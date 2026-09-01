@@ -227,9 +227,6 @@ such a side always exists, so `canClose` is true for every pane except the last 
 `outline(rects, options)`, `unionLoops(rects)`, `roundedPath(loop, radius, innerRadius)`,
 `contains(loops, x, y)`.
 
-Subpath imports are available if you want only part of it: `soksak/layout`,
-`soksak/outline`, `soksak/dom`.
-
 ## License
 
 MIT
