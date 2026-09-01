@@ -131,6 +131,18 @@ The view sets `width` and `height` on your pane element, so give it
 `box-sizing: border-box` if it has a border or padding — otherwise the element
 ends up larger than the rect the grid computed and the corridors close up.
 
+For the same reason, make sure nothing inside the pane can inflate it past the
+width the view set. A flex or grid child defaults to `min-width: auto`, which
+resolves to its min-content, and a column then stretches to fit — the element
+reports a rect wider than the size it was given. `overflow: hidden` hides that
+visually but does not shrink the rect. If anything positions itself from that
+rect and is not clipped by the pane — an OS-level view composited over the page,
+for instance — it lands outside the pane. Give the pane's children `min-width: 0`.
+
+```css
+.card > * { min-width: 0; }
+```
+
 Dragging a divider moves the line. Double-clicking it (or Enter/Space when focused) centres it so
 the two panes beside it come out the same size. Arrow keys nudge it.
 
