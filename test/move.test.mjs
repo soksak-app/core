@@ -116,3 +116,29 @@ test("moving keeps the arrangement slicing, so every card still closes", () => {
     }
   }
 });
+
+test("a card keeps its identity through a split on either side", () => {
+  const grid = three();
+  const held = grid.card("terminal");
+  held.data = { live: "pty-1" };
+
+  const born = grid.splitToward("terminal", "left", { data: { live: "pty-2" } });
+  assert.equal(grid.card("terminal"), held, "the same object still answers to the name");
+  assert.equal(held.id, "terminal", "and its name did not change underneath");
+  assert.deepEqual(held.data, { live: "pty-1" }, "nor did what it holds");
+  assert.deepEqual(grid.card(born).data, { live: "pty-2" });
+
+  // left means left: the new card is the one nearer the start
+  assert.ok(grid.rect(born).x < grid.rect("terminal").x);
+  assertTiling(grid, "after splitting toward the left");
+});
+
+test("nothing a host is holding has its id rewritten", () => {
+  const grid = three();
+  const seen = new Map(grid.cards.map((c) => [c, c.id]));
+  grid.splitToward("terminal", "top", { data: {} });
+  grid.splitToward("browser", "left", { data: {} });
+  for (const [card, id] of seen) {
+    assert.equal(card.id, id, `${id} was renamed under the host`);
+  }
+});

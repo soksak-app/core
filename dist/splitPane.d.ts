@@ -190,9 +190,10 @@ export declare class Soksak {
     /**
      * Cut a card and put the new one on a named side.
      *
-     * `split` always hands the far half to the new card, so `left` and `top` swap
-     * what the two hold afterwards — what a caller means by "put it on the left"
-     * is where the content ends up, not which record was made first.
+     * `split` always hands the far half to the new card, so `left` and `top` have
+     * the two exchange the halves they hold. What is exchanged is the *span* — a
+     * card's identity stays with the card, because a host that is holding one and
+     * finds its id changed underneath has no way to notice.
      */
     splitToward(id: string, side: Side, init?: {
         id?: string;

@@ -183,8 +183,10 @@ The card keeps its id, its payload and its fixed size, so a live surface rides
 along and a sidebar arrives the width it left.
 
 `splitToward(id, side, init)` is the same idea for a new card: `split` hands the
-far half to the new one, so `left` and `top` swap them, because what a caller
-means by "put it on the left" is where the content ends up.
+far half to the new one, so `left` and `top` have the two exchange the halves
+they hold. What is exchanged is the *span* — a card's identity stays with the
+card, because a host holding one and finding its id changed underneath has no way
+to notice.
 
 ## Where a drop lands
 

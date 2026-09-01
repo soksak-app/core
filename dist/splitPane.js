@@ -458,9 +458,10 @@ export class Soksak {
     /**
      * Cut a card and put the new one on a named side.
      *
-     * `split` always hands the far half to the new card, so `left` and `top` swap
-     * what the two hold afterwards — what a caller means by "put it on the left"
-     * is where the content ends up, not which record was made first.
+     * `split` always hands the far half to the new card, so `left` and `top` have
+     * the two exchange the halves they hold. What is exchanged is the *span* — a
+     * card's identity stays with the card, because a host that is holding one and
+     * finds its id changed underneath has no way to notice.
      */
     splitToward(id, side, init = {}) {
         const axis = axisOf(side);
@@ -469,16 +470,18 @@ export class Soksak {
             return null;
         if (!isAhead(side))
             return this.split(id, axis, init);
-        const kept = { id: card.id, data: card.data };
-        const fresh = this.split(id, axis, { id: init.id, data: kept.data });
-        if (fresh === null)
+        const born = this.split(id, axis, init);
+        if (born === null)
             return null;
-        const far = this.card(fresh);
-        card.id = far.id;
-        card.data = init.data;
-        far.id = kept.id;
-        far.data = kept.data;
-        return card.id;
+        const fresh = this.card(born);
+        const [lo, hi] = SPAN[axis];
+        const near = [card[lo], card[hi]];
+        card[lo] = fresh[lo];
+        card[hi] = fresh[hi];
+        fresh[lo] = near[0];
+        fresh[hi] = near[1];
+        this.sliceMemo.clear();
+        return born;
     }
     nextId() {
         let id;
