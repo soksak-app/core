@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { assertTiling, fuzz, make, three } from "./helpers.mjs";
+import { Soksak } from "../dist/index.js";
+import { assertTiling, fuzz, H, make, three, W } from "./helpers.mjs";
 
 test("a single matching neighbour takes the freed space", () => {
   const grid = three();
@@ -102,4 +103,66 @@ test("fillOrder picks the axis when both sides could take the space", () => {
   assert.notDeepEqual(vertical.toJSON().cards, horizontal.toJSON().cards);
   assertTiling(vertical, "vertical fill");
   assertTiling(horizontal, "horizontal fill");
+});
+
+test("a card hemmed in by fixed ones leaves by taking its own slot with it", () => {
+  // rail on one side, a sidebar on the other — neither ever fills a gap
+  const grid = new Soksak(
+    {
+      xs: [0, 0.2, 0.4, 0.7, 1],
+      ys: [0, 1],
+      cards: [
+        { id: "left", c0: 0, c1: 1, r0: 0, r1: 1, width: 180, fixed: true },
+        { id: "main", c0: 1, c1: 2, r0: 0, r1: 1 },
+        { id: "rail", c0: 2, c1: 3, r0: 0, r1: 1, width: 190, fixed: true },
+        { id: "boxed", c0: 3, c1: 4, r0: 0, r1: 1 },
+      ],
+    },
+    { width: W, height: H },
+  );
+  assert.equal(grid.fill("boxed"), null, "no neighbour can grow into it");
+  assert.equal(grid.canClose("boxed"), true, "but it can still leave");
+
+  const mainBefore = grid.rect("main").w;
+  assert.equal(grid.close("boxed"), true);
+  assert.equal(grid.card("boxed"), undefined);
+  assert.equal(grid.card("left").width, 180, "the fixed cards kept their size");
+  assert.equal(grid.card("rail").width, 190);
+  assert.ok(grid.rect("main").w > mainBefore, "the sharing card took the room back");
+  assertTiling(grid, "after the slot went");
+});
+
+test("so it can be moved, which a close it cannot do would have blocked", () => {
+  const grid = new Soksak(
+    {
+      xs: [0, 0.25, 0.5, 0.75, 1],
+      ys: [0, 1],
+      cards: [
+        { id: "target", c0: 0, c1: 1, r0: 0, r1: 1 },
+        { id: "main", c0: 1, c1: 2, r0: 0, r1: 1 },
+        { id: "rail", c0: 2, c1: 3, r0: 0, r1: 1, width: 190, fixed: true },
+        { id: "boxed", c0: 3, c1: 4, r0: 0, r1: 1 },
+      ],
+    },
+    { width: W, height: H },
+  );
+  assert.equal(grid.move("boxed", "target", "bottom"), true);
+  assert.ok(grid.rect("boxed").y > grid.rect("target").y, "it landed under the target");
+  assertTiling(grid, "after moving out from between fixed cards");
+});
+
+test("the last open card still stays, however it is hemmed in", () => {
+  const grid = new Soksak(
+    {
+      xs: [0, 0.3, 1],
+      ys: [0, 1],
+      cards: [
+        { id: "left", c0: 0, c1: 1, r0: 0, r1: 1, width: 180, fixed: true },
+        { id: "only", c0: 1, c1: 2, r0: 0, r1: 1 },
+      ],
+    },
+    { width: W, height: H },
+  );
+  assert.equal(grid.canClose("only"), false);
+  assert.equal(grid.close("only"), false);
 });

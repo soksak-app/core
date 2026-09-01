@@ -495,18 +495,67 @@ export class Soksak {
         const card = this.card(id);
         return card ? fillFor(this.list, card, this.fillOrder, this.sliceMemo) : null;
     }
-    canClose(id) {
-        return !!this.fill(id);
+    /**
+     * The axis along which this card's slots are its own, if any.
+     *
+     * A card reaching from one side of the plane to the other holds every slot it
+     * spans by itself — nobody else is in them. So it can leave without anyone
+     * growing: the slots go, the cards on either side meet, and the sharing cards
+     * take the room back.
+     *
+     * That is the only way out for a card hemmed in by fixed ones. A fixed card's
+     * size is its own, so it never fills a gap, and a card between two of them
+     * could otherwise be neither closed nor moved. How many slots it spans makes
+     * no difference — one or three, they are all its own.
+     */
+    soleSlots(card) {
+        for (const axis of AXES) {
+            const across = axis === 'x' ? 'y' : 'x';
+            const [alo, ahi] = SPAN[across];
+            if (card[alo] === 0 && card[ahi] === this.arr(across).length - 1)
+                return axis;
+        }
+        return null;
     }
-    /** Remove a card; its neighbours grow into the space. */
-    close(id) {
+    removable(id) {
         const card = this.card(id);
-        const filling = card && this.fill(id);
-        if (!card || !filling)
+        if (!card || card.fixed)
+            return null;
+        if (this.list.filter((c) => !c.fixed).length <= 1)
+            return null;
+        return card;
+    }
+    canClose(id) {
+        const card = this.removable(id);
+        return !!card && (!!this.fill(id) || this.soleSlots(card) !== null);
+    }
+    /**
+     * Remove a card.
+     *
+     * A neighbour grows into the space when one can. When none can, the card's own
+     * slot goes instead — well defined exactly when it filled that slot alone.
+     */
+    close(id) {
+        const card = this.removable(id);
+        if (!card)
             return false;
-        for (const neighbour of filling.cards)
-            neighbour[filling.grow] = card[filling.grow];
+        const filling = this.fill(id);
+        if (filling) {
+            for (const neighbour of filling.cards)
+                neighbour[filling.grow] = card[filling.grow];
+            this.list.splice(this.list.indexOf(card), 1);
+            this.sliceMemo.clear();
+            return true;
+        }
+        const axis = this.soleSlots(card);
+        if (axis === null)
+            return false;
+        const [lo, hi] = SPAN[axis];
+        const from = card[lo];
+        const count = card[hi] - from;
         this.list.splice(this.list.indexOf(card), 1);
+        for (let i = 0; i < count; i++)
+            this.dropSlot(axis, from);
         this.sliceMemo.clear();
         return true;
     }

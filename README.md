@@ -32,6 +32,13 @@ its role, so nothing around one needs a special case.
 **R6 — Rects are computed in one place, from the lines.**
 `geometry.ts` and nothing else.
 
+**R7 — A card can always leave.**
+Every open card can be closed, and what is left is again an arrangement splitting
+could have built — so no action becomes impossible because of an earlier one.
+There are two ways out: a row of neighbours grows into the space, or, when none
+can because they are all fixed, the card's own slots go and the sharing cards
+take the room back.
+
 ## Install
 
 ```sh
@@ -218,7 +225,7 @@ shape.loops.length;                   // 1 when the cards are adjacent, 2 when a
 
 `contains(shape.loops, x, y)` tests a point.
 
-## Why every card stays closable
+## Why every card stays closable (R7)
 
 Splitting only ever replaces one card with two (R4), so the arrangement is always
 a **slicing** floorplan. A pinwheel — four cards each overhanging the one in the
@@ -227,10 +234,15 @@ and splitting cannot reach it.
 
 Closing preserves that. It lets a whole row of neighbours grow together, not just
 a single matching one, and only accepts a side that leaves the arrangement
-slicing. In such an arrangement that side always exists, so `canClose` is true for
-every card except the last.
+slicing. In such an arrangement that side always exists.
 
-`grid.isSlicing()` checks it directly.
+Fixed cards never fill a gap — their size is their own — so a card standing
+between two of them has no neighbour that can grow. It leaves the other way: it
+reaches from one side of the plane to the other, so every slot it spans is its
+own, and those slots simply go. How many there are makes no difference.
+
+Together that makes `canClose` true for every card except the last, whatever has
+happened before. `grid.isSlicing()` checks the underlying property directly.
 
 ## Options
 

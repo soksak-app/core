@@ -201,8 +201,28 @@ export declare class Soksak {
     }): string | null;
     private nextId;
     fill(id: string): Fill | null;
+    /**
+     * The axis along which this card's slots are its own, if any.
+     *
+     * A card reaching from one side of the plane to the other holds every slot it
+     * spans by itself — nobody else is in them. So it can leave without anyone
+     * growing: the slots go, the cards on either side meet, and the sharing cards
+     * take the room back.
+     *
+     * That is the only way out for a card hemmed in by fixed ones. A fixed card's
+     * size is its own, so it never fills a gap, and a card between two of them
+     * could otherwise be neither closed nor moved. How many slots it spans makes
+     * no difference — one or three, they are all its own.
+     */
+    private soleSlots;
+    private removable;
     canClose(id: string): boolean;
-    /** Remove a card; its neighbours grow into the space. */
+    /**
+     * Remove a card.
+     *
+     * A neighbour grows into the space when one can. When none can, the card's own
+     * slot goes instead — well defined exactly when it filled that slot alone.
+     */
     close(id: string): boolean;
     /**
      * Whether a card reaching across the whole plane can stand on this boundary.
