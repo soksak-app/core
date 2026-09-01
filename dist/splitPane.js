@@ -17,7 +17,7 @@
  * slicing and every card stays closable. See `slicing.ts` for why that matters.
  */
 import { AXES, SPAN, axisOf, fixedSize, isAhead, spanOf } from './card.js';
-import { boundarySpans, crossing, edgePos, interiorLines, isVirtual, linePositions, rectOf, slotSizes, zoneAt, } from './geometry.js';
+import { crossing, interiorLines, isVirtual, linePositions, rectOf, slotSizes, dividers, rules, zoneAt, } from './geometry.js';
 import { fillFor, isSlicing } from './slicing.js';
 const EPS = 1e-9;
 const clamp = (v, lo, hi) => lo > hi ? (lo + hi) / 2 : Math.min(hi, Math.max(lo, v));
@@ -129,34 +129,11 @@ export class Soksak {
         return isSlicing(list, this.sliceMemo);
     }
     // ---- boundaries --------------------------------------------------------
-    /** Everything to draw: one virtual rule per line, plus its solid stretches. */
-    rules() {
-        const out = [];
-        const half = this.gap / 2;
-        for (const axis of AXES) {
-            const along = linePositions(this.plane, axis);
-            const across = axis === 'x' ? this.h : this.w;
-            const other = axis === 'x' ? 'y' : 'x';
-            for (const k of interiorLines(this.plane, axis)) {
-                const at = along[k] - 0.5;
-                out.push(axis === 'x'
-                    ? { key: `vx:${k}`, axis, line: k, virtual: true, x: at, y: -half, w: 1, h: across + this.gap }
-                    : { key: `vy:${k}`, axis, line: k, virtual: true, x: -half, y: at, w: across + this.gap, h: 1 });
-                for (const [i0, i1] of boundarySpans(this.plane, axis, k)) {
-                    const s = edgePos(this.plane, other, i0, 'lo') - half;
-                    const e = edgePos(this.plane, other, i1, 'hi') + half;
-                    out.push(axis === 'x'
-                        ? { key: `sx:${k}:${i0}`, axis, line: k, virtual: false, x: at, y: s, w: 1, h: e - s }
-                        : { key: `sy:${k}:${i0}`, axis, line: k, virtual: false, x: s, y: at, w: e - s, h: 1 });
-                }
-            }
-        }
-        return out;
-    }
     /**
      * The card a boundary resizes, if the slot on either side is held at a fixed
      * size. The card before it answers first, so dragging a sidebar's inner edge
-     * resizes the sidebar rather than the pane beside it.
+     * resizes the sidebar rather than the pane beside it — one rule, so a drag is
+     * never a guess.
      */
     holderAt(axis, line) {
         const [lo, hi] = SPAN[axis];
@@ -165,37 +142,40 @@ export class Soksak {
             return before;
         return this.list.find((c) => c[lo] === line && fixedSize(c, axis) !== null);
     }
+    /** Everything to draw for the boundaries. */
+    rules() {
+        return rules(this.plane);
+    }
     dividers() {
-        const out = [];
-        const hit = Math.max(this.gap, this.grabSize);
-        for (const axis of AXES) {
-            const along = linePositions(this.plane, axis);
-            const other = axis === 'x' ? 'y' : 'x';
-            for (const k of interiorLines(this.plane, axis)) {
-                const holder = this.holderAt(axis, k);
-                for (const [i0, i1] of boundarySpans(this.plane, axis, k)) {
-                    const s = edgePos(this.plane, other, i0, 'lo');
-                    const e = edgePos(this.plane, other, i1, 'hi');
-                    out.push(axis === 'x'
-                        ? { key: `x:${k}:${i0}`, axis, line: k, resizes: holder === null || holder === void 0 ? void 0 : holder.id, x: along[k] - hit / 2, y: s, w: hit, h: e - s }
-                        : { key: `y:${k}:${i0}`, axis, line: k, resizes: holder === null || holder === void 0 ? void 0 : holder.id, x: s, y: along[k] - hit / 2, w: e - s, h: hit });
-                }
-            }
-        }
-        return out;
+        return dividers(this.plane, this.grabSize, (axis, line) => { var _a; return (_a = this.holderAt(axis, line)) === null || _a === void 0 ? void 0 : _a.id; });
     }
     /** Where a boundary is now, in px along its axis. */
     boundaryPos(axis, line) {
         return linePositions(this.plane, axis)[line];
     }
-    /** How far a boundary may travel before some card would fall under `minSize`. */
+    /** The nearest line on this side that some card actually reads. */
+    realNeighbour(axis, line, step) {
+        const last = this.arr(axis).length - 1;
+        let at = line + step;
+        while (at > 0 && at < last && this.isVirtual(axis, at))
+            at += step;
+        return at;
+    }
+    /**
+     * How far a boundary may travel before some card would fall under `minSize`.
+     *
+     * A virtual line is a remembered position, not a constraint — nothing reads it,
+     * so nothing is holding it there, and a drag reaches past it to the nearest
+     * line a card actually uses. Letting it stop a drag was how a boundary between
+     * two cards could refuse to centre between them.
+     */
     boundaryRange(axis, line) {
         var _a, _b;
         const along = linePositions(this.plane, axis);
         const sizes = slotSizes(this.plane, axis);
         const [lo, hi] = SPAN[axis];
-        let min = (_a = along[line - 1]) !== null && _a !== void 0 ? _a : 0;
-        let max = (_b = along[line + 1]) !== null && _b !== void 0 ? _b : this.size(axis);
+        let min = (_a = along[this.realNeighbour(axis, line, -1)]) !== null && _a !== void 0 ? _a : 0;
+        let max = (_b = along[this.realNeighbour(axis, line, 1)]) !== null && _b !== void 0 ? _b : this.size(axis);
         for (const card of this.list) {
             const near = this.inset(axis, card[lo], 'lo');
             const far = this.inset(axis, card[hi], 'hi');
@@ -233,6 +213,8 @@ export class Soksak {
                 }
             }
         }
+        // A memory the move contradicts is no longer a memory of anything.
+        line = this.forgetLinesPassed(axis, line, target);
         const holder = this.holderAt(axis, line);
         if (holder) {
             // Which edge of the holder is being dragged decides the arithmetic. Both
@@ -258,6 +240,40 @@ export class Soksak {
         }
         this.sliceMemo.clear();
         return this.boundaryPos(axis, line);
+    }
+    /**
+     * Drop the virtual lines a move passes, and say where the moved line ended up.
+     *
+     * A virtual line remembers where a boundary once was, so a later split can
+     * land on it. Once a drag has gone past it, the position it remembers is on
+     * the wrong side of the boundary that made it — there is nothing left to
+     * remember, and keeping it would only mean the array is no longer in order.
+     */
+    forgetLinesPassed(axis, line, target) {
+        const a = this.arr(axis);
+        const [lo, hi] = SPAN[axis];
+        const drop = (k) => {
+            a.splice(k, 1);
+            for (const card of this.list) {
+                if (card[lo] > k)
+                    card[lo]--;
+                if (card[hi] > k)
+                    card[hi]--;
+            }
+        };
+        // `target` is px, so the comparison has to be too — the line array is
+        // normalised, and mixing the two makes every line look passed.
+        const at = (k) => linePositions(this.plane, axis)[k];
+        while (line - 1 >= 1 && this.isVirtual(axis, line - 1) && target < at(line - 1)) {
+            drop(line - 1);
+            line--;
+        }
+        while (line + 1 <= a.length - 2 && this.isVirtual(axis, line + 1) && target > at(line + 1)) {
+            drop(line + 1);
+        }
+        if (a !== this.arr(axis))
+            this.sliceMemo.clear();
+        return line;
     }
     /** How many px the sharing slots have between them, per unit of normalised span. */
     sharedExtent(axis) {

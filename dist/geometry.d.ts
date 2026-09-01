@@ -57,6 +57,37 @@ export declare function boundarySpans(plane: Plane, axis: Axis, line: number): [
 export declare function isVirtual(plane: Plane, axis: Axis, line: number): boolean;
 /** The interior lines of an axis — the plane's own two borders are not boundaries. */
 export declare function interiorLines(plane: Plane, axis: Axis): number[];
+/** A boundary to draw. One virtual rule per line, plus its solid stretches. */
+export interface Rule extends Rect {
+    key: string;
+    axis: Axis;
+    line: number;
+    virtual: boolean;
+}
+/** A place to grab a boundary, and what dragging it changes. */
+export interface Divider extends Rect {
+    key: string;
+    axis: Axis;
+    line: number;
+    /** The card whose fixed size this drag changes, if any. */
+    resizes?: string;
+}
+/**
+ * Everything to draw for the boundaries.
+ *
+ * A line runs the whole plane, so it gets one rule that does; it is only a
+ * boundary where cards actually break on it, so each of those stretches gets a
+ * solid one. Draw the first faintly and the second not.
+ */
+export declare function rules(plane: Plane): Rule[];
+/**
+ * Where a boundary can be grabbed, and which card a drag there resizes.
+ *
+ * Only where cards break on the line — elsewhere a card spans across it and
+ * there is nothing between two things to take hold of. The grab area is kept
+ * apart from the corridor so a zero gap is still grabbable.
+ */
+export declare function dividers(plane: Plane, grabSize: number, holder: (axis: Axis, line: number) => string | undefined): Divider[];
 /**
  * Where a drop lands: which card, and which part of it.
  *

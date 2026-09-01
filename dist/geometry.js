@@ -137,6 +137,62 @@ export function interiorLines(plane, axis) {
         out.push(k);
     return out;
 }
+/**
+ * Everything to draw for the boundaries.
+ *
+ * A line runs the whole plane, so it gets one rule that does; it is only a
+ * boundary where cards actually break on it, so each of those stretches gets a
+ * solid one. Draw the first faintly and the second not.
+ */
+export function rules(plane) {
+    const out = [];
+    const half = plane.gap / 2;
+    for (const axis of AXES) {
+        const along = linePositions(plane, axis);
+        const across = axis === 'x' ? plane.height : plane.width;
+        const other = axis === 'x' ? 'y' : 'x';
+        for (const line of interiorLines(plane, axis)) {
+            const at = along[line] - 0.5;
+            out.push(axis === 'x'
+                ? { key: `vx:${line}`, axis, line, virtual: true, x: at, y: -half, w: 1, h: across + plane.gap }
+                : { key: `vy:${line}`, axis, line, virtual: true, x: -half, y: at, w: across + plane.gap, h: 1 });
+            for (const [from, to] of boundarySpans(plane, axis, line)) {
+                const start = edgePos(plane, other, from, 'lo') - half;
+                const end = edgePos(plane, other, to, 'hi') + half;
+                out.push(axis === 'x'
+                    ? { key: `sx:${line}:${from}`, axis, line, virtual: false, x: at, y: start, w: 1, h: end - start }
+                    : { key: `sy:${line}:${from}`, axis, line, virtual: false, x: start, y: at, w: end - start, h: 1 });
+            }
+        }
+    }
+    return out;
+}
+/**
+ * Where a boundary can be grabbed, and which card a drag there resizes.
+ *
+ * Only where cards break on the line — elsewhere a card spans across it and
+ * there is nothing between two things to take hold of. The grab area is kept
+ * apart from the corridor so a zero gap is still grabbable.
+ */
+export function dividers(plane, grabSize, holder) {
+    const out = [];
+    const hit = Math.max(plane.gap, grabSize);
+    for (const axis of AXES) {
+        const along = linePositions(plane, axis);
+        const other = axis === 'x' ? 'y' : 'x';
+        for (const line of interiorLines(plane, axis)) {
+            const resizes = holder(axis, line);
+            for (const [from, to] of boundarySpans(plane, axis, line)) {
+                const start = edgePos(plane, other, from, 'lo');
+                const end = edgePos(plane, other, to, 'hi');
+                out.push(axis === 'x'
+                    ? { key: `x:${line}:${from}`, axis, line, resizes, x: along[line] - hit / 2, y: start, w: hit, h: end - start }
+                    : { key: `y:${line}:${from}`, axis, line, resizes, x: start, y: along[line] - hit / 2, w: end - start, h: hit });
+            }
+        }
+    }
+    return out;
+}
 export function zoneAt(plane, x, y, options = {}) {
     var _a, _b, _c;
     const header = (_a = options.headerPx) !== null && _a !== void 0 ? _a : 0;

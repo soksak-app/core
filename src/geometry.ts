@@ -153,6 +153,87 @@ export function interiorLines(plane: Plane, axis: Axis): number[] {
   return out;
 }
 
+/** A boundary to draw. One virtual rule per line, plus its solid stretches. */
+export interface Rule extends Rect {
+  key: string;
+  axis: Axis;
+  line: number;
+  virtual: boolean;
+}
+
+/** A place to grab a boundary, and what dragging it changes. */
+export interface Divider extends Rect {
+  key: string;
+  axis: Axis;
+  line: number;
+  /** The card whose fixed size this drag changes, if any. */
+  resizes?: string;
+}
+
+/**
+ * Everything to draw for the boundaries.
+ *
+ * A line runs the whole plane, so it gets one rule that does; it is only a
+ * boundary where cards actually break on it, so each of those stretches gets a
+ * solid one. Draw the first faintly and the second not.
+ */
+export function rules(plane: Plane): Rule[] {
+  const out: Rule[] = [];
+  const half = plane.gap / 2;
+  for (const axis of AXES) {
+    const along = linePositions(plane, axis);
+    const across = axis === 'x' ? plane.height : plane.width;
+    const other: Axis = axis === 'x' ? 'y' : 'x';
+    for (const line of interiorLines(plane, axis)) {
+      const at = along[line] - 0.5;
+      out.push(
+        axis === 'x'
+          ? { key: `vx:${line}`, axis, line, virtual: true, x: at, y: -half, w: 1, h: across + plane.gap }
+          : { key: `vy:${line}`, axis, line, virtual: true, x: -half, y: at, w: across + plane.gap, h: 1 },
+      );
+      for (const [from, to] of boundarySpans(plane, axis, line)) {
+        const start = edgePos(plane, other, from, 'lo') - half;
+        const end = edgePos(plane, other, to, 'hi') + half;
+        out.push(
+          axis === 'x'
+            ? { key: `sx:${line}:${from}`, axis, line, virtual: false, x: at, y: start, w: 1, h: end - start }
+            : { key: `sy:${line}:${from}`, axis, line, virtual: false, x: start, y: at, w: end - start, h: 1 },
+        );
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Where a boundary can be grabbed, and which card a drag there resizes.
+ *
+ * Only where cards break on the line — elsewhere a card spans across it and
+ * there is nothing between two things to take hold of. The grab area is kept
+ * apart from the corridor so a zero gap is still grabbable.
+ */
+export function dividers(plane: Plane, grabSize: number, holder: (axis: Axis, line: number) => string | undefined): Divider[] {
+  const out: Divider[] = [];
+  const hit = Math.max(plane.gap, grabSize);
+  for (const axis of AXES) {
+    const along = linePositions(plane, axis);
+    const other: Axis = axis === 'x' ? 'y' : 'x';
+    for (const line of interiorLines(plane, axis)) {
+      const resizes = holder(axis, line);
+      for (const [from, to] of boundarySpans(plane, axis, line)) {
+        const start = edgePos(plane, other, from, 'lo');
+        const end = edgePos(plane, other, to, 'hi');
+        out.push(
+          axis === 'x'
+            ? { key: `x:${line}:${from}`, axis, line, resizes, x: along[line] - hit / 2, y: start, w: hit, h: end - start }
+            : { key: `y:${line}:${from}`, axis, line, resizes, x: start, y: along[line] - hit / 2, w: end - start, h: hit },
+        );
+      }
+    }
+  }
+  return out;
+}
+
 /**
  * Where a drop lands: which card, and which part of it.
  *

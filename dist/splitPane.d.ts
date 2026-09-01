@@ -17,8 +17,8 @@
  * slicing and every card stays closable. See `slicing.ts` for why that matters.
  */
 import type { Axis, Card, CardInit, Rect, Side } from './card.js';
-import type { ZoneHit, ZoneOptions } from './geometry.js';
-export type { Zone, ZoneHit, ZoneOptions } from './geometry.js';
+import type { Divider, Rule, ZoneHit, ZoneOptions } from './geometry.js';
+export type { Divider, Rule, Zone, ZoneHit, ZoneOptions } from './geometry.js';
 import type { Fill, FillOrder, Span } from './slicing.js';
 export type { Axis, Card, CardInit, Rect, Side } from './card.js';
 export type { Fill, FillOrder } from './slicing.js';
@@ -42,33 +42,6 @@ export interface SoksakOptions {
     fillOrder?: FillOrder;
     width?: number;
     height?: number;
-}
-/**
- * A place to grab a boundary. Only where cards actually break on it — elsewhere
- * a card spans across and there is nothing between two things to take hold of.
- */
-export interface Divider extends Rect {
-    key: string;
-    axis: Axis;
-    line: number;
-    /**
-     * The card whose fixed size this drag changes, if any.
-     *
-     * A boundary beside a card that holds its slot at a fixed size resizes that
-     * card; anywhere else it moves the line and the cards on both sides follow.
-     * One gesture, and what it does is a fact about what is next to it.
-     */
-    resizes?: string;
-}
-/**
- * A boundary to draw. Every line yields one `virtual: true` rule spanning the
- * whole plane plus one solid rule per stretch where cards actually break on it.
- */
-export interface Rule extends Rect {
-    key: string;
-    axis: Axis;
-    line: number;
-    virtual: boolean;
 }
 export declare class Soksak {
     private xs;
@@ -115,18 +88,28 @@ export declare class Soksak {
     isVirtual(axis: Axis, line: number): boolean;
     virtualCount(): number;
     isSlicing(list?: readonly Span[]): boolean;
-    /** Everything to draw: one virtual rule per line, plus its solid stretches. */
-    rules(): Rule[];
     /**
      * The card a boundary resizes, if the slot on either side is held at a fixed
      * size. The card before it answers first, so dragging a sidebar's inner edge
-     * resizes the sidebar rather than the pane beside it.
+     * resizes the sidebar rather than the pane beside it — one rule, so a drag is
+     * never a guess.
      */
     private holderAt;
+    /** Everything to draw for the boundaries. */
+    rules(): Rule[];
     dividers(): Divider[];
     /** Where a boundary is now, in px along its axis. */
     boundaryPos(axis: Axis, line: number): number;
-    /** How far a boundary may travel before some card would fall under `minSize`. */
+    /** The nearest line on this side that some card actually reads. */
+    private realNeighbour;
+    /**
+     * How far a boundary may travel before some card would fall under `minSize`.
+     *
+     * A virtual line is a remembered position, not a constraint — nothing reads it,
+     * so nothing is holding it there, and a drag reaches past it to the nearest
+     * line a card actually uses. Letting it stop a drag was how a boundary between
+     * two cards could refuse to centre between them.
+     */
     boundaryRange(axis: Axis, line: number): [number, number];
     private inset;
     /**
@@ -139,6 +122,15 @@ export declare class Soksak {
      * Returns where the boundary ended up.
      */
     moveBoundary(axis: Axis, line: number, px: number, allowSnap?: boolean): number;
+    /**
+     * Drop the virtual lines a move passes, and say where the moved line ended up.
+     *
+     * A virtual line remembers where a boundary once was, so a later split can
+     * land on it. Once a drag has gone past it, the position it remembers is on
+     * the wrong side of the boundary that made it — there is nothing left to
+     * remember, and keeping it would only mean the array is no longer in order.
+     */
+    private forgetLinesPassed;
     /** How many px the sharing slots have between them, per unit of normalised span. */
     private sharedExtent;
     /**

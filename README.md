@@ -4,13 +4,20 @@ Pane layout over shared grid lines. Headless core, optional DOM binding, no depe
 
 ## The rules
 
-Six of them. Everything else follows.
+Seven of them. Everything else follows.
 
 **R1 — A boundary is one number.**
 Two arrays, `xs` and `ys`, own every coordinate. A card is a span of indices into
 them, so two cards that meet read the same index. Their shared boundary is one
-number: it cannot drift, and nothing anywhere decides by tolerance whether two
-places are the same place.
+number and cannot drift, and no tolerance is ever consulted to decide *where a
+card is* or *whether two cards meet* — those are integer facts.
+
+Tolerance appears three times, and none of them decides that:
+`snapDistance` is a gesture, saying how near a drag must come before it lands
+exactly on a neighbouring line; `mergeCoincident` compares two coordinates a
+snap has already made equal, which is float equality rather than a judgement;
+and the outline traces a union of rectangles, where two corners at the same
+place have to be recognised as one.
 
 **R2 — Everything is a card.**
 A sidebar, a rail, a terminal — one type, one rect rule, one corridor, one
@@ -18,8 +25,11 @@ radius, one outline. A role is one answer: whether the layout moves it. A card
 may also carry a `width`, which is an attribute and not a second kind of card.
 
 **R3 — A card occupies its slots, so nothing can cross it.**
-There is no line to check before placing a sidebar. A card holding a column *is*
-the guarantee that no other card spans across it.
+A card holding a column *is* the guarantee that no other card spans across it —
+nothing has to be measured to keep it true, and dragging can never break it.
+Placing a card that reaches across the plane does ask whether a card spans the
+boundary (`canInsertAt`), but that is counting spans, not comparing coordinates:
+an integer answer, with nothing to tune and nothing to repair afterwards.
 
 **R4 — Splitting only ever replaces one card with two.**
 So the arrangement is always a slicing floorplan, a pinwheel is unreachable, and
@@ -30,7 +40,8 @@ A card at the plane's border is flush there. The same for every card, whatever
 its role, so nothing around one needs a special case.
 
 **R6 — Rects are computed in one place, from the lines.**
-`geometry.ts` and nothing else.
+`geometry.ts` and nothing else — card rects, boundary rules, and grab areas all
+come out of it. `soksak.ts` holds the state and asks.
 
 **R7 — A card can always leave.**
 Every open card can be closed, and what is left is again an arrangement splitting

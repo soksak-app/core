@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { assertTiling, H, three, W, withFreePair } from "./helpers.mjs";
+import { Soksak } from "../dist/index.js";
+import { assertTiling, H, three, W } from "./helpers.mjs";
 
 test("dragging a line moves every card that reads it", () => {
   const grid = three();
@@ -23,48 +24,72 @@ test("a line stops where a card would fall under minSize", () => {
   assertTiling(grid, "pushed to the end");
 });
 
-test("a line may travel all the way onto its neighbour", () => {
-  const { grid, line } = withFreePair({ snap: "off" });
-  const target = grid.boundaryPos("x", line + 1);
-  grid.moveBoundary("x", line, W);
-  assert.equal(grid.boundaryPos("x", line), target, "it reaches the neighbour exactly");
-  assertTiling(grid, "with two lines on the same coordinate");
+/** A line no card reads, made the way one is really made: split, then close. */
+function withVirtualLine() {
+  const grid = new Soksak(
+    { xs: [0, 0.5, 1], ys: [0, 1], cards: [
+      { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
+      { id: "b", c0: 1, c1: 2, r0: 0, r1: 1 },
+    ] },
+    { width: W, height: H },
+  );
+  grid.split("b", "x");
+  grid.close(grid.cards.at(-1).id);
+  const line = [1, 2].find((k) => grid.isVirtual("x", k));
+  assert.ok(line !== undefined, "the closed card left its line behind");
+  return { grid, virtual: line };
+}
+
+test("a virtual line does not hold a boundary back — it is a memory, not a fence", () => {
+  const { grid, virtual } = withVirtualLine();
+  const boundary = virtual - 1;
+  const [, max] = grid.boundaryRange("x", boundary);
+  assert.ok(
+    max > grid.boundaryPos("x", virtual),
+    "the range reaches past it to the nearest line a card actually reads",
+  );
+
+  const lines = grid.lines("x").length;
+  grid.moveBoundary("x", boundary, W);
+  assert.equal(grid.lines("x").length, lines - 1, "and passing it removes it");
+  assert.ok(grid.lines("x").every((v, i, all) => i === 0 || v >= all[i - 1]), "the lines stay in order");
+  assertTiling(grid, "after passing a virtual line");
 });
 
-test("snap pulls a line the last few pixels onto its neighbour", () => {
-  const near = withFreePair({ snap: "merge", snapDistance: 7 });
-  const target = near.grid.boundaryPos("x", near.line + 1);
-  near.grid.moveBoundary("x", near.line, target - 5);
-  assert.equal(near.grid.boundaryPos("x", near.line), target, "snapped");
-
-  const far = withFreePair({ snap: "merge", snapDistance: 7 });
-  const target2 = far.grid.boundaryPos("x", far.line + 1);
-  far.grid.moveBoundary("x", far.line, target2 - 60);
-  assert.notEqual(far.grid.boundaryPos("x", far.line), target2, "60px away is left alone");
-
-  const off = withFreePair({ snap: "off" });
-  const target3 = off.grid.boundaryPos("x", off.line + 1);
-  off.grid.moveBoundary("x", off.line, target3 - 5);
-  assert.notEqual(off.grid.boundaryPos("x", off.line), target3, "snap off leaves it alone");
+test("a boundary still stops at a line some card reads", () => {
+  const grid = three({ snap: "off" });
+  const boundary = 1;
+  const [, max] = grid.boundaryRange("x", boundary);
+  const next = grid.boundaryPos("x", 2);
+  assert.ok(max <= next + 0.01, "it cannot pass a line that is holding a card");
+  grid.moveBoundary("x", boundary, W);
+  assert.ok(grid.boundaryPos("x", boundary) <= next + 0.01);
+  assertTiling(grid, "stopped at a real boundary");
 });
 
 test("coincident lines merge into one, and never at the cost of a card", () => {
-  const { grid, line } = withFreePair({ snap: "merge" });
-  const lines = grid.lines("x").length;
-  const cards = grid.cards.length;
+  // snap brings the boundary exactly onto its neighbour; merge folds the two
+  const { grid, virtual } = withVirtualLine();
+  const boundary = virtual - 1;
+  const target = grid.boundaryPos("x", virtual);
+  grid.moveBoundary("x", boundary, target - 3);   // inside snapDistance
+  assert.equal(grid.boundaryPos("x", boundary), target, "snapped exactly onto it");
 
-  grid.moveBoundary("x", line, W);
-  assert.equal(grid.mergeCoincident("x", line), true);
+  const cards = grid.cards.length;
+  const lines = grid.lines("x").length;
+  assert.equal(grid.mergeCoincident("x", boundary), true);
   assert.equal(grid.lines("x").length, lines - 1);
   assert.equal(grid.cards.length, cards, "no card was lost");
   assertTiling(grid, "after merging two lines");
 });
 
 test("merge is refused when snap is off", () => {
-  const { grid, line } = withFreePair({ snap: "off" });
+  const { grid, virtual } = withVirtualLine();
+  const boundary = virtual - 1;
+  grid.snap = "off";
   const lines = grid.lines("x").length;
-  grid.moveBoundary("x", line, W);
-  assert.equal(grid.mergeCoincident("x", line), false);
+  grid.moveBoundary("x", boundary, grid.boundaryPos("x", virtual) - 3);
+  assert.equal(grid.mergeCoincident("x", boundary), false);
   assert.equal(grid.lines("x").length, lines);
 });
 
