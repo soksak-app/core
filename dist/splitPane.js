@@ -235,13 +235,19 @@ export class Soksak {
         }
         const holder = this.holderAt(axis, line);
         if (holder) {
-            const [lo] = SPAN[axis];
-            const start = linePositions(this.plane, axis)[holder[lo]];
-            const size = Math.max(0, target - start);
+            // Which edge of the holder is being dragged decides the arithmetic. Both
+            // read positions from before the change: the edge that is *not* moving
+            // stays where it is, and the size is the distance to it. Measuring from
+            // the moving edge would be asking the size to define itself.
+            const [lo, hi] = SPAN[axis];
+            const along = linePositions(this.plane, axis);
+            const size = holder[hi] === line
+                ? target - along[holder[lo]] // its far edge moved; its start is fixed
+                : along[holder[hi]] - target; // its near edge moved; its end is fixed
             if (axis === 'x')
-                holder.width = size;
+                holder.width = Math.max(0, size);
             else
-                holder.height = size;
+                holder.height = Math.max(0, size);
         }
         else {
             const usable = this.sharedExtent(axis);
@@ -500,6 +506,147 @@ export class Soksak {
         this.list.splice(this.list.indexOf(card), 1);
         this.sliceMemo.clear();
         return true;
+    }
+    /**
+     * Whether a card reaching across the whole plane can stand on this boundary.
+     *
+     * It can when no card spans over it. That is a fact about the spans — integers
+     * — not a comparison of coordinates, so there is no tolerance to tune and
+     * nothing to repair afterwards. Dragging a boundary can never change the
+     * answer; only splitting and closing can.
+     */
+    canInsertAt(axis, line) {
+        const a = this.arr(axis);
+        if (!Number.isInteger(line) || line < 0 || line > a.length - 1)
+            return false;
+        return this.cardsCrossing(axis, line).length === 0;
+    }
+    /**
+     * Put a card at a boundary, reaching across the whole plane.
+     *
+     * This is the operation `splitToward` is not. Splitting cuts one card, so the
+     * new one inherits that card's extent — a rail made that way would stand in
+     * one row and be a pane like any other. A card that separates everything from
+     * everything has to be inserted at a boundary nothing crosses, and every card
+     * past it moves along.
+     *
+     * Returns the new card's id, or null when a card spans the boundary.
+     */
+    insertAt(axis, line, init = {}) {
+        var _a;
+        if (!this.canInsertAt(axis, line))
+            return null;
+        const [lo, hi] = SPAN[axis];
+        const across = axis === 'x' ? 'y' : 'x';
+        const [alo, ahi] = SPAN[across];
+        this.openSlot(axis, line);
+        const fresh = {
+            id: (_a = init.id) !== null && _a !== void 0 ? _a : this.nextId(),
+            c0: 0, c1: 1, r0: 0, r1: 1,
+            fixed: false,
+            data: init.data,
+        };
+        fresh[lo] = line;
+        fresh[hi] = line + 1;
+        fresh[alo] = 0;
+        fresh[ahi] = this.arr(across).length - 1;
+        if (init.size !== undefined) {
+            if (axis === 'x')
+                fresh.width = init.size;
+            else
+                fresh.height = init.size;
+        }
+        this.list.push(fresh);
+        this.sliceMemo.clear();
+        return fresh.id;
+    }
+    /** Whether a card occupies one slot and reaches across everything else. */
+    spansPlane(card, axis) {
+        const [lo, hi] = SPAN[axis];
+        const across = axis === 'x' ? 'y' : 'x';
+        const [alo, ahi] = SPAN[across];
+        return (card[hi] - card[lo] === 1 &&
+            card[alo] === 0 &&
+            card[ahi] === this.arr(across).length - 1);
+    }
+    /**
+     * Open a slot at a boundary.
+     *
+     * The coordinate is duplicated, so the new slot has no share of its own and
+     * takes its size from the card that will hold it. A card that *ends* at the
+     * boundary keeps ending there — the slot opens after it — while one that
+     * starts there moves along. Getting that asymmetry wrong is how a card ends up
+     * spanning the slot it was supposed to make room for.
+     */
+    openSlot(axis, line) {
+        const a = this.arr(axis);
+        const [lo, hi] = SPAN[axis];
+        a.splice(line, 0, a[line]);
+        for (const card of this.list) {
+            if (card[lo] >= line)
+                card[lo]++;
+            if (card[hi] > line)
+                card[hi]++;
+        }
+    }
+    /** Take a slot out of the axis. The cards on either side meet where it was. */
+    dropSlot(axis, slot) {
+        const a = this.arr(axis);
+        const [lo, hi] = SPAN[axis];
+        const gone = slot + 1;
+        a.splice(gone, 1);
+        for (const card of this.list) {
+            if (card[lo] >= gone)
+                card[lo]--;
+            if (card[hi] >= gone)
+                card[hi]--;
+        }
+    }
+    /**
+     * Take a plane-spanning card to another boundary.
+     *
+     * Its column leaves and a column arrives — nothing is closed and nothing is
+     * split, so no other card's spans change and no boundary on the other axis
+     * moves at all. Travelling that way is the difference between a rail moving
+     * and a layout being rearranged around it.
+     *
+     * `line` is a boundary in the arrangement as it stands now.
+     */
+    moveTo(id, axis, line) {
+        const card = this.card(id);
+        if (!card || !this.spansPlane(card, axis))
+            return false;
+        const [lo, hi] = SPAN[axis];
+        const from = card[lo];
+        if (line === from || line === card[hi])
+            return true; // already there
+        const before = this.toJSON();
+        this.list.splice(this.list.indexOf(card), 1);
+        this.dropSlot(axis, from);
+        // The target boundary shifted down by one if it stood past the slot that left.
+        const target = line > from + 1 ? line - 1 : line;
+        if (!this.canInsertAt(axis, target)) {
+            this.restore(before);
+            return false;
+        }
+        this.openSlot(axis, target);
+        const across = axis === 'x' ? 'y' : 'x';
+        const [alo, ahi] = SPAN[across];
+        card[lo] = target;
+        card[hi] = target + 1;
+        card[alo] = 0;
+        card[ahi] = this.arr(across).length - 1;
+        this.list.push(card);
+        this.sliceMemo.clear();
+        return true;
+    }
+    /** Every boundary a plane-spanning card could stand on. */
+    standings(axis) {
+        const out = [];
+        for (const k of interiorLines(this.plane, axis))
+            if (this.canInsertAt(axis, k))
+                out.push(k);
+        return out;
     }
     /**
      * Move a card to sit on one side of another — the drag-and-drop operation.

@@ -204,6 +204,58 @@ export declare class Soksak {
     /** Remove a card; its neighbours grow into the space. */
     close(id: string): boolean;
     /**
+     * Whether a card reaching across the whole plane can stand on this boundary.
+     *
+     * It can when no card spans over it. That is a fact about the spans — integers
+     * — not a comparison of coordinates, so there is no tolerance to tune and
+     * nothing to repair afterwards. Dragging a boundary can never change the
+     * answer; only splitting and closing can.
+     */
+    canInsertAt(axis: Axis, line: number): boolean;
+    /**
+     * Put a card at a boundary, reaching across the whole plane.
+     *
+     * This is the operation `splitToward` is not. Splitting cuts one card, so the
+     * new one inherits that card's extent — a rail made that way would stand in
+     * one row and be a pane like any other. A card that separates everything from
+     * everything has to be inserted at a boundary nothing crosses, and every card
+     * past it moves along.
+     *
+     * Returns the new card's id, or null when a card spans the boundary.
+     */
+    insertAt(axis: Axis, line: number, init?: {
+        id?: string;
+        data?: unknown;
+        size?: number;
+    }): string | null;
+    /** Whether a card occupies one slot and reaches across everything else. */
+    private spansPlane;
+    /**
+     * Open a slot at a boundary.
+     *
+     * The coordinate is duplicated, so the new slot has no share of its own and
+     * takes its size from the card that will hold it. A card that *ends* at the
+     * boundary keeps ending there — the slot opens after it — while one that
+     * starts there moves along. Getting that asymmetry wrong is how a card ends up
+     * spanning the slot it was supposed to make room for.
+     */
+    private openSlot;
+    /** Take a slot out of the axis. The cards on either side meet where it was. */
+    private dropSlot;
+    /**
+     * Take a plane-spanning card to another boundary.
+     *
+     * Its column leaves and a column arrives — nothing is closed and nothing is
+     * split, so no other card's spans change and no boundary on the other axis
+     * moves at all. Travelling that way is the difference between a rail moving
+     * and a layout being rearranged around it.
+     *
+     * `line` is a boundary in the arrangement as it stands now.
+     */
+    moveTo(id: string, axis: Axis, line: number): boolean;
+    /** Every boundary a plane-spanning card could stand on. */
+    standings(axis: Axis): number[];
+    /**
      * Move a card to sit on one side of another — the drag-and-drop operation.
      *
      * One operation rather than a close and a split the caller sequences, because

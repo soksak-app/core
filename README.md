@@ -149,6 +149,24 @@ grid.moveBoundary("x", 1, 260);        // px
 grid.centerBoundary("x", 1);
 ```
 
+## A card that reaches across the plane
+
+A rail stands between panes and reaches from one side of the plane to the other.
+It cannot be made by splitting a card — that would give it the extent of the card
+it came from, and it would be a pane like any other. It goes in at a boundary no
+card spans over, and every card past it moves along.
+
+```js
+grid.standings("x");            // the boundaries such a card could stand on
+grid.canInsertAt("x", 2);
+grid.insertAt("x", 2, { id: "rail", size: 190 });
+grid.moveTo("rail", "x", 4);    // a column leaves and a column arrives
+```
+
+Travelling that way closes nothing and splits nothing, so no other card's spans
+change and no boundary on the other axis moves at all. That is the difference
+between a rail moving and the layout being rearranged around it.
+
 ## Moving a card
 
 Dragging a card somewhere else is one operation, not a close and a split the
@@ -236,6 +254,7 @@ every card except the last.
 | `splitToward(id, side, {id?, data?})` | cut it and put the new one on a named side |
 | `canClose(id)`, `close(id)`, `fill(id)` | remove a card; `fill` reports which neighbours take the space |
 | `canMove(id, targetId, side)`, `move(id, targetId, side)` | take a card to another card's side |
+| `standings(axis)`, `canInsertAt`, `insertAt`, `moveTo` | a card that reaches across the plane |
 | `zoneAt(x, y, options)` | where a drop lands |
 | `dividers()`, `rules()` | grab areas, and boundaries to draw |
 | `boundaryPos`, `boundaryRange`, `moveBoundary`, `centerBoundary` | drag a boundary |

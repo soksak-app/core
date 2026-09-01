@@ -130,3 +130,46 @@ test("a moved sidebar keeps the width it was given", () => {
   assert.ok(grid.rect("rail").x > grid.rect("browser").x, "on the side it was sent to");
   assertTiling(grid, "after the rail travelled");
 });
+
+test("dragging either edge of a fixed card resizes it, and the other edge holds", () => {
+  const grid = edges();
+  const before = { left: grid.rect("left"), right: grid.rect("right") };
+
+  // the card's far edge — its start is fixed, so the size grows by the drag
+  grid.moveBoundary("x", 1, before.left.x + before.left.w + grid.gap / 2 + 40);
+  assert.equal(grid.card("left").width, 180 + 40, "the left sidebar grew by the drag");
+  assert.equal(grid.rect("left").x, 0, "and stayed at the plane's border");
+
+  // the card's near edge — its end is fixed, so dragging inward makes it wider
+  const rightBefore = grid.rect("right");
+  grid.moveBoundary("x", 2, rightBefore.x - grid.gap / 2 - 40);
+  assert.equal(grid.card("right").width, 200 + 40, "the right sidebar grew by the drag");
+  assert.equal(
+    grid.rect("right").x + grid.rect("right").w,
+    W,
+    "and its far edge never left the plane's border",
+  );
+  assertTiling(grid, "after dragging both sidebars");
+});
+
+test("a boundary between two fixed cards belongs to the one before it", () => {
+  const grid = new Soksak(
+    {
+      xs: [0, 0.25, 0.5, 1],
+      ys: [0, 1],
+      cards: [
+        { id: "left", c0: 0, c1: 1, r0: 0, r1: 1, width: 190 },
+        { id: "rail", c0: 1, c1: 2, r0: 0, r1: 1, width: 190 },
+        { id: "main", c0: 2, c1: 3, r0: 0, r1: 1 },
+      ],
+    },
+    { width: W, height: H },
+  );
+  const divider = grid.dividers().find((d) => d.axis === "x" && d.line === 1);
+  assert.equal(divider.resizes, "left", "one rule picks it, so a drag is never a guess");
+
+  grid.moveBoundary("x", 1, 230);
+  assert.equal(grid.card("left").width, 230, "the card before took the change");
+  assert.equal(grid.card("rail").width, 190, "the one after kept its size and moved along");
+  assertTiling(grid, "between two fixed cards");
+});
