@@ -382,6 +382,11 @@ export class Soksak {
    * corridor wider than its neighbour.
    */
   centerBoundary(axis: Axis, line: number): number {
+    // Centring divides what is shared. A fixed size is not shared — it is the
+    // card's own answer — so a boundary beside one has no half to compute, and
+    // making it "equal" to a pane would be answering a question nobody asked.
+    if (this.holderAt(axis, line)) return this.boundaryPos(axis, line);
+
     const along = linePositions(this.plane, axis);
     const [lo, hi] = SPAN[axis];
     let start = along[line - 1] ?? 0;

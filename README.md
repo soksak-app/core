@@ -144,7 +144,9 @@ keeps the original card and its near half; the new card takes the far half.
 ```
 
 Dragging a divider moves the boundary. Double-clicking it (or Enter/Space when
-focused) centres it so the two cards beside it come out the same size.
+focused) centres it so the two cards beside it come out the same size. That holds
+beside a card with a fixed width too — a width is a number and a number has a
+half.
 
 **A card's child can inflate the rect the view set.** A flex or grid child
 defaults to `min-width: auto`, so a column stretches to min-content and the

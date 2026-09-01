@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { Soksak } from "../dist/index.js";
-import { assertTiling, H, W } from "./helpers.mjs";
+import { assertTiling, H, W, three } from "./helpers.mjs";
 
 /**
  * A sidebar is a card. So is a rail. What makes them what they are is which slot
@@ -172,4 +172,22 @@ test("a boundary between two fixed cards belongs to the one before it", () => {
   assert.equal(grid.card("left").width, 230, "the card before took the change");
   assert.equal(grid.card("rail").width, 190, "the one after kept its size and moved along");
   assertTiling(grid, "between two fixed cards");
+});
+
+test("centring does nothing beside a fixed card — there is no half to compute", () => {
+  const grid = edges();
+  const before = grid.card("left").width;
+  const at = grid.boundaryPos("x", 1);
+
+  assert.equal(grid.centerBoundary("x", 1), at, "the boundary did not move");
+  assert.equal(grid.card("left").width, before, "and the card kept the size it was given");
+
+  // where both sides share, it still centres
+  const shared = three();
+  shared.moveBoundary("x", 1, 200);
+  shared.centerBoundary("x", 1);
+  assert.ok(
+    Math.abs(shared.rect("sidebar").w - shared.rect("terminal").w) < 0.01,
+    "two sharing cards still come out equal",
+  );
 });
