@@ -33,7 +33,11 @@ test("splitting keeps the original card and its near half", () => {
   const beforeRect = grid.rect("terminal");
   const id = grid.split("terminal", "x");
 
-  assert.equal(grid.card("terminal"), before, "the original object survives");
+  assert.deepEqual(
+    { id: grid.card("terminal").id, data: grid.card("terminal").data },
+    { id: before.id, data: before.data },
+    "the original card is still the one answering to the name",
+  );
   assert.equal(grid.cards.length, 4);
   const after = grid.rect("terminal");
   assert.equal(after.x, beforeRect.x, "the original keeps the near edge");

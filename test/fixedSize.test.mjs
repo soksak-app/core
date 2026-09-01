@@ -191,3 +191,21 @@ test("centring does nothing beside a fixed card — there is no half to compute"
     "two sharing cards still come out equal",
   );
 });
+
+test("a card inserted at a boundary is given a size, or it is not inserted", () => {
+  const grid = new Soksak(undefined, { width: 1200, height: 800 });
+  grid.split("card", "x");
+
+  for (const bad of [undefined, {}, { size: NaN }, { size: -40 }, { size: Infinity }]) {
+    const before = grid.toJSON();
+    assert.equal(grid.insertAt("x", 1, bad), null, `refused: ${JSON.stringify(bad)}`);
+    assert.deepEqual(grid.toJSON(), before, "and nothing changed");
+  }
+
+  const id = grid.insertAt("x", 1, { id: "rail", size: 190 });
+  assert.equal(id, "rail");
+  assert.ok(Math.abs(grid.rect("rail").w - 190) < 0.01, `it draws 190, not ${grid.rect("rail").w}`);
+  for (const [cid, r] of grid.rects()) {
+    assert.ok(r.w > 0 && r.h > 0, `${cid} has area: ${JSON.stringify(r)}`);
+  }
+});

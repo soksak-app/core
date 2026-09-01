@@ -24,6 +24,13 @@ A sidebar, a rail, a terminal — one type, one rect rule, one corridor, one
 radius, one outline. A role is one answer: whether the layout moves it. A card
 may also carry a `width`, which is an attribute and not a second kind of card.
 
+The two answers are independent, and *the layout* is the operative word in the
+second. A rail is `fixed` and still travels: `moveTo` names it, changes no other
+card's spans and no line on the other axis. `move` refuses it because a drop
+rearranges everything around it. Dragging a boundary beside a card that holds a
+px size changes that size for the same reason — the gesture is about that card.
+What `fixed` forbids is the layout deciding for it.
+
 **R3 — A card occupies its slots, so nothing can cross it.**
 A card holding a column *is* the guarantee that no other card spans across it —
 nothing has to be measured to keep it true, and dragging can never break it.
@@ -48,12 +55,18 @@ it lands where it was dropped; the card's size is what it is left holding.
 `geometry.ts` and nothing else — card rects, boundary rules, and grab areas all
 come out of it. `soksak.ts` holds the state and asks.
 
-**R7 — A card can always leave.**
-Every open card can be closed, and what is left is again an arrangement splitting
-could have built — so no action becomes impossible because of an earlier one.
-There are two ways out: a row of neighbours grows into the space, or, when none
-can because they are all fixed, the card's own slots go and the sharing cards
-take the room back.
+**R7 — A card can leave whenever its room has somewhere to go.**
+Close a card and what is left is again an arrangement splitting could have built,
+so no action becomes impossible because of an earlier one. There are two ways
+out: a row of neighbours grows into the space, or, when none can, the card's own
+slots go and the rest take the room back.
+
+Where every card shares, every open card but the last can leave. A card holding a
+px size does not stretch, so once some do, the promise is narrower: a card leaves
+when a slot along that axis is left for someone to share. If every slot were
+held, the sizes would not add up to the plane and the difference would belong to
+no one. `canClose` answers before anything moves, and the arrangement never
+deadlocks — while more than one card is open, some card can always leave.
 
 ## Install
 

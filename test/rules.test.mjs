@@ -206,3 +206,56 @@ test("every rule the README states has a test that names it", () => {
   const tested = read("test/rules.test.mjs").match(/test\("(R\d) —/g)?.map((s) => s.slice(6, 8)) ?? [];
   assert.deepEqual(stated, [...new Set(tested)], "a rule is stated without a test, or tested without being stated");
 });
+
+test("R1 — the plane's own borders are not lines a card may take away", () => {
+  // A card leaving the last slot took the line at 1.0 with it, so the plane
+  // itself got shorter and every position after that was measured against a
+  // border that had moved.
+  const grid = new Soksak(undefined, { width: 1200, height: 800 });
+  grid.split("card", "x");
+  grid.splitToward("card", "left");
+  grid.moveTo("card-2", "x", 2);
+  grid.moveTo("card-1", "x", 1);
+
+  const xs = grid.lines("x");
+  assert.equal(xs[0], 0, `the plane still starts at 0: [${xs}]`);
+  assert.equal(xs[xs.length - 1], 1, `and still ends at 1: [${xs}]`);
+  for (let i = 1; i < xs.length; i++) {
+    assert.ok(xs[i] >= xs[i - 1], `lines stay in order: [${xs}]`);
+  }
+
+  const [min, max] = grid.boundaryRange("x", 2);
+  assert.ok(min <= max, `a boundary's range is not empty: [${min}, ${max}]`);
+
+  grid.centerBoundary("x", 2);
+  for (const [id, r] of grid.rects()) {
+    assert.ok(r.w > 0 && r.h > 0, `${id} has area after centring: ${JSON.stringify(r)}`);
+  }
+});
+
+test("R3 — a split puts its line inside the card being cut, and nowhere else", () => {
+  // Searching the whole line array for the insertion point found an index
+  // outside the card whenever two lines shared a coordinate, so the card ended
+  // up with an inverted span and two cards genuinely overlapped.
+  const grid = new Soksak(undefined, { width: 1200, height: 800, gap: 0, minSize: 0 });
+  grid.splitToward("card", "top");
+  grid.split("card-1", "y");
+  grid.moveTo("card-1", "y", 2);
+  grid.split("card-1", "y");
+
+  for (const c of grid.cards) {
+    assert.ok(c.c0 < c.c1, `${c.id} spans nothing across: [${c.c0}, ${c.c1}]`);
+    assert.ok(c.r0 < c.r1, `${c.id} spans nothing down: [${c.r0}, ${c.r1}]`);
+  }
+  const rects = [...grid.rects().entries()];
+  for (let i = 0; i < rects.length; i++) {
+    for (let j = i + 1; j < rects.length; j++) {
+      const [ia, a] = rects[i];
+      const [ib, b] = rects[j];
+      const over =
+        Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) *
+        Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+      assert.ok(over < 0.01, `${ia} and ${ib} overlap by ${over.toFixed(0)}px²`);
+    }
+  }
+});

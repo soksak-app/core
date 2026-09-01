@@ -58,11 +58,28 @@ function audit(grid, where) {
   // and the arrangement is one splitting could have built
   assert.ok(grid.isSlicing(), `${where}: no longer slicing`);
 
-  // every open card can still be closed, so no action has become impossible
+  // Nothing has become impossible. Where every card shares, every open card but
+  // the last leaves — `rules.test.mjs` holds that. Once cards hold px sizes the
+  // promise narrows and `canClose` owns it, so what is checked here is that the
+  // arrangement never deadlocks and that its answer is the truth.
   const open = cards.filter((c) => !c.fixed);
+  const layout = () =>
+    cards
+      .map((o) => `${o.id}[c${o.c0}-${o.c1} r${o.r0}-${o.r1}${o.width !== undefined ? ` w${o.width.toFixed(0)}` : o.height !== undefined ? ` h${o.height.toFixed(0)}` : ""}${o.fixed ? " fixed" : ""}]`)
+      .join(" ");
   if (open.length > 1) {
+    assert.ok(
+      open.some((c) => grid.canClose(c.id)),
+      `${where}: not one card can be closed\n  ${layout()}`,
+    );
     for (const c of open) {
-      assert.ok(grid.canClose(c.id), `${where}: ${c.id} can no longer be closed`);
+      const said = grid.canClose(c.id);
+      const trial = Soksak.from(grid.toJSON(), { width: grid.width, height: grid.height });
+      assert.equal(
+        trial.close(c.id),
+        said,
+        `${where}: canClose(${c.id}) said ${said} and close disagreed\n  ${layout()}`,
+      );
     }
   }
 
@@ -128,7 +145,17 @@ test("the arrangement is sound again after every change, whatever the order", ()
         const to = pick();
         what = `move ${from.id} ${side} of ${to.id}`;
         grid.move(from.id, to.id, side);
-      } else if (roll < 0.85) {
+      } else if (roll < 0.8) {
+        // `insertAt` was reachable from the host and from no test, so the audit
+        // never walked the path where a card stands in a slot of its own.
+        const axis = next() < 0.5 ? "x" : "y";
+        const stands = grid.standings(axis);
+        if (stands.length) {
+          const line = stands[Math.floor(next() * stands.length)];
+          what = `insert at ${axis}${line}`;
+          grid.insertAt(axis, line, { size: 40 + Math.floor(next() * 120) });
+        }
+      } else if (roll < 0.88) {
         const stands = grid.standings("x");
         if (stands.length) {
           const line = stands[Math.floor(next() * stands.length)];

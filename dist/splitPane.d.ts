@@ -63,8 +63,26 @@ export declare class Soksak {
     resize(width: number, height: number): void;
     get width(): number;
     get height(): number;
+    /**
+     * Every card, as it stands.
+     *
+     * A copy, because this is a report and not a handle: writing to what came back
+     * put cards into the grid and spans past the end of a line array without any
+     * operation having run, and nothing downstream could tell.
+     */
     get cards(): readonly Card[];
     card(id: string): Card | undefined;
+    /**
+     * Replace a card's payload.
+     *
+     * `data` is opaque here and belongs to the host, which still has to be able to
+     * change it — a tab moving between cards is the host's business, not a
+     * rearrangement. Writing to what `card()` handed back used to be the only way,
+     * which meant reaching into the state to do it.
+     */
+    setData(id: string, data: unknown): boolean;
+    /** The card itself, for the operations that change it. */
+    private find;
     /** Grid line coordinates, normalised 0..1. A copy — the arrangement owns them. */
     lines(axis: Axis): number[];
     toJSON(): SoksakState;
@@ -110,6 +128,14 @@ export declare class Soksak {
      * line a card actually uses. Letting it stop a drag was how a boundary between
      * two cards could refuse to centre between them.
      */
+    /**
+     * Whether `line` names a boundary between two slots.
+     *
+     * The plane's own borders are index 0 and the last, and they are not
+     * boundaries anyone may move — moving one shortens the plane. An index past
+     * the end names nothing at all.
+     */
+    hasBoundary(axis: Axis, line: number): boolean;
     boundaryRange(axis: Axis, line: number): [number, number];
     private inset;
     /**
@@ -208,6 +234,15 @@ export declare class Soksak {
      */
     private soleSlots;
     private removable;
+    /**
+     * Whether every axis still has a slot that no card holds at a px size.
+     *
+     * Held slots take their px off the top and the rest share what is left. If
+     * nothing is left to share, nothing stretches to the plane's edge and the
+     * held sizes simply do not add up to it — a 40px card alone on an 800px
+     * plane, with the other 760 belonging to no one.
+     */
+    private someoneShares;
     canClose(id: string): boolean;
     /**
      * Remove a card.
@@ -234,12 +269,18 @@ export declare class Soksak {
      * everything has to be inserted at a boundary nothing crosses, and every card
      * past it moves along.
      *
+     * `size` is required and is px. A card inserted this way stands in a slot of
+     * its own that no proportion describes — it separates everything from
+     * everything, so there is no card to halve and no share to inherit. Without a
+     * size there is no answer to how wide it is, and the card came out with no
+     * width at all.
+     *
      * Returns the new card's id, or null when a card spans the boundary.
      */
-    insertAt(axis: Axis, line: number, init?: {
+    insertAt(axis: Axis, line: number, init: {
         id?: string;
         data?: unknown;
-        size?: number;
+        size: number;
     }): string | null;
     /** Whether a card occupies one slot and reaches across everything else. */
     private spansPlane;
@@ -253,7 +294,15 @@ export declare class Soksak {
      * spanning the slot it was supposed to make room for.
      */
     private openSlot;
-    /** Take a slot out of the axis. The cards on either side meet where it was. */
+    /**
+     * Take a slot out of the axis. The cards on either side meet where it was.
+     *
+     * A slot is bounded by two lines and exactly one of them is interior, so that
+     * is the one that goes: the far line normally, and the near one for the last
+     * slot, whose far line is the plane's own border. Taking the border instead
+     * shortens the plane, and every position after that is measured against an
+     * edge that moved.
+     */
     private dropSlot;
     /**
      * Take a plane-spanning card to another boundary.
@@ -283,5 +332,13 @@ export declare class Soksak {
     /** Whether `move` would succeed, without performing it. */
     canMove(id: string, targetId: string, side: Side): boolean;
     /** Put the arrangement back to a state it reported earlier. */
+    /**
+     * What every operation does when it is finished.
+     *
+     * A px size describes one slot. A card that comes to reach across two is not
+     * that size any more and cannot be — so the number goes, rather than lying
+     * dormant on the card and coming back to life at some later, unrelated split.
+     */
+    private changed;
     private restore;
 }

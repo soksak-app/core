@@ -31,8 +31,8 @@ test("splitToward puts the new card on the side that was named", () => {
 
 test("a move takes the card and its payload to the target's side", () => {
   const grid = three();
-  grid.card("terminal").data = { live: "pty-1" };
-  grid.card("browser").data = { live: "webview-1" };
+  grid.setData("terminal", { live: "pty-1" });
+  grid.setData("browser", { live: "webview-1" });
   grid.split("browser", "y");          // give the layout somewhere to fill from
 
   const before = ids(grid);
@@ -119,13 +119,13 @@ test("moving keeps the arrangement slicing, so every card still closes", () => {
 
 test("a card keeps its identity through a split on either side", () => {
   const grid = three();
-  const held = grid.card("terminal");
-  held.data = { live: "pty-1" };
+  grid.setData("terminal", { live: "pty-1" });
 
   const born = grid.splitToward("terminal", "left", { data: { live: "pty-2" } });
-  assert.equal(grid.card("terminal"), held, "the same object still answers to the name");
-  assert.equal(held.id, "terminal", "and its name did not change underneath");
-  assert.deepEqual(held.data, { live: "pty-1" }, "nor did what it holds");
+  // A host keeps ids and hands them back. Swapping which card wears which id
+  // was how a live surface ended up behind a name that no longer meant it.
+  assert.equal(grid.card("terminal").id, "terminal", "its name did not change underneath");
+  assert.deepEqual(grid.card("terminal").data, { live: "pty-1" }, "nor did what it holds");
   assert.deepEqual(grid.card(born).data, { live: "pty-2" });
 
   // left means left: the new card is the one nearer the start

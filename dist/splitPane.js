@@ -60,10 +60,37 @@ export class Soksak {
     get height() {
         return this.h;
     }
+    /**
+     * Every card, as it stands.
+     *
+     * A copy, because this is a report and not a handle: writing to what came back
+     * put cards into the grid and spans past the end of a line array without any
+     * operation having run, and nothing downstream could tell.
+     */
     get cards() {
-        return this.list;
+        return this.list.map((c) => Object.freeze({ ...c }));
     }
     card(id) {
+        const found = this.find(id);
+        return found && Object.freeze({ ...found });
+    }
+    /**
+     * Replace a card's payload.
+     *
+     * `data` is opaque here and belongs to the host, which still has to be able to
+     * change it — a tab moving between cards is the host's business, not a
+     * rearrangement. Writing to what `card()` handed back used to be the only way,
+     * which meant reaching into the state to do it.
+     */
+    setData(id, data) {
+        const card = this.find(id);
+        if (!card)
+            return false;
+        card.data = data;
+        return true;
+    }
+    /** The card itself, for the operations that change it. */
+    find(id) {
         return this.list.find((c) => c.id === id);
     }
     /** Grid line coordinates, normalised 0..1. A copy — the arrangement owns them. */
@@ -91,7 +118,7 @@ export class Soksak {
         return rectOf(this.plane, card);
     }
     rect(id) {
-        const card = this.card(id);
+        const card = this.find(id);
         return card && this.rectOf(card);
     }
     rects() {
@@ -169,6 +196,16 @@ export class Soksak {
      * line a card actually uses. Letting it stop a drag was how a boundary between
      * two cards could refuse to centre between them.
      */
+    /**
+     * Whether `line` names a boundary between two slots.
+     *
+     * The plane's own borders are index 0 and the last, and they are not
+     * boundaries anyone may move — moving one shortens the plane. An index past
+     * the end names nothing at all.
+     */
+    hasBoundary(axis, line) {
+        return Number.isInteger(line) && line >= 1 && line <= this.arr(axis).length - 2;
+    }
     boundaryRange(axis, line) {
         var _a, _b;
         const along = linePositions(this.plane, axis);
@@ -200,6 +237,8 @@ export class Soksak {
      * Returns where the boundary ended up.
      */
     moveBoundary(axis, line, px, allowSnap = true) {
+        if (!this.hasBoundary(axis, line) || !Number.isFinite(px))
+            return this.boundaryPos(axis, line);
         const [min, max] = this.boundaryRange(axis, line);
         let target = clamp(px, min, max);
         if (allowSnap && this.snap !== 'off') {
@@ -228,10 +267,18 @@ export class Soksak {
             // corridor away from where it was dropped.
             const corridor = inset(this.plane, axis, holder[lo], 'lo') + inset(this.plane, axis, holder[hi], 'hi');
             const size = Math.max(0, slot - corridor);
-            if (axis === 'x')
-                holder.width = size;
-            else
-                holder.height = size;
+            // A slot has one width. Setting it on the one card the drag happened to
+            // find left any other card standing in the same slot still asking for the
+            // old number, and the larger of the two won — so one of them was drawn at
+            // a size it never asked for.
+            for (const c of this.list) {
+                if (c[lo] !== holder[lo] || fixedSize(c, axis) === null)
+                    continue;
+                if (axis === 'x')
+                    c.width = size;
+                else
+                    c.height = size;
+            }
         }
         else {
             const usable = this.sharedExtent(axis);
@@ -240,7 +287,7 @@ export class Soksak {
             // Only the shared slots carry normalised width, so convert against those.
             a[line] = usable > EPS ? a[line - 1] + (target - before) / usable : a[line - 1];
         }
-        this.sliceMemo.clear();
+        this.changed();
         return this.boundaryPos(axis, line);
     }
     /**
@@ -274,7 +321,7 @@ export class Soksak {
             drop(line + 1);
         }
         if (a !== this.arr(axis))
-            this.sliceMemo.clear();
+            this.changed();
         return line;
     }
     /** How many px the sharing slots have between them, per unit of normalised span. */
@@ -304,7 +351,7 @@ export class Soksak {
         // Centring divides what is shared. A fixed size is not shared — it is the
         // card's own answer — so a boundary beside one has no half to compute, and
         // making it "equal" to a pane would be answering a question nobody asked.
-        if (this.holderAt(axis, line))
+        if (!this.hasBoundary(axis, line) || this.holderAt(axis, line))
             return this.boundaryPos(axis, line);
         const along = linePositions(this.plane, axis);
         const [lo, hi] = SPAN[axis];
@@ -352,7 +399,7 @@ export class Soksak {
             if (card[hi] > line)
                 card[hi]--;
         }
-        this.sliceMemo.clear();
+        this.changed();
         return true;
     }
     /** Drop lines no card reads any more. Returns how many went. */
@@ -375,7 +422,7 @@ export class Soksak {
             }
         }
         if (dropped)
-            this.sliceMemo.clear();
+            this.changed();
         return dropped;
     }
     // ---- splitting ---------------------------------------------------------
@@ -417,7 +464,7 @@ export class Soksak {
     }
     /** True when both halves would keep `minSize`. */
     canSplit(id, axis) {
-        const card = this.card(id);
+        const card = this.find(id);
         return !!card && !!this.cutAt(card, axis);
     }
     /**
@@ -436,7 +483,7 @@ export class Soksak {
      */
     split(id, axis, init = {}) {
         var _a;
-        const card = this.card(id);
+        const card = this.find(id);
         const cut = card && this.cutAt(card, axis);
         if (!card || !cut)
             return null;
@@ -444,9 +491,13 @@ export class Soksak {
         const [lo, hi] = SPAN[axis];
         let line = cut.line;
         if (line < 0) {
-            line = a.findIndex((t) => t > cut.value + EPS);
-            if (line < 0)
-                line = a.length;
+            // The cut falls strictly inside this card, so the new line belongs
+            // strictly inside its span. Searching the whole array instead found an
+            // index outside the card as soon as two lines shared a coordinate, and a
+            // card cannot be cut by a line it does not reach.
+            line = card[lo] + 1;
+            while (line < card[hi] && a[line] <= cut.value + EPS)
+                line++;
             a.splice(line, 0, cut.value);
             for (const other of this.list) {
                 if (other[lo] >= line)
@@ -475,7 +526,7 @@ export class Soksak {
         fresh[lo] = line;
         card[hi] = line;
         this.list.push(fresh);
-        this.sliceMemo.clear();
+        this.changed();
         return fresh.id;
     }
     /**
@@ -488,7 +539,7 @@ export class Soksak {
      */
     splitToward(id, side, init = {}) {
         const axis = axisOf(side);
-        const card = this.card(id);
+        const card = this.find(id);
         if (!card)
             return null;
         if (!isAhead(side))
@@ -496,26 +547,26 @@ export class Soksak {
         const born = this.split(id, axis, init);
         if (born === null)
             return null;
-        const fresh = this.card(born);
+        const fresh = this.find(born);
         const [lo, hi] = SPAN[axis];
         const near = [card[lo], card[hi]];
         card[lo] = fresh[lo];
         card[hi] = fresh[hi];
         fresh[lo] = near[0];
         fresh[hi] = near[1];
-        this.sliceMemo.clear();
+        this.changed();
         return born;
     }
     nextId() {
         let id;
         do {
             id = `card-${++this.seq}`;
-        } while (this.card(id));
+        } while (this.find(id));
         return id;
     }
     // ---- closing and moving ------------------------------------------------
     fill(id) {
-        const card = this.card(id);
+        const card = this.find(id);
         return card ? fillFor(this.list, card, this.fillOrder, this.sliceMemo) : null;
     }
     /**
@@ -533,24 +584,57 @@ export class Soksak {
      */
     soleSlots(card) {
         for (const axis of AXES) {
-            const across = axis === 'x' ? 'y' : 'x';
-            const [alo, ahi] = SPAN[across];
-            if (card[alo] === 0 && card[ahi] === this.arr(across).length - 1)
+            const [lo, hi] = SPAN[axis];
+            // The slots go, and every card reaching into them shrinks to what is
+            // left. That is well defined unless some other card lives *entirely*
+            // inside the range, because then it would be left spanning nothing.
+            // Asking whether this card reaches across the plane was a narrower
+            // question with the same answer in the easy cases, and no answer at all
+            // for a card hemmed in on both axes by cards holding a px size.
+            const trapped = this.list.some((other) => other !== card && other[lo] >= card[lo] && other[hi] <= card[hi]);
+            if (!trapped)
                 return axis;
         }
         return null;
     }
     removable(id) {
-        const card = this.card(id);
+        const card = this.find(id);
         if (!card || card.fixed)
             return null;
         if (this.list.filter((c) => !c.fixed).length <= 1)
             return null;
         return card;
     }
+    /**
+     * Whether every axis still has a slot that no card holds at a px size.
+     *
+     * Held slots take their px off the top and the rest share what is left. If
+     * nothing is left to share, nothing stretches to the plane's edge and the
+     * held sizes simply do not add up to it — a 40px card alone on an 800px
+     * plane, with the other 760 belonging to no one.
+     */
+    someoneShares() {
+        for (const axis of AXES) {
+            const [lo] = SPAN[axis];
+            const held = new Set();
+            for (const card of this.list)
+                if (fixedSize(card, axis) !== null)
+                    held.add(card[lo]);
+            if (held.size >= this.arr(axis).length - 1)
+                return false;
+        }
+        return true;
+    }
     canClose(id) {
         const card = this.removable(id);
-        return !!card && (!!this.fill(id) || this.soleSlots(card) !== null);
+        if (!card)
+            return false;
+        if (!this.fill(id) && this.soleSlots(card) === null)
+            return false;
+        const before = this.toJSON();
+        const done = this.close(id);
+        this.restore(before);
+        return done;
     }
     /**
      * Remove a card.
@@ -562,12 +646,17 @@ export class Soksak {
         const card = this.removable(id);
         if (!card)
             return false;
+        const before = this.toJSON();
         const filling = this.fill(id);
         if (filling) {
             for (const neighbour of filling.cards)
                 neighbour[filling.grow] = card[filling.grow];
             this.list.splice(this.list.indexOf(card), 1);
-            this.sliceMemo.clear();
+            this.changed();
+            if (!this.someoneShares()) {
+                this.restore(before);
+                return false;
+            }
             return true;
         }
         const axis = this.soleSlots(card);
@@ -579,7 +668,11 @@ export class Soksak {
         this.list.splice(this.list.indexOf(card), 1);
         for (let i = 0; i < count; i++)
             this.dropSlot(axis, from);
-        this.sliceMemo.clear();
+        this.changed();
+        if (!this.someoneShares()) {
+            this.restore(before);
+            return false;
+        }
         return true;
     }
     /**
@@ -605,10 +698,18 @@ export class Soksak {
      * everything has to be inserted at a boundary nothing crosses, and every card
      * past it moves along.
      *
+     * `size` is required and is px. A card inserted this way stands in a slot of
+     * its own that no proportion describes — it separates everything from
+     * everything, so there is no card to halve and no share to inherit. Without a
+     * size there is no answer to how wide it is, and the card came out with no
+     * width at all.
+     *
      * Returns the new card's id, or null when a card spans the boundary.
      */
-    insertAt(axis, line, init = {}) {
+    insertAt(axis, line, init) {
         var _a;
+        if (!Number.isFinite(init === null || init === void 0 ? void 0 : init.size) || init.size < 0)
+            return null;
         if (!this.canInsertAt(axis, line))
             return null;
         const [lo, hi] = SPAN[axis];
@@ -625,14 +726,12 @@ export class Soksak {
         fresh[hi] = line + 1;
         fresh[alo] = 0;
         fresh[ahi] = this.arr(across).length - 1;
-        if (init.size !== undefined) {
-            if (axis === 'x')
-                fresh.width = init.size;
-            else
-                fresh.height = init.size;
-        }
+        if (axis === 'x')
+            fresh.width = init.size;
+        else
+            fresh.height = init.size;
         this.list.push(fresh);
-        this.sliceMemo.clear();
+        this.changed();
         return fresh.id;
     }
     /** Whether a card occupies one slot and reaches across everything else. */
@@ -664,16 +763,29 @@ export class Soksak {
                 card[hi]++;
         }
     }
-    /** Take a slot out of the axis. The cards on either side meet where it was. */
+    /**
+     * Take a slot out of the axis. The cards on either side meet where it was.
+     *
+     * A slot is bounded by two lines and exactly one of them is interior, so that
+     * is the one that goes: the far line normally, and the near one for the last
+     * slot, whose far line is the plane's own border. Taking the border instead
+     * shortens the plane, and every position after that is measured against an
+     * edge that moved.
+     */
     dropSlot(axis, slot) {
         const a = this.arr(axis);
+        if (a.length <= 2)
+            return; // one slot, no interior line, nothing to take
         const [lo, hi] = SPAN[axis];
-        const gone = slot + 1;
+        const gone = slot + 1 < a.length - 1 ? slot + 1 : slot;
         a.splice(gone, 1);
         for (const card of this.list) {
+            // A card that *started* at the line falls back to the one before it; a
+            // card that *ended* there reaches on to the next. Either way it takes the
+            // freed room, and neither can be written as the other.
             if (card[lo] >= gone)
                 card[lo]--;
-            if (card[hi] >= gone)
+            if (card[hi] > gone)
                 card[hi]--;
         }
     }
@@ -688,7 +800,11 @@ export class Soksak {
      * `line` is a boundary in the arrangement as it stands now.
      */
     moveTo(id, axis, line) {
-        const card = this.card(id);
+        const card = this.find(id);
+        // `fixed` says the *layout* does not move it, and this is not the layout: it
+        // names the card, changes no other card's spans and no line on the other
+        // axis. A rail is fixed and travelling is what a rail does. `move` refuses a
+        // fixed card because a drop rearranges everything around it; this does not.
         if (!card || !this.spansPlane(card, axis))
             return false;
         const [lo, hi] = SPAN[axis];
@@ -712,7 +828,11 @@ export class Soksak {
         card[alo] = 0;
         card[ahi] = this.arr(across).length - 1;
         this.list.push(card);
-        this.sliceMemo.clear();
+        this.changed();
+        if (!this.someoneShares()) {
+            this.restore(before);
+            return false;
+        }
         return true;
     }
     /** Every boundary a plane-spanning card could stand on. */
@@ -735,8 +855,8 @@ export class Soksak {
      * rides along and a sidebar stays the width it was.
      */
     move(id, targetId, side) {
-        const card = this.card(id);
-        const target = this.card(targetId);
+        const card = this.find(id);
+        const target = this.find(targetId);
         if (!card || !target || card === target || card.fixed)
             return false;
         const carried = { data: card.data, width: card.width, height: card.height };
@@ -748,7 +868,7 @@ export class Soksak {
             this.restore(before);
             return false;
         }
-        const moved = this.card(landed);
+        const moved = this.find(landed);
         // The size a card holds is its own; the axis it now stands on decides which.
         if (axisOf(side) === 'x') {
             if (carried.width !== undefined)
@@ -762,7 +882,12 @@ export class Soksak {
             if (carried.width !== undefined && spanOf(moved, 'x') === 1)
                 moved.width = carried.width;
         }
-        this.sliceMemo.clear();
+        this.changed();
+        if (!this.someoneShares()) {
+            // The card brought its px size to a slot that was the last one sharing.
+            this.restore(before);
+            return false;
+        }
         return true;
     }
     /** Whether `move` would succeed, without performing it. */
@@ -780,6 +905,44 @@ export class Soksak {
         return probe.move(id, targetId, side);
     }
     /** Put the arrangement back to a state it reported earlier. */
+    /**
+     * What every operation does when it is finished.
+     *
+     * A px size describes one slot. A card that comes to reach across two is not
+     * that size any more and cannot be — so the number goes, rather than lying
+     * dormant on the card and coming back to life at some later, unrelated split.
+     */
+    changed() {
+        var _a;
+        for (const card of this.list) {
+            if (card.width !== undefined && card.c1 - card.c0 !== 1)
+                delete card.width;
+            if (card.height !== undefined && card.r1 - card.r0 !== 1)
+                delete card.height;
+        }
+        // Two cards can end up in one slot asking for different widths. The slot has
+        // one, so they agree on the larger and both are drawn at what they hold.
+        for (const axis of AXES) {
+            const [lo] = SPAN[axis];
+            const agreed = new Map();
+            for (const card of this.list) {
+                const size = fixedSize(card, axis);
+                if (size === null)
+                    continue;
+                agreed.set(card[lo], Math.max((_a = agreed.get(card[lo])) !== null && _a !== void 0 ? _a : 0, size));
+            }
+            for (const card of this.list) {
+                if (fixedSize(card, axis) === null)
+                    continue;
+                const size = agreed.get(card[lo]);
+                if (axis === 'x')
+                    card.width = size;
+                else
+                    card.height = size;
+            }
+        }
+        this.sliceMemo.clear();
+    }
     restore(state) {
         this.xs = [...state.xs];
         this.ys = [...state.ys];
