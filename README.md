@@ -146,6 +146,26 @@ for instance — it lands outside the pane. Give the pane's children `min-width:
 Dragging a divider moves the line. Double-clicking it (or Enter/Space when focused) centres it so
 the two panes beside it come out the same size. Arrow keys nudge it.
 
+## Moving a pane
+
+Dragging a pane somewhere else is one operation, not a close and a split the
+caller sequences. The order matters: closing first gives the space back and
+changes the target's geometry, so the cut has to be measured after that, and a
+close that cannot happen must leave the whole move undone rather than half of it.
+
+```js
+grid.canMove("terminal", "browser", "right");   // asking is not doing
+grid.move("terminal", "browser", "right");      // false, and unchanged, if refused
+```
+
+The pane keeps its id and its payload, so a live surface rides along. A refused
+move — a fixed pane, an unknown target, nothing to fill the space it would leave,
+no room at the target — changes nothing at all.
+
+`splitToward(id, side, init)` is the same idea for a new pane: `split` always
+hands the far half to the new one, so `left` and `top` swap them afterwards,
+because what a caller means by "put it on the left" is where the content ends up.
+
 ## Clean lines and a band standing on one
 
 A line is **clean** when it is a boundary over the whole plane — no pane spans
@@ -228,6 +248,8 @@ such a side always exists, so `canClose` is true for every pane except the last 
 | `panes`, `pane(id)`, `rect(id)`, `rects()`, `rectOf(pane)` | read the arrangement |
 | `resize(w, h)`, `width`, `height` | plane size |
 | `canSplit(id, axis)`, `split(id, axis, {id?, data?})` | cut one pane in two |
+| `splitToward(id, side, {id?, data?})` | cut it and put the new one on a named side |
+| `canMove(id, targetId, side)`, `move(id, targetId, side)` | take a pane to another pane's side |
 | `canClose(id)`, `close(id)`, `fill(id)` | remove a pane; `fill` reports which neighbours would take the space |
 | `dividers()`, `rules()` | grab areas, and boundaries to draw |
 | `moveLine(axis, line, value)`, `lineRange(axis, line)`, `centerLine(axis, line)` | drag a boundary |

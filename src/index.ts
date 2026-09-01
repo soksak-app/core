@@ -10,6 +10,7 @@ export type {
   PaneInit,
   Rect,
   Rule,
+  Side,
   SnapMode,
   Station,
 } from './soksak.js';

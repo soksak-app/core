@@ -17,6 +17,8 @@
  * always tiles one of its sides exactly.
  */
 export type Axis = 'x' | 'y';
+/** Which side of a pane something goes on. `left`/`top` land ahead of it. */
+export type Side = 'left' | 'right' | 'top' | 'bottom';
 /** `merge`: a dragged line snaps to a neighbour and the two become one line. */
 export type SnapMode = 'merge' | 'off';
 /** Which axis a close tries first when filling the freed space. */
@@ -226,6 +228,37 @@ export declare class Soksak {
         data?: unknown;
     }): string | null;
     private nextId;
+    /**
+     * Cut a pane and put the new one on a named side.
+     *
+     * `split` always hands the far half to the new pane. When the new one belongs
+     * ahead — on the left or on top — the two swap payloads afterwards, because
+     * what a caller means by "put it on the left" is where the content ends up,
+     * not which record was created first.
+     */
+    splitToward(id: string, side: Side, init?: {
+        id?: string;
+        data?: unknown;
+    }): string | null;
+    /**
+     * Move a pane to sit on one side of another. This is the drag-and-drop
+     * operation: the pane leaves where it was, its neighbours take that space,
+     * and it arrives beside the target.
+     *
+     * It is one operation rather than a close and a split the caller sequences,
+     * because the order matters — closing first changes the target's geometry, so
+     * the split has to be measured after the space is given back, and a close that
+     * cannot happen must leave the whole move undone rather than half of it.
+     *
+     * Returns false and changes nothing when the move cannot be made: the pane is
+     * fixed, the target is gone, nothing can fill the space the pane leaves, or
+     * the target has no room to be cut.
+     */
+    move(id: string, targetId: string, side: Side): boolean;
+    /** Put the grid back to a state it reported earlier. */
+    private restore;
+    /** Whether `move` would succeed, without performing it. */
+    canMove(id: string, targetId: string, side: Side): boolean;
     /**
      * Splitting only ever replaces one pane with two, so the layout is always a
      * slicing floorplan — a pinwheel cannot be reached. Closing has to keep that

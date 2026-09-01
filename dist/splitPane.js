@@ -472,6 +472,81 @@ export class Soksak {
         } while (this.pane(id));
         return id;
     }
+    /**
+     * Cut a pane and put the new one on a named side.
+     *
+     * `split` always hands the far half to the new pane. When the new one belongs
+     * ahead — on the left or on top — the two swap payloads afterwards, because
+     * what a caller means by "put it on the left" is where the content ends up,
+     * not which record was created first.
+     */
+    splitToward(id, side, init = {}) {
+        const axis = side === 'left' || side === 'right' ? 'x' : 'y';
+        const ahead = side === 'left' || side === 'top';
+        const pane = this.pane(id);
+        if (!pane)
+            return null;
+        if (!ahead)
+            return this.split(id, axis, init);
+        // The far half is created, then the two exchange what they hold.
+        const keep = { id: pane.id, data: pane.data };
+        const fresh = this.split(id, axis, { id: init.id, data: keep.data });
+        if (fresh === null)
+            return null;
+        const far = this.pane(fresh);
+        // The near half becomes the new pane, the far one keeps the original's identity.
+        pane.id = far.id;
+        pane.data = init.data;
+        far.id = keep.id;
+        far.data = keep.data;
+        return pane.id;
+    }
+    /**
+     * Move a pane to sit on one side of another. This is the drag-and-drop
+     * operation: the pane leaves where it was, its neighbours take that space,
+     * and it arrives beside the target.
+     *
+     * It is one operation rather than a close and a split the caller sequences,
+     * because the order matters — closing first changes the target's geometry, so
+     * the split has to be measured after the space is given back, and a close that
+     * cannot happen must leave the whole move undone rather than half of it.
+     *
+     * Returns false and changes nothing when the move cannot be made: the pane is
+     * fixed, the target is gone, nothing can fill the space the pane leaves, or
+     * the target has no room to be cut.
+     */
+    move(id, targetId, side) {
+        const pane = this.pane(id);
+        const target = this.pane(targetId);
+        if (!pane || !target || pane === target || pane.fixed)
+            return false;
+        const carried = pane.data;
+        const before = this.toJSON();
+        if (!this.close(id))
+            return false;
+        // The target may have grown into the freed space; measure the cut after that.
+        if (this.splitToward(targetId, side, { id, data: carried }) === null) {
+            this.restore(before);
+            return false;
+        }
+        return true;
+    }
+    /** Put the grid back to a state it reported earlier. */
+    restore(state) {
+        this.xs = [...state.xs];
+        this.ys = [...state.ys];
+        this.list = state.panes.map((p) => { var _a; return ({ ...p, fixed: (_a = p.fixed) !== null && _a !== void 0 ? _a : false }); });
+        this.sliceMemo.clear();
+    }
+    /** Whether `move` would succeed, without performing it. */
+    canMove(id, targetId, side) {
+        const probe = Soksak.from(this.toJSON(), {
+            gap: this.gap, minSize: this.minSize, grabSize: this.grabSize,
+            snapDistance: this.snapDistance, snap: this.snap, fillOrder: this.fillOrder,
+            width: this.w, height: this.h,
+        });
+        return probe.move(id, targetId, side);
+    }
     // ---- closing -----------------------------------------------------------
     /**
      * Splitting only ever replaces one pane with two, so the layout is always a
