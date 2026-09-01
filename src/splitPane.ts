@@ -158,6 +158,46 @@ export class Soksak {
     return true;
   }
 
+  /**
+   * Declare whether the layout may move a card — one half of its role.
+   *
+   * The other half is `setSize`. Reaching into what `cards` handed back was how
+   * a host used to say either, which meant writing to the state to do it.
+   */
+  setFixed(id: string, fixed: boolean): boolean {
+    const card = this.find(id);
+    if (!card) return false;
+    card.fixed = fixed;
+    return true;
+  }
+
+  /**
+   * Declare a card's size along one axis in px, or `null` to let it share.
+   *
+   * A px size describes one slot, so a card reaching across two cannot hold
+   * one. Nor may the last card sharing an axis stop sharing: the held sizes
+   * would not add up to the plane and the difference would belong to no one.
+   */
+  setSize(id: string, axis: Axis, px: number | null): boolean {
+    const card = this.find(id);
+    if (!card) return false;
+    if (px !== null && (!Number.isFinite(px) || px < 0 || spanOf(card, axis) !== 1)) return false;
+
+    const before = this.toJSON();
+    if (axis === 'x') {
+      if (px === null) delete card.width;
+      else card.width = px;
+    } else if (px === null) delete card.height;
+    else card.height = px;
+
+    this.changed();
+    if (!this.someoneShares()) {
+      this.restore(before);
+      return false;
+    }
+    return true;
+  }
+
   /** The card itself, for the operations that change it. */
   private find(id: string): Card | undefined {
     return this.list.find((c) => c.id === id);

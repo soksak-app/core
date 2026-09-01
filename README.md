@@ -198,6 +198,9 @@ card spans over, and every card past it moves along.
 grid.standings("x");            // the boundaries such a card could stand on
 grid.canInsertAt("x", 2);
 grid.insertAt("x", 2, { id: "rail", size: 190 });
+grid.setFixed("rail", true);           // the layout does not move it
+grid.setSize("rail", "x", 210);        // and this is how wide it is; null shares
+grid.setData("rail", { pty: 3 });      // the payload is the host's
 grid.moveTo("rail", "x", 4);    // a column leaves and a column arrives
 ```
 

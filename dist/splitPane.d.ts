@@ -81,6 +81,21 @@ export declare class Soksak {
      * which meant reaching into the state to do it.
      */
     setData(id: string, data: unknown): boolean;
+    /**
+     * Declare whether the layout may move a card — one half of its role.
+     *
+     * The other half is `setSize`. Reaching into what `cards` handed back was how
+     * a host used to say either, which meant writing to the state to do it.
+     */
+    setFixed(id: string, fixed: boolean): boolean;
+    /**
+     * Declare a card's size along one axis in px, or `null` to let it share.
+     *
+     * A px size describes one slot, so a card reaching across two cannot hold
+     * one. Nor may the last card sharing an axis stop sharing: the held sizes
+     * would not add up to the plane and the difference would belong to no one.
+     */
+    setSize(id: string, axis: Axis, px: number | null): boolean;
     /** The card itself, for the operations that change it. */
     private find;
     /** Grid line coordinates, normalised 0..1. A copy — the arrangement owns them. */

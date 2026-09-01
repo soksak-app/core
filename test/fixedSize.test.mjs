@@ -209,3 +209,29 @@ test("a card inserted at a boundary is given a size, or it is not inserted", () 
     assert.ok(r.w > 0 && r.h > 0, `${cid} has area: ${JSON.stringify(r)}`);
   }
 });
+
+test("a role is declared, not written into the state", () => {
+  const grid = three();
+  assert.equal(Object.isFrozen(grid.card("sidebar")), true, "what came back is a report");
+  assert.throws(() => { grid.card("sidebar").fixed = true; }, TypeError, "and writing to it throws");
+
+  assert.equal(grid.setFixed("sidebar", true), true);
+  assert.equal(grid.card("sidebar").fixed, true);
+  assert.equal(grid.setFixed("nobody", true), false);
+
+  assert.equal(grid.setSize("sidebar", "x", 240), true);
+  assert.ok(Math.abs(grid.rect("sidebar").w - 240) < 0.01, "it draws what it was given");
+
+  assert.equal(grid.setSize("sidebar", "x", -1), false, "a size is not negative");
+  assert.equal(grid.setSize("sidebar", "x", NaN), false, "nor is it NaN");
+  assert.equal(grid.card("sidebar").width, 240, "and a refusal changes nothing");
+
+  assert.equal(grid.setSize("sidebar", "x", null), true, "it can go back to sharing");
+  assert.equal(grid.card("sidebar").width, undefined);
+
+  // the last card sharing an axis cannot stop sharing
+  const alone = new Soksak(undefined, { width: 1200, height: 800 });
+  assert.equal(alone.setSize("card", "x", 200), false, "nobody would be left to share");
+  assert.equal(alone.card("card").width, undefined);
+  assert.ok(Math.abs(alone.rect("card").w - 1200) < 0.01, "and it still fills the plane");
+});
