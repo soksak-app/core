@@ -6,7 +6,7 @@ import { three } from "./helpers.mjs";
 
 const arcs = (path) => (path.match(/A/g) ?? []).length;
 
-test("panes separated by a corridor need pad to close into one shape", () => {
+test("cards separated by a corridor need pad to close into one shape", () => {
   const grid = three();
   const rects = ["sidebar", "terminal"].map((id) => grid.rect(id));
   const half = grid.gap / 2;
@@ -17,7 +17,7 @@ test("panes separated by a corridor need pad to close into one shape", () => {
   assert.equal(outline(rects, { pad: half + 6 }).loops.length, 1);
 });
 
-test("binding two panes at right angles gives a rounded L", () => {
+test("binding two cards at right angles gives a rounded L", () => {
   const grid = three();
   const rects = ["sidebar", "terminal"].map((id) => grid.rect(id));
   const shape = outline(rects, { pad: grid.gap / 2, radius: 14 + grid.gap / 2 });
@@ -27,7 +27,7 @@ test("binding two panes at right angles gives a rounded L", () => {
   assert.equal(arcs(shape.path), 6);
 });
 
-test("a pane left out of the outline stays outside it", () => {
+test("a card left out of the outline stays outside it", () => {
   const grid = three();
   for (const [inside, outsideId] of [
     ["terminal", "browser"],

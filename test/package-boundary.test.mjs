@@ -27,9 +27,15 @@ test("the toolchain owners are exact", () => {
   }
 });
 
+/** Comments are not code — a card standing at a window's edge is prose about furniture. */
+const codeOf = (file) =>
+  read(file)
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/(^|[^:])\/\/.*$/gm, "$1");
+
 test("the soksak core carries no DOM dependency", () => {
-  for (const file of ["src/soksak.ts", "src/outline.ts"]) {
-    const source = read(file);
+  for (const file of ["src/card.ts", "src/geometry.ts", "src/slicing.ts", "src/soksak.ts", "src/outline.ts"]) {
+    const source = codeOf(file);
     assert.doesNotMatch(source, /\bdocument\b/, `${file} touches document`);
     assert.doesNotMatch(source, /\bwindow\b/, `${file} touches window`);
     assert.doesNotMatch(source, /HTMLElement/, `${file} names an element type`);

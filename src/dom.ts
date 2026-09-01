@@ -2,7 +2,7 @@
  * DOM binding for `Soksak`.
  *
  * The view owns position, lifecycle and pointer input. It does not own markup:
- * pane elements come from a `createPane` callback the host supplies, and the
+ * card elements come from a `createCard` callback the host supplies, and the
  * elements the view must create itself (dividers and boundary rules) carry only
  * a class name and data attributes, with no visual styling. Everything you can
  * see is the host's CSS.
@@ -12,21 +12,21 @@
  */
 
 import { Soksak } from './soksak.js';
-import type { Axis, Pane, Rect } from './soksak.js';
+import type { Axis, Card, Rect } from './soksak.js';
 
 export type ChangeReason = 'drag' | 'center' | 'merge' | 'resize' | 'render';
 
 export interface ViewOptions {
   /**
-   * Build the element for a pane. Called once per pane; the returned element is
+   * Build the element for a card. Called once per card; the returned element is
    * reused across renders, so a live surface inside it survives splits, closes
    * and drags. The view sets only `position`, `left`, `top`, `width`, `height`.
    */
-  createPane(pane: Pane): HTMLElement;
-  /** Called on every render for every pane, after the rect is applied. */
-  updatePane?(el: HTMLElement, pane: Pane, rect: Rect): void;
-  /** Called when a pane element is about to be removed. */
-  destroyPane?(el: HTMLElement, pane: Pane): void;
+  createCard(card: Card): HTMLElement;
+  /** Called on every render for every card, after the rect is applied. */
+  updateCard?(el: HTMLElement, card: Card, rect: Rect): void;
+  /** Called when a card element is about to be removed. */
+  destroyCard?(el: HTMLElement, card: Card): void;
   /** Class name stem for the elements the view creates. Default `sp`. */
   classPrefix?: string;
   /** Draw the boundary lines. Set false to draw them yourself from `grid.rules()`. Default true. */
@@ -52,7 +52,7 @@ export class SoksakView {
   private grid: Soksak;
   private options: ViewOptions;
   private prefix: string;
-  private paneEls = new Map<string, { el: HTMLElement; pane: Pane }>();
+  private cardEls = new Map<string, { el: HTMLElement; card: Card }>();
   private dividerEls = new Map<string, HTMLElement>();
   private ruleEls = new Map<string, HTMLElement>();
   private drag: DragState | null = null;
@@ -80,28 +80,28 @@ export class SoksakView {
     if (this.disposed) return;
 
     const live = new Set<string>();
-    for (const pane of this.grid.panes) {
-      live.add(pane.id);
-      let held = this.paneEls.get(pane.id);
+    for (const card of this.grid.cards) {
+      live.add(card.id);
+      let held = this.cardEls.get(card.id);
       if (!held) {
-        const el = this.options.createPane(pane);
+        const el = this.options.createCard(card);
         el.style.position = 'absolute';
         this.host.appendChild(el);
-        held = { el, pane };
-        this.paneEls.set(pane.id, held);
+        held = { el, card };
+        this.cardEls.set(card.id, held);
       }
-      held.pane = pane;
-      const rect = this.grid.rectOf(pane);
+      held.card = card;
+      const rect = this.grid.rectOf(card);
       place(held.el, rect);
-      held.el.dataset.paneId = pane.id;
-      this.options.updatePane?.(held.el, pane, rect);
+      held.el.dataset.cardId = card.id;
+      this.options.updateCard?.(held.el, card, rect);
     }
-    // the pane is already gone from the grid, so hand back the last one we saw
-    for (const [id, held] of this.paneEls) {
+    // the card is already gone from the grid, so hand back the last one we saw
+    for (const [id, held] of this.cardEls) {
       if (live.has(id)) continue;
-      this.options.destroyPane?.(held.el, held.pane);
+      this.options.destroyCard?.(held.el, held.card);
       held.el.remove();
-      this.paneEls.delete(id);
+      this.cardEls.delete(id);
     }
 
     if (this.options.rules !== false) {
@@ -172,7 +172,7 @@ export class SoksakView {
       const line = Number(el.dataset.line);
       if (e.timeStamp - lastTap < DOUBLE_TAP_MS) {
         lastTap = -Infinity;
-        this.grid.centerLine(axis, line);
+        this.grid.centerBoundary(axis, line);
         this.render('center');
         return;
       }
@@ -183,7 +183,7 @@ export class SoksakView {
         axis,
         line,
         from: axis === 'x' ? e.clientX : e.clientY,
-        base: this.grid.lines(axis)[line],
+        base: this.grid.boundaryPos(axis, line),
         moved: false,
       };
     });
@@ -191,10 +191,9 @@ export class SoksakView {
     el.addEventListener('pointermove', (e: PointerEvent) => {
       const drag = this.drag;
       if (!drag) return;
-      const along = drag.axis === 'x' ? this.grid.width : this.grid.height;
       const now = drag.axis === 'x' ? e.clientX : e.clientY;
       if (Math.abs(now - drag.from) > 2) drag.moved = true;
-      this.grid.moveLine(drag.axis, drag.line, drag.base + (now - drag.from) / along);
+      this.grid.moveBoundary(drag.axis, drag.line, drag.base + (now - drag.from));
       this.render('drag');
     });
 
@@ -221,15 +220,14 @@ export class SoksakView {
       const line = Number(el.dataset.line);
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        this.grid.centerLine(axis, line);
+        this.grid.centerBoundary(axis, line);
         this.render('center');
         return;
       }
       const step = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }[e.key];
       if (step === undefined) return;
       e.preventDefault();
-      const along = axis === 'x' ? this.grid.width : this.grid.height;
-      this.grid.moveLine(axis, line, this.grid.lines(axis)[line] + (step * 8) / along);
+      this.grid.moveBoundary(axis, line, this.grid.boundaryPos(axis, line) + step * 8);
       this.render('drag');
     });
 
@@ -237,20 +235,20 @@ export class SoksakView {
     return el;
   }
 
-  /** The element currently showing a pane, if any. */
+  /** The element currently showing a card, if any. */
   element(id: string): HTMLElement | undefined {
-    return this.paneEls.get(id)?.el;
+    return this.cardEls.get(id)?.el;
   }
 
   destroy(): void {
     this.disposed = true;
     this.observer?.disconnect();
     this.observer = null;
-    for (const held of this.paneEls.values()) {
-      this.options.destroyPane?.(held.el, held.pane);
+    for (const held of this.cardEls.values()) {
+      this.options.destroyCard?.(held.el, held.card);
       held.el.remove();
     }
-    this.paneEls.clear();
+    this.cardEls.clear();
     for (const el of this.dividerEls.values()) el.remove();
     this.dividerEls.clear();
     for (const el of this.ruleEls.values()) el.remove();

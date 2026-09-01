@@ -10,13 +10,13 @@ export function make(options = {}) {
   return grid;
 }
 
-/** sidebar on the left, two stacked panes on the right — the shape the prototype starts from. */
+/** sidebar on the left, two stacked cards on the right — the shape the prototype starts from. */
 export function three(options = {}) {
   const grid = new Soksak(
     {
       xs: [0, 0.28, 1],
       ys: [0, 0.52, 1],
-      panes: [
+      cards: [
         { id: "sidebar", c0: 0, c1: 1, r0: 0, r1: 2, fixed: true },
         { id: "terminal", c0: 1, c1: 2, r0: 0, r1: 1 },
         { id: "browser", c0: 1, c1: 2, r0: 1, r1: 2 },
@@ -28,7 +28,7 @@ export function three(options = {}) {
 }
 
 /**
- * The three properties every operation must preserve: panes never overlap, the
+ * The three properties every operation must preserve: cards never overlap, the
  * plane is covered with no gap left over, and the corridor between any two
  * neighbours is exactly `gap`.
  */
@@ -41,7 +41,7 @@ export function assertTiling(grid, label = "") {
       const b = rects[j];
       const dx = Math.max(b.x - (a.x + a.w), a.x - (b.x + b.w));
       const dy = Math.max(b.y - (a.y + a.h), a.y - (b.y + b.h));
-      assert.ok(dx > -0.01 || dy > -0.01, `${label}: panes overlap`);
+      assert.ok(dx > -0.01 || dy > -0.01, `${label}: cards overlap`);
       closest = Math.min(closest, Math.max(dx, dy));
     }
   }
@@ -52,7 +52,7 @@ export function assertTiling(grid, label = "") {
     assert.ok(Math.abs(closest - grid.gap) < 0.5, `${label}: corridor is ${closest}, not ${grid.gap}`);
   }
   const smallest = Math.min(...rects.flatMap((r) => [r.w, r.h]));
-  assert.ok(smallest >= grid.minSize - 0.6, `${label}: pane shrank to ${smallest}`);
+  assert.ok(smallest >= grid.minSize - 0.6, `${label}: card shrank to ${smallest}`);
   assert.ok(grid.isSlicing(), `${label}: the arrangement is no longer slicing`);
 }
 
@@ -65,21 +65,21 @@ export function random(seed) {
 export function fuzz(grid, seed, steps) {
   const next = random(seed);
   for (let i = 0; i < steps; i++) {
-    const open = grid.panes.filter((p) => !p.fixed);
+    const open = grid.cards.filter((p) => !p.fixed);
     if (!open.length) break;
-    const pane = open[Math.floor(next() * open.length)];
+    const card = open[Math.floor(next() * open.length)];
     const roll = next();
     if (roll < 0.5) {
-      grid.split(pane.id, next() < 0.5 ? "x" : "y");
+      grid.split(card.id, next() < 0.5 ? "x" : "y");
     } else if (roll < 0.7) {
-      grid.close(pane.id);
+      grid.close(card.id);
     } else if (roll < 0.75) {
       grid.tidy();
     } else {
       const dividers = grid.dividers();
       if (dividers.length) {
         const d = dividers[Math.floor(next() * dividers.length)];
-        grid.moveLine(d.axis, d.line, grid.lines(d.axis)[d.line] + (next() - 0.5) * 0.4);
+        grid.moveBoundary(d.axis, d.line, grid.boundaryPos(d.axis, d.line) + (next() - 0.5) * 0.4 * (d.axis === "x" ? W : H));
         grid.mergeCoincident(d.axis, d.line);
       }
     }
@@ -88,14 +88,14 @@ export function fuzz(grid, seed, steps) {
 }
 
 /**
- * A line can only close up onto its neighbour when no pane spans the pair —
- * otherwise that pane stops it at `minSize` first. Returns such a line index.
+ * A line can only close up onto its neighbour when no card spans the pair —
+ * otherwise that card stops it at `minSize` first. Returns such a line index.
  */
 export function freePair(grid, axis = "x") {
   const [lo, hi] = axis === "x" ? ["c0", "c1"] : ["r0", "r1"];
   const lines = grid.lines(axis);
   for (let k = 1; k < lines.length - 1; k++) {
-    if (grid.panes.some((p) => p[lo] === k && p[hi] === k + 1)) continue;
+    if (grid.cards.some((p) => p[lo] === k && p[hi] === k + 1)) continue;
     return k;
   }
   return null;
@@ -110,11 +110,11 @@ export function withFreePair(options = {}) {
     const grid = three(options);
     const next = random(seed);
     for (let i = 0; i < 40; i++) {
-      const open = grid.panes.filter((p) => !p.fixed);
+      const open = grid.cards.filter((p) => !p.fixed);
       if (!open.length) break;
-      const pane = open[Math.floor(next() * open.length)];
-      if (next() < 0.65) grid.split(pane.id, next() < 0.5 ? "x" : "y");
-      else grid.close(pane.id);
+      const card = open[Math.floor(next() * open.length)];
+      if (next() < 0.65) grid.split(card.id, next() < 0.5 ? "x" : "y");
+      else grid.close(card.id);
     }
     const k = freePair(grid, "x");
     if (k !== null) return { grid, line: k };

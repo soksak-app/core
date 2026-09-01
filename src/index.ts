@@ -1,18 +1,20 @@
 export { Soksak } from './soksak.js';
 export type {
   Axis,
+  Card,
+  CardInit,
   Divider,
   Fill,
   FillOrder,
-  SoksakOptions,
-  SoksakState,
-  Pane,
-  PaneInit,
   Rect,
   Rule,
   Side,
   SnapMode,
-  Station,
+  SoksakOptions,
+  SoksakState,
+  Zone,
+  ZoneHit,
+  ZoneOptions,
 } from './soksak.js';
 
 export { contains, outline, roundedPath, unionLoops } from './outline.js';

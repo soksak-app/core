@@ -1,72 +1,61 @@
 /**
- * Pane layout over shared grid lines.
+ * A soksak over shared grid lines.
  *
- * There is no tree and no grouping. Two arrays of numbers own every coordinate:
+ * Two arrays of numbers own every coordinate. A card is a span of indices into
+ * them, so two cards that meet read the same index: a boundary is one number and
+ * cannot drift apart. Moving a line moves every card that reads it; a card that
+ * spans *across* the line is untouched, and for it the line is virtual —
+ * invisible as a boundary, still there, and a later split snaps to it.
  *
- *   xs   vertical grid lines, normalised 0..1
- *   ys   horizontal grid lines, normalised 0..1
+ * Everything on the plane is a card. A sidebar at the window's edge is a card
+ * holding the first column at a fixed width; the same card holding a middle
+ * column is a rail standing between panes. Nothing can cross either, because a
+ * card occupies its columns — the structure is the guarantee, so there is no
+ * line to check and no tolerance to tune.
  *
- * A pane is a span of indices into those arrays. Two panes that meet read the
- * same index, so a boundary is one number and cannot drift apart. Moving a line
- * moves every pane that references it; a pane that spans across the line is not
- * affected — for it the line is *virtual*, and a later split snaps to it.
- *
- * Splitting only ever replaces one pane with two, so the layout is always a
- * slicing (guillotine) floorplan. Closing preserves that property, which is what
- * keeps every pane closable: in a slicing floorplan a pane's sibling region
- * always tiles one of its sides exactly.
+ * Splitting only ever replaces one card with two, so the arrangement is always
+ * slicing and every card stays closable. See `slicing.ts` for why that matters.
  */
 
-export type Axis = 'x' | 'y';
+import { AXES, SPAN, axisOf, fixedSize, isAhead, spanOf } from './card.js';
+import type { Axis, Card, CardInit, Rect, Side } from './card.js';
+import {
+  boundarySpans,
+  crossing,
+  edgePos,
+  interiorLines,
+  isVirtual,
+  linePositions,
+  rectOf,
+  slotSizes,
+  zoneAt,
+} from './geometry.js';
+import type { Plane, Zone, ZoneHit, ZoneOptions } from './geometry.js';
 
-/** Which side of a pane something goes on. `left`/`top` land ahead of it. */
-export type Side = 'left' | 'right' | 'top' | 'bottom';
+export type { Zone, ZoneHit, ZoneOptions } from './geometry.js';
+import { fillFor, isSlicing } from './slicing.js';
+import type { Fill, FillOrder, Span } from './slicing.js';
 
-/** `merge`: a dragged line snaps to a neighbour and the two become one line. */
+export type { Axis, Card, CardInit, Rect, Side } from './card.js';
+export type { Fill, FillOrder } from './slicing.js';
+
+/** `merge`: a dragged boundary snaps onto a neighbouring line and the two become one. */
 export type SnapMode = 'merge' | 'off';
-
-/** Which axis a close tries first when filling the freed space. */
-export type FillOrder = 'v' | 'h';
-
-export interface Rect {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
-export interface PaneInit {
-  id: string;
-  /** Column span over `xs`. `c0 < c1`. */
-  c0: number;
-  c1: number;
-  /** Row span over `ys`. `r0 < r1`. */
-  r0: number;
-  r1: number;
-  /** A fixed pane is never split, never closed, and never fills a neighbour. */
-  fixed?: boolean;
-  /** Anything the host wants to carry along. Never read by this library. */
-  data?: unknown;
-}
-
-export interface Pane extends PaneInit {
-  fixed: boolean;
-}
 
 export interface SoksakState {
   xs: number[];
   ys: number[];
-  panes: PaneInit[];
+  cards: CardInit[];
 }
 
 export interface SoksakOptions {
-  /** Corridor between panes, in px. Half of it is the outer margin. Default 24. */
+  /** Corridor between two cards, in px. Half of it insets every inner edge. Default 24. */
   gap?: number;
-  /** Smallest pane edge, in px. Splitting and dragging both respect it. Default 96. */
+  /** Smallest card edge, in px. Splitting, dragging and resizing all respect it. Default 96. */
   minSize?: number;
-  /** Smallest grab area, in px. Kept independent of `gap` so a zero gap is still grabbable. Default 11. */
+  /** Smallest grab area, in px. Kept apart from `gap` so a zero corridor is still grabbable. Default 11. */
   grabSize?: number;
-  /** How close a dragged line must come to a neighbour to snap onto it, in px. Default 7. */
+  /** How close a dragged boundary must come to a neighbour to snap onto it, in px. Default 7. */
   snapDistance?: number;
   snap?: SnapMode;
   fillOrder?: FillOrder;
@@ -74,17 +63,27 @@ export interface SoksakOptions {
   height?: number;
 }
 
-/** A grab area. Exists only where the line is a real boundary. */
+/**
+ * A place to grab a boundary. Only where cards actually break on it — elsewhere
+ * a card spans across and there is nothing between two things to take hold of.
+ */
 export interface Divider extends Rect {
   key: string;
   axis: Axis;
   line: number;
+  /**
+   * The card whose fixed size this drag changes, if any.
+   *
+   * A boundary beside a card that holds its slot at a fixed size resizes that
+   * card; anywhere else it moves the line and the cards on both sides follow.
+   * One gesture, and what it does is a fact about what is next to it.
+   */
+  resizes?: string;
 }
 
 /**
- * A drawn boundary. Every line yields one `virtual: true` rule spanning the whole
- * plane plus one `virtual: false` rule per stretch where panes actually break on it.
- * Draw the virtual one faintly and the real ones solid.
+ * A boundary to draw. Every line yields one `virtual: true` rule spanning the
+ * whole plane plus one solid rule per stretch where cards actually break on it.
  */
 export interface Rule extends Rect {
   key: string;
@@ -93,46 +92,18 @@ export interface Rule extends Rect {
   virtual: boolean;
 }
 
-/**
- * A fixed-width band standing on a grid line, taking room from the panes.
- *
- * It may only stand on a *clean* line — one no pane spans across — because a
- * pane that crossed it would be cut in two by the band. `cleanLines` reports
- * which lines qualify and `nearestCleanLine` finds the closest one.
- */
-export interface Station {
-  axis: Axis;
-  line: number;
-  /** Total room the band takes, in px. Its drawn rect is inset by half a corridor, like a pane. */
-  size: number;
-}
-
-/** Which neighbours would take over a pane's space, and from which side. */
-export interface Fill {
-  side: 'below' | 'above' | 'right' | 'left';
-  panes: Pane[];
-}
-
-type SpanKey = 'c0' | 'c1' | 'r0' | 'r1';
-type Span = { c0: number; c1: number; r0: number; r1: number };
-
-const KEYS: Record<Axis, [SpanKey, SpanKey]> = { x: ['c0', 'c1'], y: ['r0', 'r1'] };
-const CROSS: Record<Axis, [SpanKey, SpanKey]> = { x: ['r0', 'r1'], y: ['c0', 'c1'] };
 const EPS = 1e-9;
-
 const clamp = (v: number, lo: number, hi: number): number =>
   lo > hi ? (lo + hi) / 2 : Math.min(hi, Math.max(lo, v));
 
 export class Soksak {
   private xs: number[];
   private ys: number[];
-  private list: Pane[];
+  private list: Card[];
   private w: number;
   private h: number;
   private seq = 0;
   private sliceMemo = new Map<string, boolean>();
-
-  private stationAt: Station | null = null;
 
   gap: number;
   minSize: number;
@@ -141,7 +112,7 @@ export class Soksak {
   snap: SnapMode;
   fillOrder: FillOrder;
 
-  /** Without a state, starts as a single pane filling the plane. */
+  /** Without a state, starts as one card filling the plane. */
   constructor(state?: SoksakState, options: SoksakOptions = {}) {
     this.gap = options.gap ?? 24;
     this.minSize = options.minSize ?? 96;
@@ -155,15 +126,19 @@ export class Soksak {
     if (state) {
       this.xs = [...state.xs];
       this.ys = [...state.ys];
-      this.list = state.panes.map((p) => ({ ...p, fixed: p.fixed ?? false }));
+      this.list = state.cards.map((c) => ({ ...c, fixed: c.fixed ?? false }));
     } else {
       this.xs = [0, 1];
       this.ys = [0, 1];
-      this.list = [{ id: 'pane', c0: 0, c1: 1, r0: 0, r1: 1, fixed: false }];
+      this.list = [{ id: 'card', c0: 0, c1: 1, r0: 0, r1: 1, fixed: false }];
     }
   }
 
-  // ---- plane -------------------------------------------------------------
+  static from(state: SoksakState, options?: SoksakOptions): Soksak {
+    return new Soksak(state, options);
+  }
+
+  // ---- the plane ---------------------------------------------------------
 
   resize(width: number, height: number): void {
     this.w = width;
@@ -178,32 +153,30 @@ export class Soksak {
     return this.h;
   }
 
-  get panes(): readonly Pane[] {
+  get cards(): readonly Card[] {
     return this.list;
   }
 
-  pane(id: string): Pane | undefined {
-    return this.list.find((p) => p.id === id);
+  card(id: string): Card | undefined {
+    return this.list.find((c) => c.id === id);
   }
 
-  /** Grid line coordinates, normalised 0..1. Read-only copies. */
+  /** Grid line coordinates, normalised 0..1. A copy — the arrangement owns them. */
   lines(axis: Axis): number[] {
-    return [...this.arr(axis)];
+    return [...(axis === 'x' ? this.xs : this.ys)];
   }
 
   toJSON(): SoksakState {
     return {
       xs: [...this.xs],
       ys: [...this.ys],
-      panes: this.list.map((p) => ({ ...p })),
+      cards: this.list.map((c) => ({ ...c })),
     };
   }
 
-  static from(state: SoksakState, options?: SoksakOptions): Soksak {
-    return new Soksak(state, options);
+  private get plane(): Plane {
+    return { xs: this.xs, ys: this.ys, cards: this.list, width: this.w, height: this.h, gap: this.gap };
   }
-
-  // ---- geometry ----------------------------------------------------------
 
   private arr(axis: Axis): number[] {
     return axis === 'x' ? this.xs : this.ys;
@@ -213,196 +186,75 @@ export class Soksak {
     return axis === 'x' ? this.w : this.h;
   }
 
-  /** Room left for the panes once a band on this axis has taken its own. */
-  private usable(axis: Axis): number {
-    const s = this.stationAt;
-    return this.size(axis) - (s && s.axis === axis ? s.size : 0);
-  }
+  // ---- reading the arrangement -------------------------------------------
 
-  /**
-   * Where a grid line falls in px. Lines at or past the band are pushed along by
-   * its width, so the panes on either side of it keep their own proportions.
-   */
-  private pos(axis: Axis, index: number): number {
-    const s = this.stationAt;
-    const base = this.arr(axis)[index] * this.usable(axis);
-    return s && s.axis === axis && index >= s.line ? base + s.size : base;
-  }
-
-  private get half(): number {
-    return this.gap / 2;
-  }
-
-  /**
-   * An interior pane edge is pulled back by half a corridor; an edge sitting on
-   * the plane boundary is flush. Every rect in the library measures from here.
-   */
-  private edge(axis: Axis, index: number, side: 'lo' | 'hi'): number {
-    const a = this.arr(axis);
-    const s = this.stationAt;
-    const flush = side === 'lo' ? index === 0 : index === a.length - 1;
-    const inset = flush ? 0 : this.half;
-    // On the far side of a band the pane starts after it, so read the shifted
-    // position for that side rather than the line's own.
-    const shifted = s && s.axis === axis && index === s.line && side === 'hi'
-      ? a[index] * this.usable(axis)
-      : this.pos(axis, index);
-    return shifted + (side === 'lo' ? inset : -inset);
-  }
-
-  private inset(axis: Axis, index: number, side: 'lo' | 'hi'): number {
-    const a = this.arr(axis);
-    const flush = side === 'lo' ? index === 0 : index === a.length - 1;
-    return flush ? 0 : this.half;
-  }
-
-  rectOf(pane: Pane): Rect {
-    const x0 = this.edge('x', pane.c0, 'lo');
-    const x1 = this.edge('x', pane.c1, 'hi');
-    const y0 = this.edge('y', pane.r0, 'lo');
-    const y1 = this.edge('y', pane.r1, 'hi');
-    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  rectOf(card: Card): Rect {
+    return rectOf(this.plane, card);
   }
 
   rect(id: string): Rect | undefined {
-    const p = this.pane(id);
-    return p && this.rectOf(p);
+    const card = this.card(id);
+    return card && this.rectOf(card);
   }
 
   rects(): Map<string, Rect> {
-    return new Map(this.list.map((p) => [p.id, this.rectOf(p)]));
+    return new Map(this.list.map((c) => [c.id, this.rectOf(c)]));
   }
 
-  // ---- real and virtual stretches of a line ------------------------------
-
-  private static merge(spans: [number, number][]): [number, number][] {
-    spans.sort((a, b) => a[0] - b[0]);
-    const out: [number, number][] = [];
-    for (const s of spans) {
-      const top = out[out.length - 1];
-      if (top && s[0] <= top[1]) top[1] = Math.max(top[1], s[1]);
-      else out.push([s[0], s[1]]);
-    }
-    return out;
+  /**
+   * Where a drop lands — which card, and whether on it or beside it.
+   *
+   * The point is in the plane's own coordinates, the ones `rects()` reports.
+   */
+  zoneAt(x: number, y: number, options: ZoneOptions = {}): ZoneHit | null {
+    return zoneAt(this.plane, x, y, options);
   }
 
-  /** Index stretches where panes actually break on this line. */
-  realSpans(axis: Axis, line: number): [number, number][] {
-    const [lo, hi] = KEYS[axis];
-    const [o0, o1] = CROSS[axis];
-    const spans: [number, number][] = [];
-    for (const a of this.list) {
-      if (a[hi] !== line) continue;
-      for (const b of this.list) {
-        if (b[lo] !== line) continue;
-        const s = Math.max(a[o0], b[o0]);
-        const e = Math.min(a[o1], b[o1]);
-        if (e > s) spans.push([s, e]);
-      }
-    }
-    return Soksak.merge(spans);
+  /** Cards that span across a line. They are what a card placed on it would cut. */
+  cardsCrossing(axis: Axis, line: number): Card[] {
+    return crossing(this.plane, axis, line);
   }
 
-  /** True when no pane references the line at all — it survives only as a snap target. */
+  /** How many lines a card spans across — how much finer its neighbours are. */
+  crossings(card: Card): number {
+    return Math.max(0, card.c1 - card.c0 - 1) + Math.max(0, card.r1 - card.r0 - 1);
+  }
+
+  /** True when no card reads this line — it survives only as a snap target. */
   isVirtual(axis: Axis, line: number): boolean {
-    const [lo, hi] = KEYS[axis];
-    return !this.list.some((p) => p[lo] === line || p[hi] === line);
+    return isVirtual(this.plane, axis, line);
   }
 
-  // ---- clean lines and the band -----------------------------------------
-
-  /**
-   * Panes that span across this line. They are what makes it unclean: a band
-   * standing here would cut them, and a pane cannot be in two places.
-   */
-  panesCrossing(axis: Axis, line: number): Pane[] {
-    const [lo, hi] = KEYS[axis];
-    return this.list.filter((p) => p[lo] < line && p[hi] > line);
+  virtualCount(): number {
+    let n = 0;
+    for (const axis of AXES) for (const k of interiorLines(this.plane, axis)) if (this.isVirtual(axis, k)) n++;
+    return n;
   }
 
-  /**
-   * A line is clean when it is a boundary over the whole plane — no pane spans
-   * across it. This is a structural fact about the spans, not a comparison of
-   * coordinates, so there is no tolerance to get wrong and no drift to heal.
-   */
-  isCleanLine(axis: Axis, line: number): boolean {
-    const a = this.arr(axis);
-    if (!Number.isInteger(line) || line < 0 || line > a.length - 1) return false;
-    return this.panesCrossing(axis, line).length === 0;
+  isSlicing(list: readonly Span[] = this.list): boolean {
+    return isSlicing(list, this.sliceMemo);
   }
 
-  /** Every clean line, in order. The plane's own two edges are always clean. */
-  cleanLines(axis: Axis): number[] {
-    const out: number[] = [];
-    for (let k = 0; k < this.arr(axis).length; k++) if (this.isCleanLine(axis, k)) out.push(k);
-    return out;
-  }
+  // ---- boundaries --------------------------------------------------------
 
-  /** The clean line nearest a normalised position. Ties go to the earlier line. */
-  nearestCleanLine(axis: Axis, value: number): number | null {
-    const a = this.arr(axis);
-    let best: number | null = null;
-    let distance = Infinity;
-    for (const k of this.cleanLines(axis)) {
-      const d = Math.abs(a[k] - value);
-      if (d < distance) {
-        best = k;
-        distance = d;
-      }
-    }
-    return best;
-  }
-
-  get station(): Station | null {
-    return this.stationAt && { ...this.stationAt };
-  }
-
-  /** Stand a band on a clean line. Refuses an unclean one — see `nearestCleanLine`. */
-  setStation(axis: Axis, line: number, size: number): boolean {
-    if (!this.isCleanLine(axis, line)) return false;
-    this.stationAt = { axis, line, size: Math.max(0, size) };
-    return true;
-  }
-
-  clearStation(): void {
-    this.stationAt = null;
-  }
-
-  /** The band's drawn rect, inset by half a corridor on each side exactly like a pane. */
-  stationRect(): Rect | null {
-    const s = this.stationAt;
-    if (!s) return null;
-    const at = this.arr(s.axis)[s.line] * this.usable(s.axis);
-    const lo = at + this.half;
-    const hi = at + s.size - this.half;
-    return s.axis === 'x'
-      ? { x: lo, y: 0, w: Math.max(0, hi - lo), h: this.h }
-      : { x: 0, y: lo, w: this.w, h: Math.max(0, hi - lo) };
-  }
-
-  /** How many lines a pane spans across. Tells you how much finer its neighbours are. */
-  crossings(pane: Pane): number {
-    return Math.max(0, pane.c1 - pane.c0 - 1) + Math.max(0, pane.r1 - pane.r0 - 1);
-  }
-
-  /** Every boundary to draw: one full-plane virtual rule per line, plus its real stretches. */
+  /** Everything to draw: one virtual rule per line, plus its solid stretches. */
   rules(): Rule[] {
     const out: Rule[] = [];
-    for (const axis of ['x', 'y'] as Axis[]) {
-      const a = this.arr(axis);
-      const along = this.size(axis);
+    const half = this.gap / 2;
+    for (const axis of AXES) {
+      const along = linePositions(this.plane, axis);
       const across = axis === 'x' ? this.h : this.w;
       const other: Axis = axis === 'x' ? 'y' : 'x';
-      for (let k = 1; k < a.length - 1; k++) {
-        const at = a[k] * along - 0.5;
+      for (const k of interiorLines(this.plane, axis)) {
+        const at = along[k] - 0.5;
         out.push(
           axis === 'x'
-            ? { key: `vx:${k}`, axis, line: k, virtual: true, x: at, y: -this.half, w: 1, h: across + this.gap }
-            : { key: `vy:${k}`, axis, line: k, virtual: true, x: -this.half, y: at, w: across + this.gap, h: 1 },
+            ? { key: `vx:${k}`, axis, line: k, virtual: true, x: at, y: -half, w: 1, h: across + this.gap }
+            : { key: `vy:${k}`, axis, line: k, virtual: true, x: -half, y: at, w: across + this.gap, h: 1 },
         );
-        for (const [i0, i1] of this.realSpans(axis, k)) {
-          const s = this.edge(other, i0, 'lo') - this.half;
-          const e = this.edge(other, i1, 'hi') + this.half;
+        for (const [i0, i1] of boundarySpans(this.plane, axis, k)) {
+          const s = edgePos(this.plane, other, i0, 'lo') - half;
+          const e = edgePos(this.plane, other, i1, 'hi') + half;
           out.push(
             axis === 'x'
               ? { key: `sx:${k}:${i0}`, axis, line: k, virtual: false, x: at, y: s, w: 1, h: e - s }
@@ -414,22 +266,33 @@ export class Soksak {
     return out;
   }
 
-  /** Grab areas. Only where a corridor exists — a virtual stretch has nothing to grab. */
+  /**
+   * The card a boundary resizes, if the slot on either side is held at a fixed
+   * size. The card before it answers first, so dragging a sidebar's inner edge
+   * resizes the sidebar rather than the pane beside it.
+   */
+  private holderAt(axis: Axis, line: number): Card | undefined {
+    const [lo, hi] = SPAN[axis];
+    const before = this.list.find((c) => c[hi] === line && fixedSize(c, axis) !== null);
+    if (before) return before;
+    return this.list.find((c) => c[lo] === line && fixedSize(c, axis) !== null);
+  }
+
   dividers(): Divider[] {
     const out: Divider[] = [];
     const hit = Math.max(this.gap, this.grabSize);
-    for (const axis of ['x', 'y'] as Axis[]) {
-      const a = this.arr(axis);
-      const along = this.size(axis);
+    for (const axis of AXES) {
+      const along = linePositions(this.plane, axis);
       const other: Axis = axis === 'x' ? 'y' : 'x';
-      for (let k = 1; k < a.length - 1; k++) {
-        for (const [i0, i1] of this.realSpans(axis, k)) {
-          const s = this.edge(other, i0, 'lo');
-          const e = this.edge(other, i1, 'hi');
+      for (const k of interiorLines(this.plane, axis)) {
+        const holder = this.holderAt(axis, k);
+        for (const [i0, i1] of boundarySpans(this.plane, axis, k)) {
+          const s = edgePos(this.plane, other, i0, 'lo');
+          const e = edgePos(this.plane, other, i1, 'hi');
           out.push(
             axis === 'x'
-              ? { key: `x:${k}:${i0}`, axis, line: k, x: a[k] * along - hit / 2, y: s, w: hit, h: e - s }
-              : { key: `y:${k}:${i0}`, axis, line: k, x: s, y: a[k] * along - hit / 2, w: e - s, h: hit },
+              ? { key: `x:${k}:${i0}`, axis, line: k, resizes: holder?.id, x: along[k] - hit / 2, y: s, w: hit, h: e - s }
+              : { key: `y:${k}:${i0}`, axis, line: k, resizes: holder?.id, x: s, y: along[k] - hit / 2, w: e - s, h: hit },
           );
         }
       }
@@ -437,378 +300,159 @@ export class Soksak {
     return out;
   }
 
-  // ---- moving a line -----------------------------------------------------
+  /** Where a boundary is now, in px along its axis. */
+  boundaryPos(axis: Axis, line: number): number {
+    return linePositions(this.plane, axis)[line];
+  }
 
-  /** How far a line may travel before some pane hits `minSize`. */
-  lineRange(axis: Axis, line: number): [number, number] {
-    const a = this.arr(axis);
-    const along = this.size(axis);
-    const [lo, hi] = KEYS[axis];
-    let min = a[line - 1];
-    let max = a[line + 1];
-    for (const p of this.list) {
-      if (p[hi] === line) {
-        const need = this.minSize + this.inset(axis, p[lo], 'lo') + this.inset(axis, line, 'hi');
-        min = Math.max(min, a[p[lo]] + need / along);
-      }
-      if (p[lo] === line) {
-        const need = this.minSize + this.inset(axis, line, 'lo') + this.inset(axis, p[hi], 'hi');
-        max = Math.min(max, a[p[hi]] - need / along);
-      }
+  /** How far a boundary may travel before some card would fall under `minSize`. */
+  boundaryRange(axis: Axis, line: number): [number, number] {
+    const along = linePositions(this.plane, axis);
+    const sizes = slotSizes(this.plane, axis);
+    const [lo, hi] = SPAN[axis];
+
+    let min = along[line - 1] ?? 0;
+    let max = along[line + 1] ?? this.size(axis);
+    for (const card of this.list) {
+      const near = this.inset(axis, card[lo], 'lo');
+      const far = this.inset(axis, card[hi], 'hi');
+      if (card[hi] === line) min = Math.max(min, along[card[lo]] + this.minSize + near + far);
+      if (card[lo] === line) max = Math.min(max, along[card[hi]] - this.minSize - near - far);
     }
+    // A held slot beyond the pair does not move, so the boundary cannot pass it.
+    void sizes;
     return [min, max];
   }
 
-  /**
-   * Move one line. Every pane that reads it follows; panes that span across it do
-   * not. A line may travel all the way onto its neighbour — panes that span the
-   * pair stop it at `minSize` first, so nothing is ever squeezed flat.
-   */
-  moveLine(axis: Axis, line: number, value: number, allowSnap = true): number {
+  private inset(axis: Axis, index: number, side: 'lo' | 'hi'): number {
     const a = this.arr(axis);
-    const along = this.size(axis);
-    const [min, max] = this.lineRange(axis, line);
-    let v = clamp(value, min, max);
-    if (allowSnap && this.snap !== 'off') {
-      for (const edge of [a[line - 1], a[line + 1]]) {
-        if (edge >= min && edge <= max && Math.abs(v - edge) * along < this.snapDistance) v = edge;
-      }
-    }
-    a[line] = v;
-    this.sliceMemo.clear();
-    return v;
+    const flush = side === 'lo' ? index === 0 : index === a.length - 1;
+    return flush ? 0 : this.gap / 2;
   }
 
   /**
-   * Put a line where the two panes beside it come out the same size. Not the
-   * midpoint of the line coordinates — a pane on the plane edge carries the
-   * corridor inset on one side only, so centring the line leaves it half a
-   * corridor wider.
+   * Move a boundary to a position in px.
+   *
+   * What that means is a fact about what is beside it: next to a card holding
+   * its slot at a fixed size it changes that size, and anywhere else it moves
+   * the line, which every card reading it follows. One gesture either way.
+   *
+   * Returns where the boundary ended up.
    */
-  centerLine(axis: Axis, line: number): number {
+  moveBoundary(axis: Axis, line: number, px: number, allowSnap = true): number {
+    const [min, max] = this.boundaryRange(axis, line);
+    let target = clamp(px, min, max);
+
+    if (allowSnap && this.snap !== 'off') {
+      const along = linePositions(this.plane, axis);
+      for (const edge of [along[line - 1], along[line + 1]]) {
+        if (edge >= min - EPS && edge <= max + EPS && Math.abs(target - edge) < this.snapDistance) {
+          target = edge;
+        }
+      }
+    }
+
+    const holder = this.holderAt(axis, line);
+    if (holder) {
+      const [lo] = SPAN[axis];
+      const start = linePositions(this.plane, axis)[holder[lo]];
+      const size = Math.max(0, target - start);
+      if (axis === 'x') holder.width = size;
+      else holder.height = size;
+    } else {
+      const usable = this.sharedExtent(axis);
+      const before = linePositions(this.plane, axis)[line - 1];
+      const a = this.arr(axis);
+      // Only the shared slots carry normalised width, so convert against those.
+      a[line] = usable > EPS ? a[line - 1] + (target - before) / usable : a[line - 1];
+    }
+    this.sliceMemo.clear();
+    return this.boundaryPos(axis, line);
+  }
+
+  /** How many px the sharing slots have between them, per unit of normalised span. */
+  private sharedExtent(axis: Axis): number {
     const a = this.arr(axis);
-    const along = this.size(axis);
-    const [lo, hi] = KEYS[axis];
-    let start = a[line - 1];
-    let end = a[line + 1];
+    const sizes = slotSizes(this.plane, axis);
+    let px = 0;
+    let span = 0;
+    for (let i = 0; i < sizes.length; i++) {
+      const held = this.list.some((c) => c[SPAN[axis][0]] === i && fixedSize(c, axis) !== null);
+      if (held) continue;
+      px += sizes[i];
+      span += a[i + 1] - a[i];
+    }
+    return span > EPS ? px / span : 0;
+  }
+
+  /**
+   * Put a boundary where the two cards beside it come out the same size.
+   *
+   * Not the midpoint of the two lines — a card at the plane's border carries the
+   * corridor inset on one side only, so centring the line leaves it half a
+   * corridor wider than its neighbour.
+   */
+  centerBoundary(axis: Axis, line: number): number {
+    const along = linePositions(this.plane, axis);
+    const [lo, hi] = SPAN[axis];
+    let start = along[line - 1] ?? 0;
+    let end = along[line + 1] ?? this.size(axis);
     let insStart = this.inset(axis, line - 1, 'lo');
     let insEnd = this.inset(axis, line + 1, 'hi');
-    for (const p of this.list) {
-      if (p[hi] === line && a[p[lo]] >= start) {
-        start = a[p[lo]];
-        insStart = this.inset(axis, p[lo], 'lo');
+    for (const card of this.list) {
+      if (card[hi] === line && along[card[lo]] >= start) {
+        start = along[card[lo]];
+        insStart = this.inset(axis, card[lo], 'lo');
       }
-      if (p[lo] === line && a[p[hi]] <= end) {
-        end = a[p[hi]];
-        insEnd = this.inset(axis, p[hi], 'hi');
+      if (card[lo] === line && along[card[hi]] <= end) {
+        end = along[card[hi]];
+        insEnd = this.inset(axis, card[hi], 'hi');
       }
     }
-    return this.moveLine(axis, line, (start + end) / 2 + (insStart - insEnd) / (2 * along), false);
+    return this.moveBoundary(axis, line, (start + end) / 2 + (insStart - insEnd) / 2, false);
   }
 
   /**
-   * Fold a line onto a neighbour it exactly coincides with. Refuses when a pane
-   * spans the pair, which would leave that pane with no size — `minSize` keeps
-   * that state from arising in the first place.
+   * Fold a line onto a neighbour it now coincides with.
+   *
+   * Refused when a card spans the pair — that card would be left with no size,
+   * and `minSize` keeps the state from arising in the first place.
    */
   mergeCoincident(axis: Axis, line: number): boolean {
     if (this.snap === 'off') return false;
     const a = this.arr(axis);
-    const [lo, hi] = KEYS[axis];
+    const [lo, hi] = SPAN[axis];
     const other = [line - 1, line + 1].find(
       (i) => i > 0 && i < a.length - 1 && Math.abs(a[i] - a[line]) < EPS,
     );
     if (other === undefined) return false;
-    const at = (p: Pane, key: SpanKey): number => (p[key] === line ? other : p[key]);
-    if (this.list.some((p) => at(p, lo) === at(p, hi))) return false;
-    for (const p of this.list) {
-      p[lo] = at(p, lo);
-      p[hi] = at(p, hi);
+    const at = (card: Card, k: 'c0' | 'c1' | 'r0' | 'r1'): number => (card[k] === line ? other : card[k]);
+    if (this.list.some((c) => at(c, lo) === at(c, hi))) return false;
+    for (const card of this.list) {
+      card[lo] = at(card, lo);
+      card[hi] = at(card, hi);
     }
     a.splice(line, 1);
-    for (const p of this.list) {
-      if (p[lo] > line) p[lo]--;
-      if (p[hi] > line) p[hi]--;
+    for (const card of this.list) {
+      if (card[lo] > line) card[lo]--;
+      if (card[hi] > line) card[hi]--;
     }
     this.sliceMemo.clear();
     return true;
   }
 
-  // ---- splitting ---------------------------------------------------------
-
-  /**
-   * Where to cut. Among the virtual lines the pane spans, take the one nearest
-   * its centre that leaves both halves at least `minSize`; otherwise draw a new
-   * line at the centre, pulled inside the feasible range. A single off-centre
-   * virtual line must never lock a pane that has room.
-   */
-  private cutAt(pane: Pane, axis: Axis): { line: number; value: number; snapped: boolean } | null {
-    if (pane.fixed) return null;
-    const a = this.arr(axis);
-    const along = this.size(axis);
-    const [lo, hi] = KEYS[axis];
-    const lowest = a[pane[lo]] + (this.minSize + this.inset(axis, pane[lo], 'lo') + this.half) / along;
-    const highest = a[pane[hi]] - (this.minSize + this.half + this.inset(axis, pane[hi], 'hi')) / along;
-    if (lowest > highest) return null;
-
-    const mid = (a[pane[lo]] + a[pane[hi]]) / 2;
-    let line = -1;
-    for (let i = pane[lo] + 1; i < pane[hi]; i++) {
-      if (a[i] < lowest || a[i] > highest) continue;
-      if (line < 0 || Math.abs(a[i] - mid) < Math.abs(a[line] - mid)) line = i;
-    }
-    if (line >= 0) return { line, value: a[line], snapped: true };
-    return { line: -1, value: clamp(mid, lowest, highest), snapped: false };
-  }
-
-  /** True when both halves would keep `minSize`. Equivalently: edge >= 2·minSize + gap. */
-  canSplit(id: string, axis: Axis): boolean {
-    const p = this.pane(id);
-    return !!p && !!this.cutAt(p, axis);
-  }
-
-  /**
-   * Cut one pane in two. The original keeps its identity and its near half, so a
-   * live surface it owns survives; the new pane takes the far half. Panes that
-   * span the new line only widen their span — they are not cut.
-   *
-   * The new pane carries no `data` unless you give it some. A host that hangs a
-   * payload on its panes has to answer for the new one, and guessing on its
-   * behalf — copying the source's payload — would hand two panes one surface.
-   *
-   * Returns the new pane's id, or null when there was no room.
-   */
-  split(id: string, axis: Axis, init: { id?: string; data?: unknown } = {}): string | null {
-    const pane = this.pane(id);
-    const cut = pane && this.cutAt(pane, axis);
-    if (!pane || !cut) return null;
-    const a = this.arr(axis);
-    const [lo, hi] = KEYS[axis];
-
-    let line = cut.line;
-    if (line < 0) {
-      line = a.findIndex((t) => t > cut.value + EPS);
-      if (line < 0) line = a.length;
-      a.splice(line, 0, cut.value);
-      for (const p of this.list) {
-        if (p[lo] >= line) p[lo]++;
-        if (p[hi] >= line) p[hi]++;
-      }
-    }
-
-    const fresh: Pane = {
-      id: init.id ?? this.nextId(),
-      c0: pane.c0,
-      c1: pane.c1,
-      r0: pane.r0,
-      r1: pane.r1,
-      fixed: false,
-      data: init.data,
-    };
-    fresh[lo] = line;
-    pane[hi] = line;
-    this.list.push(fresh);
-    this.sliceMemo.clear();
-    return fresh.id;
-  }
-
-  private nextId(): string {
-    let id: string;
-    do {
-      id = `pane-${++this.seq}`;
-    } while (this.pane(id));
-    return id;
-  }
-
-  /**
-   * Cut a pane and put the new one on a named side.
-   *
-   * `split` always hands the far half to the new pane. When the new one belongs
-   * ahead — on the left or on top — the two swap payloads afterwards, because
-   * what a caller means by "put it on the left" is where the content ends up,
-   * not which record was created first.
-   */
-  splitToward(id: string, side: Side, init: { id?: string; data?: unknown } = {}): string | null {
-    const axis: Axis = side === 'left' || side === 'right' ? 'x' : 'y';
-    const ahead = side === 'left' || side === 'top';
-    const pane = this.pane(id);
-    if (!pane) return null;
-
-    if (!ahead) return this.split(id, axis, init);
-
-    // The far half is created, then the two exchange what they hold.
-    const keep = { id: pane.id, data: pane.data };
-    const fresh = this.split(id, axis, { id: init.id, data: keep.data });
-    if (fresh === null) return null;
-    const far = this.pane(fresh)!;
-    // The near half becomes the new pane, the far one keeps the original's identity.
-    pane.id = far.id;
-    pane.data = init.data;
-    far.id = keep.id;
-    far.data = keep.data;
-    return pane.id;
-  }
-
-  /**
-   * Move a pane to sit on one side of another. This is the drag-and-drop
-   * operation: the pane leaves where it was, its neighbours take that space,
-   * and it arrives beside the target.
-   *
-   * It is one operation rather than a close and a split the caller sequences,
-   * because the order matters — closing first changes the target's geometry, so
-   * the split has to be measured after the space is given back, and a close that
-   * cannot happen must leave the whole move undone rather than half of it.
-   *
-   * Returns false and changes nothing when the move cannot be made: the pane is
-   * fixed, the target is gone, nothing can fill the space the pane leaves, or
-   * the target has no room to be cut.
-   */
-  move(id: string, targetId: string, side: Side): boolean {
-    const pane = this.pane(id);
-    const target = this.pane(targetId);
-    if (!pane || !target || pane === target || pane.fixed) return false;
-
-    const carried = pane.data;
-    const before = this.toJSON();
-    if (!this.close(id)) return false;
-    // The target may have grown into the freed space; measure the cut after that.
-    if (this.splitToward(targetId, side, { id, data: carried }) === null) {
-      this.restore(before);
-      return false;
-    }
-    return true;
-  }
-
-  /** Put the grid back to a state it reported earlier. */
-  private restore(state: SoksakState): void {
-    this.xs = [...state.xs];
-    this.ys = [...state.ys];
-    this.list = state.panes.map((p) => ({ ...p, fixed: p.fixed ?? false }));
-    this.sliceMemo.clear();
-  }
-
-  /** Whether `move` would succeed, without performing it. */
-  canMove(id: string, targetId: string, side: Side): boolean {
-    const probe = Soksak.from(this.toJSON(), {
-      gap: this.gap, minSize: this.minSize, grabSize: this.grabSize,
-      snapDistance: this.snapDistance, snap: this.snap, fillOrder: this.fillOrder,
-      width: this.w, height: this.h,
-    });
-    return probe.move(id, targetId, side);
-  }
-
-  // ---- closing -----------------------------------------------------------
-
-  /**
-   * Splitting only ever replaces one pane with two, so the layout is always a
-   * slicing floorplan — a pinwheel cannot be reached. Closing has to keep that
-   * property; the moment it breaks, panes appear that no neighbour can fill.
-   */
-  isSlicing(list: Span[] = this.list): boolean {
-    const key = list
-      .map((r) => `${r.c0},${r.c1},${r.r0},${r.r1}`)
-      .sort()
-      .join('|');
-    const hit = this.sliceMemo.get(key);
-    if (hit !== undefined) return hit;
-
-    let out = list.length <= 1;
-    if (!out) {
-      outer: for (const [lo, hi] of [
-        ['c0', 'c1'],
-        ['r0', 'r1'],
-      ] as [SpanKey, SpanKey][]) {
-        for (const v of new Set(list.map((r) => r[hi]))) {
-          const a = list.filter((r) => r[hi] <= v);
-          const b = list.filter((r) => r[lo] >= v);
-          if (a.length && b.length && a.length + b.length === list.length && this.isSlicing(a) && this.isSlicing(b)) {
-            out = true;
-            break outer;
-          }
-        }
-      }
-    }
-    if (this.sliceMemo.size > 4000) this.sliceMemo.clear();
-    this.sliceMemo.set(key, out);
-    return out;
-  }
-
-  /**
-   * Which neighbours would take the freed space. One pane need not match
-   * exactly — a row of them may tile the side together — but the result has to
-   * be slicing again, which is what keeps every pane closable. In a slicing
-   * floorplan such a side always exists.
-   */
-  fill(id: string): Fill | null {
-    const pane = this.pane(id);
-    if (!pane || pane.fixed) return null;
-    if (this.list.filter((p) => !p.fixed).length <= 1) return null;
-
-    type Dir = { side: Fill['side']; hit: (p: Pane) => boolean; lo: SpanKey; hi: SpanKey; grow: SpanKey };
-    const below: Dir = { side: 'below', hit: (p) => p.r0 === pane.r1, lo: 'c0', hi: 'c1', grow: 'r0' };
-    const above: Dir = { side: 'above', hit: (p) => p.r1 === pane.r0, lo: 'c0', hi: 'c1', grow: 'r1' };
-    const right: Dir = { side: 'right', hit: (p) => p.c0 === pane.c1, lo: 'r0', hi: 'r1', grow: 'c0' };
-    const left: Dir = { side: 'left', hit: (p) => p.c1 === pane.c0, lo: 'r0', hi: 'r1', grow: 'c1' };
-    const dirs = this.fillOrder === 'h' ? [right, left, below, above] : [below, above, right, left];
-
-    for (const d of dirs) {
-      const group = this.list
-        .filter((p) => p !== pane && !p.fixed && d.hit(p) && p[d.lo] >= pane[d.lo] && p[d.hi] <= pane[d.hi])
-        .sort((a, b) => a[d.lo] - b[d.lo]);
-      if (!group.length) continue;
-
-      let at = pane[d.lo];
-      let tiles = true;
-      for (const p of group) {
-        if (p[d.lo] !== at) {
-          tiles = false;
-          break;
-        }
-        at = p[d.hi];
-      }
-      if (!tiles || at !== pane[d.hi]) continue;
-
-      const after: Span[] = this.list
-        .filter((p) => p !== pane)
-        .map((p) => {
-          const copy: Span = { c0: p.c0, c1: p.c1, r0: p.r0, r1: p.r1 };
-          if (group.includes(p)) copy[d.grow] = pane[d.grow];
-          return copy;
-        });
-      if (this.isSlicing(after)) return { side: d.side, panes: group };
-    }
-    return null;
-  }
-
-  canClose(id: string): boolean {
-    return !!this.fill(id);
-  }
-
-  /** Remove a pane; its neighbours grow into the space. Returns false when nothing can fill it. */
-  close(id: string): boolean {
-    const pane = this.pane(id);
-    const f = pane && this.fill(id);
-    if (!pane || !f) return false;
-    const grow: SpanKey =
-      f.side === 'below' ? 'r0' : f.side === 'above' ? 'r1' : f.side === 'right' ? 'c0' : 'c1';
-    for (const p of f.panes) p[grow] = pane[grow];
-    this.list.splice(this.list.indexOf(pane), 1);
-    this.sliceMemo.clear();
-    return true;
-  }
-
-  /** Drop lines no pane references any more. Returns how many went. */
+  /** Drop lines no card reads any more. Returns how many went. */
   tidy(): number {
     let dropped = 0;
-    for (const axis of ['x', 'y'] as Axis[]) {
+    for (const axis of AXES) {
       const a = this.arr(axis);
-      const [lo, hi] = KEYS[axis];
+      const [lo, hi] = SPAN[axis];
       for (let k = a.length - 2; k >= 1; k--) {
         if (!this.isVirtual(axis, k)) continue;
         a.splice(k, 1);
-        for (const p of this.list) {
-          if (p[lo] > k) p[lo]--;
-          if (p[hi] > k) p[hi]--;
+        for (const card of this.list) {
+          if (card[lo] > k) card[lo]--;
+          if (card[hi] > k) card[hi]--;
         }
         dropped++;
       }
@@ -817,13 +461,212 @@ export class Soksak {
     return dropped;
   }
 
-  /** How many lines exist that no pane references. */
-  virtualCount(): number {
-    let n = 0;
-    for (const axis of ['x', 'y'] as Axis[]) {
-      const a = this.arr(axis);
-      for (let k = 1; k < a.length - 1; k++) if (this.isVirtual(axis, k)) n++;
+  // ---- splitting ---------------------------------------------------------
+
+  /**
+   * Where to cut.
+   *
+   * Among the virtual lines the card spans, the one nearest its centre that
+   * leaves both halves at least `minSize`; otherwise a new line at the centre,
+   * pulled inside the range that fits. A single off-centre virtual line must
+   * never lock a card that has room.
+   */
+  private cutAt(card: Card, axis: Axis): { line: number; value: number; snapped: boolean } | null {
+    if (card.fixed) return null;
+    // A card whose slot is held at a fixed size cannot be cut along that axis:
+    // the size describes one slot, and two slots would need two answers.
+    if (fixedSize(card, axis) !== null) return null;
+
+    const a = this.arr(axis);
+    const [lo, hi] = SPAN[axis];
+    const per = this.sharedExtent(axis);
+    if (per <= EPS) return null;
+
+    const lowest = a[card[lo]] + (this.minSize + this.inset(axis, card[lo], 'lo') + this.gap / 2) / per;
+    const highest = a[card[hi]] - (this.minSize + this.gap / 2 + this.inset(axis, card[hi], 'hi')) / per;
+    if (lowest > highest) return null;
+
+    const mid = (a[card[lo]] + a[card[hi]]) / 2;
+    let line = -1;
+    for (let i = card[lo] + 1; i < card[hi]; i++) {
+      if (a[i] < lowest || a[i] > highest) continue;
+      if (line < 0 || Math.abs(a[i] - mid) < Math.abs(a[line] - mid)) line = i;
     }
-    return n;
+    if (line >= 0) return { line, value: a[line], snapped: true };
+    return { line: -1, value: clamp(mid, lowest, highest), snapped: false };
+  }
+
+  /** True when both halves would keep `minSize`. */
+  canSplit(id: string, axis: Axis): boolean {
+    const card = this.card(id);
+    return !!card && !!this.cutAt(card, axis);
+  }
+
+  /**
+   * Cut one card in two.
+   *
+   * The original keeps its identity and its near half, so a live surface it owns
+   * survives; the new card takes the far half. Cards that span the new line only
+   * widen their span — they are not cut.
+   *
+   * The new card carries no `data` unless you give it some. A host that hangs a
+   * payload on its cards has to answer for the new one, and copying the source's
+   * would hand two cards one surface. A fixed size on the *other* axis rides
+   * along, because both halves still stand in that slot.
+   *
+   * Returns the new card's id, or null when there was no room.
+   */
+  split(id: string, axis: Axis, init: { id?: string; data?: unknown } = {}): string | null {
+    const card = this.card(id);
+    const cut = card && this.cutAt(card, axis);
+    if (!card || !cut) return null;
+    const a = this.arr(axis);
+    const [lo, hi] = SPAN[axis];
+
+    let line = cut.line;
+    if (line < 0) {
+      line = a.findIndex((t) => t > cut.value + EPS);
+      if (line < 0) line = a.length;
+      a.splice(line, 0, cut.value);
+      for (const other of this.list) {
+        if (other[lo] >= line) other[lo]++;
+        if (other[hi] >= line) other[hi]++;
+      }
+    }
+
+    const across: Axis = axis === 'x' ? 'y' : 'x';
+    const fresh: Card = {
+      id: init.id ?? this.nextId(),
+      c0: card.c0,
+      c1: card.c1,
+      r0: card.r0,
+      r1: card.r1,
+      fixed: false,
+      data: init.data,
+    };
+    const held = fixedSize(card, across);
+    if (held !== null) {
+      if (across === 'x') fresh.width = held;
+      else fresh.height = held;
+    }
+    fresh[lo] = line;
+    card[hi] = line;
+    this.list.push(fresh);
+    this.sliceMemo.clear();
+    return fresh.id;
+  }
+
+  /**
+   * Cut a card and put the new one on a named side.
+   *
+   * `split` always hands the far half to the new card, so `left` and `top` swap
+   * what the two hold afterwards — what a caller means by "put it on the left"
+   * is where the content ends up, not which record was made first.
+   */
+  splitToward(id: string, side: Side, init: { id?: string; data?: unknown } = {}): string | null {
+    const axis = axisOf(side);
+    const card = this.card(id);
+    if (!card) return null;
+    if (!isAhead(side)) return this.split(id, axis, init);
+
+    const kept = { id: card.id, data: card.data };
+    const fresh = this.split(id, axis, { id: init.id, data: kept.data });
+    if (fresh === null) return null;
+    const far = this.card(fresh)!;
+    card.id = far.id;
+    card.data = init.data;
+    far.id = kept.id;
+    far.data = kept.data;
+    return card.id;
+  }
+
+  private nextId(): string {
+    let id: string;
+    do {
+      id = `card-${++this.seq}`;
+    } while (this.card(id));
+    return id;
+  }
+
+  // ---- closing and moving ------------------------------------------------
+
+  fill(id: string): Fill | null {
+    const card = this.card(id);
+    return card ? fillFor(this.list, card, this.fillOrder, this.sliceMemo) : null;
+  }
+
+  canClose(id: string): boolean {
+    return !!this.fill(id);
+  }
+
+  /** Remove a card; its neighbours grow into the space. */
+  close(id: string): boolean {
+    const card = this.card(id);
+    const filling = card && this.fill(id);
+    if (!card || !filling) return false;
+    for (const neighbour of filling.cards) neighbour[filling.grow] = card[filling.grow];
+    this.list.splice(this.list.indexOf(card), 1);
+    this.sliceMemo.clear();
+    return true;
+  }
+
+  /**
+   * Move a card to sit on one side of another — the drag-and-drop operation.
+   *
+   * One operation rather than a close and a split the caller sequences, because
+   * the order matters: closing first gives the space back and changes the
+   * target's geometry, so the cut is measured after that, and a close that
+   * cannot happen leaves the whole move undone rather than half of it.
+   *
+   * The card keeps its id, its payload and its fixed size, so a live surface
+   * rides along and a sidebar stays the width it was.
+   */
+  move(id: string, targetId: string, side: Side): boolean {
+    const card = this.card(id);
+    const target = this.card(targetId);
+    if (!card || !target || card === target || card.fixed) return false;
+
+    const carried = { data: card.data, width: card.width, height: card.height };
+    const before = this.toJSON();
+    if (!this.close(id)) return false;
+    const landed = this.splitToward(targetId, side, { id, data: carried.data });
+    if (landed === null) {
+      this.restore(before);
+      return false;
+    }
+    const moved = this.card(landed)!;
+    // The size a card holds is its own; the axis it now stands on decides which.
+    if (axisOf(side) === 'x') {
+      if (carried.width !== undefined) moved.width = carried.width;
+      if (carried.height !== undefined && spanOf(moved, 'y') === 1) moved.height = carried.height;
+    } else {
+      if (carried.height !== undefined) moved.height = carried.height;
+      if (carried.width !== undefined && spanOf(moved, 'x') === 1) moved.width = carried.width;
+    }
+    this.sliceMemo.clear();
+    return true;
+  }
+
+  /** Whether `move` would succeed, without performing it. */
+  canMove(id: string, targetId: string, side: Side): boolean {
+    const probe = new Soksak(this.toJSON(), {
+      gap: this.gap,
+      minSize: this.minSize,
+      grabSize: this.grabSize,
+      snapDistance: this.snapDistance,
+      snap: this.snap,
+      fillOrder: this.fillOrder,
+      width: this.w,
+      height: this.h,
+    });
+    return probe.move(id, targetId, side);
+  }
+
+  /** Put the arrangement back to a state it reported earlier. */
+  private restore(state: SoksakState): void {
+    this.xs = [...state.xs];
+    this.ys = [...state.ys];
+    this.list = state.cards.map((c) => ({ ...c, fixed: c.fixed ?? false }));
+    this.sliceMemo.clear();
   }
 }
