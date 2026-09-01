@@ -26,6 +26,7 @@ export class Soksak {
         var _a, _b, _c, _d, _e, _f, _g, _h;
         this.seq = 0;
         this.sliceMemo = new Map();
+        this.stationAt = null;
         this.gap = (_a = options.gap) !== null && _a !== void 0 ? _a : 24;
         this.minSize = (_b = options.minSize) !== null && _b !== void 0 ? _b : 96;
         this.grabSize = (_c = options.grabSize) !== null && _c !== void 0 ? _c : 11;
@@ -83,6 +84,20 @@ export class Soksak {
     size(axis) {
         return axis === 'x' ? this.w : this.h;
     }
+    /** Room left for the panes once a band on this axis has taken its own. */
+    usable(axis) {
+        const s = this.stationAt;
+        return this.size(axis) - (s && s.axis === axis ? s.size : 0);
+    }
+    /**
+     * Where a grid line falls in px. Lines at or past the band are pushed along by
+     * its width, so the panes on either side of it keep their own proportions.
+     */
+    pos(axis, index) {
+        const s = this.stationAt;
+        const base = this.arr(axis)[index] * this.usable(axis);
+        return s && s.axis === axis && index >= s.line ? base + s.size : base;
+    }
     get half() {
         return this.gap / 2;
     }
@@ -92,9 +107,15 @@ export class Soksak {
      */
     edge(axis, index, side) {
         const a = this.arr(axis);
+        const s = this.stationAt;
         const flush = side === 'lo' ? index === 0 : index === a.length - 1;
         const inset = flush ? 0 : this.half;
-        return a[index] * this.size(axis) + (side === 'lo' ? inset : -inset);
+        // On the far side of a band the pane starts after it, so read the shifted
+        // position for that side rather than the line's own.
+        const shifted = s && s.axis === axis && index === s.line && side === 'hi'
+            ? a[index] * this.usable(axis)
+            : this.pos(axis, index);
+        return shifted + (side === 'lo' ? inset : -inset);
     }
     inset(axis, index, side) {
         const a = this.arr(axis);
@@ -151,6 +172,73 @@ export class Soksak {
     isVirtual(axis, line) {
         const [lo, hi] = KEYS[axis];
         return !this.list.some((p) => p[lo] === line || p[hi] === line);
+    }
+    // ---- clean lines and the band -----------------------------------------
+    /**
+     * Panes that span across this line. They are what makes it unclean: a band
+     * standing here would cut them, and a pane cannot be in two places.
+     */
+    panesCrossing(axis, line) {
+        const [lo, hi] = KEYS[axis];
+        return this.list.filter((p) => p[lo] < line && p[hi] > line);
+    }
+    /**
+     * A line is clean when it is a boundary over the whole plane — no pane spans
+     * across it. This is a structural fact about the spans, not a comparison of
+     * coordinates, so there is no tolerance to get wrong and no drift to heal.
+     */
+    isCleanLine(axis, line) {
+        const a = this.arr(axis);
+        if (!Number.isInteger(line) || line < 0 || line > a.length - 1)
+            return false;
+        return this.panesCrossing(axis, line).length === 0;
+    }
+    /** Every clean line, in order. The plane's own two edges are always clean. */
+    cleanLines(axis) {
+        const out = [];
+        for (let k = 0; k < this.arr(axis).length; k++)
+            if (this.isCleanLine(axis, k))
+                out.push(k);
+        return out;
+    }
+    /** The clean line nearest a normalised position. Ties go to the earlier line. */
+    nearestCleanLine(axis, value) {
+        const a = this.arr(axis);
+        let best = null;
+        let distance = Infinity;
+        for (const k of this.cleanLines(axis)) {
+            const d = Math.abs(a[k] - value);
+            if (d < distance) {
+                best = k;
+                distance = d;
+            }
+        }
+        return best;
+    }
+    get station() {
+        return this.stationAt && { ...this.stationAt };
+    }
+    /** Stand a band on a clean line. Refuses an unclean one — see `nearestCleanLine`. */
+    setStation(axis, line, size) {
+        if (!this.isCleanLine(axis, line))
+            return false;
+        this.stationAt = { axis, line, size: Math.max(0, size) };
+        return true;
+    }
+    clearStation() {
+        this.stationAt = null;
+    }
+    /** The band's drawn rect, inset by half a corridor on each side exactly like a pane. */
+    stationRect() {
+        const s = this.stationAt;
+        if (!s)
+            return null;
+        const at = this.arr(s.axis)[s.line] * this.usable(s.axis);
+        const lo = at + this.half;
+        const hi = at + s.size - this.half;
+        return s.axis === 'x'
+            ? { x: lo, y: 0, w: Math.max(0, hi - lo), h: this.h }
+            : { x: 0, y: lo, w: this.w, h: Math.max(0, hi - lo) };
     }
     /** How many lines a pane spans across. Tells you how much finer its neighbours are. */
     crossings(pane) {

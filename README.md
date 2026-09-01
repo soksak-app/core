@@ -131,6 +131,35 @@ ends up larger than the rect the grid computed and the corridors close up.
 Dragging a divider moves the line. Double-clicking it (or Enter/Space when focused) centres it so
 the two panes beside it come out the same size. Arrow keys nudge it.
 
+## Clean lines and a band standing on one
+
+A line is **clean** when it is a boundary over the whole plane — no pane spans
+across it. That is a fact about the spans, not a comparison of coordinates, so
+there is no tolerance to tune and no drift to repair. Dragging a line can never
+make it clean or unclean; only splitting and closing can.
+
+```js
+grid.cleanLines("x");          // [0, 1, 3] - line 2 is blocked
+grid.isCleanLine("x", 2);      // false
+grid.panesCrossing("x", 2);    // the panes standing in the way
+grid.nearestCleanLine("x", v); // the closest one to a normalised position
+```
+
+A **station** is a fixed-width band standing on a clean line, taking room from
+the panes on either side — a sidebar that lives between panes rather than at the
+window edge. It may only stand on a clean line, because a pane that crossed it
+would be cut in two.
+
+```js
+grid.setStation("x", 1, 200);  // false if that line is blocked
+grid.stationRect();            // { x, y, w, h } - inset by half a corridor, like a pane
+grid.clearStation();
+```
+
+The band keeps the corridor rule: one full `gap` between it and the pane on each
+side, so its drawn width is `size - gap`. Panes past it are pushed along by its
+width and keep their own proportions among themselves.
+
 ## The outline
 
 `outline()` draws a single rounded shape around any set of panes — a sidebar bound to whichever
@@ -188,6 +217,8 @@ such a side always exists, so `canClose` is true for every pane except the last 
 | `dividers()`, `rules()` | grab areas, and boundaries to draw |
 | `moveLine(axis, line, value)`, `lineRange(axis, line)`, `centerLine(axis, line)` | drag a boundary |
 | `mergeCoincident(axis, line)` | fold a line onto the neighbour it now coincides with |
+| `cleanLines(axis)`, `isCleanLine(axis, line)`, `nearestCleanLine(axis, v)`, `panesCrossing(axis, line)` | lines nothing spans across |
+| `station`, `setStation(axis, line, size)`, `stationRect()`, `clearStation()` | a band standing on a clean line |
 | `tidy()`, `virtualCount()`, `isVirtual(axis, line)`, `crossings(pane)` | virtual lines |
 | `isSlicing()`, `lines(axis)`, `toJSON()`, `Soksak.from(state)` | inspection and state |
 

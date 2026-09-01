@@ -79,6 +79,19 @@ export interface Rule extends Rect {
     line: number;
     virtual: boolean;
 }
+/**
+ * A fixed-width band standing on a grid line, taking room from the panes.
+ *
+ * It may only stand on a *clean* line — one no pane spans across — because a
+ * pane that crossed it would be cut in two by the band. `cleanLines` reports
+ * which lines qualify and `nearestCleanLine` finds the closest one.
+ */
+export interface Station {
+    axis: Axis;
+    line: number;
+    /** Total room the band takes, in px. Its drawn rect is inset by half a corridor, like a pane. */
+    size: number;
+}
 /** Which neighbours would take over a pane's space, and from which side. */
 export interface Fill {
     side: 'below' | 'above' | 'right' | 'left';
@@ -98,6 +111,7 @@ export declare class Soksak {
     private h;
     private seq;
     private sliceMemo;
+    private stationAt;
     gap: number;
     minSize: number;
     grabSize: number;
@@ -117,6 +131,13 @@ export declare class Soksak {
     static from(state: SoksakState, options?: SoksakOptions): Soksak;
     private arr;
     private size;
+    /** Room left for the panes once a band on this axis has taken its own. */
+    private usable;
+    /**
+     * Where a grid line falls in px. Lines at or past the band are pushed along by
+     * its width, so the panes on either side of it keep their own proportions.
+     */
+    private pos;
     private get half();
     /**
      * An interior pane edge is pulled back by half a corridor; an edge sitting on
@@ -132,6 +153,27 @@ export declare class Soksak {
     realSpans(axis: Axis, line: number): [number, number][];
     /** True when no pane references the line at all — it survives only as a snap target. */
     isVirtual(axis: Axis, line: number): boolean;
+    /**
+     * Panes that span across this line. They are what makes it unclean: a band
+     * standing here would cut them, and a pane cannot be in two places.
+     */
+    panesCrossing(axis: Axis, line: number): Pane[];
+    /**
+     * A line is clean when it is a boundary over the whole plane — no pane spans
+     * across it. This is a structural fact about the spans, not a comparison of
+     * coordinates, so there is no tolerance to get wrong and no drift to heal.
+     */
+    isCleanLine(axis: Axis, line: number): boolean;
+    /** Every clean line, in order. The plane's own two edges are always clean. */
+    cleanLines(axis: Axis): number[];
+    /** The clean line nearest a normalised position. Ties go to the earlier line. */
+    nearestCleanLine(axis: Axis, value: number): number | null;
+    get station(): Station | null;
+    /** Stand a band on a clean line. Refuses an unclean one — see `nearestCleanLine`. */
+    setStation(axis: Axis, line: number, size: number): boolean;
+    clearStation(): void;
+    /** The band's drawn rect, inset by half a corridor on each side exactly like a pane. */
+    stationRect(): Rect | null;
     /** How many lines a pane spans across. Tells you how much finer its neighbours are. */
     crossings(pane: Pane): number;
     /** Every boundary to draw: one full-plane virtual rule per line, plus its real stretches. */
