@@ -64,6 +64,6 @@
   },
   "homepage": "https://github.com/min-median-max/soksak#readme",
   "devDependencies": {
-    "typescript": "5.9.3"
+    "typescript": "7.0.2"
   }
 }
