@@ -423,9 +423,14 @@ export class Soksak {
      * live surface it owns survives; the new pane takes the far half. Panes that
      * span the new line only widen their span — they are not cut.
      *
+     * The new pane carries no `data` unless you give it some. A host that hangs a
+     * payload on its panes has to answer for the new one, and guessing on its
+     * behalf — copying the source's payload — would hand two panes one surface.
+     *
      * Returns the new pane's id, or null when there was no room.
      */
-    split(id, axis, newId) {
+    split(id, axis, init = {}) {
+        var _a;
         const pane = this.pane(id);
         const cut = pane && this.cutAt(pane, axis);
         if (!pane || !cut)
@@ -446,12 +451,13 @@ export class Soksak {
             }
         }
         const fresh = {
-            id: newId !== null && newId !== void 0 ? newId : this.nextId(),
+            id: (_a = init.id) !== null && _a !== void 0 ? _a : this.nextId(),
             c0: pane.c0,
             c1: pane.c1,
             r0: pane.r0,
             r1: pane.r1,
             fixed: false,
+            data: init.data,
         };
         fresh[lo] = line;
         pane[hi] = line;

@@ -113,3 +113,22 @@ test("state round-trips through JSON", () => {
     assert.deepEqual(copy.rect(pane.id), grid.rect(pane.id));
   }
 });
+
+test("a split carries the payload the host gives the new pane", () => {
+  const grid = three();
+  const id = grid.split("terminal", "x", { id: "editor", data: { title: "editor", layer: 20 } });
+  assert.equal(id, "editor");
+  assert.deepEqual(grid.pane("editor").data, { title: "editor", layer: 20 });
+  // and the source keeps its own — a payload is never shared between two panes
+  assert.equal(grid.pane("terminal").data, undefined);
+});
+
+test("a split without a payload leaves data undefined rather than copying", () => {
+  const grid = new Soksak(
+    { xs: [0, 1], ys: [0, 1], panes: [{ id: "a", c0: 0, c1: 1, r0: 0, r1: 1, data: { live: "surface-1" } }] },
+    { width: W, height: H },
+  );
+  const id = grid.split("a", "x");
+  assert.deepEqual(grid.pane("a").data, { live: "surface-1" });
+  assert.equal(grid.pane(id).data, undefined, "copying would hand two panes one surface");
+});

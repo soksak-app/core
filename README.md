@@ -45,6 +45,9 @@ const grid = new Soksak(undefined, { width: 1200, height: 800 });
 const right = grid.split("pane", "x");   // cut left/right; returns the new pane id
 grid.split(right, "y");                  // cut that one top/bottom
 
+// a host payload rides on the pane; give the new one its own
+grid.split(right, "x", { id: "editor", data: { surface: openEditor() } });
+
 for (const [id, rect] of grid.rects()) {
   console.log(id, rect);                   // { x, y, w, h } in px
 }
@@ -212,7 +215,7 @@ such a side always exists, so `canClose` is true for every pane except the last 
 | --- | --- |
 | `panes`, `pane(id)`, `rect(id)`, `rects()`, `rectOf(pane)` | read the arrangement |
 | `resize(w, h)`, `width`, `height` | plane size |
-| `canSplit(id, axis)`, `split(id, axis, newId?)` | cut one pane in two |
+| `canSplit(id, axis)`, `split(id, axis, {id?, data?})` | cut one pane in two |
 | `canClose(id)`, `close(id)`, `fill(id)` | remove a pane; `fill` reports which neighbours would take the space |
 | `dividers()`, `rules()` | grab areas, and boundaries to draw |
 | `moveLine(axis, line, value)`, `lineRange(axis, line)`, `centerLine(axis, line)` | drag a boundary |

@@ -215,9 +215,16 @@ export declare class Soksak {
      * live surface it owns survives; the new pane takes the far half. Panes that
      * span the new line only widen their span — they are not cut.
      *
+     * The new pane carries no `data` unless you give it some. A host that hangs a
+     * payload on its panes has to answer for the new one, and guessing on its
+     * behalf — copying the source's payload — would hand two panes one surface.
+     *
      * Returns the new pane's id, or null when there was no room.
      */
-    split(id: string, axis: Axis, newId?: string): string | null;
+    split(id: string, axis: Axis, init?: {
+        id?: string;
+        data?: unknown;
+    }): string | null;
     private nextId;
     /**
      * Splitting only ever replaces one pane with two, so the layout is always a
