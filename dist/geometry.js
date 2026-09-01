@@ -29,8 +29,13 @@ export function slotSizes(plane, axis) {
         const size = fixedSize(card, axis);
         if (size === null)
             continue;
+        // A fixed size is what the card is drawn at, not the slot it stands in.
+        // The slot therefore has to carry the corridor the card gives back, or the
+        // same 180 would draw 174 at the plane's edge and 168 between two cards —
+        // and the corridor is the plane's business, not the sidebar's.
         const slot = card[lo];
-        held[slot] = Math.max((_a = held[slot]) !== null && _a !== void 0 ? _a : 0, size);
+        const drawn = size + inset(plane, axis, slot, 'lo') + inset(plane, axis, slot + 1, 'hi');
+        held[slot] = Math.max((_a = held[slot]) !== null && _a !== void 0 ? _a : 0, drawn);
     }
     let taken = 0;
     let sharedSpan = 0;

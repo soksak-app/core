@@ -39,6 +39,11 @@ every card stays closable.
 A card at the plane's border is flush there. The same for every card, whatever
 its role, so nothing around one needs a special case.
 
+Because the corridor is the plane's rule and not the card's, a card never pays
+for it: `width: 180` draws 180 at the plane's edge, 180 between two cards, and
+180 at any `gap`. The slot carries the corridor instead. Drag the boundary and
+it lands where it was dropped; the card's size is what it is left holding.
+
 **R6 — Rects are computed in one place, from the lines.**
 `geometry.ts` and nothing else — card rects, boundary rules, and grab areas all
 come out of it. `soksak.ts` holds the state and asks.

@@ -66,10 +66,21 @@ function audit(grid, where) {
     }
   }
 
-  // a fixed card kept the size it was given
-  for (const c of cards) {
+  // a fixed card measures the size it asked for. `c.width >= 0` would have
+  // passed for a sidebar squeezed to nothing by someone else's rearrangement,
+  // which is the defect this is here to catch — so compare against the rect.
+  for (const [i, c] of cards.entries()) {
     if (c.width !== undefined) {
-      assert.ok(c.width >= 0, `${where}: ${c.id} has a negative width`);
+      assert.ok(
+        Math.abs(rects[i].w - c.width) < 0.01,
+        `${where}: ${c.id} asked for ${c.width}px wide and measures ${rects[i].w}`,
+      );
+    }
+    if (c.height !== undefined) {
+      assert.ok(
+        Math.abs(rects[i].h - c.height) < 0.01,
+        `${where}: ${c.id} asked for ${c.height}px tall and measures ${rects[i].h}`,
+      );
     }
   }
 }

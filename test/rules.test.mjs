@@ -136,6 +136,42 @@ test("R5 — the corridor is half a gap inside, and nothing at the plane's borde
         }
       }
     }
+
+    // The corridor is the plane's rule, so a card never pays for it: a declared
+    // size draws that size at the border, between two cards, and at any gap.
+    for (let seed = 0; seed < 12; seed++) {
+      const grid = new Soksak(
+        {
+          xs: [0, 0.25, 0.5, 0.75, 1],
+          ys: [0, 0.5, 1],
+          cards: [
+            { id: "left", c0: 0, c1: 1, r0: 0, r1: 2, width: 180, fixed: true },
+            { id: "rail", c0: 1, c1: 2, r0: 0, r1: 2, width: 190, fixed: true },
+            { id: "main", c0: 2, c1: 3, r0: 0, r1: 1 },
+            { id: "under", c0: 2, c1: 3, r0: 1, r1: 2 },
+            { id: "right", c0: 3, c1: 4, r0: 0, r1: 2, width: 200, fixed: true },
+          ],
+        },
+        { width: 1200, height: 600, gap },
+      );
+      // Dragging a sidebar's own boundary is the user resizing it, so the
+      // number may change. What may never change is what the number means.
+      for (const id of ["left", "rail", "right"]) {
+        assert.ok(
+          Math.abs(grid.rect(id).w - grid.card(id).width) < 0.01,
+          `gap ${gap} seed ${seed}: ${id} holds ${grid.card(id).width} and draws ${grid.rect(id).w}`,
+        );
+      }
+      fuzz(grid, seed, 40);
+      for (const id of ["left", "rail", "right"]) {
+        const card = grid.card(id);
+        if (!card) continue;
+        assert.ok(
+          Math.abs(grid.rect(id).w - card.width) < 0.01,
+          `gap ${gap} seed ${seed}: ${id} holds ${card.width} and draws ${grid.rect(id).w}`,
+        );
+      }
+    }
   }
 });
 

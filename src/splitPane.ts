@@ -22,14 +22,15 @@ import type { Axis, Card, CardInit, Rect, Side } from './card.js';
 import {
   boundarySpans,
   crossing,
+  dividers,
   edgePos,
+  inset,
   interiorLines,
   isVirtual,
   linePositions,
   rectOf,
-  slotSizes,
-  dividers,
   rules,
+  slotSizes,
   zoneAt,
 } from './geometry.js';
 import type { Divider, Plane, Rule, Zone, ZoneHit, ZoneOptions } from './geometry.js';
@@ -255,7 +256,6 @@ export class Soksak {
    */
   boundaryRange(axis: Axis, line: number): [number, number] {
     const along = linePositions(this.plane, axis);
-    const sizes = slotSizes(this.plane, axis);
     const [lo, hi] = SPAN[axis];
 
     let min = along[this.realNeighbour(axis, line, -1)] ?? 0;
@@ -266,8 +266,6 @@ export class Soksak {
       if (card[hi] === line) min = Math.max(min, along[card[lo]] + this.minSize + near + far);
       if (card[lo] === line) max = Math.min(max, along[card[hi]] - this.minSize - near - far);
     }
-    // A held slot beyond the pair does not move, so the boundary cannot pass it.
-    void sizes;
     return [min, max];
   }
 
@@ -310,12 +308,18 @@ export class Soksak {
       // the moving edge would be asking the size to define itself.
       const [lo, hi] = SPAN[axis];
       const along = linePositions(this.plane, axis);
-      const size =
+      const slot =
         holder[hi] === line
           ? target - along[holder[lo]]   // its far edge moved; its start is fixed
           : along[holder[hi]] - target;  // its near edge moved; its end is fixed
-      if (axis === 'x') holder.width = Math.max(0, size);
-      else holder.height = Math.max(0, size);
+      // `slot` is line to line. A fixed size is the drawn size, so the corridor
+      // the slot carries comes back off — otherwise the boundary settles half a
+      // corridor away from where it was dropped.
+      const corridor =
+        inset(this.plane, axis, holder[lo], 'lo') + inset(this.plane, axis, holder[hi], 'hi');
+      const size = Math.max(0, slot - corridor);
+      if (axis === 'x') holder.width = size;
+      else holder.height = size;
     } else {
       const usable = this.sharedExtent(axis);
       const before = linePositions(this.plane, axis)[line - 1];

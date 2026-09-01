@@ -17,7 +17,7 @@
  * slicing and every card stays closable. See `slicing.ts` for why that matters.
  */
 import { AXES, SPAN, axisOf, fixedSize, isAhead, spanOf } from './card.js';
-import { crossing, interiorLines, isVirtual, linePositions, rectOf, slotSizes, dividers, rules, zoneAt, } from './geometry.js';
+import { crossing, dividers, inset, interiorLines, isVirtual, linePositions, rectOf, rules, slotSizes, zoneAt, } from './geometry.js';
 import { fillFor, isSlicing } from './slicing.js';
 const EPS = 1e-9;
 const clamp = (v, lo, hi) => lo > hi ? (lo + hi) / 2 : Math.min(hi, Math.max(lo, v));
@@ -172,7 +172,6 @@ export class Soksak {
     boundaryRange(axis, line) {
         var _a, _b;
         const along = linePositions(this.plane, axis);
-        const sizes = slotSizes(this.plane, axis);
         const [lo, hi] = SPAN[axis];
         let min = (_a = along[this.realNeighbour(axis, line, -1)]) !== null && _a !== void 0 ? _a : 0;
         let max = (_b = along[this.realNeighbour(axis, line, 1)]) !== null && _b !== void 0 ? _b : this.size(axis);
@@ -184,8 +183,6 @@ export class Soksak {
             if (card[lo] === line)
                 max = Math.min(max, along[card[hi]] - this.minSize - near - far);
         }
-        // A held slot beyond the pair does not move, so the boundary cannot pass it.
-        void sizes;
         return [min, max];
     }
     inset(axis, index, side) {
@@ -223,13 +220,18 @@ export class Soksak {
             // the moving edge would be asking the size to define itself.
             const [lo, hi] = SPAN[axis];
             const along = linePositions(this.plane, axis);
-            const size = holder[hi] === line
+            const slot = holder[hi] === line
                 ? target - along[holder[lo]] // its far edge moved; its start is fixed
                 : along[holder[hi]] - target; // its near edge moved; its end is fixed
+            // `slot` is line to line. A fixed size is the drawn size, so the corridor
+            // the slot carries comes back off — otherwise the boundary settles half a
+            // corridor away from where it was dropped.
+            const corridor = inset(this.plane, axis, holder[lo], 'lo') + inset(this.plane, axis, holder[hi], 'hi');
+            const size = Math.max(0, slot - corridor);
             if (axis === 'x')
-                holder.width = Math.max(0, size);
+                holder.width = size;
             else
-                holder.height = Math.max(0, size);
+                holder.height = size;
         }
         else {
             const usable = this.sharedExtent(axis);

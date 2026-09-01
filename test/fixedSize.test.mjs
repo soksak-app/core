@@ -31,9 +31,9 @@ test("a card holding a slot takes px; the rest share what is left", () => {
   const terminal = grid.rect("terminal");
 
   assert.equal(left.x, 0, "it starts at the plane's border");
-  assert.equal(left.w, 180 - grid.gap / 2, "the room it holds, less the one inner inset");
+  assert.equal(left.w, 180, "the size it asked for, wherever it stands and whatever the gap");
   assert.equal(right.x + right.w, W, "the far one ends at the border");
-  assert.equal(right.w, 200 - grid.gap / 2);
+  assert.equal(right.w, 200);
 
   assert.equal(terminal.x - (left.x + left.w), grid.gap, "one full corridor, like any two cards");
   assert.equal(right.x - (terminal.x + terminal.w), grid.gap);
@@ -56,7 +56,7 @@ test("the same card in a middle slot is a rail, and nothing can cross it", () =>
   );
   const rail = grid.rect("rail");
   assert.equal(rail.h, H, "it runs the full height");
-  assert.equal(rail.w, 190 - grid.gap, "inset on both sides — it faces a card either way");
+  assert.equal(rail.w, 190, "the same 190 as at an edge — the corridor is the plane's");
   assert.ok(rail.x > 0 && rail.x + rail.w < W, "it stands between cards, not at an edge");
 
   assert.deepEqual(grid.cardsCrossing("x", 1), [], "the structure is the guarantee");
@@ -82,9 +82,9 @@ test("dragging the boundary beside a fixed card resizes that card", () => {
 
   const linesBefore = grid.lines("x");
   grid.moveBoundary("x", 1, 260);
-  assert.equal(grid.card("left").width, 260, "the card's own size changed");
+  assert.equal(grid.boundaryPos("x", 1), 260, "the boundary landed where it was dropped");
   assert.deepEqual(grid.lines("x"), linesBefore, "and the shared lines did not move");
-  assert.equal(grid.rect("left").w, 260 - grid.gap / 2);
+  assert.equal(grid.rect("left").w, grid.card("left").width, "and the card draws the size it now holds");
   assertTiling(grid, "after resizing the sidebar");
 });
 
@@ -169,7 +169,7 @@ test("a boundary between two fixed cards belongs to the one before it", () => {
   assert.equal(divider.resizes, "left", "one rule picks it, so a drag is never a guess");
 
   grid.moveBoundary("x", 1, 230);
-  assert.equal(grid.card("left").width, 230, "the card before took the change");
+  assert.equal(grid.boundaryPos("x", 1), 230, "the card before took the change");
   assert.equal(grid.card("rail").width, 190, "the one after kept its size and moved along");
   assertTiling(grid, "between two fixed cards");
 });
