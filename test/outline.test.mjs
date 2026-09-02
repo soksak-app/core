@@ -73,3 +73,43 @@ test("no rects means no outline", () => {
   assert.deepEqual(shape.loops, []);
   assert.equal(shape.path, "");
 });
+
+test("a coordinate carrying float error still meets its neighbour", () => {
+  // 812.0000000000001 is what the grid returns for a line at 812. Rounding the
+  // vertex key but not the grid line left two lines one key apart, and the loop
+  // came back as three points instead of six.
+  const rail = { x: 812.0000000000001, y: 0, w: 190, h: 534 };
+  const focused = { x: 1026, y: 290, w: 574, h: 244 };
+  const shape = outline([rail, focused], { pad: 12, radius: 26, innerRadius: 12 });
+  assert.equal(shape.loops.length, 1);
+  assert.equal(shape.loops[0].length, 6, "an L has six corners");
+  assert.equal(shape.sharp, 0);
+});
+
+test("the loop runs outside every rect it binds", () => {
+  const rects = [
+    { x: 812.0000000000001, y: 0, w: 190, h: 534 },
+    { x: 1026, y: 290, w: 574, h: 244 },
+  ];
+  const others = [
+    { x: 0, y: 0, w: 190, h: 534 },
+    { x: 214, y: 0, w: 574, h: 266 },
+    { x: 1026, y: 0, w: 574, h: 266 },
+    { x: 1624, y: 0, w: 210, h: 534 },
+  ];
+  const { loops } = outline(rects, { pad: 12, radius: 26, innerRadius: 12 });
+  let inside = 0;
+  for (const loop of loops) {
+    for (let i = 0; i < loop.length; i++) {
+      const a = loop[i];
+      const b = loop[(i + 1) % loop.length];
+      const steps = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 6));
+      for (let t = 0; t <= steps; t++) {
+        const x = a.x + ((b.x - a.x) * t) / steps;
+        const y = a.y + ((b.y - a.y) * t) / steps;
+        if (others.some((r) => x > r.x + 2 && x < r.x + r.w - 2 && y > r.y + 2 && y < r.y + r.h - 2)) inside++;
+      }
+    }
+  }
+  assert.equal(inside, 0);
+});

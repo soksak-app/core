@@ -32,19 +32,26 @@ export interface Outline {
   sharp: number;
 }
 
-const key = (x: number, y: number): string =>
-  `${Math.round(x * 100) / 100},${Math.round(y * 100) / 100}`;
+/**
+ * Grid lines and vertex keys read the same coordinates. Rounding only the keys
+ * merged two vertices while leaving two grid lines, which cut the loop apart.
+ */
+const snap = (v: number): number => Math.round(v * 100) / 100;
+const key = (x: number, y: number): string => `${snap(x)},${snap(y)}`;
 
 /** Boundary of the union of axis-aligned rects, as closed rectilinear loops. */
 export function unionLoops(rects: readonly Rect[]): Point[][] {
-  if (!rects.length) return [];
-  const gx = [...new Set(rects.flatMap((r) => [r.x, r.x + r.w]))].sort((a, b) => a - b);
-  const gy = [...new Set(rects.flatMap((r) => [r.y, r.y + r.h]))].sort((a, b) => a - b);
+  const box = rects
+    .map((r) => ({ x0: snap(r.x), y0: snap(r.y), x1: snap(r.x + r.w), y1: snap(r.y + r.h) }))
+    .filter((b) => b.x1 > b.x0 && b.y1 > b.y0);
+  if (!box.length) return [];
+  const gx = [...new Set(box.flatMap((b) => [b.x0, b.x1]))].sort((a, b) => a - b);
+  const gy = [...new Set(box.flatMap((b) => [b.y0, b.y1]))].sort((a, b) => a - b);
 
   const filled = (i: number, j: number): boolean => {
     const cx = (gx[i] + gx[i + 1]) / 2;
     const cy = (gy[j] + gy[j + 1]) / 2;
-    return rects.some((r) => cx > r.x && cx < r.x + r.w && cy > r.y && cy < r.y + r.h);
+    return box.some((b) => cx > b.x0 && cx < b.x1 && cy > b.y0 && cy < b.y1);
   };
 
   // Emit each filled cell clockwise; an edge shared by two filled cells cancels.
