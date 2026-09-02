@@ -44,33 +44,40 @@ export function slotSizes(plane, axis) {
         const slot = card[lo];
         held[slot] = Math.max((_a = held[slot]) !== null && _a !== void 0 ? _a : 0, size);
     }
-    let asked = 0;
-    let corridors = 0;
-    let sharedSpan = 0;
+    let asked = 0; // px the held slots were told to be
+    let taken = 0; // corridor those slots carry on top
+    let sharedSpan = 0; // how the rest divide what is left
+    let floor = 0; // the corridor the rest carry, whatever else they get
     for (let i = 0; i < count; i++) {
         if (held[i] !== null) {
             asked += held[i];
-            corridors += corridor[i];
+            taken += corridor[i];
         }
         else {
             sharedSpan += a[i + 1] - a[i];
+            floor += corridor[i];
         }
     }
-    const usable = extent(plane, axis) - asked - corridors;
-    if (sharedSpan > 1e-9 && usable >= 0) {
+    // and between them one card's worth of room, so panes are not starved to
+    // nothing while a sidebar keeps its number. Per slot would count a card that
+    // spans several of them once for each.
+    if (sharedSpan > 1e-9)
+        floor += plane.minSize;
+    const usable = extent(plane, axis) - asked - taken;
+    if (sharedSpan > 1e-9 && usable >= floor) {
         const scale = usable / sharedSpan;
         return held.map((fixed, i) => fixed !== null ? fixed + corridor[i] : (a[i + 1] - a[i]) * scale);
     }
-    // Nothing shares, or what was asked for does not fit. Every sharing slot
-    // keeps just its corridor, so its card draws nothing rather than less than
-    // nothing, and the px sizes scale together to cover what is left.
-    let floors = 0;
-    for (let i = 0; i < count; i++)
-        if (held[i] === null)
-            floors += corridor[i];
-    const room = Math.max(0, extent(plane, axis) - floors - corridors);
-    const scale = asked > 1e-9 ? room / asked : 0;
-    return held.map((fixed, i) => (fixed !== null ? fixed * scale + corridor[i] : corridor[i]));
+    // What was asked for does not fit, or nothing shares at all. The sharing
+    // slots keep their floor and the px sizes scale together to cover the rest —
+    // one multiple for all of them, so their proportions survive. A sidebar
+    // narrows with the window rather than starving the panes or hanging off the
+    // edge, and a card that closes always has somewhere to send its room.
+    const keep = Math.min(floor, Math.max(0, extent(plane, axis) - taken));
+    const left = Math.max(0, extent(plane, axis) - keep - taken);
+    const scale = asked > 1e-9 ? left / asked : 0;
+    const each = sharedSpan > 1e-9 ? keep / sharedSpan : 0;
+    return held.map((fixed, i) => fixed !== null ? fixed * scale + corridor[i] : (a[i + 1] - a[i]) * each);
 }
 /** Where a grid line falls in px — the sum of every slot before it. */
 export function linePos(plane, axis, index) {

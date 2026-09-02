@@ -155,22 +155,28 @@ test("R5 — the corridor is half a gap inside, and nothing at the plane's borde
         { width: 1200, height: 600, gap },
       );
       // Dragging a sidebar's own boundary is the user resizing it, so the
-      // number may change. What may never change is what the number means.
-      for (const id of ["left", "rail", "right"]) {
+      // number may change. What may never change is what the number means: it
+      // is drawn at exactly that while the plane can give it, and when it
+      // cannot, every px card is drawn at the same multiple of what it asked.
+      const multiples = () =>
+        ["left", "rail", "right"]
+          .map((id) => grid.card(id))
+          .filter((c) => c && c.width !== undefined && c.c1 - c.c0 === 1)
+          .map((c) => grid.rect(c.id).w / c.width);
+      const agree = (when) => {
+        const m = multiples();
+        if (!m.length) return;
         assert.ok(
-          Math.abs(grid.rect(id).w - grid.card(id).width) < 0.01,
-          `gap ${gap} seed ${seed}: ${id} holds ${grid.card(id).width} and draws ${grid.rect(id).w}`,
+          Math.max(...m) - Math.min(...m) < 0.001,
+          `gap ${gap} seed ${seed} ${when}: drawn at ${m.map((v) => v.toFixed(3))}`,
         );
+      };
+      agree("at the start");
+      for (const m of multiples()) {
+        assert.ok(Math.abs(m - 1) < 0.001, `gap ${gap} seed ${seed}: drawn at ${m} with room to spare`);
       }
       fuzz(grid, seed, 40);
-      for (const id of ["left", "rail", "right"]) {
-        const card = grid.card(id);
-        if (!card) continue;
-        assert.ok(
-          Math.abs(grid.rect(id).w - card.width) < 0.01,
-          `gap ${gap} seed ${seed}: ${id} holds ${card.width} and draws ${grid.rect(id).w}`,
-        );
-      }
+      agree("after fuzzing");
     }
   }
 });

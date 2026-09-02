@@ -145,7 +145,7 @@ export class Soksak {
         };
     }
     get plane() {
-        return { xs: this.xs, ys: this.ys, cards: this.list, width: this.w, height: this.h, gap: this.gap };
+        return { xs: this.xs, ys: this.ys, cards: this.list, width: this.w, height: this.h, gap: this.gap, minSize: this.minSize };
     }
     arr(axis) {
         return axis === 'x' ? this.xs : this.ys;

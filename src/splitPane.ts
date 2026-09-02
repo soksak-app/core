@@ -213,7 +213,7 @@ export class Soksak {
   }
 
   private get plane(): Plane {
-    return { xs: this.xs, ys: this.ys, cards: this.list, width: this.w, height: this.h, gap: this.gap };
+    return { xs: this.xs, ys: this.ys, cards: this.list, width: this.w, height: this.h, gap: this.gap, minSize: this.minSize };
   }
 
   private arr(axis: Axis): number[] {

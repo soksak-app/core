@@ -18,6 +18,8 @@ export interface Plane {
     height: number;
     /** Corridor between two cards, in px. Half of it insets every inner edge. */
     gap: number;
+    /** The smallest a card is asked to be, in px. */
+    minSize: number;
 }
 /**
  * The px width of every slot along an axis.
