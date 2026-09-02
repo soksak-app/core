@@ -105,11 +105,10 @@ const ORDER: Record<FillOrder, readonly Fill['side'][]> = {
  * A fixed card never fills: its size is its own, so growing it would answer a
  * question nobody asked, and one at the plane's edge would spread over it.
  *
- * Neither does a card holding a px size on the axis it would grow along. That
- * is the other half of a role and a separate question from whether the layout
- * moves it: a movable rail is still 40px wide, and a card that grows across a
- * second slot stops holding a size at all — the number stays on it, dormant,
- * and the card is drawn at whatever is left.
+ * A card holding a px size does fill. Growing across a second slot means it
+ * stops holding a size, and that is the right answer: the number described one
+ * slot and the card no longer stands in one. Refusing instead left cards that
+ * nothing could close.
  */
 export function fillFor(
   cards: readonly Card[],
@@ -122,13 +121,11 @@ export function fillFor(
 
   for (const side of ORDER[order]) {
     const dir = DIRECTIONS[side];
-    const along: Axis = dir.grow[0] === 'c' ? 'x' : 'y';
     const row = cards
       .filter(
         (c) =>
           c !== closing &&
           !c.fixed &&
-          fixedSize(c, along) === null &&
           dir.touches(c, closing) &&
           c[dir.lo] >= closing[dir.lo] &&
           c[dir.hi] <= closing[dir.hi],

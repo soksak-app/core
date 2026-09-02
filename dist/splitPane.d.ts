@@ -260,6 +260,8 @@ export declare class Soksak {
      * no difference — one or three, they are all its own.
      */
     private soleSlots;
+    /** Drop the lines inside this card's span that no other card reads. */
+    private closeUpInside;
     private removable;
     canClose(id: string): boolean;
     /**

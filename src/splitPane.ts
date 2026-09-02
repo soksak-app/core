@@ -754,6 +754,16 @@ export class Soksak {
     return null;
   }
 
+  /** Drop the lines inside this card's span that no other card reads. */
+  private closeUpInside(card: Card, axis: Axis): void {
+    const [lo, hi] = SPAN[axis];
+    for (let slot = card[hi] - 1; slot > card[lo]; slot--) {
+      const read = this.list.some((c) => c !== card && (c[lo] === slot || c[hi] === slot));
+      if (read) continue;
+      this.dropSlot(axis, slot - 1);
+    }
+  }
+
   private removable(id: string): Card | null {
     const card = this.find(id);
     if (!card || card.fixed) return null;
@@ -778,8 +788,26 @@ export class Soksak {
 
     const filling = this.fill(id);
     if (filling) {
+      const axis: Axis = filling.grow[0] === 'c' ? 'x' : 'y';
+      const gone = fixedSize(card, axis);
+      const was = new Map(filling.cards.map((c) => [c, fixedSize(c, axis)]));
       for (const neighbour of filling.cards) neighbour[filling.grow] = card[filling.grow];
       this.list.splice(this.list.indexOf(card), 1);
+
+      // A px size describes one slot. When a card holding one takes over a slot
+      // that was also held at a px size, the two are one slot now and the sizes
+      // add — 84 and 131 make 215. The line between them is read by nobody, and
+      // it cannot stay inside a card that is a single number wide.
+      if (gone !== null) {
+        for (const neighbour of filling.cards) {
+          const mine = was.get(neighbour);
+          if (mine === null || mine === undefined) continue;
+          this.closeUpInside(neighbour, axis);
+          if (spanOf(neighbour, axis) !== 1) continue;
+          if (axis === 'x') neighbour.width = mine + gone;
+          else neighbour.height = mine + gone;
+        }
+      }
       this.changed();
       return true;
     }

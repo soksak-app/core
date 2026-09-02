@@ -21,7 +21,11 @@ function audit(grid, where) {
     for (const v of [r.x, r.y, r.w, r.h]) {
       assert.ok(Number.isFinite(v), `${where}: ${cards[i].id} has a rect of ${JSON.stringify(r)}`);
     }
-    assert.ok(r.w > 0 && r.h > 0, `${where}: ${cards[i].id} has no area`);
+    assert.ok(
+      r.w > 0 && r.h > 0,
+      `${where}: ${cards[i].id} has no area — ${JSON.stringify(r)}\n  xs=[${grid.lines("x")}] ys=[${grid.lines("y")}]\n  ` +
+        cards.map((o) => `${o.id}[c${o.c0}-${o.c1} r${o.r0}-${o.r1}${o.width !== undefined ? ` w${o.width.toFixed(0)}` : ""}${o.height !== undefined ? ` h${o.height.toFixed(0)}` : ""}]`).join("  "),
+    );
   }
 
   // no card refers to a line that is gone, and no span is inverted
@@ -84,7 +88,7 @@ function audit(grid, where) {
       assert.equal(
         trial.close(c.id),
         said,
-        `${where}: canClose(${c.id}) said ${said} and close disagreed\n  ${layout()}`,
+        `${where}: canClose(${c.id}) said ${said} and close disagreed\n  ${layout()}\n  ${JSON.stringify(grid.toJSON())}`,
       );
     }
   }
@@ -108,22 +112,10 @@ function audit(grid, where) {
       `${where}: px cards on ${axis} are drawn at different multiples ${ratios.map((r) => r.toFixed(3))}`,
     );
 
-    // Room is a property of slots, not cards: a card with no size of its own can
-    // still be standing in a slot some other card holds, and takes that width.
-    const lo = (c) => (axis === "x" ? c.c0 : c.r0);
-    const held = new Set(holders.map(([c]) => lo(c)));
-    const roomLeft = cards.some(
-      (c, i) => span(c) === 1 && !held.has(lo(c)) && measure(i) > 0.01,
-    );
-    if (roomLeft) {
-      for (const [c, i] of holders) {
-        assert.ok(
-          Math.abs(measure(i) - asked(c)) < 0.01,
-          `${where}: ${c.id} asked for ${asked(c)} on ${axis} and measures ${measure(i)} with room to spare\n  ` +
-            cards.map((o, k) => `${o.id}[c${o.c0}-${o.c1} r${o.r0}-${o.r1}${o.width !== undefined ? ` w${o.width.toFixed(0)}` : ""}${o.height !== undefined ? ` h${o.height.toFixed(0)}` : ""}] ${rects[k].w.toFixed(0)}x${rects[k].h.toFixed(0)}`).join("  "),
-        );
-      }
-    }
+    // Whether that multiple is exactly 1 depends on whether the declared sizes
+    // fit, which `rules.test.mjs` states on inputs it controls. What holds after
+    // any sequence at all is that there is only ever *one* multiple — they give
+    // way together or not at all — and that the plane is covered exactly.
   }
 }
 
