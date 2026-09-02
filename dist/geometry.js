@@ -11,9 +11,45 @@
 import { AXES, SPAN, fixedSize, other } from './card.js';
 const lines = (plane, axis) => (axis === 'x' ? plane.xs : plane.ys);
 const extent = (plane, axis) => (axis === 'x' ? plane.width : plane.height);
-/** Corridor a slot carries: half a gap on each inner edge. */
+/**
+ * Corridor a slot carries: half a gap for every card edge that insets into it.
+ *
+ * Lines at one position are one boundary, and a blank slot has no width to
+ * carry a corridor with, so the charge falls on the nearest slot that has one.
+ * Two lines of a run can each land an edge here — a card starting at either —
+ * and one half gap holds both, so the run charges the largest, not the sum.
+ */
 export function corridorOf(plane, axis, slot, read = linesRead(plane, axis)) {
-    return inset(plane, axis, slot, 'lo', read) + inset(plane, axis, slot + 1, 'hi', read);
+    const a = lines(plane, axis);
+    if (blank(plane, axis, slot))
+        return 0;
+    let lo = inset(plane, axis, slot, 'lo', read);
+    for (let k = slot - 1; k >= 0 && blank(plane, axis, k); k--) {
+        lo = Math.max(lo, inset(plane, axis, k, 'lo', read));
+    }
+    let hi = inset(plane, axis, slot + 1, 'hi', read);
+    for (let k = slot + 2; k < a.length && blank(plane, axis, k - 1); k++) {
+        hi = Math.max(hi, inset(plane, axis, k, 'hi', read));
+    }
+    return lo + hi;
+}
+/**
+ * True when a slot draws at nothing: no span to take a share with and no px
+ * size of its own. The two lines around one land at the same position.
+ *
+ * The cards are walked only when a slot has no span, which is rare, so a plane
+ * whose lines are all apart pays one subtraction per call.
+ */
+function blank(plane, axis, slot) {
+    const a = lines(plane, axis);
+    if (a[slot + 1] - a[slot] >= 1e-9)
+        return false;
+    const [lo] = SPAN[axis];
+    for (const card of plane.cards) {
+        if (card[lo] === slot && fixedSize(card, axis) !== null)
+            return false;
+    }
+    return true;
 }
 /** The px size each slot declares: the largest any card in it asks for. */
 export function heldSizes(plane, axis) {
@@ -101,20 +137,12 @@ export function slotSizes(plane, axis) {
                 }
                 return size;
             }
+            // `usable` is at least the corridors plus one card's worth, so stopping
+            // every slot at its corridor still leaves room and span to divide.
             stopped[starved] = true;
             size[starved] = corridor[starved];
             room -= corridor[starved];
             pool -= a[starved + 1] - a[starved];
-            if (pool <= 1e-9) {
-                let open = 0;
-                for (let i = 0; i < count; i++)
-                    if (held[i] === null)
-                        open++;
-                for (let i = 0; i < count; i++)
-                    if (held[i] === null)
-                        size[i] += room / open;
-                return size;
-            }
         }
     }
     // What was asked for does not fit, or nothing shares at all. The sharing
@@ -148,16 +176,21 @@ export function linePositions(plane, axis) {
  * Corridor width for this axis, capped at what the plane can hold.
  *
  * Each real interior line costs one gap. When the total exceeds the plane, the
- * gap is reduced to what the plane holds. A single slot can still be narrower
- * than the corridor it carries; `rectIn` draws that card with no width.
+ * gap is reduced to what the plane holds. Every slot is at least the corridor
+ * it carries; a card whose own lines stand at one place still has none to draw,
+ * and `rectIn` puts it there.
  */
 function corridor(plane, axis, read = linesRead(plane, axis)) {
     const a = lines(plane, axis);
-    let real = 0;
-    for (let k = 1; k < a.length - 1; k++)
-        if (read.has(k))
-            real++;
-    if (real === 0)
+    // Counted off the set rather than walked: every card span is an index into
+    // the lines, so the interior ones are the set less whichever borders are in
+    // it, and `inset` asks this once per line it is asked about.
+    let real = read.size;
+    if (read.has(0))
+        real--;
+    if (read.has(a.length - 1))
+        real--;
+    if (real <= 0)
         return plane.gap;
     return Math.min(plane.gap, Math.max(0, extent(plane, axis)) / real);
 }
@@ -183,14 +216,19 @@ export function inset(plane, axis, index, side, read = linesRead(plane, axis)) {
     const flush = side === 'lo' ? index === 0 : index === a.length - 1;
     if (flush)
         return 0;
-    // A line no card references separates nothing and takes no corridor. Nor
-    // does one whose slot on this side has no span: there is nothing between
-    // this line and the next for a corridor to separate, and a drag that brings
-    // a boundary onto its neighbour leaves exactly that.
+    // A line no card references separates nothing and takes no corridor.
     if (!read.has(index))
         return 0;
-    const slot = side === 'lo' ? index : index - 1;
-    if (a[slot + 1] - a[slot] < 1e-9)
+    // Lines at one position are one boundary. The card on this side has its room
+    // in the first slot past the blank ones, so the run is walked rather than
+    // read as a single slot: a card reaching over coincident lines still sits
+    // half a gap back from what it meets. A run that ends at the plane's edge has
+    // nothing to inset into, and a card there is drawn against the border.
+    const step = side === 'lo' ? 1 : -1;
+    let slot = side === 'lo' ? index : index - 1;
+    while (slot >= 0 && slot <= a.length - 2 && blank(plane, axis, slot))
+        slot += step;
+    if (slot < 0 || slot > a.length - 2)
         return 0;
     return corridor(plane, axis, read) / 2;
 }
@@ -216,9 +254,11 @@ export function frameOf(plane) {
         const at = [0];
         for (const size of sizes)
             at.push(at[at.length - 1] + size);
-        const gap = corridor(plane, axis, read) / 2;
-        const half = a.map((_, i) => (i === 0 || i === a.length - 1 || !read.has(i) ? 0 : gap));
-        return { at, half };
+        // Asked of `inset`, never worked out again here: a second copy of the rule
+        // is a second answer, and the two drifted apart over coincident lines.
+        const lo = a.map((_, i) => inset(plane, axis, i, 'lo', read));
+        const hi = a.map((_, i) => inset(plane, axis, i, 'hi', read));
+        return { at, lo, hi };
     };
     return { x: axle('x'), y: axle('y') };
 }
@@ -231,13 +271,14 @@ export function rectIn(frame, card) {
 /**
  * One axis of a rect: where the card starts and how much it holds.
  *
- * A slot narrower than the corridor it carries would put the far edge before
- * the near one. The card has no room there, so it is drawn with none, in the
- * middle of the slots it spans, rather than inside out.
+ * A card whose two lines stand at one place has its far edge before its near
+ * one: it has no room there, so it is drawn with none, in the middle of the
+ * slots it spans, rather than inside out. That is the place its lines stand,
+ * inside the one gap that keeps the cards either side of the run apart.
  */
 function span(axle, lo, hi) {
-    const near = axle.at[lo] + axle.half[lo];
-    const far = axle.at[hi] - axle.half[hi];
+    const near = axle.at[lo] + axle.lo[lo];
+    const far = axle.at[hi] - axle.hi[hi];
     // A card clamped to exactly no width lands a rounding either side of its
     // near edge. Reading that as inside out would move it to the middle of its
     // slots, which puts the corridor before it a fraction under a gap.
@@ -355,8 +396,8 @@ export function rules(plane) {
                 ? { key: `vx:${line}`, axis, line, virtual: true, x: at, y: 0, w: 1, h: across }
                 : { key: `vy:${line}`, axis, line, virtual: true, x: 0, y: at, w: across, h: 1 });
             for (const [from, to] of boundarySpans(plane, axis, line, meet)) {
-                const start = hold(frame[down].at[from] + frame[down].half[from] - half);
-                const end = hold(frame[down].at[to] - frame[down].half[to] + half);
+                const start = hold(frame[down].at[from] + frame[down].lo[from] - half);
+                const end = hold(frame[down].at[to] - frame[down].hi[to] + half);
                 out.push(axis === 'x'
                     ? { key: `sx:${line}:${from}`, axis, line, virtual: false, x: at, y: start, w: 1, h: end - start }
                     : { key: `sy:${line}:${from}`, axis, line, virtual: false, x: start, y: at, w: end - start, h: 1 });
@@ -382,8 +423,8 @@ export function dividers(plane, grabSize) {
         const meet = touching(plane, axis);
         for (const line of interiorLines(plane, axis)) {
             for (const [from, to] of boundarySpans(plane, axis, line, meet)) {
-                const start = frame[down].at[from] + frame[down].half[from];
-                const end = frame[down].at[to] - frame[down].half[to];
+                const start = frame[down].at[from] + frame[down].lo[from];
+                const end = frame[down].at[to] - frame[down].hi[to];
                 out.push(axis === 'x'
                     ? { key: `x:${line}:${from}`, axis, line, x: along[line] - hit / 2, y: start, w: hit, h: end - start }
                     : { key: `y:${line}:${from}`, axis, line, x: start, y: along[line] - hit / 2, w: end - start, h: hit });

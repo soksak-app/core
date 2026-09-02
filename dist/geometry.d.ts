@@ -21,7 +21,14 @@ export interface Plane {
     /** The smallest a card is asked to be, in px. */
     minSize: number;
 }
-/** Corridor a slot carries: half a gap on each inner edge. */
+/**
+ * Corridor a slot carries: half a gap for every card edge that insets into it.
+ *
+ * Lines at one position are one boundary, and a blank slot has no width to
+ * carry a corridor with, so the charge falls on the nearest slot that has one.
+ * Two lines of a run can each land an edge here — a card starting at either —
+ * and one half gap holds both, so the run charges the largest, not the sum.
+ */
 export declare function corridorOf(plane: Plane, axis: Axis, slot: number, read?: Set<number>): number;
 /** The px size each slot declares: the largest any card in it asks for. */
 export declare function heldSizes(plane: Plane, axis: Axis): (number | null)[];
@@ -54,7 +61,10 @@ export declare function linesReadOn(plane: Plane, axis: Axis): Set<number>;
 /** Line positions and edge insets for one axis. */
 export interface Axle {
     at: number[];
-    half: number[];
+    /** How far a card starting at each line sits back from it. */
+    lo: number[];
+    /** How far a card ending at each line sits back from it. */
+    hi: number[];
 }
 /** Frames for both axes. */
 export interface Frame {

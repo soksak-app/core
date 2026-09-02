@@ -275,3 +275,93 @@ test("no two rules and no two grab areas share a key", () => {
     }
   }
 });
+
+/**
+ * Lines that stand at one place. A drag or a close can leave two lines at the
+ * same coordinate, with an empty slot between them. What the cards either side
+ * of that run are owed does not change: a corridor is one gap wide.
+ */
+test("a card reaching over coincident lines keeps a full gap either side", () => {
+  // `over` spans the empty slot. The plane is too small to give it width, so
+  // it is drawn with none — but `held` and `far` still stand a gap away from
+  // it, not the half gap the run charges when it is read as a single slot.
+  const grid = new Soksak(
+    {
+      xs: [0, 0.3, 0.45, 0.5, 0.5, 1],
+      ys: [0, 1],
+      cards: [
+        { id: "share", c0: 0, c1: 1, r0: 0, r1: 1 },
+        { id: "held", c0: 1, c1: 2, r0: 0, r1: 1, width: 100 },
+        { id: "over", c0: 2, c1: 4, r0: 0, r1: 1 },
+        { id: "far", c0: 4, c1: 5, r0: 0, r1: 1, width: 100 },
+      ],
+    },
+    { width: 400, height: 300, gap: 24, minSize: 96 },
+  );
+  const held = grid.rect("held");
+  const over = grid.rect("over");
+  const far = grid.rect("far");
+  assert.ok(over.w >= 0, `over is inside out at ${over.w}`);
+  assert.ok(Math.abs(over.x - (held.x + held.w) - grid.gap) < 0.01, `${over.x - (held.x + held.w)} before it`);
+  assert.ok(Math.abs(far.x - (over.x + over.w) - grid.gap) < 0.01, `${far.x - (over.x + over.w)} after it`);
+});
+
+test("a card between coincident lines is drawn with nothing where they stand", () => {
+  // `flat` has both its lines at one place. It has no width to draw and no
+  // corridor of its own; it sits at that place, inside the one gap that keeps
+  // its neighbours apart.
+  const grid = new Soksak(
+    {
+      xs: [0, 0.4, 0.7, 0.7, 1],
+      ys: [0, 1],
+      cards: [
+        { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
+        { id: "b", c0: 1, c1: 2, r0: 0, r1: 1 },
+        { id: "flat", c0: 2, c1: 3, r0: 0, r1: 1 },
+        { id: "c", c0: 3, c1: 4, r0: 0, r1: 1 },
+      ],
+    },
+    { width: 1600, height: 300, gap: 24, minSize: 96 },
+  );
+  const b = grid.rect("b");
+  const flat = grid.rect("flat");
+  const c = grid.rect("c");
+  assert.equal(flat.w, 0, "it has nothing to draw");
+  assert.equal(flat.x, grid.boundaryPos("x", 2), "and stands where its lines do");
+  assert.ok(Math.abs(c.x - (b.x + b.w) - grid.gap) < 0.01, `its neighbours are ${c.x - (b.x + b.w)} apart`);
+});
+
+test("a px size on a slot with no span is still drawn at that size", () => {
+  // The slot takes no share, so its width is the size the card declares and
+  // the corridor on top. Reading the slot as empty drew the card a gap short.
+  const grid = new Soksak(
+    {
+      xs: [0, 0.5, 0.5, 1],
+      ys: [0, 1],
+      cards: [
+        { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
+        { id: "z", c0: 1, c1: 2, r0: 0, r1: 1, width: 100 },
+        { id: "b", c0: 2, c1: 3, r0: 0, r1: 1 },
+      ],
+    },
+    { width: 1600, height: 400, gap: 24, minSize: 96 },
+  );
+  const a = grid.rect("a");
+  const z = grid.rect("z");
+  const b = grid.rect("b");
+  assert.equal(z.w, 100, "the size it was given");
+  assert.ok(Math.abs(z.x - (a.x + a.w) - grid.gap) < 0.01);
+  assert.ok(Math.abs(b.x - (z.x + z.w) - grid.gap) < 0.01);
+});
+
+test("insertAt refuses a size the plane cannot hold", () => {
+  // Taking the whole plane leaves the cards already there none of it, and the
+  // new line has to be written before the plane starts to make the room.
+  const grid = three();
+  const lines = grid.lines("x").length;
+  assert.equal(grid.insertAt("x", 1, { size: W, id: "whole" }), null);
+  assert.equal(grid.insertAt("x", 1, { size: W + 1, id: "past" }), null);
+  assert.equal(grid.lines("x").length, lines, "and nothing was written");
+  assert.ok(grid.lines("x").every((v) => v >= 0 && v <= 1), "the lines stay inside the plane");
+  assert.ok(grid.insertAt("x", 1, { size: 200, id: "fits" }) !== null, "one that fits is taken");
+});

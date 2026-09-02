@@ -335,3 +335,58 @@ test("tidy drops every line no card reads, including the first", () => {
   assert.equal(grid.virtualCount(), 0, "and none is left");
   assert.equal(grid.lines("x").length, 2, "the array is one shorter");
 });
+
+test("a card cannot be inserted at the size of the plane or more", () => {
+  // Without the check `openSlot` writes a line before the plane starts and the
+  // array comes back out of order and past 1. It takes a plane that has been
+  // worked on to reach, so this walks a fixed set of them.
+  let inserted = 0;
+  let refused = 0;
+  for (let seed = 0; seed < 60; seed++) {
+    const grid = new Soksak(undefined, {
+      width: 100 + (seed % 1400),
+      height: 100 + (seed % 900),
+      gap: seed % 40,
+      minSize: seed % 120,
+    });
+    const ids = ["card"];
+    let r = seed * 7919 + 3;
+    const rnd = () => {
+      r = (r * 1103515245 + 12345) >>> 0;
+      return r / 4294967296;
+    };
+    for (let i = 0; i < 12; i++) {
+      const t = ids[Math.floor(rnd() * ids.length)];
+      const k = rnd();
+      if (k < 0.5) {
+        const n = grid.split(t, rnd() < 0.5 ? "x" : "y");
+        if (n) ids.push(n);
+      } else if (k < 0.7) {
+        grid.setSize(t, rnd() < 0.5 ? "x" : "y", 20 + Math.floor(rnd() * 300));
+      } else {
+        grid.moveBoundary(rnd() < 0.5 ? "x" : "y", 1, rnd() * grid.width);
+      }
+
+      for (const axis of ["x", "y"]) {
+        const plane = axis === "x" ? grid.width : grid.height;
+        for (const line of [0, 1, grid.lines(axis).length - 1]) {
+          const got = grid.insertAt(axis, line, { size: plane });
+          if (got === null) refused++;
+          else inserted++;
+          const along = grid.lines(axis);
+          for (let k2 = 1; k2 < along.length; k2++) {
+            assert.ok(along[k2] >= along[k2 - 1], `seed ${seed}: ${axis} out of order: ${along.join(", ")}`);
+          }
+          assert.ok(along.every((v) => v >= 0 && v <= 1), `seed ${seed}: ${axis} outside 0..1`);
+        }
+      }
+    }
+  }
+  assert.equal(inserted, 0, "no plane took a card as wide as itself");
+  assert.ok(refused > 1000, `and the sweep reached ${refused} of them`);
+
+  // The check refuses only what it names: a plane with the room still takes one.
+  const grid = new Soksak(undefined, { width: 1200, height: 800, gap: 24, minSize: 0 });
+  grid.split("card", "x");
+  assert.ok(grid.insertAt("x", 0, { size: 40, id: "narrow" }), "a size the plane holds");
+});

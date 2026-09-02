@@ -38,9 +38,11 @@ every card stays closable.
 **R5 — The corridor is half a gap on every inner edge.**
 A card at the plane's border is flush there. A line no card references takes no
 corridor. When the corridor total exceeds the plane, the gap is reduced to what
-the plane holds. A slot can still end up narrower than the corridor it carries;
-the card there is drawn with no width, in the middle of its slots, so a rect is
-never inside out.
+the plane holds. Lines standing at one place are one boundary: the slot beside
+the run carries the corridor, because a slot with no width has nothing to carry
+one with. A card whose own two lines stand at that one place has no width to
+draw; it sits there, inside the one gap that keeps its neighbours apart, so a
+rect is never inside out.
 
 The slot carries the corridor, so a px size is the drawn size: `width: 180`
 draws 180 at the plane's edge, between two cards, and at any `gap`.

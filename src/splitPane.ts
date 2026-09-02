@@ -1159,7 +1159,11 @@ export class Soksak {
     if (this.noAxis(axis)) return null;
     if (init?.id !== undefined && this.find(init.id)) return null;
     const plane = this.size(axis);
-    if (!Number.isFinite(init?.size) || init.size < 0) return null;
+    // A size that takes the whole plane leaves the cards already there none,
+    // and `openSlot` writes the new line before the plane's start to make the
+    // room. Refused here, where the size is read, rather than found afterwards
+    // by measuring what it did.
+    if (!Number.isFinite(init?.size) || init.size < 0 || init.size >= plane) return null;
     if (!this.canInsertAt(axis, line)) return null;
     const was = this.extents(axis);
     const undo = this.toJSON();
