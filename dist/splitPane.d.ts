@@ -233,6 +233,8 @@ export declare class Soksak {
     private cutAt;
     /** The smallest side every card has, so a change can be asked what it cost. */
     private extents;
+    /** Whether every card is drawn with area. A card with none is not a card. */
+    private hasArea;
     /**
      * Whether every card still has the room it had, or `minSize`, whichever is
      * less.

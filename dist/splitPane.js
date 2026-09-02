@@ -12,7 +12,7 @@
  * This module holds the state and the operations. `geometry.ts` computes the
  * coordinates.
  */
-import { AXES, SPAN, axisOf, fixedSize, isAhead, spanOf } from './card.js';
+import { AXES, SPAN, axisOf, fixedSize, isAhead, other, spanOf } from './card.js';
 import { corridorOf, crossing, dividers, frameOf, halfCorridor, heldSizes, inset, interiorLines, isVirtual, linePositions, rectIn, rectOf, rules, slotSizes, slotWidths, zoneAt, } from './geometry.js';
 import { fillFor, isSlicing } from './slicing.js';
 const SIDES = ['left', 'right', 'top', 'bottom'];
@@ -641,18 +641,23 @@ export class Soksak {
                 line = i;
         }
         if (line >= 0)
-            return { line, value: a[line], snapped: true };
-        return { line: -1, value: clamp(mid, lowest, highest), snapped: false };
+            return { line, value: a[line] };
+        return { line: -1, value: clamp(mid, lowest, highest) };
     }
     /** The smallest side every card has, so a change can be asked what it cost. */
     extents(axis) {
-        const frame = frameOf(this.plane);
         const out = new Map();
-        for (const card of this.list) {
-            const r = rectIn(frame, card);
-            out.set(card.id, axis === 'x' ? r.w : r.h);
-        }
+        for (const [id, r] of this.rects())
+            out.set(id, axis === 'x' ? r.w : r.h);
         return out;
+    }
+    /** Whether every card is drawn with area. A card with none is not a card. */
+    hasArea() {
+        const frame = frameOf(this.plane);
+        return this.list.every((c) => {
+            const r = rectIn(frame, c);
+            return r.w > 0 && r.h > 0;
+        });
     }
     /**
      * Whether every card still has the room it had, or `minSize`, whichever is
@@ -662,13 +667,9 @@ export class Soksak {
      * split can push a card elsewhere below its size.
      */
     stillFits(axis, before) {
-        const frame = frameOf(this.plane);
-        for (const card of this.list) {
-            // Every card must have area, including one just created.
-            const r = rectIn(frame, card);
-            if (!(r.w > 0 && r.h > 0))
-                return false;
-        }
+        // Every card must have area, including one just created.
+        if (!this.hasArea())
+            return false;
         for (const [id, now] of this.extents(axis)) {
             // `minSize` applies only to cards that were already present. A new card
             // is the size it was given; the halves of a cut are checked by `cutAt`.
@@ -757,7 +758,7 @@ export class Soksak {
             data: init.data,
         };
         // A px size on the other axis is copied: both halves stay in that slot.
-        const across = axis === 'x' ? 'y' : 'x';
+        const across = other(axis);
         const alongside = fixedSize(card, across);
         if (alongside !== null) {
             if (across === 'x')
@@ -976,7 +977,7 @@ export class Soksak {
         const was = this.extents(axis);
         const undo = this.toJSON();
         const [lo, hi] = SPAN[axis];
-        const across = axis === 'x' ? 'y' : 'x';
+        const across = other(axis);
         const [alo, ahi] = SPAN[across];
         const held = slotWidths(this.plane, axis);
         this.openSlot(axis, line, init.size / plane);
@@ -1014,7 +1015,7 @@ export class Soksak {
     /** Whether a card occupies one slot and reaches across everything else. */
     spansPlane(card, axis) {
         const [lo, hi] = SPAN[axis];
-        const across = axis === 'x' ? 'y' : 'x';
+        const across = other(axis);
         const [alo, ahi] = SPAN[across];
         return (card[hi] - card[lo] === 1 &&
             card[alo] === 0 &&
@@ -1155,7 +1156,7 @@ export class Soksak {
             for (let k = target + 1; k < a.length; k++)
                 a[k] = was[k];
         }
-        const across = axis === 'x' ? 'y' : 'x';
+        const across = other(axis);
         const [alo, ahi] = SPAN[across];
         card[lo] = target;
         card[hi] = target + 1;
@@ -1166,12 +1167,7 @@ export class Soksak {
         // The slot leaves one boundary and arrives at another, so the neighbours
         // that give and take are not the same pair. Refuse when that leaves a card
         // without area.
-        const frame = frameOf(this.plane);
-        const noArea = this.list.some((c) => {
-            const r = rectIn(frame, c);
-            return !(r.w > 0 && r.h > 0);
-        });
-        if (noArea) {
+        if (!this.hasArea()) {
             this.restore(before);
             return false;
         }

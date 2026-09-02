@@ -43,7 +43,6 @@ export interface Card extends CardInit {
 /** Span keys for an axis. */
 export declare const SPAN: Record<Axis, readonly ['c0' | 'r0', 'c1' | 'r1']>;
 /** Span keys for the other axis. */
-export declare const CROSS: Record<Axis, readonly ['c0' | 'r0', 'c1' | 'r1']>;
 export declare const AXES: readonly Axis[];
 export declare const axisOf: (side: Side) => Axis;
 /** True when the side is before the card on its axis. */
@@ -52,3 +51,5 @@ export declare const isAhead: (side: Side) => boolean;
 export declare const spanOf: (card: Card, axis: Axis) => number;
 /** The px size set on an axis, or null when the card takes a share. */
 export declare function fixedSize(card: Card, axis: Axis): number | null;
+/** The axis that is not this one. */
+export declare function other(axis: Axis): Axis;

@@ -53,11 +53,6 @@ export const SPAN: Record<Axis, readonly ['c0' | 'r0', 'c1' | 'r1']> = {
 };
 
 /** Span keys for the other axis. */
-export const CROSS: Record<Axis, readonly ['c0' | 'r0', 'c1' | 'r1']> = {
-  x: ['r0', 'r1'],
-  y: ['c0', 'c1'],
-};
-
 export const AXES: readonly Axis[] = ['x', 'y'];
 
 export const axisOf = (side: Side): Axis =>
@@ -77,4 +72,9 @@ export function fixedSize(card: Card, axis: Axis): number | null {
   if (spanOf(card, axis) !== 1) return null;
   const size = axis === 'x' ? card.width : card.height;
   return typeof size === 'number' && Number.isFinite(size) ? Math.max(0, size) : null;
+}
+
+/** The axis that is not this one. */
+export function other(axis: Axis): Axis {
+  return axis === 'x' ? 'y' : 'x';
 }

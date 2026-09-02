@@ -7,7 +7,7 @@
  * Every function here is pure and takes the plane as an argument.
  */
 
-import { AXES, CROSS, SPAN, fixedSize } from './card.js';
+import { AXES, SPAN, fixedSize, other } from './card.js';
 import type { Axis, Card, Rect, Side } from './card.js';
 
 /** Everything a coordinate depends on. */
@@ -119,14 +119,6 @@ export function slotSizes(
   );
 }
 
-/** Where a grid line falls in px — the sum of every slot before it. */
-export function linePos(plane: Plane, axis: Axis, index: number): number {
-  const sizes = slotSizes(plane, axis);
-  let at = 0;
-  for (let i = 0; i < index; i++) at += sizes[i];
-  return at;
-}
-
 /** Every line position in px, index for index with the line array. */
 export function linePositions(plane: Plane, axis: Axis): number[] {
   const sizes = slotSizes(plane, axis);
@@ -173,13 +165,6 @@ export function inset(plane: Plane, axis: Axis, index: number, side: 'lo' | 'hi'
 /** Half the corridor a real line draws, capped at what the plane can hold. */
 export function halfCorridor(plane: Plane, axis: Axis): number {
   return corridor(plane, axis) / 2;
-}
-
-/** Where a card's edge falls in px. */
-export function edgePos(plane: Plane, axis: Axis, index: number, side: 'lo' | 'hi'): number {
-  const at = linePos(plane, axis, index);
-  const back = inset(plane, axis, index, side);
-  return side === 'lo' ? at + back : at - back;
 }
 
 /** Line positions and edge insets for one axis. */
@@ -286,7 +271,7 @@ export function boundarySpans(
   line: number,
   meet: Touching = touching(plane, axis),
 ): [number, number][] {
-  const [o0, o1] = CROSS[axis];
+  const [o0, o1] = SPAN[other(axis)];
   const spans: [number, number][] = [];
   for (const before of meet.ends.get(line) ?? []) {
     for (const after of meet.starts.get(line) ?? []) {
@@ -307,8 +292,7 @@ export function boundarySpans(
 
 /** True when no card references this line. */
 export function isVirtual(plane: Plane, axis: Axis, line: number): boolean {
-  const [lo, hi] = SPAN[axis];
-  return !plane.cards.some((c) => c[lo] === line || c[hi] === line);
+  return !linesRead(plane, axis).has(line);
 }
 
 /** Interior line indices. The two borders are excluded. */
@@ -351,7 +335,7 @@ export function rules(plane: Plane): Rule[] {
     const half = halfCorridor(plane, axis);
     const along = frame[axis].at;
     const across = axis === 'x' ? plane.height : plane.width;
-    const other: Axis = axis === 'x' ? 'y' : 'x';
+    const down = other(axis);
     const meet = touching(plane, axis);
     for (const line of interiorLines(plane, axis)) {
       const at = along[line] - 0.5;
@@ -361,8 +345,8 @@ export function rules(plane: Plane): Rule[] {
           : { key: `vy:${line}`, axis, line, virtual: true, x: -half, y: at, w: across + half * 2, h: 1 },
       );
       for (const [from, to] of boundarySpans(plane, axis, line, meet)) {
-        const start = frame[other].at[from] + frame[other].half[from] - half;
-        const end = frame[other].at[to] - frame[other].half[to] + half;
+        const start = frame[down].at[from] + frame[down].half[from] - half;
+        const end = frame[down].at[to] - frame[down].half[to] + half;
         out.push(
           axis === 'x'
             ? { key: `sx:${line}:${from}`, axis, line, virtual: false, x: at, y: start, w: 1, h: end - start }
@@ -387,12 +371,12 @@ export function dividers(plane: Plane, grabSize: number): Divider[] {
   const frame = frameOf(plane);
   for (const axis of AXES) {
     const along = frame[axis].at;
-    const other: Axis = axis === 'x' ? 'y' : 'x';
+    const down = other(axis);
     const meet = touching(plane, axis);
     for (const line of interiorLines(plane, axis)) {
       for (const [from, to] of boundarySpans(plane, axis, line, meet)) {
-        const start = frame[other].at[from] + frame[other].half[from];
-        const end = frame[other].at[to] - frame[other].half[to];
+        const start = frame[down].at[from] + frame[down].half[from];
+        const end = frame[down].at[to] - frame[down].half[to];
         out.push(
           axis === 'x'
             ? { key: `x:${line}:${from}`, axis, line, x: along[line] - hit / 2, y: start, w: hit, h: end - start }

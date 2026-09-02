@@ -14,10 +14,6 @@ export const SPAN = {
     y: ['r0', 'r1'],
 };
 /** Span keys for the other axis. */
-export const CROSS = {
-    x: ['r0', 'r1'],
-    y: ['c0', 'c1'],
-};
 export const AXES = ['x', 'y'];
 export const axisOf = (side) => side === 'left' || side === 'right' ? 'x' : 'y';
 /** True when the side is before the card on its axis. */
@@ -33,4 +29,8 @@ export function fixedSize(card, axis) {
         return null;
     const size = axis === 'x' ? card.width : card.height;
     return typeof size === 'number' && Number.isFinite(size) ? Math.max(0, size) : null;
+}
+/** The axis that is not this one. */
+export function other(axis) {
+    return axis === 'x' ? 'y' : 'x';
 }
