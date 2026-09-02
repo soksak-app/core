@@ -365,3 +365,33 @@ test("insertAt refuses a size the plane cannot hold", () => {
   assert.ok(grid.lines("x").every((v) => v >= 0 && v <= 1), "the lines stay inside the plane");
   assert.ok(grid.insertAt("x", 1, { size: 200, id: "fits" }) !== null, "one that fits is taken");
 });
+
+test("a card with no width sits inside the corridor, not beside it", () => {
+  // Its own two lines stand at one coordinate, so it is drawn at that
+  // coordinate with nothing. The two cards that do have width are still a full
+  // gap apart: the empty one is inside that gap, not another thing in the row.
+  const grid = new Soksak(
+    { xs: [0, 0.591717, 0.665638, 0.665638, 1], ys: [0, 1], cards: [
+      { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
+      { id: "b", c0: 1, c1: 2, r0: 0, r1: 1 },
+      { id: "none", c0: 2, c1: 3, r0: 0, r1: 1 },
+      { id: "c", c0: 3, c1: 4, r0: 0, r1: 1 },
+    ] },
+    { width: 1602, height: 600, gap: 24, minSize: 0 },
+  );
+  assert.equal(grid.rect("none").w, 0, "its two lines are at one coordinate");
+
+  const drawn = [...grid.rects()].filter(([, r]) => r.w > 0).sort((x, y) => x[1].x - y[1].x);
+  for (let i = 1; i < drawn.length; i++) {
+    const [before, a] = drawn[i - 1];
+    const [after, b] = drawn[i];
+    assert.ok(
+      Math.abs(b.x - (a.x + a.w) - grid.gap) < 1e-9,
+      `${before} to ${after} is ${b.x - (a.x + a.w)}, not ${grid.gap}`,
+    );
+  }
+  const none = grid.rect("none");
+  const b = grid.rect("b");
+  const c = grid.rect("c");
+  assert.ok(none.x > b.x + b.w && none.x < c.x, "and the empty one is between them");
+});
