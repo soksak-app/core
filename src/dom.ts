@@ -64,7 +64,8 @@ export class SoksakView {
   private ruleEls = new Map<string, HTMLElement>();
   /**
    * One drag state per pointer id. A single shared field let a second pointer
-   * overwrite the first, so one divider drove another and kept `data-dragging`.
+   * overwrite the first, which moved the wrong boundary and left `data-dragging`
+   * set on a divider nobody was holding.
    */
   private drags = new Map<number, DragState>();
   private observer: ResizeObserver | null = null;
@@ -117,7 +118,8 @@ export class SoksakView {
       held.el.dataset.cardId = card.id;
       this.options.updateCard?.(held.el, card, rect);
     }
-    // the card is already gone from the grid, so hand back the last one we saw
+    // The card is gone from the grid, so `destroyCard` receives the last copy
+    // the view held.
     for (const [id, held] of this.cardEls) {
       if (live.has(id)) continue;
       this.options.destroyCard?.(held.el, held.card);
@@ -195,8 +197,8 @@ export class SoksakView {
   }
 
   /**
-   * Dividers are reused across renders. Rebuilding one mid-drag would drop its
-   * pointer capture, which reads as the boundary jumping once and then going dead.
+   * Dividers are reused across renders. Rebuilding one mid-drag drops its
+   * pointer capture: the boundary jumps once and then stops responding.
    */
   private makeDivider(): HTMLElement {
     const el = document.createElement('div');

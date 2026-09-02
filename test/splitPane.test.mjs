@@ -206,3 +206,35 @@ test("a state that cannot describe a plane is refused, and names the fault", () 
   ] };
   assert.doesNotThrow(() => new Soksak(good, { width: 800, height: 600 }));
 });
+
+test("a side the caller made up is refused", () => {
+  const grid = new Soksak(undefined, { width: 1600, height: 1000 });
+  const before = JSON.stringify(grid.toJSON());
+  // axisOf returns "y" for anything but left and right, so a misspelled side
+  // would split downward without saying so.
+  assert.equal(grid.splitToward("card", "sideways", { id: "q" }), null);
+  assert.equal(grid.move("card", "card", "sideways"), false);
+  assert.equal(JSON.stringify(grid.toJSON()), before);
+  assert.equal(typeof grid.splitToward("card", "left", { id: "q" }), "string");
+});
+
+test("a line index that is not one returns a number, not undefined", () => {
+  const grid = new Soksak(undefined, { width: 1600, height: 1000 });
+  grid.split("card", "x");
+  for (const line of [99, -1, 1.5, NaN]) {
+    assert.equal(typeof grid.boundaryPos("x", line), "number", String(line));
+  }
+  assert.ok(grid.boundaryPos("x", 1) > 0, "and a real one still returns a number");
+});
+
+test("a card drawn with no area returns centre, not a side", () => {
+  const grid = new Soksak(undefined, { width: 1000, height: 200, gap: 24, minSize: 0 });
+  const b = grid.split("card", "x");
+  grid.split(b, "x");
+  grid.gap = 400;                       // more corridor than a slot can hold
+  const [id, r] = [...grid.rects()].find(([, box]) => box.w === 0) ?? [];
+  assert.ok(id, "one card has no width");
+  // Dividing by a zero width gives NaN, and every comparison then falls to the
+  // last branch, so every point on the card read as one side.
+  assert.deepEqual(grid.zoneAt(r.x, r.y + r.h / 2), { id, zone: "centre" });
+});

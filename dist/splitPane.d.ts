@@ -1,9 +1,11 @@
 /**
  * A soksak over shared grid lines.
  *
- * `xs` and `ys` hold every coordinate as a fraction of the plane. A card is a
- * span of indices into them, so two cards that meet read the same index and
- * their shared boundary is one number. Moving a line moves every card that
+ * `xs` and `ys` hold every coordinate, normalised 0..1 over the slots that
+ * share what is left. A slot held at a px size is drawn at that size whatever
+ * its span, so a line's position in px is not its number times the plane. A
+ * card is a span of indices into them, so two cards that meet read the same
+ * index and their shared boundary is one number. Moving a line moves every card that
  * references it; a card spanning across the line is unaffected.
  *
  * Splitting replaces one card with two, so the arrangement stays a slicing
@@ -79,7 +81,6 @@ export declare class Soksak {
      * pair drives one card to `minSize`.
      */
     private paidBy;
-    /** Which side `openSlot` last took its span from. */
     /** True while canSplit runs a trial split and restores the state. */
     private probing;
     private g;
@@ -176,8 +177,8 @@ export declare class Soksak {
      *
      * `order` lists the slots to try, nearest first. The first one that leaves
      * every card its minimum takes the room; when none does, every sharing slot
-     * shares it. Each candidate is applied and measured, so there is one answer
-     * to what a slot is worth, not a prediction beside it.
+     * shares it. Each candidate is applied and then measured, so the slot sizes
+     * come from `slotSizes` alone and no second calculation can disagree with it.
      *
      * Returns the slot that took the room, or -1.
      */
@@ -203,17 +204,18 @@ export declare class Soksak {
     /** The nearest line on this side that some card actually reads. */
     private realNeighbour;
     /**
-     * How far a boundary may travel before a card would fall under `minSize`.
-     *
-     * The range extends to the nearest line a card references. Lines no card
-     * references do not constrain it.
-     */
-    /**
      * Whether `line` is an interior line index.
      *
      * Index 0 and the last index are the plane's borders and are not boundaries.
      */
     hasBoundary(axis: Axis, line: number): boolean;
+    /**
+     * How far a boundary may travel before a card would fall under `minSize`.
+     *
+     * The range reaches to the nearest line a card references; lines no card
+     * references do not constrain it. When two cards ask for more room than the
+     * plane holds it is one point, never an inverted pair.
+     */
     boundaryRange(axis: Axis, line: number): [number, number];
     /**
      * Move a boundary to a position in px.
@@ -356,25 +358,25 @@ export declare class Soksak {
      */
     private openSlot;
     /**
-     * Remove a slot and scale the rest so they still sum to the plane.
-     *
-     * Removes the far line, or the near line for the last slot, so the plane's
-     * two borders are never removed.
-     */
-    /**
-     * Remove one line and shift the spans that referenced it.
-     *
-     * `into` says which neighbouring slot absorbs the one that goes, which
-     * decides whether a card ending on the line follows it or reaches past it.
-     */
-    /**
      * Open a slot at a boundary and shift the spans that referenced it.
      *
      * A card that starts on the line moves past the new slot; one that ends on it
      * stays where it ends. This is what `removeLine(axis, line, 'hi')` undoes.
      */
     private openIndex;
+    /**
+     * Remove one line and shift the spans that referenced it.
+     *
+     * `into` says which neighbouring slot absorbs the one that goes, which
+     * decides whether a card ending on the line follows it or reaches past it.
+     */
     private removeLine;
+    /**
+     * Remove one slot by removing a line beside it.
+     *
+     * The far line, or the near one for the last slot, so the plane's two borders
+     * are never removed.
+     */
     private dropSlot;
     /**
      * Move a plane-spanning card to another boundary.
@@ -400,8 +402,9 @@ export declare class Soksak {
      * target's geometry, so the cut is measured after that, and a close that
      * cannot happen leaves the whole move undone rather than half of it.
      *
-     * The card keeps its id, its payload and its fixed size, so a live surface
-     * rides along and a sidebar stays the width it was.
+     * The card keeps its id and its payload, so the host's element is reused and
+     * a live surface inside it is not torn down. It keeps its px size only when it
+     * lands spanning one slot on that axis.
      */
     move(id: string, targetId: string, side: Side): boolean;
     /** Whether `move` would succeed, without performing it. */
@@ -410,9 +413,8 @@ export declare class Soksak {
     /**
      * What every operation does when it is finished.
      *
-     * A px size describes one slot. A card that comes to reach across two is not
-     * that size any more and cannot be — so the number goes, rather than lying
-     * dormant on the card and coming back to life at some later, unrelated split.
+     * A px size describes one slot. A card that comes to span two cannot be that
+     * size, so the number is removed rather than kept for a later split to apply.
      */
     private changed;
     /**

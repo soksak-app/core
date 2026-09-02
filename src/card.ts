@@ -78,3 +78,6 @@ export function fixedSize(card: Card, axis: Axis): number | null {
 export function other(axis: Axis): Axis {
   return axis === 'x' ? 'y' : 'x';
 }
+
+/** Every side a card can be split toward. */
+export const SIDES: readonly Side[] = ['left', 'right', 'top', 'bottom'];

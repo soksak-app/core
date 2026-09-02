@@ -53,3 +53,5 @@ export declare const spanOf: (card: Card, axis: Axis) => number;
 export declare function fixedSize(card: Card, axis: Axis): number | null;
 /** The axis that is not this one. */
 export declare function other(axis: Axis): Axis;
+/** Every side a card can be split toward. */
+export declare const SIDES: readonly Side[];

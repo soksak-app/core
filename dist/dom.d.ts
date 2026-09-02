@@ -48,7 +48,8 @@ export declare class SoksakView {
     private ruleEls;
     /**
      * One drag state per pointer id. A single shared field let a second pointer
-     * overwrite the first, so one divider drove another and kept `data-dragging`.
+     * overwrite the first, which moved the wrong boundary and left `data-dragging`
+     * set on a divider nobody was holding.
      */
     private drags;
     private observer;
@@ -65,8 +66,8 @@ export declare class SoksakView {
      */
     private end;
     /**
-     * Dividers are reused across renders. Rebuilding one mid-drag would drop its
-     * pointer capture, which reads as the boundary jumping once and then going dead.
+     * Dividers are reused across renders. Rebuilding one mid-drag drops its
+     * pointer capture: the boundary jumps once and then stops responding.
      */
     private makeDivider;
     /** The element currently showing a card, if any. */

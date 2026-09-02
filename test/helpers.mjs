@@ -10,7 +10,7 @@ export function make(options = {}) {
   return grid;
 }
 
-/** sidebar on the left, two stacked cards on the right — the shape the prototype starts from. */
+/** A sidebar on the left and two stacked cards on the right. */
 export function three(options = {}) {
   const grid = new Soksak(
     {
@@ -48,7 +48,7 @@ export function assertTiling(grid, label = "") {
   // The plane is covered exactly. Summing each card's *slot box* — line to line,
   // before the corridor is taken off — is the whole of it: the boxes tile the
   // plane by construction, whatever the gap and whatever lines nobody reads.
-  // `(w + gap)(h + gap)` was a shortcut that assumed every line costs a gap.
+  // Measured slot to slot: a line no card references costs no gap.
   const X = (k) => grid.boundaryPos("x", k);
   const Y = (k) => grid.boundaryPos("y", k);
   const covered = grid.cards.reduce((n, c) => n + (X(c.c1) - X(c.c0)) * (Y(c.r1) - Y(c.r0)), 0);

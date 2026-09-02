@@ -195,3 +195,22 @@ test("a boundary range is never inverted, so the lines stay in order", () => {
     assert.ok(grid.rect("C").w >= grid.rect("A").w - 1e-9, "C spans more slots than A");
   }
 });
+
+test("a drag never writes a line past its neighbour", () => {
+  // The px to span conversion divides by one average slope, and the slots do
+  // not all sit on it once a px size is in play, so the answer can land beyond
+  // a neighbouring line.
+  const grid = new Soksak(undefined, { width: 1600, height: 1000, gap: 24, minSize: 96 });
+  grid.split("card", "x", { id: "n1" });
+  grid.insertAt("x", 1, { size: 315, id: "n4" });
+  grid.centerBoundary("x", 1);
+  grid.split("n1", "y", { id: "n5" });
+  grid.splitToward("n5", "left", { id: "n6" });
+  grid.close("n6");
+  grid.resize(588, 552);
+
+  grid.moveBoundary("x", 3, 583);
+  const xs = grid.lines("x");
+  for (let k = 1; k < xs.length; k++) assert.ok(xs[k] >= xs[k - 1], `out of order: ${xs.join(", ")}`);
+  assert.ok(xs.every((v) => v >= 0 && v <= 1), `outside 0..1: ${xs.join(", ")}`);
+});

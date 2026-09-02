@@ -59,7 +59,7 @@ narrower than the corridor it carries draws its card with no width, in the
 middle of that slot, so the neighbours on either side sit closer than one gap.
 `minSize` is what keeps a host out of that state; `resize` cannot refuse.
 
-A card that arrives takes its span from the whole plane in proportion.
+A card that arrives takes its width from the slot next to it, as a drag does.
 
 A px size describes one slot, so a cut divides it between the halves. A card
 spanning two slots carries no px size.
@@ -339,15 +339,28 @@ first.
 | `splitToward(id, side, {id?, data?})` | cut it and put the new one on a named side |
 | `canClose(id)`, `close(id)`, `fill(id)` | remove a card; `fill` reports which neighbours take the space |
 | `canMove(id, targetId, side)`, `move(id, targetId, side)` | take a card to another card's side |
-| `standings(axis)`, `canInsertAt`, `insertAt`, `moveTo` | a card that reaches across the plane |
+| `setFixed(id, on)`, `setSize(id, axis, px)`, `setData(id, data)` | change a card; the returned copies are frozen |
+| `standings(axis, without?)`, `canInsertAt(axis, line, without?)`, `insertAt`, `moveTo` | a card that reaches across the plane |
 | `zoneAt(x, y, options)` | where a drop lands |
 | `dividers()`, `rules()` | grab areas, and boundaries to draw |
-| `boundaryPos`, `boundaryRange`, `moveBoundary`, `centerBoundary` | drag a boundary |
+| `boundaryPos`, `boundaryRange`, `hasBoundary(axis, line)`, `moveBoundary(axis, line, px, allowSnap?)`, `centerBoundary` | drag a boundary |
 | `mergeCoincident(axis, line)` | fold a line onto the neighbour it now coincides with |
 | `tidy()`, `virtualCount()`, `isVirtual(axis, line)`, `crossings(card)`, `cardsCrossing(axis, line)` | virtual lines |
-| `isSlicing()`, `lines(axis)`, `toJSON()`, `Soksak.from(state)` | inspection and state |
+| `isSlicing()`, `lines(axis)`, `toJSON()`, `Soksak.from(state, options?)`, `checkState(state)` | inspection and state |
+| `gap`, `minSize`, `grabSize`, `snapDistance`, `snap`, `fillOrder` | the options, readable and writable after construction |
 
-`SoksakView` — `render(reason?)`, `element(id)`, `destroy()`.
+Every method taking an axis refuses one that is not `"x"` or `"y"`; every method
+taking a side refuses one that is not `left`, `right`, `top` or `bottom`. A
+refusal returns `null`, `false` or an empty answer and changes nothing.
+
+`toJSON()` carries `paidBy`, which records the card each slot was taken from, so
+a grid rebuilt from it closes cards the same way. `checkState` is what the
+constructor runs; call it to reject a stale saved layout before installing one.
+
+`SoksakView(host, grid, options)` — `render(reason?)`, `element(id)`,
+`destroy()`. Options: `createCard` (required), `updateCard`, `destroyCard`,
+`onChange(reason)`, `classPrefix` (default `sp`), `observeResize` (default on).
+`reason` is one of `drag`, `center`, `merge`, `resize`, `render`.
 
 `outline(rects, options)`, `unionLoops(rects)`, `roundedPath(loop, radius, innerRadius)`,
 `contains(loops, x, y)`.

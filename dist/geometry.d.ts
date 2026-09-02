@@ -1,7 +1,9 @@
 /**
  * Coordinate computation.
  *
- * `xs` and `ys` hold every position as a fraction of the plane. A card is a
+ * `xs` and `ys` hold every position, normalised 0..1 over the slots that share
+ * what is left; a slot held at a px size is drawn at that size whatever its
+ * span, so a line's position in px is not its number times the plane. A card is a
  * span of indices into them, so two cards that meet read the same index.
  *
  * Every function here is pure and takes the plane as an argument.
@@ -73,13 +75,6 @@ export declare function rectOf(plane: Plane, card: Card): Rect;
 /** Cards that span across a line. They are why a card cannot be placed on it. */
 export declare function crossing(plane: Plane, axis: Axis, line: number): Card[];
 /**
- * Index stretches where cards actually break on a line.
- *
- * A line runs the whole plane, but it is only a boundary where one card ends and
- * another begins. Everywhere else a card spans across it, and there is nothing
- * there to grab or to draw solid.
- */
-/**
  * Cards indexed by the line they end at and the line they start at.
  *
  * Built once per axis so `boundarySpans` pairs only the cards that meet at a
@@ -90,6 +85,13 @@ export interface Touching {
     starts: Map<number, Card[]>;
 }
 export declare function touching(plane: Plane, axis: Axis): Touching;
+/**
+ * Index stretches where cards actually break on a line.
+ *
+ * A line runs the whole plane, but it is only a boundary where one card ends and
+ * another begins. Everywhere else a card spans across it, and there is nothing
+ * there to grab or to draw solid.
+ */
 export declare function boundarySpans(plane: Plane, axis: Axis, line: number, meet?: Touching): [number, number][];
 /** True when no card references this line. */
 export declare function isVirtual(plane: Plane, axis: Axis, line: number, read?: Set<number>): boolean;
@@ -132,8 +134,8 @@ export declare function dividers(plane: Plane, grabSize: number): Divider[];
  * nearest, measured on the body rather than the whole card, so a header or a
  * status bar cannot read as "the top".
  *
- * The band is a fraction of the body, not px, so a small card and a large one
- * feel the same to aim at.
+ * The band is a fraction of the body, not px, so the target is the same
+ * proportion of a small card and a large one.
  */
 export type Zone = 'centre' | Side;
 export interface ZoneHit {
@@ -151,4 +153,3 @@ export interface ZoneOptions {
     centreOnly?: string;
 }
 export declare function zoneAt(plane: Plane, x: number, y: number, options?: ZoneOptions): ZoneHit | null;
-/** Every axis a card is measured on, for a caller that treats both alike. */

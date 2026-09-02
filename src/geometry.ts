@@ -1,7 +1,9 @@
 /**
  * Coordinate computation.
  *
- * `xs` and `ys` hold every position as a fraction of the plane. A card is a
+ * `xs` and `ys` hold every position, normalised 0..1 over the slots that share
+ * what is left; a slot held at a px size is drawn at that size whatever its
+ * span, so a line's position in px is not its number times the plane. A card is a
  * span of indices into them, so two cards that meet read the same index.
  *
  * Every function here is pure and takes the plane as an argument.
@@ -111,8 +113,9 @@ export function slotSizes(
   // What was asked for does not fit, or nothing shares at all. The sharing
   // slots keep their floor and the px sizes scale together to cover the rest —
   // one multiple for all of them, so their proportions survive. A sidebar
-  // narrows with the window rather than starving the panes or hanging off the
-  // edge, and a card that closes always has somewhere to send its room.
+  // narrows with the window instead of leaving the panes under `minSize` or
+  // extending past the plane, and a card that closes always has a slot to send
+  // its room to.
   const keep = Math.min(floor, Math.max(0, extent(plane, axis) - taken));
   const left = Math.max(0, extent(plane, axis) - keep - taken);
   const scale = asked > 1e-9 ? left / asked : 0;
@@ -257,13 +260,6 @@ export function crossing(plane: Plane, axis: Axis, line: number): Card[] {
 }
 
 /**
- * Index stretches where cards actually break on a line.
- *
- * A line runs the whole plane, but it is only a boundary where one card ends and
- * another begins. Everywhere else a card spans across it, and there is nothing
- * there to grab or to draw solid.
- */
-/**
  * Cards indexed by the line they end at and the line they start at.
  *
  * Built once per axis so `boundarySpans` pairs only the cards that meet at a
@@ -290,6 +286,13 @@ export function touching(plane: Plane, axis: Axis): Touching {
   return { ends, starts };
 }
 
+/**
+ * Index stretches where cards actually break on a line.
+ *
+ * A line runs the whole plane, but it is only a boundary where one card ends and
+ * another begins. Everywhere else a card spans across it, and there is nothing
+ * there to grab or to draw solid.
+ */
 export function boundarySpans(
   plane: Plane,
   axis: Axis,
@@ -429,8 +432,8 @@ export function dividers(plane: Plane, grabSize: number): Divider[] {
  * nearest, measured on the body rather than the whole card, so a header or a
  * status bar cannot read as "the top".
  *
- * The band is a fraction of the body, not px, so a small card and a large one
- * feel the same to aim at.
+ * The band is a fraction of the body, not px, so the target is the same
+ * proportion of a small card and a large one.
  */
 export type Zone = 'centre' | Side;
 
@@ -466,6 +469,9 @@ export function zoneAt(plane: Plane, x: number, y: number, options: ZoneOptions 
     const bottom = r.y + r.h - footer;
     if (bottom <= top || y < top || y > bottom) return { id: card.id, zone: 'centre' };
 
+    // A card drawn with no width or height has no zones to aim at: dividing by
+    // it gives NaN, and every comparison below then answers the last branch.
+    if (!(r.w > 0) || !(bottom > top)) return { id: card.id, zone: 'centre' };
     const px = (x - r.x) / r.w;
     const py = (y - top) / (bottom - top);
     if (px > edge && px < 1 - edge && py > edge && py < 1 - edge) return { id: card.id, zone: 'centre' };
@@ -477,5 +483,3 @@ export function zoneAt(plane: Plane, x: number, y: number, options: ZoneOptions 
   }
   return null;
 }
-
-/** Every axis a card is measured on, for a caller that treats both alike. */

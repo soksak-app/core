@@ -44,9 +44,9 @@ export declare function roundedPath(loop: readonly Point[], radius: number, inne
 /**
  * Outline binding a set of rects into one shape.
  *
- * With `pad` at half the corridor the rects meet exactly and you get a single
- * loop; below that they stay apart and you get one loop each, which is a useful
- * signal rather than a failure.
+ * With `pad` at half the corridor the rects meet exactly and the result is a
+ * single loop. Below that they stay apart and the result is one loop each,
+ * which reports the separation rather than failing.
  */
 export declare function outline(rects: readonly Rect[], options?: OutlineOptions): Outline;
 /** Even-odd point test against a set of loops. */
