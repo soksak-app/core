@@ -27,8 +27,13 @@ const lines = (plane: Plane, axis: Axis): number[] => (axis === 'x' ? plane.xs :
 const extent = (plane: Plane, axis: Axis): number => (axis === 'x' ? plane.width : plane.height);
 
 /** Corridor a slot carries: half a gap on each inner edge. */
-export function corridorOf(plane: Plane, axis: Axis, slot: number): number {
-  return inset(plane, axis, slot, 'lo') + inset(plane, axis, slot + 1, 'hi');
+export function corridorOf(
+  plane: Plane,
+  axis: Axis,
+  slot: number,
+  read = linesRead(plane, axis),
+): number {
+  return inset(plane, axis, slot, 'lo', read) + inset(plane, axis, slot + 1, 'hi', read);
 }
 
 /** The px size each slot declares: the largest any card in it asks for. */
@@ -45,7 +50,8 @@ export function heldSizes(plane: Plane, axis: Axis): (number | null)[] {
 
 /** Drawn width of every slot, corridor removed. */
 export function slotWidths(plane: Plane, axis: Axis): number[] {
-  return slotSizes(plane, axis).map((size, i) => size - corridorOf(plane, axis, i));
+  const read = linesRead(plane, axis);
+  return slotSizes(plane, axis).map((size, i) => size - corridorOf(plane, axis, i, read));
 }
 
 /**
@@ -66,8 +72,9 @@ export function slotSizes(
   const count = a.length - 1;
 
   // The slot carries the corridor so a px size is the drawn width.
+  const read = linesRead(plane, axis);        // one pass, not one per slot
   const corridor = new Array<number>(count);
-  for (let i = 0; i < count; i++) corridor[i] = corridorOf(plane, axis, i);
+  for (let i = 0; i < count; i++) corridor[i] = corridorOf(plane, axis, i, read);
 
   // What each slot asks for. `want` names a width for a slot, or `null` to make
   // it share; where it names nothing the cards in the slot answer.
@@ -154,17 +161,35 @@ function linesRead(plane: Plane, axis: Axis): Set<number> {
   return read;
 }
 
-export function inset(plane: Plane, axis: Axis, index: number, side: 'lo' | 'hi'): number {
+/**
+ * How far a card's edge sits back from the line it reads.
+ *
+ * `read` is which lines any card references. It costs one pass over the cards,
+ * so a caller asking about many lines or many cards works it out once and hands
+ * it in; without that a loop over N cards walks the cards N times.
+ */
+export function inset(
+  plane: Plane,
+  axis: Axis,
+  index: number,
+  side: 'lo' | 'hi',
+  read = linesRead(plane, axis),
+): number {
   const a = lines(plane, axis);
   const flush = side === 'lo' ? index === 0 : index === a.length - 1;
   if (flush) return 0;
   // A line no card references separates nothing and takes no corridor.
-  return isVirtual(plane, axis, index) ? 0 : halfCorridor(plane, axis);
+  return read.has(index) ? corridor(plane, axis, read) / 2 : 0;
 }
 
 /** Half the corridor a real line draws, capped at what the plane can hold. */
-export function halfCorridor(plane: Plane, axis: Axis): number {
-  return corridor(plane, axis) / 2;
+export function halfCorridor(plane: Plane, axis: Axis, read = linesRead(plane, axis)): number {
+  return corridor(plane, axis, read) / 2;
+}
+
+/** Which lines any card references. One pass over the cards. */
+export function linesReadOn(plane: Plane, axis: Axis): Set<number> {
+  return linesRead(plane, axis);
 }
 
 /** Line positions and edge insets for one axis. */
@@ -291,8 +316,13 @@ export function boundarySpans(
 }
 
 /** True when no card references this line. */
-export function isVirtual(plane: Plane, axis: Axis, line: number): boolean {
-  return !linesRead(plane, axis).has(line);
+export function isVirtual(
+  plane: Plane,
+  axis: Axis,
+  line: number,
+  read = linesRead(plane, axis),
+): boolean {
+  return !read.has(line);
 }
 
 /** Interior line indices. The two borders are excluded. */

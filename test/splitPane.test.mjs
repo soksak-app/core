@@ -136,3 +136,43 @@ test("a split without a payload leaves data undefined rather than copying", () =
   assert.deepEqual(grid.card("a").data, { live: "surface-1" });
   assert.equal(grid.card(id).data, undefined, "copying would hand two cards one surface");
 });
+
+test("an id already in use is refused, so no two cards share a name", () => {
+  const grid = new Soksak(undefined, { width: 1200, height: 800 });
+  assert.equal(grid.split("card", "x", { id: "dup" }), "dup");
+  // rects() and the view key by id: a second card called `dup` would have no
+  // rect and no element of its own.
+  assert.equal(grid.split("card", "y", { id: "dup" }), null);
+  assert.equal(grid.splitToward("card", "left", { id: "dup" }), null);
+  assert.equal(grid.insertAt("x", 0, { id: "dup", size: 100 }), null);
+  assert.equal(grid.cards.length, grid.rects().size);
+  assert.equal(new Set(grid.cards.map((c) => c.id)).size, grid.cards.length);
+});
+
+test("an axis the caller made up is refused, not thrown on", () => {
+  const grid = new Soksak(undefined, { width: 1200, height: 800 });
+  const z = "z";
+  const results = {
+    lines: () => grid.lines(z),
+    cardsCrossing: () => grid.cardsCrossing(z, 1),
+    isVirtual: () => grid.isVirtual(z, 1),
+    boundaryPos: () => grid.boundaryPos(z, 1),
+    boundaryRange: () => grid.boundaryRange(z, 1),
+    hasBoundary: () => grid.hasBoundary(z, 1),
+    moveBoundary: () => grid.moveBoundary(z, 1, 10),
+    centerBoundary: () => grid.centerBoundary(z, 1),
+    mergeCoincident: () => grid.mergeCoincident(z, 1),
+    canSplit: () => grid.canSplit("card", z),
+    split: () => grid.split("card", z),
+    setSize: () => grid.setSize("card", z, 10),
+    canInsertAt: () => grid.canInsertAt(z, 1),
+    insertAt: () => grid.insertAt(z, 1, { size: 10 }),
+    moveTo: () => grid.moveTo("card", z, 1),
+    standings: () => grid.standings(z),
+  };
+  const before = JSON.stringify(grid.toJSON());
+  for (const [name, ask] of Object.entries(results)) {
+    assert.doesNotThrow(ask, `${name} threw`);
+  }
+  assert.equal(JSON.stringify(grid.toJSON()), before, "and none of them changed anything");
+});

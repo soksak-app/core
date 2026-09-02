@@ -20,7 +20,7 @@ export interface Plane {
     minSize: number;
 }
 /** Corridor a slot carries: half a gap on each inner edge. */
-export declare function corridorOf(plane: Plane, axis: Axis, slot: number): number;
+export declare function corridorOf(plane: Plane, axis: Axis, slot: number, read?: Set<number>): number;
 /** The px size each slot declares: the largest any card in it asks for. */
 export declare function heldSizes(plane: Plane, axis: Axis): (number | null)[];
 /** Drawn width of every slot, corridor removed. */
@@ -37,9 +37,18 @@ export declare function slotWidths(plane: Plane, axis: Axis): number[];
 export declare function slotSizes(plane: Plane, axis: Axis, want?: readonly (number | null | undefined)[]): number[];
 /** Every line position in px, index for index with the line array. */
 export declare function linePositions(plane: Plane, axis: Axis): number[];
-export declare function inset(plane: Plane, axis: Axis, index: number, side: 'lo' | 'hi'): number;
+/**
+ * How far a card's edge sits back from the line it reads.
+ *
+ * `read` is which lines any card references. It costs one pass over the cards,
+ * so a caller asking about many lines or many cards works it out once and hands
+ * it in; without that a loop over N cards walks the cards N times.
+ */
+export declare function inset(plane: Plane, axis: Axis, index: number, side: 'lo' | 'hi', read?: Set<number>): number;
 /** Half the corridor a real line draws, capped at what the plane can hold. */
-export declare function halfCorridor(plane: Plane, axis: Axis): number;
+export declare function halfCorridor(plane: Plane, axis: Axis, read?: Set<number>): number;
+/** Which lines any card references. One pass over the cards. */
+export declare function linesReadOn(plane: Plane, axis: Axis): Set<number>;
 /** Line positions and edge insets for one axis. */
 export interface Axle {
     at: number[];
@@ -83,7 +92,7 @@ export interface Touching {
 export declare function touching(plane: Plane, axis: Axis): Touching;
 export declare function boundarySpans(plane: Plane, axis: Axis, line: number, meet?: Touching): [number, number][];
 /** True when no card references this line. */
-export declare function isVirtual(plane: Plane, axis: Axis, line: number): boolean;
+export declare function isVirtual(plane: Plane, axis: Axis, line: number, read?: Set<number>): boolean;
 /** Interior line indices. The two borders are excluded. */
 export declare function interiorLines(plane: Plane, axis: Axis): number[];
 /** A boundary to draw. One virtual rule per line, plus its solid stretches. */

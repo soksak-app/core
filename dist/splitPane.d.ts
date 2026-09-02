@@ -115,6 +115,8 @@ export declare class Soksak {
     toJSON(): SoksakState;
     private get plane();
     private arr;
+    /** An axis the caller made up. Every public method that takes one refuses. */
+    private noAxis;
     private size;
     rectOf(card: Card): Rect;
     rect(id: string): Rect | undefined;

@@ -48,6 +48,10 @@ export class SoksakView {
         var _a, _b, _c, _d, _e, _f;
         if (this.disposed)
             return;
+        // One measurement of the plane for every card. Asking for each card's rect
+        // on its own rebuilt the whole coordinate system once per card, which is
+        // what a drag pays on every pointer move.
+        const box = this.grid.rects();
         const live = new Set();
         for (const card of this.grid.cards) {
             live.add(card.id);
@@ -60,7 +64,7 @@ export class SoksakView {
                 this.cardEls.set(card.id, held);
             }
             held.card = card;
-            const rect = this.grid.rectOf(card);
+            const rect = box.get(card.id);
             place(held.el, rect);
             held.el.dataset.cardId = card.id;
             (_b = (_a = this.options).updateCard) === null || _b === void 0 ? void 0 : _b.call(_a, held.el, card, rect);
@@ -219,6 +223,8 @@ export class SoksakView {
         // then no pointerup reaches it.
         el.addEventListener('lostpointercapture', stop);
         el.addEventListener('keydown', (e) => {
+            if (this.disposed)
+                return;
             const axis = el.dataset.axis;
             const line = Number(el.dataset.line);
             if (e.key === 'Enter' || e.key === ' ') {

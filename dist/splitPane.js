@@ -13,7 +13,7 @@
  * coordinates.
  */
 import { AXES, SPAN, axisOf, fixedSize, isAhead, other, spanOf } from './card.js';
-import { corridorOf, crossing, dividers, frameOf, halfCorridor, heldSizes, inset, interiorLines, isVirtual, linePositions, rectIn, rectOf, rules, slotSizes, slotWidths, zoneAt, } from './geometry.js';
+import { corridorOf, crossing, dividers, frameOf, linesReadOn, halfCorridor, heldSizes, inset, interiorLines, isVirtual, linePositions, rectIn, rectOf, rules, slotSizes, slotWidths, zoneAt, } from './geometry.js';
 import { fillFor, isSlicing } from './slicing.js';
 const SIDES = ['left', 'right', 'top', 'bottom'];
 const EPS = 1e-9;
@@ -160,7 +160,7 @@ export class Soksak {
      * invalid or the card spans more than one slot.
      */
     setSize(id, axis, px) {
-        if (axis !== 'x' && axis !== 'y')
+        if (this.noAxis(axis))
             return false;
         const card = this.find(id);
         if (!card)
@@ -192,6 +192,8 @@ export class Soksak {
     }
     /** Grid line coordinates, normalised 0..1. A copy — the arrangement owns them. */
     lines(axis) {
+        if (this.noAxis(axis))
+            return [];
         return [...(axis === 'x' ? this.xs : this.ys)];
     }
     toJSON() {
@@ -206,6 +208,10 @@ export class Soksak {
     }
     arr(axis) {
         return axis === 'x' ? this.xs : this.ys;
+    }
+    /** An axis the caller made up. Every public method that takes one refuses. */
+    noAxis(axis) {
+        return axis !== 'x' && axis !== 'y';
     }
     size(axis) {
         return axis === 'x' ? this.w : this.h;
@@ -232,6 +238,8 @@ export class Soksak {
     }
     /** Cards that span across a line, as frozen copies. They are what a card placed on it would cut. */
     cardsCrossing(axis, line) {
+        if (this.noAxis(axis))
+            return [];
         return crossing(this.plane, axis, line).map((c) => Object.freeze({ ...c }));
     }
     /** How many lines a card spans across — how much finer its neighbours are. */
@@ -240,6 +248,8 @@ export class Soksak {
     }
     /** True when no card reads this line — it survives only as a snap target. */
     isVirtual(axis, line) {
+        if (this.noAxis(axis))
+            return false;
         return isVirtual(this.plane, axis, line);
     }
     virtualCount() {
@@ -287,8 +297,10 @@ export class Soksak {
         const count = a.length - 1;
         if (want.length !== count || this.size(axis) <= 0)
             return;
-        const held = heldSizes(this.plane, axis);
-        const sizes = slotSizes(this.plane, axis);
+        const plane = this.plane;
+        const read = linesReadOn(plane, axis);
+        const held = heldSizes(plane, axis);
+        const sizes = slotSizes(plane, axis);
         // What the sharing slots divide between them, measured as the plane stands.
         // It does not depend on how they currently divide it.
         let room = 0;
@@ -313,7 +325,7 @@ export class Soksak {
                 nulls++;
             }
             else {
-                size[i] = Math.max(0, want[i] + corridorOf(this.plane, axis, i));
+                size[i] = Math.max(0, want[i] + corridorOf(plane, axis, i, read));
                 named += size[i];
             }
         }
@@ -413,6 +425,8 @@ export class Soksak {
     }
     /** Where a boundary is now, in px along its axis. */
     boundaryPos(axis, line) {
+        if (this.noAxis(axis))
+            return 0;
         return linePositions(this.plane, axis)[line];
     }
     /** The nearest line on this side that some card actually reads. */
@@ -435,10 +449,14 @@ export class Soksak {
      * Index 0 and the last index are the plane's borders and are not boundaries.
      */
     hasBoundary(axis, line) {
+        if (this.noAxis(axis))
+            return false;
         return Number.isInteger(line) && line >= 1 && line <= this.arr(axis).length - 2;
     }
     boundaryRange(axis, line) {
         var _a, _b;
+        if (this.noAxis(axis))
+            return [0, 0];
         const along = linePositions(this.plane, axis);
         const [lo, hi] = SPAN[axis];
         // The neighbouring lines are the hard limits: past one of them the line
@@ -448,9 +466,11 @@ export class Soksak {
         const last = (_b = along[this.realNeighbour(axis, line, 1)]) !== null && _b !== void 0 ? _b : this.size(axis);
         let min = first;
         let max = last;
+        const plane = this.plane;
+        const read = linesReadOn(plane, axis); // one pass, not two per card
         for (const card of this.list) {
-            const near = inset(this.plane, axis, card[lo], 'lo');
-            const far = inset(this.plane, axis, card[hi], 'hi');
+            const near = inset(plane, axis, card[lo], 'lo', read);
+            const far = inset(plane, axis, card[hi], 'hi', read);
             if (card[hi] === line)
                 min = Math.max(min, along[card[lo]] + this.min + near + far);
             if (card[lo] === line)
@@ -474,6 +494,8 @@ export class Soksak {
      * Returns the resulting position.
      */
     moveBoundary(axis, line, px, allowSnap = true) {
+        if (this.noAxis(axis))
+            return 0;
         if (!this.hasBoundary(axis, line) || !Number.isFinite(px))
             return this.boundaryPos(axis, line);
         const [min, max] = this.boundaryRange(axis, line);
@@ -559,22 +581,26 @@ export class Soksak {
      */
     centerBoundary(axis, line) {
         var _a, _b;
+        if (this.noAxis(axis))
+            return 0;
         if (!this.hasBoundary(axis, line))
             return this.boundaryPos(axis, line);
         const along = linePositions(this.plane, axis);
         const [lo, hi] = SPAN[axis];
         let start = (_a = along[line - 1]) !== null && _a !== void 0 ? _a : 0;
         let end = (_b = along[line + 1]) !== null && _b !== void 0 ? _b : this.size(axis);
-        let insStart = inset(this.plane, axis, line - 1, 'lo');
-        let insEnd = inset(this.plane, axis, line + 1, 'hi');
+        const near = this.plane;
+        const seen = linesReadOn(near, axis);
+        let insStart = inset(near, axis, line - 1, 'lo', seen);
+        let insEnd = inset(near, axis, line + 1, 'hi', seen);
         for (const card of this.list) {
             if (card[hi] === line && along[card[lo]] >= start) {
                 start = along[card[lo]];
-                insStart = inset(this.plane, axis, card[lo], 'lo');
+                insStart = inset(near, axis, card[lo], 'lo', seen);
             }
             if (card[lo] === line && along[card[hi]] <= end) {
                 end = along[card[hi]];
-                insEnd = inset(this.plane, axis, card[hi], 'hi');
+                insEnd = inset(near, axis, card[hi], 'hi', seen);
             }
         }
         return this.moveBoundary(axis, line, (start + end) / 2 + (insStart - insEnd) / 2, false);
@@ -585,6 +611,8 @@ export class Soksak {
      * Returns false when a card spans the pair, which would leave it with no size.
      */
     mergeCoincident(axis, line) {
+        if (this.noAxis(axis))
+            return false;
         if (this.snap === 'off')
             return false;
         const a = this.arr(axis);
@@ -695,6 +723,8 @@ export class Soksak {
     }
     /** True when the cut would leave every card the room it has, or `minSize`. */
     canSplit(id, axis) {
+        if (this.noAxis(axis))
+            return false;
         // canSplit runs a trial split, which copies the state twice. The result is
         // cached until the next change: a host redraw calls this once per card per
         // axis, 134 times at 67 cards.
@@ -730,7 +760,11 @@ export class Soksak {
      */
     split(id, axis, init = {}) {
         var _a;
-        if (axis !== 'x' && axis !== 'y')
+        if (this.noAxis(axis))
+            return null;
+        // An id already in use would give two cards one name: `rects` and the view
+        // key by id, so one of them would have no rect and no element.
+        if (init.id !== undefined && this.find(init.id))
             return null;
         const card = this.find(id);
         const cut = card && this.cutAt(card, axis);
@@ -808,6 +842,8 @@ export class Soksak {
      * two spans. Ids are not swapped.
      */
     splitToward(id, side, init = {}) {
+        if (init.id !== undefined && this.find(init.id))
+            return null;
         const axis = axisOf(side);
         const card = this.find(id);
         if (!card)
@@ -962,6 +998,8 @@ export class Soksak {
      * True when no card spans over the line. `without` ignores one card by id.
      */
     canInsertAt(axis, line, without) {
+        if (this.noAxis(axis))
+            return false;
         const a = this.arr(axis);
         if (!Number.isInteger(line) || line < 0 || line > a.length - 1)
             return false;
@@ -981,6 +1019,10 @@ export class Soksak {
      */
     insertAt(axis, line, init) {
         var _a;
+        if (this.noAxis(axis))
+            return null;
+        if ((init === null || init === void 0 ? void 0 : init.id) !== undefined && this.find(init.id))
+            return null;
         const plane = this.size(axis);
         if (!Number.isFinite(init === null || init === void 0 ? void 0 : init.size) || init.size < 0 || init.size >= plane)
             return null;
@@ -1122,6 +1164,8 @@ export class Soksak {
      * `line` is an index in the current arrangement.
      */
     moveTo(id, axis, line) {
+        if (this.noAxis(axis))
+            return false;
         const card = this.find(id);
         // `fixed` blocks the layout, not a direct call. This changes no other
         // card's spans and no line on the other axis, so it is allowed.
@@ -1192,6 +1236,8 @@ export class Soksak {
      * ask where else it could stand without blocking itself.
      */
     standings(axis, without) {
+        if (this.noAxis(axis))
+            return [];
         // Includes the plane's two borders, which `insertAt` accepts.
         const out = [];
         for (let k = 0; k < this.arr(axis).length; k++) {

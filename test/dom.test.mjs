@@ -196,3 +196,18 @@ test("onChange reports the reason for each change", () => {
   assert.ok(reasons.includes("drag"), `a drag reports drag: ${reasons}`);
   assert.ok(!reasons.includes("resize"), "and does not report resize");
 });
+
+test("a destroyed view handles no key either", () => {
+  const { host, grid, view } = mount();
+  view.render();
+  const divider = host.querySelector(".sp-divider");
+  assert.ok(divider, "a divider to press");
+
+  view.destroy();
+  const before = JSON.stringify(grid.toJSON());
+  for (let i = 0; i < 5; i++) {
+    divider.dispatchEvent(new host.ownerDocument.defaultView.KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+  }
+  divider.dispatchEvent(new host.ownerDocument.defaultView.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  assert.equal(JSON.stringify(grid.toJSON()), before, "the grid is untouched");
+});
