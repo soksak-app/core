@@ -28,7 +28,9 @@
   "scripts": {
     "build": "tsc && node scripts/emit-dom-reference.mjs",
     "test": "pnpm build && node --test",
-    "fuzz": "pnpm build && node scripts/fuzz.mjs"
+    "fuzz": "pnpm build && node scripts/fuzz.mjs",
+    "mutate": "pnpm build && node scripts/mutate.mjs",
+    "breaks": "pnpm build && node scripts/check-breaks.mjs"
   },
   "keywords": [
     "split",
