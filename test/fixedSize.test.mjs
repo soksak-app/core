@@ -199,7 +199,12 @@ test("centring works beside a card with a px size", () => {
     "two sharing cards come out equal too",
   );
 
-  assert.equal(grid.centerBoundary("x", 0), grid.boundaryPos("x", 0), "a border is not a boundary");
+  // Read first, then act: an assertion whose expected side calls a reader after
+  // the actual side called a mutator compares the new state with itself.
+  const border = grid.boundaryPos("x", 0);
+  const before = [...grid.lines("x")];
+  assert.equal(grid.centerBoundary("x", 0), border, "a border is not a boundary");
+  assert.deepEqual(grid.lines("x"), before, "and centring one moves nothing");
 });
 
 test("a cut divides the card's px size between the halves", () => {

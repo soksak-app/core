@@ -283,8 +283,12 @@ test("the keyboard moves and centres a boundary", () => {
 
   for (const name of ["Enter", " "]) {
     grid.moveBoundary("x", 1, from + 200);
+    const off = grid.boundaryPos("x", 1);
+    const centred = grid.centerBoundary("x", 1);   // where centring puts it
+    grid.moveBoundary("x", 1, off);                // and back off centre
     key(name);
-    assert.equal(grid.boundaryPos("x", 1), grid.centerBoundary("x", 1), `${name} centres it`);
+    assert.equal(grid.boundaryPos("x", 1), centred, `${name} centres it`);
+    assert.notEqual(centred, off, "and that is somewhere else");
   }
   view.destroy();
 });
@@ -294,6 +298,8 @@ test("a double tap centres the boundary", () => {
   const el = host.querySelector('.sp-divider[data-axis="x"]');
   grid.moveBoundary("x", 1, grid.boundaryPos("x", 1) + 200);
   const off = grid.boundaryPos("x", 1);
+  const centred = grid.centerBoundary("x", 1);   // where centring puts it
+  grid.moveBoundary("x", 1, off);                // and back off centre
 
   // Two presses inside the double-tap window, with no movement between them.
   pointer(window, el, "pointerdown", 1, off, 300);
@@ -302,7 +308,7 @@ test("a double tap centres the boundary", () => {
   pointer(window, el, "pointerup", 1, off, 300);
 
   assert.notEqual(grid.boundaryPos("x", 1), off, "it moved");
-  assert.equal(grid.boundaryPos("x", 1), grid.centerBoundary("x", 1), "to the centre");
+  assert.equal(grid.boundaryPos("x", 1), centred, "to the centre");
   view.destroy();
 });
 
