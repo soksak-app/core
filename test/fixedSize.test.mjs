@@ -396,3 +396,40 @@ test("a sidebar leaving and returning is settled with the slot next to it", () =
   for (const [id, w] of Object.entries(was)) near(id, w, "back where it started");
   assertTiling(grid, "sidebars back");
 });
+
+test("with nothing sharing, px sizes are scaled to cover the plane", () => {
+  // The slots always sum to the plane. With no sharing slot on the axis the px
+  // sizes are the only thing that can cover it, so they become proportions.
+  const one = new Soksak(undefined, { width: 1600, height: 1000 });
+  assert.equal(one.setSize("card", "x", 200), true);
+  assert.equal(one.rect("card").w, 1600, "the only card covers the plane");
+
+  const two = new Soksak(undefined, { width: 1600, height: 1000 });
+  const b = two.split("card", "x");
+  two.setSize("card", "x", 200);
+  two.setSize(b, "x", 300);
+  const wide = two.rect(b).w;
+  const narrow = two.rect("card").w;
+  assert.ok(Math.abs(narrow / wide - 200 / 300) < 1e-9, "the proportions asked for survive");
+  assert.ok(Math.abs(narrow + wide + two.gap - 1600) < 1e-9, "and they cover the plane");
+
+  // One sharing slot is enough for the px size to be the drawn size.
+  const shared = new Soksak(undefined, { width: 1600, height: 1000 });
+  shared.split("card", "x");
+  shared.setSize("card", "x", 200);
+  assert.equal(shared.rect("card").w, 200);
+});
+
+test("a plane too small for its cards draws the starved one with no width", () => {
+  const grid = new Soksak(undefined, { width: 1600, height: 1000 });
+  grid.splitToward("card", "left", { id: "n1" });
+  grid.splitToward("n1", "left", { id: "n2" });
+  grid.insertAt("x", 1, { size: 230, id: "n3" });
+  grid.resize(453, 469);   // less than 230 + three minimums + three corridors
+
+  for (const [id, r] of grid.rects()) {
+    assert.ok(r.w >= 0 && r.h >= 0, `${id} is ${r.w}x${r.h}`);
+    assert.ok(r.x >= -1e-9 && r.x + r.w <= 453 + 1e-9, `${id} runs past the plane`);
+  }
+  assert.ok([...grid.rects().values()].some((r) => r.w === 0), "and one of them has no width");
+});

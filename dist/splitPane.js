@@ -441,8 +441,13 @@ export class Soksak {
         var _a, _b;
         const along = linePositions(this.plane, axis);
         const [lo, hi] = SPAN[axis];
-        let min = (_a = along[this.realNeighbour(axis, line, -1)]) !== null && _a !== void 0 ? _a : 0;
-        let max = (_b = along[this.realNeighbour(axis, line, 1)]) !== null && _b !== void 0 ? _b : this.size(axis);
+        // The neighbouring lines are the hard limits: past one of them the line
+        // array is out of order, and a card gets drawn wider than one that spans
+        // more slots than it does.
+        const first = (_a = along[this.realNeighbour(axis, line, -1)]) !== null && _a !== void 0 ? _a : 0;
+        const last = (_b = along[this.realNeighbour(axis, line, 1)]) !== null && _b !== void 0 ? _b : this.size(axis);
+        let min = first;
+        let max = last;
         for (const card of this.list) {
             const near = inset(this.plane, axis, card[lo], 'lo');
             const far = inset(this.plane, axis, card[hi], 'hi');
@@ -450,6 +455,13 @@ export class Soksak {
                 min = Math.max(min, along[card[lo]] + this.min + near + far);
             if (card[lo] === line)
                 max = Math.min(max, along[card[hi]] - this.min - near - far);
+        }
+        // Two cards can ask for more room than the plane holds. Neither gets its
+        // minimum then, so the range is one point between the neighbours rather
+        // than an inverted pair every caller has to guard against.
+        if (min > max) {
+            const mid = clamp((min + max) / 2, first, last);
+            return [mid, mid];
         }
         return [min, max];
     }

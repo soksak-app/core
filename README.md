@@ -44,9 +44,21 @@ never inside out.
 The slot carries the corridor, so a px size is the drawn size: `width: 180`
 draws 180 at the plane's edge, between two cards, and at any `gap`.
 
-The slots always sum to the plane. A px size is honoured while the plane has the
-room; when it does not, every px size is scaled by one factor. A card that
-arrives takes its span from the whole plane in proportion.
+The slots always sum to the plane, and that is the rule a px size gives way to.
+It is honoured while some slot on the axis shares and the plane has the room.
+When the plane does not, every px size is scaled down by one factor, so their
+proportions survive and the sharing slots keep a floor. When no slot on the axis
+shares, the px sizes are the only thing that can cover the plane, so they are
+scaled to it in both directions and the declared numbers become proportions:
+one card asking for 200 in a 1600 plane is drawn 1600, and two asking 200 and
+300 are drawn 630 and 946. Read `rect(id)` for what a card is drawn at.
+
+A plane too small for what it holds cannot give every card its minimum. A slot
+narrower than the corridor it carries draws its card with no width, in the
+middle of that slot, so the neighbours on either side sit closer than one gap.
+`minSize` is what keeps a host out of that state; `resize` cannot refuse.
+
+A card that arrives takes its span from the whole plane in proportion.
 
 A px size describes one slot, so a cut divides it between the halves. A card
 spanning two slots carries no px size.

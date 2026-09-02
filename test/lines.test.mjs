@@ -152,3 +152,36 @@ test("dividers cover referenced lines; rules cover every line", () => {
     "one grab area per real stretch",
   );
 });
+
+test("a boundary range is never inverted, so the lines stay in order", () => {
+  // Two cards can ask for more room than the plane holds. The drag then has no
+  // position that satisfies both, but it must not put a line past its
+  // neighbour: that draws a card wider than one spanning more slots than it.
+  const railed = () =>
+    Soksak.from(
+      {
+        xs: [0, 0.12, 0.23, 1],
+        ys: [0, 0.5, 1],
+        cards: [
+          { id: "A", c0: 0, c1: 1, r0: 0, r1: 1 },
+          { id: "B", c0: 1, c1: 3, r0: 0, r1: 1 },
+          { id: "C", c0: 0, c1: 2, r0: 1, r1: 2 },
+          { id: "D", c0: 2, c1: 3, r0: 1, r1: 2 },
+        ],
+      },
+      { width: 454, height: 400, gap: 24, minSize: 200 },
+    );
+
+  const [min, max] = railed().boundaryRange("x", 1);
+  assert.ok(min <= max, `range is ${min}..${max}`);
+
+  for (const move of [(g) => g.moveBoundary("x", 1, 300), (g) => g.centerBoundary("x", 1)]) {
+    const grid = railed();
+    move(grid);
+    const xs = grid.lines("x");
+    for (let k = 1; k < xs.length; k++) {
+      assert.ok(xs[k] >= xs[k - 1], `lines out of order: ${xs.join(", ")}`);
+    }
+    assert.ok(grid.rect("C").w >= grid.rect("A").w - 1e-9, "C spans more slots than A");
+  }
+});
