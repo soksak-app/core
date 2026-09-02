@@ -54,10 +54,11 @@ scaled to it in both directions and the declared numbers become proportions:
 one card asking for 200 in a 1600 plane is drawn 1600, and two asking 200 and
 300 are drawn 630 and 946. Read `rect(id)` for what a card is drawn at.
 
-A plane too small for what it holds cannot give every card its minimum. A slot
-narrower than the corridor it carries draws its card with no width, in the
-middle of that slot, so the neighbours on either side sit closer than one gap.
-`minSize` is what keeps a host out of that state; `resize` cannot refuse.
+A plane too small for what it holds cannot give every card its minimum. What
+gives is the card's width, not the gap beside it: a sharing slot stops at the
+corridor it carries, the rest divide what is left, and the card that ran out of
+room is drawn with no width against its near edge. The corridor between any two
+neighbours is still exactly `gap`, and the plane is still covered exactly.
 
 A card that arrives takes its width from the slot next to it, as a drag does.
 

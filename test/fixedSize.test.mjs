@@ -498,3 +498,44 @@ test("the options are readable and writable after construction", () => {
   grid.fillOrder = "sideways";
   assert.equal(grid.fillOrder, "h", "a value that is not an axis order is ignored");
 });
+
+test("a plane too small keeps the corridor between neighbours", () => {
+  // 453px holding cards that need 590. Something has to give, and it is the
+  // width of the card that runs out of room — not the gap beside it.
+  const grid = new Soksak(undefined, { width: 1600, height: 1000, gap: 24, minSize: 96 });
+  grid.splitToward("card", "left", { id: "n1" });
+  grid.splitToward("n1", "left", { id: "n2" });
+  grid.insertAt("x", 1, { size: 230, id: "n3" });
+  grid.resize(453, 469);
+
+  const across = [...grid.rects()].sort((a, b) => a[1].x - b[1].x);
+  for (let i = 1; i < across.length; i++) {
+    const [before, a] = across[i - 1];
+    const [after, b] = across[i];
+    assert.ok(
+      Math.abs(b.x - (a.x + a.w) - grid.gap) < 1e-6,
+      `${before} to ${after} is ${b.x - (a.x + a.w)}, not ${grid.gap}`,
+    );
+  }
+  const drawn = across.reduce((n, [, r]) => n + r.w, 0);
+  assert.ok(Math.abs(drawn + 3 * grid.gap - 453) < 1e-6, "and the plane is covered exactly");
+  assert.ok(across.some(([, r]) => r.w === 0), "one card ran out of room");
+  for (const [id, r] of across) assert.ok(r.w >= 0, `${id} is ${r.w}`);
+});
+
+test("a slot never comes out narrower than the corridor it carries", () => {
+  for (const [w, h] of [[453, 469], [300, 300], [200, 900], [120, 120]]) {
+    const grid = new Soksak(undefined, { width: 1400, height: 900, gap: 24, minSize: 96 });
+    grid.split("card", "x", { id: "b" });
+    grid.split("b", "x", { id: "c" });
+    grid.split("card", "y", { id: "d" });
+    grid.resize(w, h);
+    for (const axis of ["x", "y"]) {
+      const along = grid.lines(axis).map((_, k) => grid.boundaryPos(axis, k));
+      for (let k = 1; k < along.length; k++) {
+        assert.ok(along[k] >= along[k - 1] - 1e-9, `${w}x${h}: ${axis} line ${k} is before ${k - 1}`);
+      }
+    }
+    for (const [id, r] of grid.rects()) assert.ok(r.w >= 0 && r.h >= 0, `${w}x${h}: ${id} is ${r.w}x${r.h}`);
+  }
+});

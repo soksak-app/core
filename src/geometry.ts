@@ -97,10 +97,44 @@ export function slotSizes(plane: Plane, axis: Axis): number[] {
 
   const usable = extent(plane, axis) - asked - taken;
   if (sharedSpan > 1e-9 && usable >= floor) {
-    const scale = usable / sharedSpan;
-    return held.map((fixed, i) =>
-      fixed !== null ? fixed + corridor[i] : (a[i + 1] - a[i]) * scale,
-    );
+    const size = held.map((fixed, i) => (fixed !== null ? fixed + corridor[i] : 0));
+
+    // Share `usable` by span, but no sharing slot goes below the corridor it
+    // carries: a slot narrower than that draws its card with nothing and puts
+    // its neighbours closer together than one gap. A starved slot stops at its
+    // corridor and the rest divide what is left, so only a plane too small to
+    // hold what it holds is touched.
+    const stopped = new Array<boolean>(count).fill(false);
+    let room = usable;
+    let pool = sharedSpan;
+    for (;;) {
+      const each = pool > 1e-9 ? room / pool : 0;
+      let starved = -1;
+      for (let i = 0; i < count; i++) {
+        if (held[i] !== null || stopped[i]) continue;
+        if ((a[i + 1] - a[i]) * each < corridor[i] - 1e-9) {
+          starved = i;
+          break;
+        }
+      }
+      if (starved < 0) {
+        for (let i = 0; i < count; i++) {
+          if (held[i] !== null || stopped[i]) continue;
+          size[i] = (a[i + 1] - a[i]) * each;
+        }
+        return size;
+      }
+      stopped[starved] = true;
+      size[starved] = corridor[starved];
+      room -= corridor[starved];
+      pool -= a[starved + 1] - a[starved];
+      if (pool <= 1e-9) {
+        let open = 0;
+        for (let i = 0; i < count; i++) if (held[i] === null) open++;
+        for (let i = 0; i < count; i++) if (held[i] === null) size[i] += room / open;
+        return size;
+      }
+    }
   }
 
   // What was asked for does not fit, or nothing shares at all. The sharing
@@ -174,8 +208,14 @@ export function inset(
   const a = lines(plane, axis);
   const flush = side === 'lo' ? index === 0 : index === a.length - 1;
   if (flush) return 0;
-  // A line no card references separates nothing and takes no corridor.
-  return read.has(index) ? corridor(plane, axis, read) / 2 : 0;
+  // A line no card references separates nothing and takes no corridor. Nor
+  // does one whose slot on this side has no span: there is nothing between
+  // this line and the next for a corridor to separate, and a drag that brings
+  // a boundary onto its neighbour leaves exactly that.
+  if (!read.has(index)) return 0;
+  const slot = side === 'lo' ? index : index - 1;
+  if (a[slot + 1] - a[slot] < 1e-9) return 0;
+  return corridor(plane, axis, read) / 2;
 }
 
 /** Half the corridor a real line draws, capped at what the plane can hold. */
@@ -237,7 +277,10 @@ export function rectIn(frame: Frame, card: Card): Rect {
 function span(axle: Axle, lo: number, hi: number): [number, number] {
   const near = axle.at[lo] + axle.half[lo];
   const far = axle.at[hi] - axle.half[hi];
-  if (far >= near) return [near, far - near];
+  // A card clamped to exactly no width lands a rounding either side of its
+  // near edge. Reading that as inside out would move it to the middle of its
+  // slots, which puts the corridor before it a fraction under a gap.
+  if (far >= near - 1e-6) return [near, Math.max(0, far - near)];
   return [(axle.at[lo] + axle.at[hi]) / 2, 0];
 }
 
