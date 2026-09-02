@@ -326,6 +326,13 @@ export declare class Soksak {
      * `into` says which neighbouring slot absorbs the one that goes, which
      * decides whether a card ending on the line follows it or reaches past it.
      */
+    /**
+     * Open a slot at a boundary and shift the spans that referenced it.
+     *
+     * A card that starts on the line moves past the new slot; one that ends on it
+     * stays where it ends. This is what `removeLine(axis, line, 'hi')` undoes.
+     */
+    private openIndex;
     private removeLine;
     private dropSlot;
     /**
@@ -367,5 +374,14 @@ export declare class Soksak {
      * dormant on the card and coming back to life at some later, unrelated split.
      */
     private changed;
+    /**
+     * Make every card in a slot declare the same px size, the largest asked for,
+     * and drop a size from a card that no longer stands in one slot.
+     *
+     * A slot has one width, so two cards in it cannot ask for different ones.
+     * `heldSizes` reads the largest, and this writes that back, so what `toJSON`
+     * reports is what gets drawn. Run it wherever cards arrive or move.
+     */
+    private agreeSizes;
     private restore;
 }
