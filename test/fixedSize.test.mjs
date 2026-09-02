@@ -151,7 +151,7 @@ test("dragging either edge of a px slot resizes it and holds the other edge", ()
   assertTiling(grid, "after dragging both sidebars");
 });
 
-test("a boundary between two px slots changes the one before it", () => {
+test("a boundary between two px slots changes both and nothing else", () => {
   const grid = new Soksak(
     {
       xs: [0, 0.25, 0.5, 1],
@@ -164,13 +164,19 @@ test("a boundary between two px slots changes the one before it", () => {
     },
     { width: W, height: H },
   );
+  const was = { left: grid.rect("left").w, rail: grid.rect("rail").w, main: grid.rect("main").w };
+  const from = grid.boundaryPos("x", 1);
 
-  grid.moveBoundary("x", 1, 230);
-  // One rule picks which side a drag changes, so it is never a guess: the slot
-  // before the boundary. Every card standing in that slot follows — a slot has
-  // one width.
-  assert.equal(grid.boundaryPos("x", 1), 230, "the card before took the change");
-  assert.equal(grid.card("rail").width, 190, "the one after kept its size and moved along");
+  const to = grid.moveBoundary("x", 1, 230);
+  // A drag changes the two slots that meet at the boundary and no others. The
+  // slot before takes the room; the slot after gives it up. Every card standing
+  // in either slot follows — a slot has one width.
+  const moved = to - from;
+  assert.equal(to, 230, "the boundary landed where it was sent");
+  assert.ok(moved > 0, "and it did move");
+  assert.equal(grid.rect("left").w, was.left + moved);
+  assert.equal(grid.rect("rail").w, was.rail - moved);
+  assert.equal(grid.rect("main").w, was.main, "the slot that does not touch the boundary is untouched");
   assertTiling(grid, "between two fixed cards");
 });
 
@@ -291,4 +297,56 @@ test("a cut lands on an unreferenced line, or halves the card", () => {
     Math.abs(wide.rect("pane").w - 240) < 0.01,
     `it landed on the remembered line, not the centre: ${wide.rect("pane").w}`,
   );
+});
+
+test("a drag beside a px slot leaves the slot on the far side of it alone", () => {
+  const railed = () =>
+    new Soksak(
+      {
+        xs: [0, 0.1, 0.35, 0.6, 0.9, 1],
+        ys: [0, 0.5, 1],
+        cards: [
+          { id: "left", c0: 0, c1: 1, r0: 0, r1: 2, width: 190, fixed: true },
+          { id: "A", c0: 1, c1: 2, r0: 0, r1: 1 },
+          { id: "B", c0: 1, c1: 2, r0: 1, r1: 2 },
+          { id: "rail", c0: 2, c1: 3, r0: 0, r1: 2, width: 190, fixed: true },
+          { id: "C", c0: 3, c1: 4, r0: 0, r1: 1 },
+          { id: "D", c0: 3, c1: 4, r0: 1, r1: 2 },
+          { id: "right", c0: 4, c1: 5, r0: 0, r1: 2, width: 210, fixed: true },
+        ],
+      },
+      { width: W, height: H },
+    );
+
+  // The rail's right boundary. A and B stand on its left and never touch it.
+  for (const push of [-60, 40, 160]) {
+    const grid = railed();
+    const was = Object.fromEntries(grid.cards.map((c) => [c.id, grid.rect(c.id).w]));
+    const from = grid.boundaryPos("x", 3);
+
+    const to = grid.moveBoundary("x", 3, from + push, false);
+    assert.equal(to, from + push, `landed at ${push}`);
+    assert.equal(grid.rect("rail").w, was.rail + push, "the rail took the room");
+    assert.equal(grid.rect("C").w, was.C - push, "the slot beside it gave the room");
+    assert.equal(grid.rect("D").w, was.D - push);
+    for (const id of ["left", "A", "B", "right"]) {
+      assert.equal(grid.rect(id).w, was[id], `${id} is not at this boundary`);
+    }
+    assertTiling(grid, `rail boundary ${push}`);
+  }
+
+  // And the same from the other side: the rail's left boundary leaves C and D.
+  for (const push of [-60, 60]) {
+    const grid = railed();
+    const was = Object.fromEntries(grid.cards.map((c) => [c.id, grid.rect(c.id).w]));
+    const from = grid.boundaryPos("x", 2);
+
+    assert.equal(grid.moveBoundary("x", 2, from + push, false), from + push);
+    assert.equal(grid.rect("A").w, was.A + push, "the pane before took the room");
+    assert.equal(grid.rect("rail").w, was.rail - push, "the rail gave the room");
+    for (const id of ["left", "C", "D", "right"]) {
+      assert.equal(grid.rect(id).w, was[id], `${id} is not at this boundary`);
+    }
+    assertTiling(grid, `left of the rail ${push}`);
+  }
 });

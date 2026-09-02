@@ -222,8 +222,69 @@ export class Soksak {
     }
     // ---- boundaries --------------------------------------------------------
     /**
-     * The card whose px size a drag at this boundary changes, if the slot before
-     * it has one. Every card in that slot takes the new size.
+     * Set one slot's drawn size and take the difference from one neighbour.
+     *
+     * A slot with a px size is not part of what the sharing slots divide, so
+     * changing it changed every sharing slot at once. A drag moves one boundary:
+     * the two slots meeting there change and no other slot does.
+     */
+    resizeSlot(axis, slot, size, pays) {
+        const a = this.arr(axis);
+        const [lo] = SPAN[axis];
+        const count = a.length - 1;
+        const corridor = (i) => inset(this.plane, axis, i, 'lo') + inset(this.plane, axis, i + 1, 'hi');
+        const sizes = slotSizes(this.plane, axis);
+        const drawn = sizes.map((s, i) => s - corridor(i));
+        const held = new Array(count).fill(false);
+        for (const c of this.list)
+            if (fixedSize(c, axis) !== null)
+                held[c[lo]] = true;
+        const setSize = (i, px) => {
+            for (const c of this.list) {
+                if (c[lo] !== i || fixedSize(c, axis) === null)
+                    continue;
+                if (axis === 'x')
+                    c.width = px;
+                else
+                    c.height = px;
+            }
+        };
+        const delta = size - drawn[slot];
+        setSize(slot, size);
+        if (pays < 0 || pays >= count || Math.abs(delta) < EPS)
+            return;
+        if (held[pays]) {
+            setSize(pays, Math.max(0, drawn[pays] - delta));
+            return;
+        }
+        // The sharing slots divide what the px sizes leave, in proportion to their
+        // spans. Re-proportion them to the sizes they should end with, keeping the
+        // total span they occupy so every other slot's span stays where it is.
+        // The proportion is over slot sizes, corridor included, since that is what
+        // the division hands out.
+        const want = new Array(count).fill(0);
+        let span = 0;
+        let total = 0;
+        for (let i = 0; i < count; i++) {
+            if (held[i])
+                continue;
+            want[i] = Math.max(0, sizes[i] - (i === pays ? delta : 0));
+            span += a[i + 1] - a[i];
+            total += want[i];
+        }
+        if (span < EPS || total < EPS)
+            return;
+        const end = a[count];
+        let at = a[0];
+        for (let i = 0; i < count; i++) {
+            at += held[i] ? a[i + 1] - a[i] : (span * want[i]) / total;
+            a[i + 1] = at;
+        }
+        a[count] = end;
+    }
+    /**
+     * The card whose px size a drag at this boundary changes, if either slot
+     * meeting there has one. Every card in that slot takes the new size.
      */
     holderAt(axis, line) {
         const [lo, hi] = SPAN[axis];
@@ -316,15 +377,8 @@ export class Soksak {
             // `slot` is line to line; subtract the corridor to get the drawn size.
             const corridor = inset(this.plane, axis, holder[lo], 'lo') + inset(this.plane, axis, holder[hi], 'hi');
             const size = Math.max(0, slot - corridor);
-            // A slot has one size, so set it on every card in the slot.
-            for (const c of this.list) {
-                if (c[lo] !== holder[lo] || fixedSize(c, axis) === null)
-                    continue;
-                if (axis === 'x')
-                    c.width = size;
-                else
-                    c.height = size;
-            }
+            // The slot on the other side of the boundary pays for the change.
+            this.resizeSlot(axis, holder[lo], size, holder[hi] === line ? line : line - 1);
         }
         else {
             const usable = this.sharedExtent(axis);
