@@ -69,11 +69,18 @@ not that many px wide any more, and the number goes.
 `geometry.ts` and nothing else — card rects, boundary rules, and grab areas all
 come out of it. `soksak.ts` holds the state and asks.
 
-**R7 — A card can always leave.**
+**R7 — A card can always leave, unless the layout has been told not to touch
+what would take its place.**
 Every open card but the last can be closed, and what is left is again an
 arrangement splitting could have built — so no action becomes impossible because
 of an earlier one. There are two ways out: a row of neighbours grows into the
 space, or the card's own slots go and the rest take the room back.
+
+The exception is `fixed`, and it is the host's own doing. A `fixed` card is one
+the layout may not move, so it will not grow to cover a departing neighbour
+either; a card whose only possible filler is `fixed`, and whose slots are not
+its own to take, stays. `canClose` says so before anything moves. Nothing else
+strands a card — a `width` never does.
 
 A fixed width is no obstacle. If closing leaves nothing to share, the fixed
 widths scale together to cover the plane rather than leaving the difference to no

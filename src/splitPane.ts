@@ -64,6 +64,7 @@ export interface SoksakOptions {
   height?: number;
 }
 
+const SIDES: readonly Side[] = ['left', 'right', 'top', 'bottom'];
 const EPS = 1e-9;
 const clamp = (v: number, lo: number, hi: number): number =>
   lo > hi ? (lo + hi) / 2 : Math.min(hi, Math.max(lo, v));
@@ -96,7 +97,8 @@ export class Soksak {
   /** Without a state, starts as one card filling the plane. */
   constructor(state?: SoksakState, options: SoksakOptions = {}) {
     this.gap = options.gap ?? 24;
-    this.minSize = options.minSize ?? 96;
+    const min = options.minSize ?? 96;
+    this.minSize = Number.isFinite(min) && min >= 0 ? min : 96;
     this.grabSize = options.grabSize ?? 11;
     this.snapDistance = options.snapDistance ?? 7;
     this.snap = options.snap ?? 'merge';
@@ -188,15 +190,24 @@ export class Soksak {
    * all scale together.
    */
   setSize(id: string, axis: Axis, px: number | null): boolean {
+    if (axis !== 'x' && axis !== 'y') return false;
     const card = this.find(id);
     if (!card) return false;
     if (px !== null && (!Number.isFinite(px) || px < 0 || spanOf(card, axis) !== 1)) return false;
 
-    if (axis === 'x') {
-      if (px === null) delete card.width;
-      else card.width = px;
-    } else if (px === null) delete card.height;
-    else card.height = px;
+    // A slot has one width, so this sets the slot. Setting it on the one card
+    // named and leaving another in the same slot asking for the old number meant
+    // `changed()` reconciled them to the larger, and this returned true having
+    // stored something else.
+    const [lo, hi] = SPAN[axis];
+    for (const c of this.list) {
+      if (c[lo] !== card[lo] || c[hi] !== card[hi]) continue;
+      if (axis === 'x') {
+        if (px === null) delete c.width;
+        else c.width = px;
+      } else if (px === null) delete c.height;
+      else c.height = px;
+    }
 
     this.changed();
     return true;
@@ -619,8 +630,10 @@ export class Soksak {
     const card = this.find(id);
     if (!card || !this.cutAt(card, axis)) return false;
     const before = this.toJSON();
+    const seq = this.seq;                 // asking must not spend a name
     const made = this.split(id, axis);
     this.restore(before);
+    this.seq = seq;
     return made !== null;
   }
 
@@ -639,6 +652,7 @@ export class Soksak {
    * Returns the new card's id, or null when there was no room.
    */
   split(id: string, axis: Axis, init: { id?: string; data?: unknown } = {}): string | null {
+    if (axis !== 'x' && axis !== 'y') return null;
     const card = this.find(id);
     const cut = card && this.cutAt(card, axis);
     if (!card || !cut) return null;
@@ -1024,6 +1038,7 @@ export class Soksak {
    * rides along and a sidebar stays the width it was.
    */
   move(id: string, targetId: string, side: Side): boolean {
+    if (!SIDES.includes(side)) return false;
     const card = this.find(id);
     const target = this.find(targetId);
     if (!card || !target || card === target || card.fixed) return false;

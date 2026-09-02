@@ -55,7 +55,12 @@ export class SoksakView {
   private cardEls = new Map<string, { el: HTMLElement; card: Card }>();
   private dividerEls = new Map<string, HTMLElement>();
   private ruleEls = new Map<string, HTMLElement>();
-  private drag: DragState | null = null;
+  /**
+   * One drag per pointer. A single field meant a second finger overwrote the
+   * first, so the divider still under the first finger drove the second one's
+   * line and kept `data-dragging` forever.
+   */
+  private drags = new Map<number, DragState>();
   private observer: ResizeObserver | null = null;
   private disposed = false;
 
@@ -185,17 +190,17 @@ export class SoksakView {
       lastTap = e.timeStamp;
       el.setPointerCapture(e.pointerId);
       el.dataset.dragging = 'true';
-      this.drag = {
+      this.drags.set(e.pointerId, {
         axis,
         line,
         from: axis === 'x' ? e.clientX : e.clientY,
         base: this.grid.boundaryPos(axis, line),
         moved: false,
-      };
+      });
     });
 
     el.addEventListener('pointermove', (e: PointerEvent) => {
-      const drag = this.drag;
+      const drag = this.drags.get(e.pointerId);
       if (!drag) return;
       const now = drag.axis === 'x' ? e.clientX : e.clientY;
       if (Math.abs(now - drag.from) > 2) drag.moved = true;
@@ -204,7 +209,7 @@ export class SoksakView {
     });
 
     const stop = (e: PointerEvent): void => {
-      const drag = this.drag;
+      const drag = this.drags.get(e.pointerId);
       if (!drag) return;
       try {
         el.releasePointerCapture(e.pointerId);
@@ -214,7 +219,7 @@ export class SoksakView {
       // a press that actually dragged must not arm the next one as a double tap
       if (drag.moved) lastTap = -Infinity;
       const merged = this.grid.mergeCoincident(drag.axis, drag.line);
-      this.drag = null;
+      this.drags.delete(e.pointerId);
       delete el.dataset.dragging;
       this.render(merged ? 'merge' : 'drag');
     };

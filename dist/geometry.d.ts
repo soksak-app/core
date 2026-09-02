@@ -39,12 +39,6 @@ export declare function slotSizes(plane: Plane, axis: Axis): number[];
 export declare function linePos(plane: Plane, axis: Axis, index: number): number;
 /** Every line position in px, index for index with the line array. */
 export declare function linePositions(plane: Plane, axis: Axis): number[];
-/**
- * How far a card's edge pulls back from the line it sits on.
- *
- * Half a corridor on every side that faces another card, and nothing at the
- * plane's own border. One rule, so no card needs a special case.
- */
 export declare function inset(plane: Plane, axis: Axis, index: number, side: 'lo' | 'hi'): number;
 /** Where a card's edge falls in px. */
 export declare function edgePos(plane: Plane, axis: Axis, index: number, side: 'lo' | 'hi'): number;

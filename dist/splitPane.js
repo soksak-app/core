@@ -19,6 +19,7 @@
 import { AXES, SPAN, axisOf, fixedSize, isAhead, spanOf } from './card.js';
 import { crossing, dividers, inset, interiorLines, isVirtual, linePositions, rectOf, rules, slotSizes, zoneAt, } from './geometry.js';
 import { fillFor, isSlicing } from './slicing.js';
+const SIDES = ['left', 'right', 'top', 'bottom'];
 const EPS = 1e-9;
 const clamp = (v, lo, hi) => lo > hi ? (lo + hi) / 2 : Math.min(hi, Math.max(lo, v));
 export class Soksak {
@@ -37,7 +38,8 @@ export class Soksak {
         this.sliceMemo = new Map();
         this.g = 24;
         this.gap = (_a = options.gap) !== null && _a !== void 0 ? _a : 24;
-        this.minSize = (_b = options.minSize) !== null && _b !== void 0 ? _b : 96;
+        const min = (_b = options.minSize) !== null && _b !== void 0 ? _b : 96;
+        this.minSize = Number.isFinite(min) && min >= 0 ? min : 96;
         this.grabSize = (_c = options.grabSize) !== null && _c !== void 0 ? _c : 11;
         this.snapDistance = (_d = options.snapDistance) !== null && _d !== void 0 ? _d : 7;
         this.snap = (_e = options.snap) !== null && _e !== void 0 ? _e : 'merge';
@@ -121,21 +123,32 @@ export class Soksak {
      * all scale together.
      */
     setSize(id, axis, px) {
+        if (axis !== 'x' && axis !== 'y')
+            return false;
         const card = this.find(id);
         if (!card)
             return false;
         if (px !== null && (!Number.isFinite(px) || px < 0 || spanOf(card, axis) !== 1))
             return false;
-        if (axis === 'x') {
-            if (px === null)
-                delete card.width;
+        // A slot has one width, so this sets the slot. Setting it on the one card
+        // named and leaving another in the same slot asking for the old number meant
+        // `changed()` reconciled them to the larger, and this returned true having
+        // stored something else.
+        const [lo, hi] = SPAN[axis];
+        for (const c of this.list) {
+            if (c[lo] !== card[lo] || c[hi] !== card[hi])
+                continue;
+            if (axis === 'x') {
+                if (px === null)
+                    delete c.width;
+                else
+                    c.width = px;
+            }
+            else if (px === null)
+                delete c.height;
             else
-                card.width = px;
+                c.height = px;
         }
-        else if (px === null)
-            delete card.height;
-        else
-            card.height = px;
         this.changed();
         return true;
     }
@@ -547,8 +560,10 @@ export class Soksak {
         if (!card || !this.cutAt(card, axis))
             return false;
         const before = this.toJSON();
+        const seq = this.seq; // asking must not spend a name
         const made = this.split(id, axis);
         this.restore(before);
+        this.seq = seq;
         return made !== null;
     }
     /**
@@ -567,6 +582,8 @@ export class Soksak {
      */
     split(id, axis, init = {}) {
         var _a;
+        if (axis !== 'x' && axis !== 'y')
+            return null;
         const card = this.find(id);
         const cut = card && this.cutAt(card, axis);
         if (!card || !cut)
@@ -962,6 +979,8 @@ export class Soksak {
      * rides along and a sidebar stays the width it was.
      */
     move(id, targetId, side) {
+        if (!SIDES.includes(side))
+            return false;
         const card = this.find(id);
         const target = this.find(targetId);
         if (!card || !target || card === target || card.fixed)

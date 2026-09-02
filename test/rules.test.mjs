@@ -265,3 +265,54 @@ test("R3 — a split puts its line inside the card being cut, and nowhere else",
     }
   }
 });
+
+test("a line no card reads costs nothing, and a corridor never outgrows the plane", () => {
+  // A corridor separates two cards. A remembered boundary separates nothing.
+  const grid = new Soksak(undefined, { width: 1200, height: 600, gap: 24 });
+  grid.split("card", "x");
+  const born = grid.insertAt("x", 1, { id: "rail", size: 190 });
+  grid.close(born);
+  const remembered = grid
+    .lines("x")
+    .some((_, i) => i > 0 && i < grid.lines("x").length - 1 && grid.isVirtual("x", i));
+  assert.ok(remembered, "the boundary is remembered");
+  assert.equal(
+    grid.cards.reduce((n, c) => n + grid.rect(c.id).w, 0) + grid.gap,
+    grid.width,
+    "and the plane is still spent on cards and one corridor, not on the memory",
+  );
+
+  // and when the plane is smaller than the corridors, the corridors give way
+  for (const px of [200, 40, 10, 1, 0]) {
+    const small = new Soksak(undefined, { width: 1200, height: 600, gap: 24 });
+    small.split("card", "x");
+    small.split("card-1", "x");
+    small.resize(px, px);
+    for (const [id, r] of small.rects()) {
+      assert.ok(r.w >= 0 && r.h >= 0, `plane ${px}: ${id} is ${r.w}x${r.h}`);
+    }
+  }
+});
+
+test("RED — putting a place up and taking it down leaves the plane as it was", () => {
+  // `insertAt` takes the room it needs from everyone in proportion. `close`
+  // hands it back to one neighbour. So the two are not inverses: repeat the
+  // round trip and one pane grows while another shrinks, until the ninth rail
+  // cannot be put up at all. The rule is right — a round trip should change
+  // nothing — and the implementation does not meet it yet.
+  const grid = new Soksak(undefined, { width: 1200, height: 600, gap: 24 });
+  grid.split("card", "x");
+  const before = grid.cards.map((c) => +grid.rect(c.id).w.toFixed(3));
+
+  for (let i = 0; i < 12; i++) {
+    const born = grid.insertAt("x", 1, { id: `rail-${i}`, size: 190 });
+    assert.ok(born, `round ${i}: a rail could still be put up`);
+    assert.equal(grid.close(born), true, `round ${i}: and taken down`);
+  }
+
+  assert.deepEqual(
+    grid.cards.map((c) => +grid.rect(c.id).w.toFixed(3)),
+    before,
+    "twelve round trips left the panes exactly as they were",
+  );
+});

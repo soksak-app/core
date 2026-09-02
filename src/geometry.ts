@@ -96,9 +96,15 @@ export function slotSizes(plane: Plane, axis: Axis): number[] {
   const keep = Math.min(floor, Math.max(0, extent(plane, axis) - taken));
   const left = Math.max(0, extent(plane, axis) - keep - taken);
   const scale = asked > 1e-9 ? left / asked : 0;
-  const each = sharedSpan > 1e-9 ? keep / sharedSpan : 0;
+  // A sharing slot gets its corridor first and a share of what is over. Handing
+  // out `keep` by span alone gave a slot less than the corridor it carries, and
+  // the card in it a negative width — a 40px plane drew one at -10.
+  let floors = 0;
+  for (let i = 0; i < count; i++) if (held[i] === null) floors += corridor[i];
+  const spare = Math.max(0, keep - floors);
+  const each = sharedSpan > 1e-9 ? spare / sharedSpan : 0;
   return held.map((fixed, i) =>
-    fixed !== null ? fixed * scale + corridor[i] : (a[i + 1] - a[i]) * each,
+    fixed !== null ? fixed * scale + corridor[i] : corridor[i] + (a[i + 1] - a[i]) * each,
   );
 }
 
@@ -124,10 +130,32 @@ export function linePositions(plane: Plane, axis: Axis): number[] {
  * Half a corridor on every side that faces another card, and nothing at the
  * plane's own border. One rule, so no card needs a special case.
  */
+/**
+ * The corridor the plane can actually afford on this axis.
+ *
+ * Every real interior line costs a whole gap. A plane narrower than what those
+ * come to cannot pay for them, and taking the gap anyway gave every card a
+ * negative width — a 10px plane drew two cards at -7. The plane cannot spend
+ * what it does not have, so the corridor gives way before the cards do.
+ */
+function corridor(plane: Plane, axis: Axis): number {
+  const a = lines(plane, axis);
+  let real = 0;
+  for (let k = 1; k < a.length - 1; k++) if (!isVirtual(plane, axis, k)) real++;
+  if (real === 0) return plane.gap;
+  return Math.min(plane.gap, Math.max(0, extent(plane, axis)) / real);
+}
+
 export function inset(plane: Plane, axis: Axis, index: number, side: 'lo' | 'hi'): number {
   const a = lines(plane, axis);
   const flush = side === 'lo' ? index === 0 : index === a.length - 1;
-  return flush ? 0 : plane.gap / 2;
+  if (flush) return 0;
+  // A corridor separates two cards. A line no card reads separates nothing, so
+  // it costs nothing — it is a remembered position, and a memory that took a
+  // gap's width from the plane every time one was kept would eventually eat the
+  // cards: forty rail toggles left forty such lines and a 190px sidebar drawn
+  // at 131.
+  return isVirtual(plane, axis, index) ? 0 : corridor(plane, axis) / 2;
 }
 
 /** Where a card's edge falls in px. */
@@ -304,6 +332,7 @@ export interface ZoneOptions {
 }
 
 export function zoneAt(plane: Plane, x: number, y: number, options: ZoneOptions = {}): ZoneHit | null {
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
   const header = options.headerPx ?? 0;
   const footer = options.footerPx ?? 0;
   const edge = options.edge ?? 0.25;

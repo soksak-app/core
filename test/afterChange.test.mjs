@@ -40,8 +40,15 @@ function audit(grid, where) {
   assert.equal(new Set(ids).size, ids.length, `${where}: two cards share a name`);
 
   // the plane is covered exactly, with the corridor between neighbours
-  const covered = rects.reduce((n, r) => n + (r.w + grid.gap) * (r.h + grid.gap), 0);
-  const plane = (grid.width + grid.gap) * (grid.height + grid.gap);
+  // The plane is covered exactly. Summing each card's *slot box* — line to line,
+  // before the corridor is taken off — is the whole of it: the boxes tile the
+  // plane by construction, whatever the gap and whatever lines nobody reads.
+  // `(w + gap)(h + gap)` was a shortcut that assumed every line costs a gap.
+  const X = (k) => grid.boundaryPos("x", k);
+  const Y = (k) => grid.boundaryPos("y", k);
+  const covered = cards.reduce((n, c) => n + (X(c.c1) - X(c.c0)) * (Y(c.r1) - Y(c.r0)), 0);
+  const plane = grid.width * grid.height;
+
   assert.ok(
     Math.abs(covered - plane) < 2,
     `${where}: coverage off by ${covered - plane}\n  xs=[${grid.lines("x")}] ys=[${grid.lines("y")}]\n  ` +
