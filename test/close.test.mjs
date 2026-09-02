@@ -166,3 +166,57 @@ test("the last open card is not closed", () => {
   assert.equal(grid.canClose("only"), false);
   assert.equal(grid.close("only"), false);
 });
+
+test("the room goes back to the slot that gave it, not the nearest one", () => {
+  // The slot beside the boundary may be unable to give the room without
+  // falling under minSize, so a further one pays. Closing must find that one.
+  const start = () => {
+    const grid = new Soksak(undefined, { width: 1600, height: 1000, gap: 24, minSize: 96 });
+    grid.split("card", "y", { id: "n1" });
+    grid.split("card", "y", { id: "n2" });
+    return grid;
+  };
+  const heights = (grid) => grid.cards.map((c) => `${c.id}:${grid.rect(c.id).h.toFixed(3)}`).join(" ");
+
+  for (const line of [0, 1, 2, 3]) {
+    const grid = start();
+    const was = heights(grid);
+    const id = grid.insertAt("y", line, { size: 150 });
+    assert.ok(id, `inserted at ${line}`);
+    // card is 238 tall, so it cannot give 174 and stay above 96: n1 pays.
+    assert.equal(grid.close(id), true);
+    assert.equal(heights(grid), was, `line ${line}`);
+  }
+});
+
+test("the state carries where each slot came from", () => {
+  const grid = new Soksak(undefined, { width: 1600, height: 1000, gap: 24, minSize: 96 });
+  grid.splitToward("card", "left", { id: "n2" });
+  grid.split("n2", "x", { id: "n3" });
+  const widths = (g) => g.cards.map((c) => `${c.id}:${g.rect(c.id).w.toFixed(3)}`).join(" ");
+
+  const copy = Soksak.from(grid.toJSON(), { width: 1600, height: 1000, gap: 24, minSize: 96 });
+  assert.equal(widths(copy), widths(grid), "the same rects");
+
+  grid.close("n3");
+  copy.close("n3");
+  assert.equal(widths(copy), widths(grid), "and the same close");
+});
+
+test("a refused move leaves nothing behind", () => {
+  const start = () => {
+    const grid = new Soksak(undefined, { width: 1600, height: 1000, gap: 24, minSize: 96 });
+    grid.setSize("card", "x", 155);
+    grid.insertAt("y", 1, { size: 181, id: "n3" });
+    grid.insertAt("y", 1, { size: 141, id: "n4" });
+    return grid;
+  };
+  const plain = start();
+  const tried = start();
+  assert.equal(tried.move("n3", "card", "left"), false, "the move is refused");
+  assert.deepEqual(tried.toJSON(), plain.toJSON(), "and changes no state");
+
+  plain.close("n3");
+  tried.close("n3");
+  assert.deepEqual(tried.toJSON(), plain.toJSON(), "so the next close does the same thing");
+});

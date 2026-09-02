@@ -46,10 +46,24 @@ export type { Fill, FillOrder } from './slicing.js';
 /** `merge`: a dragged boundary snaps onto a neighbouring line and the two become one. */
 export type SnapMode = 'merge' | 'off';
 
+/** Where a card's slot came from: which side of it, and the card that gave it. */
+export interface Paid {
+  side: 'lo' | 'hi';
+  to: string;
+}
+
 export interface SoksakState {
   xs: number[];
   ys: number[];
   cards: CardInit[];
+  /**
+   * Which side each card took its slot from, by id.
+   *
+   * A close hands the slot back to the neighbour that gave it up, so this
+   * decides where the room goes. It is part of the state: without it a grid
+   * built from `toJSON` draws the same rects but closes cards differently.
+   */
+  paidBy?: Record<string, Paid>;
 }
 
 export interface SoksakOptions {
@@ -101,7 +115,7 @@ export class Soksak {
    * the space moves to whichever neighbour the fill picks, and repeating the
    * pair drives one card to `minSize`.
    */
-  private paidBy = new Map<string, 'lo' | 'hi'>();
+  private paidBy = new Map<string, Paid>();
   /** Which side `openSlot` last took its span from. */
   /** True while canSplit runs a trial split and restores the state. */
   private probing = false;
@@ -166,6 +180,7 @@ export class Soksak {
       this.xs = [...state.xs];
       this.ys = [...state.ys];
       this.list = state.cards.map((c) => ({ ...c, fixed: c.fixed ?? false }));
+      this.paidBy = new Map(Object.entries(state.paidBy ?? {}));
     } else {
       this.xs = [0, 1];
       this.ys = [0, 1];
@@ -228,6 +243,10 @@ export class Soksak {
     const card = this.find(id);
     if (!card) return false;
     card.fixed = fixed;
+    // A fixed card does not grow over a departing neighbour, so this changes
+    // what a split and a close can do.
+    this.splitMemo.clear();
+    this.sliceMemo.clear();
     return true;
   }
 
@@ -275,6 +294,7 @@ export class Soksak {
       xs: [...this.xs],
       ys: [...this.ys],
       cards: this.list.map((c) => ({ ...c })),
+      paidBy: Object.fromEntries(this.paidBy),
     };
   }
 
@@ -891,7 +911,7 @@ export class Soksak {
     fresh[lo] = line;
     card[hi] = line;
     this.list.push(fresh);
-    this.paidBy.set(fresh.id, 'lo');
+    this.paidBy.set(fresh.id, { side: 'lo', to: card.id });
     this.changed();
     if (!this.stillFits(axis, was)) {
       this.restore(undo);
@@ -922,7 +942,7 @@ export class Soksak {
     card[hi] = fresh[hi];
     fresh[lo] = near[0];
     fresh[hi] = near[1];
-    this.paidBy.set(fresh.id, 'hi');   // the halves were swapped
+    this.paidBy.set(fresh.id, { side: 'hi', to: card.id });   // the halves were swapped
     this.changed();
     return born;
   }
@@ -1008,7 +1028,7 @@ export class Soksak {
           (c) => c === card || c[hi] <= card[lo] || c[lo] >= card[hi],
         );
         if (!alone) continue;
-        const gone = paid === 'lo' ? card[lo] : card[hi];
+        const gone = paid.side === 'lo' ? card[lo] : card[hi];
         if (gone <= 0 || gone >= this.arr(axis).length - 1) continue;
         // Removing the line grows every card that ends or starts on it. Only
         // the one that gave the span up should grow, so take this path only
@@ -1016,13 +1036,17 @@ export class Soksak {
         const reading = this.list.filter((c) => c !== card && (c[lo] === gone || c[hi] === gone));
         if (reading.length !== 1) continue;
         const held = slotWidths(this.plane, axis);
+        const mine = card[lo];
         this.list.splice(this.list.indexOf(card), 1);
-        this.removeLine(axis, gone, paid);
+        this.removeLine(axis, gone, paid.side);
         this.paidBy.delete(id);
-        // The card's slot merges with the one that gave it up, and that slot
-        // takes the room back. No other slot changes width.
-        const want: (number | null)[] = held.filter((_, i) => i !== gone);
-        this.settleOn(axis, want, order(gone - 1, want.length));
+        // The card's slot goes; the neighbour it merges into keeps the width it
+        // had, and the slot that gave the room up takes it back. No other slot
+        // changes width.
+        const back = this.find(paid.to);
+        const want: (number | null)[] = held.filter((_, i) => i !== mine);
+        const merged = paid.side === 'lo' ? mine - 1 : mine;
+        this.settleOn(axis, want, order(back ? back[lo] : merged, want.length));
         this.changed();
         return true;
       }
@@ -1118,7 +1142,10 @@ export class Soksak {
     for (let i = 0; i < held.length; i++) want[i >= line ? i + 1 : i] = held[i];
     want[line] = init.size;
     const pays = this.settleOn(axis, want, order(line + 1, want.length, line - 1));
-    if (pays >= 0) this.paidBy.set(fresh.id, pays > line ? 'hi' : 'lo');
+    // Name the slot that paid, not just the side it is on: the nearest slot may
+    // have been unable to give the room, and a close hands it back by name.
+    const payer = pays >= 0 ? this.list.find((c) => c[lo] === pays && c !== fresh) : undefined;
+    if (payer) this.paidBy.set(fresh.id, { side: pays > line ? 'hi' : 'lo', to: payer.id });
     this.changed();
     if (!this.stillFits(axis, was)) {
       this.restore(undo);
@@ -1408,6 +1435,7 @@ export class Soksak {
     this.xs = [...state.xs];
     this.ys = [...state.ys];
     this.list = state.cards.map((c) => ({ ...c, fixed: c.fixed ?? false }));
+    this.paidBy = new Map(Object.entries(state.paidBy ?? {}));
     this.agreeSizes();
     this.sliceMemo.clear();
     if (!this.probing) this.splitMemo.clear();

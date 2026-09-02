@@ -332,7 +332,12 @@ test("a card added and closed leaves the plane as it was", () => {
   for (const [name, round] of [
     ["split", (g) => { const b = g.split("card", "x"); return b && g.close(b); }],
     ["splitToward left", (g) => { const b = g.splitToward("card", "left", {}); return b && g.close(b); }],
-    ["insertAt", (g) => { const b = g.insertAt("x", 1, { size: 190 }); return b && g.close(b); }],
+    ["insertAt 0", (g) => { const b = g.insertAt("x", 0, { size: 190 }); return b && g.close(b); }],
+    ["insertAt 1", (g) => { const b = g.insertAt("x", 1, { size: 190 }); return b && g.close(b); }],
+    ["insertAt last", (g) => {
+      const b = g.insertAt("x", g.lines("x").length - 1, { size: 190 });
+      return b && g.close(b);
+    }],
   ]) {
     const grid = start();
     const before = widths(grid);

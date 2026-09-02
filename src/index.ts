@@ -6,6 +6,7 @@ export type {
   Divider,
   Fill,
   FillOrder,
+  Paid,
   Rect,
   Rule,
   Side,

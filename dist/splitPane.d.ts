@@ -20,10 +20,23 @@ export type { Axis, Card, CardInit, Rect, Side } from './card.js';
 export type { Fill, FillOrder } from './slicing.js';
 /** `merge`: a dragged boundary snaps onto a neighbouring line and the two become one. */
 export type SnapMode = 'merge' | 'off';
+/** Where a card's slot came from: which side of it, and the card that gave it. */
+export interface Paid {
+    side: 'lo' | 'hi';
+    to: string;
+}
 export interface SoksakState {
     xs: number[];
     ys: number[];
     cards: CardInit[];
+    /**
+     * Which side each card took its slot from, by id.
+     *
+     * A close hands the slot back to the neighbour that gave it up, so this
+     * decides where the room goes. It is part of the state: without it a grid
+     * built from `toJSON` draws the same rects but closes cards differently.
+     */
+    paidBy?: Record<string, Paid>;
 }
 export interface SoksakOptions {
     /** Corridor between two cards, in px. Half of it insets every inner edge. Default 24. */
