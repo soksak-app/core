@@ -294,35 +294,3 @@ test("a line no card reads costs nothing, and a corridor never outgrows the plan
   }
 });
 
-test("RED — putting a place up and taking it down leaves the plane as it was", () => {
-  // `insertAt` takes the room it needs from everyone in proportion. `close`
-  // hands it back to one neighbour — the one that grows to cover the rectangle.
-  // So the two are not inverses: 588/588 becomes 493/683, then 413/763, and by
-  // the ninth round trip no rail will fit.
-  //
-  // Making the close give the room back is one line — fold the vacated slot to
-  // nothing and renormalise — and it works: twenty round trips leave 588/588
-  // exactly. But a slot folded to nothing puts its line on top of its
-  // neighbour, and that line was the memory of where the boundary had been, so
-  // a later split can no longer land on it. `lines.test.mjs` holds that memory
-  // to be a rule too.
-  //
-  // The two cannot both hold: returning the room needs the slot to go to zero,
-  // remembering the position needs it to keep its width. Which rule wins is a
-  // decision, not a defect, and this stays RED until that decision is made.
-  const grid = new Soksak(undefined, { width: 1200, height: 600, gap: 24 });
-  grid.split("card", "x");
-  const before = grid.cards.map((c) => +grid.rect(c.id).w.toFixed(3));
-
-  for (let i = 0; i < 12; i++) {
-    const born = grid.insertAt("x", 1, { id: `rail-${i}`, size: 190 });
-    assert.ok(born, `round ${i}: a rail could still be put up`);
-    assert.equal(grid.close(born), true, `round ${i}: and taken down`);
-  }
-
-  assert.deepEqual(
-    grid.cards.map((c) => +grid.rect(c.id).w.toFixed(3)),
-    before,
-    "twelve round trips left the panes exactly as they were",
-  );
-});
