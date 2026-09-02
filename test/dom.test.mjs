@@ -561,3 +561,31 @@ test("element() returns the element for a card the grid still has", () => {
   assert.equal(view.element(born), undefined, "and one that is gone has none");
   view.destroy();
 });
+
+test("sweeping one divider ends its drag and no one else's", () => {
+  const { window, host, grid, view } = mount();
+  grid.split("card", "y");
+  view.render();
+
+  const vertical = host.querySelector('.sp-divider[data-axis="x"]');
+  const horizontal = host.querySelector('.sp-divider[data-axis="y"]');
+  pointer(window, vertical, "pointerdown", 1, grid.boundaryPos("x", 1), 300);
+  pointer(window, vertical, "pointermove", 1, grid.boundaryPos("x", 1) - 30, 300);
+  pointer(window, horizontal, "pointerdown", 2, 300, grid.boundaryPos("y", 1));
+  pointer(window, horizontal, "pointermove", 2, 300, grid.boundaryPos("y", 1) + 30);
+  assert.equal(vertical.dataset.dragging, "true");
+  assert.equal(horizontal.dataset.dragging, "true");
+
+  // Close the card whose boundary the horizontal divider draws. Sweeping it
+  // must end its own drag and leave the other pointer holding its own.
+  grid.close(grid.cards.find((c) => c.r0 === 1)?.id ?? "card-2");
+  view.render();
+  assert.equal(horizontal.isConnected, false, "the horizontal divider is gone");
+  assert.equal(horizontal.dataset.dragging, undefined, "and its drag ended");
+  assert.equal(vertical.dataset.dragging, "true", "the other one is still held");
+
+  const held = grid.boundaryPos("x", 1);
+  pointer(window, vertical, "pointermove", 1, grid.boundaryPos("x", 1) - 40, 300);
+  assert.notEqual(grid.boundaryPos("x", 1), held, "and still follows its pointer");
+  view.destroy();
+});

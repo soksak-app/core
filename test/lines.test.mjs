@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { Soksak } from "../dist/index.js";
-import { assertTiling, H, three, W } from "./helpers.mjs";
+import { assertTiling, fuzz, H, three, W } from "./helpers.mjs";
 
 test("dragging a line moves every card referencing it", () => {
   const grid = three();
@@ -213,4 +213,65 @@ test("a drag never writes a line past its neighbour", () => {
   const xs = grid.lines("x");
   for (let k = 1; k < xs.length; k++) assert.ok(xs[k] >= xs[k - 1], `out of order: ${xs.join(", ")}`);
   assert.ok(xs.every((v) => v >= 0 && v <= 1), `outside 0..1: ${xs.join(", ")}`);
+});
+
+test("a grab area is centred on the boundary it grabs", () => {
+  const grid = new Soksak(undefined, { width: 1200, height: 600, gap: 24, grabSize: 11 });
+  grid.split("card", "x");
+  grid.split("card", "y");
+
+  for (const d of grid.dividers()) {
+    const at = grid.boundaryPos(d.axis, d.line);
+    const thick = d.axis === "x" ? d.w : d.h;
+    const near = d.axis === "x" ? d.x : d.y;
+    assert.equal(thick, Math.max(grid.gap, 11), `${d.key} is as thick as the corridor`);
+    // Centred: the pointer must be able to reach the boundary from either side
+    // by the same distance.
+    assert.ok(Math.abs(near + thick / 2 - at) < 1e-9, `${d.key} sits at ${near}, not around ${at}`);
+  }
+});
+
+test("a rule covers exactly where cards break on the line", () => {
+  // Two cards above the line and one below it, so only part of the line is a
+  // boundary. The solid stretch must be the overlap of the two sides, not the
+  // union: the wrong end would draw a rule where nothing meets.
+  const grid = new Soksak(
+    { xs: [0, 0.5, 1], ys: [0, 0.5, 1], cards: [
+      { id: "topLeft", c0: 0, c1: 1, r0: 0, r1: 1 },
+      { id: "topRight", c0: 1, c1: 2, r0: 0, r1: 1 },
+      { id: "under", c0: 0, c1: 2, r0: 1, r1: 2 },
+    ] },
+    { width: 1200, height: 600, gap: 24 },
+  );
+  const solid = grid.rules().filter((r) => !r.virtual && r.axis === "x");
+  assert.equal(solid.length, 1, "one stretch on x");
+  const [stretch] = solid;
+  const top = grid.rect("topLeft");
+  // It reaches half a corridor past the pair at each end, and stops at the
+  // plane rather than running off it.
+  assert.equal(stretch.y, Math.max(0, top.y - grid.gap / 2), "it starts where the pair starts");
+  assert.ok(
+    Math.abs(stretch.y + stretch.h - (top.y + top.h + grid.gap / 2)) < 1e-9,
+    "and ends where they stop meeting, not where the plane does",
+  );
+  assert.ok(stretch.h < grid.height, "so it is shorter than the whole line");
+});
+
+test("no two rules and no two grab areas share a key", () => {
+  // The view keys its elements by these, so a repeated key means two rules
+  // fighting over one element and one of them never drawn.
+  for (let seed = 0; seed < 40; seed++) {
+    const grid = three({ gap: seed % 30, minSize: seed % 60 });
+    fuzz(grid, seed, 30);
+    for (const [what, list] of [["rules", grid.rules()], ["dividers", grid.dividers()]]) {
+      const keys = list.map((r) => r.key);
+      assert.equal(new Set(keys).size, keys.length, `seed ${seed}: ${what} repeat a key`);
+    }
+    // And a solid stretch never runs past the line's own full-plane rule.
+    for (const rule of grid.rules().filter((r) => !r.virtual)) {
+      const full = grid.rules().find((r) => r.virtual && r.axis === rule.axis && r.line === rule.line);
+      assert.ok(full, `seed ${seed}: ${rule.key} has a full-plane rule`);
+      assert.ok(rule.h <= full.h + 1e-9 && rule.w <= full.w + 1e-9, `${rule.key} is longer than its line`);
+    }
+  }
 });
