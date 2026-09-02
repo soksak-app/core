@@ -410,7 +410,6 @@ export declare class Soksak {
     move(id: string, targetId: string, side: Side): boolean;
     /** Whether `move` would succeed, without performing it. */
     canMove(id: string, targetId: string, side: Side): boolean;
-    /** Put the arrangement back to a state it reported earlier. */
     /**
      * What every operation does when it is finished.
      *
@@ -427,5 +426,6 @@ export declare class Soksak {
      * reports is what gets drawn. Run it wherever cards arrive or move.
      */
     private agreeSizes;
+    /** Put the arrangement back to a state it reported earlier. */
     private restore;
 }

@@ -868,7 +868,7 @@ export class Soksak {
     // canSplit runs a trial split, which copies the state twice. The result is
     // cached until the next change: a host redraw calls this once per card per
     // axis, 134 times at 67 cards.
-    const key = `${id}:${axis}`;
+    const key = `split:${id}:${axis}`;
     const known = this.splitMemo.get(key);
     if (known !== undefined) return known;
 
@@ -1420,20 +1420,26 @@ export class Soksak {
 
   /** Whether `move` would succeed, without performing it. */
   canMove(id: string, targetId: string, side: Side): boolean {
-    const probe = new Soksak(this.toJSON(), {
-      gap: this.gap,
-      minSize: this.min,
-      grabSize: this.grabSize,
-      snapDistance: this.snapDistance,
-      snap: this.snap,
-      fillOrder: this.order,
-      width: this.w,
-      height: this.h,
-    });
-    return probe.move(id, targetId, side);
+    // Run it here and put the state back, as canSplit does, and cache it in the
+    // same place. Building a second Soksak copied the whole arrangement and
+    // every option to answer yes or no, and a host asking about four sides on
+    // every pointer move paid for all of it each time.
+    const key = `move:${id}:${targetId}:${side}`;
+    const known = this.splitMemo.get(key);
+    if (known !== undefined) return known;
+
+    const before = this.toJSON();
+    const seq = this.seq;
+    const probing = this.probing;
+    this.probing = true;
+    const ok = this.move(id, targetId, side);
+    this.restore(before);
+    this.probing = probing;
+    this.seq = seq;
+    this.splitMemo.set(key, ok);
+    return ok;
   }
 
-  /** Put the arrangement back to a state it reported earlier. */
   /**
    * What every operation does when it is finished.
    *
@@ -1479,6 +1485,7 @@ export class Soksak {
     }
   }
 
+  /** Put the arrangement back to a state it reported earlier. */
   private restore(state: SoksakState): void {
     this.xs = [...state.xs];
     this.ys = [...state.ys];
