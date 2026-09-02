@@ -58,7 +58,6 @@ export declare class Soksak {
      */
     private paidBy;
     /** Which side `openSlot` last took its span from. */
-    private paid;
     /** True while canSplit runs a trial split and restores the state. */
     private probing;
     private g;
@@ -127,9 +126,51 @@ export declare class Soksak {
     isVirtual(axis: Axis, line: number): boolean;
     virtualCount(): number;
     isSlicing(list?: readonly Span[]): boolean;
+    /** Corridor a slot carries: half a gap on each inner edge. */
+    private corridorOf;
+    /** Drawn width of every slot on an axis, corridor removed. */
+    private slotWidths;
+    /** The px size declared for a slot: the largest any card in it asks for. */
+    private declaredIn;
+    /** Set the px size every card in a slot declares. */
+    private declare;
+    /** Which slots hold a px size. Their width is declared, not divided. */
+    private heldSlots;
     /**
-     * The card whose px size a drag at this boundary changes, if the slot before
-     * it has one. Every card in that slot takes the new size.
+     * The width every slot ends with when the sharing slots named `null` in
+     * `want` take what is left over, sharing it in proportion to their spans.
+     */
+    private widthsFor;
+    /** Whether every card keeps its minimum with these slot widths. */
+    private fits;
+    /**
+     * Give each sharing slot the width `want` names for it. A slot named `null`
+     * takes what is left over.
+     *
+     * A px size is declared by the host, so this never changes one: a held slot
+     * keeps its size whatever `want` says. Naming the widths settles a change
+     * with the slots it touches and leaves the rest where they are.
+     */
+    private setSlotWidths;
+    /**
+     * Settle a change with the sharing slot nearest the boundary.
+     *
+     * `order` lists the slots to try, nearest first. The first one that leaves
+     * every card its minimum takes the room; when none does, every sharing slot
+     * shares it. Returns the slot that took it, or -1.
+     */
+    private settleOn;
+    /**
+     * Set one slot's px size and take the difference from the slot on the other
+     * side of the boundary.
+     *
+     * A drag moves one boundary: the two slots meeting there change and no other
+     * slot does.
+     */
+    private resizeSlot;
+    /**
+     * The card whose px size a drag at this boundary changes, if either slot
+     * meeting there has one. Every card in that slot takes the new size.
      */
     private holderAt;
     /** Everything to draw for the boundaries. */

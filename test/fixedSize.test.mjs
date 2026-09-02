@@ -350,3 +350,49 @@ test("a drag beside a px slot leaves the slot on the far side of it alone", () =
     assertTiling(grid, `left of the rail ${push}`);
   }
 });
+
+test("a sidebar leaving and returning is settled with the slot next to it", () => {
+  const grid = new Soksak(
+    {
+      xs: [0, 0.1, 0.35, 0.6, 0.9, 1],
+      ys: [0, 0.5, 1],
+      cards: [
+        { id: "left", c0: 0, c1: 1, r0: 0, r1: 2, width: 190, fixed: true },
+        { id: "A", c0: 1, c1: 2, r0: 0, r1: 1 },
+        { id: "B", c0: 1, c1: 2, r0: 1, r1: 2 },
+        { id: "rail", c0: 2, c1: 3, r0: 0, r1: 2, width: 190, fixed: true },
+        { id: "C", c0: 3, c1: 4, r0: 0, r1: 1 },
+        { id: "D", c0: 3, c1: 4, r0: 1, r1: 2 },
+        { id: "right", c0: 4, c1: 5, r0: 0, r1: 2, width: 210, fixed: true },
+      ],
+    },
+    { width: W, height: H },
+  );
+  const was = Object.fromEntries(grid.cards.map((c) => [c.id, grid.rect(c.id).w]));
+  const last = () => grid.lines("x").length - 1;
+  // Re-proportioning divides, so widths come back to within a rounding.
+  const near = (id, w, note) =>
+    assert.ok(Math.abs(grid.rect(id).w - w) < 1e-9, `${id} is ${grid.rect(id).w}, not ${w}: ${note}`);
+
+  grid.setFixed("left", false);
+  assert.equal(grid.close("left"), true);
+  // The pane beside it takes the sidebar's width and the corridor it released.
+  // The panes on the far side of the rail do not move.
+  near("A", was.A + was.left + grid.gap, "took the room next to it");
+  near("C", was.C, "is not next to it");
+  near("right", was.right, "a px size is declared, not divided");
+
+  grid.setFixed("right", false);
+  assert.equal(grid.close("right"), true);
+  near("C", was.C + was.right + grid.gap, "took the room next to it");
+  near("A", was.A + was.left + grid.gap, "is not next to it");
+
+  // And back: each returns to the slot it came from, taking its width from it.
+  grid.setFixed(grid.insertAt("x", 0, { id: "left", size: 190 }), true);
+  near("A", was.A, "gave the room back");
+  near("C", was.C + was.right + grid.gap, "is not next to it");
+
+  grid.setFixed(grid.insertAt("x", last(), { id: "right", size: 210 }), true);
+  for (const [id, w] of Object.entries(was)) near(id, w, "back where it started");
+  assertTiling(grid, "sidebars back");
+});

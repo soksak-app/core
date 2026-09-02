@@ -172,9 +172,18 @@ outside the card. Give the children `min-width: 0`.
 
 ## Boundaries
 
-A drag is one gesture, and what it does is a fact about what is beside it: next
-to a card holding its slot at a fixed size it changes that size, and anywhere
-else it moves the line and both sides follow.
+A drag changes the two slots that meet at the boundary and no others. Next to a
+card holding its slot at a fixed size it changes that size and the slot on the
+other side pays for it; anywhere else it moves the line and both sides follow.
+
+The same rule settles a card that appears or disappears. A closing card's width,
+and the corridor it releases, go to the slot next to it; a card inserted at a
+boundary takes its width from the slot next to it. So a sidebar switched off and
+back on leaves every other card the width it had.
+
+A px size is declared by the host. Only a drag changes one — a close or an insert
+settles with a sharing slot, and looks further out when the nearest one cannot
+give the room without taking a card below `minSize`.
 
 ```js
 grid.dividers();                       // where each boundary can be grabbed
