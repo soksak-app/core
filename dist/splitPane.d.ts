@@ -64,11 +64,18 @@ export declare class Soksak {
     /** Corridor between two cards, in px. Never negative — a card would overlap. */
     get gap(): number;
     set gap(px: number);
-    minSize: number;
+    private min;
+    /** The smallest a card may be drawn on either axis. */
+    get minSize(): number;
+    /** Writing it clears the cached answers that were computed against the old one. */
+    set minSize(px: number);
+    private order;
+    /** Which axis a close tries first. */
+    get fillOrder(): FillOrder;
+    set fillOrder(value: FillOrder);
     grabSize: number;
     snapDistance: number;
     snap: SnapMode;
-    fillOrder: FillOrder;
     /** Without a state, starts as one card filling the plane. */
     constructor(state?: SoksakState, options?: SoksakOptions);
     static from(state: SoksakState, options?: SoksakOptions): Soksak;
@@ -118,8 +125,8 @@ export declare class Soksak {
      * The point is in the plane's own coordinates, the ones `rects()` reports.
      */
     zoneAt(x: number, y: number, options?: ZoneOptions): ZoneHit | null;
-    /** Cards that span across a line. They are what a card placed on it would cut. */
-    cardsCrossing(axis: Axis, line: number): Card[];
+    /** Cards that span across a line, as frozen copies. They are what a card placed on it would cut. */
+    cardsCrossing(axis: Axis, line: number): readonly Card[];
     /** How many lines a card spans across — how much finer its neighbours are. */
     crossings(card: Card): number;
     /** True when no card reads this line — it survives only as a snap target. */
@@ -263,7 +270,15 @@ export declare class Soksak {
         data?: unknown;
     }): string | null;
     private nextId;
+    /**
+     * Which neighbours would grow over a card if it closed, as frozen copies.
+     *
+     * `null` when no row of neighbours matches a side, which is when `close`
+     * removes the card's slots instead.
+     */
     fill(id: string): Fill | null;
+    /** The same, holding the cards themselves, so `close` can grow them. */
+    private fillOf;
     /**
      * The axis on which this card's slots hold no other card, or null.
      *

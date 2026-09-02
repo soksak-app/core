@@ -36,8 +36,10 @@ every card stays closable.
 
 **R5 — The corridor is half a gap on every inner edge.**
 A card at the plane's border is flush there. A line no card references takes no
-corridor. When the corridor total exceeds the plane, the gap is reduced so no
-rect goes negative.
+corridor. When the corridor total exceeds the plane, the gap is reduced to what
+the plane holds. A slot can still end up narrower than the corridor it carries;
+the card there is drawn with no width, in the middle of its slots, so a rect is
+never inside out.
 
 The slot carries the corridor, so a px size is the drawn size: `width: 180`
 draws 180 at the plane's edge, between two cards, and at any `gap`.
@@ -283,8 +285,12 @@ between two of them has no neighbour that can grow. It leaves the other way: it
 reaches from one side of the plane to the other, so every slot it spans is its
 own, and those slots simply go. How many there are makes no difference.
 
-Together that makes `canClose` true for every card except the last, whatever has
-happened before. `grid.isSlicing()` checks the underlying property directly.
+Together that makes `canClose` true for every open card except the last,
+whatever has happened before — apart from the R7 case above, where a card's only
+filler is `fixed` and its slots hold another card. `canClose` returns false for a
+`fixed` card, because the layout does not move it; clear the flag with `setFixed`
+first.
+`grid.isSlicing()` checks the underlying property directly.
 
 ## Options
 

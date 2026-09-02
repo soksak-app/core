@@ -40,6 +40,8 @@ export declare function linePos(plane: Plane, axis: Axis, index: number): number
 /** Every line position in px, index for index with the line array. */
 export declare function linePositions(plane: Plane, axis: Axis): number[];
 export declare function inset(plane: Plane, axis: Axis, index: number, side: 'lo' | 'hi'): number;
+/** Half the corridor a real line draws, capped at what the plane can hold. */
+export declare function halfCorridor(plane: Plane, axis: Axis): number;
 /** Where a card's edge falls in px. */
 export declare function edgePos(plane: Plane, axis: Axis, index: number, side: 'lo' | 'hi'): number;
 /** Line positions and edge insets for one axis. */

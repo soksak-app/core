@@ -29,6 +29,10 @@ export class SoksakView {
         this.prefix = (_a = options.classPrefix) !== null && _a !== void 0 ? _a : 'sp';
         if (options.observeResize !== false && typeof ResizeObserver !== 'undefined') {
             this.observer = new ResizeObserver(() => {
+                // A hidden host reports 0x0. Resizing to that drops every px size to 0
+                // and showing the host again does not bring them back.
+                if (host.clientWidth <= 0 || host.clientHeight <= 0)
+                    return;
                 this.grid.resize(host.clientWidth, host.clientHeight);
                 this.render('resize');
             });
@@ -108,9 +112,36 @@ export class SoksakView {
         for (const [k, el] of map) {
             if (keep.has(k))
                 continue;
+            for (const [pointer, drag] of this.drags)
+                if (drag.on === el)
+                    this.end(pointer);
             el.remove();
             map.delete(k);
         }
+    }
+    /**
+     * End a drag and report whether it moved the boundary.
+     *
+     * Every way a drag can end runs through here: pointerup, pointercancel, the
+     * capture being lost, the divider being swept, and destroy.
+     */
+    end(pointer) {
+        const drag = this.drags.get(pointer);
+        if (!drag)
+            return false;
+        this.drags.delete(pointer);
+        try {
+            drag.on.releasePointerCapture(pointer);
+        }
+        catch {
+            /* the pointer may already be gone */
+        }
+        delete drag.on.dataset.dragging;
+        if (this.disposed)
+            return drag.moved;
+        const merged = this.grid.mergeCoincident(drag.axis, drag.line);
+        this.render(merged ? 'merge' : 'drag');
+        return drag.moved;
     }
     /**
      * Dividers are reused across renders. Rebuilding one mid-drag would drop its
@@ -147,6 +178,7 @@ export class SoksakView {
             }
             el.dataset.dragging = 'true';
             this.drags.set(e.pointerId, {
+                on: el,
                 axis,
                 line,
                 from: axis === 'x' ? e.clientX : e.clientY,
@@ -158,8 +190,16 @@ export class SoksakView {
             if (this.disposed)
                 return;
             const drag = this.drags.get(e.pointerId);
-            if (!drag)
+            // Only the divider that started the drag continues it, and only while a
+            // button is down. A drag whose divider is swept away never sees its own
+            // pointerup, and the mouse is always pointer 1: without both checks that
+            // one entry drags every other divider on a plain hover.
+            if (!drag || drag.on !== el)
                 return;
+            if (e.buttons === 0) {
+                this.end(e.pointerId);
+                return;
+            }
             const now = drag.axis === 'x' ? e.clientX : e.clientY;
             if (Math.abs(now - drag.from) > 2)
                 drag.moved = true;
@@ -167,27 +207,17 @@ export class SoksakView {
             this.render('drag');
         });
         const stop = (e) => {
-            if (this.disposed)
+            var _a;
+            if (((_a = this.drags.get(e.pointerId)) === null || _a === void 0 ? void 0 : _a.on) !== el)
                 return;
-            const drag = this.drags.get(e.pointerId);
-            if (!drag)
-                return;
-            try {
-                el.releasePointerCapture(e.pointerId);
-            }
-            catch {
-                /* the pointer may already be gone */
-            }
-            // a press that actually dragged must not arm the next one as a double tap
-            if (drag.moved)
+            if (this.end(e.pointerId))
                 lastTap = -Infinity;
-            const merged = this.grid.mergeCoincident(drag.axis, drag.line);
-            this.drags.delete(e.pointerId);
-            delete el.dataset.dragging;
-            this.render(merged ? 'merge' : 'drag');
         };
         el.addEventListener('pointerup', stop);
         el.addEventListener('pointercancel', stop);
+        // The browser drops the capture when the element leaves the document, and
+        // then no pointerup reaches it.
+        el.addEventListener('lostpointercapture', stop);
         el.addEventListener('keydown', (e) => {
             const axis = el.dataset.axis;
             const line = Number(el.dataset.line);
@@ -215,6 +245,8 @@ export class SoksakView {
     destroy() {
         var _a, _b, _c;
         this.disposed = true;
+        for (const pointer of [...this.drags.keys()])
+            this.end(pointer);
         (_a = this.observer) === null || _a === void 0 ? void 0 : _a.disconnect();
         this.observer = null;
         for (const held of this.cardEls.values()) {

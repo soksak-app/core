@@ -140,7 +140,8 @@ export function linePositions(plane: Plane, axis: Axis): number[] {
  * Corridor width for this axis, capped at what the plane can hold.
  *
  * Each real interior line costs one gap. When the total exceeds the plane, the
- * gap is reduced so rects stay non-negative.
+ * gap is reduced to what the plane holds. A single slot can still be narrower
+ * than the corridor it carries; `rectIn` draws that card with no width.
  */
 function corridor(plane: Plane, axis: Axis, read = linesRead(plane, axis)): number {
   const a = lines(plane, axis);
@@ -166,7 +167,12 @@ export function inset(plane: Plane, axis: Axis, index: number, side: 'lo' | 'hi'
   const flush = side === 'lo' ? index === 0 : index === a.length - 1;
   if (flush) return 0;
   // A line no card references separates nothing and takes no corridor.
-  return isVirtual(plane, axis, index) ? 0 : corridor(plane, axis) / 2;
+  return isVirtual(plane, axis, index) ? 0 : halfCorridor(plane, axis);
+}
+
+/** Half the corridor a real line draws, capped at what the plane can hold. */
+export function halfCorridor(plane: Plane, axis: Axis): number {
+  return corridor(plane, axis) / 2;
 }
 
 /** Where a card's edge falls in px. */
@@ -210,11 +216,23 @@ export function frameOf(plane: Plane): Frame {
 
 /** Rect of one card from a precomputed frame. */
 export function rectIn(frame: Frame, card: Card): Rect {
-  const x0 = frame.x.at[card.c0] + frame.x.half[card.c0];
-  const x1 = frame.x.at[card.c1] - frame.x.half[card.c1];
-  const y0 = frame.y.at[card.r0] + frame.y.half[card.r0];
-  const y1 = frame.y.at[card.r1] - frame.y.half[card.r1];
-  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  const [x, w] = span(frame.x, card.c0, card.c1);
+  const [y, h] = span(frame.y, card.r0, card.r1);
+  return { x, y, w, h };
+}
+
+/**
+ * One axis of a rect: where the card starts and how much it holds.
+ *
+ * A slot narrower than the corridor it carries would put the far edge before
+ * the near one. The card has no room there, so it is drawn with none, in the
+ * middle of the slots it spans, rather than inside out.
+ */
+function span(axle: Axle, lo: number, hi: number): [number, number] {
+  const near = axle.at[lo] + axle.half[lo];
+  const far = axle.at[hi] - axle.half[hi];
+  if (far >= near) return [near, far - near];
+  return [(axle.at[lo] + axle.at[hi]) / 2, 0];
 }
 
 /** The rect of one card. Every rect in the library comes from here. */
@@ -325,9 +343,12 @@ export interface Divider extends Rect {
  */
 export function rules(plane: Plane): Rule[] {
   const out: Rule[] = [];
-  const half = plane.gap / 2;
   const frame = frameOf(plane);
   for (const axis of AXES) {
+    // The drawn corridor, not the declared gap: a plane too narrow for the
+    // gap draws a smaller one, and a rule drawn to the declared size runs off
+    // the plane.
+    const half = halfCorridor(plane, axis);
     const along = frame[axis].at;
     const across = axis === 'x' ? plane.height : plane.width;
     const other: Axis = axis === 'x' ? 'y' : 'x';
@@ -336,8 +357,8 @@ export function rules(plane: Plane): Rule[] {
       const at = along[line] - 0.5;
       out.push(
         axis === 'x'
-          ? { key: `vx:${line}`, axis, line, virtual: true, x: at, y: -half, w: 1, h: across + plane.gap }
-          : { key: `vy:${line}`, axis, line, virtual: true, x: -half, y: at, w: across + plane.gap, h: 1 },
+          ? { key: `vx:${line}`, axis, line, virtual: true, x: at, y: -half, w: 1, h: across + half * 2 }
+          : { key: `vy:${line}`, axis, line, virtual: true, x: -half, y: at, w: across + half * 2, h: 1 },
       );
       for (const [from, to] of boundarySpans(plane, axis, line, meet)) {
         const start = frame[other].at[from] + frame[other].half[from] - half;

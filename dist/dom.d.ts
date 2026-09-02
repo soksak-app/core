@@ -51,6 +51,13 @@ export declare class SoksakView {
     render(reason?: ChangeReason): void;
     private sweep;
     /**
+     * End a drag and report whether it moved the boundary.
+     *
+     * Every way a drag can end runs through here: pointerup, pointercancel, the
+     * capture being lost, the divider being swept, and destroy.
+     */
+    private end;
+    /**
      * Dividers are reused across renders. Rebuilding one mid-drag would drop its
      * pointer capture, which reads as the boundary jumping once and then going dead.
      */

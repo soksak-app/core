@@ -388,3 +388,42 @@ test("R7 — only a fixed card leaves another with nowhere to go", () => {
   }
   assert.equal(stuck, 0, "no card is stranded when nothing is fixed");
 });
+
+test("R7 — a card whose only filler is fixed stays, and canClose returns false", () => {
+  const grid = new Soksak(undefined, { width: 1600, height: 900 });
+  const right = grid.split("card", "x");
+  const boxed = grid.split("card", "y");
+  const below = grid.split(boxed, "y");
+  const midR = grid.split(right, "y");
+  grid.split(midR, "y");
+  grid.setFixed("card", true);
+  grid.setFixed(below, true);
+  grid.setFixed(midR, true);
+
+  // The exception R7 names: no row of neighbours may grow over it, and its
+  // slots hold another card, so removing them is not open either.
+  assert.equal(grid.fill(boxed), null, "no row of neighbours can grow over it");
+  assert.equal(grid.canClose(boxed), false);
+  assert.equal(grid.close(boxed), false, "and it refuses rather than corrupting");
+  assert.equal(grid.isSlicing(), true);
+
+  // A fixed card returns false because the layout does not move it. Clearing
+  // the flag is what a host does to close one.
+  assert.equal(grid.canClose("card"), false, "fixed");
+  grid.setFixed("card", false);
+  assert.equal(grid.canClose("card"), true);
+});
+
+test("a rect is never inside out, whatever the gap", () => {
+  for (const gap of [0, 24, 200, 400, 2000]) {
+    const grid = new Soksak(undefined, { width: 1000, height: 200, minSize: 0 });
+    const b = grid.split("card", "x");
+    grid.split(b, "x");
+    grid.split("card", "y");
+    grid.gap = gap;
+    for (const [id, r] of grid.rects()) {
+      assert.ok(r.w >= 0 && r.h >= 0, `gap ${gap}: ${id} is ${r.w}x${r.h}`);
+      assert.ok(Number.isFinite(r.x) && Number.isFinite(r.y), `gap ${gap}: ${id} at ${r.x},${r.y}`);
+    }
+  }
+});

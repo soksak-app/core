@@ -20,6 +20,7 @@ import {
   crossing,
   dividers,
   frameOf,
+  halfCorridor,
   heldSizes,
   inset,
   interiorLines,
@@ -116,21 +117,47 @@ export class Soksak {
     this.g = px;
     this.splitMemo.clear();
   }
-  minSize: number;
+  private min: number;
+
+  /** The smallest a card may be drawn on either axis. */
+  get minSize(): number {
+    return this.min;
+  }
+
+  /** Writing it clears the cached answers that were computed against the old one. */
+  set minSize(px: number) {
+    if (!Number.isFinite(px) || px < 0) return;
+    this.min = px;
+    this.splitMemo.clear();
+  }
+
+  private order: FillOrder;
+
+  /** Which axis a close tries first. */
+  get fillOrder(): FillOrder {
+    return this.order;
+  }
+
+  set fillOrder(value: FillOrder) {
+    if (value !== 'v' && value !== 'h') return;
+    this.order = value;
+    this.sliceMemo.clear();
+    this.splitMemo.clear();
+  }
+
   grabSize: number;
   snapDistance: number;
   snap: SnapMode;
-  fillOrder: FillOrder;
 
   /** Without a state, starts as one card filling the plane. */
   constructor(state?: SoksakState, options: SoksakOptions = {}) {
     this.gap = options.gap ?? 24;
     const min = options.minSize ?? 96;
-    this.minSize = Number.isFinite(min) && min >= 0 ? min : 96;
+    this.min = Number.isFinite(min) && min >= 0 ? min : 96;
     this.grabSize = options.grabSize ?? 11;
     this.snapDistance = options.snapDistance ?? 7;
     this.snap = options.snap ?? 'merge';
-    this.fillOrder = options.fillOrder ?? 'v';
+    this.order = options.fillOrder ?? 'v';
     this.w = options.width ?? 0;
     this.h = options.height ?? 0;
 
@@ -250,7 +277,7 @@ export class Soksak {
   }
 
   private get plane(): Plane {
-    return { xs: this.xs, ys: this.ys, cards: this.list, width: this.w, height: this.h, gap: this.gap, minSize: this.minSize };
+    return { xs: this.xs, ys: this.ys, cards: this.list, width: this.w, height: this.h, gap: this.gap, minSize: this.min };
   }
 
   private arr(axis: Axis): number[] {
@@ -286,9 +313,9 @@ export class Soksak {
     return zoneAt(this.plane, x, y, options);
   }
 
-  /** Cards that span across a line. They are what a card placed on it would cut. */
-  cardsCrossing(axis: Axis, line: number): Card[] {
-    return crossing(this.plane, axis, line);
+  /** Cards that span across a line, as frozen copies. They are what a card placed on it would cut. */
+  cardsCrossing(axis: Axis, line: number): readonly Card[] {
+    return crossing(this.plane, axis, line).map((c) => Object.freeze({ ...c }));
   }
 
   /** How many lines a card spans across — how much finer its neighbours are. */
@@ -325,7 +352,7 @@ export class Soksak {
 
   /** Whether every card has its minimum, as the plane stands. */
   private fits(axis: Axis): boolean {
-    for (const w of this.extents(axis).values()) if (w < this.minSize - EPS) return false;
+    for (const w of this.extents(axis).values()) if (w < this.min - EPS) return false;
     return true;
   }
 
@@ -502,8 +529,8 @@ export class Soksak {
     for (const card of this.list) {
       const near = inset(this.plane, axis, card[lo], 'lo');
       const far = inset(this.plane, axis, card[hi], 'hi');
-      if (card[hi] === line) min = Math.max(min, along[card[lo]] + this.minSize + near + far);
-      if (card[lo] === line) max = Math.min(max, along[card[hi]] - this.minSize - near - far);
+      if (card[hi] === line) min = Math.max(min, along[card[lo]] + this.min + near + far);
+      if (card[lo] === line) max = Math.min(max, along[card[hi]] - this.min - near - far);
     }
     return [min, max];
   }
@@ -686,8 +713,9 @@ export class Soksak {
     const per = own !== null ? own / (a[card[hi]] - a[card[lo]] || 1) : this.sharedExtent(axis);
     if (per <= EPS) return null;
 
-    const lowest = a[card[lo]] + (this.minSize + inset(this.plane, axis, card[lo], 'lo') + this.gap / 2) / per;
-    const highest = a[card[hi]] - (this.minSize + this.gap / 2 + inset(this.plane, axis, card[hi], 'hi')) / per;
+    const half = halfCorridor(this.plane, axis);
+    const lowest = a[card[lo]] + (this.min + inset(this.plane, axis, card[lo], 'lo') + half) / per;
+    const highest = a[card[hi]] - (this.min + half + inset(this.plane, axis, card[hi], 'hi')) / per;
     if (lowest > highest) return null;
 
     const mid = (a[card[lo]] + a[card[hi]]) / 2;
@@ -730,7 +758,7 @@ export class Soksak {
       // is the size it was given; the halves of a cut are checked by `cutAt`.
       const was = before.get(id);
       if (was === undefined) continue;
-      if (now < Math.min(this.minSize, was) - 0.01) return false;
+      if (now < Math.min(this.min, was) - 0.01) return false;
     }
     return true;
   }
@@ -870,9 +898,21 @@ export class Soksak {
 
   // ---- closing and moving ------------------------------------------------
 
+  /**
+   * Which neighbours would grow over a card if it closed, as frozen copies.
+   *
+   * `null` when no row of neighbours matches a side, which is when `close`
+   * removes the card's slots instead.
+   */
   fill(id: string): Fill | null {
+    const found = this.fillOf(id);
+    return found && { ...found, cards: found.cards.map((c) => Object.freeze({ ...c })) };
+  }
+
+  /** The same, holding the cards themselves, so `close` can grow them. */
+  private fillOf(id: string): Fill | null {
     const card = this.find(id);
-    return card ? fillFor(this.list, card, this.fillOrder, this.sliceMemo) : null;
+    return card ? fillFor(this.list, card, this.order, this.sliceMemo) : null;
   }
 
   /**
@@ -904,7 +944,7 @@ export class Soksak {
 
   canClose(id: string): boolean {
     const card = this.removable(id);
-    return !!card && (!!this.fill(id) || this.soleSlots(card) !== null);
+    return !!card && (!!this.fillOf(id) || this.soleSlots(card) !== null);
   }
 
   /**
@@ -949,7 +989,7 @@ export class Soksak {
       }
     }
 
-    const filling = this.fill(id);
+    const filling = this.fillOf(id);
     if (filling) {
       const axis: Axis = filling.grow === 'c0' || filling.grow === 'c1' ? 'x' : 'y';
       const [lo, hi] = SPAN[axis];
@@ -1267,11 +1307,11 @@ export class Soksak {
   canMove(id: string, targetId: string, side: Side): boolean {
     const probe = new Soksak(this.toJSON(), {
       gap: this.gap,
-      minSize: this.minSize,
+      minSize: this.min,
       grabSize: this.grabSize,
       snapDistance: this.snapDistance,
       snap: this.snap,
-      fillOrder: this.fillOrder,
+      fillOrder: this.order,
       width: this.w,
       height: this.h,
     });
@@ -1302,6 +1342,13 @@ export class Soksak {
    * reports is what gets drawn. Run it wherever cards arrive or move.
    */
   private agreeSizes(): void {
+    // A card that is gone leaves nothing to pay back, and a trial operation
+    // that was rolled back leaves an entry for an id that never existed.
+    if (this.paidBy.size) {
+      const live = new Set(this.list.map((c) => c.id));
+      for (const id of this.paidBy.keys()) if (!live.has(id)) this.paidBy.delete(id);
+    }
+
     for (const card of this.list) {
       if (card.width !== undefined && card.c1 - card.c0 !== 1) delete card.width;
       if (card.height !== undefined && card.r1 - card.r0 !== 1) delete card.height;
