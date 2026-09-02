@@ -188,7 +188,8 @@ export declare class Soksak {
      * side of the boundary.
      *
      * A drag moves one boundary: the two slots meeting there change and no other
-     * slot does.
+     * slot does. `slot` and `pays` are the two slots a boundary separates, so
+     * they are always in range and never the same one.
      */
     private resizeSlot;
     /**

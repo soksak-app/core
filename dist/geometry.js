@@ -42,7 +42,7 @@ export function slotWidths(plane, axis) {
  * When the px sizes do not fit, they are scaled by one factor so the slots
  * still sum to the plane.
  */
-export function slotSizes(plane, axis, want) {
+export function slotSizes(plane, axis) {
     const a = lines(plane, axis);
     const count = a.length - 1;
     // The slot carries the corridor so a px size is the drawn width.
@@ -50,14 +50,9 @@ export function slotSizes(plane, axis, want) {
     const corridor = new Array(count);
     for (let i = 0; i < count; i++)
         corridor[i] = corridorOf(plane, axis, i, read);
-    // What each slot asks for. `want` names a width for a slot, or `null` to make
-    // it share; where it names nothing the cards in the slot answer.
+    // What each slot asks for: the px size the cards in it declare, or nothing,
+    // which makes it share what the others leave.
     const held = heldSizes(plane, axis);
-    if (want) {
-        for (let i = 0; i < count; i++)
-            if (want[i] !== undefined)
-                held[i] = want[i];
-    }
     let asked = 0; // px the held slots were told to be
     let taken = 0; // corridor those slots carry on top
     let sharedSpan = 0; // how the rest divide what is left

@@ -439,7 +439,8 @@ export class Soksak {
      * side of the boundary.
      *
      * A drag moves one boundary: the two slots meeting there change and no other
-     * slot does.
+     * slot does. `slot` and `pays` are the two slots a boundary separates, so
+     * they are always in range and never the same one.
      */
     resizeSlot(axis, slot, size, pays) {
         const width = slotWidths(this.plane, axis);
@@ -447,10 +448,6 @@ export class Soksak {
         this.declare(axis, slot, size);
         const want = [...width];
         want[slot] = size;
-        if (pays < 0 || pays >= want.length || pays === slot) {
-            this.setSlotWidths(axis, want);
-            return;
-        }
         if (heldSizes(this.plane, axis)[pays] !== null) {
             // Two px slots meet here: the one after gives up what the one before took.
             this.declare(axis, pays, Math.max(0, width[pays] - delta));

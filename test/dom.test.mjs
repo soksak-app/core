@@ -264,3 +264,149 @@ test("a render writes only what changed", () => {
   view.render("drag");
   assert.ok(writes > 0, "and a render that moves a card writes");
 });
+
+test("the keyboard moves and centres a boundary", () => {
+  const { window, host, grid, view } = mount();
+  const el = host.querySelector('.sp-divider[data-axis="x"]');
+  const key = (name) =>
+    el.dispatchEvent(new window.KeyboardEvent("keydown", { key: name, bubbles: true, cancelable: true }));
+
+  const from = grid.boundaryPos("x", 1);
+  key("ArrowRight");
+  assert.equal(grid.boundaryPos("x", 1), from + 8, "one step right");
+  key("ArrowLeft");
+  key("ArrowLeft");
+  assert.equal(grid.boundaryPos("x", 1), from - 8, "and back past where it started");
+
+  key("Home");
+  assert.equal(grid.boundaryPos("x", 1), from - 8, "a key it does not use changes nothing");
+
+  for (const name of ["Enter", " "]) {
+    grid.moveBoundary("x", 1, from + 200);
+    key(name);
+    assert.equal(grid.boundaryPos("x", 1), grid.centerBoundary("x", 1), `${name} centres it`);
+  }
+  view.destroy();
+});
+
+test("a double tap centres the boundary", () => {
+  const { window, host, grid, view } = mount();
+  const el = host.querySelector('.sp-divider[data-axis="x"]');
+  grid.moveBoundary("x", 1, grid.boundaryPos("x", 1) + 200);
+  const off = grid.boundaryPos("x", 1);
+
+  // Two presses inside the double-tap window, with no movement between them.
+  pointer(window, el, "pointerdown", 1, off, 300);
+  pointer(window, el, "pointerup", 1, off, 300);
+  pointer(window, el, "pointerdown", 1, off, 300);
+  pointer(window, el, "pointerup", 1, off, 300);
+
+  assert.notEqual(grid.boundaryPos("x", 1), off, "it moved");
+  assert.equal(grid.boundaryPos("x", 1), grid.centerBoundary("x", 1), "to the centre");
+  view.destroy();
+});
+
+test("a move with no button down ends the drag", () => {
+  const { window, host, grid, view } = mount();
+  const el = host.querySelector('.sp-divider[data-axis="x"]');
+  const from = grid.boundaryPos("x", 1);
+
+  pointer(window, el, "pointerdown", 1, from, 300);
+  pointer(window, el, "pointermove", 1, from - 100, 300);
+  const held = grid.boundaryPos("x", 1);
+  assert.equal(held, from - 100, "a move with the button down drags");
+
+  // The pointerup never arrives — the element lost the capture. The next move
+  // has no button down, and must end the drag rather than keep dragging.
+  el.dispatchEvent(
+    new window.PointerEvent("pointermove", { pointerId: 1, clientX: from - 400, clientY: 300, buttons: 0, bubbles: true }),
+  );
+  assert.equal(grid.boundaryPos("x", 1), held, "that move did not drag");
+  assert.equal(el.dataset.dragging, undefined, "and the drag is over");
+
+  el.dispatchEvent(
+    new window.PointerEvent("pointermove", { pointerId: 1, clientX: from - 500, clientY: 300, buttons: 1, bubbles: true }),
+  );
+  assert.equal(grid.boundaryPos("x", 1), held, "a later move does not resume it");
+  view.destroy();
+});
+
+test("a divider swept away mid-drag ends its drag", () => {
+  const { window, host, grid, view } = mount();
+  const born = grid.split("card", "y");
+  view.render();
+  const el = host.querySelector('.sp-divider[data-axis="y"]');
+  const from = grid.boundaryPos("y", 1);
+
+  pointer(window, el, "pointerdown", 1, 300, from);
+  pointer(window, el, "pointermove", 1, 300, from + 40);
+  assert.equal(el.dataset.dragging, "true");
+
+  // The host closes the card that boundary belonged to, and renders.
+  assert.equal(grid.close(born), true);
+  view.render();
+  assert.equal(el.isConnected, false, "the divider is gone");
+
+  const settled = grid.boundaryPos("x", 1);
+  const other = host.querySelector('.sp-divider[data-axis="x"]');
+  other.dispatchEvent(
+    new window.PointerEvent("pointermove", { pointerId: 1, clientX: 100, clientY: 300, buttons: 1, bubbles: true }),
+  );
+  assert.equal(grid.boundaryPos("x", 1), settled, "and no other divider inherits the drag");
+  view.destroy();
+});
+
+test("the view follows the host's size, and ignores a host with none", () => {
+  // jsdom has no ResizeObserver, so the block that reads the host's size had
+  // never run — including the guard its own comment warns about.
+  const dom = new JSDOM("<!doctype html><div id=host></div>", { pretendToBeVisual: true });
+  globalThis.document = dom.window.document;
+  const host = dom.window.document.getElementById("host");
+  let fire = () => {};
+  globalThis.ResizeObserver = class {
+    constructor(cb) {
+      fire = cb;
+    }
+    observe() {}
+    disconnect() {
+      fire = () => {};
+    }
+  };
+  const size = (w, h) => {
+    Object.defineProperty(host, "clientWidth", { value: w, configurable: true });
+    Object.defineProperty(host, "clientHeight", { value: h, configurable: true });
+  };
+
+  size(1000, 800);
+  const grid = new Soksak(undefined, { width: 1000, height: 800, gap: 24 });
+  grid.split("card", "x");
+  grid.setSize("card", "x", 300);
+  const reasons = [];
+  const view = new SoksakView(host, grid, {
+    createCard: () => dom.window.document.createElement("div"),
+    onChange: (reason) => reasons.push(reason),
+  });
+
+  size(600, 500);
+  fire();
+  assert.deepEqual([grid.width, grid.height], [600, 500], "the grid took the new size");
+  assert.ok(reasons.includes("resize"), "and the host was told");
+
+  // A hidden host reports nothing. Writing that in scaled every px size to zero
+  // and showing the host again did not bring them back.
+  size(0, 0);
+  fire();
+  assert.deepEqual([grid.width, grid.height], [600, 500], "a host with no layout is ignored");
+  assert.equal(grid.card("card").width, 300, "so the px size survives");
+
+  size(1000, 800);
+  fire();
+  assert.deepEqual([grid.width, grid.height], [1000, 800]);
+  assert.equal(grid.rect("card").w, 300, "and it is drawn at the size it declares");
+
+  view.destroy();
+  size(400, 400);
+  fire();
+  assert.deepEqual([grid.width, grid.height], [1000, 800], "a destroyed view stops observing");
+  delete globalThis.ResizeObserver;
+});

@@ -36,7 +36,7 @@ export declare function slotWidths(plane: Plane, axis: Axis): number[];
  * When the px sizes do not fit, they are scaled by one factor so the slots
  * still sum to the plane.
  */
-export declare function slotSizes(plane: Plane, axis: Axis, want?: readonly (number | null | undefined)[]): number[];
+export declare function slotSizes(plane: Plane, axis: Axis): number[];
 /** Every line position in px, index for index with the line array. */
 export declare function linePositions(plane: Plane, axis: Axis): number[];
 /**

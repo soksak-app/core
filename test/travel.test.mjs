@@ -167,3 +167,27 @@ test("standings includes the plane's borders", () => {
     "the last index places it at the far border",
   );
 });
+
+test("a travel that would leave a card with no area is refused", () => {
+  // The slot leaves one boundary and arrives at another, so the pair that gives
+  // the room and the pair that takes it are not the same. Found by fuzzing:
+  // it happens about ten times in eighteen thousand states.
+  const state = {
+    xs: [0, 0.04997858047175793, 0.22326102321984956, 0.5145381395124059, 1],
+    ys: [0, 0.5, 0.5, 1],
+    cards: [
+      { id: "left", c0: 1, c1: 2, r0: 0, r1: 3, fixed: true, width: 804.2623836009122 },
+      { id: "middle", c0: 2, c1: 3, r0: 0, r1: 3, fixed: false, width: 233 },
+      { id: "right", c0: 3, c1: 4, r0: 0, r1: 3, fixed: false },
+      { id: "rail", c0: 0, c1: 1, r0: 0, r1: 3, fixed: false },
+    ],
+  };
+  const grid = new Soksak(state, { width: 1117, height: 340, gap: 7, minSize: 47 });
+  const before = JSON.stringify(grid.toJSON());
+  const rects = JSON.stringify([...grid.rects()]);
+
+  assert.equal(grid.moveTo("rail", "x", 2), false, "the travel is refused");
+  assert.equal(JSON.stringify(grid.toJSON()), before, "and the arrangement is put back");
+  assert.equal(JSON.stringify([...grid.rects()]), rects, "down to the rects");
+  for (const [id, r] of grid.rects()) assert.ok(r.w > 0 && r.h > 0, `${id} still has area`);
+});

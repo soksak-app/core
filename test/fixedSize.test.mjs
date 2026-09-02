@@ -445,3 +445,51 @@ test("a plane too small for its cards draws the starved one with no width", () =
   assert.ok(Math.abs(box.get(id).x - middle) < 1e-9, `drawn at ${box.get(id).x}, not ${middle}`);
   assert.ok(card.c0 >= 0 && card.c1 <= xs.length - 1);
 });
+
+test("height is the same rule as width, on the other axis", () => {
+  // R2 promises one rule for both axes. Every other setSize test here works on
+  // x, so the y half of the code had never run.
+  const grid = new Soksak(undefined, { width: 1200, height: 900, gap: 24 });
+  const below = grid.split("card", "y", { id: "below" });
+  grid.split("card", "x", { id: "beside" });
+
+  assert.equal(grid.setSize("card", "y", 200), true);
+  assert.equal(grid.card("card").height, 200);
+  assert.equal(grid.rect("card").h, 200, "the px size is the drawn size on y too");
+  assert.equal(grid.card("beside").height, 200, "and every card in the slot takes it");
+  assert.equal(grid.rect(below).h, 900 - 200 - grid.gap, "the rest is what is left");
+
+  // Dragging the boundary beside it changes that size, as on x.
+  const from = grid.boundaryPos("y", 1);
+  assert.equal(grid.moveBoundary("y", 1, from + 50), from + 50);
+  assert.equal(grid.rect("card").h, 250);
+  assert.equal(grid.rect(below).h, 900 - 250 - grid.gap);
+
+  // And null gives the slot back to the share.
+  assert.equal(grid.setSize("card", "y", null), true);
+  assert.equal(grid.card("card").height, undefined);
+  assertTiling(grid, "after sizing on y");
+});
+
+test("the options are readable and writable after construction", () => {
+  const grid = new Soksak(undefined, { width: 1200, height: 900 });
+  assert.equal(grid.minSize, 96);
+  assert.equal(grid.fillOrder, "v");
+
+  // Half of 1200 less the corridor is 588, so 700 refuses and 96 does not.
+  grid.minSize = 700;
+  assert.equal(grid.minSize, 700);
+  assert.equal(grid.split("card", "x"), null, "a split that would go under it is refused");
+
+  for (const bad of [-1, NaN, Infinity]) {
+    grid.minSize = bad;
+    assert.equal(grid.minSize, 700, `${bad} is ignored`);
+  }
+  grid.minSize = 96;
+  assert.ok(grid.split("card", "x"), "and lowering it lets the split through");
+
+  grid.fillOrder = "h";
+  assert.equal(grid.fillOrder, "h");
+  grid.fillOrder = "sideways";
+  assert.equal(grid.fillOrder, "h", "a value that is not an axis order is ignored");
+});

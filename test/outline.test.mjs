@@ -113,3 +113,33 @@ test("the loop runs outside every rect it binds", () => {
   }
   assert.equal(inside, 0);
 });
+
+test("the radius drawn at a corner is the one asked for, and which kind it is", () => {
+  // An L: six corners, five convex and one reflex. Swapping the two radii, or
+  // scaling either, changes the arcs and nothing else, so the path must be read
+  // for the values and not only counted.
+  const shape = outline(
+    [
+      { x: 0, y: 0, w: 400, h: 100 },
+      { x: 0, y: 100, w: 100, h: 300 },
+    ],
+    { pad: 0, radius: 30, innerRadius: 8 },
+  );
+  assert.equal(shape.loops.length, 1);
+  assert.equal(shape.loops[0].length, 6);
+  assert.equal(shape.sharp, 0);
+
+  const radii = [...shape.path.matchAll(/A([\d.]+) /g)].map((m) => Number(m[1])).sort((a, b) => a - b);
+  assert.equal(radii.length, 6, "one arc per corner");
+  assert.deepEqual(radii, [8, 30, 30, 30, 30, 30], "one reflex corner at 8, five convex at 30");
+
+  // The cap: half the shorter of the two sides meeting there.
+  const tight = outline([{ x: 0, y: 0, w: 400, h: 40 }], { pad: 0, radius: 100, innerRadius: 4 });
+  const capped = [...tight.path.matchAll(/A([\d.]+) /g)].map((m) => Number(m[1]));
+  assert.deepEqual(capped, [20, 20, 20, 20], "capped at half the 40px side");
+
+  // Below half a px it is cut straight and counted.
+  const flat = outline([{ x: 0, y: 0, w: 400, h: 0.6 }], { pad: 0, radius: 30, innerRadius: 4 });
+  assert.equal(flat.sharp, 4);
+  assert.equal([...flat.path.matchAll(/A/g)].length, 0, "and no arc is emitted");
+});
