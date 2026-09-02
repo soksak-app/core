@@ -71,13 +71,11 @@ export interface Rule extends Rect {
     line: number;
     virtual: boolean;
 }
-/** A place to grab a boundary, and what dragging it changes. */
+/** A place to grab a boundary. */
 export interface Divider extends Rect {
     key: string;
     axis: Axis;
     line: number;
-    /** The card whose fixed size this drag changes, if any. */
-    resizes?: string;
 }
 /**
  * Everything to draw for the boundaries.
@@ -88,13 +86,13 @@ export interface Divider extends Rect {
  */
 export declare function rules(plane: Plane): Rule[];
 /**
- * Where a boundary can be grabbed, and which card a drag there resizes.
+ * Where a boundary can be grabbed.
  *
  * Only where cards break on the line — elsewhere a card spans across it and
  * there is nothing between two things to take hold of. The grab area is kept
  * apart from the corridor so a zero gap is still grabbable.
  */
-export declare function dividers(plane: Plane, grabSize: number, holder: (axis: Axis, line: number) => string | undefined): Divider[];
+export declare function dividers(plane: Plane, grabSize: number): Divider[];
 /**
  * Where a drop lands: which card, and which part of it.
  *
@@ -123,4 +121,3 @@ export interface ZoneOptions {
 }
 export declare function zoneAt(plane: Plane, x: number, y: number, options?: ZoneOptions): ZoneHit | null;
 /** Every axis a card is measured on, for a caller that treats both alike. */
-export declare const axes: readonly Axis[];

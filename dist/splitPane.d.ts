@@ -85,18 +85,20 @@ export declare class Soksak {
      */
     setData(id: string, data: unknown): boolean;
     /**
-     * Declare whether the layout may move a card — one half of its role.
+     * Declare whether the layout may move a card — its whole role.
      *
-     * The other half is `setSize`. Reaching into what `cards` handed back was how
-     * a host used to say either, which meant writing to the state to do it.
+     * Reaching into what `cards` handed back was how a host used to say it, which
+     * meant writing to the state to do it.
      */
     setFixed(id: string, fixed: boolean): boolean;
     /**
-     * Declare a card's size along one axis in px, or `null` to let it share.
+     * Set how many px wide or tall a card is drawn, or `null` to let it take a
+     * share of what is left.
      *
-     * A px size describes one slot, so a card reaching across two cannot hold
-     * one. Nor may the last card sharing an axis stop sharing: the held sizes
-     * would not add up to the plane and the difference would belong to no one.
+     * A width describes one slot, so a card reaching across two cannot carry one.
+     * Nothing else about the card changes: it is refused no operation for having
+     * a number, and when the plane cannot afford the numbers it was given they
+     * all scale together.
      */
     setSize(id: string, axis: Axis, px: number | null): boolean;
     /** The card itself, for the operations that change it. */
@@ -125,10 +127,9 @@ export declare class Soksak {
     virtualCount(): number;
     isSlicing(list?: readonly Span[]): boolean;
     /**
-     * The card a boundary resizes, if the slot on either side is held at a fixed
-     * size. The card before it answers first, so dragging a sidebar's inner edge
-     * resizes the sidebar rather than the pane beside it — one rule, so a drag is
-     * never a guess.
+     * The card whose width a drag at this boundary changes, if the slot before it
+     * carries one. Every card standing in that slot follows — a slot has one
+     * width — so this names where the change lands, not who it belongs to.
      */
     private holderAt;
     /** Everything to draw for the boundaries. */
@@ -155,7 +156,6 @@ export declare class Soksak {
      */
     hasBoundary(axis: Axis, line: number): boolean;
     boundaryRange(axis: Axis, line: number): [number, number];
-    private inset;
     /**
      * Move a boundary to a position in px.
      *
@@ -280,7 +280,7 @@ export declare class Soksak {
      * nothing to repair afterwards. Dragging a boundary can never change the
      * answer; only splitting and closing can.
      */
-    canInsertAt(axis: Axis, line: number): boolean;
+    canInsertAt(axis: Axis, line: number, without?: string): boolean;
     /**
      * Put a card at a boundary, reaching across the whole plane.
      *
@@ -336,8 +336,16 @@ export declare class Soksak {
      * `line` is a boundary in the arrangement as it stands now.
      */
     moveTo(id: string, axis: Axis, line: number): boolean;
-    /** Every boundary a plane-spanning card could stand on. */
-    standings(axis: Axis): number[];
+    /**
+     * Every boundary a plane-spanning card could stand on.
+     *
+     * `without` ignores one card when asking, which is how a card already
+     * standing somewhere finds out where else it could stand — its own boundaries
+     * are candidates, and it does not block itself. A host had been taking the
+     * card out of a copy of the state to ask this, which is a question the
+     * library should answer rather than a hole the host should reach through.
+     */
+    standings(axis: Axis, without?: string): number[];
     /**
      * Move a card to sit on one side of another — the drag-and-drop operation.
      *

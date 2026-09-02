@@ -77,9 +77,8 @@ test("resizing the plane moves the sharing cards only", () => {
 
 test("dragging the boundary beside a fixed card resizes that card", () => {
   const grid = edges();
-  const divider = grid.dividers().find((d) => d.axis === "x" && d.line === 1);
-  assert.equal(divider.resizes, "left", "the boundary says whose size it changes");
-
+  // A divider is a place to grab a line; it does not announce whose size it
+  // changes. What the drag does is the thing to check.
   const linesBefore = grid.lines("x");
   grid.moveBoundary("x", 1, 260);
   assert.equal(grid.boundaryPos("x", 1), 260, "the boundary landed where it was dropped");
@@ -165,10 +164,11 @@ test("a boundary between two fixed cards belongs to the one before it", () => {
     },
     { width: W, height: H },
   );
-  const divider = grid.dividers().find((d) => d.axis === "x" && d.line === 1);
-  assert.equal(divider.resizes, "left", "one rule picks it, so a drag is never a guess");
 
   grid.moveBoundary("x", 1, 230);
+  // One rule picks which side a drag changes, so it is never a guess: the slot
+  // before the boundary. Every card standing in that slot follows — a slot has
+  // one width.
   assert.equal(grid.boundaryPos("x", 1), 230, "the card before took the change");
   assert.equal(grid.card("rail").width, 190, "the one after kept its size and moved along");
   assertTiling(grid, "between two fixed cards");

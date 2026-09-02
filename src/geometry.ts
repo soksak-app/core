@@ -204,13 +204,11 @@ export interface Rule extends Rect {
   virtual: boolean;
 }
 
-/** A place to grab a boundary, and what dragging it changes. */
+/** A place to grab a boundary. */
 export interface Divider extends Rect {
   key: string;
   axis: Axis;
   line: number;
-  /** The card whose fixed size this drag changes, if any. */
-  resizes?: string;
 }
 
 /**
@@ -249,27 +247,26 @@ export function rules(plane: Plane): Rule[] {
 }
 
 /**
- * Where a boundary can be grabbed, and which card a drag there resizes.
+ * Where a boundary can be grabbed.
  *
  * Only where cards break on the line — elsewhere a card spans across it and
  * there is nothing between two things to take hold of. The grab area is kept
  * apart from the corridor so a zero gap is still grabbable.
  */
-export function dividers(plane: Plane, grabSize: number, holder: (axis: Axis, line: number) => string | undefined): Divider[] {
+export function dividers(plane: Plane, grabSize: number): Divider[] {
   const out: Divider[] = [];
   const hit = Math.max(plane.gap, grabSize);
   for (const axis of AXES) {
     const along = linePositions(plane, axis);
     const other: Axis = axis === 'x' ? 'y' : 'x';
     for (const line of interiorLines(plane, axis)) {
-      const resizes = holder(axis, line);
       for (const [from, to] of boundarySpans(plane, axis, line)) {
         const start = edgePos(plane, other, from, 'lo');
         const end = edgePos(plane, other, to, 'hi');
         out.push(
           axis === 'x'
-            ? { key: `x:${line}:${from}`, axis, line, resizes, x: along[line] - hit / 2, y: start, w: hit, h: end - start }
-            : { key: `y:${line}:${from}`, axis, line, resizes, x: start, y: along[line] - hit / 2, w: end - start, h: hit },
+            ? { key: `x:${line}:${from}`, axis, line, x: along[line] - hit / 2, y: start, w: hit, h: end - start }
+            : { key: `y:${line}:${from}`, axis, line, x: start, y: along[line] - hit / 2, w: end - start, h: hit },
         );
       }
     }
@@ -333,4 +330,3 @@ export function zoneAt(plane: Plane, x: number, y: number, options: ZoneOptions 
 }
 
 /** Every axis a card is measured on, for a caller that treats both alike. */
-export const axes = AXES;

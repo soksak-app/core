@@ -179,9 +179,10 @@ keeps the original card and its near half; the new card takes the far half.
 ```
 
 Dragging a divider moves the boundary. Double-clicking it (or Enter/Space when
-focused) centres it so the two cards beside it come out the same size. That holds
-beside a card with a fixed width too — a width is a number and a number has a
-half.
+focused) centres it so the two cards beside it come out the same size. That
+holds beside a card with a fixed width too — a width is a number and a number
+has a half. A host that does not want a sidebar centred by a double-click should
+not hand that divider the gesture.
 
 **A card's child can inflate the rect the view set.** A flex or grid child
 defaults to `min-width: auto`, so a column stretches to min-content and the
@@ -197,7 +198,7 @@ to a card holding its slot at a fixed size it changes that size, and anywhere
 else it moves the line and both sides follow.
 
 ```js
-grid.dividers();                       // each says `resizes` when it changes a card's size
+grid.dividers();                       // where each boundary can be grabbed
 grid.boundaryPos("x", 1);              // px
 grid.boundaryRange("x", 1);            // [min, max] px, before something hits minSize
 grid.moveBoundary("x", 1, 260);        // px

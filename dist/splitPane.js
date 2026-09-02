@@ -99,10 +99,10 @@ export class Soksak {
         return true;
     }
     /**
-     * Declare whether the layout may move a card — one half of its role.
+     * Declare whether the layout may move a card — its whole role.
      *
-     * The other half is `setSize`. Reaching into what `cards` handed back was how
-     * a host used to say either, which meant writing to the state to do it.
+     * Reaching into what `cards` handed back was how a host used to say it, which
+     * meant writing to the state to do it.
      */
     setFixed(id, fixed) {
         const card = this.find(id);
@@ -112,11 +112,13 @@ export class Soksak {
         return true;
     }
     /**
-     * Declare a card's size along one axis in px, or `null` to let it share.
+     * Set how many px wide or tall a card is drawn, or `null` to let it take a
+     * share of what is left.
      *
-     * A px size describes one slot, so a card reaching across two cannot hold
-     * one. Nor may the last card sharing an axis stop sharing: the held sizes
-     * would not add up to the plane and the difference would belong to no one.
+     * A width describes one slot, so a card reaching across two cannot carry one.
+     * Nothing else about the card changes: it is refused no operation for having
+     * a number, and when the plane cannot afford the numbers it was given they
+     * all scale together.
      */
     setSize(id, axis, px) {
         const card = this.find(id);
@@ -124,7 +126,6 @@ export class Soksak {
             return false;
         if (px !== null && (!Number.isFinite(px) || px < 0 || spanOf(card, axis) !== 1))
             return false;
-        const before = this.toJSON();
         if (axis === 'x') {
             if (px === null)
                 delete card.width;
@@ -206,10 +207,9 @@ export class Soksak {
     }
     // ---- boundaries --------------------------------------------------------
     /**
-     * The card a boundary resizes, if the slot on either side is held at a fixed
-     * size. The card before it answers first, so dragging a sidebar's inner edge
-     * resizes the sidebar rather than the pane beside it — one rule, so a drag is
-     * never a guess.
+     * The card whose width a drag at this boundary changes, if the slot before it
+     * carries one. Every card standing in that slot follows — a slot has one
+     * width — so this names where the change lands, not who it belongs to.
      */
     holderAt(axis, line) {
         const [lo, hi] = SPAN[axis];
@@ -223,7 +223,7 @@ export class Soksak {
         return rules(this.plane);
     }
     dividers() {
-        return dividers(this.plane, this.grabSize, (axis, line) => { var _a; return (_a = this.holderAt(axis, line)) === null || _a === void 0 ? void 0 : _a.id; });
+        return dividers(this.plane, this.grabSize);
     }
     /** Where a boundary is now, in px along its axis. */
     boundaryPos(axis, line) {
@@ -262,19 +262,14 @@ export class Soksak {
         let min = (_a = along[this.realNeighbour(axis, line, -1)]) !== null && _a !== void 0 ? _a : 0;
         let max = (_b = along[this.realNeighbour(axis, line, 1)]) !== null && _b !== void 0 ? _b : this.size(axis);
         for (const card of this.list) {
-            const near = this.inset(axis, card[lo], 'lo');
-            const far = this.inset(axis, card[hi], 'hi');
+            const near = inset(this.plane, axis, card[lo], 'lo');
+            const far = inset(this.plane, axis, card[hi], 'hi');
             if (card[hi] === line)
                 min = Math.max(min, along[card[lo]] + this.minSize + near + far);
             if (card[lo] === line)
                 max = Math.min(max, along[card[hi]] - this.minSize - near - far);
         }
         return [min, max];
-    }
-    inset(axis, index, side) {
-        const a = this.arr(axis);
-        const flush = side === 'lo' ? index === 0 : index === a.length - 1;
-        return flush ? 0 : this.gap / 2;
     }
     /**
      * Move a boundary to a position in px.
@@ -403,16 +398,16 @@ export class Soksak {
         const [lo, hi] = SPAN[axis];
         let start = (_a = along[line - 1]) !== null && _a !== void 0 ? _a : 0;
         let end = (_b = along[line + 1]) !== null && _b !== void 0 ? _b : this.size(axis);
-        let insStart = this.inset(axis, line - 1, 'lo');
-        let insEnd = this.inset(axis, line + 1, 'hi');
+        let insStart = inset(this.plane, axis, line - 1, 'lo');
+        let insEnd = inset(this.plane, axis, line + 1, 'hi');
         for (const card of this.list) {
             if (card[hi] === line && along[card[lo]] >= start) {
                 start = along[card[lo]];
-                insStart = this.inset(axis, card[lo], 'lo');
+                insStart = inset(this.plane, axis, card[lo], 'lo');
             }
             if (card[lo] === line && along[card[hi]] <= end) {
                 end = along[card[hi]];
-                insEnd = this.inset(axis, card[hi], 'hi');
+                insEnd = inset(this.plane, axis, card[hi], 'hi');
             }
         }
         return this.moveBoundary(axis, line, (start + end) / 2 + (insStart - insEnd) / 2, false);
@@ -491,8 +486,8 @@ export class Soksak {
         const per = own !== null ? own / (a[card[hi]] - a[card[lo]] || 1) : this.sharedExtent(axis);
         if (per <= EPS)
             return null;
-        const lowest = a[card[lo]] + (this.minSize + this.inset(axis, card[lo], 'lo') + this.gap / 2) / per;
-        const highest = a[card[hi]] - (this.minSize + this.gap / 2 + this.inset(axis, card[hi], 'hi')) / per;
+        const lowest = a[card[lo]] + (this.minSize + inset(this.plane, axis, card[lo], 'lo') + this.gap / 2) / per;
+        const highest = a[card[hi]] - (this.minSize + this.gap / 2 + inset(this.plane, axis, card[hi], 'hi')) / per;
         if (lowest > highest)
             return null;
         const mid = (a[card[lo]] + a[card[hi]]) / 2;
@@ -763,11 +758,11 @@ export class Soksak {
      * nothing to repair afterwards. Dragging a boundary can never change the
      * answer; only splitting and closing can.
      */
-    canInsertAt(axis, line) {
+    canInsertAt(axis, line, without) {
         const a = this.arr(axis);
         if (!Number.isInteger(line) || line < 0 || line > a.length - 1)
             return false;
-        return this.cardsCrossing(axis, line).length === 0;
+        return this.cardsCrossing(axis, line).every((c) => c.id === without);
     }
     /**
      * Put a card at a boundary, reaching across the whole plane.
@@ -939,11 +934,19 @@ export class Soksak {
         this.changed();
         return true;
     }
-    /** Every boundary a plane-spanning card could stand on. */
-    standings(axis) {
+    /**
+     * Every boundary a plane-spanning card could stand on.
+     *
+     * `without` ignores one card when asking, which is how a card already
+     * standing somewhere finds out where else it could stand — its own boundaries
+     * are candidates, and it does not block itself. A host had been taking the
+     * card out of a copy of the state to ask this, which is a question the
+     * library should answer rather than a hole the host should reach through.
+     */
+    standings(axis, without) {
         const out = [];
         for (const k of interiorLines(this.plane, axis))
-            if (this.canInsertAt(axis, k))
+            if (this.canInsertAt(axis, k, without))
                 out.push(k);
         return out;
     }

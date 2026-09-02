@@ -13,7 +13,7 @@
  * have built.
  */
 
-import { SPAN, fixedSize } from './card.js';
+import { SPAN } from './card.js';
 import type { Axis, Card } from './card.js';
 
 /** Just the extent of a card. Slicing is a question about regions, not identity. */

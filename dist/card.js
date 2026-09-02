@@ -3,8 +3,13 @@
  *
  * Everything on the plane is a card — a sidebar, a rail, a terminal. One type,
  * one rect rule, one corridor, one radius, one outline. A role is one answer:
- * whether the layout moves it — split, close and move, or never. A card may
- * also carry a `width`, which is an attribute and not a second kind of card.
+ * whether the layout moves it — split, close and move, or never.
+ *
+ * A card may also carry a `width` or a `height`, which is how many px it is
+ * drawn at while the plane can afford it. That is an attribute, not a second
+ * kind of card: nothing in this library refuses an operation because a card has
+ * one. Naming those cards a kind is what produced five rules that could only be
+ * stated with the name, and all five were wrong.
  *
  * That is what makes a sidebar and a terminal the same object. A sidebar at the
  * window's edge is a card holding the first column; the same card holding a
