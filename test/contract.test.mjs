@@ -16,19 +16,23 @@ test("everything the API hands back is a copy the host may keep", () => {
   const grid = three();
   grid.split("terminal", "x", { id: "editor", data: { pty: 3 } });
 
+  // `browser` spans the line the split just made, so cardsCrossing has someone
+  // to answer with. Without that the loop below skipped it.
+  const crossing = grid.cardsCrossing("x", 2);
+  assert.equal(crossing.length, 1, "a card spans the new line");
   for (const [what, got] of [
     ["cards", grid.cards[0]],
     ["card()", grid.card("terminal")],
-    ["cardsCrossing", grid.cardsCrossing("x", 1)[0]],
+    ["cardsCrossing", crossing[0]],
     ["fill().cards", grid.fill("terminal")?.cards[0]],
   ]) {
-    if (!got) continue;
+    assert.ok(got, `${what} answered`);
     assert.equal(Object.isFrozen(got), true, `${what} is frozen`);
   }
 
   // Writing to one changes nothing, whether it throws or is ignored.
   const rects = JSON.stringify([...grid.rects()]);
-  for (const got of [grid.cards[0], grid.card("terminal"), ...grid.cardsCrossing("x", 1)]) {
+  for (const got of [grid.cards[0], grid.card("terminal"), ...crossing]) {
     try {
       got.r0 = 0;
       got.width = 9;
@@ -196,10 +200,28 @@ test("the arguments each method reads are the ones it is given", () => {
   assert.equal(grid.insertAt("x", 1, { size: grid.width }), null, "the whole plane");
   assert.equal(grid.insertAt("x", 1, { size: grid.width + 1 }), null, "more than it");
 
-  // mergeCoincident refuses while a card spans the pair.
+  // mergeCoincident needs two lines at one coordinate, and refuses even then
+  // while a card stands in the slot between them: folding would leave it with
+  // no span at all.
   const lines = grid.lines("x").length;
-  assert.equal(grid.mergeCoincident("x", 1), false, "the lines do not coincide");
+  assert.equal(grid.mergeCoincident("x", 1), false, "these lines do not coincide");
   assert.equal(grid.lines("x").length, lines, "and nothing was folded");
+
+  const thin = new Soksak(
+    { xs: [0, 0.4, 0.4, 1], ys: [0, 1], cards: [
+      { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
+      { id: "thin", c0: 1, c1: 2, r0: 0, r1: 1 },
+      { id: "b", c0: 2, c1: 3, r0: 0, r1: 1 },
+    ] },
+    { width: 1200, height: 600, gap: 24, minSize: 0 },
+  );
+  assert.equal(thin.lines("x")[1], thin.lines("x")[2], "two lines at one coordinate");
+  assert.equal(thin.rect("thin").w, 0, "with a card between them");
+  for (const line of [1, 2]) {
+    assert.equal(thin.mergeCoincident("x", line), false, `folding at ${line} would lose thin`);
+  }
+  assert.equal(thin.lines("x").length, 4, "so both lines are still there");
+  assert.ok(thin.card("thin"), "and the card is still there");
 });
 
 test("zoneAt returns nothing for a point that is not one", () => {
@@ -214,14 +236,19 @@ test("outline's radius follows pad, and it reports its corners", () => {
   const one = outline([{ x: 0, y: 0, w: 200, h: 200 }], { pad: 16 });
   assert.equal(one.corners, 4, "a rect has four");
   assert.equal(one.sharp, 0);
-  // The default radius is `pad`, so a padded rect is drawn flush with a square
-  // card: the arc radius equals the padding.
-  const radii = [...one.path.matchAll(/A([\d.]+) /g)].map((m) => Number(m[1]));
-  assert.deepEqual(radii, [16, 16, 16, 16]);
-
-  const named = outline([{ x: 0, y: 0, w: 200, h: 200 }], { pad: 16, radius: 40 });
+  // The default radius is `pad` itself, so a padded rect is drawn flush with a
+  // square card. A pad below any floor is what shows that: at 16 a default of
+  // `max(4, pad)` looks the same.
+  const arcs = (shape) => [...shape.path.matchAll(/A([\d.]+) /g)].map((m) => Number(m[1]));
+  assert.deepEqual(arcs(one), [16, 16, 16, 16]);
   assert.deepEqual(
-    [...named.path.matchAll(/A([\d.]+) /g)].map((m) => Number(m[1])),
+    arcs(outline([{ x: 0, y: 0, w: 200, h: 200 }], { pad: 2 })),
+    [2, 2, 2, 2],
+    "a small pad gives a small radius",
+  );
+
+  assert.deepEqual(
+    arcs(outline([{ x: 0, y: 0, w: 200, h: 200 }], { pad: 16, radius: 40 })),
     [40, 40, 40, 40],
     "and a named radius wins",
   );

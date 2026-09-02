@@ -442,9 +442,13 @@ test("the view calls back and honours its options", () => {
     assert.ok(el, `${rule.key} has an element marked with what it is`);
   }
 
+  const ids = grid.cards.map((c) => c.id);
   view.destroy();
-  assert.deepEqual(gone.sort(), grid.cards.map((c) => c.id).sort(), "destroyCard for each card");
+  assert.deepEqual(gone.sort(), [...ids].sort(), "destroyCard for each card");
   assert.equal(host.children.length, 0, "and every element it made is gone");
+  // Removed from the document is not the same as let go of: a view that keeps
+  // its map still returns them and keeps them alive.
+  for (const id of ids) assert.equal(view.element(id), undefined, `${id} is released`);
 });
 
 test("rules: false draws no rules and still draws the grab areas", () => {

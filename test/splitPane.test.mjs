@@ -244,12 +244,18 @@ test("a state that cannot describe a plane is refused, and names the fault", () 
 
 test("a side the caller made up is refused", () => {
   const grid = new Soksak(undefined, { width: 1600, height: 1000 });
-  const before = JSON.stringify(grid.toJSON());
   // axisOf returns "y" for anything but left and right, so a misspelled side
   // would split downward without saying so.
+  const other = grid.split("card", "x", { id: "other" });
+  assert.ok(other, "two cards to move between");
   assert.equal(grid.splitToward("card", "sideways", { id: "q" }), null);
-  assert.equal(grid.move("card", "card", "sideways"), false);
-  assert.equal(JSON.stringify(grid.toJSON()), before);
+  // Two different cards: moving a card onto itself is refused for its own
+  // reason, so it does not name the side.
+  assert.equal(grid.move("card", other, "sideways"), false, "a side that is not one");
+  assert.equal(grid.canMove("card", other, "sideways"), false);
+  const before = JSON.stringify(grid.toJSON());
+  assert.equal(grid.move("card", other, "sideways"), false);
+  assert.equal(JSON.stringify(grid.toJSON()), before, "and nothing changed");
   assert.equal(typeof grid.splitToward("card", "left", { id: "q" }), "string");
 });
 

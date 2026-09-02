@@ -1159,7 +1159,7 @@ export class Soksak {
     if (this.noAxis(axis)) return null;
     if (init?.id !== undefined && this.find(init.id)) return null;
     const plane = this.size(axis);
-    if (!Number.isFinite(init?.size) || init.size < 0 || init.size >= plane) return null;
+    if (!Number.isFinite(init?.size) || init.size < 0) return null;
     if (!this.canInsertAt(axis, line)) return null;
     const was = this.extents(axis);
     const undo = this.toJSON();
@@ -1392,7 +1392,8 @@ export class Soksak {
    * lands spanning one slot on that axis.
    */
   move(id: string, targetId: string, side: Side): boolean {
-    if (!SIDES.includes(side)) return false;
+    // A side that is not one is refused by `splitToward` below, and the close
+    // before it is put back, so this needs no check of its own.
     const card = this.find(id);
     const target = this.find(targetId);
     if (!card || !target || card === target || card.fixed) return false;
