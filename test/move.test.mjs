@@ -29,7 +29,7 @@ test("splitToward puts the new card on the side that was named", () => {
   }
 });
 
-test("a move takes the card and its payload to the target's side", () => {
+test("move takes the card and its data to the target side", () => {
   const grid = three();
   grid.setData("terminal", { live: "pty-1" });
   grid.setData("browser", { live: "webview-1" });
@@ -43,7 +43,7 @@ test("a move takes the card and its payload to the target's side", () => {
   assertTiling(grid, "after the move");
 });
 
-test("the card ends up on the side asked for", () => {
+test("move places the card on the named side", () => {
   for (const side of ["left", "right", "top", "bottom"]) {
     const grid = three();
     grid.split("browser", "y");
@@ -61,7 +61,7 @@ test("the card ends up on the side asked for", () => {
   }
 });
 
-test("a refused move changes nothing at all", () => {
+test("a refused move changes nothing", () => {
   const grid = three();
   const before = JSON.stringify(grid.toJSON());
 
@@ -81,7 +81,7 @@ test("a refused move changes nothing at all", () => {
   assert.equal(JSON.stringify(grid.toJSON()), before, "every refusal left the grid untouched");
 });
 
-test("canMove answers without moving anything", () => {
+test("canMove does not change the state", () => {
   const grid = three();
   grid.split("browser", "y");
   const target = grid.cards.at(-1).id;
@@ -92,7 +92,7 @@ test("canMove answers without moving anything", () => {
   assert.equal(grid.move("terminal", target, "right"), answer, "and the answer was right");
 });
 
-test("moving keeps the arrangement slicing, so every card still closes", () => {
+test("moving leaves a slicing arrangement", () => {
   let rng = 20260902;
   const next = () => (rng = (rng * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
   for (let seed = 0; seed < 40; seed++) {
@@ -117,13 +117,12 @@ test("moving keeps the arrangement slicing, so every card still closes", () => {
   }
 });
 
-test("a card keeps its identity through a split on either side", () => {
+test("a split does not change which card holds which id", () => {
   const grid = three();
   grid.setData("terminal", { live: "pty-1" });
 
   const born = grid.splitToward("terminal", "left", { data: { live: "pty-2" } });
-  // A host keeps ids and hands them back. Swapping which card wears which id
-  // was how a live surface ended up behind a name that no longer meant it.
+  // A host holds ids, so a split must not swap which card carries which id.
   assert.equal(grid.card("terminal").id, "terminal", "its name did not change underneath");
   assert.deepEqual(grid.card("terminal").data, { live: "pty-1" }, "nor did what it holds");
   assert.deepEqual(grid.card(born).data, { live: "pty-2" });
@@ -133,7 +132,7 @@ test("a card keeps its identity through a split on either side", () => {
   assertTiling(grid, "after splitting toward the left");
 });
 
-test("nothing a host is holding has its id rewritten", () => {
+test("no existing id is reassigned", () => {
   const grid = three();
   const seen = new Map(grid.cards.map((c) => [c, c.id]));
   grid.splitToward("terminal", "top", { data: {} });

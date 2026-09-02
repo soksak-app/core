@@ -1,26 +1,17 @@
 /**
- * A card, and what a role means.
+ * Card types.
  *
- * Everything on the plane is a card — a sidebar, a rail, a terminal. One type,
- * one rect rule, one corridor, one radius, one outline. A role is one answer:
- * whether the layout moves it — split, close and move, or never.
+ * Every element on the plane is a card: sidebar, rail, and pane use one type.
+ * A card occupies a span of slots on each axis.
  *
- * A card may also carry a `width` or a `height`, which is how many px it is
- * drawn at while the plane can afford it. That is an attribute, not a second
- * kind of card: nothing in this library refuses an operation because a card has
- * one. Naming those cards a kind is what produced five rules that could only be
- * stated with the name, and all five were wrong.
- *
- * That is what makes a sidebar and a terminal the same object. A sidebar at the
- * window's edge is a card holding the first column; the same card holding a
- * middle column is a rail standing between panes. There is no second kind of
- * thing to keep in step, and no line to check — a card occupies its columns, so
- * nothing can cross it.
+ * `fixed` sets whether the layout may split, close or move the card.
+ * `width` and `height` set how many px a card is drawn at when the plane has
+ * the room; otherwise the card takes a share of what is left.
  */
 
 export type Axis = 'x' | 'y';
 
-/** Which side of a card something goes on. `left` and `top` land ahead of it. */
+/** Which side of a card to place on. */
 export type Side = 'left' | 'right' | 'top' | 'bottom';
 
 export interface Rect {
@@ -39,17 +30,15 @@ export interface CardInit {
   r0: number;
   r1: number;
   /**
-   * Takes this many px across instead of a share of what is left.
-   *
-   * Only a card holding a single column can fix its width — one spanning several
-   * is taking a share of them, and there would be no one slot to fix.
+   * Width in px, instead of a share of what is left.
+   * Applies only to a card spanning one column.
    */
   width?: number;
-  /** Takes this many px down instead of a share of what is left. */
+  /** Height in px, instead of a share of what is left. Spans one row. */
   height?: number;
-  /** A card the layout never splits, closes, moves, or grows into a gap. */
+  /** When true, the layout does not split, close, move or grow this card. */
   fixed?: boolean;
-  /** Anything the host wants to carry along. Never read by this library. */
+  /** Host payload. This library does not read it. */
   data?: unknown;
 }
 
@@ -57,13 +46,13 @@ export interface Card extends CardInit {
   fixed: boolean;
 }
 
-/** The pair of span keys an axis is measured by. */
+/** Span keys for an axis. */
 export const SPAN: Record<Axis, readonly ['c0' | 'r0', 'c1' | 'r1']> = {
   x: ['c0', 'c1'],
   y: ['r0', 'r1'],
 };
 
-/** The pair for the other axis — a card's extent across the one being measured. */
+/** Span keys for the other axis. */
 export const CROSS: Record<Axis, readonly ['c0' | 'r0', 'c1' | 'r1']> = {
   x: ['r0', 'r1'],
   y: ['c0', 'c1'],
@@ -74,16 +63,16 @@ export const AXES: readonly Axis[] = ['x', 'y'];
 export const axisOf = (side: Side): Axis =>
   side === 'left' || side === 'right' ? 'x' : 'y';
 
-/** Whether a side lands ahead of the card it names. */
+/** True when the side is before the card on its axis. */
 export const isAhead = (side: Side): boolean => side === 'left' || side === 'top';
 
-/** How many slots a card spans along an axis. One means it can hold that slot. */
+/** Number of slots the card spans on an axis. */
 export const spanOf = (card: Card, axis: Axis): number => {
   const [lo, hi] = SPAN[axis];
   return card[hi] - card[lo];
 };
 
-/** The fixed size a card declares along an axis, or null when it takes a share. */
+/** The px size set on an axis, or null when the card takes a share. */
 export function fixedSize(card: Card, axis: Axis): number | null {
   if (spanOf(card, axis) !== 1) return null;
   const size = axis === 'x' ? card.width : card.height;

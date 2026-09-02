@@ -4,7 +4,7 @@ import test from "node:test";
 import { outline } from "../dist/index.js";
 import { assertTiling, fuzz, three } from "./helpers.mjs";
 
-test("splitting alone never produces a card no neighbour can fill", () => {
+test("splitting always leaves a slicing arrangement", () => {
   // Replacing one card with two can only build a slicing floorplan, and a
   // pinwheel — the shape that strands a card — is the canonical non-slicing one.
   for (let seed = 0; seed < 40; seed++) {
@@ -22,7 +22,7 @@ test("splitting alone never produces a card no neighbour can fill", () => {
   }
 });
 
-test("split, close, drag and merge in any order keep every invariant", () => {
+test("every invariant holds after split, close, drag and merge", () => {
   for (let seed = 0; seed < 60; seed++) {
     const grid = three();
     fuzz(grid, seed, 150);
@@ -36,7 +36,7 @@ test("split, close, drag and merge in any order keep every invariant", () => {
   }
 });
 
-test("the invariants hold at every gap, including no gap at all", () => {
+test("every invariant holds at any gap, including zero", () => {
   for (const gap of [0, 2, 12, 24, 48]) {
     const grid = three({ gap });
     fuzz(grid, 3, 120);
@@ -44,7 +44,7 @@ test("the invariants hold at every gap, including no gap at all", () => {
   }
 });
 
-test("the outline binds any card to the fixed one at half the corridor", () => {
+test("the outline joins two cards at half the corridor", () => {
   for (let seed = 0; seed < 20; seed++) {
     const grid = three();
     fuzz(grid, seed, 60);

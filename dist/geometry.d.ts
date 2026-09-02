@@ -1,12 +1,10 @@
 /**
- * The only place coordinates are computed.
+ * Coordinate computation.
  *
- * Two arrays of numbers own every position. A card is a span of indices into
- * them, so two cards that meet read the same index and their shared boundary is
- * one number — it cannot drift, and there is no tolerance anywhere that decides
- * whether two places are the same place.
+ * `xs` and `ys` hold every position as a fraction of the plane. A card is a
+ * span of indices into them, so two cards that meet read the same index.
  *
- * Every function here is pure. The arrangement holds the state and asks.
+ * Every function here is pure and takes the plane as an argument.
  */
 import type { Axis, Card, Rect, Side } from './card.js';
 /** Everything a coordinate depends on. */
@@ -22,17 +20,13 @@ export interface Plane {
     minSize: number;
 }
 /**
- * The px width of every slot along an axis.
+ * Width in px of every slot on an axis.
  *
- * The plane is covered exactly, always. A slot a card holds at a px size takes
- * that size and the rest share what is left — the whole story while there is
- * something left to share.
+ * A slot held at a px size takes that size; the rest divide what is left in
+ * proportion to their spans, down to `minSize` each.
  *
- * When there is not — every slot held, or the plane narrower than what was
- * asked for — the px sizes scale together to cover it. A card that closes has
- * to send its room somewhere, and a sidebar narrowing with the window is the
- * same fact from the other side: a px size is what a card gets when the plane
- * can give it, not a claim on room the plane does not have.
+ * When the px sizes do not fit, they are scaled by one factor so the slots
+ * still sum to the plane.
  */
 export declare function slotSizes(plane: Plane, axis: Axis): number[];
 /** Where a grid line falls in px — the sum of every slot before it. */
@@ -42,26 +36,24 @@ export declare function linePositions(plane: Plane, axis: Axis): number[];
 export declare function inset(plane: Plane, axis: Axis, index: number, side: 'lo' | 'hi'): number;
 /** Where a card's edge falls in px. */
 export declare function edgePos(plane: Plane, axis: Axis, index: number, side: 'lo' | 'hi'): number;
-/** Where every line sits and how far each edge pulls back from it, on one axis. */
+/** Line positions and edge insets for one axis. */
 export interface Axle {
     at: number[];
     half: number[];
 }
-/** Both axes, measured once. */
+/** Frames for both axes. */
 export interface Frame {
     x: Axle;
     y: Axle;
 }
 /**
- * Measure the plane once.
+ * Line positions and edge insets for both axes.
  *
- * `rectOf` asks for four edges, each of which asks where a line is, which walks
- * every slot, which walks every card. One rect was O(cards); a rect for every
- * card was O(cards squared) — 1,000 cards took 89ms to place. The answer is the
- * same for every card, so it is worked out once and handed round.
+ * Computed once and passed to `rectIn`, so placing N cards is O(N) rather than
+ * O(N squared).
  */
 export declare function frameOf(plane: Plane): Frame;
-/** The rect of one card, from a plane already measured. */
+/** Rect of one card from a precomputed frame. */
 export declare function rectIn(frame: Frame, card: Card): Rect;
 /** The rect of one card. Every rect in the library comes from here. */
 export declare function rectOf(plane: Plane, card: Card): Rect;
@@ -75,11 +67,10 @@ export declare function crossing(plane: Plane, axis: Axis, line: number): Card[]
  * there to grab or to draw solid.
  */
 /**
- * The cards that end at each line and the cards that start at each line.
+ * Cards indexed by the line they end at and the line they start at.
  *
- * Pairing every card with every card to find the pairs that meet at one line
- * was O(cards squared) per line — a thousand cards took 243ms just to place the
- * grab areas. The pairs that meet are known after one pass.
+ * Built once per axis so `boundarySpans` pairs only the cards that meet at a
+ * line, rather than every card with every card.
  */
 export interface Touching {
     ends: Map<number, Card[]>;
@@ -87,9 +78,9 @@ export interface Touching {
 }
 export declare function touching(plane: Plane, axis: Axis): Touching;
 export declare function boundarySpans(plane: Plane, axis: Axis, line: number, meet?: Touching): [number, number][];
-/** Whether any card reads this line at all. One that none reads is only a memory of a boundary. */
+/** True when no card references this line. */
 export declare function isVirtual(plane: Plane, axis: Axis, line: number): boolean;
-/** The interior lines of an axis — the plane's own two borders are not boundaries. */
+/** Interior line indices. The two borders are excluded. */
 export declare function interiorLines(plane: Plane, axis: Axis): number[];
 /** A boundary to draw. One virtual rule per line, plus its solid stretches. */
 export interface Rule extends Rect {
@@ -98,7 +89,7 @@ export interface Rule extends Rect {
     line: number;
     virtual: boolean;
 }
-/** A place to grab a boundary. */
+/** Hit area for dragging a boundary. */
 export interface Divider extends Rect {
     key: string;
     axis: Axis;

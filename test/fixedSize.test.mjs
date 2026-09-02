@@ -24,7 +24,7 @@ const edges = (options = {}) =>
     { width: W, height: H, ...options },
   );
 
-test("a card holding a slot takes px; the rest share what is left", () => {
+test("a slot with a px size takes it; the rest share what is left", () => {
   const grid = edges();
   const left = grid.rect("left");
   const right = grid.rect("right");
@@ -40,7 +40,7 @@ test("a card holding a slot takes px; the rest share what is left", () => {
   assertTiling(grid, "with two fixed cards");
 });
 
-test("the same card in a middle slot is a rail, and nothing can cross it", () => {
+test("a card in a middle slot spans the plane and nothing crosses it", () => {
   const grid = new Soksak(
     {
       xs: [0, 0.5, 0.75, 1],
@@ -64,7 +64,7 @@ test("the same card in a middle slot is a rail, and nothing can cross it", () =>
   assertTiling(grid, "with a rail between panes");
 });
 
-test("resizing the plane moves the sharing cards only", () => {
+test("resizing the plane changes the sharing cards", () => {
   const grid = edges();
   const before = { left: grid.rect("left").w, right: grid.rect("right").w, mid: grid.rect("terminal").w };
   grid.resize(W + 400, H);
@@ -75,7 +75,7 @@ test("resizing the plane moves the sharing cards only", () => {
   assert.equal(after.mid, before.mid + 400, "the sharing card took the whole change");
 });
 
-test("dragging the boundary beside a fixed card resizes that card", () => {
+test("dragging the boundary beside a px slot resizes it", () => {
   const grid = edges();
   // A divider is a place to grab a line; it does not announce whose size it
   // changes. What the drag does is the thing to check.
@@ -87,12 +87,12 @@ test("dragging the boundary beside a fixed card resizes that card", () => {
   assertTiling(grid, "after resizing the sidebar");
 });
 
-test("a fixed-size card cannot be cut along the axis it holds", () => {
+test("a card with a px size can be cut on that axis", () => {
   const grid = edges();
   assert.equal(grid.canSplit("left", "x"), false, "one slot, one size — two would need two values");
 });
 
-test("splitting across the held axis keeps the width for both halves", () => {
+test("splitting across the other axis keeps the px size on both halves", () => {
   const grid = new Soksak(
     {
       xs: [0, 0.4, 1],
@@ -111,7 +111,7 @@ test("splitting across the held axis keeps the width for both halves", () => {
   assertTiling(grid, "after splitting a fixed-width card");
 });
 
-test("a moved sidebar keeps the width it was given", () => {
+test("move keeps the card's px size", () => {
   const grid = new Soksak(
     {
       xs: [0, 0.25, 1],
@@ -130,7 +130,7 @@ test("a moved sidebar keeps the width it was given", () => {
   assertTiling(grid, "after the rail travelled");
 });
 
-test("dragging either edge of a fixed card resizes it, and the other edge holds", () => {
+test("dragging either edge of a px slot resizes it and holds the other edge", () => {
   const grid = edges();
   const before = { left: grid.rect("left"), right: grid.rect("right") };
 
@@ -151,7 +151,7 @@ test("dragging either edge of a fixed card resizes it, and the other edge holds"
   assertTiling(grid, "after dragging both sidebars");
 });
 
-test("a boundary between two fixed cards belongs to the one before it", () => {
+test("a boundary between two px slots changes the one before it", () => {
   const grid = new Soksak(
     {
       xs: [0, 0.25, 0.5, 1],
@@ -174,7 +174,7 @@ test("a boundary between two fixed cards belongs to the one before it", () => {
   assertTiling(grid, "between two fixed cards");
 });
 
-test("centring beside a pinned card centres, like anywhere else", () => {
+test("centring works beside a card with a px size", () => {
   // There is no separate kind of card here, so there is no gesture a card can
   // refuse. A pinned width is a number, and half of it is half of it.
   const grid = edges();
@@ -196,7 +196,7 @@ test("centring beside a pinned card centres, like anywhere else", () => {
   assert.equal(grid.centerBoundary("x", 0), grid.boundaryPos("x", 0), "a border is not a boundary");
 });
 
-test("a cut divides the card, and so divides its fixed width", () => {
+test("a cut divides the card's px size between the halves", () => {
   // Half and half by default; a virtual line inside the card decides otherwise.
   // Nothing here is special to a card that has a width — a cut divides whatever
   // the card was.
@@ -221,7 +221,7 @@ test("a cut divides the card, and so divides its fixed width", () => {
 
 
 
-test("a card inserted at a boundary is given a size, or it is not inserted", () => {
+test("insertAt requires a valid size", () => {
   const grid = new Soksak(undefined, { width: 1200, height: 800 });
   grid.split("card", "x");
 
@@ -239,7 +239,7 @@ test("a card inserted at a boundary is given a size, or it is not inserted", () 
   }
 });
 
-test("a role is declared, not written into the state", () => {
+test("setFixed and setSize change a card; writing to cards does not", () => {
   const grid = three();
   assert.equal(Object.isFrozen(grid.card("sidebar")), true, "what came back is a report");
   assert.throws(() => { grid.card("sidebar").fixed = true; }, TypeError, "and writing to it throws");
@@ -249,7 +249,7 @@ test("a role is declared, not written into the state", () => {
   assert.equal(grid.setFixed("nobody", true), false);
 
   assert.equal(grid.setSize("sidebar", "x", 240), true);
-  assert.ok(Math.abs(grid.rect("sidebar").w - 240) < 0.01, "it draws what it was given");
+  assert.ok(Math.abs(grid.rect("sidebar").w - 240) < 0.01, "drawn at 240");
 
   assert.equal(grid.setSize("sidebar", "x", -1), false, "a size is not negative");
   assert.equal(grid.setSize("sidebar", "x", NaN), false, "nor is it NaN");
@@ -266,17 +266,16 @@ test("a role is declared, not written into the state", () => {
   assert.ok(Math.abs(alone.rect("card").w - 1200) < 0.01, "and covers the plane exactly");
 });
 
-test("a cut looks for a remembered line first, and halves only when there is none", () => {
-  // A width describes one slot, so a card that has one spans one slot and no
-  // line can be inside it — it always halves. A card taking a share can reach
-  // across several, and then the line it remembers is where the cut lands.
+test("a cut lands on an unreferenced line, or halves the card", () => {
+  // A card with a px size spans one slot, so no line is inside it and the cut
+  // halves it. A card spanning several slots is cut at the unreferenced line.
   const grid = three();
   assert.equal(grid.insertAt("x", 1, { id: "rail", size: 400 }), "rail");
   const born = grid.split("rail", "x");
   assert.ok(Math.abs(grid.card("rail").width - 200) < 0.01, "half");
   assert.ok(Math.abs(grid.card(born).width - 200) < 0.01, "and half");
 
-  // a sharing card that reaches across a line nobody reads divides there
+  // a card spanning an unreferenced line is cut there
   const wide = new Soksak(
     {
       xs: [0, 0.2, 1],
@@ -285,7 +284,7 @@ test("a cut looks for a remembered line first, and halves only when there is non
     },
     { width: 1200, height: 600, gap: 0 },
   );
-  assert.equal(wide.isVirtual("x", 1), true, "nobody reads the line at 0.2");
+  assert.equal(wide.isVirtual("x", 1), true, "no card references the line at 0.2");
   const half = wide.split("pane", "x");
   assert.ok(half, "cut");
   assert.ok(

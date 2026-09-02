@@ -54,6 +54,7 @@
   },
   "homepage": "https://github.com/min-median-max/soksak#readme",
   "devDependencies": {
+    "jsdom": "^30.0.1",
     "typescript": "7.0.2"
   },
   "sideEffects": false

@@ -1,20 +1,16 @@
 /**
  * A soksak over shared grid lines.
  *
- * Two arrays of numbers own every coordinate. A card is a span of indices into
- * them, so two cards that meet read the same index: a boundary is one number and
- * cannot drift apart. Moving a line moves every card that reads it; a card that
- * spans *across* the line is untouched, and for it the line is virtual —
- * invisible as a boundary, still there, and a later split snaps to it.
+ * `xs` and `ys` hold every coordinate as a fraction of the plane. A card is a
+ * span of indices into them, so two cards that meet read the same index and
+ * their shared boundary is one number. Moving a line moves every card that
+ * references it; a card spanning across the line is unaffected.
  *
- * Everything on the plane is a card. A sidebar at the window's edge is a card
- * holding the first column at a fixed width; the same card holding a middle
- * column is a rail standing between panes. Nothing can cross either, because a
- * card occupies its columns — the structure is the guarantee, so there is no
- * line to check and no tolerance to tune.
+ * Splitting replaces one card with two, so the arrangement stays a slicing
+ * floorplan and every card can be closed.
  *
- * Splitting only ever replaces one card with two, so the arrangement is always
- * slicing and every card stays closable. See `slicing.ts` for why that matters.
+ * This module holds the state and the operations. `geometry.ts` computes the
+ * coordinates.
  */
 
 import { AXES, SPAN, axisOf, fixedSize, isAhead, spanOf } from './card.js';
@@ -79,6 +75,9 @@ export class Soksak {
   private h: number;
   private seq = 0;
   private sliceMemo = new Map<string, boolean>();
+  private splitMemo = new Map<string, boolean>();
+  /** True while canSplit runs a trial split and restores the state. */
+  private probing = false;
 
   private g = 24;
 
@@ -88,7 +87,9 @@ export class Soksak {
   }
 
   set gap(px: number) {
-    if (Number.isFinite(px) && px >= 0) this.g = px;
+    if (!Number.isFinite(px) || px < 0) return;
+    this.g = px;
+    this.splitMemo.clear();
   }
   minSize: number;
   grabSize: number;
@@ -128,6 +129,7 @@ export class Soksak {
   resize(width: number, height: number): void {
     this.w = width;
     this.h = height;
+    this.splitMemo.clear();      // plane size changes the answer
   }
 
   get width(): number {
@@ -139,11 +141,10 @@ export class Soksak {
   }
 
   /**
-   * Every card, as it stands.
+   * Every card, as frozen copies.
    *
-   * A copy, because this is a report and not a handle: writing to what came back
-   * put cards into the grid and spans past the end of a line array without any
-   * operation having run, and nothing downstream could tell.
+   * Writes to the returned objects do not reach the grid. Use `setFixed`,
+   * `setSize` and `setData` to change a card.
    */
   get cards(): readonly Card[] {
     return this.list.map((c) => Object.freeze({ ...c }));
@@ -157,10 +158,7 @@ export class Soksak {
   /**
    * Replace a card's payload.
    *
-   * `data` is opaque here and belongs to the host, which still has to be able to
-   * change it — a tab moving between cards is the host's business, not a
-   * rearrangement. Writing to what `card()` handed back used to be the only way,
-   * which meant reaching into the state to do it.
+   * `data` is opaque to this library.
    */
   setData(id: string, data: unknown): boolean {
     const card = this.find(id);
@@ -170,10 +168,7 @@ export class Soksak {
   }
 
   /**
-   * Declare whether the layout may move a card — its whole role.
-   *
-   * Reaching into what `cards` handed back was how a host used to say it, which
-   * meant writing to the state to do it.
+   * Set whether the layout may split, close or move a card.
    */
   setFixed(id: string, fixed: boolean): boolean {
     const card = this.find(id);
@@ -183,13 +178,11 @@ export class Soksak {
   }
 
   /**
-   * Set how many px wide or tall a card is drawn, or `null` to let it take a
-   * share of what is left.
+   * Set a card's px width or height, or `null` for a share of what is left.
    *
-   * A width describes one slot, so a card reaching across two cannot carry one.
-   * Nothing else about the card changes: it is refused no operation for having
-   * a number, and when the plane cannot afford the numbers it was given they
-   * all scale together.
+   * Applies to a card spanning one slot on that axis. Sets the slot, so every
+   * card in it takes the same size. Returns false when the axis or size is
+   * invalid or the card spans more than one slot.
    */
   setSize(id: string, axis: Axis, px: number | null): boolean {
     if (axis !== 'x' && axis !== 'y') return false;
@@ -197,10 +190,7 @@ export class Soksak {
     if (!card) return false;
     if (px !== null && (!Number.isFinite(px) || px < 0 || spanOf(card, axis) !== 1)) return false;
 
-    // A slot has one width, so this sets the slot. Setting it on the one card
-    // named and leaving another in the same slot asking for the old number meant
-    // `changed()` reconciled them to the larger, and this returned true having
-    // stored something else.
+    // A slot has one size, so set it on every card in the slot.
     const [lo, hi] = SPAN[axis];
     for (const c of this.list) {
       if (c[lo] !== card[lo] || c[hi] !== card[hi]) continue;
@@ -298,9 +288,8 @@ export class Soksak {
   // ---- boundaries --------------------------------------------------------
 
   /**
-   * The card whose width a drag at this boundary changes, if the slot before it
-   * carries one. Every card standing in that slot follows — a slot has one
-   * width — so this names where the change lands, not who it belongs to.
+   * The card whose px size a drag at this boundary changes, if the slot before
+   * it has one. Every card in that slot takes the new size.
    */
   private holderAt(axis: Axis, line: number): Card | undefined {
     const [lo, hi] = SPAN[axis];
@@ -332,19 +321,15 @@ export class Soksak {
   }
 
   /**
-   * How far a boundary may travel before some card would fall under `minSize`.
+   * How far a boundary may travel before a card would fall under `minSize`.
    *
-   * A virtual line is a remembered position, not a constraint — nothing reads it,
-   * so nothing is holding it there, and a drag reaches past it to the nearest
-   * line a card actually uses. Letting it stop a drag was how a boundary between
-   * two cards could refuse to centre between them.
+   * The range extends to the nearest line a card references. Lines no card
+   * references do not constrain it.
    */
   /**
-   * Whether `line` names a boundary between two slots.
+   * Whether `line` is an interior line index.
    *
-   * The plane's own borders are index 0 and the last, and they are not
-   * boundaries anyone may move — moving one shortens the plane. An index past
-   * the end names nothing at all.
+   * Index 0 and the last index are the plane's borders and are not boundaries.
    */
   hasBoundary(axis: Axis, line: number): boolean {
     return Number.isInteger(line) && line >= 1 && line <= this.arr(axis).length - 2;
@@ -369,11 +354,10 @@ export class Soksak {
   /**
    * Move a boundary to a position in px.
    *
-   * What that means is a fact about what is beside it: next to a card holding
-   * its slot at a fixed size it changes that size, and anywhere else it moves
-   * the line, which every card reading it follows. One gesture either way.
+   * Next to a slot with a px size, this changes that size. Otherwise it moves
+   * the line and every card referencing it follows.
    *
-   * Returns where the boundary ended up.
+   * Returns the resulting position.
    */
   moveBoundary(axis: Axis, line: number, px: number, allowSnap = true): number {
     if (!this.hasBoundary(axis, line) || !Number.isFinite(px)) return this.boundaryPos(axis, line);
@@ -389,31 +373,24 @@ export class Soksak {
       }
     }
 
-    // A memory the move contradicts is no longer a memory of anything.
+    // Remove the unreferenced lines the move has passed.
     line = this.forgetLinesPassed(axis, line, target);
 
     const holder = this.holderAt(axis, line);
     if (holder) {
-      // Which edge of the holder is being dragged decides the arithmetic. Both
-      // read positions from before the change: the edge that is *not* moving
-      // stays where it is, and the size is the distance to it. Measuring from
-      // the moving edge would be asking the size to define itself.
+      // Measure from the edge that is not moving. Both positions are read
+      // before the change.
       const [lo, hi] = SPAN[axis];
       const along = linePositions(this.plane, axis);
       const slot =
         holder[hi] === line
           ? target - along[holder[lo]]   // its far edge moved; its start is fixed
           : along[holder[hi]] - target;  // its near edge moved; its end is fixed
-      // `slot` is line to line. A fixed size is the drawn size, so the corridor
-      // the slot carries comes back off — otherwise the boundary settles half a
-      // corridor away from where it was dropped.
+      // `slot` is line to line; subtract the corridor to get the drawn size.
       const corridor =
         inset(this.plane, axis, holder[lo], 'lo') + inset(this.plane, axis, holder[hi], 'hi');
       const size = Math.max(0, slot - corridor);
-      // A slot has one width. Setting it on the one card the drag happened to
-      // find left any other card standing in the same slot still asking for the
-      // old number, and the larger of the two won — so one of them was drawn at
-      // a size it never asked for.
+      // A slot has one size, so set it on every card in the slot.
       for (const c of this.list) {
         if (c[lo] !== holder[lo] || fixedSize(c, axis) === null) continue;
         if (axis === 'x') c.width = size;
@@ -431,12 +408,9 @@ export class Soksak {
   }
 
   /**
-   * Drop the virtual lines a move passes, and say where the moved line ended up.
+   * Remove the unreferenced lines a move passes, and return the moved index.
    *
-   * A virtual line remembers where a boundary once was, so a later split can
-   * land on it. Once a drag has gone past it, the position it remembers is on
-   * the wrong side of the boundary that made it — there is nothing left to
-   * remember, and keeping it would only mean the array is no longer in order.
+   * A line the move has passed would leave the array out of order.
    */
   private forgetLinesPassed(axis: Axis, line: number, target: number): number {
     const a = this.arr(axis);
@@ -448,8 +422,7 @@ export class Soksak {
         if (card[hi] > k) card[hi]--;
       }
     };
-    // `target` is px, so the comparison has to be too — the line array is
-    // normalised, and mixing the two makes every line look passed.
+    // `target` is px; the line array is normalised, so compare in px.
     const at = (k: number): number => linePositions(this.plane, axis)[k];
     while (line - 1 >= 1 && this.isVirtual(axis, line - 1) && target < at(line - 1)) {
       drop(line - 1);
@@ -478,11 +451,10 @@ export class Soksak {
   }
 
   /**
-   * Put a boundary where the two cards beside it come out the same size.
+   * Move a boundary so the two cards beside it are the same size.
    *
-   * Not the midpoint of the two lines — a card at the plane's border carries the
-   * corridor inset on one side only, so centring the line leaves it half a
-   * corridor wider than its neighbour.
+   * Not the midpoint of the two lines: a card at the plane's border insets on
+   * one side only.
    */
   centerBoundary(axis: Axis, line: number): number {
     if (!this.hasBoundary(axis, line)) return this.boundaryPos(axis, line);
@@ -507,10 +479,9 @@ export class Soksak {
   }
 
   /**
-   * Fold a line onto a neighbour it now coincides with.
+   * Merge a line onto a neighbour at the same coordinate.
    *
-   * Refused when a card spans the pair — that card would be left with no size,
-   * and `minSize` keeps the state from arising in the first place.
+   * Returns false when a card spans the pair, which would leave it with no size.
    */
   mergeCoincident(axis: Axis, line: number): boolean {
     if (this.snap === 'off') return false;
@@ -560,18 +531,16 @@ export class Soksak {
   /**
    * Where to cut.
    *
-   * Among the virtual lines the card spans, the one nearest its centre that
-   * leaves both halves at least `minSize`; otherwise a new line at the centre,
-   * pulled inside the range that fits. A single off-centre virtual line must
-   * never lock a card that has room.
+   * The unreferenced line nearest the card's centre that leaves both halves at
+   * `minSize`; otherwise a new line at the centre, clamped to the range that
+   * fits.
    */
   private cutAt(card: Card, axis: Axis): { line: number; value: number; snapped: boolean } | null {
     if (card.fixed) return null;
 
     const a = this.arr(axis);
     const [lo, hi] = SPAN[axis];
-    // A card with a fixed width is measured against that width; one taking a
-    // share is measured against what the sharing slots have between them.
+    // px per unit of span: the card's own size, or what the sharing slots hold.
     const own = fixedSize(card, axis);
     const per = own !== null ? own / (a[card[hi]] - a[card[lo]] || 1) : this.sharedExtent(axis);
     if (per <= EPS) return null;
@@ -605,24 +574,19 @@ export class Soksak {
    * Whether every card still has the room it had, or `minSize`, whichever is
    * less.
    *
-   * A new line brings a new corridor, and the corridor is paid for out of what
-   * the cards share — by all of them, not by the two halves of the cut. So a
-   * split has a cost some card elsewhere might not be able to meet, and asking
-   * only whether the card being cut fits was asking too little.
+   * A new line adds a corridor, which is taken from the shared slots, so a
+   * split can push a card elsewhere below its size.
    */
   private stillFits(axis: Axis, before: Map<string, number>): boolean {
     const frame = frameOf(this.plane);
     for (const card of this.list) {
-      // Having area is not a matter of `minSize`: a card with none is not a
-      // card. That holds for one that has just arrived too, however small it
-      // was asked to be.
+      // Every card must have area, including one just created.
       const r = rectIn(frame, card);
       if (!(r.w > 0 && r.h > 0)) return false;
     }
     for (const [id, now] of this.extents(axis)) {
-      // Beyond that, only cards that were already here. A card that has just
-      // arrived is the size it was asked for — a 40px rail is deliberately
-      // under `minSize`, and the halves of a cut are `cutAt`'s business.
+      // `minSize` applies only to cards that were already present. A new card
+      // is the size it was given; the halves of a cut are checked by `cutAt`.
       const was = before.get(id);
       if (was === undefined) continue;
       if (now < Math.min(this.minSize, was) - 0.01) return false;
@@ -632,29 +596,40 @@ export class Soksak {
 
   /** True when the cut would leave every card the room it has, or `minSize`. */
   canSplit(id: string, axis: Axis): boolean {
+    // canSplit runs a trial split, which copies the state twice. The result is
+    // cached until the next change: a host redraw calls this once per card per
+    // axis, 134 times at 67 cards.
+    const key = `${id}:${axis}`;
+    const known = this.splitMemo.get(key);
+    if (known !== undefined) return known;
+
     const card = this.find(id);
-    if (!card || !this.cutAt(card, axis)) return false;
-    const before = this.toJSON();
-    const seq = this.seq;                 // asking must not spend a name
-    const made = this.split(id, axis);
-    this.restore(before);
-    this.seq = seq;
-    return made !== null;
+    let ok = false;
+    if (card && this.cutAt(card, axis)) {
+      const before = this.toJSON();
+      const seq = this.seq;               // a trial must not consume an id
+      this.probing = true;
+      ok = this.split(id, axis) !== null;
+      this.restore(before);
+      this.probing = false;
+      this.seq = seq;
+    }
+    this.splitMemo.set(key, ok);
+    return ok;
   }
+
 
   /**
    * Cut one card in two.
    *
-   * The original keeps its identity and its near half, so a live surface it owns
-   * survives; the new card takes the far half. Cards that span the new line only
-   * widen their span — they are not cut.
+   * The original keeps its id and the near half; the new card takes the far
+   * half. Cards spanning the new line widen their span instead of being cut.
    *
-   * The new card carries no `data` unless you give it some. A host that hangs a
-   * payload on its cards has to answer for the new one, and copying the source's
-   * would hand two cards one surface. A fixed size on the *other* axis rides
-   * along, because both halves still stand in that slot.
+   * The new card gets no `data` unless `init.data` is given. A px size on the
+   * other axis is copied, since both halves stay in that slot. A px size on the
+   * cut axis is divided between them.
    *
-   * Returns the new card's id, or null when there was no room.
+   * Returns the new card's id, or null when there is no room.
    */
   split(id: string, axis: Axis, init: { id?: string; data?: unknown } = {}): string | null {
     if (axis !== 'x' && axis !== 'y') return null;
@@ -665,18 +640,14 @@ export class Soksak {
     const undo = this.toJSON();
     const a = this.arr(axis);
     const [lo, hi] = SPAN[axis];
-    // Read before the cut: inserting the line makes the card span two slots,
-    // and a width describes one.
+    // Read before the cut: the new line makes the card span two slots.
     const whole = fixedSize(card, axis);
     const from = a[card[lo]];
     const to = a[card[hi]];
 
     let line = cut.line;
     if (line < 0) {
-      // The cut falls strictly inside this card, so the new line belongs
-      // strictly inside its span. Searching the whole array instead found an
-      // index outside the card as soon as two lines shared a coordinate, and a
-      // card cannot be cut by a line it does not reach.
+      // The new line goes strictly inside the card's span.
       line = card[lo] + 1;
       while (line < card[hi] && a[line] <= cut.value + EPS) line++;
       a.splice(line, 0, cut.value);
@@ -695,17 +666,14 @@ export class Soksak {
       fixed: false,
       data: init.data,
     };
-    // A fixed width on the *other* axis rides along, because both halves still
-    // stand in that slot.
+    // A px size on the other axis is copied: both halves stay in that slot.
     const across: Axis = axis === 'x' ? 'y' : 'x';
     const alongside = fixedSize(card, across);
     if (alongside !== null) {
       if (across === 'x') fresh.width = alongside;
       else fresh.height = alongside;
     }
-    // The cut divides the card, so it divides everything the card was: a fixed
-    // width goes to the halves in the proportion the line fell at, which is
-    // half and half unless a virtual line inside said otherwise.
+    // A px size on the cut axis is divided in the proportion the line fell at.
     if (whole !== null) {
       const f = to - from > EPS ? (a[line] - from) / (to - from) : 0.5;
       if (axis === 'x') { card.width = whole * f; fresh.width = whole * (1 - f); }
@@ -725,10 +693,8 @@ export class Soksak {
   /**
    * Cut a card and put the new one on a named side.
    *
-   * `split` always hands the far half to the new card, so `left` and `top` have
-   * the two exchange the halves they hold. What is exchanged is the *span* — a
-   * card's identity stays with the card, because a host that is holding one and
-   * finds its id changed underneath has no way to notice.
+   * `split` gives the far half to the new card, so `left` and `top` swap the
+   * two spans. Ids are not swapped.
    */
   splitToward(id: string, side: Side, init: { id?: string; data?: unknown } = {}): string | null {
     const axis = axisOf(side);
@@ -765,27 +731,17 @@ export class Soksak {
   }
 
   /**
-   * The axis along which this card's slots are its own, if any.
+   * The axis on which this card's slots hold no other card, or null.
    *
-   * A card reaching from one side of the plane to the other holds every slot it
-   * spans by itself — nobody else is in them. So it can leave without anyone
-   * growing: the slots go, the cards on either side meet, and the sharing cards
-   * take the room back.
-   *
-   * That is the only way out for a card hemmed in by fixed ones. A fixed card's
-   * size is its own, so it never fills a gap, and a card between two of them
-   * could otherwise be neither closed nor moved. How many slots it spans makes
-   * no difference — one or three, they are all its own.
+   * On that axis the slots can be removed when the card closes, without a
+   * neighbour growing over it. Returns null when another card lies entirely
+   * inside the range, which would leave it spanning nothing.
    */
   private soleSlots(card: Card): Axis | null {
     for (const axis of AXES) {
       const [lo, hi] = SPAN[axis];
-      // The slots go, and every card reaching into them shrinks to what is
-      // left. That is well defined unless some other card lives *entirely*
-      // inside the range, because then it would be left spanning nothing.
-      // Asking whether this card reaches across the plane was a narrower
-      // question with the same answer in the easy cases, and no answer at all
-      // for a card hemmed in on both axes by cards holding a px size.
+      // Removing the slots shrinks every card reaching into them. Refused when
+      // another card lies entirely inside the range.
       const trapped = this.list.some(
         (other) => other !== card && other[lo] >= card[lo] && other[hi] <= card[hi],
       );
@@ -809,8 +765,9 @@ export class Soksak {
   /**
    * Remove a card.
    *
-   * A neighbour grows into the space when one can. When none can, the card's own
-   * slot goes instead — well defined exactly when it filled that slot alone.
+   * A row of neighbours grows over the space when one matches the side.
+   * Otherwise the card's slots are removed. Returns false when neither
+   * applies, or when the card is `fixed`, or when it is the last one.
    */
   close(id: string): boolean {
     const card = this.removable(id);
@@ -836,12 +793,9 @@ export class Soksak {
   }
 
   /**
-   * Whether a card reaching across the whole plane can stand on this boundary.
+   * Whether a card reaching across the plane can stand on this boundary.
    *
-   * It can when no card spans over it. That is a fact about the spans — integers
-   * — not a comparison of coordinates, so there is no tolerance to tune and
-   * nothing to repair afterwards. Dragging a boundary can never change the
-   * answer; only splitting and closing can.
+   * True when no card spans over the line. `without` ignores one card by id.
    */
   canInsertAt(axis: Axis, line: number, without?: string): boolean {
     const a = this.arr(axis);
@@ -852,19 +806,14 @@ export class Soksak {
   /**
    * Put a card at a boundary, reaching across the whole plane.
    *
-   * This is the operation `splitToward` is not. Splitting cuts one card, so the
-   * new one inherits that card's extent — a rail made that way would stand in
-   * one row and be a pane like any other. A card that separates everything from
-   * everything has to be inserted at a boundary nothing crosses, and every card
-   * past it moves along.
+   * Unlike `splitToward`, the new card spans the whole plane on the other axis.
+   * Cards past the boundary shift by one index.
    *
-   * `size` is required and is px. A card inserted this way stands in a slot of
-   * its own that no proportion describes — it separates everything from
-   * everything, so there is no card to halve and no share to inherit. Without a
-   * size there is no answer to how wide it is, and the card came out with no
-   * width at all.
+   * `size` is required, in px, and must be less than the plane. It becomes a
+   * span taken from the whole plane in proportion.
    *
-   * Returns the new card's id, or null when a card spans the boundary.
+   * Returns the new card's id, or null when a card spans the boundary, the size
+   * is invalid, or the result would leave a card without area.
    */
   insertAt(axis: Axis, line: number, init: { id?: string; data?: unknown; size: number }): string | null {
     const plane = this.size(axis);
@@ -912,21 +861,15 @@ export class Soksak {
   }
 
   /**
-   * Open a slot at a boundary.
+   * Insert a slot at a boundary with the given span.
    *
-   * The coordinate is duplicated, so the new slot has no share of its own and
-   * takes its size from the card that will hold it. A card that *ends* at the
-   * boundary keeps ending there — the slot opens after it — while one that
-   * starts there moves along. Getting that asymmetry wrong is how a card ends up
-   * spanning the slot it was supposed to make room for.
+   * Every other slot is scaled by `1 - span`. A card ending at the boundary
+   * keeps its index; a card starting there shifts by one.
    */
   private openSlot(axis: Axis, line: number, span: number): void {
     const a = this.arr(axis);
     const [lo, hi] = SPAN[axis];
-    // The slot arrives with a span of its own, taken from the whole plane in
-    // proportion. Duplicating a line instead gave it no width but the number
-    // its card was pinned to, so the moment that card stopped being pinned —
-    // or left — whoever stood there had no area at all.
+    // The new slot takes its span from the whole plane in proportion.
     const keep = 1 - span;
     const at = a[line] * keep + span;
     for (let k = 0; k < a.length; k++) a[k] = k <= line ? a[k] * keep : a[k] * keep + span;
@@ -939,21 +882,16 @@ export class Soksak {
   }
 
   /**
-   * Take a slot out of the axis. The cards on either side meet where it was.
+   * Remove a slot and scale the rest so they still sum to the plane.
    *
-   * A slot is bounded by two lines and exactly one of them is interior, so that
-   * is the one that goes: the far line normally, and the near one for the last
-   * slot, whose far line is the plane's own border. Taking the border instead
-   * shortens the plane, and every position after that is measured against an
-   * edge that moved.
+   * Removes the far line, or the near line for the last slot, so the plane's
+   * two borders are never removed.
    */
   private dropSlot(axis: Axis, slot: number): void {
     const a = this.arr(axis);
     if (a.length <= 2) return; // one slot, no interior line, nothing to take
     const [lo, hi] = SPAN[axis];
-    // Exactly one of a slot's two lines is interior: the far one normally, and
-    // the near one for the last slot, whose far line is the plane's own border.
-    // Taking the border instead shortens the plane itself.
+    // Remove the interior line: the far one, or the near one for the last slot.
     const last = slot + 1 >= a.length - 1;
     const gone = last ? slot : slot + 1;
     const freed = a[slot + 1] - a[slot];
@@ -973,21 +911,17 @@ export class Soksak {
   }
 
   /**
-   * Take a plane-spanning card to another boundary.
+   * Move a plane-spanning card to another boundary.
    *
-   * Its column leaves and a column arrives — nothing is closed and nothing is
-   * split, so no other card's spans change and no boundary on the other axis
-   * moves at all. Travelling that way is the difference between a rail moving
-   * and a layout being rearranged around it.
+   * Its slot is removed and a slot of the same span is inserted at the target.
+   * No other card's spans change and no line on the other axis moves.
    *
-   * `line` is a boundary in the arrangement as it stands now.
+   * `line` is an index in the current arrangement.
    */
   moveTo(id: string, axis: Axis, line: number): boolean {
     const card = this.find(id);
-    // `fixed` says the *layout* does not move it, and this is not the layout: it
-    // names the card, changes no other card's spans and no line on the other
-    // axis. A rail is fixed and travelling is what a rail does. `move` refuses a
-    // fixed card because a drop rearranges everything around it; this does not.
+    // `fixed` blocks the layout, not a direct call. This changes no other
+    // card's spans and no line on the other axis, so it is allowed.
     if (!card || !this.spansPlane(card, axis)) return false;
     const [lo, hi] = SPAN[axis];
     const from = card[lo];
@@ -1019,11 +953,8 @@ export class Soksak {
   /**
    * Every boundary a plane-spanning card could stand on.
    *
-   * `without` ignores one card when asking, which is how a card already
-   * standing somewhere finds out where else it could stand — its own boundaries
-   * are candidates, and it does not block itself. A host had been taking the
-   * card out of a copy of the state to ask this, which is a question the
-   * library should answer rather than a hole the host should reach through.
+   * `without` ignores one card by id, so a card already standing somewhere can
+   * ask where else it could stand without blocking itself.
    */
   standings(axis: Axis, without?: string): number[] {
     const out: number[] = [];
@@ -1093,12 +1024,13 @@ export class Soksak {
    * dormant on the card and coming back to life at some later, unrelated split.
    */
   private changed(): void {
+    // A trial split discards its state, so it must not clear the cache.
+    if (!this.probing) this.splitMemo.clear();
     for (const card of this.list) {
       if (card.width !== undefined && card.c1 - card.c0 !== 1) delete card.width;
       if (card.height !== undefined && card.r1 - card.r0 !== 1) delete card.height;
     }
-    // Two cards can end up in one slot asking for different widths. The slot has
-    // one, so they agree on the larger and both are drawn at what they hold.
+    // Two cards in one slot: use the larger size for both.
     for (const axis of AXES) {
       const [lo] = SPAN[axis];
       const agreed = new Map<number, number>();
@@ -1122,5 +1054,6 @@ export class Soksak {
     this.ys = [...state.ys];
     this.list = state.cards.map((c) => ({ ...c, fixed: c.fixed ?? false }));
     this.sliceMemo.clear();
+    if (!this.probing) this.splitMemo.clear();
   }
 }

@@ -20,7 +20,7 @@ test("every exported path exists in the build", () => {
   }
 });
 
-test("the toolchain owners are exact", () => {
+test("the package declares its toolchain", () => {
   // `.node-version` is the Node this is built on. `engines.node` is the Node a
   // consumer needs. Those are different questions, and pinning the second to
   // the first told everyone else to run the version I happen to have — an
@@ -44,7 +44,7 @@ const codeOf = (file) =>
     .replace(/\/\*[\s\S]*?\*\//g, " ")
     .replace(/(^|[^:])\/\/.*$/gm, "$1");
 
-test("the soksak core carries no DOM dependency", () => {
+test("the core imports no DOM API", () => {
   for (const file of ["src/card.ts", "src/geometry.ts", "src/slicing.ts", "src/soksak.ts", "src/outline.ts"]) {
     const source = codeOf(file);
     assert.doesNotMatch(source, /\bdocument\b/, `${file} touches document`);
@@ -53,7 +53,7 @@ test("the soksak core carries no DOM dependency", () => {
   }
 });
 
-test("the view creates no markup of its own beyond what input needs", () => {
+test("the view creates only div elements and writes no markup", () => {
   const source = read("src/dom.ts");
   const created = [...source.matchAll(/createElement\(['"](\w+)['"]\)/g)].map((m) => m[1]);
   assert.deepEqual([...new Set(created)], ["div"], "only bare divs, so the host owns the markup");

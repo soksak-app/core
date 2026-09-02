@@ -1,14 +1,13 @@
 /**
  * DOM binding for `Soksak`.
  *
- * The view owns position, lifecycle and pointer input. It does not own markup:
- * card elements come from a `createCard` callback the host supplies, and the
- * elements the view must create itself (dividers and boundary rules) carry only
- * a class name and data attributes, with no visual styling. Everything you can
- * see is the host's CSS.
+ * The view sets position, manages element lifecycle and handles pointer input.
+ * Card elements come from the host's `createCard` callback. The elements the
+ * view creates carry a class name and data attributes and no inline styling
+ * beyond position, left, top, width and height.
  *
- * The host element needs `position: relative` (or any non-static position); the
- * view places children absolutely inside it.
+ * The host element needs a non-static `position`; the view places children
+ * absolutely inside it.
  */
 const DOUBLE_TAP_MS = 350;
 export class SoksakView {
@@ -18,9 +17,8 @@ export class SoksakView {
         this.dividerEls = new Map();
         this.ruleEls = new Map();
         /**
-         * One drag per pointer. A single field meant a second finger overwrote the
-         * first, so the divider still under the first finger drove the second one's
-         * line and kept `data-dragging` forever.
+         * One drag state per pointer id. A single shared field let a second pointer
+         * overwrite the first, so one divider drove another and kept `data-dragging`.
          */
         this.drags = new Map();
         this.observer = null;
@@ -36,10 +34,7 @@ export class SoksakView {
             });
             this.observer.observe(host);
         }
-        // Only if the host has been laid out. A host that is `display:none` or not
-        // yet in the document measures 0×0, and taking that as the plane's size
-        // silently gives every card no area — the grid arrived with a size, and a
-        // measurement of nothing is not a reason to throw it away.
+        // Skip when the host has no layout: 0x0 would give every card no area.
         if (host.clientWidth > 0 && host.clientHeight > 0) {
             this.grid.resize(host.clientWidth, host.clientHeight);
         }
@@ -132,6 +127,8 @@ export class SoksakView {
         // so `dblclick` never arrives. Detect the second press here instead.
         let lastTap = -Infinity;
         el.addEventListener('pointerdown', (e) => {
+            if (this.disposed)
+                return;
             e.preventDefault();
             const axis = el.dataset.axis;
             const line = Number(el.dataset.line);
@@ -142,7 +139,12 @@ export class SoksakView {
                 return;
             }
             lastTap = e.timeStamp;
-            el.setPointerCapture(e.pointerId);
+            try {
+                el.setPointerCapture(e.pointerId);
+            }
+            catch {
+                // setPointerCapture throws if the pointer is gone. Start the drag anyway.
+            }
             el.dataset.dragging = 'true';
             this.drags.set(e.pointerId, {
                 axis,
@@ -153,6 +155,8 @@ export class SoksakView {
             });
         });
         el.addEventListener('pointermove', (e) => {
+            if (this.disposed)
+                return;
             const drag = this.drags.get(e.pointerId);
             if (!drag)
                 return;
@@ -163,6 +167,8 @@ export class SoksakView {
             this.render('drag');
         });
         const stop = (e) => {
+            if (this.disposed)
+                return;
             const drag = this.drags.get(e.pointerId);
             if (!drag)
                 return;

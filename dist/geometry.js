@@ -1,37 +1,29 @@
 /**
- * The only place coordinates are computed.
+ * Coordinate computation.
  *
- * Two arrays of numbers own every position. A card is a span of indices into
- * them, so two cards that meet read the same index and their shared boundary is
- * one number — it cannot drift, and there is no tolerance anywhere that decides
- * whether two places are the same place.
+ * `xs` and `ys` hold every position as a fraction of the plane. A card is a
+ * span of indices into them, so two cards that meet read the same index.
  *
- * Every function here is pure. The arrangement holds the state and asks.
+ * Every function here is pure and takes the plane as an argument.
  */
 import { AXES, CROSS, SPAN, fixedSize } from './card.js';
 const lines = (plane, axis) => (axis === 'x' ? plane.xs : plane.ys);
 const extent = (plane, axis) => (axis === 'x' ? plane.width : plane.height);
 /**
- * The px width of every slot along an axis.
+ * Width in px of every slot on an axis.
  *
- * The plane is covered exactly, always. A slot a card holds at a px size takes
- * that size and the rest share what is left — the whole story while there is
- * something left to share.
+ * A slot held at a px size takes that size; the rest divide what is left in
+ * proportion to their spans, down to `minSize` each.
  *
- * When there is not — every slot held, or the plane narrower than what was
- * asked for — the px sizes scale together to cover it. A card that closes has
- * to send its room somewhere, and a sidebar narrowing with the window is the
- * same fact from the other side: a px size is what a card gets when the plane
- * can give it, not a claim on room the plane does not have.
+ * When the px sizes do not fit, they are scaled by one factor so the slots
+ * still sum to the plane.
  */
 export function slotSizes(plane, axis) {
     var _a;
     const a = lines(plane, axis);
     const [lo] = SPAN[axis];
     const count = a.length - 1;
-    // A px size is what the card is drawn at, so the slot carries the corridor
-    // and the card never pays for it — otherwise the same 180 would draw 174 at
-    // the plane's edge and 168 between two cards.
+    // The slot carries the corridor so a px size is the drawn width.
     const corridor = new Array(count);
     for (let i = 0; i < count; i++) {
         corridor[i] = inset(plane, axis, i, 'lo') + inset(plane, axis, i + 1, 'hi');
@@ -47,7 +39,7 @@ export function slotSizes(plane, axis) {
     let asked = 0; // px the held slots were told to be
     let taken = 0; // corridor those slots carry on top
     let sharedSpan = 0; // how the rest divide what is left
-    let floor = 0; // the corridor the rest carry, whatever else they get
+    let floor = 0; // corridor the sharing slots carry
     for (let i = 0; i < count; i++) {
         if (held[i] !== null) {
             asked += held[i];
@@ -58,9 +50,8 @@ export function slotSizes(plane, axis) {
             floor += corridor[i];
         }
     }
-    // and between them one card's worth of room, so panes are not starved to
-    // nothing while a sidebar keeps its number. Per slot would count a card that
-    // spans several of them once for each.
+    // Plus one card's worth between them. Per slot would overcount a card that
+    // spans several.
     if (sharedSpan > 1e-9)
         floor += plane.minSize;
     const usable = extent(plane, axis) - asked - taken;
@@ -76,9 +67,7 @@ export function slotSizes(plane, axis) {
     const keep = Math.min(floor, Math.max(0, extent(plane, axis) - taken));
     const left = Math.max(0, extent(plane, axis) - keep - taken);
     const scale = asked > 1e-9 ? left / asked : 0;
-    // A sharing slot gets its corridor first and a share of what is over. Handing
-    // out `keep` by span alone gave a slot less than the corridor it carries, and
-    // the card in it a negative width — a 40px plane drew one at -10.
+    // A sharing slot gets its corridor first, then a share of what is left.
     let floors = 0;
     for (let i = 0; i < count; i++)
         if (held[i] === null)
@@ -103,19 +92,12 @@ export function linePositions(plane, axis) {
         out.push(out[out.length - 1] + size);
     return out;
 }
+/** How far a card's edge insets from its line: half a corridor, or 0 at a border. */
 /**
- * How far a card's edge pulls back from the line it sits on.
+ * Corridor width for this axis, capped at what the plane can hold.
  *
- * Half a corridor on every side that faces another card, and nothing at the
- * plane's own border. One rule, so no card needs a special case.
- */
-/**
- * The corridor the plane can actually afford on this axis.
- *
- * Every real interior line costs a whole gap. A plane narrower than what those
- * come to cannot pay for them, and taking the gap anyway gave every card a
- * negative width — a 10px plane drew two cards at -7. The plane cannot spend
- * what it does not have, so the corridor gives way before the cards do.
+ * Each real interior line costs one gap. When the total exceeds the plane, the
+ * gap is reduced so rects stay non-negative.
  */
 function corridor(plane, axis, read = linesRead(plane, axis)) {
     const a = lines(plane, axis);
@@ -127,7 +109,7 @@ function corridor(plane, axis, read = linesRead(plane, axis)) {
         return plane.gap;
     return Math.min(plane.gap, Math.max(0, extent(plane, axis)) / real);
 }
-/** Which line indices some card reads, in one pass over the cards. */
+/** Line indices that at least one card references. */
 function linesRead(plane, axis) {
     const [lo, hi] = SPAN[axis];
     const read = new Set();
@@ -142,11 +124,7 @@ export function inset(plane, axis, index, side) {
     const flush = side === 'lo' ? index === 0 : index === a.length - 1;
     if (flush)
         return 0;
-    // A corridor separates two cards. A line no card reads separates nothing, so
-    // it costs nothing — it is a remembered position, and a memory that took a
-    // gap's width from the plane every time one was kept would eventually eat the
-    // cards: forty rail toggles left forty such lines and a 190px sidebar drawn
-    // at 131.
+    // A line no card references separates nothing and takes no corridor.
     return isVirtual(plane, axis, index) ? 0 : corridor(plane, axis) / 2;
 }
 /** Where a card's edge falls in px. */
@@ -156,12 +134,10 @@ export function edgePos(plane, axis, index, side) {
     return side === 'lo' ? at + back : at - back;
 }
 /**
- * Measure the plane once.
+ * Line positions and edge insets for both axes.
  *
- * `rectOf` asks for four edges, each of which asks where a line is, which walks
- * every slot, which walks every card. One rect was O(cards); a rect for every
- * card was O(cards squared) — 1,000 cards took 89ms to place. The answer is the
- * same for every card, so it is worked out once and handed round.
+ * Computed once and passed to `rectIn`, so placing N cards is O(N) rather than
+ * O(N squared).
  */
 export function frameOf(plane) {
     const axle = (axis) => {
@@ -177,7 +153,7 @@ export function frameOf(plane) {
     };
     return { x: axle('x'), y: axle('y') };
 }
-/** The rect of one card, from a plane already measured. */
+/** Rect of one card from a precomputed frame. */
 export function rectIn(frame, card) {
     const x0 = frame.x.at[card.c0] + frame.x.half[card.c0];
     const x1 = frame.x.at[card.c1] - frame.x.half[card.c1];
@@ -234,12 +210,12 @@ export function boundarySpans(plane, axis, line, meet = touching(plane, axis)) {
     }
     return merged;
 }
-/** Whether any card reads this line at all. One that none reads is only a memory of a boundary. */
+/** True when no card references this line. */
 export function isVirtual(plane, axis, line) {
     const [lo, hi] = SPAN[axis];
     return !plane.cards.some((c) => c[lo] === line || c[hi] === line);
 }
-/** The interior lines of an axis — the plane's own two borders are not boundaries. */
+/** Interior line indices. The two borders are excluded. */
 export function interiorLines(plane, axis) {
     const a = lines(plane, axis);
     const out = [];

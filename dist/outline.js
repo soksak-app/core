@@ -1,14 +1,9 @@
 /**
- * Rounded outline around a set of rectangles.
+ * Outline of a set of rects.
  *
- * Panes separated by a corridor do not touch, so their plain union falls apart
- * into one loop per pane. Grow each rect by `pad` first: at `pad >= gap / 2` the
- * grown rects meet on the corridor centre line and the union closes into one
- * shape. That is the whole trick — the outline is derived from the pane borders,
- * pushed outward by exactly the margin every pane already owns.
- *
- * Every right angle is drawn as an arc, convex corners concentric with the pane
- * radius and reflex corners at the pad radius.
+ * `outline` returns the path around one or more rects, padded and rounded, as
+ * a list of loops and an SVG path string. Adjacent rects give one loop;
+ * separated rects give one loop each.
  */
 const key = (x, y) => `${Math.round(x * 100) / 100},${Math.round(y * 100) / 100}`;
 /** Boundary of the union of axis-aligned rects, as closed rectilinear loops. */

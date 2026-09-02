@@ -40,10 +40,8 @@ function audit(grid, where) {
   assert.equal(new Set(ids).size, ids.length, `${where}: two cards share a name`);
 
   // the plane is covered exactly, with the corridor between neighbours
-  // The plane is covered exactly. Summing each card's *slot box* — line to line,
-  // before the corridor is taken off — is the whole of it: the boxes tile the
-  // plane by construction, whatever the gap and whatever lines nobody reads.
-  // `(w + gap)(h + gap)` was a shortcut that assumed every line costs a gap.
+  // Sum each card's slot box, line to line, before the corridor is subtracted.
+  // The boxes tile the plane at any gap.
   const X = (k) => grid.boundaryPos("x", k);
   const Y = (k) => grid.boundaryPos("y", k);
   const covered = cards.reduce((n, c) => n + (X(c.c1) - X(c.c0)) * (Y(c.r1) - Y(c.r0)), 0);
@@ -142,7 +140,7 @@ const start = () =>
     { width: W, height: H },
   );
 
-test("the arrangement is sound again after every change, whatever the order", () => {
+test("every invariant holds after each structural change", () => {
   for (let seed = 0; seed < 250; seed++) {
     const grid = start();
     let rng = seed * 2654435761 + 7;
@@ -199,7 +197,7 @@ test("the arrangement is sound again after every change, whatever the order", ()
   }
 });
 
-test("a fixed card is never moved, closed, or resized by someone else's change", () => {
+test("a fixed card keeps its slots and its share of the other fixed cards", () => {
   for (let seed = 0; seed < 40; seed++) {
     const grid = start();
     let rng = seed * 7919 + 3;

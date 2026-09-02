@@ -4,7 +4,7 @@ import test from "node:test";
 import { Soksak } from "../dist/index.js";
 import { assertTiling, fuzz, H, make, three, W } from "./helpers.mjs";
 
-test("a single matching neighbour takes the freed space", () => {
+test("one matching neighbour takes the closed card's space", () => {
   const grid = three();
   const before = grid.rect("browser");
   assert.equal(grid.fill("terminal").side, "below");
@@ -31,7 +31,7 @@ test("several neighbours tile the side together", () => {
   assertTiling(grid, "after a group fill");
 });
 
-test("closing keeps the arrangement slicing, which is what keeps cards closable", () => {
+test("closing leaves a slicing arrangement", () => {
   const grid = three();
   fuzz(grid, 7, 200);
   assert.ok(grid.isSlicing());
@@ -43,7 +43,7 @@ test("closing keeps the arrangement slicing, which is what keeps cards closable"
   }
 });
 
-test("any arrangement closes all the way down to a single card", () => {
+test("cards can be closed down to the last one", () => {
   for (let seed = 0; seed < 20; seed++) {
     const grid = three();
     for (let i = 0; i < 40; i++) {
@@ -68,13 +68,13 @@ test("any arrangement closes all the way down to a single card", () => {
   }
 });
 
-test("the last remaining card is kept", () => {
+test("the last card is not closed", () => {
   const grid = make();
   assert.equal(grid.canClose(grid.cards[0].id), false);
   assert.equal(grid.close(grid.cards[0].id), false);
 });
 
-test("a fixed card never fills a closed neighbour", () => {
+test("a fixed card does not fill", () => {
   const grid = three();
   for (const card of grid.cards) {
     const fill = grid.fill(card.id);
@@ -105,7 +105,7 @@ test("fillOrder picks the axis when both sides could take the space", () => {
   assertTiling(horizontal, "horizontal fill");
 });
 
-test("a card hemmed in by fixed ones leaves by taking its own slot with it", () => {
+test("a card surrounded by fixed cards closes by removing its slots", () => {
   // rail on one side, a sidebar on the other — neither ever fills a gap
   const grid = new Soksak(
     {
@@ -132,7 +132,7 @@ test("a card hemmed in by fixed ones leaves by taking its own slot with it", () 
   assertTiling(grid, "after the slot went");
 });
 
-test("so it can be moved, which a close it cannot do would have blocked", () => {
+test("a card that cannot close can still be moved", () => {
   const grid = new Soksak(
     {
       xs: [0, 0.25, 0.5, 0.75, 1],
@@ -151,7 +151,7 @@ test("so it can be moved, which a close it cannot do would have blocked", () => 
   assertTiling(grid, "after moving out from between fixed cards");
 });
 
-test("the last open card still stays, however it is hemmed in", () => {
+test("the last open card is not closed", () => {
   const grid = new Soksak(
     {
       xs: [0, 0.3, 1],

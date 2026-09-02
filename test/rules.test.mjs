@@ -294,3 +294,22 @@ test("a line no card reads costs nothing, and a corridor never outgrows the plan
   }
 });
 
+test("R7 — a card stays only when the layout was told not to touch what would take its place", () => {
+  // The one exception, pinned so it cannot widen quietly. `fixed` is the host
+  // saying the layout may not move a card, so it will not grow it over a
+  // departing neighbour either.
+  const grid = new Soksak(undefined, { width: 1600, height: 1200 });
+  grid.split("card", "x");
+  grid.split("card-1", "x");
+  grid.split("card-2", "y");
+  grid.split("card", "y");
+
+  for (const c of grid.cards) assert.equal(grid.canClose(c.id), true, `${c.id} can leave`);
+
+  grid.setFixed("card", true);
+  assert.equal(grid.canClose("card-4"), false, "its only filler may not be moved");
+  assert.equal(grid.close("card-4"), false, "and the close agrees");
+
+  grid.setFixed("card", false);
+  assert.equal(grid.canClose("card-4"), true, "and it leaves the moment that is lifted");
+});

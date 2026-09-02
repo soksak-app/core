@@ -1,90 +1,66 @@
 # soksak
 
-Pane layout over shared grid lines. Headless core, optional DOM binding, no dependencies.
+Pane layout over shared grid lines. Headless core, optional DOM binding, no runtime dependencies.
 
 ## The rules
 
-Seven of them. Everything else follows.
-
 **R1 — A boundary is one number.**
-Two arrays, `xs` and `ys`, own every coordinate. A card is a span of indices into
-them, so two cards that meet read the same index. Their shared boundary is one
-number and cannot drift, and no tolerance is ever consulted to decide *where a
-card is* or *whether two cards meet* — those are integer facts.
+`xs` and `ys` hold every coordinate. A card is a span of indices into them, so
+two cards that meet read the same index and their shared boundary is one number.
+No tolerance decides where a card is or whether two cards meet.
 
-Tolerance appears three times, and none of them decides that:
-`snapDistance` is a gesture, saying how near a drag must come before it lands
-exactly on a neighbouring line; `mergeCoincident` compares two coordinates a
-snap has already made equal, which is float equality rather than a judgement;
-and the outline traces a union of rectangles, where two corners at the same
-place have to be recognised as one.
+Tolerance is used in three places, none of them for that: `snapDistance` sets
+how near a drag must come before it lands on a neighbouring line;
+`mergeCoincident` compares two coordinates a snap has already made equal; and
+the outline treats two corners at the same point as one.
 
 **R2 — Everything is a card.**
-A sidebar, a rail, a terminal — one type, one rect rule, one corridor, one
-radius, one outline.
+Sidebar, rail and pane use one type, one rect rule, one corridor, one radius,
+one outline.
 
-A left sidebar, a right sidebar and a rail may have a fixed width. That is not a
-second kind of card and there is nothing an ordinary card may do that one of
-these may not: it is an ordinary card with a `width`, and the panes beside it
-take what is left. No operation is refused because a card has one, and no rule
-in this file begins "a card with a fixed width may not".
+A card may carry a `width` or `height` in px. That is an attribute, not a second
+type: no operation is refused because a card has one.
 
-`fixed` is separate, and *the layout* is the operative word in it. A rail is
-`fixed` and still travels: `moveTo` names it, changes no other card's spans and
-no line on the other axis. `move` refuses it because a drop rearranges everything
-around it. What `fixed` forbids is the layout deciding for it.
+`fixed` is separate and applies to the layout. A `fixed` card is not split,
+closed, moved or grown by the layout. A direct call to `moveTo` still moves it,
+since that changes no other card's spans and no line on the other axis. `move`
+refuses it, since a drop rearranges the cards around it.
 
 **R3 — A card occupies its slots, so nothing can cross it.**
-A card holding a column *is* the guarantee that no other card spans across it —
-nothing has to be measured to keep it true, and dragging can never break it.
-Placing a card that reaches across the plane does ask whether a card spans the
-boundary (`canInsertAt`), but that is counting spans, not comparing coordinates:
-an integer answer, with nothing to tune and nothing to repair afterwards.
+A card holding a column guarantees no other card spans across it. `canInsertAt`
+counts spans rather than comparing coordinates.
 
-**R4 — Splitting only ever replaces one card with two.**
+**R4 — Splitting replaces one card with two.**
 So the arrangement is always a slicing floorplan, a pinwheel is unreachable, and
 every card stays closable.
 
 **R5 — The corridor is half a gap on every inner edge.**
-A card at the plane's border is flush there. The same for every card, whatever
-its role, so nothing around one needs a special case.
+A card at the plane's border is flush there. A line no card references takes no
+corridor. When the corridor total exceeds the plane, the gap is reduced so no
+rect goes negative.
 
-Because the corridor is the plane's rule and not the card's, a card never pays
-for it: `width: 180` draws 180 at the plane's edge, 180 between two cards, and
-180 at any `gap`. The slot carries the corridor instead. Drag the boundary and it
-lands where it was dropped; the card's size is what it is left holding.
+The slot carries the corridor, so a px size is the drawn size: `width: 180`
+draws 180 at the plane's edge, between two cards, and at any `gap`.
 
-And the plane is covered exactly, always. A fixed width is what a card gets when
-the plane can give it, not a claim on room the plane does not have — so when
-nothing is left to share, or the window is narrower than the widths asked for,
-every fixed width is drawn at the same multiple of itself. A card that arrives is
-paid for by everyone in proportion, a card that closes gives what it had back the
-same way, and a sidebar narrows with the window instead of hanging off the edge.
+The slots always sum to the plane. A px size is honoured while the plane has the
+room; when it does not, every px size is scaled by one factor. A card that
+arrives takes its span from the whole plane in proportion.
 
-A width describes one slot, so a cut divides it — half and half, or wherever a
-virtual line inside the card says. A card that comes to reach across two slots is
-not that many px wide any more, and the number goes.
+A px size describes one slot, so a cut divides it between the halves. A card
+spanning two slots carries no px size.
 
-**R6 — Rects are computed in one place, from the lines.**
-`geometry.ts` and nothing else — card rects, boundary rules, and grab areas all
-come out of it. `soksak.ts` holds the state and asks.
+**R6 — Rects are computed in one place.**
+`geometry.ts` computes card rects, boundary rules and grab areas.
+`soksak.ts` holds the state.
 
-**R7 — A card can always leave, unless the layout has been told not to touch
-what would take its place.**
-Every open card but the last can be closed, and what is left is again an
-arrangement splitting could have built — so no action becomes impossible because
-of an earlier one. There are two ways out: a row of neighbours grows into the
-space, or the card's own slots go and the rest take the room back.
+**R7 — A card can leave unless the layout may not move what would replace it.**
+Every open card but the last can be closed, and the result is again an
+arrangement splitting could have built. There are two ways out: a row of
+neighbours grows over the space, or the card's slots are removed.
 
-The exception is `fixed`, and it is the host's own doing. A `fixed` card is one
-the layout may not move, so it will not grow to cover a departing neighbour
-either; a card whose only possible filler is `fixed`, and whose slots are not
-its own to take, stays. `canClose` says so before anything moves. Nothing else
-strands a card — a `width` never does.
-
-A fixed width is no obstacle. If closing leaves nothing to share, the fixed
-widths scale together to cover the plane rather than leaving the difference to no
-one, which is R5's other half.
+A `fixed` card does not grow over a departing neighbour, so a card whose only
+filler is `fixed`, and whose slots hold another card, stays. `canClose` reports
+this before anything moves.
 
 ## Install
 
@@ -92,11 +68,10 @@ one, which is R5's other half.
 pnpm add github:min-median-max/soksak
 ```
 
-Not `pnpm add soksak` — that name belongs to an unrelated jQuery plugin on
-npm, and following it would install someone else's 2015 code. This package is
-installed from git; `dist/` is committed so there is nothing to build.
+Install from git. The npm name `soksak` is taken by an unrelated package.
+`dist/` is committed, so there is no build step.
 
-ESM only. There is no CommonJS build and `require` will not resolve it.
+ESM only. There is no CommonJS build.
 
 ## The model
 
@@ -105,11 +80,10 @@ xs   vertical grid lines,   normalised 0..1 over the sharing slots
 ys   horizontal grid lines
 ```
 
-A card is `{ id, c0, c1, r0, r1 }` — which slots it occupies. Moving a line moves
-every card that reads it; a card that spans *across* the line is untouched. For
-that card the line is **virtual** — invisible as a boundary, still there, and a
-later split snaps to it, which is how a split derived from one card lines up with
-a split derived from another.
+A card is `{ id, c0, c1, r0, r1 }`: the slots it occupies. Moving a line moves
+every card referencing it. A card spanning across the line is unaffected, and
+for that card the line is unreferenced. A later split snaps to it, so splits in
+different rows line up.
 
 There is no tree and no grouping.
 
@@ -127,11 +101,9 @@ const grid = new Soksak({
 }, { width: 1200, height: 800 });
 ```
 
-`width` means the card takes 180px across instead of a share of what is left; the
-rest share the remainder. `fixed` means the layout never splits, closes or moves
-it. Give the same card a middle column and it is a rail standing between panes —
-same object, same drawing, different slot. Only a card holding a single slot can
-fix its size on that axis; one spanning several is taking a share of them.
+`width` sets the card to 180px across; the rest share the remainder. `fixed`
+stops the layout splitting, closing or moving it. The same card in a middle
+column is a rail. Only a card spanning one slot can set a px size on that axis.
 
 Everything else reads the same for every card:
 
@@ -139,14 +111,14 @@ Everything else reads the same for every card:
 grid.rects();               // Map<id, {x, y, w, h}>
 grid.split("terminal", "x");
 grid.close(id);
-grid.move("rail", "browser", "right");   // a rail travels by moving
+grid.move("rail", "browser", "right");
 ```
 
 ## Quick start — DOM
 
-`SoksakView` owns position, lifecycle and pointer input. It does **not** own
-markup: card elements come from your `createCard`, and the elements it creates
-itself carry only a class name and data attributes.
+`SoksakView` sets position, manages element lifecycle and handles pointer
+input. Card elements come from `createCard`. The elements the view creates carry
+a class name and data attributes only.
 
 ```js
 import { Soksak, SoksakView } from "soksak";
@@ -158,7 +130,7 @@ const view = new SoksakView(host, grid, {
   createCard(card) {
     const el = document.createElement("article");
     el.className = "card";
-    el.append(mySurfaceFor(card.id));            // survives splits, closes and drags
+    el.append(mySurfaceFor(card.id));            // reused across renders
     return el;
   },
   onChange() { drawOutline(); },
@@ -225,7 +197,7 @@ grid.canInsertAt("x", 2);
 grid.insertAt("x", 2, { id: "rail", size: 190 });
 grid.setFixed("rail", true);           // the layout does not move it
 grid.setSize("rail", "x", 210);        // and this is how wide it is; null shares
-grid.setData("rail", { pty: 3 });      // the payload is the host's
+grid.setData("rail", { pty: 3 });      // host payload
 grid.moveTo("rail", "x", 4);    // a column leaves and a column arrives
 ```
 
@@ -245,14 +217,11 @@ grid.canMove("terminal", "browser", "right");   // asking is not doing
 grid.move("terminal", "browser", "right");      // false, and unchanged, if refused
 ```
 
-The card keeps its id, its payload and its fixed size, so a live surface rides
-along and a sidebar arrives the width it left.
+The card keeps its id, its payload and its px size.
 
-`splitToward(id, side, init)` is the same idea for a new card: `split` hands the
-far half to the new one, so `left` and `top` have the two exchange the halves
-they hold. What is exchanged is the *span* — a card's identity stays with the
-card, because a host holding one and finding its id changed underneath has no way
-to notice.
+`splitToward(id, side, init)` places a new card on a named side. `split` gives
+the far half to the new card, so `left` and `top` swap the two spans. Ids are
+not swapped.
 
 ## Where a drop lands
 
@@ -261,10 +230,9 @@ grid.zoneAt(x, y, { headerPx: 34, footerPx: 24, centreOnly: draggingId });
 // → { id, zone: "centre" | "left" | "right" | "top" | "bottom" } | null
 ```
 
-`centre` means the card itself — join what is already there. A side means the
-drop needs a new place beside it. Chrome is never a side, so a header cannot read
-as "the top", and the band is a fraction of the body, so a small card aims like a
-large one.
+`centre` means the card itself. A side means a new place beside it.
+`headerPx` and `footerPx` are excluded, so chrome does not read as a side. The
+edge band is a fraction of the body, not px.
 
 ## The outline
 

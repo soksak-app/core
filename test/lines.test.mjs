@@ -4,7 +4,7 @@ import test from "node:test";
 import { Soksak } from "../dist/index.js";
 import { assertTiling, H, three, W } from "./helpers.mjs";
 
-test("dragging a line moves every card that reads it", () => {
+test("dragging a line moves every card referencing it", () => {
   const grid = three();
   grid.split("terminal", "x");
   grid.split("browser", "x");
@@ -16,7 +16,7 @@ test("dragging a line moves every card that reads it", () => {
   assertTiling(grid, "after a shared drag");
 });
 
-test("a line stops where a card would fall under minSize", () => {
+test("a drag stops where a card would fall under minSize", () => {
   const grid = three();
   grid.moveBoundary("x", 1, -5 * W);
   assertTiling(grid, "pushed to the start");
@@ -40,7 +40,7 @@ function withVirtualLine() {
   return { grid, virtual: line };
 }
 
-test("a virtual line does not hold a boundary back — it is a memory, not a fence", () => {
+test("an unreferenced line does not limit a drag", () => {
   const { grid, virtual } = withVirtualLine();
   const boundary = virtual - 1;
   const [, max] = grid.boundaryRange("x", boundary);
@@ -56,7 +56,7 @@ test("a virtual line does not hold a boundary back — it is a memory, not a fen
   assertTiling(grid, "after passing a virtual line");
 });
 
-test("a boundary still stops at a line some card reads", () => {
+test("a drag stops at a line a card references", () => {
   const grid = three({ snap: "off" });
   const boundary = 1;
   const [, max] = grid.boundaryRange("x", boundary);
@@ -67,7 +67,7 @@ test("a boundary still stops at a line some card reads", () => {
   assertTiling(grid, "stopped at a real boundary");
 });
 
-test("coincident lines merge into one, and never at the cost of a card", () => {
+test("coincident lines merge and no card loses its size", () => {
   // snap brings the boundary exactly onto its neighbour; merge folds the two
   const { grid, virtual } = withVirtualLine();
   const boundary = virtual - 1;
@@ -93,7 +93,7 @@ test("merge is refused when snap is off", () => {
   assert.equal(grid.lines("x").length, lines);
 });
 
-test("centring a line makes the two cards beside it the same size", () => {
+test("centring makes the two cards beside a line the same size", () => {
   const grid = three();
   grid.moveBoundary("x", 1, 0.12 * W);
   grid.centerBoundary("x", 1);
@@ -108,7 +108,7 @@ test("centring a line makes the two cards beside it the same size", () => {
   assertTiling(grid, "after centring");
 });
 
-test("a line no card reads is virtual, survives a close, and can be tidied", () => {
+test("an unreferenced line survives a close and is removed by tidy", () => {
   const grid = three();
   grid.split("terminal", "y");
   grid.split("terminal", "y");
@@ -126,7 +126,7 @@ test("a line no card reads is virtual, survives a close, and can be tidied", () 
   assertTiling(grid, "after tidy");
 });
 
-test("only real boundaries get a grab area; every line gets a drawn rule", () => {
+test("dividers cover referenced lines; rules cover every line", () => {
   const grid = three();
   grid.split("terminal", "x");
   const dividers = grid.dividers();
