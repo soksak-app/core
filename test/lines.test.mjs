@@ -395,3 +395,43 @@ test("a card with no width sits inside the corridor, not beside it", () => {
   const c = grid.rect("c");
   assert.ok(none.x > b.x + b.w && none.x < c.x, "and the empty one is between them");
 });
+
+test("merging onto the plane's own border keeps the border", () => {
+  // Two lines at the plane's edge: the border and one a drag brought onto it.
+  // Folding them must drop the interior one. Dropping the border promoted a
+  // coordinate a rounding short of the edge, and the plane came out
+  // 0.9999999999999999 wide from then on.
+  // The interior line stands a rounding short of the edge, the way arithmetic
+  // leaves it. Folding must keep the border's exact 1, not promote this.
+  const almost = 0.9999999999999999;
+  assert.notEqual(almost, 1, "the fixture carries the rounding");
+  const grid = new Soksak(
+    { xs: [0, 0.2, 0.4, almost, 1], ys: [0, 1], cards: [
+      { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
+      { id: "b", c0: 1, c1: 2, r0: 0, r1: 1 },
+      { id: "c", c0: 2, c1: 4, r0: 0, r1: 1 },
+    ] },
+    { width: 900, height: 600, gap: 12 },
+  );
+  const last = grid.lines("x").length - 1;
+  assert.equal(grid.mergeCoincident("x", last), true, "the pair folds");
+
+  const xs = grid.lines("x");
+  assert.equal(xs[0], 0, "it still starts at 0");
+  assert.equal(xs[xs.length - 1], 1, "and ends at 1, exactly");
+  assert.equal(xs.length, 4, "one line went");
+  assert.equal(grid.rect("c").x + grid.rect("c").w, 900, "so the last card reaches the edge");
+  assertTiling(grid, "after folding onto the border");
+
+  // The same from the other end.
+  const left = new Soksak(
+    { xs: [0, Number.MIN_VALUE, 0.6, 1], ys: [0, 1], cards: [
+      { id: "a", c0: 0, c1: 2, r0: 0, r1: 1 },
+      { id: "b", c0: 2, c1: 3, r0: 0, r1: 1 },
+    ] },
+    { width: 900, height: 600, gap: 12 },
+  );
+  assert.equal(left.mergeCoincident("x", 0), true);
+  assert.equal(left.lines("x")[0], 0, "it still starts at 0, exactly");
+  assert.equal(left.rect("a").x, 0, "so the first card starts at the edge");
+});

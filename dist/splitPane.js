@@ -676,19 +676,25 @@ export class Soksak {
             return false;
         const a = this.arr(axis);
         const [lo, hi] = SPAN[axis];
-        const other = [line - 1, line + 1].find((i) => i > 0 && i < a.length - 1 && Math.abs(a[i] - a[line]) < EPS);
-        if (other === undefined)
+        const found = [line - 1, line + 1].find((i) => i >= 0 && i < a.length && Math.abs(a[i] - a[line]) < EPS);
+        if (found === undefined)
             return false;
-        const at = (card, k) => (card[k] === line ? other : card[k]);
+        // The plane's own borders are not lines a card may take away, and they
+        // carry the only exact 0 and 1 there is. When one of the pair is a border,
+        // it is the one that stays: dropping it promoted a coordinate a rounding
+        // short of the edge, and the plane came out 0.9999999999999999 wide.
+        const border = (i) => i === 0 || i === a.length - 1;
+        const [keep, drop] = border(line) ? [line, found] : [found, line];
+        const at = (card, k) => (card[k] === drop ? keep : card[k]);
         if (this.list.some((c) => at(c, lo) === at(c, hi)))
             return false;
         for (const card of this.list) {
             card[lo] = at(card, lo);
             card[hi] = at(card, hi);
         }
-        // Every card now reads `other`, so which neighbour absorbs makes no
+        // Every card now reads `keep`, so which neighbour absorbs makes no
         // difference.
-        this.removeLine(axis, line, 'lo');
+        this.removeLine(axis, drop, 'lo');
         this.changed();
         return true;
     }
