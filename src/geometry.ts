@@ -26,6 +26,28 @@ export interface Plane {
 const lines = (plane: Plane, axis: Axis): number[] => (axis === 'x' ? plane.xs : plane.ys);
 const extent = (plane: Plane, axis: Axis): number => (axis === 'x' ? plane.width : plane.height);
 
+/** Corridor a slot carries: half a gap on each inner edge. */
+export function corridorOf(plane: Plane, axis: Axis, slot: number): number {
+  return inset(plane, axis, slot, 'lo') + inset(plane, axis, slot + 1, 'hi');
+}
+
+/** The px size each slot declares: the largest any card in it asks for. */
+export function heldSizes(plane: Plane, axis: Axis): (number | null)[] {
+  const [lo] = SPAN[axis];
+  const held = new Array<number | null>(lines(plane, axis).length - 1).fill(null);
+  for (const card of plane.cards) {
+    const size = fixedSize(card, axis);
+    if (size === null) continue;
+    held[card[lo]] = Math.max(held[card[lo]] ?? 0, size);
+  }
+  return held;
+}
+
+/** Drawn width of every slot, corridor removed. */
+export function slotWidths(plane: Plane, axis: Axis): number[] {
+  return slotSizes(plane, axis).map((size, i) => size - corridorOf(plane, axis, i));
+}
+
 /**
  * Width in px of every slot on an axis.
  *
@@ -35,23 +57,23 @@ const extent = (plane: Plane, axis: Axis): number => (axis === 'x' ? plane.width
  * When the px sizes do not fit, they are scaled by one factor so the slots
  * still sum to the plane.
  */
-export function slotSizes(plane: Plane, axis: Axis): number[] {
+export function slotSizes(
+  plane: Plane,
+  axis: Axis,
+  want?: readonly (number | null | undefined)[],
+): number[] {
   const a = lines(plane, axis);
-  const [lo] = SPAN[axis];
   const count = a.length - 1;
 
   // The slot carries the corridor so a px size is the drawn width.
   const corridor = new Array<number>(count);
-  for (let i = 0; i < count; i++) {
-    corridor[i] = inset(plane, axis, i, 'lo') + inset(plane, axis, i + 1, 'hi');
-  }
+  for (let i = 0; i < count; i++) corridor[i] = corridorOf(plane, axis, i);
 
-  const held = new Array<number | null>(count).fill(null);
-  for (const card of plane.cards) {
-    const size = fixedSize(card, axis);
-    if (size === null) continue;
-    const slot = card[lo];
-    held[slot] = Math.max(held[slot] ?? 0, size);
+  // What each slot asks for. `want` names a width for a slot, or `null` to make
+  // it share; where it names nothing the cards in the slot answer.
+  const held = heldSizes(plane, axis);
+  if (want) {
+    for (let i = 0; i < count; i++) if (want[i] !== undefined) held[i] = want[i] as number | null;
   }
 
   let asked = 0;      // px the held slots were told to be

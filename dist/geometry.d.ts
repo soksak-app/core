@@ -19,6 +19,12 @@ export interface Plane {
     /** The smallest a card is asked to be, in px. */
     minSize: number;
 }
+/** Corridor a slot carries: half a gap on each inner edge. */
+export declare function corridorOf(plane: Plane, axis: Axis, slot: number): number;
+/** The px size each slot declares: the largest any card in it asks for. */
+export declare function heldSizes(plane: Plane, axis: Axis): (number | null)[];
+/** Drawn width of every slot, corridor removed. */
+export declare function slotWidths(plane: Plane, axis: Axis): number[];
 /**
  * Width in px of every slot on an axis.
  *
@@ -28,7 +34,7 @@ export interface Plane {
  * When the px sizes do not fit, they are scaled by one factor so the slots
  * still sum to the plane.
  */
-export declare function slotSizes(plane: Plane, axis: Axis): number[];
+export declare function slotSizes(plane: Plane, axis: Axis, want?: readonly (number | null | undefined)[]): number[];
 /** Where a grid line falls in px — the sum of every slot before it. */
 export declare function linePos(plane: Plane, axis: Axis, index: number): number;
 /** Every line position in px, index for index with the line array. */

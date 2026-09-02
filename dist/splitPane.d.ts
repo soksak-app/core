@@ -126,26 +126,14 @@ export declare class Soksak {
     isVirtual(axis: Axis, line: number): boolean;
     virtualCount(): number;
     isSlicing(list?: readonly Span[]): boolean;
-    /** Corridor a slot carries: half a gap on each inner edge. */
-    private corridorOf;
-    /** Drawn width of every slot on an axis, corridor removed. */
-    private slotWidths;
-    /** The px size declared for a slot: the largest any card in it asks for. */
-    private declaredIn;
     /** Set the px size every card in a slot declares. */
     private declare;
-    /** Which slots hold a px size. Their width is declared, not divided. */
-    private heldSlots;
-    /**
-     * The width every slot ends with when the sharing slots named `null` in
-     * `want` take what is left over, sharing it in proportion to their spans.
-     */
-    private widthsFor;
-    /** Whether every card keeps its minimum with these slot widths. */
+    /** Whether every card has its minimum, as the plane stands. */
     private fits;
     /**
      * Give each sharing slot the width `want` names for it. A slot named `null`
-     * takes what is left over.
+     * takes what is left over, shared with the other `null` slots in proportion
+     * to the span it holds.
      *
      * A px size is declared by the host, so this never changes one: a held slot
      * keeps its size whatever `want` says. Naming the widths settles a change
@@ -157,7 +145,10 @@ export declare class Soksak {
      *
      * `order` lists the slots to try, nearest first. The first one that leaves
      * every card its minimum takes the room; when none does, every sharing slot
-     * shares it. Returns the slot that took it, or -1.
+     * shares it. Each candidate is applied and measured, so there is one answer
+     * to what a slot is worth, not a prediction beside it.
+     *
+     * Returns the slot that took the room, or -1.
      */
     private settleOn;
     /**

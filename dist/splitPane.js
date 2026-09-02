@@ -13,7 +13,7 @@
  * coordinates.
  */
 import { AXES, SPAN, axisOf, fixedSize, isAhead, spanOf } from './card.js';
-import { crossing, dividers, frameOf, inset, interiorLines, isVirtual, linePositions, rectIn, rectOf, rules, slotSizes, zoneAt, } from './geometry.js';
+import { corridorOf, crossing, dividers, frameOf, heldSizes, inset, interiorLines, isVirtual, linePositions, rectIn, rectOf, rules, slotSizes, slotWidths, zoneAt, } from './geometry.js';
 import { fillFor, isSlicing } from './slicing.js';
 const SIDES = ['left', 'right', 'top', 'bottom'];
 const EPS = 1e-9;
@@ -231,26 +231,6 @@ export class Soksak {
         return isSlicing(list, this.sliceMemo);
     }
     // ---- boundaries --------------------------------------------------------
-    /** Corridor a slot carries: half a gap on each inner edge. */
-    corridorOf(axis, slot) {
-        return inset(this.plane, axis, slot, 'lo') + inset(this.plane, axis, slot + 1, 'hi');
-    }
-    /** Drawn width of every slot on an axis, corridor removed. */
-    slotWidths(axis) {
-        return slotSizes(this.plane, axis).map((size, i) => size - this.corridorOf(axis, i));
-    }
-    /** The px size declared for a slot: the largest any card in it asks for. */
-    declaredIn(axis, slot) {
-        var _a;
-        const [lo] = SPAN[axis];
-        let size = 0;
-        for (const c of this.list) {
-            if (c[lo] !== slot)
-                continue;
-            size = Math.max(size, (_a = fixedSize(c, axis)) !== null && _a !== void 0 ? _a : 0);
-        }
-        return size;
-    }
     /** Set the px size every card in a slot declares. */
     declare(axis, slot, size) {
         const [lo] = SPAN[axis];
@@ -263,63 +243,17 @@ export class Soksak {
                 c.height = size;
         }
     }
-    /** Which slots hold a px size. Their width is declared, not divided. */
-    heldSlots(axis) {
-        const [lo] = SPAN[axis];
-        const held = new Array(this.arr(axis).length - 1).fill(false);
-        for (const c of this.list)
-            if (fixedSize(c, axis) !== null)
-                held[c[lo]] = true;
-        return held;
-    }
-    /**
-     * The width every slot ends with when the sharing slots named `null` in
-     * `want` take what is left over, sharing it in proportion to their spans.
-     */
-    widthsFor(axis, want) {
-        var _a;
-        const a = this.arr(axis);
-        const count = a.length - 1;
-        const held = this.heldSlots(axis);
-        const size = new Array(count);
-        let spoken = 0;
-        let open = 0;
-        let names = 0;
-        for (let i = 0; i < count; i++) {
-            spoken += this.corridorOf(axis, i);
-            const takes = want[i] === null && !held[i];
-            if (takes) {
-                open += a[i + 1] - a[i];
-                names++;
-            }
-            else {
-                size[i] = held[i] ? this.declaredIn(axis, i) : Math.max(0, (_a = want[i]) !== null && _a !== void 0 ? _a : 0);
-                spoken += size[i];
-            }
-        }
-        const left = Math.max(0, this.size(axis) - spoken);
-        for (let i = 0; i < count; i++) {
-            if (want[i] !== null || held[i])
-                continue;
-            size[i] = open > EPS ? (left * (a[i + 1] - a[i])) / open : left / names;
-        }
-        return size;
-    }
-    /** Whether every card keeps its minimum with these slot widths. */
-    fits(axis, size) {
-        const [lo, hi] = SPAN[axis];
-        for (const c of this.list) {
-            let w = -inset(this.plane, axis, c[lo], 'lo') - inset(this.plane, axis, c[hi], 'hi');
-            for (let i = c[lo]; i < c[hi]; i++)
-                w += size[i] + this.corridorOf(axis, i);
+    /** Whether every card has its minimum, as the plane stands. */
+    fits(axis) {
+        for (const w of this.extents(axis).values())
             if (w < this.minSize - EPS)
                 return false;
-        }
         return true;
     }
     /**
      * Give each sharing slot the width `want` names for it. A slot named `null`
-     * takes what is left over.
+     * takes what is left over, shared with the other `null` slots in proportion
+     * to the span it holds.
      *
      * A px size is declared by the host, so this never changes one: a held slot
      * keeps its size whatever `want` says. Naming the widths settles a change
@@ -330,26 +264,52 @@ export class Soksak {
         const count = a.length - 1;
         if (want.length !== count || this.size(axis) <= 0)
             return;
-        const held = this.heldSlots(axis);
-        const size = this.widthsFor(axis, want);
-        // The sharing slots divide what the px sizes leave, in proportion to their
-        // spans. Re-proportion them to the slot sizes they should end with, keeping
-        // the total span they occupy so no other line moves.
+        const held = heldSizes(this.plane, axis);
+        const sizes = slotSizes(this.plane, axis);
+        // What the sharing slots divide between them, measured as the plane stands.
+        // It does not depend on how they currently divide it.
+        let room = 0;
         let span = 0;
-        let total = 0;
         for (let i = 0; i < count; i++) {
-            if (held[i])
+            if (held[i] !== null)
                 continue;
+            room += sizes[i];
             span += a[i + 1] - a[i];
-            total += size[i] + this.corridorOf(axis, i);
         }
-        if (span < EPS || total < EPS)
+        if (span < EPS || room < EPS)
             return;
-        // Read the spans from a copy: the loop writes into `a` as it goes.
+        const size = new Array(count).fill(0);
+        let named = 0;
+        let open = 0;
+        let nulls = 0;
+        for (let i = 0; i < count; i++) {
+            if (held[i] !== null)
+                continue;
+            if (want[i] === null) {
+                open += a[i + 1] - a[i];
+                nulls++;
+            }
+            else {
+                size[i] = Math.max(0, want[i] + corridorOf(this.plane, axis, i));
+                named += size[i];
+            }
+        }
+        const left = Math.max(0, room - named);
+        for (let i = 0; i < count; i++) {
+            if (held[i] !== null || want[i] !== null)
+                continue;
+            size[i] = open > EPS ? (left * (a[i + 1] - a[i])) / open : left / nulls;
+        }
+        // Re-proportion the sharing spans to those sizes, keeping the total span
+        // they occupy so no other line moves. Read the spans from a copy: the loop
+        // writes into `a` as it goes.
+        const total = named + left;
+        if (total < EPS)
+            return;
         const was = [...a];
         let at = a[0];
         for (let i = 0; i < count; i++) {
-            at += held[i] ? was[i + 1] - was[i] : (span * (size[i] + this.corridorOf(axis, i))) / total;
+            at += held[i] !== null ? was[i + 1] - was[i] : (span * size[i]) / total;
             a[i + 1] = at;
         }
         a[count] = was[count];
@@ -359,23 +319,27 @@ export class Soksak {
      *
      * `order` lists the slots to try, nearest first. The first one that leaves
      * every card its minimum takes the room; when none does, every sharing slot
-     * shares it. Returns the slot that took it, or -1.
+     * shares it. Each candidate is applied and measured, so there is one answer
+     * to what a slot is worth, not a prediction beside it.
+     *
+     * Returns the slot that took the room, or -1.
      */
     settleOn(axis, want, order) {
-        const held = this.heldSlots(axis);
+        const held = heldSizes(this.plane, axis);
+        const undo = this.toJSON();
         for (const slot of order) {
-            if (slot < 0 || slot >= want.length || held[slot])
+            if (slot < 0 || slot >= want.length || held[slot] !== null)
                 continue;
             const had = want[slot];
             want[slot] = null;
-            if (this.fits(axis, this.widthsFor(axis, want))) {
-                this.setSlotWidths(axis, want);
+            this.setSlotWidths(axis, want);
+            if (this.fits(axis))
                 return slot;
-            }
+            this.restore(undo);
             want[slot] = had;
         }
         for (let i = 0; i < want.length; i++)
-            if (!held[i])
+            if (held[i] === null)
                 want[i] = null;
         this.setSlotWidths(axis, want);
         return -1;
@@ -388,7 +352,7 @@ export class Soksak {
      * slot does.
      */
     resizeSlot(axis, slot, size, pays) {
-        const width = this.slotWidths(axis);
+        const width = slotWidths(this.plane, axis);
         const delta = size - width[slot];
         this.declare(axis, slot, size);
         const want = [...width];
@@ -397,7 +361,7 @@ export class Soksak {
             this.setSlotWidths(axis, want);
             return;
         }
-        if (this.heldSlots(axis)[pays]) {
+        if (heldSizes(this.plane, axis)[pays] !== null) {
             // Two px slots meet here: the one after gives up what the one before took.
             this.declare(axis, pays, Math.max(0, width[pays] - delta));
             this.setSlotWidths(axis, want);
@@ -499,8 +463,9 @@ export class Soksak {
                 ? target - along[holder[lo]] // its far edge moved; its start is fixed
                 : along[holder[hi]] - target; // its near edge moved; its end is fixed
             // `slot` is line to line; subtract the corridor to get the drawn size.
-            const corridor = inset(this.plane, axis, holder[lo], 'lo') + inset(this.plane, axis, holder[hi], 'hi');
-            const size = Math.max(0, slot - corridor);
+            // A card holding a px size stands in one slot: `changed` drops the size
+            // from a card that spans more.
+            const size = Math.max(0, slot - corridorOf(this.plane, axis, holder[lo]));
             // The slot on the other side of the boundary pays for the change.
             this.resizeSlot(axis, holder[lo], size, holder[hi] === line ? line : line - 1);
         }
@@ -548,11 +513,11 @@ export class Soksak {
     sharedExtent(axis) {
         const a = this.arr(axis);
         const sizes = slotSizes(this.plane, axis);
+        const held = heldSizes(this.plane, axis);
         let px = 0;
         let span = 0;
         for (let i = 0; i < sizes.length; i++) {
-            const held = this.list.some((c) => c[SPAN[axis][0]] === i && fixedSize(c, axis) !== null);
-            if (held)
+            if (held[i] !== null)
                 continue;
             px += sizes[i];
             span += a[i + 1] - a[i];
@@ -916,7 +881,7 @@ export class Soksak {
                 const reading = this.list.filter((c) => c !== card && (c[lo] === gone || c[hi] === gone));
                 if (reading.length !== 1)
                     continue;
-                const held = this.slotWidths(axis);
+                const held = slotWidths(this.plane, axis);
                 this.list.splice(this.list.indexOf(card), 1);
                 this.removeLine(axis, gone, paid);
                 this.paidBy.delete(id);
@@ -934,7 +899,7 @@ export class Soksak {
             const [lo, hi] = SPAN[axis];
             const from = card[lo];
             const to = card[hi];
-            const want = this.slotWidths(axis);
+            const want = slotWidths(this.plane, axis);
             for (const neighbour of filling.cards)
                 neighbour[filling.grow] = card[filling.grow];
             this.list.splice(this.list.indexOf(card), 1);
@@ -950,7 +915,7 @@ export class Soksak {
         const [lo, hi] = SPAN[axis];
         const from = card[lo];
         const count = card[hi] - from;
-        const held = this.slotWidths(axis);
+        const held = slotWidths(this.plane, axis);
         this.list.splice(this.list.indexOf(card), 1);
         for (let i = 0; i < count; i++)
             this.dropSlot(axis, from);
@@ -995,7 +960,7 @@ export class Soksak {
         const [lo, hi] = SPAN[axis];
         const across = axis === 'x' ? 'y' : 'x';
         const [alo, ahi] = SPAN[across];
-        const held = this.slotWidths(axis);
+        const held = slotWidths(this.plane, axis);
         this.openSlot(axis, line, init.size / plane);
         const fresh = {
             id: (_a = init.id) !== null && _a !== void 0 ? _a : this.nextId(),

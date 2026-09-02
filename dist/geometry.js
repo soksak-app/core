@@ -9,6 +9,27 @@
 import { AXES, CROSS, SPAN, fixedSize } from './card.js';
 const lines = (plane, axis) => (axis === 'x' ? plane.xs : plane.ys);
 const extent = (plane, axis) => (axis === 'x' ? plane.width : plane.height);
+/** Corridor a slot carries: half a gap on each inner edge. */
+export function corridorOf(plane, axis, slot) {
+    return inset(plane, axis, slot, 'lo') + inset(plane, axis, slot + 1, 'hi');
+}
+/** The px size each slot declares: the largest any card in it asks for. */
+export function heldSizes(plane, axis) {
+    var _a;
+    const [lo] = SPAN[axis];
+    const held = new Array(lines(plane, axis).length - 1).fill(null);
+    for (const card of plane.cards) {
+        const size = fixedSize(card, axis);
+        if (size === null)
+            continue;
+        held[card[lo]] = Math.max((_a = held[card[lo]]) !== null && _a !== void 0 ? _a : 0, size);
+    }
+    return held;
+}
+/** Drawn width of every slot, corridor removed. */
+export function slotWidths(plane, axis) {
+    return slotSizes(plane, axis).map((size, i) => size - corridorOf(plane, axis, i));
+}
 /**
  * Width in px of every slot on an axis.
  *
@@ -18,23 +39,20 @@ const extent = (plane, axis) => (axis === 'x' ? plane.width : plane.height);
  * When the px sizes do not fit, they are scaled by one factor so the slots
  * still sum to the plane.
  */
-export function slotSizes(plane, axis) {
-    var _a;
+export function slotSizes(plane, axis, want) {
     const a = lines(plane, axis);
-    const [lo] = SPAN[axis];
     const count = a.length - 1;
     // The slot carries the corridor so a px size is the drawn width.
     const corridor = new Array(count);
-    for (let i = 0; i < count; i++) {
-        corridor[i] = inset(plane, axis, i, 'lo') + inset(plane, axis, i + 1, 'hi');
-    }
-    const held = new Array(count).fill(null);
-    for (const card of plane.cards) {
-        const size = fixedSize(card, axis);
-        if (size === null)
-            continue;
-        const slot = card[lo];
-        held[slot] = Math.max((_a = held[slot]) !== null && _a !== void 0 ? _a : 0, size);
+    for (let i = 0; i < count; i++)
+        corridor[i] = corridorOf(plane, axis, i);
+    // What each slot asks for. `want` names a width for a slot, or `null` to make
+    // it share; where it names nothing the cards in the slot answer.
+    const held = heldSizes(plane, axis);
+    if (want) {
+        for (let i = 0; i < count; i++)
+            if (want[i] !== undefined)
+                held[i] = want[i];
     }
     let asked = 0; // px the held slots were told to be
     let taken = 0; // corridor those slots carry on top
