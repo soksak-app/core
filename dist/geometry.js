@@ -117,15 +117,25 @@ export function linePositions(plane, axis) {
  * negative width — a 10px plane drew two cards at -7. The plane cannot spend
  * what it does not have, so the corridor gives way before the cards do.
  */
-function corridor(plane, axis) {
+function corridor(plane, axis, read = linesRead(plane, axis)) {
     const a = lines(plane, axis);
     let real = 0;
     for (let k = 1; k < a.length - 1; k++)
-        if (!isVirtual(plane, axis, k))
+        if (read.has(k))
             real++;
     if (real === 0)
         return plane.gap;
     return Math.min(plane.gap, Math.max(0, extent(plane, axis)) / real);
+}
+/** Which line indices some card reads, in one pass over the cards. */
+function linesRead(plane, axis) {
+    const [lo, hi] = SPAN[axis];
+    const read = new Set();
+    for (const card of plane.cards) {
+        read.add(card[lo]);
+        read.add(card[hi]);
+    }
+    return read;
 }
 export function inset(plane, axis, index, side) {
     const a = lines(plane, axis);
@@ -145,36 +155,68 @@ export function edgePos(plane, axis, index, side) {
     const back = inset(plane, axis, index, side);
     return side === 'lo' ? at + back : at - back;
 }
+/**
+ * Measure the plane once.
+ *
+ * `rectOf` asks for four edges, each of which asks where a line is, which walks
+ * every slot, which walks every card. One rect was O(cards); a rect for every
+ * card was O(cards squared) — 1,000 cards took 89ms to place. The answer is the
+ * same for every card, so it is worked out once and handed round.
+ */
+export function frameOf(plane) {
+    const axle = (axis) => {
+        const a = lines(plane, axis);
+        const read = linesRead(plane, axis); // one pass, not one per line
+        const sizes = slotSizes(plane, axis);
+        const at = [0];
+        for (const size of sizes)
+            at.push(at[at.length - 1] + size);
+        const gap = corridor(plane, axis, read) / 2;
+        const half = a.map((_, i) => (i === 0 || i === a.length - 1 || !read.has(i) ? 0 : gap));
+        return { at, half };
+    };
+    return { x: axle('x'), y: axle('y') };
+}
+/** The rect of one card, from a plane already measured. */
+export function rectIn(frame, card) {
+    const x0 = frame.x.at[card.c0] + frame.x.half[card.c0];
+    const x1 = frame.x.at[card.c1] - frame.x.half[card.c1];
+    const y0 = frame.y.at[card.r0] + frame.y.half[card.r0];
+    const y1 = frame.y.at[card.r1] - frame.y.half[card.r1];
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
 /** The rect of one card. Every rect in the library comes from here. */
 export function rectOf(plane, card) {
-    const x0 = edgePos(plane, 'x', card.c0, 'lo');
-    const x1 = edgePos(plane, 'x', card.c1, 'hi');
-    const y0 = edgePos(plane, 'y', card.r0, 'lo');
-    const y1 = edgePos(plane, 'y', card.r1, 'hi');
-    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+    return rectIn(frameOf(plane), card);
 }
 /** Cards that span across a line. They are why a card cannot be placed on it. */
 export function crossing(plane, axis, line) {
     const [lo, hi] = SPAN[axis];
     return plane.cards.filter((c) => c[lo] < line && c[hi] > line);
 }
-/**
- * Index stretches where cards actually break on a line.
- *
- * A line runs the whole plane, but it is only a boundary where one card ends and
- * another begins. Everywhere else a card spans across it, and there is nothing
- * there to grab or to draw solid.
- */
-export function boundarySpans(plane, axis, line) {
+export function touching(plane, axis) {
     const [lo, hi] = SPAN[axis];
+    const ends = new Map();
+    const starts = new Map();
+    const push = (m, k, c) => {
+        const at = m.get(k);
+        if (at)
+            at.push(c);
+        else
+            m.set(k, [c]);
+    };
+    for (const card of plane.cards) {
+        push(ends, card[hi], card);
+        push(starts, card[lo], card);
+    }
+    return { ends, starts };
+}
+export function boundarySpans(plane, axis, line, meet = touching(plane, axis)) {
+    var _a, _b;
     const [o0, o1] = CROSS[axis];
     const spans = [];
-    for (const before of plane.cards) {
-        if (before[hi] !== line)
-            continue;
-        for (const after of plane.cards) {
-            if (after[lo] !== line)
-                continue;
+    for (const before of (_a = meet.ends.get(line)) !== null && _a !== void 0 ? _a : []) {
+        for (const after of (_b = meet.starts.get(line)) !== null && _b !== void 0 ? _b : []) {
             const start = Math.max(before[o0], after[o0]);
             const end = Math.min(before[o1], after[o1]);
             if (end > start)
@@ -215,18 +257,20 @@ export function interiorLines(plane, axis) {
 export function rules(plane) {
     const out = [];
     const half = plane.gap / 2;
+    const frame = frameOf(plane);
     for (const axis of AXES) {
-        const along = linePositions(plane, axis);
+        const along = frame[axis].at;
         const across = axis === 'x' ? plane.height : plane.width;
         const other = axis === 'x' ? 'y' : 'x';
+        const meet = touching(plane, axis);
         for (const line of interiorLines(plane, axis)) {
             const at = along[line] - 0.5;
             out.push(axis === 'x'
                 ? { key: `vx:${line}`, axis, line, virtual: true, x: at, y: -half, w: 1, h: across + plane.gap }
                 : { key: `vy:${line}`, axis, line, virtual: true, x: -half, y: at, w: across + plane.gap, h: 1 });
-            for (const [from, to] of boundarySpans(plane, axis, line)) {
-                const start = edgePos(plane, other, from, 'lo') - half;
-                const end = edgePos(plane, other, to, 'hi') + half;
+            for (const [from, to] of boundarySpans(plane, axis, line, meet)) {
+                const start = frame[other].at[from] + frame[other].half[from] - half;
+                const end = frame[other].at[to] - frame[other].half[to] + half;
                 out.push(axis === 'x'
                     ? { key: `sx:${line}:${from}`, axis, line, virtual: false, x: at, y: start, w: 1, h: end - start }
                     : { key: `sy:${line}:${from}`, axis, line, virtual: false, x: start, y: at, w: end - start, h: 1 });
@@ -245,13 +289,15 @@ export function rules(plane) {
 export function dividers(plane, grabSize) {
     const out = [];
     const hit = Math.max(plane.gap, grabSize);
+    const frame = frameOf(plane);
     for (const axis of AXES) {
-        const along = linePositions(plane, axis);
+        const along = frame[axis].at;
         const other = axis === 'x' ? 'y' : 'x';
+        const meet = touching(plane, axis);
         for (const line of interiorLines(plane, axis)) {
-            for (const [from, to] of boundarySpans(plane, axis, line)) {
-                const start = edgePos(plane, other, from, 'lo');
-                const end = edgePos(plane, other, to, 'hi');
+            for (const [from, to] of boundarySpans(plane, axis, line, meet)) {
+                const start = frame[other].at[from] + frame[other].half[from];
+                const end = frame[other].at[to] - frame[other].half[to];
                 out.push(axis === 'x'
                     ? { key: `x:${line}:${from}`, axis, line, x: along[line] - hit / 2, y: start, w: hit, h: end - start }
                     : { key: `y:${line}:${from}`, axis, line, x: start, y: along[line] - hit / 2, w: end - start, h: hit });
@@ -264,11 +310,12 @@ export function zoneAt(plane, x, y, options = {}) {
     var _a, _b, _c;
     if (!Number.isFinite(x) || !Number.isFinite(y))
         return null;
+    const frame = frameOf(plane);
     const header = (_a = options.headerPx) !== null && _a !== void 0 ? _a : 0;
     const footer = (_b = options.footerPx) !== null && _b !== void 0 ? _b : 0;
     const edge = (_c = options.edge) !== null && _c !== void 0 ? _c : 0.25;
     for (const card of plane.cards) {
-        const r = rectOf(plane, card);
+        const r = rectIn(frame, card);
         if (x < r.x || x > r.x + r.w || y < r.y || y > r.y + r.h)
             continue;
         if (card.id === options.centreOnly)

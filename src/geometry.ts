@@ -138,12 +138,23 @@ export function linePositions(plane: Plane, axis: Axis): number[] {
  * negative width — a 10px plane drew two cards at -7. The plane cannot spend
  * what it does not have, so the corridor gives way before the cards do.
  */
-function corridor(plane: Plane, axis: Axis): number {
+function corridor(plane: Plane, axis: Axis, read = linesRead(plane, axis)): number {
   const a = lines(plane, axis);
   let real = 0;
-  for (let k = 1; k < a.length - 1; k++) if (!isVirtual(plane, axis, k)) real++;
+  for (let k = 1; k < a.length - 1; k++) if (read.has(k)) real++;
   if (real === 0) return plane.gap;
   return Math.min(plane.gap, Math.max(0, extent(plane, axis)) / real);
+}
+
+/** Which line indices some card reads, in one pass over the cards. */
+function linesRead(plane: Plane, axis: Axis): Set<number> {
+  const [lo, hi] = SPAN[axis];
+  const read = new Set<number>();
+  for (const card of plane.cards) {
+    read.add(card[lo]);
+    read.add(card[hi]);
+  }
+  return read;
 }
 
 export function inset(plane: Plane, axis: Axis, index: number, side: 'lo' | 'hi'): number {
@@ -165,13 +176,52 @@ export function edgePos(plane: Plane, axis: Axis, index: number, side: 'lo' | 'h
   return side === 'lo' ? at + back : at - back;
 }
 
+/** Where every line sits and how far each edge pulls back from it, on one axis. */
+export interface Axle {
+  at: number[];
+  half: number[];
+}
+
+/** Both axes, measured once. */
+export interface Frame {
+  x: Axle;
+  y: Axle;
+}
+
+/**
+ * Measure the plane once.
+ *
+ * `rectOf` asks for four edges, each of which asks where a line is, which walks
+ * every slot, which walks every card. One rect was O(cards); a rect for every
+ * card was O(cards squared) — 1,000 cards took 89ms to place. The answer is the
+ * same for every card, so it is worked out once and handed round.
+ */
+export function frameOf(plane: Plane): Frame {
+  const axle = (axis: Axis): Axle => {
+    const a = lines(plane, axis);
+    const read = linesRead(plane, axis);       // one pass, not one per line
+    const sizes = slotSizes(plane, axis);
+    const at = [0];
+    for (const size of sizes) at.push(at[at.length - 1] + size);
+    const gap = corridor(plane, axis, read) / 2;
+    const half = a.map((_, i) => (i === 0 || i === a.length - 1 || !read.has(i) ? 0 : gap));
+    return { at, half };
+  };
+  return { x: axle('x'), y: axle('y') };
+}
+
+/** The rect of one card, from a plane already measured. */
+export function rectIn(frame: Frame, card: Card): Rect {
+  const x0 = frame.x.at[card.c0] + frame.x.half[card.c0];
+  const x1 = frame.x.at[card.c1] - frame.x.half[card.c1];
+  const y0 = frame.y.at[card.r0] + frame.y.half[card.r0];
+  const y1 = frame.y.at[card.r1] - frame.y.half[card.r1];
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
+
 /** The rect of one card. Every rect in the library comes from here. */
 export function rectOf(plane: Plane, card: Card): Rect {
-  const x0 = edgePos(plane, 'x', card.c0, 'lo');
-  const x1 = edgePos(plane, 'x', card.c1, 'hi');
-  const y0 = edgePos(plane, 'y', card.r0, 'lo');
-  const y1 = edgePos(plane, 'y', card.r1, 'hi');
-  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  return rectIn(frameOf(plane), card);
 }
 
 /** Cards that span across a line. They are why a card cannot be placed on it. */
@@ -187,14 +237,44 @@ export function crossing(plane: Plane, axis: Axis, line: number): Card[] {
  * another begins. Everywhere else a card spans across it, and there is nothing
  * there to grab or to draw solid.
  */
-export function boundarySpans(plane: Plane, axis: Axis, line: number): [number, number][] {
+/**
+ * The cards that end at each line and the cards that start at each line.
+ *
+ * Pairing every card with every card to find the pairs that meet at one line
+ * was O(cards squared) per line — a thousand cards took 243ms just to place the
+ * grab areas. The pairs that meet are known after one pass.
+ */
+export interface Touching {
+  ends: Map<number, Card[]>;
+  starts: Map<number, Card[]>;
+}
+
+export function touching(plane: Plane, axis: Axis): Touching {
   const [lo, hi] = SPAN[axis];
+  const ends = new Map<number, Card[]>();
+  const starts = new Map<number, Card[]>();
+  const push = (m: Map<number, Card[]>, k: number, c: Card): void => {
+    const at = m.get(k);
+    if (at) at.push(c);
+    else m.set(k, [c]);
+  };
+  for (const card of plane.cards) {
+    push(ends, card[hi], card);
+    push(starts, card[lo], card);
+  }
+  return { ends, starts };
+}
+
+export function boundarySpans(
+  plane: Plane,
+  axis: Axis,
+  line: number,
+  meet: Touching = touching(plane, axis),
+): [number, number][] {
   const [o0, o1] = CROSS[axis];
   const spans: [number, number][] = [];
-  for (const before of plane.cards) {
-    if (before[hi] !== line) continue;
-    for (const after of plane.cards) {
-      if (after[lo] !== line) continue;
+  for (const before of meet.ends.get(line) ?? []) {
+    for (const after of meet.starts.get(line) ?? []) {
       const start = Math.max(before[o0], after[o0]);
       const end = Math.min(before[o1], after[o1]);
       if (end > start) spans.push([start, end]);
@@ -249,10 +329,12 @@ export interface Divider extends Rect {
 export function rules(plane: Plane): Rule[] {
   const out: Rule[] = [];
   const half = plane.gap / 2;
+  const frame = frameOf(plane);
   for (const axis of AXES) {
-    const along = linePositions(plane, axis);
+    const along = frame[axis].at;
     const across = axis === 'x' ? plane.height : plane.width;
     const other: Axis = axis === 'x' ? 'y' : 'x';
+    const meet = touching(plane, axis);
     for (const line of interiorLines(plane, axis)) {
       const at = along[line] - 0.5;
       out.push(
@@ -260,9 +342,9 @@ export function rules(plane: Plane): Rule[] {
           ? { key: `vx:${line}`, axis, line, virtual: true, x: at, y: -half, w: 1, h: across + plane.gap }
           : { key: `vy:${line}`, axis, line, virtual: true, x: -half, y: at, w: across + plane.gap, h: 1 },
       );
-      for (const [from, to] of boundarySpans(plane, axis, line)) {
-        const start = edgePos(plane, other, from, 'lo') - half;
-        const end = edgePos(plane, other, to, 'hi') + half;
+      for (const [from, to] of boundarySpans(plane, axis, line, meet)) {
+        const start = frame[other].at[from] + frame[other].half[from] - half;
+        const end = frame[other].at[to] - frame[other].half[to] + half;
         out.push(
           axis === 'x'
             ? { key: `sx:${line}:${from}`, axis, line, virtual: false, x: at, y: start, w: 1, h: end - start }
@@ -284,13 +366,15 @@ export function rules(plane: Plane): Rule[] {
 export function dividers(plane: Plane, grabSize: number): Divider[] {
   const out: Divider[] = [];
   const hit = Math.max(plane.gap, grabSize);
+  const frame = frameOf(plane);
   for (const axis of AXES) {
-    const along = linePositions(plane, axis);
+    const along = frame[axis].at;
     const other: Axis = axis === 'x' ? 'y' : 'x';
+    const meet = touching(plane, axis);
     for (const line of interiorLines(plane, axis)) {
-      for (const [from, to] of boundarySpans(plane, axis, line)) {
-        const start = edgePos(plane, other, from, 'lo');
-        const end = edgePos(plane, other, to, 'hi');
+      for (const [from, to] of boundarySpans(plane, axis, line, meet)) {
+        const start = frame[other].at[from] + frame[other].half[from];
+        const end = frame[other].at[to] - frame[other].half[to];
         out.push(
           axis === 'x'
             ? { key: `x:${line}:${from}`, axis, line, x: along[line] - hit / 2, y: start, w: hit, h: end - start }
@@ -333,12 +417,13 @@ export interface ZoneOptions {
 
 export function zoneAt(plane: Plane, x: number, y: number, options: ZoneOptions = {}): ZoneHit | null {
   if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  const frame = frameOf(plane);
   const header = options.headerPx ?? 0;
   const footer = options.footerPx ?? 0;
   const edge = options.edge ?? 0.25;
 
   for (const card of plane.cards) {
-    const r = rectOf(plane, card);
+    const r = rectIn(frame, card);
     if (x < r.x || x > r.x + r.w || y < r.y || y > r.y + r.h) continue;
     if (card.id === options.centreOnly) return { id: card.id, zone: 'centre' };
 

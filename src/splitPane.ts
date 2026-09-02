@@ -22,10 +22,12 @@ import type { Axis, Card, CardInit, Rect, Side } from './card.js';
 import {
   crossing,
   dividers,
+  frameOf,
   inset,
   interiorLines,
   isVirtual,
   linePositions,
+  rectIn,
   rectOf,
   rules,
   slotSizes,
@@ -255,7 +257,8 @@ export class Soksak {
   }
 
   rects(): Map<string, Rect> {
-    return new Map(this.list.map((c) => [c.id, this.rectOf(c)]));
+    const frame = frameOf(this.plane);        // measured once, not once per card
+    return new Map(this.list.map((c) => [c.id, rectIn(frame, c)]));
   }
 
   /**
@@ -589,9 +592,10 @@ export class Soksak {
 
   /** The smallest side every card has, so a change can be asked what it cost. */
   private extents(axis: Axis): Map<string, number> {
+    const frame = frameOf(this.plane);
     const out = new Map<string, number>();
     for (const card of this.list) {
-      const r = rectOf(this.plane, card);
+      const r = rectIn(frame, card);
       out.set(card.id, axis === 'x' ? r.w : r.h);
     }
     return out;
@@ -607,11 +611,12 @@ export class Soksak {
    * only whether the card being cut fits was asking too little.
    */
   private stillFits(axis: Axis, before: Map<string, number>): boolean {
+    const frame = frameOf(this.plane);
     for (const card of this.list) {
       // Having area is not a matter of `minSize`: a card with none is not a
       // card. That holds for one that has just arrived too, however small it
       // was asked to be.
-      const r = rectOf(this.plane, card);
+      const r = rectIn(frame, card);
       if (!(r.w > 0 && r.h > 0)) return false;
     }
     for (const [id, now] of this.extents(axis)) {

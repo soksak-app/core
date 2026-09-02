@@ -17,7 +17,7 @@
  * slicing and every card stays closable. See `slicing.ts` for why that matters.
  */
 import { AXES, SPAN, axisOf, fixedSize, isAhead, spanOf } from './card.js';
-import { crossing, dividers, inset, interiorLines, isVirtual, linePositions, rectOf, rules, slotSizes, zoneAt, } from './geometry.js';
+import { crossing, dividers, frameOf, inset, interiorLines, isVirtual, linePositions, rectIn, rectOf, rules, slotSizes, zoneAt, } from './geometry.js';
 import { fillFor, isSlicing } from './slicing.js';
 const SIDES = ['left', 'right', 'top', 'bottom'];
 const EPS = 1e-9;
@@ -185,7 +185,8 @@ export class Soksak {
         return card && this.rectOf(card);
     }
     rects() {
-        return new Map(this.list.map((c) => [c.id, this.rectOf(c)]));
+        const frame = frameOf(this.plane); // measured once, not once per card
+        return new Map(this.list.map((c) => [c.id, rectIn(frame, c)]));
     }
     /**
      * Where a drop lands — which card, and whether on it or beside it.
@@ -517,9 +518,10 @@ export class Soksak {
     }
     /** The smallest side every card has, so a change can be asked what it cost. */
     extents(axis) {
+        const frame = frameOf(this.plane);
         const out = new Map();
         for (const card of this.list) {
-            const r = rectOf(this.plane, card);
+            const r = rectIn(frame, card);
             out.set(card.id, axis === 'x' ? r.w : r.h);
         }
         return out;
@@ -534,11 +536,12 @@ export class Soksak {
      * only whether the card being cut fits was asking too little.
      */
     stillFits(axis, before) {
+        const frame = frameOf(this.plane);
         for (const card of this.list) {
             // Having area is not a matter of `minSize`: a card with none is not a
             // card. That holds for one that has just arrived too, however small it
             // was asked to be.
-            const r = rectOf(this.plane, card);
+            const r = rectIn(frame, card);
             if (!(r.w > 0 && r.h > 0))
                 return false;
         }

@@ -42,6 +42,27 @@ export declare function linePositions(plane: Plane, axis: Axis): number[];
 export declare function inset(plane: Plane, axis: Axis, index: number, side: 'lo' | 'hi'): number;
 /** Where a card's edge falls in px. */
 export declare function edgePos(plane: Plane, axis: Axis, index: number, side: 'lo' | 'hi'): number;
+/** Where every line sits and how far each edge pulls back from it, on one axis. */
+export interface Axle {
+    at: number[];
+    half: number[];
+}
+/** Both axes, measured once. */
+export interface Frame {
+    x: Axle;
+    y: Axle;
+}
+/**
+ * Measure the plane once.
+ *
+ * `rectOf` asks for four edges, each of which asks where a line is, which walks
+ * every slot, which walks every card. One rect was O(cards); a rect for every
+ * card was O(cards squared) — 1,000 cards took 89ms to place. The answer is the
+ * same for every card, so it is worked out once and handed round.
+ */
+export declare function frameOf(plane: Plane): Frame;
+/** The rect of one card, from a plane already measured. */
+export declare function rectIn(frame: Frame, card: Card): Rect;
 /** The rect of one card. Every rect in the library comes from here. */
 export declare function rectOf(plane: Plane, card: Card): Rect;
 /** Cards that span across a line. They are why a card cannot be placed on it. */
@@ -53,7 +74,19 @@ export declare function crossing(plane: Plane, axis: Axis, line: number): Card[]
  * another begins. Everywhere else a card spans across it, and there is nothing
  * there to grab or to draw solid.
  */
-export declare function boundarySpans(plane: Plane, axis: Axis, line: number): [number, number][];
+/**
+ * The cards that end at each line and the cards that start at each line.
+ *
+ * Pairing every card with every card to find the pairs that meet at one line
+ * was O(cards squared) per line — a thousand cards took 243ms just to place the
+ * grab areas. The pairs that meet are known after one pass.
+ */
+export interface Touching {
+    ends: Map<number, Card[]>;
+    starts: Map<number, Card[]>;
+}
+export declare function touching(plane: Plane, axis: Axis): Touching;
+export declare function boundarySpans(plane: Plane, axis: Axis, line: number, meet?: Touching): [number, number][];
 /** Whether any card reads this line at all. One that none reads is only a memory of a boundary. */
 export declare function isVirtual(plane: Plane, axis: Axis, line: number): boolean;
 /** The interior lines of an axis — the plane's own two borders are not boundaries. */
