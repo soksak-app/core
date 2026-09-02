@@ -1,4 +1,4 @@
-export { Soksak } from './soksak.js';
+export { Soksak, checkState } from './soksak.js';
 export type {
   Axis,
   Card,

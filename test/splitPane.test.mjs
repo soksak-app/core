@@ -176,3 +176,33 @@ test("an axis the caller made up is refused, not thrown on", () => {
   }
   assert.equal(JSON.stringify(grid.toJSON()), before, "and none of them changed anything");
 });
+
+test("a state that cannot describe a plane is refused, and names the fault", () => {
+  // A layout read back from storage otherwise reaches the geometry, where a bad
+  // index becomes a NaN rect and the view freezes with nothing to report.
+  const cases = [
+    [{ xs: [], ys: [0, 1], cards: [{ id: "a", c0: 0, c1: 1, r0: 0, r1: 1 }] }, /xs needs at least two/],
+    [{ xs: [0, 1], ys: [0, 1], cards: [{ id: "a", c0: 0, c1: 5, r0: 0, r1: 1 }] }, /outside xs/],
+    [{ xs: [0, 1], ys: [0, 1], cards: [{ id: "a", c0: -1, c1: 1, r0: 0, r1: 1 }] }, /outside xs/],
+    [{ xs: [0, 0.5, 1], ys: [0, 1], cards: [{ id: "a", c0: 2, c1: 1, r0: 0, r1: 1 }] }, /not past/],
+    [{ xs: [0, NaN, 1], ys: [0, 1], cards: [{ id: "a", c0: 0, c1: 1, r0: 0, r1: 1 }] }, /xs\[1\] is NaN/],
+    [{ xs: [0, 0.8, 0.3, 1], ys: [0, 1], cards: [{ id: "a", c0: 0, c1: 1, r0: 0, r1: 1 }] }, /before/],
+    [{ xs: [0, 1], ys: [0, 1], cards: [] }, /cards is empty/],
+    [
+      { xs: [0, 0.5, 1], ys: [0, 1], cards: [
+        { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
+        { id: "a", c0: 1, c1: 2, r0: 0, r1: 1 },
+      ] },
+      /two cards are called a/,
+    ],
+  ];
+  for (const [state, why] of cases) {
+    assert.throws(() => new Soksak(state, { width: 800, height: 600 }), why, JSON.stringify(state));
+  }
+
+  const good = { xs: [0, 0.5, 1], ys: [0, 1], cards: [
+    { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
+    { id: "b", c0: 1, c1: 2, r0: 0, r1: 1 },
+  ] };
+  assert.doesNotThrow(() => new Soksak(good, { width: 800, height: 600 }));
+});

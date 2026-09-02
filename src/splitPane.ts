@@ -95,6 +95,46 @@ const order = (from: number, count: number, back = from - 1): number[] => {
   }
   return out.filter((i) => i >= 0 && i < count);
 };
+/**
+ * Refuse a state that cannot describe a plane, naming what is wrong.
+ *
+ * A stale layout read back from storage otherwise reaches the geometry, where
+ * an index outside the line array or a coordinate that is not a number turns
+ * into a NaN rect. In the DOM that becomes `left: NaNpx`, which the CSSOM
+ * drops, so the view freezes at its last good layout with nothing to report.
+ */
+export function checkState(state: SoksakState): void {
+  const bad = (why: string): never => {
+    throw new TypeError(`soksak: ${why}`);
+  };
+  for (const axis of ['xs', 'ys'] as const) {
+    const a = state?.[axis];
+    if (!Array.isArray(a) || a.length < 2) bad(`${axis} needs at least two lines`);
+    for (const [i, v] of a.entries()) {
+      if (!Number.isFinite(v)) bad(`${axis}[${i}] is ${String(v)}`);
+      if (i > 0 && v < a[i - 1]) bad(`${axis}[${i}] is before ${axis}[${i - 1}]`);
+    }
+  }
+  if (!Array.isArray(state.cards) || state.cards.length === 0) bad('cards is empty');
+  const seen = new Set<string>();
+  for (const c of state.cards) {
+    if (typeof c?.id !== 'string' || !c.id) bad('a card has no id');
+    if (seen.has(c.id)) bad(`two cards are called ${c.id}`);
+    seen.add(c.id);
+    for (const [lo, hi, axis] of [
+      ['c0', 'c1', 'xs'],
+      ['r0', 'r1', 'ys'],
+    ] as const) {
+      const a = state[axis];
+      const from = c[lo];
+      const to = c[hi];
+      if (!Number.isInteger(from) || !Number.isInteger(to)) bad(`${c.id}.${lo}/${hi} is not an index`);
+      if (from < 0 || to > a.length - 1) bad(`${c.id}.${lo}/${hi} is outside ${axis}`);
+      if (to <= from) bad(`${c.id}.${hi} is not past ${c.id}.${lo}`);
+    }
+  }
+}
+
 const clamp = (v: number, lo: number, hi: number): number =>
   lo > hi ? (lo + hi) / 2 : Math.min(hi, Math.max(lo, v));
 
@@ -177,6 +217,7 @@ export class Soksak {
     this.h = options.height ?? 0;
 
     if (state) {
+      checkState(state);
       this.xs = [...state.xs];
       this.ys = [...state.ys];
       this.list = state.cards.map((c) => ({ ...c, fixed: c.fixed ?? false }));

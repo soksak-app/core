@@ -67,3 +67,16 @@ test("the README documents the exported surface", () => {
     assert.match(readme, new RegExp(name), name);
   }
 });
+
+test("the declaration files name a DOM lib for the view only", () => {
+  const dts = (name) => readFileSync(new URL(`../dist/${name}`, import.meta.url), "utf8");
+  // A consumer compiling without the DOM lib reads the public types. Only the
+  // view needs one and declares it, so the core typechecks in a worker or on a
+  // server.
+  assert.match(dts("dom.d.ts"), /^\/\/\/ <reference lib="dom" \/>/, "dom.d.ts declares it");
+  for (const name of ["soksak.d.ts", "geometry.d.ts", "outline.d.ts", "card.d.ts", "slicing.d.ts"]) {
+    assert.doesNotMatch(dts(name), /HTMLElement|PointerEvent|ResizeObserver/, `${name} needs no DOM`);
+  }
+  const tsconfig = readFileSync(new URL("../tsconfig.json", import.meta.url), "utf8");
+  assert.doesNotMatch(tsconfig, /"DOM"/, "the build proves the reference carries it");
+});

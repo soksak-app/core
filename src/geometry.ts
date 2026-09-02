@@ -367,16 +367,19 @@ export function rules(plane: Plane): Rule[] {
     const across = axis === 'x' ? plane.height : plane.width;
     const down = other(axis);
     const meet = touching(plane, axis);
+    // A rule stays inside the plane. Drawing it half a corridor past each end
+    // made the host scroll, since the view places these in the host's element.
+    const hold = (v: number): number => Math.min(Math.max(v, 0), across);
     for (const line of interiorLines(plane, axis)) {
       const at = along[line] - 0.5;
       out.push(
         axis === 'x'
-          ? { key: `vx:${line}`, axis, line, virtual: true, x: at, y: -half, w: 1, h: across + half * 2 }
-          : { key: `vy:${line}`, axis, line, virtual: true, x: -half, y: at, w: across + half * 2, h: 1 },
+          ? { key: `vx:${line}`, axis, line, virtual: true, x: at, y: 0, w: 1, h: across }
+          : { key: `vy:${line}`, axis, line, virtual: true, x: 0, y: at, w: across, h: 1 },
       );
       for (const [from, to] of boundarySpans(plane, axis, line, meet)) {
-        const start = frame[down].at[from] + frame[down].half[from] - half;
-        const end = frame[down].at[to] - frame[down].half[to] + half;
+        const start = hold(frame[down].at[from] + frame[down].half[from] - half);
+        const end = hold(frame[down].at[to] - frame[down].half[to] + half);
         out.push(
           axis === 'x'
             ? { key: `sx:${line}:${from}`, axis, line, virtual: false, x: at, y: start, w: 1, h: end - start }

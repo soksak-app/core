@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 /**
  * DOM binding for `Soksak`.
  *

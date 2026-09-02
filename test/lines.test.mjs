@@ -143,9 +143,19 @@ test("dividers cover referenced lines; rules cover every line", () => {
   const virtual = rules.filter((r) => r.virtual && r.axis === "x" && r.line === 2);
   const real = rules.filter((r) => !r.virtual && r.axis === "x" && r.line === 2);
   assert.equal(virtual.length, 1, "one full-plane rule per line");
-  assert.equal(virtual[0].h, H + grid.gap, "it spans the whole plane");
+  assert.equal(virtual[0].h, H, "it spans the plane, and stops there");
   assert.ok(real.length >= 1);
-  assert.ok(real.every((r) => r.h < virtual[0].h), "real stretches are shorter");
+  assert.ok(real.every((r) => r.h <= virtual[0].h), "real stretches are no longer");
+
+  // The view places these inside the host's element, so anything past the
+  // plane gives the host a scrollbar.
+  for (const r of rules) {
+    assert.ok(r.x >= -0.6 && r.y >= -0.6, `${r.key} starts before the plane`);
+    assert.ok(r.x + r.w <= W + 0.6 && r.y + r.h <= H + 0.6, `${r.key} runs past the plane`);
+  }
+  for (const d of dividers) {
+    assert.ok(d.x >= 0 && d.y >= 0 && d.x + d.w <= W && d.y + d.h <= H, `${d.key} is outside`);
+  }
   assert.equal(
     dividers.filter((d) => d.axis === "x" && d.line === 2).length,
     real.length,

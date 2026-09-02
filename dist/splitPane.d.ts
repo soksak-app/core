@@ -52,6 +52,15 @@ export interface SoksakOptions {
     width?: number;
     height?: number;
 }
+/**
+ * Refuse a state that cannot describe a plane, naming what is wrong.
+ *
+ * A stale layout read back from storage otherwise reaches the geometry, where
+ * an index outside the line array or a coordinate that is not a number turns
+ * into a NaN rect. In the DOM that becomes `left: NaNpx`, which the CSSOM
+ * drops, so the view freezes at its last good layout with nothing to report.
+ */
+export declare function checkState(state: SoksakState): void;
 export declare class Soksak {
     private xs;
     private ys;

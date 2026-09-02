@@ -26,8 +26,8 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc",
-    "test": "tsc && node --test"
+    "build": "tsc && node scripts/emit-dom-reference.mjs",
+    "test": "pnpm build && node --test"
   },
   "keywords": [
     "split",
