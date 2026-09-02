@@ -48,25 +48,29 @@ its role, so nothing around one needs a special case.
 
 Because the corridor is the plane's rule and not the card's, a card never pays
 for it: `width: 180` draws 180 at the plane's edge, 180 between two cards, and
-180 at any `gap`. The slot carries the corridor instead. Drag the boundary and
-it lands where it was dropped; the card's size is what it is left holding.
+180 at any `gap`. The slot carries the corridor instead. Drag the boundary and it
+lands where it was dropped; the card's size is what it is left holding.
+
+And the plane is covered exactly, always. A px size is what a card gets when the
+plane can give it, not a claim on room the plane does not have — so when nothing
+is left to share, or the window is narrower than the sizes asked for, every px
+card is drawn at the same multiple of what it asked for. A card that closes has
+somewhere to send its room, a card that arrives is paid for by everyone, and a
+sidebar narrows with the window instead of hanging off the edge.
 
 **R6 — Rects are computed in one place, from the lines.**
 `geometry.ts` and nothing else — card rects, boundary rules, and grab areas all
 come out of it. `soksak.ts` holds the state and asks.
 
-**R7 — A card can leave whenever its room has somewhere to go.**
-Close a card and what is left is again an arrangement splitting could have built,
-so no action becomes impossible because of an earlier one. There are two ways
-out: a row of neighbours grows into the space, or, when none can, the card's own
-slots go and the rest take the room back.
+**R7 — A card can always leave.**
+Every open card but the last can be closed, and what is left is again an
+arrangement splitting could have built — so no action becomes impossible because
+of an earlier one. There are two ways out: a row of neighbours grows into the
+space, or the card's own slots go and the rest take the room back.
 
-Where every card shares, every open card but the last can leave. A card holding a
-px size does not stretch, so once some do, the promise is narrower: a card leaves
-when a slot along that axis is left for someone to share. If every slot were
-held, the sizes would not add up to the plane and the difference would belong to
-no one. `canClose` answers before anything moves, and the arrangement never
-deadlocks — while more than one card is open, some card can always leave.
+A px size is no obstacle. If closing leaves nothing to share, the px sizes scale
+together to cover the plane rather than leaving the difference to no one, which
+is R5's other half.
 
 ## Install
 

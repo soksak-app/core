@@ -200,7 +200,19 @@ export declare class Soksak {
      * never lock a card that has room.
      */
     private cutAt;
-    /** True when both halves would keep `minSize`. */
+    /** The smallest side every card has, so a change can be asked what it cost. */
+    private extents;
+    /**
+     * Whether every card still has the room it had, or `minSize`, whichever is
+     * less.
+     *
+     * A new line brings a new corridor, and the corridor is paid for out of what
+     * the cards share — by all of them, not by the two halves of the cut. So a
+     * split has a cost some card elsewhere might not be able to meet, and asking
+     * only whether the card being cut fits was asking too little.
+     */
+    private stillFits;
+    /** True when the cut would leave every card the room it has, or `minSize`. */
     canSplit(id: string, axis: Axis): boolean;
     /**
      * Cut one card in two.
@@ -249,15 +261,6 @@ export declare class Soksak {
      */
     private soleSlots;
     private removable;
-    /**
-     * Whether every axis still has a slot that no card holds at a px size.
-     *
-     * Held slots take their px off the top and the rest share what is left. If
-     * nothing is left to share, nothing stretches to the plane's edge and the
-     * held sizes simply do not add up to it — a 40px card alone on an 800px
-     * plane, with the other 760 belonging to no one.
-     */
-    private someoneShares;
     canClose(id: string): boolean;
     /**
      * Remove a card.

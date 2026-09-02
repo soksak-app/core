@@ -191,10 +191,6 @@ export class Soksak {
     else card.height = px;
 
     this.changed();
-    if (!this.someoneShares()) {
-      this.restore(before);
-      return false;
-    }
     return true;
   }
 
@@ -581,10 +577,45 @@ export class Soksak {
     return { line: -1, value: clamp(mid, lowest, highest), snapped: false };
   }
 
-  /** True when both halves would keep `minSize`. */
+  /** The smallest side every card has, so a change can be asked what it cost. */
+  private extents(axis: Axis): Map<string, number> {
+    const out = new Map<string, number>();
+    for (const card of this.list) {
+      const r = rectOf(this.plane, card);
+      out.set(card.id, axis === 'x' ? r.w : r.h);
+    }
+    return out;
+  }
+
+  /**
+   * Whether every card still has the room it had, or `minSize`, whichever is
+   * less.
+   *
+   * A new line brings a new corridor, and the corridor is paid for out of what
+   * the cards share — by all of them, not by the two halves of the cut. So a
+   * split has a cost some card elsewhere might not be able to meet, and asking
+   * only whether the card being cut fits was asking too little.
+   */
+  private stillFits(axis: Axis, before: Map<string, number>): boolean {
+    for (const [id, now] of this.extents(axis)) {
+      // Only cards that were already here. A card that has just arrived is the
+      // size it was asked for — a 40px rail is deliberately under `minSize`,
+      // and the halves of a cut are `cutAt`'s business.
+      const was = before.get(id);
+      if (was === undefined) continue;
+      if (now < Math.min(this.minSize, was) - 0.01) return false;
+    }
+    return true;
+  }
+
+  /** True when the cut would leave every card the room it has, or `minSize`. */
   canSplit(id: string, axis: Axis): boolean {
     const card = this.find(id);
-    return !!card && !!this.cutAt(card, axis);
+    if (!card || !this.cutAt(card, axis)) return false;
+    const before = this.toJSON();
+    const made = this.split(id, axis);
+    this.restore(before);
+    return made !== null;
   }
 
   /**
@@ -605,6 +636,8 @@ export class Soksak {
     const card = this.find(id);
     const cut = card && this.cutAt(card, axis);
     if (!card || !cut) return null;
+    const was = this.extents(axis);
+    const undo = this.toJSON();
     const a = this.arr(axis);
     const [lo, hi] = SPAN[axis];
 
@@ -642,6 +675,10 @@ export class Soksak {
     card[hi] = line;
     this.list.push(fresh);
     this.changed();
+    if (!this.stillFits(axis, was)) {
+      this.restore(undo);
+      return null;
+    }
     return fresh.id;
   }
 
@@ -724,32 +761,9 @@ export class Soksak {
     return card;
   }
 
-  /**
-   * Whether every axis still has a slot that no card holds at a px size.
-   *
-   * Held slots take their px off the top and the rest share what is left. If
-   * nothing is left to share, nothing stretches to the plane's edge and the
-   * held sizes simply do not add up to it — a 40px card alone on an 800px
-   * plane, with the other 760 belonging to no one.
-   */
-  private someoneShares(): boolean {
-    for (const axis of AXES) {
-      const [lo] = SPAN[axis];
-      const held = new Set<number>();
-      for (const card of this.list) if (fixedSize(card, axis) !== null) held.add(card[lo]);
-      if (held.size >= this.arr(axis).length - 1) return false;
-    }
-    return true;
-  }
-
   canClose(id: string): boolean {
     const card = this.removable(id);
-    if (!card) return false;
-    if (!this.fill(id) && this.soleSlots(card) === null) return false;
-    const before = this.toJSON();
-    const done = this.close(id);
-    this.restore(before);
-    return done;
+    return !!card && (!!this.fill(id) || this.soleSlots(card) !== null);
   }
 
   /**
@@ -761,17 +775,12 @@ export class Soksak {
   close(id: string): boolean {
     const card = this.removable(id);
     if (!card) return false;
-    const before = this.toJSON();
 
     const filling = this.fill(id);
     if (filling) {
       for (const neighbour of filling.cards) neighbour[filling.grow] = card[filling.grow];
       this.list.splice(this.list.indexOf(card), 1);
       this.changed();
-      if (!this.someoneShares()) {
-        this.restore(before);
-        return false;
-      }
       return true;
     }
 
@@ -783,10 +792,6 @@ export class Soksak {
     this.list.splice(this.list.indexOf(card), 1);
     for (let i = 0; i < count; i++) this.dropSlot(axis, from);
     this.changed();
-    if (!this.someoneShares()) {
-      this.restore(before);
-      return false;
-    }
     return true;
   }
 
@@ -824,6 +829,8 @@ export class Soksak {
   insertAt(axis: Axis, line: number, init: { id?: string; data?: unknown; size: number }): string | null {
     if (!Number.isFinite(init?.size) || init.size < 0) return null;
     if (!this.canInsertAt(axis, line)) return null;
+    const was = this.extents(axis);
+    const undo = this.toJSON();
     const [lo, hi] = SPAN[axis];
     const across: Axis = axis === 'x' ? 'y' : 'x';
     const [alo, ahi] = SPAN[across];
@@ -844,6 +851,10 @@ export class Soksak {
     else fresh.height = init.size;
     this.list.push(fresh);
     this.changed();
+    if (!this.stillFits(axis, was)) {
+      this.restore(undo);
+      return null;
+    }
     return fresh.id;
   }
 
@@ -891,14 +902,18 @@ export class Soksak {
     const a = this.arr(axis);
     if (a.length <= 2) return; // one slot, no interior line, nothing to take
     const [lo, hi] = SPAN[axis];
-    const gone = slot + 1 < a.length - 1 ? slot + 1 : slot;
+    // Which of the two lines goes decides which neighbour absorbs the slot, and
+    // that decides the arithmetic. Normally the far line goes and the slot to
+    // the right takes the room, so a card ending on that line falls back with
+    // it. For the last slot the near line goes instead — the far one is the
+    // plane's own border — and the slot to the left takes the room, so a card
+    // ending there reaches on into it.
+    const last = slot + 1 >= a.length - 1;
+    const gone = last ? slot : slot + 1;
     a.splice(gone, 1);
     for (const card of this.list) {
-      // A card that *started* at the line falls back to the one before it; a
-      // card that *ended* there reaches on to the next. Either way it takes the
-      // freed room, and neither can be written as the other.
       if (card[lo] >= gone) card[lo]--;
-      if (card[hi] > gone) card[hi]--;
+      if (last ? card[hi] > gone : card[hi] >= gone) card[hi]--;
     }
   }
 
@@ -942,10 +957,6 @@ export class Soksak {
     card[ahi] = this.arr(across).length - 1;
     this.list.push(card);
     this.changed();
-    if (!this.someoneShares()) {
-      this.restore(before);
-      return false;
-    }
     return true;
   }
 
@@ -990,11 +1001,6 @@ export class Soksak {
       if (carried.width !== undefined && spanOf(moved, 'x') === 1) moved.width = carried.width;
     }
     this.changed();
-    if (!this.someoneShares()) {
-      // The card brought its px size to a slot that was the last one sharing.
-      this.restore(before);
-      return false;
-    }
     return true;
   }
 

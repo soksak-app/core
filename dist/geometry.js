@@ -14,40 +14,63 @@ const extent = (plane, axis) => (axis === 'x' ? plane.width : plane.height);
 /**
  * The px width of every slot along an axis.
  *
- * A slot a card holds at a fixed size contributes that size; the rest share what
- * is left, in the proportions the lines describe. Walking the slots in order is
- * what makes a card at the plane's edge and one standing between panes the same
- * case — the only difference is which slot it holds.
+ * The plane is covered exactly, always. A slot a card holds at a px size takes
+ * that size and the rest share what is left — the whole story while there is
+ * something left to share.
+ *
+ * When there is not — every slot held, or the plane narrower than what was
+ * asked for — the px sizes scale together to cover it. A card that closes has
+ * to send its room somewhere, and a sidebar narrowing with the window is the
+ * same fact from the other side: a px size is what a card gets when the plane
+ * can give it, not a claim on room the plane does not have.
  */
 export function slotSizes(plane, axis) {
     var _a;
     const a = lines(plane, axis);
     const [lo] = SPAN[axis];
     const count = a.length - 1;
+    // A px size is what the card is drawn at, so the slot carries the corridor
+    // and the card never pays for it — otherwise the same 180 would draw 174 at
+    // the plane's edge and 168 between two cards.
+    const corridor = new Array(count);
+    for (let i = 0; i < count; i++) {
+        corridor[i] = inset(plane, axis, i, 'lo') + inset(plane, axis, i + 1, 'hi');
+    }
     const held = new Array(count).fill(null);
     for (const card of plane.cards) {
         const size = fixedSize(card, axis);
         if (size === null)
             continue;
-        // A fixed size is what the card is drawn at, not the slot it stands in.
-        // The slot therefore has to carry the corridor the card gives back, or the
-        // same 180 would draw 174 at the plane's edge and 168 between two cards —
-        // and the corridor is the plane's business, not the sidebar's.
         const slot = card[lo];
-        const drawn = size + inset(plane, axis, slot, 'lo') + inset(plane, axis, slot + 1, 'hi');
-        held[slot] = Math.max((_a = held[slot]) !== null && _a !== void 0 ? _a : 0, drawn);
+        held[slot] = Math.max((_a = held[slot]) !== null && _a !== void 0 ? _a : 0, size);
     }
-    let taken = 0;
+    let asked = 0;
+    let corridors = 0;
     let sharedSpan = 0;
     for (let i = 0; i < count; i++) {
-        if (held[i] !== null)
-            taken += held[i];
-        else
+        if (held[i] !== null) {
+            asked += held[i];
+            corridors += corridor[i];
+        }
+        else {
             sharedSpan += a[i + 1] - a[i];
+        }
     }
-    const usable = Math.max(0, extent(plane, axis) - taken);
-    const scale = sharedSpan > 1e-9 ? usable / sharedSpan : 0;
-    return held.map((fixed, i) => (fixed !== null ? fixed : (a[i + 1] - a[i]) * scale));
+    const usable = extent(plane, axis) - asked - corridors;
+    if (sharedSpan > 1e-9 && usable >= 0) {
+        const scale = usable / sharedSpan;
+        return held.map((fixed, i) => fixed !== null ? fixed + corridor[i] : (a[i + 1] - a[i]) * scale);
+    }
+    // Nothing shares, or what was asked for does not fit. Every sharing slot
+    // keeps just its corridor, so its card draws nothing rather than less than
+    // nothing, and the px sizes scale together to cover what is left.
+    let floors = 0;
+    for (let i = 0; i < count; i++)
+        if (held[i] === null)
+            floors += corridor[i];
+    const room = Math.max(0, extent(plane, axis) - floors - corridors);
+    const scale = asked > 1e-9 ? room / asked : 0;
+    return held.map((fixed, i) => (fixed !== null ? fixed * scale + corridor[i] : corridor[i]));
 }
 /** Where a grid line falls in px — the sum of every slot before it. */
 export function linePos(plane, axis, index) {

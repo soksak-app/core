@@ -38,7 +38,13 @@ function audit(grid, where) {
   // the plane is covered exactly, with the corridor between neighbours
   const covered = rects.reduce((n, r) => n + (r.w + grid.gap) * (r.h + grid.gap), 0);
   const plane = (grid.width + grid.gap) * (grid.height + grid.gap);
-  assert.ok(Math.abs(covered - plane) < 2, `${where}: coverage off by ${covered - plane}`);
+  assert.ok(
+    Math.abs(covered - plane) < 2,
+    `${where}: coverage off by ${covered - plane}\n  xs=[${grid.lines("x")}] ys=[${grid.lines("y")}]\n  ` +
+      cards
+        .map((o, i) => `${o.id}[c${o.c0}-${o.c1} r${o.r0}-${o.r1}${o.width !== undefined ? ` w${o.width.toFixed(0)}` : ""}${o.height !== undefined ? ` h${o.height.toFixed(0)}` : ""}] ${rects[i].w.toFixed(0)}x${rects[i].h.toFixed(0)}`)
+        .join("  "),
+  );
 
   let closest = Infinity;
   for (let i = 0; i < rects.length; i++) {
@@ -83,21 +89,40 @@ function audit(grid, where) {
     }
   }
 
-  // a fixed card measures the size it asked for. `c.width >= 0` would have
-  // passed for a sidebar squeezed to nothing by someone else's rearrangement,
-  // which is the defect this is here to catch — so compare against the rect.
-  for (const [i, c] of cards.entries()) {
-    if (c.width !== undefined) {
-      assert.ok(
-        Math.abs(rects[i].w - c.width) < 0.01,
-        `${where}: ${c.id} asked for ${c.width}px wide and measures ${rects[i].w}`,
-      );
-    }
-    if (c.height !== undefined) {
-      assert.ok(
-        Math.abs(rects[i].h - c.height) < 0.01,
-        `${where}: ${c.id} asked for ${c.height}px tall and measures ${rects[i].h}`,
-      );
+  // A px size is what a card gets when the plane can give it. While something
+  // is left to share, every one of them is drawn at exactly what it asked for;
+  // when nothing is, they scale together — by one multiple, never each on its
+  // own — so the plane is still covered exactly.
+  for (const axis of ["x", "y"]) {
+    const measure = (i) => (axis === "x" ? rects[i].w : rects[i].h);
+    const asked = (c) => (axis === "x" ? c.width : c.height);
+    const span = (c) => (axis === "x" ? c.c1 - c.c0 : c.r1 - c.r0);
+    const holders = cards
+      .map((c, i) => [c, i])
+      .filter(([c]) => span(c) === 1 && typeof asked(c) === "number" && asked(c) > 0.01);
+    if (!holders.length) continue;
+
+    const ratios = holders.map(([c, i]) => measure(i) / asked(c));
+    assert.ok(
+      Math.max(...ratios) - Math.min(...ratios) < 0.001,
+      `${where}: px cards on ${axis} are drawn at different multiples ${ratios.map((r) => r.toFixed(3))}`,
+    );
+
+    // Room is a property of slots, not cards: a card with no size of its own can
+    // still be standing in a slot some other card holds, and takes that width.
+    const lo = (c) => (axis === "x" ? c.c0 : c.r0);
+    const held = new Set(holders.map(([c]) => lo(c)));
+    const roomLeft = cards.some(
+      (c, i) => span(c) === 1 && !held.has(lo(c)) && measure(i) > 0.01,
+    );
+    if (roomLeft) {
+      for (const [c, i] of holders) {
+        assert.ok(
+          Math.abs(measure(i) - asked(c)) < 0.01,
+          `${where}: ${c.id} asked for ${asked(c)} on ${axis} and measures ${measure(i)} with room to spare\n  ` +
+            cards.map((o, k) => `${o.id}[c${o.c0}-${o.c1} r${o.r0}-${o.r1}${o.width !== undefined ? ` w${o.width.toFixed(0)}` : ""}${o.height !== undefined ? ` h${o.height.toFixed(0)}` : ""}] ${rects[k].w.toFixed(0)}x${rects[k].h.toFixed(0)}`).join("  "),
+        );
+      }
     }
   }
 }

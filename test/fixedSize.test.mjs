@@ -229,9 +229,10 @@ test("a role is declared, not written into the state", () => {
   assert.equal(grid.setSize("sidebar", "x", null), true, "it can go back to sharing");
   assert.equal(grid.card("sidebar").width, undefined);
 
-  // the last card sharing an axis cannot stop sharing
+  // with nothing left to share, a px size scales to cover the plane rather than
+  // leaving the difference to no one
   const alone = new Soksak(undefined, { width: 1200, height: 800 });
-  assert.equal(alone.setSize("card", "x", 200), false, "nobody would be left to share");
-  assert.equal(alone.card("card").width, undefined);
-  assert.ok(Math.abs(alone.rect("card").w - 1200) < 0.01, "and it still fills the plane");
+  assert.equal(alone.setSize("card", "x", 200), true);
+  assert.equal(alone.card("card").width, 200, "it still holds the number it was given");
+  assert.ok(Math.abs(alone.rect("card").w - 1200) < 0.01, "and covers the plane exactly");
 });

@@ -22,10 +22,15 @@ export interface Plane {
 /**
  * The px width of every slot along an axis.
  *
- * A slot a card holds at a fixed size contributes that size; the rest share what
- * is left, in the proportions the lines describe. Walking the slots in order is
- * what makes a card at the plane's edge and one standing between panes the same
- * case — the only difference is which slot it holds.
+ * The plane is covered exactly, always. A slot a card holds at a px size takes
+ * that size and the rest share what is left — the whole story while there is
+ * something left to share.
+ *
+ * When there is not — every slot held, or the plane narrower than what was
+ * asked for — the px sizes scale together to cover it. A card that closes has
+ * to send its room somewhere, and a sidebar narrowing with the window is the
+ * same fact from the other side: a px size is what a card gets when the plane
+ * can give it, not a claim on room the plane does not have.
  */
 export declare function slotSizes(plane: Plane, axis: Axis): number[];
 /** Where a grid line falls in px — the sum of every slot before it. */
