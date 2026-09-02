@@ -416,3 +416,144 @@ test("the view follows the host's size, and ignores a host with none", () => {
   assert.deepEqual([grid.width, grid.height], [1000, 800], "a destroyed view stops observing");
   delete globalThis.ResizeObserver;
 });
+
+test("the view calls back and honours its options", () => {
+  const updates = [];
+  const { host, grid, view, gone } = mount({
+    classPrefix: "px",
+    updateCard: (el, card, rect) => updates.push([card.id, rect.w, el.dataset.cardId]),
+  });
+
+  assert.ok(updates.length > 0, "updateCard is called for every card");
+  for (const [id, w, marked] of updates) {
+    assert.equal(w, grid.rect(id).w, `${id} was handed the rect it was placed at`);
+    assert.equal(marked, id, "and its own element");
+  }
+
+  assert.equal(host.querySelectorAll(".px-divider").length > 0, true, "classPrefix is used");
+  assert.equal(host.querySelectorAll(".sp-divider").length, 0, "and the default is not");
+  assert.equal(host.querySelectorAll(".px-rule").length, grid.rules().length);
+
+  // Every rule carries the axis and whether it runs the whole plane.
+  for (const rule of grid.rules()) {
+    const el = host.querySelector(
+      `.px-rule[data-axis="${rule.axis}"][data-virtual="${rule.virtual}"]`,
+    );
+    assert.ok(el, `${rule.key} has an element marked with what it is`);
+  }
+
+  view.destroy();
+  assert.deepEqual(gone.sort(), grid.cards.map((c) => c.id).sort(), "destroyCard for each card");
+  assert.equal(host.children.length, 0, "and every element it made is gone");
+});
+
+test("rules: false draws no rules and still draws the grab areas", () => {
+  const { host, grid, view } = mount({ rules: false });
+  assert.equal(host.querySelectorAll(".sp-rule").length, 0);
+  assert.equal(host.querySelectorAll(".sp-divider").length, grid.dividers().length);
+  view.destroy();
+});
+
+test("releasing the pointer folds a pair the drag brought together", () => {
+  const reasons = [];
+  const { window, host, grid, view } = mount({ onChange: (reason) => reasons.push(reason) });
+  // A line no card reads is a snap target with no minimum to respect, which is
+  // the case a drag can actually bring together.
+  grid.split("card", "y");
+  const spare = grid.split("card", "x");
+  grid.close(spare);
+  const virtual = [1, 2].find((k) => grid.isVirtual("x", k));
+  assert.ok(virtual, "a line no card reads");
+  view.render();
+
+  const lines = grid.lines("x").length;
+  const beside = grid
+    .dividers()
+    .find((d) => d.axis === "x" && Math.abs(d.line - virtual) === 1);
+  assert.ok(beside, "a divider next to it");
+  const el = host.querySelector(`.sp-divider[data-axis="x"][data-line="${beside.line}"]`);
+  assert.ok(el, "with an element");
+
+  const from = grid.boundaryPos("x", beside.line);
+  const onto = grid.boundaryPos("x", virtual);
+  pointer(window, el, "pointerdown", 1, from, 300);
+  pointer(window, el, "pointermove", 1, onto - 2, 300);   // inside snapDistance
+  reasons.length = 0;
+  pointer(window, el, "pointerup", 1, onto - 2, 300);
+
+  assert.equal(grid.lines("x").length, lines - 1, "the two lines were folded into one");
+  assert.ok(reasons.includes("merge"), "and the host was told it was a merge");
+  view.destroy();
+});
+
+test("losing the capture ends the drag", () => {
+  const { window, host, grid, view } = mount();
+  const el = host.querySelector('.sp-divider[data-axis="x"]');
+  const from = grid.boundaryPos("x", 1);
+
+  pointer(window, el, "pointerdown", 1, from, 300);
+  pointer(window, el, "pointermove", 1, from - 60, 300);
+  const held = grid.boundaryPos("x", 1);
+  assert.equal(held, from - 60);
+
+  el.dispatchEvent(new window.PointerEvent("lostpointercapture", { pointerId: 1, bubbles: true }));
+  assert.equal(el.dataset.dragging, undefined, "the drag is over");
+
+  el.dispatchEvent(
+    new window.PointerEvent("pointermove", { pointerId: 1, clientX: from - 300, clientY: 300, buttons: 1, bubbles: true }),
+  );
+  assert.equal(grid.boundaryPos("x", 1), held, "and a later move does not resume it");
+  view.destroy();
+});
+
+test("destroy ends a drag in flight and releases what it held", () => {
+  const { window, host, grid, view } = mount();
+  const el = host.querySelector('.sp-divider[data-axis="x"]');
+  const from = grid.boundaryPos("x", 1);
+  let released = 0;
+  el.releasePointerCapture = () => {
+    released++;
+  };
+
+  pointer(window, el, "pointerdown", 1, from, 300);
+  pointer(window, el, "pointermove", 1, from - 40, 300);
+  assert.equal(el.dataset.dragging, "true");
+
+  view.destroy();
+  assert.equal(released, 1, "the capture was released");
+  assert.equal(el.dataset.dragging, undefined, "and the divider is not left held");
+});
+
+test("a swept divider does not stay held", () => {
+  const { window, host, grid, view } = mount();
+  const born = grid.split("card", "y");
+  view.render();
+  const el = host.querySelector('.sp-divider[data-axis="y"]');
+  let released = 0;
+  el.releasePointerCapture = () => {
+    released++;
+  };
+
+  pointer(window, el, "pointerdown", 1, 300, grid.boundaryPos("y", 1));
+  pointer(window, el, "pointermove", 1, 300, grid.boundaryPos("y", 1) + 40);
+  assert.equal(el.dataset.dragging, "true");
+
+  grid.close(born);
+  view.render();
+  assert.equal(el.isConnected, false, "the divider is gone");
+  assert.equal(el.dataset.dragging, undefined, "and it is not still marked as held");
+  assert.equal(released, 1, "its capture was released");
+  view.destroy();
+});
+
+test("element() returns the element for a card the grid still has", () => {
+  const { grid, view } = mount();
+  const born = grid.split("card", "y");
+  view.render();
+  assert.ok(view.element(born), "a card that is there has an element");
+
+  grid.close(born);
+  view.render();
+  assert.equal(view.element(born), undefined, "and one that is gone has none");
+  view.destroy();
+});

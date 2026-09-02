@@ -160,3 +160,69 @@ test("outline returns a value for nothing, and for rects that do not meet", () =
   ], { pad: 10 });
   assert.equal(meeting.loops.length, 1, "one when the padding closes the corridor");
 });
+
+test("the arguments each method reads are the ones it is given", () => {
+  const grid = three();
+  grid.split("terminal", "x", { id: "beside" });
+
+  // isSlicing reads the list it is handed, not always its own.
+  assert.equal(grid.isSlicing(), true);
+  assert.equal(
+    grid.isSlicing([
+      { id: "a", c0: 0, c1: 2, r0: 0, r1: 1 },
+      { id: "b", c0: 2, c1: 3, r0: 0, r1: 2 },
+      { id: "c", c0: 1, c1: 3, r0: 2, r1: 3 },
+      { id: "d", c0: 0, c1: 1, r0: 1, r1: 3 },
+    ]),
+    false,
+    "a pinwheel handed in is answered for",
+  );
+
+  // standings honours `without`. `browser` spans the line the split just made,
+  // so it blocks that boundary until it is the card being ignored.
+  const crossed = grid.cardsCrossing("x", 2).map((c) => c.id);
+  assert.deepEqual(crossed, ["browser"], "browser spans the new line");
+  const all = grid.standings("x");
+  const without = grid.standings("x", "browser");
+  assert.ok(!all.includes(2), "so nothing may stand there");
+  assert.ok(without.includes(2), "unless browser is the one being ignored");
+
+  // canInsertAt checks the index, not only what crosses.
+  for (const line of [-1, 1.5, NaN, 99]) {
+    assert.equal(grid.canInsertAt("x", line), false, `line ${line}`);
+  }
+
+  // insertAt refuses a size the plane cannot hold.
+  assert.equal(grid.insertAt("x", 1, { size: grid.width }), null, "the whole plane");
+  assert.equal(grid.insertAt("x", 1, { size: grid.width + 1 }), null, "more than it");
+
+  // mergeCoincident refuses while a card spans the pair.
+  const lines = grid.lines("x").length;
+  assert.equal(grid.mergeCoincident("x", 1), false, "the lines do not coincide");
+  assert.equal(grid.lines("x").length, lines, "and nothing was folded");
+});
+
+test("zoneAt returns nothing for a point that is not one", () => {
+  const grid = three();
+  for (const [x, y] of [[NaN, 10], [10, NaN], [Infinity, 10], [-1e9, -1e9]]) {
+    assert.equal(grid.zoneAt(x, y), null, `${x},${y}`);
+  }
+  assert.ok(grid.zoneAt(grid.rect("terminal").x + 10, grid.rect("terminal").y + 10), "a real point lands");
+});
+
+test("outline's radius follows pad, and it reports its corners", () => {
+  const one = outline([{ x: 0, y: 0, w: 200, h: 200 }], { pad: 16 });
+  assert.equal(one.corners, 4, "a rect has four");
+  assert.equal(one.sharp, 0);
+  // The default radius is `pad`, so a padded rect is drawn flush with a square
+  // card: the arc radius equals the padding.
+  const radii = [...one.path.matchAll(/A([\d.]+) /g)].map((m) => Number(m[1]));
+  assert.deepEqual(radii, [16, 16, 16, 16]);
+
+  const named = outline([{ x: 0, y: 0, w: 200, h: 200 }], { pad: 16, radius: 40 });
+  assert.deepEqual(
+    [...named.path.matchAll(/A([\d.]+) /g)].map((m) => Number(m[1])),
+    [40, 40, 40, 40],
+    "and a named radius wins",
+  );
+});
