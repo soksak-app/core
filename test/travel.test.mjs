@@ -99,3 +99,20 @@ test("standing still is success and changes nothing", () => {
   assert.equal(grid.moveTo("rail", "x", 1), true);
   assert.equal(JSON.stringify(grid.toJSON()), before);
 });
+
+test("standings includes the plane's borders", () => {
+  // insertAt accepts index 0 and the last index, so standings must list them.
+  const grid = new Soksak(undefined, { width: 1200, height: 600 });
+  assert.deepEqual(grid.standings("x"), [0, 1], "a single card leaves both borders free");
+
+  const left = new Soksak(undefined, { width: 1200, height: 600 });
+  assert.equal(left.insertAt("x", 0, { id: "rail", size: 190 }), "rail");
+  assert.equal(left.rect("rail").x, 0, "index 0 places it at the near border");
+
+  const right = new Soksak(undefined, { width: 1200, height: 600 });
+  assert.equal(right.insertAt("x", 1, { id: "rail", size: 190 }), "rail");
+  assert.ok(
+    Math.abs(right.rect("rail").x + right.rect("rail").w - 1200) < 0.01,
+    "the last index places it at the far border",
+  );
+});

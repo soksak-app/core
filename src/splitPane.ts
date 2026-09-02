@@ -957,8 +957,11 @@ export class Soksak {
    * ask where else it could stand without blocking itself.
    */
   standings(axis: Axis, without?: string): number[] {
+    // Includes the plane's two borders, which `insertAt` accepts.
     const out: number[] = [];
-    for (const k of interiorLines(this.plane, axis)) if (this.canInsertAt(axis, k, without)) out.push(k);
+    for (let k = 0; k < this.arr(axis).length; k++) {
+      if (this.canInsertAt(axis, k, without)) out.push(k);
+    }
     return out;
   }
 

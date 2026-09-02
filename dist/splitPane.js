@@ -893,10 +893,12 @@ export class Soksak {
      * ask where else it could stand without blocking itself.
      */
     standings(axis, without) {
+        // Includes the plane's two borders, which `insertAt` accepts.
         const out = [];
-        for (const k of interiorLines(this.plane, axis))
+        for (let k = 0; k < this.arr(axis).length; k++) {
             if (this.canInsertAt(axis, k, without))
                 out.push(k);
+        }
         return out;
     }
     /**
