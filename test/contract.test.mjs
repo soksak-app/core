@@ -253,3 +253,85 @@ test("outline's radius follows pad, and it reports its corners", () => {
     "and a named radius wins",
   );
 });
+
+test("checkState names every shape a state cannot have", () => {
+  const base = { xs: [0, 0.5, 1], ys: [0, 1] };
+  for (const [cards, why] of [
+    [[{ c0: 0, c1: 1, r0: 0, r1: 1 }], /no id/],
+    [[{ id: "", c0: 0, c1: 1, r0: 0, r1: 1 }], /no id/],
+    [[{ id: 7, c0: 0, c1: 1, r0: 0, r1: 1 }], /no id/],
+    [[{ id: "a", c0: 1, c1: 1, r0: 0, r1: 1 }], /not past/],
+    [[{ id: "a", c0: 0, c1: 1, r0: 1, r1: 1 }], /not past/],
+    [[{ id: "a", c0: 0.5, c1: 1, r0: 0, r1: 1 }], /not an index/],
+  ]) {
+    assert.throws(() => checkState({ ...base, cards }), why, JSON.stringify(cards));
+  }
+});
+
+test("the options take every value that is one", () => {
+  // Zero is a size, and the defaults are what the README states.
+  const zero = new Soksak(undefined, { width: W, height: H, minSize: 0, gap: 0 });
+  assert.equal(zero.minSize, 0, "a minimum of nothing is a minimum");
+  assert.equal(zero.gap, 0);
+  assert.ok(zero.split("card", "x"), "and nothing is too small to cut");
+
+  const plain = new Soksak(undefined, { width: W, height: H });
+  assert.deepEqual(
+    [plain.gap, plain.minSize, plain.grabSize, plain.snapDistance, plain.snap, plain.fillOrder],
+    [24, 96, 11, 7, "merge", "v"],
+    "the defaults the README states",
+  );
+  const named = new Soksak(undefined, {
+    width: W, height: H, gap: 8, minSize: 20, grabSize: 3, snapDistance: 2, snap: "off", fillOrder: "h",
+  });
+  assert.deepEqual(
+    [named.gap, named.minSize, named.grabSize, named.snapDistance, named.snap, named.fillOrder],
+    [8, 20, 3, 2, "off", "h"],
+    "and a named value is kept",
+  );
+});
+
+test("a boundary at the plane's edge returns px, not nothing", () => {
+  const grid = three();
+  // The borders have no line beyond them, so the range falls back to the plane
+  // itself. A missing fallback reads as `null` and every comparison against it
+  // then returns a wrong value.
+  for (const axis of ["x", "y"]) {
+    for (const line of [0, grid.lines(axis).length - 1]) {
+      const [min, max] = grid.boundaryRange(axis, line);
+      assert.equal(typeof min, "number", `${axis}${line} min`);
+      assert.equal(typeof max, "number", `${axis}${line} max`);
+      assert.ok(min >= 0 && max <= (axis === "x" ? W : H), `${axis}${line} is inside the plane`);
+    }
+  }
+});
+
+test("centring a boundary at the plane's edge uses the plane's own edge", () => {
+  const grid = three();
+  grid.split("terminal", "x");
+  for (const axis of ["x", "y"]) {
+    const last = grid.lines(axis).length - 1;
+    const before = [...grid.lines(axis)];
+    // A border is not a boundary: centring one changes nothing, and the
+    // fallback to the plane's edge is what makes the arithmetic finite.
+    for (const line of [0, last]) {
+      const at = grid.centerBoundary(axis, line);
+      assert.ok(Number.isFinite(at), `${axis}${line} answered ${at}`);
+      assert.deepEqual(grid.lines(axis), before, `${axis}${line} moved a line`);
+    }
+  }
+});
+
+test("tidy drops every line no card reads, including the first", () => {
+  const grid = new Soksak(undefined, { width: 1200, height: 600, gap: 24, minSize: 0 });
+  grid.split("card", "y");                       // two rows
+  const spare = grid.split("card", "x");         // a line only the top row breaks on
+  assert.ok(grid.close(spare), "closing it leaves the line behind");
+  const virtual = grid.lines("x").findIndex((_, k) => grid.isVirtual("x", k));
+  assert.equal(virtual, 1, "the line left over is the first interior one");
+  assert.equal(grid.virtualCount(), 1);
+
+  assert.equal(grid.tidy(), 1, "tidy takes it");
+  assert.equal(grid.virtualCount(), 0, "and none is left");
+  assert.equal(grid.lines("x").length, 2, "the array is one shorter");
+});
