@@ -21,15 +21,18 @@ place have to be recognised as one.
 
 **R2 — Everything is a card.**
 A sidebar, a rail, a terminal — one type, one rect rule, one corridor, one
-radius, one outline. A role is one answer: whether the layout moves it. A card
-may also carry a `width`, which is an attribute and not a second kind of card.
+radius, one outline.
 
-The two answers are independent, and *the layout* is the operative word in the
-second. A rail is `fixed` and still travels: `moveTo` names it, changes no other
-card's spans and no line on the other axis. `move` refuses it because a drop
-rearranges everything around it. Dragging a boundary beside a card that holds a
-px size changes that size for the same reason — the gesture is about that card.
-What `fixed` forbids is the layout deciding for it.
+A left sidebar, a right sidebar and a rail may have a fixed width. That is not a
+second kind of card and there is nothing an ordinary card may do that one of
+these may not: it is an ordinary card with a `width`, and the panes beside it
+take what is left. No operation is refused because a card has one, and no rule
+in this file begins "a card with a fixed width may not".
+
+`fixed` is separate, and *the layout* is the operative word in it. A rail is
+`fixed` and still travels: `moveTo` names it, changes no other card's spans and
+no line on the other axis. `move` refuses it because a drop rearranges everything
+around it. What `fixed` forbids is the layout deciding for it.
 
 **R3 — A card occupies its slots, so nothing can cross it.**
 A card holding a column *is* the guarantee that no other card spans across it —
@@ -51,12 +54,16 @@ for it: `width: 180` draws 180 at the plane's edge, 180 between two cards, and
 180 at any `gap`. The slot carries the corridor instead. Drag the boundary and it
 lands where it was dropped; the card's size is what it is left holding.
 
-And the plane is covered exactly, always. A px size is what a card gets when the
-plane can give it, not a claim on room the plane does not have — so when nothing
-is left to share, or the window is narrower than the sizes asked for, every px
-card is drawn at the same multiple of what it asked for. A card that closes has
-somewhere to send its room, a card that arrives is paid for by everyone, and a
-sidebar narrows with the window instead of hanging off the edge.
+And the plane is covered exactly, always. A fixed width is what a card gets when
+the plane can give it, not a claim on room the plane does not have — so when
+nothing is left to share, or the window is narrower than the widths asked for,
+every fixed width is drawn at the same multiple of itself. A card that arrives is
+paid for by everyone in proportion, a card that closes gives what it had back the
+same way, and a sidebar narrows with the window instead of hanging off the edge.
+
+A width describes one slot, so a cut divides it — half and half, or wherever a
+virtual line inside the card says. A card that comes to reach across two slots is
+not that many px wide any more, and the number goes.
 
 **R6 — Rects are computed in one place, from the lines.**
 `geometry.ts` and nothing else — card rects, boundary rules, and grab areas all
@@ -68,9 +75,9 @@ arrangement splitting could have built — so no action becomes impossible becau
 of an earlier one. There are two ways out: a row of neighbours grows into the
 space, or the card's own slots go and the rest take the room back.
 
-A px size is no obstacle. If closing leaves nothing to share, the px sizes scale
-together to cover the plane rather than leaving the difference to no one, which
-is R5's other half.
+A fixed width is no obstacle. If closing leaves nothing to share, the fixed
+widths scale together to cover the plane rather than leaving the difference to no
+one, which is R5's other half.
 
 ## Install
 

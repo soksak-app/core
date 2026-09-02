@@ -174,23 +174,52 @@ test("a boundary between two fixed cards belongs to the one before it", () => {
   assertTiling(grid, "between two fixed cards");
 });
 
-test("centring does nothing beside a fixed card — there is no half to compute", () => {
+test("centring beside a pinned card centres, like anywhere else", () => {
+  // There is no separate kind of card here, so there is no gesture a card can
+  // refuse. A pinned width is a number, and half of it is half of it.
   const grid = edges();
-  const before = grid.card("left").width;
-  const at = grid.boundaryPos("x", 1);
+  grid.moveBoundary("x", 1, 300);
+  grid.centerBoundary("x", 1);
+  assert.ok(
+    Math.abs(grid.rect("left").w - grid.rect("terminal").w) < 0.01,
+    `${grid.rect("left").w} and ${grid.rect("terminal").w}`,
+  );
 
-  assert.equal(grid.centerBoundary("x", 1), at, "the boundary did not move");
-  assert.equal(grid.card("left").width, before, "and the card kept the size it was given");
-
-  // where both sides share, it still centres
   const shared = three();
   shared.moveBoundary("x", 1, 200);
   shared.centerBoundary("x", 1);
   assert.ok(
     Math.abs(shared.rect("sidebar").w - shared.rect("terminal").w) < 0.01,
-    "two sharing cards still come out equal",
+    "two sharing cards come out equal too",
   );
+
+  assert.equal(grid.centerBoundary("x", 0), grid.boundaryPos("x", 0), "a border is not a boundary");
 });
+
+test("a cut divides the card, and so divides its fixed width", () => {
+  // Half and half by default; a virtual line inside the card decides otherwise.
+  // Nothing here is special to a card that has a width — a cut divides whatever
+  // the card was.
+  const grid = three();
+  assert.equal(grid.insertAt("x", 1, { id: "rail", size: 400 }), "rail");
+  assert.equal(grid.canSplit("rail", "x"), true, "there is room for two");
+
+  const born = grid.split("rail", "x");
+  assert.ok(born, "it was cut");
+  assert.ok(
+    Math.abs(grid.card("rail").width + grid.card(born).width - 400) < 0.01,
+    `the number divides: ${grid.card("rail").width} and ${grid.card(born).width}`,
+  );
+  assert.ok(
+    Math.abs(grid.card("rail").width - 200) < 0.01,
+    `half and half by default, not ${grid.card("rail").width}`,
+  );
+  assertTiling(grid, "after cutting a card that has a fixed width");
+});
+
+
+
+
 
 test("a card inserted at a boundary is given a size, or it is not inserted", () => {
   const grid = new Soksak(undefined, { width: 1200, height: 800 });
@@ -235,4 +264,32 @@ test("a role is declared, not written into the state", () => {
   assert.equal(alone.setSize("card", "x", 200), true);
   assert.equal(alone.card("card").width, 200, "it still holds the number it was given");
   assert.ok(Math.abs(alone.rect("card").w - 1200) < 0.01, "and covers the plane exactly");
+});
+
+test("a cut looks for a remembered line first, and halves only when there is none", () => {
+  // A width describes one slot, so a card that has one spans one slot and no
+  // line can be inside it — it always halves. A card taking a share can reach
+  // across several, and then the line it remembers is where the cut lands.
+  const grid = three();
+  assert.equal(grid.insertAt("x", 1, { id: "rail", size: 400 }), "rail");
+  const born = grid.split("rail", "x");
+  assert.ok(Math.abs(grid.card("rail").width - 200) < 0.01, "half");
+  assert.ok(Math.abs(grid.card(born).width - 200) < 0.01, "and half");
+
+  // a sharing card that reaches across a line nobody reads divides there
+  const wide = new Soksak(
+    {
+      xs: [0, 0.2, 1],
+      ys: [0, 1],
+      cards: [{ id: "pane", c0: 0, c1: 2, r0: 0, r1: 1 }],
+    },
+    { width: 1200, height: 600, gap: 0 },
+  );
+  assert.equal(wide.isVirtual("x", 1), true, "nobody reads the line at 0.2");
+  const half = wide.split("pane", "x");
+  assert.ok(half, "cut");
+  assert.ok(
+    Math.abs(wide.rect("pane").w - 240) < 0.01,
+    `it landed on the remembered line, not the centre: ${wide.rect("pane").w}`,
+  );
 });
