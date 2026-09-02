@@ -96,15 +96,35 @@ test("a card element is reused across splits and closes", () => {
   assert.equal(made.filter((id) => id === "card").length, 1, "created once");
 });
 
-test("the view writes position and nothing else", () => {
-  const { host, view } = mount();
-  const el = view.element("card");
-  const style = el.getAttribute("style") ?? "";
+test("the view places every element on the grid rect", () => {
+  const { host, grid, view } = mount();
+  grid.split("card", "x");
+  grid.split("card", "y");
+  view.render();
+
+  // Against the numbers the grid reports, not against the style being present:
+  // a view that drew every card 0x0 in the corner passed the old check.
+  for (const [id, rect] of grid.rects()) {
+    const el = view.element(id);
+    assert.ok(el, `${id} has an element`);
+    assert.equal(el.style.left, `${rect.x}px`, `${id} left`);
+    assert.equal(el.style.top, `${rect.y}px`, `${id} top`);
+    assert.equal(el.style.width, `${rect.w}px`, `${id} width`);
+    assert.equal(el.style.height, `${rect.h}px`, `${id} height`);
+    assert.equal(el.dataset.cardId, id);
+  }
+  for (const divider of grid.dividers()) {
+    const el = host.querySelector(`.sp-divider[data-axis="${divider.axis}"][data-line="${divider.line}"]`);
+    assert.ok(el, `${divider.key} has an element`);
+    assert.equal(el.style.left, `${divider.x}px`, `${divider.key} left`);
+    assert.equal(el.style.width, `${divider.w}px`, `${divider.key} width`);
+  }
+  assert.equal(host.querySelectorAll(".sp-divider").length, grid.dividers().length);
+
+  const style = view.element("card").getAttribute("style") ?? "";
   for (const banned of ["background", "border", "color", "font"]) {
     assert.ok(!style.includes(banned), `the view set ${banned}`);
   }
-  assert.match(style, /position:\s*absolute/);
-  assert.ok(host.querySelectorAll(".sp-divider").length > 0, "and a place to grab the boundary");
 });
 
 test("a host that has not been laid out keeps the size the grid was given", () => {
@@ -133,10 +153,14 @@ test("two pointers drag two dividers independently", () => {
   const xs = [...grid.lines("x")];
   const ys = [...grid.lines("y")];
 
+  const wasX = grid.boundaryPos("x", 1);
   pointer(window, vertical, "pointerdown", 1, 600, 300);
   pointer(window, horizontal, "pointerdown", 2, 300, 300);
   pointer(window, vertical, "pointermove", 1, 400, 300);   // only the first finger moves
 
+  // Where it went, not merely that something changed: a drag that moved the
+  // boundary the wrong way, or by the wrong amount, passed the old check.
+  assert.equal(grid.boundaryPos("x", 1), wasX - 200, "it followed the finger");
   assert.notDeepEqual(grid.lines("x"), xs, "the divider under that finger moved");
   assert.deepEqual(grid.lines("y"), ys, "the other one did not");
 

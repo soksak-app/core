@@ -76,14 +76,24 @@ test("the last card is not closed", () => {
 
 test("a fixed card does not fill", () => {
   const grid = three();
+  let answered = 0;
   for (const card of grid.cards) {
     const fill = grid.fill(card.id);
     if (!fill) continue;
+    answered++;
     assert.ok(
       fill.cards.every((p) => !p.fixed),
       "a fixed card would spread over the plane",
     );
   }
+  // Without this a build whose fill always returns null passes on an empty loop.
+  assert.ok(answered > 0, "and some card had a filler to check");
+
+  // The sidebar is fixed and beside the panes, so it is the one that must not
+  // be offered as a filler.
+  assert.equal(grid.card("sidebar").fixed, true);
+  const beside = grid.fill("terminal");
+  if (beside) assert.ok(beside.cards.every((p) => p.id !== "sidebar"), "the sidebar was offered");
 });
 
 test("fillOrder picks the axis when both sides could take the space", () => {

@@ -75,12 +75,23 @@ test("R3 — no card ever spans over a card, and the check is integers", () => {
     fuzz(grid, seed, 50);
     for (const axis of ["x", "y"]) {
       for (let line = 0; line < grid.lines(axis).length; line++) {
-        const crossing = grid.cardsCrossing(axis, line);
-        assert.equal(
-          grid.canInsertAt(axis, line),
-          crossing.length === 0,
-          `seed ${seed}: ${axis}${line} disagrees with its own spans`,
-        );
+        // Against the operation, not against the expression the predicate is
+        // written in: a card is placed exactly where the predicate allows.
+        const copy = Soksak.from(grid.toJSON(), { width: W, height: H });
+        const said = grid.canInsertAt(axis, line);
+        const went = copy.insertAt(axis, line, { size: 40, id: "probe" }) !== null;
+        // The predicate reports whether a card spans over the line, not whether
+        // the plane has the room, so a true answer can still be refused for
+        // room. A false one may never go in.
+        if (!said) assert.equal(went, false, `seed ${seed}: ${axis}${line} refused, insertAt went`);
+        if (!went) continue;
+        // Nothing was cut: every card that was there keeps its span across.
+        const [alo, ahi] = axis === "x" ? ["r0", "r1"] : ["c0", "c1"];
+        for (const was of grid.cards) {
+          const now = copy.card(was.id);
+          assert.ok(now, `seed ${seed}: ${was.id} survived`);
+          assert.deepEqual([now[alo], now[ahi]], [was[alo], was[ahi]], `${was.id} was cut`);
+        }
       }
     }
   }
@@ -95,12 +106,56 @@ test("R3 — no card ever spans over a card, and the check is integers", () => {
   assert.deepEqual(["x", "y"].map((a) => grid.standings(a).join(",")), before);
 });
 
+/**
+ * Can these spans be cut apart by whole-width and whole-height cuts?
+ *
+ * Worked out here rather than asked of the grid: `isSlicing` is the answer
+ * under test, and a test that asks the implementation for it passes whatever
+ * the implementation defines.
+ */
+function guillotine(spans) {
+  if (spans.length <= 1) return true;
+  for (const [lo, hi] of [["c0", "c1"], ["r0", "r1"]]) {
+    for (const line of [...new Set(spans.map((s) => s[lo]))].sort((a, b) => a - b)) {
+      const before = spans.filter((s) => s[hi] <= line);
+      const after = spans.filter((s) => s[lo] >= line);
+      if (before.length && after.length && before.length + after.length === spans.length) {
+        return guillotine(before) && guillotine(after);
+      }
+    }
+  }
+  return false;
+}
+
 test("R4 — nothing reachable is outside what splitting could build", () => {
   for (let seed = 0; seed < 60; seed++) {
     const grid = three();
     fuzz(grid, seed, 60);
-    assert.ok(grid.isSlicing(), `seed ${seed}`);
+    const spans = grid.cards.map(({ c0, c1, r0, r1 }) => ({ c0, c1, r0, r1 }));
+    assert.ok(guillotine(spans), `seed ${seed}: no cut separates ${JSON.stringify(spans)}`);
+    assert.equal(grid.isSlicing(), true, `seed ${seed}: and the grid agrees`);
   }
+});
+
+test("R4 — a pinwheel is not reachable, and isSlicing returns false", () => {
+  // Four cards around a hole: no whole-width or whole-height cut separates any
+  // of them. Without this the fuzz above would prove nothing about the check.
+  const pinwheel = [
+    { c0: 0, c1: 2, r0: 0, r1: 1 },
+    { c0: 2, c1: 3, r0: 0, r1: 2 },
+    { c0: 1, c1: 3, r0: 2, r1: 3 },
+    { c0: 0, c1: 1, r0: 1, r1: 3 },
+  ];
+  assert.equal(guillotine(pinwheel), false, "the check can fail");
+  const grid = new Soksak(
+    {
+      xs: [0, 0.3, 0.6, 1],
+      ys: [0, 0.3, 0.6, 1],
+      cards: pinwheel.map((s, i) => ({ id: `p${i}`, ...s })),
+    },
+    { width: 900, height: 900 },
+  );
+  assert.equal(grid.isSlicing(), false, "and so does the grid");
 });
 
 test("R5 — the corridor is half a gap inside, and nothing at the plane's border", () => {
@@ -206,7 +261,9 @@ test("R7 — every open card but the last can leave, whatever came before", () =
   }
 });
 
-test("every rule the README states has a test that names it", () => {
+// A ledger, not a behaviour check: it compares two documents and would pass on
+// any implementation. It is here so a rule cannot be stated without a test.
+test("the rules the README states and the rules named by a test are the same list", () => {
   const readme = read("README.md");
   const stated = [...readme.matchAll(/\*\*(R\d) — /g)].map((m) => m[1]);
   const tested = read("test/rules.test.mjs").match(/test\("(R\d) —/g)?.map((s) => s.slice(6, 8)) ?? [];

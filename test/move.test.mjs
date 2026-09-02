@@ -48,7 +48,9 @@ test("move places the card on the named side", () => {
     const grid = three();
     grid.split("browser", "y");
     const target = grid.cards.find((p) => p.id.startsWith("card-")).id;
-    if (!grid.canMove("terminal", target, side)) continue;
+    // Every side must be reachable here, so a build that refuses them all
+    // cannot pass by skipping the body.
+    assert.equal(grid.canMove("terminal", target, side), true, `canMove ${side}`);
 
     assert.equal(grid.move("terminal", target, side), true, side);
     const moved = grid.rect("terminal");
@@ -134,10 +136,19 @@ test("a split does not change which card holds which id", () => {
 
 test("no existing id is reassigned", () => {
   const grid = three();
-  const seen = new Map(grid.cards.map((c) => [c, c.id]));
-  grid.splitToward("terminal", "top", { data: {} });
-  grid.splitToward("browser", "left", { data: {} });
-  for (const [card, id] of seen) {
-    assert.equal(card.id, id, `${id} was renamed under the host`);
+  // Keyed by id and by what the card holds, not by the frozen copy the grid
+  // handed out: comparing that copy's id to itself asserts nothing.
+  const before = new Map(grid.cards.map((c) => [c.id, JSON.stringify(grid.rect(c.id))]));
+  grid.splitToward("terminal", "top", { id: "above", data: {} });
+  grid.splitToward("browser", "left", { id: "beside", data: {} });
+
+  for (const id of before.keys()) {
+    assert.ok(grid.card(id), `${id} is still there under its own name`);
   }
+  assert.deepEqual(
+    grid.cards.map((c) => c.id).filter((id) => !before.has(id)).sort(),
+    ["above", "beside"],
+    "and the only new names are the ones asked for",
+  );
+  assert.equal(new Set(grid.cards.map((c) => c.id)).size, grid.cards.length, "no name twice");
 });

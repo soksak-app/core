@@ -109,13 +109,48 @@ test("a fixed card is never split and never closed", () => {
 
 test("state round-trips through JSON", () => {
   const grid = three();
-  grid.split("terminal", "x");
+  grid.split("terminal", "x", { id: "editor", data: { pty: 7 } });
+  grid.setSize("sidebar", "x", 210);
+  grid.setFixed("sidebar", true);
   grid.moveBoundary("x", 2, 0.7 * W);
   const copy = Soksak.from(grid.toJSON(), { width: W, height: H });
-  assert.deepEqual(copy.toJSON(), grid.toJSON());
-  for (const card of grid.cards) {
-    assert.deepEqual(copy.rect(card.id), grid.rect(card.id));
+
+  // Comparing the two toJSON results would pass on a state that drops a
+  // field, since both sides forget it. Read the copy through the API instead,
+  // and against values named here rather than fetched from the original.
+  assert.deepEqual(copy.card("editor").data, { pty: 7 }, "the payload came across");
+  assert.equal(copy.card("sidebar").width, 210, "and the px size");
+  assert.equal(copy.card("sidebar").fixed, true, "and the role");
+  assert.deepEqual(copy.cards.map((c) => c.id).sort(), grid.cards.map((c) => c.id).sort());
+  for (const card of grid.cards) assert.deepEqual(copy.rect(card.id), grid.rect(card.id));
+
+  // Behaviour, not just shape: the same operation must do the same thing.
+  const same = Soksak.from(grid.toJSON(), { width: W, height: H });
+  assert.equal(same.close("editor"), grid.close("editor"));
+  assert.deepEqual(
+    [...same.rects()].map(([id, r]) => [id, r.w, r.h]),
+    [...grid.rects()].map(([id, r]) => [id, r.w, r.h]),
+    "and leaves the same plane",
+  );
+});
+
+test("every field of a card survives the round trip", () => {
+  // Named one by one: a comparison of two toJSON results cannot see a field
+  // the state drops, because it is missing from both.
+  const grid = new Soksak(undefined, { width: W, height: H });
+  const b = grid.split("card", "x", { id: "b", data: { deep: { n: 1 } } });
+  grid.setSize("card", "x", 180);
+  grid.setFixed("card", true);
+  grid.setData(b, { deep: { n: 2 } });
+
+  const copy = Soksak.from(grid.toJSON(), { width: W, height: H });
+  for (const field of ["id", "c0", "c1", "r0", "r1", "fixed", "width", "height", "data"]) {
+    for (const card of grid.cards) {
+      assert.deepEqual(copy.card(card.id)[field], card[field], `${card.id}.${field}`);
+    }
   }
+  assert.deepEqual(copy.lines("x"), grid.lines("x"));
+  assert.deepEqual(copy.lines("y"), grid.lines("y"));
 });
 
 test("a split carries the payload the host gives the new card", () => {

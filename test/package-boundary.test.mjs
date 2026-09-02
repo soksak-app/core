@@ -61,10 +61,20 @@ test("the view creates only div elements and writes no markup", () => {
   assert.doesNotMatch(source, /style\.(background|border|color|font)/, "the view never styles");
 });
 
-test("the README documents the exported surface", () => {
-  const readme = read("README.md");
-  for (const name of ["Soksak", "SoksakView", "outline"]) {
-    assert.match(readme, new RegExp(name), name);
+test("every exported name appears in the README", async () => {
+  const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8");
+  const lib = await import("../dist/index.js");
+  for (const name of Object.keys(lib)) {
+    assert.match(readme, new RegExp(`\\b${name}\\b`), `${name} is exported and undocumented`);
+  }
+
+  // And every public method of the two classes.
+  const methods = (cls) =>
+    Object.getOwnPropertyNames(cls.prototype).filter((n) => n !== "constructor" && !n.startsWith("_"));
+  const declared = readFileSync(new URL("../dist/soksak.d.ts", import.meta.url), "utf8");
+  for (const name of methods(lib.Soksak)) {
+    if (!new RegExp(`^\\s{4}(get |set )?${name}[(<:]`, "m").test(declared)) continue;   // private
+    assert.match(readme, new RegExp(`\\b${name}\\b`), `Soksak.${name} is public and undocumented`);
   }
 });
 

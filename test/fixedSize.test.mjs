@@ -427,9 +427,21 @@ test("a plane too small for its cards draws the starved one with no width", () =
   grid.insertAt("x", 1, { size: 230, id: "n3" });
   grid.resize(453, 469);   // less than 230 + three minimums + three corridors
 
-  for (const [id, r] of grid.rects()) {
+  const box = grid.rects();
+  for (const [id, r] of box) {
     assert.ok(r.w >= 0 && r.h >= 0, `${id} is ${r.w}x${r.h}`);
     assert.ok(r.x >= -1e-9 && r.x + r.w <= 453 + 1e-9, `${id} runs past the plane`);
   }
-  assert.ok([...grid.rects().values()].some((r) => r.w === 0), "and one of them has no width");
+  const starved = [...box].filter(([, r]) => r.w === 0);
+  assert.equal(starved.length, 1, "one card has no width");
+
+  // Where R5 places it: the middle of the slots it spans, so it stays inside
+  // them and the neighbours on both sides are the same distance away.
+  const [id] = starved[0];
+  const card = grid.card(id);
+  const xs = grid.lines("x");
+  const at = (line) => grid.boundaryPos("x", line);
+  const middle = (at(card.c0) + at(card.c1)) / 2;
+  assert.ok(Math.abs(box.get(id).x - middle) < 1e-9, `drawn at ${box.get(id).x}, not ${middle}`);
+  assert.ok(card.c0 >= 0 && card.c1 <= xs.length - 1);
 });
