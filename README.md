@@ -7,12 +7,13 @@ Pane layout over shared grid lines. Headless core, optional DOM binding, no runt
 **R1 — A boundary is one number.**
 `xs` and `ys` hold every coordinate. A card is a span of indices into them, so
 two cards that meet read the same index and their shared boundary is one number.
-No tolerance decides where a card is or whether two cards meet.
+No tolerance decides where a card is or whether two cards meet: those are
+integer indices, and two cards that meet read the same one.
 
-Tolerance is used in three places, none of them for that: `snapDistance` sets
-how near a drag must come before it lands on a neighbouring line;
-`mergeCoincident` compares two coordinates a snap has already made equal; and
-the outline treats two corners at the same point as one.
+Tolerance decides other things — how near a drag must come before it lands on a
+neighbouring line, whether an operation left a card enough room, whether a
+corner is tight enough to draw square — and every one of those is a judgement
+about px, never about which card is where.
 
 **R2 — Everything is a card.**
 Sidebar, rail and pane use one type, one rect rule, one corridor, one radius,
@@ -156,10 +157,15 @@ Card elements are created once and reused, so a live surface inside one — a
 terminal, a webview, a canvas — is never torn down by a layout change. Splitting
 keeps the original card and its near half; the new card takes the far half.
 
-| Element | Class | Data attributes |
-| --- | --- | --- |
-| grab area | `sp-divider` | `data-axis`, `data-line`, `data-dragging` while held |
-| boundary line | `sp-rule` | `data-axis`, `data-virtual` |
+| Element | Class | Attributes the view writes | Inline style |
+| --- | --- | --- | --- |
+| card, from `createCard` | yours | `data-card-id` | `position`, `left`, `top`, `width`, `height` |
+| grab area | `sp-divider` | `data-axis`, `data-line`, `data-dragging` while held, `tabindex="0"`, `role="separator"` | the same, plus `touch-action: none` |
+| boundary line | `sp-rule` | `data-axis`, `data-virtual` | the same, plus `pointer-events: none` |
+
+`data-virtual` on a rule marks a rule that runs the whole plane rather than only
+where cards break on the line. `isVirtual` reports something else: whether any
+card reads the line at all.
 
 ```css
 #stage { position: relative; }
@@ -246,7 +252,9 @@ grid.canMove("terminal", "browser", "right");   // asking is not doing
 grid.move("terminal", "browser", "right");      // false, and unchanged, if refused
 ```
 
-The card keeps its id, its payload and its px size.
+The card keeps its id and its payload. It keeps its px size only when it lands
+spanning one slot on that axis: a card spanning two carries none (R5), so a move
+onto a side that widens it drops the size.
 
 `splitToward(id, side, init)` places a new card on a named side. `split` gives
 the far half to the new card, so `left` and `top` swap the two spans. Ids are
@@ -267,8 +275,11 @@ edge band is a fraction of the body, not px.
 
 Cards separated by a corridor do not touch, so their plain union falls apart into
 one loop each. Grow them first: at `pad = gap / 2` the grown rects meet on the
-corridor centre line and the union closes into one shape. Every right angle
-becomes an arc, including the reflex corners of an L.
+corridor centre line and the union closes into one shape. A right angle becomes
+an arc where the radius fits, including the reflex corners of an L; the radius
+is capped at half the shorter of the two sides meeting there, and a corner too
+tight for an arc is drawn as a straight cut. `Outline.corners` counts the
+corners and `Outline.sharp` how many were cut.
 
 ```js
 import { outline } from "soksak";
@@ -311,7 +322,7 @@ first.
 | `gap` | `24` | Corridor between cards, px. Half of it insets every inner edge and is the outline's `pad`. |
 | `minSize` | `96` | Smallest card edge, px. |
 | `grabSize` | `11` | Smallest grab area, px. Apart from `gap`, so `gap: 0` is still draggable. |
-| `snap` | `"merge"` | A dragged boundary snaps onto a neighbour it nearly meets and the two become one line. `"off"`: neither. |
+| `snap` | `"merge"` | A dragged boundary snaps onto a neighbour it nearly meets. `mergeCoincident` folds the two into one line, which `SoksakView` calls when the pointer is released. `"off"`: neither. |
 | `snapDistance` | `7` | How close it must come, px. |
 | `fillOrder` | `"v"` | Which axis a close tries first: `"v"` from above/below, `"h"` from the sides. |
 | `width`, `height` | `0` | Plane size. `resize(w, h)` updates it; the view does this for you. |

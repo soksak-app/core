@@ -29,7 +29,13 @@ export interface Outline {
 }
 /** Boundary of the union of axis-aligned rects, as closed rectilinear loops. */
 export declare function unionLoops(rects: readonly Rect[]): Point[][];
-/** One closed loop as an SVG path with every right angle turned into an arc. */
+/**
+ * One closed loop as an SVG path, each right angle turned into an arc.
+ *
+ * The radius is capped at half the shorter of the two sides meeting at the
+ * corner, so a short side cannot bow past its own end. A corner left with less
+ * than half a px is cut straight instead and counted in `sharp`.
+ */
 export declare function roundedPath(loop: readonly Point[], radius: number, innerRadius: number): {
     d: string;
     corners: number;

@@ -83,7 +83,13 @@ function dropCollinear(pts) {
     }
     return out;
 }
-/** One closed loop as an SVG path with every right angle turned into an arc. */
+/**
+ * One closed loop as an SVG path, each right angle turned into an arc.
+ *
+ * The radius is capped at half the shorter of the two sides meeting at the
+ * corner, so a short side cannot bow past its own end. A corner left with less
+ * than half a px is cut straight instead and counted in `sharp`.
+ */
 export function roundedPath(loop, radius, innerRadius) {
     const n = loop.length;
     let d = '';

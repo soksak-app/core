@@ -2,9 +2,14 @@
  * DOM binding for `Soksak`.
  *
  * The view sets position, manages element lifecycle and handles pointer input.
- * Card elements come from the host's `createCard` callback. The elements the
- * view creates carry a class name and data attributes and no inline styling
- * beyond position, left, top, width and height.
+ * Card elements come from the host's `createCard` callback; on those the view
+ * writes `position`, `left`, `top`, `width`, `height` and `data-card-id`.
+ *
+ * It creates two kinds of element of its own. A rule carries `class`,
+ * `data-axis`, `data-virtual`, and `position`, `pointer-events: none`, `left`,
+ * `top`, `width`, `height`. A divider carries `class`, `data-axis`,
+ * `data-line`, `data-dragging` while held, `tabindex="0"`, `role="separator"`,
+ * and `position`, `touch-action: none`, `left`, `top`, `width`, `height`.
  *
  * The host element needs a non-static `position`; the view places children
  * absolutely inside it.
@@ -18,7 +23,8 @@ export type ChangeReason = 'drag' | 'center' | 'merge' | 'resize' | 'render';
 export interface ViewOptions {
   /**
    * Build the element for a card. Called once per card. The element is reused
-   * across renders. The view sets only position, left, top, width and height.
+   * across renders. The view sets `position`, `left`, `top`, `width`, `height`
+   * and `data-card-id` on it, and nothing else.
    */
   createCard(card: Card): HTMLElement;
   /** Called on every render for every card, after the rect is applied. */
