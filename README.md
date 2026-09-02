@@ -201,9 +201,15 @@ grid.setData("rail", { pty: 3 });      // host payload
 grid.moveTo("rail", "x", 4);    // a column leaves and a column arrives
 ```
 
-Travelling that way closes nothing and splits nothing, so no other card's spans
-change and no boundary on the other axis moves at all. That is the difference
-between a rail moving and the layout being rearranged around it.
+Travelling that way closes nothing and splits nothing. The slot itself moves:
+the cards it passes shift by its span, every other line keeps the coordinate it
+had, and no boundary on the other axis moves. Between interior boundaries no
+other card changes width at all.
+
+Landing on the plane's border is the one exception. A border charges no
+corridor, so the rail there costs half a gap less, and the card that was flush
+against the border now has the rail beside it and pays half a gap. Every card
+keeps its share of the plane; what moves is the corridor drawn next to it.
 
 ## Moving a card
 

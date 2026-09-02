@@ -994,9 +994,18 @@ export class Soksak {
     if (line === from || line === card[hi]) return true;   // already there
 
     const before = this.toJSON();
-    const span = this.arr(axis)[from + 1] - this.arr(axis)[from];
+    const a = this.arr(axis);
+    const was = [...a];
+    const span = was[from + 1] - was[from];
     this.list.splice(this.list.indexOf(card), 1);
-    this.dropSlot(axis, from);
+
+    // The slot travels; it is not given to a neighbour and taken back from
+    // another. Move the indices first, since canInsertAt reads only those.
+    a.splice(from + 1, 1);
+    for (const c of this.list) {
+      if (c[lo] > from) c[lo]--;
+      if (c[hi] > from) c[hi]--;
+    }
 
     // The target boundary shifted down by one if it stood past the slot that left.
     const target = line > from + 1 ? line - 1 : line;
@@ -1004,7 +1013,26 @@ export class Soksak {
       this.restore(before);
       return false;
     }
-    this.openSlot(axis, target, span);
+
+    a.splice(target, 0, 0);
+    for (const c of this.list) {
+      if (c[lo] >= target) c[lo]++;
+      if (c[hi] > target) c[hi]++;
+    }
+
+    // Write every coordinate from the one it had. The cards the slot passes
+    // shift by its span once; the rest keep their exact value. Shifting the
+    // whole tail out and back added a rounding error to every line.
+    if (target <= from) {
+      for (let k = 0; k <= target; k++) a[k] = was[k];
+      for (let k = target + 1; k <= from + 1; k++) a[k] = was[k - 1] + span;
+      for (let k = from + 2; k < a.length; k++) a[k] = was[k];
+    } else {
+      for (let k = 0; k <= from; k++) a[k] = was[k];
+      for (let k = from + 1; k < target; k++) a[k] = was[k + 1] - span;
+      a[target] = was[line] - span;
+      for (let k = target + 1; k < a.length; k++) a[k] = was[k];
+    }
     const across: Axis = axis === 'x' ? 'y' : 'x';
     const [alo, ahi] = SPAN[across];
     card[lo] = target;

@@ -61,6 +61,57 @@ test("travelling changes no other card's spans and no row boundary", () => {
   assertTiling(grid, "after travelling");
 });
 
+test("travelling between interior boundaries changes no other card's width", () => {
+  const grid = railed();
+  grid.split("terminal", "x");
+  grid.split("browser", "x");
+  const before = Object.fromEntries(
+    grid.cards.filter((c) => c.id !== "rail").map((c) => [c.id, grid.rect(c.id).w]),
+  );
+
+  const last = grid.lines("x").length - 1;
+  const interior = grid.standings("x", "rail").filter((l) => l > 0 && l < last);
+  assert.ok(interior.length > 1, "there is more than one boundary to travel between");
+  for (const line of [...interior].reverse()) {
+    assert.equal(grid.moveTo("rail", "x", line), true, `to ${line}`);
+    for (const [id, w] of Object.entries(before)) {
+      assert.equal(grid.rect(id).w, w, `${id} after the rail moved to ${line}`);
+    }
+    assert.equal(grid.rect("rail").w, 190, "and the rail kept its width");
+    assertTiling(grid, `rail at ${line}`);
+  }
+});
+
+test("standing on the plane's border moves the corridor, not the share", () => {
+  const grid = railed();
+  grid.split("terminal", "x");
+  grid.split("browser", "x");
+  const xs = () => grid.lines("x");
+  const share = (id) => {
+    const c = grid.card(id);
+    return xs()[c.c1] - xs()[c.c0];
+  };
+  const before = Object.fromEntries(
+    grid.cards.filter((c) => c.id !== "rail").map((c) => [c.id, share(c.id)]),
+  );
+  const drawn = grid.rect("terminal").w + grid.rect("card-1").w;
+  assert.notEqual(grid.rect("terminal").w, grid.rect("card-1").w, "card-1 is flush with the border");
+
+  assert.equal(grid.moveTo("rail", "x", xs().length - 1), true);
+
+  // Every column keeps the share it had. What changes is the corridor: the rail
+  // pays half a gap at the border instead of a whole one, and the column that
+  // was flush against the border now has the rail beside it.
+  for (const [id, span] of Object.entries(before)) {
+    assert.ok(Math.abs(share(id) - span) < 1e-9, `${id} kept its share`);
+  }
+  assert.equal(grid.rect("rail").w, 190);
+  assert.ok(Math.abs(grid.rect("terminal").w - grid.rect("card-1").w) < 1e-9,
+            "equal shares now draw equal");
+  assert.ok(Math.abs(grid.rect("terminal").w + grid.rect("card-1").w - drawn) < 1e-9);
+  assertTiling(grid, "rail on the border");
+});
+
 test("it lands on the boundary it was sent to", () => {
   // to the near boundary: only the left sidebar stands before it
   const near = railed();
