@@ -22,11 +22,20 @@ import { fillFor, isSlicing } from './slicing.js';
 const EPS = 1e-9;
 const clamp = (v, lo, hi) => lo > hi ? (lo + hi) / 2 : Math.min(hi, Math.max(lo, v));
 export class Soksak {
+    /** Corridor between two cards, in px. Never negative — a card would overlap. */
+    get gap() {
+        return this.g;
+    }
+    set gap(px) {
+        if (Number.isFinite(px) && px >= 0)
+            this.g = px;
+    }
     /** Without a state, starts as one card filling the plane. */
     constructor(state, options = {}) {
         var _a, _b, _c, _d, _e, _f, _g, _h;
         this.seq = 0;
         this.sliceMemo = new Map();
+        this.g = 24;
         this.gap = (_a = options.gap) !== null && _a !== void 0 ? _a : 24;
         this.minSize = (_b = options.minSize) !== null && _b !== void 0 ? _b : 96;
         this.grabSize = (_c = options.grabSize) !== null && _c !== void 0 ? _c : 11;

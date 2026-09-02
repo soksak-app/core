@@ -51,7 +51,10 @@ export declare class Soksak {
     private h;
     private seq;
     private sliceMemo;
-    gap: number;
+    private g;
+    /** Corridor between two cards, in px. Never negative — a card would overlap. */
+    get gap(): number;
+    set gap(px: number);
     minSize: number;
     grabSize: number;
     snapDistance: number;

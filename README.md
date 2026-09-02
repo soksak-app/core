@@ -82,8 +82,14 @@ one, which is R5's other half.
 ## Install
 
 ```sh
-pnpm add soksak
+pnpm add github:min-median-max/soksak
 ```
+
+Not `pnpm add soksak` — that name belongs to an unrelated jQuery plugin on
+npm, and following it would install someone else's 2015 code. This package is
+installed from git; `dist/` is committed so there is nothing to build.
+
+ESM only. There is no CommonJS build and `require` will not resolve it.
 
 ## The model
 
@@ -262,7 +268,7 @@ becomes an arc, including the reflex corners of an L.
 ```js
 import { outline } from "soksak";
 
-const rects = ["left", focused].map((id) => grid.rect(id));
+const rects = ["left", focused].map((id) => grid.rect(id)).filter((r) => r !== undefined);
 const shape = outline(rects, { pad: grid.gap / 2, radius: 14 + grid.gap / 2 });
 path.setAttribute("d", shape.path);   // works for both fill (evenodd) and stroke
 shape.loops.length;                   // 1 when the cards are adjacent, 2 when apart

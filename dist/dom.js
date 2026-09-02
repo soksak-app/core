@@ -31,7 +31,13 @@ export class SoksakView {
             });
             this.observer.observe(host);
         }
-        this.grid.resize(host.clientWidth, host.clientHeight);
+        // Only if the host has been laid out. A host that is `display:none` or not
+        // yet in the document measures 0×0, and taking that as the plane's size
+        // silently gives every card no area — the grid arrived with a size, and a
+        // measurement of nothing is not a reason to throw it away.
+        if (host.clientWidth > 0 && host.clientHeight > 0) {
+            this.grid.resize(host.clientWidth, host.clientHeight);
+        }
     }
     /** Re-place every element from the grid. Cheap enough to call on every frame of a drag. */
     render(reason = 'render') {

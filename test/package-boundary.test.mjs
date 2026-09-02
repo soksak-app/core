@@ -9,16 +9,27 @@ test("every exported path exists in the build", () => {
   for (const path of [pkg.main, pkg.module, pkg.types]) {
     assert.equal(existsSync(new URL(`../${path}`, import.meta.url)), true, path);
   }
+  // An entry is either a path or a map of conditions to paths, and a condition
+  // may itself be a map. Walk to the strings.
+  const paths = (entry) =>
+    typeof entry === "string" ? [entry] : Object.values(entry).flatMap(paths);
   for (const [name, entry] of Object.entries(pkg.exports)) {
-    for (const path of Object.values(entry)) {
+    for (const path of paths(entry)) {
       assert.equal(existsSync(new URL(`../${path}`, import.meta.url)), true, `${name} -> ${path}`);
     }
   }
 });
 
 test("the toolchain owners are exact", () => {
-  const nodeVersion = read(".node-version").trim();
-  assert.equal(pkg.engines.node, nodeVersion);
+  // `.node-version` is the Node this is built on. `engines.node` is the Node a
+  // consumer needs. Those are different questions, and pinning the second to
+  // the first told everyone else to run the version I happen to have — an
+  // install refused on Node 20 for a build that targets ES2019. What must hold
+  // is only that what I build on satisfies what I advertise.
+  const built = read(".node-version").trim();
+  assert.match(pkg.engines.node, /^>=\d+/, "consumers are given a floor, not my version");
+  const floor = Number(pkg.engines.node.slice(2).split(".")[0]);
+  assert.ok(Number(built.split(".")[0]) >= floor, `built on ${built}, advertised ${pkg.engines.node}`);
   assert.match(pkg.packageManager, /^pnpm@\d+[.]\d+[.]\d+$/);
   assert.equal(pkg.type, "module");
   const makefile = read("Makefile");

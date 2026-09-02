@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": "26.7.0"
+    "node": ">=20"
   },
   "packageManager": "pnpm@11.24.0",
   "description": "Headless soksak layout with shared grid lines: split, close, drag, snap-and-merge boundaries, and a rounded union outline that binds any set of panes. Guarantees a slicing layout, exact coverage, and that every pane stays closable.",
@@ -14,8 +14,10 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    }
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",
@@ -53,5 +55,6 @@
   "homepage": "https://github.com/min-median-max/soksak#readme",
   "devDependencies": {
     "typescript": "7.0.2"
-  }
+  },
+  "sideEffects": false
 }

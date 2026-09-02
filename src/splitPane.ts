@@ -79,7 +79,16 @@ export class Soksak {
   private seq = 0;
   private sliceMemo = new Map<string, boolean>();
 
-  gap: number;
+  private g = 24;
+
+  /** Corridor between two cards, in px. Never negative — a card would overlap. */
+  get gap(): number {
+    return this.g;
+  }
+
+  set gap(px: number) {
+    if (Number.isFinite(px) && px >= 0) this.g = px;
+  }
   minSize: number;
   grabSize: number;
   snapDistance: number;
