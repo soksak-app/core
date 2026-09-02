@@ -26,17 +26,21 @@ test("a drag stops where a card would fall under minSize", () => {
 
 /** A line no card reads, made the way one is really made: split, then close. */
 function withVirtualLine() {
+  // Two rows. Splitting the top row and closing the new card leaves the line
+  // for the bottom row, which still spans it. In a single-row plane the close
+  // restores the previous spans and there is no line left over.
   const grid = new Soksak(
-    { xs: [0, 0.5, 1], ys: [0, 1], cards: [
+    { xs: [0, 0.5, 1], ys: [0, 0.5, 1], cards: [
       { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
       { id: "b", c0: 1, c1: 2, r0: 0, r1: 1 },
+      { id: "under", c0: 0, c1: 2, r0: 1, r1: 2 },
     ] },
     { width: W, height: H },
   );
   grid.split("b", "x");
   grid.close(grid.cards.at(-1).id);
   const line = [1, 2].find((k) => grid.isVirtual("x", k));
-  assert.ok(line !== undefined, "the closed card left its line behind");
+  assert.ok(line !== undefined, "the closed card left its line");
   return { grid, virtual: line };
 }
 

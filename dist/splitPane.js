@@ -35,6 +35,17 @@ export class Soksak {
         this.seq = 0;
         this.sliceMemo = new Map();
         this.splitMemo = new Map();
+        /**
+         * Which side of a card's slot gave up the span it occupies, by card id.
+         *
+         * `split` and `insertAt` take the span from one neighbour. A close returns it
+         * by removing the line on that side, so the two are inverses. Without this
+         * the space moves to whichever neighbour the fill picks, and repeating the
+         * pair drives one card to `minSize`.
+         */
+        this.paidBy = new Map();
+        /** Which side `openSlot` last took its span from. */
+        this.paid = null;
         /** True while canSplit runs a trial split and restores the state. */
         this.probing = false;
         this.g = 24;
@@ -619,6 +630,7 @@ export class Soksak {
         fresh[lo] = line;
         card[hi] = line;
         this.list.push(fresh);
+        this.paidBy.set(fresh.id, 'lo');
         this.changed();
         if (!this.stillFits(axis, was)) {
             this.restore(undo);
@@ -649,6 +661,7 @@ export class Soksak {
         card[hi] = fresh[hi];
         fresh[lo] = near[0];
         fresh[hi] = near[1];
+        this.paidBy.set(fresh.id, 'hi'); // the halves were swapped
         this.changed();
         return born;
     }
@@ -705,6 +718,27 @@ export class Soksak {
         const card = this.removable(id);
         if (!card)
             return false;
+        // Return the span to the side that gave it up, by removing the line on that
+        // side. Only when no other card is in these slots.
+        const paid = this.paidBy.get(id);
+        if (paid) {
+            for (const axis of AXES) {
+                const [lo, hi] = SPAN[axis];
+                if (card[hi] - card[lo] !== 1)
+                    continue;
+                const alone = this.list.every((c) => c === card || c[hi] <= card[lo] || c[lo] >= card[hi]);
+                if (!alone)
+                    continue;
+                const gone = paid === 'lo' ? card[lo] : card[hi];
+                if (gone <= 0 || gone >= this.arr(axis).length - 1)
+                    continue;
+                this.list.splice(this.list.indexOf(card), 1);
+                this.removeLine(axis, gone, paid);
+                this.paidBy.delete(id);
+                this.changed();
+                return true;
+            }
+        }
         const filling = this.fill(id);
         if (filling) {
             for (const neighbour of filling.cards)
@@ -776,6 +810,8 @@ export class Soksak {
         else
             fresh.height = init.size;
         this.list.push(fresh);
+        if (this.paid)
+            this.paidBy.set(fresh.id, this.paid);
         this.changed();
         if (!this.stillFits(axis, was)) {
             this.restore(undo);
@@ -801,13 +837,29 @@ export class Soksak {
     openSlot(axis, line, span) {
         const a = this.arr(axis);
         const [lo, hi] = SPAN[axis];
-        // The new slot takes its span from the whole plane in proportion.
-        const keep = 1 - span;
-        const at = a[line] * keep + span;
-        for (let k = 0; k < a.length; k++)
-            a[k] = k <= line ? a[k] * keep : a[k] * keep + span;
-        a.splice(line + 1, 0, at);
-        a[a.length - 1] = 1;
+        // The new slot takes its span from the slot next to the boundary, so a
+        // close that merges it back into that slot restores the previous spans.
+        // Which slot depends on where there is room.
+        const after = line < a.length - 1 ? a[line + 1] - a[line] : 0;
+        const before = line > 0 ? a[line] - a[line - 1] : 0;
+        this.paid = after >= span ? 'hi' : before >= span ? 'lo' : null;
+        if (after >= span) {
+            a.splice(line + 1, 0, a[line] + span);
+        }
+        else if (before >= span) {
+            const at = a[line];
+            a[line] = at - span;
+            a.splice(line + 1, 0, at);
+        }
+        else {
+            // Neither neighbour has the room on its own; take it from the whole plane.
+            const keep = 1 - span;
+            const at = a[line] * keep + span;
+            for (let k = 0; k < a.length; k++)
+                a[k] = k <= line ? a[k] * keep : a[k] * keep + span;
+            a.splice(line + 1, 0, at);
+            a[a.length - 1] = 1;
+        }
         for (const card of this.list) {
             if (card[lo] >= line)
                 card[lo]++;
@@ -821,6 +873,23 @@ export class Soksak {
      * Removes the far line, or the near line for the last slot, so the plane's
      * two borders are never removed.
      */
+    /**
+     * Remove one line and shift the spans that referenced it.
+     *
+     * `into` says which neighbouring slot absorbs the one that goes, which
+     * decides whether a card ending on the line follows it or reaches past it.
+     */
+    removeLine(axis, gone, into) {
+        const a = this.arr(axis);
+        const [lo, hi] = SPAN[axis];
+        a.splice(gone, 1);
+        for (const card of this.list) {
+            if (card[lo] >= gone)
+                card[lo]--;
+            if (into === 'lo' ? card[hi] > gone : card[hi] >= gone)
+                card[hi]--;
+        }
+    }
     dropSlot(axis, slot) {
         const a = this.arr(axis);
         if (a.length <= 2)
@@ -829,17 +898,9 @@ export class Soksak {
         // Remove the interior line: the far one, or the near one for the last slot.
         const last = slot + 1 >= a.length - 1;
         const gone = last ? slot : slot + 1;
-        const freed = a[slot + 1] - a[slot];
-        for (let k = slot + 1; k < a.length; k++)
-            a[k] -= freed;
+        // The neighbouring slot absorbs the span, which is what `openSlot` takes
+        // from it, so a slot removed and one opened at the same boundary cancel.
         a.splice(gone, 1);
-        // and what the slot had goes back to the plane, shared out in proportion
-        const keep = 1 - freed;
-        if (keep > EPS)
-            for (let k = 0; k < a.length; k++)
-                a[k] /= keep;
-        a[0] = 0;
-        a[a.length - 1] = 1;
         for (const card of this.list) {
             if (card[lo] >= gone)
                 card[lo]--;
@@ -884,6 +945,14 @@ export class Soksak {
         card[ahi] = this.arr(across).length - 1;
         this.list.push(card);
         this.changed();
+        // The slot leaves one boundary and arrives at another, so the neighbours
+        // that give and take are not the same pair. Refuse when that leaves a card
+        // without area.
+        const frame = frameOf(this.plane);
+        if (this.list.some((c) => { const r = rectIn(frame, c); return !(r.w > 0 && r.h > 0); })) {
+            this.restore(before);
+            return false;
+        }
         return true;
     }
     /**

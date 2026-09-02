@@ -48,6 +48,17 @@ export declare class Soksak {
     private seq;
     private sliceMemo;
     private splitMemo;
+    /**
+     * Which side of a card's slot gave up the span it occupies, by card id.
+     *
+     * `split` and `insertAt` take the span from one neighbour. A close returns it
+     * by removing the line on that side, so the two are inverses. Without this
+     * the space moves to whichever neighbour the fill picks, and repeating the
+     * pair drives one card to `minSize`.
+     */
+    private paidBy;
+    /** Which side `openSlot` last took its span from. */
+    private paid;
     /** True while canSplit runs a trial split and restores the state. */
     private probing;
     private g;
@@ -277,6 +288,13 @@ export declare class Soksak {
      * Removes the far line, or the near line for the last slot, so the plane's
      * two borders are never removed.
      */
+    /**
+     * Remove one line and shift the spans that referenced it.
+     *
+     * `into` says which neighbouring slot absorbs the one that goes, which
+     * decides whether a card ending on the line follows it or reaches past it.
+     */
+    private removeLine;
     private dropSlot;
     /**
      * Move a plane-spanning card to another boundary.

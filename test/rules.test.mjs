@@ -270,17 +270,22 @@ test("a line no card reads costs nothing, and a corridor never outgrows the plan
   // A corridor separates two cards. A remembered boundary separates nothing.
   const grid = new Soksak(undefined, { width: 1200, height: 600, gap: 24 });
   grid.split("card", "x");
-  const born = grid.insertAt("x", 1, { id: "rail", size: 190 });
-  grid.close(born);
-  const remembered = grid
-    .lines("x")
-    .some((_, i) => i > 0 && i < grid.lines("x").length - 1 && grid.isVirtual("x", i));
-  assert.ok(remembered, "the boundary is remembered");
-  assert.equal(
-    grid.cards.reduce((n, c) => n + grid.rect(c.id).w, 0) + grid.gap,
-    grid.width,
-    "and the plane is still spent on cards and one corridor, not on the memory",
+  // Two rows, so the bottom one still spans the line after the close.
+  const rows = new Soksak(
+    { xs: [0, 0.5, 1], ys: [0, 0.5, 1], cards: [
+      { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
+      { id: "b", c0: 1, c1: 2, r0: 0, r1: 1 },
+      { id: "under", c0: 0, c1: 2, r0: 1, r1: 2 },
+    ] },
+    { width: 1200, height: 600, gap: 24 },
   );
+  rows.close("b");
+  assert.ok(
+    rows.lines("x").some((_, i) => i > 0 && i < rows.lines("x").length - 1 && rows.isVirtual("x", i)),
+    "the closed card left its line",
+  );
+  assert.equal(rows.rect("a").w, rows.width, "and the line takes no width from the row above");
+  assert.equal(rows.rect("under").w, rows.width, "nor from the row below");
 
   // and when the plane is smaller than the corridors, the corridors give way
   for (const px of [200, 40, 10, 1, 0]) {
@@ -312,4 +317,28 @@ test("R7 — a card stays only when the layout was told not to touch what would 
 
   grid.setFixed("card", false);
   assert.equal(grid.canClose("card-4"), true, "and it leaves the moment that is lifted");
+});
+
+test("a card added and closed leaves the plane as it was", () => {
+  // split, splitToward and insertAt each take the new card's span from one
+  // neighbour. Closing it returns the span to that neighbour.
+  const start = () => {
+    const grid = new Soksak(undefined, { width: 1200, height: 600, gap: 24 });
+    grid.split("card", "x");
+    return grid;
+  };
+  const widths = (grid) => grid.cards.map((c) => +grid.rect(c.id).w.toFixed(3));
+
+  for (const [name, round] of [
+    ["split", (g) => { const b = g.split("card", "x"); return b && g.close(b); }],
+    ["splitToward left", (g) => { const b = g.splitToward("card", "left", {}); return b && g.close(b); }],
+    ["insertAt", (g) => { const b = g.insertAt("x", 1, { size: 190 }); return b && g.close(b); }],
+  ]) {
+    const grid = start();
+    const before = widths(grid);
+    for (let i = 0; i < 40; i++) {
+      assert.ok(round(grid), `${name}: round ${i} completed`);
+    }
+    assert.deepEqual(widths(grid), before, `${name}: forty rounds changed nothing`);
+  }
 });
