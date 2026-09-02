@@ -300,22 +300,40 @@ export function boundarySpans(
   meet: Touching = touching(plane, axis),
 ): [number, number][] {
   const [o0, o1] = SPAN[other(axis)];
-  const spans: [number, number][] = [];
-  for (const before of meet.ends.get(line) ?? []) {
-    for (const after of meet.starts.get(line) ?? []) {
-      const start = Math.max(before[o0], after[o0]);
-      const end = Math.min(before[o1], after[o1]);
-      if (end > start) spans.push([start, end]);
-    }
+  // What the cards ending here cover, intersected with what the cards starting
+  // here cover. Taking each pair's overlap and merging those gives the same
+  // answer and walks every card against every card to do it.
+  const before = cover(meet.ends.get(line), o0, o1);
+  const after = cover(meet.starts.get(line), o0, o1);
+
+  const out: [number, number][] = [];
+  let i = 0;
+  let j = 0;
+  while (i < before.length && j < after.length) {
+    const start = Math.max(before[i][0], after[j][0]);
+    const end = Math.min(before[i][1], after[j][1]);
+    if (end > start) out.push([start, end]);
+    if (before[i][1] < after[j][1]) i++;
+    else j++;
   }
-  spans.sort((a, b) => a[0] - b[0]);
-  const merged: [number, number][] = [];
+  return out;
+}
+
+/** The spans a set of cards covers on the other axis, sorted and merged. */
+function cover(
+  cards: Card[] | undefined,
+  o0: 'c0' | 'r0',
+  o1: 'c1' | 'r1',
+): [number, number][] {
+  if (!cards?.length) return [];
+  const spans = cards.map((c): [number, number] => [c[o0], c[o1]]).sort((a, b) => a[0] - b[0]);
+  const out: [number, number][] = [spans[0]];
   for (const span of spans) {
-    const last = merged[merged.length - 1];
-    if (last && span[0] <= last[1]) last[1] = Math.max(last[1], span[1]);
-    else merged.push([span[0], span[1]]);
+    const last = out[out.length - 1];
+    if (span[0] <= last[1]) last[1] = Math.max(last[1], span[1]);
+    else out.push([span[0], span[1]]);
   }
-  return merged;
+  return out;
 }
 
 /** True when no card references this line. */

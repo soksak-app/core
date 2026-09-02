@@ -108,6 +108,7 @@ export class SoksakView {
       if (!held) {
         const el = this.options.createCard(card);
         el.style.position = 'absolute';
+        el.dataset.cardId = card.id;
         this.host.appendChild(el);
         held = { el, card };
         this.cardEls.set(card.id, held);
@@ -115,7 +116,6 @@ export class SoksakView {
       held.card = card;
       const rect = box.get(card.id) as Rect;
       place(held.el, rect);
-      held.el.dataset.cardId = card.id;
       this.options.updateCard?.(held.el, card, rect);
     }
     // The card is gone from the grid, so `destroyCard` receives the last copy
@@ -137,11 +137,13 @@ export class SoksakView {
           el.className = `${this.prefix}-rule`;
           el.style.position = 'absolute';
           el.style.pointerEvents = 'none';
+          // A rule is keyed by axis, line and whether it runs the whole plane,
+          // so an element built under one key never carries another's values.
+          el.dataset.axis = rule.axis;
+          el.dataset.virtual = String(rule.virtual);
           this.host.appendChild(el);
           this.ruleEls.set(rule.key, el);
         }
-        el.dataset.axis = rule.axis;
-        el.dataset.virtual = String(rule.virtual);
         place(el, rule);
       }
       this.sweep(this.ruleEls, keep);
@@ -153,12 +155,11 @@ export class SoksakView {
       let el = this.dividerEls.get(divider.key);
       if (!el) {
         el = this.makeDivider();
+        el.dataset.axis = divider.axis;
+        el.dataset.line = String(divider.line);
         this.dividerEls.set(divider.key, el);
       }
-      el.dataset.axis = divider.axis;
-      el.dataset.line = String(divider.line);
       place(el, divider);
-      this.dividerEls.set(divider.key, el);
     }
     this.sweep(this.dividerEls, keep);
 
@@ -311,9 +312,22 @@ export class SoksakView {
   }
 }
 
+/**
+ * Write the four position values that changed.
+ *
+ * A drag moves a handful of elements and leaves the rest where they are, so
+ * comparing first turns a write per element per frame into a write per element
+ * that moved. The last values are read back from the element, so nothing else
+ * has to remember them.
+ */
 function place(el: HTMLElement, rect: Rect): void {
-  el.style.left = `${rect.x}px`;
-  el.style.top = `${rect.y}px`;
-  el.style.width = `${rect.w}px`;
-  el.style.height = `${rect.h}px`;
+  const s = el.style;
+  const left = `${rect.x}px`;
+  const top = `${rect.y}px`;
+  const width = `${rect.w}px`;
+  const height = `${rect.h}px`;
+  if (s.left !== left) s.left = left;
+  if (s.top !== top) s.top = top;
+  if (s.width !== width) s.width = width;
+  if (s.height !== height) s.height = height;
 }

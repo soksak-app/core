@@ -211,3 +211,32 @@ test("a destroyed view handles no key either", () => {
   divider.dispatchEvent(new host.ownerDocument.defaultView.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
   assert.equal(JSON.stringify(grid.toJSON()), before, "the grid is untouched");
 });
+
+test("a render writes only what changed", () => {
+  const { host, grid, view } = mount();
+  view.render();
+
+  const el = host.querySelector("[data-card-id]");
+  const style = el.style;
+  let writes = 0;
+  const watched = new Proxy(style, {
+    set(target, key, value) {
+      writes++;
+      return Reflect.set(target, key, value);
+    },
+  });
+  Object.defineProperty(el, "style", { value: watched, configurable: true });
+
+  view.render();
+  assert.equal(writes, 0, "a render that changes nothing writes nothing");
+
+  // data attributes are written when the element is built, and the key an
+  // element is kept under already carries them.
+  const before = { ...el.dataset };
+  view.render();
+  assert.deepEqual({ ...el.dataset }, before);
+
+  grid.moveBoundary("x", 1, grid.boundaryPos("x", 1) + 20);
+  view.render("drag");
+  assert.ok(writes > 0, "and a render that moves a card writes");
+});
