@@ -342,3 +342,49 @@ test("a card added and closed leaves the plane as it was", () => {
     assert.deepEqual(widths(grid), before, `${name}: forty rounds changed nothing`);
   }
 });
+
+test("R7 — only a fixed card leaves another with nowhere to go", () => {
+  // Random operations from a layout with no fixed cards: every open card but
+  // the last can always be closed. Add fixed cards and the exception appears.
+  const start = (fixed) =>
+    new Soksak(
+      { xs: [0, 0.16, 0.32, 0.84, 1], ys: [0, 0.5, 1], cards: [
+        { id: "left", c0: 0, c1: 1, r0: 0, r1: 2, fixed },
+        { id: "rail", c0: 1, c1: 2, r0: 0, r1: 2, fixed },
+        { id: "terminal", c0: 2, c1: 3, r0: 0, r1: 1 },
+        { id: "browser", c0: 2, c1: 3, r0: 1, r1: 2 },
+        { id: "right", c0: 3, c1: 4, r0: 0, r1: 2, fixed },
+      ] },
+      { width: 1440, height: 900 },
+    );
+
+  let stuck = 0;
+  for (let seed = 0; seed < 300; seed++) {
+    const grid = start(false);
+    let rng = seed * 2654435761 + 7;
+    const next = () => (rng = (rng * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+
+    for (let step = 0; step < 40; step++) {
+      const open = grid.cards.filter((c) => !c.fixed);
+      if (open.length < 2) break;
+      const pick = () => open[Math.floor(next() * open.length)];
+      const side = ["left", "right", "top", "bottom"][Math.floor(next() * 4)];
+      const roll = next();
+      if (roll < 0.35) grid.splitToward(pick().id, side, { data: {} });
+      else if (roll < 0.55) grid.close(pick().id);
+      else if (roll < 0.8) grid.move(pick().id, pick().id, side);
+      else {
+        const axis = next() < 0.5 ? "x" : "y";
+        const stands = grid.standings(axis);
+        if (stands.length) {
+          grid.insertAt(axis, stands[Math.floor(next() * stands.length)], { size: 40 + Math.floor(next() * 120) });
+        }
+      }
+
+      const now = grid.cards.filter((c) => !c.fixed);
+      if (now.length < 2) continue;
+      for (const c of now) if (!grid.canClose(c.id)) stuck++;
+    }
+  }
+  assert.equal(stuck, 0, "no card is stranded when nothing is fixed");
+});

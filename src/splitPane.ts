@@ -799,6 +799,11 @@ export class Soksak {
         if (!alone) continue;
         const gone = paid === 'lo' ? card[lo] : card[hi];
         if (gone <= 0 || gone >= this.arr(axis).length - 1) continue;
+        // Removing the line grows every card that ends or starts on it. Only
+        // the one that gave the span up should grow, so take this path only
+        // when it is the sole other card referencing the line.
+        const reading = this.list.filter((c) => c !== card && (c[lo] === gone || c[hi] === gone));
+        if (reading.length !== 1) continue;
         this.list.splice(this.list.indexOf(card), 1);
         this.removeLine(axis, gone, paid);
         this.paidBy.delete(id);
@@ -1013,7 +1018,11 @@ export class Soksak {
     // that give and take are not the same pair. Refuse when that leaves a card
     // without area.
     const frame = frameOf(this.plane);
-    if (this.list.some((c) => { const r = rectIn(frame, c); return !(r.w > 0 && r.h > 0); })) {
+    const noArea = this.list.some((c) => {
+      const r = rectIn(frame, c);
+      return !(r.w > 0 && r.h > 0);
+    });
+    if (noArea) {
       this.restore(before);
       return false;
     }
