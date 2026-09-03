@@ -234,6 +234,10 @@ const isPlace = (id) => id in PLACE;
 let grid, view, focusedId, seq = 0;
 let railMode = "flow", leftOn = true, rightOn = true;
 const railOn = { terminal: true, browser: false };
+// 레일이 물러나는 것은 닫는 것이므로 폭이 카드와 함께 사라진다. 사람이 정한
+// 폭은 그 사람의 결정이지 그 순간 서 있던 카드의 것이 아니다 — 종류별로
+// 기억해 두었다가 다시 설 때 그 폭으로 세운다.
+const railWidth = { terminal: 190, browser: 190 };
 
 /* ── 탭 규칙 ──────────────────────────────────────────────────────────────
    T1 카드는 탭 목록과 활성 탭 하나를 갖는다
@@ -685,16 +689,22 @@ function standRail(kind) {
   // 종류가 포커스를 잃으면 물러난다 — 그 종류의 레일을 꺼 두었다면 아무 레일도
   // 서지 않는 것이 맞다.
   if (!railOn[kind] || railMode === "off" || focusedPlugin() !== kind) {
-    if (has) dismiss(id);
+    if (has) {
+      railWidth[kind] = grid.card(id).width ?? railWidth[kind];
+      dismiss(id);
+    }
     return;
   }
   if (!has) {
     const line = railTarget(id, kind);
     if (line === null) return;
-    grid.insertAt("x", line, { id, data: null, size: 190 });
+    grid.insertAt("x", line, { id, data: null, size: railWidth[kind] });
     grid.setFixed(id, true);
     return;
   }
+  // 서 있는 동안 사람이 끌어 바꾼 폭을 받아 둔다. 물러날 때만 읽으면 그 사이의
+  // 조정을 놓친다.
+  railWidth[kind] = grid.card(id).width ?? railWidth[kind];
   if (railMode !== "flow") return;                  // PIN — 자리를 지킨다
   const line = railTarget(id, kind);
   if (line !== null) grid.moveTo(id, "x", line);
