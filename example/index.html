@@ -67,8 +67,11 @@ input[type=range]{accent-color:var(--rail);width:110px}
 .chrome__act:hover:not(:disabled){background:color-mix(in srgb,var(--bd) 26%,transparent);color:var(--fg)}
 .chrome__act:disabled{opacity:.25;cursor:not-allowed}
 .slot{position:relative}
+/* 상태줄은 카드가 좁아져도 한 줄이다. 줄바꿈이 나면 22px 칸 안에서 잘려
+   두 번째 줄이 사라지고, 남은 첫 줄도 위로 밀려 세로 가운데를 잃는다. */
 .status{display:flex;align-items:center;padding:0 8px;font-size:10px;
-  border-top:1px solid color-mix(in srgb,var(--bd) 40%,transparent);color:var(--muted);overflow:hidden}
+  border-top:1px solid color-mix(in srgb,var(--bd) 40%,transparent);color:var(--muted);
+  overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .set{padding:8px 10px;font-size:11px;color:var(--muted);overflow:hidden}
 .set b{color:var(--fg);display:block;margin-bottom:4px}
 .card[data-role=fixed] .set b{color:var(--rail)}
