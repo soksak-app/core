@@ -30,7 +30,8 @@
     "test": "pnpm build && node --test",
     "fuzz": "pnpm build && node scripts/fuzz.mjs",
     "mutate": "pnpm build && node scripts/mutate.mjs",
-    "breaks": "pnpm build && node scripts/check-breaks.mjs"
+    "breaks": "pnpm build && node scripts/check-breaks.mjs",
+    "example": "pnpm build && python3 -m http.server 8749"
   },
   "keywords": [
     "split",

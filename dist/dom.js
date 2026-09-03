@@ -15,6 +15,26 @@
  * The host element needs a non-static `position`; the view places children
  * absolutely inside it.
  */
+/**
+ * A rule that reaches the plane's edge carries on to the frame around it.
+ *
+ * Only at the ends that reach the plane: a rule that ends against a card is
+ * left alone, because there the card is the wall.
+ */
+function reach(rule, grid, bleed) {
+    if (bleed <= 0)
+        return rule;
+    if (rule.axis === 'x') {
+        const head = rule.y <= EDGE ? bleed : 0;
+        const tail = rule.y + rule.h >= grid.height - EDGE ? bleed : 0;
+        return { x: rule.x, y: rule.y - head, w: rule.w, h: rule.h + head + tail };
+    }
+    const head = rule.x <= EDGE ? bleed : 0;
+    const tail = rule.x + rule.w >= grid.width - EDGE ? bleed : 0;
+    return { x: rule.x - head, y: rule.y, w: rule.w + head + tail, h: rule.h };
+}
+/** Near enough to the plane's edge to be at it. */
+const EDGE = 0.5;
 const DOUBLE_TAP_MS = 350;
 export class SoksakView {
     constructor(host, grid, options) {
@@ -53,6 +73,7 @@ export class SoksakView {
     /** Re-place every element from the grid. Cheap enough to call on every frame of a drag. */
     render(reason = 'render') {
         var _a, _b, _c, _d, _e, _f;
+        var _g;
         if (this.disposed)
             return;
         // One measurement of the plane for every card. Asking for each card's rect
@@ -102,7 +123,7 @@ export class SoksakView {
                     this.host.appendChild(el);
                     this.ruleEls.set(rule.key, el);
                 }
-                place(el, rule);
+                place(el, reach(rule, this.grid, (_g = this.options.bleed) !== null && _g !== void 0 ? _g : 0));
             }
             this.sweep(this.ruleEls, keep);
         }

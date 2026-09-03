@@ -1,0 +1,924 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Card / Rail — Wails 적용 전 시뮬레이터</title>
+<link rel="icon" href="data:,">
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#101117;--card:#1b1d27;--fg:#ececf5;--muted:#9b9dad;
+  --bd:#7279ff;--rail:#ffb36b;--ok:#53dc93;--no:#ff7c7c;
+  --surface:#0d1a14;--surface-fg:#7fe3b0;
+  --r:14px;--half-gap:12px;
+}
+:root[data-theme=light]{
+  color-scheme:light;
+  --bg:#eef0f7;--card:#fff;--fg:#252735;--muted:#6c6f7e;
+  --bd:#5962e8;--rail:#c06a1f;--ok:#12894f;--no:#c62c2c;
+  --surface:#e8f5ee;--surface-fg:#12684a;
+}
+*{box-sizing:border-box}
+body{margin:0;padding:20px;background:var(--bg);color:var(--fg);
+  font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace}
+h1{margin:0 0 6px;font-size:18px}
+.lede{margin:0 0 12px;color:var(--muted);max-width:88ch}
+.controls{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:10px;color:var(--muted)}
+.controls label{display:flex;gap:6px;align-items:center}
+select,button{font:inherit;color:var(--fg);background:var(--card);
+  border:1px solid color-mix(in srgb,var(--bd) 45%,transparent);border-radius:7px;padding:3px 8px}
+button{cursor:pointer}
+input[type=range]{accent-color:var(--rail);width:110px}
+
+.stage{position:relative;height:560px;padding:var(--half-gap);
+  border:1px solid color-mix(in srgb,var(--bd) 35%,transparent);border-radius:22px}
+.plane{position:relative;width:100%;height:100%}
+
+/* 카드는 하나다. 역할만 다르다 — 몫을 받는가 px를 받는가, 옮겨지는가 아닌가.
+   z 순서는 CSS가 아니라 합성이 정한다: 네이티브 표면은 OS 뷰라 CSS 스택에
+   참여하지 않으므로, 시뮬레이터는 표면 레이어를 위에 두어 그것을 재현한다. */
+.card{position:absolute;z-index:1;display:grid;grid-template-rows:32px 1fr 22px;
+  min-width:0;overflow:hidden;border:1px solid var(--bd);border-radius:var(--r);
+  background:var(--card);outline:0}
+/* 그리드 자식의 min-width 기본값 auto 는 열을 min-content 까지 부풀리고,
+   overflow:hidden 은 화면만 자를 뿐 rect 를 줄이지 않는다. 그러면 네이티브
+   표면이 카드 밖에 그려진다. 선언 rect 는 클립보다 커서는 안 된다. */
+.card > *{min-width:0}
+.card[data-role=fixed]{border-color:var(--rail)}
+.card[data-focused=true]{box-shadow:0 0 0 1px var(--rail)}
+
+.chrome{display:flex;align-items:center;gap:4px;padding:0 4px 0 4px;overflow:hidden;
+  border-bottom:1px solid color-mix(in srgb,var(--bd) 40%,transparent)}
+.tab{display:flex;align-items:center;gap:4px;padding:2px 6px;border-radius:6px;
+  font-size:11px;color:var(--muted);cursor:grab;user-select:none;white-space:nowrap;
+  border:1px solid transparent}
+.tab[data-active=true]{color:var(--fg);background:color-mix(in srgb,var(--bd) 20%,transparent);
+  border-color:color-mix(in srgb,var(--bd) 40%,transparent)}
+.tab[data-dragging=true]{opacity:.4}
+.tab__x{border:0;background:transparent;color:inherit;padding:0 2px;line-height:1;font-size:11px;border-radius:4px}
+.tab__x:hover{background:color-mix(in srgb,var(--no) 35%,transparent)}
+.chrome__acts{margin-left:auto;display:flex;gap:1px;padding:1px;border-radius:7px;flex:0 0 auto;
+  border:1px solid color-mix(in srgb,var(--bd) 32%,transparent)}
+.chrome__act{display:grid;place-items:center;width:20px;height:20px;padding:0;border:0;
+  background:transparent;color:var(--muted);border-radius:5px}
+.chrome__act svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.3;
+  stroke-linecap:round;stroke-linejoin:round}
+.chrome__act .half{fill:currentColor;stroke:none;opacity:.28}
+.chrome__act:hover:not(:disabled){background:color-mix(in srgb,var(--bd) 26%,transparent);color:var(--fg)}
+.chrome__act:disabled{opacity:.25;cursor:not-allowed}
+.slot{position:relative}
+.status{display:flex;align-items:center;padding:0 8px;font-size:10px;
+  border-top:1px solid color-mix(in srgb,var(--bd) 40%,transparent);color:var(--muted);overflow:hidden}
+.set{padding:8px 10px;font-size:11px;color:var(--muted);overflow:hidden}
+.set b{color:var(--fg);display:block;margin-bottom:4px}
+.card[data-role=fixed] .set b{color:var(--rail)}
+
+.sp-rule{background:color-mix(in srgb,var(--bd) 65%,transparent)}
+.sp-rule[data-virtual=true]{background:color-mix(in srgb,var(--bd) 20%,transparent)}
+.sp-divider{z-index:4}
+.sp-divider::after{content:"";position:absolute;inset:0;margin:auto;border-radius:99px;
+  background:color-mix(in srgb,var(--muted) 75%,transparent);transition:background .12s}
+.sp-divider:hover::after,.sp-divider[data-dragging]::after{background:var(--rail)}
+.sp-divider[data-axis=x]{cursor:col-resize}
+.sp-divider[data-axis=x]::after{width:3px;height:24px}
+.sp-divider[data-axis=y]{cursor:row-resize}
+.sp-divider[data-axis=y]::after{height:3px;width:24px}
+
+/* 레일 외곽선은 통로 안에만 존재할 수 있다 — 카드 안쪽을 덮는 채움은
+   실제 앱에서 네이티브 표면에 가려 보이지 않으므로 여기서도 그리지 않는다. */
+.rail{position:absolute;inset:0;z-index:3;pointer-events:none;overflow:visible}
+.rail path{fill:none;stroke:var(--rail);stroke-width:2;
+  stroke-linejoin:round;vector-effect:non-scaling-stroke}
+
+/* 시뮬레이션된 네이티브 표면 — 컴포지터가 applied 프레임에 앉힌다 */
+.surface{position:absolute;z-index:50;background:var(--surface);color:var(--surface-fg);
+  font-size:11px;padding:6px 9px;overflow:hidden;pointer-events:none;border-radius:4px}
+.surface[data-hidden=true]{display:none}
+.surface b{color:var(--fg)}
+
+.standin{position:absolute;inset:0;background:var(--surface);color:var(--surface-fg);
+  font-size:11px;padding:6px 9px;overflow:hidden;border-radius:4px;opacity:.7}
+.standin b{color:var(--fg)}
+/* 구획은 DOM 이다. 표면이 비켜선 동안에만 보일 수 있고, 그래서 표면보다
+   낮은 z 로 둔다 — 올려서 위에 그린 척하면 실제 앱과 달라진다. */
+.drop{position:absolute;z-index:40;pointer-events:none;border-radius:var(--r);
+  background:color-mix(in srgb,var(--rail) 22%,transparent);
+  border:2px solid var(--rail)}
+.drop[hidden]{display:none}
+
+.metric{margin-top:10px;padding:10px 13px;
+  border:1px solid color-mix(in srgb,var(--bd) 35%,transparent);border-radius:10px}
+.metric table{border-collapse:collapse;width:100%}
+.metric td{padding:1px 0;vertical-align:top;color:var(--muted)}
+.metric td:first-child{width:32ch;color:var(--fg)}
+.metric td:last-child{width:6ch;text-align:right;font-weight:700}
+.pass{color:var(--ok)}.fail{color:var(--no)}
+.note{margin-top:8px;color:var(--muted);font-size:12px;max-width:88ch}
+</style></head>
+<body>
+<h1>Card / Rail — Wails 적용 전 시뮬레이터</h1>
+<p class="lede">배치는 <code>soksak</code> 라이브러리가 소유한다. 사이드바·레일·터미널이 모두 같은 카드이고,
+역할만 다르다 — 몫을 받는가 px를 받는가, 옮겨지는가 아닌가. 이 문서는 그 위에 네이티브 합성의 제약을 재현한다:
+표면은 CSS 스택 위에 있고, 선언 프레임과 적용 프레임은 지연을 두고 따로 움직인다.
+여기서 GREEN 인 것만 Wails 에서도 GREEN 이다.</p>
+
+<div class="controls">
+  <label>테마 <select id="theme"><option value="dark">dark</option><option value="light">light</option></select></label>
+  <label>여백 <input id="gap" type="range" min="0" max="24" step="1" value="12"> <output id="gapOut">12px</output></label>
+  <label>커밋 지연 <input id="latency" type="range" min="0" max="600" step="50" value="0"> <output id="latOut">0ms</output></label>
+  <label>적용 오차 <input id="skew" type="range" min="0" max="12" step="1" value="0"> <output id="skewOut">0px</output></label>
+  <label>레일 <select id="railMode">
+    <option value="flow">FLOW — 포커스를 따라간다</option>
+    <option value="pin">PIN — 자리를 지킨다</option>
+    <option value="off">없음</option>
+  </select></label>
+  <label>좌측 <select id="leftOn"><option value="on">있음</option><option value="off">없음</option></select></label>
+  <label>우측 <select id="rightOn"><option value="on">있음</option><option value="off">없음</option></select></label>
+  <button id="reset" type="button">초기 배치로</button>
+</div>
+
+<main class="stage"><div class="plane" id="plane">
+  <svg class="rail" id="rail"><path id="railPath"></path></svg>
+  <div class="drop" id="drop" hidden></div>
+</div></main>
+
+<div class="metric"><table id="metric"></table></div>
+<p class="note" id="note"></p>
+
+<script type="module">
+/* 이 저장소가 방금 만든 빌드를 읽는다 — `pnpm example` 이 build 를 먼저 돌린다.
+   여기서 GREEN 인 것은 이 커밋의 dist 에 대해서만 참이다. 호스트가 설치한
+   것은 별개이고, 둘은 갈릴 수 있다. */
+import { Soksak, SoksakView, outline }
+  from "../dist/index.js";
+
+/* 브라우저가 문서와 라이브러리 중 하나만 새로 받아오면 판이 어긋난다. 그때
+   나는 오류는 원인이 코드에 없으므로, 필요한 멤버가 있는지 먼저 확인하고
+   없으면 무엇이 없는지 표시한다. */
+const NEEDS = ["cards", "card", "insertAt", "moveTo", "standings", "moveBoundary", "zoneAt", "splitToward"];
+{
+  const probe = new Soksak(undefined, { width: 100, height: 100 });
+  const missing = NEEDS.filter((k) => typeof probe[k] === "undefined");
+  if (missing.length) {
+    document.body.innerHTML =
+      '<h1>이 문서와 soksak 이 서로 다른 판이다</h1>' +
+      '<p style="color:#ff7c7c;max-width:70ch">라이브러리에 <code>' + missing.join("</code>, <code>") +
+      '</code> 가 없다. 브라우저가 둘 중 하나만 새로 받아온 상태이고, ' +
+      '강제 새로고침(⇧⌘R)이면 사라진다. 그래도 남으면 라이브러리를 다시 빌드해야 한다.</p>';
+    throw new Error("soksak mismatch: " + missing.join(", "));
+  }
+}
+
+const CARD_R = 14, HEADER = 32, FOOTER = 22;
+const plane = document.getElementById("plane");
+const railPath = document.getElementById("railPath");
+const dropEl = document.getElementById("drop");
+
+/* ── 자리와 세트 — 다른 두 축 ──────────────────────────────────────────────
+   어디 서는가          무엇이 서는가
+   left   첫 열, 고정폭      설치 전체가 한 세트 (포커스와 무관)
+   right  마지막 열, 고정폭   포커스된 플러그인의 세트
+   rail   가운데 열, 고정폭   포커스된 플러그인의 세트 · 포커스를 따라 이동
+   셋 다 카드다. 자리 사이에 모드 전환은 없다 — 자리가 곧 규칙이다.         */
+const SETS = {
+  install: { name: "탐색기", sections: ["파일 트리", "북마크"] },
+  terminal: { rail: { name: "셸", sections: ["실행 기록", "cwd"] },
+              right: { name: "프로세스", sections: ["PTY", "작업"] } },
+  browser:  { rail: { name: "페이지", sections: ["DOM", "네트워크"] },
+              right: { name: "브라우저", sections: ["탭", "히스토리"] } },
+};
+const PLACE = { left: "left", right: "right", rail: "rail" };
+const isPlace = (id) => id in PLACE;
+
+let grid, view, focusedId, seq = 0;
+let railMode = "flow", leftOn = true, rightOn = true;
+
+/* ── 탭 규칙 ──────────────────────────────────────────────────────────────
+   T1 카드는 탭 목록과 활성 탭 하나를 갖는다
+   T2 + 는 그 카드에 탭을 더한다. 배치는 그대로다
+   T3 가운데 드롭 = 대상 카드의 탭이 된다. 배치는 그대로다
+   T4 변에 드롭 = 그쪽에 새 자리가 필요하다
+   T5 마지막 탭이 떠나면 그 카드는 사라진다 — 빈 카드는 남지 않는다        */
+const tab = (plugin, title) => ({ id: `tab-${++seq}`, plugin, title });
+const tabsOf = (card) => card?.data?.tabs ?? [];
+const activeTab = (card) => tabsOf(card).find((t) => t.id === card.data.activeId) ?? tabsOf(card)[0];
+const focusedPlugin = () => activeTab(grid.card(focusedId))?.plugin ?? null;
+
+const standingSet = (place) => {
+  if (place === "left") return SETS.install;
+  const plugin = focusedPlugin();
+  return plugin ? (SETS[plugin]?.[place] ?? null) : null;
+};
+
+function initial() {
+  const cards = [
+    { id: "left", c0: 0, c1: 1, r0: 0, r1: 2, width: 190, fixed: true },
+    { id: "terminal", c0: 1, c1: 2, r0: 0, r1: 1,
+      data: { tabs: [tab("terminal", ">_ 셸"), tab("terminal", ">_ 빌드")], activeId: null } },
+    { id: "browser", c0: 1, c1: 2, r0: 1, r1: 2,
+      data: { tabs: [tab("browser", "www 문서")], activeId: null } },
+    { id: "right", c0: 2, c1: 3, r0: 0, r1: 2, width: 210, fixed: true },
+  ];
+  for (const c of cards) if (c.data) c.data.activeId = c.data.tabs[0].id;
+  return { xs: [0, 1 / 3, 2 / 3, 1], ys: [0, 0.52, 1], cards };
+}
+
+/* ── 시뮬레이션된 네이티브 컴포지터 ────────────────────────────────────────
+   실제 계약과 같은 개념만 쓴다. declared 와 applied 는 한 커밋의 한 레코드에
+   함께 담긴다 — 따로 읽으면 두 시점의 두 값을 빼는 것이라 차이가 무엇을
+   뜻하는지 알 수 없다.                                                      */
+const compositor = {
+  latency: 0, skew: 0, seq: 0, applied: 0, latest: null,
+  surfaces: new Map(), timer: null,
+
+  surfaceEl(id) {
+    let el = this.surfaces.get(id);
+    if (el) return el;
+    el = document.createElement("div");
+    el.className = "surface";
+    el.dataset.nativeSurfaceId = id;
+    plane.appendChild(el);
+    this.surfaces.set(id, el);
+    return el;
+  },
+
+  /**
+   * 선언 ∧ 모든 조상의 data-surface-visible ∧ capture-hidden 이 아님.
+   *
+   * 세 번째 항이 드래그 중의 표시를 정한다. DOM 은 네이티브 표면 위에 그릴
+   * 수 없으므로, 표면 위에 무언가를 그리는 동안에는 capture-hidden 으로
+   * 표면을 숨기고 DOM 이 스냅샷을 그린다. 계약이 정의한 절차다.
+   */
+  effectiveVisible(slot) {
+    if (slot.dataset.nativeVisible !== "true") return false;
+    if (slot.dataset.nativeCaptureHidden === "true") return false;
+    for (let n = slot.parentElement; n && n !== document.body; n = n.parentElement) {
+      if (n.dataset?.surfaceVisible === "false") return false;
+    }
+    return true;
+  },
+
+  observe() {
+    const seq = ++this.seq;
+    const host = plane.getBoundingClientRect();
+    const snapshot = [];
+    // 카드마다 DOM 을 훑으면 카드 수의 제곱이 된다 — 한 번 모아 이름으로 찾는다.
+    const slots = new Map();
+    for (const el of plane.querySelectorAll("[data-native-surface][data-native-surface-id]")) {
+      slots.set(el.dataset.nativeSurfaceId, el);
+    }
+    for (const card of grid.cards) {
+      const t = activeTab(card);
+      if (!t) continue;
+      const slot = slots.get(card.id);
+      if (!slot) continue;
+      const r = slot.getBoundingClientRect();
+      snapshot.push({
+        id: card.id, layer: 10, title: t.title, plugin: t.plugin,
+        visible: this.effectiveVisible(slot),
+        frame: { x: r.left - host.left, y: r.top - host.top, w: r.width, h: r.height },
+      });
+    }
+    clearTimeout(this.timer);
+    const deliver = () => this.commit(seq, snapshot);
+    if (this.latency === 0) deliver();
+    else this.timer = setTimeout(deliver, this.latency);
+  },
+
+  /** 유일한 네이티브 writer. 시퀀스가 뒤진 스냅샷은 여기서 거부된다. */
+  commit(seq, snapshot) {
+    if (seq < this.applied) return;
+    this.applied = seq;
+    const record = { seq, surfaces: [] };
+    for (const s of snapshot) {
+      const applied = { ...s.frame, x: s.frame.x + this.skew, y: s.frame.y + this.skew };
+      const el = this.surfaceEl(s.id);
+      el.style.left = `${applied.x}px`; el.style.top = `${applied.y}px`;
+      el.style.width = `${applied.w}px`; el.style.height = `${applied.h}px`;
+      el.style.zIndex = String(50 + s.layer);
+      el.dataset.hidden = String(!s.visible);
+      // 라벨은 바뀔 때만 다시 쓴다. 커밋은 프레임마다 오는데 제목과 레이어는
+      // 거의 그대로여서, 매번 다시 쓰면 표면 안이 프레임마다 새로 태어난다.
+      const label = `<b>${s.title}</b><br>네이티브 표면 · ${s.plugin} · layer ${s.layer}`;
+      if (el.dataset.label !== label) { el.innerHTML = label; el.dataset.label = label; }
+      record.surfaces.push({ id: s.id, declared: s.frame, applied, visible: s.visible });
+    }
+    for (const [id, el] of this.surfaces) {
+      if (!record.surfaces.some((x) => x.id === id)) { el.remove(); this.surfaces.delete(id); }
+    }
+    for (const s of record.surfaces) {
+      const slot = plane.querySelector(`[data-native-surface-id="${s.id}"][data-native-surface]`);
+      if (slot) slot.dataset.nativeDeclaredFrame =
+        `${s.declared.x.toFixed(2)},${s.declared.y.toFixed(2)},${s.declared.w.toFixed(2)},${s.declared.h.toFixed(2)}`;
+    }
+    this.latest = record;
+    verify();
+  },
+};
+
+const maxDelta = (a, b) =>
+  !a || !b ? Infinity
+    : Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y), Math.abs(a.w - b.w), Math.abs(a.h - b.h));
+
+/* ── 카드 ─────────────────────────────────────────────────────────────── */
+
+function createCard(card) {
+  const el = document.createElement("article");
+  el.className = "card";
+  el.innerHTML = isPlace(card.id)
+    ? '<header class="chrome"></header><div class="set"></div><footer class="status"></footer>'
+    : '<header class="chrome"></header><div class="slot"></div><footer class="status"></footer>';
+  // 카드 객체를 가두지 않고 엘리먼트의 data-card-id 를 읽는다. 배치가 바뀌면
+  // 엘리먼트가 다른 카드를 받으므로, 가둔 참조는 옛 id 를 반환한다.
+  el.addEventListener("pointerdown", (e) => {
+    const id = el.dataset.cardId;
+    if (!id || isPlace(id) || e.target.closest(".tab__x, .chrome__act")) return;
+    if (focusedId !== id) { focusedId = id; settle(); }
+  });
+  return el;
+}
+
+/**
+ * 바뀐 것만 고친다.
+ *
+ * 매 렌더마다 `chrome.innerHTML = ""` 로 다시 만들고 있었다. 판 안의 노드가
+ * 87개인데 포인터 이동 한 번에 52개가 교체되었다 — 커서 밑의 엘리먼트가 매
+ * 프레임 새로 태어나니 hover 와 포커스가 끊기고, 드래그 중이던 탭이 사라져
+ * `pointerup` 이 오지 않는다. 탭 목록이 실제로 달라졌을 때만 다시 만든다.
+ */
+const setText = (el, text) => { if (el.textContent !== text) el.textContent = text; };
+const setHTML = (el, html) => { if (el.dataset.html !== html) { el.innerHTML = html; el.dataset.html = html; } };
+
+function updateCard(el, card) {
+  const place = isPlace(card.id) ? card.id : null;
+  el.dataset.role = card.fixed ? "fixed" : "pane";
+  el.dataset.focused = String(card.id === focusedId);
+  const chrome = el.querySelector(".chrome");
+  const status = el.querySelector(".status");
+
+  if (place) {
+    const name = place === "left" ? "좌측" : place === "right" ? "우측" : "레일";
+    setHTML(chrome, `<span class="tab" data-active="true">${name}</span>`);
+    const set = standingSet(place);
+    setHTML(el.querySelector(".set"), set
+      ? `<b>${set.name}</b>${set.sections.join(" · ")}`
+      : "<b>—</b>포커스된 플러그인 없음");
+    setText(status, place === "left"
+      ? `열 ${card.c0}–${card.c1} · 설치 전체가 한 세트`
+      : `열 ${card.c0}–${card.c1} · 포커스: ${focusedPlugin() ?? "없음"}`);
+    return;
+  }
+
+  const tabs = tabsOf(card);
+  const key = tabs.map((t) => `${t.id}\u0000${t.title}`).join("\u0001");
+  let acts = chrome.querySelector(".chrome__acts");
+
+  if (chrome.dataset.tabs !== key) {
+    chrome.dataset.tabs = key;
+    for (const gone of [...chrome.querySelectorAll(".tab")]) gone.remove();
+    for (const t of tabs) {
+      const b = document.createElement("span");
+      b.className = "tab";
+      b.dataset.tabId = t.id;
+      b.draggable = false;
+      b.innerHTML = `${t.title}<button class="tab__x" title="닫기">&#10005;</button>`;
+      b.addEventListener("pointerdown", (e) => {
+        if (e.target.closest(".tab__x")) return;
+        const own = grid.card(el.dataset.cardId);
+        if (!own) return;
+        own.data.activeId = t.id;
+        focusedId = own.id;
+        beginTabDrag(e, own.id, t.id);
+      });
+      b.querySelector(".tab__x").addEventListener("click", () => closeTab(el.dataset.cardId, t.id));
+      chrome.insertBefore(b, acts);
+    }
+  }
+  for (const b of chrome.querySelectorAll(".tab")) {
+    b.dataset.active = String(b.dataset.tabId === card.data.activeId);
+  }
+
+  // 카드의 연산은 넷이다 — 탭을 더한다(T2), 세로로 쪼갠다, 가로로 쪼갠다, 닫는다.
+  // 탭 ✕ 는 그 탭 하나를 닫고 마지막이면 카드가 함께 간다(T5). 카드 ✕ 는
+  // 탭이 몇 개든 카드째로 닫는다 — 다른 연산이므로 둘 다 있어야 한다.
+  if (!acts) {
+    acts = document.createElement("span");
+    acts.className = "chrome__acts";
+    for (const [what, title, svg] of [
+      ["add", "이 카드에 탭 추가", '<path d="M8 3v10M3 8h10"/>'],
+      ["close", "이 카드를 닫는다 — 안의 탭이 몇 개든 함께 간다",
+        '<path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/>'],
+      ["x", "세로선으로 쪼개기 — 좌우로 나뉜다",
+        '<rect class="half" x="2" y="3" width="6" height="10" rx="1.5"/>' +
+        '<rect x="2" y="3" width="12" height="10" rx="2"/><path d="M8 3v10"/>'],
+      ["y", "가로선으로 쪼개기 — 위아래로 나뉜다",
+        '<rect class="half" x="3" y="2" width="10" height="6" rx="1.5"/>' +
+        '<rect x="3" y="2" width="10" height="12" rx="2"/><path d="M3 8h10"/>'],
+    ]) {
+      const b = document.createElement("button");
+      b.className = "chrome__act";
+      b.dataset.do = what;
+      b.dataset.title = title;
+      b.title = title;
+      b.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true">${svg}</svg>`;
+      b.addEventListener("click", () => {
+        const own = grid.card(el.dataset.cardId);
+        if (!own) return;
+        if (what === "close") {
+          grid.close(own.id);
+          if (!grid.card(focusedId)) focusedId = grid.cards.find((c) => !isPlace(c.id))?.id ?? null;
+        } else if (what === "add") {
+          const t = tab(activeTab(own)?.plugin ?? "terminal", `탭 ${++seq}`);
+          own.data.tabs.push(t);
+          own.data.activeId = t.id;
+          focusedId = own.id;
+        } else {
+          // 쪼개면 활성 탭이 새 카드로 간다. 남길 탭이 없으면 새 탭이 태어난다 —
+          // 빈 카드는 도달 가능한 상태가 아니다(T5).
+          const moving = tabsOf(own).length > 1
+            ? activeTab(own)
+            : tab(activeTab(own)?.plugin ?? "terminal", `탭 ${++seq}`);
+          if (tabsOf(own).length > 1) {
+            own.data.tabs = tabsOf(own).filter((t) => t.id !== moving.id);
+            own.data.activeId = tabsOf(own)[0].id;
+          }
+          const born = grid.split(own.id, what, { data: { tabs: [moving], activeId: moving.id } });
+          if (born === null && tabsOf(own).length > 0 && !tabsOf(own).includes(moving)) {
+            own.data.tabs.push(moving);           // 자리가 없으면 되돌린다
+            own.data.activeId = moving.id;
+          } else if (born) {
+            focusedId = born;
+          }
+        }
+        settle();
+      });
+      acts.appendChild(b);
+    }
+    chrome.appendChild(acts);
+  }
+  for (const b of acts.querySelectorAll(".chrome__act")) {
+    const what = b.dataset.do;
+    const off = what === "close" ? !grid.canClose(card.id)
+      : what === "add" ? false : !grid.canSplit(card.id, what);
+    if (b.disabled !== off) b.disabled = off;
+    const title = !off ? b.dataset.title
+      : what === "close"
+        ? (card.fixed ? "고정된 카드는 자기 스위치로 닫는다"
+                      : "닫을 수 없다 — 어느 이웃도 이 자리를 빈틈없이 못 메운다")
+        : b.dataset.title;
+    if (b.title !== title) b.title = title;
+  }
+
+  const slot = el.querySelector(".slot");
+  slot.dataset.nativeSurface = "stub";
+  slot.dataset.nativeSurfaceId = card.id;
+  slot.dataset.nativeLayer = "10";
+  slot.dataset.nativeVisible = "true";
+  setText(status, `열 ${card.c0}–${card.c1} · 행 ${card.r0}–${card.r1} · 탭 ${tabs.length}`);
+}
+
+/* ── T5 — 마지막 탭이 떠나면 카드가 사라진다 ─────────────────────────── */
+
+function closeTab(cardId, tabId) {
+  const card = grid.card(cardId);
+  if (!card) return;
+  card.data.tabs = tabsOf(card).filter((t) => t.id !== tabId);
+  if (card.data.tabs.length === 0) {
+    if (grid.canClose(cardId)) grid.close(cardId);
+    else card.data.tabs = [tab(focusedPlugin() ?? "terminal", "빈 탭")];
+  }
+  if (!tabsOf(card).some((t) => t.id === card.data?.activeId)) {
+    if (card.data) card.data.activeId = tabsOf(card)[0]?.id ?? null;
+  }
+  if (!grid.card(focusedId)) focusedId = grid.cards.find((c) => !isPlace(c.id))?.id ?? null;
+  settle();
+}
+
+/* ── 탭 드래그 — T3/T4/T5 ─────────────────────────────────────────────── */
+
+let tabDrag = null;
+
+function beginTabDrag(e, cardId, tabId) {
+  e.preventDefault();
+  tabDrag = { cardId, tabId, from: { x: e.clientX, y: e.clientY }, moved: false, hit: null };
+  const el = e.currentTarget;
+  el.setPointerCapture(e.pointerId);
+  el.dataset.dragging = "true";
+
+  const onMove = (ev) => {
+    if (!tabDrag) return;
+    if (Math.hypot(ev.clientX - tabDrag.from.x, ev.clientY - tabDrag.from.y) > 4) tabDrag.moved = true;
+    if (!tabDrag.moved) return;
+    if (!tabDrag.stood) { tabDrag.stood = true; standInForSurfaces(true); }
+    const host = plane.getBoundingClientRect();
+    const only = tabsOf(grid.card(tabDrag.cardId)).length === 1 ? tabDrag.cardId : undefined;
+    tabDrag.hit = grid.zoneAt(ev.clientX - host.left, ev.clientY - host.top,
+      { headerPx: HEADER, footerPx: FOOTER, centreOnly: only });
+    showDrop(tabDrag.hit);
+  };
+  const onUp = (ev) => {
+    if (!tabDrag) return;
+    try { el.releasePointerCapture(ev.pointerId); } catch {}
+    delete el.dataset.dragging;
+    const drag = tabDrag;
+    tabDrag = null;
+    dropEl.hidden = true;
+    if (drag.stood) standInForSurfaces(false);
+    el.removeEventListener("pointermove", onMove);
+    el.removeEventListener("pointerup", onUp);
+    el.removeEventListener("pointercancel", onUp);
+    if (drag.moved && drag.hit) dropTab(drag.cardId, drag.tabId, drag.hit);
+    else settle();
+  };
+  el.addEventListener("pointermove", onMove);
+  el.addEventListener("pointerup", onUp);
+  el.addEventListener("pointercancel", onUp);
+}
+
+/**
+ * 표면을 비키게 하고 그 자리에 스냅샷을 세운다.
+ *
+ * 드래그하는 동안 DOM 이 카드 위에 구획을 그린다. 네이티브 표면은 OS 뷰라
+ * DOM 이 그 위에 그릴 수 없으므로, 계약의 capture-hidden 을 세워 표면을 숨기고
+ * DOM 이 스냅샷을 그린다. 표면의 갱신은 그동안 멈추고, 드래그가 끝나면
+ * 복원한다.
+ */
+function standInForSurfaces(on) {
+  for (const slot of plane.querySelectorAll("[data-native-surface]")) {
+    if (on) slot.dataset.nativeCaptureHidden = "true";
+    else delete slot.dataset.nativeCaptureHidden;
+    const card = grid.card(slot.dataset.nativeSurfaceId);
+    const t = card && activeTab(card);
+    slot.innerHTML = on && t
+      ? `<div class="standin"><b>${t.title}</b><br>스냅샷 · 표면은 비켜섰다</div>`
+      : "";
+  }
+  compositor.observe();
+}
+
+function showDrop(hit) {
+  if (!hit || isPlace(hit.id)) { dropEl.hidden = true; return; }
+  const r = grid.rect(hit.id);
+  const half = { x: r.x, y: r.y, w: r.w, h: r.h };
+  if (hit.zone === "left") half.w = r.w / 2;
+  if (hit.zone === "right") { half.x = r.x + r.w / 2; half.w = r.w / 2; }
+  if (hit.zone === "top") half.h = r.h / 2;
+  if (hit.zone === "bottom") { half.y = r.y + r.h / 2; half.h = r.h / 2; }
+  dropEl.hidden = false;
+  dropEl.style.left = `${half.x}px`; dropEl.style.top = `${half.y}px`;
+  dropEl.style.width = `${half.w}px`; dropEl.style.height = `${half.h}px`;
+}
+
+/**
+ * T4 와 T5 가 배치 연산을 가른다.
+ *   출발 카드에 탭이 1개  → 카드째로 옮겨간다. 남는 것 없음      move()
+ *   여러 개              → 카드는 남고 탭만 간다                splitToward()
+ * move 가 close+split 조합이 아니라 한 연산이어야 하는 이유가 첫 줄이다.
+ */
+function dropTab(fromId, tabId, hit) {
+  const from = grid.card(fromId);
+  const target = grid.card(hit.id);
+  if (!from || !target || isPlace(hit.id)) return settle();
+  const moving = tabsOf(from).find((t) => t.id === tabId);
+  if (!moving) return settle();
+
+  if (hit.zone === "centre") {                                  // T3
+    if (target.id === fromId) { from.data.activeId = tabId; return settle(); }
+    from.data.tabs = tabsOf(from).filter((t) => t.id !== tabId);
+    target.data.tabs.push(moving);
+    target.data.activeId = tabId;
+    focusedId = target.id;
+    if (tabsOf(from).length === 0 && grid.canClose(fromId)) grid.close(fromId);
+    else if (!tabsOf(from).some((t) => t.id === from.data.activeId)) from.data.activeId = tabsOf(from)[0]?.id ?? null;
+    return settle();
+  }
+
+  if (tabsOf(from).length === 1) {                               // T5 — 남길 것이 없다
+    if (fromId === hit.id) return settle();
+    grid.move(fromId, hit.id, hit.zone);
+    focusedId = fromId;
+    return settle();
+  }
+
+  from.data.tabs = tabsOf(from).filter((t) => t.id !== tabId);   // T4 — 자리는 남고 탭만
+  if (!tabsOf(from).some((t) => t.id === from.data.activeId)) from.data.activeId = tabsOf(from)[0].id;
+  const born = grid.splitToward(hit.id, hit.zone,
+    { data: { tabs: [moving], activeId: moving.id } });
+  if (born === null) {                                           // 자리가 없으면 되돌린다
+    from.data.tabs.push(moving);
+    from.data.activeId = moving.id;
+  } else {
+    focusedId = born;
+  }
+  settle();
+}
+
+/* ── 레일 — 카드이므로 이동도 move() 다 ───────────────────────────────── */
+
+/**
+ * 레일은 판을 가로지르는 카드다.
+ *
+ * 그래서 카드 하나를 쪼개서 만들 수 없다 — 그렇게 만들면 그 카드의 행만
+ * 차지하는 또 하나의 판이 된다. 아무 카드도 넘지 않는 경계에 열로 끼우고,
+ * 이동은 그 열을 빼서 다른 경계에 넣는 것이다. 닫고 다시 여는 것이 아니므로
+ * 다른 카드의 행 경계는 움직이지 않는다.
+ */
+function standRail() {
+  const has = !!grid.card("rail");
+  if (railMode === "off") {
+    if (has) dismiss("rail");
+    return;
+  }
+  if (!has) {
+    const line = railTarget();
+    if (line === null) return;
+    grid.insertAt("x", line, { id: "rail", data: null, size: 190 });
+    grid.setFixed("rail", true);
+    return;
+  }
+  if (railMode !== "flow") return;                  // PIN — 자리를 지킨다
+  const line = railTarget();
+  if (line !== null) grid.moveTo("rail", "x", line);
+}
+
+/**
+ * 레일이 서야 할 경계.
+ *
+ * 레일이 서 있는 열은 다른 카드의 위치를 190px 옮겨 놓는다. 그 위치를 기준으로
+ * 고르면 답이 레일 자신에 따라 달라지므로, `standings` 에 레일을 무시하도록
+ * 요청해 레일을 뺀 배치에서 잰다.
+ */
+function railTarget() {
+  // 레일 자신의 경계도 후보다. 이미 옳은 자리에 서 있으면 그 자리가 답이고,
+  // moveTo 는 제자리 이동을 성공으로 반환한다.
+  const stands = grid.standings("x", "rail");
+  if (!stands.length) return null;
+
+  const want = grid.rect(focusedId)?.x ?? 0;
+
+  // P3 — 왼쪽에 붙는다. 바로 왼쪽에 설 수 없으면 더 왼쪽으로 물러난다.
+  // 오른쪽으로는 넘어가지 않는다: 사이드바가 자기가 붙은 것의 반대편에
+  // 나타나면 그건 다른 물건이다. 왼쪽에 아무 자리도 없을 때만 가장 왼쪽으로.
+  const onLeft = stands.filter((k) => grid.boundaryPos("x", k) <= want + 0.5);
+  return onLeft.length
+    ? onLeft.reduce((a, k) => (grid.boundaryPos("x", k) > grid.boundaryPos("x", a) ? k : a))
+    : stands[0];
+}
+
+/**
+ * 자리를 치운다.
+ *
+ * `fixed` 는 레이아웃이 그 카드를 옮기거나 닫지 않는다는 뜻이므로, 호스트가
+ * 직접 치우려면 먼저 그 역할을 해제한다. `canClose` 는 `fixed` 카드에 언제나
+ * 거짓을 반환하므로 그것만으로는 치울 수 없다. 레일과 좌·우가 같은 함수를 쓴다.
+ */
+function dismiss(id) {
+  if (!grid.card(id)) return;
+  grid.setFixed(id, false);
+  if (!grid.close(id)) grid.setFixed(id, true);   // 치우지 못했으면 역할도 그대로
+}
+
+/**
+ * 판의 끝에 서는 사이드바를 세우거나 치운다.
+ *
+ * 좌·우가 같은 일을 하므로 같은 함수를 쓴다.
+ *
+ * `splitToward` 가 아니라 `insertAt` 을 쓴다. 자르면 잘린 카드의 행 범위를
+ * 물려받아 한 줄만 차지하는데, 사이드바는 판을 가로질러야 한다.
+ */
+function standEdge(id, on, size, side) {
+  const has = !!grid.card(id);
+  if (on && !has) {
+    const line = side === "left" ? 0 : grid.lines("x").length - 1;
+    if (grid.canInsertAt("x", line)) {
+      grid.insertAt("x", line, { id, data: null, size });
+      grid.setFixed(id, true);
+    }
+  } else if (!on && has) {
+    dismiss(id);
+  }
+}
+
+/* ── 그리고 다시 그린다 ───────────────────────────────────────────────── */
+
+function settle() {
+  standEdge("left", leftOn, 190, "left");
+  standEdge("right", rightOn, 210, "right");
+  standRail();
+  if (!grid.card(focusedId)) focusedId = grid.cards.find((c) => !isPlace(c.id))?.id ?? null;
+  view.render();
+}
+
+function drawRail() {
+  const pad = grid.gap / 2;
+  // 레일이 없으면 묶을 것이 없다. `filter(Boolean)` 만 두면 포커스 카드 하나를
+  // 감싼 외곽선을 그려 놓고 「레일 외곽선」이라 부르게 된다.
+  const rail = grid.rect("rail");
+  const focused = grid.rect(focusedId);
+  const rects = rail && focused ? [rail, focused] : [];
+  const shape = outline(rects, { pad, radius: CARD_R + pad, innerRadius: Math.max(4, pad) });
+  document.getElementById("rail").setAttribute("viewBox", `0 0 ${grid.width} ${grid.height}`);
+  railPath.setAttribute("d", shape.path);
+  return { shape, rects };
+}
+
+/* ── 검증 — 캡처는 판단에, 합격은 수치로 ──────────────────────────────── */
+
+function verify() {
+  const rows = [];
+  const add = (n, ok, note) => rows.push([n, note, ok]);
+  const cards = [...grid.cards];
+  const box = grid.rects();                 // 한 번 재고 id 로 찾는다
+  const rects = cards.map((c) => box.get(c.id));
+  const { shape, rects: railRects } = drawRail();
+
+  const adjacent = railRects.length === 2 && (() => {
+    const [a, b] = railRects;
+    const dx = Math.max(b.x - (a.x + a.w), a.x - (b.x + b.w));
+    const dy = Math.max(b.y - (a.y + a.h), a.y - (b.y + b.h));
+    return (Math.abs(dx - grid.gap) < .5 && dy < -.5) || (Math.abs(dy - grid.gap) < .5 && dx < -.5);
+  })();
+  add("V0 레일 외곽선", shape.sharp === 0 && shape.loops.length === (adjacent ? 1 : railRects.length),
+      `${shape.loops.length}개 루프 · ${shape.corners}꼭짓점 전부 라운드 · ${adjacent ? "인접" : "떨어짐"}`);
+
+  // V1 — 같은 선을 읽는 카드의 경계가 정확히 같다 (허용오차 없음)
+  let drift = 0;
+  for (const axis of ["x", "y"]) {
+    const [lo, hi] = axis === "x" ? ["c0", "c1"] : ["r0", "r1"];
+    for (let k = 1; k < grid.lines(axis).length - 1; k++) {
+      const ends = cards.filter((c) => c[hi] === k).map((c) => {
+        const r = box.get(c.id); return axis === "x" ? r.x + r.w : r.y + r.h;
+      });
+      const starts = cards.filter((c) => c[lo] === k).map((c) => {
+        const r = box.get(c.id); return axis === "x" ? r.x : r.y;
+      });
+      for (const arr of [ends, starts]) if (arr.length > 1) drift = Math.max(drift, Math.max(...arr) - Math.min(...arr));
+    }
+  }
+  add("V1 공유 경계 편차 == 0", drift === 0, `최대 ${drift.toFixed(4)}px · 허용오차 없음`);
+
+  // 슬롯 상자의 합. `(w+gap)(h+gap)` 은 모든 선이 복도 하나를 먹는다는 가정에서
+  // 나온 지름길이고, 음수 폭 카드도 정확히 상쇄해 통과시켰다.
+  const X = (k) => grid.boundaryPos("x", k), Y = (k) => grid.boundaryPos("y", k);
+  const area = grid.cards.reduce((n, c) => n + (X(c.c1) - X(c.c0)) * (Y(c.r1) - Y(c.r0)), 0);
+  const want = grid.width * grid.height;
+  const noArea = rects.filter((r) => !(r.w > 0 && r.h > 0)).length;
+  add("V2 판이 빈틈없이 덮임", Math.abs(area - want) < 2 && noArea === 0,
+      `Δ ${(area - want).toFixed(1)}px²` + (noArea ? ` · 면적 없는 카드 ${noArea}장` : ""));
+
+  let worst = Infinity, overlap = 0;
+  for (let i = 0; i < rects.length; i++) for (let j = i + 1; j < rects.length; j++) {
+    const a = rects[i], b = rects[j];
+    const dx = Math.max(b.x - (a.x + a.w), a.x - (b.x + b.w));
+    const dy = Math.max(b.y - (a.y + a.h), a.y - (b.y + b.h));
+    if (dx < -0.01 && dy < -0.01) { overlap++; continue; }
+    worst = Math.min(worst, Math.max(dx, dy));
+  }
+  add(`V3 겹침 0 · 통로 ${grid.gap}px`,
+      overlap === 0 && (!isFinite(worst) || Math.abs(worst - grid.gap) < 0.5),
+      overlap ? `겹침 ${overlap}쌍` : `최소 ${isFinite(worst) ? worst.toFixed(1) : grid.gap}px`);
+
+  const smallest = Math.min(...rects.flatMap((r) => [r.w, r.h]));
+  add(`V4 카드 최소 변 ≥ ${grid.minSize}px`, smallest >= grid.minSize - 0.6, `최소 ${smallest.toFixed(0)}px`);
+  add("V5 배치가 slicing", grid.isSlicing(), "한 영역을 통째로 자른 결과만 가능");
+
+  const open = cards.filter((c) => !c.fixed);
+  add("V6 마지막 하나 빼고 전부 닫힌다", open.length <= 1 || open.every((c) => grid.canClose(c.id)),
+      `${open.filter((c) => grid.canClose(c.id)).length}/${open.length}`);
+
+  // V7a / V7b — 합성. 두 차이는 원인이 다르므로 나눠서 재고,
+  // declared 와 applied 는 같은 커밋의 한 레코드에서 읽는다.
+  const host = plane.getBoundingClientRect();
+  const latest = compositor.latest;
+  let stale = 0, land = 0, counted = 0;
+  for (const s of latest?.surfaces ?? []) {
+    const slot = plane.querySelector(`[data-native-surface-id="${s.id}"][data-native-surface]`);
+    if (!slot) continue;
+    const r = slot.getBoundingClientRect();
+    stale = Math.max(stale, maxDelta({ x: r.left - host.left, y: r.top - host.top, w: r.width, h: r.height }, s.declared));
+    land = Math.max(land, maxDelta(s.declared, s.applied));
+    counted++;
+  }
+  add("V7a element − declared == 0", counted > 0 && stale < 0.5,
+      counted ? `최대 ${stale.toFixed(2)}px · 0이 아니면 커밋이 뒤처진 것 (seq ${latest.seq})` : "표면 없음");
+  add("V7b declared − applied == 0", counted > 0 && land < 0.5,
+      counted ? `최대 ${land.toFixed(2)}px · 0이 아니면 컴포지터가 못 앉힌 것` : "표면 없음");
+
+  const transformed = [...plane.querySelectorAll(".card")]
+    .filter((el) => el.style.transform && el.style.transform !== "none").length;
+  add("V8 뷰가 transform 을 안 쓴다", transformed === 0, `${transformed}개 카드에 transform`);
+
+  // V9 — 그려지는 것은 외곽선이다. 그 획이 카드 안쪽을 지나면 실제 앱에서
+  // 네이티브 표면에 가려 보이지 않는다.
+  let onCard = 0;
+  for (const loop of shape.loops) for (let i = 0; i < loop.length; i++) {
+    const a = loop[i], b = loop[(i + 1) % loop.length];
+    const steps = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 6));
+    for (let t = 0; t <= steps; t++) {
+      const x = a.x + (b.x - a.x) * (t / steps), y = a.y + (b.y - a.y) * (t / steps);
+      if (rects.some((r) => x > r.x + 2 && x < r.x + r.w - 2 && y > r.y + 2 && y < r.y + r.h - 2)) onCard++;
+    }
+  }
+  add("V9 레일 획이 카드 안을 안 지난다", onCard === 0, `표본 ${onCard}점 침범`);
+
+  // V10 — 네이티브 표면은 DOM overflow 에 잘리지 않는다. 선언 rect 가 클립보다
+  // 크면 표면이 카드 밖에 그려진다.
+  let escape = 0;
+  for (const s of latest?.surfaces ?? []) {
+    const el = plane.querySelector(`[data-card-id="${s.id}"]`);
+    if (!el) continue;
+    const c = el.getBoundingClientRect();
+    const box = { x: c.left - host.left, y: c.top - host.top, w: c.width, h: c.height };
+    escape = Math.max(escape, box.x - s.applied.x, (s.applied.x + s.applied.w) - (box.x + box.w),
+                              box.y - s.applied.y, (s.applied.y + s.applied.h) - (box.y + box.h));
+  }
+  add("V10 표면이 카드를 안 뚫는다", escape <= 0.5, `최대 ${Math.max(0, escape).toFixed(2)}px`);
+
+  // T5 — 빈 카드는 도달 가능한 상태가 아니다
+  const empty = cards.filter((c) => !isPlace(c.id) && tabsOf(c).length === 0);
+  add("T5 빈 카드 0", empty.length === 0, `${cards.length - empty.length}/${cards.length} 카드가 내용을 가짐`);
+
+  // 세 자리가 각자의 규칙대로 서 있는가.
+  //
+  // 선언값이 아니라 그려진 폭을 잰다. 선언값은 요청이고 검증 대상은 결과다.
+  const left = grid.card("left"), right = grid.card("right"), rail = grid.card("rail");
+  const drawn = (c) => (c ? grid.rect(c.id).w : null);
+  const asked = (c) => (c && c.width !== undefined ? c.width : null);
+  const kept = (c) => c === undefined || c === null || asked(c) === null
+    || Math.abs(drawn(c) - asked(c)) < 0.5;
+  const say = (c, where) => {
+    if (!c) return "없음";
+    const w = drawn(c).toFixed(0);
+    const a = asked(c);
+    return a !== null && Math.abs(drawn(c) - a) >= 0.5
+      ? `${w}px ${where} (${a.toFixed(0)} 요청)`
+      : `${w}px ${where}`;
+  };
+  // 없는 자리는 규칙을 어길 수 없다 — 좌측을 껐다고 FAIL 이 될 일이 아니다.
+  const placeOk = (!left || left.c0 === 0)
+    && (!right || right.c1 === grid.lines("x").length - 1)
+    && [left, right, rail].every(kept);
+  add("P 자리는 카드다", placeOk,
+      `좌 ${say(left, "첫 열")} · ` +
+      `레일 ${rail ? say(rail, "열 " + rail.c0) : "없음"} · ` +
+      `우 ${say(right, "마지막 열")}`);
+
+  document.getElementById("metric").innerHTML = rows.map(([n, note, ok]) =>
+    `<tr><td>${n}</td><td>${note}</td><td class="${ok ? "pass" : "fail"}">${ok ? "PASS" : "FAIL"}</td></tr>`).join("");
+
+  document.getElementById("note").textContent =
+    "탭을 끌어 다른 카드의 가운데에 놓으면 그 카드의 탭이 되고(T3), 변에 놓으면 그쪽에 자리가 생긴다(T4). " +
+    "출발 카드의 탭이 하나뿐이면 카드째로 옮겨가 빈 카드를 남기지 않는다(T5). " +
+    "커밋 지연은 V7a 를, 적용 오차는 V7b 를 각각 RED 로 뒤집는다.";
+}
+
+/* ── 배선 ─────────────────────────────────────────────────────────────── */
+
+function build() {
+  view?.destroy();
+  for (const el of plane.querySelectorAll(".surface")) el.remove();
+  compositor.surfaces.clear();
+  compositor.latest = null;
+  seq = 0;
+  grid = new Soksak(initial(), { gap: Number(document.getElementById("gap").value) * 2 });
+  focusedId = "terminal";
+  view = new SoksakView(plane, grid, {
+    createCard, updateCard,
+    // 평면은 stage 안쪽으로 이만큼 들어와 있다. 뷰만 아는 값이 아니므로 뷰에게
+    // 말해 준다 — 그래야 평면 가장자리에 닿는 선이 벽까지 이어진다.
+    bleed: Number(document.getElementById("gap").value),
+    onChange: () => { verify(); compositor.observe(); },
+  });
+  Object.assign(window, { grid, view });   // 관측용 — build 마다 새로 걸어야 낡지 않는다
+  settle();
+}
+
+document.getElementById("theme").addEventListener("change", (e) => {
+  document.documentElement.dataset.theme = e.target.value;
+});
+document.getElementById("gap").addEventListener("input", (e) => {
+  const half = Number(e.target.value);
+  document.getElementById("gapOut").value = `${half}px`;
+  document.documentElement.style.setProperty("--half-gap", `${half}px`);
+  grid.gap = half * 2;
+  view.render();
+});
+document.getElementById("latency").addEventListener("input", (e) => {
+  compositor.latency = Number(e.target.value);
+  document.getElementById("latOut").value = `${e.target.value}ms`;
+  view.render();
+});
+document.getElementById("skew").addEventListener("input", (e) => {
+  compositor.skew = Number(e.target.value);
+  document.getElementById("skewOut").value = `${e.target.value}px`;
+  view.render();
+});
+document.getElementById("railMode").addEventListener("change", (e) => { railMode = e.target.value; settle(); });
+document.getElementById("leftOn").addEventListener("change", (e) => { leftOn = e.target.value === "on"; settle(); });
+document.getElementById("rightOn").addEventListener("change", (e) => { rightOn = e.target.value === "on"; settle(); });
+document.getElementById("reset").addEventListener("click", build);
+
+build();
+Object.assign(window, { grid, view, compositor, verify, settle });
+</script>
+</body></html>

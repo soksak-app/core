@@ -17,7 +17,7 @@
  */
 
 import { Soksak } from './soksak.js';
-import type { Axis, Card, Rect } from './soksak.js';
+import type { Axis, Card, Rect, Rule } from './soksak.js';
 
 export type ChangeReason = 'drag' | 'center' | 'merge' | 'resize' | 'render';
 
@@ -40,7 +40,37 @@ export interface ViewOptions {
   onChange?(reason: ChangeReason): void;
   /** Keep the plane size in sync with the host element. Default true. */
   observeResize?: boolean;
+  /**
+   * How far past the plane a rule may run to reach the frame around it.
+   *
+   * A host that holds the plane inside a frame draws its border that far from
+   * where a rule ends, and the rule reads as a line that gave up. Only the host
+   * knows the distance — the view is handed an element, and an element's own
+   * padding does not move what is placed absolutely inside it. Default 0.
+   */
+  bleed?: number;
 }
+
+/**
+ * A rule that reaches the plane's edge carries on to the frame around it.
+ *
+ * Only at the ends that reach the plane: a rule that ends against a card is
+ * left alone, because there the card is the wall.
+ */
+function reach(rule: Rule, grid: Soksak, bleed: number): Rect {
+  if (bleed <= 0) return rule;
+  if (rule.axis === 'x') {
+    const head = rule.y <= EDGE ? bleed : 0;
+    const tail = rule.y + rule.h >= grid.height - EDGE ? bleed : 0;
+    return { x: rule.x, y: rule.y - head, w: rule.w, h: rule.h + head + tail };
+  }
+  const head = rule.x <= EDGE ? bleed : 0;
+  const tail = rule.x + rule.w >= grid.width - EDGE ? bleed : 0;
+  return { x: rule.x - head, y: rule.y, w: rule.w + head + tail, h: rule.h };
+}
+
+/** Near enough to the plane's edge to be at it. */
+const EDGE = 0.5;
 
 interface DragState {
   /** The divider that started it. Only that one may continue it. */
@@ -144,7 +174,7 @@ export class SoksakView {
           this.host.appendChild(el);
           this.ruleEls.set(rule.key, el);
         }
-        place(el, rule);
+        place(el, reach(rule, this.grid, this.options.bleed ?? 0));
       }
       this.sweep(this.ruleEls, keep);
     }

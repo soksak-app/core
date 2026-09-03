@@ -37,6 +37,15 @@ export interface ViewOptions {
     onChange?(reason: ChangeReason): void;
     /** Keep the plane size in sync with the host element. Default true. */
     observeResize?: boolean;
+    /**
+     * How far past the plane a rule may run to reach the frame around it.
+     *
+     * A host that holds the plane inside a frame draws its border that far from
+     * where a rule ends, and the rule reads as a line that gave up. Only the host
+     * knows the distance — the view is handed an element, and an element's own
+     * padding does not move what is placed absolutely inside it. Default 0.
+     */
+    bleed?: number;
 }
 export declare class SoksakView {
     private host;

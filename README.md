@@ -362,7 +362,16 @@ constructor runs; call it to reject a stale saved layout before installing one.
 
 `SoksakView(host, grid, options)` — `render(reason?)`, `element(id)`,
 `destroy()`. Options: `createCard` (required), `updateCard`, `destroyCard`,
-`onChange(reason)`, `classPrefix` (default `sp`), `observeResize` (default on).
+`onChange(reason)`, `classPrefix` (default `sp`), `observeResize` (default on),
+`bleed` (default 0).
+
+`bleed` is how far past the plane a rule may run to reach the frame around it.
+A host that holds the plane inside a frame — a padding on the element outside
+it — draws its border that far from where a rule ends, and the rule reads as a
+line that stops short. Only the host has that distance: the view receives an
+element, and an element's own padding does not move what is placed absolutely
+inside it. Only the ends that reach the plane bleed; a rule that stops against
+a card is left where it stops, because there the card is the wall.
 `reason` is one of `drag`, `center`, `merge`, `resize`, `render`.
 
 `outline(rects, options)`, `unionLoops(rects)`, `roundedPath(loop, radius, innerRadius)`,
