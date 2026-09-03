@@ -480,8 +480,12 @@ export function rules(plane: Plane): Rule[] {
           : { key: `vy:${line}`, axis, line, virtual: true, x: 0, y: at, w: across, h: 1 },
       );
       for (const [from, to] of boundarySpans(plane, axis, line, meet)) {
-        const start = hold(frame[down].at[from] + frame[down].lo[from] - half);
-        const end = hold(frame[down].at[to] - frame[down].hi[to] + half);
+        // Wall to wall: the stretch runs to the facing edge of whatever bounds
+        // it, which is the neighbouring card across the corridor, or the plane
+        // itself where there is no card. Stopping half a corridor short left it
+        // ending in mid-air, 12px from the card it should meet.
+        const start = hold(frame[down].at[from] - frame[down].hi[from]);
+        const end = hold(frame[down].at[to] + frame[down].lo[to]);
         out.push(
           axis === 'x'
             ? { key: `sx:${line}:${from}`, axis, line, virtual: false, x: at, y: start, w: 1, h: end - start }
