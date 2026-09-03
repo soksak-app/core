@@ -48,7 +48,27 @@ input[type=range]{accent-color:var(--rail);width:110px}
 /* 포커스는 테두리 하나를 더 두르는 것이 아니라 있던 테두리의 색이다. 링을
    덧대면 카드마다 선이 두 겹이 되고, 둘 사이의 1px 이 어느 쪽에도 속하지
    않는 틈으로 읽힌다. */
-.card[data-focused=true]{border-color:var(--rail)}
+:root[data-focus-ind=border] .card[data-focused=true]{border-color:var(--rail)}
+
+/* 꺽쇠는 본문의 네 귀퉁이에만 선다. 네이티브 표면은 CSS 스택 밖이라 카드 안에
+   그리면 표면 아래로 들어가므로, 표면과 같은 층에 본문 자리를 따라 놓는다. */
+.focus-mark{position:absolute;z-index:80;pointer-events:none;
+  --len:14px;--t:2px;
+  background-image:
+    linear-gradient(var(--rail),var(--rail)),linear-gradient(var(--rail),var(--rail)),
+    linear-gradient(var(--rail),var(--rail)),linear-gradient(var(--rail),var(--rail)),
+    linear-gradient(var(--rail),var(--rail)),linear-gradient(var(--rail),var(--rail)),
+    linear-gradient(var(--rail),var(--rail)),linear-gradient(var(--rail),var(--rail));
+  background-size:
+    var(--len) var(--t),var(--t) var(--len),
+    var(--len) var(--t),var(--t) var(--len),
+    var(--len) var(--t),var(--t) var(--len),
+    var(--len) var(--t),var(--t) var(--len);
+  background-position:
+    left top,left top, right top,right top,
+    left bottom,left bottom, right bottom,right bottom;
+  background-repeat:no-repeat}
+.focus-mark[hidden]{display:none}
 
 .chrome{display:flex;align-items:center;gap:4px;padding:0 4px 0 4px;overflow:hidden;
   border-bottom:1px solid color-mix(in srgb,var(--bd) 40%,transparent)}
@@ -129,6 +149,10 @@ input[type=range]{accent-color:var(--rail);width:110px}
 여기서 GREEN 인 것만 Wails 에서도 GREEN 이다.</p>
 
 <div class="controls">
+  <label>포커스 <select id="focusInd">
+    <option value="border">보더</option>
+    <option value="corner">꺽쇠</option>
+  </select></label>
   <label>테마 <select id="theme"><option value="dark">dark</option><option value="light">light</option></select></label>
   <label>여백 <input id="gap" type="range" min="0" max="24" step="1" value="12"> <output id="gapOut">12px</output></label>
   <label>커밋 지연 <input id="latency" type="range" min="0" max="600" step="50" value="0"> <output id="latOut">0ms</output></label>
@@ -148,6 +172,7 @@ input[type=range]{accent-color:var(--rail);width:110px}
 <main class="stage"><div class="plane" id="plane">
   <svg class="rail" id="rail"><path id="railPath"></path></svg>
   <div class="drop" id="drop" hidden></div>
+  <div class="focus-mark" id="focusMark" hidden></div>
 </div></main>
 
 <div class="metric"><table id="metric"></table></div>
@@ -747,6 +772,29 @@ function settle() {
   view.render();
 }
 
+/**
+ * 꺽쇠를 포커스 카드의 본문 자리에 놓는다.
+ *
+ * 카드 안이 아니라 표면과 같은 층이다. 네이티브 표면은 CSS 스택에 참여하지
+ * 않으므로 카드 안에 그린 표시는 표면 아래로 들어간다 — 실제 앱에서 보이지
+ * 않을 것을 시뮬레이터에서만 보이게 두면 재현이 아니다.
+ */
+function markFocus() {
+  const mark = document.getElementById("focusMark");
+  const on = document.documentElement.dataset.focusInd === "corner";
+  const slot = on
+    ? plane.querySelector(`[data-native-surface-id="${focusedId}"][data-native-surface]`)
+    : null;
+  if (!slot) { mark.hidden = true; return; }
+  const host = plane.getBoundingClientRect();
+  const r = slot.getBoundingClientRect();
+  mark.style.left = `${r.left - host.left}px`;
+  mark.style.top = `${r.top - host.top}px`;
+  mark.style.width = `${r.width}px`;
+  mark.style.height = `${r.height}px`;
+  mark.hidden = false;
+}
+
 function drawRail() {
   const pad = grid.gap / 2;
   // 포커스 카드와 묶이는 것은 그 카드의 종류를 맡은 레일뿐이다. 레일이 없으면
@@ -930,10 +978,18 @@ function build() {
     bleed: Number(document.getElementById("gap").value),
     onChange: () => { verify(); compositor.observe(); },
   });
+  const baseRender = view.render.bind(view);
+  view.render = () => { baseRender(); markFocus(); };
+
   Object.assign(window, { grid, view });   // 관측용 — build 마다 새로 걸어야 낡지 않는다
   settle();
 }
 
+document.documentElement.dataset.focusInd = "border";
+document.getElementById("focusInd").addEventListener("change", (e) => {
+  document.documentElement.dataset.focusInd = e.target.value;
+  view.render();
+});
 document.getElementById("theme").addEventListener("change", (e) => {
   document.documentElement.dataset.theme = e.target.value;
 });
