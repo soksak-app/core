@@ -103,7 +103,9 @@ input[type=color]{width:34px;height:24px;padding:0;background:var(--card);
 
 .sp-rule{background:color-mix(in srgb,var(--bd) 65%,transparent)}
 .sp-rule[data-virtual=true]{background:color-mix(in srgb,var(--bd) 20%,transparent)}
-/* 전장선은 그 선이 평면을 어디까지 지나는지 보여준다. 셋 중 하나로 둔다.
+/* 가이드선은 그 선이 평면을 어디까지 지나는지 보여준다. 실선과 같은 좌표에
+   앉고 길이만 다르다 — 위쪽만 나뉘고 아래는 한 장이 가로지를 때, 실선만 그리면
+   선이 둘로 보인다. 셋 중 하나로 둔다.
    · 보임 — 표면 위. DOM 오버레이는 실제 앱에서도 네이티브 표면 위에 그릴 수
            있으므로 재현 가능한 그림이다.
    · 가림 — 카드 아래. 카드가 덮는 구간은 보이지 않는다.
@@ -161,7 +163,7 @@ input[type=color]{width:34px;height:24px;padding:0;background:var(--card);
   <label>포커스 색 <input id="focusColor" type="color" data-token="--focus"></label>
   <label>레일 색 <input id="railColor" type="color" data-token="--rail"></label>
   <button id="colorReset" type="button">테마 색으로</button>
-  <label>전장선 <select id="fullRule">
+  <label>가이드선 <select id="fullRule">
     <option value="under">가림</option>
     <option value="on">보임</option>
     <option value="off">숨김</option>
