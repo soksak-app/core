@@ -51,6 +51,15 @@ export declare class SoksakView {
     private host;
     private grid;
     private options;
+    /**
+     * How far past the plane a rule may run to reach the frame around it.
+     *
+     * Writable, because a host that lets a person change its gap changes this
+     * with it. Reads back what it holds, so a host does not have to remember
+     * what it set.
+     */
+    get bleed(): number;
+    set bleed(px: number);
     private prefix;
     private cardEls;
     private dividerEls;

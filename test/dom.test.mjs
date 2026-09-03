@@ -631,3 +631,32 @@ test("no bleed is the default, and nothing runs past the plane", () => {
   }
   view.destroy();
 });
+
+test("bleed is readable and writable, and refuses a value that is not one", () => {
+  const { host, grid, view } = mount();
+  assert.equal(view.bleed, 0, "nothing by default");
+
+  view.bleed = 20;
+  assert.equal(view.bleed, 20, "it reads back what it was set to");
+  view.render();
+  for (const el of host.querySelectorAll('.sp-rule[data-axis="x"]')) {
+    assert.equal(el.style.top, "-20px", "and the rules follow it");
+  }
+
+  view.bleed = 6;
+  view.render();
+  for (const el of host.querySelectorAll('.sp-rule[data-axis="x"]')) {
+    assert.equal(el.style.top, "-6px", "including downward");
+  }
+
+  for (const bad of [-1, NaN, Infinity]) {
+    view.bleed = bad;
+    assert.equal(view.bleed, 6, `${bad} is ignored`);
+  }
+  view.bleed = 0;
+  assert.equal(view.bleed, 0, "and zero is a distance");
+  view.render();
+  assert.equal(host.querySelector('.sp-rule[data-axis="x"]').style.top, "0px");
+  assert.ok(grid.cards.length, "the plane is untouched by any of it");
+  view.destroy();
+});

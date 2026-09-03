@@ -88,6 +88,22 @@ export class SoksakView {
   private host: HTMLElement;
   private grid: Soksak;
   private options: ViewOptions;
+
+  /**
+   * How far past the plane a rule may run to reach the frame around it.
+   *
+   * Writable, because a host that lets a person change its gap changes this
+   * with it. Reads back what it holds, so a host does not have to remember
+   * what it set.
+   */
+  get bleed(): number {
+    return this.options.bleed ?? 0;
+  }
+
+  set bleed(px: number) {
+    if (!Number.isFinite(px) || px < 0) return;
+    this.options.bleed = px;
+  }
   private prefix: string;
   private cardEls = new Map<string, { el: HTMLElement; card: Card }>();
   private dividerEls = new Map<string, HTMLElement>();

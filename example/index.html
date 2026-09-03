@@ -884,8 +884,9 @@ function build() {
   focusedId = "terminal";
   view = new SoksakView(plane, grid, {
     createCard, updateCard,
-    // 평면은 stage 안쪽으로 이만큼 들어와 있다. 뷰만 아는 값이 아니므로 뷰에게
-    // 말해 준다 — 그래야 평면 가장자리에 닿는 선이 벽까지 이어진다.
+    // 평면은 stage 안쪽으로 이만큼 들어와 있다. 호스트만 아는 값이므로 뷰에게
+    // 말해 준다 — 그래야 평면 가장자리에 닿는 선이 벽까지 이어진다. 여백은
+    // 사람이 바꾸므로 슬라이더가 이것도 같이 옮긴다.
     bleed: Number(document.getElementById("gap").value),
     onChange: () => { verify(); compositor.observe(); },
   });
@@ -901,6 +902,7 @@ document.getElementById("gap").addEventListener("input", (e) => {
   document.getElementById("gapOut").value = `${half}px`;
   document.documentElement.style.setProperty("--half-gap", `${half}px`);
   grid.gap = half * 2;
+  view.bleed = half;          // stage 여백이 바뀌면 선이 넘어야 할 거리도 바뀐다
   view.render();
 });
 document.getElementById("latency").addEventListener("input", (e) => {

@@ -37,6 +37,22 @@ function reach(rule, grid, bleed) {
 const EDGE = 0.5;
 const DOUBLE_TAP_MS = 350;
 export class SoksakView {
+    /**
+     * How far past the plane a rule may run to reach the frame around it.
+     *
+     * Writable, because a host that lets a person change its gap changes this
+     * with it. Reads back what it holds, so a host does not have to remember
+     * what it set.
+     */
+    get bleed() {
+        var _a;
+        return (_a = this.options.bleed) !== null && _a !== void 0 ? _a : 0;
+    }
+    set bleed(px) {
+        if (!Number.isFinite(px) || px < 0)
+            return;
+        this.options.bleed = px;
+    }
     constructor(host, grid, options) {
         var _a;
         this.cardEls = new Map();
