@@ -28,7 +28,7 @@ h1{margin:0 0 6px;font-size:18px}
 select,button{font:inherit;color:var(--fg);background:var(--card);
   border:1px solid color-mix(in srgb,var(--bd) 45%,transparent);border-radius:7px;padding:3px 8px}
 button{cursor:pointer}
-input[type=range]{accent-color:var(--rail);width:110px}
+input[type=range]{accent-color:var(--focus);width:110px}
 input[type=color]{width:34px;height:24px;padding:0;background:var(--card);
   border:1px solid color-mix(in srgb,var(--bd) 45%,transparent);border-radius:6px}
 
@@ -106,7 +106,7 @@ input[type=color]{width:34px;height:24px;padding:0;background:var(--card);
 .sp-divider{z-index:4}
 .sp-divider::after{content:"";position:absolute;inset:0;margin:auto;border-radius:99px;
   background:color-mix(in srgb,var(--muted) 75%,transparent);transition:background .12s}
-.sp-divider:hover::after,.sp-divider[data-dragging]::after{background:var(--rail)}
+.sp-divider:hover::after,.sp-divider[data-dragging]::after{background:var(--focus)}
 .sp-divider[data-axis=x]{cursor:col-resize}
 .sp-divider[data-axis=x]::after{width:3px;height:24px}
 .sp-divider[data-axis=y]{cursor:row-resize}
@@ -130,8 +130,8 @@ input[type=color]{width:34px;height:24px;padding:0;background:var(--card);
 /* 구획은 DOM 이다. 표면이 비켜선 동안에만 보일 수 있고, 그래서 표면보다
    낮은 z 로 둔다 — 올려서 위에 그린 척하면 실제 앱과 달라진다. */
 .drop{position:absolute;z-index:40;pointer-events:none;border-radius:var(--r);
-  background:color-mix(in srgb,var(--rail) 22%,transparent);
-  border:2px solid var(--rail)}
+  background:color-mix(in srgb,var(--focus) 22%,transparent);
+  border:2px solid var(--focus)}
 .drop[hidden]{display:none}
 
 .metric{margin-top:10px;padding:10px 13px;
@@ -1000,7 +1000,8 @@ function build() {
    레일이 무엇에 묶여 있는지의 표시. 같은 색으로 두면 카드 하나에 두 뜻이 겹쳐
    어느 쪽을 말하는지 알 수 없다. 각자 고를 수 있다.
 
-   --focus : 포커스 카드 테두리, 꺽쇠, 자리 카드(좌측·우측·레일)의 테두리와 제목
+   --focus : 표시하는 것 전부 — 포커스 카드 테두리, 꺽쇠, 자리 카드의 테두리와
+             제목, 잡은 divider, 놓을 자리
    --rail  : 레일이 포커스 카드를 묶는 바깥 외곽선, 그것 하나 테마가 기본을 주고
    사람이 고른 값이 이긴다: 인라인 값이라 테마를 바꿔도 남고, 「테마 색으로」가
    그 값을 걷어 다시 테마에 맡긴다. */
