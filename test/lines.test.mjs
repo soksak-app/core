@@ -247,14 +247,12 @@ test("a rule covers exactly where cards break on the line", () => {
   assert.equal(solid.length, 1, "one stretch on x");
   const [stretch] = solid;
   const top = grid.rect("topLeft");
-  const under = grid.rect("under");
-  // Wall to wall: it runs to the facing edge of whatever bounds it — the plane
-  // at the top, the card across the corridor at the bottom — and not to the far
-  // end of the line, which is what the full-plane rule is for.
-  assert.equal(stretch.y, 0, "it starts at the plane");
+  // It reaches half a corridor past the pair at each end, and stops at the
+  // plane rather than running off it.
+  assert.equal(stretch.y, Math.max(0, top.y - grid.gap / 2), "it starts where the pair starts");
   assert.ok(
-    Math.abs(stretch.y + stretch.h - under.y) < 1e-9,
-    `it ends at the card below (${stretch.y + stretch.h} vs ${under.y})`,
+    Math.abs(stretch.y + stretch.h - (top.y + top.h + grid.gap / 2)) < 1e-9,
+    "and ends where they stop meeting, not where the plane does",
   );
   assert.ok(stretch.h < grid.height, "so it is shorter than the whole line");
 });
