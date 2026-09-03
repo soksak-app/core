@@ -130,7 +130,9 @@ input[type=range]{accent-color:var(--rail);width:110px}
   <label>여백 <input id="gap" type="range" min="0" max="24" step="1" value="12"> <output id="gapOut">12px</output></label>
   <label>커밋 지연 <input id="latency" type="range" min="0" max="600" step="50" value="0"> <output id="latOut">0ms</output></label>
   <label>적용 오차 <input id="skew" type="range" min="0" max="12" step="1" value="0"> <output id="skewOut">0px</output></label>
-  <label>레일 <select id="railMode">
+  <label>터미널 레일 <select id="railTerminal"><option value="on">있음</option><option value="off">없음</option></select></label>
+  <label>브라우저 레일 <select id="railBrowser"><option value="off">없음</option><option value="on">있음</option></select></label>
+  <label>레일 거동 <select id="railMode">
     <option value="flow">FLOW — 포커스를 따라간다</option>
     <option value="pin">PIN — 자리를 지킨다</option>
     <option value="off">없음</option>
@@ -190,11 +192,15 @@ const SETS = {
   browser:  { rail: { name: "페이지", sections: ["DOM", "네트워크"] },
               right: { name: "브라우저", sections: ["탭", "히스토리"] } },
 };
-const PLACE = { left: "left", right: "right", rail: "rail" };
+// 레일은 플러그인 종류마다 하나다. 터미널 레일과 브라우저 레일은 서로 다른
+// 물건이고, 각자 자기 종류가 포커스를 잡았을 때만 따라간다.
+const RAILS = { terminal: "rail-terminal", browser: "rail-browser" };
+const PLACE = { left: "left", right: "right", "rail-terminal": "rail-terminal", "rail-browser": "rail-browser" };
 const isPlace = (id) => id in PLACE;
 
 let grid, view, focusedId, seq = 0;
 let railMode = "flow", leftOn = true, rightOn = true;
+const railOn = { terminal: true, browser: false };
 
 /* ── 탭 규칙 ──────────────────────────────────────────────────────────────
    T1 카드는 탭 목록과 활성 탭 하나를 갖는다
@@ -207,8 +213,16 @@ const tabsOf = (card) => card?.data?.tabs ?? [];
 const activeTab = (card) => tabsOf(card).find((t) => t.id === card.data.activeId) ?? tabsOf(card)[0];
 const focusedPlugin = () => activeTab(grid.card(focusedId))?.plugin ?? null;
 
+/** 그 자리가 보여주는 세트. */
+const railKind = (place) =>
+  Object.keys(RAILS).find((k) => RAILS[k] === place) ?? null;
+
 const standingSet = (place) => {
   if (place === "left") return SETS.install;
+  // 레일은 자기 종류의 세트를 보여준다. 포커스가 다른 종류에 가 있어도 그
+  // 레일이 무엇의 레일인지는 바뀌지 않는다.
+  const kind = railKind(place);
+  if (kind) return SETS[kind]?.rail ?? null;
   const plugin = focusedPlugin();
   return plugin ? (SETS[plugin]?.[place] ?? null) : null;
 };
@@ -360,7 +374,9 @@ function updateCard(el, card) {
   const status = el.querySelector(".status");
 
   if (place) {
-    const name = place === "left" ? "좌측" : place === "right" ? "우측" : "레일";
+    const kind = railKind(place);
+    const name = place === "left" ? "좌측" : place === "right" ? "우측"
+      : kind === "terminal" ? "터미널 레일" : kind === "browser" ? "브라우저 레일" : "레일";
     setHTML(chrome, `<span class="tab" data-active="true">${name}</span>`);
     const set = standingSet(place);
     setHTML(el.querySelector(".set"), set
@@ -368,7 +384,9 @@ function updateCard(el, card) {
       : "<b>—</b>포커스된 플러그인 없음");
     setText(status, place === "left"
       ? `열 ${card.c0}–${card.c1} · 설치 전체가 한 세트`
-      : `열 ${card.c0}–${card.c1} · 포커스: ${focusedPlugin() ?? "없음"}`);
+      : kind
+        ? `열 ${card.c0}–${card.c1} · ${kind}${focusedPlugin() === kind ? " · 포커스" : ""}`
+        : `열 ${card.c0}–${card.c1} · 포커스: ${focusedPlugin() ?? "없음"}`);
     return;
   }
 
@@ -626,22 +644,26 @@ function dropTab(fromId, tabId, hit) {
  * 이동은 그 열을 빼서 다른 경계에 넣는 것이다. 닫고 다시 여는 것이 아니므로
  * 다른 카드의 행 경계는 움직이지 않는다.
  */
-function standRail() {
-  const has = !!grid.card("rail");
-  if (railMode === "off") {
-    if (has) dismiss("rail");
+function standRail(kind) {
+  const id = RAILS[kind];
+  const has = !!grid.card(id);
+  if (!railOn[kind] || railMode === "off") {
+    if (has) dismiss(id);
     return;
   }
   if (!has) {
-    const line = railTarget();
+    const line = railTarget(id, kind);
     if (line === null) return;
-    grid.insertAt("x", line, { id: "rail", data: null, size: 190 });
-    grid.setFixed("rail", true);
+    grid.insertAt("x", line, { id, data: null, size: 190 });
+    grid.setFixed(id, true);
     return;
   }
   if (railMode !== "flow") return;                  // PIN — 자리를 지킨다
-  const line = railTarget();
-  if (line !== null) grid.moveTo("rail", "x", line);
+  // 자기 종류가 포커스를 잡았을 때만 따라간다. 다른 종류가 잡은 동안 옮기면
+  // 터미널을 보는 사이에 브라우저 레일이 끌려다닌다.
+  if (focusedPlugin() !== kind) return;
+  const line = railTarget(id, kind);
+  if (line !== null) grid.moveTo(id, "x", line);
 }
 
 /**
@@ -651,13 +673,21 @@ function standRail() {
  * 고르면 답이 레일 자신에 따라 달라지므로, `standings` 에 레일을 무시하도록
  * 요청해 레일을 뺀 배치에서 잰다.
  */
-function railTarget() {
+function railTarget(id, kind) {
   // 레일 자신의 경계도 후보다. 이미 옳은 자리에 서 있으면 그 자리가 답이고,
   // moveTo 는 제자리 이동을 성공으로 반환한다.
-  const stands = grid.standings("x", "rail");
+  const stands = grid.standings("x", id);
   if (!stands.length) return null;
 
-  const want = grid.rect(focusedId)?.x ?? 0;
+  // 자기 종류를 보여주는 카드 옆에 선다. 포커스가 그 종류면 그 카드, 아니면
+  // 그 종류를 든 가장 왼쪽 카드 — 없으면 설 자리가 없다.
+  const beside = focusedPlugin() === kind
+    ? grid.card(focusedId)
+    : grid.cards
+        .filter((c) => !isPlace(c.id) && activeTab(c)?.plugin === kind)
+        .sort((a, b) => grid.rect(a.id).x - grid.rect(b.id).x)[0];
+  if (!beside) return null;
+  const want = grid.rect(beside.id)?.x ?? 0;
 
   // P3 — 왼쪽에 붙는다. 바로 왼쪽에 설 수 없으면 더 왼쪽으로 물러난다.
   // 오른쪽으로는 넘어가지 않는다: 사이드바가 자기가 붙은 것의 반대편에
@@ -707,16 +737,18 @@ function standEdge(id, on, size, side) {
 function settle() {
   standEdge("left", leftOn, 190, "left");
   standEdge("right", rightOn, 210, "right");
-  standRail();
+  standRail("terminal");
+  standRail("browser");
   if (!grid.card(focusedId)) focusedId = grid.cards.find((c) => !isPlace(c.id))?.id ?? null;
   view.render();
 }
 
 function drawRail() {
   const pad = grid.gap / 2;
-  // 레일이 없으면 묶을 것이 없다. `filter(Boolean)` 만 두면 포커스 카드 하나를
-  // 감싼 외곽선을 그려 놓고 「레일 외곽선」이라 부르게 된다.
-  const rail = grid.rect("rail");
+  // 포커스 카드와 묶이는 것은 그 카드의 종류를 맡은 레일뿐이다. 레일이 없으면
+  // 묶을 것이 없다: `filter(Boolean)` 만 두면 포커스 카드 하나를 감싼 외곽선을
+  // 그려 놓고 「레일 외곽선」이라 부르게 된다.
+  const rail = grid.rect(RAILS[focusedPlugin()] ?? "");
   const focused = grid.rect(focusedId);
   const rects = rail && focused ? [rail, focused] : [];
   const shape = outline(rects, { pad, radius: CARD_R + pad, innerRadius: Math.max(4, pad) });
@@ -844,7 +876,8 @@ function verify() {
   // 세 자리가 각자의 규칙대로 서 있는가.
   //
   // 선언값이 아니라 그려진 폭을 잰다. 선언값은 요청이고 검증 대상은 결과다.
-  const left = grid.card("left"), right = grid.card("right"), rail = grid.card("rail");
+  const left = grid.card("left"), right = grid.card("right");
+  const rail = grid.card(RAILS.terminal) ?? grid.card(RAILS.browser);
   const drawn = (c) => (c ? grid.rect(c.id).w : null);
   const asked = (c) => (c && c.width !== undefined ? c.width : null);
   const kept = (c) => c === undefined || c === null || asked(c) === null
@@ -919,6 +952,8 @@ document.getElementById("skew").addEventListener("input", (e) => {
   view.render();
 });
 document.getElementById("railMode").addEventListener("change", (e) => { railMode = e.target.value; settle(); });
+document.getElementById("railTerminal").addEventListener("change", (e) => { railOn.terminal = e.target.value === "on"; settle(); });
+document.getElementById("railBrowser").addEventListener("change", (e) => { railOn.browser = e.target.value === "on"; settle(); });
 document.getElementById("leftOn").addEventListener("change", (e) => { leftOn = e.target.value === "on"; settle(); });
 document.getElementById("rightOn").addEventListener("change", (e) => { rightOn = e.target.value === "on"; settle(); });
 document.getElementById("reset").addEventListener("click", build);
