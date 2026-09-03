@@ -647,7 +647,11 @@ function dropTab(fromId, tabId, hit) {
 function standRail(kind) {
   const id = RAILS[kind];
   const has = !!grid.card(id);
-  if (!railOn[kind] || railMode === "off") {
+  // 레일은 포커스가 잡은 것의 곁을 지킨다. 브라우저를 보는 동안 터미널 레일이
+  // 남아 있으면 그것은 지금 보고 있는 것의 곁이 아니라 남겨진 자리다. 자기
+  // 종류가 포커스를 잃으면 물러난다 — 그 종류의 레일을 꺼 두었다면 아무 레일도
+  // 서지 않는 것이 맞다.
+  if (!railOn[kind] || railMode === "off" || focusedPlugin() !== kind) {
     if (has) dismiss(id);
     return;
   }
@@ -659,9 +663,6 @@ function standRail(kind) {
     return;
   }
   if (railMode !== "flow") return;                  // PIN — 자리를 지킨다
-  // 자기 종류가 포커스를 잡았을 때만 따라간다. 다른 종류가 잡은 동안 옮기면
-  // 터미널을 보는 사이에 브라우저 레일이 끌려다닌다.
-  if (focusedPlugin() !== kind) return;
   const line = railTarget(id, kind);
   if (line !== null) grid.moveTo(id, "x", line);
 }
