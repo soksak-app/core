@@ -767,7 +767,13 @@ function railTarget(id, kind) {
 function dismiss(id) {
   if (!grid.card(id)) return;
   grid.setFixed(id, false);
-  if (!grid.close(id)) grid.setFixed(id, true);   // 치우지 못했으면 역할도 그대로
+  if (!grid.close(id)) { grid.setFixed(id, true); return; }   // 치우지 못했으면 역할도 그대로
+  // 카드가 가면 그 카드가 읽던 선은 아무도 읽지 않는 선으로 남는다. 라이브러리는
+  // 그런 선을 그대로 두고 언제 걷을지는 호스트에게 맡긴다 — 여기서는 걷는다.
+  // 남겨 봐야 쓸 수 없다: 자란 카드가 그 선을 가로지르므로 `standings` 가
+  // 후보로 내놓지 않고, 레일이 돌아올 때는 새 선을 끼운다. 그대로 두면 왕복할
+  // 때마다 한 자리에 선이 하나씩 쌓인다.
+  grid.tidy();
 }
 
 /**
