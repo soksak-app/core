@@ -29,6 +29,8 @@ select,button{font:inherit;color:var(--fg);background:var(--card);
   border:1px solid color-mix(in srgb,var(--bd) 45%,transparent);border-radius:7px;padding:3px 8px}
 button{cursor:pointer}
 input[type=range]{accent-color:var(--rail);width:110px}
+input[type=color]{width:34px;height:24px;padding:0;background:var(--card);
+  border:1px solid color-mix(in srgb,var(--bd) 45%,transparent);border-radius:6px}
 
 .stage{position:relative;height:560px;padding:var(--half-gap);
   border:1px solid color-mix(in srgb,var(--bd) 35%,transparent);border-radius:22px}
@@ -149,6 +151,7 @@ input[type=range]{accent-color:var(--rail);width:110px}
 여기서 GREEN 인 것만 Wails 에서도 GREEN 이다.</p>
 
 <div class="controls">
+  <label>레일 색 <input id="railColor" type="color"> <button id="railColorReset" type="button">테마 기본</button></label>
   <label>포커스 <select id="focusInd">
     <option value="border">보더</option>
     <option value="corner">꺽쇠</option>
@@ -986,9 +989,39 @@ function build() {
   const baseRender = view.render.bind(view);
   view.render = () => { baseRender(); markFocus(); };
 
+  showThemeRail();
   Object.assign(window, { grid, view });   // 관측용 — build 마다 새로 걸어야 낡지 않는다
   settle();
 }
+
+/* 레일 색은 테마가 정한다. 사람이 고르면 그것이 이긴다 — 인라인 값이라
+   테마를 바꿔도 남고, 「테마 기본」이 그 값을 걷어 다시 테마에 맡긴다. */
+const railColorEl = document.getElementById("railColor");
+const themeRail = () =>
+  getComputedStyle(document.documentElement).getPropertyValue("--rail").trim();
+const showThemeRail = () => {
+  if (!document.documentElement.style.getPropertyValue("--rail")) {
+    railColorEl.value = toHex(themeRail());
+  }
+};
+/** 무엇으로 적혀 있든 색 입력이 받는 형태로. */
+function toHex(css) {
+  const probe = document.createElement("span");
+  probe.style.color = css;
+  document.body.appendChild(probe);
+  const rgb = getComputedStyle(probe).color.match(/\d+/g) ?? [0, 0, 0];
+  probe.remove();
+  return "#" + rgb.slice(0, 3).map((n) => Number(n).toString(16).padStart(2, "0")).join("");
+}
+railColorEl.addEventListener("input", (e) => {
+  document.documentElement.style.setProperty("--rail", e.target.value);
+  view.render();
+});
+document.getElementById("railColorReset").addEventListener("click", () => {
+  document.documentElement.style.removeProperty("--rail");
+  showThemeRail();
+  view.render();
+});
 
 document.documentElement.dataset.focusInd = "border";
 document.getElementById("focusInd").addEventListener("change", (e) => {
@@ -997,6 +1030,7 @@ document.getElementById("focusInd").addEventListener("change", (e) => {
 });
 document.getElementById("theme").addEventListener("change", (e) => {
   document.documentElement.dataset.theme = e.target.value;
+  showThemeRail();          // 사람이 고른 값이 없을 때만 테마 색을 보여준다
 });
 document.getElementById("gap").addEventListener("input", (e) => {
   const half = Number(e.target.value);
