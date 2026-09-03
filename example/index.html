@@ -8,14 +8,14 @@
 :root{
   color-scheme:dark;
   --bg:#101117;--card:#1b1d27;--fg:#ececf5;--muted:#9b9dad;
-  --bd:#7279ff;--rail:#ffb36b;--ok:#53dc93;--no:#ff7c7c;
+  --bd:#7279ff;--rail:#ffb36b;--focus:#ffb36b;--ok:#53dc93;--no:#ff7c7c;
   --surface:#0d1a14;--surface-fg:#7fe3b0;
   --r:14px;--half-gap:12px;
 }
 :root[data-theme=light]{
   color-scheme:light;
   --bg:#eef0f7;--card:#fff;--fg:#252735;--muted:#6c6f7e;
-  --bd:#5962e8;--rail:#c06a1f;--ok:#12894f;--no:#c62c2c;
+  --bd:#5962e8;--rail:#c06a1f;--focus:#c06a1f;--ok:#12894f;--no:#c62c2c;
   --surface:#e8f5ee;--surface-fg:#12684a;
 }
 *{box-sizing:border-box}
@@ -50,17 +50,17 @@ input[type=color]{width:34px;height:24px;padding:0;background:var(--card);
 /* 포커스는 테두리 하나를 더 두르는 것이 아니라 있던 테두리의 색이다. 링을
    덧대면 카드마다 선이 두 겹이 되고, 둘 사이의 1px 이 어느 쪽에도 속하지
    않는 틈으로 읽힌다. */
-:root[data-focus-ind=border] .card[data-focused=true]{border-color:var(--rail)}
+:root[data-focus-ind=border] .card[data-focused=true]{border-color:var(--focus)}
 
 /* 꺽쇠는 본문의 네 귀퉁이에만 선다. 네이티브 표면은 CSS 스택 밖이라 카드 안에
    그리면 표면 아래로 들어가므로, 표면과 같은 층에 본문 자리를 따라 놓는다. */
 .focus-mark{position:absolute;z-index:80;pointer-events:none;
   --len:14px;--t:1px;
   background-image:
-    linear-gradient(var(--rail),var(--rail)),linear-gradient(var(--rail),var(--rail)),
-    linear-gradient(var(--rail),var(--rail)),linear-gradient(var(--rail),var(--rail)),
-    linear-gradient(var(--rail),var(--rail)),linear-gradient(var(--rail),var(--rail)),
-    linear-gradient(var(--rail),var(--rail)),linear-gradient(var(--rail),var(--rail));
+    linear-gradient(var(--focus),var(--focus)),linear-gradient(var(--focus),var(--focus)),
+    linear-gradient(var(--focus),var(--focus)),linear-gradient(var(--focus),var(--focus)),
+    linear-gradient(var(--focus),var(--focus)),linear-gradient(var(--focus),var(--focus)),
+    linear-gradient(var(--focus),var(--focus)),linear-gradient(var(--focus),var(--focus));
   background-size:
     var(--len) var(--t),var(--t) var(--len),
     var(--len) var(--t),var(--t) var(--len),
@@ -151,7 +151,9 @@ input[type=color]{width:34px;height:24px;padding:0;background:var(--card);
 여기서 GREEN 인 것만 Wails 에서도 GREEN 이다.</p>
 
 <div class="controls">
-  <label>레일 색 <input id="railColor" type="color"> <button id="railColorReset" type="button">테마 기본</button></label>
+  <label>포커스 색 <input id="focusColor" type="color" data-token="--focus"></label>
+  <label>레일 색 <input id="railColor" type="color" data-token="--rail"></label>
+  <button id="colorReset" type="button">테마 색으로</button>
   <label>포커스 <select id="focusInd">
     <option value="border">보더</option>
     <option value="corner">꺽쇠</option>
@@ -989,21 +991,18 @@ function build() {
   const baseRender = view.render.bind(view);
   view.render = () => { baseRender(); markFocus(); };
 
-  showThemeRail();
+  showThemeColors();
   Object.assign(window, { grid, view });   // 관측용 — build 마다 새로 걸어야 낡지 않는다
   settle();
 }
 
-/* 레일 색은 테마가 정한다. 사람이 고르면 그것이 이긴다 — 인라인 값이라
-   테마를 바꿔도 남고, 「테마 기본」이 그 값을 걷어 다시 테마에 맡긴다. */
-const railColorEl = document.getElementById("railColor");
-const themeRail = () =>
-  getComputedStyle(document.documentElement).getPropertyValue("--rail").trim();
-const showThemeRail = () => {
-  if (!document.documentElement.style.getPropertyValue("--rail")) {
-    railColorEl.value = toHex(themeRail());
-  }
-};
+/* 포커스 표시와 레일 외곽선은 서로 다른 것이다 — 지금 보고 있는 것의 표시와,
+   레일이 무엇에 묶여 있는지의 표시. 같은 색으로 두면 카드 하나에 두 뜻이 겹쳐
+   어느 쪽을 말하는지 알 수 없다. 각자 고를 수 있다. 테마가 기본을 주고
+   사람이 고른 값이 이긴다: 인라인 값이라 테마를 바꿔도 남고, 「테마 색으로」가
+   그 값을 걷어 다시 테마에 맡긴다. */
+const colorEls = [...document.querySelectorAll("input[type=color][data-token]")];
+
 /** 무엇으로 적혀 있든 색 입력이 받는 형태로. */
 function toHex(css) {
   const probe = document.createElement("span");
@@ -1013,13 +1012,25 @@ function toHex(css) {
   probe.remove();
   return "#" + rgb.slice(0, 3).map((n) => Number(n).toString(16).padStart(2, "0")).join("");
 }
-railColorEl.addEventListener("input", (e) => {
-  document.documentElement.style.setProperty("--rail", e.target.value);
-  view.render();
-});
-document.getElementById("railColorReset").addEventListener("click", () => {
-  document.documentElement.style.removeProperty("--rail");
-  showThemeRail();
+
+/** 고른 값이 없는 입력만 테마 색을 보여준다. */
+function showThemeColors() {
+  const root = document.documentElement;
+  for (const el of colorEls) {
+    if (root.style.getPropertyValue(el.dataset.token)) continue;
+    el.value = toHex(getComputedStyle(root).getPropertyValue(el.dataset.token).trim());
+  }
+}
+
+for (const el of colorEls) {
+  el.addEventListener("input", () => {
+    document.documentElement.style.setProperty(el.dataset.token, el.value);
+    view.render();
+  });
+}
+document.getElementById("colorReset").addEventListener("click", () => {
+  for (const el of colorEls) document.documentElement.style.removeProperty(el.dataset.token);
+  showThemeColors();
   view.render();
 });
 
@@ -1030,7 +1041,7 @@ document.getElementById("focusInd").addEventListener("change", (e) => {
 });
 document.getElementById("theme").addEventListener("change", (e) => {
   document.documentElement.dataset.theme = e.target.value;
-  showThemeRail();          // 사람이 고른 값이 없을 때만 테마 색을 보여준다
+  showThemeColors();        // 사람이 고른 값이 없을 때만 테마 색을 보여준다
 });
 document.getElementById("gap").addEventListener("input", (e) => {
   const half = Number(e.target.value);
