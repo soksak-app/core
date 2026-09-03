@@ -103,6 +103,11 @@ input[type=color]{width:34px;height:24px;padding:0;background:var(--card);
 
 .sp-rule{background:color-mix(in srgb,var(--bd) 65%,transparent)}
 .sp-rule[data-virtual=true]{background:color-mix(in srgb,var(--bd) 20%,transparent)}
+/* 전장선은 그 선이 평면을 어디까지 지나는지 보여준다. 기본은 카드 아래라 카드가
+   덮는 구간은 보이지 않는다 — 경계가 아닌 곳에는 선이 없는 것으로 읽힌다.
+   「보임」은 표면 위로 올린다: DOM 오버레이는 실제 앱에서도 네이티브 표면 위에
+   그릴 수 있으므로 이것은 재현 가능한 그림이다. */
+:root[data-full-rule=on] .sp-rule[data-virtual=true]{z-index:70}
 .sp-divider{z-index:4}
 .sp-divider::after{content:"";position:absolute;inset:0;margin:auto;border-radius:99px;
   background:color-mix(in srgb,var(--muted) 75%,transparent);transition:background .12s}
@@ -154,6 +159,10 @@ input[type=color]{width:34px;height:24px;padding:0;background:var(--card);
   <label>포커스 색 <input id="focusColor" type="color" data-token="--focus"></label>
   <label>레일 색 <input id="railColor" type="color" data-token="--rail"></label>
   <button id="colorReset" type="button">테마 색으로</button>
+  <label>전장선 <select id="fullRule">
+    <option value="off">숨김</option>
+    <option value="on">보임</option>
+  </select></label>
   <label>포커스 <select id="focusInd">
     <option value="border">보더</option>
     <option value="corner">꺽쇠</option>
@@ -1046,6 +1055,11 @@ document.getElementById("colorReset").addEventListener("click", () => {
   for (const el of colorEls) document.documentElement.style.removeProperty(el.dataset.token);
   showThemeColors();
   view.render();
+});
+
+document.documentElement.dataset.fullRule = "off";
+document.getElementById("fullRule").addEventListener("change", (e) => {
+  document.documentElement.dataset.fullRule = e.target.value;
 });
 
 document.documentElement.dataset.focusInd = "border";
