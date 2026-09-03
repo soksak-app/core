@@ -327,6 +327,15 @@ export declare class Soksak {
      */
     close(id: string): boolean;
     /**
+     * Put lines nobody reads back where they stood.
+     *
+     * The coordinate that draws a given px is not a closed form — a slot's size
+     * depends on every other slot — so it is walked to: each pass moves the
+     * coordinate by the error over the slope, and the error falls off fast
+     * enough that a handful of passes land on it exactly.
+     */
+    private standAgain;
+    /**
      * Whether a card reaching across the plane can stand on this boundary.
      *
      * True when no card spans over the line. `without` ignores one card by id.

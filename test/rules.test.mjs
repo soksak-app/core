@@ -489,3 +489,35 @@ test("a rect is never inside out, whatever the gap", () => {
     }
   }
 });
+
+test("R1 — where a line stands does not depend on which cards read it", () => {
+  // A card leaving stops any read of the line it stood on. R5 defines such a
+  // line takes no corridor, which is a statement about how wide the cards
+  // beside it are drawn — not about where the line is. Answering both from one
+  // number slides the line half a corridor onto the edge of the card that grew
+  // over it, and the place a person set is lost.
+  const grid = new Soksak(
+    { xs: [0, 1 / 3, 0.432086, 2 / 3, 1], ys: [0, 0.52, 1], cards: [
+      { id: "left", c0: 0, c1: 1, r0: 0, r1: 2, width: 190, fixed: true },
+      { id: "rail", c0: 1, c1: 2, r0: 0, r1: 2, width: 280, fixed: true },
+      { id: "terminal", c0: 2, c1: 3, r0: 0, r1: 1 },
+      { id: "browser", c0: 2, c1: 3, r0: 1, r1: 2 },
+      { id: "right", c0: 3, c1: 4, r0: 0, r1: 2, width: 210, fixed: true },
+    ] },
+    { width: 1950, height: 560, gap: 24 },
+  );
+  const before = grid.lines("x").map((_, k) => grid.boundaryPos("x", k));
+  assert.equal(grid.isVirtual("x", 2), false, "the rail reads the line");
+
+  grid.setFixed("rail", false);
+  assert.equal(grid.close("rail"), true);
+
+  assert.equal(grid.isVirtual("x", 2), true, "and now nobody does");
+  assert.equal(grid.lines("x").length, before.length, "the line is still there");
+  for (let k = 0; k < before.length; k++) {
+    assert.ok(
+      Math.abs(grid.boundaryPos("x", k) - before[k]) < 1e-6,
+      `line ${k} moved from ${before[k]} to ${grid.boundaryPos("x", k)}`,
+    );
+  }
+});

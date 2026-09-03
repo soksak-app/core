@@ -1110,6 +1110,12 @@ export class Soksak {
     const filling = this.fillOf(id);
     if (filling) {
       const axis: Axis = filling.grow === 'c0' || filling.grow === 'c1' ? 'x' : 'y';
+      // Where a line stands does not depend on which cards read it. The card
+      // leaving stops anyone reading its line, and R5 gives such a line no
+      // corridor — a statement about how wide the cards beside it are drawn,
+      // not about where the line is. Read the places before, and put back the
+      // ones that only moved because nobody reads them now.
+      const stood = this.arr(axis).map((_, k) => this.boundaryPos(axis, k));
       const [lo, hi] = SPAN[axis];
       const from = card[lo];
       const to = card[hi];
@@ -1119,6 +1125,7 @@ export class Soksak {
       // The slots the card stood in go to the neighbour that grew over them.
       // Every other slot keeps the width it had.
       this.settleOn(axis, want, order(from, want.length, to - 1));
+      this.standAgain(axis, stood);
       this.changed();
       return true;
     }
@@ -1136,6 +1143,33 @@ export class Soksak {
     this.settleOn(axis, kept, order(Math.min(from, kept.length - 1), kept.length));
     this.changed();
     return true;
+  }
+
+  /**
+   * Put lines nobody reads back where they stood.
+   *
+   * The coordinate that draws a given px is not a closed form — a slot's size
+   * depends on every other slot — so it is walked to: each pass moves the
+   * coordinate by the error over the slope, and the error falls off fast
+   * enough that a handful of passes land on it exactly.
+   */
+  private standAgain(axis: Axis, stood: readonly number[]): void {
+    const a = this.arr(axis);
+    for (let k = 1; k < a.length - 1; k++) {
+      const want = stood[k];
+      if (want === undefined || !this.isVirtual(axis, k)) continue;
+      for (let pass = 0; pass < 8; pass++) {
+        const at = this.boundaryPos(axis, k);
+        const off = want - at;
+        if (Math.abs(off) < 1e-9) break;
+        const span = a[k + 1] - a[k - 1];
+        const room = this.boundaryPos(axis, k + 1) - this.boundaryPos(axis, k - 1);
+        if (span < EPS || room < EPS) break;
+        const next = a[k] + (off * span) / room;
+        if (!(next > a[k - 1] && next < a[k + 1])) break;   // no room to stand there
+        a[k] = next;
+      }
+    }
   }
 
   /**
