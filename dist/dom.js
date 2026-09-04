@@ -88,8 +88,8 @@ export class SoksakView {
     }
     /** Re-place every element from the grid. Cheap enough to call on every frame of a drag. */
     render(reason = 'render') {
-        var _a, _b, _c, _d, _e, _f;
-        var _g;
+        var _a, _b, _c, _d, _e, _f, _g, _h;
+        var _j;
         if (this.disposed)
             return;
         // One measurement of the plane for every card. Asking for each card's rect
@@ -139,7 +139,7 @@ export class SoksakView {
                     this.host.appendChild(el);
                     this.ruleEls.set(rule.key, el);
                 }
-                place(el, reach(rule, this.grid, (_g = this.options.bleed) !== null && _g !== void 0 ? _g : 0));
+                place(el, reach(rule, this.grid, (_j = this.options.bleed) !== null && _j !== void 0 ? _j : 0));
             }
             this.sweep(this.ruleEls, keep);
         }
@@ -154,9 +154,10 @@ export class SoksakView {
                 this.dividerEls.set(divider.key, el);
             }
             place(el, divider);
+            (_f = (_e = this.options).updateDivider) === null || _f === void 0 ? void 0 : _f.call(_e, el, divider);
         }
         this.sweep(this.dividerEls, keep);
-        (_f = (_e = this.options).onChange) === null || _f === void 0 ? void 0 : _f.call(_e, reason);
+        (_h = (_g = this.options).onChange) === null || _h === void 0 ? void 0 : _h.call(_g, reason);
     }
     sweep(map, keep) {
         for (const [k, el] of map) {

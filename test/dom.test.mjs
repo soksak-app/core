@@ -419,9 +419,11 @@ test("the view follows the host's size, and ignores a host with none", () => {
 
 test("the view calls back and honours its options", () => {
   const updates = [];
+  const dividerUpdates = [];
   const { host, grid, view, gone } = mount({
     classPrefix: "px",
     updateCard: (el, card, rect) => updates.push([card.id, rect.w, el.dataset.cardId]),
+    updateDivider: (el, divider) => dividerUpdates.push([el, divider.key, divider.axis, divider.line]),
   });
 
   assert.ok(updates.length > 0, "updateCard is called for every card");
@@ -433,6 +435,11 @@ test("the view calls back and honours its options", () => {
   assert.equal(host.querySelectorAll(".px-divider").length > 0, true, "classPrefix is used");
   assert.equal(host.querySelectorAll(".sp-divider").length, 0, "and the default is not");
   assert.equal(host.querySelectorAll(".px-rule").length, grid.rules().length);
+  assert.deepEqual(
+    dividerUpdates.map(([, key, axis, line]) => [key, axis, line]),
+    grid.dividers().map((divider) => [divider.key, divider.axis, divider.line]),
+    "updateDivider receives each placed divider",
+  );
 
   // Every rule carries the axis and whether it runs the whole plane.
   for (const rule of grid.rules()) {
