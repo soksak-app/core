@@ -390,3 +390,24 @@ test("a card cannot be inserted at the size of the plane or more", () => {
   grid.split("card", "x");
   assert.ok(grid.insertAt("x", 0, { size: 40, id: "narrow" }), "a size the plane holds");
 });
+
+test("replace updates the canonical arrangement without replacing the grid", () => {
+  const grid = new Soksak(undefined, { width: 1200, height: 800, minSize: 0 });
+  const first = grid.card("card");
+  const next = grid.split("card", "x", { id: "browser", data: { program: "browser" } });
+  assert.equal(next, "browser");
+
+  grid.replace({
+    xs: [0, 0.25, 1],
+    ys: [0, 1],
+    cards: [
+      { id: "terminal", c0: 0, c1: 1, r0: 0, r1: 1, data: { program: "terminal" } },
+      { id: "browser", c0: 1, c1: 2, r0: 0, r1: 1, data: { program: "browser" } },
+    ],
+  });
+
+  assert.equal(grid.card("card"), undefined);
+  assert.equal(grid.card("terminal").data.program, "terminal");
+  assert.deepEqual(grid.rect("browser"), { x: 312, y: 0, w: 888, h: 800 });
+  assert.notEqual(grid.card("terminal"), first);
+});

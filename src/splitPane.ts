@@ -339,6 +339,23 @@ export class Soksak {
     };
   }
 
+  /**
+   * Replace the arrangement while keeping this grid's plane and options.
+   *
+   * The payload is opaque to the library. This is the synchronization point
+   * for a host that owns the canonical state and keeps one DOM view alive.
+   */
+  replace(state: SoksakState): void {
+    checkState(state);
+    this.xs = [...state.xs];
+    this.ys = [...state.ys];
+    this.list = state.cards.map((c) => ({ ...c, fixed: c.fixed ?? false }));
+    this.paidBy = new Map(Object.entries(state.paidBy ?? {}));
+    this.sliceMemo.clear();
+    this.splitMemo.clear();
+    this.agreeSizes();
+  }
+
   private get plane(): Plane {
     return { xs: this.xs, ys: this.ys, cards: this.list, width: this.w, height: this.h, gap: this.gap, minSize: this.min };
   }
