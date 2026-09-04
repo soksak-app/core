@@ -80,6 +80,39 @@ test("the view creates and removes one element per card", () => {
   assert.equal(host.children.length, 0, "destroy leaves the host as it found it");
 });
 
+test("the view accepts the mouse drag contract for dividers", () => {
+  const changes = [];
+  const { window, host, grid, view } = mount({ onChange: (reason) => changes.push(reason) });
+  const divider = host.querySelector('[role="separator"]');
+  assert.ok(divider);
+  const boundaryBefore = grid.boundaryPos("x", 1);
+
+  divider.dispatchEvent(new window.MouseEvent("mousedown", {
+    clientX: boundaryBefore,
+    clientY: 100,
+    bubbles: true,
+    button: 0,
+    buttons: 1,
+  }));
+  window.document.dispatchEvent(new window.MouseEvent("mousemove", {
+    clientX: boundaryBefore + 80,
+    clientY: 100,
+    bubbles: true,
+    buttons: 1,
+  }));
+  window.document.dispatchEvent(new window.MouseEvent("mouseup", {
+    clientX: boundaryBefore + 80,
+    clientY: 100,
+    bubbles: true,
+    button: 0,
+    buttons: 0,
+  }));
+
+  assert.equal(grid.boundaryPos("x", 1), boundaryBefore + 80);
+  assert.ok(changes.includes("drag"));
+  view.destroy();
+});
+
 test("a card element is reused across splits and closes", () => {
   const { grid, view, made } = mount();
   const kept = view.element("card");

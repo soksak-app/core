@@ -116,6 +116,8 @@ export class SoksakView {
    * set on a divider nobody was holding.
    */
   private drags = new Map<number, DragState>();
+  private mouseDrag: DragState | null = null;
+  private mouseDisposers = new Set<() => void>();
   private observer: ResizeObserver | null = null;
   private disposed = false;
 
@@ -251,7 +253,7 @@ export class SoksakView {
    * pointer capture: the boundary jumps once and then stops responding.
    */
   private makeDivider(): HTMLElement {
-    const el = document.createElement('div');
+    const el = this.host.ownerDocument.createElement('div');
     el.className = `${this.prefix}-divider`;
     el.style.position = 'absolute';
     el.style.touchAction = 'none';
@@ -318,6 +320,49 @@ export class SoksakView {
     // then no pointerup reaches it.
     el.addEventListener('lostpointercapture', stop);
 
+    // The public DOM command contract sends mouse events. Keep the same divider
+    // state machine available for that contract without changing the grid API.
+    const ownerDocument = el.ownerDocument;
+    const mouseDown = (e: MouseEvent): void => {
+      if (this.disposed || e.button !== 0) return;
+      e.preventDefault();
+      const axis = el.dataset.axis as Axis;
+      const line = Number(el.dataset.line);
+      this.mouseDrag = {
+        on: el,
+        axis,
+        line,
+        from: axis === 'x' ? e.clientX : e.clientY,
+        base: this.grid.boundaryPos(axis, line),
+        moved: false,
+      };
+    };
+    const mouseMove = (e: MouseEvent): void => {
+      const drag = this.mouseDrag;
+      if (this.disposed || !drag || drag.on !== el) return;
+      if (e.buttons === 0) {
+        this.mouseDrag = null;
+        return;
+      }
+      const now = drag.axis === 'x' ? e.clientX : e.clientY;
+      if (Math.abs(now - drag.from) > 2) drag.moved = true;
+      this.grid.moveBoundary(drag.axis, drag.line, drag.base + (now - drag.from));
+      this.render('drag');
+    };
+    const mouseUp = (): void => {
+      if (this.mouseDrag?.on === el) this.mouseDrag = null;
+    };
+    el.addEventListener('mousedown', mouseDown);
+    ownerDocument.addEventListener('mousemove', mouseMove);
+    ownerDocument.addEventListener('mouseup', mouseUp);
+    const disposeMouse = (): void => {
+      el.removeEventListener('mousedown', mouseDown);
+      ownerDocument.removeEventListener('mousemove', mouseMove);
+      ownerDocument.removeEventListener('mouseup', mouseUp);
+      this.mouseDisposers.delete(disposeMouse);
+    };
+    this.mouseDisposers.add(disposeMouse);
+
     el.addEventListener('keydown', (e: KeyboardEvent) => {
       if (this.disposed) return;
       const axis = el.dataset.axis as Axis;
@@ -346,6 +391,8 @@ export class SoksakView {
 
   destroy(): void {
     this.disposed = true;
+    for (const dispose of this.mouseDisposers) dispose();
+    this.mouseDrag = null;
     for (const pointer of [...this.drags.keys()]) this.end(pointer);
     this.observer?.disconnect();
     this.observer = null;
