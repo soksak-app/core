@@ -516,16 +516,18 @@ function updateCard(el, card) {
   if (!acts) {
     acts = document.createElement("span");
     acts.className = "chrome__acts";
+    // 생성 버튼 3개를 앞에, 닫기를 끝에 배치한다. 닫기는 되돌릴 수 없으므로
+    // 다른 버튼 사이에 두면 오클릭 위험이 크다.
     for (const [what, title, svg] of [
-      ["add", "이 카드에 탭 추가", '<path d="M8 3v10M3 8h10"/>'],
-      ["close", "이 카드를 닫는다 — 안의 탭이 몇 개든 함께 간다",
-        '<path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/>'],
+      ["add", "이 카드에 탭 추가 — 무엇을 띄울지 묻는다", '<path d="M8 3v10M3 8h10"/>'],
       ["x", "세로선으로 쪼개기 — 좌우로 나뉜다",
         '<rect class="half" x="2" y="3" width="6" height="10" rx="1.5"/>' +
         '<rect x="2" y="3" width="12" height="10" rx="2"/><path d="M8 3v10"/>'],
       ["y", "가로선으로 쪼개기 — 위아래로 나뉜다",
         '<rect class="half" x="3" y="2" width="10" height="6" rx="1.5"/>' +
         '<rect x="3" y="2" width="10" height="12" rx="2"/><path d="M3 8h10"/>'],
+      ["close", "이 카드를 닫는다 — 안의 탭이 몇 개든 함께 간다",
+        '<path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/>'],
     ]) {
       const b = document.createElement("button");
       b.className = "chrome__act";
