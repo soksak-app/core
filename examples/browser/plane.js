@@ -47,6 +47,35 @@ window.pressSurface = (cardId) => {
   slot.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
 };
 
+/* 호스트가 넘긴 드래그를 잡고 있는 divider. 누를 때 정해지고 놓을 때 비운다. */
+let heldDivider = null;
+
+/* 왼쪽 버튼의 한 걸음. 호스트가 좌표를 이 문서의 것으로 변환해 보낸다.
+   phase 는 0 이 누름, 1 이 이동, 2 가 놓음이다.
+
+   divider 의 잡는 영역은 통로보다 넓다. 통로가 선 하나 폭이면 그 영역 전체가 표면
+   아래에 놓여 누름이 이 문서에 도달하지 않으므로, 호스트가 좌표를 넘기고 여기서
+   그 좌표가 어느 divider 위인지 판정한다. 뷰는 mouse 이벤트로도 divider 를 움직일
+   수 있으므로 판이 아니라 그 요소에 이벤트를 낸다. */
+window.surfaceInput = ({ phase, x, y }) => {
+  if (phase === 0) {
+    heldDivider = document.elementFromPoint(x, y)?.closest(".sp-divider") ?? null;
+    heldDivider?.dispatchEvent(new MouseEvent("mousedown", {
+      bubbles: true, clientX: x, clientY: y, button: 0, buttons: 1,
+    }));
+    return;
+  }
+  if (!heldDivider) return;
+  if (phase === 1) {
+    document.dispatchEvent(new MouseEvent("mousemove", {
+      bubbles: true, clientX: x, clientY: y, buttons: 1,
+    }));
+    return;
+  }
+  document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, clientX: x, clientY: y }));
+  heldDivider = null;
+};
+
 
 const plane = document.getElementById("plane");
 const railPath = document.getElementById("railPath");

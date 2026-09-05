@@ -123,6 +123,10 @@ function install() {
   // 애플리케이션이 표면 id 를 전달하면 페이지가 해당 슬롯에 pointerdown 을 낸다.
   bridge.on("surface-pressed", (id) => window.pressSurface(id));
 
+  // 왼쪽 버튼의 누름, 이동, 놓음. 좌표는 이 문서의 것이다. divider 의 잡는 영역은
+  // 통로보다 넓어서 통로가 선 하나 폭이면 그 영역 전체가 표면 아래에 놓인다.
+  bridge.on("surface-input", (step) => window.surfaceInput(step));
+
   let pick = null;
   let shown = null;
   // 모달은 여러 번 응답하므로 여기서 구독을 해제하지 않고 hide 에서 해제한다.
