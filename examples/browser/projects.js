@@ -1,65 +1,64 @@
 // 프로젝트와 스페이스.
 //
-//   프로젝트  루트 하나를 연 것. 스페이스 묶음과 이름과 색을 갖는다
-//     └ 스페이스  판 한 벌 — 배치와 포커스. 여러 개를 두고 탭으로 바꾼다
+//   프로젝트  루트 하나에 대응한다. 스페이스 목록과 이름과 색을 갖는다
+//     └ 스페이스  판 한 벌. 배치와 포커스를 갖고 탭으로 전환한다
 //
-// 정체는 root 다. 같은 root 를 두 번 열면 새로 만들지 않고 이미 열린 것을
-// 답한다 — id 로 판단했다면 "이 프로젝트가 이미 열려 있나"에 답할 수 없다.
+// 정체성은 root 다. 같은 root 를 다시 열면 새로 만들지 않고 기존 프로젝트를
+// 활성화한다. id 로 판정하면 중복 여부를 알 수 없다.
 //
-// 판이 무엇인지 모른다. 스페이스가 담은 배치는 여기서 읽지 않는 값이고, 그것을
-// 판에 걸고 다시 걷어 오는 일은 판이 한다.
+// 스페이스가 보관하는 layout 값을 이 모듈은 해석하지 않는다. 판에서 읽어 오고 판에
+// 적용하는 것은 onSwitch 로 등록된 두 함수다.
 import { issueId } from "./ids.js";
 
 const projects = [];
 let activeProjectId = null;
 
-/* 활성 스페이스가 바뀌었음을 듣는 쪽. 판이 여기 붙는다. */
+/* 활성 스페이스 전환 수신자. 판이 여기에 연결된다. */
 let listener = null;
 
 /**
- * 활성 스페이스가 바뀌기 직전과 직후에 부를 것을 건다.
+ * 활성 스페이스 전환 직전과 직후에 호출할 함수를 등록한다.
  *
- * `save` 는 지금 판을 걷어 돌려주고, `load` 는 그 값을 판에 건다. 프로젝트든
- * 스페이스든 바뀌는 것은 같은 일이므로 경로가 하나다.
+ * `save` 는 현재 판의 배치를 반환하고 `load` 는 그 값을 판에 적용한다. 프로젝트
+ * 전환과 스페이스 전환이 같은 동작이므로 경로가 하나다.
  */
 export function onSwitch({ save, load }) {
   listener = { save, load };
 }
 
-/** 지금 판을 걷어 활성 스페이스에 넣는다. */
+/** 현재 판의 배치를 활성 스페이스에 저장한다. */
 function keep() {
   const space = activeSpace();
   if (space && listener) space.layout = listener.save();
 }
 
-/** 활성 스페이스의 배치를 판에 건다. */
+/** 활성 스페이스의 배치를 판에 적용한다. */
 function restore() {
   const space = activeSpace();
   if (space && listener) listener.load(space.layout);
 }
 
-/** 열린 프로젝트 전부. */
+/** 열린 프로젝트 전부를 반환한다. */
 export const all = () => projects;
 
-/** 지금 보고 있는 프로젝트. 하나도 없으면 null. */
+/** 활성 프로젝트를 반환한다. 없으면 null. */
 export const active = () => projects.find((p) => p.id === activeProjectId) ?? null;
 
-/** 지금 보고 있는 스페이스. */
+/** 활성 스페이스를 반환한다. 활성 프로젝트가 없으면 null. */
 function activeSpace() {
   const p = active();
   return p ? p.spaces.find((s) => s.id === p.activeSpaceId) : null;
 }
 
-/** 새 스페이스 하나. 배치는 부르는 쪽이 준다 — 판의 모양은 여기서 모른다. */
+/** 스페이스 하나를 만든다. 배치는 호출자가 전달한다. */
 function newSpace(title, layout) {
   return { id: issueId("space"), title, layout };
 }
 
 /**
- * 그 루트의 프로젝트를 연다.
+ * 해당 루트의 프로젝트를 연다.
  *
- * 이미 열려 있으면 새로 만들지 않고 그것을 활성으로 한다. 한 루트는 한
- * 프로젝트다.
+ * 이미 열려 있으면 새로 만들지 않고 활성화한다. 루트 하나에 프로젝트 하나다.
  */
 export function open({ root, title, color, layout }) {
   const already = projects.find((p) => p.root === root);
@@ -79,7 +78,7 @@ export function open({ root, title, color, layout }) {
   return project;
 }
 
-/** 프로젝트를 바꾼다. 스페이스 묶음이 통째로 바뀐다. */
+/** 활성 프로젝트를 전환한다. 스페이스 목록 전체가 교체된다. */
 export function activate(id) {
   if (id === activeProjectId) return;
   const found = projects.find((p) => p.id === id);
@@ -89,7 +88,7 @@ export function activate(id) {
   restore();
 }
 
-/** 프로젝트를 닫는다. 마지막 하나는 닫지 않는다 — 볼 것이 없어진다. */
+/** 프로젝트를 닫는다. 마지막 하나는 닫지 않는다. */
 export function close(id) {
   if (projects.length === 1) return;
   const at = projects.findIndex((p) => p.id === id);
@@ -102,7 +101,7 @@ export function close(id) {
   restore();
 }
 
-/** 이름과 색을 고친다. root 는 정체이므로 바뀌지 않는다. */
+/** 이름과 색을 변경한다. root 는 정체성이므로 변경하지 않는다. */
 export function rename(id, { title, color }) {
   const found = projects.find((p) => p.id === id);
   if (!found) throw new Error(`unknown project: ${id}`);
@@ -110,7 +109,7 @@ export function rename(id, { title, color }) {
   if (color !== undefined) found.color = color;
 }
 
-/** 활성 프로젝트에 스페이스를 더하고 그리로 옮긴다. */
+/** 활성 프로젝트에 스페이스를 추가하고 활성화한다. */
 export function addSpace(layout) {
   const project = active();
   keep();
@@ -121,7 +120,7 @@ export function addSpace(layout) {
   return space;
 }
 
-/** 스페이스를 바꾼다. 판의 배치가 통째로 바뀐다. */
+/** 활성 스페이스를 전환한다. 판의 배치 전체가 교체된다. */
 export function activateSpace(id) {
   const project = active();
   if (id === project.activeSpaceId) return;
@@ -145,7 +144,7 @@ export function closeSpace(id) {
   restore();
 }
 
-/** 스페이스의 이름을 고친다. */
+/** 스페이스의 이름을 변경한다. */
 export function renameSpace(id, title) {
   const space = active().spaces.find((s) => s.id === id);
   if (!space) throw new Error(`unknown space: ${id}`);

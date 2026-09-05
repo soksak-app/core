@@ -1,16 +1,15 @@
 // Native surfaces and native modals for the soksak example.
 //
-// The example declares, on every commit, the frame each surface should occupy,
-// and hands over any [data-native-modal] element it opens. Each of those becomes
-// a webview inside the main window, placed on the frame the page asked for.
+// On every commit the page declares the frame each surface occupies, and it
+// sends any [data-native-modal] element it opens. Each becomes a webview inside
+// the main window, positioned on the declared frame.
 //
-// Wails has no API for adding a webview to a window, but it hands over the
-// window itself, and a webview is a native view like any other. See
-// native_darwin.go.
+// Wails has no API for adding a webview to a window, but it exposes the window,
+// and a webview is a native view. See native_darwin.go.
 //
-// A view added that way is outside the app's asset server, which answers a
-// scheme only its own webview knows. The local pages a surface or a modal needs
-// are therefore served over http on the loopback address; see serve.go.
+// A view added that way cannot reach the app's asset server, which serves a
+// scheme only its own webview resolves. The local pages a surface or a modal
+// needs are served over http on a loopback address instead; see serve.go.
 package main
 
 import (
@@ -31,14 +30,14 @@ type Rect struct {
 type Surface struct {
 	ID  string `json:"id"`
 	URL string `json:"url"`
-	// Whether URL points outside this host. An address of this host's own is
-	// served by the loopback server; naming the kind here would mean editing
+	// Whether URL points outside this host. This host's own addresses are served
+	// by the loopback server. Deciding by plugin kind here would require editing
 	// this file for every plugin the page adds.
 	External bool `json:"external"`
 	Visible  bool `json:"visible"`
-	// Whether the page asked for this surface to stand back, having lost focus.
+	// Whether the page asked for this surface to be dimmed after losing focus.
 	Dim bool `json:"dim"`
-	// The colour the view starts on, so a resize never uncovers white.
+	// The colour the view shows before its page paints, so a resize shows no white.
 	Background [3]float64 `json:"background"`
 	Rect
 }
@@ -48,20 +47,20 @@ type SyncRequest struct {
 	Surfaces []Surface `json:"surfaces"`
 }
 
-// Viewport is the page's own height. The page's view starts at the window
-// content view's origin, so the height is all that is needed to turn a rect
-// measured from the page's top left into the frame AppKit wants.
+// Viewport is the page's own height. The page's view starts at the window content
+// view's origin, so the height alone converts a rect measured from the page's top
+// left into the bottom-left frame AppKit expects.
 type Viewport struct {
 	H float64 `json:"h"`
 }
 
-// The page's theme, carried to the pages this host serves.
+// The page's theme, forwarded to the pages this host serves.
 type Theme struct {
 	Scheme string            `json:"scheme"`
 	Tokens map[string]string `json:"tokens"`
 }
 
-// What a [data-native-modal] element needs in order to be drawn elsewhere.
+// What a [data-native-modal] element needs in order to be rendered in another view.
 type OverlayRequest struct {
 	ID         string     `json:"id"`
 	Viewport   Viewport   `json:"viewport"`
@@ -74,7 +73,7 @@ type OverlayRequest struct {
 	Background [3]float64 `json:"background"`
 }
 
-// What the modal's own view asks for once it has loaded.
+// What the modal's view requests once it has loaded.
 type OverlayContent struct {
 	CSS       string `json:"css"`
 	ClassName string `json:"className"`
@@ -88,10 +87,7 @@ type modal struct {
 	radius  float64
 }
 
-// Where one surface was last put, and whether a press could land on it.
-//
-// Kept in the order the page declared them: a press is answered topmost first,
-// and with every layer equal the later declaration is the one on top.
+// Where one surface was last placed. Held in the order the page declared them.
 type placement struct {
 	id      string
 	frame   Rect
@@ -102,11 +98,11 @@ type placement struct {
 
 type Surfaces struct {
 	// Guards modals, which the pages this host serves read over HTTP. Views are
-	// touched on the main thread only and need no lock.
+	// only touched on the main thread and need no lock.
 	mu    sync.Mutex
 	views map[string]*nativeView
 	// A surface is a native view, so a press on it never reaches the page. This
-	// is what names the surface a pressed view draws.
+	// maps a pressed view to the surface id the page uses.
 	named  map[uintptr]string
 	modals map[string]*modal
 	shells *Shells
@@ -124,10 +120,10 @@ func NewSurfaces(shells *Shells, pages *Pages) *Surfaces {
 	}
 }
 
-// OverlayShow places a modal's view and hands it its content.
+// OverlayShow creates a modal's view and stores its content.
 //
-// The view is created here, after the surface views, which is what puts it above
-// them. It is not revealed until it reports the size it needs.
+// The view is created after the surface views, which places it above them. It
+// stays hidden until it reports the size it needs.
 func (s *Surfaces) OverlayShow(req OverlayRequest) error {
 	win, ok := mainWindow()
 	if !ok {
@@ -161,8 +157,8 @@ func (s *Surfaces) OverlayShow(req OverlayRequest) error {
 	return nil
 }
 
-// PlaceRequest is where an open modal's view goes. The card decides; this is
-// that decision arriving, as a drag on its grip.
+// PlaceRequest is the new position of an open modal's view. The page decides the
+// position; a drag on the card's grip is what changes it.
 type PlaceRequest struct {
 	ID       string   `json:"id"`
 	Viewport Viewport `json:"viewport"`
@@ -202,8 +198,8 @@ func (s *Surfaces) OverlayHide(id string) error {
 	return nil
 }
 
-// OverlayUpdate replaces what an open modal draws, without rebuilding its view.
-// A modal whose controls change what the page holds is redrawn while it stands.
+// OverlayUpdate replaces an open modal's content without rebuilding its view.
+// A modal whose controls change the page's state is redrawn while it is open.
 func (s *Surfaces) OverlayUpdate(req OverlayRequest) error {
 	content := OverlayContent{
 		CSS: req.CSS, ClassName: req.ClassName, HTML: req.HTML, Border: req.Border,
@@ -221,7 +217,7 @@ func (s *Surfaces) OverlayUpdate(req OverlayRequest) error {
 	return nil
 }
 
-// ModalContent is what the modal's own view asks for once it has loaded.
+// ModalContent returns the content the modal's view requests after loading.
 func (s *Surfaces) ModalContent(id string) OverlayContent {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -231,8 +227,8 @@ func (s *Surfaces) ModalContent(id string) OverlayContent {
 	return OverlayContent{}
 }
 
-// ModalFit gives the view the size its page found it needs, clips its corners
-// and reveals it. Revealing any earlier would show a view of the wrong shape.
+// ModalFit resizes the view to the size its page measured, clips its corners and
+// shows it. Showing it earlier would display a view of the wrong size.
 func (s *Surfaces) ModalFit(id string, w, h float64) {
 	s.mu.Lock()
 	live, ok := s.modals[id]
@@ -251,17 +247,11 @@ func (s *Surfaces) ModalFit(id string, w, h float64) {
 	})
 }
 
-// surfaceAt names the surface a point lands on, or "" for a point on none.
-//
-// Invisible or transparent is not there to be pressed: a surface parked behind
-// the one a person is looking at still holds its rectangle, which is what keeps
-// its layout. Where two of them cover the point the topmost answers — by layer,
-// and with those equal by the order the page declared them.
-// up turns a top-left y into the bottom-left one AppKit measures.
+// up converts a top-left y to the bottom-left y AppKit uses.
 func up(viewport Viewport, y, h float64) float64 { return viewport.H - y - h }
 
-// press reports whether the view is one of the surfaces, and names it to the
-// page when it is. The page decides what a press means; here it is only named.
+// press reports whether the view is one of the surfaces and sends its id to the
+// page. What the press means is decided by the page.
 func (s *Surfaces) press(view uintptr) bool {
 	id, ok := s.named[view]
 	if !ok {
@@ -271,8 +261,7 @@ func (s *Surfaces) press(view uintptr) bool {
 	return true
 }
 
-// How solid a surface is drawn. Dimming is the page's decision; this is only
-// the number it comes out as.
+// alphaFor returns the alpha for a surface. The page decides whether to dim it.
 func alphaFor(dim bool) float64 {
 	if dim {
 		return 0.45
@@ -280,7 +269,7 @@ func alphaFor(dim bool) float64 {
 	return 1
 }
 
-// srgb turns the page's 0-255 channels into the 0-1 AppKit wants.
+// srgb converts the page's 0-255 channels to the 0-1 range AppKit takes.
 func srgb(c [3]float64) [3]float64 {
 	return [3]float64{c[0] / 255, c[1] / 255, c[2] / 255}
 }
@@ -301,9 +290,8 @@ func mainWindow() (*application.WebviewWindow, bool) {
 	return win, ok
 }
 
-// Report writes one line from the page's own checks into this app's log. The
-// page has no file to write to and its console is not read when the app runs
-// outside a debugger.
+// Report writes one line from the page's checks into this app's log. The page
+// cannot write a file, and its console is not visible outside a debugger.
 func (s *Surfaces) Report(line string) error {
 	log.Println(line)
 	return nil

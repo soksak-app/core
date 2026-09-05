@@ -19,10 +19,9 @@ export interface OutlineOptions {
   /**
    * Corner radius. Default `pad`, i.e. flush with a square pane.
    *
-   * One number for every corner. At each of them the stroke is going round a
-   * card's corner at the same distance; which way it turns says which side the
-   * card is on, not how tight the turn is. A stroke that bent at two radii
-   * would read as two shapes.
+   * One value for every corner. At each corner the stroke runs around a card's
+   * corner at the same distance; the turn direction indicates which side the
+   * card is on. Two different radii would render as two shapes.
    *
    * For a stroke that stays `pad` outside cards of radius `r`, this is `r + pad`.
    */
@@ -30,18 +29,18 @@ export interface OutlineOptions {
 }
 
 export interface Outline {
-  /** SVG path data for every loop, ready for both `fill` (evenodd) and `stroke`. */
+  /** SVG path data for every loop, usable for both `fill` (evenodd) and `stroke`. */
   path: string;
-  /** Closed rectilinear loops, before rounding. One loop means one lump. */
+  /** Closed rectilinear loops before rounding. One loop per connected region. */
   loops: Point[][];
-  /** Total corner count, and how many were too tight to round. */
+  /** Total corner count and the number too tight to round. */
   corners: number;
   sharp: number;
 }
 
 /**
- * Grid lines and vertex keys read the same coordinates. Rounding only the keys
- * merged two vertices while leaving two grid lines, which cut the loop apart.
+ * Grid lines and vertex keys use the same coordinates. Rounding only the keys
+ * merged two vertices while leaving two grid lines, which split the loop.
  */
 const snap = (v: number): number => Math.round(v * 100) / 100;
 const key = (x: number, y: number): string => `${snap(x)},${snap(y)}`;
@@ -115,11 +114,11 @@ function dropCollinear(pts: Point[]): Point[] {
 }
 
 /**
- * One closed loop as an SVG path, each right angle turned into an arc.
+ * Converts one closed loop to an SVG path, replacing each right angle with an arc.
  *
  * The radius is capped at half the shorter of the two sides meeting at the
- * corner, so a short side cannot bow past its own end. A corner left with less
- * than half a px is cut straight instead and counted in `sharp`.
+ * corner, so an arc cannot extend past a side's end. A corner with less than
+ * half a px left is drawn square and counted in `sharp`.
  */
 export function roundedPath(
   loop: readonly Point[],

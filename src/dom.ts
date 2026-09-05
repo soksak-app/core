@@ -6,11 +6,11 @@
  * Card elements come from the host's `createCard` callback; on those the view
  * writes `position`, `left`, `top`, `width`, `height` and `data-card-id`.
  *
- * It creates two kinds of element of its own. A rule carries `class`,
- * `data-axis`, `data-virtual`, and `position`, `pointer-events: none`, `left`,
- * `top`, `width`, `height`. A divider carries `class`, `data-axis`,
- * `data-line`, `data-dragging` while held, `tabindex="0"`, `role="separator"`,
- * and `position`, `touch-action: none`, `left`, `top`, `width`, `height`.
+ * It creates two kinds of element of its own. A rule has `class`, `data-axis`,
+ * `data-virtual`, and `position`, `pointer-events: none`, `left`, `top`,
+ * `width`, `height`. A divider has `class`, `data-axis`, `data-line`,
+ * `data-dragging` while dragged, `tabindex="0"`, `role="separator"`, and
+ * `position`, `touch-action: none`, `left`, `top`, `width`, `height`.
  *
  * The host element needs a non-static `position`; the view places children
  * absolutely inside it.
@@ -59,19 +59,19 @@ export interface ViewOptions {
   /**
    * How far past the plane a rule may run to reach the frame around it.
    *
-   * A host that holds the plane inside a frame draws its border that far from
-   * where a rule ends, and the rule reads as a line that gave up. Only the host
-   * knows the distance — the view is handed an element, and an element's own
-   * padding does not move what is placed absolutely inside it. Default 0.
+   * A host that places the plane inside a frame draws that frame's border this
+   * far from where a rule ends, leaving a visible break. Only the host has that
+   * distance: the view receives an element, and the element's own padding does
+   * not move absolutely positioned children. Default 0.
    */
   bleed?: number;
 }
 
 /**
- * A rule that reaches the plane's edge carries on to the frame around it.
+ * Extends a rule that reaches the plane's edge to the frame around it.
  *
- * Only at the ends that reach the plane: a rule that ends against a card is
- * left alone, because there the card is the wall.
+ * Only the ends that reach the plane edge are extended. A rule ending against a
+ * card is left unchanged.
  */
 function reach(rule: Rule, grid: Soksak, bleed: number): Rect {
   if (bleed <= 0) return rule;
@@ -175,9 +175,9 @@ export class SoksakView {
   render(reason: ChangeReason = 'render'): void {
     if (this.disposed) return;
 
-    // One measurement of the plane for every card. Asking for each card's rect
-    // on its own rebuilt the whole coordinate system once per card, which is
-    // what a drag pays on every pointer move.
+    // One measurement for every card. Requesting each card's rect separately
+    // rebuilt the whole coordinate system once per card, on every pointer move
+    // of a drag.
     const box = this.grid.rects();
     const live = new Set<string>();
     for (const card of this.grid.cards) {
@@ -215,8 +215,8 @@ export class SoksakView {
           el.className = `${this.prefix}-rule`;
           el.style.position = 'absolute';
           el.style.pointerEvents = 'none';
-          // A rule is keyed by axis, line and whether it runs the whole plane,
-          // so an element built under one key never carries another's values.
+          // A rule is keyed by axis, line and whether it spans the whole plane,
+          // so an element created under one key never holds another key's values.
           el.dataset.axis = rule.axis;
           el.dataset.virtual = String(rule.virtual);
           this.host.appendChild(el);

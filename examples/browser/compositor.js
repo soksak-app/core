@@ -1,28 +1,26 @@
-// 네이티브 표면을 흉내 내는 컴포지터.
+// 네이티브 표면을 모사하는 컴포지터.
 //
-// 실제 계약과 같은 개념만 쓴다. declared 와 applied 는 한 커밋의 한 레코드에
-// 함께 담긴다 — 따로 읽으면 두 시점의 두 값을 빼는 것이라 차이가 무엇을
-// 뜻하는지 알 수 없다.
+// declared 와 applied 를 한 커밋의 한 레코드에 함께 담는다. 따로 읽으면 서로 다른
+// 시점의 두 값을 빼게 되어 차이를 해석할 수 없다.
 //
-// 판을 모른다. 카드가 무엇인지, 탭이 어떻게 움직이는지 알 필요가 없다: 표면이
-// 설 자리와 그 자리가 무엇을 담았는지는 판이 자리 요소에 표시해 두고, 여기서는
-// 그 표시를 읽어 재고 알린다.
+// 판의 구조를 알지 않는다. 표면의 위치와 내용은 판이 슬롯 요소의 data 속성에
+// 기록하고, 이 모듈은 그 속성을 읽어 측정하고 보고한다.
 import { plugin } from "./plugins/registry.js";
 
 const plane = document.getElementById("plane");
 
-/* 호스트가 네이티브로 그리는 종류들. 그 종류의 표면은 여기서 흉내 내지 않는다. */
+/* 호스트가 네이티브로 그리는 플러그인 종류. 해당 표면은 여기서 모사하지 않는다. */
 const hostKinds = () => window.hostSurfaces?.kinds ?? [];
 
-/* 커밋이 끝났음을 듣는 쪽. 검증이 여기 붙는다. */
+/* 커밋 완료 수신자. 검증이 여기에 연결된다. */
 let listener = null;
 
-/** 커밋마다 부를 함수를 건다. */
+/** 커밋마다 호출할 함수를 등록한다. */
 export function onCommit(fn) {
   listener = fn;
 }
 
-/** 사람이 정하는 두 값 — 커밋을 늦추고, 앉히는 자리를 어긋나게 한다. */
+/** 사용자가 설정하는 두 값. 커밋을 지연시키고 적용 위치에 오차를 만든다. */
 export const knobs = { latency: 0, skew: 0 };
 
 let seq = 0;
@@ -31,10 +29,10 @@ let latestRecord = null;
 let timer = null;
 const drawn = new Map();
 
-/** 마지막 커밋. 아직 없으면 null. */
+/** 마지막 커밋 레코드를 반환한다. 없으면 null. */
 export const latest = () => latestRecord;
 
-/** 판을 다시 세울 때 흉내 낸 표면을 모두 걷는다. */
+/** 판을 다시 만들 때 모사한 표면 요소를 모두 제거한다. */
 export function reset() {
   for (const el of drawn.values()) el.remove();
   drawn.clear();
@@ -55,11 +53,11 @@ function surfaceEl(id) {
 }
 
 /**
- * 선언 ∧ 모든 조상의 data-surface-visible ∧ capture-hidden 이 아님.
+ * 선언값 ∧ 모든 조상의 data-surface-visible ∧ capture-hidden 아님.
  *
- * 세 번째 항이 드래그 중의 표시를 정한다. DOM 은 네이티브 표면 위에 그릴 수
- * 없으므로, 표면 위에 무언가를 그리는 동안에는 capture-hidden 으로 표면을
- * 숨기고 DOM 이 스냅샷을 그린다. 계약이 정의한 절차다.
+ * 세 번째 항이 드래그 중의 표시 여부를 결정한다. DOM 은 네이티브 표면 위에 그릴 수
+ * 없으므로, 표면 위에 무언가를 그리는 동안 capture-hidden 으로 표면을 숨기고 DOM 이
+ * 스냅샷을 그린다.
  */
 function effectiveVisible(slot) {
   if (slot.dataset.nativeVisible !== "true") return false;
@@ -70,15 +68,14 @@ function effectiveVisible(slot) {
   return true;
 }
 
-/** 표면이 설 자리들. 판이 표시해 둔 것을 그대로 읽는다. */
+/** 표면 슬롯 목록. 판이 기록한 data 속성을 그대로 읽는다. */
 const slots = () =>
   plane.querySelectorAll("[data-native-surface][data-native-surface-id]");
 
 /**
- * 지금 자리들을 재어 커밋한다. 지연이 걸려 있으면 그만큼 늦춰 앉힌다.
+ * 현재 슬롯을 측정해 커밋한다. 지연이 설정되어 있으면 그만큼 늦게 적용한다.
  *
- * 부르는 함수다. 무엇도 관측하지 않는다 — 자리가 바뀌었는지 지켜보는 쪽은
- * 없고, 자리를 정한 쪽이 정했다고 말할 때 이것이 불린다.
+ * 호출로만 동작한다. 위치 변경을 감시하지 않고, 위치를 정한 쪽이 호출한다.
  */
 export function publish() {
   const mine = ++seq;
@@ -102,7 +99,7 @@ export function publish() {
   else timer = setTimeout(deliver, knobs.latency);
 }
 
-/** 유일한 네이티브 writer. 시퀀스가 뒤진 스냅샷은 여기서 거부된다. */
+/** 네이티브 상태를 쓰는 유일한 함수. 시퀀스가 낮은 스냅샷은 거부한다. */
 function commit(mine, snapshot) {
   if (mine < applied) return;
   applied = mine;
@@ -113,12 +110,12 @@ function commit(mine, snapshot) {
     const declared = {
       id: s.id, plugin: s.plugin, layer: s.layer, declared: s.frame, applied: seat,
       visible: s.visible, dim: s.dim,
-      // 표면이 보여주는 것은 플러그인이 정한다. 호스트가 종류의 이름으로
-      // 분기하면 플러그인을 하나 더 만들 때 호스트도 고쳐야 한다.
+      // 표면이 표시할 대상은 플러그인이 정한다. 호스트가 종류로 분기하면 플러그인을
+      // 추가할 때마다 호스트를 수정해야 한다.
       surface: plugin(s.plugin).surface(s.id),
     };
-    // 호스트가 네이티브로 그리는 표면에는 흉내 낸 요소를 두지 않는다. 둘 다
-    // 두면 DOM 사본이 진짜 뷰 아래에 깔린다.
+    // 호스트가 네이티브로 그리는 표면에는 모사 요소를 만들지 않는다. 둘 다 만들면
+    // DOM 사본이 네이티브 뷰 아래에 남는다.
     if (native.includes(s.plugin)) {
       drawn.get(s.id)?.remove();
       drawn.delete(s.id);
@@ -130,8 +127,8 @@ function commit(mine, snapshot) {
     el.style.width = `${seat.w}px`; el.style.height = `${seat.h}px`;
     el.style.zIndex = String(50 + s.layer);
     el.dataset.hidden = String(!s.visible);
-    // 라벨은 바뀔 때만 다시 쓴다. 커밋은 프레임마다 오는데 제목과 레이어는
-    // 거의 그대로여서, 매번 다시 쓰면 표면 안이 프레임마다 새로 태어난다.
+    // 라벨은 값이 바뀔 때만 갱신한다. 커밋은 프레임마다 발생하지만 제목과 레이어는
+    // 거의 바뀌지 않으므로, 매번 쓰면 표면 내용이 프레임마다 다시 생성된다.
     const label = `<b>${s.title}</b><br>네이티브 표면 · ${s.plugin} · layer ${s.layer}`;
     if (el.dataset.label !== label) { el.innerHTML = label; el.dataset.label = label; }
     record.surfaces.push(declared);
@@ -152,23 +149,21 @@ function commit(mine, snapshot) {
 /**
  * 표면을 숨기고 같은 위치에 `.standin` 을 표시한다.
  *
- * 네이티브 표면은 OS 뷰라서 DOM 이 그 위에 그릴 수 없다. DOM 을 표면 위에
- * 그리는 동안 capture-hidden 으로 표면을 숨기고 `.standin` 을 대신 표시한다.
- * 표면 갱신은 그동안 중단되며 종료 시 복원된다.
+ * 네이티브 표면은 OS 뷰이므로 DOM 이 그 위에 그릴 수 없다. DOM 을 표면 위에 그리는
+ * 동안 capture-hidden 으로 표면을 숨기고 `.standin` 을 대신 표시하며, 표면 갱신은
+ * 그동안 중단하고 종료 시 복원한다.
  *
  * `.standin` 은 표면과 동일하게 표시한다. 표면을 숨기는 동안 화면이 변하면 안 된다.
  *
- * `over` 를 지정하면 그 영역과 겹치는 표면만 숨긴다. 드롭 구획은 판 전체를
- * 대상으로 하므로 전체를 숨기지만, 선택 레이어는 작아서 전체를 숨기면 겹치지
- * 않는 표면의 갱신까지 중단된다.
+ * `over` 를 지정하면 그 영역과 겹치는 표면만 숨긴다. 드롭 구획은 판 전체를 대상으로
+ * 하지만, 선택 레이어는 작아서 전체를 숨기면 겹치지 않는 표면의 갱신까지 중단된다.
  */
 export function standIn(on, over) {
   const host = over ? plane.getBoundingClientRect() : null;
   const native = hostKinds();
   for (const slot of slots()) {
-    // 호스트가 네이티브로 그리는 표면은 살아 있는 내용을 보여준다: 도는 페이지,
-    // 도는 프로그램. 그 위에 DOM 을 그리자고 숨기면 사람이 보고 있던 것이 정지
-    // 화면으로 바뀐다. 그래서 숨기지 않고, DOM 은 컴포지터가 주는 순서를 받는다.
+    // 네이티브 표면은 실행 중인 페이지와 프로그램을 표시한다. DOM 을 그리려고 숨기면
+    // 사용자가 보던 화면이 정지 이미지로 바뀌므로 숨기지 않는다.
     if (native.includes(slot.dataset.nativePlugin)) {
       delete slot.dataset.nativeCaptureHidden;
       slot.innerHTML = "";
@@ -185,15 +180,15 @@ export function standIn(on, over) {
     slot.innerHTML = "";
     if (!hide) continue;
 
-    // 표면이 마지막으로 표시한 내용을 복제한다. 모델에서 다시 생성하면 숨기는
-    // 시점의 표면이 아니라 현재 모델을 표시한다. 커밋 지연 중에는 둘이 다르다.
+    // 표면이 마지막으로 표시한 내용을 복제한다. 모델에서 다시 만들면 숨기는 시점이
+    // 아니라 현재 모델을 표시하고, 커밋 지연 중에는 두 값이 다르다.
     const id = slot.dataset.nativeSurfaceId;
     const shown = drawn.get(id);
     if (!shown) continue;
     const el = document.createElement("div");
     el.className = "standin";
     el.innerHTML = shown.innerHTML;
-    // 표면이 있던 위치에 배치한다. 선언 위치에 두면 적용 오차만큼 화면이 이동한다.
+    // 표면이 있던 위치에 배치한다. 선언 위치에 두면 적용 오차만큼 어긋난다.
     const rec = latestRecord?.surfaces.find((x) => x.id === id);
     if (rec) el.style.transform =
       `translate(${rec.applied.x - rec.declared.x}px,${rec.applied.y - rec.declared.y}px)`;

@@ -1,10 +1,9 @@
-// 판 하나 — 카드, 탭, 드래그, 레일, 선택 레이어, 그리고 다시 그리기.
+// 판 하나. 카드, 탭, 드래그, 레일, 선택 레이어, 렌더링을 담당한다.
 //
-// 표면이 설 자리를 카드 안에 표시해 두고, 그 위에 DOM 을 그릴 때는 표면을
-// 물러나게 해 달라고 말한다. 표면을 어떻게 재고 어떻게 공표하는지는 모른다.
+// 표면의 위치를 카드 안 슬롯 요소에 기록하고, 그 위에 DOM 을 그릴 때 표면을 숨기도록
+// 요청한다. 표면을 측정하고 보고하는 방법은 알지 않는다.
 //
-// 검증이 무엇인지는 모른다. 다시 그렸다는 것만 알리고, 그 뒤에 무엇이 일어나는
-// 지는 문서가 정한다.
+// 검증의 존재를 알지 않는다. 렌더링 완료만 통지하고 이후 처리는 문서가 정한다.
 import { Soksak, SoksakView, outline } from "/dist/index.js";
 import { cardRadius, halfGap, linkedSet, value } from "./settings.js";
 import { isPlace, plugin, plugins, railId, railKind, section } from "./plugins/registry.js";
@@ -28,21 +27,19 @@ const NEEDS = ["cards", "card", "insertAt", "moveTo", "standings", "moveBoundary
 const HEADER = 32, FOOTER = 22;
 
 /* A host may place real native surfaces instead of the simulated ones.
-   window.hostSurfaces.kinds lists the plugin kinds the host draws natively; the
-   simulator skips its own surface for those. window.hostSurfaces.place receives
-   every commit record so the host can position its views on the same frames.
-   With no host, both are absent and the page simulates everything. */
+   window.hostSurfaces.kinds lists the plugin kinds the host draws natively, and
+   the simulator skips its own surface for those. window.hostSurfaces.place
+   receives every commit record so the host places its views on the same frames.
+   With no host both are absent and the page simulates every surface. */
 const hostKinds = () => window.hostSurfaces?.kinds ?? [];
 
-/* 포커스를 잃은 표면을 흐리게 할지. 표면은 카드 하나에 하나이므로 판단도
-   카드 단위다. */
+/* 포커스를 잃은 표면의 흐림 여부. 표면은 카드마다 하나이므로 카드 단위로 판정한다. */
 const dimmed = (cardId) =>
   value("dim") && cardId !== focusedId;
 
-/* 표면은 네이티브라 그 위의 클릭이 이 문서에 닿지 않는다. 호스트가 알려 주면
-   표면이 서 있는 자리 요소에서 pointerdown 을 낸다: 포커스도 레이어 닫기도
-   이미 누름을 듣고 있는 쪽이 처리한다. 표면만의 경로를 따로 두면 누름에 반응
-   하는 것이 늘 때마다 그 목록을 다시 맞춰야 한다. */
+/* 표면은 네이티브 뷰이므로 그 위의 클릭이 이 문서에 도달하지 않는다. 호스트가 표면
+   id 를 보고하면 해당 슬롯 요소에서 pointerdown 을 발생시킨다. 포커스 이동과 레이어
+   닫기를 이미 pointerdown 을 수신하는 쪽이 처리한다. */
 window.pressSurface = (cardId) => {
   const slot = document.querySelector(
     `[data-native-surface-id="${cardId}"][data-native-surface]`);
@@ -56,17 +53,15 @@ const railPath = document.getElementById("railPath");
 const dropEl = document.getElementById("drop");
 const pickerEl = document.getElementById("picker");
 
-// 레일이 물러나는 것은 닫는 것이므로 폭이 카드와 함께 사라진다. 사람이 드래그로
-// 정한 폭은 그 사람의 결정이므로, 판이 종류별로 기억해 두었다가 다시 설 때 그
-// 폭으로 세운다. 설정이 아니라 스페이스의 기억이다.
+// 레일을 닫으면 카드와 함께 폭도 사라진다. 사용자가 드래그로 지정한 폭을 플러그인
+// 종류별로 보관했다가 다시 열 때 그 폭으로 복원한다. 설정이 아니라 스페이스의 값이다.
 //
-// 처음 폭은 자리의 것이지 종류의 것이 아니다. 등록된 종류마다 같은 값으로
-// 채우므로, 플러그인이 늘어도 여기 적을 것이 없다.
+// 초기 폭은 종류와 무관하게 같은 값이다. 등록된 종류마다 같은 값으로 채우므로
+// 플러그인이 늘어도 이 파일을 수정할 필요가 없다.
 const RAIL_WIDTH = 190;
 const freshRailWidth = () =>
   Object.fromEntries(plugins().map((p) => [p.id, RAIL_WIDTH]));
-// 등록이 끝난 뒤에 채운다. 모듈이 평가되는 시점에 읽으면 그때 무엇이 등록되어
-// 있었는지에 따라 답이 달라진다.
+// 등록이 끝난 뒤에 채운다. 모듈 평가 시점에 읽으면 등록 순서에 따라 결과가 달라진다.
 let railWidth = {};
 
 /* ── 자리 ─────────────────────────────────────────────────────────────────
@@ -80,7 +75,7 @@ let railWidth = {};
    설정에서 그 세트를 자리에 건다. 걸지 않으면 그 사이드바는 없다.        */
 
 let grid, view, focusedId;
-// 탭 제목에 붙는 번호. 식별자가 아니라 사람이 읽는 이름이므로 세어서 만든다.
+// 탭 제목의 번호. 식별자가 아니라 표시용 이름이므로 카운터로 만든다.
 let named = 0;
 
 /* ── 탭 규칙 ──────────────────────────────────────────────────────────────
@@ -95,7 +90,7 @@ const tabsOf = (card) => card?.data?.tabs ?? [];
 const activeTab = (card) => tabsOf(card).find((t) => t.id === card.data.activeId) ?? tabsOf(card)[0];
 const focusedPlugin = () => activeTab(grid.card(focusedId))?.plugin ?? null;
 
-/** 제목 번호와 id 번호를 일치시킨다. 다르면 화면과 로그의 탭 식별이 어긋난다. */
+/** 제목 번호와 id 번호를 일치시킨다. 다르면 화면과 로그의 탭 식별자가 어긋난다. */
 function newTab(kind) {
   const t = tab(kind, "");
   t.title = `${plugin(kind).mark} 탭 ${++named}`;
@@ -103,13 +98,13 @@ function newTab(kind) {
 }
 
 /**
- * 그 자리에 선 세트와, 그 세트가 담은 섹션의 이름들.
+ * 해당 자리에 연결된 세트와 그 세트가 담은 섹션 이름을 반환한다.
  *
- * 걸린 것이 없으면 null 이다 — 연결하지 않으면 그 사이드바는 없다.
+ * 연결된 세트가 없으면 null 을 반환하고 사이드바를 표시하지 않는다.
  */
 function standingSet(place) {
-  // 레일은 자기 종류의 세트를 보여준다. 포커스가 다른 종류에 가 있어도 그
-  // 레일이 무엇의 레일인지는 바뀌지 않는다.
+  // 레일은 자신의 플러그인 종류에 해당하는 세트를 표시한다. 포커스가 다른 종류로
+  // 이동해도 레일의 종류는 바뀌지 않는다.
   const kind = railKind(place);
   const set = kind ? linkedSet("rail", kind)
     : place === "left" ? linkedSet("left", null)
@@ -140,8 +135,8 @@ function createCard(card) {
   el.innerHTML = isPlace(card.id)
     ? '<header class="chrome"></header><div class="set"></div><footer class="status"></footer>'
     : '<header class="chrome"></header><div class="slot"></div><footer class="status"></footer>';
-  // 카드 객체를 가두지 않고 엘리먼트의 data-card-id 를 읽는다. 배치가 바뀌면
-  // 엘리먼트가 다른 카드를 받으므로, 가둔 참조는 옛 id 를 반환한다.
+  // 카드 객체를 클로저에 담지 않고 요소의 data-card-id 를 읽는다. 배치가 바뀌면
+  // 요소가 다른 카드에 재사용되므로 담아 둔 참조는 이전 id 를 반환한다.
   el.addEventListener("pointerdown", (e) => {
     const id = el.dataset.cardId;
     if (!id || isPlace(id) || e.target.closest(".tab__x, .chrome__act")) return;
@@ -151,12 +146,11 @@ function createCard(card) {
 }
 
 /**
- * 바뀐 것만 고친다.
+ * 변경된 부분만 갱신한다.
  *
- * 매 렌더마다 `chrome.innerHTML = ""` 로 다시 만들고 있었다. 판 안의 노드가
- * 87개인데 포인터 이동 한 번에 52개가 교체되었다 — 커서 밑의 엘리먼트가 매
- * 프레임 새로 태어나니 hover 와 포커스가 끊기고, 드래그 중이던 탭이 사라져
- * `pointerup` 이 오지 않는다. 탭 목록이 실제로 달라졌을 때만 다시 만든다.
+ * 이전에는 렌더마다 `chrome.innerHTML = ""` 로 다시 만들었다. 노드 87개 중 포인터
+ * 이동 한 번에 52개가 교체되어 hover 와 포커스가 끊기고, 드래그 중이던 탭이 사라져
+ * `pointerup` 이 도착하지 않았다. 탭 목록이 실제로 달라졌을 때만 다시 만든다.
  */
 const setText = (el, text) => { if (el.textContent !== text) el.textContent = text; };
 const setHTML = (el, html) => { if (el.dataset.html !== html) { el.innerHTML = html; el.dataset.html = html; } };
@@ -237,14 +231,14 @@ function updateCard(el, card) {
     b.dataset.active = String(b.dataset.tabId === card.data.activeId);
   }
 
-  // 카드의 연산은 넷이다 — 탭을 더한다(T2), 세로로 쪼갠다, 가로로 쪼갠다, 닫는다.
-  // 탭 ✕ 는 그 탭 하나를 닫고 마지막이면 카드가 함께 간다(T5). 카드 ✕ 는
-  // 탭이 몇 개든 카드째로 닫는다 — 다른 연산이므로 둘 다 있어야 한다.
+  // 카드의 연산은 넷이다: 탭 추가(T2), 세로 분할, 가로 분할, 닫기.
+  // 탭 ✕ 는 그 탭 하나를 닫고 마지막 탭이면 카드도 닫는다(T5). 카드 ✕ 는 탭 수와
+  // 무관하게 카드를 닫는다. 서로 다른 연산이므로 둘 다 둔다.
   if (!acts) {
     acts = document.createElement("span");
     acts.className = "chrome__acts";
-    // 생성 버튼 3개를 앞에, 닫기를 끝에 배치한다. 닫기는 되돌릴 수 없으므로
-    // 다른 버튼 사이에 두면 오클릭 위험이 크다.
+    // 생성 버튼 3개를 앞에, 닫기를 끝에 배치한다. 닫기는 되돌릴 수 없으므로 다른
+    // 버튼 사이에 두지 않는다.
     for (const [what, title, svg] of [
       ["add", "이 카드에 탭 추가 — 무엇을 띄울지 묻는다", '<path d="M8 3v10M3 8h10"/>'],
       ["x", "세로선으로 쪼개기 — 좌우로 나뉜다",
@@ -273,10 +267,11 @@ function updateCard(el, card) {
         }
         // The button toggles: pressing the one that opened the layer closes it.
         if (picker?.anchor === b) { closePicker(); return; }
-        // 나머지 3개는 탭을 생성한다. + 는 이 카드에, 쪼개기는 새 카드에 생성한다.
-        // 여기서는 레이어만 표시하고 생성하지 않는다. 미리 생성하면 취소 시 제거해야 한다.
+        // 나머지 3개는 탭을 생성한다. + 는 이 카드에, 분할은 새 카드에 생성한다.
+        // 여기서는 선택 레이어만 표시하고 생성하지 않는다. 미리 생성하면 취소 시
+        // 제거해야 한다.
         //
-        // 쪼개기는 활성 탭을 이동시키지 않는다. 탭 이동은 T4(변에 드롭)가 담당한다.
+        // 분할은 활성 탭을 이동시키지 않는다. 탭 이동은 T4(변에 드롭)가 담당한다.
         // 두 방식이 겹치면 탭 개수에 따라 같은 버튼의 동작이 달라진다.
         focusedId = own.id;
         settle();
@@ -299,7 +294,7 @@ function updateCard(el, card) {
     if (b.title !== title) b.title = title;
   }
 
-  // 표면이 설 자리. 컴포지터는 판을 모르므로 필요한 것을 여기에 표시해 둔다.
+  // 표면의 슬롯. 컴포지터는 판의 구조를 알지 않으므로 필요한 값을 여기에 기록한다.
   const slot = el.querySelector(".slot");
   slot.dataset.nativeSurface = "stub";
   slot.dataset.nativeSurfaceId = card.id;
@@ -312,7 +307,7 @@ function updateCard(el, card) {
   setText(status, `열 ${card.c0}–${card.c1} · 행 ${card.r0}–${card.r1} · 탭 ${tabs.length}`);
 }
 
-/* ── T5 — 마지막 탭이 떠나면 카드가 사라진다 ─────────────────────────── */
+/* ── T5 — 마지막 탭이 이동하면 카드를 닫는다 ─────────────────────────── */
 
 function closeTab(cardId, tabId) {
   const card = grid.card(cardId);
@@ -371,9 +366,8 @@ function beginTabDrag(e, cardId, tabId) {
 }
 
 /* ── 선택 레이어 ──────────────────────────────────────────────────────────
-   레이어는 카드가 아니므로 배치에 영향을 주지 않고, Soksak 은 레이어를
-   인식하지 않는다. 배치가 변경되면 레이어의 기준 위치가 무효가 되므로
-   settle 이 먼저 레이어를 닫는다.                                          */
+   레이어는 카드가 아니므로 배치에 영향을 주지 않고 Soksak 도 인식하지 않는다.
+   배치가 바뀌면 레이어의 기준 위치가 무효가 되므로 settle 이 먼저 닫는다.     */
 
 let picker = null;
 
@@ -393,8 +387,8 @@ pickerEl.addEventListener("click", (e) => {
 
 const onPickerOutside = (e) => {
   if (pickerEl.contains(e.target)) return;
-  // The button that opened the layer closes it on its own click, so a press on
-  // it is not an outside press. Closing here would let the click reopen at once.
+  // The button that opened the layer closes it on its own click, so a press on it
+  // is not an outside press. Closing here would let that click reopen the layer.
   if (picker?.anchor?.contains(e.target)) return;
   closePicker();
 };
@@ -404,14 +398,14 @@ const onPickerKey = (e) => {
   closePicker();
 };
 
-/** 새 탭의 종류를 묻는다. + 와 쪼개기가 공용으로 사용한다. */
+/** 새 탭의 플러그인 종류를 선택받는다. + 와 분할 버튼이 함께 사용한다. */
 function openPicker(anchor, what, cardId) {
   openLayer(anchor, PICKER_ASK[what] ?? PICKER_ASK.add,
     plugins().map((p) => ({ key: p.id, name: p.name, mark: p.mark, svg: p.svg })),
     (k) => (what === "add" ? addTab(cardId, k) : splitWith(cardId, what, k)));
 }
 
-/** 활성화할 탭을 묻는다. 헤더가 접혔을 때 탭 목록을 여기에 표시한다. */
+/** 활성화할 탭을 선택받는다. 헤더가 접혔을 때 탭 목록을 표시한다. */
 function openTabList(anchor, cardId) {
   const card = grid.card(cardId);
   if (!card?.data) return;
@@ -428,10 +422,10 @@ function openTabList(anchor, cardId) {
 }
 
 /**
- * 기준 버튼 아래에 배치하고 판 경계 안으로 제한한다. 판 밖은 표시할 수 없다.
+ * 기준 버튼 아래에 배치하고 판 경계 안으로 제한한다. 판 밖에는 표시할 수 없다.
  *
  * 항목 이름은 `textContent` 로 설정한다. 탭 제목은 사용자 입력이므로 마크업으로
- * 연결하면 제목이 레이어 구조를 변경할 수 있다.
+ * 삽입하면 제목이 레이어 구조를 변경할 수 있다.
  */
 function openLayer(anchor, ask, items, pick, align = "right") {
   closePicker();
@@ -467,10 +461,10 @@ function openLayer(anchor, ask, items, pick, align = "right") {
   pickerEl.style.left = `${rect.x}px`;
   pickerEl.style.top = `${rect.y}px`;
   picker = { anchor, pick, rect };
-  // DOM cannot be drawn over a native view, but a webview is a native view that
-  // draws DOM. A host that can raise one takes this element and draws it there,
-  // so the surfaces underneath keep running. The element is handed over whole:
-  // the host needs no knowledge of what a layer contains.
+  // DOM cannot be drawn over a native view, and a webview is a native view that
+  // renders DOM. A host takes this element and renders it in such a view, so the
+  // surfaces underneath keep running. The element is passed whole and the host
+  // needs no knowledge of its contents.
   if (window.hostOverlay) {
     window.hostOverlay.show(pickerEl, rect, (key) => { closePicker(); pick(key); });
     pickerEl.hidden = true;
@@ -493,7 +487,7 @@ function closePicker() {
   else standIn(false);
 }
 
-/** + 버튼의 후속 처리. 배치는 변경하지 않고 탭만 추가한다. */
+/** + 버튼의 후속 처리. 배치를 변경하지 않고 탭만 추가한다. */
 function addTab(cardId, plugin) {
   const card = grid.card(cardId);
   if (!card?.data) return;
@@ -510,7 +504,7 @@ function splitWith(cardId, axis, plugin) {
   if (!card?.data) return;
   const t = newTab(plugin);
   // 공간이 없으면 split 이 null 을 반환한다. 원본 카드에서 제거한 탭이 없으므로
-  // 복구할 것이 없다.
+  // 복구할 상태가 없다.
   const born = grid.split(cardId, axis, { data: { tabs: [t], activeId: t.id } });
   if (born) focusedId = born;
   settle();
@@ -530,10 +524,10 @@ function showDrop(hit) {
 }
 
 /**
- * T4 와 T5 가 배치 연산을 가른다.
- *   출발 카드에 탭이 1개  → 카드째로 옮겨간다. 남는 것 없음      move()
- *   여러 개              → 카드는 남고 탭만 간다                splitToward()
- * move 가 close+split 조합이 아니라 한 연산이어야 하는 이유가 첫 줄이다.
+ * T4 와 T5 가 배치 연산을 결정한다.
+ *   출발 카드의 탭이 1개  → 카드를 이동한다. 빈 카드가 남지 않는다   move()
+ *   2개 이상             → 카드는 유지하고 탭만 이동한다            splitToward()
+ * 첫 번째 경우 때문에 move 가 close + split 조합이 아니라 하나의 연산이어야 한다.
  */
 function dropTab(fromId, tabId, hit) {
   const from = grid.card(fromId);
@@ -573,23 +567,20 @@ function dropTab(fromId, tabId, hit) {
   settle();
 }
 
-/* ── 레일 — 카드이므로 이동도 move() 다 ───────────────────────────────── */
+/* ── 레일. 카드이므로 이동에 move() 를 사용한다 ───────────────────────── */
 
 /**
  * 레일은 판을 가로지르는 카드다.
  *
- * 그래서 카드 하나를 쪼개서 만들 수 없다 — 그렇게 만들면 그 카드의 행만
- * 차지하는 또 하나의 판이 된다. 아무 카드도 넘지 않는 경계에 열로 끼우고,
- * 이동은 그 열을 빼서 다른 경계에 넣는 것이다. 닫고 다시 여는 것이 아니므로
- * 다른 카드의 행 경계는 움직이지 않는다.
+ * 카드 하나를 분할해서 만들 수 없다. 분할하면 그 카드의 행 범위만 차지한다. 어떤
+ * 카드도 걸치지 않는 경계에 열로 삽입하고, 이동은 그 열을 빼서 다른 경계에 넣는다.
+ * 닫고 다시 여는 것이 아니므로 다른 카드의 행 경계가 움직이지 않는다.
  */
 function standRail(kind) {
   const id = railId(kind);
   const has = !!grid.card(id);
-  // 레일은 포커스가 잡은 것의 곁을 지킨다. 브라우저를 보는 동안 터미널 레일이
-  // 남아 있으면 그것은 지금 보고 있는 것의 곁이 아니라 남겨진 자리다. 자기
-  // 종류가 포커스를 잃으면 물러난다 — 그 종류의 레일을 꺼 두었다면 아무 레일도
-  // 서지 않는 것이 맞다.
+  // 레일은 포커스한 카드 옆에 표시한다. 자기 플러그인 종류가 포커스를 잃으면
+  // 닫는다. 그 종류의 레일을 연결하지 않았으면 아무 레일도 표시하지 않는다.
   if (!linkedSet("rail", kind) || value("rail") === "off" || focusedPlugin() !== kind) {
     if (has) {
       railWidth[kind] = grid.card(id).width ?? railWidth[kind];
@@ -604,8 +595,8 @@ function standRail(kind) {
     grid.setFixed(id, true);
     return;
   }
-  // 서 있는 동안 사람이 끌어 바꾼 폭을 받아 둔다. 물러날 때만 읽으면 그 사이의
-  // 조정을 놓친다.
+  // 표시 중에 사용자가 드래그로 바꾼 폭을 보관한다. 닫을 때만 읽으면 그 사이의
+  // 변경을 놓친다.
   railWidth[kind] = grid.card(id).width ?? railWidth[kind];
   if (value("rail") !== "flow") return;                  // PIN — 자리를 지킨다
   const line = railTarget(id, kind);
@@ -613,20 +604,20 @@ function standRail(kind) {
 }
 
 /**
- * 레일이 서야 할 경계.
+ * 레일을 배치할 경계를 반환한다.
  *
- * 레일이 서 있는 열은 다른 카드의 위치를 190px 옮겨 놓는다. 그 위치를 기준으로
- * 고르면 답이 레일 자신에 따라 달라지므로, `standings` 에 레일을 무시하도록
- * 요청해 레일을 뺀 배치에서 잰다.
+ * 레일이 차지한 열은 다른 카드의 위치를 190px 이동시킨다. 그 위치를 기준으로 고르면
+ * 결과가 레일 자신에 의존하므로, `standings` 에 레일을 제외하도록 요청해 레일이 없는
+ * 배치에서 측정한다.
  */
 function railTarget(id, kind) {
-  // 레일 자신의 경계도 후보다. 이미 옳은 자리에 서 있으면 그 자리가 답이고,
-  // moveTo 는 제자리 이동을 성공으로 반환한다.
+  // 레일 자신의 경계도 후보에 포함한다. 이미 올바른 자리면 그 자리를 반환하고
+  // moveTo 는 제자리 이동을 성공으로 처리한다.
   const stands = grid.standings("x", id);
   if (!stands.length) return null;
 
-  // 자기 종류를 보여주는 카드 옆에 선다. 포커스가 그 종류면 그 카드, 아니면
-  // 그 종류를 든 가장 왼쪽 카드 — 없으면 설 자리가 없다.
+  // 자기 종류를 표시하는 카드 옆에 배치한다. 포커스가 그 종류면 그 카드, 아니면 그
+  // 종류를 가진 가장 왼쪽 카드를 기준으로 한다. 없으면 배치하지 않는다.
   const beside = focusedPlugin() === kind
     ? grid.card(focusedId)
     : grid.cards
@@ -635,9 +626,8 @@ function railTarget(id, kind) {
   if (!beside) return null;
   const want = grid.rect(beside.id)?.x ?? 0;
 
-  // P3 — 왼쪽에 붙는다. 바로 왼쪽에 설 수 없으면 더 왼쪽으로 물러난다.
-  // 오른쪽으로는 넘어가지 않는다: 사이드바가 자기가 붙은 것의 반대편에
-  // 나타나면 그건 다른 물건이다. 왼쪽에 아무 자리도 없을 때만 가장 왼쪽으로.
+  // P3 — 기준 카드의 왼쪽에 배치한다. 바로 왼쪽에 자리가 없으면 더 왼쪽으로 이동한다.
+  // 오른쪽으로는 이동하지 않는다. 왼쪽에 자리가 없을 때만 가장 왼쪽에 배치한다.
   const onLeft = stands.filter((k) => grid.boundaryPos("x", k) <= want + 0.5);
   return onLeft.length
     ? onLeft.reduce((a, k) => (grid.boundaryPos("x", k) > grid.boundaryPos("x", a) ? k : a))
@@ -645,31 +635,28 @@ function railTarget(id, kind) {
 }
 
 /**
- * 자리를 치운다.
+ * 고정 자리를 제거한다.
  *
- * `fixed` 는 레이아웃이 그 카드를 옮기거나 닫지 않는다는 뜻이므로, 호스트가
- * 직접 치우려면 먼저 그 역할을 해제한다. `canClose` 는 `fixed` 카드에 언제나
- * 거짓을 반환하므로 그것만으로는 치울 수 없다. 레일과 좌·우가 같은 함수를 쓴다.
+ * `fixed` 는 레이아웃이 그 카드를 이동하거나 닫지 않는다는 뜻이므로 제거 전에 해제한다.
+ * `canClose` 는 `fixed` 카드에 항상 false 를 반환한다. 레일과 좌·우가 같은 함수를 쓴다.
  */
 function dismiss(id) {
   if (!grid.card(id)) return;
   grid.setFixed(id, false);
   if (!grid.close(id)) { grid.setFixed(id, true); return; }   // 치우지 못했으면 역할도 그대로
-  // 카드가 가면 그 카드가 읽던 선은 아무도 읽지 않는 선으로 남는다. 라이브러리는
-  // 그런 선을 그대로 두고 언제 걷을지는 호스트에게 맡긴다 — 여기서는 걷는다.
-  // 남겨 봐야 쓸 수 없다: 자란 카드가 그 선을 가로지르므로 `standings` 가
-  // 후보로 내놓지 않고, 레일이 돌아올 때는 새 선을 끼운다. 그대로 두면 왕복할
-  // 때마다 한 자리에 선이 하나씩 쌓인다.
+  // 카드를 닫으면 그 카드가 참조하던 선을 아무도 참조하지 않는다. 라이브러리는 그런
+  // 선을 남기고 제거 시점을 호스트에 맡긴다. 남겨 두면 확장된 카드가 그 선을 가로질러
+  // `standings` 가 후보로 반환하지 않고, 레일이 다시 열릴 때 새 선이 추가되어 같은
+  // 자리에 선이 누적된다.
   grid.tidy();
 }
 
 /**
- * 판의 끝에 서는 사이드바를 세우거나 치운다.
+ * 판의 끝에 위치하는 사이드바를 추가하거나 제거한다. 좌·우가 같은 동작이므로 같은
+ * 함수를 쓴다.
  *
- * 좌·우가 같은 일을 하므로 같은 함수를 쓴다.
- *
- * `splitToward` 가 아니라 `insertAt` 을 쓴다. 자르면 잘린 카드의 행 범위를
- * 물려받아 한 줄만 차지하는데, 사이드바는 판을 가로질러야 한다.
+ * `splitToward` 가 아니라 `insertAt` 을 사용한다. 분할하면 분할된 카드의 행 범위를
+ * 상속해 한 행만 차지하지만, 사이드바는 판을 가로질러야 한다.
  */
 function standEdge(id, on, size, side) {
   const has = !!grid.card(id);
@@ -684,7 +671,7 @@ function standEdge(id, on, size, side) {
   }
 }
 
-/* ── 그리고 다시 그린다 ───────────────────────────────────────────────── */
+/* ── 렌더링 ───────────────────────────────────────────────────────────── */
 
 function settle() {
   closePicker();
@@ -696,14 +683,13 @@ function settle() {
 }
 
 /**
- * 꺽쇠를 포커스 카드의 본문 자리에 놓되, 1px 바깥에 세운다.
+ * 포커스 표식을 포커스 카드의 본문 영역에 배치하되 1px 바깥에 둔다.
  *
- * 본문에 딱 맞추면 꺽쇠가 네이티브 표면 위에 얹혀 표면의 내용을 가린다. 한 픽셀
- * 물러나면 표면이 끝나는 자리에 서서 본문을 덮지 않는다.
+ * 본문에 맞추면 표식이 네이티브 표면 위에 겹쳐 표면 내용을 가린다. 1px 바깥이면
+ * 표면 경계에 위치해 본문을 덮지 않는다.
  *
- * 카드 안이 아니라 표면과 같은 층이다: 표면은 CSS 스택에 참여하지 않으므로
- * 카드 안에 그린 표시는 실제 앱에서 표면 아래로 들어간다 — 시뮬레이터에서만
- * 보이게 두면 재현이 아니다.
+ * 카드 안이 아니라 표면과 같은 층에 둔다. 표면은 CSS 스택에 참여하지 않으므로 카드
+ * 안에 그린 표식은 애플리케이션에서 표면 아래에 가려진다.
  */
 const MARK_OUT = 1;
 
@@ -724,8 +710,8 @@ function centreTab(strip, activeId) {
   const active = strip.querySelector(".tab[data-active=true]");
   if (!active) { strip.scrollLeft = 0; return; }
   const room = strip.scrollWidth - strip.clientWidth;
-  // 두 rect 의 차이로 계산한다. `offsetLeft` 는 offsetParent 기준인데 탭 목록이
-  // static 이라 기준이 카드가 되고, 헤더 좌우 padding 만큼 오차가 생긴다.
+  // 두 rect 의 차이로 계산한다. `offsetLeft` 는 offsetParent 기준이고 탭 목록이
+  // static 이라 기준이 카드가 되어 헤더 좌우 padding 만큼 오차가 생긴다.
   const a = active.getBoundingClientRect(), box = strip.getBoundingClientRect();
   const to = room <= 0 ? 0 : Math.max(0, Math.min(
     strip.scrollLeft + (a.left + a.width / 2) - (box.left + box.width / 2), room));
@@ -777,7 +763,7 @@ function fitChrome(chrome, strip) {
     : "ham";
 }
 
-/* 렌더 완료 후에 측정한다. 너비가 갱신되기 전에 재면 잘못된 위치를 계산한다.
+/* 렌더 완료 후에 측정한다. 너비가 갱신되기 전에 측정하면 잘못된 위치를 계산한다.
    탭 드래그 중에는 스크롤하지 않는다. 드래그 중인 탭의 좌표가 어긋난다. */
 function centreTabs() {
   for (const strip of plane.querySelectorAll(".chrome__tabs")) {
@@ -807,15 +793,15 @@ function markFocus() {
 
 function drawRail() {
   const pad = grid.gap / 2;
-  // 포커스 카드와 묶이는 것은 그 카드의 종류를 맡은 레일뿐이다. 레일이 없으면
-  // 묶을 것이 없다: `filter(Boolean)` 만 두면 포커스 카드 하나를 감싼 외곽선을
-  // 그려 놓고 「레일 외곽선」이라 부르게 된다.
+  // 포커스 카드와 묶는 대상은 그 카드의 종류를 담당하는 레일뿐이다. 레일이 없으면
+  // 외곽선을 그리지 않는다. `filter(Boolean)` 만 두면 포커스 카드 하나만 감싼
+  // 외곽선을 레일 외곽선으로 그리게 된다.
   const kind = focusedPlugin();
   const rail = kind ? grid.rect(railId(kind)) : null;
   const focused = grid.rect(focusedId);
   const rects = rail && focused ? [rail, focused] : [];
-  // 획은 카드에서 pad 만큼 떨어져 돈다. 카드 모서리와 동심이려면 그만큼 더
-  // 벌어진 반경이어야 하고, 그 값은 굽이의 방향과 무관하게 하나다.
+  // 획은 카드에서 pad 만큼 떨어진 경로를 그린다. 카드 모서리와 동심이려면 반경도
+  // 그만큼 커야 하고, 그 값은 방향과 무관하게 하나다.
   const shape = outline(rects, { pad, radius: cardRadius() + pad });
   document.getElementById("rail").setAttribute("viewBox", `0 0 ${grid.width} ${grid.height}`);
   railPath.setAttribute("d", shape.path);
@@ -823,15 +809,15 @@ function drawRail() {
 }
 
 
-/* 다시 그렸음을 듣는 쪽. 검증과 공표가 여기 붙는다. */
+/* 렌더 완료 수신자. 검증과 보고가 여기에 연결된다. */
 let listener = null;
 
-/** 판을 다시 그릴 때마다 부를 함수를 건다. */
+/** 판을 다시 그릴 때마다 호출할 함수를 등록한다. */
 export function onRender(fn) {
   listener = fn;
 }
 
-/** 처음부터 다시 세운다. */
+/** 판을 처음부터 다시 만든다. */
 export function build() {
   view?.destroy();
   named = 0;
@@ -841,8 +827,8 @@ export function build() {
   focusedId = "terminal";
   view = new SoksakView(plane, grid, {
     createCard, updateCard,
-    // 평면은 stage 안쪽으로 이만큼 들어와 있다. 호스트만 아는 값이므로 뷰에게
-    // 말해 준다 — 그래야 평면 가장자리에 닿는 선이 벽까지 이어진다.
+    // 판은 stage 안쪽으로 이 값만큼 들어와 있다. 호스트만 아는 값이므로 뷰에 전달해야
+    // 판 가장자리에 닿는 선이 stage 경계까지 이어진다.
     bleed: half,
     onChange: () => listener?.(),
   });
@@ -852,22 +838,20 @@ export function build() {
   settle();
 }
 
-/** 통로가 바뀌면 판과 뷰가 함께 따라간다. */
+/** 통로 값을 판과 뷰에 적용한다. */
 export function setGap(half) {
   grid.gap = half * 2;
   view.bleed = half;
-  // 통로는 stage 의 안쪽 여백이기도 하므로, 통로가 바뀌면 판이 서 있는 상자의
-  // 크기가 함께 바뀐다. 그 사실은 여기서 이미 알고 있다 — 관측자가 알려 줄
-  // 때까지 기다리면 그 사이의 한 벌은 옛 크기로 그려지고, 표면으로도 그것이
-  // 나간다.
+  // 통로는 stage 의 안쪽 여백이기도 하므로 통로가 바뀌면 판의 크기도 바뀐다. 옵저버를
+  // 기다리면 그 사이의 렌더가 이전 크기로 그려지고 표면에도 그 값이 전달된다.
   grid.resize(plane.clientWidth, plane.clientHeight);
 }
 
 /**
- * 지금 판을 한 벌로 걷는다. 스페이스가 담는 것이 이것이다.
+ * 현재 판의 상태를 한 벌로 반환한다. 스페이스가 이 값을 보관한다.
  *
- * 배치와, 무엇을 보고 있었는지와, 접힌 레일이 다시 설 폭. 셋 다 그 스페이스의
- * 것이지 이 판의 것이 아니다 — 판은 한 번에 한 스페이스를 그린다.
+ * 배치, 포커스, 닫힌 레일의 복원 폭. 셋 다 스페이스의 값이고 판의 값이 아니다.
+ * 판은 한 번에 스페이스 하나를 그린다.
  */
 export const capture = () => ({
   state: grid.toJSON(),
@@ -876,7 +860,7 @@ export const capture = () => ({
   named,
 });
 
-/** 걷어 두었던 한 벌을 판에 건다. */
+/** 보관해 둔 상태 한 벌을 판에 적용한다. */
 export function adopt(kept) {
   grid.replace(kept.state);
   focusedId = kept.focusedId;
@@ -885,7 +869,7 @@ export function adopt(kept) {
   settle();
 }
 
-/** 아직 아무것도 없는 스페이스 한 벌. 새 스페이스가 이것으로 시작한다. */
+/** 빈 스페이스 상태를 반환한다. 새 스페이스가 이 값으로 시작한다. */
 export const fresh = () => ({
   state: initial(),
   focusedId: "terminal",

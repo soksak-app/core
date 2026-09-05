@@ -6,11 +6,11 @@
  * Card elements come from the host's `createCard` callback; on those the view
  * writes `position`, `left`, `top`, `width`, `height` and `data-card-id`.
  *
- * It creates two kinds of element of its own. A rule carries `class`,
- * `data-axis`, `data-virtual`, and `position`, `pointer-events: none`, `left`,
- * `top`, `width`, `height`. A divider carries `class`, `data-axis`,
- * `data-line`, `data-dragging` while held, `tabindex="0"`, `role="separator"`,
- * and `position`, `touch-action: none`, `left`, `top`, `width`, `height`.
+ * It creates two kinds of element of its own. A rule has `class`, `data-axis`,
+ * `data-virtual`, and `position`, `pointer-events: none`, `left`, `top`,
+ * `width`, `height`. A divider has `class`, `data-axis`, `data-line`,
+ * `data-dragging` while dragged, `tabindex="0"`, `role="separator"`, and
+ * `position`, `touch-action: none`, `left`, `top`, `width`, `height`.
  *
  * The host element needs a non-static `position`; the view places children
  * absolutely inside it.
@@ -56,10 +56,10 @@ export interface ViewOptions {
     /**
      * How far past the plane a rule may run to reach the frame around it.
      *
-     * A host that holds the plane inside a frame draws its border that far from
-     * where a rule ends, and the rule reads as a line that gave up. Only the host
-     * knows the distance — the view is handed an element, and an element's own
-     * padding does not move what is placed absolutely inside it. Default 0.
+     * A host that places the plane inside a frame draws that frame's border this
+     * far from where a rule ends, leaving a visible break. Only the host has that
+     * distance: the view receives an element, and the element's own padding does
+     * not move absolutely positioned children. Default 0.
      */
     bleed?: number;
 }

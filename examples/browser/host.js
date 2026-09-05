@@ -1,35 +1,34 @@
-// 페이지에 진짜 네이티브 표면과, 모달을 그릴 네이티브 뷰를 준다.
+// 네이티브 표면과 모달 뷰를 애플리케이션에 요청한다.
 //
-// 페이지는 매 커밋마다 표면이 서야 할 프레임을 선언하고, 그 하나하나가 실제
-// 웹뷰가 된다: 브라우저 판은 살아 있는 페이지를, 터미널 판은 이 호스트가
-// 서비스하는 문서를 보여주고 그 뒤에 셸이 붙는다.
+// 페이지는 커밋마다 표면의 프레임을 선언하고 호스트가 각각을 웹뷰로 만든다.
+// 브라우저 표면은 외부 URL 을, 터미널 표면은 이 호스트가 서비스하는 문서를
+// 표시하고 셸 프로세스를 연결한다.
 //
-// 모달: DOM 은 네이티브 뷰 위에 그릴 수 없으므로 [data-native-modal] 요소는
-// 자기 뷰로 넘긴다. 표면보다 나중에 만들어지므로 그 위에 선다.
+// DOM 은 네이티브 뷰 위에 그릴 수 없으므로 [data-native-modal] 요소는 별도 뷰에
+// 렌더링한다. 표면보다 나중에 생성되므로 표면 위에 배치된다.
 //
-// 이 파일은 어느 앱의 것도 아니다. 앱마다 다른 것은 전송 수단뿐이고, 그것은
-// framework/ 가 내놓는다 — 계약이 같은데 파일이 둘이면 반드시 갈라진다.
+// 이 파일은 애플리케이션마다 복제하지 않는다. 애플리케이션별 차이는 전송 방식뿐이고
+// framework/ 가 담당한다.
 import { host as bridge } from "./framework/index.js";
 
-/** 표면이 보여주는 것을 주소로 바꾼다. `url` 은 이 호스트 밖, `page` 는 안. */
+/** 표면이 표시할 대상을 URL 로 변환한다. `url` 은 외부, `page` 는 이 호스트의 문서. */
 function surfaceURL(surface) {
   if (surface.url) return surface.url;
   if (surface.page) return bridge.page(surface.page);
   throw new Error(`surface declares neither url nor page: ${JSON.stringify(surface)}`);
 }
 
-/** 계산된 CSS 색의 네 채널. 알파가 없으면 불투명이다. */
+/** 계산된 CSS 색을 [r, g, b, a] 로 반환한다. 알파가 없으면 1 이다. */
 function rgba(css) {
   const n = (css.match(/[\d.]+/g) ?? []).map(Number);
   return [n[0] || 0, n[1] || 0, n[2] || 0, n[3] === undefined ? 1 : n[3]];
 }
 
 /**
- * 한 색을 다른 색 위에 얹은, 불투명한 색.
+ * colour 를 ground 위에 합성한 불투명 색을 반환한다.
  *
- * 페이지의 색들은 일부 투명해서 페이지 안에서는 뒤의 판 위에 얹힌다. 네이티브로
- * 그린 모달은 아래 표면이 보여주는 것 위에 얹히므로, 반투명한 보더는 흰
- * 페이지 위에서 씻겨 나간다.
+ * 페이지의 일부 색은 반투명이고 페이지 안에서는 판 위에 합성된다. 네이티브 모달은
+ * 아래 표면 위에 합성되므로, 반투명 보더가 흰 페이지 위에서 사라진다.
  */
 function over(colour, ground) {
   const [r, g, b, a] = rgba(colour);
@@ -38,7 +37,7 @@ function over(colour, ground) {
   return `rgb(${mix(r, br)}, ${mix(g, bg)}, ${mix(b, bb)})`;
 }
 
-/** 표면이 아직 자기 문서를 그리지 않은 동안 보여줄 색. */
+/** 표면이 문서를 렌더링하기 전까지 표시할 색을 반환한다. */
 function surfaceBackground() {
   const probe = document.createElement("div");
   probe.style.color = "var(--surface)";
@@ -48,13 +47,13 @@ function surfaceBackground() {
   return [Number(rgb[0]), Number(rgb[1]), Number(rgb[2])];
 }
 
-/** 판 좌표로 받은 사각형을 페이지 좌표로. */
+/** 판 기준 사각형을 페이지 기준으로 변환한다. */
 function toPage(rect) {
   const plane = document.getElementById("plane").getBoundingClientRect();
   return { x: plane.left + rect.x, y: plane.top + rect.y, w: rect.w, h: rect.h };
 }
 
-/** 모달 하나를 그리는 데 필요한 것. show 와 update 가 같은 것을 보낸다. */
+/** 모달 렌더링에 필요한 값. show 와 update 가 같은 형태를 전송한다. */
 function drawing(el) {
   const style = getComputedStyle(el);
   return {
@@ -68,19 +67,18 @@ function drawing(el) {
 function install() {
   let last = "";
 
-  // 페이지는 이 호스트가 자리 잡기 전에 테마를 건다. 그래서 첫 공표가 테마를
-  // 묻는 자리다 — 공표는 페이지가 섰다는 말이다.
+  // 페이지는 이 호스트가 설치되기 전에 테마를 적용한다. 첫 place 호출에서 테마를
+  // 한 번 전송한다.
   let announced = false;
 
-  /* 앱에는 콘솔이 없다. 실패한 호출을 여기서 삼키면 그 실패는 아무 데도
-     남지 않으므로, 잡지 않고 그대로 둔다 — 문서의 unhandledrejection 이
-     받아서 앱의 로그로 보낸다. */
+  /* 애플리케이션에는 콘솔이 없다. 여기서 실패를 잡으면 기록되지 않으므로 잡지
+     않는다. 문서의 unhandledrejection 이 애플리케이션 로그로 전달한다. */
   const tell = (name, payload) => bridge.call(name, payload);
 
   window.hostSurfaces = {
     kinds: ["browser", "terminal"],
 
-    /** 검사 결과 한 줄. 화면이 아니라 앱의 로그로 간다. */
+    /** 검증 결과 한 줄을 애플리케이션 로그로 전송한다. */
     report: (line) => tell("report", line),
 
     theme: (values) => tell("setTheme", values),
@@ -94,19 +92,18 @@ function install() {
         id: s.id,
         dim: s.dim,
         url: surfaceURL(s.surface),
-        // 그 주소가 이 호스트 밖인가. 앱은 바깥 주소는 그대로 열고 자기 것은
-        // 자기 서버로 열며, 어느 종류가 물었는지는 알 필요가 없다.
+        // URL 이 이 호스트 외부인지 여부. 애플리케이션은 외부 주소를 그대로 열고
+        // 자체 문서는 자기 서버로 연다. 표면의 종류는 알 필요가 없다.
         external: !!s.surface.url,
         visible: s.visible,
-        // 웹뷰는 아직 그리지 않은 자리를 흰색으로 둔다. divider 를 끌면 표면이
-        // 매 프레임 크기가 바뀌므로 방금 드러난 띠가 흰색으로 번쩍인다. 표면
-        // 색으로 시작하면 볼 흰색이 없다.
+        // 웹뷰는 렌더링 전 영역을 흰색으로 표시한다. divider 드래그 중에는 표면
+        // 크기가 매 프레임 바뀌므로 새로 드러난 영역이 흰색으로 깜빡인다.
         background: surfaceBackground(),
         ...toPage(s.applied),
       }));
 
-      // 공표는 매 렌더마다 온다. divider 를 끄는 매 프레임도 그렇다. 달라지지
-      // 않은 요청을 보내는 것은 다리를 헛되이 건너는 일이다.
+      // place 는 렌더마다 호출되고 divider 드래그 중에는 매 프레임 호출된다.
+      // 직전과 같은 요청은 전송하지 않는다.
       const request = { viewport: { h: window.innerHeight }, surfaces };
       const key = JSON.stringify(request);
       if (key === last) return;
@@ -115,22 +112,19 @@ function install() {
     },
   };
 
-  // 표면은 네이티브 뷰라 그 위의 누름이 이 문서에 닿지 않는다. 앱이 어느
-  // 표면인지 알려 주면 페이지가 그 자리를 누른다 — 누름을 듣고 있는 것들이
-  // 이미 아는 방식이다.
+  // 표면은 네이티브 뷰이므로 그 위의 클릭이 이 문서에 도달하지 않는다.
+  // 애플리케이션이 표면 id 를 전달하면 페이지가 해당 슬롯에 pointerdown 을 낸다.
   bridge.on("surface-pressed", (id) => window.pressSurface(id));
 
   let pick = null;
   let shown = null;
-  // 모달은 여러 번 답할 수 있다 — 고르기는 한 번이지만 설정은 바꿀 때마다다.
-  // 듣는 것을 여기서 끊지 않는다. 끝났다고 말하는 것은 hide 다.
+  // 모달은 여러 번 응답하므로 여기서 구독을 해제하지 않고 hide 에서 해제한다.
   bridge.on("overlay-pick", ({ key, value }) => { if (pick) pick(key, value); });
 
   window.hostOverlay = {
     show(el, rect, onPick) {
       pick = onPick;
-      // 뷰는 요소의 이름을 따르므로, 이름 없는 요소는 뷰도 이름이 없다. 그런
-      // 것이 둘이면 한 뷰를 나눠 쓰게 된다.
+      // 뷰 이름은 요소 id 를 사용한다. id 가 없는 요소가 둘이면 같은 뷰를 공유한다.
       if (!el.id) throw new Error("a [data-native-modal] element needs an id");
       shown = el.id;
       const style = getComputedStyle(el);
@@ -144,13 +138,13 @@ function install() {
       });
     },
 
-    /** 열려 있는 모달을 옮긴다. 어디에 서는지는 페이지가 정한다. */
+    /** 열려 있는 모달 뷰의 위치를 갱신한다. 위치는 페이지가 결정한다. */
     place(rect) {
       if (!shown) return;
       tell("overlayPlace", { id: shown, viewport: { h: window.innerHeight }, rect: toPage(rect) });
     },
 
-    /** 열려 있는 모달의 내용을 갈아 끼운다. 뷰를 새로 만들면 깜빡인다. */
+    /** 열려 있는 모달 뷰의 내용을 교체한다. 뷰를 다시 만들면 깜빡인다. */
     update(el) {
       if (!shown) return;
       tell("overlayUpdate", { id: shown, ...drawing(el) });
@@ -165,5 +159,5 @@ function install() {
   };
 }
 
-// 다리가 없으면 호스트도 없다 — 브라우저에서는 페이지가 표면을 스스로 그린다.
+// 인터페이스가 없으면 호스트도 없다. 브라우저에서는 페이지가 표면을 직접 그린다.
 if (bridge) bridge.ready(install);

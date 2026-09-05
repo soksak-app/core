@@ -2,12 +2,11 @@
 <meta charset="utf-8">
 <title>terminal</title>
 <!--
-  터미널 표면 — 창 안의 웹뷰이고 그 뒤에 셸이 붙는다.
+  터미널 표면. 창 안의 웹뷰이고 셸 프로세스가 연결된다.
 
-  터미널 에뮬레이터가 아니라 콘솔이다. 출력은 글자이고 입력은 한 줄씩 간다.
+  터미널 에뮬레이터가 아니라 콘솔이다. 출력은 텍스트이고 입력은 한 줄 단위다.
 
-  이 페이지는 자기를 담고 있는 것이 무엇인지 framework/ 에게 묻는다. 앱마다
-  셸에게 말하는 법이 다르고, 그 차이는 거기 한 곳에 있다.
+  셸을 호출하는 방식은 애플리케이션마다 다르고 framework/ 가 그 차이를 담당한다.
 -->
 <style>
   html, body { margin: 0; height: 100%; background: var(--surface) }
@@ -29,8 +28,8 @@
 <script type="module">
   import { page } from "./framework/index.js";
 
-  /* 이 페이지는 자기 문서라 주 페이지의 스타일시트를 물려받지 못한다. 그래서
-     테마가 값으로 와서 여기서 자기 루트에 심는다. */
+  /* 이 페이지는 별도 문서라 메인 페이지의 스타일시트를 상속하지 않는다. 테마를
+     값으로 받아 자기 루트에 설정한다. */
   function applyTheme(theme) {
     const root = document.documentElement;
     root.style.colorScheme = theme.scheme;
@@ -46,8 +45,8 @@
   const input = document.getElementById("in");
 
   function write(text) {
-    // Kept at the bottom only when it was already there, so reading back does
-    // not fight the output.
+    // Scrolls to the bottom only when it was already at the bottom, so scrolling
+    // back is not overridden by new output.
     const atEnd = out.scrollTop + out.clientHeight >= out.scrollHeight - 4;
     out.append(text);
     if (atEnd) out.scrollTop = out.scrollHeight;

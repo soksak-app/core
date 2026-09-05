@@ -1,13 +1,11 @@
-// 판 바깥의 값들 — 테마와 모드, 그리고 형태.
+// 판 외부의 설정값. 테마, 모드, 형태.
 //
-// 여기서 값이 바뀌면 판의 배치가 바뀐다. 그래도 이 모듈은 판을 부르지 않고
-// 알리기만 한다: 설정이 판을 아는 순간 둘은 한 덩어리가 되고, 설정을 하나 더
-// 넣을 때마다 판의 어느 함수를 불러야 하는지 매번 정해야 한다.
+// 값이 바뀌면 판의 배치도 바뀌지만 이 모듈은 판을 호출하지 않고 변경만 통지한다.
+// 설정이 판을 참조하면 설정을 추가할 때마다 호출할 판의 함수를 정해야 한다.
 
 /* ── 테마 ──────────────────────────────────────────────────────────────────
-   축이 둘이다. 테마는 형태와 색의 성격을 정하고, 모드는 그 테마의 밝은 쪽과
-   어두운 쪽 중 하나를 고른다. 모든 테마가 양쪽을 다 가진다 — 한쪽이 없어
-   다른 쪽으로 대신하는 경우는 없다.
+   축이 둘이다. 테마가 형태와 색을 정하고, 모드가 그 테마의 dark 와 light 중
+   하나를 선택한다. 모든 테마는 양쪽 값을 모두 갖는다.
 
    형태(모서리 반경, 통로 폭, 보더 굵기)는 모드와 무관하다. 밝기가 바뀐다고
    모서리가 바뀔 이유는 없다.
@@ -99,37 +97,34 @@ export const THEMES = [
 export const MODES = ["dark", "light"];
 
 /**
- * 지금 걸린 설정. 하나의 객체이고, 그대로 JSON 이다.
+ * 현재 설정. 객체 하나이며 그대로 JSON 저장 형식이다.
  *
- * 값마다 변수를 두면 저장할 때 목록을 따로 적어야 하고, 하나 늘 때마다 그
- * 목록을 고쳐야 한다. 여기서는 이 객체가 곧 저장 형식이다.
+ * 값마다 변수를 두면 저장할 목록을 따로 관리해야 하고 값을 추가할 때마다 그 목록을
+ * 수정해야 한다.
  */
 const settings = {
   theme: THEMES[0].name,
   mode: "dark",
 
-  /* 프로젝트 탭이 어디 서는가. top = 크롬 줄, left = 왼쪽 세로 레일. */
+  /* 프로젝트 탭의 위치. top = 크롬 행, left = 왼쪽 세로 레일. */
   projectTabs: "top",
-  /* 레일이 포커스를 따라가는가. flow = 따라간다, pin = 자리를 지킨다,
-     off = 서지 않는다. */
+  /* 레일의 포커스 추적 방식. flow = 추적, pin = 고정, off = 표시하지 않음. */
   rail: "flow",
-  /* 좌·우 영역을 여는가. 무엇이 서는지는 연결이 정하고, 이것은 자리 자체다. */
+  /* 좌·우 영역의 표시 여부. 무엇을 표시할지는 links 가 정한다. */
   left: true,
   right: true,
-  /* 포커스를 잃은 표면을 흐리게 하는가. */
+  /* 포커스를 잃은 표면의 흐림 처리 여부. */
   dim: false,
-  /* 포커스 카드를 무엇으로 표시하는가 — 테두리인가 네 꼭짓점의 꺽쇠인가. */
+  /* 포커스 카드의 표시 방식. border = 테두리, corner = 네 모서리 표식. */
   focusInd: "border",
-  /* 카드 사이의 경계선을 그리는가. */
+  /* 카드 사이 경계선의 표시 여부. */
   fullRule: "hide",
-  /* 통로의 절반 폭(px). 테마를 고르면 그 테마의 값이 되고, 그 뒤에 사람이
-     옮기면 옮긴 값이다. */
+  /* 통로의 절반 폭(px). 테마를 선택하면 그 테마의 값으로 설정되고, 이후에는
+     사용자가 지정한 값을 사용한다. */
   gap: parseFloat(THEMES[0].shape.gap),
 
-  /* 사이드바는 조합해서 만든다. 세트 하나가 섹션들을 골라 순서대로 담고,
-     연결이 그 세트를 어느 자리에 건다.
-
-     세트는 제목이 아니라 id 로 걸린다 — 같은 제목의 세트가 둘 있을 수 있다. */
+  /* 사이드바는 세트를 조합해서 만든다. 세트 하나가 섹션을 순서대로 담고 links 가
+     그 세트를 자리에 연결한다. 연결은 제목이 아니라 id 로 한다. */
   sets: [
     { id: "set-install", title: "탐색기", sections: ["files.tree", "files.bookmarks"] },
     { id: "set-shell", title: "셸", sections: ["terminal.history", "terminal.cwd"] },
@@ -138,11 +133,8 @@ const settings = {
     { id: "set-browser", title: "브라우저", sections: ["browser.tabs", "browser.history"] },
   ],
 
-  /* 어느 세트가 어디에 서는가. `plugin` 이 null 인 자리는 포커스를 따르지
-     않는다 — 좌측이 그렇다.
-
-     여기 없는 자리는 사이드바가 없다. set-page 는 만들어져 있지만 걸려 있지
-     않으므로 브라우저 레일은 서지 않는다. */
+  /* 세트를 자리에 연결한다. `plugin` 이 null 인 자리는 포커스를 추적하지 않는다.
+     목록에 없는 자리는 사이드바를 표시하지 않는다. */
   links: [
     { place: "left", plugin: null, set: "set-install" },
     { place: "rail", plugin: "terminal", set: "set-shell" },
@@ -151,14 +143,14 @@ const settings = {
   ],
 };
 
-/** 이름으로 찾은 테마. 목록에 없는 이름은 부르는 쪽의 잘못이므로 실패한다. */
+/** 이름으로 테마를 반환한다. 목록에 없는 이름이면 예외를 던진다. */
 function themeOf(name) {
   const found = THEMES.find((t) => t.name === name);
   if (!found) throw new Error(`unknown theme: ${name}`);
   return found;
 }
 
-/** 지금 걸려 있는 값들. 표면과 모달이 같은 것을 받는다. */
+/** 현재 토큰 값. 표면과 모달이 같은 값을 받는다. */
 function themeTokens() {
   const theme = themeOf(settings.theme);
   const c = theme[settings.mode];
@@ -166,99 +158,95 @@ function themeTokens() {
     "--bg": c.bg, "--card": c.card, "--fg": c.fg, "--muted": c.muted,
     "--bd": c.bd, "--rail": c.rail, "--focus": c.focus, "--ok": c.ok,
     "--no": c.no, "--surface": c.surface, "--surface-fg": c.surfaceFg,
-    // 통로는 테마가 아니라 설정이 갖는다. 테마는 고를 때 그 값을 한 번 정할
-    // 뿐이다(applyTheme) — 여기서 테마의 값을 다시 쓰면 사람이 바꾼 값이
-    // 매번 지워진다.
+    // 통로는 테마가 아니라 설정이 보관한다. 테마는 선택 시 한 번 값을
+    // 설정한다(applyTheme). 여기서 테마 값을 쓰면 사용자가 바꾼 값이 지워진다.
     "--r": theme.shape.r, "--half-gap": `${settings.gap}px`, "--bw": theme.shape.bw,
   };
 }
 
-/* 호스트가 만드는 페이지들은 각자 다른 문서라 이 문서의 스타일시트를 물려받지
-   못한다. 그래서 값을 실어 보내고, 그쪽에서 자기 루트에 심는다. */
+/* 호스트가 서비스하는 페이지는 별도 문서라 이 문서의 스타일시트를 상속하지 않는다.
+   토큰 값을 전송하면 그쪽에서 자기 루트에 설정한다. */
 window.pageTheme = () => ({ scheme: settings.mode, tokens: themeTokens() });
 
 /**
- * 테마와 모드를 건다.
+ * 테마와 모드를 적용한다.
  *
- * 값은 루트에 심는다 — 스타일시트를 갈아 끼우지 않으므로, 사람이 색 입력으로
- * 고른 값이 있으면 그것이 그대로 이긴다.
+ * 값을 루트에 설정한다. 스타일시트를 교체하지 않으므로 사용자가 색 입력으로 지정한
+ * 값이 유지된다.
  */
 export function applyTheme(name, next) {
   if (!MODES.includes(next)) throw new Error(`unknown mode: ${next}`);
   const theme = themeOf(name);
-  // 통로는 테마가 정한다. 테마를 고르는 것이 통로를 고르는 것이기도 하다.
+  // 테마 선택이 통로 값도 함께 설정한다.
   set({ theme: theme.name, mode: next, gap: parseFloat(theme.shape.gap) });
 }
 
-/** 지금 값 하나를 읽는다. */
+/** 설정값 하나를 반환한다. */
 export const value = (key) => settings[key];
 
 /**
- * 설정의 일부를 바꾼다. 값을 심고, 듣는 쪽에 알린다.
+ * 설정의 일부를 변경하고, 값을 적용한 뒤 변경을 통지한다.
  *
- * 바꾸는 경로는 이것 하나다. 값마다 함수를 두면 심는 것을 빠뜨린 함수가
- * 생긴다.
+ * 변경 경로는 이 함수 하나다. 값마다 함수를 두면 적용을 누락한 함수가 생긴다.
  */
 export function set(patch) {
   Object.assign(settings, patch);
   install();
-  // 통로는 배치가 읽는 값이므로 설정이 바뀌면 판도 바뀐다. 그 일은 듣는 쪽이
-  // 한다 — 여기서는 바뀌었다는 사실만 알린다.
+  // 통로는 배치가 사용하는 값이므로 설정이 바뀌면 판도 바뀐다. 그 처리는 수신자가
+  // 하고 여기서는 변경만 통지한다.
   announce();
 }
 
-/** 값을 문서 루트에 심는다. 시작할 때 한 번, 그 뒤로는 바뀔 때마다. */
+/** 값을 문서 루트에 설정한다. 시작 시 한 번, 이후 변경할 때마다 호출한다. */
 export function install() {
   const root = document.documentElement;
   root.style.colorScheme = settings.mode;
-  // 스타일시트가 읽는 두 값. 보이는 것만 바꾸므로 판을 다시 세우지 않는다.
+  // 스타일시트가 읽는 두 값. 표시만 바뀌므로 판을 다시 만들지 않는다.
   root.dataset.focusInd = settings.focusInd;
   root.dataset.fullRule = settings.fullRule;
   for (const [token, value] of Object.entries(themeTokens())) {
     root.style.setProperty(token, value);
   }
-  // 호스트가 그리는 페이지들은 이 문서의 스타일시트를 물려받지 못하므로 값을
-  // 따로 받는다. 테마는 사람이 고를 때만 바뀌므로 그때 한 번만 보낸다.
+  // 호스트가 서비스하는 페이지는 이 문서의 스타일시트를 상속하지 않으므로 값을
+  // 따로 전송한다.
   window.hostSurfaces?.theme?.(window.pageTheme());
 }
-/** 카드의 모서리 반경. 테마가 정하므로 상수로 둘 수 없다. */
+/** 카드의 모서리 반경을 반환한다. 테마가 결정하므로 상수로 둘 수 없다. */
 export const cardRadius = () =>
   parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--r")) || 0;
 
-/* 값이 바뀌었음을 듣는 쪽. 판 하나가 붙는다. */
+/* 설정 변경 수신자. 판 하나가 연결된다. */
 let listener = null;
 
-/** 값이 바뀌면 부를 함수를 건다. */
+/** 설정이 바뀔 때 호출할 함수를 등록한다. */
 export function onSettingsChange(fn) {
   listener = fn;
 }
 
 const announce = () => listener?.();
 
-/** 조합해 둔 세트 전부. 사이드바를 편집할 때 고르는 목록이다. */
+/** 세트 전부를 반환한다. 사이드바 편집 시 선택 목록으로 사용한다. */
 export const sets = () => settings.sets;
 
 /**
- * 세트를 자리에 건다. `setId` 가 null 이면 연결을 끊는다 — 그러면 그 사이드바는
- * 없다.
+ * 세트를 자리에 연결한다. `setId` 가 null 이면 연결을 제거하고 사이드바를 표시하지
+ * 않는다.
  */
 export function link(place, plugin, setId) {
   const rest = settings.links.filter((l) => !(l.place === place && l.plugin === plugin));
   set({ links: setId === null ? rest : [...rest, { place, plugin, set: setId }] });
 }
 
-/** 그 자리에 걸린 세트의 id. 없으면 null. */
+/** 해당 자리에 연결된 세트의 id 를 반환한다. 없으면 null. */
 export function linkedId(place, plugin) {
   const found = settings.links.find((l) => l.place === place && l.plugin === plugin);
   return found ? found.set : null;
 }
 
 /**
- * 그 자리에 걸린 세트. 걸린 것이 없으면 null — 연결하지 않으면 그 사이드바는
- * 없다.
+ * 해당 자리에 연결된 세트를 반환한다. 없으면 null.
  *
- * 섹션의 이름까지 여기서 읽지는 않는다. 무엇이 등록되어 있는지는 레지스트리가
- * 알고, 설정은 어느 것을 골랐는지만 안다.
+ * 섹션의 이름은 읽지 않는다. 등록 목록은 레지스트리가 갖고 설정은 선택한 id 만 갖는다.
  */
 export function linkedSet(place, plugin) {
   const link = settings.links.find((l) => l.place === place && l.plugin === plugin);
@@ -268,10 +256,10 @@ export function linkedSet(place, plugin) {
   return set;
 }
 
-/** 지금 걸린 테마의 이름과 모드. 배선이 select 를 맞출 때 읽는다. */
+/** 현재 테마 이름과 모드를 반환한다. */
 export const themeName = () => settings.theme;
 export const modeName = () => settings.mode;
 
-/** 이 테마가 정한 통로의 절반 폭(px). 판이 gap 과 bleed 를 여기서 얻는다. */
+/** 통로의 절반 폭(px). 판이 gap 과 bleed 를 이 값으로 설정한다. */
 export const halfGap = () => settings.gap;
 

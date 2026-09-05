@@ -2,28 +2,26 @@
 <meta charset="utf-8">
 <title>native modal</title>
 <!--
-  Draws one [data-native-modal] element of the main page.
+  Renders one [data-native-modal] element of the main page.
 
-  DOM cannot be drawn over a native view, but a webview is a native view that
-  draws DOM. This page is loaded into a view created after the surface views, so
-  it sits above them and the surfaces keep running underneath.
+  DOM cannot be drawn over a native view, and a webview is a native view that
+  renders DOM. This page is loaded into a view created after the surface views,
+  so it is placed above them and the surfaces keep running.
 
-  It receives the element's class, its markup and the page's stylesheet, so it
-  renders exactly what the page would have. A click on anything carrying
-  data-key is reported back and the main page decides what it means.
+  It receives the element's class name, its markup and the page's stylesheet.
+  A click on any element carrying data-key is reported to the main page.
 -->
 <style>
-  /* Painted from the markup, before any script runs: a webview shows white
-     until its document paints, and a background applied later is a flash. */
+  /* Set in the markup so it applies before any script runs. A webview shows
+     white until its document paints. */
   html, body { margin: 0; padding: 0; height: 100%; background: #1b1d27 }
 </style>
 <script type="module">
   import { page } from "./framework/index.js";
   import { onGripDrag, showValue } from "./card.js";
 
-  /* 이 페이지는 자기 문서라 주 페이지의 스타일시트를 물려받지 못한다. 그래서
-     테마가 값으로 와서 여기서 자기 루트에 심는다. 모달은 열릴 때 만들어지고
-     닫힐 때 사라지므로, 실릴 때 읽은 테마가 사는 동안의 테마다. */
+  /* 이 페이지는 별도 문서라 메인 페이지의 스타일시트를 상속하지 않는다. 테마를
+     값으로 받아 자기 루트에 설정한다. */
   function applyTheme(theme) {
     const root = document.documentElement;
     root.style.colorScheme = theme.scheme;
@@ -42,14 +40,13 @@
     if (!sheet) {
       document.head.insertAdjacentHTML("beforeend", `<style id="page"></style>`);
       sheet = document.getElementById("page");
-      // The page's stylesheet arrives whole, which brings its body rule with it:
-      // a padding and a background meant for a page, not for a modal. This is
-      // added after it so it wins.
+      // The page's stylesheet arrives whole, including its body rule. This block
+      // is inserted after it so it takes precedence.
       document.head.insertAdjacentHTML("beforeend", `<style>
         html, body { margin: 0; padding: 0; height: 100% }
-        /* 카드는 주 페이지에서 자기 자리를 스스로 잡는다. 여기서는 이 뷰가
-           카드 하나만 담으므로 그 자리 잡기를 전부 되돌린다 — transform 을
-           남기면 카드가 자기 폭의 절반만큼 밀려 왼쪽이 잘린다. */
+        /* 카드는 메인 페이지에서 자기 위치를 지정한다. 이 뷰는 카드 하나만 담으므로
+           그 위치 지정을 모두 해제한다. transform 을 남기면 카드가 폭의 절반만큼
+           이동해 왼쪽이 잘린다. */
         body > * { position: static !important; inset: auto !important;
                    transform: none !important; margin: 0 !important;
                    max-height: none !important }
@@ -62,17 +59,17 @@
     root.innerHTML = html;
     root.style.borderColor = border;
 
-    // Measured at once: this view is placed before it is filled, and the size it
-    // needs is only known here, where it is laid out.
+    // The view is created before it is filled, so the required size is measured
+    // here after layout.
     const r = root.getBoundingClientRect();
     page.modal.fit(id, Math.ceil(r.width), Math.ceil(r.height));
   }
 
-  /* 실릴 때 한 번, 그리고 열려 있는 동안 바뀔 때마다. 뷰를 새로 만들면 깜빡인다. */
+  /* 로드 시 한 번, 이후 내용이 바뀔 때마다 호출한다. 뷰를 다시 만들면 깜빡인다. */
   page.modal.content(id, render);
 
-  /* 돌려주는 것은 하나다: 무엇을(key), 무엇으로(value).
-     고르기는 값이 비어 있고, 값을 바꾼 것은 그 값을 싣는다. */
+  /* 응답 형식은 key 와 value 하나씩이다. 클릭은 value 가 비어 있고 값 변경은
+     그 값을 담는다. */
   const send = (key, value) => page.modal.answer(id, key, value);
 
   addEventListener("click", (e) => {
@@ -87,8 +84,8 @@
     if (e.key === "Escape") send("", "");
   });
 
-  /* 잡이를 끈 것도 답 하나다. 이 뷰는 카드가 어디에 서 있는지 모르므로 움직인
-     양만 돌려주고, 자리는 카드를 가진 페이지가 정한다. */
+  /* 그립 드래그도 같은 응답으로 보낸다. 이 뷰는 카드의 위치를 알지 않으므로 이동
+     거리만 전달하고 위치는 카드를 소유한 페이지가 정한다. */
   onGripDrag(document, (dx, dy) => send("move", `${dx},${dy}`));
   showValue(document);
 </script>

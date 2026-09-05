@@ -1,12 +1,12 @@
 // 설정 모달.
 //
-// 구 프로젝트의 모양 그대로다: 520px 카드, 머리에 잡이와 ✕, 왼쪽에 절 목록,
-// 오른쪽에 「이름 130px + 조작」 줄, 절마다 설명 한 줄.
+// 레이아웃은 구 프로젝트와 동일하다: 520px 카드, 헤더에 그립과 닫기 버튼, 왼쪽에 절
+// 목록, 오른쪽에 「이름 130px + 컨트롤」 행, 절마다 설명 한 줄.
 //
-// [data-native-modal] 이다. 네이티브 표면은 OS 뷰라서 DOM 이 그 위에 그릴 수
-// 없으므로, 호스트가 이 요소를 자기 뷰에 옮겨 표면들 위에 그린다. 그 뷰는 이
-// 요소의 사본이므로 여기서 건 리스너는 그쪽에서 돌지 않는다 — 그래서 조작은
-// 전부 data-key 를 달고, 답은 하나의 함수로 온다.
+// [data-native-modal] 요소다. DOM 은 네이티브 표면 위에 그릴 수 없으므로 호스트가
+// 이 요소를 별도 뷰에 렌더링한다. 그 뷰는 사본이므로 여기서 등록한 리스너가 동작하지
+// 않는다. 모든 컨트롤에 data-key 또는 data-set 을 붙이고 응답을 answer() 하나로
+// 받는다.
 import { standIn } from "./compositor.js";
 import { icon } from "./icons.js";
 import { onGripDrag, showValue } from "./card.js";
@@ -17,17 +17,17 @@ import {
   MODES, THEMES, applyTheme, halfGap, link, linkedId, modeName, set, sets, themeName, value,
 } from "./settings.js";
 
-/* 열려 있는 동안에만 있는 것들. 닫으면 사라진다 — 숨겨 두면 그 요소가 언제
-   보이는지가 CSS 의 사정이 되고, 실제로 그렇게 새어 나왔다. */
+/* 열려 있는 동안에만 존재한다. 숨겨 두면 표시 여부를 CSS 가 결정하게 되고,
+   [hidden] 은 display 를 정하는 규칙을 이기지 못한다. */
 let scrim = null;
 let card = null;
 let nav = null;
 let body = null;
 
-/** 지금 열려 있는 절. 닫아도 기억해 두었다가 다시 열 때 그 절로 연다. */
+/** 현재 절. 닫아도 유지하고 다시 열 때 같은 절을 표시한다. */
 let here = "general";
 
-/** 「이름 + 조작」 한 줄. */
+/** 「이름 + 컨트롤」 한 행을 만든다. */
 function row(label, control) {
   const el = document.createElement("label");
   el.className = "set-row";
@@ -38,7 +38,7 @@ function row(label, control) {
   return el;
 }
 
-/** 절의 설명 한 줄. */
+/** 절의 설명 한 줄을 만든다. */
 function caption(text) {
   const el = document.createElement("p");
   el.className = "set-caption";
@@ -46,12 +46,11 @@ function caption(text) {
   return el;
 }
 
-/* 지금 값은 프로퍼티가 아니라 속성에 적는다.
-   호스트가 이 카드를 네이티브 뷰로 넘길 때 보내는 것은 innerHTML 이고, 직렬화
-   되는 것은 속성뿐이다. checked/selected/value 를 프로퍼티로만 적으면 사본은
-   전부 초기값으로 그려지고, 값을 바꿔도 다시 그릴 때마다 되돌아간다. */
+/* 현재 값을 프로퍼티가 아니라 속성으로 설정한다.
+   호스트에 전송하는 것은 innerHTML 이고 직렬화되는 것은 속성뿐이다.
+   checked/selected/value 를 프로퍼티로만 설정하면 사본이 초기값으로 렌더링된다. */
 
-/** 고르는 것. 고른 값이 key 와 함께 돌아온다. */
+/** select 를 만든다. 선택한 값이 key 와 함께 반환된다. */
 function choose(key, options, now) {
   const el = document.createElement("select");
   el.dataset.set = key;
@@ -65,7 +64,7 @@ function choose(key, options, now) {
   return el;
 }
 
-/** 켜고 끄는 것. */
+/** 체크박스를 만든다. */
 function toggle(key, now) {
   const el = document.createElement("input");
   el.type = "checkbox";
@@ -74,7 +73,7 @@ function toggle(key, now) {
   return el;
 }
 
-/** 끌어서 정하는 수. */
+/** range 입력과 값 표시를 만든다. */
 function slide(key, min, max, now, unit) {
   const wrap = document.createElement("span");
   wrap.className = "set-slide";
@@ -90,7 +89,7 @@ function slide(key, min, max, now, unit) {
   return wrap;
 }
 
-/** 누르는 것. */
+/** 버튼을 만든다. */
 function press(key, label) {
   const el = document.createElement("button");
   el.className = "set-press";
@@ -100,7 +99,7 @@ function press(key, label) {
   return el;
 }
 
-/** 테마 한 칸 — 바탕, 사이드바, 강조를 그대로 보여준다. */
+/** 테마 견본 하나를 만든다. 배경, 사이드바, 강조 색을 표시한다. */
 function swatch(theme) {
   const el = document.createElement("button");
   el.className = "th";
@@ -162,7 +161,7 @@ const SECTIONS = [
   ["compositing", "합성", drawCompositing],
 ];
 
-/** 카드 한 장. 열 때 만든다. */
+/** 카드 요소를 만든다. 열 때 호출한다. */
 function makeCard() {
   const el = document.createElement("div");
   el.className = "set-card";
@@ -186,14 +185,14 @@ function makeCard() {
     const c = e.target.closest("[data-set]");
     if (c) answer(c.dataset.set, c.type === "checkbox" ? String(c.checked) : c.value);
   });
-  // 호스트가 있으면 이 요소는 그려지지 않지만 자리는 지킨다. 그래서 잡이를 끄는
-  // 일은 사본이 있는 뷰에서 일어나고, 그 답이 여기로 온다.
+  // 호스트가 있으면 이 요소는 렌더링되지 않는다. 그립 드래그는 사본이 있는 뷰에서
+  // 발생하고 그 결과가 answer() 로 전달된다.
   onGripDrag(el, (dx, dy) => answer("move", `${dx},${dy}`));
   showValue(el);
   return el;
 }
 
-/** 카드를 다시 그리고, 열려 있으면 그 뷰에도 새 내용을 준다. */
+/** 카드를 다시 그리고, 열려 있으면 호스트 뷰의 내용도 갱신한다. */
 export function drawSettings() {
   if (!card) return;
   nav.textContent = "";
@@ -212,10 +211,10 @@ export function drawSettings() {
 }
 
 /**
- * 카드가 답한 것 하나. 무엇을(key), 무엇으로(value).
+ * 카드의 응답 하나를 처리한다. key 가 대상, value 가 값이다.
  *
- * 조작마다 리스너를 달지 않는다 — 네이티브 뷰가 그리는 것은 이 요소의 사본이라
- * 거기 붙인 리스너는 돌지 않는다.
+ * 컨트롤마다 리스너를 등록하지 않는다. 네이티브 뷰는 이 요소의 사본을 렌더링하므로
+ * 거기 등록한 리스너가 동작하지 않는다.
  */
 function answer(key, val) {
   if (key === "" || key === "close") return closeSettings();
@@ -226,14 +225,14 @@ function answer(key, val) {
   if (kind === "press") { if (a === "build") build(); return; }
   if (kind === "link") return link(a, b || null, val || null);
   if (kind === "knob") { knobs[a] = Number(val); return; }
-  // 나머지는 설정의 이름 그대로다. 조작이 문자열을 주므로 그 이름의 지금 값을
-  // 보고 무엇으로 읽을지 정한다.
+  // 나머지 key 는 설정 이름이다. 컨트롤이 문자열을 주므로 현재 값의 타입으로
+  // 변환 방식을 결정한다.
   const now = value(key);
   set({ [key]: typeof now === "boolean" ? val === "true"
     : typeof now === "number" ? Number(val) : val });
 }
 
-/** 카드가 선 자리. 판을 기준으로 잰다 — 호스트가 그 좌표로 뷰를 놓는다. */
+/** 카드의 위치와 크기를 판 기준으로 측정해 반환한다. 호스트가 이 좌표로 뷰를 배치한다. */
 function cardRect() {
   const plane = document.getElementById("plane").getBoundingClientRect();
   const r = card.getBoundingClientRect();
@@ -241,9 +240,9 @@ function cardRect() {
 }
 
 /**
- * 잡이를 끈 만큼 옮긴다. 창 안에 8px 을 남기는 것은 구 프로젝트와 같다.
+ * 그립을 드래그한 거리만큼 카드를 이동한다. 창 안에 8px 을 남긴다.
  *
- * 어디에 서 있는지는 요소가 안다. 따로 기억해 두면 요소와 기억이 갈라진다.
+ * 현재 위치는 요소에서 읽는다. 별도 변수로 보관하면 두 값이 어긋난다.
  */
 function moveBy(dx, dy) {
   const r = card.getBoundingClientRect();
@@ -256,23 +255,21 @@ function moveBy(dx, dy) {
 }
 
 /**
- * 카드 밖을 누르면 닫는다.
+ * 카드 밖을 클릭하면 닫는다.
  *
- * 막을 누른 것도, 네이티브 표면을 누른 것도 같은 하나의 누름으로 온다: 표면은
- * OS 뷰라 그 위의 누름이 이 문서에 닿지 않지만, 호스트가 알려 주면 판이 그
- * 표면의 자리 요소에서 pointerdown 을 낸다(plane.js 의 pressSurface). 그래서
- * 「어디를 눌렀나」를 조건으로 따지지 않고 카드 안인지만 본다.
+ * 오버레이 클릭과 네이티브 표면 클릭이 같은 pointerdown 으로 도착한다. 표면 클릭은
+ * 호스트가 보고하고 판이 해당 슬롯에서 pointerdown 을 발생시킨다(plane.js 의
+ * pressSurface). 클릭 위치를 조건으로 따지지 않고 카드 내부인지만 확인한다.
  */
 function pressedOutside(e) {
   if (!e.target.closest(".set-card")) closeSettings();
 }
 
-/** 연다. 호스트가 있으면 그 뷰가 표면들 위에 그리고, 없으면 여기서 그린다. */
+/** 모달을 연다. 호스트가 있으면 네이티브 뷰가, 없으면 이 문서가 렌더링한다. */
 export function openSettings() {
   if (card) return;
-  // 막이 먼저다. 모달이 열린 동안 판은 누름을 받지 않는다 — 막이 없으면 카드
-  // 옆의 divider 가 그대로 끌린다. 호스트가 카드를 가져가면 이 문서에 남는 것은
-  // 막뿐이고, 막이 하는 일은 그때도 같다.
+  // 오버레이가 모달이 열린 동안 판의 포인터 입력을 차단한다. 없으면 카드 옆 divider
+  // 드래그가 동작한다. 호스트가 카드를 렌더링해도 오버레이는 이 문서에 남는다.
   scrim = document.createElement("div");
   scrim.className = "set-scrim";
   card = makeCard();
@@ -285,8 +282,8 @@ export function openSettings() {
 
   const rect = cardRect();
   if (window.hostOverlay) {
-    // 호스트가 그리므로 여기서는 보이지 않는다. 자리는 그대로 지킨다 — 카드가
-    // 어디에 얼마만 한 크기로 서 있는지는 이 요소에게 물어야 한다.
+    // 호스트가 렌더링하므로 여기서는 표시하지 않는다. 위치와 크기는 이 요소에서
+    // 읽어야 하므로 display 가 아니라 visibility 로 숨긴다.
     card.style.visibility = "hidden";
     window.hostOverlay.show(card, rect, answer);
   } else {
@@ -294,7 +291,7 @@ export function openSettings() {
   }
 }
 
-/** 닫는다. 막과 카드는 사라진다. */
+/** 모달을 닫고 오버레이와 카드를 제거한다. */
 function closeSettings() {
   if (!card) return;
   document.removeEventListener("pointerdown", pressedOutside);

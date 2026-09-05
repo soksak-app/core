@@ -6,8 +6,8 @@
  * separated rects give one loop each.
  */
 /**
- * Grid lines and vertex keys read the same coordinates. Rounding only the keys
- * merged two vertices while leaving two grid lines, which cut the loop apart.
+ * Grid lines and vertex keys use the same coordinates. Rounding only the keys
+ * merged two vertices while leaving two grid lines, which split the loop.
  */
 const snap = (v) => Math.round(v * 100) / 100;
 const key = (x, y) => `${snap(x)},${snap(y)}`;
@@ -84,11 +84,11 @@ function dropCollinear(pts) {
     return out;
 }
 /**
- * One closed loop as an SVG path, each right angle turned into an arc.
+ * Converts one closed loop to an SVG path, replacing each right angle with an arc.
  *
  * The radius is capped at half the shorter of the two sides meeting at the
- * corner, so a short side cannot bow past its own end. A corner left with less
- * than half a px is cut straight instead and counted in `sharp`.
+ * corner, so an arc cannot extend past a side's end. A corner with less than
+ * half a px left is drawn square and counted in `sharp`.
  */
 export function roundedPath(loop, radius) {
     const n = loop.length;

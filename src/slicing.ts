@@ -5,14 +5,14 @@
  * always a slicing floorplan: one a single cut can divide in two, recursively.
  * A close must leave it slicing, or cards appear that no neighbour can fill.
  *
- * `isSlicing` answers that. `fillFor` picks the row of neighbours that grows
- * over a closing card.
+ * `isSlicing` reports whether an arrangement is slicing. `fillFor` selects the
+ * row of neighbours that expands over a closing card.
  */
 
 import { SPAN } from './card.js';
 import type { Axis, Card } from './card.js';
 
-/** Just the extent of a card. Slicing is a question about regions, not identity. */
+/** A card's extent only. The slicing check reads regions, not identities. */
 export interface Span {
   c0: number;
   c1: number;
@@ -29,8 +29,8 @@ const key = (list: readonly Span[]): string =>
 /**
  * Whether one cut can divide the regions in two, all the way down.
  *
- * Memoised because a close asks it once per candidate side, and the same
- * arrangement comes back constantly during a drag.
+ * Memoised because a close calls it once per candidate side and the same
+ * arrangement recurs during a drag.
  */
 export function isSlicing(list: readonly Span[], memo = new Map<string, boolean>()): boolean {
   const k = key(list);
@@ -59,22 +59,22 @@ export function isSlicing(list: readonly Span[], memo = new Map<string, boolean>
   return answer;
 }
 
-/** Which cards would take over a closed card's space, and from which side. */
+/** The cards that take a closed card's space, and the side they come from. */
 export interface Fill {
   side: 'below' | 'above' | 'right' | 'left';
-  /** The span key each of them grows by. */
+  /** The span key each of them expands by. */
   grow: 'r0' | 'r1' | 'c0' | 'c1';
   cards: Card[];
 }
 
-/** Which axis a close tries first when giving the space back. */
+/** The axis a close tries first when redistributing the space. */
 export type FillOrder = 'v' | 'h';
 
 interface Direction {
   side: Fill['side'];
   grow: Fill['grow'];
   touches: (card: Card, closing: Card) => boolean;
-  /** The span keys the row of fillers has to tile along. */
+  /** The span keys the row of fillers tiles along. */
   lo: 'c0' | 'r0';
   hi: 'c1' | 'r1';
 }
@@ -92,13 +92,13 @@ const ORDER: Record<FillOrder, readonly Fill['side'][]> = {
 };
 
 /**
- * Which neighbours take a closed card's space.
+ * Returns the neighbours that take a closed card's space.
  *
- * A row of neighbours may tile the side together. The result must still be
+ * A row of neighbours may tile the side together. The result must remain
  * slicing, which keeps every card closable.
  *
- * A `fixed` card never fills, since the layout may not grow it. A card with a
- * px size does fill; spanning a second slot drops that size.
+ * A `fixed` card never fills, because the layout may not expand it. A card with
+ * a px size does fill, and spanning a second slot removes that size.
  */
 export function fillFor(
   cards: readonly Card[],

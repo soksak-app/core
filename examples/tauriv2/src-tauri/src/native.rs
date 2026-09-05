@@ -12,10 +12,9 @@
 //! Clipped corners are simply not drawn, so whatever sits behind the modal
 //! shows through them. No transparency and no private interface is involved.
 //!
-//! It also holds the two other things a surface needs from its platform: how
-//! solid it is drawn, and where a press landed. A surface is a native view, so
-//! a press on it never reaches the page, and the window is the only place that
-//! sees it.
+//! It also holds the two other platform operations a surface needs: setting its
+//! alpha, and identifying the view a press landed on. A surface is a native
+//! view, so a press on it never reaches the page and only the window receives it.
 //!
 //! Both are implemented for macOS here. On Windows a press reaches the parent
 //! window as WM_PARENTNOTIFY and a child window cannot be made translucent; on

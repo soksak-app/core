@@ -2,11 +2,11 @@
  * A soksak over shared grid lines.
  *
  * `xs` and `ys` hold every coordinate, normalised 0..1 over the slots that
- * share what is left. A slot held at a px size is drawn at that size whatever
- * its span, so a line's position in px is not its number times the plane. A
- * card is a span of indices into them, so two cards that meet read the same
- * index and their shared boundary is one number. Moving a line moves every card that
- * references it; a card spanning across the line is unaffected.
+ * share the remaining space. A slot with a px size is drawn at that size
+ * whatever its span, so a line's px position is not its value times the plane
+ * size. A card is a span of indices into them, so two cards that meet reference
+ * the same index and their shared boundary is one value. Moving a line moves
+ * every card that references it; a card spanning across it is unaffected.
  *
  * Splitting replaces one card with two, so the arrangement stays a slicing
  * floorplan and every card can be closed.
@@ -30,12 +30,12 @@ const order = (from, count, back = from - 1) => {
     return out.filter((i) => i >= 0 && i < count);
 };
 /**
- * Refuse a state that cannot describe a plane, naming what is wrong.
+ * Rejects a state that cannot describe a plane and reports which field is wrong.
  *
- * A stale layout read back from storage otherwise reaches the geometry, where
- * an index outside the line array or a coordinate that is not a number turns
- * into a NaN rect. In the DOM that becomes `left: NaNpx`, which the CSSOM
- * drops, so the view freezes at its last good layout with nothing to report.
+ * Without this check a stale layout read from storage reaches the geometry,
+ * where an index outside the line array or a non-numeric coordinate produces a
+ * NaN rect. In the DOM that becomes `left: NaNpx`, which the CSSOM discards, so
+ * the view stops at its last valid layout and reports nothing.
  */
 export function checkState(state) {
     const bad = (why) => {
@@ -79,7 +79,7 @@ export function checkState(state) {
 }
 const clamp = (v, lo, hi) => lo > hi ? (lo + hi) / 2 : Math.min(hi, Math.max(lo, v));
 export class Soksak {
-    /** Corridor between two cards, in px. Never negative — a card would overlap. */
+    /** Gap between two cards, in px. Clamped to 0; a negative value overlaps cards. */
     get gap() {
         return this.g;
     }
@@ -89,18 +89,18 @@ export class Soksak {
         this.g = px;
         this.splitMemo.clear();
     }
-    /** The smallest a card may be drawn on either axis. */
+    /** Minimum drawn size of a card on either axis. */
     get minSize() {
         return this.min;
     }
-    /** Writing it clears the cached answers that were computed against the old one. */
+    /** Assigning it clears the values cached against the previous one. */
     set minSize(px) {
         if (!Number.isFinite(px) || px < 0)
             return;
         this.min = px;
         this.splitMemo.clear();
     }
-    /** Which axis a close tries first. */
+    /** The axis a close tries first. */
     get fillOrder() {
         return this.order;
     }
@@ -111,7 +111,7 @@ export class Soksak {
         this.sliceMemo.clear();
         this.splitMemo.clear();
     }
-    /** Without a state, starts as one card filling the plane. */
+    /** With no state, starts as one card filling the plane. */
     constructor(state, options = {}) {
         var _a, _b, _c, _d, _e, _f, _g, _h, _j;
         this.seq = 0;
@@ -121,9 +121,9 @@ export class Soksak {
          * Which side of a card's slot gave up the span it occupies, by card id.
          *
          * `split` and `insertAt` take the span from one neighbour. A close returns it
-         * by removing the line on that side, so the two are inverses. Without this
-         * the space moves to whichever neighbour the fill picks, and repeating the
-         * pair drives one card to `minSize`.
+         * by removing the line on that side, so the two operations are inverses.
+         * Without this the space goes to whichever neighbour the fill selects, and
+         * repeating split and close reduces one card to `minSize`.
          */
         this.paidBy = new Map();
         /** True while canSplit runs a trial split and restores the state. */
@@ -170,7 +170,7 @@ export class Soksak {
     /**
      * Every card, as frozen copies.
      *
-     * Writes to the returned objects do not reach the grid. Use `setFixed`,
+     * Writes to the returned objects do not affect the grid. Use `setFixed`,
      * `setSize` and `setData` to change a card.
      */
     get cards() {
@@ -200,18 +200,19 @@ export class Soksak {
         if (!card)
             return false;
         card.fixed = fixed;
-        // A fixed card does not grow over a departing neighbour, so this changes
-        // what a split and a close can do.
+        // splitMemo and sliceMemo were computed with the previous `fixed` value.
+        // A fixed card never fills for a closing neighbour, so both results change.
         this.splitMemo.clear();
         this.sliceMemo.clear();
         return true;
     }
     /**
-     * Set a card's px width or height, or `null` for a share of what is left.
+     * Sets a card's px width or height. `null` removes the size and the card takes
+     * a share of the remainder.
      *
-     * Applies to a card spanning one slot on that axis. Sets the slot, so every
-     * card in it takes the same size. Returns false when the axis or size is
-     * invalid or the card spans more than one slot.
+     * The size applies to the slot, so it is written to every card in that slot.
+     * Returns false for an unknown axis, a negative or non-finite size, or a card
+     * spanning more than one slot on that axis.
      */
     setSize(id, axis, px) {
         if (this.noAxis(axis))
@@ -221,7 +222,7 @@ export class Soksak {
             return false;
         if (px !== null && (!Number.isFinite(px) || px < 0 || spanOf(card, axis) !== 1))
             return false;
-        // A slot has one size, so set it on every card in the slot.
+        // Every card with the same span on this axis is in the same slot.
         const [lo, hi] = SPAN[axis];
         for (const c of this.list) {
             if (c[lo] !== card[lo] || c[hi] !== card[hi])
@@ -281,7 +282,7 @@ export class Soksak {
     arr(axis) {
         return axis === 'x' ? this.xs : this.ys;
     }
-    /** An axis the caller made up. Every public method that takes one refuses. */
+    /** Rejects an axis value the caller invented. Every public method that takes one checks it. */
     noAxis(axis) {
         return axis !== 'x' && axis !== 'y';
     }
@@ -348,7 +349,7 @@ export class Soksak {
                 c.height = size;
         }
     }
-    /** Whether every card has its minimum, as the plane stands. */
+    /** Whether every card meets its minimum at the current plane size. */
     fits(axis) {
         for (const w of this.extents(axis).values())
             if (w < this.min - EPS)
@@ -356,13 +357,12 @@ export class Soksak {
         return true;
     }
     /**
-     * Give each sharing slot the width `want` names for it. A slot named `null`
-     * takes what is left over, shared with the other `null` slots in proportion
-     * to the span it holds.
+     * Writes the widths in `want` to the sharing slots by moving the lines between
+     * them. An entry of `null` leaves that slot to share the remainder in
+     * proportion to its span.
      *
-     * A px size is declared by the host, so this never changes one: a held slot
-     * keeps its size whatever `want` says. Naming the widths settles a change
-     * with the slots it touches and leaves the rest where they are.
+     * Slots with a px size are skipped: that size is the host's and `want` does
+     * not override it. Only the lines around the named slots move.
      */
     setSlotWidths(axis, want) {
         const a = this.arr(axis);
@@ -373,8 +373,8 @@ export class Soksak {
         const read = linesReadOn(plane, axis);
         const held = heldSizes(plane, axis);
         const sizes = slotSizes(plane, axis);
-        // What the sharing slots divide between them, measured as the plane stands.
-        // It does not depend on how they currently divide it.
+        // Total width and span of the sharing slots. Both are read from the current
+        // sizes, not from the normalised array being rewritten below.
         let room = 0;
         let span = 0;
         for (let i = 0; i < count; i++) {
@@ -407,9 +407,9 @@ export class Soksak {
                 continue;
             size[i] = open > EPS ? (left * (a[i + 1] - a[i])) / open : left / nulls;
         }
-        // Re-proportion the sharing spans to those sizes, keeping the total span
-        // they occupy so no other line moves. Read the spans from a copy: the loop
-        // writes into `a` as it goes.
+        // Rewrite each sharing span in proportion to its new size, keeping the total
+        // span unchanged so the lines outside this run do not move. `was` is a copy
+        // because the loop writes into `a` as it advances.
         const total = named + left;
         if (total < EPS)
             return;
@@ -422,14 +422,17 @@ export class Soksak {
         a[count] = was[count];
     }
     /**
-     * Settle a change with the sharing slot nearest the boundary.
+     * Applies `want`, letting one sharing slot absorb the difference.
      *
-     * `order` lists the slots to try, nearest first. The first one that leaves
-     * every card its minimum takes the room; when none does, every sharing slot
-     * shares it. Each candidate is applied and then measured, so the slot sizes
-     * come from `slotSizes` alone and no second calculation can disagree with it.
+     * `order` lists the candidate slots, nearest the boundary first. Each is set
+     * to `null` in turn, written, and measured; the first that keeps every card at
+     * `minSize` is kept and the rest are restored. If none does, every sharing
+     * slot is set to `null` and they share the difference.
      *
-     * Returns the slot that took the room, or -1.
+     * Measuring after writing means the sizes come from `slotSizes` and are not
+     * predicted separately.
+     *
+     * Returns the slot that absorbed the difference, or -1.
      */
     settleOn(axis, want, order) {
         const held = heldSizes(this.plane, axis);
@@ -452,12 +455,11 @@ export class Soksak {
         return -1;
     }
     /**
-     * Set one slot's px size and take the difference from the slot on the other
-     * side of the boundary.
+     * Sets one slot's px size and takes the difference from `pays`, the slot on
+     * the other side of the boundary.
      *
-     * A drag moves one boundary: the two slots meeting there change and no other
-     * slot does. `slot` and `pays` are the two slots a boundary separates, so
-     * they are always in range and never the same one.
+     * A drag moves one boundary, so only those two slots change. Both indices come
+     * from that boundary and are therefore in range and never equal.
      */
     resizeSlot(axis, slot, size, pays) {
         const width = slotWidths(this.plane, axis);
@@ -466,7 +468,7 @@ export class Soksak {
         const want = [...width];
         want[slot] = size;
         if (heldSizes(this.plane, axis)[pays] !== null) {
-            // Two px slots meet here: the one after gives up what the one before took.
+            // Both slots have a px size, so `pays` is reduced by the same amount.
             this.declare(axis, pays, Math.max(0, width[pays] - delta));
             this.setSlotWidths(axis, want);
             return;
@@ -499,7 +501,7 @@ export class Soksak {
         const along = linePositions(this.plane, axis);
         return line >= 0 && line < along.length ? along[line] : 0;
     }
-    /** The nearest line on this side that some card actually reads. */
+    /** The nearest line on that side that at least one card references. */
     realNeighbour(axis, line, step) {
         const last = this.arr(axis).length - 1;
         let at = line + step;
@@ -518,11 +520,11 @@ export class Soksak {
         return Number.isInteger(line) && line >= 1 && line <= this.arr(axis).length - 2;
     }
     /**
-     * How far a boundary may travel before a card would fall under `minSize`.
+     * The px range a boundary may move within while every card keeps `minSize`.
      *
-     * The range reaches to the nearest line a card references; lines no card
-     * references do not constrain it. When two cards ask for more room than the
-     * plane holds it is one point, never an inverted pair.
+     * The range extends to the nearest line a card references; unreferenced lines
+     * do not limit it. When the cards on both sides need more than the plane
+     * holds, `lo` and `hi` are equal rather than inverted.
      */
     boundaryRange(axis, line) {
         var _a, _b;
@@ -530,9 +532,8 @@ export class Soksak {
             return [0, 0];
         const along = linePositions(this.plane, axis);
         const [lo, hi] = SPAN[axis];
-        // The neighbouring lines are the hard limits: past one of them the line
-        // array is out of order, and a card gets drawn wider than one that spans
-        // more slots than it does.
+        // The neighbouring lines are hard limits. Past one of them the line array is
+        // out of order and a card is drawn wider than one spanning more slots.
         const first = (_a = along[this.realNeighbour(axis, line, -1)]) !== null && _a !== void 0 ? _a : 0;
         const last = (_b = along[this.realNeighbour(axis, line, 1)]) !== null && _b !== void 0 ? _b : this.size(axis);
         let min = first;
@@ -547,9 +548,9 @@ export class Soksak {
             if (card[lo] === line)
                 max = Math.min(max, along[card[hi]] - this.min - near - far);
         }
-        // Two cards can ask for more room than the plane holds. Neither gets its
-        // minimum then, so the range is one point between the neighbours rather
-        // than an inverted pair every caller has to guard against.
+        // The two cards can need more than the plane holds. Neither reaches its
+        // minimum, so the range collapses to one point instead of inverting, which
+        // every caller would otherwise have to check.
         if (min > max) {
             const mid = clamp((min + max) / 2, first, last);
             return [mid, mid];
@@ -559,8 +560,8 @@ export class Soksak {
     /**
      * Move a boundary to a position in px.
      *
-     * Next to a slot with a px size, this changes that size. Otherwise it moves
-     * the line and every card referencing it follows.
+     * When either adjacent slot has a px size, that size changes. Otherwise the
+     * line itself moves and every card referencing it moves with it.
      *
      * Returns the resulting position.
      */
@@ -583,45 +584,46 @@ export class Soksak {
         line = this.forgetLinesPassed(axis, line, target);
         const holder = this.holderAt(axis, line);
         if (holder) {
-            // Measure from the edge that is not moving. Both positions are read
-            // before the change.
+            // Measure from the edge that does not move. Both positions are read before
+            // the change is applied.
             const [lo, hi] = SPAN[axis];
             const along = linePositions(this.plane, axis);
             const slot = holder[hi] === line
                 ? target - along[holder[lo]] // its far edge moved; its start is fixed
                 : along[holder[hi]] - target; // its near edge moved; its end is fixed
-            // `slot` is line to line; subtract the corridor to get the drawn size.
-            // A card holding a px size stands in one slot: `changed` drops the size
-            // from a card that spans more.
+            // `slot` is line to line, so subtract the gap to get the drawn size. A card
+            // with a px size spans one slot; `changed` removes the size from a card
+            // that comes to span more.
             const size = Math.max(0, slot - corridorOf(this.plane, axis, holder[lo]));
-            // The slot on the other side of the boundary pays for the change.
+            // The slot on the other side of the boundary absorbs the difference.
             this.resizeSlot(axis, holder[lo], size, holder[hi] === line ? line : line - 1);
         }
         else {
             const usable = this.sharedExtent(axis);
             const before = linePositions(this.plane, axis)[line - 1];
             const a = this.arr(axis);
-            // Only the shared slots carry normalised width, so convert against those.
+            // Only the sharing slots hold normalised width, so convert against those.
             const want = usable > EPS ? a[line - 1] + (target - before) / usable : a[line - 1];
-            // The conversion divides by one average slope, and the slots do not all
-            // sit on it once a px size is in play, so it can answer past a
-            // neighbouring line. A line past its neighbour puts the array out of
-            // order and draws a card wider than one spanning more slots.
+            // The conversion uses one average px-per-unit ratio, which the slots do not
+            // all follow once a px size exists, so the result can land past a
+            // neighbouring line. That would put the array out of order and draw a card
+            // wider than one spanning more slots.
             a[line] = clamp(want, a[line - 1], a[line + 1]);
         }
         this.changed();
         return this.boundaryPos(axis, line);
     }
     /**
-     * Remove the unreferenced lines a move passes, and return the moved index.
+     * Removes the unreferenced lines the move passes and returns the new index of
+     * the moved line.
      *
-     * A line the move has passed would leave the array out of order.
+     * Leaving a passed line in place would put the array out of order.
      */
     forgetLinesPassed(axis, line, target) {
         const a = this.arr(axis);
-        // No card reads these lines, so which neighbour absorbs makes no difference.
+        // No card references these lines, so it does not matter which neighbour absorbs them.
         const drop = (k) => this.removeLine(axis, k, 'lo');
-        // `target` is px; the line array is normalised, so compare in px.
+        // `target` is in px and the line array is normalised, so compare in px.
         const at = (k) => linePositions(this.plane, axis)[k];
         while (line - 1 >= 1 && this.isVirtual(axis, line - 1) && target < at(line - 1)) {
             drop(line - 1);
@@ -634,7 +636,7 @@ export class Soksak {
             this.changed();
         return line;
     }
-    /** How many px the sharing slots have between them, per unit of normalised span. */
+    /** px per unit of normalised span across the sharing slots. */
     sharedExtent(axis) {
         const a = this.arr(axis);
         const sizes = slotSizes(this.plane, axis);
@@ -650,10 +652,10 @@ export class Soksak {
         return span > EPS ? px / span : 0;
     }
     /**
-     * Move a boundary so the two cards beside it are the same size.
+     * Moves a boundary so the two cards beside it are drawn at the same size.
      *
-     * Not the midpoint of the two lines: a card at the plane's border insets on
-     * one side only.
+     * This is not the midpoint of the two lines: a card at the plane's border
+     * insets on one side only.
      */
     centerBoundary(axis, line) {
         var _a, _b;
@@ -682,9 +684,9 @@ export class Soksak {
         return this.moveBoundary(axis, line, (start + end) / 2 + (insStart - insEnd) / 2, false);
     }
     /**
-     * Merge a line onto a neighbour at the same coordinate.
+     * Merges a line onto a neighbour at the same coordinate.
      *
-     * Returns false when a card spans the pair, which would leave it with no size.
+     * Returns false when a card spans both lines, which would leave it zero size.
      */
     mergeCoincident(axis, line) {
         if (this.noAxis(axis))
@@ -696,10 +698,9 @@ export class Soksak {
         const found = [line - 1, line + 1].find((i) => i >= 0 && i < a.length && Math.abs(a[i] - a[line]) < EPS);
         if (found === undefined)
             return false;
-        // The plane's own borders are not lines a card may take away, and they
-        // carry the only exact 0 and 1 there is. When one of the pair is a border,
-        // it is the one that stays: dropping it promoted a coordinate a rounding
-        // short of the edge, and the plane came out 0.9999999999999999 wide.
+        // Index 0 and the last index hold exactly 0 and 1. When one of the pair is a
+        // border it is the one kept: removing it promoted a coordinate one rounding
+        // short of the edge and the plane measured 0.9999999999999999 wide.
         const border = (i) => i === 0 || i === a.length - 1;
         const [keep, drop] = border(line) ? [line, found] : [found, line];
         const at = (card, k) => (card[k] === drop ? keep : card[k]);
@@ -709,20 +710,20 @@ export class Soksak {
             card[lo] = at(card, lo);
             card[hi] = at(card, hi);
         }
-        // Every card now reads `keep`, so which neighbour absorbs makes no
-        // difference.
+        // Every card now references `keep`, so it does not matter which neighbour
+        // absorbs the removed line.
         this.removeLine(axis, drop, 'lo');
         this.changed();
         return true;
     }
-    /** Drop lines no card reads any more. Returns how many went. */
+    /** Removes lines no card references. Returns how many were removed. */
     tidy() {
         let dropped = 0;
         for (const axis of AXES) {
             for (let k = this.arr(axis).length - 2; k >= 1; k--) {
                 if (!this.isVirtual(axis, k))
                     continue;
-                // No card reads the line, so which neighbour absorbs makes no difference.
+                // No card references the line, so it does not matter which neighbour absorbs it.
                 this.removeLine(axis, k, 'lo');
                 dropped++;
             }
@@ -733,18 +734,18 @@ export class Soksak {
     }
     // ---- splitting ---------------------------------------------------------
     /**
-     * Where to cut.
+     * Returns the position to cut a card at.
      *
-     * The unreferenced line nearest the card's centre that leaves both halves at
-     * `minSize`; otherwise a new line at the centre, clamped to the range that
-     * fits.
+     * Prefers the unreferenced line nearest the card's centre that leaves both
+     * halves at `minSize`. Otherwise returns a new line at the centre, clamped to
+     * the range where both halves fit.
      */
     cutAt(card, axis) {
         if (card.fixed)
             return null;
         const a = this.arr(axis);
         const [lo, hi] = SPAN[axis];
-        // px per unit of span: the card's own size, or what the sharing slots hold.
+        // px per unit of span: the card's own px size, or the sharing slots' ratio.
         const own = fixedSize(card, axis);
         const per = own !== null ? own / (a[card[hi]] - a[card[lo]] || 1) : this.sharedExtent(axis);
         if (per <= EPS)
@@ -766,14 +767,14 @@ export class Soksak {
             return { line, value: a[line] };
         return { line: -1, value: clamp(mid, lowest, highest) };
     }
-    /** The smallest side every card has, so a change can be asked what it cost. */
+    /** The smallest drawn side of every card, by id. Used to compare before and after a change. */
     extents(axis) {
         const out = new Map();
         for (const [id, r] of this.rects())
             out.set(id, axis === 'x' ? r.w : r.h);
         return out;
     }
-    /** Whether every card is drawn with area. A card with none is not a card. */
+    /** Whether every card is drawn with a non-zero width and height. */
     hasArea() {
         const frame = frameOf(this.plane);
         return this.list.every((c) => {
@@ -782,19 +783,18 @@ export class Soksak {
         });
     }
     /**
-     * Whether every card still has the room it had, or `minSize`, whichever is
-     * less.
+     * Whether every card still has the smaller of the size it had and `minSize`.
      *
-     * A new line adds a corridor, which is taken from the shared slots, so a
-     * split can push a card elsewhere below its size.
+     * A new line adds a gap, taken from the sharing slots, so a split can reduce a
+     * card elsewhere on the plane.
      */
     stillFits(axis, before) {
-        // Every card must have area, including one just created.
+        // Every card must have a non-zero area, including one just created.
         if (!this.hasArea())
             return false;
         for (const [id, now] of this.extents(axis)) {
-            // `minSize` applies only to cards that were already present. A new card
-            // is the size it was given; the halves of a cut are checked by `cutAt`.
+            // `minSize` applies only to cards present before the change. A new card
+            // has the size it was given, and `cutAt` checks the halves of a cut.
             const was = before.get(id);
             if (was === undefined)
                 continue;
@@ -803,13 +803,13 @@ export class Soksak {
         }
         return true;
     }
-    /** True when the cut would leave every card the room it has, or `minSize`. */
+    /** True when the cut leaves every card the smaller of its current size and `minSize`. */
     canSplit(id, axis) {
         if (this.noAxis(axis))
             return false;
-        // canSplit runs a trial split, which copies the state twice. The result is
-        // cached until the next change: a host redraw calls this once per card per
-        // axis, 134 times at 67 cards.
+        // canSplit performs a trial split, copying the state twice. The result is
+        // cached until the next change, because a host redraw calls this once per
+        // card per axis: 134 calls at 67 cards.
         const key = `split:${id}:${axis}`;
         const known = this.splitMemo.get(key);
         if (known !== undefined)
@@ -832,20 +832,20 @@ export class Soksak {
      * Cut one card in two.
      *
      * The original keeps its id and the near half; the new card takes the far
-     * half. Cards spanning the new line widen their span instead of being cut.
+     * half. Cards spanning the new line have their span widened rather than cut.
      *
-     * The new card gets no `data` unless `init.data` is given. A px size on the
-     * other axis is copied, since both halves stay in that slot. A px size on the
-     * cut axis is divided between them.
+     * The new card has no `data` unless `init.data` is given. A px size on the
+     * other axis is copied, because both halves stay in that slot. A px size on
+     * the cut axis is divided between them.
      *
-     * Returns the new card's id, or null when there is no room.
+     * Returns the new card's id, or null when the halves do not fit.
      */
     split(id, axis, init = {}) {
         var _a;
         if (this.noAxis(axis))
             return null;
-        // An id already in use would give two cards one name: `rects` and the view
-        // key by id, so one of them would have no rect and no element.
+        // An id already in use would give two cards the same key. `rects` and the
+        // view are both keyed by id, so one card would have no rect and no element.
         if (init.id !== undefined && this.find(init.id))
             return null;
         const card = this.find(id);
@@ -856,18 +856,18 @@ export class Soksak {
         const undo = this.toJSON();
         const a = this.arr(axis);
         const [lo, hi] = SPAN[axis];
-        // Read before the cut: the new line makes the card span two slots.
+        // Read before the cut, because the new line makes the card span two slots.
         const whole = fixedSize(card, axis);
         const from = a[card[lo]];
         const to = a[card[hi]];
         let line = cut.line;
         if (line < 0) {
-            // The new line goes strictly inside the card's span.
+            // The new line is placed strictly inside the card's span.
             line = card[lo] + 1;
             while (line < card[hi] && a[line] <= cut.value + EPS)
                 line++;
-            // A line inside a card, not a slot at a boundary: every span at or past
-            // this index moves with it, including a card that ends here.
+            // The line is inside a card rather than at a boundary, so every span at or
+            // past this index shifts by one, including a card that ends here.
             a.splice(line, 0, cut.value);
             for (const other of this.list) {
                 if (other[lo] >= line)
@@ -885,7 +885,7 @@ export class Soksak {
             fixed: false,
             data: init.data,
         };
-        // A px size on the other axis is copied: both halves stay in that slot.
+        // A px size on the other axis is copied, because both halves stay in that slot.
         const across = other(axis);
         const alongside = fixedSize(card, across);
         if (alongside !== null) {
@@ -894,7 +894,7 @@ export class Soksak {
             else
                 fresh.height = alongside;
         }
-        // A px size on the cut axis is divided in the proportion the line fell at.
+        // A px size on the cut axis is divided in the proportion of the cut.
         if (whole !== null) {
             const f = to - from > EPS ? (a[line] - from) / (to - from) : 0.5;
             if (axis === 'x') {
@@ -920,12 +920,12 @@ export class Soksak {
     /**
      * Cut a card and put the new one on a named side.
      *
-     * `split` gives the far half to the new card, so `left` and `top` swap the
-     * two spans. Ids are not swapped.
+     * `split` gives the far half to the new card, so `left` and `top` swap the two
+     * spans afterwards. The ids are not swapped.
      */
     splitToward(id, side, init = {}) {
-        // axisOf answers 'y' for anything that is not left or right, so a
-        // misspelled side would split downward without saying so.
+        // axisOf returns 'y' for any value that is not left or right, so a misspelled
+        // side would split downward instead of failing.
         if (!SIDES.includes(side))
             return null;
         if (init.id !== undefined && this.find(init.id))
@@ -959,32 +959,32 @@ export class Soksak {
     }
     // ---- closing and moving ------------------------------------------------
     /**
-     * Which neighbours would grow over a card if it closed, as frozen copies.
+     * The neighbours that would expand over a card if it closed, as frozen copies.
      *
-     * `null` when no row of neighbours matches a side, which is when `close`
-     * removes the card's slots instead.
+     * Returns null when no row of neighbours matches a side. `close` then removes
+     * the card's slots instead.
      */
     fill(id) {
         const found = this.fillOf(id);
         return found && { ...found, cards: found.cards.map((c) => Object.freeze({ ...c })) };
     }
-    /** The same, holding the cards themselves, so `close` can grow them. */
+    /** The same result holding the stored cards, so `close` can modify them. */
     fillOf(id) {
         const card = this.find(id);
         return card ? fillFor(this.list, card, this.order, this.sliceMemo) : null;
     }
     /**
-     * The axis on which this card's slots hold no other card, or null.
+     * The axis whose slots hold no other card, or null.
      *
-     * On that axis the slots can be removed when the card closes, without a
-     * neighbour growing over it. Returns null when another card lies entirely
-     * inside the range, which would leave it spanning nothing.
+     * On that axis the card's slots can be removed when it closes, with no
+     * neighbour expanding over it. Returns null when another card lies entirely
+     * inside the range, because removing the slots would leave it spanning nothing.
      */
     soleSlots(card) {
         for (const axis of AXES) {
             const [lo, hi] = SPAN[axis];
-            // Removing the slots shrinks every card reaching into them. Refused when
-            // another card lies entirely inside the range.
+            // Removing the slots shrinks every card that reaches into them, and leaves
+            // a card lying entirely inside the range with no span.
             const trapped = this.list.some((other) => other !== card && other[lo] >= card[lo] && other[hi] <= card[hi]);
             if (!trapped)
                 return axis;
@@ -1006,16 +1006,16 @@ export class Soksak {
     /**
      * Remove a card.
      *
-     * A row of neighbours grows over the space when one matches the side.
-     * Otherwise the card's slots are removed. Returns false when neither
-     * applies, or when the card is `fixed`, or when it is the last one.
+     * A row of neighbours expands over the space when one matches the side.
+     * Otherwise the card's slots are removed. Returns false when neither applies,
+     * when the card is `fixed`, or when it is the last card.
      */
     close(id) {
         const card = this.removable(id);
         if (!card)
             return false;
-        // Return the span to the side that gave it up, by removing the line on that
-        // side. Only when no other card is in these slots.
+        // Return the span by removing the line on the side it came from. Only valid
+        // when no other card is in these slots.
         const paid = this.paidBy.get(id);
         if (paid) {
             for (const axis of AXES) {
@@ -1028,8 +1028,8 @@ export class Soksak {
                 const gone = paid.side === 'lo' ? card[lo] : card[hi];
                 if (gone <= 0 || gone >= this.arr(axis).length - 1)
                     continue;
-                // Removing the line grows every card that ends or starts on it. Only
-                // the one that gave the span up should grow, so take this path only
+                // Removing the line expands every card that ends or starts on it. Only
+                // the card that gave the span up should expand, so this path runs only
                 // when it is the sole other card referencing the line.
                 const reading = this.list.filter((c) => c !== card && (c[lo] === gone || c[hi] === gone));
                 if (reading.length !== 1)
@@ -1039,9 +1039,8 @@ export class Soksak {
                 this.list.splice(this.list.indexOf(card), 1);
                 this.removeLine(axis, gone, paid.side);
                 this.paidBy.delete(id);
-                // The card's slot goes; the neighbour it merges into keeps the width it
-                // had, and the slot that gave the room up takes it back. No other slot
-                // changes width.
+                // The card's slot is removed. The slot it merges into keeps its width and
+                // the slot that gave the span up regains it. No other slot changes.
                 const back = this.find(paid.to);
                 const want = held.filter((_, i) => i !== mine);
                 const merged = paid.side === 'lo' ? mine - 1 : mine;
@@ -1053,11 +1052,11 @@ export class Soksak {
         const filling = this.fillOf(id);
         if (filling) {
             const axis = filling.grow === 'c0' || filling.grow === 'c1' ? 'x' : 'y';
-            // Where a line stands does not depend on which cards read it. The card
-            // leaving stops anyone reading its line, and R5 gives such a line no
-            // corridor — a statement about how wide the cards beside it are drawn,
-            // not about where the line is. Read the places before, and put back the
-            // ones that only moved because nobody reads them now.
+            // A line's position does not depend on which cards reference it. Closing
+            // the card leaves its line unreferenced, and R5 gives an unreferenced line
+            // no gap, which changes the drawn width of the cards beside it but not the
+            // line's position. Record the positions first and restore the lines that
+            // moved only because they became unreferenced.
             const stood = this.arr(axis).map((_, k) => this.boundaryPos(axis, k));
             const [lo, hi] = SPAN[axis];
             const from = card[lo];
@@ -1066,8 +1065,8 @@ export class Soksak {
             for (const neighbour of filling.cards)
                 neighbour[filling.grow] = card[filling.grow];
             this.list.splice(this.list.indexOf(card), 1);
-            // The slots the card stood in go to the neighbour that grew over them.
-            // Every other slot keeps the width it had.
+            // The card's slots go to the neighbour that expanded over them. Every other
+            // slot keeps its width.
             this.settleOn(axis, want, order(from, want.length, to - 1));
             this.standAgain(axis, stood);
             this.changed();
@@ -1083,19 +1082,19 @@ export class Soksak {
         this.list.splice(this.list.indexOf(card), 1);
         for (let i = 0; i < count; i++)
             this.dropSlot(axis, from);
-        // The slots are gone; the neighbour that absorbed them takes the room.
+        // The slots are removed and the neighbour that absorbed them takes the space.
         const kept = held.filter((_, i) => i < from || i >= from + count);
         this.settleOn(axis, kept, order(Math.min(from, kept.length - 1), kept.length));
         this.changed();
         return true;
     }
     /**
-     * Put lines nobody reads back where they stood.
+     * Restores unreferenced lines to their previous px positions.
      *
-     * The coordinate that draws a given px is not a closed form — a slot's size
-     * depends on every other slot — so it is walked to: each pass moves the
-     * coordinate by the error over the slope, and the error falls off fast
-     * enough that a handful of passes land on it exactly.
+     * The coordinate that produces a given px position has no closed form, because
+     * a slot's size depends on every other slot. It is found by iteration: each
+     * pass moves the coordinate by the error divided by the slope, and the error
+     * falls fast enough that a few passes reach it exactly.
      */
     standAgain(axis, stood) {
         const a = this.arr(axis);
@@ -1120,9 +1119,9 @@ export class Soksak {
         }
     }
     /**
-     * Whether a card reaching across the plane can stand on this boundary.
+     * Whether a card spanning the whole plane can be placed on this boundary.
      *
-     * True when no card spans over the line. `without` ignores one card by id.
+     * True when no card spans across the line. `without` excludes one card by id.
      */
     canInsertAt(axis, line, without) {
         if (this.noAxis(axis))
@@ -1133,16 +1132,16 @@ export class Soksak {
         return this.cardsCrossing(axis, line).every((c) => c.id === without);
     }
     /**
-     * Put a card at a boundary, reaching across the whole plane.
+     * Inserts a card at a boundary, spanning the whole plane on the other axis.
      *
-     * Unlike `splitToward`, the new card spans the whole plane on the other axis.
-     * Cards past the boundary shift by one index.
+     * Unlike `splitToward`, the new card is not cut from one card. Cards past the
+     * boundary shift by one index.
      *
-     * `size` is required, in px, and must be less than the plane. It becomes a
-     * span taken from the whole plane in proportion.
+     * `size` is required, in px, and must be smaller than the plane. It is
+     * converted to a span in proportion to the plane.
      *
      * Returns the new card's id, or null when a card spans the boundary, the size
-     * is invalid, or the result would leave a card without area.
+     * is invalid, or the result would leave a card with no area.
      */
     insertAt(axis, line, init) {
         var _a;
@@ -1151,10 +1150,9 @@ export class Soksak {
         if ((init === null || init === void 0 ? void 0 : init.id) !== undefined && this.find(init.id))
             return null;
         const plane = this.size(axis);
-        // A size that takes the whole plane leaves the cards already there none,
-        // and `openSlot` writes the new line before the plane's start to make the
-        // room. Refused here, where the size is read, rather than found afterwards
-        // by measuring what it did.
+        // A size equal to the plane leaves the existing cards none, and `openSlot`
+        // would write the new line before the plane's start. Rejected here rather
+        // than detected afterwards by measuring the result.
         if (!Number.isFinite(init === null || init === void 0 ? void 0 : init.size) || init.size < 0 || init.size >= plane)
             return null;
         if (!this.canInsertAt(axis, line))
@@ -1181,15 +1179,15 @@ export class Soksak {
         else
             fresh.height = init.size;
         this.list.push(fresh);
-        // The slot next to the new one pays for it, so a close at the same
-        // boundary hands the room straight back. Every other slot keeps its width.
+        // The slot next to the new one gives up the space, so a close at the same
+        // boundary returns it directly. Every other slot keeps its width.
         const want = new Array(this.arr(axis).length - 1).fill(0);
         for (let i = 0; i < held.length; i++)
             want[i >= line ? i + 1 : i] = held[i];
         want[line] = init.size;
         const pays = this.settleOn(axis, want, order(line + 1, want.length, line - 1));
-        // Name the slot that paid, not just the side it is on: the nearest slot may
-        // have been unable to give the room, and a close hands it back by name.
+        // Record which slot gave up the space, not only the side: the nearest slot
+        // may not have had room, and close returns the space to the recorded slot.
         const payer = pays >= 0 ? this.list.find((c) => c[lo] === pays && c !== fresh) : undefined;
         if (payer)
             this.paidBy.set(fresh.id, { side: pays > line ? 'hi' : 'lo', to: payer.id });
@@ -1200,7 +1198,7 @@ export class Soksak {
         }
         return fresh.id;
     }
-    /** Whether a card occupies one slot and reaches across everything else. */
+    /** Whether a card occupies one slot on one axis and spans the whole other axis. */
     spansPlane(card, axis) {
         const [lo, hi] = SPAN[axis];
         const across = other(axis);
@@ -1213,13 +1211,13 @@ export class Soksak {
      * Insert a slot at a boundary with the given span.
      *
      * Every other slot is scaled by `1 - span`. A card ending at the boundary
-     * keeps its index; a card starting there shifts by one.
+     * keeps its index and a card starting there shifts by one.
      */
     openSlot(axis, line, span) {
         const a = this.arr(axis);
-        // The new slot takes its span from the slot next to the boundary, so a
-        // close that merges it back into that slot restores the previous spans.
-        // Which slot depends on where there is room.
+        // The new slot takes its span from the slot next to the boundary, so a close
+        // that merges it back restores the previous spans. Which of the two slots is
+        // used depends on which has room.
         const after = line < a.length - 1 ? a[line + 1] - a[line] : 0;
         const before = line > 0 ? a[line] - a[line - 1] : 0;
         if (after >= span) {
@@ -1231,7 +1229,7 @@ export class Soksak {
             a.splice(line + 1, 0, at);
         }
         else {
-            // Neither neighbour has the room on its own; take it from the whole plane.
+            // Neither neighbour has enough room alone, so take the span from the whole plane.
             const keep = 1 - span;
             const at = a[line] * keep + span;
             for (let k = 0; k < a.length; k++)
@@ -1244,8 +1242,8 @@ export class Soksak {
     /**
      * Open a slot at a boundary and shift the spans that referenced it.
      *
-     * A card that starts on the line moves past the new slot; one that ends on it
-     * stays where it ends. This is what `removeLine(axis, line, 'hi')` undoes.
+     * A card that starts on the line moves past the new slot; a card that ends on
+     * it keeps its index. `removeLine(axis, line, 'hi')` is the inverse.
      */
     openIndex(axis, line) {
         const [lo, hi] = SPAN[axis];
@@ -1259,8 +1257,8 @@ export class Soksak {
     /**
      * Remove one line and shift the spans that referenced it.
      *
-     * `into` says which neighbouring slot absorbs the one that goes, which
-     * decides whether a card ending on the line follows it or reaches past it.
+     * `into` selects which neighbouring slot absorbs the removed one, which decides
+     * whether a card ending on the line follows it or extends past it.
      */
     removeLine(axis, gone, into) {
         const a = this.arr(axis);
@@ -1276,24 +1274,24 @@ export class Soksak {
     /**
      * Remove one slot by removing a line beside it.
      *
-     * The far line, or the near one for the last slot, so the plane's two borders
-     * are never removed.
+     * Removes the far line, or the near one for the last slot, so the plane's two
+     * borders are never removed.
      */
     dropSlot(axis, slot) {
         const a = this.arr(axis);
         if (a.length <= 2)
             return; // one slot, no interior line, nothing to take
         // Remove the interior line: the far one, or the near one for the last slot,
-        // so the plane's two borders are never removed. The neighbour that absorbs
-        // the slot is the one on the other side of the line that goes.
+        // so the plane's two borders are never removed. The slot on the other side
+        // of that line absorbs the removed one.
         const last = slot + 1 >= a.length - 1;
         this.removeLine(axis, last ? slot : slot + 1, last ? 'lo' : 'hi');
     }
     /**
      * Move a plane-spanning card to another boundary.
      *
-     * Its slot is removed and a slot of the same span is inserted at the target.
-     * No other card's spans change and no line on the other axis moves.
+     * The card's slot is removed and a slot of the same span is inserted at the
+     * target. No other card's spans change and no line on the other axis moves.
      *
      * `line` is an index in the current arrangement.
      */
@@ -1301,8 +1299,8 @@ export class Soksak {
         if (this.noAxis(axis))
             return false;
         const card = this.find(id);
-        // `fixed` blocks the layout, not a direct call. This changes no other
-        // card's spans and no line on the other axis, so it is allowed.
+        // `fixed` blocks the layout, not a direct call from the host. This operation
+        // changes no other card's spans, so a fixed card may be moved.
         if (!card || !this.spansPlane(card, axis))
             return false;
         const [lo, hi] = SPAN[axis];
@@ -1314,11 +1312,11 @@ export class Soksak {
         const was = [...a];
         const span = was[from + 1] - was[from];
         this.list.splice(this.list.indexOf(card), 1);
-        // The slot travels; it is not given to a neighbour and taken back from
-        // another. Move the indices first, since canInsertAt reads only those.
+        // The same slot is reinserted rather than given to one neighbour and taken
+        // from another. The indices move first, because canInsertAt reads only those.
         // The card is out of the list, so the slot after it absorbs the line.
         this.removeLine(axis, from + 1, 'hi');
-        // The target boundary shifted down by one if it stood past the slot that left.
+        // The target index shifts down by one when it was past the removed slot.
         const target = line > from + 1 ? line - 1 : line;
         if (!this.canInsertAt(axis, target)) {
             this.restore(before);
@@ -1326,9 +1324,9 @@ export class Soksak {
         }
         a.splice(target, 0, 0);
         this.openIndex(axis, target);
-        // Write every coordinate from the one it had. The cards the slot passes
-        // shift by its span once; the rest keep their exact value. Shifting the
-        // whole tail out and back added a rounding error to every line.
+        // Each coordinate is written from its previous value. The lines the slot
+        // passes shift by its span once and the rest keep their exact value.
+        // Shifting the whole tail out and back added a rounding error to every line.
         if (target <= from) {
             for (let k = 0; k <= target; k++)
                 a[k] = was[k];
@@ -1354,9 +1352,9 @@ export class Soksak {
         card[ahi] = this.arr(across).length - 1;
         this.list.push(card);
         this.changed();
-        // The slot leaves one boundary and arrives at another, so the neighbours
-        // that give and take are not the same pair. Refuse when that leaves a card
-        // without area.
+        // The slot leaves one boundary and arrives at another, so the neighbours that
+        // give and take the span are different. Reject the move when the result
+        // leaves a card with no area.
         if (!this.hasArea()) {
             this.restore(before);
             return false;
@@ -1366,8 +1364,8 @@ export class Soksak {
     /**
      * Every boundary a plane-spanning card could stand on.
      *
-     * `without` ignores one card by id, so a card already standing somewhere can
-     * ask where else it could stand without blocking itself.
+     * `without` excludes one card by id, so a card already placed can query the
+     * other boundaries without blocking itself.
      */
     standings(axis, without) {
         if (this.noAxis(axis))
@@ -1381,20 +1379,20 @@ export class Soksak {
         return out;
     }
     /**
-     * Move a card to sit on one side of another — the drag-and-drop operation.
+     * Moves a card to one side of another. This is the drag-and-drop operation.
      *
-     * One operation rather than a close and a split the caller sequences, because
-     * the order matters: closing first gives the space back and changes the
-     * target's geometry, so the cut is measured after that, and a close that
-     * cannot happen leaves the whole move undone rather than half of it.
+     * One operation rather than a close and a split sequenced by the caller,
+     * because the order matters: the close returns the space first and changes the
+     * target's geometry, so the cut is measured after it. A close that cannot
+     * happen leaves the arrangement unchanged instead of half changed.
      *
-     * The card keeps its id and its payload, so the host's element is reused and
-     * a live surface inside it is not torn down. It keeps its px size only when it
+     * The card keeps its id and its payload, so the host's element is reused and a
+     * live surface inside it is not destroyed. It keeps its px size only when it
      * lands spanning one slot on that axis.
      */
     move(id, targetId, side) {
-        // A side that is not one is refused by `splitToward` below, and the close
-        // before it is put back, so this needs no check of its own.
+        // `splitToward` below rejects an invalid side and the close before it is
+        // rolled back, so no check is needed here.
         const card = this.find(id);
         const target = this.find(targetId);
         if (!card || !target || card === target || card.fixed)
@@ -1409,7 +1407,7 @@ export class Soksak {
             return false;
         }
         const moved = this.find(landed);
-        // The size a card holds is its own; the axis it now stands on decides which.
+        // The px size is the card's. Which of the two applies depends on the axis it lands on.
         if (axisOf(side) === 'x') {
             if (carried.width !== undefined)
                 moved.width = carried.width;
@@ -1427,10 +1425,10 @@ export class Soksak {
     }
     /** Whether `move` would succeed, without performing it. */
     canMove(id, targetId, side) {
-        // Run it here and put the state back, as canSplit does, and cache it in the
-        // same place. Building a second Soksak copied the whole arrangement and
-        // every option to answer yes or no, and a host asking about four sides on
-        // every pointer move paid for all of it each time.
+        // Performs the move, records the result and restores the state, as canSplit
+        // does, and caches it alongside. Building a second Soksak copied the whole
+        // arrangement and every option per call, and a host queries four sides on
+        // every pointer move.
         const key = `move:${id}:${targetId}:${side}`;
         const known = this.splitMemo.get(key);
         if (known !== undefined)
@@ -1447,10 +1445,10 @@ export class Soksak {
         return ok;
     }
     /**
-     * What every operation does when it is finished.
+     * Runs after every operation that changes the arrangement.
      *
-     * A px size describes one slot. A card that comes to span two cannot be that
-     * size, so the number is removed rather than kept for a later split to apply.
+     * A px size describes one slot, so a card that comes to span two loses it. The
+     * value is removed rather than kept for a later split to reapply.
      */
     changed() {
         // A trial split discards its state, so it must not clear the cache.
@@ -1460,16 +1458,16 @@ export class Soksak {
         this.sliceMemo.clear();
     }
     /**
-     * Make every card in a slot declare the same px size, the largest asked for,
-     * and drop a size from a card that no longer stands in one slot.
+     * Writes the largest declared px size to every card in a slot, and removes the
+     * size from a card that no longer spans one slot.
      *
-     * A slot has one width, so two cards in it cannot ask for different ones.
-     * `heldSizes` reads the largest, and this writes that back, so what `toJSON`
-     * reports is what gets drawn. Run it wherever cards arrive or move.
+     * A slot has one width, so two cards in it cannot declare different sizes.
+     * `heldSizes` reads the largest and this writes it back, so `toJSON` reports
+     * what is drawn. Called wherever cards are added or moved.
      */
     agreeSizes() {
-        // A card that is gone leaves nothing to pay back, and a trial operation
-        // that was rolled back leaves an entry for an id that never existed.
+        // A closed card has nothing to return the span to, and a rolled-back trial
+        // operation leaves an entry for an id that no longer exists.
         if (this.paidBy.size) {
             const live = new Set(this.list.map((c) => c.id));
             for (const id of this.paidBy.keys())
@@ -1496,7 +1494,7 @@ export class Soksak {
             }
         }
     }
-    /** Put the arrangement back to a state it reported earlier. */
+    /** Restores the arrangement to a state returned earlier by `toJSON`. */
     restore(state) {
         var _a;
         this.xs = [...state.xs];

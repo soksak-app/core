@@ -24,8 +24,7 @@ use tauri::{
     webview::Color, Emitter, LogicalPosition, LogicalSize, Manager, State, WebviewBuilder, WebviewUrl, Window,
 };
 
-/// One surface the page wants on screen, in CSS pixels relative to the page
-/// viewport.
+/// One surface the page declares, in CSS pixels relative to the page viewport.
 #[derive(Debug, Deserialize)]
 struct Surface {
     id: String,
@@ -236,7 +235,7 @@ struct Rect {
     h: f64,
 }
 
-/// What the overlay webview asks for once it has loaded.
+/// What the overlay webview requests after loading.
 #[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct OverlayContent {
@@ -291,8 +290,7 @@ fn modal_label(id: &str) -> String {
 /// building it at the moment it is wanted needs no reordering afterwards.
 ///
 /// A webview shows white until its document is fetched and painted. The page
-/// asks for overlay.html once at startup so that this fetch is a cache hit and
-/// there is nothing to wait for.
+/// requests overlay.html once at startup so this fetch is a cache hit.
 #[tauri::command]
 fn overlay_show(
     window: Window,
@@ -369,14 +367,13 @@ fn overlay_content(state: State<'_, Overlay>, id: String) -> Result<OverlayConte
 
 /// Resizes the view to what the element needs, and reveals it.
 ///
-/// The main page measures the element in its own document, but the modal is
-/// laid out in another one, and two layouts of the same markup can differ by a
-/// line of wrapped text. The view that draws it is the one that knows, so it
-/// reports its size and the view follows.
+/// The main page measures the element in its own document, and the modal is laid
+/// out in another one; two layouts of the same markup can differ by a line of
+/// wrapped text. The view that renders it reports its own size and is resized to
+/// it.
 ///
-/// Showing happens here rather than when the modal opened, because here the
-/// content is drawn and the size is right. Revealing any earlier would show a
-/// view that is still empty or still the wrong shape.
+/// The view is shown here rather than at open, because the content is drawn and
+/// the size is correct only at this point.
 #[tauri::command]
 fn overlay_fit(
     window: Window,
@@ -427,9 +424,9 @@ fn overlay_pick(window: Window, key: String, value: String) -> Result<(), String
     Ok(())
 }
 
-/// Replaces what an open modal draws, without rebuilding its view. A modal whose
-/// controls change what the page holds is redrawn while it stands; building the
-/// view again would make it blink.
+/// Replaces an open modal's content without rebuilding its view. A modal whose
+/// controls change the page's state is redrawn while it is open, and rebuilding
+/// the view would make it blink.
 #[tauri::command]
 fn overlay_update(
     window: Window,
@@ -462,8 +459,8 @@ struct Picked {
     value: String,
 }
 
-/// Starts the shell behind a terminal surface. The page asks once, when its
-/// view loads, so a surface that is reopened gets a shell of its own.
+/// Starts the shell for a terminal surface. The page calls this once, when the
+/// view loads, so a reopened surface gets its own shell.
 #[tauri::command]
 fn terminal_open(app: tauri::AppHandle, shells: State<'_, shell::Shells>, id: String) -> Result<(), String> {
     shells.open(&app, &id)
@@ -482,7 +479,7 @@ fn report(line: String) {
     println!("{line}");
 }
 
-/// What a page asks for when it loads.
+/// Returns the current theme. A page requests this when it loads.
 #[tauri::command]
 fn theme(state: State<'_, CurrentTheme>) -> Result<Theme, String> {
     Ok(state.0.lock().map_err(|e| e.to_string())?.clone())

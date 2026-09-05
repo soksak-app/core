@@ -2,11 +2,11 @@
  * A soksak over shared grid lines.
  *
  * `xs` and `ys` hold every coordinate, normalised 0..1 over the slots that
- * share what is left. A slot held at a px size is drawn at that size whatever
- * its span, so a line's position in px is not its number times the plane. A
- * card is a span of indices into them, so two cards that meet read the same
- * index and their shared boundary is one number. Moving a line moves every card that
- * references it; a card spanning across the line is unaffected.
+ * share the remaining space. A slot with a px size is drawn at that size
+ * whatever its span, so a line's px position is not its value times the plane
+ * size. A card is a span of indices into them, so two cards that meet reference
+ * the same index and their shared boundary is one value. Moving a line moves
+ * every card that references it; a card spanning across it is unaffected.
  *
  * Splitting replaces one card with two, so the arrangement stays a slicing
  * floorplan and every card can be closed.
@@ -20,9 +20,9 @@ export type { Divider, Rule, Zone, ZoneHit, ZoneOptions } from './geometry.js';
 import type { Fill, FillOrder, Span } from './slicing.js';
 export type { Axis, Card, CardInit, Rect, Side } from './card.js';
 export type { Fill, FillOrder } from './slicing.js';
-/** `merge`: a dragged boundary snaps onto a neighbouring line and the two become one. */
+/** `merge`: a dragged boundary snaps onto a neighbouring line and the two combine. */
 export type SnapMode = 'merge' | 'off';
-/** Where a card's slot came from: which side of it, and the card that gave it. */
+/** Where a card's slot came from: the side, and the card it came from. */
 export interface Paid {
     side: 'lo' | 'hi';
     to: string;
@@ -34,18 +34,18 @@ export interface SoksakState {
     /**
      * Which side each card took its slot from, by id.
      *
-     * A close hands the slot back to the neighbour that gave it up, so this
-     * decides where the room goes. It is part of the state: without it a grid
-     * built from `toJSON` draws the same rects but closes cards differently.
+     * A close returns the slot to the neighbour it came from, so this decides
+     * where the space goes. It is part of the state: without it a grid built from
+     * `toJSON` draws the same rects but closes cards differently.
      */
     paidBy?: Record<string, Paid>;
 }
 export interface SoksakOptions {
-    /** Corridor between two cards, in px. Half of it insets every inner edge. Default 24. */
+    /** Gap between two cards, in px. Half of it insets every inner edge. Default 24. */
     gap?: number;
     /** Smallest card edge, in px. Splitting, dragging and resizing all respect it. Default 96. */
     minSize?: number;
-    /** Smallest grab area, in px. Kept apart from `gap` so a zero corridor is still grabbable. Default 11. */
+    /** Smallest hit area, in px. Independent of `gap` so a zero gap is still draggable. Default 11. */
     grabSize?: number;
     /** How close a dragged boundary must come to a neighbour to snap onto it, in px. Default 7. */
     snapDistance?: number;
@@ -55,12 +55,12 @@ export interface SoksakOptions {
     height?: number;
 }
 /**
- * Refuse a state that cannot describe a plane, naming what is wrong.
+ * Rejects a state that cannot describe a plane and reports which field is wrong.
  *
- * A stale layout read back from storage otherwise reaches the geometry, where
- * an index outside the line array or a coordinate that is not a number turns
- * into a NaN rect. In the DOM that becomes `left: NaNpx`, which the CSSOM
- * drops, so the view freezes at its last good layout with nothing to report.
+ * Without this check a stale layout read from storage reaches the geometry,
+ * where an index outside the line array or a non-numeric coordinate produces a
+ * NaN rect. In the DOM that becomes `left: NaNpx`, which the CSSOM discards, so
+ * the view stops at its last valid layout and reports nothing.
  */
 export declare function checkState(state: SoksakState): void;
 export declare class Soksak {
@@ -76,30 +76,30 @@ export declare class Soksak {
      * Which side of a card's slot gave up the span it occupies, by card id.
      *
      * `split` and `insertAt` take the span from one neighbour. A close returns it
-     * by removing the line on that side, so the two are inverses. Without this
-     * the space moves to whichever neighbour the fill picks, and repeating the
-     * pair drives one card to `minSize`.
+     * by removing the line on that side, so the two operations are inverses.
+     * Without this the space goes to whichever neighbour the fill selects, and
+     * repeating split and close reduces one card to `minSize`.
      */
     private paidBy;
     /** True while canSplit runs a trial split and restores the state. */
     private probing;
     private g;
-    /** Corridor between two cards, in px. Never negative — a card would overlap. */
+    /** Gap between two cards, in px. Clamped to 0; a negative value overlaps cards. */
     get gap(): number;
     set gap(px: number);
     private min;
-    /** The smallest a card may be drawn on either axis. */
+    /** Minimum drawn size of a card on either axis. */
     get minSize(): number;
-    /** Writing it clears the cached answers that were computed against the old one. */
+    /** Assigning it clears the values cached against the previous one. */
     set minSize(px: number);
     private order;
-    /** Which axis a close tries first. */
+    /** The axis a close tries first. */
     get fillOrder(): FillOrder;
     set fillOrder(value: FillOrder);
     grabSize: number;
     snapDistance: number;
     snap: SnapMode;
-    /** Without a state, starts as one card filling the plane. */
+    /** With no state, starts as one card filling the plane. */
     constructor(state?: SoksakState, options?: SoksakOptions);
     static from(state: SoksakState, options?: SoksakOptions): Soksak;
     resize(width: number, height: number): void;
@@ -108,7 +108,7 @@ export declare class Soksak {
     /**
      * Every card, as frozen copies.
      *
-     * Writes to the returned objects do not reach the grid. Use `setFixed`,
+     * Writes to the returned objects do not affect the grid. Use `setFixed`,
      * `setSize` and `setData` to change a card.
      */
     get cards(): readonly Card[];
@@ -124,11 +124,12 @@ export declare class Soksak {
      */
     setFixed(id: string, fixed: boolean): boolean;
     /**
-     * Set a card's px width or height, or `null` for a share of what is left.
+     * Sets a card's px width or height. `null` removes the size and the card takes
+     * a share of the remainder.
      *
-     * Applies to a card spanning one slot on that axis. Sets the slot, so every
-     * card in it takes the same size. Returns false when the axis or size is
-     * invalid or the card spans more than one slot.
+     * The size applies to the slot, so it is written to every card in that slot.
+     * Returns false for an unknown axis, a negative or non-finite size, or a card
+     * spanning more than one slot on that axis.
      */
     setSize(id: string, axis: Axis, px: number | null): boolean;
     /** The card itself, for the operations that change it. */
@@ -145,7 +146,7 @@ export declare class Soksak {
     replace(state: SoksakState): void;
     private get plane();
     private arr;
-    /** An axis the caller made up. Every public method that takes one refuses. */
+    /** Rejects an axis value the caller invented. Every public method that takes one checks it. */
     private noAxis;
     private size;
     rectOf(card: Card): Rect;
@@ -167,36 +168,37 @@ export declare class Soksak {
     isSlicing(list?: readonly Span[]): boolean;
     /** Set the px size every card in a slot declares. */
     private declare;
-    /** Whether every card has its minimum, as the plane stands. */
+    /** Whether every card meets its minimum at the current plane size. */
     private fits;
     /**
-     * Give each sharing slot the width `want` names for it. A slot named `null`
-     * takes what is left over, shared with the other `null` slots in proportion
-     * to the span it holds.
+     * Writes the widths in `want` to the sharing slots by moving the lines between
+     * them. An entry of `null` leaves that slot to share the remainder in
+     * proportion to its span.
      *
-     * A px size is declared by the host, so this never changes one: a held slot
-     * keeps its size whatever `want` says. Naming the widths settles a change
-     * with the slots it touches and leaves the rest where they are.
+     * Slots with a px size are skipped: that size is the host's and `want` does
+     * not override it. Only the lines around the named slots move.
      */
     private setSlotWidths;
     /**
-     * Settle a change with the sharing slot nearest the boundary.
+     * Applies `want`, letting one sharing slot absorb the difference.
      *
-     * `order` lists the slots to try, nearest first. The first one that leaves
-     * every card its minimum takes the room; when none does, every sharing slot
-     * shares it. Each candidate is applied and then measured, so the slot sizes
-     * come from `slotSizes` alone and no second calculation can disagree with it.
+     * `order` lists the candidate slots, nearest the boundary first. Each is set
+     * to `null` in turn, written, and measured; the first that keeps every card at
+     * `minSize` is kept and the rest are restored. If none does, every sharing
+     * slot is set to `null` and they share the difference.
      *
-     * Returns the slot that took the room, or -1.
+     * Measuring after writing means the sizes come from `slotSizes` and are not
+     * predicted separately.
+     *
+     * Returns the slot that absorbed the difference, or -1.
      */
     private settleOn;
     /**
-     * Set one slot's px size and take the difference from the slot on the other
-     * side of the boundary.
+     * Sets one slot's px size and takes the difference from `pays`, the slot on
+     * the other side of the boundary.
      *
-     * A drag moves one boundary: the two slots meeting there change and no other
-     * slot does. `slot` and `pays` are the two slots a boundary separates, so
-     * they are always in range and never the same one.
+     * A drag moves one boundary, so only those two slots change. Both indices come
+     * from that boundary and are therefore in range and never equal.
      */
     private resizeSlot;
     /**
@@ -209,7 +211,7 @@ export declare class Soksak {
     dividers(): Divider[];
     /** Where a boundary is now, in px along its axis. */
     boundaryPos(axis: Axis, line: number): number;
-    /** The nearest line on this side that some card actually reads. */
+    /** The nearest line on that side that at least one card references. */
     private realNeighbour;
     /**
      * Whether `line` is an interior line index.
@@ -218,78 +220,78 @@ export declare class Soksak {
      */
     hasBoundary(axis: Axis, line: number): boolean;
     /**
-     * How far a boundary may travel before a card would fall under `minSize`.
+     * The px range a boundary may move within while every card keeps `minSize`.
      *
-     * The range reaches to the nearest line a card references; lines no card
-     * references do not constrain it. When two cards ask for more room than the
-     * plane holds it is one point, never an inverted pair.
+     * The range extends to the nearest line a card references; unreferenced lines
+     * do not limit it. When the cards on both sides need more than the plane
+     * holds, `lo` and `hi` are equal rather than inverted.
      */
     boundaryRange(axis: Axis, line: number): [number, number];
     /**
      * Move a boundary to a position in px.
      *
-     * Next to a slot with a px size, this changes that size. Otherwise it moves
-     * the line and every card referencing it follows.
+     * When either adjacent slot has a px size, that size changes. Otherwise the
+     * line itself moves and every card referencing it moves with it.
      *
      * Returns the resulting position.
      */
     moveBoundary(axis: Axis, line: number, px: number, allowSnap?: boolean): number;
     /**
-     * Remove the unreferenced lines a move passes, and return the moved index.
+     * Removes the unreferenced lines the move passes and returns the new index of
+     * the moved line.
      *
-     * A line the move has passed would leave the array out of order.
+     * Leaving a passed line in place would put the array out of order.
      */
     private forgetLinesPassed;
-    /** How many px the sharing slots have between them, per unit of normalised span. */
+    /** px per unit of normalised span across the sharing slots. */
     private sharedExtent;
     /**
-     * Move a boundary so the two cards beside it are the same size.
+     * Moves a boundary so the two cards beside it are drawn at the same size.
      *
-     * Not the midpoint of the two lines: a card at the plane's border insets on
-     * one side only.
+     * This is not the midpoint of the two lines: a card at the plane's border
+     * insets on one side only.
      */
     centerBoundary(axis: Axis, line: number): number;
     /**
-     * Merge a line onto a neighbour at the same coordinate.
+     * Merges a line onto a neighbour at the same coordinate.
      *
-     * Returns false when a card spans the pair, which would leave it with no size.
+     * Returns false when a card spans both lines, which would leave it zero size.
      */
     mergeCoincident(axis: Axis, line: number): boolean;
-    /** Drop lines no card reads any more. Returns how many went. */
+    /** Removes lines no card references. Returns how many were removed. */
     tidy(): number;
     /**
-     * Where to cut.
+     * Returns the position to cut a card at.
      *
-     * The unreferenced line nearest the card's centre that leaves both halves at
-     * `minSize`; otherwise a new line at the centre, clamped to the range that
-     * fits.
+     * Prefers the unreferenced line nearest the card's centre that leaves both
+     * halves at `minSize`. Otherwise returns a new line at the centre, clamped to
+     * the range where both halves fit.
      */
     private cutAt;
-    /** The smallest side every card has, so a change can be asked what it cost. */
+    /** The smallest drawn side of every card, by id. Used to compare before and after a change. */
     private extents;
-    /** Whether every card is drawn with area. A card with none is not a card. */
+    /** Whether every card is drawn with a non-zero width and height. */
     private hasArea;
     /**
-     * Whether every card still has the room it had, or `minSize`, whichever is
-     * less.
+     * Whether every card still has the smaller of the size it had and `minSize`.
      *
-     * A new line adds a corridor, which is taken from the shared slots, so a
-     * split can push a card elsewhere below its size.
+     * A new line adds a gap, taken from the sharing slots, so a split can reduce a
+     * card elsewhere on the plane.
      */
     private stillFits;
-    /** True when the cut would leave every card the room it has, or `minSize`. */
+    /** True when the cut leaves every card the smaller of its current size and `minSize`. */
     canSplit(id: string, axis: Axis): boolean;
     /**
      * Cut one card in two.
      *
      * The original keeps its id and the near half; the new card takes the far
-     * half. Cards spanning the new line widen their span instead of being cut.
+     * half. Cards spanning the new line have their span widened rather than cut.
      *
-     * The new card gets no `data` unless `init.data` is given. A px size on the
-     * other axis is copied, since both halves stay in that slot. A px size on the
-     * cut axis is divided between them.
+     * The new card has no `data` unless `init.data` is given. A px size on the
+     * other axis is copied, because both halves stay in that slot. A px size on
+     * the cut axis is divided between them.
      *
-     * Returns the new card's id, or null when there is no room.
+     * Returns the new card's id, or null when the halves do not fit.
      */
     split(id: string, axis: Axis, init?: {
         id?: string;
@@ -298,8 +300,8 @@ export declare class Soksak {
     /**
      * Cut a card and put the new one on a named side.
      *
-     * `split` gives the far half to the new card, so `left` and `top` swap the
-     * two spans. Ids are not swapped.
+     * `split` gives the far half to the new card, so `left` and `top` swap the two
+     * spans afterwards. The ids are not swapped.
      */
     splitToward(id: string, side: Side, init?: {
         id?: string;
@@ -307,20 +309,20 @@ export declare class Soksak {
     }): string | null;
     private nextId;
     /**
-     * Which neighbours would grow over a card if it closed, as frozen copies.
+     * The neighbours that would expand over a card if it closed, as frozen copies.
      *
-     * `null` when no row of neighbours matches a side, which is when `close`
-     * removes the card's slots instead.
+     * Returns null when no row of neighbours matches a side. `close` then removes
+     * the card's slots instead.
      */
     fill(id: string): Fill | null;
-    /** The same, holding the cards themselves, so `close` can grow them. */
+    /** The same result holding the stored cards, so `close` can modify them. */
     private fillOf;
     /**
-     * The axis on which this card's slots hold no other card, or null.
+     * The axis whose slots hold no other card, or null.
      *
-     * On that axis the slots can be removed when the card closes, without a
-     * neighbour growing over it. Returns null when another card lies entirely
-     * inside the range, which would leave it spanning nothing.
+     * On that axis the card's slots can be removed when it closes, with no
+     * neighbour expanding over it. Returns null when another card lies entirely
+     * inside the range, because removing the slots would leave it spanning nothing.
      */
     private soleSlots;
     private removable;
@@ -328,78 +330,78 @@ export declare class Soksak {
     /**
      * Remove a card.
      *
-     * A row of neighbours grows over the space when one matches the side.
-     * Otherwise the card's slots are removed. Returns false when neither
-     * applies, or when the card is `fixed`, or when it is the last one.
+     * A row of neighbours expands over the space when one matches the side.
+     * Otherwise the card's slots are removed. Returns false when neither applies,
+     * when the card is `fixed`, or when it is the last card.
      */
     close(id: string): boolean;
     /**
-     * Put lines nobody reads back where they stood.
+     * Restores unreferenced lines to their previous px positions.
      *
-     * The coordinate that draws a given px is not a closed form — a slot's size
-     * depends on every other slot — so it is walked to: each pass moves the
-     * coordinate by the error over the slope, and the error falls off fast
-     * enough that a handful of passes land on it exactly.
+     * The coordinate that produces a given px position has no closed form, because
+     * a slot's size depends on every other slot. It is found by iteration: each
+     * pass moves the coordinate by the error divided by the slope, and the error
+     * falls fast enough that a few passes reach it exactly.
      */
     private standAgain;
     /**
-     * Whether a card reaching across the plane can stand on this boundary.
+     * Whether a card spanning the whole plane can be placed on this boundary.
      *
-     * True when no card spans over the line. `without` ignores one card by id.
+     * True when no card spans across the line. `without` excludes one card by id.
      */
     canInsertAt(axis: Axis, line: number, without?: string): boolean;
     /**
-     * Put a card at a boundary, reaching across the whole plane.
+     * Inserts a card at a boundary, spanning the whole plane on the other axis.
      *
-     * Unlike `splitToward`, the new card spans the whole plane on the other axis.
-     * Cards past the boundary shift by one index.
+     * Unlike `splitToward`, the new card is not cut from one card. Cards past the
+     * boundary shift by one index.
      *
-     * `size` is required, in px, and must be less than the plane. It becomes a
-     * span taken from the whole plane in proportion.
+     * `size` is required, in px, and must be smaller than the plane. It is
+     * converted to a span in proportion to the plane.
      *
      * Returns the new card's id, or null when a card spans the boundary, the size
-     * is invalid, or the result would leave a card without area.
+     * is invalid, or the result would leave a card with no area.
      */
     insertAt(axis: Axis, line: number, init: {
         id?: string;
         data?: unknown;
         size: number;
     }): string | null;
-    /** Whether a card occupies one slot and reaches across everything else. */
+    /** Whether a card occupies one slot on one axis and spans the whole other axis. */
     private spansPlane;
     /**
      * Insert a slot at a boundary with the given span.
      *
      * Every other slot is scaled by `1 - span`. A card ending at the boundary
-     * keeps its index; a card starting there shifts by one.
+     * keeps its index and a card starting there shifts by one.
      */
     private openSlot;
     /**
      * Open a slot at a boundary and shift the spans that referenced it.
      *
-     * A card that starts on the line moves past the new slot; one that ends on it
-     * stays where it ends. This is what `removeLine(axis, line, 'hi')` undoes.
+     * A card that starts on the line moves past the new slot; a card that ends on
+     * it keeps its index. `removeLine(axis, line, 'hi')` is the inverse.
      */
     private openIndex;
     /**
      * Remove one line and shift the spans that referenced it.
      *
-     * `into` says which neighbouring slot absorbs the one that goes, which
-     * decides whether a card ending on the line follows it or reaches past it.
+     * `into` selects which neighbouring slot absorbs the removed one, which decides
+     * whether a card ending on the line follows it or extends past it.
      */
     private removeLine;
     /**
      * Remove one slot by removing a line beside it.
      *
-     * The far line, or the near one for the last slot, so the plane's two borders
-     * are never removed.
+     * Removes the far line, or the near one for the last slot, so the plane's two
+     * borders are never removed.
      */
     private dropSlot;
     /**
      * Move a plane-spanning card to another boundary.
      *
-     * Its slot is removed and a slot of the same span is inserted at the target.
-     * No other card's spans change and no line on the other axis moves.
+     * The card's slot is removed and a slot of the same span is inserted at the
+     * target. No other card's spans change and no line on the other axis moves.
      *
      * `line` is an index in the current arrangement.
      */
@@ -407,41 +409,41 @@ export declare class Soksak {
     /**
      * Every boundary a plane-spanning card could stand on.
      *
-     * `without` ignores one card by id, so a card already standing somewhere can
-     * ask where else it could stand without blocking itself.
+     * `without` excludes one card by id, so a card already placed can query the
+     * other boundaries without blocking itself.
      */
     standings(axis: Axis, without?: string): number[];
     /**
-     * Move a card to sit on one side of another — the drag-and-drop operation.
+     * Moves a card to one side of another. This is the drag-and-drop operation.
      *
-     * One operation rather than a close and a split the caller sequences, because
-     * the order matters: closing first gives the space back and changes the
-     * target's geometry, so the cut is measured after that, and a close that
-     * cannot happen leaves the whole move undone rather than half of it.
+     * One operation rather than a close and a split sequenced by the caller,
+     * because the order matters: the close returns the space first and changes the
+     * target's geometry, so the cut is measured after it. A close that cannot
+     * happen leaves the arrangement unchanged instead of half changed.
      *
-     * The card keeps its id and its payload, so the host's element is reused and
-     * a live surface inside it is not torn down. It keeps its px size only when it
+     * The card keeps its id and its payload, so the host's element is reused and a
+     * live surface inside it is not destroyed. It keeps its px size only when it
      * lands spanning one slot on that axis.
      */
     move(id: string, targetId: string, side: Side): boolean;
     /** Whether `move` would succeed, without performing it. */
     canMove(id: string, targetId: string, side: Side): boolean;
     /**
-     * What every operation does when it is finished.
+     * Runs after every operation that changes the arrangement.
      *
-     * A px size describes one slot. A card that comes to span two cannot be that
-     * size, so the number is removed rather than kept for a later split to apply.
+     * A px size describes one slot, so a card that comes to span two loses it. The
+     * value is removed rather than kept for a later split to reapply.
      */
     private changed;
     /**
-     * Make every card in a slot declare the same px size, the largest asked for,
-     * and drop a size from a card that no longer stands in one slot.
+     * Writes the largest declared px size to every card in a slot, and removes the
+     * size from a card that no longer spans one slot.
      *
-     * A slot has one width, so two cards in it cannot ask for different ones.
-     * `heldSizes` reads the largest, and this writes that back, so what `toJSON`
-     * reports is what gets drawn. Run it wherever cards arrive or move.
+     * A slot has one width, so two cards in it cannot declare different sizes.
+     * `heldSizes` reads the largest and this writes it back, so `toJSON` reports
+     * what is drawn. Called wherever cards are added or moved.
      */
     private agreeSizes;
-    /** Put the arrangement back to a state it reported earlier. */
+    /** Restores the arrangement to a state returned earlier by `toJSON`. */
     private restore;
 }

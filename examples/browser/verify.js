@@ -1,27 +1,26 @@
-// 판과 컴포지터를 읽어 검사한다.
+// 판과 컴포지터를 읽어 검증한다.
 //
-// 둘 다 읽기만 하고 아무것도 바꾸지 않는다. 그래서 판도 컴포지터도 검증이
-// 있다는 것을 모르고, 검사를 하나 더 붙여도 저쪽은 고칠 것이 없다.
+// 읽기만 하고 아무것도 변경하지 않는다. 판과 컴포지터는 검증의 존재를 알지 않으므로
+// 검사를 추가해도 그쪽을 수정할 필요가 없다.
 //
-// 캡처는 판단에, 합격은 수치로 — 화면을 보고 판단하는 대신 재어서 답한다.
+// 화면을 보고 판단하지 않고 수치로 판정한다.
 import { latest } from "./compositor.js";
 import { currentGrid, currentView, drawRail, plane, tabsOf } from "./plane.js";
 import { isPlace, railKind } from "./plugins/registry.js";
 
-/** 두 사각형이 가장 크게 어긋난 값. 하나라도 없으면 비교할 수 없다. */
+/** 두 사각형의 최대 차이를 반환한다. 하나라도 없으면 비교하지 않는다. */
 const maxDelta = (a, b) =>
   !a || !b ? Infinity
     : Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y), Math.abs(a.w - b.w), Math.abs(a.h - b.h));
 
 /**
- * 한 번 검사하고 결과를 돌려준다.
+ * 검증을 한 번 실행하고 결과를 반환한다.
  *
- * 화면에 그리지 않는다. 이것은 개발자가 읽는 값이지 사람이 쓰는 화면이 아니고,
- * 매 렌더마다 나오므로 화면에 두면 그 자리를 계속 차지한다. 어디에 적을지는
- * 부르는 쪽이 정한다.
+ * 화면에 그리지 않는다. 개발자가 읽는 값이고 렌더마다 발생하므로 출력 위치는
+ * 호출자가 정한다.
  */
 export function verify() {
-  // 지금의 판. 검사 한 번은 한 시점을 보는 것이므로 처음에 한 번만 집는다.
+  // 현재 판. 검증 한 번은 한 시점을 대상으로 하므로 처음에 한 번만 읽는다.
   const grid = currentGrid();
   const view = currentView();
   const rows = [];
@@ -56,8 +55,8 @@ export function verify() {
   }
   add("V1 공유 경계 편차 == 0", drift === 0, `최대 ${drift.toFixed(4)}px · 허용오차 없음`);
 
-  // 슬롯 상자의 합. `(w+gap)(h+gap)` 은 모든 선이 복도 하나를 먹는다는 가정에서
-  // 나온 지름길이고, 음수 폭 카드도 정확히 상쇄해 통과시켰다.
+  // 슬롯 상자의 합. `(w+gap)(h+gap)` 은 모든 선이 통로 하나를 차지한다는 가정이며,
+  // 폭이 음수인 카드도 상쇄되어 통과했다.
   const X = (k) => grid.boundaryPos("x", k), Y = (k) => grid.boundaryPos("y", k);
   const area = grid.cards.reduce((n, c) => n + (X(c.c1) - X(c.c0)) * (Y(c.r1) - Y(c.r0)), 0);
   const want = grid.width * grid.height;
@@ -85,8 +84,8 @@ export function verify() {
   add("V6 마지막 하나 빼고 전부 닫힌다", open.length <= 1 || open.every((c) => grid.canClose(c.id)),
       `${open.filter((c) => grid.canClose(c.id)).length}/${open.length}`);
 
-  // V7a / V7b — 합성. 두 차이는 원인이 다르므로 나눠서 재고,
-  // declared 와 applied 는 같은 커밋의 한 레코드에서 읽는다.
+  // V7a / V7b — 합성. 두 차이는 원인이 다르므로 나눠서 측정하고, declared 와
+  // applied 는 같은 커밋의 한 레코드에서 읽는다.
   const host = plane.getBoundingClientRect();
   const record = latest();
   let stale = 0, land = 0, counted = 0;
@@ -98,8 +97,8 @@ export function verify() {
     land = Math.max(land, maxDelta(s.declared, s.applied));
     counted++;
   }
-  // 첫 렌더는 커밋보다 앞서므로 비교할 표면이 없다. 비교할 것이 없는 것은
-  // 어긋난 것이 아니다 — 표면이 있어야 하는데 없는 경우는 V10 과 T5 가 본다.
+  // 첫 렌더는 커밋보다 앞서므로 비교할 표면이 없다. 표면이 있어야 하는데 없는
+  // 경우는 V10 과 T5 가 검사한다.
   add("V7a element − declared == 0", counted === 0 || stale < 0.5,
       counted ? `최대 ${stale.toFixed(2)}px · 0이 아니면 커밋이 뒤처진 것 (seq ${record.seq})` : "아직 커밋 없음");
   add("V7b declared − applied == 0", counted === 0 || land < 0.5,
@@ -109,8 +108,7 @@ export function verify() {
     .filter((el) => el.style.transform && el.style.transform !== "none").length;
   add("V8 뷰가 transform 을 안 쓴다", transformed === 0, `${transformed}개 카드에 transform`);
 
-  // V9 — 그려지는 것은 외곽선이다. 그 획이 카드 안쪽을 지나면 실제 앱에서
-  // 네이티브 표면에 가려 보이지 않는다.
+  // V9 — 외곽선의 획이 카드 안쪽을 지나면 애플리케이션에서 네이티브 표면에 가려진다.
   let onCard = 0;
   for (const loop of shape.loops) for (let i = 0; i < loop.length; i++) {
     const a = loop[i], b = loop[(i + 1) % loop.length];
@@ -122,7 +120,7 @@ export function verify() {
   }
   add("V9 레일 획이 카드 안을 안 지난다", onCard === 0, `표본 ${onCard}점 침범`);
 
-  // V10 — 네이티브 표면은 DOM overflow 에 잘리지 않는다. 선언 rect 가 클립보다
+  // V10 — 네이티브 표면은 DOM overflow 로 잘리지 않는다. 선언 rect 가 클립 영역보다
   // 크면 표면이 카드 밖에 그려진다.
   let escape = 0;
   for (const s of latest()?.surfaces ?? []) {
@@ -135,13 +133,12 @@ export function verify() {
   }
   add("V10 표면이 카드를 안 뚫는다", escape <= 0.5, `최대 ${Math.max(0, escape).toFixed(2)}px`);
 
-  // T5 — 빈 카드는 도달 가능한 상태가 아니다
+  // T5 — 빈 카드는 도달 가능한 상태가 아니다.
   const empty = cards.filter((c) => !isPlace(c.id) && tabsOf(c).length === 0);
   add("T5 빈 카드 0", empty.length === 0, `${cards.length - empty.length}/${cards.length} 카드가 내용을 가짐`);
 
-  // 세 자리가 각자의 규칙대로 서 있는가.
-  //
-  // 선언값이 아니라 그려진 폭을 잰다. 선언값은 요청이고 검증 대상은 결과다.
+  // 세 자리가 각자의 규칙대로 배치되었는지 검사한다. 선언값이 아니라 그려진 폭을
+  // 측정한다. 선언값은 요청이고 검증 대상은 결과다.
   const left = grid.card("left"), right = grid.card("right");
   const rail = grid.cards.find((c) => railKind(c.id));
   const drawn = (c) => (c ? grid.rect(c.id).w : null);
@@ -156,7 +153,7 @@ export function verify() {
       ? `${w}px ${where} (${a.toFixed(0)} 요청)`
       : `${w}px ${where}`;
   };
-  // 없는 자리는 규칙을 어길 수 없다 — 좌측을 껐다고 FAIL 이 될 일이 아니다.
+  // 표시하지 않는 자리는 검사 대상이 아니다.
   const placeOk = (!left || left.c0 === 0)
     && (!right || right.c1 === grid.lines("x").length - 1)
     && [left, right, rail].every(kept);

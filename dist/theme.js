@@ -1,24 +1,20 @@
 /**
- * The look of the two things on the plane that are not cards.
+ * Default stylesheet for the boundary lines and the dividers.
  *
- * Separate from the view on purpose. The view places elements and handles input
- * and decides no appearance at all; a host that wants the default look asks for
- * it here. Nothing calls this on a host's behalf.
+ * Separate from the view. The view sets position and handles input and applies
+ * no appearance; a host that wants the default look installs this sheet.
  *
- * The view draws the boundary lines and the dividers on them, because their
- * shape carries rules a host would have to rediscover: a divider's target is as
- * wide as a finger while its grip is a hairline, and a line a card crosses is
- * drawn too, or one line reads as two.
+ * The view draws the lines and dividers because their shape carries two rules:
+ * a divider's hit target is finger-wide while its grip is a hairline, and a
+ * line a card crosses is drawn too, or one line renders as two.
  *
- * Their colour is not a rule. Each is named in a token with a value that stands
- * alone, and a host with colours of its own points the tokens at them from its
- * own stylesheet. Nothing here reads a host's token names, and nothing here
- * decides light from dark: a host changes its tokens when its theme changes,
- * and these change with them.
+ * Colour is not part of those rules. Each colour is a token with a standalone
+ * default, and a host redirects the tokens to its own values from its own
+ * stylesheet. This module reads no host token name and selects no light or dark
+ * variant.
  *
- * The sheet is text rather than a file because its class names come from the
- * prefix the view was given, and a sheet written for one prefix is wrong for
- * another.
+ * The sheet is text rather than a file because its class names derive from the
+ * prefix the view was given.
  */
 const PALETTE = {
     line: 'rgb(0 0 0 / 0.16)',
@@ -27,7 +23,7 @@ const PALETTE = {
     gripActive: 'rgb(0 0 0 / 0.55)',
 };
 const METRICS = { gripThickness: 3, gripLength: 24 };
-/** The token names, so a host can point them at its own colours. */
+/** Token names, so a host can redirect them to its own colours. */
 export function themeTokens(prefix = 'sp') {
     return {
         line: `--${prefix}-line`,
@@ -38,7 +34,7 @@ export function themeTokens(prefix = 'sp') {
         gripLength: `--${prefix}-grip-length`,
     };
 }
-/** The stylesheet, as text. */
+/** Returns the stylesheet as text. */
 export function themeCSS(options = {}) {
     var _a;
     const prefix = (_a = options.prefix) !== null && _a !== void 0 ? _a : 'sp';
@@ -57,15 +53,15 @@ export function themeCSS(options = {}) {
   background: var(--${prefix}-line);
 }
 
-/* The part of a line a card crosses rather than ends against. Same line, same
-   coordinate, drawn fainter: leaving it out makes one line read as two wherever
-   the cards above and below it disagree. */
+/* The part of a line a card crosses rather than ends against. Same line and
+   coordinate, drawn fainter. Omitting it renders one line as two wherever the
+   cards on the two sides differ. */
 .${prefix}-rule[data-virtual="true"] {
   background: var(--${prefix}-line-crossing);
 }
 
-/* The divider is a target, not a mark. What is seen is the grip inside it, so
-   the target can be as wide as a finger without looking like it. */
+/* The divider is the hit target and the grip inside it is what is drawn, so the
+   target can be finger-wide without appearing that wide. */
 .${prefix}-divider::after {
   content: "";
   position: absolute;
@@ -108,11 +104,11 @@ export function themeCSS(options = {}) {
 `;
 }
 /**
- * Puts the sheet in a document, once.
+ * Adds the sheet to a document once.
  *
- * Keyed by prefix, so two views with different prefixes each get their own and a
- * second view with the same prefix does not add a second copy. It goes first in
- * the head, so a host's own rules follow it and win on equal weight.
+ * Keyed by prefix, so views with different prefixes each get their own sheet and
+ * a second view with the same prefix adds no second copy. It is inserted first
+ * in the head so a host's own rules follow it and win at equal specificity.
  */
 export function installTheme(doc, options = {}) {
     var _a;

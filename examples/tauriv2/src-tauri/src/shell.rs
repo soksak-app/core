@@ -58,7 +58,7 @@ impl Shells {
         }
 
         let (program, args) = shell();
-        // Started where the person lives, not where the app happens to run from.
+        // Started in the user's home directory, not the app's working directory.
         let home = std::env::var_os("HOME")
             .or_else(|| std::env::var_os("USERPROFILE"))
             .map(std::path::PathBuf::from);

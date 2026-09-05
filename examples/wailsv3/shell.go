@@ -58,7 +58,7 @@ func (s *Shells) Open(id string) error {
 	}
 
 	cmd := exec.Command(shell())
-	// Started where the person lives, not where the app happens to run from.
+	// Started in the user's home directory, not the app's working directory.
 	if home, err := os.UserHomeDir(); err == nil {
 		cmd.Dir = home
 	}
@@ -100,7 +100,7 @@ func (s *Shells) Open(id string) error {
 	return nil
 }
 
-// emit hands one line to everyone watching that shell. A watcher that has
+// emit sends one line to every watcher of that shell. A watcher that has
 // stopped reading is skipped rather than waited for.
 func (s *Shells) emit(id string, text string) {
 	s.mu.Lock()
@@ -153,7 +153,7 @@ func (s *Shells) Write(id string, data string) error {
 }
 
 // Close ends the shell whose surface is gone: a process with nothing left to
-// write to is a process nobody will read.
+// write to is a process whose output no one reads.
 //
 // The process is ended with the lock released. Ending it means waiting for it,
 // and the goroutines reading its output take this lock for every line: waiting

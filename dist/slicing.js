@@ -5,8 +5,8 @@
  * always a slicing floorplan: one a single cut can divide in two, recursively.
  * A close must leave it slicing, or cards appear that no neighbour can fill.
  *
- * `isSlicing` answers that. `fillFor` picks the row of neighbours that grows
- * over a closing card.
+ * `isSlicing` reports whether an arrangement is slicing. `fillFor` selects the
+ * row of neighbours that expands over a closing card.
  */
 import { SPAN } from './card.js';
 const key = (list) => list
@@ -16,8 +16,8 @@ const key = (list) => list
 /**
  * Whether one cut can divide the regions in two, all the way down.
  *
- * Memoised because a close asks it once per candidate side, and the same
- * arrangement comes back constantly during a drag.
+ * Memoised because a close calls it once per candidate side and the same
+ * arrangement recurs during a drag.
  */
 export function isSlicing(list, memo = new Map()) {
     const k = key(list);
@@ -58,13 +58,13 @@ const ORDER = {
     h: ['right', 'left', 'below', 'above'],
 };
 /**
- * Which neighbours take a closed card's space.
+ * Returns the neighbours that take a closed card's space.
  *
- * A row of neighbours may tile the side together. The result must still be
+ * A row of neighbours may tile the side together. The result must remain
  * slicing, which keeps every card closable.
  *
- * A `fixed` card never fills, since the layout may not grow it. A card with a
- * px size does fill; spanning a second slot drops that size.
+ * A `fixed` card never fills, because the layout may not expand it. A card with
+ * a px size does fill, and spanning a second slot removes that size.
  */
 export function fillFor(cards, closing, order, memo) {
     if (closing.fixed)

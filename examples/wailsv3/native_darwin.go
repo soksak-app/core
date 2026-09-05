@@ -2,10 +2,10 @@
 
 // Webviews placed inside the window.
 //
-// Wails gives one webview per window and no API to add another, but it does
-// hand over the window itself through NativeWindow(). A webview is a native
-// view, so it can be added to that window's content view like any other, which
-// is what the Tauri example gets from its own runtime.
+// Wails creates one webview per window and has no API for adding another, but
+// NativeWindow() exposes the window. A webview is a native view, so it is added
+// to that window's content view directly. The Tauri runtime provides the same
+// through its own API.
 //
 // A frame arrives in the content view's coordinates, measured from the bottom
 // left as AppKit does. The page measures from its top left; surfaces.go turns
@@ -22,9 +22,8 @@ package main
 // store's pixel grid outward: the page reports fractional rects, and a frame
 // snapped inward leaves the card's background showing along that edge.
 //
-// Outward means the view may cover up to half a pixel more than the page asked
-// for. That half pixel is under the card's border, which the page draws and the
-// surface does not reach.
+// Outward means the view covers up to half a pixel more than the declared rect.
+// That half pixel falls under the card's border, which the page draws.
 static NSRect surfaceAligned(NSWindow* window, double x, double y, double w, double h) {
     return [window backingAlignedRect:NSMakeRect(x, y, w, h) options:NSAlignAllEdgesOutward];
 }
@@ -60,14 +59,14 @@ static void surfaceSetFrame(void* handle, double x, double y, double w, double h
     view.frame = surfaceAligned(window, x, y, w, h);
 }
 
-// Resizes about the top left, which is where the page put it.
+// Resizes about the top left, which is the origin the page declared.
 static void surfaceResize(void* handle, double w, double h) {
     WKWebView* view = (WKWebView*)handle;
     NSRect frame = view.frame;
     view.frame = NSMakeRect(frame.origin.x, frame.origin.y + frame.size.height - h, w, h);
 }
 
-// How solid the view is. A surface that lost focus can be asked to stand back.
+// Sets the view's alpha. The page dims a surface that has lost focus.
 static void surfaceSetAlpha(void* handle, double alpha) {
     WKWebView* view = (WKWebView*)handle;
     [view setAlphaValue:alpha];
@@ -78,8 +77,8 @@ static void surfaceSetHidden(void* handle, int hidden) {
     [view setHidden:hidden ? YES : NO];
 }
 
-// Raises the view above its siblings. A view added later sits above the ones
-// before it, so a modal has to be lifted after a surface has been added.
+// Raises the view above its siblings. A view added later is above the earlier
+// ones, so a modal is raised again after a surface is added.
 static void surfaceRaise(void* handle) {
     WKWebView* view = (WKWebView*)handle;
     NSView* parent = [view superview];
@@ -87,8 +86,8 @@ static void surfaceRaise(void* handle) {
     [parent addSubview:view positioned:NSWindowAbove relativeTo:nil];
 }
 
-// Clips the view to a rounded rectangle. The corners are then not drawn, so
-// whatever is behind them shows through: no transparency is involved.
+// Clips the view to a rounded rectangle. The corners are not drawn, so what is
+// behind them shows through. No transparency is applied.
 static void surfaceSetCornerRadius(void* handle, double radius) {
     WKWebView* view = (WKWebView*)handle;
     [view setWantsLayer:YES];
@@ -96,14 +95,14 @@ static void surfaceSetCornerRadius(void* handle, double radius) {
     view.layer.masksToBounds = YES;
 }
 
-// Reports one view a press is for. Returns non-zero once the view is a surface,
-// and the walk up from the view that was hit stops there.
+// Reports whether one view is a surface. Returns non-zero for a surface, and the
+// walk up from the hit view stops there.
 extern int surfaceHit(void* view);
 
 // A surface is a native view, so a press on it never reaches the page. One
-// monitor on the app sees every press, and AppKit is asked which view the press
-// is for: the answer is a view, not a point, so nothing has to be converted and
-// nothing can disagree with where the page thinks a surface stands.
+// monitor on the app receives every press and AppKit reports which view it hit.
+// The result is a view rather than a point, so no coordinate is converted and
+// none can disagree with the page's frame.
 //
 // The monitor returns the event unchanged and the view still receives it.
 static void surfaceWatchMouse(void* nsWindow) {
@@ -134,7 +133,7 @@ import "C"
 
 import "unsafe"
 
-// nativeView is one webview living inside the window.
+// nativeView is one webview inside the window.
 type nativeView struct{ handle unsafe.Pointer }
 
 func newNativeView(window unsafe.Pointer, url string, x, y, w, h float64, background [3]float64) *nativeView {
@@ -176,7 +175,7 @@ func (v *nativeView) setCornerRadius(radius float64) {
 
 func (v *nativeView) destroy() { C.surfaceDestroy(v.handle) }
 
-// id names this view among the ones a press walks through.
+// id identifies this view among the ones a press passes through.
 func (v *nativeView) id() uintptr { return uintptr(v.handle) }
 
 // watchMouse starts the monitor. Called once, when the first surface appears.

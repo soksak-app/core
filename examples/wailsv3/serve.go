@@ -1,7 +1,7 @@
 // The pages a native view loads.
 //
 // A view added straight to the window is outside the app's asset server, which
-// answers a scheme only the app's own webview knows. These pages are therefore
+// serves a scheme only the app's own webview resolves. These pages are therefore
 // served over http on the loopback address, on a port the system picks.
 //
 // The same server carries the terminal traffic: a view added this way has no
@@ -34,7 +34,7 @@ type Pages struct {
 	// A page served here is a document of its own and inherits none of the main
 	// page's stylesheet, so it reads the values and sets them on its own root. A
 	// modal reads them once: it is built when it opens and destroyed when it
-	// closes. A terminal outlives a change, and hears it on the stream that
+	// closes. A terminal outlives a theme change and receives it on the stream that
 	// already carries its shell's output.
 	themeMu    sync.Mutex
 	theme      Theme
@@ -136,7 +136,7 @@ func (p *Pages) overlayFit(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// NotifyModal hands new content to the page drawing that modal.
+// NotifyModal sends new content to the page rendering that modal.
 func (p *Pages) NotifyModal(id string, content OverlayContent) {
 	p.modalMu.Lock()
 	defer p.modalMu.Unlock()
