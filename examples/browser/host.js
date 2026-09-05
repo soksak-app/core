@@ -53,13 +53,20 @@ function toPage(rect) {
   return { x: plane.left + rect.x, y: plane.top + rect.y, w: rect.w, h: rect.h };
 }
 
-/** 모달 렌더링에 필요한 값. show 와 update 가 같은 형태를 전송한다. */
+/**
+ * 모달 렌더링에 필요한 값. show 와 update 가 같은 형태를 전송한다.
+ *
+ * 스타일시트는 문서가 실제로 가진 규칙을 읽는다. `<style>` 요소만 모으면 링크로
+ * 걸린 시트가 빠지고, 모달은 규칙 없는 마크업만 받는다.
+ */
 function drawing(el) {
   const style = getComputedStyle(el);
   return {
     className: el.className,
     html: el.innerHTML,
-    css: [...document.querySelectorAll("style")].map((s) => s.textContent).join("\n"),
+    css: [...document.styleSheets]
+      .map((sheet) => [...sheet.cssRules].map((rule) => rule.cssText).join("\n"))
+      .join("\n"),
     border: over(style.borderTopColor, style.backgroundColor),
   };
 }

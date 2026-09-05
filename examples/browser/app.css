@@ -1,0 +1,279 @@
+:root{
+  color-scheme:dark;
+  --bg:#101117;--card:#1b1d27;--fg:#ececf5;--muted:#9b9dad;
+  --bd:#7279ff;--rail:#ffb36b;--focus:#ffb36b;--ok:#53dc93;--no:#ff7c7c;
+  --surface:#0d1a14;--surface-fg:#7fe3b0;
+  --r:14px;--half-gap:12px;--bw:1px;
+}
+*{box-sizing:border-box}
+/* 판이 남은 공간을 차지한다. 문서 흐름에 두면 위쪽 요소가 커질 때마다 판의 위치가
+   이동하고 네이티브 표면이 그 변화를 받지 못한다. 여기서는 위치가 아니라 크기만
+   바뀐다. */
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;
+  box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden}
+/* 창의 크롬. 구 프로젝트의 App.css 값을 따른다.
+
+     .titlebar      45px · padding 0 14px 0 82px · 아래 보더 · --side 배경
+     크롬 행 높이   37 = 위아래 여백 5 + 칩 26 + 선 1
+     .workspace-tab radius 5 · rgba(127,127,127,.12), 활성 .28
+     .space-tab     radius 6 6 0 0 · .1, 활성 .24
+     .icon-btn      24×22 · radius 4 · opacity .7, 활성은 강조색
+
+   왼쪽 여백만 다르다. 구 프로젝트는 이 행이 타이틀바이고 82px 이 신호등 자리다.
+   이 예제의 창에는 타이틀바가 따로 있다.                                     */
+:root{--chrome-row-h:37px;--chip:rgba(127,127,127,.12);--chip-hover:rgba(127,127,127,.22);
+  --chip-on:rgba(127,127,127,.28);--inset:color-mix(in srgb,var(--bd) 22%,transparent)}
+
+.chrome-bar{flex:0 0 45px;height:45px;display:flex;align-items:center;gap:10px;
+  padding:0 14px;border-bottom:1px solid var(--bd);background:var(--card);
+  user-select:none}
+.brand{flex:0 0 auto;font-weight:700;letter-spacing:.08em;font-size:12px;color:var(--muted);
+  margin-right:4px}
+.chrome-bar__acts{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+
+/* 프로젝트 탭 행. 높이는 위의 --chrome-row-h 가 정한다. */
+.tabs{display:flex;align-items:stretch;gap:4px;flex:1 1 auto;min-width:0;
+  height:var(--chrome-row-h);padding-block:5px;overflow:hidden}
+.tabs--project{align-self:center}
+
+/* 스페이스 탭 행. 판 바로 위에 위치하므로 탭의 아래가 판과 이어진다. */
+.tabs--space{flex:0 0 auto;gap:2px;height:var(--chrome-row-h);padding:5px 10px;
+  align-items:center;background:var(--card);border-bottom:1px solid var(--bd)}
+.tabs--space .bar-tab{height:26px}
+
+.bar-tab{display:flex;align-items:center;gap:6px;padding:0 8px;border:0;border-radius:5px;
+  background:var(--chip);color:var(--muted);font:inherit;font-size:12px;cursor:pointer;
+  max-width:220px;white-space:nowrap}
+.bar-tab:hover{background:var(--chip-hover)}
+.bar-tab[data-on=true]{background:var(--chip-on);color:var(--fg)}
+.tabs--space .bar-tab{border-radius:6px 6px 0 0;background:rgba(127,127,127,.1)}
+.tabs--space .bar-tab:hover{background:rgba(127,127,127,.18)}
+.tabs--space .bar-tab[data-on=true]{background:rgba(127,127,127,.24);color:var(--fg)}
+.bar-tab__name{overflow:hidden;text-overflow:ellipsis}
+.bar-tab__x{opacity:.55;padding:0 1px;flex:0 0 auto}
+.bar-tab__x:hover{opacity:1}
+.bar-tab--add{background:transparent;color:var(--muted);font-size:16px;line-height:1;padding:0 6px}
+.bar-tab--add:hover{background:rgba(127,127,127,.18)}
+.bar-tab__root{padding:0 8px;border:1px solid var(--focus);border-radius:5px;
+  background:var(--bg);color:var(--fg);font:inherit;font-size:12px;width:180px}
+
+/* 아이콘 스위치. */
+.act{display:inline-flex;align-items:center;justify-content:center;width:24px;height:22px;
+  flex:0 0 auto;padding:0;border:1px solid transparent;border-radius:4px;background:transparent;
+  color:var(--muted);opacity:.7;cursor:pointer}
+.act:hover{opacity:1;background:var(--inset)}
+.act[data-on=true]{opacity:1;color:var(--focus)}
+.act svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6;
+  stroke-linecap:round;stroke-linejoin:round}
+
+/* 프로젝트 탭이 왼쪽에 배치될 때. 스페이스 행보다 위에서 시작해 아래까지 이어진다. */
+.shell{display:flex;flex:1 1 auto;min-height:0}
+.work{display:flex;flex-direction:column;flex:1 1 auto;min-width:0;min-height:0}
+.rail-projects{display:flex;flex-direction:column;gap:4px;width:64px;flex:0 0 auto;
+  padding:5px;background:var(--card);border-right:1px solid var(--bd)}
+.rail-projects .bar-tab{width:100%;height:36px;justify-content:center;padding:0 4px}
+.rail-projects .bar-tab__name{max-width:100%;text-align:center}
+.rail-projects .bar-tab__x{display:none}
+.rail-projects .bar-tab--add{width:100%;height:24px;justify-content:center}
+
+/* 설정 모달. 판 전체를 덮는 오버레이와 그 안의 520px 카드.
+   오버레이가 모달이 열린 동안 뒤의 divider 드래그를 차단한다.
+   구 프로젝트의 .dmodal-overlay 는 rgba(0,0,0,.15) 를 칠하지만 여기서는 칠하지
+   않는다. 네이티브 표면이 이 문서 위에 합성되므로 화면의 일부만 어두워진다. */
+.set-scrim{position:fixed;inset:0;z-index:200}
+.set-card{position:absolute;left:50%;top:80px;transform:translateX(-50%);
+  width:520px;max-height:70vh;display:flex;flex-direction:column;
+  border:var(--bw) solid var(--bd);border-radius:12px;background:var(--card);
+  box-shadow:0 18px 48px rgb(0 0 0 / .35)}
+.set-card__head{display:flex;align-items:center;gap:8px;padding:8px 8px 8px 10px;
+  border-bottom:var(--bw) solid var(--bd);cursor:grab}
+.set-card__head:active{cursor:grabbing}
+.set-grip{color:var(--muted);user-select:none}
+.set-card__title{font-size:12px;color:var(--fg)}
+.set-card__head .act{margin-left:auto}
+.set-card__body{display:flex;min-height:0}
+.set-card__nav{display:flex;flex-direction:column;gap:2px;width:120px;flex:0 0 auto;
+  padding:8px;border-right:var(--bw) solid var(--bd)}
+.set-nav{text-align:left;padding:6px 8px;border:0;border-radius:6px;background:transparent;
+  color:var(--muted);font:inherit;font-size:12px;cursor:pointer}
+.set-nav[data-on=true]{background:var(--bg);color:var(--fg)}
+.set-card__pane{flex:1 1 auto;min-width:0;padding:10px 12px;overflow:auto}
+.set-caption{margin:2px 0 8px;font-size:11px;color:var(--muted)}
+.set-row{display:flex;align-items:center;gap:10px;margin:0 0 6px}
+.set-row__name{width:130px;flex:0 0 auto;font-size:12px;color:var(--muted)}
+.set-row select{flex:1 1 auto;min-width:0}
+.set-row select,.set-press{padding:3px 6px;border:var(--bw) solid var(--bd);border-radius:6px;
+  background:var(--bg);color:var(--fg);font:inherit;font-size:12px}
+.set-press{cursor:pointer}
+.set-slide{display:flex;align-items:center;gap:8px;flex:1 1 auto}
+.set-slide output{font-size:11px;color:var(--muted);min-width:5ch}
+.th-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin:0 0 12px}
+.th{display:flex;flex-direction:column;align-items:center;gap:4px;padding:4px;border:var(--bw) solid transparent;
+  border-radius:8px;background:transparent;color:var(--muted);font:inherit;font-size:10px;cursor:pointer}
+.th[data-on=true]{border-color:var(--focus);color:var(--fg)}
+.th__box{position:relative;display:block;width:100%;height:26px;border-radius:5px;
+  border:1px solid color-mix(in srgb,var(--bd) 50%,transparent)}
+.th__side{position:absolute;left:0;top:0;bottom:0;width:30%;border-radius:4px 0 0 4px}
+.th__dot{position:absolute;right:4px;bottom:4px;width:6px;height:6px;border-radius:50%}
+select,button{font:inherit;color:var(--fg);background:var(--card);
+  border:1px solid color-mix(in srgb,var(--bd) 45%,transparent);border-radius:7px;padding:3px 8px}
+button{cursor:pointer}
+input[type=range]{accent-color:var(--focus);width:110px}
+input[type=color]{width:34px;height:24px;padding:0;background:var(--card);
+  border:1px solid color-mix(in srgb,var(--bd) 45%,transparent);border-radius:6px}
+
+.stage{position:relative;flex:1 1 auto;min-height:0;padding:var(--half-gap);
+  border:1px solid color-mix(in srgb,var(--bd) 35%,transparent);border-radius:22px}
+.plane{position:relative;width:100%;height:100%}
+
+/* 카드는 한 종류이고 역할만 다르다. 비율을 받는지 px 를 받는지, 이동 가능한지가
+   차이다. z 순서는 CSS 가 아니라 합성이 정한다. 네이티브 표면은 OS 뷰라 CSS 스택에
+   참여하지 않으므로 시뮬레이터는 표면 레이어를 위에 두어 재현한다. */
+.card{position:absolute;z-index:1;display:grid;grid-template-rows:32px 1fr 22px;
+  min-width:0;overflow:hidden;border:var(--bw) solid var(--bd);border-radius:var(--r);
+  background:var(--card);outline:0}
+/* 그리드 자식의 min-width 기본값 auto 는 열을 min-content 까지 확장하고,
+   overflow:hidden 은 표시만 자를 뿐 rect 를 줄이지 않는다. 그러면 네이티브 표면이
+   카드 밖에 그려진다. 선언 rect 는 클립 영역보다 클 수 없다. */
+.card > *{min-width:0}
+.card[data-role=fixed]{border-color:var(--focus)}
+/* 포커스는 테두리를 추가하지 않고 기존 테두리의 색으로 표시한다. 링을 덧대면 선이
+   두 겹이 되고 그 사이 1px 이 빈 공간으로 보인다. */
+:root[data-focus-ind=border] .card[data-focused=true]{border-color:var(--focus)}
+
+/* 포커스 표식은 본문의 네 모서리에만 표시한다. 네이티브 표면은 CSS 스택 밖이라 카드
+   안에 그리면 표면 아래에 가려지므로 표면과 같은 층에 배치한다. */
+.focus-mark{position:absolute;z-index:80;pointer-events:none;
+  --len:14px;--t:1px;
+  background-image:
+    linear-gradient(var(--focus),var(--focus)),linear-gradient(var(--focus),var(--focus)),
+    linear-gradient(var(--focus),var(--focus)),linear-gradient(var(--focus),var(--focus)),
+    linear-gradient(var(--focus),var(--focus)),linear-gradient(var(--focus),var(--focus)),
+    linear-gradient(var(--focus),var(--focus)),linear-gradient(var(--focus),var(--focus));
+  background-size:
+    var(--len) var(--t),var(--t) var(--len),
+    var(--len) var(--t),var(--t) var(--len),
+    var(--len) var(--t),var(--t) var(--len),
+    var(--len) var(--t),var(--t) var(--len);
+  background-position:
+    left top,left top, right top,right top,
+    left bottom,left bottom, right bottom,right bottom;
+  background-repeat:no-repeat}
+.focus-mark[hidden]{display:none}
+
+.chrome{display:flex;align-items:center;gap:4px;padding:0 4px 0 4px;overflow:hidden;
+  border-bottom:1px solid color-mix(in srgb,var(--bd) 40%,transparent)}
+/* 탭 목록은 넘치면 가로 스크롤한다. 탭을 제거하거나 축소하지 않는다. 헤더 높이가
+   32px 이라 스크롤바가 탭보다 두꺼워서 표시하지 않는다. */
+.chrome__tabs{display:flex;align-items:center;gap:4px;flex:1 1 auto;min-width:0;
+  overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
+.chrome__tabs::-webkit-scrollbar{display:none}
+/* 헤더 너비에 따른 세 단계.
+     strip  탭 전체를 표시한다. 넘치면 가로 스크롤한다
+     one    ≡ 와 활성 탭 1개를 표시한다
+     ham    ≡ 만 표시한다
+   단계가 내려가도 탭을 제거하지 않는다. ≡ 는 항상 탭 전체를 목록으로 표시한다. */
+.chrome__ham{display:none;place-items:center;width:20px;height:20px;padding:0;border:0;
+  flex:0 0 auto;background:transparent;color:var(--muted);border-radius:5px}
+.chrome[data-fit=one] .chrome__ham,.chrome[data-fit=ham] .chrome__ham{display:grid}
+.chrome__ham svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.3;stroke-linecap:round}
+.chrome__ham:hover{background:color-mix(in srgb,var(--bd) 26%,transparent);color:var(--fg)}
+.chrome[data-fit=one] .chrome__tabs .tab:not([data-active=true]){display:none}
+.chrome[data-fit=ham] .chrome__tabs{display:none}
+.tab{display:flex;align-items:center;gap:4px;padding:2px 6px;border-radius:6px;
+  font-size:11px;color:var(--muted);cursor:grab;user-select:none;white-space:nowrap;
+  flex:0 0 auto;border:1px solid transparent}
+.tab[data-active=true]{color:var(--fg);background:color-mix(in srgb,var(--bd) 20%,transparent);
+  border-color:color-mix(in srgb,var(--bd) 40%,transparent)}
+.tab[data-dragging=true]{opacity:.4}
+.tab__name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+/* one 단계에서 활성 탭은 남은 너비만 사용하고 제목을 말줄임한다.
+   제목 전체가 들어갈 때만 표시하면 탭이 불필요하게 숨겨진다. */
+.chrome[data-fit=one] .tab[data-active=true]{flex:0 1 auto;min-width:0}
+.tab__x{border:0;background:transparent;color:inherit;padding:0 2px;line-height:1;font-size:11px;border-radius:4px}
+.tab__x:hover{background:color-mix(in srgb,var(--no) 35%,transparent)}
+.chrome__acts{margin-left:auto;display:flex;gap:1px;padding:1px;border-radius:7px;flex:0 0 auto;
+  border:1px solid color-mix(in srgb,var(--bd) 32%,transparent)}
+.chrome__act{display:grid;place-items:center;width:20px;height:20px;padding:0;border:0;
+  background:transparent;color:var(--muted);border-radius:5px}
+.chrome__act svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.3;
+  stroke-linecap:round;stroke-linejoin:round}
+.chrome__act .half{fill:currentColor;stroke:none;opacity:.28}
+.chrome__act:hover:not(:disabled){background:color-mix(in srgb,var(--bd) 26%,transparent);color:var(--fg)}
+.chrome__act:disabled{opacity:.25;cursor:not-allowed}
+/* `[hidden]` 은 display:grid 를 이기지 못하므로 여기서 명시한다. */
+.chrome__act[hidden]{display:none}
+.slot{position:relative}
+/* 상태줄은 카드가 좁아져도 한 줄을 유지한다. 줄바꿈이 생기면 22px 안에서 잘려
+   두 번째 줄이 사라지고 첫 줄의 세로 정렬도 어긋난다. */
+.status{display:flex;align-items:center;padding:0 8px;font-size:10px;
+  border-top:1px solid color-mix(in srgb,var(--bd) 40%,transparent);color:var(--muted);
+  overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.set{padding:8px 10px;font-size:11px;color:var(--muted);overflow:hidden}
+.set b{color:var(--fg);display:block;margin-bottom:4px}
+.card[data-role=fixed] .set b{color:var(--focus)}
+
+/* 선과 divider 는 뷰가 그린다. 이 문서는 색만 지정하고 모양과 커서는 뷰가 갖는다. */
+:root{
+  --sp-line:color-mix(in srgb,var(--bd) 65%,transparent);
+  --sp-line-crossing:color-mix(in srgb,var(--bd) 20%,transparent);
+  --sp-grip:color-mix(in srgb,var(--muted) 75%,transparent);
+  --sp-grip-active:var(--focus);
+}
+/* 경계선은 한 좌표가 판을 가로지르는 전체 구간이다. 카드가 실제로 접하는 구간은
+   실선이고 나머지는 카드가 가로지르는 구간이다. 둘은 같은 좌표에 있고 길이만 다르다.
+   실선만 그리면 위는 나뉘고 아래는 이어진 곳에서 선이 둘로 보인다. 세 값 중 하나다.
+   · 보임 — 표면 위에 그린다. DOM 오버레이는 애플리케이션에서도 표면 위에 그릴 수 있다.
+   · 가림 — 카드 아래에 그린다. 카드가 덮는 구간은 보이지 않는다.
+   · 숨김 — 그리지 않는다. */
+:root[data-full-rule=on] .sp-rule[data-virtual=true]{z-index:70}
+:root[data-full-rule=off] .sp-rule[data-virtual=true]{display:none}
+.sp-divider{z-index:4}
+
+/* 레일 외곽선은 통로 안에만 그린다. 카드 안쪽을 덮는 채움은 애플리케이션에서
+   네이티브 표면에 가려지므로 여기서도 그리지 않는다. */
+.rail{position:absolute;inset:0;z-index:3;pointer-events:none;overflow:visible}
+.rail path{fill:none;stroke:var(--rail);stroke-width:2;
+  stroke-linejoin:round;vector-effect:non-scaling-stroke}
+
+/* 모사한 네이티브 표면. 컴포지터가 applied 프레임에 배치한다. */
+.surface{position:absolute;z-index:50;background:var(--surface);color:var(--surface-fg);
+  font-size:11px;padding:6px 9px;overflow:hidden;pointer-events:none;border-radius:4px}
+.surface[data-hidden=true]{display:none}
+.surface b{color:var(--fg)}
+
+/* `.standin` 은 표면과 동일하게 보여야 하므로 `.surface` 와 같은 값을 사용한다.
+   값이 다르면 표면을 숨기는 시점에 화면이 바뀐다. */
+.standin{position:absolute;inset:0;background:var(--surface);color:var(--surface-fg);
+  font-size:11px;padding:6px 9px;overflow:hidden;border-radius:4px}
+.standin b{color:var(--fg)}
+/* 드롭 구획은 DOM 이므로 표면이 숨겨진 동안에만 보인다. z 를 표면보다 낮게 둔다.
+   높이면 애플리케이션의 동작과 달라진다. */
+.drop{position:absolute;z-index:40;pointer-events:none;border-radius:var(--r);
+  background:color-mix(in srgb,var(--focus) 22%,transparent);
+  border:2px solid var(--focus)}
+.drop[hidden]{display:none}
+
+/* 선택 레이어는 DOM 요소다. z 를 표면보다 낮게 두고 겹치는 표면만 숨긴다.
+   높이면 애플리케이션에서 표면에 가려진다. */
+.picker{position:absolute;z-index:41;min-width:170px;max-width:260px;max-height:238px;
+  overflow-y:auto;scrollbar-width:thin;padding:4px;
+  background:var(--card);border-radius:9px;
+  border:1px solid color-mix(in srgb,var(--bd) 55%,transparent);
+  box-shadow:0 10px 26px rgb(0 0 0 / .38)}
+.picker[hidden]{display:none}
+.picker__head{padding:3px 7px 5px;font-size:10px;color:var(--muted)}
+.picker__item{display:flex;align-items:center;gap:7px;width:100%;padding:5px 7px;
+  border:0;border-radius:6px;background:transparent;color:var(--fg);
+  font:inherit;font-size:12px;text-align:left}
+.picker__item svg{width:14px;height:14px;flex:0 0 auto;fill:none;stroke:currentColor;
+  stroke-width:1.3;stroke-linecap:round;stroke-linejoin:round}
+.picker__name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.picker__item small{margin-left:auto;padding-left:8px;color:var(--muted);font-size:10px;flex:0 0 auto}
+.picker__item[data-active=true]{color:var(--fg);
+  background:color-mix(in srgb,var(--bd) 22%,transparent)}
+.picker__item:hover,.picker__item:focus-visible{outline:0;color:var(--fg);
+  background:color-mix(in srgb,var(--bd) 30%,transparent)}
+
