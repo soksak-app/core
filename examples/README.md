@@ -72,6 +72,10 @@ A surface says what it shows as `{url}` or `{page}`: an address anywhere, or a
 document this host serves. The page publishes that with each commit, so nothing
 outside the page names a kind of surface.
 
+[`NATIVE-HOST.md`](NATIVE-HOST.md) is a draft: what the three host interfaces
+are, what the two applications implement twice, and what publishing them as a
+Wails service and a Tauri plugin would take.
+
 ## The applications
 
 Each draws the surfaces with native views of its own. The page is shared and is
