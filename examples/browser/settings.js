@@ -107,6 +107,30 @@ export const MODES = ["dark", "light"];
 const settings = {
   theme: THEMES[0].name,
   mode: "dark",
+
+  /* 사이드바는 조합해서 만든다. 세트 하나가 섹션들을 골라 순서대로 담고,
+     연결이 그 세트를 어느 자리에 건다.
+
+     세트는 제목이 아니라 id 로 걸린다 — 같은 제목의 세트가 둘 있을 수 있다. */
+  sets: [
+    { id: "set-install", title: "탐색기", sections: ["files.tree", "files.bookmarks"] },
+    { id: "set-shell", title: "셸", sections: ["terminal.history", "terminal.cwd"] },
+    { id: "set-process", title: "프로세스", sections: ["terminal.pty", "terminal.jobs"] },
+    { id: "set-page", title: "페이지", sections: ["browser.dom", "browser.network"] },
+    { id: "set-browser", title: "브라우저", sections: ["browser.tabs", "browser.history"] },
+  ],
+
+  /* 어느 세트가 어디에 서는가. `plugin` 이 null 인 자리는 포커스를 따르지
+     않는다 — 좌측이 그렇다.
+
+     여기 없는 자리는 사이드바가 없다. set-page 는 만들어져 있지만 걸려 있지
+     않으므로 브라우저 레일은 서지 않는다. */
+  links: [
+    { place: "left", plugin: null, set: "set-install" },
+    { place: "rail", plugin: "terminal", set: "set-shell" },
+    { place: "right", plugin: "terminal", set: "set-process" },
+    { place: "right", plugin: "browser", set: "set-browser" },
+  ],
 };
 
 /** 이름으로 찾은 테마. 목록에 없는 이름은 부르는 쪽의 잘못이므로 실패한다. */
@@ -181,6 +205,25 @@ export function onSettingsChange(fn) {
 }
 
 const announce = () => listener?.();
+
+/**
+ * 그 자리에 걸린 세트. 걸린 것이 없으면 null — 연결하지 않으면 그 사이드바는
+ * 없다.
+ *
+ * 섹션의 이름까지 여기서 읽지는 않는다. 무엇이 등록되어 있는지는 레지스트리가
+ * 알고, 설정은 어느 것을 골랐는지만 안다.
+ */
+export function linkedSet(place, plugin) {
+  const link = settings.links.find((l) => l.place === place && l.plugin === plugin);
+  if (!link) return null;
+  const set = settings.sets.find((s) => s.id === link.set);
+  if (!set) throw new Error(`link points at a set that is gone: ${link.set}`);
+  return set;
+}
+
+/** 레일이 서는 종류들. 레일 자리에 세트가 걸린 플러그인만 레일을 갖는다. */
+export const railedPlugins = () =>
+  settings.links.filter((l) => l.place === "rail").map((l) => l.plugin);
 
 /** 지금 걸린 테마의 이름과 모드. 배선이 select 를 맞출 때 읽는다. */
 export const themeName = () => settings.theme;

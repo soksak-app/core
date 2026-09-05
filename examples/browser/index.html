@@ -221,8 +221,6 @@ input[type=color]{width:34px;height:24px;padding:0;background:var(--card);
   <label>여백 <input id="gap" type="range" min="0" max="24" step="1" value="12"> <output id="gapOut">12px</output></label>
   <label>커밋 지연 <input id="latency" type="range" min="0" max="600" step="50" value="0"> <output id="latOut">0ms</output></label>
   <label>적용 오차 <input id="skew" type="range" min="0" max="12" step="1" value="0"> <output id="skewOut">0px</output></label>
-  <label>터미널 레일 <select id="railTerminal"><option value="on">있음</option><option value="off">없음</option></select></label>
-  <label>브라우저 레일 <select id="railBrowser"><option value="off">없음</option><option value="on">있음</option></select></label>
   <label>레일 거동 <select id="railMode">
     <option value="flow">FLOW — 포커스를 따라간다</option>
     <option value="pin">PIN — 자리를 지킨다</option>
@@ -262,9 +260,16 @@ import { Soksak, SoksakView, installTheme, outline }
    세우는 일만 한다 — 설정이 판을 직접 부르면 설정 하나 늘 때마다 어느 함수를
    불러야 하는지 매번 정해야 한다. */
 import {
-  THEMES, MODES, applyTheme, cardRadius, halfGap, modeName, onSettingsChange,
-  themeName,
+  THEMES, MODES, applyTheme, cardRadius, halfGap, linkedSet, modeName,
+  onSettingsChange, themeName,
 } from "./settings.js";
+
+/* 표면을 가진 것과 사이드바에 설 수 있는 것. 파일을 가져오는 것이 곧 등록이다
+   — 어느 것이 있는지 아는 목록을 따로 두면 목록과 파일이 갈린다. */
+import { isPlace, plugin, plugins, railId, railKind, section } from "./plugins/registry.js";
+import "./plugins/terminal.js";
+import "./plugins/browser.js";
+import "./plugins/files.js";
 
 /* 브라우저가 문서와 라이브러리 중 하나만 새로 받아오면 판이 어긋난다. 그때
    나는 오류는 원인이 코드에 없으므로, 필요한 멤버가 있는지 먼저 확인하고
@@ -318,28 +323,18 @@ const railPath = document.getElementById("railPath");
 const dropEl = document.getElementById("drop");
 const pickerEl = document.getElementById("picker");
 
-/* ── 자리와 세트 — 다른 두 축 ──────────────────────────────────────────────
+/* ── 자리 ─────────────────────────────────────────────────────────────────
    어디 서는가          무엇이 서는가
-   left   첫 열, 고정폭      설치 전체가 한 세트 (포커스와 무관)
-   right  마지막 열, 고정폭   포커스된 플러그인의 세트
-   rail   가운데 열, 고정폭   포커스된 플러그인의 세트 · 포커스를 따라 이동
-   셋 다 카드다. 자리 사이에 모드 전환은 없다 — 자리가 곧 규칙이다.         */
-const SETS = {
-  install: { name: "탐색기", sections: ["파일 트리", "북마크"] },
-  terminal: { rail: { name: "셸", sections: ["실행 기록", "cwd"] },
-              right: { name: "프로세스", sections: ["PTY", "작업"] } },
-  browser:  { rail: { name: "페이지", sections: ["DOM", "네트워크"] },
-              right: { name: "브라우저", sections: ["탭", "히스토리"] } },
-};
-// 레일은 플러그인 종류마다 하나다. 터미널 레일과 브라우저 레일은 서로 다른
-// 물건이고, 각자 자기 종류가 포커스를 잡았을 때만 따라간다.
-const RAILS = { terminal: "rail-terminal", browser: "rail-browser" };
-const PLACE = { left: "left", right: "right", "rail-terminal": "rail-terminal", "rail-browser": "rail-browser" };
-const isPlace = (id) => id in PLACE;
+   left   첫 열, 고정폭      포커스와 무관하게 걸린 세트
+   right  마지막 열, 고정폭   포커스된 플러그인에 걸린 세트
+   rail   가운데 열, 고정폭   포커스된 플러그인에 걸린 세트 · 포커스를 따라 이동
+   셋 다 카드다. 자리 사이에 모드 전환은 없다 — 자리가 곧 규칙이다.
+
+   무엇이 서는지는 여기서 정하지 않는다. 사람이 섹션을 골라 세트로 묶고,
+   설정에서 그 세트를 자리에 건다. 걸지 않으면 그 사이드바는 없다.        */
 
 let grid, view, focusedId, seq = 0;
 let railMode = "flow", leftOn = true, rightOn = true;
-const railOn = { terminal: true, browser: false };
 // 레일이 물러나는 것은 닫는 것이므로 폭이 카드와 함께 사라진다. 사람이 정한
 // 폭은 그 사람의 결정이지 그 순간 서 있던 카드의 것이 아니다 — 종류별로
 // 기억해 두었다가 다시 설 때 그 폭으로 세운다.
@@ -357,36 +352,28 @@ const tabsOf = (card) => card?.data?.tabs ?? [];
 const activeTab = (card) => tabsOf(card).find((t) => t.id === card.data.activeId) ?? tabsOf(card)[0];
 const focusedPlugin = () => activeTab(grid.card(focusedId))?.plugin ?? null;
 
-/* 플러그인 종류가 표면·레일·우측 세트를 결정한다. 활성 탭의 종류를 그대로
-   사용하면 사용자가 의도하지 않은 종류를 생성하므로 생성 전에 종류를 묻는다. */
-const PLUGIN = {
-  terminal: { name: "터미널", mark: ">_",
-    svg: '<rect x="2" y="3" width="12" height="10" rx="2"/><path d="M5 6.5l2 1.75L5 10M8.5 10.25H11"/>' },
-  browser: { name: "브라우저", mark: "www",
-    svg: '<rect x="2" y="3" width="12" height="10" rx="2"/><path d="M2 6.25h12M4.3 4.6h.01M6.1 4.6h.01"/>' },
-};
-const NEW_TAB = ["terminal", "browser"];
-
 /** 제목 번호와 id 번호를 일치시킨다. 다르면 화면과 로그의 탭 식별이 어긋난다. */
-function newTab(plugin) {
-  const t = tab(plugin, "");
-  t.title = `${PLUGIN[plugin]?.mark ?? "?"} 탭 ${seq}`;
+function newTab(kind) {
+  const t = tab(kind, "");
+  t.title = `${plugin(kind).mark} 탭 ${seq}`;
   return t;
 }
 
-/** 그 자리가 보여주는 세트. */
-const railKind = (place) =>
-  Object.keys(RAILS).find((k) => RAILS[k] === place) ?? null;
-
-const standingSet = (place) => {
-  if (place === "left") return SETS.install;
+/**
+ * 그 자리에 선 세트와, 그 세트가 담은 섹션의 이름들.
+ *
+ * 걸린 것이 없으면 null 이다 — 연결하지 않으면 그 사이드바는 없다.
+ */
+function standingSet(place) {
   // 레일은 자기 종류의 세트를 보여준다. 포커스가 다른 종류에 가 있어도 그
   // 레일이 무엇의 레일인지는 바뀌지 않는다.
   const kind = railKind(place);
-  if (kind) return SETS[kind]?.rail ?? null;
-  const plugin = focusedPlugin();
-  return plugin ? (SETS[plugin]?.[place] ?? null) : null;
-};
+  const set = kind ? linkedSet("rail", kind)
+    : place === "left" ? linkedSet("left", null)
+    : linkedSet(place, focusedPlugin());
+  if (!set) return null;
+  return { name: set.title, sections: set.sections.map((id) => section(id).name) };
+}
 
 function initial() {
   const cards = [
@@ -839,7 +826,7 @@ const onPickerKey = (e) => {
 /** 새 탭의 종류를 묻는다. + 와 쪼개기가 공용으로 사용한다. */
 function openPicker(anchor, what, cardId) {
   openLayer(anchor, PICKER_ASK[what] ?? PICKER_ASK.add,
-    NEW_TAB.map((k) => ({ key: k, name: PLUGIN[k].name, mark: PLUGIN[k].mark, svg: PLUGIN[k].svg })),
+    plugins().map((p) => ({ key: p.id, name: p.name, mark: p.mark, svg: p.svg })),
     (k) => (what === "add" ? addTab(cardId, k) : splitWith(cardId, what, k)));
 }
 
@@ -848,7 +835,7 @@ function openTabList(anchor, cardId) {
   const card = grid.card(cardId);
   if (!card?.data) return;
   openLayer(anchor, `탭 ${tabsOf(card).length}개`, tabsOf(card).map((t) => ({
-    key: t.id, name: t.title, mark: PLUGIN[t.plugin]?.mark ?? "", svg: PLUGIN[t.plugin]?.svg ?? "",
+    key: t.id, name: t.title, mark: plugin(t.plugin).mark, svg: plugin(t.plugin).svg,
     active: t.id === card.data.activeId,
   })), (id) => {
     const c = grid.card(cardId);
@@ -1016,13 +1003,13 @@ function dropTab(fromId, tabId, hit) {
  * 다른 카드의 행 경계는 움직이지 않는다.
  */
 function standRail(kind) {
-  const id = RAILS[kind];
+  const id = railId(kind);
   const has = !!grid.card(id);
   // 레일은 포커스가 잡은 것의 곁을 지킨다. 브라우저를 보는 동안 터미널 레일이
   // 남아 있으면 그것은 지금 보고 있는 것의 곁이 아니라 남겨진 자리다. 자기
   // 종류가 포커스를 잃으면 물러난다 — 그 종류의 레일을 꺼 두었다면 아무 레일도
   // 서지 않는 것이 맞다.
-  if (!railOn[kind] || railMode === "off" || focusedPlugin() !== kind) {
+  if (!linkedSet("rail", kind) || railMode === "off" || focusedPlugin() !== kind) {
     if (has) {
       railWidth[kind] = grid.card(id).width ?? railWidth[kind];
       dismiss(id);
@@ -1122,8 +1109,7 @@ function settle() {
   closePicker();
   standEdge("left", leftOn, 190, "left");
   standEdge("right", rightOn, 210, "right");
-  standRail("terminal");
-  standRail("browser");
+  for (const p of plugins()) standRail(p.id);
   if (!grid.card(focusedId)) focusedId = grid.cards.find((c) => !isPlace(c.id))?.id ?? null;
   view.render();
 }
@@ -1243,7 +1229,8 @@ function drawRail() {
   // 포커스 카드와 묶이는 것은 그 카드의 종류를 맡은 레일뿐이다. 레일이 없으면
   // 묶을 것이 없다: `filter(Boolean)` 만 두면 포커스 카드 하나를 감싼 외곽선을
   // 그려 놓고 「레일 외곽선」이라 부르게 된다.
-  const rail = grid.rect(RAILS[focusedPlugin()] ?? "");
+  const kind = focusedPlugin();
+  const rail = kind ? grid.rect(railId(kind)) : null;
   const focused = grid.rect(focusedId);
   const rects = rail && focused ? [rail, focused] : [];
   // 획은 카드에서 pad 만큼 떨어져 돈다. 카드 모서리와 동심이려면 그만큼 더
@@ -1374,7 +1361,7 @@ function verify() {
   //
   // 선언값이 아니라 그려진 폭을 잰다. 선언값은 요청이고 검증 대상은 결과다.
   const left = grid.card("left"), right = grid.card("right");
-  const rail = grid.card(RAILS.terminal) ?? grid.card(RAILS.browser);
+  const rail = grid.cards.find((c) => railKind(c.id));
   const drawn = (c) => (c ? grid.rect(c.id).w : null);
   const asked = (c) => (c && c.width !== undefined ? c.width : null);
   const kept = (c) => c === undefined || c === null || asked(c) === null
@@ -1534,8 +1521,6 @@ document.getElementById("skew").addEventListener("input", (e) => {
   view.render();
 });
 document.getElementById("railMode").addEventListener("change", (e) => { railMode = e.target.value; settle(); });
-document.getElementById("railTerminal").addEventListener("change", (e) => { railOn.terminal = e.target.value === "on"; settle(); });
-document.getElementById("railBrowser").addEventListener("change", (e) => { railOn.browser = e.target.value === "on"; settle(); });
 document.getElementById("leftOn").addEventListener("change", (e) => { leftOn = e.target.value === "on"; settle(); });
 document.getElementById("rightOn").addEventListener("change", (e) => { rightOn = e.target.value === "on"; settle(); });
 document.getElementById("reset").addEventListener("click", build);
