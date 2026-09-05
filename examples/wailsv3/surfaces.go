@@ -154,7 +154,7 @@ func (s *Surfaces) OverlayShow(req OverlayRequest) error {
 		if live.view != nil {
 			live.view.destroy()
 		}
-		url := s.pages.URL("overlay.html?id=" + req.ID)
+		url := s.pages.URL("overlay.html?id=" + req.ID + "&framework=wailsv3")
 		live.view = newNativeView(win.NativeWindow(), url, x, y,
 			max1(req.Rect.W), max1(req.Rect.H), srgb(req.Background))
 		if live.view != nil {

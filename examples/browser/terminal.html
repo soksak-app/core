@@ -2,12 +2,12 @@
 <meta charset="utf-8">
 <title>terminal</title>
 <!--
-  A terminal surface: a webview inside the window, with a shell process behind
-  it. A console, not a terminal emulator — output is text and input is a line at
-  a time.
+  터미널 표면 — 창 안의 웹뷰이고 그 뒤에 셸이 붙는다.
 
-  This page is loaded straight into a native view, so it has no bridge to Go.
-  It reads the shell's output as an event stream and posts what is typed.
+  터미널 에뮬레이터가 아니라 콘솔이다. 출력은 글자이고 입력은 한 줄씩 간다.
+
+  이 페이지는 자기를 담고 있는 것이 무엇인지 framework/ 에게 묻는다. 앱마다
+  셸에게 말하는 법이 다르고, 그 차이는 거기 한 곳에 있다.
 -->
 <style>
   html, body { margin: 0; height: 100%; background: var(--surface) }
@@ -26,11 +26,11 @@
 </style>
 <pre id="out"></pre>
 <div id="line"><span>$</span><input id="in" autocomplete="off" spellcheck="false"></div>
-<script>
-  /* A page served here is a document of its own and inherits none of the main
-     page's stylesheet, so the theme arrives as values and is set here. It has no
-     bridge to Go either, so a change arrives on the stream that carries the
-     shell's output: this page may hold only a few connections to that server. */
+<script type="module">
+  import { page } from "./framework/index.js";
+
+  /* 이 페이지는 자기 문서라 주 페이지의 스타일시트를 물려받지 못한다. 그래서
+     테마가 값으로 와서 여기서 자기 루트에 심는다. */
   function applyTheme(theme) {
     const root = document.documentElement;
     root.style.colorScheme = theme.scheme;
@@ -39,7 +39,7 @@
     }
   }
 
-  fetch("/theme").then((r) => r.json()).then(applyTheme);
+  page.theme(applyTheme);
 
   const id = new URLSearchParams(location.search).get("id");
   const out = document.getElementById("out");
@@ -53,20 +53,15 @@
     if (atEnd) out.scrollTop = out.scrollHeight;
   }
 
-  const query = `?id=${encodeURIComponent(id)}`;
-
-  fetch(`/terminal/open${query}`, { method: "POST" }).then(() => {
-    const stream = new EventSource(`/terminal/stream${query}`);
-    stream.addEventListener("output", (e) => write(JSON.parse(e.data)));
-    stream.addEventListener("theme", (e) => applyTheme(JSON.parse(e.data)));
-  });
+  page.shell.open(id);
+  page.shell.onOutput(id, write, applyTheme);
 
   input.addEventListener("keydown", (e) => {
     if (e.key !== "Enter") return;
     const line = input.value;
     input.value = "";
     write(`$ ${line}\n`);
-    fetch(`/terminal/write${query}`, { method: "POST", body: `${line}\n` });
+    page.shell.write(id, `${line}\n`);
   });
 
   addEventListener("click", () => input.focus());

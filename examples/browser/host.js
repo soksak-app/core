@@ -8,7 +8,8 @@
 // 자기 뷰로 넘긴다. 표면보다 나중에 만들어지므로 그 위에 선다.
 //
 // 이 파일은 어느 앱의 것도 아니다. 앱마다 다른 것은 전송 수단뿐이고, 그것은
-// bridge.js 가 내놓는다 — 계약이 같은데 파일이 둘이면 반드시 갈라진다.
+// framework/ 가 내놓는다 — 계약이 같은데 파일이 둘이면 반드시 갈라진다.
+import { host as bridge } from "./framework/index.js";
 
 /** 표면이 보여주는 것을 주소로 바꾼다. `url` 은 이 호스트 밖, `page` 는 안. */
 function surfaceURL(surface) {
@@ -159,4 +160,4 @@ function install() {
 }
 
 // 다리가 없으면 호스트도 없다 — 브라우저에서는 페이지가 표면을 스스로 그린다.
-if (typeof bridge !== "undefined" && bridge) bridge.ready(install);
+if (bridge) bridge.ready(install);

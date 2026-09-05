@@ -322,7 +322,8 @@ fn overlay_show(
     }
     // The id is passed in the url so the page can identify itself when it calls
     // back.
-    let url = format!("overlay.html?id={}", request.id);
+    // The page reads which framework holds it from the address it was opened at.
+    let url = format!("overlay.html?id={}&framework=tauriv2", request.id);
     let [r, g, b] = request.background;
     window
         .add_child(

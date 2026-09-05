@@ -38,16 +38,14 @@ WAILS_DEBUG   = examples/wailsv3/bin/wailsv3
 WAILS_RELEASE = examples/wailsv3/bin/wailsv3-release
 
 # The page is copied whole: go:embed cannot reach outside its module, so it has
-# to sit inside the app. Nothing is rewritten — the page is servable as it is,
-# and each app only puts its own host.js and its own pages over the copy.
+# to sit inside the app. Nothing is rewritten and nothing is added — the page
+# asks framework/ which runtime is holding it, so one copy serves every app.
 example-frontend:
 	@for app in wailsv3 tauriv2; do \
 	  out="examples/$$app/frontend"; \
 	  rm -rf "$$out"; mkdir -p "$$out/dist"; \
 	  cp -R examples/browser/. "$$out/"; \
 	  cp dist/*.js "$$out/dist/"; \
-	  cp "examples/$$app/bridge.js" "examples/$$app/overlay.html" \
-	     "examples/$$app/terminal.html" "$$out/"; \
 	done
 
 # generate_context! embeds the frontend, so the crate is forced to rebuild.

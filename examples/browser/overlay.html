@@ -17,11 +17,12 @@
      until its document paints, and a background applied later is a flash. */
   html, body { margin: 0; padding: 0; height: 100%; background: #1b1d27 }
 </style>
-<script>
-  /* A page served here is a document of its own and inherits none of the main
-     page's stylesheet, so the theme arrives as values and is set here. This page
-     is built when the modal opens and destroyed when it closes, so the theme it
-     reads on load is the theme for as long as it exists. */
+<script type="module">
+  import { page } from "./framework/index.js";
+
+  /* 이 페이지는 자기 문서라 주 페이지의 스타일시트를 물려받지 못한다. 그래서
+     테마가 값으로 와서 여기서 자기 루트에 심는다. 모달은 열릴 때 만들어지고
+     닫힐 때 사라지므로, 실릴 때 읽은 테마가 사는 동안의 테마다. */
   function applyTheme(theme) {
     const root = document.documentElement;
     root.style.colorScheme = theme.scheme;
@@ -30,10 +31,9 @@
     }
   }
 
-  fetch("/theme").then((r) => r.json()).then(applyTheme);
+  page.theme(applyTheme);
 
   const id = new URLSearchParams(location.search).get("id");
-  const query = `?id=${encodeURIComponent(id)}`;
   let sheet = null;
   let root = null;
 
@@ -46,8 +46,12 @@
       // added after it so it wins.
       document.head.insertAdjacentHTML("beforeend", `<style>
         html, body { margin: 0; padding: 0; height: 100% }
+        /* 카드는 주 페이지에서 자기 자리를 스스로 잡는다. 여기서는 이 뷰가
+           카드 하나만 담으므로 그 자리 잡기를 전부 되돌린다 — transform 을
+           남기면 카드가 자기 폭의 절반만큼 밀려 왼쪽이 잘린다. */
         body > * { position: static !important; inset: auto !important;
-                   margin: 0 !important; max-height: none !important }
+                   transform: none !important; margin: 0 !important;
+                   max-height: none !important }
       </style>`);
       root = document.createElement("div");
       document.body.appendChild(root);
@@ -60,18 +64,15 @@
     // Measured at once: this view is placed before it is filled, and the size it
     // needs is only known here, where it is laid out.
     const r = root.getBoundingClientRect();
-    fetch(`/overlay/fit${query}&w=${Math.ceil(r.width)}&h=${Math.ceil(r.height)}`, {
-      method: "POST",
-    });
+    page.modal.fit(id, Math.ceil(r.width), Math.ceil(r.height));
   }
 
-  fetch(`/overlay/content${query}`).then((r) => r.json()).then(render);
-  /* 열려 있는 동안 내용이 바뀌면 다시 그린다. 뷰를 새로 만들면 깜빡인다. */
-  new EventSource(`/overlay/stream${query}`).onmessage = (e) => render(JSON.parse(e.data));
+  /* 실릴 때 한 번, 그리고 열려 있는 동안 바뀔 때마다. 뷰를 새로 만들면 깜빡인다. */
+  page.modal.content(id, render);
 
   /* 돌려주는 것은 하나다: 무엇을(key), 무엇으로(value).
      고르기는 값이 비어 있고, 값을 바꾼 것은 그 값을 싣는다. */
-  const send = (key, value) => fetch(`/overlay/pick${query}&key=${encodeURIComponent(key)}&value=${encodeURIComponent(value)}`, { method: "POST" });
+  const send = (key, value) => page.modal.answer(id, key, value);
 
   addEventListener("click", (e) => {
     const hit = e.target.closest("[data-key]");
