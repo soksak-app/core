@@ -72,8 +72,10 @@ function install() {
   // 묻는 자리다 — 공표는 페이지가 섰다는 말이다.
   let announced = false;
 
-  const tell = (name, payload) =>
-    bridge.call(name, payload).catch((e) => console.error(name, e));
+  /* 앱에는 콘솔이 없다. 실패한 호출을 여기서 삼키면 그 실패는 아무 데도
+     남지 않으므로, 잡지 않고 그대로 둔다 — 문서의 unhandledrejection 이
+     받아서 앱의 로그로 보낸다. */
+  const tell = (name, payload) => bridge.call(name, payload);
 
   window.hostSurfaces = {
     kinds: ["browser", "terminal"],
