@@ -65,7 +65,9 @@ const pickerEl = document.getElementById("picker");
 const RAIL_WIDTH = 190;
 const freshRailWidth = () =>
   Object.fromEntries(plugins().map((p) => [p.id, RAIL_WIDTH]));
-const railWidth = freshRailWidth();
+// 등록이 끝난 뒤에 채운다. 모듈이 평가되는 시점에 읽으면 그때 무엇이 등록되어
+// 있었는지에 따라 답이 달라진다.
+let railWidth = {};
 
 /* ── 자리 ─────────────────────────────────────────────────────────────────
    어디 서는가          무엇이 서는가
@@ -833,6 +835,7 @@ export function onRender(fn) {
 export function build() {
   view?.destroy();
   named = 0;
+  railWidth = freshRailWidth();
   const half = halfGap();
   grid = new Soksak(initial(), { gap: half * 2 });
   focusedId = "terminal";
@@ -872,7 +875,7 @@ export const capture = () => ({
 export function adopt(kept) {
   grid.replace(kept.state);
   focusedId = kept.focusedId;
-  Object.assign(railWidth, kept.railWidth);
+  railWidth = { ...kept.railWidth };
   named = kept.named;
   settle();
 }

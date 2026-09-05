@@ -218,6 +218,24 @@ export function onSettingsChange(fn) {
 
 const announce = () => listener?.();
 
+/** 조합해 둔 세트 전부. 사이드바를 편집할 때 고르는 목록이다. */
+export const sets = () => settings.sets;
+
+/**
+ * 세트를 자리에 건다. `setId` 가 null 이면 연결을 끊는다 — 그러면 그 사이드바는
+ * 없다.
+ */
+export function link(place, plugin, setId) {
+  const rest = settings.links.filter((l) => !(l.place === place && l.plugin === plugin));
+  set({ links: setId === null ? rest : [...rest, { place, plugin, set: setId }] });
+}
+
+/** 그 자리에 걸린 세트의 id. 없으면 null. */
+export function linkedId(place, plugin) {
+  const found = settings.links.find((l) => l.place === place && l.plugin === plugin);
+  return found ? found.set : null;
+}
+
 /**
  * 그 자리에 걸린 세트. 걸린 것이 없으면 null — 연결하지 않으면 그 사이드바는
  * 없다.
