@@ -267,6 +267,10 @@ import {
 /* 표면을 가진 것과 사이드바에 설 수 있는 것. 파일을 가져오는 것이 곧 등록이다
    — 어느 것이 있는지 아는 목록을 따로 두면 목록과 파일이 갈린다. */
 import { isPlace, plugin, plugins, railId, railKind, section } from "./plugins/registry.js";
+
+/* 표면을 흉내 내고 공표하는 쪽. 판은 자리 요소에 표시만 하고, 재는 일과
+   알리는 일은 저쪽이 한다. */
+import { knobs, latest, observe, onCommit, reset, standIn } from "./compositor.js";
 import "./plugins/terminal.js";
 import "./plugins/browser.js";
 import "./plugins/files.js";
@@ -388,122 +392,6 @@ function initial() {
   return { xs: [0, 1 / 3, 2 / 3, 1], ys: [0, 0.52, 1], cards };
 }
 
-/* ── 시뮬레이션된 네이티브 컴포지터 ────────────────────────────────────────
-   실제 계약과 같은 개념만 쓴다. declared 와 applied 는 한 커밋의 한 레코드에
-   함께 담긴다 — 따로 읽으면 두 시점의 두 값을 빼는 것이라 차이가 무엇을
-   뜻하는지 알 수 없다.                                                      */
-const compositor = {
-  latency: 0, skew: 0, seq: 0, applied: 0, latest: null,
-  surfaces: new Map(), timer: null,
-
-  surfaceEl(id) {
-    let el = this.surfaces.get(id);
-    if (el) return el;
-    el = document.createElement("div");
-    el.className = "surface";
-    el.dataset.nativeSurfaceId = id;
-    plane.appendChild(el);
-    this.surfaces.set(id, el);
-    return el;
-  },
-
-  /**
-   * 선언 ∧ 모든 조상의 data-surface-visible ∧ capture-hidden 이 아님.
-   *
-   * 세 번째 항이 드래그 중의 표시를 정한다. DOM 은 네이티브 표면 위에 그릴
-   * 수 없으므로, 표면 위에 무언가를 그리는 동안에는 capture-hidden 으로
-   * 표면을 숨기고 DOM 이 스냅샷을 그린다. 계약이 정의한 절차다.
-   */
-  effectiveVisible(slot) {
-    if (slot.dataset.nativeVisible !== "true") return false;
-    if (slot.dataset.nativeCaptureHidden === "true") return false;
-    for (let n = slot.parentElement; n && n !== document.body; n = n.parentElement) {
-      if (n.dataset?.surfaceVisible === "false") return false;
-    }
-    return true;
-  },
-
-  observe() {
-    const seq = ++this.seq;
-    const host = plane.getBoundingClientRect();
-    const snapshot = [];
-    // 카드마다 DOM 을 훑으면 카드 수의 제곱이 된다 — 한 번 모아 이름으로 찾는다.
-    const slots = new Map();
-    for (const el of plane.querySelectorAll("[data-native-surface][data-native-surface-id]")) {
-      slots.set(el.dataset.nativeSurfaceId, el);
-    }
-    for (const card of grid.cards) {
-      const t = activeTab(card);
-      if (!t) continue;
-      const slot = slots.get(card.id);
-      if (!slot) continue;
-      const r = slot.getBoundingClientRect();
-      snapshot.push({
-        id: card.id, layer: 10, title: t.title, plugin: t.plugin,
-        visible: this.effectiveVisible(slot),
-        frame: { x: r.left - host.left, y: r.top - host.top, w: r.width, h: r.height },
-      });
-    }
-    clearTimeout(this.timer);
-    const deliver = () => this.commit(seq, snapshot);
-    if (this.latency === 0) deliver();
-    else this.timer = setTimeout(deliver, this.latency);
-  },
-
-  /** 유일한 네이티브 writer. 시퀀스가 뒤진 스냅샷은 여기서 거부된다. */
-  commit(seq, snapshot) {
-    if (seq < this.applied) return;
-    this.applied = seq;
-    const record = { seq, surfaces: [] };
-    const native = hostKinds();
-    for (const s of snapshot) {
-      const applied = { ...s.frame, x: s.frame.x + this.skew, y: s.frame.y + this.skew };
-      // A surface the host draws natively gets no simulated element. Drawing
-      // both would put a DOM copy under the real view.
-      if (native.includes(s.plugin)) {
-        this.surfaces.get(s.id)?.remove();
-        this.surfaces.delete(s.id);
-        record.surfaces.push({
-          id: s.id, plugin: s.plugin, layer: s.layer, declared: s.frame, applied,
-          visible: s.visible, dim: dimmed(s.id),
-          // 표면이 보여주는 것은 플러그인이 정한다. 호스트가 종류의 이름으로
-          // 분기하면 플러그인을 하나 더 만들 때 호스트도 고쳐야 한다.
-          surface: plugin(s.plugin).surface(s.id),
-        });
-        continue;
-      }
-      const el = this.surfaceEl(s.id);
-      el.style.left = `${applied.x}px`; el.style.top = `${applied.y}px`;
-      el.style.width = `${applied.w}px`; el.style.height = `${applied.h}px`;
-      el.style.zIndex = String(50 + s.layer);
-      el.dataset.hidden = String(!s.visible);
-      // 라벨은 바뀔 때만 다시 쓴다. 커밋은 프레임마다 오는데 제목과 레이어는
-      // 거의 그대로여서, 매번 다시 쓰면 표면 안이 프레임마다 새로 태어난다.
-      const label = `<b>${s.title}</b><br>네이티브 표면 · ${s.plugin} · layer ${s.layer}`;
-      if (el.dataset.label !== label) { el.innerHTML = label; el.dataset.label = label; }
-      record.surfaces.push({
-          id: s.id, plugin: s.plugin, layer: s.layer, declared: s.frame, applied,
-          visible: s.visible, dim: dimmed(s.id),
-          surface: plugin(s.plugin).surface(s.id),
-        });
-    }
-    for (const [id, el] of this.surfaces) {
-      if (!record.surfaces.some((x) => x.id === id)) { el.remove(); this.surfaces.delete(id); }
-    }
-    for (const s of record.surfaces) {
-      const slot = plane.querySelector(`[data-native-surface-id="${s.id}"][data-native-surface]`);
-      if (slot) slot.dataset.nativeDeclaredFrame =
-        `${s.declared.x.toFixed(2)},${s.declared.y.toFixed(2)},${s.declared.w.toFixed(2)},${s.declared.h.toFixed(2)}`;
-    }
-    this.latest = record;
-    window.hostSurfaces?.place?.(record);
-    verify();
-  },
-};
-
-const maxDelta = (a, b) =>
-  !a || !b ? Infinity
-    : Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y), Math.abs(a.w - b.w), Math.abs(a.h - b.h));
 
 /* ── 카드 ─────────────────────────────────────────────────────────────── */
 
@@ -672,11 +560,16 @@ function updateCard(el, card) {
     if (b.title !== title) b.title = title;
   }
 
+  // 표면이 설 자리. 컴포지터는 판을 모르므로 필요한 것을 여기에 표시해 둔다.
   const slot = el.querySelector(".slot");
   slot.dataset.nativeSurface = "stub";
   slot.dataset.nativeSurfaceId = card.id;
   slot.dataset.nativeLayer = "10";
   slot.dataset.nativeVisible = "true";
+  const shown = activeTab(card);
+  slot.dataset.nativePlugin = shown.plugin;
+  slot.dataset.nativeTitle = shown.title;
+  slot.dataset.nativeDim = String(dimmed(card.id));
   setText(status, `열 ${card.c0}–${card.c1} · 행 ${card.r0}–${card.r1} · 탭 ${tabs.length}`);
 }
 
@@ -712,7 +605,7 @@ function beginTabDrag(e, cardId, tabId) {
     if (!tabDrag) return;
     if (Math.hypot(ev.clientX - tabDrag.from.x, ev.clientY - tabDrag.from.y) > 4) tabDrag.moved = true;
     if (!tabDrag.moved) return;
-    if (!tabDrag.stood) { tabDrag.stood = true; standInForSurfaces(true); }
+    if (!tabDrag.stood) { tabDrag.stood = true; standIn(true); }
     const host = plane.getBoundingClientRect();
     const only = tabsOf(grid.card(tabDrag.cardId)).length === 1 ? tabDrag.cardId : undefined;
     tabDrag.hit = grid.zoneAt(ev.clientX - host.left, ev.clientY - host.top,
@@ -726,7 +619,7 @@ function beginTabDrag(e, cardId, tabId) {
     const drag = tabDrag;
     tabDrag = null;
     dropEl.hidden = true;
-    if (drag.stood) standInForSurfaces(false);
+    if (drag.stood) standIn(false);
     el.removeEventListener("pointermove", onMove);
     el.removeEventListener("pointerup", onUp);
     el.removeEventListener("pointercancel", onUp);
@@ -736,61 +629,6 @@ function beginTabDrag(e, cardId, tabId) {
   el.addEventListener("pointermove", onMove);
   el.addEventListener("pointerup", onUp);
   el.addEventListener("pointercancel", onUp);
-}
-
-/**
- * 표면을 숨기고 같은 위치에 `.standin` 을 표시한다.
- *
- * 네이티브 표면은 OS 뷰라서 DOM 이 그 위에 그릴 수 없다. DOM 을 표면 위에
- * 그리는 동안 capture-hidden 으로 표면을 숨기고 `.standin` 을 대신 표시한다.
- * 표면 갱신은 그동안 중단되며 종료 시 복원된다.
- *
- * `.standin` 은 표면과 동일하게 표시한다. 표면을 숨기는 동안 화면이 변하면 안 된다.
- *
- * `over` 를 지정하면 그 영역과 겹치는 표면만 숨긴다. 드롭 구획은 판 전체를
- * 대상으로 하므로 전체를 숨기지만, 선택 레이어는 작아서 전체를 숨기면 겹치지
- * 않는 표면의 갱신까지 중단된다.
- */
-function standInForSurfaces(on, over) {
-  const host = over ? plane.getBoundingClientRect() : null;
-  const native = hostKinds();
-  for (const slot of plane.querySelectorAll("[data-native-surface]")) {
-    // A surface the host draws natively shows live content: a running page, a
-    // running program. Hiding it to draw DOM on top would replace what the user
-    // is watching with a still, so it is never hidden and the DOM has to take
-    // whatever z order the compositor gives it.
-    const own = grid.card(slot.dataset.nativeSurfaceId);
-    if (native.includes(activeTab(own)?.plugin)) {
-      delete slot.dataset.nativeCaptureHidden;
-      slot.innerHTML = "";
-      continue;
-    }
-    let hide = on;
-    if (hide && over) {
-      const r = slot.getBoundingClientRect();
-      hide = over.x < r.right - host.left && over.x + over.w > r.left - host.left
-          && over.y < r.bottom - host.top && over.y + over.h > r.top - host.top;
-    }
-    if (hide) slot.dataset.nativeCaptureHidden = "true";
-    else delete slot.dataset.nativeCaptureHidden;
-    slot.innerHTML = "";
-    if (!hide) continue;
-
-    // 표면이 마지막으로 표시한 내용을 복제한다. 모델에서 다시 생성하면 숨기는
-    // 시점의 표면이 아니라 현재 모델을 표시한다. 커밋 지연 중에는 둘이 다르다.
-    const id = slot.dataset.nativeSurfaceId;
-    const shown = compositor.surfaces.get(id);
-    if (!shown) continue;
-    const el = document.createElement("div");
-    el.className = "standin";
-    el.innerHTML = shown.innerHTML;
-    // 표면이 있던 위치에 배치한다. 선언 위치에 두면 적용 오차만큼 화면이 이동한다.
-    const rec = compositor.latest?.surfaces.find((x) => x.id === id);
-    if (rec) el.style.transform =
-      `translate(${rec.applied.x - rec.declared.x}px,${rec.applied.y - rec.declared.y}px)`;
-    slot.appendChild(el);
-  }
-  compositor.observe();
 }
 
 /* ── 선택 레이어 ──────────────────────────────────────────────────────────
@@ -898,7 +736,7 @@ function openLayer(anchor, ask, items, pick, align = "right") {
     window.hostOverlay.show(pickerEl, rect, (key) => { closePicker(); pick(key); });
     pickerEl.hidden = true;
   } else {
-    standInForSurfaces(true, rect);
+    standIn(true, rect);
   }
   document.addEventListener("pointerdown", onPickerOutside, true);
   document.addEventListener("keydown", onPickerKey, true);
@@ -913,7 +751,7 @@ function closePicker() {
   document.removeEventListener("pointerdown", onPickerOutside, true);
   document.removeEventListener("keydown", onPickerKey, true);
   if (window.hostOverlay) window.hostOverlay.hide();
-  else standInForSurfaces(false);
+  else standIn(false);
 }
 
 /** + 버튼의 후속 처리. 배치는 변경하지 않고 탭만 추가한다. */
@@ -1247,6 +1085,11 @@ function drawRail() {
 
 /* ── 검증 — 캡처는 판단에, 합격은 수치로 ──────────────────────────────── */
 
+/** 두 사각형이 가장 크게 어긋난 값. 하나라도 없으면 비교할 수 없다. */
+const maxDelta = (a, b) =>
+  !a || !b ? Infinity
+    : Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y), Math.abs(a.w - b.w), Math.abs(a.h - b.h));
+
 function verify() {
   const rows = [];
   const add = (n, ok, note) => rows.push([n, note, ok]);
@@ -1312,9 +1155,9 @@ function verify() {
   // V7a / V7b — 합성. 두 차이는 원인이 다르므로 나눠서 재고,
   // declared 와 applied 는 같은 커밋의 한 레코드에서 읽는다.
   const host = plane.getBoundingClientRect();
-  const latest = compositor.latest;
+  const record = latest();
   let stale = 0, land = 0, counted = 0;
-  for (const s of latest?.surfaces ?? []) {
+  for (const s of record?.surfaces ?? []) {
     const slot = plane.querySelector(`[data-native-surface-id="${s.id}"][data-native-surface]`);
     if (!slot) continue;
     const r = slot.getBoundingClientRect();
@@ -1323,7 +1166,7 @@ function verify() {
     counted++;
   }
   add("V7a element − declared == 0", counted > 0 && stale < 0.5,
-      counted ? `최대 ${stale.toFixed(2)}px · 0이 아니면 커밋이 뒤처진 것 (seq ${latest.seq})` : "표면 없음");
+      counted ? `최대 ${stale.toFixed(2)}px · 0이 아니면 커밋이 뒤처진 것 (seq ${record.seq})` : "표면 없음");
   add("V7b declared − applied == 0", counted > 0 && land < 0.5,
       counted ? `최대 ${land.toFixed(2)}px · 0이 아니면 컴포지터가 못 앉힌 것` : "표면 없음");
 
@@ -1347,7 +1190,7 @@ function verify() {
   // V10 — 네이티브 표면은 DOM overflow 에 잘리지 않는다. 선언 rect 가 클립보다
   // 크면 표면이 카드 밖에 그려진다.
   let escape = 0;
-  for (const s of latest?.surfaces ?? []) {
+  for (const s of latest()?.surfaces ?? []) {
     const el = plane.querySelector(`[data-card-id="${s.id}"]`);
     if (!el) continue;
     const c = el.getBoundingClientRect();
@@ -1399,11 +1242,13 @@ function verify() {
 
 /* ── 배선 ─────────────────────────────────────────────────────────────── */
 
+/* 커밋이 끝나면 검증한다. 컴포지터는 검증이 무엇인지 모르고, 검증은 둘 다
+   읽기만 한다 — 그래서 서로를 부르지 않고 여기서 잇는다. */
+onCommit(verify);
+
 function build() {
   view?.destroy();
-  for (const el of plane.querySelectorAll(".surface")) el.remove();
-  compositor.surfaces.clear();
-  compositor.latest = null;
+  reset();
   seq = 0;
   grid = new Soksak(initial(), { gap: Number(document.getElementById("gap").value) * 2 });
   focusedId = "terminal";
@@ -1413,7 +1258,7 @@ function build() {
     // 말해 준다 — 그래야 평면 가장자리에 닿는 선이 벽까지 이어진다. 여백은
     // 사람이 바꾸므로 슬라이더가 이것도 같이 옮긴다.
     bleed: Number(document.getElementById("gap").value),
-    onChange: () => { verify(); compositor.observe(); },
+    onChange: () => { verify(); observe(); },
   });
   const baseRender = view.render.bind(view);
   view.render = () => { baseRender(); markFocus(); centreTabs(); };
@@ -1515,12 +1360,12 @@ document.getElementById("gap").addEventListener("input", (e) => {
   view.render();
 });
 document.getElementById("latency").addEventListener("input", (e) => {
-  compositor.latency = Number(e.target.value);
+  knobs.latency = Number(e.target.value);
   document.getElementById("latOut").value = `${e.target.value}ms`;
   view.render();
 });
 document.getElementById("skew").addEventListener("input", (e) => {
-  compositor.skew = Number(e.target.value);
+  knobs.skew = Number(e.target.value);
   document.getElementById("skewOut").value = `${e.target.value}px`;
   view.render();
 });
@@ -1536,8 +1381,8 @@ build();
  *
  * 첫 배치가 선 뒤에 듣기 시작한다. 새로고침하면 브라우저가 스크롤 위치를
  * 되돌리며 scroll 을 먼저 내는데, 그때 읽은 자리는 카드가 서기 전의 것이다. */
-addEventListener("scroll", () => compositor.observe(), { passive: true });
-addEventListener("resize", () => compositor.observe());
+addEventListener("scroll", () => observe(), { passive: true });
+addEventListener("resize", () => observe());
 
 Object.assign(window, { grid, view, compositor, verify, settle });
 </script>
