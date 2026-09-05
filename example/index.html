@@ -423,6 +423,9 @@ function applyTheme(name, next) {
   for (const [token, value] of Object.entries(themeTokens())) {
     root.style.setProperty(token, value);
   }
+  // 호스트가 그리는 페이지들은 이 문서의 스타일시트를 물려받지 못하므로 값을
+  // 따로 받는다. 테마는 사람이 고를 때만 바뀌므로 그때 한 번만 보낸다.
+  window.hostSurfaces?.theme?.(window.pageTheme());
   // 통로는 배치가 읽는 값이라 슬라이더와 판이 함께 따라간다.
   const half = parseFloat(theme.shape.gap);
   document.getElementById("gap").value = String(half);

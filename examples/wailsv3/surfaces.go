@@ -44,12 +44,12 @@ type Surface struct {
 
 type SyncRequest struct {
 	Viewport Viewport  `json:"viewport"`
-	Theme    Theme     `json:"theme"`
 	Surfaces []Surface `json:"surfaces"`
 }
 
-// Viewport is the page's own size, used to work out how far the page sits
-// inside the window's content view: on macOS that is the height of the title bar.
+// Viewport is the page's own size. The page's view starts at the window content
+// view's origin, so its height is all that is needed to turn a rect measured
+// from the page's top left into the frame AppKit wants.
 type Viewport struct {
 	W float64 `json:"w"`
 	H float64 `json:"h"`
@@ -101,15 +101,19 @@ type placement struct {
 }
 
 type Surfaces struct {
+	// Guards modals, which the pages this host serves read over HTTP. Views and
+	// placements are touched on the main thread only and need no lock.
 	mu sync.Mutex
 	// A surface is a native view, so a press on it never reaches the page. This
 	// is what lets a press be named.
 	views  map[string]*nativeView
 	placed []placement
-	modals map[string]*modal
-	shells *Shells
-	pages  *Pages
-	watch  sync.Once
+	// The page's size, which turns a point in the window into a page point.
+	viewport Viewport
+	modals   map[string]*modal
+	shells   *Shells
+	pages    *Pages
+	watch    sync.Once
 }
 
 func NewSurfaces(shells *Shells, pages *Pages) *Surfaces {
@@ -130,22 +134,21 @@ func (s *Surfaces) OverlayShow(req OverlayRequest) error {
 	if !ok {
 		return nil
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	live := s.modals[req.ID]
-	if live == nil {
-		live = &modal{}
-		s.modals[req.ID] = live
-	}
-	live.content = OverlayContent{
-		CSS: req.CSS, ClassName: req.ClassName, HTML: req.HTML, Border: req.Border,
-	}
-	live.radius = req.Radius
-
 	application.InvokeSync(func() {
-		insetX, insetY := inset(win, req.Viewport)
-		x, y := req.Rect.X+insetX, req.Rect.Y+insetY
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
+		live := s.modals[req.ID]
+		if live == nil {
+			live = &modal{}
+			s.modals[req.ID] = live
+		}
+		live.content = OverlayContent{
+			CSS: req.CSS, ClassName: req.ClassName, HTML: req.HTML, Border: req.Border,
+		}
+		live.radius = req.Radius
+
+		x, y := req.Rect.X, up(req.Viewport, req.Rect.Y, max1(req.Rect.H))
 		if live.view != nil {
 			live.view.destroy()
 		}
@@ -161,13 +164,15 @@ func (s *Surfaces) OverlayShow(req OverlayRequest) error {
 
 func (s *Surfaces) OverlayHide(id string) error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	live, ok := s.modals[id]
 	if !ok || live.view == nil {
+		s.mu.Unlock()
 		return nil
 	}
 	view := live.view
 	live.view = nil
+	s.mu.Unlock()
+
 	application.InvokeSync(view.destroy)
 	return nil
 }
@@ -226,12 +231,15 @@ func surfaceAt(placed []placement, x, y float64) string {
 	return found
 }
 
+// up turns a top-left y into the bottom-left one AppKit measures.
+func up(viewport Viewport, y, h float64) float64 { return viewport.H - y - h }
+
 // press tells the page which surface a press landed on. The page decides what
 // that means; here it is only named.
-func (s *Surfaces) press(x, y float64) {
-	s.mu.Lock()
-	hit := surfaceAt(s.placed, x, y)
-	s.mu.Unlock()
+func (s *Surfaces) press(x, up float64) {
+	// The monitor reports a point in the window content view, measured from the
+	// bottom left. The placements are in the page's coordinates.
+	hit := surfaceAt(s.placed, x, s.viewport.H-up)
 	if hit == "" {
 		return
 	}
@@ -268,21 +276,11 @@ func mainWindow() (*application.WebviewWindow, bool) {
 	return win, ok
 }
 
-// inset reports how far the page sits inside the area views are placed in.
-func inset(win *application.WebviewWindow, viewport Viewport) (float64, float64) {
-	cw, ch := contentSize(win.NativeWindow())
-	if cw <= 0 || ch <= 0 {
-		return 0, 0
-	}
-	x := (cw - viewport.W) / 2
-	if x < 0 {
-		x = 0
-	}
-	y := ch - viewport.H - x
-	if y < 0 {
-		y = 0
-	}
-	return x, y
+// SetTheme records the theme the page is now drawn in, for the pages this host
+// serves. The page calls it when a theme is chosen, not on every render.
+func (s *Surfaces) SetTheme(theme Theme) error {
+	s.pages.SetTheme(theme)
+	return nil
 }
 
 // SyncSurfaces makes the surface views match the frames the page declared.
@@ -294,14 +292,8 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) error {
 	if !ok {
 		return nil
 	}
-	s.pages.SetTheme(req.Theme)
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	application.InvokeSync(func() {
-		insetX, insetY := inset(win, req.Viewport)
-		s.apply(win, req, insetX, insetY)
+		s.apply(win, req)
 		s.watch.Do(func() {
 			pressed = s.press
 			watchMouse(win.NativeWindow())
@@ -310,24 +302,19 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) error {
 	return nil
 }
 
-func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest, insetX, insetY float64) {
+func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) {
+	s.viewport = req.Viewport
 
 	wanted := map[string]bool{}
 	s.placed = s.placed[:0]
 	for _, surface := range req.Surfaces {
 		wanted[surface.ID] = true
-		x, y := surface.X+insetX, surface.Y+insetY
-		w, h := surface.W, surface.H
-		if w < 1 {
-			w = 1
-		}
-		if h < 1 {
-			h = 1
-		}
+		w, h := max1(surface.W), max1(surface.H)
+		x, y := surface.X, up(req.Viewport, surface.Y, h)
 
 		alpha := alphaFor(surface.Dim)
 		s.placed = append(s.placed, placement{
-			id: surface.ID, frame: Rect{X: x, Y: y, W: w, H: h},
+			id: surface.ID, frame: Rect{X: surface.X, Y: surface.Y, W: w, H: h},
 			layer: surface.Layer, visible: surface.Visible, alpha: alpha,
 		})
 		if view, live := s.views[surface.ID]; live {

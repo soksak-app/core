@@ -70,12 +70,20 @@ function install(call) {
   window.hostSurfaces = {
     kinds: ["browser", "terminal"],
 
+    theme(values) {
+      call.ByName(`${SERVICE}.SetTheme`, values).catch((e) =>
+        console.error("SetTheme", e),
+      );
+    },
+
     place(record) {
       const surfaces = record.surfaces
         .filter((s) => SURFACE_URL[s.plugin])
         .map((s) => ({
           id: s.id,
           kind: s.plugin,
+          layer: s.layer,
+          dim: s.dim,
           url: SURFACE_URL[s.plugin](s.id),
           visible: s.visible,
           // A webview leaves unpainted area white, and a divider drag resizes a
@@ -102,19 +110,27 @@ function install(call) {
     },
   };
 
+  // A surface is a native view, so a press on it never reaches this document.
+  // The app locates it and names the surface; focus then moves exactly as it
+  // does when a card is pressed. An event carries what was emitted in `data`,
+  // and nothing else.
+  window.wails.Events.On("surface-pressed", (e) => window.focusSurface(e.data));
+
   let pick = null;
   let shown = null;
   window.wails.Events.On("overlay-pick", (e) => {
-    const payload = e.data?.[0] ?? e.data;
     const done = pick;
     pick = null;
-    if (done && payload) done(payload.key);
+    if (done) done(e.data.key);
   });
 
   window.hostOverlay = {
     show(el, rect, onPick) {
       pick = onPick;
-      shown = el.id || "modal";
+      // The view is named after the element, so an element without an id has
+      // no name. Two of them would share one view.
+      if (!el.id) throw new Error("a [data-native-modal] element needs an id");
+      shown = el.id;
       const style = getComputedStyle(el);
       call.ByName(`${SERVICE}.OverlayShow`, {
         id: shown,

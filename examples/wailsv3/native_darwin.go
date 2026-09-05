@@ -24,10 +24,11 @@ static NSView* surfacePageView(NSWindow* window) {
     return [subviews count] == 0 ? nil : [subviews objectAtIndex:0];
 }
 
-// One frame, from the content view's top left into the frame AppKit wants.
-static NSRect surfaceInContent(NSWindow* window, double x, double y, double w, double h) {
-    NSView* content = [window contentView];
-    return NSMakeRect(x, [content bounds].size.height - y - h, w, h);
+// A frame arrives already in AppKit's coordinates. It is snapped to the backing
+// store's pixel grid outward: the page reports fractional rects, and a frame
+// snapped inward leaves the card's background showing along that edge.
+static NSRect surfaceAligned(NSWindow* window, double x, double y, double w, double h) {
+    return [window backingAlignedRect:NSMakeRect(x, y, w, h) options:NSAlignAllEdgesOutward];
 }
 
 // Not under ARC, so the view is retained here and released in surfaceDestroy.
@@ -37,7 +38,7 @@ static void* surfaceCreate(void* nsWindow, const char* url, double x, double y, 
     NSView* parent = [window contentView];
     WKWebViewConfiguration* config = [[WKWebViewConfiguration alloc] init];
     WKWebView* view = [[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, w, h) configuration:config];
-    view.frame = surfaceInContent(window, x, y, w, h);
+    view.frame = surfaceAligned(window, x, y, w, h);
     // The colour the view shows where its page has not painted. Public since
     // macOS 12; without it that area is white.
     if (@available(macOS 12.0, *)) {
@@ -58,7 +59,7 @@ static void surfaceSetFrame(void* handle, double x, double y, double w, double h
     WKWebView* view = (WKWebView*)handle;
     NSWindow* window = [view window];
     if (window == nil) return;
-    view.frame = surfaceInContent(window, x, y, w, h);
+    view.frame = surfaceAligned(window, x, y, w, h);
 }
 
 // Resizes about the top left, which is where the page put it.
@@ -111,8 +112,10 @@ static void surfaceWatchMouse(void* nsWindow) {
                                           handler:^NSEvent*(NSEvent* event) {
         if ([event window] == window) {
             NSView* content = [window contentView];
+            // Reported as AppKit measures it; the page's own height turns it
+            // into a page point, and only the page knows that height.
             NSPoint p = [content convertPoint:[event locationInWindow] fromView:nil];
-            surfaceMouseDown(p.x, [content bounds].size.height - p.y);
+            surfaceMouseDown(p.x, p.y);
         }
         return event;
     }];

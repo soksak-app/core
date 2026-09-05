@@ -28,6 +28,9 @@ function surfaceBackground() {
   return [Number(rgb[0]), Number(rgb[1]), Number(rgb[2])];
 }
 
+/** The viewport size, which the app uses to place a view inside its window. */
+const viewport = () => ({ w: window.innerWidth, h: window.innerHeight });
+
 /** Page coordinates for a rect the page gave in plane coordinates. */
 function toPage(rect) {
   const plane = document.getElementById("plane").getBoundingClientRect();
@@ -58,10 +61,6 @@ function over(colour, ground) {
   return `rgb(${mix(r, br)}, ${mix(g, bg)}, ${mix(b, bb)})`;
 }
 
-/** The viewport size lets the app work out how far the page sits inside the
- *  window's content view; on macOS that is the height of the title bar. */
-const viewport = () => ({ w: window.innerWidth, h: window.innerHeight });
-
 if (!invoke) {
   console.warn("no Tauri bridge; the page stays fully simulated");
 } else {
@@ -70,12 +69,18 @@ if (!invoke) {
   window.hostSurfaces = {
     kinds: ["browser", "terminal"],
 
+    theme(values) {
+      invoke("set_theme", { theme: values });
+    },
+
     place(record) {
       const surfaces = record.surfaces
         .filter((s) => SURFACE_URL[s.plugin])
         .map((s) => ({
           id: s.id,
           kind: s.plugin,
+          layer: s.layer,
+          dim: s.dim,
           url: SURFACE_URL[s.plugin](s.id),
           visible: s.visible,
           // A webview leaves unpainted area white, and a divider drag resizes a
