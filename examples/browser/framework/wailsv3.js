@@ -27,6 +27,7 @@ const METHOD = {
   setTheme: "SetTheme",
   report: "Report",
   overlayShow: "OverlayShow",
+  overlayPlace: "OverlayPlace",
   overlayUpdate: "OverlayUpdate",
   overlayHide: "OverlayHide",
 };

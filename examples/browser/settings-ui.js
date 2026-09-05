@@ -9,6 +9,7 @@
 // 전부 data-key 를 달고, 답은 하나의 함수로 온다.
 import { standIn } from "./compositor.js";
 import { icon } from "./icons.js";
+import { onGripDrag } from "./grip.js";
 import { build } from "./plane.js";
 import { knobs } from "./compositor.js";
 import { plugins, section } from "./plugins/registry.js";
@@ -168,7 +169,7 @@ function makeCard() {
   el.id = "settings";
   el.dataset.nativeModal = "";
   el.innerHTML =
-    '<header class="set-card__head">' +
+    '<header class="set-card__head" data-grip>' +
       '<span class="set-grip">⠿</span>' +
       '<span class="set-card__title">설정</span>' +
       `<button class="act" type="button" data-key="close" title="닫는다">${icon("close")}</button>` +
@@ -185,6 +186,9 @@ function makeCard() {
     const c = e.target.closest("[data-set]");
     if (c) answer(c.dataset.set, c.type === "checkbox" ? String(c.checked) : c.value);
   });
+  // 호스트가 있으면 이 요소는 그려지지 않지만 자리는 지킨다. 그래서 잡이를 끄는
+  // 일은 사본이 있는 뷰에서 일어나고, 그 답이 여기로 온다.
+  onGripDrag(el, (dx, dy) => answer("move", `${dx},${dy}`));
   return el;
 }
 
@@ -214,6 +218,7 @@ export function drawSettings() {
  */
 function answer(key, val) {
   if (key === "" || key === "close") return closeSettings();
+  if (key === "move") return moveBy(...val.split(",").map(Number));
   const [kind, a, b] = key.split(":");
   if (kind === "nav") { here = a; return drawSettings(); }
   if (kind === "theme") return applyTheme(a, modeName());
@@ -225,6 +230,28 @@ function answer(key, val) {
   const now = value(key);
   set({ [key]: typeof now === "boolean" ? val === "true"
     : typeof now === "number" ? Number(val) : val });
+}
+
+/** 카드가 선 자리. 판을 기준으로 잰다 — 호스트가 그 좌표로 뷰를 놓는다. */
+function cardRect() {
+  const plane = document.getElementById("plane").getBoundingClientRect();
+  const r = card.getBoundingClientRect();
+  return { x: r.left - plane.left, y: r.top - plane.top, w: r.width, h: r.height };
+}
+
+/**
+ * 잡이를 끈 만큼 옮긴다. 창 안에 8px 을 남기는 것은 구 프로젝트와 같다.
+ *
+ * 어디에 서 있는지는 요소가 안다. 따로 기억해 두면 요소와 기억이 갈라진다.
+ */
+function moveBy(dx, dy) {
+  const r = card.getBoundingClientRect();
+  card.style.left = `${Math.max(8, Math.min(innerWidth - r.width - 8, r.left + dx))}px`;
+  card.style.top = `${Math.max(8, Math.min(innerHeight - r.height - 8, r.top + dy))}px`;
+  card.style.transform = "none";
+  const rect = cardRect();
+  if (window.hostOverlay) window.hostOverlay.place(rect);
+  else standIn(true, rect);
 }
 
 /**
@@ -255,13 +282,11 @@ export function openSettings() {
   body = card.querySelector(".set-card__pane");
   drawSettings();
 
-  const plane = document.getElementById("plane").getBoundingClientRect();
-  const r = card.getBoundingClientRect();
-  const rect = { x: r.left - plane.left, y: r.top - plane.top, w: r.width, h: r.height };
+  const rect = cardRect();
   if (window.hostOverlay) {
-    // 호스트가 그리므로 이 문서에서는 자리를 차지하지 않는다. 요소는 남는다 —
-    // 내용이 바뀌면 그 요소를 다시 읽어 뷰에 준다.
-    card.style.display = "none";
+    // 호스트가 그리므로 여기서는 보이지 않는다. 자리는 그대로 지킨다 — 카드가
+    // 어디에 얼마만 한 크기로 서 있는지는 이 요소에게 물어야 한다.
+    card.style.visibility = "hidden";
     window.hostOverlay.show(card, rect, answer);
   } else {
     standIn(true, rect);

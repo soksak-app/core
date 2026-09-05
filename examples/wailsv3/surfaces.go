@@ -161,6 +161,32 @@ func (s *Surfaces) OverlayShow(req OverlayRequest) error {
 	return nil
 }
 
+// PlaceRequest is where an open modal's view goes. The card decides; this is
+// that decision arriving, as a drag on its grip.
+type PlaceRequest struct {
+	ID       string   `json:"id"`
+	Viewport Viewport `json:"viewport"`
+	Rect     Rect     `json:"rect"`
+}
+
+// OverlayPlace moves an open modal's view.
+func (s *Surfaces) OverlayPlace(req PlaceRequest) error {
+	s.mu.Lock()
+	live, ok := s.modals[req.ID]
+	if !ok || live.view == nil {
+		s.mu.Unlock()
+		return nil
+	}
+	view := live.view
+	s.mu.Unlock()
+
+	x, y := req.Rect.X, up(req.Viewport, req.Rect.Y, max1(req.Rect.H))
+	application.InvokeSync(func() {
+		view.setFrame(x, y, max1(req.Rect.W), max1(req.Rect.H))
+	})
+	return nil
+}
+
 func (s *Surfaces) OverlayHide(id string) error {
 	s.mu.Lock()
 	live, ok := s.modals[id]

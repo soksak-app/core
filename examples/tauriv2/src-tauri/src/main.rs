@@ -331,6 +331,30 @@ fn overlay_show(
     Ok(())
 }
 
+/// Where an open modal's view goes. The card decides; this is that decision
+/// arriving, as a drag on its grip.
+#[derive(Debug, Deserialize)]
+struct PlaceRequest {
+    viewport: Viewport,
+    id: String,
+    rect: Rect,
+}
+
+#[tauri::command]
+fn overlay_place(window: Window, request: PlaceRequest) -> Result<(), String> {
+    let top = inset(&window, &request.viewport)?;
+    if let Some(view) = window.get_webview(&modal_label(&request.id)) {
+        view.set_position(LogicalPosition::new(request.rect.x, request.rect.y + top))
+            .map_err(|e| e.to_string())?;
+        view.set_size(LogicalSize::new(
+            request.rect.w.max(1.0),
+            request.rect.h.max(1.0),
+        ))
+        .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 #[tauri::command]
 fn overlay_content(state: State<'_, Overlay>, id: String) -> Result<OverlayContent, String> {
     Ok(state
@@ -486,6 +510,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             sync_surfaces,
             overlay_show,
+            overlay_place,
             overlay_content,
             overlay_update,
             overlay_fit,

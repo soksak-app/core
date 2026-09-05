@@ -144,6 +144,12 @@ function install() {
       });
     },
 
+    /** 열려 있는 모달을 옮긴다. 어디에 서는지는 페이지가 정한다. */
+    place(rect) {
+      if (!shown) return;
+      tell("overlayPlace", { id: shown, viewport: { h: window.innerHeight }, rect: toPage(rect) });
+    },
+
     /** 열려 있는 모달의 내용을 갈아 끼운다. 뷰를 새로 만들면 깜빡인다. */
     update(el) {
       if (!shown) return;

@@ -15,6 +15,7 @@ const COMMAND = {
   setTheme: "set_theme",
   report: "report",
   overlayShow: "overlay_show",
+  overlayPlace: "overlay_place",
   overlayUpdate: "overlay_update",
   overlayHide: "overlay_hide",
 };
@@ -25,6 +26,7 @@ const ARG = {
   setTheme: (v) => ({ theme: v }),
   report: (v) => ({ line: v }),
   overlayShow: (v) => ({ request: v }),
+  overlayPlace: (v) => ({ request: v }),
   overlayUpdate: (v) => ({ request: v }),
   overlayHide: (v) => ({ id: v }),
 };
