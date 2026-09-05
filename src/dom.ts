@@ -40,6 +40,20 @@ export interface ViewOptions {
   rules?: boolean;
   /** Fired after any interaction the view handled, and after `render()`. */
   onChange?(reason: ChangeReason): void;
+  /**
+   * Commit a layout change the view handled.
+   *
+   * Called with the rects the change will draw and the function that draws
+   * them. A plane that holds more than DOM — an OS view composited over the
+   * page, which no CSS reaches — has to move that too, and it moves on a
+   * channel of its own. Whoever is slower goes first: put the other things
+   * where these rects say, then draw. Both then land in one frame.
+   *
+   * Until `draw` is called the page still shows the layout before the change,
+   * which is a whole frame and not a torn one. Not given, the change is drawn
+   * at once.
+   */
+  commit?(rects: ReadonlyMap<string, Rect>, draw: () => void): void;
   /** Keep the plane size in sync with the host element. Default true. */
   observeResize?: boolean;
   /**
@@ -144,6 +158,20 @@ export class SoksakView {
   }
 
   /** Re-place every element from the grid. Cheap enough to call on every frame of a drag. */
+  /**
+   * Change the layout, then draw it.
+   *
+   * The model is changed first, because the rects a host is given have to be
+   * the ones about to be drawn. Between that and the draw the page still shows
+   * the layout before the change: a whole frame, not a torn one.
+   */
+  private commit(reason: ChangeReason, change: () => void): void {
+    change();
+    const draw = (): void => this.render(reason);
+    if (this.options.commit) this.options.commit(this.grid.rects(), draw);
+    else draw();
+  }
+
   render(reason: ChangeReason = 'render'): void {
     if (this.disposed) return;
 
@@ -306,8 +334,9 @@ export class SoksakView {
       }
       const now = drag.axis === 'x' ? e.clientX : e.clientY;
       if (Math.abs(now - drag.from) > 2) drag.moved = true;
-      this.grid.moveBoundary(drag.axis, drag.line, drag.base + (now - drag.from));
-      this.render('drag');
+      this.commit('drag', () =>
+        this.grid.moveBoundary(drag.axis, drag.line, drag.base + (now - drag.from)),
+      );
     });
 
     const stop = (e: PointerEvent): void => {
@@ -346,8 +375,9 @@ export class SoksakView {
       }
       const now = drag.axis === 'x' ? e.clientX : e.clientY;
       if (Math.abs(now - drag.from) > 2) drag.moved = true;
-      this.grid.moveBoundary(drag.axis, drag.line, drag.base + (now - drag.from));
-      this.render('drag');
+      this.commit('drag', () =>
+        this.grid.moveBoundary(drag.axis, drag.line, drag.base + (now - drag.from)),
+      );
     };
     const mouseUp = (): void => {
       if (this.mouseDrag?.on === el) this.mouseDrag = null;
@@ -376,8 +406,9 @@ export class SoksakView {
       const step = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }[e.key];
       if (step === undefined) return;
       e.preventDefault();
-      this.grid.moveBoundary(axis, line, this.grid.boundaryPos(axis, line) + step * 8);
-      this.render('drag');
+      this.commit('drag', () =>
+        this.grid.moveBoundary(axis, line, this.grid.boundaryPos(axis, line) + step * 8),
+      );
     });
 
     this.host.appendChild(el);

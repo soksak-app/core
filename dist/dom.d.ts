@@ -37,6 +37,20 @@ export interface ViewOptions {
     rules?: boolean;
     /** Fired after any interaction the view handled, and after `render()`. */
     onChange?(reason: ChangeReason): void;
+    /**
+     * Commit a layout change the view handled.
+     *
+     * Called with the rects the change will draw and the function that draws
+     * them. A plane that holds more than DOM — an OS view composited over the
+     * page, which no CSS reaches — has to move that too, and it moves on a
+     * channel of its own. Whoever is slower goes first: put the other things
+     * where these rects say, then draw. Both then land in one frame.
+     *
+     * Until `draw` is called the page still shows the layout before the change,
+     * which is a whole frame and not a torn one. Not given, the change is drawn
+     * at once.
+     */
+    commit?(rects: ReadonlyMap<string, Rect>, draw: () => void): void;
     /** Keep the plane size in sync with the host element. Default true. */
     observeResize?: boolean;
     /**
@@ -78,6 +92,14 @@ export declare class SoksakView {
     private disposed;
     constructor(host: HTMLElement, grid: Soksak, options: ViewOptions);
     /** Re-place every element from the grid. Cheap enough to call on every frame of a drag. */
+    /**
+     * Change the layout, then draw it.
+     *
+     * The model is changed first, because the rects a host is given have to be
+     * the ones about to be drawn. Between that and the draw the page still shows
+     * the layout before the change: a whole frame, not a torn one.
+     */
+    private commit;
     render(reason?: ChangeReason): void;
     private sweep;
     /**

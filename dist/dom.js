@@ -89,6 +89,21 @@ export class SoksakView {
         }
     }
     /** Re-place every element from the grid. Cheap enough to call on every frame of a drag. */
+    /**
+     * Change the layout, then draw it.
+     *
+     * The model is changed first, because the rects a host is given have to be
+     * the ones about to be drawn. Between that and the draw the page still shows
+     * the layout before the change: a whole frame, not a torn one.
+     */
+    commit(reason, change) {
+        change();
+        const draw = () => this.render(reason);
+        if (this.options.commit)
+            this.options.commit(this.grid.rects(), draw);
+        else
+            draw();
+    }
     render(reason = 'render') {
         var _a, _b, _c, _d, _e, _f, _g, _h;
         var _j;
@@ -256,8 +271,7 @@ export class SoksakView {
             const now = drag.axis === 'x' ? e.clientX : e.clientY;
             if (Math.abs(now - drag.from) > 2)
                 drag.moved = true;
-            this.grid.moveBoundary(drag.axis, drag.line, drag.base + (now - drag.from));
-            this.render('drag');
+            this.commit('drag', () => this.grid.moveBoundary(drag.axis, drag.line, drag.base + (now - drag.from)));
         });
         const stop = (e) => {
             var _a;
@@ -300,8 +314,7 @@ export class SoksakView {
             const now = drag.axis === 'x' ? e.clientX : e.clientY;
             if (Math.abs(now - drag.from) > 2)
                 drag.moved = true;
-            this.grid.moveBoundary(drag.axis, drag.line, drag.base + (now - drag.from));
-            this.render('drag');
+            this.commit('drag', () => this.grid.moveBoundary(drag.axis, drag.line, drag.base + (now - drag.from)));
         };
         const mouseUp = () => {
             var _a;
@@ -333,8 +346,7 @@ export class SoksakView {
             if (step === undefined)
                 return;
             e.preventDefault();
-            this.grid.moveBoundary(axis, line, this.grid.boundaryPos(axis, line) + step * 8);
-            this.render('drag');
+            this.commit('drag', () => this.grid.moveBoundary(axis, line, this.grid.boundaryPos(axis, line) + step * 8));
         });
         this.host.appendChild(el);
         return el;
