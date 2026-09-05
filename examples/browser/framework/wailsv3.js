@@ -6,10 +6,10 @@
 // 런타임은 /wails/runtime.js 의 ES 모듈이므로 script 태그가 아니라 import 로
 // 불러온다.
 //
-// 표면과 모달 페이지는 네이티브 뷰에서 직접 실행되어 Go 바인딩을 사용할 수 없고,
-// 애플리케이션이 띄운 루프백 서버로 요청한다. WKWebView 들이 네트워크 프로세스를
-// 공유하며 호스트당 연결이 6개이므로, 테마는 별도 스트림 없이 셸 스트림으로
-// 함께 전달한다.
+// 표면과 모달 페이지는 네이티브 뷰에서 직접 실행되어 Go 바인딩을 사용할 수 없다.
+// 대신 뷰가 그 페이지에 메시지 채널을 주입한다(native_darwin.go). 루프백 서버는
+// 문서를 내려주는 데만 쓴다 — 연결을 붙들고 있으면 표면이 늘수록 호스트당 연결
+// 한도를 먹는다.
 
 export const name = "wailsv3";
 
@@ -53,29 +53,33 @@ export const host = () => ({
   page: (path) => `/${path}${path.includes("?") ? "&" : "?"}framework=${name}`,
 });
 
-const query = (id) => `?id=${encodeURIComponent(id)}`;
+/* 페이지가 시작할 때 이미 갖고 있는 값. 뷰를 만들 때 주입되므로 가져오지 않는다. */
+const boot = () => window.__spBoot;
+
+/* 이 앱으로 가는 호출. 응답은 __spDeliver 로 돌아온다. */
+const call = (name, arg) => window.__spCall(name, arg);
+
+/* 앱이 보내는 것을 받을 함수를 건다. 이름 하나에 하나다. */
+const on = (name, fn) => { window.__spOn[name] = fn; };
 
 export const page = () => ({
   theme(fn) {
-    fetch("/theme").then((r) => r.json()).then(fn);
+    if (boot()) fn(boot());
+    on("theme", fn);
   },
   shell: {
-    open: (id) => fetch(`/terminal/open${query(id)}`, { method: "POST" }),
-    write: (id, text) => fetch(`/terminal/write${query(id)}`, { method: "POST", body: text }),
-    onOutput(id, fn, onTheme) {
-      const stream = new EventSource(`/terminal/stream${query(id)}`);
-      stream.addEventListener("output", (e) => fn(JSON.parse(e.data)));
-      stream.addEventListener("theme", (e) => onTheme(JSON.parse(e.data)));
+    open: (id) => call("terminal.open", { id }),
+    write: (id, text) => call("terminal.write", { id, text }),
+    onOutput(id, fn) {
+      on("output", fn);
     },
   },
   modal: {
     content(id, fn) {
-      fetch(`/overlay/content${query(id)}`).then((r) => r.json()).then(fn);
-      new EventSource(`/overlay/stream${query(id)}`).onmessage = (e) => fn(JSON.parse(e.data));
+      on("content", fn);
+      call("overlay.content", { id });
     },
-    fit: (id, w, h) => fetch(`/overlay/fit${query(id)}&w=${w}&h=${h}`, { method: "POST" }),
-    answer: (id, key, value) =>
-      fetch(`/overlay/pick${query(id)}&key=${encodeURIComponent(key)}` +
-            `&value=${encodeURIComponent(value)}`, { method: "POST" }),
+    fit: (id, w, h) => call("overlay.fit", { id, w, h }),
+    answer: (id, key, value) => call("overlay.pick", { id, key, value }),
   },
 });

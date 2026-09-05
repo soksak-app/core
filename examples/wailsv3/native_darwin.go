@@ -28,12 +28,58 @@ static NSRect surfaceAligned(NSWindow* window, double x, double y, double w, dou
     return [window backingAlignedRect:NSMakeRect(x, y, w, h) options:NSAlignAllEdgesOutward];
 }
 
+// One message from a page this app serves. Declared here because a Go function
+// exported to C cannot live in a file that also holds C definitions.
+extern void surfaceMessage(char* json);
+
+// The channel a page uses to reach this app.
+//
+// A surface page is loaded from the loopback server and has no Wails binding, so
+// it used to speak over HTTP. WKWebViews share one network process with six
+// connections per host, and a page that holds one for as long as it lives spends
+// a budget that the number of surfaces can exhaust. A message handler is not a
+// connection and there is no budget to spend.
+@interface SPBridge : NSObject <WKScriptMessageHandler>
+@end
+
+@implementation SPBridge
+- (void)userContentController:(WKUserContentController*)controller
+      didReceiveScriptMessage:(WKScriptMessage*)message {
+    surfaceMessage((char*)[[message body] UTF8String]);
+}
+@end
+
+// The script every page this app serves starts with. `boot` is the value the
+// page would otherwise have to fetch, so it is there before the first script
+// runs and no request is made for it.
+static NSString* surfaceScript(const char* boot) {
+    return [NSString stringWithFormat:
+        @"window.__spBoot = %s;"
+         "window.__spOn = {};"
+         "window.__spCall = function (name, arg) {"
+         "  var body = Object.assign({ name: name }, arg || {});"
+         "  window.webkit.messageHandlers.host.postMessage(JSON.stringify(body));"
+         "};"
+         "window.__spDeliver = function (name, data) {"
+         "  var fn = window.__spOn[name]; if (fn) fn(data);"
+         "};",
+        boot];
+}
+
 // Not under ARC, so the view is retained here and released in surfaceDestroy.
 static void* surfaceCreate(void* nsWindow, const char* url, double x, double y, double w, double h,
-                           double red, double green, double blue, double alpha) {
+                           double red, double green, double blue, double alpha,
+                           const char* boot) {
     NSWindow* window = (NSWindow*)nsWindow;
     NSView* parent = [window contentView];
     WKWebViewConfiguration* config = [[WKWebViewConfiguration alloc] init];
+    WKUserContentController* controller = [[WKUserContentController alloc] init];
+    [controller addUserScript:[[WKUserScript alloc]
+        initWithSource:surfaceScript(boot)
+         injectionTime:WKUserScriptInjectionTimeAtDocumentStart
+      forMainFrameOnly:YES]];
+    [controller addScriptMessageHandler:[[SPBridge alloc] init] name:@"host"];
+    config.userContentController = controller;
     WKWebView* view = [[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, w, h) configuration:config];
     view.frame = surfaceAligned(window, x, y, w, h);
     // The colour the view shows where its page has not painted. Public since
@@ -164,6 +210,13 @@ static void shapeSetStyle(void* handle, double radius, double lineWidth,
         [[NSColor colorWithSRGBRed:lr green:lg blue:lb alpha:la] CGColor];
 }
 
+// Runs a line of script in a page this app serves. This is how a message goes
+// the other way.
+static void surfaceEval(void* handle, const char* js) {
+    WKWebView* view = (WKWebView*)handle;
+    [view evaluateJavaScript:[NSString stringWithUTF8String:js] completionHandler:nil];
+}
+
 static void surfaceDestroy(void* handle) {
     WKWebView* view = (WKWebView*)handle;
     [view removeFromSuperview];
@@ -177,12 +230,15 @@ import "unsafe"
 // nativeView is one webview inside the window.
 type nativeView struct{ handle unsafe.Pointer }
 
-func newNativeView(window unsafe.Pointer, url string, x, y, w, h float64, background [4]float64) *nativeView {
+func newNativeView(window unsafe.Pointer, url string, x, y, w, h float64, background [4]float64,
+	boot string) *nativeView {
 	target := C.CString(url)
 	defer C.free(unsafe.Pointer(target))
+	start := C.CString(boot)
+	defer C.free(unsafe.Pointer(start))
 	handle := C.surfaceCreate(window, target, C.double(x), C.double(y), C.double(w), C.double(h),
 		C.double(background[0]), C.double(background[1]), C.double(background[2]),
-		C.double(background[3]))
+		C.double(background[3]), start)
 	if handle == nil {
 		return nil
 	}
@@ -213,6 +269,13 @@ func (v *nativeView) raise() { C.surfaceRaise(v.handle) }
 
 func (v *nativeView) setCornerRadius(radius float64) {
 	C.surfaceSetCornerRadius(v.handle, C.double(radius))
+}
+
+// eval runs a line of script in the page this view holds.
+func (v *nativeView) eval(js string) {
+	line := C.CString(js)
+	defer C.free(unsafe.Pointer(line))
+	C.surfaceEval(v.handle, line)
 }
 
 func (v *nativeView) destroy() { C.surfaceDestroy(v.handle) }

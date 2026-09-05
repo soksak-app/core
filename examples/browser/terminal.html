@@ -53,7 +53,7 @@
   }
 
   page.shell.open(id);
-  page.shell.onOutput(id, write, applyTheme);
+  page.shell.onOutput(id, write);
 
   input.addEventListener("keydown", (e) => {
     if (e.key !== "Enter") return;

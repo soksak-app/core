@@ -4,23 +4,19 @@
 // serves a scheme only the app's own webview resolves. These pages are therefore
 // served over http on the loopback address, on a port the system picks.
 //
-// The same server carries the terminal traffic: a view added this way has no
-// bridge to Go either, so output arrives as an event stream and input as a post.
+// The server carries the documents and nothing else. A page talks to this app
+// over the message channel the view injects (native_darwin.go): WKWebViews share
+// one network process with six connections per host, and a page that holds one
+// for as long as it lives spends a budget the number of surfaces can exhaust.
 package main
 
 import (
 	"embed"
-	"encoding/json"
-	"fmt"
-	"io"
 	"io/fs"
 	"net"
 	"net/http"
-	"strconv"
 	"strings"
 	"sync"
-
-	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 type Pages struct {
@@ -28,22 +24,10 @@ type Pages struct {
 	shells   *Shells
 	surfaces *Surfaces
 
-	// The theme the page last chose, and the terminal streams waiting to hear it
-	// change.
-	//
-	// A page served here is a document of its own and inherits none of the main
-	// page's stylesheet, so it reads the values and sets them on its own root. A
-	// modal reads them once: it is built when it opens and destroyed when it
-	// closes. A terminal outlives a theme change and receives it on the stream that
-	// already carries its shell's output.
-	themeMu    sync.Mutex
-	theme      Theme
-	themeWatch map[chan Theme]bool
-
-	// 열려 있는 모달의 페이지들. 그 페이지도 Go 로 가는 다리가 없으므로, 내용이
-	// 바뀌면 스트림으로 듣는다.
-	modalMu    sync.Mutex
-	modalWatch map[string]map[chan OverlayContent]bool
+	// The theme the page last chose. A view is created with it, so the page it
+	// loads has the theme before its first script runs and asks for nothing.
+	themeMu sync.Mutex
+	theme   Theme
 }
 
 // Bind lets the pages reach the surfaces once both exist.
@@ -59,23 +43,10 @@ func NewPages(assets embed.FS, shells *Shells) (*Pages, error) {
 	if err != nil {
 		return nil, err
 	}
-	pages := &Pages{
-		addr:       listener.Addr().String(),
-		shells:     shells,
-		themeWatch: map[chan Theme]bool{},
-		modalWatch: map[string]map[chan OverlayContent]bool{},
-	}
+	pages := &Pages{addr: listener.Addr().String(), shells: shells}
 
 	mux := http.NewServeMux()
 	mux.Handle("/", http.FileServer(http.FS(frontend)))
-	mux.HandleFunc("/terminal/open", pages.open)
-	mux.HandleFunc("/terminal/write", pages.write)
-	mux.HandleFunc("/terminal/stream", pages.stream)
-	mux.HandleFunc("/theme", pages.themeNow)
-	mux.HandleFunc("/overlay/content", pages.overlayContent)
-	mux.HandleFunc("/overlay/fit", pages.overlayFit)
-	mux.HandleFunc("/overlay/pick", pages.overlayPick)
-	mux.HandleFunc("/overlay/stream", pages.overlayStream)
 	go func() { _ = http.Serve(listener, mux) }()
 	return pages, nil
 }
@@ -88,175 +59,23 @@ func (p *Pages) URL(path string) string {
 // SetTheme records what the page chose and tells the pages already open.
 func (p *Pages) SetTheme(theme Theme) {
 	p.themeMu.Lock()
-	defer p.themeMu.Unlock()
 	p.theme = theme
-	for watcher := range p.themeWatch {
-		select {
-		case watcher <- theme:
-		default:
-		}
+	p.themeMu.Unlock()
+	if p.surfaces != nil {
+		p.surfaces.Tell("theme", theme)
 	}
 }
 
-func (p *Pages) themeNow(w http.ResponseWriter, r *http.Request) {
+// Theme is what a view injects into the page it loads.
+func (p *Pages) Theme() Theme {
 	p.themeMu.Lock()
-	theme := p.theme
-	p.themeMu.Unlock()
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(theme)
-}
-
-// watchTheme returns a channel carrying every later theme, and a function that
-// gives it back. The terminal stream carries the theme alongside its output: a
-// page here may hold only a few connections to this server, so a second stream
-// for the theme would cost one that the surfaces need.
-func (p *Pages) watchTheme() (chan Theme, func()) {
-	changes := make(chan Theme, 4)
-	p.themeMu.Lock()
-	p.themeWatch[changes] = true
-	p.themeMu.Unlock()
-	return changes, func() {
-		p.themeMu.Lock()
-		delete(p.themeWatch, changes)
-		p.themeMu.Unlock()
-	}
-}
-
-func (p *Pages) overlayContent(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(p.surfaces.ModalContent(r.URL.Query().Get("id")))
-}
-
-// overlayFit gives the view the size the page found it needs, and reveals it.
-func (p *Pages) overlayFit(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-	width, _ := strconv.ParseFloat(q.Get("w"), 64)
-	height, _ := strconv.ParseFloat(q.Get("h"), 64)
-	p.surfaces.ModalFit(q.Get("id"), width, height)
-	w.WriteHeader(http.StatusNoContent)
+	defer p.themeMu.Unlock()
+	return p.theme
 }
 
 // NotifyModal sends new content to the page rendering that modal.
 func (p *Pages) NotifyModal(id string, content OverlayContent) {
-	p.modalMu.Lock()
-	defer p.modalMu.Unlock()
-	for watcher := range p.modalWatch[id] {
-		select {
-		case watcher <- content:
-		default:
-		}
-	}
-}
-
-// overlayStream sends that modal's content every time it changes. A modal whose
-// controls change what the page holds has to be redrawn while it is open, and
-// rebuilding its view instead would make it blink.
-func (p *Pages) overlayStream(w http.ResponseWriter, r *http.Request) {
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		http.Error(w, "no streaming", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.WriteHeader(http.StatusOK)
-	flusher.Flush()
-
-	id := r.URL.Query().Get("id")
-	changes := make(chan OverlayContent, 4)
-	p.modalMu.Lock()
-	if p.modalWatch[id] == nil {
-		p.modalWatch[id] = map[chan OverlayContent]bool{}
-	}
-	p.modalWatch[id][changes] = true
-	p.modalMu.Unlock()
-	defer func() {
-		p.modalMu.Lock()
-		delete(p.modalWatch[id], changes)
-		p.modalMu.Unlock()
-	}()
-
-	for {
-		select {
-		case <-r.Context().Done():
-			return
-		case content := <-changes:
-			payload, _ := json.Marshal(content)
-			fmt.Fprintf(w, "data: %s\n\n", payload)
-			flusher.Flush()
-		}
-	}
-}
-
-// overlayPick tells the main page what was chosen; it decides what it means.
-func (p *Pages) overlayPick(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-	application.Get().Event.Emit("overlay-pick", map[string]string{
-		"id": q.Get("id"), "key": q.Get("key"), "value": q.Get("value"),
-	})
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func (p *Pages) open(w http.ResponseWriter, r *http.Request) {
-	if err := p.shells.Open(r.URL.Query().Get("id")); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func (p *Pages) write(w http.ResponseWriter, r *http.Request) {
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if err := p.shells.Write(r.URL.Query().Get("id"), string(body)); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-// stream sends one shell's output as it arrives, for as long as the page is
-// open.
-func (p *Pages) stream(w http.ResponseWriter, r *http.Request) {
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		http.Error(w, "no streaming", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.WriteHeader(http.StatusOK)
-	flusher.Flush()
-
-	id := r.URL.Query().Get("id")
-	lines := p.shells.Listen(id)
-	defer p.shells.Unlisten(id, lines)
-	themes, stopTheme := p.watchTheme()
-	defer stopTheme()
-
-	send := func(name string, value any) {
-		payload, err := json.Marshal(value)
-		if err != nil {
-			return
-		}
-		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", name, payload)
-		flusher.Flush()
-	}
-
-	for {
-		select {
-		case <-r.Context().Done():
-			return
-		case theme := <-themes:
-			send("theme", theme)
-		case text, open := <-lines:
-			if !open {
-				return
-			}
-			send("output", text)
-		}
+	if p.surfaces != nil {
+		p.surfaces.deliverModal(id, "content", content)
 	}
 }

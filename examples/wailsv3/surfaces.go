@@ -13,6 +13,7 @@
 package main
 
 import (
+	"encoding/json"
 	"log"
 	"sync"
 
@@ -111,8 +112,117 @@ type Surfaces struct {
 	watch  sync.Once
 }
 
+// Message is one call from a page this app serves. The page names itself, so the
+// answer goes back to the view that asked.
+type Message struct {
+	Name  string  `json:"name"`
+	ID    string  `json:"id"`
+	Text  string  `json:"text"`
+	Key   string  `json:"key"`
+	Value string  `json:"value"`
+	W     float64 `json:"w"`
+	H     float64 `json:"h"`
+}
+
+// answer dispatches one message from a surface or modal page.
+func (s *Surfaces) answer(payload string) {
+	var m Message
+	if err := json.Unmarshal([]byte(payload), &m); err != nil {
+		return
+	}
+	switch m.Name {
+	case "terminal.open":
+		if err := s.shells.Open(m.ID); err != nil {
+			return
+		}
+		go s.forward(m.ID)
+	case "terminal.write":
+		_ = s.shells.Write(m.ID, m.Text)
+	case "overlay.content":
+		s.deliverModal(m.ID, "content", s.ModalContent(m.ID))
+	case "overlay.fit":
+		s.ModalFit(m.ID, m.W, m.H)
+	case "overlay.pick":
+		application.Get().Event.Emit("overlay-pick", map[string]string{
+			"id": m.ID, "key": m.Key, "value": m.Value,
+		})
+	}
+}
+
+// boot is the value a page starts with, injected before its first script runs.
+// A page that had to fetch this would spend a connection to get what this app
+// already holds.
+func (s *Surfaces) boot() string {
+	payload, err := json.Marshal(s.pages.Theme())
+	if err != nil {
+		return "null"
+	}
+	return string(payload)
+}
+
+// forward sends one shell's output to the page showing it, until the shell ends.
+func (s *Surfaces) forward(id string) {
+	lines := s.shells.Listen(id)
+	defer s.shells.Unlisten(id, lines)
+	for text := range lines {
+		s.deliverSurface(id, "output", text)
+	}
+}
+
+// deliver runs __spDeliver in a view. Script runs on the main thread.
+func deliver(view *nativeView, name string, value any) {
+	if view == nil {
+		return
+	}
+	payload, err := json.Marshal(value)
+	if err != nil {
+		return
+	}
+	call, err := json.Marshal(name)
+	if err != nil {
+		return
+	}
+	application.InvokeSync(func() {
+		view.eval("window.__spDeliver(" + string(call) + "," + string(payload) + ")")
+	})
+}
+
+func (s *Surfaces) deliverSurface(id, name string, value any) {
+	s.mu.Lock()
+	view := s.views[id]
+	s.mu.Unlock()
+	deliver(view, name, value)
+}
+
+func (s *Surfaces) deliverModal(id, name string, value any) {
+	s.mu.Lock()
+	live := s.modals[id]
+	s.mu.Unlock()
+	if live == nil {
+		return
+	}
+	deliver(live.view, name, value)
+}
+
+// Tell sends the theme to every page this app serves. A page reads the theme it
+// started with from the script injected into it, so this is only the change.
+func (s *Surfaces) Tell(name string, value any) {
+	s.mu.Lock()
+	views := make([]*nativeView, 0, len(s.views)+len(s.modals))
+	for _, view := range s.views {
+		views = append(views, view)
+	}
+	for _, live := range s.modals {
+		views = append(views, live.view)
+	}
+	s.mu.Unlock()
+	for _, view := range views {
+		deliver(view, name, value)
+	}
+}
+
 func NewSurfaces(shells *Shells, pages *Pages) *Surfaces {
-	return &Surfaces{
+	made := &Surfaces{
 		views:  map[string]*nativeView{},
 		named:  map[uintptr]string{},
 		modals: map[string]*modal{},
@@ -120,6 +230,8 @@ func NewSurfaces(shells *Shells, pages *Pages) *Surfaces {
 		shells: shells,
 		pages:  pages,
 	}
+	onSurfaceMessage = made.answer
+	return made
 }
 
 // OverlayShow creates a modal's view and stores its content.
@@ -151,7 +263,7 @@ func (s *Surfaces) OverlayShow(req OverlayRequest) error {
 		}
 		url := s.pages.URL("overlay.html?id=" + req.ID + "&framework=wailsv3")
 		live.view = newNativeView(win.NativeWindow(), url, x, y,
-			max1(req.Rect.W), max1(req.Rect.H), srgba(req.Background))
+			max1(req.Rect.W), max1(req.Rect.H), srgba(req.Background), s.boot())
 		if live.view != nil {
 			live.view.setHidden(true)
 		}
@@ -408,7 +520,7 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) {
 		}
 		bg := srgb(surface.Background)
 		view := newNativeView(win.NativeWindow(), url, x, y, w, h,
-			[4]float64{bg[0], bg[1], bg[2], 1})
+			[4]float64{bg[0], bg[1], bg[2], 1}, s.boot())
 		if view == nil {
 			log.Printf("surface %s: no native view on this platform", surface.ID)
 			continue
