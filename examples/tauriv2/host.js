@@ -1,16 +1,21 @@
 // Gives the page real native surfaces, and a native view for its modals.
 //
 // Surfaces: the page declares, on every commit, the frame each one should
-// occupy. The browser ones become child webviews on the same frames. Terminal
-// panes stay simulated: a terminal has no simple native equivalent, and having
-// both kinds in one window is the point.
+// occupy, and each becomes a child webview on that frame. A browser pane shows
+// a live page; a terminal pane shows a local page with a shell process behind
+// it. Both are native views, which is what the example is about.
 //
 // Modals: DOM cannot be drawn over a native view, so a [data-native-modal]
 // element is handed to a webview of its own, created after the surfaces and
 // therefore above them.
 const { invoke } = window.__TAURI__?.core ?? {};
 const { listen } = window.__TAURI__?.event ?? {};
-const SURFACE_URL = "https://www.google.com";
+// What each kind of surface shows. A browser pane is a live page; a terminal
+// pane is a local page with a shell process behind it.
+const SURFACE_URL = {
+  browser: () => "https://www.google.com",
+  terminal: (id) => `terminal.html?id=${encodeURIComponent(id)}`,
+};
 
 /** Page coordinates for a rect the page gave in plane coordinates. */
 function toPage(rect) {
@@ -52,12 +57,18 @@ if (!invoke) {
   let lastSync = "";
 
   window.hostSurfaces = {
-    kinds: ["browser"],
+    kinds: ["browser", "terminal"],
 
     place(record) {
       const surfaces = record.surfaces
-        .filter((s) => s.plugin === "browser")
-        .map((s) => ({ id: s.id, url: SURFACE_URL, visible: s.visible, ...toPage(s.applied) }));
+        .filter((s) => SURFACE_URL[s.plugin])
+        .map((s) => ({
+          id: s.id,
+          kind: s.plugin,
+          url: SURFACE_URL[s.plugin](s.id),
+          visible: s.visible,
+          ...toPage(s.applied),
+        }));
 
       // A commit arrives on every render, including every frame of a divider
       // drag. Sending an unchanged request would cross the bridge for nothing.

@@ -1,0 +1,62 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>terminal</title>
+<!--
+  A terminal surface.
+
+  Like the browser surface this is a webview, and so a native view; what differs
+  is that its page is local and a shell process here feeds it. The output keeps
+  arriving, which is the point of the example: a surface showing a running
+  program cannot be replaced by a still of itself.
+
+  This is a console, not a terminal emulator. Output is shown as text and input
+  is sent a line at a time.
+-->
+<style>
+  html, body { margin: 0; height: 100%; background: #0d1a14 }
+  body {
+    display: flex; flex-direction: column;
+    font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: #7fe3b0;
+  }
+  #out { flex: 1 1 auto; margin: 0; padding: 6px 9px; overflow-y: auto;
+         white-space: pre-wrap; word-break: break-word }
+  #line { display: flex; gap: 6px; padding: 4px 9px 6px;
+          border-top: 1px solid rgb(127 227 176 / .22) }
+  #line span { color: rgb(127 227 176 / .55) }
+  #in { flex: 1 1 auto; min-width: 0; border: 0; background: transparent;
+        color: inherit; font: inherit; outline: 0 }
+</style>
+<pre id="out"></pre>
+<div id="line"><span>$</span><input id="in" autocomplete="off" spellcheck="false"></div>
+<script>
+  const { invoke } = window.__TAURI__.core;
+  const { listen } = window.__TAURI__.event;
+  const id = new URLSearchParams(location.search).get("id") ?? "";
+  const out = document.getElementById("out");
+  const input = document.getElementById("in");
+
+  function write(text) {
+    // Kept at the bottom only when it was already there, so reading back does
+    // not fight the output.
+    const atEnd = out.scrollTop + out.clientHeight >= out.scrollHeight - 4;
+    out.append(text);
+    if (atEnd) out.scrollTop = out.scrollHeight;
+  }
+
+  listen("terminal-output", (e) => {
+    if (e.payload.id === id) write(e.payload.text);
+  });
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    const line = input.value;
+    input.value = "";
+    write(`$ ${line}\n`);
+    invoke("terminal_write", { id, data: `${line}\n` });
+  });
+
+  invoke("terminal_open", { id }).catch((e) => write(`${e}\n`));
+  addEventListener("click", () => input.focus());
+  input.focus();
+</script>

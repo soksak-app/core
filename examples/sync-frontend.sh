@@ -21,8 +21,10 @@ build() {
   # An app that drives native surfaces of its own ships a host.js; one that
   # does not simply runs the example as it is.
   [ -f "$root/examples/$app/host.js" ] && cp "$root/examples/$app/host.js" "$out/host.js"
-  # A modal is drawn by a view of its own; that view loads this page.
-  [ -f "$root/examples/$app/overlay.html" ] && cp "$root/examples/$app/overlay.html" "$out/overlay.html"
+  # Pages loaded into views of their own: the modal, and the terminal surface.
+  for page in overlay.html terminal.html; do
+    [ -f "$root/examples/$app/$page" ] && cp "$root/examples/$app/$page" "$out/$page"
+  done
 
   APP=$app OUT=$out ROOT=$root python3 - <<'PY'
 import io, os, sys

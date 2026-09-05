@@ -12,6 +12,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod native;
+mod shell;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
@@ -27,6 +28,9 @@ use tauri::{
 #[derive(Debug, Deserialize)]
 struct Surface {
     id: String,
+    /// What the surface shows. A browser pane loads a url of its own; a terminal
+    /// pane loads a page of this app, which is a path, not a url.
+    kind: String,
     url: String,
     x: f64,
     y: f64,
@@ -76,7 +80,11 @@ fn inset(window: &Window, viewport: &Viewport) -> Result<(f64, f64), String> {
 }
 
 #[tauri::command]
-fn sync_surfaces(window: Window, request: SyncRequest) -> Result<Vec<String>, String> {
+fn sync_surfaces(
+    window: Window,
+    shells: State<'_, shell::Shells>,
+    request: SyncRequest,
+) -> Result<Vec<String>, String> {
     let (inset_x, inset_y) = inset(&window, &request.viewport)?;
 
     let mut wanted: HashSet<String> = HashSet::new();
@@ -103,8 +111,12 @@ fn sync_surfaces(window: Window, request: SyncRequest) -> Result<Vec<String>, St
             continue;
         }
 
-        let url = s.url.parse().map_err(|_| format!("bad url: {}", s.url))?;
-        let builder = WebviewBuilder::new(&label, WebviewUrl::External(url));
+        let target = if s.kind == "browser" {
+            WebviewUrl::External(s.url.parse().map_err(|_| format!("bad url: {}", s.url))?)
+        } else {
+            WebviewUrl::App(s.url.clone().into())
+        };
+        let builder = WebviewBuilder::new(&label, target);
         window
             .add_child(builder, position, size)
             .map_err(|e| e.to_string())?;
@@ -119,6 +131,9 @@ fn sync_surfaces(window: Window, request: SyncRequest) -> Result<Vec<String>, St
             webview.close().map_err(|e| e.to_string())?;
         }
     }
+    // A shell whose surface is gone has nothing left to write to.
+    let alive: Vec<String> = request.surfaces.iter().map(|s| s.id.clone()).collect();
+    shells.retain(&|id: &str| alive.iter().any(|s| s == id))?;
 
     Ok(created)
 }
@@ -305,16 +320,31 @@ fn overlay_pick(window: Window, key: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Starts the shell behind a terminal surface. The page asks once, when its
+/// view loads, so a surface that is reopened gets a shell of its own.
+#[tauri::command]
+fn terminal_open(app: tauri::AppHandle, shells: State<'_, shell::Shells>, id: String) -> Result<(), String> {
+    shells.open(&app, &id)
+}
+
+#[tauri::command]
+fn terminal_write(shells: State<'_, shell::Shells>, id: String, data: String) -> Result<(), String> {
+    shells.write(&id, &data)
+}
+
 fn main() {
     tauri::Builder::default()
         .manage(Overlay::default())
+        .manage(shell::Shells::default())
         .invoke_handler(tauri::generate_handler![
             sync_surfaces,
             overlay_show,
             overlay_content,
             overlay_fit,
             overlay_hide,
-            overlay_pick
+            overlay_pick,
+            terminal_open,
+            terminal_write
         ])
         .run(tauri::generate_context!())
         .expect("failed to run the tauri application");

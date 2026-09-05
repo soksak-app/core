@@ -31,6 +31,11 @@ struct Session {
 pub struct Shells(Mutex<HashMap<String, Session>>);
 
 /// The user's shell, or the platform's default when it is not set.
+///
+/// Not interactive. An interactive shell draws its own prompt with the escape
+/// sequences a terminal would act on, and this page is not a terminal: it would
+/// print them as text. The page draws the prompt itself and the shell is left to
+/// produce output only.
 fn shell() -> (String, Vec<String>) {
     #[cfg(windows)]
     {
@@ -40,9 +45,7 @@ fn shell() -> (String, Vec<String>) {
     #[cfg(not(windows))]
     {
         let program = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".into());
-        // Interactive, so the shell prints its prompt; unbuffered lines, so the
-        // page sees output as it happens rather than when a buffer fills.
-        (program, vec!["-i".into()])
+        (program, vec![])
     }
 }
 
@@ -55,7 +58,15 @@ impl Shells {
         }
 
         let (program, args) = shell();
-        let mut child = Command::new(&program)
+        // Started where the person lives, not where the app happens to run from.
+        let home = std::env::var_os("HOME")
+            .or_else(|| std::env::var_os("USERPROFILE"))
+            .map(std::path::PathBuf::from);
+        let mut child = Command::new(&program);
+        if let Some(home) = home {
+            child.current_dir(home);
+        }
+        let mut child = child
             .args(&args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
