@@ -130,6 +130,8 @@ func (s *Shells) Listen(id string) chan string {
 	return lines
 }
 
+// Unlisten drops that stream's channel. The stream owns it and is the only one
+// that closes it.
 func (s *Shells) Unlisten(id string, lines chan string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -152,18 +154,26 @@ func (s *Shells) Write(id string, data string) error {
 
 // Close ends the shell whose surface is gone: a process with nothing left to
 // write to is a process nobody will read.
+//
+// The process is ended with the lock released. Ending it means waiting for it,
+// and the goroutines reading its output take this lock for every line: waiting
+// while holding it stops them reading, and a process whose output is not read
+// does not end.
+//
+// The watchers are left alone. Each is closed by the stream that made it, once
+// its request ends, which is what happens when the surface goes.
 func (s *Shells) Close(id string) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	live, ok := s.running[id]
+	if ok {
+		delete(s.running, id)
+	}
+	s.mu.Unlock()
 	if !ok {
 		return
 	}
+
 	_ = live.stdin.Close()
 	_ = live.cmd.Process.Kill()
 	_ = live.cmd.Wait()
-	for watcher := range live.watchers {
-		close(watcher)
-	}
-	delete(s.running, id)
 }
