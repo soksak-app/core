@@ -408,7 +408,7 @@ It is writable on the view — `view.bleed = px` — because a host that lets a
 person change its gap changes this with it.
 `reason` is one of `drag`, `center`, `merge`, `resize`, `render`.
 
-`outline(rects, options)`, `unionLoops(rects)`, `roundedPath(loop, radius, innerRadius)`,
+`outline(rects, options)`, `unionLoops(rects)`, `roundedPath(loop, radius)`,
 `contains(loops, x, y)`.
 
 ## License

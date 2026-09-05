@@ -80,7 +80,7 @@ test("a coordinate carrying float error still meets its neighbour", () => {
   // came back as three points instead of six.
   const rail = { x: 812.0000000000001, y: 0, w: 190, h: 534 };
   const focused = { x: 1026, y: 290, w: 574, h: 244 };
-  const shape = outline([rail, focused], { pad: 12, radius: 26, innerRadius: 12 });
+  const shape = outline([rail, focused], { pad: 12, radius: 26 });
   assert.equal(shape.loops.length, 1);
   assert.equal(shape.loops[0].length, 6, "an L has six corners");
   assert.equal(shape.sharp, 0);
@@ -97,7 +97,7 @@ test("the loop runs outside every rect it binds", () => {
     { x: 1026, y: 0, w: 574, h: 266 },
     { x: 1624, y: 0, w: 210, h: 534 },
   ];
-  const { loops } = outline(rects, { pad: 12, radius: 26, innerRadius: 12 });
+  const { loops } = outline(rects, { pad: 12, radius: 26 });
   let inside = 0;
   for (const loop of loops) {
     for (let i = 0; i < loop.length; i++) {
@@ -114,16 +114,17 @@ test("the loop runs outside every rect it binds", () => {
   assert.equal(inside, 0);
 });
 
-test("the radius drawn at a corner is the one asked for, and which kind it is", () => {
-  // An L: six corners, five convex and one reflex. Swapping the two radii, or
-  // scaling either, changes the arcs and nothing else, so the path must be read
-  // for the values and not only counted.
+test("every corner is drawn at the one radius, whichever way it turns", () => {
+  // An L: six corners, five convex and one reflex. At each of them the stroke
+  // goes round a card's corner at the same distance, and the turn direction gives
+  // which side the card is on, not how tight the turn is. Reading the arcs out
+  // of the path catches a radius that was picked by the kind of corner.
   const shape = outline(
     [
       { x: 0, y: 0, w: 400, h: 100 },
       { x: 0, y: 100, w: 100, h: 300 },
     ],
-    { pad: 0, radius: 30, innerRadius: 8 },
+    { pad: 0, radius: 30 },
   );
   assert.equal(shape.loops.length, 1);
   assert.equal(shape.loops[0].length, 6);
@@ -131,15 +132,15 @@ test("the radius drawn at a corner is the one asked for, and which kind it is", 
 
   const radii = [...shape.path.matchAll(/A([\d.]+) /g)].map((m) => Number(m[1])).sort((a, b) => a - b);
   assert.equal(radii.length, 6, "one arc per corner");
-  assert.deepEqual(radii, [8, 30, 30, 30, 30, 30], "one reflex corner at 8, five convex at 30");
+  assert.deepEqual(radii, [30, 30, 30, 30, 30, 30], "the reflex corner too");
 
   // The cap: half the shorter of the two sides meeting there.
-  const tight = outline([{ x: 0, y: 0, w: 400, h: 40 }], { pad: 0, radius: 100, innerRadius: 4 });
+  const tight = outline([{ x: 0, y: 0, w: 400, h: 40 }], { pad: 0, radius: 100 });
   const capped = [...tight.path.matchAll(/A([\d.]+) /g)].map((m) => Number(m[1]));
   assert.deepEqual(capped, [20, 20, 20, 20], "capped at half the 40px side");
 
   // Below half a px it is cut straight and counted.
-  const flat = outline([{ x: 0, y: 0, w: 400, h: 0.6 }], { pad: 0, radius: 30, innerRadius: 4 });
+  const flat = outline([{ x: 0, y: 0, w: 400, h: 0.6 }], { pad: 0, radius: 30 });
   assert.equal(flat.sharp, 4);
   assert.equal([...flat.path.matchAll(/A/g)].length, 0, "and no arc is emitted");
 });

@@ -16,10 +16,17 @@ export interface Point {
 export interface OutlineOptions {
   /** How far outside the rect borders the outline runs. Default 0. */
   pad?: number;
-  /** Convex corner radius. Default `pad`, i.e. flush with a square pane. */
+  /**
+   * Corner radius. Default `pad`, i.e. flush with a square pane.
+   *
+   * One number for every corner. At each of them the stroke is going round a
+   * card's corner at the same distance; which way it turns says which side the
+   * card is on, not how tight the turn is. A stroke that bent at two radii
+   * would read as two shapes.
+   *
+   * For a stroke that stays `pad` outside cards of radius `r`, this is `r + pad`.
+   */
   radius?: number;
-  /** Reflex (inner) corner radius. Default `max(4, pad)`. */
-  innerRadius?: number;
 }
 
 export interface Outline {
@@ -117,7 +124,6 @@ function dropCollinear(pts: Point[]): Point[] {
 export function roundedPath(
   loop: readonly Point[],
   radius: number,
-  innerRadius: number,
 ): { d: string; corners: number; sharp: number } {
   const n = loop.length;
   let d = '';
@@ -133,7 +139,7 @@ export function roundedPath(
     const lenIn = Math.hypot(inX, inY);
     const lenOut = Math.hypot(outX, outY);
     const turn = inX * outY - inY * outX; // > 0 is convex on a clockwise loop
-    const r = Math.min(turn > 0 ? radius : innerRadius, lenIn / 2, lenOut / 2);
+    const r = Math.min(radius, lenIn / 2, lenOut / 2);
     d += `${i === 0 ? 'M' : 'L'}${(p.x - (inX / lenIn) * r).toFixed(2)} ${(p.y - (inY / lenIn) * r).toFixed(2)}`;
     if (r > 0.5) {
       d +=
@@ -156,10 +162,9 @@ export function roundedPath(
 export function outline(rects: readonly Rect[], options: OutlineOptions = {}): Outline {
   const pad = options.pad ?? 0;
   const radius = options.radius ?? pad;
-  const innerRadius = options.innerRadius ?? Math.max(4, pad);
   const grown = rects.map((r) => ({ x: r.x - pad, y: r.y - pad, w: r.w + pad * 2, h: r.h + pad * 2 }));
   const loops = unionLoops(grown);
-  const parts = loops.map((l) => roundedPath(l, radius, innerRadius));
+  const parts = loops.map((l) => roundedPath(l, radius));
   return {
     path: parts.map((p) => p.d).join(' '),
     loops,

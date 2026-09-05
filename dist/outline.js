@@ -90,7 +90,7 @@ function dropCollinear(pts) {
  * corner, so a short side cannot bow past its own end. A corner left with less
  * than half a px is cut straight instead and counted in `sharp`.
  */
-export function roundedPath(loop, radius, innerRadius) {
+export function roundedPath(loop, radius) {
     const n = loop.length;
     let d = '';
     let sharp = 0;
@@ -105,7 +105,7 @@ export function roundedPath(loop, radius, innerRadius) {
         const lenIn = Math.hypot(inX, inY);
         const lenOut = Math.hypot(outX, outY);
         const turn = inX * outY - inY * outX; // > 0 is convex on a clockwise loop
-        const r = Math.min(turn > 0 ? radius : innerRadius, lenIn / 2, lenOut / 2);
+        const r = Math.min(radius, lenIn / 2, lenOut / 2);
         d += `${i === 0 ? 'M' : 'L'}${(p.x - (inX / lenIn) * r).toFixed(2)} ${(p.y - (inY / lenIn) * r).toFixed(2)}`;
         if (r > 0.5) {
             d +=
@@ -126,13 +126,12 @@ export function roundedPath(loop, radius, innerRadius) {
  * which reports the separation rather than failing.
  */
 export function outline(rects, options = {}) {
-    var _a, _b, _c;
+    var _a, _b;
     const pad = (_a = options.pad) !== null && _a !== void 0 ? _a : 0;
     const radius = (_b = options.radius) !== null && _b !== void 0 ? _b : pad;
-    const innerRadius = (_c = options.innerRadius) !== null && _c !== void 0 ? _c : Math.max(4, pad);
     const grown = rects.map((r) => ({ x: r.x - pad, y: r.y - pad, w: r.w + pad * 2, h: r.h + pad * 2 }));
     const loops = unionLoops(grown);
-    const parts = loops.map((l) => roundedPath(l, radius, innerRadius));
+    const parts = loops.map((l) => roundedPath(l, radius));
     return {
         path: parts.map((p) => p.d).join(' '),
         loops,

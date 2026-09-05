@@ -13,10 +13,17 @@ export interface Point {
 export interface OutlineOptions {
     /** How far outside the rect borders the outline runs. Default 0. */
     pad?: number;
-    /** Convex corner radius. Default `pad`, i.e. flush with a square pane. */
+    /**
+     * Corner radius. Default `pad`, i.e. flush with a square pane.
+     *
+     * One number for every corner. At each of them the stroke is going round a
+     * card's corner at the same distance; which way it turns says which side the
+     * card is on, not how tight the turn is. A stroke that bent at two radii
+     * would read as two shapes.
+     *
+     * For a stroke that stays `pad` outside cards of radius `r`, this is `r + pad`.
+     */
     radius?: number;
-    /** Reflex (inner) corner radius. Default `max(4, pad)`. */
-    innerRadius?: number;
 }
 export interface Outline {
     /** SVG path data for every loop, ready for both `fill` (evenodd) and `stroke`. */
@@ -36,7 +43,7 @@ export declare function unionLoops(rects: readonly Rect[]): Point[][];
  * corner, so a short side cannot bow past its own end. A corner left with less
  * than half a px is cut straight instead and counted in `sharp`.
  */
-export declare function roundedPath(loop: readonly Point[], radius: number, innerRadius: number): {
+export declare function roundedPath(loop: readonly Point[], radius: number): {
     d: string;
     corners: number;
     sharp: number;
