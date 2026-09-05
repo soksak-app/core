@@ -51,8 +51,8 @@ function activeSpace() {
 }
 
 /** 스페이스 하나를 만든다. 배치는 호출자가 전달한다. */
-function newSpace(title, layout) {
-  return { id: issueId("space"), title, layout };
+function newSpace(n, layout) {
+  return { id: issueId("space"), title: `SPACE${n}`, layout };
 }
 
 /**
@@ -60,16 +60,18 @@ function newSpace(title, layout) {
  *
  * 이미 열려 있으면 새로 만들지 않고 활성화한다. 루트 하나에 프로젝트 하나다.
  */
-export function open({ root, title, color, layout }) {
+export function open({ root, color, layout }) {
   const already = projects.find((p) => p.root === root);
   if (already) {
     activate(already.id);
     return already;
   }
   keep();
-  const space = newSpace("1", layout);
+  const space = newSpace(1, layout);
   const project = {
-    id: issueId("project"), root, title, color,
+    // 이름은 사람이 정하기 전까지 번호다. 루트의 마지막 조각을 쓰면 서로 다른
+    // 루트가 같은 이름을 갖고, 그 이름이 무엇을 세는지도 알 수 없다.
+    id: issueId("project"), root, title: `PROJECT${projects.length + 1}`, color,
     spaces: [space], activeSpaceId: space.id,
   };
   projects.push(project);
@@ -113,7 +115,7 @@ export function rename(id, { title, color }) {
 export function addSpace(layout) {
   const project = active();
   keep();
-  const space = newSpace(String(project.spaces.length + 1), layout);
+  const space = newSpace(project.spaces.length + 1, layout);
   project.spaces.push(space);
   project.activeSpaceId = space.id;
   restore();

@@ -584,7 +584,6 @@ function openProject(from) {
     if (take && root) {
       projects.open({
         root,
-        title: root.replace(/\/+$/, "").split("/").pop(),
         color: TINTS[projects.all().length % TINTS.length],
         layout: fresh(),
       });
@@ -608,7 +607,6 @@ build();
    열면 이 프로젝트를 활성화한다. */
 projects.open({
   root: "~/Work/soksak",
-  title: "soksak",
   color: TINTS[0],
   layout: capture(),
 });
