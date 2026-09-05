@@ -49,11 +49,10 @@ struct Surface {
     dim: bool,
 }
 
-/// The page viewport in CSS pixels, used to convert page coordinates into the
-/// coordinates a child webview is placed in.
+/// The page's own height. Everything else the page sends is already in the
+/// coordinates a child webview is placed in; this is the one difference.
 #[derive(Debug, Deserialize)]
 struct Viewport {
-    w: f64,
     h: f64,
 }
 
@@ -78,26 +77,23 @@ fn label_for(id: &str) -> String {
     format!("surface-{id}")
 }
 
-/// Places the window's child webviews on the frames the page declared.
+/// How far below the window's top the page begins.
 ///
-/// A child webview is positioned inside the window's content view, and on macOS
-/// that content view is taller than the page viewport by the height of the title
-/// bar. Subtracting the two gives the inset without hard-coding a platform
-/// constant, and without it every surface sits one title bar too high.
-/// A child webview is positioned inside the window's content view, and on macOS
-/// that view is taller than the page viewport by the height of the title bar.
-/// Subtracting the two gives the inset without a platform constant; without it
-/// everything sits one title bar too high.
-fn inset(window: &Window, viewport: &Viewport) -> Result<(f64, f64), String> {
+/// A child webview is placed from the window's top, and the page begins below
+/// the title bar, so a rect measured in the page moves down by that much. The
+/// height the page reports is the only number involved — no platform constant,
+/// and no guess about which chrome the window happens to have.
+///
+/// Wails needs none of this: there a child view is added to the content view
+/// the page's own view already sits in, so the two origins are the same.
+fn inset(window: &Window, viewport: &Viewport) -> Result<f64, String> {
     let scale = window.scale_factor().map_err(|e| e.to_string())?;
-    let content = window
+    let height = window
         .inner_size()
         .map_err(|e| e.to_string())?
-        .to_logical::<f64>(scale);
-    Ok((
-        (content.width - viewport.w).max(0.0),
-        (content.height - viewport.h).max(0.0),
-    ))
+        .to_logical::<f64>(scale)
+        .height;
+    Ok((height - viewport.h).max(0.0))
 }
 
 /// Starts watching the window for presses, once.
@@ -142,7 +138,7 @@ fn sync_surfaces(
     request: SyncRequest,
 ) -> Result<Vec<String>, String> {
     watch_presses(&window, &views, &watching)?;
-    let (inset_x, inset_y) = inset(&window, &request.viewport)?;
+    let top = inset(&window, &request.viewport)?;
 
     let mut wanted: HashSet<String> = HashSet::new();
     let mut created = Vec::new();
@@ -154,7 +150,7 @@ fn sync_surfaces(
         // A zero-sized webview is not something anyone can see, and some
         // platforms reject it, so treat it as hidden.
         let visible = s.visible && s.w >= 1.0 && s.h >= 1.0;
-        let position = LogicalPosition::new(s.x + inset_x, s.y + inset_y);
+        let position = LogicalPosition::new(s.x, s.y + top);
         let size = LogicalSize::new(s.w.max(1.0), s.h.max(1.0));
         let solid = if s.dim { 0.45 } else { 1.0 };
 
@@ -316,7 +312,7 @@ fn overlay_show(
         Modal { content, radius: request.radius },
     );
 
-    let (inset_x, inset_y) = inset(&window, &request.viewport)?;
+    let top = inset(&window, &request.viewport)?;
     if let Some(existing) = window.get_webview(&label) {
         existing.close().map_err(|e| e.to_string())?;
     }
@@ -329,7 +325,7 @@ fn overlay_show(
         .add_child(
             WebviewBuilder::new(&label, WebviewUrl::App(url.into()))
                 .background_color(Color(r, g, b, 255)),
-            LogicalPosition::new(request.rect.x + inset_x, request.rect.y + inset_y),
+            LogicalPosition::new(request.rect.x, request.rect.y + top),
             LogicalSize::new(request.rect.w.max(1.0), request.rect.h.max(1.0)),
         )
         .map_err(|e| e.to_string())?;
