@@ -167,8 +167,9 @@ function install(call) {
   };
 }
 
-(function await_bridge(tries = 0) {
-  if (window.wails?.Call) return install(window.wails.Call);
-  if (tries > 100) return void console.error("no Wails bridge");
-  setTimeout(() => await_bridge(tries + 1), 20);
-})();
+// Wails serves its bridge at /wails/runtime.js and it is an ES module, so it is
+// imported rather than loaded by a tag. Importing it here keeps the page's own
+// html free of anything Wails: the page carries one host.js and this is it.
+import("/wails/runtime.js")
+  .then(() => install(window.wails.Call))
+  .catch((e) => console.error("no Wails bridge", e));
