@@ -66,6 +66,11 @@ if (!invoke) {
 } else {
   let lastSync = "";
 
+  // The page applies its theme before this host is in place, so the first
+  // commit is where the theme it is drawn in is asked for: a commit is the page
+  // saying it is up.
+  let announced = false;
+
   window.hostSurfaces = {
     kinds: ["browser", "terminal"],
 
@@ -74,6 +79,10 @@ if (!invoke) {
     },
 
     place(record) {
+      if (!announced) {
+        announced = true;
+        this.theme(window.pageTheme());
+      }
       const surfaces = record.surfaces
         .filter((s) => SURFACE_URL[s.plugin])
         .map((s) => ({
