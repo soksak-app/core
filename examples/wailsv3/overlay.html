@@ -18,7 +18,21 @@
   html, body { margin: 0; padding: 0; height: 100%; background: #1b1d27 }
 </style>
 <script>
-  const id = new URLSearchParams(location.search).get("id") ?? "modal";
+  /* A page served here is a document of its own and inherits none of the main
+     page's stylesheet, so the theme arrives as values and is set here. This page
+     is built when the modal opens and destroyed when it closes, so the theme it
+     reads on load is the theme for as long as it exists. */
+  function applyTheme(theme) {
+    const root = document.documentElement;
+    root.style.colorScheme = theme.scheme;
+    for (const [token, value] of Object.entries(theme.tokens)) {
+      root.style.setProperty(token, value);
+    }
+  }
+
+  fetch("/theme").then((r) => r.json()).then(applyTheme);
+
+  const id = new URLSearchParams(location.search).get("id");
   const query = `?id=${encodeURIComponent(id)}`;
   let sheet = null;
   let root = null;

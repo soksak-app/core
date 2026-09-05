@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -26,6 +27,15 @@ type Pages struct {
 	addr     string
 	shells   *Shells
 	surfaces *Surfaces
+
+	// The theme the page last declared, and everyone waiting to hear it change.
+	//
+	// A page served here is a document of its own and inherits none of the main
+	// page's stylesheet, so it reads the values and sets them on its own root.
+	// It has no bridge to Go either, so it hears about a change on a stream.
+	themeMu    sync.Mutex
+	theme      Theme
+	themeWatch map[chan Theme]bool
 }
 
 // Bind lets the pages reach the surfaces once both exist.
@@ -41,13 +51,18 @@ func NewPages(assets embed.FS, shells *Shells) (*Pages, error) {
 	if err != nil {
 		return nil, err
 	}
-	pages := &Pages{addr: listener.Addr().String(), shells: shells}
+	pages := &Pages{
+		addr:       listener.Addr().String(),
+		shells:     shells,
+		themeWatch: map[chan Theme]bool{},
+	}
 
 	mux := http.NewServeMux()
 	mux.Handle("/", http.FileServer(http.FS(frontend)))
 	mux.HandleFunc("/terminal/open", pages.open)
 	mux.HandleFunc("/terminal/write", pages.write)
 	mux.HandleFunc("/terminal/stream", pages.stream)
+	mux.HandleFunc("/theme", pages.themeNow)
 	mux.HandleFunc("/overlay/content", pages.overlayContent)
 	mux.HandleFunc("/overlay/fit", pages.overlayFit)
 	mux.HandleFunc("/overlay/pick", pages.overlayPick)
@@ -58,6 +73,43 @@ func NewPages(assets embed.FS, shells *Shells) (*Pages, error) {
 // URL turns a page path into one a native view can load.
 func (p *Pages) URL(path string) string {
 	return "http://" + p.addr + "/" + strings.TrimPrefix(path, "/")
+}
+
+// SetTheme records what the page chose and tells the pages already open.
+func (p *Pages) SetTheme(theme Theme) {
+	p.themeMu.Lock()
+	defer p.themeMu.Unlock()
+	p.theme = theme
+	for watcher := range p.themeWatch {
+		select {
+		case watcher <- theme:
+		default:
+		}
+	}
+}
+
+func (p *Pages) themeNow(w http.ResponseWriter, r *http.Request) {
+	p.themeMu.Lock()
+	theme := p.theme
+	p.themeMu.Unlock()
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(theme)
+}
+
+// watchTheme returns a channel carrying every later theme, and a function that
+// gives it back. The terminal stream carries the theme alongside its output: a
+// page here may hold only a few connections to this server, so a second stream
+// for the theme would cost one that the surfaces need.
+func (p *Pages) watchTheme() (chan Theme, func()) {
+	changes := make(chan Theme, 4)
+	p.themeMu.Lock()
+	p.themeWatch[changes] = true
+	p.themeMu.Unlock()
+	return changes, func() {
+		p.themeMu.Lock()
+		delete(p.themeWatch, changes)
+		p.themeMu.Unlock()
+	}
 }
 
 func (p *Pages) overlayContent(w http.ResponseWriter, r *http.Request) {
@@ -120,18 +172,29 @@ func (p *Pages) stream(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	lines := p.shells.Listen(id)
 	defer p.shells.Unlisten(id, lines)
+	themes, stopTheme := p.watchTheme()
+	defer stopTheme()
+
+	send := func(name string, value any) {
+		payload, err := json.Marshal(value)
+		if err != nil {
+			return
+		}
+		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", name, payload)
+		flusher.Flush()
+	}
 
 	for {
 		select {
 		case <-r.Context().Done():
 			return
+		case theme := <-themes:
+			send("theme", theme)
 		case text, open := <-lines:
 			if !open {
 				return
 			}
-			payload, _ := json.Marshal(text)
-			fmt.Fprintf(w, "data: %s\n\n", payload)
-			flusher.Flush()
+			send("output", text)
 		}
 	}
 }

@@ -57,6 +57,17 @@ struct SyncRequest {
     surfaces: Vec<Surface>,
 }
 
+/// The page's theme, carried to the pages the host creates.
+///
+/// A surface and a modal are documents of their own and inherit none of the
+/// main page's stylesheet, so the values travel and each page sets them on its
+/// own root.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+struct Theme {
+    scheme: String,
+    tokens: std::collections::HashMap<String, String>,
+}
+
 fn label_for(id: &str) -> String {
     format!("surface-{id}")
 }
@@ -194,6 +205,10 @@ struct Modal {
 struct Overlay {
     modals: Mutex<HashMap<String, Modal>>,
 }
+
+/// The theme last declared by the page.
+#[derive(Default)]
+struct CurrentTheme(Mutex<Theme>);
 
 /// One view per modal element, named after it, so a page may have several.
 fn modal_label(id: &str) -> String {
@@ -337,9 +352,28 @@ fn terminal_write(shells: State<'_, shell::Shells>, id: String, data: String) ->
     shells.write(&id, &data)
 }
 
+/// What a page asks for when it loads.
+#[tauri::command]
+fn theme(state: State<'_, CurrentTheme>) -> Result<Theme, String> {
+    Ok(state.0.lock().map_err(|e| e.to_string())?.clone())
+}
+
+/// Records the theme the page is now drawn in, for the pages this host creates.
+/// The page calls it when a theme is chosen, not on every render.
+#[tauri::command]
+fn set_theme(
+    window: Window,
+    state: State<'_, CurrentTheme>,
+    theme: Theme,
+) -> Result<(), String> {
+    *state.0.lock().map_err(|e| e.to_string())? = theme.clone();
+    window.emit("theme", theme).map_err(|e| e.to_string())
+}
+
 fn main() {
     tauri::Builder::default()
         .manage(Overlay::default())
+        .manage(CurrentTheme::default())
         .manage(shell::Shells::default())
         .invoke_handler(tauri::generate_handler![
             sync_surfaces,
@@ -349,7 +383,9 @@ fn main() {
             overlay_hide,
             overlay_pick,
             terminal_open,
-            terminal_write
+            terminal_write,
+            theme,
+            set_theme
         ])
         .run(tauri::generate_context!())
         .expect("failed to run the tauri application");

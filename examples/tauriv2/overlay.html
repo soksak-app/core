@@ -22,6 +22,20 @@
   const { invoke } = window.__TAURI__.core;
   const { listen } = window.__TAURI__.event;
 
+  /* A page the host created is a document of its own and inherits none of the
+     main page's stylesheet, so the theme arrives as values and is set here. */
+  function applyTheme(theme) {
+    if (!theme) return;
+    const root = document.documentElement;
+    root.style.colorScheme = theme.scheme ?? "dark";
+    for (const [token, value] of Object.entries(theme.tokens ?? {})) {
+      root.style.setProperty(token, value);
+    }
+  }
+
+  invoke("theme").then(applyTheme);
+  listen("theme", (e) => applyTheme(e.payload));
+
   let sheet = null;
   let root = null;
 
