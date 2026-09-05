@@ -166,7 +166,10 @@ function themeTokens() {
     "--bg": c.bg, "--card": c.card, "--fg": c.fg, "--muted": c.muted,
     "--bd": c.bd, "--rail": c.rail, "--focus": c.focus, "--ok": c.ok,
     "--no": c.no, "--surface": c.surface, "--surface-fg": c.surfaceFg,
-    "--r": theme.shape.r, "--half-gap": theme.shape.gap, "--bw": theme.shape.bw,
+    // 통로는 테마가 아니라 설정이 갖는다. 테마는 고를 때 그 값을 한 번 정할
+    // 뿐이다(applyTheme) — 여기서 테마의 값을 다시 쓰면 사람이 바꾼 값이
+    // 매번 지워진다.
+    "--r": theme.shape.r, "--half-gap": `${settings.gap}px`, "--bw": theme.shape.bw,
   };
 }
 
@@ -211,7 +214,6 @@ export function install() {
   // 스타일시트가 읽는 두 값. 보이는 것만 바꾸므로 판을 다시 세우지 않는다.
   root.dataset.focusInd = settings.focusInd;
   root.dataset.fullRule = settings.fullRule;
-  root.style.setProperty("--half-gap", `${settings.gap}px`);
   for (const [token, value] of Object.entries(themeTokens())) {
     root.style.setProperty(token, value);
   }

@@ -856,6 +856,11 @@ export function build() {
 export function setGap(half) {
   grid.gap = half * 2;
   view.bleed = half;
+  // 통로는 stage 의 안쪽 여백이기도 하므로, 통로가 바뀌면 판이 서 있는 상자의
+  // 크기가 함께 바뀐다. 그 사실은 여기서 이미 알고 있다 — 관측자가 알려 줄
+  // 때까지 기다리면 그 사이의 한 벌은 옛 크기로 그려지고, 표면으로도 그것이
+  // 나간다.
+  grid.resize(plane.clientWidth, plane.clientHeight);
 }
 
 /**
