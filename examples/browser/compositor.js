@@ -74,8 +74,13 @@ function effectiveVisible(slot) {
 const slots = () =>
   plane.querySelectorAll("[data-native-surface][data-native-surface-id]");
 
-/** 지금 자리들을 재어 커밋한다. 지연이 걸려 있으면 그만큼 늦춰 앉힌다. */
-export function observe() {
+/**
+ * 지금 자리들을 재어 커밋한다. 지연이 걸려 있으면 그만큼 늦춰 앉힌다.
+ *
+ * 부르는 함수다. 무엇도 관측하지 않는다 — 자리가 바뀌었는지 지켜보는 쪽은
+ * 없고, 자리를 정한 쪽이 정했다고 말할 때 이것이 불린다.
+ */
+export function publish() {
   const mine = ++seq;
   const host = plane.getBoundingClientRect();
   const snapshot = [];
@@ -194,5 +199,5 @@ export function standIn(on, over) {
       `translate(${rec.applied.x - rec.declared.x}px,${rec.applied.y - rec.declared.y}px)`;
     slot.appendChild(el);
   }
-  observe();
+  publish();
 }

@@ -17,34 +17,91 @@
    밀리고, 네이티브 표면은 그 사실을 알 길이 없다. 여기서는 위쪽이 커지면 판이
    줄어든다 — 자리는 그대로이고 크기만 바뀌므로 판 하나만 보면 된다. */
 html,body{height:100%}
-body{margin:0;padding:20px;background:var(--bg);color:var(--fg);
+body{margin:0;background:var(--bg);color:var(--fg);
   font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;
   box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden}
-h1{margin:0 0 6px;font-size:18px}
-.lede{margin:0 0 12px;color:var(--muted);max-width:88ch}
-.bars{display:flex;flex-direction:column;gap:4px;margin:0 0 10px}
-.bar{display:flex;align-items:center;gap:6px;min-height:26px;flex-wrap:wrap}
-.chip{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 8px;
-  border:var(--bw) solid var(--bd);border-radius:6px;background:var(--card);
-  color:var(--muted);font:inherit;font-size:11px;cursor:pointer}
-.chip[data-on=true]{color:var(--fg);border-color:var(--focus)}
-.chip__dot{width:8px;height:8px;border-radius:50%;background:var(--rail)}
-.chip__x{opacity:.55;padding:0 1px}
-.chip__x:hover{opacity:1}
-.chip--add{color:var(--muted);border-style:dashed}
-.chip__root{height:24px;padding:0 8px;border:var(--bw) solid var(--focus);border-radius:6px;
-  background:var(--card);color:var(--fg);font:inherit;font-size:11px;width:160px}
-.bar__root{font-size:11px;color:var(--muted);margin-left:4px}
+/* 창의 크롬. 하나의 면이고, 탭이 그 면에 박힌다 — 활성 탭은 아래 내용과 같은
+   바닥색이라 그 탭의 것이 아래에 있다는 뜻이 된다. */
+.chrome-bar{display:flex;align-items:center;gap:8px;height:40px;flex:0 0 auto;
+  padding:0 10px;background:var(--card)}
+.brand{font-weight:700;letter-spacing:.08em;font-size:12px;color:var(--fg);
+  padding:0 6px 0 2px;opacity:.85;flex:0 0 auto}
+.chrome-bar__acts{margin-left:auto;display:flex;gap:2px;flex:0 0 auto}
+
+/* 탭 줄. 프로젝트와 스페이스가 같은 모양을 쓴다 — 둘 다 「무엇을 보고 있는가」다. */
+.tabs{display:flex;align-items:flex-end;gap:1px;flex:1 1 auto;min-width:0;overflow:hidden}
+.tabs--space{flex:0 0 auto;height:34px;padding:4px 10px 0;background:var(--card);
+  align-items:stretch}
+.tab{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;
+  border:0;border-radius:8px 8px 0 0;background:transparent;color:var(--muted);
+  font:inherit;font-size:12px;cursor:pointer;max-width:220px;white-space:nowrap}
+.tab:hover{color:var(--fg)}
+.tab[data-on=true]{background:var(--bg);color:var(--fg)}
+.tab__dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+.tab__name{overflow:hidden;text-overflow:ellipsis}
+.tab__x{opacity:0;padding:0 1px;flex:0 0 auto}
+.tab:hover .tab__x,.tab[data-on=true] .tab__x{opacity:.5}
+.tab__x:hover{opacity:1}
+.tab--add{color:var(--muted);padding:0 10px;font-size:14px;border-radius:8px}
+.tab--add:hover{background:color-mix(in srgb,var(--bd) 22%,transparent);color:var(--fg)}
+.tab__root{height:26px;padding:0 8px;border:var(--bw) solid var(--focus);border-radius:6px;
+  background:var(--card);color:var(--fg);font:inherit;font-size:12px;width:180px}
+
+/* 아이콘 스위치. 카드의 것과 같은 모양이다. */
+.act{display:grid;place-items:center;width:26px;height:26px;padding:0;border:0;border-radius:6px;
+  background:transparent;color:var(--muted);cursor:pointer}
+.act:hover{background:color-mix(in srgb,var(--bd) 22%,transparent);color:var(--fg)}
+.act[data-on=true]{color:var(--focus)}
+.act svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.4;
+  stroke-linecap:round;stroke-linejoin:round}
+
+/* 프로젝트 탭이 왼쪽에 설 때. 창 옆에 붙는 세로 줄이다. */
+.shell{display:flex;flex:1 1 auto;min-height:0}
+.rail-projects{display:flex;flex-direction:column;gap:6px;width:56px;flex:0 0 auto;
+  padding:8px 6px;background:var(--card)}
+.rail-projects .tab{width:44px;height:44px;justify-content:center;border-radius:10px;
+  border:var(--bw) solid var(--bd);padding:0;background:transparent}
+.rail-projects .tab[data-on=true]{border-color:var(--focus);background:var(--bg)}
+.rail-projects .tab__name{max-width:34px;font-size:11px;text-align:center}
+.rail-projects .tab__x{display:none}
+.rail-projects .tab--add{border-style:dashed;font-size:16px}
 /* 판 아래에 선다. 위에 두면 열 때마다 판이 밀리고, 네이티브 표면은 밀린 것을
    알 길이 없다. 아래에 있으면 판은 자리를 지키고 크기만 준다. */
-.panel{border:var(--bw) solid var(--bd);border-radius:8px;background:var(--card);
-  padding:10px 12px;margin:10px 0 0;overflow:auto;flex:0 1 auto}
-.controls--links{margin-top:8px;padding-top:8px;border-top:var(--bw) solid var(--bd)}
-.controls__head{font-size:11px;color:var(--muted);width:100%}
-.links{display:flex;flex-wrap:wrap;gap:8px 14px}
-.link{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)}
-.controls{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:10px;color:var(--muted)}
-.controls label{display:flex;gap:6px;align-items:center}
+/* 설정 모달 — 520px 카드. 판 위를 덮으므로 잡이로 옮길 수 있다. */
+.shade{position:fixed;inset:0;z-index:200;display:grid;place-items:center;
+  background:color-mix(in srgb,var(--bg) 55%,transparent)}
+.set-card{position:relative;width:520px;max-height:80vh;display:flex;flex-direction:column;
+  border:var(--bw) solid var(--bd);border-radius:12px;background:var(--card);
+  box-shadow:0 18px 48px rgb(0 0 0 / .35)}
+.set-card__head{display:flex;align-items:center;gap:8px;padding:8px 8px 8px 10px;
+  border-bottom:var(--bw) solid var(--bd)}
+.set-grip{cursor:grab;color:var(--muted);user-select:none;touch-action:none}
+.set-card__title{font-size:12px;color:var(--fg)}
+.set-card__head .act{margin-left:auto}
+.set-card__body{display:flex;min-height:0}
+.set-card__nav{display:flex;flex-direction:column;gap:2px;width:120px;flex:0 0 auto;
+  padding:8px;border-right:var(--bw) solid var(--bd)}
+.set-nav{text-align:left;padding:6px 8px;border:0;border-radius:6px;background:transparent;
+  color:var(--muted);font:inherit;font-size:12px;cursor:pointer}
+.set-nav[data-on=true]{background:var(--bg);color:var(--fg)}
+.set-card__pane{flex:1 1 auto;min-width:0;padding:10px 12px;overflow:auto}
+.set-caption{margin:2px 0 8px;font-size:11px;color:var(--muted)}
+.set-row{display:flex;align-items:center;gap:10px;margin:0 0 6px}
+.set-row__name{width:130px;flex:0 0 auto;font-size:12px;color:var(--muted)}
+.set-row select{flex:1 1 auto;min-width:0}
+.set-row select,.set-press{padding:3px 6px;border:var(--bw) solid var(--bd);border-radius:6px;
+  background:var(--bg);color:var(--fg);font:inherit;font-size:12px}
+.set-press{cursor:pointer}
+.set-slide{display:flex;align-items:center;gap:8px;flex:1 1 auto}
+.set-slide output{font-size:11px;color:var(--muted);min-width:5ch}
+.th-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin:0 0 12px}
+.th{display:flex;flex-direction:column;align-items:center;gap:4px;padding:4px;border:var(--bw) solid transparent;
+  border-radius:8px;background:transparent;color:var(--muted);font:inherit;font-size:10px;cursor:pointer}
+.th[data-on=true]{border-color:var(--focus);color:var(--fg)}
+.th__box{position:relative;display:block;width:100%;height:26px;border-radius:5px;
+  border:1px solid color-mix(in srgb,var(--bd) 50%,transparent)}
+.th__side{position:absolute;left:0;top:0;bottom:0;width:30%;border-radius:4px 0 0 4px}
+.th__dot{position:absolute;right:4px;bottom:4px;width:6px;height:6px;border-radius:50%}
 select,button{font:inherit;color:var(--fg);background:var(--card);
   border:1px solid color-mix(in srgb,var(--bd) 45%,transparent);border-radius:7px;padding:3px 8px}
 button{cursor:pointer}
@@ -209,7 +266,9 @@ input[type=color]{width:34px;height:24px;padding:0;background:var(--card);
 .picker__item:hover,.picker__item:focus-visible{outline:0;color:var(--fg);
   background:color-mix(in srgb,var(--bd) 30%,transparent)}
 
-.note{margin-top:8px;color:var(--muted);font-size:12px;max-width:88ch}
+.note{margin:0;padding:8px 12px;color:var(--muted);font-size:11px;max-width:96ch}
+.lede{margin:0;padding:0 12px 8px;color:var(--muted);font-size:11px;max-width:96ch}
+h1{margin:0;padding:8px 12px 4px;font-size:13px}
 </style></head>
 <body>
 <h1>Card / Rail — Wails 적용 전 시뮬레이터</h1>
@@ -219,12 +278,20 @@ input[type=color]{width:34px;height:24px;padding:0;background:var(--card);
 여기서 GREEN 인 것만 Wails 에서도 GREEN 이다.</p>
 
 
-<!-- 프로젝트 줄과 스페이스 줄. 프로젝트는 루트 하나를 연 것이고, 그 안의
-     스페이스는 판 한 벌이다. -->
-<div class="bars">
-  <div class="bar bar--project" id="projectBar"></div>
-  <div class="bar bar--space" id="spaceBar"></div>
-</div>
+<!-- 창의 크롬. 브랜드, 프로젝트 탭, 그리고 자주 쓰는 스위치.
+     프로젝트 탭은 설정에 따라 여기 서거나 왼쪽 세로 레일로 간다. -->
+<header class="chrome-bar">
+  <div class="brand">SPLIT&#8202;PANE</div>
+  <div class="tabs tabs--project" id="projectBar"></div>
+  <div class="chrome-bar__acts" id="chromeActs"></div>
+</header>
+
+<!-- 스페이스 줄. 한 프로젝트 안의 판들. -->
+<div class="tabs tabs--space" id="spaceBar"></div>
+
+<div class="shell">
+  <!-- 프로젝트 탭이 왼쪽에 설 때의 자리. -->
+  <div class="rail-projects" id="projectRail" hidden></div>
 
 <main class="stage"><div class="plane" id="plane">
   <svg class="rail" id="rail"><path id="railPath"></path></svg>
@@ -232,44 +299,21 @@ input[type=color]{width:34px;height:24px;padding:0;background:var(--card);
   <div class="picker" id="picker" data-native-modal hidden></div>
   <div class="focus-mark" id="focusMark" hidden></div>
 </div></main>
-
-<div class="panel" id="settings" hidden>
-<div class="controls">
-  <label>포커스 색 <input id="focusColor" type="color" data-token="--focus"></label>
-  <label>레일 색 <input id="railColor" type="color" data-token="--rail"></label>
-  <button id="colorReset" type="button">테마 색으로</button>
-  <label>경계선 <select id="fullRule">
-    <option value="under">가림</option>
-    <option value="on">보임</option>
-    <option value="off">숨김</option>
-  </select></label>
-  <label>포커스 <select id="focusInd">
-    <option value="border">보더</option>
-    <option value="corner">꺽쇠</option>
-  </select></label>
-  <label>테마 <select id="theme"></select></label>
-  <label>모드 <select id="mode"></select></label>
-  <label>포커스 밖 <select id="dim">
-    <option value="off">그대로</option>
-    <option value="on">흐리게</option>
-  </select></label>
-  <label>여백 <input id="gap" type="range" min="0" max="24" step="1" value="12"> <output id="gapOut">12px</output></label>
-  <label>커밋 지연 <input id="latency" type="range" min="0" max="600" step="50" value="0"> <output id="latOut">0ms</output></label>
-  <label>적용 오차 <input id="skew" type="range" min="0" max="12" step="1" value="0"> <output id="skewOut">0px</output></label>
-  <label>레일 거동 <select id="railMode">
-    <option value="flow">FLOW — 포커스를 따라간다</option>
-    <option value="pin">PIN — 자리를 지킨다</option>
-    <option value="off">없음</option>
-  </select></label>
-  <label>좌측 <select id="leftOn"><option value="on">있음</option><option value="off">없음</option></select></label>
-  <label>우측 <select id="rightOn"><option value="on">있음</option><option value="off">없음</option></select></label>
-  <button id="reset" type="button">초기 배치로</button>
 </div>
 
-<div class="controls controls--links">
-  <span class="controls__head">사이드바 — 자리마다 세트를 건다. 걸지 않으면 없다</span>
-  <div class="links" id="sidebarLinks"></div>
-</div>
+<!-- 설정 모달. 판 위에 뜨고, 열려 있는 동안 표면은 물러난다. -->
+<div class="shade" id="settingsShade" hidden>
+  <div class="set-card" id="settingsCard">
+    <header class="set-card__head">
+      <span class="set-grip" id="settingsGrip" title="끌어서 옮긴다">⠿</span>
+      <span class="set-card__title">설정</span>
+      <button class="act" id="settingsClose" type="button" title="닫는다"></button>
+    </header>
+    <div class="set-card__body">
+      <nav class="set-card__nav" id="settingsNav"></nav>
+      <div class="set-card__pane" id="settingsBody"></div>
+    </div>
+  </div>
 </div>
 
 <p class="note">+ 와 쪼개기는 새 탭의 종류를 먼저 묻는다(T2). 탭을 끌어 다른 카드의 가운데에
@@ -301,7 +345,7 @@ import { installTheme } from "/dist/index.js";
    세우는 일만 한다 — 설정이 판을 직접 부르면 설정 하나 늘 때마다 어느 함수를
    불러야 하는지 매번 정해야 한다. */
 import {
-  THEMES, MODES, applyTheme, halfGap, modeName, onSettingsChange, set, themeName,
+  applyTheme, halfGap, install, modeName, onSettingsChange, set, themeName, value,
 } from "./settings.js";
 
 /* 표면을 가진 것과 사이드바에 설 수 있는 것. 파일을 가져오는 것이 곧 등록이다
@@ -309,7 +353,7 @@ import {
 
 /* 표면을 흉내 내고 공표하는 쪽. 판은 자리 요소에 표시만 하고, 재는 일과
    알리는 일은 저쪽이 한다. */
-import { knobs, latest, observe, onCommit, reset } from "./compositor.js";
+import { knobs, latest, onCommit, publish, reset } from "./compositor.js";
 
 /* 판 하나. 이 문서는 판이 어떻게 그리는지 모르고, 다시 그렸다는 것만 듣는다. */
 import { build, onRender, render, setGap, settle } from "./plane.js";
@@ -323,7 +367,8 @@ import { verify } from "./verify.js";
 import * as projects from "./projects.js";
 
 /* 사이드바를 어디에 걸지 고르는 줄. 자리 목록은 등록된 플러그인이 정한다. */
-import { drawSidebarLinks } from "./sidebars.js";
+import { closeSettings, drawSettings, openSettings, settingsOpen } from "./settings-ui.js";
+import { icon } from "./icons.js";
 import { adopt, capture, fresh } from "./plane.js";
 
 /* 브라우저가 문서와 라이브러리 중 하나만 새로 받아오면 판이 어긋난다. 그때
@@ -332,6 +377,9 @@ import { adopt, capture, fresh } from "./plane.js";
 // 선과 divider 의 모양은 이 시트가 갖는다. 이 문서가 정하는 것은 색뿐이고,
 // 아래 :root 가 그 토큰을 이 문서의 색에 잇는다.
 installTheme(document);
+
+/* 설정이 정한 값을 문서 루트에 심는다. 스타일시트가 그 값을 읽는다. */
+install();
 
 /* ── 배선 ─────────────────────────────────────────────────────────────── */
 
@@ -364,7 +412,7 @@ onCommit(check);
 
 /* 판이 다시 그려지면 검증하고 공표한다. 판은 둘 다 모르고, 둘은 판을 읽기만
    한다 — 그래서 서로를 부르지 않고 여기서 잇는다. */
-onRender(() => { check(); observe(); });
+onRender(() => { check(); publish(); });
 
 /* 스페이스가 바뀌면 판을 걷어 두었다가 다른 한 벌을 건다. 프로젝트가 바뀌는
    것도 같은 일이다 — 스페이스 묶음이 바뀌었을 뿐이다. */
@@ -380,45 +428,52 @@ projects.onSwitch({ save: capture, load: adopt });
    --rail  : 레일이 포커스 카드를 묶는 바깥 외곽선, 그것 하나 테마가 기본을 주고
    사람이 고른 값이 이긴다: 인라인 값이라 테마를 바꿔도 남고, 「테마 색으로」가
    그 값을 걷어 다시 테마에 맡긴다. */
-const colorEls = [...document.querySelectorAll("input[type=color][data-token]")];
 
-/** 무엇으로 적혀 있든 색 입력이 받는 형태로. */
-function toHex(css) {
-  const probe = document.createElement("span");
-  probe.style.color = css;
-  document.body.appendChild(probe);
-  const rgb = getComputedStyle(probe).color.match(/\d+/g) ?? [0, 0, 0];
-  probe.remove();
-  return "#" + rgb.slice(0, 3).map((n) => Number(n).toString(16).padStart(2, "0")).join("");
-}
 
 /** 고른 값이 없는 입력만 테마 색을 보여준다. */
 /* ── 프로젝트와 스페이스 줄 ─────────────────────────────────────────────
    프로젝트를 바꾸면 스페이스 묶음이 통째로 바뀌고, 스페이스를 바꾸면 판의
    배치가 통째로 바뀐다. 둘 다 같은 한 가지 일이므로 경로가 하나다.        */
 
-const panel = document.getElementById("settings");
 const projectBar = document.getElementById("projectBar");
+const projectRail = document.getElementById("projectRail");
 const spaceBar = document.getElementById("spaceBar");
+const chromeActs = document.getElementById("chromeActs");
 
-/** 칩 하나. 누르면 옮겨가고, 두 번 누르면 이름을 고치고, ✕ 는 닫는다. */
-function chip(text, on, { dot, onPick, onClose, onRename }) {
+/** 크롬 줄의 스위치 하나. */
+function act(name, title, on, onPick) {
+  const b = document.createElement("button");
+  b.className = "act";
+  b.type = "button";
+  b.title = title;
+  b.dataset.on = String(on);
+  b.innerHTML = icon(name);
+  b.addEventListener("click", onPick);
+  return b;
+}
+
+/** 탭 하나. 누르면 옮겨가고, 두 번 누르면 이름을 고치고, ✕ 는 닫는다. */
+function tab(text, on, { dot, onPick, onClose, onRename }) {
   const el = document.createElement("button");
-  el.className = "chip";
+  el.className = "tab";
   el.type = "button";
   el.dataset.on = String(on);
+  el.title = text;
   if (dot) {
     const d = document.createElement("span");
-    d.className = "chip__dot";
+    d.className = "tab__dot";
     d.style.background = dot;
     el.appendChild(d);
   }
-  el.appendChild(document.createTextNode(text));
+  const name = document.createElement("span");
+  name.className = "tab__name";
+  name.textContent = text;
+  el.appendChild(name);
   el.addEventListener("click", onPick);
   if (onRename) el.addEventListener("dblclick", () => renameInPlace(el, text, onRename));
   if (onClose) {
     const x = document.createElement("span");
-    x.className = "chip__x";
+    x.className = "tab__x";
     x.textContent = "✕";
     x.addEventListener("click", (e) => { e.stopPropagation(); onClose(); });
     el.appendChild(x);
@@ -426,10 +481,10 @@ function chip(text, on, { dot, onPick, onClose, onRename }) {
   return el;
 }
 
-/** 칩 자리에서 이름을 고친다. 비우면 그대로 둔다 — 이름 없는 것은 고를 수 없다. */
+/** 탭 자리에서 이름을 고친다. 비우면 그대로 둔다 — 이름 없는 것은 고를 수 없다. */
 function renameInPlace(el, was, take) {
   const input = document.createElement("input");
-  input.className = "chip__root";
+  input.className = "tab__root";
   input.value = was;
   el.replaceWith(input);
   input.focus();
@@ -447,46 +502,56 @@ function renameInPlace(el, was, take) {
   input.addEventListener("blur", () => done(true));
 }
 
+/** 「+」 탭. 누르면 그 자리에서 루트를 입력받는다. */
+function addTabButton(text, onPick) {
+  const b = document.createElement("button");
+  b.className = "tab tab--add";
+  b.type = "button";
+  b.textContent = text;
+  b.addEventListener("click", () => onPick(b));
+  return b;
+}
+
 function drawBars() {
   const here = projects.active();
+  const toLeft = value("projectTabs") === "left";
+  const into = toLeft ? projectRail : projectBar;
+  projectRail.hidden = !toLeft;
+  projectBar.hidden = toLeft;
   projectBar.textContent = "";
+  projectRail.textContent = "";
+
   for (const p of projects.all()) {
-    projectBar.appendChild(chip(p.title, p.id === here.id, {
-      dot: p.color,
+    into.appendChild(tab(p.title, p.id === here.id, {
+      dot: toLeft ? null : p.color,
       onPick: () => { projects.activate(p.id); drawBars(); },
       onRename: (title) => projects.rename(p.id, { title }),
       onClose: projects.all().length > 1
         ? () => { projects.close(p.id); drawBars(); } : null,
     }));
   }
-  const add = chip("+ 프로젝트", false, { onPick: () => openProject(add) });
-  add.classList.add("chip--add");
-  projectBar.appendChild(add);
-
-  const gear = chip("⚙ 설정", !panel.hidden, { onPick: () => {
-    panel.hidden = !panel.hidden;
-    drawBars();
-  } });
-  projectBar.appendChild(gear);
-  const root = document.createElement("span");
-  root.className = "bar__root";
-  root.textContent = here.root;
-  projectBar.appendChild(root);
+  into.appendChild(addTabButton("+", openProject));
 
   spaceBar.textContent = "";
   for (const sp of here.spaces) {
-    spaceBar.appendChild(chip(sp.title, sp.id === here.activeSpaceId, {
+    spaceBar.appendChild(tab(sp.title, sp.id === here.activeSpaceId, {
       onPick: () => { projects.activateSpace(sp.id); drawBars(); },
       onRename: (title) => projects.renameSpace(sp.id, title),
       onClose: here.spaces.length > 1
         ? () => { projects.closeSpace(sp.id); drawBars(); } : null,
     }));
   }
-  const addSpace = chip("+ 스페이스", false, {
-    onPick: () => { projects.addSpace(fresh()); drawBars(); },
-  });
-  addSpace.classList.add("chip--add");
-  spaceBar.appendChild(addSpace);
+  spaceBar.appendChild(addTabButton("+", () => { projects.addSpace(fresh()); drawBars(); }));
+
+  chromeActs.textContent = "";
+  chromeActs.append(
+    act("panel-left", "좌측 자리", value("left"), () => set({ left: !value("left") })),
+    act("panel-right", "우측 자리", value("right"), () => set({ right: !value("right") })),
+    act(modeName() === "dark" ? "sun" : "moon", "밝게 / 어둡게", false,
+        () => applyTheme(themeName(), modeName() === "dark" ? "light" : "dark")),
+    act("settings", "설정", settingsOpen(),
+        () => { settingsOpen() ? closeSettings() : openSettings(); drawBars(); }),
+  );
 }
 
 /**
@@ -494,11 +559,11 @@ function drawBars() {
  *
  * 같은 루트는 이미 열린 것을 답한다 — 정체는 root 이고, 두 번 여는 일은 없다.
  */
-function openProject(chip) {
+function openProject(from) {
   const input = document.createElement("input");
-  input.className = "chip__root";
+  input.className = "tab__root";
   input.placeholder = "~/Work/…";
-  chip.replaceWith(input);
+  from.replaceWith(input);
   input.focus();
   const done = (take) => {
     const root = input.value.trim();
@@ -523,87 +588,6 @@ function openProject(chip) {
 /** 프로젝트를 알아보게 하는 색. 사람이 고르기 전까지의 값이다. */
 const TINTS = ["#ffb36b", "#7fe3b0", "#7db4ff", "#e08bd8", "#f2d16b"];
 
-function showThemeColors() {
-  const root = document.documentElement;
-  for (const el of colorEls) {
-    if (root.style.getPropertyValue(el.dataset.token)) continue;
-    el.value = toHex(getComputedStyle(root).getPropertyValue(el.dataset.token).trim());
-  }
-}
-
-for (const el of colorEls) {
-  el.addEventListener("input", () => {
-    document.documentElement.style.setProperty(el.dataset.token, el.value);
-    render();
-  });
-}
-document.getElementById("colorReset").addEventListener("click", () => {
-  for (const el of colorEls) document.documentElement.style.removeProperty(el.dataset.token);
-  showThemeColors();
-  render();
-});
-
-document.documentElement.dataset.fullRule = "under";
-document.getElementById("fullRule").addEventListener("change", (e) => {
-  document.documentElement.dataset.fullRule = e.target.value;
-});
-
-document.documentElement.dataset.focusInd = "border";
-document.getElementById("focusInd").addEventListener("change", (e) => {
-  document.documentElement.dataset.focusInd = e.target.value;
-  render();
-});
-/* 설정이 바뀌면 판을 다시 세운다. 통로 폭은 테마가 정하므로 슬라이더와 판이
-   함께 따라간다. 판이 아직 없으면 build() 가 그때의 값으로 만든다. */
-onSettingsChange(() => {
-  drawSidebarLinks(document.getElementById("sidebarLinks"));
-  const half = halfGap();
-  document.getElementById("gap").value = String(half);
-  document.getElementById("gapOut").value = `${half}px`;
-  setGap(half);
-  settle();
-});
-
-{
-  const themes = document.getElementById("theme");
-  themes.innerHTML = THEMES.map((t) => `<option value="${t.name}">${t.name}</option>`).join("");
-  themes.value = themeName();
-  const modes = document.getElementById("mode");
-  modes.innerHTML = MODES.map((m) => `<option value="${m}">${m}</option>`).join("");
-  modes.value = modeName();
-}
-
-// 사람이 고른 색이 없을 때만 테마 색을 보여주므로, 어느 축이 바뀌든 다시 읽는다.
-document.getElementById("theme").addEventListener("change", (e) => {
-  applyTheme(e.target.value, modeName());
-  showThemeColors();
-});
-document.getElementById("mode").addEventListener("change", (e) => {
-  applyTheme(themeName(), e.target.value);
-  showThemeColors();
-});
-document.getElementById("dim").addEventListener("change", (e) => set({ dim: e.target.value === "on" }));
-document.getElementById("gap").addEventListener("input", (e) => {
-  const half = Number(e.target.value);
-  document.getElementById("gapOut").value = `${half}px`;
-  document.documentElement.style.setProperty("--half-gap", `${half}px`);
-  setGap(half);              // stage 여백이 바뀌면 선이 넘어야 할 거리도 바뀐다
-  render();
-});
-document.getElementById("latency").addEventListener("input", (e) => {
-  knobs.latency = Number(e.target.value);
-  document.getElementById("latOut").value = `${e.target.value}ms`;
-  render();
-});
-document.getElementById("skew").addEventListener("input", (e) => {
-  knobs.skew = Number(e.target.value);
-  document.getElementById("skewOut").value = `${e.target.value}px`;
-  render();
-});
-document.getElementById("railMode").addEventListener("change", (e) => set({ rail: e.target.value }));
-document.getElementById("leftOn").addEventListener("change", (e) => set({ left: e.target.value === "on" }));
-document.getElementById("rightOn").addEventListener("change", (e) => set({ right: e.target.value === "on" }));
-document.getElementById("reset").addEventListener("click", build);
 
 build();
 
@@ -616,7 +600,16 @@ projects.open({
   layout: capture(),
 });
 drawBars();
-drawSidebarLinks(document.getElementById("sidebarLinks"));
+
+/* 설정이 바뀌면 판과 크롬이 함께 따라간다. 첫 프로젝트가 선 뒤에 건다 — 그
+   전에 불리면 그릴 프로젝트가 없다. */
+onSettingsChange(() => {
+  const half = halfGap();
+  setGap(half);
+  settle();
+  drawBars();
+  drawSettings();
+});
 
 /* 판의 크기가 바뀌면 SoksakView 가 스스로 알아채고 다시 그린다(dom.ts 의
    ResizeObserver). 여기서 같은 것을 한 번 더 보면 관측자가 둘이 되고, 둘 중

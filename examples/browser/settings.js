@@ -108,6 +108,8 @@ const settings = {
   theme: THEMES[0].name,
   mode: "dark",
 
+  /* 프로젝트 탭이 어디 서는가. top = 크롬 줄, left = 왼쪽 세로 레일. */
+  projectTabs: "top",
   /* 레일이 포커스를 따라가는가. flow = 따라간다, pin = 자리를 지킨다,
      off = 서지 않는다. */
   rail: "flow",
@@ -116,6 +118,13 @@ const settings = {
   right: true,
   /* 포커스를 잃은 표면을 흐리게 하는가. */
   dim: false,
+  /* 포커스 카드를 무엇으로 표시하는가 — 테두리인가 네 꼭짓점의 꺽쇠인가. */
+  focusInd: "border",
+  /* 카드 사이의 경계선을 그리는가. */
+  fullRule: "hide",
+  /* 통로의 절반 폭(px). 테마를 고르면 그 테마의 값이 되고, 그 뒤에 사람이
+     옮기면 옮긴 값이다. */
+  gap: parseFloat(THEMES[0].shape.gap),
 
   /* 사이드바는 조합해서 만든다. 세트 하나가 섹션들을 골라 순서대로 담고,
      연결이 그 세트를 어느 자리에 건다.
@@ -173,7 +182,9 @@ window.pageTheme = () => ({ scheme: settings.mode, tokens: themeTokens() });
  */
 export function applyTheme(name, next) {
   if (!MODES.includes(next)) throw new Error(`unknown mode: ${next}`);
-  set({ theme: themeOf(name).name, mode: next });
+  const theme = themeOf(name);
+  // 통로는 테마가 정한다. 테마를 고르는 것이 통로를 고르는 것이기도 하다.
+  set({ theme: theme.name, mode: next, gap: parseFloat(theme.shape.gap) });
 }
 
 /** 지금 값 하나를 읽는다. */
@@ -193,10 +204,14 @@ export function set(patch) {
   announce();
 }
 
-/** 값을 문서 루트에 심는다. */
-function install() {
+/** 값을 문서 루트에 심는다. 시작할 때 한 번, 그 뒤로는 바뀔 때마다. */
+export function install() {
   const root = document.documentElement;
   root.style.colorScheme = settings.mode;
+  // 스타일시트가 읽는 두 값. 보이는 것만 바꾸므로 판을 다시 세우지 않는다.
+  root.dataset.focusInd = settings.focusInd;
+  root.dataset.fullRule = settings.fullRule;
+  root.style.setProperty("--half-gap", `${settings.gap}px`);
   for (const [token, value] of Object.entries(themeTokens())) {
     root.style.setProperty(token, value);
   }
@@ -256,5 +271,5 @@ export const themeName = () => settings.theme;
 export const modeName = () => settings.mode;
 
 /** 이 테마가 정한 통로의 절반 폭(px). 판이 gap 과 bleed 를 여기서 얻는다. */
-export const halfGap = () => parseFloat(themeOf(settings.theme).shape.gap);
+export const halfGap = () => settings.gap;
 
