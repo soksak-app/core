@@ -46,7 +46,7 @@ example-frontend:
 	  rm -rf "$$out"; mkdir -p "$$out/dist"; \
 	  cp -R examples/browser/. "$$out/"; \
 	  cp dist/*.js "$$out/dist/"; \
-	  cp "examples/$$app/host.js" "examples/$$app/overlay.html" \
+	  cp "examples/$$app/bridge.js" "examples/$$app/overlay.html" \
 	     "examples/$$app/terminal.html" "$$out/"; \
 	done
 
