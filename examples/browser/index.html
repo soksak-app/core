@@ -20,53 +20,73 @@ html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--fg);
   font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;
   box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden}
-/* 창의 크롬. 하나의 면이고, 탭이 그 면에 박힌다 — 활성 탭은 아래 내용과 같은
-   바닥색이라 그 탭의 것이 아래에 있다는 뜻이 된다. */
-.chrome-bar{display:flex;align-items:center;gap:8px;height:40px;flex:0 0 auto;
-  padding:0 10px;background:var(--card)}
-.brand{font-weight:700;letter-spacing:.08em;font-size:12px;color:var(--fg);
-  padding:0 6px 0 2px;opacity:.85;flex:0 0 auto}
-.chrome-bar__acts{margin-left:auto;display:flex;gap:2px;flex:0 0 auto}
+/* 창의 크롬.
+   구 프로젝트(soksak)의 App.css 를 그대로 따른다:
 
-/* 탭 줄. 프로젝트와 스페이스가 같은 모양을 쓴다 — 둘 다 「무엇을 보고 있는가」다. */
-.tabs{display:flex;align-items:flex-end;gap:1px;flex:1 1 auto;min-width:0;overflow:hidden}
-.tabs--space{flex:0 0 auto;height:34px;padding:4px 10px 0;background:var(--card);
-  align-items:stretch}
-.tab{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;
-  border:0;border-radius:8px 8px 0 0;background:transparent;color:var(--muted);
-  font:inherit;font-size:12px;cursor:pointer;max-width:220px;white-space:nowrap}
-.tab:hover{color:var(--fg)}
-.tab[data-on=true]{background:var(--bg);color:var(--fg)}
-.tab__dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
-.tab__name{overflow:hidden;text-overflow:ellipsis}
-.tab__x{opacity:0;padding:0 1px;flex:0 0 auto}
-.tab:hover .tab__x,.tab[data-on=true] .tab__x{opacity:.5}
-.tab__x:hover{opacity:1}
-.tab--add{color:var(--muted);padding:0 10px;font-size:14px;border-radius:8px}
-.tab--add:hover{background:color-mix(in srgb,var(--bd) 22%,transparent);color:var(--fg)}
-.tab__root{height:26px;padding:0 8px;border:var(--bw) solid var(--focus);border-radius:6px;
-  background:var(--card);color:var(--fg);font:inherit;font-size:12px;width:180px}
+     .titlebar      45px · padding 0 14px 0 82px · 아래 보더 · --side 바탕
+     크롬 줄 높이   37 = 위아래 여백 5 + 칩 26 + 선 1
+     .workspace-tab 알약 radius 5 · rgba(127,127,127,.12), 활성 .28
+     .space-tab     위만 둥근 radius 6 6 0 0 · .1, 활성 .24
+     .icon-btn      24×22 · radius 4 · opacity .7, 활성은 강조색
 
-/* 아이콘 스위치. 카드의 것과 같은 모양이다. */
-.act{display:grid;place-items:center;width:26px;height:26px;padding:0;border:0;border-radius:6px;
-  background:transparent;color:var(--muted);cursor:pointer}
-.act:hover{background:color-mix(in srgb,var(--bd) 22%,transparent);color:var(--fg)}
-.act[data-on=true]{color:var(--focus)}
-.act svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.4;
+   왼쪽 여백만 다르다. 구 프로젝트는 창에 테두리가 없어 이 줄이 곧 타이틀바이고
+   82px 은 신호등 자리다. 이 예제의 창에는 진짜 타이틀바가 따로 있으므로 비워 둘
+   자리가 없다.                                                             */
+:root{--chrome-row-h:37px;--chip:rgba(127,127,127,.12);--chip-hover:rgba(127,127,127,.22);
+  --chip-on:rgba(127,127,127,.28);--inset:color-mix(in srgb,var(--bd) 22%,transparent)}
+
+.chrome-bar{flex:0 0 45px;height:45px;display:flex;align-items:center;gap:10px;
+  padding:0 14px;border-bottom:1px solid var(--bd);background:var(--card);
+  user-select:none}
+.brand{flex:0 0 auto;font-weight:700;letter-spacing:.08em;font-size:12px;color:var(--muted);
+  margin-right:4px}
+.chrome-bar__acts{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+
+/* 프로젝트 탭 줄. 크롬 줄의 높이는 여기가 아니라 위의 계약이 갖는다. */
+.tabs{display:flex;align-items:stretch;gap:4px;flex:1 1 auto;min-width:0;
+  height:var(--chrome-row-h);padding-block:5px;overflow:hidden}
+.tabs--project{align-self:center}
+
+/* 스페이스 탭 줄. 판 바로 위에 서므로 탭의 아래가 판과 이어진다. */
+.tabs--space{flex:0 0 auto;gap:2px;height:var(--chrome-row-h);padding:5px 10px;
+  align-items:center;background:var(--card);border-bottom:1px solid var(--bd)}
+.tabs--space .bar-tab{height:26px}
+
+.bar-tab{display:flex;align-items:center;gap:6px;padding:0 8px;border:0;border-radius:5px;
+  background:var(--chip);color:var(--muted);font:inherit;font-size:12px;cursor:pointer;
+  max-width:220px;white-space:nowrap}
+.bar-tab:hover{background:var(--chip-hover)}
+.bar-tab[data-on=true]{background:var(--chip-on);color:var(--fg)}
+.tabs--space .bar-tab{border-radius:6px 6px 0 0;background:rgba(127,127,127,.1)}
+.tabs--space .bar-tab:hover{background:rgba(127,127,127,.18)}
+.tabs--space .bar-tab[data-on=true]{background:rgba(127,127,127,.24);color:var(--fg)}
+.bar-tab__name{overflow:hidden;text-overflow:ellipsis}
+.bar-tab__x{opacity:.55;padding:0 1px;flex:0 0 auto}
+.bar-tab__x:hover{opacity:1}
+.bar-tab--add{background:transparent;color:var(--muted);font-size:16px;line-height:1;padding:0 6px}
+.bar-tab--add:hover{background:rgba(127,127,127,.18)}
+.bar-tab__root{padding:0 8px;border:1px solid var(--focus);border-radius:5px;
+  background:var(--bg);color:var(--fg);font:inherit;font-size:12px;width:180px}
+
+/* 아이콘 스위치. */
+.act{display:inline-flex;align-items:center;justify-content:center;width:24px;height:22px;
+  flex:0 0 auto;padding:0;border:1px solid transparent;border-radius:4px;background:transparent;
+  color:var(--muted);opacity:.7;cursor:pointer}
+.act:hover{opacity:1;background:var(--inset)}
+.act[data-on=true]{opacity:1;color:var(--focus)}
+.act svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6;
   stroke-linecap:round;stroke-linejoin:round}
 
-/* 프로젝트 탭이 왼쪽에 설 때. 창 옆에 붙는 세로 줄이다. */
+/* 프로젝트 탭이 왼쪽에 설 때. 스페이스 줄보다 위에서 시작해 아래까지 내려간다. */
 .shell{display:flex;flex:1 1 auto;min-height:0}
-.rail-projects{display:flex;flex-direction:column;gap:6px;width:56px;flex:0 0 auto;
-  padding:8px 6px;background:var(--card)}
-.rail-projects .tab{width:44px;height:44px;justify-content:center;border-radius:10px;
-  border:var(--bw) solid var(--bd);padding:0;background:transparent}
-.rail-projects .tab[data-on=true]{border-color:var(--focus);background:var(--bg)}
-.rail-projects .tab__name{max-width:34px;font-size:11px;text-align:center}
-.rail-projects .tab__x{display:none}
-.rail-projects .tab--add{border-style:dashed;font-size:16px}
-/* 판 아래에 선다. 위에 두면 열 때마다 판이 밀리고, 네이티브 표면은 밀린 것을
-   알 길이 없다. 아래에 있으면 판은 자리를 지키고 크기만 준다. */
+.work{display:flex;flex-direction:column;flex:1 1 auto;min-width:0;min-height:0}
+.rail-projects{display:flex;flex-direction:column;gap:4px;width:64px;flex:0 0 auto;
+  padding:5px;background:var(--card);border-right:1px solid var(--bd)}
+.rail-projects .bar-tab{width:100%;height:36px;justify-content:center;padding:0 4px}
+.rail-projects .bar-tab__name{max-width:100%;text-align:center}
+.rail-projects .bar-tab__x{display:none}
+.rail-projects .bar-tab--add{width:100%;height:24px;justify-content:center}
+
 /* 설정 모달 — 520px 카드. 판 위를 덮으므로 잡이로 옮길 수 있다. */
 .set-card{position:absolute;left:50%;top:80px;transform:translateX(-50%);z-index:200;
   width:520px;max-height:70vh;display:flex;flex-direction:column;
@@ -270,11 +290,7 @@ input[type=color]{width:34px;height:24px;padding:0;background:var(--card);
 h1{margin:0;padding:8px 12px 4px;font-size:13px}
 </style></head>
 <body>
-<h1>Card / Rail — Wails 적용 전 시뮬레이터</h1>
-<p class="lede">배치는 <code>soksak</code> 라이브러리가 소유한다. 사이드바·레일·터미널이 모두 같은 카드이고,
-역할만 다르다 — 몫을 받는가 px를 받는가, 옮겨지는가 아닌가. 이 문서는 그 위에 네이티브 합성의 제약을 재현한다:
-표면은 CSS 스택 위에 있고, 선언 프레임과 적용 프레임은 지연을 두고 따로 움직인다.
-여기서 GREEN 인 것만 Wails 에서도 GREEN 이다.</p>
+
 
 
 <!-- 창의 크롬. 브랜드, 프로젝트 탭, 그리고 자주 쓰는 스위치.
@@ -285,12 +301,14 @@ h1{margin:0;padding:8px 12px 4px;font-size:13px}
   <div class="chrome-bar__acts" id="chromeActs"></div>
 </header>
 
-<!-- 스페이스 줄. 한 프로젝트 안의 판들. -->
-<div class="tabs tabs--space" id="spaceBar"></div>
-
 <div class="shell">
-  <!-- 프로젝트 탭이 왼쪽에 설 때의 자리. -->
+  <!-- 프로젝트 탭이 왼쪽에 설 때의 자리. 스페이스 줄보다 위에서 시작해 아래까지
+       내려간다 — 프로젝트가 스페이스를 담기 때문이다. -->
   <div class="rail-projects" id="projectRail" hidden></div>
+
+  <div class="work">
+  <!-- 스페이스 줄. 한 프로젝트 안의 판들. -->
+  <div class="tabs tabs--space" id="spaceBar"></div>
 
 <main class="stage"><div class="plane" id="plane">
   <svg class="rail" id="rail"><path id="railPath"></path></svg>
@@ -298,6 +316,7 @@ h1{margin:0;padding:8px 12px 4px;font-size:13px}
   <div class="picker" id="picker" data-native-modal hidden></div>
   <div class="focus-mark" id="focusMark" hidden></div>
 </div></main>
+  </div>
 </div>
 
 <!-- 설정 모달. 판 위에 뜨고, 열려 있는 동안 표면은 물러난다. -->
@@ -318,6 +337,11 @@ h1{margin:0;padding:8px 12px 4px;font-size:13px}
   </div>
 </div>
 
+<h1>Card / Rail — Wails 적용 전 시뮬레이터</h1>
+<p class="lede">배치는 <code>soksak</code> 라이브러리가 소유한다. 사이드바·레일·터미널이 모두 같은 카드이고,
+역할만 다르다 — 몫을 받는가 px를 받는가, 옮겨지는가 아닌가. 이 문서는 그 위에 네이티브 합성의 제약을 재현한다:
+표면은 CSS 스택 위에 있고, 선언 프레임과 적용 프레임은 지연을 두고 따로 움직인다.
+여기서 GREEN 인 것만 Wails 에서도 GREEN 이다.</p>
 <p class="note">+ 와 쪼개기는 새 탭의 종류를 먼저 묻는다(T2). 탭을 끌어 다른 카드의 가운데에
 놓으면 그 카드의 탭이 되고(T3), 변에 놓으면 그쪽에 자리가 생긴다(T4). 출발 카드의 탭이 하나뿐이면
 카드째로 옮겨가 빈 카드를 남기지 않는다(T5). 커밋 지연은 V7a 를, 적용 오차는 V7b 를 각각 뒤집는다.
@@ -381,6 +405,13 @@ installTheme(document);
 
 /* 설정이 정한 값을 문서 루트에 심는다. 스타일시트가 그 값을 읽는다. */
 install();
+
+/* 잡히지 않은 오류는 앱의 로그로 간다. 앱에는 콘솔이 없어서, 이것이 없으면
+   무엇이 터졌는지 볼 방법이 없다. */
+addEventListener("error", (e) =>
+  window.hostSurfaces?.report?.(`error: ${e.message} @ ${e.filename}:${e.lineno}`));
+addEventListener("unhandledrejection", (e) =>
+  window.hostSurfaces?.report?.(`rejected: ${e.reason}`));
 
 /* ── 배선 ─────────────────────────────────────────────────────────────── */
 
@@ -456,25 +487,21 @@ function act(name, title, on, onPick) {
 /** 탭 하나. 누르면 옮겨가고, 두 번 누르면 이름을 고치고, ✕ 는 닫는다. */
 function tab(text, on, { dot, onPick, onClose, onRename }) {
   const el = document.createElement("button");
-  el.className = "tab";
+  el.className = "bar-tab";
   el.type = "button";
   el.dataset.on = String(on);
   el.title = text;
-  if (dot) {
-    const d = document.createElement("span");
-    d.className = "tab__dot";
-    d.style.background = dot;
-    el.appendChild(d);
-  }
+  // 프로젝트 색은 그 탭이 선택되었을 때의 강조다. 점을 따로 달지 않는다.
+  if (dot && on) el.style.background = `color-mix(in srgb, ${dot} 24%, transparent)`;
   const name = document.createElement("span");
-  name.className = "tab__name";
+  name.className = "bar-tab__name";
   name.textContent = text;
   el.appendChild(name);
   el.addEventListener("click", onPick);
   if (onRename) el.addEventListener("dblclick", () => renameInPlace(el, text, onRename));
   if (onClose) {
     const x = document.createElement("span");
-    x.className = "tab__x";
+    x.className = "bar-tab__x";
     x.textContent = "✕";
     x.addEventListener("click", (e) => { e.stopPropagation(); onClose(); });
     el.appendChild(x);
@@ -485,7 +512,7 @@ function tab(text, on, { dot, onPick, onClose, onRename }) {
 /** 탭 자리에서 이름을 고친다. 비우면 그대로 둔다 — 이름 없는 것은 고를 수 없다. */
 function renameInPlace(el, was, take) {
   const input = document.createElement("input");
-  input.className = "tab__root";
+  input.className = "bar-tab__root";
   input.value = was;
   el.replaceWith(input);
   input.focus();
@@ -506,7 +533,7 @@ function renameInPlace(el, was, take) {
 /** 「+」 탭. 누르면 그 자리에서 루트를 입력받는다. */
 function addTabButton(text, onPick) {
   const b = document.createElement("button");
-  b.className = "tab tab--add";
+  b.className = "bar-tab bar-tab--add";
   b.type = "button";
   b.textContent = text;
   b.addEventListener("click", () => onPick(b));
@@ -524,7 +551,7 @@ function drawBars() {
 
   for (const p of projects.all()) {
     into.appendChild(tab(p.title, p.id === here.id, {
-      dot: toLeft ? null : p.color,
+      dot: p.color,
       onPick: () => { projects.activate(p.id); drawBars(); },
       onRename: (title) => projects.rename(p.id, { title }),
       onClose: projects.all().length > 1
@@ -562,7 +589,7 @@ function drawBars() {
  */
 function openProject(from) {
   const input = document.createElement("input");
-  input.className = "tab__root";
+  input.className = "bar-tab__root";
   input.placeholder = "~/Work/…";
   from.replaceWith(input);
   input.focus();
