@@ -1,0 +1,78 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>native modal</title>
+<!--
+  Draws one [data-native-modal] element of the main page.
+
+  DOM cannot be drawn over a native view, but a webview is a native view that
+  draws DOM. This page is loaded into a child webview created after the surface
+  webviews, so it sits above them and the surfaces keep running underneath.
+
+  It receives the element's class, its markup and the page's stylesheet, so it
+  renders exactly what the page would have rendered. A click on anything
+  carrying data-key is reported back and the main page decides what it means.
+-->
+<style>
+  /* Painted from the markup, before any script runs. A webview starts white and
+     shows that white until its document paints, so a background applied later
+     is a flash of white however quickly it arrives. */
+  html, body { margin: 0; padding: 0; height: 100%; background: #1b1d27 }
+</style>
+<script>
+  const { invoke } = window.__TAURI__.core;
+  const { listen } = window.__TAURI__.event;
+
+  let sheet = null;
+  let root = null;
+
+  function render({ css, className, html, border }) {
+    // The page's stylesheet comes in whole, which brings its body rule with it:
+    // a padding and a background meant for the page, not for a modal. The reset
+    // is added after it so it wins, and it keeps the ground transparent so the
+    // element's own corners show what is behind them.
+    if (!sheet) {
+      document.head.insertAdjacentHTML("beforeend", `<style id="page"></style>`);
+      sheet = document.getElementById("page");
+      document.head.insertAdjacentHTML(
+        "beforeend",
+        `<style>
+         html, body { margin: 0; padding: 0; height: 100% }
+         /* The element is the whole view here: it fills it, and it squares its
+            corners so no pixel of the view is left showing around them. */
+         /* The element takes its natural size here and the view is resized to
+            match, so nothing of it is cut off. Its corner radius is kept: the
+            view itself is clipped to the same radius, so the two agree. */
+         body > * { position: static !important; inset: auto !important;
+                    margin: 0 !important; max-height: none !important }
+         </style>`,
+      );
+      root = document.createElement("div");
+      document.body.appendChild(root);
+    }
+    sheet.textContent = css;
+    root.className = className;
+    root.innerHTML = html;
+    root.style.borderColor = border;
+
+    // Measured at once, not on the next frame: this view is hidden until it
+    // has reported a size, and a hidden view is not given frames, so waiting
+    // for one would mean waiting forever. getBoundingClientRect forces the
+    // layout it needs, which a hidden view does run.
+    const r = root.getBoundingClientRect();
+    invoke("overlay_fit", { id, w: Math.ceil(r.width), h: Math.ceil(r.height) });
+  }
+
+  // The view is kept between showings, so the content arrives twice over: once
+  // when it first loads, and by event every time after that.
+  const id = new URLSearchParams(location.search).get("id") ?? "modal";
+  invoke("overlay_content", { id }).then(render);
+  listen("overlay-content", (e) => render(e.payload));
+
+  addEventListener("click", (e) => {
+    const hit = e.target.closest("[data-key]");
+    if (hit) invoke("overlay_pick", { key: hit.dataset.key });
+  });
+  addEventListener("keydown", (e) => {
+    if (e.key === "Escape") invoke("overlay_pick", { key: "" });
+  });
+</script>

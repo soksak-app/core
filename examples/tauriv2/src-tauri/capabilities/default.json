@@ -1,0 +1,15 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Lets the main webview and the modal webviews call the app's own commands.",
+  "windows": [
+    "main"
+  ],
+  "webviews": [
+    "main",
+    "modal-*"
+  ],
+  "permissions": [
+    "core:default"
+  ]
+}

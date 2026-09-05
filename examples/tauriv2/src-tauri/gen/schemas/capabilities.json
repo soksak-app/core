@@ -1,0 +1,1 @@
+{"default":{"identifier":"default","description":"Lets the main webview and the modal webviews call the app's own commands.","local":true,"windows":["main"],"webviews":["main","modal-*"],"permissions":["core:default"]}}
