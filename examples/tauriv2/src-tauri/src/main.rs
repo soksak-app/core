@@ -28,6 +28,10 @@ use tauri::{
 #[derive(Debug, Deserialize)]
 struct Surface {
     id: String,
+    /// The colour the view starts on. A webview leaves unpainted area white, and
+    /// a divider drag resizes a surface every frame, so the strip it uncovered
+    /// would flash white until its page paints it.
+    background: [u8; 3],
     /// What the surface shows. A browser pane loads a url of its own; a terminal
     /// pane loads a page of this app, which is a path, not a url.
     kind: String,
@@ -116,7 +120,8 @@ fn sync_surfaces(
         } else {
             WebviewUrl::App(s.url.clone().into())
         };
-        let builder = WebviewBuilder::new(&label, target);
+        let [r, g, b] = s.background;
+        let builder = WebviewBuilder::new(&label, target).background_color(Color(r, g, b, 255));
         window
             .add_child(builder, position, size)
             .map_err(|e| e.to_string())?;

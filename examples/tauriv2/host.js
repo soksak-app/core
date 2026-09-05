@@ -17,6 +17,17 @@ const SURFACE_URL = {
   terminal: (id) => `terminal.html?id=${encodeURIComponent(id)}`,
 };
 
+/** The colour a surface shows where its page has not painted yet. */
+function surfaceBackground() {
+  const css = getComputedStyle(document.documentElement).getPropertyValue("--surface");
+  const probe = document.createElement("span");
+  probe.style.color = css.trim() || "#000";
+  document.body.appendChild(probe);
+  const rgb = getComputedStyle(probe).color.match(/\d+/g) ?? [0, 0, 0];
+  probe.remove();
+  return [Number(rgb[0]), Number(rgb[1]), Number(rgb[2])];
+}
+
 /** Page coordinates for a rect the page gave in plane coordinates. */
 function toPage(rect) {
   const plane = document.getElementById("plane").getBoundingClientRect();
@@ -67,6 +78,11 @@ if (!invoke) {
           kind: s.plugin,
           url: SURFACE_URL[s.plugin](s.id),
           visible: s.visible,
+          // A webview leaves unpainted area white, and a divider drag resizes a
+          // surface every frame, so the strip it just uncovered flashes white
+          // until the page paints it. Starting the view on the colour the page
+          // uses for a surface means there is no white to see.
+          background: surfaceBackground(),
           ...toPage(s.applied),
         }));
 

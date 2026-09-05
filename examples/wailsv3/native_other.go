@@ -10,7 +10,7 @@ import "unsafe"
 
 type nativeView struct{}
 
-func newNativeView(window unsafe.Pointer, url string, x, y, w, h float64) *nativeView {
+func newNativeView(window unsafe.Pointer, url string, x, y, w, h float64, background [3]float64) *nativeView {
 	return nil
 }
 

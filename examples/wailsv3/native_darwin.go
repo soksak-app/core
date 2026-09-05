@@ -18,12 +18,22 @@ package main
 #import <WebKit/WebKit.h>
 
 // Not under ARC, so the view is retained here and released in surfaceDestroy.
-static void* surfaceCreate(void* nsWindow, const char* url, double x, double y, double w, double h) {
+static void* surfaceCreate(void* nsWindow, const char* url, double x, double y, double w, double h,
+                           double red, double green, double blue) {
     NSWindow* window = (NSWindow*)nsWindow;
     NSView* parent = [window contentView];
     WKWebViewConfiguration* config = [[WKWebViewConfiguration alloc] init];
     WKWebView* view = [[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, w, h) configuration:config];
     view.frame = NSMakeRect(x, [parent bounds].size.height - y - h, w, h);
+    // The colour the view shows where its page has not painted. Public since
+    // macOS 12; without it that area is white.
+    if (@available(macOS 12.0, *)) {
+        view.underPageBackgroundColor =
+            [NSColor colorWithSRGBRed:red green:green blue:blue alpha:1.0];
+    }
+    [view setWantsLayer:YES];
+    view.layer.backgroundColor =
+        [[NSColor colorWithSRGBRed:red green:green blue:blue alpha:1.0] CGColor];
     [parent addSubview:view positioned:NSWindowAbove relativeTo:nil];
     NSURL* target = [NSURL URLWithString:[NSString stringWithUTF8String:url]];
     [view loadRequest:[NSURLRequest requestWithURL:target]];
@@ -90,10 +100,11 @@ import "unsafe"
 // nativeView is one webview living inside the window.
 type nativeView struct{ handle unsafe.Pointer }
 
-func newNativeView(window unsafe.Pointer, url string, x, y, w, h float64) *nativeView {
+func newNativeView(window unsafe.Pointer, url string, x, y, w, h float64, background [3]float64) *nativeView {
 	target := C.CString(url)
 	defer C.free(unsafe.Pointer(target))
-	handle := C.surfaceCreate(window, target, C.double(x), C.double(y), C.double(w), C.double(h))
+	handle := C.surfaceCreate(window, target, C.double(x), C.double(y), C.double(w), C.double(h),
+		C.double(background[0]), C.double(background[1]), C.double(background[2]))
 	if handle == nil {
 		return nil
 	}

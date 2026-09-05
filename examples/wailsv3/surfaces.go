@@ -40,6 +40,8 @@ type Surface struct {
 	Kind    string `json:"kind"`
 	URL     string `json:"url"`
 	Visible bool   `json:"visible"`
+	// The colour the view starts on, so a resize never uncovers white.
+	Background [3]float64 `json:"background"`
 	Rect
 }
 
@@ -50,14 +52,15 @@ type SyncRequest struct {
 
 // What a [data-native-modal] element needs in order to be drawn elsewhere.
 type OverlayRequest struct {
-	ID        string   `json:"id"`
-	Viewport  Viewport `json:"viewport"`
-	Rect      Rect     `json:"rect"`
-	ClassName string   `json:"className"`
-	HTML      string   `json:"html"`
-	CSS       string   `json:"css"`
-	Border    string   `json:"border"`
-	Radius    float64  `json:"radius"`
+	ID         string     `json:"id"`
+	Viewport   Viewport   `json:"viewport"`
+	Rect       Rect       `json:"rect"`
+	ClassName  string     `json:"className"`
+	HTML       string     `json:"html"`
+	CSS        string     `json:"css"`
+	Border     string     `json:"border"`
+	Radius     float64    `json:"radius"`
+	Background [3]float64 `json:"background"`
 }
 
 // What the modal's own view asks for once it has loaded.
@@ -120,7 +123,8 @@ func (s *Surfaces) OverlayShow(req OverlayRequest) error {
 			live.view.destroy()
 		}
 		url := s.pages.URL("overlay.html?id=" + req.ID)
-		live.view = newNativeView(win.NativeWindow(), url, x, y, max1(req.Rect.W), max1(req.Rect.H))
+		live.view = newNativeView(win.NativeWindow(), url, x, y,
+			max1(req.Rect.W), max1(req.Rect.H), srgb(req.Background))
 		if live.view != nil {
 			live.view.setHidden(true)
 		}
@@ -169,6 +173,11 @@ func (s *Surfaces) ModalFit(id string, w, h float64) {
 		view.raise()
 		view.setHidden(false)
 	})
+}
+
+// srgb turns the page's 0-255 channels into the 0-1 AppKit wants.
+func srgb(c [3]float64) [3]float64 {
+	return [3]float64{c[0] / 255, c[1] / 255, c[2] / 255}
 }
 
 func max1(v float64) float64 {
@@ -251,7 +260,7 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest, insetX
 		if surface.Kind != "browser" {
 			url = s.pages.URL(surface.URL)
 		}
-		view := newNativeView(win.NativeWindow(), url, x, y, w, h)
+		view := newNativeView(win.NativeWindow(), url, x, y, w, h, srgb(surface.Background))
 		if view == nil {
 			log.Printf("surface %s: no native view on this platform", surface.ID)
 			continue
