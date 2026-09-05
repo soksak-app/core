@@ -19,7 +19,7 @@
 </style>
 <script type="module">
   import { page } from "./framework/index.js";
-  import { onGripDrag } from "./grip.js";
+  import { onGripDrag, showValue } from "./card.js";
 
   /* 이 페이지는 자기 문서라 주 페이지의 스타일시트를 물려받지 못한다. 그래서
      테마가 값으로 와서 여기서 자기 루트에 심는다. 모달은 열릴 때 만들어지고
@@ -90,4 +90,5 @@
   /* 잡이를 끈 것도 답 하나다. 이 뷰는 카드가 어디에 서 있는지 모르므로 움직인
      양만 돌려주고, 자리는 카드를 가진 페이지가 정한다. */
   onGripDrag(document, (dx, dy) => send("move", `${dx},${dy}`));
+  showValue(document);
 </script>

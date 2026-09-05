@@ -1,4 +1,7 @@
-// 잡이를 끌어 무언가를 옮기는 제스처.
+// [data-native-modal] 카드가 어느 문서에서 그려지든 갖는 거동.
+//
+// 카드는 자기를 가진 문서에도, 그 사본을 그리는 네이티브 뷰에도 있다. 여기 있는
+// 것은 그 둘 모두에서 같아야 하는 것들이다.
 //
 // 카드를 가진 문서와 그 사본을 그리는 문서가 같은 제스처를 쓴다. 어디까지
 // 옮겼는지는 여기서 정하지 않는다 — 움직인 만큼만 알리고, 자리를 정하는 것은
@@ -39,5 +42,21 @@ export function onGripDrag(root, moved) {
     addEventListener("mouseup", up);
     document.body.style.cursor = "grabbing";
     document.body.style.userSelect = "none";
+  });
+}
+
+/**
+ * 끌고 있는 동안 슬라이더 옆의 수를 따라가게 한다.
+ *
+ * 값이 바뀌었다고 알리는 것은 손을 뗄 때(change)다. 그 사이에도 수는 손을 따라야
+ * 하는데, 매 input 마다 알리면 카드가 통째로 다시 그려져 끌던 손잡이가 사라진다.
+ * 그래서 이 표시는 알리지 않고 여기서만 고친다.
+ */
+export function showValue(root) {
+  root.addEventListener("input", (e) => {
+    const el = e.target.closest("input[type=range][data-set]");
+    if (!el) return;
+    const out = el.parentElement.querySelector("output");
+    if (out) out.textContent = out.textContent.replace(/^-?[\d.]+/, el.value);
   });
 }

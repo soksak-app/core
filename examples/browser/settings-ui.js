@@ -9,7 +9,7 @@
 // 전부 data-key 를 달고, 답은 하나의 함수로 온다.
 import { standIn } from "./compositor.js";
 import { icon } from "./icons.js";
-import { onGripDrag } from "./grip.js";
+import { onGripDrag, showValue } from "./card.js";
 import { build } from "./plane.js";
 import { knobs } from "./compositor.js";
 import { plugins, section } from "./plugins/registry.js";
@@ -189,6 +189,7 @@ function makeCard() {
   // 호스트가 있으면 이 요소는 그려지지 않지만 자리는 지킨다. 그래서 잡이를 끄는
   // 일은 사본이 있는 뷰에서 일어나고, 그 답이 여기로 온다.
   onGripDrag(el, (dx, dy) => answer("move", `${dx},${dy}`));
+  showValue(el);
   return el;
 }
 
