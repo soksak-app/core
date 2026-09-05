@@ -13,17 +13,17 @@
   is sent a line at a time.
 -->
 <style>
-  html, body { margin: 0; height: 100%; background: var(--surface, #0d1a14) }
+  html, body { margin: 0; height: 100%; background: var(--surface) }
   body {
     display: flex; flex-direction: column;
     font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
-    color: var(--surface-fg, #7fe3b0);
+    color: var(--surface-fg);
   }
   #out { flex: 1 1 auto; margin: 0; padding: 6px 9px; overflow-y: auto;
          white-space: pre-wrap; word-break: break-word }
   #line { display: flex; gap: 6px; padding: 4px 9px 6px;
-          border-top: 1px solid color-mix(in srgb, var(--surface-fg, #7fe3b0) 22%, transparent) }
-  #line span { color: color-mix(in srgb, var(--surface-fg, #7fe3b0) 55%, transparent) }
+          border-top: 1px solid color-mix(in srgb, var(--surface-fg) 22%, transparent) }
+  #line span { color: color-mix(in srgb, var(--surface-fg) 55%, transparent) }
   #in { flex: 1 1 auto; min-width: 0; border: 0; background: transparent;
         color: inherit; font: inherit; outline: 0 }
 </style>
@@ -36,10 +36,9 @@
   /* A page the host created is a document of its own and inherits none of the
      main page's stylesheet, so the theme arrives as values and is set here. */
   function applyTheme(theme) {
-    if (!theme) return;
     const root = document.documentElement;
-    root.style.colorScheme = theme.scheme ?? "dark";
-    for (const [token, value] of Object.entries(theme.tokens ?? {})) {
+    root.style.colorScheme = theme.scheme;
+    for (const [token, value] of Object.entries(theme.tokens)) {
       root.style.setProperty(token, value);
     }
   }

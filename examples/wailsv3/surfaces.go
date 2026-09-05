@@ -47,11 +47,10 @@ type SyncRequest struct {
 	Surfaces []Surface `json:"surfaces"`
 }
 
-// Viewport is the page's own size. The page's view starts at the window content
-// view's origin, so its height is all that is needed to turn a rect measured
-// from the page's top left into the frame AppKit wants.
+// Viewport is the page's own height. The page's view starts at the window
+// content view's origin, so the height is all that is needed to turn a rect
+// measured from the page's top left into the frame AppKit wants.
 type Viewport struct {
-	W float64 `json:"w"`
 	H float64 `json:"h"`
 }
 
@@ -236,10 +235,10 @@ func up(viewport Viewport, y, h float64) float64 { return viewport.H - y - h }
 
 // press tells the page which surface a press landed on. The page decides what
 // that means; here it is only named.
-func (s *Surfaces) press(x, up float64) {
+func (s *Surfaces) press(x, fromBottom float64) {
 	// The monitor reports a point in the window content view, measured from the
 	// bottom left. The placements are in the page's coordinates.
-	hit := surfaceAt(s.placed, x, s.viewport.H-up)
+	hit := surfaceAt(s.placed, x, s.viewport.H-fromBottom)
 	if hit == "" {
 		return
 	}
@@ -310,11 +309,14 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) {
 	for _, surface := range req.Surfaces {
 		wanted[surface.ID] = true
 		w, h := max1(surface.W), max1(surface.H)
-		x, y := surface.X, up(req.Viewport, surface.Y, h)
+		// The page's rect is what a press is tested against; the view takes the
+		// same rect in AppKit's coordinates.
+		page := Rect{X: surface.X, Y: surface.Y, W: w, H: h}
+		x, y := page.X, up(req.Viewport, page.Y, h)
 
 		alpha := alphaFor(surface.Dim)
 		s.placed = append(s.placed, placement{
-			id: surface.ID, frame: Rect{X: surface.X, Y: surface.Y, W: w, H: h},
+			id: surface.ID, frame: page,
 			layer: surface.Layer, visible: surface.Visible, alpha: alpha,
 		})
 		if view, live := s.views[surface.ID]; live {

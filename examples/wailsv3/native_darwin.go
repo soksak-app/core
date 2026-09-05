@@ -7,8 +7,9 @@
 // view, so it can be added to that window's content view like any other, which
 // is what the Tauri example gets from its own runtime.
 //
-// Views are placed in the content view's coordinates. AppKit measures from the
-// bottom left, so a frame given from the top left is flipped here.
+// A frame arrives in the content view's coordinates, measured from the bottom
+// left as AppKit does. The page measures from its top left; surfaces.go turns
+// one into the other.
 package main
 
 /*
@@ -17,16 +18,13 @@ package main
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 
-// The view the page itself lives in. It is the first thing in the content view;
-// everything this app adds goes above it.
-static NSView* surfacePageView(NSWindow* window) {
-    NSArray<NSView*>* subviews = [[window contentView] subviews];
-    return [subviews count] == 0 ? nil : [subviews objectAtIndex:0];
-}
-
 // A frame arrives already in AppKit's coordinates. It is snapped to the backing
 // store's pixel grid outward: the page reports fractional rects, and a frame
 // snapped inward leaves the card's background showing along that edge.
+//
+// Outward means the view may cover up to half a pixel more than the page asked
+// for. That half pixel is under the card's border, which the page draws and the
+// surface does not reach.
 static NSRect surfaceAligned(NSWindow* window, double x, double y, double w, double h) {
     return [window backingAlignedRect:NSMakeRect(x, y, w, h) options:NSAlignAllEdgesOutward];
 }
@@ -121,15 +119,6 @@ static void surfaceWatchMouse(void* nsWindow) {
     }];
 }
 
-// The size of the area views are placed in, so the page's offset inside it can
-// be worked out.
-static void surfaceContentSize(void* nsWindow, double* w, double* h) {
-    NSWindow* window = (NSWindow*)nsWindow;
-    NSRect bounds = [[window contentView] bounds];
-    *w = bounds.size.width;
-    *h = bounds.size.height;
-}
-
 static void surfaceDestroy(void* handle) {
     WKWebView* view = (WKWebView*)handle;
     [view removeFromSuperview];
@@ -184,10 +173,3 @@ func (v *nativeView) destroy() { C.surfaceDestroy(v.handle) }
 
 // watchMouse starts the monitor. Called once, when the first surface appears.
 func watchMouse(window unsafe.Pointer) { C.surfaceWatchMouse(window) }
-
-// contentSize reports the size of the area views are placed in.
-func contentSize(window unsafe.Pointer) (float64, float64) {
-	var w, h C.double
-	C.surfaceContentSize(window, &w, &h)
-	return float64(w), float64(h)
-}

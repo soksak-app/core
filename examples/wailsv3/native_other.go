@@ -25,5 +25,3 @@ func (v *nativeView) destroy()                    {}
 func (v *nativeView) frame() (x, y, w, h float64) { return 0, 0, 0, 0 }
 
 func watchMouse(window unsafe.Pointer) {}
-
-func contentSize(window unsafe.Pointer) (float64, float64) { return 0, 0 }

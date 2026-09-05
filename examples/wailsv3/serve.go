@@ -28,11 +28,14 @@ type Pages struct {
 	shells   *Shells
 	surfaces *Surfaces
 
-	// The theme the page last declared, and everyone waiting to hear it change.
+	// The theme the page last chose, and the terminal streams waiting to hear it
+	// change.
 	//
 	// A page served here is a document of its own and inherits none of the main
-	// page's stylesheet, so it reads the values and sets them on its own root.
-	// It has no bridge to Go either, so it hears about a change on a stream.
+	// page's stylesheet, so it reads the values and sets them on its own root. A
+	// modal reads them once: it is built when it opens and destroyed when it
+	// closes. A terminal outlives a change, and hears it on the stream that
+	// already carries its shell's output.
 	themeMu    sync.Mutex
 	theme      Theme
 	themeWatch map[chan Theme]bool

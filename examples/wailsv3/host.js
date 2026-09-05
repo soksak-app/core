@@ -97,7 +97,7 @@ function install(call) {
       // A commit arrives on every render, including every frame of a divider
       // drag. Sending an unchanged request would cross the bridge for nothing.
       const request = {
-        viewport: { w: window.innerWidth, h: window.innerHeight },
+        viewport: { h: window.innerHeight },
         surfaces,
       };
       const key = JSON.stringify(request);
@@ -134,7 +134,7 @@ function install(call) {
       const style = getComputedStyle(el);
       call.ByName(`${SERVICE}.OverlayShow`, {
         id: shown,
-        viewport: { w: window.innerWidth, h: window.innerHeight },
+        viewport: { h: window.innerHeight },
         rect: toPage(rect),
         className: el.className,
         html: el.innerHTML,
