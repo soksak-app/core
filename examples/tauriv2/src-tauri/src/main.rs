@@ -224,7 +224,7 @@ struct OverlayRequest {
     radius: f64,
     /// The element's background. Given to the view at birth so that it is never
     /// the white a webview shows before its document has painted.
-    background: [u8; 3],
+    background: [f64; 4],
 }
 
 #[derive(Debug, Deserialize)]
@@ -317,11 +317,11 @@ fn overlay_show(
     // back.
     // The page reads which framework holds it from the address it was opened at.
     let url = format!("overlay.html?id={}&framework=tauriv2", request.id);
-    let [r, g, b] = request.background;
+    let [r, g, b, a] = request.background;
     window
         .add_child(
             WebviewBuilder::new(&label, WebviewUrl::App(url.into()))
-                .background_color(Color(r, g, b, 255)),
+                .background_color(Color(r as u8, g as u8, b as u8, (a * 255.0) as u8)),
             LogicalPosition::new(request.rect.x, request.rect.y + top),
             LogicalSize::new(request.rect.w.max(1.0), request.rect.h.max(1.0)),
         )
