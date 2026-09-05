@@ -45,7 +45,7 @@ export const all = () => projects;
 export const active = () => projects.find((p) => p.id === activeProjectId) ?? null;
 
 /** 지금 보고 있는 스페이스. */
-export function activeSpace() {
+function activeSpace() {
   const p = active();
   return p ? p.spaces.find((s) => s.id === p.activeSpaceId) : null;
 }
