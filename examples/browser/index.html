@@ -466,6 +466,9 @@ const compositor = {
         record.surfaces.push({
           id: s.id, plugin: s.plugin, layer: s.layer, declared: s.frame, applied,
           visible: s.visible, dim: dimmed(s.id),
+          // 표면이 보여주는 것은 플러그인이 정한다. 호스트가 종류의 이름으로
+          // 분기하면 플러그인을 하나 더 만들 때 호스트도 고쳐야 한다.
+          surface: plugin(s.plugin).surface(s.id),
         });
         continue;
       }
@@ -481,6 +484,7 @@ const compositor = {
       record.surfaces.push({
           id: s.id, plugin: s.plugin, layer: s.layer, declared: s.frame, applied,
           visible: s.visible, dim: dimmed(s.id),
+          surface: plugin(s.plugin).surface(s.id),
         });
     }
     for (const [id, el] of this.surfaces) {

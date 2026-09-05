@@ -10,12 +10,14 @@
 // therefore above them.
 const { invoke } = window.__TAURI__?.core ?? {};
 const { listen } = window.__TAURI__?.event ?? {};
-// What each kind of surface shows. A browser pane is a live page; a terminal
-// pane is a local page with a shell process behind it.
-const SURFACE_URL = {
-  browser: () => "https://www.google.com",
-  terminal: (id) => `terminal.html?id=${encodeURIComponent(id)}`,
-};
+// What a surface shows, as the page declared it: `url` is an address anywhere,
+// `page` is a document of this app. A plugin the page adds later needs no change
+// here, because the kind is never named.
+function surfaceURL(surface) {
+  if (surface.url) return surface.url;
+  if (surface.page) return surface.page;
+  throw new Error(`surface declares neither url nor page: ${JSON.stringify(surface)}`);
+}
 
 /** The colour a surface shows where its page has not painted yet. */
 function surfaceBackground() {
@@ -84,13 +86,16 @@ if (!invoke) {
         this.theme(window.pageTheme());
       }
       const surfaces = record.surfaces
-        .filter((s) => SURFACE_URL[s.plugin])
         .map((s) => ({
           id: s.id,
           kind: s.plugin,
           layer: s.layer,
           dim: s.dim,
-          url: SURFACE_URL[s.plugin](s.id),
+          url: surfaceURL(s.surface),
+          // Whether that address is outside this host. The app opens an outside
+          // address as it is and one of its own through its own server, and it
+          // never has to know which kind of surface asked.
+          external: !!s.surface.url,
           visible: s.visible,
           // A webview leaves unpainted area white, and a divider drag resizes a
           // surface every frame, so the strip it just uncovered flashes white

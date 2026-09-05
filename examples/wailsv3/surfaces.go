@@ -29,10 +29,14 @@ type Rect struct {
 }
 
 type Surface struct {
-	ID      string `json:"id"`
-	Kind    string `json:"kind"`
-	URL     string `json:"url"`
-	Visible bool   `json:"visible"`
+	ID   string `json:"id"`
+	Kind string `json:"kind"`
+	URL  string `json:"url"`
+	// Whether URL points outside this host. An address of this host's own is
+	// served by the loopback server; naming the kind here would mean editing
+	// this file for every plugin the page adds.
+	External bool `json:"external"`
+	Visible  bool `json:"visible"`
 	// Whether the page asked for this surface to stand back, having lost focus.
 	Dim bool `json:"dim"`
 	// Which of two overlapping surfaces is on top.
@@ -296,7 +300,7 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) {
 			continue
 		}
 		url := surface.URL
-		if surface.Kind != "browser" {
+		if !surface.External {
 			url = s.pages.URL(surface.URL)
 		}
 		view := newNativeView(win.NativeWindow(), url, x, y, w, h, srgb(surface.Background))

@@ -33,10 +33,13 @@ struct Surface {
     /// a divider drag resizes a surface every frame, so the strip it uncovered
     /// would flash white until its page paints it.
     background: [u8; 3],
-    /// What the surface shows. A browser pane loads a url of its own; a terminal
-    /// pane loads a page of this app, which is a path, not a url.
     kind: String,
+    /// What the surface shows.
     url: String,
+    /// Whether that address is outside this app. An address of this app's own is
+    /// a path into its frontend; naming the kind here would mean editing this
+    /// file for every plugin the page adds.
+    external: bool,
     x: f64,
     y: f64,
     w: f64,
@@ -169,7 +172,7 @@ fn sync_surfaces(
             continue;
         }
 
-        let target = if s.kind == "browser" {
+        let target = if s.external {
             WebviewUrl::External(s.url.parse().map_err(|_| format!("bad url: {}", s.url))?)
         } else {
             WebviewUrl::App(s.url.clone().into())
