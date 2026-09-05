@@ -535,7 +535,10 @@ function updateCard(el, card) {
     ham.title = "탭 목록";
     ham.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true">' +
       '<path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/></svg>';
-    ham.addEventListener("click", () => openTabList(ham, el.dataset.cardId));
+    ham.addEventListener("click", () => {
+      if (picker?.anchor === ham) { closePicker(); return; }
+      openTabList(ham, el.dataset.cardId);
+    });
     chrome.insertBefore(ham, chrome.firstChild);
   }
   let strip = chrome.querySelector(".chrome__tabs");
@@ -608,6 +611,8 @@ function updateCard(el, card) {
           settle();
           return;
         }
+        // The button toggles: pressing the one that opened the layer closes it.
+        if (picker?.anchor === b) { closePicker(); return; }
         // 나머지 3개는 탭을 생성한다. + 는 이 카드에, 쪼개기는 새 카드에 생성한다.
         // 여기서는 레이어만 표시하고 생성하지 않는다. 미리 생성하면 취소 시 제거해야 한다.
         //
@@ -776,7 +781,13 @@ pickerEl.addEventListener("click", (e) => {
   pick(key);
 });
 
-const onPickerOutside = (e) => { if (!pickerEl.contains(e.target)) closePicker(); };
+const onPickerOutside = (e) => {
+  if (pickerEl.contains(e.target)) return;
+  // The button that opened the layer closes it on its own click, so a press on
+  // it is not an outside press. Closing here would let the click reopen at once.
+  if (picker?.anchor?.contains(e.target)) return;
+  closePicker();
+};
 const onPickerKey = (e) => {
   if (e.key !== "Escape") return;
   e.stopPropagation();
@@ -845,7 +856,7 @@ function openLayer(anchor, ask, items, pick, align = "right") {
   };
   pickerEl.style.left = `${rect.x}px`;
   pickerEl.style.top = `${rect.y}px`;
-  picker = { pick, rect };
+  picker = { anchor, pick, rect };
   // DOM cannot be drawn over a native view, but a webview is a native view that
   // draws DOM. A host that can raise one takes this element and draws it there,
   // so the surfaces underneath keep running. The element is handed over whole:
