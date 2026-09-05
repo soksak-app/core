@@ -29,9 +29,8 @@ type Rect struct {
 }
 
 type Surface struct {
-	ID   string `json:"id"`
-	Kind string `json:"kind"`
-	URL  string `json:"url"`
+	ID  string `json:"id"`
+	URL string `json:"url"`
 	// Whether URL points outside this host. An address of this host's own is
 	// served by the loopback server; naming the kind here would mean editing
 	// this file for every plugin the page adds.
@@ -39,8 +38,6 @@ type Surface struct {
 	Visible  bool `json:"visible"`
 	// Whether the page asked for this surface to stand back, having lost focus.
 	Dim bool `json:"dim"`
-	// Which of two overlapping surfaces is on top.
-	Layer int `json:"layer"`
 	// The colour the view starts on, so a resize never uncovers white.
 	Background [3]float64 `json:"background"`
 	Rect

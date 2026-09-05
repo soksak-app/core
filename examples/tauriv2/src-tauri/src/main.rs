@@ -33,7 +33,6 @@ struct Surface {
     /// a divider drag resizes a surface every frame, so the strip it uncovered
     /// would flash white until its page paints it.
     background: [u8; 3],
-    kind: String,
     /// What the surface shows.
     url: String,
     /// Whether that address is outside this app. An address of this app's own is

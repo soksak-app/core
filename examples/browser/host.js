@@ -90,8 +90,6 @@ function install() {
       }
       const surfaces = record.surfaces.map((s) => ({
         id: s.id,
-        kind: s.plugin,
-        layer: s.layer,
         dim: s.dim,
         url: surfaceURL(s.surface),
         // 그 주소가 이 호스트 밖인가. 앱은 바깥 주소는 그대로 열고 자기 것은
