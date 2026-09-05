@@ -37,8 +37,9 @@ if s.count(old) != 1:
 s = s.replace(old, 'from "./dist/index.js"')
 
 # Wails serves its bridge at /wails/runtime.js; without it the page cannot call
-# into Go. Tauri injects its own bridge before any page script runs.
-head = '<script src="/wails/runtime.js"></script>\n' if app == "wailsv3" else ""
+# into Go. It is an ES module, so a plain script tag fails to parse it and the
+# bridge never appears. Tauri injects its own bridge before any page script runs.
+head = '<script type="module" src="/wails/runtime.js"></script>\n' if app == "wailsv3" else ""
 if os.path.exists(f"{out}/host.js"):
     head += '<script src="./host.js"></script>\n'
 marker = '<script type="module">'

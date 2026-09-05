@@ -5,8 +5,8 @@
 // so index.html sits at the frontend root and the window opens "/".
 //
 // Wails v3 beta.16 creates one webview per window and offers no API to add a
-// second webview to a window, so this example has no native surface beneath
-// the DOM. See NOTES.md.
+// second webview to one, so a native surface here is a frameless window held
+// over the main one. See surfaces.go.
 package main
 
 import (
@@ -20,11 +20,21 @@ import (
 var assets embed.FS
 
 func main() {
+	shells := NewShells()
+	pages, err := NewPages(assets, shells)
+	if err != nil {
+		log.Fatal(err)
+	}
+	surfaces := NewSurfaces(shells, pages)
+	pages.Bind(surfaces)
 	app := application.New(application.Options{
 		Name:        "soksak",
 		Description: "soksak layout running in Wails v3",
 		Assets: application.AssetOptions{
 			Handler: application.BundledAssetFileServer(assets),
+		},
+		Services: []application.Service{
+			application.NewService(surfaces),
 		},
 	})
 

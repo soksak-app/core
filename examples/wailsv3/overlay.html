@@ -1,0 +1,63 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>native modal</title>
+<!--
+  Draws one [data-native-modal] element of the main page.
+
+  DOM cannot be drawn over a native view, but a webview is a native view that
+  draws DOM. This page is loaded into a view created after the surface views, so
+  it sits above them and the surfaces keep running underneath.
+
+  It receives the element's class, its markup and the page's stylesheet, so it
+  renders exactly what the page would have. A click on anything carrying
+  data-key is reported back and the main page decides what it means.
+-->
+<style>
+  /* Painted from the markup, before any script runs: a webview shows white
+     until its document paints, and a background applied later is a flash. */
+  html, body { margin: 0; padding: 0; height: 100%; background: #1b1d27 }
+</style>
+<script>
+  const id = new URLSearchParams(location.search).get("id") ?? "modal";
+  const query = `?id=${encodeURIComponent(id)}`;
+  let sheet = null;
+  let root = null;
+
+  function render({ css, className, html, border }) {
+    if (!sheet) {
+      document.head.insertAdjacentHTML("beforeend", `<style id="page"></style>`);
+      sheet = document.getElementById("page");
+      // The page's stylesheet arrives whole, which brings its body rule with it:
+      // a padding and a background meant for a page, not for a modal. This is
+      // added after it so it wins.
+      document.head.insertAdjacentHTML("beforeend", `<style>
+        html, body { margin: 0; padding: 0; height: 100% }
+        body > * { position: static !important; inset: auto !important;
+                   margin: 0 !important; max-height: none !important }
+      </style>`);
+      root = document.createElement("div");
+      document.body.appendChild(root);
+    }
+    sheet.textContent = css;
+    root.className = className;
+    root.innerHTML = html;
+    root.style.borderColor = border;
+
+    // Measured at once: this view is placed before it is filled, and the size it
+    // needs is only known here, where it is laid out.
+    const r = root.getBoundingClientRect();
+    fetch(`/overlay/fit${query}&w=${Math.ceil(r.width)}&h=${Math.ceil(r.height)}`, {
+      method: "POST",
+    });
+  }
+
+  fetch(`/overlay/content${query}`).then((r) => r.json()).then(render);
+
+  addEventListener("click", (e) => {
+    const hit = e.target.closest("[data-key]");
+    if (hit) fetch(`/overlay/pick${query}&key=${encodeURIComponent(hit.dataset.key)}`, { method: "POST" });
+  });
+  addEventListener("keydown", (e) => {
+    if (e.key === "Escape") fetch(`/overlay/pick${query}&key=`, { method: "POST" });
+  });
+</script>
