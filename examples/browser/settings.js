@@ -109,11 +109,15 @@ const settings = {
   mode: "dark",
 };
 
-/** 이름으로 찾은 테마. 없는 이름은 첫 번째로 읽는다. */
-const themeOf = (name) => THEMES.find((t) => t.name === name) ?? THEMES[0];
+/** 이름으로 찾은 테마. 목록에 없는 이름은 부르는 쪽의 잘못이므로 실패한다. */
+function themeOf(name) {
+  const found = THEMES.find((t) => t.name === name);
+  if (!found) throw new Error(`unknown theme: ${name}`);
+  return found;
+}
 
 /** 지금 걸려 있는 값들. 표면과 모달이 같은 것을 받는다. */
-export function themeTokens() {
+function themeTokens() {
   const theme = themeOf(settings.theme);
   const c = theme[settings.mode];
   return {
@@ -135,7 +139,8 @@ window.pageTheme = () => ({ scheme: settings.mode, tokens: themeTokens() });
  * 고른 값이 있으면 그것이 그대로 이긴다.
  */
 export function applyTheme(name, next) {
-  set({ theme: themeOf(name).name, mode: MODES.includes(next) ? next : settings.mode });
+  if (!MODES.includes(next)) throw new Error(`unknown mode: ${next}`);
+  set({ theme: themeOf(name).name, mode: next });
 }
 
 /**
@@ -144,21 +149,12 @@ export function applyTheme(name, next) {
  * 바꾸는 경로는 이것 하나다. 값마다 함수를 두면 심는 것을 빠뜨린 함수가
  * 생긴다.
  */
-export function set(patch) {
+function set(patch) {
   Object.assign(settings, patch);
   install();
   // 통로는 배치가 읽는 값이므로 설정이 바뀌면 판도 바뀐다. 그 일은 듣는 쪽이
   // 한다 — 여기서는 바뀌었다는 사실만 알린다.
   announce();
-}
-
-/** 지금 설정을 그대로 돌려준다. 저장하거나 호스트에 넘길 때 이것이 형식이다. */
-export const current = () => ({ ...settings });
-
-/** 저장된 설정을 건다. 모르는 키는 버리지 않고 그대로 둔다 — 이 페이지가
- *  모르는 값을 다른 곳이 알 수 있다. */
-export function load(saved) {
-  if (saved && typeof saved === "object") set(saved);
 }
 
 /** 값을 문서 루트에 심는다. */
@@ -176,16 +172,15 @@ function install() {
 export const cardRadius = () =>
   parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--r")) || 0;
 
-/* 값이 바뀌었음을 듣는 쪽. 판이 여기 붙는다. */
-const listeners = new Set();
+/* 값이 바뀌었음을 듣는 쪽. 판 하나가 붙는다. */
+let listener = null;
 
-/** 값이 바뀌면 부를 함수를 등록한다. 반환값을 부르면 해제된다. */
+/** 값이 바뀌면 부를 함수를 건다. */
 export function onSettingsChange(fn) {
-  listeners.add(fn);
-  return () => listeners.delete(fn);
+  listener = fn;
 }
 
-const announce = () => { for (const fn of listeners) fn(); };
+const announce = () => listener?.();
 
 /** 지금 걸린 테마의 이름과 모드. 배선이 select 를 맞출 때 읽는다. */
 export const themeName = () => settings.theme;
