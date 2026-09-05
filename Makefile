@@ -44,7 +44,7 @@ example-frontend:
 	@for app in wailsv3 tauriv2; do \
 	  out="examples/$$app/frontend"; \
 	  rm -rf "$$out"; mkdir -p "$$out/dist"; \
-	  cp examples/browser/index.html examples/browser/host.js "$$out/"; \
+	  cp -R examples/browser/. "$$out/"; \
 	  cp dist/*.js "$$out/dist/"; \
 	  cp "examples/$$app/host.js" "examples/$$app/overlay.html" \
 	     "examples/$$app/terminal.html" "$$out/"; \
