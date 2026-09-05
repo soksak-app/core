@@ -121,6 +121,25 @@ function install() {
   // 모달은 여러 번 응답하므로 여기서 구독을 해제하지 않고 hide 에서 해제한다.
   bridge.on("overlay-pick", ({ key, value }) => { if (pick) pick(key, value); });
 
+  /* 표면 위에 그리는 도형. 네이티브 뷰 하나이고 웹뷰가 아니다 — 채움과 선이
+     알파를 갖고 표면이 보여주는 것 위에 합성된다. 웹뷰는 WebKit 이 자기 배경을
+     칠하므로 그렇게 할 수 없다. */
+  window.hostShapes = {
+    set(id, rect, style) {
+      tell("setShape", {
+        id,
+        viewport: { h: window.innerHeight },
+        rect: toPage(rect),
+        radius: style.radius,
+        lineWidth: style.lineWidth,
+        fill: rgba(style.fill),
+        line: rgba(style.line),
+      });
+    },
+
+    clear: (id) => tell("clearShape", id),
+  };
+
   window.hostOverlay = {
     show(el, rect, onPick) {
       pick = onPick;
@@ -134,7 +153,7 @@ function install() {
         rect: toPage(rect),
         ...drawing(el),
         radius: parseFloat(style.borderTopLeftRadius) || 0,
-        background: rgba(style.backgroundColor).slice(0, 3),
+        background: rgba(style.backgroundColor),
       });
     },
 

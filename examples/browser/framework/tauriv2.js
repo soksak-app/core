@@ -14,6 +14,8 @@ const COMMAND = {
   report: "report",
   overlayShow: "overlay_show",
   overlayPlace: "overlay_place",
+  setShape: "set_shape",
+  clearShape: "clear_shape",
   overlayUpdate: "overlay_update",
   overlayHide: "overlay_hide",
 };
@@ -25,6 +27,8 @@ const ARG = {
   report: (v) => ({ line: v }),
   overlayShow: (v) => ({ request: v }),
   overlayPlace: (v) => ({ request: v }),
+  setShape: (v) => ({ request: v }),
+  clearShape: (v) => ({ id: v }),
   overlayUpdate: (v) => ({ request: v }),
   overlayHide: (v) => ({ id: v }),
 };

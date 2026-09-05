@@ -352,7 +352,7 @@ function beginTabDrag(e, cardId, tabId) {
     delete el.dataset.dragging;
     const drag = tabDrag;
     tabDrag = null;
-    dropEl.hidden = true;
+    hideDrop();
     if (drag.stood) standIn(false);
     el.removeEventListener("pointermove", onMove);
     el.removeEventListener("pointerup", onUp);
@@ -510,17 +510,44 @@ function splitWith(cardId, axis, plugin) {
   settle();
 }
 
+/* 미리보기가 호스트의 뷰에 있는가. 드래그 한 번 동안 그 뷰를 유지하고 위치만
+   갱신한다. 매 프레임 다시 만들면 깜빡인다. */
+let dropShown = false;
+
 function showDrop(hit) {
-  if (!hit || isPlace(hit.id)) { dropEl.hidden = true; return; }
+  if (!hit || isPlace(hit.id)) return hideDrop();
   const r = grid.rect(hit.id);
   const half = { x: r.x, y: r.y, w: r.w, h: r.h };
   if (hit.zone === "left") half.w = r.w / 2;
   if (hit.zone === "right") { half.x = r.x + r.w / 2; half.w = r.w / 2; }
   if (hit.zone === "top") half.h = r.h / 2;
   if (hit.zone === "bottom") { half.y = r.y + r.h / 2; half.h = r.h / 2; }
+  // 미리보기는 표면 위에 그려야 한다. 호스트가 있으면 네이티브 도형으로 그린다 —
+  // 채움이 반투명이라 웹뷰로는 표면 위에 합성되지 않는다. 모양은 이 문서의 CSS 가
+  // 정하고 그 계산값을 그대로 보낸다.
+  if (window.hostShapes) {
+    const css = getComputedStyle(dropEl);
+    window.hostShapes.set("drop", half, {
+      radius: parseFloat(css.borderTopLeftRadius) || 0,
+      lineWidth: parseFloat(css.borderTopWidth) || 0,
+      fill: css.backgroundColor,
+      line: css.borderTopColor,
+    });
+    dropShown = true;
+    return;
+  }
   dropEl.hidden = false;
   dropEl.style.left = `${half.x}px`; dropEl.style.top = `${half.y}px`;
   dropEl.style.width = `${half.w}px`; dropEl.style.height = `${half.h}px`;
+}
+
+/** 미리보기를 지운다. 호스트가 그리고 있으면 그 도형도 없앤다. */
+function hideDrop() {
+  if (dropShown) {
+    window.hostShapes.clear("drop");
+    dropShown = false;
+  }
+  dropEl.hidden = true;
 }
 
 /**

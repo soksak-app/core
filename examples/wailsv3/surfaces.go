@@ -70,7 +70,7 @@ type OverlayRequest struct {
 	CSS        string     `json:"css"`
 	Border     string     `json:"border"`
 	Radius     float64    `json:"radius"`
-	Background [3]float64 `json:"background"`
+	Background [4]float64 `json:"background"`
 }
 
 // What the modal's view requests once it has loaded.
@@ -105,6 +105,7 @@ type Surfaces struct {
 	// maps a pressed view to the surface id the page uses.
 	named  map[uintptr]string
 	modals map[string]*modal
+	shapes map[string]*nativeShape
 	shells *Shells
 	pages  *Pages
 	watch  sync.Once
@@ -115,6 +116,7 @@ func NewSurfaces(shells *Shells, pages *Pages) *Surfaces {
 		views:  map[string]*nativeView{},
 		named:  map[uintptr]string{},
 		modals: map[string]*modal{},
+		shapes: map[string]*nativeShape{},
 		shells: shells,
 		pages:  pages,
 	}
@@ -149,11 +151,69 @@ func (s *Surfaces) OverlayShow(req OverlayRequest) error {
 		}
 		url := s.pages.URL("overlay.html?id=" + req.ID + "&framework=wailsv3")
 		live.view = newNativeView(win.NativeWindow(), url, x, y,
-			max1(req.Rect.W), max1(req.Rect.H), srgb(req.Background))
+			max1(req.Rect.W), max1(req.Rect.H), srgba(req.Background))
 		if live.view != nil {
 			live.view.setHidden(true)
 		}
 	})
+	return nil
+}
+
+// ShapeRequest is a rectangle the page draws above the surfaces.
+//
+// A shape is a plain layer-backed view, not a webview. Its fill and its line
+// carry an alpha channel and composite over whatever the surfaces are showing;
+// a webview cannot do that, because WebKit paints its own opaque background.
+type ShapeRequest struct {
+	ID        string     `json:"id"`
+	Viewport  Viewport   `json:"viewport"`
+	Rect      Rect       `json:"rect"`
+	Radius    float64    `json:"radius"`
+	LineWidth float64    `json:"lineWidth"`
+	Fill      [4]float64 `json:"fill"`
+	Line      [4]float64 `json:"line"`
+}
+
+// SetShape draws the rectangle, creating its view on first use.
+func (s *Surfaces) SetShape(req ShapeRequest) error {
+	win, ok := mainWindow()
+	if !ok {
+		return nil
+	}
+	x, y := req.Rect.X, up(req.Viewport, req.Rect.Y, max1(req.Rect.H))
+	w, h := max1(req.Rect.W), max1(req.Rect.H)
+	application.InvokeSync(func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
+		shape := s.shapes[req.ID]
+		if shape == nil {
+			shape = newNativeShape(win.NativeWindow(), x, y, w, h)
+			if shape == nil {
+				return
+			}
+			s.shapes[req.ID] = shape
+		} else {
+			shape.setFrame(x, y, w, h)
+		}
+		shape.setStyle(req.Radius, req.LineWidth, srgba(req.Fill), srgba(req.Line))
+		shape.raise()
+	})
+	return nil
+}
+
+// ClearShape removes the rectangle.
+func (s *Surfaces) ClearShape(id string) error {
+	s.mu.Lock()
+	shape, ok := s.shapes[id]
+	if !ok {
+		s.mu.Unlock()
+		return nil
+	}
+	delete(s.shapes, id)
+	s.mu.Unlock()
+
+	application.InvokeSync(shape.destroy)
 	return nil
 }
 
@@ -274,6 +334,11 @@ func srgb(c [3]float64) [3]float64 {
 	return [3]float64{c[0] / 255, c[1] / 255, c[2] / 255}
 }
 
+// srgba is srgb with the alpha the page reported, which arrives already 0-1.
+func srgba(c [4]float64) [4]float64 {
+	return [4]float64{c[0] / 255, c[1] / 255, c[2] / 255, c[3]}
+}
+
 func max1(v float64) float64 {
 	if v < 1 {
 		return 1
@@ -341,7 +406,9 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) {
 		if !surface.External {
 			url = s.pages.URL(surface.URL)
 		}
-		view := newNativeView(win.NativeWindow(), url, x, y, w, h, srgb(surface.Background))
+		bg := srgb(surface.Background)
+		view := newNativeView(win.NativeWindow(), url, x, y, w, h,
+			[4]float64{bg[0], bg[1], bg[2], 1})
 		if view == nil {
 			log.Printf("surface %s: no native view on this platform", surface.ID)
 			continue

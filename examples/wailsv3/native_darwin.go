@@ -30,7 +30,7 @@ static NSRect surfaceAligned(NSWindow* window, double x, double y, double w, dou
 
 // Not under ARC, so the view is retained here and released in surfaceDestroy.
 static void* surfaceCreate(void* nsWindow, const char* url, double x, double y, double w, double h,
-                           double red, double green, double blue) {
+                           double red, double green, double blue, double alpha) {
     NSWindow* window = (NSWindow*)nsWindow;
     NSView* parent = [window contentView];
     WKWebViewConfiguration* config = [[WKWebViewConfiguration alloc] init];
@@ -40,11 +40,11 @@ static void* surfaceCreate(void* nsWindow, const char* url, double x, double y, 
     // macOS 12; without it that area is white.
     if (@available(macOS 12.0, *)) {
         view.underPageBackgroundColor =
-            [NSColor colorWithSRGBRed:red green:green blue:blue alpha:1.0];
+            [NSColor colorWithSRGBRed:red green:green blue:blue alpha:alpha];
     }
     [view setWantsLayer:YES];
     view.layer.backgroundColor =
-        [[NSColor colorWithSRGBRed:red green:green blue:blue alpha:1.0] CGColor];
+        [[NSColor colorWithSRGBRed:red green:green blue:blue alpha:alpha] CGColor];
     [parent addSubview:view positioned:NSWindowAbove relativeTo:nil];
     NSURL* target = [NSURL URLWithString:[NSString stringWithUTF8String:url]];
     [view loadRequest:[NSURLRequest requestWithURL:target]];
@@ -123,6 +123,31 @@ static void surfaceWatchMouse(void* nsWindow) {
     }];
 }
 
+// A plain layer-backed view, used for the shapes the page draws over the
+// surfaces. An NSView with a layer takes a colour with an alpha channel and
+// composites over what is behind it, which a WKWebView cannot do: WebKit paints
+// its own opaque background and the key that turns that off is private.
+static void* shapeCreate(void* nsWindow, double x, double y, double w, double h) {
+    NSWindow* window = (NSWindow*)nsWindow;
+    NSView* view = [[NSView alloc] initWithFrame:surfaceAligned(window, x, y, w, h)];
+    [view setWantsLayer:YES];
+    [[window contentView] addSubview:view positioned:NSWindowAbove relativeTo:nil];
+    [view retain];
+    return (void*)view;
+}
+
+static void shapeSetStyle(void* handle, double radius, double lineWidth,
+                          double fr, double fg, double fb, double fa,
+                          double lr, double lg, double lb, double la) {
+    NSView* view = (NSView*)handle;
+    view.layer.cornerRadius = radius;
+    view.layer.borderWidth = lineWidth;
+    view.layer.backgroundColor =
+        [[NSColor colorWithSRGBRed:fr green:fg blue:fb alpha:fa] CGColor];
+    view.layer.borderColor =
+        [[NSColor colorWithSRGBRed:lr green:lg blue:lb alpha:la] CGColor];
+}
+
 static void surfaceDestroy(void* handle) {
     WKWebView* view = (WKWebView*)handle;
     [view removeFromSuperview];
@@ -136,11 +161,12 @@ import "unsafe"
 // nativeView is one webview inside the window.
 type nativeView struct{ handle unsafe.Pointer }
 
-func newNativeView(window unsafe.Pointer, url string, x, y, w, h float64, background [3]float64) *nativeView {
+func newNativeView(window unsafe.Pointer, url string, x, y, w, h float64, background [4]float64) *nativeView {
 	target := C.CString(url)
 	defer C.free(unsafe.Pointer(target))
 	handle := C.surfaceCreate(window, target, C.double(x), C.double(y), C.double(w), C.double(h),
-		C.double(background[0]), C.double(background[1]), C.double(background[2]))
+		C.double(background[0]), C.double(background[1]), C.double(background[2]),
+		C.double(background[3]))
 	if handle == nil {
 		return nil
 	}
@@ -180,3 +206,28 @@ func (v *nativeView) id() uintptr { return uintptr(v.handle) }
 
 // watchMouse starts the monitor. Called once, when the first surface appears.
 func watchMouse(window unsafe.Pointer) { C.surfaceWatchMouse(window) }
+
+// nativeShape is a layer-backed view drawn above the surfaces.
+type nativeShape struct{ handle unsafe.Pointer }
+
+func newNativeShape(window unsafe.Pointer, x, y, w, h float64) *nativeShape {
+	handle := C.shapeCreate(window, C.double(x), C.double(y), C.double(w), C.double(h))
+	if handle == nil {
+		return nil
+	}
+	return &nativeShape{handle: handle}
+}
+
+func (v *nativeShape) setFrame(x, y, w, h float64) {
+	C.surfaceSetFrame(v.handle, C.double(x), C.double(y), C.double(w), C.double(h))
+}
+
+func (v *nativeShape) setStyle(radius, lineWidth float64, fill, line [4]float64) {
+	C.shapeSetStyle(v.handle, C.double(radius), C.double(lineWidth),
+		C.double(fill[0]), C.double(fill[1]), C.double(fill[2]), C.double(fill[3]),
+		C.double(line[0]), C.double(line[1]), C.double(line[2]), C.double(line[3]))
+}
+
+func (v *nativeShape) raise() { C.surfaceRaise(v.handle) }
+
+func (v *nativeShape) destroy() { C.surfaceDestroy(v.handle) }

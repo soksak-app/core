@@ -41,6 +41,28 @@ unsafe impl objc2::Encode for NSPoint {
         objc2::Encoding::Struct("CGPoint", &[<f64 as objc2::Encode>::ENCODING; 2]);
 }
 
+/// A frame in AppKit's coordinates. Declared here for the same reason NSPoint is.
+#[cfg(target_os = "macos")]
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct NSRect {
+    origin: NSPoint,
+    size: NSPoint,
+}
+
+#[cfg(target_os = "macos")]
+impl From<(f64, f64, f64, f64)> for NSRect {
+    fn from((x, y, w, h): (f64, f64, f64, f64)) -> Self {
+        NSRect { origin: NSPoint { x, y }, size: NSPoint { x: w, y: h } }
+    }
+}
+
+#[cfg(target_os = "macos")]
+unsafe impl objc2::Encode for NSRect {
+    const ENCODING: objc2::Encoding =
+        objc2::Encoding::Struct("CGRect", &[NSPoint::ENCODING, NSPoint::ENCODING]);
+}
+
 /// Applies `radius` logical pixels of corner radius, given the view's size in
 /// logical pixels and the display scale.
 #[allow(unused_variables)]
@@ -100,6 +122,109 @@ pub fn alpha(webview: &PlatformWebview, alpha: f64) {
             return;
         }
         let _: () = msg_send![view, setAlphaValue: alpha];
+    }
+}
+
+/// Creates a layer-backed view in the window's content view and returns it.
+///
+/// A shape is a plain view, not a webview: its fill and its line carry an alpha
+/// channel and composite over whatever the surfaces are showing. A webview
+/// cannot do that, because WebKit paints its own opaque background and the key
+/// that turns that off is a private one.
+///
+/// Only macOS is written. On Windows this would be a layered child window and on
+/// Linux a GtkDrawingArea in the container; neither is written here, so no shape
+/// is drawn on those platforms.
+#[allow(unused_variables)]
+pub fn shape_create(ns_window: *mut std::ffi::c_void, rect: (f64, f64, f64, f64)) -> usize {
+    #[cfg(target_os = "macos")]
+    unsafe {
+        use objc2::msg_send;
+        use objc2::runtime::{AnyClass, AnyObject};
+
+        let window = ns_window as *mut AnyObject;
+        if window.is_null() {
+            return 0;
+        }
+        let Some(class) = AnyClass::get(c"NSView") else {
+            return 0;
+        };
+        let view: *mut AnyObject = msg_send![class, alloc];
+        let view: *mut AnyObject = msg_send![view, initWithFrame: NSRect::from(rect)];
+        if view.is_null() {
+            return 0;
+        }
+        let _: () = msg_send![view, setWantsLayer: true];
+        let content: *mut AnyObject = msg_send![window, contentView];
+        // NSWindowAbove is 1: the view goes above every sibling already there.
+        let _: () = msg_send![content, addSubview: view, positioned: 1isize, relativeTo: std::ptr::null_mut::<AnyObject>()];
+        view as usize
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        0
+    }
+}
+
+/// Moves a shape's view.
+#[allow(unused_variables)]
+pub fn shape_frame(view: usize, rect: (f64, f64, f64, f64)) {
+    #[cfg(target_os = "macos")]
+    unsafe {
+        use objc2::msg_send;
+        use objc2::runtime::AnyObject;
+
+        let view = view as *mut AnyObject;
+        if view.is_null() {
+            return;
+        }
+        let _: () = msg_send![view, setFrame: NSRect::from(rect)];
+    }
+}
+
+/// Sets a shape's corner radius, line width, fill colour and line colour.
+#[allow(unused_variables)]
+pub fn shape_style(view: usize, radius: f64, line_width: f64, fill: [f64; 4], line: [f64; 4]) {
+    #[cfg(target_os = "macos")]
+    unsafe {
+        use objc2::msg_send;
+        use objc2::runtime::{AnyClass, AnyObject};
+
+        let view = view as *mut AnyObject;
+        if view.is_null() {
+            return;
+        }
+        let layer: *mut AnyObject = msg_send![view, layer];
+        if layer.is_null() {
+            return;
+        }
+        let Some(colour) = AnyClass::get(c"NSColor") else {
+            return;
+        };
+        let fill_ns: *mut AnyObject = msg_send![colour, colorWithSRGBRed: fill[0], green: fill[1], blue: fill[2], alpha: fill[3]];
+        let line_ns: *mut AnyObject = msg_send![colour, colorWithSRGBRed: line[0], green: line[1], blue: line[2], alpha: line[3]];
+        let fill_cg: *mut AnyObject = msg_send![fill_ns, CGColor];
+        let line_cg: *mut AnyObject = msg_send![line_ns, CGColor];
+        let _: () = msg_send![layer, setCornerRadius: radius];
+        let _: () = msg_send![layer, setBorderWidth: line_width];
+        let _: () = msg_send![layer, setBackgroundColor: fill_cg];
+        let _: () = msg_send![layer, setBorderColor: line_cg];
+    }
+}
+
+/// Removes a shape's view.
+#[allow(unused_variables)]
+pub fn shape_destroy(view: usize) {
+    #[cfg(target_os = "macos")]
+    unsafe {
+        use objc2::msg_send;
+        use objc2::runtime::AnyObject;
+
+        let view = view as *mut AnyObject;
+        if view.is_null() {
+            return;
+        }
+        let _: () = msg_send![view, removeFromSuperview];
     }
 }
 

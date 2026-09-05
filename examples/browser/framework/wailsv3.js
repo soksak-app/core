@@ -29,6 +29,8 @@ const METHOD = {
   report: "Report",
   overlayShow: "OverlayShow",
   overlayPlace: "OverlayPlace",
+  setShape: "SetShape",
+  clearShape: "ClearShape",
   overlayUpdate: "OverlayUpdate",
   overlayHide: "OverlayHide",
 };

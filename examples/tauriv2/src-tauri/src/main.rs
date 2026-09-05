@@ -329,6 +329,74 @@ fn overlay_show(
     Ok(())
 }
 
+/// A rectangle the page draws above the surfaces.
+///
+/// A shape is a plain layer-backed view rather than a webview, so its fill and
+/// its line carry an alpha channel and composite over what the surfaces show.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ShapeRequest {
+    viewport: Viewport,
+    id: String,
+    rect: Rect,
+    radius: f64,
+    line_width: f64,
+    fill: [f64; 4],
+    line: [f64; 4],
+}
+
+/// The shapes now on screen, by id.
+#[derive(Default)]
+struct Shapes(Mutex<HashMap<String, usize>>);
+
+#[tauri::command]
+fn set_shape(window: Window, shapes: State<'_, Shapes>, request: ShapeRequest) -> Result<(), String> {
+    // A shape is added to the content view directly, so its frame is in AppKit's
+    // coordinates: the origin is the bottom left. A child webview is placed by
+    // Tauri, which converts for us; this one is not.
+    let scale = window.scale_factor().map_err(|e| e.to_string())?;
+    let content = window
+        .inner_size()
+        .map_err(|e| e.to_string())?
+        .to_logical::<f64>(scale)
+        .height;
+    let top = (content - request.viewport.h).max(0.0);
+    let h = request.rect.h.max(1.0);
+    let frame = (
+        request.rect.x,
+        content - (request.rect.y + top) - h,
+        request.rect.w.max(1.0),
+        h,
+    );
+    let mut held = shapes.0.lock().map_err(|e| e.to_string())?;
+    let view = match held.get(&request.id) {
+        Some(&view) => {
+            native::shape_frame(view, frame);
+            view
+        }
+        None => {
+            let handle = window.ns_window().map_err(|e| e.to_string())?;
+            let view = native::shape_create(handle, frame);
+            if view == 0 {
+                return Ok(());
+            }
+            held.insert(request.id.clone(), view);
+            view
+        }
+    };
+    native::shape_style(view, request.radius, request.line_width, request.fill, request.line);
+    Ok(())
+}
+
+#[tauri::command]
+fn clear_shape(shapes: State<'_, Shapes>, id: String) -> Result<(), String> {
+    let mut held = shapes.0.lock().map_err(|e| e.to_string())?;
+    if let Some(view) = held.remove(&id) {
+        native::shape_destroy(view);
+    }
+    Ok(())
+}
+
 /// Where an open modal's view goes. The card decides; this is that decision
 /// arriving, as a drag on its grip.
 #[derive(Debug, Deserialize)]
@@ -500,6 +568,7 @@ fn set_theme(
 fn main() {
     tauri::Builder::default()
         .manage(Overlay::default())
+        .manage(Shapes::default())
         .manage(CurrentTheme::default())
         .manage(Views::default())
         .manage(Watching::default())
@@ -508,6 +577,8 @@ fn main() {
             sync_surfaces,
             overlay_show,
             overlay_place,
+            set_shape,
+            clear_shape,
             overlay_content,
             overlay_update,
             overlay_fit,
