@@ -306,11 +306,9 @@ h1{margin:0;padding:8px 12px 4px;font-size:13px}
   <div class="chrome-bar__acts" id="chromeActs"></div>
 </header>
 
-<div class="shell">
-  <!-- 프로젝트 탭이 왼쪽에 설 때의 자리. 스페이스 줄보다 위에서 시작해 아래까지
-       내려간다 — 프로젝트가 스페이스를 담기 때문이다. -->
-  <div class="rail-projects" id="projectRail" hidden></div>
-
+<!-- 프로젝트 탭이 왼쪽에 설 때, 레일이 이 안의 첫 자리에 생긴다. 스페이스 줄보다
+     위에서 시작해 아래까지 내려간다 — 프로젝트가 스페이스를 담기 때문이다. -->
+<div class="shell" id="shell">
   <div class="work">
   <!-- 스페이스 줄. 한 프로젝트 안의 판들. -->
   <div class="tabs tabs--space" id="spaceBar"></div>
@@ -455,7 +453,7 @@ projects.onSwitch({ save: capture, load: adopt });
    배치가 통째로 바뀐다. 둘 다 같은 한 가지 일이므로 경로가 하나다.        */
 
 const projectBar = document.getElementById("projectBar");
-const projectRail = document.getElementById("projectRail");
+const shell = document.getElementById("shell");
 const spaceBar = document.getElementById("spaceBar");
 const chromeActs = document.getElementById("chromeActs");
 
@@ -530,11 +528,23 @@ function addTabButton(text, onPick) {
 function drawBars() {
   const here = projects.active();
   const toLeft = value("projectTabs") === "left";
-  const into = toLeft ? projectRail : projectBar;
-  projectRail.hidden = !toLeft;
-  projectBar.hidden = toLeft;
+  /* 레일은 왼쪽 모드에서만 있다. 쓰지 않는 자리는 숨기는 것이 아니라 없다 —
+     [hidden] 은 display 를 정하는 규칙을 이기지 못하고, .rail-projects 는
+     display:flex 이므로 숨겨 두면 빈 띠가 그대로 남는다.
+     크롬의 줄은 반대로 늘 있다: 비어 있어도 그 줄이 스위치들을 오른쪽으로
+     민다. 구 프로젝트의 .workspace-tabs 도 왼쪽 모드에서 빈 채로 남는다. */
+  let rail = shell.querySelector(".rail-projects");
+  if (toLeft && !rail) {
+    rail = document.createElement("div");
+    rail.className = "rail-projects";
+    shell.prepend(rail);
+  } else if (!toLeft && rail) {
+    rail.remove();
+    rail = null;
+  }
+  const into = toLeft ? rail : projectBar;
   projectBar.textContent = "";
-  projectRail.textContent = "";
+  if (rail) rail.textContent = "";
 
   for (const p of projects.all()) {
     into.appendChild(tab(p.title, p.id === here.id, {
