@@ -5,6 +5,21 @@
 `browser/` is the page. It runs on its own in a browser, where the surfaces are
 simulated, and it is the page both applications below run.
 
+The layout is the `soksak` library's. A sidebar, a rail and a terminal are
+all the same card and differ only in role: whether it takes a share or a px
+size, and whether the layout may move it. On top of that the page reproduces
+the constraints of native compositing — a surface is above the CSS stack, and
+the declared frame and the applied frame move separately, with a delay. What
+passes here passes in an application.
+
+The `+` button and the split buttons ask which plugin the new tab is for (T2).
+Dragging a tab onto the middle of another card makes it a tab of that card (T3),
+and onto an edge makes a place beside it (T4). When the source card has one tab
+left, the card itself moves and no empty card is left behind (T5). The commit
+delay in ⚙ 설정 makes V7a fail and the apply skew makes V7b fail. The check
+results go to a log rather than the screen: the browser's console, and the
+application's own log.
+
     pnpm example        # builds dist/ and serves the repository on :8749
                         # http://localhost:8749/examples/browser/index.html
 

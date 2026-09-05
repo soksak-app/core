@@ -284,9 +284,6 @@ input[type=color]{width:34px;height:24px;padding:0;background:var(--card);
 .picker__item:hover,.picker__item:focus-visible{outline:0;color:var(--fg);
   background:color-mix(in srgb,var(--bd) 30%,transparent)}
 
-.note{margin:0;padding:8px 12px;color:var(--muted);font-size:11px;max-width:96ch}
-.lede{margin:0;padding:0 12px 8px;color:var(--muted);font-size:11px;max-width:96ch}
-h1{margin:0;padding:8px 12px 4px;font-size:13px}
 </style></head>
 <body>
 
@@ -315,16 +312,6 @@ h1{margin:0;padding:8px 12px 4px;font-size:13px}
 </div></main>
   </div>
 </div>
-
-<h1>Card / Rail — Wails 적용 전 시뮬레이터</h1>
-<p class="lede">배치는 <code>soksak</code> 라이브러리가 소유한다. 사이드바·레일·터미널이 모두 같은 카드이고,
-역할만 다르다 — 몫을 받는가 px를 받는가, 옮겨지는가 아닌가. 이 문서는 그 위에 네이티브 합성의 제약을 재현한다:
-표면은 CSS 스택 위에 있고, 선언 프레임과 적용 프레임은 지연을 두고 따로 움직인다.
-여기서 GREEN 인 것만 Wails 에서도 GREEN 이다.</p>
-<p class="note">+ 와 쪼개기는 새 탭의 종류를 먼저 묻는다(T2). 탭을 끌어 다른 카드의 가운데에
-놓으면 그 카드의 탭이 되고(T3), 변에 놓으면 그쪽에 자리가 생긴다(T4). 출발 카드의 탭이 하나뿐이면
-카드째로 옮겨가 빈 카드를 남기지 않는다(T5). 커밋 지연은 V7a 를, 적용 오차는 V7b 를 각각 뒤집는다.
-검사 결과는 화면이 아니라 로그로 나간다 — 브라우저는 콘솔, 앱은 자기 로그다.</p>
 
 <!-- 이 페이지를 그대로 앱의 프론트엔드로 쓴다. host.js 는 자기를 담고 있는
      것이 무엇인지 framework/ 에게 묻고, 호스트가 없으면 아무것도 놓지 않는다 —
