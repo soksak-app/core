@@ -19,13 +19,18 @@ package main
 #import <WebKit/WebKit.h>
 
 // A frame arrives already in AppKit's coordinates. It is snapped to the backing
-// store's pixel grid outward: the page reports fractional rects, and a frame
-// snapped inward leaves the card's background showing along that edge.
+// store's pixel grid inward, so the view never covers more than the rect the page
+// declared.
 //
-// Outward means the view covers up to half a pixel more than the declared rect.
-// That half pixel falls under the card's border, which the page draws.
+// Snapping outward would be the other choice, and it is wrong here. The page's
+// lines lie in the passage between two cards, and when that passage is one line
+// wide two surfaces sit half a pixel away from it on either side. Grown outward,
+// the two together cover the line and the page's focus mark disappears.
+//
+// Inward leaves up to half a pixel of the card's background along each edge. The
+// card's background is what is behind the surface anyway.
 static NSRect surfaceAligned(NSWindow* window, double x, double y, double w, double h) {
-    return [window backingAlignedRect:NSMakeRect(x, y, w, h) options:NSAlignAllEdgesOutward];
+    return [window backingAlignedRect:NSMakeRect(x, y, w, h) options:NSAlignAllEdgesInward];
 }
 
 // One message from a page this app serves. Declared here because a Go function
@@ -145,6 +150,10 @@ static void surfaceSetCornerRadius(void* handle, double radius) {
 // walk up from the hit view stops there.
 extern int surfaceHit(void* view);
 
+// Reports one step of a left-button drag, in the page's coordinates.
+// phase is 0 for a press, 1 for a move, 2 for a release.
+extern void surfacePoint(int phase, double x, double y);
+
 // Walks up from a view to the content view, reporting the first surface.
 static void surfaceWalk(NSView* view, NSView* content) {
     while (view != nil && view != content) {
@@ -156,28 +165,47 @@ static void surfaceWalk(NSView* view, NSView* content) {
 }
 
 // A surface is a native view, so input on it never reaches the page. One monitor
-// on the app receives every press and every key, and AppKit reports which view
-// each is for. The result is a view rather than a point, so no coordinate is
-// converted and none can disagree with the page's frame.
+// on the app receives every press, every drag and every key, and reports two
+// things: which view the input was for, and where it was.
 //
 // A press is answered by hitTest:. A key goes to the window's first responder,
 // which is what a page that focuses itself becomes: google.com focuses its search
 // field on load, and without this the page's model still names the surface that
-// was pressed last.
+// was pressed last. Neither converts a coordinate, so neither can disagree with
+// the page's frame.
+//
+// The point is converted, and it has to be. A divider's grab area is wider than
+// the passage between two cards, so when the passage is one line wide the whole
+// area lies over the surfaces and no press in it reaches the page. The page
+// decides what the point means; this reports it in the page's own coordinates,
+// which the content view's height gives because the page's view fills it.
 //
 // The monitor returns the event unchanged and the view still receives it.
 static void surfaceWatchMouse(void* nsWindow) {
     NSWindow* window = (NSWindow*)nsWindow;
-    [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskLeftMouseDown | NSEventMaskKeyDown
+    NSEventMask mask = NSEventMaskLeftMouseDown | NSEventMaskLeftMouseDragged
+                     | NSEventMaskLeftMouseUp | NSEventMaskKeyDown;
+    [NSEvent addLocalMonitorForEventsMatchingMask:mask
                                           handler:^NSEvent*(NSEvent* event) {
         if ([event window] == window) {
             NSView* content = [window contentView];
-            if ([event type] == NSEventTypeLeftMouseDown) {
-                surfaceWalk([content hitTest:[event locationInWindow]], content);
-            } else {
+            NSEventType type = [event type];
+            if (type == NSEventTypeKeyDown) {
                 NSResponder* first = [window firstResponder];
                 if ([first isKindOfClass:[NSView class]]) {
                     surfaceWalk((NSView*)first, content);
+                }
+            } else {
+                NSPoint at = [event locationInWindow];
+                double x = at.x;
+                double y = [content bounds].size.height - at.y;
+                if (type == NSEventTypeLeftMouseDown) {
+                    surfacePoint(0, x, y);
+                    surfaceWalk([content hitTest:at], content);
+                } else if (type == NSEventTypeLeftMouseDragged) {
+                    surfacePoint(1, x, y);
+                } else {
+                    surfacePoint(2, x, y);
                 }
             }
         }
