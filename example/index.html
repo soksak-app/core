@@ -288,13 +288,15 @@ const hostKinds = () => window.hostSurfaces?.kinds ?? [];
 const dimmed = (cardId) =>
   document.getElementById("dim").value === "on" && cardId !== focusedId;
 
-/* 표면은 네이티브라 그 위의 클릭이 이 문서에 닿지 않는다. 호스트가 창에서
-   받은 클릭을 표면 사각형에 대조해 알려 주면, 포커스는 카드를 눌렀을 때와
-   똑같이 움직인다 — 표면을 눌렀다고 다른 규칙이 되지는 않는다. */
-window.focusSurface = (cardId) => {
-  if (!grid.card(cardId) || focusedId === cardId) return;
-  focusedId = cardId;
-  settle();
+/* 표면은 네이티브라 그 위의 클릭이 이 문서에 닿지 않는다. 호스트가 알려 주면
+   표면이 서 있는 자리 요소에서 pointerdown 을 낸다: 포커스도 레이어 닫기도
+   이미 누름을 듣고 있는 쪽이 처리한다. 표면만의 경로를 따로 두면 누름에 반응
+   하는 것이 늘 때마다 그 목록을 다시 맞춰야 한다. */
+window.pressSurface = (cardId) => {
+  const slot = document.querySelector(
+    `[data-native-surface-id="${cardId}"][data-native-surface]`);
+  if (!slot) return;
+  slot.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
 };
 
 /* ── 테마 ──────────────────────────────────────────────────────────────────

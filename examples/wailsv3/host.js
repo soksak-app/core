@@ -111,10 +111,10 @@ function install(call) {
   };
 
   // A surface is a native view, so a press on it never reaches this document.
-  // The app locates it and names the surface; focus then moves exactly as it
-  // does when a card is pressed. An event carries what was emitted in `data`,
-  // and nothing else.
-  window.wails.Events.On("surface-pressed", (e) => window.focusSurface(e.data));
+  // The app names the surface and the page presses it, which is what everything
+  // listening for a press already understands. An event carries what was
+  // emitted in `data`, and nothing else.
+  window.wails.Events.On("surface-pressed", (e) => window.pressSurface(e.data));
 
   let pick = null;
   let shown = null;
