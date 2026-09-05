@@ -261,7 +261,7 @@ import { Soksak, SoksakView, installTheme, outline }
    불러야 하는지 매번 정해야 한다. */
 import {
   THEMES, MODES, applyTheme, cardRadius, halfGap, linkedSet, modeName,
-  onSettingsChange, themeName,
+  onSettingsChange, set, themeName, value,
 } from "./settings.js";
 
 /* 표면을 가진 것과 사이드바에 설 수 있는 것. 파일을 가져오는 것이 곧 등록이다
@@ -308,7 +308,7 @@ const hostKinds = () => window.hostSurfaces?.kinds ?? [];
 /* 포커스를 잃은 표면을 흐리게 할지. 표면은 카드 하나에 하나이므로 판단도
    카드 단위다. */
 const dimmed = (cardId) =>
-  document.getElementById("dim").value === "on" && cardId !== focusedId;
+  value("dim") && cardId !== focusedId;
 
 /* 표면은 네이티브라 그 위의 클릭이 이 문서에 닿지 않는다. 호스트가 알려 주면
    표면이 서 있는 자리 요소에서 pointerdown 을 낸다: 포커스도 레이어 닫기도
@@ -327,6 +327,11 @@ const railPath = document.getElementById("railPath");
 const dropEl = document.getElementById("drop");
 const pickerEl = document.getElementById("picker");
 
+// 레일이 물러나는 것은 닫는 것이므로 폭이 카드와 함께 사라진다. 사람이 드래그로
+// 정한 폭은 그 사람의 결정이므로, 판이 종류별로 기억해 두었다가 다시 설 때 그
+// 폭으로 세운다. 설정이 아니라 판의 기억이다 — 판을 새로 세우면 함께 사라진다.
+const railWidth = { terminal: 190, browser: 190 };
+
 /* ── 자리 ─────────────────────────────────────────────────────────────────
    어디 서는가          무엇이 서는가
    left   첫 열, 고정폭      포커스와 무관하게 걸린 세트
@@ -338,11 +343,6 @@ const pickerEl = document.getElementById("picker");
    설정에서 그 세트를 자리에 건다. 걸지 않으면 그 사이드바는 없다.        */
 
 let grid, view, focusedId, seq = 0;
-let railMode = "flow", leftOn = true, rightOn = true;
-// 레일이 물러나는 것은 닫는 것이므로 폭이 카드와 함께 사라진다. 사람이 정한
-// 폭은 그 사람의 결정이지 그 순간 서 있던 카드의 것이 아니다 — 종류별로
-// 기억해 두었다가 다시 설 때 그 폭으로 세운다.
-const railWidth = { terminal: 190, browser: 190 };
 
 /* ── 탭 규칙 ──────────────────────────────────────────────────────────────
    T1 카드는 탭 목록과 활성 탭 하나를 갖는다
@@ -851,7 +851,7 @@ function standRail(kind) {
   // 남아 있으면 그것은 지금 보고 있는 것의 곁이 아니라 남겨진 자리다. 자기
   // 종류가 포커스를 잃으면 물러난다 — 그 종류의 레일을 꺼 두었다면 아무 레일도
   // 서지 않는 것이 맞다.
-  if (!linkedSet("rail", kind) || railMode === "off" || focusedPlugin() !== kind) {
+  if (!linkedSet("rail", kind) || value("rail") === "off" || focusedPlugin() !== kind) {
     if (has) {
       railWidth[kind] = grid.card(id).width ?? railWidth[kind];
       dismiss(id);
@@ -868,7 +868,7 @@ function standRail(kind) {
   // 서 있는 동안 사람이 끌어 바꾼 폭을 받아 둔다. 물러날 때만 읽으면 그 사이의
   // 조정을 놓친다.
   railWidth[kind] = grid.card(id).width ?? railWidth[kind];
-  if (railMode !== "flow") return;                  // PIN — 자리를 지킨다
+  if (value("rail") !== "flow") return;                  // PIN — 자리를 지킨다
   const line = railTarget(id, kind);
   if (line !== null) grid.moveTo(id, "x", line);
 }
@@ -949,8 +949,8 @@ function standEdge(id, on, size, side) {
 
 function settle() {
   closePicker();
-  standEdge("left", leftOn, 190, "left");
-  standEdge("right", rightOn, 210, "right");
+  standEdge("left", value("left"), 190, "left");
+  standEdge("right", value("right"), 210, "right");
   for (const p of plugins()) standRail(p.id);
   if (!grid.card(focusedId)) focusedId = grid.cards.find((c) => !isPlace(c.id))?.id ?? null;
   view.render();
@@ -1350,7 +1350,7 @@ document.getElementById("mode").addEventListener("change", (e) => {
   applyTheme(themeName(), e.target.value);
   showThemeColors();
 });
-document.getElementById("dim").addEventListener("change", settle);
+document.getElementById("dim").addEventListener("change", (e) => set({ dim: e.target.value === "on" }));
 document.getElementById("gap").addEventListener("input", (e) => {
   const half = Number(e.target.value);
   document.getElementById("gapOut").value = `${half}px`;
@@ -1369,9 +1369,9 @@ document.getElementById("skew").addEventListener("input", (e) => {
   document.getElementById("skewOut").value = `${e.target.value}px`;
   view.render();
 });
-document.getElementById("railMode").addEventListener("change", (e) => { railMode = e.target.value; settle(); });
-document.getElementById("leftOn").addEventListener("change", (e) => { leftOn = e.target.value === "on"; settle(); });
-document.getElementById("rightOn").addEventListener("change", (e) => { rightOn = e.target.value === "on"; settle(); });
+document.getElementById("railMode").addEventListener("change", (e) => set({ rail: e.target.value }));
+document.getElementById("leftOn").addEventListener("change", (e) => set({ left: e.target.value === "on" }));
+document.getElementById("rightOn").addEventListener("change", (e) => set({ right: e.target.value === "on" }));
 document.getElementById("reset").addEventListener("click", build);
 
 build();

@@ -108,6 +108,15 @@ const settings = {
   theme: THEMES[0].name,
   mode: "dark",
 
+  /* 레일이 포커스를 따라가는가. flow = 따라간다, pin = 자리를 지킨다,
+     off = 서지 않는다. */
+  rail: "flow",
+  /* 좌·우 영역을 여는가. 무엇이 서는지는 연결이 정하고, 이것은 자리 자체다. */
+  left: true,
+  right: true,
+  /* 포커스를 잃은 표면을 흐리게 하는가. */
+  dim: false,
+
   /* 사이드바는 조합해서 만든다. 세트 하나가 섹션들을 골라 순서대로 담고,
      연결이 그 세트를 어느 자리에 건다.
 
@@ -167,13 +176,16 @@ export function applyTheme(name, next) {
   set({ theme: themeOf(name).name, mode: next });
 }
 
+/** 지금 값 하나를 읽는다. */
+export const value = (key) => settings[key];
+
 /**
  * 설정의 일부를 바꾼다. 값을 심고, 듣는 쪽에 알린다.
  *
  * 바꾸는 경로는 이것 하나다. 값마다 함수를 두면 심는 것을 빠뜨린 함수가
  * 생긴다.
  */
-function set(patch) {
+export function set(patch) {
   Object.assign(settings, patch);
   install();
   // 통로는 배치가 읽는 값이므로 설정이 바뀌면 판도 바뀐다. 그 일은 듣는 쪽이
