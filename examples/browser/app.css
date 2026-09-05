@@ -1,9 +1,45 @@
 :root{
   color-scheme:dark;
-  --bg:#101117;--card:#1b1d27;--fg:#ececf5;--muted:#9b9dad;
-  --bd:#7279ff;--rail:#ffb36b;--focus:#ffb36b;--ok:#53dc93;--no:#ff7c7c;
+
+  /* 색. 설정이 테마에서 읽어 심는다. 여기 값은 이 문서를 단독으로 열었을 때의 것이다.
+
+     선은 역할별로 넷이고 서로 다른 색이다. 하나의 강조색을 농도만 바꿔 쓰면
+     무엇이 한 묶음인지 보이지 않는다.
+       --edge   카드와 상자의 테두리. 바탕에서 한 단계만 밝다
+       --rule   판을 나누는 경계선과 divider
+       --rail   사이드바와 카드를 하나로 묶는 선
+       --focus  지금 입력을 받는 곳                                            */
+  --bg:#101117;--card:#191b24;--fg:#ececf5;--muted:#8f92a4;
+  --edge:#2b2e3d;--rule:#22242f;--rail:#7279ff;--focus:#ffb36b;
+  --ok:#53dc93;--no:#ff7c7c;
   --surface:#0d1a14;--surface-fg:#7fe3b0;
-  --r:14px;--half-gap:12px;--bw:1px;
+
+  /* 형태. 모드와 무관하다. */
+  --r:10px;--half-gap:6px;--bw:1px;
+  --font:ui-monospace,SFMono-Regular,Menlo,monospace;--size:13px;
+
+  /* 반경 척도. 둥근 상자는 다섯이고 값은 셋이다. 카드가 기준이고 나머지는 거기서
+     나오므로, 테마가 --r 을 바꾸면 다섯이 함께 움직인다.
+       --r       카드, 사이드바
+       --r-sm    모달, 선택 목록
+       --r-xs    탭 이름, 아이콘 그룹, 그 안의 컨트롤
+       --r-rail  카드를 통로 밖에서 감싸는 레일과 판 */
+  --r-sm:calc(var(--r) * .75);
+  --r-xs:calc(var(--r) * .5);
+  --r-rail:calc(var(--r) + var(--half-gap));
+
+  /* 칩의 바탕. 회색을 직접 쓰면 테마가 달라도 같은 색이 된다. */
+  --chip:color-mix(in srgb,var(--fg) 7%,transparent);
+  --chip-hover:color-mix(in srgb,var(--fg) 12%,transparent);
+  --chip-on:color-mix(in srgb,var(--rail) 22%,transparent);
+  --chip-sel:color-mix(in srgb,var(--fg) 15%,transparent);
+  --inset:color-mix(in srgb,var(--fg) 10%,transparent);
+
+  /* 선과 divider 는 뷰가 그린다. 이 문서는 색만 지정하고 모양과 커서는 뷰가 갖는다. */
+  --sp-line:var(--rule);
+  --sp-line-crossing:color-mix(in srgb,var(--rule) 45%,transparent);
+  --sp-grip:color-mix(in srgb,var(--muted) 70%,transparent);
+  --sp-grip-active:var(--focus);
 }
 *{box-sizing:border-box}
 /* 판이 남은 공간을 차지한다. 문서 흐름에 두면 위쪽 요소가 커질 때마다 판의 위치가
@@ -11,134 +47,80 @@
    바뀐다. */
 html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--fg);
-  font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;
+  font:var(--size)/1.45 var(--font);
   box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden}
-/* 창의 크롬. 구 프로젝트의 App.css 값을 따른다.
 
-     .titlebar      45px · padding 0 14px 0 82px · 아래 보더 · --side 배경
-     크롬 행 높이   37 = 위아래 여백 5 + 칩 26 + 선 1
-     .workspace-tab radius 5 · rgba(127,127,127,.12), 활성 .28
-     .space-tab     radius 6 6 0 0 · .1, 활성 .24
-     .icon-btn      24×22 · radius 4 · opacity .7, 활성은 강조색
-
-   왼쪽 여백만 다르다. 구 프로젝트는 이 행이 타이틀바이고 82px 이 신호등 자리다.
-   이 예제의 창에는 타이틀바가 따로 있다.                                     */
-:root{--chrome-row-h:37px;--chip:rgba(127,127,127,.12);--chip-hover:rgba(127,127,127,.22);
-  --chip-on:rgba(127,127,127,.28);--inset:color-mix(in srgb,var(--bd) 22%,transparent)}
+/* ── 창의 크롬 ────────────────────────────────────────────────────────────
+   높이 45px 의 행 하나에 브랜드, 프로젝트 탭, 아이콘 스위치가 들어간다.
+   스페이스 탭은 판 바로 위의 별도 행이다.                                    */
+:root{--chrome-row-h:36px}
 
 .chrome-bar{flex:0 0 45px;height:45px;display:flex;align-items:center;gap:10px;
-  padding:0 14px;border-bottom:1px solid var(--bd);background:var(--card);
+  padding:0 12px;border-bottom:var(--bw) solid var(--edge);background:var(--card);
   user-select:none}
-.brand{flex:0 0 auto;font-weight:700;letter-spacing:.08em;font-size:12px;color:var(--muted);
-  margin-right:4px}
-.chrome-bar__acts{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+.brand{flex:0 0 auto;font-weight:600;letter-spacing:.1em;font-size:11px;color:var(--muted);
+  margin-right:2px}
+.chrome-bar__acts{display:flex;align-items:center;gap:6px;flex:0 0 auto}
 
-/* 프로젝트 탭 행. 높이는 위의 --chrome-row-h 가 정한다. */
+/* 프로젝트 탭 행. 높이는 --chrome-row-h 가 정한다. */
 .tabs{display:flex;align-items:stretch;gap:4px;flex:1 1 auto;min-width:0;
   height:var(--chrome-row-h);padding-block:5px;overflow:hidden}
 .tabs--project{align-self:center}
 
 /* 스페이스 탭 행. 판 바로 위에 위치하므로 탭의 아래가 판과 이어진다. */
 .tabs--space{flex:0 0 auto;gap:2px;height:var(--chrome-row-h);padding:5px 10px;
-  align-items:center;background:var(--card);border-bottom:1px solid var(--bd)}
-.tabs--space .bar-tab{height:26px}
+  align-items:center;background:var(--card);border-bottom:var(--bw) solid var(--edge)}
+.tabs--space .bar-tab{height:26px;border-radius:var(--r-xs) var(--r-xs) 0 0}
 
-.bar-tab{display:flex;align-items:center;gap:6px;padding:0 8px;border:0;border-radius:5px;
-  background:var(--chip);color:var(--muted);font:inherit;font-size:12px;cursor:pointer;
-  max-width:220px;white-space:nowrap}
+.bar-tab{display:flex;align-items:center;gap:6px;padding:0 9px;border:0;
+  border-radius:var(--r-xs);background:var(--chip);color:var(--muted);
+  font:inherit;font-size:12px;cursor:pointer;max-width:220px;white-space:nowrap}
 .bar-tab:hover{background:var(--chip-hover)}
 .bar-tab[data-on=true]{background:var(--chip-on);color:var(--fg)}
-.tabs--space .bar-tab{border-radius:6px 6px 0 0;background:rgba(127,127,127,.1)}
-.tabs--space .bar-tab:hover{background:rgba(127,127,127,.18)}
-.tabs--space .bar-tab[data-on=true]{background:rgba(127,127,127,.24);color:var(--fg)}
 .bar-tab__name{overflow:hidden;text-overflow:ellipsis}
-.bar-tab__x{opacity:.55;padding:0 1px;flex:0 0 auto}
+.bar-tab__x{opacity:.5;padding:0 1px;flex:0 0 auto}
 .bar-tab__x:hover{opacity:1}
-.bar-tab--add{background:transparent;color:var(--muted);font-size:16px;line-height:1;padding:0 6px}
-.bar-tab--add:hover{background:rgba(127,127,127,.18)}
-.bar-tab__root{padding:0 8px;border:1px solid var(--focus);border-radius:5px;
+.bar-tab--add{background:transparent;color:var(--muted);font-size:15px;line-height:1;padding:0 7px}
+.bar-tab--add:hover{background:var(--chip-hover)}
+.bar-tab__root{padding:0 8px;border:var(--bw) solid var(--focus);border-radius:var(--r-xs);
   background:var(--bg);color:var(--fg);font:inherit;font-size:12px;width:180px}
 
 /* 아이콘 스위치. */
 .act{display:inline-flex;align-items:center;justify-content:center;width:24px;height:22px;
-  flex:0 0 auto;padding:0;border:1px solid transparent;border-radius:4px;background:transparent;
-  color:var(--muted);opacity:.7;cursor:pointer}
-.act:hover{opacity:1;background:var(--inset)}
-.act[data-on=true]{opacity:1;color:var(--focus)}
-.act svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6;
+  flex:0 0 auto;padding:0;border:0;border-radius:var(--r-xs);background:transparent;
+  color:var(--muted);cursor:pointer}
+.act:hover{color:var(--fg);background:var(--inset)}
+.act[data-on=true]{color:var(--focus)}
+.act svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;
   stroke-linecap:round;stroke-linejoin:round}
 
 /* 프로젝트 탭이 왼쪽에 배치될 때. 스페이스 행보다 위에서 시작해 아래까지 이어진다. */
 .shell{display:flex;flex:1 1 auto;min-height:0}
 .work{display:flex;flex-direction:column;flex:1 1 auto;min-width:0;min-height:0}
 .rail-projects{display:flex;flex-direction:column;gap:4px;width:64px;flex:0 0 auto;
-  padding:5px;background:var(--card);border-right:1px solid var(--bd)}
+  padding:5px;background:var(--card);border-right:var(--bw) solid var(--edge)}
 .rail-projects .bar-tab{width:100%;height:36px;justify-content:center;padding:0 4px}
 .rail-projects .bar-tab__name{max-width:100%;text-align:center}
 .rail-projects .bar-tab__x{display:none}
 .rail-projects .bar-tab--add{width:100%;height:24px;justify-content:center}
 
-/* 설정 모달. 판 전체를 덮는 오버레이와 그 안의 520px 카드.
-   오버레이가 모달이 열린 동안 뒤의 divider 드래그를 차단한다.
-   구 프로젝트의 .dmodal-overlay 는 rgba(0,0,0,.15) 를 칠하지만 여기서는 칠하지
-   않는다. 네이티브 표면이 이 문서 위에 합성되므로 화면의 일부만 어두워진다. */
-.set-scrim{position:fixed;inset:0;z-index:200}
-.set-card{position:absolute;left:50%;top:80px;transform:translateX(-50%);
-  width:520px;max-height:70vh;display:flex;flex-direction:column;
-  border:var(--bw) solid var(--bd);border-radius:12px;background:var(--card);
-  box-shadow:0 18px 48px rgb(0 0 0 / .35)}
-.set-card__head{display:flex;align-items:center;gap:8px;padding:8px 8px 8px 10px;
-  border-bottom:var(--bw) solid var(--bd);cursor:grab}
-.set-card__head:active{cursor:grabbing}
-.set-grip{color:var(--muted);user-select:none}
-.set-card__title{font-size:12px;color:var(--fg)}
-.set-card__head .act{margin-left:auto}
-.set-card__body{display:flex;min-height:0}
-.set-card__nav{display:flex;flex-direction:column;gap:2px;width:120px;flex:0 0 auto;
-  padding:8px;border-right:var(--bw) solid var(--bd)}
-.set-nav{text-align:left;padding:6px 8px;border:0;border-radius:6px;background:transparent;
-  color:var(--muted);font:inherit;font-size:12px;cursor:pointer}
-.set-nav[data-on=true]{background:var(--bg);color:var(--fg)}
-.set-card__pane{flex:1 1 auto;min-width:0;padding:10px 12px;overflow:auto}
-.set-caption{margin:2px 0 8px;font-size:11px;color:var(--muted)}
-.set-row{display:flex;align-items:center;gap:10px;margin:0 0 6px}
-.set-row__name{width:130px;flex:0 0 auto;font-size:12px;color:var(--muted)}
-.set-row select{flex:1 1 auto;min-width:0}
-.set-row select,.set-press{padding:3px 6px;border:var(--bw) solid var(--bd);border-radius:6px;
-  background:var(--bg);color:var(--fg);font:inherit;font-size:12px}
-.set-press{cursor:pointer}
-.set-slide{display:flex;align-items:center;gap:8px;flex:1 1 auto}
-.set-slide output{font-size:11px;color:var(--muted);min-width:5ch}
-.th-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin:0 0 12px}
-.th{display:flex;flex-direction:column;align-items:center;gap:4px;padding:4px;border:var(--bw) solid transparent;
-  border-radius:8px;background:transparent;color:var(--muted);font:inherit;font-size:10px;cursor:pointer}
-.th[data-on=true]{border-color:var(--focus);color:var(--fg)}
-.th__box{position:relative;display:block;width:100%;height:26px;border-radius:5px;
-  border:1px solid color-mix(in srgb,var(--bd) 50%,transparent)}
-.th__side{position:absolute;left:0;top:0;bottom:0;width:30%;border-radius:4px 0 0 4px}
-.th__dot{position:absolute;right:4px;bottom:4px;width:6px;height:6px;border-radius:50%}
-select,button{font:inherit;color:var(--fg);background:var(--card);
-  border:1px solid color-mix(in srgb,var(--bd) 45%,transparent);border-radius:7px;padding:3px 8px}
-button{cursor:pointer}
-input[type=range]{accent-color:var(--focus);width:110px}
-input[type=color]{width:34px;height:24px;padding:0;background:var(--card);
-  border:1px solid color-mix(in srgb,var(--bd) 45%,transparent);border-radius:6px}
-
+/* ── 판 ───────────────────────────────────────────────────────────────── */
 .stage{position:relative;flex:1 1 auto;min-height:0;padding:var(--half-gap);
-  border:1px solid color-mix(in srgb,var(--bd) 35%,transparent);border-radius:22px}
+  border:var(--bw) solid var(--rule);border-radius:var(--r-rail)}
 .plane{position:relative;width:100%;height:100%}
 
 /* 카드는 한 종류이고 역할만 다르다. 비율을 받는지 px 를 받는지, 이동 가능한지가
    차이다. z 순서는 CSS 가 아니라 합성이 정한다. 네이티브 표면은 OS 뷰라 CSS 스택에
    참여하지 않으므로 시뮬레이터는 표면 레이어를 위에 두어 재현한다. */
 .card{position:absolute;z-index:1;display:grid;grid-template-rows:32px 1fr 22px;
-  min-width:0;overflow:hidden;border:var(--bw) solid var(--bd);border-radius:var(--r);
+  min-width:0;overflow:hidden;border:var(--bw) solid var(--edge);border-radius:var(--r);
   background:var(--card);outline:0}
 /* 그리드 자식의 min-width 기본값 auto 는 열을 min-content 까지 확장하고,
    overflow:hidden 은 표시만 자를 뿐 rect 를 줄이지 않는다. 그러면 네이티브 표면이
    카드 밖에 그려진다. 선언 rect 는 클립 영역보다 클 수 없다. */
 .card > *{min-width:0}
-.card[data-role=fixed]{border-color:var(--focus)}
+/* 사이드바도 카드와 같은 조용한 테두리를 갖는다. 레일과 같은 색을 주면 레일 획과
+   테두리가 통로 하나를 사이에 두고 두 겹이 된다. 묶는 일은 획이 한다. */
 /* 포커스는 테두리를 추가하지 않고 기존 테두리의 색으로 표시한다. 링을 덧대면 선이
    두 겹이 되고 그 사이 1px 이 빈 공간으로 보인다. */
 :root[data-focus-ind=border] .card[data-focused=true]{border-color:var(--focus)}
@@ -163,11 +145,30 @@ input[type=color]{width:34px;height:24px;padding:0;background:var(--card);
   background-repeat:no-repeat}
 .focus-mark[hidden]{display:none}
 
-.chrome{display:flex;align-items:center;gap:4px;padding:0 4px 0 4px;overflow:hidden;
-  border-bottom:1px solid color-mix(in srgb,var(--bd) 40%,transparent)}
+/* ── 이음새 ───────────────────────────────────────────────────────────────
+   통로를 0 으로 내리면 통로의 폭이 선 굵기 하나가 되고, 그 자리가 두 카드의 공유
+   보더가 된다. 카드는 자기 테두리와 반경을 갖지 않고 판을 나누는 선 하나만 남는다.
+   바깥은 판의 테두리가 닫는다.
+
+   카드 안의 선도 같은 색이다. 머리 아래와 상태줄 위. 이음새와 한 종류로 보인다.
+
+   포커스는 이음새 그 자체를 자기 색으로 칠한다. outline 은 카드 rect 바깥에
+   그려지고, 그 바깥이 곧 이음새다. 머리나 상태줄의 선에 칠하면 이음새에서 22px,
+   32px 떨어진 다른 선을 칠하는 것이 되어 카드의 경계를 말하지 못한다.          */
+:root[data-seam=line] .stage{padding:0;border-radius:0}
+:root[data-seam=line] .card{border-width:0;border-radius:0}
+:root[data-seam=line] .chrome{border-bottom-color:var(--rule)}
+:root[data-seam=line] .status{border-top-color:var(--rule)}
+:root[data-seam=line][data-focus-ind=border] .card[data-focused=true]{
+  outline:var(--bw) solid var(--focus)}
+:root[data-seam=line] .drop{border-radius:0}
+
+/* ── 카드의 머리 ─────────────────────────────────────────────────────────── */
+.chrome{display:flex;align-items:center;gap:4px;padding:0 4px;overflow:hidden;
+  border-bottom:var(--bw) solid var(--edge)}
 /* 탭 목록은 넘치면 가로 스크롤한다. 탭을 제거하거나 축소하지 않는다. 헤더 높이가
    32px 이라 스크롤바가 탭보다 두꺼워서 표시하지 않는다. */
-.chrome__tabs{display:flex;align-items:center;gap:4px;flex:1 1 auto;min-width:0;
+.chrome__tabs{display:flex;align-items:center;gap:3px;flex:1 1 auto;min-width:0;
   overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
 .chrome__tabs::-webkit-scrollbar{display:none}
 /* 헤더 너비에 따른 세 단계.
@@ -176,32 +177,33 @@ input[type=color]{width:34px;height:24px;padding:0;background:var(--card);
      ham    ≡ 만 표시한다
    단계가 내려가도 탭을 제거하지 않는다. ≡ 는 항상 탭 전체를 목록으로 표시한다. */
 .chrome__ham{display:none;place-items:center;width:20px;height:20px;padding:0;border:0;
-  flex:0 0 auto;background:transparent;color:var(--muted);border-radius:5px}
+  flex:0 0 auto;background:transparent;color:var(--muted);border-radius:var(--r-xs)}
 .chrome[data-fit=one] .chrome__ham,.chrome[data-fit=ham] .chrome__ham{display:grid}
 .chrome__ham svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.3;stroke-linecap:round}
-.chrome__ham:hover{background:color-mix(in srgb,var(--bd) 26%,transparent);color:var(--fg)}
+.chrome__ham:hover{background:var(--inset);color:var(--fg)}
 .chrome[data-fit=one] .chrome__tabs .tab:not([data-active=true]){display:none}
 .chrome[data-fit=ham] .chrome__tabs{display:none}
-.tab{display:flex;align-items:center;gap:4px;padding:2px 6px;border-radius:6px;
+.tab{display:flex;align-items:center;gap:4px;padding:3px 7px;border-radius:var(--r-xs);
   font-size:11px;color:var(--muted);cursor:grab;user-select:none;white-space:nowrap;
-  flex:0 0 auto;border:1px solid transparent}
-.tab[data-active=true]{color:var(--fg);background:color-mix(in srgb,var(--bd) 20%,transparent);
-  border-color:color-mix(in srgb,var(--bd) 40%,transparent)}
+  flex:0 0 auto}
+.tab:hover{color:var(--fg)}
+.tab[data-active=true]{color:var(--fg);background:var(--chip-sel)}
 .tab[data-dragging=true]{opacity:.4}
 .tab__name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 /* one 단계에서 활성 탭은 남은 너비만 사용하고 제목을 말줄임한다.
    제목 전체가 들어갈 때만 표시하면 탭이 불필요하게 숨겨진다. */
 .chrome[data-fit=one] .tab[data-active=true]{flex:0 1 auto;min-width:0}
-.tab__x{border:0;background:transparent;color:inherit;padding:0 2px;line-height:1;font-size:11px;border-radius:4px}
-.tab__x:hover{background:color-mix(in srgb,var(--no) 35%,transparent)}
-.chrome__acts{margin-left:auto;display:flex;gap:1px;padding:1px;border-radius:7px;flex:0 0 auto;
-  border:1px solid color-mix(in srgb,var(--bd) 32%,transparent)}
+.tab__x{border:0;background:transparent;color:inherit;padding:0 2px;line-height:1;
+  font-size:11px;border-radius:var(--r-xs);opacity:.6}
+.tab__x:hover{opacity:1;background:color-mix(in srgb,var(--no) 40%,transparent)}
+.chrome__acts{margin-left:auto;display:flex;gap:1px;padding:1px;border-radius:var(--r-xs);
+  flex:0 0 auto;border:var(--bw) solid var(--edge)}
 .chrome__act{display:grid;place-items:center;width:20px;height:20px;padding:0;border:0;
-  background:transparent;color:var(--muted);border-radius:5px}
+  background:transparent;color:var(--muted);border-radius:var(--r-xs)}
 .chrome__act svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.3;
   stroke-linecap:round;stroke-linejoin:round}
 .chrome__act .half{fill:currentColor;stroke:none;opacity:.28}
-.chrome__act:hover:not(:disabled){background:color-mix(in srgb,var(--bd) 26%,transparent);color:var(--fg)}
+.chrome__act:hover:not(:disabled){background:var(--inset);color:var(--fg)}
 .chrome__act:disabled{opacity:.25;cursor:not-allowed}
 /* `[hidden]` 은 display:grid 를 이기지 못하므로 여기서 명시한다. */
 .chrome__act[hidden]{display:none}
@@ -209,50 +211,46 @@ input[type=color]{width:34px;height:24px;padding:0;background:var(--card);
 /* 상태줄은 카드가 좁아져도 한 줄을 유지한다. 줄바꿈이 생기면 22px 안에서 잘려
    두 번째 줄이 사라지고 첫 줄의 세로 정렬도 어긋난다. */
 .status{display:flex;align-items:center;padding:0 8px;font-size:10px;
-  border-top:1px solid color-mix(in srgb,var(--bd) 40%,transparent);color:var(--muted);
+  border-top:var(--bw) solid var(--edge);color:var(--muted);
   overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .set{padding:8px 10px;font-size:11px;color:var(--muted);overflow:hidden}
 .set b{color:var(--fg);display:block;margin-bottom:4px}
-.card[data-role=fixed] .set b{color:var(--focus)}
+.card[data-role=fixed] .set b{color:var(--rail)}
 
-/* 선과 divider 는 뷰가 그린다. 이 문서는 색만 지정하고 모양과 커서는 뷰가 갖는다. */
-:root{
-  --sp-line:color-mix(in srgb,var(--bd) 65%,transparent);
-  --sp-line-crossing:color-mix(in srgb,var(--bd) 20%,transparent);
-  --sp-grip:color-mix(in srgb,var(--muted) 75%,transparent);
-  --sp-grip-active:var(--focus);
-}
-/* 경계선은 한 좌표가 판을 가로지르는 전체 구간이다. 카드가 실제로 접하는 구간은
+/* ── 선 ───────────────────────────────────────────────────────────────────
+   경계선은 한 좌표가 판을 가로지르는 전체 구간이다. 카드가 실제로 접하는 구간은
    실선이고 나머지는 카드가 가로지르는 구간이다. 둘은 같은 좌표에 있고 길이만 다르다.
    실선만 그리면 위는 나뉘고 아래는 이어진 곳에서 선이 둘로 보인다. 세 값 중 하나다.
-   · 보임 — 표면 위에 그린다. DOM 오버레이는 애플리케이션에서도 표면 위에 그릴 수 있다.
-   · 가림 — 카드 아래에 그린다. 카드가 덮는 구간은 보이지 않는다.
-   · 숨김 — 그리지 않는다. */
-:root[data-full-rule=on] .sp-rule[data-virtual=true]{z-index:70}
-:root[data-full-rule=off] .sp-rule[data-virtual=true]{display:none}
+   · over  표면 위에 그린다. DOM 오버레이는 애플리케이션에서도 표면 위에 그릴 수 있다.
+   · under 카드 아래에 그린다. 카드가 덮는 구간은 보이지 않는다.
+   · none  그리지 않는다.                                                     */
+:root[data-full-rule=over] .sp-rule[data-virtual=true]{z-index:70}
+:root[data-full-rule=none] .sp-rule[data-virtual=true]{display:none}
 .sp-divider{z-index:4}
 
 /* 레일 외곽선은 통로 안에만 그린다. 카드 안쪽을 덮는 채움은 애플리케이션에서
    네이티브 표면에 가려지므로 여기서도 그리지 않는다. */
 .rail{position:absolute;inset:0;z-index:3;pointer-events:none;overflow:visible}
-.rail path{fill:none;stroke:var(--rail);stroke-width:2;
+.rail path{fill:none;stroke:var(--rail);stroke-width:var(--bw);
   stroke-linejoin:round;vector-effect:non-scaling-stroke}
 
-/* 모사한 네이티브 표면. 컴포지터가 applied 프레임에 배치한다. */
+/* ── 표면 ─────────────────────────────────────────────────────────────────
+   모사한 네이티브 표면. 컴포지터가 applied 프레임에 배치한다. 카드가 클립하므로
+   모서리를 따로 두지 않는다.                                                  */
 .surface{position:absolute;z-index:50;background:var(--surface);color:var(--surface-fg);
-  font-size:11px;padding:6px 9px;overflow:hidden;pointer-events:none;border-radius:4px}
+  font-size:11px;padding:6px 9px;overflow:hidden;pointer-events:none}
 .surface[data-hidden=true]{display:none}
 .surface b{color:var(--fg)}
 
 /* `.standin` 은 표면과 동일하게 보여야 하므로 `.surface` 와 같은 값을 사용한다.
    값이 다르면 표면을 숨기는 시점에 화면이 바뀐다. */
 .standin{position:absolute;inset:0;background:var(--surface);color:var(--surface-fg);
-  font-size:11px;padding:6px 9px;overflow:hidden;border-radius:4px}
+  font-size:11px;padding:6px 9px;overflow:hidden}
 .standin b{color:var(--fg)}
 /* 드롭 구획은 DOM 이므로 표면이 숨겨진 동안에만 보인다. z 를 표면보다 낮게 둔다.
    높이면 애플리케이션의 동작과 달라진다. */
 .drop{position:absolute;z-index:40;pointer-events:none;border-radius:var(--r);
-  background:color-mix(in srgb,var(--focus) 22%,transparent);
+  background:color-mix(in srgb,var(--focus) 18%,transparent);
   border:2px solid var(--focus)}
 .drop[hidden]{display:none}
 
@@ -260,20 +258,119 @@ input[type=color]{width:34px;height:24px;padding:0;background:var(--card);
    높이면 애플리케이션에서 표면에 가려진다. */
 .picker{position:absolute;z-index:41;min-width:170px;max-width:260px;max-height:238px;
   overflow-y:auto;scrollbar-width:thin;padding:4px;
-  background:var(--card);border-radius:9px;
-  border:1px solid color-mix(in srgb,var(--bd) 55%,transparent);
-  box-shadow:0 10px 26px rgb(0 0 0 / .38)}
+  background:var(--card);border-radius:var(--r-sm);
+  border:var(--bw) solid var(--edge);box-shadow:0 12px 28px rgb(0 0 0 / .34)}
 .picker[hidden]{display:none}
-.picker__head{padding:3px 7px 5px;font-size:10px;color:var(--muted)}
-.picker__item{display:flex;align-items:center;gap:7px;width:100%;padding:5px 7px;
-  border:0;border-radius:6px;background:transparent;color:var(--fg);
+.picker__head{padding:4px 8px 6px;font-size:10px;color:var(--muted);letter-spacing:.04em}
+.picker__item{display:flex;align-items:center;gap:8px;width:100%;padding:5px 8px;
+  border:0;border-radius:var(--r-xs);background:transparent;color:var(--fg);
   font:inherit;font-size:12px;text-align:left}
 .picker__item svg{width:14px;height:14px;flex:0 0 auto;fill:none;stroke:currentColor;
   stroke-width:1.3;stroke-linecap:round;stroke-linejoin:round}
 .picker__name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .picker__item small{margin-left:auto;padding-left:8px;color:var(--muted);font-size:10px;flex:0 0 auto}
-.picker__item[data-active=true]{color:var(--fg);
-  background:color-mix(in srgb,var(--bd) 22%,transparent)}
+.picker__item[data-active=true]{color:var(--fg);background:var(--chip-sel)}
 .picker__item:hover,.picker__item:focus-visible{outline:0;color:var(--fg);
-  background:color-mix(in srgb,var(--bd) 30%,transparent)}
+  background:var(--chip-hover)}
 
+/* ── 설정 ─────────────────────────────────────────────────────────────────
+   판 전체를 덮는 오버레이와 그 안의 카드. 오버레이가 모달이 열린 동안 뒤의 divider
+   드래그를 차단한다. 색을 칠하지는 않는다. 네이티브 표면이 이 문서 위에 합성되므로
+   화면의 일부만 어두워진다.
+
+   컨트롤은 브라우저 기본 모양을 쓰지 않는다. 기본 select 와 checkbox 는 테마의 색을
+   따르지 않아 테마를 바꿔도 그 자리만 그대로다.                                */
+.set-scrim{position:fixed;inset:0;z-index:200}
+.set-card{position:absolute;left:50%;top:72px;transform:translateX(-50%);
+  width:560px;max-height:74vh;display:flex;flex-direction:column;
+  border:var(--bw) solid var(--edge);border-radius:var(--r-sm);background:var(--card);
+  box-shadow:0 20px 56px rgb(0 0 0 / .42)}
+.set-card__head{display:flex;align-items:center;gap:8px;height:44px;flex:0 0 44px;
+  padding:0 8px 0 16px;border-bottom:var(--bw) solid var(--edge);cursor:grab}
+.set-card__head:active{cursor:grabbing}
+.set-card__title{font-size:12px;letter-spacing:.06em;color:var(--fg)}
+.set-card__head .act{margin-left:auto}
+.set-card__body{display:flex;min-height:0}
+
+.set-card__nav{display:flex;flex-direction:column;gap:2px;width:136px;flex:0 0 auto;
+  padding:10px 8px;border-right:var(--bw) solid var(--edge)}
+/* 현재 절은 왼쪽에 레일과 같은 색의 표시를 갖는다. 사이드바를 카드에 묶는 선과 같은
+   뜻이다. */
+.set-nav{position:relative;text-align:left;padding:7px 10px;border:0;
+  border-radius:var(--r-xs);background:transparent;color:var(--muted);
+  font:inherit;font-size:12px;cursor:pointer}
+.set-nav:hover{color:var(--fg);background:var(--inset)}
+.set-nav[data-on=true]{background:var(--chip-sel);color:var(--fg)}
+.set-nav[data-on=true]::before{content:"";position:absolute;left:0;top:6px;bottom:6px;
+  width:2px;border-radius:2px;background:var(--rail)}
+
+.set-card__pane{flex:1 1 auto;min-width:0;padding:14px 18px 18px;overflow:auto}
+.set-group{margin:0 0 20px}
+.set-group:last-child{margin-bottom:0}
+.set-group__name{margin:0 0 4px;font-size:10px;letter-spacing:.1em;color:var(--rail)}
+.set-caption{margin:0 0 10px;font-size:11px;line-height:1.5;color:var(--muted)}
+.set-row{display:grid;grid-template-columns:124px 1fr;align-items:center;gap:12px;
+  min-height:30px}
+.set-row__name{font-size:12px;color:var(--muted)}
+
+/* select. 화살표는 감싼 요소가 그리고 select 자체는 기본 모양을 쓰지 않는다. */
+.set-field{position:relative;display:block}
+.set-field::after{content:"▾";position:absolute;right:10px;top:50%;translate:0 -50%;
+  font-size:10px;color:var(--muted);pointer-events:none}
+.set-field select{appearance:none;width:100%;padding:5px 26px 5px 9px;
+  border:var(--bw) solid var(--edge);border-radius:var(--r-xs);
+  background:var(--bg);color:var(--fg);font:inherit;font-size:12px;cursor:pointer}
+.set-field select:hover{border-color:var(--rail)}
+.set-field select:focus-visible{outline:0;border-color:var(--focus)}
+
+/* 값이 둘이나 셋인 설정은 목록이 아니라 한 줄에 늘어놓는다. */
+.set-seg{justify-self:start;display:inline-flex;gap:2px;padding:2px;border:var(--bw) solid var(--edge);
+  border-radius:var(--r-xs);background:var(--bg)}
+.set-seg button{padding:3px 11px;border:0;border-radius:var(--r-xs);background:transparent;
+  color:var(--muted);font:inherit;font-size:11px;cursor:pointer;white-space:nowrap}
+.set-seg button:hover{color:var(--fg)}
+.set-seg button[data-on=true]{background:var(--chip-sel);color:var(--fg)}
+
+/* 켜고 끄는 값. */
+.set-switch{justify-self:start;appearance:none;position:relative;width:34px;height:19px;flex:0 0 auto;
+  margin:0;border:0;border-radius:19px;background:var(--inset);cursor:pointer}
+.set-switch::after{content:"";position:absolute;left:3px;top:3px;width:13px;height:13px;
+  border-radius:50%;background:var(--muted)}
+.set-switch:checked{background:color-mix(in srgb,var(--focus) 40%,transparent)}
+.set-switch:checked::after{left:18px;background:var(--focus)}
+.set-switch:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+
+.set-slide{display:flex;align-items:center;gap:10px}
+.set-slide input[type=range]{appearance:none;flex:1 1 auto;min-width:0;height:3px;margin:0;
+  border-radius:3px;background:var(--inset);cursor:pointer}
+.set-slide input[type=range]::-webkit-slider-thumb{appearance:none;width:13px;height:13px;
+  border-radius:50%;background:var(--focus)}
+.set-slide input[type=range]::-moz-range-thumb{width:13px;height:13px;border:0;
+  border-radius:50%;background:var(--focus)}
+.set-slide output{flex:0 0 auto;width:6ch;text-align:right;font-size:11px;color:var(--muted)}
+
+.set-press{justify-self:start;padding:5px 12px;border:var(--bw) solid var(--edge);border-radius:var(--r-xs);
+  background:var(--bg);color:var(--fg);font:inherit;font-size:12px;cursor:pointer}
+.set-press:hover{border-color:var(--rail)}
+
+/* 테마 견본. 그 테마가 가진 값을 그 테마의 값으로 그린다. 바탕과 카드 두 칸만
+   칠하면 테마 사이의 차이가 보이지 않는다.
+
+     상자 바탕   --bg          카드 둘      --card 와 --edge
+     왼쪽 띠     --rail        둘 사이      --rule (통로가 0 인 테마)
+     오른쪽 점   --focus       모서리       그 테마의 반경
+     둘의 간격   그 테마의 통로                                              */
+.th-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px;
+  margin:0 0 14px}
+.th{display:flex;flex-direction:column;align-items:stretch;gap:5px;padding:3px;
+  border:var(--bw) solid transparent;border-radius:var(--r-xs);background:transparent;
+  color:var(--muted);font:inherit;font-size:10px;cursor:pointer}
+.th:hover{color:var(--fg)}
+.th[data-on=true]{border-color:var(--focus);color:var(--fg)}
+.th__box{position:relative;display:block;height:42px;overflow:hidden;
+  border:1px solid;border-radius:var(--r-xs)}
+.th__rail{position:absolute;left:0;top:0;bottom:0;width:4px}
+.th__pair{position:absolute;left:10px;top:6px;right:6px;bottom:6px;display:flex}
+.th__card{position:relative;flex:1 1 0;min-width:0;border:1px solid}
+.th__dot{position:absolute;right:3px;bottom:3px;width:6px;height:6px;border-radius:50%}
+.th__name{text-align:center}

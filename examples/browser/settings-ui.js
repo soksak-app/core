@@ -1,7 +1,11 @@
 // 설정 모달.
 //
-// 레이아웃은 구 프로젝트와 동일하다: 520px 카드, 헤더에 그립과 닫기 버튼, 왼쪽에 절
-// 목록, 오른쪽에 「이름 130px + 컨트롤」 행, 절마다 설명 한 줄.
+// 560px 카드. 헤더에 제목과 닫기 버튼, 왼쪽에 절 목록, 오른쪽에 「이름 124px +
+// 컨트롤」 행이 들어간다. 행은 묶음으로 나뉘고 묶음마다 이름과 설명 한 줄을 갖는다.
+//
+// 컨트롤은 브라우저 기본 모양을 쓰지 않는다. 값이 둘이나 셋이면 목록이 아니라 한 줄에
+// 늘어놓고(seg), 켜고 끄는 값은 스위치다. 기본 select 와 checkbox 는 테마의 색을
+// 따르지 않는다.
 //
 // [data-native-modal] 요소다. DOM 은 네이티브 표면 위에 그릴 수 없으므로 호스트가
 // 이 요소를 별도 뷰에 렌더링한다. 그 뷰는 사본이므로 여기서 등록한 리스너가 동작하지
@@ -14,7 +18,8 @@ import { build } from "./plane.js";
 import { knobs } from "./compositor.js";
 import { plugins, section } from "./plugins/registry.js";
 import {
-  MODES, THEMES, applyTheme, halfGap, link, linkedId, modeName, set, sets, themeName, value,
+  FONTS, MODES, THEMES, applyTheme, gapSetting, link, linkedId, modeName, set, sets,
+  themeName, value,
 } from "./settings.js";
 
 /* 열려 있는 동안에만 존재한다. 숨겨 두면 표시 여부를 CSS 가 결정하게 되고,
@@ -38,11 +43,21 @@ function row(label, control) {
   return el;
 }
 
-/** 절의 설명 한 줄을 만든다. */
-function caption(text) {
-  const el = document.createElement("p");
-  el.className = "set-caption";
-  el.textContent = text;
+/**
+ * 행 묶음 하나를 만든다. 이름, 설명 한 줄, 그리고 행들.
+ *
+ * 행을 나란히 두기만 하면 무엇이 배치를 바꾸고 무엇이 표시만 바꾸는지 보이지 않는다.
+ */
+function group(name, text, children) {
+  const el = document.createElement("section");
+  el.className = "set-group";
+  const head = document.createElement("h4");
+  head.className = "set-group__name";
+  head.textContent = name;
+  const cap = document.createElement("p");
+  cap.className = "set-caption";
+  cap.textContent = text;
+  el.append(head, cap, ...children);
   return el;
 }
 
@@ -52,6 +67,8 @@ function caption(text) {
 
 /** select 를 만든다. 선택한 값이 key 와 함께 반환된다. */
 function choose(key, options, now) {
+  const wrap = document.createElement("span");
+  wrap.className = "set-field";
   const el = document.createElement("select");
   el.dataset.set = key;
   for (const [v, label] of options) {
@@ -61,13 +78,35 @@ function choose(key, options, now) {
     if (v === now) o.setAttribute("selected", "");
     el.appendChild(o);
   }
+  wrap.appendChild(el);
+  return wrap;
+}
+
+/**
+ * 값을 한 줄에 늘어놓는다. 값이 둘이나 셋일 때 사용한다.
+ *
+ * 버튼이므로 select 와 달리 change 가 아니라 click 으로 도착한다. key 에 값을 함께
+ * 실어 보낸다.
+ */
+function segment(key, options, now) {
+  const el = document.createElement("span");
+  el.className = "set-seg";
+  for (const [v, label] of options) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.dataset.key = `pick:${key}:${v}`;
+    b.dataset.on = String(v === now);
+    b.textContent = label;
+    el.appendChild(b);
+  }
   return el;
 }
 
-/** 체크박스를 만든다. */
+/** 켜고 끄는 값. */
 function toggle(key, now) {
   const el = document.createElement("input");
   el.type = "checkbox";
+  el.className = "set-switch";
   el.dataset.set = key;
   el.toggleAttribute("checked", now);
   return el;
@@ -99,7 +138,12 @@ function press(key, label) {
   return el;
 }
 
-/** 테마 견본 하나를 만든다. 배경, 사이드바, 강조 색을 표시한다. */
+/**
+ * 테마 견본 하나를 만든다.
+ *
+ * 바탕, 카드, 테두리, 레일, 포커스 다섯 값을 한 상자에 그린다. 두 칸만 칠하면 테마
+ * 사이의 차이가 보이지 않는다. 모서리도 그 테마의 값으로 그린다.
+ */
 function swatch(theme) {
   const el = document.createElement("button");
   el.className = "th";
@@ -107,52 +151,76 @@ function swatch(theme) {
   el.dataset.key = `theme:${theme.name}`;
   el.dataset.on = String(theme.name === themeName());
   const c = theme[modeName()];
+  const gap = parseFloat(theme.shape.gap);
+  // 견본은 42px 이므로 실제 값을 그대로 쓰면 통로가 상자를 채운다. 절반으로 줄이되
+  // 통로가 0 인 테마는 1px 을 남기고 그 자리를 경계선 색으로 칠한다. 그 1px 이 두
+  // 카드가 공유하는 선이다.
+  const slit = gap === 0 ? 1 : Math.max(2, Math.round(gap / 2));
+  const between = gap === 0 ? c.rule : c.bg;
+  const r = Math.min(parseFloat(theme.shape.r) / 2, 5);
   el.innerHTML =
-    `<span class="th__box" style="background:${c.bg}">` +
-    `<span class="th__side" style="background:${c.card}"></span>` +
-    `<span class="th__dot" style="background:${c.focus}"></span></span>` +
+    `<span class="th__box" style="background:${c.bg};border-color:${c.edge}">` +
+    `<span class="th__rail" style="background:${c.rail}"></span>` +
+    `<span class="th__pair" style="gap:${slit}px;background:${between}">` +
+      `<span class="th__card" style="background:${c.card};border-color:${c.edge};` +
+        `border-radius:${r}px">` +
+        `<span class="th__dot" style="background:${c.focus}"></span></span>` +
+      `<span class="th__card" style="background:${c.card};border-color:${c.edge};` +
+        `border-radius:${r}px"></span>` +
+    `</span></span>` +
     `<span class="th__name">${theme.name}</span>`;
   return el;
 }
 
 function drawGeneral() {
-  body.append(caption("테마는 형태와 색의 성격을 정하고, 모드는 그 테마의 밝은 쪽과 어두운 쪽을 고른다."));
   const grid = document.createElement("div");
   grid.className = "th-grid";
   for (const t of THEMES) grid.appendChild(swatch(t));
-  body.append(grid);
-  body.append(row("모드", choose("mode", MODES.map((m) => [m, m]), modeName())));
 
-  body.append(caption("자리를 바꾸는 것들. 판의 크기와 카드의 자리가 함께 움직인다."));
-  body.append(row("프로젝트 탭", choose("projectTabs", [["top", "위"], ["left", "왼쪽"]], value("projectTabs"))));
-  body.append(row("레일 거동", choose("rail",
-    [["flow", "FLOW — 포커스를 따라간다"], ["pin", "PIN — 자리를 지킨다"], ["off", "없음"]], value("rail"))));
-  body.append(row("좌측 자리", toggle("left", value("left"))));
-  body.append(row("우측 자리", toggle("right", value("right"))));
-  body.append(row("포커스 밖 흐리게", toggle("dim", value("dim"))));
-  body.append(row("통로", slide("gap", 0, 24, halfGap(), "px")));
+  body.append(group("테마", "테마가 색과 형태의 기본값을 정하고, 모드는 그 테마의 밝은 쪽과 어두운 쪽을 고른다.", [
+    grid,
+    row("모드", segment("mode", MODES.map((m) => [m, m === "dark" ? "어두움" : "밝음"]), modeName())),
+  ]));
 
-  body.append(caption("보이는 것만 바꾸는 것들. 자리는 그대로다."));
-  body.append(row("포커스 표시", choose("focusInd", [["border", "보더"], ["corner", "꺽쇠"]], value("focusInd"))));
-  body.append(row("경계선", choose("fullRule", [["hide", "가림"], ["show", "보임"]], value("fullRule"))));
+  body.append(group("형태", "테마가 준 값에서 시작한다. 통로를 0 으로 내리면 카드가 선 하나를 공유한다.", [
+    row("통로", slide("gap", 0, 24, gapSetting(), "px")),
+    row("모서리", slide("radius", 0, 24, value("radius"), "px")),
+    row("폰트", choose("font", FONTS.map((f) => [f.id, f.name]), value("font"))),
+    row("글자 크기", slide("size", 10, 18, value("size"), "px")),
+  ]));
+
+  body.append(group("자리", "판의 크기와 카드의 자리가 함께 움직인다.", [
+    row("프로젝트 탭", segment("projectTabs", [["top", "위"], ["left", "왼쪽"]], value("projectTabs"))),
+    row("레일 거동", segment("rail",
+      [["flow", "따라감"], ["pin", "고정"], ["off", "없음"]], value("rail"))),
+    row("좌측 자리", toggle("left", value("left"))),
+    row("우측 자리", toggle("right", value("right"))),
+  ]));
+
+  body.append(group("표시", "자리는 그대로 두고 보이는 것만 바꾼다.", [
+    row("포커스 표시", segment("focusInd", [["border", "테두리"], ["corner", "꺽쇠"]], value("focusInd"))),
+    row("경계선", segment("fullRule", [["under", "가림"], ["over", "보임"], ["none", "숨김"]], value("fullRule"))),
+    row("포커스 밖 흐리게", toggle("dim", value("dim"))),
+  ]));
 }
 
 function drawSidebars() {
-  body.append(caption("자리마다 세트를 건다. 걸지 않으면 그 사이드바는 없다."));
   const options = [["", "없음"], ...sets().map((s) => [s.id,
     `${s.title} — ${s.sections.map((id) => section(id).name).join(" · ")}`])];
-  body.append(row("좌측", choose("link:left:", options, linkedId("left", null) ?? "")));
+  const rows = [row("좌측", choose("link:left:", options, linkedId("left", null) ?? ""))];
   for (const p of plugins()) {
-    body.append(row(`${p.name} 레일`, choose(`link:rail:${p.id}`, options, linkedId("rail", p.id) ?? "")));
-    body.append(row(`${p.name} 우측`, choose(`link:right:${p.id}`, options, linkedId("right", p.id) ?? "")));
+    rows.push(row(`${p.name} 레일`, choose(`link:rail:${p.id}`, options, linkedId("rail", p.id) ?? "")));
+    rows.push(row(`${p.name} 우측`, choose(`link:right:${p.id}`, options, linkedId("right", p.id) ?? "")));
   }
+  body.append(group("연결", "자리마다 세트를 건다. 걸지 않으면 그 사이드바는 없다.", rows));
 }
 
 function drawCompositing() {
-  body.append(caption("커밋 지연은 V7a 를, 적용 오차는 V7b 를 뒤집는다. 실제 앱의 어긋남을 여기서 만들어 본다."));
-  body.append(row("커밋 지연", slide("knob:latency", 0, 600, knobs.latency, "ms")));
-  body.append(row("적용 오차", slide("knob:skew", 0, 24, knobs.skew, "px")));
-  body.append(row("", press("press:build", "초기 배치로")));
+  body.append(group("어긋남", "커밋 지연은 V7a 를, 적용 오차는 V7b 를 뒤집는다. 실제 앱의 어긋남을 여기서 만들어 본다.", [
+    row("커밋 지연", slide("knob:latency", 0, 600, knobs.latency, "ms")),
+    row("적용 오차", slide("knob:skew", 0, 24, knobs.skew, "px")),
+    row("", press("press:build", "초기 배치로")),
+  ]));
 }
 
 const SECTIONS = [
@@ -169,7 +237,6 @@ function makeCard() {
   el.dataset.nativeModal = "";
   el.innerHTML =
     '<header class="set-card__head" data-grip>' +
-      '<span class="set-grip">⠿</span>' +
       '<span class="set-card__title">설정</span>' +
       `<button class="act" type="button" data-key="close" title="닫는다">${icon("close")}</button>` +
     '</header>' +
@@ -221,6 +288,8 @@ function answer(key, val) {
   if (key === "move") return moveBy(...val.split(",").map(Number));
   const [kind, a, b] = key.split(":");
   if (kind === "nav") { here = a; return drawSettings(); }
+  // seg 의 버튼은 값을 key 에 담아 전달한다. 아래의 설정 이름 처리로 넘긴다.
+  if (kind === "pick") return answer(a, b);
   if (kind === "theme") return applyTheme(a, modeName());
   if (kind === "press") { if (a === "build") build(); return; }
   if (kind === "link") return link(a, b || null, val || null);
