@@ -74,9 +74,14 @@ input[type=color]{width:34px;height:24px;padding:0;background:var(--card);
 
 .chrome{display:flex;align-items:center;gap:4px;padding:0 4px 0 4px;overflow:hidden;
   border-bottom:1px solid color-mix(in srgb,var(--bd) 40%,transparent)}
+/* 탭 목록은 넘치면 가로 스크롤한다. 탭을 제거하거나 축소하지 않는다.
+   스크롤바는 표시하지 않는다. 헤더 높이가 32px 이라 스크롤바가 탭보다 두껍다. */
+.chrome__tabs{display:flex;align-items:center;gap:4px;flex:1 1 auto;min-width:0;
+  overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
+.chrome__tabs::-webkit-scrollbar{display:none}
 .tab{display:flex;align-items:center;gap:4px;padding:2px 6px;border-radius:6px;
   font-size:11px;color:var(--muted);cursor:grab;user-select:none;white-space:nowrap;
-  border:1px solid transparent}
+  flex:0 0 auto;border:1px solid transparent}
 .tab[data-active=true]{color:var(--fg);background:color-mix(in srgb,var(--bd) 20%,transparent);
   border-color:color-mix(in srgb,var(--bd) 40%,transparent)}
 .tab[data-dragging=true]{opacity:.4}
@@ -483,11 +488,17 @@ function updateCard(el, card) {
 
   const tabs = tabsOf(card);
   const key = tabs.map((t) => `${t.id}\u0000${t.title}`).join("\u0001");
+  let strip = chrome.querySelector(".chrome__tabs");
+  if (!strip) {
+    strip = document.createElement("div");
+    strip.className = "chrome__tabs";
+    chrome.insertBefore(strip, chrome.firstChild);   // 도구는 늘 띠 뒤에 선다
+  }
   let acts = chrome.querySelector(".chrome__acts");
 
   if (chrome.dataset.tabs !== key) {
     chrome.dataset.tabs = key;
-    for (const gone of [...chrome.querySelectorAll(".tab")]) gone.remove();
+    for (const gone of [...strip.querySelectorAll(".tab")]) gone.remove();
     for (const t of tabs) {
       const b = document.createElement("span");
       b.className = "tab";
@@ -503,10 +514,10 @@ function updateCard(el, card) {
         beginTabDrag(e, own.id, t.id);
       });
       b.querySelector(".tab__x").addEventListener("click", () => closeTab(el.dataset.cardId, t.id));
-      chrome.insertBefore(b, acts);
+      strip.appendChild(b);
     }
   }
-  for (const b of chrome.querySelectorAll(".tab")) {
+  for (const b of strip.querySelectorAll(".tab")) {
     b.dataset.active = String(b.dataset.tabId === card.data.activeId);
   }
 
@@ -967,6 +978,49 @@ function settle() {
  */
 const MARK_OUT = 1;
 
+/**
+ * 활성 탭을 탭 목록의 가운데로 스크롤한다.
+ *
+ * 애니메이션은 사용자가 탭을 선택했을 때만 사용한다. 배치 변경으로 가운데를
+ * 다시 계산할 때는 즉시 이동한다. divider 드래그 중에는 너비가 프레임마다
+ * 바뀌므로, 매번 새 애니메이션을 시작하면 목표 위치에 도달하지 못한다.
+ *
+ * `behavior:"smooth"` 는 브라우저가 처리하며, 창이 비활성이면 애니메이션이
+ * 실행되지 않고 요청이 무시된다. SLIDE_MS 후 도착 여부를 확인하고 미도달이면
+ * 즉시 이동시킨다.
+ */
+const SLIDE_MS = 350;
+
+function centreTab(strip, activeId) {
+  const active = strip.querySelector(".tab[data-active=true]");
+  if (!active) { strip.scrollLeft = 0; return; }
+  const room = strip.scrollWidth - strip.clientWidth;
+  // 두 rect 의 차이로 계산한다. `offsetLeft` 는 offsetParent 기준인데 탭 목록이
+  // static 이라 기준이 카드가 되고, 헤더 좌우 padding 만큼 오차가 생긴다.
+  const a = active.getBoundingClientRect(), box = strip.getBoundingClientRect();
+  const to = room <= 0 ? 0 : Math.max(0, Math.min(
+    strip.scrollLeft + (a.left + a.width / 2) - (box.left + box.width / 2), room));
+  const picked = strip.dataset.centred !== String(activeId);
+  strip.dataset.centred = String(activeId ?? "");
+  clearTimeout(Number(strip.dataset.landTimer));      // 이전 타이머 제거
+  if (Math.abs(strip.scrollLeft - to) < 0.5) return;
+  if (!picked) { strip.scrollLeft = to; return; }
+  strip.scrollTo({ left: to, behavior: "smooth" });
+  strip.dataset.landTimer = String(setTimeout(() => {
+    if (Math.abs(strip.scrollLeft - to) > 0.5) strip.scrollLeft = to;
+  }, SLIDE_MS));
+}
+
+/* 렌더 완료 후에 측정한다. 너비가 갱신되기 전에 재면 잘못된 위치를 계산한다.
+   탭 드래그 중에는 스크롤하지 않는다. 드래그 중인 탭의 좌표가 어긋난다. */
+function centreTabs() {
+  if (tabDrag) return;
+  for (const strip of plane.querySelectorAll(".chrome__tabs")) {
+    const id = strip.closest(".card")?.dataset.cardId;
+    centreTab(strip, grid.card(id)?.data?.activeId);
+  }
+}
+
 function markFocus() {
   const mark = document.getElementById("focusMark");
   const on = document.documentElement.dataset.focusInd === "corner";
@@ -1168,7 +1222,7 @@ function build() {
     onChange: () => { verify(); compositor.observe(); },
   });
   const baseRender = view.render.bind(view);
-  view.render = () => { baseRender(); markFocus(); };
+  view.render = () => { baseRender(); markFocus(); centreTabs(); };
 
   showThemeColors();
   Object.assign(window, { grid, view });   // 관측용 — build 마다 새로 걸어야 낡지 않는다
