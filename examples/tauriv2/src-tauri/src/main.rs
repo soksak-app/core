@@ -104,6 +104,7 @@ fn watch_presses(
     window: &Window,
     views: &State<'_, Views>,
     watching: &State<'_, Watching>,
+    page: &State<'_, Page>,
 ) -> Result<(), String> {
     let mut started = watching.0.lock().map_err(|e| e.to_string())?;
     if *started {
@@ -115,17 +116,48 @@ fn watch_presses(
     {
         let named = views.0.clone();
         let host = window.clone();
+        let pointing = window.clone();
+        let seen = page.0.clone();
         let handle = window.ns_window().map_err(|e| e.to_string())?;
-        native::watch_mouse(handle, move |chain| {
-            let Ok(map) = named.lock() else { return };
-            let Some(id) = chain.iter().find_map(|view| map.get(view)) else {
-                return;
-            };
-            let _ = host.emit("surface-pressed", id.clone());
-        });
+        native::watch_mouse(
+            handle,
+            move |chain| {
+                let Ok(map) = named.lock() else { return };
+                let Some(id) = chain.iter().find_map(|view| map.get(view)) else {
+                    return;
+                };
+                let _ = host.emit("surface-pressed", id.clone());
+            },
+            move |phase, x, y| {
+                // The point arrives measured from the content view's top. The
+                // page starts below the inset, so the page's y is that much less.
+                let Ok(height) = seen.lock() else { return };
+                let inset = match pointing.inner_size().and_then(|s| {
+                    pointing.scale_factor().map(|f| s.to_logical::<f64>(f).height)
+                }) {
+                    Ok(window_height) => (window_height - *height).max(0.0),
+                    Err(_) => return,
+                };
+                let _ = pointing.emit("surface-input", InputStep { phase, x, y: y - inset });
+            },
+        );
     }
     Ok(())
 }
+
+/// One step of a drag, as the page receives it. Phase is 0 for a press, 1 for a
+/// move and 2 for a release.
+#[derive(Clone, serde::Serialize)]
+struct InputStep {
+    phase: u8,
+    x: f64,
+    y: f64,
+}
+
+/// The height of the page's own viewport, as the page last reported it. The
+/// monitor needs it to place a point in the page's coordinates.
+#[derive(Default)]
+struct Page(std::sync::Arc<std::sync::Mutex<f64>>);
 
 #[tauri::command]
 fn sync_surfaces(
@@ -133,9 +165,15 @@ fn sync_surfaces(
     shells: State<'_, shell::Shells>,
     views: State<'_, Views>,
     watching: State<'_, Watching>,
+    page: State<'_, Page>,
     request: SyncRequest,
 ) -> Result<Vec<String>, String> {
-    watch_presses(&window, &views, &watching)?;
+    // The monitor places a point in the page's coordinates, so it needs the
+    // page's height. The page reports it on every commit.
+    if let Ok(mut height) = page.0.lock() {
+        *height = request.viewport.h;
+    }
+    watch_presses(&window, &views, &watching, &page)?;
     let top = inset(&window, &request.viewport)?;
 
     let mut wanted: HashSet<String> = HashSet::new();
@@ -572,6 +610,7 @@ fn main() {
         .manage(CurrentTheme::default())
         .manage(Views::default())
         .manage(Watching::default())
+        .manage(Page::default())
         .manage(shell::Shells::default())
         .invoke_handler(tauri::generate_handler![
             sync_surfaces,

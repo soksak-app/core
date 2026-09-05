@@ -433,6 +433,23 @@ func (s *Surfaces) press(view uintptr) bool {
 	return true
 }
 
+// point sends one step of a left-button drag to the page, in the page's
+// coordinates. Phase is 0 for a press, 1 for a move, 2 for a release.
+//
+// A divider's grab area is wider than the passage between two cards, so when the
+// passage is one line wide that area lies over the surfaces. The page matches the
+// point against its own dividers and decides what it means.
+func (s *Surfaces) point(phase int, x float64, y float64) {
+	application.Get().Event.Emit("surface-input", InputStep{Phase: phase, X: x, Y: y})
+}
+
+// InputStep is one step of a drag, as the page receives it.
+type InputStep struct {
+	Phase int     `json:"phase"`
+	X     float64 `json:"x"`
+	Y     float64 `json:"y"`
+}
+
 // alphaFor returns the alpha for a surface. The page decides whether to dim it.
 func alphaFor(dim bool) float64 {
 	if dim {
@@ -494,6 +511,7 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) error {
 		s.apply(win, req)
 		s.watch.Do(func() {
 			pressed = s.press
+			pointed = s.point
 			watchMouse(win.NativeWindow())
 		})
 	})

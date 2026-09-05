@@ -228,22 +228,34 @@ pub fn shape_destroy(view: usize) {
     }
 }
 
-/// Reports which views input landed on, deepest first, as a chain of view
-/// pointers up to the window's content view.
+/// Reports two things about the input the window receives: which views it landed
+/// on, and where it was.
 ///
 /// Input on a surface is delivered to that surface's own view and never to the
-/// page, so the app watches the window instead. AppKit reports which view a
-/// press is for, and the answer is matched against the views this app made: no
-/// coordinate is converted, so none can disagree.
+/// page, so the app watches the window instead. `pressed` receives the chain of
+/// view pointers, deepest first, up to the window's content view. AppKit reports
+/// which view a press is for, and the answer is matched against the views this
+/// app made: no coordinate is converted, so none can disagree.
 ///
 /// A key goes to the window's first responder, which is what a page that
 /// focuses itself becomes: google.com focuses its search field on load, and
 /// without this the page's model still names the surface that was pressed last.
 ///
+/// `pointed` receives every step of a left-button drag as `(phase, x, y)`, with
+/// phase 0 for a press, 1 for a move and 2 for a release, and y measured from
+/// the content view's top. This one does convert a coordinate, and it has to: a
+/// divider's grab area is wider than the passage between two cards, so when the
+/// passage is one line wide the whole area lies over the surfaces and no press
+/// in it reaches the page. The caller turns this into the page's coordinates.
+///
 /// The monitor returns the event unchanged, and the view it was going to reach
 /// still receives it.
 #[allow(unused_variables)]
-pub fn watch_mouse(ns_window: *mut std::ffi::c_void, pressed: impl Fn(Vec<usize>) + 'static) {
+pub fn watch_mouse(
+    ns_window: *mut std::ffi::c_void,
+    pressed: impl Fn(Vec<usize>) + 'static,
+    pointed: impl Fn(u8, f64, f64) + 'static,
+) {
     #[cfg(target_os = "macos")]
     unsafe {
         use block2::RcBlock;
@@ -251,8 +263,12 @@ pub fn watch_mouse(ns_window: *mut std::ffi::c_void, pressed: impl Fn(Vec<usize>
         use objc2::runtime::{AnyClass, AnyObject};
 
         const NS_EVENT_MASK_LEFT_MOUSE_DOWN: u64 = 1 << 1;
+        const NS_EVENT_MASK_LEFT_MOUSE_UP: u64 = 1 << 2;
+        const NS_EVENT_MASK_LEFT_MOUSE_DRAGGED: u64 = 1 << 6;
         const NS_EVENT_MASK_KEY_DOWN: u64 = 1 << 10;
         const NS_EVENT_TYPE_LEFT_MOUSE_DOWN: u64 = 1;
+        const NS_EVENT_TYPE_LEFT_MOUSE_UP: u64 = 2;
+        const NS_EVENT_TYPE_LEFT_MOUSE_DRAGGED: u64 = 6;
 
         let window = ns_window as *mut AnyObject;
         let handler = RcBlock::new(move |event: *mut AnyObject| -> *mut AnyObject {
@@ -268,8 +284,22 @@ pub fn watch_mouse(ns_window: *mut std::ffi::c_void, pressed: impl Fn(Vec<usize>
                 return event;
             }
             let kind: u64 = msg_send![event, type];
+            let point: NSPoint = msg_send![event, locationInWindow];
+            let bounds: NSRect = msg_send![content, bounds];
+            let phase = match kind {
+                NS_EVENT_TYPE_LEFT_MOUSE_DOWN => Some(0),
+                NS_EVENT_TYPE_LEFT_MOUSE_DRAGGED => Some(1),
+                NS_EVENT_TYPE_LEFT_MOUSE_UP => Some(2),
+                _ => None,
+            };
+            if let Some(phase) = phase {
+                pointed(phase, point.x, bounds.size.y - point.y);
+            }
+            // A move and a release do not name a view again. The press decided it.
+            if kind == NS_EVENT_TYPE_LEFT_MOUSE_DRAGGED || kind == NS_EVENT_TYPE_LEFT_MOUSE_UP {
+                return event;
+            }
             let mut view: *mut AnyObject = if kind == NS_EVENT_TYPE_LEFT_MOUSE_DOWN {
-                let point: NSPoint = msg_send![event, locationInWindow];
                 msg_send![content, hitTest: point]
             } else {
                 let first: *mut AnyObject = msg_send![window, firstResponder];
@@ -292,6 +322,8 @@ pub fn watch_mouse(ns_window: *mut std::ffi::c_void, pressed: impl Fn(Vec<usize>
         let _: *mut AnyObject = msg_send![
             class,
             addLocalMonitorForEventsMatchingMask: NS_EVENT_MASK_LEFT_MOUSE_DOWN
+                | NS_EVENT_MASK_LEFT_MOUSE_DRAGGED
+                | NS_EVENT_MASK_LEFT_MOUSE_UP
                 | NS_EVENT_MASK_KEY_DOWN,
             handler: &*handler,
         ];
