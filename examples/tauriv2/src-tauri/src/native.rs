@@ -228,13 +228,17 @@ pub fn shape_destroy(view: usize) {
     }
 }
 
-/// Reports which views a press landed on, deepest first, as a chain of view
+/// Reports which views input landed on, deepest first, as a chain of view
 /// pointers up to the window's content view.
 ///
-/// A press on a surface is delivered to that surface's own view and never to
-/// the page, so the app watches the window instead. AppKit is asked which view
-/// the press is for, and the answer is matched against the views this app made:
-/// no coordinates are converted, so none can disagree.
+/// Input on a surface is delivered to that surface's own view and never to the
+/// page, so the app watches the window instead. AppKit reports which view a
+/// press is for, and the answer is matched against the views this app made: no
+/// coordinate is converted, so none can disagree.
+///
+/// A key goes to the window's first responder, which is what a page that
+/// focuses itself becomes: google.com focuses its search field on load, and
+/// without this the page's model still names the surface that was pressed last.
 ///
 /// The monitor returns the event unchanged, and the view it was going to reach
 /// still receives it.
@@ -247,6 +251,8 @@ pub fn watch_mouse(ns_window: *mut std::ffi::c_void, pressed: impl Fn(Vec<usize>
         use objc2::runtime::{AnyClass, AnyObject};
 
         const NS_EVENT_MASK_LEFT_MOUSE_DOWN: u64 = 1 << 1;
+        const NS_EVENT_MASK_KEY_DOWN: u64 = 1 << 10;
+        const NS_EVENT_TYPE_LEFT_MOUSE_DOWN: u64 = 1;
 
         let window = ns_window as *mut AnyObject;
         let handler = RcBlock::new(move |event: *mut AnyObject| -> *mut AnyObject {
@@ -261,8 +267,16 @@ pub fn watch_mouse(ns_window: *mut std::ffi::c_void, pressed: impl Fn(Vec<usize>
             if content.is_null() {
                 return event;
             }
-            let point: NSPoint = msg_send![event, locationInWindow];
-            let mut view: *mut AnyObject = msg_send![content, hitTest: point];
+            let kind: u64 = msg_send![event, type];
+            let mut view: *mut AnyObject = if kind == NS_EVENT_TYPE_LEFT_MOUSE_DOWN {
+                let point: NSPoint = msg_send![event, locationInWindow];
+                msg_send![content, hitTest: point]
+            } else {
+                let first: *mut AnyObject = msg_send![window, firstResponder];
+                let class = AnyClass::get(c"NSView").expect("NSView");
+                let is_view: bool = msg_send![first, isKindOfClass: class];
+                if is_view { first } else { std::ptr::null_mut() }
+            };
             let mut chain = Vec::new();
             while !view.is_null() {
                 chain.push(view as usize);
@@ -277,7 +291,8 @@ pub fn watch_mouse(ns_window: *mut std::ffi::c_void, pressed: impl Fn(Vec<usize>
         let class = AnyClass::get(c"NSEvent").expect("NSEvent");
         let _: *mut AnyObject = msg_send![
             class,
-            addLocalMonitorForEventsMatchingMask: NS_EVENT_MASK_LEFT_MOUSE_DOWN,
+            addLocalMonitorForEventsMatchingMask: NS_EVENT_MASK_LEFT_MOUSE_DOWN
+                | NS_EVENT_MASK_KEY_DOWN,
             handler: &*handler,
         ];
         std::mem::forget(handler);

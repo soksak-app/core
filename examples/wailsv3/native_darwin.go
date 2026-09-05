@@ -99,24 +99,40 @@ static void surfaceSetCornerRadius(void* handle, double radius) {
 // walk up from the hit view stops there.
 extern int surfaceHit(void* view);
 
-// A surface is a native view, so a press on it never reaches the page. One
-// monitor on the app receives every press and AppKit reports which view it hit.
-// The result is a view rather than a point, so no coordinate is converted and
-// none can disagree with the page's frame.
+// Walks up from a view to the content view, reporting the first surface.
+static void surfaceWalk(NSView* view, NSView* content) {
+    while (view != nil && view != content) {
+        if (surfaceHit((void*)view)) {
+            return;
+        }
+        view = [view superview];
+    }
+}
+
+// A surface is a native view, so input on it never reaches the page. One monitor
+// on the app receives every press and every key, and AppKit reports which view
+// each is for. The result is a view rather than a point, so no coordinate is
+// converted and none can disagree with the page's frame.
+//
+// A press is answered by hitTest:. A key goes to the window's first responder,
+// which is what a page that focuses itself becomes: google.com focuses its search
+// field on load, and without this the page's model still names the surface that
+// was pressed last.
 //
 // The monitor returns the event unchanged and the view still receives it.
 static void surfaceWatchMouse(void* nsWindow) {
     NSWindow* window = (NSWindow*)nsWindow;
-    [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskLeftMouseDown
+    [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskLeftMouseDown | NSEventMaskKeyDown
                                           handler:^NSEvent*(NSEvent* event) {
         if ([event window] == window) {
             NSView* content = [window contentView];
-            NSView* view = [content hitTest:[event locationInWindow]];
-            while (view != nil && view != content) {
-                if (surfaceHit((void*)view)) {
-                    break;
+            if ([event type] == NSEventTypeLeftMouseDown) {
+                surfaceWalk([content hitTest:[event locationInWindow]], content);
+            } else {
+                NSResponder* first = [window firstResponder];
+                if ([first isKindOfClass:[NSView class]]) {
+                    surfaceWalk((NSView*)first, content);
                 }
-                view = [view superview];
             }
         }
         return event;
