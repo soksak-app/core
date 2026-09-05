@@ -100,24 +100,23 @@ type placement struct {
 }
 
 type Surfaces struct {
-	// Guards modals, which the pages this host serves read over HTTP. Views and
-	// placements are touched on the main thread only and need no lock.
-	mu sync.Mutex
+	// Guards modals, which the pages this host serves read over HTTP. Views are
+	// touched on the main thread only and need no lock.
+	mu    sync.Mutex
+	views map[string]*nativeView
 	// A surface is a native view, so a press on it never reaches the page. This
-	// is what lets a press be named.
-	views  map[string]*nativeView
-	placed []placement
-	// The page's size, which turns a point in the window into a page point.
-	viewport Viewport
-	modals   map[string]*modal
-	shells   *Shells
-	pages    *Pages
-	watch    sync.Once
+	// is what names the surface a pressed view draws.
+	named  map[uintptr]string
+	modals map[string]*modal
+	shells *Shells
+	pages  *Pages
+	watch  sync.Once
 }
 
 func NewSurfaces(shells *Shells, pages *Pages) *Surfaces {
 	return &Surfaces{
 		views:  map[string]*nativeView{},
+		named:  map[uintptr]string{},
 		modals: map[string]*modal{},
 		shells: shells,
 		pages:  pages,
@@ -212,37 +211,18 @@ func (s *Surfaces) ModalFit(id string, w, h float64) {
 // the one a person is looking at still holds its rectangle, which is what keeps
 // its layout. Where two of them cover the point the topmost answers — by layer,
 // and with those equal by the order the page declared them.
-func surfaceAt(placed []placement, x, y float64) string {
-	found := ""
-	layer := 0
-	for _, p := range placed {
-		if !p.visible || p.alpha <= 0 {
-			continue
-		}
-		if x < p.frame.X || y < p.frame.Y || x >= p.frame.X+p.frame.W || y >= p.frame.Y+p.frame.H {
-			continue
-		}
-		if found == "" || p.layer >= layer {
-			found = p.id
-			layer = p.layer
-		}
-	}
-	return found
-}
-
 // up turns a top-left y into the bottom-left one AppKit measures.
 func up(viewport Viewport, y, h float64) float64 { return viewport.H - y - h }
 
-// press tells the page which surface a press landed on. The page decides what
-// that means; here it is only named.
-func (s *Surfaces) press(x, fromBottom float64) {
-	// The monitor reports a point in the window content view, measured from the
-	// bottom left. The placements are in the page's coordinates.
-	hit := surfaceAt(s.placed, x, s.viewport.H-fromBottom)
-	if hit == "" {
-		return
+// press reports whether the view is one of the surfaces, and names it to the
+// page when it is. The page decides what a press means; here it is only named.
+func (s *Surfaces) press(view uintptr) bool {
+	id, ok := s.named[view]
+	if !ok {
+		return false
 	}
-	application.Get().Event.Emit("surface-pressed", hit)
+	application.Get().Event.Emit("surface-pressed", id)
+	return true
 }
 
 // How solid a surface is drawn. Dimming is the page's decision; this is only
@@ -302,23 +282,13 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) error {
 }
 
 func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) {
-	s.viewport = req.Viewport
-
 	wanted := map[string]bool{}
-	s.placed = s.placed[:0]
 	for _, surface := range req.Surfaces {
 		wanted[surface.ID] = true
 		w, h := max1(surface.W), max1(surface.H)
-		// The page's rect is what a press is tested against; the view takes the
-		// same rect in AppKit's coordinates.
-		page := Rect{X: surface.X, Y: surface.Y, W: w, H: h}
-		x, y := page.X, up(req.Viewport, page.Y, h)
+		x, y := surface.X, up(req.Viewport, surface.Y, h)
 
 		alpha := alphaFor(surface.Dim)
-		s.placed = append(s.placed, placement{
-			id: surface.ID, frame: page,
-			layer: surface.Layer, visible: surface.Visible, alpha: alpha,
-		})
 		if view, live := s.views[surface.ID]; live {
 			view.setFrame(x, y, w, h)
 			view.setHidden(!surface.Visible)
@@ -336,6 +306,7 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) {
 		}
 		view.setAlpha(alpha)
 		s.views[surface.ID] = view
+		s.named[view.id()] = surface.ID
 	}
 
 	// The page is the only writer of this list, so a surface missing from it is
@@ -344,6 +315,7 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) {
 		if wanted[id] {
 			continue
 		}
+		delete(s.named, view.id())
 		view.destroy()
 		delete(s.views, id)
 		s.shells.Close(id)

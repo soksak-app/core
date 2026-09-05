@@ -96,24 +96,29 @@ static void surfaceSetCornerRadius(void* handle, double radius) {
     view.layer.masksToBounds = YES;
 }
 
-// Reports where the mouse went down, in the page's own coordinates — the same
-// ones the frames are given in.
-//
-// A surface is a native view, so a press on it never reaches the page. One
-// monitor on the app sees every press, wherever it landed, including on a view
-// this app did not make and cannot reach into.
-extern void surfaceMouseDown(double x, double y);
+// Reports one view a press is for. Returns non-zero once the view is a surface,
+// and the walk up from the view that was hit stops there.
+extern int surfaceHit(void* view);
 
+// A surface is a native view, so a press on it never reaches the page. One
+// monitor on the app sees every press, and AppKit is asked which view the press
+// is for: the answer is a view, not a point, so nothing has to be converted and
+// nothing can disagree with where the page thinks a surface stands.
+//
+// The monitor returns the event unchanged and the view still receives it.
 static void surfaceWatchMouse(void* nsWindow) {
     NSWindow* window = (NSWindow*)nsWindow;
     [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskLeftMouseDown
                                           handler:^NSEvent*(NSEvent* event) {
         if ([event window] == window) {
             NSView* content = [window contentView];
-            // Reported as AppKit measures it; the page's own height turns it
-            // into a page point, and only the page knows that height.
-            NSPoint p = [content convertPoint:[event locationInWindow] fromView:nil];
-            surfaceMouseDown(p.x, p.y);
+            NSView* view = [content hitTest:[event locationInWindow]];
+            while (view != nil && view != content) {
+                if (surfaceHit((void*)view)) {
+                    break;
+                }
+                view = [view superview];
+            }
         }
         return event;
     }];
@@ -170,6 +175,9 @@ func (v *nativeView) setCornerRadius(radius float64) {
 }
 
 func (v *nativeView) destroy() { C.surfaceDestroy(v.handle) }
+
+// id names this view among the ones a press walks through.
+func (v *nativeView) id() uintptr { return uintptr(v.handle) }
 
 // watchMouse starts the monitor. Called once, when the first surface appears.
 func watchMouse(window unsafe.Pointer) { C.surfaceWatchMouse(window) }

@@ -14,14 +14,15 @@ func newNativeView(window unsafe.Pointer, url string, x, y, w, h float64, backgr
 	return nil
 }
 
-func (v *nativeView) setFrame(x, y, w, h float64) {}
-func (v *nativeView) resize(w, h float64)         {}
-func (v *nativeView) setAlpha(alpha float64)      {}
-func (v *nativeView) setHidden(hidden bool)       {}
-func (v *nativeView) raise()                      {}
-func (v *nativeView) setCornerRadius(r float64)   {}
-func (v *nativeView) destroy()                    {}
-
-func (v *nativeView) frame() (x, y, w, h float64) { return 0, 0, 0, 0 }
+func (v *nativeView) setFrame(x, y, w, h float64)    {}
+func (v *nativeView) resize(w, h float64)            {}
+func (v *nativeView) setAlpha(alpha float64)         {}
+func (v *nativeView) setHidden(hidden bool)          {}
+func (v *nativeView) raise()                         {}
+func (v *nativeView) setCornerRadius(radius float64) {}
+func (v *nativeView) destroy()                       {}
+func (v *nativeView) id() uintptr                    { return 0 }
 
 func watchMouse(window unsafe.Pointer) {}
+
+var pressed func(view uintptr) bool
