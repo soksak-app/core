@@ -10,13 +10,7 @@
   --bg:#101117;--card:#1b1d27;--fg:#ececf5;--muted:#9b9dad;
   --bd:#7279ff;--rail:#ffb36b;--focus:#ffb36b;--ok:#53dc93;--no:#ff7c7c;
   --surface:#0d1a14;--surface-fg:#7fe3b0;
-  --r:14px;--half-gap:12px;
-}
-:root[data-theme=light]{
-  color-scheme:light;
-  --bg:#eef0f7;--card:#fff;--fg:#252735;--muted:#6c6f7e;
-  --bd:#5962e8;--rail:#c06a1f;--focus:#c06a1f;--ok:#12894f;--no:#c62c2c;
-  --surface:#e8f5ee;--surface-fg:#12684a;
+  --r:14px;--half-gap:12px;--bw:1px;
 }
 *{box-sizing:border-box}
 body{margin:0;padding:20px;background:var(--bg);color:var(--fg);
@@ -40,7 +34,7 @@ input[type=color]{width:34px;height:24px;padding:0;background:var(--card);
    z 순서는 CSS가 아니라 합성이 정한다: 네이티브 표면은 OS 뷰라 CSS 스택에
    참여하지 않으므로, 시뮬레이터는 표면 레이어를 위에 두어 그것을 재현한다. */
 .card{position:absolute;z-index:1;display:grid;grid-template-rows:32px 1fr 22px;
-  min-width:0;overflow:hidden;border:1px solid var(--bd);border-radius:var(--r);
+  min-width:0;overflow:hidden;border:var(--bw) solid var(--bd);border-radius:var(--r);
   background:var(--card);outline:0}
 /* 그리드 자식의 min-width 기본값 auto 는 열을 min-content 까지 부풀리고,
    overflow:hidden 은 화면만 자를 뿐 rect 를 줄이지 않는다. 그러면 네이티브
@@ -218,7 +212,12 @@ input[type=color]{width:34px;height:24px;padding:0;background:var(--card);
     <option value="border">보더</option>
     <option value="corner">꺽쇠</option>
   </select></label>
-  <label>테마 <select id="theme"><option value="dark">dark</option><option value="light">light</option></select></label>
+  <label>테마 <select id="theme"></select></label>
+  <label>모드 <select id="mode"></select></label>
+  <label>포커스 밖 <select id="dim">
+    <option value="off">그대로</option>
+    <option value="on">흐리게</option>
+  </select></label>
   <label>여백 <input id="gap" type="range" min="0" max="24" step="1" value="12"> <output id="gapOut">12px</output></label>
   <label>커밋 지연 <input id="latency" type="range" min="0" max="600" step="50" value="0"> <output id="latOut">0ms</output></label>
   <label>적용 오차 <input id="skew" type="range" min="0" max="12" step="1" value="0"> <output id="skewOut">0px</output></label>
@@ -248,12 +247,16 @@ input[type=color]{width:34px;height:24px;padding:0;background:var(--card);
 /* 이 저장소가 방금 만든 빌드를 읽는다 — `pnpm example` 이 build 를 먼저 돌린다.
    여기서 GREEN 인 것은 이 커밋의 dist 에 대해서만 참이다. 호스트가 설치한
    것은 별개이고, 둘은 갈릴 수 있다. */
-import { Soksak, SoksakView, outline }
+import { Soksak, SoksakView, installTheme, outline }
   from "../dist/index.js";
 
 /* 브라우저가 문서와 라이브러리 중 하나만 새로 받아오면 판이 어긋난다. 그때
    나는 오류는 원인이 코드에 없으므로, 필요한 멤버가 있는지 먼저 확인하고
    없으면 무엇이 없는지 표시한다. */
+// 선과 divider 의 모양은 이 시트가 갖는다. 이 문서가 정하는 것은 색뿐이고,
+// 아래 :root 가 그 토큰을 이 문서의 색에 잇는다.
+installTheme(document);
+
 const NEEDS = ["cards", "card", "insertAt", "moveTo", "standings", "moveBoundary", "zoneAt", "splitToward"];
 {
   const probe = new Soksak(undefined, { width: 100, height: 100 });
@@ -268,13 +271,168 @@ const NEEDS = ["cards", "card", "insertAt", "moveTo", "standings", "moveBoundary
   }
 }
 
-const CARD_R = 14, HEADER = 32, FOOTER = 22;
+const HEADER = 32, FOOTER = 22;
+
+/** 카드의 모서리 반경. 테마가 정하므로 상수로 둘 수 없다. */
+const cardRadius = () =>
+  parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--r")) || 0;
 /* A host may place real native surfaces instead of the simulated ones.
    window.hostSurfaces.kinds lists the plugin kinds the host draws natively; the
    simulator skips its own surface for those. window.hostSurfaces.place receives
    every commit record so the host can position its views on the same frames.
    With no host, both are absent and the page simulates everything. */
 const hostKinds = () => window.hostSurfaces?.kinds ?? [];
+
+/* 포커스를 잃은 표면을 흐리게 할지. 표면은 카드 하나에 하나이므로 판단도
+   카드 단위다. */
+const dimmed = (cardId) =>
+  document.getElementById("dim").value === "on" && cardId !== focusedId;
+
+/* 표면은 네이티브라 그 위의 클릭이 이 문서에 닿지 않는다. 호스트가 창에서
+   받은 클릭을 표면 사각형에 대조해 알려 주면, 포커스는 카드를 눌렀을 때와
+   똑같이 움직인다 — 표면을 눌렀다고 다른 규칙이 되지는 않는다. */
+window.focusSurface = (cardId) => {
+  if (!grid.card(cardId) || focusedId === cardId) return;
+  focusedId = cardId;
+  settle();
+};
+
+/* ── 테마 ──────────────────────────────────────────────────────────────────
+   축이 둘이다. 테마는 형태와 색의 성격을 정하고, 모드는 그 테마의 밝은 쪽과
+   어두운 쪽 중 하나를 고른다. 모든 테마가 양쪽을 다 가진다 — 한쪽이 없어
+   다른 쪽으로 대신하는 경우는 없다.
+
+   형태(모서리 반경, 통로 폭, 보더 굵기)는 모드와 무관하다. 밝기가 바뀐다고
+   모서리가 바뀔 이유는 없다.
+
+   적용은 값을 루트에 심는 것이다. 표면과 모달은 각자 다른 문서라 이 문서의
+   스타일시트를 물려받지 못하므로, 호스트가 이 값들을 그대로 실어 보낸다.     */
+const THEMES = [
+  { name: "midnight", shape: { r: "14px", gap: "12px", bw: "1px" },
+    dark: { bg: "#101117", card: "#1b1d27", fg: "#ececf5", muted: "#9b9dad",
+            bd: "#7279ff", rail: "#ffb36b", focus: "#ffb36b", ok: "#53dc93",
+            no: "#ff7c7c", surface: "#0d1a14", surfaceFg: "#7fe3b0" },
+    light: { bg: "#eef0f7", card: "#ffffff", fg: "#252735", muted: "#6c6f7e",
+             bd: "#5962e8", rail: "#c06a1f", focus: "#c06a1f", ok: "#12894f",
+             no: "#c62c2c", surface: "#e8f5ee", surfaceFg: "#12684a" } },
+
+  { name: "nord", shape: { r: "8px", gap: "8px", bw: "1px" },
+    dark: { bg: "#2e3440", card: "#3b4252", fg: "#eceff4", muted: "#8b93a5",
+            bd: "#81a1c1", rail: "#ebcb8b", focus: "#88c0d0", ok: "#a3be8c",
+            no: "#bf616a", surface: "#242933", surfaceFg: "#8fbcbb" },
+    light: { bg: "#eceff4", card: "#ffffff", fg: "#2e3440", muted: "#6d7789",
+             bd: "#5e81ac", rail: "#b48a2f", focus: "#4c7899", ok: "#57734a",
+             no: "#a3454e", surface: "#e0e6ef", surfaceFg: "#3b6a63" } },
+
+  { name: "solar", shape: { r: "6px", gap: "14px", bw: "2px" },
+    dark: { bg: "#002b36", card: "#073642", fg: "#eee8d5", muted: "#93a1a1",
+            bd: "#b58900", rail: "#cb4b16", focus: "#268bd2", ok: "#859900",
+            no: "#dc322f", surface: "#012b33", surfaceFg: "#93a1a1" },
+    light: { bg: "#fdf6e3", card: "#fffdf6", fg: "#3b4a4f", muted: "#8a9599",
+             bd: "#b58900", rail: "#cb4b16", focus: "#268bd2", ok: "#859900",
+             no: "#dc322f", surface: "#f4ecd8", surfaceFg: "#586e75" } },
+
+  { name: "forest", shape: { r: "18px", gap: "12px", bw: "1px" },
+    dark: { bg: "#0e1512", card: "#16211c", fg: "#dfeee6", muted: "#7d9389",
+            bd: "#3f8f6b", rail: "#d9a441", focus: "#5fd7a0", ok: "#5fd7a0",
+            no: "#e0736d", surface: "#0a1410", surfaceFg: "#86e0b4" },
+    light: { bg: "#eef4f0", card: "#ffffff", fg: "#1f3129", muted: "#6b8378",
+             bd: "#2f7a58", rail: "#a8761f", focus: "#1f7a55", ok: "#2f8f5f",
+             no: "#b1453f", surface: "#e2eee7", surfaceFg: "#1f6a4a" } },
+
+  { name: "ember", shape: { r: "4px", gap: "6px", bw: "2px" },
+    dark: { bg: "#17100e", card: "#241916", fg: "#f3e4de", muted: "#a1877e",
+            bd: "#c4603a", rail: "#e8a33d", focus: "#ff9a5a", ok: "#9ac06a",
+            no: "#e05252", surface: "#1c1210", surfaceFg: "#ffb98a" },
+    light: { bg: "#faf0ea", card: "#fffaf6", fg: "#3a2822", muted: "#8d7268",
+             bd: "#b1552f", rail: "#a56a17", focus: "#c25a22", ok: "#5f7f43",
+             no: "#b23a3a", surface: "#f3e4da", surfaceFg: "#8a4a24" } },
+
+  { name: "slate", shape: { r: "10px", gap: "16px", bw: "1px" },
+    dark: { bg: "#15171a", card: "#1e2126", fg: "#e6e9ee", muted: "#8d939d",
+            bd: "#4a5058", rail: "#9aa3ae", focus: "#c7ced8", ok: "#6fbf8b",
+            no: "#d97070", surface: "#101215", surfaceFg: "#b9c1cc" },
+    light: { bg: "#f1f3f5", card: "#ffffff", fg: "#23282e", muted: "#6f7781",
+             bd: "#aeb6c0", rail: "#5f6a76", focus: "#3d4854", ok: "#2f8f5f",
+             no: "#b1453f", surface: "#e6e9ed", surfaceFg: "#3d4854" } },
+
+  { name: "mist", shape: { r: "16px", gap: "12px", bw: "1px" },
+    dark: { bg: "#121821", card: "#1a222d", fg: "#e2eaf2", muted: "#7f8fa1",
+            bd: "#4c6c88", rail: "#7fa9cc", focus: "#8ec5ea", ok: "#5fc39a",
+            no: "#dd7a74", surface: "#0e141b", surfaceFg: "#9ec6e0" },
+    light: { bg: "#eef2f5", card: "#f9fbfc", fg: "#2b3440", muted: "#71808f",
+             bd: "#9db4c8", rail: "#4d7ea8", focus: "#2f6f9f", ok: "#2f8f6a",
+             no: "#b8453f", surface: "#e3ebf1", surfaceFg: "#2f5d78" } },
+
+  { name: "grape", shape: { r: "20px", gap: "10px", bw: "1px" },
+    dark: { bg: "#150f1c", card: "#211829", fg: "#ece2f6", muted: "#9b8bad",
+            bd: "#8a5cd6", rail: "#e07bd0", focus: "#c39bff", ok: "#6fd3a8",
+            no: "#e4707f", surface: "#100b16", surfaceFg: "#cbb0f5" },
+    light: { bg: "#f4eefb", card: "#fdfaff", fg: "#2f2438", muted: "#7d6e8c",
+             bd: "#7a4fc0", rail: "#a8459a", focus: "#6b3fb0", ok: "#2f8f6a",
+             no: "#b6455a", surface: "#eae0f5", surfaceFg: "#5a3a8a" } },
+
+  { name: "sand", shape: { r: "2px", gap: "8px", bw: "2px" },
+    dark: { bg: "#191712", card: "#23201a", fg: "#efe9dd", muted: "#9d9384",
+            bd: "#8a7752", rail: "#c88a4a", focus: "#d7b46a", ok: "#8fae63",
+            no: "#cf6f62", surface: "#141210", surfaceFg: "#d8c9a8" },
+    light: { bg: "#f2ede4", card: "#fbf8f2", fg: "#3a352c", muted: "#8a8172",
+             bd: "#a8926b", rail: "#a35b2a", focus: "#7a5c2e", ok: "#5f7f43",
+             no: "#a8443c", surface: "#e9e2d4", surfaceFg: "#5c5140" } },
+
+  { name: "paper", shape: { r: "12px", gap: "10px", bw: "1px" },
+    dark: { bg: "#0d0d0e", card: "#171719", fg: "#e9e9ea", muted: "#8f8f93",
+            bd: "#565659", rail: "#c9a227", focus: "#e0e0e2", ok: "#6aa87a",
+            no: "#c96a6a", surface: "#0a0a0b", surfaceFg: "#c7c7ca" },
+    light: { bg: "#ffffff", card: "#fbfbfb", fg: "#1a1a1c", muted: "#6e6e73",
+             bd: "#c9c9cd", rail: "#8a6d1f", focus: "#1a1a1c", ok: "#2f7d4f",
+             no: "#b53a3a", surface: "#f2f2f3", surfaceFg: "#3a3a3d" } },
+];
+
+const MODES = ["dark", "light"];
+
+let theme = THEMES[0];
+let mode = "dark";
+
+/** 지금 걸려 있는 값들. 표면과 모달이 같은 것을 받는다. */
+function themeTokens() {
+  const c = theme[mode];
+  return {
+    "--bg": c.bg, "--card": c.card, "--fg": c.fg, "--muted": c.muted,
+    "--bd": c.bd, "--rail": c.rail, "--focus": c.focus, "--ok": c.ok,
+    "--no": c.no, "--surface": c.surface, "--surface-fg": c.surfaceFg,
+    "--r": theme.shape.r, "--half-gap": theme.shape.gap, "--bw": theme.shape.bw,
+  };
+}
+
+/* 호스트가 만드는 페이지들은 각자 다른 문서라 이 문서의 스타일시트를 물려받지
+   못한다. 그래서 값을 실어 보내고, 그쪽에서 자기 루트에 심는다. */
+window.pageTheme = () => ({ scheme: mode, tokens: themeTokens() });
+
+/**
+ * 테마와 모드를 건다.
+ *
+ * 값은 루트에 심는다 — 스타일시트를 갈아 끼우지 않으므로, 사람이 색 입력으로
+ * 고른 값이 있으면 그것이 그대로 이긴다.
+ */
+function applyTheme(name, next) {
+  theme = THEMES.find((t) => t.name === name) ?? THEMES[0];
+  mode = MODES.includes(next) ? next : mode;
+  const root = document.documentElement;
+  root.style.colorScheme = mode;
+  for (const [token, value] of Object.entries(themeTokens())) {
+    root.style.setProperty(token, value);
+  }
+  // 통로는 배치가 읽는 값이라 슬라이더와 판이 함께 따라간다.
+  const half = parseFloat(theme.shape.gap);
+  document.getElementById("gap").value = String(half);
+  document.getElementById("gapOut").value = `${half}px`;
+  if (grid) {
+    grid.gap = half * 2;
+    view.bleed = half;
+    settle();
+  }
+}
 
 const plane = document.getElementById("plane");
 const railPath = document.getElementById("railPath");
@@ -439,7 +597,10 @@ const compositor = {
       if (native.includes(s.plugin)) {
         this.surfaces.get(s.id)?.remove();
         this.surfaces.delete(s.id);
-        record.surfaces.push({ id: s.id, plugin: s.plugin, declared: s.frame, applied, visible: s.visible });
+        record.surfaces.push({
+          id: s.id, plugin: s.plugin, layer: s.layer, declared: s.frame, applied,
+          visible: s.visible, dim: dimmed(s.id),
+        });
         continue;
       }
       const el = this.surfaceEl(s.id);
@@ -451,7 +612,10 @@ const compositor = {
       // 거의 그대로여서, 매번 다시 쓰면 표면 안이 프레임마다 새로 태어난다.
       const label = `<b>${s.title}</b><br>네이티브 표면 · ${s.plugin} · layer ${s.layer}`;
       if (el.dataset.label !== label) { el.innerHTML = label; el.dataset.label = label; }
-      record.surfaces.push({ id: s.id, plugin: s.plugin, declared: s.frame, applied, visible: s.visible });
+      record.surfaces.push({
+          id: s.id, plugin: s.plugin, layer: s.layer, declared: s.frame, applied,
+          visible: s.visible, dim: dimmed(s.id),
+        });
     }
     for (const [id, el] of this.surfaces) {
       if (!record.surfaces.some((x) => x.id === id)) { el.remove(); this.surfaces.delete(id); }
@@ -1203,7 +1367,9 @@ function drawRail() {
   const rail = grid.rect(RAILS[focusedPlugin()] ?? "");
   const focused = grid.rect(focusedId);
   const rects = rail && focused ? [rail, focused] : [];
-  const shape = outline(rects, { pad, radius: CARD_R + pad, innerRadius: Math.max(4, pad) });
+  // 획은 카드에서 pad 만큼 떨어져 돈다. 카드 모서리와 동심이려면 그만큼 더
+  // 벌어진 반경이어야 하고, 그 값은 굽이의 방향과 무관하게 하나다.
+  const shape = outline(rects, { pad, radius: cardRadius() + pad });
   document.getElementById("rail").setAttribute("viewBox", `0 0 ${grid.width} ${grid.height}`);
   railPath.setAttribute("d", shape.path);
   return { shape, rects };
@@ -1439,10 +1605,25 @@ document.getElementById("focusInd").addEventListener("change", (e) => {
   document.documentElement.dataset.focusInd = e.target.value;
   view.render();
 });
+{
+  const themes = document.getElementById("theme");
+  themes.innerHTML = THEMES.map((t) => `<option value="${t.name}">${t.name}</option>`).join("");
+  themes.value = theme.name;
+  const modes = document.getElementById("mode");
+  modes.innerHTML = MODES.map((m) => `<option value="${m}">${m}</option>`).join("");
+  modes.value = mode;
+}
+
+// 사람이 고른 색이 없을 때만 테마 색을 보여주므로, 어느 축이 바뀌든 다시 읽는다.
 document.getElementById("theme").addEventListener("change", (e) => {
-  document.documentElement.dataset.theme = e.target.value;
-  showThemeColors();        // 사람이 고른 값이 없을 때만 테마 색을 보여준다
+  applyTheme(e.target.value, mode);
+  showThemeColors();
 });
+document.getElementById("mode").addEventListener("change", (e) => {
+  applyTheme(theme.name, e.target.value);
+  showThemeColors();
+});
+document.getElementById("dim").addEventListener("change", settle);
 document.getElementById("gap").addEventListener("input", (e) => {
   const half = Number(e.target.value);
   document.getElementById("gapOut").value = `${half}px`;
