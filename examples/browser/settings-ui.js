@@ -44,6 +44,11 @@ function caption(text) {
   return el;
 }
 
+/* 지금 값은 프로퍼티가 아니라 속성에 적는다.
+   호스트가 이 카드를 네이티브 뷰로 넘길 때 보내는 것은 innerHTML 이고, 직렬화
+   되는 것은 속성뿐이다. checked/selected/value 를 프로퍼티로만 적으면 사본은
+   전부 초기값으로 그려지고, 값을 바꿔도 다시 그릴 때마다 되돌아간다. */
+
 /** 고르는 것. 고른 값이 key 와 함께 돌아온다. */
 function choose(key, options, now) {
   const el = document.createElement("select");
@@ -52,7 +57,7 @@ function choose(key, options, now) {
     const o = document.createElement("option");
     o.value = v;
     o.textContent = label;
-    if (v === now) o.selected = true;
+    if (v === now) o.setAttribute("selected", "");
     el.appendChild(o);
   }
   return el;
@@ -63,7 +68,7 @@ function toggle(key, now) {
   const el = document.createElement("input");
   el.type = "checkbox";
   el.dataset.set = key;
-  el.checked = now;
+  el.toggleAttribute("checked", now);
   return el;
 }
 
@@ -76,7 +81,7 @@ function slide(key, min, max, now, unit) {
   el.dataset.set = key;
   el.min = String(min);
   el.max = String(max);
-  el.value = String(now);
+  el.setAttribute("value", String(now));
   const out = document.createElement("output");
   out.textContent = `${now}${unit}`;
   wrap.append(el, out);
