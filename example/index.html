@@ -238,7 +238,7 @@ input[type=color]{width:34px;height:24px;padding:0;background:var(--card);
 <main class="stage"><div class="plane" id="plane">
   <svg class="rail" id="rail"><path id="railPath"></path></svg>
   <div class="drop" id="drop" hidden></div>
-  <div class="picker" id="picker" hidden></div>
+  <div class="picker" id="picker" data-native-modal hidden></div>
   <div class="focus-mark" id="focusMark" hidden></div>
 </div></main>
 
@@ -270,6 +270,13 @@ const NEEDS = ["cards", "card", "insertAt", "moveTo", "standings", "moveBoundary
 }
 
 const CARD_R = 14, HEADER = 32, FOOTER = 22;
+/* A host may place real native surfaces instead of the simulated ones.
+   window.hostSurfaces.kinds lists the plugin kinds the host draws natively; the
+   simulator skips its own surface for those. window.hostSurfaces.place receives
+   every commit record so the host can position its views on the same frames.
+   With no host, both are absent and the page simulates everything. */
+const hostKinds = () => window.hostSurfaces?.kinds ?? [];
+
 const plane = document.getElementById("plane");
 const railPath = document.getElementById("railPath");
 const dropEl = document.getElementById("drop");
@@ -425,8 +432,17 @@ const compositor = {
     if (seq < this.applied) return;
     this.applied = seq;
     const record = { seq, surfaces: [] };
+    const native = hostKinds();
     for (const s of snapshot) {
       const applied = { ...s.frame, x: s.frame.x + this.skew, y: s.frame.y + this.skew };
+      // A surface the host draws natively gets no simulated element. Drawing
+      // both would put a DOM copy under the real view.
+      if (native.includes(s.plugin)) {
+        this.surfaces.get(s.id)?.remove();
+        this.surfaces.delete(s.id);
+        record.surfaces.push({ id: s.id, plugin: s.plugin, declared: s.frame, applied, visible: s.visible });
+        continue;
+      }
       const el = this.surfaceEl(s.id);
       el.style.left = `${applied.x}px`; el.style.top = `${applied.y}px`;
       el.style.width = `${applied.w}px`; el.style.height = `${applied.h}px`;
@@ -436,7 +452,7 @@ const compositor = {
       // 거의 그대로여서, 매번 다시 쓰면 표면 안이 프레임마다 새로 태어난다.
       const label = `<b>${s.title}</b><br>네이티브 표면 · ${s.plugin} · layer ${s.layer}`;
       if (el.dataset.label !== label) { el.innerHTML = label; el.dataset.label = label; }
-      record.surfaces.push({ id: s.id, declared: s.frame, applied, visible: s.visible });
+      record.surfaces.push({ id: s.id, plugin: s.plugin, declared: s.frame, applied, visible: s.visible });
     }
     for (const [id, el] of this.surfaces) {
       if (!record.surfaces.some((x) => x.id === id)) { el.remove(); this.surfaces.delete(id); }
@@ -447,6 +463,7 @@ const compositor = {
         `${s.declared.x.toFixed(2)},${s.declared.y.toFixed(2)},${s.declared.w.toFixed(2)},${s.declared.h.toFixed(2)}`;
     }
     this.latest = record;
+    window.hostSurfaces?.place?.(record);
     verify();
   },
 };
@@ -698,7 +715,18 @@ function beginTabDrag(e, cardId, tabId) {
  */
 function standInForSurfaces(on, over) {
   const host = over ? plane.getBoundingClientRect() : null;
+  const native = hostKinds();
   for (const slot of plane.querySelectorAll("[data-native-surface]")) {
+    // A surface the host draws natively shows live content: a running page, a
+    // running program. Hiding it to draw DOM on top would replace what the user
+    // is watching with a still, so it is never hidden and the DOM has to take
+    // whatever z order the compositor gives it.
+    const own = grid.card(slot.dataset.nativeSurfaceId);
+    if (native.includes(activeTab(own)?.plugin)) {
+      delete slot.dataset.nativeCaptureHidden;
+      slot.innerHTML = "";
+      continue;
+    }
     let hide = on;
     if (hide && over) {
       const r = slot.getBoundingClientRect();
@@ -736,8 +764,8 @@ let picker = null;
 
 const PICKER_ASK = {
   add: "새 탭에 무엇을 띄울까",
-  x: "왼쪽·오른쪽으로 나눈다. 새 자리에 무엇을 띄울까",
-  y: "위·아래로 나눈다. 새 자리에 무엇을 띄울까",
+  x: "새 자리에 무엇을 띄울까",
+  y: "새 자리에 무엇을 띄울까",
 };
 
 pickerEl.addEventListener("click", (e) => {
@@ -818,7 +846,16 @@ function openLayer(anchor, ask, items, pick, align = "right") {
   pickerEl.style.left = `${rect.x}px`;
   pickerEl.style.top = `${rect.y}px`;
   picker = { pick, rect };
-  standInForSurfaces(true, rect);
+  // DOM cannot be drawn over a native view, but a webview is a native view that
+  // draws DOM. A host that can raise one takes this element and draws it there,
+  // so the surfaces underneath keep running. The element is handed over whole:
+  // the host needs no knowledge of what a layer contains.
+  if (window.hostOverlay) {
+    window.hostOverlay.show(pickerEl, rect, (key) => { closePicker(); pick(key); });
+    pickerEl.hidden = true;
+  } else {
+    standInForSurfaces(true, rect);
+  }
   document.addEventListener("pointerdown", onPickerOutside, true);
   document.addEventListener("keydown", onPickerKey, true);
   (pickerEl.querySelector('.picker__item[data-active=true]') ??
@@ -831,7 +868,8 @@ function closePicker() {
   pickerEl.hidden = true;
   document.removeEventListener("pointerdown", onPickerOutside, true);
   document.removeEventListener("keydown", onPickerKey, true);
-  standInForSurfaces(false);
+  if (window.hostOverlay) window.hostOverlay.hide();
+  else standInForSurfaces(false);
 }
 
 /** + 버튼의 후속 처리. 배치는 변경하지 않고 탭만 추가한다. */
