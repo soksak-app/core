@@ -79,12 +79,28 @@ input[type=color]{width:34px;height:24px;padding:0;background:var(--card);
 .chrome__tabs{display:flex;align-items:center;gap:4px;flex:1 1 auto;min-width:0;
   overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
 .chrome__tabs::-webkit-scrollbar{display:none}
+/* 헤더 너비에 따른 세 단계.
+     strip  탭 전체를 표시한다. 넘치면 가로 스크롤한다
+     one    ≡ 와 활성 탭 1개를 표시한다
+     ham    ≡ 만 표시한다
+   단계가 내려가도 탭은 제거되지 않는다. ≡ 는 항상 탭 전체를 목록으로 표시한다. */
+.chrome__ham{display:none;place-items:center;width:20px;height:20px;padding:0;border:0;
+  flex:0 0 auto;background:transparent;color:var(--muted);border-radius:5px}
+.chrome[data-fit=one] .chrome__ham,.chrome[data-fit=ham] .chrome__ham{display:grid}
+.chrome__ham svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.3;stroke-linecap:round}
+.chrome__ham:hover{background:color-mix(in srgb,var(--bd) 26%,transparent);color:var(--fg)}
+.chrome[data-fit=one] .chrome__tabs .tab:not([data-active=true]){display:none}
+.chrome[data-fit=ham] .chrome__tabs{display:none}
 .tab{display:flex;align-items:center;gap:4px;padding:2px 6px;border-radius:6px;
   font-size:11px;color:var(--muted);cursor:grab;user-select:none;white-space:nowrap;
   flex:0 0 auto;border:1px solid transparent}
 .tab[data-active=true]{color:var(--fg);background:color-mix(in srgb,var(--bd) 20%,transparent);
   border-color:color-mix(in srgb,var(--bd) 40%,transparent)}
 .tab[data-dragging=true]{opacity:.4}
+.tab__name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+/* one 단계에서 활성 탭은 남은 너비만 사용하고 제목을 말줄임한다.
+   제목 전체가 들어갈 때만 표시하면 탭이 불필요하게 숨겨진다. */
+.chrome[data-fit=one] .tab[data-active=true]{flex:0 1 auto;min-width:0}
 .tab__x{border:0;background:transparent;color:inherit;padding:0 2px;line-height:1;font-size:11px;border-radius:4px}
 .tab__x:hover{background:color-mix(in srgb,var(--no) 35%,transparent)}
 .chrome__acts{margin-left:auto;display:flex;gap:1px;padding:1px;border-radius:7px;flex:0 0 auto;
@@ -96,6 +112,8 @@ input[type=color]{width:34px;height:24px;padding:0;background:var(--card);
 .chrome__act .half{fill:currentColor;stroke:none;opacity:.28}
 .chrome__act:hover:not(:disabled){background:color-mix(in srgb,var(--bd) 26%,transparent);color:var(--fg)}
 .chrome__act:disabled{opacity:.25;cursor:not-allowed}
+/* `[hidden]` 속성은 display:grid 를 덮지 못한다. 숨김을 여기서 명시한다. */
+.chrome__act[hidden]{display:none}
 .slot{position:relative}
 /* 상태줄은 카드가 좁아져도 한 줄이다. 줄바꿈이 나면 22px 칸 안에서 잘려
    두 번째 줄이 사라지고, 남은 첫 줄도 위로 밀려 세로 가운데를 잃는다. */
@@ -153,7 +171,8 @@ input[type=color]{width:34px;height:24px;padding:0;background:var(--card);
 
 /* 선택 레이어는 DOM 요소다. z 를 표면보다 낮게 두고 겹치는 표면만 숨긴다.
    z 를 표면보다 높이면 실제 앱에서는 표면에 가려 보이지 않는다. */
-.picker{position:absolute;z-index:41;min-width:170px;padding:4px;
+.picker{position:absolute;z-index:41;min-width:170px;max-width:260px;max-height:238px;
+  overflow-y:auto;scrollbar-width:thin;padding:4px;
   background:var(--card);border-radius:9px;
   border:1px solid color-mix(in srgb,var(--bd) 55%,transparent);
   box-shadow:0 10px 26px rgb(0 0 0 / .38)}
@@ -164,7 +183,10 @@ input[type=color]{width:34px;height:24px;padding:0;background:var(--card);
   font:inherit;font-size:12px;text-align:left}
 .picker__item svg{width:14px;height:14px;flex:0 0 auto;fill:none;stroke:currentColor;
   stroke-width:1.3;stroke-linecap:round;stroke-linejoin:round}
-.picker__item small{margin-left:auto;color:var(--muted);font-size:10px}
+.picker__name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.picker__item small{margin-left:auto;padding-left:8px;color:var(--muted);font-size:10px;flex:0 0 auto}
+.picker__item[data-active=true]{color:var(--fg);
+  background:color-mix(in srgb,var(--bd) 22%,transparent)}
 .picker__item:hover,.picker__item:focus-visible{outline:0;color:var(--fg);
   background:color-mix(in srgb,var(--bd) 30%,transparent)}
 
@@ -294,18 +316,18 @@ const focusedPlugin = () => activeTab(grid.card(focusedId))?.plugin ?? null;
 
 /* 플러그인 종류가 표면·레일·우측 세트를 결정한다. 활성 탭의 종류를 그대로
    사용하면 사용자가 의도하지 않은 종류를 생성하므로 생성 전에 종류를 묻는다. */
-const NEW_TAB = [
-  ["terminal", "터미널", ">_",
-    '<rect x="2" y="3" width="12" height="10" rx="2"/><path d="M5 6.5l2 1.75L5 10M8.5 10.25H11"/>'],
-  ["browser", "브라우저", "www",
-    '<rect x="2" y="3" width="12" height="10" rx="2"/><path d="M2 6.25h12M4.3 4.6h.01M6.1 4.6h.01"/>'],
-];
-const PLUGIN_MARK = { terminal: ">_", browser: "www" };
+const PLUGIN = {
+  terminal: { name: "터미널", mark: ">_",
+    svg: '<rect x="2" y="3" width="12" height="10" rx="2"/><path d="M5 6.5l2 1.75L5 10M8.5 10.25H11"/>' },
+  browser: { name: "브라우저", mark: "www",
+    svg: '<rect x="2" y="3" width="12" height="10" rx="2"/><path d="M2 6.25h12M4.3 4.6h.01M6.1 4.6h.01"/>' },
+};
+const NEW_TAB = ["terminal", "browser"];
 
 /** 제목 번호와 id 번호를 일치시킨다. 다르면 화면과 로그의 탭 식별이 어긋난다. */
 function newTab(plugin) {
   const t = tab(plugin, "");
-  t.title = `${PLUGIN_MARK[plugin] ?? "?"} 탭 ${seq}`;
+  t.title = `${PLUGIN[plugin]?.mark ?? "?"} 탭 ${seq}`;
   return t;
 }
 
@@ -488,11 +510,22 @@ function updateCard(el, card) {
 
   const tabs = tabsOf(card);
   const key = tabs.map((t) => `${t.id}\u0000${t.title}`).join("\u0001");
+  let ham = chrome.querySelector(".chrome__ham");
+  if (!ham) {
+    ham = document.createElement("button");
+    ham.className = "chrome__ham";
+    ham.type = "button";
+    ham.title = "탭 목록";
+    ham.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true">' +
+      '<path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/></svg>';
+    ham.addEventListener("click", () => openTabList(ham, el.dataset.cardId));
+    chrome.insertBefore(ham, chrome.firstChild);
+  }
   let strip = chrome.querySelector(".chrome__tabs");
   if (!strip) {
     strip = document.createElement("div");
     strip.className = "chrome__tabs";
-    chrome.insertBefore(strip, chrome.firstChild);   // 도구는 늘 띠 뒤에 선다
+    ham.after(strip);                                 // ≡, 탭 목록, 도구 순으로 배치한다
   }
   let acts = chrome.querySelector(".chrome__acts");
 
@@ -504,7 +537,10 @@ function updateCard(el, card) {
       b.className = "tab";
       b.dataset.tabId = t.id;
       b.draggable = false;
-      b.innerHTML = `${t.title}<button class="tab__x" title="닫기">&#10005;</button>`;
+      // 제목은 `textContent` 로 설정한다. 사용자 입력을 마크업으로 해석하지 않는다.
+      b.innerHTML = '<span class="tab__name"></span>' +
+        '<button class="tab__x" title="닫기">&#10005;</button>';
+      b.querySelector(".tab__name").textContent = t.title;
       b.addEventListener("pointerdown", (e) => {
         if (e.target.closest(".tab__x")) return;
         const own = grid.card(el.dataset.cardId);
@@ -698,14 +734,6 @@ function standInForSurfaces(on, over) {
 
 let picker = null;
 
-pickerEl.innerHTML =
-  '<div class="picker__head">새 탭에 무엇을 띄울까</div>' +
-  NEW_TAB.map(([plugin, name, mark, svg]) =>
-    `<button class="picker__item" type="button" data-plugin="${plugin}">` +
-    `<svg viewBox="0 0 16 16" aria-hidden="true">${svg}</svg>${name}` +
-    `<small>${mark}</small></button>`).join("");
-
-const pickerHead = pickerEl.querySelector(".picker__head");
 const PICKER_ASK = {
   add: "새 탭에 무엇을 띄울까",
   x: "왼쪽·오른쪽으로 나눈다. 새 자리에 무엇을 띄울까",
@@ -715,10 +743,9 @@ const PICKER_ASK = {
 pickerEl.addEventListener("click", (e) => {
   const item = e.target.closest(".picker__item");
   if (!item || !picker) return;
-  const { what, cardId } = picker;
+  const { pick } = picker, key = item.dataset.key;
   closePicker();
-  if (what === "add") addTab(cardId, item.dataset.plugin);
-  else splitWith(cardId, what, item.dataset.plugin);
+  pick(key);
 });
 
 const onPickerOutside = (e) => { if (!pickerEl.contains(e.target)) closePicker(); };
@@ -728,11 +755,54 @@ const onPickerKey = (e) => {
   closePicker();
 };
 
-/** 누른 버튼 아래에 세우되 판 안으로 물린다 — 판 밖은 그릴 수 없는 자리다. */
+/** 새 탭의 종류를 묻는다. + 와 쪼개기가 공용으로 사용한다. */
 function openPicker(anchor, what, cardId) {
+  openLayer(anchor, PICKER_ASK[what] ?? PICKER_ASK.add,
+    NEW_TAB.map((k) => ({ key: k, name: PLUGIN[k].name, mark: PLUGIN[k].mark, svg: PLUGIN[k].svg })),
+    (k) => (what === "add" ? addTab(cardId, k) : splitWith(cardId, what, k)));
+}
+
+/** 활성화할 탭을 묻는다. 헤더가 접혔을 때 탭 목록을 여기에 표시한다. */
+function openTabList(anchor, cardId) {
+  const card = grid.card(cardId);
+  if (!card?.data) return;
+  openLayer(anchor, `탭 ${tabsOf(card).length}개`, tabsOf(card).map((t) => ({
+    key: t.id, name: t.title, mark: PLUGIN[t.plugin]?.mark ?? "", svg: PLUGIN[t.plugin]?.svg ?? "",
+    active: t.id === card.data.activeId,
+  })), (id) => {
+    const c = grid.card(cardId);
+    if (!c?.data || !tabsOf(c).some((t) => t.id === id)) return;
+    c.data.activeId = id;
+    focusedId = cardId;
+    settle();
+  }, "left");
+}
+
+/**
+ * 기준 버튼 아래에 배치하고 판 경계 안으로 제한한다. 판 밖은 표시할 수 없다.
+ *
+ * 항목 이름은 `textContent` 로 설정한다. 탭 제목은 사용자 입력이므로 마크업으로
+ * 연결하면 제목이 레이어 구조를 변경할 수 있다.
+ */
+function openLayer(anchor, ask, items, pick, align = "right") {
   closePicker();
-  // 폭은 물음이 정한다 — 재기 전에 적어야 레이어가 자기 자리를 안다.
-  pickerHead.textContent = PICKER_ASK[what] ?? PICKER_ASK.add;
+  pickerEl.textContent = "";
+  const head = document.createElement("div");
+  head.className = "picker__head";
+  head.textContent = ask;                  // 레이어 너비를 측정하기 전에 설정한다
+  pickerEl.appendChild(head);
+  for (const it of items) {
+    const b = document.createElement("button");
+    b.className = "picker__item";
+    b.type = "button";
+    b.dataset.key = it.key;
+    b.dataset.active = String(!!it.active);
+    b.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true">${it.svg}</svg>` +
+      `<span class="picker__name"></span><small></small>`;
+    b.querySelector(".picker__name").textContent = it.name;
+    b.querySelector("small").textContent = it.mark;
+    pickerEl.appendChild(b);
+  }
   const host = plane.getBoundingClientRect();
   pickerEl.style.left = "0px";
   pickerEl.style.top = "0px";
@@ -741,17 +811,18 @@ function openPicker(anchor, what, cardId) {
   const a = anchor.getBoundingClientRect();
   const fit = (v, span, room) => Math.max(2, Math.min(v, room - span - 2));
   const rect = {
-    x: fit(a.right - host.left - p.width, p.width, host.width),
+    x: fit(align === "left" ? a.left - host.left : a.right - host.left - p.width, p.width, host.width),
     y: fit(a.bottom - host.top + 5, p.height, host.height),
     w: p.width, h: p.height,
   };
   pickerEl.style.left = `${rect.x}px`;
   pickerEl.style.top = `${rect.y}px`;
-  picker = { what, cardId, rect };
+  picker = { pick, rect };
   standInForSurfaces(true, rect);
   document.addEventListener("pointerdown", onPickerOutside, true);
   document.addEventListener("keydown", onPickerKey, true);
-  pickerEl.querySelector(".picker__item")?.focus();
+  (pickerEl.querySelector('.picker__item[data-active=true]') ??
+   pickerEl.querySelector(".picker__item"))?.focus();
 }
 
 function closePicker() {
@@ -1011,13 +1082,52 @@ function centreTab(strip, activeId) {
   }, SLIDE_MS));
 }
 
+/**
+ * 헤더 너비를 측정해 표시 단계를 결정한다.
+ *
+ * 측정 전에 strip 단계로 되돌려 모든 탭을 표시한다. 접힌 상태로 측정하면 접힌
+ * 너비를 얻고, 그 값으로 단계를 다시 정하면 한 번 접힌 헤더가 넓어져도 복귀하지
+ * 못한다. 두 번의 쓰기 사이에는 렌더링이 일어나지 않으므로 화면에 나타나지 않는다.
+ *
+ * 도구 버튼은 비활성인 것부터 숨긴다. 96px 카드는 절반이 최소 너비보다 작아
+ * 쪼갤 수 없고, 그래서 쪼개기 버튼은 이미 비활성이다.
+ */
+// PEEK    strip 단계를 유지하는 데 필요한 활성 탭 외 여유 너비
+// MIN_TAB 말줄임한 활성 탭의 최소 너비. 이보다 좁으면 ham 단계로 내려간다
+const HAM_W = 20, GAP = 4, PEEK = 56, MIN_TAB = 48;
+
+function fitChrome(chrome, strip) {
+  const acts = chrome.querySelector(".chrome__acts");
+  if (!acts) return;
+  chrome.dataset.fit = "strip";
+  const inner = chrome.clientWidth - GAP * 2;          // .chrome 좌우 padding 제외
+  const all = [...acts.children];
+  for (const b of all) b.hidden = false;
+  const wide = acts.getBoundingClientRect().width;
+  const tight = inner - wide < HAM_W + GAP;
+  if (tight) for (const b of all) b.hidden = b.disabled;
+  const room = inner - (tight ? acts.getBoundingClientRect().width : wide) - GAP;
+
+  const tabs = [...strip.querySelectorAll(".tab")];
+  const active = strip.querySelector(".tab[data-active=true]");
+  const activeW = active ? active.getBoundingClientRect().width : 0;
+  const whole = tabs.reduce((n, t) => n + t.getBoundingClientRect().width, 0)
+    + Math.max(0, tabs.length - 1) * GAP;
+  // 탭 전체가 들어가면 접지 않는다. 넘쳐도 활성 탭과 여유 너비가 있으면 strip 을 유지한다.
+  chrome.dataset.fit = room >= Math.min(whole, activeW + PEEK) ? "strip"
+    : room >= HAM_W + GAP + Math.min(activeW, MIN_TAB) ? "one"
+    : "ham";
+}
+
 /* 렌더 완료 후에 측정한다. 너비가 갱신되기 전에 재면 잘못된 위치를 계산한다.
    탭 드래그 중에는 스크롤하지 않는다. 드래그 중인 탭의 좌표가 어긋난다. */
 function centreTabs() {
-  if (tabDrag) return;
   for (const strip of plane.querySelectorAll(".chrome__tabs")) {
-    const id = strip.closest(".card")?.dataset.cardId;
-    centreTab(strip, grid.card(id)?.data?.activeId);
+    const chrome = strip.parentElement;
+    const card = grid.card(strip.closest(".card")?.dataset.cardId);
+    if (!card?.data) continue;
+    fitChrome(chrome, strip);
+    if (!tabDrag) centreTab(strip, card.data.activeId);
   }
 }
 
