@@ -16,11 +16,13 @@ import {
   MODES, THEMES, applyTheme, halfGap, link, linkedId, modeName, set, sets, themeName, value,
 } from "./settings.js";
 
-const card = document.getElementById("settings");
-const nav = document.getElementById("settingsNav");
-const body = document.getElementById("settingsBody");
+/* 열려 있는 동안에만 있는 것들. 닫으면 사라진다 — 숨겨 두면 그 요소가 언제
+   보이는지가 CSS 의 사정이 되고, 실제로 그렇게 새어 나왔다. */
+let card = null;
+let nav = null;
+let body = null;
 
-/** 지금 열려 있는 절. */
+/** 지금 열려 있는 절. 닫아도 기억해 두었다가 다시 열 때 그 절로 연다. */
 let here = "general";
 
 /** 「이름 + 조작」 한 줄. */
@@ -153,9 +155,36 @@ const SECTIONS = [
   ["compositing", "합성", drawCompositing],
 ];
 
+/** 카드 한 장. 열 때 만든다. */
+function makeCard() {
+  const el = document.createElement("div");
+  el.className = "set-card";
+  el.id = "settings";
+  el.dataset.nativeModal = "";
+  el.innerHTML =
+    '<header class="set-card__head">' +
+      '<span class="set-grip">⠿</span>' +
+      '<span class="set-card__title">설정</span>' +
+      `<button class="act" type="button" data-key="close" title="닫는다">${icon("close")}</button>` +
+    '</header>' +
+    '<div class="set-card__body">' +
+      '<nav class="set-card__nav"></nav>' +
+      '<div class="set-card__pane"></div>' +
+    '</div>';
+  el.addEventListener("click", (e) => {
+    const hit = e.target.closest("[data-key]");
+    if (hit) answer(hit.dataset.key, "");
+  });
+  el.addEventListener("change", (e) => {
+    const c = e.target.closest("[data-set]");
+    if (c) answer(c.dataset.set, c.type === "checkbox" ? String(c.checked) : c.value);
+  });
+  return el;
+}
+
 /** 카드를 다시 그리고, 열려 있으면 그 뷰에도 새 내용을 준다. */
 export function drawSettings() {
-  if (!open_) return;
+  if (!card) return;
   nav.textContent = "";
   for (const [id, name] of SECTIONS) {
     const b = document.createElement("button");
@@ -192,43 +221,40 @@ function answer(key, val) {
     : typeof now === "number" ? Number(val) : val });
 }
 
-let open_ = false;
-
 /** 모달이 열려 있는가. */
-export const settingsOpen = () => open_;
+export const settingsOpen = () => card !== null;
 
 /** 연다. 호스트가 있으면 그 뷰가 표면들 위에 그리고, 없으면 여기서 그린다. */
 export function openSettings() {
-  open_ = true;
-  card.hidden = false;
+  if (card) return;
+  card = makeCard();
+  document.body.appendChild(card);
+  nav = card.querySelector(".set-card__nav");
+  body = card.querySelector(".set-card__pane");
   drawSettings();
+
   const plane = document.getElementById("plane").getBoundingClientRect();
   const r = card.getBoundingClientRect();
   const rect = { x: r.left - plane.left, y: r.top - plane.top, w: r.width, h: r.height };
   if (window.hostOverlay) {
+    // 호스트가 그리므로 이 문서에서는 자리를 차지하지 않는다. 요소는 남는다 —
+    // 내용이 바뀌면 그 요소를 다시 읽어 뷰에 준다.
+    card.style.display = "none";
     window.hostOverlay.show(card, rect, answer);
-    card.hidden = true;
   } else {
     standIn(true, rect);
   }
 }
 
-/** 닫는다. */
+/** 닫는다. 카드는 사라진다. */
 export function closeSettings() {
-  if (!open_) return;
-  open_ = false;
-  card.hidden = true;
+  if (!card) return;
   if (window.hostOverlay) window.hostOverlay.hide();
   else standIn(false);
+  card.remove();
+  card = null;
+  nav = null;
+  body = null;
 }
 
-/* 호스트가 없을 때는 이 요소가 그대로 화면에 있으므로, 같은 답을 여기서 모은다. */
-card.addEventListener("click", (e) => {
-  const hit = e.target.closest("[data-key]");
-  if (hit) answer(hit.dataset.key, "");
-});
-card.addEventListener("change", (e) => {
-  const el = e.target.closest("[data-set]");
-  if (el) answer(el.dataset.set, el.type === "checkbox" ? String(el.checked) : el.value);
-});
 addEventListener("keydown", (e) => { if (e.key === "Escape") closeSettings(); });

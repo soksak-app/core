@@ -319,24 +319,6 @@ h1{margin:0;padding:8px 12px 4px;font-size:13px}
   </div>
 </div>
 
-<!-- 설정 모달. 판 위에 뜨고, 열려 있는 동안 표면은 물러난다. -->
-<!-- 설정. [data-native-modal] 이므로 앱에서는 호스트가 자기 뷰로 옮겨 표면들
-     위에 그린다. 그 뷰는 이 요소의 사본이라, 조작은 전부 data-key 를 달고
-     답은 하나로 온다. -->
-<div class="set-card" id="settings" data-native-modal hidden>
-  <header class="set-card__head">
-    <span class="set-grip">⠿</span>
-    <span class="set-card__title">설정</span>
-    <button class="act" type="button" data-key="close" title="닫는다">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-    </button>
-  </header>
-  <div class="set-card__body">
-    <nav class="set-card__nav" id="settingsNav"></nav>
-    <div class="set-card__pane" id="settingsBody"></div>
-  </div>
-</div>
-
 <h1>Card / Rail — Wails 적용 전 시뮬레이터</h1>
 <p class="lede">배치는 <code>soksak</code> 라이브러리가 소유한다. 사이드바·레일·터미널이 모두 같은 카드이고,
 역할만 다르다 — 몫을 받는가 px를 받는가, 옮겨지는가 아닌가. 이 문서는 그 위에 네이티브 합성의 제약을 재현한다:
