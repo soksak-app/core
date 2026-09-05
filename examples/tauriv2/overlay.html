@@ -64,7 +64,7 @@
 
   // The view is kept between showings, so the content arrives twice over: once
   // when it first loads, and by event every time after that.
-  const id = new URLSearchParams(location.search).get("id") ?? "modal";
+  const id = new URLSearchParams(location.search).get("id");
   invoke("overlay_content", { id }).then(render);
   listen("overlay-content", (e) => render(e.payload));
 

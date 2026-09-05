@@ -133,7 +133,11 @@ function install(call) {
       const id = shown;
       shown = null;
       pick = null;
-      if (id) call.ByName(`${SERVICE}.OverlayHide`, id).catch(() => {});
+      if (id) {
+        call.ByName(`${SERVICE}.OverlayHide`, id).catch((e) =>
+          console.error("OverlayHide", e),
+        );
+      }
     },
   };
 }

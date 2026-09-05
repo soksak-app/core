@@ -96,11 +96,6 @@ if (!invoke) {
     },
   };
 
-  // A modal's view is built when the modal opens, and a webview is white until
-  // its document is fetched and painted. Asking for that document now puts it in
-  // the cache, so the fetch the first modal makes has nothing to wait for.
-  fetch("overlay.html").catch(() => {});
-
   let pick = null;
   let shown = null;
   listen("overlay-pick", (e) => {
@@ -112,11 +107,14 @@ if (!invoke) {
   window.hostOverlay = {
     show(el, rect, onPick) {
       pick = onPick;
-      shown = el.id || "modal";
+      // The view is named after the element, so an element without an id has
+      // no name. Two of them would share one view.
+      if (!el.id) throw new Error("a [data-native-modal] element needs an id");
+      shown = el.id;
       const style = getComputedStyle(el);
       invoke("overlay_show", {
         request: {
-          id: el.id || "modal",
+          id: el.id,
           viewport: viewport(),
           rect: toPage(rect),
           className: el.className,
