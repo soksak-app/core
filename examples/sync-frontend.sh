@@ -2,11 +2,11 @@
 # Builds the frontend directory of each example app from the repository root.
 #
 # Wails roots its asset FS at the directory that holds index.html, so index.html
-# must sit at the frontend root. The repository example lives in example/ and
-# imports ../dist/index.js, so the copy is placed at the root and its import is
-# rewritten to ./dist/index.js.
+# must sit at the frontend root. The page lives in examples/browser/ and imports
+# ../dist/index.js, so the copy is placed at the root and its import is rewritten
+# to ./dist/index.js.
 #
-# Each app also gets its own host.js, injected as a classic script. The example's
+# Each app also gets its own host.js, injected as a classic script. The page's
 # own script is a module and therefore deferred, so host.js always runs first and
 # window.hostSurfaces is set before the first commit.
 set -eu
@@ -29,7 +29,7 @@ build() {
   APP=$app OUT=$out ROOT=$root python3 - <<'PY'
 import io, os, sys
 root, out, app = os.environ["ROOT"], os.environ["OUT"], os.environ["APP"]
-s = io.open(f"{root}/example/index.html", encoding="utf-8").read()
+s = io.open(f"{root}/examples/browser/index.html", encoding="utf-8").read()
 
 old = 'from "../dist/index.js"'
 if s.count(old) != 1:

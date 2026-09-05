@@ -1,11 +1,18 @@
 # Examples
 
-Two applications running the same page as `example/index.html`, each with the
-surfaces drawn by native views of its own.
+## browser
 
-The page is shared. `sync-frontend.sh` builds each application's `frontend/`
-from `example/index.html` and the library's `dist/`, so a change to either has
-to be synced before a build:
+`browser/index.html` is the page. It runs on its own in a browser, where the
+surfaces are simulated, and it is the page both applications below run.
+
+    pnpm example        # builds dist/ and serves this directory on :8749
+
+## The applications
+
+Each draws the surfaces with native views of its own. The page is shared:
+`sync-frontend.sh` builds each application's `frontend/` from
+`browser/index.html` and the library's `dist/`, so a change to either has to be
+synced before a build:
 
     ./examples/sync-frontend.sh
 
