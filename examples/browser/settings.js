@@ -233,10 +233,6 @@ export function linkedSet(place, plugin) {
   return set;
 }
 
-/** 레일이 서는 종류들. 레일 자리에 세트가 걸린 플러그인만 레일을 갖는다. */
-export const railedPlugins = () =>
-  settings.links.filter((l) => l.place === "rail").map((l) => l.plugin);
-
 /** 지금 걸린 테마의 이름과 모드. 배선이 select 를 맞출 때 읽는다. */
 export const themeName = () => settings.theme;
 export const modeName = () => settings.mode;
