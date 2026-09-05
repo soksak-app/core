@@ -18,6 +18,7 @@ import {
 
 /* 열려 있는 동안에만 있는 것들. 닫으면 사라진다 — 숨겨 두면 그 요소가 언제
    보이는지가 CSS 의 사정이 되고, 실제로 그렇게 새어 나왔다. */
+let scrim = null;
 let card = null;
 let nav = null;
 let body = null;
@@ -226,14 +227,30 @@ function answer(key, val) {
     : typeof now === "number" ? Number(val) : val });
 }
 
-/** 모달이 열려 있는가. */
-export const settingsOpen = () => card !== null;
+/**
+ * 카드 밖을 누르면 닫는다.
+ *
+ * 막을 누른 것도, 네이티브 표면을 누른 것도 같은 하나의 누름으로 온다: 표면은
+ * OS 뷰라 그 위의 누름이 이 문서에 닿지 않지만, 호스트가 알려 주면 판이 그
+ * 표면의 자리 요소에서 pointerdown 을 낸다(plane.js 의 pressSurface). 그래서
+ * 「어디를 눌렀나」를 조건으로 따지지 않고 카드 안인지만 본다.
+ */
+function pressedOutside(e) {
+  if (!e.target.closest(".set-card")) closeSettings();
+}
 
 /** 연다. 호스트가 있으면 그 뷰가 표면들 위에 그리고, 없으면 여기서 그린다. */
 export function openSettings() {
   if (card) return;
+  // 막이 먼저다. 모달이 열린 동안 판은 누름을 받지 않는다 — 막이 없으면 카드
+  // 옆의 divider 가 그대로 끌린다. 호스트가 카드를 가져가면 이 문서에 남는 것은
+  // 막뿐이고, 막이 하는 일은 그때도 같다.
+  scrim = document.createElement("div");
+  scrim.className = "set-scrim";
   card = makeCard();
-  document.body.appendChild(card);
+  scrim.appendChild(card);
+  document.body.appendChild(scrim);
+  document.addEventListener("pointerdown", pressedOutside);
   nav = card.querySelector(".set-card__nav");
   body = card.querySelector(".set-card__pane");
   drawSettings();
@@ -251,12 +268,14 @@ export function openSettings() {
   }
 }
 
-/** 닫는다. 카드는 사라진다. */
-export function closeSettings() {
+/** 닫는다. 막과 카드는 사라진다. */
+function closeSettings() {
   if (!card) return;
+  document.removeEventListener("pointerdown", pressedOutside);
   if (window.hostOverlay) window.hostOverlay.hide();
   else standIn(false);
-  card.remove();
+  scrim.remove();
+  scrim = null;
   card = null;
   nav = null;
   body = null;

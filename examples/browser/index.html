@@ -87,8 +87,13 @@ body{margin:0;background:var(--bg);color:var(--fg);
 .rail-projects .bar-tab__x{display:none}
 .rail-projects .bar-tab--add{width:100%;height:24px;justify-content:center}
 
-/* 설정 모달 — 520px 카드. 판 위를 덮으므로 잡이로 옮길 수 있다. */
-.set-card{position:absolute;left:50%;top:80px;transform:translateX(-50%);z-index:200;
+/* 설정 모달 — 판 전체를 덮는 막과 그 안의 520px 카드.
+   막이 있어야 모달이 열린 동안 뒤의 divider 를 끌 수 없다.
+   구 프로젝트의 .dmodal-overlay 는 여기에 rgba(0,0,0,.15) 를 칠하지만, 여기서는
+   칠하지 않는다: 네이티브 표면은 이 문서 위에 합성되므로 막이 어둡게 만드는
+   것은 화면의 절반뿐이고, 반만 어두운 것은 어둡지 않은 것보다 나쁘다. */
+.set-scrim{position:fixed;inset:0;z-index:200}
+.set-card{position:absolute;left:50%;top:80px;transform:translateX(-50%);
   width:520px;max-height:70vh;display:flex;flex-direction:column;
   border:var(--bw) solid var(--bd);border-radius:12px;background:var(--card);
   box-shadow:0 18px 48px rgb(0 0 0 / .35)}
@@ -374,7 +379,7 @@ import { verify } from "./verify.js";
 import * as projects from "./projects.js";
 
 /* 사이드바를 어디에 걸지 고르는 줄. 자리 목록은 등록된 플러그인이 정한다. */
-import { closeSettings, drawSettings, openSettings, settingsOpen } from "./settings-ui.js";
+import { drawSettings, openSettings } from "./settings-ui.js";
 import { icon } from "./icons.js";
 import { adopt, capture, fresh } from "./plane.js";
 
@@ -559,8 +564,9 @@ function drawBars() {
     act("panel-right", "우측 자리", value("right"), () => set({ right: !value("right") })),
     act(modeName() === "dark" ? "sun" : "moon", "밝게 / 어둡게", false,
         () => applyTheme(themeName(), modeName() === "dark" ? "light" : "dark")),
-    act("settings", "설정", settingsOpen(),
-        () => { settingsOpen() ? closeSettings() : openSettings(); drawBars(); }),
+    // 열려 있는 동안에는 막이 이 버튼을 덮으므로 다시 눌리지 않는다. 켜짐을
+    // 표시하지도 않는다 — 구 프로젝트의 settings-toggle 도 그렇다.
+    act("settings", "설정", false, openSettings),
   );
 }
 
