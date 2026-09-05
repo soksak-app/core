@@ -860,8 +860,11 @@ function drawRail() {
   const focused = grid.rect(focusedId);
   const rects = rail && focused ? [rail, focused] : [];
   // 획은 카드에서 pad 만큼 떨어진 경로를 그린다. 카드 모서리와 동심이려면 반경도
-  // 그만큼 커야 하고, 그 값은 방향과 무관하게 하나다.
-  const shape = outline(rects, { pad, radius: cardRadius() + pad });
+  // 그만큼 커야 하고, 그 값은 방향과 무관하게 하나다. 각진 카드의 동심 외곽선은
+  // 각지다. pad 를 더하면 반경이 0 보다 커져 모서리가 깎이고, 그 경사 때문에 가로
+  // 변의 두 끝이 서로 다른 줄에 놓인다.
+  const corner = cardRadius();
+  const shape = outline(rects, { pad, radius: corner === 0 ? 0 : corner + pad });
   document.getElementById("rail").setAttribute("viewBox", `0 0 ${grid.width} ${grid.height}`);
   railPath.setAttribute("d", shape.path);
   return { shape, rects };

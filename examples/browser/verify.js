@@ -7,6 +7,7 @@
 import { latest } from "./compositor.js";
 import { currentGrid, currentView, drawRail, plane, tabsOf } from "./plane.js";
 import { isPlace, railKind } from "./plugins/registry.js";
+import { cardRadius } from "./settings.js";
 
 /** 두 사각형의 최대 차이를 반환한다. 하나라도 없으면 비교하지 않는다. */
 const maxDelta = (a, b) =>
@@ -36,8 +37,14 @@ export function verify() {
     const dy = Math.max(b.y - (a.y + a.h), a.y - (b.y + b.h));
     return (Math.abs(dx - grid.gap) < .5 && dy < -.5) || (Math.abs(dy - grid.gap) < .5 && dx < -.5);
   })();
-  add("V0 레일 외곽선", shape.sharp === 0 && shape.loops.length === (adjacent ? 1 : railRects.length),
-      `${shape.loops.length}개 루프 · ${shape.corners}꼭짓점 전부 라운드 · ${adjacent ? "인접" : "떨어짐"}`);
+  // 외곽선은 카드와 동심이므로 카드가 각지면 외곽선도 각지다. 꼭짓점은 전부 라운드
+  // 이거나 전부 각지고, 섞이면 한 모서리만 다른 모양이라는 뜻이다.
+  const square = cardRadius() === 0;
+  add("V0 레일 외곽선",
+      shape.sharp === (square ? shape.corners : 0) &&
+      shape.loops.length === (adjacent ? 1 : railRects.length),
+      `${shape.loops.length}개 루프 · ${shape.corners}꼭짓점 중 ${shape.sharp} 각짐 · ` +
+      `카드 ${square ? "각짐" : "라운드"} · ${adjacent ? "인접" : "떨어짐"}`);
 
   // V1 — 같은 선을 읽는 카드의 경계가 정확히 같다 (허용오차 없음)
   let drift = 0;
