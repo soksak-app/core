@@ -15,6 +15,7 @@ mod native;
 mod shell;
 
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 use std::sync::Mutex;
 
 use serde::Deserialize;
@@ -41,6 +42,8 @@ struct Surface {
     w: f64,
     h: f64,
     visible: bool,
+    /// Whether this surface is asked to stand back, which the page decides.
+    dim: bool,
 }
 
 /// The page viewport in CSS pixels, used to convert page coordinates into the
@@ -94,12 +97,48 @@ fn inset(window: &Window, viewport: &Viewport) -> Result<(f64, f64), String> {
     ))
 }
 
+/// Starts watching the window for presses, once.
+///
+/// A press on a surface is delivered to that surface's view and never to the
+/// page, so the window is monitored instead and the surface id is sent to the
+/// page. Only macOS is implemented; native.rs names the other platforms.
+#[allow(unused_variables)]
+fn watch_presses(
+    window: &Window,
+    views: &State<'_, Views>,
+    watching: &State<'_, Watching>,
+) -> Result<(), String> {
+    let mut started = watching.0.lock().map_err(|e| e.to_string())?;
+    if *started {
+        return Ok(());
+    }
+    *started = true;
+
+    #[cfg(target_os = "macos")]
+    {
+        let named = views.0.clone();
+        let host = window.clone();
+        let handle = window.ns_window().map_err(|e| e.to_string())?;
+        native::watch_mouse(handle, move |chain| {
+            let Ok(map) = named.lock() else { return };
+            let Some(id) = chain.iter().find_map(|view| map.get(view)) else {
+                return;
+            };
+            let _ = host.emit("surface-pressed", id.clone());
+        });
+    }
+    Ok(())
+}
+
 #[tauri::command]
 fn sync_surfaces(
     window: Window,
     shells: State<'_, shell::Shells>,
+    views: State<'_, Views>,
+    watching: State<'_, Watching>,
     request: SyncRequest,
 ) -> Result<Vec<String>, String> {
+    watch_presses(&window, &views, &watching)?;
     let (inset_x, inset_y) = inset(&window, &request.viewport)?;
 
     let mut wanted: HashSet<String> = HashSet::new();
@@ -114,6 +153,7 @@ fn sync_surfaces(
         let visible = s.visible && s.w >= 1.0 && s.h >= 1.0;
         let position = LogicalPosition::new(s.x + inset_x, s.y + inset_y);
         let size = LogicalSize::new(s.w.max(1.0), s.h.max(1.0));
+        let solid = if s.dim { 0.45 } else { 1.0 };
 
         if let Some(webview) = window.get_webview(&label) {
             webview.set_position(position).map_err(|e| e.to_string())?;
@@ -123,6 +163,9 @@ fn sync_surfaces(
             } else {
                 webview.hide().map_err(|e| e.to_string())?;
             }
+            webview
+                .with_webview(move |platform| native::alpha(&platform, solid))
+                .map_err(|e| e.to_string())?;
             continue;
         }
 
@@ -136,7 +179,19 @@ fn sync_surfaces(
         window
             .add_child(builder, position, size)
             .map_err(|e| e.to_string())?;
-        created.push(label);
+        if let Some(webview) = window.get_webview(&label) {
+            let named = views.0.clone();
+            let id = s.id.clone();
+            webview
+                .with_webview(move |platform| {
+                    native::alpha(&platform, solid);
+                    if let Ok(mut map) = named.lock() {
+                        map.insert(native::view_id(&platform), id);
+                    }
+                })
+                .map_err(|e| e.to_string())?;
+        }
+        created.push(label.clone());
     }
 
     // The page is the only writer of this list, so a surface missing from it is
@@ -209,6 +264,14 @@ struct Overlay {
 /// The theme last declared by the page.
 #[derive(Default)]
 struct CurrentTheme(Mutex<Theme>);
+
+/// The view each surface draws in, so a press can be matched to one.
+#[derive(Default)]
+struct Views(Arc<Mutex<HashMap<usize, String>>>);
+
+/// Whether the window is already watched for presses.
+#[derive(Default)]
+struct Watching(Mutex<bool>);
 
 /// One view per modal element, named after it, so a page may have several.
 fn modal_label(id: &str) -> String {
@@ -374,6 +437,8 @@ fn main() {
     tauri::Builder::default()
         .manage(Overlay::default())
         .manage(CurrentTheme::default())
+        .manage(Views::default())
+        .manage(Watching::default())
         .manage(shell::Shells::default())
         .invoke_handler(tauri::generate_handler![
             sync_surfaces,

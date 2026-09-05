@@ -101,6 +101,11 @@ if (!invoke) {
     },
   };
 
+  // A surface is a native view, so a press on it never reaches this document.
+  // The app names the surface and the page presses it, which is what everything
+  // listening for a press already understands.
+  listen("surface-pressed", (e) => window.pressSurface(e.payload));
+
   let pick = null;
   let shown = null;
   listen("overlay-pick", (e) => {
