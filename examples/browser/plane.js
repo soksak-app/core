@@ -9,6 +9,7 @@ import { Soksak, SoksakView, outline } from "/dist/index.js";
 import { cardRadius, halfGap, linkedSet, value } from "./settings.js";
 import { isPlace, plugin, plugins, railId, railKind, section } from "./plugins/registry.js";
 import { standIn } from "./compositor.js";
+import { issueId } from "./ids.js";
 
 const NEEDS = ["cards", "card", "insertAt", "moveTo", "standings", "moveBoundary", "zoneAt", "splitToward"];
 {
@@ -57,8 +58,14 @@ const pickerEl = document.getElementById("picker");
 
 // 레일이 물러나는 것은 닫는 것이므로 폭이 카드와 함께 사라진다. 사람이 드래그로
 // 정한 폭은 그 사람의 결정이므로, 판이 종류별로 기억해 두었다가 다시 설 때 그
-// 폭으로 세운다. 설정이 아니라 판의 기억이다 — 판을 새로 세우면 함께 사라진다.
-const railWidth = { terminal: 190, browser: 190 };
+// 폭으로 세운다. 설정이 아니라 스페이스의 기억이다.
+//
+// 처음 폭은 자리의 것이지 종류의 것이 아니다. 등록된 종류마다 같은 값으로
+// 채우므로, 플러그인이 늘어도 여기 적을 것이 없다.
+const RAIL_WIDTH = 190;
+const freshRailWidth = () =>
+  Object.fromEntries(plugins().map((p) => [p.id, RAIL_WIDTH]));
+const railWidth = freshRailWidth();
 
 /* ── 자리 ─────────────────────────────────────────────────────────────────
    어디 서는가          무엇이 서는가
@@ -70,7 +77,9 @@ const railWidth = { terminal: 190, browser: 190 };
    무엇이 서는지는 여기서 정하지 않는다. 사람이 섹션을 골라 세트로 묶고,
    설정에서 그 세트를 자리에 건다. 걸지 않으면 그 사이드바는 없다.        */
 
-let grid, view, focusedId, seq = 0;
+let grid, view, focusedId;
+// 탭 제목에 붙는 번호. 식별자가 아니라 사람이 읽는 이름이므로 세어서 만든다.
+let named = 0;
 
 /* ── 탭 규칙 ──────────────────────────────────────────────────────────────
    T1 카드는 탭 목록과 활성 탭 하나를 갖는다
@@ -79,7 +88,7 @@ let grid, view, focusedId, seq = 0;
    T3 가운데 드롭 = 대상 카드의 탭이 된다. 배치는 그대로다
    T4 변에 드롭 = 그쪽에 새 자리가 필요하다
    T5 마지막 탭이 떠나면 그 카드는 사라진다 — 빈 카드는 남지 않는다        */
-const tab = (plugin, title) => ({ id: `tab-${++seq}`, plugin, title });
+const tab = (plugin, title) => ({ id: issueId("tab"), plugin, title });
 const tabsOf = (card) => card?.data?.tabs ?? [];
 const activeTab = (card) => tabsOf(card).find((t) => t.id === card.data.activeId) ?? tabsOf(card)[0];
 const focusedPlugin = () => activeTab(grid.card(focusedId))?.plugin ?? null;
@@ -87,7 +96,7 @@ const focusedPlugin = () => activeTab(grid.card(focusedId))?.plugin ?? null;
 /** 제목 번호와 id 번호를 일치시킨다. 다르면 화면과 로그의 탭 식별이 어긋난다. */
 function newTab(kind) {
   const t = tab(kind, "");
-  t.title = `${plugin(kind).mark} 탭 ${seq}`;
+  t.title = `${plugin(kind).mark} 탭 ${++named}`;
   return t;
 }
 
@@ -823,7 +832,7 @@ export function onRender(fn) {
 /** 처음부터 다시 세운다. */
 export function build() {
   view?.destroy();
-  seq = 0;
+  named = 0;
   const half = halfGap();
   grid = new Soksak(initial(), { gap: half * 2 });
   focusedId = "terminal";
@@ -845,6 +854,36 @@ export function setGap(half) {
   grid.gap = half * 2;
   view.bleed = half;
 }
+
+/**
+ * 지금 판을 한 벌로 걷는다. 스페이스가 담는 것이 이것이다.
+ *
+ * 배치와, 무엇을 보고 있었는지와, 접힌 레일이 다시 설 폭. 셋 다 그 스페이스의
+ * 것이지 이 판의 것이 아니다 — 판은 한 번에 한 스페이스를 그린다.
+ */
+export const capture = () => ({
+  state: grid.toJSON(),
+  focusedId,
+  railWidth: { ...railWidth },
+  named,
+});
+
+/** 걷어 두었던 한 벌을 판에 건다. */
+export function adopt(kept) {
+  grid.replace(kept.state);
+  focusedId = kept.focusedId;
+  Object.assign(railWidth, kept.railWidth);
+  named = kept.named;
+  settle();
+}
+
+/** 아직 아무것도 없는 스페이스 한 벌. 새 스페이스가 이것으로 시작한다. */
+export const fresh = () => ({
+  state: initial(),
+  focusedId: "terminal",
+  railWidth: freshRailWidth(),
+  named: 0,
+});
 
 export { settle, tabsOf, plane, drawRail };
 export const render = () => view.render();
