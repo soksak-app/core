@@ -124,8 +124,14 @@ input[type=color]{width:34px;height:24px;padding:0;background:var(--card);
 .set b{color:var(--fg);display:block;margin-bottom:4px}
 .card[data-role=fixed] .set b{color:var(--focus)}
 
-.sp-rule{background:color-mix(in srgb,var(--bd) 65%,transparent)}
-.sp-rule[data-virtual=true]{background:color-mix(in srgb,var(--bd) 20%,transparent)}
+/* 선과 divider 는 뷰가 그린다. 여기서 정하는 것은 색뿐이고, 그것도 이 문서의
+   색을 가리키게 하는 것이 전부다 — 모양과 커서는 뷰가 들고 있다. */
+:root{
+  --sp-line:color-mix(in srgb,var(--bd) 65%,transparent);
+  --sp-line-crossing:color-mix(in srgb,var(--bd) 20%,transparent);
+  --sp-grip:color-mix(in srgb,var(--muted) 75%,transparent);
+  --sp-grip-active:var(--focus);
+}
 /* 경계선은 한 좌표가 평면을 지나는 전체다. 그중 카드가 실제로 만나는 구간이
    진한 실선이고, 나머지는 카드가 가로지르는 구간이다. 둘은 같은 좌표에 앉고
    길이만 다르다 — 실선만 그리면 위는 나뉘고 아래는 한 장인 곳에서 선이 둘로
@@ -137,13 +143,6 @@ input[type=color]{width:34px;height:24px;padding:0;background:var(--card);
 :root[data-full-rule=on] .sp-rule[data-virtual=true]{z-index:70}
 :root[data-full-rule=off] .sp-rule[data-virtual=true]{display:none}
 .sp-divider{z-index:4}
-.sp-divider::after{content:"";position:absolute;inset:0;margin:auto;border-radius:99px;
-  background:color-mix(in srgb,var(--muted) 75%,transparent);transition:background .12s}
-.sp-divider:hover::after,.sp-divider[data-dragging]::after{background:var(--focus)}
-.sp-divider[data-axis=x]{cursor:col-resize}
-.sp-divider[data-axis=x]::after{width:3px;height:24px}
-.sp-divider[data-axis=y]{cursor:row-resize}
-.sp-divider[data-axis=y]::after{height:3px;width:24px}
 
 /* 레일 외곽선은 통로 안에만 존재할 수 있다 — 카드 안쪽을 덮는 채움은
    실제 앱에서 네이티브 표면에 가려 보이지 않으므로 여기서도 그리지 않는다. */

@@ -174,11 +174,42 @@ card reads the line at all.
 #stage { position: relative; }
 .card { box-sizing: border-box; }
 .card > * { min-width: 0; }                /* see the hazard below */
-.sp-divider[data-axis="x"] { cursor: col-resize; }
-.sp-divider[data-axis="y"] { cursor: row-resize; }
-.sp-rule[data-virtual="false"] { background: #6b74ff; }
-.sp-rule[data-virtual="true"]  { background: #6b74ff33; }
 ```
+
+## The lines and the dividers
+
+The view places them and decides nothing about how they look. `installTheme`
+puts a stylesheet in the document that does: the cursor for each axis, a grab
+area as wide as a finger with a hairline grip inside it, and the crossing part
+of a line drawn fainter than the rest.
+
+```js
+import { installTheme } from "soksak";
+
+installTheme(document);
+```
+
+It reads its colours and sizes from tokens, so a host with colours of its own
+points them at those and changes nothing else. The tokens follow the view's
+`classPrefix`, and `themeTokens()` reports their names.
+
+```css
+:root {
+  --sp-line: var(--border);
+  --sp-line-crossing: var(--border-faint);
+  --sp-grip: var(--text-faint);
+  --sp-grip-active: var(--accent);
+  --sp-grip-thickness: 3px;
+  --sp-grip-length: 24px;
+}
+```
+
+Light and dark are the host's: it already changes those colours when its theme
+changes, and these change with them. Nothing here reads a host's token names or
+asks which mode is in effect.
+
+`themeCSS()` returns the same stylesheet as text, for a host that puts it in a
+file of its own rather than in the document.
 
 Dragging a divider moves the boundary. Double-clicking it (or Enter/Space when
 focused) centres it so the two cards beside it come out the same size. That

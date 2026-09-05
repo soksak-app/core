@@ -24,5 +24,9 @@ export type { Outline, OutlineOptions, Point } from './outline.js';
 export { SoksakView } from './dom.js';
 export type { ChangeReason, ViewOptions } from './dom.js';
 
+/** The view names what it draws; the host sets the colours. */
+export { installTheme, themeCSS, themeTokens } from './theme.js';
+export type { ThemeMetrics, ThemeOptions, ThemePalette } from './theme.js';
+
 /** The span of a card, which is all `isSlicing` needs to answer. */
 export type { Span } from './slicing.js';
