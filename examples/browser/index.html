@@ -13,8 +13,13 @@
   --r:14px;--half-gap:12px;--bw:1px;
 }
 *{box-sizing:border-box}
+/* 판은 남는 자리를 받는다. 문서 흐름에 얹어 두면 위쪽이 커질 때마다 판이
+   밀리고, 네이티브 표면은 그 사실을 알 길이 없다. 여기서는 위쪽이 커지면 판이
+   줄어든다 — 자리는 그대로이고 크기만 바뀌므로 판 하나만 보면 된다. */
+html,body{height:100%}
 body{margin:0;padding:20px;background:var(--bg);color:var(--fg);
-  font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace}
+  font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;
+  box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden}
 h1{margin:0 0 6px;font-size:18px}
 .lede{margin:0 0 12px;color:var(--muted);max-width:88ch}
 .bars{display:flex;flex-direction:column;gap:4px;margin:0 0 10px}
@@ -30,8 +35,10 @@ h1{margin:0 0 6px;font-size:18px}
 .chip__root{height:24px;padding:0 8px;border:var(--bw) solid var(--focus);border-radius:6px;
   background:var(--card);color:var(--fg);font:inherit;font-size:11px;width:160px}
 .bar__root{font-size:11px;color:var(--muted);margin-left:4px}
+/* 판 아래에 선다. 위에 두면 열 때마다 판이 밀리고, 네이티브 표면은 밀린 것을
+   알 길이 없다. 아래에 있으면 판은 자리를 지키고 크기만 준다. */
 .panel{border:var(--bw) solid var(--bd);border-radius:8px;background:var(--card);
-  padding:10px 12px;margin:0 0 10px}
+  padding:10px 12px;margin:10px 0 0;overflow:auto;flex:0 1 auto}
 .controls--links{margin-top:8px;padding-top:8px;border-top:var(--bw) solid var(--bd)}
 .controls__head{font-size:11px;color:var(--muted);width:100%}
 .links{display:flex;flex-wrap:wrap;gap:8px 14px}
@@ -45,7 +52,7 @@ input[type=range]{accent-color:var(--focus);width:110px}
 input[type=color]{width:34px;height:24px;padding:0;background:var(--card);
   border:1px solid color-mix(in srgb,var(--bd) 45%,transparent);border-radius:6px}
 
-.stage{position:relative;height:560px;padding:var(--half-gap);
+.stage{position:relative;flex:1 1 auto;min-height:0;padding:var(--half-gap);
   border:1px solid color-mix(in srgb,var(--bd) 35%,transparent);border-radius:22px}
 .plane{position:relative;width:100%;height:100%}
 
@@ -202,13 +209,6 @@ input[type=color]{width:34px;height:24px;padding:0;background:var(--card);
 .picker__item:hover,.picker__item:focus-visible{outline:0;color:var(--fg);
   background:color-mix(in srgb,var(--bd) 30%,transparent)}
 
-.metric{margin-top:10px;padding:10px 13px;
-  border:1px solid color-mix(in srgb,var(--bd) 35%,transparent);border-radius:10px}
-.metric table{border-collapse:collapse;width:100%}
-.metric td{padding:1px 0;vertical-align:top;color:var(--muted)}
-.metric td:first-child{width:32ch;color:var(--fg)}
-.metric td:last-child{width:6ch;text-align:right;font-weight:700}
-.pass{color:var(--ok)}.fail{color:var(--no)}
 .note{margin-top:8px;color:var(--muted);font-size:12px;max-width:88ch}
 </style></head>
 <body>
@@ -217,6 +217,21 @@ input[type=color]{width:34px;height:24px;padding:0;background:var(--card);
 역할만 다르다 — 몫을 받는가 px를 받는가, 옮겨지는가 아닌가. 이 문서는 그 위에 네이티브 합성의 제약을 재현한다:
 표면은 CSS 스택 위에 있고, 선언 프레임과 적용 프레임은 지연을 두고 따로 움직인다.
 여기서 GREEN 인 것만 Wails 에서도 GREEN 이다.</p>
+
+
+<!-- 프로젝트 줄과 스페이스 줄. 프로젝트는 루트 하나를 연 것이고, 그 안의
+     스페이스는 판 한 벌이다. -->
+<div class="bars">
+  <div class="bar bar--project" id="projectBar"></div>
+  <div class="bar bar--space" id="spaceBar"></div>
+</div>
+
+<main class="stage"><div class="plane" id="plane">
+  <svg class="rail" id="rail"><path id="railPath"></path></svg>
+  <div class="drop" id="drop" hidden></div>
+  <div class="picker" id="picker" data-native-modal hidden></div>
+  <div class="focus-mark" id="focusMark" hidden></div>
+</div></main>
 
 <div class="panel" id="settings" hidden>
 <div class="controls">
@@ -257,22 +272,10 @@ input[type=color]{width:34px;height:24px;padding:0;background:var(--card);
 </div>
 </div>
 
-<!-- 프로젝트 줄과 스페이스 줄. 프로젝트는 루트 하나를 연 것이고, 그 안의
-     스페이스는 판 한 벌이다. -->
-<div class="bars">
-  <div class="bar bar--project" id="projectBar"></div>
-  <div class="bar bar--space" id="spaceBar"></div>
-</div>
-
-<main class="stage"><div class="plane" id="plane">
-  <svg class="rail" id="rail"><path id="railPath"></path></svg>
-  <div class="drop" id="drop" hidden></div>
-  <div class="picker" id="picker" data-native-modal hidden></div>
-  <div class="focus-mark" id="focusMark" hidden></div>
-</div></main>
-
-<div class="metric"><table id="metric"></table></div>
-<p class="note" id="note"></p>
+<p class="note">+ 와 쪼개기는 새 탭의 종류를 먼저 묻는다(T2). 탭을 끌어 다른 카드의 가운데에
+놓으면 그 카드의 탭이 되고(T3), 변에 놓으면 그쪽에 자리가 생긴다(T4). 출발 카드의 탭이 하나뿐이면
+카드째로 옮겨가 빈 카드를 남기지 않는다(T5). 커밋 지연은 V7a 를, 적용 오차는 V7b 를 각각 뒤집는다.
+검사 결과는 화면이 아니라 로그로 나간다 — 브라우저는 콘솔, 앱은 자기 로그다.</p>
 
 <!-- 이 페이지를 그대로 앱의 프론트엔드로 쓴다. host.js 는 그 환경이 놓는다:
      브라우저에서는 아무것도 하지 않는 것이 놓이고, 앱에서는 네이티브 표면을
@@ -332,13 +335,36 @@ installTheme(document);
 
 /* ── 배선 ─────────────────────────────────────────────────────────────── */
 
+/**
+ * 검사하고, 결과가 달라졌을 때만 적는다.
+ *
+ * 검사는 매 렌더와 매 커밋마다 돈다. 그때마다 적으면 로그가 같은 줄로 가득
+ * 차서 무엇이 언제 바뀌었는지 읽을 수 없다.
+ */
+let lastSaid = "";
+
+function check() {
+  const rows = verify();
+  const failed = rows.filter((r) => !r.ok);
+  const line = failed.length === 0
+    ? `verify: ${rows.length} pass`
+    : `verify: ${failed.length} fail — ` +
+      failed.map((r) => `${r.name} (${r.note})`).join(" · ");
+  if (line === lastSaid) return;
+  lastSaid = line;
+  if (failed.length === 0) console.log(line);
+  else console.error(line);
+  // 앱은 자기 로그에 적는다. 호스트가 없으면 콘솔이 전부다.
+  window.hostSurfaces?.report?.(line);
+}
+
 /* 커밋이 끝나면 검증한다. 컴포지터는 검증이 무엇인지 모르고, 검증은 둘 다
    읽기만 한다 — 그래서 서로를 부르지 않고 여기서 잇는다. */
-onCommit(verify);
+onCommit(check);
 
 /* 판이 다시 그려지면 검증하고 공표한다. 판은 둘 다 모르고, 둘은 판을 읽기만
    한다 — 그래서 서로를 부르지 않고 여기서 잇는다. */
-onRender(() => { verify(); observe(); });
+onRender(() => { check(); observe(); });
 
 /* 스페이스가 바뀌면 판을 걷어 두었다가 다른 한 벌을 건다. 프로젝트가 바뀌는
    것도 같은 일이다 — 스페이스 묶음이 바뀌었을 뿐이다. */
@@ -592,13 +618,9 @@ projects.open({
 drawBars();
 drawSidebarLinks(document.getElementById("sidebarLinks"));
 
-/* 표면의 자리는 창 안에서 정해지므로 스크롤과 창 크기 변경으로 바뀐다. 배치는
-   그대로여서 렌더가 일어나지 않으니 여기서 다시 공표한다.
- *
- * 첫 배치가 선 뒤에 듣기 시작한다. 새로고침하면 브라우저가 스크롤 위치를
- * 되돌리며 scroll 을 먼저 내는데, 그때 읽은 자리는 카드가 서기 전의 것이다. */
-addEventListener("scroll", () => observe(), { passive: true });
-addEventListener("resize", () => observe());
+/* 판의 크기가 바뀌면 SoksakView 가 스스로 알아채고 다시 그린다(dom.ts 의
+   ResizeObserver). 여기서 같은 것을 한 번 더 보면 관측자가 둘이 되고, 둘 중
+   하나가 옛 크기로 카드를 앉힌 뒤 다른 하나가 그 위에 다시 앉힌다. */
 
 Object.assign(window, { verify, settle, projects, drawBars });   // 관측용
 </script>

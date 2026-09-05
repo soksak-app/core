@@ -13,6 +13,13 @@ const maxDelta = (a, b) =>
   !a || !b ? Infinity
     : Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y), Math.abs(a.w - b.w), Math.abs(a.h - b.h));
 
+/**
+ * 한 번 검사하고 결과를 돌려준다.
+ *
+ * 화면에 그리지 않는다. 이것은 개발자가 읽는 값이지 사람이 쓰는 화면이 아니고,
+ * 매 렌더마다 나오므로 화면에 두면 그 자리를 계속 차지한다. 어디에 적을지는
+ * 부르는 쪽이 정한다.
+ */
 export function verify() {
   // 지금의 판. 검사 한 번은 한 시점을 보는 것이므로 처음에 한 번만 집는다.
   const grid = currentGrid();
@@ -91,10 +98,12 @@ export function verify() {
     land = Math.max(land, maxDelta(s.declared, s.applied));
     counted++;
   }
-  add("V7a element − declared == 0", counted > 0 && stale < 0.5,
-      counted ? `최대 ${stale.toFixed(2)}px · 0이 아니면 커밋이 뒤처진 것 (seq ${record.seq})` : "표면 없음");
-  add("V7b declared − applied == 0", counted > 0 && land < 0.5,
-      counted ? `최대 ${land.toFixed(2)}px · 0이 아니면 컴포지터가 못 앉힌 것` : "표면 없음");
+  // 첫 렌더는 커밋보다 앞서므로 비교할 표면이 없다. 비교할 것이 없는 것은
+  // 어긋난 것이 아니다 — 표면이 있어야 하는데 없는 경우는 V10 과 T5 가 본다.
+  add("V7a element − declared == 0", counted === 0 || stale < 0.5,
+      counted ? `최대 ${stale.toFixed(2)}px · 0이 아니면 커밋이 뒤처진 것 (seq ${record.seq})` : "아직 커밋 없음");
+  add("V7b declared − applied == 0", counted === 0 || land < 0.5,
+      counted ? `최대 ${land.toFixed(2)}px · 0이 아니면 컴포지터가 못 앉힌 것` : "아직 커밋 없음");
 
   const transformed = [...plane.querySelectorAll(".card")]
     .filter((el) => el.style.transform && el.style.transform !== "none").length;
@@ -156,12 +165,5 @@ export function verify() {
       `레일 ${rail ? say(rail, "열 " + rail.c0) : "없음"} · ` +
       `우 ${say(right, "마지막 열")}`);
 
-  document.getElementById("metric").innerHTML = rows.map(([n, note, ok]) =>
-    `<tr><td>${n}</td><td>${note}</td><td class="${ok ? "pass" : "fail"}">${ok ? "PASS" : "FAIL"}</td></tr>`).join("");
-
-  document.getElementById("note").textContent =
-    "+ 와 쪼개기는 새 탭의 종류를 먼저 묻는다(T2). 종류가 표면·레일·우측 세트를 결정한다. " +
-    "탭을 끌어 다른 카드의 가운데에 놓으면 그 카드의 탭이 되고(T3), 변에 놓으면 그쪽에 자리가 생긴다(T4). " +
-    "출발 카드의 탭이 하나뿐이면 카드째로 옮겨가 빈 카드를 남기지 않는다(T5). " +
-    "커밋 지연은 V7a 를, 적용 오차는 V7b 를 각각 RED 로 뒤집는다.";
+  return rows.map(([name, note, ok]) => ({ name, note, ok }));
 }

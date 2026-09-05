@@ -76,6 +76,11 @@ if (!invoke) {
   window.hostSurfaces = {
     kinds: ["browser", "terminal"],
 
+    /* 검사 결과 한 줄. 화면이 아니라 앱의 로그로 간다. */
+    report(line) {
+      invoke("report", { line });
+    },
+
     theme(values) {
       invoke("set_theme", { theme: values });
     },

@@ -259,6 +259,14 @@ func mainWindow() (*application.WebviewWindow, bool) {
 	return win, ok
 }
 
+// Report writes one line from the page's own checks into this app's log. The
+// page has no file to write to and its console is not read when the app runs
+// outside a debugger.
+func (s *Surfaces) Report(line string) error {
+	log.Println(line)
+	return nil
+}
+
 // SetTheme records the theme the page is now drawn in, for the pages this host
 // serves. The page calls it when a theme is chosen, not on every render.
 func (s *Surfaces) SetTheme(theme Theme) error {

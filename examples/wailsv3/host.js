@@ -78,6 +78,13 @@ function install(call) {
   window.hostSurfaces = {
     kinds: ["browser", "terminal"],
 
+    /* 검사 결과 한 줄. 화면이 아니라 앱의 로그로 간다. */
+    report(line) {
+      call.ByName(`${SERVICE}.Report`, line).catch((e) =>
+        console.error("Report", e),
+      );
+    },
+
     theme(values) {
       call.ByName(`${SERVICE}.SetTheme`, values).catch((e) =>
         console.error("SetTheme", e),

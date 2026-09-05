@@ -418,6 +418,14 @@ fn terminal_write(shells: State<'_, shell::Shells>, id: String, data: String) ->
     shells.write(&id, &data)
 }
 
+/// Writes one line from the page's own checks into this app's log. The page has
+/// no file to write to and its console is not read when the app runs outside a
+/// debugger.
+#[tauri::command]
+fn report(line: String) {
+    println!("{line}");
+}
+
 /// What a page asks for when it loads.
 #[tauri::command]
 fn theme(state: State<'_, CurrentTheme>) -> Result<Theme, String> {
@@ -453,7 +461,8 @@ fn main() {
             terminal_open,
             terminal_write,
             theme,
-            set_theme
+            set_theme,
+            report
         ])
         .run(tauri::generate_context!())
         .expect("failed to run the tauri application");
