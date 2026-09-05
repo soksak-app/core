@@ -140,10 +140,10 @@ function install(call) {
 
   let pick = null;
   let shown = null;
+  /* 모달은 여러 번 답할 수 있다 — 고르기는 한 번이지만 설정은 바꿀 때마다다.
+     듣는 것을 여기서 끊지 않는다. 끝났다고 말하는 것은 hide 다. */
   window.wails.Events.On("overlay-pick", (e) => {
-    const done = pick;
-    pick = null;
-    if (done) done(e.data.key);
+    if (pick) pick(e.data.key, e.data.value);
   });
 
   window.hostOverlay = {
@@ -165,6 +165,21 @@ function install(call) {
         radius: parseFloat(style.borderTopLeftRadius) || 0,
         background: rgba(style.backgroundColor).slice(0, 3),
       }).catch((e) => console.error("OverlayShow", e));
+    },
+
+    /* 열려 있는 모달의 내용을 갈아 끼운다. 뷰를 새로 만들지 않으므로 깜빡이지
+       않는다 — 설정처럼 조작이 화면을 바꾸는 모달이 이것을 쓴다. */
+    update(el) {
+      if (!shown) return;
+      const style = getComputedStyle(el);
+      const payload = {
+        id: shown,
+        className: el.className,
+        html: el.innerHTML,
+        css: [...document.querySelectorAll("style")].map((s) => s.textContent).join("\n"),
+        border: over(style.borderTopColor, style.backgroundColor),
+      };
+      call.ByName(`${SERVICE}.OverlayUpdate`, payload).catch((e) => console.error("OverlayUpdate", e));
     },
 
     hide() {

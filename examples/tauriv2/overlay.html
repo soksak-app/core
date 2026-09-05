@@ -83,9 +83,17 @@
 
   addEventListener("click", (e) => {
     const hit = e.target.closest("[data-key]");
-    if (hit) invoke("overlay_pick", { key: hit.dataset.key });
+    if (hit) invoke("overlay_pick", { key: hit.dataset.key, value: "" });
+  });
+  /* 값을 바꾼 것도 같은 한 메시지로 돌려준다: 무엇을(key), 무엇으로(value). */
+  addEventListener("change", (e) => {
+    const el = e.target.closest("[data-set]");
+    if (el) invoke("overlay_pick", {
+      key: el.dataset.set,
+      value: el.type === "checkbox" ? String(el.checked) : el.value,
+    });
   });
   addEventListener("keydown", (e) => {
-    if (e.key === "Escape") invoke("overlay_pick", { key: "" });
+    if (e.key === "Escape") invoke("overlay_pick", { key: "", value: "" });
   });
 </script>

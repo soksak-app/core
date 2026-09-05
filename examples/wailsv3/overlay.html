@@ -66,12 +66,22 @@
   }
 
   fetch(`/overlay/content${query}`).then((r) => r.json()).then(render);
+  /* 열려 있는 동안 내용이 바뀌면 다시 그린다. 뷰를 새로 만들면 깜빡인다. */
+  new EventSource(`/overlay/stream${query}`).onmessage = (e) => render(JSON.parse(e.data));
+
+  /* 돌려주는 것은 하나다: 무엇을(key), 무엇으로(value).
+     고르기는 값이 비어 있고, 값을 바꾼 것은 그 값을 싣는다. */
+  const send = (key, value) => fetch(`/overlay/pick${query}&key=${encodeURIComponent(key)}&value=${encodeURIComponent(value)}`, { method: "POST" });
 
   addEventListener("click", (e) => {
     const hit = e.target.closest("[data-key]");
-    if (hit) fetch(`/overlay/pick${query}&key=${encodeURIComponent(hit.dataset.key)}`, { method: "POST" });
+    if (hit) send(hit.dataset.key, "");
+  });
+  addEventListener("change", (e) => {
+    const el = e.target.closest("[data-set]");
+    if (el) send(el.dataset.set, el.type === "checkbox" ? String(el.checked) : el.value);
   });
   addEventListener("keydown", (e) => {
-    if (e.key === "Escape") fetch(`/overlay/pick${query}&key=`, { method: "POST" });
+    if (e.key === "Escape") send("", "");
   });
 </script>

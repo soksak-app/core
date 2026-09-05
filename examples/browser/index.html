@@ -68,14 +68,13 @@ body{margin:0;background:var(--bg);color:var(--fg);
 /* 판 아래에 선다. 위에 두면 열 때마다 판이 밀리고, 네이티브 표면은 밀린 것을
    알 길이 없다. 아래에 있으면 판은 자리를 지키고 크기만 준다. */
 /* 설정 모달 — 520px 카드. 판 위를 덮으므로 잡이로 옮길 수 있다. */
-.shade{position:fixed;inset:0;z-index:200;display:grid;place-items:center;
-  background:color-mix(in srgb,var(--bg) 55%,transparent)}
-.set-card{position:relative;width:520px;max-height:80vh;display:flex;flex-direction:column;
+.set-card{position:absolute;left:50%;top:80px;transform:translateX(-50%);z-index:200;
+  width:520px;max-height:70vh;display:flex;flex-direction:column;
   border:var(--bw) solid var(--bd);border-radius:12px;background:var(--card);
   box-shadow:0 18px 48px rgb(0 0 0 / .35)}
 .set-card__head{display:flex;align-items:center;gap:8px;padding:8px 8px 8px 10px;
   border-bottom:var(--bw) solid var(--bd)}
-.set-grip{cursor:grab;color:var(--muted);user-select:none;touch-action:none}
+.set-grip{color:var(--muted);user-select:none}
 .set-card__title{font-size:12px;color:var(--fg)}
 .set-card__head .act{margin-left:auto}
 .set-card__body{display:flex;min-height:0}
@@ -302,17 +301,20 @@ h1{margin:0;padding:8px 12px 4px;font-size:13px}
 </div>
 
 <!-- 설정 모달. 판 위에 뜨고, 열려 있는 동안 표면은 물러난다. -->
-<div class="shade" id="settingsShade" hidden>
-  <div class="set-card" id="settingsCard">
-    <header class="set-card__head">
-      <span class="set-grip" id="settingsGrip" title="끌어서 옮긴다">⠿</span>
-      <span class="set-card__title">설정</span>
-      <button class="act" id="settingsClose" type="button" title="닫는다"></button>
-    </header>
-    <div class="set-card__body">
-      <nav class="set-card__nav" id="settingsNav"></nav>
-      <div class="set-card__pane" id="settingsBody"></div>
-    </div>
+<!-- 설정. [data-native-modal] 이므로 앱에서는 호스트가 자기 뷰로 옮겨 표면들
+     위에 그린다. 그 뷰는 이 요소의 사본이라, 조작은 전부 data-key 를 달고
+     답은 하나로 온다. -->
+<div class="set-card" id="settings" data-native-modal hidden>
+  <header class="set-card__head">
+    <span class="set-grip">⠿</span>
+    <span class="set-card__title">설정</span>
+    <button class="act" type="button" data-key="close" title="닫는다">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+    </button>
+  </header>
+  <div class="set-card__body">
+    <nav class="set-card__nav" id="settingsNav"></nav>
+    <div class="set-card__pane" id="settingsBody"></div>
   </div>
 </div>
 

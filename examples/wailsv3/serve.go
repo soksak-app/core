@@ -39,6 +39,11 @@ type Pages struct {
 	themeMu    sync.Mutex
 	theme      Theme
 	themeWatch map[chan Theme]bool
+
+	// 열려 있는 모달의 페이지들. 그 페이지도 Go 로 가는 다리가 없으므로, 내용이
+	// 바뀌면 스트림으로 듣는다.
+	modalMu    sync.Mutex
+	modalWatch map[string]map[chan OverlayContent]bool
 }
 
 // Bind lets the pages reach the surfaces once both exist.
@@ -58,6 +63,7 @@ func NewPages(assets embed.FS, shells *Shells) (*Pages, error) {
 		addr:       listener.Addr().String(),
 		shells:     shells,
 		themeWatch: map[chan Theme]bool{},
+		modalWatch: map[string]map[chan OverlayContent]bool{},
 	}
 
 	mux := http.NewServeMux()
@@ -69,6 +75,7 @@ func NewPages(assets embed.FS, shells *Shells) (*Pages, error) {
 	mux.HandleFunc("/overlay/content", pages.overlayContent)
 	mux.HandleFunc("/overlay/fit", pages.overlayFit)
 	mux.HandleFunc("/overlay/pick", pages.overlayPick)
+	mux.HandleFunc("/overlay/stream", pages.overlayStream)
 	go func() { _ = http.Serve(listener, mux) }()
 	return pages, nil
 }
@@ -129,11 +136,63 @@ func (p *Pages) overlayFit(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// NotifyModal hands new content to the page drawing that modal.
+func (p *Pages) NotifyModal(id string, content OverlayContent) {
+	p.modalMu.Lock()
+	defer p.modalMu.Unlock()
+	for watcher := range p.modalWatch[id] {
+		select {
+		case watcher <- content:
+		default:
+		}
+	}
+}
+
+// overlayStream sends that modal's content every time it changes. A modal whose
+// controls change what the page holds has to be redrawn while it is open, and
+// rebuilding its view instead would make it blink.
+func (p *Pages) overlayStream(w http.ResponseWriter, r *http.Request) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "no streaming", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.WriteHeader(http.StatusOK)
+	flusher.Flush()
+
+	id := r.URL.Query().Get("id")
+	changes := make(chan OverlayContent, 4)
+	p.modalMu.Lock()
+	if p.modalWatch[id] == nil {
+		p.modalWatch[id] = map[chan OverlayContent]bool{}
+	}
+	p.modalWatch[id][changes] = true
+	p.modalMu.Unlock()
+	defer func() {
+		p.modalMu.Lock()
+		delete(p.modalWatch[id], changes)
+		p.modalMu.Unlock()
+	}()
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case content := <-changes:
+			payload, _ := json.Marshal(content)
+			fmt.Fprintf(w, "data: %s\n\n", payload)
+			flusher.Flush()
+		}
+	}
+}
+
 // overlayPick tells the main page what was chosen; it decides what it means.
 func (p *Pages) overlayPick(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	application.Get().Event.Emit("overlay-pick", map[string]string{
-		"id": q.Get("id"), "key": q.Get("key"),
+		"id": q.Get("id"), "key": q.Get("key"), "value": q.Get("value"),
 	})
 	w.WriteHeader(http.StatusNoContent)
 }

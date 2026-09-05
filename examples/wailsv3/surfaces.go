@@ -179,6 +179,25 @@ func (s *Surfaces) OverlayHide(id string) error {
 	return nil
 }
 
+// OverlayUpdate replaces what an open modal draws, without rebuilding its view.
+// A modal whose controls change what the page holds is redrawn while it stands.
+func (s *Surfaces) OverlayUpdate(req OverlayRequest) error {
+	content := OverlayContent{
+		CSS: req.CSS, ClassName: req.ClassName, HTML: req.HTML, Border: req.Border,
+	}
+	s.mu.Lock()
+	live, ok := s.modals[req.ID]
+	if ok {
+		live.content = content
+	}
+	s.mu.Unlock()
+	if !ok {
+		return nil
+	}
+	s.pages.NotifyModal(req.ID, content)
+	return nil
+}
+
 // ModalContent is what the modal's own view asks for once it has loaded.
 func (s *Surfaces) ModalContent(id string) OverlayContent {
 	s.mu.Lock()

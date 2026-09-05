@@ -399,11 +399,47 @@ fn overlay_hide(window: Window, state: State<'_, Overlay>, id: String) -> Result
 
 /// The overlay reports what was clicked; the main page decides what it means.
 #[tauri::command]
-fn overlay_pick(window: Window, key: String) -> Result<(), String> {
+fn overlay_pick(window: Window, key: String, value: String) -> Result<(), String> {
     if let Some(main) = window.get_webview("main") {
-        main.emit("overlay-pick", key).map_err(|e| e.to_string())?;
+        main.emit("overlay-pick", Picked { key, value })
+            .map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+/// Replaces what an open modal draws, without rebuilding its view. A modal whose
+/// controls change what the page holds is redrawn while it stands; building the
+/// view again would make it blink.
+#[tauri::command]
+fn overlay_update(
+    window: Window,
+    overlay: State<'_, Overlay>,
+    request: OverlayRequest,
+) -> Result<(), String> {
+    let content = OverlayContent {
+        css: request.css,
+        class_name: request.class_name,
+        html: request.html,
+        border: request.border,
+    };
+    {
+        let mut modals = overlay.modals.lock().map_err(|e| e.to_string())?;
+        let Some(modal) = modals.get_mut(&request.id) else { return Ok(()) };
+        modal.content = content.clone();
+    }
+    if let Some(view) = window.get_webview(&modal_label(&request.id)) {
+        view.emit("overlay-content", content).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// What a modal's page reports: which control, and what it now holds. Named
+/// fields, not a pair — reading a pair by index is how the page once took the
+/// first character of a string for the whole answer.
+#[derive(Debug, Clone, Serialize)]
+struct Picked {
+    key: String,
+    value: String,
 }
 
 /// Starts the shell behind a terminal surface. The page asks once, when its
@@ -455,6 +491,7 @@ fn main() {
             sync_surfaces,
             overlay_show,
             overlay_content,
+            overlay_update,
             overlay_fit,
             overlay_hide,
             overlay_pick,
