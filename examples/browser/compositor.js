@@ -142,8 +142,9 @@ function commit(mine, snapshot) {
       `${s.declared.x.toFixed(2)},${s.declared.y.toFixed(2)},${s.declared.w.toFixed(2)},${s.declared.h.toFixed(2)}`;
   }
   latestRecord = record;
-  window.hostSurfaces?.place?.(record);
-  listener?.();
+  // 무엇을 호스트에 보낼지는 이 모듈이 정하지 않는다. 이 판의 표면만으로는 부족하고,
+  // 다른 스페이스의 표면도 살아 있어야 한다.
+  listener?.(record);
 }
 
 /**

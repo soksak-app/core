@@ -343,7 +343,7 @@ import {
 import { knobs, latest, onCommit, publish, reset } from "./compositor.js";
 
 /* 판 하나. 이 문서는 판의 렌더링 방식을 알지 않고 렌더 완료만 수신한다. */
-import { build, onRender, render, setGap, settle } from "./plane.js";
+import { build, currentGrid, onRender, render, setGap, settle, tabsOf } from "./plane.js";
 
 /* 판과 컴포지터를 읽어 검증한다. 아무것도 변경하지 않으므로 그 둘은 이 모듈을
    알지 않는다. */
@@ -352,6 +352,7 @@ import { verify } from "./verify.js";
 /* 프로젝트와 그 안의 스페이스. 판은 한 번에 스페이스 하나를 그리고, 전환은 현재
    상태를 저장한 뒤 다른 상태를 적용하는 것이다. */
 import * as projects from "./projects.js";
+import * as registry from "./plugins/registry.js";
 
 /* 설정 모달. 사이드바를 연결할 자리 목록은 등록된 플러그인이 정한다. */
 import { drawSettings, openSettings } from "./settings-ui.js";
@@ -398,9 +399,52 @@ function check() {
   window.hostSurfaces?.report?.(line);
 }
 
-/* 커밋이 끝나면 검증한다. 컴포지터는 검증을 알지 않고 검증은 읽기만 하므로 이
-   문서에서 연결한다. */
-onCommit(check);
+/* 표면이 하나도 서지 않는 자리. 잠든 표면은 크기가 없다. */
+const NOWHERE = { x: 0, y: 0, w: 0, h: 0 };
+
+/**
+ * 지금 그려지지 않는 탭들의 표면.
+ *
+ * 표면은 탭마다 하나이고, 보이는 것은 그려지는 카드의 활성 탭뿐이다. 나머지도
+ * 선언해야 호스트가 살려 둔다 — 그래야 스페이스나 프로젝트를 넘나들어도 셸과
+ * 페이지가 그대로다. 선언하지 않으면 호스트가 없는 표면으로 보고 없앤다.
+ */
+function dormant(shown) {
+  const seen = new Set(shown.map((s) => s.id));
+  const out = [];
+  const add = (tab) => {
+    if (seen.has(tab.id)) return;
+    seen.add(tab.id);
+    out.push({
+      id: tab.id, plugin: tab.plugin, layer: 0,
+      declared: NOWHERE, applied: NOWHERE, visible: false, dim: false,
+      surface: registry.plugin(tab.plugin).surface(tab.id),
+    });
+  };
+  // 지금 판의 탭들. 활성 탭이 아닌 것이 여기서 걸린다.
+  for (const card of currentGrid().cards) for (const t of tabsOf(card)) add(t);
+  // 다른 스페이스의 탭들. 활성 스페이스는 저장된 배치가 아니라 위의 판이 맞다.
+  const here = projects.active();
+  for (const p of projects.all()) {
+    for (const space of p.spaces) {
+      if (p === here && space.id === here.activeSpaceId) continue;
+      for (const card of space.layout.state.cards) {
+        for (const t of card.data?.tabs ?? []) add(t);
+      }
+    }
+  }
+  return out;
+}
+
+/* 커밋이 끝나면 검증하고, 호스트에 표면을 알린다. 컴포지터는 이 판의 표면만 알고,
+   무엇이 살아 있어야 하는지는 이 문서가 안다. */
+onCommit((record) => {
+  check();
+  window.hostSurfaces?.place?.({
+    ...record,
+    surfaces: [...record.surfaces, ...dormant(record.surfaces)],
+  });
+});
 
 /* 판이 다시 그려지면 검증하고 표면을 보고한다. 판은 둘을 알지 않고 둘은 판을 읽기만
    하므로 이 문서에서 연결한다. */

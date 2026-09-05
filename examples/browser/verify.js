@@ -124,7 +124,10 @@ export function verify() {
   // 크면 표면이 카드 밖에 그려진다.
   let escape = 0;
   for (const s of latest()?.surfaces ?? []) {
-    const el = plane.querySelector(`[data-card-id="${s.id}"]`);
+    // 표면의 id 는 탭이므로 카드는 그 슬롯에서 거슬러 찾는다.
+    const el = plane
+      .querySelector(`[data-native-surface-id="${s.id}"][data-native-surface]`)
+      ?.closest("[data-card-id]");
     if (!el) continue;
     const c = el.getBoundingClientRect();
     const box = { x: c.left - host.left, y: c.top - host.top, w: c.width, h: c.height };

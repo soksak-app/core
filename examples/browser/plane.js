@@ -295,12 +295,15 @@ function updateCard(el, card) {
   }
 
   // 표면의 슬롯. 컴포지터는 판의 구조를 알지 않으므로 필요한 값을 여기에 기록한다.
+  //
+  // 표면의 정체는 탭이다. 카드로 하면 같은 카드의 다른 탭들이 표면 하나를 나눠
+  // 쓰고, 카드 id 는 스페이스마다 같은 값이라 스페이스가 달라도 같은 표면이 된다.
   const slot = el.querySelector(".slot");
+  const shown = activeTab(card);
   slot.dataset.nativeSurface = "stub";
-  slot.dataset.nativeSurfaceId = card.id;
+  slot.dataset.nativeSurfaceId = shown.id;
   slot.dataset.nativeLayer = "10";
   slot.dataset.nativeVisible = "true";
-  const shown = activeTab(card);
   slot.dataset.nativePlugin = shown.plugin;
   slot.dataset.nativeTitle = shown.title;
   slot.dataset.nativeDim = String(dimmed(card.id));
