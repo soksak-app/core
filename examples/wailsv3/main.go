@@ -1,7 +1,8 @@
 // Runs the soksak example as a real Wails v3 application.
 //
-// The frontend is built by examples/sync-frontend.sh from the repository
-// example. Wails roots its asset FS at the directory that holds index.html,
+// The frontend is built by the example-frontend make target from the
+// repository example. Wails roots its asset FS at the directory that holds
+// index.html,
 // so index.html sits at the frontend root and the window opens "/".
 //
 // Wails v3 beta.16 creates one webview per window and offers no API to add a

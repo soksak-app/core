@@ -380,7 +380,7 @@ first.
 | `boundaryPos`, `boundaryRange`, `hasBoundary(axis, line)`, `moveBoundary(axis, line, px, allowSnap?)`, `centerBoundary` | drag a boundary |
 | `mergeCoincident(axis, line)` | fold a line onto the neighbour it now coincides with |
 | `tidy()`, `virtualCount()`, `isVirtual(axis, line)`, `crossings(card)`, `cardsCrossing(axis, line)` | virtual lines |
-| `isSlicing()`, `lines(axis)`, `toJSON()`, `Soksak.from(state, options?)`, `checkState(state)` | inspection and state |
+| `isSlicing()`, `lines(axis)`, `toJSON()`, `Soksak.from(state, options?)`, `checkState(state)`, `replace(state)` | inspection and state |
 | `gap`, `minSize`, `grabSize`, `snapDistance`, `snap`, `fillOrder` | the options, readable and writable after construction |
 
 Every method taking an axis refuses one that is not `"x"` or `"y"`; every method
@@ -393,8 +393,8 @@ constructor runs; call it to reject a stale saved layout before installing one.
 
 `SoksakView(host, grid, options)` — `render(reason?)`, `element(id)`,
 `destroy()`. Options: `createCard` (required), `updateCard`, `destroyCard`,
-`onChange(reason)`, `classPrefix` (default `sp`), `observeResize` (default on),
-`bleed` (default 0).
+`onChange(reason)`, `updateDivider`, `rules` (default on), `commit(rects, draw)`,
+`classPrefix` (default `sp`), `observeResize` (default on), `bleed` (default 0).
 
 `bleed` is how far past the plane a rule may run to reach the frame around it.
 A host that holds the plane inside a frame — a padding on the element outside

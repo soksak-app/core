@@ -34,7 +34,7 @@ One file per role, and the imports run one way:
     ids.js          issues prj- spc- tab-
     plane.js        one plane: cards, tabs, drag, rail, layer, render
     compositor.js   measures the slots the plane marks, and publishes
-    verify.js       reads the plane and the compositor. Nothing reads it
+    verify.js       reads the plane and the compositor, and reports the result
     host.js         real native surfaces and modals, when an application holds
                     the page. Absent in a browser, where the page simulates them
     framework/      which runtime is holding this page, and how to speak to it

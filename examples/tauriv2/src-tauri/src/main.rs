@@ -1,7 +1,7 @@
 // Runs the soksak example as a real Tauri v2 application, with real native
 // surfaces for the browser panes.
 //
-// The frontend is built by examples/sync-frontend.sh from the repository
+// The frontend is built by the example-frontend make target from the repository
 // example and is loaded from disk as frontendDist, so no bundler is involved.
 //
 // On every commit the example declares the frame each surface should occupy.

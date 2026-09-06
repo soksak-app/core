@@ -30,8 +30,9 @@
     update(el)               열려 있는 동안의 새 내용
     hide()
 
-돌아오는 것은 둘이다. `surface-pressed` 는 입력이 도달한 표면을 알리고,
-`overlay-pick` 은 모달의 `(key, value)` 하나를 나른다.
+돌아오는 이벤트는 셋이다. `surface-pressed` 는 입력이 도달한 표면을 알리고,
+`surface-input` 은 끌기의 한 단계를 페이지 좌표로 보고하며, `overlay-pick` 은
+모달의 `(key, value)` 하나를 보고한다.
 
 ## 이미 하나인 것
 

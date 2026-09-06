@@ -193,8 +193,10 @@ function updateCard(el, card) {
 
   if (place) {
     const kind = railKind(place);
+    // 레일의 이름은 그 레일이 담당하는 플러그인의 이름에서 나온다. 여기에 적으면
+    // 플러그인을 추가할 때마다 이 파일을 고쳐야 한다.
     const name = place === "left" ? "좌측" : place === "right" ? "우측"
-      : kind === "terminal" ? "터미널 레일" : kind === "browser" ? "브라우저 레일" : "레일";
+      : kind ? `${plugin(kind).name} 레일` : "레일";
     setHTML(chrome, `<span class="tab" data-active="true">${name}</span>`);
     const set = standingSet(place);
     setHTML(el.querySelector(".set"), set

@@ -33,8 +33,9 @@ surfaces.
     update(el)               new content while it is open
     hide()
 
-Two things travel back: `surface-pressed`, which names the surface an input
-landed on, and `overlay-pick`, which carries one `(key, value)` from the modal.
+Three events go back: `surface-pressed` names the surface an input landed on,
+`surface-input` reports one step of a drag in the page's coordinates, and
+`overlay-pick` reports one `(key, value)` from the modal.
 
 ## What is already one implementation
 
