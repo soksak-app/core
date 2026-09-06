@@ -387,3 +387,37 @@ test("a card that arrives at a border takes its width from one slot, not a share
   assert.equal(grid.close("rail"), true);
   assert.equal(widths(), was);
 });
+
+test("a card that leaves by giving up its slots does not redraw the slots that stay", () => {
+  // The rail's two neighbours are fixed, so no row of cards grows over it and it
+  // leaves the other way: its slot is removed. What it released belongs to the
+  // sharing slot beside it, and the sharing slot further out keeps the width it
+  // had — R5, read at a close.
+  const grid = new Soksak(
+    {
+      xs: [0, 0.2, 0.4, 0.6, 0.8, 1],
+      ys: [0, 1],
+      cards: [
+        { id: "one", c0: 0, c1: 1, r0: 0, r1: 1 },
+        { id: "two", c0: 1, c1: 2, r0: 0, r1: 1 },
+        { id: "left", c0: 2, c1: 3, r0: 0, r1: 1, width: 200, fixed: true },
+        { id: "rail", c0: 3, c1: 4, r0: 0, r1: 1, width: 190 },
+        { id: "right", c0: 4, c1: 5, r0: 0, r1: 1, width: 180, fixed: true },
+      ],
+    },
+    { width: 1600, height: 600, gap: 24 },
+  );
+  const one = grid.rect("one").w;
+  const two = grid.rect("two").w;
+  const rail = grid.rect("rail").w;
+
+  assert.equal(grid.close("rail"), true, "no neighbour can fill, so the slot goes");
+  assert.equal(grid.rect("one").w, one, "the sharing slot further out is not redrawn");
+  assert.equal(
+    grid.rect("two").w, two + rail + grid.gap,
+    "and the one beside the rail takes its width and the corridor it released",
+  );
+  assert.equal(grid.rect("left").w, 200, "the declared sizes are untouched");
+  assert.equal(grid.rect("right").w, 180);
+  assertTiling(grid, "after the rail's slot went");
+});

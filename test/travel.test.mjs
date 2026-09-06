@@ -191,3 +191,19 @@ test("a travel that would leave a card with no area is refused", () => {
   assert.equal(JSON.stringify([...grid.rects()]), rects, "down to the rects");
   for (const [id, r] of grid.rects()) assert.ok(r.w > 0 && r.h > 0, `${id} still has area`);
 });
+
+test("canInsertAt refuses a line the axis does not have, and insertAt agrees", () => {
+  // `standings` names the lines a rail could stand on and `insertAt` is what
+  // takes one. A `canInsertAt` that answers for a line past the end reports a
+  // boundary the plane does not have, and `insertAt` then refuses what it
+  // promised.
+  const grid = new Soksak(undefined, { width: W, height: H });
+  grid.split("card", "x");
+  const last = grid.lines("x").length - 1;
+  assert.equal(grid.canInsertAt("x", last), true, "the far border is one of them");
+  for (const line of [-1, last + 1, last + 2, 99]) {
+    assert.equal(grid.canInsertAt("x", line), false, `${line} is not a line`);
+    assert.equal(grid.insertAt("x", line, { size: 100 }), null, `${line} takes no card`);
+  }
+  assert.deepEqual(grid.standings("x"), [0, 1, 2], "and standings names only the lines there are");
+});

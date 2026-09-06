@@ -3,7 +3,7 @@
 // 순서는 관측 부품이 수행한다. 창이 표시되고, 페이지 렌더링을 기다리고, 경계를
 // 흔들고, 그동안 녹화하고, 종료한다.
 import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync, existsSync } from "node:fs";
+import { closeSync, existsSync, mkdtempSync, openSync, readFileSync, rmSync, writeSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -14,6 +14,70 @@ export const APPS = {
 };
 
 /**
+ * 창을 모는 실행이 서는 자물쇠.
+ *
+ * 이 폴더에는 검사 파일이 셋이고 러너는 파일을 병렬로 실행한다. 그대로 두면 세
+ * 애플리케이션이 동시에 창을 띄우고 경계를 흔들며, 각 실행은 남의 창이 섞인
+ * 화면을 녹화해 자기 것으로 잰다. Makefile 의 --test-concurrency=1 은 이 폴더를
+ * 직접 실행하면 없으므로, 자물쇠는 실행 방법과 무관한 자리인 여기에 둔다.
+ */
+const LOCK = join(tmpdir(), "soksak-window.lock");
+
+/** 자물쇠를 기다리는 한도. 이만큼 기다렸다면 앞의 실행이 끝나지 않은 것이다. */
+const WAIT = 300_000;
+
+/**
+ * 이 프로세스가 살아 있는지. 신호를 보내지 않고 존재만 묻는다.
+ *
+ * EPERM 은 다른 사용자의 프로세스라는 뜻이고, 그것은 살아 있다는 뜻이다.
+ */
+function alive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (why) {
+    return why.code === "EPERM";
+  }
+}
+
+/**
+ * 자물쇠를 잡는다.
+ *
+ * 자물쇠를 남기고 죽은 프로세스는 그것을 영원히 붙잡으므로, 적힌 프로세스가 없으면
+ * 자물쇠를 걷어내고 다시 잡는다.
+ */
+async function hold() {
+  const until = Date.now() + WAIT;
+  for (;;) {
+    try {
+      const file = openSync(LOCK, "wx");
+      writeSync(file, String(process.pid));
+      closeSync(file);
+      return;
+    } catch (why) {
+      if (why.code !== "EEXIST") throw why;
+      let owner;
+      try {
+        owner = Number(readFileSync(LOCK, "utf8"));
+      } catch {
+        continue;                       // 읽는 사이에 풀렸다.
+      }
+      if (!alive(owner)) {
+        rmSync(LOCK, { force: true });
+        continue;
+      }
+      if (Date.now() > until) {
+        throw new Error(
+          `${LOCK} 을 ${WAIT} ms 동안 프로세스 ${owner} 가 놓지 않았다. 아무것도 재지 못했다.`,
+        );
+      }
+      await new Promise((go) => setTimeout(go, 200));
+    }
+  }
+}
+
+/**
  * 애플리케이션을 실행하고 done(log) 가 참이 될 때까지 기다린다.
  *
  * 기다림의 끝은 로그에 남는 사건이다. 시계로 기다리면 느린 기계에서 아직 일어나지
@@ -21,6 +85,16 @@ export const APPS = {
  */
 export async function run(binary, args, done, { timeout = 30_000 } = {}) {
   if (!existsSync(binary)) return null;
+  await hold();
+  try {
+    return await drive(binary, args, done, timeout);
+  } finally {
+    rmSync(LOCK, { force: true });
+  }
+}
+
+/** 자물쇠를 쥔 채 애플리케이션 하나를 몬다. */
+async function drive(binary, args, done, timeout) {
   const app = spawn(binary, args);
 
   let log = "";

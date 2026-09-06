@@ -1607,8 +1607,8 @@ export class Soksak {
      * other boundaries without blocking itself.
      */
     standings(axis, without) {
-        if (this.noAxis(axis))
-            return [];
+        // No guard on the axis: every index is put to `canInsertAt`, which refuses an
+        // axis that is not one, so an axis that is not one returns nothing here.
         // Includes the plane's two borders, which `insertAt` accepts.
         const out = [];
         for (let k = 0; k < this.arr(axis).length; k++) {

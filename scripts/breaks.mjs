@@ -181,6 +181,13 @@ export const BREAKS = [
     to: "                        : false",
   },
   {
+    id: "insert-line",
+    what: "canInsertAt answers for the line one past the end of the axis",
+    file: "dist/soksak.js",
+    find: "if (!Number.isInteger(line) || line < 0 || line > a.length - 1)",
+    to: "if (!Number.isInteger(line) || line < 0 || line > a.length)",
+  },
+  {
     id: "zero-width-corridor",
     what: "a slot named at nothing is given a corridor, so a run of coincident lines comes apart",
     file: "dist/soksak.js",
@@ -494,6 +501,13 @@ export const BREAKS = [
     file: "dist/soksak.js",
     find: "if (!holdsSizes(this.plane, axis) && asked > EPS) {",
     to: "if (false) {",
+  },
+  {
+    id: "kept-slots",
+    what: "a card that leaves by giving up its slots redraws the slots that stay",
+    file: "dist/soksak.js",
+    find: "const kept = held.filter((_, i) => i < from || i >= from + count);",
+    to: "const kept = held.filter((_, i) => i < from || i > from + count);",
   },
   {
     id: "line-order",
