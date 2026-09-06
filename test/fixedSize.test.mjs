@@ -917,3 +917,34 @@ test("a slot too small for the corridor rule to read still covers the plane", ()
     assert.ok(r.x + r.w <= grid.width + 1e-9, `${id} runs past the plane`);
   }
 });
+
+test("a card narrower than minSize still takes its width from the slot beside it", () => {
+  // The rail declares 48 where `minSize` is 96. That number is the host's and no
+  // settle can raise it: a slot with a px size is drawn what it declares
+  // whichever slot pays. Judging it refused every candidate, so the sharing
+  // slots divided the width between them and the card on the far side of the
+  // plane paid for a rail inserted next to another card.
+  const grid = new Soksak(
+    {
+      xs: [0, 0.325, 1],
+      ys: [0, 1],
+      cards: [
+        { id: "left", c0: 0, c1: 1, r0: 0, r1: 1 },
+        { id: "right", c0: 1, c1: 2, r0: 0, r1: 1 },
+      ],
+    },
+    { width: 1200, height: 800, gap: 24, minSize: 96 },
+  );
+  assert.equal(grid.rect("left").w, 378);
+  assert.equal(grid.rect("right").w, 798);
+
+  assert.equal(grid.insertAt("x", 1, { id: "rail", size: 48 }), "rail");
+  assert.equal(grid.rect("rail").w, 48, "the rail is drawn what it declares");
+  assert.equal(grid.rect("left").w, 378, "the card on the other side kept its width");
+  assert.equal(grid.rect("right").w, 798 - 48 - grid.gap, "the slot beside the boundary paid");
+  assert.equal(grid.toJSON().paidBy.rail.to, "right", "and is recorded as the payer");
+
+  assert.equal(grid.close("rail"), true);
+  assert.equal(grid.rect("left").w, 378, "and the close gives it back");
+  assert.equal(grid.rect("right").w, 798);
+});

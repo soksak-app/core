@@ -187,7 +187,16 @@ export declare class Soksak {
     isSlicing(list?: readonly Span[]): boolean;
     /** Set the px size every card in a slot declares. */
     private declare;
-    /** Whether every card meets its minimum at the current plane size. */
+    /**
+     * Whether every card the settle can reach meets its minimum.
+     *
+     * `settleOn` names one sharing slot to absorb a difference, and only the
+     * sharing slots change width by that choice: a slot with a px size is drawn
+     * what it declares whichever slot pays. A card standing entirely in such
+     * slots is therefore not judged here. Judging it refused every candidate
+     * whenever the host declared a size below `minSize`, and the space went to
+     * the sharing slots together instead of to the slot beside the boundary.
+     */
     private fits;
     /**
      * Writes the widths in `want` to the sharing slots by moving the lines between

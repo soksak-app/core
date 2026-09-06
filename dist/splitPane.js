@@ -389,11 +389,33 @@ export class Soksak {
                 c.height = size;
         }
     }
-    /** Whether every card meets its minimum at the current plane size. */
+    /**
+     * Whether every card the settle can reach meets its minimum.
+     *
+     * `settleOn` names one sharing slot to absorb a difference, and only the
+     * sharing slots change width by that choice: a slot with a px size is drawn
+     * what it declares whichever slot pays. A card standing entirely in such
+     * slots is therefore not judged here. Judging it refused every candidate
+     * whenever the host declared a size below `minSize`, and the space went to
+     * the sharing slots together instead of to the slot beside the boundary.
+     */
     fits(axis) {
-        for (const w of this.extents(axis).values())
-            if (w < this.min - EPS)
+        const held = heldSizes(this.plane, axis);
+        const [lo, hi] = SPAN[axis];
+        const drawn = this.extents(axis);
+        for (const card of this.list) {
+            let shares = false;
+            for (let i = card[lo]; i < card[hi]; i++) {
+                if (held[i] === null) {
+                    shares = true;
+                    break;
+                }
+            }
+            if (!shares)
+                continue;
+            if (drawn.get(card.id) < this.min - EPS)
                 return false;
+        }
         return true;
     }
     /**
@@ -811,9 +833,14 @@ export class Soksak {
             return 0;
         if (!this.hasBoundary(axis, line))
             return this.boundaryPos(axis, line);
+        // The range is read once, before anything moves, and every pass is held
+        // inside it. A move changes where the range's own ends stand, so a pass
+        // clamped to the range as it then stood walked the boundary further out on
+        // every pass: past the range this call reported and below `minSize`.
+        const [low, high] = this.boundaryRange(axis, line);
         let at = this.boundaryPos(axis, line);
         for (let pass = 0; pass < 8; pass++) {
-            const middle = this.middleOf(axis, line);
+            const middle = clamp(this.middleOf(axis, line), low, high);
             if (Math.abs(middle - at) < 0.01)
                 break;
             at = this.moveBoundary(axis, line, middle, false);

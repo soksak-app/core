@@ -575,6 +575,20 @@ export const BREAKS = [
     to: "this.w = width;\n        this.h = height;\n        for (const c of this.list ?? []) {\n            if (c.width !== undefined && c.width > width)\n                c.width = width;\n            if (c.height !== undefined && c.height > height)\n                c.height = height;\n        }",
   },
   {
+    id: "settle-payer",
+    what: "the settle judges a card no choice of slot can widen, so no slot beside the boundary ever pays",
+    file: "dist/soksak.js",
+    find: "            if (!shares)\n                continue;",
+    to: "            ;",
+  },
+  {
+    id: "centre-range",
+    what: "a centring measures the range again after every move, so it walks outside the one it reported",
+    file: "dist/soksak.js",
+    find: "const middle = clamp(this.middleOf(axis, line), low, high);",
+    to: "const middle = this.middleOf(axis, line);",
+  },
+  {
     id: "flex-rate",
     what: "a cut is measured against a slot that does not flex with its span",
     file: "dist/soksak.js",

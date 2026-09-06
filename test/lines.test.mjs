@@ -752,3 +752,43 @@ test("a drag never leaves the boundary further from the target than it stood", (
   );
   assert.ok(to <= max + 0.01, `landed ${to}, past the range it reported`);
 });
+
+test("a centring stays inside the range it reported", () => {
+  // A plane too narrow for what it holds. `boundaryRange` measures where every
+  // card still holds `minSize`, and every move changes where the range's own
+  // ends stand, so a pass measured against the range as it then stood carried
+  // the boundary further out than the range this call reported, and `left` came
+  // out below `minSize`. A drag asking for the same place stops at 14.
+  const state = {
+    xs: [0, 0.2, 0.2, 0.24, 0.7, 0.8, 0.9, 1],
+    ys: [0, 0.5, 0.6, 1],
+    cards: [
+      { id: "a", c0: 1, c1: 2, r0: 0, r1: 1 },
+      { id: "d", c0: 1, c1: 3, r0: 1, r1: 2 },
+      { id: "e", c0: 3, c1: 5, r0: 1, r1: 2 },
+      { id: "c", c0: 3, c1: 7, r0: 0, r1: 1 },
+      { id: "f", c0: 5, c1: 7, r0: 1, r1: 2 },
+      { id: "h", c0: 4, c1: 7, r0: 2, r1: 3 },
+      { id: "g", c0: 1, c1: 4, r0: 2, r1: 3 },
+      { id: "left", c0: 0, c1: 1, r0: 0, r1: 3 },
+      { id: "b", c0: 2, c1: 3, r0: 0, r1: 1 },
+    ],
+  };
+  const options = { width: 230, height: 680, gap: 20, minSize: 4 };
+  const grid = new Soksak(state, options);
+  const [min] = grid.boundaryRange("x", 1);
+  assert.equal(min, 14);
+  assert.equal(grid.rect("left").w, 33.75);
+  assert.equal(
+    new Soksak(state, options).moveBoundary("x", 1, 0, false),
+    min,
+    "a drag past the range stops at it",
+  );
+
+  const at = grid.centerBoundary("x", 1);
+  assert.ok(at >= min - 0.01, `centred to ${at}, below the ${min} the range named`);
+  assert.ok(
+    grid.rect("left").w >= grid.minSize - 0.01,
+    `left is drawn ${grid.rect("left").w}, below minSize ${grid.minSize}`,
+  );
+});
