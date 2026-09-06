@@ -13,15 +13,24 @@ import { surfaceInput } from "./plane.js";
 if (host) {
   // 선택자 여럿을 `;` 으로 이어 보내면 순서대로 누른다. 하나의 창을 열고 그 안의
   // 것을 누르는 것이 한 번의 요청이어야 하기 때문이다.
-  host.on("observe-click", (selectors) => {
-    for (const selector of selectors.split(";")) {
-      const el = document.querySelector(selector);
+  //
+  // 숫자 하나는 그만큼의 밀리초를 기다린다. 누름이 낳은 일이 끝난 뒤에 다음을 눌러야
+  // 하는 순서가 있다 — 모달을 열고, 그것이 표시된 뒤에 다른 모달을 여는 것이 그렇다.
+  // 선택자는 숫자로만 이루어지지 않으므로 둘은 섞이지 않는다.
+  host.on("observe-click", async (selectors) => {
+    for (const step of selectors.split(";")) {
+      if (/^\d+$/.test(step)) {
+        await new Promise((go) => setTimeout(go, Number(step)));
+        host.call("report", `observe: waited ${step}ms`);
+        continue;
+      }
+      const el = document.querySelector(step);
       if (!el) {
-        host.call("report", `observe: ${selector} not found`);
+        host.call("report", `observe: ${step} not found`);
         continue;
       }
       el.click();
-      host.call("report", `observe: clicked ${selector}`);
+      host.call("report", `observe: clicked ${step}`);
     }
   });
 

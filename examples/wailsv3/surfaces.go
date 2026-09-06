@@ -83,15 +83,19 @@ type UpdateRequest struct {
 	OverlayContent
 }
 
+// modal is what the one modal window is drawing now.
+//
+// The page shows one [data-native-modal] element at a time and closes it before
+// it shows the next, so one record is enough and it names which modal it holds.
 type modal struct {
-	// The modal is a window of this application, attached over the point the page
-	// put it at.
-	window  *application.WebviewWindow
+	// The element's id. The modal's own page names it in every call it makes, and
+	// a call naming another modal is one the closed modal sent last.
+	id      string
 	content OverlayContent
 	// The frame the window was last placed at, in the main window's content.
 	at Rect
 	// Whether the page has reported its content drawn, which is when the window
-	// is shown and attached.
+	// is shown and attached. One showing, one report acted on.
 	shown bool
 }
 
@@ -112,8 +116,14 @@ type Surfaces struct {
 	// run rather than one message per frame.
 	running bool
 	// Whether the page has committed. This is what makes page-ready an edge.
-	first  sync.Once
-	modals map[string]*modal
+	first sync.Once
+	// The window every modal is drawn in, created on the first showing and kept.
+	// One window for the application's life, not one per showing: a window this
+	// application closes is taken off the screen but is not destroyed, so a window
+	// built per showing leaves one behind per showing.
+	modalWindow *application.WebviewWindow
+	// What that window is drawing now. Nil when no modal is open.
+	modal  *modal
 	shapes map[string]*nativeShape
 	shells *Shells
 	watch  sync.Once
@@ -185,7 +195,6 @@ func NewSurfaces(shells *Shells) *Surfaces {
 		views:  map[string]*application.Webview{},
 		named:  map[uintptr]string{},
 		live:   map[string]bool{},
-		modals: map[string]*modal{},
 		shapes: map[string]*nativeShape{},
 		shells: shells,
 		// 아직 테마를 받지 않았을 때의 값. 빈 맵이 아니면 JSON 에 null 이 실리고,
@@ -194,30 +203,38 @@ func NewSurfaces(shells *Shells) *Surfaces {
 	}
 }
 
-// OverlayShow creates a modal's window, stores its content, and reports the
-// frame the window was created at.
+// OverlayShow puts a modal in this application's modal window, and reports the
+// frame the window was placed at.
 //
-// The window is created hidden and stays hidden until the page reports that its
-// content is rendered; showing it earlier displays an empty window. It is
-// attached at the same point, so it is never drawn at the wrong position.
+// The window is created on the first showing and kept. It is taken off the screen
+// while it loads and stays off until the page reports that its content is
+// rendered; showing it earlier displays the modal that was closed, or an empty
+// window. It is attached at the same point, so it is never drawn at the wrong
+// position.
 func (s *Surfaces) OverlayShow(req OverlayRequest) (Rect, error) {
 	win, ok := mainWindow()
 	if !ok {
 		return Rect{}, errNoWindow
 	}
-	// 같은 id 의 모달이 열려 있으면 닫는다. 없으면 아무 일도 하지 않는다.
-	s.OverlayHide(req.ID)
 	var at Rect
 	var sx, sy int
 	application.InvokeSync(func() {
 		at = modalAligned(win.NativeWindow(), req.Rect)
 		sx, sy = modalOnScreen(win.NativeWindow(), at)
 	})
-	// 창을 만드는 것은 주 스레드의 일이고 이 호출은 그것이 끝날 때까지 기다린다.
-	// 잠금을 쥔 채로 기다리면, 주 스레드에서 같은 잠금을 잡는 호출과 서로를 기다린다.
-	live := &modal{
-		window: application.Get().Window.NewWithOptions(application.WebviewWindowOptions{
-			Name:      "modal-" + req.ID,
+	background := application.NewRGBA(
+		uint8(req.Background[0]), uint8(req.Background[1]),
+		uint8(req.Background[2]), uint8(req.Background[3]*255))
+
+	s.mu.Lock()
+	window := s.modalWindow
+	s.mu.Unlock()
+
+	if window == nil {
+		// 창을 만드는 것은 주 스레드의 일이고 이 호출은 그것이 끝날 때까지 기다린다.
+		// 잠금을 쥔 채로 기다리면, 주 스레드에서 같은 잠금을 잡는 호출과 서로를 기다린다.
+		window = application.Get().Window.NewWithOptions(application.WebviewWindowOptions{
+			Name:      "modal",
 			Title:     req.Title,
 			URL:       "overlay.html?id=" + req.ID,
 			Width:     int(at.W),
@@ -226,22 +243,43 @@ func (s *Surfaces) OverlayShow(req OverlayRequest) (Rect, error) {
 			Hidden:    true,
 			// 최종 자리에 만든다. 자리를 주지 않으면 화면 가운데에 만들어지고,
 			// 표시한 뒤에 옮기게 되어 가운데에 한 번 그려진다.
-			InitialPosition: application.WindowXY,
-			X:               sx,
-			Y:               sy,
-			BackgroundColour: application.NewRGBA(
-				uint8(req.Background[0]), uint8(req.Background[1]),
-				uint8(req.Background[2]), uint8(req.Background[3]*255)),
-			Mac: application.MacWindow{CornerRadius: req.Radius},
-		}),
+			InitialPosition:  application.WindowXY,
+			X:                sx,
+			Y:                sy,
+			BackgroundColour: background,
+			Mac:              application.MacWindow{CornerRadius: req.Radius},
+		})
+	} else {
+		// 다음 문서가 그려지기 전까지 웹뷰는 직전에 그린 것을 그대로 담고 있고, 그것은
+		// 방금 닫힌 모달이다. 페이지를 바꾸기 전에 화면에서 내린다.
+		window.Detach()
+		window.Hide()
+		window.SetSize(int(at.W), int(at.H))
+		window.SetPosition(sx, sy)
+		window.SetBackgroundColour(background)
+		window.SetURL("overlay.html?id=" + req.ID)
+	}
+	// 이름과 모서리는 표시할 때마다 이 모달의 것으로 바꾼다. 창을 만들 때 한 번 받는
+	// 설정으로는 다음 모달의 것이 되지 않는다.
+	//
+	// 화면에서 내리는 것을 여기서 한 번 더 한다. Hide 는 플랫폼에 이 턴의 끝에 요청되고,
+	// 그 사이에 놓인 호출들이 창을 다시 올린다. 이 호출이 돌아갈 때 창은 화면 밖이어야
+	// 한다 — 다음 문서가 그려졌다고 페이지가 보고할 때까지 이 창은 방금 닫힌 모달을
+	// 담고 있다.
+	application.InvokeSync(func() {
+		modalOrderOut(window.NativeWindow())
+		modalConfigure(window.NativeWindow(), req.Title, req.Radius)
+	})
+
+	s.mu.Lock()
+	s.modalWindow = window
+	s.modal = &modal{
+		id: req.ID,
 		at: at,
 		content: OverlayContent{
 			CSS: req.CSS, ClassName: req.ClassName, HTML: req.HTML, Border: req.Border,
 		},
 	}
-	application.InvokeSync(func() { modalConfigure(live.window.NativeWindow(), req.Title) })
-	s.mu.Lock()
-	s.modals[req.ID] = live
 	s.mu.Unlock()
 	return at, nil
 }
@@ -320,7 +358,8 @@ func (s *Surfaces) OverlayPlace(req PlaceRequest) (Rect, error) {
 		return Rect{}, errNoWindow
 	}
 	s.mu.Lock()
-	live, held := s.modals[req.ID]
+	live, window := s.modal, s.modalWindow
+	held := live != nil && live.id == req.ID
 	// shown 은 모달 문서의 호출이 다른 고루틴에서 기록한다. 잠금 밖에서 읽으면 이미
 	// 표시된 모달을 표시 전으로 보고 붙이지 않는다.
 	shown := held && live.shown
@@ -333,36 +372,40 @@ func (s *Surfaces) OverlayPlace(req PlaceRequest) (Rect, error) {
 		at = modalAligned(win.NativeWindow(), req.Rect)
 		// 내용이 바뀌면 카드의 크기도 바뀐다. 크기를 함께 적용하지 않으면 창은
 		// 만들어진 크기를 유지하고 그 안의 카드가 늘어나거나 잘린다.
-		live.window.SetSize(int(at.W), int(at.H))
+		window.SetSize(int(at.W), int(at.H))
 		// 붙이는 것은 창을 화면에 올리는 일이므로, 내용이 그려졌다고 페이지가
 		// 보고하기 전에는 자리만 기록한다.
 		if !shown {
 			sx, sy := modalOnScreen(win.NativeWindow(), at)
-			live.window.SetPosition(sx, sy)
-		} else if err := live.window.Attach(win, at.X, at.Y); err != nil {
+			window.SetPosition(sx, sy)
+		} else if err := window.Attach(win, at.X, at.Y); err != nil {
 			log.Printf("modal %s: %v", req.ID, err)
 		}
 	})
 	s.mu.Lock()
-	live.at = at
+	if s.modal != nil && s.modal.id == req.ID {
+		s.modal.at = at
+	}
 	s.mu.Unlock()
 	return at, nil
 }
 
-// OverlayHide closes a modal's window and deletes its record. A record without a
-// window has no reader.
+// OverlayHide takes the modal window off the screen and off the application's
+// window, and forgets what it was drawing. The window is not closed: it is the
+// one window every modal is drawn in and the next showing draws in it.
 func (s *Surfaces) OverlayHide(id string) error {
 	s.mu.Lock()
-	live, ok := s.modals[id]
-	if !ok {
+	live, window := s.modal, s.modalWindow
+	if live == nil || live.id != id {
 		s.mu.Unlock()
 		return nil
 	}
-	delete(s.modals, id)
+	s.modal = nil
 	s.mu.Unlock()
 
-	live.window.Detach()
-	live.window.Close()
+	window.Detach()
+	application.InvokeSync(func() { modalOrderOut(window.NativeWindow()) })
+	window.Hide()
 	// The modal took the keyboard when it opened, so the page gets it back.
 	if win, ok := mainWindow(); ok {
 		win.Focus()
@@ -376,9 +419,9 @@ func (s *Surfaces) OverlayHide(id string) error {
 func (s *Surfaces) OverlayUpdate(req UpdateRequest) {
 	content := req.OverlayContent
 	s.mu.Lock()
-	live, ok := s.modals[req.ID]
+	ok := s.modal != nil && s.modal.id == req.ID
 	if ok {
-		live.content = content
+		s.modal.content = content
 	}
 	s.mu.Unlock()
 	if !ok {
@@ -397,8 +440,8 @@ type ModalContentEvent struct {
 func (s *Surfaces) ModalContent(id string) OverlayContent {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if live, ok := s.modals[id]; ok {
-		return live.content
+	if s.modal != nil && s.modal.id == id {
+		return s.modal.content
 	}
 	return OverlayContent{}
 }
@@ -416,12 +459,13 @@ func (s *Surfaces) ModalReady(id string) {
 		return
 	}
 	s.mu.Lock()
-	live, held := s.modals[id]
+	live, window := s.modal, s.modalWindow
 	var at Rect
 	// 모달 문서는 렌더링할 때마다 보고하고, 이 애플리케이션은 문서가 로드되기 전에
-	// 보낸 내용 갱신을 로드 후에 전달한다. 표시는 한 번만 한다.
-	first := held && !live.shown
-	if held {
+	// 보낸 내용 갱신을 로드 후에 전달한다. 한 번의 표시에 한 번만 표시한다. 다른
+	// 모달의 이름으로 오는 보고는 닫힌 모달이 마지막으로 보낸 것이다.
+	first := live != nil && live.id == id && !live.shown
+	if first {
 		at = live.at
 		live.shown = true
 	}
@@ -429,11 +473,11 @@ func (s *Surfaces) ModalReady(id string) {
 	if !first {
 		return
 	}
-	live.window.Show()
-	if err := live.window.Attach(win, at.X, at.Y); err != nil {
+	window.Show()
+	if err := window.Attach(win, at.X, at.Y); err != nil {
 		log.Printf("modal %s: %v", id, err)
 	}
-	live.window.Focus()
+	window.Focus()
 	// 모달이 키보드를 가져가므로 앱의 창을 다시 main 으로 만든다. 그러지 않으면 그
 	// 창의 제목 표시줄이 모달이 열려 있는 동안 비활성으로 그려진다.
 	application.InvokeSync(func() { windowMakeMain(win.NativeWindow()) })

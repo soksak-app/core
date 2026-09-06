@@ -65,6 +65,7 @@ pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
                 report(ready.clone());
                 open(ready.clone());
                 zoom(ready.clone());
+                resize(ready.clone());
                 drive(ready.clone());
                 click(ready.clone());
             });
@@ -98,11 +99,51 @@ fn zoom<R: Runtime>(app: tauri::AppHandle<R>) {
         return;
     }
     for (label, window) in app.windows() {
-        if label.starts_with("modal-") {
+        if label != "main" {
             continue;
         }
         let _ = window.maximize();
     }
+}
+
+/// Gives the window's content the size asked for, and reports the size it got.
+///
+/// Unlike maximising, the size is named here. What maximising gives is the
+/// screen's available area, and that area changes by a point shortly after an
+/// application starts: two applications that maximise on opposite sides of that
+/// change end up with windows of different sizes. A named size cannot be moved
+/// by that race.
+///
+/// The size obtained is reported, because an application that does not apply the
+/// size asked for is something the reader has to be told about.
+fn resize<R: Runtime>(app: tauri::AppHandle<R>) {
+    let Some(spec) = flag("resize") else {
+        return;
+    };
+    let asked = spec
+        .split_once(',')
+        .and_then(|(w, h)| Some((w.trim().parse::<f64>().ok()?, h.trim().parse::<f64>().ok()?)))
+        .filter(|(w, h)| *w > 0.0 && *h > 0.0);
+    let Some((w, h)) = asked else {
+        eprintln!("observe: --resize takes width,height, got {spec:?}");
+        return;
+    };
+    let Some(window) = app.get_window("main") else {
+        return;
+    };
+    let Ok(scale) = window.scale_factor() else {
+        return;
+    };
+    // When the size has actually been applied is what the window says. Read
+    // straight after setting it, some applications answer with the size the
+    // window has not taken yet.
+    window.on_window_event(move |event| {
+        if let tauri::WindowEvent::Resized(got) = event {
+            let got = got.to_logical::<f64>(scale);
+            eprintln!("observe: sized {}x{}", got.width, got.height);
+        }
+    });
+    let _ = window.set_size(tauri::LogicalSize::new(w, h));
 }
 
 /// Asks the page to record every host call and its answer.
@@ -137,7 +178,7 @@ fn numbers<R: Runtime>(app: &tauri::AppHandle<R>) -> Vec<isize> {
     // windows, not in webview_windows.
     app.windows()
         .into_iter()
-        .find(|(label, _)| !label.starts_with("modal-"))
+        .find(|(label, _)| label == "main")
         .and_then(|(_, w)| w.ns_window().ok())
         .map(native::window_numbers)
         .unwrap_or_default()

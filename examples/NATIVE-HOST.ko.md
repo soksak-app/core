@@ -62,7 +62,7 @@
 | 표면 생성 | `window.AddWebview` | `window.add_child` |
 | 이동·크기·숨김 | `SetBounds`, `SetHidden` | `set_position`, `set_size`, `hide` |
 | 흐리게 | `surfaceSetAlpha` | `native::alpha` |
-| 모달의 창 | `window.Attach` | `WebviewWindowBuilder` + `parent_raw` |
+| 모달의 창 | `window.Attach` | `WebviewWindowBuilder` + `native::attach` |
 | 모서리 둥글게 | `Mac.CornerRadius` | `native::corners` |
 | 눌린 뷰 판별 | `surfaceWatchMouse` + `hitTest:` | `native::watch_mouse` |
 | 표면 위의 도형 | `shapeCreate`, `shapeSetStyle` | `native::shape_*` |

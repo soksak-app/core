@@ -69,7 +69,7 @@ The two hosts. Both implement the same operations against the same platform:
 | create a surface | `window.AddWebview` | `window.add_child` |
 | move, resize, hide | `SetBounds`, `SetHidden` | `set_position`, `set_size`, `hide` |
 | dim | `surfaceSetAlpha` | `native::alpha` |
-| a modal's window | `window.Attach` | `WebviewWindowBuilder` + `parent_raw` |
+| a modal's window | `window.Attach` | `WebviewWindowBuilder` + `native::attach` |
 | round the corners | `Mac.CornerRadius` | `native::corners` |
 | identify a pressed view | `surfaceWatchMouse` + `hitTest:` | `native::watch_mouse` |
 | a shape above the surfaces | `shapeCreate`, `shapeSetStyle` | `native::shape_*` |

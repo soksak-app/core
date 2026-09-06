@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/events"
 )
 
 type Observe struct{ began sync.Once }
@@ -54,6 +55,7 @@ func (o *Observe) start() {
 		o.report()
 		o.open()
 		o.zoom()
+		o.resize()
 		o.drive()
 		o.click()
 	})
@@ -146,6 +148,40 @@ func (o *Observe) zoom() {
 
 var zooming = flag.Bool("zoom", false,
 	"maximise the window once the page is drawn")
+
+// resize 는 창의 콘텐츠를 지정된 크기로 만들고 실제로 얻은 크기를 보고한다.
+//
+// 최대화와 달리 크기를 이 쪽이 정한다. 최대화가 주는 크기는 화면의 가용 영역이고,
+// 그 영역은 애플리케이션이 시작한 직후에 1pt 바뀐다 — 두 애플리케이션이 그 변화의
+// 양쪽에서 최대화하면 창의 크기가 서로 달라진다. 크기를 지정하면 그 경주가 결과를
+// 움직이지 못한다.
+//
+// 얻은 크기를 보고한다. 요청한 크기가 그대로 적용되지 않는 애플리케이션이 있으면
+// 그것을 읽는 쪽이 알아야 한다.
+func (o *Observe) resize() {
+	if *resizing == "" {
+		return
+	}
+	var w, h int
+	if _, err := fmt.Sscanf(*resizing, "%d,%d", &w, &h); err != nil || w <= 0 || h <= 0 {
+		log.Printf("observe: --resize takes width,height, got %q", *resizing)
+		return
+	}
+	win, ok := mainWindow()
+	if !ok {
+		return
+	}
+	// 크기가 실제로 적용된 시점은 창이 알린다. 설정한 직후에 읽으면 아직 적용되지
+	// 않은 크기를 읽는 애플리케이션이 있다.
+	win.OnWindowEvent(events.Common.WindowDidResize, func(*application.WindowEvent) {
+		got, high := win.Size()
+		log.Printf("observe: sized %dx%d", got, high)
+	})
+	application.InvokeSync(func() { win.SetSize(w, h) })
+}
+
+var resizing = flag.String("resize", "",
+	"give the window's content this size once the page is drawn, as width,height")
 
 // drive 는 경계를 끄는 일을 페이지에 요청한다.
 //

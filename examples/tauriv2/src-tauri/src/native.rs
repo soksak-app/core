@@ -767,6 +767,55 @@ pub fn attach(ns_window: *mut std::ffi::c_void, parent: *mut std::ffi::c_void) {
     }
 }
 
+/// Removes the window from the parent it was attached to. It keeps its position
+/// on screen, is no longer drawn above the parent, and is no longer ordered in
+/// with it.
+///
+/// Only macOS is written. On Windows this would clear the owner window and on
+/// Linux call gtk_window_set_transient_for with no parent.
+#[allow(unused_variables)]
+pub fn detach(ns_window: *mut std::ffi::c_void) {
+    #[cfg(target_os = "macos")]
+    unsafe {
+        use objc2::msg_send;
+        use objc2::runtime::AnyObject;
+
+        let window = ns_window as *mut AnyObject;
+        if window.is_null() {
+            return;
+        }
+        let parent: *mut AnyObject = msg_send![window, parentWindow];
+        if parent.is_null() {
+            return;
+        }
+        let _: () = msg_send![parent, removeChildWindow: window];
+    }
+}
+
+/// Takes the window off the screen now.
+///
+/// Tauri's own hide asks tao for it, and tao puts the call on the main queue, so
+/// the window is still composited for the rest of the turn. The modal window is
+/// reused: what it is still drawing in that turn is the modal that was closed,
+/// and the calls that follow move and resize it while it is on screen.
+///
+/// Only macOS is written. On Windows this is ShowWindow with SW_HIDE and on Linux
+/// gtk_widget_hide.
+#[allow(unused_variables)]
+pub fn order_out(ns_window: *mut std::ffi::c_void) {
+    #[cfg(target_os = "macos")]
+    unsafe {
+        use objc2::msg_send;
+        use objc2::runtime::AnyObject;
+
+        let window = ns_window as *mut AnyObject;
+        if window.is_null() {
+            return;
+        }
+        let _: () = msg_send![window, orderOut: std::ptr::null_mut::<AnyObject>()];
+    }
+}
+
 /// Makes this window the main one.
 ///
 /// A modal takes the keyboard so that its webview sets the cursor, and a window

@@ -47,6 +47,26 @@ function transcript(log) {
 const atRest = (calls) =>
   [...(calls.get("syncSurfaces") ?? [])].reverse().find((c) => /"settled":true/.test(c.request));
 
+/**
+ * 두 번째 크기. 시작 크기에서만 대조하면 두 호스트가 어긋날 수 있는 자리를 검사하지
+ * 않는다 — 라운드 7 의 결함은 창의 크기가 바뀐 뒤에만 드러났다.
+ *
+ * 크기는 이 검사가 지정한다. 최대화가 주는 크기는 화면의 가용 영역이고, 그 영역은
+ * 애플리케이션이 시작한 직후에 1pt 바뀐다. 두 애플리케이션이 그 변화의 양쪽에서
+ * 최대화하면 창의 크기가 서로 달라지고, 그 차이는 이 검사가 재려는 것이 아니다.
+ * 크기를 지정하면 그 경주가 결과를 움직이지 못한다.
+ */
+const SIZE = { w: 1000, h: 620 };
+
+/** 창이 그 크기를 실제로 가졌다고 보고한 줄. 창이 알린다. */
+const SIZED = `observe: sized ${SIZE.w}x${SIZE.h}`;
+
+/** 그 보고 이후의 기록. 크기가 바뀌기 전의 커밋은 대조 대상이 아니다. */
+const afterResize = (log = "") => {
+  const at = log.lastIndexOf(SIZED);
+  return at < 0 ? null : log.slice(at);
+};
+
 test("both hosts answer the same page the same way", async (t) => {
   const logs = {};
   for (const [name, binary] of Object.entries(APPS)) {
@@ -96,4 +116,32 @@ test("both hosts answer the same page the same way", async (t) => {
     assert.equal(theirs.request, mine.request, `${name} was asked differently`);
     assert.equal(theirs.answer, mine.answer, `${name} was answered differently`);
   }
+});
+
+test("both hosts lay out the same page the same way after a resize", async (t) => {
+  const rested = {};
+  for (const [name, binary] of Object.entries(APPS)) {
+    const log = await run(
+      binary,
+      ["--observe", "--transcript", "--resize", `${SIZE.w},${SIZE.h}`],
+      // 창이 지정된 크기를 가졌다고 보고한 뒤의 커밋을 기다린다. 그 크기에 이르지
+      // 못하는 호스트는 여기서 예산이 끝나고, 그 로그가 실패에 실린다.
+      (text) => /"settled":true/.test(afterResize(text) ?? ""),
+      { timeout: 30_000 },
+    );
+    if (!log) return t.skip(`${binary} is not built`);
+    const found = atRest(transcript(afterResize(log)));
+    assert.ok(found, `${name} recorded no settled commit after the resize:\n${log}`);
+    rested[name] = found;
+  }
+
+  // 두 창이 같은 크기이므로, 요청이 다르면 그것은 크기의 차이가 아니라 배치의 차이다.
+  assert.equal(
+    rested.tauriv2.request, rested.wailsv3.request,
+    `the two hosts give the page a different plane at ${SIZE.w}x${SIZE.h}`,
+  );
+  assert.equal(
+    rested.tauriv2.answer, rested.wailsv3.answer,
+    `the two hosts place the same surfaces differently at ${SIZE.w}x${SIZE.h}`,
+  );
 });

@@ -398,39 +398,43 @@ struct OverlayContent {
     border: String,
 }
 
-/// What one modal needs to be drawn, kept under the element's id: a page may
-/// declare several modals, and each view must get its own, not the last one set.
+/// What the one modal window is drawing now.
+///
+/// The page shows one [data-native-modal] element at a time and closes it before
+/// it shows the next, so one record is enough and it names which modal it holds.
 #[derive(Debug, Clone, Default)]
 struct Modal {
+    /// The element's id. The modal's own page names it in every call it makes,
+    /// and a call naming another modal is one the closed modal sent last.
+    id: String,
     content: OverlayContent,
     radius: f64,
-    /// The label of the window drawing it. Closing a window only queues the
-    /// close, so a window built for the same id straight afterwards would be
-    /// refused the label the closing one still holds. Every showing takes a
-    /// label of its own.
-    label: String,
     /// The page rect it was last placed at. A child window keeps its place on
     /// screen when its parent is resized, so it is placed again from this.
     at: Rect,
-    /// Whether the window has been shown. The modal's document reports itself
-    /// ready on every render, and showing it again takes the keyboard back.
+    /// Whether the window has been shown for this showing. The modal's document
+    /// reports itself ready on every render, and showing it again takes the
+    /// keyboard back.
     shown: bool,
 }
 
+/// The one modal window, and what it is drawing.
+///
+/// The window is built on the first showing and kept: one window for the
+/// application's life, not one per showing. A window this application closes is
+/// taken off the screen but is not destroyed, so a window built per showing
+/// leaves one behind per showing.
 #[derive(Default)]
 struct Overlay {
-    modals: Mutex<HashMap<String, Modal>>,
-    /// How many modal windows have been built. Names the next one.
-    built: Mutex<u64>,
+    window: Mutex<Option<WebviewWindow>>,
+    /// What that window is drawing now. None when no modal is open.
+    open: Mutex<Option<Modal>>,
 }
 
-/// The window of the modal shown under this id, if one is open.
-fn modal_window(app: &AppHandle, state: &State<'_, Overlay>, id: &str) -> Option<WebviewWindow> {
-    let label = state.modals.lock().ok()?.get(id)?.label.clone();
-    app.get_webview_window(&label)
-}
+/// The label of the window every modal is drawn in.
+const MODAL: &str = "modal";
 
-/// Places every open modal at the page rect it was last given.
+/// Places the open modal at the page rect it was last given.
 ///
 /// A child window follows its parent when the parent moves and keeps its place
 /// on screen when the parent is resized, so the modal is placed again here. The
@@ -444,25 +448,27 @@ fn replace_modals(app: &AppHandle) {
     let Ok(scale) = window.scale_factor() else {
         return;
     };
-    let open: Vec<(String, Rect)> = match app.state::<Overlay>().modals.lock() {
-        Ok(modals) => modals
-            .values()
-            .filter(|m| !m.label.is_empty() && m.at.w > 0.0)
-            .map(|m| (m.label.clone(), m.at))
-            .collect(),
+    let overlay = app.state::<Overlay>();
+    let at = match overlay.open.lock() {
+        Ok(held) => match held.as_ref() {
+            Some(modal) if modal.at.w > 0.0 => modal.at,
+            _ => return,
+        },
         Err(_) => return,
     };
-    for (label, at) in open {
-        let Some(modal) = app.get_webview_window(&label) else {
-            continue;
-        };
-        let (ax, ay, aw, ah) = aligned_window(at.x, at.y, at.w.max(1.0), at.h.max(1.0), scale);
-        let Ok((sx, sy)) = on_screen(&window, ax, ay) else {
-            continue;
-        };
-        let _ = modal.set_position(LogicalPosition::new(sx, sy));
-        let _ = modal.set_size(LogicalSize::new(aw, ah));
-    }
+    let modal = match overlay.window.lock() {
+        Ok(held) => match held.as_ref() {
+            Some(modal) => modal.clone(),
+            None => return,
+        },
+        Err(_) => return,
+    };
+    let (ax, ay, aw, ah) = aligned_window(at.x, at.y, at.w.max(1.0), at.h.max(1.0), scale);
+    let Ok((sx, sy)) = on_screen(&window, ax, ay) else {
+        return;
+    };
+    let _ = modal.set_position(LogicalPosition::new(sx, sy));
+    let _ = modal.set_size(LogicalSize::new(aw, ah));
 }
 
 /// The theme last declared by the page.
@@ -493,11 +499,6 @@ struct Running {
     first: Mutex<bool>,
 }
 
-/// One view per modal element, named after it, so a page may have several.
-fn modal_label(id: &str, n: u64) -> String {
-    format!("modal-{id}-{n}")
-}
-
 /// Draws one modal element in a window of its own.
 ///
 /// A window, not a webview beside the surfaces. A webview sets the cursor from
@@ -517,53 +518,83 @@ fn overlay_show(
     state: State<'_, Overlay>,
     request: OverlayRequest,
 ) -> Result<Rect, String> {
-    let content = OverlayContent {
-        css: request.css,
-        class_name: request.class_name,
-        html: request.html,
-        border: request.border,
-    };
-    let label = {
-        let mut built = state.built.lock().map_err(|e| e.to_string())?;
-        *built += 1;
-        modal_label(&request.id, *built)
-    };
-    let was = state.modals.lock().map_err(|e| e.to_string())?.insert(
-        request.id.clone(),
-        Modal { content, radius: request.radius, label: label.clone(), at: request.rect, shown: false },
-    );
-
-    if let Some(old) = was.and_then(|m| app.get_webview_window(&m.label)) {
-        old.close().map_err(|e| e.to_string())?;
-    }
-    // The id is passed in the url so the page can identify itself when it calls
-    // back.
-    let url = format!("overlay.html?id={}", request.id);
-    let [r, g, b, a] = request.background;
     let scale = window.scale_factor().map_err(|e| e.to_string())?;
     let (ax, ay, aw, ah) = aligned_window(
         request.rect.x, request.rect.y,
         request.rect.w.max(1.0), request.rect.h.max(1.0), scale,
     );
     let (sx, sy) = on_screen(&window, ax, ay)?;
-    let parent = window.ns_window().map_err(|e| e.to_string())?;
-    let modal = WebviewWindowBuilder::new(&app, &label, WebviewUrl::App(url.into()))
-        .decorations(false)
-        .resizable(false)
-        // A borderless window draws no title, but the system and assistive
-        // software name the window by it.
-        .title(&request.title)
-        .visible(false)
-        .background_color(Color(r as u8, g as u8, b as u8, (a * 255.0) as u8))
-        .position(sx, sy)
-        .inner_size(aw, ah)
-        .build()
-        .map_err(|e| e.to_string())?;
-    // Tauri provides no non-opaque window without a private interface, so the
-    // window is configured directly. The clipped corners would render black.
-    let own = modal.ns_window().map_err(|e| e.to_string())?;
-    native::panelise(own, parent);
-    Ok(Rect { x: ax, y: ay, w: aw, h: ah })
+    let at = Rect { x: ax, y: ay, w: aw, h: ah };
+    let [r, g, b, a] = request.background;
+    let colour = Color(r as u8, g as u8, b as u8, (a * 255.0) as u8);
+    // The id is passed in the url so the page can identify itself when it calls
+    // back.
+    let url = format!("overlay.html?id={}", request.id);
+
+    // Written before the window is touched: the page this loads calls back with
+    // its id, and it is answered from here.
+    *state.open.lock().map_err(|e| e.to_string())? = Some(Modal {
+        id: request.id.clone(),
+        content: OverlayContent {
+            css: request.css,
+            class_name: request.class_name,
+            html: request.html,
+            border: request.border,
+        },
+        radius: request.radius,
+        at,
+        shown: false,
+    });
+
+    let mut kept = state.window.lock().map_err(|e| e.to_string())?;
+    match kept.as_ref() {
+        Some(modal) => {
+            // Taken off the screen before its page is replaced. A webview keeps
+            // what it drew until the next document paints, and what it drew is
+            // the modal that was just closed.
+            let own = modal.ns_window().map_err(|e| e.to_string())?;
+            native::detach(own);
+            // Off the screen now, not at the end of this turn: the calls below
+            // move, resize and reload it, and a window still on screen shows all
+            // of that happening to the modal that was closed.
+            native::order_out(own);
+            modal.hide().map_err(|e| e.to_string())?;
+            // A borderless window draws no title, but the system and assistive
+            // software name the window by it, and the name is this modal's.
+            modal.set_title(&request.title).map_err(|e| e.to_string())?;
+            modal.set_background_color(Some(colour)).map_err(|e| e.to_string())?;
+            modal.set_position(LogicalPosition::new(sx, sy)).map_err(|e| e.to_string())?;
+            modal.set_size(LogicalSize::new(aw, ah)).map_err(|e| e.to_string())?;
+            // The address this window already holds names the scheme this app
+            // serves, so the page is asked for by changing the id on it.
+            let mut target = modal.url().map_err(|e| e.to_string())?;
+            target.set_path("/overlay.html");
+            target.set_query(Some(&format!("id={}", request.id)));
+            modal.navigate(target).map_err(|e| e.to_string())?;
+        }
+        None => {
+            let parent = window.ns_window().map_err(|e| e.to_string())?;
+            let built = WebviewWindowBuilder::new(&app, MODAL, WebviewUrl::App(url.into()))
+                .decorations(false)
+                .resizable(false)
+                // A borderless window draws no title, but the system and assistive
+                // software name the window by it.
+                .title(&request.title)
+                .visible(false)
+                .background_color(colour)
+                .position(sx, sy)
+                .inner_size(aw, ah)
+                .build()
+                .map_err(|e| e.to_string())?;
+            // Tauri provides no non-opaque window without a private interface, so
+            // the window is configured directly. The clipped corners would render
+            // black.
+            let own = built.ns_window().map_err(|e| e.to_string())?;
+            native::panelise(own, parent);
+            *kept = Some(built);
+        }
+    }
+    Ok(at)
 }
 
 /// Turns a point in the app window's own coordinates into one on the screen.
@@ -661,13 +692,17 @@ struct PlaceRequest {
 /// whole pixels, so the two differ and the page is told by how much.
 #[tauri::command]
 fn overlay_place(
-    app: AppHandle,
     window: Window,
     state: State<'_, Overlay>,
     request: PlaceRequest,
 ) -> Result<Rect, String> {
     let scale = window.scale_factor().map_err(|e| e.to_string())?;
-    let Some(modal) = modal_window(&app, &state, &request.id) else {
+    let open = matches!(
+        state.open.lock().map_err(|e| e.to_string())?.as_ref(),
+        Some(modal) if modal.id == request.id
+    );
+    let held = state.window.lock().map_err(|e| e.to_string())?.clone();
+    let Some(modal) = held.filter(|_| open) else {
         return Ok(Rect { x: 0.0, y: 0.0, w: 0.0, h: 0.0 });
     };
     let (ax, ay, aw, ah) = aligned_window(
@@ -678,9 +713,9 @@ fn overlay_place(
     modal.set_position(LogicalPosition::new(sx, sy)).map_err(|e| e.to_string())?;
     modal.set_size(LogicalSize::new(aw, ah)).map_err(|e| e.to_string())?;
     let applied = Rect { x: ax, y: ay, w: aw, h: ah };
-    if let Ok(mut modals) = state.modals.lock() {
-        if let Some(held) = modals.get_mut(&request.id) {
-            held.at = applied;
+    if let Ok(mut held) = state.open.lock() {
+        if let Some(open) = held.as_mut().filter(|m| m.id == request.id) {
+            open.at = applied;
         }
     }
     Ok(applied)
@@ -689,13 +724,13 @@ fn overlay_place(
 #[tauri::command]
 fn overlay_content(state: State<'_, Overlay>, id: String) -> Result<OverlayContent, String> {
     Ok(state
-        .modals
+        .open
         .lock()
         .map_err(|e| e.to_string())?
-        .get(&id)
-        .cloned()
-        .unwrap_or_default()
-        .content)
+        .as_ref()
+        .filter(|modal| modal.id == id)
+        .map(|modal| modal.content.clone())
+        .unwrap_or_default())
 }
 
 /// Clips the modal's corners and reveals it.
@@ -718,15 +753,16 @@ fn overlay_ready(
     state: State<'_, Overlay>,
     id: String,
 ) -> Result<(), String> {
-    let Some(existing) = modal_window(&app, &state, &id) else {
+    let Some(existing) = state.window.lock().map_err(|e| e.to_string())?.clone() else {
         return Ok(());
     };
     // The modal's document reports itself ready from its render, and it renders
-    // again on every content change. The window is shown once.
+    // again on every content change. The window is shown once per showing, and a
+    // report naming another modal is one the modal that was closed sent last.
     let first = {
-        let mut modals = state.modals.lock().map_err(|e| e.to_string())?;
-        match modals.get_mut(&id) {
-            Some(modal) if !modal.shown => {
+        let mut held = state.open.lock().map_err(|e| e.to_string())?;
+        match held.as_mut() {
+            Some(modal) if modal.id == id && !modal.shown => {
                 modal.shown = true;
                 Some(modal.clone())
             }
@@ -766,11 +802,21 @@ fn overlay_ready(
 
 #[tauri::command]
 fn overlay_hide(app: AppHandle, window: Window, state: State<'_, Overlay>, id: String) -> Result<(), String> {
-    let Some(was) = state.modals.lock().map_err(|e| e.to_string())?.remove(&id) else {
-        return Ok(());
-    };
-    if let Some(existing) = app.get_webview_window(&was.label) {
-        existing.close().map_err(|e| e.to_string())?;
+    {
+        let mut held = state.open.lock().map_err(|e| e.to_string())?;
+        if !matches!(held.as_ref(), Some(modal) if modal.id == id) {
+            return Ok(());
+        }
+        *held = None;
+    }
+    // A modal is open only once the window has been built, so it is here.
+    if let Some(existing) = state.window.lock().map_err(|e| e.to_string())?.as_ref() {
+        // Taken off the screen and off the app's window, not closed: this is the
+        // one window every modal is drawn in and the next showing draws in it.
+        let own = existing.ns_window().map_err(|e| e.to_string())?;
+        native::detach(own);
+        native::order_out(own);
+        existing.hide().map_err(|e| e.to_string())?;
     }
     window.set_focus().map_err(|e| e.to_string())?;
     app.emit("windows-changed", ()).map_err(|e| e.to_string())?;
@@ -794,8 +840,8 @@ fn overlay_pick(window: Window, id: String, key: String, value: String) -> Resul
 fn overlay_update(app: AppHandle, overlay: State<'_, Overlay>, request: UpdateRequest) -> Result<(), String> {
     let content = request.content;
     {
-        let mut modals = overlay.modals.lock().map_err(|e| e.to_string())?;
-        let Some(modal) = modals.get_mut(&request.id) else { return Ok(()) };
+        let mut held = overlay.open.lock().map_err(|e| e.to_string())?;
+        let Some(modal) = held.as_mut().filter(|m| m.id == request.id) else { return Ok(()) };
         modal.content = content.clone();
     }
     // Every page receives the event, so it carries the id and each modal's page

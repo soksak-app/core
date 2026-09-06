@@ -103,17 +103,39 @@ static void windowControls(void* nsWindow, double* out) {
 // behind them rather than the window's own background; with a shadow; and out of
 // the list of windows the application offers to switch between, because it is
 // auxiliary to the application's window rather than a document of its own.
-static void modalConfigure(void* modalWindow, const char* title) {
+static void modalConfigure(void* modalWindow, const char* title, double radius) {
     NSWindow* window = (NSWindow*)modalWindow;
     if (window == nil) return;
     // A window's title is the name the system and assistive software call it by,
     // drawn or not. Wails sets the title only of a window that has a frame, and
     // this one has none, so it is set here.
     if (title != NULL) [window setTitle:[NSString stringWithUTF8String:title]];
+    // The window is kept for the application's life and draws a different modal
+    // on every showing, so the corners are cut to the radius of the modal it is
+    // drawing now. The option that would set them takes the radius once, at
+    // creation.
+    NSView* content = [window contentView];
+    if (content != nil) {
+        [content setWantsLayer:YES];
+        content.layer.cornerRadius = radius;
+        content.layer.masksToBounds = YES;
+    }
     [window setOpaque:NO];
     [window setBackgroundColor:[NSColor clearColor]];
     [window setHasShadow:YES];
     [window setExcludedFromWindowsMenu:YES];
+}
+
+// Takes the window off the screen now.
+//
+// Wails asks the platform for it on the main queue, so the window is still
+// composited for the rest of the turn. The modal window is reused: what it is
+// still drawing in that turn is the modal that was closed, and the calls that
+// follow move, resize and reload it while it is on screen.
+static void modalOrderOut(void* modalWindow) {
+    NSWindow* window = (NSWindow*)modalWindow;
+    if (window == nil) return;
+    [window orderOut:nil];
 }
 
 // Makes this window the main one. A modal takes the keyboard so that its webview
@@ -315,11 +337,15 @@ func windowControls(window unsafe.Pointer) Rect {
 
 // modalConfigure configures a modal's window: named, not opaque, with a shadow,
 // and out of the window menu.
-func modalConfigure(window unsafe.Pointer, title string) {
+func modalConfigure(window unsafe.Pointer, title string, radius float64) {
 	name := C.CString(title)
 	defer C.free(unsafe.Pointer(name))
-	C.modalConfigure(window, name)
+	C.modalConfigure(window, name, C.double(radius))
 }
+
+// modalOrderOut takes the modal's window off the screen now, rather than at the
+// end of this turn.
+func modalOrderOut(window unsafe.Pointer) { C.modalOrderOut(window) }
 
 // windowMakeMain makes this window the main one, so it keeps an active title bar
 // while another window holds the keyboard.
