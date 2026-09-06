@@ -544,3 +544,24 @@ test("R1 — where a line stands does not depend on which cards read it", () => 
     );
   }
 });
+
+test("a rule reaches into the corridor of the axis it runs along", () => {
+  // Eleven columns in 200px: the ten interior lines cannot each hold the 24px
+  // gap, so the drawn gap on x is 20 and on y it is the declared 24. A rule that
+  // runs along y reaches half of x's gap into the corridor beside it.
+  const xs = Array.from({ length: 12 }, (_, i) => i / 11);
+  const cards = [{ id: "side", c0: 0, c1: 1, r0: 0, r1: 2 }];
+  for (let c = 1; c < 11; c++) {
+    cards.push({ id: `t${c}`, c0: c, c1: c + 1, r0: 0, r1: 1 });
+    cards.push({ id: `b${c}`, c0: c, c1: c + 1, r0: 1, r1: 2 });
+  }
+  const grid = new Soksak(
+    { xs, ys: [0, 0.5, 1], cards },
+    { width: 200, height: 800, gap: 24, minSize: 1 },
+  );
+
+  const stretch = grid.rules().find((r) => r.key === "sy:1:1");
+  assert.ok(stretch, "the y line has a solid stretch starting at column 1");
+  // Half of the drawn gap on x, which is 200 / 10 lines = 20.
+  assert.equal(stretch.x, grid.rect("t1").x - 10, "it starts half a drawn x gap before the card");
+});

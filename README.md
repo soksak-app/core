@@ -65,6 +65,15 @@ corridor it carries, the rest divide what is left, and the card that ran out of
 room is drawn with no width against its near edge. The corridor between any two
 neighbours is still exactly `gap`, and the plane is still covered exactly.
 
+`minSize` binds the operations, not the plane. Splitting, closing, inserting and
+dragging each refuse to take a card below it; `gap`, `minSize` and `resize`
+re-express the same proportions at the new scale instead. So a sharing card
+standing on the floor is drawn below it once the gap grows — by half a gap for
+every interior line it touches — even where the plane still has the room. Nothing
+is rewritten: set the gap back and the card is drawn what it was, to the last
+bit. A card that must keep a size whatever the gap declares one with `setSize`,
+which is drawn as declared at any `gap`.
+
 A card that arrives takes its width from the slot next to it, as a drag does.
 
 A px size describes one slot, so a cut divides it between the halves. A card
@@ -247,6 +256,12 @@ between them. `boundaryRange` reports that by returning the position the
 boundary stands at twice, and centring it does nothing for the same reason. A
 boundary with a declared size on both sides still moves, because the pair keeps
 the size it declares between them.
+
+Beside a card with a px size, the range a boundary can reach also ends where the
+sharing slots hit their floor — a gap each plus one card's minimum.
+`boundaryRange` measures the two cards that meet the boundary, so on a plane
+close to that floor it can report a little more room than the boundary can take,
+and a target past it leaves the boundary where it is.
 
 The same rule settles a card that appears or disappears. A closing card's width,
 and the corridor it releases, go to the slot next to it; a card inserted at a

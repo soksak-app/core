@@ -579,3 +579,59 @@ test("a slot stopped at its corridor does not bend a drag", () => {
     `the two cards come out the same size, not ${centred.rect("a").h} and ${centred.rect("b").h}`,
   );
 });
+
+test("a drag lands where it asked while a slot is stopped at its corridor", () => {
+  // The slot the starvation rule stopped does not flex with its span, and it
+  // flexes again as soon as the move gives it room, so one conversion of px into
+  // span lands short. The plane holds what this axis declares before and after.
+  const state = {
+    xs: [0, 0.20150587381823687, 0.608, 0.624, 0.64, 0.7840677966101695, 1],
+    ys: [0, 0.25604838709677413, 0.2560483870967742, 1],
+    cards: [
+      { id: "card-1", c0: 0, c1: 2, r0: 0, r1: 1 },
+      { id: "card-9", c0: 0, c1: 2, r0: 1, r1: 3 },
+      { id: "card-10", c0: 2, c1: 4, r0: 0, r1: 3 },
+      { id: "card-11", c0: 5, c1: 6, r0: 0, r1: 3, width: 180 },
+      { id: "card-12", c0: 4, c1: 5, r0: 0, r1: 3, width: 85 },
+    ],
+  };
+  for (const ask of [115, 130.57, 160]) {
+    const grid = new Soksak(state, { width: 590, height: 531, gap: 24, minSize: 96 });
+    const at = grid.moveBoundary("x", 2, ask, false);
+    assert.ok(Math.abs(at - ask) < 0.01, `the boundary reaches ${ask}, not ${at}`);
+  }
+});
+
+test("the range takes in where the boundary stands, so a drag that does not move it moves nothing", () => {
+  const grid = new Soksak(undefined, { width: 1200, height: 600, gap: 24, minSize: 96 });
+  grid.split("card", "x");
+  grid.split("card", "x");
+  grid.resize(420, 600);                       // too small for three cards at 96
+  for (const line of [1, 2]) {
+    const at = grid.boundaryPos("x", line);
+    const [min, max] = grid.boundaryRange("x", line);
+    assert.ok(min <= at && at <= max, `line ${line}: ${at} outside [${min}, ${max}]`);
+  }
+  const was = grid.rects();
+  const at = grid.boundaryPos("x", 1);
+  assert.equal(grid.moveBoundary("x", 1, at, false), at);
+  assert.deepEqual(grid.rects(), was);
+});
+
+test("centring halves the two cards, not the two lines beside them", () => {
+  const grid = new Soksak(
+    {
+      xs: [0, 0.5, 1],
+      ys: [0, 0.5, 0.75, 1],
+      cards: [
+        { id: "top", c0: 0, c1: 1, r0: 0, r1: 1 },
+        { id: "bottom", c0: 0, c1: 1, r0: 1, r1: 3 },   // reaches past line 2
+        { id: "r-top", c0: 1, c1: 2, r0: 0, r1: 2 },
+        { id: "r-bottom", c0: 1, c1: 2, r0: 2, r1: 3 },
+      ],
+    },
+    { width: 800, height: 600, gap: 24, minSize: 40 },
+  );
+  grid.centerBoundary("y", 1);
+  assert.equal(grid.rect("top").h, grid.rect("bottom").h);
+});

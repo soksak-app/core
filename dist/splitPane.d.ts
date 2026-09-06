@@ -34,6 +34,8 @@ export interface Paid {
     side: 'lo' | 'hi';
     to: string;
     span?: 'lo' | 'hi' | 'all';
+    /** Which of `to`'s slots gave the width, counted from its first. */
+    at?: number;
 }
 export interface SoksakState {
     xs: number[];
@@ -246,6 +248,9 @@ export declare class Soksak {
      * The range extends to the nearest line a card references; unreferenced lines
      * do not limit it. When the cards on both sides need more than the plane
      * holds, `lo` and `hi` are equal rather than inverted.
+     *
+     * The range always contains the position the boundary stands at, so a drag
+     * that does not move it changes nothing.
      *
      * A boundary with a px size on exactly one side of it, on an axis the plane
      * cannot hold, reports the position it stands at twice: every way of moving it

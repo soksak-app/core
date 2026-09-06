@@ -789,3 +789,79 @@ test("a card whose span came from the whole plane gives it back", () => {
     );
   }
 });
+
+test("centring reaches the middle on a plane that draws its sizes scaled", () => {
+  // 602 + 331 px of declared width and three corridors do not fit 992 px, so
+  // every declared size is drawn scaled. The move changes that scale, so where
+  // a move lands is not where it was asked for: the middle is measured again
+  // after each move until the two cards come out the same size.
+  const grid = new Soksak(undefined, { width: 992, height: 500, gap: 12, minSize: 15 });
+  const second = grid.split("card", "x");
+  const wide = grid.split(second, "x");
+  const narrow = grid.split(second, "x");
+  grid.setSize(wide, "x", 602);
+  grid.setSize(narrow, "x", 331);
+  grid.centerBoundary("x", 1);
+  assert.ok(
+    Math.abs(grid.rect("card").w - grid.rect(second).w) < 0.01,
+    `${grid.rect("card").w} and ${grid.rect(second).w}`,
+  );
+});
+
+test("a cut halves the card on a plane that draws its declared sizes scaled", () => {
+  const grid = new Soksak({
+    xs: [0, 0.3, 0.55, 0.82, 1],
+    ys: [0, 0.64, 0.96, 1],
+    cards: [
+      { id: "left", c0: 0, c1: 2, r0: 0, r1: 3 },
+      { id: "top", c0: 3, c1: 4, r0: 0, r1: 1, height: 148 },
+      { id: "bottom", c0: 3, c1: 4, r0: 1, r1: 3 },
+      { id: "rail", c0: 2, c1: 3, r0: 0, r1: 3, width: 123 },
+    ],
+  }, { width: 292, height: 218, gap: 32, minSize: 60 });
+  assert.equal(grid.rect("left").h, 218);
+  assert.equal(grid.split("left", "y", { id: "new" }), "new");
+  assert.equal(grid.rect("left").h, 93);
+  assert.equal(grid.rect("new").h, 93);
+});
+
+test("a gap change re-expresses the proportions and never rewrites them", () => {
+  const grid = new Soksak({
+    xs: [0, 1], ys: [0, 0.2, 0.4, 1],
+    cards: [
+      { id: "top", c0: 0, c1: 1, r0: 0, r1: 1 },
+      { id: "mid", c0: 0, c1: 1, r0: 1, r1: 2 },
+      { id: "bot", c0: 0, c1: 1, r0: 2, r1: 3, height: 400 },
+    ],
+  }, { width: 900, height: 634, gap: 0, minSize: 96 });
+  grid.moveBoundary("y", 2, grid.boundaryRange("y", 2)[0], false);
+  const parked = grid.rect("mid").h;
+  assert.equal(parked, 96);
+  const ys = grid.lines("y");
+
+  // the slot carries the corridor, so a wider gap draws a sharing card smaller
+  grid.gap = 24;
+  assert.ok(grid.rect("mid").h < grid.minSize);
+
+  // and a theme that moves the gap and moves it back changes nothing
+  for (let k = 0; k < 20; k++) { grid.gap = 7; grid.gap = 4; }
+  grid.gap = 0;
+  assert.equal(grid.rect("mid").h, parked);
+  assert.deepEqual(grid.lines("y"), ys);
+});
+
+test("a card that declares its size is drawn at it whatever the gap", () => {
+  // no second declared size, so the plane holds what the axis declares
+  const grid = new Soksak({
+    xs: [0, 1], ys: [0, 0.2, 0.4, 1],
+    cards: [
+      { id: "top", c0: 0, c1: 1, r0: 0, r1: 1 },
+      { id: "mid", c0: 0, c1: 1, r0: 1, r1: 2, height: 96 },
+      { id: "bot", c0: 0, c1: 1, r0: 2, r1: 3 },
+    ],
+  }, { width: 900, height: 634, gap: 0, minSize: 96 });
+  for (const px of [0, 4, 6, 7, 24, 60]) {
+    grid.gap = px;
+    assert.equal(grid.rect("mid").h, 96, `gap ${px}`);
+  }
+});

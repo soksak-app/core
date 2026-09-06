@@ -1180,3 +1180,132 @@ test("a pointer drag the release never reached is not the first press of a pair"
   pointer(window, divider, "pointerup", 9, at + 300, 100);
   view.destroy();
 });
+
+test("a resize under a drag carries the drag with it", () => {
+  const dom = new JSDOM("<!doctype html><div id=host></div>", { pretendToBeVisual: true });
+  const { window } = dom;
+  globalThis.document = window.document;
+  const host = window.document.getElementById("host");
+  let fire = () => {};
+  globalThis.ResizeObserver = class {
+    constructor(cb) { fire = cb; }
+    observe() {}
+    disconnect() { fire = () => {}; }
+  };
+  const size = (w, h) => {
+    Object.defineProperty(host, "clientWidth", { value: w, configurable: true });
+    Object.defineProperty(host, "clientHeight", { value: h, configurable: true });
+  };
+
+  size(1200, 600);
+  const grid = new Soksak(undefined, { width: 1200, height: 600, gap: 24 });
+  grid.split("card", "x");
+  const view = new SoksakView(host, grid, {
+    createCard: () => window.document.createElement("div"),
+  });
+  view.render();
+  const divider = host.querySelector('[role="separator"]');
+  const at = grid.boundaryPos("x", 1);
+
+  pointer(window, divider, "pointerdown", 1, at, 300);
+  pointer(window, divider, "pointermove", 1, at + 100, 300);
+  const moved = grid.boundaryPos("x", 1);
+
+  // The host shrinks while the finger is still down. The boundary moves with the
+  // plane, and the drag holds the position it was pressed at.
+  size(800, 600);
+  fire();
+  const carried = grid.boundaryPos("x", 1);
+  assert.notEqual(carried, moved, "the resize moved the boundary");
+
+  pointer(window, divider, "pointermove", 1, at + 130, 300);
+  assert.ok(
+    Math.abs(grid.boundaryPos("x", 1) - (carried + 30)) < 1e-6,
+    `the next move goes 30 further, to ${grid.boundaryPos("x", 1)}, not ${carried + 30}`,
+  );
+
+  pointer(window, divider, "pointerup", 1, at + 130, 300);
+  view.destroy();
+  delete globalThis.ResizeObserver;
+});
+
+test("a second finger on a held divider is not the second press of a pair", () => {
+  const { window, host, grid, view } = mount();
+  const divider = host.querySelector('[role="separator"]');
+  grid.moveBoundary("x", 1, 400, false);
+  view.render();
+
+  const off = grid.boundaryPos("x", 1);
+  pointer(window, divider, "pointerdown", 11, off, 150);
+  pointer(window, divider, "pointerdown", 12, off, 320);
+  assert.equal(grid.boundaryPos("x", 1), off, "the boundary is not centred");
+
+  pointer(window, divider, "pointerup", 11, off, 150);
+  pointer(window, divider, "pointerup", 12, off, 320);
+  view.destroy();
+});
+
+test("a press on another divider drops the drag whose release was never delivered", () => {
+  const { window, host, grid, view } = mount();
+  grid.split("card", "y");
+  view.render();
+  const [across, down] = [
+    host.querySelector('.sp-divider[data-axis="x"]'),
+    host.querySelector('.sp-divider[data-axis="y"]'),
+  ];
+  assert.ok(across && down, "the plane has a divider on each axis");
+
+  pointer(window, across, "pointerdown", 1, grid.boundaryPos("x", 1), 300);
+  assert.equal(across.dataset.dragging, "true", "the first divider is held");
+
+  // The release of the first press was never delivered.
+  pointer(window, down, "pointerdown", 1, 300, grid.boundaryPos("y", 1));
+  assert.equal(across.dataset.dragging, undefined, "the first divider is let go");
+  assert.equal(down.dataset.dragging, "true", "and the second is held");
+  assert.equal(host.querySelectorAll("[data-dragging]").length, 1, "one divider is held");
+
+  pointer(window, down, "pointerup", 1, 300, grid.boundaryPos("y", 1));
+  view.destroy();
+});
+
+test("a divider two pointers hold stays held until the last one lets go", () => {
+  const { window, host, grid, view } = mount();
+  const divider = host.querySelector('[role="separator"]');
+  const at = grid.boundaryPos("x", 1);
+
+  pointer(window, divider, "pointerdown", 1, at, 150);
+  pointer(window, divider, "pointerdown", 2, at, 320);
+  assert.equal(divider.dataset.dragging, "true", "both hold it");
+
+  pointer(window, divider, "pointerup", 1, at, 150);
+  assert.equal(divider.dataset.dragging, "true", "one let go, the other still holds it");
+  pointer(window, divider, "pointermove", 2, at + 60, 320);
+  assert.ok(Math.abs(grid.boundaryPos("x", 1) - (at + 60)) < 1e-6, "and still drives it");
+
+  pointer(window, divider, "pointerup", 2, at + 60, 320);
+  assert.equal(divider.dataset.dragging, undefined, "the last release lets it go");
+  view.destroy();
+});
+
+test("a hold whose release never arrived does not stop the divider being centred", () => {
+  const { window, host, grid, view } = mount();
+  const divider = host.querySelector('[role="separator"]');
+  grid.moveBoundary("x", 1, 400, false);
+  view.render();
+  const centre = 600;
+
+  // This press is never released: the divider stays held for the life of the
+  // plane. A double press on it is still a double press.
+  pointer(window, divider, "pointerdown", 7, grid.boundaryPos("x", 1), 150);
+  pointer(window, divider, "pointerdown", 8, grid.boundaryPos("x", 1), 150);
+  pointer(window, divider, "pointerup", 8, grid.boundaryPos("x", 1), 150);
+  pointer(window, divider, "pointerdown", 9, grid.boundaryPos("x", 1), 150);
+  assert.ok(
+    Math.abs(grid.boundaryPos("x", 1) - centre) < 1e-6,
+    `the pair centres the boundary, at ${grid.boundaryPos("x", 1)} instead of ${centre}`,
+  );
+
+  pointer(window, divider, "pointerup", 9, centre, 150);
+  pointer(window, divider, "pointerup", 7, centre, 150);
+  view.destroy();
+});

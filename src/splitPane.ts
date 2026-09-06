@@ -63,6 +63,8 @@ export interface Paid {
   side: 'lo' | 'hi';
   to: string;
   span?: 'lo' | 'hi' | 'all';
+  /** Which of `to`'s slots gave the width, counted from its first. */
+  at?: number;
 }
 
 export interface SoksakState {
@@ -701,6 +703,9 @@ export class Soksak {
    * do not limit it. When the cards on both sides need more than the plane
    * holds, `lo` and `hi` are equal rather than inverted.
    *
+   * The range always contains the position the boundary stands at, so a drag
+   * that does not move it changes nothing.
+   *
    * A boundary with a px size on exactly one side of it, on an axis the plane
    * cannot hold, reports the position it stands at twice: every way of moving it
    * changes the size a card that does not meet it is drawn at. The declared
@@ -737,14 +742,22 @@ export class Soksak {
       if (card[hi] === line) min = Math.max(min, along[card[lo]] + this.min + near + far);
       if (card[lo] === line) max = Math.min(max, along[card[hi]] - this.min - near - far);
     }
+    // The range takes in where the boundary stands. A plane too small for its
+    // cards leaves it outside the span where every card holds `minSize`, and a
+    // range that excludes it moves the boundary on a drag that did not: the
+    // caller clamps the position it read back to a range without it in.
+    //
     // The two cards can need more than the plane holds. Neither reaches its
-    // minimum, so the range collapses to one point instead of inverting, which
-    // every caller would otherwise have to check.
+    // minimum, so `min` is past `max` and there is no span between them; their
+    // midpoint is where the two come out the same size, which is the one
+    // position still worth reaching, and it is the other end of the range rather
+    // than an inverted pair.
+    const at = along[line];
     if (min > max) {
       const mid = clamp((min + max) / 2, first, last);
-      return [mid, mid];
+      return [Math.min(mid, at), Math.max(mid, at)];
     }
-    return [min, max];
+    return [Math.min(min, at), Math.max(max, at)];
   }
 
 
@@ -791,19 +804,30 @@ export class Soksak {
       // The slot on the other side of the boundary absorbs the difference.
       this.resizeSlot(axis, holder[lo], size, holder[hi] === line ? line : line - 1);
     } else {
-      const usable = this.sharedExtent(axis);
-      // Measured from where the line stands, not from the line before it. A slot
-      // holds its corridor as well as its share of the span, and that corridor
-      // is a constant the conversion must not scale.
-      const before = this.boundaryPos(axis, line);
       const a = this.arr(axis);
-      // Only the sharing slots hold normalised width, so convert against those.
-      const want = usable > EPS ? a[line] + (target - before) / usable : a[line - 1];
-      // The conversion uses one average px-per-unit ratio, which the slots do not
-      // all follow once a px size exists, so the result can land past a
-      // neighbouring line. That would put the array out of order and draw a card
-      // wider than one spanning more slots.
-      a[line] = clamp(want, a[line - 1], a[line + 1]);
+      // One average px per unit of span, which the slots do not all follow: a px
+      // size does not scale with it, and a slot the starvation rule stopped
+      // flexes again as soon as the move gives it room. So the step is measured
+      // again from where the line now stands, until the line is where it was
+      // asked to be.
+      for (let pass = 0; pass < 8; pass++) {
+        // Only the sharing slots hold normalised width, so convert against those.
+        const usable = this.sharedExtent(axis);
+        if (usable <= EPS) {
+          a[line] = clamp(a[line - 1], a[line - 1], a[line + 1]);
+          break;
+        }
+        // Measured from where the line stands, not from the line before it. A slot
+        // holds its corridor as well as its share of the span, and that corridor
+        // is a constant the conversion must not scale.
+        const off = target - this.boundaryPos(axis, line);
+        if (Math.abs(off) < 0.01) break;
+        // The step can still land past a neighbouring line, which would put the
+        // array out of order and draw a card wider than one spanning more slots.
+        const next = clamp(a[line] + off / usable, a[line - 1], a[line + 1]);
+        if (next === a[line]) break;
+        a[line] = next;
+      }
     }
     this.changed();
     return this.boundaryPos(axis, line);
@@ -866,21 +890,36 @@ export class Soksak {
     // hasBoundary is true, so the line has one on each side of it.
     const along = linePositions(this.plane, axis);
     const [lo, hi] = SPAN[axis];
-    let start = along[line - 1];
-    let end = along[line + 1];
     const near = this.plane;
     const seen = linesRead(near, axis);
-    let insStart = inset(near, axis, line - 1, 'lo', seen);
-    let insEnd = inset(near, axis, line + 1, 'hi', seen);
+    // The pair is the innermost one: of the cards ending here the one that starts
+    // latest, and of those starting here the one that ends earliest. Both are
+    // found among the cards. Seeded from the neighbouring lines, a card reaching
+    // past one of them was measured to that line rather than to its own edge, and
+    // the two came out unequal.
+    let start = -Infinity;
+    let end = Infinity;
+    let insStart = 0;
+    let insEnd = 0;
     for (const card of this.list) {
-      if (card[hi] === line && along[card[lo]] >= start) {
+      if (card[hi] === line && along[card[lo]] > start) {
         start = along[card[lo]];
         insStart = inset(near, axis, card[lo], 'lo', seen);
       }
-      if (card[lo] === line && along[card[hi]] <= end) {
+      if (card[lo] === line && along[card[hi]] < end) {
         end = along[card[hi]];
         insEnd = inset(near, axis, card[hi], 'hi', seen);
       }
+    }
+    // A line no card ends or starts on has no pair to halve. The neighbouring
+    // lines are the only edges there are.
+    if (start === -Infinity) {
+      start = along[line - 1];
+      insStart = inset(near, axis, line - 1, 'lo', seen);
+    }
+    if (end === Infinity) {
+      end = along[line + 1];
+      insEnd = inset(near, axis, line + 1, 'hi', seen);
     }
     return (start + end) / 2 + (insStart - insEnd) / 2;
   }
@@ -1260,7 +1299,11 @@ export class Soksak {
         // it, they divide it again.
         const back = this.find(paid.to);
         const want: (number | null)[] = held.filter((_, i) => i !== mine);
-        this.settleOn(axis, want, paid.to === '' ? [] : order(back ? back[lo] : merged, want.length));
+        // The slot that gave the width, which is not the payer's first when it
+        // spans several. `back` is read after the line is removed, and the card
+        // does not contain that line, so its indices are the ones to count from.
+        const first = back ? back[lo] + (paid.at ?? 0) : merged;
+        this.settleOn(axis, want, paid.to === '' ? [] : order(first, want.length));
         this.changed();
         return true;
       }
@@ -1395,7 +1438,11 @@ export class Soksak {
     const pays = this.settleOn(axis, want, order(line + 1, want.length, line - 1));
     // Record which slot gave up the space, not only the side: the nearest slot
     // may not have had room, and close returns the space to the recorded slot.
-    const payer = pays >= 0 ? this.list.find((c) => c[lo] === pays && c !== fresh) : undefined;
+    // The card covering that slot, not the one starting at it: a card spanning
+    // several slots can pay from any of them, and a lookup by start records
+    // nothing at all for it.
+    const payer =
+      pays >= 0 ? this.list.find((c) => c[lo] <= pays && c[hi] > pays && c !== fresh) : undefined;
     // An empty `to` records that no single slot could give the width and the
     // sharing slots divided it. No card can carry it: checkState refuses an
     // empty id.
@@ -1404,6 +1451,7 @@ export class Soksak {
         side: pays > line ? 'hi' : 'lo',
         to: payer ? payer.id : '',
         span: gave,
+        at: payer ? pays - payer[lo] : undefined,
       });
     }
     this.changed();

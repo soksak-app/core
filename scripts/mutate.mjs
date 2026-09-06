@@ -9,7 +9,7 @@
  * Prints the score and, for every mutant that survived, the file, line and
  * edit — which is either a test worth writing or a branch worth deleting.
  */
-import { execFileSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 
 const HERE = new URL("../", import.meta.url).pathname;
@@ -72,16 +72,21 @@ const want = Number(process.argv[2] ?? 140);
 const step = Math.max(1, Math.floor(sites.length / want));
 const picked = sites.filter((_, i) => i % step === 0).slice(0, want);
 
-const passes = () => {
-  try {
-    execFileSync("node", ["--test", ...TESTS], { cwd: HERE, stdio: "pipe", timeout: 300000 });
-    return true;
-  } catch {
-    return false;
-  }
-};
+// Awaited rather than run synchronously. A signal is delivered to the handlers
+// above only when the loop turns, and a run that never turns it cannot be
+// interrupted at all: those handlers replace Node's own, so Ctrl-C would leave
+// the run going with a mutant in `dist`.
+const passes = () =>
+  new Promise((done) => {
+    const child = spawn(
+      "node",
+      [`${HERE}scripts/bounded.mjs`, "300000", "node", "--test", ...TESTS],
+      { cwd: HERE, stdio: "ignore" },
+    );
+    child.on("exit", (code) => done(code === 0));
+  });
 
-if (!passes()) {
+if (!(await passes())) {
   console.error("The suite does not pass before a single mutant is applied. Nothing to measure.");
   process.exit(2);
 }
@@ -91,7 +96,7 @@ const alive = [];
 for (const [i, s] of picked.entries()) {
   const src = originals[s.f];
   writeFileSync(`${HERE}dist/${s.f}`, src.slice(0, s.at) + s.to + src.slice(s.at + s.from.length));
-  const survived = passes();
+  const survived = await passes();
   writeFileSync(`${HERE}dist/${s.f}`, src);
   if (survived) alive.push(s);
   else killed++;

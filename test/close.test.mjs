@@ -231,3 +231,19 @@ test("a refused move leaves nothing behind", () => {
   tried.close("n3");
   assert.deepEqual(tried.toJSON(), plain.toJSON(), "so the next close does the same thing");
 });
+
+test("closing a card every slot paid for gives the span back to every slot", () => {
+  // A card wider than either slot beside it cannot take its span from one of
+  // them: every slot is scaled to make room. Closing it inverts that scale, so
+  // the plane is drawn as it was before the card arrived.
+  const grid = new Soksak(undefined, { width: 616, height: 500, gap: 2, minSize: 20 });
+  const other = grid.split("card", "x");
+  const was = [grid.rect("card").w, grid.rect(other).w];
+  assert.equal(grid.insertAt("x", 2, { id: "rail", size: 466 }), "rail");
+  assert.equal(grid.close("rail"), true);
+  const now = [grid.rect("card").w, grid.rect(other).w];
+  assert.ok(
+    Math.abs(now[0] - was[0]) < 0.01 && Math.abs(now[1] - was[1]) < 0.01,
+    `${now} after the rail left, ${was} before it arrived`,
+  );
+});

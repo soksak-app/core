@@ -132,6 +132,15 @@ export declare class SoksakView {
      */
     private firstOverlay;
     private sweep;
+    /**
+     * Whether anything still holds this divider.
+     *
+     * More than one pointer can hold one divider, and the mouse can hold it as
+     * well. Letting go of one of them is not letting go of the divider.
+     */
+    private held;
+    /** A divider carries `data-dragging` for as long as anything holds it. */
+    private mark;
     /** Drop a mouse drag: the divider stops being held and nothing is drawn. */
     private dropMouse;
     /** Drop a pointer drag: the capture is released and nothing is drawn. */

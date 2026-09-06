@@ -509,13 +509,13 @@ export function rules(plane) {
     const out = [];
     const frame = frameOf(plane);
     for (const axis of AXES) {
-        // The drawn gap, not the declared one. A plane too narrow for the declared
-        // gap draws a smaller one, and a rule at the declared size extends past the
-        // plane.
-        const half = halfCorridor(plane, axis);
         const along = frame[axis].at;
         const across = axis === 'x' ? plane.height : plane.width;
         const down = other(axis);
+        // The drawn gap, not the declared one, and the one on the axis the rule runs
+        // along: a plane too narrow for the declared gap draws a smaller one there,
+        // and a rule extended by the other axis's gap misses the corridor it reaches.
+        const half = halfCorridor(plane, down);
         const meet = touching(plane, axis);
         const read = linesRead(plane, axis);
         // A rule stays inside the plane. Extending it half a gap past each end made

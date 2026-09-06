@@ -5,8 +5,10 @@
  *
  * Exits non-zero if any break survives or no longer applies.
  */
-import { execFileSync } from "node:child_process";
-import { cpSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { spawn } from "node:child_process";
+import {
+  cpSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { BREAKS } from "./breaks.mjs";
@@ -16,9 +18,15 @@ const REPO = new URL("../", import.meta.url).pathname;
 // whatever else reads it — a build, an editor, another run — reading a defect
 // nobody wrote, for as long as this takes.
 const HERE = `${mkdtempSync(join(tmpdir(), "soksak-breaks-"))}/`;
-for (const part of ["dist", "test", "scripts", "package.json", "README.md"]) {
+for (const part of [
+  "dist", "test", "scripts", "src",
+  "package.json", "README.md", "Makefile", "tsconfig.json", ".node-version",
+]) {
   cpSync(`${REPO}${part}`, `${HERE}${part}`, { recursive: true });
 }
+// The suite reads more than the built code: jsdom is what the view is rendered
+// into. Link the tree rather than copy it — the run only reads it.
+symlinkSync(`${REPO}node_modules`, `${HERE}node_modules`);
 const drop = () => rmSync(HERE, { recursive: true, force: true });
 
 const TESTS = readdirSync(`${HERE}test`)
@@ -48,6 +56,29 @@ process.on("uncaughtException", (e) => {
   process.exit(1);
 });
 
+/** Whether this test file fails in the copy. Bounded, so a hang cannot outlive it. */
+const fails = (file) =>
+  new Promise((done) => {
+    const child = spawn(
+      "node",
+      [`${HERE}scripts/bounded.mjs`, "300000", "node", "--test", file],
+      { cwd: HERE, stdio: "ignore" },
+    );
+    child.on("exit", (code) => done(code !== 0));
+  });
+
+// A copy that does not pass before a break is applied measures nothing: the run
+// below stops at the first file that fails, and that file would be the same one
+// every time.
+const broken = [];
+for (const file of TESTS) if (await fails(file)) broken.push(file);
+if (broken.length) {
+  console.error(
+    `The copy does not pass before a break is applied: ${broken.join(", ")}. Nothing to measure.`,
+  );
+  process.exit(2);
+}
+
 let caught = 0;
 const missed = [];
 const survived = [];
@@ -68,9 +99,7 @@ for (const b of BREAKS) {
   // a wrong guess costs the run that reaches the file that does fail.
   let passed = true;
   for (const file of order(b.file)) {
-    try {
-      execFileSync("node", ["--test", file], { cwd: HERE, stdio: "pipe", timeout: 300000 });
-    } catch {
+    if (await fails(file)) {
       passed = false;
       break;
     }

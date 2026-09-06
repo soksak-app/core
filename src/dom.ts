@@ -158,7 +158,17 @@ export class SoksakView {
         // A hidden host reports 0x0. Resizing to that drops every px size to 0
         // and showing the host again does not bring them back.
         if (host.clientWidth <= 0 || host.clientHeight <= 0) return;
+        // A resize moves the boundary a drag is holding. The drag holds the
+        // position that boundary stood at when it was pressed, so it has to be
+        // carried by the same amount the resize moved it; otherwise the next
+        // move puts the boundary where it would have gone on the old plane.
+        const live = [...this.drags.values()];
+        if (this.mouseDrag) live.push(this.mouseDrag);
+        const was = live.map((drag) => this.grid.boundaryPos(drag.axis, drag.line));
         this.grid.resize(host.clientWidth, host.clientHeight);
+        live.forEach((drag, i) => {
+          drag.base += this.grid.boundaryPos(drag.axis, drag.line) - was[i];
+        });
         this.draw('resize');
       });
       this.observer.observe(host);
@@ -326,12 +336,30 @@ export class SoksakView {
     }
   }
 
+  /**
+   * Whether anything still holds this divider.
+   *
+   * More than one pointer can hold one divider, and the mouse can hold it as
+   * well. Letting go of one of them is not letting go of the divider.
+   */
+  private held(el: HTMLElement): boolean {
+    if (this.mouseDrag?.on === el) return true;
+    for (const drag of this.drags.values()) if (drag.on === el) return true;
+    return false;
+  }
+
+  /** A divider carries `data-dragging` for as long as anything holds it. */
+  private mark(el: HTMLElement): void {
+    if (this.held(el)) el.dataset.dragging = 'true';
+    else delete el.dataset.dragging;
+  }
+
   /** Drop a mouse drag: the divider stops being held and nothing is drawn. */
   private dropMouse(): DragState | null {
     const drag = this.mouseDrag;
     if (!drag) return null;
     this.mouseDrag = null;
-    delete drag.on.dataset.dragging;
+    this.mark(drag.on);
     return drag;
   }
 
@@ -345,7 +373,7 @@ export class SoksakView {
     } catch {
       /* the pointer may already be gone */
     }
-    delete drag.on.dataset.dragging;
+    this.mark(drag.on);
     return drag;
   }
 
@@ -397,6 +425,10 @@ export class SoksakView {
     // preventDefault on pointerdown suppresses the compatibility mouse events,
     // so `dblclick` never arrives. Detect the second press here instead.
     let lastTap = -Infinity;
+    // The pointer whose press set `lastTap`. While that press is still down a
+    // press landing now is a second finger and not the second of a pair; once it
+    // has ended, whether it was released or dropped, the pair is open again.
+    let tapId = -1;
 
     el.addEventListener('pointerdown', (e: PointerEvent) => {
       // Only the primary button drags, as on the mouse path. A press of any
@@ -406,13 +438,20 @@ export class SoksakView {
       e.preventDefault();
       const axis = el.dataset.axis as Axis;
       const line = Number(el.dataset.line);
-      if (e.timeStamp - lastTap < DOUBLE_TAP_MS) {
+      // A press with this pointer already down is a press the release of which
+      // was never seen, as on the mouse path. Dropping it leaves no divider
+      // marked as held with no drag behind it, which is a state nothing clears.
+      if (this.drop(e.pointerId)?.moved) lastTap = -Infinity;
+      // A press that lands while the press before it is still down is a second
+      // finger, not the second press of a pair.
+      if (this.drags.get(tapId)?.on !== el && e.timeStamp - lastTap < DOUBLE_TAP_MS) {
         lastTap = -Infinity;
         this.grid.centerBoundary(axis, line);
         this.draw('center');
         return;
       }
       lastTap = e.timeStamp;
+      tapId = e.pointerId;
       try {
         el.setPointerCapture(e.pointerId);
       } catch {
