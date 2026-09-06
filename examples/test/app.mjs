@@ -89,6 +89,15 @@ export const clockHeld = (log = "") =>
   /observe: shaking [xy]:/.test(log) && !/observe: shaking done/.test(log);
 
 /**
+ * 녹화가 한 장도 오지 않았는지. 창이 그려지지 않아도 프레임은 idle 로 오고 그 수는
+ * 따로 보고되므로, 한 장도 없다는 것은 스트림이 없었다는 뜻이지 결함이 아니다.
+ *
+ * 같은 종류의 녹화가 둘이면 플랫폼이 먼저 것을 거둔다. 시계가 묶인 실행과 같은
+ * 부류다 — 그 실행은 아무것도 재지 못한 것이다.
+ */
+export const nothingRecorded = (log = "") => /observe: wrote 0 frames/.test(log);
+
+/**
  * 끌기를 한 번 다시 시도한다. 시계가 묶인 실행은 결함을 찾은 것이 아니라 아무것도
  * 재지 못한 것이므로, 그것만 다시 몰고 그 밖의 실패는 그대로 올린다.
  */

@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { join } from "node:path";
 
-import { APPS, shakeTwice } from "./app.mjs";
+import { APPS, nothingRecorded, shakeTwice } from "./app.mjs";
 import { frames, readFrame, writePNG } from "./frame.mjs";
 import { area, bare } from "./surface.mjs";
 
@@ -48,6 +48,12 @@ for (const [name, binary] of Object.entries(APPS)) {
       const run = await shakeTwice(binary, drive);
       if (!run) return t.skip(`${binary} is not built`);
       try {
+        assert.ok(
+          !nothingRecorded(run.log),
+          "the window server delivered no frames, so nothing was measured. Another capture " +
+            "of this kind was running: examples/test drives one window at a time and two " +
+            `runs at once do not each get their frames.\n${run.log}`,
+        );
         const files = frames(run.into);
         assert.ok(
           files.length > 60,
