@@ -54,7 +54,7 @@ package main
 }
 
 - (void)stream:(SCStream*)stream didStopWithError:(NSError*)error {
-    NSLog(@"관측: 캡처가 멈췄다 — %@", error.localizedDescription);
+    NSLog(@"observe: capture stopped, %@", error.localizedDescription);
 }
 
 @end
@@ -72,7 +72,7 @@ static void captureOpen(long windowNumber) {
     [SCShareableContent getShareableContentWithCompletionHandler:
         ^(SCShareableContent* content, NSError* error) {
         if (error != nil) {
-            NSLog(@"관측: 화면 기록 권한이 없다 — %@", error.localizedDescription);
+            NSLog(@"observe: no screen recording permission, %@", error.localizedDescription);
             return;
         }
         for (SCWindow* window in content.windows) {
@@ -93,7 +93,7 @@ static void captureOpen(long windowNumber) {
             captureConfig = config;
             return;
         }
-        NSLog(@"관측: 창 %ld 을 찾지 못했다", windowNumber);
+        NSLog(@"observe: window %ld not found", windowNumber);
     }];
 }
 
@@ -110,12 +110,12 @@ static void captureStart(const char* directory) {
                 sampleHandlerQueue:dispatch_queue_create("sp.capture", NULL)
                              error:&error];
     if (error != nil) {
-        NSLog(@"관측: 캡처를 붙이지 못했다 — %@", error.localizedDescription);
+        NSLog(@"observe: capture output not added, %@", error.localizedDescription);
         captureStream = nil;
         return;
     }
     [captureStream startCaptureWithCompletionHandler:^(NSError* failed) {
-        if (failed != nil) NSLog(@"관측: 캡처를 시작하지 못했다 — %@", failed.localizedDescription);
+        if (failed != nil) NSLog(@"observe: capture not started, %@", failed.localizedDescription);
     }];
 }
 
@@ -125,7 +125,7 @@ static int captureStop(void) {
     captureStream = nil;
     int written = captureSink.written;
     [stream stopCaptureWithCompletionHandler:^(NSError* failed) {
-        if (failed != nil) NSLog(@"관측: 캡처를 멈추지 못했다 — %@", failed.localizedDescription);
+        if (failed != nil) NSLog(@"observe: capture not stopped, %@", failed.localizedDescription);
     }];
     return written;
 }

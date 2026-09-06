@@ -76,7 +76,7 @@ func (o *Observe) record() func() {
 		captureStart(*capturing)
 	})
 	offEnded := bus.On("run-ended", func(*application.CustomEvent) {
-		log.Printf("관측: %d 프레임을 %s 에 적었다", captureStop(), *capturing)
+		log.Printf("observe: wrote %d frames to %s", captureStop(), *capturing)
 	})
 	return func() {
 		offBegan()
@@ -97,7 +97,7 @@ func (o *Observe) Windows() []int {
 // report 는 지금의 창 목록을 한 줄 남긴다.
 func (o *Observe) report() {
 	if now := o.Windows(); len(now) > 0 {
-		log.Printf("관측: 창 번호 %v", now)
+		log.Printf("observe: windows %s", numbers(now))
 	}
 }
 
@@ -114,7 +114,7 @@ func (o *Observe) drive() {
 	}
 	plan, err := parseDrive(*driving)
 	if err != nil {
-		log.Printf("관측: --drive %v", err)
+		log.Printf("observe: --drive %v", err)
 		return
 	}
 	go plan.run()
@@ -140,7 +140,8 @@ func (p drivePlan) run() {
 	if steps < 1 {
 		steps = 1
 	}
-	log.Printf("관측: 흔들기 (%g,%g) %+g,%+g %d걸음 ×%d", p.x, p.y, p.dx, p.dy, steps, p.times)
+	log.Printf("observe: shaking (%g,%g) by %+g,%+g in %d steps, %d times",
+		p.x, p.y, p.dx, p.dy, steps, p.times)
 
 	send := func(phase int, x, y float64) {
 		application.Get().Event.Emit("surface-input", InputStep{Phase: phase, X: x, Y: y})
@@ -153,7 +154,7 @@ func (p drivePlan) run() {
 		p.sweep(send, 1, 0, steps, frame)
 	}
 	send(2, p.x, p.y)
-	log.Print("관측: 흔들기 끝")
+	log.Print("observe: shaking done")
 }
 
 // sweep 은 누른 지점을 오프셋의 한 비율에서 다른 비율까지 옮긴다.
@@ -204,12 +205,12 @@ func (o *Observe) click() {
 	}
 	wait, selector, ok := strings.Cut(*clicking, ",")
 	if !ok {
-		log.Printf("관측: --click 은 ms,선택자 를 받는다 — %q", *clicking)
+		log.Printf("observe: --click takes ms,selector, got %q", *clicking)
 		return
 	}
 	after, err := strconv.Atoi(strings.TrimSpace(wait))
 	if err != nil {
-		log.Printf("관측: --click 의 %q 는 수가 아니다", wait)
+		log.Printf("observe: --click wait %q is not a number", wait)
 		return
 	}
 	go func() {

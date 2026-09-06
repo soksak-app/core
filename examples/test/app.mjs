@@ -25,11 +25,11 @@ export async function shake(binary, drive, { timeout = 30_000 } = {}) {
 
   let log = "";
   const done = new Promise((resolve, reject) => {
-    const fail = setTimeout(() => reject(new Error(`${binary} 가 끝나지 않았다:\n${log}`)), timeout);
+    const fail = setTimeout(() => reject(new Error(`${binary} did not finish:\n${log}`)), timeout);
     const read = (chunk) => {
       log += chunk;
       // 녹화 종료가 기록되면 모든 프레임이 파일로 저장된 상태다.
-      if (/프레임을 .* 적었다/.test(log)) {
+      if (/observe: wrote \d+ frames/.test(log)) {
         clearTimeout(fail);
         resolve();
       }

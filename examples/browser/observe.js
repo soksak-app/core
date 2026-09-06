@@ -12,10 +12,10 @@ if (host) {
   host.on("observe-click", (selector) => {
     const el = document.querySelector(selector);
     if (!el) {
-      host.call("report", `관측: ${selector} 를 찾지 못했다`);
+      host.call("report", `observe: ${selector} not found`);
       return;
     }
     el.click();
-    host.call("report", `관측: ${selector} 를 눌렀다`);
+    host.call("report", `observe: clicked ${selector}`);
   });
 }

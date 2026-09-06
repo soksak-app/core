@@ -19,6 +19,33 @@ use crate::capture;
 use crate::native;
 use crate::InputStep;
 
+/// The value of a command-line flag, in either form the other host accepts:
+/// `--flag value` and `--flag=value`. Go's flag package takes both, so a command
+/// written for one application runs on the other.
+pub fn flag(name: &str) -> Option<String> {
+    let mut args = std::env::args().skip(1);
+    let long = format!("--{name}");
+    let short = format!("-{name}");
+    while let Some(arg) = args.next() {
+        if arg == long || arg == short {
+            return args.next();
+        }
+        for prefix in [format!("{long}="), format!("{short}=")] {
+            if let Some(value) = arg.strip_prefix(&prefix) {
+                return Some(value.to_string());
+            }
+        }
+    }
+    None
+}
+
+/// Whether a flag that takes no value was given.
+pub fn given(name: &str) -> bool {
+    let long = format!("--{name}");
+    let short = format!("-{name}");
+    std::env::args().skip(1).any(|a| a == long || a == short)
+}
+
 /// The numbers of this window and the windows attached to it. A modal is a window
 /// of its own, so it joins the list while it is open.
 #[tauri::command]
@@ -40,7 +67,7 @@ pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
                 let began = into.clone();
                 app.listen("run-began", move |_| capture::start(&began));
                 app.listen("run-ended", move |_| {
-                    println!("관측: {} 프레임을 {into} 에 적었다", capture::stop());
+                    eprintln!("observe: wrote {} frames to {into}", capture::stop());
                 });
             }
             Ok(())
@@ -67,7 +94,8 @@ fn report<R: Runtime>(app: tauri::AppHandle<R>) {
     let _ = app.run_on_main_thread(move || {
         let found = numbers(&ask);
         if !found.is_empty() {
-            println!("관측: 창 번호 {found:?}");
+            let list: Vec<String> = found.iter().map(|n| n.to_string()).collect();
+            eprintln!("observe: windows {}", list.join(" "));
         }
     });
 }
@@ -110,15 +138,15 @@ fn open<R: Runtime>(app: tauri::AppHandle<R>) {
 /// button in the page's own chrome does not: it is an element of the document and
 /// only the document can press it. The page's own observation module does.
 fn click<R: Runtime>(app: tauri::AppHandle<R>) {
-    let Some(spec) = std::env::args().skip_while(|a| a != "--click").nth(1) else {
+    let Some(spec) = flag("click") else {
         return;
     };
     let Some((wait, selector)) = spec.split_once(',') else {
-        println!("관측: --click 은 ms,선택자 를 받는다 — {spec:?}");
+        eprintln!("observe: --click takes ms,selector, got {spec:?}");
         return;
     };
     let Ok(after) = wait.trim().parse::<u64>() else {
-        println!("관측: --click 의 {wait:?} 는 수가 아니다");
+        eprintln!("observe: --click wait {wait:?} is not a number");
         return;
     };
     let selector = selector.to_string();
@@ -137,16 +165,13 @@ fn click<R: Runtime>(app: tauri::AppHandle<R>) {
 /// A drag is motion, so it is written on a clock. That clock produces the steps; it
 /// does not watch for anything.
 fn drive<R: Runtime>(app: tauri::AppHandle<R>) {
-    let Some(spec) = std::env::args()
-        .skip_while(|a| a != "--drive")
-        .nth(1)
-    else {
+    let Some(spec) = flag("drive") else {
         return;
     };
     let plan = match Plan::parse(&spec) {
         Ok(plan) => plan,
         Err(why) => {
-            println!("관측: --drive {why}");
+            eprintln!("observe: --drive {why}");
             return;
         }
     };
@@ -199,8 +224,8 @@ impl Plan {
         std::thread::sleep(self.wait);
 
         let steps = (self.over.as_millis() / frame.as_millis()).max(1) as usize;
-        println!(
-            "관측: 흔들기 ({},{}) {:+},{:+} {}걸음 ×{}",
+        eprintln!(
+            "observe: shaking ({},{}) by {:+},{:+} in {} steps, {} times",
             self.x, self.y, self.dx, self.dy, steps, self.times
         );
         let send = |phase: u8, x: f64, y: f64| {
@@ -214,7 +239,7 @@ impl Plan {
             self.sweep(&send, 1.0, 0.0, steps, frame);
         }
         send(2, self.x, self.y);
-        println!("관측: 흔들기 끝");
+        eprintln!("observe: shaking done");
     }
 
     /// Moves the held point from one fraction of the offset to another.

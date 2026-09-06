@@ -735,7 +735,7 @@ fn set_theme(
 
 fn main() {
     // 관측은 요청했을 때만 붙는다. 제품의 계약이 아니다.
-    let observing = std::env::args().any(|a| a == "--observe");
+    let observing = observe::given("observe");
     let mut app = tauri::Builder::default();
     if observing {
         app = app.plugin(observe::plugin());
