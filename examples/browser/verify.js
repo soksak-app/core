@@ -107,38 +107,24 @@ export function verify(controls = null) {
       overlap ? `겹침 ${overlap}쌍`
         : `최소 ${isFinite(worst) ? worst.toFixed(1) : grid.gap}px${squeezed ? " · 판이 좁아 통로가 줄었다" : ""}`);
 
-  // V4 — minSize 는 판이 아니라 연산을 구속한다. gap 과 minSize 와 resize 는 같은
-  // 비율을 새 눈금으로 다시 표현하므로, 바닥에 선 카드는 통로가 넓어지거나 판이
-  // 작아지면 그 아래로 그려진다. 그리는 크기에 바닥을 주장하면 라이브러리가 하지
-  // 않는 약속을 검사하게 된다.
-  //
-  // 라이브러리가 하는 약속은 다시 쓰지 않는다는 것이다. 통로를 되돌리거나 크기를
-  // 되돌리면 모든 카드가 이전에 그려진 자리에 이전 크기로 그려진다. 그 약속은 왕복
-  // 으로만 잰다.
-  //
-  // 살아 있는 판을 왕복시키면 사람이 보는 배치가 두 번 바뀐다. 지금 상태의 사본을
-  // 만들어 사본을 왕복시키고, 떠날 때와 돌아온 때의 사각형을 비교한다.
-  const trip = new Soksak(grid.toJSON(),
-    { gap: grid.gap, minSize: grid.minSize, width: grid.width, height: grid.height });
-  const leaving = trip.rects();
-  // 사본은 지금 판이 그린 것과 같은 자리를 그려야 한다. 스페이스 전환이 이 길을
+  // V4 — 지금 상태를 담았다 되돌리면 그대로여야 한다. 스페이스 전환이 이 길을
   // 지난다 — capture 가 toJSON 으로 담고 adopt 가 replace 로 되돌린다. 여기서
   // 어긋나면 스페이스를 오간 것만으로 배치가 달라진다.
+  //
+  // 담은 것을 다시 판으로 만들어 지금 판이 그린 것과 비교한다. 살아 있는 판을
+  // 건드리지 않으므로 사람이 보는 배치는 바뀌지 않는다.
+  //
+  // 통로와 크기를 왕복시키는 검사는 여기 있지 않다. resize 와 gap 은 선도 카드도
+  // 건드리지 않고 rects 는 순수 함수이므로, 올바른 라이브러리에서 그 왕복은 상태와
+  // 무관하게 언제나 0 이다. 그 약속은 test/resizeTrip.test.mjs 가 잰다.
+  const trip = new Soksak(grid.toJSON(),
+    { gap: grid.gap, minSize: grid.minSize, width: grid.width, height: grid.height });
   let rebuilt = 0;
-  for (const [id, was] of leaving) rebuilt = Math.max(rebuilt, maxDelta(was, box.get(id)));
-  // 왕복이 가는 곳은 px 크기가 들어가지 못하는 눈금이어야 한다. 들어가는 눈금까지만
-  // 가면 크기를 다시 쓰는 구현도 다시 쓸 것이 없어 왕복이 그대로 돌아온다.
-  trip.gap = grid.gap * 4 + 64;
-  trip.resize(Math.max(1, Math.round(grid.width / 8)), Math.max(1, Math.round(grid.height / 8)));
-  trip.gap = grid.gap;
-  trip.resize(grid.width, grid.height);
-  const back = trip.rects();
-  let moved = 0;
-  for (const [id, was] of leaving) moved = Math.max(moved, maxDelta(was, back.get(id)));
+  for (const [id, was] of trip.rects()) rebuilt = Math.max(rebuilt, maxDelta(was, box.get(id)));
   const smallest = Math.min(...rects.flatMap((r) => [r.w, r.h]));
-  add("V4 담았다 되돌리면 그대로", moved === 0 && rebuilt === 0,
-      `사본 ${rebuilt.toFixed(4)}px · 왕복 후 최대 ${moved.toFixed(4)}px · ` +
-      `그려진 최소 변 ${smallest.toFixed(0)}px`);
+  add("V4 담았다 되돌리면 그대로", rebuilt === 0,
+      `사본 ${rebuilt.toFixed(4)}px · 그려진 최소 변 ${smallest.toFixed(0)}px`);
+
   add("V5 배치가 slicing", grid.isSlicing(), "한 영역을 통째로 자른 결과만 가능");
 
   const open = cards.filter((c) => !c.fixed);
