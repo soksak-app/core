@@ -7,9 +7,12 @@
  * code to — and unlike a mutant, there is no arguing it is equivalent, because
  * the behaviour is gone.
  *
- * `find` must appear in the built file exactly as written. When a break stops
- * applying, the code moved: read it and either follow the code or delete the
- * entry, but do not leave it silently unapplied.
+ * `find` must appear in the built file exactly as written, and exactly once.
+ * When a break stops applying, the code moved: read it and either follow the
+ * code or delete the entry, but do not leave it silently unapplied. When it
+ * applies twice, it removes two behaviours and reports one result for both, so
+ * a site nothing watches is reported as caught on the strength of another:
+ * anchor it to the site it names, or write one entry per site.
  */
 export const BREAKS = [
   {
@@ -98,17 +101,43 @@ export const BREAKS = [
   },
   {
     id: "drag-way",
-    what: "a drag runs the wrong way",
+    what: "a pointer drag runs the wrong way",
     file: "dist/dom.js",
-    find: "this.grid.moveBoundary(drag.axis, drag.line, drag.base + (now - drag.from))",
-    to: "this.grid.moveBoundary(drag.axis, drag.line, drag.base - (now - drag.from))",
+    // Anchored by the line that closes the pointermove listener. The mouse path
+    // moves the boundary with the same text, and the shorter find patched both.
+    find:
+      "this.grid.moveBoundary(drag.axis, drag.line, drag.base + (now - drag.from)), el));\n" +
+      "        });",
+    to:
+      "this.grid.moveBoundary(drag.axis, drag.line, drag.base - (now - drag.from)), el));\n" +
+      "        });",
+  },
+  {
+    id: "drag-way-mouse",
+    what: "a mouse drag runs the wrong way",
+    file: "dist/dom.js",
+    find:
+      "this.grid.moveBoundary(drag.axis, drag.line, drag.base + (now - drag.from)), el));\n" +
+      "        };",
+    to:
+      "this.grid.moveBoundary(drag.axis, drag.line, drag.base - (now - drag.from)), el));\n" +
+      "        };",
   },
   {
     id: "sweep",
     what: "a swept divider keeps its drag and takes everyone else's",
     file: "dist/dom.js",
-    find: "if (drag.on === el)",
-    to: "if (drag.on !== el)",
+    // Named down to `forget`. `held` reads the same map with the same text, so
+    // the shorter find patched that too and reported on a site it does not name.
+    find: "for (const [pointer, drag] of [...this.drags])\n            if (drag.on === el)",
+    to: "for (const [pointer, drag] of [...this.drags])\n            if (drag.on !== el)",
+  },
+  {
+    id: "sweep-held",
+    what: "held reports a divider a pointer holds as free",
+    file: "dist/dom.js",
+    find: "for (const drag of this.drags.values())\n            if (drag.on === el)",
+    to: "for (const drag of this.drags.values())\n            if (drag.on !== el)",
   },
   {
     id: "hidden-host",
@@ -436,8 +465,19 @@ export const BREAKS = [
     id: "still-marked",
     what: "a divider another pointer still holds stops carrying data-dragging",
     file: "dist/dom.js",
-    find: "        this.mark(drag.on);",
-    to: "        delete drag.on.dataset.dragging;",
+    // Anchored to the pointer drop. `dropMouse` marks with the same text, and
+    // the shorter find patched both.
+    find: "            /* the pointer may already be gone */\n        }\n        this.mark(drag.on);",
+    to:
+      "            /* the pointer may already be gone */\n        }\n" +
+      "        delete drag.on.dataset.dragging;",
+  },
+  {
+    id: "still-marked-mouse",
+    what: "a divider a pointer still holds stops carrying data-dragging when the mouse lets go",
+    file: "dist/dom.js",
+    find: "        this.mouseDrag = null;\n        this.mark(drag.on);",
+    to: "        this.mouseDrag = null;\n        delete drag.on.dataset.dragging;",
   },
   {
     id: "unread-rule",
@@ -455,10 +495,26 @@ export const BREAKS = [
   },
   {
     id: "placed",
-    what: "the view writes no position, so the rects it writes place nothing",
+    what: "a card is given no position, so the rect the view writes places nothing",
     file: "dist/dom.js",
-    find: "el.style.position = 'absolute';",
-    to: ";",
+    // One entry per element the view positions. The rule and the grab area are
+    // positioned with the same text, and the shorter find patched all three.
+    find: "                const el = this.options.createCard(card);\n                el.style.position = 'absolute';",
+    to: "                const el = this.options.createCard(card);",
+  },
+  {
+    id: "placed-rule",
+    what: "a rule is given no position, so the rect the view writes places nothing",
+    file: "dist/dom.js",
+    find: "                    el.style.position = 'absolute';",
+    to: "                    ;",
+  },
+  {
+    id: "placed-divider",
+    what: "a grab area is given no position, so the rect the view writes places nothing",
+    file: "dist/dom.js",
+    find: "        el.className = `${this.prefix}-divider`;\n        el.style.position = 'absolute';",
+    to: "        el.className = `${this.prefix}-divider`;",
   },
   {
     id: "grab-keys",
@@ -635,10 +691,38 @@ export const BREAKS = [
   },
   {
     id: "centre-reason",
-    what: "a centring is reported as a drag",
+    what: "a centring by a second tap is reported as a drag",
     file: "dist/dom.js",
-    find: "this.draw('center');",
-    to: "this.draw('drag');",
+    // One entry per gesture that centres. The mouse path and the key path draw
+    // with the same text, and the shorter find patched all three.
+    find:
+      "                lastTap = -Infinity;\n" +
+      "                this.carry(() => this.grid.centerBoundary(axis, line), el);\n" +
+      "                this.draw('center');",
+    to:
+      "                lastTap = -Infinity;\n" +
+      "                this.carry(() => this.grid.centerBoundary(axis, line), el);\n" +
+      "                this.draw('drag');",
+  },
+  {
+    id: "centre-reason-mouse",
+    what: "a centring by a second mouse press is reported as a drag",
+    file: "dist/dom.js",
+    find:
+      "                lastPress = -Infinity;\n" +
+      "                this.carry(() => this.grid.centerBoundary(axis, line), el);\n" +
+      "                this.draw('center');",
+    to:
+      "                lastPress = -Infinity;\n" +
+      "                this.carry(() => this.grid.centerBoundary(axis, line), el);\n" +
+      "                this.draw('drag');",
+  },
+  {
+    id: "centre-reason-key",
+    what: "a centring by Enter or Space is reported as a drag",
+    file: "dist/dom.js",
+    find: "                    this.draw('center');",
+    to: "                    this.draw('drag');",
   },
   {
     id: "watch-host",
@@ -651,8 +735,12 @@ export const BREAKS = [
     id: "grip",
     what: "the sheet declares the tokens and draws nothing with them",
     file: "dist/theme.js",
-    find: ".${prefix}-divider::after {",
-    to: ".${prefix}-nothing::after {",
+    // Anchored to the rule that draws the grip, at the start of a line. The
+    // `prefers-reduced-motion` block names the same selector indented, and the
+    // shorter find patched that too — a site the suite does not watch, reported
+    // as caught on the strength of this one.
+    find: "\n.${prefix}-divider::after {",
+    to: "\n.${prefix}-nothing::after {",
   },
   {
     id: "in-order",

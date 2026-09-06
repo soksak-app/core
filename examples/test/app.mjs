@@ -114,9 +114,42 @@ async function drive(binary, args, done, timeout) {
   try {
     await waited;
   } finally {
-    app.kill();
+    await end(app);
   }
   return log;
+}
+
+/** 신호에 응하지 않는 애플리케이션을 거두기까지 기다리는 한도. */
+const HARD = 5_000;
+
+/**
+ * 애플리케이션을 끝내고 사라질 때까지 기다린다.
+ *
+ * kill() 은 신호를 보내고 곧바로 돌아온다. 기다리지 않고 자물쇠를 놓으면 다음
+ * 실행이 앞의 애플리케이션이 아직 살아 있는 동안 자기 창을 띄우고 녹화를
+ * 시작한다. 같은 종류의 녹화가 둘이면 플랫폼이 먼저 것을 거두므로 그 실행은 한
+ * 장도 받지 못하고, nothingRecorded 는 그 원인을 이 검사 밖에서 찾으라고 말한다.
+ *
+ * 신호에 응하지 않는 애플리케이션은 HARD 뒤에 SIGKILL 로 거둔다.
+ */
+function end(app) {
+  if (app.pid === undefined || app.exitCode !== null || app.signalCode !== null) {
+    return Promise.resolve();
+  }
+  return new Promise((gone) => {
+    const hard = setTimeout(() => {
+      try {
+        app.kill("SIGKILL");
+      } catch {
+        // 이미 사라졌다.
+      }
+    }, HARD);
+    app.once("close", () => {
+      clearTimeout(hard);
+      gone();
+    });
+    app.kill();
+  });
 }
 
 /**

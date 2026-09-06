@@ -10,9 +10,28 @@
  * edit — which is either a test worth writing or a branch worth deleting.
  */
 import { spawn } from "node:child_process";
-import { readFileSync, readdirSync, writeFileSync } from "node:fs";
+import {
+  cpSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
-const HERE = new URL("../", import.meta.url).pathname;
+const REPO = new URL("../", import.meta.url).pathname;
+// The mutants are written into a copy. Writing them into the repository leaves
+// whatever else reads it — a build, an editor, another run — reading a defect
+// nobody wrote, for as long as this takes, and a run killed outright leaves one
+// there for good.
+const HERE = `${mkdtempSync(join(tmpdir(), "soksak-mutants-"))}/`;
+for (const part of [
+  "dist", "test", "scripts", "src",
+  "package.json", "README.md", "Makefile", "tsconfig.json", ".node-version",
+]) {
+  cpSync(`${REPO}${part}`, `${HERE}${part}`, { recursive: true });
+}
+// The suite reads more than the built code: jsdom is what the view is rendered
+// into. Link the tree rather than copy it — the run only reads it.
+symlinkSync(`${REPO}node_modules`, `${HERE}node_modules`);
+
 const FILES = ["card.js", "slicing.js", "geometry.js", "outline.js", "soksak.js", "dom.js"];
 // `node --test <dir>` picks up files that are not tests and fails on its own,
 // which would score every mutant as caught. Name them.
@@ -37,21 +56,17 @@ const RULES = [
 ];
 
 const originals = Object.fromEntries(FILES.map((f) => [f, readFileSync(`${HERE}dist/${f}`, "utf8")]));
-const restore = () => {
-  for (const f of FILES) writeFileSync(`${HERE}dist/${f}`, originals[f]);
-};
-// Put the code back however this ends. A run killed by a timeout leaves a
-// mutant in `dist` otherwise, and the next thing to read it sees a defect
-// nobody wrote.
-process.on("exit", restore);
+const drop = () => rmSync(HERE, { recursive: true, force: true });
+// Take the copy away however this ends, including a run killed by a timeout.
+process.on("exit", drop);
 for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
   process.on(signal, () => {
-    restore();
+    drop();
     process.exit(130);
   });
 }
 process.on("uncaughtException", (e) => {
-  restore();
+  drop();
   console.error(e);
   process.exit(1);
 });

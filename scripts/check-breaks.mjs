@@ -81,13 +81,24 @@ if (broken.length) {
 
 let caught = 0;
 const missed = [];
+const many = [];
 const survived = [];
 for (const b of BREAKS) {
   if (only && !only.has(b.id)) continue;
   const src = originals[b.file];
-  if (!src.includes(b.find)) {
+  const sites = src.split(b.find).length - 1;
+  if (sites === 0) {
     missed.push(b);
     console.log(`${b.id.padEnd(14)} STALE     ${b.what}`);
+    continue;
+  }
+  // `find` names one defect, and the write below replaces every occurrence of
+  // it. A `find` matching more than one site removes several behaviours at
+  // once and reports one result for all of them, so a site no test watches is
+  // reported as caught on the strength of another site's tests.
+  if (sites > 1) {
+    many.push(b);
+    console.log(`${b.id.padEnd(14)} ${String(sites)} SITES   ${b.what}`);
     continue;
   }
   writeFileSync(`${HERE}${b.file}`, src.split(b.find).join(b.to));
@@ -114,7 +125,15 @@ for (const b of BREAKS) {
   }
 }
 
-console.log(`\ncaught ${caught} · survived ${survived.length} · stale ${missed.length}`);
+console.log(
+  `\ncaught ${caught} · survived ${survived.length} · stale ${missed.length} · ambiguous ${many.length}`,
+);
 if (survived.length) console.log("A break that survives names a promise no test holds the code to.");
 if (missed.length) console.log("A stale break no longer applies: follow the code it patched, or delete it.");
-process.exit(survived.length || missed.length ? 1 : 0);
+if (many.length) {
+  console.log(
+    "A break matching more than one site measures several behaviours as one: anchor it to the " +
+      "site it names, or write one entry per site.",
+  );
+}
+process.exit(survived.length || missed.length || many.length ? 1 : 0);
