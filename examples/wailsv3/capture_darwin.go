@@ -22,7 +22,21 @@ package main
 @interface SPCapture : NSObject <SCStreamOutput, SCStreamDelegate>
 @property (nonatomic, copy) NSString* directory;
 @property (nonatomic) int written;
+@property (nonatomic) int idle;
 @end
+
+// frameStatus 는 프레임에 붙은 상태를 읽는다. 상태가 없으면 완성된 프레임으로 본다.
+static SCFrameStatus frameStatus(CMSampleBufferRef sample) {
+    CFArrayRef list = CMSampleBufferGetSampleAttachmentsArray(sample, false);
+    if (list == NULL || CFArrayGetCount(list) == 0) return SCFrameStatusComplete;
+    CFDictionaryRef attached = CFArrayGetValueAtIndex(list, 0);
+    CFNumberRef status =
+        CFDictionaryGetValue(attached, (__bridge CFStringRef)SCStreamFrameInfoStatus);
+    if (status == NULL) return SCFrameStatusComplete;
+    int value = SCFrameStatusComplete;
+    CFNumberGetValue(status, kCFNumberIntType, &value);
+    return (SCFrameStatus)value;
+}
 
 @implementation SPCapture
 
@@ -30,6 +44,12 @@ package main
     didOutputSampleBuffer:(CMSampleBufferRef)sample
                    ofType:(SCStreamOutputType)type {
     if (type != SCStreamOutputTypeScreen) return;
+    // 창이 다시 그려지지 않으면 프레임은 정해진 간격으로 계속 오되 모두 idle 로
+    // 표시되고 이미지가 없다. 이것을 세어 두면 0 장인 이유를 말할 수 있다.
+    if (frameStatus(sample) != SCFrameStatusComplete) {
+        self.idle++;
+        return;
+    }
     CVImageBufferRef buffer = CMSampleBufferGetImageBuffer(sample);
     if (buffer == NULL) return;
     // 프레임을 원시 데이터 그대로 적는다. 여기서 인코딩하면 그 시간 동안 프레임이
@@ -41,20 +61,22 @@ package main
     const uint8_t* base = (const uint8_t*)CVPixelBufferGetBaseAddress(buffer);
     if (base != NULL) {
         NSString* path = [self.directory stringByAppendingPathComponent:
-            [NSString stringWithFormat:@"frame-%04d.bgra", ++self.written]];
+            [NSString stringWithFormat:@"frame-%04d.bgra", self.written + 1]];
         FILE* file = fopen(path.UTF8String, "wb");
         if (file != NULL) {
             uint32_t head[3] = { (uint32_t)width, (uint32_t)height, (uint32_t)stride };
             fwrite(head, sizeof(head), 1, file);
             fwrite(base, stride, height, file);
-            fclose(file);
+            // Counted once the file holds the frame, so the count and the
+            // directory cannot disagree.
+            if (fclose(file) == 0) self.written++;
         }
     }
     CVPixelBufferUnlockBaseAddress(buffer, kCVPixelBufferLock_ReadOnly);
 }
 
 - (void)stream:(SCStream*)stream didStopWithError:(NSError*)error {
-    NSLog(@"observe: capture stopped, %@", error.localizedDescription);
+    fprintf(stderr, "observe: capture stopped, %s\n", error.localizedDescription.UTF8String);
 }
 
 @end
@@ -66,13 +88,18 @@ static SCStreamConfiguration* captureConfig = nil;
 static SCStream* captureStream = nil;
 static SPCapture* captureSink = nil;
 
-// captureOpen 은 창을 조회해 캡처에 필요한 값을 보관한다. 조회는 비동기이므로 그
-// 전에 시작한 캡처는 아무 일도 하지 않는다.
+// captureOpen 은 창을 조회해 캡처에 필요한 값을 보관한다.
+//
+// 조회는 비동기이므로 답을 기다린다. 기다리지 않으면 그 사이에 시작한 캡처가 조용히
+// 아무 일도 하지 않고, 프레임이 0 장인 이유가 어디에도 남지 않는다.
 static void captureOpen(long windowNumber) {
+    dispatch_semaphore_t answered = dispatch_semaphore_create(0);
     [SCShareableContent getShareableContentWithCompletionHandler:
         ^(SCShareableContent* content, NSError* error) {
         if (error != nil) {
-            NSLog(@"observe: no screen recording permission, %@", error.localizedDescription);
+            fprintf(stderr, "observe: no screen recording permission, %s\n",
+                error.localizedDescription.UTF8String);
+            dispatch_semaphore_signal(answered);
             return;
         }
         for (SCWindow* window in content.windows) {
@@ -91,14 +118,21 @@ static void captureOpen(long windowNumber) {
             config.minimumFrameInterval = CMTimeMake(1, 120);
             config.queueDepth = 8;
             captureConfig = config;
+            dispatch_semaphore_signal(answered);
             return;
         }
-        NSLog(@"observe: window %ld not found", windowNumber);
+        fprintf(stderr, "observe: window %ld not found\n", windowNumber);
+        dispatch_semaphore_signal(answered);
     }];
+    dispatch_semaphore_wait(answered, dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC));
 }
 
 static void captureStart(const char* directory) {
-    if (captureFilter == nil || captureStream != nil) return;
+    if (captureFilter == nil) {
+        fprintf(stderr, "observe: capture has no window to record\n");
+        return;
+    }
+    if (captureStream != nil) return;
     captureSink = [[SPCapture alloc] init];
     captureSink.directory = [NSString stringWithUTF8String:directory];
     captureStream = [[SCStream alloc] initWithFilter:captureFilter
@@ -110,12 +144,16 @@ static void captureStart(const char* directory) {
                 sampleHandlerQueue:dispatch_queue_create("sp.capture", NULL)
                              error:&error];
     if (error != nil) {
-        NSLog(@"observe: capture output not added, %@", error.localizedDescription);
+        fprintf(stderr, "observe: capture output not added, %s\n",
+            error.localizedDescription.UTF8String);
         captureStream = nil;
         return;
     }
     [captureStream startCaptureWithCompletionHandler:^(NSError* failed) {
-        if (failed != nil) NSLog(@"observe: capture not started, %@", failed.localizedDescription);
+        if (failed != nil) {
+            fprintf(stderr, "observe: capture not started, %s\n",
+                failed.localizedDescription.UTF8String);
+        }
     }];
 }
 
@@ -130,10 +168,17 @@ static int captureStop(void) {
     captureStream = nil;
     dispatch_semaphore_t stopped = dispatch_semaphore_create(0);
     [stream stopCaptureWithCompletionHandler:^(NSError* failed) {
-        if (failed != nil) NSLog(@"observe: capture not stopped, %@", failed.localizedDescription);
+        if (failed != nil) {
+            fprintf(stderr, "observe: capture not stopped, %s\n",
+                failed.localizedDescription.UTF8String);
+        }
         dispatch_semaphore_signal(stopped);
     }];
     dispatch_semaphore_wait(stopped, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
+    if (captureSink.written == 0 && captureSink.idle > 0) {
+        fprintf(stderr, "observe: the window was not redrawn during %d frames; "
+            "the display is off or the window is not on screen\n", captureSink.idle);
+    }
     return captureSink.written;
 }
 */
