@@ -506,8 +506,31 @@ export const BREAKS = [
     id: "paid-back",
     what: "a card closed at a boundary gives its size to the other side",
     file: "dist/soksak.js",
-    find: "                const same = from === 'lo' ? lo : hi;",
-    to: "                const same = from === 'lo' ? lo : hi;\n                if (true)\n                    continue;",
+    // Re-anchored: the line it hooked on was a guard that could not be reached,
+    // and it went. The behaviour under test is the whole path, not that line.
+    find: "                const gone = from === 'lo' ? card[lo] : card[hi];",
+    to: "                const gone = from === 'lo' ? card[lo] : card[hi];\n                if (true)\n                    continue;",
+  },
+  {
+    id: "range-end",
+    what: "a drag to the end of the range is refused by one rounding",
+    file: "dist/geometry.js",
+    find: "if (sharedSpan > 1e-9 && room - (asked - now + drawn) - taken >= floor - 1e-9)",
+    to: "if (sharedSpan > 1e-9 && room - (asked - now + drawn) - taken >= floor)",
+  },
+  {
+    id: "passed-it",
+    what: "a drag keeps a step that landed further from the target than it stood",
+    file: "dist/soksak.js",
+    find: "                if (Math.abs(target - this.boundaryPos(axis, line)) > Math.abs(off)) {",
+    to: "                if (false) {",
+  },
+  {
+    id: "no-span-left",
+    what: "a pool too small for the tolerance is read as none, so the room a stop released lands nowhere",
+    file: "dist/geometry.js",
+    find: "const each = room / pool;",
+    to: "const each = pool > 1e-9 ? room / pool : 0;",
   },
   {
     id: "flex-rate",
