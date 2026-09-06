@@ -248,6 +248,9 @@ fn sync_surfaces(
             WebviewUrl::App(s.url.clone().into())
         };
         let [r, g, b] = s.background;
+        // wry turns the webview's own background off when a background colour is
+        // given, so the area a surface has not laid out yet is clear rather than
+        // white. The Wails side asks for the same through WebviewOptions.
         let builder = WebviewBuilder::new(&label, target).background_color(Color(r, g, b, 255));
         window
             .add_child(builder, position, size)
@@ -309,6 +312,12 @@ fn sync_surfaces(
         });
     }
     Ok(placed)
+}
+
+/// Converts the page's 0-255 channels to the 0-1 range AppKit takes. The alpha
+/// arrives already in that range.
+fn srgba(c: [f64; 4]) -> [f64; 4] {
+    [c[0] / 255.0, c[1] / 255.0, c[2] / 255.0, c[3]]
 }
 
 /// Where one surface actually sits, in the page's coordinates.
@@ -585,7 +594,10 @@ fn set_shape(window: Window, shapes: State<'_, Shapes>, request: ShapeRequest) -
             view
         }
     };
-    native::shape_style(view, request.radius, request.line_width, request.fill, request.line);
+    // The page sends colour channels as 0-255 and alpha as 0-1; AppKit takes all
+    // four as 0-1.
+    native::shape_style(view, request.radius, request.line_width,
+        srgba(request.fill), srgba(request.line));
     Ok(())
 }
 
@@ -693,9 +705,9 @@ fn overlay_hide(app: AppHandle, window: Window, state: State<'_, Overlay>, id: S
 
 /// The overlay reports what was clicked; the main page decides what it means.
 #[tauri::command]
-fn overlay_pick(window: Window, key: String, value: String) -> Result<(), String> {
+fn overlay_pick(window: Window, id: String, key: String, value: String) -> Result<(), String> {
     if let Some(main) = window.get_webview("main") {
-        main.emit("overlay-pick", Picked { key, value })
+        main.emit("overlay-pick", Picked { id, key, value })
             .map_err(|e| e.to_string())?;
     }
     Ok(())
@@ -740,6 +752,7 @@ struct ModalContentEvent {
 /// first character of a string for the whole answer.
 #[derive(Debug, Clone, Serialize)]
 struct Picked {
+    id: String,
     key: String,
     value: String,
 }
@@ -761,7 +774,7 @@ fn terminal_write(shells: State<'_, shell::Shells>, id: String, data: String) ->
 /// debugger.
 #[tauri::command]
 fn report(line: String) {
-    println!("{line}");
+    eprintln!("{line}");
 }
 
 /// Returns the current theme. A page requests this when it loads.
