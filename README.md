@@ -234,6 +234,13 @@ holds beside a card with a fixed width too — a width is a number and a number
 has a half. A host that does not want a sidebar centred by a double-click should
 not hand that divider the gesture.
 
+A gesture follows the changes the view makes: a drag, a centring and a merge each
+renumber lines, and the divider under the finger is carried to the line its own
+boundary now has. A change the host makes to the grid does not carry a gesture,
+because the view is told of it by `render()`, after it happened, and a card that
+arrives or leaves moves both the number a line has and where it stands. A host
+that rearranges cards under a live gesture ends it first.
+
 **A card's child can inflate the rect the view set.** A flex or grid child
 defaults to `min-width: auto`, so a column stretches to min-content and the
 element reports a rect wider than the size it was given. `overflow: hidden` hides

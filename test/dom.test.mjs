@@ -1680,3 +1680,66 @@ test("two stretches that become one divider stay with the gesture that kept it",
   assert.equal(lower.isConnected, false, "the other element is taken away");
   view.destroy();
 });
+
+test("a re-filed divider takes the stretch it covers most, not the one it starts in", () => {
+  // The commit hook lets a host hold the draw, so two moves can land in one
+  // paint. One takes a stretch's start past where the element it holds is drawn;
+  // the other renumbers that stretch's key. Only the length the element covers
+  // then says which stretch is its own.
+  let hold = false;
+  let pending = null;
+  const { window, host, grid, view } = mount({
+    commit: (_rects, draw) => {
+      if (hold) pending = draw;
+      else draw();
+    },
+  });
+  grid.replace({
+    xs: [0, 0.5, 1],
+    ys: [0, 0.2, 0.25, 0.4, 0.7, 1],
+    cards: [
+      { id: "a", c0: 0, c1: 1, r0: 0, r1: 2 },
+      { id: "b", c0: 1, c1: 2, r0: 0, r1: 2 },
+      { id: "band", c0: 0, c1: 2, r0: 2, r1: 3 },
+      { id: "c", c0: 0, c1: 1, r0: 3, r1: 5 },
+      { id: "d", c0: 1, c1: 2, r0: 3, r1: 5 },
+    ],
+    paidBy: {},
+  });
+  view.render();
+  assert.deepEqual([1, 4].filter((k) => grid.isVirtual("y", k)), [1, 4], "two lines no card reads");
+  const down = [...host.querySelectorAll('.sp-divider[data-axis="x"][data-line="1"]')].sort(
+    (p, q) => parseFloat(p.style.top) - parseFloat(q.style.top),
+  );
+  assert.equal(down.length, 2, "the vertical line is drawn as two stretches");
+  const lower = down[1];
+  const [top, bottom] = [...host.querySelectorAll('.sp-divider[data-axis="y"]')].sort(
+    (p, q) => parseFloat(p.style.top) - parseFloat(q.style.top),
+  );
+
+  // A finger holds the lower stretch and never moves.
+  pointer(window, lower, "pointerdown", 3, grid.boundaryPos("x", 1), 500);
+  const was = parseFloat(lower.style.top);
+
+  hold = true;
+  // The lower stretch's start goes past where that element is drawn.
+  pointer(window, bottom, "pointerdown", 2, 600, grid.boundaryPos("y", 3));
+  pointer(window, bottom, "pointermove", 2, 600, 450);
+  // And this renumbers its key, so the element has to be filed again.
+  pointer(window, top, "pointerdown", 1, 600, grid.boundaryPos("y", 2));
+  pointer(window, top, "pointermove", 1, 600, 100);
+  hold = false;
+  pending();
+
+  const mine = grid.dividers().find((d) => d.key === "x:1:2");
+  assert.ok(mine.y > was, "the stretch now starts past where the element was drawn");
+  assert.equal(view.drags.has(3), true, "the finger still holds its divider");
+  assert.equal(lower.isConnected, true, "and its element is still in the host");
+  assert.equal(lower.dataset.line, "1");
+  assert.equal(
+    parseFloat(lower.style.top),
+    Math.round(mine.y),
+    "and it is drawn on the stretch it covers, not on the one above it",
+  );
+  view.destroy();
+});
