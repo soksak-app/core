@@ -96,7 +96,11 @@ The fork adds `AddWebview`, which creates a webview from the window's
 configuration, and `Attach`, which positions a window over a point in another
 window's content. With both, a surface and a modal load from the application's
 own scheme, import its runtime and receive its events, and this example creates
-no webview itself.
+no webview itself. It also adds `Mac.TrafficLightPosition`, which places the
+window's own buttons, and corrects the window's content size: Wails v3 made the
+content rect one point smaller than the webview inside it, so the page received a
+plane one point larger than the window at every size and the two hosts laid out
+differently after a resize.
 
 ## What a plugin would be
 
