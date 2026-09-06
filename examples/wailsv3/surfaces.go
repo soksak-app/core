@@ -124,10 +124,12 @@ type Surfaces struct {
 	live map[string]bool
 	// Whether a run of updates is in progress. Only changes are emitted.
 	running bool
-	modals  map[string]*modal
-	shapes  map[string]*nativeShape
-	shells  *Shells
-	watch   sync.Once
+	// The page's first commit, which is when the window is drawn.
+	first  sync.Once
+	modals map[string]*modal
+	shapes map[string]*nativeShape
+	shells *Shells
+	watch  sync.Once
 
 	// The theme the main page last set. A page calls Theme after loading.
 	theme Theme
@@ -519,6 +521,9 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) ([]Placement, error) {
 	if !ok {
 		return nil, nil
 	}
+	// The page has committed, so its window is on screen and its surfaces exist.
+	// Anything that has to run once the application is drawn starts from here.
+	s.first.Do(func() { application.Get().Event.Emit("page-ready") })
 	var placed []Placement
 	application.InvokeSync(func() {
 		s.apply(win, req)

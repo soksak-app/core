@@ -15,13 +15,13 @@ import (
 	"log"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
-	"github.com/wailsapp/wails/v3/pkg/events"
 )
 
-type Observe struct{}
+type Observe struct{ began sync.Once }
 
 func (o *Observe) ServiceName() string { return "observe" }
 
@@ -34,22 +34,27 @@ func (o *Observe) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	app := application.Get()
 	offChange := app.Event.On("windows-changed", func(*application.CustomEvent) { o.report() })
 	offRecord := o.record()
-	offShow := func() {}
-	if win, ok := mainWindow(); ok {
-		offShow = win.OnWindowEvent(events.Common.WindowShow, func(*application.WindowEvent) {
-			o.report()
-			o.open()
-			o.drive()
-			o.click()
-		})
-	}
+	// 관측은 페이지가 처음 커밋한 뒤에 시작한다. 그때 창이 화면에 있고 표면이 있다.
+	// 창 이벤트에 붙이면 이 서비스가 늦게 시작할 때 이미 지나간 이벤트를 기다린다.
+	offReady := app.Event.On("page-ready", func(*application.CustomEvent) { o.start() })
 	go func() {
 		<-ctx.Done()
 		offChange()
 		offRecord()
-		offShow()
+		offReady()
 	}()
 	return nil
+}
+
+// start 는 창을 보고하고 요청된 동작을 시작한다. 두 경로 중 먼저 닿은 쪽에서 한 번만
+// 실행된다.
+func (o *Observe) start() {
+	o.began.Do(func() {
+		o.report()
+		o.open()
+		o.drive()
+		o.click()
+	})
 }
 
 // open 은 이 창의 녹화를 준비한다. 윈도 서버의 창 목록을 읽는 것이 느리므로 한 번만
@@ -58,7 +63,11 @@ func (o *Observe) open() {
 	if *capturing == "" {
 		return
 	}
-	if now := o.Windows(); len(now) > 0 {
+	// 창 목록 조회는 답을 기다린다. 주 스레드에서 기다리면 그 답이 주 큐로 오는
+	// 경우 서로를 기다리게 되므로, 창 번호만 주 스레드에서 읽고 조회는 여기서 한다.
+	var now []int
+	application.InvokeSync(func() { now = o.Windows() })
+	if len(now) > 0 {
 		captureOpen(now[0])
 	}
 }

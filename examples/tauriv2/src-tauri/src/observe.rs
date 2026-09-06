@@ -12,7 +12,6 @@
 use std::time::Duration;
 
 use tauri::plugin::{Builder, TauriPlugin};
-use tauri::webview::PageLoadEvent;
 use tauri::{Emitter, Listener, Manager, Runtime, Window};
 
 use crate::capture;
@@ -61,6 +60,20 @@ pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
             // app announces that where it happens. Nothing is polled.
             let listen = app.clone();
             app.listen("windows-changed", move |_| report(listen.clone()));
+            // Observation starts after the page's first commit: the window is on
+            // screen and the surfaces exist. A page-load event fires again on
+            // every reload and would start it more than once.
+            let ready = app.clone();
+            let started = std::sync::atomic::AtomicBool::new(false);
+            app.listen("page-ready", move |_| {
+                if started.swap(true, std::sync::atomic::Ordering::SeqCst) {
+                    return;
+                }
+                report(ready.clone());
+                open(ready.clone());
+                drive(ready.clone());
+                click(ready.clone());
+            });
             // The page reports whether more updates follow, so a boundary dragged
             // by hand is recorded the same way as a driven one.
             if let Some(into) = capturing() {
@@ -71,16 +84,6 @@ pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
                 });
             }
             Ok(())
-        })
-        // The main page has loaded, so its window is on screen. This is the first
-        // report; waiting for it is what a timer would otherwise be doing.
-        .on_page_load(|webview, payload| {
-            if webview.label() == "main" && payload.event() == PageLoadEvent::Finished {
-                report(webview.app_handle().clone());
-                open(webview.app_handle().clone());
-                drive(webview.app_handle().clone());
-                click(webview.app_handle().clone());
-            }
         })
         .invoke_handler(tauri::generate_handler![windows])
         .build()

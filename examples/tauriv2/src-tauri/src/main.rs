@@ -196,6 +196,14 @@ fn sync_surfaces(
     request: SyncRequest,
 ) -> Result<Vec<Placement>, String> {
     announce_run(&window, &running, !request.settled)?;
+    // The page has committed, so its window is on screen and its surfaces exist.
+    // Anything that has to run once the application is drawn starts from here.
+    if let Ok(mut first) = running.first.lock() {
+        if !*first {
+            *first = true;
+            window.emit("page-ready", ()).map_err(|e| e.to_string())?;
+        }
+    }
     // The monitor places a point in the page's coordinates, so it needs the
     // page's height. The page reports it on every commit.
     if let Ok(mut height) = page.0.lock() {
@@ -321,7 +329,7 @@ fn announce_run<R: Runtime>(
     going: bool,
 ) -> Result<(), String> {
     {
-        let mut held = running.0.lock().map_err(|e| e.to_string())?;
+        let mut held = running.going.lock().map_err(|e| e.to_string())?;
         if *held == going {
             return Ok(());
         }
@@ -426,9 +434,12 @@ struct Watching(Mutex<bool>);
 #[derive(Default)]
 struct Resizing(Mutex<HashSet<String>>);
 
-/// Whether a run of updates is going. Only the changes are announced.
+/// Whether a run of updates is going, and whether the page has committed once.
 #[derive(Default)]
-struct Running(Mutex<bool>);
+struct Running {
+    going: Mutex<bool>,
+    first: Mutex<bool>,
+}
 
 /// One view per modal element, named after it, so a page may have several.
 fn modal_label(id: &str) -> String {
