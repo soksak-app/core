@@ -5,7 +5,7 @@
 //
 // 화면을 보고 판단하지 않고 수치로 판정한다.
 import { latest } from "./compositor.js";
-import { currentGrid, currentView, drawRail, plane, tabsOf } from "./plane.js";
+import { currentGrid, currentView, plane, railOutline, tabsOf } from "./plane.js";
 import { isPlace, railKind } from "./plugins/registry.js";
 import { cardRadius } from "./settings.js";
 
@@ -29,7 +29,7 @@ export function verify() {
   const cards = [...grid.cards];
   const box = grid.rects();                 // 한 번 재고 id 로 찾는다
   const rects = cards.map((c) => box.get(c.id));
-  const { shape, rects: railRects } = drawRail();
+  const { shape, rects: railRects } = railOutline();
 
   const adjacent = railRects.length === 2 && (() => {
     const [a, b] = railRects;

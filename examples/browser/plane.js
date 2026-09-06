@@ -852,6 +852,12 @@ function markFocus() {
   mark.hidden = false;
 }
 
+/* 마지막으로 그린 레일 외곽선. 검증기가 읽는다. */
+let railShape = { shape: { path: "", loops: [], corners: 0, sharp: 0 }, rects: [] };
+
+/** 마지막으로 그린 레일 외곽선과 그 대상 사각형. */
+export const railOutline = () => railShape;
+
 function drawRail() {
   const pad = grid.gap / 2;
   // 포커스 카드와 묶는 대상은 그 카드의 종류를 담당하는 레일뿐이다. 레일이 없으면
@@ -911,11 +917,19 @@ export function build() {
     // 판은 stage 안쪽으로 이 값만큼 들어와 있다. 호스트만 아는 값이므로 뷰에 전달해야
     // 판 가장자리에 닿는 선이 stage 경계까지 이어진다.
     bleed: half,
-    onChange: () => listener?.(),
     commit: (made, draw) => (layouter ? layouter(made, draw) : draw()),
   });
+  // 판의 렌더는 뷰가 그리는 것과 이 문서가 그리는 것으로 이루어진다. 뷰의 onChange 는
+  // 뷰가 그린 직후에 발화하므로, 그 시점의 판은 아직 절반만 그려져 있다. 수신자는
+  // 여기서 전부 그린 뒤에 호출한다.
   const baseRender = view.render.bind(view);
-  view.render = () => { baseRender(); markFocus(); centreTabs(); };
+  view.render = (reason) => {
+    baseRender(reason);
+    markFocus();
+    centreTabs();
+    railShape = drawRail();
+    listener?.(reason);
+  };
   Object.assign(window, { grid, view });   // 관측용 — build 마다 새로 걸어야 낡지 않는다
   settle();
 }
@@ -959,7 +973,7 @@ export const fresh = () => ({
   named: 0,
 });
 
-export { settle, tabsOf, plane, drawRail };
+export { settle, tabsOf, plane };
 export const render = () => view.render();
 export const currentGrid = () => grid;
 export const currentView = () => view;
