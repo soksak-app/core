@@ -213,8 +213,8 @@ function corridor(plane: Plane, axis: Axis, read = linesRead(plane, axis)): numb
   return Math.min(plane.gap, Math.max(0, extent(plane, axis)) / real);
 }
 
-/** Line indices that at least one card references. */
-function linesRead(plane: Plane, axis: Axis): Set<number> {
+/** Line indices that at least one card references. One pass over the cards. */
+export function linesRead(plane: Plane, axis: Axis): Set<number> {
   const [lo, hi] = SPAN[axis];
   const read = new Set<number>();
   for (const card of plane.cards) {
@@ -258,11 +258,6 @@ export function inset(
 /** Half the gap a referenced line takes, capped at what the plane can hold. */
 export function halfCorridor(plane: Plane, axis: Axis, read = linesRead(plane, axis)): number {
   return corridor(plane, axis, read) / 2;
-}
-
-/** The lines any card references. One pass over the cards. */
-export function linesReadOn(plane: Plane, axis: Axis): Set<number> {
-  return linesRead(plane, axis);
 }
 
 /** Line positions and edge insets for one axis. */

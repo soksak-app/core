@@ -46,6 +46,8 @@ export declare function slotWidths(plane: Plane, axis: Axis): number[];
 export declare function slotSizes(plane: Plane, axis: Axis): number[];
 /** Every line position in px, index for index with the line array. */
 export declare function linePositions(plane: Plane, axis: Axis): number[];
+/** Line indices that at least one card references. One pass over the cards. */
+export declare function linesRead(plane: Plane, axis: Axis): Set<number>;
 /**
  * How far a card's edge insets from the line it references.
  *
@@ -56,8 +58,6 @@ export declare function linePositions(plane: Plane, axis: Axis): number[];
 export declare function inset(plane: Plane, axis: Axis, index: number, side: 'lo' | 'hi', read?: Set<number>): number;
 /** Half the gap a referenced line takes, capped at what the plane can hold. */
 export declare function halfCorridor(plane: Plane, axis: Axis, read?: Set<number>): number;
-/** The lines any card references. One pass over the cards. */
-export declare function linesReadOn(plane: Plane, axis: Axis): Set<number>;
 /** Line positions and edge insets for one axis. */
 export interface Axle {
     at: number[];

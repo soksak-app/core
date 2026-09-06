@@ -15,7 +15,7 @@
  * coordinates.
  */
 import { AXES, SIDES, SPAN, axisOf, fixedSize, isAhead, other, spanOf } from './card.js';
-import { corridorOf, crossing, dividers, frameOf, linesReadOn, halfCorridor, heldSizes, inset, interiorLines, isVirtual, linePositions, rectIn, rectOf, rules, slotSizes, slotWidths, zoneAt, } from './geometry.js';
+import { corridorOf, crossing, dividers, frameOf, linesRead, halfCorridor, heldSizes, inset, interiorLines, isVirtual, linePositions, rectIn, rectOf, rules, slotSizes, slotWidths, zoneAt, } from './geometry.js';
 import { fillFor, isSlicing } from './slicing.js';
 const EPS = 1e-9;
 /**
@@ -111,6 +111,33 @@ export class Soksak {
         this.sliceMemo.clear();
         this.splitMemo.clear();
     }
+    /** Smallest grab area of a boundary, in px. */
+    get grabSize() {
+        return this.grab;
+    }
+    set grabSize(px) {
+        if (!Number.isFinite(px) || px < 0)
+            return;
+        this.grab = px;
+    }
+    /** How near a dragged boundary must come to a neighbour to land on it, in px. */
+    get snapDistance() {
+        return this.snapAt;
+    }
+    set snapDistance(px) {
+        if (!Number.isFinite(px) || px < 0)
+            return;
+        this.snapAt = px;
+    }
+    /** Whether a dragged boundary lands on a neighbour it nearly meets. */
+    get snap() {
+        return this.snapMode;
+    }
+    set snap(mode) {
+        if (mode !== 'merge' && mode !== 'off')
+            return;
+        this.snapMode = mode;
+    }
     /** With no state, starts as one card filling the plane. */
     constructor(state, options = {}) {
         var _a, _b, _c, _d, _e, _f, _g, _h, _j;
@@ -132,12 +159,19 @@ export class Soksak {
         this.gap = (_a = options.gap) !== null && _a !== void 0 ? _a : 24;
         const min = (_b = options.minSize) !== null && _b !== void 0 ? _b : 96;
         this.min = Number.isFinite(min) && min >= 0 ? min : 96;
+        // Every option is checked the same way. A number that is not one puts NaN
+        // into every rect the plane computes, and the elements then carry a length
+        // the CSSOM discards.
+        this.grab = 11;
         this.grabSize = (_c = options.grabSize) !== null && _c !== void 0 ? _c : 11;
+        this.snapAt = 7;
         this.snapDistance = (_d = options.snapDistance) !== null && _d !== void 0 ? _d : 7;
+        this.snapMode = 'merge';
         this.snap = (_e = options.snap) !== null && _e !== void 0 ? _e : 'merge';
         this.order = (_f = options.fillOrder) !== null && _f !== void 0 ? _f : 'v';
-        this.w = (_g = options.width) !== null && _g !== void 0 ? _g : 0;
-        this.h = (_h = options.height) !== null && _h !== void 0 ? _h : 0;
+        this.w = 0;
+        this.h = 0;
+        this.resize((_g = options.width) !== null && _g !== void 0 ? _g : 0, (_h = options.height) !== null && _h !== void 0 ? _h : 0);
         if (state) {
             checkState(state);
             this.xs = [...state.xs];
@@ -157,6 +191,9 @@ export class Soksak {
     }
     // ---- the plane ---------------------------------------------------------
     resize(width, height) {
+        if (!Number.isFinite(width) || !Number.isFinite(height) || width < 0 || height < 0) {
+            return;
+        }
         this.w = width;
         this.h = height;
         this.splitMemo.clear(); // plane size changes the answer
@@ -370,7 +407,7 @@ export class Soksak {
         if (want.length !== count || this.size(axis) <= 0)
             return;
         const plane = this.plane;
-        const read = linesReadOn(plane, axis);
+        const read = linesRead(plane, axis);
         const held = heldSizes(plane, axis);
         const sizes = slotSizes(plane, axis);
         // Total width and span of the sharing slots. Both are read from the current
@@ -539,7 +576,7 @@ export class Soksak {
         let min = first;
         let max = last;
         const plane = this.plane;
-        const read = linesReadOn(plane, axis); // one pass, not two per card
+        const read = linesRead(plane, axis); // one pass, not two per card
         for (const card of this.list) {
             const near = inset(plane, axis, card[lo], 'lo', read);
             const far = inset(plane, axis, card[hi], 'hi', read);
@@ -668,7 +705,7 @@ export class Soksak {
         let start = (_a = along[line - 1]) !== null && _a !== void 0 ? _a : 0;
         let end = (_b = along[line + 1]) !== null && _b !== void 0 ? _b : this.size(axis);
         const near = this.plane;
-        const seen = linesReadOn(near, axis);
+        const seen = linesRead(near, axis);
         let insStart = inset(near, axis, line - 1, 'lo', seen);
         let insEnd = inset(near, axis, line + 1, 'hi', seen);
         for (const card of this.list) {

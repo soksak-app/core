@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { contains, outline, unionLoops } from "../dist/index.js";
+import {
+  contains, outline, roundedPath, themeCSS, themeTokens, unionLoops,
+} from "../dist/index.js";
 import { three } from "./helpers.mjs";
 
 const arcs = (path) => (path.match(/A/g) ?? []).length;
@@ -143,4 +145,35 @@ test("every corner is drawn at the one radius, whichever way it turns", () => {
   const flat = outline([{ x: 0, y: 0, w: 400, h: 0.6 }], { pad: 0, radius: 30 });
   assert.equal(flat.sharp, 4);
   assert.equal([...flat.path.matchAll(/A/g)].length, 0, "and no arc is emitted");
+});
+
+test("roundedPath draws the loop it is given, with arcs where the radius fits", () => {
+  const square = [
+    { x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 },
+  ];
+  const square0 = roundedPath(square, 0);
+  assert.equal(square0.corners, 4, "a square has four corners");
+  assert.equal(square0.sharp, 4, "no radius, every corner cut");
+  assert.equal(square0.d.match(/A[\d.]/g), null, "and no arc drawn");
+
+  const round = roundedPath(square, 10);
+  assert.equal(round.sharp, 0, "the radius fits at every corner");
+  assert.equal(round.d.match(/A[\d.]/g).length, 4, "one arc per corner");
+  assert.ok(round.d.endsWith("Z"), "the loop closes");
+
+  // 반경은 만나는 두 변 중 짧은 쪽의 절반으로 제한된다. 8px 변에서는 4 가 된다.
+  const thin = roundedPath([{ x: 0, y: 0 }, { x: 8, y: 0 }, { x: 8, y: 100 }, { x: 0, y: 100 }], 40);
+  assert.match(thin.d, /A4\.00 4\.00/, "the radius is capped at half the shorter side");
+});
+
+test("themeCSS names every token themeTokens reports", () => {
+  const css = themeCSS();
+  for (const token of Object.values(themeTokens())) {
+    assert.ok(css.includes(`${token}:`), `${token} is set`);
+  }
+  const own = themeCSS({ prefix: "pane" });
+  for (const token of Object.values(themeTokens("pane"))) {
+    assert.ok(own.includes(`${token}:`), `${token} follows the prefix`);
+  }
+  assert.ok(!own.includes("--sp-"), "and the default prefix is gone");
 });

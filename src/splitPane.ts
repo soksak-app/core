@@ -22,7 +22,7 @@ import {
   crossing,
   dividers,
   frameOf,
-  linesReadOn,
+  linesRead,
   halfCorridor,
   heldSizes,
   inset,
@@ -200,21 +200,60 @@ export class Soksak {
     this.splitMemo.clear();
   }
 
-  grabSize: number;
-  snapDistance: number;
-  snap: SnapMode;
+  private grab: number;
+
+  /** Smallest grab area of a boundary, in px. */
+  get grabSize(): number {
+    return this.grab;
+  }
+
+  set grabSize(px: number) {
+    if (!Number.isFinite(px) || px < 0) return;
+    this.grab = px;
+  }
+
+  private snapAt: number;
+
+  /** How near a dragged boundary must come to a neighbour to land on it, in px. */
+  get snapDistance(): number {
+    return this.snapAt;
+  }
+
+  set snapDistance(px: number) {
+    if (!Number.isFinite(px) || px < 0) return;
+    this.snapAt = px;
+  }
+
+  private snapMode: SnapMode;
+
+  /** Whether a dragged boundary lands on a neighbour it nearly meets. */
+  get snap(): SnapMode {
+    return this.snapMode;
+  }
+
+  set snap(mode: SnapMode) {
+    if (mode !== 'merge' && mode !== 'off') return;
+    this.snapMode = mode;
+  }
 
   /** With no state, starts as one card filling the plane. */
   constructor(state?: SoksakState, options: SoksakOptions = {}) {
     this.gap = options.gap ?? 24;
     const min = options.minSize ?? 96;
     this.min = Number.isFinite(min) && min >= 0 ? min : 96;
+    // Every option is checked the same way. A number that is not one puts NaN
+    // into every rect the plane computes, and the elements then carry a length
+    // the CSSOM discards.
+    this.grab = 11;
     this.grabSize = options.grabSize ?? 11;
+    this.snapAt = 7;
     this.snapDistance = options.snapDistance ?? 7;
+    this.snapMode = 'merge';
     this.snap = options.snap ?? 'merge';
     this.order = options.fillOrder ?? 'v';
-    this.w = options.width ?? 0;
-    this.h = options.height ?? 0;
+    this.w = 0;
+    this.h = 0;
+    this.resize(options.width ?? 0, options.height ?? 0);
 
     if (state) {
       checkState(state);
@@ -237,6 +276,9 @@ export class Soksak {
   // ---- the plane ---------------------------------------------------------
 
   resize(width: number, height: number): void {
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width < 0 || height < 0) {
+      return;
+    }
     this.w = width;
     this.h = height;
     this.splitMemo.clear();      // plane size changes the answer
@@ -457,7 +499,7 @@ export class Soksak {
     const count = a.length - 1;
     if (want.length !== count || this.size(axis) <= 0) return;
     const plane = this.plane;
-    const read = linesReadOn(plane, axis);
+    const read = linesRead(plane, axis);
     const held = heldSizes(plane, axis);
     const sizes = slotSizes(plane, axis);
 
@@ -624,7 +666,7 @@ export class Soksak {
     let min = first;
     let max = last;
     const plane = this.plane;
-    const read = linesReadOn(plane, axis);   // one pass, not two per card
+    const read = linesRead(plane, axis);   // one pass, not two per card
     for (const card of this.list) {
       const near = inset(plane, axis, card[lo], 'lo', read);
       const far = inset(plane, axis, card[hi], 'hi', read);
@@ -753,7 +795,7 @@ export class Soksak {
     let start = along[line - 1] ?? 0;
     let end = along[line + 1] ?? this.size(axis);
     const near = this.plane;
-    const seen = linesReadOn(near, axis);
+    const seen = linesRead(near, axis);
     let insStart = inset(near, axis, line - 1, 'lo', seen);
     let insEnd = inset(near, axis, line + 1, 'hi', seen);
     for (const card of this.list) {

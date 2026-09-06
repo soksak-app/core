@@ -96,9 +96,18 @@ export declare class Soksak {
     /** The axis a close tries first. */
     get fillOrder(): FillOrder;
     set fillOrder(value: FillOrder);
-    grabSize: number;
-    snapDistance: number;
-    snap: SnapMode;
+    private grab;
+    /** Smallest grab area of a boundary, in px. */
+    get grabSize(): number;
+    set grabSize(px: number);
+    private snapAt;
+    /** How near a dragged boundary must come to a neighbour to land on it, in px. */
+    get snapDistance(): number;
+    set snapDistance(px: number);
+    private snapMode;
+    /** Whether a dragged boundary lands on a neighbour it nearly meets. */
+    get snap(): SnapMode;
+    set snap(mode: SnapMode);
     /** With no state, starts as one card filling the plane. */
     constructor(state?: SoksakState, options?: SoksakOptions);
     static from(state: SoksakState, options?: SoksakOptions): Soksak;

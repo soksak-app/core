@@ -694,12 +694,6 @@ test("a rule reaches the frame the host holds the plane inside", () => {
   grid.split("card", "y");
   view.render();
 
-  for (const rule of grid.rules()) {
-    const el = host.querySelector(
-      `.sp-rule[data-axis="${rule.axis}"][data-virtual="${rule.virtual}"]`,
-    );
-    if (!el) continue;
-  }
   const reaching = grid.rules().filter((r) => r.axis === "x" && r.y <= 0.5);
   assert.ok(reaching.length, "a rule that starts at the plane's edge");
 
@@ -756,7 +750,6 @@ test("bleed is readable and writable, and refuses a value that is not one", () =
   assert.equal(view.bleed, 0, "and zero is a distance");
   view.render();
   assert.equal(host.querySelector('.sp-rule[data-axis="x"]').style.top, "0px");
-  assert.ok(grid.cards.length, "the plane is untouched by any of it");
   view.destroy();
 });
 

@@ -71,7 +71,9 @@ spanning two slots carries no px size.
 
 **R6 — Rects are computed in one place.**
 `geometry.ts` computes card rects, boundary rules and grab areas.
-`soksak.ts` holds the state.
+`soksak.ts` holds the state. `dom.ts` computes one rect of its own, the area
+a rule is drawn in, because that one depends on the frame around the plane,
+which only the host knows.
 
 **R7 — A card can leave unless the layout may not move what would replace it.**
 Every open card but the last can be closed, and the result is again an
@@ -137,8 +139,10 @@ grid.move("rail", "browser", "right");
 ## Quick start — DOM
 
 `SoksakView` sets position, manages element lifecycle and handles pointer
-input. Card elements come from `createCard`. The elements the view creates carry
-a class name and data attributes only.
+input. It also handles mouse input, for a host that delivers a press as mouse
+events: `mousedown` on the divider, and `mousemove` and `mouseup` on the
+divider's document. Card elements come from `createCard`. The elements the view
+creates carry a class name and data attributes only.
 
 ```js
 import { Soksak, SoksakView } from "soksak";
@@ -237,9 +241,10 @@ and the corridor it releases, go to the slot next to it; a card inserted at a
 boundary takes its width from the slot next to it. So a sidebar switched off and
 back on leaves every other card the width it had.
 
-A px size is declared by the host. Only a drag changes one — a close or an insert
-settles with a sharing slot, and looks further out when the nearest one cannot
-give the room without taking a card below `minSize`.
+A px size is declared by the host. A drag changes one, and a cut divides one
+between the halves; a close or an insert settles with a sharing slot, and looks
+further out when the nearest one cannot give the room without taking a card
+below `minSize`.
 
 ```js
 grid.dividers();                       // where each boundary can be grabbed

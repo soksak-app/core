@@ -95,10 +95,29 @@ test("a size a slot cannot hold is refused", () => {
 
 test("the options refuse a value that is not one, at construction and after", () => {
   for (const bad of [-1, NaN, Infinity]) {
-    const grid = new Soksak(undefined, { width: W, height: H, gap: bad, minSize: bad });
+    const grid = new Soksak(undefined, {
+      width: bad, height: bad, gap: bad, minSize: bad,
+      grabSize: bad, snapDistance: bad,
+    });
     assert.equal(grid.gap, 24, `gap fell back from ${bad}`);
     assert.equal(grid.minSize, 96, `minSize fell back from ${bad}`);
+    assert.equal(grid.grabSize, 11, `grabSize fell back from ${bad}`);
+    assert.equal(grid.snapDistance, 7, `snapDistance fell back from ${bad}`);
+    assert.equal(grid.width, 0, `width fell back from ${bad}`);
+    assert.equal(grid.height, 0, `height fell back from ${bad}`);
   }
+
+  // 축 이름이 아닌 것과 마찬가지로, 모드 이름이 아닌 것도 거절한다.
+  const asked = new Soksak(undefined, { width: W, height: H, snap: "sideways" });
+  assert.equal(asked.snap, "merge", "an unknown snap mode is refused");
+  asked.snap = "off";
+  assert.equal(asked.snap, "off", "a known one is taken");
+
+  // 크기가 값이 아니면 판의 크기를 바꾸지 않는다. 바꾸면 모든 사각형이 NaN 이 된다.
+  const sized = new Soksak(undefined, { width: W, height: H });
+  sized.resize(NaN, H);
+  assert.equal(sized.width, W, "resize kept the width");
+  assert.ok(Number.isFinite(sized.rect("card").w), "the card still has a width");
 
   const grid = new Soksak(undefined, { width: W, height: H });
   for (const bad of [-1, NaN, Infinity]) {
@@ -409,5 +428,7 @@ test("replace updates the canonical arrangement without replacing the grid", () 
   assert.equal(grid.card("card"), undefined);
   assert.equal(grid.card("terminal").data.program, "terminal");
   assert.deepEqual(grid.rect("browser"), { x: 312, y: 0, w: 888, h: 800 });
-  assert.notEqual(grid.card("terminal"), first);
+  // 판은 그대로이고 배치만 바뀌었다. 바뀌기 전의 카드는 이 배치에 없다.
+  assert.equal(first.id, "card");
+  assert.equal(grid.card(first.id), undefined, "the card that was replaced is gone");
 });

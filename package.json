@@ -23,11 +23,12 @@
     "dist",
     "src",
     "README.md",
+    "README.ko.md",
     "LICENSE"
   ],
   "scripts": {
     "build": "tsc && node scripts/emit-dom-reference.mjs",
-    "test": "pnpm build && node --test",
+    "test": "pnpm build && node --test test/",
     "fuzz": "pnpm build && node scripts/fuzz.mjs",
     "mutate": "pnpm build && node scripts/mutate.mjs",
     "breaks": "pnpm build && node scripts/check-breaks.mjs",
