@@ -38,8 +38,8 @@ func main() {
 	app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:             "main",
 		Title:            "soksak / Wails v3",
-		Width:            1280,
-		Height:           900,
+		Width:            1200,
+		Height:           760,
 		URL:              "/",
 		DevToolsEnabled:  true,
 		BackgroundColour: application.NewRGB(16, 17, 23),

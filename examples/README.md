@@ -153,22 +153,33 @@ dispatch the click once the page has rendered:
     observe: windows 7480 7489
 
 Nothing is reported while the window stands still, so `--drive` shakes a boundary
-on its own, as `wait,x,y,dx,dy,ms,times` — wait that many ms for the pages to be
-drawn, then press at x,y and sweep by dx,dy over ms, out and back, that many
-times:
+on its own, as `wait,axis,line,dx,dy,ms,times` — wait that many ms for the pages
+to be drawn, then press the boundary on that axis and line and sweep by dx,dy
+over ms, out and back, that many times:
 
-    ./examples/wailsv3/bin/wailsv3 --observe --drive 3000,404,294,-250,0,48,15
+    ./examples/wailsv3/bin/wailsv3 --observe --drive 3000,x,2,-250,0,48,15
 
-    observe: shaking (404,294) by -250,+0 in 3 steps, 15 times
+    observe: shaking x:2 at (405,421) by -250,0 in 3 steps, 3 times
     observe: shaking done
+
+A boundary is named, not pointed at. A coordinate has to be recalculated whenever
+the window's size changes, and a press that misses moves nothing and says
+nothing.
+
+The drag is performed by the page, which both applications run, so which boundary
+is dragged and how is written once. Each step goes through the same path a press
+on a surface takes, so the measurement covers the product's own path. No key or
+button is synthesised at the operating system, so the focus does not move.
 
 The press is held for the whole run. Releasing and pressing again fails once a
 boundary stops at the minimum card size, because the next press lands where the
 boundary no longer is.
 
-Each step is delivered through `surface-input`, the same path a press on a
-surface uses, so the measurement covers the product's own path. No key or button
-is synthesised at the operating system, so the focus does not move.
+`--transcript` writes one line per host call and its answer. The recorder is in
+the page, so both applications write the same form. `examples/test/hosts.test.mjs`
+runs both this way and requires the two records to agree: the same request means
+the two hosts gave the page the same plane, and the same answer means they placed
+it the same way.
 
 `--capture <directory>` records the window while updates continue. The page
 reports whether more updates follow, so a boundary dragged by hand is recorded

@@ -11,12 +11,12 @@
 
 use std::time::Duration;
 
+use serde::Serialize;
 use tauri::plugin::{Builder, TauriPlugin};
 use tauri::{Emitter, Listener, Manager, Runtime};
 
 use crate::capture;
 use crate::native;
-use crate::InputStep;
 
 /// The value of a command-line flag, in either form the other host accepts:
 /// `--flag value` and `--flag=value`. Go's flag package takes both, so a command
@@ -61,6 +61,7 @@ pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
                 if started.swap(true, std::sync::atomic::Ordering::SeqCst) {
                     return;
                 }
+                transcribe(ready.clone());
                 report(ready.clone());
                 open(ready.clone());
                 drive(ready.clone());
@@ -84,6 +85,17 @@ pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
             Ok(())
         })
         .build()
+}
+
+/// Asks the page to record every host call and its answer.
+///
+/// The recorder is in the page, which both applications run, so the two write the
+/// same form and cannot drift apart.
+fn transcribe<R: Runtime>(app: tauri::AppHandle<R>) {
+    if !given("transcript") {
+        return;
+    }
+    let _ = app.emit("observe-record", ());
 }
 
 /// Writes one line naming the windows this app holds.
@@ -166,15 +178,10 @@ fn click<R: Runtime>(app: tauri::AppHandle<R>) {
         let _ = app.emit("observe-click", selector);
     });
 }
-
-/// Drags a boundary without anyone touching the mouse.
+/// Asks the page to drag one boundary.
 ///
-/// The steps go the way a press on a surface goes: the page receives surface-input
-/// and matches the point against its own dividers. So this measures the path the
-/// product uses, not one built beside it.
-///
-/// A drag is motion, so it is written on a clock. That clock produces the steps; it
-/// does not watch for anything.
+/// The drag itself is done by the page. Both applications run that page, so which
+/// boundary is dragged and how is written once.
 fn drive<R: Runtime>(app: tauri::AppHandle<R>) {
     let Some(spec) = flag("drive") else {
         return;
@@ -186,86 +193,54 @@ fn drive<R: Runtime>(app: tauri::AppHandle<R>) {
             return;
         }
     };
-    std::thread::spawn(move || plan.run(&app));
+    std::thread::spawn(move || {
+        // The page this app did not open has no event saying it is drawn, so this
+        // is the one place a clock is used.
+        std::thread::sleep(plan.wait);
+        let _ = app.emit("observe-drag", &plan);
+    });
 }
 
 /// One drag, shaken. A held point is swept out and back, so the boundary ends where
 /// it started and every sweep covers the same pixels.
+#[derive(Serialize)]
 struct Plan {
+    #[serde(skip)]
     wait: Duration,
-    x: f64,
-    y: f64,
+    axis: String,
+    line: i64,
     dx: f64,
     dy: f64,
-    over: Duration,
+    ms: u64,
     times: usize,
 }
 
 impl Plan {
-    /// Reads "wait,x,y,dx,dy,ms,times": wait that many ms for the pages to be
-    /// drawn, then press at x,y and sweep by dx,dy over ms, out and back, that
-    /// many times.
+    /// Reads "wait,axis,line,dx,dy,ms,times": wait that many ms for the pages to
+    /// be drawn, then press that boundary and sweep by dx,dy over ms, out and
+    /// back, that many times.
     fn parse(spec: &str) -> Result<Plan, String> {
         let parts: Vec<&str> = spec.split(',').collect();
         if parts.len() != 7 {
-            return Err(format!("wants wait,x,y,dx,dy,ms,times, got {spec:?}"));
+            return Err(format!("wants wait,axis,line,dx,dy,ms,times, got {spec:?}"));
         }
-        let mut n = [0.0f64; 7];
-        for (i, part) in parts.iter().enumerate() {
-            n[i] = part
+        if parts[1] != "x" && parts[1] != "y" {
+            return Err(format!("axis is x or y, got {:?}", parts[1]));
+        }
+        let number = |at: usize| -> Result<f64, String> {
+            parts[at]
                 .trim()
                 .parse()
-                .map_err(|_| format!("{part:?} is not a number"))?;
-        }
-        Ok(Plan {
-            wait: Duration::from_millis(n[0] as u64),
-            x: n[1],
-            y: n[2],
-            dx: n[3],
-            dy: n[4],
-            over: Duration::from_millis(n[5] as u64),
-            times: n[6] as usize,
-        })
-    }
-
-    fn run<R: Runtime>(&self, app: &tauri::AppHandle<R>) {
-        let frame = Duration::from_millis(16);
-        // 이 앱이 열지 않은 페이지가 그려지기를 기다린다. 남의 페이지가 다 그려졌다고
-        // 알려주는 것은 없으므로 여기서만 시계를 쓴다. 재는 동안에는 쓰지 않는다.
-        std::thread::sleep(self.wait);
-
-        let steps = (self.over.as_millis() / frame.as_millis()).max(1) as usize;
-        eprintln!(
-            "observe: shaking ({},{}) by {:+},{:+} in {} steps, {} times",
-            self.x, self.y, self.dx, self.dy, steps, self.times
-        );
-        let send = |phase: u8, x: f64, y: f64| {
-            let _ = app.emit("surface-input", InputStep { phase, x, y });
+                .map_err(|_| format!("{:?} is not a number", parts[at]))
         };
-        // 한 번 누른 채로 왕복한다. 놓았다 다시 누르면 경계가 최소 크기에 걸려 명령한
-        // 만큼 가지 않았을 때 다음 누름이 빗나가고, 그때부터 아무것도 움직이지 않는다.
-        send(0, self.x, self.y);
-        for _ in 0..self.times {
-            self.sweep(&send, 0.0, 1.0, steps, frame);
-            self.sweep(&send, 1.0, 0.0, steps, frame);
-        }
-        send(2, self.x, self.y);
-        eprintln!("observe: shaking done");
-    }
-
-    /// Moves the held point from one fraction of the offset to another.
-    fn sweep(
-        &self,
-        send: &impl Fn(u8, f64, f64),
-        from: f64,
-        to: f64,
-        steps: usize,
-        frame: Duration,
-    ) {
-        for i in 1..=steps {
-            std::thread::sleep(frame);
-            let at = from + (to - from) * (i as f64 / steps as f64);
-            send(1, self.x + self.dx * at, self.y + self.dy * at);
-        }
+        Ok(Plan {
+            wait: Duration::from_millis(number(0)? as u64),
+            axis: parts[1].to_string(),
+            line: number(2)? as i64,
+            dx: number(3)?,
+            dy: number(4)?,
+            ms: number(5)? as u64,
+            times: number(6)? as usize,
+        })
     }
 }

@@ -57,7 +57,7 @@ let heldDivider = null;
    아래에 놓여 누름이 이 문서에 도달하지 않으므로, 호스트가 좌표를 넘기고 여기서
    그 좌표가 어느 divider 위인지 판정한다. 뷰는 mouse 이벤트로도 divider 를 움직일
    수 있으므로 판이 아니라 그 요소에 이벤트를 낸다. */
-const surfaceInput = ({ phase, x, y }) => {
+export const surfaceInput = ({ phase, x, y }) => {
   if (phase === 0) {
     heldDivider = document.elementFromPoint(x, y)?.closest(".sp-divider") ?? null;
     heldDivider?.dispatchEvent(new MouseEvent("mousedown", {

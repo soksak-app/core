@@ -50,11 +50,21 @@ func (o *Observe) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 // 로드되면 다시 발행되므로 여기서 한 번만 실행한다.
 func (o *Observe) start() {
 	o.began.Do(func() {
+		o.transcribe()
 		o.report()
 		o.open()
 		o.drive()
 		o.click()
 	})
+}
+
+// transcribe 는 페이지에게 호출과 답을 기록하라고 요청한다. 기록기는 페이지에
+// 있으므로 두 애플리케이션이 같은 형식으로 남긴다.
+func (o *Observe) transcribe() {
+	if !*transcribing {
+		return
+	}
+	application.Get().Event.Emit("observe-record")
 }
 
 // open 은 이 창의 녹화를 준비한다. 윈도 서버의 창 목록을 읽는 것이 느리므로 한 번만
@@ -118,13 +128,10 @@ func (o *Observe) report() {
 	}
 }
 
-// drive 는 마우스 입력 없이 경계를 끈다.
+// drive 는 경계를 끄는 일을 페이지에 요청한다.
 //
-// 각 단계는 표면 위의 누름과 같은 경로로 전달된다. 페이지가 surface-input 을 받아
-// 자신의 divider 와 대조하므로, 제품이 사용하는 경로를 측정한다.
-//
-// 끌기는 시간에 따른 움직임이므로 시계로 단계를 만든다. 이 시계는 무엇을 확인하지
-// 않는다.
+// 끌기 자체는 페이지가 수행한다. 두 애플리케이션이 같은 페이지를 실행하므로, 어느
+// 경계를 어떻게 끄는지는 한 번만 적힌다.
 func (o *Observe) drive() {
 	if *driving == "" {
 		return
@@ -134,75 +141,53 @@ func (o *Observe) drive() {
 		log.Printf("observe: --drive %v", err)
 		return
 	}
-	go plan.run()
+	go func() {
+		// 이 애플리케이션이 열지 않은 페이지가 렌더링될 때까지 기다린다. 외부
+		// 페이지의 렌더링 완료를 알리는 이벤트가 없으므로 여기서만 시계를 쓴다.
+		time.Sleep(plan.wait)
+		application.Get().Event.Emit("observe-drag", plan)
+	}()
 }
 
 // drivePlan 은 한 번의 끌기를 반복하는 계획이다. 각 반복은 왕복이므로 경계는 제자리로
 // 돌아오고 모든 회차가 같은 픽셀을 지난다.
 type drivePlan struct {
-	wait   time.Duration
-	x, y   float64
-	dx, dy float64
-	over   time.Duration
-	times  int
+	wait  time.Duration `json:"-"`
+	Axis  string        `json:"axis"`
+	Line  int           `json:"line"`
+	DX    float64       `json:"dx"`
+	DY    float64       `json:"dy"`
+	MS    int           `json:"ms"`
+	Times int           `json:"times"`
 }
 
-func (p drivePlan) run() {
-	const frame = 16 * time.Millisecond
-	// 이 애플리케이션이 열지 않은 페이지가 렌더링될 때까지 기다린다. 외부 페이지의
-	// 렌더링 완료를 알리는 이벤트가 없으므로 여기서만 시계를 쓴다.
-	time.Sleep(p.wait)
-
-	steps := int(p.over / frame)
-	if steps < 1 {
-		steps = 1
-	}
-	log.Printf("observe: shaking (%g,%g) by %+g,%+g in %d steps, %d times",
-		p.x, p.y, p.dx, p.dy, steps, p.times)
-
-	send := func(phase int, x, y float64) {
-		application.Get().Event.Emit("surface-input", InputStep{Phase: phase, X: x, Y: y})
-	}
-	// 한 번 누른 채로 왕복한다. 놓았다 다시 누르면, 경계가 최소 카드 크기에서 멈춰
-	// 지정한 만큼 이동하지 못했을 때 다음 누름이 빗나간다.
-	send(0, p.x, p.y)
-	for turn := 0; turn < p.times; turn++ {
-		p.sweep(send, 0, 1, steps, frame)
-		p.sweep(send, 1, 0, steps, frame)
-	}
-	send(2, p.x, p.y)
-	log.Print("observe: shaking done")
-}
-
-// sweep 은 누른 지점을 오프셋의 한 비율에서 다른 비율까지 옮긴다.
-func (p drivePlan) sweep(send func(int, float64, float64), from, to float64, steps int, frame time.Duration) {
-	for i := 1; i <= steps; i++ {
-		time.Sleep(frame)
-		at := from + (to-from)*float64(i)/float64(steps)
-		send(1, p.x+p.dx*at, p.y+p.dy*at)
-	}
-}
-
-// parseDrive 는 "wait,x,y,dx,dy,ms,times" 를 읽는다. 페이지가 렌더링될 때까지 wait
-// 밀리초 기다린 뒤 x,y 를 누르고 ms 동안 dx,dy 만큼 왕복하며, 이를 times 번 반복한다.
+// parseDrive 는 "wait,axis,line,dx,dy,ms,times" 를 읽는다. 페이지가 렌더링될 때까지
+// wait 밀리초 기다린 뒤 그 경계를 누르고 ms 동안 dx,dy 만큼 왕복하며, 이를 times 번
+// 반복한다.
 func parseDrive(spec string) (drivePlan, error) {
 	parts := strings.Split(spec, ",")
 	if len(parts) != 7 {
-		return drivePlan{}, fmt.Errorf("wants wait,x,y,dx,dy,ms,times, got %q", spec)
+		return drivePlan{}, fmt.Errorf("wants wait,axis,line,dx,dy,ms,times, got %q", spec)
 	}
-	var n [7]float64
-	for i, part := range parts {
-		v, err := strconv.ParseFloat(strings.TrimSpace(part), 64)
+	if parts[1] != "x" && parts[1] != "y" {
+		return drivePlan{}, fmt.Errorf("axis is x or y, got %q", parts[1])
+	}
+	var n [5]float64
+	for i, at := range []int{0, 2, 3, 4, 5} {
+		v, err := strconv.ParseFloat(strings.TrimSpace(parts[at]), 64)
 		if err != nil {
-			return drivePlan{}, fmt.Errorf("%q is not a number", part)
+			return drivePlan{}, fmt.Errorf("%q is not a number", parts[at])
 		}
 		n[i] = v
 	}
+	times, err := strconv.Atoi(strings.TrimSpace(parts[6]))
+	if err != nil {
+		return drivePlan{}, fmt.Errorf("%q is not a number", parts[6])
+	}
 	return drivePlan{
 		wait: time.Duration(n[0]) * time.Millisecond,
-		x:    n[1], y: n[2], dx: n[3], dy: n[4],
-		over:  time.Duration(n[5]) * time.Millisecond,
-		times: int(n[6]),
+		Axis: parts[1], Line: int(n[1]),
+		DX: n[2], DY: n[3], MS: int(n[4]), Times: times,
 	}, nil
 }
 
@@ -219,7 +204,7 @@ var observing = flag.Bool("observe", false,
 	"register the observation service, which reports this window's number")
 
 var driving = flag.String("drive", "",
-	"drag a boundary once the window is up, as wait,x,y,dx,dy,ms,times")
+	"drag a boundary once the page is drawn, as wait,axis,line,dx,dy,ms,times")
 
 // click 은 CSS 선택자로 지정한 페이지 요소를 누른다.
 //
@@ -247,6 +232,9 @@ func (o *Observe) click() {
 
 var clicking = flag.String("click", "",
 	"press one element of the page once it is drawn, as ms,selector")
+
+var transcribing = flag.Bool("transcript", false,
+	"write one line per host call and its answer to the log")
 
 var capturing = flag.String("capture", "",
 	"record this window into this directory while a drag runs")
