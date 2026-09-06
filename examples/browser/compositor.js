@@ -165,7 +165,7 @@ function commit(mine, snapshot, final) {
   if (mine < applied) return;
   applied = mine;
   const record = { seq: mine, settled: final, surfaces: [] };
-  const native = app.kinds;
+  const kinds = app.kinds;
   for (const s of snapshot) {
     // 호스트가 없으면 이 모듈이 표면을 모사하므로 적용 위치도 여기서 정한다.
     // 호스트가 있으면 호스트가 실제로 앉힌 자리를 답으로 주고, 아래에서 그것으로
@@ -180,7 +180,7 @@ function commit(mine, snapshot, final) {
     };
     // 호스트가 네이티브로 그리는 표면에는 모사 요소를 만들지 않는다. 둘 다 만들면
     // DOM 사본이 네이티브 뷰 아래에 남는다.
-    if (native.includes(s.plugin)) {
+    if (kinds.includes(s.plugin)) {
       drawn.get(s.id)?.remove();
       drawn.delete(s.id);
       record.surfaces.push(declared);
