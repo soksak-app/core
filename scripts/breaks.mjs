@@ -356,6 +356,27 @@ export const BREAKS = [
     to: "                if (over > 0 && !to) {",
   },
   {
+    id: "settle-pair",
+    what: "a gesture the settle ends leaves the press that moved the boundary armed as the first of a pair",
+    file: "dist/dom.js",
+    find: "        if (drag.moved)\n            (_a = this.disarms.get(drag.on)) === null || _a === void 0 ? void 0 : _a();",
+    to: "        ;",
+  },
+  {
+    id: "resize-settle",
+    what: "a resize carries a gesture over a change the host made, so the settle at the host's render finds no distance left to measure",
+    file: "dist/dom.js",
+    find: "                this.settle();\n                // A resize moves the boundary",
+    to: "                // A resize moves the boundary",
+  },
+  {
+    id: "settle-reach",
+    what: "a gesture ends over a change smaller than the width its divider is grabbed at",
+    file: "dist/dom.js",
+    find: "        const reach = Math.max(this.grid.gap, this.grid.grabSize);",
+    to: "        const reach = Math.min(this.grid.gap, this.grid.grabSize);",
+  },
+  {
     id: "refile-gone",
     what: "a drag whose boundary is gone leaves its element in the host",
     file: "dist/dom.js",

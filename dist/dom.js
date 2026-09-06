@@ -85,6 +85,17 @@ export class SoksakView {
          */
         this.pressed = null;
         this.mouseDisposers = new Map();
+        /**
+         * Disarm the double press on a divider, one entry per element.
+         *
+         * A press that moved the boundary is not the first press of a pair, and every
+         * gesture that ends inside a divider's own handlers says so there. A gesture
+         * `settle` ends runs through none of them and leaves the element in the host,
+         * so the press that started it stays armed and the next press centres the
+         * boundary instead of taking hold of it. A gesture `forget` ends needs no
+         * entry: that element is removed and the press it armed goes with it.
+         */
+        this.disarms = new Map();
         this.observer = null;
         this.disposed = false;
         this.host = host;
@@ -97,6 +108,13 @@ export class SoksakView {
                 // and showing the host again does not bring them back.
                 if (host.clientWidth <= 0 || host.clientHeight <= 0)
                     return;
+                // A change the host made since the last draw has already moved the
+                // boundary, and this callback would read that position as the one the
+                // resize started from: the gesture would be carried by the host's
+                // change and `stood` would record it, so the settle at the host's
+                // render would find nothing to settle. Settle here first, while the
+                // distance is still there to measure.
+                this.settle();
                 // A resize moves the boundary a drag is holding. The drag holds the
                 // position that boundary stood at when it was pressed, so it has to be
                 // carried by the same amount the resize moved it; otherwise the next
@@ -343,6 +361,10 @@ export class SoksakView {
      * holds it any more, so it is an ordinary divider again.
      */
     release(drag) {
+        var _a;
+        // The press that moved the boundary is not the first press of a pair.
+        if (drag.moved)
+            (_a = this.disarms.get(drag.on)) === null || _a === void 0 ? void 0 : _a();
         for (const [pointer, held] of [...this.drags])
             if (held === drag)
                 this.drop(pointer);
@@ -431,6 +453,7 @@ export class SoksakView {
         // divider that is gone, and they accumulate one pair per divider. The
         // disposer drops that divider's mouse drag before it removes them.
         (_a = this.mouseDisposers.get(el)) === null || _a === void 0 ? void 0 : _a();
+        this.disarms.delete(el);
         el.remove();
     }
     sweep(map, keep) {
@@ -705,6 +728,10 @@ export class SoksakView {
             this.mouseDisposers.delete(el);
         };
         this.mouseDisposers.set(el, disposeMouse);
+        this.disarms.set(el, () => {
+            lastTap = -Infinity;
+            lastPress = -Infinity;
+        });
         el.addEventListener('keydown', (e) => {
             if (this.disposed)
                 return;
@@ -771,6 +798,7 @@ export class SoksakView {
         for (const el of this.dividerEls.values())
             el.remove();
         this.dividerEls.clear();
+        this.disarms.clear();
         for (const el of this.ruleEls.values())
             el.remove();
         this.ruleEls.clear();

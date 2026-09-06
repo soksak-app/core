@@ -103,6 +103,17 @@ export declare class SoksakView {
      */
     private pressed;
     private mouseDisposers;
+    /**
+     * Disarm the double press on a divider, one entry per element.
+     *
+     * A press that moved the boundary is not the first press of a pair, and every
+     * gesture that ends inside a divider's own handlers says so there. A gesture
+     * `settle` ends runs through none of them and leaves the element in the host,
+     * so the press that started it stays armed and the next press centres the
+     * boundary instead of taking hold of it. A gesture `forget` ends needs no
+     * entry: that element is removed and the press it armed goes with it.
+     */
+    private disarms;
     private observer;
     private disposed;
     constructor(host: HTMLElement, grid: Soksak, options: ViewOptions);
