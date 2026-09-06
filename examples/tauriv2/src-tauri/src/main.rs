@@ -390,6 +390,9 @@ fn overlay_show(
     let modal = WebviewWindowBuilder::new(&app, &label, WebviewUrl::App(url.into()))
         .decorations(false)
         .resizable(false)
+        // A borderless window draws no title, but an untitled one is listed as
+        // "Tauri App" wherever the system names windows.
+        .title("")
         .visible(false)
         .background_color(Color(r as u8, g as u8, b as u8, (a * 255.0) as u8))
         .position(sx, sy)
