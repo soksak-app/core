@@ -116,6 +116,14 @@ export declare class SoksakView {
      * Every way a drag can end runs through here: pointerup, pointercancel, the
      * capture being lost, the divider being swept, and destroy.
      */
+    /**
+     * End a mouse drag.
+     *
+     * Every way a mouse drag can end runs through here: mouseup, the button being
+     * released elsewhere, and destroy. A divider carries `data-dragging` while it
+     * is held, whichever of the two inputs is holding it.
+     */
+    private endMouse;
     private end;
     /**
      * Dividers are reused across renders. Rebuilding one mid-drag drops its

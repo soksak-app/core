@@ -113,6 +113,44 @@ test("the view accepts the mouse drag contract for dividers", () => {
   view.destroy();
 });
 
+test("a divider held by the mouse carries data-dragging", () => {
+  const { window, host, grid, view } = mount();
+  const divider = host.querySelector('[role="separator"]');
+  const at = grid.boundaryPos("x", 1);
+
+  divider.dispatchEvent(new window.MouseEvent("mousedown", {
+    clientX: at, clientY: 100, bubbles: true, button: 0, buttons: 1,
+  }));
+  assert.equal(divider.dataset.dragging, "true", "a held divider carries data-dragging");
+
+  window.document.dispatchEvent(new window.MouseEvent("mousemove", {
+    clientX: at + 40, clientY: 100, bubbles: true, buttons: 1,
+  }));
+  assert.equal(divider.dataset.dragging, "true", "it still carries it while it moves");
+
+  window.document.dispatchEvent(new window.MouseEvent("mouseup", {
+    clientX: at + 40, clientY: 100, bubbles: true, button: 0, buttons: 0,
+  }));
+  assert.equal(divider.dataset.dragging, undefined, "letting go takes it off");
+  view.destroy();
+});
+
+test("a divider the mouse let go of elsewhere stops saying it is held", () => {
+  const { window, host, grid, view } = mount();
+  const divider = host.querySelector('[role="separator"]');
+  const at = grid.boundaryPos("x", 1);
+
+  divider.dispatchEvent(new window.MouseEvent("mousedown", {
+    clientX: at, clientY: 100, bubbles: true, button: 0, buttons: 1,
+  }));
+  // A button released outside the window sends no mouseup; the next move reports it.
+  window.document.dispatchEvent(new window.MouseEvent("mousemove", {
+    clientX: at + 40, clientY: 100, bubbles: true, buttons: 0,
+  }));
+  assert.equal(divider.dataset.dragging, undefined);
+  view.destroy();
+});
+
 test("a card element is reused across splits and closes", () => {
   const { grid, view, made } = mount();
   const kept = view.element("card");

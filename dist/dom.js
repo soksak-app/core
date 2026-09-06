@@ -208,6 +208,20 @@ export class SoksakView {
      * Every way a drag can end runs through here: pointerup, pointercancel, the
      * capture being lost, the divider being swept, and destroy.
      */
+    /**
+     * End a mouse drag.
+     *
+     * Every way a mouse drag can end runs through here: mouseup, the button being
+     * released elsewhere, and destroy. A divider carries `data-dragging` while it
+     * is held, whichever of the two inputs is holding it.
+     */
+    endMouse() {
+        const drag = this.mouseDrag;
+        if (!drag)
+            return;
+        this.mouseDrag = null;
+        delete drag.on.dataset.dragging;
+    }
     end(pointer) {
         const drag = this.drags.get(pointer);
         if (!drag)
@@ -309,6 +323,7 @@ export class SoksakView {
             e.preventDefault();
             const axis = el.dataset.axis;
             const line = Number(el.dataset.line);
+            el.dataset.dragging = 'true';
             this.mouseDrag = {
                 on: el,
                 axis,
@@ -323,7 +338,7 @@ export class SoksakView {
             if (this.disposed || !drag || drag.on !== el)
                 return;
             if (e.buttons === 0) {
-                this.mouseDrag = null;
+                this.endMouse();
                 return;
             }
             const now = drag.axis === 'x' ? e.clientX : e.clientY;
@@ -334,12 +349,15 @@ export class SoksakView {
         const mouseUp = () => {
             var _a;
             if (((_a = this.mouseDrag) === null || _a === void 0 ? void 0 : _a.on) === el)
-                this.mouseDrag = null;
+                this.endMouse();
         };
         el.addEventListener('mousedown', mouseDown);
         ownerDocument.addEventListener('mousemove', mouseMove);
         ownerDocument.addEventListener('mouseup', mouseUp);
         const disposeMouse = () => {
+            var _a;
+            if (((_a = this.mouseDrag) === null || _a === void 0 ? void 0 : _a.on) === el)
+                this.endMouse();
             el.removeEventListener('mousedown', mouseDown);
             ownerDocument.removeEventListener('mousemove', mouseMove);
             ownerDocument.removeEventListener('mouseup', mouseUp);
