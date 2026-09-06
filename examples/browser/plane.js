@@ -766,10 +766,12 @@ const MARK_OUT = 1;
  * 바뀌므로, 매번 새 애니메이션을 시작하면 목표 위치에 도달하지 못한다.
  *
  * `behavior:"smooth"` 는 브라우저가 처리하며, 창이 비활성이면 애니메이션이
- * 실행되지 않고 요청이 무시된다. SLIDE_MS 후 도착 여부를 확인하고 미도달이면
- * 즉시 이동시킨다.
+ * 실행되지 않고 요청이 무시된다. 스크롤이 끝나면 scrollend 가 발생하므로, 그때
+ * 도착 여부를 확인하고 미도달이면 즉시 이동시킨다.
  */
-const SLIDE_MS = 350;
+
+/* 진행 중인 scrollend 대기. 다음 요청이 이전 대기를 취소한다. */
+const landing = new WeakMap();
 
 function centreTab(strip, activeId) {
   const active = strip.querySelector(".tab[data-active=true]");
@@ -782,13 +784,15 @@ function centreTab(strip, activeId) {
     strip.scrollLeft + (a.left + a.width / 2) - (box.left + box.width / 2), room));
   const picked = strip.dataset.centred !== String(activeId);
   strip.dataset.centred = String(activeId ?? "");
-  clearTimeout(Number(strip.dataset.landTimer));      // 이전 타이머 제거
+  landing.get(strip)?.abort();                        // 이전 대기 취소
   if (Math.abs(strip.scrollLeft - to) < 0.5) return;
   if (!picked) { strip.scrollLeft = to; return; }
-  strip.scrollTo({ left: to, behavior: "smooth" });
-  strip.dataset.landTimer = String(setTimeout(() => {
+  const wait = new AbortController();
+  landing.set(strip, wait);
+  strip.addEventListener("scrollend", () => {
     if (Math.abs(strip.scrollLeft - to) > 0.5) strip.scrollLeft = to;
-  }, SLIDE_MS));
+  }, { once: true, signal: wait.signal });
+  strip.scrollTo({ left: to, behavior: "smooth" });
 }
 
 /**
