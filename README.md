@@ -125,7 +125,7 @@ const grid = new Soksak({
 stops the layout splitting, closing or moving it. The same card in a middle
 column is a rail. Only a card spanning one slot can set a px size on that axis.
 
-Everything else reads the same for every card:
+The rest of the API is the same for every card:
 
 ```js
 grid.rects();               // Map<id, {x, y, w, h}>
@@ -304,7 +304,8 @@ grid.zoneAt(x, y, { headerPx: 34, footerPx: 24, centreOnly: draggingId });
 ```
 
 `centre` means the card itself. A side means a new place beside it.
-`headerPx` and `footerPx` are excluded, so chrome does not read as a side. The
+`headerPx` and `footerPx` are excluded, so a point on the chrome returns the
+card, not a side. The
 edge band is a fraction of the body, not px.
 
 ## The outline
@@ -400,8 +401,8 @@ constructor runs; call it to reject a stale saved layout before installing one.
 
 `bleed` is how far past the plane a rule may run to reach the frame around it.
 A host that holds the plane inside a frame — a padding on the element outside
-it — draws its border that far from where a rule ends, and the rule reads as a
-line that stops short. Only the host has that distance: the view receives an
+it — draws its border that far from where a rule ends, so the rule stops short of
+that border. Only the host has that distance: the view receives an
 element, and an element's own padding does not move what is placed absolutely
 inside it. Only the ends that reach the plane bleed; a rule that stops against
 a card is left where it stops, because there the card is the wall.

@@ -11,7 +11,7 @@ import { join } from "node:path";
  *
  * 짧은 파일은 거절한다. 녹화가 멈추는 사이에 쓰이던 프레임은 끝이 잘리고, 잘린
  * 자리를 읽으면 undefined 가 나와 어떤 색 검사에도 걸리지 않는다. 그대로 두면
- * 깨진 프레임이 깨끗한 프레임으로 읽힌다.
+ * 깨진 프레임을 온전한 프레임으로 처리하게 된다.
  */
 export function readFrame(path) {
   const file = readFileSync(path);
