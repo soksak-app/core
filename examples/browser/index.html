@@ -60,10 +60,12 @@ import {
 
 /* 표면을 모사하고 보고한다. 판은 슬롯 요소에 값을 기록만 하고 측정과 보고는 이쪽이
    담당한다. */
-import { knobs, latest, onCommit, publish, reset } from "./compositor.js";
+import { knobs, latest, onCommit, publish, publishAhead, reset } from "./compositor.js";
 
 /* 판 하나. 이 문서는 판의 렌더링 방식을 알지 않고 렌더 완료만 수신한다. */
-import { build, currentGrid, onRender, render, setGap, settle, tabsOf } from "./plane.js";
+import {
+  build, currentGrid, onLayout, onRender, rects, render, setGap, settle, tabsOf,
+} from "./plane.js";
 
 /* 판과 컴포지터를 읽어 검증한다. 아무것도 변경하지 않으므로 그 둘은 이 모듈을
    알지 않는다. */
@@ -156,19 +158,29 @@ function dormant(shown) {
   return out;
 }
 
-/* 커밋이 끝나면 검증하고, 호스트에 표면을 알린다. 컴포지터는 이 판의 표면만 알고,
-   무엇이 살아 있어야 하는지는 이 문서가 안다. */
-onCommit((record) => {
-  check();
+/* 커밋이 끝나면 호스트에 표면을 알린다. 컴포지터는 이 판의 표면만 알고, 무엇이
+   살아 있어야 하는지는 이 문서가 안다. 호스트의 답을 그대로 돌려준다. */
+onCommit((record) =>
   window.hostSurfaces?.place?.({
     ...record,
     surfaces: [...record.surfaces, ...dormant(record.surfaces)],
-  });
-});
+  }));
 
 /* 판이 다시 그려지면 검증하고 표면을 보고한다. 판은 둘을 알지 않고 둘은 판을 읽기만
    하므로 이 문서에서 연결한다. */
-onRender(() => { check(); publish(); });
+onRender(() => { check(); publish(rects()); });
+
+/* 배치가 바뀌면 그리기 전에 호스트에 알리고, 호스트가 옮긴 뒤에 그린다. 판 위의
+   네이티브 뷰는 다른 길로 움직이고 그 길이 더 느리다. 그려 놓고 알리면 한 프레임
+   동안 카드는 새 자리에, 뷰는 옛 자리에 있다.
+
+   여백을 아직 재지 못했거나 호스트가 없으면 곧바로 그린다. 그리고 나면 onRender 가
+   재서 다시 보고하므로 어느 쪽이든 마지막 값은 같다. */
+onLayout((made, draw) => {
+  const told = publishAhead(made);
+  if (told && typeof told.then === "function") told.then(draw, draw);
+  else draw();
+});
 
 /* 스페이스가 바뀌면 현재 판을 저장하고 다른 상태를 적용한다. 프로젝트 전환도 같은
    동작이다. */

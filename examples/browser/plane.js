@@ -881,6 +881,23 @@ export function onRender(fn) {
   listener = fn;
 }
 
+/* 배치를 바꾸기로 했을 때의 수신자. 그리기 전에 호출된다. */
+let layouter = null;
+
+/**
+ * 배치를 렌더링하기 전에 호출할 함수를 등록한다.
+ *
+ * 판 위에는 CSS 가 적용되지 않는 OS 뷰가 있고 별도 경로로 배치된다. 그 경로가 더
+ * 느리므로 먼저 처리한다. 받은 사각형으로 OS 뷰를 옮긴 뒤 draw 를 호출하면 둘이 같은
+ * 프레임에 반영된다. 등록하지 않으면 판이 즉시 렌더링한다.
+ */
+export function onLayout(fn) {
+  layouter = fn;
+}
+
+/** 현재 카드들의 사각형. */
+export const rects = () => grid.rects();
+
 /** 판을 처음부터 다시 만든다. */
 export function build() {
   view?.destroy();
@@ -895,6 +912,7 @@ export function build() {
     // 판 가장자리에 닿는 선이 stage 경계까지 이어진다.
     bleed: half,
     onChange: () => listener?.(),
+    commit: (made, draw) => (layouter ? layouter(made, draw) : draw()),
   });
   const baseRender = view.render.bind(view);
   view.render = () => { baseRender(); markFocus(); centreTabs(); };

@@ -29,6 +29,14 @@ let latestRecord = null;
 let timer = null;
 const drawn = new Map();
 
+/* 카드 안에서 슬롯이 차지하는 여백과 그 카드의 id. 여백은 카드의 헤더, 푸터,
+   안쪽 패딩이므로 경계를 끄는 동안 변하지 않는다. DOM 을 측정하는 커밋에서 기록하고
+   측정하지 않는 커밋에서 사용한다. 표면 id 는 탭 id 이므로 사각형 조회에 쓸 수 없다. */
+const insets = new Map();
+
+/** 슬롯이 속한 카드의 id. 판이 카드 요소에 기록한 값을 읽는다. */
+const cardOf = (slot) => slot.closest("[data-card-id]")?.dataset.cardId;
+
 /** 마지막 커밋 레코드를 반환한다. 없으면 null. */
 export const latest = () => latestRecord;
 
@@ -37,6 +45,7 @@ export function reset() {
   for (const el of drawn.values()) el.remove();
   drawn.clear();
   latestRecord = null;
+  insets.clear();
   seq = 0;
   applied = 0;
 }
@@ -68,13 +77,13 @@ function effectiveVisible(slot) {
   return true;
 }
 
-/* 이 커밋이 최종 상태인지, 곧 다음 것이 이어지는 연속 중 하나인지.
-   경계를 끄는 동안에는 매 프레임 커밋이 이어지고, 손을 떼면 멈춘다. 뷰가 끄는 동안
-   divider 에 표식을 달고 손을 뗄 때 마지막 렌더보다 먼저 지우므로, 마지막 렌더는
-   최종이라고 답한다.
+/* 이 커밋이 마지막 갱신인지, 갱신이 이어지는 중인지.
+   경계를 끄는 동안 매 프레임 커밋이 발생하고 놓으면 멈춘다. 뷰는 끄는 동안 divider 에
+   data-dragging 을 설정하고 놓을 때 마지막 렌더 전에 제거하므로, 마지막 렌더는 true 를
+   반환한다.
 
-   표면을 그리는 쪽은 이 값으로 실현 방식을 고를 수 있다. 무엇 때문에 바뀌는지가
-   아니라 더 올 것이 있는지만 알린다. */
+   표면을 그리는 쪽은 이 값으로 적용 방식을 선택한다. 변경 원인이 아니라 갱신이 더
+   있는지만 전달한다. */
 const settled = () => plane.querySelector(".sp-divider[data-dragging]") === null;
 
 /** 표면 슬롯 목록. 판이 기록한 data 속성을 그대로 읽는다. */
@@ -86,26 +95,74 @@ const slots = () =>
  *
  * 호출로만 동작한다. 위치 변경을 감시하지 않고, 위치를 정한 쪽이 호출한다.
  */
-export function publish() {
+export function publish(rects) {
   const mine = ++seq;
   const host = plane.getBoundingClientRect();
   const snapshot = [];
   for (const slot of slots()) {
     const r = slot.getBoundingClientRect();
+    const frame = { x: r.left - host.left, y: r.top - host.top, w: r.width, h: r.height };
+    const id = slot.dataset.nativeSurfaceId;
+    const seat = cardOf(slot);
+    const card = rects?.get(seat);
+    if (card) {
+      insets.set(id, {
+        card: seat,
+        left: frame.x - card.x,
+        top: frame.y - card.y,
+        width: card.w - frame.w,
+        height: card.h - frame.h,
+      });
+    }
     snapshot.push({
-      id: slot.dataset.nativeSurfaceId,
+      id,
       layer: Number(slot.dataset.nativeLayer),
       title: slot.dataset.nativeTitle,
       plugin: slot.dataset.nativePlugin,
       dim: slot.dataset.nativeDim === "true",
       visible: effectiveVisible(slot),
-      frame: { x: r.left - host.left, y: r.top - host.top, w: r.width, h: r.height },
+      frame,
     });
   }
   clearTimeout(timer);
   const deliver = () => commit(mine, snapshot, settled());
   if (knobs.latency === 0) deliver();
   else timer = setTimeout(deliver, knobs.latency);
+}
+
+/**
+ * 아직 렌더링하지 않은 배치를 커밋한다.
+ *
+ * 판이 배치를 변경하고 아직 렌더링하지 않았을 때 호출한다. 카드 사각형은 판이
+ * 전달하고, 그 안에서 슬롯의 위치는 직전 커밋에서 측정한 여백으로 계산한다.
+ *
+ * 여백을 모르는 표면이 하나라도 있으면 false 를 반환한다. 호출한 쪽은 렌더링한 뒤
+ * 측정하는 경로로 처리한다.
+ */
+export function publishAhead(rects) {
+  const seats = [];
+  for (const slot of slots()) {
+    const id = slot.dataset.nativeSurfaceId;
+    const inset = insets.get(id);
+    const card = inset && rects.get(inset.card);
+    if (!card || inset.card !== cardOf(slot)) return false;
+    seats.push({
+      id,
+      layer: Number(slot.dataset.nativeLayer),
+      title: slot.dataset.nativeTitle,
+      plugin: slot.dataset.nativePlugin,
+      dim: slot.dataset.nativeDim === "true",
+      visible: effectiveVisible(slot),
+      frame: {
+        x: card.x + inset.left,
+        y: card.y + inset.top,
+        w: card.w - inset.width,
+        h: card.h - inset.height,
+      },
+    });
+  }
+  if (seats.length === 0) return false;
+  return commit(++seq, seats, settled()) ?? true;
 }
 
 /** 네이티브 상태를 쓰는 유일한 함수. 시퀀스가 낮은 스냅샷은 거부한다. */
@@ -153,7 +210,9 @@ function commit(mine, snapshot, final) {
   latestRecord = record;
   // 무엇을 호스트에 보낼지는 이 모듈이 정하지 않는다. 이 판의 표면만으로는 부족하고,
   // 다른 스페이스의 표면도 살아 있어야 한다.
-  listener?.(record);
+  //
+  // 수신자의 반환값을 그대로 반환한다. 렌더링 전에 커밋한 쪽이 이 값을 기다린다.
+  return listener?.(record);
 }
 
 /**

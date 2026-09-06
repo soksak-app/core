@@ -103,9 +103,8 @@ function install() {
         // 자체 문서는 자기 서버로 연다. 표면의 종류는 알 필요가 없다.
         external: !!s.surface.url,
         visible: s.visible,
-        // 문서를 아직 받지 못한 뷰가 표시할 색. 이미 그린 뒤 뷰가 커져서 드러난
-        // 자리는 이 값으로 칠해지지 않는다 — 그 자리는 웹뷰 자신의 흰 배경이고
-        // 그것을 끄는 키는 비공개다. 그래서 끄는 동안에는 뷰를 키우지 않는다.
+        // 문서를 로드하기 전에 표시할 색. 렌더링 후 뷰가 커져 드러난 영역에는
+        // 적용되지 않는다.
         background: surfaceBackground(),
         ...toPage(s.applied),
       }));
@@ -114,15 +113,16 @@ function install() {
       // 직전과 같은 요청은 전송하지 않는다.
       const request = {
         viewport: { h: window.innerHeight },
-        // 이것이 최종 상태인지, 곧 다음 것이 이어지는지. 이어지는 동안 뷰를 키우면
-        // 아직 그리지 못한 자리가 드러나고 그 자리는 흰색이다.
+        // 마지막 갱신인지, 갱신이 이어지는 중인지. 이어지는 동안 뷰가 커지면
+        // 아직 렌더링되지 않은 영역이 흰색으로 보인다.
         settled: record.settled !== false,
         surfaces,
       };
       const key = JSON.stringify(request);
       if (key === last) return;
       last = key;
-      tell("syncSurfaces", request);
+      // 호출 결과를 반환한다. 렌더링 전에 배치를 보낸 쪽이 이 결과를 기다린다.
+      return tell("syncSurfaces", request);
     },
   };
 
