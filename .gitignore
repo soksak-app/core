@@ -1,3 +1,11 @@
 node_modules/
 *.log
 .DS_Store
+
+# 이 저장소 밖으로 내보내는 작업물. 저장소가 갖는 것은 제품의 사실뿐이다.
+# 디자인 캔버스는 app.css 의 마크업을 손으로 옮겨 적은 것이라 시간이 지나면
+# 어긋난다. 화면은 실행되는 앱에서 캡처한다.
+.design/
+.design-sync/
+.ds-sync/
+ds-bundle/
