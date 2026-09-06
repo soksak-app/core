@@ -563,6 +563,12 @@ fn overlay_show(
             // software name the window by it, and the name is this modal's.
             modal.set_title(&request.title).map_err(|e| e.to_string())?;
             modal.set_background_color(Some(colour)).map_err(|e| e.to_string())?;
+            // The call above gives the webview this modal's colour and gives the
+            // window it too. A window painted with a colour fills the corners the
+            // webview's layer clips, so the modal is drawn square from the second
+            // showing on. The window is made the modal's again here, which puts
+            // its own background back to clear.
+            native::panelise(own, window.ns_window().map_err(|e| e.to_string())?);
             modal.set_size(LogicalSize::new(aw, ah)).map_err(|e| e.to_string())?;
             modal.set_position(LogicalPosition::new(sx, sy)).map_err(|e| e.to_string())?;
             // The address this window already holds names the scheme this app
