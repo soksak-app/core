@@ -115,6 +115,14 @@ export declare class SoksakView {
      */
     private disarms;
     private observer;
+    /**
+     * A draw the host was handed and has not performed.
+     *
+     * Between a change and that draw the elements are behind the grid by the
+     * view's own change, which the gestures were carried through. Only outside it
+     * does an element that disagrees with the grid mean the host changed it.
+     */
+    private drawing;
     private disposed;
     constructor(host: HTMLElement, grid: Soksak, options: ViewOptions);
     /** Re-place every element from the grid. Cheap enough to call on every frame of a drag. */
@@ -185,6 +193,18 @@ export declare class SoksakView {
      * follows it; further than that the gesture ends.
      */
     private settle;
+    /**
+     * Whether the boundary a line names still stands where its divider is drawn.
+     *
+     * A gesture that starts now has one record of where its boundary was: the
+     * element, which the view drew centred on it. A change the host makes moves
+     * the boundary and renumbers the lines, and the view is told by `render()`
+     * afterwards, so until that render the number the element carries can name
+     * another boundary. A press or a key on it would drive that other one, which
+     * is the boundary the gesture never took. It is the same distance `settle`
+     * measures, against the record a gesture that has not started yet has.
+     */
+    private stands;
     /**
      * End the gesture this state belongs to, without drawing.
      *

@@ -439,6 +439,7 @@ test("the keyboard moves and centres a boundary", () => {
     const off = grid.boundaryPos("x", 1);
     const centred = grid.centerBoundary("x", 1);   // where centring puts it
     grid.moveBoundary("x", 1, off);                // and back off centre
+    view.render();                                 // the host draws the change it made
     key(name);
     assert.equal(grid.boundaryPos("x", 1), centred, `${name} centres it`);
     assert.notEqual(centred, off, "and that is somewhere else");
@@ -453,6 +454,7 @@ test("a double tap centres the boundary", () => {
   const off = grid.boundaryPos("x", 1);
   const centred = grid.centerBoundary("x", 1);   // where centring puts it
   grid.moveBoundary("x", 1, off);                // and back off centre
+  view.render();                                // the host draws the change it made
 
   // Two presses inside the double-tap window, with no movement between them.
   pointer(window, el, "pointerdown", 1, off, 300);
@@ -2090,5 +2092,136 @@ test("a change smaller than the width a divider is grabbed at keeps the gesture"
     `and its anchor followed the change, to ${grid.boundaryPos("x", 1)} not ${moved + 100}`,
   );
   pointer(window, el, "pointerup", 1, at + 100, 300);
+  view.destroy();
+});
+
+test("a move drives nothing after a change the host has not drawn", () => {
+  const { window, host, grid, view } = mount();
+  const el = host.querySelector('.sp-divider[data-axis="x"]');
+  const at = grid.boundaryPos("x", 1);
+  pointer(window, el, "pointerdown", 1, at, 300);
+
+  // The host puts in a card that reaches across the plane and does not render.
+  // Line 1 is the rail's own boundary now, and the finger still holds line 1.
+  assert.ok(grid.insertAt("x", 0, { id: "rail", size: 190 }), "the rail went in");
+  const was = grid.rect("rail").w;
+  pointer(window, el, "pointermove", 1, at + 100, 300);
+  assert.equal(grid.rect("rail").w, was, "the move does not resize the card that arrived");
+  assert.equal(el.dataset.dragging, undefined, "and nothing holds the divider any more");
+  view.destroy();
+});
+
+test("a mouse move drives nothing after a change the host has not drawn", () => {
+  const { window, host, grid, view } = mount();
+  const el = host.querySelector('.sp-divider[data-axis="x"]');
+  const doc = window.document;
+  const at = grid.boundaryPos("x", 1);
+  el.dispatchEvent(new window.MouseEvent("mousedown", {
+    clientX: at, clientY: 300, bubbles: true, button: 0, buttons: 1,
+  }));
+
+  assert.ok(grid.insertAt("x", 0, { id: "rail", size: 190 }), "the rail went in");
+  const was = grid.rect("rail").w;
+  doc.dispatchEvent(new window.MouseEvent("mousemove", {
+    clientX: at + 100, clientY: 300, bubbles: true, buttons: 1,
+  }));
+  assert.equal(grid.rect("rail").w, was, "the move does not resize the card that arrived");
+  assert.equal(el.dataset.dragging, undefined, "and nothing holds the divider any more");
+  view.destroy();
+});
+
+test("a press takes no hold on a divider a change the host has not drawn moved", () => {
+  const { window, host, grid, view } = mount();
+  const el = host.querySelector('.sp-divider[data-axis="x"]');
+  assert.ok(grid.insertAt("x", 0, { id: "rail", size: 190 }), "the rail went in");
+
+  // No render, so the divider is still drawn where its boundary was, and the
+  // number it carries names the rail's own boundary now.
+  const drawn = parseFloat(el.style.left) + parseFloat(el.style.width) / 2;
+  assert.ok(
+    Math.abs(grid.boundaryPos("x", 1) - drawn) > Math.max(grid.gap, grid.grabSize),
+    "the boundary that number names is further off than the divider is grabbed at",
+  );
+  pointer(window, el, "pointerdown", 1, drawn, 300);
+  assert.equal(el.dataset.dragging, undefined, "the press takes no hold");
+  const was = grid.rect("rail").w;
+  pointer(window, el, "pointermove", 1, drawn + 40, 300);
+  assert.equal(grid.rect("rail").w, was, "and the move that follows drives nothing");
+  view.destroy();
+});
+
+test("a key drives nothing on a divider a change the host has not drawn moved", () => {
+  const { window, host, grid, view } = mount();
+  const el = host.querySelector('.sp-divider[data-axis="x"]');
+  const key = (name) =>
+    el.dispatchEvent(new window.KeyboardEvent("keydown", { key: name, bubbles: true, cancelable: true }));
+  assert.ok(grid.insertAt("x", 0, { id: "rail", size: 190 }), "the rail went in");
+
+  const was = grid.rect("rail").w;
+  key("ArrowRight");
+  assert.equal(grid.rect("rail").w, was, "the arrow resizes no card");
+  key("Enter");
+  assert.equal(grid.rect("rail").w, was, "and neither does Enter");
+  view.destroy();
+});
+
+test("a press while the host holds the draw takes hold of the boundary the view moved", () => {
+  let hold = false;
+  let pending = null;
+  const { window, host, grid, view } = mount({
+    commit: (_rects, draw) => {
+      if (hold) pending = draw;
+      else draw();
+    },
+  });
+  const el = host.querySelector('.sp-divider[data-axis="x"]');
+  const at = grid.boundaryPos("x", 1);
+
+  // The view moves the boundary and the host has not drawn it, so the element is
+  // behind by the view's own change. That is not a change the host made, and the
+  // gesture was carried through it.
+  hold = true;
+  pointer(window, el, "pointerdown", 1, at, 300);
+  pointer(window, el, "pointermove", 1, at + 150, 300);
+  pointer(window, el, "pointerup", 1, at + 150, 300);
+  const moved = grid.boundaryPos("x", 1);
+  assert.equal(moved, at + 150, "the drag moved it, and nothing is drawn yet");
+
+  pointer(window, el, "pointerdown", 1, at + 150, 300);
+  assert.equal(el.dataset.dragging, "true", "the next press takes hold");
+  pointer(window, el, "pointermove", 1, at + 200, 300);
+  assert.ok(
+    Math.abs(grid.boundaryPos("x", 1) - (moved + 50)) < 1e-6,
+    `and drives its own boundary, to ${grid.boundaryPos("x", 1)} not ${moved + 50}`,
+  );
+  pointer(window, el, "pointerup", 1, at + 200, 300);
+  hold = false;
+  pending();
+  view.destroy();
+});
+
+test("a press takes hold across a change smaller than the width its divider is grabbed at", () => {
+  const { window, host, grid, view } = mount();
+  // The reach is the width the divider is grabbed at, which is the larger of the
+  // gap and grabSize. 16 is inside that and outside the smaller of the two.
+  assert.equal(grid.gap, 24);
+  assert.equal(grid.grabSize, 11);
+  const el = host.querySelector('.sp-divider[data-axis="x"]');
+  const drawn = parseFloat(el.style.left) + parseFloat(el.style.width) / 2;
+
+  // The host moves the boundary itself and does not render, so the divider is
+  // still drawn 16 away from where its boundary now stands.
+  grid.moveBoundary("x", 1, grid.boundaryPos("x", 1) + 16, false);
+  const moved = grid.boundaryPos("x", 1);
+  assert.ok(Math.abs(moved - (drawn + 16)) < 1e-6, `the host moved the boundary 16, to ${moved}`);
+
+  pointer(window, el, "pointerdown", 1, drawn, 300);
+  assert.equal(el.dataset.dragging, "true", "16 is inside the grab width, so the press takes hold");
+  pointer(window, el, "pointermove", 1, drawn + 100, 300);
+  assert.ok(
+    Math.abs(grid.boundaryPos("x", 1) - (moved + 100)) < 1e-6,
+    `and drives it from where the host left it, to ${grid.boundaryPos("x", 1)} not ${moved + 100}`,
+  );
+  pointer(window, el, "pointerup", 1, drawn + 100, 300);
   view.destroy();
 });

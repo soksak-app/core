@@ -245,6 +245,14 @@ further away than that is one the gesture never took hold of, so the gesture end
 there — the divider stops carrying `data-dragging` and the next move drives
 nothing.
 
+The settle runs wherever such a change first reaches a gesture: at the `render()`
+the host makes, at a resize, and at the press, key or move itself, because a host
+that changes the grid and renders later leaves those arriving in between. So a
+press on a divider whose boundary the host has moved further than the divider is
+grabbed at takes no hold either. While a `commit` hook holds a draw, the divider
+is behind by the view's own change, which the gesture was carried through, and a
+press then takes hold as usual.
+
 **A card's child can inflate the rect the view set.** A flex or grid child
 defaults to `min-width: auto`, so a column stretches to min-content and the
 element reports a rect wider than the size it was given. `overflow: hidden` hides

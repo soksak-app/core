@@ -170,6 +170,14 @@ export class SoksakView {
    */
   private disarms = new Map<HTMLElement, () => void>();
   private observer: ResizeObserver | null = null;
+  /**
+   * A draw the host was handed and has not performed.
+   *
+   * Between a change and that draw the elements are behind the grid by the
+   * view's own change, which the gestures were carried through. Only outside it
+   * does an element that disagrees with the grid mean the host changed it.
+   */
+  private drawing = false;
   private disposed = false;
 
   constructor(host: HTMLElement, grid: Soksak, options: ViewOptions) {
@@ -236,7 +244,10 @@ export class SoksakView {
     // views it draws itself. Calling it would move them onto the rects of a
     // plane that is gone.
     if (this.disposed) return;
-    const drawn = (): void => this.paint(reason);
+    const drawn = (): void => {
+      this.drawing = false;
+      this.paint(reason);
+    };
     if (!this.options.commit) {
       drawn();
       return;
@@ -246,6 +257,7 @@ export class SoksakView {
     const step = this.step;
     const on = new Map<string, Rect>();
     for (const [id, rect] of this.grid.rects()) on.set(id, onGrid(rect, step));
+    this.drawing = true;
     this.options.commit(on, drawn);
   }
 
@@ -433,6 +445,26 @@ export class SoksakView {
       }
       this.release(drag);
     }
+  }
+
+  /**
+   * Whether the boundary a line names still stands where its divider is drawn.
+   *
+   * A gesture that starts now has one record of where its boundary was: the
+   * element, which the view drew centred on it. A change the host makes moves
+   * the boundary and renumbers the lines, and the view is told by `render()`
+   * afterwards, so until that render the number the element carries can name
+   * another boundary. A press or a key on it would drive that other one, which
+   * is the boundary the gesture never took. It is the same distance `settle`
+   * measures, against the record a gesture that has not started yet has.
+   */
+  private stands(el: HTMLElement, axis: Axis, line: number): boolean {
+    // The host is holding a draw of the view's own change, so the element is
+    // behind by that change and not by one the host made.
+    if (this.drawing) return true;
+    if (!this.grid.hasBoundary(axis, line)) return false;
+    const off = Math.abs(this.grid.boundaryPos(axis, line) - drawnAt(el, axis));
+    return off <= Math.max(this.grid.gap, this.grid.grabSize);
   }
 
   /**
@@ -648,6 +680,10 @@ export class SoksakView {
       e.preventDefault();
       const axis = el.dataset.axis as Axis;
       const line = Number(el.dataset.line);
+      // The element still carries the line the last paint gave it. A change the
+      // host has made since names another boundary with it, and this press would
+      // take hold of that one.
+      if (!this.stands(el, axis, line)) return;
       // A press with this pointer already down is a press the release of which
       // was never seen, as on the mouse path. Dropping it leaves no divider
       // marked as held with no drag behind it, which is a state nothing clears.
@@ -694,6 +730,13 @@ export class SoksakView {
         if (this.end(e.pointerId)) lastTap = -Infinity;
         return;
       }
+      // A change the host made since the last draw has moved the boundary this
+      // drag holds, and nothing told the drag: the number it holds names another
+      // boundary now and this move would drive that one. Settle against the
+      // change before driving, as a paint does, and drive nothing if it ended
+      // the drag.
+      this.settle();
+      if (this.drags.get(e.pointerId) !== drag) return;
       const now = drag.axis === 'x' ? e.clientX : e.clientY;
       if (Math.abs(now - drag.from) > 2) drag.moved = true;
       this.commit('drag', () =>
@@ -725,6 +768,9 @@ export class SoksakView {
       e.preventDefault();
       const axis = el.dataset.axis as Axis;
       const line = Number(el.dataset.line);
+      // As on the pointer path: the line the element carries can name another
+      // boundary since the last paint, and this press would take hold of that one.
+      if (!this.stands(el, axis, line)) return;
       // A press with one already held is a press the release of which was never
       // seen. Dropping it leaves no divider marked as held with no drag behind
       // it, which is a state nothing ever clears. As on the other two exits, the
@@ -757,6 +803,10 @@ export class SoksakView {
         if (this.endMouse()) lastPress = -Infinity;
         return;
       }
+      // As on the pointer path: settle against a change the host made before
+      // driving, and drive nothing if it ended the drag.
+      this.settle();
+      if (this.mouseDrag !== drag) return;
       const now = drag.axis === 'x' ? e.clientX : e.clientY;
       if (Math.abs(now - drag.from) > 2) drag.moved = true;
       this.commit('drag', () =>
@@ -793,6 +843,9 @@ export class SoksakView {
       if (this.disposed) return;
       const axis = el.dataset.axis as Axis;
       const line = Number(el.dataset.line);
+      // As on the two press paths: the line the element carries can name another
+      // boundary since the last paint, and this key would drive that one.
+      if (!this.stands(el, axis, line)) return;
       // The record is set before the change runs, because that is when the line
       // each gesture holds is resolved.
       const held: DragState = {
@@ -858,6 +911,20 @@ export class SoksakView {
     for (const el of this.ruleEls.values()) el.remove();
     this.ruleEls.clear();
   }
+}
+
+/**
+ * Where the view last drew this divider's boundary, in px along its axis.
+ *
+ * The element is drawn centred on the boundary, so its middle across the axis is
+ * where the view put that boundary at the last paint. A change the host makes
+ * after that paint does not reach the element, so this is what a gesture
+ * starting now measures against.
+ */
+function drawnAt(el: HTMLElement, axis: Axis): number {
+  const start = Number.parseFloat(axis === 'x' ? el.style.left : el.style.top);
+  const size = Number.parseFloat(axis === 'x' ? el.style.width : el.style.height);
+  return start + size / 2;
 }
 
 /**
