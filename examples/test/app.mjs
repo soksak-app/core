@@ -42,6 +42,14 @@ export async function run(binary, args, done, { timeout = 30_000 } = {}) {
     app.stdout.on("data", read);
     app.stderr.on("data", read);
     app.on("error", reject);
+    app.on("close", (code, signal) => {
+      if (done(log)) return;
+      clearTimeout(fail);
+      const why = new Error(`${binary} exited with ${signal ?? code} before it finished:\n${log}`);
+      why.log = log;
+      why.exited = true;
+      reject(why);
+    });
   });
 
   try {
@@ -88,13 +96,13 @@ export async function shakeTwice(binary, drive, options) {
   try {
     return await shake(binary, drive, options);
   } catch (why) {
-    if (!clockHeld(why.log)) throw why;
+    if (why.exited || !clockHeld(why.log)) throw why;
     console.error(`  the page's clock was held; shaking ${drive} again`);
   }
   try {
     return await shake(binary, drive, options);
   } catch (why) {
-    if (!clockHeld(why.log)) throw why;
+    if (why.exited || !clockHeld(why.log)) throw why;
     throw new Error(
       "the page's clock was held to a crawl twice: a step of 16 ms took about 900 ms, so " +
         "the drag cannot finish inside any budget. Nothing was measured — run this on a " +
@@ -108,12 +116,21 @@ export async function shake(binary, drive, { zoom = false, ...options } = {}) {
   const into = mkdtempSync(join(tmpdir(), "soksak-frames-"));
   const args = ["--observe", "--drive", drive, "--capture", into];
   if (zoom) args.push("--zoom");
-  // 녹화 종료가 기록되면 모든 프레임이 파일로 저장된 상태다.
-  const log = await run(
-    binary,
-    args,
-    (text) => /observe: wrote \d+ frames/.test(text),
-    { timeout: budget(drive), ...options },
-  );
-  return { into, log, clean: () => rmSync(into, { recursive: true, force: true }) };
+  const clean = () => rmSync(into, { recursive: true, force: true });
+  let log;
+  try {
+    // 녹화 종료가 기록되면 모든 프레임이 파일로 저장된 상태다.
+    log = await run(
+      binary,
+      args,
+      (text) => /observe: wrote \d+ frames/.test(text),
+      { timeout: budget(drive), ...options },
+    );
+  } catch (why) {
+    // 끝나지 못한 실행도 그때까지의 프레임을 적어 두었다. 부르는 쪽은 반환값을
+    // 받지 못하므로 그것을 지울 수단이 없다.
+    clean();
+    throw why;
+  }
+  return { into, log, clean };
 }
