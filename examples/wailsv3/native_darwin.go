@@ -260,15 +260,23 @@ extern int surfaceHit(void* view);
 // phase is 0 for a press, 1 for a move, 2 for a release.
 extern void surfacePoint(int phase, double x, double y);
 
-// Walks up from a view to the content view, reporting the first surface.
-static void surfaceWalk(NSView* view, NSView* content) {
+// Walks up from a view to the content view, reporting the first surface. Returns
+// whether one was found, which is also whether the input began on this app's own
+// views rather than on the page.
+static int surfaceWalk(NSView* view, NSView* content) {
     while (view != nil && view != content) {
         if (surfaceHit((void*)view)) {
-            return;
+            return 1;
         }
         view = [view superview];
     }
+    return 0;
 }
+
+// Whether the button went down on one of this app's views. A drag that began on
+// the page is the page's own and needs nothing from here; forwarding it would put
+// one message per pointer move on the same thread that has to redraw the plane.
+static int surfaceDragging = 0;
 
 // A surface is a native view, so input on it never reaches the page. One monitor
 // on the app receives every press, every drag and every key, and reports two
@@ -306,12 +314,11 @@ static void surfaceWatchMouse(void* nsWindow) {
                 double x = at.x;
                 double y = [content bounds].size.height - at.y;
                 if (type == NSEventTypeLeftMouseDown) {
-                    surfacePoint(0, x, y);
-                    surfaceWalk([content hitTest:at], content);
-                } else if (type == NSEventTypeLeftMouseDragged) {
-                    surfacePoint(1, x, y);
-                } else {
-                    surfacePoint(2, x, y);
+                    surfaceDragging = surfaceWalk([content hitTest:at], content);
+                    if (surfaceDragging) surfacePoint(0, x, y);
+                } else if (surfaceDragging) {
+                    surfacePoint(type == NSEventTypeLeftMouseDragged ? 1 : 2, x, y);
+                    if (type == NSEventTypeLeftMouseUp) surfaceDragging = 0;
                 }
             }
         }

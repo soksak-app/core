@@ -140,11 +140,12 @@ fn watch_presses(
         native::watch_mouse(
             handle,
             move |chain| {
-                let Ok(map) = named.lock() else { return };
+                let Ok(map) = named.lock() else { return false };
                 let Some(id) = chain.iter().find_map(|view| map.get(view)) else {
-                    return;
+                    return false;
                 };
                 let _ = host.emit("surface-pressed", id.clone());
+                true
             },
             move |phase, x, y| {
                 // The point arrives measured from the content view's top. The

@@ -253,7 +253,7 @@ pub fn shape_destroy(view: usize) {
 #[allow(unused_variables)]
 pub fn watch_mouse(
     ns_window: *mut std::ffi::c_void,
-    pressed: impl Fn(Vec<usize>) + 'static,
+    pressed: impl Fn(Vec<usize>) -> bool + 'static,
     pointed: impl Fn(u8, f64, f64) + 'static,
 ) {
     #[cfg(target_os = "macos")]
@@ -271,6 +271,11 @@ pub fn watch_mouse(
         const NS_EVENT_TYPE_LEFT_MOUSE_DRAGGED: u64 = 6;
 
         let window = ns_window as *mut AnyObject;
+        // Whether the button went down on one of this app's views. A drag that
+        // began on the page is the page's own and needs nothing from here;
+        // forwarding it would put one message per pointer move on the same thread
+        // that has to redraw the plane.
+        let dragging = std::cell::Cell::new(false);
         let handler = RcBlock::new(move |event: *mut AnyObject| -> *mut AnyObject {
             if event.is_null() {
                 return event;
@@ -286,17 +291,16 @@ pub fn watch_mouse(
             let kind: u64 = msg_send![event, type];
             let point: NSPoint = msg_send![event, locationInWindow];
             let bounds: NSRect = msg_send![content, bounds];
-            let phase = match kind {
-                NS_EVENT_TYPE_LEFT_MOUSE_DOWN => Some(0),
-                NS_EVENT_TYPE_LEFT_MOUSE_DRAGGED => Some(1),
-                NS_EVENT_TYPE_LEFT_MOUSE_UP => Some(2),
-                _ => None,
-            };
-            if let Some(phase) = phase {
-                pointed(phase, point.x, bounds.size.y - point.y);
-            }
-            // A move and a release do not name a view again. The press decided it.
+            // A move and a release do not name a view again. The press decided it,
+            // and it decided whether this drag is one this app has to carry.
             if kind == NS_EVENT_TYPE_LEFT_MOUSE_DRAGGED || kind == NS_EVENT_TYPE_LEFT_MOUSE_UP {
+                if dragging.get() {
+                    let phase = if kind == NS_EVENT_TYPE_LEFT_MOUSE_DRAGGED { 1 } else { 2 };
+                    pointed(phase, point.x, bounds.size.y - point.y);
+                    if kind == NS_EVENT_TYPE_LEFT_MOUSE_UP {
+                        dragging.set(false);
+                    }
+                }
                 return event;
             }
             let mut view: *mut AnyObject = if kind == NS_EVENT_TYPE_LEFT_MOUSE_DOWN {
@@ -315,7 +319,13 @@ pub fn watch_mouse(
                 }
                 view = msg_send![view, superview];
             }
-            pressed(chain);
+            let ours = pressed(chain);
+            if kind == NS_EVENT_TYPE_LEFT_MOUSE_DOWN {
+                dragging.set(ours);
+                if ours {
+                    pointed(0, point.x, bounds.size.y - point.y);
+                }
+            }
             event
         });
         let class = AnyClass::get(c"NSEvent").expect("NSEvent");
