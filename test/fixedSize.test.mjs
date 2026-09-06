@@ -865,3 +865,55 @@ test("a card that declares its size is drawn at it whatever the gap", () => {
     assert.equal(grid.rect("mid").h, 96, `gap ${px}`);
   }
 });
+
+test("a drag past the limit stops at the limit, not one rounding short of it", () => {
+  // A pane and a sidebar. The end of the range is where the pane is drawn at
+  // `minSize`, which is also where the plane exactly holds what the sidebar
+  // declares there: the two are the same number, so the last position the range
+  // names sits on the equality `declaredFor` tests. The size that position asks
+  // for is measured from a line position that carries one rounding per slot.
+  const grid = new Soksak(
+    {
+      xs: [0, 0.28, 1],
+      ys: [0, 1],
+      cards: [
+        { id: "pane", c0: 0, c1: 1, r0: 0, r1: 1 },
+        { id: "side", c0: 1, c1: 2, r0: 0, r1: 1, width: 137 },
+      ],
+    },
+    { width: 800, height: 600, gap: 24, minSize: 96 },
+  );
+  const [min] = grid.boundaryRange("x", 1);
+  assert.equal(min, grid.minSize + grid.gap / 2, "the range ends where the pane is minSize");
+
+  assert.equal(grid.moveBoundary("x", 1, 0, false), min, "dragged past it, the boundary stops at it");
+  assert.equal(grid.rect("pane").w, grid.minSize);
+  assert.equal(grid.rect("side").w, 800 - min - grid.gap / 2, "the sidebar took the rest");
+  assertTiling(grid, "at the end of the range");
+});
+
+test("a slot too small for the corridor rule to read still covers the plane", () => {
+  // Two sharing slots at the scale the corridor rule's tolerance works at. The
+  // first is wide enough to be read as a slot and carries a corridor; the
+  // second is not and carries none, so the starvation rule stops the first at
+  // the corridor it holds. What is left to divide the room it gave up by is a
+  // span of 9e-10 — small, but not none, and the room has to land on it.
+  const grid = new Soksak(
+    {
+      xs: [0, 1.5e-9, 2.4e-9, 1],
+      ys: [0, 1],
+      cards: [
+        { id: "A", c0: 0, c1: 1, r0: 0, r1: 1 },
+        { id: "B", c0: 1, c1: 2, r0: 0, r1: 1 },
+        { id: "wide", c0: 2, c1: 3, r0: 0, r1: 1, width: 970 },
+      ],
+    },
+    { width: 1000, height: 400, gap: 24, minSize: 5 },
+  );
+  const last = grid.lines("x").length - 1;
+  assert.equal(grid.boundaryPos("x", last), grid.width, "the slots sum to the plane");
+  for (const [id, r] of grid.rects()) {
+    assert.ok(r.w >= 0 && r.h >= 0, `${id} is drawn ${r.w} by ${r.h}`);
+    assert.ok(r.x + r.w <= grid.width + 1e-9, `${id} runs past the plane`);
+  }
+});

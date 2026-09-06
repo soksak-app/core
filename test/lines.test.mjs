@@ -720,3 +720,35 @@ test("centring measures again from where the boundary landed", () => {
     `the two cards come out the same size, not ${grid.rect("b").w} and ${grid.rect("c").w}`,
   );
 });
+
+test("a drag never leaves the boundary further from the target than it stood", () => {
+  // A plane too narrow for what it holds. The px position of a line does not
+  // follow its coordinate there: a slot the starvation rule stopped does not
+  // move with its span, so a step can pass the target and the step after it
+  // come back past it.
+  const grid = new Soksak(undefined, { width: 800, height: 300, gap: 21, minSize: 8 });
+  for (const [id, axis, born] of [
+    ["card", "x", "c0"],
+    ["card", "y", "c1"],
+    ["c1", "x", "c2"],
+    ["c1", "x", "c3"],
+    ["c3", "x", "c4"],
+    ["c0", "y", "c5"],
+  ]) {
+    assert.equal(grid.split(id, axis, { id: born }), born);
+  }
+  grid.setSize("c2", "y", 196);
+  grid.resize(140, 300);
+
+  const from = grid.boundaryPos("x", 3);
+  const [, max] = grid.boundaryRange("x", 3);
+  assert.equal(from, 52.5);
+  assert.ok(max > from, "the range reports room above where it stands");
+
+  const to = grid.moveBoundary("x", 3, max, false);
+  assert.ok(
+    Math.abs(to - max) <= Math.abs(from - max) + 1e-9,
+    `asked ${max}, stood at ${from}, landed ${to}`,
+  );
+  assert.ok(to <= max + 0.01, `landed ${to}, past the range it reported`);
+});

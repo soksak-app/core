@@ -160,9 +160,9 @@ export function holdsSizes(plane, axis) {
  * declares, and a request of `left` or more, which no declaration reaches.
  */
 export function declaredFor(plane, axis, slot, drawn) {
-    var _a;
-    const held = heldSizes(plane, axis);
-    const now = (_a = held[slot]) !== null && _a !== void 0 ? _a : drawn;
+    // The slot declares a size: the only caller reads one off the card whose px
+    // size a drag at this boundary changes.
+    const now = heldSizes(plane, axis)[slot];
     // The size declared now already draws at the width asked for. More than one
     // declaration draws at a given width once the sizes are scaled, and this is
     // the one to keep: a drag that does not move the boundary changes nothing.
@@ -170,8 +170,13 @@ export function declaredFor(plane, axis, slot, drawn) {
         return now;
     const { asked, taken, sharedSpan, floor } = demand(plane, axis);
     const room = extent(plane, axis);
-    // The plane holds the sizes once this slot declares `drawn`.
-    if (sharedSpan > 1e-9 && room - (asked - now + drawn) - taken >= floor)
+    // The plane holds the sizes once this slot declares `drawn`. The comparison
+    // carries the same slack every other comparison here does: at the end of the
+    // range `boundaryRange` reports, the two sides are equal, and `drawn` is
+    // measured from a line position that accumulates one rounding per slot. A
+    // strict comparison refuses the last position the range names, and the drag
+    // that asked for it moves nothing.
+    if (sharedSpan > 1e-9 && room - (asked - now + drawn) - taken >= floor - 1e-9)
         return drawn;
     const other = asked - now;
     const keep = Math.min(floor, Math.max(0, room - taken));
@@ -250,7 +255,12 @@ function divide(plane, axis) {
         let room = usable;
         let pool = sharedSpan;
         for (;;) {
-            const each = pool > 1e-9 ? room / pool : 0;
+            // Divided by the span that is left, which is never none: the rule never
+            // picks the slot that would take the last of it, because a card holding
+            // only that slot is already drawn the whole of `room`. Reading the span
+            // against a tolerance instead took a pool of 9e-10 for none and gave the
+            // room the stop released to no slot at all.
+            const each = room / pool;
             let starved = -1;
             for (const card of plane.cards) {
                 let fixed = 0; // px its slots already stand at

@@ -854,7 +854,20 @@ export class Soksak {
         // array out of order and draw a card wider than one spanning more slots.
         const next = clamp(a[line] + off / usable, a[line - 1], a[line + 1]);
         if (next === a[line]) break;
+        const was = a[line];
         a[line] = next;
+        // The position does not follow the coordinate everywhere: a slot the
+        // starvation rule stopped does not move with its span, and a slot that
+        // comes to stand at zero width gives up the corridor it held, so the
+        // positions between two of those are not reachable at all. A step that
+        // lands further from the target than the line already stood has passed
+        // them, and the step after it comes back past them. Put the line back
+        // and stop, so a drag never leaves the boundary further from where it
+        // was asked than where it started.
+        if (Math.abs(target - this.boundaryPos(axis, line)) > Math.abs(off)) {
+          a[line] = was;
+          break;
+        }
       }
     }
     this.changed();
@@ -1307,12 +1320,6 @@ export class Soksak {
                 : paid.side;
         const gone = from === 'lo' ? card[lo] : card[hi];
         if (gone <= 0 || gone >= this.arr(axis).length - 1) continue;
-        // Removing the line expands the cards on the side that gave the span up,
-        // which is what this path is for. A card on the closing card's own side
-        // references the line the same way it does and would expand with it, so
-        // this path does not run then.
-        const same = from === 'lo' ? lo : hi;
-        if (this.list.some((c) => c !== card && c[same] === gone)) continue;
         const held = slotWidths(this.plane, axis);
         const mine = card[lo];
         // The span the slot holds, read before the line is removed. The take that
