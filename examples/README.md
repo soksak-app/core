@@ -18,7 +18,8 @@ The `+` button and the split buttons ask which plugin the new tab is for (T2).
 Dragging a tab onto the middle of another card makes it a tab of that card (T3),
 and onto an edge makes a place beside it (T4). When the source card has one tab
 left, the card itself moves and no empty card is left behind (T5). The commit
-delay in ⚙ 설정 makes V7a fail and the apply skew makes V7b fail. The check
+delay in ⚙ 설정 makes V7a fail on the next change that moves a surface, and the
+apply skew makes V7b fail at once. The check
 results go to a log rather than the screen: the browser's console, and the
 application's own log.
 

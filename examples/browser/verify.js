@@ -234,6 +234,31 @@ export function verify(controls = null) {
   }
   add("V10 표면이 카드를 안 뚫는다", escape <= 0.5, `최대 ${Math.max(0, escape).toFixed(2)}px`);
 
+  // R — 선은 판의 끝에서 그 바깥의 테두리까지 이어진다. 그 거리는 stage 의 안쪽
+  // 여백이고 뷰의 bleed 가 그 값이다. 더 나가면 선이 판 밖, 테두리 위에 그려진다.
+  // 여백은 재서 얻는다 — 이음새에서 스타일시트가 여백을 0 으로 만드므로 통로의
+  // 절반과 다르다.
+  //
+  // 판이 뷰가 배치한 크기 그대로일 때만 잰다. 호스트가 판의 크기를 바꾸고 아직 다시
+  // 그리지 않았으면 선은 이전 크기의 것이고, 그 차이는 선이 나간 거리가 아니다.
+  const stage = plane.parentElement;
+  const frame = stage.getBoundingClientRect();
+  const pad = Math.max(0,
+    host.left - (frame.left + parseFloat(getComputedStyle(stage).borderLeftWidth)));
+  const laid = Math.abs(host.width - grid.width) < 0.5
+    && Math.abs(host.height - grid.height) < 0.5;
+  let past = 0;
+  for (const rule of plane.querySelectorAll(".sp-rule")) {
+    const r = rule.getBoundingClientRect();
+    // 그리지 않는 선은 크기도 좌표도 0 이다. 판과 비교하면 판 전체만큼 나간 것이 된다.
+    if (r.width === 0 && r.height === 0) continue;
+    past = Math.max(past, host.left - r.left, r.right - host.right,
+                          host.top - r.top, r.bottom - host.bottom);
+  }
+  add("R 선은 판 밖으로 여백까지만 나간다", !laid || past <= pad + 0.01,
+      laid ? `최대 ${past.toFixed(2)}px · 여백 ${pad.toFixed(2)}px`
+           : "판이 아직 새 크기로 그려지지 않았다");
+
   // T5 — 빈 카드는 도달 가능한 상태가 아니다.
   const empty = cards.filter((c) => !isPlace(c.id) && tabsOf(c).length === 0);
   add("T5 빈 카드 0", empty.length === 0, `${cards.length - empty.length}/${cards.length} 카드가 내용을 가짐`);

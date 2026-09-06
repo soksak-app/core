@@ -321,7 +321,7 @@ export const themeName = () => settings.theme;
 export const modeName = () => settings.mode;
 
 /**
- * 통로의 절반 폭(px). 판이 gap 과 bleed 를 이 값으로 설정한다.
+ * 통로의 절반 폭(px). 판이 gap 을 이 값의 두 배로 설정한다.
  *
  * 설정이 0 이면 선 굵기의 절반을 반환한다. 통로가 0 이면 카드의 rect 가 맞닿아
  * 경계선을 그릴 자리가 없고, 네이티브 표면 둘도 맞닿아 선이 표면 뒤로 들어간다.
@@ -331,6 +331,16 @@ export function halfGap() {
   if (settings.gap > 0) return settings.gap;
   return parseFloat(themeOf(settings.theme).shape.bw) / 2;
 }
+
+/**
+ * 판이 stage 안으로 들어와 있는 거리(px). 뷰의 bleed 가 이 값이다.
+ *
+ * stage 의 안쪽 여백이고, 선이 그만큼 판 밖으로 나가 stage 의 테두리에 닿는다.
+ * 통로의 절반이 아니다: 이음새에서는 스타일시트가 그 여백을 0 으로 만드는데 절반은
+ * 선 굵기의 절반이므로, 절반을 주면 선이 여백 없는 판 밖으로 나가 테두리 위에
+ * 그려진다.
+ */
+export const stagePad = () => (seam() === "line" ? 0 : halfGap());
 
 /** 설정에 들어 있는 통로 값(px). 슬라이더가 표시하는 값이다. */
 export const gapSetting = () => settings.gap;

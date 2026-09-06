@@ -5,7 +5,7 @@
 //
 // 검증의 존재를 알지 않는다. 렌더링 완료만 통지하고 이후 처리는 문서가 정한다.
 import { Soksak, SoksakView, outline } from "/dist/index.js";
-import { cardRadius, halfGap, linkedSet, value } from "./settings.js";
+import { cardRadius, halfGap, linkedSet, stagePad, value } from "./settings.js";
 import { isPlace, plugin, plugins, railId, railKind, section } from "./plugins/registry.js";
 import { standIn } from "./compositor.js";
 import { native, onSurfaceInput, overlay, shapes } from "./host.js";
@@ -952,7 +952,7 @@ export function build() {
     createCard, updateCard,
     // 판은 stage 안쪽으로 이 값만큼 들어와 있다. 호스트만 아는 값이므로 뷰에 전달해야
     // 판 가장자리에 닿는 선이 stage 경계까지 이어진다.
-    bleed: half,
+    bleed: stagePad(),
     commit: (made, draw) => (layouter ? layouter(made, draw, seats()) : draw()),
     // 판의 렌더는 뷰가 그리는 것과 이 문서가 그리는 것으로 이루어진다. onChange 는
     // 뷰가 그린 직후에 발생하므로, 나머지를 여기서 그리고 그 뒤에 수신자를 호출한다.
@@ -969,7 +969,7 @@ export function build() {
 /** 통로 값을 판과 뷰에 적용한다. */
 export function setGap(half) {
   grid.gap = half * 2;
-  view.bleed = half;
+  view.bleed = stagePad();
   // 통로는 stage 의 안쪽 여백이기도 하므로 통로가 바뀌면 판의 크기도 바뀐다. 옵저버를
   // 기다리면 그 사이의 렌더가 이전 크기로 그려지고 표면에도 그 값이 전달된다.
   grid.resize(plane.clientWidth, plane.clientHeight);
