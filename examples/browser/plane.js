@@ -25,7 +25,11 @@ const NEEDS = ["cards", "card", "insertAt", "moveTo", "standings", "moveBoundary
   }
 }
 
+/* 카드의 머리와 발 높이. 이 값이 드롭 구획의 경계이자 스타일시트의 행 높이다. 두
+   곳에 적으면 한쪽만 바뀌었을 때 구획이 머리 끝에서 어긋난다. */
 const HEADER = 32, FOOTER = 22;
+document.documentElement.style.setProperty("--head", `${HEADER}px`);
+document.documentElement.style.setProperty("--foot", `${FOOTER}px`);
 
 
 /* 포커스를 잃은 표면의 흐림 여부. 표면은 카드마다 하나이므로 카드 단위로 판정한다. */
@@ -333,7 +337,6 @@ function updateCard(el, card) {
   slot.dataset.nativeSurface = "stub";
   slot.dataset.nativeSurfaceId = shown.id;
   slot.dataset.nativeLayer = "10";
-  slot.dataset.nativeVisible = "true";
   slot.dataset.nativePlugin = shown.plugin;
   slot.dataset.nativeTitle = shown.title;
   slot.dataset.nativeDim = String(dimmed(card.id));
@@ -347,8 +350,11 @@ function closeTab(cardId, tabId) {
   if (!card) return;
   card.data.tabs = tabsOf(card).filter((t) => t.id !== tabId);
   if (card.data.tabs.length === 0) {
+    // 닫을 수 없는 카드는 남으므로 탭 하나를 다시 넣는다. 종류는 포커스가 보던
+    // 것이고, 없으면 등록된 첫 플러그인이다. 여기에 이름을 적으면 플러그인을 더할
+    // 때마다 이 파일을 고쳐야 한다.
     if (grid.canClose(cardId)) grid.close(cardId);
-    else card.data.tabs = [tab(focusedPlugin() ?? "terminal", "빈 탭")];
+    else card.data.tabs = [newTab(focusedPlugin() ?? plugins()[0].id)];
   }
   if (!tabsOf(card).some((t) => t.id === card.data?.activeId)) {
     if (card.data) card.data.activeId = tabsOf(card)[0]?.id ?? null;
@@ -844,7 +850,7 @@ function centreTabs() {
 
 function markFocus() {
   const mark = document.getElementById("focusMark");
-  const on = document.documentElement.dataset.focusInd === "corner";
+  const on = value("focusInd") === "corner";
   // 슬롯은 탭 단위이고 포커스는 카드 단위다. 포커스 카드의 활성 탭이 그 카드의
   // 슬롯이다.
   const card = on ? grid.card(focusedId) : null;
@@ -940,7 +946,6 @@ export function build() {
     railShape = drawRail();
     listener?.(reason);
   };
-  Object.assign(window, { grid, view });   // 관측용 — build 마다 새로 걸어야 낡지 않는다
   settle();
 }
 

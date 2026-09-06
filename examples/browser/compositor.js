@@ -57,20 +57,12 @@ function surfaceEl(id) {
 }
 
 /**
- * 선언값 ∧ 모든 조상의 data-surface-visible ∧ capture-hidden 아님.
+ * 이 표면을 지금 표시하는가.
  *
- * 세 번째 항이 드래그 중의 표시 여부를 결정한다. DOM 은 네이티브 표면 위에 그릴 수
- * 없으므로, 표면 위에 무언가를 그리는 동안 capture-hidden 으로 표면을 숨기고 DOM 이
- * 스냅샷을 그린다.
+ * DOM 은 네이티브 표면 위에 그릴 수 없으므로, 표면 위에 무언가를 그리는 동안
+ * capture-hidden 으로 표면을 숨기고 DOM 이 스냅샷을 그린다.
  */
-function effectiveVisible(slot) {
-  if (slot.dataset.nativeVisible !== "true") return false;
-  if (slot.dataset.nativeCaptureHidden === "true") return false;
-  for (let n = slot.parentElement; n && n !== document.body; n = n.parentElement) {
-    if (n.dataset?.surfaceVisible === "false") return false;
-  }
-  return true;
-}
+const effectiveVisible = (slot) => slot.dataset.nativeCaptureHidden !== "true";
 
 /* 이 커밋이 마지막 갱신인지, 갱신이 이어지는 중인지.
    경계를 끄는 동안 매 프레임 커밋이 발생하고 놓으면 멈춘다. 뷰는 끄는 동안 divider 에
@@ -191,6 +183,7 @@ function commit(mine, snapshot, final) {
     el.style.width = `${seat.w}px`; el.style.height = `${seat.h}px`;
     el.style.zIndex = String(50 + s.layer);
     el.dataset.hidden = String(!s.visible);
+    el.dataset.dim = String(s.dim);
     // 라벨은 값이 바뀔 때만 갱신한다. 커밋은 프레임마다 발생하지만 제목과 레이어는
     // 거의 바뀌지 않으므로, 매번 쓰면 표면 내용이 프레임마다 다시 생성된다.
     const label = `<b>${s.title}</b><br>네이티브 표면 · ${s.plugin} · layer ${s.layer}`;
@@ -199,11 +192,6 @@ function commit(mine, snapshot, final) {
   }
   for (const [id, el] of drawn) {
     if (!record.surfaces.some((x) => x.id === id)) { el.remove(); drawn.delete(id); }
-  }
-  for (const s of record.surfaces) {
-    const slot = plane.querySelector(`[data-native-surface-id="${s.id}"][data-native-surface]`);
-    if (slot) slot.dataset.nativeDeclaredFrame =
-      `${s.declared.x.toFixed(2)},${s.declared.y.toFixed(2)},${s.declared.w.toFixed(2)},${s.declared.h.toFixed(2)}`;
   }
   latestRecord = record;
   // 무엇을 호스트에 보낼지는 이 모듈이 정하지 않는다. 이 판의 표면만으로는 부족하고,
@@ -240,18 +228,6 @@ function seat(record, placed) {
   if (!seatedRecord || record.seq >= seatedRecord.seq) seatedRecord = record;
 }
 
-/**
- * 표면을 숨기고 같은 위치에 `.standin` 을 표시한다.
- *
- * 네이티브 표면은 OS 뷰이므로 DOM 이 그 위에 그릴 수 없다. DOM 을 표면 위에 그리는
- * 동안 capture-hidden 으로 표면을 숨기고 `.standin` 을 대신 표시하며, 표면 갱신은
- * 그동안 중단하고 종료 시 복원한다.
- *
- * `.standin` 은 표면과 동일하게 표시한다. 표면을 숨기는 동안 화면이 변하면 안 된다.
- *
- * `over` 를 지정하면 그 영역과 겹치는 표면만 숨긴다. 드롭 구획은 판 전체를 대상으로
- * 하지만, 선택 레이어는 작아서 전체를 숨기면 겹치지 않는 표면의 갱신까지 중단된다.
- */
 /* 손잡이가 바뀌었음을 듣는 쪽. 문서가 등록한다. */
 let onKnob = () => {};
 
@@ -266,6 +242,18 @@ export function setKnob(name, value) {
   onKnob();
 }
 
+/**
+ * 표면을 숨기고 같은 위치에 `.standin` 을 표시한다.
+ *
+ * 네이티브 표면은 OS 뷰이므로 DOM 이 그 위에 그릴 수 없다. DOM 을 표면 위에 그리는
+ * 동안 capture-hidden 으로 표면을 숨기고 `.standin` 을 대신 표시하며, 표면 갱신은
+ * 그동안 중단하고 종료 시 복원한다.
+ *
+ * `.standin` 은 표면과 동일하게 표시한다. 표면을 숨기는 동안 화면이 변하면 안 된다.
+ *
+ * `over` 를 지정하면 그 영역과 겹치는 표면만 숨긴다. 드롭 구획은 판 전체를 대상으로
+ * 하지만, 선택 레이어는 작아서 전체를 숨기면 겹치지 않는 표면의 갱신까지 중단된다.
+ */
 export function standIn(on, over) {
   const area = over ? plane.getBoundingClientRect() : null;
   const kinds = app.kinds;

@@ -55,12 +55,12 @@ import { installTheme } from "/dist/index.js";
 /* 판 외부의 값은 settings 가 갖는다. 이 문서는 값이 바뀌었을 때 판을 다시 만든다.
    설정이 판을 직접 호출하면 설정을 추가할 때마다 호출할 함수를 정해야 한다. */
 import {
-  applyTheme, halfGap, install, modeName, onSettingsChange, set, themeName, value,
+  halfGap, install, modeName, onSettingsChange, set, value,
 } from "./settings.js";
 
 /* 표면을 모사하고 보고한다. 판은 슬롯 요소에 값을 기록만 하고 측정과 보고는 이쪽이
    담당한다. */
-import { knobs, latest, onCommit, onKnobChange, publish, publishAhead } from "./compositor.js";
+import { onCommit, onKnobChange, publish, publishAhead } from "./compositor.js";
 
 /* 판 하나. 이 문서는 판의 렌더링 방식을 알지 않고 렌더 완료만 수신한다. */
 import {
@@ -83,7 +83,7 @@ import * as projects from "./projects.js";
 import * as registry from "./plugins/registry.js";
 
 /* 설정 모달. 사이드바를 연결할 자리 목록은 등록된 플러그인이 정한다. */
-import { drawSettings, openSettings } from "./settings-ui.js";
+import { drawSettings, onCommand, openSettings } from "./settings-ui.js";
 import { icon } from "./icons.js";
 import { adopt, capture, fresh } from "./plane.js";
 
@@ -294,7 +294,9 @@ function drawBars() {
       onPick: () => { projects.activate(p.id); drawBars(); },
       onRename: (title) => projects.rename(p.id, { title }),
       onClose: projects.all().length > 1
-        ? () => { projects.close(p.id); drawBars(); } : null,
+        // 배경에 있던 것을 닫으면 판은 그대로다. 살아 있어야 할 표면 목록은
+        // 커밋에서만 전달되므로, 닫은 뒤 한 번 게시해 그 표면을 없앤다.
+        ? () => { projects.close(p.id); drawBars(); publish(rects()); } : null,
     }));
   }
   into.appendChild(addTabButton("+", openProject));
@@ -305,7 +307,7 @@ function drawBars() {
       onPick: () => { projects.activateSpace(sp.id); drawBars(); },
       onRename: (title) => projects.renameSpace(sp.id, title),
       onClose: here.spaces.length > 1
-        ? () => { projects.closeSpace(sp.id); drawBars(); } : null,
+        ? () => { projects.closeSpace(sp.id); drawBars(); publish(rects()); } : null,
     }));
   }
   spaceBar.appendChild(addTabButton("+", () => { projects.addSpace(fresh()); drawBars(); }));
@@ -314,8 +316,10 @@ function drawBars() {
   chromeActs.append(
     act("panel-left", "좌측 자리", value("left"), () => set({ left: !value("left") })),
     act("panel-right", "우측 자리", value("right"), () => set({ right: !value("right") })),
+    // 모달의 모드 세그먼트와 같은 경로다. applyTheme 은 테마의 형태 값까지 다시
+    // 적용하므로, 그것을 부르면 사용자가 정한 통로와 모서리가 되돌아간다.
     act(modeName() === "dark" ? "sun" : "moon", "밝게 / 어둡게", false,
-        () => applyTheme(themeName(), modeName() === "dark" ? "light" : "dark")),
+        () => set({ mode: modeName() === "dark" ? "light" : "dark" })),
     // 모달이 열린 동안에는 오버레이가 이 버튼을 덮으므로 다시 눌리지 않는다. 켜짐
     // 상태도 표시하지 않는다. 구 프로젝트의 settings-toggle 과 같다.
     act("settings", "설정", false, openSettings),
@@ -369,6 +373,14 @@ drawBars();
 
 /* 설정이 바뀌면 판과 크롬을 다시 그린다. 첫 프로젝트를 만든 뒤에 등록한다. 그 전에
    호출되면 그릴 프로젝트가 없다. */
+/* ⚙ 의 값이 아닌 누름. 이 문서가 판을 소유하므로 여기서 수행한다. */
+onCommand((name) => {
+  if (name !== "build") return;
+  build();
+  drawBars();
+  drawSettings();
+});
+
 /* 합성 손잡이가 바뀌면 다시 그린다. 손잡이는 렌더에서 읽히므로 다시 그리지 않으면
    바꾼 값이 나타나지 않는다. */
 onKnobChange(() => settle());
@@ -385,6 +397,5 @@ onSettingsChange(() => {
    것을 관측하면 옵저버가 둘이 되고, 하나가 이전 크기로 배치한 뒤 다른 하나가 다시
    배치한다. */
 
-Object.assign(window, { verify, settle, projects, drawBars });   // 디버깅용
 </script>
 </body></html>

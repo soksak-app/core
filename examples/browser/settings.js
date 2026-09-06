@@ -218,7 +218,7 @@ function fontOf(id) {
  * 별도의 설정값을 두지 않는다. 두 값을 두면 통로 0 이면서 이음새가 gap 인 상태가
  * 생기고, 그 상태에는 그릴 것이 없다.
  */
-export const seam = () => (settings.gap === 0 ? "line" : "gap");
+const seam = () => (settings.gap === 0 ? "line" : "gap");
 
 /* 애플리케이션이 서비스하는 페이지는 별도 문서라 이 문서의 스타일시트를 상속하지
    않는다. 토큰 값을 전송하면 그쪽에서 자기 루트에 설정한다. */

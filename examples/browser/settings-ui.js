@@ -15,7 +15,6 @@ import { standIn } from "./compositor.js";
 import { native, overlay } from "./host.js";
 import { icon } from "./icons.js";
 import { onAnswer, onGripDrag, showValue } from "./card.js";
-import { build } from "./plane.js";
 import { knobs, setKnob } from "./compositor.js";
 import { plugins, section } from "./plugins/registry.js";
 import {
@@ -258,6 +257,14 @@ function makeCard() {
   return el;
 }
 
+/* 값이 아닌 것을 누른 것. 이 모달은 그것을 수행하지 않고 알린다. */
+let commanded = () => {};
+
+/** 값이 아닌 누름을 받을 함수를 등록한다. 지금은 「초기 배치로」 하나다. */
+export function onCommand(fn) {
+  commanded = fn;
+}
+
 /** 카드를 다시 그리고, 열려 있으면 호스트 뷰의 내용도 갱신한다. */
 export function drawSettings() {
   if (!card) return;
@@ -295,7 +302,7 @@ function answer(key, val) {
   // seg 의 버튼은 값을 key 에 담아 전달한다. 아래의 설정 이름 처리로 넘긴다.
   if (kind === "pick") return answer(a, b);
   if (kind === "theme") return applyTheme(a, modeName());
-  if (kind === "press") { if (a === "build") build(); return; }
+  if (kind === "press") return commanded(a);
   if (kind === "link") return link(a, b || null, val || null);
   // 손잡이는 다음 렌더에 반영된다. 알리지 않으면 바꾼 값이 화면에도, 검증 결과에도
   // 나타나지 않는다.

@@ -5,7 +5,7 @@
 // 표시하고 셸 프로세스를 연결한다.
 //
 // DOM 은 네이티브 뷰 위에 그릴 수 없으므로 [data-native-modal] 요소는 별도 뷰에
-// 렌더링한다. 표면보다 나중에 생성되므로 표면 위에 배치된다.
+// 렌더링한다. 그 뷰는 애플리케이션의 창에 자식 창으로 붙으므로 표면 위에 그려진다.
 //
 // 이 파일은 애플리케이션마다 복제하지 않는다. 애플리케이션별 차이는 전송 방식뿐이고
 // framework/ 가 담당한다.
@@ -130,7 +130,11 @@ const say = (value) => {
 let turn = Promise.resolve();
 const tellInTurn = (name, payload) => {
   const answered = turn.then(() => tell(name, payload));
-  turn = answered.catch(() => {});
+  // 실패해도 다음 호출은 보낸다. 그 실패를 여기서 삼키면 아무 데도 남지 않으므로
+  // 애플리케이션 로그에 적는다.
+  turn = answered.catch((why) => {
+    bridge.call("report", `host ${name} failed: ${why}`);
+  });
   return answered;
 };
 
@@ -149,7 +153,7 @@ export const surfaces = native ? {
     /** 검증 결과 한 줄을 애플리케이션 로그로 전송한다. */
     report: (line) => tell("report", line),
 
-    theme: (values) => tell("setTheme", values),
+    theme: (values) => tellInTurn("setTheme", values),
 
     place(record) {
       if (!announced) {
@@ -185,9 +189,11 @@ export const surfaces = native ? {
       const key = JSON.stringify(request);
       if (key === last) return;
       last = key;
+      // 차례대로 보낸다. 애플리케이션에 따라 호출마다 다른 스레드에서 처리되므로,
+      // 기다리지 않으면 한 프레임 전의 자리가 나중에 적용된다.
       // 애플리케이션이 실제로 앉힌 자리를 판 기준으로 되돌려 답한다. 렌더링 전에
       // 배치를 보낸 쪽이 이 결과를 기다린다.
-      return tell("syncSurfaces", request).then((placed) =>
+      return tellInTurn("syncSurfaces", request).then((placed) =>
         (placed ?? []).map((p) => ({ id: p.id, ...toPlane(p) })));
     },
 } : {
@@ -232,7 +238,11 @@ if (native) {
   bridge.on("surface-pressed", (id) => onPress(id));
   bridge.on("surface-input", (step) => onInput(step));
   // 모달은 여러 번 응답하므로 여기서 구독을 해제하지 않고 hide 에서 해제한다.
-  bridge.on("overlay-pick", ({ key, value }) => { if (pick) pick(key, value); });
+  // 답에는 어느 모달의 것인지가 함께 온다. 닫힌 모달이 마지막으로 보낸 답이 다음
+  // 모달의 수신자에게 가지 않도록 그것으로 거른다.
+  bridge.on("overlay-pick", ({ id, key, value }) => {
+    if (pick && id === shown) pick(key, value);
+  });
 }
 
 /* 표면 위에 그리는 도형. 네이티브 뷰 하나이고 웹뷰가 아니다 — 채움과 선이 알파를
@@ -240,7 +250,7 @@ if (native) {
    그렇게 할 수 없다. */
 export const shapes = native ? {
     set(id, rect, style) {
-      tell("setShape", {
+      tellInTurn("setShape", {
         id,
         viewport: { h: window.innerHeight },
         rect: toPage(rect),
@@ -251,7 +261,7 @@ export const shapes = native ? {
       });
     },
 
-    clear: (id) => tell("clearShape", id),
+    clear: (id) => tellInTurn("clearShape", id),
 } : {
   set: () => {},
   clear: () => {},

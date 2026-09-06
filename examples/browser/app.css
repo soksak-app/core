@@ -102,9 +102,13 @@ body{margin:0;background:var(--bg);color:var(--fg);
 .work{display:flex;flex-direction:column;flex:1 1 auto;min-width:0;min-height:0}
 .rail-projects{display:flex;flex-direction:column;gap:4px;width:64px;flex:0 0 auto;
   padding:5px;background:var(--card);border-right:var(--bw) solid var(--edge)}
-.rail-projects .bar-tab{width:100%;height:36px;justify-content:center;padding:0 4px}
+.rail-projects .bar-tab{position:relative;width:100%;height:36px;justify-content:center;padding:0 4px}
 .rail-projects .bar-tab__name{max-width:100%;text-align:center}
-.rail-projects .bar-tab__x{display:none}
+/* 세로 레일에서는 이름만 담을 폭이므로 닫기 버튼이 들어가지 않는다. 표시하되
+   눌렸을 때만 드러나게 하지 않고, 이름 위에 겹쳐 둔다. */
+.rail-projects .bar-tab__x{position:absolute;top:2px;right:2px;opacity:0}
+.rail-projects .bar-tab:hover .bar-tab__x,
+.rail-projects .bar-tab:focus-within .bar-tab__x{opacity:1}
 .rail-projects .bar-tab--add{width:100%;height:24px;justify-content:center}
 
 /* ── 판 ───────────────────────────────────────────────────────────────── */
@@ -115,7 +119,7 @@ body{margin:0;background:var(--bg);color:var(--fg);
 /* 카드는 한 종류이고 역할만 다르다. 비율을 받는지 px 를 받는지, 이동 가능한지가
    차이다. z 순서는 CSS 가 아니라 합성이 정한다. 네이티브 표면은 OS 뷰라 CSS 스택에
    참여하지 않으므로 시뮬레이터는 표면 레이어를 위에 두어 재현한다. */
-.card{position:absolute;z-index:1;display:grid;grid-template-rows:32px 1fr 22px;
+.card{position:absolute;z-index:1;display:grid;grid-template-rows:var(--head) 1fr var(--foot);
   min-width:0;overflow:hidden;border:var(--bw) solid var(--edge);border-radius:var(--r);
   background:var(--card);outline:0}
 /* 그리드 자식의 min-width 기본값 auto 는 열을 min-content 까지 확장하고,
@@ -249,6 +253,8 @@ body{margin:0;background:var(--bg);color:var(--fg);
 .surface{position:absolute;z-index:50;background:var(--surface);color:var(--surface-fg);
   font-size:11px;padding:6px 9px;overflow:hidden;pointer-events:none}
 .surface[data-hidden=true]{display:none}
+/* 포커스를 잃은 표면. 애플리케이션은 뷰의 알파를 같은 값으로 낮춘다. */
+.surface[data-dim=true]{opacity:.45}
 .surface b{color:var(--fg)}
 
 /* `.standin` 은 표면과 동일하게 보여야 하므로 `.surface` 와 같은 값을 사용한다.
