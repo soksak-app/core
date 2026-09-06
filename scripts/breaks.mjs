@@ -1015,4 +1015,11 @@ export const BREAKS = [
     find: "            if (flat.has(c.id))\n                return true;\n",
     to: "",
   },
+  {
+    id: "stale-payer",
+    what: "a close follows an offset that no longer lands inside the payer",
+    file: "dist/soksak.js",
+    find: "                const first = back && paidAt >= back[lo] && paidAt < back[hi] ? paidAt : merged;",
+    to: "                const first = paidAt;",
+  },
 ];

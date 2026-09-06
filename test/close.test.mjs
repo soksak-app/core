@@ -421,3 +421,37 @@ test("a card that leaves by giving up its slots does not redraw the slots that s
   assert.equal(grid.rect("right").w, 180);
   assertTiling(grid, "after the rail's slot went");
 });
+
+test("a close gives the width back to the slot beside it when the record has gone stale", () => {
+  // `paidBy.at` counts slots from the payer's first, and nothing maintains it: a
+  // cut inside the payer's span, and a close or a travel that shortens it, both
+  // move the slot it counts to. Here `payer` spans one slot, so it has no second
+  // one, and the offset named `far` — a card that neither paid nor stands beside
+  // the boundary. `far` took the width and `next` was pushed sideways.
+  const grid = new Soksak(
+    {
+      xs: [0, 0.15, 0.7, 0.83, 0.92, 1],
+      ys: [0, 1],
+      cards: [
+        { id: "wall", c0: 0, c1: 1, r0: 0, r1: 1, width: 245, fixed: true },
+        { id: "payer", c0: 1, c1: 2, r0: 0, r1: 1 },
+        { id: "far", c0: 2, c1: 3, r0: 0, r1: 1 },
+        { id: "next", c0: 3, c1: 4, r0: 0, r1: 1 },
+        { id: "rail", c0: 4, c1: 5, r0: 0, r1: 1 },
+      ],
+      paidBy: { rail: { side: "lo", to: "payer", span: "lo", at: 1 } },
+    },
+    { width: 1586, height: 542, gap: 28, minSize: 19 },
+  );
+  const at = (id) => Number(grid.rect(id).x.toFixed(2));
+  const wide = (id) => Number(grid.rect(id).w.toFixed(2));
+  assert.deepEqual([at("far"), wide("far")], [1131.65, 174.95]);
+  assert.deepEqual([at("next"), wide("next")], [1334.6, 112.51]);
+  assert.equal(wide("rail"), 110.89);
+
+  assert.equal(grid.close("rail"), true);
+  assert.deepEqual([at("next"), wide("next")], [1334.6, 251.4], "the slot beside it took the width");
+  assert.deepEqual([at("far"), wide("far")], [1131.65, 174.95], "and no other card moved");
+  assert.equal(wide("payer"), 830.65);
+  assert.equal(wide("wall"), 245);
+});

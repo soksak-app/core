@@ -1313,7 +1313,14 @@ export class Soksak {
                 // The slot that gave the width, which is not the payer's first when it
                 // spans several. `back` is read after the line is removed, and the card
                 // does not contain that line, so its indices are the ones to count from.
-                const first = back ? back[lo] + ((_a = paid.at) !== null && _a !== void 0 ? _a : 0) : merged;
+                //
+                // Nothing maintains the offset. A cut inside the payer's span, and a
+                // close or a travel that shortens it, both move the slot it counts to,
+                // and an offset that no longer lands inside the payer names a slot the
+                // payer never gave anything from. The width then goes to the slot beside
+                // the boundary instead, which is where a close with no record puts it.
+                const paidAt = back ? back[lo] + ((_a = paid.at) !== null && _a !== void 0 ? _a : 0) : merged;
+                const first = back && paidAt >= back[lo] && paidAt < back[hi] ? paidAt : merged;
                 this.settleOn(axis, want, paid.to === '' ? [] : order(first, want.length));
                 this.changed();
                 return true;
