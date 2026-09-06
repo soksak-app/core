@@ -1309,3 +1309,45 @@ test("a hold whose release never arrived does not stop the divider being centred
   pointer(window, divider, "pointerup", 7, centre, 150);
   view.destroy();
 });
+
+test("a drag that passes a line no card reads keeps the divider it holds", () => {
+  const { window, host, grid, view } = mount();
+  grid.split("card", "y");
+  grid.close("card");
+  grid.split("card-1", "x");
+  grid.split("card-2", "y");
+  grid.split("card-2", "y");
+  grid.close("card-2");
+  view.render();
+  assert.equal(grid.isVirtual("y", 1), true, "line 1 is read by no card");
+
+  const divider = host.querySelector('.sp-divider[data-axis="y"][data-line="2"]');
+  assert.ok(divider, "the boundary on line 2 has a grab area");
+  const at = grid.boundaryPos("y", 2);
+  const past = grid.boundaryPos("y", 1) - 30;
+
+  pointer(window, divider, "pointerdown", 1, 300, at);
+  pointer(window, divider, "pointermove", 1, 300, past);
+  assert.equal(grid.lines("y").length, 3, "the line the move passed is gone");
+  assert.ok(host.contains(divider), "the gesture still holds its element");
+  assert.equal(divider.dataset.dragging, "true", "and the element is still held");
+  assert.equal(divider.dataset.line, "1", "filed under the line the boundary now has");
+
+  // The drag keeps driving the boundary, down to where the range stops it.
+  const target = grid.boundaryPos("y", 1) - 20;
+  pointer(window, divider, "pointermove", 1, 300, target);
+  const floor = grid.boundaryRange("y", 1)[0];
+  assert.ok(
+    Math.abs(grid.boundaryPos("y", 1) - Math.max(floor, target)) < 1e-9,
+    `it follows to ${grid.boundaryPos("y", 1)}, not ${Math.max(floor, target)}`,
+  );
+
+  pointer(window, divider, "pointerup", 1, 300, target);
+  assert.equal(divider.dataset.dragging, undefined, "the release lets it go");
+  assert.equal(
+    host.querySelectorAll(".sp-divider").length,
+    grid.dividers().length,
+    "one element per divider",
+  );
+  view.destroy();
+});

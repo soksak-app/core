@@ -216,6 +216,20 @@ export const BREAKS = [
     to: "            ;",
   },
   {
+    id: "renumbered",
+    what: "a drag that passes a line no card reads loses the element it holds",
+    file: "dist/dom.js",
+    find: "        this.refile(dividers, step);",
+    to: "        ;",
+  },
+  {
+    id: "drag-line",
+    what: "a drag that passes a line no card reads keeps addressing the old line",
+    file: "dist/dom.js",
+    find: "                for (const held of this.holds())\n                    if (held.on === drag.on)\n                        held.line = line;",
+    to: "                ;",
+  },
+  {
     id: "drag-resize",
     what: "a resize under a drag leaves the drag holding the position on the old plane",
     file: "dist/dom.js",

@@ -131,6 +131,36 @@ export declare class SoksakView {
      * dividers still sits under them.
      */
     private firstOverlay;
+    /** Every drag now running, the mouse's included. */
+    private holds;
+    /**
+     * Point a drag at the line its boundary now has.
+     *
+     * A move that passes a line no card reads drops that line, and every line
+     * above it is renumbered. A drag holds a line number, so it has to be given
+     * the one the boundary now stands on, or its next move addresses a different
+     * boundary. The search runs down from the number it held, because a drop only
+     * ever lowers it, and stops at the first line standing where the move left
+     * this one: a boundary snapped onto its neighbour shares that position, and
+     * the nearer number is this one's.
+     *
+     * Every drag on that divider is given the number, not only the one that moved:
+     * a divider is one boundary, so a second finger on it holds the same one.
+     */
+    private retarget;
+    /**
+     * File the element a drag holds under the key its boundary now has.
+     *
+     * The key carries the line number, so a renumber leaves the element filed
+     * under a key no divider has and the sweep would remove it. That ends the
+     * gesture: the pointer capture dies with the element, and an element made in
+     * its place cannot pick the drag up.
+     *
+     * Two dividers can stand on one line, one per stretch of it that cards break
+     * on, so the one to file under is the one covering the stretch this element
+     * already covers and that holds no element yet.
+     */
+    private refile;
     private sweep;
     /**
      * Whether anything still holds this divider.
