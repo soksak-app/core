@@ -321,11 +321,10 @@ function updateCard(el, card) {
     const off = what === "close" ? !grid.canClose(card.id)
       : what === "add" ? false : !grid.canSplit(card.id, what);
     if (b.disabled !== off) b.disabled = off;
-    const title = !off ? b.dataset.title
-      : what === "close"
-        ? (card.fixed ? "고정된 카드는 자기 스위치로 닫는다"
-                      : "닫을 수 없다 — 어느 이웃도 이 자리를 빈틈없이 못 메운다")
-        : b.dataset.title;
+    // 이 카드는 자리가 아니므로 `fixed` 가 아니다. 닫히지 않는 이유는 하나다.
+    const title = off && what === "close"
+      ? "닫을 수 없다 — 어느 이웃도 이 자리를 빈틈없이 못 메운다"
+      : b.dataset.title;
     if (b.title !== title) b.title = title;
   }
 
@@ -376,10 +375,21 @@ const cardBorder = () => {
   return el ? parseFloat(getComputedStyle(el).borderTopWidth) || 0 : 0;
 };
 
+/**
+ * 드롭 구획이 카드의 머리와 발에 내주는 높이(px).
+ *
+ * 판이 `zoneAt` 에 넘기는 값이고, 검증이 그려진 머리·발과 비교하는 값이다. 두 곳이
+ * 각자 계산하면 한쪽만 고쳤을 때 검증이 통과한 채로 구획이 어긋난다.
+ */
+export const dropBands = () => {
+  const edge = cardBorder();
+  return { headerPx: HEADER + edge, footerPx: FOOTER + edge };
+};
+
 function beginTabDrag(e, cardId, tabId) {
   e.preventDefault();
   // 보더는 드래그 한 번 동안 바뀌지 않으므로 시작할 때 한 번 잰다.
-  const edge = cardBorder();
+  const band = dropBands();
   tabDrag = { cardId, tabId, from: { x: e.clientX, y: e.clientY }, moved: false, hit: null };
   const el = e.currentTarget;
   el.setPointerCapture(e.pointerId);
@@ -393,7 +403,7 @@ function beginTabDrag(e, cardId, tabId) {
     const host = plane.getBoundingClientRect();
     const only = tabsOf(grid.card(tabDrag.cardId)).length === 1 ? tabDrag.cardId : undefined;
     tabDrag.hit = grid.zoneAt(ev.clientX - host.left, ev.clientY - host.top,
-      { headerPx: HEADER + edge, footerPx: FOOTER + edge, centreOnly: only });
+      { headerPx: band.headerPx, footerPx: band.footerPx, centreOnly: only });
     showDrop(tabDrag.hit);
   };
   const onUp = (ev) => {
@@ -693,8 +703,10 @@ function standRail(kind) {
 function railTarget(id, kind) {
   // 레일 자신의 경계도 후보에 포함한다. 이미 올바른 자리면 그 자리를 반환하고
   // moveTo 는 제자리 이동을 성공으로 처리한다.
+  //
+  // 판의 왼쪽 테두리는 어떤 카드도 가로지르지 않으므로 언제나 후보이고, 그 자리는
+  // 0 이다. 그래서 후보가 없는 경우도, 기준 카드의 왼쪽에 후보가 없는 경우도 없다.
   const stands = grid.standings("x", id);
-  if (!stands.length) return null;
 
   // 자기 종류를 표시하는 카드 옆에 배치한다. 포커스가 그 종류면 그 카드, 아니면 그
   // 종류를 가진 가장 왼쪽 카드를 기준으로 한다. 없으면 배치하지 않는다.
@@ -704,14 +716,12 @@ function railTarget(id, kind) {
         .filter((c) => !isPlace(c.id) && activeTab(c)?.plugin === kind)
         .sort((a, b) => grid.rect(a.id).x - grid.rect(b.id).x)[0];
   if (!beside) return null;
-  const want = grid.rect(beside.id)?.x ?? 0;
+  const want = grid.rect(beside.id).x;
 
   // P3 — 기준 카드의 왼쪽에 배치한다. 바로 왼쪽에 자리가 없으면 더 왼쪽으로 이동한다.
-  // 오른쪽으로는 이동하지 않는다. 왼쪽에 자리가 없을 때만 가장 왼쪽에 배치한다.
+  // 오른쪽으로는 이동하지 않는다.
   const onLeft = stands.filter((k) => grid.boundaryPos("x", k) <= want + 0.5);
-  return onLeft.length
-    ? onLeft.reduce((a, k) => (grid.boundaryPos("x", k) > grid.boundaryPos("x", a) ? k : a))
-    : stands[0];
+  return onLeft.reduce((a, k) => (grid.boundaryPos("x", k) > grid.boundaryPos("x", a) ? k : a));
 }
 
 /**
@@ -824,6 +834,8 @@ function centreTab(strip, activeId) {
  */
 // PEEK    strip 단계를 유지하는 데 필요한 활성 탭 외 여유 너비
 // MIN_TAB 말줄임한 활성 탭의 최소 너비. 이보다 좁으면 ham 단계로 내려간다
+// GAP     .chrome 의 좌우 여백이자 그 안의 요소 사이 간격. 탭 사이의 간격은 이 값이
+//         아니라 탭 목록이 갖는 값이고, 아래에서 재서 얻는다
 const HAM_W = 20, GAP = 4, PEEK = 56, MIN_TAB = 48;
 
 function fitChrome(chrome, strip) {
@@ -841,8 +853,11 @@ function fitChrome(chrome, strip) {
   const tabs = [...strip.querySelectorAll(".tab")];
   const active = strip.querySelector(".tab[data-active=true]");
   const activeW = active ? active.getBoundingClientRect().width : 0;
+  // 탭 사이의 간격은 탭 목록이 갖는 값이다. 여기에 적으면 스타일시트와 갈리고,
+  // 갈린 만큼 헤더가 접히는 너비가 어긋난다.
+  const between = parseFloat(getComputedStyle(strip).columnGap) || 0;
   const whole = tabs.reduce((n, t) => n + t.getBoundingClientRect().width, 0)
-    + Math.max(0, tabs.length - 1) * GAP;
+    + Math.max(0, tabs.length - 1) * between;
   // 탭 전체가 들어가면 접지 않는다. 넘쳐도 활성 탭과 여유 너비가 있으면 strip 을 유지한다.
   chrome.dataset.fit = room >= Math.min(whole, activeW + PEEK) ? "strip"
     : room >= HAM_W + GAP + Math.min(activeW, MIN_TAB) ? "one"

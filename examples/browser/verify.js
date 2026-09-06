@@ -7,7 +7,7 @@
 import { Soksak } from "/dist/index.js";
 
 import { ahead, latest, seated } from "./compositor.js";
-import { currentGrid, plane, railOutline, tabsOf } from "./plane.js";
+import { currentGrid, dropBands, plane, railOutline, tabsOf } from "./plane.js";
 import { isPlace, railKind } from "./plugins/registry.js";
 import { cardRadius } from "./settings.js";
 
@@ -258,6 +258,36 @@ export function verify(controls = null) {
   add("R 선은 판 밖으로 여백까지만 나간다", !laid || past <= pad + 0.01,
       laid ? `최대 ${past.toFixed(2)}px · 여백 ${pad.toFixed(2)}px`
            : "판이 아직 새 크기로 그려지지 않았다");
+
+  // D — 드롭 구획의 머리와 발은 그려진 머리와 발이 끝나는 자리에서 끝나야 한다.
+  // 판은 카드의 rect 를 기준으로 구획을 넘기고 그 rect 는 보더를 포함하는데, 머리와
+  // 발은 보더 안쪽의 행이다. 어긋나면 그려진 머리 위의 드롭이 카드에 탭을 더하지
+  // 않고 카드를 쪼갠다.
+  //
+  // 판이 넘기는 값과 그려진 카드를 비교한다. 여백을 재는 R 과 같은 방법이다 —
+  // 스타일시트가 정하는 거리는 적어 두지 않고 그려진 것에서 잰다.
+  //
+  // 카드가 두 행을 담지 못할 만큼 낮으면 행이 함께 줄어든다. 그때 그려진 머리는
+  // 선언한 높이가 아니므로 잴 대상이 아니다. 행의 선언 높이는 판이 루트에 심는다.
+  const band = dropBands();
+  const row = (name) => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name));
+  const head0 = row("--head"), foot0 = row("--foot");
+  let bandOff = 0, banded = 0;
+  for (const el of plane.querySelectorAll(".card[data-card-id]")) {
+    const box = el.getBoundingClientRect();
+    const top = el.querySelector(".chrome").getBoundingClientRect();
+    const bottom = el.querySelector(".status").getBoundingClientRect();
+    if (top.height < head0 - 0.01 || bottom.height < foot0 - 0.01) continue;
+    bandOff = Math.max(bandOff,
+      Math.abs((top.bottom - box.top) - band.headerPx),
+      Math.abs((box.bottom - bottom.top) - band.footerPx));
+    banded++;
+  }
+  add("D 드롭 구획이 그려진 머리·발에서 끝난다", bandOff < 0.01,
+      banded
+        ? `최대 ${bandOff.toFixed(2)}px · 카드 ${banded}장 · ` +
+          `머리 ${band.headerPx.toFixed(1)}px · 발 ${band.footerPx.toFixed(1)}px`
+        : "머리와 발을 온전히 담은 카드가 없다");
 
   // T5 — 빈 카드는 도달 가능한 상태가 아니다.
   const empty = cards.filter((c) => !isPlace(c.id) && tabsOf(c).length === 0);

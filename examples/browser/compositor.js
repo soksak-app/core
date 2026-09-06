@@ -22,7 +22,6 @@ export function onCommit(fn) {
 export const knobs = { latency: 0, skew: 0 };
 
 let seq = 0;
-let applied = 0;
 let latestRecord = null;
 let aheadRecord = null;
 /* 미리 게시한 커밋의 번호. 그 번호로 커밋이 이루어졌을 때만 예측 레코드가 생긴다.
@@ -195,10 +194,13 @@ export function publishAhead(rects, seated) {
   return deliver(aheadSeq, seats) ?? true;
 }
 
-/** 네이티브 상태를 쓰는 유일한 함수. 시퀀스가 낮은 스냅샷은 거부한다. */
+/**
+ * 네이티브 상태를 쓰는 유일한 함수.
+ *
+ * `deliver` 가 앞선 커밋을 취소하고 시퀀스는 커질 뿐이므로, 여기 도착하는 스냅샷은
+ * 언제나 가장 최근의 것이다.
+ */
 function commit(mine, snapshot, final) {
-  if (mine < applied) return;
-  applied = mine;
   const record = { seq: mine, settled: final, surfaces: [] };
   const kinds = app.kinds;
   for (const s of snapshot) {
