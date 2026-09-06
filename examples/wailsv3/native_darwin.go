@@ -66,6 +66,27 @@ static void surfaceFrameNow(void* handle, double* out) {
     out[3] = f.size.height;
 }
 
+// Configures a modal's window: not opaque, so the clipped corners show what is
+// behind them rather than the window's own background; with a shadow; and out of
+// the list of windows the application offers to switch between, because it is
+// auxiliary to the application's window rather than a document of its own.
+static void modalConfigure(void* modalWindow) {
+    NSWindow* window = (NSWindow*)modalWindow;
+    if (window == nil) return;
+    [window setOpaque:NO];
+    [window setBackgroundColor:[NSColor clearColor]];
+    [window setHasShadow:YES];
+    [window setExcludedFromWindowsMenu:YES];
+}
+
+// Makes this window the main one. A modal takes the keyboard so that its webview
+// sets the cursor, and a window that is not key draws its title bar inactive.
+static void windowMakeMain(void* nsWindow) {
+    NSWindow* window = (NSWindow*)nsWindow;
+    if (window == nil) return;
+    [window makeMainWindow];
+}
+
 // Snaps a modal's rect, given in the page's coordinates, inward to the display's
 // pixel grid. Snapping outward would cover the card's own border, as it would for
 // a surface.
@@ -217,6 +238,14 @@ func surfaceFrame(view unsafe.Pointer) Rect {
 	C.surfaceFrameNow(view, &out[0])
 	return Rect{X: float64(out[0]), Y: float64(out[1]), W: float64(out[2]), H: float64(out[3])}
 }
+
+// modalConfigure configures a modal's window: not opaque, with a shadow, and out
+// of the window menu.
+func modalConfigure(window unsafe.Pointer) { C.modalConfigure(window) }
+
+// windowMakeMain makes this window the main one, so it keeps an active title bar
+// while another window holds the keyboard.
+func windowMakeMain(window unsafe.Pointer) { C.windowMakeMain(window) }
 
 // modalAligned snaps a modal's rect to the display's pixels, in the page's
 // coordinates.

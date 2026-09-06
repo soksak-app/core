@@ -99,8 +99,6 @@ void sp_capture_open(long windowNumber) {
         }
         for (SCWindow* window in content.windows) {
             if ((long)window.windowID != windowNumber) continue;
-            captureFilter =
-                [[SCContentFilter alloc] initWithDesktopIndependentWindow:window];
             SCStreamConfiguration* config = [[SCStreamConfiguration alloc] init];
             // In points. In pixels a frame is four times the size, and writing it
             // takes long enough to lose frames.
@@ -112,6 +110,11 @@ void sp_capture_open(long windowNumber) {
             config.minimumFrameInterval = CMTimeMake(1, 120);
             config.queueDepth = 8;
             captureConfig = config;
+            // The filter is assigned last. sp_capture_start reads it to decide
+            // whether a capture can begin, so assigning it first would let a
+            // stream be built with no configuration.
+            captureFilter =
+                [[SCContentFilter alloc] initWithDesktopIndependentWindow:window];
             dispatch_semaphore_signal(answered);
             return;
         }
@@ -127,15 +130,18 @@ void sp_capture_start(const char* directory) {
         return;
     }
     if (captureStream != nil) return;
-    captureSink = [[SPCapture alloc] init];
+    // The sink is made once. A new one per recording restarts the frame numbers
+    // at one and overwrites the files an earlier recording wrote.
+    if (captureSink == nil) captureSink = [[SPCapture alloc] init];
     captureSink.directory = [NSString stringWithUTF8String:directory];
     captureStream = [[SCStream alloc] initWithFilter:captureFilter
                                        configuration:captureConfig
                                             delegate:captureSink];
     NSError* error = nil;
+    dispatch_queue_t handing = dispatch_queue_create("sp.capture", NULL);
     [captureStream addStreamOutput:captureSink
                               type:SCStreamOutputTypeScreen
-                sampleHandlerQueue:dispatch_queue_create("sp.capture", NULL)
+                sampleHandlerQueue:handing
                              error:&error];
     if (error != nil) {
         fprintf(stderr, "observe: capture output not added, %s\n",

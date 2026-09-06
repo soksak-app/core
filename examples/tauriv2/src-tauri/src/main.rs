@@ -134,7 +134,6 @@ fn watch_presses(
     if *started {
         return Ok(());
     }
-    *started = true;
 
     #[cfg(target_os = "macos")]
     {
@@ -167,6 +166,10 @@ fn watch_presses(
             },
         );
     }
+    // Recorded only once the monitor is installed. Recording it first would
+    // leave a failed call reporting success from then on, and no press, key or
+    // drag would ever reach the page again.
+    *started = true;
     Ok(())
 }
 

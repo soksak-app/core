@@ -150,9 +150,13 @@ fn open<R: Runtime>(app: tauri::AppHandle<R>) {
     {
         return;
     }
-    if let Ok(Some(first)) = hear.recv() {
-        capture::open(first);
-    }
+    // On a thread of its own. This is called from a listener, which runs on the
+    // thread that emitted the event, and that thread may be the main one.
+    std::thread::spawn(move || {
+        if let Ok(Some(first)) = hear.recv() {
+            capture::open(first);
+        }
+    });
 }
 
 /// Presses one element of the page, named by a CSS selector.

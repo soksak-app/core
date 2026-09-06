@@ -28,11 +28,11 @@ type Rect struct {
 }
 
 type Surface struct {
-	ID  string `json:"id"`
-	URL string `json:"url"`
+	ID string `json:"id"`
 	// The asset server resolves this application's own addresses and passes the
-	// rest through, so this host does not need to know which it is.
-	Visible bool `json:"visible"`
+	// rest through, so this host does not need to know which is which.
+	URL     string `json:"url"`
+	Visible bool   `json:"visible"`
 	// Whether the page asked for this surface to be dimmed after losing focus.
 	Dim bool `json:"dim"`
 	// The colour the webview displays before its document renders.
@@ -147,12 +147,12 @@ type ShellOutput struct {
 	Text string `json:"text"`
 }
 
-// Theme returns the current theme. A page calls it once after loading and
-// subscribes to the theme event for later changes.
 // errNoWindow is returned when this application's window is gone. Every call
 // here places or reads something in that window, so none of them can succeed.
 var errNoWindow = errors.New("the main window is gone")
 
+// Theme returns the current theme. A page calls it once after loading and
+// subscribes to the theme event for later changes.
 func (s *Surfaces) Theme() Theme {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -238,6 +238,7 @@ func (s *Surfaces) OverlayShow(req OverlayRequest) (Rect, error) {
 			CSS: req.CSS, ClassName: req.ClassName, HTML: req.HTML, Border: req.Border,
 		},
 	}
+	application.InvokeSync(func() { modalConfigure(live.window.NativeWindow()) })
 	s.mu.Lock()
 	was := s.modals[req.ID]
 	s.modals[req.ID] = live
@@ -427,6 +428,9 @@ func (s *Surfaces) ModalReady(id string) {
 		log.Printf("modal %s: %v", id, err)
 	}
 	live.window.Focus()
+	// 모달이 키보드를 가져가므로 앱의 창을 다시 main 으로 만든다. 그러지 않으면 그
+	// 창의 제목 표시줄이 모달이 열려 있는 동안 비활성으로 그려진다.
+	application.InvokeSync(func() { windowMakeMain(win.NativeWindow()) })
 	// 모달은 자기 창이므로 이 앱이 가진 창이 하나 늘었다. 창이 붙고 떨어지는 것을
 	// 알리는 통지는 AppKit 에 없고, 붙이는 것은 여기다. 그래서 여기서 알린다.
 	application.Get().Event.Emit("windows-changed")

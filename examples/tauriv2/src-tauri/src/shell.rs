@@ -120,7 +120,7 @@ impl Shells {
     pub fn write(&self, id: &str, data: &str) -> Result<(), String> {
         let mut running = self.0.lock().map_err(|e| e.to_string())?;
         let Some(session) = running.get_mut(id) else {
-            return Ok(());
+            return Err(format!("shell {id} is not running"));
         };
         session.stdin.write_all(data.as_bytes()).map_err(|e| e.to_string())?;
         session.stdin.flush().map_err(|e| e.to_string())
@@ -128,16 +128,22 @@ impl Shells {
 
     /// Ends the shells whose surfaces are gone. A surface that closed with its
     /// process still running would leave the process with nothing to write to.
+    ///
+    /// The processes are ended on a thread of their own. Ending one means
+    /// waiting for it, and this is called from the main thread, where waiting
+    /// stops the window from drawing.
     pub fn retain(&self, alive: &dyn Fn(&str) -> bool) -> Result<(), String> {
         let mut running = self.0.lock().map_err(|e| e.to_string())?;
-        running.retain(|id, session| {
-            if alive(id) {
-                return true;
-            }
-            let _ = session.child.kill();
-            let _ = session.child.wait();
-            false
-        });
+        let ended: Vec<String> = running.keys().filter(|id| !alive(id)).cloned().collect();
+        let gone: Vec<Session> = ended.iter().filter_map(|id| running.remove(id)).collect();
+        if !gone.is_empty() {
+            std::thread::spawn(move || {
+                for mut session in gone {
+                    let _ = session.child.kill();
+                    let _ = session.child.wait();
+                }
+            });
+        }
         Ok(())
     }
 }

@@ -37,3 +37,9 @@ func (v *nativeShape) destroy()                                                 
 // modalAligned snaps a modal's rect to the display's pixels. Not written for this
 // platform.
 func modalAligned(parent unsafe.Pointer, at Rect) Rect { return at }
+
+// modalConfigure configures a modal's window. Not written for this platform.
+func modalConfigure(window unsafe.Pointer) {}
+
+// windowMakeMain makes this window the main one. Not written for this platform.
+func windowMakeMain(window unsafe.Pointer) {}
