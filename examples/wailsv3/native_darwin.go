@@ -216,6 +216,18 @@ static void overlayDestroy(void* childWindow) {
     [parent makeKeyWindow];
 }
 
+// Tells the view a run of resizes has begun, and that it has ended. A webview
+// paints what it covers; area it does not cover yet is its own white until the
+// page draws there, which is a frame or more behind a resize. Between these two
+// calls WebKit holds what it has drawn instead of showing that white.
+static void surfaceBeginLiveResize(void* handle) {
+    [(WKWebView*)handle viewWillStartLiveResize];
+}
+
+static void surfaceEndLiveResize(void* handle) {
+    [(WKWebView*)handle viewDidEndLiveResize];
+}
+
 static void surfaceSetFrame(void* handle, double x, double y, double w, double h) {
     WKWebView* view = (WKWebView*)handle;
     NSWindow* window = [view window];
@@ -388,6 +400,16 @@ func newNativeView(window unsafe.Pointer, url string, x, y, w, h float64, backgr
 
 func (v *nativeView) setFrame(x, y, w, h float64) {
 	C.surfaceSetFrame(v.handle, C.double(x), C.double(y), C.double(w), C.double(h))
+}
+
+// setResizing brackets a run of resizes. The page reports whether the update it
+// just sent is the last one, and a run that is not over is a live resize.
+func (v *nativeView) setResizing(live bool) {
+	if live {
+		C.surfaceBeginLiveResize(v.handle)
+		return
+	}
+	C.surfaceEndLiveResize(v.handle)
 }
 
 func (v *nativeView) setAlpha(alpha float64) {

@@ -44,7 +44,11 @@ type Surface struct {
 }
 
 type SyncRequest struct {
-	Viewport Viewport  `json:"viewport"`
+	Viewport Viewport `json:"viewport"`
+	// Whether this is the page's final say, or one of a run still going. A run
+	// is a live resize: WebKit holds what it has drawn until the run ends,
+	// rather than showing the white it has not drawn yet.
+	Settled  bool      `json:"settled"`
 	Surfaces []Surface `json:"surfaces"`
 }
 
@@ -105,7 +109,10 @@ type Surfaces struct {
 	views map[string]*nativeView
 	// A surface is a native view, so a press on it never reaches the page. This
 	// maps a pressed view to the surface id the page uses.
-	named  map[uintptr]string
+	named map[uintptr]string
+	// The surfaces in a live resize. A surface receives the start and the end of
+	// a run, not one call per frame.
+	live   map[string]bool
 	modals map[string]*modal
 	shapes map[string]*nativeShape
 	shells *Shells
@@ -239,6 +246,7 @@ func NewSurfaces(shells *Shells, pages *Pages) *Surfaces {
 	made := &Surfaces{
 		views:  map[string]*nativeView{},
 		named:  map[uintptr]string{},
+		live:   map[string]bool{},
 		modals: map[string]*modal{},
 		shapes: map[string]*nativeShape{},
 		shells: shells,
@@ -443,6 +451,20 @@ func (s *Surfaces) ModalReady(id string) {
 	application.Get().Event.Emit("windows-changed")
 }
 
+// resizing brackets a view's live resize. The calls are paired, so the state each
+// view is in is kept here and only the changes are passed on.
+func (s *Surfaces) resizing(id string, view *nativeView, live bool) {
+	if s.live[id] == live {
+		return
+	}
+	if live {
+		s.live[id] = true
+	} else {
+		delete(s.live, id)
+	}
+	view.setResizing(live)
+}
+
 // up converts a top-left y to the bottom-left y AppKit uses.
 func up(viewport Viewport, y, h float64) float64 { return viewport.H - y - h }
 
@@ -551,6 +573,7 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) {
 
 		alpha := alphaFor(surface.Dim)
 		if view, live := s.views[surface.ID]; live {
+			s.resizing(surface.ID, view, !req.Settled)
 			view.setFrame(x, y, w, h)
 			view.setHidden(!surface.Visible)
 			view.setAlpha(alpha)
@@ -578,6 +601,7 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) {
 		if wanted[id] {
 			continue
 		}
+		s.resizing(id, view, false)
 		delete(s.named, view.id())
 		view.destroy()
 		delete(s.views, id)

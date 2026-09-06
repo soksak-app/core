@@ -15,6 +15,7 @@ func newNativeView(window unsafe.Pointer, url string, x, y, w, h float64, backgr
 }
 
 func (v *nativeView) setFrame(x, y, w, h float64)    {}
+func (v *nativeView) setResizing(live bool)          {}
 func (v *nativeView) setAlpha(alpha float64)         {}
 func (v *nativeView) setHidden(hidden bool)          {}
 func (v *nativeView) raise()                         {}

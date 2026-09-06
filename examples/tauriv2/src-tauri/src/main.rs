@@ -22,7 +22,7 @@ use std::sync::Mutex;
 use serde::Deserialize;
 use serde::Serialize;
 use tauri::{
-    webview::Color, AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, State,
+    webview::Color, AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Runtime, State,
     WebviewBuilder, WebviewUrl, WebviewWindowBuilder, Window,
 };
 
@@ -59,6 +59,10 @@ struct Viewport {
 #[derive(Debug, Deserialize)]
 struct SyncRequest {
     viewport: Viewport,
+    /// Whether this is the page's final say, or one of a run still going. A run
+    /// is a live resize: WebKit holds what it has drawn until the run ends,
+    /// rather than showing the white it has not drawn yet.
+    settled: bool,
     surfaces: Vec<Surface>,
 }
 
@@ -185,6 +189,7 @@ fn sync_surfaces(
     shells: State<'_, shell::Shells>,
     views: State<'_, Views>,
     watching: State<'_, Watching>,
+    resizing: State<'_, Resizing>,
     page: State<'_, Page>,
     request: SyncRequest,
 ) -> Result<Vec<String>, String> {
@@ -213,6 +218,7 @@ fn sync_surfaces(
         let solid = if s.dim { 0.45 } else { 1.0 };
 
         if let Some(webview) = window.get_webview(&label) {
+            set_resizing(&resizing, &webview, !request.settled)?;
             webview.set_position(position).map_err(|e| e.to_string())?;
             webview.set_size(size).map_err(|e| e.to_string())?;
             if visible {
@@ -256,6 +262,7 @@ fn sync_surfaces(
     for webview in window.webviews() {
         let label = webview.label().to_string();
         if label.starts_with("surface-") && !wanted.contains(&label) {
+            resizing.0.lock().map_err(|e| e.to_string())?.remove(&label);
             webview.close().map_err(|e| e.to_string())?;
         }
     }
@@ -264,6 +271,30 @@ fn sync_surfaces(
     shells.retain(&|id: &str| alive.iter().any(|s| s == id))?;
 
     Ok(created)
+}
+
+/// Brackets a view's live resize. The calls are paired, so the state each view is
+/// in is kept here and only the changes are passed on.
+fn set_resizing<R: Runtime>(
+    resizing: &State<'_, Resizing>,
+    webview: &tauri::Webview<R>,
+    live: bool,
+) -> Result<(), String> {
+    {
+        let mut held = resizing.0.lock().map_err(|e| e.to_string())?;
+        let label = webview.label().to_string();
+        if held.contains(&label) == live {
+            return Ok(());
+        }
+        if live {
+            held.insert(label);
+        } else {
+            held.remove(&label);
+        }
+    }
+    webview
+        .with_webview(move |platform| native::resizing(&platform, live))
+        .map_err(|e| e.to_string())
 }
 
 /// What a [data-native-modal] element needs in order to be drawn elsewhere.
@@ -332,6 +363,10 @@ struct Views(Arc<Mutex<HashMap<usize, String>>>);
 #[derive(Default)]
 struct Watching(Mutex<bool>);
 
+/// The surfaces in a live resize. A surface receives the start and the end of a
+/// run, not one call per frame.
+#[derive(Default)]
+struct Resizing(Mutex<HashSet<String>>);
 
 /// One view per modal element, named after it, so a page may have several.
 fn modal_label(id: &str) -> String {
@@ -678,6 +713,7 @@ fn main() {
         .manage(CurrentTheme::default())
         .manage(Views::default())
         .manage(Watching::default())
+        .manage(Resizing::default())
         .manage(Page::default())
         .manage(shell::Shells::default())
         .invoke_handler(tauri::generate_handler![

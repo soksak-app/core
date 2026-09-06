@@ -68,6 +68,15 @@ function effectiveVisible(slot) {
   return true;
 }
 
+/* 이 커밋이 최종 상태인지, 곧 다음 것이 이어지는 연속 중 하나인지.
+   경계를 끄는 동안에는 매 프레임 커밋이 이어지고, 손을 떼면 멈춘다. 뷰가 끄는 동안
+   divider 에 표식을 달고 손을 뗄 때 마지막 렌더보다 먼저 지우므로, 마지막 렌더는
+   최종이라고 답한다.
+
+   표면을 그리는 쪽은 이 값으로 실현 방식을 고를 수 있다. 무엇 때문에 바뀌는지가
+   아니라 더 올 것이 있는지만 알린다. */
+const settled = () => plane.querySelector(".sp-divider[data-dragging]") === null;
+
 /** 표면 슬롯 목록. 판이 기록한 data 속성을 그대로 읽는다. */
 const slots = () =>
   plane.querySelectorAll("[data-native-surface][data-native-surface-id]");
@@ -94,16 +103,16 @@ export function publish() {
     });
   }
   clearTimeout(timer);
-  const deliver = () => commit(mine, snapshot);
+  const deliver = () => commit(mine, snapshot, settled());
   if (knobs.latency === 0) deliver();
   else timer = setTimeout(deliver, knobs.latency);
 }
 
 /** 네이티브 상태를 쓰는 유일한 함수. 시퀀스가 낮은 스냅샷은 거부한다. */
-function commit(mine, snapshot) {
+function commit(mine, snapshot, final) {
   if (mine < applied) return;
   applied = mine;
-  const record = { seq: mine, surfaces: [] };
+  const record = { seq: mine, settled: final, surfaces: [] };
   const native = hostKinds();
   for (const s of snapshot) {
     const seat = { ...s.frame, x: s.frame.x + knobs.skew, y: s.frame.y + knobs.skew };

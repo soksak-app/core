@@ -103,15 +103,22 @@ function install() {
         // 자체 문서는 자기 서버로 연다. 표면의 종류는 알 필요가 없다.
         external: !!s.surface.url,
         visible: s.visible,
-        // 웹뷰는 렌더링 전 영역을 흰색으로 표시한다. divider 드래그 중에는 표면
-        // 크기가 매 프레임 바뀌므로 새로 드러난 영역이 흰색으로 깜빡인다.
+        // 문서를 아직 받지 못한 뷰가 표시할 색. 이미 그린 뒤 뷰가 커져서 드러난
+        // 자리는 이 값으로 칠해지지 않는다 — 그 자리는 웹뷰 자신의 흰 배경이고
+        // 그것을 끄는 키는 비공개다. 그래서 끄는 동안에는 뷰를 키우지 않는다.
         background: surfaceBackground(),
         ...toPage(s.applied),
       }));
 
       // place 는 렌더마다 호출되고 divider 드래그 중에는 매 프레임 호출된다.
       // 직전과 같은 요청은 전송하지 않는다.
-      const request = { viewport: { h: window.innerHeight }, surfaces };
+      const request = {
+        viewport: { h: window.innerHeight },
+        // 이것이 최종 상태인지, 곧 다음 것이 이어지는지. 이어지는 동안 뷰를 키우면
+        // 아직 그리지 못한 자리가 드러나고 그 자리는 흰색이다.
+        settled: record.settled !== false,
+        surfaces,
+      };
       const key = JSON.stringify(request);
       if (key === last) return;
       last = key;

@@ -125,6 +125,30 @@ pub fn alpha(webview: &PlatformWebview, alpha: f64) {
     }
 }
 
+/// Tells the view a run of resizes has begun, and that it has ended.
+///
+/// A webview paints what it covers; area it does not cover yet is its own white
+/// until the page draws there, which is a frame or more behind a resize. Between
+/// these two calls WebKit holds what it has drawn instead of showing that white.
+#[allow(unused_variables)]
+pub fn resizing(webview: &PlatformWebview, live: bool) {
+    #[cfg(target_os = "macos")]
+    unsafe {
+        use objc2::msg_send;
+        use objc2::runtime::AnyObject;
+
+        let view = webview.inner() as *mut AnyObject;
+        if view.is_null() {
+            return;
+        }
+        if live {
+            let _: () = msg_send![view, viewWillStartLiveResize];
+        } else {
+            let _: () = msg_send![view, viewDidEndLiveResize];
+        }
+    }
+}
+
 /// Creates a layer-backed view in the window's content view and returns it.
 ///
 /// A shape is a plain view, not a webview: its fill and its line carry an alpha
