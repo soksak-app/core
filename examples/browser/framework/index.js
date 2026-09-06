@@ -20,7 +20,6 @@ export const framework = chosen.name;
 /**
  * 메인 페이지에서 호스트를 호출하는 인터페이스. 호스트가 없으면 null.
  *
- *   ready(fn)        인터페이스 준비가 끝나면 fn 을 호출한다
  *   call(name, arg)  호스트 함수를 호출한다
  *   on(event, fn)    호스트 이벤트를 수신한다. fn 은 payload 만 받는다
  *   page(path)       호스트가 서비스하는 문서의 URL 을 반환한다

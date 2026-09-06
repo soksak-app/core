@@ -11,7 +11,7 @@
        --focus  지금 입력을 받는 곳                                            */
   --bg:#101117;--card:#191b24;--fg:#ececf5;--muted:#8f92a4;
   --edge:#2b2e3d;--rule:#22242f;--rail:#7279ff;--focus:#ffb36b;
-  --ok:#53dc93;--no:#ff7c7c;
+  --no:#ff7c7c;
   --surface:#0d1a14;--surface-fg:#7fe3b0;
 
   /* 형태. 모드와 무관하다. */

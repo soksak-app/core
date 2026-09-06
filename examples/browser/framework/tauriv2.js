@@ -37,7 +37,6 @@ export const host = () => {
   const { invoke } = window.__TAURI__.core;
   const { listen } = window.__TAURI__.event;
   return {
-    ready: (fn) => fn(),
     call(name, arg) {
       const command = COMMAND[name];
       if (!command) return Promise.reject(new Error(`unknown host call: ${name}`));

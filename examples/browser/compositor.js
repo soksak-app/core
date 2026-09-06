@@ -45,17 +45,6 @@ let seatedRecord = null;
 /** 실제 위치까지 채워진 마지막 레코드. 없으면 null. */
 export const seated = () => seatedRecord;
 
-/** 판을 다시 만들 때 모사한 표면 요소를 모두 제거한다. */
-export function reset() {
-  for (const el of drawn.values()) el.remove();
-  drawn.clear();
-  latestRecord = null;
-  seatedRecord = null;
-  insets.clear();
-  seq = 0;
-  applied = 0;
-}
-
 function surfaceEl(id) {
   let el = drawn.get(id);
   if (el) return el;

@@ -40,11 +40,6 @@ const METHOD = {
 };
 
 export const host = () => ({
-  ready(fn) {
-    runtime()
-      .then(() => fn())
-      .catch((e) => console.error("no Wails bridge", e));
-  },
   call(name, arg) {
     const method = METHOD[name];
     if (!method) return Promise.reject(new Error(`unknown host call: ${name}`));

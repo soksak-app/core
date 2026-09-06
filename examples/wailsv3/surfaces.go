@@ -102,15 +102,6 @@ type modal struct {
 	at Rect
 }
 
-// Where one surface was last placed. Held in the order the page declared them.
-type placement struct {
-	id      string
-	frame   Rect
-	layer   int
-	visible bool
-	alpha   float64
-}
-
 type Surfaces struct {
 	// Guards modals, which the pages this host serves read over HTTP. Views are
 	// only touched on the main thread and need no lock.
@@ -472,12 +463,8 @@ func alphaFor(dim bool) float64 {
 	return 1
 }
 
-// srgb converts the page's 0-255 channels to the 0-1 range AppKit takes.
-func srgb(c [3]float64) [3]float64 {
-	return [3]float64{c[0] / 255, c[1] / 255, c[2] / 255}
-}
-
-// srgba is srgb with the alpha the page reported, which arrives already 0-1.
+// srgba converts the page's 0-255 channels to the 0-1 range AppKit takes. The
+// alpha arrives already in that range.
 func srgba(c [4]float64) [4]float64 {
 	return [4]float64{c[0] / 255, c[1] / 255, c[2] / 255, c[3]}
 }
