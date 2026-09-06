@@ -2,6 +2,8 @@
 frontend/
 # go build output
 bin/
+# go build ./... 은 여기에 패키지 이름으로 쓴다.
+wailsv3
 node_modules/
 *.log
 .DS_Store
