@@ -243,6 +243,10 @@ fn sync_surfaces(
             webview
                 .with_webview(move |platform| {
                     native::alpha(&platform, solid);
+                    // The frame is set on the view itself here too: creating a
+                    // child webview rounds the size to whole points, which puts an
+                    // edge outside the rect the page declared.
+                    native::place_surface(&platform, ax, ay, aw, ah);
                     if let Ok(mut map) = named.lock() {
                         map.insert(native::view_id(&platform), id);
                     }

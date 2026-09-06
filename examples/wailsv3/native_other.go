@@ -47,7 +47,7 @@ func modalOnScreen(parent unsafe.Pointer, at Rect) (int, int) { return 0, 0 }
 func modalAligned(parent unsafe.Pointer, at Rect) Rect { return at }
 
 // modalConfigure configures a modal's window. Not written for this platform.
-func modalConfigure(window unsafe.Pointer) {}
+func modalConfigure(window unsafe.Pointer, title string) {}
 
 // windowMakeMain makes this window the main one. Not written for this platform.
 func windowMakeMain(window unsafe.Pointer) {}

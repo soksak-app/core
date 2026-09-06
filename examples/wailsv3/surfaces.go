@@ -239,7 +239,7 @@ func (s *Surfaces) OverlayShow(req OverlayRequest) (Rect, error) {
 			CSS: req.CSS, ClassName: req.ClassName, HTML: req.HTML, Border: req.Border,
 		},
 	}
-	application.InvokeSync(func() { modalConfigure(live.window.NativeWindow()) })
+	application.InvokeSync(func() { modalConfigure(live.window.NativeWindow(), req.Title) })
 	s.mu.Lock()
 	s.modals[req.ID] = live
 	s.mu.Unlock()

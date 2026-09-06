@@ -8,8 +8,9 @@ it would take to publish them as a Wails service and a Tauri plugin.
 
 ## What the page requires
 
-Three interfaces, all exported by `host.js`. In a plain browser each one is
-present and does nothing, and `native` is false.
+Four interfaces, all exported by `host.js`. In a plain browser `surfaces`,
+`shapes` and `overlay` are present and do nothing, `chrome` is null, and
+`native` is false.
 
 `surfaces` — a webview per surface, placed on the frames the page declares.
 
@@ -25,30 +26,31 @@ present and does nothing, and `native` is false.
     set(id, rect, style) frame, corner radius, line width, fill and line colour
     clear(id)
 
-`chrome` — the window itself. Neither window has a frame, so the application
-draws the buttons and marks what drags it.
+`chrome` — the window itself. Both windows keep their own frame with the title
+bar transparent and the content behind it, so the platform draws the three
+buttons over the page.
 
     draggable(el)            dragging this element moves the window
-    close(), minimise(), toggleMaximise()
+    controls()               the area those buttons occupy, in the page's
+                             coordinates
 
 `overlay` — one `[data-native-modal]` element, drawn by a webview above the
 surfaces.
 
     show(el, rect, onPick)   the element's class, markup and stylesheet
-    place(rect)              a new frame while it is open
+    place(el, rect)          a new frame while it is open
     update(el)               new content while it is open
-    hide()
+    hide(el)
 
-Three events go back. `host.js` receives them and hands each to a function the
+Two events go back. `host.js` receives them and hands each to a function the
 page registered: `onSurfaceInput({press, input})` takes the surface an input
 landed on and one step of a drag in the page's coordinates, and the modal's
-`(key, value)` goes to the function `overlay.show` was given. `onTheme(read)`
-takes the function that reads the theme the page is drawn in.
+`(key, value)` goes to the function `overlay.show` was given.
 
 ## What is already one implementation
 
 `examples/browser/host.js` is one file. It builds every payload, mixes the
-colours, drops a request identical to the last one, and installs the three
+colours, drops a request identical to the last one, and installs the four
 interfaces. It names no application.
 
 `examples/browser/framework/` holds the difference between the runtimes: how a
@@ -136,7 +138,7 @@ stays here, where it is exercised.
 
 ## What is not decided
 
-- Whether the page's three interfaces stay three, or become one namespace.
+- Whether the page's four interfaces stay four, or become one namespace.
 - Whether the shell belongs in the same plugin. It is a terminal feature, not a
   compositing one, and it is here only because the terminal surface needs it.
 - What Windows and Linux do. Both are named in the two native files and neither

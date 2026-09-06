@@ -15,6 +15,7 @@ package main
 /*
 #cgo CFLAGS: -x objective-c -fmodules
 #cgo LDFLAGS: -framework Cocoa -framework WebKit
+#include <stdlib.h>
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 
@@ -102,9 +103,13 @@ static void windowControls(void* nsWindow, double* out) {
 // behind them rather than the window's own background; with a shadow; and out of
 // the list of windows the application offers to switch between, because it is
 // auxiliary to the application's window rather than a document of its own.
-static void modalConfigure(void* modalWindow) {
+static void modalConfigure(void* modalWindow, const char* title) {
     NSWindow* window = (NSWindow*)modalWindow;
     if (window == nil) return;
+    // A window's title is the name the system and assistive software call it by,
+    // drawn or not. Wails sets the title only of a window that has a frame, and
+    // this one has none, so it is set here.
+    if (title != NULL) [window setTitle:[NSString stringWithUTF8String:title]];
     [window setOpaque:NO];
     [window setBackgroundColor:[NSColor clearColor]];
     [window setHasShadow:YES];
@@ -308,9 +313,13 @@ func windowControls(window unsafe.Pointer) Rect {
 	return Rect{X: float64(out[0]), Y: float64(out[1]), W: float64(out[2]), H: float64(out[3])}
 }
 
-// modalConfigure configures a modal's window: not opaque, with a shadow, and out
-// of the window menu.
-func modalConfigure(window unsafe.Pointer) { C.modalConfigure(window) }
+// modalConfigure configures a modal's window: named, not opaque, with a shadow,
+// and out of the window menu.
+func modalConfigure(window unsafe.Pointer, title string) {
+	name := C.CString(title)
+	defer C.free(unsafe.Pointer(name))
+	C.modalConfigure(window, name)
+}
 
 // windowMakeMain makes this window the main one, so it keeps an active title bar
 // while another window holds the keyboard.
