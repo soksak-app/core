@@ -11,6 +11,7 @@ package main
 
 import (
 	"embed"
+	"flag"
 	"log"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -20,6 +21,9 @@ import (
 var assets embed.FS
 
 func main() {
+	flag.Parse()
+	watchWindows()
+
 	shells := NewShells()
 	pages, err := NewPages(assets, shells)
 	if err != nil {
