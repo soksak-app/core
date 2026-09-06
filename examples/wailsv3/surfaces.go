@@ -111,9 +111,11 @@ type Surfaces struct {
 	// The surfaces in a live resize. A surface receives the start and the end of
 	// a run, not one call per frame.
 	live map[string]bool
-	// Whether a run of updates is in progress. Only changes are emitted.
+	// Whether a run of updates is in progress. The page reports that on every
+	// commit, and this is what makes run-began and run-ended the two edges of a
+	// run rather than one message per frame.
 	running bool
-	// The page's first commit, which is when the window is drawn.
+	// Whether the page has committed. This is what makes page-ready an edge.
 	first  sync.Once
 	modals map[string]*modal
 	shapes map[string]*nativeShape

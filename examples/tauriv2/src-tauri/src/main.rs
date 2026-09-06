@@ -456,7 +456,11 @@ struct Watching(Mutex<bool>);
 #[derive(Default)]
 struct Resizing(Mutex<HashSet<String>>);
 
-/// Whether a run of updates is going, and whether the page has committed once.
+/// Whether a run of updates is going, and whether the page has committed.
+///
+/// The page reports both on every commit. These are what make run-began,
+/// run-ended and page-ready the edges of those states rather than one message
+/// per frame.
 #[derive(Default)]
 struct Running {
     going: Mutex<bool>,

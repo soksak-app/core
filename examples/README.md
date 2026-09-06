@@ -145,7 +145,9 @@ subscribes.
 
 A boundary lies over the surfaces, so a drag reaches it by coordinates. A button
 in the page chrome is a DOM element, so `--click ms,selector` has the page
-dispatch the click once the page has rendered:
+dispatch the click once the page has rendered. Several selectors separated by
+`;` are pressed in order, which is how a run opens a modal and then changes what
+it shows:
 
     ./examples/wailsv3/bin/wailsv3 --observe --click '5000,button.act[title="설정"]'
 
