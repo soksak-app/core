@@ -10,6 +10,7 @@
 // 이 파일은 애플리케이션마다 복제하지 않는다. 애플리케이션별 차이는 전송 방식뿐이고
 // framework/ 가 담당한다.
 import { host as bridge } from "./framework/index.js";
+import { plugins } from "./plugins/registry.js";
 
 /** 표면이 표시할 대상을 URL 로 변환한다. `url` 은 외부, `page` 는 이 호스트의 문서. */
 function surfaceURL(surface) {
@@ -42,7 +43,7 @@ function surfaceBackground() {
   const probe = document.createElement("div");
   probe.style.color = "var(--surface)";
   document.body.appendChild(probe);
-  const rgb = getComputedStyle(probe).color.match(/\d+/g) ?? [0, 0, 0];
+  const rgb = getComputedStyle(probe).color.match(/\d+/g);
   probe.remove();
   return [Number(rgb[0]), Number(rgb[1]), Number(rgb[2])];
 }
@@ -138,7 +139,12 @@ let announced = false;
 
 /** 표면 인터페이스. 애플리케이션이 없으면 아무 일도 하지 않는다. */
 export const surfaces = native ? {
-    kinds: ["browser", "terminal"],
+    /* 애플리케이션이 그리는 플러그인 종류. 표면을 가진 플러그인은 모두 여기서
+       그리므로 등록소가 그 목록이다. 여기에 이름을 적으면 플러그인을 더할 때마다
+       이 파일을 고쳐야 한다. */
+    get kinds() {
+      return plugins().map((p) => p.id);
+    },
 
     /** 검증 결과 한 줄을 애플리케이션 로그로 전송한다. */
     report: (line) => tell("report", line),
@@ -150,6 +156,9 @@ export const surfaces = native ? {
         announced = true;
         this.theme(readTheme());
       }
+      // 표면마다 읽지 않는다. 값은 테마가 정하고 표면마다 같으며, 읽을 때마다
+      // 문서에 요소를 붙였다 떼고 스타일을 다시 계산하게 한다.
+      const background = surfaceBackground();
       const surfaces = record.surfaces.map((s) => ({
         id: s.id,
         dim: s.dim,
@@ -160,7 +169,7 @@ export const surfaces = native ? {
         visible: s.visible,
         // 문서를 로드하기 전에 표시할 색. 렌더링 후 뷰가 커져 드러난 영역에는
         // 적용되지 않는다.
-        background: surfaceBackground(),
+        background,
         ...toPage(s.applied),
       }));
 

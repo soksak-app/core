@@ -5,7 +5,7 @@
 //
 // 화면을 보고 판단하지 않고 수치로 판정한다.
 import { latest, seated } from "./compositor.js";
-import { currentGrid, currentView, plane, railOutline, tabsOf } from "./plane.js";
+import { currentGrid, plane, railOutline, tabsOf } from "./plane.js";
 import { isPlace, railKind } from "./plugins/registry.js";
 import { cardRadius } from "./settings.js";
 
@@ -23,7 +23,6 @@ const maxDelta = (a, b) =>
 export function verify() {
   // 현재 판. 검증 한 번은 한 시점을 대상으로 하므로 처음에 한 번만 읽는다.
   const grid = currentGrid();
-  const view = currentView();
   const rows = [];
   const add = (n, ok, note) => rows.push([n, note, ok]);
   const cards = [...grid.cards];
@@ -165,7 +164,7 @@ export function verify() {
   const rail = grid.cards.find((c) => railKind(c.id));
   const drawn = (c) => (c ? grid.rect(c.id).w : null);
   const asked = (c) => (c && c.width !== undefined ? c.width : null);
-  const kept = (c) => c === undefined || c === null || asked(c) === null
+  const kept = (c) => c === undefined || asked(c) === null
     || Math.abs(drawn(c) - asked(c)) < 0.5;
   const say = (c, where) => {
     if (!c) return "없음";

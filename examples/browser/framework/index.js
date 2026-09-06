@@ -9,13 +9,9 @@ import * as webview from "./webview.js";
 /** present() 가 true 를 반환하는 첫 항목을 선택한다. */
 const FRAMEWORKS = [tauriv2, wailsv3, webview];
 
-/* 표면·모달 페이지도 같은 애플리케이션의 문서이므로 같은 방법으로 판별된다. */
+/* 표면·모달 페이지도 같은 애플리케이션의 문서이므로 같은 방법으로 판별된다.
+   마지막 항목인 webview 는 언제나 참이므로 고르지 못하는 경우가 없다. */
 const chosen = FRAMEWORKS.find((f) => f.present());
-
-if (!chosen) throw new Error("unknown framework");
-
-/** 선택된 런타임의 이름. */
-export const framework = chosen.name;
 
 /**
  * 메인 페이지에서 호스트를 호출하는 인터페이스. 호스트가 없으면 null.

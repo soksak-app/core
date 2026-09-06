@@ -252,6 +252,20 @@ function seat(record, placed) {
  * `over` 를 지정하면 그 영역과 겹치는 표면만 숨긴다. 드롭 구획은 판 전체를 대상으로
  * 하지만, 선택 레이어는 작아서 전체를 숨기면 겹치지 않는 표면의 갱신까지 중단된다.
  */
+/* 손잡이가 바뀌었음을 듣는 쪽. 문서가 등록한다. */
+let onKnob = () => {};
+
+/** 손잡이가 바뀌면 fn 을 호출한다. */
+export function onKnobChange(fn) {
+  onKnob = fn;
+}
+
+/** 손잡이 하나를 바꾸고 알린다. 값은 다음 렌더에서 읽힌다. */
+export function setKnob(name, value) {
+  knobs[name] = value;
+  onKnob();
+}
+
 export function standIn(on, over) {
   const area = over ? plane.getBoundingClientRect() : null;
   const kinds = app.kinds;

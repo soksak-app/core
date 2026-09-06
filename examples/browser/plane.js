@@ -8,7 +8,7 @@ import { Soksak, SoksakView, outline } from "/dist/index.js";
 import { cardRadius, halfGap, linkedSet, value } from "./settings.js";
 import { isPlace, plugin, plugins, railId, railKind, section } from "./plugins/registry.js";
 import { standIn } from "./compositor.js";
-import { native, onSurfaceInput, overlay, shapes, surfaces as host } from "./host.js";
+import { native, onSurfaceInput, overlay, shapes } from "./host.js";
 import { issueId } from "./ids.js";
 
 const NEEDS = ["cards", "card", "insertAt", "moveTo", "standings", "moveBoundary", "zoneAt", "splitToward"];
@@ -27,11 +27,6 @@ const NEEDS = ["cards", "card", "insertAt", "moveTo", "standings", "moveBoundary
 
 const HEADER = 32, FOOTER = 22;
 
-/* A host may place real native surfaces instead of the simulated ones.
-   host.kinds lists the plugin kinds the application draws natively, and the
-   simulator skips its own surface for those. host.place
-   receives every commit record so the host places its views on the same frames.
-   With no host both are absent and the page simulates every surface. */
 
 /* 포커스를 잃은 표면의 흐림 여부. 표면은 카드마다 하나이므로 카드 단위로 판정한다. */
 const dimmed = (cardId) =>
@@ -436,7 +431,7 @@ const onPickerKey = (e) => {
 
 /** 새 탭의 플러그인 종류를 선택받는다. + 와 분할 버튼이 함께 사용한다. */
 function openPicker(anchor, what, cardId) {
-  openLayer(anchor, PICKER_ASK[what] ?? PICKER_ASK.add,
+  openLayer(anchor, PICKER_ASK[what],
     plugins().map((p) => ({ key: p.id, name: p.name, mark: p.mark, svg: p.svg })),
     (k) => (what === "add" ? addTab(cardId, k) : splitWith(cardId, what, k)));
 }
@@ -504,7 +499,9 @@ function openLayer(anchor, ask, items, pick, align = "right") {
   // surfaces underneath keep running. The element is passed whole and the host
   // needs no knowledge of its contents.
   if (native) {
-    overlay.show(pickerEl, rect, (key) => { closePicker(); pick(key); });
+    // 모달은 닫힘을 빈 key 로 보고한다. 그것을 선택으로 넘기면 등록되지 않은
+    // 플러그인을 찾다 예외가 난다.
+    overlay.show(pickerEl, rect, (key) => { closePicker(); if (key) pick(key); });
     pickerEl.hidden = true;
   } else {
     standIn(true, rect);
@@ -986,6 +983,4 @@ export const fresh = () => ({
 });
 
 export { settle, tabsOf, plane };
-export const render = () => view.render();
 export const currentGrid = () => grid;
-export const currentView = () => view;

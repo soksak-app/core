@@ -16,7 +16,7 @@ import { native, overlay } from "./host.js";
 import { icon } from "./icons.js";
 import { onGripDrag, showValue } from "./card.js";
 import { build } from "./plane.js";
-import { knobs } from "./compositor.js";
+import { knobs, setKnob } from "./compositor.js";
 import { plugins, section } from "./plugins/registry.js";
 import {
   FONTS, MODES, THEMES, applyTheme, gapSetting, link, linkedId, modeName, set, sets,
@@ -304,7 +304,9 @@ function answer(key, val) {
   if (kind === "theme") return applyTheme(a, modeName());
   if (kind === "press") { if (a === "build") build(); return; }
   if (kind === "link") return link(a, b || null, val || null);
-  if (kind === "knob") { knobs[a] = Number(val); return; }
+  // 손잡이는 다음 렌더에 반영된다. 알리지 않으면 바꾼 값이 화면에도, 검증 결과에도
+  // 나타나지 않는다.
+  if (kind === "knob") return setKnob(a, Number(val));
   // 나머지 key 는 설정 이름이다. 컨트롤이 문자열을 주므로 현재 값의 타입으로
   // 변환 방식을 결정한다.
   const now = value(key);

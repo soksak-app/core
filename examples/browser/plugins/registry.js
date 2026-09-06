@@ -46,9 +46,6 @@ export function registerSection(section) {
 /** 플러그인을 등록 순서로 반환한다. `+` 메뉴가 이 순서를 사용한다. */
 export const plugins = () => registeredPlugins;
 
-/** 섹션을 등록 순서로 반환한다. 세트 조합 시 선택 목록으로 사용한다. */
-export const sections = () => registeredSections;
-
 /** id 로 조회한다. 등록되지 않은 id 면 예외를 던진다. */
 export function plugin(id) {
   const found = registeredPlugins.find((p) => p.id === id);
