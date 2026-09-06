@@ -176,10 +176,11 @@ type page interface {
 }
 
 // deliver runs __spDeliver in a page. Script runs on the main thread.
+//
+// The caller passes a page it holds. There is no test for nothing here: a nil
+// pointer inside an interface is not nil, so a test would pass one through and
+// the call would land on nothing anyway.
 func deliver(view page, name string, value any) {
-	if view == nil {
-		return
-	}
 	payload, err := json.Marshal(value)
 	if err != nil {
 		return
@@ -195,8 +196,14 @@ func deliver(view page, name string, value any) {
 
 func (s *Surfaces) deliverSurface(id, name string, value any) {
 	s.mu.Lock()
-	view := s.views[id]
+	view, ok := s.views[id]
 	s.mu.Unlock()
+	// A shell can print after its surface is gone. Reading the map without asking
+	// whether the key is there hands deliver a pointer that is nil but typed, and
+	// the nil test inside an interface does not see it.
+	if !ok {
+		return
+	}
 	deliver(view, name, value)
 }
 
@@ -253,25 +260,28 @@ func (s *Surfaces) OverlayShow(req OverlayRequest) error {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 
-		live := s.modals[req.ID]
-		if live == nil {
-			live = &modal{}
-			s.modals[req.ID] = live
+		if was := s.modals[req.ID]; was != nil {
+			was.view.destroy()
 		}
-		live.content = OverlayContent{
-			CSS: req.CSS, ClassName: req.ClassName, HTML: req.HTML, Border: req.Border,
-		}
-		live.radius = req.Radius
-
 		x, y := req.Rect.X, up(req.Viewport, req.Rect.Y, max1(req.Rect.H))
-		if live.view != nil {
-			live.view.destroy()
-		}
 		url := s.pages.URL("overlay.html?id=" + req.ID + "&framework=wailsv3")
-		live.view = newNativeOverlay(win.NativeWindow(), url, x, y,
+		view := newNativeOverlay(win.NativeWindow(), url, x, y,
 			max1(req.Rect.W), max1(req.Rect.H), srgba(req.Background), s.boot())
-		if live.view != nil {
-			live.view.setHidden(true)
+		// A platform with no window to make has no modal. Recording one whose view
+		// is nil leaves an entry every reader has to test, and one that misses the
+		// test calls a method on nothing.
+		if view == nil {
+			log.Printf("modal %s: no native window on this platform", req.ID)
+			delete(s.modals, req.ID)
+			return
+		}
+		view.setHidden(true)
+		s.modals[req.ID] = &modal{
+			view:    view,
+			radius:  req.Radius,
+			content: OverlayContent{
+				CSS: req.CSS, ClassName: req.ClassName, HTML: req.HTML, Border: req.Border,
+			},
 		}
 	})
 	return nil
@@ -347,7 +357,7 @@ type PlaceRequest struct {
 func (s *Surfaces) OverlayPlace(req PlaceRequest) error {
 	s.mu.Lock()
 	live, ok := s.modals[req.ID]
-	if !ok || live.view == nil {
+	if !ok {
 		s.mu.Unlock()
 		return nil
 	}
@@ -361,18 +371,19 @@ func (s *Surfaces) OverlayPlace(req PlaceRequest) error {
 	return nil
 }
 
+// OverlayHide closes a modal's window and forgets it. The entry goes with the
+// window: a modal that is recorded but has no window is a state nothing needs.
 func (s *Surfaces) OverlayHide(id string) error {
 	s.mu.Lock()
 	live, ok := s.modals[id]
-	if !ok || live.view == nil {
+	if !ok {
 		s.mu.Unlock()
 		return nil
 	}
-	view := live.view
-	live.view = nil
+	delete(s.modals, id)
 	s.mu.Unlock()
 
-	application.InvokeSync(view.destroy)
+	application.InvokeSync(live.view.destroy)
 	return nil
 }
 
@@ -415,7 +426,7 @@ func (s *Surfaces) ModalContent(id string) OverlayContent {
 func (s *Surfaces) ModalReady(id string) {
 	s.mu.Lock()
 	live, ok := s.modals[id]
-	if !ok || live.view == nil {
+	if !ok {
 		s.mu.Unlock()
 		return
 	}
