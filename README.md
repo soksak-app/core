@@ -282,6 +282,14 @@ sharing slots hit their floor — a gap each plus one card's minimum.
 close to that floor it can report a little more room than the boundary can take,
 and a target past it leaves the boundary where it is.
 
+The same happens with no px size on the axis at all. A plane too small for what
+it holds stops a sharing slot at its corridor, and a stopped slot does not move
+with its span, so the px a boundary stands at stops following its coordinate:
+positions inside the range cannot be drawn, and a whole coordinate span can
+produce only a few positions in all. A drag asking for one that cannot be drawn
+lands on one that can, which may be outside the range. `boundaryRange` bounds a
+drag; it does not list where the drag can stop.
+
 The same rule settles a card that appears or disappears. A closing card's width,
 and the corridor it releases, go to the slot next to it; a card inserted at a
 boundary takes its width from the slot next to it. So a sidebar switched off and

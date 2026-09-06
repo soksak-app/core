@@ -792,3 +792,88 @@ test("a centring stays inside the range it reported", () => {
     `left is drawn ${grid.rect("left").w}, below minSize ${grid.minSize}`,
   );
 });
+
+test("a range bounds a drag; it does not list where the drag can stop", () => {
+  // No card on this axis declares a px size, and the plane is too small for what
+  // it holds: the starvation rule stops a sharing slot at its corridor and a
+  // stopped slot does not move with its span, so the px the boundary stands at
+  // stops following its coordinate. The whole coordinate span draws three
+  // positions and nothing between them, so no pair of numbers names them, and a
+  // drag to the range's own min lands on one of the three, outside the range.
+  const state = {
+    xs: [0, 0.09740259740259741, 0.09740259740259741, 0.09740259740259741, 0.1948051948051947, 0.6935483870967741, 1],
+    ys: [0, 0.25, 0.5, 1],
+    cards: [
+      { id: "n1", c0: 2, c1: 3, r0: 0, r1: 2 },
+      { id: "n5", c0: 0, c1: 6, r0: 2, r1: 3 },
+      { id: "n7", c0: 0, c1: 2, r0: 0, r1: 1 },
+      { id: "n8", c0: 0, c1: 1, r0: 1, r1: 2 },
+      { id: "n10", c0: 3, c1: 6, r0: 0, r1: 2 },
+      { id: "n11", c0: 1, c1: 2, r0: 1, r1: 2 },
+    ],
+  };
+  const options = { width: 124, height: 557, gap: 16, minSize: 79 };
+  const grid = new Soksak(state, options);
+  assert.equal(grid.cards.every((c) => c.width === undefined), true, "no px size on this axis");
+  const [min, max] = grid.boundaryRange("x", 1);
+  assert.equal(grid.boundaryPos("x", 1), max, "the boundary stands at the top of its range");
+
+  const drawn = new Set();
+  for (let i = 0; i <= 200; i++) {
+    const xs = [...state.xs];
+    // one ulp past the line above it is a state `checkState` refuses
+    xs[1] = Math.min((state.xs[2] * i) / 200, state.xs[2]);
+    drawn.add(Number(new Soksak({ ...state, xs }, options).boundaryPos("x", 1).toFixed(6)));
+  }
+  assert.deepEqual([...drawn].sort((a, b) => a - b), [0, 8, 12.077922],
+                   "the whole coordinate span draws three positions");
+  assert.ok(min > 0 && min < 8, `the range names ${min}, which the plane cannot draw`);
+
+  assert.equal(
+    new Soksak(state, options).moveBoundary("x", 1, min, false),
+    0,
+    "a drag asking for it lands on one the plane can draw, outside the range",
+  );
+});
+
+test("a line no card reads decides nothing drawn, and tidy takes nothing with it", () => {
+  // A plane too small for what it holds. R5 says the card that ran out of room
+  // is drawn with no width against its near edge. `right` spans two slots with a
+  // line no card reads between them, and the starvation rule stopped the slot
+  // before that line only: the slot after it went on dividing what the stop
+  // released, so `right` was drawn 3.878 instead of 0 and `tidy` moved both
+  // cards. The slots between two lines the cards read are one slot to every
+  // card, so the whole run stops.
+  const options = { width: 200, height: 400, gap: 20, minSize: 50 };
+  const cut = new Soksak(
+    {
+      xs: [0, 0.96, 0.98, 1],
+      ys: [0, 1],
+      cards: [
+        { id: "left", c0: 0, c1: 1, r0: 0, r1: 1 },
+        { id: "right", c0: 1, c1: 3, r0: 0, r1: 1 },
+      ],
+    },
+    options,
+  );
+  assert.equal(cut.isVirtual("x", 2), true, "no card reads the line between right's slots");
+  assert.equal(cut.rect("right").w, 0, "the card that ran out of room is drawn with no width");
+  assert.equal(cut.rect("left").w, 180);
+
+  // The same arrangement, without the line no card reads.
+  const whole = new Soksak(
+    {
+      xs: [0, 0.96, 1],
+      ys: [0, 1],
+      cards: [
+        { id: "left", c0: 0, c1: 1, r0: 0, r1: 1 },
+        { id: "right", c0: 1, c1: 2, r0: 0, r1: 1 },
+      ],
+    },
+    options,
+  );
+  assert.deepEqual([...cut.rects()], [...whole.rects()], "the line decides nothing drawn");
+
+  assert.equal(cut.tidy(), 1);
+  assert.deepEqual([...cut.rects()], [...whole.rects()], "and removing it decides nothing either");
+});

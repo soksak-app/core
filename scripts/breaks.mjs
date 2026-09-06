@@ -89,8 +89,15 @@ export const BREAKS = [
     id: "corridor",
     what: "a starved slot eats the corridor instead of stopping at it",
     file: "dist/geometry.js",
-    find: "size[starved] = corridor[starved];",
-    to: "size[starved] = 0;",
+    find: "                size[i] = corridor[i];\n                room -= corridor[i];",
+    to: "                size[i] = 0;\n                room -= corridor[i];",
+  },
+  {
+    id: "starve-run",
+    what: "a stop takes one slot of a run, so a line no card reads decides how much room it releases",
+    file: "dist/geometry.js",
+    find: "for (let i = runFrom[starved]; i < runTo[starved]; i++) {",
+    to: "for (let i = runFrom[starved]; i < starved + 1; i++) {",
   },
   {
     id: "place",

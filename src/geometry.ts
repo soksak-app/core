@@ -286,6 +286,23 @@ function divide(plane: Plane, axis: Axis): { size: number[]; each: number } {
     // the card spans past would move every other card instead.
     const [lo, hi] = SPAN[axis];
     const stopped = new Array<boolean>(count).fill(false);
+    // The slots between two lines the cards read are one slot to every card: a
+    // line is read only where a card starts or ends, so no card starts or ends
+    // inside such a run and every card covering one of its slots covers all of
+    // them. A stop that took part of a run let a cut no card reads decide how
+    // much room the stop released, so the same arrangement was drawn one way
+    // with the cut and another way without it, and `tidy` moved cards.
+    const runFrom = new Array<number>(count);
+    const runTo = new Array<number>(count);
+    for (let i = 0; i < count; ) {
+      let end = i + 1;
+      while (end < count && !read.has(end)) end++;
+      for (let k = i; k < end; k++) {
+        runFrom[k] = i;
+        runTo[k] = end;
+      }
+      i = end;
+    }
     let room = usable;
     let pool = sharedSpan;
     for (;;) {
@@ -323,11 +340,15 @@ function divide(plane: Plane, axis: Axis): { size: number[]; each: number } {
         return { size, each };
       }
       // `usable` is at least the gaps plus one card minimum, so stopping every
-      // slot at its gap still leaves size and span to divide.
-      stopped[starved] = true;
-      size[starved] = corridor[starved];
-      room -= corridor[starved];
-      pool -= a[starved + 1] - a[starved];
+      // slot at its gap still leaves size and span to divide. The whole run
+      // stops, because the cards read its two ends and nothing inside it.
+      for (let i = runFrom[starved]; i < runTo[starved]; i++) {
+        if (held[i] !== null || stopped[i]) continue;
+        stopped[i] = true;
+        size[i] = corridor[i];
+        room -= corridor[i];
+        pool -= a[i + 1] - a[i];
+      }
     }
   }
 
