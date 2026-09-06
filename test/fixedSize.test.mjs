@@ -585,20 +585,40 @@ test("a drag reaches the size it asks for when the plane holds less than it is t
   );
 });
 
-test("centring reaches the middle when the plane holds less than it is told", () => {
-  const grid = new Soksak(undefined, {
-    width: 1379, height: 352, gap: 5, minSize: 75, fillOrder: "h",
-  });
-  grid.insertAt("y", 0, { size: 327, id: "n0" });
-  grid.insertAt("y", 0, { size: 272, id: "n1" });
-  grid.resize(1264, 541);
+test("a boundary with a declared size on one side of it does not move a plane that holds less than it is told", () => {
+  const build = () => {
+    const grid = new Soksak(undefined, {
+      width: 1379, height: 352, gap: 5, minSize: 75, fillOrder: "h",
+    });
+    grid.insertAt("y", 0, { size: 327, id: "n0" });
+    grid.insertAt("y", 0, { size: 272, id: "n1" });
+    grid.resize(1264, 541);
+    return grid;
+  };
 
-  grid.centerBoundary("y", 2);
-  const above = grid.rect("n0").h;
-  const below = grid.rect("card").h;
+  // n0 declares a size and `card` shares, and the plane holds less than the two
+  // declarations ask for. Every way of moving the line between them changes the
+  // size a third card is drawn at, so the line stays where it is.
+  const one = build();
+  const at = one.boundaryPos("y", 2);
+  assert.deepEqual(one.boundaryRange("y", 2), [at, at], "the range is the one position");
+  const was = [...one.cards].map((c) => one.rect(c.id).h);
+  one.centerBoundary("y", 2);
+  one.moveBoundary("y", 2, at - 100, false);
+  assert.deepEqual([...one.cards].map((c) => one.rect(c.id).h), was, "nothing moved");
+
+  // The line between the two declared sizes moves, because the pair keeps the
+  // total it declares and no other card is redrawn.
+  const two = build();
+  const third = two.rect("card").h;
+  two.centerBoundary("y", 1);
   assert.ok(
-    Math.abs(above - below) < 0.02,
-    `the two cards come out the same size, not ${above} and ${below}`,
+    Math.abs(two.rect("n1").h - two.rect("n0").h) < 0.02,
+    `the two cards come out the same size, not ${two.rect("n1").h} and ${two.rect("n0").h}`,
+  );
+  assert.ok(
+    Math.abs(two.rect("card").h - third) < 1e-9,
+    `the card that does not meet it keeps its size, ${two.rect("card").h} against ${third}`,
   );
 });
 
@@ -622,4 +642,97 @@ test("a card that comes to span two slots loses the size it declared", () => {
   grid.split("low", "x");
   assert.equal(grid.card("side").c1 - grid.card("side").c0, 2, "side now spans two slots");
   assert.equal(grid.card("side").width, undefined, "and carries no px size");
+});
+
+test("a drag between two declared slots moves no third one", () => {
+  // The plane holds 1600 and the three cards declare 900 between them, so every
+  // declared size is drawn scaled.
+  const build = () =>
+    new Soksak(
+      {
+        xs: [0, 1 / 3, 2 / 3, 1],
+        ys: [0, 1],
+        cards: [
+          { id: "a", c0: 0, c1: 1, r0: 0, r1: 1, width: 200 },
+          { id: "b", c0: 1, c1: 2, r0: 0, r1: 1, width: 300 },
+          { id: "c", c0: 2, c1: 3, r0: 0, r1: 1, width: 400 },
+        ],
+      },
+      { width: 1600, height: 800, gap: 24, minSize: 96 },
+    );
+
+  for (const ask of [200, 400, 600]) {
+    const grid = build();
+    const was = grid.rect("c");
+    const at = grid.moveBoundary("x", 1, ask, false);
+    assert.ok(Math.abs(at - ask) < 0.01, `the boundary reaches ${ask}, not ${at}`);
+    const now = grid.rect("c");
+    assert.ok(
+      Math.abs(now.x - was.x) < 0.01 && Math.abs(now.w - was.w) < 0.01,
+      `c is drawn at ${now.x}/${now.w}, not ${was.x}/${was.w}`,
+    );
+  }
+});
+
+test("a card inserted at a boundary gives its size back to the cards that paid", () => {
+  const grid = new Soksak(
+    {
+      xs: [0, 0.5, 1],
+      ys: [0, 0.8, 1],
+      cards: [
+        { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
+        { id: "b", c0: 1, c1: 2, r0: 0, r1: 1 },
+        { id: "low", c0: 0, c1: 2, r0: 1, r1: 2 },
+      ],
+    },
+    { width: 800, height: 600, gap: 24, minSize: 96 },
+  );
+  const was = ["a", "b", "low"].map((id) => grid.rect(id).h);
+
+  grid.insertAt("y", 1, { size: 120, id: "rail" });
+  assert.equal(grid.rect("rail").h, 120, "the rail stands at the size it asked for");
+  grid.close("rail");
+
+  const now = ["a", "b", "low"].map((id) => grid.rect(id).h);
+  assert.deepEqual(now, was, "every card is back to the height it had");
+});
+
+test("an axis where every declared size is zero still covers the plane", () => {
+  const grid = new Soksak(undefined, { width: 800, height: 600, gap: 24, minSize: 96 });
+  assert.equal(grid.setSize("card", "y", 0), true, "zero is a size");
+  assert.equal(grid.rect("card").h, 600, "the one card still fills the plane");
+});
+
+test("a drag rewrites no span between the sharing slots it does not meet", () => {
+  // `card` and `card-1` stand on the two sharing slots and touch neither side of
+  // line 1. The plane holds less than the three declarations ask for, so each
+  // sharing slot is drawn its corridor plus a share of the span.
+  const grid = new Soksak(
+    {
+      xs: [0, 1],
+      ys: [
+        0, 0.3471777676167251, 0.438366864807194, 0.529555961997663,
+        0.7119341563786008, 1,
+      ],
+      cards: [
+        { id: "card", c0: 0, c1: 1, r0: 2, r1: 3 },
+        { id: "card-1", c0: 0, c1: 1, r0: 3, r1: 4 },
+        { id: "card-2", c0: 0, c1: 1, r0: 1, r1: 2, height: 327 },
+        { id: "card-3", c0: 0, c1: 1, r0: 0, r1: 1, height: 237 },
+        { id: "card-4", c0: 0, c1: 1, r0: 4, r1: 5, height: 140 },
+      ],
+    },
+    { width: 932, height: 486, gap: 24, minSize: 20 },
+  );
+  const was = ["card", "card-1"].map((id) => grid.rect(id).h);
+
+  const at = grid.moveBoundary("y", 1, 180, false);
+  assert.ok(Math.abs(at - 180) < 0.01, `the boundary reaches 180, not ${at}`);
+  const now = ["card", "card-1"].map((id) => grid.rect(id).h);
+  for (const [i, id] of ["card", "card-1"].entries()) {
+    assert.ok(
+      Math.abs(now[i] - was[i]) < 0.01,
+      `${id} is drawn at ${now[i]}, not ${was[i]}`,
+    );
+  }
 });

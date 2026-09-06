@@ -101,6 +101,17 @@ function demand(plane, axis) {
     return { asked, taken, sharedSpan, floor };
 }
 /**
+ * Whether the plane holds what the slots on this axis declare.
+ *
+ * When it does not, every declared size is drawn scaled by one factor. A slot
+ * that shares is the one that gives the room up, so an axis where none shares
+ * never holds them: the declared numbers are proportions there.
+ */
+export function holdsSizes(plane, axis) {
+    const { asked, taken, sharedSpan, floor } = demand(plane, axis);
+    return sharedSpan > 1e-9 && extent(plane, axis) - asked - taken >= floor;
+}
+/**
  * The px size a slot has to declare to be drawn `drawn` px wide.
  *
  * While the plane holds what the slots declare, that is `drawn` itself. When it
@@ -130,7 +141,7 @@ export function declaredFor(plane, axis, slot, drawn) {
     const { asked, taken, sharedSpan, floor } = demand(plane, axis);
     const room = extent(plane, axis);
     // The plane holds the sizes once this slot declares `drawn`.
-    if (sharedSpan <= 1e-9 || room - (asked - now + drawn) - taken >= floor)
+    if (sharedSpan > 1e-9 && room - (asked - now + drawn) - taken >= floor)
         return drawn;
     const other = asked - now;
     const keep = Math.min(floor, Math.max(0, room - taken));
@@ -149,6 +160,21 @@ export function declaredFor(plane, axis, slot, drawn) {
  * sum to the plane size.
  */
 export function slotSizes(plane, axis) {
+    return divide(plane, axis).size;
+}
+/**
+ * The px a sharing slot is drawn at per unit of its span.
+ *
+ * A boundary between two sharing slots moves by changing span, and this is what
+ * one unit of span is worth. A slot the starvation rule stopped at its corridor
+ * does not flex with its span and is not counted, so a move measured against
+ * this rate lands where it was asked to.
+ */
+export function sharePerSpan(plane, axis) {
+    return divide(plane, axis).each;
+}
+/** The size of every slot on an axis, and what one unit of shared span is worth. */
+function divide(plane, axis) {
     const a = lines(plane, axis);
     const count = a.length - 1;
     // The slot holds the gap, so a px size is the drawn width.
@@ -222,7 +248,7 @@ export function slotSizes(plane, axis) {
                         continue;
                     size[i] = (a[i + 1] - a[i]) * each;
                 }
-                return size;
+                return { size, each };
             }
             // `usable` is at least the gaps plus one card minimum, so stopping every
             // slot at its gap still leaves size and span to divide.
@@ -247,7 +273,29 @@ export function slotSizes(plane, axis) {
             floors += corridor[i];
     const spare = Math.max(0, keep - floors);
     const each = sharedSpan > 1e-9 ? spare / sharedSpan : 0;
-    return held.map((fixed, i) => fixed !== null ? fixed * scale + corridor[i] : corridor[i] + (a[i + 1] - a[i]) * each);
+    // Every declared size is zero, so there is no proportion to scale. The slots
+    // still sum to the plane, so they divide what is left by span.
+    if (asked <= 1e-9) {
+        let heldSpan = 0;
+        let heldSlots = 0;
+        for (let i = 0; i < count; i++) {
+            if (held[i] === null)
+                continue;
+            heldSpan += a[i + 1] - a[i];
+            heldSlots++;
+        }
+        return {
+            each,
+            size: held.map((fixed, i) => fixed !== null
+                ? corridor[i] +
+                    (heldSpan > 1e-9 ? (left * (a[i + 1] - a[i])) / heldSpan : left / heldSlots)
+                : corridor[i] + (a[i + 1] - a[i]) * each),
+        };
+    }
+    return {
+        each,
+        size: held.map((fixed, i) => fixed !== null ? fixed * scale + corridor[i] : corridor[i] + (a[i + 1] - a[i]) * each),
+    };
 }
 /** Every line position in px, index for index with the line array. */
 export function linePositions(plane, axis) {
@@ -469,10 +517,17 @@ export function rules(plane) {
         const across = axis === 'x' ? plane.height : plane.width;
         const down = other(axis);
         const meet = touching(plane, axis);
+        const read = linesRead(plane, axis);
         // A rule stays inside the plane. Extending it half a gap past each end made
         // the host scroll, because the view places these in the host's element.
         const hold = (v) => Math.min(Math.max(v, 0), across);
         for (const line of interiorLines(plane, axis)) {
+            // A line no card reads has no card edge anywhere along it. The line stays
+            // in the array, because it is what a card that paid for its slot comes
+            // back to, but there is nothing to draw for it. `dividers` already yields
+            // nothing there.
+            if (isVirtual(plane, axis, line, read))
+                continue;
             const at = along[line] - 0.5;
             out.push(axis === 'x'
                 ? { key: `vx:${line}`, axis, line, virtual: true, x: at, y: 0, w: 1, h: across }

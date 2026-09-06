@@ -524,3 +524,58 @@ test("a drag snaps only when snapping is on and the caller allows it", () => {
   );
   assert.equal(refused, off, "a drag that refuses the snap lands where snapping off lands");
 });
+
+test("the state a resize writes is one the library accepts", () => {
+  // The last slot has almost no span, so the coordinates the rewrite accumulates
+  // can pass the border it restores by one rounding.
+  const grid = new Soksak(
+    {
+      xs: [0, 0.09123679935012186, 0.1922217709179529, 0.7847345858406022, 1, 1],
+      ys: [0, 0.901174168297456, 0.9564579256360078, 1],
+      cards: [
+        { id: "card", c0: 0, c1: 5, r0: 0, r1: 1, fixed: true },
+        { id: "card-3", c0: 2, c1: 5, r0: 2, r1: 3 },
+        { id: "card-7", c0: 0, c1: 2, r0: 1, r1: 3 },
+        { id: "card-4", c0: 2, c1: 5, r0: 1, r1: 2 },
+      ],
+    },
+    { width: 1231, height: 712, gap: 24, minSize: 0 },
+  );
+  grid.insertAt("x", 0, { size: 158 });
+
+  const xs = grid.lines("x");
+  for (let k = 1; k < xs.length; k++) {
+    assert.ok(xs[k] >= xs[k - 1], `xs[${k}] ${xs[k]} is before xs[${k - 1}] ${xs[k - 1]}`);
+  }
+  assert.doesNotThrow(() => grid.replace(grid.toJSON()), "the state it writes is one it accepts");
+});
+
+test("a slot stopped at its corridor does not bend a drag", () => {
+  // `c` has no span to flex with, so it is drawn at the corridor it holds and
+  // the px a unit of span is worth comes from the slots that do flex.
+  const build = () =>
+    new Soksak(
+      {
+        xs: [0, 1],
+        ys: [0, 0.2, 0.6, 0.75, 1],
+        cards: [
+          { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
+          { id: "b", c0: 0, c1: 1, r0: 1, r1: 2 },
+          { id: "c", c0: 0, c1: 1, r0: 2, r1: 3 },
+          { id: "d", c0: 0, c1: 1, r0: 3, r1: 4, height: 250 },
+        ],
+      },
+      { width: 400, height: 350, gap: 24, minSize: 0 },
+    );
+
+  const moved = build();
+  const at = moved.moveBoundary("y", 1, 26, false);
+  assert.ok(Math.abs(at - 26) < 0.01, `the boundary reaches 26, not ${at}`);
+
+  const centred = build();
+  centred.centerBoundary("y", 1);
+  assert.ok(
+    Math.abs(centred.rect("a").h - centred.rect("b").h) < 0.02,
+    `the two cards come out the same size, not ${centred.rect("a").h} and ${centred.rect("b").h}`,
+  );
+});

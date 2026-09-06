@@ -239,6 +239,15 @@ card holding its slot at a fixed size it changes that size and the slot on the
 other side is reduced by the same amount; anywhere else it moves the line and
 both sides follow.
 
+Where the plane holds less than the px sizes an axis declares, every declared
+size is drawn scaled by one factor, and a boundary with such a size on exactly
+one side of it does not move: changing the declared size rescales every other
+card declaring one, and the sharing slots always divide the same remainder
+between them. `boundaryRange` reports that by returning the position the
+boundary stands at twice, and centring it does nothing for the same reason. A
+boundary with a declared size on both sides still moves, because the pair keeps
+the size it declares between them.
+
 The same rule settles a card that appears or disappears. A closing card's width,
 and the corridor it releases, go to the slot next to it; a card inserted at a
 boundary takes its width from the slot next to it. So a sidebar switched off and

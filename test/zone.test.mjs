@@ -100,8 +100,25 @@ test("edge sets how much of the body each side claims, and a value outside the b
   assert.equal(grid.zoneAt(near.x, near.y).zone, "centre", "and 0.3 across is too, by default");
   assert.equal(grid.zoneAt(near.x, near.y, { edge: 0.4 }).zone, "left", "a wider band takes it");
 
+  // Read near the edge, not at the middle. A refused value and an accepted one
+  // both answer centre in the middle, so a negative band would pass there.
+  const edge = { x: body.x + body.w * 0.05, y: middle.y };
+  assert.equal(grid.zoneAt(edge.x, edge.y).zone, "left", "0.05 across is a side by default");
   for (const bad of [NaN, Infinity, -1, 5]) {
     assert.equal(grid.zoneAt(middle.x, middle.y, { edge: bad }).zone, "centre",
-      `${bad} is refused`);
+      `${bad} is refused in the middle`);
+    assert.equal(grid.zoneAt(edge.x, edge.y, { edge: bad }).zone, "left",
+      `${bad} is refused at the edge`);
   }
+
+  // The same guard reads the chrome heights. A negative one would start the body
+  // outside the card, which moves where the bands begin: at 0.23 down the body
+  // the point is in the top band, and it is the centre once the body is taller
+  // than the card.
+  const high = { x: middle.x, y: body.y + body.h * 0.23 };
+  const low = { x: middle.x, y: body.y + body.h * 0.77 };
+  assert.equal(grid.zoneAt(high.x, high.y, { headerPx: -40 }).zone, "top",
+    "a header of -40 is read as none");
+  assert.equal(grid.zoneAt(low.x, low.y, { footerPx: -40 }).zone, "bottom",
+    "a footer of -40 is read as none");
 });

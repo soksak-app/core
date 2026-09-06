@@ -238,6 +238,12 @@ export declare class Soksak {
      * The range extends to the nearest line a card references; unreferenced lines
      * do not limit it. When the cards on both sides need more than the plane
      * holds, `lo` and `hi` are equal rather than inverted.
+     *
+     * A boundary with a px size on exactly one side of it, on an axis the plane
+     * cannot hold, reports the position it stands at twice: every way of moving it
+     * changes the size a card that does not meet it is drawn at. The declared
+     * sizes are scaled by one factor there, so changing one changes them all, and
+     * the sharing slots always divide the same remainder between them.
      */
     boundaryRange(axis: Axis, line: number): [number, number];
     /**

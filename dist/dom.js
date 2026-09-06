@@ -120,6 +120,11 @@ export class SoksakView {
      * change it makes itself as well, or those land a frame apart.
      */
     draw(reason) {
+        // A destroyed view draws nothing, and the hook is where a host moves the
+        // views it draws itself. Calling it would move them onto the rects of a
+        // plane that is gone.
+        if (this.disposed)
+            return;
         const drawn = () => this.paint(reason);
         if (!this.options.commit) {
             drawn();
@@ -364,7 +369,11 @@ export class SoksakView {
             if (!drag || drag.on !== el)
                 return;
             if (e.buttons === 0) {
-                this.end(e.pointerId);
+                // The press that moved the boundary is not the first of a pair, on this
+                // exit as on pointerup. This one is taken when the release itself was
+                // never delivered.
+                if (this.end(e.pointerId))
+                    lastTap = -Infinity;
                 return;
             }
             const now = drag.axis === 'x' ? e.clientX : e.clientY;
@@ -391,6 +400,7 @@ export class SoksakView {
         // pointer path. A press that moved the boundary is not the first of a pair.
         let lastPress = -Infinity;
         const mouseDown = (e) => {
+            var _a;
             if (this.disposed || e.button !== 0)
                 return;
             e.preventDefault();
@@ -398,8 +408,10 @@ export class SoksakView {
             const line = Number(el.dataset.line);
             // A press with one already held is a press the release of which was never
             // seen. Dropping it leaves no divider marked as held with no drag behind
-            // it, which is a state nothing ever clears.
-            this.dropMouse();
+            // it, which is a state nothing ever clears. As on the other two exits, the
+            // press that moved the boundary is not the first of a pair.
+            if ((_a = this.dropMouse()) === null || _a === void 0 ? void 0 : _a.moved)
+                lastPress = -Infinity;
             if (e.timeStamp - lastPress < DOUBLE_TAP_MS) {
                 lastPress = -Infinity;
                 this.grid.centerBoundary(axis, line);
@@ -422,7 +434,10 @@ export class SoksakView {
             if (this.disposed || !drag || drag.on !== el)
                 return;
             if (e.buttons === 0) {
-                this.endMouse();
+                // As on mouseup: a press that moved the boundary is not the first of a
+                // pair. This exit is taken when the release itself was never delivered.
+                if (this.endMouse())
+                    lastPress = -Infinity;
                 return;
             }
             const now = drag.axis === 'x' ? e.clientX : e.clientY;

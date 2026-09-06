@@ -26,6 +26,7 @@ import {
   linesRead,
   halfCorridor,
   heldSizes,
+  holdsSizes,
   inset,
   interiorLines,
   isVirtual,
@@ -33,6 +34,7 @@ import {
   rectIn,
   rectOf,
   rules,
+  sharePerSpan,
   slotSizes,
   slotWidths,
   zoneAt,
@@ -537,19 +539,32 @@ export class Soksak {
       size[i] = open > EPS ? (left * (a[i + 1] - a[i])) / open : left / nulls;
     }
 
-    // Rewrite each sharing span in proportion to its new size, keeping the total
-    // span unchanged so the lines outside this run do not move. `was` is a copy
-    // because the loop writes into `a` as it advances.
-    // `total` is `named + max(0, room - named)`, which is at least `room`, and
-    // `room` was checked above.
-    const total = named + left;
+    // Rewrite each sharing span in proportion to what its span is drawn at,
+    // keeping the total span unchanged so the lines outside this run do not
+    // move. `was` is a copy because the loop writes into `a` as it advances.
+    //
+    // A slot holds its corridor as well as its share of the span. While the
+    // plane holds the sizes the corridor is part of what the span buys; once
+    // they are scaled it is a constant on top, and counting it moves span from
+    // one sharing slot to another whose corridor differs.
+    const holds = holdsSizes(plane, axis);
+    const share = (i: number): number =>
+      holds ? size[i] : Math.max(0, size[i] - corridorOf(plane, axis, i, read));
+    let pool = 0;
+    for (let i = 0; i < count; i++) if (held[i] === null) pool += share(i);
+    const total = pool > EPS ? pool : named + left;
+    const part = (i: number): number => (pool > EPS ? share(i) : size[i]);
     const was = [...a];
     let at = a[0];
     for (let i = 0; i < count; i++) {
-      at += held[i] !== null ? was[i + 1] - was[i] : (span * size[i]) / total;
+      at += held[i] !== null ? was[i + 1] - was[i] : (span * part(i)) / total;
       a[i + 1] = at;
     }
     a[count] = was[count];
+    // The sum is the same span in exact arithmetic, and one ulp more than it in
+    // floating point. checkState compares the array strictly, so the last
+    // coordinates are held in order.
+    for (let i = count - 1; i > 0; i--) if (a[i] > a[i + 1]) a[i] = a[i + 1];
   }
 
   /**
@@ -598,17 +613,30 @@ export class Soksak {
   private resizeSlot(axis: Axis, slot: number, drawn: number, pays: number): void {
     const width = slotWidths(this.plane, axis);
     const delta = drawn - width[slot];
-    this.declare(axis, slot, declaredFor(this.plane, axis, slot, drawn));
+    const held = heldSizes(this.plane, axis);
 
     const want: (number | null)[] = [...width];
     want[slot] = drawn;
-    if (heldSizes(this.plane, axis)[pays] !== null) {
+    if (held[pays] !== null) {
       // Both slots have a px size, so `pays` is reduced by the same amount.
       const paid = Math.max(0, width[pays] - delta);
-      this.declare(axis, pays, declaredFor(this.plane, axis, pays, paid));
+      const total = (held[slot] as number) + (held[pays] as number);
+      const asked = drawn + paid;
+      if (!holdsSizes(this.plane, axis) && asked > EPS) {
+        // The plane draws every declared size scaled by one factor. The pair
+        // keeps the size it declares between them, so that factor does not
+        // change and no other card moves, and the two split it in the ratio the
+        // drag asked to be drawn at.
+        this.declare(axis, slot, (total * drawn) / asked);
+        this.declare(axis, pays, (total * paid) / asked);
+      } else {
+        this.declare(axis, slot, drawn);
+        this.declare(axis, pays, paid);
+      }
       this.setSlotWidths(axis, want);
       return;
     }
+    this.declare(axis, slot, declaredFor(this.plane, axis, slot, drawn));
     want[pays] = null;
     this.setSlotWidths(axis, want);
   }
@@ -664,6 +692,12 @@ export class Soksak {
    * The range extends to the nearest line a card references; unreferenced lines
    * do not limit it. When the cards on both sides need more than the plane
    * holds, `lo` and `hi` are equal rather than inverted.
+   *
+   * A boundary with a px size on exactly one side of it, on an axis the plane
+   * cannot hold, reports the position it stands at twice: every way of moving it
+   * changes the size a card that does not meet it is drawn at. The declared
+   * sizes are scaled by one factor there, so changing one changes them all, and
+   * the sharing slots always divide the same remainder between them.
    */
   boundaryRange(axis: Axis, line: number): [number, number] {
     if (this.noAxis(axis)) return [0, 0];
@@ -671,6 +705,13 @@ export class Soksak {
     // neighbours below fall back to the plane's borders and the method answers a
     // range for a line that has no boundary.
     if (!this.hasBoundary(axis, line)) return [0, 0];
+    if (!holdsSizes(this.plane, axis)) {
+      const declared = heldSizes(this.plane, axis);
+      if ((declared[line - 1] !== null) !== (declared[line] !== null)) {
+        const at = this.boundaryPos(axis, line);
+        return [at, at];
+      }
+    }
     const along = linePositions(this.plane, axis);
     const [lo, hi] = SPAN[axis];
 
@@ -743,10 +784,13 @@ export class Soksak {
       this.resizeSlot(axis, holder[lo], size, holder[hi] === line ? line : line - 1);
     } else {
       const usable = this.sharedExtent(axis);
-      const before = linePositions(this.plane, axis)[line - 1];
+      // Measured from where the line stands, not from the line before it. A slot
+      // holds its corridor as well as its share of the span, and that corridor
+      // is a constant the conversion must not scale.
+      const before = this.boundaryPos(axis, line);
       const a = this.arr(axis);
       // Only the sharing slots hold normalised width, so convert against those.
-      const want = usable > EPS ? a[line - 1] + (target - before) / usable : a[line - 1];
+      const want = usable > EPS ? a[line] + (target - before) / usable : a[line - 1];
       // The conversion uses one average px-per-unit ratio, which the slots do not
       // all follow once a px size exists, so the result can land past a
       // neighbouring line. That would put the array out of order and draw a card
@@ -781,17 +825,7 @@ export class Soksak {
 
   /** px per unit of normalised span across the sharing slots. */
   private sharedExtent(axis: Axis): number {
-    const a = this.arr(axis);
-    const sizes = slotSizes(this.plane, axis);
-    const held = heldSizes(this.plane, axis);
-    let px = 0;
-    let span = 0;
-    for (let i = 0; i < sizes.length; i++) {
-      if (held[i] !== null) continue;
-      px += sizes[i];
-      span += a[i + 1] - a[i];
-    }
-    return span > EPS ? px / span : 0;
+    return sharePerSpan(this.plane, axis);
   }
 
   /**
@@ -1180,11 +1214,12 @@ export class Soksak {
         if (!alone) continue;
         const gone = paid.side === 'lo' ? card[lo] : card[hi];
         if (gone <= 0 || gone >= this.arr(axis).length - 1) continue;
-        // Removing the line expands every card that ends or starts on it. Only
-        // the card that gave the span up should expand, so this path runs only
-        // when it is the sole other card referencing the line.
-        const reading = this.list.filter((c) => c !== card && (c[lo] === gone || c[hi] === gone));
-        if (reading.length !== 1) continue;
+        // Removing the line expands the cards on the side that gave the span up,
+        // which is what this path is for. A card on the closing card's own side
+        // references the line the same way it does and would expand with it, so
+        // this path does not run then.
+        const same = paid.side === 'lo' ? lo : hi;
+        if (this.list.some((c) => c !== card && c[same] === gone)) continue;
         const held = slotWidths(this.plane, axis);
         const mine = card[lo];
         this.list.splice(this.list.indexOf(card), 1);

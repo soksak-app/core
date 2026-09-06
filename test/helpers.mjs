@@ -94,37 +94,4 @@ export function fuzz(grid, seed, steps) {
   return grid;
 }
 
-/**
- * A line can only close up onto its neighbour when no card spans the pair —
- * otherwise that card stops it at `minSize` first. Returns such a line index.
- */
-export function freePair(grid, axis = "x") {
-  const [lo, hi] = axis === "x" ? ["c0", "c1"] : ["r0", "r1"];
-  const lines = grid.lines(axis);
-  for (let k = 1; k < lines.length - 1; k++) {
-    if (grid.cards.some((p) => p[lo] === k && p[hi] === k + 1)) continue;
-    return k;
-  }
-  return null;
-}
 
-/**
- * Splitting alone never leaves a neighbouring pair unspanned — every split
- * fills the band it creates. It takes a close to open one up, so search for it.
- */
-export function withFreePair(options = {}) {
-  for (let seed = 0; seed < 300; seed++) {
-    const grid = three(options);
-    const next = random(seed);
-    for (let i = 0; i < 40; i++) {
-      const open = grid.cards.filter((p) => !p.fixed);
-      if (!open.length) break;
-      const card = open[Math.floor(next() * open.length)];
-      if (next() < 0.65) grid.split(card.id, next() < 0.5 ? "x" : "y");
-      else grid.close(card.id);
-    }
-    const k = freePair(grid, "x");
-    if (k !== null) return { grid, line: k };
-  }
-  throw new Error("no arrangement with an unspanned neighbouring pair was found");
-}

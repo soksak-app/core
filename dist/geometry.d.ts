@@ -35,6 +35,14 @@ export declare function heldSizes(plane: Plane, axis: Axis): (number | null)[];
 /** Drawn width of every slot, gap removed. */
 export declare function slotWidths(plane: Plane, axis: Axis): number[];
 /**
+ * Whether the plane holds what the slots on this axis declare.
+ *
+ * When it does not, every declared size is drawn scaled by one factor. A slot
+ * that shares is the one that gives the room up, so an axis where none shares
+ * never holds them: the declared numbers are proportions there.
+ */
+export declare function holdsSizes(plane: Plane, axis: Axis): boolean;
+/**
  * The px size a slot has to declare to be drawn `drawn` px wide.
  *
  * While the plane holds what the slots declare, that is `drawn` itself. When it
@@ -63,6 +71,15 @@ export declare function declaredFor(plane: Plane, axis: Axis, slot: number, draw
  * sum to the plane size.
  */
 export declare function slotSizes(plane: Plane, axis: Axis): number[];
+/**
+ * The px a sharing slot is drawn at per unit of its span.
+ *
+ * A boundary between two sharing slots moves by changing span, and this is what
+ * one unit of span is worth. A slot the starvation rule stopped at its corridor
+ * does not flex with its span and is not counted, so a move measured against
+ * this rate lands where it was asked to.
+ */
+export declare function sharePerSpan(plane: Plane, axis: Axis): number;
 /** Every line position in px, index for index with the line array. */
 export declare function linePositions(plane: Plane, axis: Axis): number[];
 /** Line indices that at least one card references. One pass over the cards. */

@@ -217,6 +217,62 @@ test("the view places every element on the grid rect", () => {
   for (const banned of ["background", "border", "color", "font"]) {
     assert.ok(!style.includes(banned), `the view set ${banned}`);
   }
+
+  // What the README says every element carries. Without these the values above
+  // place nothing: a card that is not positioned ignores left and top, a rule
+  // that takes presses swallows them, and a grab area that no key reaches and
+  // that a touch scrolls cannot be dragged.
+  assert.equal(view.element("card").style.position, "absolute", "a card is placed");
+  const rule = host.querySelector(".sp-rule");
+  assert.ok(rule, "the view drew a rule");
+  assert.equal(rule.style.position, "absolute", "a rule is placed");
+  assert.equal(rule.style.pointerEvents, "none", "and takes no press");
+  const grab = host.querySelector(".sp-divider");
+  assert.equal(grab.style.position, "absolute", "a grab area is placed");
+  assert.equal(grab.style.touchAction, "none", "a touch on it does not scroll");
+  assert.equal(grab.getAttribute("tabindex"), "0", "and a key reaches it");
+});
+
+test("a line no card reads is not drawn", () => {
+  const { host, grid, view } = mount();
+  grid.close("card");
+  view.render();
+
+  assert.equal(grid.lines("x").length, 3, "the line stays in the array");
+  assert.equal(grid.isVirtual("x", 1), true, "and no card reads it");
+  assert.equal(grid.rules().length, 0, "so there is no rule for it");
+  assert.equal(host.querySelectorAll(".sp-rule").length, 0, "and nothing is drawn");
+
+  // The line is what the card that paid comes back to.
+  grid.split("card-1", "x");
+  view.render();
+  assert.equal(grid.boundaryPos("x", 1), 600, "the boundary comes back where it was");
+  assert.ok(host.querySelectorAll(".sp-rule").length > 0, "and its rule is drawn again");
+});
+
+test("a press that follows a drag whose release was lost is not the second of a pair", () => {
+  const { window, host, grid, view } = mount();
+  const divider = host.querySelector('[role="separator"]');
+  const doc = window.document;
+  const at = grid.boundaryPos("x", 1);
+
+  divider.dispatchEvent(new window.MouseEvent("mousedown", {
+    clientX: at, clientY: 100, bubbles: true, button: 0, buttons: 1,
+  }));
+  doc.dispatchEvent(new window.MouseEvent("mousemove", {
+    clientX: at + 300, clientY: 100, bubbles: true, buttons: 1,
+  }));
+  const moved = grid.boundaryPos("x", 1);
+
+  // The release produced no event at all, and the pointer did not move again.
+  divider.dispatchEvent(new window.MouseEvent("mousedown", {
+    clientX: at + 300, clientY: 100, bubbles: true, button: 0, buttons: 1,
+  }));
+  assert.equal(grid.boundaryPos("x", 1), moved, "the next press starts a drag, it does not centre");
+  doc.dispatchEvent(new window.MouseEvent("mouseup", {
+    clientX: at + 300, clientY: 100, bubbles: true, button: 0, buttons: 0,
+  }));
+  view.destroy();
 });
 
 test("a host that has not been laid out keeps the size the grid was given", () => {
@@ -251,8 +307,13 @@ test("two pointers drag two dividers independently", () => {
   pointer(window, vertical, "pointermove", 1, 400, 300);   // only the first finger moves
 
   // Where it went, not merely that something changed: a drag that moved the
-  // boundary the wrong way, or by the wrong amount, passed the old check.
-  assert.equal(grid.boundaryPos("x", 1), wasX - 200, "it followed the finger");
+  // boundary the wrong way, or by the wrong amount, passed the old check. The
+  // position is converted through the normalised array and back, so it carries
+  // the rounding of that conversion.
+  assert.ok(
+    Math.abs(grid.boundaryPos("x", 1) - (wasX - 200)) < 1e-9,
+    `it followed the finger to ${grid.boundaryPos("x", 1)}, not ${wasX - 200}`,
+  );
   assert.notDeepEqual(grid.lines("x"), xs, "the divider under that finger moved");
   assert.deepEqual(grid.lines("y"), ys, "the other one did not");
 
@@ -926,7 +987,10 @@ test("releasing another button leaves a mouse drag running", () => {
   doc.dispatchEvent(new window.MouseEvent("mousemove", {
     clientX: at + 200, clientY: 100, bubbles: true, buttons: 1,
   }));
-  assert.equal(grid.boundaryPos("x", 1), at + 200, "and still follows the pointer");
+  assert.ok(
+    Math.abs(grid.boundaryPos("x", 1) - (at + 200)) < 1e-9,
+    `it follows the pointer to ${grid.boundaryPos("x", 1)}, not ${at + 200}`,
+  );
 
   doc.dispatchEvent(new window.MouseEvent("mouseup", {
     clientX: at + 200, clientY: 100, bubbles: true, button: 0, buttons: 0,
@@ -1053,4 +1117,66 @@ test("the sheet draws each part the README names", () => {
   assert.match(css, /\.sp-divider::after\s*\{[^}]*--sp-grip\b/, "a grip is drawn inside the grab area");
   assert.match(css, /\.sp-divider\[data-axis="x"\]\s*\{[^}]*cursor:\s*col-resize/, "the x axis has its cursor");
   assert.match(css, /\.sp-divider\[data-axis="y"\]\s*\{[^}]*cursor:\s*row-resize/, "the y axis has its cursor");
+});
+
+test("a destroyed view does not run the commit hook", () => {
+  const seen = [];
+  const { view } = mount({
+    commit: (rects, draw) => {
+      seen.push(rects.size);
+      draw();
+    },
+  });
+  view.destroy();
+  seen.length = 0;
+  view.render();
+  assert.deepEqual(seen, [], "the host is told nothing about a plane that is gone");
+});
+
+test("a drag the release never reached is not the first press of a pair", () => {
+  const { window, host, grid, view } = mount();
+  const divider = host.querySelector('[role="separator"]');
+  const doc = window.document;
+  const at = grid.boundaryPos("x", 1);
+
+  divider.dispatchEvent(new window.MouseEvent("mousedown", {
+    clientX: at, clientY: 100, bubbles: true, button: 0, buttons: 1,
+  }));
+  doc.dispatchEvent(new window.MouseEvent("mousemove", {
+    clientX: at + 300, clientY: 100, bubbles: true, buttons: 1,
+  }));
+  const moved = grid.boundaryPos("x", 1);
+  assert.notEqual(moved, at, "the drag moved the boundary");
+
+  // The release itself was never delivered. The next move reports no button.
+  doc.dispatchEvent(new window.MouseEvent("mousemove", {
+    clientX: at + 300, clientY: 100, bubbles: true, buttons: 0,
+  }));
+  divider.dispatchEvent(new window.MouseEvent("mousedown", {
+    clientX: at + 300, clientY: 100, bubbles: true, button: 0, buttons: 1,
+  }));
+  assert.equal(grid.boundaryPos("x", 1), moved, "the next press starts a drag, it does not centre");
+  doc.dispatchEvent(new window.MouseEvent("mouseup", {
+    clientX: at + 300, clientY: 100, bubbles: true, button: 0, buttons: 0,
+  }));
+  view.destroy();
+});
+
+test("a pointer drag the release never reached is not the first press of a pair", () => {
+  const { window, host, grid, view } = mount();
+  const divider = host.querySelector('[role="separator"]');
+  const at = grid.boundaryPos("x", 1);
+
+  pointer(window, divider, "pointerdown", 9, at, 100);
+  pointer(window, divider, "pointermove", 9, at + 300, 100);
+  const moved = grid.boundaryPos("x", 1);
+  assert.notEqual(moved, at, "the drag moved the boundary");
+
+  divider.dispatchEvent(new window.PointerEvent("pointermove", {
+    pointerId: 9, clientX: at + 300, clientY: 100, bubbles: true, isPrimary: true, button: -1, buttons: 0,
+  }));
+  pointer(window, divider, "pointerdown", 9, at + 300, 100);
+  assert.equal(grid.boundaryPos("x", 1), moved, "the next press starts a drag, it does not centre");
+  pointer(window, divider, "pointerup", 9, at + 300, 100);
+  view.destroy();
 });
