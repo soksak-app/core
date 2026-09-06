@@ -745,6 +745,28 @@ fn lend_back() {
     }
 }
 
+/// Makes the window a child of the parent, drawn above it and moving with it.
+/// Adding it also puts it on screen.
+///
+/// Only macOS is written. On Windows this would set the parent as the owner
+/// window and on Linux call gtk_window_set_transient_for.
+#[allow(unused_variables)]
+pub fn attach(ns_window: *mut std::ffi::c_void, parent: *mut std::ffi::c_void) {
+    #[cfg(target_os = "macos")]
+    unsafe {
+        use objc2::msg_send;
+        use objc2::runtime::AnyObject;
+
+        let window = ns_window as *mut AnyObject;
+        let parent = parent as *mut AnyObject;
+        if window.is_null() || parent.is_null() {
+            return;
+        }
+        // NSWindowAbove is 1.
+        let _: () = msg_send![parent, addChildWindow: window, ordered: 1isize];
+    }
+}
+
 /// Makes this window the main one.
 ///
 /// A modal takes the keyboard so that its webview sets the cursor, and a window

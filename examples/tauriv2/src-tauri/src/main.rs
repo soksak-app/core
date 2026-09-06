@@ -432,10 +432,11 @@ fn modal_window(app: &AppHandle, state: &State<'_, Overlay>, id: &str) -> Option
 /// on screen when the parent is resized, so the modal is placed again here. The
 /// Wails host does this through the window it attaches to.
 fn replace_modals(app: &AppHandle) {
-    let Some(main) = app.get_webview_window("main") else {
+    // The app's window holds a webview per surface, so get_webview_window does
+    // not answer for it.
+    let Some(window) = app.get_window("main") else {
         return;
     };
-    let window = main.as_ref().window();
     let Ok(scale) = window.scale_factor() else {
         return;
     };
@@ -552,7 +553,6 @@ fn overlay_show(
         .background_color(Color(r as u8, g as u8, b as u8, (a * 255.0) as u8))
         .position(sx, sy)
         .inner_size(aw, ah)
-        .parent_raw(parent)
         .build()
         .map_err(|e| e.to_string())?;
     // Tauri provides no non-opaque window without a private interface, so the
@@ -743,9 +743,15 @@ fn overlay_ready(
     existing.set_focus().map_err(|e| e.to_string())?;
     // The modal's own document calls this command, so the window injected into
     // it is the modal. The application's window is found by name and made main
-    // again.
-    if let Some(main) = app.get_webview_window("main") {
-        native::make_main(main.ns_window().map_err(|e| e.to_string())?);
+    // again. get_webview_window does not answer for it: it holds a webview per
+    // surface.
+    if let Some(main) = app.get_window("main") {
+        let parent = main.ns_window().map_err(|e| e.to_string())?;
+        // Made a child of the app's window here rather than at build: AppKit
+        // puts a window on screen the moment it is added as a child, whatever
+        // visible(false) asked for, and until now it held nothing drawn.
+        native::attach(existing.ns_window().map_err(|e| e.to_string())?, parent);
+        native::make_main(parent);
     }
     // A modal is a window of its own, so this app now holds one more. AppKit gives
     // no notification when a child window is attached, and attaching it is done

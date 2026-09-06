@@ -50,7 +50,8 @@ One file per role, and the imports run one way:
 
 What crosses a boundary is announced, never called: settings announces a change
 and the page re-lays the plane; the plane announces a render and the page
-verifies and publishes; the compositor announces a commit and the page verifies.
+verifies and publishes; the compositor announces a commit and the page tells the
+host what is alive.
 
 ### The model
 

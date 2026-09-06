@@ -25,25 +25,30 @@ let seq = 0;
 let applied = 0;
 let latestRecord = null;
 let aheadRecord = null;
+/* 미리 게시한 커밋의 번호. 그 번호로 커밋이 이루어졌을 때만 예측 레코드가 생긴다.
+   지연이 걸려 있으면 뒤이은 측정 커밋이 그것을 대신하므로 예측은 게시되지 않는다. */
+let aheadSeq = -1;
 let timer = null;
 const drawn = new Map();
 
-/* 카드 안에서 슬롯이 차지하는 여백과 그 카드의 id. 여백은 카드의 헤더, 푸터,
-   안쪽 패딩이므로 경계를 끄는 동안 변하지 않는다. DOM 을 측정하는 커밋에서 기록하고
-   측정하지 않는 커밋에서 사용한다. 표면 id 는 탭 id 이므로 사각형 조회에 쓸 수 없다. */
-const insets = new Map();
-
-/** 슬롯이 속한 카드의 id. 판이 카드 요소에 기록한 값을 읽는다. */
-const cardOf = (slot) => slot.closest("[data-card-id]")?.dataset.cardId;
+/** 슬롯이 속한 카드의 요소. 판이 기록한 data-card-id 를 가진 조상이다. */
+const cardEl = (slot) => slot.closest("[data-card-id]");
 
 /**
- * 살아 있지 않은 표면의 여백을 잊는다.
+ * 카드 안에서 슬롯이 차지하는 여백. 지금 그려져 있는 카드에서 잰다.
  *
- * 이 모듈은 지금 판의 표면만 본다. 다른 스페이스의 표면도 살아 있으므로, 무엇이
- * 남아 있는지는 전체 목록을 아는 쪽이 전달한다.
+ * 여백은 카드의 보더와 머리와 발이고 카드의 크기와 무관하다. 앞선 커밋에서 잰 값을
+ * 보관하면 그 사이에 테마가 보더 굵기를 바꾼 렌더에서 지난 여백으로 예측하게 된다.
  */
-export function forget(live) {
-  for (const id of insets.keys()) if (!live.has(id)) insets.delete(id);
+function insetOf(slot, el) {
+  const s = slot.getBoundingClientRect();
+  const c = el.getBoundingClientRect();
+  return {
+    left: s.left - c.left,
+    top: s.top - c.top,
+    width: c.width - s.width,
+    height: c.height - s.height,
+  };
 }
 
 /** 마지막 커밋 레코드를 반환한다. 없으면 null. */
@@ -101,27 +106,15 @@ const slots = () =>
  *
  * 호출로만 동작한다. 위치 변경을 감시하지 않고, 위치를 정한 쪽이 호출한다.
  */
-export function publish(rects) {
+export function publish() {
   const mine = ++seq;
   const host = plane.getBoundingClientRect();
   const snapshot = [];
   for (const slot of slots()) {
     const r = slot.getBoundingClientRect();
     const frame = { x: r.left - host.left, y: r.top - host.top, w: r.width, h: r.height };
-    const id = slot.dataset.nativeSurfaceId;
-    const seat = cardOf(slot);
-    const card = rects?.get(seat);
-    if (card) {
-      insets.set(id, {
-        card: seat,
-        left: frame.x - card.x,
-        top: frame.y - card.y,
-        width: card.w - frame.w,
-        height: card.h - frame.h,
-      });
-    }
     snapshot.push({
-      id,
+      id: slot.dataset.nativeSurfaceId,
       layer: Number(slot.dataset.nativeLayer),
       title: slot.dataset.nativeTitle,
       plugin: slot.dataset.nativePlugin,
@@ -165,10 +158,11 @@ export function publishAhead(rects, seated) {
   const seats = [];
   for (const slot of slots()) {
     const id = slot.dataset.nativeSurfaceId;
-    const inset = insets.get(id);
-    const card = inset && rects.get(inset.card);
-    if (!card || inset.card !== cardOf(slot)) return false;
-    if (seated.get(inset.card) !== id) return false;
+    const el = cardEl(slot);
+    const card = el && rects.get(el.dataset.cardId);
+    if (!card) return false;
+    if (seated.get(el.dataset.cardId) !== id) return false;
+    const inset = insetOf(slot, el);
     seats.push({
       id,
       layer: Number(slot.dataset.nativeLayer),
@@ -188,9 +182,8 @@ export function publishAhead(rects, seated) {
   if (seats.length === 0 || seats.length !== seated.size) return false;
   // 지연은 두 길에 같이 걸린다. 한쪽만 걸면 그 손잡이가 끄는 동안에는 아무 일도
   // 하지 않고, 그 상태를 만들려고 있는 손잡이가 그 상태를 만들지 못한다.
-  const told = deliver(++seq, seats) ?? true;
-  aheadRecord = latestRecord;
-  return told;
+  aheadSeq = ++seq;
+  return deliver(aheadSeq, seats) ?? true;
 }
 
 /** 네이티브 상태를 쓰는 유일한 함수. 시퀀스가 낮은 스냅샷은 거부한다. */
@@ -235,6 +228,9 @@ function commit(mine, snapshot, final) {
     if (!record.surfaces.some((x) => x.id === id)) { el.remove(); drawn.delete(id); }
   }
   latestRecord = record;
+  // 예측이 그 번호 그대로 커밋되었을 때만 예측 레코드다. 지연이 걸려 있으면 뒤이은
+  // 측정 커밋이 그것을 대신하고, 예측은 게시되지 않는다.
+  if (mine === aheadSeq) aheadRecord = record;
   // 무엇을 호스트에 보낼지는 이 모듈이 정하지 않는다. 이 판의 표면만으로는 부족하고,
   // 다른 스페이스의 표면도 살아 있어야 한다.
   //

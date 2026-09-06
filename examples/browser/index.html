@@ -64,7 +64,7 @@ import {
 
 /* 표면을 모사하고 보고한다. 판은 슬롯 요소에 값을 기록만 하고 측정과 보고는 이쪽이
    담당한다. */
-import { forget, onCommit, onKnobChange, publish, publishAhead } from "./compositor.js";
+import { onCommit, onKnobChange, publish, publishAhead } from "./compositor.js";
 
 /* 판 하나. 이 문서는 판의 렌더링 방식을 알지 않고 렌더 완료만 수신한다. */
 import {
@@ -168,17 +168,15 @@ function dormant(shown) {
 
 /* 커밋이 끝나면 호스트에 표면을 알린다. 컴포지터는 이 판의 표면만 알고, 무엇이
    살아 있어야 하는지는 이 문서가 안다. 호스트의 답을 그대로 돌려준다. */
-onCommit((record) => {
-  const surfaces = [...record.surfaces, ...dormant(record.surfaces)];
-  // 이 목록이 살아 있는 표면의 전부다. 컴포지터는 이 판의 표면만 보므로 나머지를
-  // 스스로 정리할 수 없다.
-  forget(new Set(surfaces.map((s) => s.id)));
-  return host.place({ ...record, surfaces });
-});
+onCommit((record) =>
+  host.place({
+    ...record,
+    surfaces: [...record.surfaces, ...dormant(record.surfaces)],
+  }));
 
 /* 판이 다시 그려지면 검증하고 표면을 보고한다. 판은 둘을 알지 않고 둘은 판을 읽기만
    하므로 이 문서에서 연결한다. */
-onRender(() => { publish(drawn); check(); });
+onRender(() => { publish(); check(); });
 
 /* 배치가 바뀌면 그리기 전에 호스트에 알리고, 호스트가 옮긴 뒤에 그린다. 판 위의
    네이티브 뷰는 다른 길로 움직이고 그 길이 더 느리다. 그려 놓고 알리면 한 프레임
@@ -186,12 +184,7 @@ onRender(() => { publish(drawn); check(); });
 
    여백을 아직 재지 못했거나 호스트가 없으면 곧바로 그린다. 그리고 나면 onRender 가
    재서 다시 보고하므로 어느 쪽이든 마지막 값은 같다. */
-let drawn = null;
-
 onLayout((made, draw, seated) => {
-  // 뷰가 요소에 기록할 사각형이다. 여백을 이 값에 대해 재야 미리 게시한 자리와 그려진
-  // 자리가 같아진다. 판의 사각형은 장치 픽셀에 맞추기 전의 값이다.
-  drawn = made;
   const told = publishAhead(made, seated);
   if (told && typeof told.then === "function") told.then(draw, draw);
   else draw();
@@ -335,7 +328,7 @@ function drawBars() {
       onClose: projects.all().length > 1
         // 배경에 있던 것을 닫으면 판은 그대로다. 살아 있어야 할 표면 목록은
         // 커밋에서만 전달되므로, 닫은 뒤 한 번 게시해 그 표면을 없앤다.
-        ? () => { projects.close(p.id); drawBars(); publish(drawn); } : null,
+        ? () => { projects.close(p.id); drawBars(); publish(); } : null,
     }));
   }
   into.appendChild(addTabButton("+", openProject));
@@ -346,7 +339,7 @@ function drawBars() {
       onPick: () => { projects.activateSpace(sp.id); drawBars(); },
       onRename: (title) => projects.renameSpace(sp.id, title),
       onClose: here.spaces.length > 1
-        ? () => { projects.closeSpace(sp.id); drawBars(); publish(drawn); } : null,
+        ? () => { projects.closeSpace(sp.id); drawBars(); publish(); } : null,
     }));
   }
   spaceBar.appendChild(addTabButton("+", () => { projects.addSpace(fresh()); drawBars(); }));
