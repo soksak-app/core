@@ -164,7 +164,6 @@ static void* shapeCreate(void* nsWindow, double x, double y, double w, double h)
     NSView* view = [[NSView alloc] initWithFrame:surfaceAligned(window, x, y, w, h)];
     [view setWantsLayer:YES];
     [[window contentView] addSubview:view positioned:NSWindowAbove relativeTo:nil];
-    [view retain];
     return (void*)view;
 }
 
@@ -180,10 +179,10 @@ static void shapeSetStyle(void* handle, double radius, double lineWidth,
         [[NSColor colorWithSRGBRed:lr green:lg blue:lb alpha:la] CGColor];
 }
 
-// Runs a line of script in a page this app serves. This is how a message goes
-// the other way.
+// Removes a shape's view and releases the reference alloc returned. The
+// superview holds one of its own until removeFromSuperview.
 static void shapeDestroy(void* handle) {
-    WKWebView* view = (WKWebView*)handle;
+    NSView* view = (NSView*)handle;
     [view removeFromSuperview];
     [view release];
 }

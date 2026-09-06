@@ -282,6 +282,9 @@ pub fn shape_destroy(view: usize) {
             return;
         }
         let _: () = msg_send![view, removeFromSuperview];
+        // The reference alloc returned. The superview held one of its own until
+        // the line above.
+        let _: () = msg_send![view, release];
     }
 }
 
