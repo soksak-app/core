@@ -6,11 +6,9 @@
 // 판의 구조를 알지 않는다. 표면의 위치와 내용은 판이 슬롯 요소의 data 속성에
 // 기록하고, 이 모듈은 그 속성을 읽어 측정하고 보고한다.
 import { plugin } from "./plugins/registry.js";
+import { surfaces as host } from "./host.js";
 
 const plane = document.getElementById("plane");
-
-/* 호스트가 네이티브로 그리는 플러그인 종류. 해당 표면은 여기서 모사하지 않는다. */
-const hostKinds = () => window.hostSurfaces?.kinds ?? [];
 
 /* 커밋 완료 수신자. 검증이 여기에 연결된다. */
 let listener = null;
@@ -178,7 +176,7 @@ function commit(mine, snapshot, final) {
   if (mine < applied) return;
   applied = mine;
   const record = { seq: mine, settled: final, surfaces: [] };
-  const native = hostKinds();
+  const native = host.kinds;
   for (const s of snapshot) {
     // 호스트가 없으면 이 모듈이 표면을 모사하므로 적용 위치도 여기서 정한다.
     // 호스트가 있으면 호스트가 실제로 앉힌 자리를 답으로 주고, 아래에서 그것으로
@@ -265,7 +263,7 @@ function seat(record, placed) {
  */
 export function standIn(on, over) {
   const host = over ? plane.getBoundingClientRect() : null;
-  const native = hostKinds();
+  const native = host.kinds;
   for (const slot of slots()) {
     // 네이티브 표면은 실행 중인 페이지와 프로그램을 표시한다. DOM 을 그리려고 숨기면
     // 사용자가 보던 화면이 정지 이미지로 바뀌므로 숨기지 않는다.

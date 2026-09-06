@@ -71,6 +71,9 @@ import {
    알지 않는다. */
 import { verify } from "./verify.js";
 
+/* 애플리케이션 인터페이스. 없으면 아무 일도 하지 않는 구현이 온다. */
+import { surfaces as host } from "./host.js";
+
 /* 관측이 지목한 요소를 누른다. 호스트가 요청할 때만 동작한다. */
 import "./observe.js";
 
@@ -95,9 +98,9 @@ install();
 
 /* 처리되지 않은 오류를 애플리케이션 로그로 보낸다. 애플리케이션에는 콘솔이 없다. */
 addEventListener("error", (e) =>
-  window.hostSurfaces?.report?.(`error: ${e.message} @ ${e.filename}:${e.lineno}`));
+  host.report(`error: ${e.message} @ ${e.filename}:${e.lineno}`));
 addEventListener("unhandledrejection", (e) =>
-  window.hostSurfaces?.report?.(`rejected: ${e.reason}`));
+  host.report(`rejected: ${e.reason}`));
 
 /* ── 배선 ─────────────────────────────────────────────────────────────── */
 
@@ -122,10 +125,8 @@ function check() {
   if (failed.length === 0) console.log(line);
   else console.error(line);
   // 애플리케이션은 자체 로그에 기록한다. 호스트가 없으면 콘솔에만 남는다.
-  const told = window.hostSurfaces?.report;
-  if (!told) return;
   lastSaid = line;
-  told(line);
+  host.report(line);
 }
 
 /* 표면이 하나도 서지 않는 자리. 잠든 표면은 크기가 없다. */
@@ -168,7 +169,7 @@ function dormant(shown) {
 /* 커밋이 끝나면 호스트에 표면을 알린다. 컴포지터는 이 판의 표면만 알고, 무엇이
    살아 있어야 하는지는 이 문서가 안다. 호스트의 답을 그대로 돌려준다. */
 onCommit((record) =>
-  window.hostSurfaces?.place?.({
+  host.place({
     ...record,
     surfaces: [...record.surfaces, ...dormant(record.surfaces)],
   }));

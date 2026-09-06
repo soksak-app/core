@@ -8,6 +8,7 @@ import { Soksak, SoksakView, outline } from "/dist/index.js";
 import { cardRadius, halfGap, linkedSet, value } from "./settings.js";
 import { isPlace, plugin, plugins, railId, railKind, section } from "./plugins/registry.js";
 import { standIn } from "./compositor.js";
+import { native, overlay, shapes, surfaces as host } from "./host.js";
 import { issueId } from "./ids.js";
 
 const NEEDS = ["cards", "card", "insertAt", "moveTo", "standings", "moveBoundary", "zoneAt", "splitToward"];
@@ -27,11 +28,11 @@ const NEEDS = ["cards", "card", "insertAt", "moveTo", "standings", "moveBoundary
 const HEADER = 32, FOOTER = 22;
 
 /* A host may place real native surfaces instead of the simulated ones.
-   window.hostSurfaces.kinds lists the plugin kinds the host draws natively, and
-   the simulator skips its own surface for those. window.hostSurfaces.place
+   host.kinds lists the plugin kinds the application draws natively, and the
+   simulator skips its own surface for those. host.place
    receives every commit record so the host places its views on the same frames.
    With no host both are absent and the page simulates every surface. */
-const hostKinds = () => window.hostSurfaces?.kinds ?? [];
+const hostKinds = () => host.kinds;
 
 /* 포커스를 잃은 표면의 흐림 여부. 표면은 카드마다 하나이므로 카드 단위로 판정한다. */
 const dimmed = (cardId) =>
@@ -501,8 +502,8 @@ function openLayer(anchor, ask, items, pick, align = "right") {
   // renders DOM. A host takes this element and renders it in such a view, so the
   // surfaces underneath keep running. The element is passed whole and the host
   // needs no knowledge of its contents.
-  if (window.hostOverlay) {
-    window.hostOverlay.show(pickerEl, rect, (key) => { closePicker(); pick(key); });
+  if (native) {
+    overlay.show(pickerEl, rect, (key) => { closePicker(); pick(key); });
     pickerEl.hidden = true;
   } else {
     standIn(true, rect);
@@ -519,7 +520,7 @@ function closePicker() {
   pickerEl.hidden = true;
   document.removeEventListener("pointerdown", onPickerOutside, true);
   document.removeEventListener("keydown", onPickerKey, true);
-  if (window.hostOverlay) window.hostOverlay.hide();
+  if (native) overlay.hide();
   else standIn(false);
 }
 
@@ -561,9 +562,9 @@ function showDrop(hit) {
   // 미리보기는 표면 위에 그려야 한다. 호스트가 있으면 네이티브 도형으로 그린다 —
   // 채움이 반투명이라 웹뷰로는 표면 위에 합성되지 않는다. 모양은 이 문서의 CSS 가
   // 정하고 그 계산값을 그대로 보낸다.
-  if (window.hostShapes) {
+  if (native) {
     const css = getComputedStyle(dropEl);
-    window.hostShapes.set("drop", half, {
+    shapes.set("drop", half, {
       radius: parseFloat(css.borderTopLeftRadius) || 0,
       lineWidth: parseFloat(css.borderTopWidth) || 0,
       fill: css.backgroundColor,
@@ -580,7 +581,7 @@ function showDrop(hit) {
 /** 미리보기를 지운다. 호스트가 그리고 있으면 그 도형도 없앤다. */
 function hideDrop() {
   if (dropShown) {
-    window.hostShapes.clear("drop");
+    shapes.clear("drop");
     dropShown = false;
   }
   dropEl.hidden = true;

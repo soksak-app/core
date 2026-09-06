@@ -12,6 +12,7 @@
 // 않는다. 모든 컨트롤에 data-key 또는 data-set 을 붙이고 응답을 answer() 하나로
 // 받는다.
 import { standIn } from "./compositor.js";
+import { native, overlay } from "./host.js";
 import { icon } from "./icons.js";
 import { onGripDrag, showValue } from "./card.js";
 import { build } from "./plane.js";
@@ -279,7 +280,7 @@ export function drawSettings() {
   }
   body.textContent = "";
   SECTIONS.find(([id]) => id === here)[2]();
-  window.hostOverlay?.update(card);
+  overlay.update(card);
 }
 
 /**
@@ -324,7 +325,7 @@ function moveBy(dx, dy) {
   card.style.top = `${Math.max(8, Math.min(innerHeight - r.height - 8, r.top + dy))}px`;
   card.style.transform = "none";
   const rect = cardRect();
-  if (window.hostOverlay) window.hostOverlay.place(rect);
+  if (native) overlay.place(rect);
   else standIn(true, rect);
 }
 
@@ -355,11 +356,11 @@ export function openSettings() {
   drawSettings();
 
   const rect = cardRect();
-  if (window.hostOverlay) {
-    // 호스트가 렌더링하므로 여기서는 표시하지 않는다. 위치와 크기는 이 요소에서
+  if (native) {
+    // 애플리케이션이 렌더링하므로 여기서는 표시하지 않는다. 위치와 크기는 이 요소에서
     // 읽어야 하므로 display 가 아니라 visibility 로 숨긴다.
     card.style.visibility = "hidden";
-    window.hostOverlay.show(card, rect, answer);
+    overlay.show(card, rect, answer);
   } else {
     standIn(true, rect);
   }
@@ -369,7 +370,7 @@ export function openSettings() {
 function closeSettings() {
   if (!card) return;
   document.removeEventListener("pointerdown", pressedOutside);
-  if (window.hostOverlay) window.hostOverlay.hide();
+  if (native) overlay.hide();
   else standIn(false);
   scrim.remove();
   scrim = null;

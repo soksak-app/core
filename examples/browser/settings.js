@@ -26,6 +26,8 @@
 
 /* 고를 수 있는 폰트. 테마가 이 중 하나를 기본으로 지정하고 설정에서 바꾼다.
    설치되지 않은 이름은 목록의 다음 이름으로 넘어간다. */
+import { surfaces as host } from "./host.js";
+
 export const FONTS = [
   { id: "mono-system", name: "시스템 고정폭",
     stack: "ui-monospace,SFMono-Regular,Menlo,monospace" },
@@ -268,7 +270,7 @@ export function install() {
   }
   // 호스트가 서비스하는 페이지는 이 문서의 스타일시트를 상속하지 않으므로 값을
   // 따로 전송한다.
-  window.hostSurfaces?.theme?.(window.pageTheme());
+  host.theme(window.pageTheme());
 }
 /** 카드의 모서리 반경(px). 이음새가 line 이면 카드는 각지다. */
 export const cardRadius = () => (seam() === "line" ? 0 : settings.radius);

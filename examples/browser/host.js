@@ -77,18 +77,24 @@ function drawing(el) {
   };
 }
 
-function install() {
-  let last = "";
+/**
+ * 이 페이지를 애플리케이션이 실행하는가.
+ *
+ * 표면과 모달과 도형을 누가 그리는지가 이 값으로 갈린다. 애플리케이션이 그리면
+ * 네이티브 뷰이고, 아니면 이 문서가 DOM 으로 모사한다. 그리는 방법이 정말로 다르므로
+ * 갈림 자체는 남고, 갈리는 자리는 이 값 하나다.
+ */
+export const native = Boolean(bridge);
 
-  // 페이지는 이 호스트가 설치되기 전에 테마를 적용한다. 첫 place 호출에서 테마를
-  // 한 번 전송한다.
-  let announced = false;
+/* 애플리케이션에는 콘솔이 없다. 여기서 실패를 잡으면 기록되지 않으므로 잡지
+   않는다. 문서의 unhandledrejection 이 애플리케이션 로그로 전달한다. */
+const tell = (name, payload) => bridge.call(name, payload);
 
-  /* 애플리케이션에는 콘솔이 없다. 여기서 실패를 잡으면 기록되지 않으므로 잡지
-     않는다. 문서의 unhandledrejection 이 애플리케이션 로그로 전달한다. */
-  const tell = (name, payload) => bridge.call(name, payload);
+let last = "";
+let announced = false;
 
-  window.hostSurfaces = {
+/** 표면 인터페이스. 애플리케이션이 없으면 아무 일도 하지 않는다. */
+export const surfaces = native ? {
     kinds: ["browser", "terminal"],
 
     /** 검증 결과 한 줄을 애플리케이션 로그로 전송한다. */
@@ -132,8 +138,17 @@ function install() {
       return tell("syncSurfaces", request).then((placed) =>
         (placed ?? []).map((p) => ({ id: p.id, ...toPlane(p) })));
     },
-  };
+} : {
+  kinds: [],
+  report: () => {},
+  theme: () => {},
+  place: () => {},
+};
 
+let pick = null;
+let shown = null;
+
+if (native) {
   // 표면은 네이티브 뷰이므로 그 위의 클릭이 이 문서에 도달하지 않는다.
   // 애플리케이션이 표면 id 를 전달하면 페이지가 해당 슬롯에 pointerdown 을 낸다.
   bridge.on("surface-pressed", (id) => window.pressSurface(id));
@@ -142,15 +157,14 @@ function install() {
   // 통로보다 넓어서 통로가 선 하나 폭이면 그 영역 전체가 표면 아래에 놓인다.
   bridge.on("surface-input", (step) => window.surfaceInput(step));
 
-  let pick = null;
-  let shown = null;
   // 모달은 여러 번 응답하므로 여기서 구독을 해제하지 않고 hide 에서 해제한다.
   bridge.on("overlay-pick", ({ key, value }) => { if (pick) pick(key, value); });
+}
 
-  /* 표면 위에 그리는 도형. 네이티브 뷰 하나이고 웹뷰가 아니다 — 채움과 선이
-     알파를 갖고 표면이 보여주는 것 위에 합성된다. 웹뷰는 WebKit 이 자기 배경을
-     칠하므로 그렇게 할 수 없다. */
-  window.hostShapes = {
+/* 표면 위에 그리는 도형. 네이티브 뷰 하나이고 웹뷰가 아니다 — 채움과 선이 알파를
+   갖고 표면이 보여주는 것 위에 합성된다. 웹뷰는 WebKit 이 자기 배경을 칠하므로
+   그렇게 할 수 없다. */
+export const shapes = native ? {
     set(id, rect, style) {
       tell("setShape", {
         id,
@@ -164,9 +178,18 @@ function install() {
     },
 
     clear: (id) => tell("clearShape", id),
-  };
+} : {
+  set: () => {},
+  clear: () => {},
+};
 
-  window.hostOverlay = {
+/**
+ * 표면 위에 그리는 모달. 애플리케이션은 요소를 통째로 받아 자기 창에 그린다.
+ *
+ * conceal 은 이 문서의 요소를 감추는 방법이다. 요소마다 다르므로 부르는 쪽이 준다.
+ * 애플리케이션이 없으면 감추지 않고 이 문서가 그대로 그린다.
+ */
+export const overlay = native ? {
     show(el, rect, onPick) {
       pick = onPick;
       // 이 길로 오는 요소는 [data-native-modal] 이다. 표식만 두고 검사하지 않으면
@@ -210,8 +233,9 @@ function install() {
       pick = null;
       if (id) tell("overlayHide", id);
     },
-  };
-}
-
-// 인터페이스가 없으면 호스트도 없다. 브라우저에서는 페이지가 표면을 직접 그린다.
-if (bridge) bridge.ready(install);
+} : {
+  show: () => {},
+  place: () => {},
+  update: () => {},
+  hide: () => {},
+};
