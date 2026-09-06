@@ -202,7 +202,7 @@ export class SoksakView {
         (_h = (_g = this.options).onChange) === null || _h === void 0 ? void 0 : _h.call(_g, reason);
     }
     sweep(map, keep) {
-        var _a, _b;
+        var _a;
         for (const [k, el] of map) {
             if (keep.has(k))
                 continue;
@@ -212,12 +212,11 @@ export class SoksakView {
             for (const [pointer, drag] of [...this.drags])
                 if (drag.on === el)
                     this.drop(pointer);
-            if (((_a = this.mouseDrag) === null || _a === void 0 ? void 0 : _a.on) === el)
-                this.dropMouse();
             // The mouse listeners are on the document, so removing the element does
             // not remove them. Left behind, they keep driving the boundary of a
-            // divider that is gone, and they accumulate one pair per divider.
-            (_b = this.mouseDisposers.get(el)) === null || _b === void 0 ? void 0 : _b();
+            // divider that is gone, and they accumulate one pair per divider. The
+            // disposer drops that divider's mouse drag before it removes them.
+            (_a = this.mouseDisposers.get(el)) === null || _a === void 0 ? void 0 : _a();
             el.remove();
             map.delete(k);
         }
@@ -249,8 +248,10 @@ export class SoksakView {
     /**
      * End a mouse drag.
      *
-     * Every way a mouse drag can end runs through here: mouseup, the button being
-     * released elsewhere, and destroy. It ends the way a pointer drag ends: the
+     * A mouse drag ends here on mouseup and when the button is released
+     * elsewhere. A divider swept away, and destroy, drop the drag instead: there
+     * is nothing to draw for a divider that is gone. It ends the way a pointer
+     * drag ends: the
      * divider stops carrying `data-dragging`, boundaries that now coincide are
      * merged, and the last render reports the reason drag. Reports whether the
      * boundary moved.

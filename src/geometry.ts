@@ -544,11 +544,18 @@ export interface ZoneOptions {
   centreOnly?: string;
 }
 
+/** A px measurement from the host, or 0 when it is not one. */
+const size = (px: number | undefined): number =>
+  Number.isFinite(px) && (px as number) >= 0 ? (px as number) : 0;
+
 export function zoneAt(plane: Plane, x: number, y: number, options: ZoneOptions = {}): ZoneHit | null {
   if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
   const frame = frameOf(plane);
-  const header = options.headerPx ?? 0;
-  const footer = options.footerPx ?? 0;
+  // Every option is checked the same way the plane's are. A chrome height that
+  // is not a number makes every comparison below false and every point land on
+  // the card rather than a side.
+  const header = size(options.headerPx);
+  const footer = size(options.footerPx);
   // Every option is checked the same way the plane's are. A fraction that is
   // not one, or one outside the body, makes every point land on a side.
   const asked = options.edge ?? 0.25;
@@ -563,9 +570,9 @@ export function zoneAt(plane: Plane, x: number, y: number, options: ZoneOptions 
     const bottom = r.y + r.h - footer;
     if (bottom <= top || y < top || y > bottom) return { id: card.id, zone: 'centre' };
 
-    // A card drawn at zero width or height has no drop zones. Dividing by it
-    // gives NaN and every comparison below then falls to the last branch.
-    if (!(r.w > 0) || !(bottom > top)) return { id: card.id, zone: 'centre' };
+    // A card drawn at zero width has no drop zones. Dividing by it gives NaN and
+    // every comparison below then falls to the last branch.
+    if (!(r.w > 0)) return { id: card.id, zone: 'centre' };
     const px = (x - r.x) / r.w;
     const py = (y - top) / (bottom - top);
     if (px > edge && px < 1 - edge && py > edge && py < 1 - edge) return { id: card.id, zone: 'centre' };

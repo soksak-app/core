@@ -427,16 +427,21 @@ export function dividers(plane, grabSize) {
     }
     return out;
 }
+/** A px measurement from the host, or 0 when it is not one. */
+const size = (px) => Number.isFinite(px) && px >= 0 ? px : 0;
 export function zoneAt(plane, x, y, options = {}) {
-    var _a, _b, _c;
+    var _a;
     if (!Number.isFinite(x) || !Number.isFinite(y))
         return null;
     const frame = frameOf(plane);
-    const header = (_a = options.headerPx) !== null && _a !== void 0 ? _a : 0;
-    const footer = (_b = options.footerPx) !== null && _b !== void 0 ? _b : 0;
+    // Every option is checked the same way the plane's are. A chrome height that
+    // is not a number makes every comparison below false and every point land on
+    // the card rather than a side.
+    const header = size(options.headerPx);
+    const footer = size(options.footerPx);
     // Every option is checked the same way the plane's are. A fraction that is
     // not one, or one outside the body, makes every point land on a side.
-    const asked = (_c = options.edge) !== null && _c !== void 0 ? _c : 0.25;
+    const asked = (_a = options.edge) !== null && _a !== void 0 ? _a : 0.25;
     const edge = Number.isFinite(asked) && asked >= 0 && asked <= 0.5 ? asked : 0.25;
     for (const card of plane.cards) {
         const r = rectIn(frame, card);
@@ -448,9 +453,9 @@ export function zoneAt(plane, x, y, options = {}) {
         const bottom = r.y + r.h - footer;
         if (bottom <= top || y < top || y > bottom)
             return { id: card.id, zone: 'centre' };
-        // A card drawn at zero width or height has no drop zones. Dividing by it
-        // gives NaN and every comparison below then falls to the last branch.
-        if (!(r.w > 0) || !(bottom > top))
+        // A card drawn at zero width has no drop zones. Dividing by it gives NaN and
+        // every comparison below then falls to the last branch.
+        if (!(r.w > 0))
             return { id: card.id, zone: 'centre' };
         const px = (x - r.x) / r.w;
         const py = (y - top) / (bottom - top);

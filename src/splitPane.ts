@@ -136,8 +136,10 @@ export function checkState(state: SoksakState): void {
   }
 }
 
-const clamp = (v: number, lo: number, hi: number): number =>
-  lo > hi ? (lo + hi) / 2 : Math.min(hi, Math.max(lo, v));
+// Every caller passes a range in order: boundaryRange collapses an inverted one
+// before returning, the line array is non-decreasing, and cutAt answers null
+// before it would build one.
+const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
 
 export class Soksak {
   private xs: number[];
@@ -565,7 +567,9 @@ export class Soksak {
     const held = heldSizes(this.plane, axis);
     const undo = this.toJSON();
     for (const slot of order) {
-      if (slot < 0 || slot >= want.length || held[slot] !== null) continue;
+      // order() already dropped the indices outside the array, so only a slot
+      // that holds a px size is skipped here.
+      if (held[slot] !== null) continue;
       const had = want[slot];
       want[slot] = null;
       this.setSlotWidths(axis, want);
