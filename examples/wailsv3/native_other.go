@@ -11,6 +11,8 @@ package main
 
 import "unsafe"
 
+func surfaceFrame(view unsafe.Pointer) Rect { return Rect{} }
+
 func surfaceAlpha(view unsafe.Pointer, alpha float64) {}
 
 func surfaceResizing(view unsafe.Pointer, live bool) {}

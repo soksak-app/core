@@ -53,6 +53,12 @@ function toPage(rect) {
   return { x: plane.left + rect.x, y: plane.top + rect.y, w: rect.w, h: rect.h };
 }
 
+/** 페이지 기준 사각형을 판 기준으로 되돌린다. 애플리케이션은 페이지 좌표로 답한다. */
+function toPlane(rect) {
+  const plane = document.getElementById("plane").getBoundingClientRect();
+  return { x: rect.x - plane.left, y: rect.y - plane.top, w: rect.w, h: rect.h };
+}
+
 /**
  * 모달 렌더링에 필요한 값. show 와 update 가 같은 형태를 전송한다.
  *
@@ -121,8 +127,10 @@ function install() {
       const key = JSON.stringify(request);
       if (key === last) return;
       last = key;
-      // 호출 결과를 반환한다. 렌더링 전에 배치를 보낸 쪽이 이 결과를 기다린다.
-      return tell("syncSurfaces", request);
+      // 애플리케이션이 실제로 앉힌 자리를 판 기준으로 되돌려 답한다. 렌더링 전에
+      // 배치를 보낸 쪽이 이 결과를 기다린다.
+      return tell("syncSurfaces", request).then((placed) =>
+        (placed ?? []).map((p) => ({ id: p.id, ...toPlane(p) })));
     },
   };
 

@@ -189,6 +189,15 @@ func parseDrive(spec string) (drivePlan, error) {
 	}, nil
 }
 
+// numbers writes window numbers the same way the other host does.
+func numbers(list []int) string {
+	out := make([]string, len(list))
+	for i, n := range list {
+		out[i] = strconv.Itoa(n)
+	}
+	return strings.Join(out, " ")
+}
+
 var observing = flag.Bool("observe", false,
 	"register the observation service, which reports this window's number")
 

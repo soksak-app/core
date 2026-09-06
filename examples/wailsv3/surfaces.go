@@ -514,20 +514,43 @@ func (s *Surfaces) SetTheme(theme Theme) error {
 //
 // The work runs on the main thread: these are AppKit calls, and a service call
 // arrives on a goroutine of its own.
-func (s *Surfaces) SyncSurfaces(req SyncRequest) error {
+func (s *Surfaces) SyncSurfaces(req SyncRequest) ([]Placement, error) {
 	win, ok := mainWindow()
 	if !ok {
-		return nil
+		return nil, nil
 	}
+	var placed []Placement
 	application.InvokeSync(func() {
 		s.apply(win, req)
+		placed = s.placements(req)
 		s.watch.Do(func() {
 			pressed = s.press
 			pointed = s.point
 			watchMouse(win.NativeWindow())
 		})
 	})
-	return nil
+	return placed, nil
+}
+
+// Placement is where one surface actually sits, in the page's coordinates. The
+// page declares a rect and the host aligns it to the display's pixels, so the
+// two differ and the page is told by how much.
+type Placement struct {
+	ID string `json:"id"`
+	Rect
+}
+
+// placements reads back the frame of every surface the page declared.
+func (s *Surfaces) placements(req SyncRequest) []Placement {
+	out := make([]Placement, 0, len(req.Surfaces))
+	for _, surface := range req.Surfaces {
+		view, live := s.views[surface.ID]
+		if !live {
+			continue
+		}
+		out = append(out, Placement{ID: surface.ID, Rect: surfaceFrame(view.NativeView())})
+	}
+	return out
 }
 
 func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) {
@@ -561,10 +584,10 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) {
 			// with white. A surface grows while a boundary is dragged, so that
 			// area appears on every frame of the drag.
 			Transparent: true,
-			Hidden:      !surface.Visible,
+			Hidden:      !visible,
 		})
-		if view == nil {
-			log.Printf("surface %s: no webview in a window on this platform", surface.ID)
+		if err != nil {
+			log.Printf("surface %s: %v", surface.ID, err)
 			continue
 		}
 		surfaceAlpha(view.NativeView(), alpha)

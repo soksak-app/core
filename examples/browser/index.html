@@ -104,8 +104,10 @@ addEventListener("unhandledrejection", (e) =>
 /**
  * 검증을 실행하고 결과가 달라졌을 때만 기록한다.
  *
- * 검증은 렌더마다, 커밋마다 실행된다. 매번 기록하면 같은 줄이 반복되어 변경 시점을
- * 알 수 없다.
+ * 검증은 렌더마다 실행된다. 매번 기록하면 같은 줄이 반복되어 변경 시점을 알 수 없다.
+ *
+ * 첫 렌더는 호스트가 설치되기 전에 일어날 수 있다. 그때 기록한 것으로 치면 그 줄은
+ * 애플리케이션 로그에 영영 남지 않으므로, 실제로 보낸 줄만 기억한다.
  */
 let lastSaid = "";
 
@@ -117,11 +119,13 @@ function check() {
     : `verify: ${failed.length} fail — ` +
       failed.map((r) => `${r.name} (${r.note})`).join(" · ");
   if (line === lastSaid) return;
-  lastSaid = line;
   if (failed.length === 0) console.log(line);
   else console.error(line);
   // 애플리케이션은 자체 로그에 기록한다. 호스트가 없으면 콘솔에만 남는다.
-  window.hostSurfaces?.report?.(line);
+  const told = window.hostSurfaces?.report;
+  if (!told) return;
+  lastSaid = line;
+  told(line);
 }
 
 /* 표면이 하나도 서지 않는 자리. 잠든 표면은 크기가 없다. */

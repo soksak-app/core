@@ -190,7 +190,11 @@ pub fn shape_create(ns_window: *mut std::ffi::c_void, rect: (f64, f64, f64, f64)
     }
 }
 
-/// Moves a shape's view.
+/// Moves a shape's view and raises it above its siblings.
+///
+/// A view added later is above the ones added earlier, so a shape drawn before a
+/// surface webview ends up beneath it. The frame is aligned to the display's
+/// pixels for the same reason a surface's is: a fractional edge draws blurred.
 #[allow(unused_variables)]
 pub fn shape_frame(view: usize, rect: (f64, f64, f64, f64)) {
     #[cfg(target_os = "macos")]

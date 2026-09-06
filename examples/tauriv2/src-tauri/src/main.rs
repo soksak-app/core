@@ -194,7 +194,7 @@ fn sync_surfaces(
     running: State<'_, Running>,
     page: State<'_, Page>,
     request: SyncRequest,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<Placement>, String> {
     announce_run(&window, &running, !request.settled)?;
     // The monitor places a point in the page's coordinates, so it needs the
     // page's height. The page reports it on every commit.
@@ -206,7 +206,6 @@ fn sync_surfaces(
     let scale = window.scale_factor().map_err(|e| e.to_string())?;
 
     let mut wanted: HashSet<String> = HashSet::new();
-    let mut created = Vec::new();
 
     for s in &request.surfaces {
         let label = label_for(&s.id);
@@ -257,7 +256,6 @@ fn sync_surfaces(
                 })
                 .map_err(|e| e.to_string())?;
         }
-        created.push(label.clone());
     }
 
     // The page is the only writer of this list, so a surface missing from it is
@@ -280,7 +278,39 @@ fn sync_surfaces(
     let alive: Vec<String> = request.surfaces.iter().map(|s| s.id.clone()).collect();
     shells.retain(&|id: &str| alive.iter().any(|s| s == id))?;
 
-    Ok(created)
+    // Where each surface actually sits. The page declares a rect and this host
+    // aligns it to the display's pixels, so the two differ and the page is told
+    // by how much.
+    let mut placed = Vec::with_capacity(request.surfaces.len());
+    for s in &request.surfaces {
+        let Some(webview) = window.get_webview(&label_for(&s.id)) else { continue };
+        let at = webview
+            .position()
+            .map_err(|e| e.to_string())?
+            .to_logical::<f64>(scale);
+        let size = webview
+            .size()
+            .map_err(|e| e.to_string())?
+            .to_logical::<f64>(scale);
+        placed.push(Placement {
+            id: s.id.clone(),
+            x: at.x,
+            y: at.y - top,
+            w: size.width,
+            h: size.height,
+        });
+    }
+    Ok(placed)
+}
+
+/// Where one surface actually sits, in the page's coordinates.
+#[derive(Clone, serde::Serialize)]
+struct Placement {
+    id: String,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
 }
 
 /// Emits run-began and run-ended. The page reports whether more updates follow;
@@ -540,6 +570,7 @@ fn set_shape(window: Window, shapes: State<'_, Shapes>, request: ShapeRequest) -
                 return Ok(());
             }
             held.insert(request.id.clone(), view);
+            native::shape_frame(view, frame);
             view
         }
     };

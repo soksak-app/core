@@ -53,6 +53,19 @@ static void shapeSetFrame(void* handle, double x, double y, double w, double h) 
     view.frame = surfaceAligned(window, x, y, w, h);
 }
 
+// The frame a surface is at now, in the window content view's coordinates
+// measured from its top left, which is what the page declared.
+static void surfaceFrameNow(void* handle, double* out) {
+    NSView* view = (NSView*)handle;
+    NSView* content = [view superview];
+    if (content == nil) return;
+    NSRect f = view.frame;
+    out[0] = f.origin.x;
+    out[1] = content.bounds.size.height - f.origin.y - f.size.height;
+    out[2] = f.size.width;
+    out[3] = f.size.height;
+}
+
 // Sets the view's alpha. The page dims a surface that has lost focus.
 static void surfaceSetAlpha(void* handle, double alpha) {
     WKWebView* view = (WKWebView*)handle;
@@ -181,6 +194,15 @@ import "unsafe"
 
 // nativeView is one webview inside the window.
 type nativeView struct{ handle unsafe.Pointer }
+
+// surfaceFrame reports where a surface is now, in the page's coordinates. The
+// host aligns a declared rect to the display's pixels, so this is not the rect
+// the page sent and the page is told the difference.
+func surfaceFrame(view unsafe.Pointer) Rect {
+	var out [4]C.double
+	C.surfaceFrameNow(view, &out[0])
+	return Rect{X: float64(out[0]), Y: float64(out[1]), W: float64(out[2]), H: float64(out[3])}
+}
 
 // surfaceAlpha sets how solid a surface is drawn. The page dims one that lost
 // focus.

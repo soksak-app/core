@@ -66,18 +66,18 @@ func (s *Shells) Open(id string) (bool, error) {
 	}
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
-		return err
+		return false, err
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return err
+		return false, err
 	}
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		return err
+		return false, err
 	}
 	if err := cmd.Start(); err != nil {
-		return err
+		return false, err
 	}
 
 	live := &session{cmd: cmd, stdin: stdin, watchers: map[chan string]bool{}}
@@ -99,7 +99,7 @@ func (s *Shells) Open(id string) (bool, error) {
 			}
 		}(stream)
 	}
-	return nil
+	return true, nil
 }
 
 // emit sends one line to every watcher of that shell. A watcher that has

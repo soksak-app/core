@@ -4,7 +4,7 @@
 // 검사를 추가해도 그쪽을 수정할 필요가 없다.
 //
 // 화면을 보고 판단하지 않고 수치로 판정한다.
-import { latest } from "./compositor.js";
+import { latest, seated } from "./compositor.js";
 import { currentGrid, currentView, plane, railOutline, tabsOf } from "./plane.js";
 import { isPlace, railKind } from "./plugins/registry.js";
 import { cardRadius } from "./settings.js";
@@ -91,25 +91,37 @@ export function verify() {
   add("V6 마지막 하나 빼고 전부 닫힌다", open.length <= 1 || open.every((c) => grid.canClose(c.id)),
       `${open.filter((c) => grid.canClose(c.id)).length}/${open.length}`);
 
-  // V7a / V7b — 합성. 두 차이는 원인이 다르므로 나눠서 측정하고, declared 와
-  // applied 는 같은 커밋의 한 레코드에서 읽는다.
+  // V7a — 마지막 커밋의 선언값이 지금 그려진 요소와 같은가. 다르면 커밋이 DOM 보다
+  // 뒤처진 것이다.
   const host = plane.getBoundingClientRect();
   const record = latest();
-  let stale = 0, land = 0, counted = 0;
+  let stale = 0, counted = 0;
   for (const s of record?.surfaces ?? []) {
     const slot = plane.querySelector(`[data-native-surface-id="${s.id}"][data-native-surface]`);
     if (!slot) continue;
     const r = slot.getBoundingClientRect();
     stale = Math.max(stale, maxDelta({ x: r.left - host.left, y: r.top - host.top, w: r.width, h: r.height }, s.declared));
-    land = Math.max(land, maxDelta(s.declared, s.applied));
     counted++;
   }
-  // 첫 렌더는 커밋보다 앞서므로 비교할 표면이 없다. 표면이 있어야 하는데 없는
-  // 경우는 V10 과 T5 가 검사한다.
   add("V7a element − declared == 0", counted === 0 || stale < 0.5,
       counted ? `최대 ${stale.toFixed(2)}px · 0이 아니면 커밋이 뒤처진 것 (seq ${record.seq})` : "아직 커밋 없음");
-  add("V7b declared − applied == 0", counted === 0 || land < 0.5,
-      counted ? `최대 ${land.toFixed(2)}px · 0이 아니면 컴포지터가 못 앉힌 것` : "아직 커밋 없음");
+
+  // V7b — 호스트가 실제로 앉힌 자리와 선언값의 차이. 호스트는 선언된 사각형을
+  // 디스플레이 픽셀에 맞춰 정렬하므로 1 디바이스 픽셀까지는 정상이다. 그보다 크면
+  // 표면이 카드와 다른 자리에 있다.
+  //
+  // 답은 비동기로 오므로 최신 커밋에는 아직 없다. 답까지 채워진 마지막 레코드를
+  // 읽어 같은 커밋의 두 값을 비교한다.
+  const placed = seated();
+  const step = 1 / (window.devicePixelRatio || 1);
+  let land = 0, landed = 0;
+  for (const s of placed?.surfaces ?? []) {
+    if (!s.visible || s.declared.w < 1 || s.declared.h < 1) continue;
+    land = Math.max(land, maxDelta(s.declared, s.applied));
+    landed++;
+  }
+  add("V7b declared − applied ≤ 1 디바이스 픽셀", landed === 0 || land <= step + 0.01,
+      landed ? `최대 ${land.toFixed(2)}px · 허용 ${step.toFixed(2)}px (seq ${placed.seq})` : "아직 답 없음");
 
   const transformed = [...plane.querySelectorAll(".card")]
     .filter((el) => el.style.transform && el.style.transform !== "none").length;

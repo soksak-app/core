@@ -40,11 +40,19 @@ const cardOf = (slot) => slot.closest("[data-card-id]")?.dataset.cardId;
 /** 마지막 커밋 레코드를 반환한다. 없으면 null. */
 export const latest = () => latestRecord;
 
+/* 호스트가 실제 위치까지 답한 마지막 레코드. 답은 비동기로 오므로 최신 커밋에는
+   아직 없을 수 있다. 선언과 적용을 비교하는 검사는 이것을 읽는다. */
+let seatedRecord = null;
+
+/** 실제 위치까지 채워진 마지막 레코드. 없으면 null. */
+export const seated = () => seatedRecord;
+
 /** 판을 다시 만들 때 모사한 표면 요소를 모두 제거한다. */
 export function reset() {
   for (const el of drawn.values()) el.remove();
   drawn.clear();
   latestRecord = null;
+  seatedRecord = null;
   insets.clear();
   seq = 0;
   applied = 0;
@@ -172,6 +180,9 @@ function commit(mine, snapshot, final) {
   const record = { seq: mine, settled: final, surfaces: [] };
   const native = hostKinds();
   for (const s of snapshot) {
+    // 호스트가 없으면 이 모듈이 표면을 모사하므로 적용 위치도 여기서 정한다.
+    // 호스트가 있으면 호스트가 실제로 앉힌 자리를 답으로 주고, 아래에서 그것으로
+    // 바꿔 넣는다.
     const seat = { ...s.frame, x: s.frame.x + knobs.skew, y: s.frame.y + knobs.skew };
     const declared = {
       id: s.id, plugin: s.plugin, layer: s.layer, declared: s.frame, applied: seat,
@@ -212,7 +223,32 @@ function commit(mine, snapshot, final) {
   // 다른 스페이스의 표면도 살아 있어야 한다.
   //
   // 수신자의 반환값을 그대로 반환한다. 렌더링 전에 커밋한 쪽이 이 값을 기다린다.
-  return listener?.(record);
+  const answered = listener?.(record);
+  if (answered && typeof answered.then === "function") {
+    return answered.then((placed) => {
+      seat(record, placed);
+      return placed;
+    });
+  }
+  // 호스트가 없으면 이 모듈이 앉힌 자리가 곧 실제 자리다.
+  seatedRecord = record;
+  return answered;
+}
+
+/**
+ * 호스트가 답한 실제 위치를 레코드에 넣는다.
+ *
+ * 선언한 사각형과 실제로 앉은 자리는 다르다. 호스트가 디스플레이 픽셀에 맞춰
+ * 정렬하기 때문이다. 그 차이를 검증기가 잴 수 있어야 하므로 답을 그대로 기록한다.
+ */
+function seat(record, placed) {
+  if (!Array.isArray(placed)) return;
+  const at = new Map(placed.map((p) => [p.id, p]));
+  for (const s of record.surfaces) {
+    const now = at.get(s.id);
+    if (now) s.applied = { x: now.x, y: now.y, w: now.w, h: now.h };
+  }
+  if (!seatedRecord || record.seq >= seatedRecord.seq) seatedRecord = record;
 }
 
 /**

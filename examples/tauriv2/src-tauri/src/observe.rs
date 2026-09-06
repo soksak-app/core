@@ -115,7 +115,7 @@ fn numbers<R: Runtime>(app: &tauri::AppHandle<R>) -> Vec<isize> {
 
 /// The directory frames are written into, when one was asked for.
 fn capturing() -> Option<String> {
-    std::env::args().skip_while(|a| a != "--capture").nth(1)
+    flag("capture")
 }
 
 /// Readies the recording for this window. Reading the window server's list is the
