@@ -916,8 +916,9 @@ fn report(line: String) {
 /// that row, so they would sit above it.
 fn place_window_controls(window: &Window) -> Result<(), String> {
     let handle = window.ns_window().map_err(|e| e.to_string())? as usize;
-    // AppKit lays views out on the main thread, and a command is answered on
-    // another one.
+    // AppKit lays views out on the main thread. This is called from setup, which
+    // is already there, so the closure runs inline; the wrapper says which thread
+    // the work belongs on rather than moving it to one.
     window
         .run_on_main_thread(move || {
             native::place_window_controls(
