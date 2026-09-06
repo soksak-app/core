@@ -93,15 +93,15 @@ export const BREAKS = [
     id: "place",
     what: "the view draws every card in the corner with no size",
     file: "dist/dom.js",
-    find: "function place(el, rect) {",
-    to: "function place(el, rect) {\n    rect = { x: 0, y: 0, w: 0, h: 0 };",
+    find: "function place(el, rect, step) {",
+    to: "function place(el, rect, step) {\n    rect = { x: 0, y: 0, w: 0, h: 0 };",
   },
   {
     id: "drag-way",
     what: "a drag runs the wrong way",
     file: "dist/dom.js",
-    find: "this.grid.moveBoundary(drag.axis, drag.line, drag.base + (now - drag.from));",
-    to: "this.grid.moveBoundary(drag.axis, drag.line, drag.base - (now - drag.from));",
+    find: "this.grid.moveBoundary(drag.axis, drag.line, drag.base + (now - drag.from))",
+    to: "this.grid.moveBoundary(drag.axis, drag.line, drag.base - (now - drag.from))",
   },
   {
     id: "sweep",
@@ -119,10 +119,10 @@ export const BREAKS = [
   },
   {
     id: "radius",
-    what: "outline swaps the convex and reflex radii",
+    what: "outline turns every corner the same way",
     file: "dist/outline.js",
-    find: "const r = Math.min(turn > 0 ? radius : innerRadius, lenIn / 2, lenOut / 2);",
-    to: "const r = Math.min(turn > 0 ? innerRadius : radius, lenIn / 2, lenOut / 2);",
+    find: "${turn > 0 ? 1 : 0} ",
+    to: "${1} ",
   },
   {
     id: "grab",

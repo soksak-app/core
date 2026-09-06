@@ -1,6 +1,6 @@
 # 예제
 
-[`README.md`](README.md) 의 한국어 번역이며 독자적인 규칙을 정의하지 않는다.
+[`README.md`](README.md) 의 한국어 번역이다.
 
 ## browser
 
@@ -150,7 +150,7 @@ id 아래의 순서 있는 섹션 목록이다. 링크는 세트를 자리에 �
 
     ./examples/wailsv3/bin/wailsv3 --observe --drive 3000,x,2,-250,0,48,15
 
-    observe: shaking x:2 at (405,421) by -250,0 in 3 steps, 3 times
+    observe: shaking x:2 at (405,421) by -250,0 in 3 steps, 15 times
     observe: shaking done
 
 경계는 좌표가 아니라 이름으로 지정한다. 좌표는 창의 크기가 달라질 때마다 다시 정해야

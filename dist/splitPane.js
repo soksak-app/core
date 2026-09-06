@@ -669,8 +669,6 @@ export class Soksak {
         while (line + 1 <= a.length - 2 && this.isVirtual(axis, line + 1) && target > at(line + 1)) {
             drop(line + 1);
         }
-        if (a !== this.arr(axis))
-            this.changed();
         return line;
     }
     /** px per unit of normalised span across the sharing slots. */
@@ -695,15 +693,15 @@ export class Soksak {
      * insets on one side only.
      */
     centerBoundary(axis, line) {
-        var _a, _b;
         if (this.noAxis(axis))
             return 0;
         if (!this.hasBoundary(axis, line))
             return this.boundaryPos(axis, line);
+        // hasBoundary is true, so the line has one on each side of it.
         const along = linePositions(this.plane, axis);
         const [lo, hi] = SPAN[axis];
-        let start = (_a = along[line - 1]) !== null && _a !== void 0 ? _a : 0;
-        let end = (_b = along[line + 1]) !== null && _b !== void 0 ? _b : this.size(axis);
+        let start = along[line - 1];
+        let end = along[line + 1];
         const near = this.plane;
         const seen = linesRead(near, axis);
         let insStart = inset(near, axis, line - 1, 'lo', seen);

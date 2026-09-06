@@ -13,6 +13,7 @@ build: prepare
 
 verify: prepare
 	@pnpm test
+	@pnpm breaks
 	@pnpm build
 	@git diff --exit-code -- dist
 

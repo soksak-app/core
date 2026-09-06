@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 
-import { Soksak, SoksakView } from "../dist/index.js";
+import { Soksak, SoksakView, installTheme, themeCSS } from "../dist/index.js";
 
 /**
  * Tests for SoksakView, run against jsdom.
@@ -777,7 +777,7 @@ test("a divider swept while the mouse holds it stops driving the boundary", () =
   view.destroy();
 });
 
-test("the host commits a centre, a merge and a resize, not only a drag", () => {
+test("the host commits a centre and the end of a drag, not only the moves inside one", () => {
   const committed = [];
   const { window, host, grid, view } = mount({
     commit: (rects, draw) => { committed.push(rects.size); draw(); },
@@ -803,5 +803,73 @@ test("the host commits a centre, a merge and a resize, not only a drag", () => {
     clientX: grid.boundaryPos("x", 1), clientY: 100, bubbles: true, button: 0, buttons: 0,
   }));
   assert.ok(committed.length > beforeEnd, "the end of a drag is committed");
+  view.destroy();
+});
+
+test("a second mouse press releases the divider the first one held", () => {
+  const { window, host, grid, view } = mount();
+  grid.split("card", "y");
+  view.render();
+  const [across, down] = ["x", "y"].map((axis) =>
+    host.querySelector(`[role="separator"][data-axis="${axis}"]`));
+
+  across.dispatchEvent(new window.MouseEvent("mousedown", {
+    clientX: grid.boundaryPos("x", 1), clientY: 100, bubbles: true, button: 0, buttons: 1,
+  }));
+  // A press with one already held: the release of the first was never seen.
+  down.dispatchEvent(new window.MouseEvent("mousedown", {
+    clientX: 100, clientY: grid.boundaryPos("y", 1), bubbles: true, button: 0, buttons: 1,
+  }));
+  assert.equal(across.dataset.dragging, undefined, "the first divider is let go");
+  assert.equal(down.dataset.dragging, "true", "the second is held");
+
+  window.document.dispatchEvent(new window.MouseEvent("mouseup", {
+    clientX: 100, clientY: grid.boundaryPos("y", 1), bubbles: true, button: 0, buttons: 0,
+  }));
+  assert.equal(down.dataset.dragging, undefined, "and letting go clears it");
+  view.destroy();
+});
+
+test("pressing a divider twice with the mouse centres the boundary", () => {
+  const { window, host, grid, view } = mount();
+  grid.setSize("card", "x", null);
+  const divider = host.querySelector('[role="separator"]');
+  const at = grid.boundaryPos("x", 1);
+  grid.moveBoundary("x", 1, at + 200);
+  view.render();
+  assert.notEqual(grid.boundaryPos("x", 1), W / 2, "the boundary is off centre");
+
+  const press = (t) => divider.dispatchEvent(new window.MouseEvent("mousedown", {
+    clientX: grid.boundaryPos("x", 1), clientY: 100,
+    bubbles: true, button: 0, buttons: 1,
+  }));
+  press();
+  window.document.dispatchEvent(new window.MouseEvent("mouseup", {
+    clientX: grid.boundaryPos("x", 1), clientY: 100, bubbles: true, button: 0, buttons: 0,
+  }));
+  press();
+  assert.equal(grid.boundaryPos("x", 1), W / 2, "the second press centres it");
+  view.destroy();
+});
+
+test("installTheme puts one stylesheet first in the head and reuses it", () => {
+  const { window, view } = mount();
+  const doc = window.document;
+  const own = doc.createElement("style");
+  own.textContent = ".card { color: red }";
+  doc.head.append(own);
+
+  const sheet = installTheme(doc);
+  assert.equal(doc.head.firstElementChild, sheet, "before the host's own rules");
+  assert.equal(sheet.textContent, themeCSS(), "and it holds the theme");
+  assert.equal(installTheme(doc), sheet, "a second call reuses the one that is there");
+  assert.equal(doc.querySelectorAll("style").length, 2, "and adds no second sheet");
+
+  // 색과 크기를 직접 줄 수도 있다. 토큰 이름은 접두사를 따른다.
+  const named = installTheme(doc, {
+    prefix: "pane", palette: { line: "#123456" }, metrics: { gripLength: "40px" },
+  });
+  assert.match(named.textContent, /--pane-line: #123456/);
+  assert.match(named.textContent, /--pane-grip-length: 40px/);
   view.destroy();
 });

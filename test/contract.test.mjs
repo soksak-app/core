@@ -325,20 +325,28 @@ test("a boundary at the plane's edge returns px, not nothing", () => {
   }
 });
 
-test("centring a boundary at the plane's edge uses the plane's own edge", () => {
+test("centring the plane's border changes nothing, and centring a boundary halves it", () => {
   const grid = three();
   grid.split("terminal", "x");
   for (const axis of ["x", "y"]) {
     const last = grid.lines(axis).length - 1;
     const before = [...grid.lines(axis)];
-    // A border is not a boundary: centring one changes nothing, and the
-    // fallback to the plane's edge is what makes the arithmetic finite.
+    // A border is not a boundary. Centring one answers where it is and moves
+    // no line.
     for (const line of [0, last]) {
       const at = grid.centerBoundary(axis, line);
-      assert.ok(Number.isFinite(at), `${axis}${line} answered ${at}`);
+      assert.equal(at, grid.boundaryPos(axis, line), `${axis}${line} answered ${at}`);
       assert.deepEqual(grid.lines(axis), before, `${axis}${line} moved a line`);
     }
   }
+
+  // An interior boundary is centred between the two lines beside it, so the two
+  // cards it separates come out the same width.
+  const wide = new Soksak(undefined, { width: 1200, height: 800, gap: 0, minSize: 0 });
+  wide.split("card", "x");
+  wide.moveBoundary("x", 1, 900);
+  assert.equal(wide.centerBoundary("x", 1), 600, "centred between the borders");
+  assert.equal(wide.rect("card").w, wide.rect("card-1").w, "and the two are equal");
 });
 
 test("tidy drops every line no card reads, including the first", () => {

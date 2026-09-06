@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { Soksak } from "../dist/index.js";
 import { H, W, three } from "./helpers.mjs";
 
 const HEADER = 34;
@@ -85,5 +86,22 @@ test("every card returns a zone for its own area only", () => {
   for (const card of grid.cards) {
     const hit = zone(grid, card.id, 0.5, 0.5);
     assert.equal(hit?.id, card.id, `${card.id} answered for its own middle`);
+  }
+});
+
+test("edge sets how much of the body each side claims, and a value outside the body is refused", () => {
+  const grid = new Soksak(undefined, { width: 1000, height: 400 });
+  grid.split("card", "x");
+  const body = grid.rect("card");
+  const middle = { x: body.x + body.w / 2, y: body.y + body.h / 2 };
+  const near = { x: body.x + body.w * 0.3, y: middle.y };
+
+  assert.equal(grid.zoneAt(middle.x, middle.y).zone, "centre", "the middle is the card");
+  assert.equal(grid.zoneAt(near.x, near.y).zone, "centre", "and 0.3 across is too, by default");
+  assert.equal(grid.zoneAt(near.x, near.y, { edge: 0.4 }).zone, "left", "a wider band takes it");
+
+  for (const bad of [NaN, Infinity, -1, 5]) {
+    assert.equal(grid.zoneAt(middle.x, middle.y, { edge: bad }).zone, "centre",
+      `${bad} is refused`);
   }
 });

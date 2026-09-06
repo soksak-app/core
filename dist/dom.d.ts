@@ -118,13 +118,18 @@ export declare class SoksakView {
     private draw;
     render(reason?: ChangeReason): void;
     private sweep;
+    /** Drop a mouse drag: the divider stops being held and nothing is drawn. */
+    private dropMouse;
+    /** Drop a pointer drag: the capture is released and nothing is drawn. */
+    private drop;
     /**
      * End a mouse drag.
      *
      * Every way a mouse drag can end runs through here: mouseup, the button being
      * released elsewhere, and destroy. It ends the way a pointer drag ends: the
      * divider stops carrying `data-dragging`, boundaries that now coincide are
-     * merged, and the last render reports the reason drag.
+     * merged, and the last render reports the reason drag. Reports whether the
+     * boundary moved.
      */
     private endMouse;
     /**

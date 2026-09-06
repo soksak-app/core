@@ -161,7 +161,7 @@ over ms, out and back, that many times:
 
     ./examples/wailsv3/bin/wailsv3 --observe --drive 3000,x,2,-250,0,48,15
 
-    observe: shaking x:2 at (405,421) by -250,0 in 3 steps, 3 times
+    observe: shaking x:2 at (405,421) by -250,0 in 3 steps, 15 times
     observe: shaking done
 
 A boundary is named, not pointed at. A coordinate has to be recalculated whenever

@@ -549,7 +549,10 @@ export function zoneAt(plane: Plane, x: number, y: number, options: ZoneOptions 
   const frame = frameOf(plane);
   const header = options.headerPx ?? 0;
   const footer = options.footerPx ?? 0;
-  const edge = options.edge ?? 0.25;
+  // Every option is checked the same way the plane's are. A fraction that is
+  // not one, or one outside the body, makes every point land on a side.
+  const asked = options.edge ?? 0.25;
+  const edge = Number.isFinite(asked) && asked >= 0 && asked <= 0.5 ? asked : 0.25;
 
   for (const card of plane.cards) {
     const r = rectIn(frame, card);

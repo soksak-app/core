@@ -136,6 +136,13 @@ test("every corner is drawn at the one radius, whichever way it turns", () => {
   assert.equal(radii.length, 6, "one arc per corner");
   assert.deepEqual(radii, [30, 30, 30, 30, 30, 30], "the reflex corner too");
 
+  // 볼록한 모서리와 우각은 반대 방향으로 돈다. 방향은 호의 sweep 플래그다. 모두 같은
+  // 방향으로 돌면 우각에서 선이 카드 안쪽으로 파고든다.
+  const turns = [...shape.path.matchAll(/A[\d.]+ [\d.]+ 0 0 ([01]) /g)].map((m) => m[1]);
+  assert.equal(turns.length, 6, "one turn per corner");
+  assert.equal(turns.filter((t) => t === "1").length, 5, "five convex corners");
+  assert.equal(turns.filter((t) => t === "0").length, 1, "and one reflex corner");
+
   // The cap: half the shorter of the two sides meeting there.
   const tight = outline([{ x: 0, y: 0, w: 400, h: 40 }], { pad: 0, radius: 100 });
   const capped = [...tight.path.matchAll(/A([\d.]+) /g)].map((m) => Number(m[1]));

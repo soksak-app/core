@@ -304,14 +304,15 @@ not swapped.
 ## Where a drop lands
 
 ```js
-grid.zoneAt(x, y, { headerPx: 34, footerPx: 24, centreOnly: draggingId });
+grid.zoneAt(x, y, { headerPx: 34, footerPx: 24, edge: 0.25, centreOnly: draggingId });
 // → { id, zone: "centre" | "left" | "right" | "top" | "bottom" } | null
 ```
 
 `centre` means the card itself. A side means a new place beside it.
 `headerPx` and `footerPx` are excluded, so a point on the chrome returns the
-card, not a side. The
-edge band is a fraction of the body, not px.
+card, not a side. `edge` is how much of the body each edge claims, as a fraction
+of it rather than px; it defaults to `0.25` and a value outside `0..0.5` is
+refused, as an option out of range is everywhere else.
 
 ## The outline
 

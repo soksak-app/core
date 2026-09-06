@@ -1,6 +1,6 @@
 # 네이티브 호스트와, 그것이 있어야 할 곳
 
-초안. [`NATIVE-HOST.md`](NATIVE-HOST.md) 의 한국어 번역이며 독자적인 규칙을 정의하지 않는다.
+초안. [`NATIVE-HOST.md`](NATIVE-HOST.md) 의 한국어 번역이다.
 
 `examples/wailsv3` 와 `examples/tauriv2` 는 같은 계약 세 개를 각각 구현한다. 이
 문서는 그 계약이 무엇이고, 이미 공유하는 것이 무엇이며, Wails 서비스와 Tauri

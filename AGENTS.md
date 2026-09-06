@@ -8,5 +8,7 @@ the library's.
 - [`README.md`](README.md) — the library: rules, model, API
 - [`examples/README.md`](examples/README.md) — the example product and how to build it
 
-Code comments are Korean. Identifiers, log lines, error messages and test names are English.
+The library's code comments are English. The example's are Korean, because the example is read
+by this project's owner. Identifiers, log lines, error messages and test names are English
+everywhere.
 Documents use one English canonical and a Korean translation at the matching `.ko.md` path.

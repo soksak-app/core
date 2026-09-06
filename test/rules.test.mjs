@@ -158,6 +158,29 @@ test("R4 — a pinwheel is not reachable, and isSlicing returns false", () => {
   assert.equal(grid.isSlicing(), false, "and so does the grid");
 });
 
+test("R4 — a cut counts only when both halves are themselves sliceable", () => {
+  // The top row is one card across the plane, so the plane cuts in two there.
+  // Below it sits a pinwheel, which no cut separates. A check that accepted the
+  // top cut without looking under it would call this sliceable.
+  const spans = [
+    { c0: 0, c1: 3, r0: 0, r1: 1 },
+    { c0: 0, c1: 2, r0: 1, r1: 2 },
+    { c0: 2, c1: 3, r0: 1, r1: 3 },
+    { c0: 1, c1: 3, r0: 3, r1: 4 },
+    { c0: 0, c1: 1, r0: 2, r1: 4 },
+  ];
+  assert.equal(guillotine(spans), false, "the cut under the top row is missing");
+  const grid = new Soksak(
+    {
+      xs: [0, 0.3, 0.6, 1],
+      ys: [0, 0.25, 0.5, 0.75, 1],
+      cards: spans.map((s, i) => ({ id: `c${i}`, ...s })),
+    },
+    { width: 900, height: 900 },
+  );
+  assert.equal(grid.isSlicing(), false, "and the grid does not stop at the top cut");
+});
+
 test("R5 — the corridor is half a gap inside, and nothing at the plane's border", () => {
   for (const gap of [0, 8, 24, 48]) {
     for (let seed = 0; seed < 12; seed++) {

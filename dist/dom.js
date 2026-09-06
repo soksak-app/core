@@ -202,50 +202,40 @@ export class SoksakView {
         (_h = (_g = this.options).onChange) === null || _h === void 0 ? void 0 : _h.call(_g, reason);
     }
     sweep(map, keep) {
-        var _a;
+        var _a, _b;
         for (const [k, el] of map) {
             if (keep.has(k))
                 continue;
-            for (const [pointer, drag] of this.drags)
+            // The drag is dropped rather than ended. This runs inside render, and
+            // ending a drag draws, which would start that render again from inside
+            // itself, on a grid the merge has changed.
+            for (const [pointer, drag] of [...this.drags])
                 if (drag.on === el)
-                    this.end(pointer);
+                    this.drop(pointer);
+            if (((_a = this.mouseDrag) === null || _a === void 0 ? void 0 : _a.on) === el)
+                this.dropMouse();
             // The mouse listeners are on the document, so removing the element does
             // not remove them. Left behind, they keep driving the boundary of a
             // divider that is gone, and they accumulate one pair per divider.
-            (_a = this.mouseDisposers.get(el)) === null || _a === void 0 ? void 0 : _a();
+            (_b = this.mouseDisposers.get(el)) === null || _b === void 0 ? void 0 : _b();
             el.remove();
             map.delete(k);
         }
     }
-    /**
-     * End a mouse drag.
-     *
-     * Every way a mouse drag can end runs through here: mouseup, the button being
-     * released elsewhere, and destroy. It ends the way a pointer drag ends: the
-     * divider stops carrying `data-dragging`, boundaries that now coincide are
-     * merged, and the last render reports the reason drag.
-     */
-    endMouse() {
+    /** Drop a mouse drag: the divider stops being held and nothing is drawn. */
+    dropMouse() {
         const drag = this.mouseDrag;
         if (!drag)
-            return;
+            return null;
         this.mouseDrag = null;
         delete drag.on.dataset.dragging;
-        if (this.disposed)
-            return;
-        const merged = this.grid.mergeCoincident(drag.axis, drag.line);
-        this.draw(merged ? 'merge' : 'drag');
+        return drag;
     }
-    /**
-     * End a drag and report whether it moved the boundary.
-     *
-     * Every way a drag can end runs through here: pointerup, pointercancel, the
-     * capture being lost, the divider being swept, and destroy.
-     */
-    end(pointer) {
+    /** Drop a pointer drag: the capture is released and nothing is drawn. */
+    drop(pointer) {
         const drag = this.drags.get(pointer);
         if (!drag)
-            return false;
+            return null;
         this.drags.delete(pointer);
         try {
             drag.on.releasePointerCapture(pointer);
@@ -254,6 +244,37 @@ export class SoksakView {
             /* the pointer may already be gone */
         }
         delete drag.on.dataset.dragging;
+        return drag;
+    }
+    /**
+     * End a mouse drag.
+     *
+     * Every way a mouse drag can end runs through here: mouseup, the button being
+     * released elsewhere, and destroy. It ends the way a pointer drag ends: the
+     * divider stops carrying `data-dragging`, boundaries that now coincide are
+     * merged, and the last render reports the reason drag. Reports whether the
+     * boundary moved.
+     */
+    endMouse() {
+        const drag = this.dropMouse();
+        if (!drag)
+            return false;
+        if (this.disposed)
+            return drag.moved;
+        const merged = this.grid.mergeCoincident(drag.axis, drag.line);
+        this.draw(merged ? 'merge' : 'drag');
+        return drag.moved;
+    }
+    /**
+     * End a drag and report whether it moved the boundary.
+     *
+     * Every way a drag can end runs through here: pointerup, pointercancel, the
+     * capture being lost, the divider being swept, and destroy.
+     */
+    end(pointer) {
+        const drag = this.drop(pointer);
+        if (!drag)
+            return false;
         if (this.disposed)
             return drag.moved;
         const merged = this.grid.mergeCoincident(drag.axis, drag.line);
@@ -337,12 +358,26 @@ export class SoksakView {
         // The public DOM command contract sends mouse events. Keep the same divider
         // state machine available for that contract without changing the grid API.
         const ownerDocument = el.ownerDocument;
+        // The second press of a double press centres the boundary, as it does on the
+        // pointer path. A press that moved the boundary is not the first of a pair.
+        let lastPress = -Infinity;
         const mouseDown = (e) => {
             if (this.disposed || e.button !== 0)
                 return;
             e.preventDefault();
             const axis = el.dataset.axis;
             const line = Number(el.dataset.line);
+            // A press with one already held is a press the release of which was never
+            // seen. Dropping it leaves no divider marked as held with no drag behind
+            // it, which is a state nothing ever clears.
+            this.dropMouse();
+            if (e.timeStamp - lastPress < DOUBLE_TAP_MS) {
+                lastPress = -Infinity;
+                this.grid.centerBoundary(axis, line);
+                this.draw('center');
+                return;
+            }
+            lastPress = e.timeStamp;
             el.dataset.dragging = 'true';
             this.mouseDrag = {
                 on: el,
@@ -368,8 +403,10 @@ export class SoksakView {
         };
         const mouseUp = () => {
             var _a;
-            if (((_a = this.mouseDrag) === null || _a === void 0 ? void 0 : _a.on) === el)
-                this.endMouse();
+            if (((_a = this.mouseDrag) === null || _a === void 0 ? void 0 : _a.on) !== el)
+                return;
+            if (this.endMouse())
+                lastPress = -Infinity;
         };
         el.addEventListener('mousedown', mouseDown);
         ownerDocument.addEventListener('mousemove', mouseMove);
@@ -377,7 +414,7 @@ export class SoksakView {
         const disposeMouse = () => {
             var _a;
             if (((_a = this.mouseDrag) === null || _a === void 0 ? void 0 : _a.on) === el)
-                this.endMouse();
+                this.dropMouse();
             el.removeEventListener('mousedown', mouseDown);
             ownerDocument.removeEventListener('mousemove', mouseMove);
             ownerDocument.removeEventListener('mouseup', mouseUp);

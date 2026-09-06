@@ -1,6 +1,6 @@
 # soksak
 
-[`README.md`](README.md) 의 한국어 번역이며 독자적인 규칙을 정의하지 않는다.
+[`README.md`](README.md) 의 한국어 번역이다.
 
 공유 격자선 위의 분할 배치. 헤드리스 코어, 선택적인 DOM 바인딩, 런타임 의존성 없음.
 
@@ -292,13 +292,14 @@ grid.move("terminal", "browser", "right");      // 거절되면 false 이고 아
 ## 드롭이 내려앉는 곳
 
 ```js
-grid.zoneAt(x, y, { headerPx: 34, footerPx: 24, centreOnly: draggingId });
+grid.zoneAt(x, y, { headerPx: 34, footerPx: 24, edge: 0.25, centreOnly: draggingId });
 // → { id, zone: "centre" | "left" | "right" | "top" | "bottom" } | null
 ```
 
 `centre` 는 카드 자체를 뜻한다. 방향은 그 옆의 새 자리를 뜻한다. `headerPx` 와
-`footerPx` 는 제외되므로 크롬 위의 점은 방향이 아니라 카드를 반환한다. 가장자리 띠는 px 가 아니라
-몸통의 비율이다.
+`footerPx` 는 제외되므로 크롬 위의 점은 방향이 아니라 카드를 반환한다. `edge` 는 각
+가장자리가 차지하는 몫이며 px 가 아니라 몸통의 비율이다. 기본값은 `0.25` 이고
+`0..0.5` 밖의 값은 다른 옵션과 같이 거절된다.
 
 ## 외곽선
 
@@ -396,7 +397,7 @@ shape.loops.length;                   // 카드가 붙어 있으면 1, 떨어져
 것을 옮기지 않는다. 판에 닿는 끝만 나간다. 카드에 막혀 멈추는 rule 은 멈춘 자리에
 그대로 둔다. 거기서는 카드가 벽이기 때문이다.
 
-이 값은 뷰에서 쓸 수 있다(`view.bleed = px`). 사용자가 갭을 바꿀 수 있게 하는 호스트는
+이 값은 뷰에 대입할 수 있다(`view.bleed = px`). 사용자가 갭을 바꿀 수 있게 하는 호스트는
 그것과 함께 이 값을 바꾸기 때문이다.
 `reason` 은 `drag`, `center`, `merge`, `resize`, `render` 중 하나다.
 
