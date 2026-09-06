@@ -27,26 +27,17 @@
 <div id="line"><span>$</span><input id="in" autocomplete="off" spellcheck="false"></div>
 <script type="module">
   import { page } from "./framework/index.js";
+  import { followTheme } from "./theme.js";
 
-  /* 이 페이지는 별도 문서라 메인 페이지의 스타일시트를 상속하지 않는다. 테마를
-     값으로 받아 자기 루트에 설정한다. */
-  function applyTheme(theme) {
-    const root = document.documentElement;
-    root.style.colorScheme = theme.scheme;
-    for (const [token, value] of Object.entries(theme.tokens)) {
-      root.style.setProperty(token, value);
-    }
-  }
-
-  page.theme(applyTheme);
+  followTheme();
 
   const id = new URLSearchParams(location.search).get("id");
   const out = document.getElementById("out");
   const input = document.getElementById("in");
 
   function write(text) {
-    // Scrolls to the bottom only when it was already at the bottom, so scrolling
-    // back is not overridden by new output.
+    // 이미 맨 아래에 있을 때만 맨 아래로 스크롤한다. 위로 올려 둔 것을 새 출력이
+    // 되돌리지 않는다.
     const atEnd = out.scrollTop + out.clientHeight >= out.scrollHeight - 4;
     out.append(text);
     if (atEnd) out.scrollTop = out.scrollHeight;

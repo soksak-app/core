@@ -11,7 +11,7 @@ registerPlugin({
   name: "터미널",
   mark: ">_",
   svg: '<rect x="2" y="3" width="12" height="10" rx="2"/><path d="M5 6.5l2 1.75L5 10M8.5 10.25H11"/>',
-  surface: (cardId) => ({ page: `terminal.html?id=${encodeURIComponent(cardId)}` }),
+  surface: (tabId) => ({ page: `terminal.html?id=${encodeURIComponent(tabId)}` }),
 });
 
 registerSection({ id: "terminal.history", name: "실행 기록" });

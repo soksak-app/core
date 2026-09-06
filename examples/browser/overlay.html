@@ -2,35 +2,26 @@
 <meta charset="utf-8">
 <title>native modal</title>
 <!--
-  Renders one [data-native-modal] element of the main page.
+  메인 페이지의 [data-native-modal] 요소 하나를 렌더링한다.
 
-  DOM cannot be drawn over a native view, and a webview is a native view that
-  renders DOM. This page is loaded into a view created after the surface views,
-  so it is placed above them and the surfaces keep running.
+  DOM 은 네이티브 뷰 위에 그릴 수 없고, 웹뷰는 DOM 을 렌더링하는 네이티브 뷰다. 이
+  페이지는 표면 뷰들보다 나중에 만든 뷰에 로드되므로 그 위에 놓이고, 표면은 계속
+  실행된다.
 
-  It receives the element's class name, its markup and the page's stylesheet.
-  A click on any element carrying data-key is reported to the main page.
+  요소의 클래스 이름과 마크업과 페이지의 스타일시트를 받는다. data-key 를 가진 요소의
+  클릭은 메인 페이지에 보고된다.
 -->
 <style>
-  /* Set in the markup so it applies before any script runs. A webview shows
-     white until its document paints. */
+  /* 스크립트보다 먼저 적용되도록 마크업에 둔다. 웹뷰는 자기 문서를 그리기 전까지
+     흰색을 표시한다. */
   html, body { margin: 0; padding: 0; height: 100%; background: transparent }
 </style>
 <script type="module">
   import { page } from "./framework/index.js";
-  import { onGripDrag, showValue } from "./card.js";
+  import { followTheme } from "./theme.js";
+  import { onAnswer, onGripDrag, showValue } from "./card.js";
 
-  /* 이 페이지는 별도 문서라 메인 페이지의 스타일시트를 상속하지 않는다. 테마를
-     값으로 받아 자기 루트에 설정한다. */
-  function applyTheme(theme) {
-    const root = document.documentElement;
-    root.style.colorScheme = theme.scheme;
-    for (const [token, value] of Object.entries(theme.tokens)) {
-      root.style.setProperty(token, value);
-    }
-  }
-
-  page.theme(applyTheme);
+  followTheme();
 
   const id = new URLSearchParams(location.search).get("id");
   let sheet = null;
@@ -40,8 +31,8 @@
     if (!sheet) {
       document.head.insertAdjacentHTML("beforeend", `<style id="page"></style>`);
       sheet = document.getElementById("page");
-      // The page's stylesheet arrives whole, including its body rule. This block
-      // is inserted after it so it takes precedence.
+      // 페이지의 스타일시트는 body 규칙까지 통째로 온다. 이 블록을 그 뒤에 넣어
+      // 우선하게 한다.
       document.head.insertAdjacentHTML("beforeend", `<style>
         html, body { margin: 0; padding: 0; height: 100% }
         /* 카드는 메인 페이지에서 자기 위치를 지정한다. 이 뷰는 카드 하나만 담으므로
@@ -63,30 +54,18 @@
     root.innerHTML = html;
     root.style.borderColor = border;
 
-    // The view was created at the size the main page measured, so there is
-    // nothing to measure here. This call reports only that the content is
-    // rendered, which is when the view may be shown.
+    // 뷰는 메인 페이지가 잰 크기로 만들어졌으므로 여기서 잴 것이 없다. 이 호출은
+    // 내용이 렌더링되었다는 것만 보고하며, 그때가 뷰를 표시할 수 있는 시점이다.
     page.modal.ready(id);
   }
 
   /* 로드 시 한 번, 이후 내용이 바뀔 때마다 호출한다. 뷰를 다시 만들면 깜빡인다. */
   page.modal.content(id, render);
 
-  /* 응답 형식은 key 와 value 하나씩이다. 클릭은 value 가 비어 있고 값 변경은
-     그 값을 담는다. */
+  /* 응답은 (key, value) 하나다. 거두는 방법은 메인 문서와 같은 것을 쓴다. */
   const send = (key, value) => page.modal.answer(id, key, value);
 
-  addEventListener("click", (e) => {
-    const hit = e.target.closest("[data-key]");
-    if (hit) send(hit.dataset.key, "");
-  });
-  addEventListener("change", (e) => {
-    const el = e.target.closest("[data-set]");
-    if (el) send(el.dataset.set, el.type === "checkbox" ? String(el.checked) : el.value);
-  });
-  addEventListener("keydown", (e) => {
-    if (e.key === "Escape") send("", "");
-  });
+  onAnswer(document, send);
 
   /* 그립 드래그도 같은 응답으로 보낸다. 이 뷰는 카드의 위치를 알지 않으므로 이동
      거리만 전달하고 위치는 카드를 소유한 페이지가 정한다. */

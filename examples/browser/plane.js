@@ -32,12 +32,14 @@ const HEADER = 32, FOOTER = 22;
 const dimmed = (cardId) =>
   value("dim") && cardId !== focusedId;
 
-/* 표면은 네이티브 뷰이므로 그 위의 클릭이 이 문서에 도달하지 않는다. 호스트가 표면
-   id 를 보고하면 해당 슬롯 요소에서 pointerdown 을 발생시킨다. 포커스 이동과 레이어
-   닫기를 이미 pointerdown 을 수신하는 쪽이 처리한다. */
-const pressSurface = (cardId) => {
+/* 표면은 네이티브 뷰이므로 그 위의 클릭이 이 문서에 도달하지 않는다. 애플리케이션이
+   표면 id 를 보고하면 해당 슬롯 요소에서 pointerdown 을 발생시킨다. 포커스 이동과
+   레이어 닫기를 이미 pointerdown 을 수신하는 쪽이 처리한다.
+
+   표면 하나는 탭 하나이므로 그 id 는 탭의 id 다. */
+const pressSurface = (tabId) => {
   const slot = document.querySelector(
-    `[data-native-surface-id="${cardId}"][data-native-surface]`);
+    `[data-native-surface-id="${tabId}"][data-native-surface]`);
   if (!slot) return;
   slot.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
 };
@@ -293,7 +295,7 @@ function updateCard(el, card) {
           settle();
           return;
         }
-        // The button toggles: pressing the one that opened the layer closes it.
+        // 버튼은 토글이다. 레이어를 연 버튼을 다시 누르면 닫힌다.
         if (picker?.anchor === b) { closePicker(); return; }
         // 나머지 3개는 탭을 생성한다. + 는 이 카드에, 분할은 새 카드에 생성한다.
         // 여기서는 선택 레이어만 표시하고 생성하지 않는다. 미리 생성하면 취소 시
@@ -418,8 +420,8 @@ pickerEl.addEventListener("click", (e) => {
 
 const onPickerOutside = (e) => {
   if (pickerEl.contains(e.target)) return;
-  // The button that opened the layer closes it on its own click, so a press on it
-  // is not an outside press. Closing here would let that click reopen the layer.
+  // 레이어를 연 버튼은 자기 클릭으로 레이어를 닫으므로, 그 버튼 위의 누름은 바깥
+  // 누름이 아니다. 여기서 닫으면 그 클릭이 레이어를 다시 연다.
   if (picker?.anchor?.contains(e.target)) return;
   closePicker();
 };
@@ -494,10 +496,9 @@ function openLayer(anchor, ask, items, pick, align = "right") {
   pickerEl.style.left = `${rect.x}px`;
   pickerEl.style.top = `${rect.y}px`;
   picker = { anchor, pick, rect };
-  // DOM cannot be drawn over a native view, and a webview is a native view that
-  // renders DOM. A host takes this element and renders it in such a view, so the
-  // surfaces underneath keep running. The element is passed whole and the host
-  // needs no knowledge of its contents.
+  // DOM 은 네이티브 뷰 위에 그릴 수 없고, 웹뷰는 DOM 을 렌더링하는 네이티브 뷰다.
+  // 애플리케이션이 이 요소를 받아 그런 뷰에 렌더링하므로 아래의 표면은 계속 실행된다.
+  // 요소를 통째로 넘기므로 애플리케이션은 그 내용을 알 필요가 없다.
   if (native) {
     // 모달은 닫힘을 빈 key 로 보고한다. 그것을 선택으로 넘기면 등록되지 않은
     // 플러그인을 찾다 예외가 난다.

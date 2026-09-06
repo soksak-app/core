@@ -14,7 +14,7 @@
 import { standIn } from "./compositor.js";
 import { native, overlay } from "./host.js";
 import { icon } from "./icons.js";
-import { onGripDrag, showValue } from "./card.js";
+import { onAnswer, onGripDrag, showValue } from "./card.js";
 import { build } from "./plane.js";
 import { knobs, setKnob } from "./compositor.js";
 import { plugins, section } from "./plugins/registry.js";
@@ -250,14 +250,7 @@ function makeCard() {
       '<nav class="set-card__nav"></nav>' +
       '<div class="set-card__pane"></div>' +
     '</div>';
-  el.addEventListener("click", (e) => {
-    const hit = e.target.closest("[data-key]");
-    if (hit) answer(hit.dataset.key, "");
-  });
-  el.addEventListener("change", (e) => {
-    const c = e.target.closest("[data-set]");
-    if (c) answer(c.dataset.set, c.type === "checkbox" ? String(c.checked) : c.value);
-  });
+  onAnswer(el, answer);
   // 호스트가 있으면 이 요소는 렌더링되지 않는다. 그립 드래그는 사본이 있는 뷰에서
   // 발생하고 그 결과가 answer() 로 전달된다.
   onGripDrag(el, (dx, dy) => answer("move", `${dx},${dy}`));

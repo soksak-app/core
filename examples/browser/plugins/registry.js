@@ -18,9 +18,10 @@ const registeredSections = [];
  * @param {string} plugin.name  `+` 메뉴에 표시할 이름
  * @param {string} plugin.mark  메뉴 오른쪽 표시이자 탭 제목의 접두사
  * @param {string} plugin.svg   16×16 뷰박스 기준 아이콘 경로
- * @param {(cardId: string) => {url: string} | {page: string}} plugin.surface
+ * @param {(tabId: string) => {url: string} | {page: string}} plugin.surface
  *        표면이 표시할 대상. `url` 은 외부 주소, `page` 는 이 호스트가 서비스하는
- *        문서다. 호스트는 둘만 구분하고 플러그인 종류는 알지 않는다
+ *        문서다. 호스트는 둘만 구분하고 플러그인 종류는 알지 않는다. 표면 하나는
+ *        탭 하나이므로 인자는 탭의 id 다
  */
 export function registerPlugin(plugin) {
   if (registeredPlugins.some((p) => p.id === plugin.id)) {

@@ -4,6 +4,28 @@
 // 처리해야 하므로 여기에 둔다.
 
 /**
+ * root 안의 컨트롤이 답한 (key, value) 를 send 로 전달한다.
+ *
+ * 누름은 value 가 비어 있고, 값 변경은 그 값을 담는다. 컨트롤마다 리스너를 등록하지
+ * 않는다. 네이티브 뷰는 이 요소의 사본을 렌더링하므로 거기 등록한 리스너가 동작하지
+ * 않는다.
+ */
+export function onAnswer(root, send) {
+  root.addEventListener("click", (e) => {
+    const hit = e.target.closest("[data-key]");
+    if (hit) send(hit.dataset.key, "");
+  });
+  root.addEventListener("change", (e) => {
+    const el = e.target.closest("[data-set]");
+    if (el) send(el.dataset.set, el.type === "checkbox" ? String(el.checked) : el.value);
+  });
+  // 닫힘은 빈 key 로 보고한다. 카드를 소유한 문서가 그것이 무엇을 닫는지 정한다.
+  root.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") send("", "");
+  });
+}
+
+/**
  * root 안의 [data-grip] 을 드래그하면 moved(dx, dy) 를 호출한다.
  *
  * 이동 거리를 화면 좌표 차이로 계산한다. 오버레이 뷰는 드래그를 따라 이동하므로 뷰
