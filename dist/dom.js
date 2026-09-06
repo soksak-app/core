@@ -44,6 +44,18 @@ export class SoksakView {
      * with it. Reads back what it holds, so a host does not have to remember
      * what it set.
      */
+    /**
+     * One device pixel, in the units the rects are written in.
+     *
+     * The grid the elements are placed on. A display that draws two pixels per unit
+     * halves it; a document without a window - a test, a detached tree - has no
+     * grid finer than one unit.
+     */
+    get step() {
+        var _a, _b;
+        const dpr = (_b = (_a = this.host.ownerDocument) === null || _a === void 0 ? void 0 : _a.defaultView) === null || _b === void 0 ? void 0 : _b.devicePixelRatio;
+        return typeof dpr === 'number' && dpr > 0 ? 1 / dpr : 1;
+    }
     get bleed() {
         var _a;
         return (_a = this.options.bleed) !== null && _a !== void 0 ? _a : 0;
@@ -109,6 +121,9 @@ export class SoksakView {
         var _j;
         if (this.disposed)
             return;
+        // The width of one device pixel, read every render because a window moved to
+        // another display gets a different one.
+        const step = this.step;
         // One measurement for every card. Requesting each card's rect separately
         // rebuilt the whole coordinate system once per card, on every pointer move
         // of a drag.
@@ -127,7 +142,7 @@ export class SoksakView {
             }
             held.card = card;
             const rect = box.get(card.id);
-            place(held.el, rect);
+            place(held.el, rect, step);
             (_b = (_a = this.options).updateCard) === null || _b === void 0 ? void 0 : _b.call(_a, held.el, card, rect);
         }
         // The card is gone from the grid, so `destroyCard` receives the last copy
@@ -156,7 +171,7 @@ export class SoksakView {
                     this.host.appendChild(el);
                     this.ruleEls.set(rule.key, el);
                 }
-                place(el, reach(rule, this.grid, (_j = this.options.bleed) !== null && _j !== void 0 ? _j : 0));
+                place(el, reach(rule, this.grid, (_j = this.options.bleed) !== null && _j !== void 0 ? _j : 0), step);
             }
             this.sweep(this.ruleEls, keep);
         }
@@ -170,7 +185,7 @@ export class SoksakView {
                 el.dataset.line = String(divider.line);
                 this.dividerEls.set(divider.key, el);
             }
-            place(el, divider);
+            place(el, divider, step);
             (_f = (_e = this.options).updateDivider) === null || _f === void 0 ? void 0 : _f.call(_e, el, divider);
         }
         this.sweep(this.dividerEls, keep);
@@ -380,19 +395,32 @@ export class SoksakView {
     }
 }
 /**
- * Write the four position values that changed.
+ * Write the four position values that changed, on the device's pixel grid.
  *
  * A drag moves a handful of elements and leaves the rest where they are, so
  * comparing first turns a write per element per frame into a write per element
  * that moved. The last values are read back from the element, so nothing else
  * has to remember them.
+ *
+ * Sizes come from ratios, so an edge lands between two pixels, and everything
+ * downstream then rounds on its own: the browser spreads a one pixel border over
+ * two rows, and a native view placed on the same rect covers a different set of
+ * pixels than that border did. This is the one place that decides, because the
+ * rects written here are also the rects a page measures back off these elements
+ * and hands to whatever draws above them.
+ *
+ * Edges are quantised, not sizes. Two cards that meet at a boundary derive their
+ * facing edges from that one number, so both land on the same pixel and the
+ * plane stays exactly covered; a width is whatever its two edges leave.
  */
-function place(el, rect) {
+function place(el, rect, step) {
     const s = el.style;
-    const left = `${rect.x}px`;
-    const top = `${rect.y}px`;
-    const width = `${rect.w}px`;
-    const height = `${rect.h}px`;
+    const x = Math.round(rect.x / step) * step;
+    const y = Math.round(rect.y / step) * step;
+    const left = `${x}px`;
+    const top = `${y}px`;
+    const width = `${Math.round((rect.x + rect.w) / step) * step - x}px`;
+    const height = `${Math.round((rect.y + rect.h) / step) * step - y}px`;
     if (s.left !== left)
         s.left = left;
     if (s.top !== top)

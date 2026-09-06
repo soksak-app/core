@@ -74,6 +74,14 @@ export declare class SoksakView {
      * with it. Reads back what it holds, so a host does not have to remember
      * what it set.
      */
+    /**
+     * One device pixel, in the units the rects are written in.
+     *
+     * The grid the elements are placed on. A display that draws two pixels per unit
+     * halves it; a document without a window - a test, a detached tree - has no
+     * grid finer than one unit.
+     */
+    private get step();
     get bleed(): number;
     set bleed(px: number);
     private prefix;
