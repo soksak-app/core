@@ -118,6 +118,13 @@ copy first:
 The binaries land in `examples/tauriv2/src-tauri/target/` and
 `examples/wailsv3/bin/`.
 
+Both windows give the page 1200×760. The two numbers in the two configurations
+differ by the height of the title bar, because Wails takes the content height and
+Tauri takes the window height. The window must also fit the display: a window
+larger than the space available is resized to fit, and the two frameworks do not
+resize it the same way, so the page ends up a pixel different in each.
+`examples/test/hosts.test.mjs` fails when that happens.
+
 ### Watching what is drawn
 
 The page cannot read what is composited: the surfaces and the modal are views
