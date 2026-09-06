@@ -3,7 +3,8 @@
 // 순서는 관측 부품이 수행한다. 창이 표시되고, 페이지 렌더링을 기다리고, 경계를
 // 흔들고, 그동안 녹화하고, 종료한다.
 import { spawn } from "node:child_process";
-import { closeSync, existsSync, mkdtempSync, openSync, readFileSync, rmSync, writeSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -20,60 +21,44 @@ export const APPS = {
  * 애플리케이션이 동시에 창을 띄우고 경계를 흔들며, 각 실행은 남의 창이 섞인
  * 화면을 녹화해 자기 것으로 잰다. Makefile 의 --test-concurrency=1 은 이 폴더를
  * 직접 실행하면 없으므로, 자물쇠는 실행 방법과 무관한 자리인 여기에 둔다.
+ *
+ * 자물쇠는 파일이 아니라 열린 포트다. 파일 자물쇠는 주인이 죽으면 남고, 남은 것을
+ * 걷어내는 데에 경쟁이 있다: 두 대기자가 같은 자물쇠를 함께 죽었다고 읽으면, 하나가
+ * 새로 건 자물쇠를 다른 하나가 지우고 자기 것을 걸어 둘 다 잡았다고 여긴다. 포트는
+ * 주인이 죽으면 커널이 거두므로 남지 않고, 걷어낼 일이 없으므로 그 경쟁도 없다.
  */
-const LOCK = join(tmpdir(), "soksak-window.lock");
+const PORT = 49731;
 
-/** 자물쇠를 기다리는 한도. 이만큼 기다렸다면 앞의 실행이 끝나지 않은 것이다. */
+/** 자물쇠를 기다리는 한도. 이만큼이면 앞의 실행이 끝나지 않은 것이다. */
 const WAIT = 300_000;
 
-/**
- * 이 프로세스가 살아 있는지. 신호를 보내지 않고 존재만 묻는다.
- *
- * EPERM 은 다른 사용자의 프로세스라는 뜻이고, 그것은 살아 있다는 뜻이다.
- */
-function alive(pid) {
-  if (!Number.isInteger(pid) || pid <= 0) return false;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (why) {
-    return why.code === "EPERM";
-  }
-}
+/** 포트를 한 번 잡아 본다. 잡았으면 서버, 이미 누가 쥐고 있으면 null. */
+const take = () =>
+  new Promise((done, fail) => {
+    const server = createServer();
+    server.once("error", (why) => (why.code === "EADDRINUSE" ? done(null) : fail(why)));
+    server.listen(PORT, "127.0.0.1", () => done(server));
+  });
 
 /**
- * 자물쇠를 잡는다.
+ * 자물쇠를 잡는다. 반환한 것을 닫으면 놓는다.
  *
- * 자물쇠를 남기고 죽은 프로세스는 그것을 영원히 붙잡으므로, 적힌 프로세스가 없으면
- * 자물쇠를 걷어내고 다시 잡는다.
+ * 한도까지 잡지 못하면 실패한다. 그 실행은 결함을 찾은 것이 아니라 아무것도 재지
+ * 못한 것이므로, 무엇이 없었는지가 아니라 왜 재지 못했는지를 말한다.
  */
 async function hold() {
   const until = Date.now() + WAIT;
   for (;;) {
-    try {
-      const file = openSync(LOCK, "wx");
-      writeSync(file, String(process.pid));
-      closeSync(file);
-      return;
-    } catch (why) {
-      if (why.code !== "EEXIST") throw why;
-      let owner;
-      try {
-        owner = Number(readFileSync(LOCK, "utf8"));
-      } catch {
-        continue;                       // 읽는 사이에 풀렸다.
-      }
-      if (!alive(owner)) {
-        rmSync(LOCK, { force: true });
-        continue;
-      }
-      if (Date.now() > until) {
-        throw new Error(
-          `${LOCK} 을 ${WAIT} ms 동안 프로세스 ${owner} 가 놓지 않았다. 아무것도 재지 못했다.`,
-        );
-      }
-      await new Promise((go) => setTimeout(go, 200));
+    const lock = await take();
+    if (lock) return lock;
+    if (Date.now() > until) {
+      throw new Error(
+        `nothing held the window lock free for ${WAIT} ms: 127.0.0.1:${PORT} stayed taken. ` +
+          "Nothing was measured. Either a second copy of these tests is running, or an " +
+          "unrelated program holds that port.",
+      );
     }
+    await new Promise((go) => setTimeout(go, 200));
   }
 }
 
@@ -85,11 +70,11 @@ async function hold() {
  */
 export async function run(binary, args, done, { timeout = 30_000 } = {}) {
   if (!existsSync(binary)) return null;
-  await hold();
+  const lock = await hold();
   try {
     return await drive(binary, args, done, timeout);
   } finally {
-    rmSync(LOCK, { force: true });
+    lock.close();
   }
 }
 
@@ -168,6 +153,9 @@ export const clockHeld = (log = "") =>
  *
  * 같은 종류의 녹화가 둘이면 플랫폼이 먼저 것을 거둔다. 시계가 묶인 실행과 같은
  * 부류다 — 그 실행은 아무것도 재지 못한 것이다.
+ *
+ * 그 둘째 녹화는 이 검사의 다른 실행이 아니다. 창을 몰기 전에 자물쇠를 잡으므로
+ * run() 을 거치는 실행은 한 번에 하나다. 남는 것은 이 검사 밖에서 시작된 녹화다.
  */
 export const nothingRecorded = (log = "") => /observe: wrote 0 frames/.test(log);
 

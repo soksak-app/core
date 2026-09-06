@@ -50,9 +50,11 @@ for (const [name, binary] of Object.entries(APPS)) {
       try {
         assert.ok(
           !nothingRecorded(run.log),
-          "the window server delivered no frames, so nothing was measured. Another capture " +
-            "of this kind was running: examples/test drives one window at a time and two " +
-            `runs at once do not each get their frames.\n${run.log}`,
+          "the window server delivered no frames, so nothing was measured. A second capture " +
+            "of the same kind takes the stream, and it was not another run of these tests: " +
+            "they take a lock before driving a window. It came from outside them — the app " +
+            "driven by hand with --capture, another checkout of it, or a screen recorder on " +
+            `the same window.\n${run.log}`,
         );
         const files = frames(run.into);
         assert.ok(
@@ -88,8 +90,8 @@ for (const [name, binary] of Object.entries(APPS)) {
           const shown = join(process.cwd(), `${name}-bare.png`);
           writePNG(readFrame(worst.path), shown);
           assert.fail(
-            `${files.length} 장 중 ${seen} 장에서 렌더링되지 않은 영역이 있다. ` +
-              `가장 심한 것은 ${worst.n} 픽셀이고 ${shown} 에 적었다.`,
+            `${seen} of ${files.length} frames show unrendered area. ` +
+              `The worst is ${worst.n} pixels, written to ${shown}.`,
           );
         }
       } finally {
