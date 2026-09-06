@@ -324,7 +324,7 @@ function drawBars() {
     into.appendChild(tab(p.title, p.id === here.id, {
       dot: p.color,
       onPick: () => { projects.activate(p.id); drawBars(); },
-      onRename: (title) => projects.rename(p.id, { title }),
+      onRename: (title) => projects.rename(p.id, title),
       onClose: projects.all().length > 1
         // 배경에 있던 것을 닫으면 판은 그대로다. 살아 있어야 할 표면 목록은
         // 커밋에서만 전달되므로, 닫은 뒤 한 번 게시해 그 표면을 없앤다.

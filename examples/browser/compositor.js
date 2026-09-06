@@ -256,7 +256,6 @@ function commit(mine, snapshot, final) {
  * 정렬하기 때문이다. 그 차이를 검증기가 잴 수 있어야 하므로 답을 그대로 기록한다.
  */
 function seat(record, placed) {
-  if (!Array.isArray(placed)) return;
   const at = new Map(placed.map((p) => [p.id, p]));
   for (const s of record.surfaces) {
     const now = at.get(s.id);

@@ -105,12 +105,11 @@ export function close(id) {
   restore();
 }
 
-/** 이름과 색을 변경한다. root 는 정체성이므로 변경하지 않는다. */
-export function rename(id, { title, color }) {
+/** 이름을 변경한다. root 는 정체성이므로 변경하지 않는다. */
+export function rename(id, title) {
   const found = projects.find((p) => p.id === id);
   if (!found) throw new Error(`unknown project: ${id}`);
-  if (title !== undefined) found.title = title;
-  if (color !== undefined) found.color = color;
+  found.title = title;
 }
 
 /* 지금까지 발급한 이름의 수. 목록의 길이가 아니라 이 값이 다음 번호를 정한다. */

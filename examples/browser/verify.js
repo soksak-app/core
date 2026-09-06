@@ -4,6 +4,8 @@
 // 검사를 추가해도 그쪽을 수정할 필요가 없다.
 //
 // 화면을 보고 판단하지 않고 수치로 판정한다.
+import { Soksak } from "/dist/index.js";
+
 import { ahead, latest, seated } from "./compositor.js";
 import { currentGrid, plane, railOutline, tabsOf } from "./plane.js";
 import { isPlace, railKind } from "./plugins/registry.js";
@@ -85,8 +87,32 @@ export function verify(controls = null) {
       overlap === 0 && (!isFinite(worst) || Math.abs(worst - grid.gap) < 0.5),
       overlap ? `겹침 ${overlap}쌍` : `최소 ${isFinite(worst) ? worst.toFixed(1) : grid.gap}px`);
 
+  // V4 — minSize 는 판이 아니라 연산을 구속한다. gap 과 minSize 와 resize 는 같은
+  // 비율을 새 눈금으로 다시 표현하므로, 바닥에 선 카드는 통로가 넓어지거나 판이
+  // 작아지면 그 아래로 그려진다. 그리는 크기에 바닥을 주장하면 라이브러리가 하지
+  // 않는 약속을 검사하게 된다.
+  //
+  // 라이브러리가 하는 약속은 다시 쓰지 않는다는 것이다. 통로를 되돌리거나 크기를
+  // 되돌리면 모든 카드가 이전에 그려진 자리에 이전 크기로 그려진다. 그 약속은 왕복
+  // 으로만 잰다.
+  //
+  // 살아 있는 판을 왕복시키면 사람이 보는 배치가 두 번 바뀐다. 지금 상태의 사본을
+  // 만들어 사본을 왕복시키고, 떠날 때와 돌아온 때의 사각형을 비교한다.
+  const trip = new Soksak(grid.toJSON(),
+    { gap: grid.gap, minSize: grid.minSize, width: grid.width, height: grid.height });
+  const leaving = trip.rects();
+  // 왕복이 가는 곳은 px 크기가 들어가지 못하는 눈금이어야 한다. 들어가는 눈금까지만
+  // 가면 크기를 다시 쓰는 구현도 다시 쓸 것이 없어 왕복이 그대로 돌아온다.
+  trip.gap = grid.gap * 4 + 64;
+  trip.resize(Math.max(1, Math.round(grid.width / 8)), Math.max(1, Math.round(grid.height / 8)));
+  trip.gap = grid.gap;
+  trip.resize(grid.width, grid.height);
+  const back = trip.rects();
+  let moved = 0;
+  for (const [id, was] of leaving) moved = Math.max(moved, maxDelta(was, back.get(id)));
   const smallest = Math.min(...rects.flatMap((r) => [r.w, r.h]));
-  add(`V4 카드 최소 변 ≥ ${grid.minSize}px`, smallest >= grid.minSize - 0.6, `최소 ${smallest.toFixed(0)}px`);
+  add("V4 통로와 크기를 되돌리면 그대로", moved === 0,
+      `왕복 후 최대 ${moved.toFixed(4)}px · 그려진 최소 변 ${smallest.toFixed(0)}px`);
   add("V5 배치가 slicing", grid.isSlicing(), "한 영역을 통째로 자른 결과만 가능");
 
   const open = cards.filter((c) => !c.fixed);
@@ -199,8 +225,10 @@ export function verify(controls = null) {
   const rail = grid.cards.find((c) => railKind(c.id));
   const drawn = (c) => (c ? grid.rect(c.id).w : null);
   const asked = (c) => (c && c.width !== undefined ? c.width : null);
+  // 선언한 px 는 요청이다. 판에 자리가 있으면 그대로 그려지고, 없으면 나머지가 남은
+  // 것을 나눠 가지므로 그보다 좁게 그려진다. 넓게 그려지는 것만 규칙 위반이다.
   const kept = (c) => c === undefined || asked(c) === null
-    || Math.abs(drawn(c) - asked(c)) < 0.5;
+    || drawn(c) <= asked(c) + 0.5;
   const say = (c, where) => {
     if (!c) return "없음";
     const w = drawn(c).toFixed(0);
