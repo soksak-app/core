@@ -35,7 +35,8 @@ func newNativeOverlay(window unsafe.Pointer, url string, x, y, w, h float64,
 }
 
 func (v *nativeOverlay) setFrame(x, y, w, h float64)    {}
-func (v *nativeOverlay) setHidden(hidden bool)          {}
+func (v *nativeOverlay) show()                          {}
+func (v *nativeOverlay) hide()                          {}
 func (v *nativeOverlay) setCornerRadius(radius float64) {}
 func (v *nativeOverlay) eval(js string)                 {}
 func (v *nativeOverlay) destroy()                       {}

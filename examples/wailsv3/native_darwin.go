@@ -152,7 +152,10 @@ static void* overlayCreate(void* nsWindow, const char* url, double x, double y, 
     WKWebView* view = surfaceWebView(url, w, h, red, green, blue, alpha, boot);
     [view setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
     [child setContentView:view];
-    [parent addChildWindow:child ordered:NSWindowAbove];
+    // Not attached to the parent yet, and not ordered on screen. A window is not
+    // visible until it is ordered, and ordering a child window out takes it off
+    // its parent's list, so attaching before there is anything to show would
+    // detach it again the moment it is hidden.
     return (void*)child;
 }
 
@@ -175,17 +178,22 @@ static void overlaySetCornerRadius(void* childWindow, double radius) {
     view.layer.masksToBounds = YES;
 }
 
-// Shows the modal and gives it the keyboard, which is also what lets its page set
-// the cursor. Hiding hands the keyboard back to the app's window.
-static void overlaySetHidden(void* childWindow, int hidden) {
+// Attaches the modal to the app's window and gives it the keyboard, which is also
+// what lets its page set the cursor. A child window moves with its parent.
+static void overlayAttach(void* childWindow, void* nsWindow) {
     NSWindow* child = (NSWindow*)childWindow;
-    if (hidden) {
-        NSWindow* parent = [child parentWindow];
-        [child orderOut:nil];
-        [parent makeKeyWindow];
-        return;
-    }
-    [child makeKeyAndOrderFront:nil];
+    NSWindow* parent = (NSWindow*)nsWindow;
+    [parent addChildWindow:child ordered:NSWindowAbove];
+    [child makeKeyWindow];
+}
+
+// Takes the modal off the app's window and hands the keyboard back.
+static void overlayDetach(void* childWindow, void* nsWindow) {
+    NSWindow* child = (NSWindow*)childWindow;
+    NSWindow* parent = (NSWindow*)nsWindow;
+    [parent removeChildWindow:child];
+    [child orderOut:nil];
+    [parent makeKeyWindow];
 }
 
 static void overlayEval(void* childWindow, const char* js) {
@@ -429,13 +437,9 @@ func (v *nativeOverlay) setFrame(x, y, w, h float64) {
 	C.overlaySetFrame(v.handle, v.parent, C.double(x), C.double(y), C.double(w), C.double(h))
 }
 
-func (v *nativeOverlay) setHidden(hidden bool) {
-	flag := C.int(0)
-	if hidden {
-		flag = 1
-	}
-	C.overlaySetHidden(v.handle, flag)
-}
+func (v *nativeOverlay) show() { C.overlayAttach(v.handle, v.parent) }
+
+func (v *nativeOverlay) hide() { C.overlayDetach(v.handle, v.parent) }
 
 func (v *nativeOverlay) setCornerRadius(radius float64) {
 	C.overlaySetCornerRadius(v.handle, C.double(radius))

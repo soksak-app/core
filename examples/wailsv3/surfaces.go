@@ -275,7 +275,6 @@ func (s *Surfaces) OverlayShow(req OverlayRequest) error {
 			delete(s.modals, req.ID)
 			return
 		}
-		view.setHidden(true)
 		s.modals[req.ID] = &modal{
 			view:    view,
 			radius:  req.Radius,
@@ -435,7 +434,7 @@ func (s *Surfaces) ModalReady(id string) {
 
 	application.InvokeSync(func() {
 		view.setCornerRadius(radius)
-		view.setHidden(false)
+		view.show()
 	})
 }
 
