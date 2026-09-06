@@ -77,6 +77,13 @@ export class SoksakView {
          */
         this.drags = new Map();
         this.mouseDrag = null;
+        /**
+         * The divider a key is addressing, for the length of that key's draw. The
+         * keyboard is not a drag, so without this `refile` does not follow the
+         * element when the key renumbers, and the sweep removes it from under the
+         * focus.
+         */
+        this.pressed = null;
         this.mouseDisposers = new Map();
         this.observer = null;
         this.disposed = false;
@@ -253,32 +260,48 @@ export class SoksakView {
         const live = [...this.drags.values()];
         if (this.mouseDrag)
             live.push(this.mouseDrag);
+        if (this.pressed)
+            live.push(this.pressed);
         return live;
     }
     /**
-     * Point a drag at the line its boundary now has.
+     * Run a change that renumbers lines and point every live drag at the line its
+     * own boundary now has.
      *
-     * A move that passes a line no card reads drops that line, and every line
-     * above it is renumbered. A drag holds a line number, so it has to be given
-     * the one the boundary now stands on, or its next move addresses a different
-     * boundary. The search runs down from the number it held, because a drop only
-     * ever lowers it, and stops at the first line standing where the move left
-     * this one: a boundary snapped onto its neighbour shares that position, and
-     * the nearer number is this one's.
+     * A move, a merge and a centring all drop the lines no card reads that they
+     * pass, and every line above a dropped one is renumbered. A drag holds a line
+     * number, so each one has to be given the number its boundary now stands on,
+     * or its next move addresses a different boundary and its element is filed
+     * under a key no divider has.
      *
-     * Every drag on that divider is given the number, not only the one that moved:
-     * a divider is one boundary, so a second finger on it holds the same one.
+     * `on` is the divider the change addresses. The drags on it follow the
+     * position the change returns; every other drag follows the position its own
+     * boundary stood at before the change, and its press anchor moves by the same
+     * amount the change moved that boundary, as the resize observer does.
+     *
+     * The line is the nearest one and not an exact match: dropping a line moves
+     * what is left of the others by a rounding.
      */
-    retarget(drag, at) {
-        const last = this.grid.lines(drag.axis).length - 2;
-        for (let line = Math.min(drag.line, last); line >= 1; line--) {
-            if (this.grid.boundaryPos(drag.axis, line) === at) {
-                for (const held of this.holds())
-                    if (held.on === drag.on)
-                        held.line = line;
-                return;
+    carry(change, on) {
+        const live = this.holds();
+        const was = live.map((drag) => this.grid.boundaryPos(drag.axis, drag.line));
+        const at = change();
+        live.forEach((drag, i) => {
+            const stands = drag.on === on ? at : was[i];
+            let line = drag.line;
+            let near = Infinity;
+            for (let k = Math.min(drag.line, this.grid.lines(drag.axis).length - 2); k >= 1; k--) {
+                const off = Math.abs(this.grid.boundaryPos(drag.axis, k) - stands);
+                if (off < near) {
+                    near = off;
+                    line = k;
+                }
             }
-        }
+            drag.line = line;
+            if (drag.on !== on)
+                drag.base += this.grid.boundaryPos(drag.axis, line) - was[i];
+        });
+        return at;
     }
     /**
      * File the element a drag holds under the key its boundary now has.
@@ -289,11 +312,18 @@ export class SoksakView {
      * its place cannot pick the drag up.
      *
      * Two dividers can stand on one line, one per stretch of it that cards break
-     * on, so the one to file under is the one covering the stretch this element
-     * already covers and that holds no element yet.
+     * on, so the one to file under is the one covering most of the stretch this
+     * element already covers. A renumber on the other axis moves the ends of that
+     * stretch in the same frame, so the stretches are compared by overlap and not
+     * by an exact match.
      */
     refile(dividers, step) {
+        const moving = [];
         for (const drag of this.holds()) {
+            // More than one gesture can hold one divider, and they hold one boundary
+            // between them, so the element moves once.
+            if (moving.some((m) => m.drag.on === drag.on))
+                continue;
             let was;
             for (const [key, el] of this.dividerEls)
                 if (el === drag.on)
@@ -303,34 +333,63 @@ export class SoksakView {
             // divider has. What says the element has to move is the line.
             if (was === undefined || dividers.some((d) => d.key === was && d.line === drag.line))
                 continue;
-            const to = dividers.find((d) => d.axis === drag.axis &&
-                d.line === drag.line &&
-                !this.dividerEls.has(d.key) &&
-                across(drag.on, onGrid(d, step), d.axis));
-            if (!to)
-                continue;
+            moving.push({ drag, was });
+        }
+        // All of them leave the map before any of them is filed again, because one
+        // can want the key another is about to leave.
+        for (const { was } of moving)
             this.dividerEls.delete(was);
+        for (const { drag } of moving) {
+            let to;
+            let best = 0;
+            for (const d of dividers) {
+                if (d.axis !== drag.axis || d.line !== drag.line || this.holding(d.key))
+                    continue;
+                const over = across(drag.on, onGrid(d, step), d.axis);
+                if (over > best) {
+                    best = over;
+                    to = d;
+                }
+            }
+            if (!to) {
+                // The boundary it held is gone. It goes the way the sweep takes an
+                // element away, because the sweep no longer sees it.
+                this.forget(drag.on);
+                continue;
+            }
+            const sitting = this.dividerEls.get(to.key);
+            if (sitting !== undefined)
+                this.forget(sitting);
             this.dividerEls.set(to.key, drag.on);
             drag.on.dataset.line = String(to.line);
         }
     }
-    sweep(map, keep) {
+    /** Whether a gesture holds the element filed under this key. */
+    holding(key) {
+        const el = this.dividerEls.get(key);
+        return el !== undefined && this.holds().some((drag) => drag.on === el);
+    }
+    /** Drop what holds this element, remove its listeners, remove it. */
+    forget(el) {
         var _a;
+        // The drag is dropped rather than ended. This runs inside render, and
+        // ending a drag draws, which would start that render again from inside
+        // itself, on a grid the merge has changed.
+        for (const [pointer, drag] of [...this.drags])
+            if (drag.on === el)
+                this.drop(pointer);
+        // The mouse listeners are on the document, so removing the element does
+        // not remove them. Left behind, they keep driving the boundary of a
+        // divider that is gone, and they accumulate one pair per divider. The
+        // disposer drops that divider's mouse drag before it removes them.
+        (_a = this.mouseDisposers.get(el)) === null || _a === void 0 ? void 0 : _a();
+        el.remove();
+    }
+    sweep(map, keep) {
         for (const [k, el] of map) {
             if (keep.has(k))
                 continue;
-            // The drag is dropped rather than ended. This runs inside render, and
-            // ending a drag draws, which would start that render again from inside
-            // itself, on a grid the merge has changed.
-            for (const [pointer, drag] of [...this.drags])
-                if (drag.on === el)
-                    this.drop(pointer);
-            // The mouse listeners are on the document, so removing the element does
-            // not remove them. Left behind, they keep driving the boundary of a
-            // divider that is gone, and they accumulate one pair per divider. The
-            // disposer drops that divider's mouse drag before it removes them.
-            (_a = this.mouseDisposers.get(el)) === null || _a === void 0 ? void 0 : _a();
-            el.remove();
+            this.forget(el);
             map.delete(k);
         }
     }
@@ -394,7 +453,13 @@ export class SoksakView {
         const drag = this.dropMouse();
         if (!drag)
             return false;
-        const merged = this.grid.mergeCoincident(drag.axis, drag.line);
+        // The boundary it held is folded away, so no drag is on the divider the
+        // merge addresses; a drag that stood where it stood keeps it.
+        let merged = false;
+        this.carry(() => {
+            merged = this.grid.mergeCoincident(drag.axis, drag.line);
+            return 0;
+        }, null);
         this.draw(merged ? 'merge' : 'drag');
         return drag.moved;
     }
@@ -410,7 +475,13 @@ export class SoksakView {
             return false;
         if (this.disposed)
             return drag.moved;
-        const merged = this.grid.mergeCoincident(drag.axis, drag.line);
+        // The boundary it held is folded away, so no drag is on the divider the
+        // merge addresses; a drag that stood where it stood keeps it.
+        let merged = false;
+        this.carry(() => {
+            merged = this.grid.mergeCoincident(drag.axis, drag.line);
+            return 0;
+        }, null);
         this.draw(merged ? 'merge' : 'drag');
         return drag.moved;
     }
@@ -451,7 +522,7 @@ export class SoksakView {
             // finger, not the second press of a pair.
             if (((_b = this.drags.get(tapId)) === null || _b === void 0 ? void 0 : _b.on) !== el && e.timeStamp - lastTap < DOUBLE_TAP_MS) {
                 lastTap = -Infinity;
-                this.grid.centerBoundary(axis, line);
+                this.carry(() => this.grid.centerBoundary(axis, line), el);
                 this.draw('center');
                 return;
             }
@@ -494,7 +565,7 @@ export class SoksakView {
             const now = drag.axis === 'x' ? e.clientX : e.clientY;
             if (Math.abs(now - drag.from) > 2)
                 drag.moved = true;
-            this.commit('drag', () => this.retarget(drag, this.grid.moveBoundary(drag.axis, drag.line, drag.base + (now - drag.from))));
+            this.commit('drag', () => this.carry(() => this.grid.moveBoundary(drag.axis, drag.line, drag.base + (now - drag.from)), el));
         });
         const stop = (e) => {
             var _a;
@@ -529,7 +600,7 @@ export class SoksakView {
                 lastPress = -Infinity;
             if (e.timeStamp - lastPress < DOUBLE_TAP_MS) {
                 lastPress = -Infinity;
-                this.grid.centerBoundary(axis, line);
+                this.carry(() => this.grid.centerBoundary(axis, line), el);
                 this.draw('center');
                 return;
             }
@@ -558,7 +629,7 @@ export class SoksakView {
             const now = drag.axis === 'x' ? e.clientX : e.clientY;
             if (Math.abs(now - drag.from) > 2)
                 drag.moved = true;
-            this.commit('drag', () => this.retarget(drag, this.grid.moveBoundary(drag.axis, drag.line, drag.base + (now - drag.from))));
+            this.commit('drag', () => this.carry(() => this.grid.moveBoundary(drag.axis, drag.line, drag.base + (now - drag.from)), el));
         };
         const mouseUp = (e) => {
             var _a;
@@ -589,17 +660,32 @@ export class SoksakView {
                 return;
             const axis = el.dataset.axis;
             const line = Number(el.dataset.line);
+            // The record is set before the change runs, because that is when the line
+            // each gesture holds is resolved.
+            const held = { on: el, axis, line, from: 0, base: 0, moved: false };
             if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
-                this.grid.centerBoundary(axis, line);
-                this.draw('center');
+                this.pressed = held;
+                try {
+                    this.carry(() => this.grid.centerBoundary(axis, line), el);
+                    this.draw('center');
+                }
+                finally {
+                    this.pressed = null;
+                }
                 return;
             }
             const step = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }[e.key];
             if (step === undefined)
                 return;
             e.preventDefault();
-            this.commit('drag', () => this.grid.moveBoundary(axis, line, this.grid.boundaryPos(axis, line) + step * 8));
+            this.pressed = held;
+            try {
+                this.commit('drag', () => this.carry(() => this.grid.moveBoundary(axis, line, this.grid.boundaryPos(axis, line) + step * 8), el));
+            }
+            finally {
+                this.pressed = null;
+            }
         });
         this.host.appendChild(el);
         return el;
@@ -633,16 +719,19 @@ export class SoksakView {
     }
 }
 /**
- * Whether the element is already drawn across the stretch this rect covers.
+ * How much of this rect the element is already drawn across.
  *
- * A renumber on one axis leaves the other alone, so the coordinates across the
- * line are the ones the element was last drawn with. They tell two dividers
- * standing on one line apart.
+ * The coordinates across the line are the ones the element was last drawn with.
+ * They tell two dividers standing on one line apart. A renumber on the other
+ * axis moves the ends of the stretch in the same frame, so the answer is the
+ * length the two share and not whether they match.
  */
 function across(el, rect, axis) {
-    return axis === 'x'
-        ? el.style.top === `${rect.y}px` && el.style.height === `${rect.h}px`
-        : el.style.left === `${rect.x}px` && el.style.width === `${rect.w}px`;
+    const start = Number.parseFloat(axis === 'x' ? el.style.top : el.style.left);
+    const end = start + Number.parseFloat(axis === 'x' ? el.style.height : el.style.width);
+    const lo = axis === 'x' ? rect.y : rect.x;
+    const hi = lo + (axis === 'x' ? rect.h : rect.w);
+    return Math.min(end, hi) - Math.max(start, lo);
 }
 /**
  * Put a rect on the device's pixel grid.

@@ -1351,3 +1351,254 @@ test("a drag that passes a line no card reads keeps the divider it holds", () =>
   );
   view.destroy();
 });
+
+test("the view places elements on the display's pixel grid", () => {
+  // A display that draws two pixels per unit has a grid half a unit fine, so a
+  // fractional edge lands on a half. The step is read from the window the host
+  // is in: a view that reads no ratio rounds to a whole unit instead.
+  let reported = null;
+  const { window, grid, view } = mount({
+    commit: (rects, draw) => {
+      reported = rects;
+      draw();
+    },
+  });
+  grid.moveBoundary("x", 1, 300.3);
+  for (const [ratio, written] of [
+    [1, "288px"],
+    [2, "288.5px"],
+  ]) {
+    Object.defineProperty(window, "devicePixelRatio", { value: ratio, configurable: true });
+    view.render();
+    assert.equal(view.element("card").style.width, written, `written at a ratio of ${ratio}`);
+    assert.equal(reported.get("card").w, parseFloat(written), `commit reports it at ${ratio}`);
+  }
+  view.destroy();
+});
+
+/**
+ * Two boundaries on one axis, with a line no card reads below both.
+ *
+ * A move that passes that line drops it, which renumbers the boundary above.
+ */
+function stacked() {
+  const it = mount();
+  it.grid.split("card", "y");
+  const spare = it.grid.split("card", "x");
+  it.grid.close(spare);
+  it.grid.split("card-1", "x");
+  it.view.render();
+  assert.equal(it.grid.isVirtual("x", 1), true, "line 1 is read by no card");
+  return it;
+}
+
+test("a drag past a line no card reads keeps the divider another finger holds", () => {
+  const { window, host, grid, view } = stacked();
+  const near = host.querySelector('.sp-divider[data-axis="x"][data-line="2"]');
+  const far = host.querySelector('.sp-divider[data-axis="x"][data-line="3"]');
+
+  // The second finger takes the boundary above and holds it.
+  pointer(window, far, "pointerdown", 2, grid.boundaryPos("x", 3), 300);
+  pointer(window, far, "pointermove", 2, grid.boundaryPos("x", 3) + 10, 300);
+  const held = grid.boundaryPos("x", 3);
+
+  // The first finger takes the boundary below past the line no card reads.
+  pointer(window, near, "pointerdown", 1, grid.boundaryPos("x", 2), 100);
+  pointer(window, near, "pointermove", 1, grid.boundaryPos("x", 1) - 20, 100);
+  assert.equal(grid.lines("x").length, 4, "the line the move passed is gone");
+
+  assert.equal(far.isConnected, true, "the second finger still holds its element");
+  assert.equal(far.dataset.dragging, "true", "and the element is still held");
+  assert.equal(far.dataset.line, "2", "filed under the line its boundary now has");
+
+  pointer(window, far, "pointermove", 2, held + 60, 300);
+  assert.ok(
+    Math.abs(grid.boundaryPos("x", 2) - (held + 60)) < 1e-6,
+    `it still drives its own boundary, to ${grid.boundaryPos("x", 2)} and not ${held + 60}`,
+  );
+  view.destroy();
+});
+
+test("a merge on release keeps the divider another finger holds", () => {
+  const { window, host, grid, view } = stacked();
+  const near = host.querySelector('.sp-divider[data-axis="x"][data-line="2"]');
+  const far = host.querySelector('.sp-divider[data-axis="x"][data-line="3"]');
+
+  pointer(window, far, "pointerdown", 2, grid.boundaryPos("x", 3), 300);
+  pointer(window, far, "pointermove", 2, grid.boundaryPos("x", 3) + 10, 300);
+  const held = grid.boundaryPos("x", 3);
+
+  // The boundary below snaps onto the line no card reads, and the release folds
+  // the pair into one line, which renumbers the boundary above.
+  const onto = grid.boundaryPos("x", 1);
+  pointer(window, near, "pointerdown", 1, grid.boundaryPos("x", 2), 100);
+  pointer(window, near, "pointermove", 1, onto + 2, 100);
+  pointer(window, near, "pointerup", 1, onto + 2, 100);
+  assert.equal(grid.lines("x").length, 4, "the pair was folded into one line");
+
+  assert.equal(far.isConnected, true, "the second finger still holds its element");
+  assert.equal(far.dataset.dragging, "true", "and the element is still held");
+
+  pointer(window, far, "pointermove", 2, held + 60, 300);
+  assert.ok(
+    Math.abs(grid.boundaryPos("x", 2) - (held + 60)) < 1e-6,
+    `it still drives its own boundary, to ${grid.boundaryPos("x", 2)} and not ${held + 60}`,
+  );
+  view.destroy();
+});
+
+test("a drag on one axis keeps the divider a finger holds on the other", () => {
+  const { window, host, grid, view } = mount();
+  // One card across the top, two side by side below it, and a line no card
+  // reads inside the top card. A divider's key carries where its stretch starts
+  // on the other axis, so dropping that line renumbers the key of the vertical
+  // divider as well.
+  grid.replace({
+    xs: [0, 0.5, 1],
+    ys: [0, 0.25, 0.5, 1],
+    cards: [
+      { id: "top", c0: 0, c1: 2, r0: 0, r1: 2 },
+      { id: "left", c0: 0, c1: 1, r0: 2, r1: 3 },
+      { id: "right", c0: 1, c1: 2, r0: 2, r1: 3 },
+    ],
+    paidBy: {},
+  });
+  view.render();
+  assert.equal(grid.isVirtual("y", 1), true, "line 1 is read by no card");
+  const down = host.querySelector('.sp-divider[data-axis="x"]');
+  const across = host.querySelector('.sp-divider[data-axis="y"]');
+
+  pointer(window, down, "pointerdown", 1, 600, 450);
+  pointer(window, down, "pointermove", 1, 610, 450);
+  const held = grid.boundaryPos("x", 1);
+
+  pointer(window, across, "pointerdown", 2, 600, 300);
+  pointer(window, across, "pointermove", 2, 600, 140);
+  assert.equal(grid.lines("y").length, 3, "the line the move passed is gone");
+
+  assert.equal(down.isConnected, true, "the first finger still holds its element");
+  assert.equal(down.dataset.dragging, "true", "and the element is still held");
+
+  pointer(window, down, "pointermove", 1, held + 50, 450);
+  assert.ok(
+    Math.abs(grid.boundaryPos("x", 1) - (held + 50)) < 1e-6,
+    `it still drives its own boundary, to ${grid.boundaryPos("x", 1)} and not ${held + 50}`,
+  );
+  view.destroy();
+});
+
+test("a key past a line no card reads keeps the divider under the focus", () => {
+  const { window, host, grid, view } = mount();
+  grid.split("card", "y");
+  grid.close("card");
+  grid.split("card-1", "x");
+  grid.split("card-2", "y");
+  grid.split("card-2", "y");
+  grid.close("card-2");
+  view.render();
+  assert.equal(grid.isVirtual("y", 1), true, "line 1 is read by no card");
+
+  const divider = host.querySelector('.sp-divider[data-axis="y"][data-line="2"]');
+  const key = (name) =>
+    window.document.activeElement.dispatchEvent(
+      new window.KeyboardEvent("keydown", { key: name, bubbles: true, cancelable: true }),
+    );
+
+  divider.focus();
+  for (let i = 0; i < 19; i++) key("ArrowUp");
+  assert.equal(grid.lines("y").length, 3, "the line the keys passed is gone");
+
+  assert.equal(divider.isConnected, true, "the divider under the focus is still there");
+  assert.equal(divider.dataset.line, "1", "filed under the line its boundary now has");
+  assert.equal(window.document.activeElement, divider, "and it still has the focus");
+
+  const at = grid.boundaryPos("y", 1);
+  assert.ok(at - 8 > grid.boundaryRange("y", 1)[0], "the boundary has room for another step");
+  key("ArrowUp");
+  assert.equal(grid.boundaryPos("y", 1), at - 8, "and the next key moves it");
+  view.destroy();
+});
+
+test("onChange reports a centring driven by the mouse", () => {
+  const changes = [];
+  const { window, host, grid, view } = mount({ onChange: (reason) => changes.push(reason) });
+  grid.setSize("card", "x", null);
+  const divider = host.querySelector('[role="separator"]');
+  grid.moveBoundary("x", 1, grid.boundaryPos("x", 1) + 200, false);
+  view.render();
+  changes.length = 0;
+
+  const press = () =>
+    divider.dispatchEvent(
+      new window.MouseEvent("mousedown", {
+        clientX: grid.boundaryPos("x", 1),
+        clientY: 100,
+        bubbles: true,
+        button: 0,
+        buttons: 1,
+      }),
+    );
+  press();
+  window.document.dispatchEvent(
+    new window.MouseEvent("mouseup", {
+      clientX: grid.boundaryPos("x", 1),
+      clientY: 100,
+      bubbles: true,
+      button: 0,
+      buttons: 0,
+    }),
+  );
+  press();
+  assert.equal(grid.boundaryPos("x", 1), 600, "the second press centres it");
+  assert.ok(changes.includes("center"), `the reasons were ${changes.join(" ") || "none"}`);
+  view.destroy();
+});
+
+test("onChange reports a centring driven by a key", () => {
+  const changes = [];
+  const { window, host, grid, view } = mount({ onChange: (reason) => changes.push(reason) });
+  const el = host.querySelector('.sp-divider[data-axis="x"]');
+  grid.moveBoundary("x", 1, grid.boundaryPos("x", 1) + 200, false);
+  view.render();
+  changes.length = 0;
+
+  el.dispatchEvent(
+    new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
+  );
+  assert.equal(grid.boundaryPos("x", 1), 600, "the key centres it");
+  assert.ok(changes.includes("center"), `the reasons were ${changes.join(" ") || "none"}`);
+  view.destroy();
+});
+
+test("a divider a finger still holds keeps data-dragging when the mouse lets go", () => {
+  const { window, host, grid, view } = mount();
+  const divider = host.querySelector('[role="separator"]');
+  const at = grid.boundaryPos("x", 1);
+
+  pointer(window, divider, "pointerdown", 1, at, 150);
+  divider.dispatchEvent(
+    new window.MouseEvent("mousedown", {
+      clientX: at,
+      clientY: 150,
+      bubbles: true,
+      button: 0,
+      buttons: 1,
+    }),
+  );
+  assert.equal(divider.dataset.dragging, "true", "the finger and the mouse both hold it");
+
+  window.document.dispatchEvent(
+    new window.MouseEvent("mouseup", {
+      clientX: at,
+      clientY: 150,
+      bubbles: true,
+      button: 0,
+      buttons: 0,
+    }),
+  );
+  assert.equal(divider.dataset.dragging, "true", "the finger still holds it");
+
+  pointer(window, divider, "pointerup", 1, at, 150);
+  assert.equal(divider.dataset.dragging, undefined, "the last release lets it go");
+  view.destroy();
+});

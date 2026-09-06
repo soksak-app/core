@@ -95,6 +95,13 @@ export declare class SoksakView {
      */
     private drags;
     private mouseDrag;
+    /**
+     * The divider a key is addressing, for the length of that key's draw. The
+     * keyboard is not a drag, so without this `refile` does not follow the
+     * element when the key renumbers, and the sweep removes it from under the
+     * focus.
+     */
+    private pressed;
     private mouseDisposers;
     private observer;
     private disposed;
@@ -134,20 +141,24 @@ export declare class SoksakView {
     /** Every drag now running, the mouse's included. */
     private holds;
     /**
-     * Point a drag at the line its boundary now has.
+     * Run a change that renumbers lines and point every live drag at the line its
+     * own boundary now has.
      *
-     * A move that passes a line no card reads drops that line, and every line
-     * above it is renumbered. A drag holds a line number, so it has to be given
-     * the one the boundary now stands on, or its next move addresses a different
-     * boundary. The search runs down from the number it held, because a drop only
-     * ever lowers it, and stops at the first line standing where the move left
-     * this one: a boundary snapped onto its neighbour shares that position, and
-     * the nearer number is this one's.
+     * A move, a merge and a centring all drop the lines no card reads that they
+     * pass, and every line above a dropped one is renumbered. A drag holds a line
+     * number, so each one has to be given the number its boundary now stands on,
+     * or its next move addresses a different boundary and its element is filed
+     * under a key no divider has.
      *
-     * Every drag on that divider is given the number, not only the one that moved:
-     * a divider is one boundary, so a second finger on it holds the same one.
+     * `on` is the divider the change addresses. The drags on it follow the
+     * position the change returns; every other drag follows the position its own
+     * boundary stood at before the change, and its press anchor moves by the same
+     * amount the change moved that boundary, as the resize observer does.
+     *
+     * The line is the nearest one and not an exact match: dropping a line moves
+     * what is left of the others by a rounding.
      */
-    private retarget;
+    private carry;
     /**
      * File the element a drag holds under the key its boundary now has.
      *
@@ -157,10 +168,16 @@ export declare class SoksakView {
      * its place cannot pick the drag up.
      *
      * Two dividers can stand on one line, one per stretch of it that cards break
-     * on, so the one to file under is the one covering the stretch this element
-     * already covers and that holds no element yet.
+     * on, so the one to file under is the one covering most of the stretch this
+     * element already covers. A renumber on the other axis moves the ends of that
+     * stretch in the same frame, so the stretches are compared by overlap and not
+     * by an exact match.
      */
     private refile;
+    /** Whether a gesture holds the element filed under this key. */
+    private holding;
+    /** Drop what holds this element, remove its listeners, remove it. */
+    private forget;
     private sweep;
     /**
      * Whether anything still holds this divider.
