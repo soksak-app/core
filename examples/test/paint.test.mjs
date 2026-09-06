@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { join } from "node:path";
 
-import { APPS, shake } from "./app.mjs";
+import { APPS, shakeTwice } from "./app.mjs";
 import { frames, readFrame, writePNG } from "./frame.mjs";
 import { area, bare } from "./surface.mjs";
 
@@ -45,7 +45,7 @@ const failures = (log) =>
 for (const [name, binary] of Object.entries(APPS)) {
   for (const [which, drive] of Object.entries(DRIVES)) {
     test(`${name}: shaking the ${which} exposes no unrendered area`, async (t) => {
-      const run = await shake(binary, drive);
+      const run = await shakeTwice(binary, drive);
       if (!run) return t.skip(`${binary} is not built`);
       try {
         const files = frames(run.into);

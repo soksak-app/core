@@ -223,6 +223,13 @@ render is never captured.
 `examples/test/`. The files run one at a time: each drives a real window and
 records it, and two runs at once do not each get the frames they measure.
 
+These tests drive a real window and a real drag, and the drag is timed by the
+page's own clock. When the platform holds that clock — a step of 16 ms taken at
+about 900 ms — the drag cannot finish inside any budget, and the run measures
+nothing rather than measuring something slowly. A result can be trusted when the
+run reports no held clock; a run that reports one has not been measured, whatever
+else it says.
+
 Only macOS is implemented for the window number. On Windows this would report
 the HWND and on Linux the X window id. Without the flag neither component is
 registered.
