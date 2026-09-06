@@ -2289,3 +2289,244 @@ test("a press takes hold across a change smaller than the width its divider is g
   pointer(window, el, "pointerup", 1, drawn + 100, 300);
   view.destroy();
 });
+
+test("a render the host names a reason of its own for settles the gesture too", () => {
+  const { window, host, grid, view } = mount();
+  const el = host.querySelector('.sp-divider[data-axis="x"]');
+  const held = grid.boundaryPos("x", 1);
+  pointer(window, el, "pointerdown", 1, held, 300);
+  assert.equal(el.dataset.dragging, "true", "the finger has the divider");
+
+  // The host puts in a card that reaches across the plane and asks for the draw
+  // under a reason of its own. The reason is the host's to name and every one of
+  // them is a reason it may name, so what settles the gesture is that the host
+  // asked for the draw, not which of the five words it used.
+  assert.ok(grid.insertAt("x", 0, { id: "rail", size: 190 }), "the rail went in");
+  view.render("resize");
+  assert.equal(el.dataset.dragging, undefined, "nothing holds the divider any more");
+
+  const was = grid.rect("rail").w;
+  pointer(window, el, "pointermove", 1, held + 100, 300);
+  assert.equal(grid.rect("rail").w, was, "and the next move drives no boundary at all");
+  view.destroy();
+});
+
+test("a press takes no hold across a change the host is holding its own draw of", () => {
+  let pending = null;
+  const { window, host, grid, view } = mount({
+    commit: (_rects, draw) => {
+      pending = draw;
+    },
+  });
+  pending();                              // the render the mount made
+  const el = host.querySelector('.sp-divider[data-axis="x"]');
+  const drawn = parseFloat(el.style.left) + parseFloat(el.style.width) / 2;
+
+  // The host puts in a card that reaches across the plane and renders, and holds
+  // that draw. The element is behind by a change the host made, not by one the
+  // view made and carried the gestures through, so the divider is not the
+  // boundary the number it carries names.
+  assert.ok(grid.insertAt("x", 0, { id: "rail", size: 190 }), "the rail went in");
+  view.render();
+  assert.ok(
+    Math.abs(grid.boundaryPos("x", 1) - drawn) > Math.max(grid.gap, grid.grabSize),
+    "the boundary that number names is further off than the divider is grabbed at",
+  );
+
+  pointer(window, el, "pointerdown", 1, drawn, 300);
+  assert.equal(el.dataset.dragging, undefined, "the press takes no hold");
+  const was = grid.rect("rail").w;
+  pointer(window, el, "pointermove", 1, drawn + 40, 300);
+  assert.equal(grid.rect("rail").w, was, "and the move that follows drives nothing");
+  pending();
+  view.destroy();
+});
+
+test("a press on another divider leaves the drag it dropped disarmed on its own divider", () => {
+  const { window, host, grid, view } = mount();
+  grid.split("card", "y");
+  view.render();
+  const across = host.querySelector('.sp-divider[data-axis="x"]');
+  const down = host.querySelector('.sp-divider[data-axis="y"]');
+  assert.ok(across && down, "the plane has a divider on each axis");
+
+  const at = grid.boundaryPos("x", 1);
+  pointer(window, across, "pointerdown", 1, at, 150);
+  pointer(window, across, "pointermove", 1, at + 200, 150);
+  const moved = grid.boundaryPos("x", 1);
+  assert.ok(Math.abs(moved - (at + 200)) < 1e-6, `the drag moved the boundary, to ${moved}`);
+
+  // The release of that press is never delivered, and the next press lands on
+  // the other divider with the same pointer, so that press is the one dropping
+  // the drag. The press it disarms is the one on the divider the drag was on.
+  pointer(window, down, "pointerdown", 1, 300, grid.boundaryPos("y", 1));
+  pointer(window, down, "pointerup", 1, 300, grid.boundaryPos("y", 1));
+
+  pointer(window, across, "pointerdown", 1, moved, 150);
+  assert.equal(grid.boundaryPos("x", 1), moved, "the next press takes hold, it does not centre");
+  assert.equal(across.dataset.dragging, "true", "and the divider is held again");
+  pointer(window, across, "pointerup", 1, moved, 150);
+  view.destroy();
+});
+
+test("a mouse press on another divider leaves the drag it dropped disarmed on its own divider", () => {
+  const { window, host, grid, view } = mount();
+  grid.split("card", "y");
+  view.render();
+  const doc = window.document;
+  const across = host.querySelector('.sp-divider[data-axis="x"]');
+  const down = host.querySelector('.sp-divider[data-axis="y"]');
+  const press = (target, type, x, y, buttons) =>
+    target.dispatchEvent(
+      new window.MouseEvent(type, { clientX: x, clientY: y, bubbles: true, button: 0, buttons }),
+    );
+
+  const at = grid.boundaryPos("x", 1);
+  press(across, "mousedown", at, 150, 1);
+  press(doc, "mousemove", at + 200, 150, 1);
+  const moved = grid.boundaryPos("x", 1);
+  assert.ok(Math.abs(moved - (at + 200)) < 1e-6, `the drag moved the boundary, to ${moved}`);
+
+  // As on the pointer path: the release is never delivered, the next press lands
+  // on the other divider, and the press it disarms is the one on the divider the
+  // drag was on.
+  press(down, "mousedown", 300, grid.boundaryPos("y", 1), 1);
+  press(down, "mouseup", 300, grid.boundaryPos("y", 1), 0);
+
+  press(across, "mousedown", moved, 150, 1);
+  assert.equal(grid.boundaryPos("x", 1), moved, "the next press takes hold, it does not centre");
+  assert.equal(across.dataset.dragging, "true", "and the divider is held again");
+  press(across, "mouseup", moved, 150, 0);
+  view.destroy();
+});
+
+test("a press takes no hold across a host change made while a draw of the view's own is still out", () => {
+  let pending = null;
+  const { window, host, grid, view } = mount({
+    commit: (_rects, draw) => {
+      pending = draw;
+    },
+  });
+  pending();                              // the render the mount made
+  const el = host.querySelector('.sp-divider[data-axis="x"]');
+  const at = grid.boundaryPos("x", 1);
+
+  // The view moves the boundary and the host holds that draw, so the elements
+  // are behind by a change of the view's own.
+  pointer(window, el, "pointerdown", 1, at, 300);
+  pointer(window, el, "pointermove", 1, at + 120, 300);
+  pointer(window, el, "pointerup", 1, at + 120, 300);
+
+  // The host now makes a change of its own and renders. It holds that draw too,
+  // so the elements are behind by the host's change as well, and the gesture was
+  // carried through only the view's.
+  assert.ok(grid.insertAt("x", 0, { id: "rail", size: 190 }), "the rail went in");
+  view.render();
+
+  pointer(window, el, "pointerdown", 1, at + 120, 300);
+  assert.equal(el.dataset.dragging, undefined, "the press takes no hold");
+  const was = grid.rect("rail").w;
+  pointer(window, el, "pointermove", 1, at + 160, 300);
+  assert.equal(grid.rect("rail").w, was, "and the move that follows drives nothing");
+  pending();
+  view.destroy();
+});
+
+/**
+ * A plane with a line no card reads below two the cards do read, and a host that
+ * holds every draw.
+ *
+ * A drag that passes the unread line drops it, and every line above it is
+ * renumbered. The number a divider element carries is written by the paint, so
+ * until the host performs the draw every element still carries the number it had.
+ */
+function renumbering() {
+  const dom = new JSDOM("<!doctype html><div id=host></div>", { pretendToBeVisual: true });
+  const { window } = dom;
+  for (const name of ["PointerEvent", "Event", "Node", "HTMLElement"]) {
+    globalThis[name] = window[name];
+  }
+  globalThis.document = window.document;
+  delete globalThis.ResizeObserver;
+
+  const host = window.document.getElementById("host");
+  Object.defineProperty(host, "clientWidth", { value: 1200, configurable: true });
+  Object.defineProperty(host, "clientHeight", { value: 1000, configurable: true });
+
+  const grid = new Soksak(undefined, { width: 1200, height: 1000, gap: 24 });
+  let pending = null;
+  const view = new SoksakView(host, grid, {
+    createCard: () => window.document.createElement("div"),
+    commit: (_rects, draw) => {
+      pending = draw;
+    },
+  });
+  grid.replace({
+    xs: [0, 1],
+    ys: [0, 0.2, 0.4, 0.6, 0.8, 1],
+    cards: [
+      { id: "a", c0: 0, c1: 1, r0: 0, r1: 2 },
+      { id: "b", c0: 0, c1: 1, r0: 2, r1: 3 },
+      { id: "c", c0: 0, c1: 1, r0: 3, r1: 4 },
+      { id: "d", c0: 0, c1: 1, r0: 4, r1: 5 },
+    ],
+    paidBy: {},
+  });
+  view.render();
+  pending();
+  assert.equal(grid.isVirtual("y", 1), true, "line 1 is read by no card");
+
+  const held = host.querySelector('.sp-divider[data-axis="y"][data-line="2"]');
+  const other = host.querySelector('.sp-divider[data-axis="y"][data-line="3"]');
+  assert.ok(held && other, "both boundaries have a grab area");
+
+  // The drag passes the line no card reads. The host holds the draw, so no
+  // element is renumbered and none is moved.
+  pointer(window, held, "pointerdown", 1, 600, grid.boundaryPos("y", 2));
+  pointer(window, held, "pointermove", 1, 600, 170);
+  assert.equal(grid.lines("y").length, 5, "the line the move passed is gone");
+  return { window, host, grid, view, held, other, draw: () => pending() };
+}
+
+test("a press takes no hold on a divider a change the host is holding the draw of renumbered", () => {
+  const { window, grid, view, other, draw } = renumbering();
+  const drawn = parseFloat(other.style.top) + parseFloat(other.style.height) / 2;
+  assert.equal(other.dataset.line, "3", "the element still carries the number the paint gave it");
+  assert.ok(
+    Math.abs(grid.boundaryPos("y", 3) - drawn) > Math.max(grid.gap, grid.grabSize),
+    "and line 3 now names a boundary further off than the divider is grabbed at",
+  );
+
+  const was = grid.lines("y").slice();
+  pointer(window, other, "pointerdown", 2, 600, drawn);
+  assert.equal(other.dataset.dragging, undefined, "the press takes no hold");
+  pointer(window, other, "pointermove", 2, 600, drawn + 60);
+  assert.deepEqual(grid.lines("y"), was, "and the move that follows drives nothing");
+  draw();
+  view.destroy();
+});
+
+test("a second finger drives the boundary the gesture holds after a change the host is holding the draw of renumbered", () => {
+  const { window, grid, view, held, draw } = renumbering();
+  const drawn = parseFloat(held.style.top) + parseFloat(held.style.height) / 2;
+  assert.equal(held.dataset.line, "2", "the element still carries the number the paint gave it");
+  const own = grid.boundaryPos("y", 1);
+  assert.ok(Math.abs(own - 170) < 1e-6, `the gesture carried its boundary to line 1, at ${own}`);
+
+  // The second finger lands on the divider the first one holds. The gesture on
+  // it was carried through the change, so the boundary it addresses is that
+  // gesture's, not the one the number the element carries now names.
+  pointer(window, held, "pointerdown", 2, 600, drawn);
+  assert.equal(held.dataset.dragging, "true", "the press takes hold");
+  pointer(window, held, "pointermove", 2, 600, drawn + 60);
+  assert.ok(
+    Math.abs(grid.boundaryPos("y", 1) - (own + 60)) < 1e-6,
+    `it drives the gesture's own boundary, to ${grid.boundaryPos("y", 1)} not ${own + 60}`,
+  );
+  assert.ok(
+    Math.abs(grid.boundaryPos("y", 2) - 600) < 1e-6,
+    `and leaves the one the old number names at ${grid.boundaryPos("y", 2)}`,
+  );
+  draw();
+  view.destroy();
+});

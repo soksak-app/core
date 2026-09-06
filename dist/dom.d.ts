@@ -116,13 +116,26 @@ export declare class SoksakView {
     private disarms;
     private observer;
     /**
-     * A draw the host was handed and has not performed.
+     * A draw of one of the view's own changes that the host was handed and has
+     * not performed.
      *
-     * Between a change and that draw the elements are behind the grid by the
+     * Between such a change and that draw the elements are behind the grid by the
      * view's own change, which the gestures were carried through. Only outside it
-     * does an element that disagrees with the grid mean the host changed it.
+     * does an element that disagrees with the grid mean the host changed it. A
+     * draw `render()` hands over carries a change the host made, so it is not one
+     * of these: the elements are then behind by that change and a gesture has to
+     * be measured against them.
      */
     private drawing;
+    /**
+     * Whether a change of the view's own that the host has not drawn dropped a
+     * line.
+     *
+     * Dropping one renumbers every line above it, and the number a divider element
+     * carries is written by the paint. Until that paint every element but the ones
+     * the change carried a gesture through names another boundary.
+     */
+    private renumbered;
     private disposed;
     constructor(host: HTMLElement, grid: Soksak, options: ViewOptions);
     /** Re-place every element from the grid. Cheap enough to call on every frame of a drag. */
@@ -204,6 +217,17 @@ export declare class SoksakView {
      * is the boundary the gesture never took. It is the same distance `settle`
      * measures, against the record a gesture that has not started yet has.
      */
+    /**
+     * The line a press or a key on this element addresses.
+     *
+     * The element carries the line the last paint gave it. Between a change the
+     * view makes and the draw the host performs, that number is one the change
+     * renumbered away: `refile` writes the new one and `refile` runs in the paint.
+     * A gesture on the element was carried to the line its boundary now has, so
+     * that gesture's line is the one to address. An element no gesture holds was
+     * carried through nothing, and `stands` refuses it.
+     */
+    private lineOf;
     private stands;
     /**
      * End the gesture this state belongs to, without drawing.

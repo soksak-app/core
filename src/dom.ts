@@ -171,13 +171,26 @@ export class SoksakView {
   private disarms = new Map<HTMLElement, () => void>();
   private observer: ResizeObserver | null = null;
   /**
-   * A draw the host was handed and has not performed.
+   * A draw of one of the view's own changes that the host was handed and has
+   * not performed.
    *
-   * Between a change and that draw the elements are behind the grid by the
+   * Between such a change and that draw the elements are behind the grid by the
    * view's own change, which the gestures were carried through. Only outside it
-   * does an element that disagrees with the grid mean the host changed it.
+   * does an element that disagrees with the grid mean the host changed it. A
+   * draw `render()` hands over carries a change the host made, so it is not one
+   * of these: the elements are then behind by that change and a gesture has to
+   * be measured against them.
    */
   private drawing = false;
+  /**
+   * Whether a change of the view's own that the host has not drawn dropped a
+   * line.
+   *
+   * Dropping one renumbers every line above it, and the number a divider element
+   * carries is written by the paint. Until that paint every element but the ones
+   * the change carried a gesture through names another boundary.
+   */
+  private renumbered = false;
   private disposed = false;
 
   constructor(host: HTMLElement, grid: Soksak, options: ViewOptions) {
@@ -239,14 +252,16 @@ export class SoksakView {
    * view does not draw has to move them for a centre, a merge, a resize and a
    * change it makes itself as well, or those land a frame apart.
    */
-  private draw(reason: ChangeReason): void {
+  private draw(reason: ChangeReason, host = false): void {
     // A destroyed view draws nothing, and the hook is where a host moves the
     // views it draws itself. Calling it would move them onto the rects of a
     // plane that is gone.
     if (this.disposed) return;
     const drawn = (): void => {
+      // The paint reads the grid as it stands, so after it the elements are
+      // behind by nothing at all.
       this.drawing = false;
-      this.paint(reason);
+      this.paint(reason, host);
     };
     if (!this.options.commit) {
       drawn();
@@ -257,7 +272,12 @@ export class SoksakView {
     const step = this.step;
     const on = new Map<string, Rect>();
     for (const [id, rect] of this.grid.rects()) on.set(id, onGrid(rect, step));
-    this.drawing = true;
+    // A draw `render()` hands over carries a change the host made, so the
+    // elements it leaves behind are behind by that change as well as by any of
+    // the view's own, and a gesture was carried through only the view's. The
+    // view is not told which call followed a host change, as `settle` is not:
+    // every `render()` is one that may have.
+    this.drawing = !host;
     this.options.commit(on, drawn);
   }
 
@@ -268,15 +288,16 @@ export class SoksakView {
    * told where the cards are going before they are drawn there, as a drag is.
    */
   render(reason: ChangeReason = 'render'): void {
-    this.draw(reason);
+    this.draw(reason, true);
   }
 
-  private paint(reason: ChangeReason): void {
+  private paint(reason: ChangeReason, host = false): void {
     if (this.disposed) return;
 
-    // `render` is the one reason the view never draws for, so this paint follows
-    // a change only the host knows it made.
-    if (reason === 'render') this.settle();
+    // `render` is the one call the view never makes, so this paint follows a
+    // change only the host knows it made. The reason does not say so: the host
+    // names it, and every reason is one it may name.
+    if (host) this.settle();
 
     // The width of one device pixel, read every render because a window moved to
     // another display gets a different one.
@@ -356,6 +377,8 @@ export class SoksakView {
       this.options.updateDivider?.(el, divider);
     }
     this.sweep(this.dividerEls, keep);
+    // Every element now carries the line the grid has.
+    this.renumbered = false;
 
     this.options.onChange?.(reason);
   }
@@ -401,7 +424,9 @@ export class SoksakView {
   private carry(change: () => number, on: HTMLElement | null): number {
     const live = this.holds();
     const was = live.map((drag) => this.grid.boundaryPos(drag.axis, drag.line));
+    const lines = this.grid.lines('x').length + this.grid.lines('y').length;
     const at = change();
+    if (this.grid.lines('x').length + this.grid.lines('y').length !== lines) this.renumbered = true;
     live.forEach((drag, i) => {
       const stands = drag.on === on ? at : was[i];
       let line = drag.line;
@@ -458,10 +483,30 @@ export class SoksakView {
    * is the boundary the gesture never took. It is the same distance `settle`
    * measures, against the record a gesture that has not started yet has.
    */
+  /**
+   * The line a press or a key on this element addresses.
+   *
+   * The element carries the line the last paint gave it. Between a change the
+   * view makes and the draw the host performs, that number is one the change
+   * renumbered away: `refile` writes the new one and `refile` runs in the paint.
+   * A gesture on the element was carried to the line its boundary now has, so
+   * that gesture's line is the one to address. An element no gesture holds was
+   * carried through nothing, and `stands` refuses it.
+   */
+  private lineOf(el: HTMLElement): number {
+    const held = this.holds().find((drag) => drag.on === el);
+    return held ? held.line : Number(el.dataset.line);
+  }
+
   private stands(el: HTMLElement, axis: Axis, line: number): boolean {
     // The host is holding a draw of the view's own change, so the element is
-    // behind by that change and not by one the host made.
-    if (this.drawing) return true;
+    // behind by that change and not by one the host made. Where that change
+    // dropped a line, only the elements it carried a gesture through name their
+    // own boundary still; every other one carries a number the renumber moved,
+    // and is measured where it stands.
+    if (this.drawing && (!this.renumbered || this.holds().some((drag) => drag.on === el))) {
+      return true;
+    }
     if (!this.grid.hasBoundary(axis, line)) return false;
     const off = Math.abs(this.grid.boundaryPos(axis, line) - drawnAt(el, axis));
     return off <= Math.max(this.grid.gap, this.grid.grabSize);
@@ -679,7 +724,7 @@ export class SoksakView {
       if (this.disposed || e.button !== 0) return;
       e.preventDefault();
       const axis = el.dataset.axis as Axis;
-      const line = Number(el.dataset.line);
+      const line = this.lineOf(el);
       // The element still carries the line the last paint gave it. A change the
       // host has made since names another boundary with it, and this press would
       // take hold of that one.
@@ -687,7 +732,11 @@ export class SoksakView {
       // A press with this pointer already down is a press the release of which
       // was never seen, as on the mouse path. Dropping it leaves no divider
       // marked as held with no drag behind it, which is a state nothing clears.
-      if (this.drop(e.pointerId)?.moved) lastTap = -Infinity;
+      // The press that moved the boundary is not the first press of a pair, and
+      // the divider it armed is the one it was on, which is another divider
+      // whenever this pointer was last pressed on one.
+      const stale = this.drop(e.pointerId);
+      if (stale?.moved) this.disarms.get(stale.on)?.();
       // A press that lands while the press before it is still down is a second
       // finger, not the second press of a pair.
       if (this.drags.get(tapId)?.on !== el && e.timeStamp - lastTap < DOUBLE_TAP_MS) {
@@ -767,7 +816,7 @@ export class SoksakView {
       if (this.disposed || e.button !== 0) return;
       e.preventDefault();
       const axis = el.dataset.axis as Axis;
-      const line = Number(el.dataset.line);
+      const line = this.lineOf(el);
       // As on the pointer path: the line the element carries can name another
       // boundary since the last paint, and this press would take hold of that one.
       if (!this.stands(el, axis, line)) return;
@@ -775,7 +824,11 @@ export class SoksakView {
       // seen. Dropping it leaves no divider marked as held with no drag behind
       // it, which is a state nothing ever clears. As on the other two exits, the
       // press that moved the boundary is not the first of a pair.
-      if (this.dropMouse()?.moved) lastPress = -Infinity;
+      // The press that moved the boundary is not the first of a pair — and the
+      // divider it armed is the one it was on, which is another divider whenever
+      // the mouse was last pressed on one.
+      const stale = this.dropMouse();
+      if (stale?.moved) this.disarms.get(stale.on)?.();
       if (e.timeStamp - lastPress < DOUBLE_TAP_MS) {
         lastPress = -Infinity;
         this.carry(() => this.grid.centerBoundary(axis, line), el);
@@ -842,7 +895,7 @@ export class SoksakView {
     el.addEventListener('keydown', (e: KeyboardEvent) => {
       if (this.disposed) return;
       const axis = el.dataset.axis as Axis;
-      const line = Number(el.dataset.line);
+      const line = this.lineOf(el);
       // As on the two press paths: the line the element carries can name another
       // boundary since the last paint, and this key would drive that one.
       if (!this.stands(el, axis, line)) return;
