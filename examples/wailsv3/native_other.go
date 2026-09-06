@@ -25,3 +25,17 @@ func (v *nativeView) id() uintptr                    { return 0 }
 func watchMouse(window unsafe.Pointer) {}
 
 var pressed func(view uintptr) bool
+
+// nativeOverlay is the modal's own window. Not written for this platform.
+type nativeOverlay struct{}
+
+func newNativeOverlay(window unsafe.Pointer, url string, x, y, w, h float64,
+	background [4]float64, boot string) *nativeOverlay {
+	return nil
+}
+
+func (v *nativeOverlay) setFrame(x, y, w, h float64)    {}
+func (v *nativeOverlay) setHidden(hidden bool)          {}
+func (v *nativeOverlay) setCornerRadius(radius float64) {}
+func (v *nativeOverlay) eval(js string)                 {}
+func (v *nativeOverlay) destroy()                       {}

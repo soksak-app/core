@@ -83,7 +83,7 @@ type OverlayContent struct {
 }
 
 type modal struct {
-	view    *nativeView
+	view    *nativeOverlay
 	content OverlayContent
 	radius  float64
 }
@@ -169,8 +169,14 @@ func (s *Surfaces) forward(id string) {
 	}
 }
 
-// deliver runs __spDeliver in a view. Script runs on the main thread.
-func deliver(view *nativeView, name string, value any) {
+// page is anything this app serves a document to: a surface's view, or the modal's
+// own window. Both hold a webview on the same message channel.
+type page interface {
+	eval(js string)
+}
+
+// deliver runs __spDeliver in a page. Script runs on the main thread.
+func deliver(view page, name string, value any) {
 	if view == nil {
 		return
 	}
@@ -208,7 +214,7 @@ func (s *Surfaces) deliverModal(id, name string, value any) {
 // started with from the script injected into it, so this is only the change.
 func (s *Surfaces) Tell(name string, value any) {
 	s.mu.Lock()
-	views := make([]*nativeView, 0, len(s.views)+len(s.modals))
+	views := make([]page, 0, len(s.views)+len(s.modals))
 	for _, view := range s.views {
 		views = append(views, view)
 	}
@@ -262,7 +268,7 @@ func (s *Surfaces) OverlayShow(req OverlayRequest) error {
 			live.view.destroy()
 		}
 		url := s.pages.URL("overlay.html?id=" + req.ID + "&framework=wailsv3")
-		live.view = newNativeView(win.NativeWindow(), url, x, y,
+		live.view = newNativeOverlay(win.NativeWindow(), url, x, y,
 			max1(req.Rect.W), max1(req.Rect.H), srgba(req.Background), s.boot())
 		if live.view != nil {
 			live.view.setHidden(true)
@@ -399,7 +405,8 @@ func (s *Surfaces) ModalContent(id string) OverlayContent {
 	return OverlayContent{}
 }
 
-// ModalReady clips the view's corners and shows it. The page reports this once
+// ModalReady clips the modal's corners and shows it. A child window is always
+// above its parent, so there is nothing to raise. The page reports this once
 // its content is on screen; showing it earlier displays an empty view.
 //
 // The size is not set here. The main page measured the element and the view was
@@ -417,7 +424,6 @@ func (s *Surfaces) ModalReady(id string) {
 
 	application.InvokeSync(func() {
 		view.setCornerRadius(radius)
-		view.raise()
 		view.setHidden(false)
 	})
 }

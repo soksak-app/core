@@ -71,12 +71,11 @@ static NSString* surfaceScript(const char* boot) {
         boot];
 }
 
-// Not under ARC, so the view is retained here and released in surfaceDestroy.
-static void* surfaceCreate(void* nsWindow, const char* url, double x, double y, double w, double h,
-                           double red, double green, double blue, double alpha,
-                           const char* boot) {
-    NSWindow* window = (NSWindow*)nsWindow;
-    NSView* parent = [window contentView];
+// Builds a webview on this app's message channel, loading url and painting the
+// given colour where its page has not painted yet.
+static WKWebView* surfaceWebView(const char* url, double w, double h,
+                                 double red, double green, double blue, double alpha,
+                                 const char* boot) {
     WKWebViewConfiguration* config = [[WKWebViewConfiguration alloc] init];
     WKUserContentController* controller = [[WKUserContentController alloc] init];
     [controller addUserScript:[[WKUserScript alloc]
@@ -86,7 +85,6 @@ static void* surfaceCreate(void* nsWindow, const char* url, double x, double y, 
     [controller addScriptMessageHandler:[[SPBridge alloc] init] name:@"host"];
     config.userContentController = controller;
     WKWebView* view = [[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, w, h) configuration:config];
-    view.frame = surfaceAligned(window, x, y, w, h);
     // The colour the view shows where its page has not painted. Public since
     // macOS 12; without it that area is white.
     if (@available(macOS 12.0, *)) {
@@ -96,11 +94,114 @@ static void* surfaceCreate(void* nsWindow, const char* url, double x, double y, 
     [view setWantsLayer:YES];
     view.layer.backgroundColor =
         [[NSColor colorWithSRGBRed:red green:green blue:blue alpha:alpha] CGColor];
-    [parent addSubview:view positioned:NSWindowAbove relativeTo:nil];
     NSURL* target = [NSURL URLWithString:[NSString stringWithUTF8String:url]];
     [view loadRequest:[NSURLRequest requestWithURL:target]];
+    return view;
+}
+
+// Not under ARC, so the view is retained here and released in surfaceDestroy.
+static void* surfaceCreate(void* nsWindow, const char* url, double x, double y, double w, double h,
+                           double red, double green, double blue, double alpha,
+                           const char* boot) {
+    NSWindow* window = (NSWindow*)nsWindow;
+    WKWebView* view = surfaceWebView(url, w, h, red, green, blue, alpha, boot);
+    view.frame = surfaceAligned(window, x, y, w, h);
+    [[window contentView] addSubview:view positioned:NSWindowAbove relativeTo:nil];
     [view retain];
     return (void*)view;
+}
+
+// The modal's window. A panel rather than a plain window so the app's own window
+// keeps its active title bar while this one holds the keyboard.
+//
+// It has to be able to become key. A webview sets the cursor only while its window
+// is the key one, and a borderless window refuses key by default, so without this
+// the modal would show the arrow everywhere.
+@interface SPOverlayPanel : NSPanel
+@end
+
+@implementation SPOverlayPanel
+- (BOOL)canBecomeKeyWindow { return YES; }
+@end
+
+// The modal is a child window, not a view beside the surfaces.
+//
+// A webview sets the cursor from its own document whenever the pointer moves over
+// its frame, and it checks only that its window is the one under the pointer, not
+// that it is the view under the pointer. Two webviews stacked in one window both
+// pass that check, so a point covered by both gets two cursors and whichever reply
+// lands last wins; which one that is changes from move to move. A child window is
+// a different window, so the views below it fail the check and leave the cursor to
+// the one on top.
+//
+// The window is borderless and not opaque, so the webview's rounded corners show
+// what is behind them rather than black.
+static void* overlayCreate(void* nsWindow, const char* url, double x, double y, double w, double h,
+                           double red, double green, double blue, double alpha,
+                           const char* boot) {
+    NSWindow* parent = (NSWindow*)nsWindow;
+    NSRect frame = [parent convertRectToScreen:NSMakeRect(x, y, MAX(w, 1), MAX(h, 1))];
+    NSWindow* child = [[SPOverlayPanel alloc] initWithContentRect:frame
+                                                        styleMask:NSWindowStyleMaskBorderless
+                                                          backing:NSBackingStoreBuffered
+                                                            defer:NO];
+    [child setOpaque:NO];
+    [child setBackgroundColor:[NSColor clearColor]];
+    [child setHasShadow:YES];
+    [child setReleasedWhenClosed:NO];
+    WKWebView* view = surfaceWebView(url, w, h, red, green, blue, alpha, boot);
+    [view setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
+    [child setContentView:view];
+    [parent addChildWindow:child ordered:NSWindowAbove];
+    return (void*)child;
+}
+
+// Moves the modal's window. The frame arrives in the parent window's coordinates.
+static void overlaySetFrame(void* childWindow, void* nsWindow,
+                            double x, double y, double w, double h) {
+    NSWindow* child = (NSWindow*)childWindow;
+    NSWindow* parent = (NSWindow*)nsWindow;
+    [child setFrame:[parent convertRectToScreen:NSMakeRect(x, y, MAX(w, 1), MAX(h, 1))]
+            display:YES];
+}
+
+// Clips the modal's corners. The clip is in the view's own pixels, so it is
+// reapplied whenever the window is resized.
+static void overlaySetCornerRadius(void* childWindow, double radius) {
+    NSWindow* child = (NSWindow*)childWindow;
+    NSView* view = [child contentView];
+    [view setWantsLayer:YES];
+    view.layer.cornerRadius = radius;
+    view.layer.masksToBounds = YES;
+}
+
+// Shows the modal and gives it the keyboard, which is also what lets its page set
+// the cursor. Hiding hands the keyboard back to the app's window.
+static void overlaySetHidden(void* childWindow, int hidden) {
+    NSWindow* child = (NSWindow*)childWindow;
+    if (hidden) {
+        NSWindow* parent = [child parentWindow];
+        [child orderOut:nil];
+        [parent makeKeyWindow];
+        return;
+    }
+    [child makeKeyAndOrderFront:nil];
+}
+
+static void overlayEval(void* childWindow, const char* js) {
+    NSWindow* child = (NSWindow*)childWindow;
+    WKWebView* view = (WKWebView*)[child contentView];
+    [view evaluateJavaScript:[NSString stringWithUTF8String:js] completionHandler:nil];
+}
+
+static void overlayDestroy(void* childWindow) {
+    NSWindow* child = (NSWindow*)childWindow;
+    NSWindow* parent = [child parentWindow];
+    [parent removeChildWindow:child];
+    [child orderOut:nil];
+    [child close];
+    [child release];
+    [parent makeKeyWindow];
 }
 
 static void surfaceSetFrame(void* handle, double x, double y, double w, double h) {
@@ -302,6 +403,51 @@ func (v *nativeView) id() uintptr { return uintptr(v.handle) }
 
 // watchMouse starts the monitor. Called once, when the first surface appears.
 func watchMouse(window unsafe.Pointer) { C.surfaceWatchMouse(window) }
+
+// nativeOverlay is the modal's own window, a child of the app's.
+type nativeOverlay struct {
+	handle unsafe.Pointer
+	parent unsafe.Pointer
+}
+
+func newNativeOverlay(window unsafe.Pointer, url string, x, y, w, h float64,
+	background [4]float64, boot string) *nativeOverlay {
+	target := C.CString(url)
+	defer C.free(unsafe.Pointer(target))
+	start := C.CString(boot)
+	defer C.free(unsafe.Pointer(start))
+	handle := C.overlayCreate(window, target, C.double(x), C.double(y), C.double(w), C.double(h),
+		C.double(background[0]), C.double(background[1]), C.double(background[2]),
+		C.double(background[3]), start)
+	if handle == nil {
+		return nil
+	}
+	return &nativeOverlay{handle: handle, parent: window}
+}
+
+func (v *nativeOverlay) setFrame(x, y, w, h float64) {
+	C.overlaySetFrame(v.handle, v.parent, C.double(x), C.double(y), C.double(w), C.double(h))
+}
+
+func (v *nativeOverlay) setHidden(hidden bool) {
+	flag := C.int(0)
+	if hidden {
+		flag = 1
+	}
+	C.overlaySetHidden(v.handle, flag)
+}
+
+func (v *nativeOverlay) setCornerRadius(radius float64) {
+	C.overlaySetCornerRadius(v.handle, C.double(radius))
+}
+
+func (v *nativeOverlay) eval(js string) {
+	line := C.CString(js)
+	defer C.free(unsafe.Pointer(line))
+	C.overlayEval(v.handle, line)
+}
+
+func (v *nativeOverlay) destroy() { C.overlayDestroy(v.handle) }
 
 // nativeShape is a layer-backed view drawn above the surfaces.
 type nativeShape struct{ handle unsafe.Pointer }
