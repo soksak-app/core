@@ -57,6 +57,13 @@ test("a card spanning the new line widens its span instead of being cut", () => 
     "the card below is untouched",
   );
   assert.equal(grid.crossings(grid.card("browser")), 1, "it now spans one virtual line");
+  // The count is over both axes: the sidebar spans across the line between
+  // terminal and browser, and reading only one axis reports it as none.
+  assert.equal(
+    grid.crossings(grid.card("sidebar")),
+    1,
+    "and the sidebar spans one on the other axis",
+  );
   assertTiling(grid, "with a straddling card");
 });
 

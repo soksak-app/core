@@ -38,5 +38,13 @@ const orphaned = setInterval(() => {
 child.on("exit", (code, signal) => {
   clearTimeout(deadline);
   clearInterval(orphaned);
+  // The command can exit while something it started is still in the group. Node's
+  // test runner runs a process per file, and those are reparented rather than
+  // ended when the runner above them goes. Take the group away with it.
+  try {
+    process.kill(-child.pid, "SIGKILL");
+  } catch {
+    // The group is already gone.
+  }
   process.exit(signal ? 124 : (code ?? 1));
 });

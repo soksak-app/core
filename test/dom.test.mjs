@@ -1181,6 +1181,27 @@ test("a pointer drag the release never reached is not the first press of a pair"
   view.destroy();
 });
 
+test("a press with the pointer that is still down is not the second press of a pair", () => {
+  // No release and no move reporting the button gone, so the press below finds
+  // its own drag still running. Dropping that drag opens the pair again: the
+  // press starts a drag, and centring here would undo the drag before it.
+  const { window, host, grid, view } = mount();
+  const divider = host.querySelector('[role="separator"]');
+  grid.moveBoundary("x", 1, 400, false);
+  view.render();
+  const off = grid.boundaryPos("x", 1);
+
+  pointer(window, divider, "pointerdown", 9, off, 100);
+  pointer(window, divider, "pointermove", 9, off - 100, 100);
+  const moved = grid.boundaryPos("x", 1);
+  assert.notEqual(moved, off, "the drag moved the boundary");
+
+  pointer(window, divider, "pointerdown", 9, moved, 100);
+  assert.equal(grid.boundaryPos("x", 1), moved, "the next press starts a drag, it does not centre");
+  pointer(window, divider, "pointerup", 9, moved, 100);
+  view.destroy();
+});
+
 test("a resize under a drag carries the drag with it", () => {
   const dom = new JSDOM("<!doctype html><div id=host></div>", { pretendToBeVisual: true });
   const { window } = dom;

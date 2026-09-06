@@ -99,6 +99,15 @@ test("edge sets how much of the body each side claims, and a value outside the b
   assert.equal(grid.zoneAt(middle.x, middle.y).zone, "centre", "the middle is the card");
   assert.equal(grid.zoneAt(near.x, near.y).zone, "centre", "and 0.3 across is too, by default");
   assert.equal(grid.zoneAt(near.x, near.y, { edge: 0.4 }).zone, "left", "a wider band takes it");
+  // The README gives the range as 0..0.5, so 0.5 is a value and not a refusal:
+  // at it the two sides claim the whole body. A refused value falls back to
+  // 0.25, which answers centre 0.3 across.
+  assert.equal(grid.zoneAt(near.x, near.y, { edge: 0.5 }).zone, "left", "0.5 is the widest band");
+  assert.equal(
+    grid.zoneAt(near.x, near.y, { edge: 0.5 + 1e-6 }).zone,
+    "centre",
+    "and past it is refused",
+  );
 
   // Read near the edge, not at the middle. A refused value and an accepted one
   // both answer centre in the middle, so a negative band would pass there.

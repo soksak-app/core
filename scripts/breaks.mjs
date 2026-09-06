@@ -265,6 +265,13 @@ export const BREAKS = [
     to: "            ;",
   },
   {
+    id: "stale-pair",
+    what: "a drag dropped by a press with the same pointer leaves the pair armed",
+    file: "dist/dom.js",
+    find: "            if ((_a = this.drop(e.pointerId)) === null || _a === void 0 ? void 0 : _a.moved)\n                lastTap = -Infinity;",
+    to: "            this.drop(e.pointerId);",
+  },
+  {
     id: "renumbered",
     what: "a drag that passes a line no card reads loses the element it holds",
     file: "dist/dom.js",
@@ -433,6 +440,13 @@ export const BREAKS = [
     to: "Number.isFinite(asked) && asked <= 0.5",
   },
   {
+    id: "edge-widest",
+    what: "zoneAt refuses the widest band it documents, so 0.5 falls back to the default",
+    file: "dist/geometry.js",
+    find: "Number.isFinite(asked) && asked >= 0 && asked <= 0.5",
+    to: "Number.isFinite(asked) && asked >= 0 && asked < 0.5",
+  },
+  {
     id: "chrome-size",
     what: "zoneAt takes a negative chrome height, so the body starts outside the card",
     file: "dist/geometry.js",
@@ -501,6 +515,13 @@ export const BREAKS = [
     file: "dist/soksak.js",
     find: "if (card.width !== undefined && card.c1 - card.c0 !== 1)",
     to: "if (false)",
+  },
+  {
+    id: "crossings-axis",
+    what: "crossings counts the lines a card spans across on one axis only",
+    file: "dist/soksak.js",
+    find: "return Math.max(0, card.c1 - card.c0 - 1) + Math.max(0, card.r1 - card.r0 - 1);",
+    to: "return Math.max(0, card.c1 - card.c0 - 1);",
   },
   {
     id: "made-up-axis",
