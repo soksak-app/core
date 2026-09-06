@@ -12,6 +12,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod native;
+mod capture;
 mod observe;
 mod shell;
 
@@ -190,9 +191,11 @@ fn sync_surfaces(
     views: State<'_, Views>,
     watching: State<'_, Watching>,
     resizing: State<'_, Resizing>,
+    running: State<'_, Running>,
     page: State<'_, Page>,
     request: SyncRequest,
 ) -> Result<Vec<String>, String> {
+    announce_run(&window, &running, !request.settled)?;
     // The monitor places a point in the page's coordinates, so it needs the
     // page's height. The page reports it on every commit.
     if let Ok(mut height) = page.0.lock() {
@@ -271,6 +274,24 @@ fn sync_surfaces(
     shells.retain(&|id: &str| alive.iter().any(|s| s == id))?;
 
     Ok(created)
+}
+
+/// Emits run-began and run-ended. The page reports whether more updates follow;
+/// this emits an event only when that changes.
+fn announce_run<R: Runtime>(
+    window: &Window<R>,
+    running: &State<'_, Running>,
+    going: bool,
+) -> Result<(), String> {
+    {
+        let mut held = running.0.lock().map_err(|e| e.to_string())?;
+        if *held == going {
+            return Ok(());
+        }
+        *held = going;
+    }
+    let name = if going { "run-began" } else { "run-ended" };
+    window.emit(name, ()).map_err(|e| e.to_string())
 }
 
 /// Brackets a view's live resize. The calls are paired, so the state each view is
@@ -367,6 +388,10 @@ struct Watching(Mutex<bool>);
 /// run, not one call per frame.
 #[derive(Default)]
 struct Resizing(Mutex<HashSet<String>>);
+
+/// Whether a run of updates is going. Only the changes are announced.
+#[derive(Default)]
+struct Running(Mutex<bool>);
 
 /// One view per modal element, named after it, so a page may have several.
 fn modal_label(id: &str) -> String {
@@ -714,6 +739,7 @@ fn main() {
         .manage(Views::default())
         .manage(Watching::default())
         .manage(Resizing::default())
+        .manage(Running::default())
         .manage(Page::default())
         .manage(shell::Shells::default())
         .invoke_handler(tauri::generate_handler![

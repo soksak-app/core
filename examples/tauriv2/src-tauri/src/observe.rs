@@ -15,6 +15,7 @@ use tauri::plugin::{Builder, TauriPlugin};
 use tauri::webview::PageLoadEvent;
 use tauri::{Emitter, Listener, Manager, Runtime, Window};
 
+use crate::capture;
 use crate::native;
 use crate::InputStep;
 
@@ -33,6 +34,15 @@ pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
             // app announces that where it happens. Nothing is polled.
             let listen = app.clone();
             app.listen("windows-changed", move |_| report(listen.clone()));
+            // The page reports whether more updates follow, so a boundary dragged
+            // by hand is recorded the same way as a driven one.
+            if let Some(into) = capturing() {
+                let began = into.clone();
+                app.listen("run-began", move |_| capture::start(&began));
+                app.listen("run-ended", move |_| {
+                    println!("관측: {} 프레임을 {into} 에 적었다", capture::stop());
+                });
+            }
             Ok(())
         })
         // The main page has loaded, so its window is on screen. This is the first
@@ -40,6 +50,7 @@ pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
         .on_page_load(|webview, payload| {
             if webview.label() == "main" && payload.event() == PageLoadEvent::Finished {
                 report(webview.app_handle().clone());
+                open(webview.app_handle().clone());
                 drive(webview.app_handle().clone());
             }
         })
@@ -53,17 +64,41 @@ pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
 fn report<R: Runtime>(app: tauri::AppHandle<R>) {
     let ask = app.clone();
     let _ = app.run_on_main_thread(move || {
-        // 이 앱은 창 하나가 웹뷰 여럿을 담는다. 그런 창은 webview_windows 가 아니라
-        // windows 에 있다.
-        let found = ask
-            .windows()
-            .into_iter()
-            .find(|(label, _)| !label.starts_with("modal-"))
-            .and_then(|(_, w)| w.ns_window().ok())
-            .map(native::window_numbers)
-            .unwrap_or_default();
+        let found = numbers(&ask);
         if !found.is_empty() {
             println!("관측: 창 번호 {found:?}");
+        }
+    });
+}
+
+/// This window's number and the numbers of the windows attached to it. Read on the
+/// main thread, which is where a window may be touched.
+fn numbers<R: Runtime>(app: &tauri::AppHandle<R>) -> Vec<isize> {
+    // 이 앱은 창 하나가 웹뷰 여럿을 담는다. 그런 창은 webview_windows 가 아니라
+    // windows 에 있다.
+    app.windows()
+        .into_iter()
+        .find(|(label, _)| !label.starts_with("modal-"))
+        .and_then(|(_, w)| w.ns_window().ok())
+        .map(native::window_numbers)
+        .unwrap_or_default()
+}
+
+/// The directory frames are written into, when one was asked for.
+fn capturing() -> Option<String> {
+    std::env::args().skip_while(|a| a != "--capture").nth(1)
+}
+
+/// Readies the recording for this window. Reading the window server's list is the
+/// slow part, so it is read once, here.
+fn open<R: Runtime>(app: tauri::AppHandle<R>) {
+    if capturing().is_none() {
+        return;
+    }
+    let ask = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        if let Some(first) = numbers(&ask).first() {
+            capture::open(*first);
         }
     });
 }
@@ -93,9 +128,10 @@ fn drive<R: Runtime>(app: tauri::AppHandle<R>) {
     std::thread::spawn(move || plan.run(&app));
 }
 
-/// One drag, repeated. A repeat goes back where it came from, so the boundary stays
-/// in place over a long run and every cycle covers the same pixels.
+/// One drag, shaken. A held point is swept out and back, so the boundary ends where
+/// it started and every sweep covers the same pixels.
 struct Plan {
+    wait: Duration,
     x: f64,
     y: f64,
     dx: f64,
@@ -105,14 +141,15 @@ struct Plan {
 }
 
 impl Plan {
-    /// Reads "x,y,dx,dy,ms,times": press at x,y, move by dx,dy over ms, and do it
-    /// that many times, each turn going back the way the one before it came.
+    /// Reads "wait,x,y,dx,dy,ms,times": wait that many ms for the pages to be
+    /// drawn, then press at x,y and sweep by dx,dy over ms, out and back, that
+    /// many times.
     fn parse(spec: &str) -> Result<Plan, String> {
         let parts: Vec<&str> = spec.split(',').collect();
-        if parts.len() != 6 {
-            return Err(format!("wants x,y,dx,dy,ms,times, got {spec:?}"));
+        if parts.len() != 7 {
+            return Err(format!("wants wait,x,y,dx,dy,ms,times, got {spec:?}"));
         }
-        let mut n = [0.0f64; 6];
+        let mut n = [0.0f64; 7];
         for (i, part) in parts.iter().enumerate() {
             n[i] = part
                 .trim()
@@ -120,58 +157,54 @@ impl Plan {
                 .map_err(|_| format!("{part:?} is not a number"))?;
         }
         Ok(Plan {
-            x: n[0],
-            y: n[1],
-            dx: n[2],
-            dy: n[3],
-            over: Duration::from_millis(n[4] as u64),
-            times: n[5] as usize,
+            wait: Duration::from_millis(n[0] as u64),
+            x: n[1],
+            y: n[2],
+            dx: n[3],
+            dy: n[4],
+            over: Duration::from_millis(n[5] as u64),
+            times: n[6] as usize,
         })
     }
 
     fn run<R: Runtime>(&self, app: &tauri::AppHandle<R>) {
         let frame = Duration::from_millis(16);
+        // 이 앱이 열지 않은 페이지가 그려지기를 기다린다. 남의 페이지가 다 그려졌다고
+        // 알려주는 것은 없으므로 여기서만 시계를 쓴다. 재는 동안에는 쓰지 않는다.
+        std::thread::sleep(self.wait);
+
         let steps = (self.over.as_millis() / frame.as_millis()).max(1) as usize;
         println!(
-            "관측: 끌기 ({},{}) {:+},{:+} {}걸음 ×{}",
+            "관측: 흔들기 ({},{}) {:+},{:+} {}걸음 ×{}",
             self.x, self.y, self.dx, self.dy, steps, self.times
         );
-        // 경계는 끈 만큼 옮겨져 있다. 다음 번은 처음 자리가 아니라 지금 자리를 눌러야
-        // 같은 경계를 잡는다.
-        let (mut x, mut y) = (self.x, self.y);
-        for turn in 0..self.times {
-            let (dx, dy) = if turn % 2 == 1 {
-                (-self.dx, -self.dy)
-            } else {
-                (self.dx, self.dy)
-            };
-            drag(app, x, y, dx, dy, steps, frame);
-            x += dx;
-            y += dy;
+        let send = |phase: u8, x: f64, y: f64| {
+            let _ = app.emit("surface-input", InputStep { phase, x, y });
+        };
+        // 한 번 누른 채로 왕복한다. 놓았다 다시 누르면 경계가 최소 크기에 걸려 명령한
+        // 만큼 가지 않았을 때 다음 누름이 빗나가고, 그때부터 아무것도 움직이지 않는다.
+        send(0, self.x, self.y);
+        for _ in 0..self.times {
+            self.sweep(&send, 0.0, 1.0, steps, frame);
+            self.sweep(&send, 1.0, 0.0, steps, frame);
         }
-        println!("관측: 끌기 끝");
+        send(2, self.x, self.y);
+        println!("관측: 흔들기 끝");
     }
-}
 
-/// Presses at x,y, moves by dx,dy in even steps and releases.
-fn drag<R: Runtime>(
-    app: &tauri::AppHandle<R>,
-    x: f64,
-    y: f64,
-    dx: f64,
-    dy: f64,
-    steps: usize,
-    frame: Duration,
-) {
-    let send = |phase: u8, x: f64, y: f64| {
-        let _ = app.emit("surface-input", InputStep { phase, x, y });
-    };
-    send(0, x, y);
-    for i in 1..=steps {
-        std::thread::sleep(frame);
-        let at = i as f64 / steps as f64;
-        send(1, x + dx * at, y + dy * at);
+    /// Moves the held point from one fraction of the offset to another.
+    fn sweep(
+        &self,
+        send: &impl Fn(u8, f64, f64),
+        from: f64,
+        to: f64,
+        steps: usize,
+        frame: Duration,
+    ) {
+        for i in 1..=steps {
+            std::thread::sleep(frame);
+            let at = from + (to - from) * (i as f64 / steps as f64);
+            send(1, self.x + self.dx * at, self.y + self.dy * at);
+        }
     }
-    send(2, x + dx, y + dy);
-    std::thread::sleep(frame);
 }

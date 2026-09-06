@@ -2868,6 +2868,7 @@ name = "soksak-tauri"
 version = "0.1.0"
 dependencies = [
  "block2",
+ "cc",
  "objc2",
  "serde",
  "tauri",

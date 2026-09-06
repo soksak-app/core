@@ -138,18 +138,41 @@ The number is written when the window set changes, not on a timer: attaching and
 detaching a window is the application's own doing, so it says so where it happens
 and the component listens.
 
-Nothing is reported while the window stands still, so `--drive` drags a boundary
-on its own, as `x,y,dx,dy,ms,times` — press at x,y, move by dx,dy over ms, and do
-it that many times, each turn going back the way the one before it came:
+Nothing is reported while the window stands still, so `--drive` shakes a boundary
+on its own, as `wait,x,y,dx,dy,ms,times` — wait that many ms for the pages to be
+drawn, then press at x,y and sweep by dx,dy over ms, out and back, that many
+times:
 
-    ./examples/wailsv3/bin/wailsv3 --observe --drive 404,294,-160,0,100,40
+    ./examples/wailsv3/bin/wailsv3 --observe --drive 3000,404,294,-250,0,48,15
 
-    관측: 끌기 (404,294) -160,+0 6걸음 ×40
+    관측: 흔들기 (404,294) -250,+0 3걸음 ×15
+
+The point is held for the whole run. Letting go and pressing again would miss:
+a boundary stops at the smallest card, so the next press would land where the
+boundary is not, and nothing would move from there on.
 
 The steps travel the path a press on a surface travels — the page receives
 `surface-input` and matches the point against its own dividers — so what this
 measures is the path the product uses, not one built beside it. No key or button
 is synthesised at the operating system, so nothing takes the focus away.
+
+`--capture <directory>` records the window itself while a run of updates is
+going. The page says whether more is coming, so a boundary dragged by hand is
+recorded the same way a driven one is:
+
+    ./examples/wailsv3/bin/wailsv3 --observe --capture /tmp/frames
+
+    관측: 249 프레임을 /tmp/frames 에 적었다
+
+Frames are written as they arrive, as raw BGRA behind a width, a height and a
+row length. Encoding each one would cost frames, and a dropped frame is the one
+worth looking at. A screenshot asked for one at a time cannot be used for this:
+the system answers it with a composite made for that request, so a state that
+lasts one frame between a view being resized and its page being painted is never
+in it.
+
+`make examples-verify` runs both applications this way and looks at what they
+drew — see `examples/test/`.
 
 Only macOS is written for the window number. Windows would report the HWND and
 Linux the X window id. Without the flag neither component is registered.

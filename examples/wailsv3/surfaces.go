@@ -112,12 +112,14 @@ type Surfaces struct {
 	named map[uintptr]string
 	// The surfaces in a live resize. A surface receives the start and the end of
 	// a run, not one call per frame.
-	live   map[string]bool
-	modals map[string]*modal
-	shapes map[string]*nativeShape
-	shells *Shells
-	pages  *Pages
-	watch  sync.Once
+	live map[string]bool
+	// Whether a run of updates is going. Only the changes are announced.
+	running bool
+	modals  map[string]*modal
+	shapes  map[string]*nativeShape
+	shells  *Shells
+	pages   *Pages
+	watch   sync.Once
 }
 
 // Message is one call from a page this app serves. The page names itself, so the
@@ -451,6 +453,20 @@ func (s *Surfaces) ModalReady(id string) {
 	application.Get().Event.Emit("windows-changed")
 }
 
+// run announces the start and the end of a run of updates. The page says whether
+// more is coming; this turns that into the two moments it changes at.
+func (s *Surfaces) run(going bool) {
+	if s.running == going {
+		return
+	}
+	s.running = going
+	if going {
+		application.Get().Event.Emit("run-began")
+		return
+	}
+	application.Get().Event.Emit("run-ended")
+}
+
 // resizing brackets a view's live resize. The calls are paired, so the state each
 // view is in is kept here and only the changes are passed on.
 func (s *Surfaces) resizing(id string, view *nativeView, live bool) {
@@ -565,6 +581,7 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) error {
 }
 
 func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) {
+	s.run(!req.Settled)
 	wanted := map[string]bool{}
 	for _, surface := range req.Surfaces {
 		wanted[surface.ID] = true
