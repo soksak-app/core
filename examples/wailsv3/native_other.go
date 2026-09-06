@@ -33,3 +33,7 @@ func (v *nativeShape) setFrame(x, y, w, h float64)                              
 func (v *nativeShape) setStyle(radius, lineWidth float64, fill, line [4]float64) {}
 func (v *nativeShape) raise()                                                    {}
 func (v *nativeShape) destroy()                                                  {}
+
+// modalAligned snaps a modal's rect to the display's pixels. Not written for this
+// platform.
+func modalAligned(parent unsafe.Pointer, at Rect) Rect { return at }

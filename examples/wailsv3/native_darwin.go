@@ -66,6 +66,24 @@ static void surfaceFrameNow(void* handle, double* out) {
     out[3] = f.size.height;
 }
 
+// Snaps a modal's rect, given in the page's coordinates, inward to the display's
+// pixel grid. Snapping outward would cover the card's own border, as it would for
+// a surface.
+static void modalAligned(void* parentWindow, double x, double y, double w, double h,
+                         double* out) {
+    NSWindow* parent = (NSWindow*)parentWindow;
+    if (parent == nil) return;
+    NSView* content = [parent contentView];
+    if (content == nil) return;
+    double up = content.bounds.size.height - y - h;
+    NSRect r = [parent backingAlignedRect:NSMakeRect(x, up, w, h)
+                                  options:NSAlignAllEdgesInward];
+    out[0] = r.origin.x;
+    out[1] = content.bounds.size.height - r.origin.y - r.size.height;
+    out[2] = r.size.width;
+    out[3] = r.size.height;
+}
+
 // Sets the view's alpha. The page dims a surface that has lost focus.
 static void surfaceSetAlpha(void* handle, double alpha) {
     WKWebView* view = (WKWebView*)handle;
@@ -197,6 +215,15 @@ import "unsafe"
 func surfaceFrame(view unsafe.Pointer) Rect {
 	var out [4]C.double
 	C.surfaceFrameNow(view, &out[0])
+	return Rect{X: float64(out[0]), Y: float64(out[1]), W: float64(out[2]), H: float64(out[3])}
+}
+
+// modalAligned snaps a modal's rect to the display's pixels, in the page's
+// coordinates.
+func modalAligned(parent unsafe.Pointer, at Rect) Rect {
+	var out [4]C.double
+	C.modalAligned(parent, C.double(at.X), C.double(at.Y), C.double(max1(at.W)),
+		C.double(max1(at.H)), &out[0])
 	return Rect{X: float64(out[0]), Y: float64(out[1]), W: float64(out[2]), H: float64(out[3])}
 }
 

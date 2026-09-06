@@ -395,7 +395,7 @@ struct OverlayRequest {
     background: [f64; 4],
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct Rect {
     x: f64,
     y: f64,
@@ -478,14 +478,15 @@ fn modal_label(id: &str, n: u64) -> String {
 /// that check for the views below it.
 ///
 /// The window is created hidden and stays hidden until the page reports that its
-/// content is drawn; showing it earlier displays an empty window.
+/// content is drawn; showing it earlier displays an empty window. The frame the
+/// window was created at is reported, snapped to the display's pixels.
 #[tauri::command]
 fn overlay_show(
     app: AppHandle,
     window: Window,
     state: State<'_, Overlay>,
     request: OverlayRequest,
-) -> Result<(), String> {
+) -> Result<Rect, String> {
     let content = OverlayContent {
         css: request.css,
         class_name: request.class_name,
@@ -534,7 +535,7 @@ fn overlay_show(
     // window is configured directly. The clipped corners would render black.
     let own = modal.ns_window().map_err(|e| e.to_string())?;
     native::panelise(own, parent);
-    Ok(())
+    Ok(Rect { x: ax, y: ay - top, w: aw, h: ah })
 }
 
 /// Turns a point in the app window's own coordinates into one on the screen.
@@ -628,25 +629,31 @@ struct PlaceRequest {
     rect: Rect,
 }
 
+/// Moves and resizes an open modal's window and reports where it ended up.
+///
+/// The frame reported is the one applied, which is the page's rect snapped to the
+/// display's pixels. The page declares a rect and the host places the window on
+/// whole pixels, so the two differ and the page is told by how much.
 #[tauri::command]
 fn overlay_place(
     app: AppHandle,
     window: Window,
     state: State<'_, Overlay>,
     request: PlaceRequest,
-) -> Result<(), String> {
+) -> Result<Rect, String> {
     let top = inset(&window, &request.viewport)?;
     let scale = window.scale_factor().map_err(|e| e.to_string())?;
-    if let Some(modal) = modal_window(&app, &state, &request.id) {
-        let (ax, ay, aw, ah) = aligned(
-            request.rect.x, request.rect.y + top,
-            request.rect.w.max(1.0), request.rect.h.max(1.0), scale,
-        );
-        let (sx, sy) = on_screen(&window, ax, ay)?;
-        modal.set_position(LogicalPosition::new(sx, sy)).map_err(|e| e.to_string())?;
-        modal.set_size(LogicalSize::new(aw, ah)).map_err(|e| e.to_string())?;
-    }
-    Ok(())
+    let Some(modal) = modal_window(&app, &state, &request.id) else {
+        return Ok(Rect { x: 0.0, y: 0.0, w: 0.0, h: 0.0 });
+    };
+    let (ax, ay, aw, ah) = aligned(
+        request.rect.x, request.rect.y + top,
+        request.rect.w.max(1.0), request.rect.h.max(1.0), scale,
+    );
+    let (sx, sy) = on_screen(&window, ax, ay)?;
+    modal.set_position(LogicalPosition::new(sx, sy)).map_err(|e| e.to_string())?;
+    modal.set_size(LogicalSize::new(aw, ah)).map_err(|e| e.to_string())?;
+    Ok(Rect { x: ax, y: ay - top, w: aw, h: ah })
 }
 
 #[tauri::command]

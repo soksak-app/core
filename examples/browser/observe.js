@@ -11,14 +11,18 @@ import { host } from "./framework/index.js";
 import { surfaceInput } from "./plane.js";
 
 if (host) {
-  host.on("observe-click", (selector) => {
-    const el = document.querySelector(selector);
-    if (!el) {
-      host.call("report", `observe: ${selector} not found`);
-      return;
+  // 선택자 여럿을 `;` 으로 이어 보내면 순서대로 누른다. 하나의 창을 열고 그 안의
+  // 것을 누르는 것이 한 번의 요청이어야 하기 때문이다.
+  host.on("observe-click", (selectors) => {
+    for (const selector of selectors.split(";")) {
+      const el = document.querySelector(selector);
+      if (!el) {
+        host.call("report", `observe: ${selector} not found`);
+        continue;
+      }
+      el.click();
+      host.call("report", `observe: clicked ${selector}`);
     }
-    el.click();
-    host.call("report", `observe: clicked ${selector}`);
   });
 
   host.on("observe-drag", (plan) => shake(plan));

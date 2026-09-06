@@ -13,6 +13,9 @@ import { APPS, run } from "./app.mjs";
 /** 대조에 쓰는 끌기. 경계를 이름으로 지정하므로 창의 크기에 의존하지 않는다. */
 const DRIVE = "4000,x,2,-120,0,48,2";
 
+/** 모달을 열고 그 안의 구획을 바꾼다. 모달의 호출도 대조 대상에 든다. */
+const CLICK = '4500,button.act[title="설정"];.set-nav[data-key="nav:compositing"]';
+
 /** 기록 한 줄. 호출 이름과 요청과 답이다. */
 const LINE = /host (\w+) (\{.*\}|\[.*\]|null) -> (.*)$/;
 
@@ -49,8 +52,11 @@ test("both hosts answer the same page the same way", async (t) => {
   for (const [name, binary] of Object.entries(APPS)) {
     logs[name] = await run(
       binary,
-      ["--observe", "--transcript", "--drive", DRIVE],
-      (text) => /observe: shaking done/.test(text) && /"settled":true/.test(text),
+      ["--observe", "--transcript", "--drive", DRIVE, "--click", CLICK],
+      (text) =>
+        /observe: shaking done/.test(text) &&
+        /"settled":true/.test(text) &&
+        /host overlayPlace/.test(text),
       { timeout: 40_000 },
     );
     if (!logs[name]) return t.skip(`${binary} is not built`);
@@ -80,4 +86,14 @@ test("both hosts answer the same page the same way", async (t) => {
     [...tauri.keys()].sort(), [...wails.keys()].sort(),
     "the two hosts were asked for different things",
   );
+
+  // 나머지 호출도 마지막 것끼리 대조한다. 모달을 열고 그 구획을 바꾼 뒤의 상태는
+  // 두 실행에서 같다.
+  for (const name of wails.keys()) {
+    if (name === "syncSurfaces") continue;
+    const mine = wails.get(name).at(-1);
+    const theirs = tauri.get(name).at(-1);
+    assert.equal(theirs.request, mine.request, `${name} was asked differently`);
+    assert.equal(theirs.answer, mine.answer, `${name} was answered differently`);
+  }
 });

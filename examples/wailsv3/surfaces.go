@@ -200,14 +200,21 @@ func NewSurfaces(shells *Shells) *Surfaces {
 	}
 }
 
-// OverlayShow creates a modal's window and stores its content.
+// OverlayShow creates a modal's window, stores its content, and reports the
+// frame the window was created at.
 //
 // The window is created hidden and stays hidden until the page reports that its
 // content is rendered; showing it earlier displays an empty window. It is
 // attached at the same point, so it is never drawn at the wrong position.
-func (s *Surfaces) OverlayShow(req OverlayRequest) error {
+func (s *Surfaces) OverlayShow(req OverlayRequest) (Rect, error) {
+	win, ok := mainWindow()
+	if !ok {
+		return Rect{}, errNoWindow
+	}
 	// 같은 id 의 모달이 열려 있으면 닫는다. 없으면 아무 일도 하지 않는다.
 	s.OverlayHide(req.ID)
+	var at Rect
+	application.InvokeSync(func() { at = modalAligned(win.NativeWindow(), req.Rect) })
 	// 창을 만드는 것은 주 스레드의 일이고 이 호출은 그것이 끝날 때까지 기다린다.
 	// 잠금을 쥔 채로 기다리면, 주 스레드에서 같은 잠금을 잡는 호출과 서로를 기다린다.
 	live := &modal{
@@ -215,8 +222,8 @@ func (s *Surfaces) OverlayShow(req OverlayRequest) error {
 			Name:      "modal-" + req.ID,
 			Title:     req.Title,
 			URL:       "overlay.html?id=" + req.ID,
-			Width:     int(max1(req.Rect.W)),
-			Height:    int(max1(req.Rect.H)),
+			Width:     int(at.W),
+			Height:    int(at.H),
 			Frameless: true,
 			Hidden:    true,
 			BackgroundColour: application.NewRGBA(
@@ -224,7 +231,7 @@ func (s *Surfaces) OverlayShow(req OverlayRequest) error {
 				uint8(req.Background[2]), uint8(req.Background[3]*255)),
 			Mac: application.MacWindow{CornerRadius: req.Radius},
 		}),
-		at: req.Rect,
+		at: at,
 		content: OverlayContent{
 			CSS: req.CSS, ClassName: req.ClassName, HTML: req.HTML, Border: req.Border,
 		},
@@ -238,7 +245,7 @@ func (s *Surfaces) OverlayShow(req OverlayRequest) error {
 		was.window.Detach()
 		was.window.Close()
 	}
-	return nil
+	return at, nil
 }
 
 // ShapeRequest is a rectangle the page draws above the surfaces.
@@ -303,13 +310,17 @@ type PlaceRequest struct {
 	Rect Rect   `json:"rect"`
 }
 
-// OverlayPlace moves and resizes an open modal's window. The page decides both;
-// a drag on the card's grip changes the position and new content changes the
-// size.
-func (s *Surfaces) OverlayPlace(req PlaceRequest) error {
+// OverlayPlace moves and resizes an open modal's window and reports where it
+// ended up. The page decides both; a drag on the card's grip changes the
+// position and new content changes the size.
+//
+// The frame reported is the one applied, which is the page's rect snapped to the
+// display's pixels. The page declares a rect and the host places the window on
+// whole pixels, so the two differ and the page is told by how much.
+func (s *Surfaces) OverlayPlace(req PlaceRequest) (Rect, error) {
 	win, ok := mainWindow()
 	if !ok {
-		return errNoWindow
+		return Rect{}, errNoWindow
 	}
 	s.mu.Lock()
 	live, held := s.modals[req.ID]
@@ -318,13 +329,17 @@ func (s *Surfaces) OverlayPlace(req PlaceRequest) error {
 	}
 	s.mu.Unlock()
 	if !held {
-		return nil
+		return Rect{}, nil
 	}
-	// 내용이 바뀌면 카드의 크기도 바뀐다. 크기를 함께 적용하지 않으면 창은 만들어진
-	// 크기를 유지하고 그 안의 카드가 늘어나거나 잘린다.
-	live.window.SetSize(int(max1(req.Rect.W)), int(max1(req.Rect.H)))
-	live.window.Attach(win, req.Rect.X, req.Rect.Y)
-	return nil
+	var at Rect
+	application.InvokeSync(func() {
+		at = modalAligned(win.NativeWindow(), req.Rect)
+		// 내용이 바뀌면 카드의 크기도 바뀐다. 크기를 함께 적용하지 않으면 창은
+		// 만들어진 크기를 유지하고 그 안의 카드가 늘어나거나 잘린다.
+		live.window.SetSize(int(at.W), int(at.H))
+		live.window.Attach(win, at.X, at.Y)
+	})
+	return at, nil
 }
 
 // OverlayHide closes a modal's window and deletes its record. A record without a
@@ -351,7 +366,7 @@ func (s *Surfaces) OverlayHide(id string) error {
 
 // OverlayUpdate replaces an open modal's content without rebuilding its view.
 // A modal whose controls change the page's state is redrawn while it is open.
-func (s *Surfaces) OverlayUpdate(req UpdateRequest) error {
+func (s *Surfaces) OverlayUpdate(req UpdateRequest) {
 	content := req.OverlayContent
 	s.mu.Lock()
 	live, ok := s.modals[req.ID]
@@ -360,10 +375,9 @@ func (s *Surfaces) OverlayUpdate(req UpdateRequest) error {
 	}
 	s.mu.Unlock()
 	if !ok {
-		return nil
+		return
 	}
 	application.Get().Event.Emit("modal-content", ModalContentEvent{ID: req.ID, Content: content})
-	return nil
 }
 
 // ModalContentEvent is new content for one modal, as its page receives it.

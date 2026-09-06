@@ -107,8 +107,31 @@ const tell = (name, payload) => {
   return answered;
 };
 
-/* 기록 한 줄에 담기는 값. undefined 와 null 을 한 가지로 적는다. */
-const say = (value) => JSON.stringify(value ?? null);
+/**
+ * 기록 한 줄에 담기는 값.
+ *
+ * 답이 없는 호출을 한 가지로 적는다. 프레임워크마다 빈 답의 모양이 달라, 그대로
+ * 적으면 답이 없다는 같은 사실이 서로 다르게 남는다.
+ */
+const say = (value) => {
+  const empty = value == null ||
+    (typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0);
+  return empty ? "null" : JSON.stringify(value);
+};
+
+/**
+ * 앞선 호출이 끝난 뒤에 보낸다.
+ *
+ * 모달의 호출은 보낸 순서대로 적용되어야 한다. 창을 만드는 호출이 가장 느리고,
+ * 애플리케이션에 따라 호출마다 다른 스레드에서 처리되므로, 기다리지 않으면 나중
+ * 호출이 먼저 도착해 아직 없는 창을 옮기려 한다.
+ */
+let turn = Promise.resolve();
+const tellInTurn = (name, payload) => {
+  const answered = turn.then(() => tell(name, payload));
+  turn = answered.catch(() => {});
+  return answered;
+};
 
 let last = "";
 let announced = false;
@@ -249,7 +272,7 @@ export const overlay = native ? {
       if (!name) throw new Error(`${el.id} needs an aria-label to name its window`);
       shown = el.id;
       const style = getComputedStyle(el);
-      tell("overlayShow", {
+      tellInTurn("overlayShow", {
         id: shown,
         title: name,
         viewport: { h: window.innerHeight },
@@ -263,20 +286,20 @@ export const overlay = native ? {
     /** 열려 있는 모달 뷰의 위치를 갱신한다. 위치는 페이지가 결정한다. */
     place(rect) {
       if (!shown) return;
-      tell("overlayPlace", { id: shown, viewport: { h: window.innerHeight }, rect: toPage(rect) });
+      tellInTurn("overlayPlace", { id: shown, viewport: { h: window.innerHeight }, rect: toPage(rect) });
     },
 
     /** 열려 있는 모달 뷰의 내용을 교체한다. 뷰를 다시 만들면 깜빡인다. */
     update(el) {
       if (!shown) return;
-      tell("overlayUpdate", { id: shown, ...drawing(el) });
+      tellInTurn("overlayUpdate", { id: shown, ...drawing(el) });
     },
 
     hide() {
       const id = shown;
       shown = null;
       pick = null;
-      if (id) tell("overlayHide", id);
+      if (id) tellInTurn("overlayHide", id);
     },
 } : {
   show: () => {},
