@@ -6,7 +6,7 @@
 // 판의 구조를 알지 않는다. 표면의 위치와 내용은 판이 슬롯 요소의 data 속성에
 // 기록하고, 이 모듈은 그 속성을 읽어 측정하고 보고한다.
 import { plugin } from "./plugins/registry.js";
-import { surfaces as app } from "./host.js";
+import { native, surfaces as app } from "./host.js";
 
 const plane = document.getElementById("plane");
 
@@ -217,8 +217,10 @@ function commit(mine, snapshot, final) {
       return placed;
     });
   }
-  // 호스트가 없으면 이 모듈이 앉힌 자리가 곧 실제 자리다.
-  seatedRecord = record;
+  // 호스트가 없으면 이 모듈이 앉힌 자리가 곧 실제 자리다. 호스트가 있는데 답이
+  // 없으면 직전과 같은 요청이라 전송되지 않은 것이고, 마지막으로 답한 자리가 그대로
+  // 유효하다. 그때 이 레코드를 넣으면 모사한 자리가 실제 자리로 기록된다.
+  if (!native) seatedRecord = record;
   return answered;
 }
 

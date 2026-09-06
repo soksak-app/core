@@ -1,5 +1,7 @@
 # Examples
 
+Korean translation: [`README.ko.md`](README.ko.md).
+
 ## browser
 
 `browser/` is the page. It runs on its own in a browser, where the surfaces are
@@ -26,6 +28,7 @@ application's own log.
 One file per role, and the imports run one way:
 
     index.html      the document, and the wiring between the rest
+    app.css         the tokens the chrome is drawn with, and the chrome's rules
     settings.js     what a person chooses, as one object. Announces; calls no one
     settings-ui.js  the ⚙ modal. Built when pressed, removed when closed
     icons.js        the lucide paths the chrome draws
@@ -33,10 +36,12 @@ One file per role, and the imports run one way:
     projects.js     projects and the spaces inside them
     ids.js          issues prj- spc- tab-
     plane.js        one plane: cards, tabs, drag, rail, layer, render
+    card.js         one card's header and body, and the tabs in it
     compositor.js   measures the slots the plane marks, and publishes
     verify.js       reads the plane and the compositor, and reports the result
     host.js         real native surfaces and modals, when an application holds
                     the page. Absent in a browser, where the page simulates them
+    observe.js      presses one element when the observation component asks
     framework/      which runtime is holding this page, and how to speak to it
     terminal.html   the page a terminal surface shows
     overlay.html    the page a [data-native-modal] view shows
@@ -124,16 +129,19 @@ for its window and for the windows attached to it:
     ./examples/wailsv3/bin/wailsv3 --observe
     ./examples/tauriv2/src-tauri/target/debug/soksak-tauri --observe
 
-    관측: 창 번호 [5921]
+    observe: windows 5921
 
 A capture tool addresses a window by that number, so it reads the composite
 without raising the window and without moving the focus: `screencapture -l5921
-out.png` on macOS. A screen region would capture whatever is in front, and
+out.png` on macOS, and `--capture` below reads the same window from inside the
+application. A screen region would capture whatever is in front, and
 raising the window changes the state being measured.
 
-The number is printed when the window set changes, not on a timer. The
-application attaches and detaches the window itself, so it emits an event at that
-point and the component subscribes.
+The first report is made when the page commits for the first time, which is when
+the window is on screen and the surfaces exist. After that the number is printed
+when the window set changes, not on a timer: the application attaches and
+detaches the window itself, so it emits an event at that point and the component
+subscribes.
 
 A boundary lies over the surfaces, so a drag reaches it by coordinates. A button
 in the page chrome is a DOM element, so `--click ms,selector` has the page
@@ -141,8 +149,8 @@ dispatch the click once the page has rendered:
 
     ./examples/wailsv3/bin/wailsv3 --observe --click '5000,button.act[title="설정"]'
 
-    관측: button.act[title="설정"] 를 눌렀다
-    관측: 창 번호 [7480 7489]
+    observe: clicked button.act[title="설정"]
+    observe: windows 7480 7489
 
 Nothing is reported while the window stands still, so `--drive` shakes a boundary
 on its own, as `wait,x,y,dx,dy,ms,times` — wait that many ms for the pages to be
@@ -151,7 +159,8 @@ times:
 
     ./examples/wailsv3/bin/wailsv3 --observe --drive 3000,404,294,-250,0,48,15
 
-    관측: 흔들기 (404,294) -250,+0 3걸음 ×15
+    observe: shaking (404,294) by -250,+0 in 3 steps, 15 times
+    observe: shaking done
 
 The press is held for the whole run. Releasing and pressing again fails once a
 boundary stops at the minimum card size, because the next press lands where the
@@ -167,7 +176,11 @@ the same way as a driven one:
 
     ./examples/wailsv3/bin/wailsv3 --observe --capture /tmp/frames
 
-    관측: 249 프레임을 /tmp/frames 에 적었다
+    observe: wrote 249 frames to /tmp/frames
+
+A window that is not being redrawn — the display is off, or the window is off
+screen — still delivers frames, each marked idle and carrying no image. A
+recording of no frames reports how many of those arrived.
 
 Frames are written as they arrive, as raw BGRA behind a width, a height and a
 row length. Encoding each frame would drop frames, and a dropped frame is the one

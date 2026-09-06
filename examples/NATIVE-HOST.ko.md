@@ -8,9 +8,10 @@
 
 ## 페이지가 요구하는 것
 
-인터페이스 세 개. 모두 `host.js` 가 `window` 에 설치하고, 브라우저에서는 없다.
+인터페이스 세 개. 모두 `host.js` 가 export 한다. 브라우저에서는 셋 다 있고 아무
+일도 하지 않으며 `native` 가 false 다.
 
-`hostSurfaces` — 표면마다 웹뷰 하나를, 페이지가 선언한 프레임에 배치한다.
+`surfaces` — 표면마다 웹뷰 하나를, 페이지가 선언한 프레임에 배치한다.
 
     kinds                호스트가 그리는 플러그인 종류. 페이지는 그 종류를
                          모사하지 않는다
@@ -18,21 +19,22 @@
     theme(values)        호스트가 서비스하는 페이지에 줄 토큰 값
     place(record)        커밋마다 표면의 id, url, 프레임, 표시 여부, 흐림
 
-`hostShapes` — 표면 위의 사각형. 레이어를 가진 뷰가 그린다.
+`shapes` — 표면 위의 사각형. 레이어를 가진 뷰가 그린다.
 
     set(id, rect, style) 프레임, 모서리 반경, 선 두께, 채움과 선의 색
     clear(id)
 
-`hostOverlay` — `[data-native-modal]` 요소 하나. 표면 위의 웹뷰가 그린다.
+`overlay` — `[data-native-modal]` 요소 하나. 표면 위의 웹뷰가 그린다.
 
     show(el, rect, onPick)   요소의 클래스, 마크업, 스타일시트
     place(rect)              열려 있는 동안의 새 프레임
     update(el)               열려 있는 동안의 새 내용
     hide()
 
-돌아오는 이벤트는 셋이다. `surface-pressed` 는 입력이 도달한 표면을 알리고,
-`surface-input` 은 끌기의 한 단계를 페이지 좌표로 보고하며, `overlay-pick` 은
-모달의 `(key, value)` 하나를 보고한다.
+돌아오는 이벤트는 셋이다. `host.js` 가 받아서 페이지가 등록한 함수에 전달한다.
+`onSurfaceInput({press, input})` 은 입력이 도달한 표면과 끌기의 한 단계를 페이지
+좌표로 받고, 모달의 `(key, value)` 는 `overlay.show` 에 전달한 함수가 받는다.
+`onTheme(read)` 는 페이지가 그린 테마를 읽는 함수를 받는다.
 
 ## 이미 하나인 것
 

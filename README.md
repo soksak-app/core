@@ -1,5 +1,7 @@
 # soksak
 
+Korean translation: [`README.ko.md`](README.ko.md).
+
 Pane layout over shared grid lines. Headless core, optional DOM binding, no runtime dependencies.
 
 ## The rules

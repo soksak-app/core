@@ -8,10 +8,10 @@ it would take to publish them as a Wails service and a Tauri plugin.
 
 ## What the page asks for
 
-Three interfaces, all installed on `window` by `host.js` and absent in a plain
-browser.
+Three interfaces, all exported by `host.js`. In a plain browser each one is
+present and does nothing, and `native` is false.
 
-`hostSurfaces` — a webview per surface, placed on the frames the page declares.
+`surfaces` — a webview per surface, placed on the frames the page declares.
 
     kinds                the plugin kinds the host draws, so the page stops
                          simulating those
@@ -20,12 +20,12 @@ browser.
     place(record)        every surface's id, url, frame, visibility and dim,
                          once per commit
 
-`hostShapes` — a rectangle above the surfaces, drawn by a layer-backed view.
+`shapes` — a rectangle above the surfaces, drawn by a layer-backed view.
 
     set(id, rect, style) frame, corner radius, line width, fill and line colour
     clear(id)
 
-`hostOverlay` — one `[data-native-modal]` element, drawn by a webview above the
+`overlay` — one `[data-native-modal]` element, drawn by a webview above the
 surfaces.
 
     show(el, rect, onPick)   the element's class, markup and stylesheet
@@ -33,9 +33,11 @@ surfaces.
     update(el)               new content while it is open
     hide()
 
-Three events go back: `surface-pressed` names the surface an input landed on,
-`surface-input` reports one step of a drag in the page's coordinates, and
-`overlay-pick` reports one `(key, value)` from the modal.
+Three events go back. `host.js` receives them and hands each to a function the
+page registered: `onSurfaceInput({press, input})` takes the surface an input
+landed on and one step of a drag in the page's coordinates, and the modal's
+`(key, value)` goes to the function `overlay.show` was given. `onTheme(read)`
+takes the function that reads the theme the page is drawn in.
 
 ## What is already one implementation
 
