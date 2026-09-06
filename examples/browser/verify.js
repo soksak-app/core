@@ -144,16 +144,21 @@ export function verify(controls = null) {
     [...plane.querySelectorAll("[data-native-surface][data-native-surface-id]")]
       .map((slot) => [slot.dataset.nativeSurfaceId, slot]),
   );
+  // 커밋은 자리만이 아니라 표면의 상태도 담는다. 흐림은 판이 정하고 슬롯에 기록하는
+  // 값이므로, 그려진 슬롯과 다르면 호스트가 다른 알파를 적용한다.
   const compare = (surfaces) => {
     const told = new Set(surfaces.map((s) => s.id));
     let worst = 0;
+    let dim = 0;
     for (const s of surfaces) {
       const slot = onPlane.get(s.id);
       if (!slot) continue;
       worst = Math.max(worst, maxDelta(drawnFrame(slot), s.declared));
+      if (s.dim !== (slot.dataset.nativeDim === "true")) dim++;
     }
     return {
       worst,
+      dim,
       gone: surfaces.filter((s) => !onPlane.has(s.id)).length,
       missed: [...onPlane.keys()].filter((id) => !told.has(id)).length,
     };
@@ -162,10 +167,10 @@ export function verify(controls = null) {
   const record = latest();
   if (!record) add("V7a element − declared == 0", true, "아직 커밋 없음");
   else {
-    const { worst, gone, missed } = compare(record.surfaces);
-    add("V7a element − declared == 0", gone === 0 && missed === 0 && worst < 0.5,
+    const { worst, dim, gone, missed } = compare(record.surfaces);
+    add("V7a element − declared == 0", gone === 0 && missed === 0 && worst < 0.5 && dim === 0,
         `최대 ${worst.toFixed(2)}px · 커밋에 없는 표면 ${missed} · 사라진 표면 ${gone} · ` +
-        `0이 아니면 커밋이 뒤처진 것 (seq ${record.seq})`);
+        `흐림이 다른 표면 ${dim} · 0이 아니면 커밋이 뒤처진 것 (seq ${record.seq})`);
   }
 
   // V7c — 그리기 전에 미리 게시한 자리가 그려진 자리와 같은가. 여백은 그려질
@@ -173,9 +178,11 @@ export function verify(controls = null) {
   const guess = ahead();
   if (!guess) add("V7c 미리 게시한 자리 == 그려진 자리", true, "이번 렌더는 미리 게시하지 않았다");
   else {
-    const { worst, gone, missed } = compare(guess.surfaces);
-    add("V7c 미리 게시한 자리 == 그려진 자리", gone === 0 && missed === 0 && worst === 0,
-        `최대 ${worst.toFixed(2)}px · 없음 ${gone} · 누락 ${missed} (seq ${guess.seq})`);
+    const { worst, dim, gone, missed } = compare(guess.surfaces);
+    add("V7c 미리 게시한 자리 == 그려진 자리",
+        gone === 0 && missed === 0 && worst === 0 && dim === 0,
+        `최대 ${worst.toFixed(2)}px · 없음 ${gone} · 누락 ${missed} · 흐림이 다른 표면 ${dim} ` +
+        `(seq ${guess.seq})`);
   }
 
   // V7b — 호스트가 실제로 앉힌 자리와 선언값의 차이. 호스트는 선언된 사각형을

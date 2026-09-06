@@ -924,17 +924,18 @@ export function onLayout(fn) {
 }
 
 /**
- * 이 판이 앉힐 표면: 카드 id 마다 그 카드가 보여줄 탭의 id.
+ * 이 판이 앉힐 표면: 카드 id 마다 그 카드가 보여줄 탭의 id 와 흐림 여부.
  *
  * 표면의 정체는 탭이므로, 카드가 보여주는 탭이 바뀌면 같은 자리에 다른 표면이 앉는다.
  * 아직 그리기 전의 DOM 은 이전 탭을 담고 있고, 그것만 읽으면 지난 표면을 새 배치에
- * 앉히라고 호스트에 알리게 된다.
+ * 앉히라고 호스트에 알리게 된다. 흐림도 같은 이유로 여기서 전달한다. 포커스는 그리기
+ * 전에 이미 이동했으므로, DOM 에서 읽으면 지난 포커스의 흐림을 게시한다.
  */
 function seats() {
   const out = new Map();
   for (const card of grid.cards) {
     if (isPlace(card.id)) continue;
-    out.set(card.id, activeTab(card).id);
+    out.set(card.id, { id: activeTab(card).id, dim: dimmed(card.id) });
   }
   return out;
 }

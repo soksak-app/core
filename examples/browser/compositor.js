@@ -153,8 +153,9 @@ function deliver(mine, snapshot) {
  * DOM 이 담은 표면이 다를 때도 마찬가지다. 호출한 쪽은 렌더링한 뒤 측정하는 경로로
  * 처리한다.
  *
- * seated 는 판이 앉힐 표면이다: 카드 id 마다 그 카드가 보여줄 표면의 id. 여기서 읽는
- * DOM 은 아직 이전 배치이므로, 표면이 교체되는 변경에서는 이 둘이 다르다.
+ * seated 는 판이 앉힐 표면이다: 카드 id 마다 그 카드가 보여줄 표면의 id 와 흐림
+ * 여부. 여기서 읽는 DOM 은 아직 이전 배치이므로, 표면이 교체되는 변경에서는 이 둘이
+ * 다르다. 흐림도 판이 정하는 값이므로 DOM 이 아니라 이 값을 읽는다.
  */
 export function publishAhead(rects, seated) {
   aheadRecord = null;
@@ -164,7 +165,8 @@ export function publishAhead(rects, seated) {
     const el = cardEl(slot);
     const card = el && rects.get(el.dataset.cardId);
     if (!card) return false;
-    if (seated.get(el.dataset.cardId) !== id) return false;
+    const seat = seated.get(el.dataset.cardId);
+    if (!seat || seat.id !== id) return false;
     const inset = insetOf(slot, el);
     // 여백을 잴 수 없는 카드와, 여백을 담지 못하는 카드. 앞쪽은 슬롯이 눌려 있어
     // 뺄셈이 여백이 아니라 카드의 크기이고, 뒤쪽은 머리와 발이 줄어들어 슬롯이
@@ -175,7 +177,7 @@ export function publishAhead(rects, seated) {
       layer: Number(slot.dataset.nativeLayer),
       title: slot.dataset.nativeTitle,
       plugin: slot.dataset.nativePlugin,
-      dim: slot.dataset.nativeDim === "true",
+      dim: seat.dim,
       visible: effectiveVisible(slot),
       frame: {
         x: card.x + inset.left,
