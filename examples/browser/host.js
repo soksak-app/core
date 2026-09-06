@@ -154,6 +154,11 @@ function install() {
   window.hostOverlay = {
     show(el, rect, onPick) {
       pick = onPick;
+      // 이 길로 오는 요소는 [data-native-modal] 이다. 표식만 두고 검사하지 않으면
+      // 마크업과 동작이 따로 놀고, 표식 없는 요소가 조용히 뷰를 얻는다.
+      if (!el.matches("[data-native-modal]")) {
+        throw new Error(`${el.id || el.className} is not a [data-native-modal] element`);
+      }
       // 뷰 이름은 요소 id 를 사용한다. id 가 없는 요소가 둘이면 같은 뷰를 공유한다.
       if (!el.id) throw new Error("a [data-native-modal] element needs an id");
       shown = el.id;
