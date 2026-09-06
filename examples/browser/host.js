@@ -105,7 +105,7 @@ export const surfaces = native ? {
     place(record) {
       if (!announced) {
         announced = true;
-        this.theme(window.pageTheme());
+        this.theme(readTheme());
       }
       const surfaces = record.surfaces.map((s) => ({
         id: s.id,
@@ -148,15 +148,35 @@ export const surfaces = native ? {
 let pick = null;
 let shown = null;
 
+/* 애플리케이션이 페이지로 보내는 입력의 수신자. 판이 등록한다. */
+let onPress = () => {};
+let onInput = () => {};
+
+/**
+ * 애플리케이션의 입력을 받을 함수를 등록한다.
+ *
+ *   press(id)   표면 위의 누름. 표면은 네이티브 뷰이므로 그 위의 클릭은 이 문서에
+ *               도달하지 않는다. 애플리케이션이 표면 id 를 전달한다.
+ *   input(step) 왼쪽 버튼의 누름, 이동, 놓음. 좌표는 이 문서의 것이다. divider 의
+ *               잡는 영역은 통로보다 넓어서 통로가 선 하나 폭이면 그 영역 전체가
+ *               표면 아래에 놓인다.
+ */
+export function onSurfaceInput({ press, input }) {
+  onPress = press;
+  onInput = input;
+}
+
+/* 페이지가 그리는 테마. 애플리케이션이 서비스하는 문서들이 같은 값으로 그린다. */
+let readTheme = () => ({});
+
+/** 지금 그려진 테마를 읽는 함수를 등록한다. */
+export function onTheme(read) {
+  readTheme = read;
+}
+
 if (native) {
-  // 표면은 네이티브 뷰이므로 그 위의 클릭이 이 문서에 도달하지 않는다.
-  // 애플리케이션이 표면 id 를 전달하면 페이지가 해당 슬롯에 pointerdown 을 낸다.
-  bridge.on("surface-pressed", (id) => window.pressSurface(id));
-
-  // 왼쪽 버튼의 누름, 이동, 놓음. 좌표는 이 문서의 것이다. divider 의 잡는 영역은
-  // 통로보다 넓어서 통로가 선 하나 폭이면 그 영역 전체가 표면 아래에 놓인다.
-  bridge.on("surface-input", (step) => window.surfaceInput(step));
-
+  bridge.on("surface-pressed", (id) => onPress(id));
+  bridge.on("surface-input", (step) => onInput(step));
   // 모달은 여러 번 응답하므로 여기서 구독을 해제하지 않고 hide 에서 해제한다.
   bridge.on("overlay-pick", ({ key, value }) => { if (pick) pick(key, value); });
 }

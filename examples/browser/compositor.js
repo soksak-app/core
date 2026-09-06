@@ -6,7 +6,7 @@
 // 판의 구조를 알지 않는다. 표면의 위치와 내용은 판이 슬롯 요소의 data 속성에
 // 기록하고, 이 모듈은 그 속성을 읽어 측정하고 보고한다.
 import { plugin } from "./plugins/registry.js";
-import { surfaces as host } from "./host.js";
+import { surfaces as app } from "./host.js";
 
 const plane = document.getElementById("plane");
 
@@ -176,7 +176,7 @@ function commit(mine, snapshot, final) {
   if (mine < applied) return;
   applied = mine;
   const record = { seq: mine, settled: final, surfaces: [] };
-  const native = host.kinds;
+  const native = app.kinds;
   for (const s of snapshot) {
     // 호스트가 없으면 이 모듈이 표면을 모사하므로 적용 위치도 여기서 정한다.
     // 호스트가 있으면 호스트가 실제로 앉힌 자리를 답으로 주고, 아래에서 그것으로
@@ -262,12 +262,12 @@ function seat(record, placed) {
  * 하지만, 선택 레이어는 작아서 전체를 숨기면 겹치지 않는 표면의 갱신까지 중단된다.
  */
 export function standIn(on, over) {
-  const host = over ? plane.getBoundingClientRect() : null;
-  const native = host.kinds;
+  const area = over ? plane.getBoundingClientRect() : null;
+  const kinds = app.kinds;
   for (const slot of slots()) {
     // 네이티브 표면은 실행 중인 페이지와 프로그램을 표시한다. DOM 을 그리려고 숨기면
     // 사용자가 보던 화면이 정지 이미지로 바뀌므로 숨기지 않는다.
-    if (native.includes(slot.dataset.nativePlugin)) {
+    if (kinds.includes(slot.dataset.nativePlugin)) {
       delete slot.dataset.nativeCaptureHidden;
       slot.innerHTML = "";
       continue;
@@ -275,8 +275,8 @@ export function standIn(on, over) {
     let hide = on;
     if (hide && over) {
       const r = slot.getBoundingClientRect();
-      hide = over.x < r.right - host.left && over.x + over.w > r.left - host.left
-          && over.y < r.bottom - host.top && over.y + over.h > r.top - host.top;
+      hide = over.x < r.right - area.left && over.x + over.w > r.left - area.left
+          && over.y < r.bottom - area.top && over.y + over.h > r.top - area.top;
     }
     if (hide) slot.dataset.nativeCaptureHidden = "true";
     else delete slot.dataset.nativeCaptureHidden;

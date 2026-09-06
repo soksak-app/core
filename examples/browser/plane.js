@@ -8,7 +8,7 @@ import { Soksak, SoksakView, outline } from "/dist/index.js";
 import { cardRadius, halfGap, linkedSet, value } from "./settings.js";
 import { isPlace, plugin, plugins, railId, railKind, section } from "./plugins/registry.js";
 import { standIn } from "./compositor.js";
-import { native, overlay, shapes, surfaces as host } from "./host.js";
+import { native, onSurfaceInput, overlay, shapes, surfaces as host } from "./host.js";
 import { issueId } from "./ids.js";
 
 const NEEDS = ["cards", "card", "insertAt", "moveTo", "standings", "moveBoundary", "zoneAt", "splitToward"];
@@ -32,7 +32,6 @@ const HEADER = 32, FOOTER = 22;
    simulator skips its own surface for those. host.place
    receives every commit record so the host places its views on the same frames.
    With no host both are absent and the page simulates every surface. */
-const hostKinds = () => host.kinds;
 
 /* 포커스를 잃은 표면의 흐림 여부. 표면은 카드마다 하나이므로 카드 단위로 판정한다. */
 const dimmed = (cardId) =>
@@ -41,7 +40,7 @@ const dimmed = (cardId) =>
 /* 표면은 네이티브 뷰이므로 그 위의 클릭이 이 문서에 도달하지 않는다. 호스트가 표면
    id 를 보고하면 해당 슬롯 요소에서 pointerdown 을 발생시킨다. 포커스 이동과 레이어
    닫기를 이미 pointerdown 을 수신하는 쪽이 처리한다. */
-window.pressSurface = (cardId) => {
+const pressSurface = (cardId) => {
   const slot = document.querySelector(
     `[data-native-surface-id="${cardId}"][data-native-surface]`);
   if (!slot) return;
@@ -58,7 +57,7 @@ let heldDivider = null;
    아래에 놓여 누름이 이 문서에 도달하지 않으므로, 호스트가 좌표를 넘기고 여기서
    그 좌표가 어느 divider 위인지 판정한다. 뷰는 mouse 이벤트로도 divider 를 움직일
    수 있으므로 판이 아니라 그 요소에 이벤트를 낸다. */
-window.surfaceInput = ({ phase, x, y }) => {
+const surfaceInput = ({ phase, x, y }) => {
   if (phase === 0) {
     heldDivider = document.elementFromPoint(x, y)?.closest(".sp-divider") ?? null;
     heldDivider?.dispatchEvent(new MouseEvent("mousedown", {
@@ -76,6 +75,8 @@ window.surfaceInput = ({ phase, x, y }) => {
   document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, clientX: x, clientY: y }));
   heldDivider = null;
 };
+
+onSurfaceInput({ press: pressSurface, input: surfaceInput });
 
 
 const plane = document.getElementById("plane");
