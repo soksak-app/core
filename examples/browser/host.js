@@ -211,6 +211,9 @@ export const shapes = native ? {
  */
 export const overlay = native ? {
     show(el, rect, onPick) {
+      // 이 인터페이스는 한 번에 하나를 표시한다. 표시 중인 것을 닫지 않으면 그 창은
+      // 애플리케이션에 남고 아무도 그것을 가리키지 않는다.
+      if (shown) this.hide();
       pick = onPick;
       // 이 길로 오는 요소는 [data-native-modal] 이다. 표식만 두고 검사하지 않으면
       // 마크업과 동작이 따로 놀고, 표식 없는 요소가 조용히 뷰를 얻는다.

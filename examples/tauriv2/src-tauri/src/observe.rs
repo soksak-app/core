@@ -12,7 +12,7 @@
 use std::time::Duration;
 
 use tauri::plugin::{Builder, TauriPlugin};
-use tauri::{Emitter, Listener, Manager, Runtime, Window};
+use tauri::{Emitter, Listener, Manager, Runtime};
 
 use crate::capture;
 use crate::native;
@@ -45,14 +45,6 @@ pub fn given(name: &str) -> bool {
     std::env::args().skip(1).any(|a| a == long || a == short)
 }
 
-/// The numbers of this window and the windows attached to it. A modal is a window
-/// of its own, so it joins the list while it is open.
-#[tauri::command]
-fn windows<R: Runtime>(window: Window<R>) -> Result<Vec<isize>, String> {
-    let handle = window.ns_window().map_err(|e| e.to_string())?;
-    Ok(native::window_numbers(handle))
-}
-
 pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("observe")
         .setup(|app, _api| {
@@ -79,13 +71,18 @@ pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
             if let Some(into) = capturing() {
                 let began = into.clone();
                 app.listen("run-began", move |_| capture::start(&began));
+                // 이 수신자는 발행한 스레드에서 그대로 실행되고, run-ended 는
+                // 커맨드 안에서, 즉 주 스레드에서 발행된다. 종료는 답을 기다리므로
+                // 여기서 기다리면 그동안 화면이 멈춘다.
                 app.listen("run-ended", move |_| {
-                    eprintln!("observe: wrote {} frames to {into}", capture::stop());
+                    let into = into.clone();
+                    std::thread::spawn(move || {
+                        eprintln!("observe: wrote {} frames to {into}", capture::stop());
+                    });
                 });
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![windows])
         .build()
 }
 
@@ -123,16 +120,27 @@ fn capturing() -> Option<String> {
 
 /// Readies the recording for this window. Reading the window server's list is the
 /// slow part, so it is read once, here.
+///
+/// The lookup waits for its answer. Waiting for it on the main thread makes the
+/// two wait for each other when that answer needs the main queue, so only the
+/// window number is read there and the lookup runs on this thread.
 fn open<R: Runtime>(app: tauri::AppHandle<R>) {
     if capturing().is_none() {
         return;
     }
+    let (tell, hear) = std::sync::mpsc::channel();
     let ask = app.clone();
-    let _ = app.run_on_main_thread(move || {
-        if let Some(first) = numbers(&ask).first() {
-            capture::open(*first);
-        }
-    });
+    if app
+        .run_on_main_thread(move || {
+            let _ = tell.send(numbers(&ask).first().copied());
+        })
+        .is_err()
+    {
+        return;
+    }
+    if let Ok(Some(first)) = hear.recv() {
+        capture::open(first);
+    }
 }
 
 /// Presses one element of the page, named by a CSS selector.

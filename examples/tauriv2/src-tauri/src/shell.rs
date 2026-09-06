@@ -86,13 +86,28 @@ impl Shells {
             let id = id.to_string();
             std::thread::spawn(move || {
                 let mut reader = BufReader::new(stream);
-                let mut line = String::new();
-                // read_line keeps the newline, so the page receives the breaks
-                // the shell actually wrote.
-                while reader.read_line(&mut line).unwrap_or(0) > 0 {
+                let mut line = Vec::new();
+                // Read as bytes. A shell writes whatever the program printed, and
+                // reading it as text ends the stream on the first byte that is not
+                // UTF-8, which silences that surface for the rest of the session.
+                // The newline is kept, so the page receives the breaks the shell
+                // actually wrote.
+                loop {
+                    line.clear();
+                    match reader.read_until(b'\n', &mut line) {
+                        Ok(0) => break,
+                        Ok(_) => {}
+                        Err(e) => {
+                            eprintln!("terminal {id}: {e}");
+                            break;
+                        }
+                    }
                     let _ = app.emit(
                         "terminal-output",
-                        Output { id: id.clone(), text: std::mem::take(&mut line) },
+                        Output {
+                            id: id.clone(),
+                            text: String::from_utf8_lossy(&line).into_owned(),
+                        },
                     );
                 }
             });

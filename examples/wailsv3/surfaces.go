@@ -296,15 +296,16 @@ func (s *Surfaces) ClearShape(id string) error {
 	return nil
 }
 
-// PlaceRequest is the new position of an open modal's view. The page decides the
-// position; a drag on the card's grip is what changes it.
+// PlaceRequest is the new frame of an open modal's view. The page decides it; a
+// drag on the card's grip changes the position and new content changes the size.
 type PlaceRequest struct {
 	ID   string `json:"id"`
 	Rect Rect   `json:"rect"`
 }
 
-// OverlayPlace moves an open modal's window. The page decides the position; a
-// drag on the card's grip changes it.
+// OverlayPlace moves and resizes an open modal's window. The page decides both;
+// a drag on the card's grip changes the position and new content changes the
+// size.
 func (s *Surfaces) OverlayPlace(req PlaceRequest) error {
 	win, ok := mainWindow()
 	if !ok {
@@ -319,6 +320,9 @@ func (s *Surfaces) OverlayPlace(req PlaceRequest) error {
 	if !held {
 		return nil
 	}
+	// 내용이 바뀌면 카드의 크기도 바뀐다. 크기를 함께 적용하지 않으면 창은 만들어진
+	// 크기를 유지하고 그 안의 카드가 늘어나거나 잘린다.
+	live.window.SetSize(int(max1(req.Rect.W)), int(max1(req.Rect.H)))
 	live.window.Attach(win, req.Rect.X, req.Rect.Y)
 	return nil
 }

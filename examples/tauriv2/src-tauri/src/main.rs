@@ -24,7 +24,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use tauri::{
     webview::Color, AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Runtime, State,
-    WebviewBuilder, WebviewUrl, WebviewWindowBuilder, Window,
+    WebviewBuilder, WebviewUrl, WebviewWindow, WebviewWindowBuilder, Window,
 };
 
 /// One surface the page declares, in CSS pixels relative to the page viewport.
@@ -419,11 +419,24 @@ struct OverlayContent {
 struct Modal {
     content: OverlayContent,
     radius: f64,
+    /// The label of the window drawing it. Closing a window only queues the
+    /// close, so a window built for the same id straight afterwards would be
+    /// refused the label the closing one still holds. Every showing takes a
+    /// label of its own.
+    label: String,
 }
 
 #[derive(Default)]
 struct Overlay {
     modals: Mutex<HashMap<String, Modal>>,
+    /// How many modal windows have been built. Names the next one.
+    built: Mutex<u64>,
+}
+
+/// The window of the modal shown under this id, if one is open.
+fn modal_window(app: &AppHandle, state: &State<'_, Overlay>, id: &str) -> Option<WebviewWindow> {
+    let label = state.modals.lock().ok()?.get(id)?.label.clone();
+    app.get_webview_window(&label)
 }
 
 /// The theme last declared by the page.
@@ -451,18 +464,10 @@ struct Running {
 }
 
 /// One view per modal element, named after it, so a page may have several.
-fn modal_label(id: &str) -> String {
-    format!("modal-{id}")
+fn modal_label(id: &str, n: u64) -> String {
+    format!("modal-{id}-{n}")
 }
 
-/// Builds one view per modal the page declares, before any of them is asked for.
-///
-/// A webview shows white until its document has been fetched and painted, and no
-/// colour given to it covers that: on macOS the colour lands on
-/// `underPageBackgroundColor`, which is the area outside the document, and
-/// stopping the webview from painting its own background needs a private
-/// interface. So the view is not built at the moment it is wanted. Built here,
-/// every showing is of a view whose document is already drawn.
 /// Draws one modal element in a window of its own.
 ///
 /// A window, not a webview beside the surfaces. A webview sets the cursor from
@@ -472,8 +477,8 @@ fn modal_label(id: &str) -> String {
 /// gets two cursors and whichever reply lands last wins. A separate window fails
 /// that check for the views below it.
 ///
-/// A webview shows white until its document is fetched and painted. The page
-/// requests overlay.html once at startup so this fetch is a cache hit.
+/// The window is created hidden and stays hidden until the page reports that its
+/// content is drawn; showing it earlier displays an empty window.
 #[tauri::command]
 fn overlay_show(
     app: AppHandle,
@@ -481,21 +486,25 @@ fn overlay_show(
     state: State<'_, Overlay>,
     request: OverlayRequest,
 ) -> Result<(), String> {
-    let label = modal_label(&request.id);
     let content = OverlayContent {
         css: request.css,
         class_name: request.class_name,
         html: request.html,
         border: request.border,
     };
-    state.modals.lock().map_err(|e| e.to_string())?.insert(
+    let label = {
+        let mut built = state.built.lock().map_err(|e| e.to_string())?;
+        *built += 1;
+        modal_label(&request.id, *built)
+    };
+    let was = state.modals.lock().map_err(|e| e.to_string())?.insert(
         request.id.clone(),
-        Modal { content, radius: request.radius },
+        Modal { content, radius: request.radius, label: label.clone() },
     );
 
     let top = inset(&window, &request.viewport)?;
-    if let Some(existing) = app.get_webview_window(&label) {
-        existing.close().map_err(|e| e.to_string())?;
+    if let Some(old) = was.and_then(|m| app.get_webview_window(&m.label)) {
+        old.close().map_err(|e| e.to_string())?;
     }
     // The id is passed in the url so the page can identify itself when it calls
     // back.
@@ -620,10 +629,15 @@ struct PlaceRequest {
 }
 
 #[tauri::command]
-fn overlay_place(app: AppHandle, window: Window, request: PlaceRequest) -> Result<(), String> {
+fn overlay_place(
+    app: AppHandle,
+    window: Window,
+    state: State<'_, Overlay>,
+    request: PlaceRequest,
+) -> Result<(), String> {
     let top = inset(&window, &request.viewport)?;
     let scale = window.scale_factor().map_err(|e| e.to_string())?;
-    if let Some(modal) = app.get_webview_window(&modal_label(&request.id)) {
+    if let Some(modal) = modal_window(&app, &state, &request.id) {
         let (ax, ay, aw, ah) = aligned(
             request.rect.x, request.rect.y + top,
             request.rect.w.max(1.0), request.rect.h.max(1.0), scale,
@@ -667,7 +681,7 @@ fn overlay_ready(
     state: State<'_, Overlay>,
     id: String,
 ) -> Result<(), String> {
-    let Some(existing) = app.get_webview_window(&modal_label(&id)) else {
+    let Some(existing) = modal_window(&app, &state, &id) else {
         return Ok(());
     };
     let Some(modal) = state.modals.lock().map_err(|e| e.to_string())?.get(&id).cloned() else {
@@ -682,9 +696,11 @@ fn overlay_ready(
         .map_err(|e| e.to_string())?;
     existing.show().map_err(|e| e.to_string())?;
     existing.set_focus().map_err(|e| e.to_string())?;
-    let parent = window.ns_window().map_err(|e| e.to_string())?;
-    let own = existing.ns_window().map_err(|e| e.to_string())?;
-    native::panelise(own, parent);
+    // 이 커맨드는 모달의 문서가 호출하므로 주입되는 창은 모달 자신이다. 앱의 창을
+    // 이름으로 찾아 그것을 main 으로 되돌린다.
+    if let Some(main) = app.get_webview_window("main") {
+        native::make_main(main.ns_window().map_err(|e| e.to_string())?);
+    }
     // A modal is a window of its own, so this app now holds one more. AppKit gives
     // no notification when a child window is attached, and attaching it is done
     // here, so it is announced here.
@@ -694,8 +710,8 @@ fn overlay_ready(
 
 #[tauri::command]
 fn overlay_hide(app: AppHandle, window: Window, state: State<'_, Overlay>, id: String) -> Result<(), String> {
-    state.modals.lock().map_err(|e| e.to_string())?.remove(&id);
-    if let Some(existing) = app.get_webview_window(&modal_label(&id)) {
+    let was = state.modals.lock().map_err(|e| e.to_string())?.remove(&id);
+    if let Some(existing) = was.and_then(|m| app.get_webview_window(&m.label)) {
         existing.close().map_err(|e| e.to_string())?;
     }
     window.set_focus().map_err(|e| e.to_string())?;

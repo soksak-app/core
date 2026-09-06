@@ -221,8 +221,8 @@ unsafe fn aligned_in_window(view: *mut objc2::runtime::AnyObject, rect: (f64, f6
     if window.is_null() {
         return NSRect::from(rect);
     }
-    // NSAlignAllEdgesInward is 0b1010 in the option bits AppKit defines.
-    msg_send![window, backingAlignedRect: NSRect::from(rect), options: 10usize]
+    // NSAlignAllEdgesInward is MinX|MinY|MaxX|MaxY, the low four option bits.
+    msg_send![window, backingAlignedRect: NSRect::from(rect), options: 15usize]
 }
 
 /// Puts the view above every sibling already in the content view.
@@ -447,7 +447,28 @@ pub fn panelise(ns_window: *mut std::ffi::c_void, parent: *mut std::ffi::c_void)
         // Auxiliary to the app's window, not another document of its own, so it
         // does not belong in the list of windows the app offers to switch between.
         let _: () = msg_send![window, setExcludedFromWindowsMenu: true];
-        let _: () = msg_send![parent, makeMainWindow];
+    }
+    #[cfg(target_os = "macos")]
+    make_main(parent);
+}
+
+/// Makes this window the main one.
+///
+/// A modal takes the keyboard so that its webview sets the cursor, and a window
+/// that is not key draws its title bar inactive. The app's window is made the
+/// main one so it keeps an active title bar while the modal holds the keyboard.
+#[allow(unused_variables)]
+pub fn make_main(ns_window: *mut std::ffi::c_void) {
+    #[cfg(target_os = "macos")]
+    unsafe {
+        use objc2::msg_send;
+        use objc2::runtime::AnyObject;
+
+        let window = ns_window as *mut AnyObject;
+        if window.is_null() {
+            return;
+        }
+        let _: () = msg_send![window, makeMainWindow];
     }
 }
 

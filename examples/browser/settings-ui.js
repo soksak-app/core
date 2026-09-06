@@ -281,6 +281,11 @@ export function drawSettings() {
   body.textContent = "";
   SECTIONS.find(([id]) => id === here)[2]();
   overlay.update(card);
+  // 내용이 바뀌면 카드의 크기도 바뀐다. 자리를 다시 알리지 않으면 뷰는 이전 크기를
+  // 유지하고 그 안의 카드가 늘어나거나 잘린다.
+  const rect = cardRect();
+  if (native) overlay.place(rect);
+  else standIn(true, rect);
 }
 
 /**
