@@ -49,17 +49,18 @@ rect is never inside out.
 The slot carries the corridor, so a px size is the drawn size: `width: 180`
 draws 180 at the plane's edge, between two cards, and at any `gap`.
 
-The slots always sum to the plane, and that is the rule a px size gives way to.
-It is honoured while some slot on the axis shares and the plane has the room.
+The slots always sum to the plane, and a px size is reduced to keep that true.
+It is drawn as declared while some slot on the axis shares and the plane has the
+room.
 When the plane does not, every px size is scaled down by one factor, so their
 proportions survive and the sharing slots keep a floor. When no slot on the axis
 shares, the px sizes are the only thing that can cover the plane, so they are
 scaled to it in both directions and the declared numbers become proportions:
-one card asking for 200 in a 1600 plane is drawn 1600, and two asking 200 and
+one card declaring 200 in a 1600 plane is drawn 1600, and two declaring 200 and
 300 are drawn 630 and 946. Read `rect(id)` for what a card is drawn at.
 
-A plane too small for what it holds cannot give every card its minimum. What
-gives is the card's width, not the gap beside it: a sharing slot stops at the
+A plane too small for what it holds cannot give every card its minimum. The
+card's width is reduced and the gap beside it is not: a sharing slot stops at the
 corridor it carries, the rest divide what is left, and the card that ran out of
 room is drawn with no width against its near edge. The corridor between any two
 neighbours is still exactly `gap`, and the plane is still covered exactly.
@@ -186,8 +187,8 @@ card reads the line at all.
 
 The view places them and decides nothing about how they look. `installTheme`
 puts a stylesheet in the document that does: the cursor for each axis, a grab
-area as wide as a finger with a hairline grip inside it, and the crossing part
-of a line drawn fainter than the rest.
+area `grabSize` wide with a thin grip inside it, and the crossing part of a line
+drawn fainter than the rest.
 
 ```js
 import { installTheme } from "soksak";
@@ -211,8 +212,8 @@ points them at those and changes nothing else. The tokens follow the view's
 ```
 
 Light and dark are the host's: it already changes those colours when its theme
-changes, and these change with them. Nothing here reads a host's token names or
-asks which mode is in effect.
+changes, and these change with them. Nothing here reads a host's token names or the
+mode in effect.
 
 `themeCSS()` returns the same stylesheet as text, for a host that puts it in a
 file of its own rather than in the document.
@@ -234,7 +235,8 @@ outside the card. Give the children `min-width: 0`.
 
 A drag changes the two slots that meet at the boundary and no others. Next to a
 card holding its slot at a fixed size it changes that size and the slot on the
-other side pays for it; anywhere else it moves the line and both sides follow.
+other side is reduced by the same amount; anywhere else it moves the line and
+both sides follow.
 
 The same rule settles a card that appears or disappears. A closing card's width,
 and the corridor it releases, go to the slot next to it; a card inserted at a
@@ -259,7 +261,7 @@ grid.centerBoundary("x", 1);
 A rail stands between panes and reaches from one side of the plane to the other.
 It cannot be made by splitting a card — that would give it the extent of the card
 it came from, and it would be a pane like any other. It goes in at a boundary no
-card spans over, and every card past it moves along.
+card spans over, and every card past it is shifted by its span.
 
 ```js
 grid.standings("x");            // the boundaries such a card could stand on
@@ -276,10 +278,10 @@ the cards it passes shift by its span, every other line keeps the coordinate it
 had, and no boundary on the other axis moves. Between interior boundaries no
 other card changes width at all.
 
-Landing on the plane's border is the one exception. A border charges no
-corridor, so the rail there costs half a gap less, and the card that was flush
-against the border now has the rail beside it and pays half a gap. Every card
-keeps its share of the plane; what moves is the corridor drawn next to it.
+Landing on the plane's border is the one exception. A border takes no corridor,
+so the rail there uses half a gap less, and the card that was flush against the
+border now has the rail beside it and gives up half a gap. Every card keeps its
+share of the plane; what moves is the corridor drawn next to it.
 
 ## Moving a card
 
@@ -289,7 +291,7 @@ changes the target's geometry, so the cut is measured after that, and a close
 that cannot happen leaves the whole move undone rather than half of it.
 
 ```js
-grid.canMove("terminal", "browser", "right");   // asking is not doing
+grid.canMove("terminal", "browser", "right");   // reports; changes nothing
 grid.move("terminal", "browser", "right");      // false, and unchanged, if refused
 ```
 
@@ -411,7 +413,7 @@ it — draws its border that far from where a rule ends, so the rule stops short
 that border. Only the host has that distance: the view receives an
 element, and an element's own padding does not move what is placed absolutely
 inside it. Only the ends that reach the plane bleed; a rule that stops against
-a card is left where it stops, because there the card is the wall.
+a card is left where it stops, because the card is the edge it reaches.
 
 It is writable on the view — `view.bleed = px` — because a host that lets a
 person change its gap changes this with it.

@@ -42,7 +42,7 @@ One file per role, and the imports run one way:
     host.js         real native surfaces and modals, when an application holds
                     the page. Absent in a browser, where the page simulates them
     observe.js      presses one element when the observation component asks
-    framework/      which runtime is holding this page, and how to speak to it
+    framework/      which runtime runs this page, and how it is called
     terminal.html   the page a terminal surface shows
     overlay.html    the page a [data-native-modal] view shows
 
@@ -165,7 +165,7 @@ over ms, out and back, that many times:
     observe: shaking done
 
 A boundary is named, not pointed at. A coordinate has to be recalculated whenever
-the window's size changes, and a press that misses moves nothing and says
+the window's size changes, and a press that misses moves nothing and reports
 nothing.
 
 The drag is performed by the page, which both applications run, so which boundary

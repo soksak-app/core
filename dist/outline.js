@@ -109,7 +109,7 @@ export function roundedPath(loop, radius) {
         d += `${i === 0 ? 'M' : 'L'}${(p.x - (inX / lenIn) * r).toFixed(2)} ${(p.y - (inY / lenIn) * r).toFixed(2)}`;
         if (r > 0.5) {
             d +=
-                `A${r.toFixed(2)} ${r.toFixed(2)} 0 0 ${turn > 0 ? 1 : 0} ` +
+                `A${r.toFixed(2)} ${r.toFixed(2)} 0 0 ${1} ` +
                     `${(p.x + (outX / lenOut) * r).toFixed(2)} ${(p.y + (outY / lenOut) * r).toFixed(2)}`;
         }
         else {

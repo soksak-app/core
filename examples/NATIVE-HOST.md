@@ -6,7 +6,7 @@ Draft. Korean translation: [`NATIVE-HOST.ko.md`](NATIVE-HOST.ko.md).
 contracts. This document states what they are, what is already shared, and what
 it would take to publish them as a Wails service and a Tauri plugin.
 
-## What the page asks for
+## What the page requires
 
 Three interfaces, all exported by `host.js`. In a plain browser each one is
 present and does nothing, and `native` is false.
