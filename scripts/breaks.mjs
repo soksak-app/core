@@ -773,9 +773,21 @@ export const BREAKS = [
     // Anchored to the rule that draws the grip, at the start of a line. The
     // `prefers-reduced-motion` block names the same selector indented, and the
     // shorter find patched that too — a site the suite does not watch, reported
-    // as caught on the strength of this one.
+    // as caught on the strength of this one. That site is `reduced-motion`.
     find: "\n.${prefix}-divider::after {",
     to: "\n.${prefix}-nothing::after {",
+  },
+  {
+    id: "reduced-motion",
+    what: "the grip goes on animating where the person asked for no motion",
+    file: "dist/theme.js",
+    find:
+      "@media (prefers-reduced-motion: reduce) {\n" +
+      "  .${prefix}-divider::after {\n" +
+      "    transition: none;\n" +
+      "  }\n" +
+      "}\n",
+    to: "",
   },
   {
     id: "in-order",

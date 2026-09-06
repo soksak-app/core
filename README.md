@@ -225,8 +225,15 @@ Light and dark are the host's: it already changes those colours when its theme
 changes, and these change with them. Nothing here reads a host's token names or the
 mode in effect.
 
+The grip's colour changes over 0.12s when a divider is hovered, focused or
+held. That transition is the sheet's only animation and no token sets it, so
+the sheet turns it off itself under `prefers-reduced-motion: reduce`. It is the
+one rule here that reads a setting, and that setting is the person's rather
+than the host's.
+
 `themeCSS()` returns the same stylesheet as text, for a host that puts it in a
-file of its own rather than in the document.
+file of its own rather than in the document. It carries that rule; a host that
+writes its own sheet from `themeTokens()` writes the rule itself.
 
 Dragging a divider moves the boundary. Double-clicking it (or Enter/Space when
 focused) centres it so the two cards beside it come out the same size. That

@@ -185,6 +185,32 @@ test("themeCSS names every token themeTokens reports", () => {
   assert.ok(!own.includes("--sp-"), "and the default prefix is gone");
 });
 
+test("the sheet turns its one animation off where no motion is asked for", () => {
+  // The grip's colour transition is the only animation the sheet declares, and
+  // no token sets it: themeTokens reports four colours and two sizes and no
+  // duration. So the sheet is the only thing that can turn it off, and a host
+  // that redirects every token still gets that rule.
+  for (const token of Object.values(themeTokens())) {
+    assert.ok(!/duration|transition|motion/i.test(token), `${token} is not a duration`);
+  }
+  for (const prefix of ["sp", "pane"]) {
+    const css = prefix === "sp" ? themeCSS() : themeCSS({ prefix });
+    assert.match(
+      css,
+      new RegExp(`\\.${prefix}-divider::after \\{[^}]*transition: background 0\\.12s;`),
+      `${prefix}: the grip's colour changes over time`,
+    );
+    assert.match(
+      css,
+      new RegExp(
+        `@media \\(prefers-reduced-motion: reduce\\) \\{\\s*` +
+          `\\.${prefix}-divider::after \\{\\s*transition: none;`,
+      ),
+      `${prefix}: and stops changing where no motion is asked for`,
+    );
+  }
+});
+
 test("two cards whose facing edges round either side of one hundredth still merge", () => {
   // The right edge of the first lands on 479.12499999999994 and the left edge of
   // the second, grown by pad, on 479.125: two values a rounding apart.
