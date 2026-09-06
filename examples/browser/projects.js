@@ -69,9 +69,11 @@ export function open({ root, color, layout }) {
   keep();
   const space = newSpace(1, layout);
   const project = {
-    // 이름은 사람이 정하기 전까지 번호다. 루트의 마지막 조각을 쓰면 서로 다른
-    // 루트가 같은 이름을 갖고, 그 이름이 무엇을 세는지도 알 수 없다.
-    id: issueId("project"), root, title: `PROJECT${projects.length + 1}`, color,
+    // 이름은 사람이 정하기 전까지 번호다. 목록의 길이로 세면 하나를 닫은 뒤 다음
+    // 프로젝트가 이미 있는 이름을 받는다.
+    id: issueId("project"), root, title: `PROJECT${++named}`, color,
+    // 이 프로젝트가 지금까지 발급한 스페이스 이름의 수.
+    named: 1,
     spaces: [space], activeSpaceId: space.id,
   };
   projects.push(project);
@@ -111,11 +113,14 @@ export function rename(id, { title, color }) {
   if (color !== undefined) found.color = color;
 }
 
+/* 지금까지 발급한 이름의 수. 목록의 길이가 아니라 이 값이 다음 번호를 정한다. */
+let named = 0;
+
 /** 활성 프로젝트에 스페이스를 추가하고 활성화한다. */
 export function addSpace(layout) {
   const project = active();
   keep();
-  const space = newSpace(project.spaces.length + 1, layout);
+  const space = newSpace(++project.named, layout);
   project.spaces.push(space);
   project.activeSpaceId = space.id;
   restore();

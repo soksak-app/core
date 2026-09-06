@@ -24,10 +24,10 @@
    적용은 값을 루트에 심는 것이다. 표면과 모달은 각자 다른 문서라 이 문서의
    스타일시트를 물려받지 못하므로, 호스트가 이 값들을 그대로 실어 보낸다.     */
 
+import { surfaces as host } from "./host.js";
+
 /* 고를 수 있는 폰트. 테마가 이 중 하나를 기본으로 지정하고 설정에서 바꾼다.
    설치되지 않은 이름은 목록의 다음 이름으로 넘어간다. */
-import { onTheme, surfaces as host } from "./host.js";
-
 export const FONTS = [
   { id: "mono-system", name: "시스템 고정폭",
     stack: "ui-monospace,SFMono-Regular,Menlo,monospace" },
@@ -223,8 +223,6 @@ const seam = () => (settings.gap === 0 ? "line" : "gap");
 /* 애플리케이션이 서비스하는 페이지는 별도 문서라 이 문서의 스타일시트를 상속하지
    않는다. 토큰 값을 전송하면 그쪽에서 자기 루트에 설정한다. */
 const pageTheme = () => ({ scheme: settings.mode, tokens: themeTokens() });
-
-onTheme(pageTheme);
 
 /**
  * 테마와 모드를 적용한다.

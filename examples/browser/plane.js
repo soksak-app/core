@@ -11,7 +11,8 @@ import { standIn } from "./compositor.js";
 import { native, onSurfaceInput, overlay, shapes } from "./host.js";
 import { issueId } from "./ids.js";
 
-const NEEDS = ["cards", "card", "insertAt", "moveTo", "standings", "moveBoundary", "zoneAt", "splitToward"];
+const NEEDS = ["cards", "card", "insertAt", "moveTo", "standings", "moveBoundary", "zoneAt",
+  "splitToward", "replace"];
 {
   const probe = new Soksak(undefined, { width: 100, height: 100 });
   const missing = NEEDS.filter((k) => typeof probe[k] === "undefined");
@@ -122,7 +123,7 @@ const tabsOf = (card) => card?.data?.tabs ?? [];
 const activeTab = (card) => tabsOf(card).find((t) => t.id === card.data.activeId) ?? tabsOf(card)[0];
 const focusedPlugin = () => activeTab(grid.card(focusedId))?.plugin ?? null;
 
-/** 제목 번호와 id 번호를 일치시킨다. 다르면 화면과 로그의 탭 식별자가 어긋난다. */
+/** 새 탭 하나. 번호는 화면에 보이는 이름일 뿐이고 id 는 ids.js 가 발급한다. */
 function newTab(kind) {
   const t = tab(kind, "");
   t.title = `${plugin(kind).mark} 탭 ${++named}`;
@@ -167,8 +168,8 @@ function createCard(card) {
   el.innerHTML = isPlace(card.id)
     ? '<header class="chrome"></header><div class="set"></div><footer class="status"></footer>'
     : '<header class="chrome"></header><div class="slot"></div><footer class="status"></footer>';
-  // 카드 객체를 클로저에 담지 않고 요소의 data-card-id 를 읽는다. 배치가 바뀌면
-  // 요소가 다른 카드에 재사용되므로 담아 둔 참조는 이전 id 를 반환한다.
+  // 카드 객체를 클로저에 담지 않고 요소의 data-card-id 를 읽는다. 스페이스를
+  // 바꾸면 같은 id 로 새 카드 객체가 만들어지므로, 담아 둔 참조는 없어진 객체다.
   el.addEventListener("pointerdown", (e) => {
     const id = el.dataset.cardId;
     if (!id || isPlace(id) || e.target.closest(".tab__x, .chrome__act")) return;
@@ -744,8 +745,10 @@ function standEdge(id, on, size, side) {
 
 function settle() {
   closePicker();
-  standEdge("left", value("left"), 190, "left");
-  standEdge("right", value("right"), 210, "right");
+  // 자리가 켜져 있고 그 자리에 세트가 걸려 있을 때만 선다. 걸지 않은 사이드바는
+  // 표시할 것이 없다.
+  standEdge("left", value("left") && !!standingSet("left"), 190, "left");
+  standEdge("right", value("right") && !!standingSet("right"), 210, "right");
   for (const p of plugins()) standRail(p.id);
   if (!grid.card(focusedId)) focusedId = grid.cards.find((c) => !isPlace(c.id))?.id ?? null;
   view.render();
@@ -762,6 +765,10 @@ function settle() {
  */
 const MARK_OUT = 1;
 
+
+/* 진행 중인 scrollend 대기. 다음 요청이 이전 대기를 취소한다. */
+const landing = new WeakMap();
+
 /**
  * 활성 탭을 탭 목록의 가운데로 스크롤한다.
  *
@@ -773,10 +780,6 @@ const MARK_OUT = 1;
  * 실행되지 않고 요청이 무시된다. 스크롤이 끝나면 scrollend 가 발생하므로, 그때
  * 도착 여부를 확인하고 미도달이면 즉시 이동시킨다.
  */
-
-/* 진행 중인 scrollend 대기. 다음 요청이 이전 대기를 취소한다. */
-const landing = new WeakMap();
-
 function centreTab(strip, activeId) {
   const active = strip.querySelector(".tab[data-active=true]");
   if (!active) { strip.scrollLeft = 0; return; }

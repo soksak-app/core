@@ -3,13 +3,11 @@
 // 메인 페이지와 표면·모달 페이지가 모두 이 애플리케이션의 문서다. 셋 다 같은 스킴에서
 // 로드되고, 같은 런타임을 import 하고, 같은 이벤트를 구독한다.
 //
-// 바인딩된 메서드를 「패키지 · 타입 · 이름」으로 호출한다. 패키지는 main 이고
-// surfaces.go 의 ServiceName() 이 같은 값을 반환한다.
+// 바인딩된 메서드를 「패키지 · 타입 · 이름」으로 호출한다. 이 서비스는 이름을
+// 지정하지 않으므로 Wails 가 패키지와 타입 이름을 쓴다 — main 의 Surfaces 다.
 //
 // 런타임은 /wails/runtime.js 의 ES 모듈이므로 script 태그가 아니라 import 로
 // 로드한다. import 는 비동기이므로 아래 두 인터페이스는 완료를 기다린 뒤 호출한다.
-
-export const name = "wailsv3";
 
 /** Wails 는 이 애플리케이션의 모든 문서를 이 스킴에서 로드한다. */
 export const present = () => location.protocol === "wails:";

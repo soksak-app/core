@@ -139,7 +139,6 @@ const tellInTurn = (name, payload) => {
 };
 
 let last = "";
-let announced = false;
 
 /**
  * 창 자체를 다루는 인터페이스. 애플리케이션이 없으면 null.
@@ -169,10 +168,6 @@ export const surfaces = native ? {
     theme: (values) => tellInTurn("setTheme", values),
 
     place(record) {
-      if (!announced) {
-        announced = true;
-        this.theme(readTheme());
-      }
       // 표면마다 읽지 않는다. 값은 테마가 정하고 표면마다 같으며, 읽을 때마다
       // 문서에 요소를 붙였다 떼고 스타일을 다시 계산하게 한다.
       const background = surfaceBackground();
@@ -234,14 +229,6 @@ let onInput = () => {};
 export function onSurfaceInput({ press, input }) {
   onPress = press;
   onInput = input;
-}
-
-/* 페이지가 그리는 테마. 애플리케이션이 서비스하는 문서들이 같은 값으로 그린다. */
-let readTheme = () => ({});
-
-/** 지금 그려진 테마를 읽는 함수를 등록한다. */
-export function onTheme(read) {
-  readTheme = read;
 }
 
 if (native) {

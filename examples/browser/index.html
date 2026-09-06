@@ -370,7 +370,9 @@ function openProject(from) {
     if (take && root) {
       projects.open({
         root,
-        color: TINTS[projects.all().length % TINTS.length],
+        // 목록의 길이로 고르면 하나를 닫은 뒤 다음 프로젝트가 이미 쓰인 색을
+        // 받는다. 열린 색을 피해 고른다.
+        color: TINTS.find((t) => !projects.all().some((p) => p.color === t)) ?? TINTS[0],
         layout: fresh(),
       });
     }
@@ -398,8 +400,6 @@ projects.open({
 });
 drawBars();
 
-/* 설정이 바뀌면 판과 크롬을 다시 그린다. 첫 프로젝트를 만든 뒤에 등록한다. 그 전에
-   호출되면 그릴 프로젝트가 없다. */
 /* ⚙ 의 값이 아닌 누름. 이 문서가 판을 소유하므로 여기서 수행한다. */
 onCommand((name) => {
   if (name !== "build") return;
@@ -412,6 +412,8 @@ onCommand((name) => {
    바꾼 값이 나타나지 않는다. */
 onKnobChange(() => settle());
 
+/* 설정이 바뀌면 판과 크롬을 다시 그린다. 첫 프로젝트를 만든 뒤에 등록한다. 그 전에
+   호출되면 그릴 프로젝트가 없다. */
 onSettingsChange(() => {
   const half = halfGap();
   setGap(half);

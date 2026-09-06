@@ -3,8 +3,6 @@
 // 커맨드를 이름으로 호출한다. Tauri 가 페이지 스크립트보다 먼저 인터페이스를
 // 주입하므로 대기가 필요 없다. 표면과 모달 페이지도 같은 인터페이스를 사용한다.
 
-export const name = "tauriv2";
-
 /** Tauri 가 주입하는 전역 객체의 이름으로 판별한다. */
 export const present = () => Boolean(window.__TAURI__);
 

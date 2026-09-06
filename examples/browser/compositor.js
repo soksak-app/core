@@ -111,10 +111,21 @@ export function publish(rects) {
       frame,
     });
   }
+  deliver(mine, snapshot);
+}
+
+/**
+ * 이 스냅샷을 커밋한다. 커밋 지연이 있으면 그만큼 늦춘다.
+ *
+ * 지연은 실제 애플리케이션에서 판이 그려진 뒤 표면이 따라오기까지의 시차를 만들어
+ * 본다. 늦춘 커밋은 앞선 커밋을 대신하므로 이전 것을 취소한다.
+ */
+function deliver(mine, snapshot) {
   clearTimeout(timer);
-  const deliver = () => commit(mine, snapshot, settled());
-  if (knobs.latency === 0) deliver();
-  else timer = setTimeout(deliver, knobs.latency);
+  const send = () => commit(mine, snapshot, settled());
+  if (knobs.latency === 0) return send();
+  timer = setTimeout(send, knobs.latency);
+  return undefined;
 }
 
 /**
@@ -149,7 +160,9 @@ export function publishAhead(rects) {
     });
   }
   if (seats.length === 0) return false;
-  return commit(++seq, seats, settled()) ?? true;
+  // 지연은 두 길에 같이 걸린다. 한쪽만 걸면 그 손잡이가 끄는 동안에는 아무 일도
+  // 하지 않고, 그 상태를 만들려고 있는 손잡이가 그 상태를 만들지 못한다.
+  return deliver(++seq, seats) ?? true;
 }
 
 /** 네이티브 상태를 쓰는 유일한 함수. 시퀀스가 낮은 스냅샷은 거부한다. */
