@@ -21,7 +21,8 @@ use std::sync::Mutex;
 use serde::Deserialize;
 use serde::Serialize;
 use tauri::{
-    webview::Color, Emitter, LogicalPosition, LogicalSize, Manager, State, WebviewBuilder, WebviewUrl, Window,
+    webview::Color, AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, State,
+    WebviewBuilder, WebviewUrl, WebviewWindowBuilder, Window,
 };
 
 /// One surface the page declares, in CSS pixels relative to the page viewport.
@@ -340,16 +341,20 @@ fn modal_label(id: &str) -> String {
 /// stopping the webview from painting its own background needs a private
 /// interface. So the view is not built at the moment it is wanted. Built here,
 /// every showing is of a view whose document is already drawn.
-/// Draws one modal element in a webview of its own.
+/// Draws one modal element in a window of its own.
 ///
-/// The view is built here and closed when the modal closes. A view added after
-/// the surface views sits above them, which is what puts the modal on top, so
-/// building it at the moment it is wanted needs no reordering afterwards.
+/// A window, not a webview beside the surfaces. A webview sets the cursor from
+/// its own document whenever the pointer moves over its frame, and the only thing
+/// it checks is that its window is the one under the pointer, not that it is the
+/// view on top. Two webviews stacked in one window both pass, so a covered point
+/// gets two cursors and whichever reply lands last wins. A separate window fails
+/// that check for the views below it.
 ///
 /// A webview shows white until its document is fetched and painted. The page
 /// requests overlay.html once at startup so this fetch is a cache hit.
 #[tauri::command]
 fn overlay_show(
+    app: AppHandle,
     window: Window,
     state: State<'_, Overlay>,
     request: OverlayRequest,
@@ -367,7 +372,7 @@ fn overlay_show(
     );
 
     let top = inset(&window, &request.viewport)?;
-    if let Some(existing) = window.get_webview(&label) {
+    if let Some(existing) = app.get_webview_window(&label) {
         existing.close().map_err(|e| e.to_string())?;
     }
     // The id is passed in the url so the page can identify itself when it calls
@@ -380,15 +385,33 @@ fn overlay_show(
         request.rect.x, request.rect.y + top,
         request.rect.w.max(1.0), request.rect.h.max(1.0), scale,
     );
-    window
-        .add_child(
-            WebviewBuilder::new(&label, WebviewUrl::App(url.into()))
-                .background_color(Color(r as u8, g as u8, b as u8, (a * 255.0) as u8)),
-            LogicalPosition::new(ax, ay),
-            LogicalSize::new(aw, ah),
-        )
+    let (sx, sy) = on_screen(&window, ax, ay)?;
+    let parent = window.ns_window().map_err(|e| e.to_string())?;
+    let modal = WebviewWindowBuilder::new(&app, &label, WebviewUrl::App(url.into()))
+        .decorations(false)
+        .resizable(false)
+        .visible(false)
+        .background_color(Color(r as u8, g as u8, b as u8, (a * 255.0) as u8))
+        .position(sx, sy)
+        .inner_size(aw, ah)
+        .parent_raw(parent)
+        .build()
         .map_err(|e| e.to_string())?;
+    // Tauri provides no non-opaque window without a private interface, so the
+    // window is configured directly. The clipped corners would render black.
+    let own = modal.ns_window().map_err(|e| e.to_string())?;
+    native::panelise(own, parent);
     Ok(())
+}
+
+/// Turns a point in the app window's own coordinates into one on the screen.
+fn on_screen(window: &Window, x: f64, y: f64) -> Result<(f64, f64), String> {
+    let scale = window.scale_factor().map_err(|e| e.to_string())?;
+    let at = window
+        .inner_position()
+        .map_err(|e| e.to_string())?
+        .to_logical::<f64>(scale);
+    Ok((at.x + x, at.y + y))
 }
 
 /// A rectangle the page draws above the surfaces.
@@ -469,16 +492,17 @@ struct PlaceRequest {
 }
 
 #[tauri::command]
-fn overlay_place(window: Window, request: PlaceRequest) -> Result<(), String> {
+fn overlay_place(app: AppHandle, window: Window, request: PlaceRequest) -> Result<(), String> {
     let top = inset(&window, &request.viewport)?;
     let scale = window.scale_factor().map_err(|e| e.to_string())?;
-    if let Some(view) = window.get_webview(&modal_label(&request.id)) {
+    if let Some(modal) = app.get_webview_window(&modal_label(&request.id)) {
         let (ax, ay, aw, ah) = aligned(
             request.rect.x, request.rect.y + top,
             request.rect.w.max(1.0), request.rect.h.max(1.0), scale,
         );
-        view.set_position(LogicalPosition::new(ax, ay)).map_err(|e| e.to_string())?;
-        view.set_size(LogicalSize::new(aw, ah)).map_err(|e| e.to_string())?;
+        let (sx, sy) = on_screen(&window, ax, ay)?;
+        modal.set_position(LogicalPosition::new(sx, sy)).map_err(|e| e.to_string())?;
+        modal.set_size(LogicalSize::new(aw, ah)).map_err(|e| e.to_string())?;
     }
     Ok(())
 }
@@ -495,40 +519,54 @@ fn overlay_content(state: State<'_, Overlay>, id: String) -> Result<OverlayConte
         .content)
 }
 
-/// Clips the view's corners and reveals it.
+/// Clips the modal's corners and reveals it.
 ///
 /// The page reports this once its content is on screen; showing it earlier
-/// displays an empty view.
+/// displays an empty window.
 ///
-/// The size is not set here. The main page measures the element and the view was
-/// created at that size, so a second measurement taken inside the view would be
-/// of the same element under a different constraint and the two would disagree.
-/// The clip needs the view's size, which is read off the view.
+/// The modal takes the keyboard, because a webview sets the cursor only while its
+/// window holds it. The app's window is made the main one again so it keeps its
+/// active title bar.
+///
+/// The size is not set here. The main page measures the element and the window was
+/// created at that size, so a second measurement taken inside it would be of the
+/// same element under a different constraint and the two would disagree. The clip
+/// needs the size, which is read off the window.
 #[tauri::command]
-fn overlay_ready(window: Window, state: State<'_, Overlay>, id: String) -> Result<(), String> {
-    let Some(existing) = window.get_webview(&modal_label(&id)) else {
+fn overlay_ready(
+    app: AppHandle,
+    window: Window,
+    state: State<'_, Overlay>,
+    id: String,
+) -> Result<(), String> {
+    let Some(existing) = app.get_webview_window(&modal_label(&id)) else {
         return Ok(());
     };
     let Some(modal) = state.modals.lock().map_err(|e| e.to_string())?.get(&id).cloned() else {
         return Ok(());
     };
     let scale = window.scale_factor().map_err(|e| e.to_string())?;
-    let size = existing.size().map_err(|e| e.to_string())?.to_logical::<f64>(scale);
+    let size = existing.inner_size().map_err(|e| e.to_string())?.to_logical::<f64>(scale);
     let radius = modal.radius;
     let (w, h) = (size.width, size.height);
     existing
         .with_webview(move |platform| native::corners(&platform, radius, w, h, scale))
         .map_err(|e| e.to_string())?;
-
+    existing.show().map_err(|e| e.to_string())?;
+    existing.set_focus().map_err(|e| e.to_string())?;
+    let parent = window.ns_window().map_err(|e| e.to_string())?;
+    let own = existing.ns_window().map_err(|e| e.to_string())?;
+    native::panelise(own, parent);
     Ok(())
 }
 
 #[tauri::command]
-fn overlay_hide(window: Window, state: State<'_, Overlay>, id: String) -> Result<(), String> {
+fn overlay_hide(app: AppHandle, window: Window, state: State<'_, Overlay>, id: String) -> Result<(), String> {
     state.modals.lock().map_err(|e| e.to_string())?.remove(&id);
-    if let Some(existing) = window.get_webview(&modal_label(&id)) {
+    if let Some(existing) = app.get_webview_window(&modal_label(&id)) {
         existing.close().map_err(|e| e.to_string())?;
     }
+    window.set_focus().map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -547,7 +585,7 @@ fn overlay_pick(window: Window, key: String, value: String) -> Result<(), String
 /// the view would make it blink.
 #[tauri::command]
 fn overlay_update(
-    window: Window,
+    app: AppHandle,
     overlay: State<'_, Overlay>,
     request: OverlayRequest,
 ) -> Result<(), String> {
@@ -562,8 +600,8 @@ fn overlay_update(
         let Some(modal) = modals.get_mut(&request.id) else { return Ok(()) };
         modal.content = content.clone();
     }
-    if let Some(view) = window.get_webview(&modal_label(&request.id)) {
-        view.emit("overlay-content", content).map_err(|e| e.to_string())?;
+    if let Some(modal) = app.get_webview_window(&modal_label(&request.id)) {
+        modal.emit("overlay-content", content).map_err(|e| e.to_string())?;
     }
     Ok(())
 }

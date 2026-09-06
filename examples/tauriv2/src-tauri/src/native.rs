@@ -344,3 +344,36 @@ pub fn view_id(webview: &PlatformWebview) -> usize {
         0
     }
 }
+
+/// Makes a window the modal's: not opaque, with a shadow, and leaves the app's
+/// window as the main one.
+///
+/// Not opaque so the clipped corners show what is behind them rather than black.
+/// The main window is set back because a modal takes the keyboard - a webview
+/// sets the cursor only while its window holds it - and a window that takes the
+/// keyboard would otherwise also take the active title bar from the app's own.
+///
+/// Only macOS is written. On Windows the equivalent is a layered child window and
+/// on Linux a GTK popup; neither is written here.
+#[allow(unused_variables)]
+pub fn panelise(ns_window: *mut std::ffi::c_void, parent: *mut std::ffi::c_void) {
+    #[cfg(target_os = "macos")]
+    unsafe {
+        use objc2::msg_send;
+        use objc2::runtime::{AnyClass, AnyObject};
+
+        let window = ns_window as *mut AnyObject;
+        let parent = parent as *mut AnyObject;
+        if window.is_null() || parent.is_null() {
+            return;
+        }
+        let Some(colour) = AnyClass::get(c"NSColor") else {
+            return;
+        };
+        let clear: *mut AnyObject = msg_send![colour, clearColor];
+        let _: () = msg_send![window, setOpaque: false];
+        let _: () = msg_send![window, setBackgroundColor: clear];
+        let _: () = msg_send![window, setHasShadow: true];
+        let _: () = msg_send![parent, makeMainWindow];
+    }
+}
