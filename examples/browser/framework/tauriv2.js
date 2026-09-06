@@ -69,10 +69,11 @@ export const page = () => {
     modal: {
       content(id, fn) {
         invoke("overlay_content", { id }).then(fn);
-        listen("overlay-content", (e) => fn(e.payload));
+        // 이벤트는 모든 페이지가 받는다. 자기 모달의 것만 취한다.
+        listen("modal-content", (e) => { if (e.payload.id === id) fn(e.payload.content); });
       },
       ready: (id) => invoke("overlay_ready", { id }),
-      answer: (id, key, value) => invoke("overlay_pick", { key, value }),
+      answer: (id, key, value) => invoke("overlay_pick", { id, key, value }),
     },
   };
 };

@@ -350,7 +350,7 @@ struct Rect {
 }
 
 /// What the overlay webview requests after loading.
-#[derive(Debug, Clone, Default, Serialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct OverlayContent {
     css: String,
@@ -656,26 +656,34 @@ fn overlay_pick(window: Window, key: String, value: String) -> Result<(), String
 /// controls change the page's state is redrawn while it is open, and rebuilding
 /// the view would make it blink.
 #[tauri::command]
-fn overlay_update(
-    app: AppHandle,
-    overlay: State<'_, Overlay>,
-    request: OverlayRequest,
-) -> Result<(), String> {
-    let content = OverlayContent {
-        css: request.css,
-        class_name: request.class_name,
-        html: request.html,
-        border: request.border,
-    };
+fn overlay_update(app: AppHandle, overlay: State<'_, Overlay>, request: UpdateRequest) -> Result<(), String> {
+    let content = request.content;
     {
         let mut modals = overlay.modals.lock().map_err(|e| e.to_string())?;
         let Some(modal) = modals.get_mut(&request.id) else { return Ok(()) };
         modal.content = content.clone();
     }
-    if let Some(modal) = app.get_webview_window(&modal_label(&request.id)) {
-        modal.emit("overlay-content", content).map_err(|e| e.to_string())?;
-    }
-    Ok(())
+    // Every page receives the event, so it carries the id and each modal's page
+    // keeps the one addressed to it.
+    app.emit("modal-content", ModalContentEvent { id: request.id, content })
+        .map_err(|e| e.to_string())
+}
+
+/// New content for an open modal. It carries what the page measured of the
+/// element and nothing else: a modal that is already open keeps its position and
+/// size.
+#[derive(Debug, Deserialize)]
+struct UpdateRequest {
+    id: String,
+    #[serde(flatten)]
+    content: OverlayContent,
+}
+
+/// New content for one modal, as its page receives it.
+#[derive(Clone, serde::Serialize)]
+struct ModalContentEvent {
+    id: String,
+    content: OverlayContent,
 }
 
 /// What a modal's page reports: which control, and what it now holds. Named

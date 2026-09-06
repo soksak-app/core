@@ -85,6 +85,14 @@ type OverlayContent struct {
 	Border    string `json:"border"`
 }
 
+// UpdateRequest is new content for an open modal. It carries what the page
+// measured of the element and nothing else: a modal that is already open keeps
+// its position and size.
+type UpdateRequest struct {
+	ID string `json:"id"`
+	OverlayContent
+}
+
 type modal struct {
 	// The modal is a window of this application, attached over the point the page
 	// put it at.
@@ -329,16 +337,18 @@ func (s *Surfaces) OverlayHide(id string) error {
 
 	live.window.Detach()
 	live.window.Close()
+	// The modal took the keyboard when it opened, so the page gets it back.
+	if win, ok := mainWindow(); ok {
+		win.Focus()
+	}
 	application.Get().Event.Emit("windows-changed")
 	return nil
 }
 
 // OverlayUpdate replaces an open modal's content without rebuilding its view.
 // A modal whose controls change the page's state is redrawn while it is open.
-func (s *Surfaces) OverlayUpdate(req OverlayRequest) error {
-	content := OverlayContent{
-		CSS: req.CSS, ClassName: req.ClassName, HTML: req.HTML, Border: req.Border,
-	}
+func (s *Surfaces) OverlayUpdate(req UpdateRequest) error {
+	content := req.OverlayContent
 	s.mu.Lock()
 	live, ok := s.modals[req.ID]
 	if ok {
