@@ -3,11 +3,16 @@ set -eu
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 [ "$#" -eq 0 ] || { echo 'BUILD_DECLARATION_INVALID: usage: check-build-environment.sh' >&2; exit 78; }
+# Each fact has one owner. .node-version holds the exact Node version, the
+# packageManager field the exact pnpm version, and pnpm-lock.yaml the
+# dependencies. package.json's engines.node states the range a consumer must
+# satisfy, which is a different fact and is enforced by pnpm at install time.
 node_expected=$(awk 'NF { value=$0; count++ } END { if (count == 1) print value; else exit 1 }' "$root/.node-version" 2>/dev/null || true)
-node_declared=$(node -e 'const v=require(process.argv[1]);process.stdout.write(v.engines?.node??"")' "$root/package.json" 2>/dev/null || true)
 package_manager=$(node -e 'const v=require(process.argv[1]);process.stdout.write(v.packageManager??"")' "$root/package.json" 2>/dev/null || true)
 case "$package_manager" in pnpm@*) pnpm_expected=${package_manager#pnpm@} ;; *) pnpm_expected= ;; esac
-[ -n "$node_expected" ] && [ "$node_expected" = "$node_declared" ] && [ -n "$pnpm_expected" ] && [ -f "$root/pnpm-lock.yaml" ] || { echo 'BUILD_DECLARATION_INVALID: Node, pnpm and lock owners must be exact' >&2; exit 78; }
+[ -n "$node_expected" ] || { echo 'BUILD_DECLARATION_INVALID: .node-version must hold one Node version' >&2; exit 78; }
+[ -n "$pnpm_expected" ] || { echo 'BUILD_DECLARATION_INVALID: package.json packageManager must name one pnpm version' >&2; exit 78; }
+[ -f "$root/pnpm-lock.yaml" ] || { echo 'BUILD_DECLARATION_INVALID: pnpm-lock.yaml is missing' >&2; exit 78; }
 case "$(uname -s)-$(uname -m)" in
   Darwin-arm64) platform=darwin; arch=arm64 ;;
   Darwin-x86_64) if [ "$(sysctl -n hw.optional.arm64 2>/dev/null || true)" = 1 ]; then platform=darwin; arch=arm64; else platform=darwin; arch=x64; fi ;;
