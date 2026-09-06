@@ -368,8 +368,18 @@ function closeTab(cardId, tabId) {
 
 let tabDrag = null;
 
+/* 카드 보더의 두께. 머리와 발은 보더 안쪽의 행이고 zoneAt 은 카드의 rect 로 재는데
+   그 rect 는 보더를 포함하므로, 보더만큼 더해야 구획의 경계가 그려진 머리의 끝에
+   선다. 이음새에서는 보더가 0 이므로 값을 적지 않고 그려진 카드에서 잰다. */
+const cardBorder = () => {
+  const el = plane.querySelector(".card");
+  return el ? parseFloat(getComputedStyle(el).borderTopWidth) || 0 : 0;
+};
+
 function beginTabDrag(e, cardId, tabId) {
   e.preventDefault();
+  // 보더는 드래그 한 번 동안 바뀌지 않으므로 시작할 때 한 번 잰다.
+  const edge = cardBorder();
   tabDrag = { cardId, tabId, from: { x: e.clientX, y: e.clientY }, moved: false, hit: null };
   const el = e.currentTarget;
   el.setPointerCapture(e.pointerId);
@@ -383,7 +393,7 @@ function beginTabDrag(e, cardId, tabId) {
     const host = plane.getBoundingClientRect();
     const only = tabsOf(grid.card(tabDrag.cardId)).length === 1 ? tabDrag.cardId : undefined;
     tabDrag.hit = grid.zoneAt(ev.clientX - host.left, ev.clientY - host.top,
-      { headerPx: HEADER, footerPx: FOOTER, centreOnly: only });
+      { headerPx: HEADER + edge, footerPx: FOOTER + edge, centreOnly: only });
     showDrop(tabDrag.hit);
   };
   const onUp = (ev) => {
