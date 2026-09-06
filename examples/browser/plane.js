@@ -404,7 +404,8 @@ function beginTabDrag(e, cardId, tabId) {
     const only = tabsOf(grid.card(tabDrag.cardId)).length === 1 ? tabDrag.cardId : undefined;
     tabDrag.hit = grid.zoneAt(ev.clientX - host.left, ev.clientY - host.top,
       { headerPx: band.headerPx, footerPx: band.footerPx, centreOnly: only });
-    showDrop(tabDrag.hit);
+    // 구획이 없는 드롭은 놓아도 배치가 거절한다. 그 자리를 잡지 않는다.
+    if (!showDrop(tabDrag.cardId, tabDrag.hit)) tabDrag.hit = null;
   };
   const onUp = (ev) => {
     if (!tabDrag) return;
@@ -577,14 +578,35 @@ function splitWith(cardId, axis, plugin) {
    갱신한다. 매 프레임 다시 만들면 깜빡인다. */
 let dropShown = false;
 
-function showDrop(hit) {
-  if (!hit || isPlace(hit.id)) return hideDrop();
-  const r = grid.rect(hit.id);
-  const half = { x: r.x, y: r.y, w: r.w, h: r.h };
-  if (hit.zone === "left") half.w = r.w / 2;
-  if (hit.zone === "right") { half.x = r.x + r.w / 2; half.w = r.w / 2; }
-  if (hit.zone === "top") half.h = r.h / 2;
-  if (hit.zone === "bottom") { half.y = r.y + r.h / 2; half.h = r.h / 2; }
+/**
+ * 이 드롭이 낳는 카드의 사각형. 배치가 그 연산을 거절하면 undefined 를 반환한다.
+ *
+ * 판의 사본에서 그 연산을 수행하고 결과를 읽는다. 사본이므로 살아 있는 판은 바뀌지
+ * 않는다. 대상 카드의 절반을 계산하면 그려지는 자리와 다르다: 잘린 두 쪽은 사이의
+ * 통로를 나눠 가지므로 각각 rect 의 절반이 아니고, 이동은 먼저 닫고 그 뒤에 자르므로
+ * 대상의 크기가 자르기 전에 달라진다.
+ */
+function dropRect(fromId, hit) {
+  const copy = new Soksak(grid.toJSON(),
+    { gap: grid.gap, minSize: grid.minSize, width: grid.width, height: grid.height });
+  if (hit.zone === "centre") return copy.rect(hit.id);
+  // T5 — 탭이 하나뿐인 카드는 카드째 이동한다.
+  if (tabsOf(grid.card(fromId)).length === 1) {
+    return copy.move(fromId, hit.id, hit.zone) ? copy.rect(fromId) : undefined;
+  }
+  const born = copy.splitToward(hit.id, hit.zone, {});
+  return born === null ? undefined : copy.rect(born);
+}
+
+/**
+ * 드롭 미리보기를 그리고 그린 사각형을 반환한다. 그릴 것이 없으면 null 이다.
+ *
+ * 배치가 거절하는 드롭에는 낳을 자리가 없으므로 그리지 않는다. 그리면 놓아도 아무
+ * 일도 일어나지 않는 자리를 자리라고 표시한다.
+ */
+function showDrop(fromId, hit) {
+  const half = hit && !isPlace(hit.id) ? dropRect(fromId, hit) : undefined;
+  if (!half) { hideDrop(); return null; }
   // 미리보기는 표면 위에 그려야 한다. 호스트가 있으면 네이티브 도형으로 그린다 —
   // 채움이 반투명이라 웹뷰로는 표면 위에 합성되지 않는다. 모양은 이 문서의 CSS 가
   // 정하고 그 계산값을 그대로 보낸다.
@@ -597,11 +619,12 @@ function showDrop(hit) {
       line: css.borderTopColor,
     });
     dropShown = true;
-    return;
+    return half;
   }
   dropEl.hidden = false;
   dropEl.style.left = `${half.x}px`; dropEl.style.top = `${half.y}px`;
   dropEl.style.width = `${half.w}px`; dropEl.style.height = `${half.h}px`;
+  return half;
 }
 
 /** 미리보기를 지운다. 호스트가 그리고 있으면 그 도형도 없앤다. */
