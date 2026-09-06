@@ -48,13 +48,6 @@ type SyncRequest struct {
 	Surfaces []Surface `json:"surfaces"`
 }
 
-// Viewport is the page's own height. The page's view starts at the window content
-// view's origin, so the height alone converts a rect measured from the page's top
-// left into the bottom-left frame AppKit expects.
-type Viewport struct {
-	H float64 `json:"h"`
-}
-
 // The page's theme, forwarded to the pages this host serves.
 type Theme struct {
 	Scheme string            `json:"scheme"`
@@ -247,7 +240,6 @@ func (s *Surfaces) OverlayShow(req OverlayRequest) (Rect, error) {
 // a webview cannot do that, because WebKit paints its own opaque background.
 type ShapeRequest struct {
 	ID        string     `json:"id"`
-	Viewport  Viewport   `json:"viewport"`
 	Rect      Rect       `json:"rect"`
 	Radius    float64    `json:"radius"`
 	LineWidth float64    `json:"lineWidth"`
@@ -261,7 +253,7 @@ func (s *Surfaces) SetShape(req ShapeRequest) error {
 	if !ok {
 		return errNoWindow
 	}
-	x, y := req.Rect.X, up(req.Viewport, req.Rect.Y, max1(req.Rect.H))
+	x, y := req.Rect.X, req.Rect.Y
 	w, h := max1(req.Rect.W), max1(req.Rect.H)
 	// 도형은 뷰이고 뷰는 주 스레드에서만 다룬다. 이 맵도 그렇게 다루면 잠금이 필요
 	// 없고, 주 스레드가 잠금을 기다리는 일도 없다.
@@ -462,8 +454,6 @@ func (s *Surfaces) resizing(id string, view *application.Webview, live bool) {
 }
 
 // up converts a top-left y to the bottom-left y AppKit uses.
-func up(viewport Viewport, y, h float64) float64 { return viewport.H - y - h }
-
 // press reports whether the view is a surface and emits its id. The page decides
 // what the press means.
 func (s *Surfaces) press(view uintptr) bool {

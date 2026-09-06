@@ -25,6 +25,12 @@ present and does nothing, and `native` is false.
     set(id, rect, style) frame, corner radius, line width, fill and line colour
     clear(id)
 
+`chrome` — the window itself. Neither window has a frame, so the application
+draws the buttons and marks what drags it.
+
+    draggable(el)            dragging this element moves the window
+    close(), minimise(), toggleMaximise()
+
 `overlay` — one `[data-native-modal]` element, drawn by a webview above the
 surfaces.
 

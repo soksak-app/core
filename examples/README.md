@@ -41,7 +41,8 @@ One file per role, and the imports run one way:
     verify.js       reads the plane and the compositor, and reports the result
     host.js         real native surfaces and modals, when an application holds
                     the page. Absent in a browser, where the page simulates them
-    observe.js      presses one element when the observation component asks
+    observe.js      presses one element, and drags one boundary, when the
+                    observation component asks
     framework/      which runtime runs this page, and how it is called
     terminal.html   the page a terminal surface shows
     overlay.html    the page a [data-native-modal] view shows
@@ -92,6 +93,7 @@ the two runtimes is how a page reaches its application.
 `framework/` holds that difference, one file per runtime:
 
     framework/index.js      picks one and exports what the rest imports
+    theme.js        applies the theme to a document this application serves
     framework/tauriv2.js    invoke / listen, and Tauri's own document urls
     framework/wailsv3.js    the Wails bindings and its runtime
     framework/webview.js    no application: a plain browser, and no host
@@ -118,12 +120,19 @@ copy first:
 The binaries land in `examples/tauriv2/src-tauri/target/` and
 `examples/wailsv3/bin/`.
 
-Both windows give the page 1200×760. The two numbers in the two configurations
-differ by the height of the title bar, because Wails takes the content height and
-Tauri takes the window height. The window must also fit the display: a window
-larger than the space available is resized to fit, and the two frameworks do not
-resize it the same way, so the page ends up a pixel different in each.
-`examples/test/hosts.test.mjs` fails when that happens.
+Neither window has a frame. The two frameworks draw one differently — one
+measures its height as the content and the other as the whole window, one can
+hide the window's own buttons and the other cannot — so the page would start a
+title bar's height apart in the two. Without a frame both configurations carry
+the same numbers and mean the same thing, and the page receives the whole window:
+1200×760.
+
+The application draws the window's buttons and marks what drags the window. The
+page asks its runtime for both through `framework/`, and in a browser there is no
+window, so neither appears. The window must fit the display: a larger one is
+resized to fit, and the two frameworks do not resize it the same way, so the page
+would end up a pixel different in each. `examples/test/hosts.test.mjs` fails when
+that happens.
 
 ### Watching what is drawn
 

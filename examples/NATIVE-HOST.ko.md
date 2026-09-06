@@ -24,6 +24,12 @@
     set(id, rect, style) 프레임, 모서리 반경, 선 두께, 채움과 선의 색
     clear(id)
 
+`chrome` — 창 자체. 두 창 모두 프레임이 없으므로 단추와 끄는 자리를 애플리케이션이
+그린다.
+
+    draggable(el)            이 요소를 끌면 창이 움직인다
+    close(), minimise(), toggleMaximise()
+
 `overlay` — `[data-native-modal]` 요소 하나. 표면 위의 웹뷰가 그린다.
 
     show(el, rect, onPick)   요소의 클래스, 마크업, 스타일시트

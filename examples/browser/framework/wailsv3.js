@@ -48,6 +48,15 @@ export const host = () => ({
   on: listen,
   // 이 애플리케이션이 서비스하는 문서의 경로. 표면도 같은 자산 서버에서 로드된다.
   page: (path) => `/${path}`,
+  // 창에 프레임이 없으므로 끄는 자리를 이 문서가 지정한다.
+  draggable(el) {
+    el.style.setProperty("--wails-draggable", "drag");
+  },
+  window: {
+    close: () => runtime().then((r) => r.Window.Close()),
+    minimise: () => runtime().then((r) => r.Window.Minimise()),
+    toggleMaximise: () => runtime().then((r) => r.Window.ToggleMaximise()),
+  },
 });
 
 export const page = () => ({

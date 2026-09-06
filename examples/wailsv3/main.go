@@ -38,13 +38,15 @@ func main() {
 	app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:             "main",
 		Title:            "soksak / Wails v3",
-		// 페이지가 받는 크기다. Wails 의 Height 는 콘텐츠 높이이고 Tauri 의
-		// tauri.conf.json 은 제목 표시줄을 포함한 창 높이이므로, 두 설정의 숫자는
-		// 제목 표시줄만큼 다르고 페이지가 받는 값은 같다. 이 창은 화면에 들어가는
+		// 페이지가 받는 크기다. 창에 제목 표시줄이 없으므로 두 애플리케이션의
+		// 설정이 같은 숫자를 갖고 같은 것을 뜻한다. 이 창은 화면에 들어가는
 		// 크기여야 한다. 들어가지 않으면 창이 줄어들고, 두 프레임워크가 줄이는
 		// 방식이 달라 페이지 크기가 어긋난다.
 		Width:            1200,
 		Height:           760,
+		// 창의 장식을 이 애플리케이션이 그린다. 제목 표시줄이 없으므로 두 설정의
+		// 숫자가 같은 것을 뜻하고, 페이지가 창 전체를 받는다.
+		Frameless: true,
 		URL:              "/",
 		DevToolsEnabled:  true,
 		BackgroundColour: application.NewRGB(16, 17, 23),

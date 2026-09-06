@@ -141,6 +141,19 @@ const tellInTurn = (name, payload) => {
 let last = "";
 let announced = false;
 
+/**
+ * 창 자체를 다루는 인터페이스. 애플리케이션이 없으면 null.
+ *
+ * 창에는 프레임이 없으므로 단추와 끄는 자리를 이 페이지가 그린다. 두 애플리케이션이
+ * 프레임을 그리는 방법이 서로 달라, 그것을 쓰면 페이지가 받는 크기부터 달라진다.
+ */
+export const chrome = native ? {
+  draggable: (el) => bridge.draggable(el),
+  close: () => bridge.window.close(),
+  minimise: () => bridge.window.minimise(),
+  toggleMaximise: () => bridge.window.toggleMaximise(),
+} : null;
+
 /** 표면 인터페이스. 애플리케이션이 없으면 아무 일도 하지 않는다. */
 export const surfaces = native ? {
     /* 애플리케이션이 그리는 플러그인 종류. 표면을 가진 플러그인은 모두 여기서
@@ -180,7 +193,6 @@ export const surfaces = native ? {
       // place 는 렌더마다 호출되고 divider 드래그 중에는 매 프레임 호출된다.
       // 직전과 같은 요청은 전송하지 않는다.
       const request = {
-        viewport: { h: window.innerHeight },
         // 마지막 갱신인지, 갱신이 이어지는 중인지. 이어지는 동안 뷰가 커지면
         // 아직 렌더링되지 않은 영역이 흰색으로 보인다.
         settled: record.settled !== false,
@@ -252,7 +264,6 @@ export const shapes = native ? {
     set(id, rect, style) {
       tellInTurn("setShape", {
         id,
-        viewport: { h: window.innerHeight },
         rect: toPage(rect),
         radius: style.radius,
         lineWidth: style.lineWidth,
@@ -294,7 +305,6 @@ export const overlay = native ? {
       tellInTurn("overlayShow", {
         id: shown,
         title: name,
-        viewport: { h: window.innerHeight },
         rect: toPage(rect),
         ...drawing(el),
         radius: parseFloat(style.borderTopLeftRadius) || 0,
@@ -305,7 +315,7 @@ export const overlay = native ? {
     /** 열려 있는 모달 뷰의 위치를 갱신한다. 위치는 페이지가 결정한다. */
     place(rect) {
       if (!shown) return;
-      tellInTurn("overlayPlace", { id: shown, viewport: { h: window.innerHeight }, rect: toPage(rect) });
+      tellInTurn("overlayPlace", { id: shown, rect: toPage(rect) });
     },
 
     /** 열려 있는 모달 뷰의 내용을 교체한다. 뷰를 다시 만들면 깜빡인다. */

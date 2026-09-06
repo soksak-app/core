@@ -50,16 +50,8 @@ struct Surface {
     dim: bool,
 }
 
-/// The page's own height. Everything else the page sends is already in the
-/// coordinates a child webview is placed in; this is the one difference.
-#[derive(Debug, Deserialize)]
-struct Viewport {
-    h: f64,
-}
-
 #[derive(Debug, Deserialize)]
 struct SyncRequest {
-    viewport: Viewport,
     /// Whether this is the page's final say, or one of a run still going. A run
     /// is a live resize: WebKit holds what it has drawn until the run ends,
     /// rather than showing the white it has not drawn yet.
@@ -89,18 +81,6 @@ fn label_for(id: &str) -> String {
 /// height the page reports is the only number involved — no platform constant,
 /// and no guess about which chrome the window happens to have.
 ///
-/// Wails needs none of this: there a child view is added to the content view
-/// the page's own view already sits in, so the two origins are the same.
-fn inset(window: &Window, viewport: &Viewport) -> Result<f64, String> {
-    let scale = window.scale_factor().map_err(|e| e.to_string())?;
-    let height = window
-        .inner_size()
-        .map_err(|e| e.to_string())?
-        .to_logical::<f64>(scale)
-        .height;
-    Ok((height - viewport.h).max(0.0))
-}
-
 /// Snaps a logical rect inward to the display's pixel grid.
 ///
 /// A view placed on a fractional logical coordinate is rounded when it is drawn,
@@ -136,7 +116,6 @@ fn watch_presses(
     window: &Window,
     views: &State<'_, Views>,
     watching: &State<'_, Watching>,
-    page: &State<'_, Page>,
 ) -> Result<(), String> {
     let mut started = watching.0.lock().map_err(|e| e.to_string())?;
     if *started {
@@ -148,7 +127,6 @@ fn watch_presses(
         let named = views.0.clone();
         let host = window.clone();
         let pointing = window.clone();
-        let seen = page.0.clone();
         let handle = window.ns_window().map_err(|e| e.to_string())?;
         native::watch_mouse(
             handle,
@@ -161,16 +139,9 @@ fn watch_presses(
                 true
             },
             move |phase, x, y| {
-                // The point arrives measured from the content view's top. The
-                // page starts below the inset, so the page's y is that much less.
-                let Ok(height) = seen.lock() else { return };
-                let inset = match pointing.inner_size().and_then(|s| {
-                    pointing.scale_factor().map(|f| s.to_logical::<f64>(f).height)
-                }) {
-                    Ok(window_height) => (window_height - *height).max(0.0),
-                    Err(_) => return,
-                };
-                let _ = pointing.emit("surface-input", InputStep { phase, x, y: y - inset });
+                // The window has no frame, so the page is the content view and
+                // the point is already in the page's coordinates.
+                let _ = pointing.emit("surface-input", InputStep { phase, x, y });
             },
         );
     }
@@ -190,11 +161,6 @@ pub struct InputStep {
     pub y: f64,
 }
 
-/// The height of the page's own viewport, as the page last reported it. The
-/// monitor needs it to place a point in the page's coordinates.
-#[derive(Default)]
-struct Page(std::sync::Arc<std::sync::Mutex<f64>>);
-
 #[tauri::command]
 fn sync_surfaces(
     window: Window,
@@ -203,7 +169,6 @@ fn sync_surfaces(
     watching: State<'_, Watching>,
     resizing: State<'_, Resizing>,
     running: State<'_, Running>,
-    page: State<'_, Page>,
     request: SyncRequest,
 ) -> Result<Vec<Placement>, String> {
     announce_run(&window, &running, !request.settled)?;
@@ -215,13 +180,7 @@ fn sync_surfaces(
             window.emit("page-ready", ()).map_err(|e| e.to_string())?;
         }
     }
-    // The monitor places a point in the page's coordinates, so it needs the
-    // page's height. The page reports it on every commit.
-    if let Ok(mut height) = page.0.lock() {
-        *height = request.viewport.h;
-    }
-    watch_presses(&window, &views, &watching, &page)?;
-    let top = inset(&window, &request.viewport)?;
+    watch_presses(&window, &views, &watching)?;
     let scale = window.scale_factor().map_err(|e| e.to_string())?;
 
     let mut wanted: HashSet<String> = HashSet::new();
@@ -233,7 +192,7 @@ fn sync_surfaces(
         // A zero-sized webview is not something anyone can see, and some
         // platforms reject it, so treat it as hidden.
         let visible = s.visible && s.w >= 1.0 && s.h >= 1.0;
-        let (ax, ay, aw, ah) = aligned(s.x, s.y + top, s.w.max(1.0), s.h.max(1.0), scale);
+        let (ax, ay, aw, ah) = aligned(s.x, s.y, s.w.max(1.0), s.h.max(1.0), scale);
         let position = LogicalPosition::new(ax, ay);
         let size = LogicalSize::new(aw, ah);
         let solid = if s.dim { 0.45 } else { 1.0 };
@@ -323,7 +282,7 @@ fn sync_surfaces(
         placed.push(Placement {
             id: s.id.clone(),
             x: at.x,
-            y: at.y - top,
+            y: at.y,
             w: size.width,
             h: size.height,
         });
@@ -393,7 +352,6 @@ fn set_resizing<R: Runtime>(
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct OverlayRequest {
-    viewport: Viewport,
     /// The element's id, which names the view that draws it.
     id: String,
     /// The element's own name, which names the window that draws it.
@@ -524,7 +482,6 @@ fn overlay_show(
         Modal { content, radius: request.radius, label: label.clone() },
     );
 
-    let top = inset(&window, &request.viewport)?;
     if let Some(old) = was.and_then(|m| app.get_webview_window(&m.label)) {
         old.close().map_err(|e| e.to_string())?;
     }
@@ -534,7 +491,7 @@ fn overlay_show(
     let [r, g, b, a] = request.background;
     let scale = window.scale_factor().map_err(|e| e.to_string())?;
     let (ax, ay, aw, ah) = aligned_window(
-        request.rect.x, request.rect.y + top,
+        request.rect.x, request.rect.y,
         request.rect.w.max(1.0), request.rect.h.max(1.0), scale,
     );
     let (sx, sy) = on_screen(&window, ax, ay)?;
@@ -556,7 +513,7 @@ fn overlay_show(
     // window is configured directly. The clipped corners would render black.
     let own = modal.ns_window().map_err(|e| e.to_string())?;
     native::panelise(own, parent);
-    Ok(Rect { x: ax, y: ay - top, w: aw, h: ah })
+    Ok(Rect { x: ax, y: ay, w: aw, h: ah })
 }
 
 /// Turns a point in the app window's own coordinates into one on the screen.
@@ -576,7 +533,6 @@ fn on_screen(window: &Window, x: f64, y: f64) -> Result<(f64, f64), String> {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ShapeRequest {
-    viewport: Viewport,
     id: String,
     rect: Rect,
     radius: f64,
@@ -600,11 +556,10 @@ fn set_shape(window: Window, shapes: State<'_, Shapes>, request: ShapeRequest) -
         .map_err(|e| e.to_string())?
         .to_logical::<f64>(scale)
         .height;
-    let top = (content - request.viewport.h).max(0.0);
     let h = request.rect.h.max(1.0);
     let frame = (
         request.rect.x,
-        content - (request.rect.y + top) - h,
+        content - request.rect.y - h,
         request.rect.w.max(1.0),
         h,
     );
@@ -645,7 +600,6 @@ fn clear_shape(shapes: State<'_, Shapes>, id: String) -> Result<(), String> {
 /// arriving, as a drag on its grip.
 #[derive(Debug, Deserialize)]
 struct PlaceRequest {
-    viewport: Viewport,
     id: String,
     rect: Rect,
 }
@@ -662,19 +616,18 @@ fn overlay_place(
     state: State<'_, Overlay>,
     request: PlaceRequest,
 ) -> Result<Rect, String> {
-    let top = inset(&window, &request.viewport)?;
     let scale = window.scale_factor().map_err(|e| e.to_string())?;
     let Some(modal) = modal_window(&app, &state, &request.id) else {
         return Ok(Rect { x: 0.0, y: 0.0, w: 0.0, h: 0.0 });
     };
     let (ax, ay, aw, ah) = aligned_window(
-        request.rect.x, request.rect.y + top,
+        request.rect.x, request.rect.y,
         request.rect.w.max(1.0), request.rect.h.max(1.0), scale,
     );
     let (sx, sy) = on_screen(&window, ax, ay)?;
     modal.set_position(LogicalPosition::new(sx, sy)).map_err(|e| e.to_string())?;
     modal.set_size(LogicalSize::new(aw, ah)).map_err(|e| e.to_string())?;
-    Ok(Rect { x: ax, y: ay - top, w: aw, h: ah })
+    Ok(Rect { x: ax, y: ay, w: aw, h: ah })
 }
 
 #[tauri::command]
@@ -857,7 +810,6 @@ fn main() {
         .manage(Watching::default())
         .manage(Resizing::default())
         .manage(Running::default())
-        .manage(Page::default())
         .manage(shell::Shells::default())
         .invoke_handler(tauri::generate_handler![
             sync_surfaces,

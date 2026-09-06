@@ -12,6 +12,7 @@
 <!-- 창의 크롬. 브랜드, 프로젝트 탭, 그리고 자주 쓰는 스위치.
      프로젝트 탭은 설정에 따라 여기 서거나 왼쪽 세로 레일로 간다. -->
 <header class="chrome-bar">
+  <div class="win" id="win"></div>
   <div class="brand">SPLIT&#8202;PANE</div>
   <div class="tabs tabs--project" id="projectBar"></div>
   <div class="chrome-bar__acts" id="chromeActs"></div>
@@ -72,7 +73,7 @@ import {
 import { verify } from "./verify.js";
 
 /* 애플리케이션 인터페이스. 없으면 아무 일도 하지 않는 구현이 온다. */
-import { surfaces as host } from "./host.js";
+import { chrome, surfaces as host } from "./host.js";
 
 /* 관측이 지목한 요소를 누른다. 호스트가 요청할 때만 동작한다. */
 import "./observe.js";
@@ -199,6 +200,32 @@ const projectBar = document.getElementById("projectBar");
 const shell = document.getElementById("shell");
 const spaceBar = document.getElementById("spaceBar");
 const chromeActs = document.getElementById("chromeActs");
+
+/* 창 단추와 끄는 자리.
+
+   창에는 프레임이 없다. 두 애플리케이션이 프레임을 그리는 방법이 서로 달라, 그것을
+   쓰면 페이지가 받는 크기부터 달라진다. 이 애플리케이션이 그리면 하나다.
+
+   브라우저에는 창이 없으므로 아무것도 만들지 않는다. */
+if (chrome) {
+  const WINDOW_ACTS = [
+    ["close", "닫는다", () => chrome.close()],
+    ["minimise", "최소화한다", () => chrome.minimise()],
+    ["maximise", "최대화한다", () => chrome.toggleMaximise()],
+  ];
+  const win = document.getElementById("win");
+  for (const [act, title, run] of WINDOW_ACTS) {
+    const b = document.createElement("button");
+    b.className = "win__btn";
+    b.type = "button";
+    b.dataset.act = act;
+    b.title = title;
+    b.setAttribute("aria-label", title);
+    b.addEventListener("click", run);
+    win.appendChild(b);
+  }
+  chrome.draggable(document.querySelector(".chrome-bar"));
+}
 
 /** 크롬 행의 아이콘 버튼 하나를 만든다. */
 function act(name, title, on, onPick) {

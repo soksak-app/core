@@ -12,7 +12,8 @@
         "label": "main",
         "title": "soksak / Tauri v2",
         "width": 1200,
-        "height": 788,
+        "height": 760,
+        "decorations": false,
         "backgroundColor": "#101117",
         "acceptFirstMouse": true,
         "url": "index.html"

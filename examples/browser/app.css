@@ -63,6 +63,18 @@ body{margin:0;background:var(--bg);color:var(--fg);
   user-select:none}
 .brand{flex:0 0 auto;font-weight:600;letter-spacing:.1em;font-size:11px;color:var(--muted);
   margin-right:2px}
+
+/* 창 단추. 창에 프레임이 없으므로 이 애플리케이션이 그린다. 브라우저에는 창이
+   없으므로 비어 있다. */
+.win{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+.win:empty{display:none}
+.win__btn{width:12px;height:12px;border:0;border-radius:50%;padding:0;cursor:pointer;
+  background:var(--edge)}
+.win__btn[data-act=close]{background:var(--no)}
+.win__btn[data-act=minimise]{background:var(--focus)}
+.win__btn[data-act=maximise]{background:var(--rail)}
+.win__btn:hover{filter:brightness(1.25)}
+.win__btn:focus-visible{outline:var(--bw) solid var(--fg);outline-offset:2px}
 .chrome-bar__acts{display:flex;align-items:center;gap:6px;flex:0 0 auto}
 
 /* 프로젝트 탭 행. 높이는 --chrome-row-h 가 정한다. */

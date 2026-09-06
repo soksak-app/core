@@ -45,12 +45,15 @@ static void surfaceEndLiveResize(void* handle) {
     [(WKWebView*)handle viewDidEndLiveResize];
 }
 
-// Moves a shape's view, on the display's pixels so its edges stay crisp.
+// Moves a shape's view, on the display's pixels so its edges stay crisp. The rect
+// is in the page's coordinates, measured from the content view's top left, which
+// is what the page declares.
 static void shapeSetFrame(void* handle, double x, double y, double w, double h) {
     NSView* view = (NSView*)handle;
     NSWindow* window = [view window];
-    if (window == nil) return;
-    view.frame = surfaceAligned(window, x, y, w, h);
+    if (window == nil || [window contentView] == nil) return;
+    double up = [window contentView].bounds.size.height - y - h;
+    view.frame = surfaceAligned(window, x, up, w, h);
 }
 
 // The frame a surface is at now, in the window content view's coordinates
@@ -219,7 +222,9 @@ static void surfaceWatchMouse(void* nsWindow) {
 // its own opaque background and the key that turns that off is private.
 static void* shapeCreate(void* nsWindow, double x, double y, double w, double h) {
     NSWindow* window = (NSWindow*)nsWindow;
-    NSView* view = [[NSView alloc] initWithFrame:surfaceAligned(window, x, y, w, h)];
+    if (window == nil || [window contentView] == nil) return NULL;
+    double up = [window contentView].bounds.size.height - y - h;
+    NSView* view = [[NSView alloc] initWithFrame:surfaceAligned(window, x, up, w, h)];
     [view setWantsLayer:YES];
     [[window contentView] addSubview:view positioned:NSWindowAbove relativeTo:nil];
     return (void*)view;

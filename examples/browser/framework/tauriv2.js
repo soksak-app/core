@@ -47,8 +47,20 @@ export const host = () => {
     // 이 앱의 문서에는 다리가 이미 들어 있지만, 이름을 함께 실어 보내는 규칙은
     // 하나로 둔다 — 프레임워크마다 다르면 그 차이를 매번 기억해야 한다.
     page: (path) => `/${path}`,
+    // 창에 프레임이 없으므로 끄는 자리를 이 문서가 지정한다.
+    draggable(el) {
+      el.setAttribute("data-tauri-drag-region", "");
+    },
+    window: {
+      close: () => own().close(),
+      minimise: () => own().minimize(),
+      toggleMaximise: () => own().toggleMaximize(),
+    },
   };
 };
+
+/** 이 문서를 담은 창. */
+const own = () => window.__TAURI__.window.getCurrentWindow();
 
 export const page = () => {
   const { invoke } = window.__TAURI__.core;
