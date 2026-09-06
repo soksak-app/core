@@ -26,7 +26,7 @@ verify: prepare
 .PHONY: example-frontend \
         tauri tauri-release tauri-build tauri-build-release \
         wails wails-release wails-build wails-build-release \
-        examples-size
+        examples-verify examples-size
 
 # rustup puts cargo here and adds it to the shell profile, which make's shell
 # does not read.
@@ -74,6 +74,11 @@ wails: wails-build
 
 wails-release: wails-build-release
 	@./$(WAILS_RELEASE)
+
+# Runs the examples and looks at what they drew. Each app is started, a boundary
+# is shaken, and the window is recorded while that runs.
+examples-verify: wails-build tauri-build
+	@node --test examples/test
 
 # Both apps in both profiles, and what each one weighs.
 examples-size: tauri-build tauri-build-release wails-build-release wails-build
