@@ -495,39 +495,27 @@ fn overlay_content(state: State<'_, Overlay>, id: String) -> Result<OverlayConte
         .content)
 }
 
-/// Resizes the view to what the element needs, and reveals it.
+/// Clips the view's corners and reveals it.
 ///
-/// The main page measures the element in its own document, and the modal is laid
-/// out in another one; two layouts of the same markup can differ by a line of
-/// wrapped text. The view that renders it reports its own size and is resized to
-/// it.
+/// The page reports this once its content is on screen; showing it earlier
+/// displays an empty view.
 ///
-/// The view is shown here rather than at open, because the content is drawn and
-/// the size is correct only at this point.
+/// The size is not set here. The main page measures the element and the view was
+/// created at that size, so a second measurement taken inside the view would be
+/// of the same element under a different constraint and the two would disagree.
+/// The clip needs the view's size, which is read off the view.
 #[tauri::command]
-fn overlay_fit(
-    window: Window,
-    state: State<'_, Overlay>,
-    id: String,
-    w: f64,
-    h: f64,
-) -> Result<(), String> {
+fn overlay_ready(window: Window, state: State<'_, Overlay>, id: String) -> Result<(), String> {
     let Some(existing) = window.get_webview(&modal_label(&id)) else {
         return Ok(());
     };
     let Some(modal) = state.modals.lock().map_err(|e| e.to_string())?.get(&id).cloned() else {
         return Ok(());
     };
-    let w = w.max(1.0);
-    let h = h.max(1.0);
-    existing
-        .set_size(LogicalSize::new(w, h))
-        .map_err(|e| e.to_string())?;
-
-    // The clip is in the view's own pixels, so it is reapplied whenever the
-    // view is resized.
-    let radius = modal.radius;
     let scale = window.scale_factor().map_err(|e| e.to_string())?;
+    let size = existing.size().map_err(|e| e.to_string())?.to_logical::<f64>(scale);
+    let radius = modal.radius;
+    let (w, h) = (size.width, size.height);
     existing
         .with_webview(move |platform| native::corners(&platform, radius, w, h, scale))
         .map_err(|e| e.to_string())?;
@@ -644,7 +632,7 @@ fn main() {
             clear_shape,
             overlay_content,
             overlay_update,
-            overlay_fit,
+            overlay_ready,
             overlay_hide,
             overlay_pick,
             terminal_open,

@@ -110,18 +110,6 @@ static void surfaceSetFrame(void* handle, double x, double y, double w, double h
     view.frame = surfaceAligned(window, x, y, w, h);
 }
 
-// Resizes about the top left, which is the origin the page declared. Snaps to the
-// pixel grid like surfaceSetFrame does: two ways to set a frame that round
-// differently put a view half a pixel off depending on which one last ran.
-static void surfaceResize(void* handle, double w, double h) {
-    WKWebView* view = (WKWebView*)handle;
-    NSWindow* window = [view window];
-    if (window == nil) return;
-    NSRect frame = view.frame;
-    view.frame = surfaceAligned(window, frame.origin.x,
-                                frame.origin.y + frame.size.height - h, w, h);
-}
-
 // Sets the view's alpha. The page dims a surface that has lost focus.
 static void surfaceSetAlpha(void* handle, double alpha) {
     WKWebView* view = (WKWebView*)handle;
@@ -280,10 +268,6 @@ func newNativeView(window unsafe.Pointer, url string, x, y, w, h float64, backgr
 
 func (v *nativeView) setFrame(x, y, w, h float64) {
 	C.surfaceSetFrame(v.handle, C.double(x), C.double(y), C.double(w), C.double(h))
-}
-
-func (v *nativeView) resize(w, h float64) {
-	C.surfaceResize(v.handle, C.double(w), C.double(h))
 }
 
 func (v *nativeView) setAlpha(alpha float64) {

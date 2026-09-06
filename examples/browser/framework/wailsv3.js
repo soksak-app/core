@@ -79,7 +79,7 @@ export const page = () => ({
       on("content", fn);
       call("overlay.content", { id });
     },
-    fit: (id, w, h) => call("overlay.fit", { id, w, h }),
+    ready: (id) => call("overlay.ready", { id }),
     answer: (id, key, value) => call("overlay.pick", { id, key, value }),
   },
 });

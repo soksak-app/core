@@ -41,7 +41,7 @@ export const host = chosen.host();
  *   shell.write(id, text)    셸에 입력을 전달한다
  *   shell.onOutput(id, fn)   셸 출력을 수신한다
  *   modal.content(id, fn)    렌더링할 내용과 변경분을 fn 에 전달한다
- *   modal.fit(id, w, h)      필요한 크기를 호스트에 보고한다
+ *   modal.ready(id)          내용이 화면에 올랐음을 호스트에 알린다
  *   modal.answer(id, k, v)   변경한 키와 값을 호스트에 보고한다
  */
 export const page = chosen.page();

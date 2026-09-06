@@ -71,7 +71,7 @@ export const page = () => {
         invoke("overlay_content", { id }).then(fn);
         listen("overlay-content", (e) => fn(e.payload));
       },
-      fit: (id, w, h) => invoke("overlay_fit", { id, w, h }),
+      ready: (id) => invoke("overlay_ready", { id }),
       answer: (id, key, value) => invoke("overlay_pick", { key, value }),
     },
   };

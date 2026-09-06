@@ -140,8 +140,8 @@ func (s *Surfaces) answer(payload string) {
 		_ = s.shells.Write(m.ID, m.Text)
 	case "overlay.content":
 		s.deliverModal(m.ID, "content", s.ModalContent(m.ID))
-	case "overlay.fit":
-		s.ModalFit(m.ID, m.W, m.H)
+	case "overlay.ready":
+		s.ModalReady(m.ID)
 	case "overlay.pick":
 		application.Get().Event.Emit("overlay-pick", map[string]string{
 			"id": m.ID, "key": m.Key, "value": m.Value,
@@ -399,9 +399,13 @@ func (s *Surfaces) ModalContent(id string) OverlayContent {
 	return OverlayContent{}
 }
 
-// ModalFit resizes the view to the size its page measured, clips its corners and
-// shows it. Showing it earlier would display a view of the wrong size.
-func (s *Surfaces) ModalFit(id string, w, h float64) {
+// ModalReady clips the view's corners and shows it. The page reports this once
+// its content is on screen; showing it earlier displays an empty view.
+//
+// The size is not set here. The main page measured the element and the view was
+// created at that size, so a second measurement taken inside the view would be
+// of the same element under a different constraint and the two would disagree.
+func (s *Surfaces) ModalReady(id string) {
 	s.mu.Lock()
 	live, ok := s.modals[id]
 	if !ok || live.view == nil {
@@ -412,7 +416,6 @@ func (s *Surfaces) ModalFit(id string, w, h float64) {
 	s.mu.Unlock()
 
 	application.InvokeSync(func() {
-		view.resize(max1(w), max1(h))
 		view.setCornerRadius(radius)
 		view.raise()
 		view.setHidden(false)
