@@ -134,8 +134,25 @@ without raising the window and without taking the focus from whatever holds it �
 whatever is in front instead, and raising the window first changes the state
 being measured.
 
-Only macOS is written. Windows would report the HWND and Linux the X window id.
-Without the flag neither component is registered.
+The number is written when the window set changes, not on a timer: attaching and
+detaching a window is the application's own doing, so it says so where it happens
+and the component listens.
+
+Nothing is reported while the window stands still, so `--drive` drags a boundary
+on its own, as `x,y,dx,dy,ms,times` — press at x,y, move by dx,dy over ms, and do
+it that many times, each turn going back the way the one before it came:
+
+    ./examples/wailsv3/bin/wailsv3 --observe --drive 404,294,-160,0,100,40
+
+    관측: 끌기 (404,294) -160,+0 6걸음 ×40
+
+The steps travel the path a press on a surface travels — the page receives
+`surface-input` and matches the point against its own dividers — so what this
+measures is the path the product uses, not one built beside it. No key or button
+is synthesised at the operating system, so nothing takes the focus away.
+
+Only macOS is written for the window number. Windows would report the HWND and
+Linux the X window id. Without the flag neither component is registered.
 
 ## What each one draws natively
 

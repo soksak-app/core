@@ -9,11 +9,14 @@
 //! This is not part of the product's contract. Registered only when asked for;
 //! left out, nothing here runs.
 
+use std::time::Duration;
+
 use tauri::plugin::{Builder, TauriPlugin};
 use tauri::webview::PageLoadEvent;
-use tauri::{Listener, Manager, Runtime, Window};
+use tauri::{Emitter, Listener, Manager, Runtime, Window};
 
 use crate::native;
+use crate::InputStep;
 
 /// The numbers of this window and the windows attached to it. A modal is a window
 /// of its own, so it joins the list while it is open.
@@ -37,6 +40,7 @@ pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
         .on_page_load(|webview, payload| {
             if webview.label() == "main" && payload.event() == PageLoadEvent::Finished {
                 report(webview.app_handle().clone());
+                drive(webview.app_handle().clone());
             }
         })
         .invoke_handler(tauri::generate_handler![windows])
@@ -64,3 +68,110 @@ fn report<R: Runtime>(app: tauri::AppHandle<R>) {
     });
 }
 
+/// Drags a boundary without anyone touching the mouse.
+///
+/// The steps go the way a press on a surface goes: the page receives surface-input
+/// and matches the point against its own dividers. So this measures the path the
+/// product uses, not one built beside it.
+///
+/// A drag is motion, so it is written on a clock. That clock produces the steps; it
+/// does not watch for anything.
+fn drive<R: Runtime>(app: tauri::AppHandle<R>) {
+    let Some(spec) = std::env::args()
+        .skip_while(|a| a != "--drive")
+        .nth(1)
+    else {
+        return;
+    };
+    let plan = match Plan::parse(&spec) {
+        Ok(plan) => plan,
+        Err(why) => {
+            println!("관측: --drive {why}");
+            return;
+        }
+    };
+    std::thread::spawn(move || plan.run(&app));
+}
+
+/// One drag, repeated. A repeat goes back where it came from, so the boundary stays
+/// in place over a long run and every cycle covers the same pixels.
+struct Plan {
+    x: f64,
+    y: f64,
+    dx: f64,
+    dy: f64,
+    over: Duration,
+    times: usize,
+}
+
+impl Plan {
+    /// Reads "x,y,dx,dy,ms,times": press at x,y, move by dx,dy over ms, and do it
+    /// that many times, each turn going back the way the one before it came.
+    fn parse(spec: &str) -> Result<Plan, String> {
+        let parts: Vec<&str> = spec.split(',').collect();
+        if parts.len() != 6 {
+            return Err(format!("wants x,y,dx,dy,ms,times, got {spec:?}"));
+        }
+        let mut n = [0.0f64; 6];
+        for (i, part) in parts.iter().enumerate() {
+            n[i] = part
+                .trim()
+                .parse()
+                .map_err(|_| format!("{part:?} is not a number"))?;
+        }
+        Ok(Plan {
+            x: n[0],
+            y: n[1],
+            dx: n[2],
+            dy: n[3],
+            over: Duration::from_millis(n[4] as u64),
+            times: n[5] as usize,
+        })
+    }
+
+    fn run<R: Runtime>(&self, app: &tauri::AppHandle<R>) {
+        let frame = Duration::from_millis(16);
+        let steps = (self.over.as_millis() / frame.as_millis()).max(1) as usize;
+        println!(
+            "관측: 끌기 ({},{}) {:+},{:+} {}걸음 ×{}",
+            self.x, self.y, self.dx, self.dy, steps, self.times
+        );
+        // 경계는 끈 만큼 옮겨져 있다. 다음 번은 처음 자리가 아니라 지금 자리를 눌러야
+        // 같은 경계를 잡는다.
+        let (mut x, mut y) = (self.x, self.y);
+        for turn in 0..self.times {
+            let (dx, dy) = if turn % 2 == 1 {
+                (-self.dx, -self.dy)
+            } else {
+                (self.dx, self.dy)
+            };
+            drag(app, x, y, dx, dy, steps, frame);
+            x += dx;
+            y += dy;
+        }
+        println!("관측: 끌기 끝");
+    }
+}
+
+/// Presses at x,y, moves by dx,dy in even steps and releases.
+fn drag<R: Runtime>(
+    app: &tauri::AppHandle<R>,
+    x: f64,
+    y: f64,
+    dx: f64,
+    dy: f64,
+    steps: usize,
+    frame: Duration,
+) {
+    let send = |phase: u8, x: f64, y: f64| {
+        let _ = app.emit("surface-input", InputStep { phase, x, y });
+    };
+    send(0, x, y);
+    for i in 1..=steps {
+        std::thread::sleep(frame);
+        let at = i as f64 / steps as f64;
+        send(1, x + dx * at, y + dy * at);
+    }
+    send(2, x + dx, y + dy);
+    std::thread::sleep(frame);
+}

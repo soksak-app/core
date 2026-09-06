@@ -172,10 +172,10 @@ fn watch_presses(
 /// One step of a drag, as the page receives it. Phase is 0 for a press, 1 for a
 /// move and 2 for a release.
 #[derive(Clone, serde::Serialize)]
-struct InputStep {
-    phase: u8,
-    x: f64,
-    y: f64,
+pub struct InputStep {
+    pub phase: u8,
+    pub x: f64,
+    pub y: f64,
 }
 
 /// The height of the page's own viewport, as the page last reported it. The

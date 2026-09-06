@@ -11,7 +11,11 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -33,6 +37,7 @@ func (o *Observe) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	if win, ok := mainWindow(); ok {
 		offShow = win.OnWindowEvent(events.Common.WindowShow, func(*application.WindowEvent) {
 			o.report()
+			o.drive()
 		})
 	}
 	go func() {
@@ -60,5 +65,95 @@ func (o *Observe) report() {
 	}
 }
 
+// drive drags a boundary without anyone touching the mouse.
+//
+// The steps go the way a press on a surface goes: the page receives surface-input
+// and matches the point against its own dividers. So this measures the path the
+// product uses, not one built beside it.
+//
+// A drag is motion, so it is written on a clock. That clock produces the steps; it
+// does not watch for anything.
+func (o *Observe) drive() {
+	if *driving == "" {
+		return
+	}
+	plan, err := parseDrive(*driving)
+	if err != nil {
+		log.Printf("관측: --drive %v", err)
+		return
+	}
+	go plan.run()
+}
+
+// drivePlan is one drag, repeated. A repeat goes back where it came from, so the
+// boundary stays in place over a long run and every cycle covers the same pixels.
+type drivePlan struct {
+	x, y   float64
+	dx, dy float64
+	over   time.Duration
+	times  int
+}
+
+func (p drivePlan) run() {
+	const frame = 16 * time.Millisecond
+	steps := int(p.over / frame)
+	if steps < 1 {
+		steps = 1
+	}
+	log.Printf("관측: 끌기 (%g,%g) %+g,%+g %d걸음 ×%d", p.x, p.y, p.dx, p.dy, steps, p.times)
+	// 경계는 끈 만큼 옮겨져 있다. 다음 번은 처음 자리가 아니라 지금 자리를 눌러야
+	// 같은 경계를 잡는다.
+	x, y := p.x, p.y
+	for turn := 0; turn < p.times; turn++ {
+		dx, dy := p.dx, p.dy
+		if turn%2 == 1 {
+			dx, dy = -dx, -dy
+		}
+		drag(x, y, dx, dy, steps, frame)
+		x, y = x+dx, y+dy
+	}
+	log.Print("관측: 끌기 끝")
+}
+
+// drag presses at x,y, moves by dx,dy in even steps and releases.
+func drag(x, y, dx, dy float64, steps int, frame time.Duration) {
+	send := func(phase int, x, y float64) {
+		application.Get().Event.Emit("surface-input", InputStep{Phase: phase, X: x, Y: y})
+	}
+	send(0, x, y)
+	for i := 1; i <= steps; i++ {
+		time.Sleep(frame)
+		at := float64(i) / float64(steps)
+		send(1, x+dx*at, y+dy*at)
+	}
+	send(2, x+dx, y+dy)
+	time.Sleep(frame)
+}
+
+// parseDrive reads "x,y,dx,dy,ms,times": press at x,y, move by dx,dy over ms, and
+// do it that many times, each turn going back the way the one before it came.
+func parseDrive(spec string) (drivePlan, error) {
+	parts := strings.Split(spec, ",")
+	if len(parts) != 6 {
+		return drivePlan{}, fmt.Errorf("wants x,y,dx,dy,ms,times, got %q", spec)
+	}
+	var n [6]float64
+	for i, part := range parts {
+		v, err := strconv.ParseFloat(strings.TrimSpace(part), 64)
+		if err != nil {
+			return drivePlan{}, fmt.Errorf("%q is not a number", part)
+		}
+		n[i] = v
+	}
+	return drivePlan{
+		x: n[0], y: n[1], dx: n[2], dy: n[3],
+		over:  time.Duration(n[4]) * time.Millisecond,
+		times: int(n[5]),
+	}, nil
+}
+
 var observing = flag.Bool("observe", false,
 	"register the observation service, which reports this window's number")
+
+var driving = flag.String("drive", "",
+	"drag a boundary once the window is up, as x,y,dx,dy,ms,times")
