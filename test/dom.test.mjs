@@ -2150,6 +2150,31 @@ test("a press takes no hold on a divider a change the host has not drawn moved",
   view.destroy();
 });
 
+test("a mouse press takes no hold on a divider a change the host has not drawn moved", () => {
+  const { window, host, grid, view } = mount();
+  const el = host.querySelector('.sp-divider[data-axis="x"]');
+  const doc = window.document;
+  assert.ok(grid.insertAt("x", 0, { id: "rail", size: 190 }), "the rail went in");
+
+  // No render, so the divider is still drawn where its boundary was, and the
+  // number it carries names the rail's own boundary now.
+  const drawn = parseFloat(el.style.left) + parseFloat(el.style.width) / 2;
+  assert.ok(
+    Math.abs(grid.boundaryPos("x", 1) - drawn) > Math.max(grid.gap, grid.grabSize),
+    "the boundary that number names is further off than the divider is grabbed at",
+  );
+  el.dispatchEvent(new window.MouseEvent("mousedown", {
+    clientX: drawn, clientY: 300, bubbles: true, button: 0, buttons: 1,
+  }));
+  assert.equal(el.dataset.dragging, undefined, "the press takes no hold");
+  const was = grid.rect("rail").w;
+  doc.dispatchEvent(new window.MouseEvent("mousemove", {
+    clientX: drawn + 40, clientY: 300, bubbles: true, buttons: 1,
+  }));
+  assert.equal(grid.rect("rail").w, was, "and the move that follows drives nothing");
+  view.destroy();
+});
+
 test("a key drives nothing on a divider a change the host has not drawn moved", () => {
   const { window, host, grid, view } = mount();
   const el = host.querySelector('.sp-divider[data-axis="x"]');

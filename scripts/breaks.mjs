@@ -427,6 +427,27 @@ export const BREAKS = [
     to: "            ;",
   },
   {
+    id: "press-stands",
+    what: "a press takes hold of the boundary the line its divider carries names, wherever the host has since moved that boundary",
+    file: "dist/dom.js",
+    find: "            if (!this.stands(el, axis, line))\n                return;\n            // A press with this pointer already down is a press the release of which",
+    to: "            // A press with this pointer already down is a press the release of which",
+  },
+  {
+    id: "mouse-press-stands",
+    what: "a mouse press takes hold of the boundary the line its divider carries names, wherever the host has since moved that boundary",
+    file: "dist/dom.js",
+    find: "            if (!this.stands(el, axis, line))\n                return;\n            // A press with one already held is a press the release of which was never",
+    to: "            // A press with one already held is a press the release of which was never",
+  },
+  {
+    id: "key-stands",
+    what: "a key drives the boundary the line its divider carries names, wherever the host has since moved that boundary",
+    file: "dist/dom.js",
+    find: "            if (!this.stands(el, axis, line))\n                return;\n            // The record is set before the change runs, because that is when the line",
+    to: "            // The record is set before the change runs, because that is when the line",
+  },
+  {
     id: "stands-reach",
     what: "a press takes no hold across a change smaller than the width its divider is grabbed at",
     file: "dist/dom.js",
