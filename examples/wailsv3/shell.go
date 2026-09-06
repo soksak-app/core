@@ -13,6 +13,7 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -70,13 +71,21 @@ func (s *Shells) Open(id string) (bool, error) {
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
+		stdin.Close()
 		return false, err
 	}
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
+		stdin.Close()
+		stdout.Close()
 		return false, err
 	}
+	// Wait 이 닫아 주는 것은 프로세스가 시작된 뒤의 일이다. 시작에 실패하면 여기서
+	// 닫지 않는 한 부모 쪽 기술자가 남는다.
 	if err := cmd.Start(); err != nil {
+		stdin.Close()
+		stdout.Close()
+		stderr.Close()
 		return false, err
 	}
 
@@ -119,27 +128,31 @@ func (s *Shells) emit(id string, text string) {
 	}
 }
 
-// Listen returns a channel carrying that shell's output.
+// Listen returns a channel carrying that shell's output, or nil if that shell is
+// not running. A channel no session holds would never be closed and its reader
+// would wait for the process's lifetime.
 func (s *Shells) Listen(id string) chan string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	lines := make(chan string, 256)
 	live, ok := s.running[id]
 	if !ok {
-		return lines
+		return nil
 	}
+	lines := make(chan string, 256)
 	live.watchers[lines] = true
 	return lines
 }
 
-// Unlisten drops that stream's channel. The stream owns it and is the only one
-// that closes it.
+// Unlisten drops a reader's channel and closes it. A channel the session no
+// longer holds was closed by Close, so it is only dropped here.
 func (s *Shells) Unlisten(id string, lines chan string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if live, ok := s.running[id]; ok {
-		delete(live.watchers, lines)
+	live, ok := s.running[id]
+	if !ok || !live.watchers[lines] {
+		return
 	}
+	delete(live.watchers, lines)
 	close(lines)
 }
 
@@ -148,7 +161,7 @@ func (s *Shells) Write(id string, data string) error {
 	defer s.mu.Unlock()
 	live, ok := s.running[id]
 	if !ok {
-		return nil
+		return fmt.Errorf("shell %s is not running", id)
 	}
 	_, err := io.WriteString(live.stdin, data)
 	return err
@@ -162,13 +175,18 @@ func (s *Shells) Write(id string, data string) error {
 // while holding it stops them reading, and a process whose output is not read
 // does not end.
 //
-// The watchers are left alone. Each is closed by the stream that made it, once
-// its request ends, which is what happens when the surface goes.
+// Every watcher's channel is closed, which ends the goroutine reading it. The
+// session is deleted first, so emit finds nothing and never sends on a closed
+// channel.
 func (s *Shells) Close(id string) {
 	s.mu.Lock()
 	live, ok := s.running[id]
 	if ok {
 		delete(s.running, id)
+		for watcher := range live.watchers {
+			close(watcher)
+		}
+		live.watchers = nil
 	}
 	s.mu.Unlock()
 	if !ok {

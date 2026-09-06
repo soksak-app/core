@@ -104,8 +104,6 @@ static void captureOpen(long windowNumber) {
         }
         for (SCWindow* window in content.windows) {
             if ((long)window.windowID != windowNumber) continue;
-            captureFilter =
-                [[SCContentFilter alloc] initWithDesktopIndependentWindow:window];
             SCStreamConfiguration* config = [[SCStreamConfiguration alloc] init];
             // 점 단위로 받는다. 픽셀 단위는 한 프레임이 네 배가 되어 적는 동안
             // 프레임이 버려진다.
@@ -118,6 +116,10 @@ static void captureOpen(long windowNumber) {
             config.minimumFrameInterval = CMTimeMake(1, 120);
             config.queueDepth = 8;
             captureConfig = config;
+            // 필터를 마지막에 둔다. captureStart 가 필터로 준비 여부를 판단하므로,
+            // 먼저 두면 설정이 없는 채로 스트림을 만들 수 있다.
+            captureFilter =
+                [[SCContentFilter alloc] initWithDesktopIndependentWindow:window];
             dispatch_semaphore_signal(answered);
             return;
         }
@@ -125,6 +127,7 @@ static void captureOpen(long windowNumber) {
         dispatch_semaphore_signal(answered);
     }];
     dispatch_semaphore_wait(answered, dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC));
+    dispatch_release(answered);
 }
 
 static void captureStart(const char* directory) {
@@ -133,19 +136,24 @@ static void captureStart(const char* directory) {
         return;
     }
     if (captureStream != nil) return;
-    captureSink = [[SPCapture alloc] init];
+    // 수신 객체는 한 번만 만든다. 녹화마다 새로 만들면 프레임 번호가 1 부터 다시
+    // 시작해 앞선 녹화가 적은 파일을 덮어쓴다.
+    if (captureSink == nil) captureSink = [[SPCapture alloc] init];
     captureSink.directory = [NSString stringWithUTF8String:directory];
     captureStream = [[SCStream alloc] initWithFilter:captureFilter
                                        configuration:captureConfig
                                             delegate:captureSink];
     NSError* error = nil;
+    dispatch_queue_t handing = dispatch_queue_create("sp.capture", NULL);
     [captureStream addStreamOutput:captureSink
                               type:SCStreamOutputTypeScreen
-                sampleHandlerQueue:dispatch_queue_create("sp.capture", NULL)
+                sampleHandlerQueue:handing
                              error:&error];
+    dispatch_release(handing);
     if (error != nil) {
         fprintf(stderr, "observe: capture output not added, %s\n",
             error.localizedDescription.UTF8String);
+        [captureStream release];
         captureStream = nil;
         return;
     }
@@ -175,6 +183,8 @@ static int captureStop(void) {
         dispatch_semaphore_signal(stopped);
     }];
     dispatch_semaphore_wait(stopped, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
+    dispatch_release(stopped);
+    [stream release];
     if (captureSink.written == 0 && captureSink.idle > 0) {
         fprintf(stderr, "observe: the window was not redrawn during %d frames; "
             "the display is off or the window is not on screen\n", captureSink.idle);

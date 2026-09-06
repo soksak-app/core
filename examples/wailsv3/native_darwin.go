@@ -191,9 +191,6 @@ import "C"
 
 import "unsafe"
 
-// nativeView is one webview inside the window.
-type nativeView struct{ handle unsafe.Pointer }
-
 // surfaceFrame reports where a surface is now, in the page's coordinates. The
 // host aligns a declared rect to the display's pixels, so this is not the rect
 // the page sent and the page is told the difference.

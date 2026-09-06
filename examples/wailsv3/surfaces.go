@@ -12,6 +12,7 @@
 package main
 
 import (
+	"errors"
 	"log"
 	"sync"
 
@@ -29,11 +30,9 @@ type Rect struct {
 type Surface struct {
 	ID  string `json:"id"`
 	URL string `json:"url"`
-	// Whether URL points outside this application. Its own addresses are served
-	// by its asset server. Deciding by plugin kind here would require editing
-	// this file for every plugin the page adds.
-	External bool `json:"external"`
-	Visible  bool `json:"visible"`
+	// The asset server resolves this application's own addresses and passes the
+	// rest through, so this host does not need to know which it is.
+	Visible bool `json:"visible"`
 	// Whether the page asked for this surface to be dimmed after losing focus.
 	Dim bool `json:"dim"`
 	// The colour the webview displays before its document renders.
@@ -42,7 +41,6 @@ type Surface struct {
 }
 
 type SyncRequest struct {
-	Viewport Viewport `json:"viewport"`
 	// Whether this is the last update or one of a continuing run. During a run
 	// the surfaces are put in a live resize, in which WKWebView keeps the last
 	// rendered content instead of showing unrendered white.
@@ -67,7 +65,6 @@ type Theme struct {
 type OverlayRequest struct {
 	ID         string     `json:"id"`
 	Title      string     `json:"title"`
-	Viewport   Viewport   `json:"viewport"`
 	Rect       Rect       `json:"rect"`
 	ClassName  string     `json:"className"`
 	HTML       string     `json:"html"`
@@ -103,8 +100,9 @@ type modal struct {
 }
 
 type Surfaces struct {
-	// Guards modals, which the pages this host serves read over HTTP. Views are
-	// only touched on the main thread and need no lock.
+	// Guards modals and theme, which the pages this host serves read over HTTP.
+	// Views are only touched on the main thread and need no lock, so no path
+	// holding this lock waits for the main thread.
 	mu    sync.Mutex
 	views map[string]*application.Webview
 	// A surface is a native view, so a press on it never reaches the page. This
@@ -132,6 +130,9 @@ type Surfaces struct {
 // rendering that shell filters by id.
 func (s *Surfaces) forward(id string) {
 	lines := s.shells.Listen(id)
+	if lines == nil {
+		return
+	}
 	defer s.shells.Unlisten(id, lines)
 	for text := range lines {
 		application.Get().Event.Emit("shell-output", ShellOutput{ID: id, Text: text})
@@ -146,6 +147,10 @@ type ShellOutput struct {
 
 // Theme returns the current theme. A page calls it once after loading and
 // subscribes to the theme event for later changes.
+// errNoWindow is returned when this application's window is gone. Every call
+// here places or reads something in that window, so none of them can succeed.
+var errNoWindow = errors.New("the main window is gone")
+
 func (s *Surfaces) Theme() Theme {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -201,13 +206,11 @@ func NewSurfaces(shells *Shells) *Surfaces {
 // content is rendered; showing it earlier displays an empty window. It is
 // attached at the same point, so it is never drawn at the wrong position.
 func (s *Surfaces) OverlayShow(req OverlayRequest) error {
-	s.mu.Lock()
-	if was := s.modals[req.ID]; was != nil {
-		s.mu.Unlock()
-		s.OverlayHide(req.ID)
-		s.mu.Lock()
-	}
-	s.modals[req.ID] = &modal{
+	// 같은 id 의 모달이 열려 있으면 닫는다. 없으면 아무 일도 하지 않는다.
+	s.OverlayHide(req.ID)
+	// 창을 만드는 것은 주 스레드의 일이고 이 호출은 그것이 끝날 때까지 기다린다.
+	// 잠금을 쥔 채로 기다리면, 주 스레드에서 같은 잠금을 잡는 호출과 서로를 기다린다.
+	live := &modal{
 		window: application.Get().Window.NewWithOptions(application.WebviewWindowOptions{
 			Name:      "modal-" + req.ID,
 			Title:     req.Title,
@@ -226,7 +229,15 @@ func (s *Surfaces) OverlayShow(req OverlayRequest) error {
 			CSS: req.CSS, ClassName: req.ClassName, HTML: req.HTML, Border: req.Border,
 		},
 	}
+	s.mu.Lock()
+	was := s.modals[req.ID]
+	s.modals[req.ID] = live
 	s.mu.Unlock()
+	// 같은 id 로 두 번 호출되면 두 창이 만들어진다. 목록에 남지 못한 창을 닫는다.
+	if was != nil {
+		was.window.Detach()
+		was.window.Close()
+	}
 	return nil
 }
 
@@ -249,14 +260,13 @@ type ShapeRequest struct {
 func (s *Surfaces) SetShape(req ShapeRequest) error {
 	win, ok := mainWindow()
 	if !ok {
-		return nil
+		return errNoWindow
 	}
 	x, y := req.Rect.X, up(req.Viewport, req.Rect.Y, max1(req.Rect.H))
 	w, h := max1(req.Rect.W), max1(req.Rect.H)
+	// 도형은 뷰이고 뷰는 주 스레드에서만 다룬다. 이 맵도 그렇게 다루면 잠금이 필요
+	// 없고, 주 스레드가 잠금을 기다리는 일도 없다.
 	application.InvokeSync(func() {
-		s.mu.Lock()
-		defer s.mu.Unlock()
-
 		shape := s.shapes[req.ID]
 		if shape == nil {
 			shape = newNativeShape(win.NativeWindow(), x, y, w, h)
@@ -275,25 +285,22 @@ func (s *Surfaces) SetShape(req ShapeRequest) error {
 
 // ClearShape removes the rectangle.
 func (s *Surfaces) ClearShape(id string) error {
-	s.mu.Lock()
-	shape, ok := s.shapes[id]
-	if !ok {
-		s.mu.Unlock()
-		return nil
-	}
-	delete(s.shapes, id)
-	s.mu.Unlock()
-
-	application.InvokeSync(shape.destroy)
+	application.InvokeSync(func() {
+		shape, ok := s.shapes[id]
+		if !ok {
+			return
+		}
+		delete(s.shapes, id)
+		shape.destroy()
+	})
 	return nil
 }
 
 // PlaceRequest is the new position of an open modal's view. The page decides the
 // position; a drag on the card's grip is what changes it.
 type PlaceRequest struct {
-	ID       string   `json:"id"`
-	Viewport Viewport `json:"viewport"`
-	Rect     Rect     `json:"rect"`
+	ID   string `json:"id"`
+	Rect Rect   `json:"rect"`
 }
 
 // OverlayPlace moves an open modal's window. The page decides the position; a
@@ -301,7 +308,7 @@ type PlaceRequest struct {
 func (s *Surfaces) OverlayPlace(req PlaceRequest) error {
 	win, ok := mainWindow()
 	if !ok {
-		return nil
+		return errNoWindow
 	}
 	s.mu.Lock()
 	live, held := s.modals[req.ID]
@@ -380,16 +387,21 @@ func (s *Surfaces) ModalContent(id string) OverlayContent {
 func (s *Surfaces) ModalReady(id string) {
 	win, ok := mainWindow()
 	if !ok {
+		log.Print("modal ready: ", errNoWindow)
 		return
 	}
 	s.mu.Lock()
 	live, held := s.modals[id]
+	var at Rect
+	if held {
+		at = live.at
+	}
 	s.mu.Unlock()
 	if !held {
 		return
 	}
 	live.window.Show()
-	live.window.Attach(win, live.at.X, live.at.Y)
+	live.window.Attach(win, at.X, at.Y)
 	live.window.Focus()
 	// 모달은 자기 창이므로 이 앱이 가진 창이 하나 늘었다. 창이 붙고 떨어지는 것을
 	// 알리는 통지는 AppKit 에 없고, 붙이는 것은 여기다. 그래서 여기서 알린다.
@@ -495,6 +507,11 @@ func (s *Surfaces) Report(line string) error {
 // SetTheme records the theme and emits it to the pages already open. The main
 // page calls it when a theme is chosen, not on every render.
 func (s *Surfaces) SetTheme(theme Theme) error {
+	// 토큰이 없는 테마를 그대로 두면 다음 Theme 호출이 JSON 의 null 을 반환하고,
+	// 그것을 받은 페이지는 토큰을 순회하다 멈춘다.
+	if theme.Tokens == nil {
+		theme.Tokens = map[string]string{}
+	}
 	s.mu.Lock()
 	s.theme = theme
 	s.mu.Unlock()
@@ -509,14 +526,15 @@ func (s *Surfaces) SetTheme(theme Theme) error {
 func (s *Surfaces) SyncSurfaces(req SyncRequest) ([]Placement, error) {
 	win, ok := mainWindow()
 	if !ok {
-		return nil, nil
+		return nil, errNoWindow
 	}
 	// The page has committed, so its window is on screen and its surfaces exist.
 	// Anything that has to run once the application is drawn starts from here.
 	s.first.Do(func() { application.Get().Event.Emit("page-ready") })
 	var placed []Placement
+	var gone []string
 	application.InvokeSync(func() {
-		s.apply(win, req)
+		gone = s.apply(win, req)
 		placed = s.placements(req)
 		s.watch.Do(func() {
 			pressed = s.press
@@ -524,6 +542,11 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) ([]Placement, error) {
 			watchMouse(win.NativeWindow())
 		})
 	})
+	// 셸을 끝내는 것은 그 프로세스를 기다리는 일이다. 주 스레드에서 기다리면 기다리는
+	// 동안 화면이 멈춘다.
+	for _, id := range gone {
+		s.shells.Close(id)
+	}
 	return placed, nil
 }
 
@@ -548,7 +571,10 @@ func (s *Surfaces) placements(req SyncRequest) []Placement {
 	return out
 }
 
-func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) {
+// apply creates, moves and removes the surface views, and returns the ids whose
+// views are gone. The shells behind them are ended by the caller, off this
+// thread.
+func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) []string {
 	s.run(!req.Settled)
 	wanted := map[string]bool{}
 	for _, surface := range req.Surfaces {
@@ -592,6 +618,7 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) {
 
 	// The page is the only writer of this list, so a surface missing from it is
 	// a surface that is gone.
+	var gone []string
 	for id, view := range s.views {
 		if wanted[id] {
 			continue
@@ -600,6 +627,7 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) {
 		delete(s.named, uintptr(view.NativeView()))
 		view.Close()
 		delete(s.views, id)
-		s.shells.Close(id)
+		gone = append(gone, id)
 	}
+	return gone
 }

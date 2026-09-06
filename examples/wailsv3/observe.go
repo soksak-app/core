@@ -46,8 +46,8 @@ func (o *Observe) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	return nil
 }
 
-// start 는 창을 보고하고 요청된 동작을 시작한다. 두 경로 중 먼저 닿은 쪽에서 한 번만
-// 실행된다.
+// start 는 창을 보고하고 요청된 동작을 시작한다. page-ready 는 페이지가 다시
+// 로드되면 다시 발행되므로 여기서 한 번만 실행한다.
 func (o *Observe) start() {
 	o.began.Do(func() {
 		o.report()
@@ -63,10 +63,10 @@ func (o *Observe) open() {
 	if *capturing == "" {
 		return
 	}
-	// 창 목록 조회는 답을 기다린다. 주 스레드에서 기다리면 그 답이 주 큐로 오는
-	// 경우 서로를 기다리게 되므로, 창 번호만 주 스레드에서 읽고 조회는 여기서 한다.
-	var now []int
-	application.InvokeSync(func() { now = o.Windows() })
+	// 윈도 서버의 창 목록 조회는 답을 기다린다. 그 답이 주 큐로 오는 경우 주
+	// 스레드에서 기다리면 서로를 기다리게 되므로, 창 번호만 주 스레드에서 읽고
+	// 조회는 이 고루틴에서 한다.
+	now := o.windows()
 	if len(now) > 0 {
 		captureOpen(now[0])
 	}
@@ -93,19 +93,27 @@ func (o *Observe) record() func() {
 	}
 }
 
-// Windows 는 이 창과 여기에 붙은 자식 창들의 번호를 반환한다. 모달은 별도 창이므로
+// windows 는 이 창과 여기에 붙은 자식 창들의 번호를 반환한다. 모달은 별도 창이므로
 // 열려 있는 동안 목록에 포함된다.
-func (o *Observe) Windows() []int {
-	win, ok := mainWindow()
-	if !ok {
-		return nil
-	}
-	return windowNumbers(win.NativeWindow())
+//
+// 자식 창 목록은 AppKit 의 것이므로 주 스레드에서 읽는다. 이벤트 수신자는 자기
+// 고루틴에서 실행되고, 그동안 주 스레드가 자식 창을 붙이거나 떼면 목록을 순회하는
+// 도중에 그 목록이 바뀐다.
+func (o *Observe) windows() []int {
+	var now []int
+	application.InvokeSync(func() {
+		win, ok := mainWindow()
+		if !ok {
+			return
+		}
+		now = windowNumbers(win.NativeWindow())
+	})
+	return now
 }
 
 // report 는 지금의 창 목록을 한 줄 남긴다.
 func (o *Observe) report() {
-	if now := o.Windows(); len(now) > 0 {
+	if now := o.windows(); len(now) > 0 {
 		log.Printf("observe: windows %s", numbers(now))
 	}
 }
