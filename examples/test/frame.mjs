@@ -6,13 +6,23 @@ import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { deflateSync } from "node:zlib";
 import { join } from "node:path";
 
-/** 파일 하나를 { width, height, stride, data } 로 읽는다. */
+/**
+ * 파일 하나를 { width, height, stride, data } 로 읽는다.
+ *
+ * 짧은 파일은 거절한다. 녹화가 멈추는 사이에 쓰이던 프레임은 끝이 잘리고, 잘린
+ * 자리를 읽으면 undefined 가 나와 어떤 색 검사에도 걸리지 않는다. 그대로 두면
+ * 깨진 프레임이 깨끗한 프레임으로 읽힌다.
+ */
 export function readFrame(path) {
   const file = readFileSync(path);
   const width = file.readUInt32LE(0);
   const height = file.readUInt32LE(4);
   const stride = file.readUInt32LE(8);
-  return { width, height, stride, data: file.subarray(12) };
+  const data = file.subarray(12);
+  if (data.length < stride * height) {
+    throw new Error(`${path} holds ${data.length} bytes, ${stride * height} expected`);
+  }
+  return { width, height, stride, data };
 }
 
 /** 한 폴더의 프레임을 적힌 순서대로. */

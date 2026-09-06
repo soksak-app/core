@@ -112,13 +112,20 @@ void sp_capture_start(const char* directory) {
     }];
 }
 
+// Stops the stream and reports how many frames reached disk.
+//
+// The stop is answered on another queue, and frames already handed over are
+// written while it runs. Reading the count before that would under-report, and
+// the process exiting then would leave the last file short.
 int sp_capture_stop(void) {
     if (captureStream == nil) return 0;
     SCStream* stream = captureStream;
     captureStream = nil;
-    int written = captureSink.written;
+    dispatch_semaphore_t stopped = dispatch_semaphore_create(0);
     [stream stopCaptureWithCompletionHandler:^(NSError* failed) {
         if (failed != nil) NSLog(@"observe: capture not stopped, %@", failed.localizedDescription);
+        dispatch_semaphore_signal(stopped);
     }];
-    return written;
+    dispatch_semaphore_wait(stopped, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
+    return captureSink.written;
 }
