@@ -35,6 +35,11 @@ func (o *Observe) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	app := application.Get()
 	offChange := app.Event.On("windows-changed", func(*application.CustomEvent) { o.report() })
 	offRecord := o.record()
+	// 모달의 문서가 렌더링할 때마다 남긴다. 갱신된 내용이 그 문서에 도달했는지는
+	// 이 보고로만 알 수 있다.
+	offRendered := app.Event.On("modal-rendered", func(e *application.CustomEvent) {
+		log.Printf("observe: modal rendered %v", e.Data)
+	})
 	// 관측은 페이지가 처음 커밋한 뒤에 시작한다. 그때 창이 화면에 있고 표면이 있다.
 	// 창 이벤트에 붙이면 이 서비스가 늦게 시작할 때 이미 지나간 이벤트를 기다린다.
 	offReady := app.Event.On("page-ready", func(*application.CustomEvent) { o.start() })
@@ -42,6 +47,7 @@ func (o *Observe) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 		<-ctx.Done()
 		offChange()
 		offRecord()
+		offRendered()
 		offReady()
 	}()
 	return nil

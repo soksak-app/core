@@ -756,6 +756,10 @@ fn overlay_ready(
     state: State<'_, Overlay>,
     id: String,
 ) -> Result<(), String> {
+    // The modal's document calls this from every render, and the window is shown
+    // on the first one. The rest are announced: whether a content update reached
+    // that document is a fact only the document has, and this call carries it.
+    app.emit("modal-rendered", &id).map_err(|e| e.to_string())?;
     let Some(existing) = state.window.lock().map_err(|e| e.to_string())?.clone() else {
         return Ok(());
     };

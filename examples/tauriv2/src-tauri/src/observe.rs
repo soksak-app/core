@@ -52,6 +52,11 @@ pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
             // app announces that where it happens. Nothing is polled.
             let listen = app.clone();
             app.listen("windows-changed", move |_| report(listen.clone()));
+            // Written whenever the modal's document renders. Whether a content
+            // update reached that document is known nowhere else.
+            app.listen("modal-rendered", |event| {
+                eprintln!("observe: modal rendered {}", event.payload().trim_matches('"'));
+            });
             // Observation starts after the page's first commit: the window is on
             // screen and the surfaces exist. A page-load event fires again on
             // every reload and would start it more than once.

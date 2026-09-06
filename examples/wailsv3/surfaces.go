@@ -453,6 +453,10 @@ func (s *Surfaces) ModalContent(id string) OverlayContent {
 // created at that size; measuring the same markup inside the window would apply a
 // different constraint and produce a different size.
 func (s *Surfaces) ModalReady(id string) {
+	// The modal's document calls this from every render, and the window is shown
+	// on the first one. The rest are announced: whether a content update reached
+	// that document is a fact only the document has, and this call carries it.
+	application.Get().Event.Emit("modal-rendered", id)
 	win, ok := mainWindow()
 	if !ok {
 		log.Print("modal ready: ", errNoWindow)
