@@ -293,6 +293,20 @@ export const BREAKS = [
     to: "        for (const { drag, was } of moving) {\n            this.dividerEls.delete(was);",
   },
   {
+    id: "carry-anchor",
+    what: "a change carries the line of every other gesture but not its press anchor",
+    file: "dist/dom.js",
+    find: "                drag.base += this.grid.boundaryPos(drag.axis, line) - was[i];",
+    to: "                ;",
+  },
+  {
+    id: "refile-held",
+    what: "a gesture takes the key another gesture holds, and that other gesture loses its divider",
+    file: "dist/dom.js",
+    find: "if (d.axis !== drag.axis || d.line !== drag.line || this.holding(d.key))",
+    to: "if (d.axis !== drag.axis || d.line !== drag.line)",
+  },
+  {
     id: "refile-gone",
     what: "a drag whose boundary is gone leaves its element in the host",
     file: "dist/dom.js",

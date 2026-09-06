@@ -1602,3 +1602,81 @@ test("a divider a finger still holds keeps data-dragging when the mouse lets go"
   assert.equal(divider.dataset.dragging, undefined, "the last release lets it go");
   view.destroy();
 });
+
+test("a change on one stretch of a line carries the anchor of a gesture on the other", () => {
+  const { window, host, grid, view } = mount();
+  // A card spanning the line breaks it into two stretches, so two gestures hold
+  // one boundary through two elements.
+  grid.replace({
+    xs: [0, 0.5, 1],
+    ys: [0, 1 / 3, 2 / 3, 1],
+    cards: [
+      { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
+      { id: "b", c0: 1, c1: 2, r0: 0, r1: 1 },
+      { id: "band", c0: 0, c1: 2, r0: 1, r1: 2 },
+      { id: "c", c0: 0, c1: 1, r0: 2, r1: 3 },
+      { id: "d", c0: 1, c1: 2, r0: 2, r1: 3 },
+    ],
+    paidBy: {},
+  });
+  view.render();
+  const both = [...host.querySelectorAll('.sp-divider[data-axis="x"][data-line="1"]')].sort(
+    (p, q) => parseFloat(p.style.top) - parseFloat(q.style.top),
+  );
+  assert.equal(both.length, 2, "the line is drawn as two stretches");
+  const [upper, lower] = both;
+
+  const at = grid.boundaryPos("x", 1);
+  pointer(window, upper, "pointerdown", 1, at, 60);
+  lower.dispatchEvent(
+    new window.KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true }),
+  );
+  const moved = grid.boundaryPos("x", 1);
+  assert.equal(moved, at + 8, "the key moved the boundary both gestures hold");
+
+  // The finger has not moved, so its next move leaves the boundary where it is.
+  pointer(window, upper, "pointermove", 1, at, 60);
+  assert.equal(
+    grid.boundaryPos("x", 1),
+    moved,
+    "the finger drives the boundary from where the key left it",
+  );
+  view.destroy();
+});
+
+test("two stretches that become one divider stay with the gesture that kept it", () => {
+  const { window, host, grid, view } = mount();
+  grid.replace({
+    xs: [0, 0.5, 1],
+    ys: [0, 1 / 3, 2 / 3, 1],
+    cards: [
+      { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
+      { id: "b", c0: 1, c1: 2, r0: 0, r1: 1 },
+      { id: "band", c0: 0, c1: 2, r0: 1, r1: 2 },
+      { id: "c", c0: 0, c1: 1, r0: 2, r1: 3 },
+      { id: "d", c0: 1, c1: 2, r0: 2, r1: 3 },
+    ],
+    paidBy: {},
+  });
+  view.render();
+  const both = [...host.querySelectorAll('.sp-divider[data-axis="x"][data-line="1"]')].sort(
+    (p, q) => parseFloat(p.style.top) - parseFloat(q.style.top),
+  );
+  const [upper, lower] = both;
+  const at = grid.boundaryPos("x", 1);
+  pointer(window, upper, "pointerdown", 1, at, 60);
+  pointer(window, lower, "pointerdown", 2, at, 500);
+
+  // The band is cut on the same line, so the two stretches become one divider.
+  grid.split("band", "x");
+  view.render();
+  assert.equal(
+    host.querySelectorAll('.sp-divider[data-axis="x"][data-line="1"]').length,
+    1,
+    "one divider is left on the line",
+  );
+  assert.equal(upper.isConnected, true, "the gesture whose element kept its key keeps it");
+  assert.equal(upper.dataset.dragging, "true", "and the element is still held");
+  assert.equal(lower.isConnected, false, "the other element is taken away");
+  view.destroy();
+});
