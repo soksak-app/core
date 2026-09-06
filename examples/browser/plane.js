@@ -885,7 +885,10 @@ function drawRail() {
   const kind = focusedPlugin();
   const rail = kind ? grid.rect(railId(kind)) : null;
   const focused = grid.rect(focusedId);
-  const rects = rail && focused ? [rail, focused] : [];
+  // 변 없이 그려진 카드는 감쌀 것이 없다. 획은 카드에서 통로의 절반만큼 떨어져
+  // 지나므로, 두께 없는 카드를 감싸면 그 획이 이웃 카드의 안쪽을 가로지른다.
+  const drawable = (r) => r !== undefined && r.w > 0 && r.h > 0;
+  const rects = drawable(rail) && drawable(focused) ? [rail, focused] : [];
   // 획은 카드에서 pad 만큼 떨어진 경로를 그린다. 카드 모서리와 동심이려면 반경도
   // 그만큼 커야 하고, 그 값은 방향과 무관하게 하나다. 각진 카드의 동심 외곽선은
   // 각지다. pad 를 더하면 반경이 0 보다 커져 모서리가 깎이고, 그 경사 때문에 가로

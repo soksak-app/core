@@ -133,7 +133,8 @@ body{margin:0;background:var(--bg);color:var(--fg);
 /* 카드는 한 종류이고 역할만 다르다. 비율을 받는지 px 를 받는지, 이동 가능한지가
    차이다. z 순서는 CSS 가 아니라 합성이 정한다. 네이티브 표면은 OS 뷰라 CSS 스택에
    참여하지 않으므로 시뮬레이터는 표면 레이어를 위에 두어 재현한다. */
-.card{position:absolute;z-index:1;display:grid;grid-template-rows:var(--head) 1fr var(--foot);
+.card{position:absolute;z-index:1;display:grid;grid-template-columns:minmax(0,1fr);
+  grid-template-rows:minmax(0,var(--head)) minmax(0,1fr) minmax(0,var(--foot));
   min-width:0;overflow:hidden;border:var(--bw) solid var(--edge);border-radius:var(--r);
   background:var(--card);outline:0}
 /* 그리드 자식의 min-width 기본값 auto 는 열을 min-content 까지 확장하고,

@@ -48,6 +48,9 @@ function insetOf(slot, el) {
     top: s.top - c.top,
     width: c.width - s.width,
     height: c.height - s.height,
+    // 슬롯이 한 변을 잃었으면 카드가 머리와 발을 담지 못한 것이고, 이 뺄셈은 여백이
+    // 아니라 눌린 카드의 크기다. 그 값으로는 다른 크기의 카드를 예측할 수 없다.
+    flat: s.width <= 0 || s.height <= 0,
   };
 }
 
@@ -163,6 +166,10 @@ export function publishAhead(rects, seated) {
     if (!card) return false;
     if (seated.get(el.dataset.cardId) !== id) return false;
     const inset = insetOf(slot, el);
+    // 여백을 잴 수 없는 카드와, 여백을 담지 못하는 카드. 앞쪽은 슬롯이 눌려 있어
+    // 뺄셈이 여백이 아니라 카드의 크기이고, 뒤쪽은 머리와 발이 줄어들어 슬롯이
+    // 잰 자리에 오지 않는다. 둘 다 예측할 수 없으므로 측정하는 길로 넘긴다.
+    if (inset.flat || card.w < inset.width || card.h < inset.height) return false;
     seats.push({
       id,
       layer: Number(slot.dataset.nativeLayer),

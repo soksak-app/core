@@ -35,11 +35,15 @@ export function verify(controls = null) {
   const rects = cards.map((c) => box.get(c.id));
   const { shape, rects: railRects } = railOutline();
 
+  // 외곽선은 두 사각형을 통로의 절반만큼 키워 합치므로, 통로 하나를 사이에 둔 둘은
+  // 통로 가운데에서 만나 한 루프가 된다. 붙었는지를 같은 기준으로 판정한다. 판이
+  // 작아 한쪽이 크기 없이 그려지면 두 사각형이 맞닿기만 하는데, 키우면 그때도
+  // 만나므로 겹침을 요구하면 붙은 것을 떨어졌다고 읽는다.
   const adjacent = railRects.length === 2 && (() => {
     const [a, b] = railRects;
     const dx = Math.max(b.x - (a.x + a.w), a.x - (b.x + b.w));
     const dy = Math.max(b.y - (a.y + a.h), a.y - (b.y + b.h));
-    return (Math.abs(dx - grid.gap) < .5 && dy < -.5) || (Math.abs(dy - grid.gap) < .5 && dx < -.5);
+    return dx <= grid.gap + .5 && dy <= grid.gap + .5;
   })();
   // 외곽선은 카드와 동심이므로 카드가 각지면 외곽선도 각지다. 꼭짓점은 전부 라운드
   // 이거나 전부 각지고, 섞이면 한 모서리만 다른 모양이라는 뜻이다.
@@ -64,16 +68,25 @@ export function verify(controls = null) {
       for (const arr of [ends, starts]) if (arr.length > 1) drift = Math.max(drift, Math.max(...arr) - Math.min(...arr));
     }
   }
-  add("V1 공유 경계 편차 == 0", drift === 0, `최대 ${drift.toFixed(4)}px · 허용오차 없음`);
+  // 카드의 먼 변은 `x + w` 로 되돌린 값이고, w 는 두 선의 차다. 같은 선에서 끝나는
+  // 두 카드는 시작이 다르므로 그 덧셈의 마지막 비트가 다를 수 있다. 그것은 경계가
+  // 둘이라는 뜻이 아니라 double 의 자리수이므로, 배치가 어긋난 것과 구별되는 만큼만
+  // 허용한다 — 실제로 어긋나면 픽셀 단위로 벌어진다.
+  const ULP = 1e-9;
+  add("V1 공유 경계 편차 == 0", drift <= ULP,
+      `최대 ${drift.toExponential(1)}px · 허용 ${ULP.toExponential(0)}px`);
 
   // 슬롯 상자의 합. `(w+gap)(h+gap)` 은 모든 선이 통로 하나를 차지한다는 가정이며,
   // 폭이 음수인 카드도 상쇄되어 통과했다.
   const X = (k) => grid.boundaryPos("x", k), Y = (k) => grid.boundaryPos("y", k);
   const area = grid.cards.reduce((n, c) => n + (X(c.c1) - X(c.c0)) * (Y(c.r1) - Y(c.r0)), 0);
   const want = grid.width * grid.height;
-  const noArea = rects.filter((r) => !(r.w > 0 && r.h > 0)).length;
-  add("V2 판이 빈틈없이 덮임", Math.abs(area - want) < 2 && noArea === 0,
-      `Δ ${(area - want).toFixed(1)}px²` + (noArea ? ` · 면적 없는 카드 ${noArea}장` : ""));
+  // 판이 담을 수 있는 것보다 많이 담으면 자리를 잃은 카드가 크기 없이 그려진다(R5).
+  // 그것은 라이브러리가 하는 일이므로 통과다. 변이 음수인 카드만 규칙 위반이고,
+  // 그런 카드는 넓이 합에서 서로 상쇄되어 위의 Δ 로는 드러나지 않으므로 여기서 센다.
+  const inverted = rects.filter((r) => r.w < 0 || r.h < 0).length;
+  add("V2 판이 빈틈없이 덮임", Math.abs(area - want) < 2 && inverted === 0,
+      `Δ ${(area - want).toFixed(1)}px²` + (inverted ? ` · 뒤집힌 카드 ${inverted}장` : ""));
 
   let worst = Infinity, overlap = 0;
   for (let i = 0; i < rects.length; i++) for (let j = i + 1; j < rects.length; j++) {
@@ -83,9 +96,16 @@ export function verify(controls = null) {
     if (dx < -0.01 && dy < -0.01) { overlap++; continue; }
     worst = Math.min(worst, Math.max(dx, dy));
   }
+  // 통로가 정확히 gap 인 것은 판에 자리가 있는 동안이다. 판이 담는 것보다 많이
+  // 담으면 자리를 잃은 카드가 변 없이 그려지고, 통로 합이 판을 넘으면 통로 자체가
+  // 판에 맞춰 줄어든다(R5). 그 상태에서 gap 을 요구하면 라이브러리가 하지 않는
+  // 약속을 검사하게 되므로, 통로가 gap 보다 넓지 않은 것만 본다.
+  const squeezed = rects.some((r) => r.w <= 0 || r.h <= 0);
   add(`V3 겹침 0 · 통로 ${grid.gap}px`,
-      overlap === 0 && (!isFinite(worst) || Math.abs(worst - grid.gap) < 0.5),
-      overlap ? `겹침 ${overlap}쌍` : `최소 ${isFinite(worst) ? worst.toFixed(1) : grid.gap}px`);
+      overlap === 0 && (!isFinite(worst)
+        || (squeezed ? worst <= grid.gap + 0.5 : Math.abs(worst - grid.gap) < 0.5)),
+      overlap ? `겹침 ${overlap}쌍`
+        : `최소 ${isFinite(worst) ? worst.toFixed(1) : grid.gap}px${squeezed ? " · 판이 좁아 통로가 줄었다" : ""}`);
 
   // V4 — minSize 는 판이 아니라 연산을 구속한다. gap 과 minSize 와 resize 는 같은
   // 비율을 새 눈금으로 다시 표현하므로, 바닥에 선 카드는 통로가 넓어지거나 판이
@@ -101,6 +121,11 @@ export function verify(controls = null) {
   const trip = new Soksak(grid.toJSON(),
     { gap: grid.gap, minSize: grid.minSize, width: grid.width, height: grid.height });
   const leaving = trip.rects();
+  // 사본은 지금 판이 그린 것과 같은 자리를 그려야 한다. 스페이스 전환이 이 길을
+  // 지난다 — capture 가 toJSON 으로 담고 adopt 가 replace 로 되돌린다. 여기서
+  // 어긋나면 스페이스를 오간 것만으로 배치가 달라진다.
+  let rebuilt = 0;
+  for (const [id, was] of leaving) rebuilt = Math.max(rebuilt, maxDelta(was, box.get(id)));
   // 왕복이 가는 곳은 px 크기가 들어가지 못하는 눈금이어야 한다. 들어가는 눈금까지만
   // 가면 크기를 다시 쓰는 구현도 다시 쓸 것이 없어 왕복이 그대로 돌아온다.
   trip.gap = grid.gap * 4 + 64;
@@ -111,8 +136,9 @@ export function verify(controls = null) {
   let moved = 0;
   for (const [id, was] of leaving) moved = Math.max(moved, maxDelta(was, back.get(id)));
   const smallest = Math.min(...rects.flatMap((r) => [r.w, r.h]));
-  add("V4 통로와 크기를 되돌리면 그대로", moved === 0,
-      `왕복 후 최대 ${moved.toFixed(4)}px · 그려진 최소 변 ${smallest.toFixed(0)}px`);
+  add("V4 담았다 되돌리면 그대로", moved === 0 && rebuilt === 0,
+      `사본 ${rebuilt.toFixed(4)}px · 왕복 후 최대 ${moved.toFixed(4)}px · ` +
+      `그려진 최소 변 ${smallest.toFixed(0)}px`);
   add("V5 배치가 slicing", grid.isSlicing(), "한 영역을 통째로 자른 결과만 가능");
 
   const open = cards.filter((c) => !c.fixed);
