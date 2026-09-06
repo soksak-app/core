@@ -106,6 +106,7 @@ export class SoksakView {
                 this.grid.resize(host.clientWidth, host.clientHeight);
                 live.forEach((drag, i) => {
                     drag.base += this.grid.boundaryPos(drag.axis, drag.line) - was[i];
+                    drag.stood = this.grid.boundaryPos(drag.axis, drag.line);
                 });
                 this.draw('resize');
             });
@@ -168,6 +169,10 @@ export class SoksakView {
         var _j;
         if (this.disposed)
             return;
+        // `render` is the one reason the view never draws for, so this paint follows
+        // a change only the host knows it made.
+        if (reason === 'render')
+            this.settle();
         // The width of one device pixel, read every render because a window moved to
         // another display gets a different one.
         const step = this.step;
@@ -300,8 +305,51 @@ export class SoksakView {
             drag.line = line;
             if (drag.on !== on)
                 drag.base += this.grid.boundaryPos(drag.axis, line) - was[i];
+            drag.stood = this.grid.boundaryPos(drag.axis, line);
         });
         return at;
+    }
+    /**
+     * Settle every gesture against a change the view did not make.
+     *
+     * The host owns the grid, and a card that arrives or leaves renumbers the
+     * lines: the number a gesture holds then names another boundary. Nothing told
+     * the gesture, so it went on driving that other boundary while `refile` drew
+     * its divider there, out from under the finger.
+     *
+     * Only the host knows such a change happened, and the view is told by
+     * `render()` after it has, so there is nothing to carry from. The boundary is
+     * matched by where the view last put it: within the width the divider is
+     * grabbed at it is still the handle under the finger, and the press anchor
+     * follows it; further than that the gesture ends.
+     */
+    settle() {
+        const reach = Math.max(this.grid.gap, this.grid.grabSize);
+        for (const drag of this.holds()) {
+            const at = this.grid.boundaryPos(drag.axis, drag.line);
+            if (this.grid.hasBoundary(drag.axis, drag.line) && Math.abs(at - drag.stood) <= reach) {
+                drag.base += at - drag.stood;
+                drag.stood = at;
+                continue;
+            }
+            this.release(drag);
+        }
+    }
+    /**
+     * End the gesture this state belongs to, without drawing.
+     *
+     * This runs inside render, and ending a drag draws, which would start that
+     * render again from inside itself. The divider is left where it is: nothing
+     * holds it any more, so it is an ordinary divider again.
+     */
+    release(drag) {
+        for (const [pointer, held] of [...this.drags])
+            if (held === drag)
+                this.drop(pointer);
+        if (this.mouseDrag === drag)
+            this.dropMouse();
+        if (this.pressed === drag)
+            this.pressed = null;
     }
     /**
      * File the element a drag holds under the key its boundary now has.
@@ -541,6 +589,7 @@ export class SoksakView {
                 line,
                 from: axis === 'x' ? e.clientX : e.clientY,
                 base: this.grid.boundaryPos(axis, line),
+                stood: this.grid.boundaryPos(axis, line),
                 moved: false,
             });
         });
@@ -612,6 +661,7 @@ export class SoksakView {
                 line,
                 from: axis === 'x' ? e.clientX : e.clientY,
                 base: this.grid.boundaryPos(axis, line),
+                stood: this.grid.boundaryPos(axis, line),
                 moved: false,
             };
         };
@@ -662,7 +712,15 @@ export class SoksakView {
             const line = Number(el.dataset.line);
             // The record is set before the change runs, because that is when the line
             // each gesture holds is resolved.
-            const held = { on: el, axis, line, from: 0, base: 0, moved: false };
+            const held = {
+                on: el,
+                axis,
+                line,
+                from: 0,
+                base: 0,
+                stood: this.grid.boundaryPos(axis, line),
+                moved: false,
+            };
             if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
                 this.pressed = held;

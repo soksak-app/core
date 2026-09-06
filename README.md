@@ -236,10 +236,14 @@ not hand that divider the gesture.
 
 A gesture follows the changes the view makes: a drag, a centring and a merge each
 renumber lines, and the divider under the finger is carried to the line its own
-boundary now has. A change the host makes to the grid does not carry a gesture,
-because the view is told of it by `render()`, after it happened, and a card that
-arrives or leaves moves both the number a line has and where it stands. A host
-that rearranges cards under a live gesture ends it first.
+boundary now has. A change the host makes to the grid carries no gesture, because
+the view is told of it by `render()`, after it happened, and a card that arrives
+or leaves moves both the number a line has and where it stands. So a gesture is
+settled against such a change instead: a boundary still within the width its
+divider is grabbed at is the same handle and the gesture keeps it, and a boundary
+further away than that is one the gesture never took hold of, so the gesture ends
+there — the divider stops carrying `data-dragging` and the next move drives
+nothing.
 
 **A card's child can inflate the rect the view set.** A flex or grid child
 defaults to `min-width: auto`, so a column stretches to min-content and the

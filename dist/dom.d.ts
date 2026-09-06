@@ -160,6 +160,29 @@ export declare class SoksakView {
      */
     private carry;
     /**
+     * Settle every gesture against a change the view did not make.
+     *
+     * The host owns the grid, and a card that arrives or leaves renumbers the
+     * lines: the number a gesture holds then names another boundary. Nothing told
+     * the gesture, so it went on driving that other boundary while `refile` drew
+     * its divider there, out from under the finger.
+     *
+     * Only the host knows such a change happened, and the view is told by
+     * `render()` after it has, so there is nothing to carry from. The boundary is
+     * matched by where the view last put it: within the width the divider is
+     * grabbed at it is still the handle under the finger, and the press anchor
+     * follows it; further than that the gesture ends.
+     */
+    private settle;
+    /**
+     * End the gesture this state belongs to, without drawing.
+     *
+     * This runs inside render, and ending a drag draws, which would start that
+     * render again from inside itself. The divider is left where it is: nothing
+     * holds it any more, so it is an ordinary divider again.
+     */
+    private release;
+    /**
      * File the element a drag holds under the key its boundary now has.
      *
      * The key carries the line number, so a renumber leaves the element filed
