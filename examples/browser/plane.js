@@ -841,8 +841,12 @@ function centreTabs() {
 function markFocus() {
   const mark = document.getElementById("focusMark");
   const on = document.documentElement.dataset.focusInd === "corner";
-  const slot = on
-    ? plane.querySelector(`[data-native-surface-id="${focusedId}"][data-native-surface]`)
+  // 슬롯은 탭 단위이고 포커스는 카드 단위다. 포커스 카드의 활성 탭이 그 카드의
+  // 슬롯이다.
+  const card = on ? grid.card(focusedId) : null;
+  const shown = card ? activeTab(card) : null;
+  const slot = shown
+    ? plane.querySelector(`[data-native-surface-id="${shown.id}"][data-native-surface]`)
     : null;
   if (!slot) { mark.hidden = true; return; }
   const host = plane.getBoundingClientRect();
