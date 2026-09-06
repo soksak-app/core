@@ -47,7 +47,7 @@ export const host = () => {
     on: (event, fn) => listen(event, (e) => fn(e.payload)),
     // 이 앱의 문서에는 다리가 이미 들어 있지만, 이름을 함께 실어 보내는 규칙은
     // 하나로 둔다 — 프레임워크마다 다르면 그 차이를 매번 기억해야 한다.
-    page: (path) => `${path}${path.includes("?") ? "&" : "?"}framework=${name}`,
+    page: (path) => path,
   };
 };
 

@@ -9,16 +9,10 @@ import * as webview from "./webview.js";
 /** present() 가 true 를 반환하는 첫 항목을 선택한다. */
 const FRAMEWORKS = [tauriv2, wailsv3, webview];
 
-/* 호스트가 서비스하는 표면·모달 페이지는 메인 페이지와 다른 주소에서 실행된다.
-   Wails 는 메인 페이지가 wails:// 이고 표면은 루프백 서버이므로 주소로 런타임을
-   판별할 수 없다. 호스트가 URL 에 framework=<name> 을 추가하고 여기서 읽는다. */
-const declared = new URLSearchParams(location.search).get("framework");
+/* 표면·모달 페이지도 같은 애플리케이션의 문서이므로 같은 방법으로 판별된다. */
+const chosen = FRAMEWORKS.find((f) => f.present());
 
-const chosen = declared
-  ? FRAMEWORKS.find((f) => f.name === declared)
-  : FRAMEWORKS.find((f) => f.present());
-
-if (!chosen) throw new Error(`unknown framework: ${declared}`);
+if (!chosen) throw new Error("unknown framework");
 
 /** 선택된 런타임의 이름. */
 export const framework = chosen.name;

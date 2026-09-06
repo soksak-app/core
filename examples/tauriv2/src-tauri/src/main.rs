@@ -442,8 +442,7 @@ fn overlay_show(
     }
     // The id is passed in the url so the page can identify itself when it calls
     // back.
-    // The page reads which framework holds it from the address it was opened at.
-    let url = format!("overlay.html?id={}&framework=tauriv2", request.id);
+    let url = format!("overlay.html?id={}", request.id);
     let [r, g, b, a] = request.background;
     let scale = window.scale_factor().map_err(|e| e.to_string())?;
     let (ax, ay, aw, ah) = aligned(

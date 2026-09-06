@@ -68,7 +68,7 @@ in a place — left, or a plugin's rail or right — and a place with no link ha
 sidebar. Sets and links are what a person composes, so they are in settings, and
 ⚙ 설정 is where they are edited.
 
-A surface says what it shows as `{url}` or `{page}`: an address anywhere, or a
+A surface declares what it shows as `{url}` or `{page}`: an address anywhere, or a
 document this host serves. The page publishes that with each commit, so nothing
 outside the page names a kind of surface.
 
@@ -88,14 +88,12 @@ the two runtimes is how a page reaches its application.
 
     framework/index.js      picks one and exports what the rest imports
     framework/tauriv2.js    invoke / listen, and Tauri's own document urls
-    framework/wailsv3.js    the Wails bindings and its loopback server
+    framework/wailsv3.js    the Wails bindings and its runtime
     framework/webview.js    no application: a plain browser, and no host
 
-A runtime says it is there — Tauri by `window.__TAURI__`, Wails by the
-`wails:` scheme its window opens — and the page picks the first that does.
-Pages an application serves are loaded from its own loopback address, which says
-nothing about which application it is, so those urls carry `framework=<name>`
-and the page reads it instead of guessing.
+Each runtime is detected by what it defines: Tauri by `window.__TAURI__`, Wails
+by the `wails:` scheme. A surface and a modal are documents of the same
+application, loaded the same way, so the same detection applies.
 
 The copy is a make target, because `go:embed` cannot reach outside its module
 and both applications embed the frontend at compile time:
@@ -117,11 +115,11 @@ The binaries land in `examples/tauriv2/src-tauri/target/` and
 
 ### Watching what is drawn
 
-The page cannot read what ends up on screen: the surfaces and the modal are
-windows the application makes, and the window server composites them. Started
-with `--observe`, each application registers one more component — a service on
-Wails, a plugin on Tauri — that writes the window server's number for its window
-and for the windows attached to it:
+The page cannot read what is composited: the surfaces and the modal are views
+and windows the application creates, and the window server composites them.
+Started with `--observe`, each application registers one more component, a
+service on Wails and a plugin on Tauri, which prints the window server's number
+for its window and for the windows attached to it:
 
     ./examples/wailsv3/bin/wailsv3 --observe
     ./examples/tauriv2/src-tauri/target/debug/soksak-tauri --observe
@@ -129,18 +127,17 @@ and for the windows attached to it:
     관측: 창 번호 [5921]
 
 A capture tool addresses a window by that number, so it reads the composite
-without raising the window and without taking the focus from whatever holds it —
-`screencapture -l5921 out.png` on macOS. A region of the screen would catch
-whatever is in front instead, and raising the window first changes the state
-being measured.
+without raising the window and without moving the focus: `screencapture -l5921
+out.png` on macOS. A screen region would capture whatever is in front, and
+raising the window changes the state being measured.
 
-The number is written when the window set changes, not on a timer: attaching and
-detaching a window is the application's own doing, so it says so where it happens
-and the component listens.
+The number is printed when the window set changes, not on a timer. The
+application attaches and detaches the window itself, so it emits an event at that
+point and the component subscribes.
 
 A boundary lies over the surfaces, so a drag reaches it by coordinates. A button
-in the page's own chrome does not — it is an element of the document — so
-`--click ms,selector` asks the page to press one once it is drawn:
+in the page chrome is a DOM element, so `--click ms,selector` has the page
+dispatch the click once the page has rendered:
 
     ./examples/wailsv3/bin/wailsv3 --observe --click '5000,button.act[title="설정"]'
 
@@ -156,35 +153,34 @@ times:
 
     관측: 흔들기 (404,294) -250,+0 3걸음 ×15
 
-The point is held for the whole run. Letting go and pressing again would miss:
-a boundary stops at the smallest card, so the next press would land where the
-boundary is not, and nothing would move from there on.
+The press is held for the whole run. Releasing and pressing again fails once a
+boundary stops at the minimum card size, because the next press lands where the
+boundary no longer is.
 
-The steps travel the path a press on a surface travels — the page receives
-`surface-input` and matches the point against its own dividers — so what this
-measures is the path the product uses, not one built beside it. No key or button
-is synthesised at the operating system, so nothing takes the focus away.
+Each step is delivered through `surface-input`, the same path a press on a
+surface uses, so the measurement covers the product's own path. No key or button
+is synthesised at the operating system, so the focus does not move.
 
-`--capture <directory>` records the window itself while a run of updates is
-going. The page says whether more is coming, so a boundary dragged by hand is
-recorded the same way a driven one is:
+`--capture <directory>` records the window while updates continue. The page
+reports whether more updates follow, so a boundary dragged by hand is recorded
+the same way as a driven one:
 
     ./examples/wailsv3/bin/wailsv3 --observe --capture /tmp/frames
 
     관측: 249 프레임을 /tmp/frames 에 적었다
 
 Frames are written as they arrive, as raw BGRA behind a width, a height and a
-row length. Encoding each one would cost frames, and a dropped frame is the one
-worth looking at. A screenshot asked for one at a time cannot be used for this:
-the system answers it with a composite made for that request, so a state that
-lasts one frame between a view being resized and its page being painted is never
-in it.
+row length. Encoding each frame would drop frames, and a dropped frame is the one
+being measured. A screenshot cannot be used: the system returns a composite made
+for each request, so a state that lasts one frame between a resize and the next
+render is never captured.
 
-`make examples-verify` runs both applications this way and looks at what they
-drew — see `examples/test/`.
+`make examples-verify` runs both applications this way and reads the frames. See
+`examples/test/`.
 
-Only macOS is written for the window number. Windows would report the HWND and
-Linux the X window id. Without the flag neither component is registered.
+Only macOS is implemented for the window number. On Windows this would report
+the HWND and on Linux the X window id. Without the flag neither component is
+registered.
 
 ## What each one draws natively
 

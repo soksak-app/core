@@ -24,12 +24,7 @@ func main() {
 	flag.Parse()
 
 	shells := NewShells()
-	pages, err := NewPages(assets, shells)
-	if err != nil {
-		log.Fatal(err)
-	}
-	surfaces := NewSurfaces(shells, pages)
-	pages.Bind(surfaces)
+	surfaces := NewSurfaces(shells)
 	app := application.New(application.Options{
 		Name:        "soksak",
 		Description: "soksak layout running in Wails v3",

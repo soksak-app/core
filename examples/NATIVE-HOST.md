@@ -53,42 +53,52 @@ runtime is holding them.
 
 The two hosts. Both implement the same operations against the same platform:
 
-| Operation | Wails, Go + cgo | Tauri, Rust + objc2 |
+| Operation | Wails, Go | Tauri, Rust + objc2 |
 | --- | --- | --- |
-| create a surface | `surfaceCreate`, a WKWebView in the content view | `window.add_child` |
-| move, resize, hide | `surfaceSetFrame`, `surfaceSetHidden` | `set_position`, `set_size`, `hide` |
+| create a surface | `window.AddWebview` | `window.add_child` |
+| move, resize, hide | `SetBounds`, `SetHidden` | `set_position`, `set_size`, `hide` |
 | dim | `surfaceSetAlpha` | `native::alpha` |
-| round the corners | `surfaceSetCornerRadius` | `native::corners` |
+| a modal's window | `window.Attach` | `WebviewWindowBuilder` + `parent_raw` |
+| round the corners | `Mac.CornerRadius` | `native::corners` |
 | identify a pressed view | `surfaceWatchMouse` + `hitTest:` | `native::watch_mouse` |
 | a shape above the surfaces | `shapeCreate`, `shapeSetStyle` | `native::shape_*` |
-| stop a webview painting white | `surfaceHideBackground` | wry does it for every webview |
+| stop a webview painting white | `WebviewOptions.Transparent` | wry does it for every webview |
 | record the window | `capture_darwin.go` | `capture.m` |
-| serve the local pages | `serve.go`, a loopback server | the app's own scheme |
+| serve the local pages | the app's own scheme | the app's own scheme |
 | run a shell | `shell.go` | `shell.rs` |
 
 Only macOS is written on either side. Windows and Linux are named in
 `native_other.go` and `native.rs` and are not implemented.
 
-One of those rows is not a public interface. A webview paints what it covers, and
-area it does not cover yet is its own opaque white; nothing published turns that
-off. `underPageBackgroundColor`, which is public, reaches only the area past the
-end of a page and was measured never to appear there.
+One of those rows is not a public interface. A webview renders only the area it
+has laid out and fills the rest with opaque white. No published interface turns
+that off; `underPageBackgroundColor` is public but applies only past the end of a
+page.
 
-Both frameworks already reach a key by name for it, and both offer the intent
-rather than the key: Wails as `Mac.Backdrop = Transparent`, wry as a transparent
-webview. Neither offers it here, because a surface is not theirs — a window holds
-one webview in each of them, and every surface in this example is a webview this
-application makes and adds itself. So the intent is written here the same way:
-asked for by what it means, inside a guard, read back, and the area is left white
-if the view does not agree.
+Both frameworks set a key by name for it, and both expose the intent rather than
+the key: wry as a transparent webview, Wails as `WebviewOptions.Transparent` on a
+webview added to a window. The Wails side is
+[a fork](https://github.com/min-median-max/wails/tree/webview-in-window). Wails
+v3 creates one webview per window and provides no method to add another, so every
+surface here was previously a webview this example created itself: macOS only,
+outside the application's asset server, and on its own message channel.
+
+The fork adds `AddWebview`, which creates a webview from the window's
+configuration, and `Attach`, which positions a window over a point in another
+window's content. With both, a surface and a modal load from the application's
+own scheme, import its runtime and receive its events, and this example creates
+no webview itself.
 
 ## What a plugin would be
 
 **Wails.** A service, registered like `main.Surfaces` is today. It would export
 `SyncSurfaces`, `SetShape`, `ClearShape`, `OverlayShow`, `OverlayPlace`,
-`OverlayUpdate`, `OverlayHide`, `SetTheme` and `Report`, and emit
-`surface-pressed` and `overlay-pick`. The cgo in `native_darwin.go` and the
-loopback server in `serve.go` move with it.
+`OverlayUpdate`, `OverlayHide`, `SetTheme` and `Report` for the main page, and
+`Theme`, `ShellOpen`, `ShellWrite`, `ModalContent`, `ModalReady` and
+`OverlayPick` for the pages a surface and a modal show; it would emit
+`surface-pressed`, `surface-input`, `overlay-pick`, `theme`, `shell-output` and
+`modal-content`. The shapes in `native_darwin.go` move with it. Nothing else
+does: the webviews come from the framework.
 
 **Tauri.** A plugin crate, `tauri-plugin-native-surfaces`. The commands are the
 same list in snake case. Tauri plugins carry their own JavaScript, so

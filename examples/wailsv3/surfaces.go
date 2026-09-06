@@ -1,19 +1,17 @@
 // Native surfaces and native modals for the soksak example.
 //
-// On every commit the page declares the frame each surface occupies, and it
-// sends any [data-native-modal] element it opens. Each becomes a webview inside
-// the main window, positioned on the declared frame.
+// On every commit the page declares the frame of each surface and sends any
+// [data-native-modal] element it opens. A surface is created as a webview added
+// to the main window on the declared frame. A modal is created as a window
+// attached over the point the page declares, because a page cannot draw over a
+// webview the system composites and two webviews in one window both set the
+// cursor.
 //
-// Wails has no API for adding a webview to a window, but it exposes the window,
-// and a webview is a native view. See native_darwin.go.
-//
-// A view added that way cannot reach the app's asset server, which serves a
-// scheme only its own webview resolves. The local pages a surface or a modal
-// needs are served over http on a loopback address instead; see serve.go.
+// Both load from the application's own scheme, import its runtime and receive
+// its events.
 package main
 
 import (
-	"encoding/json"
 	"log"
 	"sync"
 
@@ -31,23 +29,23 @@ type Rect struct {
 type Surface struct {
 	ID  string `json:"id"`
 	URL string `json:"url"`
-	// Whether URL points outside this host. This host's own addresses are served
-	// by the loopback server. Deciding by plugin kind here would require editing
+	// Whether URL points outside this application. Its own addresses are served
+	// by its asset server. Deciding by plugin kind here would require editing
 	// this file for every plugin the page adds.
 	External bool `json:"external"`
 	Visible  bool `json:"visible"`
 	// Whether the page asked for this surface to be dimmed after losing focus.
 	Dim bool `json:"dim"`
-	// The colour the view shows before its page paints, so a resize shows no white.
+	// The colour the webview displays before its document renders.
 	Background [3]float64 `json:"background"`
 	Rect
 }
 
 type SyncRequest struct {
 	Viewport Viewport `json:"viewport"`
-	// Whether this is the page's final say, or one of a run still going. A run
-	// is a live resize: WebKit holds what it has drawn until the run ends,
-	// rather than showing the white it has not drawn yet.
+	// Whether this is the last update or one of a continuing run. During a run
+	// the surfaces are put in a live resize, in which WKWebView keeps the last
+	// rendered content instead of showing unrendered white.
 	Settled  bool      `json:"settled"`
 	Surfaces []Surface `json:"surfaces"`
 }
@@ -88,9 +86,12 @@ type OverlayContent struct {
 }
 
 type modal struct {
-	view    *nativeOverlay
+	// The modal is a window of this application, attached over the point the page
+	// put it at.
+	window  *application.WebviewWindow
 	content OverlayContent
-	radius  float64
+	// Where the page last put it, in the main window's content.
+	at Rect
 }
 
 // Where one surface was last placed. Held in the order the page declared them.
@@ -106,194 +107,119 @@ type Surfaces struct {
 	// Guards modals, which the pages this host serves read over HTTP. Views are
 	// only touched on the main thread and need no lock.
 	mu    sync.Mutex
-	views map[string]*nativeView
+	views map[string]*application.Webview
 	// A surface is a native view, so a press on it never reaches the page. This
 	// maps a pressed view to the surface id the page uses.
 	named map[uintptr]string
 	// The surfaces in a live resize. A surface receives the start and the end of
 	// a run, not one call per frame.
 	live map[string]bool
-	// Whether a run of updates is going. Only the changes are announced.
+	// Whether a run of updates is in progress. Only changes are emitted.
 	running bool
 	modals  map[string]*modal
 	shapes  map[string]*nativeShape
 	shells  *Shells
-	pages   *Pages
 	watch   sync.Once
+
+	// The theme the main page last set. A page calls Theme after loading.
+	theme Theme
 }
 
-// Message is one call from a page this app serves. The page names itself, so the
-// answer goes back to the view that asked.
-type Message struct {
-	Name  string  `json:"name"`
-	ID    string  `json:"id"`
-	Text  string  `json:"text"`
-	Key   string  `json:"key"`
-	Value string  `json:"value"`
-	W     float64 `json:"w"`
-	H     float64 `json:"h"`
-}
-
-// answer dispatches one message from a surface or modal page.
-func (s *Surfaces) answer(payload string) {
-	var m Message
-	if err := json.Unmarshal([]byte(payload), &m); err != nil {
-		return
-	}
-	switch m.Name {
-	case "terminal.open":
-		if err := s.shells.Open(m.ID); err != nil {
-			return
-		}
-		go s.forward(m.ID)
-	case "terminal.write":
-		_ = s.shells.Write(m.ID, m.Text)
-	case "overlay.content":
-		s.deliverModal(m.ID, "content", s.ModalContent(m.ID))
-	case "overlay.ready":
-		s.ModalReady(m.ID)
-	case "overlay.pick":
-		application.Get().Event.Emit("overlay-pick", map[string]string{
-			"id": m.ID, "key": m.Key, "value": m.Value,
-		})
-	}
-}
-
-// boot is the value a page starts with, injected before its first script runs.
-// A page that had to fetch this would spend a connection to get what this app
-// already holds.
-func (s *Surfaces) boot() string {
-	payload, err := json.Marshal(s.pages.Theme())
-	if err != nil {
-		return "null"
-	}
-	return string(payload)
-}
-
-// forward sends one shell's output to the page showing it, until the shell ends.
+// forward emits one shell's output until the shell ends.
+//
+// The output is emitted as an event. Every page receives it and the page
+// rendering that shell filters by id.
 func (s *Surfaces) forward(id string) {
 	lines := s.shells.Listen(id)
 	defer s.shells.Unlisten(id, lines)
 	for text := range lines {
-		s.deliverSurface(id, "output", text)
+		application.Get().Event.Emit("shell-output", ShellOutput{ID: id, Text: text})
 	}
 }
 
-// page is anything this app serves a document to: a surface's view, or the modal's
-// own window. Both hold a webview on the same message channel.
-type page interface {
-	eval(js string)
+// ShellOutput is one piece of a shell's output, as a page receives it.
+type ShellOutput struct {
+	ID   string `json:"id"`
+	Text string `json:"text"`
 }
 
-// deliver runs __spDeliver in a page. Script runs on the main thread.
-//
-// The caller passes a page it holds. There is no test for nothing here: a nil
-// pointer inside an interface is not nil, so a test would pass one through and
-// the call would land on nothing anyway.
-func deliver(view page, name string, value any) {
-	payload, err := json.Marshal(value)
-	if err != nil {
-		return
+// Theme returns the current theme. A page calls it once after loading and
+// subscribes to the theme event for later changes.
+func (s *Surfaces) Theme() Theme {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.theme
+}
+
+// ShellOpen opens the shell behind a terminal surface and starts forwarding it.
+func (s *Surfaces) ShellOpen(id string) error {
+	if err := s.shells.Open(id); err != nil {
+		return err
 	}
-	call, err := json.Marshal(name)
-	if err != nil {
-		return
-	}
-	application.InvokeSync(func() {
-		view.eval("window.__spDeliver(" + string(call) + "," + string(payload) + ")")
+	go s.forward(id)
+	return nil
+}
+
+// ShellWrite sends one line to a shell.
+func (s *Surfaces) ShellWrite(id string, text string) error {
+	return s.shells.Write(id, text)
+}
+
+// OverlayPick emits the key and value a modal's page changed. The main page
+// decides what they mean.
+func (s *Surfaces) OverlayPick(id string, key string, value string) error {
+	application.Get().Event.Emit("overlay-pick", map[string]string{
+		"id": id, "key": key, "value": value,
 	})
+	return nil
 }
 
-func (s *Surfaces) deliverSurface(id, name string, value any) {
-	s.mu.Lock()
-	view, ok := s.views[id]
-	s.mu.Unlock()
-	// A shell can print after its surface is gone. Reading the map without asking
-	// whether the key is there hands deliver a pointer that is nil but typed, and
-	// the nil test inside an interface does not see it.
-	if !ok {
-		return
-	}
-	deliver(view, name, value)
-}
-
-func (s *Surfaces) deliverModal(id, name string, value any) {
-	s.mu.Lock()
-	live := s.modals[id]
-	s.mu.Unlock()
-	if live == nil {
-		return
-	}
-	deliver(live.view, name, value)
-}
-
-// Tell sends the theme to every page this app serves. A page reads the theme it
-// started with from the script injected into it, so this is only the change.
-func (s *Surfaces) Tell(name string, value any) {
-	s.mu.Lock()
-	views := make([]page, 0, len(s.views)+len(s.modals))
-	for _, view := range s.views {
-		views = append(views, view)
-	}
-	for _, live := range s.modals {
-		views = append(views, live.view)
-	}
-	s.mu.Unlock()
-	for _, view := range views {
-		deliver(view, name, value)
-	}
-}
-
-func NewSurfaces(shells *Shells, pages *Pages) *Surfaces {
-	made := &Surfaces{
-		views:  map[string]*nativeView{},
+func NewSurfaces(shells *Shells) *Surfaces {
+	return &Surfaces{
+		views:  map[string]*application.Webview{},
 		named:  map[uintptr]string{},
 		live:   map[string]bool{},
 		modals: map[string]*modal{},
 		shapes: map[string]*nativeShape{},
 		shells: shells,
-		pages:  pages,
 	}
-	onSurfaceMessage = made.answer
-	return made
 }
 
-// OverlayShow creates a modal's view and stores its content.
+// OverlayShow creates a modal's window and stores its content.
 //
-// The view is created after the surface views, which places it above them. It
-// stays hidden until it reports the size it needs.
+// The window is created hidden and stays hidden until the page reports that its
+// content is rendered; showing it earlier displays an empty window. It is
+// attached at the same point, so it is never drawn at the wrong position.
 func (s *Surfaces) OverlayShow(req OverlayRequest) error {
-	win, ok := mainWindow()
-	if !ok {
-		return nil
-	}
-	application.InvokeSync(func() {
+	s.mu.Lock()
+	if was := s.modals[req.ID]; was != nil {
+		s.mu.Unlock()
+		s.OverlayHide(req.ID)
 		s.mu.Lock()
-		defer s.mu.Unlock()
-
-		if was := s.modals[req.ID]; was != nil {
-			was.view.destroy()
-		}
-		x, y := req.Rect.X, up(req.Viewport, req.Rect.Y, max1(req.Rect.H))
-		url := s.pages.URL("overlay.html?id=" + req.ID + "&framework=wailsv3")
-		view := newNativeOverlay(win.NativeWindow(), url, req.Title, x, y,
-			max1(req.Rect.W), max1(req.Rect.H), srgba(req.Background), s.boot())
-		// A platform with no window to make has no modal. Recording one whose view
-		// is nil leaves an entry every reader has to test, and one that misses the
-		// test calls a method on nothing.
-		if view == nil {
-			log.Printf("modal %s: no native window on this platform", req.ID)
-			delete(s.modals, req.ID)
-			return
-		}
-		s.modals[req.ID] = &modal{
-			view:   view,
-			radius: req.Radius,
-			content: OverlayContent{
-				CSS: req.CSS, ClassName: req.ClassName, HTML: req.HTML, Border: req.Border,
+	}
+	s.modals[req.ID] = &modal{
+		window: application.Get().Window.NewWithOptions(application.WebviewWindowOptions{
+			Name:      "modal-" + req.ID,
+			Title:     req.Title,
+			URL:       "overlay.html?id=" + req.ID,
+			Width:     int(max1(req.Rect.W)),
+			Height:    int(max1(req.Rect.H)),
+			Frameless: true,
+			Hidden:    true,
+			BackgroundColour: application.NewRGBA(
+				uint8(req.Background[0]), uint8(req.Background[1]),
+				uint8(req.Background[2]), uint8(req.Background[3]*255)),
+			Mac: application.MacWindow{
+				CornerRadius:  req.Radius,
+				DisableShadow: true,
 			},
-		}
-	})
+		}),
+		at: req.Rect,
+		content: OverlayContent{
+			CSS: req.CSS, ClassName: req.ClassName, HTML: req.HTML, Border: req.Border,
+		},
+	}
+	s.mu.Unlock()
 	return nil
 }
 
@@ -363,26 +289,28 @@ type PlaceRequest struct {
 	Rect     Rect     `json:"rect"`
 }
 
-// OverlayPlace moves an open modal's view.
+// OverlayPlace moves an open modal's window. The page decides the position; a
+// drag on the card's grip changes it.
 func (s *Surfaces) OverlayPlace(req PlaceRequest) error {
-	s.mu.Lock()
-	live, ok := s.modals[req.ID]
+	win, ok := mainWindow()
 	if !ok {
-		s.mu.Unlock()
 		return nil
 	}
-	view := live.view
+	s.mu.Lock()
+	live, held := s.modals[req.ID]
+	if held {
+		live.at = req.Rect
+	}
 	s.mu.Unlock()
-
-	x, y := req.Rect.X, up(req.Viewport, req.Rect.Y, max1(req.Rect.H))
-	application.InvokeSync(func() {
-		view.setFrame(x, y, max1(req.Rect.W), max1(req.Rect.H))
-	})
+	if !held {
+		return nil
+	}
+	live.window.Attach(win, req.Rect.X, req.Rect.Y)
 	return nil
 }
 
-// OverlayHide closes a modal's window and forgets it. The entry goes with the
-// window: a modal that is recorded but has no window is a state nothing needs.
+// OverlayHide closes a modal's window and deletes its record. A record without a
+// window has no reader.
 func (s *Surfaces) OverlayHide(id string) error {
 	s.mu.Lock()
 	live, ok := s.modals[id]
@@ -393,7 +321,8 @@ func (s *Surfaces) OverlayHide(id string) error {
 	delete(s.modals, id)
 	s.mu.Unlock()
 
-	application.InvokeSync(live.view.destroy)
+	live.window.Detach()
+	live.window.Close()
 	application.Get().Event.Emit("windows-changed")
 	return nil
 }
@@ -413,8 +342,14 @@ func (s *Surfaces) OverlayUpdate(req OverlayRequest) error {
 	if !ok {
 		return nil
 	}
-	s.pages.NotifyModal(req.ID, content)
+	application.Get().Event.Emit("modal-content", ModalContentEvent{ID: req.ID, Content: content})
 	return nil
+}
+
+// ModalContentEvent is new content for one modal, as its page receives it.
+type ModalContentEvent struct {
+	ID      string         `json:"id"`
+	Content OverlayContent `json:"content"`
 }
 
 // ModalContent returns the content the modal's view requests after loading.
@@ -427,34 +362,33 @@ func (s *Surfaces) ModalContent(id string) OverlayContent {
 	return OverlayContent{}
 }
 
-// ModalReady clips the modal's corners and shows it. A child window is always
-// above its parent, so there is nothing to raise. The page reports this once
-// its content is on screen; showing it earlier displays an empty view.
+// ModalReady shows the modal's window and attaches it over the declared point.
+// The page calls it once its content is rendered.
 //
-// The size is not set here. The main page measured the element and the view was
-// created at that size, so a second measurement taken inside the view would be
-// of the same element under a different constraint and the two would disagree.
+// The size is not set here. The main page measured the element and the window was
+// created at that size; measuring the same markup inside the window would apply a
+// different constraint and produce a different size.
 func (s *Surfaces) ModalReady(id string) {
-	s.mu.Lock()
-	live, ok := s.modals[id]
+	win, ok := mainWindow()
 	if !ok {
-		s.mu.Unlock()
 		return
 	}
-	view, radius := live.view, live.radius
+	s.mu.Lock()
+	live, held := s.modals[id]
 	s.mu.Unlock()
-
-	application.InvokeSync(func() {
-		view.setCornerRadius(radius)
-		view.show()
-	})
+	if !held {
+		return
+	}
+	live.window.Show()
+	live.window.Attach(win, live.at.X, live.at.Y)
+	live.window.Focus()
 	// 모달은 자기 창이므로 이 앱이 가진 창이 하나 늘었다. 창이 붙고 떨어지는 것을
 	// 알리는 통지는 AppKit 에 없고, 붙이는 것은 여기다. 그래서 여기서 알린다.
 	application.Get().Event.Emit("windows-changed")
 }
 
-// run announces the start and the end of a run of updates. The page says whether
-// more is coming; this turns that into the two moments it changes at.
+// run emits run-began and run-ended. The page reports whether more updates
+// follow; this emits an event only when that changes.
 func (s *Surfaces) run(going bool) {
 	if s.running == going {
 		return
@@ -467,9 +401,9 @@ func (s *Surfaces) run(going bool) {
 	application.Get().Event.Emit("run-ended")
 }
 
-// resizing brackets a view's live resize. The calls are paired, so the state each
-// view is in is kept here and only the changes are passed on.
-func (s *Surfaces) resizing(id string, view *nativeView, live bool) {
+// resizing starts and ends a surface's live resize. The two calls are paired, so
+// the state of each surface is kept here and only changes are passed on.
+func (s *Surfaces) resizing(id string, view *application.Webview, live bool) {
 	if s.live[id] == live {
 		return
 	}
@@ -478,14 +412,14 @@ func (s *Surfaces) resizing(id string, view *nativeView, live bool) {
 	} else {
 		delete(s.live, id)
 	}
-	view.setResizing(live)
+	surfaceResizing(view.NativeView(), live)
 }
 
 // up converts a top-left y to the bottom-left y AppKit uses.
 func up(viewport Viewport, y, h float64) float64 { return viewport.H - y - h }
 
-// press reports whether the view is one of the surfaces and sends its id to the
-// page. What the press means is decided by the page.
+// press reports whether the view is a surface and emits its id. The page decides
+// what the press means.
 func (s *Surfaces) press(view uintptr) bool {
 	id, ok := s.named[view]
 	if !ok {
@@ -495,12 +429,12 @@ func (s *Surfaces) press(view uintptr) bool {
 	return true
 }
 
-// point sends one step of a left-button drag to the page, in the page's
-// coordinates. Phase is 0 for a press, 1 for a move, 2 for a release.
+// point emits one step of a left-button drag in the page's coordinates. Phase is
+// 0 for a press, 1 for a move, 2 for a release.
 //
 // A divider's grab area is wider than the passage between two cards, so when the
-// passage is one line wide that area lies over the surfaces. The page matches the
-// point against its own dividers and decides what it means.
+// passage is one line wide that area lies under the surfaces. The page matches
+// the point against its own dividers.
 func (s *Surfaces) point(phase int, x float64, y float64) {
 	application.Get().Event.Emit("surface-input", InputStep{Phase: phase, X: x, Y: y})
 }
@@ -553,10 +487,13 @@ func (s *Surfaces) Report(line string) error {
 	return nil
 }
 
-// SetTheme records the theme the page is now drawn in, for the pages this host
-// serves. The page calls it when a theme is chosen, not on every render.
+// SetTheme records the theme and emits it to the pages already open. The main
+// page calls it when a theme is chosen, not on every render.
 func (s *Surfaces) SetTheme(theme Theme) error {
-	s.pages.SetTheme(theme)
+	s.mu.Lock()
+	s.theme = theme
+	s.mu.Unlock()
+	application.Get().Event.Emit("theme", theme)
 	return nil
 }
 
@@ -586,30 +523,37 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) {
 	for _, surface := range req.Surfaces {
 		wanted[surface.ID] = true
 		w, h := max1(surface.W), max1(surface.H)
-		x, y := surface.X, up(req.Viewport, surface.Y, h)
 
 		alpha := alphaFor(surface.Dim)
 		if view, live := s.views[surface.ID]; live {
 			s.resizing(surface.ID, view, !req.Settled)
-			view.setFrame(x, y, w, h)
-			view.setHidden(!surface.Visible)
-			view.setAlpha(alpha)
+			view.SetBounds(surface.X, surface.Y, w, h)
+			view.SetHidden(!surface.Visible)
+			surfaceAlpha(view.NativeView(), alpha)
 			continue
 		}
-		url := surface.URL
-		if !surface.External {
-			url = s.pages.URL(surface.URL)
-		}
-		bg := srgb(surface.Background)
-		view := newNativeView(win.NativeWindow(), url, x, y, w, h,
-			[4]float64{bg[0], bg[1], bg[2], 1}, s.boot())
+		bg := surface.Background
+		view := win.AddWebview(application.WebviewOptions{
+			URL:    surface.URL,
+			X:      surface.X,
+			Y:      surface.Y,
+			Width:  w,
+			Height: h,
+			BackgroundColour: application.NewRGB(
+				uint8(bg[0]), uint8(bg[1]), uint8(bg[2])),
+			// A webview renders only the area it has laid out and fills the rest
+			// with white. A surface grows while a boundary is dragged, so that
+			// area appears on every frame of the drag.
+			Transparent: true,
+			Hidden:      !surface.Visible,
+		})
 		if view == nil {
-			log.Printf("surface %s: no native view on this platform", surface.ID)
+			log.Printf("surface %s: no webview in a window on this platform", surface.ID)
 			continue
 		}
-		view.setAlpha(alpha)
+		surfaceAlpha(view.NativeView(), alpha)
 		s.views[surface.ID] = view
-		s.named[view.id()] = surface.ID
+		s.named[uintptr(view.NativeView())] = surface.ID
 	}
 
 	// The page is the only writer of this list, so a surface missing from it is
@@ -619,8 +563,8 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) {
 			continue
 		}
 		s.resizing(id, view, false)
-		delete(s.named, view.id())
-		view.destroy()
+		delete(s.named, uintptr(view.NativeView()))
+		view.Close()
 		delete(s.views, id)
 		s.shells.Close(id)
 	}
