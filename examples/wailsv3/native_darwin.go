@@ -100,6 +100,25 @@ static void windowControls(void* nsWindow, double* out) {
     out[3] = together.size.height;
 }
 
+// modalTakeKeyboard makes the window's own webview the first responder.
+//
+// A window with no first responder of its own chooses one from the key view loop
+// the first time it becomes key, and a WKWebView entered that way advances the
+// focus into its document: WebKit gives the first element the platform's tab
+// order accepts a focus the page never asked for, and draws a focus ring on it.
+// The modal window is made key on every showing but chooses a first responder
+// only on the first, so that ring appears on the first showing alone.
+static void modalTakeKeyboard(NSWindow* window) {
+    NSView* content = [window contentView];
+    if (content == nil) return;
+    for (NSView* view in [content subviews]) {
+        if (![view isKindOfClass:[WKWebView class]]) continue;
+        [window setInitialFirstResponder:view];
+        [window makeFirstResponder:view];
+        return;
+    }
+}
+
 // Configures a modal's window: not opaque, so the clipped corners show what is
 // behind them rather than the window's own background; with a shadow; and out of
 // the list of windows the application offers to switch between, because it is
@@ -125,6 +144,7 @@ static void modalConfigure(void* modalWindow, const char* title, double radius) 
     [window setBackgroundColor:[NSColor clearColor]];
     [window setHasShadow:YES];
     [window setExcludedFromWindowsMenu:YES];
+    modalTakeKeyboard(window);
 }
 
 // Takes the window off the screen now.
