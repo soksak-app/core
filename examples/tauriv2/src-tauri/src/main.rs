@@ -12,6 +12,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod native;
+mod observe;
 mod shell;
 
 use std::collections::{HashMap, HashSet};
@@ -660,8 +661,13 @@ fn set_theme(
 }
 
 fn main() {
-    tauri::Builder::default()
-        .manage(Overlay::default())
+    // 관측은 요청했을 때만 붙는다. 제품의 계약이 아니다.
+    let observing = std::env::args().any(|a| a == "--observe");
+    let mut app = tauri::Builder::default();
+    if observing {
+        app = app.plugin(observe::plugin());
+    }
+    app.manage(Overlay::default())
         .manage(Shapes::default())
         .manage(CurrentTheme::default())
         .manage(Views::default())

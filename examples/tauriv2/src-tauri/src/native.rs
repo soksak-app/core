@@ -390,3 +390,41 @@ pub fn panelise(ns_window: *mut std::ffi::c_void, parent: *mut std::ffi::c_void)
         let _: () = msg_send![parent, makeMainWindow];
     }
 }
+
+/// The window server's numbers for this window and the windows attached to it.
+///
+/// A capture tool addresses a window by its number, so it reads the composite the
+/// window server draws - the page, the surfaces and the modal - without raising
+/// the window and without taking the focus from whatever holds it. A region of the
+/// screen catches whatever is in front instead, and raising the window first
+/// changes the state being measured.
+///
+/// Only macOS is written. On Windows this is the HWND and on Linux the X window
+/// id; neither is written here.
+#[allow(unused_variables)]
+pub fn window_numbers(ns_window: *mut std::ffi::c_void) -> Vec<isize> {
+    #[cfg(target_os = "macos")]
+    unsafe {
+        use objc2::msg_send;
+        use objc2::runtime::AnyObject;
+
+        let window = ns_window as *mut AnyObject;
+        if window.is_null() {
+            return Vec::new();
+        }
+        let mut out = vec![msg_send![window, windowNumber]];
+        let children: *mut AnyObject = msg_send![window, childWindows];
+        if !children.is_null() {
+            let count: usize = msg_send![children, count];
+            for i in 0..count {
+                let child: *mut AnyObject = msg_send![children, objectAtIndex: i];
+                out.push(msg_send![child, windowNumber]);
+            }
+        }
+        out
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Vec::new()
+    }
+}

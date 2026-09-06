@@ -115,6 +115,28 @@ copy first:
 The binaries land in `examples/tauriv2/src-tauri/target/` and
 `examples/wailsv3/bin/`.
 
+### Watching what is drawn
+
+The page cannot read what ends up on screen: the surfaces and the modal are
+windows the application makes, and the window server composites them. Started
+with `--observe`, each application registers one more component — a service on
+Wails, a plugin on Tauri — that writes the window server's number for its window
+and for the windows attached to it:
+
+    ./examples/wailsv3/bin/wailsv3 --observe
+    ./examples/tauriv2/src-tauri/target/debug/soksak-tauri --observe
+
+    관측: 창 번호 [5921]
+
+A capture tool addresses a window by that number, so it reads the composite
+without raising the window and without taking the focus from whatever holds it —
+`screencapture -l5921 out.png` on macOS. A region of the screen would catch
+whatever is in front instead, and raising the window first changes the state
+being measured.
+
+Only macOS is written. Windows would report the HWND and Linux the X window id.
+Without the flag neither component is registered.
+
 ## What each one draws natively
 
 A browser surface is a webview on google.com. A terminal surface is a webview on
