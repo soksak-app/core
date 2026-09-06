@@ -467,8 +467,8 @@ fn replace_modals(app: &AppHandle) {
     let Ok((sx, sy)) = on_screen(&window, ax, ay) else {
         return;
     };
-    let _ = modal.set_position(LogicalPosition::new(sx, sy));
     let _ = modal.set_size(LogicalSize::new(aw, ah));
+    let _ = modal.set_position(LogicalPosition::new(sx, sy));
 }
 
 /// The theme last declared by the page.
@@ -563,8 +563,8 @@ fn overlay_show(
             // software name the window by it, and the name is this modal's.
             modal.set_title(&request.title).map_err(|e| e.to_string())?;
             modal.set_background_color(Some(colour)).map_err(|e| e.to_string())?;
-            modal.set_position(LogicalPosition::new(sx, sy)).map_err(|e| e.to_string())?;
             modal.set_size(LogicalSize::new(aw, ah)).map_err(|e| e.to_string())?;
+            modal.set_position(LogicalPosition::new(sx, sy)).map_err(|e| e.to_string())?;
             // The address this window already holds names the scheme this app
             // serves, so the page is asked for by changing the id on it.
             let mut target = modal.url().map_err(|e| e.to_string())?;
@@ -582,7 +582,10 @@ fn overlay_show(
                 .title(&request.title)
                 .visible(false)
                 .background_color(colour)
-                .position(sx, sy)
+                // Whole points: tao converts the position through the window's
+                // height, and a fractional screen position makes the window one
+                // point taller than the size asked for.
+                .position(sx.round(), sy.round())
                 .inner_size(aw, ah)
                 .build()
                 .map_err(|e| e.to_string())?;
@@ -710,8 +713,8 @@ fn overlay_place(
         request.rect.w.max(1.0), request.rect.h.max(1.0), scale,
     );
     let (sx, sy) = on_screen(&window, ax, ay)?;
-    modal.set_position(LogicalPosition::new(sx, sy)).map_err(|e| e.to_string())?;
     modal.set_size(LogicalSize::new(aw, ah)).map_err(|e| e.to_string())?;
+    modal.set_position(LogicalPosition::new(sx, sy)).map_err(|e| e.to_string())?;
     let applied = Rect { x: ax, y: ay, w: aw, h: ah };
     if let Ok(mut held) = state.open.lock() {
         if let Some(open) = held.as_mut().filter(|m| m.id == request.id) {

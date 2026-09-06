@@ -1,11 +1,12 @@
 //go:build darwin
 
-// Webviews placed inside the window.
+// What this application does to the views the framework makes.
 //
-// Wails creates one webview per window and has no API for adding another, but
-// NativeWindow() exposes the window. A webview is a native view, so it is added
-// to that window's content view directly. The Tauri runtime provides the same
-// through its own API.
+// The fork's AddWebview makes each surface's webview and Attach places the
+// modal's window, so nothing here creates a view. What is left is the work
+// neither framework exposes: placing a view on the display's pixel grid,
+// reading which view a press landed on, the shapes drawn above the surfaces,
+// and the window's own buttons.
 //
 // A frame arrives in the content view's coordinates, measured from the bottom
 // left as AppKit does. The page measures from its top left; surfaces.go turns
