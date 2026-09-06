@@ -56,16 +56,31 @@ The two hosts. Both implement the same operations against the same platform:
 | Operation | Wails, Go + cgo | Tauri, Rust + objc2 |
 | --- | --- | --- |
 | create a surface | `surfaceCreate`, a WKWebView in the content view | `window.add_child` |
-| move, resize, hide | `surfaceSetFrame`, `surfaceResize`, `surfaceSetHidden` | `set_position`, `set_size`, `hide` |
+| move, resize, hide | `surfaceSetFrame`, `surfaceSetHidden` | `set_position`, `set_size`, `hide` |
 | dim | `surfaceSetAlpha` | `native::alpha` |
 | round the corners | `surfaceSetCornerRadius` | `native::corners` |
 | identify a pressed view | `surfaceWatchMouse` + `hitTest:` | `native::watch_mouse` |
 | a shape above the surfaces | `shapeCreate`, `shapeSetStyle` | `native::shape_*` |
+| stop a webview painting white | `surfaceHideBackground` | wry does it for every webview |
+| record the window | `capture_darwin.go` | `capture.m` |
 | serve the local pages | `serve.go`, a loopback server | the app's own scheme |
 | run a shell | `shell.go` | `shell.rs` |
 
 Only macOS is written on either side. Windows and Linux are named in
 `native_other.go` and `native.rs` and are not implemented.
+
+One of those rows is not a public interface. A webview paints what it covers, and
+area it does not cover yet is its own opaque white; nothing published turns that
+off. `underPageBackgroundColor`, which is public, reaches only the area past the
+end of a page and was measured never to appear there.
+
+Both frameworks already reach a key by name for it, and both offer the intent
+rather than the key: Wails as `Mac.Backdrop = Transparent`, wry as a transparent
+webview. Neither offers it here, because a surface is not theirs — a window holds
+one webview in each of them, and every surface in this example is a webview this
+application makes and adds itself. So the intent is written here the same way:
+asked for by what it means, inside a guard, read back, and the area is left white
+if the view does not agree.
 
 ## What a plugin would be
 

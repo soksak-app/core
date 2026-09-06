@@ -51,16 +51,30 @@
 | 동작 | Wails, Go + cgo | Tauri, Rust + objc2 |
 | --- | --- | --- |
 | 표면 생성 | `surfaceCreate`, content view 의 WKWebView | `window.add_child` |
-| 이동·크기·숨김 | `surfaceSetFrame`, `surfaceResize`, `surfaceSetHidden` | `set_position`, `set_size`, `hide` |
+| 이동·크기·숨김 | `surfaceSetFrame`, `surfaceSetHidden` | `set_position`, `set_size`, `hide` |
 | 흐리게 | `surfaceSetAlpha` | `native::alpha` |
 | 모서리 둥글게 | `surfaceSetCornerRadius` | `native::corners` |
 | 눌린 뷰 판별 | `surfaceWatchMouse` + `hitTest:` | `native::watch_mouse` |
 | 표면 위의 도형 | `shapeCreate`, `shapeSetStyle` | `native::shape_*` |
+| 웹뷰가 흰 배경을 칠하지 않게 | `surfaceHideBackground` | wry 가 모든 웹뷰에 건다 |
+| 창을 녹화 | `capture_darwin.go` | `capture.m` |
 | 로컬 페이지 서비스 | `serve.go`, 루프백 서버 | 앱 자체 스킴 |
 | 셸 실행 | `shell.go` | `shell.rs` |
 
 양쪽 모두 macOS 만 구현되어 있다. Windows 와 Linux 는 `native_other.go` 와
 `native.rs` 에 이름으로만 있다.
+
+그중 한 줄은 공개 인터페이스가 아니다. 웹뷰는 자기가 덮은 자리를 칠하고, 아직 덮지
+않은 자리는 자기 불투명 흰색이다. 그것을 끄는 공개된 방법은 없다. 공개된
+`underPageBackgroundColor` 는 페이지 끝 너머에만 닿고 이 자리에는 나타나지 않는 것을
+측정으로 확인했다.
+
+두 프레임워크 모두 이미 그 키를 이름으로 부르고 있고, 둘 다 키가 아니라 의도를
+내놓는다. Wails 는 `Mac.Backdrop = Transparent`, wry 는 투명한 웹뷰다. 여기에는
+둘 다 그것을 주지 않는데, 표면이 그들의 것이 아니기 때문이다 — 둘 다 창 하나에
+웹뷰 하나이고, 이 예제의 표면은 모두 이 애플리케이션이 만들어 붙인 웹뷰다. 그래서
+의도로 부르고, 가드 안에서 걸고, 되읽어 확인하고, 뷰가 응하지 않으면 그 자리를
+흰색으로 둔다.
 
 ## 플러그인이 된다면
 

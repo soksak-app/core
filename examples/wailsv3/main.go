@@ -5,8 +5,8 @@
 // so index.html sits at the frontend root and the window opens "/".
 //
 // Wails v3 beta.16 creates one webview per window and offers no API to add a
-// second webview to one, so a native surface here is a frameless window held
-// over the main one. See surfaces.go.
+// second webview to one, so a native surface here is a WKWebView this
+// application makes and adds to the window's content view. See surfaces.go.
 package main
 
 import (
