@@ -1085,10 +1085,30 @@ export class Soksak {
     return out;
   }
 
-  /** Whether every card is drawn with a non-zero width and height. */
-  private hasArea(): boolean {
+  /** The cards drawn with no width or no height, by id. */
+  private flat(): Set<string> {
+    const frame = frameOf(this.plane);
+    const out = new Set<string>();
+    for (const c of this.list) {
+      const r = rectIn(frame, c);
+      if (!(r.w > 0) || !(r.h > 0)) out.add(c.id);
+    }
+    return out;
+  }
+
+  /**
+   * Whether every card is drawn with a non-zero width and height.
+   *
+   * `flat` names the cards that already had none before the change. R5 lets a
+   * card whose own two lines stand at one place sit inside the one gap that
+   * keeps its neighbours apart, so such a card is left where it is: judging it
+   * here refused every split, travel and insert anywhere on a plane holding
+   * one, however much room the operation had.
+   */
+  private hasArea(flat: ReadonlySet<string> = new Set()): boolean {
     const frame = frameOf(this.plane);
     return this.list.every((c) => {
+      if (flat.has(c.id)) return true;
       const r = rectIn(frame, c);
       return r.w > 0 && r.h > 0;
     });
@@ -1100,9 +1120,9 @@ export class Soksak {
    * A new line adds a gap, taken from the sharing slots, so a split can reduce a
    * card elsewhere on the plane.
    */
-  private stillFits(axis: Axis, before: Map<string, number>): boolean {
+  private stillFits(axis: Axis, before: Map<string, number>, flat?: ReadonlySet<string>): boolean {
     // Every card must have a non-zero area, including one just created.
-    if (!this.hasArea()) return false;
+    if (!this.hasArea(flat)) return false;
     for (const [id, now] of this.extents(axis)) {
       // `minSize` applies only to cards present before the change. A new card
       // has the size it was given, and `cutAt` checks the halves of a cut.
@@ -1160,6 +1180,7 @@ export class Soksak {
     const cut = card && this.cutAt(card, axis);
     if (!card || !cut) return null;
     const was = this.extents(axis);
+    const empty = this.flat();
     const undo = this.toJSON();
     const a = this.arr(axis);
     const [lo, hi] = SPAN[axis];
@@ -1213,7 +1234,7 @@ export class Soksak {
     this.list.push(fresh);
     this.paidBy.set(fresh.id, { side: 'lo', to: card.id });
     this.changed();
-    if (!this.stillFits(axis, was)) {
+    if (!this.stillFits(axis, was, empty)) {
       this.restore(undo);
       return null;
     }
@@ -1485,6 +1506,7 @@ export class Soksak {
     if (!Number.isFinite(init?.size) || init.size < 0 || init.size >= plane) return null;
     if (!this.canInsertAt(axis, line)) return null;
     const was = this.extents(axis);
+    const empty = this.flat();
     const undo = this.toJSON();
     const [lo, hi] = SPAN[axis];
     const across = other(axis);
@@ -1532,7 +1554,7 @@ export class Soksak {
       });
     }
     this.changed();
-    if (!this.stillFits(axis, was)) {
+    if (!this.stillFits(axis, was, empty)) {
       this.restore(undo);
       return null;
     }
@@ -1655,6 +1677,7 @@ export class Soksak {
     if (line === from || line === card[hi]) return true;   // already there
 
     const before = this.toJSON();
+    const empty = this.flat();
     const a = this.arr(axis);
     const was = [...a];
     const span = was[from + 1] - was[from];
@@ -1700,7 +1723,7 @@ export class Soksak {
     // The slot leaves one boundary and arrives at another, so the neighbours that
     // give and take the span are different. Reject the move when the result
     // leaves a card with no area.
-    if (!this.hasArea()) {
+    if (!this.hasArea(empty)) {
       this.restore(before);
       return false;
     }

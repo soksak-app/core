@@ -329,7 +329,17 @@ export declare class Soksak {
     private cutAt;
     /** The smallest drawn side of every card, by id. Used to compare before and after a change. */
     private extents;
-    /** Whether every card is drawn with a non-zero width and height. */
+    /** The cards drawn with no width or no height, by id. */
+    private flat;
+    /**
+     * Whether every card is drawn with a non-zero width and height.
+     *
+     * `flat` names the cards that already had none before the change. R5 lets a
+     * card whose own two lines stand at one place sit inside the one gap that
+     * keeps its neighbours apart, so such a card is left where it is: judging it
+     * here refused every split, travel and insert anywhere on a plane holding
+     * one, however much room the operation had.
+     */
     private hasArea;
     /**
      * Whether every card still has the smaller of the size it had and `minSize`.

@@ -295,3 +295,35 @@ test("a card drawn with no area returns centre, not a side", () => {
   // last branch, so every point on the card read as one side.
   assert.deepEqual(grid.zoneAt(r.x, r.y + r.h / 2), { id, zone: "centre" });
 });
+
+test("a card standing inside a gap refuses no operation elsewhere", () => {
+  // R5: a card whose own two lines stand at one place has no width to draw and
+  // sits inside the one gap that keeps its neighbours apart. Judging it by area
+  // refused every split, travel and insert anywhere else on the plane.
+  const state = {
+    xs: [0, 0.6, 0.6, 1],
+    ys: [0, 1],
+    cards: [
+      { id: "left", c0: 0, c1: 1, r0: 0, r1: 1 },
+      { id: "thin", c0: 1, c1: 2, r0: 0, r1: 1 },
+      { id: "right", c0: 2, c1: 3, r0: 0, r1: 1 },
+    ],
+  };
+  const options = { width: 900, height: 400, gap: 20, minSize: 96 };
+  const grid = new Soksak(state, options);
+  assert.equal(grid.rect("thin").w, 0, "the card stands inside the gap");
+  assert.equal(grid.rect("left").w, 530);
+
+  // 400 tall against a 96 minimum: both halves have the room.
+  assert.equal(grid.canSplit("left", "y"), true);
+  assert.equal(grid.split("left", "y", { id: "below" }), "below");
+  assert.equal(grid.rect("left").h, 190);
+  assert.equal(grid.rect("below").h, 190);
+  assert.equal(grid.rect("thin").w, 0, "and it still stands there");
+
+  const travel = new Soksak(state, options);
+  assert.equal(travel.moveTo("right", "x", 0), true, "a card that reaches across still travels");
+
+  const arrive = new Soksak(state, options);
+  assert.equal(arrive.insertAt("x", 0, { id: "rail", size: 120 }), "rail");
+});

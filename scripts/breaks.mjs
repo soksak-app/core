@@ -873,4 +873,11 @@ export const BREAKS = [
     find: "const hit = Math.max(plane.gap, grabSize);",
     to: "const hit = plane.gap;",
   },
+  {
+    id: "stands-inside",
+    what: "a card standing inside a gap refuses every split, travel and insert",
+    file: "dist/soksak.js",
+    find: "            if (flat.has(c.id))\n                return true;\n",
+    to: "",
+  },
 ];

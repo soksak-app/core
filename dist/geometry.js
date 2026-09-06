@@ -311,9 +311,9 @@ function divide(plane, axis) {
             // `usable` is at least the gaps plus one card minimum, so stopping every
             // slot at its gap still leaves size and span to divide. The whole run
             // stops, because the cards read its two ends and nothing inside it.
+            // A run is stopped whole. Every slot in it is one slot to every card, so
+            // none of them holds a px size and none was stopped on its own.
             for (let i = runFrom[starved]; i < runTo[starved]; i++) {
-                if (held[i] !== null || stopped[i])
-                    continue;
                 stopped[i] = true;
                 size[i] = corridor[i];
                 room -= corridor[i];
