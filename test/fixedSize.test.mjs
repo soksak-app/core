@@ -736,3 +736,56 @@ test("a drag rewrites no span between the sharing slots it does not meet", () =>
     );
   }
 });
+
+test("a card the sharing slots paid for gives its size back to them", () => {
+  const grid = new Soksak(
+    {
+      xs: [0, 0.25, 0.5, 0.75, 1],
+      ys: [0, 0.5, 1],
+      cards: [
+        { id: "card", c0: 1, c1: 2, r0: 1, r1: 2 },
+        { id: "card-1", c0: 3, c1: 4, r0: 0, r1: 1 },
+        { id: "card-2", c0: 2, c1: 4, r0: 1, r1: 2 },
+        { id: "card-3", c0: 0, c1: 2, r0: 0, r1: 1 },
+        { id: "card-4", c0: 0, c1: 1, r0: 1, r1: 2 },
+        { id: "card-5", c0: 2, c1: 3, r0: 0, r1: 1 },
+      ],
+    },
+    { width: 995, height: 920, gap: 24, minSize: 96 },
+  );
+  const ids = [...grid.cards].map((c) => c.id);
+  const was = ids.map((id) => grid.rect(id).w);
+
+  // No single slot can give the room, so every sharing slot gives a share of it,
+  // and the span comes off the side away from the one that pays.
+  grid.insertAt("x", 2, { size: 120, id: "rail" });
+  grid.close("rail");
+
+  for (const [i, id] of ids.entries()) {
+    assert.ok(
+      Math.abs(grid.rect(id).w - was[i]) < 0.01,
+      `${id} is back to ${was[i]}, not ${grid.rect(id).w}`,
+    );
+  }
+});
+
+test("a card whose span came from the whole plane gives it back", () => {
+  const grid = new Soksak(undefined, { width: 900, height: 600, gap: 24, minSize: 20 });
+  grid.split("card", "x");
+  grid.split("card", "x");
+  const was = [...grid.cards].map((c) => ({ id: c.id, w: grid.rect(c.id).w }));
+
+  // Neither slot beside the boundary has room for the span alone, so every slot
+  // is scaled to make it.
+  grid.insertAt("x", 1, { size: 300, id: "wide" });
+  assert.ok(grid.card("wide"), "the card was inserted");
+  assert.equal(grid.toJSON().paidBy.wide.span, "all", "and its span came from the whole plane");
+  grid.close("wide");
+
+  for (const card of was) {
+    assert.ok(
+      Math.abs(grid.rect(card.id).w - card.w) < 0.01,
+      `${card.id} is back to ${card.w}, not ${grid.rect(card.id).w}`,
+    );
+  }
+});

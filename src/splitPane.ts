@@ -51,10 +51,18 @@ export type { Fill, FillOrder } from './slicing.js';
 /** `merge`: a dragged boundary snaps onto a neighbouring line and the two combine. */
 export type SnapMode = 'merge' | 'off';
 
-/** Where a card's slot came from: the side, and the card it came from. */
+/**
+ * Where a card's slot came from: the side and the card its width came from, and
+ * the side its span came from.
+ *
+ * The two sides differ whenever the slot next to the boundary could not give the
+ * width and one further out did. `span` is absent on a state saved before it was
+ * recorded, and on a card that a split made.
+ */
 export interface Paid {
   side: 'lo' | 'hi';
   to: string;
+  span?: 'lo' | 'hi' | 'all';
 }
 
 export interface SoksakState {
@@ -1212,25 +1220,47 @@ export class Soksak {
           (c) => c === card || c[hi] <= card[lo] || c[lo] >= card[hi],
         );
         if (!alone) continue;
-        const gone = paid.side === 'lo' ? card[lo] : card[hi];
+        // The line comes off the side the span came from, which is not the side
+        // the width came from whenever the nearest slot could not give it.
+        const from = paid.span === 'lo' || paid.span === 'hi' ? paid.span : paid.side;
+        const gone = from === 'lo' ? card[lo] : card[hi];
         if (gone <= 0 || gone >= this.arr(axis).length - 1) continue;
         // Removing the line expands the cards on the side that gave the span up,
         // which is what this path is for. A card on the closing card's own side
         // references the line the same way it does and would expand with it, so
         // this path does not run then.
-        const same = paid.side === 'lo' ? lo : hi;
+        const same = from === 'lo' ? lo : hi;
         if (this.list.some((c) => c !== card && c[same] === gone)) continue;
         const held = slotWidths(this.plane, axis);
         const mine = card[lo];
+        // The span the slot holds, read before the line is removed. The take that
+        // scaled every slot is undone with it.
+        const took = this.arr(axis)[card[hi]] - this.arr(axis)[card[lo]];
         this.list.splice(this.list.indexOf(card), 1);
-        this.removeLine(axis, gone, paid.side);
+        this.removeLine(axis, gone, from);
         this.paidBy.delete(id);
+        const merged = from === 'lo' ? mine - 1 : mine;
+        // Every slot gave a share of the span, so no single side returns it. The
+        // scale that took it is inverted, before the widths are settled: naming a
+        // slot rewrites the sharing spans from the widths.
+        if (paid.span === 'all' && took < 1 - EPS) {
+          const b = this.arr(axis);
+          const spans: number[] = [];
+          for (let i = 0; i < b.length - 1; i++) spans.push(b[i + 1] - b[i]);
+          spans[merged] = Math.max(0, spans[merged] - took);
+          let at = b[0];
+          for (let i = 0; i < spans.length; i++) {
+            at += spans[i] / (1 - took);
+            b[i + 1] = at;
+          }
+          b[b.length - 1] = 1;
+        }
         // The card's slot is removed. The slot it merges into keeps its width and
-        // the slot that gave the span up regains it. No other slot changes.
+        // the slot that gave the width up regains it. When the sharing slots gave
+        // it, they divide it again.
         const back = this.find(paid.to);
         const want: (number | null)[] = held.filter((_, i) => i !== mine);
-        const merged = paid.side === 'lo' ? mine - 1 : mine;
-        this.settleOn(axis, want, order(back ? back[lo] : merged, want.length));
+        this.settleOn(axis, want, paid.to === '' ? [] : order(back ? back[lo] : merged, want.length));
         this.changed();
         return true;
       }
@@ -1341,7 +1371,7 @@ export class Soksak {
     const [alo, ahi] = SPAN[across];
 
     const held = slotWidths(this.plane, axis);
-    this.openSlot(axis, line, init.size / plane);
+    const gave = this.openSlot(axis, line, init.size / plane);
 
     const fresh: Card = {
       id: init.id ?? this.nextId(),
@@ -1366,7 +1396,16 @@ export class Soksak {
     // Record which slot gave up the space, not only the side: the nearest slot
     // may not have had room, and close returns the space to the recorded slot.
     const payer = pays >= 0 ? this.list.find((c) => c[lo] === pays && c !== fresh) : undefined;
-    if (payer) this.paidBy.set(fresh.id, { side: pays > line ? 'hi' : 'lo', to: payer.id });
+    // An empty `to` records that no single slot could give the width and the
+    // sharing slots divided it. No card can carry it: checkState refuses an
+    // empty id.
+    if (payer || pays < 0) {
+      this.paidBy.set(fresh.id, {
+        side: pays > line ? 'hi' : 'lo',
+        to: payer ? payer.id : '',
+        span: gave,
+      });
+    }
     this.changed();
     if (!this.stillFits(axis, was)) {
       this.restore(undo);
@@ -1388,12 +1427,13 @@ export class Soksak {
   }
 
   /**
-   * Insert a slot at a boundary with the given span.
+   * Insert a slot at a boundary with the given span. Returns the side the span
+   * came from, or 'all' when every slot gave a share of it.
    *
    * Every other slot is scaled by `1 - span`. A card ending at the boundary
    * keeps its index and a card starting there shifts by one.
    */
-  private openSlot(axis: Axis, line: number, span: number): void {
+  private openSlot(axis: Axis, line: number, span: number): 'lo' | 'hi' | 'all' {
     const a = this.arr(axis);
     // The new slot takes its span from the slot next to the boundary, so a close
     // that merges it back restores the previous spans. Which of the two slots is
@@ -1401,12 +1441,15 @@ export class Soksak {
     const after = line < a.length - 1 ? a[line + 1] - a[line] : 0;
     const before = line > 0 ? a[line] - a[line - 1] : 0;
 
+    let gave: 'lo' | 'hi' | 'all';
     if (after >= span) {
       a.splice(line + 1, 0, a[line] + span);
+      gave = 'hi';
     } else if (before >= span) {
       const at = a[line];
       a[line] = at - span;
       a.splice(line + 1, 0, at);
+      gave = 'lo';
     } else {
       // Neither neighbour has enough room alone, so take the span from the whole plane.
       const keep = 1 - span;
@@ -1414,9 +1457,11 @@ export class Soksak {
       for (let k = 0; k < a.length; k++) a[k] = k <= line ? a[k] * keep : a[k] * keep + span;
       a.splice(line + 1, 0, at);
       a[a.length - 1] = 1;
+      gave = 'all';
     }
 
     this.openIndex(axis, line);
+    return gave;
   }
 
   /**

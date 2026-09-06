@@ -251,7 +251,10 @@ the size it declares between them.
 The same rule settles a card that appears or disappears. A closing card's width,
 and the corridor it releases, go to the slot next to it; a card inserted at a
 boundary takes its width from the slot next to it. So a sidebar switched off and
-back on leaves every other card the width it had.
+back on leaves every other card the width it had — as long as the plane holds
+what the axis declares both times. Where it does not, every declared size is
+drawn scaled by one factor; that factor changes when a card arrives or leaves,
+and the widths it drew cannot be restored by giving the space back.
 
 A px size is declared by the host. A drag changes one, and a cut divides one
 between the halves; a close or an insert settles with a sharing slot, and looks

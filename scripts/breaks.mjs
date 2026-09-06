@@ -132,6 +132,27 @@ export const BREAKS = [
     to: "const head = bleed;",
   },
   {
+    id: "span-side",
+    what: "a closed card's line comes off the side its width came from, not its span",
+    file: "dist/soksak.js",
+    find: "const from = paid.span === 'lo' || paid.span === 'hi' ? paid.span : paid.side;",
+    to: "const from = paid.side;",
+  },
+  {
+    id: "pool-paid",
+    what: "a card the sharing slots paid for gives its width to one slot",
+    file: "dist/soksak.js",
+    find: "this.settleOn(axis, want, paid.to === '' ? [] : order(back ? back[lo] : merged, want.length));",
+    to: "this.settleOn(axis, want, order(back ? back[lo] : merged, want.length));",
+  },
+  {
+    id: "took-back",
+    what: "a span taken from every slot is not given back to every slot",
+    file: "dist/soksak.js",
+    find: "if (paid.span === 'all' && took < 1 - EPS) {",
+    to: "if (false) {",
+  },
+  {
     id: "one-sided",
     what: "a boundary that cannot move without redrawing a third card reports a range",
     file: "dist/soksak.js",
@@ -240,8 +261,8 @@ export const BREAKS = [
     id: "paid-back",
     what: "a card closed at a boundary gives its size to the other side",
     file: "dist/soksak.js",
-    find: "                const same = paid.side === 'lo' ? lo : hi;",
-    to: "                const same = paid.side === 'lo' ? lo : hi;\n                if (true)\n                    continue;",
+    find: "                const same = from === 'lo' ? lo : hi;",
+    to: "                const same = from === 'lo' ? lo : hi;\n                if (true)\n                    continue;",
   },
   {
     id: "flex-rate",

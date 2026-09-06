@@ -22,10 +22,18 @@ export type { Axis, Card, CardInit, Rect, Side } from './card.js';
 export type { Fill, FillOrder } from './slicing.js';
 /** `merge`: a dragged boundary snaps onto a neighbouring line and the two combine. */
 export type SnapMode = 'merge' | 'off';
-/** Where a card's slot came from: the side, and the card it came from. */
+/**
+ * Where a card's slot came from: the side and the card its width came from, and
+ * the side its span came from.
+ *
+ * The two sides differ whenever the slot next to the boundary could not give the
+ * width and one further out did. `span` is absent on a state saved before it was
+ * recorded, and on a card that a split made.
+ */
 export interface Paid {
     side: 'lo' | 'hi';
     to: string;
+    span?: 'lo' | 'hi' | 'all';
 }
 export interface SoksakState {
     xs: number[];
@@ -398,7 +406,8 @@ export declare class Soksak {
     /** Whether a card occupies one slot on one axis and spans the whole other axis. */
     private spansPlane;
     /**
-     * Insert a slot at a boundary with the given span.
+     * Insert a slot at a boundary with the given span. Returns the side the span
+     * came from, or 'all' when every slot gave a share of it.
      *
      * Every other slot is scaled by `1 - span`. A card ending at the boundary
      * keeps its index and a card starting there shifts by one.
