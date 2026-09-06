@@ -111,7 +111,9 @@ const tell = (name, payload) => {
   if (recording && name !== "report") {
     Promise.resolve(answered).then((answer) => {
       bridge.call("report", `host ${name} ${say(payload)} -> ${say(answer)}`);
-    });
+    // 실패한 호출은 tellInTurn 이 보고한다. 여기서 받지 않으면 그 실패가 처리되지
+    // 않은 거절이 되어, 기록을 켰을 때만 같은 실패가 두 번 남는다.
+    }, () => {});
   }
   return answered;
 };
