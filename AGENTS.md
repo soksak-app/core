@@ -12,3 +12,15 @@ The library's code comments are English. The example's are Korean, because the e
 by this project's owner. Identifiers, log lines, error messages and test names are English
 everywhere.
 Documents use one English canonical and a Korean translation at the matching `.ko.md` path.
+
+## Writing
+
+This applies to commit messages, code comments and documents, in both languages.
+
+- Name the action, the subject and the object: create, publish, receive, register, remove,
+  return, fail.
+- State a cause in one sentence.
+- Use no metaphor, no personification and no colloquialism.
+- The Korean and the English carry the same information.
+
+A commit message carries no trailer: no `Co-Authored-By`, no session link, no "Generated with".
