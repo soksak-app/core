@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { Soksak } from "../dist/index.js";
-import { assertTiling, fuzz, H, three, W } from "./helpers.mjs";
+import { assertTiling, fuzz, H, make, three, W } from "./helpers.mjs";
 
 test("dragging a line moves every card referencing it", () => {
   const grid = three();
@@ -110,6 +110,31 @@ test("centring makes the two cards beside a line the same size", () => {
   const bottom = grid.rect("browser");
   assert.ok(Math.abs(top.h - bottom.h) < 0.01, `${top.h} vs ${bottom.h}`);
   assertTiling(grid, "after centring");
+});
+
+test("centring past a line no card reads moves that boundary and no other", () => {
+  const grid = make({ gap: 24 });
+  grid.split("card", "x");
+  grid.split("card", "y");
+  // A line no card reads, between the boundary to centre and the one before it.
+  const spare = grid.split("card", "x");
+  grid.close(spare);
+  grid.split("card-1", "x");
+  grid.moveBoundary("x", 2, 0.66 * W, false);
+  grid.moveBoundary("x", 1, 0.58 * W, false);
+  assert.equal(grid.isVirtual("x", 1), true, "the line the centring passes is read by no card");
+  const far = grid.boundaryPos("x", 3);
+
+  grid.centerBoundary("x", 2);
+
+  const a = grid.rect("card");
+  const b = grid.rect("card-1");
+  assert.ok(Math.abs(a.w - b.w) < 0.01, `the two cards beside it come out ${a.w} and ${b.w}`);
+  assert.equal(grid.lines("x").length, 4, "the line the centring passed is gone");
+  assert.ok(
+    Math.abs(grid.boundaryPos("x", 2) - far) < 0.01,
+    `the boundary above it stays at ${far}, not ${grid.boundaryPos("x", 2)}`,
+  );
 });
 
 test("an unreferenced line survives a close and is removed by tidy", () => {
@@ -634,4 +659,64 @@ test("centring halves the two cards, not the two lines beside them", () => {
   );
   grid.centerBoundary("y", 1);
   assert.equal(grid.rect("top").h, grid.rect("bottom").h);
+});
+
+test("a drag on an axis where nothing flexes leaves the line where it stands", () => {
+  // Every sharing slot is stopped at the corridor it holds, so no span buys a
+  // px and the boundary reports one position. A drag must leave it there rather
+  // than fold it onto the line before it.
+  const grid = new Soksak(
+    { xs: [0, 1 / 3, 2 / 3, 1], ys: [0, 1], cards: [
+      { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
+      { id: "b", c0: 1, c1: 2, r0: 0, r1: 1 },
+      { id: "c", c0: 2, c1: 3, r0: 0, r1: 1 },
+    ] },
+    { width: 100, height: 100, gap: 50, minSize: 1 },
+  );
+  const at = grid.boundaryPos("x", 1);
+  assert.deepEqual(grid.boundaryRange("x", 1), [at, at], "the boundary cannot move");
+  const was = grid.lines("x");
+  assert.equal(grid.moveBoundary("x", 1, at, false), at, "a drag that asks for where it is");
+  assert.deepEqual(grid.lines("x"), was);
+  assert.equal(grid.moveBoundary("x", 1, at + 40, false), at, "and one that asks for more");
+  assert.deepEqual(grid.lines("x"), was);
+});
+
+test("a grab area over a run of coincident lines has no length, not a negative one", () => {
+  const grid = new Soksak(
+    { xs: [0, 0.5, 1], ys: [0, 0.4, 0.4, 1], cards: [
+      { id: "top", c0: 0, c1: 2, r0: 0, r1: 1 },
+      { id: "thinL", c0: 0, c1: 1, r0: 1, r1: 2 },
+      { id: "thinR", c0: 1, c1: 2, r0: 1, r1: 2 },
+      { id: "bottom", c0: 0, c1: 2, r0: 2, r1: 3 },
+    ] },
+    { width: 600, height: 400, gap: 24, minSize: 0 },
+  );
+  for (const d of grid.dividers()) {
+    assert.ok(d.w >= 0 && d.h >= 0, `${d.key} is ${d.w}x${d.h}`);
+  }
+});
+
+test("centring measures again from where the boundary landed", () => {
+  // `wide` declares more width than the plane can give, so every declared size is
+  // drawn scaled and each move changes that scale. One conversion of the middle
+  // into a move lands short of it.
+  const grid = new Soksak(
+    {
+      xs: [0, 0.5, 0.75, 0.777542372881356, 1],
+      ys: [0, 1],
+      cards: [
+        { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
+        { id: "wide", c0: 1, c1: 2, r0: 0, r1: 1, width: 296 },
+        { id: "b", c0: 2, c1: 3, r0: 0, r1: 1 },
+        { id: "c", c0: 3, c1: 4, r0: 0, r1: 1 },
+      ],
+    },
+    { width: 472, height: 324, gap: 10, minSize: 3 },
+  );
+  grid.centerBoundary("x", 3);
+  assert.ok(
+    Math.abs(grid.rect("b").w - grid.rect("c").w) < 0.01,
+    `the two cards come out the same size, not ${grid.rect("b").w} and ${grid.rect("c").w}`,
+  );
 });

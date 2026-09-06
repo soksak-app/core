@@ -34,6 +34,36 @@ export function corridorOf(plane, axis, slot, read = linesRead(plane, axis)) {
     return lo + hi;
 }
 /**
+ * The corridor a slot holds once it has a width.
+ *
+ * A slot standing at zero width carries none: the slot beside the run holds it,
+ * because a slot with no width has nothing to carry one with. A caller about to
+ * give such a slot a width needs the corridor it will then hold, not the zero it
+ * holds now.
+ */
+export function corridorWhenWide(plane, axis, slot, read = linesRead(plane, axis)) {
+    if (!blank(plane, axis, slot))
+        return corridorOf(plane, axis, slot, read);
+    const a = lines(plane, axis);
+    const half = halfCorridor(plane, axis, read);
+    // `inset` reads the plane as it stands, where this slot is one of a run and the
+    // scan passes through it, so a run reaching a border answers 0 for the slot
+    // that is about to carry the corridor. Once it has width its own two lines
+    // inset into it, and those two terms are read off the lines instead.
+    let lo = slot === 0 || !read.has(slot) ? 0 : half;
+    let hi = slot + 1 === a.length - 1 || !read.has(slot + 1) ? 0 : half;
+    // The slots still standing at zero width place their edges here too, and one
+    // half gap covers a whole run, so the run takes the largest rather than the
+    // sum — the rule `corridorOf` follows.
+    for (let k = slot - 1; k >= 0 && blank(plane, axis, k); k--) {
+        lo = Math.max(lo, k === 0 || !read.has(k) ? 0 : half);
+    }
+    for (let k = slot + 2; k < a.length && blank(plane, axis, k - 1); k++) {
+        hi = Math.max(hi, k === a.length - 1 || !read.has(k) ? 0 : half);
+    }
+    return lo + hi;
+}
+/**
  * True when a slot draws at zero width: no span to take a share with and no px
  * size. The two lines around it land at the same position.
  *
@@ -562,9 +592,14 @@ export function dividers(plane, grabSize) {
             for (const [from, to] of boundarySpans(plane, axis, line, meet)) {
                 const start = frame[down].at[from] + frame[down].lo[from];
                 const end = frame[down].at[to] - frame[down].hi[to];
+                // The cards on the two sides can inset further than the stretch is long,
+                // when the lines it runs between stand at one place. There is nothing to
+                // grab there, and a rect drawn inside out carries a negative length the
+                // CSSOM discards, leaving the element the size it last had.
+                const run = Math.max(0, end - start);
                 out.push(axis === 'x'
-                    ? { key: `x:${line}:${from}`, axis, line, x: along[line] - hit / 2, y: start, w: hit, h: end - start }
-                    : { key: `y:${line}:${from}`, axis, line, x: start, y: along[line] - hit / 2, w: end - start, h: hit });
+                    ? { key: `x:${line}:${from}`, axis, line, x: along[line] - hit / 2, y: start, w: hit, h: run }
+                    : { key: `y:${line}:${from}`, axis, line, x: start, y: along[line] - hit / 2, w: run, h: hit });
             }
         }
     }

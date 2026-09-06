@@ -213,6 +213,15 @@ export declare class Soksak {
      */
     private settleOn;
     /**
+     * Whether every sharing slot `want` named is drawn at the width it named.
+     *
+     * `setSlotWidths` divides the room the sharing slots hold between them, so a
+     * set of names that asks for more than that room is met by scaling all of
+     * them down. Every slot then gives a share, and the one set to `null` is not
+     * the one that paid.
+     */
+    private namedKept;
+    /**
      * Draws one slot at `drawn` px and takes the difference from `pays`, the slot
      * on the other side of the boundary.
      *

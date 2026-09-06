@@ -30,6 +30,15 @@ export interface Plane {
  * largest value rather than the sum.
  */
 export declare function corridorOf(plane: Plane, axis: Axis, slot: number, read?: Set<number>): number;
+/**
+ * The corridor a slot holds once it has a width.
+ *
+ * A slot standing at zero width carries none: the slot beside the run holds it,
+ * because a slot with no width has nothing to carry one with. A caller about to
+ * give such a slot a width needs the corridor it will then hold, not the zero it
+ * holds now.
+ */
+export declare function corridorWhenWide(plane: Plane, axis: Axis, slot: number, read?: Set<number>): number;
 /** The px size each slot declares: the largest value any card in it sets. */
 export declare function heldSizes(plane: Plane, axis: Axis): (number | null)[];
 /** Drawn width of every slot, gap removed. */

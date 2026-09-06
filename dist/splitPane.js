@@ -15,7 +15,7 @@
  * coordinates.
  */
 import { AXES, SIDES, SPAN, axisOf, fixedSize, isAhead, other, spanOf } from './card.js';
-import { corridorOf, crossing, declaredFor, dividers, frameOf, linesRead, halfCorridor, heldSizes, holdsSizes, inset, interiorLines, isVirtual, linePositions, rectIn, rectOf, rules, sharePerSpan, slotSizes, slotWidths, zoneAt, } from './geometry.js';
+import { corridorOf, corridorWhenWide, crossing, declaredFor, dividers, frameOf, linesRead, halfCorridor, heldSizes, holdsSizes, inset, interiorLines, isVirtual, linePositions, rectIn, rectOf, rules, sharePerSpan, slotSizes, slotWidths, zoneAt, } from './geometry.js';
 import { fillFor, isSlicing } from './slicing.js';
 const EPS = 1e-9;
 /**
@@ -437,7 +437,12 @@ export class Soksak {
                 nulls++;
             }
             else {
-                size[i] = Math.max(0, want[i] + corridorOf(plane, axis, i, read));
+                // A slot the caller names at nothing keeps standing at zero width, and R5
+                // gives it no corridor: the slot beside the run holds it. Asking what it
+                // would hold once wide gives it a size, a size gives it a span, and a run
+                // of lines standing at one place comes apart and never goes back.
+                const asked = want[i];
+                size[i] = Math.max(0, asked + (asked > EPS ? corridorWhenWide : corridorOf)(plane, axis, i, read));
                 named += size[i];
             }
         }
@@ -501,7 +506,7 @@ export class Soksak {
             const had = want[slot];
             want[slot] = null;
             this.setSlotWidths(axis, want);
-            if (this.fits(axis))
+            if (this.fits(axis) && this.namedKept(axis, want))
                 return slot;
             this.restore(undo);
             want[slot] = had;
@@ -511,6 +516,26 @@ export class Soksak {
                 want[i] = null;
         this.setSlotWidths(axis, want);
         return -1;
+    }
+    /**
+     * Whether every sharing slot `want` named is drawn at the width it named.
+     *
+     * `setSlotWidths` divides the room the sharing slots hold between them, so a
+     * set of names that asks for more than that room is met by scaling all of
+     * them down. Every slot then gives a share, and the one set to `null` is not
+     * the one that paid.
+     */
+    namedKept(axis, want) {
+        const held = heldSizes(this.plane, axis);
+        const width = slotWidths(this.plane, axis);
+        for (let i = 0; i < want.length; i++) {
+            const asked = want[i];
+            if (asked === null || held[i] !== null)
+                continue;
+            if (Math.abs(width[i] - asked) > 0.01)
+                return false;
+        }
+        return true;
     }
     /**
      * Draws one slot at `drawn` px and takes the difference from `pays`, the slot
@@ -713,10 +738,11 @@ export class Soksak {
             for (let pass = 0; pass < 8; pass++) {
                 // Only the sharing slots hold normalised width, so convert against those.
                 const usable = this.sharedExtent(axis);
-                if (usable <= EPS) {
-                    a[line] = clamp(a[line - 1], a[line - 1], a[line + 1]);
+                // No sharing slot flexes with its span, so no change to the line moves
+                // the boundary. Leave it where it stands: collapsing it onto the line
+                // before it moved a boundary the range reported as fixed.
+                if (usable <= EPS)
                     break;
-                }
                 // Measured from where the line stands, not from the line before it. A slot
                 // holds its corridor as well as its share of the span, and that corridor
                 // is a constant the conversion must not scale.
@@ -778,6 +804,11 @@ export class Soksak {
             if (Math.abs(middle - at) < 0.01)
                 break;
             at = this.moveBoundary(axis, line, middle, false);
+            // The move drops the unreferenced lines it passed, which lowers the number
+            // of the line it moved. The next pass measures the same boundary, so it is
+            // given the number that line has now.
+            while (line > 1 && this.boundaryPos(axis, line) !== at)
+                line--;
         }
         return at;
     }
@@ -1173,7 +1204,17 @@ export class Soksak {
                     continue;
                 // The line comes off the side the span came from, which is not the side
                 // the width came from whenever the nearest slot could not give it.
-                const from = paid.span === 'lo' || paid.span === 'hi' ? paid.span : paid.side;
+                // A span every slot gave a share of comes back through either line, so
+                // at the plane's border the interior one is taken. Without this a card
+                // that went in at the border returns nothing: its `lo` line is the
+                // border and the path below refuses it.
+                const from = paid.span === 'lo' || paid.span === 'hi'
+                    ? paid.span
+                    : card[lo] === 0
+                        ? 'hi'
+                        : card[hi] === this.arr(axis).length - 1
+                            ? 'lo'
+                            : paid.side;
                 const gone = from === 'lo' ? card[lo] : card[hi];
                 if (gone <= 0 || gone >= this.arr(axis).length - 1)
                     continue;

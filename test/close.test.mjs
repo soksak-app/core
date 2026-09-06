@@ -247,3 +247,143 @@ test("closing a card every slot paid for gives the span back to every slot", () 
     `${now} after the rail left, ${was} before it arrived`,
   );
 });
+
+test("a card that arrives takes its width from one slot, and gives it back to that one", () => {
+  const grid = new Soksak(undefined, { width: 800, height: 600, gap: 24, minSize: 96 });
+  grid.split("card", "x", { id: "n1" });
+  grid.split("n1", "x", { id: "n2" });
+  const widths = () => grid.cards.map((c) => `${c.id}:${grid.rect(c.id).w}`).sort().join(" ");
+  const was = widths();
+  assert.equal(was, "card:388 n1:176 n2:188");
+
+  assert.equal(grid.insertAt("x", 1, { size: 200, id: "rail" }), "rail");
+  assert.equal(widths(), "card:164 n1:176 n2:188 rail:200", "only the slot beside it paid");
+  assert.equal(grid.close("rail"), true);
+  assert.equal(widths(), was, "and it is the one that got it back");
+});
+
+test("a rail at the plane's border returns the span every slot gave it", () => {
+  // No slot beside the border has 200px to give, so every slot gives a share.
+  // Closing must return it the same way; the border is not a line to remove, so
+  // the far one is.
+  const make = () => new Soksak(
+    { xs: [0, 1 / 3, 2 / 3, 1], ys: [0, 1], cards: [
+      { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
+      { id: "b", c0: 1, c1: 2, r0: 0, r1: 1 },
+      { id: "c", c0: 2, c1: 3, r0: 0, r1: 1 },
+    ] },
+    { width: 451, height: 600, gap: 11, minSize: 51 },
+  );
+  const grid = make();
+  const widths = (g) => g.cards.map((x) => `${x.id}:${g.rect(x.id).w.toFixed(4)}`).sort().join(" ");
+  const was = widths(grid);
+  assert.equal(grid.insertAt("x", 0, { size: 200, id: "rail" }), "rail");
+  assert.equal(grid.close("rail"), true);
+  assert.equal(widths(grid), was);
+});
+
+test("a card that arrives beside a run of coincident lines does not pull the run apart", () => {
+  // Lines 2 and 3 stand at one place, so the slot between them has no width and
+  // R5 gives it no corridor. Settling the rail in must not hand that slot a
+  // corridor: a corridor is a size, a size is a span, and the run would come
+  // apart and take one gap out of the cards beside it for good.
+  const grid = new Soksak(
+    {
+      xs: [0, 0.375, 0.75, 0.75, 0.875, 1],
+      ys: [0, 0.5, 1],
+      cards: [
+        { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
+        { id: "b", c0: 1, c1: 3, r0: 0, r1: 1 },
+        { id: "c", c0: 3, c1: 4, r0: 0, r1: 1 },
+        { id: "d", c0: 4, c1: 5, r0: 0, r1: 1 },
+        { id: "e", c0: 0, c1: 2, r0: 1, r1: 2 },
+        { id: "f", c0: 2, c1: 5, r0: 1, r1: 2 },
+      ],
+    },
+    { width: 907, height: 1073, gap: 7, minSize: 77 },
+  );
+  const widths = () => grid.cards.map((c) => `${c.id}:${grid.rect(c.id).w.toFixed(6)}`).sort().join(" ");
+  const was = widths();
+
+  assert.equal(grid.insertAt("x", 0, { size: 90, id: "rail" }), "rail");
+  assert.equal(grid.close("rail"), true);
+
+  assert.equal(widths(), was, "every card is back where it was");
+  const xs = grid.lines("x");
+  assert.equal(xs[2], xs[3], "and the two lines still stand at one place");
+});
+
+test("a slot standing at zero width takes the corridor it will hold once it is given one", () => {
+  // The rail's slot takes its span from the slot beside it, which leaves that
+  // slot standing at zero width while the settle runs. The width it is named at
+  // is the width it had, so the corridor to add is the one it will hold again —
+  // not the nothing a slot with no width holds.
+  const grid = new Soksak(undefined, { width: 800, height: 600, gap: 8, minSize: 60 });
+  grid.split("card", "x", { id: "n1" });
+  grid.split("n1", "x", { id: "n2" });
+  const widths = () => grid.cards.map((c) => `${c.id}:${grid.rect(c.id).w.toFixed(6)}`).sort().join(" ");
+  const was = widths();
+  assert.equal(was, "card:396.000000 n1:192.000000 n2:196.000000");
+
+  assert.equal(grid.insertAt("x", 2, { size: 200, id: "rail" }), "rail");
+  assert.equal(grid.close("rail"), true);
+  assert.equal(widths(), was);
+});
+
+test("a card at the far border returns its room to the slot it came from", () => {
+  // The recorded side is where the width came from, and here it is two slots
+  // along. Removing the line on that side is not possible at the plane's border,
+  // so the other line comes off instead. Without that the whole path is skipped
+  // and the fill hands the room to whichever neighbour it picks.
+  const grid = Soksak.from(
+    {
+      xs: [0, 0.3, 0.6, 0.8, 1],
+      ys: [0, 0.5, 1],
+      cards: [
+        { id: "A", c0: 0, c1: 1, r0: 0, r1: 1 },
+        { id: "A2", c0: 0, c1: 1, r0: 1, r1: 2 },
+        { id: "B", c0: 1, c1: 2, r0: 0, r1: 2 },
+        { id: "C", c0: 2, c1: 3, r0: 0, r1: 2 },
+        { id: "rail", c0: 3, c1: 4, r0: 0, r1: 2, width: 150 },
+      ],
+      paidBy: { rail: { side: "hi", to: "A" } },   // as splitToward records it
+    },
+    { width: 1200, height: 800, gap: 20, minSize: 80 },
+  );
+  const width = (id) => grid.rect(id).w;
+  const was = { A: width("A"), B: width("B"), C: width("C"), rail: width("rail") };
+  // Re-proportioning divides, so the widths come back to within a rounding.
+  const near = (id, w, note) =>
+    assert.ok(Math.abs(width(id) - w) < 1e-9, `${id} is ${width(id)}, not ${w}: ${note}`);
+
+  assert.equal(grid.close("rail"), true);
+  near("A", was.A + was.rail + grid.gap, "A gave the room and A takes it back");
+  near("B", was.B, "B is not the one that gave it");
+  near("C", was.C, "nor is the neighbour the fill would have picked");
+});
+
+test("a card that arrives at a border takes its width from one slot, not a share from each", () => {
+  // `b` reaches over two slots and `a` over one. The rail's width has to come
+  // out of the sharing slots, and it must come out of one of them: a settle met
+  // by scaling them all leaves no slot holding the room, and the close cannot
+  // give it back.
+  const grid = Soksak.from(
+    {
+      xs: [0, 0.25, 0.75, 1],
+      ys: [0, 1],
+      cards: [
+        { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
+        { id: "b", c0: 1, c1: 3, r0: 0, r1: 1 },
+      ],
+    },
+    { width: 600, height: 400, gap: 12, minSize: 60 },
+  );
+  const widths = () => grid.cards.map((c) => `${c.id}:${grid.rect(c.id).w.toFixed(6)}`).sort().join(" ");
+  const was = widths();
+  assert.equal(was, "a:144.000000 b:444.000000");
+
+  assert.equal(grid.insertAt("x", 3, { size: 180, id: "rail" }), "rail");
+  assert.equal(widths(), "a:144.000000 b:252.000000 rail:180.000000", "a is not beside it and does not pay");
+  assert.equal(grid.close("rail"), true);
+  assert.equal(widths(), was);
+});
