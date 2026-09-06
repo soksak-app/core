@@ -94,6 +94,23 @@ fn inset(window: &Window, viewport: &Viewport) -> Result<f64, String> {
     Ok((height - viewport.h).max(0.0))
 }
 
+/// Snaps a logical rect inward to the display's pixel grid.
+///
+/// A view placed on a fractional logical coordinate is rounded when it is drawn,
+/// and rounding outward makes it cover more than the rect the page declared: the
+/// card's own border sits one line inside that rect, so the view paints over it.
+/// Snapping inward leaves up to one device pixel of the card's background along
+/// each edge, which is what is behind the view anyway. Wails snaps the same way,
+/// through backingAlignedRect.
+fn aligned(x: f64, y: f64, w: f64, h: f64, scale: f64) -> (f64, f64, f64, f64) {
+    let step = 1.0 / scale;
+    let left = (x * scale).ceil() / scale;
+    let top = (y * scale).ceil() / scale;
+    let right = ((x + w) * scale).floor() / scale;
+    let bottom = ((y + h) * scale).floor() / scale;
+    (left, top, (right - left).max(step), (bottom - top).max(step))
+}
+
 /// Starts watching the window for presses, once.
 ///
 /// A press on a surface is delivered to that surface's view and never to the
@@ -175,6 +192,7 @@ fn sync_surfaces(
     }
     watch_presses(&window, &views, &watching, &page)?;
     let top = inset(&window, &request.viewport)?;
+    let scale = window.scale_factor().map_err(|e| e.to_string())?;
 
     let mut wanted: HashSet<String> = HashSet::new();
     let mut created = Vec::new();
@@ -186,8 +204,9 @@ fn sync_surfaces(
         // A zero-sized webview is not something anyone can see, and some
         // platforms reject it, so treat it as hidden.
         let visible = s.visible && s.w >= 1.0 && s.h >= 1.0;
-        let position = LogicalPosition::new(s.x, s.y + top);
-        let size = LogicalSize::new(s.w.max(1.0), s.h.max(1.0));
+        let (ax, ay, aw, ah) = aligned(s.x, s.y + top, s.w.max(1.0), s.h.max(1.0), scale);
+        let position = LogicalPosition::new(ax, ay);
+        let size = LogicalSize::new(aw, ah);
         let solid = if s.dim { 0.45 } else { 1.0 };
 
         if let Some(webview) = window.get_webview(&label) {
@@ -356,12 +375,17 @@ fn overlay_show(
     // The page reads which framework holds it from the address it was opened at.
     let url = format!("overlay.html?id={}&framework=tauriv2", request.id);
     let [r, g, b, a] = request.background;
+    let scale = window.scale_factor().map_err(|e| e.to_string())?;
+    let (ax, ay, aw, ah) = aligned(
+        request.rect.x, request.rect.y + top,
+        request.rect.w.max(1.0), request.rect.h.max(1.0), scale,
+    );
     window
         .add_child(
             WebviewBuilder::new(&label, WebviewUrl::App(url.into()))
                 .background_color(Color(r as u8, g as u8, b as u8, (a * 255.0) as u8)),
-            LogicalPosition::new(request.rect.x, request.rect.y + top),
-            LogicalSize::new(request.rect.w.max(1.0), request.rect.h.max(1.0)),
+            LogicalPosition::new(ax, ay),
+            LogicalSize::new(aw, ah),
         )
         .map_err(|e| e.to_string())?;
     Ok(())
@@ -447,14 +471,14 @@ struct PlaceRequest {
 #[tauri::command]
 fn overlay_place(window: Window, request: PlaceRequest) -> Result<(), String> {
     let top = inset(&window, &request.viewport)?;
+    let scale = window.scale_factor().map_err(|e| e.to_string())?;
     if let Some(view) = window.get_webview(&modal_label(&request.id)) {
-        view.set_position(LogicalPosition::new(request.rect.x, request.rect.y + top))
-            .map_err(|e| e.to_string())?;
-        view.set_size(LogicalSize::new(
-            request.rect.w.max(1.0),
-            request.rect.h.max(1.0),
-        ))
-        .map_err(|e| e.to_string())?;
+        let (ax, ay, aw, ah) = aligned(
+            request.rect.x, request.rect.y + top,
+            request.rect.w.max(1.0), request.rect.h.max(1.0), scale,
+        );
+        view.set_position(LogicalPosition::new(ax, ay)).map_err(|e| e.to_string())?;
+        view.set_size(LogicalSize::new(aw, ah)).map_err(|e| e.to_string())?;
     }
     Ok(())
 }
