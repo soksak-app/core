@@ -328,6 +328,27 @@ export const BREAKS = [
     to: "    return Math.max(end, hi) - Math.max(start, lo);",
   },
   {
+    id: "host-renumber",
+    what: "a change the host makes renumbers a gesture's line, and the gesture drives the boundary that number now names",
+    file: "dist/dom.js",
+    find: "        if (reason === 'render')\n            this.settle();",
+    to: "        ;",
+  },
+  {
+    id: "across-start",
+    what: "re-filing measures an overlap from the earlier of the two starts, so a stretch the element does not reach counts as covered",
+    file: "dist/dom.js",
+    find: "    return Math.min(end, hi) - Math.max(start, lo);",
+    to: "    return Math.min(end, hi) - Math.min(start, lo);",
+  },
+  {
+    id: "refile-most",
+    what: "re-filing takes the first stretch an element touches rather than the one it covers most",
+    file: "dist/dom.js",
+    find: "                if (over > best) {",
+    to: "                if (over > 0 && !to) {",
+  },
+  {
     id: "refile-gone",
     what: "a drag whose boundary is gone leaves its element in the host",
     file: "dist/dom.js",
@@ -527,8 +548,11 @@ export const BREAKS = [
     id: "made-up-axis",
     what: "lines answers for an axis that is not one",
     file: "dist/soksak.js",
-    find: "        if (this.noAxis(axis))\n            return [];",
-    to: "        if (false)\n            return [];",
+    // Named down to `lines`. The guard is written the same way in three methods,
+    // so the shorter text patched all three at once and the entry reported on a
+    // site it does not name.
+    find: "    lines(axis) {\n        if (this.noAxis(axis))\n            return [];",
+    to: "    lines(axis) {\n        if (false)\n            return [];",
   },
   {
     id: "centre-reason",
