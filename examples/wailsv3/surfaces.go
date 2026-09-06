@@ -198,6 +198,9 @@ func NewSurfaces(shells *Shells) *Surfaces {
 		modals: map[string]*modal{},
 		shapes: map[string]*nativeShape{},
 		shells: shells,
+		// 아직 테마를 받지 않았을 때의 값. 빈 맵이 아니면 JSON 에 null 이 실리고,
+		// 이 값을 받는 페이지는 토큰을 순회하다 멈춘다.
+		theme:  Theme{Tokens: map[string]string{}},
 	}
 }
 
