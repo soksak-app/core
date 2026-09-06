@@ -266,6 +266,13 @@ fn sync_surfaces(
         let label = webview.label().to_string();
         if label.starts_with("surface-") && !wanted.contains(&label) {
             resizing.0.lock().map_err(|e| e.to_string())?.remove(&label);
+            // The map is keyed by the view's address, and the system reuses an
+            // address once the view is gone. A stale entry names a surface that
+            // no longer exists, so it is removed with the view.
+            if let Ok(mut named) = views.0.lock() {
+                let id = label.trim_start_matches("surface-").to_string();
+                named.retain(|_, held| *held != id);
+            }
             webview.close().map_err(|e| e.to_string())?;
         }
     }

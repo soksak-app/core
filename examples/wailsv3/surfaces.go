@@ -223,10 +223,7 @@ func (s *Surfaces) OverlayShow(req OverlayRequest) error {
 			BackgroundColour: application.NewRGBA(
 				uint8(req.Background[0]), uint8(req.Background[1]),
 				uint8(req.Background[2]), uint8(req.Background[3]*255)),
-			Mac: application.MacWindow{
-				CornerRadius:  req.Radius,
-				DisableShadow: true,
-			},
+			Mac: application.MacWindow{CornerRadius: req.Radius},
 		}),
 		at: req.Rect,
 		content: OverlayContent{
@@ -539,17 +536,20 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) {
 	for _, surface := range req.Surfaces {
 		wanted[surface.ID] = true
 		w, h := max1(surface.W), max1(surface.H)
+		// A webview with no area is not visible to anyone, so it is hidden
+		// rather than left as a one pixel view.
+		visible := surface.Visible && surface.W >= 1 && surface.H >= 1
 
 		alpha := alphaFor(surface.Dim)
 		if view, live := s.views[surface.ID]; live {
 			s.resizing(surface.ID, view, !req.Settled)
 			view.SetBounds(surface.X, surface.Y, w, h)
-			view.SetHidden(!surface.Visible)
+			view.SetHidden(!visible)
 			surfaceAlpha(view.NativeView(), alpha)
 			continue
 		}
 		bg := surface.Background
-		view := win.AddWebview(application.WebviewOptions{
+		view, err := win.AddWebview(application.WebviewOptions{
 			URL:    surface.URL,
 			X:      surface.X,
 			Y:      surface.Y,

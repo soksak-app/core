@@ -202,8 +202,37 @@ pub fn shape_frame(view: usize, rect: (f64, f64, f64, f64)) {
         if view.is_null() {
             return;
         }
-        let _: () = msg_send![view, setFrame: NSRect::from(rect)];
+        let _: () = msg_send![view, setFrame: aligned_in_window(view, rect)];
+        raise(view);
     }
+}
+
+/// Aligns a frame to the display's pixels, in the window the view is in.
+#[cfg(target_os = "macos")]
+unsafe fn aligned_in_window(view: *mut objc2::runtime::AnyObject, rect: (f64, f64, f64, f64)) -> NSRect {
+    use objc2::msg_send;
+    use objc2::runtime::AnyObject;
+
+    let window: *mut AnyObject = msg_send![view, window];
+    if window.is_null() {
+        return NSRect::from(rect);
+    }
+    // NSAlignAllEdgesInward is 0b1010 in the option bits AppKit defines.
+    msg_send![window, backingAlignedRect: NSRect::from(rect), options: 10usize]
+}
+
+/// Puts the view above every sibling already in the content view.
+#[cfg(target_os = "macos")]
+unsafe fn raise(view: *mut objc2::runtime::AnyObject) {
+    use objc2::msg_send;
+    use objc2::runtime::AnyObject;
+
+    let parent: *mut AnyObject = msg_send![view, superview];
+    if parent.is_null() {
+        return;
+    }
+    // NSWindowAbove is 1.
+    let _: () = msg_send![parent, addSubview: view, positioned: 1isize, relativeTo: std::ptr::null_mut::<AnyObject>()];
 }
 
 /// Sets a shape's corner radius, line width, fill colour and line colour.

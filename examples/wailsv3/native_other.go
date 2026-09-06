@@ -19,6 +19,8 @@ func watchMouse(window unsafe.Pointer) {}
 
 var pressed func(view uintptr) bool
 
+var pointed func(phase int, x float64, y float64)
+
 // nativeShape is a rectangle drawn above the surfaces. Not written for this
 // platform.
 type nativeShape struct{}
