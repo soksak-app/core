@@ -93,7 +93,8 @@ test("a fixed card does not fill", () => {
   // be offered as a filler.
   assert.equal(grid.card("sidebar").fixed, true);
   const beside = grid.fill("terminal");
-  if (beside) assert.ok(beside.cards.every((p) => p.id !== "sidebar"), "the sidebar was offered");
+  assert.ok(beside, "a card beside the terminal can take its space");
+  assert.ok(beside.cards.every((p) => p.id !== "sidebar"), "the sidebar was offered");
 });
 
 test("fillOrder picks the axis when both sides could take the space", () => {

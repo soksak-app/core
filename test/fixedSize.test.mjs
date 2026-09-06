@@ -232,9 +232,6 @@ test("a cut divides the card's px size between the halves", () => {
 });
 
 
-
-
-
 test("insertAt requires a valid size", () => {
   const grid = new Soksak(undefined, { width: 1200, height: 800 });
   grid.split("card", "x");

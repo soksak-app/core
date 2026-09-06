@@ -691,24 +691,28 @@ test("sweeping one divider ends its drag and no one else's", () => {
 
 test("a rule reaches the frame the host holds the plane inside", () => {
   const { host, grid, view } = mount({ bleed: 12 });
-  grid.split("card", "y");
+  // 두 번째 카드만 가로로 나눈다. 그 선의 규칙은 왼쪽 끝이 판 안에서 멈추고 오른쪽
+  // 끝만 판의 가장자리에 닿으므로, 한 규칙 안에서 두 경우를 모두 볼 수 있다.
+  grid.split([...grid.cards][1].id, "y");
   view.render();
 
-  const reaching = grid.rules().filter((r) => r.axis === "x" && r.y <= 0.5);
-  assert.ok(reaching.length, "a rule that starts at the plane's edge");
+  const across = [...host.querySelectorAll('.sp-rule[data-axis="y"]')];
+  const spanning = across.filter((el) => parseFloat(el.style.left) < 0);
+  const stopping = across.filter((el) => parseFloat(el.style.left) > 0);
+  assert.equal(spanning.length, 1, "one runs the whole width");
+  assert.equal(stopping.length, 1, "and one stops against a card");
+  assert.equal(spanning[0].style.left, "-12px", "the one that reaches bleeds past the edge");
+  assert.equal(parseFloat(spanning[0].style.width), W + 24, "at both ends");
+  // 카드에 막힌 끝은 그 자리에 둔다. 거기서는 카드가 벽이다.
+  assert.equal(stopping[0].style.left, `${W / 2}px`, "the end a card stops is left where it stops");
+  assert.equal(parseFloat(stopping[0].style.width), W / 2 + 12, "and the other end still bleeds");
 
-  // Only the ends that reach the plane bleed. A rule that stops against a card
-  // is left where it stops, because there the card is the wall.
-  const all = [...host.querySelectorAll('.sp-rule[data-axis="x"]')];
-  assert.ok(all.length, "the view drew them");
-  for (const el of all) {
-    assert.equal(el.style.top, "-12px", "it starts a bleed above the plane");
+  const down = [...host.querySelectorAll('.sp-rule[data-axis="x"]')];
+  assert.ok(down.length, "the view drew the rules on the other axis too");
+  for (const el of down) {
+    assert.equal(el.style.top, "-12px", "each starts a bleed above the plane");
+    assert.equal(parseFloat(el.style.height), H + 24, "and runs one past its foot");
   }
-  const full = all.filter((el) => parseFloat(el.style.height) === H + 24);
-  assert.ok(full.length, "one that spans the plane runs a bleed past each end");
-
-  const short = [...host.querySelectorAll('.sp-rule[data-axis="y"]')].map((el) => el.style.left);
-  for (const left of short) assert.equal(left, "-12px", "and on the other axis too");
   view.destroy();
 });
 
@@ -867,9 +871,9 @@ test("installTheme puts one stylesheet first in the head and reuses it", () => {
 
   // 색과 크기를 직접 줄 수도 있다. 토큰 이름은 접두사를 따른다.
   const named = installTheme(doc, {
-    prefix: "pane", palette: { line: "#123456" }, metrics: { gripLength: "40px" },
+    prefix: "pane", palette: { line: "#123456" }, metrics: { gripLength: 40 },
   });
   assert.match(named.textContent, /--pane-line: #123456/);
-  assert.match(named.textContent, /--pane-grip-length: 40px/);
+  assert.match(named.textContent, /--pane-grip-length: 40px;/);
   view.destroy();
 });

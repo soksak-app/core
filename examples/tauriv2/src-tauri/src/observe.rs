@@ -196,6 +196,8 @@ fn click<R: Runtime>(app: tauri::AppHandle<R>) {
     };
     let selector = selector.to_string();
     std::thread::spawn(move || {
+        // The same wait as --drive: nothing says when the element to press is
+        // drawn.
         std::thread::sleep(Duration::from_millis(after));
         let _ = app.emit("observe-click", selector);
     });
@@ -216,8 +218,8 @@ fn drive<R: Runtime>(app: tauri::AppHandle<R>) {
         }
     };
     std::thread::spawn(move || {
-        // The page this app did not open has no event saying it is drawn, so this
-        // is the one place a clock is used.
+        // The page this app did not open has no event saying it is drawn, so the
+        // wait asked for is what is waited.
         std::thread::sleep(plan.wait);
         let _ = app.emit("observe-drag", &plan);
     });

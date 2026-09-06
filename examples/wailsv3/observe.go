@@ -162,7 +162,7 @@ func (o *Observe) drive() {
 	}
 	go func() {
 		// 이 애플리케이션이 열지 않은 페이지가 렌더링될 때까지 기다린다. 외부
-		// 페이지의 렌더링 완료를 알리는 이벤트가 없으므로 여기서만 시계를 쓴다.
+		// 페이지의 렌더링 완료를 알리는 이벤트가 없으므로 요청받은 시각까지 기다린다.
 		time.Sleep(plan.wait)
 		application.Get().Event.Emit("observe-drag", plan)
 	}()
@@ -244,6 +244,8 @@ func (o *Observe) click() {
 		return
 	}
 	go func() {
+		// --drive 와 같은 기다림이다. 누를 요소가 언제 그려지는지 알리는 이벤트가
+		// 없다.
 		time.Sleep(time.Duration(after) * time.Millisecond)
 		application.Get().Event.Emit("observe-click", selector)
 	}()

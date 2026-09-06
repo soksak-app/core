@@ -125,6 +125,13 @@ export const BREAKS = [
     to: "${1} ",
   },
   {
+    id: "bleed",
+    what: "a rule bleeds past the end a card stops it at",
+    file: "dist/dom.js",
+    find: "const head = rule.x <= EDGE ? bleed : 0;",
+    to: "const head = bleed;",
+  },
+  {
     id: "grab",
     what: "the grab area ignores grabSize, so a zero gap cannot be grabbed",
     file: "dist/geometry.js",

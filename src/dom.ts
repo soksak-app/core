@@ -238,7 +238,7 @@ export class SoksakView {
         keep.add(rule.key);
         let el = this.ruleEls.get(rule.key);
         if (!el) {
-          el = document.createElement('div');
+          el = this.host.ownerDocument.createElement('div');
           el.className = `${this.prefix}-rule`;
           el.style.position = 'absolute';
           el.style.pointerEvents = 'none';

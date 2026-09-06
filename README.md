@@ -186,9 +186,10 @@ card reads the line at all.
 ## The lines and the dividers
 
 The view places them and decides nothing about how they look. `installTheme`
-puts a stylesheet in the document that does: the cursor for each axis, a grab
-area `grabSize` wide with a thin grip inside it, and the crossing part of a line
-drawn fainter than the rest.
+puts a stylesheet in the document that does: the cursor for each axis, a thin
+grip inside the grab area, and the crossing part of a line drawn fainter than
+the rest. The view sizes that area itself, `grabSize` or the gap, whichever is
+larger.
 
 ```js
 import { installTheme } from "soksak";
