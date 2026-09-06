@@ -138,6 +138,19 @@ type ShellOutput struct {
 // here places or reads something in that window, so none of them can succeed.
 var errNoWindow = errors.New("the main window is gone")
 
+// WindowControls reports the area the window's own buttons occupy, in the page's
+// coordinates. The page leaves that much of its first row empty. An empty rect
+// means the window draws none.
+func (s *Surfaces) WindowControls() (Rect, error) {
+	win, ok := mainWindow()
+	if !ok {
+		return Rect{}, errNoWindow
+	}
+	var at Rect
+	application.InvokeSync(func() { at = windowControls(win.NativeWindow()) })
+	return at, nil
+}
+
 // Theme returns the current theme. A page calls it once after loading and
 // subscribes to the theme event for later changes.
 func (s *Surfaces) Theme() Theme {

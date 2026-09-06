@@ -49,15 +49,18 @@ export async function run(binary, args, done, { timeout = 30_000 } = {}) {
 /**
  * 애플리케이션을 실행해 경계를 흔들고 녹화한다. 프레임 폴더와 정리 함수를 반환한다.
  *
- * drive 는 관측 부품이 받는 형식과 같다: wait,x,y,dx,dy,ms,times.
+ * drive 는 관측 부품이 받는 형식과 같다: wait,x,y,dx,dy,ms,times. zoom 은 끌기 전에
+ * 창을 최대화한다.
  */
-export async function shake(binary, drive, options = {}) {
+export async function shake(binary, drive, { zoom = false, ...options } = {}) {
   if (!existsSync(binary)) return null;
   const into = mkdtempSync(join(tmpdir(), "soksak-frames-"));
+  const args = ["--observe", "--drive", drive, "--capture", into];
+  if (zoom) args.push("--zoom");
   // 녹화 종료가 기록되면 모든 프레임이 파일로 저장된 상태다.
   const log = await run(
     binary,
-    ["--observe", "--drive", drive, "--capture", into],
+    args,
     (text) => /observe: wrote \d+ frames/.test(text),
     options,
   );

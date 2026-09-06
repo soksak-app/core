@@ -34,6 +34,10 @@ func (v *nativeShape) setStyle(radius, lineWidth float64, fill, line [4]float64)
 func (v *nativeShape) raise()                                                    {}
 func (v *nativeShape) destroy()                                                  {}
 
+// windowControls reports the area the window's own buttons occupy. Not written
+// for this platform; an empty rect means the window draws none.
+func windowControls(window unsafe.Pointer) Rect { return Rect{} }
+
 // modalOnScreen converts a point in the parent's content into a screen point.
 // Not written for this platform.
 func modalOnScreen(parent unsafe.Pointer, at Rect) (int, int) { return 0, 0 }

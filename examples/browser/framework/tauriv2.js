@@ -16,6 +16,7 @@ const COMMAND = {
   clearShape: "clear_shape",
   overlayUpdate: "overlay_update",
   overlayHide: "overlay_hide",
+  windowControls: "window_controls",
 };
 
 // 커맨드마다 인자의 이름이 다르다. 이름은 Rust 쪽 서명이 정한다.
@@ -29,6 +30,7 @@ const ARG = {
   clearShape: (v) => ({ id: v }),
   overlayUpdate: (v) => ({ request: v }),
   overlayHide: (v) => ({ id: v }),
+  windowControls: () => ({}),
 };
 
 export const host = () => {
@@ -45,20 +47,13 @@ export const host = () => {
     // 이 앱의 문서에는 다리가 이미 들어 있지만, 이름을 함께 실어 보내는 규칙은
     // 하나로 둔다 — 프레임워크마다 다르면 그 차이를 매번 기억해야 한다.
     page: (path) => `/${path}`,
-    // 창에 프레임이 없으므로 끄는 자리를 이 문서가 지정한다.
+    // 제목 표시줄이 투명하고 콘텐츠가 그 아래까지 차지하므로, 끄는 자리를 이
+    // 문서가 지정한다.
     draggable(el) {
       el.setAttribute("data-tauri-drag-region", "");
     },
-    window: {
-      close: () => own().close(),
-      minimise: () => own().minimize(),
-      toggleMaximise: () => own().toggleMaximize(),
-    },
   };
 };
-
-/** 이 문서를 담은 창. */
-const own = () => window.__TAURI__.window.getCurrentWindow();
 
 export const page = () => {
   const { invoke } = window.__TAURI__.core;

@@ -777,6 +777,40 @@ fn report(line: String) {
     eprintln!("{line}");
 }
 
+/// Places the window's own buttons so they sit inside the page's first row.
+///
+/// The platform lays them out for a standard title bar, which is shorter than
+/// that row, so they would sit above it.
+fn place_window_controls(window: &Window) -> Result<(), String> {
+    let handle = window.ns_window().map_err(|e| e.to_string())? as usize;
+    // AppKit lays views out on the main thread, and a command is answered on
+    // another one.
+    window
+        .run_on_main_thread(move || {
+            native::place_window_controls(
+                handle as *mut std::ffi::c_void,
+                CONTROLS_AT.0,
+                CONTROLS_AT.1,
+            );
+        })
+        .map_err(|e| e.to_string())
+}
+
+/// Where the window's own buttons are placed, in points from the window's top
+/// left, measured to the leftmost button's frame. The Wails host places them at
+/// the same point, and `examples/test/controls.test.mjs` measures the result in
+/// both.
+const CONTROLS_AT: (f64, f64) = (12.0, 14.5);
+
+/// Reports the area the window's own buttons occupy, in the page's coordinates.
+/// The page leaves that much of its first row empty.
+#[tauri::command]
+fn window_controls(window: Window) -> Result<Rect, String> {
+    let handle = window.ns_window().map_err(|e| e.to_string())?;
+    let (x, y, w, h) = native::window_controls(handle);
+    Ok(Rect { x, y, w, h })
+}
+
 /// Returns the current theme. A page requests this when it loads.
 #[tauri::command]
 fn theme(state: State<'_, CurrentTheme>) -> Result<Theme, String> {
@@ -803,7 +837,15 @@ fn main() {
     if observing {
         app = app.plugin(observe::plugin());
     }
-    app.manage(Overlay::default())
+    app.setup(|app| {
+        // The window's own buttons are placed before the page loads, so the page
+        // reads where they are once and never sees them move.
+        if let Some(window) = app.get_webview_window("main") {
+            place_window_controls(&window.as_ref().window())?;
+        }
+        Ok(())
+    })
+    .manage(Overlay::default())
         .manage(Shapes::default())
         .manage(CurrentTheme::default())
         .manage(Views::default())
@@ -822,6 +864,7 @@ fn main() {
             overlay_ready,
             overlay_hide,
             overlay_pick,
+            window_controls,
             terminal_open,
             terminal_write,
             theme,

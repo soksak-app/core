@@ -20,7 +20,6 @@ const chosen = FRAMEWORKS.find((f) => f.present());
  *   on(event, fn)    호스트 이벤트를 수신한다. fn 은 payload 만 받는다
  *   page(path)       호스트가 서비스하는 문서의 URL 을 반환한다
  *   draggable(el)    이 요소를 끌면 창이 움직이게 한다
- *   window           창의 close, minimise, toggleMaximise
  */
 export const host = chosen.host();
 

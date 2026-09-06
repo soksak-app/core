@@ -64,6 +64,7 @@ pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
                 transcribe(ready.clone());
                 report(ready.clone());
                 open(ready.clone());
+                zoom(ready.clone());
                 drive(ready.clone());
                 click(ready.clone());
             });
@@ -86,6 +87,22 @@ pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
             Ok(())
         })
         .build()
+}
+
+/// Maximises the window.
+///
+/// Where a window's own buttons stand is worked out from the window's size, so a
+/// test has to be able to change that size and look again.
+fn zoom<R: Runtime>(app: tauri::AppHandle<R>) {
+    if !given("zoom") {
+        return;
+    }
+    for (label, window) in app.windows() {
+        if label.starts_with("modal-") {
+            continue;
+        }
+        let _ = window.maximize();
+    }
 }
 
 /// Asks the page to record every host call and its answer.

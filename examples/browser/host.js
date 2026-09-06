@@ -143,14 +143,14 @@ let last = "";
 /**
  * 창 자체를 다루는 인터페이스. 애플리케이션이 없으면 null.
  *
- * 창에는 프레임이 없으므로 단추와 끄는 자리를 이 페이지가 그린다. 두 애플리케이션이
- * 프레임을 그리는 방법이 서로 달라, 그것을 쓰면 페이지가 받는 크기부터 달라진다.
+ * 창의 프레임은 OS 의 것이다. 모서리, 그림자, 리사이즈, 단추를 우리가 다시 만들지
+ * 않는다. 제목 표시줄만 투명하게 하고 콘텐츠가 창 전체를 차지하므로, 창 자신의
+ * 단추가 페이지 위에 놓인다. 그 자리를 비우는 것과 끄는 자리를 정하는 것이 여기다.
  */
 export const chrome = native ? {
   draggable: (el) => bridge.draggable(el),
-  close: () => bridge.window.close(),
-  minimise: () => bridge.window.minimise(),
-  toggleMaximise: () => bridge.window.toggleMaximise(),
+  /** 창 자신의 단추가 차지하는 자리. 아무것도 그리지 않는 창이면 넓이가 0 이다. */
+  controls: () => tellInTurn("windowControls"),
 } : null;
 
 /** 표면 인터페이스. 애플리케이션이 없으면 아무 일도 하지 않는다. */

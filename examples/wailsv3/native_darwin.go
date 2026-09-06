@@ -69,6 +69,35 @@ static void surfaceFrameNow(void* handle, double* out) {
     out[3] = f.size.height;
 }
 
+// The area the window's own buttons occupy, in the content view's coordinates
+// measured from its top left. The page leaves that much of its first row empty.
+//
+// The three buttons are laid out by AppKit and the window is drawn with its
+// title bar transparent and its content behind it, so they sit over the page.
+static void windowControls(void* nsWindow, double* out) {
+    NSWindow* window = (NSWindow*)nsWindow;
+    if (window == nil) return;
+    NSView* content = [window contentView];
+    if (content == nil) return;
+    NSButton* buttons[3] = {
+        [window standardWindowButton:NSWindowCloseButton],
+        [window standardWindowButton:NSWindowMiniaturizeButton],
+        [window standardWindowButton:NSWindowZoomButton],
+    };
+    NSRect together = NSZeroRect;
+    for (int i = 0; i < 3; i++) {
+        NSButton* button = buttons[i];
+        if (button == nil || button.isHidden) continue;
+        NSRect at = [content convertRect:button.bounds fromView:button];
+        together = NSIsEmptyRect(together) ? at : NSUnionRect(together, at);
+    }
+    if (NSIsEmptyRect(together)) return;
+    out[0] = together.origin.x;
+    out[1] = content.bounds.size.height - NSMaxY(together);
+    out[2] = together.size.width;
+    out[3] = together.size.height;
+}
+
 // Configures a modal's window: not opaque, so the clipped corners show what is
 // behind them rather than the window's own background; with a shadow; and out of
 // the list of windows the application offers to switch between, because it is
@@ -269,6 +298,14 @@ func modalOnScreen(parent unsafe.Pointer, at Rect) (int, int) {
 	var out [2]C.double
 	C.modalOnScreen(parent, C.double(at.X), C.double(at.Y), C.double(max1(at.H)), &out[0])
 	return int(out[0]), int(out[1])
+}
+
+// windowControls reports the area the window's own buttons occupy, in the page's
+// coordinates. An empty rect means the window draws none.
+func windowControls(window unsafe.Pointer) Rect {
+	var out [4]C.double
+	C.windowControls(window, &out[0])
+	return Rect{X: float64(out[0]), Y: float64(out[1]), W: float64(out[2]), H: float64(out[3])}
 }
 
 // modalConfigure configures a modal's window: not opaque, with a shadow, and out

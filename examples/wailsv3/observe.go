@@ -53,6 +53,7 @@ func (o *Observe) start() {
 		o.transcribe()
 		o.report()
 		o.open()
+		o.zoom()
 		o.drive()
 		o.click()
 	})
@@ -127,6 +128,24 @@ func (o *Observe) report() {
 		log.Printf("observe: windows %s", numbers(now))
 	}
 }
+
+// zoom 은 창을 최대화한다.
+//
+// 창의 단추가 서는 자리는 창의 크기에서 계산되므로, 크기가 바뀐 뒤에도 그 자리가
+// 유지되는지 검사할 수 있어야 한다.
+func (o *Observe) zoom() {
+	if !*zooming {
+		return
+	}
+	application.InvokeSync(func() {
+		if win, ok := mainWindow(); ok {
+			win.Maximise()
+		}
+	})
+}
+
+var zooming = flag.Bool("zoom", false,
+	"maximise the window once the page is drawn")
 
 // drive 는 경계를 끄는 일을 페이지에 요청한다.
 //

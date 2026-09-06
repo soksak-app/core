@@ -19,8 +19,11 @@ const maxDelta = (a, b) =>
  *
  * 화면에 그리지 않는다. 개발자가 읽는 값이고 렌더마다 발생하므로 출력 위치는
  * 호출자가 정한다.
+ *
+ * controls 는 창 자신의 단추가 차지하는 자리다. 창이 없는 브라우저에서는 null 이고,
+ * 그 검사는 실행되지 않는다.
  */
-export function verify() {
+export function verify(controls = null) {
   // 현재 판. 검증 한 번은 한 시점을 대상으로 하므로 처음에 한 번만 읽는다.
   const grid = currentGrid();
   const rows = [];
@@ -182,6 +185,17 @@ export function verify() {
       `좌 ${say(left, "첫 열")} · ` +
       `레일 ${rail ? say(rail, "열 " + rail.c0) : "없음"} · ` +
       `우 ${say(right, "마지막 열")}`);
+
+  // W — 창 자신의 단추는 첫 행의 상하 가운데에 선다. 단추는 OS 가 그리고 페이지는
+  // 그 자리를 읽을 수 없으므로, 창에게 물어 받은 자리를 첫 행과 견준다.
+  if (controls) {
+    const bar = document.querySelector(".chrome-bar").getBoundingClientRect();
+    const above = controls.y - bar.top;
+    const below = bar.bottom - (controls.y + controls.h);
+    add("W 창 단추는 첫 행 가운데", Math.abs(above - below) <= 0.5,
+        `행 ${bar.height.toFixed(1)}px · 단추 ${controls.h.toFixed(1)}px · ` +
+        `위 ${above.toFixed(1)} 아래 ${below.toFixed(1)}`);
+  }
 
   return rows.map(([name, note, ok]) => ({ name, note, ok }));
 }

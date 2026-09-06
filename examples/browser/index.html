@@ -12,7 +12,10 @@
 <!-- 창의 크롬. 브랜드, 프로젝트 탭, 그리고 자주 쓰는 스위치.
      프로젝트 탭은 설정에 따라 여기 서거나 왼쪽 세로 레일로 간다. -->
 <header class="chrome-bar">
-  <div class="win" id="win"></div>
+  <!-- 창을 끄는 자리. 막대의 빈 곳 전체가 여기이고, 단추와 탭은 그 위에 있다.
+       막대 자체에 표시하면 그 표시가 자식에게도 상속되어 단추를 눌러도 창이
+       끌린다. -->
+  <div class="chrome-bar__drag" id="winDrag"></div>
   <div class="brand">SPLIT&#8202;PANE</div>
   <div class="tabs tabs--project" id="projectBar"></div>
   <div class="chrome-bar__acts" id="chromeActs"></div>
@@ -112,7 +115,7 @@ addEventListener("unhandledrejection", (e) =>
 let lastSaid = "";
 
 function check() {
-  const rows = verify();
+  const rows = verify(controlsAt);
   const failed = rows.filter((r) => !r.ok);
   const line = failed.length === 0
     ? `verify: ${rows.length} pass`
@@ -201,30 +204,31 @@ const shell = document.getElementById("shell");
 const spaceBar = document.getElementById("spaceBar");
 const chromeActs = document.getElementById("chromeActs");
 
-/* 창 단추와 끄는 자리.
+/* 창을 끄는 자리와, 창 자신의 단추가 차지하는 자리.
 
-   창에는 프레임이 없다. 두 애플리케이션이 프레임을 그리는 방법이 서로 달라, 그것을
-   쓰면 페이지가 받는 크기부터 달라진다. 이 애플리케이션이 그리면 하나다.
+   단추는 OS 가 그린다. 제목 표시줄만 투명하고 콘텐츠가 창 전체를 차지하므로 그
+   단추가 이 막대 위에 놓인다. 얼마나 놓이는지는 창만 아는 값이므로 물어서 비운다.
 
-   브라우저에는 창이 없으므로 아무것도 만들지 않는다. */
+   브라우저에는 창이 없다. 그때 chrome 은 null 이고 막대는 들여쓰지 않는다. */
+let controlsAt = null;
+
 if (chrome) {
-  const WINDOW_ACTS = [
-    ["close", "닫는다", () => chrome.close()],
-    ["minimise", "최소화한다", () => chrome.minimise()],
-    ["maximise", "최대화한다", () => chrome.toggleMaximise()],
-  ];
-  const win = document.getElementById("win");
-  for (const [act, title, run] of WINDOW_ACTS) {
-    const b = document.createElement("button");
-    b.className = "win__btn";
-    b.type = "button";
-    b.dataset.act = act;
-    b.title = title;
-    b.setAttribute("aria-label", title);
-    b.addEventListener("click", run);
-    win.appendChild(b);
-  }
-  chrome.draggable(document.querySelector(".chrome-bar"));
+  chrome.draggable(document.getElementById("winDrag"));
+  askControls();
+  // 창의 크기가 바뀌면 OS 가 단추를 다시 배치한다. 그 자리를 다시 묻는다.
+  addEventListener("resize", askControls);
+}
+
+/** 창 자신의 단추가 차지하는 자리를 묻고, 막대의 들여쓰기를 그만큼으로 둔다. */
+function askControls() {
+  chrome.controls().then((at) => {
+    if (!at || at.w <= 0) return;
+    controlsAt = at;
+    document.documentElement.style.setProperty("--controls-w", `${at.x + at.w}px`);
+    // 답이 늦게 오고 그것만으로는 렌더가 일어나지 않는다. 검증은 이 값을 읽으므로
+    // 여기서 한 번 더 실행한다.
+    check();
+  });
 }
 
 /** 크롬 행의 아이콘 버튼 하나를 만든다. */

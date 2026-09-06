@@ -58,23 +58,25 @@ body{margin:0;background:var(--bg);color:var(--fg);
    스페이스 탭은 판 바로 위의 별도 행이다.                                    */
 :root{--chrome-row-h:36px}
 
-.chrome-bar{flex:0 0 45px;height:45px;display:flex;align-items:center;gap:10px;
-  padding:0 12px;border-bottom:var(--bw) solid var(--edge);background:var(--card);
-  user-select:none}
-.brand{flex:0 0 auto;font-weight:600;letter-spacing:.1em;font-size:11px;color:var(--muted);
-  margin-right:2px}
+/* 창 자신의 단추가 차지하는 폭. 창이 그것을 그리지 않으면 0 이고, 브라우저에서는
+   창이 없으므로 0 이다. */
+:root{--controls-w:0px}
+.chrome-bar{position:relative;flex:0 0 45px;height:45px;display:flex;align-items:center;
+  gap:10px;padding:0 12px 0 calc(12px + var(--controls-w));
+  border-bottom:var(--bw) solid var(--edge);background:var(--card);user-select:none}
+/* 창을 끄는 자리. 막대를 채우고 그 위에 탭과 단추가 선다.
 
-/* 창 단추. 창에 프레임이 없으므로 이 애플리케이션이 그린다. 브라우저에는 창이
-   없으므로 비어 있다. */
-.win{display:flex;align-items:center;gap:8px;flex:0 0 auto}
-.win:empty{display:none}
-.win__btn{width:12px;height:12px;border:0;border-radius:50%;padding:0;cursor:pointer;
-  background:var(--edge)}
-.win__btn[data-act=close]{background:var(--no)}
-.win__btn[data-act=minimise]{background:var(--focus)}
-.win__btn[data-act=maximise]{background:var(--rail)}
-.win__btn:hover{filter:brightness(1.25)}
-.win__btn:focus-visible{outline:var(--bw) solid var(--fg);outline-offset:2px}
+   탭 줄은 막대의 가운데를 가득 채우므로, 그 줄 자체는 누름을 아래로 흘려보내고 그
+   안의 탭만 받는다. 그러지 않으면 막대에서 끌 수 있는 자리가 거의 없다. */
+.chrome-bar__drag{position:absolute;inset:0;z-index:0}
+.chrome-bar .tabs,.chrome-bar__acts{position:relative;z-index:1}
+.chrome-bar .tabs{pointer-events:none}
+.chrome-bar .tabs > *{pointer-events:auto}
+/* 누름이 아래의 끄는 자리로 지나가게 둔다. 글자를 눌러도 창이 끌린다. */
+.brand{flex:0 0 auto;font-weight:600;letter-spacing:.1em;font-size:11px;color:var(--muted);
+  margin-right:2px;pointer-events:none}
+
+
 .chrome-bar__acts{display:flex;align-items:center;gap:6px;flex:0 0 auto}
 
 /* 프로젝트 탭 행. 높이는 --chrome-row-h 가 정한다. */

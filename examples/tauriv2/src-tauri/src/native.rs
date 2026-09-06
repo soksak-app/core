@@ -452,6 +452,268 @@ pub fn panelise(ns_window: *mut std::ffi::c_void, parent: *mut std::ffi::c_void)
     make_main(parent);
 }
 
+/// The area the window's own buttons occupy, in the content view's coordinates
+/// measured from its top left, as (x, y, w, h). An empty rect means the window
+/// draws none.
+///
+/// The three buttons are laid out by the platform and the window is drawn with
+/// its title bar transparent and its content behind it, so they sit over the
+/// page. Only macOS is written; on Windows and Linux the buttons are drawn in a
+/// frame outside the content and take none of it.
+#[allow(unused_variables)]
+pub fn window_controls(ns_window: *mut std::ffi::c_void) -> (f64, f64, f64, f64) {
+    #[cfg(target_os = "macos")]
+    unsafe {
+        use objc2::msg_send;
+        use objc2::runtime::AnyObject;
+
+        let window = ns_window as *mut AnyObject;
+        if window.is_null() {
+            return (0.0, 0.0, 0.0, 0.0);
+        }
+        let content: *mut AnyObject = msg_send![window, contentView];
+        if content.is_null() {
+            return (0.0, 0.0, 0.0, 0.0);
+        }
+        let height: NSRect = msg_send![content, bounds];
+        let mut left = f64::MAX;
+        let mut right = f64::MIN;
+        let mut top = f64::MAX;
+        let mut bottom = f64::MIN;
+        // NSWindowCloseButton, NSWindowMiniaturizeButton, NSWindowZoomButton.
+        for kind in 0isize..3 {
+            let button: *mut AnyObject = msg_send![window, standardWindowButton: kind];
+            if button.is_null() {
+                continue;
+            }
+            let hidden: bool = msg_send![button, isHidden];
+            if hidden {
+                continue;
+            }
+            let bounds: NSRect = msg_send![button, bounds];
+            let at: NSRect = msg_send![content, convertRect: bounds, fromView: button];
+            left = left.min(at.origin.x);
+            right = right.max(at.origin.x + at.size.x);
+            top = top.min(at.origin.y);
+            bottom = bottom.max(at.origin.y + at.size.y);
+        }
+        if right <= left {
+            return (0.0, 0.0, 0.0, 0.0);
+        }
+        return (left, height.size.y - bottom, right - left, bottom - top);
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        (0.0, 0.0, 0.0, 0.0)
+    }
+}
+
+/// Where a window's own buttons were moved to, and where they came from.
+///
+/// The example moves the buttons of one window, so one of these is kept.
+#[cfg(target_os = "macos")]
+#[derive(Clone, Copy)]
+struct Placed {
+    window: usize,
+    own: usize,
+    home: usize,
+    x: f64,
+    y: f64,
+}
+
+#[cfg(target_os = "macos")]
+thread_local! {
+    static PLACED: std::cell::Cell<Option<Placed>> = const { std::cell::Cell::new(None) };
+    /// A placement changes frames, and a frame change asks for a placement.
+    static PLACING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Moves the window's own buttons so the leftmost one's top left corner sits
+/// x, y points from the window's top left.
+///
+/// The buttons AppKit hands out are laid out for a standard title bar, and it
+/// puts them back there whenever the window is laid out again: moving a button,
+/// or the view that holds it, is undone within the same call. They are moved
+/// into a view of this app's own instead, which AppKit does not lay out. AppKit
+/// still gives each button its standard inset inside that view, so the view is
+/// placed by reading that inset rather than by a number written here.
+///
+/// Only macOS has these buttons; elsewhere the window's controls are drawn in a
+/// frame outside the content and this does nothing.
+#[allow(unused_variables)]
+pub fn place_window_controls(ns_window: *mut std::ffi::c_void, x: f64, y: f64) {
+    #[cfg(target_os = "macos")]
+    unsafe {
+        use objc2::msg_send;
+        use objc2::runtime::{AnyClass, AnyObject};
+
+        let window = ns_window as *mut AnyObject;
+        if window.is_null() {
+            return;
+        }
+        let content: *mut AnyObject = msg_send![window, contentView];
+        let close: *mut AnyObject = msg_send![window, standardWindowButton: 0isize];
+        if content.is_null() || close.is_null() {
+            return;
+        }
+        if let Some(mut placed) = PLACED.get() {
+            placed.x = x;
+            placed.y = y;
+            PLACED.set(Some(placed));
+            place();
+            return;
+        }
+
+        let Some(view) = AnyClass::get(c"NSView") else {
+            return;
+        };
+        let own: *mut AnyObject = msg_send![view, alloc];
+        let own: *mut AnyObject = msg_send![own, initWithFrame: NSRect::from((0.0, 0.0, 0.0, 0.0))];
+        // Above the webview, which fills the window because the title bar is
+        // drawn transparent. A button under it would take no press.
+        let _: () = msg_send![content, addSubview: own, positioned: 1isize, relativeTo: std::ptr::null_mut::<AnyObject>()];
+        let home: *mut AnyObject = msg_send![close, superview];
+        PLACED.set(Some(Placed {
+            window: window as usize,
+            own: own as usize,
+            home: home as usize,
+            x,
+            y,
+        }));
+        place();
+
+        // The content view is resized whenever the window is, and the placement
+        // is measured from its height.
+        let _: () = msg_send![content, setPostsFrameChangedNotifications: true];
+        let centre = notification_centre();
+        watch(centre, c"NSViewFrameDidChangeNotification", content, || place());
+        // A window in full screen has no title bar of its own and AppKit draws
+        // the buttons in the menu bar. It reads them from where it left them, so
+        // they are given back before the transition and taken again after it.
+        watch(centre, c"NSWindowWillEnterFullScreenNotification", window, || lend_back());
+        watch(centre, c"NSWindowDidExitFullScreenNotification", window, || place());
+    }
+}
+
+/// The notification centre every observer here registers with.
+#[cfg(target_os = "macos")]
+unsafe fn notification_centre() -> *mut objc2::runtime::AnyObject {
+    use objc2::msg_send;
+    use objc2::runtime::{AnyClass, AnyObject};
+
+    let Some(class) = AnyClass::get(c"NSNotificationCenter") else {
+        return std::ptr::null_mut();
+    };
+    let centre: *mut AnyObject = msg_send![class, defaultCenter];
+    centre
+}
+
+/// Calls `answer` whenever `sender` posts the notification `name`.
+#[cfg(target_os = "macos")]
+unsafe fn watch(
+    centre: *mut objc2::runtime::AnyObject,
+    name: &std::ffi::CStr,
+    sender: *mut objc2::runtime::AnyObject,
+    answer: impl Fn() + 'static,
+) {
+    use block2::RcBlock;
+    use objc2::msg_send;
+    use objc2::runtime::{AnyClass, AnyObject};
+
+    if centre.is_null() {
+        return;
+    }
+    let Some(string) = AnyClass::get(c"NSString") else {
+        return;
+    };
+    let name: *mut AnyObject = msg_send![string, stringWithUTF8String: name.as_ptr()];
+    let block = RcBlock::new(move |_note: *mut AnyObject| answer());
+    let _: *mut AnyObject = msg_send![
+        centre,
+        addObserverForName: name,
+        object: sender,
+        queue: std::ptr::null_mut::<AnyObject>(),
+        usingBlock: &*block,
+    ];
+    // The centre keeps the registration for as long as the window lives, and the
+    // block has to outlive it.
+    std::mem::forget(block);
+}
+
+/// Puts the buttons in this app's own view and places that view.
+#[cfg(target_os = "macos")]
+fn place() {
+    use objc2::msg_send;
+    use objc2::runtime::AnyObject;
+
+    let Some(placed) = PLACED.get() else {
+        return;
+    };
+    if PLACING.get() {
+        return;
+    }
+    PLACING.set(true);
+    unsafe {
+        let window = placed.window as *mut AnyObject;
+        let own = placed.own as *mut AnyObject;
+        let content: *mut AnyObject = msg_send![window, contentView];
+        let mut buttons = [std::ptr::null_mut::<AnyObject>(); 3];
+        for kind in 0isize..3 {
+            let button: *mut AnyObject = msg_send![window, standardWindowButton: kind];
+            buttons[kind as usize] = button;
+        }
+        if content.is_null() || buttons.iter().any(|button| button.is_null()) {
+            PLACING.set(false);
+            return;
+        }
+        for button in buttons {
+            let holder: *mut AnyObject = msg_send![button, superview];
+            if holder == own {
+                continue;
+            }
+            let _: () = msg_send![button, removeFromSuperview];
+            let _: () = msg_send![own, addSubview: button];
+        }
+        // The buttons carry the inset AppKit gave them, so the view is placed to
+        // put the leftmost button's top left corner at x, y from the window's top
+        // left.
+        let first: NSRect = msg_send![buttons[0], frame];
+        let last: NSRect = msg_send![buttons[2], frame];
+        let bounds: NSRect = msg_send![content, bounds];
+        let box_ = NSRect::from((
+            placed.x - first.origin.x,
+            bounds.size.y - placed.y - (first.origin.y + first.size.y),
+            last.origin.x + last.size.x + first.origin.x,
+            first.origin.y + first.size.y + first.origin.y,
+        ));
+        let _: () = msg_send![own, setFrame: box_];
+    }
+    PLACING.set(false);
+}
+
+/// Returns the buttons to where AppKit keeps them.
+#[cfg(target_os = "macos")]
+fn lend_back() {
+    use objc2::msg_send;
+    use objc2::runtime::AnyObject;
+
+    let Some(placed) = PLACED.get() else {
+        return;
+    };
+    unsafe {
+        let window = placed.window as *mut AnyObject;
+        let home = placed.home as *mut AnyObject;
+        for kind in 0isize..3 {
+            let button: *mut AnyObject = msg_send![window, standardWindowButton: kind];
+            if button.is_null() {
+                continue;
+            }
+            let _: () = msg_send![button, removeFromSuperview];
+            let _: () = msg_send![home, addSubview: button];
+        }
+    }
+}
+
 /// Makes this window the main one.
 ///
 /// A modal takes the keyboard so that its webview sets the cursor, and a window

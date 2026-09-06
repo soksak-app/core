@@ -44,9 +44,16 @@ func main() {
 		// 방식이 달라 페이지 크기가 어긋난다.
 		Width:            1200,
 		Height:           760,
-		// 창의 장식을 이 애플리케이션이 그린다. 제목 표시줄이 없으므로 두 설정의
-		// 숫자가 같은 것을 뜻하고, 페이지가 창 전체를 받는다.
-		Frameless: true,
+		// 제목 표시줄을 투명하게 두고 콘텐츠가 창 전체를 차지한다. 프레임은
+		// 남으므로 모서리, 그림자, 리사이즈, 제목줄 끌기는 OS 의 것이고, 두 설정의
+		// 숫자가 같은 것을 뜻하며 페이지가 창 전체를 받는다.
+		Mac: application.MacWindow{
+			TitleBar: application.MacTitleBarHidden,
+			// 창 자신의 단추를 이 자리에 둔다. 페이지의 첫 줄이 45pt 이고 단추가
+			// 16pt 이므로, 그 줄의 상하 가운데다. 두 애플리케이션이 같은 값을 쓰고,
+			// 페이지의 검증기가 그 결과를 잰다.
+			TrafficLightPosition: application.MacTrafficLightPosition{X: 12, Y: 14.5},
+		},
 		URL:              "/",
 		DevToolsEnabled:  true,
 		BackgroundColour: application.NewRGB(16, 17, 23),

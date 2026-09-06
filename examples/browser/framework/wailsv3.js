@@ -35,25 +35,24 @@ const METHOD = {
   clearShape: "ClearShape",
   overlayUpdate: "OverlayUpdate",
   overlayHide: "OverlayHide",
+  windowControls: "WindowControls",
 };
 
 export const host = () => ({
   call(name, arg) {
     const method = METHOD[name];
     if (!method) return Promise.reject(new Error(`unknown host call: ${name}`));
-    return call(method, arg);
+    // 인자가 없는 호출은 인자를 보내지 않는다. undefined 를 하나 보내면 바인딩이
+    // 인자 수가 맞지 않는다고 거절한다.
+    return arg === undefined ? call(method) : call(method, arg);
   },
   on: listen,
   // 이 애플리케이션이 서비스하는 문서의 경로. 표면도 같은 자산 서버에서 로드된다.
   page: (path) => `/${path}`,
-  // 창에 프레임이 없으므로 끄는 자리를 이 문서가 지정한다.
+  // 제목 표시줄이 투명하고 콘텐츠가 그 아래까지 차지하므로, 끄는 자리를 이 문서가
+  // 지정한다.
   draggable(el) {
     el.style.setProperty("--wails-draggable", "drag");
-  },
-  window: {
-    close: () => runtime().then((r) => r.Window.Close()),
-    minimise: () => runtime().then((r) => r.Window.Minimise()),
-    toggleMaximise: () => runtime().then((r) => r.Window.ToggleMaximise()),
   },
 });
 
