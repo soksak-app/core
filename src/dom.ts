@@ -106,13 +106,6 @@ export class SoksakView {
   private options: ViewOptions;
 
   /**
-   * How far past the plane a rule may run to reach the frame around it.
-   *
-   * Writable, because a host that lets a person change its gap changes this
-   * with it. Reads back what it holds, so a host does not have to remember
-   * what it set.
-   */
-  /**
    * One device pixel, in the units the rects are written in.
    *
    * The grid the elements are placed on. A display that draws two pixels per unit
@@ -124,6 +117,13 @@ export class SoksakView {
     return typeof dpr === 'number' && dpr > 0 ? 1 / dpr : 1;
   }
 
+  /**
+   * How far past the plane a rule may run to reach the frame around it.
+   *
+   * Writable, because a host that lets a person change its gap changes this
+   * with it. Reads back what it holds, so a host does not have to remember
+   * what it set.
+   */
   get bleed(): number {
     return this.options.bleed ?? 0;
   }
@@ -143,7 +143,7 @@ export class SoksakView {
    */
   private drags = new Map<number, DragState>();
   private mouseDrag: DragState | null = null;
-  private mouseDisposers = new Set<() => void>();
+  private mouseDisposers = new Map<HTMLElement, () => void>();
   private observer: ResizeObserver | null = null;
   private disposed = false;
 
@@ -159,7 +159,7 @@ export class SoksakView {
         // and showing the host again does not bring them back.
         if (host.clientWidth <= 0 || host.clientHeight <= 0) return;
         this.grid.resize(host.clientWidth, host.clientHeight);
-        this.render('resize');
+        this.draw('resize');
       });
       this.observer.observe(host);
     }
@@ -179,9 +179,20 @@ export class SoksakView {
    */
   private commit(reason: ChangeReason, change: () => void): void {
     change();
-    const draw = (): void => this.render(reason);
-    if (this.options.commit) this.options.commit(this.grid.rects(), draw);
-    else draw();
+    this.draw(reason);
+  }
+
+  /**
+   * Draw through the host's commit hook.
+   *
+   * Every layout change this view makes goes through here, not only a drag. A
+   * host that moves things this view does not draw has to move them for a
+   * centre, a merge and a resize as well, or those land a frame apart.
+   */
+  private draw(reason: ChangeReason): void {
+    const drawn = (): void => this.render(reason);
+    if (this.options.commit) this.options.commit(this.grid.rects(), drawn);
+    else drawn();
   }
 
   render(reason: ChangeReason = 'render'): void {
@@ -265,17 +276,15 @@ export class SoksakView {
     for (const [k, el] of map) {
       if (keep.has(k)) continue;
       for (const [pointer, drag] of this.drags) if (drag.on === el) this.end(pointer);
+      // The mouse listeners are on the document, so removing the element does
+      // not remove them. Left behind, they keep driving the boundary of a
+      // divider that is gone, and they accumulate one pair per divider.
+      this.mouseDisposers.get(el)?.();
       el.remove();
       map.delete(k);
     }
   }
 
-  /**
-   * End a drag and report whether it moved the boundary.
-   *
-   * Every way a drag can end runs through here: pointerup, pointercancel, the
-   * capture being lost, the divider being swept, and destroy.
-   */
   /**
    * End a mouse drag.
    *
@@ -291,9 +300,15 @@ export class SoksakView {
     delete drag.on.dataset.dragging;
     if (this.disposed) return;
     const merged = this.grid.mergeCoincident(drag.axis, drag.line);
-    this.render(merged ? 'merge' : 'drag');
+    this.draw(merged ? 'merge' : 'drag');
   }
 
+  /**
+   * End a drag and report whether it moved the boundary.
+   *
+   * Every way a drag can end runs through here: pointerup, pointercancel, the
+   * capture being lost, the divider being swept, and destroy.
+   */
   private end(pointer: number): boolean {
     const drag = this.drags.get(pointer);
     if (!drag) return false;
@@ -306,7 +321,7 @@ export class SoksakView {
     delete drag.on.dataset.dragging;
     if (this.disposed) return drag.moved;
     const merged = this.grid.mergeCoincident(drag.axis, drag.line);
-    this.render(merged ? 'merge' : 'drag');
+    this.draw(merged ? 'merge' : 'drag');
     return drag.moved;
   }
 
@@ -334,7 +349,7 @@ export class SoksakView {
       if (e.timeStamp - lastTap < DOUBLE_TAP_MS) {
         lastTap = -Infinity;
         this.grid.centerBoundary(axis, line);
-        this.render('center');
+        this.draw('center');
         return;
       }
       lastTap = e.timeStamp;
@@ -425,9 +440,9 @@ export class SoksakView {
       el.removeEventListener('mousedown', mouseDown);
       ownerDocument.removeEventListener('mousemove', mouseMove);
       ownerDocument.removeEventListener('mouseup', mouseUp);
-      this.mouseDisposers.delete(disposeMouse);
+      this.mouseDisposers.delete(el);
     };
-    this.mouseDisposers.add(disposeMouse);
+    this.mouseDisposers.set(el, disposeMouse);
 
     el.addEventListener('keydown', (e: KeyboardEvent) => {
       if (this.disposed) return;
@@ -436,7 +451,7 @@ export class SoksakView {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
         this.grid.centerBoundary(axis, line);
-        this.render('center');
+        this.draw('center');
         return;
       }
       const step = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }[e.key];
@@ -458,7 +473,7 @@ export class SoksakView {
 
   destroy(): void {
     this.disposed = true;
-    for (const dispose of this.mouseDisposers) dispose();
+    for (const dispose of [...this.mouseDisposers.values()]) dispose();
     this.mouseDrag = null;
     for (const pointer of [...this.drags.keys()]) this.end(pointer);
     this.observer?.disconnect();

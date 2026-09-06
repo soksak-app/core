@@ -68,13 +68,6 @@ export declare class SoksakView {
     private grid;
     private options;
     /**
-     * How far past the plane a rule may run to reach the frame around it.
-     *
-     * Writable, because a host that lets a person change its gap changes this
-     * with it. Reads back what it holds, so a host does not have to remember
-     * what it set.
-     */
-    /**
      * One device pixel, in the units the rects are written in.
      *
      * The grid the elements are placed on. A display that draws two pixels per unit
@@ -82,6 +75,13 @@ export declare class SoksakView {
      * grid finer than one unit.
      */
     private get step();
+    /**
+     * How far past the plane a rule may run to reach the frame around it.
+     *
+     * Writable, because a host that lets a person change its gap changes this
+     * with it. Reads back what it holds, so a host does not have to remember
+     * what it set.
+     */
     get bleed(): number;
     set bleed(px: number);
     private prefix;
@@ -108,14 +108,16 @@ export declare class SoksakView {
      * the layout before the change: a whole frame, not a torn one.
      */
     private commit;
+    /**
+     * Draw through the host's commit hook.
+     *
+     * Every layout change this view makes goes through here, not only a drag. A
+     * host that moves things this view does not draw has to move them for a
+     * centre, a merge and a resize as well, or those land a frame apart.
+     */
+    private draw;
     render(reason?: ChangeReason): void;
     private sweep;
-    /**
-     * End a drag and report whether it moved the boundary.
-     *
-     * Every way a drag can end runs through here: pointerup, pointercancel, the
-     * capture being lost, the divider being swept, and destroy.
-     */
     /**
      * End a mouse drag.
      *
@@ -125,6 +127,12 @@ export declare class SoksakView {
      * merged, and the last render reports the reason drag.
      */
     private endMouse;
+    /**
+     * End a drag and report whether it moved the boundary.
+     *
+     * Every way a drag can end runs through here: pointerup, pointercancel, the
+     * capture being lost, the divider being swept, and destroy.
+     */
     private end;
     /**
      * Dividers are reused across renders. Rebuilding one mid-drag drops its

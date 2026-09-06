@@ -759,3 +759,56 @@ test("bleed is readable and writable, and refuses a value that is not one", () =
   assert.ok(grid.cards.length, "the plane is untouched by any of it");
   view.destroy();
 });
+
+test("a divider swept while the mouse holds it stops driving the boundary", () => {
+  const { window, host, grid, view } = mount();
+  const born = grid.split("card", "y");         // a second axis, so one can go
+  view.render();
+  assert.ok(born, "the split made a card");
+  const divider = host.querySelector('[role="separator"][data-axis="y"]');
+  const at = grid.boundaryPos("y", 1);
+
+  divider.dispatchEvent(new window.MouseEvent("mousedown", {
+    clientX: 100, clientY: at, bubbles: true, button: 0, buttons: 1,
+  }));
+  // The card goes, so the boundary and its divider go with it.
+  assert.ok(grid.close(born), "the card closed");
+  view.render();
+  assert.equal(divider.dataset.dragging, undefined, "a swept divider is not held");
+
+  const lines = grid.lines("y").join(",");
+  window.document.dispatchEvent(new window.MouseEvent("mousemove", {
+    clientX: 100, clientY: at + 120, bubbles: true, buttons: 1,
+  }));
+  assert.equal(grid.lines("y").join(","), lines, "moving the mouse moves nothing");
+  view.destroy();
+});
+
+test("the host commits a centre, a merge and a resize, not only a drag", () => {
+  const committed = [];
+  const { window, host, grid, view } = mount({
+    commit: (rects, draw) => { committed.push(rects.size); draw(); },
+  });
+  const divider = host.querySelector('[role="separator"]');
+
+  const before = committed.length;
+  divider.dispatchEvent(new window.PointerEvent("pointerdown", {
+    pointerId: 1, clientX: grid.boundaryPos("x", 1), clientY: 100,
+    bubbles: true, isPrimary: true, button: 0, buttons: 1,
+  }));
+  divider.dispatchEvent(new window.PointerEvent("pointerdown", {
+    pointerId: 1, clientX: grid.boundaryPos("x", 1), clientY: 100,
+    bubbles: true, isPrimary: true, button: 0, buttons: 1,
+  }));
+  assert.ok(committed.length > before, "a centre is committed");
+
+  const beforeEnd = committed.length;
+  divider.dispatchEvent(new window.MouseEvent("mousedown", {
+    clientX: grid.boundaryPos("x", 1), clientY: 100, bubbles: true, button: 0, buttons: 1,
+  }));
+  window.document.dispatchEvent(new window.MouseEvent("mouseup", {
+    clientX: grid.boundaryPos("x", 1), clientY: 100, bubbles: true, button: 0, buttons: 0,
+  }));
+  assert.ok(committed.length > beforeEnd, "the end of a drag is committed");
+  view.destroy();
+});
