@@ -462,6 +462,8 @@ function openTabList(anchor, cardId) {
 function openLayer(anchor, ask, items, pick, align = "right") {
   closePicker();
   pickerEl.textContent = "";
+  // 호스트가 이 레이어를 창으로 그릴 때 창 이름으로 쓴다. 보이는 물음과 같은 값이다.
+  pickerEl.setAttribute("aria-label", ask);
   const head = document.createElement("div");
   head.className = "picker__head";
   head.textContent = ask;                  // 레이어 너비를 측정하기 전에 설정한다

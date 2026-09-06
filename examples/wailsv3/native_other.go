@@ -29,7 +29,7 @@ var pressed func(view uintptr) bool
 // nativeOverlay is the modal's own window. Not written for this platform.
 type nativeOverlay struct{}
 
-func newNativeOverlay(window unsafe.Pointer, url string, x, y, w, h float64,
+func newNativeOverlay(window unsafe.Pointer, url, name string, x, y, w, h float64,
 	background [4]float64, boot string) *nativeOverlay {
 	return nil
 }

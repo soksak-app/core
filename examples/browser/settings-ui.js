@@ -230,14 +230,19 @@ const SECTIONS = [
 ];
 
 /** 카드 요소를 만든다. 열 때 호출한다. */
+/** 이 모달의 이름. 보이는 제목이자 호스트가 창에 붙이는 이름이다. */
+const NAME = "설정";
+
 function makeCard() {
   const el = document.createElement("div");
   el.className = "set-card";
   el.id = "settings";
   el.dataset.nativeModal = "";
+  el.setAttribute("role", "dialog");
+  el.setAttribute("aria-label", NAME);
   el.innerHTML =
     '<header class="set-card__head" data-grip>' +
-      '<span class="set-card__title">설정</span>' +
+      `<span class="set-card__title">${NAME}</span>` +
       `<button class="act" type="button" data-key="close" title="닫는다">${icon("close")}</button>` +
     '</header>' +
     '<div class="set-card__body">' +

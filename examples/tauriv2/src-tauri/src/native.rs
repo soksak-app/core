@@ -345,8 +345,8 @@ pub fn view_id(webview: &PlatformWebview) -> usize {
     }
 }
 
-/// Makes a window the modal's: not opaque, with a shadow, and leaves the app's
-/// window as the main one.
+/// Makes a window the modal's: not opaque, with a shadow, kept out of the window
+/// list, and leaves the app's window as the main one.
 ///
 /// Not opaque so the clipped corners show what is behind them rather than black.
 /// The main window is set back because a modal takes the keyboard - a webview
@@ -374,6 +374,9 @@ pub fn panelise(ns_window: *mut std::ffi::c_void, parent: *mut std::ffi::c_void)
         let _: () = msg_send![window, setOpaque: false];
         let _: () = msg_send![window, setBackgroundColor: clear];
         let _: () = msg_send![window, setHasShadow: true];
+        // Auxiliary to the app's window, not another document of its own, so it
+        // does not belong in the list of windows the app offers to switch between.
+        let _: () = msg_send![window, setExcludedFromWindowsMenu: true];
         let _: () = msg_send![parent, makeMainWindow];
     }
 }

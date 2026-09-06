@@ -136,7 +136,8 @@ static void* surfaceCreate(void* nsWindow, const char* url, double x, double y, 
 //
 // The window is borderless and not opaque, so the webview's rounded corners show
 // what is behind them rather than black.
-static void* overlayCreate(void* nsWindow, const char* url, double x, double y, double w, double h,
+static void* overlayCreate(void* nsWindow, const char* url, const char* name,
+                           double x, double y, double w, double h,
                            double red, double green, double blue, double alpha,
                            const char* boot) {
     NSWindow* parent = (NSWindow*)nsWindow;
@@ -149,6 +150,9 @@ static void* overlayCreate(void* nsWindow, const char* url, double x, double y, 
     [child setBackgroundColor:[NSColor clearColor]];
     [child setHasShadow:YES];
     [child setReleasedWhenClosed:NO];
+    // A borderless window draws no title, but the system and assistive software
+    // name the window by it. A panel stays out of the Windows menu by class.
+    [child setTitle:[NSString stringWithUTF8String:name]];
     WKWebView* view = surfaceWebView(url, w, h, red, green, blue, alpha, boot);
     [view setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
     [child setContentView:view];
@@ -418,13 +422,16 @@ type nativeOverlay struct {
 	parent unsafe.Pointer
 }
 
-func newNativeOverlay(window unsafe.Pointer, url string, x, y, w, h float64,
+func newNativeOverlay(window unsafe.Pointer, url, name string, x, y, w, h float64,
 	background [4]float64, boot string) *nativeOverlay {
 	target := C.CString(url)
 	defer C.free(unsafe.Pointer(target))
+	title := C.CString(name)
+	defer C.free(unsafe.Pointer(title))
 	start := C.CString(boot)
 	defer C.free(unsafe.Pointer(start))
-	handle := C.overlayCreate(window, target, C.double(x), C.double(y), C.double(w), C.double(h),
+	handle := C.overlayCreate(window, target, title,
+		C.double(x), C.double(y), C.double(w), C.double(h),
 		C.double(background[0]), C.double(background[1]), C.double(background[2]),
 		C.double(background[3]), start)
 	if handle == nil {

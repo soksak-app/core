@@ -64,6 +64,7 @@ type Theme struct {
 // What a [data-native-modal] element needs in order to be rendered in another view.
 type OverlayRequest struct {
 	ID         string     `json:"id"`
+	Title      string     `json:"title"`
 	Viewport   Viewport   `json:"viewport"`
 	Rect       Rect       `json:"rect"`
 	ClassName  string     `json:"className"`
@@ -265,7 +266,7 @@ func (s *Surfaces) OverlayShow(req OverlayRequest) error {
 		}
 		x, y := req.Rect.X, up(req.Viewport, req.Rect.Y, max1(req.Rect.H))
 		url := s.pages.URL("overlay.html?id=" + req.ID + "&framework=wailsv3")
-		view := newNativeOverlay(win.NativeWindow(), url, x, y,
+		view := newNativeOverlay(win.NativeWindow(), url, req.Title, x, y,
 			max1(req.Rect.W), max1(req.Rect.H), srgba(req.Background), s.boot())
 		// A platform with no window to make has no modal. Recording one whose view
 		// is nil leaves an entry every reader has to test, and one that misses the
@@ -276,8 +277,8 @@ func (s *Surfaces) OverlayShow(req OverlayRequest) error {
 			return
 		}
 		s.modals[req.ID] = &modal{
-			view:    view,
-			radius:  req.Radius,
+			view:   view,
+			radius: req.Radius,
 			content: OverlayContent{
 				CSS: req.CSS, ClassName: req.ClassName, HTML: req.HTML, Border: req.Border,
 			},

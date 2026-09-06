@@ -271,6 +271,8 @@ struct OverlayRequest {
     viewport: Viewport,
     /// The element's id, which names the view that draws it.
     id: String,
+    /// The element's own name, which names the window that draws it.
+    title: String,
     rect: Rect,
     class_name: String,
     html: String,
@@ -390,9 +392,9 @@ fn overlay_show(
     let modal = WebviewWindowBuilder::new(&app, &label, WebviewUrl::App(url.into()))
         .decorations(false)
         .resizable(false)
-        // A borderless window draws no title, but an untitled one is listed as
-        // "Tauri App" wherever the system names windows.
-        .title("")
+        // A borderless window draws no title, but the system and assistive
+        // software name the window by it.
+        .title(&request.title)
         .visible(false)
         .background_color(Color(r as u8, g as u8, b as u8, (a * 255.0) as u8))
         .position(sx, sy)

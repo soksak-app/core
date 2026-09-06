@@ -161,10 +161,14 @@ function install() {
       }
       // 뷰 이름은 요소 id 를 사용한다. id 가 없는 요소가 둘이면 같은 뷰를 공유한다.
       if (!el.id) throw new Error("a [data-native-modal] element needs an id");
+      // 창은 그려지지 않는 제목도 갖는다. 시스템과 보조기술이 창을 부르는 이름이다.
+      const name = el.getAttribute("aria-label");
+      if (!name) throw new Error(`${el.id} needs an aria-label to name its window`);
       shown = el.id;
       const style = getComputedStyle(el);
       tell("overlayShow", {
         id: shown,
+        title: name,
         viewport: { h: window.innerHeight },
         rect: toPage(rect),
         ...drawing(el),
