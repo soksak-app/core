@@ -24,6 +24,7 @@ export const knobs = { latency: 0, skew: 0 };
 let seq = 0;
 let applied = 0;
 let latestRecord = null;
+let aheadRecord = null;
 let timer = null;
 const drawn = new Map();
 
@@ -47,6 +48,14 @@ export function forget(live) {
 
 /** 마지막 커밋 레코드를 반환한다. 없으면 null. */
 export const latest = () => latestRecord;
+
+/**
+ * 직전 렌더에서 미리 게시한 레코드. 미리 게시하지 않았으면 null.
+ *
+ * 렌더가 끝나면 측정한 레코드가 마지막 커밋이 되므로, 예측이 맞았는지는 그때 이 값과
+ * 비교해야 알 수 있다.
+ */
+export const ahead = () => aheadRecord;
 
 /* 호스트가 실제 위치까지 답한 마지막 레코드. 답은 비동기로 오므로 최신 커밋에는
    아직 없을 수 있다. 선언과 적용을 비교하는 검사는 이것을 읽는다. */
@@ -144,16 +153,22 @@ function deliver(mine, snapshot) {
  * 판이 배치를 변경하고 아직 렌더링하지 않았을 때 호출한다. 카드 사각형은 판이
  * 전달하고, 그 안에서 슬롯의 위치는 직전 커밋에서 측정한 여백으로 계산한다.
  *
- * 여백을 모르는 표면이 하나라도 있으면 false 를 반환한다. 호출한 쪽은 렌더링한 뒤
- * 측정하는 경로로 처리한다.
+ * 여백을 모르는 표면이 하나라도 있으면 false 를 반환한다. seated 가 전달한 표면과
+ * DOM 이 담은 표면이 다를 때도 마찬가지다. 호출한 쪽은 렌더링한 뒤 측정하는 경로로
+ * 처리한다.
+ *
+ * seated 는 판이 앉힐 표면이다: 카드 id 마다 그 카드가 보여줄 표면의 id. 여기서 읽는
+ * DOM 은 아직 이전 배치이므로, 표면이 교체되는 변경에서는 이 둘이 다르다.
  */
-export function publishAhead(rects) {
+export function publishAhead(rects, seated) {
+  aheadRecord = null;
   const seats = [];
   for (const slot of slots()) {
     const id = slot.dataset.nativeSurfaceId;
     const inset = insets.get(id);
     const card = inset && rects.get(inset.card);
     if (!card || inset.card !== cardOf(slot)) return false;
+    if (seated.get(inset.card) !== id) return false;
     seats.push({
       id,
       layer: Number(slot.dataset.nativeLayer),
@@ -169,10 +184,13 @@ export function publishAhead(rects) {
       },
     });
   }
-  if (seats.length === 0) return false;
+  // 모델이 앉힐 표면이 DOM 보다 많으면 그 표면은 이 게시에 없다.
+  if (seats.length === 0 || seats.length !== seated.size) return false;
   // 지연은 두 길에 같이 걸린다. 한쪽만 걸면 그 손잡이가 끄는 동안에는 아무 일도
   // 하지 않고, 그 상태를 만들려고 있는 손잡이가 그 상태를 만들지 못한다.
-  return deliver(++seq, seats) ?? true;
+  const told = deliver(++seq, seats) ?? true;
+  aheadRecord = latestRecord;
+  return told;
 }
 
 /** 네이티브 상태를 쓰는 유일한 함수. 시퀀스가 낮은 스냅샷은 거부한다. */

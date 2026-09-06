@@ -408,6 +408,9 @@ struct Modal {
     /// The page rect it was last placed at. A child window keeps its place on
     /// screen when its parent is resized, so it is placed again from this.
     at: Rect,
+    /// Whether the window has been shown. The modal's document reports itself
+    /// ready on every render, and showing it again takes the keyboard back.
+    shown: bool,
 }
 
 #[derive(Default)]
@@ -522,7 +525,7 @@ fn overlay_show(
     };
     let was = state.modals.lock().map_err(|e| e.to_string())?.insert(
         request.id.clone(),
-        Modal { content, radius: request.radius, label: label.clone(), at: request.rect },
+        Modal { content, radius: request.radius, label: label.clone(), at: request.rect, shown: false },
     );
 
     if let Some(old) = was.and_then(|m| app.get_webview_window(&m.label)) {
@@ -714,7 +717,19 @@ fn overlay_ready(
     let Some(existing) = modal_window(&app, &state, &id) else {
         return Ok(());
     };
-    let Some(modal) = state.modals.lock().map_err(|e| e.to_string())?.get(&id).cloned() else {
+    // The modal's document reports itself ready from its render, and it renders
+    // again on every content change. The window is shown once.
+    let first = {
+        let mut modals = state.modals.lock().map_err(|e| e.to_string())?;
+        match modals.get_mut(&id) {
+            Some(modal) if !modal.shown => {
+                modal.shown = true;
+                Some(modal.clone())
+            }
+            _ => None,
+        }
+    };
+    let Some(modal) = first else {
         return Ok(());
     };
     let scale = window.scale_factor().map_err(|e| e.to_string())?;

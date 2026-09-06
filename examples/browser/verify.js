@@ -4,7 +4,7 @@
 // 검사를 추가해도 그쪽을 수정할 필요가 없다.
 //
 // 화면을 보고 판단하지 않고 수치로 판정한다.
-import { latest, seated } from "./compositor.js";
+import { ahead, latest, seated } from "./compositor.js";
 import { currentGrid, plane, railOutline, tabsOf } from "./plane.js";
 import { isPlace, railKind } from "./plugins/registry.js";
 import { cardRadius } from "./settings.js";
@@ -93,20 +93,52 @@ export function verify(controls = null) {
   add("V6 마지막 하나 빼고 전부 닫힌다", open.length <= 1 || open.every((c) => grid.canClose(c.id)),
       `${open.filter((c) => grid.canClose(c.id)).length}/${open.length}`);
 
-  // V7a — 마지막 커밋의 선언값이 지금 그려진 요소와 같은가. 다르면 커밋이 DOM 보다
-  // 뒤처진 것이다.
+  // V7a — 마지막 커밋이 지금 그려진 표면을 그대로, 그려진 자리에 담고 있는가.
+  //
+  // 커밋에만 있는 표면과 판에만 있는 표면을 함께 센다. 하나도 겹치지 않는 커밋은
+  // 겹치는 것이 없어서 통과하는 것이지 맞는 것이 아니다.
   const host = plane.getBoundingClientRect();
-  const record = latest();
-  let stale = 0, counted = 0;
-  for (const s of record?.surfaces ?? []) {
-    const slot = plane.querySelector(`[data-native-surface-id="${s.id}"][data-native-surface]`);
-    if (!slot) continue;
+  const drawnFrame = (slot) => {
     const r = slot.getBoundingClientRect();
-    stale = Math.max(stale, maxDelta({ x: r.left - host.left, y: r.top - host.top, w: r.width, h: r.height }, s.declared));
-    counted++;
+    return { x: r.left - host.left, y: r.top - host.top, w: r.width, h: r.height };
+  };
+  const onPlane = new Map(
+    [...plane.querySelectorAll("[data-native-surface][data-native-surface-id]")]
+      .map((slot) => [slot.dataset.nativeSurfaceId, slot]),
+  );
+  const compare = (surfaces) => {
+    const told = new Set(surfaces.map((s) => s.id));
+    let worst = 0;
+    for (const s of surfaces) {
+      const slot = onPlane.get(s.id);
+      if (!slot) continue;
+      worst = Math.max(worst, maxDelta(drawnFrame(slot), s.declared));
+    }
+    return {
+      worst,
+      gone: surfaces.filter((s) => !onPlane.has(s.id)).length,
+      missed: [...onPlane.keys()].filter((id) => !told.has(id)).length,
+    };
+  };
+
+  const record = latest();
+  if (!record) add("V7a element − declared == 0", true, "아직 커밋 없음");
+  else {
+    const { worst, gone, missed } = compare(record.surfaces);
+    add("V7a element − declared == 0", gone === 0 && missed === 0 && worst < 0.5,
+        `최대 ${worst.toFixed(2)}px · 커밋에 없는 표면 ${missed} · 사라진 표면 ${gone} · ` +
+        `0이 아니면 커밋이 뒤처진 것 (seq ${record.seq})`);
   }
-  add("V7a element − declared == 0", counted === 0 || stale < 0.5,
-      counted ? `최대 ${stale.toFixed(2)}px · 0이 아니면 커밋이 뒤처진 것 (seq ${record.seq})` : "아직 커밋 없음");
+
+  // V7c — 그리기 전에 미리 게시한 자리가 그려진 자리와 같은가. 여백은 그려질
+  // 사각형에 대해 재므로 오차가 남을 자리가 없다.
+  const guess = ahead();
+  if (!guess) add("V7c 미리 게시한 자리 == 그려진 자리", true, "이번 렌더는 미리 게시하지 않았다");
+  else {
+    const { worst, gone, missed } = compare(guess.surfaces);
+    add("V7c 미리 게시한 자리 == 그려진 자리", gone === 0 && missed === 0 && worst === 0,
+        `최대 ${worst.toFixed(2)}px · 없음 ${gone} · 누락 ${missed} (seq ${guess.seq})`);
+  }
 
   // V7b — 호스트가 실제로 앉힌 자리와 선언값의 차이. 호스트는 선언된 사각형을
   // 디스플레이 픽셀에 맞춰 정렬하므로 1 디바이스 픽셀까지는 정상이다. 그보다 크면

@@ -920,8 +920,21 @@ export function onLayout(fn) {
   layouter = fn;
 }
 
-/** 현재 카드들의 사각형. */
-export const rects = () => grid.rects();
+/**
+ * 이 판이 앉힐 표면: 카드 id 마다 그 카드가 보여줄 탭의 id.
+ *
+ * 표면의 정체는 탭이므로, 카드가 보여주는 탭이 바뀌면 같은 자리에 다른 표면이 앉는다.
+ * 아직 그리기 전의 DOM 은 이전 탭을 담고 있고, 그것만 읽으면 지난 표면을 새 배치에
+ * 앉히라고 호스트에 알리게 된다.
+ */
+function seats() {
+  const out = new Map();
+  for (const card of grid.cards) {
+    if (isPlace(card.id)) continue;
+    out.set(card.id, activeTab(card).id);
+  }
+  return out;
+}
 
 /** 판을 처음부터 다시 만든다. */
 export function build() {
@@ -936,7 +949,7 @@ export function build() {
     // 판은 stage 안쪽으로 이 값만큼 들어와 있다. 호스트만 아는 값이므로 뷰에 전달해야
     // 판 가장자리에 닿는 선이 stage 경계까지 이어진다.
     bleed: half,
-    commit: (made, draw) => (layouter ? layouter(made, draw) : draw()),
+    commit: (made, draw) => (layouter ? layouter(made, draw, seats()) : draw()),
     // 판의 렌더는 뷰가 그리는 것과 이 문서가 그리는 것으로 이루어진다. onChange 는
     // 뷰가 그린 직후에 발생하므로, 나머지를 여기서 그리고 그 뒤에 수신자를 호출한다.
     onChange: (reason) => {
