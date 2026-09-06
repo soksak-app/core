@@ -1,11 +1,11 @@
 // 개발 중 관측을 담당하는 서비스.
 //
-// 화면에 무엇이 그려졌는지는 페이지가 알 수 없다. 표면과 모달은 이 앱이 만든 OS 창이고
-// 합성은 윈도 서버가 한다. 그래서 밖에서 봐야 하고, 캡처 도구는 화면의 영역이 아니라
-// 창을 지목할 수 있어야 한다. 영역을 찍으면 앞에 있는 다른 창이 함께 찍히고, 창을 앞으로
-// 끌어내면 재려던 상태가 바뀐다.
+// 페이지는 화면에 합성된 결과를 읽을 수 없다. 표면과 모달은 이 애플리케이션이 만든
+// OS 뷰와 창이고 합성은 윈도 서버가 수행한다. 캡처 도구는 화면 영역이 아니라 창을
+// 지정해야 한다. 영역을 캡처하면 앞에 있는 다른 창이 함께 캡처되고, 창을 앞으로
+// 이동시키면 측정 대상 상태가 바뀐다.
 //
-// 제품의 계약이 아니라 별개 서비스다. 등록하지 않으면 이 파일은 아무 일도 하지 않는다.
+// 제품의 계약이 아니라 별개 서비스다. 등록하지 않으면 이 파일은 실행되지 않는다.
 package main
 
 import (
@@ -27,9 +27,9 @@ func (o *Observe) ServiceName() string { return "observe" }
 
 // ServiceStartup 이 관측을 시작한다.
 //
-// 창 목록이 바뀌는 것을 주기로 확인하지 않는다. 창을 붙이고 떼는 것은 이 앱이므로
-// 그 자리에서 알리고, 여기서는 그것을 구독한다. 첫 창도 마찬가지로, 떠오르는 것을
-// 기다리지 않고 떠올랐다는 이벤트를 받는다.
+// 창 목록을 주기로 확인하지 않는다. 자식 창을 붙이고 떼는 것은 이 애플리케이션이므로
+// 그 지점에서 windows-changed 를 발행하고 여기서 구독한다. 첫 보고는 창이 표시되는
+// 이벤트에서 받는다.
 func (o *Observe) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
 	app := application.Get()
 	offChange := app.Event.On("windows-changed", func(*application.CustomEvent) { o.report() })
@@ -40,6 +40,7 @@ func (o *Observe) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 			o.report()
 			o.open()
 			o.drive()
+			o.click()
 		})
 	}
 	go func() {
@@ -51,8 +52,8 @@ func (o *Observe) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	return nil
 }
 
-// open readies the recording for this window. Reading the window server's list is
-// the slow part, so it is read once, here.
+// open 은 이 창의 녹화를 준비한다. 윈도 서버의 창 목록을 읽는 것이 느리므로 한 번만
+// 읽는다.
 func (o *Observe) open() {
 	if *capturing == "" {
 		return
@@ -62,10 +63,10 @@ func (o *Observe) open() {
 	}
 }
 
-// record keeps this window's composite while a run of updates is going.
+// record 는 갱신이 이어지는 동안 이 창을 녹화한다.
 //
-// The page says whether more is coming, so a boundary dragged by hand is recorded
-// the same way a driven one is. Nothing is asked on a clock.
+// 페이지가 갱신이 더 있는지를 보고하므로, 사람이 끄는 경계도 --drive 가 끄는 경계와
+// 같은 방식으로 녹화된다. 주기로 확인하지 않는다.
 func (o *Observe) record() func() {
 	if *capturing == "" {
 		return func() {}
@@ -83,8 +84,8 @@ func (o *Observe) record() func() {
 	}
 }
 
-// Windows 는 이 창과 여기 붙은 창들의 번호를 반환한다. 모달은 자기 창이므로 목록에
-// 들어왔다 나간다.
+// Windows 는 이 창과 여기에 붙은 자식 창들의 번호를 반환한다. 모달은 별도 창이므로
+// 열려 있는 동안 목록에 포함된다.
 func (o *Observe) Windows() []int {
 	win, ok := mainWindow()
 	if !ok {
@@ -100,14 +101,13 @@ func (o *Observe) report() {
 	}
 }
 
-// drive drags a boundary without anyone touching the mouse.
+// drive 는 마우스 입력 없이 경계를 끈다.
 //
-// The steps go the way a press on a surface goes: the page receives surface-input
-// and matches the point against its own dividers. So this measures the path the
-// product uses, not one built beside it.
+// 각 단계는 표면 위의 누름과 같은 경로로 전달된다. 페이지가 surface-input 을 받아
+// 자신의 divider 와 대조하므로, 제품이 사용하는 경로를 측정한다.
 //
-// A drag is motion, so it is written on a clock. That clock produces the steps; it
-// does not watch for anything.
+// 끌기는 시간에 따른 움직임이므로 시계로 단계를 만든다. 이 시계는 무엇을 확인하지
+// 않는다.
 func (o *Observe) drive() {
 	if *driving == "" {
 		return
@@ -120,8 +120,8 @@ func (o *Observe) drive() {
 	go plan.run()
 }
 
-// drivePlan is one drag, repeated. A repeat goes back where it came from, so the
-// boundary stays in place over a long run and every cycle covers the same pixels.
+// drivePlan 은 한 번의 끌기를 반복하는 계획이다. 각 반복은 왕복이므로 경계는 제자리로
+// 돌아오고 모든 회차가 같은 픽셀을 지난다.
 type drivePlan struct {
 	wait   time.Duration
 	x, y   float64
@@ -132,8 +132,8 @@ type drivePlan struct {
 
 func (p drivePlan) run() {
 	const frame = 16 * time.Millisecond
-	// 이 앱이 열지 않은 페이지가 그려지기를 기다린다. 남의 페이지가 다 그려졌다고
-	// 알려주는 것은 없으므로 여기서만 시계를 쓴다. 재는 동안에는 쓰지 않는다.
+	// 이 애플리케이션이 열지 않은 페이지가 렌더링될 때까지 기다린다. 외부 페이지의
+	// 렌더링 완료를 알리는 이벤트가 없으므로 여기서만 시계를 쓴다.
 	time.Sleep(p.wait)
 
 	steps := int(p.over / frame)
@@ -145,8 +145,8 @@ func (p drivePlan) run() {
 	send := func(phase int, x, y float64) {
 		application.Get().Event.Emit("surface-input", InputStep{Phase: phase, X: x, Y: y})
 	}
-	// 한 번 누른 채로 왕복한다. 놓았다 다시 누르면 경계가 최소 크기에 걸려 명령한
-	// 만큼 가지 않았을 때 다음 누름이 빗나가고, 그때부터 아무것도 움직이지 않는다.
+	// 한 번 누른 채로 왕복한다. 놓았다 다시 누르면, 경계가 최소 카드 크기에서 멈춰
+	// 지정한 만큼 이동하지 못했을 때 다음 누름이 빗나간다.
 	send(0, p.x, p.y)
 	for turn := 0; turn < p.times; turn++ {
 		p.sweep(send, 0, 1, steps, frame)
@@ -156,7 +156,7 @@ func (p drivePlan) run() {
 	log.Print("관측: 흔들기 끝")
 }
 
-// sweep moves the held point from one fraction of the offset to another.
+// sweep 은 누른 지점을 오프셋의 한 비율에서 다른 비율까지 옮긴다.
 func (p drivePlan) sweep(send func(int, float64, float64), from, to float64, steps int, frame time.Duration) {
 	for i := 1; i <= steps; i++ {
 		time.Sleep(frame)
@@ -165,9 +165,8 @@ func (p drivePlan) sweep(send func(int, float64, float64), from, to float64, ste
 	}
 }
 
-// parseDrive reads "wait,x,y,dx,dy,ms,times": wait that many ms for the pages to
-// be drawn, then press at x,y, move by dx,dy over ms, and do it that many times,
-// each turn going back the way the one before it came.
+// parseDrive 는 "wait,x,y,dx,dy,ms,times" 를 읽는다. 페이지가 렌더링될 때까지 wait
+// 밀리초 기다린 뒤 x,y 를 누르고 ms 동안 dx,dy 만큼 왕복하며, 이를 times 번 반복한다.
 func parseDrive(spec string) (drivePlan, error) {
 	parts := strings.Split(spec, ",")
 	if len(parts) != 7 {
@@ -194,6 +193,33 @@ var observing = flag.Bool("observe", false,
 
 var driving = flag.String("drive", "",
 	"drag a boundary once the window is up, as wait,x,y,dx,dy,ms,times")
+
+// click 은 CSS 선택자로 지정한 페이지 요소를 누른다.
+//
+// 경계는 표면 위에 있으므로 좌표로 도달한다. 페이지 크롬의 버튼은 DOM 요소이므로
+// 문서만 클릭을 전달할 수 있고, 페이지의 관측 모듈이 그 일을 한다.
+func (o *Observe) click() {
+	if *clicking == "" {
+		return
+	}
+	wait, selector, ok := strings.Cut(*clicking, ",")
+	if !ok {
+		log.Printf("관측: --click 은 ms,선택자 를 받는다 — %q", *clicking)
+		return
+	}
+	after, err := strconv.Atoi(strings.TrimSpace(wait))
+	if err != nil {
+		log.Printf("관측: --click 의 %q 는 수가 아니다", wait)
+		return
+	}
+	go func() {
+		time.Sleep(time.Duration(after) * time.Millisecond)
+		application.Get().Event.Emit("observe-click", selector)
+	}()
+}
+
+var clicking = flag.String("click", "",
+	"press one element of the page once it is drawn, as ms,selector")
 
 var capturing = flag.String("capture", "",
 	"record this window into this directory while a drag runs")

@@ -138,6 +138,15 @@ The number is written when the window set changes, not on a timer: attaching and
 detaching a window is the application's own doing, so it says so where it happens
 and the component listens.
 
+A boundary lies over the surfaces, so a drag reaches it by coordinates. A button
+in the page's own chrome does not — it is an element of the document — so
+`--click ms,selector` asks the page to press one once it is drawn:
+
+    ./examples/wailsv3/bin/wailsv3 --observe --click '5000,button.act[title="설정"]'
+
+    관측: button.act[title="설정"] 를 눌렀다
+    관측: 창 번호 [7480 7489]
+
 Nothing is reported while the window stands still, so `--drive` shakes a boundary
 on its own, as `wait,x,y,dx,dy,ms,times` — wait that many ms for the pages to be
 drawn, then press at x,y and sweep by dx,dy over ms, out and back, that many

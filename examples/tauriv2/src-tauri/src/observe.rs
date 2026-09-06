@@ -52,6 +52,7 @@ pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
                 report(webview.app_handle().clone());
                 open(webview.app_handle().clone());
                 drive(webview.app_handle().clone());
+                click(webview.app_handle().clone());
             }
         })
         .invoke_handler(tauri::generate_handler![windows])
@@ -100,6 +101,30 @@ fn open<R: Runtime>(app: tauri::AppHandle<R>) {
         if let Some(first) = numbers(&ask).first() {
             capture::open(*first);
         }
+    });
+}
+
+/// Presses one element of the page, named by a CSS selector.
+///
+/// A boundary lies over the surfaces, so a drag reaches it by coordinates. A
+/// button in the page's own chrome does not: it is an element of the document and
+/// only the document can press it. The page's own observation module does.
+fn click<R: Runtime>(app: tauri::AppHandle<R>) {
+    let Some(spec) = std::env::args().skip_while(|a| a != "--click").nth(1) else {
+        return;
+    };
+    let Some((wait, selector)) = spec.split_once(',') else {
+        println!("관측: --click 은 ms,선택자 를 받는다 — {spec:?}");
+        return;
+    };
+    let Ok(after) = wait.trim().parse::<u64>() else {
+        println!("관측: --click 의 {wait:?} 는 수가 아니다");
+        return;
+    };
+    let selector = selector.to_string();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(after));
+        let _ = app.emit("observe-click", selector);
     });
 }
 
