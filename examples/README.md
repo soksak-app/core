@@ -200,7 +200,8 @@ for each request, so a state that lasts one frame between a resize and the next
 render is never captured.
 
 `make examples-verify` runs both applications this way and reads the frames. See
-`examples/test/`.
+`examples/test/`. The files run one at a time: each drives a real window and
+records it, and two runs at once do not each get the frames they measure.
 
 Only macOS is implemented for the window number. On Windows this would report
 the HWND and on Linux the X window id. Without the flag neither component is

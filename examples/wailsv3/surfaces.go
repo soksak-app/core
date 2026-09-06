@@ -337,7 +337,9 @@ func (s *Surfaces) OverlayPlace(req PlaceRequest) (Rect, error) {
 		// 내용이 바뀌면 카드의 크기도 바뀐다. 크기를 함께 적용하지 않으면 창은
 		// 만들어진 크기를 유지하고 그 안의 카드가 늘어나거나 잘린다.
 		live.window.SetSize(int(at.W), int(at.H))
-		live.window.Attach(win, at.X, at.Y)
+		if err := live.window.Attach(win, at.X, at.Y); err != nil {
+			log.Printf("modal %s: %v", req.ID, err)
+		}
 	})
 	return at, nil
 }
@@ -419,7 +421,9 @@ func (s *Surfaces) ModalReady(id string) {
 		return
 	}
 	live.window.Show()
-	live.window.Attach(win, at.X, at.Y)
+	if err := live.window.Attach(win, at.X, at.Y); err != nil {
+		log.Printf("modal %s: %v", id, err)
+	}
 	live.window.Focus()
 	// 모달은 자기 창이므로 이 앱이 가진 창이 하나 늘었다. 창이 붙고 떨어지는 것을
 	// 알리는 통지는 AppKit 에 없고, 붙이는 것은 여기다. 그래서 여기서 알린다.

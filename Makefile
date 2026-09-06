@@ -77,8 +77,12 @@ wails-release: wails-build-release
 
 # Runs the examples and looks at what they drew. Each app is started, a boundary
 # is shaken, and the window is recorded while that runs.
+#
+# One file at a time. Every test here drives a real window and records it, and
+# two applications shaking a boundary at once do not each get the frames they
+# are measuring.
 examples-verify: wails-build tauri-build
-	@node --test examples/test
+	@node --test --test-concurrency=1 examples/test
 
 # Both apps in both profiles, and what each one weighs.
 examples-size: tauri-build tauri-build-release wails-build-release wails-build
