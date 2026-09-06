@@ -20,6 +20,7 @@ import type { Axis, Card, CardInit, Rect, Side } from './card.js';
 import {
   corridorOf,
   crossing,
+  declaredFor,
   dividers,
   frameOf,
   linesRead,
@@ -539,8 +540,9 @@ export class Soksak {
     // Rewrite each sharing span in proportion to its new size, keeping the total
     // span unchanged so the lines outside this run do not move. `was` is a copy
     // because the loop writes into `a` as it advances.
+    // `total` is `named + max(0, room - named)`, which is at least `room`, and
+    // `room` was checked above.
     const total = named + left;
-    if (total < EPS) return;
     const was = [...a];
     let at = a[0];
     for (let i = 0; i < count; i++) {
@@ -583,22 +585,27 @@ export class Soksak {
   }
 
   /**
-   * Sets one slot's px size and takes the difference from `pays`, the slot on
-   * the other side of the boundary.
+   * Draws one slot at `drawn` px and takes the difference from `pays`, the slot
+   * on the other side of the boundary.
+   *
+   * `drawn` is a size read off the plane, and what a slot declares is drawn
+   * scaled when the plane cannot hold every declared size, so each slot declares
+   * the size that draws at the width asked for.
    *
    * A drag moves one boundary, so only those two slots change. Both indices come
    * from that boundary and are therefore in range and never equal.
    */
-  private resizeSlot(axis: Axis, slot: number, size: number, pays: number): void {
+  private resizeSlot(axis: Axis, slot: number, drawn: number, pays: number): void {
     const width = slotWidths(this.plane, axis);
-    const delta = size - width[slot];
-    this.declare(axis, slot, size);
+    const delta = drawn - width[slot];
+    this.declare(axis, slot, declaredFor(this.plane, axis, slot, drawn));
 
     const want: (number | null)[] = [...width];
-    want[slot] = size;
+    want[slot] = drawn;
     if (heldSizes(this.plane, axis)[pays] !== null) {
       // Both slots have a px size, so `pays` is reduced by the same amount.
-      this.declare(axis, pays, Math.max(0, width[pays] - delta));
+      const paid = Math.max(0, width[pays] - delta);
+      this.declare(axis, pays, declaredFor(this.plane, axis, pays, paid));
       this.setSlotWidths(axis, want);
       return;
     }
@@ -660,13 +667,17 @@ export class Soksak {
    */
   boundaryRange(axis: Axis, line: number): [number, number] {
     if (this.noAxis(axis)) return [0, 0];
+    // The same line every other boundary method takes. Without this the two
+    // neighbours below fall back to the plane's borders and the method answers a
+    // range for a line that has no boundary.
+    if (!this.hasBoundary(axis, line)) return [0, 0];
     const along = linePositions(this.plane, axis);
     const [lo, hi] = SPAN[axis];
 
     // The neighbouring lines are hard limits. Past one of them the line array is
     // out of order and a card is drawn wider than one spanning more slots.
-    const first = along[this.realNeighbour(axis, line, -1)] ?? 0;
-    const last = along[this.realNeighbour(axis, line, 1)] ?? this.size(axis);
+    const first = along[this.realNeighbour(axis, line, -1)];
+    const last = along[this.realNeighbour(axis, line, 1)];
     let min = first;
     let max = last;
     const plane = this.plane;
@@ -786,13 +797,30 @@ export class Soksak {
   /**
    * Moves a boundary so the two cards beside it are drawn at the same size.
    *
-   * This is not the midpoint of the two lines: a card at the plane's border
-   * insets on one side only.
+   * A plane too small for the sizes its cards declare draws them scaled, and the
+   * move changes that scale, so the position asked for is not the position
+   * reached. The middle is measured again after each move. A plane that holds
+   * its declared sizes reaches it in one.
    */
   centerBoundary(axis: Axis, line: number): number {
     if (this.noAxis(axis)) return 0;
     if (!this.hasBoundary(axis, line)) return this.boundaryPos(axis, line);
+    let at = this.boundaryPos(axis, line);
+    for (let pass = 0; pass < 8; pass++) {
+      const middle = this.middleOf(axis, line);
+      if (Math.abs(middle - at) < 0.01) break;
+      at = this.moveBoundary(axis, line, middle, false);
+    }
+    return at;
+  }
 
+  /**
+   * Where the two cards meeting at a boundary come out the same size.
+   *
+   * This is not the midpoint of the two lines: a card at the plane's border
+   * insets on one side only.
+   */
+  private middleOf(axis: Axis, line: number): number {
     // hasBoundary is true, so the line has one on each side of it.
     const along = linePositions(this.plane, axis);
     const [lo, hi] = SPAN[axis];
@@ -812,7 +840,7 @@ export class Soksak {
         insEnd = inset(near, axis, card[hi], 'hi', seen);
       }
     }
-    return this.moveBoundary(axis, line, (start + end) / 2 + (insStart - insEnd) / 2, false);
+    return (start + end) / 2 + (insStart - insEnd) / 2;
   }
 
   /**
@@ -992,9 +1020,13 @@ export class Soksak {
       // The new line is placed strictly inside the card's span.
       line = card[lo] + 1;
       while (line < card[hi] && a[line] <= cut.value + EPS) line++;
+      // The scan above accepts a line EPS past the cut, so the cut can sit a
+      // rounding below the line before it. checkState compares the array
+      // strictly, and a state read back from this grid would be rejected.
+      const value = Math.min(Math.max(cut.value, a[line - 1]), a[line]);
       // The line is inside a card rather than at a boundary, so every span at or
       // past this index shifts by one, including a card that ends here.
-      a.splice(line, 0, cut.value);
+      a.splice(line, 0, value);
       for (const other of this.list) {
         if (other[lo] >= line) other[lo]++;
         if (other[hi] >= line) other[hi]++;
@@ -1389,8 +1421,9 @@ export class Soksak {
    * borders are never removed.
    */
   private dropSlot(axis: Axis, slot: number): void {
+    // `close` reaches here only for a card that does not span every slot on the
+    // axis, so the array holds an interior line.
     const a = this.arr(axis);
-    if (a.length <= 2) return; // one slot, no interior line, nothing to take
     // Remove the interior line: the far one, or the near one for the last slot,
     // so the plane's two borders are never removed. The slot on the other side
     // of that line absorbs the removed one.

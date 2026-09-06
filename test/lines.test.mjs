@@ -435,3 +435,92 @@ test("merging onto the plane's own border keeps the border", () => {
   assert.equal(left.lines("x")[0], 0, "it still starts at 0, exactly");
   assert.equal(left.rect("a").x, 0, "so the first card starts at the edge");
 });
+
+test("split keeps the line array in order, so the state it writes reads back", () => {
+  // The scan that places the new line accepts one EPS past the cut, and this
+  // sequence puts the cut that far below the line before it.
+  const grid = new Soksak(undefined, {
+    width: 1081, height: 889, gap: 24, minSize: 1, snap: "merge", fillOrder: "h",
+  });
+  grid.split("card", "y", { id: "n0" });
+  grid.move("n0", "card", "left");
+  grid.setSize("n0", "y", 355);
+  grid.split("n0", "y", { id: "n6" });
+  grid.insertAt("y", 2, { size: 347, id: "n7" });
+  grid.splitToward("n7", "bottom", { id: "n9" });
+  grid.split("n0", "y", { id: "n10" });
+  grid.split("n0", "y", { id: "n11" });
+  grid.resize(338, 231);
+  grid.splitToward("n9", "top", { id: "n12" });
+  grid.close("n6");
+  grid.splitToward("card", "right", { id: "n14" });
+  grid.split("n14", "y", { id: "n17" });
+
+  const ys = grid.lines("y");
+  for (let k = 1; k < ys.length; k++) {
+    assert.ok(ys[k] >= ys[k - 1], `ys[${k}] ${ys[k]} is before ys[${k - 1}] ${ys[k - 1]}`);
+  }
+  assert.doesNotThrow(() => grid.replace(grid.toJSON()), "the state it writes is one it accepts");
+});
+
+test("a line no card reads does not change where the cards are drawn", () => {
+  const grid = new Soksak(undefined, {
+    width: 1300, height: 693, gap: 30, minSize: 118, snap: "off", fillOrder: "h",
+  });
+  grid.splitToward("card", "left", { id: "n0" });
+  grid.splitToward("n0", "right", { id: "n1" });
+  grid.close("card");
+  grid.insertAt("x", 0, { size: 294, id: "n4" });
+  assert.equal(grid.isVirtual("x", 3), true, "line 3 is read by no card");
+
+  const before = [...grid.cards].map((c) => ({ id: c.id, ...grid.rect(c.id) }));
+  grid.tidy();
+  for (const was of before) {
+    const now = grid.rect(was.id);
+    assert.ok(
+      Math.abs(now.x - was.x) < 0.01 && Math.abs(now.w - was.w) < 0.01,
+      `${was.id} moved from ${was.x}/${was.w} to ${now.x}/${now.w} when the line was removed`,
+    );
+  }
+});
+
+test("boundaryRange refuses a line that carries no boundary", () => {
+  const grid = new Soksak(undefined, { width: 800, height: 600 });
+  grid.split("card", "x");
+  for (const line of [99, -5, 1.5, 0, 2]) {
+    assert.deepEqual(grid.boundaryRange("x", line), [0, 0], `line ${line}`);
+  }
+  const [min, max] = grid.boundaryRange("x", 1);
+  assert.ok(max > min, "and answers for one that does");
+});
+
+test("a drag snaps only when snapping is on and the caller allows it", () => {
+  // `wide` spans lines 1 to 3, so line 2 is read by no card and a drag of line 1
+  // that comes within snapDistance of it snaps onto it.
+  const build = (snap) =>
+    new Soksak(
+      {
+        xs: [0, 0.5, 0.75, 1],
+        ys: [0, 1],
+        cards: [
+          { id: "narrow", c0: 0, c1: 1, r0: 0, r1: 1 },
+          { id: "wide", c0: 1, c1: 3, r0: 0, r1: 1 },
+        ],
+      },
+      { width: 1200, height: 800, gap: 24, minSize: 50, snap, snapDistance: 12 },
+    );
+  const drag = (snap, allowSnap) => {
+    const grid = build(snap);
+    const next = grid.lines("x")[2] * grid.width;
+    return grid.moveBoundary("x", 1, next - 3, allowSnap);
+  };
+
+  const snapped = drag("merge", true);
+  const off = drag("off", true);
+  const refused = drag("merge", false);
+  assert.ok(
+    Math.abs(snapped - off) > 1,
+    `snapping takes the boundary past what the drag asked, ${snapped} against ${off}`,
+  );
+  assert.equal(refused, off, "a drag that refuses the snap lands where snapping off lands");
+});

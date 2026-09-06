@@ -35,6 +35,25 @@ export declare function heldSizes(plane: Plane, axis: Axis): (number | null)[];
 /** Drawn width of every slot, gap removed. */
 export declare function slotWidths(plane: Plane, axis: Axis): number[];
 /**
+ * The px size a slot has to declare to be drawn `drawn` px wide.
+ *
+ * While the plane holds what the slots declare, that is `drawn` itself. When it
+ * does not, every declared size is drawn scaled by one factor, so the size read
+ * off the plane is smaller than the size that produced it: writing the read size
+ * back would shrink the declaration on every drag, including one that moves
+ * nothing.
+ *
+ * In that regime the slot is drawn `d * left / (other + d)`, where `other` is
+ * what the remaining slots declare and `left` is the px the scaled sizes divide.
+ * Solving it for `d` gives the size below. `left` does not depend on any
+ * declared size, so one slot's declaration is enough to solve.
+ *
+ * Two cases have no answer and keep the size the slot declares now: no other
+ * slot declares one, which makes the drawn size the same whatever this slot
+ * declares, and a request of `left` or more, which no declaration reaches.
+ */
+export declare function declaredFor(plane: Plane, axis: Axis, slot: number, drawn: number): number;
+/**
  * Width in px of every slot on an axis.
  *
  * A slot with a px size takes that size; the rest divide the remainder in

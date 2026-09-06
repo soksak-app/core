@@ -203,8 +203,12 @@ export declare class Soksak {
      */
     private settleOn;
     /**
-     * Sets one slot's px size and takes the difference from `pays`, the slot on
-     * the other side of the boundary.
+     * Draws one slot at `drawn` px and takes the difference from `pays`, the slot
+     * on the other side of the boundary.
+     *
+     * `drawn` is a size read off the plane, and what a slot declares is drawn
+     * scaled when the plane cannot hold every declared size, so each slot declares
+     * the size that draws at the width asked for.
      *
      * A drag moves one boundary, so only those two slots change. Both indices come
      * from that boundary and are therefore in range and never equal.
@@ -257,10 +261,19 @@ export declare class Soksak {
     /**
      * Moves a boundary so the two cards beside it are drawn at the same size.
      *
+     * A plane too small for the sizes its cards declare draws them scaled, and the
+     * move changes that scale, so the position asked for is not the position
+     * reached. The middle is measured again after each move. A plane that holds
+     * its declared sizes reaches it in one.
+     */
+    centerBoundary(axis: Axis, line: number): number;
+    /**
+     * Where the two cards meeting at a boundary come out the same size.
+     *
      * This is not the midpoint of the two lines: a card at the plane's border
      * insets on one side only.
      */
-    centerBoundary(axis: Axis, line: number): number;
+    private middleOf;
     /**
      * Merges a line onto a neighbour at the same coordinate.
      *

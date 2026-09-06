@@ -42,7 +42,9 @@ function check(grid, where) {
     const a = grid.lines(axis);
     if (a[0] !== 0 || a[a.length - 1] !== 1) errs.push(`${where}: ${axis} does not run 0..1`);
     for (let k = 1; k < a.length; k++) {
-      if (!(a[k] >= a[k - 1] - 1e-9)) errs.push(`${where}: ${axis} line ${k} is before ${k - 1}`);
+      // checkState compares the array strictly, so a tolerance here would pass
+      // a state the library then rejects.
+      if (!(a[k] >= a[k - 1])) errs.push(`${where}: ${axis} line ${k} is before ${k - 1}`);
       if (a[k] < -1e-9 || a[k] > 1 + 1e-9) errs.push(`${where}: ${axis} line ${k} is outside 0..1`);
     }
   }

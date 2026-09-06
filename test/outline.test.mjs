@@ -184,3 +184,17 @@ test("themeCSS names every token themeTokens reports", () => {
   }
   assert.ok(!own.includes("--sp-"), "and the default prefix is gone");
 });
+
+test("two cards whose facing edges round either side of one hundredth still merge", () => {
+  // The right edge of the first lands on 479.12499999999994 and the left edge of
+  // the second, grown by pad, on 479.125: two values a rounding apart.
+  const { loops, path } = outline(
+    [
+      { x: 411.75, y: 0, w: 67.37499999999994, h: 901 },
+      { x: 514.125, y: 0, w: 84.875, h: 901 },
+    ],
+    { pad: 17.5, radius: 17.5 },
+  );
+  assert.equal(loops.length, 1, "the two grow into one shape");
+  assert.equal(path.match(/M/g).length, 1, "drawn as one loop");
+});

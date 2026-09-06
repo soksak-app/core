@@ -877,3 +877,180 @@ test("installTheme puts one stylesheet first in the head and reuses it", () => {
   assert.match(named.textContent, /--pane-grip-length: 40px;/);
   view.destroy();
 });
+
+test("only the primary button drags a divider", () => {
+  const { window, host, grid, view } = mount();
+  const divider = host.querySelector('[role="separator"]');
+  const send = (type, button, buttons, x) =>
+    divider.dispatchEvent(
+      new window.PointerEvent(type, {
+        pointerId: 3, clientX: x, clientY: 100, bubbles: true, isPrimary: true, button, buttons,
+      }),
+    );
+
+  const at = grid.boundaryPos("x", 1);
+  send("pointerdown", 2, 2, at);
+  assert.equal(divider.dataset.dragging, undefined, "the second button does not hold the divider");
+  send("pointermove", -1, 2, at + 150);
+  assert.equal(grid.boundaryPos("x", 1), at, "and does not move the boundary");
+  send("pointerup", 2, 0, at + 150);
+
+  // A press of the second button is not the first press of a double press.
+  grid.moveBoundary("x", 1, 300);
+  view.render();
+  send("pointerdown", 2, 2, 300);
+  send("pointerup", 2, 0, 300);
+  send("pointerdown", 0, 1, 300);
+  assert.equal(grid.boundaryPos("x", 1), 300, "the primary press starts a drag, not a centring");
+  send("pointerup", 0, 0, 300);
+  view.destroy();
+});
+
+test("releasing another button leaves a mouse drag running", () => {
+  const { window, host, grid, view } = mount();
+  const divider = host.querySelector('[role="separator"]');
+  const at = grid.boundaryPos("x", 1);
+  const doc = window.document;
+  divider.dispatchEvent(new window.MouseEvent("mousedown", {
+    clientX: at, clientY: 100, bubbles: true, button: 0, buttons: 1,
+  }));
+  doc.dispatchEvent(new window.MouseEvent("mousemove", {
+    clientX: at + 100, clientY: 100, bubbles: true, buttons: 1,
+  }));
+
+  // The second button is pressed and released while the primary one is held.
+  doc.dispatchEvent(new window.MouseEvent("mouseup", {
+    clientX: at + 100, clientY: 100, bubbles: true, button: 2, buttons: 1,
+  }));
+  assert.equal(divider.dataset.dragging, "true", "the divider is still held");
+  doc.dispatchEvent(new window.MouseEvent("mousemove", {
+    clientX: at + 200, clientY: 100, bubbles: true, buttons: 1,
+  }));
+  assert.equal(grid.boundaryPos("x", 1), at + 200, "and still follows the pointer");
+
+  doc.dispatchEvent(new window.MouseEvent("mouseup", {
+    clientX: at + 200, clientY: 100, bubbles: true, button: 0, buttons: 0,
+  }));
+  assert.equal(divider.dataset.dragging, undefined, "the primary release ends the drag");
+  view.destroy();
+});
+
+test("commit reports the rects the render writes", () => {
+  const seen = [];
+  const { window, host, grid, view } = mount({
+    commit: (rects, draw) => {
+      seen.push(rects);
+      draw();
+    },
+  });
+  const divider = host.querySelector('[role="separator"]');
+  const at = grid.boundaryPos("x", 1);
+  const doc = window.document;
+  divider.dispatchEvent(new window.MouseEvent("mousedown", {
+    clientX: at, clientY: 100, bubbles: true, button: 0, buttons: 1,
+  }));
+  // A fractional boundary, which is where the rect the grid computes and the
+  // rect the element receives differ.
+  doc.dispatchEvent(new window.MouseEvent("mousemove", {
+    clientX: at + 30.7, clientY: 100, bubbles: true, buttons: 1,
+  }));
+  doc.dispatchEvent(new window.MouseEvent("mouseup", {
+    clientX: at + 30.7, clientY: 100, bubbles: true, button: 0, buttons: 0,
+  }));
+
+  assert.ok(seen.length, "commit ran");
+  const reported = seen[seen.length - 1];
+  assert.notEqual(grid.rect("card").w, reported.get("card").w, "the drag left a fractional rect");
+  for (const [id, rect] of reported) {
+    const el = host.querySelector(`[data-card-id="${id}"]`);
+    assert.equal(rect.x, parseFloat(el.style.left), `${id} left`);
+    assert.equal(rect.y, parseFloat(el.style.top), `${id} top`);
+    assert.equal(rect.w, parseFloat(el.style.width), `${id} width`);
+    assert.equal(rect.h, parseFloat(el.style.height), `${id} height`);
+  }
+  view.destroy();
+});
+
+test("a card created later is drawn under the rules and the dividers", () => {
+  const { host, grid, view } = mount();
+  grid.split("card", "y");
+  view.render();
+
+  const kids = [...host.children];
+  const lastCard = kids.findLastIndex((el) => el.dataset.cardId !== undefined);
+  const firstOver = kids.findIndex((el) => el.dataset.cardId === undefined);
+  assert.ok(lastCard >= 0 && firstOver >= 0, "the host holds cards and rules");
+  assert.ok(
+    firstOver > lastCard,
+    `every card comes before every rule and divider, not ${kids.map((el) => el.className || "card").join(" ")}`,
+  );
+  view.destroy();
+});
+
+test("onChange reports a centring", () => {
+  const changes = [];
+  const { window, host, grid, view } = mount({ onChange: (reason) => changes.push(reason) });
+  const divider = host.querySelector('[role="separator"]');
+  grid.moveBoundary("x", 1, grid.boundaryPos("x", 1) - 200, false);
+  view.render();
+  changes.length = 0;
+
+  // The second press of a pair centres the boundary.
+  const at = grid.boundaryPos("x", 1);
+  pointer(window, divider, "pointerdown", 7, at, 100);
+  pointer(window, divider, "pointerup", 7, at, 100);
+  pointer(window, divider, "pointerdown", 7, at, 100);
+  assert.ok(changes.includes("center"), `the reasons were ${changes.join(" ") || "none"}`);
+  pointer(window, divider, "pointerup", 7, grid.boundaryPos("x", 1), 100);
+  view.destroy();
+});
+
+test("observeResize: false leaves the host unwatched", () => {
+  const dom = new JSDOM("<!doctype html><div id=host></div>", { pretendToBeVisual: true });
+  const { window } = dom;
+  globalThis.document = window.document;
+  const host = window.document.getElementById("host");
+  let size = { w: 1000, h: 800 };
+  Object.defineProperty(host, "clientWidth", { get: () => size.w, configurable: true });
+  Object.defineProperty(host, "clientHeight", { get: () => size.h, configurable: true });
+
+  // jsdom has no ResizeObserver, so this stub is the one the view finds.
+  const watchers = [];
+  globalThis.ResizeObserver = class {
+    constructor(fn) { this.fn = fn; watchers.push(this); }
+    observe() {}
+    disconnect() {}
+  };
+  const view = (grid, options) =>
+    new SoksakView(host, grid, {
+      createCard: () => window.document.createElement("div"),
+      ...options,
+    });
+
+  const unwatched = new Soksak(undefined, { width: size.w, height: size.h });
+  const watched = new Soksak(undefined, { width: size.w, height: size.h });
+  const off = view(unwatched, { observeResize: false });
+  assert.equal(watchers.length, 0, "the view that refused it makes no observer");
+  const on = view(watched, {});
+  assert.equal(watchers.length, 1, "the view that did not makes one");
+
+  size = { w: 600, h: 500 };
+  watchers[0].fn();
+  assert.equal(watched.width, 600, "the watched grid follows the host");
+  assert.equal(unwatched.width, 1000, "the unwatched one does not");
+
+  off.destroy();
+  on.destroy();
+  delete globalThis.ResizeObserver;
+});
+
+test("the sheet draws each part the README names", () => {
+  const css = themeCSS();
+  assert.match(
+    css, /\.sp-rule\[data-virtual="true"\]\s*\{[^}]*--sp-line-crossing/,
+    "the crossing part of a line is drawn fainter",
+  );
+  assert.match(css, /\.sp-divider::after\s*\{[^}]*--sp-grip\b/, "a grip is drawn inside the grab area");
+  assert.match(css, /\.sp-divider\[data-axis="x"\]\s*\{[^}]*cursor:\s*col-resize/, "the x axis has its cursor");
+  assert.match(css, /\.sp-divider\[data-axis="y"\]\s*\{[^}]*cursor:\s*row-resize/, "the y axis has its cursor");
+});

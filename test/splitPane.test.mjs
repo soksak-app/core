@@ -205,9 +205,18 @@ test("an axis the caller made up is refused, not thrown on", () => {
     moveTo: () => grid.moveTo("card", z, 1),
     standings: () => grid.standings(z),
   };
+  // A refusal is null, false, zero, or an answer with nothing in it. Checking
+  // only that nothing threw leaves every reader free to answer as if "x" had
+  // been passed.
+  const refused = (v) =>
+    v === null || v === false || v === 0 ||
+    (Array.isArray(v) && (v.length === 0 || v.every((n) => n === 0)));
+
   const before = JSON.stringify(grid.toJSON());
   for (const [name, ask] of Object.entries(results)) {
-    assert.doesNotThrow(ask, `${name} threw`);
+    let answer;
+    assert.doesNotThrow(() => { answer = ask(); }, `${name} threw`);
+    assert.ok(refused(answer), `${name} answered ${JSON.stringify(answer)}`);
   }
   assert.equal(JSON.stringify(grid.toJSON()), before, "and none of them changed anything");
 });

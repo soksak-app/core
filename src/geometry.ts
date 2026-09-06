@@ -91,6 +91,78 @@ export function slotWidths(plane: Plane, axis: Axis): number[] {
 }
 
 /**
+ * What the slots on an axis ask of the plane.
+ *
+ * `asked` is the px the slots with a size declare, `taken` the corridor those
+ * slots carry on top, `sharedSpan` how much span the rest divide, and `floor`
+ * the least the rest can take. The plane holds the declared sizes when
+ * `sharedSpan` is zero or `extent - asked - taken` is at least `floor`.
+ */
+function demand(plane: Plane, axis: Axis): {
+  asked: number;
+  taken: number;
+  sharedSpan: number;
+  floor: number;
+} {
+  const a = lines(plane, axis);
+  const count = a.length - 1;
+  const read = linesRead(plane, axis);
+  const held = heldSizes(plane, axis);
+  let asked = 0;
+  let taken = 0;
+  let sharedSpan = 0;
+  let floor = 0;
+  for (let i = 0; i < count; i++) {
+    if (held[i] !== null) {
+      asked += held[i] as number;
+      taken += corridorOf(plane, axis, i, read);
+    } else {
+      sharedSpan += a[i + 1] - a[i];
+      floor += corridorOf(plane, axis, i, read);
+    }
+  }
+  if (sharedSpan > 1e-9) floor += plane.minSize;
+  return { asked, taken, sharedSpan, floor };
+}
+
+/**
+ * The px size a slot has to declare to be drawn `drawn` px wide.
+ *
+ * While the plane holds what the slots declare, that is `drawn` itself. When it
+ * does not, every declared size is drawn scaled by one factor, so the size read
+ * off the plane is smaller than the size that produced it: writing the read size
+ * back would shrink the declaration on every drag, including one that moves
+ * nothing.
+ *
+ * In that regime the slot is drawn `d * left / (other + d)`, where `other` is
+ * what the remaining slots declare and `left` is the px the scaled sizes divide.
+ * Solving it for `d` gives the size below. `left` does not depend on any
+ * declared size, so one slot's declaration is enough to solve.
+ *
+ * Two cases have no answer and keep the size the slot declares now: no other
+ * slot declares one, which makes the drawn size the same whatever this slot
+ * declares, and a request of `left` or more, which no declaration reaches.
+ */
+export function declaredFor(plane: Plane, axis: Axis, slot: number, drawn: number): number {
+  const held = heldSizes(plane, axis);
+  const now = held[slot] ?? drawn;
+  // The size declared now already draws at the width asked for. More than one
+  // declaration draws at a given width once the sizes are scaled, and this is
+  // the one to keep: a drag that does not move the boundary changes nothing.
+  if (Math.abs(slotWidths(plane, axis)[slot] - drawn) <= 1e-9) return now;
+  const { asked, taken, sharedSpan, floor } = demand(plane, axis);
+  const room = extent(plane, axis);
+  // The plane holds the sizes once this slot declares `drawn`.
+  if (sharedSpan <= 1e-9 || room - (asked - now + drawn) - taken >= floor) return drawn;
+
+  const other = asked - now;
+  const keep = Math.min(floor, Math.max(0, room - taken));
+  const left = Math.max(0, room - keep - taken);
+  if (other <= 1e-9 || drawn >= left - 1e-9) return now;
+  return Math.max(drawn, (drawn * other) / (left - drawn));
+}
+
+/**
  * Width in px of every slot on an axis.
  *
  * A slot with a px size takes that size; the rest divide the remainder in
@@ -133,20 +205,38 @@ export function slotSizes(plane: Plane, axis: Axis): number[] {
   if (sharedSpan > 1e-9 && usable >= floor) {
     const size = held.map((fixed, i) => (fixed !== null ? fixed + corridor[i] : 0));
 
-    // Divide `usable` by span, but no sharing slot goes below the gap it holds.
-    // A narrower slot draws its card at zero width and places its neighbours
-    // closer than one gap. Such a slot stops at its gap and the rest divide the
-    // remainder, so only a plane too small for its contents is affected.
+    // Divide `usable` by span, but no card is drawn narrower than the corridor
+    // its slots hold. Such a card is drawn at zero width and places its
+    // neighbours closer than one gap. The first of its slots that still shares
+    // stops at the gap it holds and the rest divide the remainder, so only a
+    // plane too small for its contents is affected.
+    //
+    // The measure is the card, not the slot: a card drawn across several slots
+    // takes its corridor out of all of them together, and charging one slot that
+    // the card spans past would move every other card instead.
+    const [lo, hi] = SPAN[axis];
     const stopped = new Array<boolean>(count).fill(false);
     let room = usable;
     let pool = sharedSpan;
     for (;;) {
       const each = pool > 1e-9 ? room / pool : 0;
       let starved = -1;
-      for (let i = 0; i < count; i++) {
-        if (held[i] !== null || stopped[i]) continue;
-        if ((a[i + 1] - a[i]) * each < corridor[i] - 1e-9) {
-          starved = i;
+      for (const card of plane.cards) {
+        let fixed = 0;   // px its slots already stand at
+        let span = 0;    // span its remaining slots divide
+        let need = 0;    // corridor those slots hold
+        let first = -1;  // the slot to stop
+        for (let i = card[lo]; i < card[hi]; i++) {
+          need += corridor[i];
+          if (held[i] !== null || stopped[i]) {
+            fixed += size[i];
+            continue;
+          }
+          span += a[i + 1] - a[i];
+          if (first < 0) first = i;
+        }
+        if (first >= 0 && fixed + span * each < need - 1e-9) {
+          starved = first;
           break;
         }
       }

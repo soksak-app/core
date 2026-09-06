@@ -539,3 +539,87 @@ test("a slot never comes out narrower than the corridor it carries", () => {
     for (const [id, r] of grid.rects()) assert.ok(r.w >= 0 && r.h >= 0, `${w}x${h}: ${id} is ${r.w}x${r.h}`);
   }
 });
+
+test("a drag that does not move the boundary leaves the declared size alone", () => {
+  // The plane is too small for the 400 the card declares, so it is drawn at 300.
+  const grid = new Soksak(
+    {
+      xs: [0, 0.5, 1],
+      ys: [0, 1],
+      cards: [
+        { id: "side", c0: 0, c1: 1, r0: 0, r1: 1, width: 400 },
+        { id: "pane", c0: 1, c1: 2, r0: 0, r1: 1 },
+      ],
+    },
+    { width: 420, height: 600, gap: 24, minSize: 96 },
+  );
+  assert.equal(grid.card("side").width, 400, "it declares 400");
+  assert.equal(grid.rect("side").w, 300, "and is drawn at 300");
+
+  // The first move of every drag is to where the boundary already is.
+  const at = grid.boundaryPos("x", 1);
+  for (let i = 0; i < 8; i++) grid.moveBoundary("x", 1, at, false);
+  assert.equal(grid.boundaryPos("x", 1), at, "the boundary stays where it is");
+  assert.equal(grid.card("side").width, 400, "and the card still declares 400");
+
+  grid.resize(1600, 600);
+  assert.equal(grid.rect("side").w, 400, "a plane that holds it draws it at 400");
+});
+
+test("a drag reaches the size it asks for when the plane holds less than it is told", () => {
+  const grid = new Soksak(
+    {
+      xs: [0, 0.5, 1],
+      ys: [0, 1],
+      cards: [
+        { id: "side", c0: 0, c1: 1, r0: 0, r1: 1, width: 400 },
+        { id: "pane", c0: 1, c1: 2, r0: 0, r1: 1, width: 400 },
+      ],
+    },
+    { width: 500, height: 600, gap: 24, minSize: 96 },
+  );
+  grid.moveBoundary("x", 1, 300, false);
+  assert.ok(
+    Math.abs(grid.boundaryPos("x", 1) - 300) < 0.01,
+    `the boundary reaches 300, not ${grid.boundaryPos("x", 1)}`,
+  );
+});
+
+test("centring reaches the middle when the plane holds less than it is told", () => {
+  const grid = new Soksak(undefined, {
+    width: 1379, height: 352, gap: 5, minSize: 75, fillOrder: "h",
+  });
+  grid.insertAt("y", 0, { size: 327, id: "n0" });
+  grid.insertAt("y", 0, { size: 272, id: "n1" });
+  grid.resize(1264, 541);
+
+  grid.centerBoundary("y", 2);
+  const above = grid.rect("n0").h;
+  const below = grid.rect("card").h;
+  assert.ok(
+    Math.abs(above - below) < 0.02,
+    `the two cards come out the same size, not ${above} and ${below}`,
+  );
+});
+
+test("a card that comes to span two slots loses the size it declared", () => {
+  const grid = new Soksak(
+    {
+      xs: [0, 0.4, 1],
+      ys: [0, 0.5, 1],
+      cards: [
+        { id: "side", c0: 0, c1: 1, r0: 0, r1: 1, width: 400 },
+        { id: "low", c0: 0, c1: 1, r0: 1, r1: 2 },
+        { id: "main", c0: 1, c1: 2, r0: 0, r1: 2 },
+      ],
+    },
+    { width: 1200, height: 800, gap: 24 },
+  );
+  assert.equal(grid.card("side").width, 400, "it declares a width");
+
+  // The split puts a line inside the column both cards stand in, so `side` comes
+  // to span two slots without being split itself.
+  grid.split("low", "x");
+  assert.equal(grid.card("side").c1 - grid.card("side").c0, 2, "side now spans two slots");
+  assert.equal(grid.card("side").width, undefined, "and carries no px size");
+});

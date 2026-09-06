@@ -68,13 +68,19 @@ test("every exported name appears in the README", async () => {
     assert.match(readme, new RegExp(`\\b${name}\\b`), `${name} is exported and undocumented`);
   }
 
-  // And every public method of the two classes.
+  // And every public method of both classes.
   const methods = (cls) =>
     Object.getOwnPropertyNames(cls.prototype).filter((n) => n !== "constructor" && !n.startsWith("_"));
-  const declared = readFileSync(new URL("../dist/soksak.d.ts", import.meta.url), "utf8");
-  for (const name of methods(lib.Soksak)) {
-    if (!new RegExp(`^\\s{4}(get |set )?${name}[(<:]`, "m").test(declared)) continue;   // private
-    assert.match(readme, new RegExp(`\\b${name}\\b`), `Soksak.${name} is public and undocumented`);
+  const classes = [
+    ["Soksak", lib.Soksak, "soksak.d.ts"],
+    ["SoksakView", lib.SoksakView, "dom.d.ts"],
+  ];
+  for (const [what, cls, file] of classes) {
+    const declared = readFileSync(new URL(`../dist/${file}`, import.meta.url), "utf8");
+    for (const name of methods(cls)) {
+      if (!new RegExp(`^\\s{4}(get |set )?${name}[(<:]`, "m").test(declared)) continue;   // private
+      assert.match(readme, new RegExp(`\\b${name}\\b`), `${what}.${name} is public and undocumented`);
+    }
   }
 });
 

@@ -45,14 +45,42 @@ export interface Outline {
 const snap = (v: number): number => Math.round(v * 100) / 100;
 const key = (x: number, y: number): string => `${snap(x)},${snap(y)}`;
 
+/**
+ * The distinct coordinates, with any two one snap apart read as one.
+ *
+ * Two edges that meet can fall either side of the same half-hundredth and round
+ * a hundredth apart. That leaves a column one hundredth wide between two rects
+ * that touch, and the union comes out as two loops with a seam between them.
+ */
+function collapse(values: number[]): number[] {
+  const out: number[] = [];
+  for (const v of [...values].sort((a, b) => a - b)) {
+    if (!out.length || v - out[out.length - 1] > 0.01 + 1e-9) out.push(v);
+  }
+  return out;
+}
+
+/** The collapsed coordinate this one belongs to. */
+const at = (grid: number[], v: number): number => {
+  let best = grid[0];
+  for (const g of grid) if (Math.abs(g - v) < Math.abs(best - v)) best = g;
+  return best;
+};
+
 /** Boundary of the union of axis-aligned rects, as closed rectilinear loops. */
 export function unionLoops(rects: readonly Rect[]): Point[][] {
-  const box = rects
+  const snapped = rects
     .map((r) => ({ x0: snap(r.x), y0: snap(r.y), x1: snap(r.x + r.w), y1: snap(r.y + r.h) }))
     .filter((b) => b.x1 > b.x0 && b.y1 > b.y0);
+  if (!snapped.length) return [];
+  const gx = collapse(snapped.flatMap((b) => [b.x0, b.x1]));
+  const gy = collapse(snapped.flatMap((b) => [b.y0, b.y1]));
+  const box = snapped
+    .map((b) => ({
+      x0: at(gx, b.x0), x1: at(gx, b.x1), y0: at(gy, b.y0), y1: at(gy, b.y1),
+    }))
+    .filter((b) => b.x1 > b.x0 && b.y1 > b.y0);
   if (!box.length) return [];
-  const gx = [...new Set(box.flatMap((b) => [b.x0, b.x1]))].sort((a, b) => a - b);
-  const gy = [...new Set(box.flatMap((b) => [b.y0, b.y1]))].sort((a, b) => a - b);
 
   const filled = (i: number, j: number): boolean => {
     const cx = (gx[i] + gx[i + 1]) / 2;

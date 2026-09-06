@@ -111,12 +111,26 @@ export declare class SoksakView {
     /**
      * Draw through the host's commit hook.
      *
-     * Every layout change this view makes goes through here, not only a drag. A
-     * host that moves things this view does not draw has to move them for a
-     * centre, a merge and a resize as well, or those land a frame apart.
+     * Every draw goes through here, not only a drag: a host that moves things this
+     * view does not draw has to move them for a centre, a merge, a resize and a
+     * change it makes itself as well, or those land a frame apart.
      */
     private draw;
+    /**
+     * Draw the plane.
+     *
+     * The draw runs through `commit`, so a host that changes the grid itself is
+     * told where the cards are going before they are drawn there, as a drag is.
+     */
     render(reason?: ChangeReason): void;
+    private paint;
+    /**
+     * The first rule or divider element in the host, or null when there is none.
+     *
+     * A card element is inserted before it, so a card created after the rules and
+     * dividers still sits under them.
+     */
+    private firstOverlay;
     private sweep;
     /** Drop a mouse drag: the divider stops being held and nothing is drawn. */
     private dropMouse;
@@ -126,12 +140,11 @@ export declare class SoksakView {
      * End a mouse drag.
      *
      * A mouse drag ends here on mouseup and when the button is released
-     * elsewhere. A divider swept away, and destroy, drop the drag instead: there
-     * is nothing to draw for a divider that is gone. It ends the way a pointer
-     * drag ends: the
-     * divider stops carrying `data-dragging`, boundaries that now coincide are
-     * merged, and the last render reports the reason drag. Reports whether the
-     * boundary moved.
+     * elsewhere. A divider that is swept away, and destroy, drop the drag
+     * instead, because a divider that is gone has nothing to draw. It ends the
+     * way a pointer drag ends: the divider stops carrying `data-dragging`,
+     * boundaries that now coincide are merged, and the last render reports the
+     * reason drag. Returns whether the boundary moved.
      */
     private endMouse;
     /**

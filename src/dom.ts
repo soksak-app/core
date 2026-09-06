@@ -185,17 +185,35 @@ export class SoksakView {
   /**
    * Draw through the host's commit hook.
    *
-   * Every layout change this view makes goes through here, not only a drag. A
-   * host that moves things this view does not draw has to move them for a
-   * centre, a merge and a resize as well, or those land a frame apart.
+   * Every draw goes through here, not only a drag: a host that moves things this
+   * view does not draw has to move them for a centre, a merge, a resize and a
+   * change it makes itself as well, or those land a frame apart.
    */
   private draw(reason: ChangeReason): void {
-    const drawn = (): void => this.render(reason);
-    if (this.options.commit) this.options.commit(this.grid.rects(), drawn);
-    else drawn();
+    const drawn = (): void => this.paint(reason);
+    if (!this.options.commit) {
+      drawn();
+      return;
+    }
+    // The host places its own views on these rects, so they are the rects the
+    // render will write, not the ones the grid computed.
+    const step = this.step;
+    const on = new Map<string, Rect>();
+    for (const [id, rect] of this.grid.rects()) on.set(id, onGrid(rect, step));
+    this.options.commit(on, drawn);
   }
 
+  /**
+   * Draw the plane.
+   *
+   * The draw runs through `commit`, so a host that changes the grid itself is
+   * told where the cards are going before they are drawn there, as a drag is.
+   */
   render(reason: ChangeReason = 'render'): void {
+    this.draw(reason);
+  }
+
+  private paint(reason: ChangeReason): void {
     if (this.disposed) return;
 
     // The width of one device pixel, read every render because a window moved to
@@ -214,13 +232,16 @@ export class SoksakView {
         const el = this.options.createCard(card);
         el.style.position = 'absolute';
         el.dataset.cardId = card.id;
-        this.host.appendChild(el);
+        // Rules and dividers are drawn over the cards and carry no z-index, so
+        // paint and hit order is tree order. A card element appended after them
+        // would cover the grab area of every divider it touches.
+        this.host.insertBefore(el, this.firstOverlay());
         held = { el, card };
         this.cardEls.set(card.id, held);
       }
       held.card = card;
-      const rect = box.get(card.id) as Rect;
-      place(held.el, rect, step);
+      const rect = onGrid(box.get(card.id) as Rect, step);
+      place(held.el, rect);
       this.options.updateCard?.(held.el, card, rect);
     }
     // The card is gone from the grid, so `destroyCard` receives the last copy
@@ -249,7 +270,7 @@ export class SoksakView {
           this.host.appendChild(el);
           this.ruleEls.set(rule.key, el);
         }
-        place(el, reach(rule, this.grid, this.options.bleed ?? 0), step);
+        place(el, onGrid(reach(rule, this.grid, this.options.bleed ?? 0), step));
       }
       this.sweep(this.ruleEls, keep);
     }
@@ -264,12 +285,24 @@ export class SoksakView {
         el.dataset.line = String(divider.line);
         this.dividerEls.set(divider.key, el);
       }
-      place(el, divider, step);
+      place(el, onGrid(divider, step));
       this.options.updateDivider?.(el, divider);
     }
     this.sweep(this.dividerEls, keep);
 
     this.options.onChange?.(reason);
+  }
+
+  /**
+   * The first rule or divider element in the host, or null when there is none.
+   *
+   * A card element is inserted before it, so a card created after the rules and
+   * dividers still sits under them.
+   */
+  private firstOverlay(): HTMLElement | null {
+    return this.host.querySelector(
+      `:scope > .${this.prefix}-rule, :scope > .${this.prefix}-divider`,
+    );
   }
 
   private sweep(map: Map<string, HTMLElement>, keep: Set<string>): void {
@@ -316,17 +349,15 @@ export class SoksakView {
    * End a mouse drag.
    *
    * A mouse drag ends here on mouseup and when the button is released
-   * elsewhere. A divider swept away, and destroy, drop the drag instead: there
-   * is nothing to draw for a divider that is gone. It ends the way a pointer
-   * drag ends: the
-   * divider stops carrying `data-dragging`, boundaries that now coincide are
-   * merged, and the last render reports the reason drag. Reports whether the
-   * boundary moved.
+   * elsewhere. A divider that is swept away, and destroy, drop the drag
+   * instead, because a divider that is gone has nothing to draw. It ends the
+   * way a pointer drag ends: the divider stops carrying `data-dragging`,
+   * boundaries that now coincide are merged, and the last render reports the
+   * reason drag. Returns whether the boundary moved.
    */
   private endMouse(): boolean {
     const drag = this.dropMouse();
     if (!drag) return false;
-    if (this.disposed) return drag.moved;
     const merged = this.grid.mergeCoincident(drag.axis, drag.line);
     this.draw(merged ? 'merge' : 'drag');
     return drag.moved;
@@ -364,7 +395,10 @@ export class SoksakView {
     let lastTap = -Infinity;
 
     el.addEventListener('pointerdown', (e: PointerEvent) => {
-      if (this.disposed) return;
+      // Only the primary button drags, as on the mouse path. A press of any
+      // other button reports button 2 or 1 and its move reports the same
+      // buttons bitmask a drag does, so without this it moves the boundary.
+      if (this.disposed || e.button !== 0) return;
       e.preventDefault();
       const axis = el.dataset.axis as Axis;
       const line = Number(el.dataset.line);
@@ -465,7 +499,10 @@ export class SoksakView {
         this.grid.moveBoundary(drag.axis, drag.line, drag.base + (now - drag.from)),
       );
     };
-    const mouseUp = (): void => {
+    const mouseUp = (e: MouseEvent): void => {
+      // Releasing another button while the primary one is still held does not
+      // end the drag. mouseMove ends it when the primary button goes up.
+      if (e.button !== 0) return;
       if (this.mouseDrag?.on !== el) return;
       if (this.endMouse()) lastPress = -Infinity;
     };
@@ -528,32 +565,43 @@ export class SoksakView {
 }
 
 /**
- * Write the four position values that changed, on the device's pixel grid.
- *
- * A drag moves a handful of elements and leaves the rest where they are, so
- * comparing first turns a write per element per frame into a write per element
- * that moved. The last values are read back from the element, so nothing else
- * has to remember them.
+ * Put a rect on the device's pixel grid.
  *
  * Sizes come from ratios, so an edge lands between two pixels, and everything
  * downstream then rounds on its own: the browser spreads a one pixel border over
  * two rows, and a native view placed on the same rect covers a different set of
- * pixels than that border did. This is the one place that decides, because the
- * rects written here are also the rects a page measures back off these elements
- * and hands to whatever draws above them.
+ * pixels than that border did. This function is the one place that decides, and
+ * every rect the view writes or reports passes through it.
  *
  * Edges are quantised, not sizes. Two cards that meet at a boundary derive their
  * facing edges from that one number, so both land on the same pixel and the
  * plane stays exactly covered; a width is whatever its two edges leave.
  */
-function place(el: HTMLElement, rect: Rect, step: number): void {
-  const s = el.style;
+function onGrid(rect: Rect, step: number): Rect {
   const x = Math.round(rect.x / step) * step;
   const y = Math.round(rect.y / step) * step;
-  const left = `${x}px`;
-  const top = `${y}px`;
-  const width = `${Math.round((rect.x + rect.w) / step) * step - x}px`;
-  const height = `${Math.round((rect.y + rect.h) / step) * step - y}px`;
+  return {
+    x,
+    y,
+    w: Math.round((rect.x + rect.w) / step) * step - x,
+    h: Math.round((rect.y + rect.h) / step) * step - y,
+  };
+}
+
+/**
+ * Write the four position values that changed.
+ *
+ * A drag moves a handful of elements and leaves the rest where they are, so
+ * comparing first turns a write per element per frame into a write per element
+ * that moved. The last values are read back from the element, so nothing else
+ * has to remember them.
+ */
+function place(el: HTMLElement, rect: Rect): void {
+  const s = el.style;
+  const left = `${rect.x}px`;
+  const top = `${rect.y}px`;
+  const width = `${rect.w}px`;
+  const height = `${rect.h}px`;
   if (s.left !== left) s.left = left;
   if (s.top !== top) s.top = top;
   if (s.width !== width) s.width = width;
