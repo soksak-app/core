@@ -36,7 +36,8 @@ One file per role, and the imports run one way:
     projects.js     projects and the spaces inside them
     ids.js          issues prj- spc- tab-
     plane.js        one plane: cards, tabs, drag, rail, layer, render
-    card.js         one card's header and body, and the tabs in it
+    card.js         the input handling of a [data-native-modal] card, shared by
+                    the main document and the overlay view
     compositor.js   measures the slots the plane marks, and publishes
     verify.js       reads the plane and the compositor, and reports the result
     host.js         real native surfaces and modals, when an application holds

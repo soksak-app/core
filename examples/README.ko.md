@@ -33,7 +33,8 @@
     projects.js     프로젝트와 그 안의 스페이스
     ids.js          prj- spc- tab- 을 발급한다
     plane.js        판 하나: 카드, 탭, 끌기, 레일, 레이어, 렌더
-    card.js         카드 하나의 머리와 몸, 그리고 그 안의 탭
+    card.js         [data-native-modal] 카드의 입력 처리. 메인 문서와 오버레이
+                    뷰가 함께 사용한다
     compositor.js   판이 표시한 슬롯을 측정하고 게시한다
     verify.js       판과 컴포지터를 읽고 결과를 보고한다
     host.js         애플리케이션이 페이지를 들고 있을 때의 실제 네이티브 표면과

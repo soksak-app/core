@@ -35,6 +35,16 @@ const insets = new Map();
 /** 슬롯이 속한 카드의 id. 판이 카드 요소에 기록한 값을 읽는다. */
 const cardOf = (slot) => slot.closest("[data-card-id]")?.dataset.cardId;
 
+/**
+ * 살아 있지 않은 표면의 여백을 잊는다.
+ *
+ * 이 모듈은 지금 판의 표면만 본다. 다른 스페이스의 표면도 살아 있으므로, 무엇이
+ * 남아 있는지는 전체 목록을 아는 쪽이 전달한다.
+ */
+export function forget(live) {
+  for (const id of insets.keys()) if (!live.has(id)) insets.delete(id);
+}
+
 /** 마지막 커밋 레코드를 반환한다. 없으면 null. */
 export const latest = () => latestRecord;
 

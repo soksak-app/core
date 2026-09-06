@@ -206,8 +206,14 @@ fn sync_surfaces(
             } else {
                 webview.hide().map_err(|e| e.to_string())?;
             }
+            // The frame is set on the view itself as well: the two calls above
+            // round to whole points and the page's rect is aligned to the
+            // display's pixels.
             webview
-                .with_webview(move |platform| native::alpha(&platform, solid))
+                .with_webview(move |platform| {
+                    native::alpha(&platform, solid);
+                    native::place_surface(&platform, ax, ay, aw, ah);
+                })
                 .map_err(|e| e.to_string())?;
             continue;
         }
@@ -370,7 +376,7 @@ struct OverlayRequest {
     background: [f64; 4],
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 struct Rect {
     x: f64,
     y: f64,
@@ -399,6 +405,9 @@ struct Modal {
     /// refused the label the closing one still holds. Every showing takes a
     /// label of its own.
     label: String,
+    /// The page rect it was last placed at. A child window keeps its place on
+    /// screen when its parent is resized, so it is placed again from this.
+    at: Rect,
 }
 
 #[derive(Default)]
@@ -412,6 +421,40 @@ struct Overlay {
 fn modal_window(app: &AppHandle, state: &State<'_, Overlay>, id: &str) -> Option<WebviewWindow> {
     let label = state.modals.lock().ok()?.get(id)?.label.clone();
     app.get_webview_window(&label)
+}
+
+/// Places every open modal at the page rect it was last given.
+///
+/// A child window follows its parent when the parent moves and keeps its place
+/// on screen when the parent is resized, so the modal is placed again here. The
+/// Wails host does this through the window it attaches to.
+fn replace_modals(app: &AppHandle) {
+    let Some(main) = app.get_webview_window("main") else {
+        return;
+    };
+    let window = main.as_ref().window();
+    let Ok(scale) = window.scale_factor() else {
+        return;
+    };
+    let open: Vec<(String, Rect)> = match app.state::<Overlay>().modals.lock() {
+        Ok(modals) => modals
+            .values()
+            .filter(|m| !m.label.is_empty() && m.at.w > 0.0)
+            .map(|m| (m.label.clone(), m.at))
+            .collect(),
+        Err(_) => return,
+    };
+    for (label, at) in open {
+        let Some(modal) = app.get_webview_window(&label) else {
+            continue;
+        };
+        let (ax, ay, aw, ah) = aligned_window(at.x, at.y, at.w.max(1.0), at.h.max(1.0), scale);
+        let Ok((sx, sy)) = on_screen(&window, ax, ay) else {
+            continue;
+        };
+        let _ = modal.set_position(LogicalPosition::new(sx, sy));
+        let _ = modal.set_size(LogicalSize::new(aw, ah));
+    }
 }
 
 /// The theme last declared by the page.
@@ -479,7 +522,7 @@ fn overlay_show(
     };
     let was = state.modals.lock().map_err(|e| e.to_string())?.insert(
         request.id.clone(),
-        Modal { content, radius: request.radius, label: label.clone() },
+        Modal { content, radius: request.radius, label: label.clone(), at: request.rect },
     );
 
     if let Some(old) = was.and_then(|m| app.get_webview_window(&m.label)) {
@@ -627,7 +670,13 @@ fn overlay_place(
     let (sx, sy) = on_screen(&window, ax, ay)?;
     modal.set_position(LogicalPosition::new(sx, sy)).map_err(|e| e.to_string())?;
     modal.set_size(LogicalSize::new(aw, ah)).map_err(|e| e.to_string())?;
-    Ok(Rect { x: ax, y: ay, w: aw, h: ah })
+    let applied = Rect { x: ax, y: ay, w: aw, h: ah };
+    if let Ok(mut modals) = state.modals.lock() {
+        if let Some(held) = modals.get_mut(&request.id) {
+            held.at = applied;
+        }
+    }
+    Ok(applied)
 }
 
 #[tauri::command]
@@ -842,6 +891,12 @@ fn main() {
         // reads where they are once and never sees them move.
         if let Some(window) = app.get_webview_window("main") {
             place_window_controls(&window.as_ref().window())?;
+            let handle = app.handle().clone();
+            window.on_window_event(move |event| {
+                if matches!(event, tauri::WindowEvent::Resized(_)) {
+                    replace_modals(&handle);
+                }
+            });
         }
         Ok(())
     })

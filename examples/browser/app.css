@@ -58,21 +58,21 @@ body{margin:0;background:var(--bg);color:var(--fg);
    스페이스 탭은 판 바로 위의 별도 행이다.                                    */
 :root{--chrome-row-h:36px}
 
-/* 창 자신의 단추가 차지하는 폭. 창이 그것을 그리지 않으면 0 이고, 브라우저에서는
+/* 창이 그리는 단추가 차지하는 폭. 창이 단추를 그리지 않으면 0 이고, 브라우저에는
    창이 없으므로 0 이다. */
 :root{--controls-w:0px}
 .chrome-bar{position:relative;flex:0 0 45px;height:45px;display:flex;align-items:center;
   gap:10px;padding:0 12px 0 calc(12px + var(--controls-w));
   border-bottom:var(--bw) solid var(--edge);background:var(--card);user-select:none}
-/* 창을 끄는 자리. 막대를 채우고 그 위에 탭과 단추가 선다.
+/* 창을 끄는 영역. 막대 전체를 덮고, 탭과 단추는 그 위에 배치된다.
 
-   탭 줄은 막대의 가운데를 가득 채우므로, 그 줄 자체는 누름을 아래로 흘려보내고 그
-   안의 탭만 받는다. 그러지 않으면 막대에서 끌 수 있는 자리가 거의 없다. */
+   탭 줄이 막대의 가운데를 모두 차지하므로, 탭 줄은 누름을 받지 않고 그 안의 탭만
+   받는다. 그러지 않으면 끌 수 있는 영역이 남지 않는다. */
 .chrome-bar__drag{position:absolute;inset:0;z-index:0}
 .chrome-bar .tabs,.chrome-bar__acts{position:relative;z-index:1}
 .chrome-bar .tabs{pointer-events:none}
 .chrome-bar .tabs > *{pointer-events:auto}
-/* 누름이 아래의 끄는 자리로 지나가게 둔다. 글자를 눌러도 창이 끌린다. */
+/* 이 글자는 누름을 받지 않는다. 누름은 아래의 끄는 영역에 도달한다. */
 .brand{flex:0 0 auto;font-weight:600;letter-spacing:.1em;font-size:11px;color:var(--muted);
   margin-right:2px;pointer-events:none}
 

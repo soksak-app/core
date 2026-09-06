@@ -526,7 +526,7 @@ function closePicker() {
   pickerEl.hidden = true;
   document.removeEventListener("pointerdown", onPickerOutside, true);
   document.removeEventListener("keydown", onPickerKey, true);
-  if (native) overlay.hide();
+  if (native) overlay.hide(pickerEl);
   else standIn(false);
 }
 
@@ -937,18 +937,15 @@ export function build() {
     // 판 가장자리에 닿는 선이 stage 경계까지 이어진다.
     bleed: half,
     commit: (made, draw) => (layouter ? layouter(made, draw) : draw()),
+    // 판의 렌더는 뷰가 그리는 것과 이 문서가 그리는 것으로 이루어진다. onChange 는
+    // 뷰가 그린 직후에 발생하므로, 나머지를 여기서 그리고 그 뒤에 수신자를 호출한다.
+    onChange: (reason) => {
+      markFocus();
+      centreTabs();
+      railShape = drawRail();
+      listener?.(reason);
+    },
   });
-  // 판의 렌더는 뷰가 그리는 것과 이 문서가 그리는 것으로 이루어진다. 뷰의 onChange 는
-  // 뷰가 그린 직후에 발화하므로, 그 시점의 판은 아직 절반만 그려져 있다. 수신자는
-  // 여기서 전부 그린 뒤에 호출한다.
-  const baseRender = view.render.bind(view);
-  view.render = (reason) => {
-    baseRender(reason);
-    markFocus();
-    centreTabs();
-    railShape = drawRail();
-    listener?.(reason);
-  };
   settle();
 }
 

@@ -19,10 +19,18 @@ function surfaceURL(surface) {
   throw new Error(`surface declares neither url nor page: ${JSON.stringify(surface)}`);
 }
 
-/** 계산된 CSS 색을 [r, g, b, a] 로 반환한다. 알파가 없으면 1 이다. */
+/**
+ * 계산된 CSS 색을 [r, g, b, a] 로 반환한다. 알파가 없으면 1 이다.
+ *
+ * 브라우저는 color-mix 의 결과를 color(srgb r g b / a) 로 직렬화하고, 그 표기의
+ * 채널은 0..1 이다. rgb() 표기의 채널은 0..255 이므로 눈금을 맞춘다. 호스트는 색을
+ * 0..255 로 받는다.
+ */
 function rgba(css) {
-  const n = (css.match(/[\d.]+/g) ?? []).map(Number);
-  return [n[0] || 0, n[1] || 0, n[2] || 0, n[3] === undefined ? 1 : n[3]];
+  const text = String(css).trim();
+  const n = (text.match(/[\d.]+/g) ?? []).map(Number);
+  const unit = text.startsWith("color(") ? 255 : 1;
+  return [(n[0] || 0) * unit, (n[1] || 0) * unit, (n[2] || 0) * unit, n[3] === undefined ? 1 : n[3]];
 }
 
 /**
@@ -143,13 +151,13 @@ let last = "";
 /**
  * 창 자체를 다루는 인터페이스. 애플리케이션이 없으면 null.
  *
- * 창의 프레임은 OS 의 것이다. 모서리, 그림자, 리사이즈, 단추를 우리가 다시 만들지
- * 않는다. 제목 표시줄만 투명하게 하고 콘텐츠가 창 전체를 차지하므로, 창 자신의
- * 단추가 페이지 위에 놓인다. 그 자리를 비우는 것과 끄는 자리를 정하는 것이 여기다.
+ * 창의 프레임은 OS 가 그린다. 모서리, 그림자, 리사이즈, 단추를 이 예제가 다시
+ * 만들지 않는다. 제목 표시줄만 투명하고 콘텐츠가 창 전체를 차지하므로, 창이 그리는
+ * 단추가 페이지 위에 배치된다. 이 인터페이스는 그 영역과 끄는 영역을 담당한다.
  */
 export const chrome = native ? {
   draggable: (el) => bridge.draggable(el),
-  /** 창 자신의 단추가 차지하는 자리. 아무것도 그리지 않는 창이면 넓이가 0 이다. */
+  /** 창이 그리는 단추가 차지하는 영역. 단추를 그리지 않는 창이면 폭이 0 이다. */
   controls: () => tellInTurn("windowControls"),
 } : null;
 
@@ -299,19 +307,27 @@ export const overlay = native ? {
       });
     },
 
-    /** 열려 있는 모달 뷰의 위치를 갱신한다. 위치는 페이지가 결정한다. */
-    place(rect) {
-      if (!shown) return;
+    /**
+     * 이 요소의 모달 뷰의 위치를 갱신한다. 위치는 페이지가 결정한다.
+     *
+     * 표시 중인 것이 이 요소가 아니면 아무 일도 하지 않는다. 이 인터페이스는 한
+     * 번에 하나를 표시하고, 자기 것이 아닌 창을 옮기거나 닫는 호출자는 다른
+     * 기능의 창을 건드린다.
+     */
+    place(el, rect) {
+      if (shown !== el.id) return;
       tellInTurn("overlayPlace", { id: shown, rect: toPage(rect) });
     },
 
-    /** 열려 있는 모달 뷰의 내용을 교체한다. 뷰를 다시 만들면 깜빡인다. */
+    /** 이 요소의 모달 뷰의 내용을 교체한다. 뷰를 다시 만들면 깜빡인다. */
     update(el) {
-      if (!shown) return;
+      if (shown !== el.id) return;
       tellInTurn("overlayUpdate", { id: shown, ...drawing(el) });
     },
 
-    hide() {
+    /** 이 요소의 모달 뷰를 닫는다. */
+    hide(el) {
+      if (el && shown !== el.id) return;
       const id = shown;
       shown = null;
       pick = null;

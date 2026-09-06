@@ -125,6 +125,37 @@ pub fn alpha(webview: &PlatformWebview, alpha: f64) {
     }
 }
 
+/// Places a surface's view at an exact rect in the page's coordinates.
+///
+/// `set_position` and `set_size` take logical points and round them to whole
+/// points before they reach the view, which undoes the alignment to the display's
+/// pixels that `aligned` computed and can move an edge outward. The frame is set
+/// on the view itself instead, in its parent's coordinates, which are unflipped:
+/// y counts up from the parent's bottom.
+///
+/// Only macOS is written. On Windows and Linux a surface is a child window and a
+/// different call places it.
+#[allow(unused_variables)]
+pub fn place_surface(webview: &PlatformWebview, x: f64, y: f64, w: f64, h: f64) {
+    #[cfg(target_os = "macos")]
+    unsafe {
+        use objc2::msg_send;
+        use objc2::runtime::AnyObject;
+
+        let view = webview.inner() as *mut AnyObject;
+        if view.is_null() {
+            return;
+        }
+        let parent: *mut AnyObject = msg_send![view, superview];
+        if parent.is_null() {
+            return;
+        }
+        let bounds: NSRect = msg_send![parent, bounds];
+        let frame = NSRect::from((x, bounds.size.y - y - h, w, h));
+        let _: () = msg_send![view, setFrame: frame];
+    }
+}
+
 /// Tells the view a run of resizes has begun, and that it has ended.
 ///
 /// A webview paints what it covers; area it does not cover yet is its own white

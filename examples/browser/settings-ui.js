@@ -284,7 +284,7 @@ export function drawSettings() {
   // 내용이 바뀌면 카드의 크기도 바뀐다. 자리를 다시 알리지 않으면 뷰는 이전 크기를
   // 유지하고 그 안의 카드가 늘어나거나 잘린다.
   const rect = cardRect();
-  if (native) overlay.place(rect);
+  if (native) overlay.place(card, rect);
   else standIn(true, rect);
 }
 
@@ -332,7 +332,7 @@ function moveBy(dx, dy) {
   card.style.top = `${Math.max(8, Math.min(innerHeight - r.height - 8, r.top + dy))}px`;
   card.style.transform = "none";
   const rect = cardRect();
-  if (native) overlay.place(rect);
+  if (native) overlay.place(card, rect);
   else standIn(true, rect);
 }
 
@@ -377,7 +377,7 @@ export function openSettings() {
 function closeSettings() {
   if (!card) return;
   document.removeEventListener("pointerdown", pressedOutside);
-  if (native) overlay.hide();
+  if (native) overlay.hide(card);
   else standIn(false);
   scrim.remove();
   scrim = null;

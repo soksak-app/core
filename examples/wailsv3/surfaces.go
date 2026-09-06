@@ -321,6 +321,9 @@ func (s *Surfaces) OverlayPlace(req PlaceRequest) (Rect, error) {
 	}
 	s.mu.Lock()
 	live, held := s.modals[req.ID]
+	// shown 은 모달 문서의 호출이 다른 고루틴에서 기록한다. 잠금 밖에서 읽으면 이미
+	// 표시된 모달을 표시 전으로 보고 붙이지 않는다.
+	shown := held && live.shown
 	s.mu.Unlock()
 	if !held {
 		return Rect{}, nil
@@ -333,7 +336,7 @@ func (s *Surfaces) OverlayPlace(req PlaceRequest) (Rect, error) {
 		live.window.SetSize(int(at.W), int(at.H))
 		// 붙이는 것은 창을 화면에 올리는 일이므로, 내용이 그려졌다고 페이지가
 		// 보고하기 전에는 자리만 기록한다.
-		if !live.shown {
+		if !shown {
 			sx, sy := modalOnScreen(win.NativeWindow(), at)
 			live.window.SetPosition(sx, sy)
 		} else if err := live.window.Attach(win, at.X, at.Y); err != nil {
@@ -415,16 +418,17 @@ func (s *Surfaces) ModalReady(id string) {
 	s.mu.Lock()
 	live, held := s.modals[id]
 	var at Rect
+	// 모달 문서는 렌더링할 때마다 보고하고, 이 애플리케이션은 문서가 로드되기 전에
+	// 보낸 내용 갱신을 로드 후에 전달한다. 표시는 한 번만 한다.
+	first := held && !live.shown
 	if held {
 		at = live.at
+		live.shown = true
 	}
 	s.mu.Unlock()
-	if !held {
+	if !first {
 		return
 	}
-	s.mu.Lock()
-	live.shown = true
-	s.mu.Unlock()
 	live.window.Show()
 	if err := live.window.Attach(win, at.X, at.Y); err != nil {
 		log.Printf("modal %s: %v", id, err)

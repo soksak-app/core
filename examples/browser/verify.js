@@ -20,8 +20,8 @@ const maxDelta = (a, b) =>
  * 화면에 그리지 않는다. 개발자가 읽는 값이고 렌더마다 발생하므로 출력 위치는
  * 호출자가 정한다.
  *
- * controls 는 창 자신의 단추가 차지하는 자리다. 창이 없는 브라우저에서는 null 이고,
- * 그 검사는 실행되지 않는다.
+ * controls 는 창이 그리는 단추가 차지하는 영역이다. 창이 없는 브라우저에서는 null
+ * 이고, 그 검사는 실행되지 않는다.
  */
 export function verify(controls = null) {
   // 현재 판. 검증 한 번은 한 시점을 대상으로 하므로 처음에 한 번만 읽는다.
@@ -186,8 +186,8 @@ export function verify(controls = null) {
       `레일 ${rail ? say(rail, "열 " + rail.c0) : "없음"} · ` +
       `우 ${say(right, "마지막 열")}`);
 
-  // W — 창 자신의 단추는 첫 행의 상하 가운데에 선다. 단추는 OS 가 그리고 페이지는
-  // 그 자리를 읽을 수 없으므로, 창에게 물어 받은 자리를 첫 행과 견준다.
+  // W — 창이 그리는 단추는 첫 행의 상하 가운데에 위치한다. 단추는 OS 가 그리고
+  // 페이지는 그 영역을 읽을 수 없으므로, 호스트가 반환한 영역을 첫 행과 비교한다.
   if (controls) {
     const bar = document.querySelector(".chrome-bar").getBoundingClientRect();
     const above = controls.y - bar.top;
