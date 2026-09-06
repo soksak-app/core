@@ -250,6 +250,26 @@ test("insertAt requires a valid size", () => {
   }
 });
 
+test("insertAt is refused when the card that arrives would take another below minSize", () => {
+  // `minSize` binds the operations. The size is one the plane holds, so the
+  // check above lets it through, and what refuses it is that the two cards
+  // beside it would be drawn under the floor. A card that arrives and leaves a
+  // card under the floor is the operation R5 says may not happen.
+  const grid = new Soksak(undefined, { width: 1200, height: 800, gap: 24, minSize: 96 });
+  assert.ok(grid.split("card", "x"), "two cards sharing the plane");
+  const before = [...grid.rects()].map(([id, r]) => [id, r.w]);
+
+  assert.equal(grid.insertAt("x", 1, { id: "rail", size: 500 }), null, "500 leaves the two under 96");
+  assert.deepEqual([...grid.rects()].map(([id, r]) => [id, r.w]), before, "and nothing moved");
+  assert.equal(grid.insertAt("x", 1, { id: "rail", size: 600 }), null, "600 leaves one with no width");
+  assert.deepEqual([...grid.rects()].map(([id, r]) => [id, r.w]), before, "and nothing moved");
+
+  // The refusal is the floor, not the operation: a size the plane can give goes in.
+  assert.equal(grid.insertAt("x", 1, { id: "rail", size: 300 }), "rail");
+  const widths = [...grid.rects().values()].map((r) => r.w);
+  assert.ok(Math.min(...widths) >= grid.minSize - 0.01, `every card keeps the floor: ${widths}`);
+});
+
 test("setFixed and setSize change a card; writing to cards does not", () => {
   const grid = three();
   assert.equal(Object.isFrozen(grid.card("sidebar")), true, "what came back is a report");

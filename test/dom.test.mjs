@@ -37,9 +37,9 @@ function mount(options = {}) {
   const view = new SoksakView(host, grid, {
     createCard: (card) => {
       made.push(card.id);
-      const el = window.document.createElement("div");
-      el.dataset.cardId = card.id;
-      return el;
+      // The view writes `data-card-id` itself. A card element the test stamps
+      // makes every check of that attribute read what the test wrote.
+      return window.document.createElement("div");
     },
     destroyCard: (_el, card) => gone.push(card.id),
     ...options,
@@ -646,6 +646,45 @@ test("releasing the pointer folds a pair the drag brought together", () => {
   pointer(window, el, "pointermove", 1, onto - 2, 300);   // inside snapDistance
   reasons.length = 0;
   pointer(window, el, "pointerup", 1, onto - 2, 300);
+
+  assert.equal(grid.lines("x").length, lines - 1, "the two lines were folded into one");
+  assert.ok(reasons.includes("merge"), "and the host was told it was a merge");
+  view.destroy();
+});
+
+test("releasing the mouse folds a pair the drag brought together", () => {
+  // The pointer path is held above. A host that delivers a press as mouse
+  // events reaches the same fold through its own release, and a merge the
+  // mouse never performs leaves two lines where the drag put one.
+  const reasons = [];
+  const { window, host, grid, view } = mount({ onChange: (reason) => reasons.push(reason) });
+  grid.split("card", "y");
+  const spare = grid.split("card", "x");
+  grid.close(spare);
+  const virtual = [1, 2].find((k) => grid.isVirtual("x", k));
+  assert.ok(virtual, "a line no card reads");
+  view.render();
+
+  const lines = grid.lines("x").length;
+  const beside = grid
+    .dividers()
+    .find((d) => d.axis === "x" && Math.abs(d.line - virtual) === 1);
+  assert.ok(beside, "a divider next to it");
+  const el = host.querySelector(`.sp-divider[data-axis="x"][data-line="${beside.line}"]`);
+  assert.ok(el, "with an element");
+
+  const from = grid.boundaryPos("x", beside.line);
+  const onto = grid.boundaryPos("x", virtual);
+  el.dispatchEvent(new window.MouseEvent("mousedown", {
+    clientX: from, clientY: 300, bubbles: true, button: 0, buttons: 1,
+  }));
+  window.document.dispatchEvent(new window.MouseEvent("mousemove", {
+    clientX: onto - 2, clientY: 300, bubbles: true, buttons: 1,   // inside snapDistance
+  }));
+  reasons.length = 0;
+  window.document.dispatchEvent(new window.MouseEvent("mouseup", {
+    clientX: onto - 2, clientY: 300, bubbles: true, button: 0, buttons: 0,
+  }));
 
   assert.equal(grid.lines("x").length, lines - 1, "the two lines were folded into one");
   assert.ok(reasons.includes("merge"), "and the host was told it was a merge");

@@ -536,6 +536,47 @@ export const BREAKS = [
     to: "        this.mouseDrag = null;\n        delete drag.on.dataset.dragging;",
   },
   {
+    id: "merge-mouse",
+    what: "a mouse release folds no pair the drag brought together",
+    file: "dist/dom.js",
+    // Anchored to the mouse release. The pointer release folds with the same
+    // text, and the shorter find patched both.
+    find:
+      "            merged = this.grid.mergeCoincident(drag.axis, drag.line);\n" +
+      "            return 0;\n" +
+      "        }, null);\n" +
+      "        this.draw(merged ? 'merge' : 'drag');\n" +
+      "        return drag.moved;\n" +
+      "    }\n" +
+      "    /**\n" +
+      "     * End a drag and report whether it moved the boundary.",
+    to:
+      "            return 0;\n" +
+      "        }, null);\n" +
+      "        this.draw(merged ? 'merge' : 'drag');\n" +
+      "        return drag.moved;\n" +
+      "    }\n" +
+      "    /**\n" +
+      "     * End a drag and report whether it moved the boundary.",
+  },
+  {
+    id: "merge-reason-mouse",
+    what: "a fold a mouse release performs is reported as a drag",
+    file: "dist/dom.js",
+    find:
+      "        this.draw(merged ? 'merge' : 'drag');\n" +
+      "        return drag.moved;\n" +
+      "    }\n" +
+      "    /**\n" +
+      "     * End a drag and report whether it moved the boundary.",
+    to:
+      "        this.draw('drag');\n" +
+      "        return drag.moved;\n" +
+      "    }\n" +
+      "    /**\n" +
+      "     * End a drag and report whether it moved the boundary.",
+  },
+  {
     id: "unread-rule",
     what: "a line no card reads is drawn as a rule",
     file: "dist/geometry.js",
@@ -571,6 +612,13 @@ export const BREAKS = [
     file: "dist/dom.js",
     find: "        el.className = `${this.prefix}-divider`;\n        el.style.position = 'absolute';",
     to: "        el.className = `${this.prefix}-divider`;",
+  },
+  {
+    id: "card-id",
+    what: "a card element is not marked with the id of the card it draws",
+    file: "dist/dom.js",
+    find: "                el.dataset.cardId = card.id;\n",
+    to: "",
   },
   {
     id: "grab-keys",
@@ -809,6 +857,51 @@ export const BREAKS = [
       "  }\n" +
       "}\n",
     to: "",
+  },
+  {
+    id: "insert-fits",
+    what: "an insert that takes a card below minSize is kept rather than undone",
+    file: "dist/soksak.js",
+    // Anchored to the insert. The split undoes itself with the same three
+    // lines, and the shorter find patched both.
+    find:
+      "        this.changed();\n" +
+      "        if (!this.stillFits(axis, was, empty)) {\n" +
+      "            this.restore(undo);\n" +
+      "            return null;\n" +
+      "        }\n" +
+      "        return fresh.id;\n" +
+      "    }\n" +
+      "    /** Whether a card occupies one slot on one axis",
+    to:
+      "        this.changed();\n" +
+      "        if (false) {\n" +
+      "            this.restore(undo);\n" +
+      "            return null;\n" +
+      "        }\n" +
+      "        return fresh.id;\n" +
+      "    }\n" +
+      "    /** Whether a card occupies one slot on one axis",
+  },
+  {
+    id: "split-fits",
+    what: "a split that takes another card below the size it has is kept rather than undone",
+    file: "dist/soksak.js",
+    find:
+      "        this.paidBy.set(fresh.id, { side: 'lo', to: card.id });\n" +
+      "        this.changed();\n" +
+      "        if (!this.stillFits(axis, was, empty)) {",
+    to:
+      "        this.paidBy.set(fresh.id, { side: 'lo', to: card.id });\n" +
+      "        this.changed();\n" +
+      "        if (false) {",
+  },
+  {
+    id: "fits-min",
+    what: "the check a change runs reads no card's size, so a change may take one below minSize",
+    file: "dist/soksak.js",
+    find: "            if (now < Math.min(this.min, was) - 0.01)\n                return false;",
+    to: "            ;",
   },
   {
     id: "in-order",

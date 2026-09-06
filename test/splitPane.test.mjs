@@ -93,6 +93,32 @@ test("splitting is refused when a half would fall under minSize", () => {
   assertTiling(grid, "at the smallest card size");
 });
 
+test("splitting is refused when it would take another card below the size it has", () => {
+  // The cut adds a line and the line takes a gap, and that gap comes out of the
+  // sharing slots — so a cut narrows cards it does not touch. `card-1` declares
+  // more than the plane holds, so `card` is drawn at exactly `minSize`, and the
+  // cut would take it under. `minSize` binds the operation: what the halves of
+  // the cut can hold is not the only question.
+  const grid = Soksak.from(
+    {
+      xs: [0, 0.5, 1],
+      ys: [0, 1],
+      cards: [
+        { id: "card", c0: 0, c1: 1, r0: 0, r1: 1 },
+        { id: "card-1", c0: 1, c1: 2, r0: 0, r1: 1, width: 271 },
+      ],
+    },
+    { width: 158, height: 158, gap: 18, minSize: 58 },
+  );
+  const before = grid.rect("card").w;
+  assert.equal(before, grid.minSize, "the plane draws it at exactly the floor");
+
+  assert.equal(grid.canSplit("card-1", "x"), false, "so no cut may make it narrower");
+  assert.equal(grid.split("card-1", "x"), null, "and the cut is refused");
+  assert.equal(grid.rect("card").w, before, "and nothing moved");
+  assert.equal(grid.cards.length, 2, "no card was added");
+});
+
 test("canSplit is exactly 'two halves plus a corridor fit'", () => {
   const grid = three();
   for (const axis of ["x", "y"]) {
