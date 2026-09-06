@@ -10,7 +10,8 @@ import test from "node:test";
 import { join } from "node:path";
 
 import { APPS, shake } from "./app.mjs";
-import { frames, readFrame, pixel, writePNG } from "./frame.mjs";
+import { frames, readFrame, writePNG } from "./frame.mjs";
+import { area, bare } from "./surface.mjs";
 
 /**
  * 흔들 경계와 폭.
@@ -27,52 +28,14 @@ const DRIVES = {
   "horizontal boundary": "5000,729,479,0,180,48,15",
 };
 
-/** 흰색으로 판정할 밝기. */
-const PALE = 230;
-
 /**
- * 터미널 표면의 배경색. settings.js 의 midnight 테마가 --surface 로 주는 값이며,
- * 예제가 기본으로 그리는 테마다.
+ * 경계가 움직였다고 판정할 표면 넓이의 변화량.
  *
- * "어두운 초록" 처럼 넓게 잡으면 브라우저 표면이 그리는 글자의 안티에일리어싱
- * 가장자리가 걸린다. 이 검사가 찾는 것은 터미널 표면이므로 그 색만 본다.
+ * 누름이 경계를 빗나가면 이 값은 0 에 가깝다. 경계가 최소 카드 크기에 걸려 있어도
+ * 마찬가지다. 그때 렌더링 검사는 아무것도 검사하지 않고 통과하므로, 먼저 경계가
+ * 실제로 움직였는지 확인한다. 가장 적게 움직인 세로 끌기가 7000 이상이다.
  */
-const SURFACE = [13, 26, 20];
-// 판의 배경 #101117 과 카드 테두리 #2b2e3d 는 초록이 두드러지지 않는다. 표면 색만
-// 걸리도록 좁게 잡는다.
-const NEAR = 4;
-const surface = (px) => px.every((v, i) => Math.abs(v - SURFACE[i]) <= NEAR);
-
-const pale = ([r, g, b]) => r > PALE && g > PALE && b > PALE;
-
-/**
- * 표면 배경과 흰색이 이만큼 안에 맞붙어 있으면 사이에 카드 테두리가 없다.
- *
- * midnight 테마의 통로는 6px 이다. 그만큼 멀리 보면 통로 건너편 표면이 걸리므로
- * 통로보다 짧아야 한다.
- */
-const REACH = 3;
-
-/**
- * 이 프레임에서 터미널 표면에 맞붙은 흰 픽셀 수.
- *
- * 터미널 표면의 배경 바로 옆은 카드의 머리, 발, 테두리라 모두 어둡다. 그 배경에
- * 맞붙은 흰색은 그 표면 안에서 아직 렌더링되지 않은 자리뿐이다. 창의 어느 구역인지
- * 알 필요가 없으므로 세로 끌기와 가로 끌기에 같은 기준이 쓰인다.
- */
-function bare(frame) {
-  let n = 0;
-  for (let y = REACH; y < frame.height - REACH; y += 2) {
-    for (let x = REACH; x < frame.width - REACH; x += 2) {
-      if (!surface(pixel(frame, x, y))) continue;
-      if (pale(pixel(frame, x + REACH, y)) || pale(pixel(frame, x - REACH, y)) ||
-          pale(pixel(frame, x, y + REACH)) || pale(pixel(frame, x, y - REACH))) {
-        n++;
-      }
-    }
-  }
-  return n;
-}
+const MOVED = 2000;
 
 /** 로그에서 페이지 검증기가 남긴 실패 줄. */
 const failures = (log) =>
@@ -91,17 +54,28 @@ for (const [name, binary] of Object.entries(APPS)) {
         );
 
         // 페이지의 검증기는 렌더마다 돌고 결과를 애플리케이션 로그로 보낸다. 그
-      // 결과가 기계적 판정에 쓰이지 않으면 사람이 읽어야만 알 수 있다.
-      assert.match(run.log, /verify: \d+ pass/, `the page never reported a check:\n${run.log}`);
-      assert.deepEqual(failures(run.log), [], "the page reported a failed check");
+        // 결과가 기계적 판정에 쓰이지 않으면 사람이 읽어야만 알 수 있다.
+        assert.match(run.log, /verify: \d+ pass/, `the page never reported a check:\n${run.log}`);
+        assert.deepEqual(failures(run.log), [], "the page reported a failed check");
 
-      let worst = { n: 0, path: "" };
+        let worst = { n: 0, path: "" };
         let seen = 0;
+        let least = Infinity;
+        let most = 0;
         for (const path of files) {
-          const n = bare(readFrame(path));
+          const frame = readFrame(path);
+          const n = bare(frame);
           if (n > 0) seen++;
           if (n > worst.n) worst = { n, path };
+          const size = area(frame);
+          least = Math.min(least, size);
+          most = Math.max(most, size);
         }
+        assert.ok(
+          most - least >= MOVED,
+          `the terminal surface changed by ${most - least} while the boundary was ` +
+            `shaken, so the boundary did not move:\n${run.log}`,
+        );
         if (worst.n > 0) {
           // 실패한 프레임을 PNG 로 남긴다.
           const shown = join(process.cwd(), `${name}-bare.png`);
