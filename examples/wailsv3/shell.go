@@ -49,12 +49,14 @@ func shell() string {
 	return "/bin/sh"
 }
 
-// Open starts a shell for id, or does nothing if one is already running.
-func (s *Shells) Open(id string) error {
+// Open starts a shell for id and reports whether it started one. A shell that is
+// already running is left alone and false is returned, so the caller does not
+// attach a second reader to the same output.
+func (s *Shells) Open(id string) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, live := s.running[id]; live {
-		return nil
+		return false, nil
 	}
 
 	cmd := exec.Command(shell())

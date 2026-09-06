@@ -151,12 +151,18 @@ func (s *Surfaces) Theme() Theme {
 	return s.theme
 }
 
-// ShellOpen opens the shell behind a terminal surface and starts forwarding it.
+// ShellOpen opens the shell behind a terminal surface and forwards its output.
+//
+// A page that reloads calls this again for a shell that is already running. Only
+// a shell this call started gets a forwarder, so the output is not emitted twice.
 func (s *Surfaces) ShellOpen(id string) error {
-	if err := s.shells.Open(id); err != nil {
+	started, err := s.shells.Open(id)
+	if err != nil {
 		return err
 	}
-	go s.forward(id)
+	if started {
+		go s.forward(id)
+	}
 	return nil
 }
 
