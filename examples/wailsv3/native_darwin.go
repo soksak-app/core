@@ -87,6 +87,23 @@ static void windowMakeMain(void* nsWindow) {
     [window makeMainWindow];
 }
 
+// The screen point of a point in the parent window's content, measured from its
+// top left. A window is placed by screen coordinates, and the page gives its
+// own.
+static void modalOnScreen(void* parentWindow, double x, double y, double h, double* out) {
+    NSWindow* parent = (NSWindow*)parentWindow;
+    if (parent == nil) return;
+    NSView* content = [parent contentView];
+    if (content == nil) return;
+    NSRect inContent = NSMakeRect(x, content.bounds.size.height - y - h, 0, h);
+    NSRect inWindow = [content convertRect:inContent toView:nil];
+    NSRect onScreen = [parent convertRectToScreen:inWindow];
+    out[0] = onScreen.origin.x;
+    // AppKit measures a window's position from the bottom left of the screen and
+    // Wails takes it from the top left, so the two differ by the screen height.
+    out[1] = NSMaxY([[parent screen] frame]) - NSMaxY(onScreen);
+}
+
 // Snaps a modal's rect, given in the page's coordinates, inward to the display's
 // pixel grid. Snapping outward would cover the card's own border, as it would for
 // a surface.
@@ -101,8 +118,10 @@ static void modalAligned(void* parentWindow, double x, double y, double w, doubl
                                   options:NSAlignAllEdgesInward];
     out[0] = r.origin.x;
     out[1] = content.bounds.size.height - r.origin.y - r.size.height;
-    out[2] = r.size.width;
-    out[3] = r.size.height;
+    // A window is sized in whole points, so the size is rounded up to one. Down
+    // would cut the card the page measured.
+    out[2] = ceil(r.size.width);
+    out[3] = ceil(r.size.height);
 }
 
 // Sets the view's alpha. The page dims a surface that has lost focus.
@@ -237,6 +256,14 @@ func surfaceFrame(view unsafe.Pointer) Rect {
 	var out [4]C.double
 	C.surfaceFrameNow(view, &out[0])
 	return Rect{X: float64(out[0]), Y: float64(out[1]), W: float64(out[2]), H: float64(out[3])}
+}
+
+// modalOnScreen converts a point in the parent's content, measured from its top
+// left, into the screen point Wails places a window at.
+func modalOnScreen(parent unsafe.Pointer, at Rect) (int, int) {
+	var out [2]C.double
+	C.modalOnScreen(parent, C.double(at.X), C.double(at.Y), C.double(max1(at.H)), &out[0])
+	return int(out[0]), int(out[1])
 }
 
 // modalConfigure configures a modal's window: not opaque, with a shadow, and out

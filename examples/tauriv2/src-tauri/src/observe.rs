@@ -72,9 +72,10 @@ pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
             if let Some(into) = capturing() {
                 let began = into.clone();
                 app.listen("run-began", move |_| capture::start(&began));
-                // 이 수신자는 발행한 스레드에서 그대로 실행되고, run-ended 는
-                // 커맨드 안에서, 즉 주 스레드에서 발행된다. 종료는 답을 기다리므로
-                // 여기서 기다리면 그동안 화면이 멈춘다.
+                // A listener runs on the thread that emitted the event, and
+                // run-ended is emitted inside a command, on the main thread.
+                // Stopping the recording waits for an answer, and waiting here
+                // would stop the window drawing.
                 app.listen("run-ended", move |_| {
                     let into = into.clone();
                     std::thread::spawn(move || {
@@ -115,8 +116,8 @@ fn report<R: Runtime>(app: tauri::AppHandle<R>) {
 /// This window's number and the numbers of the windows attached to it. Read on the
 /// main thread, which is where a window may be touched.
 fn numbers<R: Runtime>(app: &tauri::AppHandle<R>) -> Vec<isize> {
-    // 이 앱은 창 하나가 웹뷰 여럿을 담는다. 그런 창은 webview_windows 가 아니라
-    // windows 에 있다.
+    // This application puts several webviews in one window. Such a window is in
+    // windows, not in webview_windows.
     app.windows()
         .into_iter()
         .find(|(label, _)| !label.starts_with("modal-"))

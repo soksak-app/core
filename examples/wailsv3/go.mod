@@ -15,4 +15,4 @@ require (
 	golang.org/x/sys v0.46.0 // indirect
 )
 
-replace github.com/wailsapp/wails/v3 => github.com/min-median-max/wails/v3 v3.0.0-20260906092219-a57e97d1c064
+replace github.com/wailsapp/wails/v3 => github.com/min-median-max/wails/v3 v3.0.0-20260906101808-c1b50853897d

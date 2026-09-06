@@ -24,17 +24,21 @@ import (
 type session struct {
 	cmd   *exec.Cmd
 	stdin io.WriteCloser
-	// Everyone watching this shell. A view added straight to the window has no
-	// bridge to Go, so its page reads an event stream instead.
-	watchers map[chan string]bool
 }
 
 type Shells struct {
 	mu      sync.Mutex
 	running map[string]*session
+	// Where a line of output goes. The reader passes each line straight to it,
+	// so no line waits in a queue and none is dropped.
+	say func(id string, text string)
 }
 
-func NewShells() *Shells { return &Shells{running: map[string]*session{}} }
+// NewShells makes the set of shells. say receives every line each shell writes,
+// from the goroutine reading it.
+func NewShells(say func(id string, text string)) *Shells {
+	return &Shells{running: map[string]*session{}, say: say}
+}
 
 // shell reports the user's shell, or the platform's default when it is not set.
 func shell() string {
@@ -89,7 +93,7 @@ func (s *Shells) Open(id string) (bool, error) {
 		return false, err
 	}
 
-	live := &session{cmd: cmd, stdin: stdin, watchers: map[chan string]bool{}}
+	live := &session{cmd: cmd, stdin: stdin}
 	s.running[id] = live
 
 	for _, stream := range []io.Reader{stdout, stderr} {
@@ -100,7 +104,7 @@ func (s *Shells) Open(id string) (bool, error) {
 				// the shell actually wrote.
 				line, err := reader.ReadString('\n')
 				if line != "" {
-					s.emit(id, line)
+					s.say(id, line)
 				}
 				if err != nil {
 					return
@@ -109,51 +113,6 @@ func (s *Shells) Open(id string) (bool, error) {
 		}(stream)
 	}
 	return true, nil
-}
-
-// emit sends one line to every watcher of that shell. A watcher that has
-// stopped reading is skipped rather than waited for.
-func (s *Shells) emit(id string, text string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	live, ok := s.running[id]
-	if !ok {
-		return
-	}
-	for watcher := range live.watchers {
-		select {
-		case watcher <- text:
-		default:
-		}
-	}
-}
-
-// Listen returns a channel carrying that shell's output, or nil if that shell is
-// not running. A channel no session holds would never be closed and its reader
-// would wait for the process's lifetime.
-func (s *Shells) Listen(id string) chan string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	live, ok := s.running[id]
-	if !ok {
-		return nil
-	}
-	lines := make(chan string, 256)
-	live.watchers[lines] = true
-	return lines
-}
-
-// Unlisten drops a reader's channel and closes it. A channel the session no
-// longer holds was closed by Close, so it is only dropped here.
-func (s *Shells) Unlisten(id string, lines chan string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	live, ok := s.running[id]
-	if !ok || !live.watchers[lines] {
-		return
-	}
-	delete(live.watchers, lines)
-	close(lines)
 }
 
 func (s *Shells) Write(id string, data string) error {
@@ -171,22 +130,13 @@ func (s *Shells) Write(id string, data string) error {
 // write to is a process whose output no one reads.
 //
 // The process is ended with the lock released. Ending it means waiting for it,
-// and the goroutines reading its output take this lock for every line: waiting
-// while holding it stops them reading, and a process whose output is not read
-// does not end.
+// and a wait while holding the lock would stop the next call to this set.
 //
-// Every watcher's channel is closed, which ends the goroutine reading it. The
-// session is deleted first, so emit finds nothing and never sends on a closed
-// channel.
 func (s *Shells) Close(id string) {
 	s.mu.Lock()
 	live, ok := s.running[id]
 	if ok {
 		delete(s.running, id)
-		for watcher := range live.watchers {
-			close(watcher)
-		}
-		live.watchers = nil
 	}
 	s.mu.Unlock()
 	if !ok {

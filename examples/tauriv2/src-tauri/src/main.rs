@@ -118,6 +118,14 @@ fn aligned(x: f64, y: f64, w: f64, h: f64, scale: f64) -> (f64, f64, f64, f64) {
     (left, top, (right - left).max(step), (bottom - top).max(step))
 }
 
+/// The frame a modal's window is placed at: the page's rect snapped to the
+/// display's pixels, with the size rounded up to whole points. A window is sized
+/// in whole points, and rounding down would cut the card the page measured.
+fn aligned_window(x: f64, y: f64, w: f64, h: f64, scale: f64) -> (f64, f64, f64, f64) {
+    let (ax, ay, aw, ah) = aligned(x, y, w, h, scale);
+    (ax, ay, aw.ceil(), ah.ceil())
+}
+
 /// Starts watching the window for presses, once.
 ///
 /// A press on a surface is delivered to that surface's view and never to the
@@ -259,6 +267,12 @@ fn sync_surfaces(
             .add_child(builder, position, size)
             .map_err(|e| e.to_string())?;
         if let Some(webview) = window.get_webview(&label) {
+            // A surface the page declared invisible is created shown, because a
+            // child webview takes no visibility at creation. It is hidden here,
+            // before the first frame it would appear in.
+            if !visible {
+                webview.hide().map_err(|e| e.to_string())?;
+            }
             let named = views.0.clone();
             let id = s.id.clone();
             webview
@@ -519,7 +533,7 @@ fn overlay_show(
     let url = format!("overlay.html?id={}", request.id);
     let [r, g, b, a] = request.background;
     let scale = window.scale_factor().map_err(|e| e.to_string())?;
-    let (ax, ay, aw, ah) = aligned(
+    let (ax, ay, aw, ah) = aligned_window(
         request.rect.x, request.rect.y + top,
         request.rect.w.max(1.0), request.rect.h.max(1.0), scale,
     );
@@ -653,7 +667,7 @@ fn overlay_place(
     let Some(modal) = modal_window(&app, &state, &request.id) else {
         return Ok(Rect { x: 0.0, y: 0.0, w: 0.0, h: 0.0 });
     };
-    let (ax, ay, aw, ah) = aligned(
+    let (ax, ay, aw, ah) = aligned_window(
         request.rect.x, request.rect.y + top,
         request.rect.w.max(1.0), request.rect.h.max(1.0), scale,
     );
@@ -710,8 +724,9 @@ fn overlay_ready(
         .map_err(|e| e.to_string())?;
     existing.show().map_err(|e| e.to_string())?;
     existing.set_focus().map_err(|e| e.to_string())?;
-    // 이 커맨드는 모달의 문서가 호출하므로 주입되는 창은 모달 자신이다. 앱의 창을
-    // 이름으로 찾아 그것을 main 으로 되돌린다.
+    // The modal's own document calls this command, so the window injected into
+    // it is the modal. The application's window is found by name and made main
+    // again.
     if let Some(main) = app.get_webview_window("main") {
         native::make_main(main.ns_window().map_err(|e| e.to_string())?);
     }
@@ -724,8 +739,10 @@ fn overlay_ready(
 
 #[tauri::command]
 fn overlay_hide(app: AppHandle, window: Window, state: State<'_, Overlay>, id: String) -> Result<(), String> {
-    let was = state.modals.lock().map_err(|e| e.to_string())?.remove(&id);
-    if let Some(existing) = was.and_then(|m| app.get_webview_window(&m.label)) {
+    let Some(was) = state.modals.lock().map_err(|e| e.to_string())?.remove(&id) else {
+        return Ok(());
+    };
+    if let Some(existing) = app.get_webview_window(&was.label) {
         existing.close().map_err(|e| e.to_string())?;
     }
     window.set_focus().map_err(|e| e.to_string())?;
@@ -826,7 +843,8 @@ fn set_theme(
 }
 
 fn main() {
-    // 관측은 요청했을 때만 붙는다. 제품의 계약이 아니다.
+    // Observation is registered only when it is asked for. It is not part of
+    // the product.
     let observing = observe::given("observe");
     let mut app = tauri::Builder::default();
     if observing {

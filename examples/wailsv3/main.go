@@ -24,7 +24,7 @@ var assets embed.FS
 func main() {
 	flag.Parse()
 
-	shells := NewShells()
+	shells := NewShells(emitShellOutput)
 	surfaces := NewSurfaces(shells)
 	app := application.New(application.Options{
 		Name:        "soksak",

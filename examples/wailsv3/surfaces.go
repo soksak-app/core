@@ -95,8 +95,11 @@ type modal struct {
 	// put it at.
 	window  *application.WebviewWindow
 	content OverlayContent
-	// Where the page last put it, in the main window's content.
+	// The frame the window was last placed at, in the main window's content.
 	at Rect
+	// Whether the page has reported its content drawn, which is when the window
+	// is shown and attached.
+	shown bool
 }
 
 type Surfaces struct {
@@ -126,19 +129,10 @@ type Surfaces struct {
 	theme Theme
 }
 
-// forward emits one shell's output until the shell ends.
-//
-// The output is emitted as an event. Every page receives it and the page
-// rendering that shell filters by id.
-func (s *Surfaces) forward(id string) {
-	lines := s.shells.Listen(id)
-	if lines == nil {
-		return
-	}
-	defer s.shells.Unlisten(id, lines)
-	for text := range lines {
-		application.Get().Event.Emit("shell-output", ShellOutput{ID: id, Text: text})
-	}
+// emitShellOutput sends one line of a shell's output as an event. Every page
+// receives it and the page rendering that shell filters by id.
+func emitShellOutput(id string, text string) {
+	application.Get().Event.Emit("shell-output", ShellOutput{ID: id, Text: text})
 }
 
 // ShellOutput is one piece of a shell's output, as a page receives it.
@@ -159,19 +153,11 @@ func (s *Surfaces) Theme() Theme {
 	return s.theme
 }
 
-// ShellOpen opens the shell behind a terminal surface and forwards its output.
-//
-// A page that reloads calls this again for a shell that is already running. Only
-// a shell this call started gets a forwarder, so the output is not emitted twice.
+// ShellOpen opens the shell behind a terminal surface. A page that reloads calls
+// it again for a shell that is already running, which is left alone.
 func (s *Surfaces) ShellOpen(id string) error {
-	started, err := s.shells.Open(id)
-	if err != nil {
-		return err
-	}
-	if started {
-		go s.forward(id)
-	}
-	return nil
+	_, err := s.shells.Open(id)
+	return err
 }
 
 // ShellWrite sends one line to a shell.
@@ -216,7 +202,11 @@ func (s *Surfaces) OverlayShow(req OverlayRequest) (Rect, error) {
 	// 같은 id 의 모달이 열려 있으면 닫는다. 없으면 아무 일도 하지 않는다.
 	s.OverlayHide(req.ID)
 	var at Rect
-	application.InvokeSync(func() { at = modalAligned(win.NativeWindow(), req.Rect) })
+	var sx, sy int
+	application.InvokeSync(func() {
+		at = modalAligned(win.NativeWindow(), req.Rect)
+		sx, sy = modalOnScreen(win.NativeWindow(), at)
+	})
 	// 창을 만드는 것은 주 스레드의 일이고 이 호출은 그것이 끝날 때까지 기다린다.
 	// 잠금을 쥔 채로 기다리면, 주 스레드에서 같은 잠금을 잡는 호출과 서로를 기다린다.
 	live := &modal{
@@ -228,6 +218,11 @@ func (s *Surfaces) OverlayShow(req OverlayRequest) (Rect, error) {
 			Height:    int(at.H),
 			Frameless: true,
 			Hidden:    true,
+			// 최종 자리에 만든다. 자리를 주지 않으면 화면 가운데에 만들어지고,
+			// 표시한 뒤에 옮기게 되어 가운데에 한 번 그려진다.
+			InitialPosition: application.WindowXY,
+			X:               sx,
+			Y:               sy,
 			BackgroundColour: application.NewRGBA(
 				uint8(req.Background[0]), uint8(req.Background[1]),
 				uint8(req.Background[2]), uint8(req.Background[3]*255)),
@@ -240,14 +235,8 @@ func (s *Surfaces) OverlayShow(req OverlayRequest) (Rect, error) {
 	}
 	application.InvokeSync(func() { modalConfigure(live.window.NativeWindow()) })
 	s.mu.Lock()
-	was := s.modals[req.ID]
 	s.modals[req.ID] = live
 	s.mu.Unlock()
-	// 같은 id 로 두 번 호출되면 두 창이 만들어진다. 목록에 남지 못한 창을 닫는다.
-	if was != nil {
-		was.window.Detach()
-		was.window.Close()
-	}
 	return at, nil
 }
 
@@ -327,9 +316,6 @@ func (s *Surfaces) OverlayPlace(req PlaceRequest) (Rect, error) {
 	}
 	s.mu.Lock()
 	live, held := s.modals[req.ID]
-	if held {
-		live.at = req.Rect
-	}
 	s.mu.Unlock()
 	if !held {
 		return Rect{}, nil
@@ -340,10 +326,18 @@ func (s *Surfaces) OverlayPlace(req PlaceRequest) (Rect, error) {
 		// 내용이 바뀌면 카드의 크기도 바뀐다. 크기를 함께 적용하지 않으면 창은
 		// 만들어진 크기를 유지하고 그 안의 카드가 늘어나거나 잘린다.
 		live.window.SetSize(int(at.W), int(at.H))
-		if err := live.window.Attach(win, at.X, at.Y); err != nil {
+		// 붙이는 것은 창을 화면에 올리는 일이므로, 내용이 그려졌다고 페이지가
+		// 보고하기 전에는 자리만 기록한다.
+		if !live.shown {
+			sx, sy := modalOnScreen(win.NativeWindow(), at)
+			live.window.SetPosition(sx, sy)
+		} else if err := live.window.Attach(win, at.X, at.Y); err != nil {
 			log.Printf("modal %s: %v", req.ID, err)
 		}
 	})
+	s.mu.Lock()
+	live.at = at
+	s.mu.Unlock()
 	return at, nil
 }
 
@@ -423,6 +417,9 @@ func (s *Surfaces) ModalReady(id string) {
 	if !held {
 		return
 	}
+	s.mu.Lock()
+	live.shown = true
+	s.mu.Unlock()
 	live.window.Show()
 	if err := live.window.Attach(win, at.X, at.Y); err != nil {
 		log.Printf("modal %s: %v", id, err)
