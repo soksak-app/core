@@ -57,6 +57,36 @@ extern void surfaceMessage(char* json);
 // The script every page this app serves starts with. `boot` is the value the
 // page would otherwise have to fetch, so it is there before the first script
 // runs and no request is made for it.
+// Asks the view not to paint its own background, and answers whether it agreed.
+//
+// A webview paints what it covers. Area it does not cover yet is not painted at
+// all, and what shows there is the view's own opaque white. A view that paints no
+// background leaves that area clear instead, and what shows through is the card
+// the page drew underneath.
+//
+// There is no public way to ask for this. underPageBackgroundColor, which is
+// public, reaches only the area past the end of a page and was measured never to
+// appear here. The key below is not in any header and is reached by name, which is
+// what wry does for every webview in the Tauri example and what Wails itself does
+// for this window's own webview - so this application already runs on it.
+//
+// Reached by name, it can be gone in a later macOS, and asking for a name that is
+// not there raises. So it is asked for inside a guard and read back: agreed only
+// if the view now says it paints no background. Not agreed, the caller says so and
+// the area stays white.
+static BOOL surfaceHideBackground(WKWebView* view) {
+    @try {
+        [view setValue:@NO forKey:@"drawsBackground"];
+        id now = [view valueForKey:@"drawsBackground"];
+        BOOL agreed = [now isKindOfClass:[NSNumber class]] && ![now boolValue];
+        if (!agreed) NSLog(@"표면: 배경을 끄지 못했다 — 값이 %@ 다", now);
+        return agreed;
+    } @catch (NSException* gone) {
+        NSLog(@"표면: 배경을 끄지 못했다 — %@", gone.reason);
+        return NO;
+    }
+}
+
 static NSString* surfaceScript(const char* boot) {
     return [NSString stringWithFormat:
         @"window.__spBoot = %s;"
@@ -85,6 +115,7 @@ static WKWebView* surfaceWebView(const char* url, double w, double h,
     [controller addScriptMessageHandler:[[SPBridge alloc] init] name:@"host"];
     config.userContentController = controller;
     WKWebView* view = [[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, w, h) configuration:config];
+    surfaceHideBackground(view);
     // The colour the view shows where its page has not painted. Public since
     // macOS 12; without it that area is white.
     if (@available(macOS 12.0, *)) {
