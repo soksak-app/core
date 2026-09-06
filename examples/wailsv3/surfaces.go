@@ -384,6 +384,7 @@ func (s *Surfaces) OverlayHide(id string) error {
 	s.mu.Unlock()
 
 	application.InvokeSync(live.view.destroy)
+	application.Get().Event.Emit("windows-changed")
 	return nil
 }
 
@@ -437,6 +438,9 @@ func (s *Surfaces) ModalReady(id string) {
 		view.setCornerRadius(radius)
 		view.show()
 	})
+	// 모달은 자기 창이므로 이 앱이 가진 창이 하나 늘었다. 창이 붙고 떨어지는 것을
+	// 알리는 통지는 AppKit 에 없고, 붙이는 것은 여기다. 그래서 여기서 알린다.
+	application.Get().Event.Emit("windows-changed")
 }
 
 // up converts a top-left y to the bottom-left y AppKit uses.

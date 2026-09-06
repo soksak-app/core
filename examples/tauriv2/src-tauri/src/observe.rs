@@ -10,7 +10,8 @@
 //! left out, nothing here runs.
 
 use tauri::plugin::{Builder, TauriPlugin};
-use tauri::{Manager, Runtime, Window};
+use tauri::webview::PageLoadEvent;
+use tauri::{Listener, Manager, Runtime, Window};
 
 use crate::native;
 
@@ -25,51 +26,41 @@ fn windows<R: Runtime>(window: Window<R>) -> Result<Vec<isize>, String> {
 pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("observe")
         .setup(|app, _api| {
-            let handle = app.clone();
-            std::thread::spawn(move || report(handle));
+            // The window set changes when a modal is attached or detached, and the
+            // app announces that where it happens. Nothing is polled.
+            let listen = app.clone();
+            app.listen("windows-changed", move |_| report(listen.clone()));
             Ok(())
+        })
+        // The main page has loaded, so its window is on screen. This is the first
+        // report; waiting for it is what a timer would otherwise be doing.
+        .on_page_load(|webview, payload| {
+            if webview.label() == "main" && payload.event() == PageLoadEvent::Finished {
+                report(webview.app_handle().clone());
+            }
         })
         .invoke_handler(tauri::generate_handler![windows])
         .build()
 }
 
-/// Writes a line whenever the set of windows changes.
+/// Writes one line naming the windows this app holds.
 ///
-/// AppKit gives no notification when a child window is attached or detached, so
-/// this asks. The numbers are read on the main thread, which is where a window may
-/// be touched.
+/// The numbers are read on the main thread, which is where a window may be touched.
 fn report<R: Runtime>(app: tauri::AppHandle<R>) {
-    let mut last = String::new();
-    loop {
-        std::thread::sleep(std::time::Duration::from_millis(300));
-        let (tx, rx) = std::sync::mpsc::channel();
-        let ask = app.clone();
-        if app
-            .run_on_main_thread(move || {
-                // 이 앱은 창 하나가 웹뷰 여럿을 담는다. 그런 창은 webview_windows 가
-                // 아니라 windows 에 있다.
-                let found = ask
-                    .windows()
-                    .into_iter()
-                    .find(|(label, _)| !label.starts_with("modal-"))
-                    .and_then(|(_, w)| w.ns_window().ok())
-                    .map(native::window_numbers)
-                    .unwrap_or_default();
-                let _ = tx.send(found);
-            })
-            .is_err()
-        {
-            return;
+    let ask = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        // 이 앱은 창 하나가 웹뷰 여럿을 담는다. 그런 창은 webview_windows 가 아니라
+        // windows 에 있다.
+        let found = ask
+            .windows()
+            .into_iter()
+            .find(|(label, _)| !label.starts_with("modal-"))
+            .and_then(|(_, w)| w.ns_window().ok())
+            .map(native::window_numbers)
+            .unwrap_or_default();
+        if !found.is_empty() {
+            println!("관측: 창 번호 {found:?}");
         }
-        let Ok(now) = rx.recv() else { return };
-        if now.is_empty() {
-            continue;
-        }
-        let line = format!("{now:?}");
-        if line == last {
-            continue;
-        }
-        last = line;
-        println!("관측: 창 번호 {now:?}");
-    }
+    });
 }
+

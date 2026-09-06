@@ -332,6 +332,7 @@ struct Views(Arc<Mutex<HashMap<usize, String>>>);
 #[derive(Default)]
 struct Watching(Mutex<bool>);
 
+
 /// One view per modal element, named after it, so a page may have several.
 fn modal_label(id: &str) -> String {
     format!("modal-{id}")
@@ -564,6 +565,10 @@ fn overlay_ready(
     let parent = window.ns_window().map_err(|e| e.to_string())?;
     let own = existing.ns_window().map_err(|e| e.to_string())?;
     native::panelise(own, parent);
+    // A modal is a window of its own, so this app now holds one more. AppKit gives
+    // no notification when a child window is attached, and attaching it is done
+    // here, so it is announced here.
+    app.emit("windows-changed", ()).map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -574,6 +579,7 @@ fn overlay_hide(app: AppHandle, window: Window, state: State<'_, Overlay>, id: S
         existing.close().map_err(|e| e.to_string())?;
     }
     window.set_focus().map_err(|e| e.to_string())?;
+    app.emit("windows-changed", ()).map_err(|e| e.to_string())?;
     Ok(())
 }
 

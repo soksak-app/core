@@ -22,7 +22,6 @@ var assets embed.FS
 
 func main() {
 	flag.Parse()
-	watchWindows()
 
 	shells := NewShells()
 	pages, err := NewPages(assets, shells)
@@ -37,9 +36,7 @@ func main() {
 		Assets: application.AssetOptions{
 			Handler: application.BundledAssetFileServer(assets),
 		},
-		Services: []application.Service{
-			application.NewService(surfaces),
-		},
+		Services: services(surfaces),
 	})
 
 	app.Window.NewWithOptions(application.WebviewWindowOptions{
@@ -55,4 +52,13 @@ func main() {
 	if err := app.Run(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// services 는 이 애플리케이션이 등록할 서비스 목록이다. 관측은 요청했을 때만 붙는다.
+func services(surfaces *Surfaces) []application.Service {
+	list := []application.Service{application.NewService(surfaces)}
+	if *observing {
+		list = append(list, application.NewService(&Observe{}))
+	}
+	return list
 }
