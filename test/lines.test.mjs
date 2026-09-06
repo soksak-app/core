@@ -90,11 +90,24 @@ test("coincident lines merge and no card loses its size", () => {
 test("merge is refused when snap is off", () => {
   const { grid, virtual } = withVirtualLine();
   const boundary = virtual - 1;
+  // The pair must coincide before snap decides anything. A drag with snap off
+  // leaves the boundary short of its neighbour, and the refusal is then the one
+  // for a neighbour that is not there.
+  grid.moveBoundary("x", boundary, grid.boundaryPos("x", virtual) - 3);
+  assert.equal(
+    grid.boundaryPos("x", boundary), grid.boundaryPos("x", virtual),
+    "snapped onto the line it nearly met",
+  );
+
   grid.snap = "off";
   const lines = grid.lines("x").length;
-  grid.moveBoundary("x", boundary, grid.boundaryPos("x", virtual) - 3);
   assert.equal(grid.mergeCoincident("x", boundary), false);
   assert.equal(grid.lines("x").length, lines);
+
+  // The same pair folds once snapping is back on, so the refusal above is snap's.
+  grid.snap = "merge";
+  assert.equal(grid.mergeCoincident("x", boundary), true);
+  assert.equal(grid.lines("x").length, lines - 1);
 });
 
 test("centring makes the two cards beside a line the same size", () => {

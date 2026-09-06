@@ -219,6 +219,12 @@ test("an id already in use is refused, so no two cards share a name", () => {
 
 test("an axis the caller made up is refused, not thrown on", () => {
   const grid = new Soksak(undefined, { width: 1200, height: 800 });
+  // A plane with one card has no boundary on either axis, so every reader below
+  // refuses "x" as well and the axis decides nothing. Cut on both axes first.
+  grid.split("card", "x");
+  grid.split("card", "y");
+  assert.equal(grid.hasBoundary("x", 1), true, "there is a boundary to answer for");
+  assert.equal(grid.hasBoundary("y", 1), true);
   const z = "z";
   const results = {
     lines: () => grid.lines(z),

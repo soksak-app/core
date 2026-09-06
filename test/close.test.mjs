@@ -95,6 +95,13 @@ test("a fixed card does not fill", () => {
   const beside = grid.fill("terminal");
   assert.ok(beside, "a card beside the terminal can take its space");
   assert.ok(beside.cards.every((p) => p.id !== "sidebar"), "the sidebar was offered");
+
+  // And a fixed card is never the one filled. Its two neighbours tile its side
+  // and would grow over any other card there, so the answer comes from `fixed`
+  // rather than from the arrangement.
+  assert.equal(grid.fill("sidebar"), null, "no neighbour takes a fixed card's space");
+  grid.setFixed("sidebar", false);
+  assert.ok(grid.fill("sidebar"), "and they take it the moment that is lifted");
 });
 
 test("fillOrder picks the axis when both sides could take the space", () => {

@@ -1022,4 +1022,25 @@ export const BREAKS = [
     find: "                const first = back && paidAt >= back[lo] && paidAt < back[hi] ? paidAt : merged;",
     to: "                const first = paidAt;",
   },
+  {
+    id: "merge-snap-off",
+    what: "mergeCoincident folds a pair although snapping is off",
+    file: "dist/soksak.js",
+    find: "    mergeCoincident(axis, line) {\n        if (this.noAxis(axis))\n            return false;\n        if (this.snap === 'off')\n            return false;\n",
+    to: "    mergeCoincident(axis, line) {\n        if (this.noAxis(axis))\n            return false;\n",
+  },
+  {
+    id: "boundary-axis",
+    what: "hasBoundary answers for an axis that is not one",
+    file: "dist/soksak.js",
+    find: "    hasBoundary(axis, line) {\n        if (this.noAxis(axis))\n            return false;\n",
+    to: "    hasBoundary(axis, line) {\n",
+  },
+  {
+    id: "fill-fixed",
+    what: "fill names the neighbours that would grow over a fixed card",
+    file: "dist/slicing.js",
+    find: "export function fillFor(cards, closing, order, memo) {\n    if (closing.fixed)\n        return null;\n",
+    to: "export function fillFor(cards, closing, order, memo) {\n",
+  },
 ];
