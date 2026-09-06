@@ -120,8 +120,9 @@ export declare class SoksakView {
      * End a mouse drag.
      *
      * Every way a mouse drag can end runs through here: mouseup, the button being
-     * released elsewhere, and destroy. A divider carries `data-dragging` while it
-     * is held, whichever of the two inputs is holding it.
+     * released elsewhere, and destroy. It ends the way a pointer drag ends: the
+     * divider stops carrying `data-dragging`, boundaries that now coincide are
+     * merged, and the last render reports the reason drag.
      */
     private endMouse;
     private end;

@@ -135,6 +135,27 @@ test("a divider held by the mouse carries data-dragging", () => {
   view.destroy();
 });
 
+test("a mouse drag renders once more when it ends", () => {
+  const changes = [];
+  const { window, host, grid, view } = mount({ onChange: (reason) => changes.push(reason) });
+  const divider = host.querySelector('[role="separator"]');
+  const at = grid.boundaryPos("x", 1);
+
+  divider.dispatchEvent(new window.MouseEvent("mousedown", {
+    clientX: at, clientY: 100, bubbles: true, button: 0, buttons: 1,
+  }));
+  window.document.dispatchEvent(new window.MouseEvent("mousemove", {
+    clientX: at + 40, clientY: 100, bubbles: true, buttons: 1,
+  }));
+  const during = changes.length;
+  window.document.dispatchEvent(new window.MouseEvent("mouseup", {
+    clientX: at + 40, clientY: 100, bubbles: true, button: 0, buttons: 0,
+  }));
+
+  assert.ok(changes.length > during, "letting go renders once more");
+  view.destroy();
+});
+
 test("a divider the mouse let go of elsewhere stops saying it is held", () => {
   const { window, host, grid, view } = mount();
   const divider = host.querySelector('[role="separator"]');

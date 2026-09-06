@@ -212,8 +212,9 @@ export class SoksakView {
      * End a mouse drag.
      *
      * Every way a mouse drag can end runs through here: mouseup, the button being
-     * released elsewhere, and destroy. A divider carries `data-dragging` while it
-     * is held, whichever of the two inputs is holding it.
+     * released elsewhere, and destroy. It ends the way a pointer drag ends: the
+     * divider stops carrying `data-dragging`, boundaries that now coincide are
+     * merged, and the last render reports the reason drag.
      */
     endMouse() {
         const drag = this.mouseDrag;
@@ -221,6 +222,10 @@ export class SoksakView {
             return;
         this.mouseDrag = null;
         delete drag.on.dataset.dragging;
+        if (this.disposed)
+            return;
+        const merged = this.grid.mergeCoincident(drag.axis, drag.line);
+        this.render(merged ? 'merge' : 'drag');
     }
     end(pointer) {
         const drag = this.drags.get(pointer);
