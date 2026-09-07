@@ -243,7 +243,7 @@ export function onSurfaceInput({ press, input }) {
 
 if (native) {
   // 관측 부품이 기록을 요청한다. 요청하지 않으면 한 줄도 남지 않는다.
-  bridge.on("observe-record", (on) => { recording = on !== false; });
+  bridge.on("observe-record", () => { recording = true; });
   bridge.on("surface-pressed", (id) => onPress(id));
   bridge.on("surface-input", (step) => onInput(step));
   // 모달은 여러 번 응답하므로 여기서 구독을 해제하지 않고 hide 에서 해제한다.

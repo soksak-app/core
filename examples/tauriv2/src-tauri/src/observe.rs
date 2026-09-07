@@ -181,8 +181,10 @@ fn command<R: Runtime>(app: &tauri::AppHandle<R>, line: &str) {
             let _ = app.emit("observe-click", rest.to_string());
         }
         "transcript" => {
-            let _ = app.emit("observe-record", rest != "off");
-            say(&format!("observe: transcript {}", on_off(rest)));
+            // There is no way to turn it off. A reset reads the page again and
+            // the recording starts over with it.
+            let _ = app.emit("observe-record", ());
+            say("observe: transcript on");
         }
         "zoom" => {
             if let Some(window) = app.get_window("main") {
@@ -192,7 +194,7 @@ fn command<R: Runtime>(app: &tauri::AppHandle<R>, line: &str) {
                     window.maximize()
                 };
             }
-            say(&format!("observe: zoom {}", on_off(rest)));
+            say(if rest == "off" { "observe: zoom off" } else { "observe: zoom on" });
         }
         "size" => match size_of(rest) {
             Some((w, h)) => set_size(app, w, h),
@@ -422,15 +424,6 @@ fn size_of(spec: &str) -> Option<(f64, f64)> {
     spec.split_once(',')
         .and_then(|(w, h)| Some((w.trim().parse::<f64>().ok()?, h.trim().parse::<f64>().ok()?)))
         .filter(|(w, h)| *w > 0.0 && *h > 0.0)
-}
-
-/// Names an instruction's value for the log.
-fn on_off(value: &str) -> &'static str {
-    if value == "off" {
-        "off"
-    } else {
-        "on"
-    }
 }
 
 /// Gives the window's content this size and reports the size it took.

@@ -70,16 +70,20 @@ const afterResize = (log = "") => {
 test("both hosts answer the same page the same way", async (t) => {
   const logs = {};
   for (const [name, binary] of Object.entries(APPS)) {
-    logs[name] = await ask(
+    // 끌기가 먼저다. 설정 모달이 열려 있는 동안에는 그 아래 표면의 갱신이
+    // 중단되므로, 모달을 먼저 열면 끌기가 커밋을 하나도 남기지 않는다.
+    const dragged = await ask(
       binary,
-      ["transcript on", `click ${CLICK}`, `drag ${DRIVE} `],
-      (text) =>
-        /observe: shaking done/.test(text) &&
-        /"settled":true/.test(text) &&
-        /host overlayPlace/.test(text),
-      { timeout: 40_000 },
+      ["transcript on", `drag ${DRIVE} `],
+      (text) => /observe: shaking done/.test(text) && /"settled":true/.test(text),
+      { timeout: 20_000 },
     );
-    if (!logs[name]) return t.skip(`${binary} is not built`);
+    if (!dragged) return t.skip(`${binary} is not built`);
+    // 페이지를 되돌리지 않는다. 되돌리면 기록이 꺼지고 앞의 끌기도 사라진다.
+    const clicked = await ask(binary, `click ${CLICK}`,
+      (text) => /host overlayPlace/.test(text),
+      { timeout: 20_000, from: false });
+    logs[name] = dragged + clicked;
   }
 
   const wails = transcript(logs.wailsv3);

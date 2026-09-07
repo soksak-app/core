@@ -483,8 +483,9 @@ func (o *Observe) command(line string) {
 	case "click":
 		application.Get().Event.Emit("observe-click", rest)
 	case "transcript":
-		application.Get().Event.Emit("observe-record", rest != "off")
-		log.Printf("observe: transcript %s", onOff(rest))
+		// 끄는 길은 없다. reset 이 페이지를 다시 읽으면 기록도 처음으로 돌아간다.
+		application.Get().Event.Emit("observe-record")
+		log.Printf("observe: transcript on")
 	case "zoom":
 		application.InvokeSync(func() {
 			win, ok := mainWindow()
@@ -497,7 +498,11 @@ func (o *Observe) command(line string) {
 				win.Maximise()
 			}
 		})
-		log.Printf("observe: zoom %s", onOff(rest))
+		if rest == "off" {
+			log.Printf("observe: zoom off")
+		} else {
+			log.Printf("observe: zoom on")
+		}
 	case "size":
 		w, h, err := parseSize(rest)
 		if err != nil {
@@ -527,14 +532,6 @@ const (
 	startWidth  = 1200
 	startHeight = 760
 )
-
-// onOff 는 지시의 값을 로그에 적을 말로 바꾼다.
-func onOff(value string) string {
-	if value == "off" {
-		return "off"
-	}
-	return "on"
-}
 
 var driving = flag.String("drive", "",
 	"drag a boundary once the page is drawn, as wait,axis,line,dx,dy,ms,times")

@@ -183,8 +183,13 @@ export async function ask(binary, lines, done, { timeout = 30_000, from = true }
  * 다시 그려진 시점은 페이지의 검증기가 알린다. 시계로 기다리지 않는다.
  */
 async function fresh(binary) {
+  // 두 번째 보고를 기다린다. 페이지는 결과가 바뀔 때만 보고하고, 창의 단추가 어디
+  // 있는지는 호스트에게 물어 답을 받은 뒤에야 검사에 들어간다. 그래서 첫 보고와 둘째
+  // 보고 사이가 그 답이 도착한 자리다. 첫 보고에서 돌아가면 그 물음이 다음 지시와
+  // 겹쳐, 어느 실행에서는 기록에 남고 어느 실행에서는 남지 않는다.
+  const said = (text) => (text.match(/verify: \d+ (?:pass|fail)/g) ?? []).length;
   await held(() =>
-    tell(binary, portOf(binary), ["reset"], (text) => /verify: \d+ (pass|fail)/.test(text), 20_000),
+    tell(binary, portOf(binary), ["reset"], (text) => said(text) >= 2, 20_000),
   );
 }
 
