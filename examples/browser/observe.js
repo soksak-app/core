@@ -7,6 +7,7 @@
 // 적힌다. 호스트가 각자 구현하면 그 둘이 어긋날 수 있다.
 //
 // 호스트가 요청하지 않으면 실행되지 않는다.
+import { setKnob } from "./compositor.js";
 import { host } from "./framework/index.js";
 import { surfaceInput } from "./plane.js";
 
@@ -35,6 +36,12 @@ if (host) {
   });
 
   host.on("observe-drag", (plan) => shake(plan));
+  // 손잡이는 사람이 설정 화면에서 돌리는 것과 같은 값이다. 관측이 그것을 돌릴 수
+  // 있어야, 어떤 값에서 무엇이 달라지는지를 사람이 아니라 검사가 잰다.
+  host.on("observe-knob", ({ name, value }) => {
+    setKnob(name, value);
+    host.call("report", `observe: knob ${name} ${value}`);
+  });
   host.on("observe-tick", () => {
     if (waiting) {
       const go = waiting;
@@ -105,6 +112,11 @@ async function shake({ axis, line, dx, dy, ms, times }) {
 
   // 한 번 누른 채로 왕복한다. 놓았다 다시 누르면, 경계가 최소 카드 크기에서 멈춰
   // 지정한 만큼 이동하지 못했을 때 다음 누름이 빗나간다.
+  // 앞선 끌기가 받아 두고 쓰지 않은 걸음은 이 끌기의 것이 아니다. 남겨 두면 이
+  // 끌기가 그만큼을 한 번에 소비해 요청보다 빨리 끝나고, 그 끌기는 요청한 속도가
+  // 아니므로 아무것도 재지 못한다.
+  pending = 0;
+  waiting = null;
   surfaceInput({ phase: 0, x: from.x, y: from.y });
   const began = performance.now();
   for (let turn = 0; turn < times; turn++) {

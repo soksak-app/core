@@ -23,7 +23,7 @@ const settled = (log) =>
 
 for (const [name, binary] of Object.entries(APPS)) {
   test(`${name}: maximising the window leaves its own buttons in place`, async (t) => {
-    const run = await shake(binary, DRIVE, { zoom: true });
+    const run = await shake(binary, DRIVE, { before: ["zoom on"], after: ["zoom off"] });
     if (!run) return t.skip(`${binary} is not built`);
     try {
       // 창의 크기가 바뀌는 동안에는 표면이 페이지보다 한 커밋 늦으므로 그때의

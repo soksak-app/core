@@ -138,10 +138,9 @@ fn command<R: Runtime>(app: &tauri::AppHandle<R>, line: &str) {
     match verb {
         "" => {}
         "drag" => {
-            let Some((spec, dir)) = rest.split_once(' ') else {
-                say(&format!("observe: drag takes a spec and a directory, got {rest:?}"));
-                return;
-            };
+            // The directory is optional. A drag asked for without one is a
+            // drag whose result is read in the log rather than in the frames.
+            let (spec, dir) = rest.split_once(' ').unwrap_or((rest, ""));
             let mut plan = match Plan::parse(spec) {
                 Ok(plan) => plan,
                 Err(why) => {
@@ -150,9 +149,30 @@ fn command<R: Runtime>(app: &tauri::AppHandle<R>, line: &str) {
                 }
             };
             plan.wait = Duration::ZERO;
-            write_to(Some(dir.to_string()), true);
+            write_to((!dir.is_empty()).then(|| dir.to_string()), true);
             start_drag(app, plan);
         }
+        "click" => {
+            let _ = app.emit("observe-click", rest.to_string());
+        }
+        "transcript" => {
+            let _ = app.emit("observe-record", rest != "off");
+            say(&format!("observe: transcript {}", on_off(rest)));
+        }
+        "zoom" => {
+            if let Some(window) = app.get_window("main") {
+                let _ = if rest == "off" {
+                    window.unmaximize()
+                } else {
+                    window.maximize()
+                };
+            }
+            say(&format!("observe: zoom {}", on_off(rest)));
+        }
+        "size" => match size_of(rest) {
+            Some((w, h)) => set_size(app, w, h),
+            None => say(&format!("observe: size takes width,height, got {rest:?}")),
+        },
         _ => say(&format!("observe: {verb:?} is not a command")),
     }
 }
@@ -244,30 +264,12 @@ fn resize<R: Runtime>(app: tauri::AppHandle<R>) {
     let Some(spec) = flag("resize") else {
         return;
     };
-    let asked = spec
-        .split_once(',')
-        .and_then(|(w, h)| Some((w.trim().parse::<f64>().ok()?, h.trim().parse::<f64>().ok()?)))
-        .filter(|(w, h)| *w > 0.0 && *h > 0.0);
+    let asked = size_of(&spec);
     let Some((w, h)) = asked else {
         say(&format!("observe: --resize takes width,height, got {spec:?}"));
         return;
     };
-    let Some(window) = app.get_window("main") else {
-        return;
-    };
-    let Ok(scale) = window.scale_factor() else {
-        return;
-    };
-    // When the size has actually been applied is what the window says. Read
-    // straight after setting it, some applications answer with the size the
-    // window has not taken yet.
-    window.on_window_event(move |event| {
-        if let tauri::WindowEvent::Resized(got) = event {
-            let got = got.to_logical::<f64>(scale);
-            say(&format!("observe: sized {}x{}", got.width, got.height));
-        }
-    });
-    let _ = window.set_size(tauri::LogicalSize::new(w, h));
+    set_size(&app, w, h);
 }
 
 /// Asks the page to record every host call and its answer.
@@ -386,6 +388,50 @@ fn drive<R: Runtime>(app: tauri::AppHandle<R>) {
         start_drag(&app, plan);
     });
 }
+
+/// Reads "width,height".
+fn size_of(spec: &str) -> Option<(f64, f64)> {
+    spec.split_once(',')
+        .and_then(|(w, h)| Some((w.trim().parse::<f64>().ok()?, h.trim().parse::<f64>().ok()?)))
+        .filter(|(w, h)| *w > 0.0 && *h > 0.0)
+}
+
+/// Names an instruction's value for the log.
+fn on_off(value: &str) -> &'static str {
+    if value == "off" {
+        "off"
+    } else {
+        "on"
+    }
+}
+
+/// Gives the window's content this size and reports the size it took.
+///
+/// The reporter is attached once: this application takes many instructions, and
+/// attaching on every one leaves several lines for one change.
+fn set_size<R: Runtime>(app: &tauri::AppHandle<R>, w: f64, h: f64) {
+    let Some(window) = app.get_window("main") else {
+        return;
+    };
+    let Ok(scale) = window.scale_factor() else {
+        return;
+    };
+    if !SIZED.swap(true, std::sync::atomic::Ordering::SeqCst) {
+        // When the size has actually been applied is what the window says. Read
+        // straight after setting it, some applications answer with the size the
+        // window has not taken yet.
+        window.on_window_event(move |event| {
+            if let tauri::WindowEvent::Resized(got) = event {
+                let got = got.to_logical::<f64>(scale);
+                say(&format!("observe: sized {}x{}", got.width, got.height));
+            }
+        });
+    }
+    let _ = window.set_size(tauri::LogicalSize::new(w, h));
+}
+
+/// Whether the window's size reporter is attached.
+static SIZED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// One step of a drag. The page's observe.js writes the same value.
 const FRAME: Duration = Duration::from_millis(16);

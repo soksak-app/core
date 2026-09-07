@@ -14,6 +14,7 @@ package main
 import (
 	"errors"
 	"log"
+	"math"
 	"sync"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -111,6 +112,12 @@ type Surfaces struct {
 	// The surfaces in a live resize. A surface receives the start and the end of
 	// a run, not one call per frame.
 	live map[string]bool
+	// The rect each surface was last told to take. A surface and its card are
+	// drawn by two compositors and land in different window-server frames, so
+	// while a run is going the page's card is drawn at either the rect it was
+	// told last or the one it is told now. Drawing the surface across only what
+	// those two share puts it inside the card whichever of the two is on screen.
+	told map[string]Rect
 	// Whether a run of updates is in progress. The page reports that on every
 	// commit, and this is what makes run-began and run-ended the two edges of a
 	// run rather than one message per frame.
@@ -195,11 +202,12 @@ func NewSurfaces(shells *Shells) *Surfaces {
 		views:  map[string]*application.Webview{},
 		named:  map[uintptr]string{},
 		live:   map[string]bool{},
+		told:   map[string]Rect{},
 		shapes: map[string]*nativeShape{},
 		shells: shells,
 		// 아직 테마를 받지 않았을 때의 값. 빈 맵이 아니면 JSON 에 null 이 실리고,
 		// 이 값을 받는 페이지는 토큰을 순회하다 멈춘다.
-		theme:  Theme{Tokens: map[string]string{}},
+		theme: Theme{Tokens: map[string]string{}},
 	}
 }
 
@@ -547,6 +555,19 @@ type InputStep struct {
 	Y     float64 `json:"y"`
 }
 
+// shared returns the rect two rects both cover. Rects that do not meet share no
+// area, and the result is then the empty rect at the corner they are nearest at.
+func shared(a, b Rect) Rect {
+	left := math.Max(a.X, b.X)
+	top := math.Max(a.Y, b.Y)
+	right := math.Min(a.X+a.W, b.X+b.W)
+	bottom := math.Min(a.Y+a.H, b.Y+b.H)
+	if right <= left || bottom <= top {
+		return Rect{X: left, Y: top}
+	}
+	return Rect{X: left, Y: top, W: right - left, H: bottom - top}
+}
+
 // alphaFor returns the alpha for a surface. The page decides whether to dim it.
 func alphaFor(dim bool) float64 {
 	if dim {
@@ -665,9 +686,26 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) []stri
 		visible := surface.Visible && surface.W >= 1 && surface.H >= 1
 
 		alpha := alphaFor(surface.Dim)
+		// Where this surface is told to be, and where it is drawn. The two differ
+		// while a run is going: see `told`.
+		want := Rect{X: surface.X, Y: surface.Y, W: w, H: h}
+		before, had := s.told[surface.ID]
+		// A commit naming the rect the last one named carries nothing new. The
+		// page measures and reports again after it draws, and that report says
+		// the same as the report that preceded the draw; taking it as a second
+		// change would widen the surface back to the whole rect and undo what
+		// the two shared.
+		same := had && before == want
+		draw := want
+		if !req.Settled && had {
+			draw = shared(before, want)
+		}
+		s.told[surface.ID] = want
 		if view, live := s.views[surface.ID]; live {
 			s.resizing(surface.ID, view, !req.Settled)
-			view.SetBounds(surface.X, surface.Y, w, h)
+			if !same {
+				view.SetBounds(draw.X, draw.Y, max1(draw.W), max1(draw.H))
+			}
 			view.SetHidden(!visible)
 			surfaceAlpha(view.NativeView(), alpha)
 			continue
@@ -704,6 +742,7 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) []stri
 			continue
 		}
 		s.resizing(id, view, false)
+		delete(s.told, id)
 		delete(s.named, uintptr(view.NativeView()))
 		view.Close()
 		delete(s.views, id)

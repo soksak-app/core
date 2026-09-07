@@ -169,6 +169,7 @@ fn sync_surfaces(
     watching: State<'_, Watching>,
     resizing: State<'_, Resizing>,
     running: State<'_, Running>,
+    told: State<'_, Told>,
     request: SyncRequest,
 ) -> Result<Vec<Placement>, String> {
     announce_run(&window, &running, !request.settled)?;
@@ -192,15 +193,33 @@ fn sync_surfaces(
         // A zero-sized webview is not something anyone can see, and some
         // platforms reject it, so treat it as hidden.
         let visible = s.visible && s.w >= 1.0 && s.h >= 1.0;
-        let (ax, ay, aw, ah) = aligned(s.x, s.y, s.w.max(1.0), s.h.max(1.0), scale);
+        let want = aligned(s.x, s.y, s.w.max(1.0), s.h.max(1.0), scale);
+        let before = told.0.lock().map_err(|e| e.to_string())?.get(&label).copied();
+        // A commit naming the rect the last one named carries nothing new. The
+        // page measures and reports again after it draws, and that report says
+        // the same as the report that preceded the draw; taking it as a second
+        // change would widen the surface back to the whole rect and undo what
+        // the two shared.
+        let same = before == Some(want);
+        let (ax, ay, aw, ah) = match before {
+            Some(had) if !request.settled => shared(had, want),
+            _ => want,
+        };
+        told
+            .0
+            .lock()
+            .map_err(|e| e.to_string())?
+            .insert(label.clone(), want);
         let position = LogicalPosition::new(ax, ay);
         let size = LogicalSize::new(aw, ah);
         let solid = if s.dim { 0.45 } else { 1.0 };
 
         if let Some(webview) = window.get_webview(&label) {
             set_resizing(&resizing, &webview, !request.settled)?;
-            webview.set_position(position).map_err(|e| e.to_string())?;
-            webview.set_size(size).map_err(|e| e.to_string())?;
+            if !same {
+                webview.set_position(position).map_err(|e| e.to_string())?;
+                webview.set_size(size).map_err(|e| e.to_string())?;
+            }
             if visible {
                 webview.show().map_err(|e| e.to_string())?;
             } else {
@@ -212,7 +231,9 @@ fn sync_surfaces(
             webview
                 .with_webview(move |platform| {
                     native::alpha(&platform, solid);
-                    native::place_surface(&platform, ax, ay, aw, ah);
+                    if !same {
+                        native::place_surface(&platform, ax, ay, aw, ah);
+                    }
                 })
                 .map_err(|e| e.to_string())?;
             continue;
@@ -261,6 +282,7 @@ fn sync_surfaces(
         let label = webview.label().to_string();
         if label.starts_with("surface-") && !wanted.contains(&label) {
             resizing.0.lock().map_err(|e| e.to_string())?.remove(&label);
+            told.0.lock().map_err(|e| e.to_string())?.remove(&label);
             // The map is keyed by the view's address, and the system reuses an
             // address once the view is gone. A stale entry names a surface that
             // no longer exists, so it is removed with the view.
@@ -487,6 +509,27 @@ struct Watching(Mutex<bool>);
 /// run, not one call per frame.
 #[derive(Default)]
 struct Resizing(Mutex<HashSet<String>>);
+
+/// The rect each surface was last told to take.
+///
+/// A surface and its card are drawn by two compositors and land in different
+/// window-server frames, so while a run is going the card is drawn at either the
+/// rect told last or the one told now. Drawing the surface across only what
+/// those two share puts it inside the card whichever of the two is on screen.
+#[derive(Default)]
+struct Told(Mutex<HashMap<String, (f64, f64, f64, f64)>>);
+
+/// The rect two rects both cover. Rects that do not meet cover no area.
+fn shared(a: (f64, f64, f64, f64), b: (f64, f64, f64, f64)) -> (f64, f64, f64, f64) {
+    let left = a.0.max(b.0);
+    let top = a.1.max(b.1);
+    let right = (a.0 + a.2).min(b.0 + b.2);
+    let bottom = (a.1 + a.3).min(b.1 + b.3);
+    if right <= left || bottom <= top {
+        return (left, top, 0.0, 0.0);
+    }
+    (left, top, right - left, bottom - top)
+}
 
 /// Whether a run of updates is going, and whether the page has committed.
 ///
@@ -991,6 +1034,7 @@ fn main() {
         .manage(Views::default())
         .manage(Watching::default())
         .manage(Resizing::default())
+        .manage(Told::default())
         .manage(Running::default())
         .manage(shell::Shells::default())
         .invoke_handler(tauri::generate_handler![

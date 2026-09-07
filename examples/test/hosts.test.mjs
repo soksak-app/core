@@ -8,7 +8,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { APPS, run } from "./app.mjs";
+import { APPS, ask } from "./app.mjs";
 
 /** 대조에 쓰는 끌기. 경계를 이름으로 지정하므로 창의 크기에 의존하지 않는다. */
 const DRIVE = "4000,x,2,-120,0,48,2";
@@ -70,9 +70,9 @@ const afterResize = (log = "") => {
 test("both hosts answer the same page the same way", async (t) => {
   const logs = {};
   for (const [name, binary] of Object.entries(APPS)) {
-    logs[name] = await run(
+    logs[name] = await ask(
       binary,
-      ["--observe", "--transcript", "--drive", DRIVE, "--click", CLICK],
+      ["transcript on", `drag ${DRIVE} `, `click ${CLICK}`],
       (text) =>
         /observe: shaking done/.test(text) &&
         /"settled":true/.test(text) &&
@@ -121,9 +121,9 @@ test("both hosts answer the same page the same way", async (t) => {
 test("both hosts lay out the same page the same way after a resize", async (t) => {
   const rested = {};
   for (const [name, binary] of Object.entries(APPS)) {
-    const log = await run(
+    const log = await ask(
       binary,
-      ["--observe", "--transcript", "--resize", `${SIZE.w},${SIZE.h}`],
+      ["transcript on", `size ${SIZE.w},${SIZE.h}`],
       // 창이 지정된 크기를 가졌다고 보고한 뒤의 커밋을 기다린다. 그 크기에 이르지
       // 못하는 호스트는 여기서 예산이 끝나고, 그 로그가 실패에 실린다.
       (text) => /"settled":true/.test(afterResize(text) ?? ""),

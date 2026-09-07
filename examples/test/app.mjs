@@ -2,7 +2,6 @@
 //
 // 순서는 관측 부품이 수행한다. 창이 표시되고, 페이지 렌더링을 기다리고, 경계를
 // 흔들고, 그동안 녹화하고, 종료한다.
-import { spawn } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { connect, createServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -26,9 +25,6 @@ const CONTROL = {
   tauriv2: 49733,
 };
 
-/** 띄운 애플리케이션이 통로를 열 때까지 기다리는 한도. */
-const OPENS = 30_000;
-
 /** 통로에 한 번 붙어 본다. 붙었으면 연결, 아니면 null. */
 const reach = (port) =>
   new Promise((done) => {
@@ -38,27 +34,22 @@ const reach = (port) =>
   });
 
 /**
- * 이 애플리케이션의 통로에 붙는다. 떠 있지 않으면 한 번 띄우고 기다린다.
+ * 이 애플리케이션의 통로에 붙는다. 떠 있지 않으면 실패한다.
  *
- * 띄운 것은 이 프로세스와 함께 죽지 않는다. 다음 검사가 같은 창에 지시를 보내므로,
- * 창은 한 번만 뜬다.
+ * 검사는 애플리케이션을 띄우지 않는다. 새 창은 화면 앞에 놓이고 그 순간 포커스를
+ * 가져가므로, 창을 띄우는 것은 기계를 쓰고 있는 사람이 허락한 때에만 일어나야 한다.
+ * 검사가 띄울 수 있으면 그 약속은 약속으로만 남는다.
  */
 async function reachApp(binary, port) {
-  const first = await reach(port);
-  if (first) return first;
-  spawn(binary, ["--observe"], { detached: true, stdio: "ignore" }).unref();
-  const until = Date.now() + OPENS;
-  for (;;) {
-    const conn = await reach(port);
-    if (conn) return conn;
-    if (Date.now() > until) {
-      throw new Error(
-        `${binary} did not open 127.0.0.1:${port} in ${OPENS} ms. Nothing was measured: ` +
-          "the application was started and never answered.",
-      );
-    }
-    await new Promise((go) => setTimeout(go, 200));
-  }
+  const conn = await reach(port);
+  if (conn) return conn;
+  throw new Error(
+    `${binary} is not running, so nothing was measured. These checks drive an application ` +
+      "that is already open and never open one themselves: a window that opens takes the " +
+      "screen and the keyboard from whoever is using the machine. Start it once with " +
+      `\`${binary} --observe\` and run them again; it answers on 127.0.0.1:${port} and ` +
+      "stays open for every run after this one.",
+  );
 }
 
 /**
@@ -67,13 +58,15 @@ async function reachApp(binary, port) {
  * 돌아오는 것은 그 애플리케이션의 로그다. 붙은 뒤의 줄만 오므로, 이 지시가 남긴
  * 것만 읽는다.
  */
-async function tell(binary, port, line, done, timeout) {
+async function tell(binary, port, lines, done, timeout) {
   const conn = await reachApp(binary, port);
   let log = "";
   try {
     return await new Promise((resolve, reject) => {
       const fail = setTimeout(() => {
-        const why = new Error(`${binary} did not finish ${line} in ${timeout} ms:\n${log}`);
+        const why = new Error(
+          `${binary} did not finish ${lines.join(", ")} in ${timeout} ms:\n${log}`,
+        );
         why.log = log;
         reject(why);
       }, timeout);
@@ -96,7 +89,7 @@ async function tell(binary, port, line, done, timeout) {
         why.exited = true;
         reject(why);
       });
-      conn.write(`${line}\n`);
+      for (const line of lines) conn.write(`${line}\n`);
     });
   } finally {
     conn.destroy();
@@ -151,68 +144,29 @@ async function hold() {
   }
 }
 
+/** 이 실행 파일이 지시를 받는 포트. */
+const portOf = (binary) =>
+  CONTROL[Object.entries(APPS).find(([, at]) => at === binary)?.[0]];
+
 /**
- * 애플리케이션을 실행하고 done(log) 가 참이 될 때까지 기다린다.
+ * 떠 있는 애플리케이션에 지시를 보내고 done(log) 가 참이 될 때까지 읽는다.
  *
- * 기다림의 끝은 로그에 남는 사건이다. 시계로 기다리면 느린 기계에서 아직 일어나지
- * 않은 것을 검사하게 된다.
+ * 여러 줄을 주면 한 연결에서 차례로 보낸다. 한 상태를 함께 만드는 지시들 사이에
+ * 다른 실행이 끼어들면 그 상태가 섞이기 때문이다.
+ *
+ * 실행 파일이 없으면 null 이다. 부르는 쪽은 그것을 건너뛴 검사로 보고한다.
  */
-export async function run(binary, args, done, { timeout = 30_000 } = {}) {
+export async function ask(binary, lines, done, { timeout = 30_000 } = {}) {
   if (!existsSync(binary)) return null;
-  const lock = await hold();
-  try {
-    return await drive(binary, args, done, timeout);
-  } finally {
-    lock.close();
-  }
-}
-
-/** 자물쇠를 쥔 채 애플리케이션 하나를 몬다. */
-async function drive(binary, args, done, timeout) {
-  const app = spawn(binary, args);
-
-  let log = "";
-  const waited = new Promise((resolve, reject) => {
-    const fail = setTimeout(() => {
-      // 로그를 오류에 실어 보낸다. 예산이 끝난 이유는 로그의 마지막 줄에 있고,
-      // 문자열로만 넘기면 부르는 쪽이 그것을 다시 읽어야 한다.
-      const why = new Error(`${binary} did not finish in ${timeout} ms:\n${log}`);
-      why.log = log;
-      reject(why);
-    }, timeout);
-    const read = (chunk) => {
-      log += chunk;
-      if (done(log)) {
-        clearTimeout(fail);
-        resolve();
-      }
-    };
-    app.stdout.on("data", read);
-    app.stderr.on("data", read);
-    app.on("error", reject);
-    app.on("close", (code, signal) => {
-      if (done(log)) return;
-      clearTimeout(fail);
-      const why = new Error(`${binary} exited with ${signal ?? code} before it finished:\n${log}`);
-      why.log = log;
-      why.exited = true;
-      reject(why);
-    });
-  });
-
-  try {
-    await waited;
-  } finally {
-    await end(app);
-  }
-  return log;
+  return held(() => tell(binary, portOf(binary), [].concat(lines), done, timeout));
 }
 
 /**
  * 자물쇠를 쥔 채 하나를 수행한다.
  *
- * 창을 모는 일은 한 번에 하나여야 한다. 애플리케이션을 띄우는 실행과 떠 있는
- * 것에 지시를 보내는 실행이 같은 자물쇠를 쓴다.
+ * 창을 모는 일은 한 번에 하나여야 한다. 검사 파일은 여럿이고 러너는 그것들을 함께
+ * 실행하므로, 같은 창에 두 지시가 겹쳐 들어가면 각 실행은 남의 지시가 섞인 결과를
+ * 자기 것으로 잰다.
  */
 async function held(work) {
   const lock = await hold();
@@ -223,44 +177,12 @@ async function held(work) {
   }
 }
 
-/** 신호에 응하지 않는 애플리케이션을 거두기까지 기다리는 한도. */
-const HARD = 5_000;
-
 /**
- * 애플리케이션을 끝내고 사라질 때까지 기다린다.
+ * 떠 있는 애플리케이션에 경계를 흔들라고 하고 녹화한다. 프레임 폴더와 정리 함수를
+ * 반환한다.
  *
- * kill() 은 신호를 보내고 곧바로 돌아온다. 기다리지 않고 자물쇠를 놓으면 다음
- * 실행이 앞의 애플리케이션이 아직 살아 있는 동안 자기 창을 띄우고 녹화를
- * 시작한다. 같은 종류의 녹화가 둘이면 플랫폼이 먼저 것을 거두므로 그 실행은 한
- * 장도 받지 못하고, nothingRecorded 는 그 원인을 이 검사 밖에서 찾으라고 말한다.
- *
- * 신호에 응하지 않는 애플리케이션은 HARD 뒤에 SIGKILL 로 거둔다.
- */
-function end(app) {
-  if (app.pid === undefined || app.exitCode !== null || app.signalCode !== null) {
-    return Promise.resolve();
-  }
-  return new Promise((gone) => {
-    const hard = setTimeout(() => {
-      try {
-        app.kill("SIGKILL");
-      } catch {
-        // 이미 사라졌다.
-      }
-    }, HARD);
-    app.once("close", () => {
-      clearTimeout(hard);
-      gone();
-    });
-    app.kill();
-  });
-}
-
-/**
- * 애플리케이션을 실행해 경계를 흔들고 녹화한다. 프레임 폴더와 정리 함수를 반환한다.
- *
- * drive 는 관측 부품이 받는 형식과 같다: wait,x,y,dx,dy,ms,times. zoom 은 끌기 전에
- * 창을 최대화한다.
+ * drive 는 관측 부품이 받는 형식과 같다: wait,axis,line,dx,dy,ms,times. before 와
+ * after 는 그 끌기 앞뒤로 보낼 지시다.
  */
 /**
  * 이 끌기가 요구하는 시계.
@@ -291,7 +213,11 @@ export const clockHeld = (log = "") => {
   if (!/observe: shaking [xy]:/.test(log)) return false;
   const done = log.match(/observe: shaking done in (\d+)ms, asked (\d+)ms/);
   if (!done) return true;
-  return Number(done[1]) > Number(done[2]) * MARGIN;
+  const took = Number(done[1]);
+  const asked = Number(done[2]);
+  // 빠른 것도 요청한 속도가 아니다. 걸음이 몰려 전달되면 끌기는 지정한 경로를
+  // 지정한 속도로 지나지 않으므로, 그 실행 역시 아무것도 재지 못한 것이다.
+  return took > asked * MARGIN || took < asked / MARGIN;
 };
 
 /**
@@ -330,29 +256,26 @@ export async function shakeTwice(binary, drive, options) {
   }
 }
 
-export async function shake(binary, drive, { zoom = false, ...options } = {}) {
+export async function shake(binary, drive, { before = [], after = [] } = {}) {
   if (!existsSync(binary)) return null;
   const into = mkdtempSync(join(tmpdir(), "soksak-frames-"));
   const clean = () => rmSync(into, { recursive: true, force: true });
   // 녹화 종료가 기록되면 모든 프레임이 파일로 저장된 상태다.
   const done = (text) => /observe: wrote \d+ frames/.test(text);
-  const timeout = budget(drive);
-  const name = Object.entries(APPS).find(([, at]) => at === binary)?.[0];
   let log;
   try {
-    log = zoom
-      ? // --zoom 은 창을 최대화한 채로 시작해야 하므로 실행 인자다. 그 검사는
-        // 자기 애플리케이션을 띄운다.
-        await run(binary, ["--observe", "--zoom", "--drive", drive, "--capture", into], done, {
-          timeout,
-          ...options,
-        })
-      : await held(() => tell(binary, CONTROL[name], `drag ${drive} ${into}`, done, timeout));
+    log = await ask(binary, [...before, `drag ${drive} ${into}`], done, {
+      timeout: budget(drive),
+    });
   } catch (why) {
     // 끝나지 못한 실행도 그때까지의 프레임을 적어 두었다. 부르는 쪽은 반환값을
     // 받지 못하므로 그것을 지울 수단이 없다.
     clean();
     throw why;
+  } finally {
+    // 이 검사가 창에 준 상태는 이 검사가 거둔다. 애플리케이션은 다음 검사에도
+    // 살아 있으므로, 남긴 상태는 그 검사가 재는 것을 바꾼다.
+    for (const line of after) await ask(binary, line, () => true, { timeout: 5_000 });
   }
   return { into, log, clean };
 }

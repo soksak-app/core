@@ -14,7 +14,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { APPS, run } from "./app.mjs";
+import { APPS, ask } from "./app.mjs";
 
 /**
  * 모달을 열고 그 안의 구획을 바꾼다. 구획을 바꾸면 페이지가 내용 갱신을 전송한다.
@@ -33,9 +33,9 @@ const renders = (log, id) =>
 
 for (const [name, binary] of Object.entries(APPS)) {
   test(`${name}: an open modal's document receives the content the page updates`, async (t) => {
-    const log = await run(
+    const log = await ask(
       binary,
-      ["--observe", "--click", CLICK],
+      `click ${CLICK}`,
       (text) => renders(text, "settings") >= 2 || text.includes(WAITED),
       { timeout: 30_000 },
     );

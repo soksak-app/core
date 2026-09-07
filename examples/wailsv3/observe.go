@@ -33,6 +33,8 @@ type Observe struct {
 	// 값을 준다. 지시를 받는 고루틴과 이벤트 수신자가 함께 읽는다.
 	mu   sync.Mutex
 	into string
+	// 창이 크기를 알리는 수신자를 붙였는지.
+	sized sync.Once
 	// 이 폴더가 실행 하나만 받는지. 지시는 자기가 시킨 끌기만 녹화한다. --capture
 	// 는 사람이 끄는 경계도 담으라는 뜻이므로 계속 받는다.
 	once bool
@@ -212,20 +214,37 @@ func (o *Observe) resize() {
 	if *resizing == "" {
 		return
 	}
-	var w, h int
-	if _, err := fmt.Sscanf(*resizing, "%d,%d", &w, &h); err != nil || w <= 0 || h <= 0 {
-		log.Printf("observe: --resize takes width,height, got %q", *resizing)
+	w, h, err := parseSize(*resizing)
+	if err != nil {
+		log.Printf("observe: --resize %v", err)
 		return
 	}
+	o.size(w, h)
+}
+
+// parseSize 는 "width,height" 를 읽는다.
+func parseSize(spec string) (int, int, error) {
+	var w, h int
+	if _, err := fmt.Sscanf(spec, "%d,%d", &w, &h); err != nil || w <= 0 || h <= 0 {
+		return 0, 0, fmt.Errorf("takes width,height, got %q", spec)
+	}
+	return w, h, nil
+}
+
+// size 는 창의 콘텐츠를 이 크기로 만들고 얻은 크기를 보고한다.
+func (o *Observe) size(w, h int) {
 	win, ok := mainWindow()
 	if !ok {
 		return
 	}
 	// 크기가 실제로 적용된 시점은 창이 알린다. 설정한 직후에 읽으면 아직 적용되지
-	// 않은 크기를 읽는 애플리케이션이 있다.
-	win.OnWindowEvent(events.Common.WindowDidResize, func(*application.WindowEvent) {
-		got, high := win.Size()
-		log.Printf("observe: sized %dx%d", got, high)
+	// 않은 크기를 읽는 애플리케이션이 있다. 수신자는 한 번만 붙인다: 이 애플리케이션은
+	// 지시를 여러 번 받으므로, 부를 때마다 붙이면 한 번의 변경이 여러 줄로 남는다.
+	o.sized.Do(func() {
+		win.OnWindowEvent(events.Common.WindowDidResize, func(*application.WindowEvent) {
+			got, high := win.Size()
+			log.Printf("observe: sized %dx%d", got, high)
+		})
 	})
 	application.InvokeSync(func() { win.SetSize(w, h) })
 }
@@ -429,11 +448,9 @@ func (o *Observe) command(line string) {
 	switch verb {
 	case "":
 	case "drag":
-		spec, into, ok := strings.Cut(rest, " ")
-		if !ok {
-			log.Printf("observe: drag takes a spec and a directory, got %q", rest)
-			return
-		}
+		// 폴더는 없어도 된다. 녹화 없이 끄는 지시는 화면이 아니라 로그를 읽는
+		// 검사의 것이다.
+		spec, into, _ := strings.Cut(rest, " ")
 		plan, err := parseDrive(spec)
 		if err != nil {
 			log.Printf("observe: drag %v", err)
@@ -442,9 +459,54 @@ func (o *Observe) command(line string) {
 		plan.wait = 0
 		o.writeTo(into, true)
 		startDrag(plan)
+	case "click":
+		application.Get().Event.Emit("observe-click", rest)
+	case "transcript":
+		application.Get().Event.Emit("observe-record", rest != "off")
+		log.Printf("observe: transcript %s", onOff(rest))
+	case "zoom":
+		application.InvokeSync(func() {
+			win, ok := mainWindow()
+			if !ok {
+				return
+			}
+			if rest == "off" {
+				win.UnMaximise()
+			} else {
+				win.Maximise()
+			}
+		})
+		log.Printf("observe: zoom %s", onOff(rest))
+	case "size":
+		w, h, err := parseSize(rest)
+		if err != nil {
+			log.Printf("observe: size %v", err)
+			return
+		}
+		o.size(w, h)
+	case "knob":
+		name, value, ok := strings.Cut(rest, " ")
+		if !ok {
+			log.Printf("observe: knob takes a name and a value, got %q", rest)
+			return
+		}
+		at, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+		if err != nil {
+			log.Printf("observe: knob %q is not a number", value)
+			return
+		}
+		application.Get().Event.Emit("observe-knob", map[string]any{"name": name, "value": at})
 	default:
 		log.Printf("observe: %q is not a command", verb)
 	}
+}
+
+// onOff 는 지시의 값을 로그에 적을 말로 바꾼다.
+func onOff(value string) string {
+	if value == "off" {
+		return "off"
+	}
+	return "on"
 }
 
 var driving = flag.String("drive", "",
