@@ -372,7 +372,7 @@ let tabDrag = null;
    선다. 이음새에서는 보더가 0 이므로 값을 적지 않고 그려진 카드에서 잰다. */
 const cardBorder = () => {
   const el = plane.querySelector(".card");
-  return el ? parseFloat(getComputedStyle(el).borderTopWidth) || 0 : 0;
+  return el ? parseFloat(getComputedStyle(el).borderTopWidth) : 0;
 };
 
 /**
