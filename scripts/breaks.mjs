@@ -930,11 +930,11 @@ export const BREAKS = [
     what: "a split that takes another card below the size it has is kept rather than undone",
     file: "dist/soksak.js",
     find:
-      "        this.paidBy.set(fresh.id, { side: 'lo', to: card.id });\n" +
+      "        this.paidBy.set(fresh.id, { side: 'lo', to: card.id, at: line - card[lo] - 1 });\n" +
       "        this.changed();\n" +
       "        if (!this.stillFits(axis, was, empty)) {",
     to:
-      "        this.paidBy.set(fresh.id, { side: 'lo', to: card.id });\n" +
+      "        this.paidBy.set(fresh.id, { side: 'lo', to: card.id, at: line - card[lo] - 1 });\n" +
       "        this.changed();\n" +
       "        if (false) {",
   },
@@ -1161,5 +1161,19 @@ export const BREAKS = [
     file: "dist/dom.js",
     find: "            const step = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }[e.key];\n            if (step === undefined)\n                return;\n",
     to: "            const step = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }[e.key];\n",
+  },
+  {
+    id: "fill-payer",
+    what: "a close a neighbour fills keeps the width instead of returning it",
+    file: "dist/soksak.js",
+    find: "            const gives = !!back &&",
+    to: "            const gives = false && !!back &&",
+  },
+  {
+    id: "cut-payer",
+    what: "a cut does not record which of the payer's slots it took the width from",
+    file: "dist/soksak.js",
+    find: "        this.paidBy.set(fresh.id, { side: 'lo', to: card.id, at: line - card[lo] - 1 });\n        this.changed();",
+    to: "        this.paidBy.set(fresh.id, { side: 'lo', to: card.id });\n        this.changed();",
   },
 ];

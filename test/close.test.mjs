@@ -364,6 +364,9 @@ test("a card at the far border returns its room to the slot it came from", () =>
     assert.ok(Math.abs(width(id) - w) < 1e-9, `${id} is ${width(id)}, not ${w}: ${note}`);
 
   assert.equal(grid.close("rail"), true);
+  // The line comes off, which is what returning the span means: skipping the
+  // path leaves it standing and a neighbour grows over the slot instead.
+  assert.equal(grid.lines("x").length, 4, "the rail's line went with it");
   near("A", was.A + was.rail + grid.gap, "A gave the room and A takes it back");
   near("B", was.B, "B is not the one that gave it");
   near("C", was.C, "nor is the neighbour the fill would have picked");
@@ -455,4 +458,85 @@ test("a close gives the width back to the slot beside it when the record has gon
   assert.deepEqual([at("n6"), wide("n6")], [1380.41, 205.59], "the slot beside it took the width");
   assert.deepEqual([at("n1"), wide("n1")], [859.29, 184.12], "and no other card moved");
   assert.deepEqual([at("n2"), wide("n2")], [1071.41, 281]);
+});
+
+test("a split and the close after it are inverses when a neighbour grows over the slot", () => {
+  // `paidBy` records the card a split cut the new one out of, so the close hands
+  // the width back to it. Where the closing card's line cannot be removed —
+  // another card reads it — a row of neighbours grows over the slot instead, and
+  // the width went to whichever neighbour that was: `top` lost half its height
+  // to `bottom` on every split-and-close pair, until it was too short to cut.
+  const grid = new Soksak(
+    {
+      xs: [0, 0.5, 1],
+      ys: [0, 0.5, 1],
+      cards: [
+        { id: "top", c0: 0, c1: 1, r0: 0, r1: 1 },
+        { id: "bottom", c0: 0, c1: 1, r0: 1, r1: 2 },
+        { id: "right", c0: 1, c1: 2, r0: 0, r1: 2 },
+      ],
+    },
+    { width: 1000, height: 400, gap: 20, minSize: 40 },
+  );
+  const tall = (id) => Number(grid.rect(id).h.toFixed(2));
+  assert.deepEqual([tall("top"), tall("bottom")], [190, 190]);
+
+  for (let round = 0; round < 3; round++) {
+    const born = grid.split("top", "y", { id: `mid${round}` });
+    assert.equal(born, `mid${round}`, `round ${round}: the cut was refused`);
+    assert.deepEqual(
+      [tall("top"), tall(born), tall("bottom")],
+      [90, 80, 190],
+      `round ${round}: the cut divides top and leaves bottom alone`,
+    );
+    // `right` reads the line the cut made, so the close cannot take that line
+    // away: the row below grows over the slot instead.
+    assert.equal(grid.fill(born).side, "below", `round ${round}: bottom fills the slot`);
+    assert.equal(grid.close(born), true);
+    assert.deepEqual(
+      [tall("top"), tall("bottom")],
+      [190, 190],
+      `round ${round}: the width went back to the card the cut took it from`,
+    );
+    assertTiling(grid, `after round ${round}`);
+  }
+});
+
+test("a cut takes the far half, so its width comes back to the payer's last slot", () => {
+  // `split` gives the new card the far half, so the slot the width came from is
+  // the payer's last and not its first. `paidBy.at` counts slots from the
+  // payer's first, so a cut out of a payer spanning several has to record which
+  // one; without that the close gave the width to `under`, a slot the cut never
+  // touched, and `beside` — the card standing where the cut card was — kept the
+  // width it had.
+  const grid = new Soksak(
+    {
+      xs: [0, 0.2, 0.55, 1],
+      ys: [0, 1],
+      cards: [{ id: "wide", c0: 0, c1: 3, r0: 0, r1: 1 }],
+    },
+    { width: 1000, height: 400, gap: 20, minSize: 40 },
+  );
+  // The cut lands on the line nearest the middle, which leaves `wide` over two
+  // slots and `cut` over the third.
+  assert.equal(grid.split("wide", "x", { id: "cut" }), "cut");
+  assert.deepEqual([grid.card("wide").c0, grid.card("wide").c1], [0, 2]);
+  assert.equal(grid.split("wide", "y", { id: "under" }), "under");
+  assert.equal(grid.split("under", "x", { id: "beside" }), "beside");
+
+  const wide = (id) => Number(grid.rect(id).w.toFixed(2));
+  const at = (id) => Number(grid.rect(id).x.toFixed(2));
+  assert.deepEqual([at("under"), wide("under")], [0, 190]);
+  assert.deepEqual([at("beside"), wide("beside")], [210, 330]);
+  assert.equal(wide("cut"), 440);
+
+  assert.equal(grid.close("cut"), true);
+  assert.deepEqual(
+    [at("beside"), wide("beside")],
+    [210, 790],
+    "the slot the cut took the width from gets it back",
+  );
+  assert.deepEqual([at("under"), wide("under")], [0, 190], "and the slot beyond it does not move");
+  assert.equal(wide("wide"), 1000);
+  assertTiling(grid, "after the cut card closed");
 });

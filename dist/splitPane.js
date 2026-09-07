@@ -1147,7 +1147,9 @@ export class Soksak {
         fresh[lo] = line;
         card[hi] = line;
         this.list.push(fresh);
-        this.paidBy.set(fresh.id, { side: 'lo', to: card.id });
+        // The far half is the new card, so the slot the space came from is the
+        // payer's last, which is not its first whenever it spans several.
+        this.paidBy.set(fresh.id, { side: 'lo', to: card.id, at: line - card[lo] - 1 });
         this.changed();
         if (!this.stillFits(axis, was, empty)) {
             this.restore(undo);
@@ -1249,7 +1251,7 @@ export class Soksak {
      * when the card is `fixed`, or when it is the last card.
      */
     close(id) {
-        var _a;
+        var _a, _b;
         const card = this.removable(id);
         if (!card)
             return false;
@@ -1339,12 +1341,29 @@ export class Soksak {
             const from = card[lo];
             const to = card[hi];
             const want = slotWidths(this.plane, axis);
+            // The card's slots go to the neighbour that expanded over them, and the
+            // width those slots held goes back to the slot it came from, as it does
+            // where the line can be removed. Every other slot keeps its width.
+            //
+            // Without the handback the width goes to whichever neighbour the fill
+            // selected, so a split and the close after it are not inverses and
+            // repeating the pair walks the card the split cut down to `minSize`. A
+            // payer that is itself one of the growers takes the width back with the
+            // slots, so nothing is named there.
+            const back = paid && this.find(paid.to);
+            const paidAt = back ? back[lo] + ((_b = paid.at) !== null && _b !== void 0 ? _b : 0) : -1;
+            const gives = !!back &&
+                !filling.cards.includes(back) &&
+                paidAt >= back[lo] &&
+                paidAt < back[hi] &&
+                (paidAt < from || paidAt >= to);
+            if (gives)
+                for (let i = from; i < to; i++)
+                    want[i] = 0;
             for (const neighbour of filling.cards)
                 neighbour[filling.grow] = card[filling.grow];
             this.list.splice(this.list.indexOf(card), 1);
-            // The card's slots go to the neighbour that expanded over them. Every other
-            // slot keeps its width.
-            this.settleOn(axis, want, order(from, want.length, to - 1));
+            this.settleOn(axis, want, gives ? order(paidAt, want.length, paidAt - 1) : order(from, want.length, to - 1));
             this.standAgain(axis, stood);
             this.changed();
             return true;
