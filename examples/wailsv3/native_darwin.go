@@ -90,7 +90,12 @@ static void windowControls(void* nsWindow, double* out) {
     for (int i = 0; i < 3; i++) {
         NSButton* button = buttons[i];
         if (button == nil || button.isHidden) continue;
-        NSRect at = [content convertRect:button.bounds fromView:button];
+        // The drawn circle, not the button's clickable box: AppKit draws a 12pt
+        // circle inside a 16pt button and does not centre it there, so centring
+        // the box leaves the circle high. `alignmentRectForFrame:` is what the
+        // platform reports as the visually meaningful area.
+        NSRect drawn = [button alignmentRectForFrame:button.bounds];
+        NSRect at = [content convertRect:drawn fromView:button];
         together = NSIsEmptyRect(together) ? at : NSUnionRect(together, at);
     }
     if (NSIsEmptyRect(together)) return;
