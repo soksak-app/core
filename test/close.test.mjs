@@ -430,35 +430,29 @@ test("a card that leaves by giving up its slots does not redraw the slots that s
 });
 
 test("a close gives the width back to the slot beside it when the record has gone stale", () => {
-  // `paidBy.at` counts slots from the payer's first, and nothing maintains it: a
-  // cut inside the payer's span, and a close or a travel that shortens it, both
-  // move the slot it counts to. Here `payer` spans one slot, so it has no second
-  // one, and the offset named `far` — a card that neither paid nor stands beside
-  // the boundary. `far` took the width and `next` was pushed sideways.
-  const grid = new Soksak(
-    {
-      xs: [0, 0.15, 0.7, 0.83, 0.92, 1],
-      ys: [0, 1],
-      cards: [
-        { id: "wall", c0: 0, c1: 1, r0: 0, r1: 1, width: 245, fixed: true },
-        { id: "payer", c0: 1, c1: 2, r0: 0, r1: 1 },
-        { id: "far", c0: 2, c1: 3, r0: 0, r1: 1 },
-        { id: "next", c0: 3, c1: 4, r0: 0, r1: 1 },
-        { id: "rail", c0: 4, c1: 5, r0: 0, r1: 1 },
-      ],
-      paidBy: { rail: { side: "lo", to: "payer", span: "lo", at: 1 } },
-    },
-    { width: 1586, height: 542, gap: 28, minSize: 19 },
-  );
+  // `paidBy` records which of the payer's slots gave the width, counted from the
+  // payer's first. Nothing maintains that count: the split below cuts a line out
+  // from under it, and the offset then names a slot the payer does not hold.
+  const grid = new Soksak(undefined, { width: 1586, height: 542, gap: 28, minSize: 19 });
+  grid.split("card", "y", { id: "n0" });
+  grid.split("n0", "x", { id: "n1" });
+  grid.insertAt("x", 2, { size: 281, id: "n2" });
+  grid.splitToward("card", "bottom", { id: "n6" });
+  grid.insertAt("x", 3, { size: 271, id: "n7" });   // records card's second slot
+  grid.setSize("n7", "x", null);
+  grid.move("n6", "n7", "left");
+  grid.split("card", "x", { id: "n8" });            // and card is one slot again
+
   const at = (id) => Number(grid.rect(id).x.toFixed(2));
   const wide = (id) => Number(grid.rect(id).w.toFixed(2));
-  assert.deepEqual([at("far"), wide("far")], [1131.65, 174.95]);
-  assert.deepEqual([at("next"), wide("next")], [1334.6, 112.51]);
-  assert.equal(wide("rail"), 110.89);
+  assert.deepEqual(grid.toJSON().paidBy.n7, { side: "lo", to: "card", span: "lo", at: 1 });
+  assert.equal(grid.card("card").c1 - grid.card("card").c0, 1, "the payer has no second slot");
+  assert.deepEqual([at("n6"), wide("n6")], [1380.41, 81.79], "n6 stands beside n7");
+  assert.deepEqual([at("n1"), wide("n1")], [859.29, 184.12]);
+  assert.deepEqual([at("n2"), wide("n2")], [1071.41, 281]);
 
-  assert.equal(grid.close("rail"), true);
-  assert.deepEqual([at("next"), wide("next")], [1334.6, 251.4], "the slot beside it took the width");
-  assert.deepEqual([at("far"), wide("far")], [1131.65, 174.95], "and no other card moved");
-  assert.equal(wide("payer"), 830.65);
-  assert.equal(wide("wall"), 245);
+  assert.equal(grid.close("n7"), true);
+  assert.deepEqual([at("n6"), wide("n6")], [1380.41, 205.59], "the slot beside it took the width");
+  assert.deepEqual([at("n1"), wide("n1")], [859.29, 184.12], "and no other card moved");
+  assert.deepEqual([at("n2"), wide("n2")], [1071.41, 281]);
 });
