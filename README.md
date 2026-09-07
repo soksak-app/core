@@ -484,10 +484,10 @@ constructor runs; call it to reject a stale saved layout before installing one.
 `onChange(reason)`, `updateDivider`, `rules` (default on), `commit(rects, draw)`,
 `classPrefix` (default `sp`), `observeResize` (default on), `bleed` (default 0).
 
-`commit(rects, draw)` runs before every layout change the view makes, not only a
-drag. It receives the rects the render is about to write — the same values the
-elements get, on the device's pixel grid — and calls `draw` to perform it. A host
-that places its own views over the plane moves them in the same frame.
+`commit(rects, draw)` receives the next rectangles before every layout update.
+The host completes preparation and then calls `draw`. Only the latest pending
+callback can update the DOM, and it runs once. A newer preparation invalidates
+older callbacks. Native presentation remains the host's responsibility.
 
 `bleed` is how far past the plane a rule may run to reach the frame around it.
 A host that holds the plane inside a frame — a padding on the element outside

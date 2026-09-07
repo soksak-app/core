@@ -109,6 +109,7 @@ export class SoksakView {
          * be measured against them.
          */
         this.drawing = false;
+        this.drawRevision = 0;
         /**
          * Whether a change of the view's own that the host has not drawn dropped a
          * line.
@@ -174,7 +175,11 @@ export class SoksakView {
         // plane that is gone.
         if (this.disposed)
             return;
+        const revision = ++this.drawRevision;
         const drawn = () => {
+            if (revision !== this.drawRevision)
+                return;
+            this.drawRevision++;
             // The paint reads the grid as it stands, so after it the elements are
             // behind by nothing at all.
             this.drawing = false;

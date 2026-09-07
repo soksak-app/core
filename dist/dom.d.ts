@@ -38,17 +38,9 @@ export interface ViewOptions {
     /** Fired after any interaction the view handled, and after `render()`. */
     onChange?(reason: ChangeReason): void;
     /**
-     * Commit a layout change the view handled.
-     *
-     * Called with the rects the change will draw and the function that draws
-     * them. A plane that holds more than DOM — an OS view composited over the
-     * page, which no CSS reaches — has to move that too, and it moves on a
-     * channel of its own. Whoever is slower goes first: put the other things
-     * where these rects say, then draw. Both then land in one frame.
-     *
-     * Until `draw` is called the page still shows the layout before the change,
-     * which is a whole frame and not a torn one. Not given, the change is drawn
-     * at once.
+     * Prepare the supplied rectangles before calling `draw`.
+     * Only the latest pending callback can draw, and it runs once. Without this
+     * hook, changes draw immediately. Native presentation is the host's responsibility.
      */
     commit?(rects: ReadonlyMap<string, Rect>, draw: () => void): void;
     /** Keep the plane size in sync with the host element. Default true. */
@@ -127,6 +119,7 @@ export declare class SoksakView {
      * be measured against them.
      */
     private drawing;
+    private drawRevision;
     /**
      * Whether a change of the view's own that the host has not drawn dropped a
      * line.
