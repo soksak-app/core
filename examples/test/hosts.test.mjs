@@ -14,7 +14,7 @@ import { APPS, ask } from "./app.mjs";
 const DRIVE = "4000,x,2,-120,0,48,2";
 
 /** 모달을 열고 그 안의 구획을 바꾼다. 모달의 호출도 대조 대상에 든다. */
-const CLICK = '4500,button.act[title="설정"];.set-nav[data-key="nav:compositing"]';
+const CLICK = 'button.act[title="설정"];.set-nav[data-key="nav:compositing"]';
 
 /** 기록 한 줄. 호출 이름과 요청과 답이다. */
 const LINE = /host (\w+) (\{.*\}|\[.*\]|null) -> (.*)$/;
@@ -72,7 +72,7 @@ test("both hosts answer the same page the same way", async (t) => {
   for (const [name, binary] of Object.entries(APPS)) {
     logs[name] = await ask(
       binary,
-      ["transcript on", `drag ${DRIVE} `, `click ${CLICK}`],
+      ["transcript on", `click ${CLICK}`, `drag ${DRIVE} `],
       (text) =>
         /observe: shaking done/.test(text) &&
         /"settled":true/.test(text) &&

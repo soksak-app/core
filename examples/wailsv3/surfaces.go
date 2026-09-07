@@ -690,12 +690,14 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) []stri
 		// while a run is going: see `told`.
 		want := Rect{X: surface.X, Y: surface.Y, W: w, H: h}
 		before, had := s.told[surface.ID]
-		// A commit naming the rect the last one named carries nothing new. The
-		// page measures and reports again after it draws, and that report says
-		// the same as the report that preceded the draw; taking it as a second
-		// change would widen the surface back to the whole rect and undo what
-		// the two shared.
-		same := had && before == want
+		// A commit naming the rect the last one named carries nothing new while a
+		// run is going. The page measures and reports again after it draws, and
+		// that report says the same as the report that preceded the draw; taking
+		// it as a second change would widen the surface back to the whole rect
+		// and undo what the two shared. The commit that ends the run names that
+		// same rect and does have something to say — that the run is over and the
+		// surface takes the whole of it — so it is never the one skipped.
+		same := had && before == want && !req.Settled
 		draw := want
 		if !req.Settled && had {
 			draw = shared(before, want)

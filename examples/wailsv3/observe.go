@@ -459,6 +459,27 @@ func (o *Observe) command(line string) {
 		plan.wait = 0
 		o.writeTo(into, true)
 		startDrag(plan)
+	case "reset":
+		// 이 애플리케이션은 검사보다 오래 살고 검사는 여럿이다. 앞의 검사가 연
+		// 모달이나 옮긴 경계가 남아 있으면 다음 검사는 자기가 만들지 않은 상태를
+		// 잰다. 페이지를 다시 읽으면 모든 검사가 같은 자리에서 시작한다.
+		application.InvokeSync(func() {
+			win, ok := mainWindow()
+			if !ok {
+				return
+			}
+			// 이미 그 상태면 건드리지 않는다. 창의 크기를 다시 정하면 그 사이에
+			// 창의 단추가 제자리를 벗어나고, 페이지의 검사는 그것을 본다. 되돌릴
+			// 것이 없는데 되돌리는 일이 그 자체로 잴 것을 만든다.
+			if win.IsMaximised() {
+				win.UnMaximise()
+			}
+			if w, h := win.Size(); w != startWidth || h != startHeight {
+				win.SetSize(startWidth, startHeight)
+			}
+			win.Reload()
+		})
+		log.Printf("observe: reset")
 	case "click":
 		application.Get().Event.Emit("observe-click", rest)
 	case "transcript":
@@ -500,6 +521,12 @@ func (o *Observe) command(line string) {
 		log.Printf("observe: %q is not a command", verb)
 	}
 }
+
+// 창이 만들어질 때 받은 콘텐츠 크기. reset 이 창을 이 크기로 되돌린다.
+const (
+	startWidth  = 1200
+	startHeight = 760
+)
 
 // onOff 는 지시의 값을 로그에 적을 말로 바꾼다.
 func onOff(value string) string {

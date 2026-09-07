@@ -25,6 +25,9 @@ const CONTROL = {
   tauriv2: 49733,
 };
 
+/** 올라오는 중인 애플리케이션을 기다리는 한도. */
+const OPENS = 20_000;
+
 /** 통로에 한 번 붙어 본다. 붙었으면 연결, 아니면 null. */
 const reach = (port) =>
   new Promise((done) => {
@@ -41,8 +44,16 @@ const reach = (port) =>
  * 검사가 띄울 수 있으면 그 약속은 약속으로만 남는다.
  */
 async function reachApp(binary, port) {
-  const conn = await reach(port);
-  if (conn) return conn;
+  // 떠 있는 것을 기다리기는 하되 띄우지는 않는다. 방금 실행된 애플리케이션은 창을
+  // 그리고 통로를 여는 데에 시간이 걸리고, 그 사이에 붙으려다 실패하면 사람이
+  // 띄워 둔 것을 두고 없다고 말하게 된다.
+  const until = Date.now() + OPENS;
+  for (;;) {
+    const conn = await reach(port);
+    if (conn) return conn;
+    if (Date.now() > until) break;
+    await new Promise((go) => setTimeout(go, 200));
+  }
   throw new Error(
     `${binary} is not running, so nothing was measured. These checks drive an application ` +
       "that is already open and never open one themselves: a window that opens takes the " +
@@ -156,9 +167,25 @@ const portOf = (binary) =>
  *
  * 실행 파일이 없으면 null 이다. 부르는 쪽은 그것을 건너뛴 검사로 보고한다.
  */
-export async function ask(binary, lines, done, { timeout = 30_000 } = {}) {
+export async function ask(binary, lines, done, { timeout = 30_000, from = true } = {}) {
   if (!existsSync(binary)) return null;
+  if (from) await fresh(binary);
   return held(() => tell(binary, portOf(binary), [].concat(lines), done, timeout));
+}
+
+/**
+ * 페이지를 처음 상태로 되돌리고 그것이 다시 그려질 때까지 기다린다.
+ *
+ * 애플리케이션 하나가 모든 검사를 수행하므로, 앞의 검사가 남긴 상태는 다음 검사가
+ * 재는 것을 바꾼다. 되돌리는 일을 각 검사가 기억해서 하면 잊는 검사가 생기므로,
+ * 지시를 보내는 길이 언제나 되돌리고 시작한다.
+ *
+ * 다시 그려진 시점은 페이지의 검증기가 알린다. 시계로 기다리지 않는다.
+ */
+async function fresh(binary) {
+  await held(() =>
+    tell(binary, portOf(binary), ["reset"], (text) => /verify: \d+ (pass|fail)/.test(text), 20_000),
+  );
 }
 
 /**

@@ -152,6 +152,31 @@ fn command<R: Runtime>(app: &tauri::AppHandle<R>, line: &str) {
             write_to((!dir.is_empty()).then(|| dir.to_string()), true);
             start_drag(app, plan);
         }
+        "reset" => {
+            // This application outlives the checks and there are several. A
+            // modal the check before it opened, or a boundary it moved, is state
+            // the next check did not make and would measure. Reading the page
+            // again starts every check from the same place.
+            // Left alone when it is already so. Setting the size again takes the
+            // window's own buttons off their place while it happens, and the
+            // page's checks see that: undoing what needs no undoing is itself
+            // something to measure.
+            if let Some(window) = app.get_window("main") {
+                if window.is_maximized().unwrap_or(false) {
+                    let _ = window.unmaximize();
+                }
+                if let (Ok(size), Ok(scale)) = (window.inner_size(), window.scale_factor()) {
+                    let now = size.to_logical::<f64>(scale);
+                    if now.width != START.0 || now.height != START.1 {
+                        let _ = window.set_size(tauri::LogicalSize::new(START.0, START.1));
+                    }
+                }
+            }
+            if let Some(webview) = app.get_webview("main") {
+                let _ = webview.reload();
+            }
+            say("observe: reset");
+        }
         "click" => {
             let _ = app.emit("observe-click", rest.to_string());
         }
@@ -388,6 +413,9 @@ fn drive<R: Runtime>(app: tauri::AppHandle<R>) {
         start_drag(&app, plan);
     });
 }
+
+/// The content size the window is created with. A reset returns it to this.
+const START: (f64, f64) = (1200.0, 760.0);
 
 /// Reads "width,height".
 fn size_of(spec: &str) -> Option<(f64, f64)> {

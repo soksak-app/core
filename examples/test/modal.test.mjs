@@ -22,7 +22,7 @@ import { APPS, ask } from "./app.mjs";
  * 마지막 기다림은 그 갱신이 문서에 닿을 시간이다. 그 시간을 다 쓰지 않아도 두 번째
  * 렌더링이 오면 실행은 거기서 끝난다.
  */
-const CLICK = '4500,button.act[title="설정"];2000;.set-nav[data-key="nav:compositing"];3000';
+const CLICK = 'button.act[title="설정"];2000;.set-nav[data-key="nav:compositing"];3000';
 
 /** 갱신이 도달할 시간을 다 쓴 지점. 도달하지 않은 실행은 여기서 끝난다. */
 const WAITED = "observe: waited 3000ms";

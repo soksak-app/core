@@ -195,12 +195,14 @@ fn sync_surfaces(
         let visible = s.visible && s.w >= 1.0 && s.h >= 1.0;
         let want = aligned(s.x, s.y, s.w.max(1.0), s.h.max(1.0), scale);
         let before = told.0.lock().map_err(|e| e.to_string())?.get(&label).copied();
-        // A commit naming the rect the last one named carries nothing new. The
-        // page measures and reports again after it draws, and that report says
-        // the same as the report that preceded the draw; taking it as a second
-        // change would widen the surface back to the whole rect and undo what
-        // the two shared.
-        let same = before == Some(want);
+        // A commit naming the rect the last one named carries nothing new while
+        // a run is going. The page measures and reports again after it draws,
+        // and that report says the same as the report that preceded the draw;
+        // taking it as a second change would widen the surface back to the whole
+        // rect and undo what the two shared. The commit that ends the run names
+        // that same rect and does have something to say — that the run is over
+        // and the surface takes the whole of it — so it is never skipped.
+        let same = before == Some(want) && !request.settled;
         let (ax, ay, aw, ah) = match before {
             Some(had) if !request.settled => shared(had, want),
             _ => want,
@@ -1020,9 +1022,16 @@ fn main() {
         if let Some(window) = app.get_webview_window("main") {
             place_window_controls(&window.as_ref().window())?;
             let handle = app.handle().clone();
+            let placed = window.clone();
             window.on_window_event(move |event| {
                 if matches!(event, tauri::WindowEvent::Resized(_)) {
                     replace_modals(&handle);
+                    // The buttons are laid out from the window's top left, and
+                    // the view holding them keeps the frame it was given, which
+                    // is measured from the bottom. A window that changes height
+                    // leaves them somewhere else in the page's first row, so
+                    // they are placed again for the size the window now has.
+                    let _ = place_window_controls(&placed.as_ref().window());
                 }
             });
         }

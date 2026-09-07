@@ -12,6 +12,10 @@ import { isPlace, railKind } from "./plugins/registry.js";
 import { cardRadius } from "./settings.js";
 
 /** 두 사각형의 최대 차이를 반환한다. 하나라도 없으면 비교하지 않는다. */
+/** a 가 b 밖으로 나간 가장 먼 거리. 안에 있으면 0 이다. */
+const beyond = (a, b) =>
+  Math.max(0, b.x - a.x, b.y - a.y, a.x + a.w - (b.x + b.w), a.y + a.h - (b.y + b.h));
+
 const maxDelta = (a, b) =>
   !a || !b ? Infinity
     : Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y), Math.abs(a.w - b.w), Math.abs(a.h - b.h));
@@ -185,10 +189,16 @@ export function verify(controls = null) {
         `(seq ${guess.seq})`);
   }
 
-  // V7b — 호스트가 실제로 앉힌 자리와 선언값의 차이. 여유는 없다. 호스트는 선언된
-  // 사각형을 디스플레이 픽셀에 맞춰 정렬하지만 판이 이미 그 눈금 위에서 보내므로
-  // 그 정렬은 아무것도 옮기지 않는다 — 두 호스트에서 1912개의 변을 재어 전부 0
-  // 이었다. 0 이 아니면 표면이 카드와 다른 자리에 있다.
+  // V7b — 호스트가 실제로 앉힌 자리와 선언값의 관계.
+  //
+  // 갱신이 이어지는 동안 호스트는 선언된 사각형을 그대로 앉히지 않는다. 표면과
+  // 카드는 다른 합성기가 그리므로 서로 다른 프레임에 실리고, 그래서 호스트는 직전에
+  // 들은 사각형과 이번에 들은 사각형이 함께 덮는 자리에만 표면을 그린다. 그 자리는
+  // 언제나 선언값 안이다. 갱신이 끝나면 선언값을 그대로 앉힌다.
+  //
+  // 그러므로 검사는 둘이다. 앉힌 자리가 선언값 밖으로 나가지 않을 것 — 나가면 그
+  // 표면은 카드 밖에 있다. 그리고 정지한 커밋에서는 둘이 같을 것 — 다르면 끌기가
+  // 끝난 뒤에도 표면이 카드를 다 채우지 않는다.
   //
   // 이 검사는 한 커밋 안의 두 값을 견주므로, 그려진 것과 합성된 것이 어긋나는
   // 것은 보지 못한다. 그것은 examples/test/outside.test.mjs 가 픽셀로 잰다.
@@ -196,14 +206,19 @@ export function verify(controls = null) {
   // 답은 비동기로 오므로 최신 커밋에는 아직 없다. 답까지 채워진 마지막 레코드를
   // 읽어 같은 커밋의 두 값을 비교한다.
   const placed = seated();
-  let land = 0, landed = 0;
+  let land = 0, landed = 0, escaped = 0;
   for (const s of placed?.surfaces ?? []) {
     if (!s.visible || s.declared.w < 1 || s.declared.h < 1) continue;
     land = Math.max(land, maxDelta(s.declared, s.applied));
+    escaped = Math.max(escaped, beyond(s.applied, s.declared));
     landed++;
   }
-  add("V7b declared − applied == 0", landed === 0 || land === 0,
-      landed ? `최대 ${land.toFixed(2)}px (seq ${placed.seq})` : "아직 답 없음");
+  add("V7b applied 는 declared 안에 있고, 정지하면 같다",
+      landed === 0 || (escaped === 0 && (!placed.settled || land === 0)),
+      landed
+        ? `밖으로 ${escaped.toFixed(2)}px · 차이 ${land.toFixed(2)}px · ` +
+          `${placed.settled ? "정지" : "갱신 중"} (seq ${placed.seq})`
+        : "아직 답 없음");
 
   const transformed = [...plane.querySelectorAll(".card")]
     .filter((el) => el.style.transform && el.style.transform !== "none").length;
