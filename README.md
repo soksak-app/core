@@ -253,8 +253,8 @@ there — the divider stops carrying `data-dragging` and the next move drives
 nothing.
 
 The settle runs wherever such a change first reaches a gesture: at the `render()`
-the host makes, whatever reason it names there, at a resize, and at the press, key
-or move itself, because a host that changes the grid and renders later leaves
+the host makes, whatever reason it names there, at a resize, and at the press, key,
+move or release itself, because a host that changes the grid and renders later leaves
 those arriving in between. So a press on a divider whose boundary the host has
 moved further than the divider is grabbed at takes no hold either. While a
 `commit` hook holds a draw of a change the view made, the divider is behind by

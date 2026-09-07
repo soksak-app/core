@@ -663,6 +663,12 @@ export class SoksakView {
    * reason drag. Returns whether the boundary moved.
    */
   private endMouse(): boolean {
+    // A change the host made since the last draw has moved the boundary this
+    // drag holds, and nothing told the drag: the line it holds names another
+    // boundary, which the merge below folds, and the draw that follows reports
+    // the elements as behind by the view's own change alone. Settle before
+    // letting go, as a move does.
+    this.settle();
     const drag = this.dropMouse();
     if (!drag) return false;
     // The boundary it held is folded away, so no drag is on the divider the
@@ -683,6 +689,10 @@ export class SoksakView {
    * capture being lost, the divider being swept, and destroy.
    */
   private end(pointer: number): boolean {
+    // As on the mouse path: settle against a change the host made before the
+    // merge reads the line and before the draw reports what the elements are
+    // behind by.
+    this.settle();
     const drag = this.drop(pointer);
     if (!drag) return false;
     if (this.disposed) return drag.moved;
@@ -723,6 +733,12 @@ export class SoksakView {
       // buttons bitmask a drag does, so without this it moves the boundary.
       if (this.disposed || e.button !== 0) return;
       e.preventDefault();
+      // As on the move path: a change the host made since the last draw has moved
+      // the boundary every live gesture holds, and nothing told them. A centring
+      // press carries them through its own change, which records the moved
+      // position as the one each gesture agreed with and leaves the settle at the
+      // host's render no distance to measure. Settle here first.
+      this.settle();
       const axis = el.dataset.axis as Axis;
       const line = this.lineOf(el);
       // The element still carries the line the last paint gave it. A change the
@@ -815,6 +831,9 @@ export class SoksakView {
     const mouseDown = (e: MouseEvent): void => {
       if (this.disposed || e.button !== 0) return;
       e.preventDefault();
+      // As on the pointer path: settle against a change the host made before a
+      // centring press carries every live gesture through its own change.
+      this.settle();
       const axis = el.dataset.axis as Axis;
       const line = this.lineOf(el);
       // As on the pointer path: the line the element carries can name another
@@ -894,6 +913,12 @@ export class SoksakView {
 
     el.addEventListener('keydown', (e: KeyboardEvent) => {
       if (this.disposed) return;
+      // As on the two press paths: a change the host made since the last draw has
+      // moved the boundary every live gesture holds, and nothing told them. The
+      // carry below would take each one through this key's change and record the
+      // moved position as the one it agreed with, leaving the settle at the
+      // host's render no distance to measure. Settle here first.
+      this.settle();
       const axis = el.dataset.axis as Axis;
       const line = this.lineOf(el);
       // As on the two press paths: the line the element carries can name another
