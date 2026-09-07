@@ -43,8 +43,8 @@
     if (atEnd) out.scrollTop = out.scrollHeight;
   }
 
-  page.shell.open(id);
   page.shell.onOutput(id, write);
+  page.shell.open(id);
 
   input.addEventListener("keydown", (e) => {
     if (e.key !== "Enter") return;
