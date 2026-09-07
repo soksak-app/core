@@ -359,3 +359,19 @@ test("a card standing inside a gap refuses no operation elsewhere", () => {
   const arrive = new Soksak(state, options);
   assert.equal(arrive.insertAt("x", 0, { id: "rail", size: 120 }), "rail");
 });
+
+test("no change leaves a card with no area, whatever minSize allows", () => {
+  // minSize is zero, so nothing below is too small — except nothing itself. The
+  // gap here takes two thirds of the height, and a second cut would leave the
+  // new card drawn at no height at all.
+  const grid = new Soksak(undefined, { width: 1200, height: 800, gap: 200, minSize: 0 });
+  grid.split("card", "y");
+  assert.equal(grid.rect("card").h, 300, "two cards, each with room");
+
+  assert.equal(grid.canSplit("card", "y"), false, "a third would have no height");
+  assert.equal(grid.split("card", "y"), null);
+  assert.equal(grid.cards.length, 2, "and the refusal left the plane alone");
+  for (const [id, r] of grid.rects()) {
+    assert.ok(r.w > 0 && r.h > 0, `${id} is drawn at ${r.w}x${r.h}`);
+  }
+});

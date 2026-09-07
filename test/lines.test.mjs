@@ -890,3 +890,43 @@ test("a line no card reads decides nothing drawn, and tidy takes nothing with it
   assert.equal(cut.tidy(), 1);
   assert.deepEqual([...cut.rects()], [...whole.rects()], "and removing it decides nothing either");
 });
+
+test("a run of coincident lines at the plane's border takes no corridor", () => {
+  // Two cards drawn at nothing, one against each border, with two cards between
+  // them. A run ending at the border has nothing to inset into, so the card
+  // there is flush — and the range its boundary can be dragged in says so.
+  const grid = new Soksak(
+    { xs: [0, 0, 0.5, 1, 1], ys: [0, 1], cards: [
+      { id: "z0", c0: 0, c1: 1, r0: 0, r1: 1 },
+      { id: "a", c0: 1, c1: 2, r0: 0, r1: 1 },
+      { id: "b", c0: 2, c1: 3, r0: 0, r1: 1 },
+      { id: "z1", c0: 3, c1: 4, r0: 0, r1: 1 },
+    ] },
+    { width: 300, height: 220, gap: 24, minSize: 96 },
+  );
+  assert.deepEqual(grid.rect("z0"), { x: 0, y: 0, w: 0, h: 220 }, "flush against the near border");
+  assert.deepEqual(grid.rect("z1"), { x: 300, y: 0, w: 0, h: 220 }, "and against the far one");
+  // Half a gap each way is what an inset into the run would cost, and there is
+  // nothing there to inset into.
+  assert.deepEqual(grid.boundaryRange("x", 1), [0, 63], "the near boundary reaches the border");
+  assert.deepEqual(grid.boundaryRange("x", 3), [237, 300], "and the far one reaches the other");
+});
+
+test("a close re-stands only the lines no card reads", () => {
+  // `z0` sits inside a run of coincident lines. Closing it must leave the pair
+  // coincident: a line a card reads is placed by the slots, and putting it back
+  // where it stood in px pulls the run apart.
+  const grid = new Soksak(
+    { xs: [0, 0.5, 0.5, 1, 1], ys: [0, 1], cards: [
+      { id: "z0", c0: 1, c1: 2, r0: 0, r1: 1 },
+      { id: "b", c0: 2, c1: 3, r0: 0, r1: 1 },
+      { id: "z1", c0: 3, c1: 4, r0: 0, r1: 1 },
+      { id: "a", c0: 0, c1: 1, r0: 0, r1: 1, fixed: true },
+    ] },
+    { width: 120, height: 90, gap: 40, minSize: 96 },
+  );
+  assert.equal(grid.close("z0"), true);
+  const xs = grid.lines("x");
+  assert.equal(xs[1], xs[2], `lines 1 and 2 came apart: ${xs[1]} and ${xs[2]}`);
+  assert.deepEqual(grid.rect("a"), { x: 0, y: 0, w: 40, h: 90 });
+});

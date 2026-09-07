@@ -2714,3 +2714,57 @@ test("a centring mouse press does not carry a gesture over a change the host mad
   );
   view.destroy();
 });
+
+test("one mouse move is one change, however many dividers the plane has", () => {
+  // Every divider listens on the divider's document, so a move is delivered to
+  // all of them. Only the one holding the drag drives it: a host that places its
+  // own views in `commit` does that work once per move, not once per divider.
+  const commits = [];
+  const changes = [];
+  const { window, host, grid, view } = mount({
+    commit: (rects, draw) => { commits.push(rects.size); draw(); },
+    onChange: (reason) => changes.push(reason),
+  });
+  grid.split("card", "y");
+  grid.split("card-1", "y");
+  view.render();
+  assert.ok(host.querySelectorAll('[role="separator"]').length > 1, "more than one divider listens");
+
+  const divider = host.querySelector('.sp-divider[data-axis="x"]');
+  const at = grid.boundaryPos("x", 1);
+  commits.length = 0;
+  changes.length = 0;
+  divider.dispatchEvent(new window.MouseEvent("mousedown", {
+    clientX: at, clientY: 400, bubbles: true, button: 0, buttons: 1,
+  }));
+  window.document.dispatchEvent(new window.MouseEvent("mousemove", {
+    clientX: at + 60, clientY: 400, bubbles: true, buttons: 1,
+  }));
+
+  assert.equal(commits.length, 1, `one move, ${commits.length} commits`);
+  assert.deepEqual(changes, ["drag"], "and one change");
+  view.destroy();
+});
+
+test("a key the view does not handle reaches the page", () => {
+  // Arrows move the boundary and Enter and Space centre it. Everything else is
+  // the page's: swallowing Tab takes focus away from the person who pressed it.
+  const changes = [];
+  const { window, host, grid, view } = mount({ onChange: (reason) => changes.push(reason) });
+  const divider = host.querySelector('[role="separator"]');
+  const before = grid.boundaryPos("x", 1);
+  changes.length = 0;
+
+  for (const key of ["Tab", "Home", "End", "Escape", "a"]) {
+    const event = new window.KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
+    divider.dispatchEvent(event);
+    assert.equal(event.defaultPrevented, false, `${key} was swallowed`);
+  }
+  assert.deepEqual(changes, [], "and none of them was reported as a change");
+  assert.equal(grid.boundaryPos("x", 1), before, "the boundary did not move");
+
+  // The keys it does handle still work.
+  divider.dispatchEvent(new window.KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true }));
+  assert.ok(grid.boundaryPos("x", 1) > before, "an arrow still moves it");
+  view.destroy();
+});

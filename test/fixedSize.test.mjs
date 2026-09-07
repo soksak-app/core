@@ -968,3 +968,58 @@ test("a card narrower than minSize still takes its width from the slot beside it
   assert.equal(grid.rect("left").w, 378, "and the close gives it back");
   assert.equal(grid.rect("right").w, 798);
 });
+
+test("a card that came to span two slots is measured as one that shares", () => {
+  // `head` declares a height and holds one row slot. Closing `body` gives it the
+  // other, and R5 says a card spanning two slots carries no px size — so the
+  // line `body` left must stand where a sharing `head` puts it, not where the
+  // 200 it no longer declares would.
+  const grid = new Soksak(
+    { xs: [0, 0.2, 0.6, 1], ys: [0, 0.3, 1], cards: [
+      { id: "side", c0: 0, c1: 1, r0: 0, r1: 2, width: 190, fixed: true },
+      { id: "head", c0: 1, c1: 2, r0: 0, r1: 1, height: 200 },
+      { id: "body", c0: 1, c1: 2, r0: 1, r1: 2 },
+      { id: "rail", c0: 2, c1: 3, r0: 0, r1: 2, width: 210, fixed: true },
+    ] },
+    { width: 900, height: 634, gap: 24, minSize: 96 },
+  );
+  assert.equal(grid.rect("head").h, 200, "declared while it holds one slot");
+
+  assert.equal(grid.close("body"), true);
+  assert.equal(grid.card("head").height, undefined, "the size went with the second slot");
+  assert.equal(grid.card("head").r1 - grid.card("head").r0, 2);
+  // The leftover line is what a later cut snaps to, so where it stands is the
+  // whole of the difference.
+  assert.equal(grid.isVirtual("y", 1), true);
+  assert.ok(
+    Math.abs(grid.boundaryPos("y", 1) - 212) < 0.01,
+    `the line stands at ${grid.boundaryPos("y", 1)}, not 212`,
+  );
+
+  const born = grid.split("head", "y");
+  assert.ok(born, "and the cut lands on it");
+  assert.ok(
+    Math.abs(grid.rect("head").h - 200) < 0.01,
+    `head is drawn ${grid.rect("head").h}, not the 200 it had`,
+  );
+});
+
+test("the slot a settle names is one that shares, not one holding a px size", () => {
+  // Both cards declare a size, so no slot on the axis shares. The insert cannot
+  // name either of them as the slot that paid: neither gave a share it can give
+  // back, and a close reading that name would take the width off a declared slot.
+  const grid = new Soksak(
+    { xs: [0, 0.5, 1], ys: [0, 1], cards: [
+      { id: "p", c0: 0, c1: 1, r0: 0, r1: 1, width: 200 },
+      { id: "q", c0: 1, c1: 2, r0: 0, r1: 1, width: 300 },
+    ] },
+    { width: 1600, height: 1000, gap: 24, minSize: 96 },
+  );
+  assert.equal(grid.insertAt("x", 2, { size: 262, id: "ins" }), "ins");
+  const paid = grid.toJSON().paidBy.ins;
+  assert.ok(paid, "the insert recorded what paid");
+  assert.ok(
+    paid.to !== "p" && paid.to !== "q",
+    `the settle named ${JSON.stringify(paid.to)}, a slot that declares its own width`,
+  );
+});
