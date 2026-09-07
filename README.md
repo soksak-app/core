@@ -252,19 +252,23 @@ further away than that is one the gesture never took hold of, so the gesture end
 there — the divider stops carrying `data-dragging` and the next move drives
 nothing.
 
-The settle runs wherever such a change first reaches a gesture: at the `render()`
-the host makes, whatever reason it names there, at a resize, and at the press, key,
-move or release itself, because a host that changes the grid and renders later leaves
-those arriving in between. So a press on a divider whose boundary the host has
-moved further than the divider is grabbed at takes no hold either. While a
-`commit` hook holds a draw of a change the view made, the divider is behind by
-that change, which the gesture was carried through, and a press then takes hold
-as usual — of the boundary that gesture holds, because the number the divider
-carries is written by the paint the host has not performed. Where the change
-dropped a line, every other divider carries a number that renumber moved, and a
-press on one of those takes no hold until the draw is done. A draw `render()`
-hands over is not one of these at all: the view is not told whether the host
-changed the grid before that call, so every `render()` is one that may have.
+The settle runs at the `render()` the host makes, whatever reason it names there,
+and nowhere else. **A host changes the grid and calls `render()` in the same
+turn.** Nothing reaches a gesture in between, so a press, a key, a move or a
+release always follows the render of the change before it, and each of those
+paths reads a grid the elements agree with. A host that changes the grid and
+renders later hands its gestures a boundary that has moved and does not say so;
+the view has no way to be told of a change it is not told of.
+
+While a `commit` hook holds a draw of a change the view made, the divider is
+behind by that change, which the gesture was carried through, and a press then
+takes hold as usual — of the boundary that gesture holds, because the number the
+divider carries is written by the paint the host has not performed. Where the
+change dropped a line, every other divider carries a number that renumber moved,
+and a press on one of those takes no hold until the draw is done. A draw
+`render()` hands over is not one of these at all: the view is not told whether
+the host changed the grid before that call, so every `render()` is one that may
+have.
 
 **A card's child can inflate the rect the view set.** A flex or grid child
 defaults to `min-width: auto`, so a column stretches to min-content and the

@@ -2071,48 +2071,6 @@ test("a gesture the host's change ends does not leave the next press centring", 
   view.destroy();
 });
 
-test("a resize does not carry a gesture over a change the host made", () => {
-  const dom = new JSDOM("<!doctype html><div id=host></div>", { pretendToBeVisual: true });
-  const { window } = dom;
-  globalThis.document = window.document;
-  const host = window.document.getElementById("host");
-  let fire = () => {};
-  globalThis.ResizeObserver = class {
-    constructor(cb) { fire = cb; }
-    observe() {}
-    disconnect() { fire = () => {}; }
-  };
-  Object.defineProperty(host, "clientWidth", { value: 1200, configurable: true });
-  Object.defineProperty(host, "clientHeight", { value: 600, configurable: true });
-
-  const grid = new Soksak(undefined, { width: 1200, height: 600, gap: 24 });
-  grid.split("card", "x");
-  const view = new SoksakView(host, grid, {
-    createCard: () => window.document.createElement("div"),
-  });
-  view.render();
-  const el = host.querySelector('.sp-divider[data-axis="x"]');
-  const held = grid.boundaryPos("x", 1);
-  pointer(window, el, "pointerdown", 1, held, 300);
-  assert.equal(el.dataset.dragging, "true", "the finger has the divider");
-
-  // The host puts in a card that reaches across the plane, and the host element
-  // is measured again before the host renders. The plane did not change size, so
-  // the whole distance the callback finds is the host's change, and the gesture
-  // ends on it rather than being carried over it.
-  assert.ok(grid.insertAt("x", 0, { id: "rail", size: 190 }), "the rail went in");
-  fire();
-  assert.equal(el.dataset.dragging, undefined, "nothing holds the divider any more");
-
-  view.render();
-  const was = grid.rect("rail").w;
-  pointer(window, el, "pointermove", 1, held + 100, 300);
-  assert.equal(grid.rect("rail").w, was, "and the next move does not resize the card that arrived");
-
-  view.destroy();
-  delete globalThis.ResizeObserver;
-});
-
 test("a change smaller than the width a divider is grabbed at keeps the gesture", () => {
   const { window, host, grid, view } = mount();
   // The reach is the width the divider is grabbed at, which is the larger of the
@@ -2136,41 +2094,6 @@ test("a change smaller than the width a divider is grabbed at keeps the gesture"
     `and its anchor followed the change, to ${grid.boundaryPos("x", 1)} not ${moved + 100}`,
   );
   pointer(window, el, "pointerup", 1, at + 100, 300);
-  view.destroy();
-});
-
-test("a move drives nothing after a change the host has not drawn", () => {
-  const { window, host, grid, view } = mount();
-  const el = host.querySelector('.sp-divider[data-axis="x"]');
-  const at = grid.boundaryPos("x", 1);
-  pointer(window, el, "pointerdown", 1, at, 300);
-
-  // The host puts in a card that reaches across the plane and does not render.
-  // Line 1 is the rail's own boundary now, and the finger still holds line 1.
-  assert.ok(grid.insertAt("x", 0, { id: "rail", size: 190 }), "the rail went in");
-  const was = grid.rect("rail").w;
-  pointer(window, el, "pointermove", 1, at + 100, 300);
-  assert.equal(grid.rect("rail").w, was, "the move does not resize the card that arrived");
-  assert.equal(el.dataset.dragging, undefined, "and nothing holds the divider any more");
-  view.destroy();
-});
-
-test("a mouse move drives nothing after a change the host has not drawn", () => {
-  const { window, host, grid, view } = mount();
-  const el = host.querySelector('.sp-divider[data-axis="x"]');
-  const doc = window.document;
-  const at = grid.boundaryPos("x", 1);
-  el.dispatchEvent(new window.MouseEvent("mousedown", {
-    clientX: at, clientY: 300, bubbles: true, button: 0, buttons: 1,
-  }));
-
-  assert.ok(grid.insertAt("x", 0, { id: "rail", size: 190 }), "the rail went in");
-  const was = grid.rect("rail").w;
-  doc.dispatchEvent(new window.MouseEvent("mousemove", {
-    clientX: at + 100, clientY: 300, bubbles: true, buttons: 1,
-  }));
-  assert.equal(grid.rect("rail").w, was, "the move does not resize the card that arrived");
-  assert.equal(el.dataset.dragging, undefined, "and nothing holds the divider any more");
   view.destroy();
 });
 
@@ -2536,118 +2459,6 @@ test("a second finger drives the boundary the gesture holds after a change the h
   view.destroy();
 });
 
-test("a release settles against a change the host made and has not drawn", () => {
-  let pending = null;
-  let holding = false;
-  const { window, host, grid, view } = mount({
-    commit: (_rects, draw) => {
-      if (holding) pending = draw;
-      else draw();
-    },
-  });
-  const el = host.querySelector('.sp-divider[data-axis="x"]');
-  const at = grid.boundaryPos("x", 1);
-
-  pointer(window, el, "pointerdown", 1, at, 300);
-  pointer(window, el, "pointermove", 1, at + 20, 300);
-  const drawn = parseFloat(el.style.left) + parseFloat(el.style.width) / 2;
-  assert.equal(drawn, at + 20, "the divider is drawn where the drag put the boundary");
-
-  // The host moves the boundary further than the divider is grabbed at and does
-  // not render, so nothing has told the gesture.
-  grid.moveBoundary("x", 1, at + 400);
-  const moved = grid.boundaryPos("x", 1);
-  holding = true;
-  pointer(window, el, "pointerup", 1, at + 20, 300);
-
-  // The release draws, and that draw must not report the elements as behind by
-  // the view's own change alone: they are behind by the host's change too.
-  pointer(window, el, "pointerdown", 2, drawn, 300);
-  assert.equal(el.dataset.dragging, undefined, "the press that follows takes no hold");
-  pointer(window, el, "pointermove", 2, drawn + 10, 300);
-  assert.ok(
-    Math.abs(grid.boundaryPos("x", 1) - moved) < 0.5,
-    `and drives nothing, not the boundary ${moved - drawn} away`,
-  );
-  pending?.();
-  view.destroy();
-});
-
-test("a mouse release settles against a change the host made and has not drawn", () => {
-  let pending = null;
-  let holding = false;
-  const { window, host, grid, view } = mount({
-    commit: (_rects, draw) => {
-      if (holding) pending = draw;
-      else draw();
-    },
-  });
-  const el = host.querySelector('.sp-divider[data-axis="x"]');
-  const at = grid.boundaryPos("x", 1);
-  const press = (target, type, x, buttons) =>
-    target.dispatchEvent(new window.MouseEvent(type, {
-      clientX: x, clientY: 300, bubbles: true, button: 0, buttons,
-    }));
-
-  press(el, "mousedown", at, 1);
-  press(window.document, "mousemove", at + 20, 1);
-  const drawn = parseFloat(el.style.left) + parseFloat(el.style.width) / 2;
-  assert.equal(drawn, at + 20, "the divider is drawn where the drag put the boundary");
-
-  grid.moveBoundary("x", 1, at + 400);
-  const moved = grid.boundaryPos("x", 1);
-  holding = true;
-  press(window.document, "mouseup", at + 20, 0);
-
-  press(el, "mousedown", drawn, 1);
-  assert.equal(el.dataset.dragging, undefined, "the press that follows takes no hold");
-  press(window.document, "mousemove", drawn + 10, 1);
-  assert.ok(
-    Math.abs(grid.boundaryPos("x", 1) - moved) < 0.5,
-    `and drives nothing, not the boundary ${moved - drawn} away`,
-  );
-  pending?.();
-  view.destroy();
-});
-
-test("a key does not carry a gesture over a change the host made", () => {
-  const { window, host, grid, view } = mount();
-  grid.split("card", "y");
-  view.render();
-  const held = host.querySelector('.sp-divider[data-axis="y"]');
-  const other = host.querySelector('.sp-divider[data-axis="x"]');
-  const at = grid.boundaryPos("y", 1);
-
-  // A finger takes hold of the y boundary and moves it.
-  pointer(window, held, "pointerdown", 1, 200, at);
-  pointer(window, held, "pointermove", 1, 200, at + 10);
-  assert.equal(held.dataset.dragging, "true", "the finger holds it");
-
-  // The host moves that boundary further than the divider is grabbed at, and
-  // does not render.
-  grid.moveBoundary("y", 1, at + 160);
-  const moved = grid.boundaryPos("y", 1);
-  assert.ok(
-    moved - (at + 10) > Math.max(grid.gap, grid.grabSize),
-    `the host moved it ${moved - (at + 10)} away, further than it is grabbed at`,
-  );
-
-  // A key on the other axis. Its change carries every live gesture, so it runs
-  // after that distance is measured, not before.
-  other.dispatchEvent(
-    new window.KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true }),
-  );
-  view.render();
-  assert.equal(held.dataset.dragging, undefined, "the gesture the host's change took away has ended");
-
-  pointer(window, held, "pointermove", 1, 200, at + 20);
-  assert.ok(
-    Math.abs(grid.boundaryPos("y", 1) - moved) < 0.5,
-    `and the move that follows drives nothing, not the boundary from ${moved} to ${grid.boundaryPos("y", 1)}`,
-  );
-  view.destroy();
-});
-
 /**
  * A finger holding a y boundary the host has since moved out from under it.
  *
@@ -2674,46 +2485,6 @@ function stranded() {
   );
   return { window, grid, view, held, other, at, moved };
 }
-
-test("a centring press does not carry a gesture over a change the host made", () => {
-  const { window, grid, view, held, other, at, moved } = stranded();
-  const x = grid.boundaryPos("x", 1);
-
-  // The release of the first press is never delivered, so the second is the
-  // second of a pair and centres. Its change carries every live gesture.
-  pointer(window, other, "pointerdown", 2, x, 300);
-  pointer(window, other, "pointerdown", 2, x, 300);
-
-  view.render();
-  assert.equal(held.dataset.dragging, undefined, "the gesture the host's change took away has ended");
-  pointer(window, held, "pointermove", 1, 200, at + 20);
-  assert.ok(
-    Math.abs(grid.boundaryPos("y", 1) - moved) < 0.5,
-    `and the move that follows drives nothing, not the boundary from ${moved} to ${grid.boundaryPos("y", 1)}`,
-  );
-  view.destroy();
-});
-
-test("a centring mouse press does not carry a gesture over a change the host made", () => {
-  const { window, grid, view, held, other, at, moved } = stranded();
-  const x = grid.boundaryPos("x", 1);
-  const press = () =>
-    other.dispatchEvent(new window.MouseEvent("mousedown", {
-      clientX: x, clientY: 300, bubbles: true, button: 0, buttons: 1,
-    }));
-
-  press();
-  press();
-
-  view.render();
-  assert.equal(held.dataset.dragging, undefined, "the gesture the host's change took away has ended");
-  pointer(window, held, "pointermove", 1, 200, at + 20);
-  assert.ok(
-    Math.abs(grid.boundaryPos("y", 1) - moved) < 0.5,
-    `and the move that follows drives nothing, not the boundary from ${moved} to ${grid.boundaryPos("y", 1)}`,
-  );
-  view.destroy();
-});
 
 test("one mouse move is one change, however many dividers the plane has", () => {
   // Every divider listens on the divider's document, so a move is delivered to

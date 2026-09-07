@@ -399,32 +399,11 @@ export const BREAKS = [
     to: "        ;",
   },
   {
-    id: "resize-settle",
-    what: "a resize carries a gesture over a change the host made, so the settle at the host's render finds no distance left to measure",
-    file: "dist/dom.js",
-    find: "                this.settle();\n                // A resize moves the boundary",
-    to: "                // A resize moves the boundary",
-  },
-  {
     id: "settle-reach",
     what: "a gesture ends over a change smaller than the width its divider is grabbed at",
     file: "dist/dom.js",
     find: "        const reach = Math.max(this.grid.gap, this.grid.grabSize);",
     to: "        const reach = Math.min(this.grid.gap, this.grid.grabSize);",
-  },
-  {
-    id: "move-settle",
-    what: "a pointer move drives the boundary a change the host has not drawn renumbered onto its line",
-    file: "dist/dom.js",
-    find: "            this.settle();\n            if (this.drags.get(e.pointerId) !== drag)\n                return;",
-    to: "            ;",
-  },
-  {
-    id: "mouse-move-settle",
-    what: "a mouse move drives the boundary a change the host has not drawn renumbered onto its line",
-    file: "dist/dom.js",
-    find: "            this.settle();\n            if (this.mouseDrag !== drag)\n                return;",
-    to: "            ;",
   },
   {
     id: "press-stands",
@@ -1042,64 +1021,6 @@ export const BREAKS = [
     file: "dist/slicing.js",
     find: "export function fillFor(cards, closing, order, memo) {\n    if (closing.fixed)\n        return null;\n",
     to: "export function fillFor(cards, closing, order, memo) {\n",
-  },
-  {
-    id: "release-settle",
-    what: "a pointer release folds and draws without settling, so the draw it hands over reports the elements as behind by the view's own change alone and the next press takes hold of a boundary the host moved away",
-    file: "dist/dom.js",
-    find: "        this.settle();\n        const drag = this.drop(pointer);",
-    to: "        const drag = this.drop(pointer);",
-  },
-  {
-    id: "release-settle-mouse",
-    what: "a mouse release folds and draws without settling, so the draw it hands over reports the elements as behind by the view's own change alone and the next press takes hold of a boundary the host moved away",
-    file: "dist/dom.js",
-    find: "        this.settle();\n        const drag = this.dropMouse();",
-    to: "        const drag = this.dropMouse();",
-  },
-  {
-    id: "key-settle",
-    what: "a key carries every live gesture through its own change without settling first, so the settle at the host's render finds no distance left to measure and a gesture the host's change took away goes on driving",
-    file: "dist/dom.js",
-    // Anchored down to the comment that follows. The two press paths settle with
-    // the same three lines, and the shorter find patched all three.
-    find:
-      "            this.settle();\n" +
-      "            const axis = el.dataset.axis;\n" +
-      "            const line = this.lineOf(el);\n" +
-      "            // As on the two press paths:",
-    to:
-      "            const axis = el.dataset.axis;\n" +
-      "            const line = this.lineOf(el);\n" +
-      "            // As on the two press paths:",
-  },
-  {
-    id: "press-settle",
-    what: "a centring press carries every live gesture through its own change without settling first, so the settle at the host's render finds no distance left to measure",
-    file: "dist/dom.js",
-    find:
-      "            this.settle();\n" +
-      "            const axis = el.dataset.axis;\n" +
-      "            const line = this.lineOf(el);\n" +
-      "            // The element still carries the line the last paint gave it.",
-    to:
-      "            const axis = el.dataset.axis;\n" +
-      "            const line = this.lineOf(el);\n" +
-      "            // The element still carries the line the last paint gave it.",
-  },
-  {
-    id: "mouse-press-settle",
-    what: "a centring mouse press carries every live gesture through its own change without settling first, so the settle at the host's render finds no distance left to measure",
-    file: "dist/dom.js",
-    find:
-      "            this.settle();\n" +
-      "            const axis = el.dataset.axis;\n" +
-      "            const line = this.lineOf(el);\n" +
-      "            // As on the pointer path: the line the element carries can name another",
-    to:
-      "            const axis = el.dataset.axis;\n" +
-      "            const line = this.lineOf(el);\n" +
-      "            // As on the pointer path: the line the element carries can name another",
   },
   {
     id: "grip-active",
