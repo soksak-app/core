@@ -237,8 +237,9 @@ function makeCard() {
   const el = document.createElement("div");
   el.className = "set-card";
   el.id = "settings";
-  el.dataset.nativeModal = "";
+  el.dataset.nativeModal = "dialog";
   el.setAttribute("role", "dialog");
+  el.setAttribute("aria-modal", "true");
   el.setAttribute("aria-label", NAME);
   el.innerHTML =
     '<header class="set-card__head" data-grip>' +
@@ -295,7 +296,7 @@ export function drawSettings() {
  * 거기 등록한 리스너가 동작하지 않는다.
  */
 function answer(key, val) {
-  if (key === "" || key === "close") return closeSettings();
+  if (key === "close") return closeSettings();
   if (key === "move") return moveBy(...val.split(",").map(Number));
   const [kind, a, b] = key.split(":");
   if (kind === "nav") { here = a; return drawSettings(); }
@@ -336,17 +337,6 @@ function moveBy(dx, dy) {
   else standIn(true, rect);
 }
 
-/**
- * 카드 밖을 클릭하면 닫는다.
- *
- * 오버레이 클릭과 네이티브 표면 클릭이 같은 pointerdown 으로 도착한다. 표면 클릭은
- * 호스트가 보고하고 판이 해당 슬롯에서 pointerdown 을 발생시킨다(plane.js 의
- * pressSurface). 클릭 위치를 조건으로 따지지 않고 카드 내부인지만 확인한다.
- */
-function pressedOutside(e) {
-  if (!e.target.closest(".set-card")) closeSettings();
-}
-
 /** 모달을 연다. 호스트가 있으면 네이티브 뷰가, 없으면 이 문서가 렌더링한다. */
 export function openSettings() {
   if (card) return;
@@ -357,7 +347,6 @@ export function openSettings() {
   card = makeCard();
   scrim.appendChild(card);
   document.body.appendChild(scrim);
-  document.addEventListener("pointerdown", pressedOutside);
   nav = card.querySelector(".set-card__nav");
   body = card.querySelector(".set-card__pane");
   drawSettings();
@@ -376,7 +365,6 @@ export function openSettings() {
 /** 모달을 닫고 오버레이와 카드를 제거한다. */
 function closeSettings() {
   if (!card) return;
-  document.removeEventListener("pointerdown", pressedOutside);
   if (native) overlay.hide(card);
   else standIn(false);
   scrim.remove();
@@ -386,4 +374,6 @@ function closeSettings() {
   body = null;
 }
 
-addEventListener("keydown", (e) => { if (e.key === "Escape") closeSettings(); });
+// A settings card that was dragged to an edge must remain inside a resized
+// parent window. Its native webview follows the same clamped DOM rectangle.
+addEventListener("resize", () => { if (card) moveBy(0, 0); });

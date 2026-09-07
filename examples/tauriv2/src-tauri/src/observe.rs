@@ -150,7 +150,19 @@ fn command<R: Runtime>(app: &tauri::AppHandle<R>, line: &str) {
             };
             plan.wait = Duration::ZERO;
             write_to((!dir.is_empty()).then(|| dir.to_string()), true);
+            if !dir.is_empty() {
+                capture::start(dir);
+                if !capture::wait() {
+                    say("observe: capture did not produce an initial frame");
+                    return;
+                }
+            }
             start_drag(app, plan);
+        }
+        "stop" => {
+            let dir = into().unwrap_or_default();
+            wrote();
+            say(&format!("observe: wrote {} frames to {dir}", capture::stop()));
         }
         "reset" => {
             // This application outlives the checks and there are several. A
@@ -180,6 +192,26 @@ fn command<R: Runtime>(app: &tauri::AppHandle<R>, line: &str) {
         "click" => {
             let _ = app.emit("observe-click", rest.to_string());
         }
+        "native" => {
+            #[cfg(target_os = "macos")]
+            if let Some(window) = app.get_window("main") {
+                let request = rest.to_owned();
+                let held = window.clone();
+                let _ = window.run_on_main_thread(move || {
+                    extern "C" {
+                        fn spNativeProbe(window: *mut std::ffi::c_void, request: *const std::ffi::c_char,
+                            reply: extern "C" fn(*const std::ffi::c_char));
+                    }
+                    extern "C" fn reply(text: *const std::ffi::c_char) {
+                        let text = unsafe { std::ffi::CStr::from_ptr(text) }.to_string_lossy();
+                        say(&format!("observe: native {text}"));
+                    }
+                    if let (Ok(handle), Ok(text)) = (held.ns_window(), std::ffi::CString::new(request)) {
+                        unsafe { spNativeProbe(handle, text.as_ptr(), reply); }
+                    }
+                });
+            }
+        }
         "transcript" => {
             // There is no way to turn it off. A reset reads the page again and
             // the recording starts over with it.
@@ -207,10 +239,6 @@ fn command<R: Runtime>(app: &tauri::AppHandle<R>, line: &str) {
 pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("observe")
         .setup(|app, _api| {
-            // The window set changes when a modal is attached or detached, and the
-            // app announces that where it happens. Nothing is polled.
-            let listen = app.clone();
-            app.listen("windows-changed", move |_| report(listen.clone()));
             // Written whenever the modal's document renders. Whether a content
             // update reached that document is known nowhere else.
             app.listen("modal-rendered", |event| {
@@ -247,6 +275,10 @@ pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
             // Stopping the recording waits for an answer, and waiting here
             // would stop the window drawing.
             app.listen("run-ended", move |_| {
+                if INTO.lock().unwrap().1 {
+                    say("observe: drag presented");
+                    return;
+                }
                 let ended = into();
                 wrote();
                 let Some(into) = ended else {

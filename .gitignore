@@ -13,3 +13,4 @@ ds-bundle/
 # examples-verify 가 어긋난 프레임을 여기에 적는다. 보고 나면 지운다.
 *-bare.png
 *-outside.png
+*-alignment.png

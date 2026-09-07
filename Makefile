@@ -1,6 +1,9 @@
 SHELL := /bin/sh
 
-.PHONY: preflight prepare build verify
+.PHONY: preflight prepare build verify docs-check
+
+docs-check:
+	@node scripts/check-docs.mjs
 
 preflight:
 	@scripts/check-build-environment.sh
@@ -11,7 +14,7 @@ prepare: preflight
 build: prepare
 	@pnpm build
 
-verify: prepare
+verify: prepare docs-check
 	@pnpm test
 	@pnpm breaks
 	@pnpm build
@@ -76,13 +79,8 @@ wails: wails-build
 wails-release: wails-build-release
 	@./$(WAILS_RELEASE)
 
-# Runs the examples and looks at what they drew. Each app is started, a boundary
-# is shaken, and the window is recorded while that runs.
-#
-# One file at a time. Every test here drives a real window and records it, and
-# two applications shaking a boundary at once do not each get the frames they
-# are measuring.
-examples-verify: wails-build tauri-build
+# 이미 실행 중인 앱의 창을 순차 검사한다. 하네스는 앱을 실행하지 않는다.
+examples-verify: docs-check
 	@node --test --test-concurrency=1 examples/test
 
 # Both apps in both profiles, and what each one weighs.

@@ -5,9 +5,8 @@
 // index.html,
 // so index.html sits at the frontend root and the window opens "/".
 //
-// Wails v3 creates one webview per window. This application builds against a
-// fork that adds AddWebview, so a native surface is a webview the framework
-// makes from the window's own configuration. See surfaces.go.
+// Wails creates the main window. This application creates additional native
+// webviews and handles their messages through webview.go; no fork is required.
 package main
 
 import (
@@ -43,6 +42,7 @@ func main() {
 		},
 		Services: services(surfaces),
 	})
+	connectNativePages(app, surfaces)
 
 	win := app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:  "main",
@@ -71,11 +71,17 @@ func main() {
 	// 바꾸게 한다.
 	place := func(*application.WindowEvent) {
 		application.InvokeSync(func() {
+			prepareNativeWindow(win.NativeWindow())
 			windowPlaceControls(win.NativeWindow(), controlsAtX, controlsAtY)
 		})
 	}
 	win.OnWindowEvent(events.Common.WindowDidResize, place)
 	win.OnWindowEvent(events.Common.WindowShow, place)
+	win.OnWindowEvent(events.Mac.WebViewDidCommitNavigation, func(*application.WindowEvent) {
+		application.InvokeSync(cancelSurfaceLayout)
+		surfaces.discardOverlay()
+	})
+	win.OnWindowEvent(events.Common.WindowClosing, func(*application.WindowEvent) { dropNativeWebviews() })
 
 	if err := app.Run(); err != nil {
 		log.Fatal(err)

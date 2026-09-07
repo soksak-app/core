@@ -69,15 +69,12 @@ func (o *Observe) ServiceName() string { return "observe" }
 
 // ServiceStartup 이 관측을 시작한다.
 //
-// 창 목록을 주기로 확인하지 않는다. 자식 창을 붙이고 떼는 것은 이 애플리케이션이므로
-// 그 지점에서 windows-changed 를 발행하고 여기서 구독한다. 첫 보고는 창이 표시되는
-// 이벤트에서 받는다.
+// 첫 페이지 커밋에서 창을 보고하고 관측을 시작한다.
 func (o *Observe) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
 	// 로그를 표준오류와 제어 연결에 함께 적는다. 제품은 이 서비스를 등록하지
 	// 않으므로 그 로그는 지금까지처럼 표준오류에만 간다.
 	log.SetOutput(io.MultiWriter(os.Stderr, logging))
 	app := application.Get()
-	offChange := app.Event.On("windows-changed", func(*application.CustomEvent) { o.report() })
 	offRecord := o.record()
 	// 모달의 문서가 렌더링할 때마다 남긴다. 갱신된 내용이 그 문서에 도달했는지는
 	// 이 보고로만 알 수 있다.
@@ -89,7 +86,6 @@ func (o *Observe) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	offReady := app.Event.On("page-ready", func(*application.CustomEvent) { o.start() })
 	go func() {
 		<-ctx.Done()
-		offChange()
 		offRecord()
 		offRendered()
 		offReady()
@@ -146,6 +142,13 @@ func (o *Observe) record() func() {
 		}
 	})
 	offEnded := bus.On("run-ended", func(*application.CustomEvent) {
+		o.mu.Lock()
+		controlled := o.once
+		o.mu.Unlock()
+		if controlled {
+			log.Print("observe: drag presented")
+			return
+		}
 		into := o.dir()
 		o.wrote()
 		if into != "" {
@@ -458,7 +461,18 @@ func (o *Observe) command(line string) {
 		}
 		plan.wait = 0
 		o.writeTo(into, true)
+		if into != "" {
+			captureStart(into)
+			if !captureWait() {
+				log.Printf("observe: capture did not produce an initial frame")
+				return
+			}
+		}
 		startDrag(plan)
+	case "stop":
+		into := o.dir()
+		o.wrote()
+		log.Printf("observe: wrote %d frames to %s", captureStop(), into)
 	case "reset":
 		// 이 애플리케이션은 검사보다 오래 살고 검사는 여럿이다. 앞의 검사가 연
 		// 모달이나 옮긴 경계가 남아 있으면 다음 검사는 자기가 만들지 않은 상태를
@@ -482,6 +496,8 @@ func (o *Observe) command(line string) {
 		log.Printf("observe: reset")
 	case "click":
 		application.Get().Event.Emit("observe-click", rest)
+	case "native":
+		observeNative(rest)
 	case "transcript":
 		// 끄는 길은 없다. reset 이 페이지를 다시 읽으면 기록도 처음으로 돌아간다.
 		application.Get().Event.Emit("observe-record")

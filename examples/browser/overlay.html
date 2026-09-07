@@ -5,7 +5,7 @@
   메인 페이지의 [data-native-modal] 요소 하나를 렌더링한다.
 
   DOM 은 네이티브 뷰 위에 그릴 수 없고, 웹뷰는 DOM 을 렌더링하는 네이티브 뷰다. 이
-  페이지는 애플리케이션의 창에 자식 창으로 붙는 창에 로드되므로 표면 위에 그려지고,
+  페이지는 메인창 내부의 별도 네이티브 웹뷰에 로드되므로 표면 위에 그려지고,
   표면은 계속 실행된다.
 
   요소의 클래스 이름과 마크업과 페이지의 스타일시트를 받는다. data-key 를 가진 요소의
@@ -15,6 +15,7 @@
   /* 스크립트보다 먼저 적용되도록 마크업에 둔다. 웹뷰는 자기 문서를 그리기 전까지
      흰색을 표시한다. */
   html, body { margin: 0; padding: 0; height: 100%; background: transparent }
+  html { overflow: hidden }
 </style>
 <script type="module">
   import { page } from "./framework/index.js";
@@ -24,46 +25,57 @@
   followTheme();
 
   const id = new URLSearchParams(location.search).get("id");
+  const instance = Number(new URLSearchParams(location.search).get("instance"));
   let sheet = null;
   let root = null;
+  let pendingCard = null;
 
-  function render({ css, className, html, border }) {
+  function place({ x, y, w, h }) {
+    if (!root) { pendingCard = { x, y, w, h }; return; }
+    root.style.left = `${x}px`;
+    root.style.top = `${y}px`;
+    root.style.width = `${w}px`;
+    root.style.height = `${h}px`;
+  }
+
+  function render({ mode, title, css, className, html, border, card }) {
     if (!sheet) {
       document.head.insertAdjacentHTML("beforeend", `<style id="page"></style>`);
       sheet = document.getElementById("page");
       // 페이지의 스타일시트는 body 규칙까지 통째로 온다. 이 블록을 그 뒤에 넣어
       // 우선하게 한다.
       document.head.insertAdjacentHTML("beforeend", `<style>
-        html, body { margin: 0; padding: 0; height: 100% }
-        /* 카드는 메인 페이지에서 자기 위치를 지정한다. 이 뷰는 카드 하나만 담으므로
-           그 위치 지정을 모두 해제한다. transform 을 남기면 카드가 폭의 절반만큼
-           이동해 왼쪽이 잘린다.
-
-           크기는 메인 페이지가 정하고 뷰가 이미 그 크기다. 카드는 뷰를 채운다.
-           카드의 max-height 를 남겨 두면 뷰 높이의 74% 로 다시 줄어들고, 없애기만
-           하면 내용만큼 자라 뷰 밖으로 넘친다. 높이를 채워야 안의 판이 스크롤한다. */
-        body > * { position: static !important; inset: auto !important;
-                   transform: none !important; margin: 0 !important;
-                   max-height: none !important; height: 100% !important }
+        html, body { margin: 0; padding: 0; height: 100%; background: transparent }
+        body[data-mode="dialog"] { background: rgb(0 0 0 / .5) }
+        body > [data-native-modal] { position: absolute; transform: none !important;
+          margin: 0 !important; max-height: none !important }
       </style>`);
       root = document.createElement("div");
       document.body.appendChild(root);
     }
     sheet.textContent = css;
     root.className = className;
+    root.dataset.nativeModal = mode;
+    document.body.dataset.mode = mode;
+    document.title = title;
+    root.setAttribute("role", "dialog");
+    root.setAttribute("aria-modal", String(mode === "dialog"));
+    root.setAttribute("aria-label", title);
     root.innerHTML = html;
     root.style.borderColor = border;
+    place(pendingCard ?? card);
+    pendingCard = null;
 
     // 뷰는 메인 페이지가 잰 크기로 만들어졌으므로 여기서 잴 것이 없다. 이 호출은
     // 내용이 렌더링되었다는 것만 보고하며, 그때가 뷰를 표시할 수 있는 시점이다.
-    page.modal.ready(id);
+    page.modal.ready(id, instance);
   }
 
   /* 로드 시 한 번, 이후 내용이 바뀔 때마다 호출한다. 뷰를 다시 만들면 깜빡인다. */
-  page.modal.content(id, render);
+  page.modal.content(id, instance, render, place);
 
   /* 응답은 (key, value) 하나다. 거두는 방법은 메인 문서와 같은 것을 쓴다. */
-  const send = (key, value) => page.modal.answer(id, key, value);
+  const send = (key, value) => page.modal.answer(id, instance, key, value);
 
   onAnswer(document, send);
 

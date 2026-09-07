@@ -19,9 +19,10 @@ export function onAnswer(root, send) {
     const el = e.target.closest("[data-set]");
     if (el) send(el.dataset.set, el.type === "checkbox" ? String(el.checked) : el.value);
   });
-  // 닫힘은 빈 key 로 보고한다. 카드를 소유한 문서가 그것이 무엇을 닫는지 정한다.
+  // 메뉴는 Escape 로 취소한다. dialog 는 자기 닫기 버튼으로만 닫는다.
   root.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") send("", "");
+    const menu = '[data-native-modal="menu"]';
+    if (e.key === "Escape" && (root.matches?.(menu) || root.querySelector(menu))) send("", "");
   });
 }
 

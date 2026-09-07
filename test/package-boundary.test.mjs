@@ -61,8 +61,8 @@ test("the view creates only div elements and writes no markup", () => {
   assert.doesNotMatch(source, /style\.(background|border|color|font)/, "the view never styles");
 });
 
-test("every exported name appears in the README", async () => {
-  const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8");
+test("every exported name appears in the layout specification", async () => {
+  const readme = readFileSync(new URL("../docs/spec/layout.md", import.meta.url), "utf8");
   const lib = await import("../dist/index.js");
   for (const name of Object.keys(lib)) {
     assert.match(readme, new RegExp(`\\b${name}\\b`), `${name} is exported and undocumented`);

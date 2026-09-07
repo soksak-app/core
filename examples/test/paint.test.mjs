@@ -3,8 +3,7 @@
 // 웹뷰는 레이아웃한 영역만 렌더링하고 나머지는 흰색으로 채운다. 터미널 표면과 그
 // 표면이 놓인 행은 모두 어두우므로, 그 행의 흰 픽셀이 렌더링되지 않은 영역이다.
 //
-// 애플리케이션이 빌드되어 있지 않으면 건너뛴다. `make examples-verify` 가 먼저
-// 빌드한다.
+// 검사 전에 앱을 빌드하고 다시 실행한다. 바이너리가 없으면 검사를 건너뛴다.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { join } from "node:path";
@@ -47,6 +46,7 @@ for (const [name, binary] of Object.entries(APPS)) {
     test(`${name}: shaking the ${which} exposes no unrendered area`, async (t) => {
       const run = await shakeTwice(binary, drive);
       if (!run) return t.skip(`${binary} is not built`);
+      let passed = false;
       try {
         assert.ok(
           !nothingRecorded(run.log),
@@ -94,8 +94,12 @@ for (const [name, binary] of Object.entries(APPS)) {
               `The worst is ${worst.n} pixels, written to ${shown}.`,
           );
         }
+        passed = true;
+      } catch (error) {
+        error.message += `\nRecorded frames: ${run.into}`;
+        throw error;
       } finally {
-        run.clean();
+        if (passed) run.clean();
       }
     });
   }

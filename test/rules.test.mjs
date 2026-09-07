@@ -6,7 +6,7 @@ import { Soksak } from "../dist/index.js";
 import { H, W, fuzz, three } from "./helpers.mjs";
 
 /**
- * One test per rule in the README.
+ * One test per rule in the layout specification.
  *
  * A rule nothing checks is decoration: it survives a rewrite that breaks it, and
  * the next reader believes it. Each of these names the rule it is in service of,
@@ -286,8 +286,8 @@ test("R7 — every open card but the last can leave, whatever came before", () =
 
 // A ledger, not a behaviour check: it compares two documents and would pass on
 // any implementation. It is here so a rule cannot be stated without a test.
-test("the rules the README states and the rules named by a test are the same list", () => {
-  const readme = read("README.md");
+test("the rules the layout specification states and the rules named by a test are the same list", () => {
+  const readme = read("docs/spec/layout.md");
   const stated = [...readme.matchAll(/\*\*(R\d) — /g)].map((m) => m[1]);
   const tested = read("test/rules.test.mjs").match(/test\("(R\d) —/g)?.map((s) => s.slice(6, 8)) ?? [];
   assert.deepEqual(stated, [...new Set(tested)], "a rule is stated without a test, or tested without being stated");

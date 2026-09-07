@@ -5,7 +5,7 @@
 // 표시하고 셸 프로세스를 연결한다.
 //
 // DOM 은 네이티브 뷰 위에 그릴 수 없으므로 [data-native-modal] 요소는 별도 뷰에
-// 렌더링한다. 그 뷰는 애플리케이션의 창에 자식 창으로 붙으므로 표면 위에 그려진다.
+// 렌더링한다. 그 뷰는 메인창 내부에 배치되어 표면 위에 그려진다.
 //
 // 이 파일은 애플리케이션마다 복제하지 않는다. 애플리케이션별 차이는 전송 방식뿐이고
 // framework/ 가 담당한다.
@@ -46,16 +46,6 @@ function over(colour, ground) {
   return `rgb(${mix(r, br)}, ${mix(g, bg)}, ${mix(b, bb)})`;
 }
 
-/** 표면이 문서를 렌더링하기 전까지 표시할 색을 반환한다. */
-function surfaceBackground() {
-  const probe = document.createElement("div");
-  probe.style.color = "var(--surface)";
-  document.body.appendChild(probe);
-  const rgb = getComputedStyle(probe).color.match(/\d+/g);
-  probe.remove();
-  return [Number(rgb[0]), Number(rgb[1]), Number(rgb[2])];
-}
-
 /** 판 기준 사각형을 페이지 기준으로 변환한다. */
 function toPage(rect) {
   const plane = document.getElementById("plane").getBoundingClientRect();
@@ -77,6 +67,9 @@ function toPlane(rect) {
 function drawing(el) {
   const style = getComputedStyle(el);
   return {
+    mode: el.dataset.nativeModal,
+    card: cardFrame(el),
+    title: el.getAttribute("aria-label") || "",
     className: el.className,
     html: el.innerHTML,
     css: [...document.styleSheets]
@@ -84,6 +77,18 @@ function drawing(el) {
       .join("\n"),
     border: over(style.borderTopColor, style.backgroundColor),
   };
+}
+
+function cardFrame(el) {
+  const r = el.getBoundingClientRect();
+  const dialog = el.dataset.nativeModal === "dialog";
+  return { x: dialog ? r.left : 0, y: dialog ? r.top : 0, w: r.width, h: r.height };
+}
+
+function overlayFrame(el, rect) {
+  return el.dataset.nativeModal === "dialog"
+    ? { x: 0, y: 0, w: innerWidth, h: innerHeight }
+    : toPage(rect);
 }
 
 /**
@@ -149,6 +154,7 @@ const tellInTurn = (name, payload) => {
 };
 
 let last = "";
+let prepared = null;
 
 /**
  * 창 자체를 다루는 인터페이스. 애플리케이션이 없으면 null.
@@ -178,9 +184,6 @@ export const surfaces = native ? {
     theme: (values) => tellInTurn("setTheme", values),
 
     place(record) {
-      // 표면마다 읽지 않는다. 값은 테마가 정하고 표면마다 같으며, 읽을 때마다
-      // 문서에 요소를 붙였다 떼고 스타일을 다시 계산하게 한다.
-      const background = surfaceBackground();
       const surfaces = record.surfaces.map((s) => ({
         id: s.id,
         dim: s.dim,
@@ -189,9 +192,6 @@ export const surfaces = native ? {
         // 자체 문서는 자기 서버로 연다. 표면의 종류는 알 필요가 없다.
         external: !!s.surface.url,
         visible: s.visible,
-        // 문서를 로드하기 전에 표시할 색. 렌더링 후 뷰가 커져 드러난 영역에는
-        // 적용되지 않는다.
-        background,
         ...toPage(s.applied),
       }));
 
@@ -204,13 +204,18 @@ export const surfaces = native ? {
         surfaces,
       };
       const key = JSON.stringify(request);
-      if (key === last) return;
-      last = key;
+      if (key !== last) {
+        last = key;
+        prepared = tellInTurn("syncSurfaces", request);
+      }
       // 차례대로 보낸다. 애플리케이션에 따라 호출마다 다른 스레드에서 처리되므로,
       // 기다리지 않으면 한 프레임 전의 자리가 나중에 적용된다.
       // 애플리케이션이 실제로 앉힌 자리를 판 기준으로 되돌려 답한다. 렌더링 전에
       // 배치를 보낸 쪽이 이 결과를 기다린다.
-      return tellInTurn("syncSurfaces", request).then((placed) =>
+      const placed = record.drawn
+        ? prepared.then((frame) => tell("presentSurfaces", { ...frame, settled: request.settled }))
+        : prepared.then((frame) => frame.placements);
+      return placed.then((placed) =>
         (placed ?? []).map((p) => ({ id: p.id, ...toPlane(p) })));
     },
 } : {
@@ -289,23 +294,22 @@ export const overlay = native ? {
       pick = onPick;
       // 이 길로 오는 요소는 [data-native-modal] 이다. 표식만 두고 검사하지 않으면
       // 마크업과 동작이 따로 놀고, 표식 없는 요소가 조용히 뷰를 얻는다.
-      if (!el.matches("[data-native-modal]")) {
-        throw new Error(`${el.id || el.className} is not a [data-native-modal] element`);
+      if (!["dialog", "menu"].includes(el.dataset.nativeModal)) {
+        throw new Error(`${el.id || el.className} needs data-native-modal="dialog" or "menu"`);
       }
       // 뷰 이름은 요소 id 를 사용한다. id 가 없는 요소가 둘이면 같은 뷰를 공유한다.
       if (!el.id) throw new Error("a [data-native-modal] element needs an id");
-      // 창은 그려지지 않는 제목도 갖는다. 시스템과 보조기술이 창을 부르는 이름이다.
+      // 보조기술이 오버레이를 부르는 이름이다.
       const name = el.getAttribute("aria-label");
-      if (!name) throw new Error(`${el.id} needs an aria-label to name its window`);
+      if (!name) throw new Error(`${el.id} needs an aria-label to name its overlay`);
       shown = el.id;
       const style = getComputedStyle(el);
       tellInTurn("overlayShow", {
         id: shown,
         title: name,
-        rect: toPage(rect),
+        rect: overlayFrame(el, rect),
         ...drawing(el),
-        radius: parseFloat(style.borderTopLeftRadius) || 0,
-        background: rgba(style.backgroundColor),
+        radius: el.dataset.nativeModal === "dialog" ? 0 : parseFloat(style.borderTopLeftRadius) || 0,
       });
     },
 
@@ -318,7 +322,7 @@ export const overlay = native ? {
      */
     place(el, rect) {
       if (shown !== el.id) return;
-      tellInTurn("overlayPlace", { id: shown, rect: toPage(rect) });
+      tellInTurn("overlayPlace", { id: shown, rect: overlayFrame(el, rect), card: cardFrame(el) });
     },
 
     /** 이 요소의 모달 뷰의 내용을 교체한다. 뷰를 다시 만들면 깜빡인다. */

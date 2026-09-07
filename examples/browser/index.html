@@ -31,7 +31,7 @@
 <main class="stage"><div class="plane" id="plane">
   <svg class="rail" id="rail"><path id="railPath"></path></svg>
   <div class="drop" id="drop" hidden></div>
-  <div class="picker" id="picker" data-native-modal hidden></div>
+  <div class="picker" id="picker" data-native-modal="menu" hidden></div>
   <div class="focus-mark" id="focusMark" hidden></div>
 </div></main>
   </div>
@@ -40,6 +40,7 @@
 <!-- 이 페이지를 그대로 앱의 프론트엔드로 쓴다. host.js 는 자기를 담고 있는
      것이 무엇인지 framework/ 에게 묻고, 호스트가 없으면 아무것도 놓지 않는다 —
      그러면 페이지가 표면을 스스로 그린다. -->
+<script src="./background.js"></script>
 <script type="module" src="./host.js"></script>
 <script type="module">
 /* 이 저장소가 방금 만든 빌드를 읽는다 — `pnpm example` 이 build 를 먼저 돌린다.
@@ -64,7 +65,7 @@ import {
 
 /* 표면을 모사하고 보고한다. 판은 슬롯 요소에 값을 기록만 하고 측정과 보고는 이쪽이
    담당한다. */
-import { onCommit, onKnobChange, onRun, publish, publishAhead } from "./compositor.js";
+import { latest, onCommit, onKnobChange, onRun, publish, publishAhead } from "./compositor.js";
 
 /* 판 하나. 이 문서는 판의 렌더링 방식을 알지 않고 렌더 완료만 수신한다. */
 import {
@@ -182,18 +183,34 @@ onCommit((record) =>
 
 /* 판이 다시 그려지면 검증하고 표면을 보고한다. 판은 둘을 알지 않고 둘은 판을 읽기만
    하므로 이 문서에서 연결한다. */
-onRender(() => { publish(); check(); });
+let ready = false;
+let presented = Promise.resolve();
+onRender(() => {
+  const done = publish();
+  presented = Promise.resolve(done);
+  const record = latest();
+  check();
+  Promise.resolve(done).then(() => {
+    if (latest() !== record) return;
+    check();
+    if (!ready) {
+      ready = true;
+      host.report(`observe: ready ${performance.timeOrigin}`);
+    }
+  });
+});
 
-/* 배치가 바뀌면 그리기 전에 호스트에 알리고, 호스트가 옮긴 뒤에 그린다. 판 위의
-   네이티브 뷰는 다른 길로 움직이고 그 길이 더 느리다. 그려 놓고 알리면 한 프레임
-   동안 카드는 새 자리에, 뷰는 옛 자리에 있다.
-
-   여백을 아직 재지 못했거나 호스트가 없으면 곧바로 그린다. 그리고 나면 onRender 가
-   재서 다시 보고하므로 어느 쪽이든 마지막 값은 같다. */
+/* 네이티브 표면 준비가 완료된 뒤 카드 DOM을 갱신한다. */
+let drawing = Promise.resolve();
+let revision = 0;
 onLayout((made, draw, seated) => {
-  const told = publishAhead(made, seated);
-  if (told && typeof told.then === "function") told.then(draw, draw);
-  else draw();
+  const mine = ++revision;
+  drawing = drawing.then(async () => {
+    if (mine !== revision) return;
+    await publishAhead(made, seated);
+    draw();
+    await presented;
+  });
 });
 
 /* 스페이스가 바뀌면 현재 판을 저장하고 다른 상태를 적용한다. 프로젝트 전환도 같은

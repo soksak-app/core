@@ -29,6 +29,19 @@ const REACH = 3;
 const surface = (px) => px.every((v, i) => Math.abs(v - SURFACE[i]) <= NEAR);
 const pale = ([r, g, b]) => r > PALE && g > PALE && b > PALE;
 
+/** 녹화 종료 확인에 사용하는 터미널 표면의 표시 좌표. */
+export function bounds(frame) {
+  let l = frame.width, r = -1, t = frame.height, b = -1;
+  for (let y = 0; y < frame.height; y++) {
+    for (let x = 0; x < frame.width; x++) {
+      if (!surface(pixel(frame, x, y))) continue;
+      l = Math.min(l, x); r = Math.max(r, x);
+      t = Math.min(t, y); b = Math.max(b, y);
+    }
+  }
+  return r >= l ? { l, r, t, b } : null;
+}
+
 /**
  * 이 프레임에서 터미널 표면에 맞붙은 흰 픽셀 수.
  *

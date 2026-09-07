@@ -1,0 +1,68 @@
+# 예제 빌드와 검증
+
+[English](examples.md)
+
+저장소 루트에서 명령을 실행한다. `package.json`의 패키지 관리자 버전, `examples/wailsv3/go.mod`와 호환되는 Go 도구 체인, Tauri 크레이트와 호환되는 Rust 도구 체인을 사용한다. 현재 네이티브 검증은 macOS에서 Command Line Tools SDK와 캡처를 위한 화면 기록 권한을 사용한다.
+
+## 빌드
+
+```sh
+make prepare
+pnpm build
+make wails-build tauri-build
+```
+
+빌드 대상은 `examples/browser/`와 `dist/`를 각 앱의 생성된 `frontend/`에 복사한다. 두 바이너리 모두 빌드 시 프런트엔드를 포함한다. 실행 중인 프로세스에는 새 프런트엔드가 적용되지 않으므로 빌드 후 해당 앱을 다시 실행한다.
+
+디버그 바이너리는 `examples/wailsv3/bin/wailsv3`와 `examples/tauriv2/src-tauri/target/debug/soksak-tauri`다. 릴리스 빌드는 `make wails-build-release tauri-build-release`를 사용한다. `make examples-size`는 두 프로파일을 빌드하고 크기를 출력한다.
+
+## 창 검사
+
+각각 다른 터미널에서 앱을 한 번씩 실행한다.
+
+```sh
+./examples/wailsv3/bin/wailsv3 --observe
+./examples/tauriv2/src-tauri/target/debug/soksak-tauri --observe
+```
+
+디스플레이를 켜고 두 창이 렌더링 가능한 상태에서 실행한다.
+
+```sh
+node --test --test-concurrency=1 examples/test
+```
+
+하네스는 Wails의 `127.0.0.1:49732`, Tauri의 `127.0.0.1:49733`에 연결한다. `49731` 포트로 창 검사를 순차 실행한다. 검사는 앱을 시작하거나 창을 활성화하지 않는다. 실행 중인 앱이 없으면 실패하고, 바이너리가 없으면 건너뜀으로 표시한다. 호스트 검사를 건너뛴 실행으로 두 호스트를 검증했다고 기록하지 않는다.
+
+`make examples-verify`는 같은 검사와 문서 검사를 실행한다. 검증 전에 두 앱을 빌드하고 다시 실행한다. 실행 파일을 다시 빌드해도 이미 실행 중인 프로세스는 교체되지 않는다.
+
+하네스는 실행마다 메인 문서를 다시 로드하고 초기 네이티브 표시를 기다린다. 호스트는 16ms 간격으로 드래그 단계를 제공한다. 자동 드래그 녹화는 입력 전 첫 프레임을 수신한다. 표시 보고 후 하네스는 캡처의 터미널 좌표가 초기 좌표로 복귀한 것을 확인하고 `stop`을 요청한다. 10초 안에 최종 좌표가 기록되지 않으면 검사는 실패하고 녹화를 보존한다. 제스처 미완료, 잘못된 속도, 프레임 부족, 측정 가능 프레임 부족은 검사 실패다.
+
+`outside.test.mjs`는 측정 가능한 모든 프레임에서 카드 밖 표면 픽셀 0, 왕복 두 번 전체, 터미널 콘텐츠·DOM 입력 구분선·카드 UI·사이드바·레일의 일정한 상대 좌표를 검사한다. 외부 문서에서 측정한 700ms 작업 구간 안에 메인 배치가 반복 갱신되어야 하며, 해당 작업의 실행만으로는 충분하지 않다. `paint.test.mjs`는 렌더링되지 않은 영역을 검사한다. `modal.test.mjs`는 순서, 투명도, 배경 블러·입력, 닫기, 이동, 크기 변경, 다시 로드 후 제거를 검사한다. `controls.test.mjs`는 최대화·녹화 후 버튼 좌표를 읽는다. `hosts.test.mjs`는 최종 요청과 표시 좌표를 비교한다. 준비 식별자는 각 프로세스 내부 값이다.
+
+픽셀 검사 실패 시 원시 BGRA 프레임을 보존하고 정렬, 카드 외부 표시 또는 미렌더링 문제가 가장 심한 프레임을 PNG로 저장한다. 원시 프레임에는 너비·높이·행 바이트 수인 32비트 값 세 개와 BGRA 픽셀 데이터가 포함된다. 누락되거나 불완전한 녹화를 통과로 처리하지 않는다.
+
+## 수동 인수
+
+- 브라우저·터미널 위에 설정을 연다. 검정 50% 배경, 보이는 블러, 선명한 설정 콘텐츠를 확인한다. 배경 클릭과 스크롤이 하부 콘텐츠를 조작하면 안 된다.
+- 설정 헤더를 드래그하고 메인 창 크기를 변경하며 창 관리 도구를 사용한다. 설정은 메인 창 내부에 유지되어야 한다. ×만 설정을 닫으며 배경 클릭과 Escape는 닫지 않는다.
+- 추가·분할 선택 메뉴를 연다. 배경 투명, 블러 없음, 선택·바깥 클릭·Escape로 닫기를 확인한다.
+- 설정을 닫고 화면·입력 복원을 확인한다. 설정이 열린 상태에서 브라우저를 다시 로드하고 새 문서의 블러를 확인한다.
+- 구분선 드래그를 녹화하고 전체화면을 진입·해제한다. 네이티브 버튼은 첫 행의 상하 중앙을 유지해야 한다.
+
+2026-09-07 수동 외관 검증에서 두 macOS 호스트의 설정 블러를 확인했다. 이는 자동 좌표·입력 검사와 구분되는 수동 외관 검증이다. 새 결과는 [기능 상태](../features.ko.md)와 [변경 기록](../../CHANGELOG.ko.md)에 기록한다. Windows와 Linux는 네이티브 실행과 검증이 추가로 필요하다.
+
+## 진단
+
+`--transcript`는 호스트 요청·응답을 기록한다. `--click '5000,button.act[title="설정"]'`는 지정한 지연 후 DOM 클릭을 요청한다. `--drive 3000,x,2,-250,0,400,2`는 두 왕복을 요청한다. `--capture /tmp/frames`는 수동 배치 갱신을 녹화한다. 이 플래그는 `--observe`가 필요하다.
+
+독립 겹침 웹뷰 입력 검사는 앱을 활성화하지 않는 임시 네이티브 창을 사용한다. 공통 입력 코드를 변경할 때 실행한다.
+
+```sh
+clang -fblocks -I examples/native -framework Cocoa -framework WebKit \
+  examples/native-tests/webview-input.m examples/native/webview_input_darwin.m \
+  -o /tmp/soksak-webview-input
+/tmp/soksak-webview-input --baseline
+/tmp/soksak-webview-input
+```
+
+기준 실행은 겹친 DOM의 중복 포인터 이동을 확인한다. 입력 등록 실행은 단일 대상 포인터 추적, 키보드 입력 유지, 오버레이 숨김·제거 후 정리를 검사한다. 두 실행 모두 지연된 커서 응답을 검사하지 않는다.

@@ -43,6 +43,7 @@ let aheadRecord = null;
 /* 미리 게시한 커밋의 번호. 그 번호로 커밋이 이루어졌을 때만 예측 레코드가 생긴다.
    지연이 걸려 있으면 뒤이은 측정 커밋이 그것을 대신하므로 예측은 게시되지 않는다. */
 let aheadSeq = -1;
+let aheadComplete = false;
 let timer = null;
 const drawn = new Map();
 
@@ -141,7 +142,7 @@ export function publish() {
       frame,
     });
   }
-  deliver(mine, snapshot);
+  return deliver(mine, snapshot);
 }
 
 /**
@@ -158,63 +159,45 @@ function deliver(mine, snapshot) {
       going = running;
       edge?.(going);
     }
-    commit(mine, snapshot, !running);
+    return commit(mine, snapshot, !running);
   };
   if (knobs.latency === 0) return send();
   timer = setTimeout(send, knobs.latency);
   return undefined;
 }
 
-/**
- * 아직 렌더링하지 않은 배치를 커밋한다.
- *
- * 판이 배치를 변경하고 아직 렌더링하지 않았을 때 호출한다. 카드 사각형은 판이
- * 전달하고, 그 안에서 슬롯의 위치는 직전 커밋에서 측정한 여백으로 계산한다.
- *
- * 여백을 모르는 표면이 하나라도 있으면 false 를 반환한다. seated 가 전달한 표면과
- * DOM 이 담은 표면이 다를 때도 마찬가지다. 호출한 쪽은 렌더링한 뒤 측정하는 경로로
- * 처리한다.
- *
- * seated 는 판이 앉힐 표면이다: 카드 id 마다 그 카드가 보여줄 표면의 id 와 흐림
- * 여부. 여기서 읽는 DOM 은 아직 이전 배치이므로, 표면이 교체되는 변경에서는 이 둘이
- * 다르다. 흐림도 판이 정하는 값이므로 DOM 이 아니라 이 값을 읽는다.
- */
+/** 다음 카드 배치를 준비한다. 위치를 계산할 수 없는 기존 표면은 먼저 숨긴다. */
 export function publishAhead(rects, seated) {
   aheadRecord = null;
+  aheadComplete = true;
   const seats = [];
   for (const slot of slots()) {
     const id = slot.dataset.nativeSurfaceId;
     const el = cardEl(slot);
     const card = el && rects.get(el.dataset.cardId);
-    if (!card) return false;
-    const seat = seated.get(el.dataset.cardId);
-    if (!seat || seat.id !== id) return false;
-    const inset = insetOf(slot, el);
-    // 여백을 잴 수 없는 카드와, 여백을 담지 못하는 카드. 앞쪽은 슬롯이 눌려 있어
-    // 뺄셈이 여백이 아니라 카드의 크기이고, 뒤쪽은 머리와 발이 줄어들어 슬롯이
-    // 잰 자리에 오지 않는다. 둘 다 예측할 수 없으므로 측정하는 길로 넘긴다.
-    if (inset.flat || card.w < inset.width || card.h < inset.height) return false;
+    const seat = el && seated.get(el.dataset.cardId);
+    const inset = el && insetOf(slot, el);
+    const measurable = card && seat?.id === id && inset && !inset.flat
+      && card.w >= inset.width && card.h >= inset.height;
+    if (!measurable) aheadComplete = false;
     seats.push({
       id,
       layer: Number(slot.dataset.nativeLayer),
       title: slot.dataset.nativeTitle,
       plugin: slot.dataset.nativePlugin,
-      dim: seat.dim,
-      visible: effectiveVisible(slot),
-      frame: {
+      dim: seat?.dim === true,
+      visible: !!measurable && effectiveVisible(slot),
+      frame: measurable ? {
         x: card.x + inset.left,
         y: card.y + inset.top,
         w: card.w - inset.width,
         h: card.h - inset.height,
-      },
+      } : { x: 0, y: 0, w: 0, h: 0 },
     });
   }
-  // 모델이 앉힐 표면이 DOM 보다 많으면 그 표면은 이 게시에 없다.
-  if (seats.length === 0 || seats.length !== seated.size) return false;
-  // 지연은 두 길에 같이 걸린다. 한쪽만 걸면 그 손잡이가 끄는 동안에는 아무 일도
-  // 하지 않고, 그 상태를 만들려고 있는 손잡이가 그 상태를 만들지 못한다.
+  aheadComplete &&= seats.length === seated.size;
   aheadSeq = ++seq;
-  return deliver(aheadSeq, seats) ?? true;
+  return deliver(aheadSeq, seats);
 }
 
 /**
@@ -224,7 +207,7 @@ export function publishAhead(rects, seated) {
  * 언제나 가장 최근의 것이다.
  */
 function commit(mine, snapshot, final) {
-  const record = { seq: mine, settled: final, surfaces: [] };
+  const record = { seq: mine, settled: final, drawn: mine !== aheadSeq, surfaces: [] };
   const kinds = app.kinds;
   for (const s of snapshot) {
     // 호스트가 없으면 이 모듈이 표면을 모사하므로 적용 위치도 여기서 정한다.
@@ -264,7 +247,7 @@ function commit(mine, snapshot, final) {
   latestRecord = record;
   // 예측이 그 번호 그대로 커밋되었을 때만 예측 레코드다. 지연이 걸려 있으면 뒤이은
   // 측정 커밋이 그것을 대신하고, 예측은 게시되지 않는다.
-  if (mine === aheadSeq) aheadRecord = record;
+  if (mine === aheadSeq && aheadComplete) aheadRecord = record;
   // 무엇을 호스트에 보낼지는 이 모듈이 정하지 않는다. 이 판의 표면만으로는 부족하고,
   // 다른 스페이스의 표면도 살아 있어야 한다.
   //

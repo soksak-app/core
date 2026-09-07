@@ -14,5 +14,3 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	golang.org/x/sys v0.46.0 // indirect
 )
-
-replace github.com/wailsapp/wails/v3 => github.com/min-median-max/wails/v3 v3.0.0-20260906173324-96061d7a8ec1

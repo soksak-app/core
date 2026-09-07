@@ -7,7 +7,7 @@
   ],
   "webviews": [
     "main",
-    "modal",
+    "modal-*",
     "surface-*"
   ],
   "permissions": [

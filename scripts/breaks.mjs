@@ -1,5 +1,5 @@
 /**
- * One deliberate defect per promise the README makes.
+ * One deliberate defect per promise the layout specification makes.
  *
  * A mutation run flips operators and finds what no test is watching. This is
  * the other direction: each entry removes a behaviour the library states, and

@@ -8,5 +8,6 @@ package main
 func captureOpen(windowNumber int) {}
 
 func captureStart(directory string) {}
+func captureWait() bool             { return false }
 
 func captureStop() int { return 0 }

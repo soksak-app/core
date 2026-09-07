@@ -38,20 +38,9 @@ func (v *nativeShape) destroy()                                                 
 // for this platform; an empty rect means the window draws none.
 func windowControls(window unsafe.Pointer) Rect { return Rect{} }
 
-// modalOnScreen converts a point in the parent's content into a screen point.
-// Not written for this platform.
-func modalOnScreen(parent unsafe.Pointer, at Rect) (int, int) { return 0, 0 }
-
 // modalAligned snaps a modal's rect to the display's pixels. Not written for this
 // platform.
 func modalAligned(parent unsafe.Pointer, at Rect) Rect { return at }
 
-// modalConfigure configures a modal's window. Not written for this platform.
-func modalConfigure(window unsafe.Pointer, title string, radius float64) {}
-
-// modalOrderOut takes the modal's window off the screen. Not written for this
-// platform.
-func modalOrderOut(window unsafe.Pointer) {}
-
-// windowMakeMain makes this window the main one. Not written for this platform.
-func windowMakeMain(window unsafe.Pointer) {}
+func modalViewConfigure(view unsafe.Pointer, title string, radius float64) {}
+func modalViewFocus(view unsafe.Pointer, take bool)                        {}

@@ -24,6 +24,11 @@
     "src",
     "README.md",
     "README.ko.md",
+    "docs",
+    "AGENTS.md",
+    "AGENTS.ko.md",
+    "CHANGELOG.md",
+    "CHANGELOG.ko.md",
     "LICENSE"
   ],
   "scripts": {

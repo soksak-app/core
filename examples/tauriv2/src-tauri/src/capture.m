@@ -13,6 +13,10 @@
 #import <Cocoa/Cocoa.h>
 #import <ScreenCaptureKit/ScreenCaptureKit.h>
 
+static dispatch_semaphore_t captureFirstFrame;
+static dispatch_queue_t captureQueue;
+static int captureBefore;
+
 @interface SPCapture : NSObject <SCStreamOutput, SCStreamDelegate>
 @property (nonatomic, copy) NSString* directory;
 @property (nonatomic) int written;
@@ -57,14 +61,18 @@ static SCFrameStatus frameStatus(CMSampleBufferRef sample) {
     if (base != NULL) {
         NSString* path = [self.directory stringByAppendingPathComponent:
             [NSString stringWithFormat:@"frame-%04d.bgra", self.written + 1]];
-        FILE* file = fopen(path.UTF8String, "wb");
+        NSString* pending = [path stringByAppendingString:@".partial"];
+        FILE* file = fopen(pending.UTF8String, "wb");
         if (file != NULL) {
             uint32_t head[3] = { (uint32_t)width, (uint32_t)height, (uint32_t)stride };
             fwrite(head, sizeof(head), 1, file);
             fwrite(base, stride, height, file);
             // Counted once the file holds the frame, so the count and the
             // directory cannot disagree.
-            if (fclose(file) == 0) self.written++;
+            if (fclose(file) == 0 && rename(pending.UTF8String, path.UTF8String) == 0) {
+                self.written++;
+                if (self.written == captureBefore + 1) dispatch_semaphore_signal(captureFirstFrame);
+            }
         }
     }
     CVPixelBufferUnlockBaseAddress(buffer, kCVPixelBufferLock_ReadOnly);
@@ -133,15 +141,18 @@ void sp_capture_start(const char* directory) {
     // The sink is made once. A new one per recording restarts the frame numbers
     // at one and overwrites the files an earlier recording wrote.
     if (captureSink == nil) captureSink = [[SPCapture alloc] init];
+    captureBefore = captureSink.written;
+    captureSink.idle = 0;
+    captureFirstFrame = dispatch_semaphore_create(0);
     captureSink.directory = [NSString stringWithUTF8String:directory];
     captureStream = [[SCStream alloc] initWithFilter:captureFilter
                                        configuration:captureConfig
                                             delegate:captureSink];
     NSError* error = nil;
-    dispatch_queue_t handing = dispatch_queue_create("sp.capture", NULL);
+    captureQueue = dispatch_queue_create("sp.capture", NULL);
     [captureStream addStreamOutput:captureSink
                               type:SCStreamOutputTypeScreen
-                sampleHandlerQueue:handing
+                sampleHandlerQueue:captureQueue
                              error:&error];
     if (error != nil) {
         fprintf(stderr, "observe: capture output not added, %s\n",
@@ -157,6 +168,12 @@ void sp_capture_start(const char* directory) {
     }];
 }
 
+// The control thread waits for an initial image before starting drag input.
+int sp_capture_wait(void) {
+    return captureStream != nil && dispatch_semaphore_wait(captureFirstFrame,
+        dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC)) == 0;
+}
+
 // Stops the stream and reports how many frames reached disk.
 //
 // The stop is answered on another queue, and frames already handed over are
@@ -165,7 +182,6 @@ void sp_capture_start(const char* directory) {
 int sp_capture_stop(void) {
     if (captureStream == nil) return 0;
     SCStream* stream = captureStream;
-    captureStream = nil;
     dispatch_semaphore_t stopped = dispatch_semaphore_create(0);
     [stream stopCaptureWithCompletionHandler:^(NSError* failed) {
         if (failed != nil) {
@@ -175,9 +191,11 @@ int sp_capture_stop(void) {
         dispatch_semaphore_signal(stopped);
     }];
     dispatch_semaphore_wait(stopped, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
-    if (captureSink.written == 0 && captureSink.idle > 0) {
+    dispatch_sync(captureQueue, ^{});
+    captureStream = nil;
+    if (captureSink.written == captureBefore && captureSink.idle > 0) {
         fprintf(stderr, "observe: the window was not redrawn during %d frames; "
             "the display is off or the window is not on screen\n", captureSink.idle);
     }
-    return captureSink.written;
+    return captureSink.written - captureBefore;
 }

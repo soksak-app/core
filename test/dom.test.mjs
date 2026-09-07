@@ -218,7 +218,7 @@ test("the view places every element on the grid rect", () => {
     assert.ok(!style.includes(banned), `the view set ${banned}`);
   }
 
-  // What the README says every element carries. Without these the values above
+  // What the layout specification says every element carries. Without these the values above
   // place nothing: a card that is not positioned ignores left and top, a rule
   // that takes presses swallows them, and a grab area that no key reaches and
   // that a touch scrolls cannot be dragged.
@@ -1149,7 +1149,7 @@ test("observeResize: false leaves the host unwatched", () => {
   delete globalThis.ResizeObserver;
 });
 
-test("the sheet draws each part the README names", () => {
+test("the sheet draws each part the layout specification names", () => {
   const css = themeCSS();
   assert.match(
     css, /\.sp-rule\[data-virtual="true"\]\s*\{[^}]*--sp-line-crossing/,

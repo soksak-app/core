@@ -8,7 +8,22 @@ fn main() {
             .file("src/capture.m")
             .flag("-fobjc-arc")
             .compile("spcapture");
-        for framework in ["Cocoa", "ScreenCaptureKit", "CoreMedia", "CoreVideo"] {
+        println!("cargo:rerun-if-changed=../../native/webview_input_darwin.m");
+        println!("cargo:rerun-if-changed=../../native/webview_input_darwin.h");
+        println!("cargo:rerun-if-changed=../../native/window_probe_darwin.m");
+        println!("cargo:rerun-if-changed=../../native/window_probe_darwin.h");
+        println!("cargo:rerun-if-changed=../../native/window_controls_darwin.m");
+        println!("cargo:rerun-if-changed=../../native/window_controls_darwin.h");
+        println!("cargo:rerun-if-changed=../../native/surface_layout_darwin.m");
+        println!("cargo:rerun-if-changed=../../native/surface_layout_darwin.h");
+        cc::Build::new()
+            .file("../../native/webview_input_darwin.m")
+            .file("../../native/window_probe_darwin.m")
+            .file("../../native/window_controls_darwin.m")
+            .file("../../native/surface_layout_darwin.m")
+            .flag("-fblocks")
+            .compile("spwebviewinput");
+        for framework in ["Cocoa", "WebKit", "QuartzCore", "ScreenCaptureKit", "CoreMedia", "CoreVideo"] {
             println!("cargo:rustc-link-lib=framework={framework}");
         }
     }

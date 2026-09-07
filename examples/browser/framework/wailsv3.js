@@ -1,7 +1,7 @@
 // Wails v3.
 //
-// 메인 페이지와 표면·모달 페이지가 모두 이 애플리케이션의 문서다. 셋 다 같은 스킴에서
-// 로드되고, 같은 런타임을 import 하고, 같은 이벤트를 구독한다.
+// 메인 페이지는 Wails 런타임을, 추가 웹뷰는 앱의 네이티브 브리지를 사용한다.
+// 웹뷰 설정의 자산 서버를 공유하므로 문서는 같은 스킴에서 로드된다.
 //
 // 바인딩된 메서드를 「패키지 · 타입 · 이름」으로 호출한다. 이 서비스는 이름을
 // 지정하지 않으므로 Wails 가 패키지와 타입 이름을 쓴다 — main 의 Surfaces 다.
@@ -27,6 +27,7 @@ const listen = (event, fn) =>
 
 const METHOD = {
   syncSurfaces: "SyncSurfaces",
+  presentSurfaces: "PresentSurfaces",
   setTheme: "SetTheme",
   report: "Report",
   overlayShow: "OverlayShow",
@@ -56,29 +57,34 @@ export const host = () => ({
   },
 });
 
-export const page = () => ({
-  theme(fn) {
-    call("Theme").then(fn);
-    listen("theme", fn);
-  },
-  shell: {
-    open: (id) => call("ShellOpen", id),
-    write: (id, text) => call("ShellWrite", id, text),
-    onOutput(id, fn) {
-      // 출력 이벤트는 모든 페이지가 받는다. id 가 일치하는 것만 처리한다.
-      listen("shell-output", (out) => {
-        if (out.id === id) fn(out.text);
-      });
+export const page = () => {
+  const call = (method, ...args) => window.__soksakNative.call(method, args);
+  const listen = (event, fn) => window.__soksakNative.on(event, fn);
+  return {
+    theme(fn) {
+      call("Theme").then(fn);
+      listen("theme", fn);
     },
-  },
-  modal: {
-    content(id, fn) {
-      call("ModalContent", id).then(fn);
-      listen("modal-content", (sent) => {
-        if (sent.id === id) fn(sent.content);
-      });
+    shell: {
+      open: (id) => call("ShellOpen", id),
+      write: (id, text) => call("ShellWrite", id, text),
+      onOutput(id, fn) {
+        // 출력 이벤트는 모든 페이지가 받는다. id 가 일치하는 것만 처리한다.
+        listen("shell-output", (out) => {
+          if (out.id === id) fn(out.text);
+        });
+      },
     },
-    ready: (id) => call("ModalReady", id),
-    answer: (id, key, value) => call("OverlayPick", id, key, value),
-  },
-});
+    modal: {
+      content(id, instance, fn, place) {
+        return Promise.all([listen("modal-content", (sent) => {
+          if (sent.id === id && sent.instance === instance) fn(sent.content);
+        }), listen("modal-position", (sent) => {
+          if (sent.id === id && sent.instance === instance) place(sent.card);
+        })]).then(() => call("ModalContent", id, instance)).then(fn);
+      },
+      ready: (id, instance) => call("ModalReady", id, instance),
+      answer: (id, instance, key, value) => call("OverlayPick", id, instance, key, value),
+    },
+  };
+};

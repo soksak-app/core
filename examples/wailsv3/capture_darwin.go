@@ -18,6 +18,10 @@ package main
 #import <Cocoa/Cocoa.h>
 #import <ScreenCaptureKit/ScreenCaptureKit.h>
 
+static dispatch_semaphore_t captureFirstFrame;
+static dispatch_queue_t captureQueue;
+static int captureBefore;
+
 // 프레임을 받아 파일로 적는다. 프레임이 메시지로 전달되므로 수신 객체가 필요하다.
 @interface SPCapture : NSObject <SCStreamOutput, SCStreamDelegate>
 @property (nonatomic, copy) NSString* directory;
@@ -62,14 +66,18 @@ static SCFrameStatus frameStatus(CMSampleBufferRef sample) {
     if (base != NULL) {
         NSString* path = [self.directory stringByAppendingPathComponent:
             [NSString stringWithFormat:@"frame-%04d.bgra", self.written + 1]];
-        FILE* file = fopen(path.UTF8String, "wb");
+        NSString* pending = [path stringByAppendingString:@".partial"];
+        FILE* file = fopen(pending.UTF8String, "wb");
         if (file != NULL) {
             uint32_t head[3] = { (uint32_t)width, (uint32_t)height, (uint32_t)stride };
             fwrite(head, sizeof(head), 1, file);
             fwrite(base, stride, height, file);
             // Counted once the file holds the frame, so the count and the
             // directory cannot disagree.
-            if (fclose(file) == 0) self.written++;
+            if (fclose(file) == 0 && rename(pending.UTF8String, path.UTF8String) == 0) {
+                self.written++;
+                if (self.written == captureBefore + 1) dispatch_semaphore_signal(captureFirstFrame);
+            }
         }
     }
     CVPixelBufferUnlockBaseAddress(buffer, kCVPixelBufferLock_ReadOnly);
@@ -139,17 +147,20 @@ static void captureStart(const char* directory) {
     // 수신 객체는 한 번만 만든다. 녹화마다 새로 만들면 프레임 번호가 1 부터 다시
     // 시작해 앞선 녹화가 적은 파일을 덮어쓴다.
     if (captureSink == nil) captureSink = [[SPCapture alloc] init];
+    captureBefore = captureSink.written;
+    captureSink.idle = 0;
+    if (captureFirstFrame) dispatch_release(captureFirstFrame);
+    captureFirstFrame = dispatch_semaphore_create(0);
     captureSink.directory = [NSString stringWithUTF8String:directory];
     captureStream = [[SCStream alloc] initWithFilter:captureFilter
                                        configuration:captureConfig
                                             delegate:captureSink];
     NSError* error = nil;
-    dispatch_queue_t handing = dispatch_queue_create("sp.capture", NULL);
+    captureQueue = dispatch_queue_create("sp.capture", NULL);
     [captureStream addStreamOutput:captureSink
                               type:SCStreamOutputTypeScreen
-                sampleHandlerQueue:handing
+                sampleHandlerQueue:captureQueue
                              error:&error];
-    dispatch_release(handing);
     if (error != nil) {
         fprintf(stderr, "observe: capture output not added, %s\n",
             error.localizedDescription.UTF8String);
@@ -165,6 +176,11 @@ static void captureStart(const char* directory) {
     }];
 }
 
+static int captureWait(void) {
+    return captureStream != nil && dispatch_semaphore_wait(captureFirstFrame,
+        dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC)) == 0;
+}
+
 // Stops the stream and reports how many frames reached disk.
 //
 // The stop is answered on another queue, and frames already handed over are
@@ -173,7 +189,6 @@ static void captureStart(const char* directory) {
 static int captureStop(void) {
     if (captureStream == nil) return 0;
     SCStream* stream = captureStream;
-    captureStream = nil;
     dispatch_semaphore_t stopped = dispatch_semaphore_create(0);
     [stream stopCaptureWithCompletionHandler:^(NSError* failed) {
         if (failed != nil) {
@@ -183,13 +198,16 @@ static int captureStop(void) {
         dispatch_semaphore_signal(stopped);
     }];
     dispatch_semaphore_wait(stopped, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
+    dispatch_sync(captureQueue, ^{});
+    captureStream = nil;
+    dispatch_release(captureQueue);
     dispatch_release(stopped);
     [stream release];
-    if (captureSink.written == 0 && captureSink.idle > 0) {
+    if (captureSink.written == captureBefore && captureSink.idle > 0) {
         fprintf(stderr, "observe: the window was not redrawn during %d frames; "
             "the display is off or the window is not on screen\n", captureSink.idle);
     }
-    return captureSink.written;
+    return captureSink.written - captureBefore;
 }
 */
 import "C"
@@ -204,4 +222,5 @@ func captureStart(directory string) {
 	C.captureStart(where)
 }
 
-func captureStop() int { return int(C.captureStop()) }
+func captureStop() int  { return int(C.captureStop()) }
+func captureWait() bool { return C.captureWait() != 0 }

@@ -8,6 +8,7 @@ export const present = () => Boolean(window.__TAURI__);
 
 const COMMAND = {
   syncSurfaces: "sync_surfaces",
+  presentSurfaces: "present_surfaces",
   setTheme: "set_theme",
   report: "report",
   overlayShow: "overlay_show",
@@ -22,6 +23,7 @@ const COMMAND = {
 // 커맨드마다 인자의 이름이 다르다. 이름은 Rust 쪽 서명이 정한다.
 const ARG = {
   syncSurfaces: (v) => ({ request: v }),
+  presentSurfaces: (v) => ({ request: v }),
   setTheme: (v) => ({ theme: v }),
   report: (v) => ({ line: v }),
   overlayShow: (v) => ({ request: v }),
@@ -71,13 +73,16 @@ export const page = () => {
       },
     },
     modal: {
-      content(id, fn) {
-        invoke("overlay_content", { id }).then(fn);
+      content(id, instance, fn, place) {
         // 이벤트는 모든 페이지가 받는다. 자기 모달의 것만 취한다.
-        listen("modal-content", (e) => { if (e.payload.id === id) fn(e.payload.content); });
+        return Promise.all([listen("modal-content", (e) => {
+          if (e.payload.id === id && e.payload.instance === instance) fn(e.payload.content);
+        }), listen("modal-position", (e) => {
+          if (e.payload.id === id && e.payload.instance === instance) place(e.payload.card);
+        })]).then(() => invoke("overlay_content", { id, instance })).then(fn);
       },
-      ready: (id) => invoke("overlay_ready", { id }),
-      answer: (id, key, value) => invoke("overlay_pick", { id, key, value }),
+      ready: (id, instance) => invoke("overlay_ready", { id, instance }),
+      answer: (id, instance, key, value) => invoke("overlay_pick", { id, instance, key, value }),
     },
   };
 };

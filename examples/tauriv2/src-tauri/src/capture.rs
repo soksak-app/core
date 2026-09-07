@@ -10,6 +10,7 @@ mod platform {
     extern "C" {
         fn sp_capture_open(window_number: isize);
         fn sp_capture_start(directory: *const c_char);
+        fn sp_capture_wait() -> c_int;
         fn sp_capture_stop() -> c_int;
     }
 
@@ -25,15 +26,18 @@ mod platform {
     pub fn stop() -> i32 {
         unsafe { sp_capture_stop() }
     }
+
+    pub fn wait() -> bool { unsafe { sp_capture_wait() != 0 } }
 }
 
 #[cfg(not(target_os = "macos"))]
 mod platform {
     pub fn open(_window_number: isize) {}
     pub fn start(_directory: &str) {}
+    pub fn wait() -> bool { false }
     pub fn stop() -> i32 {
         0
     }
 }
 
-pub use platform::{open, start, stop};
+pub use platform::{open, start, stop, wait};

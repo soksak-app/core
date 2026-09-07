@@ -288,7 +288,7 @@ test("checkState names every shape a state cannot have", () => {
 });
 
 test("the options take every value that is one", () => {
-  // Zero is a size, and the defaults are what the README states.
+  // Zero is a size, and the defaults are what the layout specification states.
   const zero = new Soksak(undefined, { width: W, height: H, minSize: 0, gap: 0 });
   assert.equal(zero.minSize, 0, "a minimum of nothing is a minimum");
   assert.equal(zero.gap, 0);
@@ -298,7 +298,7 @@ test("the options take every value that is one", () => {
   assert.deepEqual(
     [plain.gap, plain.minSize, plain.grabSize, plain.snapDistance, plain.snap, plain.fillOrder],
     [24, 96, 11, 7, "merge", "v"],
-    "the defaults the README states",
+    "the defaults the layout specification states",
   );
   const named = new Soksak(undefined, {
     width: W, height: H, gap: 8, minSize: 20, grabSize: 3, snapDistance: 2, snap: "off", fillOrder: "h",

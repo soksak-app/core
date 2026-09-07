@@ -23,7 +23,7 @@ const mulberry = (a) => () => {
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 };
 
-/** Every rule the README states, read off the plane as drawn. */
+/** Every rule the layout specification states, read off the plane as drawn. */
 function check(grid, where) {
   const errs = [];
   const rects = [...grid.rects()];
