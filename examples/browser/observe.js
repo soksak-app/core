@@ -60,8 +60,15 @@ if (host) {
 let pending = 0;
 let waiting = null;
 
+/* 이 문서가 기다리기 전에 도착한 걸음의 수와, 그렇게 밀린 걸음의 수. 둘 다 0 이면
+   이 문서가 호스트의 걸음을 제때 따라간 것이고, 끌기는 요청한 모양 그대로다. */
+let deepest = 0;
+let late = 0;
+
 const tick = () => {
   if (pending > 0) {
+    deepest = Math.max(deepest, pending);
+    late++;
     pending--;
     return Promise.resolve();
   }
@@ -110,7 +117,10 @@ async function shake({ axis, line, dx, dy, ms, times }) {
   // 시간을 함께 남긴다. 늦춰진 끌기는 사람이 끄는 속도가 아니고, 그 속도에서만
   // 보이는 결함은 그때 보이지 않는다.
   host.call("report",
-    `observe: shaking done in ${Math.round(took)}ms, asked ${times * 2 * steps * FRAME}ms`);
+    `observe: shaking done in ${Math.round(took)}ms, asked ${times * 2 * steps * FRAME}ms` +
+    `, late ${late}/${times * 2 * steps} steps, deepest queue ${deepest}`);
+  late = 0;
+  deepest = 0;
 }
 
 /** 누른 지점을 오프셋의 한 비율에서 다른 비율까지 옮긴다. */
