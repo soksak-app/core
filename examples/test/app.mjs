@@ -4,7 +4,7 @@
 // 흔들고, 그동안 녹화하고, 종료한다.
 import { spawn } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
-import { createServer } from "node:net";
+import { connect, createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -13,6 +13,95 @@ export const APPS = {
   wailsv3: "examples/wailsv3/bin/wailsv3",
   tauriv2: "examples/tauriv2/src-tauri/target/debug/soksak-tauri",
 };
+
+/**
+ * 각 애플리케이션이 지시를 받는 포트. 관측 부품이 같은 숫자를 적는다.
+ *
+ * 애플리케이션은 검사보다 오래 산다. 검사는 떠 있는 것에 지시를 보내고, 떠 있지
+ * 않으면 한 번 띄운다. 새 창은 사람이 보고 있는 화면 앞에 놓이므로, 창이 뜨는
+ * 횟수를 검사 횟수에서 떼어 놓는다.
+ */
+const CONTROL = {
+  wailsv3: 49732,
+  tauriv2: 49733,
+};
+
+/** 띄운 애플리케이션이 통로를 열 때까지 기다리는 한도. */
+const OPENS = 30_000;
+
+/** 통로에 한 번 붙어 본다. 붙었으면 연결, 아니면 null. */
+const reach = (port) =>
+  new Promise((done) => {
+    const conn = connect(port, "127.0.0.1");
+    conn.once("connect", () => done(conn));
+    conn.once("error", () => done(null));
+  });
+
+/**
+ * 이 애플리케이션의 통로에 붙는다. 떠 있지 않으면 한 번 띄우고 기다린다.
+ *
+ * 띄운 것은 이 프로세스와 함께 죽지 않는다. 다음 검사가 같은 창에 지시를 보내므로,
+ * 창은 한 번만 뜬다.
+ */
+async function reachApp(binary, port) {
+  const first = await reach(port);
+  if (first) return first;
+  spawn(binary, ["--observe"], { detached: true, stdio: "ignore" }).unref();
+  const until = Date.now() + OPENS;
+  for (;;) {
+    const conn = await reach(port);
+    if (conn) return conn;
+    if (Date.now() > until) {
+      throw new Error(
+        `${binary} did not open 127.0.0.1:${port} in ${OPENS} ms. Nothing was measured: ` +
+          "the application was started and never answered.",
+      );
+    }
+    await new Promise((go) => setTimeout(go, 200));
+  }
+}
+
+/**
+ * 떠 있는 애플리케이션에 지시 한 줄을 보내고 done(log) 가 참이 될 때까지 읽는다.
+ *
+ * 돌아오는 것은 그 애플리케이션의 로그다. 붙은 뒤의 줄만 오므로, 이 지시가 남긴
+ * 것만 읽는다.
+ */
+async function tell(binary, port, line, done, timeout) {
+  const conn = await reachApp(binary, port);
+  let log = "";
+  try {
+    return await new Promise((resolve, reject) => {
+      const fail = setTimeout(() => {
+        const why = new Error(`${binary} did not finish ${line} in ${timeout} ms:\n${log}`);
+        why.log = log;
+        reject(why);
+      }, timeout);
+      conn.on("data", (chunk) => {
+        log += chunk;
+        if (!done(log)) return;
+        clearTimeout(fail);
+        resolve(log);
+      });
+      conn.on("error", (why) => {
+        clearTimeout(fail);
+        why.log = log;
+        reject(why);
+      });
+      conn.on("close", () => {
+        if (done(log)) return;
+        clearTimeout(fail);
+        const why = new Error(`${binary} closed the control port before it finished:\n${log}`);
+        why.log = log;
+        why.exited = true;
+        reject(why);
+      });
+      conn.write(`${line}\n`);
+    });
+  } finally {
+    conn.destroy();
+  }
+}
 
 /**
  * 창을 모는 실행이 서는 자물쇠.
@@ -119,6 +208,21 @@ async function drive(binary, args, done, timeout) {
   return log;
 }
 
+/**
+ * 자물쇠를 쥔 채 하나를 수행한다.
+ *
+ * 창을 모는 일은 한 번에 하나여야 한다. 애플리케이션을 띄우는 실행과 떠 있는
+ * 것에 지시를 보내는 실행이 같은 자물쇠를 쓴다.
+ */
+async function held(work) {
+  const lock = await hold();
+  try {
+    return await work();
+  } finally {
+    lock.close();
+  }
+}
+
 /** 신호에 응하지 않는 애플리케이션을 거두기까지 기다리는 한도. */
 const HARD = 5_000;
 
@@ -171,14 +275,24 @@ export function budget(drive, { start = 5_000, slack = 4 } = {}) {
 }
 
 /**
- * 끌기가 시작되고 끝나지 않았는지. 페이지의 시계가 묶였다는 뜻이다.
+ * 끌기가 요청한 속도로 수행되지 않았는지.
  *
- * observe.js 의 쓸기는 조건이 아니라 시계로 도는 고리이므로, 시작한 끌기는 언제나
- * 끝난다. 끝나지 않았다면 그 시계가 돌지 않은 것이고, 그때 이 실행은 아무것도
- * 재지 못한 것이지 결함을 찾은 것이 아니다.
+ * 걸음의 시각은 호스트가 준다. 호스트의 시계는 창이 어디에 있든 늦춰지지 않으므로,
+ * 요청한 만큼 걸리는 것이 정상이고 두 호스트에서 1440ms 요청에 1441ms 와 1444ms 로
+ * 측정된다. 그보다 크게 벗어났다면 걸음이 제때 전달되지 않은 것이다.
+ *
+ * 그때 이 실행은 결함을 찾은 것이 아니라 아무것도 재지 못한 것이다. 사람이 끄는
+ * 속도에서만 드러나는 어긋남은 느린 끌기에서 드러나지 않으므로, 느린 끌기의 통과는
+ * 통과가 아니다.
  */
-export const clockHeld = (log = "") =>
-  /observe: shaking [xy]:/.test(log) && !/observe: shaking done/.test(log);
+const MARGIN = 1.25;
+
+export const clockHeld = (log = "") => {
+  if (!/observe: shaking [xy]:/.test(log)) return false;
+  const done = log.match(/observe: shaking done in (\d+)ms, asked (\d+)ms/);
+  if (!done) return true;
+  return Number(done[1]) > Number(done[2]) * MARGIN;
+};
 
 /**
  * 녹화가 한 장도 오지 않았는지. 창이 그려지지 않아도 프레임은 idle 로 오고 그 수는
@@ -201,16 +315,17 @@ export async function shakeTwice(binary, drive, options) {
     return await shake(binary, drive, options);
   } catch (why) {
     if (why.exited || !clockHeld(why.log)) throw why;
-    console.error(`  the page's clock was held; shaking ${drive} again`);
+    console.error(`  the drag ran slower than asked; shaking ${drive} again`);
   }
   try {
     return await shake(binary, drive, options);
   } catch (why) {
     if (why.exited || !clockHeld(why.log)) throw why;
     throw new Error(
-      "the page's clock was held to a crawl twice: a step of 16 ms took about 900 ms, so " +
-        "the drag cannot finish inside any budget. Nothing was measured — run this on a " +
-        `machine that is not otherwise busy.\n${why.log}`,
+      "the drag ran slower than it was asked to, twice. The steps come from the host, whose " +
+        "clock is not held wherever the window is, so this is not the window being behind " +
+        "another one. Nothing was measured: an unrendered area shows itself at the speed a " +
+        `person drags at, and a slow drag passing is not a pass.\n${why.log}`,
     );
   }
 }
@@ -218,18 +333,21 @@ export async function shakeTwice(binary, drive, options) {
 export async function shake(binary, drive, { zoom = false, ...options } = {}) {
   if (!existsSync(binary)) return null;
   const into = mkdtempSync(join(tmpdir(), "soksak-frames-"));
-  const args = ["--observe", "--drive", drive, "--capture", into];
-  if (zoom) args.push("--zoom");
   const clean = () => rmSync(into, { recursive: true, force: true });
+  // 녹화 종료가 기록되면 모든 프레임이 파일로 저장된 상태다.
+  const done = (text) => /observe: wrote \d+ frames/.test(text);
+  const timeout = budget(drive);
+  const name = Object.entries(APPS).find(([, at]) => at === binary)?.[0];
   let log;
   try {
-    // 녹화 종료가 기록되면 모든 프레임이 파일로 저장된 상태다.
-    log = await run(
-      binary,
-      args,
-      (text) => /observe: wrote \d+ frames/.test(text),
-      { timeout: budget(drive), ...options },
-    );
+    log = zoom
+      ? // --zoom 은 창을 최대화한 채로 시작해야 하므로 실행 인자다. 그 검사는
+        // 자기 애플리케이션을 띄운다.
+        await run(binary, ["--observe", "--zoom", "--drive", drive, "--capture", into], done, {
+          timeout,
+          ...options,
+        })
+      : await held(() => tell(binary, CONTROL[name], `drag ${drive} ${into}`, done, timeout));
   } catch (why) {
     // 끝나지 못한 실행도 그때까지의 프레임을 적어 두었다. 부르는 쪽은 반환값을
     // 받지 못하므로 그것을 지울 수단이 없다.

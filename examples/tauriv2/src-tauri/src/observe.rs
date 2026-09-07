@@ -9,6 +9,9 @@
 //! This is not part of the product's contract. Registered only when asked for;
 //! left out, nothing here runs.
 
+use std::io::{BufRead, BufReader, Write};
+use std::net::{TcpListener, TcpStream};
+use std::sync::Mutex;
 use std::time::Duration;
 
 use serde::Serialize;
@@ -45,6 +48,115 @@ pub fn given(name: &str) -> bool {
     std::env::args().skip(1).any(|a| a == long || a == short)
 }
 
+/// The port this application takes instructions on. The other host takes a
+/// different one, so both can be up at once. `examples/test/app.mjs` writes the
+/// same numbers.
+const CONTROL_PORT: u16 = 49733;
+
+/// The control connections open right now.
+static TOLD: Mutex<Vec<TcpStream>> = Mutex::new(Vec::new());
+
+/// Where the recording writes its frames, and whether that directory takes one
+/// run only. `--capture` gives the first value and takes every run, because it
+/// asks for a boundary dragged by hand to be recorded too. An instruction
+/// records the drag it asked for and nothing after it.
+static INTO: Mutex<(Option<String>, bool)> = Mutex::new((None, false));
+
+/// Writes one line to stderr and to every open control connection.
+///
+/// A check reads the lines observation leaves and the lines the page's own
+/// verifier leaves. Both come through here, so one place carries both.
+pub fn say(line: &str) {
+    eprintln!("{line}");
+    let mut open = TOLD.lock().unwrap();
+    open.retain_mut(|conn| conn.write_all(format!("{line}\n").as_bytes()).is_ok());
+}
+
+/// Where the next recording writes.
+fn into() -> Option<String> {
+    INTO.lock().unwrap().0.clone()
+}
+
+/// Sets where the next recording writes. `once` takes one run only.
+fn write_to(dir: Option<String>, once: bool) {
+    *INTO.lock().unwrap() = (dir, once);
+}
+
+/// Reports that one run ended. A directory taking one run only is closed here.
+fn wrote() {
+    let mut at = INTO.lock().unwrap();
+    if at.1 {
+        *at = (None, false);
+    }
+}
+
+/// Opens the way instructions arrive.
+///
+/// One application drives many times, and it outlives the checks that drive it,
+/// so running the checks again opens no window. A new window is placed in front
+/// of whatever the person at the machine is looking at, so how often one opens
+/// is how often their screen is covered.
+///
+/// The way is an open port. It takes one instruction per line and sends this
+/// application's log back until that instruction is done; the caller reads the
+/// line it waits for and closes.
+fn commands<R: Runtime>(app: tauri::AppHandle<R>) {
+    let listener = match TcpListener::bind(("127.0.0.1", CONTROL_PORT)) {
+        Ok(listener) => listener,
+        Err(why) => {
+            say(&format!("observe: no control port, {why}"));
+            return;
+        }
+    };
+    say(&format!("observe: control on {CONTROL_PORT}"));
+    std::thread::spawn(move || {
+        for conn in listener.incoming().flatten() {
+            let app = app.clone();
+            std::thread::spawn(move || serve(app, conn));
+        }
+    });
+}
+
+/// Carries out the instructions one connection sends.
+fn serve<R: Runtime>(app: tauri::AppHandle<R>, conn: TcpStream) {
+    let Ok(mine) = conn.try_clone() else {
+        return;
+    };
+    TOLD.lock().unwrap().push(conn);
+    for line in BufReader::new(mine).lines().map_while(Result::ok) {
+        command(&app, line.trim());
+    }
+}
+
+/// Carries out one instruction.
+///
+/// `drag` is the drag `--drive` performs, without its wait. That wait is for the
+/// page to be drawn for the first time, and the page is drawn before an
+/// instruction can arrive.
+fn command<R: Runtime>(app: &tauri::AppHandle<R>, line: &str) {
+    let (verb, rest) = line.split_once(' ').unwrap_or((line, ""));
+    match verb {
+        "" => {}
+        "drag" => {
+            let Some((spec, dir)) = rest.split_once(' ') else {
+                say(&format!("observe: drag takes a spec and a directory, got {rest:?}"));
+                return;
+            };
+            let mut plan = match Plan::parse(spec) {
+                Ok(plan) => plan,
+                Err(why) => {
+                    say(&format!("observe: drag {why}"));
+                    return;
+                }
+            };
+            plan.wait = Duration::ZERO;
+            write_to(Some(dir.to_string()), true);
+            start_drag(app, plan);
+        }
+        _ => say(&format!("observe: {verb:?} is not a command")),
+    }
+}
+
 pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("observe")
         .setup(|app, _api| {
@@ -55,7 +167,7 @@ pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
             // Written whenever the modal's document renders. Whether a content
             // update reached that document is known nowhere else.
             app.listen("modal-rendered", |event| {
-                eprintln!("observe: modal rendered {}", event.payload().trim_matches('"'));
+                say(&format!("observe: modal rendered {}", event.payload().trim_matches('"')));
             });
             // Observation starts after the page's first commit: the window is on
             // screen and the surfaces exist. A page-load event fires again on
@@ -73,23 +185,30 @@ pub fn plugin<R: Runtime>() -> TauriPlugin<R> {
                 resize(ready.clone());
                 drive(ready.clone());
                 click(ready.clone());
+                commands(ready.clone());
             });
             // The page reports whether more updates follow, so a boundary dragged
             // by hand is recorded the same way as a driven one.
-            if let Some(into) = capturing() {
-                let began = into.clone();
-                app.listen("run-began", move |_| capture::start(&began));
-                // A listener runs on the thread that emitted the event, and
-                // run-ended is emitted inside a command, on the main thread.
-                // Stopping the recording waits for an answer, and waiting here
-                // would stop the window drawing.
-                app.listen("run-ended", move |_| {
-                    let into = into.clone();
-                    std::thread::spawn(move || {
-                        eprintln!("observe: wrote {} frames to {into}", capture::stop());
-                    });
+            write_to(capturing(), false);
+            app.listen("run-began", move |_| {
+                if let Some(into) = into() {
+                    capture::start(&into);
+                }
+            });
+            // A listener runs on the thread that emitted the event, and
+            // run-ended is emitted inside a command, on the main thread.
+            // Stopping the recording waits for an answer, and waiting here
+            // would stop the window drawing.
+            app.listen("run-ended", move |_| {
+                let ended = into();
+                wrote();
+                let Some(into) = ended else {
+                    return;
+                };
+                std::thread::spawn(move || {
+                    say(&format!("observe: wrote {} frames to {into}", capture::stop()));
                 });
-            }
+            });
             Ok(())
         })
         .build()
@@ -130,7 +249,7 @@ fn resize<R: Runtime>(app: tauri::AppHandle<R>) {
         .and_then(|(w, h)| Some((w.trim().parse::<f64>().ok()?, h.trim().parse::<f64>().ok()?)))
         .filter(|(w, h)| *w > 0.0 && *h > 0.0);
     let Some((w, h)) = asked else {
-        eprintln!("observe: --resize takes width,height, got {spec:?}");
+        say(&format!("observe: --resize takes width,height, got {spec:?}"));
         return;
     };
     let Some(window) = app.get_window("main") else {
@@ -145,7 +264,7 @@ fn resize<R: Runtime>(app: tauri::AppHandle<R>) {
     window.on_window_event(move |event| {
         if let tauri::WindowEvent::Resized(got) = event {
             let got = got.to_logical::<f64>(scale);
-            eprintln!("observe: sized {}x{}", got.width, got.height);
+            say(&format!("observe: sized {}x{}", got.width, got.height));
         }
     });
     let _ = window.set_size(tauri::LogicalSize::new(w, h));
@@ -171,7 +290,7 @@ fn report<R: Runtime>(app: tauri::AppHandle<R>) {
         let found = numbers(&ask);
         if !found.is_empty() {
             let list: Vec<String> = found.iter().map(|n| n.to_string()).collect();
-            eprintln!("observe: windows {}", list.join(" "));
+            say(&format!("observe: windows {}", list.join(" ")));
         }
     });
 }
@@ -201,9 +320,6 @@ fn capturing() -> Option<String> {
 /// two wait for each other when that answer needs the main queue, so only the
 /// window number is read there and the lookup runs on this thread.
 fn open<R: Runtime>(app: tauri::AppHandle<R>) {
-    if capturing().is_none() {
-        return;
-    }
     let (tell, hear) = std::sync::mpsc::channel();
     let ask = app.clone();
     if app
@@ -233,11 +349,11 @@ fn click<R: Runtime>(app: tauri::AppHandle<R>) {
         return;
     };
     let Some((wait, selector)) = spec.split_once(',') else {
-        eprintln!("observe: --click takes ms,selector, got {spec:?}");
+        say(&format!("observe: --click takes ms,selector, got {spec:?}"));
         return;
     };
     let Ok(after) = wait.trim().parse::<u64>() else {
-        eprintln!("observe: --click wait {wait:?} is not a number");
+        say(&format!("observe: --click wait {wait:?} is not a number"));
         return;
     };
     let selector = selector.to_string();
@@ -259,7 +375,7 @@ fn drive<R: Runtime>(app: tauri::AppHandle<R>) {
     let plan = match Plan::parse(&spec) {
         Ok(plan) => plan,
         Err(why) => {
-            eprintln!("observe: --drive {why}");
+            say(&format!("observe: --drive {why}"));
             return;
         }
     };
@@ -267,7 +383,38 @@ fn drive<R: Runtime>(app: tauri::AppHandle<R>) {
         // The page this app did not open has no event saying it is drawn, so the
         // wait asked for is what is waited.
         std::thread::sleep(plan.wait);
-        let _ = app.emit("observe-drag", &plan);
+        start_drag(&app, plan);
+    });
+}
+
+/// One step of a drag. The page's observe.js writes the same value.
+const FRAME: Duration = Duration::from_millis(16);
+
+/// Asks for a drag and sends the times of its steps.
+///
+/// The page holds what the drag is; when each step happens comes from here. A
+/// window that is not in front has its document treated as hidden, and the
+/// browser holds that document's timers to near a second, so a page counting its
+/// own steps drags at a fraction of the speed asked. This clock is not held,
+/// wherever the window is.
+///
+/// The number of steps is the number the page takes. That many are sent.
+fn start_drag<R: Runtime>(app: &tauri::AppHandle<R>, plan: Plan) {
+    let steps = plan.steps() * 2 * plan.times;
+    let _ = app.emit("observe-drag", &plan);
+    let app = app.clone();
+    std::thread::spawn(move || {
+        // Each step is due at its own time from the start, not one frame after
+        // the last one woke. Sleeping a frame at a time adds what each step
+        // costs to every step after it, and the drag ends slower than asked.
+        let began = std::time::Instant::now();
+        for step in 1..=steps {
+            let due = FRAME * step as u32;
+            if let Some(left) = due.checked_sub(began.elapsed()) {
+                std::thread::sleep(left);
+            }
+            let _ = app.emit("observe-tick", ());
+        }
     });
 }
 
@@ -286,6 +433,12 @@ struct Plan {
 }
 
 impl Plan {
+    /// The steps in one sweep, counted as the page counts them.
+    fn steps(&self) -> usize {
+        let n = (self.ms as f64 / FRAME.as_millis() as f64).round() as usize;
+        n.max(1)
+    }
+
     /// Reads "wait,axis,line,dx,dy,ms,times": wait that many ms for the pages to
     /// be drawn, then press that boundary and sweep by dx,dy over ms, out and
     /// back, that many times.

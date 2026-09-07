@@ -64,7 +64,7 @@ import {
 
 /* 표면을 모사하고 보고한다. 판은 슬롯 요소에 값을 기록만 하고 측정과 보고는 이쪽이
    담당한다. */
-import { onCommit, onKnobChange, publish, publishAhead } from "./compositor.js";
+import { onCommit, onKnobChange, onRun, publish, publishAhead } from "./compositor.js";
 
 /* 판 하나. 이 문서는 판의 렌더링 방식을 알지 않고 렌더 완료만 수신한다. */
 import {
@@ -111,8 +111,14 @@ addEventListener("unhandledrejection", (e) =>
  *
  * 검증은 렌더마다 실행된다. 매번 기록하면 같은 줄이 반복되어 변경 시점을 알 수 없다.
  *
+ * 같음은 실행 하나 안에서만 따진다. 애플리케이션 하나가 경계를 여러 번 몰므로,
+ * 일생에 걸쳐 따지면 두 번째 실행부터는 결과가 어디에도 남지 않는다.
  */
 let lastSaid = "";
+
+onRun((going) => {
+  if (going) lastSaid = "";
+});
 
 function check() {
   const rows = verify(controlsAt);

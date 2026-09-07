@@ -9,10 +9,15 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"log"
+	"math"
+	"net"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -22,7 +27,41 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/events"
 )
 
-type Observe struct{ began sync.Once }
+type Observe struct {
+	began sync.Once
+	// 지금 녹화가 프레임을 적는 폴더. --capture 가 첫 값을 주고, 지시가 그 뒤의
+	// 값을 준다. 지시를 받는 고루틴과 이벤트 수신자가 함께 읽는다.
+	mu   sync.Mutex
+	into string
+	// 이 폴더가 실행 하나만 받는지. 지시는 자기가 시킨 끌기만 녹화한다. --capture
+	// 는 사람이 끄는 경계도 담으라는 뜻이므로 계속 받는다.
+	once bool
+}
+
+// dir 는 지금 녹화가 적을 폴더를 반환한다. 빈 값이면 녹화하지 않는다.
+func (o *Observe) dir() string {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.into
+}
+
+// writeTo 는 다음 녹화가 적을 폴더를 정한다. once 면 실행 하나만 받는다.
+func (o *Observe) writeTo(into string, once bool) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.into = into
+	o.once = once
+}
+
+// wrote 는 실행 하나가 끝났음을 알린다. 실행 하나만 받기로 한 폴더는 여기서 닫힌다.
+func (o *Observe) wrote() {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.once {
+		o.into = ""
+		o.once = false
+	}
+}
 
 func (o *Observe) ServiceName() string { return "observe" }
 
@@ -32,6 +71,9 @@ func (o *Observe) ServiceName() string { return "observe" }
 // 그 지점에서 windows-changed 를 발행하고 여기서 구독한다. 첫 보고는 창이 표시되는
 // 이벤트에서 받는다.
 func (o *Observe) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
+	// 로그를 표준오류와 제어 연결에 함께 적는다. 제품은 이 서비스를 등록하지
+	// 않으므로 그 로그는 지금까지처럼 표준오류에만 간다.
+	log.SetOutput(io.MultiWriter(os.Stderr, logging))
 	app := application.Get()
 	offChange := app.Event.On("windows-changed", func(*application.CustomEvent) { o.report() })
 	offRecord := o.record()
@@ -57,6 +99,7 @@ func (o *Observe) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 // 로드되면 다시 발행되므로 여기서 한 번만 실행한다.
 func (o *Observe) start() {
 	o.began.Do(func() {
+		o.writeTo(*capturing, false)
 		o.transcribe()
 		o.report()
 		o.open()
@@ -64,6 +107,7 @@ func (o *Observe) start() {
 		o.resize()
 		o.drive()
 		o.click()
+		o.commands()
 	})
 }
 
@@ -79,9 +123,6 @@ func (o *Observe) transcribe() {
 // open 은 이 창의 녹화를 준비한다. 윈도 서버의 창 목록을 읽는 것이 느리므로 한 번만
 // 읽는다.
 func (o *Observe) open() {
-	if *capturing == "" {
-		return
-	}
 	// 윈도 서버의 창 목록 조회는 답을 기다린다. 그 답이 주 큐로 오는 경우 주
 	// 스레드에서 기다리면 서로를 기다리게 되므로, 창 번호만 주 스레드에서 읽고
 	// 조회는 이 고루틴에서 한다.
@@ -96,15 +137,18 @@ func (o *Observe) open() {
 // 페이지가 갱신이 더 있는지를 보고하므로, 사람이 끄는 경계도 --drive 가 끄는 경계와
 // 같은 방식으로 녹화된다. 주기로 확인하지 않는다.
 func (o *Observe) record() func() {
-	if *capturing == "" {
-		return func() {}
-	}
 	bus := application.Get().Event
 	offBegan := bus.On("run-began", func(*application.CustomEvent) {
-		captureStart(*capturing)
+		if into := o.dir(); into != "" {
+			captureStart(into)
+		}
 	})
 	offEnded := bus.On("run-ended", func(*application.CustomEvent) {
-		log.Printf("observe: wrote %d frames to %s", captureStop(), *capturing)
+		into := o.dir()
+		o.wrote()
+		if into != "" {
+			log.Printf("observe: wrote %d frames to %s", captureStop(), into)
+		}
 	})
 	return func() {
 		offBegan()
@@ -206,8 +250,39 @@ func (o *Observe) drive() {
 		// 이 애플리케이션이 열지 않은 페이지가 렌더링될 때까지 기다린다. 외부
 		// 페이지의 렌더링 완료를 알리는 이벤트가 없으므로 요청받은 시각까지 기다린다.
 		time.Sleep(plan.wait)
-		application.Get().Event.Emit("observe-drag", plan)
+		startDrag(plan)
 	}()
+}
+
+// startDrag 는 끌기를 요청하고 그 걸음의 시각을 보낸다.
+//
+// 페이지는 끌기가 무엇인지를 갖고, 걸음이 언제인지는 여기서 온다. 창이 앞에 없으면
+// 브라우저가 그 문서의 시계를 1초 가까이로 묶으므로, 페이지가 스스로 세면 끌기는
+// 요청한 속도의 수십 분의 일로 느려진다. 이 시계는 창이 어디에 있든 늦춰지지 않는다.
+//
+// 걸음의 수는 페이지가 세는 것과 같다. 그만큼 보내고 멈춘다.
+func startDrag(plan drivePlan) {
+	bus := application.Get().Event
+	bus.Emit("observe-drag", plan)
+	go func() {
+		tick := time.NewTicker(frame)
+		defer tick.Stop()
+		for left := plan.steps() * 2 * plan.Times; left > 0; left-- {
+			<-tick.C
+			bus.Emit("observe-tick")
+		}
+	}()
+}
+
+// frame 은 한 걸음의 길이다. 페이지의 observe.js 가 같은 값을 적는다.
+const frame = 16 * time.Millisecond
+
+// steps 는 한 쓸기의 걸음 수다. 페이지가 세는 것과 같은 식이다.
+func (p drivePlan) steps() int {
+	if n := int(math.Round(float64(p.MS) / float64(frame/time.Millisecond))); n > 1 {
+		return n
+	}
+	return 1
 }
 
 // drivePlan 은 한 번의 끌기를 반복하는 계획이다. 각 반복은 왕복이므로 경계는 제자리로
@@ -263,6 +338,114 @@ func numbers(list []int) string {
 
 var observing = flag.Bool("observe", false,
 	"register the observation service, which reports this window's number")
+
+// ControlPort 는 이 애플리케이션이 지시를 받는 포트다. 다른 호스트는 다른 포트를
+// 쓰므로 둘이 함께 떠 있을 수 있다. examples/test/app.mjs 가 같은 숫자를 적는다.
+const ControlPort = 49732
+
+// commands 는 지시를 받는 통로를 연다.
+//
+// 한 애플리케이션이 여러 번 몰 수 있고, 그 애플리케이션은 검사보다 오래 산다.
+// 그래서 검사를 다시 돌려도 창이 새로 뜨지 않는다. 새 창은 사람이 보고 있는 화면
+// 앞에 놓이므로, 뜨는 횟수가 곧 가리는 횟수다.
+//
+// 통로는 열린 포트다. 지시 한 줄을 받고, 그 지시가 끝날 때까지 이 애플리케이션의
+// 로그를 그대로 돌려보낸다. 부르는 쪽은 자기가 기다리는 줄을 읽으면 끊는다.
+func (o *Observe) commands() {
+	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", ControlPort))
+	if err != nil {
+		log.Printf("observe: no control port, %v", err)
+		return
+	}
+	log.Printf("observe: control on %d", ControlPort)
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go o.serve(conn)
+		}
+	}()
+}
+
+// serve 는 연결 하나가 보내는 지시들을 수행한다.
+func (o *Observe) serve(conn net.Conn) {
+	defer conn.Close()
+	logging.join(conn)
+	defer logging.leave(conn)
+	in := bufio.NewScanner(conn)
+	for in.Scan() {
+		o.command(strings.TrimSpace(in.Text()))
+	}
+}
+
+// logging 은 이 애플리케이션의 로그를 표준오류와 열린 연결들에 함께 적는다.
+//
+// 검사가 읽는 줄은 관측이 남기는 것과 페이지의 검증기가 남기는 것 둘 다이고, 둘
+// 모두 표준 로거를 지난다. 그래서 로거 하나만 갈래를 내면 된다.
+var logging = &fan{}
+
+type fan struct {
+	mu sync.Mutex
+	to []net.Conn
+}
+
+func (f *fan) join(conn net.Conn) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.to = append(f.to, conn)
+}
+
+func (f *fan) leave(conn net.Conn) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for i, at := range f.to {
+		if at == conn {
+			f.to = append(f.to[:i], f.to[i+1:]...)
+			return
+		}
+	}
+}
+
+// Write 는 어느 연결이 실패해도 오류를 돌려주지 않는다. 로그는 실패해도 계속
+// 남아야 하고, 끊어진 연결은 그 연결을 쥔 쪽이 거둔다.
+func (f *fan) Write(p []byte) (int, error) {
+	f.mu.Lock()
+	to := append([]net.Conn(nil), f.to...)
+	f.mu.Unlock()
+	for _, conn := range to {
+		_, _ = conn.Write(p)
+	}
+	return len(p), nil
+}
+
+// command 는 지시 한 줄을 수행한다.
+//
+// drag 는 --drive 와 같은 끌기이되 기다림이 없다. 그 기다림은 페이지가 처음
+// 그려지기를 기다리는 것이고, 지시를 받을 때 페이지는 이미 그려져 있다.
+func (o *Observe) command(line string) {
+	verb, rest, _ := strings.Cut(line, " ")
+	switch verb {
+	case "":
+	case "drag":
+		spec, into, ok := strings.Cut(rest, " ")
+		if !ok {
+			log.Printf("observe: drag takes a spec and a directory, got %q", rest)
+			return
+		}
+		plan, err := parseDrive(spec)
+		if err != nil {
+			log.Printf("observe: drag %v", err)
+			return
+		}
+		plan.wait = 0
+		o.writeTo(into, true)
+		startDrag(plan)
+	default:
+		log.Printf("observe: %q is not a command", verb)
+	}
+}
 
 var driving = flag.String("drive", "",
 	"drag a boundary once the page is drawn, as wait,axis,line,dx,dy,ms,times")

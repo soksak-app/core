@@ -35,9 +35,42 @@ if (host) {
   });
 
   host.on("observe-drag", (plan) => shake(plan));
+  host.on("observe-tick", () => {
+    if (waiting) {
+      const go = waiting;
+      waiting = null;
+      go();
+      return;
+    }
+    pending++;
+  });
 }
 
-/** 한 걸음의 길이. 화면이 갱신되는 간격이다. */
+/**
+ * 걸음의 시각은 호스트가 준다.
+ *
+ * 창이 앞에 없으면 브라우저는 이 문서를 숨은 것으로 보고 setTimeout 을 1초 가까이로
+ * 묶는다. 16ms 를 요청한 걸음이 그만큼 늘어나면 끌기는 사람이 끄는 속도가 아니게 되고,
+ * 그 속도에서만 드러나는 결함은 드러나지 않는다. 호스트의 시계는 창이 어디에 있든
+ * 늦춰지지 않으므로, 끌기가 무엇인지는 여기에 적히고 걸음이 언제인지는 호스트가 준다.
+ *
+ * 도착한 걸음은 세어 둔다. 이 문서가 한 걸음을 처리하는 동안 다음 걸음이 오면, 그것을
+ * 기다리는 쪽이 아직 없기 때문이다.
+ */
+let pending = 0;
+let waiting = null;
+
+const tick = () => {
+  if (pending > 0) {
+    pending--;
+    return Promise.resolve();
+  }
+  return new Promise((go) => {
+    waiting = go;
+  });
+};
+
+/** 한 걸음의 길이. 화면이 갱신되는 간격이다. 호스트가 같은 값으로 걸음을 보낸다. */
 const FRAME = 16;
 
 /**
@@ -66,18 +99,24 @@ async function shake({ axis, line, dx, dy, ms, times }) {
   // 한 번 누른 채로 왕복한다. 놓았다 다시 누르면, 경계가 최소 카드 크기에서 멈춰
   // 지정한 만큼 이동하지 못했을 때 다음 누름이 빗나간다.
   surfaceInput({ phase: 0, x: from.x, y: from.y });
+  const began = performance.now();
   for (let turn = 0; turn < times; turn++) {
     await sweep(from, dx, dy, 0, 1, steps);
     await sweep(from, dx, dy, 1, 0, steps);
   }
+  const took = performance.now() - began;
   surfaceInput({ phase: 2, x: from.x, y: from.y });
-  host.call("report", "observe: shaking done");
+  // 이 시계는 페이지의 것이다. 창이 앞에 없으면 브라우저가 그것을 늦추므로, 걸린
+  // 시간을 함께 남긴다. 늦춰진 끌기는 사람이 끄는 속도가 아니고, 그 속도에서만
+  // 보이는 결함은 그때 보이지 않는다.
+  host.call("report",
+    `observe: shaking done in ${Math.round(took)}ms, asked ${times * 2 * steps * FRAME}ms`);
 }
 
 /** 누른 지점을 오프셋의 한 비율에서 다른 비율까지 옮긴다. */
 async function sweep(from, dx, dy, start, end, steps) {
   for (let i = 1; i <= steps; i++) {
-    await new Promise((go) => setTimeout(go, FRAME));
+    await tick();
     const at = start + (end - start) * (i / steps);
     surfaceInput({ phase: 1, x: from.x + dx * at, y: from.y + dy * at });
   }

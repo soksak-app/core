@@ -907,7 +907,7 @@ fn terminal_write(shells: State<'_, shell::Shells>, id: String, data: String) ->
 /// debugger.
 #[tauri::command]
 fn report(line: String) {
-    eprintln!("{line}");
+    observe::say(&line);
 }
 
 /// Places the window's own buttons so they sit inside the page's first row.

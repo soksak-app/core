@@ -18,6 +18,22 @@ export function onCommit(fn) {
   listener = fn;
 }
 
+/* 실행의 두 끝을 듣는 쪽. */
+let edge = null;
+
+/**
+ * 실행이 시작되고 끝날 때 호출할 함수를 등록한다.
+ *
+ * 애플리케이션도 커밋이 전하는 settled 로 같은 두 끝을 잡는다. 페이지 안에서 그
+ * 두 끝을 알아야 하는 쪽은 여기에 붙는다.
+ */
+export function onRun(fn) {
+  edge = fn;
+}
+
+/** 지금 갱신이 이어지는 중인지. */
+let going = false;
+
 /** 사용자가 설정하는 두 값. 커밋을 지연시키고 적용 위치에 오차를 만든다. */
 export const knobs = { latency: 0, skew: 0 };
 
@@ -136,7 +152,14 @@ export function publish() {
  */
 function deliver(mine, snapshot) {
   clearTimeout(timer);
-  const send = () => commit(mine, snapshot, settled());
+  const send = () => {
+    const running = !settled();
+    if (running !== going) {
+      going = running;
+      edge?.(going);
+    }
+    commit(mine, snapshot, !running);
+  };
   if (knobs.latency === 0) return send();
   timer = setTimeout(send, knobs.latency);
   return undefined;
