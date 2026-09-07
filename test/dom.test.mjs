@@ -2768,3 +2768,33 @@ test("a key the view does not handle reaches the page", () => {
   assert.ok(grid.boundaryPos("x", 1) > before, "an arrow still moves it");
   view.destroy();
 });
+
+test("a release delivered to another divider does not end the drag this one holds", () => {
+  // The platform gives up on a pointer by sending pointercancel to whatever is
+  // under it, which is not always the element the drag started on. Only the
+  // divider the pointer actually holds ends.
+  const changes = [];
+  const { window, host, grid, view } = mount({ onChange: (reason) => changes.push(reason) });
+  grid.split("card", "y");
+  view.render();
+  const held = host.querySelector('.sp-divider[data-axis="x"]');
+  const other = host.querySelector('.sp-divider[data-axis="y"]');
+  assert.ok(held && other && held !== other, "two dividers to tell apart");
+
+  const at = grid.boundaryPos("x", 1);
+  pointer(window, held, "pointerdown", 1, at, 400);
+  pointer(window, held, "pointermove", 1, at + 40, 400);
+  assert.equal(held.dataset.dragging, "true", "the first divider is held");
+  changes.length = 0;
+
+  pointer(window, other, "pointercancel", 1, at + 40, 400);
+  assert.equal(held.dataset.dragging, "true", "and a cancel elsewhere does not let it go");
+  assert.deepEqual(changes, [], "nor report a change");
+
+  pointer(window, held, "pointermove", 1, at + 90, 400);
+  assert.ok(
+    Math.abs(grid.boundaryPos("x", 1) - (at + 90)) < 1e-6,
+    `the finger still drives its boundary, to ${grid.boundaryPos("x", 1)}`,
+  );
+  view.destroy();
+});

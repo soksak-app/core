@@ -1023,3 +1023,26 @@ test("the slot a settle names is one that shares, not one holding a px size", ()
     `the settle named ${JSON.stringify(paid.to)}, a slot that declares its own width`,
   );
 });
+
+test("a cut is refused on an axis where nothing flexes", () => {
+  // Both cards on the x axis declare a width of zero, so no slot there shares
+  // and no slot grows with its span. A cut has no px-per-span rate to be placed
+  // against, and `rail` — which spans both slots — cannot be divided at all.
+  const grid = new Soksak(
+    { xs: [0, 0.5, 1], ys: [0, 0.268, 1], cards: [
+      { id: "p", c0: 0, c1: 1, r0: 1, r1: 2, width: 0 },
+      { id: "q", c0: 1, c1: 2, r0: 1, r1: 2, width: 0 },
+      { id: "rail", c0: 0, c1: 2, r0: 0, r1: 1, height: 268 },
+    ] },
+    { width: 1600, height: 1000, gap: 0, minSize: 0 },
+  );
+  assert.equal(grid.rect("rail").w, 1600, "the rail reaches across");
+
+  assert.equal(grid.canSplit("rail", "x"), false, "no rate to measure the cut against");
+  assert.equal(grid.split("rail", "x"), null);
+  assert.equal(grid.cards.length, 3, "and the refusal left the plane alone");
+
+  // The same cut on the axis that does flex is allowed, so the refusal above is
+  // about the axis and not about the card.
+  assert.equal(grid.canSplit("rail", "y"), true);
+});

@@ -1176,4 +1176,18 @@ export const BREAKS = [
     find: "        this.paidBy.set(fresh.id, { side: 'lo', to: card.id, at: line - card[lo] - 1 });\n        this.changed();",
     to: "        this.paidBy.set(fresh.id, { side: 'lo', to: card.id });\n        this.changed();",
   },
+  {
+    id: "no-flex-cut",
+    what: "a cut is measured on an axis where nothing flexes, so a card no width can be taken from is split",
+    file: "dist/soksak.js",
+    find: "        const per = own !== null ? own / (a[card[hi]] - a[card[lo]] || 1) : this.sharedExtent(axis);\n        if (per <= EPS)\n            return null;\n",
+    to: "        const per = own !== null ? own / (a[card[hi]] - a[card[lo]] || 1) : this.sharedExtent(axis);\n",
+  },
+  {
+    id: "cancel-elsewhere",
+    what: "a release or cancel delivered to another divider ends the drag this one holds",
+    file: "dist/dom.js",
+    find: "        const stop = (e) => {\n            var _a;\n            if (((_a = this.drags.get(e.pointerId)) === null || _a === void 0 ? void 0 : _a.on) !== el)\n                return;\n",
+    to: "        const stop = (e) => {\n            var _a;\n",
+  },
 ];
