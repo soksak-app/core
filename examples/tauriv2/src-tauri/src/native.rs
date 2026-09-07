@@ -502,6 +502,11 @@ pub fn window_controls(ns_window: *mut std::ffi::c_void) -> (f64, f64, f64, f64)
         if window.is_null() {
             return (0.0, 0.0, 0.0, 0.0);
         }
+        // AppKit takes the buttons back into its own title bar view when the page
+        // is loaded again, and no frame changes when it does, so nothing else
+        // puts them back. The page asks where they are once per load, right
+        // after that, so they are placed here before the answer is measured.
+        place();
         let content: *mut AnyObject = msg_send![window, contentView];
         if content.is_null() {
             return (0.0, 0.0, 0.0, 0.0);
@@ -521,8 +526,14 @@ pub fn window_controls(ns_window: *mut std::ffi::c_void) -> (f64, f64, f64, f64)
             if hidden {
                 continue;
             }
+            // The drawn circle, not the button's clickable box: AppKit draws a
+            // 12pt circle inside a 16pt button and does not centre it there, so
+            // centring the box leaves the circle high. alignmentRectForFrame:
+            // is what the platform reports as the visually meaningful area, and
+            // the Wails host reports the same.
             let bounds: NSRect = msg_send![button, bounds];
-            let at: NSRect = msg_send![content, convertRect: bounds, fromView: button];
+            let drawn: NSRect = msg_send![button, alignmentRectForFrame: bounds];
+            let at: NSRect = msg_send![content, convertRect: drawn, fromView: button];
             left = left.min(at.origin.x);
             right = right.max(at.origin.x + at.size.x);
             top = top.min(at.origin.y);

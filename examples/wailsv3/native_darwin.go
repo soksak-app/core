@@ -76,9 +76,16 @@ static void surfaceFrameNow(void* handle, double* out) {
 //
 // The three buttons are laid out by AppKit and the window is drawn with its
 // title bar transparent and its content behind it, so they sit over the page.
+static void windowControlsPlace(void);
+
 static void windowControls(void* nsWindow, double* out) {
     NSWindow* window = (NSWindow*)nsWindow;
     if (window == nil) return;
+    // AppKit takes the buttons back into its own title bar view when the page is
+    // loaded again, and no frame changes when it does, so nothing else puts them
+    // back. The page asks where they are once per load, right after that, so
+    // they are placed here before the answer is measured.
+    windowControlsPlace();
     NSView* content = [window contentView];
     if (content == nil) return;
     NSButton* buttons[3] = {
@@ -103,6 +110,101 @@ static void windowControls(void* nsWindow, double* out) {
     out[1] = content.bounds.size.height - NSMaxY(together);
     out[2] = together.size.width;
     out[3] = together.size.height;
+}
+
+// The window's own buttons, held in a view of this application's own.
+//
+// AppKit lays the buttons out for a standard title bar and puts them back there
+// whenever the window is laid out again: moving a button, or the view holding
+// it, is undone within the same call. They are moved into a view of this
+// application's own instead, which AppKit does not lay out. AppKit still gives
+// each button its standard inset inside that view, so the view is placed by
+// reading that inset rather than by a number written here.
+static NSWindow* controlsWindow = nil;
+static NSView* controlsOwn = nil;
+static NSView* controlsHome = nil;
+static double controlsX = 0;
+static double controlsY = 0;
+static BOOL controlsPlacing = NO;
+
+// Puts the buttons in this application's own view and places that view.
+static void windowControlsPlace(void) {
+    if (controlsWindow == nil || controlsOwn == nil || controlsPlacing) return;
+    controlsPlacing = YES;
+    NSView* content = [controlsWindow contentView];
+    NSButton* buttons[3] = {
+        [controlsWindow standardWindowButton:NSWindowCloseButton],
+        [controlsWindow standardWindowButton:NSWindowMiniaturizeButton],
+        [controlsWindow standardWindowButton:NSWindowZoomButton],
+    };
+    if (content == nil || buttons[0] == nil || buttons[1] == nil || buttons[2] == nil) {
+        controlsPlacing = NO;
+        return;
+    }
+    for (int i = 0; i < 3; i++) {
+        if ([buttons[i] superview] == controlsOwn) continue;
+        [buttons[i] removeFromSuperview];
+        [controlsOwn addSubview:buttons[i]];
+    }
+    // The buttons carry the inset AppKit gave them, so the view is placed to put
+    // the leftmost button's top left corner at x, y from the window's top left.
+    NSRect first = buttons[0].frame;
+    NSRect last = buttons[2].frame;
+    NSRect bounds = content.bounds;
+    [controlsOwn setFrame:NSMakeRect(
+        controlsX - first.origin.x,
+        bounds.size.height - controlsY - NSMaxY(first),
+        NSMaxX(last) + first.origin.x,
+        NSMaxY(first) + first.origin.y)];
+    controlsPlacing = NO;
+}
+
+// Returns the buttons to where AppKit keeps them.
+static void windowControlsLendBack(void) {
+    if (controlsWindow == nil || controlsHome == nil) return;
+    for (int kind = 0; kind < 3; kind++) {
+        NSButton* button = [controlsWindow standardWindowButton:kind];
+        if (button == nil) continue;
+        [button removeFromSuperview];
+        [controlsHome addSubview:button];
+    }
+}
+
+// windowPlaceControls moves the window's own buttons so the leftmost one's top
+// left corner sits x, y points from the window's top left.
+static void windowPlaceControls(void* nsWindow, double x, double y) {
+    NSWindow* window = (NSWindow*)nsWindow;
+    if (window == nil) return;
+    controlsX = x;
+    controlsY = y;
+    if (controlsOwn != nil) {
+        windowControlsPlace();
+        return;
+    }
+    NSView* content = [window contentView];
+    NSButton* close = [window standardWindowButton:NSWindowCloseButton];
+    if (content == nil || close == nil) return;
+    controlsWindow = window;
+    controlsHome = [close superview];
+    controlsOwn = [[NSView alloc] initWithFrame:NSZeroRect];
+    // Above the webview, which fills the window because the title bar is drawn
+    // transparent. A button under it would take no press.
+    [content addSubview:controlsOwn positioned:NSWindowAbove relativeTo:nil];
+    windowControlsPlace();
+
+    // The content view is resized whenever the window is, and the placement is
+    // measured from its height.
+    [content setPostsFrameChangedNotifications:YES];
+    NSNotificationCenter* centre = [NSNotificationCenter defaultCenter];
+    [centre addObserverForName:NSViewFrameDidChangeNotification object:content queue:nil
+                    usingBlock:^(NSNotification* note) { windowControlsPlace(); }];
+    // A window in full screen has no title bar of its own and AppKit draws the
+    // buttons in the menu bar. It reads them from where it left them, so they are
+    // given back before the transition and taken again after it.
+    [centre addObserverForName:NSWindowWillEnterFullScreenNotification object:window queue:nil
+                    usingBlock:^(NSNotification* note) { windowControlsLendBack(); }];
+    [centre addObserverForName:NSWindowDidExitFullScreenNotification object:window queue:nil
+                    usingBlock:^(NSNotification* note) { windowControlsPlace(); }];
 }
 
 // modalTakeKeyboard makes the window's own webview the first responder.
@@ -351,6 +453,13 @@ func modalOnScreen(parent unsafe.Pointer, at Rect) (int, int) {
 	var out [2]C.double
 	C.modalOnScreen(parent, C.double(at.X), C.double(at.Y), C.double(max1(at.H)), &out[0])
 	return int(out[0]), int(out[1])
+}
+
+// windowPlaceControls moves the window's own buttons so the leftmost one's top
+// left corner sits at this point from the window's top left. The Tauri host
+// places them at the same point by the same means.
+func windowPlaceControls(window unsafe.Pointer, x, y float64) {
+	C.windowPlaceControls(window, C.double(x), C.double(y))
 }
 
 // windowControls reports the area the window's own buttons occupy, in the page's
