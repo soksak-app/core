@@ -797,18 +797,6 @@ function settle() {
   view.render();
 }
 
-/**
- * 포커스 표식을 포커스 카드의 본문 영역에 배치하되 1px 바깥에 둔다.
- *
- * 본문에 맞추면 표식이 네이티브 표면 위에 겹쳐 표면 내용을 가린다. 1px 바깥이면
- * 표면 경계에 위치해 본문을 덮지 않는다.
- *
- * 카드 안이 아니라 표면과 같은 층에 둔다. 표면은 CSS 스택에 참여하지 않으므로 카드
- * 안에 그린 표식은 애플리케이션에서 표면 아래에 가려진다.
- */
-const MARK_OUT = 1;
-
-
 /* 진행 중인 scrollend 대기. 다음 요청이 이전 대기를 취소한다. */
 const landing = new WeakMap();
 
@@ -857,33 +845,38 @@ function centreTab(strip, activeId) {
  */
 // PEEK    strip 단계를 유지하는 데 필요한 활성 탭 외 여유 너비
 // MIN_TAB 말줄임한 활성 탭의 최소 너비. 이보다 좁으면 ham 단계로 내려간다
-// GAP     .chrome 의 좌우 여백이자 그 안의 요소 사이 간격. 탭 사이의 간격은 이 값이
-//         아니라 탭 목록이 갖는 값이고, 아래에서 재서 얻는다
-const HAM_W = 20, GAP = 4, PEEK = 56, MIN_TAB = 48;
+const PEEK = 56, MIN_TAB = 48;
 
 function fitChrome(chrome, strip) {
   const acts = chrome.querySelector(".chrome__acts");
   if (!acts) return;
   chrome.dataset.fit = "strip";
-  const inner = chrome.clientWidth - GAP * 2;          // .chrome 좌우 padding 제외
+  // 머리의 좌우 여백과 그 안의 요소 사이 간격, 그리고 ≡ 의 너비는 스타일시트가
+  // 정하므로 재서 얻는다. 여기에 적으면 스타일시트와 갈리고, 갈린 만큼 헤더가
+  // 접히는 너비가 어긋난다. 탭 사이의 간격을 재는 것과 같은 이유다.
+  const head = getComputedStyle(chrome);
+  const gap = parseFloat(head.columnGap) || 0;
+  const inner = chrome.clientWidth
+    - parseFloat(head.paddingLeft) - parseFloat(head.paddingRight);
+  // ≡ 는 strip 단계에서 그려지지 않으므로 rect 가 아니라 선언된 너비를 읽는다.
+  const ham = parseFloat(getComputedStyle(chrome.querySelector(".chrome__ham")).width);
   const all = [...acts.children];
   for (const b of all) b.hidden = false;
   const wide = acts.getBoundingClientRect().width;
-  const tight = inner - wide < HAM_W + GAP;
+  const tight = inner - wide < ham + gap;
   if (tight) for (const b of all) b.hidden = b.disabled;
-  const room = inner - (tight ? acts.getBoundingClientRect().width : wide) - GAP;
+  const room = inner - (tight ? acts.getBoundingClientRect().width : wide) - gap;
 
   const tabs = [...strip.querySelectorAll(".tab")];
   const active = strip.querySelector(".tab[data-active=true]");
   const activeW = active ? active.getBoundingClientRect().width : 0;
-  // 탭 사이의 간격은 탭 목록이 갖는 값이다. 여기에 적으면 스타일시트와 갈리고,
-  // 갈린 만큼 헤더가 접히는 너비가 어긋난다.
+  // 탭 사이의 간격은 탭 목록이 갖는 값이다.
   const between = parseFloat(getComputedStyle(strip).columnGap) || 0;
   const whole = tabs.reduce((n, t) => n + t.getBoundingClientRect().width, 0)
     + Math.max(0, tabs.length - 1) * between;
   // 탭 전체가 들어가면 접지 않는다. 넘쳐도 활성 탭과 여유 너비가 있으면 strip 을 유지한다.
   chrome.dataset.fit = room >= Math.min(whole, activeW + PEEK) ? "strip"
-    : room >= HAM_W + GAP + Math.min(activeW, MIN_TAB) ? "one"
+    : room >= ham + gap + Math.min(activeW, MIN_TAB) ? "one"
     : "ham";
 }
 
@@ -899,6 +892,16 @@ function centreTabs() {
   }
 }
 
+/**
+ * 포커스 표식을 포커스 카드의 본문 영역에 배치하되 획 두께만큼 바깥에 둔다.
+ *
+ * 본문에 맞추면 표식이 네이티브 표면 위에 겹쳐 표면 내용을 가린다. 획 두께만큼
+ * 바깥이면 획이 표면 경계 밖에 놓여 본문을 덮지 않는다. 그 두께는 스타일시트가
+ * 정하므로 재서 얻는다.
+ *
+ * 카드 안이 아니라 표면과 같은 층에 둔다. 표면은 CSS 스택에 참여하지 않으므로 카드
+ * 안에 그린 표식은 애플리케이션에서 표면 아래에 가려진다.
+ */
 function markFocus() {
   const mark = document.getElementById("focusMark");
   const on = value("focusInd") === "corner";
@@ -912,10 +915,12 @@ function markFocus() {
   if (!slot) { mark.hidden = true; return; }
   const host = plane.getBoundingClientRect();
   const r = slot.getBoundingClientRect();
-  mark.style.left = `${r.left - host.left - MARK_OUT}px`;
-  mark.style.top = `${r.top - host.top - MARK_OUT}px`;
-  mark.style.width = `${r.width + MARK_OUT * 2}px`;
-  mark.style.height = `${r.height + MARK_OUT * 2}px`;
+  // 표식은 획 두께만큼 바깥에 선다. 그 두께는 스타일시트가 정하므로 재서 얻는다.
+  const out = parseFloat(getComputedStyle(mark).getPropertyValue("--t"));
+  mark.style.left = `${r.left - host.left - out}px`;
+  mark.style.top = `${r.top - host.top - out}px`;
+  mark.style.width = `${r.width + out * 2}px`;
+  mark.style.height = `${r.height + out * 2}px`;
   mark.hidden = false;
 }
 
