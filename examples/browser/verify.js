@@ -185,22 +185,25 @@ export function verify(controls = null) {
         `(seq ${guess.seq})`);
   }
 
-  // V7b — 호스트가 실제로 앉힌 자리와 선언값의 차이. 호스트는 선언된 사각형을
-  // 디스플레이 픽셀에 맞춰 정렬하므로 1 디바이스 픽셀까지는 정상이다. 그보다 크면
-  // 표면이 카드와 다른 자리에 있다.
+  // V7b — 호스트가 실제로 앉힌 자리와 선언값의 차이. 여유는 없다. 호스트는 선언된
+  // 사각형을 디스플레이 픽셀에 맞춰 정렬하지만 판이 이미 그 눈금 위에서 보내므로
+  // 그 정렬은 아무것도 옮기지 않는다 — 두 호스트에서 1912개의 변을 재어 전부 0
+  // 이었다. 0 이 아니면 표면이 카드와 다른 자리에 있다.
+  //
+  // 이 검사는 한 커밋 안의 두 값을 견주므로, 그려진 것과 합성된 것이 어긋나는
+  // 것은 보지 못한다. 그것은 examples/test/outside.test.mjs 가 픽셀로 잰다.
   //
   // 답은 비동기로 오므로 최신 커밋에는 아직 없다. 답까지 채워진 마지막 레코드를
   // 읽어 같은 커밋의 두 값을 비교한다.
   const placed = seated();
-  const step = 1 / (window.devicePixelRatio || 1);
   let land = 0, landed = 0;
   for (const s of placed?.surfaces ?? []) {
     if (!s.visible || s.declared.w < 1 || s.declared.h < 1) continue;
     land = Math.max(land, maxDelta(s.declared, s.applied));
     landed++;
   }
-  add("V7b declared − applied ≤ 1 디바이스 픽셀", landed === 0 || land <= step + 0.01,
-      landed ? `최대 ${land.toFixed(2)}px · 허용 ${step.toFixed(2)}px (seq ${placed.seq})` : "아직 답 없음");
+  add("V7b declared − applied == 0", landed === 0 || land === 0,
+      landed ? `최대 ${land.toFixed(2)}px (seq ${placed.seq})` : "아직 답 없음");
 
   const transformed = [...plane.querySelectorAll(".card")]
     .filter((el) => el.style.transform && el.style.transform !== "none").length;
@@ -232,7 +235,7 @@ export function verify(controls = null) {
     escape = Math.max(escape, box.x - s.applied.x, (s.applied.x + s.applied.w) - (box.x + box.w),
                               box.y - s.applied.y, (s.applied.y + s.applied.h) - (box.y + box.h));
   }
-  add("V10 표면이 카드를 안 뚫는다", escape <= 0.5, `최대 ${Math.max(0, escape).toFixed(2)}px`);
+  add("V10 표면이 카드를 안 뚫는다", escape <= 0, `최대 ${Math.max(0, escape).toFixed(2)}px`);
 
   // R — 선은 판의 끝에서 그 바깥의 테두리까지 이어진다. 그 거리는 stage 의 안쪽
   // 여백이고 뷰의 bleed 가 그 값이다. 더 나가면 선이 판 밖, 테두리 위에 그려진다.
