@@ -5,6 +5,9 @@
 
 @interface WKWebView (SPPresentation)
 - (void)_doAfterNextPresentationUpdate:(void (^)(void))done;
+- (BOOL)_drawsBackground;
+- (NSColor *)_backgroundColor;
+- (void)_setBackgroundColor:(NSColor *)color;
 @end
 
 static uint64_t preparation;
@@ -52,6 +55,12 @@ void surfaceLayoutAfterPresentation(void *handle, void (^done)(void)) {
     // 앱 문서의 새 크기 표시를 확인한다. 외부 문서의 렌더링은 기다리지 않는다.
     __block NSUInteger pending = views.count;
     for (WKWebView *view in views) {
-        [view _doAfterNextPresentationUpdate:^{ if (--pending == 0) done(); }];
+        [view _doAfterNextPresentationUpdate:^{
+            // 소수점 크기에서 문서 밖 한 픽셀도 문서 배경색으로 표시한다.
+            NSColor *color = view.underPageBackgroundColor;
+            if ([view _drawsBackground] && ![[view _backgroundColor] isEqual:color])
+                [view _setBackgroundColor:color];
+            if (--pending == 0) done();
+        }];
     }
 }

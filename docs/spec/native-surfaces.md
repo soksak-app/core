@@ -29,7 +29,7 @@ The host controls native view geometry. Each content webview renders its documen
 
 The main document's presentation callback does not confirm another webview's document size. Application documents participate in the same presentation completion check. External documents retain independent content rendering; their native frames still follow the card geometry in the transaction.
 
-Ordinary content webviews use default opaque rendering. Their documents define their backgrounds. Settings and menu transparency is configured separately.
+Ordinary content webviews remain opaque. After application documents confirm presentation, the host applies each document’s reported under-page color to its native backing background. A fractional-point view size can exceed the document viewport by one device pixel; that area must use the document background. Settings and menu transparency is configured separately.
 
 ## Acceptance criteria
 
