@@ -4,8 +4,10 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>soksak</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="./app.css"></head>
-<body>
+<link rel="stylesheet" href="./app.css">
+<link rel="stylesheet" href="./library.css"></head>
+<body data-screen="library">
+<section id="library" aria-label="프로젝트 라이브러리"></section>
 
 
 
@@ -93,6 +95,7 @@ import { icon } from "./icons.js";
 import { adopt, capture, fresh, clear } from "./plane.js";
 
 import { WorkspaceStore } from "./storage.js";
+import { createLibrary } from "./library.js";
 
 // 선과 divider 의 모양은 이 시트가 정의한다. 이 문서는 색만 지정하고 아래 :root 가
 // 그 토큰을 이 문서의 색에 연결한다.
@@ -137,7 +140,7 @@ onRun((going) => {
 });
 
 function check() {
-  if (!currentGrid()) return;
+  if (!currentGrid() || projects.inLibrary()) return;
   const rows = verify(controlsAt);
   const failed = rows.filter((r) => !r.ok);
   const line = failed.length === 0
@@ -180,7 +183,7 @@ function dormant(shown) {
   const here = projects.active();
   for (const p of projects.local()) {
     for (const space of p.spaces) {
-      if (p === here && space.id === here.activeSpaceId) continue;
+      if (!projects.inLibrary() && p === here && space.id === here.activeSpaceId) continue;
       for (const card of space.layout.state.cards) {
         for (const t of card.data?.tabs ?? []) add(t);
       }
@@ -349,7 +352,9 @@ function addTabButton(text, onPick) {
 
 function drawBars() {
   const here = projects.active();
-  const toLeft = value("projectTabs") === "left";
+  const browsing = projects.inLibrary();
+  document.body.dataset.screen = browsing ? "library" : "workspace";
+  const toLeft = !browsing && value("projectTabs") === "left";
   /* 레일은 왼쪽 모드에서만 만든다. 숨기지 않고 제거한다. [hidden] 은 display 를
      정하는 규칙을 이기지 못하고 .rail-projects 는 display:flex 이므로, 숨기면 빈
      영역이 남는다. 크롬 행은 반대로 항상 둔다. 비어 있어도 그 행이 버튼들을
@@ -367,7 +372,7 @@ function drawBars() {
   projectBar.textContent = "";
   if (rail) rail.textContent = "";
 
-  for (const p of projects.all()) {
+  for (const p of browsing ? [] : projects.all()) {
     const el = tab(p.title, p.id === here?.id, {
       dot: p.color,
       onPick: () => { projects.activate(p.id); drawBars(); },
@@ -385,7 +390,7 @@ function drawBars() {
     });
     into.appendChild(el);
   }
-  into.appendChild(addTabButton("+", openProject));
+  if (!browsing) into.appendChild(addTabButton("+", () => projects.browse()));
 
   spaceBar.textContent = "";
   for (const sp of here?.spaces ?? []) {
@@ -399,6 +404,7 @@ function drawBars() {
   if (here) spaceBar.appendChild(addTabButton("+", () => { projects.addSpace(fresh()); drawBars(); }));
 
   chromeActs.textContent = "";
+  if (!browsing) chromeActs.append(act("projects", "프로젝트 목록", false, () => projects.browse()));
   chromeActs.append(
     act("panel-left", "좌측 자리", value("left"), () => set({ left: !value("left") })),
     act("panel-right", "우측 자리", value("right"), () => set({ right: !value("right") })),
@@ -412,48 +418,16 @@ function drawBars() {
   );
 }
 
-/**
- * 그 자리에서 루트를 입력받아 프로젝트를 연다.
- *
- * 같은 루트는 기존 프로젝트를 활성화한다. 정체성이 root 이므로 중복해서 열지 않는다.
- */
-function openProject(from) {
-  const input = document.createElement("input");
-  input.className = "bar-tab__root";
-  input.placeholder = "~/Work/…";
-  from.replaceWith(input);
-  input.focus();
-  let finished = false;
-  const done = (take) => {
-    if (finished) return;
-    finished = true;
-    const root = input.value.trim();
-    input.remove();
-    if (take && root) {
-      projects.open({
-        root,
-        // 목록의 길이로 고르면 하나를 닫은 뒤 다음 프로젝트가 이미 쓰인 색을
-        // 받는다. 열린 색을 피해 고른다.
-        color: TINTS.find((t) => !projects.all().some((p) => p.color === t)) ?? TINTS[0],
-        layout: fresh(),
-      });
-    }
-    drawBars();
-  };
-  input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") done(true);
-    if (e.key === "Escape") done(false);
-  });
-  input.addEventListener("blur", () => done(true));
-}
-
-/** 프로젝트 구분 색. 사용자가 지정하기 전까지 사용하는 값이다. */
-const TINTS = ["#ffb36b", "#7fe3b0", "#7db4ff", "#e08bd8", "#f2d16b"];
-
+const library = createLibrary(document.getElementById("library"));
+addEventListener("keydown", (event) => {
+  if (!(event.metaKey || event.ctrlKey)) return;
+  if (!chrome && event.shiftKey && event.key.toLowerCase() === "n") { event.preventDefault(); projects.newWindow(); }
+  if (event.key.toLowerCase() === "k" && projects.inLibrary()) { event.preventDefault(); library.search(); }
+});
 
 const storage = await WorkspaceStore.open();
 await connectSettings(storage);
-projects.onChange(() => { drawBars(); drawSettings(); });
+projects.onChange(() => { drawBars(); drawSettings(); library.render(); });
 await projects.initialise(storage);
 drawBars();
 
@@ -467,6 +441,7 @@ if (!chrome) addEventListener("pagehide", () => { projects.flush().catch(showErr
 /* ⚙ 의 값이 아닌 누름. 이 문서가 판을 소유하므로 여기서 수행한다. */
 onCommand((name) => {
   if (name !== "build") return;
+  if (projects.inLibrary()) return;
   build();
   drawBars();
   drawSettings();

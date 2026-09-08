@@ -17,7 +17,7 @@ The example page uses the interfaces exported by [host.js](../../examples/browse
 
 ## Project and settings operations
 
-`projects.js` and `storage.js` use the runtime bridge for `projectFolder`, `projectOpen`, `projectRelease`, `windowState`, `windowReady`, `windowClose`, and `workspace`. The [project specification](projects.md) defines their file storage and window behavior. Wails selects native state from the calling window supplied by the framework's service context. Tauri selects it from the command's window. Events, surfaces, overlays, input monitors, and shells belong to that window. Surface and modal labels are unique across windows. Input monitors and shells are removed when their window closes.
+`projects.js`, `library.js`, and `storage.js` use the runtime bridge for `projectFolder`, `projectCreate`, `folderChoose`, `projectOpen`, `projectRelease`, `windowNew`, `windowState`, `windowReady`, `windowClose`, and `workspace`. `folderChoose` uses the host’s public directory dialog API; cancellation returns no path. `projectCreate` requires a new directory, optionally runs Git clone, and returns its canonical identity. `windowNew` creates an unassigned application window. Workspace snapshots include the project IDs owned by open windows. The [project specification](projects.md) defines their file storage and window behavior. Wails selects native state from the calling window supplied by the framework's service context. Tauri selects it from the command's window. Events, surfaces, overlays, input monitors, and shells belong to that window. Surface and modal labels are unique across windows. Input monitors and shells are removed when their window closes.
 
 ## macOS implementation
 

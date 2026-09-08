@@ -8,6 +8,7 @@ export const present = () => Boolean(window.__TAURI__);
 
 const COMMAND = {
   workspace: "workspace",
+  windowNew: "window_new", folderChoose: "folder_choose", projectCreate: "project_create",
   projectFolder: "project_folder", projectOpen: "project_open", projectRelease: "project_release",
   windowState: "window_state", windowReady: "window_ready", windowClose: "window_close",
   syncSurfaces: "sync_surfaces",
@@ -26,6 +27,7 @@ const COMMAND = {
 // 커맨드마다 인자의 이름이 다르다. 이름은 Rust 쪽 서명이 정한다.
 const ARG = {
   workspace: (request) => ({ request }),
+  windowNew: () => ({}), folderChoose: () => ({}), projectCreate: (request) => ({ request }),
   projectFolder: (root) => ({ root }), projectOpen: (request) => ({ request }), projectRelease: (id) => ({ id }),
   windowState: () => ({}), windowReady: () => ({}), windowClose: () => ({}),
   syncSurfaces: (v) => ({ request: v }),

@@ -6,6 +6,8 @@ import { host } from "./framework/index.js";
 let store;
 let projects = [];
 let activeProjectId = null;
+let browsing = true;
+let openProjects = new Set();
 const owned = new Set();
 let listener;
 let changed = () => {};
@@ -16,6 +18,20 @@ let refreshing = Promise.resolve();
 export const all = () => projects;
 export const active = () => projects.find((p) => p.id === activeProjectId) ?? null;
 export const local = () => projects.filter((p) => owned.has(p.id));
+export const inLibrary = () => browsing;
+export const isOpen = (id) => host ? openProjects.has(id) : owned.has(id);
+export async function browse() {
+  await flush();
+  browsing = true;
+  await listener.empty();
+  changed();
+}
+export function newWindow() {
+  if (host) return host.call("windowNew");
+  const target = new URL(location.href); target.search = "";
+  if (!window.open(target, "_blank")) throw new Error("The browser blocked the new window");
+}
+export const pin = (id, pinned) => store.patch(id, { pinned });
 export function onSwitch(callbacks) { listener = callbacks; }
 export function onChange(fn) { changed = fn; }
 
@@ -28,7 +44,7 @@ export async function initialise(storage) {
     await host.on("project-close-request", () => closeWindow().catch(failed));
   }
   const requested = new URL(location.href).searchParams.get("project");
-  const first = requested ? projects.find((p) => p.id === requested) : projects[0];
+  const first = requested ? projects.find((p) => p.id === requested) : null;
   if (first) {
     try { await activate(first.id); } catch (error) { failed(error); }
   }
@@ -45,6 +61,7 @@ function refresh() {
 
 async function readProjects() {
   const snapshot = await store.snapshot();
+  openProjects = new Set(snapshot.open ?? []);
   const previous = new Map(projects.map((p) => [p.id, p]));
   projects = snapshot.projects.map((p) => {
     const old = previous.get(p.id);
@@ -54,16 +71,18 @@ async function readProjects() {
   for (const id of removed) owned.delete(id);
   if (activeProjectId && !active()) {
     activeProjectId = null;
+    browsing = true;
+    history.replaceState(null, "", location.pathname);
     savedLayout = "";
     await selectProject(null);
     await listener?.empty();
-  } else if (removed.length) listener?.update();
+  } else if (removed.length && !browsing) listener?.update();
   changed();
 }
 
 export function keep() {
   const project = active();
-  if (!project || !listener) return writing;
+  if (!project || !listener || browsing) return writing;
   project.spaces.find((s) => s.id === project.activeSpaceId).layout = listener.save();
   const patch = { spaces: project.spaces, activeSpaceId: project.activeSpaceId, named: project.named };
   const key = JSON.stringify(patch);
@@ -75,7 +94,7 @@ export function keep() {
 }
 
 async function activateHere(id) {
-  if (id === activeProjectId) { await selectProject(id); return; }
+  if (id === activeProjectId && !browsing) { await selectProject(id); return; }
   await keep();
   await refresh();
   const project = projects.find((p) => p.id === id);
@@ -83,6 +102,9 @@ async function activateHere(id) {
   await selectProject(id);
   owned.add(id);
   activeProjectId = id;
+  browsing = false;
+  history.replaceState(null, "", `${location.pathname}?project=${encodeURIComponent(id)}`);
+  changed();
   savedLayout = "";
   listener.load(project.spaces.find((s) => s.id === project.activeSpaceId).layout);
   changed();
@@ -98,7 +120,8 @@ export async function activate(id) {
     if (folder.identity !== project.identity) throw new Error(`Project directory has changed: ${project.root}`);
     const result = await host.call("projectOpen", { id, root: project.root, title: project.title,
       separate: value("projectOpening") === "windows", geometry: project.geometry ?? null });
-    if (!result.local) return;
+    await store.patch(id, { lastOpened: Date.now() });
+    if (!result.local) { if (active()) await activateHere(activeProjectId); return; }
   } else if (active() && !owned.has(id) && value("projectOpening") === "windows") {
     const target = new URL(location.href); target.searchParams.set("project", id);
     const opened = window.open(target, `soksak-${id}`);
@@ -106,9 +129,11 @@ export async function activate(id) {
     return;
   }
   await activateHere(id);
+  if (!host) await store.patch(id, { lastOpened: Date.now() });
 }
 
 export async function open({ root, color, layout }) {
+  if (!root.trim()) throw new Error("Project directory is empty");
   const folder = host ? await host.call("projectFolder", root) : { root: root.trim(), identity: `browser:${root.trim()}` };
   const space = { id: issueId("space"), title: "SPACE1", layout };
   const project = await store.add({
@@ -126,7 +151,7 @@ export async function close(id) {
   owned.delete(id);
   await store.remove(id);
   await refresh();
-  if (active()) listener.update();
+  if (active() && !browsing) listener.update();
   if (!active()) {
     const next = local()[0];
     if (next) await activate(next.id);
@@ -180,7 +205,7 @@ export function renameSpace(id, title) {
 
 export async function saveGeometry() {
   const id = activeProjectId;
-  if (!id || !host) return;
+  if (!id || !host || browsing) return;
   const geometry = await host.call("windowState");
   if (geometry) await store.patch(id, { geometry });
 }

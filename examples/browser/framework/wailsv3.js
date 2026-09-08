@@ -30,6 +30,7 @@ const listen = (event, fn) =>
 
 const METHOD = {
   workspace: "Workspace",
+  windowNew: "WindowNew", folderChoose: "FolderChoose", projectCreate: "ProjectCreate",
   projectFolder: "ProjectFolder",
   projectOpen: "ProjectOpen",
   projectRelease: "ProjectRelease",

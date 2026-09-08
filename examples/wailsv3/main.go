@@ -37,7 +37,11 @@ func main() {
 		Assets:     application.AssetOptions{Handler: application.BundledAssetFileServer(assets)},
 		Services:   services(host),
 		ShouldQuit: host.shouldQuit,
+		KeyBindings: map[string]func(application.Window){
+			"CmdOrCtrl+Shift+N": func(application.Window) { go host.WindowNew() },
+		},
 	})
+	setupDockMenu(host)
 	host.newWindow("main", "/")
 
 	if err := app.Run(); err != nil {

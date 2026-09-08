@@ -950,11 +950,15 @@ fn set_theme(
     emit_window(&window, "theme", theme).map_err(|e| e.to_string())
 }
 
+mod project_files;
+#[cfg(target_os = "macos")]
+mod dock;
+
 fn main() {
     // Observation is registered only when it is asked for. It is not part of
     // the product.
     let observing = observe::given("observe");
-    let mut app = tauri::Builder::default();
+    let mut app = tauri::Builder::default().plugin(tauri_plugin_dialog::init());
     if observing {
         app = app.plugin(observe::plugin());
     }
@@ -974,14 +978,30 @@ fn main() {
             }
         })
         .setup(|app| {
+            #[cfg(target_os = "macos")]
+            dock::setup(app.handle().clone())?;
+            let menu = tauri::menu::Menu::default(app.handle())?;
+            let Some(tauri::menu::MenuItemKind::Submenu(windows)) = menu.get(tauri::menu::WINDOW_SUBMENU_ID)
+                else { return Err("default window menu is missing".into()); };
+            windows.prepend(&tauri::menu::MenuItem::with_id(app, "new-window", "새 창", true, Some("CmdOrCtrl+Shift+N"))?)?;
+            app.set_menu(menu)?;
             let directory = observe::flag("config-dir").map(std::path::PathBuf::from).unwrap_or(app.path().app_config_dir()?);
             app.manage(workspace::Workspace::new(directory));
             if let Some(window) = app.get_webview_window("main") { windows::register(window.as_ref().window())?; }
             Ok(())
         })
+        .on_menu_event(|app, event| {
+            if event.id().as_ref() == "new-window" {
+                let app = app.clone();
+                tauri::async_runtime::spawn_blocking(move || {
+                    if let Err(error) = windows::window_new(app) { eprintln!("{error}"); }
+                });
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             windows::project_folder, windows::project_open, windows::project_release,
-            windows::window_state, windows::window_ready, windows::window_close, workspace::workspace,
+            windows::window_state, windows::window_ready, windows::window_close, windows::window_new, workspace::workspace,
+            project_files::folder_choose, project_files::project_create,
             sync_surfaces,
             present_surfaces,
             overlay_show,
@@ -1003,6 +1023,10 @@ fn main() {
         .build(tauri::generate_context!())
         .expect("failed to build the tauri application")
         .run(|app, event| {
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::ExitRequested { code: None, ref api, .. } = event {
+                if app.windows().is_empty() { api.prevent_exit(); return; }
+            }
             if let tauri::RunEvent::ExitRequested { api, .. } = event { windows::quit(app, api); }
         });
 }

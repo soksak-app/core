@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -15,12 +16,13 @@ import (
 
 // Host는 호출한 창의 네이티브 상태를 선택한다.
 type Host struct {
-	quitting  bool
-	workspace *Workspace
-	opening   sync.Mutex
-	mu        sync.Mutex
-	windows   map[uint]*Surfaces
-	owners    map[string]*Surfaces
+	quitting   bool
+	nextWindow uint64
+	workspace  *Workspace
+	opening    sync.Mutex
+	mu         sync.Mutex
+	windows    map[uint]*Surfaces
+	owners     map[string]*Surfaces
 }
 
 var configDirectory = flag.String("config-dir", "", "Application configuration directory")
@@ -152,6 +154,7 @@ func (h *Host) ProjectOpen(ctx context.Context, req ProjectOpen) (ProjectOpened,
 		owner.window.SetSize(req.Geometry.Width, req.Geometry.Height)
 		owner.window.SetPosition(req.Geometry.X, req.Geometry.Y)
 	}
+	h.notifyWorkspace()
 	return ProjectOpened{Local: owner == current}, nil
 }
 
@@ -167,13 +170,30 @@ func validProjectID(id string) bool {
 	return true
 }
 
+func (h *Host) WindowNew() {
+	h.newWindow(fmt.Sprintf("project-window-%d", atomic.AddUint64(&h.nextWindow, 1)), "/")
+}
+
+func (h *Host) notifyWorkspace() {
+	h.mu.Lock()
+	windows := make([]*Surfaces, 0, len(h.windows))
+	for _, s := range h.windows {
+		windows = append(windows, s)
+	}
+	h.mu.Unlock()
+	for _, s := range windows {
+		s.emit("workspace-changed")
+	}
+}
+
 func (h *Host) ProjectRelease(id string) {
 	h.mu.Lock()
-	defer h.mu.Unlock()
 	if owner := h.owners[id]; owner != nil {
 		delete(owner.projects, id)
 	}
 	delete(h.owners, id)
+	h.mu.Unlock()
+	h.notifyWorkspace()
 }
 
 func (h *Host) WindowState(ctx context.Context) (*WindowGeometry, error) {
@@ -256,6 +276,7 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 			return
 		}
 		s.close()
+		h.notifyWorkspace()
 		if quit {
 			go application.Get().Quit()
 		}
@@ -276,15 +297,17 @@ func (h *Host) Workspace(req WorkspaceRequest) (any, error) {
 		req.Project["root"], req.Project["identity"] = folder.Root, folder.Identity
 	}
 	result, err := h.workspace.Apply(req)
-	if err == nil && req.Kind != "snapshot" {
-		h.mu.Lock()
-		windows := make([]*Surfaces, 0, len(h.windows))
-		for _, s := range h.windows {
-			windows = append(windows, s)
-		}
-		h.mu.Unlock()
-		for _, s := range windows {
-			s.emit("workspace-changed")
+	if err == nil {
+		if req.Kind == "snapshot" {
+			h.mu.Lock()
+			ids := make([]string, 0, len(h.owners))
+			for id := range h.owners {
+				ids = append(ids, id)
+			}
+			h.mu.Unlock()
+			result.(Record)["open"] = ids
+		} else {
+			h.notifyWorkspace()
 		}
 	}
 	return result, err

@@ -20,6 +20,7 @@ pub(crate) struct WindowData {
 #[derive(Default)]
 pub(crate) struct Windows {
     quitting: AtomicBool,
+    next_window: std::sync::atomic::AtomicU64,
     opening: Mutex<()>,
     windows: Mutex<HashMap<String, Arc<WindowData>>>,
     owners: Mutex<HashMap<String, String>>,
@@ -46,6 +47,33 @@ pub(crate) fn emit_window<S: Serialize + Clone>(window: &Window, event: &str, pa
         EventTarget::App => window.label() == "main",
         _ => false,
     })
+}
+
+pub(crate) fn notify_workspace(app: &AppHandle) {
+    for window in app.windows().values() {
+     if let Err(error) = emit_window(window, "workspace-changed", ()) { eprintln!("{error}"); }
+    }
+}
+
+pub(crate) fn opened(app: &AppHandle) -> Result<Vec<String>, String> {
+    Ok(app.state::<Windows>().owners.lock().map_err(|e| e.to_string())?.keys().cloned().collect())
+}
+
+fn new_window(app: &AppHandle, label: &str, url: &str, title: &str) -> Result<Window, String> {
+    let created = WebviewWindowBuilder::new(app, label, WebviewUrl::App(url.into()))
+     .title(title).inner_size(1200.0,760.0).background_color(Color(16,17,23,255));
+    #[cfg(target_os = "macos")]
+    let created = created.title_bar_style(tauri::TitleBarStyle::Overlay).hidden_title(true).accept_first_mouse(true);
+    let window = created.build().map_err(|e| e.to_string())?.as_ref().window();
+    register(window.clone())?;
+    Ok(window)
+}
+
+#[tauri::command(async)]
+pub(crate) fn window_new(app: AppHandle) -> Result<(), String> {
+    let id = app.state::<Windows>().next_window.fetch_add(1, Ordering::Relaxed);
+    new_window(&app, &format!("project-window-{id}"), "index.html", "soksak / Tauri v2")?;
+    Ok(())
 }
 
 pub(crate) fn register(window: Window) -> Result<(), String> {
@@ -76,6 +104,7 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
                     windows.remove(host.label());
                     if windows.is_empty() && registry.quitting.load(Ordering::Relaxed) { host.app_handle().exit(0); }
                 };
+                notify_workspace(host.app_handle());
             }
             tauri::WindowEvent::Resized(_) => { let _ = place_window_controls(&host); }
             _ => {}
@@ -85,7 +114,7 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
 }
 
 #[derive(Serialize)]
-pub(crate) struct Folder { root: String, identity: String }
+pub(crate) struct Folder { pub(crate) root: String, identity: String }
 
 pub(crate) fn folder(root: &str, home: &Path) -> Result<Folder, String> {
     if root.trim().is_empty() { return Err("project directory is empty".into()); }
@@ -145,15 +174,7 @@ pub(crate) fn project_open(window: Window, request: OpenProject) -> Result<serde
     let occupied = registry.owners.lock().map_err(|e| e.to_string())?.values().any(|label| label == window.label());
     let owner = if request.separate && occupied {
         let label = format!("project-{}", request.id);
-        let created = WebviewWindowBuilder::new(window.app_handle(), &label,
-            WebviewUrl::App(format!("index.html?project={}", request.id).into()))
-            .title(&request.title).inner_size(1200.0,760.0)
-            .background_color(Color(16,17,23,255));
-        #[cfg(target_os = "macos")]
-        let created = created.title_bar_style(tauri::TitleBarStyle::Overlay).hidden_title(true).accept_first_mouse(true);
-        let created = created.build().map_err(|e| e.to_string())?.as_ref().window();
-        register(created.clone())?;
-        created
+        new_window(window.app_handle(), &label, &format!("index.html?project={}", request.id), &request.title)?
     } else { window.clone() };
     registry.owners.lock().map_err(|e| e.to_string())?.insert(request.id, owner.label().into());
     *window_data(&owner)?.root.lock().map_err(|e| e.to_string())? = folder.root;
@@ -162,12 +183,14 @@ pub(crate) fn project_open(window: Window, request: OpenProject) -> Result<serde
         owner.set_size(LogicalSize::new(g.width, g.height)).map_err(|e| e.to_string())?;
         owner.set_position(tauri::PhysicalPosition::new(g.x, g.y)).map_err(|e| e.to_string())?;
     }
+    notify_workspace(window.app_handle());
     Ok(serde_json::json!({"local":owner.label() == window.label()}))
 }
 
 #[tauri::command]
 pub(crate) fn project_release(window: Window, id: String) -> Result<(), String> {
     window.state::<Windows>().owners.lock().map_err(|e| e.to_string())?.remove(&id);
+    notify_workspace(window.app_handle());
     Ok(())
 }
 

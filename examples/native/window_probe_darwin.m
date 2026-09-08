@@ -21,6 +21,19 @@ void spNativeProbe(void *handle, const char *text, void (*reply)(const char *)) 
     NSDictionary *request = [NSJSONSerialization JSONObjectWithData:
         [[NSString stringWithUTF8String:text] dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil];
     if (![request isKindOfClass:NSDictionary.class]) { probeReply(@{}, nil, @"invalid native request", reply); return; }
+    if ([request[@"op"] isEqualToString:@"dock"]) {
+        id<NSApplicationDelegate> delegate = NSApp.delegate;
+        NSMenu *menu = [delegate respondsToSelector:@selector(applicationDockMenu:)] ? [delegate applicationDockMenu:NSApp] : nil;
+        NSMutableArray *items = [NSMutableArray array];
+        for (NSMenuItem *item in menu.itemArray) [items addObject:item.title];
+        if (request[@"select"]) {
+            NSInteger index = [menu indexOfItemWithTitle:request[@"select"]];
+            if (!menu || index < 0) { probeReply(request, nil, @"Dock menu item not found", reply); return; }
+            [menu performActionForItemAtIndex:index];
+        }
+        probeReply(request, items, nil, reply);
+        return;
+    }
     NSWindow *window = request[@"window"] ? [NSApp windowWithWindowNumber:[request[@"window"] integerValue]] : (NSWindow *)handle;
     if (!window) { probeReply(request, nil, @"window not found", reply); return; }
     NSMutableArray *views = [NSMutableArray array];

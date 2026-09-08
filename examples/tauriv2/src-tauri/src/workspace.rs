@@ -54,6 +54,7 @@ impl Workspace {
                     let path = Path::new(project["root"].as_str().ok_or("invalid project root")?).join(".soksak/settings.json");
                     let settings: Map<String, Value> = read(&path)?;
                     if settings.contains_key("projectOpening") { return Err(format!("{}: projectOpening is common-only", path.display())); }
+                    project["repository"] = Path::new(project["root"].as_str().unwrap()).join(".git").exists().into();
                     project["settings"] = settings.into();
                 }
                 return Ok(json!({"projects":projects, "common":common}));
@@ -69,7 +70,7 @@ impl Workspace {
             "patch" => {
                 let Some(at) = at else { return Ok(false.into()) };
                 for (key,value) in req.patch.unwrap_or_default() {
-                    if !["title", "color", "spaces", "activeSpaceId", "named", "geometry"].contains(&key.as_str()) { return Err(format!("invalid project field: {key}")); }
+                    if !["title", "color", "spaces", "activeSpaceId", "named", "geometry", "pinned", "lastOpened"].contains(&key.as_str()) { return Err(format!("invalid project field: {key}")); }
                     projects[at][key] = value;
                 }
             }
@@ -111,7 +112,8 @@ pub(crate) fn workspace(app: AppHandle, mut request: Request) -> Result<Value, S
         project["identity"] = folder["identity"].clone();
     }
     let changed = request.kind != "snapshot";
-    let result = app.state::<Workspace>().apply(request)?;
+    let mut result = app.state::<Workspace>().apply(request)?;
+    if !changed { result["open"] = serde_json::to_value(super::windows::opened(&app)?).map_err(|e| e.to_string())?; }
     if changed {
         for window in app.windows().values() {
             super::windows::emit_window(window, "workspace-changed", ()).map_err(|e| e.to_string())?;

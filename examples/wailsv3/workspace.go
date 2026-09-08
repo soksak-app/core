@@ -109,6 +109,8 @@ func (w *Workspace) Apply(req WorkspaceRequest) (any, error) {
 				return nil, fmt.Errorf("%s: projectOpening is common-only", path)
 			}
 			p["settings"] = settings
+			_, gitErr := os.Stat(filepath.Join(root, ".git"))
+			p["repository"] = gitErr == nil
 		}
 		return Record{"projects": projects, "common": common}, nil
 	case "add":
@@ -129,7 +131,7 @@ func (w *Workspace) Apply(req WorkspaceRequest) (any, error) {
 		}
 		for key, value := range req.Patch {
 			switch key {
-			case "title", "color", "spaces", "activeSpaceId", "named", "geometry":
+			case "title", "color", "spaces", "activeSpaceId", "named", "geometry", "pinned", "lastOpened":
 				projects[at][key] = value
 			default:
 				return nil, fmt.Errorf("invalid project field: %s", key)

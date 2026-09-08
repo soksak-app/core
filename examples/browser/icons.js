@@ -1,11 +1,9 @@
 // 아이콘.
 //
-// lucide 에서 가져온 경로 그대로다. 지어내지 않는다 — 눈에 익은 모양이 아니면
-// 무엇을 하는 버튼인지 읽을 수 없다.
-//
 // 전부 24 뷰박스의 획(stroke)이다.
 
 const PATHS = {
+  projects: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
   "panel-left": '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/>',
   "panel-right": '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/>' +

@@ -109,6 +109,7 @@ let edgeWidth = {};
    설정에서 그 세트를 자리에 건다. 걸지 않으면 그 사이드바는 없다.        */
 
 let grid, view, focusedId;
+let placements = new Map();
 // 탭 제목의 번호. 식별자가 아니라 표시용 이름이므로 카운터로 만든다.
 let named = 0;
 
@@ -1011,7 +1012,10 @@ export function build(kept = fresh()) {
     // 판은 stage 안쪽으로 이 값만큼 들어와 있다. 호스트만 아는 값이므로 뷰에 전달해야
     // 판 가장자리에 닿는 선이 stage 경계까지 이어진다.
     bleed: stagePad(),
-    commit: (made, draw) => (layouter ? layouter(made, draw, seats()) : draw()),
+    commit: (made, draw) => {
+      placements = made;
+      return layouter ? layouter(made, draw, seats()) : draw();
+    },
     // 판의 렌더는 뷰가 그리는 것과 이 문서가 그리는 것으로 이루어진다. onChange 는
     // 뷰가 그린 직후에 발생하므로, 나머지를 여기서 그리고 그 뒤에 수신자를 호출한다.
     onChange: (reason) => {
@@ -1042,6 +1046,8 @@ export function setGap(half) {
  */
 export const capture = () => ({
   state: grid.toJSON(),
+  preview: { width: grid.width, height: grid.height, pad: stagePad(), radius: cardRadius(),
+    rects: [...placements].map(([id, rect]) => ({ id, ...rect })), rail: railShape.shape.path },
   focusedId,
   railWidth: { ...railWidth },
   edgeWidth: { ...edgeWidth },
@@ -1062,6 +1068,7 @@ export function adopt(kept) {
 /** 빈 스페이스 상태를 반환한다. 새 스페이스가 이 값으로 시작한다. */
 export const fresh = () => ({
   state: initial(),
+  preview: null,
   focusedId: "terminal",
   railWidth: freshRailWidth(),
   edgeWidth: { left: 190, right: 210 },
@@ -1072,6 +1079,7 @@ export function clear() {
   view?.destroy();
   view = null;
   grid = null;
+  placements = new Map();
   railPath.setAttribute("d", "");
   document.getElementById("focusMark").hidden = true;
 }

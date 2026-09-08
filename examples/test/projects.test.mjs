@@ -163,9 +163,9 @@ for (const [name,binary] of Object.entries(APPS)) {
     const origin = await evaluate(binary,main,'performance.timeOrigin');
     await evaluate(binary,main,'location.reload(); null');
     await until(()=>evaluate(binary,main,'performance.timeOrigin'),v=>v!==origin,'main document did not reload');
-    await until(()=>run(binary,main,`return (await import('./projects.js')).active()?.id ?? null;`),id=>id===third.id,'startup did not select the first saved project');
+    await until(()=>run(binary,main,`return (await import('./projects.js')).active()?.id ?? null;`),id=>id===first.id,'reload did not retain the current project');
     assert.equal((await state(binary,main)).windows.length,1);
-    assert.equal(await run(binary,main,`return (await import('./projects.js')).active().title;`),'First saved project');
+    assert.equal(await run(binary,main,`return (await import('./projects.js')).all()[0].title;`),'First saved project');
     t.diagnostic('verified common/project JSON files, native modal isolation, directory aliases, tab/window policy, and close/reopen persistence');
   });
 }

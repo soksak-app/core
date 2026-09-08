@@ -76,6 +76,12 @@ Call sites are in [Wry `wkwebview/mod.rs`](https://github.com/tauri-apps/wry/blo
 
 Inventory entries describe active or explicitly conditional application paths, not every private API present in dependency source. For example, Wry uses public fullscreen preferences on the current macOS; its older-OS `fullScreenEnabled` branch is not active here. Changing the supported OS range, build flags, or framework configuration requires another source audit. KVC access to a public property is not itself a private API.
 
+## Public Dock menu integration
+
+[`dock_menu_darwin.m`](../../examples/native/dock_menu_darwin.m) registers the public `NSApplicationDelegate.applicationDockMenu:` callback and an `NSMenu` action for New Window. Neither host exposes Dock-menu registration. The application adds this missing callback with public Objective-C runtime `class_addMethod`; it does not replace the framework delegate or an existing method. Registration fails if the delegate is unavailable or already implements the callback. Wails and Tauri callbacks invoke their existing public window creation APIs outside the AppKit callback. No private selector or framework fork is added.
+
+After a framework update, check whether it supplies this callback or a Dock-menu API. Verify the menu item and creation of a library window, including after closing all windows. This integration concerns application menus, not surface rendering or webview input.
+
 ## Update review procedure
 
 1. Record the old and new application revision, OS/build, installed WebKit version, SDK/toolchain, and resolved framework revisions. Read this inventory first when diagnosing a failure after any native update.
@@ -92,4 +98,4 @@ Source and necessity review: 2026-09-08, including the project-window integratio
 
 Project windows add no private selectors. Public framework APIs create top-level windows and identify the calling window. Public filesystem APIs store settings. The existing private geometry, presentation, pointer, and transparency corrections remain necessary for their stated purposes. Their host state and lifetime now belong to each project window. Native mouse monitors are removed on window closure.
 
-The standalone overlapping-input baseline and registered runs passed after this integration. Rebuilt macOS hosts passed `make examples-verify` 39/39 with no skips, including independent project windows, concurrent duplicate opens, modal isolation, fractional rendering, and native input. Closing the initial window preserved the other window's rendering; application quit and restart saved settings and restored the first project. [Features](../features.md) records validation and platform limits. Source links identify review locations; a current source declaration does not prove that an installed WebKit build contains the same implementation.
+The standalone overlapping-input baseline and registered runs passed after the project-window integration; the library change does not modify that input code. Rebuilt macOS hosts passed 39 example checks with 0 failures and 2 display-transition skips in the library verification. This includes independent project windows, library window reuse, Dock actions, concurrent duplicate opens, modal isolation, fractional rendering, and native input. Application quit saves settings, and startup displays saved projects in the library. [Features](../features.md) records validation and platform limits. Source links identify review locations; a current source declaration does not prove that an installed WebKit build contains the same implementation.
