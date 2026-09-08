@@ -27,30 +27,35 @@
 use tauri::webview::PlatformWebview;
 
 #[allow(unused_variables)]
-pub fn begin_surface_layout(ticket: u64) {
+pub fn begin_surface_layout(owner: usize, ticket: u64, ready: impl Fn(bool) + 'static) {
     #[cfg(target_os = "macos")]
     unsafe {
-        extern "C" { fn surfaceLayoutBegin(ticket: u64); }
-        surfaceLayoutBegin(ticket);
+        use block2::{Block, RcBlock};
+        extern "C" { fn surfaceLayoutBegin(owner: *mut std::ffi::c_void, ticket: u64, ready: &Block<dyn Fn(i32)>); }
+        let ready = RcBlock::new(move |allowed: i32| ready(allowed != 0));
+        surfaceLayoutBegin(owner as *mut _, ticket, &ready);
     }
+    #[cfg(not(target_os = "macos"))]
+    ready(true);
 }
 
 #[allow(unused_variables)]
-pub fn commit_surface_layout(ticket: u64) -> bool {
+pub fn commit_surface_layout(owner: usize, ticket: u64) -> bool {
     #[cfg(target_os = "macos")]
     unsafe {
-        extern "C" { fn surfaceLayoutCommit(ticket: u64) -> bool; }
-        return surfaceLayoutCommit(ticket);
+        extern "C" { fn surfaceLayoutCommit(owner: *mut std::ffi::c_void, ticket: u64) -> bool; }
+        return surfaceLayoutCommit(owner as *mut _, ticket);
     }
     #[cfg(not(target_os = "macos"))]
     { true }
 }
 
-pub fn cancel_surface_layout() {
+#[allow(unused_variables)]
+pub fn cancel_surface_layout(owner: usize) {
     #[cfg(target_os = "macos")]
     unsafe {
-        extern "C" { fn surfaceLayoutCancel(); }
-        surfaceLayoutCancel();
+        extern "C" { fn surfaceLayoutCancel(owner: *mut std::ffi::c_void); }
+        surfaceLayoutCancel(owner as *mut _);
     }
 }
 
@@ -412,7 +417,7 @@ pub fn watch_mouse(
     ns_window: *mut std::ffi::c_void,
     pressed: impl Fn(Vec<usize>) -> bool + 'static,
     pointed: impl Fn(u8, f64, f64) + 'static,
-) {
+) -> usize {
     #[cfg(target_os = "macos")]
     unsafe {
         use block2::RcBlock;
@@ -486,7 +491,7 @@ pub fn watch_mouse(
             event
         });
         let class = AnyClass::get(c"NSEvent").expect("NSEvent");
-        let _: *mut AnyObject = msg_send![
+        let monitor: *mut AnyObject = msg_send![
             class,
             addLocalMonitorForEventsMatchingMask: NS_EVENT_MASK_LEFT_MOUSE_DOWN
                 | NS_EVENT_MASK_LEFT_MOUSE_DRAGGED
@@ -494,8 +499,20 @@ pub fn watch_mouse(
                 | NS_EVENT_MASK_KEY_DOWN,
             handler: &*handler,
         ];
-        std::mem::forget(handler);
+        return monitor as usize;
     }
+    #[cfg(not(target_os = "macos"))]
+    { 0 }
+}
+
+#[allow(unused_variables)]
+pub fn unwatch_mouse(monitor: usize) {
+    #[cfg(target_os = "macos")]
+    if monitor != 0 { unsafe {
+        use objc2::{msg_send, runtime::{AnyClass, AnyObject}};
+        let class = AnyClass::get(c"NSEvent").expect("NSEvent");
+        let _: () = msg_send![class, removeMonitor: monitor as *mut AnyObject];
+    } }
 }
 
 /// The pointer to the view a webview draws in, which names it among the views a

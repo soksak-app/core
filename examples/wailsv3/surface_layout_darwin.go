@@ -13,9 +13,22 @@ import (
 	"unsafe"
 )
 
-func beginSurfaceLayout(ticket uint64)       { C.surfaceLayoutBegin(C.uint64_t(ticket)) }
-func commitSurfaceLayout(ticket uint64) bool { return bool(C.surfaceLayoutCommit(C.uint64_t(ticket))) }
-func cancelSurfaceLayout()                   { C.surfaceLayoutCancel() }
+func beginSurfaceLayout(window unsafe.Pointer, ticket uint64, ready func(bool)) {
+	handle := cgo.NewHandle(ready)
+	C.nativeWindowLayoutBegin(window, C.uint64_t(ticket), C.uintptr_t(handle))
+}
+func commitSurfaceLayout(window unsafe.Pointer, ticket uint64) bool {
+	return bool(C.surfaceLayoutCommit(window, C.uint64_t(ticket)))
+}
+func cancelSurfaceLayout(window unsafe.Pointer) { C.surfaceLayoutCancel(window) }
+
+//export nativeLayoutReady
+func nativeLayoutReady(value C.uintptr_t, allowed C.bool) {
+	handle := cgo.Handle(value)
+	ready := handle.Value().(func(bool))
+	handle.Delete()
+	ready(bool(allowed))
+}
 
 func afterSurfacePresentation(window unsafe.Pointer, done func()) bool {
 	handle := cgo.NewHandle(done)

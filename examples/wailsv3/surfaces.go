@@ -96,6 +96,12 @@ type modal struct {
 }
 
 type Surfaces struct {
+	window   *application.WebviewWindow
+	projects map[string]bool
+	root     string
+	ready    bool
+	monitor  uintptr
+
 	// Guards modal state and theme across host calls.
 	// Views are only touched on the main thread and need no lock, so no path
 	// holding this lock waits for the main thread.
@@ -127,12 +133,6 @@ type Surfaces struct {
 	theme Theme
 }
 
-// emitShellOutput sends one line of a shell's output as an event. Every page
-// receives it and the page rendering that shell filters by id.
-func emitShellOutput(id string, text string) {
-	application.Get().Event.Emit("shell-output", ShellOutput{ID: id, Text: text})
-}
-
 // ShellOutput is one piece of a shell's output, as a page receives it.
 type ShellOutput struct {
 	ID   string `json:"id"`
@@ -147,7 +147,7 @@ var errNoWindow = errors.New("the main window is gone")
 // coordinates. The page leaves that much of its first row empty. An empty rect
 // means the window draws none.
 func (s *Surfaces) WindowControls() (Rect, error) {
-	win, ok := mainWindow()
+	win, ok := s.window, s.window != nil
 	if !ok {
 		return Rect{}, errNoWindow
 	}
@@ -167,7 +167,10 @@ func (s *Surfaces) Theme() Theme {
 // ShellOpen opens the shell behind a terminal surface. A page that reloads calls
 // it again for a shell that is already running, which is left alone.
 func (s *Surfaces) ShellOpen(id string) error {
-	_, err := s.shells.Open(id)
+	s.mu.Lock()
+	root := s.root
+	s.mu.Unlock()
+	_, err := s.shells.Open(id, root)
 	return err
 }
 
@@ -183,30 +186,32 @@ func (s *Surfaces) OverlayPick(id string, instance uint64, key string, value str
 	current := s.modal != nil && s.modal.id == id && s.modal.instance == instance
 	s.mu.Unlock()
 	if current {
-		application.Get().Event.Emit("overlay-pick", map[string]string{
+		s.emit("overlay-pick", map[string]string{
 			"id": id, "key": key, "value": value,
 		})
 	}
 	return nil
 }
 
-func NewSurfaces(shells *Shells) *Surfaces {
-	return &Surfaces{
+func NewSurfaces(win *application.WebviewWindow) *Surfaces {
+	s := &Surfaces{
+		window: win, projects: map[string]bool{},
 		views:  map[string]*nativeWebview{},
 		named:  map[uintptr]string{},
 		live:   map[string]bool{},
 		shapes: map[string]*nativeShape{},
-		shells: shells,
 		// 아직 테마를 받지 않았을 때의 값. 빈 맵이 아니면 JSON 에 null 이 실리고,
 		// 이 값을 받는 페이지는 토큰을 순회하다 멈춘다.
 		theme: Theme{Tokens: map[string]string{}},
 	}
+	s.shells = NewShells(func(id, text string) { s.emit("shell-output", ShellOutput{ID: id, Text: text}) })
+	return s
 }
 
 // OverlayShow renders one marked element in a hidden child webview. The view
 // becomes visible only after its own document reports that it has rendered.
 func (s *Surfaces) OverlayShow(req OverlayRequest) (Rect, error) {
-	win, ok := mainWindow()
+	win, ok := s.window, s.window != nil
 	if !ok {
 		return Rect{}, errNoWindow
 	}
@@ -226,7 +231,7 @@ func (s *Surfaces) OverlayShow(req OverlayRequest) (Rect, error) {
 		content: OverlayContent{Mode: req.Mode, Card: req.Card, Title: req.Title, CSS: req.CSS, ClassName: req.ClassName, HTML: req.HTML, Border: req.Border},
 	}
 	s.mu.Unlock()
-	view, err := newNativeWebview(win, nativeWebviewOptions{
+	view, err := newNativeWebview(s, nativeWebviewOptions{
 		URL: "about:blank", Hidden: true, Transparent: true,
 		FillParent: req.Mode == "dialog",
 		X:          at.X, Y: at.Y, Width: at.W, Height: at.H,
@@ -266,7 +271,7 @@ type ShapeRequest struct {
 
 // SetShape draws the rectangle, creating its view on first use.
 func (s *Surfaces) SetShape(req ShapeRequest) error {
-	win, ok := mainWindow()
+	win, ok := s.window, s.window != nil
 	if !ok {
 		return errNoWindow
 	}
@@ -314,7 +319,7 @@ type PlaceRequest struct {
 
 // OverlayPlace changes the child webview's frame in the main window.
 func (s *Surfaces) OverlayPlace(req PlaceRequest) (Rect, error) {
-	win, ok := mainWindow()
+	win, ok := s.window, s.window != nil
 	if !ok {
 		return Rect{}, errNoWindow
 	}
@@ -333,7 +338,7 @@ func (s *Surfaces) OverlayPlace(req PlaceRequest) (Rect, error) {
 	s.mu.Lock()
 	live.content.Card = req.Card
 	s.mu.Unlock()
-	application.Get().Event.Emit("modal-position", map[string]any{"id": req.ID, "instance": live.instance, "card": req.Card})
+	s.emit("modal-position", map[string]any{"id": req.ID, "instance": live.instance, "card": req.Card})
 	return at, nil
 }
 
@@ -383,7 +388,7 @@ func (s *Surfaces) OverlayUpdate(req UpdateRequest) {
 	if !ok {
 		return
 	}
-	application.Get().Event.Emit("modal-content", ModalContentEvent{ID: req.ID, Instance: instance, Content: content})
+	s.emit("modal-content", ModalContentEvent{ID: req.ID, Instance: instance, Content: content})
 }
 
 // ModalContentEvent is new content for one modal, as its page receives it.
@@ -417,7 +422,7 @@ func (s *Surfaces) ModalReady(id string, instance uint64) {
 	s.mu.Unlock()
 	if !first {
 		if current {
-			application.Get().Event.Emit("modal-rendered", id)
+			s.emit("modal-rendered", id)
 		}
 		return
 	}
@@ -426,7 +431,7 @@ func (s *Surfaces) ModalReady(id string, instance uint64) {
 		view.SetHidden(false)
 		modalViewFocus(view.NativeView(), true)
 	})
-	application.Get().Event.Emit("modal-rendered", id)
+	s.emit("modal-rendered", id)
 }
 
 func (s *Surfaces) dialog() bool {
@@ -436,7 +441,7 @@ func (s *Surfaces) dialog() bool {
 }
 
 func (s *Surfaces) setBackground(enabled bool) {
-	if win, ok := mainWindow(); ok {
+	if win, ok := s.window, s.window != nil; ok {
 		win.ExecJS(fmt.Sprintf("window.__soksakBackground = %t", enabled))
 	}
 	application.InvokeSync(func() {
@@ -454,10 +459,10 @@ func (s *Surfaces) run(going bool) {
 	}
 	s.running = going
 	if going {
-		application.Get().Event.Emit("run-began")
+		s.emit("run-began")
 		return
 	}
-	application.Get().Event.Emit("run-ended")
+	s.emit("run-ended")
 }
 
 // resizing starts and ends a surface's live resize. The two calls are paired, so
@@ -482,7 +487,7 @@ func (s *Surfaces) press(view uintptr) bool {
 	if !ok {
 		return false
 	}
-	application.Get().Event.Emit("surface-pressed", id)
+	s.emit("surface-pressed", id)
 	return true
 }
 
@@ -493,7 +498,7 @@ func (s *Surfaces) press(view uintptr) bool {
 // passage is one line wide that area lies under the surfaces. The page matches
 // the point against its own dividers.
 func (s *Surfaces) point(phase int, x float64, y float64) {
-	application.Get().Event.Emit("surface-input", InputStep{Phase: phase, X: x, Y: y})
+	s.emit("surface-input", InputStep{Phase: phase, X: x, Y: y})
 }
 
 // InputStep is one step of a drag, as the page receives it.
@@ -551,7 +556,7 @@ func (s *Surfaces) SetTheme(theme Theme) error {
 	s.mu.Lock()
 	s.theme = theme
 	s.mu.Unlock()
-	application.Get().Event.Emit("theme", theme)
+	s.emit("theme", theme)
 	return nil
 }
 
@@ -560,26 +565,30 @@ func (s *Surfaces) SetTheme(theme Theme) error {
 // The work runs on the main thread: these are AppKit calls, and a service call
 // arrives on a goroutine of its own.
 func (s *Surfaces) SyncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
-	win, ok := mainWindow()
+	win, ok := s.window, s.window != nil
 	if !ok {
 		return PreparedSurfaces{}, errNoWindow
 	}
 	// The page has committed, so its window is on screen and its surfaces exist.
 	// Anything that has to run once the application is drawn starts from here.
-	s.first.Do(func() { application.Get().Event.Emit("page-ready") })
+	s.first.Do(func() { s.emit("page-ready") })
 	var prepared PreparedSurfaces
 	var gone []string
+	done := make(chan bool, 1)
 	application.InvokeSync(func() {
 		s.lastPreparation++
 		prepared.Ticket = s.lastPreparation
-		beginSurfaceLayout(prepared.Ticket)
-		gone, prepared.Placements = s.apply(win, req)
-		s.watch.Do(func() {
-			pressed = s.press
-			pointed = s.point
-			watchMouse(win.NativeWindow())
+		beginSurfaceLayout(win.NativeWindow(), prepared.Ticket, func(allowed bool) {
+			if allowed {
+				gone, prepared.Placements = s.apply(win, req)
+				s.watch.Do(func() { s.monitor = watchMouse(win.NativeWindow(), s) })
+			}
+			done <- allowed
 		})
 	})
+	if !<-done {
+		return prepared, errNoWindow
+	}
 	// 셸을 끝내는 것은 그 프로세스를 기다리는 일이다. 주 스레드에서 기다리면 기다리는
 	// 동안 화면이 멈춘다.
 	for _, id := range gone {
@@ -608,7 +617,7 @@ type PresentRequest struct {
 }
 
 func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
-	win, ok := mainWindow()
+	win, ok := s.window, s.window != nil
 	if !ok {
 		return nil, errNoWindow
 	}
@@ -624,7 +633,7 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 				}
 				out = append(out, Placement{ID: p.ID, Rect: surfaceFrame(view.NativeView())})
 			}
-			committed := commitSurfaceLayout(req.Ticket)
+			committed := commitSurfaceLayout(win.NativeWindow(), req.Ticket)
 			if committed && req.Settled {
 				s.run(false)
 			}
@@ -667,7 +676,7 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]str
 			surfaceAlpha(view.NativeView(), alpha)
 			continue
 		}
-		view, err := newNativeWebview(win, nativeWebviewOptions{
+		view, err := newNativeWebview(s, nativeWebviewOptions{
 			URL:    surface.URL,
 			X:      surface.X,
 			Y:      surface.Y,

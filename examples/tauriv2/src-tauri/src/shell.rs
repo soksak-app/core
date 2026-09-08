@@ -14,7 +14,7 @@ use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::Mutex;
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter};
+use tauri::Window;
 
 #[derive(Clone, Serialize)]
 pub struct Output {
@@ -51,21 +51,15 @@ fn shell() -> (String, Vec<String>) {
 
 impl Shells {
     /// Starts a shell for `id`, or does nothing if one is already running.
-    pub fn open(&self, app: &AppHandle, id: &str) -> Result<(), String> {
+    pub fn open(&self, window: &Window, id: &str, root: &str) -> Result<(), String> {
         let mut running = self.0.lock().map_err(|e| e.to_string())?;
         if running.contains_key(id) {
             return Ok(());
         }
 
         let (program, args) = shell();
-        // Started in the user's home directory, not the app's working directory.
-        let home = std::env::var_os("HOME")
-            .or_else(|| std::env::var_os("USERPROFILE"))
-            .map(std::path::PathBuf::from);
         let mut child = Command::new(&program);
-        if let Some(home) = home {
-            child.current_dir(home);
-        }
+        child.current_dir(root);
         let mut child = child
             .args(&args)
             .stdin(Stdio::piped())
@@ -82,7 +76,7 @@ impl Shells {
         .into_iter()
         .flatten()
         {
-            let app = app.clone();
+            let window = window.clone();
             let id = id.to_string();
             std::thread::spawn(move || {
                 let mut reader = BufReader::new(stream);
@@ -102,7 +96,7 @@ impl Shells {
                             break;
                         }
                     }
-                    let _ = app.emit(
+                    let _ = crate::windows::emit_window(&window,
                         "terminal-output",
                         Output {
                             id: id.clone(),

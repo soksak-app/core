@@ -12,6 +12,19 @@ import { host } from "./framework/index.js";
 import { surfaceInput } from "./plane.js";
 
 if (host) {
+  host.on("observe-fixture", async (root) => {
+    try {
+      const projects = await import("./projects.js");
+      const settings = await import("./settings.js");
+      const plane = await import("./plane.js");
+      await projects.flush();
+      for (const project of [...projects.all()]) await projects.close(project.id);
+      await settings.set(structuredClone(settings.defaults), "common");
+      await projects.open({ root, color: "#ffb36b", layout: plane.fresh() });
+      await projects.flush();
+      host.call("report", "observe: fixture ready");
+    } catch (error) { host.call("report", `observe: fixture error: ${error}`); }
+  });
   // 선택자 여럿을 `;` 으로 이어 보내면 순서대로 누른다. 하나의 창을 열고 그 안의
   // 것을 누르는 것이 한 번의 요청이어야 하기 때문이다.
   //

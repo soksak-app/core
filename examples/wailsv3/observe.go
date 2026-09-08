@@ -18,6 +18,7 @@ import (
 	"math"
 	"net"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -79,11 +80,18 @@ func (o *Observe) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	// 모달의 문서가 렌더링할 때마다 남긴다. 갱신된 내용이 그 문서에 도달했는지는
 	// 이 보고로만 알 수 있다.
 	offRendered := app.Event.On("modal-rendered", func(e *application.CustomEvent) {
+		if e.Sender != "main" {
+			return
+		}
 		log.Printf("observe: modal rendered %v", e.Data)
 	})
 	// 관측은 페이지가 처음 커밋한 뒤에 시작한다. 그때 창이 화면에 있고 표면이 있다.
 	// 창 이벤트에 붙이면 이 서비스가 늦게 시작할 때 이미 지나간 이벤트를 기다린다.
-	offReady := app.Event.On("page-ready", func(*application.CustomEvent) { o.start() })
+	offReady := app.Event.On("page-ready", func(e *application.CustomEvent) {
+		if e.Sender == "main" {
+			o.start()
+		}
+	})
 	go func() {
 		<-ctx.Done()
 		offRecord()
@@ -115,7 +123,7 @@ func (o *Observe) transcribe() {
 	if !*transcribing {
 		return
 	}
-	application.Get().Event.Emit("observe-record")
+	emitObservation("observe-record")
 }
 
 // open 은 이 창의 녹화를 준비한다. 윈도 서버의 창 목록을 읽는 것이 느리므로 한 번만
@@ -136,12 +144,18 @@ func (o *Observe) open() {
 // 같은 방식으로 녹화된다. 주기로 확인하지 않는다.
 func (o *Observe) record() func() {
 	bus := application.Get().Event
-	offBegan := bus.On("run-began", func(*application.CustomEvent) {
+	offBegan := bus.On("run-began", func(e *application.CustomEvent) {
+		if e.Sender != "main" {
+			return
+		}
 		if into := o.dir(); into != "" {
 			captureStart(into)
 		}
 	})
-	offEnded := bus.On("run-ended", func(*application.CustomEvent) {
+	offEnded := bus.On("run-ended", func(e *application.CustomEvent) {
+		if e.Sender != "main" {
+			return
+		}
 		o.mu.Lock()
 		controlled := o.once
 		o.mu.Unlock()
@@ -161,8 +175,8 @@ func (o *Observe) record() func() {
 	}
 }
 
-// windows 는 이 창과 여기에 붙은 자식 창들의 번호를 반환한다. 모달은 별도 창이므로
-// 열려 있는 동안 목록에 포함된다.
+// windows는 관측할 메인 OS 창과 자식 창의 번호를 반환한다.
+// 설정과 메뉴는 웹뷰이므로 별도 창 번호가 없다.
 //
 // 자식 창 목록은 AppKit 의 것이므로 주 스레드에서 읽는다. 이벤트 수신자는 자기
 // 고루틴에서 실행되고, 그동안 주 스레드가 자식 창을 붙이거나 떼면 목록을 순회하는
@@ -284,14 +298,13 @@ func (o *Observe) drive() {
 //
 // 걸음의 수는 페이지가 세는 것과 같다. 그만큼 보내고 멈춘다.
 func startDrag(plan drivePlan) {
-	bus := application.Get().Event
-	bus.Emit("observe-drag", plan)
+	emitObservation("observe-drag", plan)
 	go func() {
 		tick := time.NewTicker(frame)
 		defer tick.Stop()
 		for left := plan.steps() * 2 * plan.Times; left > 0; left-- {
 			<-tick.C
-			bus.Emit("observe-tick")
+			emitObservation("observe-tick")
 		}
 	}()
 }
@@ -469,10 +482,28 @@ func (o *Observe) command(line string) {
 			}
 		}
 		startDrag(plan)
+	case "quit":
+		log.Print("observe: quit requested")
+		application.Get().Quit()
 	case "stop":
 		into := o.dir()
 		o.wrote()
 		log.Printf("observe: wrote %d frames to %s", captureStop(), into)
+	case "fixture":
+		if *configDirectory == "" {
+			log.Print("observe: fixture error: --config-dir is required for window tests")
+			return
+		}
+		root := filepath.Join(*configDirectory, "test-project")
+		if err := os.MkdirAll(root, 0700); err != nil {
+			log.Printf("observe: fixture error: %v", err)
+			return
+		}
+		if err := writeJSON(filepath.Join(root, ".soksak", "settings.json"), Record{}); err != nil {
+			log.Printf("observe: fixture error: %v", err)
+			return
+		}
+		emitObservation("observe-fixture", root)
 	case "reset":
 		// 이 애플리케이션은 검사보다 오래 살고 검사는 여럿이다. 앞의 검사가 연
 		// 모달이나 옮긴 경계가 남아 있으면 다음 검사는 자기가 만들지 않은 상태를
@@ -495,12 +526,12 @@ func (o *Observe) command(line string) {
 		})
 		log.Printf("observe: reset")
 	case "click":
-		application.Get().Event.Emit("observe-click", rest)
+		emitObservation("observe-click", rest)
 	case "native":
 		observeNative(rest)
 	case "transcript":
 		// 끄는 길은 없다. reset 이 페이지를 다시 읽으면 기록도 처음으로 돌아간다.
-		application.Get().Event.Emit("observe-record")
+		emitObservation("observe-record")
 		log.Printf("observe: transcript on")
 	case "zoom":
 		application.InvokeSync(func() {
@@ -537,7 +568,7 @@ func (o *Observe) command(line string) {
 			log.Printf("observe: knob %q is not a number", value)
 			return
 		}
-		application.Get().Event.Emit("observe-knob", map[string]any{"name": name, "value": at})
+		emitObservation("observe-knob", map[string]any{"name": name, "value": at})
 	default:
 		log.Printf("observe: %q is not a command", verb)
 	}
@@ -574,7 +605,7 @@ func (o *Observe) click() {
 		// --drive 와 같은 기다림이다. 누를 요소가 언제 그려지는지 알리는 이벤트가
 		// 없다.
 		time.Sleep(time.Duration(after) * time.Millisecond)
-		application.Get().Event.Emit("observe-click", selector)
+		emitObservation("observe-click", selector)
 	}()
 }
 
@@ -586,3 +617,9 @@ var transcribing = flag.Bool("transcript", false,
 
 var capturing = flag.String("capture", "",
 	"record this window into this directory while a drag runs")
+
+func emitObservation(name string, data ...any) {
+	if win, ok := mainWindow(); ok {
+		win.EmitEvent(name, data...)
+	}
+}

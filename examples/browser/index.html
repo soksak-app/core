@@ -60,7 +60,7 @@ import { installTheme } from "/dist/index.js";
 /* 판 외부의 값은 settings 가 갖는다. 이 문서는 값이 바뀌었을 때 판을 다시 만든다.
    설정이 판을 직접 호출하면 설정을 추가할 때마다 호출할 함수를 정해야 한다. */
 import {
-  halfGap, install, modeName, onSettingsChange, set, value,
+  halfGap, install, modeName, onSettingsChange, set, value, connectSettings,
 } from "./settings.js";
 
 /* 표면을 모사하고 보고한다. 판은 슬롯 요소에 값을 기록만 하고 측정과 보고는 이쪽이
@@ -90,7 +90,9 @@ import * as registry from "./plugins/registry.js";
 /* 설정 모달. 사이드바를 연결할 자리 목록은 등록된 플러그인이 정한다. */
 import { drawSettings, onCommand, openSettings } from "./settings-ui.js";
 import { icon } from "./icons.js";
-import { adopt, capture, fresh } from "./plane.js";
+import { adopt, capture, fresh, clear } from "./plane.js";
+
+import { WorkspaceStore } from "./storage.js";
 
 // 선과 divider 의 모양은 이 시트가 정의한다. 이 문서는 색만 지정하고 아래 :root 가
 // 그 토큰을 이 문서의 색에 연결한다.
@@ -102,8 +104,21 @@ install();
 /* 처리되지 않은 오류를 애플리케이션 로그로 보낸다. 애플리케이션에는 콘솔이 없다. */
 addEventListener("error", (e) =>
   host.report(`error: ${e.message} @ ${e.filename}:${e.lineno}`));
-addEventListener("unhandledrejection", (e) =>
-  host.report(`rejected: ${e.reason}`));
+addEventListener("unhandledrejection", (e) => {
+  host.report(`rejected: ${e.reason}`);
+  showError(e.reason);
+});
+addEventListener("error", (e) => showError(e.message));
+function showError(reason) {
+  let el = document.getElementById("applicationError");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "applicationError";
+    el.setAttribute("role", "alert");
+    document.querySelector("header").after(el);
+  }
+  el.textContent = String(reason);
+}
 
 /* ── 배선 ─────────────────────────────────────────────────────────────── */
 
@@ -122,6 +137,7 @@ onRun((going) => {
 });
 
 function check() {
+  if (!currentGrid()) return;
   const rows = verify(controlsAt);
   const failed = rows.filter((r) => !r.ok);
   const line = failed.length === 0
@@ -159,10 +175,10 @@ function dormant(shown) {
     });
   };
   // 지금 판의 탭들. 활성 탭이 아닌 것이 여기서 걸린다.
-  for (const card of currentGrid().cards) for (const t of tabsOf(card)) add(t);
+  for (const card of currentGrid()?.cards ?? []) for (const t of tabsOf(card)) add(t);
   // 다른 스페이스의 탭들. 활성 스페이스는 저장된 배치가 아니라 위의 판이 맞다.
   const here = projects.active();
-  for (const p of projects.all()) {
+  for (const p of projects.local()) {
     for (const space of p.spaces) {
       if (p === here && space.id === here.activeSpaceId) continue;
       for (const card of space.layout.state.cards) {
@@ -193,6 +209,7 @@ onRender(() => {
   Promise.resolve(done).then(() => {
     if (latest() !== record) return;
     check();
+    if (record?.settled !== false) projects.keep();
     if (!ready) {
       ready = true;
       host.report(`observe: ready ${performance.timeOrigin}`);
@@ -215,7 +232,14 @@ onLayout((made, draw, seated) => {
 
 /* 스페이스가 바뀌면 현재 판을 저장하고 다른 상태를 적용한다. 프로젝트 전환도 같은
    동작이다. */
-projects.onSwitch({ save: capture, load: adopt });
+projects.onSwitch({ save: capture, load: adopt, update: settle, async empty() {
+  revision++;
+  drawing = drawing.then(async () => {
+    clear();
+    await publish();
+  });
+  await drawing;
+} });
 
 
 /* ── 프로젝트와 스페이스 행 ─────────────────────────────────────────────
@@ -344,20 +368,27 @@ function drawBars() {
   if (rail) rail.textContent = "";
 
   for (const p of projects.all()) {
-    into.appendChild(tab(p.title, p.id === here.id, {
+    const el = tab(p.title, p.id === here?.id, {
       dot: p.color,
       onPick: () => { projects.activate(p.id); drawBars(); },
       onRename: (title) => projects.rename(p.id, title),
-      onClose: projects.all().length > 1
-        // 배경에 있던 것을 닫으면 판은 그대로다. 살아 있어야 할 표면 목록은
-        // 커밋에서만 전달되므로, 닫은 뒤 한 번 게시해 그 표면을 없앤다.
-        ? () => { projects.close(p.id); drawBars(); publish(); } : null,
-    }));
+      onClose: () => projects.close(p.id),
+    });
+    el.draggable = true;
+    el.addEventListener("dragstart", (e) => e.dataTransfer.setData("text/plain", p.id));
+    el.addEventListener("dragover", (e) => e.preventDefault());
+    el.addEventListener("drop", (e) => {
+      e.preventDefault();
+      const ids = projects.all().map((p) => p.id);
+      const from = ids.indexOf(e.dataTransfer.getData("text/plain"));
+      if (from >= 0) projects.move(ids[from], ids.indexOf(p.id) - from);
+    });
+    into.appendChild(el);
   }
   into.appendChild(addTabButton("+", openProject));
 
   spaceBar.textContent = "";
-  for (const sp of here.spaces) {
+  for (const sp of here?.spaces ?? []) {
     spaceBar.appendChild(tab(sp.title, sp.id === here.activeSpaceId, {
       onPick: () => { projects.activateSpace(sp.id); drawBars(); },
       onRename: (title) => projects.renameSpace(sp.id, title),
@@ -365,7 +396,7 @@ function drawBars() {
         ? () => { projects.closeSpace(sp.id); drawBars(); publish(); } : null,
     }));
   }
-  spaceBar.appendChild(addTabButton("+", () => { projects.addSpace(fresh()); drawBars(); }));
+  if (here) spaceBar.appendChild(addTabButton("+", () => { projects.addSpace(fresh()); drawBars(); }));
 
   chromeActs.textContent = "";
   chromeActs.append(
@@ -392,7 +423,10 @@ function openProject(from) {
   input.placeholder = "~/Work/…";
   from.replaceWith(input);
   input.focus();
+  let finished = false;
   const done = (take) => {
+    if (finished) return;
+    finished = true;
     const root = input.value.trim();
     input.remove();
     if (take && root) {
@@ -417,16 +451,18 @@ function openProject(from) {
 const TINTS = ["#ffb36b", "#7fe3b0", "#7db4ff", "#e08bd8", "#f2d16b"];
 
 
-build();
-
-/* 첫 프로젝트는 방금 만든 판을 그대로 받는다. 루트가 정체성이므로 같은 루트를 다시
-   열면 이 프로젝트를 활성화한다. */
-projects.open({
-  root: "~/Work/soksak",
-  color: TINTS[0],
-  layout: capture(),
-});
+const storage = await WorkspaceStore.open();
+await connectSettings(storage);
+projects.onChange(() => { drawBars(); drawSettings(); });
+await projects.initialise(storage);
 drawBars();
+
+let geometrySave;
+addEventListener("resize", () => {
+  clearTimeout(geometrySave);
+  geometrySave = setTimeout(() => projects.saveGeometry().catch(showError), 200);
+});
+if (!chrome) addEventListener("pagehide", () => { projects.flush().catch(showError); });
 
 /* ⚙ 의 값이 아닌 누름. 이 문서가 판을 소유하므로 여기서 수행한다. */
 onCommand((name) => {

@@ -25,6 +25,7 @@
    스타일시트를 물려받지 못하므로, 호스트가 이 값들을 그대로 실어 보낸다.     */
 
 import { surfaces as host } from "./host.js";
+import { effectiveSettings } from "./settings-scope.js";
 
 /* 고를 수 있는 폰트. 테마가 이 중 하나를 기본으로 지정하고 설정에서 바꾼다.
    설치되지 않은 이름은 목록의 다음 이름으로 넘어간다. */
@@ -133,7 +134,10 @@ export const MODES = ["dark", "light"];
  * 값마다 변수를 두면 저장할 목록을 따로 관리해야 하고 값을 추가할 때마다 그 목록을
  * 수정해야 한다.
  */
-const settings = {
+export const defaults = {
+  projectOpening: "windows",
+  latency: 0,
+  skew: 0,
   theme: THEMES[0].name,
   mode: "dark",
 
@@ -181,6 +185,51 @@ const settings = {
     { place: "right", plugin: "browser", set: "set-browser" },
   ],
 };
+
+let settings = structuredClone(defaults);
+let common = {};
+let overrides = {};
+let projectId = null;
+let store;
+let writing = Promise.resolve();
+let changes = 0;
+let revision = 0;
+
+export async function connectSettings(storage) {
+  store = storage;
+  store.onChange(() => { if (!changes) refresh().catch((e) => dispatchEvent(new ErrorEvent("error", { message: e.message }))); });
+  await refresh();
+}
+
+async function refresh() {
+  const mine = ++revision;
+  const snapshot = await store.snapshot();
+  if (changes || mine !== revision) return;
+  const nextOverrides = snapshot.projects.find((p) => p.id === projectId)?.settings ?? {};
+  if (JSON.stringify(common) === JSON.stringify(snapshot.common) && JSON.stringify(overrides) === JSON.stringify(nextOverrides)) return;
+  common = snapshot.common;
+  overrides = nextOverrides;
+  apply();
+}
+
+function apply() {
+  settings = effectiveSettings(defaults, common, overrides);
+  install();
+  announce();
+}
+
+export async function selectProject(id) {
+  await writing;
+  projectId = id;
+  await refresh();
+}
+
+export const settingProject = () => projectId;
+export const scopedValue = (key, scope) => scope === "common"
+  ? (common[key] ?? defaults[key]) : settings[key];
+export const overridden = (key) => Object.hasOwn(overrides, key);
+export const flushSettings = () => writing;
+export const reset = (key) => set({ [key]: undefined }, "project");
 
 /** 이름으로 테마를 반환한다. 목록에 없는 이름이면 예외를 던진다. */
 function themeOf(name) {
@@ -230,7 +279,7 @@ const pageTheme = () => ({ scheme: settings.mode, tokens: themeTokens() });
  * 값을 루트에 설정한다. 스타일시트를 교체하지 않으므로 사용자가 색 입력으로 지정한
  * 값이 유지된다.
  */
-export function applyTheme(name, next) {
+export function applyTheme(name, next, scope) {
   if (!MODES.includes(next)) throw new Error(`unknown mode: ${next}`);
   const theme = themeOf(name);
   // 테마 선택이 형태 네 값도 함께 설정한다.
@@ -238,7 +287,7 @@ export function applyTheme(name, next) {
     theme: theme.name, mode: next,
     gap: parseFloat(theme.shape.gap), radius: parseFloat(theme.shape.r),
     font: theme.shape.font, size: parseFloat(theme.shape.size),
-  });
+  }, scope);
 }
 
 /** 설정값 하나를 반환한다. */
@@ -249,12 +298,22 @@ export const value = (key) => settings[key];
  *
  * 변경 경로는 이 함수 하나다. 값마다 함수를 두면 적용을 누락한 함수가 생긴다.
  */
-export function set(patch) {
-  Object.assign(settings, patch);
-  install();
-  // 통로는 배치가 사용하는 값이므로 설정이 바뀌면 판도 바뀐다. 그 처리는 수신자가
-  // 하고 여기서는 변경만 통지한다.
-  announce();
+export function set(patch, scope = projectId ? "project" : "common") {
+  const id = scope === "project" ? projectId : null;
+  if (scope === "project" && !id) throw new Error("No project is selected");
+  if (id && Object.hasOwn(patch, "projectOpening")) throw new Error("Project opening mode is common-only");
+  for (const [key, val] of Object.entries(patch)) {
+    if (!Object.hasOwn(defaults, key)) throw new Error(`Unknown setting: ${key}`);
+    const target = id ? overrides : common;
+    if (val === undefined) delete target[key];
+    else target[key] = val;
+  }
+  changes++;
+  revision++;
+  apply();
+  const saved = writing.then(() => store.settings(id, patch));
+  writing = saved.finally(async () => { changes--; if (!changes) await refresh(); });
+  return writing;
 }
 
 /** 값을 문서 루트에 설정한다. 시작 시 한 번, 이후 변경할 때마다 호출한다. */
@@ -292,9 +351,9 @@ export const sets = () => settings.sets;
  * 세트를 자리에 연결한다. `setId` 가 null 이면 연결을 제거하고 사이드바를 표시하지
  * 않는다.
  */
-export function link(place, plugin, setId) {
-  const rest = settings.links.filter((l) => !(l.place === place && l.plugin === plugin));
-  set({ links: setId === null ? rest : [...rest, { place, plugin, set: setId }] });
+export function link(place, plugin, setId, scope) {
+  const rest = scopedValue("links", scope).filter((l) => !(l.place === place && l.plugin === plugin));
+  return set({ links: setId === null ? rest : [...rest, { place, plugin, set: setId }] }, scope);
 }
 
 /** 해당 자리에 연결된 세트의 id 를 반환한다. 없으면 null. */

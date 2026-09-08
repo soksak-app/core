@@ -31,9 +31,9 @@
 
 ### 표시 완료
 
-이 수정을 유지한다. JavaScript 실행이나 DOM 애니메이션 프레임 콜백의 완료는 각 웹뷰가 새 문서 좌표를 표시했다는 확인이 아니다. 호스트는 메인과 표시 중인 앱 문서를 기다린 뒤 네이티브 트랜잭션을 커밋한다. 외부 문서는 참여하지 않으므로 외부 렌더러의 긴 작업이 메인 창 배치를 중단시키지 않는다.
+이 수정을 유지한다. JavaScript 실행이나 DOM 애니메이션 프레임 콜백의 완료는 각 웹뷰가 새 문서 좌표를 표시했다는 확인이 아니다. 호스트는 해당 프로젝트 창의 메인과 표시 중인 앱 문서를 기다린 뒤 네이티브 트랜잭션을 커밋한다. `CATransaction`은 UI 스레드에 속하므로 서로 다른 창의 준비를 직렬화하며, 탐색과 닫기는 해당 창의 준비만 취소한다. 외부 문서는 참여하지 않으므로 외부 렌더러의 긴 작업이 메인 창 배치를 중단시키지 않는다.
 
-콜백 시점, 그리기 완료, 탐색·프로세스 종료 중 동작을 검토한다. 구현은 실행 중인 프로세스나 그리기 영역이 없으면 즉시 완료할 수 있으므로 콜백만으로 캡처된 픽셀을 확인한 것으로 처리하지 않는다. 문서 준비 확인과 전체 녹화가 계속 필요하다. 외부 문서의 700ms 작업과 다시 로드 후 정리를 포함해 [`outside.test.mjs`](../../examples/test/outside.test.mjs), [`paint.test.mjs`](../../examples/test/paint.test.mjs), [`hosts.test.mjs`](../../examples/test/hosts.test.mjs)를 검증한다.
+콜백 시점, 그리기 완료, 탐색·프로세스 종료 중 동작을 검토한다. 구현은 실행 중인 프로세스나 그리기 영역이 없으면 즉시 완료할 수 있으므로 콜백만으로 캡처된 픽셀을 확인한 것으로 처리하지 않는다. 문서 준비 확인과 전체 녹화가 계속 필요하다. 외부 문서의 700ms 작업과 다시 로드 후 정리를 포함해 [`outside.test.mjs`](../../examples/test/outside.test.mjs), [`paint.test.mjs`](../../examples/test/paint.test.mjs), [`hosts.test.mjs`](../../examples/test/hosts.test.mjs)를 검증한다. [`projects.test.mjs`](../../examples/test/projects.test.mjs)는 독립 프로젝트 창, 모달 전달, 닫기·다시 열기 정리도 검증한다.
 
 [`WKWebView.mm`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/WKWebView.mm)의 `_doAfterNextPresentationUpdate:`와 [`WebPageProxy.cpp`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/WebPageProxy.cpp)의 `WebPageProxy::callAfterNextPresentationUpdate`를 검토한다.
 
@@ -88,8 +88,8 @@
 
 ## 검토 기준
 
-소스·필요성 검토일은 2026-09-08이며 앱 구현은 `1a921b4`다. 환경은 macOS 26.6.2 (25G83), WebKit `21624.5.1.11.3`, SDK 15.2를 보고한다. 의존성은 Wails `v3.0.0-beta.16`, Tauri 리비전 `270c63f117eb1f4ff0a653ca63b2ca61e9175663`, Wry `0.56.1`, Tao `0.37.0`이며 [`go.mod`](../../examples/wailsv3/go.mod), [`Cargo.toml`](../../examples/tauriv2/src-tauri/Cargo.toml), [`Cargo.lock`](../../examples/tauriv2/src-tauri/Cargo.lock)에 따라 확정한다.
+소스·필요성 검토일은 2026-09-08이며 프로젝트 창 통합을 포함한다. 환경은 macOS 26.6.2 (25G83), WebKit `21624.5.1.11.3`, SDK 15.2를 보고한다. 의존성은 Wails `v3.0.0-beta.16`, Tauri 리비전 `270c63f117eb1f4ff0a653ca63b2ca61e9175663`, Wry `0.56.1`, Tao `0.37.0`으로 유지하며 [`go.mod`](../../examples/wailsv3/go.mod), [`Cargo.toml`](../../examples/tauriv2/src-tauri/Cargo.toml), [`Cargo.lock`](../../examples/tauriv2/src-tauri/Cargo.lock)에 따라 확정한다.
 
-앱 보완과 독립 검사 항목은 명시한 목적에 계속 필요하므로 이번 검토에서 런타임 호출을 제거하지 않는다. 입력 모니터 주석은 마우스 이탈이 항상 전달된다는 설명을 제거한다. 프레임워크의 디버깅·미디어 기본값은 표면 수정의 필수 조건으로 기록하지 않고 각 목적을 기록한다.
+프로젝트 창은 비공개 선택자를 추가하지 않는다. 공개 프레임워크 API로 독립 창을 생성하고 호출한 창을 식별한다. 공개 파일시스템 API로 설정을 저장한다. 기존의 비공개 좌표·표시·포인터·투명도 수정은 명시한 목적에 계속 필요하다. 해당 호스트 상태와 수명은 각 프로젝트 창에서 관리한다. 네이티브 마우스 모니터는 창을 닫을 때 제거한다.
 
-기존 macOS 호스트 35/35 결과는 변경하지 않은 앱 구현에 적용되며 [기능 상태](../features.ko.md)에 범위를 기록한다. 이번 목록 검토를 새로운 런타임·배포·다중 플랫폼 검증으로 처리하지 않는다. 소스 링크는 검토 위치를 제공하며 최신 소스의 선언만으로 설치된 WebKit 빌드가 같은 구현을 포함한다고 판단하지 않는다.
+통합 후 독립 겹친 입력 검사의 기준 실행과 등록 실행이 통과했다. 다시 빌드한 macOS 호스트가 `make examples-verify` 39/39를 생략 없이 통과했다. 독립 프로젝트 창, 동시 중복 열기, 모달 분리, 소수점 렌더링, 네이티브 입력을 포함한다. 최초 창을 닫아도 다른 창의 렌더링이 유지됐으며 앱 종료·재시작 시 설정 저장과 첫 프로젝트 복원을 확인했다. [기능 상태](../features.ko.md)에 검증 결과와 플랫폼 제한을 기록한다. 소스 링크는 검토 위치를 제공하며 최신 소스의 선언만으로 설치된 WebKit 빌드가 같은 구현을 포함한다고 판단하지 않는다.

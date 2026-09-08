@@ -15,6 +15,9 @@ mod native;
 mod capture;
 mod observe;
 mod shell;
+mod windows;
+mod workspace;
+use windows::{window_data, emit_window, root_view, Windows};
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -24,7 +27,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use serde::Deserialize;
 use serde::Serialize;
 use tauri::{
-    webview::Color, AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Runtime, State,
+    webview::Color, AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Runtime,
     Webview, WebviewBuilder, WebviewUrl, Window,
 };
 
@@ -65,8 +68,8 @@ struct Theme {
     tokens: std::collections::HashMap<String, String>,
 }
 
-fn label_for(id: &str) -> String {
-    format!("surface-{id}")
+fn label_for(window: &Window, id: &str) -> String {
+    format!("surface-{}-{id}", window.label())
 }
 
 /// Snaps a logical rect inward to the display's pixel grid.
@@ -96,43 +99,40 @@ fn aligned(x: f64, y: f64, w: f64, h: f64, scale: f64) -> (f64, f64, f64, f64) {
 #[allow(unused_variables)]
 fn watch_presses(
     window: &Window,
-    views: &State<'_, Views>,
-    watching: &State<'_, Watching>,
+    views: &Views,
+    watching: &Watching,
 ) -> Result<(), String> {
-    let mut started = watching.0.lock().map_err(|e| e.to_string())?;
-    if *started {
-        return Ok(());
-    }
-    let main = window.get_webview("main").ok_or("the main webview is gone")?;
+    if watching.0.lock().map_err(|e| e.to_string())?.is_some() { return Ok(()) }
+    let main = root_view(window).ok_or("the main webview is gone")?;
     isolate_webview(&main)?;
-
     #[cfg(target_os = "macos")]
     {
         let named = views.0.clone();
+        let watched = watching.0.clone();
         let host = window.clone();
         let pointing = window.clone();
-        let handle = window.ns_window().map_err(|e| e.to_string())?;
-        native::watch_mouse(
-            handle,
-            move |chain| {
-                let Ok(map) = named.lock() else { return false };
-                let Some(id) = chain.iter().find_map(|view| map.get(view)) else {
-                    return false;
-                };
-                let _ = host.emit("surface-pressed", id.clone());
-                true
-            },
-            move |phase, x, y| {
-                // The page fills the window's content view, so the point is
-                // already in the page's coordinates.
-                let _ = pointing.emit("surface-input", InputStep { phase, x, y });
-            },
-        );
+        let handle = windows::native_owner(window)?;
+        let (tx, rx) = std::sync::mpsc::channel();
+        window.run_on_main_thread(move || {
+            let result = (|| -> Result<(), String> {
+                let mut started = watched.lock().map_err(|e| e.to_string())?;
+                if started.is_some() { return Ok(()) }
+                *started = Some(native::watch_mouse(handle as *mut _, move |chain| {
+                    let Ok(map) = named.lock() else { return false };
+                    let Some(id) = chain.iter().find_map(|view| map.get(view)) else { return false };
+                    let _ = emit_window(&host, "surface-pressed", id.clone());
+                    true
+                }, move |phase, x, y| {
+                    let _ = emit_window(&pointing, "surface-input", InputStep { phase, x, y });
+                }));
+                Ok(())
+            })();
+            let _ = tx.send(result);
+        }).map_err(|e| e.to_string())?;
+        rx.recv().map_err(|e| e.to_string())??;
     }
-    // Recorded only once the monitor is installed. Recording it first would
-    // leave a failed call reporting success from then on, and no press, key or
-    // drag would ever reach the page again.
-    *started = true;
+    #[cfg(not(target_os = "macos"))]
+    { *watching.0.lock().map_err(|e| e.to_string())? = Some(0); }
     Ok(())
 }
 
@@ -145,43 +145,46 @@ pub struct InputStep {
     pub y: f64,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn sync_surfaces(
     window: Window,
-    overlay: State<'_, Overlay>,
-    shells: State<'_, shell::Shells>,
-    views: State<'_, Views>,
-    watching: State<'_, Watching>,
-    resizing: State<'_, Resizing>,
-    running: State<'_, Running>,
     request: SyncRequest,
 ) -> Result<PreparedSurfaces, String> {
+    let context = window_data(&window)?;
+    let overlay = &context.overlay;
+    let shells = &context.shells;
+    let views = &context.views;
+    let watching = &context.watching;
+    let resizing = &context.resizing;
+    let running = &context.running;
+
     if !request.settled { announce_run(&window, &running, true)?; }
     // The page has committed, so its window is on screen and its surfaces exist.
     // Anything that has to run once the application is drawn starts from here.
     if let Ok(mut first) = running.first.lock() {
         if !*first {
             *first = true;
-            window.emit("page-ready", ()).map_err(|e| e.to_string())?;
+            emit_window(&window, "page-ready", ()).map_err(|e| e.to_string())?;
         }
     }
     watch_presses(&window, &views, &watching)?;
     let scale = window.scale_factor().map_err(|e| e.to_string())?;
 
-    let main = window.get_webview("main").ok_or("the main webview is gone")?;
+    let main = root_view(&window).ok_or("the main webview is gone")?;
     let ticket = running.prepared.fetch_add(1, Ordering::Relaxed) + 1;
+    let owner = windows::native_owner(&window)?;
     let (tx, rx) = std::sync::mpsc::channel();
     main.with_webview(move |platform| {
-        native::begin_surface_layout(ticket);
-        let _ = tx.send(native::view_id(&platform));
+        let handle = native::view_id(&platform);
+        native::begin_surface_layout(owner, ticket, move |allowed| { let _ = tx.send(if allowed { Ok(handle) } else { Err("window closed before layout") }); });
     }).map_err(|e| e.to_string())?;
-    let main_handle = rx.recv().map_err(|e| e.to_string())?;
+    let main_handle = rx.recv().map_err(|e| e.to_string())??;
 
     let result = (|| -> Result<PreparedSurfaces, String> {
     let mut wanted: HashSet<String> = HashSet::new();
 
     for s in &request.surfaces {
-        let label = label_for(&s.id);
+        let label = label_for(&window, &s.id);
         wanted.insert(label.clone());
 
         // A zero-sized webview is not something anyone can see, and some
@@ -263,7 +266,7 @@ fn sync_surfaces(
             // address once the view is gone. A stale entry names a surface that
             // no longer exists, so it is removed with the view.
             if let Ok(mut named) = views.0.lock() {
-                let id = label.trim_start_matches("surface-").to_string();
+                let id = label.trim_start_matches(&format!("surface-{}-", window.label())).to_string();
                 named.retain(|_, held| *held != id);
             }
             webview.close().map_err(|e| e.to_string())?;
@@ -278,13 +281,13 @@ fn sync_surfaces(
     // by how much.
     let mut placed = Vec::with_capacity(request.surfaces.len());
     for s in &request.surfaces {
-        let Some(webview) = window.get_webview(&label_for(&s.id)) else { continue };
+        let Some(webview) = window.get_webview(&label_for(&window, &s.id)) else { continue };
         placed.push(surface_placement(&webview, &s.id)?);
     }
     Ok(PreparedSurfaces { ticket, placements: placed })
     })();
     if result.is_err() {
-        main.with_webview(move |_| { native::commit_surface_layout(ticket); })
+        main.with_webview(move |_| { native::commit_surface_layout(owner, ticket); })
             .map_err(|e| e.to_string())?;
     }
     result
@@ -343,23 +346,25 @@ struct PresentRequest {
 async fn present_surfaces(window: Window, request: PresentRequest) -> Result<Vec<Placement>, String> {
     #[cfg(target_os = "macos")]
     {
-        let main = window.get_webview("main").ok_or("the main webview is gone")?;
+        let main = root_view(&window).ok_or("the main webview is gone")?;
         let ticket = request.ticket;
         let finished = window.clone();
+        let context = window_data(&window)?;
+        let owner = windows::native_owner(&window)?;
         let settled = request.settled;
         let held: Vec<_> = request.placements.into_iter().filter_map(|p| {
-            window.get_webview(&label_for(&p.id)).map(|view| (view, p))
+            window.get_webview(&label_for(&window, &p.id)).map(|view| (view, p))
         }).collect();
         let (tx, mut rx) = tauri::async_runtime::channel(1);
         main.with_webview(move |platform| native::after_presentation(&platform, move || {
-            let committed = native::commit_surface_layout(ticket);
+            let committed = native::commit_surface_layout(owner, ticket);
             let result = (|| -> Result<Vec<Placement>, String> {
                 let mut placed = Vec::new();
                 for (view, p) in &held {
                     placed.push(surface_placement(view, &p.id)?);
                 }
                 // 준비 갱신과 종료 판정을 같은 UI 스레드에서 순서대로 실행한다.
-                let running = finished.state::<Running>();
+                let running = &context.running;
                 if committed && settled && running.prepared.load(Ordering::Relaxed) == ticket {
                     announce_run(&finished, &running, false)?;
                 }
@@ -372,16 +377,16 @@ async fn present_surfaces(window: Window, request: PresentRequest) -> Result<Vec
     }
     #[cfg(not(target_os = "macos"))]
     {
-        if request.settled { announce_run(&window, &window.state::<Running>(), false)?; }
+        if request.settled { announce_run(&window, &window_data(&window)?.running, false)?; }
         Ok(request.placements)
     }
 }
 
 /// Emits run-began and run-ended. The page reports whether more updates follow;
 /// this emits an event only when that changes.
-fn announce_run<R: Runtime>(
-    window: &Window<R>,
-    running: &State<'_, Running>,
+fn announce_run(
+    window: &Window,
+    running: &Running,
     going: bool,
 ) -> Result<(), String> {
     {
@@ -392,13 +397,13 @@ fn announce_run<R: Runtime>(
         *held = going;
     }
     let name = if going { "run-began" } else { "run-ended" };
-    window.emit(name, ()).map_err(|e| e.to_string())
+    emit_window(&window, name, ()).map_err(|e| e.to_string())
 }
 
 /// Brackets a view's live resize. The calls are paired, so the state each view is
 /// in is kept here and only the changes are passed on.
 fn set_resizing<R: Runtime>(
-    resizing: &State<'_, Resizing>,
+    resizing: &Resizing,
     webview: &tauri::Webview<R>,
     live: bool,
 ) -> Result<(), String> {
@@ -507,7 +512,7 @@ impl Overlay {
 
 fn set_background(window: &Window, enabled: bool) -> Result<(), String> {
     for view in window.webviews() {
-        if view.label() == "main" || view.label().starts_with("surface-") {
+        if view.label() == window.label() || view.label().starts_with("surface-") {
             view.eval(format!("window.__soksakBackground = {enabled}"))
                 .map_err(|e| e.to_string())?;
         }
@@ -548,7 +553,7 @@ struct Views(Arc<Mutex<HashMap<usize, String>>>);
 
 /// Whether the window is already watched for presses.
 #[derive(Default)]
-struct Watching(Mutex<bool>);
+struct Watching(Arc<Mutex<Option<usize>>>);
 
 /// The surfaces in a live resize. A surface receives the start and the end of a
 /// run, not one call per frame.
@@ -570,7 +575,10 @@ struct Running {
 /// Draws one modal element in a webview inside the main window.
 /// The view stays hidden until its document reports that the content is drawn.
 #[tauri::command]
-fn overlay_show(window: Window, state: State<'_, Overlay>, request: OverlayRequest) -> Result<Rect, String> {
+fn overlay_show(window: Window, request: OverlayRequest) -> Result<Rect, String> {
+    let context = window_data(&window)?;
+    let state = &context.overlay;
+
     // Destroy the previous native view. A showing has its own identity so late
     // messages from its document cannot affect the next one with the same id.
     state.discard()?;
@@ -578,7 +586,7 @@ fn overlay_show(window: Window, state: State<'_, Overlay>, request: OverlayReque
     let scale = window.scale_factor().map_err(|e| e.to_string())?;
     let (x, y, w, h) = aligned(request.rect.x, request.rect.y, request.rect.w.max(1.0), request.rect.h.max(1.0), scale);
     let at = Rect { x, y, w, h };
-    let mut target = window.get_webview("main").ok_or("the main webview is gone")?.url().map_err(|e| e.to_string())?;
+    let mut target = root_view(&window).ok_or("the main webview is gone")?.url().map_err(|e| e.to_string())?;
     target.set_path("/overlay.html");
     target.set_query(None);
     target.query_pairs_mut().append_pair("id", &request.id).append_pair("instance", &instance.to_string());
@@ -591,7 +599,7 @@ fn overlay_show(window: Window, state: State<'_, Overlay>, request: OverlayReque
     // navigating to a document that calls overlay_ready. This avoids both an
     // empty frame on screen and a creation/ready race.
     let built = window.add_child(
-        WebviewBuilder::new(format!("modal-{instance}"), WebviewUrl::External("about:blank".parse().unwrap()))
+        WebviewBuilder::new(format!("modal-{}-{instance}", window.label()), WebviewUrl::External("about:blank".parse().unwrap()))
             .background_color(Color(0, 0, 0, 0)),
         LogicalPosition::new(x, y), LogicalSize::new(0.0, 0.0),
     );
@@ -633,7 +641,10 @@ struct ShapeRequest {
 struct Shapes(Mutex<HashMap<String, usize>>);
 
 #[tauri::command]
-fn set_shape(window: Window, shapes: State<'_, Shapes>, request: ShapeRequest) -> Result<(), String> {
+fn set_shape(window: Window, request: ShapeRequest) -> Result<(), String> {
+    let context = window_data(&window)?;
+    let shapes = &context.shapes;
+
     // A shape is added to the content view directly, so its frame is in AppKit's
     // coordinates: the origin is the bottom left. A child webview is placed by
     // Tauri, which converts for us; this one is not.
@@ -657,7 +668,7 @@ fn set_shape(window: Window, shapes: State<'_, Shapes>, request: ShapeRequest) -
             view
         }
         None => {
-            let handle = window.ns_window().map_err(|e| e.to_string())?;
+            let handle = windows::native_owner(&window)? as *mut std::ffi::c_void;
             let view = native::shape_create(handle, frame);
             if view == 0 {
                 return Ok(());
@@ -675,7 +686,10 @@ fn set_shape(window: Window, shapes: State<'_, Shapes>, request: ShapeRequest) -
 }
 
 #[tauri::command]
-fn clear_shape(shapes: State<'_, Shapes>, id: String) -> Result<(), String> {
+fn clear_shape(window: Window, id: String) -> Result<(), String> {
+    let context = window_data(&window)?;
+    let shapes = &context.shapes;
+
     let mut held = shapes.0.lock().map_err(|e| e.to_string())?;
     if let Some(view) = held.remove(&id) {
         native::shape_destroy(view);
@@ -705,7 +719,10 @@ struct ModalPosition {
 /// display's pixels. The page declares a rect and the host places the window on
 /// whole pixels, so the two differ and the page is told by how much.
 #[tauri::command]
-fn overlay_place(window: Window, state: State<'_, Overlay>, request: PlaceRequest) -> Result<Rect, String> {
+fn overlay_place(window: Window, request: PlaceRequest) -> Result<Rect, String> {
+    let context = window_data(&window)?;
+    let state = &context.overlay;
+
     let scale = window.scale_factor().map_err(|e| e.to_string())?;
     let current = state.open.lock().map_err(|e| e.to_string())?.as_ref().is_some_and(|m| m.id == request.id);
     let Some(view) = state.view.lock().map_err(|e| e.to_string())?.clone().filter(|_| current) else {
@@ -717,33 +734,40 @@ fn overlay_place(window: Window, state: State<'_, Overlay>, request: PlaceReques
     if let Some(modal) = state.open.lock().map_err(|e| e.to_string())?.as_mut().filter(|m| m.id == request.id) {
         modal.at = at;
         modal.content.card = request.card;
-        view.emit("modal-position", ModalPosition { id: modal.id.clone(), instance: modal.instance, card: request.card })
+        emit_window(&window, "modal-position", ModalPosition { id: modal.id.clone(), instance: modal.instance, card: request.card })
             .map_err(|e| e.to_string())?;
     }
     Ok(at)
 }
 
 #[tauri::command]
-fn overlay_content(state: State<'_, Overlay>, id: String, instance: u64) -> Result<OverlayContent, String> {
-    Ok(state
+fn overlay_content(window: Window, id: String, instance: u64) -> Result<OverlayContent, String> {
+    let context = window_data(&window)?;
+    let state = &context.overlay;
+
+    let content = state
         .open
         .lock()
         .map_err(|e| e.to_string())?
         .as_ref()
         .filter(|modal| modal.id == id && modal.instance == instance)
         .map(|modal| modal.content.clone())
-        .unwrap_or_default())
+        .unwrap_or_default();
+    Ok(content)
 }
 
 /// Reveals the child webview once this showing has rendered.
 #[tauri::command]
-fn overlay_ready(app: AppHandle, window: Window, state: State<'_, Overlay>, id: String, instance: u64) -> Result<(), String> {
+fn overlay_ready(window: Window, id: String, instance: u64) -> Result<(), String> {
+    let context = window_data(&window)?;
+    let state = &context.overlay;
+
     let Some(view) = state.view.lock().map_err(|e| e.to_string())?.clone() else { return Ok(()) };
     let first = {
         let mut held = state.open.lock().map_err(|e| e.to_string())?;
         let Some(modal) = held.as_mut().filter(|m| m.id == id && m.instance == instance) else { return Ok(()) };
         if modal.shown {
-            app.emit("modal-rendered", &id).map_err(|e| e.to_string())?;
+            emit_window(&window, "modal-rendered", &id).map_err(|e| e.to_string())?;
             return Ok(())
         }
         modal.shown = true;
@@ -757,29 +781,35 @@ fn overlay_ready(app: AppHandle, window: Window, state: State<'_, Overlay>, id: 
     }).map_err(|e| e.to_string())?;
     view.show().map_err(|e| e.to_string())?;
     view.set_focus().map_err(|e| e.to_string())?;
-    app.emit("modal-rendered", &id).map_err(|e| e.to_string())?;
+    emit_window(&window, "modal-rendered", &id).map_err(|e| e.to_string())?;
     Ok(())
 }
 
 #[tauri::command]
-fn overlay_hide(window: Window, state: State<'_, Overlay>, id: String) -> Result<(), String> {
+fn overlay_hide(window: Window, id: String) -> Result<(), String> {
+    let context = window_data(&window)?;
+    let state = &context.overlay;
+
     {
         let mut held = state.open.lock().map_err(|e| e.to_string())?;
         if !matches!(held.as_ref(), Some(modal) if modal.id == id) { return Ok(()) }
         *held = None;
     }
     state.discard()?;
-    if let Some(main) = window.get_webview("main") { main.set_focus().map_err(|e| e.to_string())?; }
+    if let Some(main) = root_view(&window) { main.set_focus().map_err(|e| e.to_string())?; }
     Ok(())
 }
 
 /// An old document may finish sending an answer after its view was destroyed.
 #[tauri::command]
-fn overlay_pick(window: Window, state: State<'_, Overlay>, id: String, instance: u64, key: String, value: String) -> Result<(), String> {
+fn overlay_pick(window: Window, id: String, instance: u64, key: String, value: String) -> Result<(), String> {
+    let context = window_data(&window)?;
+    let state = &context.overlay;
+
     let current = state.open.lock().map_err(|e| e.to_string())?.as_ref().is_some_and(|m| m.id == id && m.instance == instance);
     if current {
-        if let Some(main) = window.get_webview("main") {
-            main.emit("overlay-pick", Picked { id, key, value }).map_err(|e| e.to_string())?;
+        if root_view(&window).is_some() {
+            emit_window(&window, "overlay-pick", Picked { id, key, value }).map_err(|e| e.to_string())?;
         }
     }
     Ok(())
@@ -789,7 +819,10 @@ fn overlay_pick(window: Window, state: State<'_, Overlay>, id: String, instance:
 /// controls change the page's state is redrawn while it is open, and rebuilding
 /// the view would make it blink.
 #[tauri::command]
-fn overlay_update(app: AppHandle, overlay: State<'_, Overlay>, request: UpdateRequest) -> Result<(), String> {
+fn overlay_update(window: Window, request: UpdateRequest) -> Result<(), String> {
+    let context = window_data(&window)?;
+    let overlay = &context.overlay;
+
     let content = request.content;
     let instance = {
         let mut held = overlay.open.lock().map_err(|e| e.to_string())?;
@@ -799,7 +832,7 @@ fn overlay_update(app: AppHandle, overlay: State<'_, Overlay>, request: UpdateRe
     };
     // Every page receives the event, so it carries the id and each modal's page
     // keeps the one addressed to it.
-    app.emit("modal-content", ModalContentEvent { instance, id: request.id, content })
+    emit_window(&window, "modal-content", ModalContentEvent { instance, id: request.id, content })
         .map_err(|e| e.to_string())
 }
 
@@ -834,12 +867,19 @@ struct Picked {
 /// Starts the shell for a terminal surface. The page calls this once, when the
 /// view loads, so a reopened surface gets its own shell.
 #[tauri::command]
-fn terminal_open(app: tauri::AppHandle, shells: State<'_, shell::Shells>, id: String) -> Result<(), String> {
-    shells.open(&app, &id)
+fn terminal_open(window: Window, id: String) -> Result<(), String> {
+    let context = window_data(&window)?;
+    let shells = &context.shells;
+
+    let root = context.root.lock().map_err(|e| e.to_string())?.clone();
+    shells.open(&window, &id, &root)
 }
 
 #[tauri::command]
-fn terminal_write(shells: State<'_, shell::Shells>, id: String, data: String) -> Result<(), String> {
+fn terminal_write(window: Window, id: String, data: String) -> Result<(), String> {
+    let context = window_data(&window)?;
+    let shells = &context.shells;
+
     shells.write(&id, &data)
 }
 
@@ -856,7 +896,7 @@ fn report(line: String) {
 /// The platform lays them out for a standard title bar, which is shorter than
 /// that row, so they would sit above it.
 fn place_window_controls(window: &Window) -> Result<(), String> {
-    let handle = window.ns_window().map_err(|e| e.to_string())? as usize;
+    let handle = windows::native_owner(window)?;
     // AppKit lays views out on the main thread. This is called from setup, which
     // is already there, so the closure runs inline; the wrapper says which thread
     // the work belongs on rather than moving it to one.
@@ -881,15 +921,19 @@ const CONTROLS_AT: (f64, f64) = (12.0, 14.5);
 /// The page leaves that much of its first row empty.
 #[tauri::command]
 fn window_controls(window: Window) -> Result<Rect, String> {
-    let handle = window.ns_window().map_err(|e| e.to_string())?;
+    let handle = windows::native_owner(&window)? as *mut std::ffi::c_void;
     let (x, y, w, h) = native::window_controls(handle);
     Ok(Rect { x, y, w, h })
 }
 
 /// Returns the current theme. A page requests this when it loads.
 #[tauri::command]
-fn theme(state: State<'_, CurrentTheme>) -> Result<Theme, String> {
-    Ok(state.0.lock().map_err(|e| e.to_string())?.clone())
+fn theme(window: Window, ) -> Result<Theme, String> {
+    let context = window_data(&window)?;
+    let state = &context.theme;
+
+    let theme = state.0.lock().map_err(|e| e.to_string())?.clone();
+    Ok(theme)
 }
 
 /// Records the theme the page is now drawn in, for the pages this host creates.
@@ -897,11 +941,13 @@ fn theme(state: State<'_, CurrentTheme>) -> Result<Theme, String> {
 #[tauri::command]
 fn set_theme(
     window: Window,
-    state: State<'_, CurrentTheme>,
     theme: Theme,
 ) -> Result<(), String> {
+    let context = window_data(&window)?;
+    let state = &context.theme;
+
     *state.0.lock().map_err(|e| e.to_string())? = theme.clone();
-    window.emit("theme", theme).map_err(|e| e.to_string())
+    emit_window(&window, "theme", theme).map_err(|e| e.to_string())
 }
 
 fn main() {
@@ -912,50 +958,30 @@ fn main() {
     if observing {
         app = app.plugin(observe::plugin());
     }
-    app.on_page_load(|webview, payload| {
-        if webview.label().starts_with("surface-") && payload.event() == tauri::webview::PageLoadEvent::Started {
-            let enabled = webview.state::<Overlay>().dialog();
-            if let Err(error) = webview.eval(format!("window.__soksakBackground = {enabled}")) {
-                eprintln!("cannot apply the surface background effect: {error}");
+    app.manage(Windows::default())
+        .on_page_load(|view, payload| {
+            if payload.event() != tauri::webview::PageLoadEvent::Started { return; }
+            let window = view.window();
+            let Ok(context) = window_data(&window) else { return };
+            if view.label().starts_with("surface-") {
+                let enabled = context.overlay.dialog();
+                if let Err(error) = view.eval(format!("window.__soksakBackground = {enabled}")) { eprintln!("{error}"); }
             }
-        }
-        if webview.label() == "main" && payload.event() == tauri::webview::PageLoadEvent::Started {
-            if let Err(error) = webview.with_webview(|_| native::cancel_surface_layout()) {
-                eprintln!("cannot cancel the previous document's layout: {error}");
+            if view.label() == window.label() {
+                context.ready.store(false, Ordering::Relaxed);
+                if let Ok(owner) = windows::native_owner(&window) { native::cancel_surface_layout(owner); }
+                if let Err(error) = context.overlay.discard() { eprintln!("{error}"); }
             }
-            // The previous main document's DOM and answer callback are gone.
-            if let Err(error) = webview.state::<Overlay>().discard() {
-                eprintln!("cannot discard the previous document's overlay: {error}");
-            }
-        }
-    }).setup(|app| {
-        // The window's own buttons are placed before the page loads, so the page
-        // reads where they are once and never sees them move.
-        if let Some(window) = app.get_webview_window("main") {
-            place_window_controls(&window.as_ref().window())?;
-            let placed = window.clone();
-            window.on_window_event(move |event| {
-                if matches!(event, tauri::WindowEvent::Resized(_)) {
-                    // The buttons are laid out from the window's top left, and
-                    // the view holding them keeps the frame it was given, which
-                    // is measured from the bottom. A window that changes height
-                    // leaves them somewhere else in the page's first row, so
-                    // they are placed again for the size the window now has.
-                    let _ = place_window_controls(&placed.as_ref().window());
-                }
-            });
-        }
-        Ok(())
-    })
-    .manage(Overlay::default())
-        .manage(Shapes::default())
-        .manage(CurrentTheme::default())
-        .manage(Views::default())
-        .manage(Watching::default())
-        .manage(Resizing::default())
-        .manage(Running::default())
-        .manage(shell::Shells::default())
+        })
+        .setup(|app| {
+            let directory = observe::flag("config-dir").map(std::path::PathBuf::from).unwrap_or(app.path().app_config_dir()?);
+            app.manage(workspace::Workspace::new(directory));
+            if let Some(window) = app.get_webview_window("main") { windows::register(window.as_ref().window())?; }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
+            windows::project_folder, windows::project_open, windows::project_release,
+            windows::window_state, windows::window_ready, windows::window_close, workspace::workspace,
             sync_surfaces,
             present_surfaces,
             overlay_show,
@@ -974,6 +1000,9 @@ fn main() {
             set_theme,
             report
         ])
-        .run(tauri::generate_context!())
-        .expect("failed to run the tauri application");
+        .build(tauri::generate_context!())
+        .expect("failed to build the tauri application")
+        .run(|app, event| {
+            if let tauri::RunEvent::ExitRequested { api, .. } = event { windows::quit(app, api); }
+        });
 }

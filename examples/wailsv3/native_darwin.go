@@ -109,18 +109,18 @@ static void surfaceRaise(void* handle) {
 
 // Reports whether one view is a surface. Returns non-zero for a surface, and the
 // walk up from the hit view stops there.
-extern int surfaceHit(void* view);
+extern int surfaceHit(uintptr_t owner, void* view);
 
 // Reports one step of a left-button drag, in the page's coordinates.
 // phase is 0 for a press, 1 for a move, 2 for a release.
-extern void surfacePoint(int phase, double x, double y);
+extern void surfacePoint(uintptr_t owner, int phase, double x, double y);
 
 // Walks up from a view to the content view, reporting the first surface. Returns
 // whether one was found, which is also whether the input began on this app's own
 // views rather than on the page.
-static int surfaceWalk(NSView* view, NSView* content) {
+static int surfaceWalk(uintptr_t owner, NSView* view, NSView* content) {
     while (view != nil && view != content) {
-        if (surfaceHit((void*)view)) {
+        if (surfaceHit(owner, (void*)view)) {
             return 1;
         }
         view = [view superview];
@@ -131,7 +131,7 @@ static int surfaceWalk(NSView* view, NSView* content) {
 // Whether the button went down on one of this app's views. A drag that began on
 // the page is the page's own and needs nothing from here; forwarding it would put
 // one message per pointer move on the same thread that has to redraw the plane.
-static int surfaceDragging = 0;
+
 
 // A surface is a native view, so input on it never reaches the page. One monitor
 // on the app receives every press, every drag and every key, and reports two
@@ -150,11 +150,12 @@ static int surfaceDragging = 0;
 // which the content view's height gives because the page's view fills it.
 //
 // The monitor returns the event unchanged and the view still receives it.
-static void surfaceWatchMouse(void* nsWindow) {
+static uintptr_t surfaceWatchMouse(void* nsWindow, uintptr_t owner) {
+    __block int surfaceDragging = 0;
     NSWindow* window = (NSWindow*)nsWindow;
     NSEventMask mask = NSEventMaskLeftMouseDown | NSEventMaskLeftMouseDragged
                      | NSEventMaskLeftMouseUp | NSEventMaskKeyDown;
-    [NSEvent addLocalMonitorForEventsMatchingMask:mask
+    return (uintptr_t)[NSEvent addLocalMonitorForEventsMatchingMask:mask
                                           handler:^NSEvent*(NSEvent* event) {
         if ([event window] == window) {
             NSView* content = [window contentView];
@@ -162,17 +163,17 @@ static void surfaceWatchMouse(void* nsWindow) {
             if (type == NSEventTypeKeyDown) {
                 NSResponder* first = [window firstResponder];
                 if ([first isKindOfClass:[NSView class]]) {
-                    surfaceWalk((NSView*)first, content);
+                    surfaceWalk(owner, (NSView*)first, content);
                 }
             } else {
                 NSPoint at = [event locationInWindow];
                 double x = at.x;
                 double y = [content bounds].size.height - at.y;
                 if (type == NSEventTypeLeftMouseDown) {
-                    surfaceDragging = surfaceWalk([content hitTest:at], content);
-                    if (surfaceDragging) surfacePoint(0, x, y);
+                    surfaceDragging = surfaceWalk(owner, [content hitTest:at], content);
+                    if (surfaceDragging) surfacePoint(owner, 0, x, y);
                 } else if (surfaceDragging) {
-                    surfacePoint(type == NSEventTypeLeftMouseDragged ? 1 : 2, x, y);
+                    surfacePoint(owner, type == NSEventTypeLeftMouseDragged ? 1 : 2, x, y);
                     if (type == NSEventTypeLeftMouseUp) surfaceDragging = 0;
                 }
             }
@@ -180,6 +181,8 @@ static void surfaceWatchMouse(void* nsWindow) {
         return event;
     }];
 }
+
+static void surfaceUnwatchMouse(uintptr_t monitor) { if (monitor) [NSEvent removeMonitor:(id)monitor]; }
 
 // A plain layer-backed view, used for the shapes the page draws over the
 // surfaces. An NSView with a layer takes a colour with an alpha channel and
@@ -217,7 +220,10 @@ static void shapeDestroy(void* handle) {
 */
 import "C"
 
-import "unsafe"
+import (
+	"runtime/cgo"
+	"unsafe"
+)
 
 // surfaceFrame reports where a surface is now, in the page's coordinates. The
 // host aligns a declared rect to the display's pixels, so this is not the rect
@@ -280,7 +286,21 @@ func surfaceResizing(view unsafe.Pointer, live bool) {
 	C.surfaceEndLiveResize(view)
 }
 
-func watchMouse(window unsafe.Pointer) { C.surfaceWatchMouse(window) }
+var mouseOwners = map[uintptr]cgo.Handle{}
+
+func watchMouse(window unsafe.Pointer, owner *Surfaces) uintptr {
+	handle := cgo.NewHandle(owner)
+	monitor := uintptr(C.surfaceWatchMouse(window, C.uintptr_t(handle)))
+	mouseOwners[monitor] = handle
+	return monitor
+}
+func unwatchMouse(monitor uintptr) {
+	if handle, ok := mouseOwners[monitor]; ok {
+		C.surfaceUnwatchMouse(C.uintptr_t(monitor))
+		handle.Delete()
+		delete(mouseOwners, monitor)
+	}
+}
 
 // nativeShape is a layer-backed view drawn above the surfaces.
 type nativeShape struct{ handle unsafe.Pointer }

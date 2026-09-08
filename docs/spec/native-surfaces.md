@@ -16,14 +16,16 @@ The host must not assume that DOM and native rendering differ by at most one fra
 ## Placement sequence
 
 1. Before updating card DOM, the page submits the next surface rectangles.
-2. The host begins a main-thread layer transaction and applies the full native rectangles. The response contains actual geometry and one identifier for the complete preparation.
+2. The host acquires the UI thread's layer transaction for the owning window and applies the full native rectangles. The response contains actual geometry and one identifier for the complete preparation.
 3. After preparation completes, the page updates card DOM and requests presentation for that identifier.
 4. After the main webview and visible webviews from the same application origin confirm presentation, the host commits the transaction and returns actual geometry. Hidden webviews and documents from external origins do not delay this commit.
 5. The page starts the next preparation after that response, using the latest pending layout. Outdated draw callbacks do not draw.
 
 A native surface is never temporarily reduced to the intersection of pending rectangles. A surface without a matching future slot is hidden before the DOM changes. Measurement after drawing supplies the new rectangles.
 
-An older confirmation must not commit a newer preparation. Main-document navigation cancels any open transaction. Native calls execute on the UI thread without blocking it while waiting for WebKit.
+An older confirmation must not commit a newer preparation. Main-document navigation cancels that window's active and queued preparations. Native calls execute on the UI thread without blocking it while waiting for WebKit.
+
+Native layer transactions are shared by the UI thread. Preparations from different project windows are queued until the current window commits or cancels. A window's reload or closure cancels only that window's active and queued preparations. Waiting requests do not block the UI thread.
 
 The host controls native view geometry. Each content webview renders its document independently; a delayed external renderer must not stop the main window's layout updates.
 

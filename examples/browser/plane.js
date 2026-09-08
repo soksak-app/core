@@ -96,6 +96,7 @@ const freshRailWidth = () =>
   Object.fromEntries(plugins().map((p) => [p.id, RAIL_WIDTH]));
 // 등록이 끝난 뒤에 채운다. 모듈 평가 시점에 읽으면 등록 순서에 따라 결과가 달라진다.
 let railWidth = {};
+let edgeWidth = {};
 
 /* ── 자리 ─────────────────────────────────────────────────────────────────
    어디 서는가          무엇이 서는가
@@ -771,8 +772,10 @@ function dismiss(id) {
  * `splitToward` 가 아니라 `insertAt` 을 사용한다. 분할하면 분할된 카드의 행 범위를
  * 상속해 한 행만 차지하지만, 사이드바는 판을 가로질러야 한다.
  */
-function standEdge(id, on, size, side) {
+function standEdge(id, on, side) {
   const has = !!grid.card(id);
+  if (has) edgeWidth[id] = grid.card(id).width ?? edgeWidth[id];
+  const size = edgeWidth[id];
   if (on && !has) {
     const line = side === "left" ? 0 : grid.lines("x").length - 1;
     if (grid.canInsertAt("x", line)) {
@@ -787,11 +790,12 @@ function standEdge(id, on, size, side) {
 /* ── 렌더링 ───────────────────────────────────────────────────────────── */
 
 function settle() {
+  if (!grid) return;
   closePicker();
   // 자리가 켜져 있고 그 자리에 세트가 걸려 있을 때만 선다. 걸지 않은 사이드바는
   // 표시할 것이 없다.
-  standEdge("left", value("left") && !!standingSet("left"), 190, "left");
-  standEdge("right", value("right") && !!standingSet("right"), 210, "right");
+  standEdge("left", value("left") && !!standingSet("left"), "left");
+  standEdge("right", value("right") && !!standingSet("right"), "right");
   for (const p of plugins()) standRail(p.id);
   if (!grid.card(focusedId)) focusedId = grid.cards.find((c) => !isPlace(c.id))?.id ?? null;
   view.render();
@@ -994,13 +998,14 @@ function seats() {
 }
 
 /** 판을 처음부터 다시 만든다. */
-export function build() {
+export function build(kept = fresh()) {
   view?.destroy();
-  named = 0;
-  railWidth = freshRailWidth();
+  named = kept.named;
+  railWidth = { ...kept.railWidth };
+  edgeWidth = { ...kept.edgeWidth };
   const half = halfGap();
-  grid = new Soksak(initial(), { gap: half * 2 });
-  focusedId = "terminal";
+  grid = new Soksak(kept.state, { gap: half * 2 });
+  focusedId = kept.focusedId;
   view = new SoksakView(plane, grid, {
     createCard, updateCard,
     // 판은 stage 안쪽으로 이 값만큼 들어와 있다. 호스트만 아는 값이므로 뷰에 전달해야
@@ -1021,6 +1026,7 @@ export function build() {
 
 /** 통로 값을 판과 뷰에 적용한다. */
 export function setGap(half) {
+  if (!grid) return;
   grid.gap = half * 2;
   view.bleed = stagePad();
   // 통로는 stage 의 안쪽 여백이기도 하므로 통로가 바뀌면 판의 크기도 바뀐다. 옵저버를
@@ -1038,14 +1044,17 @@ export const capture = () => ({
   state: grid.toJSON(),
   focusedId,
   railWidth: { ...railWidth },
+  edgeWidth: { ...edgeWidth },
   named,
 });
 
 /** 보관해 둔 상태 한 벌을 판에 적용한다. */
 export function adopt(kept) {
+  if (!grid) return build(kept);
   grid.replace(kept.state);
   focusedId = kept.focusedId;
   railWidth = { ...kept.railWidth };
+  edgeWidth = { ...kept.edgeWidth };
   named = kept.named;
   settle();
 }
@@ -1055,8 +1064,17 @@ export const fresh = () => ({
   state: initial(),
   focusedId: "terminal",
   railWidth: freshRailWidth(),
+  edgeWidth: { left: 190, right: 210 },
   named: 0,
 });
+
+export function clear() {
+  view?.destroy();
+  view = null;
+  grid = null;
+  railPath.setAttribute("d", "");
+  document.getElementById("focusMark").hidden = true;
+}
 
 export { settle, tabsOf, plane };
 export const currentGrid = () => grid;

@@ -21,10 +21,16 @@ void spNativeProbe(void *handle, const char *text, void (*reply)(const char *)) 
     NSDictionary *request = [NSJSONSerialization JSONObjectWithData:
         [[NSString stringWithUTF8String:text] dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil];
     if (![request isKindOfClass:NSDictionary.class]) { probeReply(@{}, nil, @"invalid native request", reply); return; }
-    NSWindow *window = (NSWindow *)handle;
+    NSWindow *window = request[@"window"] ? [NSApp windowWithWindowNumber:[request[@"window"] integerValue]] : (NSWindow *)handle;
+    if (!window) { probeReply(request, nil, @"window not found", reply); return; }
     NSMutableArray *views = [NSMutableArray array];
     probeViews(window.contentView, views);
     NSString *op = request[@"op"];
+    if ([op isEqualToString:@"close"]) {
+        [window performClose:nil];
+        probeReply(request, @YES, nil, reply);
+        return;
+    }
     if ([op isEqualToString:@"position"]) {
         [window setFrameOrigin:NSMakePoint([request[@"x"] doubleValue], [request[@"y"] doubleValue])];
         probeReply(request, @YES, nil, reply);

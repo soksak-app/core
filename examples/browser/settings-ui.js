@@ -13,13 +13,13 @@
 // 받는다.
 import { standIn } from "./compositor.js";
 import { native, overlay } from "./host.js";
+import { active } from "./projects.js";
 import { icon } from "./icons.js";
 import { onAnswer, onGripDrag, showValue } from "./card.js";
-import { knobs, setKnob } from "./compositor.js";
 import { plugins, section } from "./plugins/registry.js";
 import {
-  FONTS, MODES, THEMES, applyTheme, gapSetting, link, linkedId, modeName, set, sets,
-  themeName, value,
+  FONTS, MODES, THEMES, applyTheme, link, set,
+  scopedValue, settingProject, overridden, reset,
 } from "./settings.js";
 
 /* 열려 있는 동안에만 존재한다. 숨겨 두면 표시 여부를 CSS 가 결정하게 되고,
@@ -31,6 +31,11 @@ let body = null;
 
 /** 현재 절. 닫아도 유지하고 다시 열 때 같은 절을 표시한다. */
 let here = "general";
+let scope = "common";
+const value = (key) => scopedValue(key, scope);
+const themeName = () => value("theme");
+const modeName = () => value("mode");
+const gapSetting = () => value("gap");
 
 /** 「이름 + 컨트롤」 한 행을 만든다. */
 function row(label, control) {
@@ -40,6 +45,13 @@ function row(label, control) {
   name.className = "set-row__name";
   name.textContent = label;
   el.append(name, control);
+  const field = control.matches?.("[data-set]") ? control : control.querySelector("[data-set], [data-key]");
+  const key = field?.dataset.set ?? field?.dataset.key?.split(":")[1];
+  if (scope === "project" && key && overridden(key)) {
+    const resetButton = press(`reset:${key}`, "공통값 사용");
+    resetButton.classList.add("set-reset");
+    el.append(resetButton);
+  }
   return el;
 }
 
@@ -177,6 +189,10 @@ function drawGeneral() {
   grid.className = "th-grid";
   for (const t of THEMES) grid.appendChild(swatch(t));
 
+  if (scope === "common") body.append(group("프로젝트", "프로젝트를 여는 방식은 모든 프로젝트에 적용됩니다. 이미 열린 창은 유지됩니다.", [
+    row("열기 방식", segment("projectOpening", [["tabs", "현재 창"], ["windows", "별도 창"]], value("projectOpening"))),
+  ]));
+  if (scope === "project" && overridden("theme")) grid.append(press("reset:theme", "공통 테마 사용"));
   body.append(group("테마", "테마가 색과 형태의 기본값을 정하고, 모드는 그 테마의 밝은 쪽과 어두운 쪽을 고른다.", [
     grid,
     row("모드", segment("mode", MODES.map((m) => [m, m === "dark" ? "어두움" : "밝음"]), modeName())),
@@ -205,20 +221,22 @@ function drawGeneral() {
 }
 
 function drawSidebars() {
-  const options = [["", "없음"], ...sets().map((s) => [s.id,
+  const options = [["", "없음"], ...value("sets").map((s) => [s.id,
     `${s.title} — ${s.sections.map((id) => section(id).name).join(" · ")}`])];
+  const linkedId = (place, plugin) => value("links").find((l) => l.place === place && l.plugin === plugin)?.set;
   const rows = [row("좌측", choose("link:left:", options, linkedId("left", null) ?? ""))];
   for (const p of plugins()) {
     rows.push(row(`${p.name} 레일`, choose(`link:rail:${p.id}`, options, linkedId("rail", p.id) ?? "")));
     rows.push(row(`${p.name} 우측`, choose(`link:right:${p.id}`, options, linkedId("right", p.id) ?? "")));
   }
+  if (scope === "project" && overridden("links")) rows.push(row("", press("reset:links", "공통 연결 사용")));
   body.append(group("연결", "자리마다 세트를 건다. 걸지 않으면 그 사이드바는 없다.", rows));
 }
 
 function drawCompositing() {
   body.append(group("어긋남", "커밋 지연은 V7a 를, 적용 오차는 V7b 를 뒤집는다. 실제 앱의 어긋남을 여기서 만들어 본다.", [
-    row("커밋 지연", slide("knob:latency", 0, 600, knobs.latency, "ms")),
-    row("적용 오차", slide("knob:skew", 0, 24, knobs.skew, "px")),
+    row("커밋 지연", slide("latency", 0, 600, value("latency"), "ms")),
+    row("적용 오차", slide("skew", 0, 24, value("skew"), "px")),
     row("", press("press:build", "초기 배치로")),
   ]));
 }
@@ -269,7 +287,9 @@ export function onCommand(fn) {
 /** 카드를 다시 그리고, 열려 있으면 호스트 뷰의 내용도 갱신한다. */
 export function drawSettings() {
   if (!card) return;
+  if (!settingProject()) scope = "common";
   nav.textContent = "";
+  nav.append(segment("scope", [["common", "공통"], ...(settingProject() ? [["project", "프로젝트 폴더"]] : [])], scope));
   for (const [id, name] of SECTIONS) {
     const b = document.createElement("button");
     b.className = "set-nav";
@@ -280,6 +300,12 @@ export function drawSettings() {
     nav.appendChild(b);
   }
   body.textContent = "";
+  if (scope === "project") {
+    const folder = document.createElement("p");
+    folder.className = "set-caption";
+    folder.textContent = active()?.root ?? "";
+    body.append(folder);
+  }
   SECTIONS.find(([id]) => id === here)[2]();
   overlay.update(card);
   // 내용이 바뀌면 카드의 크기도 바뀐다. 자리를 다시 알리지 않으면 뷰는 이전 크기를
@@ -296,23 +322,24 @@ export function drawSettings() {
  * 거기 등록한 리스너가 동작하지 않는다.
  */
 function answer(key, val) {
+  if (key === "scope") { scope = val; return drawSettings(); }
   if (key === "close") return closeSettings();
   if (key === "move") return moveBy(...val.split(",").map(Number));
   const [kind, a, b] = key.split(":");
   if (kind === "nav") { here = a; return drawSettings(); }
   // seg 의 버튼은 값을 key 에 담아 전달한다. 아래의 설정 이름 처리로 넘긴다.
   if (kind === "pick") return answer(a, b);
-  if (kind === "theme") return applyTheme(a, modeName());
+  if (kind === "reset") return reset(a);
+  if (kind === "theme") return applyTheme(a, modeName(), scope);
   if (kind === "press") return commanded(a);
-  if (kind === "link") return link(a, b || null, val || null);
+  if (kind === "link") return link(a, b || null, val || null, scope);
   // 손잡이는 다음 렌더에 반영된다. 알리지 않으면 바꾼 값이 화면에도, 검증 결과에도
   // 나타나지 않는다.
-  if (kind === "knob") return setKnob(a, Number(val));
   // 나머지 key 는 설정 이름이다. 컨트롤이 문자열을 주므로 현재 값의 타입으로
   // 변환 방식을 결정한다.
   const now = value(key);
   set({ [key]: typeof now === "boolean" ? val === "true"
-    : typeof now === "number" ? Number(val) : val });
+    : typeof now === "number" ? Number(val) : val }, scope);
 }
 
 /** 카드의 위치와 크기를 판 기준으로 측정해 반환한다. 호스트가 이 좌표로 뷰를 배치한다. */

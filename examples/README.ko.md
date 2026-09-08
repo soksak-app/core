@@ -16,8 +16,11 @@ make wails
 make tauri
 ```
 
+최초 실행 시 프로젝트 + 버튼으로 존재하는 폴더를 추가한다. 기본 설정에서는 프로젝트를 별도 OS 창으로 연다. 공통 설정은 앱 설정 디렉터리에, 폴더 재정의는 프로젝트 내부의 `.soksak/settings.json`에 저장한다.
+
 설정은 `data-native-modal="dialog"`, 추가·분할 선택 메뉴는 `data-native-modal="menu"`를 사용한다. 네이티브 호스트는 기존 DOM 요소를 메인 OS 창 내부의 웹뷰로 렌더링한다.
 
+- [프로젝트·설정·창](../docs/spec/projects.ko.md)
 - [예제 모델](../docs/spec/example-model.ko.md)
 - [네이티브 호스트 인터페이스](../docs/spec/native-host.ko.md)
 - [data-native-modal 사용과 동작](../docs/spec/native-modals.ko.md)

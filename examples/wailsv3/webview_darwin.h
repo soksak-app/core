@@ -11,3 +11,5 @@ void nativeWebviewHidden(void *view, bool hidden);
 void nativeWebviewBackground(void *view, bool enabled);
 void nativeWebviewEval(void *view, const char *script);
 void nativeWebviewClose(void *view);
+
+void nativeWindowLayoutBegin(void *window, uint64_t ticket, uintptr_t callback);

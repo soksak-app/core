@@ -57,7 +57,7 @@ func shell() string {
 // Open starts a shell for id and reports whether it started one. A shell that is
 // already running is left alone and false is returned, so the caller does not
 // attach a second reader to the same output.
-func (s *Shells) Open(id string) (bool, error) {
+func (s *Shells) Open(id, root string) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, live := s.running[id]; live {
@@ -65,10 +65,7 @@ func (s *Shells) Open(id string) (bool, error) {
 	}
 
 	cmd := exec.Command(shell())
-	// Started in the user's home directory, not the app's working directory.
-	if home, err := os.UserHomeDir(); err == nil {
-		cmd.Dir = home
-	}
+	cmd.Dir = root
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return false, err
@@ -131,7 +128,6 @@ func (s *Shells) Write(id string, data string) error {
 //
 // The process is ended with the lock released. Ending it means waiting for it,
 // and a wait while holding the lock would stop the next call to this set.
-//
 func (s *Shells) Close(id string) {
 	s.mu.Lock()
 	live, ok := s.running[id]
@@ -146,4 +142,16 @@ func (s *Shells) Close(id string) {
 	_ = live.stdin.Close()
 	_ = live.cmd.Process.Kill()
 	_ = live.cmd.Wait()
+}
+
+func (s *Shells) CloseAll() {
+	s.mu.Lock()
+	ids := make([]string, 0, len(s.running))
+	for id := range s.running {
+		ids = append(ids, id)
+	}
+	s.mu.Unlock()
+	for _, id := range ids {
+		s.Close(id)
+	}
 }

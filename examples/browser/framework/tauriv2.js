@@ -7,6 +7,9 @@
 export const present = () => Boolean(window.__TAURI__);
 
 const COMMAND = {
+  workspace: "workspace",
+  projectFolder: "project_folder", projectOpen: "project_open", projectRelease: "project_release",
+  windowState: "window_state", windowReady: "window_ready", windowClose: "window_close",
   syncSurfaces: "sync_surfaces",
   presentSurfaces: "present_surfaces",
   setTheme: "set_theme",
@@ -22,6 +25,9 @@ const COMMAND = {
 
 // 커맨드마다 인자의 이름이 다르다. 이름은 Rust 쪽 서명이 정한다.
 const ARG = {
+  workspace: (request) => ({ request }),
+  projectFolder: (root) => ({ root }), projectOpen: (request) => ({ request }), projectRelease: (id) => ({ id }),
+  windowState: () => ({}), windowReady: () => ({}), windowClose: () => ({}),
   syncSurfaces: (v) => ({ request: v }),
   presentSurfaces: (v) => ({ request: v }),
   setTheme: (v) => ({ theme: v }),
@@ -37,7 +43,8 @@ const ARG = {
 
 export const host = () => {
   const { invoke } = window.__TAURI__.core;
-  const { listen } = window.__TAURI__.event;
+  const listen = (event, fn) => window.__TAURI__.event.listen(event, fn,
+    { target: { kind: "Webview", label: window.__TAURI__.webview.getCurrentWebview().label } });
   return {
     call(name, arg) {
       const command = COMMAND[name];
@@ -59,7 +66,8 @@ export const host = () => {
 
 export const page = () => {
   const { invoke } = window.__TAURI__.core;
-  const { listen } = window.__TAURI__.event;
+  const listen = (event, fn) => window.__TAURI__.event.listen(event, fn,
+    { target: { kind: "Webview", label: window.__TAURI__.webview.getCurrentWebview().label } });
   return {
     theme(fn) {
       invoke("theme").then(fn);

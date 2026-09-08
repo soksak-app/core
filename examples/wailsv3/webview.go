@@ -25,39 +25,51 @@ type nativeWebviewOptions struct {
 
 // Handles and the registry are read and changed on the AppKit main thread.
 type nativeWebview struct {
+	owner  *Surfaces
 	id     uint64
 	handle unsafe.Pointer
 }
 
 var nativeViews = map[uint64]*nativeWebview{}
 var nativeSerial uint64
-var nativeService *Surfaces
 
-func connectNativePages(app *application.App, service *Surfaces) {
-	nativeService = service
-	for _, name := range []string{"theme", "shell-output", "modal-content", "modal-position"} {
-		app.Event.On(name, func(event *application.CustomEvent) {
-			payload, err := json.Marshal(map[string]any{"event": event.Name, "data": event.Data})
-			if err != nil {
-				log.Printf("native event: %v", err)
-				return
-			}
-			application.InvokeSync(func() {
-				for _, view := range nativeViews {
-					view.execJS("window.__soksakNative?.receive(" + string(payload) + ")")
-				}
-			})
-		})
+// 창의 이벤트는 그 창의 문서에만 전달한다.
+func (s *Surfaces) emit(name string, data ...any) {
+	s.window.EmitEvent(name, data...)
+	var value any
+	if len(data) == 1 {
+		value = data[0]
+	} else if len(data) > 1 {
+		value = data
 	}
-}
-
-func dropNativeWebviews() {
+	payload, err := json.Marshal(map[string]any{"event": name, "data": value})
+	if err != nil {
+		log.Printf("native event: %v", err)
+		return
+	}
 	application.InvokeSync(func() {
-		cancelSurfaceLayout()
 		for _, view := range nativeViews {
-			view.Close()
+			if view.owner == s {
+				view.execJS("window.__soksakNative?.receive(" + string(payload) + ")")
+			}
 		}
 	})
+}
+
+func (s *Surfaces) close() {
+	application.InvokeSync(func() {
+		cancelSurfaceLayout(s.window.NativeWindow())
+		unwatchMouse(s.monitor)
+		for _, view := range nativeViews {
+			if view.owner == s {
+				view.Close()
+			}
+		}
+		for _, shape := range s.shapes {
+			shape.destroy()
+		}
+	})
+	go s.shells.CloseAll()
 }
 
 type nativeCall struct {
@@ -80,8 +92,7 @@ func nativeArgs(call nativeCall, into ...any) error {
 }
 
 // Extra documents have a narrow host interface, separate from Wails bindings.
-func invokeNative(call nativeCall) (any, error) {
-	s := nativeService
+func invokeNative(s *Surfaces, call nativeCall) (any, error) {
 	var id, key, value string
 	var instance uint64
 	switch call.Method {
@@ -125,12 +136,16 @@ func dispatchNative(viewID uint64, body string) {
 		log.Printf("native message: %v", err)
 		return
 	}
-	var exists bool
-	application.InvokeSync(func() { exists = nativeViews[viewID] != nil })
-	if !exists {
+	var owner *Surfaces
+	application.InvokeSync(func() {
+		if view := nativeViews[viewID]; view != nil {
+			owner = view.owner
+		}
+	})
+	if owner == nil {
 		return
 	}
-	result, err := invokeNative(call)
+	result, err := invokeNative(owner, call)
 	reply := map[string]any{"epoch": call.Epoch, "id": call.ID, "result": result}
 	if err != nil {
 		reply["error"] = err.Error()

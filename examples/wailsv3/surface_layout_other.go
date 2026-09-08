@@ -4,7 +4,7 @@ package main
 
 import "unsafe"
 
-func beginSurfaceLayout(uint64)                            {}
-func commitSurfaceLayout(uint64) bool                      { return true }
-func cancelSurfaceLayout()                                 {}
-func afterSurfacePresentation(unsafe.Pointer, func()) bool { return false }
+func beginSurfaceLayout(_ unsafe.Pointer, _ uint64, ready func(bool)) { ready(true) }
+func commitSurfaceLayout(unsafe.Pointer, uint64) bool                 { return true }
+func cancelSurfaceLayout(unsafe.Pointer)                              {}
+func afterSurfacePresentation(unsafe.Pointer, func()) bool            { return false }

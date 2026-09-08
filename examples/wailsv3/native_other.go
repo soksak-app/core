@@ -17,11 +17,8 @@ func surfaceAlpha(view unsafe.Pointer, alpha float64) {}
 
 func surfaceResizing(view unsafe.Pointer, live bool) {}
 
-func watchMouse(window unsafe.Pointer) {}
-
-var pressed func(view uintptr) bool
-
-var pointed func(phase int, x float64, y float64)
+func watchMouse(window unsafe.Pointer, owner *Surfaces) uintptr { return 0 }
+func unwatchMouse(uintptr)                                      {}
 
 // nativeShape is a rectangle drawn above the surfaces. Not written for this
 // platform.
@@ -37,6 +34,8 @@ func (v *nativeShape) destroy()                                                 
 // windowControls reports the area the window's own buttons occupy. Not written
 // for this platform; an empty rect means the window draws none.
 func windowControls(window unsafe.Pointer) Rect { return Rect{} }
+
+func windowPlaceControls(unsafe.Pointer, float64, float64) {}
 
 // modalAligned snaps a modal's rect to the display's pixels. Not written for this
 // platform.

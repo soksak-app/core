@@ -4,10 +4,6 @@ import test from "node:test";
 
 import { APPS, ask, nativeProbe } from "./app.mjs";
 
-const CLICK = 'button.act[title="설정"];2000;.set-nav[data-key="nav:compositing"];3000';
-
-const WAITED = "observe: waited 3000ms";
-
 const renders = (log, id) =>
   log.split("\n").filter((line) => line.endsWith(`observe: modal rendered ${id}`)).length;
 
@@ -48,20 +44,28 @@ async function background(binary, state, enabled) {
   }
 }
 
+async function until(read, accept, message) {
+  const end = Date.now()+10000;
+  let value;
+  do {
+    value = await read();
+    if (accept(value)) return value;
+    await new Promise(resolve=>setTimeout(resolve,20));
+  } while (Date.now()<end);
+  assert.fail(`${message}: ${JSON.stringify(value)}`);
+}
+
+async function openCompositing(binary) {
+  const log = await ask(binary, 'click button.act[title="설정"]', text=>renders(text,'settings')>=1);
+  if (!log) return null;
+  await evaluate(binary,'overlay.html', `document.querySelector('[data-key="nav:compositing"]').click(); null`);
+  await until(()=>evaluate(binary,'overlay.html',`Boolean(document.querySelector('[data-key="press:build"]'))`),Boolean,'settings content did not update');
+  return true;
+}
+
 for (const [name, binary] of Object.entries(APPS)) {
   test(`${name}: an open modal's document receives the content the page updates`, async (t) => {
-    const log = await ask(
-      binary,
-      `click ${CLICK}`,
-      (text) => renders(text, "settings") >= 2 || text.includes(WAITED),
-      { timeout: 30_000 },
-    );
-    if (!log) return t.skip(`${binary} is not built`);
-    assert.ok(
-      renders(log, "settings") >= 2,
-      `${name}: the settings modal's document rendered once and never again, so the ` +
-        `update the page sent never reached it:\n${log}`,
-    );
+    if (!await openCompositing(binary)) return t.skip(`${binary} is not built`);
     assert.equal(await evaluate(binary, "overlay.html", 'getComputedStyle(document.documentElement).filter'),
       "none", "settings navigation must not copy the background blur into the dialog");
     assert.equal(await evaluate(binary, "overlay.html", 'getComputedStyle(document.body).backgroundColor'),
@@ -69,15 +73,15 @@ for (const [name, binary] of Object.entries(APPS)) {
   });
 
   test(`${name}: rebuilding the layout from settings keeps settings above new surfaces`, async (t) => {
-    const opened = await ask(binary, `click ${CLICK}`,
-      (text) => renders(text, "settings") >= 2);
-    if (!opened) return t.skip(`${binary} is not built`);
+    if (!await openCompositing(binary)) return t.skip(`${binary} is not built`);
     const before = await nativeState(binary);
     settingsAboveSurfaces(before);
     await ask(binary, ['transcript on', 'click .set-press[data-key="press:build"]'],
-      (text) => renders(text, "settings") >= 1 && text.includes("host overlayPlace"),
+      (text) => renders(text, "settings") >= 1 && /host presentSurfaces .*"settled":true.* ->/.test(text),
       { from: false });
-    const after = await nativeState(binary);
+    const old = new Set(before.views.filter(v=>v.url.includes("terminal.html")).map(v=>v.url));
+    const after = await until(()=>nativeState(binary), state=>state.views.some(v=>!v.hidden&&v.url.includes("terminal.html")&&!old.has(v.url)),
+      "the layout rebuild did not display new native surfaces");
     assert.notDeepEqual(after.views.filter((v) => v.url.includes("terminal.html")).map((v) => v.url),
       before.views.filter((v) => v.url.includes("terminal.html")).map((v) => v.url),
       "the layout rebuild must create new native surfaces");

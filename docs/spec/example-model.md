@@ -11,7 +11,7 @@ The example application owns projects, spaces, and tabs. The layout library owns
 | Card | Layout slots, optional pixel size, and tabs |
 | Tab | Plugin and title |
 
-Opening an existing project root activates that project. Switching spaces saves the current application state and restores the selected space through `Soksak.replace()`.
+The [project contract](projects.md) defines directory identity, persistence, settings inheritance, startup selection, and project windows. Switching spaces captures the current application state and restores the selected space through `Soksak.replace()`.
 
 The add and split buttons select a plugin for a new tab. Dropping a tab on a card center adds it to that card; dropping it at a card edge creates adjacent space. Moving the only tab in a card moves the card.
 

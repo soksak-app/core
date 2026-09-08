@@ -19,12 +19,12 @@ func nativeProbeResult(text *C.char) { log.Printf("observe: native %s", C.GoStri
 
 func observeNative(request string) {
 	application.InvokeSync(func() {
-		window, ok := mainWindow()
-		if !ok {
-			return
+		var handle unsafe.Pointer
+		if window, ok := mainWindow(); ok {
+			handle = window.NativeWindow()
 		}
 		text := C.CString(request)
 		defer C.free(unsafe.Pointer(text))
-		C.nativeRunProbe(window.NativeWindow(), text)
+		C.nativeRunProbe(handle, text)
 	})
 }

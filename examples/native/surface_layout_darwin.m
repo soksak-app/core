@@ -7,32 +7,67 @@
 - (void)_doAfterNextPresentationUpdate:(void (^)(void))done;
 @end
 
-static uint64_t preparation;
-static BOOL active;
+@interface SPLayoutRequest : NSObject
+@property(nonatomic, assign) void *owner;
+@property(nonatomic, assign) uint64_t ticket;
+@property(nonatomic, copy) void (^ready)(int);
+@end
+@implementation SPLayoutRequest
+- (void)dealloc { [_ready release]; [super dealloc]; }
+@end
 
-void surfaceLayoutBegin(uint64_t ticket) {
-    NSCAssert(NSThread.isMainThread, @"surface layout requires the UI thread");
-    if (!active) {
+static uint64_t preparation;
+static void *activeOwner;
+static NSMutableArray<SPLayoutRequest *> *waiting;
+
+static void startLayout(SPLayoutRequest *request) {
+    if (!activeOwner) {
         [CATransaction begin];
         [CATransaction setDisableActions:YES];
-        active = YES;
+        activeOwner = request.owner;
     }
-    preparation = ticket;
+    preparation = request.ticket;
+    request.ready(true);
 }
 
-bool surfaceLayoutCommit(uint64_t ticket) {
+static void nextLayout(void) {
+    while (waiting.count && (!activeOwner || waiting.firstObject.owner == activeOwner)) {
+        SPLayoutRequest *request = [waiting.firstObject retain];
+        [waiting removeObjectAtIndex:0];
+        startLayout(request);
+        [request release];
+    }
+}
+
+// CATransaction은 UI 스레드 단위이므로 여러 창의 준비·표시를 직렬화한다.
+void surfaceLayoutBegin(void *owner, uint64_t ticket, void (^ready)(int)) {
     NSCAssert(NSThread.isMainThread, @"surface layout requires the UI thread");
-    if (!active || ticket != preparation) return false;
-    active = NO;
+    SPLayoutRequest *request = [[[SPLayoutRequest alloc] init] autorelease];
+    request.owner = owner;
+    request.ticket = ticket;
+    request.ready = ready;
+    if (!activeOwner || activeOwner == owner) { startLayout(request); return; }
+    if (!waiting) waiting = [[NSMutableArray alloc] init];
+    [waiting addObject:request];
+}
+
+bool surfaceLayoutCommit(void *owner, uint64_t ticket) {
+    NSCAssert(NSThread.isMainThread, @"surface layout requires the UI thread");
+    if (activeOwner != owner || ticket != preparation) return false;
+    activeOwner = NULL;
     [CATransaction commit];
+    nextLayout();
     return true;
 }
 
-void surfaceLayoutCancel(void) {
+void surfaceLayoutCancel(void *owner) {
     NSCAssert(NSThread.isMainThread, @"surface layout requires the UI thread");
-    if (!active) return;
-    active = NO;
-    [CATransaction commit];
+    for (SPLayoutRequest *request in [[waiting copy] autorelease]) {
+        if (request.owner != owner) continue;
+        [waiting removeObjectIdenticalTo:request];
+        request.ready(false);
+    }
+    if (activeOwner == owner) surfaceLayoutCommit(owner, preparation);
 }
 
 static void applicationViews(NSView *parent, WKWebView *main, NSMutableArray<WKWebView *> *views) {

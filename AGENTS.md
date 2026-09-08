@@ -28,6 +28,6 @@
 - Run `make docs-check` for every change and review the documents against the code; structural checks do not verify meaning.
 - Run `make verify` for library changes. Commit generated `dist/` changes together with their source; the final check requires no difference between source output and committed files.
 - For native or example behavior, follow [example verification](docs/operations/examples.md). Build both hosts, then run the affected checks against those binaries.
-- Window tests connect to applications already running with `--observe`. They must not launch applications or activate windows.
+- Window tests connect to applications already running with `--observe --config-dir PATH`, using a disposable configuration directory and project folders. They must not launch applications or independently activate windows. Project-window checks may invoke the application’s project-open command, which creates or focuses windows as specified.
 - A recording must include the full gesture at the requested rate. Missing frames or incomplete input is a failure, not a passing measurement.
 - Record the tested implementation and platform. Do not use an earlier result to validate later code or describe a test pass as a release.

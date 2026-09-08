@@ -127,6 +127,9 @@ export async function nativeProbe(binary, request, from = false) {
 }
 
 async function fresh(binary) {
+  const prepared = await held(() => tell(binary, portOf(binary), ["fixture"],
+    text => /observe: fixture (ready|error)/.test(text), OPENS));
+  if (prepared.includes("observe: fixture error")) throw new Error(prepared);
   const previous = await nativeProbe(binary, { op: "eval", match: "main", script: "performance.timeOrigin" });
   await held(() =>
     tell(binary, portOf(binary), ["reset"], (text) =>

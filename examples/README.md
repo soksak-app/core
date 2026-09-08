@@ -16,8 +16,11 @@ make wails
 make tauri
 ```
 
+On first launch, use the project + button to add an existing folder. Projects open in separate OS windows by default. Common settings are stored in the application configuration directory; folder overrides are stored in `.soksak/settings.json` inside the project.
+
 Settings uses `data-native-modal="dialog"`; add and split pickers use `data-native-modal="menu"`. The native host renders these existing DOM elements in webviews inside the main OS window.
 
+- [Projects, settings, and windows](../docs/spec/projects.md)
 - [Example model](../docs/spec/example-model.md)
 - [Native host interfaces](../docs/spec/native-host.md)
 - [data-native-modal usage and behavior](../docs/spec/native-modals.md)

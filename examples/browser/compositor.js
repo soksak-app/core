@@ -7,6 +7,7 @@
 // 기록하고, 이 모듈은 그 속성을 읽어 측정하고 보고한다.
 import { plugin } from "./plugins/registry.js";
 import { native, surfaces as app } from "./host.js";
+import { value as setting, set as setSetting } from "./settings.js";
 
 const plane = document.getElementById("plane");
 
@@ -35,7 +36,7 @@ export function onRun(fn) {
 let going = false;
 
 /** 사용자가 설정하는 두 값. 커밋을 지연시키고 적용 위치에 오차를 만든다. */
-export const knobs = { latency: 0, skew: 0 };
+export const knobs = { get latency() { return setting("latency"); }, get skew() { return setting("skew"); } };
 
 let seq = 0;
 let latestRecord = null;
@@ -291,7 +292,7 @@ export function onKnobChange(fn) {
 
 /** 손잡이 하나를 바꾸고 알린다. 값은 다음 렌더에서 읽힌다. */
 export function setKnob(name, value) {
-  knobs[name] = value;
+  setSetting({ [name]: value });
   onKnob();
 }
 

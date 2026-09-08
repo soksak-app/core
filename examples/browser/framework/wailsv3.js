@@ -12,7 +12,7 @@
 /** Wails 는 이 애플리케이션의 모든 문서를 이 스킴에서 로드한다. */
 export const present = () => location.protocol === "wails:";
 
-const SERVICE = "main.Surfaces";
+const SERVICE = "main.Host";
 
 /* 런타임 모듈. import 는 한 번만 평가된다. */
 const runtime = () => import("/wails/runtime.js");
@@ -23,9 +23,19 @@ const call = (method, ...args) =>
 
 /** 이벤트 수신. payload 는 `data` 필드에 담긴다. */
 const listen = (event, fn) =>
-  runtime().then((r) => r.Events.On(event, (e) => fn(e.data)));
+  runtime().then(async (r) => {
+    const name = await r.Window.Name();
+    return r.Events.On(event, (e) => { if (e.sender === name) fn(e.data); });
+  });
 
 const METHOD = {
+  workspace: "Workspace",
+  projectFolder: "ProjectFolder",
+  projectOpen: "ProjectOpen",
+  projectRelease: "ProjectRelease",
+  windowState: "WindowState",
+  windowReady: "WindowReady",
+  windowClose: "WindowClose",
   syncSurfaces: "SyncSurfaces",
   presentSurfaces: "PresentSurfaces",
   setTheme: "SetTheme",

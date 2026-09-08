@@ -404,3 +404,15 @@ body{margin:0;background:var(--bg);color:var(--fg);
 .th__card{position:relative;flex:1 1 0;min-width:0;border:1px solid}
 .th__dot{position:absolute;right:3px;bottom:3px;width:6px;height:6px;border-radius:50%}
 .th__name{text-align:center}
+
+#applicationError {
+  padding: 8px 12px;
+  color: var(--no);
+  background: var(--bg);
+  border-bottom: 1px solid var(--no);
+  font: 12px var(--font);
+  user-select: text;
+}
+.set-card__nav > .set-seg { flex-direction: column; margin-bottom: 12px; }
+.set-reset { font-size: 10px; }
+.set-row:has(.set-reset) { flex-wrap: wrap; }

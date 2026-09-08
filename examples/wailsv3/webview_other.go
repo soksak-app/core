@@ -4,12 +4,11 @@ package main
 
 import (
 	"fmt"
-	"github.com/wailsapp/wails/v3/pkg/application"
 	"unsafe"
 )
 
 func prepareNativeWindow(unsafe.Pointer) {}
-func newNativeWebview(*application.WebviewWindow, nativeWebviewOptions) (*nativeWebview, error) {
+func newNativeWebview(*Surfaces, nativeWebviewOptions) (*nativeWebview, error) {
 	return nil, fmt.Errorf("the example's native webviews are not implemented on this platform")
 }
 func (v *nativeWebview) NativeView() unsafe.Pointer                   { return nil }

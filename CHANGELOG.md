@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- Persist common settings in the application configuration directory and explicit project overrides in `.soksak/settings.json`. Removing an override restores inheritance. Project opening mode remains common-only. Native hosts use JSON files; the browser example uses IndexedDB.
+- Identify projects by canonical directory and filesystem identity. Reuse the existing project and window for duplicate opens, including concurrent requests. Save project order, spaces, cards, tabs, sidebar and rail widths, and normal window geometry. Startup opens the first saved project.
+- Open projects in independent OS windows through public framework APIs. Scope surfaces, settings menus, input, themes, and shells to each window. Complete pending saves before closing a ready window or quitting the application. Settings and add/split menus remain native webviews inside their project window.
+- Serialize per-window native presentation on the UI thread. Complete pending presentation before removing a project's surfaces. Apply common or project settings only when their values change. Prepare the Wails main view before restoring saved window dimensions.
+- Rebuild and restart both macOS hosts; pass `make examples-verify` 39/39 with no skips, Go 3/3 and Rust 3/3 storage tests, and `make docs-check`. Verify application quit, final saves, and first-project restoration after process restart. Wails Windows cross-compilation passed; Windows and Linux native execution remain unverified. No private API or framework fork was added, and the layout library is unchanged.
+
 - Add the private native API inventory with a necessity review, exact callers, framework dependencies, and update verification steps. Require it as the first document reviewed after native update failures. Correct the input-monitor comment about mouse-exit delivery. Runtime behavior is unchanged; `make docs-check` passed.
 
 - Window checks wait for the initial terminal document, its theme, and native presentation before recording.

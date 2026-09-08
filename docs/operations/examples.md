@@ -25,8 +25,8 @@ Debug binaries are `examples/wailsv3/bin/wailsv3` and `examples/tauriv2/src-taur
 Start each application once, from separate terminals:
 
 ```sh
-./examples/wailsv3/bin/wailsv3 --observe
-./examples/tauriv2/src-tauri/target/debug/soksak-tauri --observe
+./examples/wailsv3/bin/wailsv3 --observe --config-dir /tmp/soksak-check-wails
+./examples/tauriv2/src-tauri/target/debug/soksak-tauri --observe --config-dir /tmp/soksak-check-tauri
 ```
 
 Keep the display on and both windows available for rendering. Run:
@@ -35,19 +35,26 @@ Keep the display on and both windows available for rendering. Run:
 node --test --test-concurrency=1 examples/test
 ```
 
-The harness connects to Wails on `127.0.0.1:49732` and Tauri on `127.0.0.1:49733`. Port `49731` serializes window checks. Tests never start applications or activate windows. A missing running application fails the check; a missing binary is reported as skipped. A run with skipped host tests does not validate both hosts.
+The harness connects to Wails on `127.0.0.1:49732` and Tauri on `127.0.0.1:49733`. Port `49731` serializes window checks. Tests never start applications or independently activate windows. Project-window checks invoke the application’s project-open command, including its specified creation and focus behavior. A missing running application fails the check; a missing binary is reported as skipped. A run with skipped host tests does not validate both hosts.
 
 `make examples-verify` runs the same checks and the documentation check. Build both applications and restart them before verification. Rebuilding an executable does not replace an already running process.
 
-The harness reloads the main document between runs, waits for the initial terminal document and theme, and confirms presentation of the main and visible application documents before capturing. The host supplies drag steps at 16ms intervals. A driven capture receives its first frame before input starts. After presentation is reported, the harness waits for captured terminal bounds to return to their initial coordinates, then sends `stop`. If the final coordinates are missing for 10 seconds, the check fails and retains the recording. A test rejects an incomplete gesture, an incorrect rate, too few frames, or too few measurable frames.
+Use disposable configuration directories: the harness replaces their registry and common settings and creates a `test-project` folder with test-only overrides. The fixture command requires an explicit `--config-dir`. Project-window checks create additional temporary project folders and exercise the normal file and window APIs.
 
-`outside.test.mjs` requires zero surface pixels outside the card on every measurable frame, two complete round trips, and consistent relative positions of terminal content, its DOM input separator, card chrome, the sidebar, and its rail. It also requires repeated main-layout changes within the external document's measured 700ms task interval; merely executing that task is insufficient. `paint.test.mjs` checks unrendered areas. `footer.test.mjs` requires an actual half-point surface height, measures document geometry and hit testing in the final device pixel, and checks footer pixels throughout a vertical divider drag; this check requires a 2× display. `modal.test.mjs` checks ordering, transparency, background blur and input, dismissal, movement, resizing, and reload cleanup. `controls.test.mjs` reads button geometry after maximization and recording. `hosts.test.mjs` compares final requests and displayed geometry; preparation identifiers are local to each process.
+The harness resets the test project and reloads the main document between runs, waits for the initial terminal document and theme, and confirms presentation of the main and visible application documents before capturing. The host supplies drag steps at 16ms intervals. A driven capture receives its first frame before input starts. After presentation is reported, the harness waits for captured terminal bounds to return to their initial coordinates, then sends `stop`. If the final coordinates are missing for 10 seconds, the check fails and retains the recording. A test rejects an incomplete gesture, an incorrect rate, too few frames, or too few measurable frames.
+
+`outside.test.mjs` requires zero surface pixels outside the card on every measurable frame, two complete round trips, and consistent relative positions of terminal content, its DOM input separator, card chrome, the sidebar, and its rail. It also requires repeated main-layout changes within the external document's measured 700ms task interval; merely executing that task is insufficient. `paint.test.mjs` checks unrendered areas. `footer.test.mjs` requires an actual half-point surface height, measures document geometry and hit testing in the final device pixel, and checks footer pixels throughout a vertical divider drag; this check requires a 2× display. `modal.test.mjs` checks ordering, transparency, background blur and input, dismissal, movement, resizing, and reload cleanup. `controls.test.mjs` reads button geometry after maximization and recording. `hosts.test.mjs` compares final requests and displayed geometry; preparation identifiers are local to the owning window.
+
+`projects.test.mjs` checks common and folder settings files, override reset, folder aliases, tab/window policy, independent modals, and saved layout and window geometry after native close/reopen. `settings.test.mjs` checks setting precedence and browser storage transactions. Native file-storage unit checks are `go test -C examples/wailsv3 ./...` and `cargo test --locked --manifest-path examples/tauriv2/src-tauri/Cargo.toml`.
 
 Failed pixel checks retain raw BGRA frames and write a PNG for the worst alignment, containment, or paint failure. Raw frames contain three 32-bit values (width, height, row stride), followed by BGRA pixel data. Do not treat a missing or partial recording as a pass.
 
 `geometry.test.mjs` compares native frames, DOM slots, document rectangles, and visual viewports after window resizing and display-scale changes. It uses AppKit hit testing and sends native mouse events to the selected view, waits for pointer-down delivery before release, and checks the resulting DOM coordinates. Display-transition checks require two screens with different scale factors and restore the window position afterward. A skipped display-transition check does not validate that behavior.
 
 ## Manual acceptance
+
+- Add two existing project folders, reorder the projects, close the application, and restart it. Only the first saved project opens. Reopen the other project and confirm its saved layout and settings.
+- Change common settings and add/reset a folder override. Confirm inheritance in both windows, and confirm the opening mode appears only in common settings.
 
 - Open settings over a browser and terminal. Confirm 50% black shading, visible blur, and clear settings content. Background clicks and scrolling must not operate the underlying content.
 - Move settings by its header, resize the main window, and use the window manager. Settings must stay inside the main window. Only × closes settings; background clicks and Escape do not.
@@ -61,7 +68,7 @@ Manual appearance validation confirmed settings blur in both macOS hosts on 2026
 
 `--transcript` logs host requests and replies. `--click '5000,button.act[title="설정"]'` requests a DOM click after the specified delay. `--drive 3000,x,2,-250,0,400,2` requests two round trips. `--capture /tmp/frames` records manual layout updates. These flags require `--observe`.
 
-The native probe's `state` operation reports screen scales and window position. `position` uses AppKit global coordinates; `mouse` uses coordinates from the content area's top-left corner with a `down` or `up` phase. Neither operation activates the application.
+The native probe's `state` operation reports screen scales and window position. The optional `window` field selects an OS window by its reported number; `close` uses its normal close action and save sequence. The observe command `quit` requests normal framework application termination, including pending project saves. `position` uses AppKit global coordinates; `mouse` uses coordinates from the content area's top-left corner with a `down` or `up` phase. Neither operation activates the application.
 
 The standalone overlapping-webview input check uses a temporary native window without activating the application. Run it when changing the shared input code:
 

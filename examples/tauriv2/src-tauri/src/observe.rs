@@ -159,10 +159,23 @@ fn command<R: Runtime>(app: &tauri::AppHandle<R>, line: &str) {
             }
             start_drag(app, plan);
         }
+        "quit" => {
+            say("observe: quit requested");
+            app.exit(0);
+        }
         "stop" => {
             let dir = into().unwrap_or_default();
             wrote();
             say(&format!("observe: wrote {} frames to {dir}", capture::stop()));
+        }
+        "fixture" => {
+            let Some(directory) = flag("config-dir") else { say("observe: fixture error: --config-dir is required for window tests"); return };
+            let root = std::path::Path::new(&directory).join("test-project");
+            if let Err(error) = std::fs::create_dir_all(root.join(".soksak"))
+                .and_then(|_| std::fs::write(root.join(".soksak/settings.json"), "{}\n")) {
+                say(&format!("observe: fixture error: {error}")); return;
+            }
+            let _ = emit_main(&app, "observe-fixture", root.to_string_lossy().into_owned());
         }
         "reset" => {
             // This application outlives the checks and there are several. A
@@ -190,14 +203,14 @@ fn command<R: Runtime>(app: &tauri::AppHandle<R>, line: &str) {
             say("observe: reset");
         }
         "click" => {
-            let _ = app.emit("observe-click", rest.to_string());
+            let _ = emit_main(&app, "observe-click", rest.to_string());
         }
         "native" => {
             #[cfg(target_os = "macos")]
-            if let Some(window) = app.get_window("main") {
+            {
                 let request = rest.to_owned();
-                let held = window.clone();
-                let _ = window.run_on_main_thread(move || {
+                let held = app.clone();
+                let _ = app.run_on_main_thread(move || {
                     extern "C" {
                         fn spNativeProbe(window: *mut std::ffi::c_void, request: *const std::ffi::c_char,
                             reply: extern "C" fn(*const std::ffi::c_char));
@@ -206,7 +219,8 @@ fn command<R: Runtime>(app: &tauri::AppHandle<R>, line: &str) {
                         let text = unsafe { std::ffi::CStr::from_ptr(text) }.to_string_lossy();
                         say(&format!("observe: native {text}"));
                     }
-                    if let (Ok(handle), Ok(text)) = (held.ns_window(), std::ffi::CString::new(request)) {
+                    let handle = held.get_window("main").and_then(|w| w.ns_window().ok()).unwrap_or(std::ptr::null_mut());
+                    if let Ok(text) = std::ffi::CString::new(request) {
                         unsafe { spNativeProbe(handle, text.as_ptr(), reply); }
                     }
                 });
@@ -215,7 +229,7 @@ fn command<R: Runtime>(app: &tauri::AppHandle<R>, line: &str) {
         "transcript" => {
             // There is no way to turn it off. A reset reads the page again and
             // the recording starts over with it.
-            let _ = app.emit("observe-record", ());
+            let _ = emit_main(&app, "observe-record", ());
             say("observe: transcript on");
         }
         "zoom" => {
@@ -339,7 +353,7 @@ fn transcribe<R: Runtime>(app: tauri::AppHandle<R>) {
     if !given("transcript") {
         return;
     }
-    let _ = app.emit("observe-record", ());
+    let _ = emit_main(&app, "observe-record", ());
 }
 
 /// Writes one line naming the windows this app holds.
@@ -422,7 +436,7 @@ fn click<R: Runtime>(app: tauri::AppHandle<R>) {
         // The same wait as --drive: nothing says when the element to press is
         // drawn.
         std::thread::sleep(Duration::from_millis(after));
-        let _ = app.emit("observe-click", selector);
+        let _ = emit_main(&app, "observe-click", selector);
     });
 }
 /// Asks the page to drag one boundary.
@@ -500,7 +514,7 @@ const FRAME: Duration = Duration::from_millis(16);
 /// The number of steps is the number the page takes. That many are sent.
 fn start_drag<R: Runtime>(app: &tauri::AppHandle<R>, plan: Plan) {
     let steps = plan.steps() * 2 * plan.times;
-    let _ = app.emit("observe-drag", &plan);
+    let _ = emit_main(&app, "observe-drag", &plan);
     let app = app.clone();
     std::thread::spawn(move || {
         // Each step is due at its own time from the start, not one frame after
@@ -512,7 +526,7 @@ fn start_drag<R: Runtime>(app: &tauri::AppHandle<R>, plan: Plan) {
             if let Some(left) = due.checked_sub(began.elapsed()) {
                 std::thread::sleep(left);
             }
-            let _ = app.emit("observe-tick", ());
+            let _ = emit_main(&app, "observe-tick", ());
         }
     });
 }
@@ -565,4 +579,8 @@ impl Plan {
             times: number(6)? as usize,
         })
     }
+}
+
+fn emit_main<R: Runtime, S: serde::Serialize + Clone>(app: &tauri::AppHandle<R>, event: &str, payload: S) -> tauri::Result<()> {
+    app.emit_to(tauri::EventTarget::webview("main"), event, payload)
 }

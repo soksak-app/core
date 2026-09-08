@@ -24,6 +24,7 @@ view.render();
 
 - [배치 규칙과 API](docs/spec/layout.ko.md)
 - [예제 애플리케이션](examples/README.ko.md)
+- [프로젝트·설정·창](docs/spec/projects.ko.md)
 - [네이티브 표면 배치](docs/spec/native-surfaces.ko.md)
 - [data-native-modal](docs/spec/native-modals.ko.md)
 - [비공개 네이티브 API와 업데이트 검토](docs/operations/private-native-apis.ko.md)

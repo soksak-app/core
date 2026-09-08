@@ -1,158 +1,197 @@
-// 프로젝트와 스페이스.
-//
-//   프로젝트  루트 하나에 대응한다. 스페이스 목록과 이름과 색을 갖는다
-//     └ 스페이스  판 한 벌. 배치와 포커스를 갖고 탭으로 전환한다
-//
-// 정체성은 root 다. 같은 root 를 다시 열면 새로 만들지 않고 기존 프로젝트를
-// 활성화한다. id 로 판정하면 중복 여부를 알 수 없다.
-//
-// 스페이스가 보관하는 layout 값을 이 모듈은 해석하지 않는다. 판에서 읽어 오고 판에
-// 적용하는 것은 onSwitch 로 등록된 두 함수다.
+// 프로젝트 목록은 공유 저장소에, 활성 프로젝트와 창 소유권은 실행 중인 창에 저장한다.
 import { issueId } from "./ids.js";
+import { selectProject, value, flushSettings } from "./settings.js";
+import { host } from "./framework/index.js";
 
-const projects = [];
+let store;
+let projects = [];
 let activeProjectId = null;
+const owned = new Set();
+let listener;
+let changed = () => {};
+let savedLayout = "";
+let writing = Promise.resolve();
+let refreshing = Promise.resolve();
 
-/* 활성 스페이스 전환 수신자. 판이 여기에 연결된다. */
-let listener = null;
-
-/**
- * 활성 스페이스 전환 직전과 직후에 호출할 함수를 등록한다.
- *
- * `save` 는 현재 판의 배치를 반환하고 `load` 는 그 값을 판에 적용한다. 프로젝트
- * 전환과 스페이스 전환이 같은 동작이므로 경로가 하나다.
- */
-export function onSwitch({ save, load }) {
-  listener = { save, load };
-}
-
-/** 현재 판의 배치를 활성 스페이스에 저장한다. */
-function keep() {
-  const space = activeSpace();
-  if (space && listener) space.layout = listener.save();
-}
-
-/** 활성 스페이스의 배치를 판에 적용한다. */
-function restore() {
-  const space = activeSpace();
-  if (space && listener) listener.load(space.layout);
-}
-
-/** 열린 프로젝트 전부를 반환한다. */
 export const all = () => projects;
-
-/** 활성 프로젝트를 반환한다. 없으면 null. */
 export const active = () => projects.find((p) => p.id === activeProjectId) ?? null;
+export const local = () => projects.filter((p) => owned.has(p.id));
+export function onSwitch(callbacks) { listener = callbacks; }
+export function onChange(fn) { changed = fn; }
 
-/** 활성 스페이스를 반환한다. 활성 프로젝트가 없으면 null. */
-function activeSpace() {
-  const p = active();
-  return p ? p.spaces.find((s) => s.id === p.activeSpaceId) : null;
-}
-
-/** 스페이스 하나를 만든다. 배치는 호출자가 전달한다. */
-function newSpace(n, layout) {
-  return { id: issueId("space"), title: `SPACE${n}`, layout };
-}
-
-/**
- * 해당 루트의 프로젝트를 연다.
- *
- * 이미 열려 있으면 새로 만들지 않고 활성화한다. 루트 하나에 프로젝트 하나다.
- */
-export function open({ root, color, layout }) {
-  const already = projects.find((p) => p.root === root);
-  if (already) {
-    activate(already.id);
-    return already;
+export async function initialise(storage) {
+  store = storage;
+  await refresh();
+  store.onChange(() => { refresh().catch(failed); });
+  if (host) {
+    await host.on("project-activate", (id) => activateHere(id).catch(failed));
+    await host.on("project-close-request", () => closeWindow().catch(failed));
   }
-  keep();
-  const space = newSpace(1, layout);
-  const project = {
-    // 이름은 사람이 정하기 전까지 번호다. 목록의 길이로 세면 하나를 닫은 뒤 다음
-    // 프로젝트가 이미 있는 이름을 받는다.
-    id: issueId("project"), root, title: `PROJECT${++named}`, color,
-    // 이 프로젝트가 지금까지 발급한 스페이스 이름의 수.
-    named: 1,
-    spaces: [space], activeSpaceId: space.id,
-  };
-  projects.push(project);
-  activeProjectId = project.id;
-  restore();
+  const requested = new URL(location.href).searchParams.get("project");
+  const first = requested ? projects.find((p) => p.id === requested) : projects[0];
+  if (first) {
+    try { await activate(first.id); } catch (error) { failed(error); }
+  }
+  if (host) await host.call("windowReady");
+  changed();
+}
+
+function failed(error) { dispatchEvent(new ErrorEvent("error", { message: error.message })); }
+
+function refresh() {
+  refreshing = refreshing.then(readProjects, readProjects);
+  return refreshing;
+}
+
+async function readProjects() {
+  const snapshot = await store.snapshot();
+  const previous = new Map(projects.map((p) => [p.id, p]));
+  projects = snapshot.projects.map((p) => {
+    const old = previous.get(p.id);
+    return owned.has(p.id) && old ? { ...p, spaces: old.spaces, activeSpaceId: old.activeSpaceId, named: old.named } : p;
+  });
+  const removed = [...owned].filter(id => !projects.some(p => p.id === id));
+  for (const id of removed) owned.delete(id);
+  if (activeProjectId && !active()) {
+    activeProjectId = null;
+    savedLayout = "";
+    await selectProject(null);
+    await listener?.empty();
+  } else if (removed.length) listener?.update();
+  changed();
+}
+
+export function keep() {
+  const project = active();
+  if (!project || !listener) return writing;
+  project.spaces.find((s) => s.id === project.activeSpaceId).layout = listener.save();
+  const patch = { spaces: project.spaces, activeSpaceId: project.activeSpaceId, named: project.named };
+  const key = JSON.stringify(patch);
+  if (key === savedLayout) return writing;
+  savedLayout = key;
+  const copy = structuredClone(patch);
+  writing = writing.then(() => store.patch(project.id, copy));
+  return writing;
+}
+
+async function activateHere(id) {
+  if (id === activeProjectId) { await selectProject(id); return; }
+  await keep();
+  await refresh();
+  const project = projects.find((p) => p.id === id);
+  if (!project) throw new Error(`Unknown project: ${id}`);
+  await selectProject(id);
+  owned.add(id);
+  activeProjectId = id;
+  savedLayout = "";
+  listener.load(project.spaces.find((s) => s.id === project.activeSpaceId).layout);
+  changed();
+}
+
+export async function activate(id) {
+  const project = projects.find((p) => p.id === id);
+  if (!project) throw new Error(`Unknown project: ${id}`);
+  await keep();
+  await saveGeometry();
+  if (host) {
+    const folder = await host.call("projectFolder", project.root);
+    if (folder.identity !== project.identity) throw new Error(`Project directory has changed: ${project.root}`);
+    const result = await host.call("projectOpen", { id, root: project.root, title: project.title,
+      separate: value("projectOpening") === "windows", geometry: project.geometry ?? null });
+    if (!result.local) return;
+  } else if (active() && !owned.has(id) && value("projectOpening") === "windows") {
+    const target = new URL(location.href); target.searchParams.set("project", id);
+    const opened = window.open(target, `soksak-${id}`);
+    if (!opened) throw new Error("The browser blocked the project window");
+    return;
+  }
+  await activateHere(id);
+}
+
+export async function open({ root, color, layout }) {
+  const folder = host ? await host.call("projectFolder", root) : { root: root.trim(), identity: `browser:${root.trim()}` };
+  const space = { id: issueId("space"), title: "SPACE1", layout };
+  const project = await store.add({
+    id: issueId("project"), ...folder, title: folder.root.split(/[\\/]/).filter(Boolean).at(-1), color,
+    named: 1, spaces: [space], activeSpaceId: space.id, settings: {},
+  });
+  await refresh();
+  await activate(project.id);
   return project;
 }
 
-/** 활성 프로젝트를 전환한다. 스페이스 목록 전체가 교체된다. */
-export function activate(id) {
-  if (id === activeProjectId) return;
-  const found = projects.find((p) => p.id === id);
-  if (!found) throw new Error(`unknown project: ${id}`);
+export async function close(id) {
+  if (id === activeProjectId) await keep();
+  if (host) await host.call("projectRelease", id);
+  owned.delete(id);
+  await store.remove(id);
+  await refresh();
+  if (active()) listener.update();
+  if (!active()) {
+    const next = local()[0];
+    if (next) await activate(next.id);
+  }
+}
+
+export const rename = (id, title) => store.patch(id, { title });
+export const move = (id, delta) => store.move(id, delta);
+
+function restore() {
+  const p = active();
+  listener.load(p.spaces.find((s) => s.id === p.activeSpaceId).layout);
+  changed();
   keep();
-  activeProjectId = id;
-  restore();
 }
 
-/** 프로젝트를 닫는다. 마지막 하나는 닫지 않는다. */
-export function close(id) {
-  if (projects.length === 1) return;
-  const at = projects.findIndex((p) => p.id === id);
-  if (at < 0) throw new Error(`unknown project: ${id}`);
-  const wasActive = id === activeProjectId;
-  if (wasActive) keep();
-  projects.splice(at, 1);
-  if (!wasActive) return;
-  activeProjectId = projects[Math.min(at, projects.length - 1)].id;
-  restore();
-}
-
-/** 이름을 변경한다. root 는 정체성이므로 변경하지 않는다. */
-export function rename(id, title) {
-  const found = projects.find((p) => p.id === id);
-  if (!found) throw new Error(`unknown project: ${id}`);
-  found.title = title;
-}
-
-/* 지금까지 발급한 이름의 수. 목록의 길이가 아니라 이 값이 다음 번호를 정한다. */
-let named = 0;
-
-/** 활성 프로젝트에 스페이스를 추가하고 활성화한다. */
 export function addSpace(layout) {
   const project = active();
   keep();
-  const space = newSpace(++project.named, layout);
+  const space = { id: issueId("space"), title: `SPACE${++project.named}`, layout };
   project.spaces.push(space);
   project.activeSpaceId = space.id;
   restore();
   return space;
 }
 
-/** 활성 스페이스를 전환한다. 판의 배치 전체가 교체된다. */
 export function activateSpace(id) {
   const project = active();
   if (id === project.activeSpaceId) return;
-  if (!project.spaces.some((s) => s.id === id)) throw new Error(`unknown space: ${id}`);
+  if (!project.spaces.some((s) => s.id === id)) throw new Error(`Unknown space: ${id}`);
   keep();
   project.activeSpaceId = id;
   restore();
 }
 
-/** 스페이스를 닫는다. 마지막 하나는 닫지 않는다. */
 export function closeSpace(id) {
   const project = active();
   if (project.spaces.length === 1) return;
   const at = project.spaces.findIndex((s) => s.id === id);
-  if (at < 0) throw new Error(`unknown space: ${id}`);
-  const wasActive = id === project.activeSpaceId;
-  if (wasActive) keep();
+  if (at < 0) throw new Error(`Unknown space: ${id}`);
+  keep();
   project.spaces.splice(at, 1);
-  if (!wasActive) return;
-  project.activeSpaceId = project.spaces[Math.min(at, project.spaces.length - 1)].id;
+  if (id === project.activeSpaceId) project.activeSpaceId = project.spaces[Math.min(at, project.spaces.length - 1)].id;
   restore();
 }
 
-/** 스페이스의 이름을 변경한다. */
 export function renameSpace(id, title) {
-  const space = active().spaces.find((s) => s.id === id);
-  if (!space) throw new Error(`unknown space: ${id}`);
-  space.title = title;
+  active().spaces.find((s) => s.id === id).title = title;
+  keep();
+}
+
+export async function saveGeometry() {
+  const id = activeProjectId;
+  if (!id || !host) return;
+  const geometry = await host.call("windowState");
+  if (geometry) await store.patch(id, { geometry });
+}
+
+export async function flush() {
+  await keep();
+  await flushSettings();
+  await saveGeometry();
+}
+
+async function closeWindow() {
+  await flush();
+  await host.call("windowClose");
 }

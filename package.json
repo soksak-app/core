@@ -64,6 +64,7 @@
   },
   "homepage": "https://github.com/min-median-max/soksak#readme",
   "devDependencies": {
+    "fake-indexeddb": "^6.2.5",
     "jsdom": "^30.0.1",
     "typescript": "7.0.2"
   },

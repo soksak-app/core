@@ -152,3 +152,8 @@ void nativeWebviewClose(void *handle) {
     [view removeFromSuperview];
     [view release];
 }
+
+extern void nativeLayoutReady(uintptr_t callback, bool allowed);
+void nativeWindowLayoutBegin(void *window, uint64_t ticket, uintptr_t callback) {
+    surfaceLayoutBegin(window, ticket, ^(int allowed) { nativeLayoutReady(callback, allowed); });
+}

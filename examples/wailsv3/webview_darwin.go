@@ -25,20 +25,20 @@ func nativeMessage(identifier C.ulonglong, message *C.char) {
 
 func prepareNativeWindow(window unsafe.Pointer) { C.nativeWindowPrepare(window) }
 
-func newNativeWebview(window *application.WebviewWindow, options nativeWebviewOptions) (*nativeWebview, error) {
+func newNativeWebview(owner *Surfaces, options nativeWebviewOptions) (*nativeWebview, error) {
 	var view *nativeWebview
 	application.InvokeSync(func() {
 		nativeSerial++
 		bootstrap := C.CString(webviewBootstrap + "\n" + backgroundScript)
 		defer C.free(unsafe.Pointer(bootstrap))
-		handle := C.nativeWebviewCreate(window.NativeWindow(), C.ulonglong(nativeSerial), bootstrap,
+		handle := C.nativeWebviewCreate(owner.window.NativeWindow(), C.ulonglong(nativeSerial), bootstrap,
 			C.double(options.X), C.double(options.Y), C.double(options.Width), C.double(options.Height),
 			C.bool(options.Hidden), C.bool(options.Transparent),
 			C.bool(options.FillParent))
 		if handle == nil {
 			return
 		}
-		view = &nativeWebview{id: nativeSerial, handle: handle}
+		view = &nativeWebview{id: nativeSerial, handle: handle, owner: owner}
 		nativeViews[view.id] = view
 	})
 	if view == nil {

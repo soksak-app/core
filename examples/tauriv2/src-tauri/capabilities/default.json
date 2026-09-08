@@ -3,12 +3,14 @@
   "identifier": "default",
   "description": "Lets the main webview, the modal webviews and the surface webviews call the app's own commands.",
   "windows": [
-    "main"
+    "main",
+    "project-*"
   ],
   "webviews": [
     "main",
     "modal-*",
-    "surface-*"
+    "surface-*",
+    "project-*"
   ],
   "permissions": [
     "core:default",
