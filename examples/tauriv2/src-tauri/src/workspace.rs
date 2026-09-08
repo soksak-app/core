@@ -54,7 +54,6 @@ impl Workspace {
                     let path = Path::new(project["root"].as_str().ok_or("invalid project root")?).join(".soksak/settings.json");
                     let settings: Map<String, Value> = read(&path)?;
                     if settings.contains_key("projectOpening") { return Err(format!("{}: projectOpening is common-only", path.display())); }
-                    project["repository"] = Path::new(project["root"].as_str().unwrap()).join(".git").exists().into();
                     project["settings"] = settings.into();
                 }
                 return Ok(json!({"projects":projects, "common":common}));

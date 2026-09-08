@@ -1,8 +1,7 @@
-// 라이브러리 시작, 기존 OS 창 재사용, 폴더 생성·복제와 작업 화면 복원을 검사한다.
+// 라이브러리 시작, 기존 OS 창 재사용, 폴더 생성과 작업 화면 복원을 검사한다.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync, mkdirSync, rmSync, existsSync, realpathSync, writeFileSync} from 'node:fs';
-import {execFileSync} from 'node:child_process';
+import {mkdtempSync, rmSync, existsSync, realpathSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {APPS,nativeProbe} from './app.mjs';
@@ -21,11 +20,6 @@ async function run(binary,window,script) {
 for(const [name,binary]of Object.entries(APPS))test(`${name}: library windows create and open projects in place`,async t=>{
  const initial=await nativeProbe(binary,{op:'state'},true);if(!initial)return t.skip('host binary is not built');
  const main=initial.window, temporary=realpathSync(mkdtempSync(join(tmpdir(),'soksak-library-')));
- const repository=join(temporary,'repository');mkdirSync(repository);
- execFileSync('git',['init','--quiet',repository]);
- writeFileSync(join(repository,'readme.txt'),'local clone verification');
- execFileSync('git',['-C',repository,'add','.']);
- execFileSync('git',['-C',repository,'-c','user.name=Test','-c','user.email=test@example.invalid','commit','--quiet','-m','Initial file']);
  const state=()=>nativeProbe(binary,{op:'state',window:main});
  t.after(async()=>{
   for(const window of (await state()).windows)if(window.number!==main)await nativeProbe(binary,{op:'close',window:window.number});
@@ -39,8 +33,19 @@ for(const [name,binary]of Object.entries(APPS))test(`${name}: library windows cr
  assert.equal(await evaluate(binary,main,'document.body.dataset.screen'),'library');
  assert.equal((await state()).views.some(v=>!v.hidden&&v.url.includes('terminal.html')),false);
  assert.equal(await evaluate(binary,main,'document.querySelectorAll(".library-project").length'),1);
- const preview=await evaluate(binary,main,`[...document.querySelectorAll('.library-preview__pane')].map(r=>({id:r.dataset.cardId,x:+r.getAttribute('x'),y:+r.getAttribute('y'),w:+r.getAttribute('width'),h:+r.getAttribute('height')}))`);
- assert.deepEqual(preview,geometry,'preview must use the rectangles displayed by the workspace renderer');
+ const preview=await evaluate(binary,main,`[...document.querySelectorAll('.library-preview__pane')].map(c=>{const r=c.getBoundingClientRect();return {id:c.dataset.cardId,x:r.x,y:r.y,w:r.width,h:r.height};})`);
+ assert.deepEqual(preview.map(c=>c.id).sort(),geometry.map(c=>c.id).sort(),'preview must include the workspace cards');
+ for(const a of geometry)for(const b of geometry) {
+  const pa=preview.find(c=>c.id===a.id),pb=preview.find(c=>c.id===b.id);
+  if(a.x+a.w<=b.x)assert.ok(pa.x+pa.w<pb.x,`${a.id} must remain left of ${b.id}`);
+  if(a.y+a.h<=b.y)assert.ok(pa.y+pa.h<pb.y,`${a.id} must remain above ${b.id}`);
+ }
+ const [left,rail,terminal,browser,right]=['left','rail-terminal','terminal','browser','right'].map(id=>preview.find(c=>c.id===id));
+ assert.ok(Math.abs(left.w-right.w)<=1/64,'sidebar widths must be uniform');
+ assert.ok(Math.abs(terminal.h-browser.h)<=1/64,'split rows must have equal heights');
+ const gaps=[rail.x-left.x-left.w,terminal.x-rail.x-rail.w,right.x-terminal.x-terminal.w,browser.y-terminal.y-terminal.h];
+ assert.ok(gaps.every(gap=>gap>0&&Math.abs(gap-gaps[0])<=1/64),'pane gaps must be uniform on both axes');
+ assert.equal(await run(binary,main,`const p=(await import('./projects.js')).active();return 'preview' in p.spaces.find(s=>s.id===p.activeSpaceId).layout;`),false,'screen state must not store renderer coordinates for previews');
  await run(binary,main,`await(await import('./projects.js')).newWindow();`);
  const two=await until(state,s=>s.windows.length===2,'new OS window was not created');
  let child=two.windows.find(w=>w.number!==main).number;
@@ -57,7 +62,7 @@ for(const [name,binary]of Object.entries(APPS))test(`${name}: library windows cr
  await evaluate(binary,child,`document.querySelector('button[title="프로젝트 목록"]').click();null`);
  await until(()=>evaluate(binary,child,'document.body.dataset.screen'),s=>s==='library','project list button did not open the library');
  assert.equal(await evaluate(binary,child,'document.body.dataset.screen'),'library');
- await until(()=>evaluate(binary,child,`document.querySelector('[data-filter="open"] span').textContent`),s=>s==='2','open project count is not actual');
+ await until(()=>evaluate(binary,child,`document.querySelector('.library-count').textContent`),s=>s==='프로젝트 2 · 열림 2','open project count is not actual');
  await evaluate(binary,child,`document.querySelector('[data-project-id="${created.id}"] .library-project__pin').click();null`);
  await until(()=>run(binary,child,`return(await import('./projects.js')).all().find(p=>p.id==='${created.id}').pinned;`),Boolean,'pin was not saved');
  await evaluate(binary,child,`const q=document.querySelector('input[type="search"]');q.value='created';q.dispatchEvent(new Event('input'));null`);
@@ -83,19 +88,11 @@ for(const [name,binary]of Object.entries(APPS))test(`${name}: library windows cr
  assert.equal(await run(binary,third,`return(await import('./projects.js')).active();`),null);
  await run(binary,third,`const h=(await import('./framework/index.js')).host;
   for(const name of ['../escape','created']) {
-   try { await h.call('projectCreate',{parent:${JSON.stringify(temporary)},name,repository:''}); throw new Error('invalid creation succeeded'); }
+   try { await h.call('projectCreate',{parent:${JSON.stringify(temporary)},name}); throw new Error('invalid creation succeeded'); }
    catch(error) { if(error.message==='invalid creation succeeded') throw error; }
   }
-  try { await h.call('projectCreate',{parent:${JSON.stringify(temporary)},name:'failed-clone',repository:${JSON.stringify(join(temporary,'missing-repo'))}}); throw new Error('invalid clone succeeded'); }
-  catch(error) { if(error.message==='invalid clone succeeded') throw error; }
  `);
  assert.equal(existsSync(join(temporary,'created')),true);
- assert.equal(existsSync(join(temporary,'failed-clone')),false);
  assert.equal(await evaluate(binary,third,'document.body.dataset.screen'),'library');
- await evaluate(binary,third,`document.querySelector('[data-action="clone"]').click();document.querySelector('[name="repository"]').value=${JSON.stringify(repository)};document.querySelector('[name="name"]').value='cloned';document.querySelector('[name="parent"]').value=${JSON.stringify(temporary)};document.querySelector('.library-fields').requestSubmit();null`);
- await until(()=>evaluate(binary,third,'document.body.dataset.screen'),s=>s==='workspace','clone did not reuse the library window');
- assert.equal(existsSync(join(temporary,'cloned','readme.txt')),true);
- assert.equal((await state()).windows.length,3);
- assert.equal(await evaluate(binary,third,'document.querySelector(".library-error").hidden'),true);
- t.diagnostic('same OS window reused for creation, saved projects and clone; Dock menu creates an unassigned library window');
+ t.diagnostic('same OS window reused for creation and saved projects; Dock menu creates an unassigned library window');
 });

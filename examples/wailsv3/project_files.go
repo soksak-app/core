@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -21,9 +20,8 @@ func (h *Host) FolderChoose(ctx context.Context) (string, error) {
 }
 
 type CreateProject struct {
-	Parent     string `json:"parent"`
-	Name       string `json:"name"`
-	Repository string `json:"repository"`
+	Parent string `json:"parent"`
+	Name   string `json:"name"`
 }
 
 func (h *Host) ProjectCreate(req CreateProject) (ProjectFolder, error) {
@@ -38,15 +36,6 @@ func (h *Host) ProjectCreate(req CreateProject) (ProjectFolder, error) {
 	destination := filepath.Join(parent.Root, name)
 	if err := os.Mkdir(destination, 0755); err != nil {
 		return ProjectFolder{}, err
-	}
-	if req.Repository != "" {
-		cmd := exec.Command("git", "clone", "--", req.Repository, destination)
-		cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
-		if output, err := cmd.CombinedOutput(); err != nil {
-			// 비어 있는 생성 폴더만 제거한다. 파일이 있는 폴더는 유지한다.
-			_ = os.Remove(destination)
-			return ProjectFolder{}, fmt.Errorf("git clone failed: %w: %s", err, strings.TrimSpace(string(output)))
-		}
 	}
 	return h.ProjectFolder(destination)
 }

@@ -3,19 +3,10 @@
 #library[hidden],body[data-screen=workspace] #library,body[data-screen=library] #shell,
 body[data-screen=library] #projectBar,body[data-screen=library] #chromeActs .act[title="좌측 자리"],
 body[data-screen=library] #chromeActs .act[title="우측 자리"]{display:none}
-#library{display:grid;grid-template-columns:190px minmax(0,1fr);grid-template-rows:minmax(0,1fr) 22px;flex:1;min-height:0;background:var(--bg);font-size:var(--text-control)}
+#library{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) 22px;flex:1;min-height:0;background:var(--bg);font-size:var(--text-control)}
 #library button{cursor:pointer}
 #library button:disabled{cursor:wait}
-.library-sidebar{display:flex;flex-direction:column;min-height:0;padding:var(--space-3);border-right:var(--bw) solid var(--edge);background:var(--card)}
-.library-label{margin:0 var(--space-2) var(--space-2);color:var(--muted);font-size:var(--text-caption);letter-spacing:var(--section-tracking)}
-.library-sidebar nav{display:grid;gap:var(--space-1)}
-.library-sidebar nav button{text-align:left;border:0;border-radius:var(--r-xs);padding:5px var(--space-2);background:transparent;color:var(--muted)}
-.library-sidebar nav button[aria-pressed=true]{color:var(--fg);background:var(--chip-sel)}
-.library-sidebar nav span{margin-left:var(--space-2);color:var(--muted)}
-.library-sidebar nav [data-filter=open] span{color:var(--surface-fg)}
-.library-sidebar__actions{margin-top:auto;padding-top:var(--space-3);display:grid;gap:var(--space-2)}
-.library-sidebar__actions .ui-button{justify-self:stretch}
-.library-sidebar nav button:hover,.library-add:hover{color:var(--fg);background:var(--chip-hover)}
+.library-add:hover{color:var(--fg);background:var(--chip-hover)}
 .library-main{padding:var(--space-3);overflow:auto;min-width:0}
 .library-heading{display:flex;align-items:center;gap:var(--space-3);min-height:var(--chrome-row-h);margin-bottom:var(--space-3)}
 .library-heading h1{margin:0;font-size:var(--size);font-weight:600}
@@ -27,12 +18,15 @@ body[data-screen=library] #chromeActs .act[title="우측 자리"]{display:none}
 .library-project[data-open=true]{border-color:var(--rail)}
 .library-project:hover{border-color:var(--focus)}
 .library-project__open{display:block;width:100%;height:100%;text-align:left;padding:0;border:0;background:transparent;color:var(--fg)}
-.library-preview{position:relative;height:145px;margin:var(--half-gap);border-radius:var(--r-xs);overflow:hidden;background:var(--bg)}
-.library-preview svg{display:block;width:100%;height:100%}
-.library-preview__pane{fill:color-mix(in srgb,var(--card) 90%,var(--fg));stroke:var(--edge);stroke-width:1}
-.library-preview__pane[data-plugin=terminal]{fill:var(--surface);stroke:var(--surface-fg)}
-.library-preview__pane[data-plugin=browser]{fill:color-mix(in srgb,var(--fg) 94%,var(--card))}
-.library-preview__rail{fill:none;stroke:var(--rail);stroke-width:1}
+.library-preview{display:grid;gap:var(--space-2);height:145px;margin:var(--half-gap);padding:var(--space-4) calc(var(--space-4) * 2);border-radius:var(--r-xs);overflow:hidden;background:var(--bg)}
+.library-preview__pane{--preview-ink:var(--muted);min-width:0;min-height:0;overflow:hidden;padding:var(--space-2);border:var(--bw) solid color-mix(in srgb,var(--preview-ink) 24%,var(--card));border-radius:var(--r-xs);background:color-mix(in srgb,var(--preview-ink) 10%,var(--card));color:color-mix(in srgb,var(--preview-ink) 65%,var(--card))}
+.library-preview__pane[data-plugin=terminal]{--preview-ink:var(--surface-fg)}
+.library-preview__pane[data-plugin=browser]{--preview-ink:var(--rail)}
+.library-preview__mark{display:block;width:14px;height:14px;max-width:100%}
+.library-preview__mark svg{display:block;width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:1.25;stroke-linecap:round;stroke-linejoin:round}
+.library-preview__pane::after{content:"";display:block;width:60%;height:3px;margin-top:var(--space-2);border-radius:var(--r-xs);background:currentColor;box-shadow:0 7px 0 currentColor;opacity:.35}
+.library-preview__pane[data-plugin=sidebar]{padding:var(--space-1)}
+.library-preview__pane[data-plugin=sidebar]::before{content:"";display:block;height:var(--space-1);margin-top:var(--space-1);border-radius:var(--r-xs);background:currentColor;opacity:.45}
 .library-project__text{padding:var(--space-2) var(--space-3);border-top:var(--bw) solid var(--edge)}
 .library-project h2{margin:0 0 var(--space-1);font-size:var(--text-control);font-weight:400;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .library-project__path{font-size:var(--text-small);color:var(--muted);margin:0 0 var(--space-2);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
@@ -49,7 +43,7 @@ body[data-screen=library] #chromeActs .act[title="우측 자리"]{display:none}
 .library-footer button{border:0;background:transparent;color:var(--muted);padding:0 var(--space-1)}
 .library-footer button:last-child{margin-left:auto}
 .library-error{color:var(--no);padding:var(--space-3);border:var(--bw) solid var(--no);border-radius:var(--r-sm);margin-bottom:var(--space-3);white-space:pre-wrap}
-.library-error[hidden],.library-form[hidden],.library-return[hidden],.library-sidebar__actions [hidden]{display:none}
+.library-error[hidden],.library-form[hidden],.library-return[hidden]{display:none}
 .library-form{max-width:560px;border:var(--bw) solid var(--edge);border-radius:var(--r-sm);padding:var(--space-4);margin:0 0 var(--space-3);background:var(--card)}
 .library-form h2{margin:0 0 var(--space-3);font-size:var(--text-control);font-weight:600}
 .library-fields{display:grid;gap:var(--space-3)}
@@ -58,5 +52,5 @@ body[data-screen=library] #chromeActs .act[title="우측 자리"]{display:none}
 .library-form__actions{display:flex;justify-content:flex-end;gap:var(--space-2)}
 .library-primary{background:var(--chip-on);border-color:var(--rail)}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
-@media(max-width:780px){#library{grid-template-columns:160px minmax(0,1fr)}.library-heading{flex-wrap:wrap;gap:var(--space-2)}.library-search{flex:1 1 100%;margin:0}.library-search input{width:100%}.library-sidebar{padding:var(--space-2)}.library-grid{grid-template-columns:repeat(auto-fill,minmax(215px,1fr))}}
+@media(max-width:780px){.library-heading{flex-wrap:wrap;gap:var(--space-2)}.library-search{flex:1 1 100%;margin:0}.library-search input{width:100%}.library-grid{grid-template-columns:repeat(auto-fill,minmax(215px,1fr))}}
 body[data-screen=library] .chrome-bar__acts{margin-left:auto}

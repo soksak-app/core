@@ -1,4 +1,4 @@
-use std::{fs, path::Path, process::Command};
+use std::{fs, path::Path};
 use serde::Deserialize;
 use tauri::{AppHandle, Window};
 use tauri_plugin_dialog::DialogExt;
@@ -12,7 +12,7 @@ pub(crate) fn folder_choose(window: Window) -> Result<Option<String>, String> {
 }
 
 #[derive(Deserialize)]
-pub(crate) struct CreateProject { parent: String, name: String, repository: String }
+pub(crate) struct CreateProject { parent: String, name: String }
 
 #[tauri::command(async)]
 pub(crate) fn project_create(app: AppHandle, request: CreateProject) -> Result<Folder, String> {
@@ -23,19 +23,5 @@ pub(crate) fn project_create(app: AppHandle, request: CreateProject) -> Result<F
     }
     let destination = Path::new(&parent.root).join(name);
     fs::create_dir(&destination).map_err(|e| e.to_string())?;
-    if !request.repository.is_empty() {
-        let result = Command::new("git").args(["clone", "--", &request.repository]).arg(&destination)
-            .env("GIT_TERMINAL_PROMPT", "0").output();
-        let error = match result {
-            Ok(output) if output.status.success() => None,
-            Ok(output) => Some(String::from_utf8_lossy(&output.stderr).trim().to_string()),
-            Err(error) => Some(error.to_string()),
-        };
-        if let Some(error) = error {
-            // 비어 있는 생성 폴더만 제거한다. 파일이 있는 폴더는 유지한다.
-            let _ = fs::remove_dir(&destination);
-            return Err(format!("git clone failed: {error}"));
-        }
-    }
     project_folder(app, destination.to_str().ok_or("project path is not UTF-8")?.into())
 }

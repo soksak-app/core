@@ -109,8 +109,6 @@ func (w *Workspace) Apply(req WorkspaceRequest) (any, error) {
 				return nil, fmt.Errorf("%s: projectOpening is common-only", path)
 			}
 			p["settings"] = settings
-			_, gitErr := os.Stat(filepath.Join(root, ".git"))
-			p["repository"] = gitErr == nil
 		}
 		return Record{"projects": projects, "common": common}, nil
 	case "add":

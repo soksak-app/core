@@ -17,7 +17,7 @@
 
 ## 프로젝트·설정 연산
 
-`projects.js`, `library.js`, `storage.js`는 런타임 브리지의 `projectFolder`, `projectCreate`, `folderChoose`, `projectOpen`, `projectRelease`, `windowNew`, `windowState`, `windowReady`, `windowClose`, `workspace`를 사용한다. `folderChoose`는 호스트의 공개 디렉터리 선택 API를 사용하며 취소 시 경로를 반환하지 않는다. `projectCreate`는 새 디렉터리만 허용하고 선택적으로 Git 복제를 실행한 뒤 정규화된 식별 정보를 반환한다. `windowNew`는 프로젝트 미선택 앱 창을 생성한다. 저장소 스냅샷은 열린 창이 소유한 프로젝트 ID를 포함한다. [프로젝트 명세](projects.ko.md)가 파일 저장과 창 동작을 정의한다. Wails는 프레임워크의 서비스 컨텍스트가 제공한 호출 창으로 네이티브 상태를 선택한다. Tauri는 명령의 창으로 선택한다. 이벤트, 표면, 오버레이, 입력 모니터, 셸은 해당 창에 속한다. 표면·모달 라벨은 창 사이에서 중복되지 않는다. 창을 닫으면 입력 모니터와 셸을 제거한다.
+`projects.js`, `library.js`, `storage.js`는 런타임 브리지의 `projectFolder`, `projectCreate`, `folderChoose`, `projectOpen`, `projectRelease`, `windowNew`, `windowState`, `windowReady`, `windowClose`, `workspace`를 사용한다. `folderChoose`는 호스트의 공개 디렉터리 선택 API를 사용하며 취소 시 경로를 반환하지 않는다. `projectCreate`는 새 디렉터리를 생성하고 정규화된 식별 정보를 반환한다. `windowNew`는 프로젝트 미선택 앱 창을 생성한다. 저장소 스냅샷은 열린 창이 소유한 프로젝트 ID를 포함한다. [프로젝트 명세](projects.ko.md)가 파일 저장과 창 동작을 정의한다. Wails는 프레임워크의 서비스 컨텍스트가 제공한 호출 창으로 네이티브 상태를 선택한다. Tauri는 명령의 창으로 선택한다. 이벤트, 표면, 오버레이, 입력 모니터, 셸은 해당 창에 속한다. 표면·모달 라벨은 창 사이에서 중복되지 않는다. 창을 닫으면 입력 모니터와 셸을 제거한다.
 
 ## macOS 구현
 

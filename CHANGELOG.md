@@ -4,10 +4,12 @@
 
 ## Unreleased
 
+- Validate simplified library screens in both rebuilt macOS hosts. Creation, saved-project selection, window reuse, search, pins, and schematic preview checks passed. The full example run passed 37 checks, failed 2 for insufficient recording frames, and skipped 2 display-transition checks. The failed checks passed on rerun with unchanged code and criteria; intermittent frame-count failure remains unresolved. Go 3/3, Rust 3/3, and documentation checks passed.
+
 - Unify library and workspace typography, letter spacing, line height, spacing, borders, corners, buttons, fields, and icon styling through shared CSS. Remove the library-only type scale and fixed theme shapes. Both screens scale their text with the configured base size. Rebuilt macOS hosts passed 39 example checks with 0 failures and 2 display-transition skips; visual comparison and font/size/corner changes were checked in both hosts. `make docs-check` passed.
 
-- Display the project library at startup and in new windows. Create a project, select an existing folder, or clone a Git repository into the same unassigned OS window. Return from the workspace to the project list without closing its shells.
-- Render library previews from the workspace renderer’s saved card rectangles, spacing, corners, and rail path. Add project search, sorting, open/pinned/Git filters, and persisted pins.
+- Display the project library at startup and in new windows. Create or select a saved project in the same unassigned OS window. Return from the workspace to the project list without closing its shells.
+- Render schematic library previews from the saved card grid with uniform gaps, equal row tracks, compact sidebar columns, and theme-derived colors and content symbols. Remove stored renderer rectangles and rail paths. Retain project search, sorting, and persisted pins. Remove the library navigation sidebar, category filters, standalone folder-opening action, and Git clone implementation.
 - Add Dock New Window, the library footer action, and Cmd/Ctrl+Shift+N. Remove the top New Window icon. On macOS, closing all windows keeps the application available for Dock New Window.
 
 - Record native window checks at backing-pixel resolution. Point-sized downsampling blended thin separator colors and caused Wails alignment measurements to fail. Keep the existing pixel tolerances and gesture requirements. This changes diagnostic capture, not application layout.
