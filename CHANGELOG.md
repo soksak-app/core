@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- Unify library and workspace typography, letter spacing, line height, spacing, borders, corners, buttons, fields, and icon styling through shared CSS. Remove the library-only type scale and fixed theme shapes. Both screens scale their text with the configured base size. Rebuilt macOS hosts passed 39 example checks with 0 failures and 2 display-transition skips; visual comparison and font/size/corner changes were checked in both hosts. `make docs-check` passed.
+
 - Display the project library at startup and in new windows. Create a project, select an existing folder, or clone a Git repository into the same unassigned OS window. Return from the workspace to the project list without closing its shells.
 - Render library previews from the workspace renderer’s saved card rectangles, spacing, corners, and rail path. Add project search, sorting, open/pinned/Git filters, and persisted pins.
 - Add Dock New Window, the library footer action, and Cmd/Ctrl+Shift+N. Remove the top New Window icon. On macOS, closing all windows keeps the application available for Dock New Window.

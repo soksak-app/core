@@ -80,7 +80,7 @@ function group(name, text, children) {
 /** select 를 만든다. 선택한 값이 key 와 함께 반환된다. */
 function choose(key, options, now) {
   const wrap = document.createElement("span");
-  wrap.className = "set-field";
+  wrap.className = "select-field";
   const el = document.createElement("select");
   el.dataset.set = key;
   for (const [v, label] of options) {
@@ -143,7 +143,7 @@ function slide(key, min, max, now, unit) {
 /** 버튼을 만든다. */
 function press(key, label) {
   const el = document.createElement("button");
-  el.className = "set-press";
+  el.className = "ui-button";
   el.type = "button";
   el.dataset.key = key;
   el.textContent = label;

@@ -2,6 +2,7 @@
 import * as projects from "./projects.js";
 import { fresh } from "./plane.js";
 import { host } from "./framework/index.js";
+import { icon } from "./icons.js";
 
 const TINTS = ["#ffb36b", "#7fe3b0", "#7db4ff", "#e08bd8", "#f2d16b"];
 const element = (tag, cls, text) => {
@@ -22,15 +23,15 @@ export function createLibrary(root) {
         <button type="button" data-filter="git">Git 저장소 <span></span></button>
       </nav>
       <div class="library-sidebar__actions">
-        <button type="button" data-action="folder">＋ 폴더 열기</button>
-        <button type="button" data-action="clone">↓ Git Clone</button>
+        <button type="button" class="ui-button" data-action="folder">＋ 폴더 열기</button>
+        <button type="button" class="ui-button" data-action="clone">↓ Git Clone</button>
       </div>
     </aside>
     <main class="library-main">
       <header class="library-heading">
         <h1>프로젝트</h1>
-        <select aria-label="프로젝트 정렬"><option value="saved">저장 순서</option><option value="name">이름</option><option value="recent">최근</option><option value="open">열림</option></select>
-        <label class="library-search"><span class="sr-only">프로젝트 검색</span><input type="search" placeholder="이름 또는 폴더 검색" autocomplete="off"></label>
+        <label class="select-field library-sort"><select aria-label="프로젝트 정렬"><option value="saved">저장 순서</option><option value="name">이름</option><option value="recent">최근</option><option value="open">열림</option></select></label>
+        <label class="library-search"><span class="sr-only">프로젝트 검색</span><input class="text-field" type="search" placeholder="이름 또는 폴더 검색" autocomplete="off"></label>
       </header>
       <div class="library-error" role="alert" hidden></div>
       <div class="library-form" hidden></div>
@@ -69,7 +70,7 @@ export function createLibrary(root) {
     const heading = element('h2', '', kind==='clone'?'Git 저장소 복제':kind==='open'?'폴더 열기':'새 프로젝트');
     const fields = element('form', 'library-fields');
     function field(name, title, placeholder) {
-      const label=element('label','',title), input=element('input');
+      const label=element('label','',title), input=element('input','text-field');
       input.name=name; input.placeholder=placeholder; input.required=true; input.autocomplete='off';
       label.append(input); fields.append(label); return input;
     }
@@ -78,13 +79,13 @@ export function createLibrary(root) {
     if (kind!=='open') name=field('name','프로젝트 폴더 이름','my-project');
     const parent=field('parent',kind==='open'?'폴더 경로':'생성 위치','/Users/…');
     if (host) {
-      const choose=element('button','library-secondary','폴더 선택'); choose.type='button';
+      const choose=element('button','ui-button','폴더 선택'); choose.type='button';
       choose.onclick=()=>perform(async()=>{ const path=await host.call('folderChoose'); if(path) parent.value=path; });
       parent.parentElement.append(choose);
     }
     const actions=element('div','library-form__actions');
-    const cancel=element('button','library-secondary','취소'); cancel.type='button'; cancel.onclick=()=>{form.hidden=true;};
-    const submit=element('button','library-primary',kind==='clone'?'복제 후 열기':kind==='open'?'열기':'생성 후 열기'); submit.type='submit';
+    const cancel=element('button','ui-button','취소'); cancel.type='button'; cancel.onclick=()=>{form.hidden=true;};
+    const submit=element('button','ui-button library-primary',kind==='clone'?'복제 후 열기':kind==='open'?'열기':'생성 후 열기'); submit.type='submit';
     actions.append(cancel,submit); fields.append(actions); form.append(heading,fields);
     fields.onsubmit=(event)=>{event.preventDefault();perform(async()=>{
       let root=parent.value.trim();
@@ -134,7 +135,7 @@ export function createLibrary(root) {
         time.dateTime=new Date(project.lastOpened).toISOString(); time.title=new Date(project.lastOpened).toLocaleString('ko'); meta.append(time);
       }
       text.append(meta); choose.append(text);
-      const pin=element('button','library-project__pin',project.pinned?'★':'☆');pin.type='button';
+      const pin=element('button','act library-project__pin');pin.type='button';pin.innerHTML=icon('star');
       pin.title=project.pinned?'고정 해제':'프로젝트 고정';pin.setAttribute('aria-pressed',String(Boolean(project.pinned)));
       pin.onclick=()=>perform(()=>projects.pin(project.id,!project.pinned));
       card.append(choose,pin); grid.append(card);

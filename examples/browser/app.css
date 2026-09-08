@@ -18,6 +18,14 @@
   --r:10px;--half-gap:6px;--bw:1px;
   --font:ui-monospace,SFMono-Regular,Menlo,monospace;--size:13px;
 
+  /* 모든 화면의 글자 크기와 간격. 글자 크기는 설정의 기본 크기에 비례한다. */
+  --text-control:calc(var(--size) * 12 / 13);
+  --text-small:calc(var(--size) * 11 / 13);
+  --text-caption:calc(var(--size) * 10 / 13);
+  --line-height:1.45;--letter-spacing:0;--section-tracking:.04em;
+  --space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;
+
+
   /* 반경 척도. 둥근 상자는 다섯이고 값은 셋이다. 카드가 기준이고 나머지는 거기서
      나오므로, 테마가 --r 을 바꾸면 다섯이 함께 움직인다.
        --r       카드, 사이드바
@@ -50,8 +58,11 @@
    바뀐다. */
 html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--fg);
-  font:var(--size)/1.45 var(--font);
+  font:var(--size)/var(--line-height) var(--font);letter-spacing:var(--letter-spacing);
   box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden}
+
+button,input,select,textarea{font:inherit;letter-spacing:inherit}
+button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 
 /* ── 창의 크롬 ────────────────────────────────────────────────────────────
    높이 45px 의 행 하나에 브랜드, 프로젝트 탭, 아이콘 스위치가 들어간다.
@@ -62,7 +73,7 @@ body{margin:0;background:var(--bg);color:var(--fg);
    창이 없으므로 0 이다. */
 :root{--controls-w:0px}
 .chrome-bar{position:relative;flex:0 0 45px;height:45px;display:flex;align-items:center;
-  gap:10px;padding:0 12px 0 calc(12px + var(--controls-w));
+  gap:var(--space-2);padding:0 var(--space-3) 0 calc(var(--space-3) + var(--controls-w));
   border-bottom:var(--bw) solid var(--edge);background:var(--card);user-select:none}
 /* 창을 끄는 영역. 막대 전체를 덮고, 탭과 단추는 그 위에 배치된다.
 
@@ -73,7 +84,7 @@ body{margin:0;background:var(--bg);color:var(--fg);
 .chrome-bar .tabs{pointer-events:none}
 .chrome-bar .tabs > *{pointer-events:auto}
 /* 이 글자는 누름을 받지 않는다. 누름은 아래의 끄는 영역에 도달한다. */
-.brand{flex:0 0 auto;font-weight:600;letter-spacing:.1em;font-size:11px;color:var(--muted);
+.brand{flex:0 0 auto;font-weight:600;letter-spacing:.1em;font-size:var(--text-small);color:var(--muted);
   margin-right:2px;pointer-events:none}
 
 
@@ -85,13 +96,13 @@ body{margin:0;background:var(--bg);color:var(--fg);
 .tabs--project{align-self:center}
 
 /* 스페이스 탭 행. 판 바로 위에 위치하므로 탭의 아래가 판과 이어진다. */
-.tabs--space{flex:0 0 auto;gap:2px;height:var(--chrome-row-h);padding:5px 10px;
+.tabs--space{flex:0 0 auto;gap:2px;height:var(--chrome-row-h);padding:5px var(--space-3);
   align-items:center;background:var(--card);border-bottom:var(--bw) solid var(--edge)}
 .tabs--space .bar-tab{height:26px;border-radius:var(--r-xs) var(--r-xs) 0 0}
 
-.bar-tab{display:flex;align-items:center;gap:6px;padding:0 9px;border:0;
+.bar-tab{display:flex;align-items:center;gap:6px;padding:0 var(--space-2);border:0;
   border-radius:var(--r-xs);background:var(--chip);color:var(--muted);
-  font:inherit;font-size:12px;cursor:pointer;max-width:220px;white-space:nowrap}
+  font:inherit;font-size:var(--text-control);cursor:pointer;max-width:220px;white-space:nowrap}
 .bar-tab:hover{background:var(--chip-hover)}
 .bar-tab[data-on=true]{background:var(--chip-on);color:var(--fg)}
 .bar-tab__name{overflow:hidden;text-overflow:ellipsis}
@@ -100,7 +111,7 @@ body{margin:0;background:var(--bg);color:var(--fg);
 .bar-tab--add{background:transparent;color:var(--muted);font-size:15px;line-height:1;padding:0 7px}
 .bar-tab--add:hover{background:var(--chip-hover)}
 .bar-tab__root{padding:0 8px;border:var(--bw) solid var(--focus);border-radius:var(--r-xs);
-  background:var(--bg);color:var(--fg);font:inherit;font-size:12px;width:180px}
+  background:var(--bg);color:var(--fg);font:inherit;font-size:var(--text-control);width:180px}
 
 /* 아이콘 스위치. */
 .act{display:inline-flex;align-items:center;justify-content:center;width:24px;height:22px;
@@ -212,7 +223,7 @@ body{margin:0;background:var(--bg);color:var(--fg);
 .chrome[data-fit=one] .chrome__tabs .tab:not([data-active=true]){display:none}
 .chrome[data-fit=ham] .chrome__tabs{display:none}
 .tab{display:flex;align-items:center;gap:4px;padding:3px 7px;border-radius:var(--r-xs);
-  font-size:11px;color:var(--muted);cursor:grab;user-select:none;white-space:nowrap;
+  font-size:var(--text-small);color:var(--muted);cursor:grab;user-select:none;white-space:nowrap;
   flex:0 0 auto}
 .tab:hover{color:var(--fg)}
 .tab[data-active=true]{color:var(--fg);background:var(--chip-sel)}
@@ -222,7 +233,7 @@ body{margin:0;background:var(--bg);color:var(--fg);
    제목 전체가 들어갈 때만 표시하면 탭이 불필요하게 숨겨진다. */
 .chrome[data-fit=one] .tab[data-active=true]{flex:0 1 auto;min-width:0}
 .tab__x{border:0;background:transparent;color:inherit;padding:0 2px;line-height:1;
-  font-size:11px;border-radius:var(--r-xs);opacity:.6;cursor:pointer}
+  font-size:var(--text-small);border-radius:var(--r-xs);opacity:.6;cursor:pointer}
 .tab__x:hover{opacity:1;background:color-mix(in srgb,var(--no) 40%,transparent)}
 .chrome__acts{margin-left:auto;display:flex;gap:1px;padding:1px;border-radius:var(--r-xs);
   flex:0 0 auto;border:var(--bw) solid var(--edge)}
@@ -238,10 +249,10 @@ body{margin:0;background:var(--bg);color:var(--fg);
 .slot{position:relative}
 /* 상태줄은 카드가 좁아져도 한 줄을 유지한다. 줄바꿈이 생기면 22px 안에서 잘려
    두 번째 줄이 사라지고 첫 줄의 세로 정렬도 어긋난다. */
-.status{display:flex;align-items:center;padding:0 8px;font-size:10px;
+.status{display:flex;align-items:center;padding:0 var(--space-2);font-size:var(--text-caption);
   border-top:var(--bw) solid var(--edge);color:var(--muted);
   overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-.set{padding:8px 10px;font-size:11px;color:var(--muted);overflow:hidden}
+.set{padding:var(--space-2) var(--space-3);font-size:var(--text-small);color:var(--muted);overflow:hidden}
 .set b{color:var(--fg);display:block;margin-bottom:4px}
 .card[data-role=fixed] .set b{color:var(--rail)}
 
@@ -266,7 +277,7 @@ body{margin:0;background:var(--bg);color:var(--fg);
    모사한 네이티브 표면. 컴포지터가 applied 프레임에 배치한다. 카드가 클립하므로
    모서리를 따로 두지 않는다.                                                  */
 .surface{position:absolute;z-index:50;background:var(--surface);color:var(--surface-fg);
-  font-size:11px;padding:6px 9px;overflow:hidden;pointer-events:none}
+  font-size:var(--text-small);padding:6px 9px;overflow:hidden;pointer-events:none}
 .surface[data-hidden=true]{display:none}
 /* 포커스를 잃은 표면. 애플리케이션은 뷰의 알파를 같은 값으로 낮춘다. */
 .surface[data-dim=true]{opacity:.45}
@@ -275,7 +286,7 @@ body{margin:0;background:var(--bg);color:var(--fg);
 /* `.standin` 은 표면과 동일하게 보여야 하므로 `.surface` 와 같은 값을 사용한다.
    값이 다르면 표면을 숨기는 시점에 화면이 바뀐다. */
 .standin{position:absolute;inset:0;background:var(--surface);color:var(--surface-fg);
-  font-size:11px;padding:6px 9px;overflow:hidden}
+  font-size:var(--text-small);padding:6px 9px;overflow:hidden}
 .standin b{color:var(--fg)}
 /* 드롭 구획은 DOM 이므로 표면이 숨겨진 동안에만 보인다. z 를 표면보다 낮게 둔다.
    높이면 애플리케이션의 동작과 달라진다. */
@@ -291,14 +302,14 @@ body{margin:0;background:var(--bg);color:var(--fg);
   background:var(--card);border-radius:var(--r-sm);
   border:var(--bw) solid var(--edge);box-shadow:0 12px 28px rgb(0 0 0 / .34)}
 .picker[hidden]{display:none}
-.picker__head{padding:4px 8px 6px;font-size:10px;color:var(--muted);letter-spacing:.04em}
+.picker__head{padding:4px 8px 6px;font-size:var(--text-caption);color:var(--muted);letter-spacing:var(--section-tracking)}
 .picker__item{display:flex;align-items:center;gap:8px;width:100%;padding:5px 8px;
   border:0;border-radius:var(--r-xs);background:transparent;color:var(--fg);
-  font:inherit;font-size:12px;text-align:left;cursor:pointer}
+  font:inherit;font-size:var(--text-control);text-align:left;cursor:pointer}
 .picker__item svg{width:14px;height:14px;flex:0 0 auto;fill:none;stroke:currentColor;
   stroke-width:1.3;stroke-linecap:round;stroke-linejoin:round}
 .picker__name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.picker__item small{margin-left:auto;padding-left:8px;color:var(--muted);font-size:10px;flex:0 0 auto}
+.picker__item small{margin-left:auto;padding-left:8px;color:var(--muted);font-size:var(--text-caption);flex:0 0 auto}
 .picker__item[data-active=true]{color:var(--fg);background:var(--chip-sel)}
 .picker__item:hover,.picker__item:focus-visible{outline:0;color:var(--fg);
   background:var(--chip-hover)}
@@ -318,7 +329,7 @@ body{margin:0;background:var(--bg);color:var(--fg);
 .set-card__head{display:flex;align-items:center;gap:8px;height:44px;flex:0 0 44px;
   padding:0 8px 0 16px;border-bottom:var(--bw) solid var(--edge);cursor:grab}
 .set-card__head:active{cursor:grabbing}
-.set-card__title{font-size:12px;letter-spacing:.06em;color:var(--fg)}
+.set-card__title{font-size:var(--text-control);letter-spacing:var(--letter-spacing);color:var(--fg)}
 .set-card__head .act{margin-left:auto}
 .set-card__body{display:flex;min-height:0}
 
@@ -328,7 +339,7 @@ body{margin:0;background:var(--bg);color:var(--fg);
    뜻이다. */
 .set-nav{position:relative;text-align:left;padding:7px 10px;border:0;
   border-radius:var(--r-xs);background:transparent;color:var(--muted);
-  font:inherit;font-size:12px;cursor:pointer}
+  font:inherit;font-size:var(--text-control);cursor:pointer}
 .set-nav:hover{color:var(--fg);background:var(--inset)}
 .set-nav[data-on=true]{background:var(--chip-sel);color:var(--fg)}
 .set-nav[data-on=true]::before{content:"";position:absolute;left:0;top:6px;bottom:6px;
@@ -337,27 +348,28 @@ body{margin:0;background:var(--bg);color:var(--fg);
 .set-card__pane{flex:1 1 auto;min-width:0;padding:14px 18px 18px;overflow:auto}
 .set-group{margin:0 0 20px}
 .set-group:last-child{margin-bottom:0}
-.set-group__name{margin:0 0 4px;font-size:10px;letter-spacing:.1em;color:var(--rail)}
-.set-caption{margin:0 0 10px;font-size:11px;line-height:1.5;color:var(--muted)}
+.set-group__name{margin:0 0 var(--space-1);font-size:var(--text-caption);letter-spacing:var(--section-tracking);color:var(--rail)}
+.set-caption{margin:0 0 10px;font-size:var(--text-small);line-height:var(--line-height);color:var(--muted)}
 .set-row{display:grid;grid-template-columns:124px 1fr;align-items:center;gap:12px;
   min-height:30px}
-.set-row__name{font-size:12px;color:var(--muted)}
+.set-row__name{font-size:var(--text-control);color:var(--muted)}
 
 /* select. 화살표는 감싼 요소가 그리고 select 자체는 기본 모양을 쓰지 않는다. */
-.set-field{position:relative;display:block}
-.set-field::after{content:"▾";position:absolute;right:10px;top:50%;translate:0 -50%;
-  font-size:10px;color:var(--muted);pointer-events:none}
-.set-field select{appearance:none;width:100%;padding:5px 26px 5px 9px;
+.select-field{position:relative;display:block}
+.select-field::after{content:"▾";position:absolute;right:10px;top:50%;translate:0 -50%;
+  font-size:var(--text-caption);color:var(--muted);pointer-events:none}
+.select-field select,.text-field{width:100%;min-width:0;padding:5px var(--space-2);
   border:var(--bw) solid var(--edge);border-radius:var(--r-xs);
-  background:var(--bg);color:var(--fg);font:inherit;font-size:12px;cursor:pointer}
-.set-field select:hover{border-color:var(--rail)}
-.set-field select:focus-visible{outline:0;border-color:var(--focus)}
+  background:var(--bg);color:var(--fg);font:inherit;font-size:var(--text-control)}
+.select-field select{appearance:none;padding-right:26px;cursor:pointer}
+.select-field select:hover,.text-field:hover{border-color:var(--rail)}
+.select-field select:focus-visible,.text-field:focus-visible{outline:0;border-color:var(--focus)}
 
 /* 값이 둘이나 셋인 설정은 목록이 아니라 한 줄에 늘어놓는다. */
 .set-seg{justify-self:start;display:inline-flex;gap:2px;padding:2px;border:var(--bw) solid var(--edge);
   border-radius:var(--r-xs);background:var(--bg)}
 .set-seg button{padding:3px 11px;border:0;border-radius:var(--r-xs);background:transparent;
-  color:var(--muted);font:inherit;font-size:11px;cursor:pointer;white-space:nowrap}
+  color:var(--muted);font:inherit;font-size:var(--text-small);cursor:pointer;white-space:nowrap}
 .set-seg button:hover{color:var(--fg)}
 .set-seg button[data-on=true]{background:var(--chip-sel);color:var(--fg)}
 
@@ -377,11 +389,11 @@ body{margin:0;background:var(--bg);color:var(--fg);
   border-radius:50%;background:var(--focus)}
 .set-slide input[type=range]::-moz-range-thumb{width:13px;height:13px;border:0;
   border-radius:50%;background:var(--focus)}
-.set-slide output{flex:0 0 auto;width:6ch;text-align:right;font-size:11px;color:var(--muted)}
+.set-slide output{flex:0 0 auto;width:6ch;text-align:right;font-size:var(--text-small);color:var(--muted)}
 
-.set-press{justify-self:start;padding:5px 12px;border:var(--bw) solid var(--edge);border-radius:var(--r-xs);
-  background:var(--bg);color:var(--fg);font:inherit;font-size:12px;cursor:pointer}
-.set-press:hover{border-color:var(--rail)}
+.ui-button{justify-self:start;padding:5px var(--space-3);border:var(--bw) solid var(--edge);border-radius:var(--r-xs);
+  background:var(--bg);color:var(--fg);font:inherit;font-size:var(--text-control);cursor:pointer}
+.ui-button:hover{border-color:var(--rail)}
 
 /* 테마 견본. 그 테마가 가진 값을 그 테마의 값으로 그린다. 바탕과 카드 두 칸만
    칠하면 테마 사이의 차이가 보이지 않는다.
@@ -394,7 +406,7 @@ body{margin:0;background:var(--bg);color:var(--fg);
   margin:0 0 14px}
 .th{display:flex;flex-direction:column;align-items:stretch;gap:5px;padding:3px;
   border:var(--bw) solid transparent;border-radius:var(--r-xs);background:transparent;
-  color:var(--muted);font:inherit;font-size:10px;cursor:pointer}
+  color:var(--muted);font:inherit;font-size:var(--text-caption);cursor:pointer}
 .th:hover{color:var(--fg)}
 .th[data-on=true]{border-color:var(--focus);color:var(--fg)}
 .th__box{position:relative;display:block;height:42px;overflow:hidden;
@@ -410,7 +422,7 @@ body{margin:0;background:var(--bg);color:var(--fg);
   color: var(--no);
   background: var(--bg);
   border-bottom: 1px solid var(--no);
-  font: 12px var(--font);
+  font: var(--text-control)/var(--line-height) var(--font);
   user-select: text;
 }
 .set-card__nav > .set-seg { flex-direction: column; margin-bottom: 12px; }

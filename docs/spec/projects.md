@@ -14,6 +14,14 @@ The library displays saved projects, layout previews, folder paths, space counts
 
 The title bar’s project-list button and project-add action open the library in that window while preserving its current work. Selecting a project or returning to the workspace restores the work screen. New Window always creates an unassigned window. On macOS, closing all windows keeps the application available for this action. The library footer, Command/Ctrl+Shift+N, and macOS Dock menu invoke the same action. The library uses common settings when the window has no selected project.
 
+## Shared appearance
+
+The library and project workspace use the same typography, color, border, corner, and spacing definitions in `app.css`. `library.css` defines the library layout and its component placement. It does not define a separate type scale or fixed theme colors and corner radii.
+
+The configured font family and base size apply to both screens. At the default 13px base size, project names and controls use 12px, secondary content uses 11px, and metadata and status text use 10px. These sizes scale with the base size. Body and control text use the same line height and normal letter spacing; section captions share one letter-spacing value. Screen headings use the base size rather than a separate large display style.
+
+Library navigation, forms, project cards, and the footer use the workspace's compact spacing and theme-derived borders and corners. Changing font, size, theme, or corner settings applies the same definitions in both screens.
+
 ## Settings
 
 Effective settings are defaults, then common settings, then the current project's explicit overrides. Settings provides a common scope and a project-folder scope. A project value can be removed to resume inheriting the common value. Changing a common value updates every open project that has no override for that value.

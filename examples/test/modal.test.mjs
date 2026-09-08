@@ -76,7 +76,7 @@ for (const [name, binary] of Object.entries(APPS)) {
     if (!await openCompositing(binary)) return t.skip(`${binary} is not built`);
     const before = await nativeState(binary);
     settingsAboveSurfaces(before);
-    await ask(binary, ['transcript on', 'click .set-press[data-key="press:build"]'],
+    await ask(binary, ['transcript on', 'click button[data-key="press:build"]'],
       (text) => renders(text, "settings") >= 1 && /host presentSurfaces .*"settled":true.* ->/.test(text),
       { from: false });
     const old = new Set(before.views.filter(v=>v.url.includes("terminal.html")).map(v=>v.url));
