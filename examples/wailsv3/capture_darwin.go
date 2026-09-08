@@ -112,11 +112,11 @@ static void captureOpen(long windowNumber) {
         }
         for (SCWindow* window in content.windows) {
             if ((long)window.windowID != windowNumber) continue;
+            SCContentFilter* filter = [[SCContentFilter alloc] initWithDesktopIndependentWindow:window];
             SCStreamConfiguration* config = [[SCStreamConfiguration alloc] init];
-            // 점 단위로 받는다. 픽셀 단위는 한 프레임이 네 배가 되어 적는 동안
-            // 프레임이 버려진다.
-            config.width = (size_t)window.frame.size.width;
-            config.height = (size_t)window.frame.size.height;
+            // 장치 픽셀을 유지하여 가는 선의 색상이 축소 과정에서 혼합되지 않도록 한다.
+            config.width = (size_t)(filter.contentRect.size.width * filter.pointPixelScale);
+            config.height = (size_t)(filter.contentRect.size.height * filter.pointPixelScale);
             config.pixelFormat = kCVPixelFormatType_32BGRA;
             config.showsCursor = NO;
             config.captureResolution = SCCaptureResolutionBest;
@@ -126,8 +126,7 @@ static void captureOpen(long windowNumber) {
             captureConfig = config;
             // 필터를 마지막에 둔다. captureStart 가 필터로 준비 여부를 판단하므로,
             // 먼저 두면 설정이 없는 채로 스트림을 만들 수 있다.
-            captureFilter =
-                [[SCContentFilter alloc] initWithDesktopIndependentWindow:window];
+            captureFilter = filter;
             dispatch_semaphore_signal(answered);
             return;
         }

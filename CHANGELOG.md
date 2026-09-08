@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- Record native window checks at backing-pixel resolution. Point-sized downsampling blended thin separator colors and caused Wails alignment measurements to fail. Keep the existing pixel tolerances and gesture requirements. This changes diagnostic capture, not application layout.
+
 - Persist common settings in the application configuration directory and explicit project overrides in `.soksak/settings.json`. Removing an override restores inheritance. Project opening mode remains common-only. Native hosts use JSON files; the browser example uses IndexedDB.
 - Identify projects by canonical directory and filesystem identity. Reuse the existing project and window for duplicate opens, including concurrent requests. Save project order, spaces, cards, tabs, sidebar and rail widths, and normal window geometry. Startup opens the first saved project.
 - Open projects in independent OS windows through public framework APIs. Scope surfaces, settings menus, input, themes, and shells to each window. Complete pending saves before closing a ready window or quitting the application. Settings and add/split menus remain native webviews inside their project window.

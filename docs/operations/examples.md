@@ -47,7 +47,9 @@ The harness resets the test project and reloads the main document between runs, 
 
 `projects.test.mjs` checks common and folder settings files, override reset, folder aliases, tab/window policy, independent modals, and saved layout and window geometry after native close/reopen. `settings.test.mjs` checks setting precedence and browser storage transactions. Native file-storage unit checks are `go test -C examples/wailsv3 ./...` and `cargo test --locked --manifest-path examples/tauriv2/src-tauri/Cargo.toml`.
 
-Failed pixel checks retain raw BGRA frames and write a PNG for the worst alignment, containment, or paint failure. Raw frames contain three 32-bit values (width, height, row stride), followed by BGRA pixel data. Do not treat a missing or partial recording as a pass.
+Failed pixel checks retain raw BGRA frames and write a PNG for the worst alignment, containment, or paint failure. Record at the window’s backing-pixel resolution. Point-sized downsampling blends half-point lines with adjacent pixels and prevents exact color measurement. Raw frames contain three 32-bit values (width, height, row stride), followed by BGRA pixel data. Do not treat a missing or partial recording as a pass.
+
+Finish builds before recording. Raw frame directories and diagnostic images are temporary: inspect failed frames, record the findings in the test log, then delete the recording and images after diagnosis. Do not archive completed recordings.
 
 `geometry.test.mjs` compares native frames, DOM slots, document rectangles, and visual viewports after window resizing and display-scale changes. It uses AppKit hit testing and sends native mouse events to the selected view, waits for pointer-down delivery before release, and checks the resulting DOM coordinates. Display-transition checks require two screens with different scale factors and restore the window position afterward. A skipped display-transition check does not validate that behavior.
 

@@ -107,11 +107,11 @@ void sp_capture_open(long windowNumber) {
         }
         for (SCWindow* window in content.windows) {
             if ((long)window.windowID != windowNumber) continue;
+            SCContentFilter* filter = [[SCContentFilter alloc] initWithDesktopIndependentWindow:window];
             SCStreamConfiguration* config = [[SCStreamConfiguration alloc] init];
-            // In points. In pixels a frame is four times the size, and writing it
-            // takes long enough to lose frames.
-            config.width = (size_t)window.frame.size.width;
-            config.height = (size_t)window.frame.size.height;
+            // Preserve backing pixels so downsampling does not blend thin-line colors.
+            config.width = (size_t)(filter.contentRect.size.width * filter.pointPixelScale);
+            config.height = (size_t)(filter.contentRect.size.height * filter.pointPixelScale);
             config.pixelFormat = kCVPixelFormatType_32BGRA;
             config.showsCursor = NO;
             config.captureResolution = SCCaptureResolutionBest;
@@ -121,8 +121,7 @@ void sp_capture_open(long windowNumber) {
             // The filter is assigned last. sp_capture_start reads it to decide
             // whether a capture can begin, so assigning it first would let a
             // stream be built with no configuration.
-            captureFilter =
-                [[SCContentFilter alloc] initWithDesktopIndependentWindow:window];
+            captureFilter = filter;
             dispatch_semaphore_signal(answered);
             return;
         }
