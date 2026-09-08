@@ -21,6 +21,8 @@ Acceptance requires captured pixels showing blur and translucent shading, clear 
 
 The visual definition is shared web code. Each platform still requires a working native webview host and behavior verification. Current Wails additional-webview creation is implemented only on macOS. Windows and Linux execution is unverified.
 
+The [private native API inventory](../operations/private-native-apis.md) records transparency and input dependencies and their necessity. Review it first if modal behavior fails after a native update.
+
 ## Usage
 
 An empty value or any other value is rejected by `show()`. The element also

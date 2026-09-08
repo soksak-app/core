@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- Add the private native API inventory with a necessity review, exact callers, framework dependencies, and update verification steps. Require it as the first document reviewed after native update failures. Correct the input-monitor comment about mouse-exit delivery. Runtime behavior is unchanged; `make docs-check` passed.
+
 - Window checks wait for the initial terminal document, its theme, and native presentation before recording.
 
 - Render macOS content webviews in device-pixel native coordinates while preserving CSS dimensions and device-pixel ratio. Native surface and document sizes now match at half-point heights. Remove native backing-background recoloring.

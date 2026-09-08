@@ -4,6 +4,10 @@
 
 Run commands from the repository root. Use the package-manager version in `package.json`, a Go toolchain compatible with `examples/wailsv3/go.mod`, and a Rust toolchain compatible with the Tauri crate. Native validation currently runs on macOS with the Command Line Tools SDK and screen-recording permission for capture.
 
+## Native updates
+
+Read the [private native API inventory](private-native-apis.md) before updating native source, frameworks, the SDK, or the OS. If native behavior fails after an update, review that document first. It records active calls, necessity, failure signs, and required verification.
+
 ## Build
 
 ```sh

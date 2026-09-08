@@ -26,7 +26,7 @@ BOOL webviewInputRegister(WKWebView *view) {
     if (![view respondsToSelector:@selector(_setIgnoresMouseMoveEvents:)]) return NO;
     if (!inputViews) {
         inputViews = [[NSHashTable weakObjectsHashTable] retain];
-        // Leave exit events enabled for the previous owner so its DOM clears hover.
+        // 마우스 이탈 이벤트에서는 추적 대상을 변경하지 않는다.
         [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskMouseMoved | NSEventMaskMouseEntered
             handler:^NSEvent *(NSEvent *event) { return routePointer(event); }];
     }

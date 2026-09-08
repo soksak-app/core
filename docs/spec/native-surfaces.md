@@ -33,7 +33,7 @@ The example preserves device-pixel placement, including 0.5 CSS pixel dimensions
 
 On macOS, content webviews use a shared native container whose coordinates are device pixels. The host converts window rectangles through the native view hierarchy. Each content webview uses the display scale as its page zoom and one backing pixel per local coordinate unit. This preserves CSS dimensions and device-pixel ratio while providing integral native rendering sizes. Window resizing and display-scale changes preserve the conversion. Main and modal webviews retain window-point coordinates.
 
-The macOS geometry module sets the private `_setOverrideDeviceScaleFactor:` API to `1` when attaching a content webview. Its local coordinates already represent device pixels, so the rendering density must be one backing pixel per local unit. The page zoom preserves CSS dimensions. This dependency belongs to the macOS host implementation; it is not part of the shared layout API.
+The [private native API inventory](../operations/private-native-apis.md) records the geometry, presentation, and input dependencies, their necessity, and the first review steps after native updates.
 
 ## Acceptance criteria
 

@@ -26,6 +26,7 @@ Give `#stage` a size and `position: relative`, and set `box-sizing: border-box` 
 - [Example applications](examples/README.md)
 - [Native surface placement](docs/spec/native-surfaces.md)
 - [data-native-modal](docs/spec/native-modals.md)
+- [Private native APIs and update review](docs/operations/private-native-apis.md)
 - [Implementation, validation, and release status](docs/features.md)
 - [Changes](CHANGELOG.md)
 - [Development and required checks](AGENTS.md)

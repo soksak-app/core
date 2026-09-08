@@ -8,6 +8,7 @@
 
 - Choose the simplest implementation that satisfies the current contract. Remove obsolete paths instead of adding compatibility layers, fallbacks, or migrations.
 - Keep responsibilities separate. Add native platform code only when the required behavior cannot be implemented through existing APIs.
+- Maintain the [private native API inventory](docs/operations/private-native-apis.md) with each API or call-condition change. Read it first when diagnosing failures after native source, framework, SDK, or OS updates; review each correction's necessity and actual API semantics.
 - Remove harmful or unnecessary changes. Preserve correct unrelated changes separately and describe their actual purpose in the commit.
 - Verify behavior before rewriting commits. Do not merge or push without authorization.
 
