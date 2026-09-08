@@ -162,6 +162,19 @@ export class SoksakView {
    */
   private disarms = new Map<HTMLElement, () => void>();
   private observer: ResizeObserver | null = null;
+  private resolution: MediaQueryList | null = null;
+
+  private readonly resolutionChanged = (): void => {
+    this.observeResolution();
+    this.draw('resize');
+  };
+
+  private observeResolution(): void {
+    this.resolution?.removeEventListener('change', this.resolutionChanged);
+    const win = this.host.ownerDocument.defaultView!;
+    this.resolution = win.matchMedia(`(resolution: ${win.devicePixelRatio}dppx)`);
+    this.resolution.addEventListener('change', this.resolutionChanged);
+  }
   /**
    * A draw of one of the view's own changes that the host was handed and has
    * not performed.
@@ -191,6 +204,7 @@ export class SoksakView {
     this.grid = grid;
     this.options = options;
     this.prefix = options.classPrefix ?? 'sp';
+    this.observeResolution();
 
     if (options.observeResize !== false && typeof ResizeObserver !== 'undefined') {
       this.observer = new ResizeObserver(() => {
@@ -933,6 +947,8 @@ export class SoksakView {
     for (const pointer of [...this.drags.keys()]) this.end(pointer);
     this.observer?.disconnect();
     this.observer = null;
+    this.resolution?.removeEventListener('change', this.resolutionChanged);
+    this.resolution = null;
     for (const held of this.cardEls.values()) {
       this.options.destroyCard?.(held.el, held.card);
       held.el.remove();

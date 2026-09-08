@@ -3,6 +3,7 @@
 #import "webview_darwin.h"
 #import "../native/webview_input_darwin.h"
 #import "../native/surface_layout_darwin.h"
+#import "../native/webview_geometry_darwin.h"
 
 extern void nativeMessage(unsigned long long identifier, char *message);
 
@@ -77,11 +78,7 @@ void nativeWindowPrepare(void *handle) {
 }
 
 void nativeWebviewBounds(void *handle, double x, double y, double width, double height) {
-    NSView *view = (NSView *)handle;
-    NSWindow *window = view.window;
-    if (!window) return;
-    NSRect frame = NSMakeRect(x, window.contentView.bounds.size.height - y - height, width, height);
-    view.frame = [window backingAlignedRect:frame options:NSAlignAllEdgesInward];
+    webviewSetFrame(handle, x, y, width, height);
 }
 
 void *nativeWebviewCreate(void *handle, unsigned long long identifier, const char *script,
@@ -125,6 +122,7 @@ void *nativeWebviewCreate(void *handle, unsigned long long identifier, const cha
     // New surfaces belong above main and below existing overlays. A modal is
     // raised when it is ready, while still hidden here.
     [window.contentView addSubview:view positioned:NSWindowAbove relativeTo:root];
+    if (!transparent) webviewAttachSurface(view, root);
     nativeWebviewBounds(view, x, y, width, height);
     return view; // Go owns this retain until nativeWebviewClose.
 }

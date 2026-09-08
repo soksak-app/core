@@ -107,6 +107,9 @@ export declare class SoksakView {
      */
     private disarms;
     private observer;
+    private resolution;
+    private readonly resolutionChanged;
+    private observeResolution;
     /**
      * A draw of one of the view's own changes that the host was handed and has
      * not performed.

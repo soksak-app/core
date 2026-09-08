@@ -180,35 +180,36 @@ pub fn alpha(webview: &PlatformWebview, alpha: f64) {
     }
 }
 
-/// Places a surface's view at an exact rect in the page's coordinates.
-///
-/// `set_position` and `set_size` take logical points and round them to whole
-/// points before they reach the view, which undoes the alignment to the display's
-/// pixels that `aligned` computed and can move an edge outward. The frame is set
-/// on the view itself instead, in its parent's coordinates, which are unflipped:
-/// y counts up from the parent's bottom.
-///
-/// Only macOS is written. On Windows and Linux a surface is a child window and a
-/// different call places it.
+/// 창 좌표를 네이티브 뷰의 부모 좌표로 변환해 배치한다.
 #[allow(unused_variables)]
-pub fn place_surface(webview: &PlatformWebview, x: f64, y: f64, w: f64, h: f64) {
+pub fn place_webview(webview: &PlatformWebview, x: f64, y: f64, w: f64, h: f64) {
     #[cfg(target_os = "macos")]
     unsafe {
-        use objc2::msg_send;
-        use objc2::runtime::AnyObject;
-
-        let view = webview.inner() as *mut AnyObject;
-        if view.is_null() {
-            return;
+        extern "C" {
+            fn webviewSetFrame(view: *mut std::ffi::c_void, x: f64, y: f64, w: f64, h: f64);
         }
-        let parent: *mut AnyObject = msg_send![view, superview];
-        if parent.is_null() {
-            return;
-        }
-        let bounds: NSRect = msg_send![parent, bounds];
-        let frame = NSRect::from((x, bounds.size.y - y - h, w, h));
-        let _: () = msg_send![view, setFrame: frame];
+        webviewSetFrame(webview.inner().cast(), x, y, w, h);
     }
+}
+
+/// 콘텐츠 웹뷰를 장치 픽셀 좌표의 공통 컨테이너에 등록한다.
+#[allow(unused_variables)]
+pub fn attach_surface(webview: &PlatformWebview, main: usize) {
+    #[cfg(target_os = "macos")]
+    unsafe {
+        extern "C" { fn webviewAttachSurface(view: *mut std::ffi::c_void, main: *mut std::ffi::c_void); }
+        webviewAttachSurface(webview.inner().cast(), main as *mut std::ffi::c_void);
+    }
+}
+
+#[cfg(target_os = "macos")]
+pub fn webview_frame(webview: &PlatformWebview) -> [f64; 4] {
+    let mut rect = [0.0; 4];
+    unsafe {
+        extern "C" { fn webviewGetFrame(view: *mut std::ffi::c_void, rect: *mut f64); }
+        webviewGetFrame(webview.inner().cast(), rect.as_mut_ptr());
+    }
+    rect
 }
 
 /// 연속적인 표면 크기 변경의 시작과 종료를 웹뷰에 전달한다.

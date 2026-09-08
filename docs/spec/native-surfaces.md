@@ -29,7 +29,9 @@ The host controls native view geometry. Each content webview renders its documen
 
 The main document's presentation callback does not confirm another webview's document size. Application documents participate in the same presentation completion check. External documents retain independent content rendering; their native frames still follow the card geometry in the transaction.
 
-Ordinary content webviews remain opaque. After application documents confirm presentation, the host applies each document’s reported under-page color to its native backing background. A fractional-point view size can exceed the document viewport by one device pixel; that area must use the document background. Settings and menu transparency is configured separately.
+The example preserves device-pixel placement, including 0.5 CSS pixel dimensions on a display with a scale factor of two. Card edges, rules, dividers, and prepared surface rectangles use that same grid. Rendered content must cover its native surface without a gap at the footer. Reducing placement precision or recoloring native backgrounds does not satisfy this requirement. Settings and menu transparency is configured separately.
+
+On macOS, content webviews use a shared native container whose coordinates are device pixels. The host converts window rectangles through the native view hierarchy. Each content webview uses the display scale as its page zoom and one backing pixel per local coordinate unit. This preserves CSS dimensions and device-pixel ratio while providing integral native rendering sizes. Window resizing and display-scale changes preserve the conversion. Main and modal webviews retain window-point coordinates.
 
 ## Acceptance criteria
 
@@ -38,6 +40,9 @@ Ordinary content webviews remain opaque. After application documents confirm pre
 - A run must fail if it records too few frames or cannot identify the surface and card in most frames.
 - Continuous input must continue to update the displayed layout; postponing all rendering until release does not satisfy this specification.
 - Surface creation, replacement, hiding, window resizing, and document reload must preserve these requirements.
+- Fractional-size checks measure actual CSS rectangles and recorded pixels. Integer-valued viewport queries alone do not establish the rendered document extent.
+- The final device pixel inside a native surface must participate in document hit testing.
+- Native pointer coordinates must match document coordinates after window resizing and changes between display scales.
 - Settings and menu webviews remain above surfaces. Their behavior is specified in [data-native-modal](native-modals.md).
 
 ## Platform scope

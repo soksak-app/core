@@ -37,9 +37,11 @@ The harness connects to Wails on `127.0.0.1:49732` and Tauri on `127.0.0.1:49733
 
 The harness reloads the main document between runs, waits for the initial terminal document and theme, and confirms presentation of the main and visible application documents before capturing. The host supplies drag steps at 16ms intervals. A driven capture receives its first frame before input starts. After presentation is reported, the harness waits for captured terminal bounds to return to their initial coordinates, then sends `stop`. If the final coordinates are missing for 10 seconds, the check fails and retains the recording. A test rejects an incomplete gesture, an incorrect rate, too few frames, or too few measurable frames.
 
-`outside.test.mjs` requires zero surface pixels outside the card on every measurable frame, two complete round trips, and consistent relative positions of terminal content, its DOM input separator, card chrome, the sidebar, and its rail. It also requires repeated main-layout changes within the external document's measured 700ms task interval; merely executing that task is insufficient. `paint.test.mjs` checks unrendered areas. `footer.test.mjs` starts at a half-point surface height and checks the footer pixels throughout a vertical divider drag; this check requires a 2× display. `modal.test.mjs` checks ordering, transparency, background blur and input, dismissal, movement, resizing, and reload cleanup. `controls.test.mjs` reads button geometry after maximization and recording. `hosts.test.mjs` compares final requests and displayed geometry; preparation identifiers are local to each process.
+`outside.test.mjs` requires zero surface pixels outside the card on every measurable frame, two complete round trips, and consistent relative positions of terminal content, its DOM input separator, card chrome, the sidebar, and its rail. It also requires repeated main-layout changes within the external document's measured 700ms task interval; merely executing that task is insufficient. `paint.test.mjs` checks unrendered areas. `footer.test.mjs` requires an actual half-point surface height, measures document geometry and hit testing in the final device pixel, and checks footer pixels throughout a vertical divider drag; this check requires a 2× display. `modal.test.mjs` checks ordering, transparency, background blur and input, dismissal, movement, resizing, and reload cleanup. `controls.test.mjs` reads button geometry after maximization and recording. `hosts.test.mjs` compares final requests and displayed geometry; preparation identifiers are local to each process.
 
 Failed pixel checks retain raw BGRA frames and write a PNG for the worst alignment, containment, or paint failure. Raw frames contain three 32-bit values (width, height, row stride), followed by BGRA pixel data. Do not treat a missing or partial recording as a pass.
+
+`geometry.test.mjs` compares native frames, DOM slots, document rectangles, and visual viewports after window resizing and display-scale changes. It uses AppKit hit testing and sends native mouse events to the selected view, waits for pointer-down delivery before release, and checks the resulting DOM coordinates. Display-transition checks require two screens with different scale factors and restore the window position afterward. A skipped display-transition check does not validate that behavior.
 
 ## Manual acceptance
 
@@ -54,6 +56,8 @@ Manual appearance validation confirmed settings blur in both macOS hosts on 2026
 ## Diagnostics
 
 `--transcript` logs host requests and replies. `--click '5000,button.act[title="설정"]'` requests a DOM click after the specified delay. `--drive 3000,x,2,-250,0,400,2` requests two round trips. `--capture /tmp/frames` records manual layout updates. These flags require `--observe`.
+
+The native probe's `state` operation reports screen scales and window position. `position` uses AppKit global coordinates; `mouse` uses coordinates from the content area's top-left corner with a `down` or `up` phase. Neither operation activates the application.
 
 The standalone overlapping-webview input check uses a temporary native window without activating the application. Run it when changing the shared input code:
 

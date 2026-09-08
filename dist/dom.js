@@ -65,6 +65,13 @@ export class SoksakView {
             return;
         this.options.bleed = px;
     }
+    observeResolution() {
+        var _a;
+        (_a = this.resolution) === null || _a === void 0 ? void 0 : _a.removeEventListener('change', this.resolutionChanged);
+        const win = this.host.ownerDocument.defaultView;
+        this.resolution = win.matchMedia(`(resolution: ${win.devicePixelRatio}dppx)`);
+        this.resolution.addEventListener('change', this.resolutionChanged);
+    }
     constructor(host, grid, options) {
         var _a;
         this.cardEls = new Map();
@@ -97,6 +104,11 @@ export class SoksakView {
          */
         this.disarms = new Map();
         this.observer = null;
+        this.resolution = null;
+        this.resolutionChanged = () => {
+            this.observeResolution();
+            this.draw('resize');
+        };
         /**
          * A draw of one of the view's own changes that the host was handed and has
          * not performed.
@@ -124,6 +136,7 @@ export class SoksakView {
         this.grid = grid;
         this.options = options;
         this.prefix = (_a = options.classPrefix) !== null && _a !== void 0 ? _a : 'sp';
+        this.observeResolution();
         if (options.observeResize !== false && typeof ResizeObserver !== 'undefined') {
             this.observer = new ResizeObserver(() => {
                 // A hidden host reports 0x0. Resizing to that drops every px size to 0
@@ -881,7 +894,7 @@ export class SoksakView {
         return (_a = this.cardEls.get(id)) === null || _a === void 0 ? void 0 : _a.el;
     }
     destroy() {
-        var _a, _b, _c;
+        var _a, _b, _c, _d;
         this.disposed = true;
         for (const dispose of [...this.mouseDisposers.values()])
             dispose();
@@ -890,8 +903,10 @@ export class SoksakView {
             this.end(pointer);
         (_a = this.observer) === null || _a === void 0 ? void 0 : _a.disconnect();
         this.observer = null;
+        (_b = this.resolution) === null || _b === void 0 ? void 0 : _b.removeEventListener('change', this.resolutionChanged);
+        this.resolution = null;
         for (const held of this.cardEls.values()) {
-            (_c = (_b = this.options).destroyCard) === null || _c === void 0 ? void 0 : _c.call(_b, held.el, held.card);
+            (_d = (_c = this.options).destroyCard) === null || _d === void 0 ? void 0 : _d.call(_c, held.el, held.card);
             held.el.remove();
         }
         this.cardEls.clear();

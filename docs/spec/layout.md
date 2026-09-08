@@ -490,6 +490,10 @@ Only the latest pending callback can draw, and it runs once; an older callback
 cannot draw a newer layout against an earlier preparation. DOM and native
 presentation require separate synchronization in the host.
 
+The DOM binding observes display-resolution changes and redraws on the new
+device-pixel grid even when the host's CSS size is unchanged. `destroy()` removes
+this observation.
+
 `bleed` is how far past the plane a rule may run to reach the frame around it.
 A host that holds the plane inside a frame — a padding on the element outside
 it — draws its border that far from where a rule ends, so the rule stops short of

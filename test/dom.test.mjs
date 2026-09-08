@@ -16,8 +16,18 @@ import { Soksak, SoksakView, installTheme, themeCSS } from "../dist/index.js";
 const W = 1200;
 const H = 600;
 
-function mount(options = {}) {
+function createDOM() {
   const dom = new JSDOM("<!doctype html><div id=host></div>", { pretendToBeVisual: true });
+  const queries = new Map();
+  dom.window.matchMedia = (query) => {
+    if (!queries.has(query)) queries.set(query, new dom.window.EventTarget());
+    return queries.get(query);
+  };
+  return dom;
+}
+
+function mount(options = {}) {
+  const dom = createDOM();
   const { window } = dom;
   for (const name of ["PointerEvent", "Event", "Node", "HTMLElement"]) {
     globalThis[name] = window[name];
@@ -276,7 +286,7 @@ test("a press that follows a drag whose release was lost is not the second of a 
 });
 
 test("a host that has not been laid out keeps the size the grid was given", () => {
-  const dom = new JSDOM("<!doctype html><div id=host></div>", { pretendToBeVisual: true });
+  const dom = createDOM();
   globalThis.document = dom.window.document;
   delete globalThis.ResizeObserver;
   const host = dom.window.document.getElementById("host");   // clientWidth is 0 in jsdom
@@ -520,7 +530,7 @@ test("a divider swept away mid-drag ends its drag", () => {
 test("the view follows the host's size, and ignores a host with none", () => {
   // jsdom has no ResizeObserver, so the block that reads the host's size had
   // never run — including the guard its own comment warns about.
-  const dom = new JSDOM("<!doctype html><div id=host></div>", { pretendToBeVisual: true });
+  const dom = createDOM();
   globalThis.document = dom.window.document;
   const host = dom.window.document.getElementById("host");
   let fire = () => {};
@@ -1111,7 +1121,7 @@ test("onChange reports a centring", () => {
 });
 
 test("observeResize: false leaves the host unwatched", () => {
-  const dom = new JSDOM("<!doctype html><div id=host></div>", { pretendToBeVisual: true });
+  const dom = createDOM();
   const { window } = dom;
   globalThis.document = window.document;
   const host = window.document.getElementById("host");
@@ -1249,7 +1259,7 @@ test("a press with the pointer that is still down is not the second press of a p
 });
 
 test("a resize under a drag carries the drag with it", () => {
-  const dom = new JSDOM("<!doctype html><div id=host></div>", { pretendToBeVisual: true });
+  const dom = createDOM();
   const { window } = dom;
   globalThis.document = window.document;
   const host = window.document.getElementById("host");
@@ -1461,6 +1471,32 @@ test("the view places elements on the display's pixel grid", () => {
     assert.equal(reported.get("card").w, parseFloat(written), `commit reports it at ${ratio}`);
   }
   view.destroy();
+});
+
+test("display-scale changes redraw the pixel grid without resizing the host", () => {
+  let reported, commits = 0;
+  const { window, grid, view } = mount({ commit: (rects, draw) => {
+    reported = rects;
+    commits++;
+    draw();
+  } });
+  grid.moveBoundary("x", 1, 300.3);
+  view.render();
+  for (const [ratio, width] of [[2, 288.5], [1, 288], [2, 288.5]]) {
+    const previous = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+    window.devicePixelRatio = ratio;
+    previous.dispatchEvent(new window.Event("change"));
+    assert.equal(reported.get("card").w, width);
+    assert.equal(view.element("card").style.width, `${width}px`);
+    const count = commits;
+    previous.dispatchEvent(new window.Event("change"));
+    assert.equal(commits, count, "the previous resolution listener must be removed");
+  }
+  const count = commits;
+  const current = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+  view.destroy();
+  current.dispatchEvent(new window.Event("change"));
+  assert.equal(commits, count, "destroy must remove the resolution listener");
 });
 
 /**
@@ -2389,7 +2425,7 @@ test("a press takes no hold across a host change made while a draw of the view's
  * until the host performs the draw every element still carries the number it had.
  */
 function renumbering() {
-  const dom = new JSDOM("<!doctype html><div id=host></div>", { pretendToBeVisual: true });
+  const dom = createDOM();
   const { window } = dom;
   for (const name of ["PointerEvent", "Event", "Node", "HTMLElement"]) {
     globalThis[name] = window[name];

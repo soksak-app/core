@@ -171,11 +171,11 @@ fn sync_surfaces(
     let main = window.get_webview("main").ok_or("the main webview is gone")?;
     let ticket = running.prepared.fetch_add(1, Ordering::Relaxed) + 1;
     let (tx, rx) = std::sync::mpsc::channel();
-    main.with_webview(move |_| {
+    main.with_webview(move |platform| {
         native::begin_surface_layout(ticket);
-        let _ = tx.send(());
+        let _ = tx.send(native::view_id(&platform));
     }).map_err(|e| e.to_string())?;
-    rx.recv().map_err(|e| e.to_string())?;
+    let main_handle = rx.recv().map_err(|e| e.to_string())?;
 
     let result = (|| -> Result<PreparedSurfaces, String> {
     let mut wanted: HashSet<String> = HashSet::new();
@@ -207,7 +207,7 @@ fn sync_surfaces(
             webview
                 .with_webview(move |platform| {
                     native::alpha(&platform, solid);
-                    native::place_surface(&platform, ax, ay, aw, ah);
+                    native::place_webview(&platform, ax, ay, aw, ah);
                 })
                 .map_err(|e| e.to_string())?;
             continue;
@@ -236,10 +236,8 @@ fn sync_surfaces(
             webview
                 .with_webview(move |platform| {
                     native::alpha(&platform, solid);
-                    // The frame is set on the view itself here too: creating a
-                    // child webview rounds the size to whole points, which puts an
-                    // edge outside the rect the page declared.
-                    native::place_surface(&platform, ax, ay, aw, ah);
+                    native::attach_surface(&platform, main_handle);
+                    native::place_webview(&platform, ax, ay, aw, ah);
                     if let Ok(mut map) = named.lock() {
                         map.insert(native::view_id(&platform), id);
                     }
@@ -281,21 +279,7 @@ fn sync_surfaces(
     let mut placed = Vec::with_capacity(request.surfaces.len());
     for s in &request.surfaces {
         let Some(webview) = window.get_webview(&label_for(&s.id)) else { continue };
-        let at = webview
-            .position()
-            .map_err(|e| e.to_string())?
-            .to_logical::<f64>(scale);
-        let size = webview
-            .size()
-            .map_err(|e| e.to_string())?
-            .to_logical::<f64>(scale);
-        placed.push(Placement {
-            id: s.id.clone(),
-            x: at.x,
-            y: at.y,
-            w: size.width,
-            h: size.height,
-        });
+        placed.push(surface_placement(&webview, &s.id)?);
     }
     Ok(PreparedSurfaces { ticket, placements: placed })
     })();
@@ -322,6 +306,24 @@ struct Placement {
     h: f64,
 }
 
+fn surface_placement(view: &Webview, id: &str) -> Result<Placement, String> {
+    #[cfg(target_os = "macos")]
+    {
+        let (tx, rx) = std::sync::mpsc::channel();
+        view.with_webview(move |platform| { let _ = tx.send(native::webview_frame(&platform)); })
+            .map_err(|e| e.to_string())?;
+        let [x, y, w, h] = rx.recv().map_err(|e| e.to_string())?;
+        Ok(Placement { id: id.into(), x, y, w, h })
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let scale = view.window().scale_factor().map_err(|e| e.to_string())?;
+        let at = view.position().map_err(|e| e.to_string())?.to_logical::<f64>(scale);
+        let size = view.size().map_err(|e| e.to_string())?.to_logical::<f64>(scale);
+        Ok(Placement { id: id.into(), x: at.x, y: at.y, w: size.width, h: size.height })
+    }
+}
+
 #[derive(serde::Serialize)]
 struct PreparedSurfaces {
     ticket: u64,
@@ -342,7 +344,6 @@ async fn present_surfaces(window: Window, request: PresentRequest) -> Result<Vec
     #[cfg(target_os = "macos")]
     {
         let main = window.get_webview("main").ok_or("the main webview is gone")?;
-        let scale = window.scale_factor().map_err(|e| e.to_string())?;
         let ticket = request.ticket;
         let finished = window.clone();
         let settled = request.settled;
@@ -355,9 +356,7 @@ async fn present_surfaces(window: Window, request: PresentRequest) -> Result<Vec
             let result = (|| -> Result<Vec<Placement>, String> {
                 let mut placed = Vec::new();
                 for (view, p) in &held {
-                    let at = view.position().map_err(|e| e.to_string())?.to_logical::<f64>(scale);
-                    let size = view.size().map_err(|e| e.to_string())?.to_logical::<f64>(scale);
-                    placed.push(Placement { id: p.id.clone(), x: at.x, y: at.y, w: size.width, h: size.height });
+                    placed.push(surface_placement(view, &p.id)?);
                 }
                 // 준비 갱신과 종료 판정을 같은 UI 스레드에서 순서대로 실행한다.
                 let running = finished.state::<Running>();
@@ -530,7 +529,7 @@ fn isolate_webview(view: &Webview) -> Result<(), String> {
 fn place_overlay(view: &Webview, at: Rect) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     return view.with_webview(move |platform| {
-        native::place_surface(&platform, at.x, at.y, at.w, at.h);
+        native::place_webview(&platform, at.x, at.y, at.w, at.h);
     }).map_err(|e| e.to_string());
     #[cfg(not(target_os = "macos"))]
     view.set_bounds(tauri::Rect {

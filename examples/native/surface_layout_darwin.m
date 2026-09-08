@@ -5,9 +5,6 @@
 
 @interface WKWebView (SPPresentation)
 - (void)_doAfterNextPresentationUpdate:(void (^)(void))done;
-- (BOOL)_drawsBackground;
-- (NSColor *)_backgroundColor;
-- (void)_setBackgroundColor:(NSColor *)color;
 @end
 
 static uint64_t preparation;
@@ -38,29 +35,30 @@ void surfaceLayoutCancel(void) {
     [CATransaction commit];
 }
 
-void surfaceLayoutAfterPresentation(void *handle, void (^done)(void)) {
-    NSCAssert(NSThread.isMainThread, @"surface presentation requires the UI thread");
-    WKWebView *main = (WKWebView *)handle;
+static void applicationViews(NSView *parent, WKWebView *main, NSMutableArray<WKWebView *> *views) {
     NSURL *origin = main.URL;
-    NSMutableArray<WKWebView *> *views = [NSMutableArray arrayWithObject:main];
-    for (NSView *candidate in main.superview.subviews) {
-        if (candidate == main || ![candidate isKindOfClass:WKWebView.class]
-            || candidate.isHiddenOrHasHiddenAncestor) continue;
+    for (NSView *candidate in parent.subviews) {
+        if (candidate == main || candidate.isHiddenOrHasHiddenAncestor) continue;
+        if (![candidate isKindOfClass:WKWebView.class]) {
+            applicationViews(candidate, main, views);
+            continue;
+        }
         WKWebView *view = (WKWebView *)candidate;
         NSURL *url = view.URL;
         if (![url.scheme isEqualToString:origin.scheme] || ![url.host isEqualToString:origin.host]
             || !(url.port == origin.port || [url.port isEqual:origin.port])) continue;
         [views addObject:view];
     }
+}
+
+void surfaceLayoutAfterPresentation(void *handle, void (^done)(void)) {
+    NSCAssert(NSThread.isMainThread, @"surface presentation requires the UI thread");
+    WKWebView *main = (WKWebView *)handle;
+    NSMutableArray<WKWebView *> *views = [NSMutableArray arrayWithObject:main];
+    applicationViews(main.window.contentView, main, views);
     // 앱 문서의 새 크기 표시를 확인한다. 외부 문서의 렌더링은 기다리지 않는다.
     __block NSUInteger pending = views.count;
     for (WKWebView *view in views) {
-        [view _doAfterNextPresentationUpdate:^{
-            // 소수점 크기에서 문서 밖 한 픽셀도 문서 배경색으로 표시한다.
-            NSColor *color = view.underPageBackgroundColor;
-            if ([view _drawsBackground] && ![[view _backgroundColor] isEqual:color])
-                [view _setBackgroundColor:color];
-            if (--pending == 0) done();
-        }];
+        [view _doAfterNextPresentationUpdate:^{ if (--pending == 0) done(); }];
     }
 }

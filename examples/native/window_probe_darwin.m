@@ -25,6 +25,28 @@ void spNativeProbe(void *handle, const char *text, void (*reply)(const char *)) 
     NSMutableArray *views = [NSMutableArray array];
     probeViews(window.contentView, views);
     NSString *op = request[@"op"];
+    if ([op isEqualToString:@"position"]) {
+        [window setFrameOrigin:NSMakePoint([request[@"x"] doubleValue], [request[@"y"] doubleValue])];
+        probeReply(request, @YES, nil, reply);
+        return;
+    }
+    if ([op isEqualToString:@"mouse"]) {
+        NSView *content = window.contentView;
+        NSPoint point = NSMakePoint([request[@"x"] doubleValue], content.bounds.size.height - [request[@"y"] doubleValue]);
+        NSView *hit = [content hitTest:[content convertPoint:point toView:content.superview]];
+        point = [content convertPoint:point toView:nil];
+        NSString *phase = request[@"phase"];
+        if (![phase isEqualToString:@"down"] && ![phase isEqualToString:@"up"]) {
+            probeReply(request, nil, @"mouse phase must be down or up", reply); return;
+        }
+        BOOL down = [phase isEqualToString:@"down"];
+        NSEvent *event = [NSEvent mouseEventWithType:down ? NSEventTypeLeftMouseDown : NSEventTypeLeftMouseUp location:point
+            modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
+            context:nil eventNumber:1 clickCount:1 pressure:0];
+        if (down) [hit mouseDown:event]; else [hit mouseUp:event];
+        probeReply(request, @YES, nil, reply);
+        return;
+    }
     if ([op isEqualToString:@"presentation"]) {
         if (!views.count) { probeReply(request, nil, @"main webview not found", reply); return; }
         surfaceLayoutAfterPresentation(views.firstObject, ^{ probeReply(request, @YES, nil, reply); });
@@ -58,7 +80,15 @@ void spNativeProbe(void *handle, const char *text, void (*reply)(const char *)) 
             [windows addObject:@{ @"number": @([(NSWindow *)item windowNumber]),
                 @"role": [item accessibilityRole] ?: @"", @"title": [item accessibilityTitle] ?: @"" }];
         }
+        NSMutableArray *screens = [NSMutableArray array];
+        for (NSScreen *screen in NSScreen.screens) {
+            NSRect frame = screen.visibleFrame;
+            [screens addObject:@{ @"x": @(frame.origin.x), @"y": @(frame.origin.y),
+                @"w": @(frame.size.width), @"h": @(frame.size.height), @"scale": @(screen.backingScaleFactor) }];
+        }
         probeReply(request, @{ @"views": rows, @"controls": controls, @"windows": windows, @"window": @(window.windowNumber),
+            @"screens": screens, @"scale": @(window.backingScaleFactor),
+            @"x": @(window.frame.origin.x), @"y": @(window.frame.origin.y),
             @"children": @(window.childWindows.count), @"key": @(window.isKeyWindow),
             @"front": @(NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier),
             @"pid": @(NSProcessInfo.processInfo.processIdentifier),

@@ -1,21 +1,14 @@
 //go:build darwin
 
-// What this application does to the views the framework makes.
-//
-// webview_darwin.m creates the native surface and overlay webviews. This file
-// places those views on the display's pixel grid,
-// reading which view a press landed on, the shapes drawn above the surfaces,
-// and the window's own buttons.
-//
-// A frame arrives in the content view's coordinates, measured from the bottom
-// left as AppKit does. The page measures from its top left; surfaces.go turns
-// one into the other.
+// macOS 호스트의 도형, 입력과 창 버튼을 처리한다.
+// 웹뷰 생성은 webview_darwin.m, 좌표 변환은 공통 webview_geometry_darwin.m에서 처리한다.
 package main
 
 /*
 #cgo CFLAGS: -x objective-c -fmodules
 #cgo LDFLAGS: -framework Cocoa -framework WebKit
 #include "window_controls_darwin.h"
+#include "webview_geometry_darwin.h"
 #include <stdlib.h>
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
@@ -53,19 +46,6 @@ static void shapeSetFrame(void* handle, double x, double y, double w, double h) 
     if (window == nil || [window contentView] == nil) return;
     double up = [window contentView].bounds.size.height - y - h;
     view.frame = surfaceAligned(window, x, up, w, h);
-}
-
-// The frame a surface is at now, in the window content view's coordinates
-// measured from its top left, which is what the page declared.
-static void surfaceFrameNow(void* handle, double* out) {
-    NSView* view = (NSView*)handle;
-    NSView* content = [view superview];
-    if (content == nil) return;
-    NSRect f = view.frame;
-    out[0] = f.origin.x;
-    out[1] = content.bounds.size.height - f.origin.y - f.size.height;
-    out[2] = f.size.width;
-    out[3] = f.size.height;
 }
 
 // A modal is a WKWebView in the main window. Its layer clips its corners;
@@ -244,7 +224,7 @@ import "unsafe"
 // the page sent and the page is told the difference.
 func surfaceFrame(view unsafe.Pointer) Rect {
 	var out [4]C.double
-	C.surfaceFrameNow(view, &out[0])
+	C.webviewGetFrame(view, &out[0])
 	return Rect{X: float64(out[0]), Y: float64(out[1]), W: float64(out[2]), H: float64(out[3])}
 }
 
