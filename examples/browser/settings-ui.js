@@ -48,7 +48,7 @@ function row(label, control) {
   const field = control.matches?.("[data-set]") ? control : control.querySelector("[data-set], [data-key]");
   const key = field?.dataset.set ?? field?.dataset.key?.split(":")[1];
   if (scope === "project" && key && overridden(key)) {
-    const resetButton = press(`reset:${key}`, "공통값 사용");
+    const resetButton = press(`reset:${key}`, "전역값 사용");
     resetButton.classList.add("set-reset");
     el.append(resetButton);
   }
@@ -192,7 +192,7 @@ function drawGeneral() {
   if (scope === "common") body.append(group("프로젝트", "프로젝트를 여는 방식은 모든 프로젝트에 적용됩니다. 이미 열린 창은 유지됩니다.", [
     row("열기 방식", segment("projectOpening", [["tabs", "현재 창"], ["windows", "별도 창"]], value("projectOpening"))),
   ]));
-  if (scope === "project" && overridden("theme")) grid.append(press("reset:theme", "공통 테마 사용"));
+  if (scope === "project" && overridden("theme")) grid.append(press("reset:theme", "전역 테마 사용"));
   body.append(group("테마", "테마가 색과 형태의 기본값을 정하고, 모드는 그 테마의 밝은 쪽과 어두운 쪽을 고른다.", [
     grid,
     row("모드", segment("mode", MODES.map((m) => [m, m === "dark" ? "어두움" : "밝음"]), modeName())),
@@ -229,7 +229,7 @@ function drawSidebars() {
     rows.push(row(`${p.name} 레일`, choose(`link:rail:${p.id}`, options, linkedId("rail", p.id) ?? "")));
     rows.push(row(`${p.name} 우측`, choose(`link:right:${p.id}`, options, linkedId("right", p.id) ?? "")));
   }
-  if (scope === "project" && overridden("links")) rows.push(row("", press("reset:links", "공통 연결 사용")));
+  if (scope === "project" && overridden("links")) rows.push(row("", press("reset:links", "전역 연결 사용")));
   body.append(group("연결", "자리마다 세트를 건다. 걸지 않으면 그 사이드바는 없다.", rows));
 }
 
@@ -289,7 +289,6 @@ export function drawSettings() {
   if (!card) return;
   if (!settingProject()) scope = "common";
   nav.textContent = "";
-  nav.append(segment("scope", [["common", "공통"], ...(settingProject() ? [["project", "프로젝트 폴더"]] : [])], scope));
   for (const [id, name] of SECTIONS) {
     const b = document.createElement("button");
     b.className = "set-nav";
@@ -300,6 +299,14 @@ export function drawSettings() {
     nav.appendChild(b);
   }
   body.textContent = "";
+  if (here === "general") {
+    const tabs = segment("scope", [["common", "전역"], ...(settingProject() ? [["project", "프로젝트"]] : [])], scope);
+    tabs.className = "set-scope-tabs";
+    tabs.setAttribute("role", "group");
+    tabs.setAttribute("aria-label", "설정 범위");
+    for (const tab of tabs.children) tab.setAttribute("aria-pressed", tab.dataset.on);
+    body.append(tabs);
+  }
   if (scope === "project") {
     const folder = document.createElement("p");
     folder.className = "set-caption";

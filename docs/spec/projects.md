@@ -14,7 +14,7 @@ The library displays saved projects, layout previews, folder paths, space counts
 
 Layout previews are schematic diagrams of the active space's saved card grid. They preserve card order, grid spans, and split directions, with uniform gaps, equally sized row tracks, and compact sidebar columns. Content columns share the remaining width equally. Theme-derived colors, rounded corners, and small content symbols distinguish panes. Window dimensions, dragged split ratios, fixed pixel widths, and rail outlines do not determine thumbnail proportions. Preview generation uses saved layout state without opening the workspace or storing rendered coordinates. It does not create content webviews or shells.
 
-The title bar’s project-list button and project-add action open the library in that window while preserving its current work. Selecting a project or returning to the workspace restores the work screen. New Window always creates an unassigned window. On macOS, closing all windows keeps the application available for this action. The library footer, Command/Ctrl+Shift+N, and macOS Dock menu invoke the same action. The library uses common settings when the window has no selected project.
+The title bar’s project-list button and project-add action open the library in that window while preserving its current work. Selecting a project or returning to the workspace restores the work screen. New Window always creates an unassigned window. On macOS, closing all windows keeps the application available for this action. The library footer, Command/Ctrl+Shift+N, and macOS Dock menu invoke the same action. The library always uses common settings, including when returning from a project workspace. Returning to the workspace reapplies that project’s overrides.
 
 ## Shared appearance
 
@@ -26,7 +26,9 @@ Library controls, forms, project cards, and the footer use the workspace's compa
 
 ## Settings
 
-Effective settings are defaults, then common settings, then the current project's explicit overrides. Settings provides a common scope and a project-folder scope. A project value can be removed to resume inheriting the common value. Changing a common value updates every open project that has no override for that value.
+The library applies defaults and common settings only. A project workspace additionally applies its project’s explicit overrides. The selected settings project determines effective values, default write targets, and available scopes. The library clears this selection while preserving the window’s projects and their saved overrides. Workspace selection restores the settings project.
+
+The General settings pane provides horizontal Global and Project scope tabs above its controls. The left navigation contains setting categories only. The library provides only Global; Global and Project are available in a project workspace. Returning to the library resets the editing scope to Global without changing the project’s saved overrides. Selecting another category preserves the chosen scope for its controls. A project value can be removed to resume inheriting the common value. Changing a common value updates every open project that has no override for that value.
 
 Project opening mode is common-only: `tabs` opens projects in the current window, and `windows` opens another project in a separate top-level OS window when the current window already owns a project. An unassigned window always opens its first project in place. Project-folder settings cannot override this mode. Existing project windows are reused when their project is selected; changing the opening policy applies to subsequent project opens and does not close running windows or shells.
 
@@ -45,7 +47,7 @@ The default configuration directories are:
 | Wails | `~/Library/Application Support/com.soksak.wailsv3` | `%AppData%/com.soksak.wailsv3` | `$XDG_CONFIG_HOME/com.soksak.wailsv3`, or `~/.config/com.soksak.wailsv3` when unset |
 | Tauri | `~/Library/Application Support/dev.soksak.example` | `%AppData%/dev.soksak.example` | `$XDG_CONFIG_HOME/dev.soksak.example`, or `~/.config/dev.soksak.example` when unset |
 
-`--config-dir PATH` selects another application configuration directory. Project override paths remain inside their projects. The settings UI provides a common/project scope selector and removes individual overrides through **Use common value**. Project tabs can be reordered by dragging; their order determines the default library order. A tab's × removes the project from the registry and preserves its folder and settings file. The OS window's close button preserves the project in the registry.
+`--config-dir PATH` selects another application configuration directory. Project override paths remain inside their projects. Global edits update the common settings file; Project edits update the selected project's settings file. **Use global value** removes an individual override. Project tabs can be reordered by dragging; their order determines the default library order. A tab's × removes the project from the registry and preserves its folder and settings file. The OS window's close button preserves the project in the registry.
 
 The application configuration directory also contains `projects.json`, which stores the ordered registry and project screen state. Wails and Tauri use their own application configuration directories. Native hosts serialize changes, reread the affected file before updating it, write a temporary file in the same directory, and replace the destination after the write completes. Open windows receive a change notification after successful replacement. Settings files are reread on reload and project selection. A storage failure is reported visibly; it does not reset or silently overwrite saved data with defaults. Closing a ready project window completes pending saves before closing its native resources. Application quit requests the same save from each ready window before termination.
 
@@ -55,6 +57,7 @@ The browser example uses browser windows and IndexedDB storage; it does not writ
 
 - Equivalent folder paths and symbolic links select one project, including concurrent opens from separate windows.
 - Project creation, renaming, removal, order, pins, and last-opened times survive application restart; startup displays the library without starting projects.
+- The library always uses and edits common settings, including after leaving a workspace with project overrides. Returning to the workspace restores its overrides and provides both editing scopes.
 - Common settings and explicit folder overrides survive reload and restart. Resetting an override restores inheritance. The opening mode is absent from project-folder settings.
 - Startup and New Window show the library without native content surfaces or shells. First-project creation/opening reuses that OS window in both opening modes. Selecting another project from an occupied window follows the common opening mode. Reopening an already open project selects its existing window.
 - Layout, tabs, sidebar widths, theme settings, and normal window geometry restore for the selected project. Closing a window keeps its saved data.

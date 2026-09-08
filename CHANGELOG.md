@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- Move Global/Project scope selection from the settings navigation to horizontal tabs at the top of General. Preserve scope across categories, keep project opening mode in Global, and use Global labels and shared text sizing for override reset controls. Library screens now apply and edit common settings only, including after leaving a workspace; returning restores project overrides and both scope tabs. Rebuilt macOS hosts passed all 18 related settings, project, library, and modal checks. Native library settings were visually reviewed. `make docs-check` passed.
+
 - Validate simplified library screens in both rebuilt macOS hosts. Creation, saved-project selection, window reuse, search, pins, and schematic preview checks passed. The full example run passed 37 checks, failed 2 for insufficient recording frames, and skipped 2 display-transition checks. The failed checks passed on rerun with unchanged code and criteria; intermittent frame-count failure remains unresolved. Go 3/3, Rust 3/3, and documentation checks passed.
 
 - Unify library and workspace typography, letter spacing, line height, spacing, borders, corners, buttons, fields, and icon styling through shared CSS. Remove the library-only type scale and fixed theme shapes. Both screens scale their text with the configured base size. Rebuilt macOS hosts passed 39 example checks with 0 failures and 2 display-transition skips; visual comparison and font/size/corner changes were checked in both hosts. `make docs-check` passed.

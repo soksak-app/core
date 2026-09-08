@@ -106,18 +106,79 @@ for (const [name,binary] of Object.entries(APPS)) {
     await run(binary,main,`(await import('./settings-ui.js')).openSettings();`);
     await until(()=>state(binary,main),s=>s.views.some(v=>!v.hidden&&v.url.includes('overlay.html')),'main settings did not render');
     const childModal = (await state(binary,child)).views.find(v=>v.url.includes('overlay.html')).url;
+    const scopeTabs = await evaluate(binary,child,`({
+      navScopes:document.querySelectorAll('.set-card__nav [data-key^="pick:scope:"]').length,
+      tabs:[...document.querySelectorAll('.set-card__pane .set-scope-tabs button')].map(b=>({
+        label:b.textContent,selected:b.getAttribute('aria-pressed'),x:b.getBoundingClientRect().x,y:b.getBoundingClientRect().y
+      }))
+    })`,childModal);
+    assert.equal(scopeTabs.navScopes,0);
+    assert.deepEqual(scopeTabs.tabs.map(b=>b.label),['전역','프로젝트']);
+    assert.deepEqual(scopeTabs.tabs.map(b=>b.selected),['true','false']);
+    assert.equal(scopeTabs.tabs[0].y,scopeTabs.tabs[1].y);
+    assert.ok(scopeTabs.tabs[0].x<scopeTabs.tabs[1].x);
     await evaluate(binary,child,`document.querySelector('[data-key="pick:scope:project"]').click(); null`,childModal);
     await until(()=>evaluate(binary,child,`Boolean(document.querySelector('[data-key="pick:scope:project"][data-on="true"]'))`,childModal),Boolean,'folder settings scope was not selected');
     assert.equal(await evaluate(binary,child,`Boolean(document.querySelector('[data-key^="pick:projectOpening:"]'))`,childModal),false);
     await evaluate(binary,child,`document.querySelector('[data-key="pick:mode:light"]').click(); null`,childModal);
     await until(()=>mode(binary,child),m=>m==='light','modal did not update its project');
     assert.equal(await mode(binary,main),'dark');
+    assert.equal(read(join(second.root,'.soksak/settings.json')).mode,'light');
+    assert.equal(read(join(config,'settings.json')).mode,'dark');
+    const commonLatency = read(join(config,'settings.json')).latency;
+    await evaluate(binary,child,`document.querySelector('[data-key="nav:compositing"]').click();null`,childModal);
+    await until(()=>evaluate(binary,child,`Boolean(document.querySelector('[data-set="latency"]'))`,childModal),Boolean,'compositing settings did not open');
+    await evaluate(binary,child,`const input=document.querySelector('[data-set="latency"]');input.value='7';input.dispatchEvent(new Event('change',{bubbles:true}));null`,childModal);
+    await until(()=>read(join(second.root,'.soksak/settings.json')).latency,n=>n===7,'category change did not retain project scope');
+    assert.equal(read(join(config,'settings.json')).latency,commonLatency);
+    await until(()=>evaluate(binary,child,`Boolean(document.querySelector('[data-key="reset:latency"]'))`,childModal),Boolean,'project override reset did not appear');
+    await evaluate(binary,child,`document.querySelector('[data-key="reset:latency"]').click();null`,childModal);
+    await until(()=>read(join(second.root,'.soksak/settings.json')).latency,n=>n===undefined,'project override was not removed');
+    await evaluate(binary,child,`document.querySelector('[data-key="nav:general"]').click();null`,childModal);
+    await until(()=>evaluate(binary,child,`Boolean(document.querySelector('.set-scope-tabs [data-key="pick:scope:project"][aria-pressed="true"]'))`,childModal),Boolean,'General did not retain the selected project tab');
+    await evaluate(binary,child,`document.querySelector('[data-key="pick:scope:common"]').click();null`,childModal);
+    await until(()=>evaluate(binary,child,`Boolean(document.querySelector('[data-key^="pick:projectOpening:"]'))`,childModal),Boolean,'Global tab did not display the common-only setting');
+    await evaluate(binary,child,`document.querySelector('[data-key="pick:mode:light"]').click();null`,childModal);
+    await until(()=>mode(binary,main),m=>m==='light','Global tab did not update the other project');
+    assert.equal(read(join(config,'settings.json')).mode,'light');
+    await evaluate(binary,child,`document.querySelector('[data-key="pick:scope:project"]').click();null`,childModal);
+    await until(()=>evaluate(binary,child,`Boolean(document.querySelector('[data-key="pick:scope:project"][aria-pressed="true"]'))`,childModal),Boolean,'project scope was not selected before leaving the workspace');
     await evaluate(binary,child,`document.querySelector('[data-key="close"]').click(); null`,childModal);
     await until(()=>state(binary,child),s=>!s.views.some(v=>v.url.includes('overlay.html')),'child settings did not close');
     assert.equal((await state(binary,main)).views.some(v=>!v.hidden&&v.url.includes('overlay.html')),true);
     const mainModal = (await state(binary,main)).views.find(v=>v.url.includes('overlay.html')).url;
     await evaluate(binary,main,`document.querySelector('[data-key="close"]').click(); null`,mainModal);
     await until(()=>state(binary,main),s=>!s.views.some(v=>v.url.includes('overlay.html')),'main settings did not close');
+
+    await settings(binary,main,{mode:'dark'},'common');
+    const projectSettings = read(join(second.root,'.soksak/settings.json'));
+    await run(binary,child,`await (await import('./projects.js')).browse();`);
+    assert.equal(await evaluate(binary,child,'document.body.dataset.screen'),'library');
+    assert.equal(await mode(binary,child),'dark','library must apply common settings after leaving a project');
+    assert.equal(await evaluate(binary,child,'document.documentElement.style.colorScheme'),'dark');
+    await run(binary,child,`(await import('./settings-ui.js')).openSettings();`);
+    const libraryModal = (await until(()=>state(binary,child),s=>s.views.some(v=>v.url.includes('overlay.html')),'library settings did not open')).views.find(v=>v.url.includes('overlay.html')).url;
+    const libraryTabs = await until(()=>evaluate(binary,child,`[...document.querySelectorAll('.set-scope-tabs button')].map(b=>({label:b.textContent,selected:b.getAttribute('aria-pressed')}))`,libraryModal),tabs=>tabs.length>0,'library scope tab did not render');
+    assert.deepEqual(libraryTabs,[{label:'전역',selected:'true'}]);
+    assert.equal(await evaluate(binary,child,`Boolean(document.querySelector('[data-key^="pick:projectOpening:"]'))`,libraryModal),true);
+    await evaluate(binary,child,`document.querySelector('[data-key="pick:mode:light"]').click();null`,libraryModal);
+    await until(()=>mode(binary,main),m=>m==='light','library settings did not update common settings');
+    assert.equal(read(join(config,'settings.json')).mode,'light');
+    assert.deepEqual(read(join(second.root,'.soksak/settings.json')),projectSettings);
+    await evaluate(binary,child,`document.querySelector('[data-key="close"]').click();null`,libraryModal);
+    await until(()=>state(binary,child),s=>!s.views.some(v=>v.url.includes('overlay.html')),'library settings did not close');
+    await evaluate(binary,child,`document.querySelector('button[title="밝게 / 어둡게"]').click();null`);
+    await until(()=>mode(binary,main),m=>m==='dark','library appearance action did not update common settings');
+    assert.deepEqual(read(join(second.root,'.soksak/settings.json')),projectSettings);
+    await run(binary,child,`await (await import('./projects.js')).activate(${JSON.stringify(second.id)});`);
+    assert.equal(await mode(binary,child),'light','workspace must restore its project override');
+    assert.equal(await evaluate(binary,child,'document.documentElement.style.colorScheme'),'light');
+    await run(binary,child,`(await import('./settings-ui.js')).openSettings();`);
+    const restoredModal = (await until(()=>state(binary,child),s=>s.views.some(v=>v.url.includes('overlay.html')),'restored workspace settings did not open')).views.find(v=>v.url.includes('overlay.html')).url;
+    const restoredTabs = await until(()=>evaluate(binary,child,`[...document.querySelectorAll('.set-scope-tabs button')].map(b=>b.textContent)`,restoredModal),tabs=>tabs.length>0,'restored workspace scope tabs did not render');
+    assert.deepEqual(restoredTabs,['전역','프로젝트']);
+    await evaluate(binary,child,`document.querySelector('[data-key="close"]').click();null`,restoredModal);
+    await until(()=>state(binary,child),s=>!s.views.some(v=>v.url.includes('overlay.html')),'restored workspace settings did not close');
 
     await settings(binary,main,{projectOpening:'tabs'},'common');
     const third = await run(binary,main,`const p=await import('./projects.js'),v=await import('./plane.js');

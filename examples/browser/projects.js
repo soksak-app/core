@@ -24,6 +24,7 @@ export async function browse() {
   await flush();
   browsing = true;
   await listener.empty();
+  await selectProject(null);
   changed();
 }
 export function newWindow() {

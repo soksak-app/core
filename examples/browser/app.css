@@ -346,6 +346,11 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
   width:2px;border-radius:2px;background:var(--rail)}
 
 .set-card__pane{flex:1 1 auto;min-width:0;padding:14px 18px 18px;overflow:auto}
+.set-scope-tabs{display:flex;gap:var(--space-4);margin-bottom:var(--space-4);border-bottom:var(--bw) solid var(--edge)}
+.set-scope-tabs button{padding:var(--space-2) var(--space-1);margin-bottom:calc(0px - var(--bw));border:0;border-bottom:2px solid transparent;
+  background:transparent;color:var(--muted);font:inherit;font-size:var(--text-control);cursor:pointer}
+.set-scope-tabs button:hover{color:var(--fg)}
+.set-scope-tabs button[aria-pressed=true]{color:var(--fg);border-bottom-color:var(--rail)}
 .set-group{margin:0 0 20px}
 .set-group:last-child{margin-bottom:0}
 .set-group__name{margin:0 0 var(--space-1);font-size:var(--text-caption);letter-spacing:var(--section-tracking);color:var(--rail)}
@@ -425,6 +430,5 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
   font: var(--text-control)/var(--line-height) var(--font);
   user-select: text;
 }
-.set-card__nav > .set-seg { flex-direction: column; margin-bottom: 12px; }
-.set-reset { font-size: 10px; }
+.set-reset { font-size: var(--text-caption); }
 .set-row:has(.set-reset) { flex-wrap: wrap; }
