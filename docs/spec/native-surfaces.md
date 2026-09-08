@@ -33,6 +33,8 @@ The example preserves device-pixel placement, including 0.5 CSS pixel dimensions
 
 On macOS, content webviews use a shared native container whose coordinates are device pixels. The host converts window rectangles through the native view hierarchy. Each content webview uses the display scale as its page zoom and one backing pixel per local coordinate unit. This preserves CSS dimensions and device-pixel ratio while providing integral native rendering sizes. Window resizing and display-scale changes preserve the conversion. Main and modal webviews retain window-point coordinates.
 
+The macOS geometry module sets the private `_setOverrideDeviceScaleFactor:` API to `1` when attaching a content webview. Its local coordinates already represent device pixels, so the rendering density must be one backing pixel per local unit. The page zoom preserves CSS dimensions. This dependency belongs to the macOS host implementation; it is not part of the shared layout API.
+
 ## Acceptance criteria
 
 - Recorded native content stays within its card on every measurable frame. Native content, card chrome, the rail sidebar, and its outer rail must preserve their relative geometry in the same frame; temporary inset growth does not satisfy this requirement.
@@ -46,5 +48,9 @@ On macOS, content webviews use a shared native container whose coordinates are d
 - Settings and menu webviews remain above surfaces. Their behavior is specified in [data-native-modal](native-modals.md).
 
 ## Platform scope
+
+Surface placement, visibility, stacking, and input follow the same contract in every host and operating system. Native implementations use the APIs and coordinate systems of their target platform.
+
+Platform and framework defects are corrected in the host's native core within this repository when necessary. Private APIs are permitted when the required behavior cannot be obtained correctly through public APIs. Each correction must identify the cause, justify the API's role using its actual behavior, use the smallest sufficient implementation, and verify geometry, rendering, input, and lifecycle on the affected platform. Remove harmful or unnecessary changes. Passing tests is evidence of tested behavior; implementation review must also establish necessity and correct API use. API availability and maintenance risks are documented separately from the technical validity of the correction. Differences between hosts require diagnosis of the framework integration and native behavior; they do not establish the cause by themselves.
 
 Native presentation validation currently targets macOS. Windows and Linux behavior is unverified. No framework fork is part of this implementation.
