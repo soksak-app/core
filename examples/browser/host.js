@@ -73,6 +73,7 @@ function drawing(el) {
     className: el.className,
     html: el.innerHTML,
     css: [...document.styleSheets]
+      .filter((sheet) => !document.adoptedStyleSheets.includes(sheet))
       .map((sheet) => [...sheet.cssRules].map((rule) => rule.cssText).join("\n"))
       .join("\n"),
     border: over(style.borderTopColor, style.backgroundColor),

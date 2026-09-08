@@ -67,7 +67,9 @@ el.style.visibility = "hidden";
 ```
 
 Frames passed to `show()` and `place()` are CSS pixels relative to `#plane`.
-`show()` copies the root class, inner markup and page stylesheets. It does not
+`show()` copies the root class, inner markup and page stylesheets, excluding
+adopted stylesheets used for document-local effects. Content updates use the
+same rule; background blur must never become a dialog style. It does not
 hide or remove the original DOM. Keep that DOM measurable with
 `visibility: hidden` if it owns layout, then call `overlay.place(el, rect)` when
 it moves or changes size and `overlay.update(el)` when its content changes.

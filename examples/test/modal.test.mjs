@@ -62,6 +62,10 @@ for (const [name, binary] of Object.entries(APPS)) {
       `${name}: the settings modal's document rendered once and never again, so the ` +
         `update the page sent never reached it:\n${log}`,
     );
+    assert.equal(await evaluate(binary, "overlay.html", 'getComputedStyle(document.documentElement).filter'),
+      "none", "settings navigation must not copy the background blur into the dialog");
+    assert.equal(await evaluate(binary, "overlay.html", 'getComputedStyle(document.body).backgroundColor'),
+      "rgba(0, 0, 0, 0.5)", "settings navigation must preserve one 50% backdrop");
   });
 
   test(`${name}: rebuilding the layout from settings keeps settings above new surfaces`, async (t) => {
