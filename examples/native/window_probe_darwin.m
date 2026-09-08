@@ -1,6 +1,7 @@
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import "window_probe_darwin.h"
+#import "surface_layout_darwin.h"
 
 static void probeViews(NSView *parent, NSMutableArray *views) {
     if ([parent isKindOfClass:WKWebView.class]) { [views addObject:parent]; return; }
@@ -24,6 +25,11 @@ void spNativeProbe(void *handle, const char *text, void (*reply)(const char *)) 
     NSMutableArray *views = [NSMutableArray array];
     probeViews(window.contentView, views);
     NSString *op = request[@"op"];
+    if ([op isEqualToString:@"presentation"]) {
+        if (!views.count) { probeReply(request, nil, @"main webview not found", reply); return; }
+        surfaceLayoutAfterPresentation(views.firstObject, ^{ probeReply(request, @YES, nil, reply); });
+        return;
+    }
     if ([op isEqualToString:@"state"]) {
         NSMutableArray *rows = [NSMutableArray array];
         NSMutableArray *controls = [NSMutableArray array];

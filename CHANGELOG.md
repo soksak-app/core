@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- Window checks wait for the initial terminal document, its theme, and native presentation before recording.
+
 - Synchronize opaque application webview backing backgrounds with their document colors after presentation. This removes the bright bottom pixel at fractional-point heights during divider dragging. The new regression check failed in both macOS hosts before the fix; the corrected complete window suite passed 31/31.
 
 - Exclude document-local adopted stylesheets when copying modal CSS. Settings navigation previously copied the main document's blur into the dialog. Both macOS hosts passed 12/12 modal checks with the new navigation assertions.

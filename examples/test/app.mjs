@@ -132,6 +132,18 @@ async function fresh(binary) {
     tell(binary, portOf(binary), ["reset"], (text) =>
       [...text.matchAll(/observe: ready ([\d.]+)/g)].some((match) => Number(match[1]) !== previous), 20_000),
   );
+  // 초기 앱 문서와 테마가 준비된 뒤 실제 표시 완료를 확인한다.
+  const until = Date.now() + OPENS;
+  for (;;) {
+    const state = await nativeProbe(binary, { op: "state" });
+    const terminal = state.views.find(view => !view.hidden && view.url.includes("terminal.html"));
+    if (terminal && await nativeProbe(binary, { op: "eval", match: terminal.url,
+      script: `document.readyState === "complete" &&
+        getComputedStyle(document.documentElement).getPropertyValue("--surface").trim() !== ""` })) break;
+    if (Date.now() > until) throw new Error(`${binary}: the initial terminal document did not become ready`);
+    await new Promise(resolve => setTimeout(resolve, 20));
+  }
+  await nativeProbe(binary, { op: "presentation" });
 }
 
 async function held(work) {
