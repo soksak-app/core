@@ -4,6 +4,9 @@ import test from "node:test";
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const pkg = JSON.parse(read("package.json"));
+// The workspace root declares the toolchain and holds the specification.
+const readRoot = (path) => readFileSync(new URL(`../../../${path}`, import.meta.url), "utf8");
+const workspace = JSON.parse(readRoot("package.json"));
 
 test("every exported path exists in the build", () => {
   for (const path of [pkg.main, pkg.module, pkg.types]) {
@@ -26,13 +29,13 @@ test("the package declares its toolchain", () => {
   // the first told everyone else to run the version I happen to have — an
   // install refused on Node 20 for a build that targets ES2019. What must hold
   // is only that what I build on satisfies what I advertise.
-  const built = read(".node-version").trim();
+  const built = readRoot(".node-version").trim();
   assert.match(pkg.engines.node, /^>=\d+/, "consumers are given a floor, not my version");
   const floor = Number(pkg.engines.node.slice(2).split(".")[0]);
   assert.ok(Number(built.split(".")[0]) >= floor, `built on ${built}, advertised ${pkg.engines.node}`);
-  assert.match(pkg.packageManager, /^pnpm@\d+[.]\d+[.]\d+$/);
+  assert.match(workspace.packageManager, /^pnpm@\d+[.]\d+[.]\d+$/);
   assert.equal(pkg.type, "module");
-  const makefile = read("Makefile");
+  const makefile = readRoot("Makefile");
   for (const target of ["preflight", "prepare", "build", "verify"]) {
     assert.match(makefile, new RegExp(`^${target}:`, "m"));
   }
@@ -62,7 +65,7 @@ test("the view creates only div elements and writes no markup", () => {
 });
 
 test("every exported name appears in the layout specification", async () => {
-  const readme = readFileSync(new URL("../docs/spec/layout.md", import.meta.url), "utf8");
+  const readme = readFileSync(new URL("../docs/layout.md", import.meta.url), "utf8");
   const lib = await import("../dist/index.js");
   for (const name of Object.keys(lib)) {
     assert.match(readme, new RegExp(`\\b${name}\\b`), `${name} is exported and undocumented`);

@@ -17,16 +17,20 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const REPO = new URL("../", import.meta.url).pathname;
+const ROOT = new URL("../../../", import.meta.url).pathname;
 // The mutants are written into a copy. Writing them into the repository leaves
 // whatever else reads it — a build, an editor, another run — reading a defect
 // nobody wrote, for as long as this takes, and a run killed outright leaves one
 // there for good.
-const HERE = `${mkdtempSync(join(tmpdir(), "soksak-mutants-"))}/`;
-for (const part of [
-  "dist", "test", "scripts", "src",
-  "package.json", "README.md", "docs", "Makefile", "tsconfig.json", ".node-version",
-]) {
+// The copy keeps the workspace layout, because the suite reads the root's
+// toolchain declarations through the same relative paths.
+const TOP = `${mkdtempSync(join(tmpdir(), "soksak-mutants-"))}/`;
+const HERE = `${TOP}packages/soksak/`;
+for (const part of ["dist", "test", "scripts", "src", "docs", "package.json", "tsconfig.json"]) {
   cpSync(`${REPO}${part}`, `${HERE}${part}`, { recursive: true });
+}
+for (const part of ["package.json", "Makefile", ".node-version"]) {
+  cpSync(`${ROOT}${part}`, `${TOP}${part}`, { recursive: true });
 }
 // The suite reads more than the built code: jsdom is what the view is rendered
 // into. Link the tree rather than copy it — the run only reads it.
@@ -56,7 +60,7 @@ const RULES = [
 ];
 
 const originals = Object.fromEntries(FILES.map((f) => [f, readFileSync(`${HERE}dist/${f}`, "utf8")]));
-const drop = () => rmSync(HERE, { recursive: true, force: true });
+const drop = () => rmSync(TOP, { recursive: true, force: true });
 // Take the copy away however this ends, including a run killed by a timeout.
 process.on("exit", drop);
 for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {

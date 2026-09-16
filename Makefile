@@ -18,7 +18,7 @@ verify: prepare docs-check
 	@pnpm test
 	@pnpm breaks
 	@pnpm build
-	@git diff --exit-code -- dist
+	@git diff --exit-code -- packages/soksak/dist
 
 # Example apps. The frontend of each is generated from examples/browser/ and
 # dist/, and both embed it at compile time, so the frontend is regenerated

@@ -18,6 +18,6 @@
 | 네이티브 창 버튼 | 공통 AppKit 배치, 읽기 전용 좌표 조회 구현 | 두 macOS 호스트의 최대화·녹화 종료 후 좌표 검사 통과 | 미배포 |
 | Windows·Linux 네이티브 호스트 | Wails 추가 웹뷰 생성 미구현. 여러 플랫폼의 CSS 정의는 공통 | Wails Windows 교차 컴파일 통과. Windows·Linux 네이티브 실행 미검증 | 미배포 |
 
-계약: [프로젝트와 설정](spec/projects.ko.md), [배치](spec/layout.ko.md), [표면 배치](spec/native-surfaces.ko.md), [네이티브 모달](spec/native-modals.ko.md). 절차: [빌드와 검증](operations/examples.ko.md).
+계약: [프로젝트와 설정](spec/projects.ko.md), [배치](../packages/soksak/docs/layout.ko.md), [표면 배치](spec/native-surfaces.ko.md), [네이티브 모달](spec/native-modals.ko.md). 절차: [빌드와 검증](operations/examples.ko.md).
 
 2026-09-08 라이브러리 단순화 검증은 두 macOS 호스트를 다시 빌드하고 재시작했다. 전체 예제 검사에서 37개 통과, 녹화 프레임 수 부족으로 2개 실패(Wails 56개·Tauri 55개, 기준 60개 초과), 2× 화면 하나만 연결되어 화면 전환 검사 2개를 생략했다. 실패한 2개는 같은 코드와 기준으로 재검사하여 통과했다. 프레임 수 부족은 간헐적으로 발생하며 이번 변경에서 수정하지 않았다. Go 3/3·Rust 3/3 저장소 검사와 `make docs-check`를 통과했다. Windows·Linux 네이티브 실행은 미검증이다. 변경하지 않은 배치 라이브러리는 `1a921b4` 기준 테스트 310개 통과·변이 142개 검출 결과를 유지한다.

@@ -1,0 +1,67 @@
+{
+  "name": "soksak",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "description": "Headless soksak layout with shared grid lines: split, close, drag, snap-and-merge boundaries, and a rounded union outline that binds any set of panes. Guarantees a slicing layout, exact coverage, and that every pane stays closable.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "src",
+    "docs",
+    "README.md",
+    "README.ko.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc && node scripts/emit-dom-reference.mjs",
+    "test": "pnpm build && node --test test/",
+    "fuzz": "pnpm build && node scripts/fuzz.mjs",
+    "mutate": "pnpm build && node scripts/mutate.mjs",
+    "breaks": "pnpm build && node scripts/check-breaks.mjs"
+  },
+  "keywords": [
+    "split",
+    "soksak",
+    "splitter",
+    "layout",
+    "tiling",
+    "guillotine",
+    "slicing",
+    "floorplan",
+    "resizable",
+    "panes",
+    "grid",
+    "headless"
+  ],
+  "license": "MIT",
+  "author": "min-median-max",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/min-median-max/soksak.git",
+    "directory": "packages/soksak"
+  },
+  "bugs": {
+    "url": "https://github.com/min-median-max/soksak/issues"
+  },
+  "homepage": "https://github.com/min-median-max/soksak/tree/main/packages/soksak#readme",
+  "devDependencies": {
+    "jsdom": "^30.0.1",
+    "fake-indexeddb": "^6.2.5",
+    "typescript": "7.0.2"
+  },
+  "sideEffects": false
+}
