@@ -20,3 +20,7 @@ test("every plugin is a declared dependency and every reference resolves", () =>
   });
   checkReferences(environment, manifests);
 });
+
+test("the native application declares the sidecars it runs", () => {
+  assert.deepEqual(environment.sidecars, ["shell"]);
+});

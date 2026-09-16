@@ -72,13 +72,13 @@ export const page = (() => {
       invoke("theme").then(fn);
       listen("theme", (e) => fn(e.payload));
     },
-    shell: {
-      open: (id) => invoke("terminal_open", { id }),
-      write: (id, text) => invoke("terminal_write", { id, data: text }),
-      onOutput(id, fn) {
-        listen("terminal-output", (e) => { if (e.payload.id === id) fn(e.payload.text); });
-      },
-    },
+    sidecar: (name) => ({
+      send: (surface, body) => invoke("sidecar_send", { sidecar: name, surface, body }),
+      // 사이드카 이벤트는 창의 모든 페이지가 받는다. 사이드카와 표면이 일치하는 것만 처리한다.
+      on: (surface, fn) => listen("sidecar-message", (e) => {
+        if (e.payload.sidecar === name && e.payload.surface === surface) fn(e.payload.body);
+      }),
+    }),
     modal: {
       content(id, instance, fn, place) {
         // 이벤트는 모든 페이지가 받는다. 자기 모달의 것만 취한다.

@@ -1,18 +1,19 @@
-// Runs the soksak example as a real Wails v3 application.
+// soksak 워크벤치를 실행하는 Wails v3 애플리케이션.
 //
-// The frontend is built by the example-frontend make target from the
-// repository example. Wails roots its asset FS at the directory that holds
-// index.html,
-// so index.html sits at the frontend root and the window opens "/".
+// pnpm run frontend 가 frontend/ 에 프런트엔드를 배치한다. Wails 는 index.html 이 있는
+// 디렉터리를 자산 루트로 사용하므로 창은 "/" 를 연다.
 //
-// Wails creates the main window. This application creates additional native
-// webviews and handles their messages through webview.go; no fork is required.
+// Wails 가 메인 창을 생성한다. 추가 네이티브 웹뷰와 그 메시지는 webview.go 가 처리한다.
+// 사이드카 채널은 sidecars.go 가 처리한다.
 package main
 
 import (
 	"embed"
 	"flag"
+	"io/fs"
 	"log"
+	"os"
+	"path/filepath"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -31,12 +32,25 @@ const (
 func main() {
 	flag.Parse()
 
-	host := NewHost()
+	environment, err := fs.ReadFile(assets, "frontend/environment.json")
+	if err != nil {
+		log.Fatal(err)
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		log.Fatal(err)
+	}
+	sidecars, err := NewSidecars(environment, filepath.Dir(executable))
+	if err != nil {
+		log.Fatal(err)
+	}
+	host := NewHost(sidecars)
 	app := application.New(application.Options{
 		Name: "soksak", Description: "soksak layout running in Wails v3",
 		Assets:     application.AssetOptions{Handler: application.BundledAssetFileServer(assets)},
 		Services:   services(host),
 		ShouldQuit: host.shouldQuit,
+		OnShutdown: sidecars.Stop,
 		KeyBindings: map[string]func(application.Window){
 			"CmdOrCtrl+Shift+N": func(application.Window) { go host.WindowNew() },
 		},

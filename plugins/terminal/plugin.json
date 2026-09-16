@@ -23,5 +23,8 @@
       "id": "terminal.jobs",
       "name": "작업"
     }
+  ],
+  "sidecars": [
+    "shell"
   ]
 }

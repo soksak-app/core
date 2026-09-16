@@ -20,3 +20,7 @@ test("every plugin is a declared dependency and every reference resolves", () =>
   });
   checkReferences(environment, manifests);
 });
+
+test("the browser application declares no sidecars because it has no native host", () => {
+  assert.equal(environment.sidecars, undefined);
+});

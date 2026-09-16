@@ -69,7 +69,7 @@ func (s *Surfaces) close() {
 			shape.destroy()
 		}
 	})
-	go s.shells.CloseAll()
+	go s.sidecars.CloseOwner(s)
 }
 
 type nativeCall struct {
@@ -101,16 +101,12 @@ func invokeNative(s *Surfaces, call nativeCall) (any, error) {
 			return nil, err
 		}
 		return s.Theme(), nil
-	case "ShellOpen":
-		if err := nativeArgs(call, &id); err != nil {
+	case "SidecarSend":
+		var body json.RawMessage
+		if err := nativeArgs(call, &key, &id, &body); err != nil {
 			return nil, err
 		}
-		return nil, s.ShellOpen(id)
-	case "ShellWrite":
-		if err := nativeArgs(call, &id, &value); err != nil {
-			return nil, err
-		}
-		return nil, s.ShellWrite(id, value)
+		return nil, s.SidecarSend(key, id, body)
 	case "ModalContent", "ModalReady":
 		if err := nativeArgs(call, &id, &instance); err != nil {
 			return nil, err

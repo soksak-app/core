@@ -1,0 +1,9 @@
+{
+  "name": "@soksak/sidecar-shell",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Shell sidecar: one shell process per surface over line-delimited JSON.",
+  "scripts": {
+    "test": "go test ./..."
+  }
+}

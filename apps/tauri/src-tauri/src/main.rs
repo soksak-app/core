@@ -14,7 +14,7 @@
 mod native;
 mod capture;
 mod observe;
-mod shell;
+mod sidecars;
 mod windows;
 mod workspace;
 use windows::{window_data, emit_window, root_view, Windows};
@@ -152,7 +152,6 @@ fn sync_surfaces(
 ) -> Result<PreparedSurfaces, String> {
     let context = window_data(&window)?;
     let overlay = &context.overlay;
-    let shells = &context.shells;
     let views = &context.views;
     let watching = &context.watching;
     let resizing = &context.resizing;
@@ -272,9 +271,9 @@ fn sync_surfaces(
             webview.close().map_err(|e| e.to_string())?;
         }
     }
-    // A shell whose surface is gone has nothing left to write to.
+    // 제거된 표면을 사이드카에 알린다.
     let alive: Vec<String> = request.surfaces.iter().map(|s| s.id.clone()).collect();
-    shells.retain(&|id: &str| alive.iter().any(|s| s == id))?;
+    window.state::<WindowSidecars>().retain(&window, &|id: &str| alive.iter().any(|s| s == id))?;
 
     // Where each surface actually sits. The page declares a rect and this host
     // aligns it to the display's pixels, so the two differ and the page is told
@@ -864,23 +863,29 @@ struct Picked {
     value: String,
 }
 
-/// Starts the shell for a terminal surface. The page calls this once, when the
-/// view loads, so a reopened surface gets its own shell.
-#[tauri::command]
-fn terminal_open(window: Window, id: String) -> Result<(), String> {
-    let context = window_data(&window)?;
-    let shells = &context.shells;
+/// 사이드카 채널에서 사용하는 창. 창 레이블로 구분하고 창의 프로젝트 디렉터리를 root 로 사용한다.
+type WindowSidecars = sidecars::Sidecars<Window>;
 
-    let root = context.root.lock().map_err(|e| e.to_string())?.clone();
-    shells.open(&window, &id, &root)
+impl sidecars::Owner for Window {
+    fn key(&self) -> String {
+        self.label().to_string()
+    }
+    fn root(&self) -> Result<String, String> {
+        let context = window_data(self)?;
+        let root = context.root.lock().map_err(|e| e.to_string())?.clone();
+        Ok(root)
+    }
+    fn deliver(&self, message: sidecars::Message) {
+        if let Err(error) = emit_window(self, "sidecar-message", message) {
+            eprintln!("sidecar message: {error}");
+        }
+    }
 }
 
+/// 표면 페이지가 보낸 메시지를 사이드카에 전달한다.
 #[tauri::command]
-fn terminal_write(window: Window, id: String, data: String) -> Result<(), String> {
-    let context = window_data(&window)?;
-    let shells = &context.shells;
-
-    shells.write(&id, &data)
+fn sidecar_send(window: Window, sidecar: String, surface: String, body: Box<serde_json::value::RawValue>) -> Result<(), String> {
+    window.state::<WindowSidecars>().send(&window, &sidecar, &surface, &body)
 }
 
 /// Writes one line from the page's own checks into this app's log. The page has
@@ -987,6 +992,11 @@ fn main() {
             app.set_menu(menu)?;
             let directory = observe::flag("config-dir").map(std::path::PathBuf::from).unwrap_or(app.path().app_config_dir()?);
             app.manage(workspace::Workspace::new(directory));
+            let environment = app.asset_resolver().get("environment.json".into())
+                .ok_or("environment.json is missing from the frontend")?;
+            let executable = std::env::current_exe()?;
+            let sidecar_directory = executable.parent().ok_or("executable has no directory")?.to_path_buf();
+            app.manage(WindowSidecars::new(&environment.bytes, sidecar_directory)?);
             if let Some(window) = app.get_webview_window("main") { windows::register(window.as_ref().window())?; }
             Ok(())
         })
@@ -1014,8 +1024,7 @@ fn main() {
             overlay_hide,
             overlay_pick,
             window_controls,
-            terminal_open,
-            terminal_write,
+            sidecar_send,
             theme,
             set_theme,
             report
@@ -1027,6 +1036,7 @@ fn main() {
             if let tauri::RunEvent::ExitRequested { code: None, ref api, .. } = event {
                 if app.windows().is_empty() { api.prevent_exit(); return; }
             }
+            if let tauri::RunEvent::Exit = event { app.state::<WindowSidecars>().stop(); }
             if let tauri::RunEvent::ExitRequested { api, .. } = event { windows::quit(app, api); }
         });
 }

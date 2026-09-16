@@ -12,7 +12,6 @@ pub(crate) struct WindowData {
     pub watching: Watching,
     pub resizing: Resizing,
     pub running: Running,
-    pub shells: shell::Shells,
     pub root: Mutex<String>,
     pub ready: AtomicBool,
 }
@@ -97,7 +96,7 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
                 if let Ok(mut shapes) = context.shapes.0.lock() {
                     for (_, shape) in shapes.drain() { native::shape_destroy(shape); }
                 }
-                let _ = context.shells.retain(&|_| false);
+                if let Err(error) = host.state::<WindowSidecars>().retain(&host, &|_| false) { eprintln!("{error}"); }
                 let registry = host.state::<Windows>();
                 if let Ok(mut owners) = registry.owners.lock() { owners.retain(|_, label| label != host.label()); }
                 if let Ok(mut windows) = registry.windows.lock() {

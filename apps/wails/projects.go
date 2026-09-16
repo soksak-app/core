@@ -23,11 +23,12 @@ type Host struct {
 	mu         sync.Mutex
 	windows    map[uint]*Surfaces
 	owners     map[string]*Surfaces
+	sidecars   *Sidecars
 }
 
 var configDirectory = flag.String("config-dir", "", "Application configuration directory")
 
-func NewHost() *Host {
+func NewHost(sidecars *Sidecars) *Host {
 	config, err := os.UserConfigDir()
 	if err != nil {
 		panic(err)
@@ -36,7 +37,7 @@ func NewHost() *Host {
 	if *configDirectory != "" {
 		directory = *configDirectory
 	}
-	return &Host{workspace: &Workspace{directory: directory}, windows: map[uint]*Surfaces{}, owners: map[string]*Surfaces{}}
+	return &Host{workspace: &Workspace{directory: directory}, windows: map[uint]*Surfaces{}, owners: map[string]*Surfaces{}, sidecars: sidecars}
 }
 
 func (h *Host) surface(ctx context.Context) (*Surfaces, error) {
@@ -240,7 +241,7 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 		Mac: application.MacWindow{TitleBar: application.MacTitleBarHidden},
 		URL: url, DevToolsEnabled: true, BackgroundColour: application.NewRGB(16, 17, 23),
 	})
-	s := NewSurfaces(win)
+	s := NewSurfaces(win, h.sidecars)
 	h.mu.Lock()
 	h.windows[win.ID()] = s
 	h.mu.Unlock()

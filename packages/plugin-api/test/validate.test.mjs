@@ -4,7 +4,9 @@ import {
   PAGE_IMPORTS, checkReferences, modulePath, pageImports, validateEnvironment, validateManifest,
 } from "../index.js";
 
-const card = { id: "probe", name: "Probe", mark: "p", icon: "<path/>", surface: { page: "ui/probe.html" } };
+const card = {
+  id: "probe", name: "Probe", mark: "p", icon: "<path/>", surface: { page: "ui/probe.html" }, sidecars: ["worker"],
+};
 const side = { id: "side", name: "Side", sections: [{ id: "side.list", name: "List" }] };
 const environment = () => ({
   runtime: "runtime",
@@ -28,7 +30,7 @@ const environment = () => ({
 test("a manifest with a page surface or with sections only is accepted", () => {
   assert.equal(validateManifest(card), card);
   assert.equal(validateManifest(side), side);
-  assert.equal(validateManifest({ ...card, surface: { url: "https://example.com" } }).id, "probe");
+  assert.equal(validateManifest({ ...card, sidecars: undefined, surface: { url: "https://example.com" } }).id, "probe");
 });
 
 test("a manifest is rejected for each invalid field", () => {
@@ -45,6 +47,9 @@ test("a manifest is rejected for each invalid field", () => {
     [{ ...side, sections: [{ id: "other.list", name: "x" }] }, /must be side.<name>/],
     [{ ...side, sections: [side.sections[0], side.sections[0]] }, /duplicate section/],
     [{ id: "empty", name: "Empty" }, /surface or sections/],
+    [{ ...card, surface: { url: "https://example.com" } }, /sidecars require a page surface/],
+    [{ ...card, sidecars: ["Worker"] }, /expected sidecar names/],
+    [{ ...card, sidecars: ["worker", "worker"] }, /duplicate sidecar/],
   ];
   for (const [manifest, message] of cases) assert.throws(() => validateManifest(manifest), message);
 });
@@ -85,6 +90,15 @@ test("references to missing plugins and sections are rejected", () => {
     assert.throws(() => checkReferences(value, [card, side]), message);
   }
   assert.throws(() => checkReferences(environment(), [card, side, { ...side }]), /same id/);
+});
+
+test("sidecar references are checked only in an environment that declares sidecars", () => {
+  const hosted = { ...environment(), sidecars: ["worker"] };
+  assert.equal(validateEnvironment(hosted), hosted);
+  checkReferences(hosted, [card, side]);
+  checkReferences(environment(), [card, side]);
+  assert.throws(() => checkReferences({ ...hosted, sidecars: [] }, [card, side]), /undeclared sidecar worker/);
+  assert.throws(() => validateEnvironment({ ...hosted, sidecars: ["worker", "worker"] }), /duplicate sidecar/);
 });
 
 test("page imports resolve inside the staged layout", () => {

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- 두 호스트의 셸 세션 코드를 `sidecars/shell` 프로세스로 옮긴다. 두 호스트는 표면 페이지와 선언된 사이드카 사이에서 한 줄 JSON을 전달하고, 사이드카 메시지를 표면을 소유한 창에만 전달하며, 제거된 표면을 알리고, 종료 시 사이드카를 멈춘다. 페이지는 `page.sidecar(name)`을 사용한다. 터미널 플러그인은 `shell` 사이드카를 선언하고 네이티브 애플리케이션은 이를 `environment.json`에 선언한다. 사이드카 프로토콜 테스트(Go 3), fake 사이드카를 사용한 Wails 전달 테스트(Go 신규 3, 전체 6), Tauri 전달 테스트(Rust 신규 3, 전체 6), 패키지 테스트가 통과했고 두 네이티브 빌드에 `soksak-shell`이 포함된다. 실행 중인 애플리케이션의 네이티브 창 검사와 터미널 입력은 실행하지 않았다.
 - 모든 작업 공간 패키지와 애플리케이션의 버전을 0.0.1로 지정한다. Tauri 크레이트와 설정은 작업 공간 분리 커밋에서 0.0.1로 지정했다.
 - 저장소를 pnpm 작업 공간으로 재구성한다. `packages/soksak`은 배치 라이브러리와 명세, `packages/workbench`는 워크벤치 프런트엔드, `packages/plugin-api`는 `plugin.json`·`environment.json`·스테이징 배치·페이지 import map, `plugins/{browser,terminal,files}`는 세 플러그인 선언, `apps/{browser,wails,tauri}`는 `environment.json`을 통한 조립, `native/darwin`은 pkg-config로 찾는 macOS 공용 정적 라이브러리, `e2e`는 창 검사를 담는다. 라이브러리는 `pnpm add "github:min-median-max/soksak#path:packages/soksak"`로 설치한다. 저장소 루트는 더 이상 라이브러리 패키지가 아니다.
 - 네이티브 애플리케이션의 최소 버전을 macOS 14.0으로 선언한다. Wails 캡처 코드는 macOS 14.0의 ScreenCaptureKit API를, 공용 라이브러리는 macOS 12.0의 WebKit API를 사용하지만 기존 빌드는 최소 버전 11.0으로 링크했다. 공용 라이브러리 빌드는 선언한 최소 버전보다 새로운 API를 사용하는 소스에서 실패한다. 두 네이티브 빌드는 최소 버전 14.0으로 링크하고 배포 버전 경고가 없다. Wails는 의존성이 추가한 `-lobjc` 중복 경고를 계속 출력한다.

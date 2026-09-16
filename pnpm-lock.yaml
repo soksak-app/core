@@ -118,6 +118,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/plugin-api
 
+  sidecars/shell: {}
+
 packages:
 
   '@asamuzakjp/css-color@6.0.7':

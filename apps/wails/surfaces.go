@@ -8,6 +8,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -126,17 +127,11 @@ type Surfaces struct {
 	nextModal uint64
 	modal     *modal
 	shapes    map[string]*nativeShape
-	shells    *Shells
+	sidecars  *Sidecars
 	watch     sync.Once
 
 	// The theme the main page last set. A page calls Theme after loading.
 	theme Theme
-}
-
-// ShellOutput is one piece of a shell's output, as a page receives it.
-type ShellOutput struct {
-	ID   string `json:"id"`
-	Text string `json:"text"`
 }
 
 // errNoWindow is returned when this application's window is gone. Every call
@@ -164,19 +159,16 @@ func (s *Surfaces) Theme() Theme {
 	return s.theme
 }
 
-// ShellOpen opens the shell behind a terminal surface. A page that reloads calls
-// it again for a shell that is already running, which is left alone.
-func (s *Surfaces) ShellOpen(id string) error {
+// projectRoot 는 이 창의 프로젝트 디렉터리를 반환한다.
+func (s *Surfaces) projectRoot() string {
 	s.mu.Lock()
-	root := s.root
-	s.mu.Unlock()
-	_, err := s.shells.Open(id, root)
-	return err
+	defer s.mu.Unlock()
+	return s.root
 }
 
-// ShellWrite sends one line to a shell.
-func (s *Surfaces) ShellWrite(id string, text string) error {
-	return s.shells.Write(id, text)
+// SidecarSend 는 이 창의 표면 페이지가 보낸 메시지를 사이드카에 전달한다.
+func (s *Surfaces) SidecarSend(name, surface string, body json.RawMessage) error {
+	return s.sidecars.Send(s, name, surface, body)
 }
 
 // OverlayPick emits the key and value a modal's page changed. The main page
@@ -193,9 +185,9 @@ func (s *Surfaces) OverlayPick(id string, instance uint64, key string, value str
 	return nil
 }
 
-func NewSurfaces(win *application.WebviewWindow) *Surfaces {
+func NewSurfaces(win *application.WebviewWindow, sidecars *Sidecars) *Surfaces {
 	s := &Surfaces{
-		window: win, projects: map[string]bool{},
+		window: win, projects: map[string]bool{}, sidecars: sidecars,
 		views:  map[string]*nativeWebview{},
 		named:  map[uintptr]string{},
 		live:   map[string]bool{},
@@ -204,7 +196,6 @@ func NewSurfaces(win *application.WebviewWindow) *Surfaces {
 		// 이 값을 받는 페이지는 토큰을 순회하다 멈춘다.
 		theme: Theme{Tokens: map[string]string{}},
 	}
-	s.shells = NewShells(func(id, text string) { s.emit("shell-output", ShellOutput{ID: id, Text: text}) })
 	return s
 }
 
@@ -589,10 +580,9 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 	if !<-done {
 		return prepared, errNoWindow
 	}
-	// 셸을 끝내는 것은 그 프로세스를 기다리는 일이다. 주 스레드에서 기다리면 기다리는
-	// 동안 화면이 멈춘다.
+	// 제거된 표면을 사이드카에 알린다. 주 스레드 밖에서 호출한다.
 	for _, id := range gone {
-		s.shells.Close(id)
+		s.sidecars.Close(id)
 	}
 	return prepared, nil
 }

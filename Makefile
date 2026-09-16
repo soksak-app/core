@@ -26,7 +26,7 @@ verify: prepare docs-check
 #
 # 각 앱은 debug 와 release 두 프로필로 빌드한다. release 는 각 도구의 표준 축소
 # 옵션(cargo release 프로필, Go 의 -s -w -trimpath)을 사용한다.
-.PHONY: native-darwin frontend-wails frontend-tauri \
+.PHONY: native-darwin sidecars frontend-wails frontend-tauri native-test \
         tauri tauri-release tauri-build tauri-build-release \
         wails wails-release wails-build wails-build-release \
         examples-verify examples-size
@@ -52,6 +52,12 @@ WAILS_RELEASE = apps/wails/bin/wails-release
 native-darwin:
 	@$(MAKE) -C native/darwin
 
+# 사이드카. 네이티브 앱은 실행 파일과 같은 디렉터리에서 soksak-<이름> 을 찾는다.
+SIDECARS = sidecars/shell/build/soksak-shell
+
+sidecars:
+	@$(GO_ENV) go build -C sidecars/shell -ldflags "$(GO_LINK)" -o build/soksak-shell .
+
 frontend-wails: build
 	@pnpm -F @soksak/wails run frontend
 
@@ -59,19 +65,23 @@ frontend-tauri: build
 	@pnpm -F @soksak/tauri run frontend
 
 # generate_context! 가 프런트엔드를 포함하므로 크레이트를 다시 빌드하게 한다.
-tauri-build: native-darwin frontend-tauri
+tauri-build: native-darwin sidecars frontend-tauri
 	@touch apps/tauri/src-tauri/src/main.rs
 	@cd apps/tauri/src-tauri && $(CARGO_ENV) cargo build
+	@cp $(SIDECARS) $(dir $(TAURI_DEBUG))
 
-tauri-build-release: native-darwin frontend-tauri
+tauri-build-release: native-darwin sidecars frontend-tauri
 	@touch apps/tauri/src-tauri/src/main.rs
 	@cd apps/tauri/src-tauri && $(CARGO_ENV) cargo build --release
+	@cp $(SIDECARS) $(dir $(TAURI_RELEASE))
 
-wails-build: native-darwin frontend-wails
+wails-build: native-darwin sidecars frontend-wails
 	@$(GO_ENV) go build -C apps/wails -ldflags "$(GO_LINK)" -o bin/wails .
+	@cp $(SIDECARS) apps/wails/bin/
 
-wails-build-release: native-darwin frontend-wails
+wails-build-release: native-darwin sidecars frontend-wails
 	@$(GO_ENV) go build -C apps/wails -trimpath -ldflags "-s -w $(GO_LINK)" -o bin/wails-release .
+	@cp $(SIDECARS) apps/wails/bin/
 
 tauri: tauri-build
 	@./$(TAURI_DEBUG)
@@ -84,6 +94,12 @@ wails: wails-build
 
 wails-release: wails-build-release
 	@./$(WAILS_RELEASE)
+
+# 네이티브 코드의 단위 검사. 공용 입력 검사, Wails 와 Tauri 호스트 검사를 실행한다.
+native-test: native-darwin frontend-wails frontend-tauri
+	@$(MAKE) -C native/darwin test
+	@$(GO_ENV) go test -C apps/wails -ldflags "$(GO_LINK)" ./...
+	@cd apps/tauri/src-tauri && $(CARGO_ENV) cargo test
 
 # 이미 실행 중인 앱의 창을 순차 검사한다. 하네스는 앱을 실행하지 않는다.
 examples-verify: docs-check

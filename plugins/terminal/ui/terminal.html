@@ -6,7 +6,7 @@
 
   터미널 에뮬레이터가 아니라 콘솔이다. 출력은 텍스트이고 입력은 한 줄 단위다.
 
-  셸을 호출하는 방식은 애플리케이션마다 다르고 런타임 모듈이 그 차이를 담당한다.
+  셸 세션은 shell 사이드카가 실행하고, 네이티브 호스트가 메시지를 전달한다.
 -->
 <style>
   html, body { margin: 0; height: 100%; background: var(--surface) }
@@ -51,15 +51,18 @@
     if (atEnd) out.scrollTop = out.scrollHeight;
   }
 
-  page.shell.onOutput(id, write);
-  page.shell.open(id);
+  // 셸 사이드카가 이 표면의 셸 세션을 실행한다. 형식은 sidecars/shell 에 정의한다.
+  const shell = page.sidecar("shell");
+  // 출력 수신을 등록한 뒤 셸을 연다. 먼저 열면 첫 출력이 등록 전에 도착할 수 있다.
+  await shell.on(id, (body) => write(body.error === undefined ? body.text : `error: ${body.error}\n`));
+  shell.send(id, { op: "open" });
 
   input.addEventListener("keydown", (e) => {
     if (e.key !== "Enter") return;
     const line = input.value;
     input.value = "";
     write(`$ ${line}\n`);
-    page.shell.write(id, `${line}\n`);
+    shell.send(id, { op: "write", data: `${line}\n` });
   });
 
   addEventListener("click", () => input.focus());

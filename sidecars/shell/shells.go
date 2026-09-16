@@ -1,14 +1,8 @@
-// A shell process behind a terminal surface.
+// 표면마다 하나의 셸 프로세스를 실행한다.
 //
-// A terminal surface is a webview like the browser one; what differs is that
-// its page is local and a process here feeds it. The output keeps arriving,
-// which is the point: a surface showing a running program cannot be replaced by
-// a still of itself.
-//
-// This is a console, not a terminal emulator. Output is streamed as text and
-// input is sent a line at a time. The shell is not started interactive: an
-// interactive shell draws its prompt with the escape sequences a terminal would
-// act on, and this page is not a terminal.
+// 콘솔이며 터미널 에뮬레이터가 아니다. 출력은 줄 단위 텍스트로 전달하고 입력은 받은
+// 그대로 전달한다. 대화형 셸은 터미널 제어 문자로 프롬프트를 그리므로 셸을 대화형으로
+// 실행하지 않는다.
 package main
 
 import (
@@ -29,18 +23,16 @@ type session struct {
 type Shells struct {
 	mu      sync.Mutex
 	running map[string]*session
-	// Where a line of output goes. The reader passes each line straight to it,
-	// so no line waits in a queue and none is dropped.
+	// 출력 한 줄을 받는 함수. 읽는 고루틴이 줄마다 바로 호출한다.
 	say func(id string, text string)
 }
 
-// NewShells makes the set of shells. say receives every line each shell writes,
-// from the goroutine reading it.
+// NewShells 는 셸 집합을 생성한다. say 는 각 셸이 출력한 줄을 읽는 고루틴에서 받는다.
 func NewShells(say func(id string, text string)) *Shells {
 	return &Shells{running: map[string]*session{}, say: say}
 }
 
-// shell reports the user's shell, or the platform's default when it is not set.
+// shell 은 사용자의 셸을, 설정되지 않았으면 플랫폼 기본 셸을 반환한다.
 func shell() string {
 	if runtime.GOOS == "windows" {
 		if program := os.Getenv("COMSPEC"); program != "" {
@@ -54,9 +46,8 @@ func shell() string {
 	return "/bin/sh"
 }
 
-// Open starts a shell for id and reports whether it started one. A shell that is
-// already running is left alone and false is returned, so the caller does not
-// attach a second reader to the same output.
+// Open 은 id 의 셸을 시작하고 시작 여부를 반환한다. 이미 실행 중이면 시작하지 않고
+// false 를 반환한다. 같은 출력에 읽는 고루틴이 둘 생기지 않게 하기 위해서다.
 func (s *Shells) Open(id, root string) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -81,8 +72,8 @@ func (s *Shells) Open(id, root string) (bool, error) {
 		stdout.Close()
 		return false, err
 	}
-	// Wait 이 닫아 주는 것은 프로세스가 시작된 뒤의 일이다. 시작에 실패하면 여기서
-	// 닫지 않는 한 부모 쪽 기술자가 남는다.
+	// Wait 는 시작된 프로세스의 파이프만 닫는다. 시작에 실패하면 여기서 닫아야 부모
+	// 프로세스의 파일 기술자가 남지 않는다.
 	if err := cmd.Start(); err != nil {
 		stdin.Close()
 		stdout.Close()
@@ -97,8 +88,7 @@ func (s *Shells) Open(id, root string) (bool, error) {
 		go func(stream io.Reader) {
 			reader := bufio.NewReader(stream)
 			for {
-				// ReadString keeps the newline, so the page receives the breaks
-				// the shell actually wrote.
+				// ReadString 은 줄바꿈을 포함해 반환하므로 셸이 출력한 줄바꿈이 그대로 전달된다.
 				line, err := reader.ReadString('\n')
 				if line != "" {
 					s.say(id, line)
@@ -112,6 +102,7 @@ func (s *Shells) Open(id, root string) (bool, error) {
 	return true, nil
 }
 
+// Write 는 id 의 셸 입력으로 data 를 전달한다.
 func (s *Shells) Write(id string, data string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -123,11 +114,10 @@ func (s *Shells) Write(id string, data string) error {
 	return err
 }
 
-// Close ends the shell whose surface is gone: a process with nothing left to
-// write to is a process whose output no one reads.
+// Close 는 표면이 제거된 셸을 종료한다.
 //
-// The process is ended with the lock released. Ending it means waiting for it,
-// and a wait while holding the lock would stop the next call to this set.
+// 종료는 프로세스를 기다리는 작업이므로 잠금을 해제한 뒤 수행한다. 잠금을 유지한 채
+// 기다리면 다른 호출이 대기한다.
 func (s *Shells) Close(id string) {
 	s.mu.Lock()
 	live, ok := s.running[id]
@@ -144,6 +134,7 @@ func (s *Shells) Close(id string) {
 	_ = live.cmd.Wait()
 }
 
+// CloseAll 은 실행 중인 모든 셸을 종료한다.
 func (s *Shells) CloseAll() {
 	s.mu.Lock()
 	ids := make([]string, 0, len(s.running))

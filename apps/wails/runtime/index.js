@@ -74,16 +74,13 @@ export const page = (() => {
       call("Theme").then(fn);
       listen("theme", fn);
     },
-    shell: {
-      open: (id) => call("ShellOpen", id),
-      write: (id, text) => call("ShellWrite", id, text),
-      onOutput(id, fn) {
-        // 출력 이벤트는 모든 페이지가 받는다. id 가 일치하는 것만 처리한다.
-        listen("shell-output", (out) => {
-          if (out.id === id) fn(out.text);
-        });
-      },
-    },
+    sidecar: (name) => ({
+      send: (surface, body) => call("SidecarSend", name, surface, body),
+      // 사이드카 이벤트는 창의 모든 페이지가 받는다. 사이드카와 표면이 일치하는 것만 처리한다.
+      on: (surface, fn) => listen("sidecar-message", (message) => {
+        if (message.sidecar === name && message.surface === surface) fn(message.body);
+      }),
+    }),
     modal: {
       content(id, instance, fn, place) {
         return Promise.all([listen("modal-content", (sent) => {

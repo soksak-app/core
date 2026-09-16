@@ -13,10 +13,11 @@ The workbench does not reference any specific plugin. Each application declares 
 | `packages/plugin-api` | Declaration formats, staged layout, page import map, and helpers for plugin pages |
 | `plugins/<id>` | One plugin: `plugin.json`, its pages, and its tests |
 | `apps/<name>` | One application: `environment.json`, `runtime/`, native host code, and its tests |
+| `sidecars/<name>` | One [sidecar](sidecars.md): a native process that plugins use through the host |
 | `native/darwin` | Shared macOS library used by the native hosts |
 | `e2e` | Window checks for running native applications |
 
-Common functionality belongs to the workbench or the native host so plugins do not reimplement it. Plugin functionality does not move into the workbench.
+Common functionality belongs to the workbench or the native host so plugins do not reimplement it. Plugin functionality does not move into the workbench. A sidecar holds native functionality for one domain and can serve several plugins; general functionality such as the message relay belongs to the host.
 
 ## plugin.json
 
@@ -28,6 +29,7 @@ Common functionality belongs to the workbench or the native host so plugins do n
 | `mark` | with `surface` | Short text shown in the add menu and new tab titles |
 | `icon` | with `surface` | SVG elements for a 16×16 view box |
 | `sections` | no | Sidebar sections `{ "id": "<plugin id>.<name>", "name" }` |
+| `sidecars` | no | [Sidecar](sidecars.md) names the page surface uses; requires a `page` surface |
 
 A plugin requires `surface`, `sections`, or both. Only plugins with a surface appear in the add menu and own a rail. The workbench opens a `page` surface at `modules/<package name>/<page>?id=<tab id>`. Unknown fields are rejected.
 
@@ -41,6 +43,7 @@ A plugin requires `surface`, `sections`, or both. Only plugins with a surface ap
 | `workspace.focus` | Card focused in a new space; it must have tabs |
 | `sidebars.sets` | Default section sets |
 | `sidebars.links` | Default assignments of sets to `left` (with `plugin: null`), `right`, or `rail` (with a plugin id) |
+| `sidecars` | Sidecars the native host runs. An application without a native host omits this field; otherwise every plugin sidecar must be listed |
 
 The workbench loads `environment.json` and every listed `plugin.json` before it reads settings or builds a space. A tab or link that names a plugin without a surface, or a set that names an unknown section, fails the load before any registration.
 
@@ -64,7 +67,7 @@ Every page declares one import map equal to `PAGE_IMPORTS`: `soksak`, `@soksak/p
 | Export | Meaning |
 | --- | --- |
 | `host` | Main-page host interface (`call`, `on`, `page`, `draggable`), or `null` without a native host |
-| `page` | Surface and modal page interface (`theme`, `shell`, `modal`), or `null` without a native host |
+| `page` | Surface and modal page interface (`theme`, `sidecar`, `modal`), or `null` without a native host |
 | `openStore()` | Returns the workspace store. The browser application uses IndexedDB; native applications return `HostWorkspaceStore` |
 
 Plugin pages import `followTheme` and `page` from `@soksak/plugin-api/page` and do not import workbench files.

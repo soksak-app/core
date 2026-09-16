@@ -38,6 +38,14 @@ const PACKAGE = /^(@[a-z0-9-]+\/)?[a-z0-9-]+$/;
 const isObject = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 const isText = (value) => typeof value === "string" && value.length > 0;
 
+/** 사이드카 이름 목록을 검사한다. */
+function checkNames(where, names) {
+  if (!Array.isArray(names) || names.some((name) => typeof name !== "string" || !ID.test(name))) {
+    throw new Error(`${where}: expected sidecar names`);
+  }
+  if (new Set(names).size !== names.length) throw new Error(`${where}: duplicate sidecar`);
+}
+
 function only(where, value, keys) {
   for (const key of Object.keys(value)) {
     if (!keys.includes(key)) throw new Error(`${where}: unknown field ${key}`);
@@ -53,10 +61,11 @@ function only(where, value, keys) {
  *   icon      16×16 뷰박스 SVG 요소. surface 가 있으면 필수
  *   surface   카드 표면. `{ url }` 은 외부 주소, `{ page }` 는 패키지 안의 문서 경로
  *   sections  사이드바에 표시할 수 있는 섹션. id 는 `<플러그인 id>.<이름>` 형식
+ *   sidecars  표면 페이지가 사용하는 사이드카 이름
  */
 export function validateManifest(manifest) {
   if (!isObject(manifest)) throw new Error("plugin.json: expected an object");
-  only("plugin.json", manifest, ["id", "name", "mark", "icon", "surface", "sections"]);
+  only("plugin.json", manifest, ["id", "name", "mark", "icon", "surface", "sections", "sidecars"]);
   const { id } = manifest;
   if (typeof id !== "string" || !ID.test(id)) throw new Error(`plugin.json: invalid id ${id}`);
   const where = `plugin ${id}`;
@@ -92,6 +101,10 @@ export function validateManifest(manifest) {
       if (!isText(section.name)) throw new Error(`${where}: section ${section.id} requires a name`);
     }
   }
+  if (manifest.sidecars !== undefined) {
+    if (manifest.surface?.page === undefined) throw new Error(`${where}: sidecars require a page surface`);
+    checkNames(`${where} sidecars`, manifest.sidecars);
+  }
   if (manifest.surface === undefined && manifest.sections === undefined) {
     throw new Error(`${where}: a plugin requires a surface or sections`);
   }
@@ -105,12 +118,15 @@ export function validateManifest(manifest) {
  *   plugins    불러올 플러그인 패키지 이름. 순서가 `+` 메뉴 순서다
  *   workspace  새 스페이스의 배치. focus 는 포커스할 카드 id, grid 는 선과 카드
  *   sidebars   사이드바 세트(sets)와 자리 연결(links)의 기본값
+ *   sidecars   네이티브 호스트가 실행하는 사이드카 이름. 네이티브 호스트가 없는
+ *              애플리케이션은 이 필드를 두지 않는다
  *
  * 플러그인 id 와 섹션 id 의 참조는 manifest 를 불러온 뒤 checkReferences 로 검사한다.
  */
 export function validateEnvironment(environment) {
   if (!isObject(environment)) throw new Error("environment.json: expected an object");
-  only("environment.json", environment, ["runtime", "plugins", "workspace", "sidebars"]);
+  only("environment.json", environment, ["runtime", "plugins", "workspace", "sidebars", "sidecars"]);
+  if (environment.sidecars !== undefined) checkNames("environment.json sidecars", environment.sidecars);
   if (!isText(environment.runtime) || environment.runtime.startsWith("/") || environment.runtime.split("/").includes("..")) {
     throw new Error("environment.json: runtime must be a directory inside the application");
   }
@@ -189,6 +205,14 @@ export function checkReferences(environment, manifests) {
   for (const set of environment.sidebars.sets) {
     for (const id of set.sections) {
       if (!sections.has(id)) throw new Error(`environment.json: set ${set.id} names unknown section ${id}`);
+    }
+  }
+  // sidecars 가 없는 환경은 네이티브 호스트가 없으므로 표면 페이지를 열지 않는다.
+  for (const manifest of environment.sidecars ? manifests : []) {
+    for (const name of manifest.sidecars ?? []) {
+      if (!environment.sidecars.includes(name)) {
+        throw new Error(`environment.json: plugin ${manifest.id} uses undeclared sidecar ${name}`);
+      }
     }
   }
   for (const link of environment.sidebars.links) {
