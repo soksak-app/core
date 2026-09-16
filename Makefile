@@ -35,8 +35,14 @@ verify: prepare docs-check
 # 프로필을 읽지 않는다.
 export PATH := $(HOME)/.cargo/bin:$(PATH)
 
-# native/darwin 라이브러리의 헤더와 링크 옵션은 pkg-config 로 찾는다.
+# 네이티브 앱의 최소 macOS 버전. 캡처 코드가 macOS 14.0 의 ScreenCaptureKit API 를
+# 사용한다. Go 는 CGO_CFLAGS 로 모든 cgo 패키지에, 링커에는 -extldflags 로 전달한다.
+# Rust 와 cc 는 MACOSX_DEPLOYMENT_TARGET 을 읽는다.
+MACOS_MINIMUM = 14.0
 export PKG_CONFIG_PATH := $(CURDIR)/native/darwin/build
+GO_ENV       = CGO_CFLAGS="-O2 -g -mmacosx-version-min=$(MACOS_MINIMUM)"
+GO_LINK      = -extldflags=-mmacosx-version-min=$(MACOS_MINIMUM)
+CARGO_ENV    = MACOSX_DEPLOYMENT_TARGET=$(MACOS_MINIMUM)
 
 TAURI_DEBUG   = apps/tauri/src-tauri/target/debug/soksak-tauri
 TAURI_RELEASE = apps/tauri/src-tauri/target/release/soksak-tauri
@@ -55,17 +61,17 @@ frontend-tauri: build
 # generate_context! 가 프런트엔드를 포함하므로 크레이트를 다시 빌드하게 한다.
 tauri-build: native-darwin frontend-tauri
 	@touch apps/tauri/src-tauri/src/main.rs
-	@cd apps/tauri/src-tauri && cargo build
+	@cd apps/tauri/src-tauri && $(CARGO_ENV) cargo build
 
 tauri-build-release: native-darwin frontend-tauri
 	@touch apps/tauri/src-tauri/src/main.rs
-	@cd apps/tauri/src-tauri && cargo build --release
+	@cd apps/tauri/src-tauri && $(CARGO_ENV) cargo build --release
 
 wails-build: native-darwin frontend-wails
-	@go build -C apps/wails -o bin/wails .
+	@$(GO_ENV) go build -C apps/wails -ldflags "$(GO_LINK)" -o bin/wails .
 
 wails-build-release: native-darwin frontend-wails
-	@go build -C apps/wails -trimpath -ldflags "-s -w" -o bin/wails-release .
+	@$(GO_ENV) go build -C apps/wails -trimpath -ldflags "-s -w $(GO_LINK)" -o bin/wails-release .
 
 tauri: tauri-build
 	@./$(TAURI_DEBUG)

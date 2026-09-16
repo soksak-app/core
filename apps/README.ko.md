@@ -9,7 +9,7 @@ make prepare
 pnpm example
 ```
 
-브라우저 애플리케이션은 `http://localhost:8749/index.html`에서 연다. macOS 네이티브 애플리케이션 빌드와 실행:
+브라우저 애플리케이션은 `http://localhost:8749/index.html`에서 연다. macOS 14.0 이상에서 네이티브 애플리케이션 빌드와 실행:
 
 ```sh
 make wails

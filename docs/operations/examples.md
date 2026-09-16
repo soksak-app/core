@@ -16,7 +16,7 @@ pnpm build
 make wails-build tauri-build
 ```
 
-`native/darwin` builds `libsoksak-darwin.a` and `soksak-darwin.pc` in `native/darwin/build/`. The Makefile adds that directory to `PKG_CONFIG_PATH`; Wails and Tauri locate the headers and link flags through pkg-config.
+`native/darwin` builds `libsoksak-darwin.a` and `soksak-darwin.pc` in `native/darwin/build/`. The Makefile adds that directory to `PKG_CONFIG_PATH`; Wails and Tauri locate the headers and link flags through pkg-config. Both native applications require macOS 14.0 because the capture code uses ScreenCaptureKit APIs introduced in macOS 14.0. The Makefile passes this minimum to Go through `CGO_CFLAGS` and `-extldflags`, and to Rust through `MACOSX_DEPLOYMENT_TARGET`.
 
 Run the browser application with `pnpm example` and open `http://localhost:8749/index.html`. Run every package test with `pnpm test`.
 

@@ -9,7 +9,7 @@ make prepare
 pnpm example
 ```
 
-Open `http://localhost:8749/index.html` for the browser application. To build and run a native application on macOS:
+Open `http://localhost:8749/index.html` for the browser application. To build and run a native application on macOS 14.0 or later:
 
 ```sh
 make wails
