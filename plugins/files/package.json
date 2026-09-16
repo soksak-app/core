@@ -1,0 +1,16 @@
+{
+  "name": "@soksak/plugin-files",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Files plugin: sidebar sections for the project directory.",
+  "files": [
+    "plugin.json"
+  ],
+  "scripts": {
+    "test": "node --test test/"
+  },
+  "devDependencies": {
+    "@soksak/plugin-api": "workspace:*"
+  }
+}

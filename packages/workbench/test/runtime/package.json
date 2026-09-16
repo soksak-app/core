@@ -1,0 +1,8 @@
+{
+  "name": "@soksak/runtime",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Runtime module for workbench tests: no native host and no store.",
+  "type": "module",
+  "exports": "./index.js"
+}

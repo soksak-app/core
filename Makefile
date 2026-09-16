@@ -20,52 +20,52 @@ verify: prepare docs-check
 	@pnpm build
 	@git diff --exit-code -- packages/soksak/dist
 
-# Example apps. The frontend of each is generated from examples/browser/ and
-# dist/, and both embed it at compile time, so the frontend is regenerated
-# before every build.
+# 애플리케이션. 각 앱은 environment.json 으로 프런트엔드를 조립하고, 빌드 전에
+# 프런트엔드를 앱 디렉터리에 스테이징한다. 두 네이티브 앱은 go:embed 와
+# generate_context! 로 스테이징된 프런트엔드를 컴파일 시점에 포함한다.
 #
-# Each app builds in two profiles, to the same two places, so the artifacts can
-# be compared. The release flags are the ones each toolchain uses to strip a
-# binary: cargo's release profile, and -s -w -trimpath for Go.
-.PHONY: example-frontend \
+# 각 앱은 debug 와 release 두 프로필로 빌드한다. release 는 각 도구의 표준 축소
+# 옵션(cargo release 프로필, Go 의 -s -w -trimpath)을 사용한다.
+.PHONY: native-darwin frontend-wails frontend-tauri \
         tauri tauri-release tauri-build tauri-build-release \
         wails wails-release wails-build wails-build-release \
         examples-verify examples-size
 
-# rustup puts cargo here and adds it to the shell profile, which make's shell
-# does not read.
+# rustup 은 cargo 를 여기에 설치하고 셸 프로필에 경로를 추가한다. make 의 셸은
+# 프로필을 읽지 않는다.
 export PATH := $(HOME)/.cargo/bin:$(PATH)
 
-TAURI_DEBUG   = examples/tauriv2/src-tauri/target/debug/soksak-tauri
-TAURI_RELEASE = examples/tauriv2/src-tauri/target/release/soksak-tauri
-WAILS_DEBUG   = examples/wailsv3/bin/wailsv3
-WAILS_RELEASE = examples/wailsv3/bin/wailsv3-release
+# native/darwin 라이브러리의 헤더와 링크 옵션은 pkg-config 로 찾는다.
+export PKG_CONFIG_PATH := $(CURDIR)/native/darwin/build
 
-# The page is copied whole: go:embed cannot reach outside its module, so it has
-# to sit inside the app. Nothing is rewritten and nothing is added — the page
-# asks framework/ which runtime is holding it, so one copy serves every app.
-example-frontend:
-	@for app in wailsv3 tauriv2; do \
-	  out="examples/$$app/frontend"; \
-	  rm -rf "$$out"; mkdir -p "$$out/dist"; \
-	  cp -R examples/browser/. "$$out/"; \
-	  cp dist/*.js "$$out/dist/"; \
-	done
+TAURI_DEBUG   = apps/tauri/src-tauri/target/debug/soksak-tauri
+TAURI_RELEASE = apps/tauri/src-tauri/target/release/soksak-tauri
+WAILS_DEBUG   = apps/wails/bin/wails
+WAILS_RELEASE = apps/wails/bin/wails-release
 
-# generate_context! embeds the frontend, so the crate is forced to rebuild.
-tauri-build: example-frontend
-	@touch examples/tauriv2/src-tauri/src/main.rs
-	@cd examples/tauriv2/src-tauri && cargo build
+native-darwin:
+	@$(MAKE) -C native/darwin
 
-tauri-build-release: example-frontend
-	@touch examples/tauriv2/src-tauri/src/main.rs
-	@cd examples/tauriv2/src-tauri && cargo build --release
+frontend-wails: build
+	@pnpm -F @soksak/wails run frontend
 
-wails-build: example-frontend
-	@go build -C examples/wailsv3 -o bin/wailsv3 .
+frontend-tauri: build
+	@pnpm -F @soksak/tauri run frontend
 
-wails-build-release: example-frontend
-	@go build -C examples/wailsv3 -trimpath -ldflags "-s -w" -o bin/wailsv3-release .
+# generate_context! 가 프런트엔드를 포함하므로 크레이트를 다시 빌드하게 한다.
+tauri-build: native-darwin frontend-tauri
+	@touch apps/tauri/src-tauri/src/main.rs
+	@cd apps/tauri/src-tauri && cargo build
+
+tauri-build-release: native-darwin frontend-tauri
+	@touch apps/tauri/src-tauri/src/main.rs
+	@cd apps/tauri/src-tauri && cargo build --release
+
+wails-build: native-darwin frontend-wails
+	@go build -C apps/wails -o bin/wails .
+
+wails-build-release: native-darwin frontend-wails
+	@go build -C apps/wails -trimpath -ldflags "-s -w" -o bin/wails-release .
 
 tauri: tauri-build
 	@./$(TAURI_DEBUG)
@@ -81,9 +81,9 @@ wails-release: wails-build-release
 
 # 이미 실행 중인 앱의 창을 순차 검사한다. 하네스는 앱을 실행하지 않는다.
 examples-verify: docs-check
-	@node --test --test-concurrency=1 examples/test
+	@pnpm -F @soksak/e2e run verify
 
-# Both apps in both profiles, and what each one weighs.
+# 두 앱의 두 프로필 빌드와 각 크기.
 examples-size: tauri-build tauri-build-release wails-build-release wails-build
 	@printf "%-10s %10s %10s\n" "" debug release
 	@printf "%-10s %9.1fM %9.1fM\n" tauri \

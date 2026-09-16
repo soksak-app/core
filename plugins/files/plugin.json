@@ -1,0 +1,14 @@
+{
+  "id": "files",
+  "name": "파일",
+  "sections": [
+    {
+      "id": "files.tree",
+      "name": "파일 트리"
+    },
+    {
+      "id": "files.bookmarks",
+      "name": "북마크"
+    }
+  ]
+}

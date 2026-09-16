@@ -6,14 +6,71 @@ settings:
 
 importers:
 
-  .:
+  .: {}
+
+  apps/browser:
+    dependencies:
+      '@soksak/plugin-browser':
+        specifier: workspace:*
+        version: link:../../plugins/browser
+      '@soksak/plugin-files':
+        specifier: workspace:*
+        version: link:../../plugins/files
+      '@soksak/plugin-terminal':
+        specifier: workspace:*
+        version: link:../../plugins/terminal
+      '@soksak/workbench':
+        specifier: workspace:*
+        version: link:../../packages/workbench
     devDependencies:
+      '@soksak/plugin-api':
+        specifier: workspace:*
+        version: link:../../packages/plugin-api
       fake-indexeddb:
         specifier: ^6.2.5
         version: 6.2.5
-      jsdom:
-        specifier: ^30.0.1
-        version: 30.0.1
+
+  apps/tauri:
+    dependencies:
+      '@soksak/plugin-browser':
+        specifier: workspace:*
+        version: link:../../plugins/browser
+      '@soksak/plugin-files':
+        specifier: workspace:*
+        version: link:../../plugins/files
+      '@soksak/plugin-terminal':
+        specifier: workspace:*
+        version: link:../../plugins/terminal
+      '@soksak/workbench':
+        specifier: workspace:*
+        version: link:../../packages/workbench
+    devDependencies:
+      '@soksak/plugin-api':
+        specifier: workspace:*
+        version: link:../../packages/plugin-api
+
+  apps/wails:
+    dependencies:
+      '@soksak/plugin-browser':
+        specifier: workspace:*
+        version: link:../../plugins/browser
+      '@soksak/plugin-files':
+        specifier: workspace:*
+        version: link:../../plugins/files
+      '@soksak/plugin-terminal':
+        specifier: workspace:*
+        version: link:../../plugins/terminal
+      '@soksak/workbench':
+        specifier: workspace:*
+        version: link:../../packages/workbench
+    devDependencies:
+      '@soksak/plugin-api':
+        specifier: workspace:*
+        version: link:../../packages/plugin-api
+
+  e2e: {}
+
+  packages/plugin-api: {}
 
   packages/soksak:
     devDependencies:
@@ -26,6 +83,40 @@ importers:
       typescript:
         specifier: 7.0.2
         version: 7.0.2
+
+  packages/workbench:
+    dependencies:
+      '@soksak/plugin-api':
+        specifier: workspace:*
+        version: link:../plugin-api
+      soksak:
+        specifier: workspace:*
+        version: link:../soksak
+    devDependencies:
+      '@soksak/runtime':
+        specifier: link:test/runtime
+        version: link:test/runtime
+      jsdom:
+        specifier: ^30.0.1
+        version: 30.0.1
+
+  plugins/browser:
+    devDependencies:
+      '@soksak/plugin-api':
+        specifier: workspace:*
+        version: link:../../packages/plugin-api
+
+  plugins/files:
+    devDependencies:
+      '@soksak/plugin-api':
+        specifier: workspace:*
+        version: link:../../packages/plugin-api
+
+  plugins/terminal:
+    devDependencies:
+      '@soksak/plugin-api':
+        specifier: workspace:*
+        version: link:../../packages/plugin-api
 
 packages:
 

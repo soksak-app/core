@@ -1,0 +1,22 @@
+{
+  "name": "@soksak/browser",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Browser application: the workbench without a native host. Plugin surfaces show placeholders.",
+  "scripts": {
+    "frontend": "soksak-stage build",
+    "dev": "pnpm run frontend && python3 -m http.server 8749 -d build",
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "@soksak/workbench": "workspace:*",
+    "@soksak/plugin-browser": "workspace:*",
+    "@soksak/plugin-files": "workspace:*",
+    "@soksak/plugin-terminal": "workspace:*"
+  },
+  "devDependencies": {
+    "@soksak/plugin-api": "workspace:*",
+    "fake-indexeddb": "^6.2.5"
+  }
+}

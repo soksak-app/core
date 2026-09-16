@@ -75,8 +75,8 @@ adopted 스타일시트는 제외한다. 내용 갱신에도 같은 규칙을 �
 호출한다. JavaScript 리스너와 폼 프로퍼티는 직렬화되지 않는다. 복사할 초기 상태는
 `checked`, `selected`, `value` 등의 속성에 적는다.
 
-[`browser/card.js`](../../examples/browser/card.js)가 `data-key` 클릭과 `data-set` 변경을
+[`workbench/card.js`](../../packages/workbench/card.js)가 `data-key` 클릭과 `data-set` 변경을
 `(key, value)`로 전달한다. `menu`의 Escape는 빈 key를 보낸다. 응답의 의미를 처리하고
 닫을 때 원본 DOM을 제거하는 것은 소유 컴포넌트의 일이다. 바깥 클릭 처리도 그
-컴포넌트가 맡는다. 실제 소유자는 [`settings-ui.js`](../../examples/browser/settings-ui.js)와
-[`plane.js`](../../examples/browser/plane.js)다.
+컴포넌트가 맡는다. 실제 소유자는 [`settings-ui.js`](../../packages/workbench/settings-ui.js)와
+[`plane.js`](../../packages/workbench/plane.js)다.

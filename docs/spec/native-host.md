@@ -2,7 +2,7 @@
 
 [한국어](native-host.ko.md)
 
-The example page uses the interfaces exported by [host.js](../../examples/browser/host.js). `framework/` supplies runtime calls, events, and document URLs. In a plain browser, `native` is false, `chrome` is null, and native drawing operations do nothing.
+The workbench page uses the interfaces exported by [host.js](../../packages/workbench/host.js). The application's runtime module (`@soksak/runtime`, see [plugins](plugins.md#runtime-module)) supplies runtime calls, events, and document URLs. In a plain browser, `native` is false, `chrome` is null, and native drawing operations do nothing.
 
 | Interface | Operations | Responsibility |
 | --- | --- | --- |

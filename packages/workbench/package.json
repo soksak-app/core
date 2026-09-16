@@ -1,0 +1,44 @@
+{
+  "name": "@soksak/workbench",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Workbench frontend: projects, spaces, cards, tabs, sidebars, settings, and plugin loading.",
+  "type": "module",
+  "bin": {
+    "soksak-stage": "./stage.mjs"
+  },
+  "files": [
+    "index.html",
+    "overlay.html",
+    "background.js",
+    "app.css",
+    "library.css",
+    "card.js",
+    "compositor.js",
+    "environment.js",
+    "host.js",
+    "host-store.js",
+    "icons.js",
+    "ids.js",
+    "library.js",
+    "observe.js",
+    "plane.js",
+    "projects.js",
+    "registry.js",
+    "settings.js",
+    "settings-scope.js",
+    "settings-ui.js",
+    "verify.js"
+  ],
+  "scripts": {
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "@soksak/plugin-api": "workspace:*",
+    "soksak": "workspace:*"
+  },
+  "devDependencies": {
+    "@soksak/runtime": "link:test/runtime",
+    "jsdom": "^30.0.1"
+  }
+}

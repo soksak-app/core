@@ -2,7 +2,7 @@
 
 [English](native-host.md)
 
-예제 페이지는 [host.js](../../examples/browser/host.js)의 인터페이스를 사용한다. `framework/`는 런타임 호출, 이벤트, 문서 URL을 제공한다. 일반 브라우저에서는 `native`가 false, `chrome`이 null이며 네이티브 그리기 연산을 실행하지 않는다.
+워크벤치 페이지는 [host.js](../../packages/workbench/host.js)의 인터페이스를 사용한다. 애플리케이션의 런타임 모듈(`@soksak/runtime`, [플러그인](plugins.ko.md#런타임-모듈) 참고)이 런타임 호출, 이벤트, 문서 URL을 제공한다. 일반 브라우저에서는 `native`가 false, `chrome`이 null이며 네이티브 그리기 연산을 실행하지 않는다.
 
 | 인터페이스 | 연산 | 책임 |
 | --- | --- | --- |

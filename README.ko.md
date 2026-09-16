@@ -2,20 +2,27 @@
 
 [English](README.md)
 
-soksak 배치 라이브러리와 이를 사용하는 애플리케이션의 작업 공간이다.
+soksak 배치 라이브러리, 워크벤치 프런트엔드, 플러그인, 애플리케이션의 작업 공간이다.
 
 | 디렉터리 | 내용 |
 | --- | --- |
 | [`packages/soksak`](packages/soksak/README.ko.md) | 헤드리스 분할 배치 라이브러리 |
-| [`examples`](examples/README.ko.md) | 예제 프런트엔드와 네이티브 애플리케이션 |
+| [`packages/workbench`](docs/spec/plugins.ko.md) | 워크벤치 프런트엔드와 플러그인 로드 |
+| [`packages/plugin-api`](docs/spec/plugins.ko.md) | 플러그인과 환경 형식 |
+| `plugins/` | 브라우저, 터미널, 파일 플러그인 |
+| [`apps`](apps/README.ko.md) | 브라우저, Wails, Tauri 애플리케이션 |
+| `native/darwin` | macOS 네이티브 공용 라이브러리 |
+| `e2e` | 실행 중인 네이티브 애플리케이션의 창 검사 |
 
 ```sh
 make prepare
 make verify
+pnpm test
 ```
 
 - [배치 규칙과 API](packages/soksak/docs/layout.ko.md)
-- [예제 애플리케이션](examples/README.ko.md)
+- [애플리케이션](apps/README.ko.md)
+- [플러그인과 애플리케이션 환경](docs/spec/plugins.ko.md)
 - [프로젝트·설정·창](docs/spec/projects.ko.md)
 - [네이티브 표면 배치](docs/spec/native-surfaces.ko.md)
 - [data-native-modal](docs/spec/native-modals.ko.md)

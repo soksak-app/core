@@ -1,0 +1,17 @@
+{
+  "name": "@soksak/plugin-terminal",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Terminal plugin: a console surface connected to a shell session.",
+  "files": [
+    "plugin.json",
+    "ui"
+  ],
+  "scripts": {
+    "test": "node --test test/"
+  },
+  "devDependencies": {
+    "@soksak/plugin-api": "workspace:*"
+  }
+}

@@ -1,4 +1,5 @@
 packages:
   - packages/*
-  - plugins/*/ui
-  - apps/browser
+  - plugins/*
+  - apps/*
+  - e2e

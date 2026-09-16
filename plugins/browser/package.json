@@ -1,0 +1,16 @@
+{
+  "name": "@soksak/plugin-browser",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Browser plugin: a surface that shows an external page.",
+  "files": [
+    "plugin.json"
+  ],
+  "scripts": {
+    "test": "node --test test/"
+  },
+  "devDependencies": {
+    "@soksak/plugin-api": "workspace:*"
+  }
+}

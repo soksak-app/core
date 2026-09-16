@@ -1,0 +1,10 @@
+{
+  "name": "@soksak/e2e",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Window checks for running Wails and Tauri applications.",
+  "type": "module",
+  "scripts": {
+    "verify": "node --test --test-concurrency=1 ."
+  }
+}

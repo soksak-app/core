@@ -2,20 +2,27 @@
 
 [한국어](README.ko.md)
 
-A workspace for the soksak layout library and the applications built on it.
+A workspace for the soksak layout library, its workbench frontend, plugins, and applications.
 
 | Directory | Contents |
 | --- | --- |
 | [`packages/soksak`](packages/soksak/README.md) | Headless soksak layout library |
-| [`examples`](examples/README.md) | Example frontend and native applications |
+| [`packages/workbench`](docs/spec/plugins.md) | Workbench frontend and plugin loading |
+| [`packages/plugin-api`](docs/spec/plugins.md) | Plugin and environment formats |
+| `plugins/` | Browser, terminal, and files plugins |
+| [`apps`](apps/README.md) | Browser, Wails, and Tauri applications |
+| `native/darwin` | Shared macOS native library |
+| `e2e` | Window checks for running native applications |
 
 ```sh
 make prepare
 make verify
+pnpm test
 ```
 
 - [Layout rules and API](packages/soksak/docs/layout.md)
-- [Example applications](examples/README.md)
+- [Applications](apps/README.md)
+- [Plugins and application environments](docs/spec/plugins.md)
 - [Projects, settings, and windows](docs/spec/projects.md)
 - [Native surface placement](docs/spec/native-surfaces.md)
 - [data-native-modal](docs/spec/native-modals.md)

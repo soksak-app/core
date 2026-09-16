@@ -1,0 +1,27 @@
+{
+  "id": "browser",
+  "name": "브라우저",
+  "mark": "www",
+  "icon": "<rect x=\"2\" y=\"3\" width=\"12\" height=\"10\" rx=\"2\"/><path d=\"M2 6.25h12M4.3 4.6h.01M6.1 4.6h.01\"/>",
+  "surface": {
+    "url": "https://www.google.com"
+  },
+  "sections": [
+    {
+      "id": "browser.dom",
+      "name": "DOM"
+    },
+    {
+      "id": "browser.network",
+      "name": "네트워크"
+    },
+    {
+      "id": "browser.tabs",
+      "name": "탭"
+    },
+    {
+      "id": "browser.history",
+      "name": "히스토리"
+    }
+  ]
+}

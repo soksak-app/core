@@ -1,8 +1,8 @@
-# Build and verify examples
+# Build and verify applications
 
 [한국어](examples.ko.md)
 
-Run commands from the repository root. Use the package-manager version in `package.json`, a Go toolchain compatible with `examples/wailsv3/go.mod`, and a Rust toolchain compatible with the Tauri crate. Native validation currently runs on macOS with the Command Line Tools SDK and screen-recording permission for capture.
+Run commands from the repository root. Use the package-manager version in `package.json`, a Go toolchain compatible with `apps/wails/go.mod`, and a Rust toolchain compatible with the Tauri crate. Native validation currently runs on macOS with the Command Line Tools SDK and screen-recording permission for capture.
 
 ## Native updates
 
@@ -16,23 +16,27 @@ pnpm build
 make wails-build tauri-build
 ```
 
-The build targets copy `examples/browser/` and `dist/` into each generated `frontend/`. Both binaries embed the frontend at build time. A running process does not acquire a newly built frontend; restart the corresponding application after building.
+`native/darwin` builds `libsoksak-darwin.a` and `soksak-darwin.pc` in `native/darwin/build/`. The Makefile adds that directory to `PKG_CONFIG_PATH`; Wails and Tauri locate the headers and link flags through pkg-config.
 
-Debug binaries are `examples/wailsv3/bin/wailsv3` and `examples/tauriv2/src-tauri/target/debug/soksak-tauri`. Release builds use `make wails-build-release tauri-build-release`. `make examples-size` builds both profiles and reports their sizes.
+Run the browser application with `pnpm example` and open `http://localhost:8749/index.html`. Run every package test with `pnpm test`.
+
+The build targets build `native/darwin` and run `pnpm run frontend` in each application. That script stages the workbench, the layout library, the plugin API, the plugins named in `environment.json`, and the application's `runtime/` directory into the generated `frontend/`. Both binaries embed the frontend at build time. A running process does not acquire a newly built frontend; restart the corresponding application after building.
+
+Debug binaries are `apps/wails/bin/wails` and `apps/tauri/src-tauri/target/debug/soksak-tauri`. Release builds use `make wails-build-release tauri-build-release`. `make examples-size` builds both profiles and reports their sizes.
 
 ## Window checks
 
 Start each application once, from separate terminals:
 
 ```sh
-./examples/wailsv3/bin/wailsv3 --observe --config-dir /tmp/soksak-check-wails
-./examples/tauriv2/src-tauri/target/debug/soksak-tauri --observe --config-dir /tmp/soksak-check-tauri
+./apps/wails/bin/wails --observe --config-dir /tmp/soksak-check-wails
+./apps/tauri/src-tauri/target/debug/soksak-tauri --observe --config-dir /tmp/soksak-check-tauri
 ```
 
 Keep the display on and both windows available for rendering. Run:
 
 ```sh
-node --test --test-concurrency=1 examples/test
+pnpm -F @soksak/e2e run verify
 ```
 
 The harness connects to Wails on `127.0.0.1:49732` and Tauri on `127.0.0.1:49733`. Port `49731` serializes window checks. Tests never start applications or independently activate windows. Project-window checks invoke the application’s project-open command, including its specified creation and focus behavior. A missing running application fails the check; a missing binary is reported as skipped. A run with skipped host tests does not validate both hosts.
@@ -76,11 +80,9 @@ The native probe's `state` operation reports screen scales and window position. 
 The standalone overlapping-webview input check uses a temporary native window without activating the application. Run it when changing the shared input code:
 
 ```sh
-clang -fblocks -I examples/native -framework Cocoa -framework WebKit \
-  examples/native-tests/webview-input.m examples/native/webview_input_darwin.m \
-  -o /tmp/soksak-webview-input
-/tmp/soksak-webview-input --baseline
-/tmp/soksak-webview-input
+make -C native/darwin test
 ```
+
+The target builds `native/darwin/build/webview-input` against the shared library and runs the baseline and registered-input runs in that order.
 
 The baseline expects duplicate pointer movement in overlapping DOMs. The registered-input run requires exclusive pointer tracking, retained keyboard input, and cleanup after hiding or removing the overlay. Neither run tests delayed cursor responses.

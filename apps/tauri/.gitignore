@@ -1,0 +1,4 @@
+# pnpm run frontend 가 생성한다
+frontend/
+# cargo 출력
+src-tauri/target/

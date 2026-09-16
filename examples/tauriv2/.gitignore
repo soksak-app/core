@@ -1,4 +1,0 @@
-# Built from the repository root by the example-frontend make target
-frontend/
-# Cargo output
-src-tauri/target/

@@ -1,8 +1,8 @@
-# 예제 빌드와 검증
+# 애플리케이션 빌드와 검증
 
 [English](examples.md)
 
-저장소 루트에서 명령을 실행한다. `package.json`의 패키지 관리자 버전, `examples/wailsv3/go.mod`와 호환되는 Go 도구 체인, Tauri 크레이트와 호환되는 Rust 도구 체인을 사용한다. 현재 네이티브 검증은 macOS에서 Command Line Tools SDK와 캡처를 위한 화면 기록 권한을 사용한다.
+저장소 루트에서 명령을 실행한다. `package.json`의 패키지 관리자 버전, `apps/wails/go.mod`와 호환되는 Go 도구 체인, Tauri 크레이트와 호환되는 Rust 도구 체인을 사용한다. 현재 네이티브 검증은 macOS에서 Command Line Tools SDK와 캡처를 위한 화면 기록 권한을 사용한다.
 
 ## 네이티브 업데이트
 
@@ -16,23 +16,27 @@ pnpm build
 make wails-build tauri-build
 ```
 
-빌드 대상은 `examples/browser/`와 `dist/`를 각 앱의 생성된 `frontend/`에 복사한다. 두 바이너리 모두 빌드 시 프런트엔드를 포함한다. 실행 중인 프로세스에는 새 프런트엔드가 적용되지 않으므로 빌드 후 해당 앱을 다시 실행한다.
+`native/darwin`은 `native/darwin/build/`에 `libsoksak-darwin.a`와 `soksak-darwin.pc`를 생성한다. Makefile은 이 디렉터리를 `PKG_CONFIG_PATH`에 추가하고, Wails와 Tauri는 pkg-config로 헤더와 링크 옵션을 찾는다.
 
-디버그 바이너리는 `examples/wailsv3/bin/wailsv3`와 `examples/tauriv2/src-tauri/target/debug/soksak-tauri`다. 릴리스 빌드는 `make wails-build-release tauri-build-release`를 사용한다. `make examples-size`는 두 프로파일을 빌드하고 크기를 출력한다.
+브라우저 애플리케이션은 `pnpm example`로 실행하고 `http://localhost:8749/index.html`을 연다. 모든 패키지 테스트는 `pnpm test`로 실행한다.
+
+빌드 대상은 `native/darwin`을 빌드하고 각 애플리케이션에서 `pnpm run frontend`를 실행한다. 이 스크립트는 워크벤치, 배치 라이브러리, 플러그인 API, `environment.json`에 적힌 플러그인, 애플리케이션의 `runtime/` 디렉터리를 생성된 `frontend/`에 배치한다. 두 바이너리 모두 빌드 시 프런트엔드를 포함한다. 실행 중인 프로세스에는 새 프런트엔드가 적용되지 않으므로 빌드 후 해당 앱을 다시 실행한다.
+
+디버그 바이너리는 `apps/wails/bin/wails`와 `apps/tauri/src-tauri/target/debug/soksak-tauri`다. 릴리스 빌드는 `make wails-build-release tauri-build-release`를 사용한다. `make examples-size`는 두 프로파일을 빌드하고 크기를 출력한다.
 
 ## 창 검사
 
 각각 다른 터미널에서 앱을 한 번씩 실행한다.
 
 ```sh
-./examples/wailsv3/bin/wailsv3 --observe --config-dir /tmp/soksak-check-wails
-./examples/tauriv2/src-tauri/target/debug/soksak-tauri --observe --config-dir /tmp/soksak-check-tauri
+./apps/wails/bin/wails --observe --config-dir /tmp/soksak-check-wails
+./apps/tauri/src-tauri/target/debug/soksak-tauri --observe --config-dir /tmp/soksak-check-tauri
 ```
 
 디스플레이를 켜고 두 창이 렌더링 가능한 상태에서 실행한다.
 
 ```sh
-node --test --test-concurrency=1 examples/test
+pnpm -F @soksak/e2e run verify
 ```
 
 하네스는 Wails의 `127.0.0.1:49732`, Tauri의 `127.0.0.1:49733`에 연결한다. `49731` 포트로 창 검사를 순차 실행한다. 검사는 앱을 시작하거나 별도로 창을 활성화하지 않는다. 프로젝트 창 검사는 명세의 생성·포커스 동작을 포함한 앱의 프로젝트 열기 명령을 호출한다. 실행 중인 앱이 없으면 실패하고, 바이너리가 없으면 건너뜀으로 표시한다. 호스트 검사를 건너뛴 실행으로 두 호스트를 검증했다고 기록하지 않는다.
@@ -76,11 +80,9 @@ node --test --test-concurrency=1 examples/test
 독립 겹침 웹뷰 입력 검사는 앱을 활성화하지 않는 임시 네이티브 창을 사용한다. 공통 입력 코드를 변경할 때 실행한다.
 
 ```sh
-clang -fblocks -I examples/native -framework Cocoa -framework WebKit \
-  examples/native-tests/webview-input.m examples/native/webview_input_darwin.m \
-  -o /tmp/soksak-webview-input
-/tmp/soksak-webview-input --baseline
-/tmp/soksak-webview-input
+make -C native/darwin test
 ```
+
+이 대상은 공용 라이브러리로 `native/darwin/build/webview-input`을 빌드하고 기준 실행과 입력 등록 실행을 차례로 수행한다.
 
 기준 실행은 겹친 DOM의 중복 포인터 이동을 확인한다. 입력 등록 실행은 단일 대상 포인터 추적, 키보드 입력 유지, 오버레이 숨김·제거 후 정리를 검사한다. 두 실행 모두 지연된 커서 응답을 검사하지 않는다.

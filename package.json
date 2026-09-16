@@ -9,7 +9,7 @@
   "packageManager": "pnpm@11.24.0",
   "scripts": {
     "build": "pnpm -F soksak build",
-    "test": "pnpm -F soksak test",
+    "test": "pnpm -r test",
     "fuzz": "pnpm -F soksak fuzz",
     "mutate": "pnpm -F soksak mutate",
     "breaks": "pnpm -F soksak breaks",
@@ -20,9 +20,5 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/min-median-max/soksak.git"
-  },
-  "devDependencies": {
-    "fake-indexeddb": "^6.2.5",
-    "jsdom": "^30.0.1"
   }
 }

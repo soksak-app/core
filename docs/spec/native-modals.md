@@ -78,8 +78,8 @@ it moves or changes size and `overlay.update(el)` when its content changes.
 JavaScript listeners and form properties are not serialized; use attributes
 such as `checked`, `selected` and `value` for the copied initial state.
 
-[`browser/card.js`](../../examples/browser/card.js) forwards `data-key` clicks and `data-set`
+[`workbench/card.js`](../../packages/workbench/card.js) forwards `data-key` clicks and `data-set`
 changes as `(key, value)`. Escape in a `menu` sends an empty key. The owning
 component decides what the answer does and removes its own DOM when closing;
 outside-click handling belongs to that component too. The actual owners are
-[`settings-ui.js`](../../examples/browser/settings-ui.js) and [`plane.js`](../../examples/browser/plane.js).
+[`settings-ui.js`](../../packages/workbench/settings-ui.js) and [`plane.js`](../../packages/workbench/plane.js).

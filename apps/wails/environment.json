@@ -1,0 +1,140 @@
+{
+  "runtime": "runtime",
+  "plugins": [
+    "@soksak/plugin-terminal",
+    "@soksak/plugin-browser",
+    "@soksak/plugin-files"
+  ],
+  "workspace": {
+    "focus": "terminal",
+    "grid": {
+      "xs": [
+        0,
+        0.3333333333333333,
+        0.6666666666666666,
+        1
+      ],
+      "ys": [
+        0,
+        0.52,
+        1
+      ],
+      "cards": [
+        {
+          "id": "left",
+          "c0": 0,
+          "c1": 1,
+          "r0": 0,
+          "r1": 2,
+          "width": 190,
+          "fixed": true
+        },
+        {
+          "id": "terminal",
+          "c0": 1,
+          "c1": 2,
+          "r0": 0,
+          "r1": 1,
+          "tabs": [
+            {
+              "plugin": "terminal",
+              "title": ">_ 셸"
+            },
+            {
+              "plugin": "terminal",
+              "title": ">_ 빌드"
+            }
+          ]
+        },
+        {
+          "id": "browser",
+          "c0": 1,
+          "c1": 2,
+          "r0": 1,
+          "r1": 2,
+          "tabs": [
+            {
+              "plugin": "browser",
+              "title": "www 문서"
+            }
+          ]
+        },
+        {
+          "id": "right",
+          "c0": 2,
+          "c1": 3,
+          "r0": 0,
+          "r1": 2,
+          "width": 210,
+          "fixed": true
+        }
+      ]
+    }
+  },
+  "sidebars": {
+    "sets": [
+      {
+        "id": "set-install",
+        "title": "탐색기",
+        "sections": [
+          "files.tree",
+          "files.bookmarks"
+        ]
+      },
+      {
+        "id": "set-shell",
+        "title": "셸",
+        "sections": [
+          "terminal.history",
+          "terminal.cwd"
+        ]
+      },
+      {
+        "id": "set-process",
+        "title": "프로세스",
+        "sections": [
+          "terminal.pty",
+          "terminal.jobs"
+        ]
+      },
+      {
+        "id": "set-page",
+        "title": "페이지",
+        "sections": [
+          "browser.dom",
+          "browser.network"
+        ]
+      },
+      {
+        "id": "set-browser",
+        "title": "브라우저",
+        "sections": [
+          "browser.tabs",
+          "browser.history"
+        ]
+      }
+    ],
+    "links": [
+      {
+        "place": "left",
+        "plugin": null,
+        "set": "set-install"
+      },
+      {
+        "place": "rail",
+        "plugin": "terminal",
+        "set": "set-shell"
+      },
+      {
+        "place": "right",
+        "plugin": "terminal",
+        "set": "set-process"
+      },
+      {
+        "place": "right",
+        "plugin": "browser",
+        "set": "set-browser"
+      }
+    ]
+  }
+}
