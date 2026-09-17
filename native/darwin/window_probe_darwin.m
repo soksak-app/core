@@ -124,16 +124,24 @@ void spNativeProbe(void *handle, const char *text, void (*reply)(const char *)) 
         probeReply(request, @{ @"identifier": hit.identifier ?: @"" }, nil, reply);
         return;
     }
-    if ([op isEqualToString:@"eval"]) {
+    if ([op isEqualToString:@"eval"] || [op isEqualToString:@"evalAsync"]) {
         NSString *match = request[@"match"] ?: @"index.html";
         WKWebView *selected = nil;
         for (WKWebView *view in views) {
             if ([view.URL.absoluteString containsString:match] || ([match isEqualToString:@"main"] && view == views.firstObject)) { selected = view; break; }
         }
         if (!selected) { probeReply(request, nil, @"webview not found", reply); return; }
-        [selected evaluateJavaScript:request[@"script"] completionHandler:^(id value, NSError *error) {
+        void (^finish)(id, NSError *) = ^(id value, NSError *error) {
             probeReply(request, value, error.localizedDescription, reply);
-        }];
+        };
+        // eval 은 식의 값을 반환한다. evalAsync 는 함수 본문을 실행하고 반환된 promise 가
+        // 완료될 때 값을 반환한다.
+        if ([op isEqualToString:@"eval"]) {
+            [selected evaluateJavaScript:request[@"script"] completionHandler:finish];
+        } else {
+            [selected callAsyncJavaScript:request[@"script"] arguments:@{} inFrame:nil
+                inContentWorld:WKContentWorld.pageWorld completionHandler:finish];
+        }
         return;
     }
     probeReply(request, nil, @"unknown native operation", reply);
