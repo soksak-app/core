@@ -103,6 +103,21 @@ pub(crate) struct Running {
     pub prepared: AtomicU64,
     going: Mutex<bool>,
     first: Mutex<bool>,
+    settled: Mutex<Vec<std::sync::mpsc::Sender<()>>>,
+}
+
+/// 연속 갱신이 끝나면 값을 받는 수신자를 반환한다. 진행 중인 갱신이 없으면 이미 값이 있다.
+/// 진단 메서드 diagnostics.drag 만 사용한다.
+#[cfg(feature = "diagnostics")]
+pub(crate) fn when_settled(running: &Running) -> Result<std::sync::mpsc::Receiver<()>, String> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let going = running.going.lock().map_err(|e| e.to_string())?;
+    if *going {
+        running.settled.lock().map_err(|e| e.to_string())?.push(tx);
+    } else {
+        let _ = tx.send(());
+    }
+    Ok(rx)
 }
 
 pub(crate) fn label_for(window: &Window, id: &str) -> String {
@@ -401,6 +416,11 @@ fn announce_run(window: &Window, running: &Running, going: bool) -> Result<(), S
             return Ok(());
         }
         *held = going;
+        if !going {
+            for done in running.settled.lock().map_err(|e| e.to_string())?.drain(..) {
+                let _ = done.send(());
+            }
+        }
     }
     let name = if going { "run-began" } else { "run-ended" };
     emit_window(window, name, ()).map_err(|e| e.to_string())

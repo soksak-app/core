@@ -1,11 +1,15 @@
 import { pixel } from "./frame.mjs";
 
+// 터미널 입력 구분선의 색. midnight 테마의 --surface-fg(#7fe3b0) 22% 를 --surface(#0d1a14)
+// 위에 합성한 sRGB 값이다(plugins/terminal/ui/terminal.html).
+const LINE = [38, 70, 54];
+
 // 터미널 입력 구분선은 웹뷰 배경과 별도로 문서의 실제 표시 폭을 확인한다.
 function terminalLine(frame, at) {
   const cx = Math.round((at.surface.l + at.surface.r) / 2);
   let best = null;
   for (let y = at.row + 3; y < frame.height * .6; y++) {
-    const line = (x) => pixel(frame, x, y).every((value, i) => Math.abs(value - [39, 60, 47][i]) <= 5);
+    const line = (x) => pixel(frame, x, y).every((value, i) => Math.abs(value - LINE[i]) <= 5);
     if (!line(cx)) continue;
     let l = cx, r = cx;
     while (l > 0 && line(l - 1)) l--;
@@ -15,12 +19,15 @@ function terminalLine(frame, at) {
   return best && best.r - best.l > 40 ? best : null;
 }
 
+// 카드의 배경. midnight 테마의 --card(#191b24)다.
+const CARD = [25, 27, 36];
+
 // 초기 배치의 레일 사이드바 아래쪽에서 카드 배경과 외곽 레일을 측정한다.
 export function alignment(frame, at) {
   const line = terminalLine(frame, at);
   if (!line) return null;
   const y = Math.floor(frame.height * .75);
-  const card = (x) => pixel(frame, x, y).every((value, i) => Math.abs(value - [25, 27, 35][i]) <= 5);
+  const card = (x) => pixel(frame, x, y).every((value, i) => Math.abs(value - CARD[i]) <= 5);
   let x = Math.round(at.card.l - 20 * at.scale);
   if (x < 0 || !card(x)) return null;
   while (x + 1 < frame.width && card(x + 1)) x++;

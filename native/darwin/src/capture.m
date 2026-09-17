@@ -12,6 +12,9 @@
 #import <ScreenCaptureKit/ScreenCaptureKit.h>
 
 static dispatch_semaphore_t captureFirstFrame;
+// 종료 요청 시각(mach 절대 시각)과, 그 이후에 표시된 프레임이 도착했음을 알리는 신호.
+static uint64_t captureStopAfter;
+static dispatch_semaphore_t captureCaughtUp;
 static dispatch_queue_t captureQueue;
 static int captureBefore;
 
@@ -21,6 +24,17 @@ static int captureBefore;
 @property (nonatomic) int written;
 @property (nonatomic) int idle;
 @end
+
+// displayTime 은 프레임이 화면에 표시된 mach 절대 시각을 읽는다. 없으면 0 이다.
+static uint64_t displayTime(CMSampleBufferRef sample) {
+    CFArrayRef list = CMSampleBufferGetSampleAttachmentsArray(sample, false);
+    if (list == NULL || CFArrayGetCount(list) == 0) return 0;
+    CFDictionaryRef attached = CFArrayGetValueAtIndex(list, 0);
+    CFNumberRef time = CFDictionaryGetValue(attached, (__bridge CFStringRef)SCStreamFrameInfoDisplayTime);
+    uint64_t value = 0;
+    if (time != NULL) CFNumberGetValue(time, kCFNumberSInt64Type, &value);
+    return value;
+}
 
 // frameStatus 는 프레임에 붙은 상태를 읽는다. 상태가 없으면 완성된 프레임으로 본다.
 static SCFrameStatus frameStatus(CMSampleBufferRef sample) {
@@ -41,6 +55,15 @@ static SCFrameStatus frameStatus(CMSampleBufferRef sample) {
     didOutputSampleBuffer:(CMSampleBufferRef)sample
                    ofType:(SCStreamOutputType)type {
     if (type != SCStreamOutputTypeScreen) return;
+    [self write:sample];
+    // 종료 요청 이후에 표시된 프레임은 idle 이어도 그 시각까지의 화면이 모두 전달되었다는 뜻이다.
+    if (captureCaughtUp != NULL && captureStopAfter != 0 && displayTime(sample) >= captureStopAfter) {
+        captureStopAfter = 0;
+        dispatch_semaphore_signal(captureCaughtUp);
+    }
+}
+
+- (void)write:(CMSampleBufferRef)sample {
     // 창이 다시 그려지지 않으면 프레임은 정해진 간격으로 계속 오되 모두 idle 로
     // 표시되고 이미지가 없다. 이것을 세어 두면 0 장인 이유를 말할 수 있다.
     if (frameStatus(sample) != SCFrameStatusComplete) {
@@ -111,6 +134,9 @@ void sp_capture_open(long windowNumber) {
             config.width = (size_t)(filter.contentRect.size.width * filter.pointPixelScale);
             config.height = (size_t)(filter.contentRect.size.height * filter.pointPixelScale);
             config.pixelFormat = kCVPixelFormatType_32BGRA;
+            // 페이지는 sRGB 로 색을 지정한다. 디스플레이 색공간으로 받으면 연결된 디스플레이마다
+            // 픽셀 값이 달라지므로, 측정하는 쪽과 같은 sRGB 로 받는다.
+            config.colorSpaceName = kCGColorSpaceSRGB;
             config.showsCursor = NO;
             config.captureResolution = SCCaptureResolutionBest;
             // 화면이 갱신되는 만큼 받는다. 변경이 없으면 프레임도 오지 않는다.
@@ -181,6 +207,21 @@ int sp_capture_wait(void) {
 int sp_capture_stop(void) {
     if (captureStream == nil) return 0;
     SCStream* stream = captureStream;
+    // 호출 시점까지 표시된 화면이 스트림에 모두 전달된 뒤 멈춘다. 스트림은 화면이 바뀌지
+    // 않아도 idle 프레임을 minimumFrameInterval 마다 전달하므로 기다림은 한 간격 안에 끝난다.
+    dispatch_semaphore_t caughtUp = dispatch_semaphore_create(0);
+    dispatch_sync(captureQueue, ^{
+        captureCaughtUp = caughtUp;
+        captureStopAfter = mach_absolute_time();
+    });
+    if (dispatch_semaphore_wait(caughtUp, dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC)) != 0) {
+        fprintf(stderr, "observe: no frame displayed after the stop request arrived within 1 second\n");
+    }
+    dispatch_sync(captureQueue, ^{
+        captureCaughtUp = NULL;
+        captureStopAfter = 0;
+    });
+    dispatch_release(caughtUp);
     dispatch_semaphore_t stopped = dispatch_semaphore_create(0);
     [stream stopCaptureWithCompletionHandler:^(NSError* failed) {
         if (failed != nil) {

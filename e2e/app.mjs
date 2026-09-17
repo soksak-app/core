@@ -143,8 +143,13 @@ export class Session {
   }
 
   request(method, params = {}, { timeout = REQUEST } = {}) {
-    const answer = this.client.request(method, { window: this.window, ...params });
-    return within(answer, timeout, `${this.app.name} ${method} ${params.name ?? ""}`);
+    const what = `${this.app.name} ${method} ${params.name ?? ""}`.trimEnd();
+    // 실패한 요청의 이름을 오류에 남긴다. code 는 그대로 둔다.
+    const answer = this.client.request(method, { window: this.window, ...params }).catch((error) => {
+      if (error instanceof EndpointError) error.message = `${what}: ${error.message}`;
+      throw error;
+    });
+    return within(answer, timeout, what);
   }
 
   get(name, surface) {

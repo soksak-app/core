@@ -17,7 +17,7 @@ use serde_json::{json, Map, Value};
 use tauri::{Emitter, EventTarget, Manager, Window};
 
 use crate::endpoint::Failure;
-use crate::exposure::{self, on_main, presented, Host, TIMEOUT};
+use crate::exposure::{self, on_main, Host, TIMEOUT};
 use crate::platform;
 use crate::workspace::Workspace;
 
@@ -110,7 +110,13 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
         }
     }
     let result = result?;
-    presented(window, TIMEOUT)?;
+    // 마지막 배치가 커밋되고 표시될 때까지 기다린다. 다음 표시 한 번만 기다리면 마지막 단계의
+    // 커밋보다 앞선 표시에서 끝날 수 있다. Wails 호스트도 같은 시점을 기다린다.
+    let context = crate::windows::window_data(window).map_err(|e| Failure::new(-32603, e))?;
+    let settled = crate::surfaces::when_settled(&context.running).map_err(|e| Failure::new(-32603, e))?;
+    if settled.recv_timeout(TIMEOUT).is_err() {
+        return Err(Failure::new(crate::endpoint::TIMED_OUT, "the drag was not presented within the time limit"));
+    }
     exposure::log(window, "diagnostics: drag presented");
     let mut merged = match result {
         Value::Object(fields) => fields,
