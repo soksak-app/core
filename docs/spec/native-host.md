@@ -29,4 +29,4 @@ Wails completes its initial webview size correction before applying saved window
 
 The window-controls container repositions buttons when AppKit reparents them during recording. Position queries only read geometry. Fullscreen transitions temporarily restore the buttons to their standard title-bar container.
 
-Windows and Linux native-host behavior is unverified. Wails additional-webview creation is currently implemented only on macOS. [Feature status](../features.md) records validation and release separately.
+Windows and Linux native-host behavior is unverified. On Windows both hosts implement only directory identity, and application startup fails; [native hosts](hosts.md#windows-state) describes this state. Linux has no implementation. [Feature status](../features.md) records validation and release separately.

@@ -2,7 +2,7 @@
 
 [English](examples.md)
 
-저장소 루트에서 명령을 실행한다. `package.json`의 패키지 관리자 버전, `apps/wailsv3/go.mod`와 호환되는 Go 도구 체인, Tauri 크레이트와 호환되는 Rust 도구 체인을 사용한다. 현재 네이티브 검증은 macOS에서 Command Line Tools SDK와 캡처를 위한 화면 기록 권한을 사용한다.
+저장소 루트에서 명령을 실행한다. `package.json`의 패키지 관리자 버전, `go.work`와 `packages/host/wailsv3/go.mod`와 호환되는 Go 도구 체인, 루트 `Cargo.toml` 워크스페이스와 호환되는 Rust 도구 체인을 사용한다. [네이티브 호스트 명세](../spec/hosts.ko.md)가 호스트 패키지, 애플리케이션, 워크스페이스 파일을 설명한다. 현재 네이티브 검증은 macOS에서 Command Line Tools SDK와 캡처를 위한 화면 기록 권한을 사용한다.
 
 ## 네이티브 업데이트
 
@@ -20,17 +20,17 @@ make wailsv3-build tauriv2-build
 
 브라우저 애플리케이션은 `pnpm example`로 실행하고 `http://localhost:8749/index.html`을 연다. 모든 패키지 테스트는 `pnpm test`로 실행한다.
 
-빌드 대상은 `native/darwin`을 빌드하고 각 애플리케이션에서 `pnpm run frontend`를 실행한다. 이 스크립트는 워크벤치, 배치 라이브러리, 플러그인 API, `environment.json`에 적힌 플러그인, 애플리케이션의 `runtime/` 디렉터리를 생성된 `frontend/`에 배치한다. 두 바이너리 모두 빌드 시 프런트엔드를 포함한다. 실행 중인 프로세스에는 새 프런트엔드가 적용되지 않으므로 빌드 후 해당 앱을 다시 실행한다.
+빌드 대상은 `native/darwin`, 워크벤치, 사이드카를 빌드한 뒤 각 애플리케이션에서 `soksak-stage src/frontend --executables <실행 파일 디렉터리>`를 실행한다. 이 도구는 워크벤치, 배치 라이브러리, 플러그인 API, `environment.json`에 적힌 플러그인, 애플리케이션의 `runtime/` 디렉터리를 생성된 `apps/<app>/src/frontend/`에 배치하고, 사이드카 실행 파일을 실행 파일 디렉터리에 복사한다. 두 실행 파일 모두 빌드 시 프런트엔드를 포함한다. 실행 중인 프로세스에는 새 프런트엔드가 적용되지 않으므로 빌드 후 해당 앱을 다시 실행한다.
 
-디버그 바이너리는 `apps/wailsv3/bin/soksak-wailsv3`와 `apps/tauriv2/target/debug/soksak-tauriv2`다. 릴리스 빌드는 `make wailsv3-build-release tauriv2-build-release`를 사용한다. `make examples-size`는 두 프로파일을 빌드하고 크기를 출력한다.
+디버그 실행 파일은 `target/debug/soksak-wailsv3`와 `target/debug/soksak-tauriv2`다. 릴리스 빌드는 `make wailsv3-build-release tauriv2-build-release`를 사용하며 `target/release/soksak-wailsv3`와 `target/release/soksak-tauriv2`를 만든다. `make examples-size`는 두 프로파일을 빌드하고 크기를 출력한다.
 
 ## 창 검사
 
 각각 다른 터미널에서 앱을 한 번씩 실행한다.
 
 ```sh
-./apps/wailsv3/bin/soksak-wailsv3 --observe --config-dir /tmp/soksak-check-wailsv3
-./apps/tauriv2/target/debug/soksak-tauriv2 --observe --config-dir /tmp/soksak-check-tauriv2
+./target/debug/soksak-wailsv3 --observe --config-dir /tmp/soksak-check-wailsv3
+./target/debug/soksak-tauriv2 --observe --config-dir /tmp/soksak-check-tauriv2
 ```
 
 디스플레이를 켜고 두 창이 렌더링 가능한 상태에서 실행한다.
@@ -49,7 +49,7 @@ pnpm -F @soksak/e2e run verify
 
 `outside.test.mjs`는 측정 가능한 모든 프레임에서 카드 밖 표면 픽셀 0, 왕복 두 번 전체, 터미널 콘텐츠·DOM 입력 구분선·카드 UI·사이드바·레일의 일정한 상대 좌표를 검사한다. 외부 문서에서 측정한 700ms 작업 구간 안에 메인 배치가 반복 갱신되어야 하며, 해당 작업의 실행만으로는 충분하지 않다. `paint.test.mjs`는 렌더링되지 않은 영역을 검사한다. `footer.test.mjs`는 실제 표면 높이가 0.5pt 단위인지 확인하고, 문서 좌표와 마지막 장치 픽셀의 히트테스트를 측정하며, 가로 디바이더의 상하 드래그 전체 프레임에서 푸터 픽셀을 검사한다. 이 검사에는 2× 디스플레이가 필요하다. `modal.test.mjs`는 순서, 투명도, 배경 블러·입력, 닫기, 이동, 크기 변경, 다시 로드 후 제거를 검사한다. `controls.test.mjs`는 최대화·녹화 후 버튼 좌표를 읽는다. `hosts.test.mjs`는 최종 요청과 표시 좌표를 비교한다. 준비 식별자는 해당 창 내부 값이다.
 
-`projects.test.mjs`는 공통·폴더 설정 파일, 일반 범위 탭 위치, 각 탭의 파일 저장, 분류 전환 후 범위 유지, 재정의 제거, 라이브러리 전역 범위 전용 설정과 외관 동작, 작업 화면 덮어쓰기 복원, 폴더 별칭, 탭·창 정책, 독립 모달, 네이티브 창 닫기·다시 열기 후 배치와 창 좌표 복원을 검사한다. `library.test.mjs`는 생성·선택 후 창 재사용, 디렉터리 작업 실패, 실제 열림 상태, 고정, 검색, 작업 화면 복귀, Dock 새 창을 검사한다. 미리보기 검사는 작업 화면과 카드 순서·분할 방향을 비교하고 행 높이·사이드바 너비·간격의 균일성과 렌더러 좌표를 저장하지 않는지 확인한다. `terminal.test.mjs`는 보이는 터미널 표면에 입력하고 DOM 변경 감시로 출력 줄을 기다린 뒤, `echo` 출력이 한 번 나타나는지, `pwd`가 프로젝트 디렉터리를 반환하는지, 다른 터미널 표면에 출력이 없는지 검사한다. 설정 우선순위와 브라우저 저장 트랜잭션은 `packages/workbench`와 `apps/browser`의 `pnpm test`가 검사한다. `make native-test`는 공용 입력 검사와 파일 저장·사이드카 전달을 포함한 Wails·Tauri 단위 검사를 실행한다.
+`projects.test.mjs`는 공통·폴더 설정 파일, 일반 범위 탭 위치, 각 탭의 파일 저장, 분류 전환 후 범위 유지, 재정의 제거, 라이브러리 전역 범위 전용 설정과 외관 동작, 작업 화면 덮어쓰기 복원, 폴더 별칭, 탭·창 정책, 독립 모달, 네이티브 창 닫기·다시 열기 후 배치와 창 좌표 복원을 검사한다. `library.test.mjs`는 생성·선택 후 창 재사용, 디렉터리 작업 실패, 실제 열림 상태, 고정, 검색, 작업 화면 복귀, Dock 새 창을 검사한다. 미리보기 검사는 작업 화면과 카드 순서·분할 방향을 비교하고 행 높이·사이드바 너비·간격의 균일성과 렌더러 좌표를 저장하지 않는지 확인한다. `terminal.test.mjs`는 보이는 터미널 표면에 입력하고 DOM 변경 감시로 출력 줄을 기다린 뒤, `echo` 출력이 한 번 나타나는지, `pwd`가 프로젝트 디렉터리를 반환하는지, 다른 터미널 표면에 출력이 없는지 검사한다. 설정 우선순위와 브라우저 저장 트랜잭션은 `packages/workbench`와 `apps/browser`의 `pnpm test`가 검사한다. `make native-test`는 공용 입력 검사, `packages/host/wailsv3`와 `sidecars/shell`의 `go test`, `cargo test -p soksak-host-tauriv2`를 실행한다. 호스트 테스트는 파일 저장과 사이드카 전달을 검사한다.
 
 픽셀 검사 실패 시 원시 BGRA 프레임을 보존하고 정렬, 카드 외부 표시 또는 미렌더링 문제가 가장 심한 프레임을 PNG로 저장한다. 녹화는 창의 실제 장치 픽셀 해상도를 사용한다. 포인트 크기로 축소하면 0.5pt 위치의 선과 인접 픽셀이 혼합되어 정확한 색상 측정이 불가능하다. 원시 프레임에는 너비·높이·행 바이트 수인 32비트 값 세 개와 BGRA 픽셀 데이터가 포함된다. 누락되거나 불완전한 녹화를 통과로 처리하지 않는다.
 

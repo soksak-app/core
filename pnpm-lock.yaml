@@ -72,6 +72,10 @@ importers:
 
   packages/client: {}
 
+  packages/host/tauriv2: {}
+
+  packages/host/wailsv3: {}
+
   packages/plugin-api: {}
 
   packages/soksak:

@@ -13,8 +13,8 @@
 | `WKWebView._setOverrideDeviceScaleFactor:` | 두 호스트의 [`webview_geometry.m`](../../native/darwin/src/webview_geometry.m), `webviewAttachSurface` | 장치 픽셀 컨테이너의 로컬 한 단위를 backing 픽셀 하나로 렌더링 |
 | `WKWebView._doAfterNextPresentationUpdate:` | 두 호스트의 [`surface_layout.m`](../../native/darwin/src/surface_layout.m), `surfaceLayoutAfterPresentation`; 프로브와 독립 입력 검사에서도 사용 | 네이티브 좌표 커밋 또는 렌더링 결과 측정 전에 웹뷰 표시 완료 확인 |
 | `WKWebView._setIgnoresMouseMoveEvents:` | 두 호스트의 [`webview_input.m`](../../native/darwin/src/webview_input.m), 등록·포인터 처리·제거 | 겹친 웹뷰의 포인터 추적을 AppKit 히트테스트 결과로 제한 |
-| `WKWebView` KVC `drawsBackground` (`_drawsBackground` / `_setDrawsBackground:`) | Wails [`webview_darwin.m`](../../apps/wailsv3/webview_darwin.m)의 모달 생성; 두 호스트 [`window_probe.m`](../../native/darwin/src/window_probe.m)의 진단 조회 | 모달 웹뷰의 불투명 배경 비활성화 및 상태 조회 |
-| `WKWebViewConfiguration` KVC `drawsBackground` (`_setDrawsBackground:`) | Tauri → Wry 웹뷰 생성; [`overlay_show`](../../apps/tauriv2/src/main.rs)가 `background_color(Color(0, 0, 0, 0))` 요청; 메인도 배경색 설정 | 웹뷰 초기화 전에 배경 그리기 설정 |
+| `WKWebView` KVC `drawsBackground` (`_drawsBackground` / `_setDrawsBackground:`) | Wails [`webview.m`](../../packages/host/wailsv3/src/platform/darwin/webview.m)의 모달 생성; 두 호스트 [`window_probe.m`](../../native/darwin/src/window_probe.m)의 진단 조회 | 모달 웹뷰의 불투명 배경 비활성화 및 상태 조회 |
+| `WKWebViewConfiguration` KVC `drawsBackground` (`_setDrawsBackground:`) | Tauri → Wry 웹뷰 생성; [`modals.rs`](../../packages/host/tauriv2/src/modals.rs) `show`가 `background_color(Color(0, 0, 0, 0))` 요청; 메인도 배경색 설정 | 웹뷰 초기화 전에 배경 그리기 설정 |
 | `WKWebView._doAfterProcessingAllPendingMouseEvents:` | [`native/darwin/tests/webview_input_test.m`](../../native/darwin/tests/webview_input_test.m)의 `drain`; 독립 검사 전용 | DOM 이벤트 횟수를 검사하기 전에 네이티브 마우스 처리 완료 대기 |
 
 두 `drawsBackground` 항목의 대상 객체는 다르다. Wails는 생성된 뷰를 변경하고, Wry는 생성 전 구성을 변경한다. 프레임워크의 공개 Rust·Go 진입점도 비공개 네이티브 의존성을 포함할 수 있다.
@@ -94,7 +94,7 @@
 
 ## 검토 기준
 
-소스·필요성 검토일은 2026-09-08이며 프로젝트 창 통합을 포함한다. 환경은 macOS 26.6.2 (25G83), WebKit `21624.5.1.11.3`, SDK 15.2를 보고한다. 의존성은 Wails `v3.0.0-beta.16`, Tauri 리비전 `270c63f117eb1f4ff0a653ca63b2ca61e9175663`, Wry `0.56.1`, Tao `0.37.0`으로 유지하며 [`go.mod`](../../apps/wailsv3/go.mod), [`Cargo.toml`](../../apps/tauriv2/Cargo.toml), [`Cargo.lock`](../../apps/tauriv2/Cargo.lock)에 따라 확정한다.
+소스·필요성 검토일은 2026-09-08이며 프로젝트 창 통합을 포함한다. 환경은 macOS 26.6.2 (25G83), WebKit `21624.5.1.11.3`, SDK 15.2를 보고한다. 의존성은 Wails `v3.0.0-beta.16`, Tauri 리비전 `270c63f117eb1f4ff0a653ca63b2ca61e9175663`, Wry `0.56.1`, Tao `0.37.0`으로 유지하며 [`go.mod`](../../packages/host/wailsv3/go.mod), [`Cargo.toml`](../../Cargo.toml), [`Cargo.lock`](../../Cargo.lock)에 따라 확정한다.
 
 프로젝트 창은 비공개 선택자를 추가하지 않는다. 공개 프레임워크 API로 독립 창을 생성하고 호출한 창을 식별한다. 공개 파일시스템 API로 설정을 저장한다. 기존의 비공개 좌표·표시·포인터·투명도 수정은 명시한 목적에 계속 필요하다. 해당 호스트 상태와 수명은 각 프로젝트 창에서 관리한다. 네이티브 마우스 모니터는 창을 닫을 때 제거한다.
 

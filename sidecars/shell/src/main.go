@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 
-	"soksak/sidecars/shell/src/shell"
+	"github.com/min-median-max/soksak/sidecars/shell/src/shell"
 )
 
 func main() {

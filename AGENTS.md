@@ -18,6 +18,7 @@ This workspace contains the headless layout library `soksak`, the workbench fron
 - Common functionality belongs to core so plugins do not reimplement it. Plugin functionality does not move into core. A sidecar holds native functionality for one domain.
 - Platform-specific files live only under `platform/<os>/` (`darwin`, `windows`, `linux`) in the owning package. Do not add stub files for other platforms.
 - Native code packages (Go, Rust, Objective-C) keep code in `src/`, tests in `tests/`, and manifests and build files at the root. Go and Rust files that serve the same role have the same name; test files end in `_test` in both languages. The [native host specification](docs/spec/hosts.md) lists the allowed differences.
+- A platform either implements an operation of the host platform interface or returns a `not implemented on <os>` error from `platform/<os>/unsupported.*`; a host that cannot provide a required operation fails at startup instead of running partially. `make platforms` and `make hosts-check` check the layout.
 - Recordings made by checks are removed when the check ends.
 
 ## Documentation

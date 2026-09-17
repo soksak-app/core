@@ -2,7 +2,7 @@
 
 [한국어](examples.ko.md)
 
-Run commands from the repository root. Use the package-manager version in `package.json`, a Go toolchain compatible with `apps/wailsv3/go.mod`, and a Rust toolchain compatible with the Tauri crate. Native validation currently runs on macOS with the Command Line Tools SDK and screen-recording permission for capture.
+Run commands from the repository root. Use the package-manager version in `package.json`, a Go toolchain compatible with `go.work` and `packages/host/wailsv3/go.mod`, and a Rust toolchain compatible with the root `Cargo.toml` workspace. The [native host specification](../spec/hosts.md) describes the host packages, applications, and workspace files. Native validation currently runs on macOS with the Command Line Tools SDK and screen-recording permission for capture.
 
 ## Native updates
 
@@ -20,17 +20,17 @@ make wailsv3-build tauriv2-build
 
 Run the browser application with `pnpm example` and open `http://localhost:8749/index.html`. Run every package test with `pnpm test`.
 
-The build targets build `native/darwin` and run `pnpm run frontend` in each application. That script stages the workbench, the layout library, the plugin API, the plugins named in `environment.json`, and the application's `runtime/` directory into the generated `frontend/`. Both binaries embed the frontend at build time. A running process does not acquire a newly built frontend; restart the corresponding application after building.
+The build targets build `native/darwin`, the workbench, and the sidecars, then run `soksak-stage src/frontend --executables <executable directory>` in each application. The tool stages the workbench, the layout library, the plugin API, the plugins named in `environment.json`, and the application's `runtime/` directory into the generated `apps/<app>/src/frontend/`, and copies the sidecar executables into the executable directory. Both executables embed the frontend at build time. A running process does not acquire a newly built frontend; restart the corresponding application after building.
 
-Debug binaries are `apps/wailsv3/bin/soksak-wailsv3` and `apps/tauriv2/target/debug/soksak-tauriv2`. Release builds use `make wailsv3-build-release tauriv2-build-release`. `make examples-size` builds both profiles and reports their sizes.
+Debug executables are `target/debug/soksak-wailsv3` and `target/debug/soksak-tauriv2`. Release builds use `make wailsv3-build-release tauriv2-build-release` and write `target/release/soksak-wailsv3` and `target/release/soksak-tauriv2`. `make examples-size` builds both profiles and reports their sizes.
 
 ## Window checks
 
 Start each application once, from separate terminals:
 
 ```sh
-./apps/wailsv3/bin/soksak-wailsv3 --observe --config-dir /tmp/soksak-check-wailsv3
-./apps/tauriv2/target/debug/soksak-tauriv2 --observe --config-dir /tmp/soksak-check-tauriv2
+./target/debug/soksak-wailsv3 --observe --config-dir /tmp/soksak-check-wailsv3
+./target/debug/soksak-tauriv2 --observe --config-dir /tmp/soksak-check-tauriv2
 ```
 
 Keep the display on and both windows available for rendering. Run:
@@ -49,7 +49,7 @@ The harness resets the test project and reloads the main document between runs, 
 
 `outside.test.mjs` requires zero surface pixels outside the card on every measurable frame, two complete round trips, and consistent relative positions of terminal content, its DOM input separator, card chrome, the sidebar, and its rail. It also requires repeated main-layout changes within the external document's measured 700ms task interval; merely executing that task is insufficient. `paint.test.mjs` checks unrendered areas. `footer.test.mjs` requires an actual half-point surface height, measures document geometry and hit testing in the final device pixel, and checks footer pixels throughout a vertical divider drag; this check requires a 2× display. `modal.test.mjs` checks ordering, transparency, background blur and input, dismissal, movement, resizing, and reload cleanup. `controls.test.mjs` reads button geometry after maximization and recording. `hosts.test.mjs` compares final requests and displayed geometry; preparation identifiers are local to the owning window.
 
-`projects.test.mjs` checks common and folder settings files, General scope-tab placement, writes from each tab, scope preservation across categories, override reset, library-only Global scope and appearance actions, workspace override restoration, folder aliases, tab/window policy, independent modals, and saved layout and window geometry after native close/reopen. `library.test.mjs` checks window reuse after creation and selection; failed directory operations; actual open status, pins, search, workspace return, and Dock New Window. Preview checks compare card order and split directions with the workspace and require equal row heights, uniform sidebar widths and gaps, and no stored renderer coordinates. `terminal.test.mjs` types into the visible terminal surface, waits for the output line through a DOM mutation observer, and requires the `echo` output once, the project directory from `pwd`, and no output in the other terminal surface. Setting precedence and browser storage transactions are checked by `pnpm test` in `packages/workbench` and `apps/browser`. `make native-test` runs the shared input check and the Wails and Tauri unit checks, including file storage and the sidecar relay.
+`projects.test.mjs` checks common and folder settings files, General scope-tab placement, writes from each tab, scope preservation across categories, override reset, library-only Global scope and appearance actions, workspace override restoration, folder aliases, tab/window policy, independent modals, and saved layout and window geometry after native close/reopen. `library.test.mjs` checks window reuse after creation and selection; failed directory operations; actual open status, pins, search, workspace return, and Dock New Window. Preview checks compare card order and split directions with the workspace and require equal row heights, uniform sidebar widths and gaps, and no stored renderer coordinates. `terminal.test.mjs` types into the visible terminal surface, waits for the output line through a DOM mutation observer, and requires the `echo` output once, the project directory from `pwd`, and no output in the other terminal surface. Setting precedence and browser storage transactions are checked by `pnpm test` in `packages/workbench` and `apps/browser`. `make native-test` runs the shared input check, `go test` for `packages/host/wailsv3` and `sidecars/shell`, and `cargo test -p soksak-host-tauriv2`; the host tests cover file storage and the sidecar relay.
 
 Failed pixel checks retain raw BGRA frames and write a PNG for the worst alignment, containment, or paint failure. Record at the window’s backing-pixel resolution. Point-sized downsampling blends half-point lines with adjacent pixels and prevents exact color measurement. Raw frames contain three 32-bit values (width, height, row stride), followed by BGRA pixel data. Do not treat a missing or partial recording as a pass.
 

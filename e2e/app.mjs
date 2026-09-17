@@ -8,10 +8,10 @@ import { frames, readFrame } from "./frame.mjs";
 import { bounds } from "./surface.mjs";
 
 // 검사하는 애플리케이션 실행 파일. 작업 디렉터리와 무관하게 이 파일 위치를 기준으로 찾는다.
-const built = (path) => fileURLToPath(new URL(`../apps/${path}`, import.meta.url));
+const built = (name) => fileURLToPath(new URL(`../target/debug/${name}`, import.meta.url));
 export const APPS = {
-  wailsv3: built("wailsv3/bin/soksak-wailsv3"),
-  tauriv2: built("tauriv2/target/debug/soksak-tauriv2"),
+  wailsv3: built("soksak-wailsv3"),
+  tauriv2: built("soksak-tauriv2"),
 };
 
 const CONTROL = {

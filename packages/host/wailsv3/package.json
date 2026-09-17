@@ -1,0 +1,6 @@
+{
+  "name": "@soksak/host-wailsv3",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Wails v3 native host: project windows, native webview surfaces, modals, sidecar channel, and platform implementations."
+}

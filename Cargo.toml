@@ -1,0 +1,19 @@
+# Rust 워크스페이스. 두 크레이트가 하나의 Cargo.lock, target/, patch 를 공유한다.
+[workspace]
+resolver = "2"
+members = ["apps/tauriv2", "packages/host/tauriv2"]
+
+[profile.dev]
+incremental = true
+
+# wry 0.56 은 문서를 그리기 전에 웹뷰가 흰색으로 칠해지는 것을 막는다. crates.io 의
+# tauri-runtime-wry 는 wry 0.55 를 고정하고 main 만 0.56 을 사용하므로 tauri 계열 전체를
+# 해당 커밋에서 가져온다.
+[patch.crates-io]
+tauri = { git = "https://github.com/tauri-apps/tauri", rev = "270c63f117eb1f4ff0a653ca63b2ca61e9175663" }
+tauri-build = { git = "https://github.com/tauri-apps/tauri", rev = "270c63f117eb1f4ff0a653ca63b2ca61e9175663" }
+tauri-codegen = { git = "https://github.com/tauri-apps/tauri", rev = "270c63f117eb1f4ff0a653ca63b2ca61e9175663" }
+tauri-macros = { git = "https://github.com/tauri-apps/tauri", rev = "270c63f117eb1f4ff0a653ca63b2ca61e9175663" }
+tauri-runtime = { git = "https://github.com/tauri-apps/tauri", rev = "270c63f117eb1f4ff0a653ca63b2ca61e9175663" }
+tauri-runtime-wry = { git = "https://github.com/tauri-apps/tauri", rev = "270c63f117eb1f4ff0a653ca63b2ca61e9175663" }
+tauri-utils = { git = "https://github.com/tauri-apps/tauri", rev = "270c63f117eb1f4ff0a653ca63b2ca61e9175663" }

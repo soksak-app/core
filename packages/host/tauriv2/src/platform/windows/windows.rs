@@ -1,0 +1,132 @@
+//! Windows 구현.
+//!
+//! 디렉터리 식별을 구현한다. 나머지 기능은 unsupported 에서 "not implemented on windows"
+//! 오류를 반환한다.
+
+use std::fs::Metadata;
+use std::path::Path;
+
+use tauri::webview::PlatformWebview;
+use tauri::Window;
+
+use super::{Frame, Handle, Platform, WindowBuilder};
+
+#[path = "identity.rs"]
+mod identity;
+#[path = "unsupported.rs"]
+mod unsupported;
+
+/// Windows 플랫폼 구현.
+pub struct Windows;
+
+impl Platform for Windows {
+    fn prepare_window<'a>(&self, builder: WindowBuilder<'a>) -> Result<WindowBuilder<'a>, String> {
+        unsupported::prepare_window(builder)
+    }
+    fn window_handle(&self, window: &Window) -> Result<Handle, String> {
+        unsupported::window_handle(window)
+    }
+    fn place_window_controls(&self, window: Handle, x: f64, y: f64) -> Result<(), String> {
+        unsupported::place_window_controls(window, x, y)
+    }
+    fn window_controls(&self, window: Handle) -> Result<Frame, String> {
+        unsupported::window_controls(window)
+    }
+    fn window_numbers(&self, window: &Window) -> Result<Vec<isize>, String> {
+        unsupported::window_numbers(window)
+    }
+    fn probe(&self, window: Handle, request: &str, reply: fn(String)) -> Result<(), String> {
+        unsupported::probe(window, request, reply)
+    }
+    /// Windows 애플리케이션은 마지막 창이 닫히면 종료한다.
+    fn stays_open_without_windows(&self) -> bool {
+        false
+    }
+
+    fn place_webview(&self, view: &PlatformWebview, x: f64, y: f64, w: f64, h: f64) -> Result<(), String> {
+        unsupported::place_webview(view, x, y, w, h)
+    }
+    fn webview_frame(&self, view: &PlatformWebview) -> Result<[f64; 4], String> {
+        unsupported::webview_frame(view)
+    }
+    fn attach_surface(&self, view: &PlatformWebview, main: Handle) -> Result<(), String> {
+        unsupported::attach_surface(view, main)
+    }
+    fn set_alpha(&self, view: &PlatformWebview, alpha: f64) -> Result<(), String> {
+        unsupported::set_alpha(view, alpha)
+    }
+    fn set_live_resize(&self, view: &PlatformWebview, live: bool) -> Result<(), String> {
+        unsupported::set_live_resize(view, live)
+    }
+    fn raise_webview(&self, view: &PlatformWebview) -> Result<(), String> {
+        unsupported::raise_webview(view)
+    }
+    fn round_corners(&self, view: &PlatformWebview, radius: f64) -> Result<(), String> {
+        unsupported::round_corners(view, radius)
+    }
+    fn view_id(&self, view: &PlatformWebview) -> Result<Handle, String> {
+        unsupported::view_id(view)
+    }
+
+    fn begin_layout(&self, window: Handle, ticket: u64, ready: Box<dyn Fn(bool)>) -> Result<(), String> {
+        unsupported::begin_layout(window, ticket, ready)
+    }
+    fn commit_layout(&self, window: Handle, ticket: u64) -> Result<bool, String> {
+        unsupported::commit_layout(window, ticket)
+    }
+    fn cancel_layout(&self, window: Handle) -> Result<(), String> {
+        unsupported::cancel_layout(window)
+    }
+    fn after_presentation(&self, view: &PlatformWebview, done: Box<dyn Fn()>) -> Result<(), String> {
+        unsupported::after_presentation(view, done)
+    }
+
+    fn create_shape(&self, window: Handle, frame: Frame) -> Result<Handle, String> {
+        unsupported::create_shape(window, frame)
+    }
+    fn place_shape(&self, shape: Handle, frame: Frame) -> Result<(), String> {
+        unsupported::place_shape(shape, frame)
+    }
+    fn style_shape(&self, shape: Handle, radius: f64, line_width: f64, fill: [f64; 4], line: [f64; 4]) -> Result<(), String> {
+        unsupported::style_shape(shape, radius, line_width, fill, line)
+    }
+    fn destroy_shape(&self, shape: Handle) -> Result<(), String> {
+        unsupported::destroy_shape(shape)
+    }
+
+    fn register_input(&self, view: &PlatformWebview) -> Result<bool, String> {
+        unsupported::register_input(view)
+    }
+    fn watch_input(
+        &self,
+        window: Handle,
+        pressed: Box<dyn Fn(Vec<Handle>) -> bool>,
+        pointed: Box<dyn Fn(u8, f64, f64)>,
+    ) -> Result<Handle, String> {
+        unsupported::watch_input(window, pressed, pointed)
+    }
+    fn unwatch_input(&self, monitor: Handle) -> Result<(), String> {
+        unsupported::unwatch_input(monitor)
+    }
+
+    fn capture_open(&self, window_number: isize) -> Result<(), String> {
+        unsupported::capture_open(window_number)
+    }
+    fn capture_start(&self, directory: &str) -> Result<(), String> {
+        unsupported::capture_start(directory)
+    }
+    fn capture_wait(&self) -> Result<bool, String> {
+        unsupported::capture_wait()
+    }
+    fn capture_stop(&self) -> Result<i32, String> {
+        unsupported::capture_stop()
+    }
+
+    fn install_dock_menu(&self, new_window: Box<dyn Fn()>) -> Result<(), String> {
+        unsupported::install_dock_menu(new_window)
+    }
+
+    fn directory_identity(&self, path: &Path, _metadata: &Metadata) -> Result<String, String> {
+        identity::identity(path)
+    }
+}

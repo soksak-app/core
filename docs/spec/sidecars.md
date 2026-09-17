@@ -41,7 +41,7 @@ The host records the window that first sends for a surface and delivers each sid
 
 ## shell
 
-`sidecars/shell` (`@soksak/sidecar-shell`) builds `build/soksak-shell` with `pnpm run build` and runs one shell process per surface in the surface's project directory. The shell is `$SHELL`, or `/bin/sh` when unset (`%COMSPEC%` or `cmd.exe` on Windows), and is not interactive.
+`sidecars/shell` (`@soksak/sidecar-shell`) builds `build/soksak-shell` with `pnpm run build` and runs one shell process per surface in the surface's project directory. The shell is `$SHELL`, or `/bin/sh` when unset (`%COMSPEC%` or `cmd.exe` on Windows), and is not interactive. Its code is in `src/`: the entry point `src/main.go`, the protocol in the package `src/shell`, and the shell selection for each OS in `src/platform/{darwin,linux,windows}/`, which registers through `src/platform/platform.go` ([platform selection](hosts.md#platform-selection)). Its tests are in `tests/`.
 
 | Body | Effect |
 | --- | --- |
@@ -52,4 +52,4 @@ The sidecar sends each output line as `{"text": line}` including its newline, an
 
 ## Tests
 
-Each sidecar runs its tests in its own directory. `shell` tests its protocol with `go test ./...` and validates its `sidecar.json` with a Node test. Each host tests its relay and its resolution from staged manifests with a fake sidecar executable and does not start a real sidecar.
+Each sidecar runs its tests in its own directory. `shell` tests its protocol and OS selection with `go test ./...` and validates its `sidecar.json` with `node --test tests/`. Each host tests its relay in `tests/sidecars_test.*` and its resolution from staged manifests with a fake sidecar executable and does not start a real sidecar.

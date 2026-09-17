@@ -2,26 +2,28 @@
 
 [한국어](hosts.ko.md)
 
-This specification is not implemented yet; [feature status](../features.md) tracks its implementation.
+This specification is partly implemented. The exposure and local endpoint files (`exposure.*`, `endpoint.*`, `platform/<os>/endpoint.*`, and `tests/endpoint_test.*`, `tests/exposure_test.*`) do not exist yet; [exposure](exposure.md) and [local endpoint](endpoint.md) define them, and [feature status](../features.md) tracks their implementation.
 
-Core's native side lives in two host packages with the same structure. [Native host interfaces](native-host.md) defines the operations the workbench page uses.
+Core's native side lives in two library packages with the same structure. [Native host interfaces](native-host.md) defines the operations the workbench page uses.
 
 | Package | Language | Identity |
 | --- | --- | --- |
-| `packages/host/wailsv3` | Go | Module `soksak/host/wailsv3`, package `host`, import path `soksak/host/wailsv3/src` |
+| `packages/host/wailsv3` | Go | Module `github.com/min-median-max/soksak/packages/host/wailsv3`; package `host` in `src/`, imported as `github.com/min-median-max/soksak/packages/host/wailsv3/src` |
 | `packages/host/tauriv2` | Rust | Crate `soksak-host-tauriv2`, `[lib] path = "src/host.rs"` |
 
-The applications `apps/wailsv3` and `apps/tauriv2` contain only `src/main.*`, `environment.json`, `runtime/index.js`, tests, and framework configuration. `src/main.*` calls the host package.
+The applications `apps/wailsv3` and `apps/tauriv2` contain only `src/main.*`, `environment.json`, `runtime/index.js`, tests, manifests, and framework configuration. `apps/wailsv3/src/main.go` reads the command-line flags into `host.Options` and calls `host.Run(assets, options)`. `apps/tauriv2/src/main.rs` calls `soksak_host_tauriv2::run(tauri::generate_context!(), BACKGROUND)`, where `BACKGROUND` is the staged `frontend/background.js`.
 
 ## Host tree
+
+Files marked "not implemented" are part of this specification and do not exist yet.
 
 ```
 packages/host/wailsv3/                     packages/host/tauriv2/
   package.json                               package.json
-  go.mod                                     Cargo.toml
+  go.mod, go.sum                             Cargo.toml            difference A4
   (none: cgo directives use pkg-config)      build.rs              difference H1
   src/                                       src/
-    host.go        package documentation, assembly    host.rs
+    host.go        package documentation, Run         host.rs
     bindings.go    page call registration             bindings.rs
     windows.go     windows, readiness, close, exit    windows.rs
     projects.go    folder check, choice, creation     projects.rs
@@ -31,73 +33,84 @@ packages/host/wailsv3/                     packages/host/tauriv2/
     shapes.go      outlines above surfaces            shapes.rs
     theme.go       theme storage and delivery         theme.rs
     sidecars.go    sidecar channel                    sidecars.rs
-    exposure.go    exposure request relay             exposure.rs
-    endpoint.go    JSON-RPC server                    endpoint.rs
-    diagnostics.go diagnostics (build tag)            diagnostics.rs
+    exposure.go    exposure request relay             exposure.rs      not implemented
+    endpoint.go    JSON-RPC server                    endpoint.rs      not implemented
+    diagnostics.go diagnostics, registered by --observe   diagnostics.rs
     bridge.js      call channel for additional webviews   difference H3
     platform/                                  platform/
       platform.go  interface and selection       platform.rs
       darwin/                                    darwin/
-        darwin.go    package documentation, assembly  darwin.rs
+        darwin.go    package documentation, registration  darwin.rs
         window.go    window preparation, buttons      window.rs
         webview.go   webview creation, placement      webview.rs
         webview.m    WKWebView creation               difference H4
         layout.go    surface layout transaction       layout.rs
         shapes.go    outline views                    shapes.rs
-        input.go     input monitoring, injection      input.rs
+        input.go     input monitoring                 input.rs
         capture.go   capture calls                    capture.rs
         dock.go      Dock menu                        dock.rs
         identity.go  directory identity               identity.rs
-        endpoint.go  Unix socket                      endpoint.rs
+        endpoint.go  Unix socket                      endpoint.rs      not implemented
       windows/                                   windows/
-        windows.go     package documentation, assembly  windows.rs
-        endpoint.go    named pipe                       endpoint.rs
+        windows.go     package documentation, registration  windows.rs
+        endpoint.go    named pipe                       endpoint.rs    not implemented
         identity.go    file ID                          identity.rs
         unsupported.go remaining "not implemented"      unsupported.rs
       linux/  (added when implemented)           linux/
   tests/                                     tests/
     sidecars_test.go                           sidecars_test.rs
     workspace_test.go                          workspace_test.rs
-    endpoint_test.go                           endpoint_test.rs
-    exposure_test.go                           exposure_test.rs
-  test/  (JS: configuration checks)          test/
+    endpoint_test.go                           endpoint_test.rs   not implemented
+    exposure_test.go                           exposure_test.rs   not implemented
 ```
 
 ## Rules
 
-- Code is in `src/`. Tests are in `tests/`, and test file names end with `_test` in both languages.
+- Code is in `src/`. Tests are in `tests/`, and test file names end with `_test` in both languages. Go tests in `tests/` import the host package; Cargo builds each `tests/*_test.rs` file as an integration test of the crate.
 - The primary file of each directory has the directory's name: `host.*`, `platform/platform.*`, `darwin/darwin.*`, `windows/windows.*`.
 - Rust modules use `#[path = "..."]` attributes, so the crate has no `lib.rs` or `mod.rs`.
-- Platform code exists only under `src/platform/<os>/`, where `os` is `darwin`, `windows`, or `linux`. Rust selects the `darwin` module with `#[cfg(target_os = "macos")]`.
-- No stub files exist. An operation that a platform does not implement returns a "not implemented" error from `src/platform/<os>/unsupported.*`.
+- Platform code exists only under `src/platform/<os>/`, where `os` is `darwin`, `windows`, or `linux`.
+- No stub files exist. An operation that a platform does not implement returns an error from `src/platform/<os>/unsupported.*`.
+
+## Platform selection
+
+Go: each `src/platform/<os>/` directory is a Go package. Its primary file (`darwin.go`, `windows.go`) has no build tag and contains only the package documentation; the other files have a `//go:build <os>` tag, and one of them calls `platform.Register` from `init`. `host.go` imports every OS package with a blank import, so a build registers only the implementation for its target OS. `host.Run` obtains it with `platform.Current()` and fails when no implementation is registered.
+
+Rust: `src/platform/platform.rs` declares each OS module with `#[cfg(target_os = "macos")]` or `#[cfg(windows)]` and `#[path = "<os>/<os>.rs"]`. `platform::current()` returns the implementation for the target OS and returns an error on other targets. Each OS module declares its own files with `#[path]`.
+
+The shell sidecar uses the same Go mechanism in `sidecars/shell/src/platform/`.
 
 ## Platform interface
 
-`src/platform/platform.*` defines the interface that each `src/platform/<os>/` implements.
+`src/platform/platform.*` defines the interface that each `src/platform/<os>/` implements. Operations take native window and view handles.
 
 | Area | Operations |
 | --- | --- |
-| Window | Window preparation, window buttons |
-| Webview | Creation, placement, visibility, background, close |
+| Window | Window preparation, window button placement and area, window server numbers, native inspection requests |
+| Webview | Creation, placement, frame, visibility, background, opacity, live resize, close (Wails also navigation, script evaluation, modal configuration and focus, pixel alignment; Tauri also ordering, corner radius, view identity) |
 | Surface layout | Transaction begin, commit, cancel, and completion after presentation |
-| Shapes | Outline shapes above surfaces |
-| Input | Input monitoring and native input injection |
-| Capture | Window capture |
-| Dock | Dock menu |
+| Shapes | Outline views above surfaces: creation, frame, style, removal |
+| Input | Input monitoring and its removal; Tauri also registers webviews for pointer routing |
+| Capture | Window capture: open, start, wait for the first frame, stop |
+| Dock | Dock menu installation |
 | Identity | Directory identity |
-| Endpoint | [Local endpoint](endpoint.md) transport |
+| Endpoint | [Local endpoint](endpoint.md) transport; not implemented |
+
+## Windows state
+
+On Windows both hosts implement only directory identity (`platform/windows/identity.*`). Every other operation in `platform/windows/unsupported.*` returns an error of the form `<operation> is not implemented on windows`. Application startup fails on Windows: Wails exits when Dock menu installation returns this error, and Tauri's setup returns the Dock menu error. Linux has no implementation; `platform.Current()` and `platform::current()` return an error there.
 
 ## Allowed differences
 
 | ID | Wails | Tauri | Reason |
 | --- | --- | --- | --- |
-| H1 | none | `build.rs` | Rust runs pkg-config and Objective-C compilation in a build script; Go uses cgo directives |
-| H3 | `bridge.js` | none | Wails provides no call channel to webviews that the application creates |
-| H4 | `platform/darwin/webview.m` | none | Wails has no child-webview API, so the host creates the webview in Objective-C; Tauri uses `add_child` |
+| H1 | none | `build.rs` | Rust locates `native/darwin` through pkg-config (`soksak-darwin`) in a build script on macOS targets; Go uses the `#cgo pkg-config` directive |
+| H3 | `src/bridge.js` | none | Wails provides no call channel to webviews that the application creates |
+| H4 | `src/platform/darwin/webview.m` | none | Wails has no child-webview API, so the host creates the webview in Objective-C; Tauri uses `add_child` |
 | A1 | content differs | content differs | `runtime/index.js` uses each framework's call mechanism |
 | A2 | none | `build.rs` | Tauri requires `tauri_build::build()` |
 | A3 | none | `tauri.conf.json`, `capabilities/`, `icons/`, `gen/` | Tauri configuration |
-| A4 | `go.mod` | `Cargo.toml` | Each language has its own manifest; the host packages have the same difference |
+| A4 | `go.mod`, `go.sum` | `Cargo.toml` | Each language has its own manifest; the host packages have the same difference |
 
 ## Application tree
 
@@ -108,21 +121,54 @@ apps/wailsv3/                  apps/tauriv2/
   runtime/index.js               runtime/index.js      difference A1
   test/                          test/
   src/main.go                    src/main.rs
-  go.mod                         Cargo.toml            difference A4
+  src/frontend/  (generated)     src/frontend/  (generated)
+  go.mod, go.sum                 Cargo.toml            difference A4
   (none)                         build.rs              difference A2
   (none)                         tauri.conf.json, capabilities/, icons/, gen/   difference A3
 ```
 
-## Structure check
+`apps/wailsv3/go.mod` requires the host module. `apps/tauriv2/Cargo.toml` depends on `soksak-host-tauriv2` by path and on `tauri`. `apps/tauriv2/build.rs` calls only `tauri_build::build()`.
 
-`scripts/check-hosts.mjs`, run by `make hosts-check`, compares the two host trees and the two application trees by relative path without extension. The check passes only when every difference is in the allowed differences table.
+The Wails binding service name is `github.com/min-median-max/soksak/packages/host/wailsv3/src.Host`. Wails derives it from the Go package path and type name, and `apps/wailsv3/runtime/index.js` uses it.
+
+## Frontend and executables
+
+`soksak-stage` places the frontend in `apps/<app>/src/frontend/`, which each application's `.gitignore` excludes. Wails embeds it with `//go:embed all:frontend` in `src/main.go` because `go:embed` reaches only files below the embedding package's directory; `host.Run` uses `frontend/` as the asset root. Tauri reads it through `"frontendDist": "src/frontend"` in `tauri.conf.json`, and `src/main.rs` includes `frontend/background.js`.
+
+The debug executables are `target/debug/soksak-wailsv3` and `target/debug/soksak-tauriv2`; release executables are in `target/release/`. Staging copies sidecar executables into the same directory, and the hosts start sidecars from the directory of the running executable.
+
+## Workspace files
+
+| File | Contents |
+| --- | --- |
+| `go.work` | Uses `apps/wailsv3`, `packages/host/wailsv3`, and `sidecars/shell`; replaces the host module `v0.0.0` with `./packages/host/wailsv3` |
+| `Cargo.toml` | Workspace with members `apps/tauriv2` and `packages/host/tauriv2`, the shared `[patch.crates-io]` for the Tauri crates, and the `dev` profile |
+| `Cargo.lock` | The single lock file for both crates |
+| `target/` | Cargo output and both application executables; excluded by `.gitignore` |
+
+## Commands
+
+| Command | Action |
+| --- | --- |
+| `make wailsv3-build`, `make tauriv2-build` | Build `native/darwin`, the frontend, and the sidecars, stage them, and build the debug executable |
+| `make wailsv3-build-release`, `make tauriv2-build-release` | Build the release executable |
+| `make wailsv3`, `make tauriv2` | Build and run the debug executable |
+| `make native-test` | Run the shared input check, `go test` for `packages/host/wailsv3` and `sidecars/shell`, and `cargo test -p soksak-host-tauriv2` |
+| `make platforms` | Run `scripts/check-platforms.mjs` |
+| `make hosts-check` | Run `scripts/check-hosts.mjs` |
+
+## Structure checks
+
+`scripts/check-hosts.mjs` compares `packages/host/wailsv3` with `packages/host/tauriv2` and `apps/wailsv3` with `apps/tauriv2`. It compares `.go` and `.rs` files by relative path without extension and other files by relative path. A file present on one side passes only when it is listed with a difference ID from the allowed differences table. The check reads files that Git tracks or would track, so generated `src/frontend/` files are not compared.
+
+`scripts/check-platforms.mjs` reports these outside `platform/<os>/` directories: file names with an OS suffix (`_darwin`, `_windows`, and others) and, in source files, `runtime.GOOS`, Go OS build tags, Rust OS `cfg` attributes, and `process.platform`. It skips `native/<os>/`, `scripts/check-build-environment.sh`, `platform/platform.{go,rs,js}`, and itself. It does not read `Cargo.toml`, so target-specific dependency tables are allowed.
 
 ## native/darwin
 
-`native/darwin` is the shared macOS library that both hosts call.
+`native/darwin` is the shared macOS library that both hosts call. Its minimum macOS version is 14.0.
 
 | Path | Contents |
 | --- | --- |
-| `src/` | `<name>.h` and `<name>.m` sources. File names have no `_darwin` suffix because the directory identifies the platform |
-| `tests/` | Native tests |
-| `Makefile` | Builds a static library that the hosts find through pkg-config as `soksak-darwin` |
+| `src/` | `<name>.h` and `<name>.m` sources, including `capture.m`, which both hosts use for window capture. File names have no `_darwin` suffix because the directory identifies the platform |
+| `tests/` | `webview_input_test.m`, the standalone input check |
+| `Makefile` | Builds a static library that the hosts find through pkg-config as `soksak-darwin`; `make -C native/darwin test` runs the input check |

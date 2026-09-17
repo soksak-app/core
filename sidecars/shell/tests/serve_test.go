@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"soksak/sidecars/shell/src/shell"
+	"github.com/min-median-max/soksak/sidecars/shell/src/shell"
 )
 
 // harness 는 Serve 를 실행하고 요청 전송과 이벤트 수신을 제공한다.

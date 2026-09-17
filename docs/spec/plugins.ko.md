@@ -13,7 +13,8 @@
 | `packages/plugin-api` | 선언 형식, 스테이징 배치, 페이지 import map, 플러그인 페이지 도구 |
 | `packages/client` | 로컬 엔드포인트 클라이언트와 지연 시간 벤치마크 |
 | `plugins/<id>` | 플러그인 하나: `plugin.json`, 페이지, 테스트 |
-| `apps/<name>` | 애플리케이션 하나: `environment.json`, `runtime/`, 네이티브 호스트 코드, 테스트 |
+| `packages/host/<name>` | [네이티브 호스트](hosts.ko.md) 라이브러리(코어): Go의 `wailsv3`와 Rust의 `tauriv2` |
+| `apps/<name>` | 애플리케이션 하나: `environment.json`, `runtime/`, 네이티브 진입점과 프레임워크 설정, 테스트 |
 | `sidecars/<name>` | [사이드카](sidecars.ko.md) 하나: `sidecar.json`, 플러그인이 호스트를 통해 사용하는 네이티브 프로세스, 테스트 |
 | `native/darwin` | 네이티브 호스트가 사용하는 macOS 공용 라이브러리 |
 | `e2e` | 실행 중인 네이티브 애플리케이션의 창 검사 |
@@ -60,7 +61,7 @@
 | `/environment.json` | 애플리케이션의 `environment.json` |
 | `/modules/<사이드카>/sidecar.json` | 플러그인의 `sidecars`에 나열된 각 사이드카 패키지의 `sidecar.json` |
 
-`--executables <디렉터리>`를 지정하면 각 사이드카의 빌드된 `executable` 파일을 파일 이름 그대로 `<디렉터리>`에 복사하고, 파일이 빌드되지 않았으면 실패한다. Makefile의 `frontend-wails`와 `frontend-tauri` 대상은 모든 사이드카 패키지를 빌드하는 `sidecars` 대상을 실행한 뒤 애플리케이션 실행 파일의 디렉터리를 `--executables`로 지정해 스테이징한다.
+`--executables <디렉터리>`를 지정하면 각 사이드카의 빌드된 `executable` 파일을 파일 이름 그대로 `<디렉터리>`에 복사하고, 파일이 빌드되지 않았으면 실패한다. 디버그 스테이징 대상 `frontend-wailsv3`, `frontend-tauriv2`와 릴리스 빌드 대상은 모든 사이드카 패키지를 빌드하는 `sidecars` 대상을 실행한 뒤 애플리케이션 실행 파일의 디렉터리(`target/debug` 또는 `target/release`)를 `--executables`로 지정해 `apps/<app>/src/frontend`에 스테이징한다.
 
 모든 페이지는 `PAGE_IMPORTS`와 같은 import map 하나를 선언한다. 항목은 `soksak`, `@soksak/plugin-api`, `@soksak/plugin-api/page`, `@soksak/runtime`, `@soksak/workbench/`다.
 

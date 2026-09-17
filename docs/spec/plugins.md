@@ -13,7 +13,8 @@ The workbench does not reference any specific plugin. Each application declares 
 | `packages/plugin-api` | Declaration formats, staged layout, page import map, and helpers for plugin pages |
 | `packages/client` | Client for the local endpoint and its latency benchmark |
 | `plugins/<id>` | One plugin: `plugin.json`, its pages, and its tests |
-| `apps/<name>` | One application: `environment.json`, `runtime/`, native host code, and its tests |
+| `packages/host/<name>` | [Native host](hosts.md) libraries (core): `wailsv3` in Go and `tauriv2` in Rust |
+| `apps/<name>` | One application: `environment.json`, `runtime/`, the native entry point and framework configuration, and its tests |
 | `sidecars/<name>` | One [sidecar](sidecars.md): `sidecar.json`, a native process that plugins use through the host, and its tests |
 | `native/darwin` | Shared macOS library used by the native hosts |
 | `e2e` | Window checks for running native applications |
@@ -60,7 +61,7 @@ The workbench loads `environment.json` and every listed `plugin.json` before it 
 | `/environment.json` | The application's `environment.json` |
 | `/modules/<sidecar>/sidecar.json` | `sidecar.json` of each sidecar package listed in a plugin's `sidecars` |
 
-With `--executables <dir>`, the tool also copies each sidecar's built `executable` file into `<dir>` under its file name and fails when the file is not built. The Makefile targets `frontend-wails` and `frontend-tauri` run the `sidecars` target, which builds every sidecar package, and then stage with `--executables` set to the directory of the application executable.
+With `--executables <dir>`, the tool also copies each sidecar's built `executable` file into `<dir>` under its file name and fails when the file is not built. The debug staging targets `frontend-wailsv3` and `frontend-tauriv2` and the release build targets run the `sidecars` target, which builds every sidecar package, and then stage into `apps/<app>/src/frontend` with `--executables` set to the directory of the application executable (`target/debug` or `target/release`).
 
 Every page declares one import map equal to `PAGE_IMPORTS`: `soksak`, `@soksak/plugin-api`, `@soksak/plugin-api/page`, `@soksak/runtime`, and `@soksak/workbench/`.
 

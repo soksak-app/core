@@ -9,10 +9,13 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"os"
 	"os/exec"
-	"runtime"
 	"sync"
+
+	"github.com/min-median-max/soksak/sidecars/shell/src/platform"
+	_ "github.com/min-median-max/soksak/sidecars/shell/src/platform/darwin"
+	_ "github.com/min-median-max/soksak/sidecars/shell/src/platform/linux"
+	_ "github.com/min-median-max/soksak/sidecars/shell/src/platform/windows"
 )
 
 type session struct {
@@ -32,20 +35,6 @@ func NewShells(say func(id string, text string)) *Shells {
 	return &Shells{running: map[string]*session{}, say: say}
 }
 
-// shell 은 사용자의 셸을, 설정되지 않았으면 플랫폼 기본 셸을 반환한다.
-func shell() string {
-	if runtime.GOOS == "windows" {
-		if program := os.Getenv("COMSPEC"); program != "" {
-			return program
-		}
-		return "cmd.exe"
-	}
-	if program := os.Getenv("SHELL"); program != "" {
-		return program
-	}
-	return "/bin/sh"
-}
-
 // Open 은 id 의 셸을 시작하고 시작 여부를 반환한다. 이미 실행 중이면 시작하지 않고
 // false 를 반환한다. 같은 출력에 읽는 고루틴이 둘 생기지 않게 하기 위해서다.
 func (s *Shells) Open(id, root string) (bool, error) {
@@ -55,7 +44,11 @@ func (s *Shells) Open(id, root string) (bool, error) {
 		return false, nil
 	}
 
-	cmd := exec.Command(shell())
+	current, err := platform.Current()
+	if err != nil {
+		return false, err
+	}
+	cmd := exec.Command(current.Shell())
 	cmd.Dir = root
 	stdin, err := cmd.StdinPipe()
 	if err != nil {

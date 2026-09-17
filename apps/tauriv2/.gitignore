@@ -1,4 +1,2 @@
-# pnpm run frontend 가 생성한다
-frontend/
-# cargo 출력
-target/
+# 스테이징이 src/frontend/ 에 생성한다
+src/frontend/

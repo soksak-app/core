@@ -41,7 +41,7 @@
 
 ## shell
 
-`sidecars/shell`(`@soksak/sidecar-shell`)은 `pnpm run build`로 `build/soksak-shell`을 빌드하고, 표면마다 셸 프로세스 하나를 표면의 프로젝트 디렉터리에서 실행한다. 셸은 `$SHELL`이며 설정되지 않았으면 `/bin/sh`(Windows는 `%COMSPEC%` 또는 `cmd.exe`)다. 대화형으로 실행하지 않는다.
+`sidecars/shell`(`@soksak/sidecar-shell`)은 `pnpm run build`로 `build/soksak-shell`을 빌드하고, 표면마다 셸 프로세스 하나를 표면의 프로젝트 디렉터리에서 실행한다. 셸은 `$SHELL`이며 설정되지 않았으면 `/bin/sh`(Windows는 `%COMSPEC%` 또는 `cmd.exe`)다. 대화형으로 실행하지 않는다. 코드는 `src/`에 있다: 진입점 `src/main.go`, 패키지 `src/shell`의 프로토콜, `src/platform/platform.go`를 통해 등록되는 `src/platform/{darwin,linux,windows}/`의 운영체제별 셸 선택([플랫폼 선택](hosts.ko.md#플랫폼-선택)). 테스트는 `tests/`에 있다.
 
 | 본문 | 동작 |
 | --- | --- |
@@ -52,4 +52,4 @@
 
 ## 테스트
 
-각 사이드카는 자기 디렉터리에서 테스트를 실행한다. `shell`은 `go test ./...`로 프로토콜을, Node 테스트로 `sidecar.json`을 검사한다. 각 호스트는 fake 사이드카 실행 파일로 전달과 스테이징된 선언 파일을 통한 해석을 검사하고 실제 사이드카를 실행하지 않는다.
+각 사이드카는 자기 디렉터리에서 테스트를 실행한다. `shell`은 `go test ./...`로 프로토콜과 운영체제 선택을, `node --test tests/`로 `sidecar.json`을 검사한다. 각 호스트는 `tests/sidecars_test.*`에서 fake 사이드카 실행 파일로 전달과 스테이징된 선언 파일을 통한 해석을 검사하고 실제 사이드카를 실행하지 않는다.

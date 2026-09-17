@@ -1,6 +1,2 @@
-# pnpm run frontend 가 생성한다
-frontend/
-# go build 출력
-bin/
-# go build 를 -o 없이 실행하면 모듈 이름으로 출력한다
-/wailsv3
+# 스테이징이 src/frontend/ 에 생성한다
+src/frontend/

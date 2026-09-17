@@ -16,6 +16,8 @@ make wailsv3
 make tauriv2
 ```
 
+The targets build `target/debug/soksak-wailsv3` and `target/debug/soksak-tauriv2` and run them. The applications call the host libraries in `packages/host/wailsv3` and `packages/host/tauriv2`.
+
 Startup displays the project library. Create a project or select a saved project to use that same window. The title bar’s project-list button returns to the library while preserving current work. New Window, including the macOS Dock menu, opens another library screen. The common opening mode applies when a window already owns a project. Common settings are stored in the application configuration directory; folder overrides are stored in `.soksak/settings.json` inside the project.
 
 Settings uses `data-native-modal="dialog"`; add and split pickers use `data-native-modal="menu"`. The native host renders these existing DOM elements in webviews inside the main OS window.
@@ -23,6 +25,7 @@ Settings uses `data-native-modal="dialog"`; add and split pickers use `data-nati
 - [Projects, settings, and windows](../docs/spec/projects.md)
 - [Example model](../docs/spec/example-model.md)
 - [Plugins and application environments](../docs/spec/plugins.md)
+- [Native hosts and application structure](../docs/spec/hosts.md)
 - [Native host interfaces](../docs/spec/native-host.md)
 - [data-native-modal usage and behavior](../docs/spec/native-modals.md)
 - [Native surface placement](../docs/spec/native-surfaces.md)

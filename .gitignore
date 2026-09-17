@@ -14,3 +14,6 @@ ds-bundle/
 *-bare.png
 *-outside.png
 *-alignment.png
+
+# Rust 워크스페이스의 cargo 출력
+/target/

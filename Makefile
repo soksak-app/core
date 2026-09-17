@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: preflight prepare build verify docs-check boundaries
+.PHONY: preflight prepare build verify docs-check boundaries platforms hosts-check
 
 docs-check:
 	@node scripts/check-docs.mjs
@@ -8,6 +8,14 @@ docs-check:
 # 코어, 플러그인, 사이드카가 서로의 이름을 코드에 적지 않았는지 검사한다.
 boundaries:
 	@node scripts/check-boundaries.mjs
+
+# 운영체제별 코드가 platform/<os>/ 아래에만 있는지 검사한다.
+platforms:
+	@node scripts/check-platforms.mjs
+
+# 두 네이티브 호스트와 두 네이티브 앱의 파일 구조가 허용된 차이만 갖는지 검사한다.
+hosts-check:
+	@node scripts/check-hosts.mjs
 
 preflight:
 	@scripts/check-build-environment.sh
@@ -24,7 +32,7 @@ verify: prepare docs-check
 	@pnpm build
 	@git diff --exit-code -- packages/soksak/dist
 
-# 애플리케이션. 각 앱은 environment.json 으로 프런트엔드를 조립하고, 빌드 전에
+# 애플리케이션. 두 네이티브 앱과 사이드카 실행 파일은 target/{debug,release} 에 놓인다. 각 앱은 environment.json 으로 프런트엔드를 조립하고, 빌드 전에
 # 프런트엔드를 앱 디렉터리에 스테이징한다. 두 네이티브 앱은 go:embed 와
 # generate_context! 로 스테이징된 프런트엔드를 컴파일 시점에 포함한다.
 #
@@ -48,10 +56,10 @@ GO_ENV       = CGO_CFLAGS="-O2 -g -mmacosx-version-min=$(MACOS_MINIMUM)"
 GO_LINK      = -extldflags=-mmacosx-version-min=$(MACOS_MINIMUM)
 CARGO_ENV    = MACOSX_DEPLOYMENT_TARGET=$(MACOS_MINIMUM)
 
-TAURI_DEBUG   = apps/tauriv2/target/debug/soksak-tauriv2
-TAURI_RELEASE = apps/tauriv2/target/release/soksak-tauriv2
-WAILS_DEBUG   = apps/wailsv3/bin/soksak-wailsv3
-WAILS_RELEASE = apps/wailsv3/bin/soksak-wailsv3-release
+TAURI_DEBUG   = target/debug/soksak-tauriv2
+TAURI_RELEASE = target/release/soksak-tauriv2
+WAILS_DEBUG   = target/debug/soksak-wailsv3
+WAILS_RELEASE = target/release/soksak-wailsv3
 
 native-darwin:
 	@$(MAKE) -C native/darwin
@@ -62,30 +70,31 @@ sidecars:
 	@$(GO_ENV) pnpm --filter "./sidecars/*" run build
 
 # 프런트엔드와 사이드카 실행 파일을 배치한다. 인자는 실행 파일 디렉터리(앱 디렉터리 기준)다.
-stage-wailsv3 = pnpm -F @soksak/wailsv3 exec soksak-stage frontend --executables $(1)
-stage-tauriv2 = pnpm -F @soksak/tauriv2 exec soksak-stage frontend --executables $(1)
+stage-wailsv3 = pnpm -F @soksak/wailsv3 exec soksak-stage src/frontend --executables $(1)
+stage-tauriv2 = pnpm -F @soksak/tauriv2 exec soksak-stage src/frontend --executables $(1)
 
 frontend-wailsv3: build sidecars
-	@$(call stage-wailsv3,bin)
+	@$(call stage-wailsv3,../../target/debug)
 
 frontend-tauriv2: build sidecars
-	@$(call stage-tauriv2,target/debug)
+	@$(call stage-tauriv2,../../target/debug)
 
 # generate_context! 가 프런트엔드를 포함하므로 크레이트를 다시 빌드하게 한다.
 tauriv2-build: native-darwin frontend-tauriv2
 	@touch apps/tauriv2/src/main.rs
-	@cd apps/tauriv2 && $(CARGO_ENV) cargo build
+	@$(CARGO_ENV) cargo build -p soksak-tauriv2
 
 tauriv2-build-release: native-darwin build sidecars
-	@$(call stage-tauriv2,target/release)
+	@$(call stage-tauriv2,../../target/release)
 	@touch apps/tauriv2/src/main.rs
-	@cd apps/tauriv2 && $(CARGO_ENV) cargo build --release
+	@$(CARGO_ENV) cargo build --release -p soksak-tauriv2
 
 wailsv3-build: native-darwin frontend-wailsv3
-	@$(GO_ENV) go build -C apps/wailsv3 -ldflags "$(GO_LINK)" -o bin/soksak-wailsv3 .
+	@$(GO_ENV) go build -C apps/wailsv3 -ldflags "$(GO_LINK)" -o ../../$(WAILS_DEBUG) ./src
 
-wailsv3-build-release: native-darwin frontend-wailsv3
-	@$(GO_ENV) go build -C apps/wailsv3 -trimpath -ldflags "-s -w $(GO_LINK)" -o bin/soksak-wailsv3-release .
+wailsv3-build-release: native-darwin build sidecars
+	@$(call stage-wailsv3,../../target/release)
+	@$(GO_ENV) go build -C apps/wailsv3 -trimpath -ldflags "-s -w $(GO_LINK)" -o ../../$(WAILS_RELEASE) ./src
 
 tauriv2: tauriv2-build
 	@./$(TAURI_DEBUG)
@@ -102,8 +111,8 @@ wailsv3-release: wailsv3-build-release
 # 네이티브 코드의 단위 검사. 공용 입력 검사, Wails 와 Tauri 호스트 검사를 실행한다.
 native-test: native-darwin frontend-wailsv3 frontend-tauriv2
 	@$(MAKE) -C native/darwin test
-	@$(GO_ENV) go test -C apps/wailsv3 -ldflags "$(GO_LINK)" ./...
-	@cd apps/tauriv2 && $(CARGO_ENV) cargo test
+	@$(GO_ENV) go test -ldflags "$(GO_LINK)" ./packages/host/wailsv3/... ./sidecars/shell/...
+	@$(CARGO_ENV) cargo test -p soksak-host-tauriv2
 
 # 이미 실행 중인 앱의 창을 순차 검사한다. 하네스는 앱을 실행하지 않는다.
 examples-verify: docs-check

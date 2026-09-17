@@ -1,10 +1,9 @@
 // 로컬 엔드포인트 전송 방식별 JSON-RPC 왕복 지연 측정.
 // 사용법: node bench/transport.mjs [--requests <n>] [--json]
 
+import * as platform from "../platform/platform.js";
 import net from "node:net";
-import fs from "node:fs";
 import os from "node:os";
-import path from "node:path";
 import { once } from "node:events";
 import { encodeFrame, FrameReader } from "../frame.js";
 
@@ -207,7 +206,7 @@ async function main() {
   const options = parseArgs(process.argv.slice(2));
   const environment = {
     node: process.version,
-    platform: process.platform,
+    platform: platform.name,
     arch: process.arch,
     cpu: os.cpus()[0]?.model ?? "unknown",
     requests: options.requests,
@@ -223,20 +222,14 @@ async function main() {
     }), options.requests),
   );
 
-  if (process.platform === "win32") {
-    const pipePath = `\\\\.\\pipe\\soksak-bench-${process.pid}`;
-    rows.push(await benchTransport("named-pipe", pipePath, () => pipePath, options.requests));
-  } else {
-    // 소켓 파일은 소유자 전용 임시 디렉터리에 둔다.
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "soksak-bench-"));
-    try {
-      fs.chmodSync(dir, 0o700);
-      const socketPath = path.join(dir, "endpoint.sock");
-      rows.push(await benchTransport("unix-socket", socketPath, () => socketPath, options.requests));
-    } finally {
-      fs.rmSync(dir, { recursive: true, force: true });
-    }
+  // 운영체제별 로컬 전송. 주소는 소유자 전용으로 만들고 측정 후 제거한다.
+  const local = platform.createAddress("soksak-bench");
+  try {
+    rows.push(await benchTransport(`${platform.transport}-local`, local.address, () => local.address, options.requests));
+  } finally {
+    local.remove();
   }
+
 
   if (options.json) {
     process.stdout.write(`${JSON.stringify({ environment, results: rows }, null, 2)}\n`);

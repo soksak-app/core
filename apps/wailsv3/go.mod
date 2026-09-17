@@ -1,8 +1,11 @@
-module soksak/apps/wailsv3
+module github.com/min-median-max/soksak/apps/wailsv3
 
 go 1.25.0
 
-require github.com/wailsapp/wails/v3 v3.0.0-beta.16
+require (
+	github.com/min-median-max/soksak/packages/host/wailsv3 v0.0.0
+	github.com/wailsapp/wails/v3 v3.0.0-beta.16 // indirect
+)
 
 require (
 	github.com/adrg/xdg v0.5.3 // indirect

@@ -1,5 +1,6 @@
 packages:
   - packages/*
+  - packages/host/*
   - plugins/*
   - sidecars/*
   - apps/*

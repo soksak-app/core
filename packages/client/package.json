@@ -5,7 +5,8 @@
   "type": "module",
   "description": "Client for the soksak local endpoint.",
   "files": [
-    "frame.js"
+    "frame.js",
+    "platform"
   ],
   "scripts": {
     "bench": "node bench/transport.mjs",
