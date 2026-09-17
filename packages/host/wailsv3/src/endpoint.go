@@ -118,6 +118,18 @@ type endpointMethod func(e *Endpoint, c *endpointConn, params json.RawMessage) (
 // diagnosticMethods 는 진단 빌드가 init 에서 추가하는 메서드다. 진단 빌드가 아니면 비어 있다.
 var diagnosticMethods = map[string]endpointMethod{}
 
+// subscriptionMethod 는 연결의 구독을 바꾸는 메서드의 params 를 읽고 바꿀 topic 과 방향을 반환한다.
+// 이 메서드들은 받은 순서대로 적용한다.
+type subscriptionMethod func(e *Endpoint, params json.RawMessage) (topic, bool, error)
+
+var subscriptionMethods = map[string]subscriptionMethod{
+	"status.watch":   func(e *Endpoint, p json.RawMessage) (topic, bool, error) { return watchTopic(e, p, true) },
+	"status.unwatch": func(e *Endpoint, p json.RawMessage) (topic, bool, error) { return watchTopic(e, p, false) },
+}
+
+// diagnosticSubscriptions 는 진단 빌드가 init 에서 추가하는 구독 메서드다.
+var diagnosticSubscriptions = map[string]subscriptionMethod{}
+
 // topic 은 알림을 받는 대상이다. 상태 감시는 상태 이름, 진단 기록은 logTopic 을 사용한다.
 type topic struct {
 	window string
@@ -149,13 +161,15 @@ type Endpoint struct {
 	conns    map[*endpointConn]bool
 	// counts 는 topic 마다 구독한 연결의 수다.
 	counts map[topic]int
-	// watching 은 페이지에 감시 시작·해제를 보내는 순서를 정한다.
-	watching sync.Mutex
+	// queues 는 topic 마다 받은 순서대로 실행할 구독 변경이다. 목록이 있으면 그 topic 의 실행
+	// 고루틴이 있다. queueMu 로 보호한다.
+	queueMu sync.Mutex
+	queues  map[topic][]func()
 }
 
 // NewEndpoint 는 backend 를 사용하는 엔드포인트를 만든다.
 func NewEndpoint(backend Backend) *Endpoint {
-	return &Endpoint{backend: backend, conns: map[*endpointConn]bool{}, counts: map[topic]int{}}
+	return &Endpoint{backend: backend, conns: map[*endpointConn]bool{}, counts: map[topic]int{}, queues: map[topic][]func(){}}
 }
 
 // Serve 는 configDir 에 endpoint.json 을 쓰고 listener 의 연결을 받기 시작한다.
@@ -365,11 +379,76 @@ func (e *Endpoint) read(c *endpointConn) {
 		if !json.Valid(body) || json.Unmarshal(body, &req) != nil || req.JSONRPC != "2.0" || req.Method == nil {
 			return
 		}
+		if parse, ok := e.subscription(*req.Method); ok {
+			e.changeInOrder(c, req, parse)
+			continue
+		}
 		method, declared := e.method(*req.Method)
 		if !declared {
 			return
 		}
 		go e.run(c, req, method)
+	}
+}
+
+// subscription 은 구독을 바꾸는 선언된 메서드의 처리를 반환한다.
+func (e *Endpoint) subscription(name string) (subscriptionMethod, bool) {
+	if parse, ok := subscriptionMethods[name]; ok {
+		return parse, true
+	}
+	parse, ok := diagnosticSubscriptions[name]
+	return parse, ok
+}
+
+// changeInOrder 는 구독 변경 요청 하나를 그 topic 의 대기열 끝에 넣는다. 읽기 루프에서 호출하므로
+// 같은 topic 의 변경과 페이지에 보내는 메시지는 받은 순서대로 실행되고, 답은 페이지가 답한 뒤 보낸다.
+func (e *Endpoint) changeInOrder(c *endpointConn, req request, parse subscriptionMethod) {
+	t, on, err := parse(e, req.Params)
+	if err != nil {
+		go e.reply(c, req, nil, err)
+		return
+	}
+	e.enqueue(t, func() { e.reply(c, req, nil, e.change(c, t, on)) })
+}
+
+// change 는 연결 c 의 topic 구독을 바꾸고, 첫 구독이나 마지막 해제이면 페이지에 알린다. 페이지가
+// 첫 구독을 거부하면 구독을 되돌린다.
+func (e *Endpoint) change(c *endpointConn, t topic, on bool) error {
+	if !e.subscribe(c, t, on) {
+		return nil
+	}
+	err := e.notifyPage(t, on)
+	if err != nil && on {
+		e.subscribe(c, t, false)
+	}
+	return err
+}
+
+// enqueue 는 job 을 topic t 의 대기열에 넣고, 실행 중인 고루틴이 없으면 시작한다.
+func (e *Endpoint) enqueue(t topic, job func()) {
+	e.queueMu.Lock()
+	defer e.queueMu.Unlock()
+	pending, running := e.queues[t]
+	e.queues[t] = append(pending, job)
+	if !running {
+		go e.drain(t)
+	}
+}
+
+// drain 은 topic t 의 대기열이 빌 때까지 작업을 차례로 실행한다.
+func (e *Endpoint) drain(t topic) {
+	for {
+		e.queueMu.Lock()
+		pending := e.queues[t]
+		if len(pending) == 0 {
+			delete(e.queues, t)
+			e.queueMu.Unlock()
+			return
+		}
+		job := pending[0]
+		e.queues[t] = pending[1:]
+		e.queueMu.Unlock()
+		job()
 	}
 }
 
@@ -385,31 +464,36 @@ func (e *Endpoint) drop(c *endpointConn) {
 	}
 	e.mu.Unlock()
 	for _, t := range held {
-		e.watching.Lock()
-		last := e.subscribe(c, t, false)
-		if last {
-			e.release(t)
-		}
-		e.watching.Unlock()
+		e.enqueue(t, func() {
+			if err := e.change(c, t, false); err != nil {
+				log.Printf("endpoint: release %s on %s: %v", t.name, t.window, err)
+			}
+		})
 	}
 }
 
-// release 는 마지막 구독이 사라진 topic 을 페이지에 알린다.
-func (e *Endpoint) release(t topic) {
+// notifyPage 는 topic 의 첫 구독이나 마지막 해제를 페이지에 보낸다. 호스트 상태는 페이지에 보내지 않는다.
+func (e *Endpoint) notifyPage(t topic, on bool) error {
 	var err error
 	switch {
 	case t.name == logTopic:
-		_, err = e.backend.PageRequest(t.window, "diagnostics.transcript", json.RawMessage(`{"on":false}`))
-	case !isHostName(t.name):
+		_, err = e.backend.PageRequest(t.window, "diagnostics.transcript", mustJSON(map[string]bool{"on": on}))
+	case isHostName(t.name):
+	case on:
+		_, err = e.backend.PageRequest(t.window, "status.watch", mustJSON(t.watchParams()))
+	default:
 		_, err = e.backend.PageRequest(t.window, "status.unwatch", mustJSON(t.watchParams()))
 	}
-	if err != nil {
-		log.Printf("endpoint: release %s on %s: %v", t.name, t.window, err)
-	}
+	return err
 }
 
 func (e *Endpoint) run(c *endpointConn, req request, method endpointMethod) {
 	result, err := method(e, c, req.Params)
+	e.reply(c, req, result, err)
+}
+
+// reply 는 요청 req 의 결과나 오류를 보낸다. id 가 없는 요청에는 답하지 않는다.
+func (e *Endpoint) reply(c *endpointConn, req request, result any, err error) {
 	if len(req.ID) == 0 || string(req.ID) == "null" {
 		return
 	}
@@ -448,16 +532,14 @@ func (e *Endpoint) method(name string) (endpointMethod, bool) {
 }
 
 var endpointMethods = map[string]endpointMethod{
-	"windows.list":   func(e *Endpoint, _ *endpointConn, _ json.RawMessage) (any, error) { return e.backend.Windows(), nil },
-	"exposure.list":  exposureList,
-	"status.get":     statusGet,
-	"status.watch":   func(e *Endpoint, c *endpointConn, p json.RawMessage) (any, error) { return statusWatch(e, c, p, true) },
-	"status.unwatch": func(e *Endpoint, c *endpointConn, p json.RawMessage) (any, error) { return statusWatch(e, c, p, false) },
-	"command.run":    commandRun,
-	"dom.rect":       domRequest("dom.rect"),
-	"dom.act":        domRequest("dom.act"),
-	"input.pointer":  inputPointer,
-	"input.key":      inputKey,
+	"windows.list":  func(e *Endpoint, _ *endpointConn, _ json.RawMessage) (any, error) { return e.backend.Windows(), nil },
+	"exposure.list": exposureList,
+	"status.get":    statusGet,
+	"command.run":   commandRun,
+	"dom.rect":      domRequest("dom.rect"),
+	"dom.act":       domRequest("dom.act"),
+	"input.pointer": inputPointer,
+	"input.key":     inputKey,
 }
 
 // namePattern 은 항목 이름의 형식이다.
@@ -560,46 +642,30 @@ func statusGet(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error
 	return e.backend.PageRequest(window, "status.get", withoutWindow(params))
 }
 
-// statusWatch 는 연결의 감시를 바꾼다. 페이지는 창과 이름마다 첫 감시와 마지막 해제만 받는다.
-func statusWatch(e *Endpoint, c *endpointConn, params json.RawMessage, on bool) (any, error) {
+// watchTopic 은 status.watch 와 status.unwatch 의 params 에서 바꿀 topic 을 읽는다.
+func watchTopic(e *Endpoint, params json.RawMessage, on bool) (topic, bool, error) {
 	window, name, err := e.named(params)
 	if err != nil {
-		return nil, err
+		return topic{}, on, err
 	}
+	t := topic{window: window, name: name}
 	if isHostName(name) {
 		if _, ok := hostStatus[name]; !ok {
-			return nil, rpcError(codeUnknownName, "unknown status %s", name)
+			return topic{}, on, rpcError(codeUnknownName, "unknown status %s", name)
 		}
-		e.subscribe(c, topic{window, name, ""}, on)
-		return nil, nil
+		return t, on, nil
 	}
 	var fields target
 	if err := decode(params, &fields); err != nil {
-		return nil, err
+		return topic{}, on, err
 	}
-	t := topic{window: window, name: name}
 	if fields.Surface != nil {
 		if *fields.Surface == "" {
-			return nil, rpcError(codeInvalidParams, "surface must not be empty")
+			return topic{}, on, rpcError(codeInvalidParams, "surface must not be empty")
 		}
 		t.surface = *fields.Surface
 	}
-	e.watching.Lock()
-	defer e.watching.Unlock()
-	if !e.subscribe(c, t, on) {
-		return nil, nil
-	}
-	method := "status.unwatch"
-	if on {
-		method = "status.watch"
-	}
-	if _, err := e.backend.PageRequest(window, method, withoutWindow(params)); err != nil {
-		if on {
-			e.subscribe(c, t, false)
-		}
-		return nil, err
-	}
-	return nil, nil
+	return t, on, nil
 }
 
 func commandRun(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {

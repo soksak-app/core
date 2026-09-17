@@ -50,7 +50,9 @@ The host removes the file on exit. A client reads the file to connect. When the 
 
 Each message is a 4-byte big-endian unsigned length followed by that many bytes of one UTF-8 JSON-RPC 2.0 object. The maximum length is 16 MiB.
 
-A connection stays open for many requests. Requests are multiplexed by `id`. Server notifications have no `id`.
+A connection stays open for many requests. Requests are multiplexed by `id`, and replies can arrive in any order. Server notifications have no `id`.
+
+Requests that change the subscriptions of a connection (`status.watch`, `status.unwatch`, `diagnostics.transcript`) are applied in the order the host receives them, including the messages the host forwards to the page for them. A client that ends one subscription and starts the same one again sends the two requests in that order.
 
 ## Closing
 

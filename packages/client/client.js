@@ -77,6 +77,7 @@ class Client {
   #listeners = new Map();
   // window, name, surface 별 status.watch 사용 수. 호스트는 연결당 하나의 감시만 기록하므로 마지막 사용이 끝날 때 unwatch 한다.
   #watches = new Map();
+  #subscriptions = new Map();
   #closed = null;
   #ended;
   #end;
@@ -128,6 +129,8 @@ class Client {
     return new Promise((resolve, reject) => {
       let done = false;
       let timer;
+      let seen = false;
+      let last;
       const finish = (error, value) => {
         if (done) return;
         done = true;
@@ -139,6 +142,8 @@ class Client {
         else resolve(value);
       };
       const check = (value) => {
+        seen = true;
+        last = value;
         let ok;
         try {
           ok = predicate(value);
@@ -155,7 +160,8 @@ class Client {
       const offClose = this.#onClose((error) => finish(error));
       if (timeout !== Infinity) {
         timer = setTimeout(() => {
-          const error = new Error(`status ${name} did not satisfy the condition within ${timeout} ms`);
+          const error = new Error(`status ${name} did not satisfy the condition within ${timeout} ms; ` +
+            (seen ? `last value ${JSON.stringify(last)}` : "no value was received"));
           error.code = "ETIMEDOUT";
           finish(error);
         }, timeout);
@@ -194,13 +200,28 @@ class Client {
     return () => this.#closeListeners.delete(fn);
   }
 
+  /**
+   * 대상 하나의 구독 요청을 보낸 순서대로 이어 붙인다. 구독 해제와 다음 구독이 이 순서로
+   * 전송되고 적용되어야 한다(docs/spec/endpoint.md).
+   */
+  #subscribe(key, send) {
+    const previous = this.#subscriptions.get(key) ?? Promise.resolve();
+    const sent = previous.then(send);
+    const settled = sent.then(() => {}, () => {});
+    this.#subscriptions.set(key, settled);
+    settled.then(() => {
+      if (this.#subscriptions.get(key) === settled) this.#subscriptions.delete(key);
+    });
+    return sent;
+  }
+
   #acquire(key, target) {
     const entry = this.#watches.get(key);
     if (entry) {
       entry.count += 1;
       return entry.ready;
     }
-    const created = { count: 1, ready: this.request("status.watch", target) };
+    const created = { count: 1, ready: this.#subscribe(key, () => this.request("status.watch", target)) };
     this.#watches.set(key, created);
     created.ready.catch(() => {
       if (this.#watches.get(key) === created) this.#watches.delete(key);
@@ -215,10 +236,9 @@ class Client {
     if (entry.count > 0) return;
     this.#watches.delete(key);
     if (this.#closed) return;
-    entry.ready.then(
-      () => this.request("status.unwatch", target).catch(() => {}),
-      () => {},
-    );
+    // 구독은 이 차례보다 앞에 있으므로 여기서는 결과가 정해져 있다. 실패한 구독은 해제하지 않는다.
+    this.#subscribe(key, () => entry.ready.then(() => this.request("status.unwatch", target), () => {}))
+      .catch(() => {});
   }
 
   #receive(message) {

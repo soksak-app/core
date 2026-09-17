@@ -25,6 +25,10 @@ type fakeBackend struct {
 	commands []string
 	keys     []host.KeyInput
 	pointers []host.PointerInput
+	// held 가 있으면 첫 status.watch 는 entered 에 신호를 보내고 held 가 닫힐 때까지 답하지 않는다.
+	held    chan struct{}
+	entered chan struct{}
+	holding bool
 	// unwatched 는 페이지가 status.unwatch 를 받을 때마다 신호를 받는다.
 	unwatched chan struct{}
 }
@@ -41,7 +45,15 @@ func (b *fakeBackend) PageRequest(window, method string, params json.RawMessage)
 	b.mu.Lock()
 	b.requests = append(b.requests, method)
 	b.bodies = append(b.bodies, string(params))
+	hold := method == "status.watch" && b.held != nil && !b.holding
+	if hold {
+		b.holding = true
+	}
 	b.mu.Unlock()
+	if hold {
+		b.entered <- struct{}{}
+		<-b.held
+	}
 	if method == "status.unwatch" {
 		b.unwatched <- struct{}{}
 	}
@@ -476,5 +488,44 @@ func TestSurfaceWatchesAreSeparate(t *testing.T) {
 	backend.mu.Unlock()
 	if last != `{"name":"probe.lines","surface":"tab-a"}` {
 		t.Fatalf("unwatch params %s", last)
+	}
+}
+
+func TestSubscriptionChangesKeepArrivalOrder(t *testing.T) {
+	backend := newFakeBackend()
+	backend.held = make(chan struct{})
+	backend.entered = make(chan struct{}, 1)
+	endpoint, address, _ := serve(t, backend)
+	conn := dial(t, address)
+	watch := map[string]any{"window": "main", "name": "core.layout"}
+	request := func(id int, method string) {
+		send(t, conn, map[string]any{"jsonrpc": "2.0", "id": id, "method": method, "params": watch})
+	}
+	request(1, "status.watch")
+	<-backend.entered
+	// 첫 감시의 페이지 답이 오기 전에 해제와 감시를 연달아 보낸다.
+	request(2, "status.unwatch")
+	request(3, "status.watch")
+	close(backend.held)
+	for range 3 {
+		got, err := receive(t, conn)
+		if err != nil || got.Error != nil || got.ID == nil {
+			t.Fatalf("reply %+v (%v)", got, err)
+		}
+	}
+	endpoint.StatusChanged("main", "core.layout", "", 5)
+	got, err := receive(t, conn)
+	if err != nil || got.Method != "status.changed" {
+		t.Fatalf("the connection is not watching after unwatch and watch: %+v (%v)", got, err)
+	}
+	requests, _ := backend.seen()
+	var order []string
+	for _, method := range requests {
+		if method == "status.watch" || method == "status.unwatch" {
+			order = append(order, method)
+		}
+	}
+	if len(order) != 3 || order[0] != "status.watch" || order[1] != "status.unwatch" || order[2] != "status.watch" {
+		t.Fatalf("page received %v", order)
 	}
 }

@@ -6,7 +6,7 @@
 //! 맡고, 이 파일은 전송, 매개변수의 `window`, 연결별 감시 목록, 알림을 처리한다. 전송은
 //! `platform/<os>/endpoint.*` 가 제공한다. 형식은 docs/spec/endpoint.md 에 정의한다.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::{ErrorKind, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -115,17 +115,109 @@ impl Watch {
     }
 }
 
-/// 연결 하나의 쓰기 대상과 감시 목록.
+/// 연결 하나의 쓰기 대상과 감시 목록. changes 는 구독마다 마지막으로 받은 변경의 순번이다.
 struct Peer {
     writer: Arc<Mutex<Box<dyn Connection>>>,
     watches: HashSet<Watch>,
     transcript: HashSet<String>,
+    changes: HashMap<Topic, u64>,
+}
+
+/// 연결이 구독하는 대상. 페이지에 보내는 구독 변경은 대상마다 받은 순서로 실행한다.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+enum Topic {
+    Status(Watch),
+    Transcript(String),
+}
+
+impl Topic {
+    fn window(&self) -> &str {
+        match self {
+            Topic::Status(watch) => &watch.window,
+            Topic::Transcript(window) => window,
+        }
+    }
+
+    /// 페이지에 보낼 시작 또는 종료 요청.
+    fn request(&self, on: bool) -> (&'static str, Map<String, Value>) {
+        match self {
+            Topic::Status(watch) => (if on { "status.watch" } else { "status.unwatch" }, watch.params()),
+            Topic::Transcript(_) => {
+                let mut params = Map::new();
+                params.insert("on".into(), Value::Bool(on));
+                ("diagnostics.transcript", params)
+            }
+        }
+    }
+
+    fn held(&self, peer: &Peer) -> bool {
+        match self {
+            Topic::Status(watch) => peer.watches.contains(watch),
+            Topic::Transcript(window) => peer.transcript.contains(window),
+        }
+    }
+
+    fn set(&self, peer: &mut Peer, on: bool) {
+        match (self, on) {
+            (Topic::Status(watch), true) => {
+                peer.watches.insert(watch.clone());
+            }
+            (Topic::Status(watch), false) => {
+                peer.watches.remove(watch);
+            }
+            (Topic::Transcript(window), true) => {
+                peer.transcript.insert(window.clone());
+            }
+            (Topic::Transcript(window), false) => {
+                peer.transcript.remove(window);
+            }
+        }
+    }
+}
+
+/// 요청에 대한 응답을 쓸 대상.
+struct Answer {
+    writer: Arc<Mutex<Box<dyn Connection>>>,
+    id: Option<Value>,
+}
+
+impl Answer {
+    fn send(self, outcome: Result<Value, Failure>) {
+        let Some(id) = self.id else { return };
+        let reply = match outcome {
+            Ok(result) => json!({"jsonrpc": "2.0", "id": id, "result": result}),
+            Err(failure) => json!({"jsonrpc": "2.0", "id": id,
+                "error": {"code": failure.code, "message": failure.message}}),
+        };
+        if let Ok(mut writer) = self.writer.lock() {
+            let _ = write_frame(&mut *writer, &reply);
+        }
+    }
+}
+
+/// 구독 변경 하나. last 는 종료 변경 뒤에 이 대상을 구독한 연결이 없는지 나타낸다.
+struct Change {
+    peer: u64,
+    order: u64,
+    on: bool,
+    last: bool,
+    answer: Option<Answer>,
+}
+
+/// 대상 하나의 대기 중인 변경. page 는 페이지가 이 대상을 따르고 있는지 나타낸다.
+#[derive(Default)]
+struct Line {
+    changes: VecDeque<Change>,
+    running: bool,
+    page: bool,
 }
 
 struct Shared {
     service: Arc<dyn Service>,
     peers: Mutex<HashMap<u64, Peer>>,
+    lines: Mutex<HashMap<Topic, Line>>,
     next: AtomicU64,
+    orders: AtomicU64,
 }
 
 /// 연결에 알림을 보낸다. 엔드포인트가 멈춘 뒤에는 보낼 연결이 없다.
@@ -204,7 +296,13 @@ impl Endpoint {
         let listener: Arc<dyn Listener> = platform::current()?.endpoint_listen(application)?.into();
         let address = listener.address();
         let file = directory.join("endpoint.json");
-        let shared = Arc::new(Shared { service, peers: Mutex::new(HashMap::new()), next: AtomicU64::new(1) });
+        let shared = Arc::new(Shared {
+            service,
+            peers: Mutex::new(HashMap::new()),
+            lines: Mutex::new(HashMap::new()),
+            next: AtomicU64::new(1),
+            orders: AtomicU64::new(1),
+        });
         let endpoint = Endpoint { shared, listener, address, file, stopped: Arc::new(AtomicBool::new(false)) };
         let executable = std::env::current_exe()
             .and_then(std::fs::canonicalize)
@@ -372,7 +470,8 @@ fn declared(method: &str) -> bool {
     METHODS.contains(&method) || DIAGNOSTICS.contains(&method)
 }
 
-/// 연결 하나의 요청을 읽고 실행한다.
+/// 연결 하나의 요청을 읽고 실행한다. 구독 변경은 받은 순서로 적용하고, 나머지 요청은 각자의
+/// 스레드에서 실행한다.
 fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
     let writer = match connection.try_clone() {
         Ok(writer) => Arc::new(Mutex::new(writer)),
@@ -383,7 +482,12 @@ fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
     };
     let peer = shared.next.fetch_add(1, Ordering::Relaxed);
     if let Ok(mut peers) = shared.peers.lock() {
-        peers.insert(peer, Peer { writer: writer.clone(), watches: HashSet::new(), transcript: HashSet::new() });
+        peers.insert(peer, Peer {
+            writer: writer.clone(),
+            watches: HashSet::new(),
+            transcript: HashSet::new(),
+            changes: HashMap::new(),
+        });
     }
     loop {
         let Ok(Some(message)) = read_frame(&mut connection) else { break };
@@ -391,35 +495,31 @@ fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
         if !declared(&request.method) {
             break;
         }
-        let shared = shared.clone();
-        let writer = writer.clone();
-        std::thread::spawn(move || {
-            let outcome = run(&shared, peer, &request.method, request.params);
-            let Some(id) = request.id else { return };
-            let reply = match outcome {
-                Ok(result) => json!({"jsonrpc": "2.0", "id": id, "result": result}),
-                Err(failure) => json!({"jsonrpc": "2.0", "id": id,
-                    "error": {"code": failure.code, "message": failure.message}}),
-            };
-            if let Ok(mut writer) = writer.lock() {
-                let _ = write_frame(&mut *writer, &reply);
+        let answer = Answer { writer: writer.clone(), id: request.id };
+        if SUBSCRIPTIONS.contains(&request.method.as_str()) {
+            match subscription(&shared, &request.method, request.params) {
+                Ok((topic, on)) => change(&shared, peer, topic, on, Some(answer)),
+                Err(failure) => answer.send(Err(failure)),
             }
-        });
+            continue;
+        }
+        let shared = shared.clone();
+        std::thread::spawn(move || answer.send(run(&shared, &request.method, request.params)));
     }
     connection.close();
     forget(&shared, peer);
 }
 
-/// 요청 하나를 실행한다.
-fn run(shared: &Shared, peer: u64, method: &str, params: Option<Value>) -> Result<Value, Failure> {
+/// 연결의 구독을 바꾸는 메서드.
+const SUBSCRIPTIONS: &[&str] = &["status.watch", "status.unwatch", "diagnostics.transcript"];
+
+/// params 를 검사하고 창의 이름을 꺼낸다.
+fn target(shared: &Shared, method: &str, params: Option<Value>) -> Result<(String, Map<String, Value>), Failure> {
     let mut params = match params {
         None | Some(Value::Null) => Map::new(),
         Some(Value::Object(params)) => params,
         Some(_) => return Err(Failure::params("params must be an object")),
     };
-    if method == "windows.list" {
-        return shared.service.windows();
-    }
     let window = match params.remove("window") {
         Some(Value::String(window)) => window,
         _ => return Err(Failure::params("window must be a string")),
@@ -430,44 +530,101 @@ fn run(shared: &Shared, peer: u64, method: &str, params: Option<Value>) -> Resul
     if !shared.service.exists(&window) {
         return Err(Failure::new(MISSING_DOCUMENT, format!("window {window} does not exist")));
     }
+    Ok((window, params))
+}
+
+/// 구독 변경 요청의 대상과 시작 여부를 반환한다.
+fn subscription(shared: &Shared, method: &str, params: Option<Value>) -> Result<(Topic, bool), Failure> {
+    let (window, params) = target(shared, method, params)?;
     match method {
-        "status.watch" => {
-            let key = watch_key(&window, &params)?;
-            let result = shared.service.call(&window, method, params)?;
-            with_peer(shared, peer, |state| {
-                state.watches.insert(key);
-            });
-            Ok(result)
-        }
-        "status.unwatch" => {
-            let key = watch_key(&window, &params)?;
-            with_peer(shared, peer, |state| {
-                state.watches.remove(&key);
-            });
-            if watched(shared, &key) {
-                return Ok(Value::Null);
-            }
-            shared.service.call(&window, method, params)
-        }
-        #[cfg(feature = "diagnostics")]
-        "diagnostics.transcript" => {
-            let Some(on) = params.get("on").and_then(Value::as_bool) else {
-                return Err(Failure::params("on must be a boolean"));
-            };
-            with_peer(shared, peer, |state| {
-                if on {
-                    state.transcript.insert(window.clone());
-                } else {
-                    state.transcript.remove(&window);
-                }
-            });
-            if !on && transcribed(shared, &window) {
-                return Ok(Value::Null);
-            }
-            shared.service.call(&window, method, params)
-        }
-        _ => shared.service.call(&window, method, params),
+        "status.watch" => Ok((Topic::Status(watch_key(&window, &params)?), true)),
+        "status.unwatch" => Ok((Topic::Status(watch_key(&window, &params)?), false)),
+        _ => match params.get("on") {
+            Some(Value::Bool(on)) => Ok((Topic::Transcript(window), *on)),
+            _ => Err(Failure::params("on must be a boolean")),
+        },
     }
+}
+
+/// 연결 peer 의 구독을 바로 바꾸고, 페이지에 보낼 변경을 대상의 줄에 넣는다. 두 작업을 연결 목록
+/// 잠금 안에서 실행하므로 줄의 순서는 구독 변경을 적용한 순서와 같다.
+fn change(shared: &Arc<Shared>, peer: u64, topic: Topic, on: bool, answer: Option<Answer>) {
+    let start = {
+        let Ok(mut peers) = shared.peers.lock() else { return };
+        let order = shared.orders.fetch_add(1, Ordering::Relaxed);
+        if let Some(state) = peers.get_mut(&peer) {
+            topic.set(state, on);
+            state.changes.insert(topic.clone(), order);
+        }
+        let last = !on && !peers.values().any(|other| topic.held(other));
+        let Ok(mut lines) = shared.lines.lock() else { return };
+        let line = lines.entry(topic.clone()).or_default();
+        line.changes.push_back(Change { peer, order, on, last, answer });
+        !std::mem::replace(&mut line.running, true)
+    };
+    if start {
+        let shared = shared.clone();
+        std::thread::spawn(move || drain(&shared, topic));
+    }
+}
+
+/// 대상 topic 의 줄에 있는 변경을 순서대로 페이지에 보내고 응답한다.
+fn drain(shared: &Shared, topic: Topic) {
+    loop {
+        let (next, page) = {
+            let Ok(mut lines) = shared.lines.lock() else { return };
+            let Some(line) = lines.get_mut(&topic) else { return };
+            match line.changes.pop_front() {
+                Some(next) => (next, line.page),
+                None => {
+                    line.running = false;
+                    if !line.page {
+                        lines.remove(&topic);
+                    }
+                    return;
+                }
+            }
+        };
+        let (method, params) = topic.request(next.on);
+        let (outcome, following) = if next.on && !page {
+            match shared.service.call(topic.window(), method, params) {
+                Ok(result) => (Ok(result), true),
+                Err(failure) => {
+                    // 이 연결이 그 뒤에 이 대상을 다시 바꾸지 않았으면 시작을 되돌린다.
+                    if let Ok(mut peers) = shared.peers.lock() {
+                        if let Some(state) = peers.get_mut(&next.peer) {
+                            if state.changes.get(&topic) == Some(&next.order) {
+                                topic.set(state, false);
+                            }
+                        }
+                    }
+                    (Err(failure), false)
+                }
+            }
+        } else if !next.on && next.last && page {
+            // 페이지가 종료 요청에 실패해도 이후 시작 요청은 페이지에 다시 보낸다.
+            (shared.service.call(topic.window(), method, params), false)
+        } else {
+            (Ok(Value::Null), page)
+        };
+        if let Ok(mut lines) = shared.lines.lock() {
+            if let Some(line) = lines.get_mut(&topic) {
+                line.page = following;
+            }
+        }
+        if let Some(answer) = next.answer {
+            answer.send(outcome);
+        }
+    }
+}
+
+/// 구독 변경이 아닌 요청 하나를 실행한다.
+fn run(shared: &Shared, method: &str, params: Option<Value>) -> Result<Value, Failure> {
+    if method == "windows.list" {
+        return shared.service.windows();
+    }
+    let (window, params) = target(shared, method, params)?;
+    shared.service.call(&window, method, params)
 }
 
 /// params 의 name 을 반환한다.
@@ -495,14 +652,6 @@ fn watch_key(window: &str, params: &Map<String, Value>) -> Result<Watch, Failure
     Ok(Watch { window: window.into(), name: name(params)?, surface })
 }
 
-fn with_peer(shared: &Shared, peer: u64, change: impl FnOnce(&mut Peer)) {
-    if let Ok(mut peers) = shared.peers.lock() {
-        if let Some(state) = peers.get_mut(&peer) {
-            change(state);
-        }
-    }
-}
-
 /// 감시 key 를 가진 연결이 있는지 반환한다.
 fn watched(shared: &Shared, key: &Watch) -> bool {
     shared.peers.lock().is_ok_and(|peers| peers.values().any(|peer| peer.watches.contains(key)))
@@ -513,21 +662,22 @@ fn transcribed(shared: &Shared, window: &str) -> bool {
     shared.peers.lock().is_ok_and(|peers| peers.values().any(|peer| peer.transcript.contains(window)))
 }
 
-/// 닫힌 연결의 감시를 제거하고, 남은 감시자가 없는 값의 감시 해제를 페이지에 요청한다.
-fn forget(shared: &Shared, peer: u64) {
-    let Some(state) = shared.peers.lock().ok().and_then(|mut peers| peers.remove(&peer)) else { return };
-    for watch in state.watches {
-        if watched(shared, &watch) || !shared.service.exists(&watch.window) {
-            continue;
-        }
-        let _ = shared.service.call(&watch.window, "status.unwatch", watch.params());
+/// 닫힌 연결의 구독을 받은 순서의 마지막 변경으로 끝낸다. 남은 구독자가 없는 대상은 페이지에
+/// 종료를 요청한다.
+fn forget(shared: &Arc<Shared>, peer: u64) {
+    let topics: Vec<Topic> = match shared.peers.lock() {
+        Ok(peers) => match peers.get(&peer) {
+            Some(state) => state.watches.iter().cloned().map(Topic::Status)
+                .chain(state.transcript.iter().cloned().map(Topic::Transcript))
+                .collect(),
+            None => return,
+        },
+        Err(_) => return,
+    };
+    for topic in topics {
+        change(shared, peer, topic, false, None);
     }
-    for window in state.transcript {
-        if transcribed(shared, &window) || !shared.service.exists(&window) {
-            continue;
-        }
-        let mut params = Map::new();
-        params.insert("on".into(), Value::Bool(false));
-        let _ = shared.service.call(&window, "diagnostics.transcript", params);
+    if let Ok(mut peers) = shared.peers.lock() {
+        peers.remove(&peer);
     }
 }

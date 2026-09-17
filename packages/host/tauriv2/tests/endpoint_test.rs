@@ -277,3 +277,68 @@ fn names_must_have_the_owner_form() {
     assert!(endpoint::valid_name("core.surface.document") && endpoint::valid_name("plugin-x.a-1"));
     endpoint.stop();
 }
+
+/// 감시 요청을 처리 완료 순서로 기록하는 페이지. 첫 status.unwatch 는 gate 가 열릴 때까지 끝나지 않는다.
+struct GatedPage {
+    order: Mutex<Vec<String>>,
+    gate: Mutex<Option<Receiver<()>>>,
+    entered: Mutex<Sender<String>>,
+}
+
+impl Service for GatedPage {
+    fn windows(&self) -> Result<Value, Failure> {
+        Ok(json!([]))
+    }
+
+    fn exists(&self, window: &str) -> bool {
+        window == "w1"
+    }
+
+    fn call(&self, _window: &str, method: &str, _params: Map<String, Value>) -> Result<Value, Failure> {
+        let _ = self.entered.lock().unwrap().send(method.to_string());
+        if method == "status.unwatch" {
+            let gate = self.gate.lock().unwrap().take();
+            if let Some(gate) = gate {
+                gate.recv().unwrap();
+            }
+        }
+        if method.starts_with("status.") && method != "status.get" {
+            self.order.lock().unwrap().push(method.to_string());
+        }
+        Ok(if method == "status.get" { json!(0) } else { Value::Null })
+    }
+}
+
+#[test]
+fn subscription_changes_reach_the_page_in_arrival_order() {
+    let config = tempfile::tempdir().unwrap();
+    let (open_gate, gate) = mpsc::channel();
+    let (entered, calls) = mpsc::channel();
+    let page = Arc::new(GatedPage { order: Mutex::new(Vec::new()), gate: Mutex::new(Some(gate)), entered: Mutex::new(entered) });
+    let endpoint = Endpoint::start(config.path(), "test-order", page.clone()).unwrap();
+    let notifier = endpoint.notifier();
+    let mut connection = open(&endpoint);
+    let topic = json!({"window": "w1", "name": "core.layout"});
+    assert_eq!(request(&mut connection, 1, "status.watch", topic.clone())["result"], Value::Null);
+    assert_eq!(calls.recv().unwrap(), "status.watch");
+
+    // 감시 해제와 감시를 연달아 보낸다. 페이지가 감시 해제를 끝내기 전에 다른 요청의 응답을 받는다.
+    send(&mut connection, json!({"jsonrpc": "2.0", "id": 2, "method": "status.unwatch", "params": topic}));
+    send(&mut connection, json!({"jsonrpc": "2.0", "id": 3, "method": "status.watch", "params": topic}));
+    assert_eq!(calls.recv().unwrap(), "status.unwatch");
+    send(&mut connection, json!({"jsonrpc": "2.0", "id": 4, "method": "status.get", "params": topic}));
+    let mut replies = Vec::new();
+    let first = receive(&mut connection).unwrap();
+    replies.push(first["id"].clone());
+    assert!(notifier.watched("w1", "core.layout"));
+    open_gate.send(()).unwrap();
+    while replies.len() < 3 {
+        replies.push(receive(&mut connection).unwrap()["id"].clone());
+    }
+    assert_eq!(replies, [json!(4), json!(2), json!(3)]);
+    assert_eq!(*page.order.lock().unwrap(), ["status.watch", "status.unwatch", "status.watch"]);
+    assert!(notifier.watched("w1", "core.layout"));
+    notifier.changed("w1", "core.layout", None, json!(5));
+    assert_eq!(receive(&mut connection).unwrap()["params"]["value"], 5);
+    endpoint.stop();
+}

@@ -69,17 +69,26 @@ test("error replies become EndpointError with the code", async (t) => {
   });
 });
 
+/** 가짜 엔드포인트가 predicate 를 만족하는 요청을 받으면 이행한다. */
+const requested = (server, predicate) => new Promise((resolve) => {
+  const listener = (message) => {
+    if (!predicate(message)) return;
+    server.events.off("request", listener);
+    resolve(message);
+  };
+  server.events.on("request", listener);
+});
+
 test("watch resolves with the current value when it already satisfies the predicate", async (t) => {
   const sample = sampleHandlers();
   const server = await startFakeEndpoint(sample.handlers);
   t.after(() => server.close());
   const client = await connect({ configDir: server.configDir });
   t.after(() => client.close());
+  const unwatched = requested(server, (m) => m.method === "status.unwatch");
   assert.equal(await client.watch("main", "core.screen", (value) => value === "home"), "home");
-  const methods = server.requests.map((m) => m.method);
-  await client.request("windows.list");
-  assert.deepEqual(server.requests.map((m) => m.method), [...methods.slice(0, 2), "status.unwatch", "windows.list"]);
-  assert.deepEqual(methods.slice(0, 2), ["status.watch", "status.get"]);
+  await unwatched;
+  assert.deepEqual(server.requests.map((m) => m.method), ["status.watch", "status.get", "status.unwatch"]);
 });
 
 test("watch resolves from a status.changed notification without further requests", async (t) => {
@@ -104,7 +113,10 @@ test("watch rejects after the timeout and unwatches", async (t) => {
   t.after(() => server.close());
   const client = await connect({ configDir: server.configDir });
   t.after(() => client.close());
-  await assert.rejects(client.watch("main", "core.screen", () => false, { timeout: 50 }), { code: "ETIMEDOUT" });
+  await assert.rejects(client.watch("main", "core.screen", () => false, { timeout: 50 }), {
+    code: "ETIMEDOUT",
+    message: 'status core.screen did not satisfy the condition within 50 ms; last value "home"',
+  });
   await client.request("windows.list");
   assert.ok(server.requests.some((m) => m.method === "status.unwatch"));
 });
@@ -123,6 +135,36 @@ test("concurrent watches of one name unwatch only after the last one ends", asyn
   sample.set("core.screen", "later");
   assert.equal(await later, "later");
   assert.equal(server.requests.filter((m) => m.method === "status.watch").length, 1);
+});
+
+test("a watch that ends before its subscription is confirmed is unsubscribed before the next watch", async (t) => {
+  const sample = sampleHandlers();
+  // 첫 status.watch 의 응답을 테스트가 보낼 때까지 미룬다.
+  let confirm;
+  let first = true;
+  const handlers = {
+    ...sample.handlers,
+    "status.watch": (params, connection) => {
+      if (!first) return sample.handlers["status.watch"](params, connection);
+      first = false;
+      return new Promise((resolve) => {
+        confirm = () => resolve(sample.handlers["status.watch"](params, connection));
+      });
+    },
+  };
+  const server = await startFakeEndpoint(handlers);
+  t.after(() => server.close());
+  const client = await connect({ configDir: server.configDir });
+  t.after(() => client.close());
+  await assert.rejects(client.watch("main", "core.screen", () => false, { timeout: 20 }), { code: "ETIMEDOUT" });
+  const next = client.watch("main", "core.screen", (value) => value === "later");
+  await client.request("windows.list");
+  confirm();
+  const subscriptions = () => server.requests.map((m) => m.method).filter((m) => m === "status.watch" || m === "status.unwatch");
+  await requested(server, () => subscriptions().length === 3);
+  assert.deepEqual(subscriptions(), ["status.watch", "status.unwatch", "status.watch"]);
+  sample.set("core.screen", "later");
+  assert.equal(await next, "later");
 });
 
 test("watch rejects with the endpoint error for an unknown name", async (t) => {

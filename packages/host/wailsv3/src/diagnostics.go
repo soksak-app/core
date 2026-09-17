@@ -29,7 +29,7 @@ func init() {
 	diagnosticMethods["diagnostics.drag"] = diagnosticDrag
 	diagnosticMethods["diagnostics.capture.stop"] = diagnosticCaptureStop
 	diagnosticMethods["diagnostics.knob"] = diagnosticKnob
-	diagnosticMethods["diagnostics.transcript"] = diagnosticTranscript
+	diagnosticSubscriptions["diagnostics.transcript"] = transcriptTopic
 }
 
 // frameStep 은 끌기 한 걸음의 길이다. 페이지가 같은 값으로 걸음 수를 센다.
@@ -257,33 +257,21 @@ func diagnosticKnob(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, 
 	return e.backend.PageRequest(window, "diagnostics.knob", mustJSON(p))
 }
 
-// diagnosticTranscript 는 연결의 diagnostics.log 알림을 켜거나 끈다. 페이지는 첫 구독과 마지막
-// 해제에서 호출 기록의 시작과 종료를 받는다.
-func diagnosticTranscript(e *Endpoint, c *endpointConn, params json.RawMessage) (any, error) {
+// transcriptTopic 은 diagnostics.transcript 의 params 에서 연결의 diagnostics.log 구독과 방향을 읽는다.
+// 페이지는 첫 구독과 마지막 해제에서 호출 기록의 시작과 종료를 받는다.
+func transcriptTopic(e *Endpoint, params json.RawMessage) (topic, bool, error) {
 	window, err := e.window(params)
 	if err != nil {
-		return nil, err
+		return topic{}, false, err
 	}
 	var p struct {
 		On *bool `json:"on"`
 	}
 	if err := decode(params, &p); err != nil {
-		return nil, err
+		return topic{}, false, err
 	}
 	if p.On == nil {
-		return nil, rpcError(codeInvalidParams, "on is required")
+		return topic{}, false, rpcError(codeInvalidParams, "on is required")
 	}
-	e.watching.Lock()
-	defer e.watching.Unlock()
-	t := topic{window, logTopic, ""}
-	if !e.subscribe(c, t, *p.On) {
-		return nil, nil
-	}
-	if _, err := e.backend.PageRequest(window, "diagnostics.transcript", mustJSON(map[string]bool{"on": *p.On})); err != nil {
-		if *p.On {
-			e.subscribe(c, t, false)
-		}
-		return nil, err
-	}
-	return nil, nil
+	return topic{window, logTopic, ""}, *p.On, nil
 }
