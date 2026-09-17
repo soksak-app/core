@@ -21,6 +21,8 @@ mod modals;
 #[path = "platform/platform.rs"]
 mod platform;
 pub mod projects;
+#[cfg(feature = "diagnostics")]
+pub mod recording;
 mod shapes;
 pub mod sidecars;
 mod surfaces;

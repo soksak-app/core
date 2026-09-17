@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"sync"
@@ -269,6 +270,30 @@ type ExposureForwardRequest struct {
 	Surface string          `json:"surface"`
 	Method  string          `json:"method"`
 	Params  json.RawMessage `json:"params"`
+	// Timeout 은 이 요청의 제한 시간(ms)이다. 없으면 10 초다. 선언의 timeout 을 페이지가 전달한다.
+	Timeout json.RawMessage `json:"timeout,omitempty"`
+}
+
+// maxForwardTimeout 은 전달 요청이 지정할 수 있는 가장 긴 제한 시간이다.
+const maxForwardTimeout = 600000
+
+// ForwardTimeout 은 전달 요청의 제한 시간을 정한다. status.next 는 값이 바뀔 때까지 답하지 않으므로
+// 제한 시간이 없고(0), timeout 을 받지 않는다. timeout 은 1 이상 600000 이하의 정수 ms 다.
+func ForwardTimeout(method string, timeout json.RawMessage) (time.Duration, *RPCError) {
+	if len(timeout) == 0 || string(timeout) == "null" {
+		if method == "status.next" {
+			return 0, nil
+		}
+		return pageTimeout, nil
+	}
+	if method == "status.next" {
+		return 0, &RPCError{Code: codeInvalidParams, Message: "status.next has no timeout"}
+	}
+	var ms float64
+	if err := json.Unmarshal(timeout, &ms); err != nil || ms != math.Trunc(ms) || ms < 1 || ms > maxForwardTimeout {
+		return 0, &RPCError{Code: codeInvalidParams, Message: fmt.Sprintf("timeout must be an integer from 1 to %d milliseconds", maxForwardTimeout)}
+	}
+	return time.Duration(ms) * time.Millisecond, nil
 }
 
 // ExposureForward 는 요청을 표면 페이지에 전달하고 그 답 {result} 또는 {error} 를 반환한다.
@@ -277,6 +302,10 @@ func (h *Host) ExposureForward(ctx context.Context, req ExposureForwardRequest) 
 	s, err := h.surface(ctx)
 	if err != nil {
 		return ExposureResult{}, err
+	}
+	timeout, invalid := ForwardTimeout(req.Method, req.Timeout)
+	if invalid != nil {
+		return ExposureResult{Error: invalid}, nil
 	}
 	id, w := h.relay.open(s, req.Surface)
 	payload, err := json.Marshal(map[string]any{"event": "exposure-request",
@@ -294,11 +323,7 @@ func (h *Host) ExposureForward(ctx context.Context, req ExposureForwardRequest) 
 	if !sent {
 		h.relay.abandon(s, map[string]bool{req.Surface: true})
 	}
-	// status.next 는 값이 바뀔 때까지 답하지 않으므로 제한 시간이 없다. 표면이 닫히면 1003 으로 끝난다.
-	timeout := pageTimeout
-	if req.Method == "status.next" {
-		timeout = 0
-	}
+	// status.next 는 제한 시간이 없다. 표면이 닫히면 1003 으로 끝난다.
 	reply := h.relay.wait(id, w, timeout)
 	if reply.Error == nil && len(reply.Result) == 0 {
 		reply.Result = json.RawMessage(`null`)
@@ -880,16 +905,18 @@ func (s *Surfaces) windowChanged() {
 	}()
 }
 
-// rewatch 는 다시 로드된 메인 페이지에 이 창의 감시와 진단 기록을 다시 요청한다.
+// rewatch 는 다시 로드된 메인 페이지에 이 창의 감시와 진단 구독을 다시 요청한다.
 func (s *Surfaces) rewatch() {
 	if s.host == nil || s.host.endpoint == nil {
 		return
 	}
 	for _, t := range s.host.endpoint.topics(s.name) {
 		var err error
+		request, diagnostic := diagnosticTopics[t.name]
 		switch {
-		case t.name == logTopic:
-			_, err = s.host.ask(s, "diagnostics.transcript", map[string]any{"on": true}, pageTimeout)
+		case diagnostic:
+			method, params := request(true)
+			_, err = s.host.ask(s, method, params, pageTimeout)
 		case !isHostName(t.name):
 			params := map[string]any{}
 			for key, value := range t.watchParams() {
@@ -903,9 +930,9 @@ func (s *Surfaces) rewatch() {
 	}
 }
 
-// log 는 이 창의 진단 기록을 켠 연결에 줄 하나를 보낸다.
+// log 는 이 창의 진단 기록을 켠 연결에 줄 하나를 보낸다. 진단 빌드가 아니면 보낼 곳이 없다.
 func (s *Surfaces) log(line string) {
-	if s.host != nil && s.host.endpoint != nil {
-		s.host.endpoint.Log(s.name, line)
+	if transcribe != nil && s.host != nil && s.host.endpoint != nil {
+		transcribe(s.host.endpoint, s.name, line)
 	}
 }

@@ -41,6 +41,21 @@ type Input struct {
 	Point func(phase int, x, y float64)
 }
 
+// Capturer 는 창 녹화 연산이다. 진단 빌드(태그 diagnostics)의 플랫폼 구현만 제공하며, 진단
+// 코드는 Current() 의 값을 이 인터페이스로 확인해 사용한다.
+type Capturer interface {
+	// WindowNumbers 는 창과 자식 창의 윈도 서버 번호를 반환한다. 창 자신의 번호가 처음이다.
+	WindowNumbers(window unsafe.Pointer) ([]int, error)
+	// CaptureOpen 은 윈도 서버 번호 windowNumber 의 창을 녹화 대상으로 정한다.
+	CaptureOpen(windowNumber int) error
+	// CaptureStart 는 directory 에 프레임 기록을 시작한다.
+	CaptureStart(directory string) error
+	// CaptureWait 는 첫 프레임이 기록되었는지 반환한다.
+	CaptureWait() (bool, error)
+	// CaptureStop 은 녹화를 끝내고 기록한 프레임 수를 반환한다.
+	CaptureStop() (int, error)
+}
+
 // Platform 은 운영체제마다 다른 동작이다.
 //
 // 오류를 반환하지 않는 함수는 오류를 반환하는 생성 함수가 만든 핸들만 받는다.
@@ -52,8 +67,6 @@ type Platform interface {
 	PlaceWindowControls(window unsafe.Pointer, x, centreY float64) error
 	// WindowControls 는 창 단추가 차지하는 영역을 페이지 좌표로 반환한다.
 	WindowControls(window unsafe.Pointer) (Rect, error)
-	// WindowNumbers 는 창과 자식 창의 윈도 서버 번호를 반환한다. 창 자신의 번호가 처음이다.
-	WindowNumbers(window unsafe.Pointer) ([]int, error)
 	// WindowFacts 는 창의 프레임, 활성 상태, 창 단추와 웹뷰를 JSON 으로 반환한다. 형식은
 	// native/darwin/src/window_facts.h 의 sp_window_facts 와 같다. UI 스레드에서 호출한다.
 	WindowFacts(window unsafe.Pointer) (string, error)
@@ -113,15 +126,6 @@ type Platform interface {
 	// UnwatchInput 은 WatchInput 이 반환한 감시를 해제한다.
 	UnwatchInput(monitor uintptr)
 
-	// CaptureOpen 은 윈도 서버 번호 windowNumber 의 창을 녹화 대상으로 정한다.
-	CaptureOpen(windowNumber int) error
-	// CaptureStart 는 directory 에 프레임 기록을 시작한다.
-	CaptureStart(directory string) error
-	// CaptureWait 는 첫 프레임이 기록되었는지 반환한다.
-	CaptureWait() (bool, error)
-	// CaptureStop 은 녹화를 끝내고 기록한 프레임 수를 반환한다.
-	CaptureStop() (int, error)
-
 	// InjectPointer 는 창의 콘텐츠 영역 좌표 (x, y) 에 포인터 입력을 전달하고 그 결과를 반환한다.
 	// phase 는 이동 0, 누름 1, 끌기 2, 뗌 3, 스크롤 4 이고 button 은 왼쪽 0, 오른쪽 1 이다.
 	InjectPointer(window unsafe.Pointer, x, y float64, phase, button int, deltaX, deltaY float64) (PointerResult, error)
@@ -132,9 +136,10 @@ type Platform interface {
 	// 4 Option, 8 Command 의 비트 합이다.
 	InjectKey(window unsafe.Pointer, key, text string, modifiers uint, down bool) (bool, error)
 
-	// Listen 은 로컬 엔드포인트의 리스너를 만든다. application 은 주소 이름에 들어간다.
+	// Listen 은 directory 안에 로컬 엔드포인트의 리스너를 만든다. directory 는 현재 사용자 전용이어야
+	// 한다. application 은 주소 이름에 들어간다.
 	// 리스너를 닫으면 주소도 제거된다.
-	Listen(application string) (net.Listener, Endpoint, error)
+	Listen(directory, application string) (net.Listener, Endpoint, error)
 
 	// InstallDock 은 Dock 메뉴를 등록한다. 새 창 항목은 newWindow 를 호출한다.
 	InstallDock(newWindow func()) error

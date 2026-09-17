@@ -32,6 +32,7 @@ packages/host/wailsv3/                     packages/host/tauriv2/
     exposure.go    노출 요청 전달                     exposure.rs
     endpoint.go    JSON-RPC 서버                      endpoint.rs
     diagnostics.go 진단 메서드(빌드 태그)             diagnostics.rs
+    recording.go   진단 녹화 상태(빌드 태그)          recording.rs
     bridge.js      추가 웹뷰 호출 통로                차이 H3
     platform/                                  platform/
       platform.go  인터페이스와 선택             platform.rs
@@ -43,7 +44,7 @@ packages/host/wailsv3/                     packages/host/tauriv2/
         layout.go    표면 배치 트랜잭션               layout.rs
         shapes.go    외곽선 뷰                        shapes.rs
         input.go     입력 감시                        input.rs
-        capture.go   캡처 호출                        capture.rs
+        capture.go   캡처 호출(빌드 태그)             capture.rs
         dock.go      Dock 메뉴                        dock.rs
         identity.go  디렉터리 식별                    identity.rs
         endpoint.go  Unix 소켓                        endpoint.rs
@@ -54,6 +55,7 @@ packages/host/wailsv3/                     packages/host/tauriv2/
       linux/  (구현 시 추가)                     linux/
   tests/                                     tests/
     sidecars_test.go                           sidecars_test.rs
+    recording_test.go(빌드 태그)               recording_test.rs(기능)
     workspace_test.go                          workspace_test.rs
     endpoint_test.go                           endpoint_test.rs
     exposure_test.go                           exposure_test.rs

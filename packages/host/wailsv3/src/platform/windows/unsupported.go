@@ -38,10 +38,6 @@ func (implementation) WindowControls(unsafe.Pointer) (platform.Rect, error) {
 	return platform.Rect{}, unsupported("window controls")
 }
 
-func (implementation) WindowNumbers(unsafe.Pointer) ([]int, error) {
-	return nil, unsupported("window numbers")
-}
-
 func (implementation) WindowFacts(unsafe.Pointer) (string, error) {
 	return "", unsupported("window state")
 }
@@ -165,22 +161,6 @@ func (implementation) UnwatchInput(uintptr) {
 	unreachable("surface input release")
 }
 
-func (implementation) CaptureOpen(int) error {
-	return unsupported("window capture")
-}
-
-func (implementation) CaptureStart(string) error {
-	return unsupported("window capture")
-}
-
-func (implementation) CaptureWait() (bool, error) {
-	return false, unsupported("window capture")
-}
-
-func (implementation) CaptureStop() (int, error) {
-	return 0, unsupported("window capture")
-}
-
 func (implementation) InjectPointer(unsafe.Pointer, float64, float64, int, int, float64, float64) (platform.PointerResult, error) {
 	return platform.PointerRejected, unsupported("native pointer input")
 }
@@ -193,7 +173,7 @@ func (implementation) InjectKey(unsafe.Pointer, string, string, uint, bool) (boo
 	return false, unsupported("native key input")
 }
 
-func (implementation) Listen(string) (net.Listener, platform.Endpoint, error) {
+func (implementation) Listen(string, string) (net.Listener, platform.Endpoint, error) {
 	return nil, platform.Endpoint{}, unsupported("local endpoint")
 }
 

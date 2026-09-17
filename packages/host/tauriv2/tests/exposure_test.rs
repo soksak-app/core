@@ -160,3 +160,16 @@ fn pointer_and_key_params_are_validated() {
     assert_eq!(exposure::key(&json!({"key": "a", "phase": "down", "modifiers": ["hyper"]}).as_object().unwrap().clone())
         .unwrap_err().code, -32602);
 }
+
+#[test]
+fn forwarded_requests_use_the_declared_timeout() {
+    assert_eq!(exposure::forward_timeout("command.run", &Value::Null).unwrap(), Some(exposure::TIMEOUT));
+    assert_eq!(exposure::forward_timeout("command.run", &json!(600000)).unwrap(), Some(Duration::from_secs(600)));
+    assert_eq!(exposure::forward_timeout("command.run", &json!(1)).unwrap(), Some(Duration::from_millis(1)));
+    assert_eq!(exposure::forward_timeout("status.next", &Value::Null).unwrap(), None);
+    for invalid in [json!(0), json!(600001), json!(1.5), json!("10"), json!(-1)] {
+        let error = exposure::forward_timeout("command.run", &invalid).unwrap_err();
+        assert_eq!(error.code, -32602, "{invalid}");
+    }
+    assert_eq!(exposure::forward_timeout("status.next", &json!(10)).unwrap_err().code, -32602);
+}

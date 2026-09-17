@@ -101,6 +101,9 @@ type Backend interface {
 	Key(window string, input KeyInput) error
 }
 
+// SocketDirectory 는 애플리케이션이 소켓을 두는 디렉터리다. 사용자별 임시 디렉터리 아래에 있다.
+func SocketDirectory() string { return filepath.Join(os.TempDir(), "soksak") }
+
 // EndpointInfo 는 endpoint.json 의 내용이다.
 type EndpointInfo struct {
 	Transport   string    `json:"transport"`
@@ -130,7 +133,7 @@ var subscriptionMethods = map[string]subscriptionMethod{
 // diagnosticSubscriptions 는 진단 빌드가 init 에서 추가하는 구독 메서드다.
 var diagnosticSubscriptions = map[string]subscriptionMethod{}
 
-// topic 은 알림을 받는 대상이다. 상태 감시는 상태 이름, 진단 기록은 logTopic 을 사용한다.
+// topic 은 알림을 받는 대상이다. 상태 감시는 상태 이름, 진단 구독은 diagnosticTopics 의 이름을 사용한다.
 type topic struct {
 	window string
 	name   string
@@ -147,9 +150,12 @@ func (t topic) watchParams() map[string]string {
 	return params
 }
 
-// logTopic 은 diagnostics.log 알림을 받는 연결의 topic 이름이다. 상태 이름은 점으로 구분한
-// 소문자이므로 이 값과 겹치지 않는다.
-const logTopic = "#diagnostics.log"
+// diagnosticTopics 는 진단 빌드가 init 에서 추가하는 구독 대상이다. 값은 구독의 시작(on)과
+// 끝을 페이지에 알리는 요청의 메서드와 params 를 만든다. 진단 빌드가 아니면 비어 있다.
+var diagnosticTopics = map[string]func(on bool) (method string, params any){}
+
+// transcribe 는 창의 진단 기록을 켠 연결에 줄 하나를 보낸다. 진단 빌드가 init 에서 정한다.
+var transcribe func(e *Endpoint, window, line string)
 
 // Endpoint 는 연결을 받고 요청을 처리한다.
 type Endpoint struct {
@@ -248,11 +254,6 @@ func (e *Endpoint) Watching(window, name string) bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return e.counts[topic{window, name, ""}] > 0
-}
-
-// Log 는 창 window 의 진단 기록을 켠 연결에 줄 하나를 알린다.
-func (e *Endpoint) Log(window, line string) {
-	e.publish(topic{window, logTopic, ""}, "diagnostics.log", map[string]any{"window": window, "line": line})
 }
 
 func (e *Endpoint) publish(t topic, method string, params any) {
@@ -475,9 +476,11 @@ func (e *Endpoint) drop(c *endpointConn) {
 // notifyPage 는 topic 의 첫 구독이나 마지막 해제를 페이지에 보낸다. 호스트 상태는 페이지에 보내지 않는다.
 func (e *Endpoint) notifyPage(t topic, on bool) error {
 	var err error
+	request, diagnostic := diagnosticTopics[t.name]
 	switch {
-	case t.name == logTopic:
-		_, err = e.backend.PageRequest(t.window, "diagnostics.transcript", mustJSON(map[string]bool{"on": on}))
+	case diagnostic:
+		method, params := request(on)
+		_, err = e.backend.PageRequest(t.window, method, mustJSON(params))
 	case isHostName(t.name):
 	case on:
 		_, err = e.backend.PageRequest(t.window, "status.watch", mustJSON(t.watchParams()))

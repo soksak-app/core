@@ -1,5 +1,7 @@
 //! Windows 에서 구현하지 않은 플랫폼 기능. 모든 함수가 "not implemented on windows" 오류를 반환한다.
 
+use std::path::Path;
+
 use tauri::webview::PlatformWebview;
 use serde_json::Value;
 use tauri::Window;
@@ -189,7 +191,7 @@ pub fn private_directory(_path: &std::path::Path) -> Result<(), String> {
     missing("private directory")
 }
 
-pub fn endpoint_listen(_name: &str) -> Result<Box<dyn Listener>, String> {
+pub fn endpoint_listen(_directory: &Path, _name: &str) -> Result<Box<dyn Listener>, String> {
     missing("local endpoint")
 }
 

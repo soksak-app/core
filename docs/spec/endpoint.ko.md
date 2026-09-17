@@ -10,7 +10,7 @@ macOS 호스트가 이 명세를 구현하며 [기능 상태](../features.ko.md)
 
 | OS | 전송 | 주소와 접근 |
 | --- | --- | --- |
-| macOS | Unix 도메인 소켓 | 사용자별 임시 디렉터리(`confstr(_CS_DARWIN_USER_TEMP_DIR)` 또는 `TMPDIR`) 아래 `soksak/`의 소켓. 호스트가 디렉터리를 모드 0700으로 생성한다 |
+| macOS | Unix 도메인 소켓 | 사용자별 임시 디렉터리(`$TMPDIR`, Go `os.TempDir`과 Rust `std::env::temp_dir`의 값) 아래 `soksak/`의 `<application>-<pid>.sock`. 호스트가 디렉터리를 모드 0700으로 생성하며, 경로가 디렉터리가 아니거나 다른 사용자 소유이거나 다른 모드이면 열지 않는다. 소켓의 모드는 0600이다 |
 | Linux | Unix 도메인 소켓 | `$XDG_RUNTIME_DIR/soksak`의 소켓. 호스트가 디렉터리를 모드 0700으로 생성한다 |
 | Windows | named pipe | `\\.\pipe\soksak-<id>`. 보안 설명자는 현재 사용자만 허용한다 |
 

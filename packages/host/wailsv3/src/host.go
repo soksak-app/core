@@ -68,7 +68,7 @@ func Run(assets fs.FS, options Options) error {
 		return err
 	}
 	// 엔드포인트는 창을 표시하기 전에 만든다. 만들 수 없으면 애플리케이션을 시작하지 않는다.
-	listener, address, err := system.Listen(applicationName)
+	listener, address, err := system.Listen(SocketDirectory(), applicationName)
 	if err != nil {
 		return fmt.Errorf("local endpoint: %w", err)
 	}

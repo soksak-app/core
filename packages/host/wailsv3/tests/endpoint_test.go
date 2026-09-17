@@ -8,12 +8,15 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime/debug"
+	"strings"
 	"sync"
 	"syscall"
 	"testing"
 	"time"
 
 	host "github.com/min-median-max/soksak/packages/host/wailsv3/src"
+	"github.com/min-median-max/soksak/packages/host/wailsv3/src/platform"
 )
 
 // fakeBackend 는 창 하나("main")와 그 페이지를 흉내 낸다. 페이지 요청은 기록하고 null 로 답한다.
@@ -234,6 +237,46 @@ func TestEndpointClosesOnUndeclaredMethod(t *testing.T) {
 	}
 }
 
+// builtWith 은 이 검사 바이너리가 빌드 태그 tag 로 빌드되었는지 반환한다.
+func builtWith(tag string) bool {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return false
+	}
+	for _, setting := range info.Settings {
+		if setting.Key == "-tags" {
+			for _, value := range strings.Split(setting.Value, ",") {
+				if value == tag {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func TestDiagnosticMethodsExistOnlyInDiagnosticBuilds(t *testing.T) {
+	backend := newFakeBackend()
+	_, address, _ := serve(t, backend)
+	conn := dial(t, address)
+	params := map[string]any{"window": "main", "name": "latency", "value": 0}
+	if builtWith("diagnostics") {
+		reply := call(t, conn, 1, "diagnostics.knob", params)
+		if reply.Error != nil {
+			t.Fatalf("diagnostics.knob failed in a diagnostic build: %+v", reply.Error)
+		}
+		if requests, _ := backend.seen(); len(requests) != 1 || requests[0] != "diagnostics.knob" {
+			t.Fatalf("page requests %v, want diagnostics.knob", requests)
+		}
+		return
+	}
+	send(t, conn, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "diagnostics.knob", "params": params})
+	expectClosed(t, conn)
+	if requests, _ := backend.seen(); len(requests) != 0 {
+		t.Fatalf("a diagnostic method reached the page in a release build: %v", requests)
+	}
+}
+
 func TestEndpointRoundTrip(t *testing.T) {
 	_, address, _ := serve(t, newFakeBackend())
 	conn := dial(t, address)
@@ -365,8 +408,8 @@ func TestEndpointFileIsWrittenAndRemoved(t *testing.T) {
 	if _, err := time.Parse(time.RFC3339, info["started"].(string)); err != nil {
 		t.Fatalf("started is not ISO 8601: %v", info["started"])
 	}
-	if stat, err := os.Stat(path); err != nil || stat.Mode().Perm()&0077 != 0 {
-		t.Fatalf("endpoint.json is readable by others: %v %v", stat.Mode(), err)
+	if stat, err := os.Stat(path); err != nil || stat.Mode().Perm() != 0600 {
+		t.Fatalf("endpoint.json mode %v, want 0600: %v", stat.Mode(), err)
 	}
 	if err := endpoint.Close(); err != nil {
 		t.Fatal(err)
@@ -527,5 +570,78 @@ func TestSubscriptionChangesKeepArrivalOrder(t *testing.T) {
 	}
 	if len(order) != 3 || order[0] != "status.watch" || order[1] != "status.unwatch" || order[2] != "status.watch" {
 		t.Fatalf("page received %v", order)
+	}
+}
+
+// socketParent 는 소켓 경로 길이 제한 안에 드는 짧은 임시 디렉터리다.
+func socketParent(t *testing.T) string {
+	t.Helper()
+	parent, err := os.MkdirTemp("", "sp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(parent) })
+	return parent
+}
+
+func listen(t *testing.T, directory, name string) (net.Listener, platform.Endpoint, error) {
+	t.Helper()
+	system, err := platform.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return system.Listen(directory, name)
+}
+
+func TestEndpointFilesArePrivateToTheUser(t *testing.T) {
+	sockets := filepath.Join(socketParent(t), "sockets")
+	listener, address, err := listen(t, sockets, "test-modes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	if stat, err := os.Stat(sockets); err != nil || stat.Mode().Perm() != 0700 {
+		t.Fatalf("socket directory mode %v: %v", stat.Mode(), err)
+	}
+	if stat, err := os.Stat(address.Address); err != nil || stat.Mode().Perm() != 0600 {
+		t.Fatalf("socket mode %v: %v", stat.Mode(), err)
+	}
+}
+
+func TestSocketDirectoryOpenToOthersIsRefused(t *testing.T) {
+	sockets := filepath.Join(socketParent(t), "sockets")
+	if err := os.Mkdir(sockets, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(sockets, 0755); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err := listen(t, sockets, "test-open")
+	if err == nil || !strings.Contains(err.Error(), "mode 755") {
+		t.Fatalf("got %v, want a mode error", err)
+	}
+}
+
+func TestSocketDirectoryOfAnotherUserIsRefused(t *testing.T) {
+	// /usr 는 root 소유다. 검사는 권한보다 소유자를 먼저 본다.
+	_, _, err := listen(t, "/usr", "test-owner")
+	if err == nil || !strings.Contains(err.Error(), "belongs to another user") {
+		t.Fatalf("got %v, want an owner error", err)
+	}
+}
+
+func TestSocketPathThatIsNotADirectoryIsRefused(t *testing.T) {
+	parent := socketParent(t)
+	target := filepath.Join(parent, "target")
+	if err := os.Mkdir(target, 0700); err != nil {
+		t.Fatal(err)
+	}
+	sockets := filepath.Join(parent, "sockets")
+	if err := os.Symlink(target, sockets); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err := listen(t, sockets, "test-link")
+	if err == nil || !strings.Contains(err.Error(), "is not a directory") {
+		t.Fatalf("got %v, want a kind error", err)
 	}
 }

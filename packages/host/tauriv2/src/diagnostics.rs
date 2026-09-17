@@ -8,9 +8,8 @@
 //! 창의 문서는 숨김 상태로 처리되어 타이머가 1 초 가까이 지연된다. 호스트의 시계는 창 위치와
 //! 관계없이 지연되지 않는다.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde_json::{json, Map, Value};
@@ -19,13 +18,36 @@ use tauri::{Emitter, EventTarget, Manager, Window};
 use crate::endpoint::Failure;
 use crate::exposure::{self, on_main, Host, TIMEOUT};
 use crate::platform;
+use crate::recording::{Capture, Recording};
 use crate::workspace::Workspace;
 
 /// 끌기 한 단계의 간격. 페이지도 같은 값으로 단계 수를 계산한다.
 const FRAME: Duration = Duration::from_millis(16);
 
-/// 진행 중인 캡처의 디렉터리와 캡처 대상으로 준비한 창 번호.
-static CAPTURE: Mutex<(Option<PathBuf>, Option<isize>)> = Mutex::new((None, None));
+/// 진행 중인 녹화.
+static RECORDING: Recording = Recording::new();
+
+/// 플랫폼의 창 녹화 연산.
+struct PlatformCapture(&'static dyn platform::Platform);
+
+impl Capture for PlatformCapture {
+    fn open(&self, window_number: isize) -> Result<(), String> {
+        self.0.capture_open(window_number)
+    }
+    fn start(&self, directory: &Path) -> Result<(), String> {
+        self.0.capture_start(&directory.to_string_lossy())
+    }
+    fn wait(&self) -> Result<bool, String> {
+        self.0.capture_wait()
+    }
+    fn stop(&self) -> Result<i32, String> {
+        self.0.capture_stop()
+    }
+}
+
+fn recorder() -> Result<PlatformCapture, Failure> {
+    Ok(PlatformCapture(platform::current().map_err(internal)?))
+}
 
 /// 캡처 디렉터리 이름을 구분하는 번호.
 static CAPTURES: AtomicU64 = AtomicU64::new(0);
@@ -96,37 +118,31 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
     let length = FRAME * steps as u32;
     // 페이지는 끌기를 시작할 때 이전 단계를 버리므로 단계는 요청 이벤트를 보낸 뒤 보낸다.
     let result = host.page_then(window, "diagnostics.drag", params, TIMEOUT + length, move || tick(app, label, steps));
-    if result.is_err() {
-        if let Ok(mut capture) = CAPTURE.lock() {
-            if capture.0.take().is_some() {
-                if let Ok(platform) = platform::current() {
-                    let _ = platform.capture_stop();
-                }
-            }
+    let finished = (|| -> Result<Value, Failure> {
+        let result = result?;
+        // 마지막 배치가 커밋되고 표시될 때까지 기다린다. 다음 표시 한 번만 기다리면 마지막 단계의
+        // 커밋보다 앞선 표시에서 끝날 수 있다. Wails 호스트도 같은 시점을 기다린다.
+        let context = crate::windows::window_data(window).map_err(internal)?;
+        let settled = crate::surfaces::when_settled(&context.running).map_err(internal)?;
+        if settled.recv_timeout(TIMEOUT).is_err() {
+            return Err(Failure::new(crate::endpoint::TIMED_OUT, "the drag was not presented within the time limit"));
         }
-        // 요청자는 프레임 폴더를 받지 못했으므로 지운다.
+        exposure::log(window, "diagnostics: drag presented");
+        let mut merged = match result {
+            Value::Object(fields) => fields,
+            Value::Null => Map::new(),
+            _ => return Err(internal("the page drag result is not an object")),
+        };
         if let Some(frames) = &frames {
-            let _ = std::fs::remove_dir_all(frames);
+            merged.insert("frames".into(), Value::String(frames.to_string_lossy().into_owned()));
         }
+        Ok(Value::Object(merged))
+    })();
+    // 요청자가 프레임 폴더를 받지 못하면 녹화를 멈추고 폴더를 지운다.
+    if finished.is_err() && frames.is_some() {
+        RECORDING.abort(&recorder()?);
     }
-    let result = result?;
-    // 마지막 배치가 커밋되고 표시될 때까지 기다린다. 다음 표시 한 번만 기다리면 마지막 단계의
-    // 커밋보다 앞선 표시에서 끝날 수 있다. Wails 호스트도 같은 시점을 기다린다.
-    let context = crate::windows::window_data(window).map_err(|e| Failure::new(-32603, e))?;
-    let settled = crate::surfaces::when_settled(&context.running).map_err(|e| Failure::new(-32603, e))?;
-    if settled.recv_timeout(TIMEOUT).is_err() {
-        return Err(Failure::new(crate::endpoint::TIMED_OUT, "the drag was not presented within the time limit"));
-    }
-    exposure::log(window, "diagnostics: drag presented");
-    let mut merged = match result {
-        Value::Object(fields) => fields,
-        Value::Null => Map::new(),
-        _ => return Err(Failure::new(-32603, "the page drag result is not an object")),
-    };
-    if let Some(frames) = frames {
-        merged.insert("frames".into(), Value::String(frames.to_string_lossy().into_owned()));
-    }
-    Ok(Value::Object(merged))
+    finished
 }
 
 /// 페이지에 끌기 단계 시각을 steps 번 보낸다. 각 단계는 시작 시각 기준의 예정 시각에 보낸다.
@@ -159,31 +175,15 @@ fn capture_start(window: &Window) -> Result<PathBuf, Failure> {
         .directory()
         .join("captures")
         .join(format!("{stamp}-{}", CAPTURES.fetch_add(1, Ordering::Relaxed)));
-    platform.private_directory(&directory).map_err(internal)?;
-    let mut capture = CAPTURE.lock().map_err(internal)?;
-    if capture.0.is_some() {
-        return Err(Failure::new(-32603, "a capture is already running"));
-    }
-    // 캡처 대상 준비는 창 서버 목록을 조회하므로 창이 바뀔 때만 실행한다.
-    if capture.1 != Some(number) {
-        platform.capture_open(number).map_err(internal)?;
-        capture.1 = Some(number);
-    }
-    let path = directory.to_string_lossy().into_owned();
-    platform.capture_start(&path).map_err(internal)?;
-    if !platform.capture_wait().map_err(internal)? {
-        let _ = platform.capture_stop();
-        return Err(Failure::new(-32603, "capture did not produce an initial frame"));
-    }
-    capture.0 = Some(directory.clone());
+    let recorder = recorder()?;
+    RECORDING
+        .start(&recorder, number, &directory, &|path| recorder.0.private_directory(path))
+        .map_err(internal)?;
     Ok(directory)
 }
 
 /// 진행 중인 기록을 끝내고 디렉터리와 프레임 수를 반환한다.
 fn capture_stop() -> Result<Value, Failure> {
-    let platform = platform::current().map_err(internal)?;
-    let mut capture = CAPTURE.lock().map_err(internal)?;
-    let directory = capture.0.take().ok_or_else(|| internal("no capture is running"))?;
-    let count = platform.capture_stop().map_err(internal)?;
+    let (directory, count) = RECORDING.finish(&recorder()?).map_err(internal)?;
     Ok(json!({"frames": directory.to_string_lossy(), "count": count}))
 }

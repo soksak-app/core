@@ -18,9 +18,9 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"sync"
 	"time"
 
+	"github.com/min-median-max/soksak/packages/host/wailsv3/src/platform"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -30,7 +30,17 @@ func init() {
 	diagnosticMethods["diagnostics.capture.stop"] = diagnosticCaptureStop
 	diagnosticMethods["diagnostics.knob"] = diagnosticKnob
 	diagnosticSubscriptions["diagnostics.transcript"] = transcriptTopic
+	diagnosticTopics[logTopic] = func(on bool) (string, any) {
+		return "diagnostics.transcript", map[string]bool{"on": on}
+	}
+	transcribe = func(e *Endpoint, window, line string) {
+		e.publish(topic{window, logTopic, ""}, "diagnostics.log", map[string]any{"window": window, "line": line})
+	}
 }
+
+// logTopic 은 diagnostics.log 알림을 받는 연결의 topic 이름이다. 상태 이름은 점으로 구분한
+// 소문자이므로 이 값과 겹치지 않는다.
+const logTopic = "#diagnostics.log"
 
 // frameStep 은 끌기 한 걸음의 길이다. 페이지가 같은 값으로 걸음 수를 센다.
 const frameStep = 16 * time.Millisecond
@@ -87,10 +97,24 @@ func (p dragPlan) steps() int {
 	return 1
 }
 
-// capture 는 진행 중인 녹화다. 녹화 구현은 애플리케이션에 하나다.
-var capture struct {
-	mu        sync.Mutex
-	directory string
+// recording 은 진행 중인 녹화다.
+var recording Recording
+
+// platformCapture 는 플랫폼의 창 녹화 연산이다.
+type platformCapture struct{ platform.Capturer }
+
+func (c platformCapture) Open(windowNumber int) error  { return c.CaptureOpen(windowNumber) }
+func (c platformCapture) Start(directory string) error { return c.CaptureStart(directory) }
+func (c platformCapture) Wait() (bool, error)          { return c.CaptureWait() }
+func (c platformCapture) Stop() (int, error)           { return c.CaptureStop() }
+
+// recorder 는 이 플랫폼의 녹화 장치를 반환한다.
+func recorder() (platformCapture, error) {
+	capturer, ok := system.(platform.Capturer)
+	if !ok {
+		return platformCapture{}, errors.New("window capture is not implemented on this platform")
+	}
+	return platformCapture{capturer}, nil
 }
 
 // diagnosticDrag 는 페이지에 끌기를 요청하고 걸음의 시각을 보낸다.
@@ -143,10 +167,25 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, 
 	}()
 	reply := h.relay.wait(id, w, time.Duration(ticks)*frameStep+pageTimeout)
 	close(stop)
-	if reply.Error != nil {
+	result, err := dragResult(s, reply)
+	if err != nil {
+		// 요청자가 프레임 폴더를 받지 못하면 녹화를 멈추고 폴더를 지운다.
 		if p.Capture {
-			stopCapture()
+			if capture, captureErr := recorder(); captureErr == nil {
+				recording.Abort(capture)
+			}
 		}
+		return nil, err
+	}
+	if p.Capture {
+		result["frames"] = frames
+	}
+	return result, nil
+}
+
+// dragResult 는 페이지의 끌기 응답을 확인하고, 마지막 배치가 표시될 때까지 기다린 뒤 결과를 반환한다.
+func dragResult(s *Surfaces, reply ExposureResult) (map[string]any, error) {
+	if reply.Error != nil {
 		return nil, reply.Error
 	}
 	select {
@@ -161,62 +200,29 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, 
 			return nil, fmt.Errorf("the page drag result is not an object: %w", err)
 		}
 	}
-	if p.Capture {
-		result["frames"] = frames
-	}
 	return result, nil
 }
 
 // startCapture 는 창 s 의 녹화를 설정 디렉터리 아래 새 폴더에 시작하고 첫 프레임을 기다린다.
 func startCapture(h *Host, s *Surfaces) (string, error) {
-	capture.mu.Lock()
-	defer capture.mu.Unlock()
-	if capture.directory != "" {
-		return "", fmt.Errorf("a capture into %s is running", capture.directory)
-	}
-	directory := filepath.Join(h.workspace.directory, "captures", fmt.Sprintf("%s-%d", s.name, time.Now().UnixNano()))
-	if err := os.MkdirAll(directory, 0700); err != nil {
+	capture, err := recorder()
+	if err != nil {
 		return "", err
 	}
 	// 윈도 서버의 창 목록 조회는 답을 기다리므로 창 번호만 주 스레드에서 읽는다.
 	var numbers []int
-	var err error
-	application.InvokeSync(func() { numbers, err = system.WindowNumbers(s.window.NativeWindow()) })
+	application.InvokeSync(func() { numbers, err = capture.WindowNumbers(s.window.NativeWindow()) })
 	if err != nil {
 		return "", err
 	}
 	if len(numbers) == 0 {
 		return "", errors.New("the window has no window server number")
 	}
-	if err := system.CaptureOpen(numbers[0]); err != nil {
-		return "", err
-	}
-	if err := system.CaptureStart(directory); err != nil {
-		return "", err
-	}
-	capture.directory = directory
-	ready, err := system.CaptureWait()
-	if err == nil && !ready {
-		err = errors.New("capture did not produce an initial frame")
-	}
-	if err != nil {
-		capture.directory = ""
-		_, _ = system.CaptureStop()
+	directory := filepath.Join(h.workspace.directory, "captures", fmt.Sprintf("%s-%d", s.name, time.Now().UnixNano()))
+	if err := recording.Start(capture, numbers[0], directory); err != nil {
 		return "", err
 	}
 	return directory, nil
-}
-
-// stopCapture 는 실패한 끌기의 녹화를 끝낸다. 프레임 폴더는 요청자가 받지 못했으므로 지운다.
-func stopCapture() {
-	capture.mu.Lock()
-	defer capture.mu.Unlock()
-	if capture.directory == "" {
-		return
-	}
-	_, _ = system.CaptureStop()
-	_ = os.RemoveAll(capture.directory)
-	capture.directory = ""
 }
 
 // diagnosticCaptureStop 은 녹화를 끝내고 프레임 폴더와 프레임 수를 반환한다.
@@ -224,14 +230,11 @@ func diagnosticCaptureStop(e *Endpoint, _ *endpointConn, params json.RawMessage)
 	if _, _, err := diagnosticHost(e, params); err != nil {
 		return nil, err
 	}
-	capture.mu.Lock()
-	defer capture.mu.Unlock()
-	if capture.directory == "" {
-		return nil, errors.New("no capture is running")
+	capture, err := recorder()
+	if err != nil {
+		return nil, err
 	}
-	count, err := system.CaptureStop()
-	directory := capture.directory
-	capture.directory = ""
+	directory, count, err := recording.Finish(capture)
 	if err != nil {
 		return nil, err
 	}

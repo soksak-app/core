@@ -300,7 +300,7 @@ pub(crate) struct Exposure {
 
 /// 엔드포인트를 열고 endpoint.json 을 쓴다.
 pub(crate) fn start(app: &AppHandle, directory: &std::path::Path) -> Result<(), String> {
-    let endpoint = Endpoint::start(directory, APPLICATION, Arc::new(Host(app.clone())))?;
+    let endpoint = Endpoint::start(&crate::endpoint::socket_directory(), directory, APPLICATION, Arc::new(Host(app.clone())))?;
     app.state::<Exposure>().endpoint.set(endpoint).map_err(|_| "the endpoint is already started".to_string())
 }
 
@@ -312,11 +312,15 @@ pub(crate) fn stop(app: &AppHandle) {
 }
 
 /// 창 window 의 기록을 요청한 연결에 줄 하나를 보낸다.
+/// 진단 빌드가 아니면 보낼 곳이 없다.
+#[cfg(feature = "diagnostics")]
 pub(crate) fn log(window: &Window, line: &str) {
     if let Some(endpoint) = window.state::<Exposure>().endpoint.get() {
         endpoint.notifier().log(window.label(), line);
     }
 }
+#[cfg(not(feature = "diagnostics"))]
+pub(crate) fn log(_window: &Window, _line: &str) {}
 
 /// 명령을 호출한 웹뷰가 창의 메인 페이지인지 확인한다.
 fn main_page(webview: &Webview) -> Result<Window, String> {
@@ -360,6 +364,28 @@ pub(crate) struct Forward {
     method: String,
     #[serde(default)]
     params: Value,
+    /// 이 요청의 제한 시간(ms). 없으면 10 초다. 선언의 timeout 을 페이지가 전달한다.
+    #[serde(default)]
+    timeout: Value,
+}
+
+/// 전달 요청이 지정할 수 있는 가장 긴 제한 시간(ms).
+const MAX_FORWARD_TIMEOUT: u64 = 600_000;
+
+/// 전달 요청의 제한 시간을 정한다. status.next 는 값이 바뀔 때까지 답하지 않으므로 제한 시간이
+/// 없고(None), timeout 을 받지 않는다. timeout 은 1 이상 600000 이하의 정수 ms 다.
+pub fn forward_timeout(method: &str, timeout: &Value) -> Result<Option<Duration>, Failure> {
+    if timeout.is_null() {
+        return Ok((method != "status.next").then_some(TIMEOUT));
+    }
+    if method == "status.next" {
+        return Err(Failure::params("status.next has no timeout"));
+    }
+    let ms = timeout
+        .as_f64()
+        .filter(|ms| ms.fract() == 0.0 && *ms >= 1.0 && *ms <= MAX_FORWARD_TIMEOUT as f64)
+        .ok_or_else(|| Failure::params(format!("timeout must be an integer from 1 to {MAX_FORWARD_TIMEOUT} milliseconds")))?;
+    Ok(Some(Duration::from_millis(ms as u64)))
 }
 
 /// 메인 페이지의 요청을 표면 페이지에 보내고 그 응답을 `{result}` 또는 `{error}` 로 반환한다.
@@ -367,14 +393,15 @@ pub(crate) fn forward(webview: &Webview, request: Forward) -> Result<Value, Stri
     let window = main_page(webview)?;
     let label = label_for(&window, &request.surface);
     let app = window.app_handle().clone();
-    let outcome = if window.get_webview(&label).is_none() {
-        Err(Failure::new(MISSING_DOCUMENT, format!("surface {} does not exist", request.surface)))
-    } else {
-        // status.next 는 표면 값이 바뀔 때 응답하므로 제한 시간을 두지 않는다. 표면이 닫히면 1003 이다.
-        let timeout = (request.method != "status.next").then_some(TIMEOUT);
-        window.state::<Exposure>().relay.request(&label, timeout, |id| {
+    let outcome = match forward_timeout(&request.method, &request.timeout) {
+        Err(invalid) => Err(invalid),
+        Ok(_) if window.get_webview(&label).is_none() => {
+            Err(Failure::new(MISSING_DOCUMENT, format!("surface {} does not exist", request.surface)))
+        }
+        // status.next 는 제한 시간이 없다. 표면이 닫히면 1003 이다.
+        Ok(timeout) => window.state::<Exposure>().relay.request(&label, timeout, |id| {
             emit_to(&app, &label, "exposure-request", json!({"id": id, "method": request.method, "params": request.params}))
-        })
+        }),
     };
     Ok(match outcome {
         Ok(result) => json!({"result": result}),
@@ -468,6 +495,7 @@ pub(crate) fn rewatch(window: &Window) {
                 log(&window, &format!("rewatch {}: {}", watch.name, error.message));
             }
         }
+        #[cfg(feature = "diagnostics")]
         if notifier.transcribed(window.label()) {
             let mut params = Map::new();
             params.insert("on".into(), Value::Bool(true));

@@ -54,6 +54,10 @@ const METHODS: &[&str] = &[
     "input.key",
 ];
 
+/// 진단 기록을 켜고 끄는 구독 메서드. 진단 빌드에만 있다.
+#[cfg(feature = "diagnostics")]
+const TRANSCRIPT: &str = "diagnostics.transcript";
+
 /// 진단 빌드만 선언하는 메서드.
 #[cfg(feature = "diagnostics")]
 const DIAGNOSTICS: &[&str] = &[
@@ -61,7 +65,7 @@ const DIAGNOSTICS: &[&str] = &[
     "diagnostics.drag",
     "diagnostics.capture.stop",
     "diagnostics.knob",
-    "diagnostics.transcript",
+    TRANSCRIPT,
 ];
 #[cfg(not(feature = "diagnostics"))]
 const DIAGNOSTICS: &[&str] = &[];
@@ -119,6 +123,7 @@ impl Watch {
 struct Peer {
     writer: Arc<Mutex<Box<dyn Connection>>>,
     watches: HashSet<Watch>,
+    #[cfg(feature = "diagnostics")]
     transcript: HashSet<String>,
     changes: HashMap<Topic, u64>,
 }
@@ -127,6 +132,8 @@ struct Peer {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 enum Topic {
     Status(Watch),
+    /// 창의 진단 기록. 진단 빌드에만 있다.
+    #[cfg(feature = "diagnostics")]
     Transcript(String),
 }
 
@@ -134,6 +141,7 @@ impl Topic {
     fn window(&self) -> &str {
         match self {
             Topic::Status(watch) => &watch.window,
+            #[cfg(feature = "diagnostics")]
             Topic::Transcript(window) => window,
         }
     }
@@ -142,10 +150,11 @@ impl Topic {
     fn request(&self, on: bool) -> (&'static str, Map<String, Value>) {
         match self {
             Topic::Status(watch) => (if on { "status.watch" } else { "status.unwatch" }, watch.params()),
+            #[cfg(feature = "diagnostics")]
             Topic::Transcript(_) => {
                 let mut params = Map::new();
                 params.insert("on".into(), Value::Bool(on));
-                ("diagnostics.transcript", params)
+                (TRANSCRIPT, params)
             }
         }
     }
@@ -153,6 +162,7 @@ impl Topic {
     fn held(&self, peer: &Peer) -> bool {
         match self {
             Topic::Status(watch) => peer.watches.contains(watch),
+            #[cfg(feature = "diagnostics")]
             Topic::Transcript(window) => peer.transcript.contains(window),
         }
     }
@@ -165,9 +175,11 @@ impl Topic {
             (Topic::Status(watch), false) => {
                 peer.watches.remove(watch);
             }
+            #[cfg(feature = "diagnostics")]
             (Topic::Transcript(window), true) => {
                 peer.transcript.insert(window.clone());
             }
+            #[cfg(feature = "diagnostics")]
             (Topic::Transcript(window), false) => {
                 peer.transcript.remove(window);
             }
@@ -246,6 +258,7 @@ impl Notifier {
     }
 
     /// 창 window 의 기록을 요청한 연결이 있는지 반환한다.
+    #[cfg(feature = "diagnostics")]
     pub fn transcribed(&self, window: &str) -> bool {
         transcribed(&self.0, window)
     }
@@ -262,6 +275,7 @@ impl Notifier {
     }
 
     /// 창 window 의 기록을 요청한 연결에 `diagnostics.log` 를 보낸다.
+    #[cfg(feature = "diagnostics")]
     pub fn log(&self, window: &str, line: &str) {
         let message = json!({"jsonrpc": "2.0", "method": "diagnostics.log",
             "params": {"window": window, "line": line}});
@@ -291,9 +305,9 @@ pub struct Endpoint {
 }
 
 impl Endpoint {
-    /// application 이름의 엔드포인트를 열고 `<directory>/endpoint.json` 을 쓴다.
-    pub fn start(directory: &Path, application: &str, service: Arc<dyn Service>) -> Result<Endpoint, String> {
-        let listener: Arc<dyn Listener> = platform::current()?.endpoint_listen(application)?.into();
+    /// sockets 디렉터리에 application 이름의 엔드포인트를 열고 `<directory>/endpoint.json` 을 쓴다.
+    pub fn start(sockets: &Path, directory: &Path, application: &str, service: Arc<dyn Service>) -> Result<Endpoint, String> {
+        let listener: Arc<dyn Listener> = platform::current()?.endpoint_listen(sockets, application)?.into();
         let address = listener.address();
         let file = directory.join("endpoint.json");
         let shared = Arc::new(Shared {
@@ -375,6 +389,11 @@ impl Drop for Endpoint {
     fn drop(&mut self) {
         self.stop();
     }
+}
+
+/// 애플리케이션이 소켓을 두는 디렉터리. 사용자별 임시 디렉터리 아래에 있다.
+pub fn socket_directory() -> std::path::PathBuf {
+    std::env::temp_dir().join("soksak")
 }
 
 /// 엔드포인트 주소 address 에 연결한다.
@@ -485,6 +504,7 @@ fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
         peers.insert(peer, Peer {
             writer: writer.clone(),
             watches: HashSet::new(),
+            #[cfg(feature = "diagnostics")]
             transcript: HashSet::new(),
             changes: HashMap::new(),
         });
@@ -511,7 +531,10 @@ fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
 }
 
 /// 연결의 구독을 바꾸는 메서드.
-const SUBSCRIPTIONS: &[&str] = &["status.watch", "status.unwatch", "diagnostics.transcript"];
+#[cfg(feature = "diagnostics")]
+const SUBSCRIPTIONS: &[&str] = &["status.watch", "status.unwatch", TRANSCRIPT];
+#[cfg(not(feature = "diagnostics"))]
+const SUBSCRIPTIONS: &[&str] = &["status.watch", "status.unwatch"];
 
 /// params 를 검사하고 창의 이름을 꺼낸다.
 fn target(shared: &Shared, method: &str, params: Option<Value>) -> Result<(String, Map<String, Value>), Failure> {
@@ -539,10 +562,12 @@ fn subscription(shared: &Shared, method: &str, params: Option<Value>) -> Result<
     match method {
         "status.watch" => Ok((Topic::Status(watch_key(&window, &params)?), true)),
         "status.unwatch" => Ok((Topic::Status(watch_key(&window, &params)?), false)),
-        _ => match params.get("on") {
+        #[cfg(feature = "diagnostics")]
+        TRANSCRIPT => match params.get("on") {
             Some(Value::Bool(on)) => Ok((Topic::Transcript(window), *on)),
             _ => Err(Failure::params("on must be a boolean")),
         },
+        other => Err(Failure::new(-32601, format!("{other} is not a subscription"))),
     }
 }
 
@@ -658,6 +683,7 @@ fn watched(shared: &Shared, key: &Watch) -> bool {
 }
 
 /// 창 window 의 기록을 요청한 연결이 있는지 반환한다.
+#[cfg(feature = "diagnostics")]
 fn transcribed(shared: &Shared, window: &str) -> bool {
     shared.peers.lock().is_ok_and(|peers| peers.values().any(|peer| peer.transcript.contains(window)))
 }
@@ -667,9 +693,12 @@ fn transcribed(shared: &Shared, window: &str) -> bool {
 fn forget(shared: &Arc<Shared>, peer: u64) {
     let topics: Vec<Topic> = match shared.peers.lock() {
         Ok(peers) => match peers.get(&peer) {
-            Some(state) => state.watches.iter().cloned().map(Topic::Status)
-                .chain(state.transcript.iter().cloned().map(Topic::Transcript))
-                .collect(),
+            Some(state) => {
+                let topics = state.watches.iter().cloned().map(Topic::Status);
+                #[cfg(feature = "diagnostics")]
+                let topics = topics.chain(state.transcript.iter().cloned().map(Topic::Transcript));
+                topics.collect()
+            }
             None => return,
         },
         Err(_) => return,

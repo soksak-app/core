@@ -47,8 +47,14 @@ impl Service for Fake {
     }
 }
 
+/// config 안의 sockets 디렉터리에 엔드포인트를 연다. 소켓 경로 길이 제한 안에 든다.
 fn start(config: &Path, application: &str, service: Arc<Fake>) -> Endpoint {
-    Endpoint::start(config, application, service).unwrap()
+    Endpoint::start(&config.join("sockets"), config, application, service).unwrap()
+}
+
+fn mode(path: &Path) -> u32 {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::metadata(path).unwrap().permissions().mode() & 0o777
 }
 
 fn open(endpoint: &Endpoint) -> Box<dyn Connection> {
@@ -194,6 +200,50 @@ fn endpoint_file_is_written_and_removed() {
 }
 
 #[test]
+fn endpoint_files_are_private_to_the_user() {
+    let config = tempfile::tempdir().unwrap();
+    let (fake, _) = Fake::new();
+    let endpoint = start(config.path(), "test-modes", fake);
+    assert_eq!(mode(&config.path().join("sockets")), 0o700);
+    assert_eq!(mode(Path::new(endpoint.address())), 0o600);
+    assert_eq!(mode(&config.path().join("endpoint.json")), 0o600);
+}
+
+#[test]
+fn a_socket_directory_open_to_others_is_refused() {
+    use std::os::unix::fs::PermissionsExt;
+    let config = tempfile::tempdir().unwrap();
+    let sockets = config.path().join("sockets");
+    std::fs::create_dir(&sockets).unwrap();
+    std::fs::set_permissions(&sockets, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let (fake, _) = Fake::new();
+    let refused = Endpoint::start(&sockets, config.path(), "test-open", fake).err().unwrap();
+    assert!(refused.contains("mode 755"), "{refused}");
+    assert!(!config.path().join("endpoint.json").exists());
+}
+
+#[test]
+fn a_socket_directory_of_another_user_is_refused() {
+    // /usr 는 root 소유다. 검사는 권한보다 소유자를 먼저 본다.
+    let config = tempfile::tempdir().unwrap();
+    let (fake, _) = Fake::new();
+    let refused = Endpoint::start(Path::new("/usr"), config.path(), "test-owner", fake).err().unwrap();
+    assert!(refused.contains("belongs to another user"), "{refused}");
+}
+
+#[test]
+fn a_socket_path_that_is_not_a_directory_is_refused() {
+    let config = tempfile::tempdir().unwrap();
+    let target = config.path().join("target");
+    std::fs::create_dir(&target).unwrap();
+    let sockets = config.path().join("sockets");
+    std::os::unix::fs::symlink(&target, &sockets).unwrap();
+    let (fake, _) = Fake::new();
+    let refused = Endpoint::start(&sockets, config.path(), "test-link", fake).err().unwrap();
+    assert!(refused.contains("is not a directory"), "{refused}");
+}
+
+#[test]
 fn watchers_belong_to_their_connection() {
     let config = tempfile::tempdir().unwrap();
     let (fake, seen) = Fake::new();
@@ -315,7 +365,7 @@ fn subscription_changes_reach_the_page_in_arrival_order() {
     let (open_gate, gate) = mpsc::channel();
     let (entered, calls) = mpsc::channel();
     let page = Arc::new(GatedPage { order: Mutex::new(Vec::new()), gate: Mutex::new(Some(gate)), entered: Mutex::new(entered) });
-    let endpoint = Endpoint::start(config.path(), "test-order", page.clone()).unwrap();
+    let endpoint = Endpoint::start(&config.path().join("sockets"), config.path(), "test-order", page.clone()).unwrap();
     let notifier = endpoint.notifier();
     let mut connection = open(&endpoint);
     let topic = json!({"window": "w1", "name": "core.layout"});

@@ -32,6 +32,7 @@ packages/host/wailsv3/                     packages/host/tauriv2/
     exposure.go    exposure request relay             exposure.rs
     endpoint.go    JSON-RPC server                    endpoint.rs
     diagnostics.go diagnostic methods (build tag)     diagnostics.rs
+    recording.go   diagnostic recording state (build tag) recording.rs
     bridge.js      call channel for additional webviews   difference H3
     platform/                                  platform/
       platform.go  interface and selection       platform.rs
@@ -43,7 +44,7 @@ packages/host/wailsv3/                     packages/host/tauriv2/
         layout.go    surface layout transaction       layout.rs
         shapes.go    outline views                    shapes.rs
         input.go     input monitoring                 input.rs
-        capture.go   capture calls                    capture.rs
+        capture.go   capture calls (build tag)        capture.rs
         dock.go      Dock menu                        dock.rs
         identity.go  directory identity               identity.rs
         endpoint.go  Unix socket                      endpoint.rs
@@ -54,6 +55,7 @@ packages/host/wailsv3/                     packages/host/tauriv2/
       linux/  (added when implemented)           linux/
   tests/                                     tests/
     sidecars_test.go                           sidecars_test.rs
+    recording_test.go (build tag)              recording_test.rs (feature)
     workspace_test.go                          workspace_test.rs
     endpoint_test.go                           endpoint_test.rs
     exposure_test.go                           exposure_test.rs

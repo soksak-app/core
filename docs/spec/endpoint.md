@@ -10,7 +10,7 @@ The native host serves the [exposure](exposure.md) methods to local clients over
 
 | OS | Transport | Address and access |
 | --- | --- | --- |
-| macOS | Unix domain socket | Socket in `soksak/` under the per-user temporary directory (`confstr(_CS_DARWIN_USER_TEMP_DIR)` or `TMPDIR`). The host creates the directory with mode 0700 |
+| macOS | Unix domain socket | Socket `<application>-<pid>.sock` in `soksak/` under the per-user temporary directory (`$TMPDIR`, as returned by Go `os.TempDir` and Rust `std::env::temp_dir`). The host creates the directory with mode 0700 and refuses to listen when the path is not a directory, belongs to another user, or has another mode. The socket has mode 0600 |
 | Linux | Unix domain socket | Socket in `$XDG_RUNTIME_DIR/soksak`. The host creates the directory with mode 0700 |
 | Windows | Named pipe | `\\.\pipe\soksak-<id>`. The security descriptor allows only the current user |
 

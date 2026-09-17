@@ -232,8 +232,8 @@ pub trait Platform: Send + Sync {
 
     // 엔드포인트
 
-    /// 이름 name 의 로컬 엔드포인트 주소를 연다.
-    fn endpoint_listen(&self, name: &str) -> Result<Box<dyn Listener>, String>;
+    /// directory 안에 이름 name 의 로컬 엔드포인트 주소를 연다. directory 는 현재 사용자 전용이어야 한다.
+    fn endpoint_listen(&self, directory: &Path, name: &str) -> Result<Box<dyn Listener>, String>;
     /// 로컬 엔드포인트 주소에 연결한다.
     fn endpoint_connect(&self, address: &str) -> Result<Box<dyn Connection>, String>;
 }

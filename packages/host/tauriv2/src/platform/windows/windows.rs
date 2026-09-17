@@ -172,8 +172,8 @@ impl Platform for Windows {
         unsupported::private_directory(path)
     }
 
-    fn endpoint_listen(&self, name: &str) -> Result<Box<dyn Listener>, String> {
-        unsupported::endpoint_listen(name)
+    fn endpoint_listen(&self, directory: &Path, name: &str) -> Result<Box<dyn Listener>, String> {
+        unsupported::endpoint_listen(directory, name)
     }
     fn endpoint_connect(&self, address: &str) -> Result<Box<dyn Connection>, String> {
         unsupported::endpoint_connect(address)
