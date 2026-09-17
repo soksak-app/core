@@ -36,7 +36,7 @@
     "core-exposure.js"
   ],
   "scripts": {
-    "test": "node --test test/"
+    "test": "node --test --experimental-test-module-mocks test/"
   },
   "dependencies": {
     "@soksak/plugin-api": "workspace:*",

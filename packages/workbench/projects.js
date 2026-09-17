@@ -20,12 +20,27 @@ export const active = () => projects.find((p) => p.id === activeProjectId) ?? nu
 export const local = () => projects.filter((p) => owned.has(p.id));
 export const inLibrary = () => browsing;
 export const isOpen = (id) => openProjects.has(id) || owned.has(id);
-export async function browse() {
-  await flush();
-  browsing = true;
-  await listener.empty();
-  await selectProject(null);
-  changed();
+/**
+ * 판을 바꾸는 전환(라이브러리 열기, 프로젝트 활성화)을 받은 순서대로 끝낸다.
+ *
+ * 라이브러리 열기는 판을 비우는 동안 기다린다. 그 사이에 시작한 활성화가 먼저 판을 채우면
+ * 늦게 끝난 비우기가 활성 프로젝트의 판을 지운다.
+ */
+let switching = Promise.resolve();
+function inTurn(run) {
+  const done = switching.then(run);
+  switching = done.catch(() => {});
+  return done;
+}
+
+export function browse() {
+  return inTurn(async () => {
+    await flush();
+    browsing = true;
+    await listener.empty();
+    await selectProject(null);
+    changed();
+  });
 }
 export const newWindow = () => windows.newWindow();
 export const pin = (id, pinned) => store.patch(id, { pinned });
@@ -88,7 +103,11 @@ export function keep() {
   return writing;
 }
 
-async function activateHere(id) {
+function activateHere(id) {
+  return inTurn(() => showProject(id));
+}
+
+async function showProject(id) {
   if (id === activeProjectId && !browsing) { await selectProject(id); return; }
   await keep();
   await refresh();
