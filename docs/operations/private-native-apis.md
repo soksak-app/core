@@ -82,12 +82,23 @@ Inventory entries describe active or explicitly conditional application paths, n
 
 After a framework update, check whether it supplies this callback or a Dock-menu API. Verify the menu item and creation of a library window, including after closing all windows. This integration concerns application menus, not surface rendering or webview input.
 
+## Native input injection
+
+[`input_inject.m`](../../native/darwin/src/input_inject.m) delivers pointer and key input to an application window without activating the application. It uses public AppKit calls with these conditions:
+
+- Keys: `-[NSWindow sendEvent:]` with `+[NSEvent keyEventWithType:...]`. A focused element receives the keys in a window that is not the key window.
+- Pointer press, drag, release: the event method (`mouseDown:`, `mouseDragged:`, `mouseUp:`, right-button variants) of the view returned by `hitTest:`. `-[NSWindow sendEvent:]` is not used for these because AppKit treats a press in an inactive window as a first click and does not deliver it to the view.
+- Pointer movement: `mouseMoved:` of the owner of the first tracking area that contains the point, from the hit view upward.
+- Scroll: **nonstandard use.** No public API creates a scroll `NSEvent` that carries a window. The code creates the event with `CGEventCreateScrollWheelEvent2`, which has no window, and stores the window coordinates in the screen-location field (`CGEventSetLocation(x, topOfMainScreen - y)`), because WebKit reads `locationInWindow` of such an event as window coordinates. `CGEventSetWindowLocation` (private) and `CGEventPostToPid` did not deliver the scroll in the review on 2026-09-17.
+
+Failure signs: `tests/input_inject_test.m` reports missing, untrusted, or misplaced pointer events, no wheel event, a scroll distance other than the requested 120 pixels, or a lost focus after a click. After an OS or WebKit update, run `make -C native/darwin test`; remove the scroll workaround when a public method delivers a windowed scroll event.
+
 ## Update review procedure
 
 1. Record the old and new application revision, OS/build, installed WebKit version, SDK/toolchain, and resolved framework revisions. Read this inventory first when diagnosing a failure after any native update.
 2. Match the symptom to the relevant entries. Compare receiver classes, selectors or keys, argument and callback types, availability, threading, and actual semantics in the changed source. Inspect framework callers even when the application uses a public wrapper. Source review narrows the investigation; reproduce the failure before assigning its cause.
 3. Reassess necessity. Remove a correction when the required behavior is now implemented correctly without it. Preserve the behavior contract and remove harmful or unnecessary code instead of adding compatibility branches, fixed delays, reduced precision, or background recoloring to conceal a failure.
-4. Follow [build and verification](examples.md): rebuild and restart both hosts, run the affected checks and `make examples-verify`, and run both standalone input variants when input dependencies change. Verify actual gestures and pixels. Record unavailable platforms or skipped checks explicitly.
+4. Follow [build and verification](examples.md): rebuild and restart both hosts, run the affected checks and `make examples-verify`, and run both standalone input variants and the input injection check when input dependencies change. Verify actual gestures and pixels. Record unavailable platforms or skipped checks explicitly.
 5. Update this inventory and its Korean translation in the same change as API additions, replacements, removals, or changed call conditions. Record changed behavior and new validation in [features](../features.md) and [changes](../../CHANGELOG.md). Run `make docs-check`; source review must also confirm the inventory's accuracy.
 
 The necessity decision belongs to the specific correction. Private status alone does not invalidate a correction, and successful tests alone do not justify its design. Each new entry requires a concrete cause, the public API limitation, exact implementation location and scope, failure signs, and verification steps.

@@ -4,7 +4,7 @@
 # 헤더와 라이브러리 위치를 찾도록 soksak-darwin.pc 를 생성한다.
 #
 #   make          build/libsoksak-darwin.a, build/soksak-darwin.pc
-#   make test     입력 검사를 빌드하고 기준 실행과 등록 실행을 수행한다
+#   make test     입력 검사(기준 실행·등록 실행)와 입력 주입 검사를 실행한다
 
 SHELL := /bin/sh
 
@@ -44,9 +44,13 @@ $(BUILD):
 $(BUILD)/webview_input_test: tests/webview_input_test.m $(LIBRARY)
 	@clang $(CFLAGS) -I$(CURDIR)/src $< -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) $(MINIMUM) -o $@
 
-test: $(BUILD)/webview_input_test
+$(BUILD)/input_inject_test: tests/input_inject_test.m $(LIBRARY)
+	@clang $(CFLAGS) -I$(CURDIR)/src $< -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) $(MINIMUM) -o $@
+
+test: $(BUILD)/webview_input_test $(BUILD)/input_inject_test
 	@$(BUILD)/webview_input_test --baseline
 	@$(BUILD)/webview_input_test
+	@$(BUILD)/input_inject_test
 
 clean:
 	@rm -rf $(BUILD)

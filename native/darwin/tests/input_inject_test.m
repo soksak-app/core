@@ -1,0 +1,115 @@
+// 네이티브 입력 주입이 앱을 활성화하지 않고 웹뷰에 신뢰 이벤트로 도달하는지 검사한다.
+//
+// 창은 일반 NSWindow 이며 키 창 상태를 흉내 내지 않는다. 실제 애플리케이션 창과 같은 조건이다.
+#import <Cocoa/Cocoa.h>
+#import <WebKit/WebKit.h>
+#import "input_inject.h"
+
+@interface WKWebView (InputInjectTestBarrier)
+- (void)_doAfterProcessingAllPendingMouseEvents:(void (^)(void))completion;
+- (void)_doAfterNextPresentationUpdate:(void (^)(void))completion;
+@end
+
+static int failures = 0;
+
+static void check(BOOL condition, NSString *message) {
+    fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
+    if (!condition) failures++;
+}
+
+static void until(BOOL (^done)(void)) {
+    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
+    while (!done() && deadline.timeIntervalSinceNow > 0) {
+        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
+                               beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+    }
+    if (!done()) { fprintf(stderr, "FAIL: WebKit did not answer within 10 seconds\n"); exit(1); }
+}
+
+static id evaluate(WKWebView *view, NSString *script) {
+    __block BOOL done = NO;
+    __block id result = nil;
+    [view evaluateJavaScript:script completionHandler:^(id value, NSError *error) {
+        if (error) fprintf(stderr, "JavaScript: %s\n", error.localizedDescription.UTF8String);
+        result = [value retain];
+        done = YES;
+    }];
+    until(^BOOL { return done; });
+    return [result autorelease];
+}
+
+static void drain(WKWebView *view) {
+    __block BOOL done = NO;
+    [view _doAfterProcessingAllPendingMouseEvents:^{ done = YES; }];
+    until(^BOOL { return done; });
+}
+
+int main(void) { @autoreleasepool {
+    [NSApplication sharedApplication];
+    [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
+    [NSApp finishLaunching];
+    [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(120, 120, 400, 300)
+        styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+    [window setReleasedWhenClosed:NO];
+    window.acceptsMouseMovedEvents = YES;
+    WKWebView *view = [[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 300)];
+    window.contentView = view;
+    NSString *html = @"<!doctype html><style>html,body{margin:0;width:100%;height:100%}</style>"
+        "<input id='field' style='position:absolute;left:10px;top:10px;width:200px'>"
+        "<div id='pad' style='position:absolute;left:0;top:60px;width:400px;height:240px;overflow:auto'>"
+        "<div style='height:2000px'></div></div><script>"
+        "window.probe={events:[]};"
+        "for (const type of ['pointerdown','pointerup','pointermove','click','wheel','keydown','input'])"
+        " addEventListener(type,e=>probe.events.push({type,trusted:e.isTrusted,x:e.clientX,y:e.clientY,key:e.key}),true);"
+        "</script>";
+    [view loadHTMLString:html baseURL:nil];
+    [window orderBack:nil];
+    until(^BOOL { return [evaluate(view, @"Boolean(window.probe)") boolValue]; });
+    __block BOOL painted = NO;
+    [view _doAfterNextPresentationUpdate:^{ painted = YES; }];
+    until(^BOOL { return painted; });
+
+    check(sp_input_pointer(window, 150, 100, 0, 0, 0, 0), @"move accepted");
+    check(sp_input_pointer(window, 150, 100, 1, 0, 0, 0), @"press accepted");
+    check(sp_input_pointer(window, 160, 155, 2, 0, 0, 0), @"drag accepted");
+    check(sp_input_pointer(window, 160, 155, 3, 0, 0, 0), @"release accepted");
+    drain(view);
+    NSArray *pointer = evaluate(view, @"probe.events.filter(e=>e.type.startsWith('pointer')||e.type==='click')");
+    NSArray *types = [pointer valueForKey:@"type"];
+    check([types containsObject:@"pointerdown"] && [types containsObject:@"pointerup"] && [types containsObject:@"click"],
+        [NSString stringWithFormat:@"pointer sequence reaches the page: %@", [types componentsJoinedByString:@","]]);
+    check(![[pointer valueForKey:@"trusted"] containsObject:@NO], @"pointer events are trusted");
+    NSDictionary *down = nil;
+    for (NSDictionary *event in pointer) if ([event[@"type"] isEqual:@"pointerdown"]) { down = event; break; }
+    check(down && [down[@"x"] doubleValue] == 150 && [down[@"y"] doubleValue] == 100,
+        [NSString stringWithFormat:@"pointer coordinates are CSS pixels from the top left: %@", down]);
+
+    evaluate(view, @"probe.events.length=0; null");
+    check(sp_input_pointer(window, 100, 200, 4, 0, 0, 120), @"scroll accepted");
+    drain(view);
+    until(^BOOL { return [evaluate(view, @"probe.events.filter(e=>e.type==='wheel').length") intValue] > 0; });
+    NSArray *wheel = evaluate(view, @"probe.events.filter(e=>e.type==='wheel')");
+    check(wheel.count > 0 && ![[wheel valueForKey:@"trusted"] containsObject:@NO],
+        [NSString stringWithFormat:@"scroll reaches the page as a trusted wheel event (%lu)", (unsigned long)wheel.count]);
+    until(^BOOL { return [evaluate(view, @"document.getElementById('pad').scrollTop") doubleValue] > 0; });
+    check([evaluate(view, @"document.getElementById('pad').scrollTop") doubleValue] == 120, @"scroll moves the element under the point by the requested 120 pixels");
+
+    check(sp_input_pointer(window, 50, 20, 1, 0, 0, 0) && sp_input_pointer(window, 50, 20, 3, 0, 0, 0), @"field click accepted");
+    drain(view);
+    check([evaluate(view, @"document.activeElement && document.activeElement.id") isEqual:@"field"], @"a click focuses the field in an inactive window");
+    evaluate(view, @"probe.events.length=0; null");
+    check(sp_input_key(window, "a", NULL, 0, true) && sp_input_key(window, "a", NULL, 0, false), @"key accepted");
+    check(sp_input_key(window, "Enter", NULL, 0, true) && sp_input_key(window, "Enter", NULL, 0, false), @"named key accepted");
+    check(!sp_input_key(window, "NoSuchKey", NULL, 0, true), @"unknown key name rejected");
+    until(^BOOL { return [evaluate(view, @"probe.events.filter(e=>e.type==='keydown').length") intValue] >= 2; });
+    NSArray *keysSeen = evaluate(view, @"probe.events.filter(e=>e.type==='keydown').map(e=>e.key)");
+    check([keysSeen isEqual:@[@"a", @"Enter"]],
+        [NSString stringWithFormat:@"keys reach the focused field in a window that is not key: %@", keysSeen]);
+    check([evaluate(view, @"document.getElementById('field').value") isEqual:@"a"], @"text input reaches the field");
+
+    check(!NSApp.isActive, @"application stays inactive");
+    check(NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier != getpid(), @"this process did not become the frontmost application");
+    [window close];
+    return failures ? 1 : 0;
+}}
