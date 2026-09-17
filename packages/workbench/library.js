@@ -3,7 +3,7 @@ import * as projects from "./projects.js";
 import { fresh } from "./plane.js";
 import { windows } from "@soksak/runtime";
 import { icon } from "./icons.js";
-import { isPlace, plugin } from "./registry.js";
+import { hasPlugin, isPlace, isRailId, plugin } from "./registry.js";
 import { delegate, mark } from "./commands.js";
 
 const TINTS = ["#ffb36b", "#7fe3b0", "#7db4ff", "#e08bd8", "#f2d16b"];
@@ -178,6 +178,9 @@ export function createLibrary(root, rendered = () => {}) {
   return {render, state, actions};
 }
 
+// 등록되지 않은 종류의 레일도 자리다. 판이 열면서 치운다.
+const aside=(id)=>isPlace(id)||isRailId(id);
+
 function preview(project) {
   const el=element('div','library-preview'); el.setAttribute('aria-hidden','true');
   const layout=project.spaces.find(s=>s.id===project.activeSpaceId)?.layout;
@@ -185,15 +188,15 @@ function preview(project) {
   const {cards,xs,ys}=layout.state;
   // 분할 위치는 격자 인덱스로 유지하고, 표시 비율은 미리보기에서 정한다.
   el.style.gridTemplateColumns=xs.slice(1).map((_,column)=>
-    cards.some(c=>!isPlace(c.id)&&c.c0<=column&&column<c.c1)?'minmax(0,1fr)':'minmax(0,.22fr)').join(' ');
+    cards.some(c=>!aside(c.id)&&c.c0<=column&&column<c.c1)?'minmax(0,1fr)':'minmax(0,.22fr)').join(' ');
   el.style.gridTemplateRows=`repeat(${ys.length-1},minmax(0,1fr))`;
   for(const card of cards) {
     const pane=element('div','library-preview__pane');
     pane.dataset.cardId=card.id;
     pane.style.gridArea=`${card.r0+1} / ${card.c0+1} / ${card.r1+1} / ${card.c1+1}`;
-    const tabs=card.data?.tabs ?? [];
+    const tabs=(card.data?.tabs ?? []).filter(t=>hasPlugin(t.plugin));
     const active=tabs.find(t=>t.id===card.data?.activeId) ?? tabs[0];
-    pane.dataset.plugin=isPlace(card.id)?'sidebar':active?.plugin ?? '';
+    pane.dataset.plugin=aside(card.id)?'sidebar':active?.plugin ?? '';
     if(active) {
       const {ink}=plugin(active.plugin);
       if(ink) pane.style.setProperty('--preview-ink',`var(${ink})`);

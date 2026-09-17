@@ -6,7 +6,7 @@
 // 검증의 존재를 알지 않는다. 렌더링 완료만 통지하고 이후 처리는 문서가 정한다.
 import { Soksak, SoksakView, outline } from "soksak";
 import { cardRadius, halfGap, linkedSet, stagePad, value } from "./settings.js";
-import { isPlace, plugin, plugins, railId, railKind, section } from "./registry.js";
+import { hasPlugin, isPlace, isRailId, plugin, plugins, railId, railKind, sectionNames } from "./registry.js";
 import { environment } from "./environment.js";
 import { standIn } from "./compositor.js";
 import { native, onSurfaceInput, overlay, shapes } from "./host.js";
@@ -146,7 +146,7 @@ function standingSet(place) {
     : place === "left" ? linkedSet("left", null)
     : linkedSet(place, focusedPlugin());
   if (!set) return null;
-  return { name: set.title, sections: set.sections.map((id) => section(id).name) };
+  return { name: set.title, sections: sectionNames(set.sections) };
 }
 
 /** environment.json 의 workspace.grid 로 새 스페이스의 배치를 만든다. 탭 id 는 새로 발급한다. */
@@ -348,6 +348,27 @@ function closeTab(cardId, tabId) {
   }
   if (!grid.card(focusedId)) focusedId = grid.cards.find((c) => !isPlace(c.id))?.id ?? null;
   settle();
+}
+
+/* 등록되지 않은 플러그인의 탭과 레일을 치운다. 저장된 배치는 다른 환경에서
+   만들어졌을 수 있다. 탭이 모두 없어진 카드는 탭을 닫을 때와 같이 닫거나, 닫을 수
+   없으면 새 탭 하나를 받는다. */
+function forgetUnknown() {
+  for (const { id } of [...grid.cards]) {
+    const card = grid.card(id);
+    if (!card) continue;
+    if (isRailId(id) && !isPlace(id)) { dismiss(id); continue; }
+    const tabs = tabsOf(card);
+    if (tabs.every((t) => hasPlugin(t.plugin))) continue;
+    card.data.tabs = tabs.filter((t) => hasPlugin(t.plugin));
+    if (card.data.tabs.length === 0) {
+      if (grid.canClose(id)) { grid.close(id); continue; }
+      const kind = focusedPlugin();
+      card.data.tabs = [newTab(hasPlugin(kind) ? kind : plugins()[0].id)];
+    }
+    if (!tabsOf(card).some((t) => t.id === card.data.activeId)) card.data.activeId = card.data.tabs[0].id;
+  }
+  for (const kind of Object.keys(railWidth)) if (!hasPlugin(kind)) delete railWidth[kind];
 }
 
 /* ── 탭 드래그 — T3/T4/T5 ─────────────────────────────────────────────── */
@@ -1039,6 +1060,7 @@ export function build(kept = fresh()) {
   const half = halfGap();
   grid = new Soksak(kept.state, { gap: half * 2 });
   focusedId = kept.focusedId;
+  forgetUnknown();
   view = new SoksakView(plane, grid, {
     createCard, updateCard,
     // 판은 stage 안쪽으로 이 값만큼 들어와 있다. 호스트만 아는 값이므로 뷰에 전달해야
@@ -1093,6 +1115,7 @@ export function adopt(kept) {
   railWidth = { ...kept.railWidth };
   edgeWidth = { ...kept.edgeWidth };
   named = kept.named;
+  forgetUnknown();
   settle();
 }
 

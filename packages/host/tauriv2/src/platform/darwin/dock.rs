@@ -12,7 +12,7 @@ pub fn install(new_window: Box<dyn Fn()>) -> Result<(), String> {
     extern "C" {
         fn appInstallDockMenu(new_window: &Block<dyn Fn()>) -> bool;
     }
-    let create = RcBlock::new(move || new_window());
+    let create = RcBlock::new(new_window);
     if unsafe { appInstallDockMenu(&create) } {
         Ok(())
     } else {

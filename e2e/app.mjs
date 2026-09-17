@@ -229,7 +229,7 @@ export class Session {
     };
   }
 
-  /** 메인 페이지와 보이는 앱 문서가 현재 배치를 표시할 때까지 기다린다. */
+  /** 메인 페이지와 보이는 앱 문서가 현재 배치를 표시할 때까지 기다린다. 결과는 그 화면의 표시 시각 { displayed } 다. */
   presented() {
     return this.run("host.window.presented");
   }
@@ -374,7 +374,9 @@ async function dragOnce(t, s, plan, capture) {
   const result = await s.request("diagnostics.drag", { ...plan, capture }, { timeout: REQUEST + ms * 4 });
   if (!capture) return result;
   t.after(() => rmSync(result.frames, { recursive: true, force: true }));
-  const stopped = await s.request("diagnostics.capture.stop");
+  // 끌기의 마지막 화면이 표시되는 시각까지 녹화한다.
+  const { displayed } = await s.presented();
+  const stopped = await s.request("diagnostics.capture.stop", { after: displayed });
   // 녹화가 한 번에 이만큼 넘게 끊겼다면 그 사이 화면은 기록되지 않았다. 측정되지 않은 구간은 통과가 아니다.
   if (stopped.longestGap > GAP) {
     throw new Error(`the recording has a ${stopped.longestGap.toFixed(0)}ms gap between frames; ` +

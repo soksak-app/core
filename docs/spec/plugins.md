@@ -48,7 +48,7 @@ A plugin requires `surface`, `sections`, or both. Only plugins with a surface ap
 | `sidebars.sets` | Default section sets |
 | `sidebars.links` | Default assignments of sets to `left` (with `plugin: null`), `right`, or `rail` (with a plugin id) |
 
-The workbench loads `environment.json` and every listed `plugin.json` before it reads settings or builds a space. A tab or link that names a plugin without a surface, or a set that names an unknown section, fails the load before any registration.
+The workbench loads `environment.json` and every listed `plugin.json` before it reads settings or builds a space. A tab or link that names a plugin without a surface, or a set that names an unknown section, fails the load before any registration. Saved spaces and settings are not environment files; their unregistered plugins and sections are dropped when a space opens ([projects](projects.md#persistence)).
 
 ## Staged layout
 
@@ -62,6 +62,7 @@ The workbench loads `environment.json` and every listed `plugin.json` before it 
 | `/environment.json` | The application's `environment.json` |
 | `/modules/<sidecar>/sidecar.json` | `sidecar.json` of each sidecar package listed in a plugin's `sidecars` |
 | `/diagnostics.js` | With `--diagnostics`, the workbench's `observe.js` (the page diagnostic methods); otherwise an empty module |
+| `/transcript.js` | With `--diagnostics`, the workbench's `transcript.js` (the call recorder of the diagnostic module); otherwise absent |
 
 With `--executables <dir>`, the tool also copies each sidecar's built `executable` file into `<dir>` under its file name and fails when the file is not built. The debug staging targets `frontend-wailsv3` and `frontend-tauriv2` and the release build targets run the `sidecars` target, which builds every sidecar package, and then stage into `apps/<app>/src/frontend` with `--executables` set to the directory of the application executable (`target/debug` or `target/release`). The debug targets add `--diagnostics`; release builds contain no page diagnostic code.
 

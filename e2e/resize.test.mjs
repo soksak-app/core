@@ -50,20 +50,26 @@ const right = (w) => Math.max(...w.surfaces.filter((x) => x.visible).map((x) => 
 /** 창 오른쪽 끝과 가장 오른쪽 표면 사이의 거리. 배치는 창 크기와 관계없이 이 거리를 유지한다. */
 const margin = (w) => w.content.width - right(w);
 
-async function record(t, s, change, sized) {
+async function record(s, change, sized) {
   const kept = margin(await s.get("host.window"));
   const { frames: directory } = await s.request("diagnostics.capture.start");
-  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  // 녹화는 창 크기의 프레임을 초당 60 장까지 담으므로 측정한 뒤 바로 지운다.
   try {
-    await change();
-    // 창이 새 크기에 도달하고 표면이 그 크기의 배치로 옮겨진 뒤 그 배치가 표시될 때까지 기다린다.
-    await s.until("host.window", (w) => sized(w) && Math.abs(margin(w) - kept) < 1,
-      "the surfaces did not follow the window");
-    await s.presented();
+    // 녹화는 이 표시 시각의 화면까지 담는다. 앱이 커밋한 화면은 표시 대기가 끝난 뒤에 표시된다.
+    let displayed = 0;
+    try {
+      await change();
+      // 창이 새 크기에 도달하고 표면이 그 크기의 배치로 옮겨진 뒤 그 배치가 표시될 때까지 기다린다.
+      await s.until("host.window", (w) => sized(w) && Math.abs(margin(w) - kept) < 1,
+        "the surfaces did not follow the window");
+      ({ displayed } = await s.presented());
+    } finally {
+      await s.request("diagnostics.capture.stop", { after: displayed });
+    }
+    return { displayed, measured: frames(directory).map((path) => measure(readFrame(path))) };
   } finally {
-    await s.request("diagnostics.capture.stop");
+    rmSync(directory, { recursive: true, force: true });
   }
-  return frames(directory).map((path) => measure(readFrame(path)));
 }
 
 /**
@@ -71,19 +77,23 @@ async function record(t, s, change, sized) {
  * 프레임 수를 보고한다. 창 프레임과 WebKit 내용은 따로 표시되므로(WebKit/WebKit#72971,
  * tauri-apps/tao#1207) 변경 중의 늦은 프레임은 측정값으로만 남긴다.
  */
-function assertSettled(t, measured, label) {
+function assertSettled(t, { displayed, measured }, label) {
   assert.ok(measured.length > 1, `${label}: only ${measured.length} frames were recorded`);
   const [first] = measured;
   const last = measured.at(-1);
+  const tail = measured.slice(-5).map((m) =>
+    `${(m.time - first.time).toFixed(0)}ms ${m.window.width.toFixed(0)}×${m.window.height.toFixed(0)} gap ${m.gap.x.toFixed(0)},${m.gap.y.toFixed(0)}`);
+  const shown = `presented for display at ${(displayed - first.time).toFixed(0)}ms`;
   assert.ok(Math.abs(last.window.width - first.window.width) > 100,
-    `${label}: the recording did not include the resized window (${first.window.width} → ${last.window.width})`);
+    `${label}: the recording did not include the resized window (${first.window.width} → ${last.window.width}; ` +
+    `${shown}; last frames ${tail.join(", ")})`);
   const off = (m) => Math.abs(m.gap.x - first.gap.x) > LAG || Math.abs(m.gap.y - first.gap.y) > LAG;
   const late = measured.filter(off);
   const took = late.length ? late.at(-1).time - first.time : 0;
   t.diagnostic(`${label}: ${late.length} of ${measured.length} frames show the layout behind the window, the last at ${took.toFixed(0)}ms`);
   assert.ok(!off(last), `${label}: the settled frame shows the layout behind the window ` +
     `(window ${last.window.width.toFixed(0)}×${last.window.height.toFixed(0)}, gap ${last.gap.x.toFixed(0)},${last.gap.y.toFixed(0)}, ` +
-    `base gap ${first.gap.x.toFixed(0)},${first.gap.y.toFixed(0)})`);
+    `base gap ${first.gap.x.toFixed(0)},${first.gap.y.toFixed(0)}; ${shown}; last frames ${tail.join(", ")})`);
 }
 
 for (const app of Object.values(APPS)) {
@@ -97,7 +107,7 @@ for (const app of Object.values(APPS)) {
       && before.y >= x.y && before.y < x.y + x.height);
     const same = (a, b) => ["x", "y", "width", "height"].every((key) => Math.abs(a[key] - b[key]) < 1);
     let maximised = false;
-    t.after(async () => {
+    s.cleanup(async () => {
       if (!maximised) return;
       await s.run("host.window.maximize", { on: false });
       await s.until("host.window", (w) => w.frame.width === before.width && w.frame.height === before.height,
@@ -105,13 +115,13 @@ for (const app of Object.values(APPS)) {
       await s.presented();
     });
 
-    const grown = await record(t, s, async () => {
+    const grown = await record(s, async () => {
       maximised = true;
       await s.run("host.window.maximize", { on: true });
     }, (w) => same(w.frame, screen.visible));
     assertSettled(t, grown, "maximising");
 
-    const shrunk = await record(t, s, () => s.run("host.window.maximize", { on: false }),
+    const shrunk = await record(s, () => s.run("host.window.maximize", { on: false }),
       (w) => same(w.frame, before));
     maximised = false;
     assertSettled(t, shrunk, "restoring");

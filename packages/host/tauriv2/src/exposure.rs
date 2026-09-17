@@ -105,8 +105,8 @@ fn host_declarations() -> Value {
             {"name": "host.window.move", "description": "Moves the window frame origin to a point in screen coordinates.",
              "params": {"type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "number"}}},
              "result": nothing},
-            {"name": "host.window.presented", "description": "Resolves after the main page and visible application documents have presented their current geometry.",
-             "params": empty, "result": nothing},
+            {"name": "host.window.presented", "description": "Resolves after the main page and visible application documents have presented their current geometry, with the display time of that frame.",
+             "params": empty, "result": {"type": "object", "properties": {"displayed": {"type": "number"}}}},
             {"name": "host.window.reload", "description": "Reloads the main page.",
              "params": empty, "result": nothing},
             {"name": "host.window.resize", "description": "Resizes the content area.",
@@ -685,15 +685,17 @@ fn reload(window: &Window) -> Result<Value, Failure> {
 }
 
 /// 메인 페이지와 표시 중인 앱 문서가 현재 배치를 그릴 때까지 기다린다.
-pub(crate) fn presented(window: &Window, timeout: Duration) -> Result<(), Failure> {
+/// 창의 표면 배치 트랜잭션이 확정되고 메인 문서와 보이는 앱 문서가 현재 배치를 표시할 때까지 기다리고,
+/// 그 화면의 표시 시각(ms, mach 절대 시각)을 반환한다.
+pub(crate) fn presented(window: &Window, timeout: Duration) -> Result<f64, Failure> {
     let platform = platform::current().map_err(internal)?;
     let main = root_view(window).ok_or_else(|| Failure::new(MISSING_DOCUMENT, "the main page is gone"))?;
     let (tx, rx) = mpsc::channel();
     let failed = tx.clone();
     main.with_webview(move |view| {
         let done = tx.clone();
-        if let Err(error) = platform.after_presentation(&view, Box::new(move || {
-            let _ = done.send(Ok(()));
+        if let Err(error) = platform.after_settled(&view, Box::new(move |displayed| {
+            let _ = done.send(Ok(displayed));
         })) {
             let _ = failed.send(Err(error));
         }
@@ -822,7 +824,7 @@ impl Host {
                 done(window.set_size(LogicalSize::new(width, height)))
             })(),
             "host.window.reload" => reload(window),
-            "host.window.presented" => presented(window, TIMEOUT).map(|_| Value::Null),
+            "host.window.presented" => presented(window, TIMEOUT).map(|displayed| json!({"displayed": displayed})),
             "host.window.move" => (|| {
                 let x = number(arguments, "x")?;
                 let y = number(arguments, "y")?;

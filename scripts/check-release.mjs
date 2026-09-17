@@ -14,7 +14,7 @@ const APPS = ["wailsv3", "tauriv2"];
 
 /** 진단 코드의 표지. 진단 메서드 이름과 녹화 라이브러리 기호다. */
 const MARKS = [
-  { what: "diagnostic method", pattern: /diagnostics\.(fixture|drag|knob|transcript|capture)/ },
+  { what: "diagnostic method", pattern: /diagnostics\.(fixture|drag|knob|transcript|capture|modal)/ },
   { what: "window capture symbol", pattern: /sp_capture_/ },
 ];
 

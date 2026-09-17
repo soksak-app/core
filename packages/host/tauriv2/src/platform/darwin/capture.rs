@@ -6,7 +6,7 @@ extern "C" {
     fn sp_capture_open(window_number: isize, display: bool);
     fn sp_capture_start(directory: *const c_char);
     fn sp_capture_wait() -> c_int;
-    fn sp_capture_stop() -> c_int;
+    fn sp_capture_stop(after: f64) -> c_int;
     fn sp_capture_longest_gap() -> f64;
 }
 
@@ -21,9 +21,9 @@ pub fn start(directory: &str) {
     unsafe { sp_capture_start(where_to.as_ptr()) }
 }
 
-/// 기록을 끝내고 기록한 프레임 수를 반환한다.
-pub fn stop() -> i32 {
-    unsafe { sp_capture_stop() }
+/// after 의 표시 시각(ms, 0 이면 호출 시각)까지 기록한 뒤 기록을 끝내고 기록한 프레임 수를 반환한다.
+pub fn stop(after: f64) -> i32 {
+    unsafe { sp_capture_stop(after) }
 }
 
 /// 마지막으로 멈춘 기록에서 연속한 프레임 사이의 가장 긴 표시 간격(ms).

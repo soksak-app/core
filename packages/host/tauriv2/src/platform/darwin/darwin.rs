@@ -32,6 +32,8 @@ mod input;
 mod layout;
 #[path = "shapes.rs"]
 mod shapes;
+#[path = "termination.rs"]
+mod termination;
 #[path = "webview.rs"]
 mod webview;
 #[path = "window.rs"]
@@ -175,6 +177,10 @@ impl Platform for Darwin {
         layout::after_presentation(view, done);
         Ok(())
     }
+    fn after_settled(&self, view: &PlatformWebview, done: Box<dyn Fn(f64)>) -> Result<(), String> {
+        layout::after_settled(view, done);
+        Ok(())
+    }
 
     fn create_shape(&self, window: Handle, frame: Frame) -> Result<Handle, String> {
         Ok(shapes::create(window, frame))
@@ -237,14 +243,17 @@ impl Platform for Darwin {
         Ok(capture::wait())
     }
     #[cfg(feature = "diagnostics")]
-    fn capture_stop(&self) -> Result<i32, String> {
-        Ok(capture::stop())
+    fn capture_stop(&self, after: f64) -> Result<i32, String> {
+        Ok(capture::stop(after))
     }
     #[cfg(feature = "diagnostics")]
     fn capture_longest_gap(&self) -> Result<f64, String> {
         Ok(capture::longest_gap())
     }
 
+    fn on_termination(&self, quit: Box<dyn Fn() + Send>) -> Result<(), String> {
+        termination::on_termination(quit)
+    }
     fn install_dock_menu(&self, new_window: Box<dyn Fn()>) -> Result<(), String> {
         dock::install(new_window)
     }

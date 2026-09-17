@@ -4,9 +4,11 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime/debug"
 	"strings"
@@ -605,6 +607,43 @@ func TestEndpointFilesArePrivateToTheUser(t *testing.T) {
 	}
 	if stat, err := os.Stat(address.Address); err != nil || stat.Mode().Perm() != 0600 {
 		t.Fatalf("socket mode %v: %v", stat.Mode(), err)
+	}
+}
+
+// endedProcess 는 끝난 프로세스의 번호를 반환한다.
+func endedProcess(t *testing.T) int {
+	t.Helper()
+	command := exec.Command("/usr/bin/true")
+	if err := command.Run(); err != nil {
+		t.Fatal(err)
+	}
+	return command.Process.Pid
+}
+
+func TestSocketsOfEndedProcessesAreRemoved(t *testing.T) {
+	sockets := filepath.Join(socketParent(t), "sockets")
+	if err := os.Mkdir(sockets, 0700); err != nil {
+		t.Fatal(err)
+	}
+	ended := filepath.Join(sockets, fmt.Sprintf("test-sweep-%d.sock", endedProcess(t)))
+	running := filepath.Join(sockets, fmt.Sprintf("test-sweep-%d.sock", os.Getppid()))
+	other := filepath.Join(sockets, fmt.Sprintf("test-other-%d.sock", endedProcess(t)))
+	for _, path := range []string{ended, running, other} {
+		if err := os.WriteFile(path, nil, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	listener, _, err := listen(t, sockets, "test-sweep")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	present := func(path string) bool {
+		_, err := os.Stat(path)
+		return err == nil
+	}
+	if present(ended) || !present(running) || !present(other) {
+		t.Fatalf("ended %v, running %v, other application %v", present(ended), present(running), present(other))
 	}
 }
 

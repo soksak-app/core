@@ -18,6 +18,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/min-median-max/soksak/packages/host/wailsv3/src/platform"
@@ -30,6 +31,9 @@ func init() {
 	diagnosticMethods["diagnostics.capture.start"] = diagnosticCaptureStart
 	diagnosticMethods["diagnostics.capture.stop"] = diagnosticCaptureStop
 	diagnosticMethods["diagnostics.knob"] = diagnosticKnob
+	diagnosticMethods["diagnostics.modal.hold"] = diagnosticModalHold
+	diagnosticMethods["diagnostics.modal.held"] = diagnosticModalHeld
+	holdModalContent = modalHolds.wait
 	diagnosticSubscriptions["diagnostics.transcript"] = transcriptTopic
 	diagnosticTopics[logTopic] = func(on bool) (string, any) {
 		return "diagnostics.transcript", map[string]bool{"on": on}
@@ -101,15 +105,18 @@ func (p dragPlan) steps() int {
 // recording 은 진행 중인 녹화다.
 var recording Recording
 
-// platformCapture 는 플랫폼의 창 녹화 연산이다.
-type platformCapture struct{ platform.Capturer }
+// platformCapture 는 플랫폼의 창 녹화 연산이다. after 는 멈출 때 녹화에 포함할 마지막 표시 시각이다.
+type platformCapture struct {
+	platform.Capturer
+	after float64
+}
 
 func (c platformCapture) Open(target CaptureTarget) error {
 	return c.CaptureOpen(target.Window, target.Display)
 }
 func (c platformCapture) Start(directory string) error { return c.CaptureStart(directory) }
 func (c platformCapture) Wait() (bool, error)          { return c.CaptureWait() }
-func (c platformCapture) Stop() (int, error)           { return c.CaptureStop() }
+func (c platformCapture) Stop() (int, error)           { return c.CaptureStop(c.after) }
 
 // recorder 는 이 플랫폼의 녹화 장치를 반환한다.
 func recorder() (platformCapture, error) {
@@ -117,7 +124,7 @@ func recorder() (platformCapture, error) {
 	if !ok {
 		return platformCapture{}, errors.New("window capture is not implemented on this platform")
 	}
-	return platformCapture{capturer}, nil
+	return platformCapture{Capturer: capturer}, nil
 }
 
 // diagnosticDrag 는 페이지에 끌기를 요청하고 걸음의 시각을 보낸다.
@@ -248,14 +255,27 @@ func diagnosticCaptureStart(e *Endpoint, _ *endpointConn, params json.RawMessage
 	return map[string]any{"frames": directory}, nil
 }
 
-// diagnosticCaptureStop 은 녹화를 끝내고 프레임 폴더와 프레임 수를 반환한다.
+// diagnosticCaptureStop 은 after 의 표시 시각까지 녹화한 뒤 녹화를 끝내고 프레임 폴더와 프레임 수를
+// 반환한다.
 func diagnosticCaptureStop(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
 	if _, _, err := diagnosticHost(e, params); err != nil {
+		return nil, err
+	}
+	var p struct {
+		After *float64 `json:"after"`
+	}
+	if err := decode(params, &p); err != nil {
 		return nil, err
 	}
 	capture, err := recorder()
 	if err != nil {
 		return nil, err
+	}
+	if p.After != nil {
+		if *p.After < 0 {
+			return nil, rpcError(codeInvalidParams, "after must not be negative")
+		}
+		capture.after = *p.After
 	}
 	directory, count, err := recording.Finish(capture)
 	if err != nil {
@@ -300,4 +320,82 @@ func transcriptTopic(e *Endpoint, params json.RawMessage) (topic, bool, error) {
 		return topic{}, false, rpcError(codeInvalidParams, "on is required")
 	}
 	return topic{window, logTopic, ""}, *p.On, nil
+}
+
+// modalHold 는 한 창에서 붙잡은 모달 내용 응답이다.
+type modalHold struct {
+	// release 가 닫히면 붙잡은 응답을 보낸다.
+	release chan struct{}
+	// held 는 첫 응답을 붙잡으면 닫힌다.
+	held chan struct{}
+	once sync.Once
+}
+
+// modalHoldSet 은 창별로 모달 내용 응답을 붙잡는다. 검사는 모달 문서가 처음 내용을 이후
+// 이벤트보다 늦게 받는 순서를 만든다.
+type modalHoldSet struct {
+	mu      sync.Mutex
+	windows map[*Surfaces]*modalHold
+}
+
+var modalHolds = &modalHoldSet{windows: map[*Surfaces]*modalHold{}}
+
+// wait 는 창 s 의 응답을 붙잡은 동안 반환하지 않는다.
+func (set *modalHoldSet) wait(s *Surfaces) {
+	set.mu.Lock()
+	hold := set.windows[s]
+	set.mu.Unlock()
+	if hold == nil {
+		return
+	}
+	hold.once.Do(func() { close(hold.held) })
+	<-hold.release
+}
+
+// diagnosticModalHold 는 on 이면 창의 모달 내용 응답을 붙잡기 시작하고, 아니면 붙잡은 응답을
+// 보내고 붙잡기를 멈춘다.
+func diagnosticModalHold(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+	_, s, err := diagnosticHost(e, params)
+	if err != nil {
+		return nil, err
+	}
+	var p struct {
+		On *bool `json:"on"`
+	}
+	if err := decode(params, &p); err != nil {
+		return nil, err
+	}
+	if p.On == nil {
+		return nil, rpcError(codeInvalidParams, "on is required")
+	}
+	modalHolds.mu.Lock()
+	defer modalHolds.mu.Unlock()
+	hold := modalHolds.windows[s]
+	switch {
+	case *p.On && hold == nil:
+		modalHolds.windows[s] = &modalHold{release: make(chan struct{}), held: make(chan struct{})}
+	case !*p.On && hold != nil:
+		close(hold.release)
+		delete(modalHolds.windows, s)
+	}
+	return nil, nil
+}
+
+// diagnosticModalHeld 는 창에서 모달 내용 응답을 하나 붙잡으면 답한다.
+func diagnosticModalHeld(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+	_, s, err := diagnosticHost(e, params)
+	if err != nil {
+		return nil, err
+	}
+	modalHolds.mu.Lock()
+	hold := modalHolds.windows[s]
+	modalHolds.mu.Unlock()
+	if hold == nil {
+		return nil, errors.New("modal content answers are not held in this window")
+	}
+	select {
+	case <-hold.held:
+	case <-hold.release:
+	}
+	return nil, nil
 }

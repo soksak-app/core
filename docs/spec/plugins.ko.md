@@ -48,7 +48,7 @@
 | `sidebars.sets` | 기본 섹션 세트 |
 | `sidebars.links` | 세트를 `left`(`plugin: null`), `right`, `rail`(플러그인 id 포함)에 연결하는 기본값 |
 
-워크벤치는 설정을 읽거나 스페이스를 만들기 전에 `environment.json`과 나열된 모든 `plugin.json`을 로드한다. 표면이 없는 플러그인을 가리키는 탭이나 연결, 알 수 없는 섹션을 가리키는 세트가 있으면 등록 전에 로드가 실패한다.
+워크벤치는 설정을 읽거나 스페이스를 만들기 전에 `environment.json`과 나열된 모든 `plugin.json`을 로드한다. 표면이 없는 플러그인을 가리키는 탭이나 연결, 알 수 없는 섹션을 가리키는 세트가 있으면 등록 전에 로드가 실패한다. 저장된 스페이스와 설정은 환경 파일이 아니며, 스페이스를 열 때 등록되지 않은 플러그인과 섹션을 제거한다([프로젝트](projects.ko.md#저장)).
 
 ## 스테이징 배치
 
@@ -62,6 +62,7 @@
 | `/environment.json` | 애플리케이션의 `environment.json` |
 | `/modules/<사이드카>/sidecar.json` | 플러그인의 `sidecars`에 나열된 각 사이드카 패키지의 `sidecar.json` |
 | `/diagnostics.js` | `--diagnostics`이면 워크벤치의 `observe.js`(페이지 진단 메서드), 아니면 빈 모듈 |
+| `/transcript.js` | `--diagnostics`이면 워크벤치의 `transcript.js`(진단 모듈이 쓰는 호출 기록기), 아니면 없음 |
 
 `--executables <디렉터리>`를 지정하면 각 사이드카의 빌드된 `executable` 파일을 파일 이름 그대로 `<디렉터리>`에 복사하고, 파일이 빌드되지 않았으면 실패한다. 디버그 스테이징 대상 `frontend-wailsv3`, `frontend-tauriv2`와 릴리스 빌드 대상은 모든 사이드카 패키지를 빌드하는 `sidecars` 대상을 실행한 뒤 애플리케이션 실행 파일의 디렉터리(`target/debug` 또는 `target/release`)를 `--executables`로 지정해 `apps/<app>/src/frontend`에 스테이징한다. 디버그 대상은 `--diagnostics`를 더하며, 릴리스 빌드에는 페이지 진단 코드가 없다.
 

@@ -187,6 +187,9 @@ pub trait Platform: Send + Sync {
     fn cancel_layout(&self, window: Handle) -> Result<(), String>;
     /// 메인 문서와 표시 중인 문서의 렌더링이 끝난 뒤 done 을 호출한다.
     fn after_presentation(&self, view: &PlatformWebview, done: Box<dyn Fn()>) -> Result<(), String>;
+    /// 창에 열린 표면 배치 트랜잭션이 없는 상태에서 메인 문서와 표시 중인 문서의 렌더링이 끝난 뒤 done 을
+    /// 호출한다. 인자는 그 화면이 표시되는 시각(ms, mach 절대 시각)이다.
+    fn after_settled(&self, view: &PlatformWebview, done: Box<dyn Fn(f64)>) -> Result<(), String>;
 
     // 도형
 
@@ -252,11 +255,17 @@ pub trait Platform: Send + Sync {
     /// 첫 프레임을 기다리고 기록 여부를 반환한다.
     fn capture_wait(&self) -> Result<bool, String>;
     #[cfg(feature = "diagnostics")]
-    /// 기록을 끝내고 기록한 프레임 수를 반환한다.
-    fn capture_stop(&self) -> Result<i32, String>;
+    /// after 의 표시 시각(ms, 0 이면 호출 시각)까지 기록한 뒤 기록을 끝내고 기록한 프레임 수를 반환한다.
+    fn capture_stop(&self, after: f64) -> Result<i32, String>;
     #[cfg(feature = "diagnostics")]
     /// 마지막으로 멈춘 기록에서 연속한 프레임 사이의 가장 긴 표시 간격(ms).
     fn capture_longest_gap(&self) -> Result<f64, String>;
+
+    // 종료 요청
+
+    /// 종료 신호(SIGTERM, SIGINT, SIGHUP)를 처음 받으면 quit 를 호출하게 한다. 그 뒤의 종료
+    /// 신호는 기본 동작으로 프로세스를 끝낸다.
+    fn on_termination(&self, quit: Box<dyn Fn() + Send>) -> Result<(), String>;
 
     // Dock
 

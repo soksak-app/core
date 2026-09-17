@@ -46,6 +46,15 @@ func Run(assets fs.FS, options Options) error {
 		return err
 	}
 	system = current
+	// 종료 신호는 엔드포인트를 만들기 전부터 받는다. 일반 종료는 애플리케이션이 시작한 뒤에
+	// 요청한다. 일반 종료는 준비된 창의 저장을 마친 뒤 엔드포인트를 닫는다.
+	started := make(chan struct{})
+	if err := system.OnTermination(func() {
+		<-started
+		application.Get().Quit()
+	}); err != nil {
+		return err
+	}
 	frontend, err := fs.Sub(assets, "frontend")
 	if err != nil {
 		return err
@@ -85,6 +94,9 @@ func Run(assets fs.FS, options Options) error {
 		Assets:     application.AssetOptions{Handler: application.BundledAssetFileServer(assets)},
 		Services:   []application.Service{application.NewService(host)},
 		ShouldQuit: host.shouldQuit,
+		// Wails 의 기본 신호 처리기는 만들어지기만 하고 시작되지 않는다(v3.0.0-beta.16).
+		// Run 이 등록한 처리기가 종료 신호를 받는다.
+		DisableDefaultSignalHandler: true,
 		OnShutdown: func() {
 			sidecars.Stop()
 			if err := host.endpoint.Close(); err != nil {
@@ -94,6 +106,9 @@ func Run(assets fs.FS, options Options) error {
 		KeyBindings: map[string]func(application.Window){
 			"CmdOrCtrl+Shift+N": func(application.Window) { go host.WindowNew() },
 		},
+	})
+	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
+		close(started)
 	})
 	setupDockMenu(host)
 	host.newWindow("main", "/")

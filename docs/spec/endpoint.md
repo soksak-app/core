@@ -44,7 +44,7 @@ When the endpoint is ready, the host writes `<config-dir>/endpoint.json`.
 | `executable` | Absolute path of the host executable with symbolic links resolved |
 | `started` | Start time in ISO 8601 |
 
-The host removes the file on exit. A client reads the file to connect. When the process with `pid` is not running, the client reports an error and does not connect.
+The host removes the file and its socket on exit, including an exit requested by a termination signal (SIGTERM, SIGINT, SIGHUP), which runs the same quit as `host.quit`. A process that ends without that exit, such as one killed with SIGKILL, leaves its socket; the next host of the same application removes sockets named `<application>-<pid>.sock` whose process is no longer running before it listens. A client reads the file to connect. When the process with `pid` is not running, the client reports an error and does not connect.
 
 ## Framing
 
@@ -78,8 +78,10 @@ The following methods exist only in diagnostic builds (Go build tag `diagnostics
 | `diagnostics.fixture` | `{window}` | Creates `<config-dir>/test-project` with empty folder settings, removes other projects, resets common settings, opens the project in the window, and returns `{root}` |
 | `diagnostics.drag` | `{window, axis, line, dx, dy, ms, times, capture?}` | Drags boundary `line` on `axis` by `dx, dy` over `ms` and back, `times` round trips, with host-timed steps. Returns the page's drag result `{from, steps, took, asked, late, deepest}` after the gesture has been presented. With `capture: true` the host also records the window and adds `frames`, the frame directory; if the drag fails, the host stops the capture and removes the directory |
 | `diagnostics.capture.start` | `{window}` | Starts recording the window after its first frame and returns `{frames}`, the frame directory |
-| `diagnostics.capture.stop` | `{window}` | Stops a capture and returns `{frames, count, longestGap}`; `longestGap` is the longest display interval in milliseconds between consecutive recorded frames |
+| `diagnostics.capture.stop` | `{window, after?}` | Stops a capture once the stream has delivered the screen displayed at or after `after` (a `displayed` time from `host.window.presented`) or the request, whichever is later, and returns `{frames, count, longestGap}`; `longestGap` is the longest display interval in milliseconds between consecutive recorded frames. A state the application committed can reach the screen after the request, so a recording that must end with that state passes its display time |
 | `diagnostics.knob` | `{window, name, value}` | Sets a compositor test value (`latency`, `skew`) |
+| `diagnostics.modal.hold` | `{window, on}` | With `on`, holds the host's answers to the window's modal content requests; without, sends the held answers and stops holding |
+| `diagnostics.modal.held` | `{window}` | Answers when the window holds a modal content answer or stops holding; fails when the window does not hold answers |
 | `diagnostics.transcript` | `{window, on}` | Starts or stops `diagnostics.log` notifications `{window, line}` for host requests, replies, and page verification lines |
 
 The host writes large data, such as captures, to files under the configuration directory, and the reply contains the file paths. The requester removes the capture files after measurement.
@@ -101,4 +103,6 @@ Each platform runs these checks against the endpoint:
 - an HTTP request line closes the connection, and no method runs;
 - a different user cannot connect;
 - an undeclared method closes the connection;
-- the host removes `endpoint.json` on normal exit.
+- the host removes `endpoint.json` on normal exit;
+- a termination signal requests the normal exit once, and the next one ends the process;
+- sockets of ended processes of the same application are removed before listening.

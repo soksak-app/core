@@ -78,6 +78,31 @@ for (const app of Object.values(APPS)) {
     assert.equal(document.bodyBackground, "rgba(0, 0, 0, 0.5)", "settings navigation must preserve one 50% backdrop");
   });
 
+  test(`${app.name}: a first modal answer that arrives after later changes keeps the moved position`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    await s.request("diagnostics.modal.hold", { on: true });
+    s.cleanup(() => s.request("diagnostics.modal.hold", { on: false }));
+    await s.run("core.settings.open");
+    await s.request("diagnostics.modal.held");
+    // 첫 응답을 붙잡은 동안 내용 이벤트가 모달을 그리고 위치 이벤트가 모달을 옮긴다.
+    await s.run("core.settings-modal.nav", { section: "compositing" });
+    const shown = await s.until("core.modal", (modal) => modal?.document?.loaded === false,
+      "the content event did not render the modal before its first answer");
+    await s.run("core.settings-modal.move", { dx: 40, dy: 20 });
+    const moved = await s.until("core.settings-modal",
+      (modal) => modal.card.x === shown.document.rect.x + 40 && modal.card.y === shown.document.rect.y + 20,
+      "core.settings-modal.move did not move the card by 40,20");
+    await s.until("core.modal", (modal) => modal.document.rect.x === moved.card.x && modal.document.rect.y === moved.card.y,
+      "the position event did not move the modal document");
+    await s.request("diagnostics.modal.hold", { on: false });
+    const loaded = await s.until("core.modal", (modal) => modal.document.loaded, "the modal document did not handle its first answer");
+    assert.deepEqual([loaded.document.rect.x, loaded.document.rect.y], [moved.card.x, moved.card.y],
+      "the first answer moved the modal document back");
+    await s.run("core.settings.close");
+  });
+
   test(`${app.name}: rebuilding the layout from settings keeps settings above new surfaces`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);

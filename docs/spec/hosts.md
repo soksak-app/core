@@ -25,12 +25,14 @@ packages/host/wailsv3/                     packages/host/tauriv2/
     projects.go    folder check, choice, creation     projects.rs
     workspace.go   settings and project storage       workspace.rs
     surfaces.go    surface sync, presentation, place  surfaces.rs
+    documents.go   document regions of surfaces       documents.rs
     modals.go      native modals                      modals.rs
     shapes.go      outlines above surfaces            shapes.rs
     theme.go       theme storage and delivery         theme.rs
     sidecars.go    sidecar channel                    sidecars.rs
     exposure.go    exposure request relay             exposure.rs
     endpoint.go    JSON-RPC server                    endpoint.rs
+    termination.go termination requests             termination.rs
     diagnostics.go diagnostic methods (build tag)     diagnostics.rs
     recording.go   diagnostic recording state (build tag) recording.rs
     bridge.js      call channel for additional webviews   difference H3
@@ -41,6 +43,7 @@ packages/host/wailsv3/                     packages/host/tauriv2/
         window.go    window preparation, buttons      window.rs
         webview.go   webview creation, placement      webview.rs
         webview.m    WKWebView creation               difference H4
+        document.go  document region views            document.rs
         layout.go    surface layout transaction       layout.rs
         shapes.go    outline views                    shapes.rs
         input.go     input monitoring                 input.rs
@@ -48,6 +51,7 @@ packages/host/wailsv3/                     packages/host/tauriv2/
         dock.go      Dock menu                        dock.rs
         identity.go  directory identity               identity.rs
         endpoint.go  Unix socket                      endpoint.rs
+        termination.go termination signals            termination.rs
       windows/                                   windows/
         windows.go     package documentation, registration  windows.rs
         identity.go    file ID                          identity.rs
@@ -59,6 +63,8 @@ packages/host/wailsv3/                     packages/host/tauriv2/
     workspace_test.go                          workspace_test.rs
     endpoint_test.go                           endpoint_test.rs
     exposure_test.go                           exposure_test.rs
+    documents_test.go                          documents_test.rs
+    termination_test.go                        termination_test.rs
 ```
 
 ## Rules
@@ -89,6 +95,8 @@ The shell sidecar uses the same Go mechanism in `sidecars/shell/src/platform/`.
 | Shapes | Outline views above surfaces: creation, frame, style, removal |
 | Input | Input monitoring and its removal; Tauri also registers webviews for pointer routing |
 | Capture | Window capture: open, start, wait for the first frame, stop |
+| Document regions | Creation inside a surface webview, navigation, history actions, placement by insets, dialog blur, close |
+| Termination | Termination signals (SIGTERM, SIGINT, SIGHUP): the first one calls the host's quit request; later ones end the process with the default action |
 | Dock | Dock menu installation |
 | Identity | Directory identity |
 | Endpoint | [Local endpoint](endpoint.md) transport: Unix socket on macOS; not implemented on Windows |
@@ -99,7 +107,7 @@ Both hosts place the window's own buttons inside the page's first row (`.chrome-
 
 ## Windows state
 
-On Windows both hosts implement only directory identity (`platform/windows/identity.*`). Every other operation in `platform/windows/unsupported.*` returns an error of the form `<operation> is not implemented on windows`. Application startup fails on Windows: Wails exits when Dock menu installation returns this error, and Tauri's setup returns the Dock menu error. Linux has no implementation; `platform.Current()` and `platform::current()` return an error there.
+On Windows both hosts implement only directory identity (`platform/windows/identity.*`). Every other operation in `platform/windows/unsupported.*` returns an error of the form `<operation> is not implemented on windows`. Application startup fails on Windows: Wails `Run` and Tauri's endpoint setup return the termination-request error before any window opens. Linux has no implementation; `platform.Current()` and `platform::current()` return an error there.
 
 ## Allowed differences
 

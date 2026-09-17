@@ -29,6 +29,7 @@
 <script type="module">
   import { followTheme, page } from "@soksak/plugin-api/page";
   import { onAnswer, onGripDrag, showValue } from "./card.js";
+  import { modalOrder } from "./modal-order.js";
 
   followTheme().then(report);
 
@@ -37,6 +38,8 @@
   let sheet = null;
   let root = null;
   let pendingCard = null;
+  // 처음 내용 응답을 처리했는지. 응답이 버려졌어도 참이다.
+  let loaded = false;
 
   function place({ x, y, w, h }) {
     if (!root) { pendingCard = { x, y, w, h }; return; }
@@ -58,11 +61,12 @@
       htmlBackground: getComputedStyle(document.documentElement).backgroundColor,
       bodyBackground: getComputedStyle(document.body).backgroundColor,
       rect: { x: r.left, y: r.top, width: r.width, height: r.height },
+      loaded,
     }));
   }
   new MutationObserver(report).observe(document.documentElement, { attributes: true, attributeFilter: ["style", "class"] });
 
-  function render({ mode, title, css, className, html, border, card }) {
+  function render({ mode, title, css, className, html, border }, card) {
     if (!sheet) {
       document.head.insertAdjacentHTML("beforeend", `<style id="page"></style>`);
       sheet = document.getElementById("page");
@@ -87,16 +91,25 @@
     root.setAttribute("aria-label", title);
     root.innerHTML = html;
     root.style.borderColor = border;
-    place(pendingCard ?? card);
+    // 새 위치가 없으면 이미 적용한 위치를 유지한다.
+    const at = card ?? pendingCard;
     pendingCard = null;
+    if (at) place(at);
+    else report();
 
     // 뷰는 메인 페이지가 잰 크기로 만들어졌으므로 여기서 잴 것이 없다. 이 호출은
     // 내용이 렌더링되었다는 것만 보고하며, 그때가 뷰를 표시할 수 있는 시점이다.
     page.modal.ready(id, instance);
   }
 
-  /* 로드 시 한 번, 이후 내용이 바뀔 때마다 호출한다. 뷰를 다시 만들면 깜빡인다. */
-  page.modal.content(id, instance, render, place);
+  /* 로드 시 한 번, 이후 내용이 바뀔 때마다 호출한다. 뷰를 다시 만들면 깜빡인다. 처음 내용은
+     호출의 응답으로 오므로 더 늦게 바뀐 위치보다 나중에 도착할 수 있다. 호스트가 붙인 변경
+     번호로 오래된 값을 버린다. */
+  const order = modalOrder(render, place);
+  page.modal.content(id, instance, order.content, order.position).then(() => {
+    loaded = true;
+    report();
+  });
 
   /* 응답은 (key, value) 하나다. 거두는 방법은 메인 문서와 같은 것을 쓴다. */
   const send = (key, value) => page.modal.answer(id, instance, key, value);

@@ -53,7 +53,9 @@ func (implementation) CaptureStart(directory string) error {
 	return nil
 }
 
-func (implementation) CaptureStop() (int, error) { return int(C.sp_capture_stop()), nil }
+func (implementation) CaptureStop(after float64) (int, error) {
+	return int(C.sp_capture_stop(C.double(after))), nil
+}
 
 func (implementation) CaptureWait() (bool, error) { return C.sp_capture_wait() != 0, nil }
 

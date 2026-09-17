@@ -54,6 +54,10 @@ func (implementation) Screens() (string, error) {
 	return "", unsupported("display list")
 }
 
+func (implementation) OnTermination(func()) error {
+	return unsupported("termination requests")
+}
+
 func (implementation) DockItems() (string, error) {
 	return "", unsupported("Dock menu")
 }
@@ -156,6 +160,10 @@ func (implementation) CancelLayout(unsafe.Pointer) error {
 }
 
 func (implementation) AfterPresentation(unsafe.Pointer, func()) error {
+	return unsupported("native presentation")
+}
+
+func (implementation) AfterSettled(unsafe.Pointer, func(float64)) error {
 	return unsupported("native presentation")
 }
 

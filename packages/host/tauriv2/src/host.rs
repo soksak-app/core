@@ -27,6 +27,7 @@ pub mod recording;
 mod shapes;
 pub mod sidecars;
 mod surfaces;
+pub mod termination;
 mod theme;
 mod windows;
 pub mod workspace;
@@ -77,6 +78,10 @@ pub fn run(context: tauri::Context<tauri::Wry>, background: &'static str) {
     // 플러그인 설정은 설정 파일의 창을 만들기 전에 실행되므로 엔드포인트를 여기서 연다.
     let endpoint = tauri::plugin::Builder::<tauri::Wry>::new("endpoint")
         .setup(|app, _api| {
+            // 종료 신호는 엔드포인트를 열기 전부터 받는다. host.quit 과 같은 일반 종료 요청이며,
+            // 이벤트 루프가 시작한 뒤 처리되어 준비된 창의 저장을 마친 뒤 끝난다.
+            let quit = app.clone();
+            termination::on_termination(Box::new(move || quit.exit(0)))?;
             let directory = config_directory(app)?;
             exposure::start(app, &directory)?;
             Ok(())

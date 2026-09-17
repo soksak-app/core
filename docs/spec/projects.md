@@ -51,6 +51,8 @@ The default configuration directories are:
 
 The application configuration directory also contains `projects.json`, which stores the ordered registry and project screen state. Wails and Tauri use their own application configuration directories. Native hosts serialize changes, reread the affected file before updating it, write a temporary file in the same directory, and replace the destination after the write completes. Open windows receive a change notification after successful replacement. Settings files are reread on reload and project selection. A storage failure is reported visibly; it does not reset or silently overwrite saved data with defaults. Closing a ready project window completes pending saves before closing its native resources. Application quit requests the same save from each ready window before termination.
 
+Saved data can come from an environment with other plugins. Opening a space drops tabs whose plugin is not registered and rails of unregistered plugins. A card left without tabs closes when it can; otherwise it receives one new tab, as when its last tab closes. Rail widths of unregistered plugins are dropped, and set names skip unregistered sections. Library previews omit unregistered tabs and show unregistered rails as sidebar columns. The dropped entries leave the saved file at the next save.
+
 The browser example uses browser windows and IndexedDB storage; it does not write settings into native folders. It cannot establish native filesystem identity from a typed path; directory identity and native window placement require a native host.
 
 ## Acceptance
@@ -61,5 +63,6 @@ The browser example uses browser windows and IndexedDB storage; it does not writ
 - Common settings and explicit folder overrides survive reload and restart. Resetting an override restores inheritance. The opening mode is absent from project-folder settings.
 - Startup and New Window show the library without native content surfaces or shells. First-project creation/opening reuses that OS window in both opening modes. Selecting another project from an occupied window follows the common opening mode. Reopening an already open project selects its existing window.
 - Layout, tabs, sidebar widths, theme settings, and normal window geometry restore for the selected project. Closing a window keeps its saved data.
+- A saved space or library preview that names unregistered plugins or sections opens without an error and without those entries.
 - Two windows can render and receive input independently. Settings effects, native surfaces, shells, and cleanup remain limited to their owning window.
 - Existing surface placement, fractional rendering, and modal checks continue to pass in both native hosts. Native behavior on each operating system is recorded separately.

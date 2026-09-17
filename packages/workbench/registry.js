@@ -55,6 +55,9 @@ export function plugin(id) {
   return found;
 }
 
+/** 등록된 플러그인인지 반환한다. 저장된 배치는 다른 환경에서 만들어졌을 수 있다. */
+export const hasPlugin = (id) => registeredPlugins.some((p) => p.id === id);
+
 /** 해당 플러그인의 레일 카드 id 를 반환한다. 레일은 플러그인마다 하나다. */
 export const railId = (id) => `rail-${id}`;
 
@@ -63,6 +66,9 @@ export const railKind = (place) => {
   const found = registeredPlugins.find((p) => railId(p.id) === place);
   return found ? found.id : null;
 };
+
+/** 레일 카드 id 형식인지 반환한다. 종류가 등록되지 않은 레일도 참이다. */
+export const isRailId = (id) => id.startsWith(railId(""));
 
 /** 고정 자리(좌·우·레일)인지 반환한다. 나머지 카드는 탭을 담는다. */
 export const isPlace = (id) =>
@@ -74,3 +80,7 @@ export function section(id) {
   if (!found) throw new Error(`unknown section: ${id}`);
   return found;
 }
+
+/** 섹션 id 목록 중 등록된 섹션의 이름을 순서대로 반환한다. 세트는 다른 환경에서 저장되었을 수 있다. */
+export const sectionNames = (ids) =>
+  ids.filter((id) => registeredSections.some((s) => s.id === id)).map((id) => section(id).name);

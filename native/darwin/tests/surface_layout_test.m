@@ -2,6 +2,7 @@
 // 않는지 검사한다. 각 웹뷰의 웹 프로세스를 스크립트로 붙잡은 동안 대기가 그 스크립트보다 먼저 끝나는지 본다.
 // 애플리케이션을 활성화하지 않는다.
 #import <Cocoa/Cocoa.h>
+#import <QuartzCore/QuartzCore.h>
 #import "surface_layout.h"
 #import "private/webkit.h"
 
@@ -48,6 +49,46 @@ static void until(BOOL (^done)(void)) {
 }
 @end
 
+// 화면 갱신을 정해진 수만큼 센다.
+@interface SPFrames : NSObject
+@property int left;
+- (void)tick:(CADisplayLink *)link;
+@end
+@implementation SPFrames
+- (void)tick:(CADisplayLink *)link {
+    if (--self.left == 0) [link invalidate];
+}
+@end
+
+static void waitFrames(NSScreen *screen, int count) {
+    SPFrames *frames = [[SPFrames new] autorelease];
+    frames.left = count;
+    [[screen displayLinkWithTarget:frames selector:@selector(tick:)]
+        addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
+    until(^BOOL { return frames.left == 0; });
+}
+
+// 창의 배치 트랜잭션이 열린 동안 끝난 표시는 대기를 끝내지 않는다. 트랜잭션을 연 요청보다 새 요청이
+// 트랜잭션을 연장하면 이전 요청의 확정은 실패하고, 대기는 새 요청이 확정된 뒤에 끝난다.
+static void checkSettledWaitsForLayout(NSWindow *window, WKWebView *main) {
+    __block int order = 0;
+    __block int settledAt = 0;
+    surfaceLayoutBegin(window, 101, ^(int allowed) {});
+    surfaceLayoutAfterSettled(main, ^(double displayed) { settledAt = ++order; });
+    surfaceLayoutBegin(window, 102, ^(int allowed) {});
+    __block BOOL presented = NO;
+    surfaceLayoutAfterPresentation(main, ^{ presented = YES; });
+    until(^BOOL { return presented; });
+    check(!surfaceLayoutCommit(window, 101), @"an older request does not commit an extended layout transaction");
+    waitFrames(window.screen, 5);
+    check(surfaceLayoutCommit(window, 102), @"the newest request commits the layout transaction");
+    int committedAt = ++order;
+    until(^BOOL { return settledAt != 0; });
+    check(settledAt > committedAt,
+        [NSString stringWithFormat:@"the settled wait ends after the open layout transaction commits (settled %d, committed %d)",
+            settledAt, committedAt]);
+}
+
 // 문서 불러오기가 끝나면 알린다.
 @interface SPLoaded : NSObject <WKNavigationDelegate>
 @property BOOL finished;
@@ -67,7 +108,7 @@ static WKWebView *page(NSWindow *window, WKWebViewConfiguration *configuration, 
     return view;
 }
 
-typedef struct { NSTimeInterval took; BOOL beforeRelease; } SPWait;
+typedef struct { NSTimeInterval took; BOOL beforeRelease; double requested; double displayed; } SPWait;
 
 // busy 의 웹 프로세스를 붙잡은 뒤 메인 웹뷰 크기를 바꾸고, 표시 대기가 끝날 때까지의 시간과 그 대기가
 // busy 의 스크립트가 끝나기 전에 끝났는지 반환한다. 순서로 판정하므로 기계 부하와 무관하다.
@@ -85,9 +126,15 @@ static SPWait waitWhileBusy(WKWebView *main, WKWebView *busy, SPBusySignal *sign
     main.frame = frame;
     NSDate *start = [NSDate date];
     __block NSTimeInterval took = 0;
-    surfaceLayoutAfterPresentation(main, ^{ took = -start.timeIntervalSinceNow; presented = YES; });
+    __block double displayed = 0;
+    double requested = CACurrentMediaTime() * 1000;
+    surfaceLayoutAfterSettled(main, ^(double at) {
+        took = -start.timeIntervalSinceNow;
+        displayed = at;
+        presented = YES;
+    });
     until(^BOOL { return presented && released; });
-    return (SPWait){ took, beforeRelease };
+    return (SPWait){ took, beforeRelease, requested, displayed };
 }
 
 int main(void) { @autoreleasepool {
@@ -112,6 +159,8 @@ int main(void) { @autoreleasepool {
     [main _doAfterNextPresentationUpdate:^{ painted = YES; }];
     until(^BOOL { return painted; });
 
+    checkSettledWaitsForLayout(window, main);
+
     SPWait externalWait = waitWhileBusy(main, external, signal);
     check(externalWait.beforeRelease,
         [NSString stringWithFormat:@"a busy external document does not delay the presentation wait (%.3fs)", externalWait.took]);
@@ -119,6 +168,11 @@ int main(void) { @autoreleasepool {
     SPWait visibleWait = waitWhileBusy(main, application, signal);
     check(!visibleWait.beforeRelease,
         [NSString stringWithFormat:@"the wait includes a visible document of the main origin (%.3fs)", visibleWait.took]);
+    // 표시 시각은 요청보다 늦고, 대기를 마친 시점에서 한 번의 화면 갱신 안이다.
+    double finished = visibleWait.requested + visibleWait.took * 1000;
+    check(visibleWait.displayed > finished && visibleWait.displayed < finished + 100,
+        [NSString stringWithFormat:@"the wait reports the display time of the presented frame (requested %.1fms, finished %.1fms, displayed %.1fms)",
+            visibleWait.requested, finished, visibleWait.displayed]);
 
     application.hidden = YES;
     SPWait hiddenWait = waitWhileBusy(main, application, signal);

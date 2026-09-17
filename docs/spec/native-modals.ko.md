@@ -66,7 +66,12 @@ overlay.show(el, {
 el.style.visibility = "hidden";
 ```
 
-`show()`와 `place()`의 프레임은 `#plane` 기준 CSS 픽셀이다. `show()`는 루트의
+`show()`와 `place()`의 프레임은 `#plane` 기준 CSS 픽셀이다.
+호스트는 열린 모달의 내용과 위치를 바꿀 때마다 번호를 붙인다. 모달 문서는 처음
+내용을 호출의 응답으로, 이후 변경을 이벤트로 받으며 둘은 다른 경로로 도착한다.
+문서는 내용과 위치를 번호 순서로 적용하고 이미 적용한 것보다 오래된 값을 버린다
+([`workbench/modal-order.js`](../../packages/workbench/modal-order.js)).
+`show()`는 루트의
 클래스, 내부 마크업, 페이지 스타일시트를 복사하며 문서 내부 효과에 사용하는
 adopted 스타일시트는 제외한다. 내용 갱신에도 같은 규칙을 적용한다. 배경 블러가
 대화상자 스타일로 복사되면 안 된다. 원본 DOM을 감추거나 제거하지

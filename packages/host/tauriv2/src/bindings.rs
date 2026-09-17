@@ -8,7 +8,7 @@ use tauri::ipc::Invoke;
 use tauri::{AppHandle, Manager, Webview, Window};
 
 use crate::documents;
-use crate::modals::{self, OverlayContent, OverlayRequest, PlaceRequest, UpdateRequest};
+use crate::modals::{self, OverlayRequest, PlaceRequest, RevisedContent, UpdateRequest};
 use crate::projects::{self, CreateProject, Folder};
 use crate::shapes::{self, ShapeRequest};
 use crate::sidecars::WindowSidecars;
@@ -155,9 +155,9 @@ fn clear_shape(window: Window, id: String) -> Result<(), String> {
     shapes::clear(&window, id)
 }
 
-/// 모달 문서가 그릴 내용을 반환한다.
-#[tauri::command]
-fn overlay_content(window: Window, id: String, instance: u64) -> Result<OverlayContent, String> {
+/// 모달 문서가 그릴 내용을 반환한다. 메인 스레드가 필요 없다.
+#[tauri::command(async)]
+fn overlay_content(window: Window, id: String, instance: u64) -> Result<RevisedContent, String> {
     modals::content(&window, id, instance)
 }
 

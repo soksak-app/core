@@ -25,12 +25,14 @@ packages/host/wailsv3/                     packages/host/tauriv2/
     projects.go    폴더 확인, 선택, 생성              projects.rs
     workspace.go   설정과 프로젝트 저장               workspace.rs
     surfaces.go    표면 동기화, 표시, 배치            surfaces.rs
+    documents.go   표면의 문서 영역                   documents.rs
     modals.go      네이티브 모달                      modals.rs
     shapes.go      표면 위 외곽선                     shapes.rs
     theme.go       테마 저장과 전달                   theme.rs
     sidecars.go    사이드카 채널                      sidecars.rs
     exposure.go    노출 요청 전달                     exposure.rs
     endpoint.go    JSON-RPC 서버                      endpoint.rs
+    termination.go 종료 요청                          termination.rs
     diagnostics.go 진단 메서드(빌드 태그)             diagnostics.rs
     recording.go   진단 녹화 상태(빌드 태그)          recording.rs
     bridge.js      추가 웹뷰 호출 통로                차이 H3
@@ -41,6 +43,7 @@ packages/host/wailsv3/                     packages/host/tauriv2/
         window.go    창 준비, 창 단추                 window.rs
         webview.go   웹뷰 생성, 배치                  webview.rs
         webview.m    WKWebView 생성                   차이 H4
+        document.go  문서 영역 뷰                     document.rs
         layout.go    표면 배치 트랜잭션               layout.rs
         shapes.go    외곽선 뷰                        shapes.rs
         input.go     입력 감시                        input.rs
@@ -48,6 +51,7 @@ packages/host/wailsv3/                     packages/host/tauriv2/
         dock.go      Dock 메뉴                        dock.rs
         identity.go  디렉터리 식별                    identity.rs
         endpoint.go  Unix 소켓                        endpoint.rs
+        termination.go 종료 신호                      termination.rs
       windows/                                   windows/
         windows.go     패키지 문서, 등록                windows.rs
         identity.go    파일 ID                          identity.rs
@@ -59,6 +63,8 @@ packages/host/wailsv3/                     packages/host/tauriv2/
     workspace_test.go                          workspace_test.rs
     endpoint_test.go                           endpoint_test.rs
     exposure_test.go                           exposure_test.rs
+    documents_test.go                          documents_test.rs
+    termination_test.go                        termination_test.rs
 ```
 
 ## 규칙
@@ -89,6 +95,8 @@ Rust: `src/platform/platform.rs`는 각 운영체제 모듈을 `#[cfg(target_os 
 | 외곽선 | 표면 위 외곽선 뷰의 생성, 영역, 스타일, 제거 |
 | 입력 | 입력 감시와 해제. Tauri는 포인터 라우팅에 웹뷰를 등록하는 연산도 가진다 |
 | 캡처 | 창 캡처: 대상 지정, 시작, 첫 프레임 대기, 종료 |
+| 문서 영역 | 표면 웹뷰 안의 생성, 이동, 기록 동작, 여백에 따른 배치, 대화 상자 흐림, 닫기 |
+| 종료 | 종료 신호(SIGTERM, SIGINT, SIGHUP). 첫 신호는 호스트의 종료 요청을 부르고, 그 뒤의 신호는 기본 동작으로 프로세스를 끝낸다 |
 | Dock | Dock 메뉴 설치 |
 | 식별 | 디렉터리 식별 |
 | 엔드포인트 | [로컬 엔드포인트](endpoint.ko.md) 전송: macOS는 Unix 소켓, Windows는 미구현 |
@@ -99,7 +107,7 @@ Rust: `src/platform/platform.rs`는 각 운영체제 모듈을 `#[cfg(target_os 
 
 ## Windows 상태
 
-Windows에서 두 호스트는 디렉터리 식별(`platform/windows/identity.*`)만 구현한다. `platform/windows/unsupported.*`의 나머지 연산은 `<operation> is not implemented on windows` 형식의 오류를 반환한다. Windows에서는 애플리케이션 시작이 실패한다. Wails는 Dock 메뉴 설치가 이 오류를 반환하면 종료하고, Tauri의 setup은 Dock 메뉴 오류를 반환한다. Linux 구현은 없으며, 그곳에서 `platform.Current()`와 `platform::current()`는 오류를 반환한다.
+Windows에서 두 호스트는 디렉터리 식별(`platform/windows/identity.*`)만 구현한다. `platform/windows/unsupported.*`의 나머지 연산은 `<operation> is not implemented on windows` 형식의 오류를 반환한다. Windows에서는 애플리케이션 시작이 실패한다. Wails의 `Run`과 Tauri의 엔드포인트 setup이 창을 열기 전에 종료 요청 오류를 반환한다. Linux 구현은 없으며, 그곳에서 `platform.Current()`와 `platform::current()`는 오류를 반환한다.
 
 ## 허용 차이
 

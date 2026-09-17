@@ -114,6 +114,10 @@ pub fn after_presentation(_view: &PlatformWebview, _done: Box<dyn Fn()>) -> Resu
     missing("presentation tracking")
 }
 
+pub fn after_settled(_view: &PlatformWebview, _done: Box<dyn Fn(f64)>) -> Result<(), String> {
+    missing("presentation tracking")
+}
+
 pub fn create_shape(_window: Handle, _frame: Frame) -> Result<Handle, String> {
     missing("shapes")
 }
@@ -187,13 +191,17 @@ pub fn capture_wait() -> Result<bool, String> {
 }
 
 #[cfg(feature = "diagnostics")]
-pub fn capture_stop() -> Result<i32, String> {
+pub fn capture_stop(_after: f64) -> Result<i32, String> {
     missing("window capture")
 }
 
 #[cfg(feature = "diagnostics")]
 pub fn capture_longest_gap() -> Result<f64, String> {
     missing("window capture")
+}
+
+pub fn on_termination(_quit: Box<dyn Fn() + Send>) -> Result<(), String> {
+    missing("termination requests")
 }
 
 pub fn install_dock_menu(_new_window: Box<dyn Fn()>) -> Result<(), String> {

@@ -109,9 +109,9 @@ export const page = (() => {
     modal: {
       content(id, instance, fn, place) {
         return Promise.all([listen("modal-content", (sent) => {
-          if (sent.id === id && sent.instance === instance) fn(sent.content);
+          if (sent.id === id && sent.instance === instance) fn({ revision: sent.revision, content: sent.content });
         }), listen("modal-position", (sent) => {
-          if (sent.id === id && sent.instance === instance) place(sent.card);
+          if (sent.id === id && sent.instance === instance) place({ revision: sent.revision, card: sent.card });
         })]).then(() => call("ModalContent", id, instance)).then(fn);
       },
       ready: (id, instance) => call("ModalReady", id, instance),

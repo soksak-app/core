@@ -796,6 +796,9 @@
                 "bodyBackground": {
                   "type": "string"
                 },
+                "loaded": {
+                  "type": "boolean"
+                },
                 "rect": {
                   "type": "object",
                   "properties": {

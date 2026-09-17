@@ -54,6 +54,8 @@ type modal struct {
 	// 마지막으로 보낸 것이다.
 	id      string
 	content OverlayContent
+	// revision 은 내용이나 위치를 바꿀 때마다 오른다. 모달 페이지는 이보다 오래된 값을 버린다.
+	revision uint64
 	// 페이지가 렌더링을 마쳐 웹뷰 표시를 시작했는지 나타낸다. 같은 표시를 두 번 하지 않는다.
 	shown bool
 	// 웹뷰를 표시하고 키보드 초점을 넘겼는지 나타낸다. host.window 가 이 값을 보고한다.
@@ -92,7 +94,7 @@ func (s *Surfaces) OverlayShow(req OverlayRequest) (Rect, error) {
 	s.nextModal++
 	instance := s.nextModal
 	s.modal = &modal{
-		id: req.ID, instance: instance,
+		id: req.ID, instance: instance, revision: 1,
 		content: OverlayContent{Mode: req.Mode, Card: req.Card, Title: req.Title, CSS: req.CSS, ClassName: req.ClassName, HTML: req.HTML, Border: req.Border},
 	}
 	s.mu.Unlock()
@@ -148,8 +150,10 @@ func (s *Surfaces) OverlayPlace(req PlaceRequest) (Rect, error) {
 	})
 	s.mu.Lock()
 	live.content.Card = req.Card
+	live.revision++
+	revision := live.revision
 	s.mu.Unlock()
-	s.Emit("modal-position", map[string]any{"id": req.ID, "instance": live.instance, "card": req.Card})
+	s.Emit("modal-position", map[string]any{"id": req.ID, "instance": live.instance, "revision": revision, "card": req.Card})
 	s.windowChanged()
 	return at, nil
 }
@@ -192,33 +196,51 @@ func (s *Surfaces) OverlayUpdate(req UpdateRequest) {
 	content := req.OverlayContent
 	s.mu.Lock()
 	ok := s.modal != nil && s.modal.id == req.ID
-	var instance uint64
+	var instance, revision uint64
 	if ok {
 		instance = s.modal.instance
 		s.modal.content = content
+		s.modal.revision++
+		revision = s.modal.revision
 	}
 	s.mu.Unlock()
 	if !ok {
 		return
 	}
-	s.Emit("modal-content", ModalContentEvent{ID: req.ID, Instance: instance, Content: content})
+	s.Emit("modal-content", ModalContentEvent{ID: req.ID, Instance: instance, Revision: revision, Content: content})
 }
 
 // ModalContentEvent 는 모달 페이지가 받는 모달 하나의 새 내용이다.
 type ModalContentEvent struct {
 	Instance uint64         `json:"instance"`
 	ID       string         `json:"id"`
+	Revision uint64         `json:"revision"`
 	Content  OverlayContent `json:"content"`
 }
 
-// ModalContent 는 모달 뷰가 로드한 뒤 요청한 내용을 반환한다.
-func (s *Surfaces) ModalContent(id string, instance uint64) OverlayContent {
+// RevisedContent 는 모달의 내용과 그 내용의 변경 번호다.
+type RevisedContent struct {
+	Revision uint64         `json:"revision"`
+	Content  OverlayContent `json:"content"`
+}
+
+// holdModalContent 는 진단 빌드에서 창 s 의 모달 내용 응답을 보내기 전에 호출된다. 검사가
+// 응답을 붙잡았으면 놓을 때까지 반환하지 않는다. 다른 빌드에서는 nil 이다.
+var holdModalContent func(s *Surfaces)
+
+// ModalContent 는 모달 뷰가 로드한 뒤 요청한 내용을 반환한다. 다른 모달이면 번호 0 의 빈
+// 내용을 반환하고, 모달 페이지는 그것을 버린다.
+func (s *Surfaces) ModalContent(id string, instance uint64) RevisedContent {
+	var answer RevisedContent
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if s.modal != nil && s.modal.id == id && s.modal.instance == instance {
-		return s.modal.content
+		answer = RevisedContent{Revision: s.modal.revision, Content: s.modal.content}
 	}
-	return OverlayContent{}
+	s.mu.Unlock()
+	if holdModalContent != nil {
+		holdModalContent(s)
+	}
+	return answer
 }
 
 // ModalReady 는 이번 표시를 한 번만 드러낸다. 제거된 문서가 늦게 보낸 알림은 같은

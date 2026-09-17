@@ -16,6 +16,40 @@ use super::super::{Connection, Listener};
 
 extern "C" {
     fn geteuid() -> u32;
+    fn kill(pid: i32, signal: i32) -> i32;
+}
+
+/// `kill` 이 번호의 프로세스가 없을 때 알리는 오류 번호.
+const ESRCH: i32 = 3;
+
+/// 번호 pid 의 프로세스가 끝났는지 반환한다.
+fn ended(pid: i32) -> bool {
+    let result = unsafe { kill(pid, 0) };
+    result != 0 && std::io::Error::last_os_error().raw_os_error() == Some(ESRCH)
+}
+
+/// directory 에서 끝난 프로세스가 남긴 name 의 소켓을 제거한다. 강제 종료된 프로세스는 자기
+/// 소켓을 지우지 못한다. 번호의 프로세스가 있으면 다른 프로그램이어도 남긴다.
+fn remove_ended(directory: &Path, name: &str) -> Result<(), String> {
+    let entries = fs::read_dir(directory).map_err(|e| format!("{}: {e}", directory.display()))?;
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("{}: {e}", directory.display()))?;
+        let file = entry.file_name();
+        let Some(pid) = file.to_str()
+            .and_then(|file| file.strip_prefix(name)?.strip_prefix('-')?.strip_suffix(".sock")?.parse::<i32>().ok())
+        else {
+            continue;
+        };
+        if pid <= 0 || !ended(pid) {
+            continue;
+        }
+        match fs::remove_file(entry.path()) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(format!("{}: {e}", entry.path().display())),
+        }
+    }
+    Ok(())
 }
 
 /// path 를 현재 사용자만 접근할 수 있는 디렉터리로 만든다. 이미 있으면 소유자와 권한을 확인한다.
@@ -101,10 +135,11 @@ impl Connection for Stream {
     }
 }
 
-/// `<directory>/<name>-<pid>.sock` 소켓을 연다. 같은 경로의 이전 소켓 파일은 종료한 같은 번호의
-/// 프로세스가 남긴 것이므로 제거한다.
+/// `<directory>/<name>-<pid>.sock` 소켓을 연다. 끝난 프로세스의 소켓과, 종료한 같은 번호의
+/// 프로세스가 남긴 같은 경로의 소켓 파일을 먼저 제거한다.
 pub fn listen(directory: &Path, name: &str) -> Result<Box<dyn Listener>, String> {
     private_directory(directory)?;
+    remove_ended(directory, name)?;
     let path = directory.join(format!("{name}-{}.sock", std::process::id()));
     match fs::remove_file(&path) {
         Ok(()) => {}

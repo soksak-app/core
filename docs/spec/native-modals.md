@@ -69,6 +69,11 @@ el.style.visibility = "hidden";
 ```
 
 Frames passed to `show()` and `place()` are CSS pixels relative to `#plane`.
+The host numbers every content and position change of an open modal. The modal
+document receives its first content as the answer to a call and later changes as
+events, which arrive on different paths. It applies content and positions in
+that numbered order and drops values older than the ones it applied
+([`workbench/modal-order.js`](../../packages/workbench/modal-order.js)).
 `show()` copies the root class, inner markup and page stylesheets, excluding
 adopted stylesheets used for document-local effects. Content updates use the
 same rule; background blur must never become a dialog style. It does not

@@ -114,6 +114,9 @@ impl Platform for Windows {
     fn after_presentation(&self, view: &PlatformWebview, done: Box<dyn Fn()>) -> Result<(), String> {
         unsupported::after_presentation(view, done)
     }
+    fn after_settled(&self, view: &PlatformWebview, done: Box<dyn Fn(f64)>) -> Result<(), String> {
+        unsupported::after_settled(view, done)
+    }
 
     fn create_shape(&self, window: Handle, frame: Frame) -> Result<Handle, String> {
         unsupported::create_shape(window, frame)
@@ -168,14 +171,17 @@ impl Platform for Windows {
         unsupported::capture_wait()
     }
     #[cfg(feature = "diagnostics")]
-    fn capture_stop(&self) -> Result<i32, String> {
-        unsupported::capture_stop()
+    fn capture_stop(&self, after: f64) -> Result<i32, String> {
+        unsupported::capture_stop(after)
     }
     #[cfg(feature = "diagnostics")]
     fn capture_longest_gap(&self) -> Result<f64, String> {
         unsupported::capture_longest_gap()
     }
 
+    fn on_termination(&self, quit: Box<dyn Fn() + Send>) -> Result<(), String> {
+        unsupported::on_termination(quit)
+    }
     fn install_dock_menu(&self, new_window: Box<dyn Fn()>) -> Result<(), String> {
         unsupported::install_dock_menu(new_window)
     }

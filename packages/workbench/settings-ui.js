@@ -18,7 +18,7 @@ import { active } from "./projects.js";
 import { icon } from "./icons.js";
 import { onGripDrag, showValue } from "./card.js";
 import { commandOf, delegate, mark, run } from "./commands.js";
-import { plugins, section } from "./registry.js";
+import { plugins, sectionNames } from "./registry.js";
 import {
   FONTS, MODES, THEMES, scopedValue, settingProject, overridden,
 } from "./settings.js";
@@ -247,7 +247,7 @@ function drawGeneral() {
 
 function drawSidebars() {
   const options = [["", "없음"], ...value("sets").map((s) => [s.id,
-    `${s.title} — ${s.sections.map((id) => section(id).name).join(" · ")}`])];
+    `${s.title} — ${sectionNames(s.sections).join(" · ")}`])];
   const linkedId = (place, plugin) => value("links").find((l) => l.place === place && l.plugin === plugin)?.set;
   const rows = [row("좌측", choose("link:left:", options, linkedId("left", null) ?? ""))];
   for (const p of plugins()) {

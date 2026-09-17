@@ -209,6 +209,32 @@ fn endpoint_files_are_private_to_the_user() {
     assert_eq!(mode(&config.path().join("endpoint.json")), 0o600);
 }
 
+/// 끝난 프로세스의 번호.
+fn ended_process() -> u32 {
+    let mut child = std::process::Command::new("/usr/bin/true").spawn().unwrap();
+    child.wait().unwrap();
+    child.id()
+}
+
+#[test]
+fn sockets_of_ended_processes_are_removed() {
+    use std::os::unix::fs::DirBuilderExt;
+    let config = tempfile::tempdir().unwrap();
+    let sockets = config.path().join("sockets");
+    std::fs::DirBuilder::new().mode(0o700).create(&sockets).unwrap();
+    let ended = sockets.join(format!("test-sweep-{}.sock", ended_process()));
+    let running = sockets.join(format!("test-sweep-{}.sock", std::os::unix::process::parent_id()));
+    let other = sockets.join(format!("test-other-{}.sock", ended_process()));
+    for path in [&ended, &running, &other] {
+        std::fs::write(path, "").unwrap();
+    }
+    let (fake, _) = Fake::new();
+    let endpoint = Endpoint::start(&sockets, config.path(), "test-sweep", fake).unwrap();
+    let found = (ended.exists(), running.exists(), other.exists());
+    endpoint.stop();
+    assert_eq!(found, (false, true, true), "ended, running, other application");
+}
+
 #[test]
 fn a_socket_directory_open_to_others_is_refused() {
     use std::os::unix::fs::PermissionsExt;

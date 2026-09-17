@@ -37,6 +37,16 @@ pub fn after_presentation(view: &PlatformWebview, done: Box<dyn Fn()>) {
     extern "C" {
         fn surfaceLayoutAfterPresentation(view: *mut c_void, done: &Block<dyn Fn()>);
     }
-    let done = RcBlock::new(move || done());
+    let done = RcBlock::new(done);
     unsafe { surfaceLayoutAfterPresentation(view.inner().cast(), &done) }
+}
+
+/// 창에 열린 표면 배치 트랜잭션이 없는 상태에서 메인 문서와 표시 중인 앱 문서의 렌더링 완료를 확인한
+/// 뒤 그 화면의 표시 시각(ms)으로 done 을 호출한다.
+pub fn after_settled(view: &PlatformWebview, done: Box<dyn Fn(f64)>) {
+    extern "C" {
+        fn surfaceLayoutAfterSettled(view: *mut c_void, done: &Block<dyn Fn(f64)>);
+    }
+    let done = RcBlock::new(done);
+    unsafe { surfaceLayoutAfterSettled(view.inner().cast(), &done) }
 }

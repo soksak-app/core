@@ -66,6 +66,8 @@ const DIAGNOSTICS: &[&str] = &[
     "diagnostics.capture.start",
     "diagnostics.capture.stop",
     "diagnostics.knob",
+    "diagnostics.modal.hold",
+    "diagnostics.modal.held",
     TRANSCRIPT,
 ];
 #[cfg(not(feature = "diagnostics"))]
@@ -510,8 +512,7 @@ fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
             changes: HashMap::new(),
         });
     }
-    loop {
-        let Ok(Some(message)) = read_frame(&mut connection) else { break };
+    while let Ok(Some(message)) = read_frame(&mut connection) {
         let Some(request) = parse(message) else { break };
         if !declared(&request.method) {
             break;

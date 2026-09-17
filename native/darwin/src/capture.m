@@ -315,18 +315,24 @@ int sp_capture_wait(void) {
 // The stop is answered on another queue, and frames already handed over are
 // written while it runs. Reading the count before that would under-report, and
 // the process exiting then would leave the last file short.
-int sp_capture_stop(void) {
+int sp_capture_stop(double after) {
     if (captureStream == nil) return 0;
     SCStream* stream = captureStream;
-    // 호출 시점까지 표시된 화면이 스트림에 모두 전달된 뒤 멈춘다. 스트림은 화면이 바뀌지
+    // 호출 시점과 after 중 늦은 시각까지 표시된 화면이 스트림에 모두 전달된 뒤 멈춘다. 앱이 커밋한
+    // 내용은 호출보다 늦게 표시될 수 있으므로 호출자가 그 표시 시각을 넘긴다. 스트림은 화면이 바뀌지
     // 않아도 idle 프레임을 minimumFrameInterval 마다 전달하므로 기다림은 한 간격 안에 끝난다.
+    mach_timebase_info_data_t base;
+    mach_timebase_info(&base);
+    uint64_t now = mach_absolute_time();
+    uint64_t shown = after > 0 ? (uint64_t)(after * 1e6 * base.denom / base.numer) : 0;
+    uint64_t until = shown > now ? shown : now;
     dispatch_semaphore_t caughtUp = dispatch_semaphore_create(0);
     dispatch_sync(captureQueue, ^{
         captureCaughtUp = caughtUp;
-        captureStopAfter = mach_absolute_time();
+        captureStopAfter = until;
     });
-    if (dispatch_semaphore_wait(caughtUp, dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC)) != 0) {
-        fprintf(stderr, "observe: no frame displayed after the stop request arrived within 1 second\n");
+    if (dispatch_semaphore_wait(caughtUp, dispatch_time(until, NSEC_PER_SEC)) != 0) {
+        fprintf(stderr, "observe: no frame displayed within 1 second after the requested display time\n");
     }
     dispatch_sync(captureQueue, ^{
         captureCaughtUp = NULL;

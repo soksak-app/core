@@ -16,6 +16,7 @@
     "card.js",
     "commands.js",
     "compositor.js",
+    "modal-order.js",
     "environment.js",
     "host.js",
     "host-store.js",

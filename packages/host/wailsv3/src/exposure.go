@@ -42,6 +42,9 @@ var rectSchema = map[string]any{"type": "object", "properties": map[string]any{
 var emptyObject = map[string]any{"type": "object", "properties": map[string]any{}}
 var nullSchema = map[string]any{"type": "null"}
 
+// presentedSchema 는 host.window.presented 의 결과다. displayed 는 표시 시각(ms, mach 절대 시각)이다.
+var presentedSchema = map[string]any{"type": "object", "properties": map[string]any{"displayed": map[string]any{"type": "number"}}}
+
 var hostStatus = map[string]hostEntry{
 	"host.window": {
 		Description: "Window frame in screen coordinates, content size, backing scale, maximized, key and application active state, child window count, window buttons, native surfaces, document regions, and the open native modal.",
@@ -109,7 +112,7 @@ var hostCommands = map[string]hostEntry{
 	"host.dock.select": {Description: "Performs the Dock menu item with the title.", Result: nullSchema,
 		Params: map[string]any{"type": "object", "properties": map[string]any{"title": map[string]any{"type": "string"}}}},
 	"host.window.reload":    {Description: "Reloads the main page.", Params: emptyObject, Result: nullSchema},
-	"host.window.presented": {Description: "Resolves after the main page and visible application documents have presented their current geometry.", Params: emptyObject, Result: nullSchema},
+	"host.window.presented": {Description: "Resolves after the main page and visible application documents have presented their current geometry, with the display time of that frame.", Params: emptyObject, Result: presentedSchema},
 	"host.hit": {Description: "Returns the owner of a point in window coordinates.",
 		Params: map[string]any{"type": "object", "properties": map[string]any{
 			"x": map[string]any{"type": "number"}, "y": map[string]any{"type": "number"}}},
@@ -611,7 +614,11 @@ func (b hostBackend) HostCommand(window, name string, params json.RawMessage) (a
 	case "host.window.reload":
 		return nil, s.reloadPage()
 	case "host.window.presented":
-		return nil, s.presented()
+		displayed, err := s.presented()
+		if err != nil {
+			return nil, err
+		}
+		return map[string]float64{"displayed": displayed}, nil
 	case "host.hit":
 		var p struct {
 			X, Y *float64
@@ -927,21 +934,22 @@ func (s *Surfaces) hit(x, y float64) (map[string]any, error) {
 	}
 }
 
-// presented 는 메인 페이지와 보이는 앱 문서가 현재 배치를 표시할 때까지 기다린다.
-func (s *Surfaces) presented() error {
-	done := make(chan struct{})
+// presented 는 창의 표면 배치 트랜잭션이 확정되고 메인 페이지와 보이는 앱 문서가 현재 배치를 표시할
+// 때까지 기다리고, 그 화면이 표시되는 시각(ms, mach 절대 시각)을 반환한다.
+func (s *Surfaces) presented() (float64, error) {
+	done := make(chan float64, 1)
 	var err error
 	application.InvokeSync(func() {
-		err = system.AfterPresentation(s.window.NativeWindow(), func() { close(done) })
+		err = system.AfterSettled(s.window.NativeWindow(), func(displayed float64) { done <- displayed })
 	})
 	if err != nil {
-		return err
+		return 0, err
 	}
 	select {
-	case <-done:
-		return nil
+	case displayed := <-done:
+		return displayed, nil
 	case <-time.After(pageTimeout):
-		return rpcError(codeTimeout, "the window did not present within %s", pageTimeout)
+		return 0, rpcError(codeTimeout, "the window did not present within %s", pageTimeout)
 	}
 }
 

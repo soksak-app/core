@@ -44,7 +44,7 @@ macOS 호스트가 이 명세를 구현하며 [기능 상태](../features.ko.md)
 | `executable` | 심볼릭 링크를 해석한 호스트 실행 파일의 절대 경로 |
 | `started` | ISO 8601 시작 시각 |
 
-호스트는 종료할 때 파일을 삭제한다. 클라이언트는 이 파일을 읽어 연결한다. `pid` 프로세스가 실행 중이 아니면 클라이언트는 오류를 보고하고 연결하지 않는다.
+호스트는 종료할 때 파일과 소켓을 삭제한다. 종료 신호(SIGTERM, SIGINT, SIGHUP)로 요청된 종료도 `host.quit`과 같은 종료를 실행하므로 같다. SIGKILL처럼 그 종료를 거치지 않고 끝난 프로세스는 소켓을 남긴다. 같은 애플리케이션의 다음 호스트는 수신을 시작하기 전에 프로세스가 더 이상 실행 중이 아닌 `<application>-<pid>.sock` 소켓을 제거한다. 클라이언트는 이 파일을 읽어 연결한다. `pid` 프로세스가 실행 중이 아니면 클라이언트는 오류를 보고하고 연결하지 않는다.
 
 ## 프레임
 
@@ -78,8 +78,10 @@ HTTP 요청 줄은 최대 길이보다 큰 길이 접두 또는 올바르지 않
 | `diagnostics.fixture` | `{window}` | 빈 폴더 설정을 가진 `<config-dir>/test-project`를 만들고, 다른 프로젝트를 제거하고, 공통 설정을 초기화하고, 창에서 그 프로젝트를 연 뒤 `{root}`를 반환한다 |
 | `diagnostics.drag` | `{window, axis, line, dx, dy, ms, times, capture?}` | `axis`의 경계 `line`을 `ms` 동안 `dx, dy`만큼 끌었다가 되돌리는 왕복을 `times`번 실행한다. 단계 시각은 호스트가 정한다. 동작이 화면에 표시된 뒤 페이지의 끌기 결과 `{from, steps, took, asked, late, deepest}`를 반환한다. `capture: true`이면 호스트가 창도 기록하고 프레임 폴더 `frames`를 더한다. 끌기가 실패하면 호스트가 기록을 멈추고 폴더를 지운다 |
 | `diagnostics.capture.start` | `{window}` | 창 녹화를 시작하고 첫 프레임이 기록된 뒤 프레임 폴더 `{frames}`를 반환한다 |
-| `diagnostics.capture.stop` | `{window}` | 캡처를 중지하고 `{frames, count, longestGap}`를 반환한다. `longestGap`은 연속한 기록 프레임 사이의 가장 긴 표시 간격(ms)이다 |
+| `diagnostics.capture.stop` | `{window, after?}` | `after`(`host.window.presented`의 `displayed`)와 요청 시각 중 늦은 시각 이후에 표시된 화면을 스트림이 전달한 뒤 캡처를 중지하고 `{frames, count, longestGap}`를 반환한다. `longestGap`은 연속한 기록 프레임 사이의 가장 긴 표시 간격(ms)이다. 앱이 커밋한 상태는 요청보다 늦게 화면에 나올 수 있으므로, 그 상태로 끝나야 하는 녹화는 그 표시 시각을 넘긴다 |
 | `diagnostics.knob` | `{window, name, value}` | 합성기 테스트 값(`latency`, `skew`)을 설정한다 |
+| `diagnostics.modal.hold` | `{window, on}` | `on`이면 창의 모달 내용 요청에 대한 호스트 응답을 붙잡고, 아니면 붙잡은 응답을 보내고 붙잡기를 멈춘다 |
+| `diagnostics.modal.held` | `{window}` | 창이 모달 내용 응답을 붙잡거나 붙잡기를 멈추면 답한다. 창이 응답을 붙잡고 있지 않으면 실패한다 |
 | `diagnostics.transcript` | `{window, on}` | 호스트 요청, 응답, 페이지 검증 줄에 대한 `diagnostics.log` 알림 `{window, line}`을 시작하거나 중지한다 |
 
 호스트는 캡처 같은 큰 데이터를 설정 디렉터리 아래 파일에 기록하고, 응답에는 파일 경로를 담는다. 요청자는 측정 후 캡처 파일을 삭제한다.
@@ -101,4 +103,6 @@ HTTP 요청 줄은 최대 길이보다 큰 길이 접두 또는 올바르지 않
 - HTTP 요청 줄을 보내면 연결이 종료되고 메서드가 실행되지 않는다;
 - 다른 사용자는 연결할 수 없다;
 - 선언되지 않은 메서드를 보내면 연결이 종료된다;
-- 정상 종료 시 호스트가 `endpoint.json`을 삭제한다.
+- 정상 종료 시 호스트가 `endpoint.json`을 삭제한다;
+- 종료 신호는 정상 종료를 한 번 요청하고, 다음 신호는 프로세스를 끝낸다;
+- 수신 전에 같은 애플리케이션의 끝난 프로세스 소켓을 제거한다.

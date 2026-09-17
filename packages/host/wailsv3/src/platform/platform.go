@@ -56,7 +56,8 @@ type Capturer interface {
 	// CaptureWait 는 첫 프레임이 기록되었는지 반환한다.
 	CaptureWait() (bool, error)
 	// CaptureStop 은 녹화를 끝내고 기록한 프레임 수를 반환한다.
-	CaptureStop() (int, error)
+	// after 는 녹화에 포함할 마지막 표시 시각(ms, 표시 시각과 같은 시계)이고, 0 이면 호출 시각이다.
+	CaptureStop(after float64) (int, error)
 	// CaptureLongestGap 은 마지막으로 멈춘 녹화에서 연속한 프레임 사이의 가장 긴 표시 간격(ms)이다.
 	CaptureLongestGap() float64
 }
@@ -129,8 +130,11 @@ type Platform interface {
 	CommitLayout(window unsafe.Pointer, ticket uint64) bool
 	// CancelLayout 은 진행 중인 배치를 취소한다.
 	CancelLayout(window unsafe.Pointer) error
-	// AfterPresentation 은 메인 웹뷰가 다음 화면을 표시한 뒤 done 을 UI 스레드에서 호출한다.
+	// AfterPresentation 은 메인 웹뷰와 보이는 앱 문서가 다음 화면을 표시한 뒤 done 을 UI 스레드에서 호출한다.
 	AfterPresentation(window unsafe.Pointer, done func()) error
+	// AfterSettled 는 창에 열린 표면 배치 트랜잭션이 없는 상태에서 메인 웹뷰와 보이는 앱 문서가 화면을
+	// 표시한 뒤 done 을 UI 스레드에서 호출한다. displayed 는 그 화면이 표시되는 시각(ms, mach 절대 시각)이다.
+	AfterSettled(window unsafe.Pointer, done func(displayed float64)) error
 
 	// CreateShape 는 표면 위에 그리는 도형 뷰를 만든다. 창에 콘텐츠 뷰가 없으면 nil 핸들을 반환한다.
 	CreateShape(window unsafe.Pointer, x, y, w, h float64) (unsafe.Pointer, error)
@@ -163,6 +167,10 @@ type Platform interface {
 	// 한다. application 은 주소 이름에 들어간다.
 	// 리스너를 닫으면 주소도 제거된다.
 	Listen(directory, application string) (net.Listener, Endpoint, error)
+
+	// OnTermination 은 종료 신호(SIGTERM, SIGINT, SIGHUP)를 처음 받으면 quit 를 호출하게 한다. 그
+	// 뒤의 종료 신호는 기본 동작으로 프로세스를 끝낸다.
+	OnTermination(quit func()) error
 
 	// InstallDock 은 Dock 메뉴를 등록한다. 새 창 항목은 newWindow 를 호출한다.
 	InstallDock(newWindow func()) error

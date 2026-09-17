@@ -60,6 +60,8 @@ struct Modal {
     /// 마지막으로 보낸 호출이다.
     id: String,
     content: OverlayContent,
+    /// 내용이나 위치를 바꿀 때마다 오른다. 모달 페이지는 이보다 오래된 값을 버린다.
+    revision: u64,
     radius: f64,
     /// 페이지 좌표의 사각형. 모서리 설정에도 사용한다.
     at: Rect,
@@ -115,6 +117,7 @@ pub(crate) struct PlaceRequest {
 struct ModalPosition {
     id: String,
     instance: u64,
+    revision: u64,
     card: Rect,
 }
 
@@ -131,6 +134,14 @@ pub(crate) struct UpdateRequest {
 struct ModalContentEvent {
     instance: u64,
     id: String,
+    revision: u64,
+    content: OverlayContent,
+}
+
+/// 모달의 내용과 그 내용의 변경 번호.
+#[derive(Debug, Default, Serialize)]
+pub(crate) struct RevisedContent {
+    revision: u64,
     content: OverlayContent,
 }
 
@@ -190,6 +201,7 @@ pub(crate) fn show(window: &Window, request: OverlayRequest) -> Result<Rect, Str
             html: request.html,
             border: request.border,
         },
+        revision: 1,
         radius: request.radius,
         at,
         shown: false,
@@ -245,14 +257,17 @@ pub(crate) fn place(window: &Window, request: PlaceRequest) -> Result<Rect, Stri
     if let Some(modal) = state.open.lock().map_err(|e| e.to_string())?.as_mut().filter(|m| m.id == request.id) {
         modal.at = at;
         modal.content.card = request.card;
-        emit_window(window, "modal-position", ModalPosition { id: modal.id.clone(), instance: modal.instance, card: request.card })
+        modal.revision += 1;
+        let position = ModalPosition { id: modal.id.clone(), instance: modal.instance, revision: modal.revision, card: request.card };
+        emit_window(window, "modal-position", position)
             .map_err(|e| e.to_string())?;
     }
     Ok(at)
 }
 
-/// id 와 instance 가 현재 모달과 같으면 모달 내용을 반환한다.
-pub(crate) fn content(window: &Window, id: String, instance: u64) -> Result<OverlayContent, String> {
+/// id 와 instance 가 현재 모달과 같으면 모달 내용을 반환한다. 다른 모달이면 번호 0 의 빈 내용을
+/// 반환하고, 모달 페이지는 그것을 버린다.
+pub(crate) fn content(window: &Window, id: String, instance: u64) -> Result<RevisedContent, String> {
     let context = window_data(window)?;
     let state = &context.overlay;
 
@@ -262,8 +277,11 @@ pub(crate) fn content(window: &Window, id: String, instance: u64) -> Result<Over
         .map_err(|e| e.to_string())?
         .as_ref()
         .filter(|modal| modal.id == id && modal.instance == instance)
-        .map(|modal| modal.content.clone())
+        .map(|modal| RevisedContent { revision: modal.revision, content: modal.content.clone() })
         .unwrap_or_default();
+    // 검사가 응답을 붙잡았으면 놓을 때까지 보내지 않는다.
+    #[cfg(feature = "diagnostics")]
+    crate::diagnostics::hold_modal_content(window.label());
     Ok(content)
 }
 
@@ -355,13 +373,14 @@ pub(crate) fn update(window: &Window, request: UpdateRequest) -> Result<(), Stri
     let overlay = &context.overlay;
 
     let content = request.content;
-    let instance = {
+    let (instance, revision) = {
         let mut held = overlay.open.lock().map_err(|e| e.to_string())?;
         let Some(modal) = held.as_mut().filter(|m| m.id == request.id) else { return Ok(()) };
         modal.content = content.clone();
-        modal.instance
+        modal.revision += 1;
+        (modal.instance, modal.revision)
     };
     // 모든 페이지가 이벤트를 받으므로 id 를 포함하고, 각 모달 페이지는 자신의 이벤트만 사용한다.
-    emit_window(window, "modal-content", ModalContentEvent { instance, id: request.id, content })
+    emit_window(window, "modal-content", ModalContentEvent { instance, id: request.id, revision, content })
         .map_err(|e| e.to_string())
 }

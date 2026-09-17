@@ -37,6 +37,12 @@ pub struct Recording {
     state: Mutex<State>,
 }
 
+impl Default for Recording {
+    fn default() -> Recording {
+        Recording::new()
+    }
+}
+
 impl Recording {
     pub const fn new() -> Recording {
         Recording { state: Mutex::new(State { directory: None, opened: None }) }

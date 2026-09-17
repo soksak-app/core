@@ -68,6 +68,14 @@ bool nativeWindowAfterPresentation(void *handle, uintptr_t callback) {
     return true;
 }
 
+extern void nativeSettledDone(uintptr_t callback, double displayed);
+bool nativeWindowAfterSettled(void *handle, uintptr_t callback) {
+    WKWebView *view = mainWebview([(NSWindow *)handle contentView]);
+    if (!view) return false;
+    surfaceLayoutAfterSettled(view, ^(double displayed) { nativeSettledDone(callback, displayed); });
+    return true;
+}
+
 void nativeWindowPrepare(void *handle) {
     NSWindow *window = (NSWindow *)handle;
     WKWebView *root = mainWebview(window.contentView);

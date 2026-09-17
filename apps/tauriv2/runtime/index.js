@@ -112,9 +112,11 @@ export const page = (() => {
       content(id, instance, fn, place) {
         // 이벤트는 모든 페이지가 받는다. 자기 모달의 것만 취한다.
         return Promise.all([listen("modal-content", (e) => {
-          if (e.payload.id === id && e.payload.instance === instance) fn(e.payload.content);
+          const { payload } = e;
+          if (payload.id === id && payload.instance === instance) fn({ revision: payload.revision, content: payload.content });
         }), listen("modal-position", (e) => {
-          if (e.payload.id === id && e.payload.instance === instance) place(e.payload.card);
+          const { payload } = e;
+          if (payload.id === id && payload.instance === instance) place({ revision: payload.revision, card: payload.card });
         })]).then(() => invoke("overlay_content", { id, instance })).then(fn);
       },
       ready: (id, instance) => invoke("overlay_ready", { id, instance }),

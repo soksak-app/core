@@ -81,7 +81,7 @@ The native host relays registrations and requests between a surface page and the
 
 ### Modal documents
 
-A native modal document reports its state to the main page through the modal answer channel with the key `document` after each render, placement, and theme change. The main page publishes it as status `core.modal`: `null` without an open modal, or `{id, mode, document}` where `document` is `null` until the first report and then `{mode, filter, htmlBackground, bodyBackground, rect}`: the rendered element's `data-native-modal`, the root's computed `filter`, the computed background colors of the root and the body, and the element rectangle in CSS pixels.
+A native modal document reports its state to the main page through the modal answer channel with the key `document` after each render, placement, and theme change. The main page publishes it as status `core.modal`: `null` without an open modal, or `{id, mode, document}` where `document` is `null` until the first report and then `{mode, filter, htmlBackground, bodyBackground, loaded, rect}`: the rendered element's `data-native-modal`, the root's computed `filter`, the computed background colors of the root and the body, whether the document has handled the answer to its first content request (also when it dropped that answer as older than applied changes), and the element rectangle in CSS pixels.
 
 ### Choosing a surface
 
@@ -109,7 +109,7 @@ Screen coordinates are points with the origin at the top-left corner of the prim
 | command | `host.window.fullscreen` | Enters full screen in its own Space, or leaves it with `{on: false}` |
 | command | `host.window.resize` | Resizes the content area to `{width, height}` |
 | command | `host.window.reload` | Reloads the main page and resolves after the new page reports ready; 1005 if it does not within 10 seconds |
-| command | `host.window.presented` | Resolves after the main page and visible application documents have presented their current geometry |
+| command | `host.window.presented` | Resolves after the main page and visible application documents have presented their current geometry. It waits for the window's open surface layout transactions to commit first ([native surfaces](native-surfaces.md)). Returns `{displayed}`, the time in milliseconds of the display refresh that shows that state, on the clock of recorded frame times (the next refresh of the window's screen after the presentation; the call time when the window is on no screen) |
 | command | `host.hit` | Returns the owner of the point `{x, y}` in window coordinates: `{kind: "page"}`, `{kind: "surface", surface}`, `{kind: "document", surface, document}` for a document region, or `{kind: "native", identifier}` |
 | command | `host.dock.select` | Performs the Dock menu item with `{title}` |
 | command | `host.quit` | Requests normal application termination, including pending saves |

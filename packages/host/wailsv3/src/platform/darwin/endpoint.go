@@ -7,6 +7,8 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"syscall"
 
 	"github.com/min-median-max/soksak/packages/host/wailsv3/src/platform"
@@ -38,11 +40,38 @@ func privateDirectory(path string) error {
 	return nil
 }
 
+// removeEnded 는 directory 에서 끝난 프로세스가 남긴 application 의 소켓을 제거한다. 강제 종료된
+// 프로세스는 자기 소켓을 지우지 못한다. 번호의 프로세스가 있으면 다른 프로그램이어도 남긴다.
+func removeEnded(directory, application string) error {
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		number, found := strings.CutPrefix(entry.Name(), application+"-")
+		number, suffixed := strings.CutSuffix(number, ".sock")
+		pid, err := strconv.Atoi(number)
+		if !found || !suffixed || err != nil || pid <= 0 {
+			continue
+		}
+		if syscall.Kill(pid, 0) != syscall.ESRCH {
+			continue
+		}
+		if err := os.Remove(filepath.Join(directory, entry.Name())); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	return nil
+}
+
 // Listen 은 directory 에 Unix 도메인 소켓을 만든다. directory 는 이 사용자만 접근하는 0700
-// 디렉터리여야 한다. 소켓 경로는 104 바이트로 제한되므로 애플리케이션은 설정 디렉터리가 아니라
+// 디렉터리여야 한다. 끝난 프로세스가 남긴 소켓을 먼저 제거한다. 소켓 경로는 104 바이트로 제한되므로 애플리케이션은 설정 디렉터리가 아니라
 // 임시 디렉터리를 사용한다.
 func (implementation) Listen(directory, application string) (net.Listener, platform.Endpoint, error) {
 	if err := privateDirectory(directory); err != nil {
+		return nil, platform.Endpoint{}, err
+	}
+	if err := removeEnded(directory, application); err != nil {
 		return nil, platform.Endpoint{}, err
 	}
 	address := filepath.Join(directory, fmt.Sprintf("%s-%d.sock", application, os.Getpid()))
