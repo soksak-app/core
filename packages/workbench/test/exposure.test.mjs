@@ -1,0 +1,253 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+import { JSDOM } from "jsdom";
+import { EXPOSURE_ERRORS, validateExposureFile } from "@soksak/plugin-api";
+
+// 가짜 문서와 가짜 플러그인 선언. 실제 플러그인 이름을 사용하지 않는다.
+const dom = new JSDOM(`<body>
+  <button data-expose="core.fixture.button">b</button>
+  <span data-expose="core.fixture.row">r0</span><span data-expose="core.fixture.row">r1</span>
+</body>`, { url: "https://example.test/" });
+globalThis.window = dom.window;
+globalThis.document = dom.window.document;
+
+const { createRegistry, loadExposure, registry } = await import("../exposure.js");
+
+const coreExposes = () => ({
+  status: [{ name: "core.fixture.count", description: "Count.", schema: { type: "integer" } }],
+  commands: [{ name: "core.fixture.add", description: "Adds.", params: { type: "object", properties: { n: { type: "integer" } } }, result: { type: "integer" } }],
+  dom: [
+    { name: "core.fixture.button", description: "Button." },
+    { name: "core.fixture.row", description: "Rows.", many: true },
+    { name: "core.fixture.missing", description: "Absent." },
+  ],
+});
+const probeExposes = () => ({
+  status: [{ name: "probe.lines", description: "Lines.", schema: { type: "array" } }],
+  commands: [{ name: "probe.send", description: "Sends.", params: { type: "object" }, result: {} }],
+  dom: [{ name: "probe.lines", description: "Output." }],
+});
+
+/** 호스트 호출을 기록하고, exposureForward 에는 answer 가 정한 답을 준다. */
+function fakeHost(answer = () => ({ result: null })) {
+  const calls = [];
+  return {
+    calls,
+    call: async (name, arg) => {
+      calls.push([name, arg]);
+      return name === "exposureForward" ? answer(arg) : null;
+    },
+  };
+}
+
+function coreRegistry(host) {
+  const made = createRegistry({ call: host?.call ?? null });
+  made.declare("core", coreExposes());
+  made.declare("probe", probeExposes());
+  return made;
+}
+
+test("the core declaration file is valid and every entry is registered by core-exposure.js or marked in markup", () => {
+  const file = JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8"));
+  validateExposureFile(file);
+  const source = (name) => readFileSync(new URL(`../${name}`, import.meta.url), "utf8");
+  const code = source("core-exposure.js");
+  for (const { name } of file.exposes.status) assert.match(code, new RegExp(`status\\("${name}"`), name);
+  for (const { name } of file.exposes.commands) assert.match(code, new RegExp(`command\\("${name}"`), name);
+  const markup = ["index.html", "plane.js", "settings-ui.js", "library.js"].map(source).join("\n");
+  for (const { name } of file.exposes.dom) {
+    assert.ok(markup.includes(`"${name}"`) || markup.includes(`'${name}'`), `${name} has no data-expose in the markup`);
+  }
+});
+
+test("the registry loads core declarations from the served file", async () => {
+  const served = { exposes: coreExposes() };
+  globalThis.fetch = async (path) => (path === "/exposure.json"
+    ? { ok: true, json: async () => structuredClone(served) } : { ok: false, status: 404 });
+  await loadExposure();
+  const listed = registry.list();
+  assert.deepEqual(Object.keys(listed), ["status", "commands", "dom"]);
+  assert.deepEqual(listed.commands, [{ ...served.exposes.commands[0], registered: false }],
+    "entries keep the declaration format and add registered");
+  assert.deepEqual(Object.values(listed).flat().map((entry) => `${entry.name} ${entry.registered}`), [
+    "core.fixture.count false",
+    "core.fixture.add false",
+    "core.fixture.button false",
+    "core.fixture.row false",
+    "core.fixture.missing false",
+  ], "nothing is registered before core registration");
+  registry.dom("core.fixture.row");
+  assert.equal(registry.list().dom.find((entry) => entry.name === "core.fixture.row").registered, true);
+});
+
+test("core entries answer requests and undeclared or unregistered names fail with their codes", async () => {
+  const host = fakeHost();
+  const made = coreRegistry(host);
+  assert.throws(() => made.status("core.fixture.other", () => 0, () => {}), /not declared/);
+  assert.throws(() => made.declare("core", { status: [{ name: "probe.x", description: "x", schema: {} }] }), /core.<name>/);
+  assert.throws(() => made.declare("probe", probeExposes()), /declared twice/);
+
+  let count = 1;
+  let emit = null;
+  made.status("core.fixture.count", () => count, (fn) => { emit = fn; return () => { emit = null; }; });
+  made.command("core.fixture.add", ({ n }) => (count += n));
+  made.dom("core.fixture.button");
+  made.dom("core.fixture.row");
+  made.dom("core.fixture.missing");
+
+  const code = async (request) => (await made.handle(request)).error?.code;
+  assert.equal(await code({ method: "status.get", params: { name: "core.fixture.none" } }), EXPOSURE_ERRORS.unknownName);
+  assert.equal(await code({ method: "dom.rect", params: { name: "core.fixture.missing" } }), EXPOSURE_ERRORS.unregistered);
+  assert.equal(await code({ method: "command.run", params: { name: "core.fixture.add", params: { n: "1" } } }), EXPOSURE_ERRORS.invalidParams);
+  assert.equal(await code({ method: "windows.list", params: {} }), EXPOSURE_ERRORS.unknownMethod);
+
+  assert.deepEqual(await made.handle({ method: "status.get", params: { name: "core.fixture.count" } }), { result: 1 });
+  assert.deepEqual(await made.handle({ method: "command.run", params: { name: "core.fixture.add", params: { n: 2 } } }), { result: 3 });
+
+  const button = document.querySelector('[data-expose="core.fixture.button"]');
+  button.getBoundingClientRect = () => ({ left: 4, top: 5, width: 6, height: 7 });
+  assert.deepEqual(await made.handle({ method: "dom.rect", params: { name: "core.fixture.button" } }),
+    { result: { x: 4, y: 5, width: 6, height: 7, document: { x: 0, y: 0 } } });
+  let clicked = 0;
+  button.addEventListener("click", () => clicked++);
+  assert.deepEqual(await made.handle({ method: "dom.act", params: { name: "core.fixture.button", action: "click" } }), { result: null });
+  assert.equal(clicked, 1);
+  const rows = [...document.querySelectorAll('[data-expose="core.fixture.row"]')];
+  const seen = [];
+  rows[1].addEventListener("keydown", (event) => seen.push([event.key, event.isTrusted]));
+  await made.handle({ method: "dom.act", params: { name: "core.fixture.row", index: 1, action: "dispatch", event: { type: "keydown", key: "Escape" } } });
+  assert.deepEqual(seen, [["Escape", false]]);
+
+  assert.deepEqual(await made.handle({ method: "status.watch", params: { name: "core.fixture.count" } }), { result: null });
+  emit(3);
+  count = 4;
+  emit(count);
+  await made.handle({ method: "status.unwatch", params: { name: "core.fixture.count" } });
+  assert.equal(emit, null, "unwatch releases the subscription");
+  assert.deepEqual(host.calls.filter(([name]) => name === "exposureChanged").map(([, arg]) => arg), [
+    { name: "core.fixture.count", value: 3 },
+    { name: "core.fixture.count", value: 4 },
+  ], "the first value is sent once and repeated values are not sent");
+
+  const listed = made.list();
+  const find = (key, name) => listed[key].find((entry) => entry.name === name);
+  assert.equal(find("status", "core.fixture.count").registered, true);
+  assert.equal(find("dom", "core.fixture.missing").registered, false);
+  assert.equal(find("status", "probe.lines").registered, false);
+  assert.equal(find("commands", "core.fixture.add").params.type, "object");
+  assert.equal("kind" in find("commands", "core.fixture.add"), false);
+  assert.deepEqual(await made.handle({ method: "exposure.list", params: {} }), { result: made.list() });
+});
+
+test("diagnostic methods are answered by their registered handlers", async () => {
+  const made = coreRegistry(fakeHost());
+  made.method("diagnostics.fixture", async ({ root }) => ({ root }));
+  assert.throws(() => made.method("diagnostics.fixture", () => null), /already registered/);
+  assert.deepEqual(await made.handle({ method: "diagnostics.fixture", params: { root: "/tmp/x" } }), { result: { root: "/tmp/x" } });
+  made.method("diagnostics.knob", () => { throw new Error("bad knob"); });
+  assert.deepEqual(await made.handle({ method: "diagnostics.knob", params: {} }),
+    { error: { code: EXPOSURE_ERRORS.failed, message: "bad knob" } });
+});
+
+test("surface registrations are checked against the declarations and the surface's plugin", () => {
+  const made = coreRegistry(fakeHost());
+  const plugins = { "tab-a": "probe", "tab-b": "probe", "tab-c": "other" };
+  made.configure({ surfacePlugin: (surface) => plugins[surface] ?? null });
+  made.registered({ surface: "tab-a", kind: "status", name: "probe.lines" });
+  made.registered({ surface: "tab-a", kind: "dom", name: "probe.lines" });
+  assert.throws(() => made.registered({ surface: "tab-a", kind: "command", name: "probe.lines" }), /undeclared command probe.lines/);
+  assert.throws(() => made.registered({ surface: "tab-a", kind: "status", name: "core.fixture.count" }), /undeclared/);
+  assert.throws(() => made.registered({ surface: "tab-c", kind: "command", name: "probe.send" }), /of plugin other cannot register/);
+  assert.throws(() => made.registered({ surface: "tab-x", kind: "command", name: "probe.send" }), /of plugin null/);
+  assert.deepEqual(made.namesOf("tab-a"), ["status probe.lines", "dom probe.lines"]);
+  made.registered({ surface: "tab-a", closed: true });
+  assert.deepEqual(made.namesOf("tab-a"), []);
+  assert.equal(made.list().status.find((entry) => entry.name === "probe.lines").registered, false);
+});
+
+test("requests for surface names are forwarded to the preferred surface with its document origin", async () => {
+  const host = fakeHost(({ surface, method }) => (method === "dom.rect"
+    ? { result: { x: 1, y: 2, width: 3, height: 4 } }
+    : method === "command.run" ? { result: surface } : { error: { code: 1003, message: "gone" } }));
+  const made = coreRegistry(host);
+  let preferred = [];
+  made.configure({
+    surfacePlugin: () => "probe",
+    preferred: () => preferred,
+    origin: (surface) => (surface === "tab-a" ? { x: 100, y: 50 } : null),
+  });
+  assert.equal((await made.handle({ method: "command.run", params: { name: "probe.send", params: {} } })).error.code,
+    EXPOSURE_ERRORS.unregistered);
+  made.registered({ surface: "tab-a", kind: "command", name: "probe.send" });
+  made.registered({ surface: "tab-b", kind: "command", name: "probe.send" });
+  made.registered({ surface: "tab-a", kind: "dom", name: "probe.lines" });
+  assert.deepEqual(await made.handle({ method: "command.run", params: { name: "probe.send", params: {} } }), { result: "tab-b" },
+    "without a preference the latest registration receives the request");
+  preferred = ["tab-c", "tab-a"];
+  assert.deepEqual(await made.handle({ method: "command.run", params: { name: "probe.send", params: {} } }), { result: "tab-a" });
+  assert.deepEqual(await made.handle({ method: "dom.rect", params: { name: "probe.lines" } }),
+    { result: { x: 1, y: 2, width: 3, height: 4, document: { x: 100, y: 50 } } });
+  const forwarded = host.calls.filter(([name]) => name === "exposureForward").map(([, arg]) => arg);
+  assert.deepEqual(forwarded.at(-1).params, { name: "probe.lines" });
+  assert.equal(forwarded.at(-1).surface, "tab-a");
+  assert.equal(new Set(forwarded.map((arg) => arg.id)).size, forwarded.length, "every forward has its own id");
+  assert.equal((await made.handle({ method: "status.get", params: { name: "probe.lines" } })).error.code, EXPOSURE_ERRORS.unregistered);
+});
+
+test("a watched surface status follows status.next replies until unwatch", async () => {
+  let release = null;
+  const host = fakeHost(({ method, params }) => {
+    if (method !== "status.next") return { result: null };
+    if (params.version === 0) return { result: { version: 1, value: ["a"] } };
+    if (params.version === 1) return { result: { version: 2, value: ["b"] } };
+    return new Promise((resolve) => { release = resolve; });
+  });
+  const made = coreRegistry(host);
+  made.configure({ surfacePlugin: () => "probe" });
+  made.registered({ surface: "tab-a", kind: "status", name: "probe.lines" });
+  assert.deepEqual(await made.handle({ method: "status.watch", params: { name: "probe.lines" } }), { result: null });
+  assert.deepEqual(await made.handle({ method: "status.watch", params: { name: "probe.lines" } }), { result: null });
+  await new Promise((resolve) => setImmediate(resolve));
+  const changes = () => host.calls.filter(([name]) => name === "exposureChanged").map(([, arg]) => arg);
+  assert.deepEqual(changes(), [
+    { name: "probe.lines", value: ["a"] },
+    { name: "probe.lines", value: ["b"] },
+  ]);
+  const forwarded = (method) => host.calls.filter(([name, arg]) => name === "exposureForward" && arg.method === method);
+  assert.equal(forwarded("status.watch").length, 1, "a second watch is not forwarded");
+  assert.deepEqual(forwarded("status.next").map(([, arg]) => arg.params.version), [0, 1, 2]);
+  assert.deepEqual(await made.handle({ method: "status.unwatch", params: { name: "probe.lines" } }), { result: null });
+  assert.equal(forwarded("status.unwatch").length, 1);
+  release({ result: { version: 3, value: ["c"] } });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(changes().length, 2, "a value after unwatch is not sent");
+});
+
+test("without a host the registry answers in the page and cannot forward", async () => {
+  const made = coreRegistry(null);
+  made.configure({ surfacePlugin: () => "probe" });
+  made.registered({ surface: "tab-a", kind: "command", name: "probe.send" });
+  assert.equal((await made.handle({ method: "command.run", params: { name: "probe.send", params: {} } })).error.code,
+    EXPOSURE_ERRORS.gone);
+  let count = 0;
+  made.status("core.fixture.count", () => count, () => () => {});
+  assert.deepEqual(await made.handle({ method: "status.watch", params: { name: "core.fixture.count" } }), { result: null });
+  count = 1;
+  assert.deepEqual(await made.handle({ method: "status.get", params: { name: "core.fixture.count" } }), { result: 1 });
+});
+
+test("a failed status.next ends the watch", async () => {
+  const host = fakeHost(({ method }) => (method === "status.next"
+    ? { error: { code: EXPOSURE_ERRORS.gone, message: "gone" } } : { result: null }));
+  const made = coreRegistry(host);
+  made.configure({ surfacePlugin: () => "probe" });
+  made.registered({ surface: "tab-a", kind: "status", name: "probe.lines" });
+  await made.handle({ method: "status.watch", params: { name: "probe.lines" } });
+  await new Promise((resolve) => setImmediate(resolve));
+  const next = () => host.calls.filter(([name, arg]) => name === "exposureForward" && arg.method === "status.next").length;
+  assert.equal(next(), 1);
+  await made.handle({ method: "status.watch", params: { name: "probe.lines" } });
+  assert.equal(host.calls.filter(([name, arg]) => name === "exposureForward" && arg.method === "status.watch").length, 2,
+    "a new watch starts after the previous one ended");
+});

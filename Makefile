@@ -37,7 +37,8 @@ verify: prepare docs-check
 # generate_context! 로 스테이징된 프런트엔드를 컴파일 시점에 포함한다.
 #
 # 각 앱은 debug 와 release 두 프로필로 빌드한다. release 는 각 도구의 표준 축소
-# 옵션(cargo release 프로필, Go 의 -s -w -trimpath)을 사용한다.
+# 옵션(cargo release 프로필, Go 의 -s -w -trimpath)을 사용한다. debug 는 진단 빌드(Go 태그·cargo
+# 기능 diagnostics)이고 release 는 진단 메서드를 포함하지 않는다.
 .PHONY: native-darwin sidecars frontend-wailsv3 frontend-tauriv2 native-test \
         tauriv2 tauriv2-release tauriv2-build tauriv2-build-release \
         wailsv3 wailsv3-release wailsv3-build wailsv3-build-release \
@@ -82,7 +83,7 @@ frontend-tauriv2: build sidecars
 # generate_context! 가 프런트엔드를 포함하므로 크레이트를 다시 빌드하게 한다.
 tauriv2-build: native-darwin frontend-tauriv2
 	@touch apps/tauriv2/src/main.rs
-	@$(CARGO_ENV) cargo build -p soksak-tauriv2
+	@$(CARGO_ENV) cargo build -p soksak-tauriv2 --features diagnostics
 
 tauriv2-build-release: native-darwin build sidecars
 	@$(call stage-tauriv2,../../target/release)
@@ -90,7 +91,7 @@ tauriv2-build-release: native-darwin build sidecars
 	@$(CARGO_ENV) cargo build --release -p soksak-tauriv2
 
 wailsv3-build: native-darwin frontend-wailsv3
-	@$(GO_ENV) go build -C apps/wailsv3 -ldflags "$(GO_LINK)" -o ../../$(WAILS_DEBUG) ./src
+	@$(GO_ENV) go build -C apps/wailsv3 -tags diagnostics -ldflags "$(GO_LINK)" -o ../../$(WAILS_DEBUG) ./src
 
 wailsv3-build-release: native-darwin build sidecars
 	@$(call stage-wailsv3,../../target/release)
@@ -112,7 +113,9 @@ wailsv3-release: wailsv3-build-release
 native-test: native-darwin frontend-wailsv3 frontend-tauriv2
 	@$(MAKE) -C native/darwin test
 	@$(GO_ENV) go test -ldflags "$(GO_LINK)" ./packages/host/wailsv3/... ./sidecars/shell/...
+	@$(GO_ENV) go test -tags diagnostics -ldflags "$(GO_LINK)" ./packages/host/wailsv3/...
 	@$(CARGO_ENV) cargo test -p soksak-host-tauriv2
+	@$(CARGO_ENV) cargo test -p soksak-host-tauriv2 --features diagnostics
 
 # 이미 실행 중인 앱의 창을 순차 검사한다. 하네스는 앱을 실행하지 않는다.
 examples-verify: docs-check

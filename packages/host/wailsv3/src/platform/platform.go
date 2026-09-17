@@ -8,6 +8,7 @@ package platform
 
 import (
 	"errors"
+	"net"
 	"os"
 	"sync"
 	"unsafe"
@@ -52,7 +53,8 @@ type Platform interface {
 	WindowControls(window unsafe.Pointer) (Rect, error)
 	// WindowNumbers 는 창과 자식 창의 윈도 서버 번호를 반환한다. 창 자신의 번호가 처음이다.
 	WindowNumbers(window unsafe.Pointer) ([]int, error)
-	// Probe 는 개발용 네이티브 검사 요청을 실행하고 결과를 reply 에 전달한다.
+	// Probe 는 네이티브 검사 요청(JSON)을 실행하고 결과(JSON)를 reply 에 전달한다. reply 는 요청마다
+	// 한 번 호출되고, 요청을 실행하는 동안 또는 그 뒤에 UI 스레드에서 호출된다.
 	Probe(window unsafe.Pointer, request string, reply func(string)) error
 
 	// CreateWebview 는 창의 메인 웹뷰 위에 네이티브 웹뷰를 추가하고 그 핸들을 반환한다.
@@ -111,11 +113,44 @@ type Platform interface {
 	// CaptureStop 은 녹화를 끝내고 기록한 프레임 수를 반환한다.
 	CaptureStop() (int, error)
 
+	// InjectPointer 는 창의 콘텐츠 영역 좌표 (x, y) 에 포인터 입력을 전달하고 그 결과를 반환한다.
+	// phase 는 이동 0, 누름 1, 끌기 2, 뗌 3, 스크롤 4 이고 button 은 왼쪽 0, 오른쪽 1 이다.
+	InjectPointer(window unsafe.Pointer, x, y float64, phase, button int, deltaX, deltaY float64) (PointerResult, error)
+	// ActivateWindow 는 애플리케이션을 활성화하고 창을 키 창으로 만든다. 창의 모든 웹뷰가 활성
+	// 상태를 받은 뒤 done(true) 를, timeout 초 안에 활성화되지 않으면 done(false) 를 UI 스레드에서 호출한다.
+	ActivateWindow(window unsafe.Pointer, timeout float64, done func(ok bool)) error
+	// InjectKey 는 창에 키 입력을 전달하고 전달했는지 반환한다. modifiers 는 1 Shift, 2 Control,
+	// 4 Option, 8 Command 의 비트 합이다.
+	InjectKey(window unsafe.Pointer, key, text string, modifiers uint, down bool) (bool, error)
+
+	// Listen 은 로컬 엔드포인트의 리스너를 만든다. application 은 주소 이름에 들어간다.
+	// 리스너를 닫으면 주소도 제거된다.
+	Listen(application string) (net.Listener, Endpoint, error)
+
 	// InstallDock 은 Dock 메뉴를 등록한다. 새 창 항목은 newWindow 를 호출한다.
 	InstallDock(newWindow func()) error
 
 	// DirectoryIdentity 는 디렉터리를 식별하는 문자열을 반환한다.
 	DirectoryIdentity(path string, info os.FileInfo) (string, error)
+}
+
+// PointerResult 는 포인터 입력 전달의 결과다.
+type PointerResult int
+
+const (
+	// PointerDelivered 는 입력을 전달했다는 뜻이다.
+	PointerDelivered PointerResult = iota
+	// PointerRejected 는 창, 좌표 또는 단계가 올바르지 않아 전달하지 않았다는 뜻이다.
+	PointerRejected
+	// PointerInactive 는 버튼 없는 이동이고 창이 키 창이 아니어서 전달하지 않았다는 뜻이다.
+	PointerInactive
+)
+
+// Endpoint 는 로컬 엔드포인트의 전송과 주소다.
+type Endpoint struct {
+	// Transport 는 unix 또는 pipe 다.
+	Transport string
+	Address   string
 }
 
 var (

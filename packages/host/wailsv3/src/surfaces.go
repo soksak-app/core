@@ -65,7 +65,11 @@ var nativeViews = map[uint64]*nativeWebview{}
 var nativeSerial uint64
 
 type Surfaces struct {
-	window   *application.WebviewWindow
+	window *application.WebviewWindow
+	// host 는 이 창을 만든 호스트다. name 은 엔드포인트의 창 식별자이고 title 은 창 제목이다.
+	host     *Host
+	name     string
+	title    string
 	projects map[string]bool
 	root     string
 	ready    bool
@@ -84,7 +88,9 @@ type Surfaces struct {
 	live map[string]bool
 	// 연속 갱신이 진행 중인지 나타낸다. 페이지가 커밋마다 알리고, 이 값으로 run-began 과
 	// run-ended 를 프레임마다가 아니라 연속 갱신의 시작과 끝에만 발행한다.
-	running         bool
+	running bool
+	// settled 는 연속 갱신이 끝나기를 기다리는 채널이다. run-ended 를 발행할 때 닫는다.
+	settled         []chan struct{}
 	lastPreparation uint64
 	// 페이지가 커밋했는지 나타낸다. page-ready 를 한 번만 발행한다.
 	first sync.Once
@@ -161,7 +167,25 @@ func (s *Surfaces) run(going bool) {
 		s.Emit("run-began")
 		return
 	}
+	for _, done := range s.settled {
+		close(done)
+	}
+	s.settled = nil
 	s.Emit("run-ended")
+}
+
+// whenSettled 는 연속 갱신이 끝나면 닫히는 채널을 반환한다. 진행 중인 갱신이 없으면 닫힌
+// 채널이다.
+func (s *Surfaces) whenSettled() <-chan struct{} {
+	done := make(chan struct{})
+	application.InvokeSync(func() {
+		if !s.running {
+			close(done)
+			return
+		}
+		s.settled = append(s.settled, done)
+	})
+	return done
 }
 
 // resizing 은 표면의 연속 크기 변경을 시작하거나 끝낸다. 두 호출은 짝을 이루므로 표면별
@@ -260,10 +284,11 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 	if !<-done {
 		return prepared, errNoWindow
 	}
-	// 제거된 표면을 사이드카에 알린다. 주 스레드 밖에서 호출한다.
+	// 제거된 표면을 사이드카와 메인 페이지의 노출 등록에 알린다. 주 스레드 밖에서 호출한다.
 	for _, id := range gone {
 		s.sidecars.Close(id)
 	}
+	s.surfacesClosed(gone)
 	return prepared, nil
 }
 
@@ -322,7 +347,9 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 	if waiting != nil {
 		return nil, waiting
 	}
-	return <-done, nil
+	placed := <-done
+	s.windowChanged()
+	return placed, nil
 }
 
 // apply 는 표면 뷰를 만들고 옮기고 제거하며, 뷰가 제거된 id 를 반환한다. 그 뒤의 셸은

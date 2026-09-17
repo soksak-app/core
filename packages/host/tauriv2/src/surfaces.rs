@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex};
 use serde::{Deserialize, Serialize};
 use tauri::{LogicalPosition, LogicalSize, Manager, Runtime, Webview, WebviewBuilder, WebviewUrl, Window};
 
+use crate::exposure;
 use crate::log_error;
 use crate::platform::{self, Handle};
 use crate::sidecars::WindowSidecars;
@@ -308,11 +309,12 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
                 resizing.0.lock().map_err(|e| e.to_string())?.remove(&label);
                 // 맵의 키는 뷰 주소이고 시스템은 해제된 뷰의 주소를 재사용한다. 남은 항목은
                 // 존재하지 않는 표면을 가리키므로 뷰와 함께 제거한다.
+                let id = label.trim_start_matches(&format!("surface-{}-", window.label())).to_string();
                 if let Ok(mut named) = views.0.lock() {
-                    let id = label.trim_start_matches(&format!("surface-{}-", window.label())).to_string();
                     named.retain(|_, held| *held != id);
                 }
                 webview.close().map_err(|e| e.to_string())?;
+                exposure::surface_closed(window, &id);
             }
         }
         // 제거된 표면을 사이드카에 알린다.
@@ -377,6 +379,7 @@ pub(crate) async fn present(window: Window, request: PresentRequest) -> Result<V
                 if committed && settled && running.prepared.load(Ordering::Relaxed) == ticket {
                     announce_run(&finished, running, false)?;
                 }
+                exposure::window_changed(&finished);
                 Ok(placed)
             })();
             let _ = tx.try_send(result);

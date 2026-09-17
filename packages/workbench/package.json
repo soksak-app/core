@@ -29,7 +29,10 @@
     "settings.js",
     "settings-scope.js",
     "settings-ui.js",
-    "verify.js"
+    "verify.js",
+    "exposure.json",
+    "exposure.js",
+    "core-exposure.js"
   ],
   "scripts": {
     "test": "node --test test/"

@@ -1,7 +1,7 @@
 //! macOS 구현.
 //!
 //! 창, 웹뷰, 표면 배치, 입력, 캡처, Dock 기능은 native/darwin 라이브러리와 AppKit 공개
-//! 인터페이스를 호출한다. 포인터 라우팅은 native/darwin 에서 WebKit 비공개 입력 API 하나를
+//! 인터페이스를 호출한다. 로컬 엔드포인트는 Unix 도메인 소켓이다. 포인터 라우팅은 native/darwin 에서 WebKit 비공개 입력 API 하나를
 //! 사용한다.
 
 use std::fs::Metadata;
@@ -10,12 +10,17 @@ use std::path::Path;
 use tauri::webview::PlatformWebview;
 use tauri::Window;
 
-use super::{Frame, Handle, Platform, WindowBuilder};
+use std::time::Duration;
 
+use super::{Connection, Delivery, Frame, Handle, Hit, Key, Listener, Platform, Pointer, WindowBuilder};
+
+#[cfg(feature = "diagnostics")]
 #[path = "capture.rs"]
 mod capture;
 #[path = "dock.rs"]
 mod dock;
+#[path = "endpoint.rs"]
+mod endpoint;
 #[path = "identity.rs"]
 mod identity;
 #[path = "input.rs"]
@@ -78,12 +83,15 @@ impl Platform for Darwin {
     fn window_controls(&self, window: Handle) -> Result<Frame, String> {
         Ok(window::controls(window))
     }
+    #[cfg(feature = "diagnostics")]
     fn window_numbers(&self, window: &Window) -> Result<Vec<isize>, String> {
         Ok(window::numbers(window::handle(window)?))
     }
-    fn probe(&self, window: Handle, request: &str, reply: fn(String)) -> Result<(), String> {
-        window::probe(window, request, reply);
-        Ok(())
+    fn window_buttons(&self, window: Handle) -> Result<Vec<(Frame, bool)>, String> {
+        Ok(window::buttons(window))
+    }
+    fn hit(&self, window: Handle, x: f64, y: f64) -> Result<Hit, String> {
+        input::hit(window, x, y)
     }
     fn stays_open_without_windows(&self) -> bool {
         true
@@ -118,6 +126,9 @@ impl Platform for Darwin {
     }
     fn view_id(&self, view: &PlatformWebview) -> Result<Handle, String> {
         Ok(webview::id(view))
+    }
+    fn webview_layer(&self, view: &PlatformWebview) -> Result<(bool, usize), String> {
+        Ok(webview::layer(view))
     }
 
     fn begin_layout(&self, window: Handle, ticket: u64, ready: Box<dyn Fn(bool)>) -> Result<(), String> {
@@ -167,18 +178,32 @@ impl Platform for Darwin {
         input::unwatch(monitor);
         Ok(())
     }
+    fn input_pointer(&self, window: Handle, pointer: Pointer) -> Result<Delivery, String> {
+        Ok(input::pointer(window, pointer))
+    }
+    fn input_activate(&self, window: Handle, timeout: Duration, done: Box<dyn FnOnce(bool) + Send>) -> Result<(), String> {
+        input::activate(window, timeout, done);
+        Ok(())
+    }
+    fn input_key(&self, window: Handle, key: &Key) -> Result<bool, String> {
+        input::key(window, key)
+    }
 
+    #[cfg(feature = "diagnostics")]
     fn capture_open(&self, window_number: isize) -> Result<(), String> {
         capture::open(window_number);
         Ok(())
     }
+    #[cfg(feature = "diagnostics")]
     fn capture_start(&self, directory: &str) -> Result<(), String> {
         capture::start(directory);
         Ok(())
     }
+    #[cfg(feature = "diagnostics")]
     fn capture_wait(&self) -> Result<bool, String> {
         Ok(capture::wait())
     }
+    #[cfg(feature = "diagnostics")]
     fn capture_stop(&self) -> Result<i32, String> {
         Ok(capture::stop())
     }
@@ -189,5 +214,16 @@ impl Platform for Darwin {
 
     fn directory_identity(&self, _path: &Path, metadata: &Metadata) -> Result<String, String> {
         Ok(identity::identity(metadata))
+    }
+    #[cfg(feature = "diagnostics")]
+    fn private_directory(&self, path: &Path) -> Result<(), String> {
+        endpoint::private_directory(path)
+    }
+
+    fn endpoint_listen(&self, name: &str) -> Result<Box<dyn Listener>, String> {
+        endpoint::listen(name)
+    }
+    fn endpoint_connect(&self, address: &str) -> Result<Box<dyn Connection>, String> {
+        endpoint::connect(address)
     }
 }

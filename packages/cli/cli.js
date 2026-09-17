@@ -11,7 +11,7 @@ commands:
   status NAME --window W [--watch]
   run NAME --window W [--params JSON]
   dom rect|click|input NAME --window W [--index N] [--value V]
-  input pointer --window W --x X --y Y --phase move|down|drag|up|scroll [--button N] [--delta-x N] [--delta-y N]
+  input pointer --window W --x X --y Y --phase move|down|drag|up|scroll [--button left|right] [--delta-x N] [--delta-y N] [--activate]
   input key --window W --key K --phase down|up [--text T] [--modifiers shift,control,option,command]
 
 common options:
@@ -28,6 +28,7 @@ const options = {
   y: { type: "string" },
   phase: { type: "string" },
   button: { type: "string" },
+  activate: { type: "boolean" },
   "delta-x": { type: "string" },
   "delta-y": { type: "string" },
   key: { type: "string" },
@@ -98,16 +99,22 @@ function plan(positionals, values) {
     case "input": {
       const kind = positional(positionals, 1, "input kind");
       if (kind === "pointer") {
+        const phase = required(values, "phase");
+        if (values.button !== undefined && !["left", "right"].includes(values.button)) {
+          throw new UsageError("--button must be left or right");
+        }
+        if (values.activate && phase !== "move") throw new UsageError("--activate applies to --phase move");
         return {
           method: "input.pointer",
           params: compact({
             window: window(),
             x: number(values, "x") ?? required(values, "x"),
             y: number(values, "y") ?? required(values, "y"),
-            phase: required(values, "phase"),
-            button: number(values, "button"),
+            phase,
+            button: values.button,
             deltaX: number(values, "delta-x"),
             deltaY: number(values, "delta-y"),
+            activate: values.activate,
           }),
         };
       }

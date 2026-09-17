@@ -13,20 +13,24 @@ const element = (tag, cls, text) => {
   return el;
 };
 
-export function createLibrary(root) {
+/**
+ * 라이브러리 화면을 만든다. rendered 는 화면을 다시 그리거나 양식을 열고 닫을 때
+ * 호출된다.
+ */
+export function createLibrary(root, rendered = () => {}) {
   root.innerHTML = `
     <main class="library-main">
       <header class="library-heading">
         <h1>프로젝트</h1>
-        <label class="select-field library-sort"><select aria-label="프로젝트 정렬"><option value="saved">저장 순서</option><option value="name">이름</option><option value="recent">최근</option><option value="open">열림</option></select></label>
-        <label class="library-search"><span class="sr-only">프로젝트 검색</span><input class="text-field" type="search" placeholder="이름 또는 폴더 검색" autocomplete="off"></label>
+        <label class="select-field library-sort"><select aria-label="프로젝트 정렬" data-expose="core.library.sort"><option value="saved">저장 순서</option><option value="name">이름</option><option value="recent">최근</option><option value="open">열림</option></select></label>
+        <label class="library-search"><span class="sr-only">프로젝트 검색</span><input class="text-field" type="search" data-expose="core.library.search" placeholder="이름 또는 폴더 검색" autocomplete="off"></label>
       </header>
       <div class="library-error" role="alert" hidden></div>
       <div class="library-form" hidden></div>
       <div class="library-empty" hidden><h2>프로젝트를 시작하세요</h2><p>새 프로젝트를 만들거나 기존 폴더를 여세요.</p></div>
       <div class="library-grid" role="list"></div>
     </main>
-    <footer class="library-footer"><span class="library-count"></span><button type="button" class="library-return" hidden>작업 화면으로 돌아가기</button><button type="button" data-action="window">＋ 새 창</button></footer>`;
+    <footer class="library-footer"><span class="library-count"></span><button type="button" class="library-return" data-expose="core.library.return" hidden>작업 화면으로 돌아가기</button><button type="button" data-action="window" data-expose="core.library.window">＋ 새 창</button></footer>`;
   const grid = root.querySelector('.library-grid');
   const search = root.querySelector('input[type=search]');
   const sort = root.querySelector('select');
@@ -53,21 +57,21 @@ export function createLibrary(root) {
     const creates = windows.createsFolders;
     const heading = element('h2', '', creates?'새 프로젝트':'폴더 열기');
     const fields = element('form', 'library-fields');
-    function field(name, title, placeholder) {
+    function field(name, title, placeholder, expose) {
       const label=element('label','',title), input=element('input','text-field');
-      input.name=name; input.placeholder=placeholder; input.required=true; input.autocomplete='off';
+      input.name=name; input.dataset.expose=expose; input.placeholder=placeholder; input.required=true; input.autocomplete='off';
       label.append(input); fields.append(label); return input;
     }
-    const name=creates?field('name','프로젝트 폴더 이름','my-project'):null;
-    const parent=field('parent',creates?'생성 위치':'폴더 경로','/Users/…');
+    const name=creates?field('name','프로젝트 폴더 이름','my-project','core.library.form.name'):null;
+    const parent=field('parent',creates?'생성 위치':'폴더 경로','/Users/…','core.library.form.parent');
     if (creates) {
-      const choose=element('button','ui-button','폴더 선택'); choose.type='button';
+      const choose=element('button','ui-button','폴더 선택'); choose.type='button'; choose.dataset.expose='core.library.form.choose';
       choose.onclick=()=>perform(async()=>{ const path=await windows.chooseFolder(); if(path) parent.value=path; });
       parent.parentElement.append(choose);
     }
     const actions=element('div','library-form__actions');
-    const cancel=element('button','ui-button','취소'); cancel.type='button'; cancel.onclick=()=>{form.hidden=true;};
-    const submit=element('button','ui-button library-primary',creates?'생성 후 열기':'열기'); submit.type='submit';
+    const cancel=element('button','ui-button','취소'); cancel.type='button'; cancel.dataset.expose='core.library.form.cancel'; cancel.onclick=()=>{form.hidden=true;rendered();};
+    const submit=element('button','ui-button library-primary',creates?'생성 후 열기':'열기'); submit.type='submit'; submit.dataset.expose='core.library.form.submit';
     actions.append(cancel,submit); fields.append(actions); form.append(heading,fields);
     fields.onsubmit=(event)=>{event.preventDefault();perform(async()=>{
       let root=parent.value.trim();
@@ -75,6 +79,7 @@ export function createLibrary(root) {
       await record(root); form.hidden=true;
     });};
     fields.querySelector('input').focus();
+    rendered();
   }
   root.querySelector('[data-action=window]').onclick=()=>perform(()=>projects.newWindow());
   back.onclick=()=>perform(()=>projects.activate(projects.active().id));
@@ -94,7 +99,7 @@ export function createLibrary(root) {
     for(const project of shown) {
       const card=element('article','library-project'); card.dataset.projectId=project.id; card.setAttribute('role','listitem');
       card.dataset.open=String(projects.isOpen(project.id));
-      const choose=element('button','library-project__open'); choose.type='button'; choose.title=project.root;
+      const choose=element('button','library-project__open'); choose.type='button'; choose.title=project.root; choose.dataset.expose='core.library.open';
       choose.setAttribute('aria-label',`${project.title} 열기`);
       choose.onclick=()=>perform(()=>projects.activate(project.id));
       choose.append(preview(project));
@@ -107,17 +112,33 @@ export function createLibrary(root) {
         time.dateTime=new Date(project.lastOpened).toISOString(); time.title=new Date(project.lastOpened).toLocaleString('ko'); meta.append(time);
       }
       text.append(meta); choose.append(text);
-      const pin=element('button','act library-project__pin');pin.type='button';pin.innerHTML=icon('star');
+      const pin=element('button','act library-project__pin');pin.type='button';pin.dataset.expose='core.library.pin';pin.innerHTML=icon('star');
       pin.title=project.pinned?'고정 해제':'프로젝트 고정';pin.setAttribute('aria-pressed',String(Boolean(project.pinned)));
       pin.onclick=()=>perform(()=>projects.pin(project.id,!project.pinned));
       card.append(choose,pin); grid.append(card);
     }
-    const add=element('button','library-add',windows.createsFolders?'＋ 새 프로젝트':'＋ 폴더 열기');add.type='button';add.dataset.action='create';
+    const add=element('button','library-add',windows.createsFolders?'＋ 새 프로젝트':'＋ 폴더 열기');add.type='button';add.dataset.action='create';add.dataset.expose='core.library.add';
     add.onclick=showForm;grid.append(add);
     const empty=root.querySelector('.library-empty');empty.hidden=all.length>0;
     if(!shown.length&&all.length) grid.prepend(element('p','library-no-results','일치하는 프로젝트가 없습니다.'));
+    rendered();
   }
-  return {render, search:()=>search.focus()};
+  /** 화면의 상태. 미리보기 사각형은 뷰포트 기준이다. */
+  function state() {
+    const previews={};
+    for(const card of grid.querySelectorAll('.library-project')) {
+      previews[card.dataset.projectId]=[...card.querySelectorAll('.library-preview__pane')].map(pane=>{
+        const r=pane.getBoundingClientRect();return {card:pane.dataset.cardId,x:r.x,y:r.y,w:r.width,h:r.height};
+      });
+    }
+    return {
+      shown:[...grid.querySelectorAll('.library-project')].map(card=>card.dataset.projectId),
+      count:root.querySelector('.library-count').textContent,
+      query:search.value, sort:sort.value, form:!form.hidden,
+      error:error.hidden?null:error.textContent, previews,
+    };
+  }
+  return {render, state, search:()=>search.focus()};
 }
 
 function preview(project) {

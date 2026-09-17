@@ -21,6 +21,9 @@ const COMMAND = {
   overlayUpdate: "overlay_update",
   overlayHide: "overlay_hide",
   windowControls: "window_controls",
+  exposureReply: "exposure_reply",
+  exposureChanged: "exposure_changed",
+  exposureForward: "exposure_forward",
 };
 
 // 커맨드마다 인자의 이름이 다르다. 이름은 Rust 쪽 서명이 정한다.
@@ -40,6 +43,9 @@ const ARG = {
   overlayUpdate: (v) => ({ request: v }),
   overlayHide: (v) => ({ id: v }),
   windowControls: () => ({}),
+  exposureReply: (request) => ({ request }),
+  exposureChanged: (request) => ({ request }),
+  exposureForward: (request) => ({ request }),
 };
 
 export const host = (() => {
@@ -68,6 +74,8 @@ export const page = (() => {
   const { invoke } = window.__TAURI__.core;
   const listen = (event, fn) => window.__TAURI__.event.listen(event, fn,
     { target: { kind: "Webview", label: window.__TAURI__.webview.getCurrentWebview().label } });
+  // 표면 id 는 문서 주소의 id 다. 워크벤치가 표면을 그 탭 id 로 연다.
+  const surface = new URLSearchParams(location.search).get("id");
   return {
     theme(fn) {
       invoke("theme").then(fn);
@@ -80,6 +88,14 @@ export const page = (() => {
         if (e.payload.sidecar === name && e.payload.surface === surface) fn(e.payload.body);
       }),
     }),
+    // 공개 항목의 등록과 요청. 요청 이벤트에 surface 가 있으면 이 표면의 것만 처리한다.
+    exposure: {
+      register: (kind, name) => invoke("exposure_register", { request: { surface, kind, name } }),
+      onRequest: (fn) => listen("exposure-request", (e) => {
+        if (e.payload.surface === undefined || e.payload.surface === surface) fn(e.payload);
+      }),
+      reply: (id, payload) => invoke("exposure_reply", { request: { id, ...payload } }),
+    },
     modal: {
       content(id, instance, fn, place) {
         // 이벤트는 모든 페이지가 받는다. 자기 모달의 것만 취한다.

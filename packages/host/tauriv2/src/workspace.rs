@@ -58,6 +58,11 @@ impl Workspace {
         Self { directory, writing: Mutex::new(()) }
     }
 
+    /// 설정 디렉터리.
+    pub fn directory(&self) -> &Path {
+        &self.directory
+    }
+
     /// 요청을 실행하고 결과를 반환한다.
     ///
     /// snapshot 은 프로젝트 목록(각 프로젝트의 settings 포함)과 공통 설정을 반환한다. add 는

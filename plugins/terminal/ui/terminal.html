@@ -35,13 +35,23 @@
 }}
 </script>
 <script type="module">
-  import { followTheme, page } from "@soksak/plugin-api/page";
+  import { expose, followTheme, page } from "@soksak/plugin-api/page";
 
-  followTheme();
+  const themed = followTheme();
 
   const id = new URLSearchParams(location.search).get("id");
   const out = document.getElementById("out");
   const input = document.getElementById("in");
+
+  /* 출력이 바뀔 때 호출할 함수. 공개 항목 terminal.output 의 감시가 등록한다. */
+  const watchers = new Set();
+
+  /** 출력의 줄. 마지막 줄바꿈 뒤의 빈 줄은 포함하지 않는다. */
+  const lines = () => {
+    const all = out.textContent.split("\n");
+    if (all.at(-1) === "") all.pop();
+    return all;
+  };
 
   function write(text) {
     // 이미 맨 아래에 있을 때만 맨 아래로 스크롤한다. 위로 올려 둔 것을 새 출력이
@@ -49,6 +59,7 @@
     const atEnd = out.scrollTop + out.clientHeight >= out.scrollHeight - 4;
     out.append(text);
     if (atEnd) out.scrollTop = out.scrollHeight;
+    for (const fn of watchers) fn(lines());
   }
 
   // 셸 사이드카가 이 표면의 셸 세션을 실행한다. plugin.json 이 이 사이드카를 의존성으로 선언한다.
@@ -69,4 +80,21 @@
 
   addEventListener("click", () => input.focus());
   input.focus();
+
+  // 공개 항목은 첫 테마를 적용한 뒤 등록한다. 등록된 문서는 표시할 준비가 된 문서다.
+  // 셸의 작업 디렉터리는 사이드카가 보고하지 않으므로 공개하지 않는다.
+  await themed;
+  await Promise.all([
+    expose.status("terminal.output", lines, (fn) => {
+      watchers.add(fn);
+      return () => watchers.delete(fn);
+    }),
+    expose.command("terminal.write", async ({ data }) => {
+      if (typeof data !== "string") throw new Error("terminal.write requires data");
+      await shell.send(id, { op: "write", data });
+      return null;
+    }),
+    expose.dom("terminal.input", input),
+    expose.dom("terminal.output", out),
+  ]);
 </script>

@@ -1,0 +1,992 @@
+{
+  "exposes": {
+    "status": [
+      {
+        "name": "core.window.document",
+        "description": "The main document's time origin, ready state, applied color scheme, background blur, device pixel ratio, and viewport size.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "timeOrigin": {
+              "type": "number"
+            },
+            "readyState": {
+              "enum": [
+                "loading",
+                "interactive",
+                "complete"
+              ]
+            },
+            "scheme": {
+              "type": "string"
+            },
+            "background": {
+              "type": "boolean"
+            },
+            "scale": {
+              "type": "number"
+            },
+            "width": {
+              "type": "number"
+            },
+            "height": {
+              "type": "number"
+            }
+          }
+        }
+      },
+      {
+        "name": "core.screen",
+        "description": "The shown screen and the open modal of the main document.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "screen": {
+              "enum": [
+                "library",
+                "workspace"
+              ]
+            },
+            "modal": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "enum": [
+                "settings",
+                "picker",
+                null
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "core.page.error",
+        "description": "The error text shown in the main document, or null.",
+        "schema": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      {
+        "name": "core.projects",
+        "description": "Every saved project with its open state.",
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      },
+      {
+        "name": "core.project",
+        "description": "The project shown in this window, or null.",
+        "schema": {
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      },
+      {
+        "name": "core.layout",
+        "description": "The saved form of the current space layout: grid state, focus, and restore widths, or null.",
+        "schema": {
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      },
+      {
+        "name": "core.grid",
+        "description": "The current grid: size, gap, boundary positions, and cards in document order with their rectangles in plane coordinates, or null.",
+        "schema": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "width": {
+              "type": "number"
+            },
+            "height": {
+              "type": "number"
+            },
+            "gap": {
+              "type": "number"
+            },
+            "plane": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "number"
+                },
+                "y": {
+                  "type": "number"
+                },
+                "w": {
+                  "type": "number"
+                },
+                "h": {
+                  "type": "number"
+                }
+              }
+            },
+            "lines": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  }
+                },
+                "y": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  }
+                }
+              }
+            },
+            "cards": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "x": {
+                    "type": "number"
+                  },
+                  "y": {
+                    "type": "number"
+                  },
+                  "w": {
+                    "type": "number"
+                  },
+                  "h": {
+                    "type": "number"
+                  },
+                  "c0": {
+                    "type": "integer"
+                  },
+                  "c1": {
+                    "type": "integer"
+                  },
+                  "r0": {
+                    "type": "integer"
+                  },
+                  "r1": {
+                    "type": "integer"
+                  },
+                  "fixed": {
+                    "type": "boolean"
+                  },
+                  "width": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "focused": {
+                    "type": "boolean"
+                  },
+                  "pane": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "tabs": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "plugin": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "active": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "core.surfaces",
+        "description": "The native surfaces of the current plane with their plugin, visibility, dimming, declared and applied frames in window coordinates, and registered entries as \"<kind> <name>\".",
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "surface": {
+                "type": "string"
+              },
+              "plugin": {
+                "type": "string"
+              },
+              "visible": {
+                "type": "boolean"
+              },
+              "dim": {
+                "type": "boolean"
+              },
+              "declared": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  },
+                  "y": {
+                    "type": "number"
+                  },
+                  "w": {
+                    "type": "number"
+                  },
+                  "h": {
+                    "type": "number"
+                  }
+                }
+              },
+              "applied": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  },
+                  "y": {
+                    "type": "number"
+                  },
+                  "w": {
+                    "type": "number"
+                  },
+                  "h": {
+                    "type": "number"
+                  }
+                }
+              },
+              "exposes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "core.settings",
+        "description": "The effective settings, the project that project-scope changes apply to, and the keys that the project overrides.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "values": {
+              "type": "object"
+            },
+            "project": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "overridden": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "core.settings-modal",
+        "description": "Whether the settings modal is open and its exposed controls in document order.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "open": {
+              "type": "boolean"
+            },
+            "controls": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "index": {
+                    "type": "integer"
+                  },
+                  "key": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "on": {
+                    "type": [
+                      "boolean",
+                      "null"
+                    ]
+                  },
+                  "value": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "core.picker",
+        "description": "Whether the add or tab menu is open, its title, and its items in order.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "open": {
+              "type": "boolean"
+            },
+            "title": {
+              "type": "string"
+            },
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "key": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "active": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "core.library",
+        "description": "The project library: shown project ids in order, count text, search text, sort, form and error state, and preview pane rectangles per project.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "shown": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "count": {
+              "type": "string"
+            },
+            "query": {
+              "type": "string"
+            },
+            "sort": {
+              "type": "string"
+            },
+            "form": {
+              "type": "boolean"
+            },
+            "error": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "previews": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      {
+        "name": "core.verify",
+        "description": "The latest layout verification rows and the number of failed rows, or null before the first verification.",
+        "schema": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "failed": {
+              "type": "integer"
+            },
+            "rows": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "note": {
+                    "type": "string"
+                  },
+                  "ok": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    ],
+    "commands": [
+      {
+        "name": "core.settings.set",
+        "description": "Changes settings in the common or project scope and resolves after the change is saved.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "patch": {
+              "type": "object"
+            },
+            "scope": {
+              "enum": [
+                "common",
+                "project"
+              ]
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings.reset",
+        "description": "Removes the project override of one setting.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "key": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings.open",
+        "description": "Opens the settings modal.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings.close",
+        "description": "Closes the settings modal.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.projects.browse",
+        "description": "Shows the project library in this window.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.projects.flush",
+        "description": "Saves the current layout, settings, and window geometry.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.project.open",
+        "description": "Registers the directory as a project with a fresh layout and opens it; returns the project.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "root": {
+              "type": "string"
+            },
+            "color": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "object"
+        }
+      },
+      {
+        "name": "core.project.activate",
+        "description": "Opens a saved project.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.project.close",
+        "description": "Closes and removes a project.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.project.rename",
+        "description": "Renames a project.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.project.move",
+        "description": "Moves a project in the saved order by delta positions.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "delta": {
+              "type": "integer"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.project.pin",
+        "description": "Pins or unpins a project.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "pinned": {
+              "type": "boolean"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.window.new",
+        "description": "Opens a new unassigned window.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.folder.create",
+        "description": "Creates a project folder through the host and returns its root and identity.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "parent": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "root": {
+              "type": "string"
+            },
+            "identity": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
+        "name": "core.space.add",
+        "description": "Adds a space with a fresh layout, shows it, and returns its id and title.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
+        "name": "core.space.activate",
+        "description": "Shows a space of the current project.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.space.rename",
+        "description": "Renames a space of the current project.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.space.close",
+        "description": "Closes a space of the current project.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.grid.size",
+        "description": "Sets the width or height of a card on an axis and redraws.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            },
+            "axis": {
+              "enum": [
+                "x",
+                "y"
+              ]
+            },
+            "size": {
+              "type": "number"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.boundary.move",
+        "description": "Moves boundary line on axis to a position in plane coordinates and redraws; returns the resulting position.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "axis": {
+              "enum": [
+                "x",
+                "y"
+              ]
+            },
+            "line": {
+              "type": "integer"
+            },
+            "position": {
+              "type": "number"
+            }
+          }
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "position": {
+              "type": "number"
+            }
+          }
+        }
+      }
+    ],
+    "dom": [
+      {
+        "name": "core.chrome.bar",
+        "description": "The window chrome row."
+      },
+      {
+        "name": "core.chrome.projects",
+        "description": "The project library button."
+      },
+      {
+        "name": "core.chrome.left",
+        "description": "The left sidebar switch."
+      },
+      {
+        "name": "core.chrome.right",
+        "description": "The right sidebar switch."
+      },
+      {
+        "name": "core.chrome.mode",
+        "description": "The light and dark mode switch."
+      },
+      {
+        "name": "core.chrome.settings",
+        "description": "The settings button."
+      },
+      {
+        "name": "core.project-tab",
+        "description": "The project tabs in order.",
+        "many": true
+      },
+      {
+        "name": "core.project-tab.add",
+        "description": "The project tab add button."
+      },
+      {
+        "name": "core.space-tab",
+        "description": "The space tabs in order.",
+        "many": true
+      },
+      {
+        "name": "core.space-tab.add",
+        "description": "The space tab add button."
+      },
+      {
+        "name": "core.card",
+        "description": "The cards in document order.",
+        "many": true
+      },
+      {
+        "name": "core.card.tab",
+        "description": "The tabs of every card in document order.",
+        "many": true
+      },
+      {
+        "name": "core.card.add",
+        "description": "The add-tab buttons of pane cards in document order.",
+        "many": true
+      },
+      {
+        "name": "core.card.split-x",
+        "description": "The vertical split buttons of pane cards in document order.",
+        "many": true
+      },
+      {
+        "name": "core.card.split-y",
+        "description": "The horizontal split buttons of pane cards in document order.",
+        "many": true
+      },
+      {
+        "name": "core.card.close",
+        "description": "The close buttons of pane cards in document order.",
+        "many": true
+      },
+      {
+        "name": "core.picker.item",
+        "description": "The items of the open add or tab menu in order.",
+        "many": true
+      },
+      {
+        "name": "core.library.search",
+        "description": "The project search field."
+      },
+      {
+        "name": "core.library.sort",
+        "description": "The project sort selection."
+      },
+      {
+        "name": "core.library.open",
+        "description": "The open buttons of the shown projects in order.",
+        "many": true
+      },
+      {
+        "name": "core.library.pin",
+        "description": "The pin buttons of the shown projects in order.",
+        "many": true
+      },
+      {
+        "name": "core.library.add",
+        "description": "The new project button."
+      },
+      {
+        "name": "core.library.return",
+        "description": "The button that returns to the current project."
+      },
+      {
+        "name": "core.library.window",
+        "description": "The new window button."
+      },
+      {
+        "name": "core.library.form.name",
+        "description": "The project folder name field."
+      },
+      {
+        "name": "core.library.form.parent",
+        "description": "The parent or folder path field."
+      },
+      {
+        "name": "core.library.form.choose",
+        "description": "The folder selection button."
+      },
+      {
+        "name": "core.library.form.cancel",
+        "description": "The form cancel button."
+      },
+      {
+        "name": "core.library.form.submit",
+        "description": "The form submit button."
+      },
+      {
+        "name": "core.settings-modal.card",
+        "description": "The settings card in the main document; the native modal draws it at the same rectangle."
+      },
+      {
+        "name": "core.settings-modal.scrim",
+        "description": "The layer that blocks the main document while settings are open."
+      },
+      {
+        "name": "core.settings-modal.grip",
+        "description": "The settings header that moves the card."
+      },
+      {
+        "name": "core.settings-modal.close",
+        "description": "The settings close button."
+      },
+      {
+        "name": "core.settings-modal.nav",
+        "description": "The settings section buttons in order.",
+        "many": true
+      },
+      {
+        "name": "core.settings-modal.scope",
+        "description": "The settings scope buttons in order.",
+        "many": true
+      },
+      {
+        "name": "core.settings-modal.pick",
+        "description": "The settings choice buttons in document order; core.settings-modal lists their keys.",
+        "many": true
+      },
+      {
+        "name": "core.settings-modal.theme",
+        "description": "The theme swatches in order.",
+        "many": true
+      },
+      {
+        "name": "core.settings-modal.set",
+        "description": "The settings value controls in document order; core.settings-modal lists their keys.",
+        "many": true
+      },
+      {
+        "name": "core.settings-modal.reset",
+        "description": "The buttons that remove project overrides in document order.",
+        "many": true
+      },
+      {
+        "name": "core.settings-modal.build",
+        "description": "The button that rebuilds the initial layout."
+      }
+    ]
+  }
+}

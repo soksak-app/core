@@ -22,3 +22,18 @@ test("every sidecar the plugin uses is a declared package dependency", () => {
     assert.ok(pkg.dependencies?.[name], `${name} is not a dependency`);
   }
 });
+
+test("the surface page registers every declared exposure", () => {
+  const html = readFileSync(new URL(`../${manifest.surface.page}`, import.meta.url), "utf8");
+  const kinds = { status: "status", commands: "command", dom: "dom" };
+  const declared = Object.entries(manifest.exposes ?? {})
+    .flatMap(([key, entries]) => entries.map((entry) => `${kinds[key]} ${entry.name}`)).sort();
+  const registered = [...html.matchAll(/expose\.(status|command|dom)\("([^"]+)"/g)]
+    .map(([, kind, name]) => `${kind} ${name}`).sort();
+  assert.deepEqual(registered, declared);
+});
+
+test("the terminal exposes its input, output, and write command", () => {
+  const names = Object.values(manifest.exposes).flat().map((entry) => entry.name).sort();
+  assert.deepEqual(names, ["terminal.input", "terminal.output", "terminal.output", "terminal.write"].sort());
+});

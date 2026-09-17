@@ -93,7 +93,7 @@ func (h *Host) ProjectOpen(ctx context.Context, req ProjectOpen) (ProjectOpened,
 		owner.root = folder.Root
 		owner.mu.Unlock()
 		h.mu.Unlock()
-		owner.window.SetTitle(req.Title + " / Wails v3")
+		owner.setTitle(req.Title + titleSuffix)
 		if !local {
 			owner.Emit("project-activate", req.ID)
 			owner.window.Show()
@@ -114,7 +114,7 @@ func (h *Host) ProjectOpen(ctx context.Context, req ProjectOpen) (ProjectOpened,
 	owner.mu.Unlock()
 	h.owners[req.ID] = owner
 	h.mu.Unlock()
-	owner.window.SetTitle(req.Title + " / Wails v3")
+	owner.setTitle(req.Title + titleSuffix)
 	if req.Geometry != nil && req.Geometry.Width > 0 && req.Geometry.Height > 0 {
 		application.InvokeSync(func() { prepareWindow(owner.window) })
 		owner.window.SetSize(req.Geometry.Width, req.Geometry.Height)

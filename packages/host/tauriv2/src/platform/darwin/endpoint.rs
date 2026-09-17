@@ -1,0 +1,124 @@
+//! 로컬 엔드포인트의 Unix 도메인 소켓.
+//!
+//! 소켓은 사용자별 임시 디렉터리 아래 `soksak/` 에 둔다. 설정 디렉터리 경로는 소켓 경로의
+//! 길이 제한(104 바이트)을 넘을 수 있다. 디렉터리는 현재 사용자만 접근할 수 있고, 다른 권한이나
+//! 다른 소유자의 디렉터리이면 열지 않는다.
+
+use std::fs;
+use std::io::{Read, Write};
+use std::net::Shutdown;
+use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
+use std::os::unix::net::{UnixListener, UnixStream};
+use std::path::{Path, PathBuf};
+use std::time::Duration;
+
+use super::super::{Connection, Listener};
+
+extern "C" {
+    fn geteuid() -> u32;
+}
+
+/// path 를 현재 사용자만 접근할 수 있는 디렉터리로 만든다. 이미 있으면 소유자와 권한을 확인한다.
+pub fn private_directory(path: &Path) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
+    }
+    match fs::DirBuilder::new().mode(0o700).create(path) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+        Err(e) => return Err(format!("{}: {e}", path.display())),
+    }
+    let metadata = fs::symlink_metadata(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    if !metadata.is_dir() {
+        return Err(format!("{} is not a directory", path.display()));
+    }
+    if metadata.uid() != unsafe { geteuid() } {
+        return Err(format!("{} belongs to another user", path.display()));
+    }
+    if metadata.mode() & 0o777 != 0o700 {
+        return Err(format!("{} has mode {:o}, want 700", path.display(), metadata.mode() & 0o777));
+    }
+    Ok(())
+}
+
+struct Socket {
+    listener: UnixListener,
+    path: PathBuf,
+}
+
+impl Listener for Socket {
+    fn accept(&self) -> Result<Box<dyn Connection>, String> {
+        let (stream, _) = self.listener.accept().map_err(|e| e.to_string())?;
+        Ok(Box::new(Stream(stream)))
+    }
+
+    fn transport(&self) -> &'static str {
+        "unix"
+    }
+
+    fn address(&self) -> String {
+        self.path.to_string_lossy().into_owned()
+    }
+
+    fn remove(&self) {
+        if let Err(error) = fs::remove_file(&self.path) {
+            if error.kind() != std::io::ErrorKind::NotFound {
+                eprintln!("{}: {error}", self.path.display());
+            }
+        }
+    }
+}
+
+struct Stream(UnixStream);
+
+impl Read for Stream {
+    fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+        self.0.read(buffer)
+    }
+}
+
+impl Write for Stream {
+    fn write(&mut self, buffer: &[u8]) -> std::io::Result<usize> {
+        self.0.write(buffer)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.0.flush()
+    }
+}
+
+impl Connection for Stream {
+    fn try_clone(&self) -> Result<Box<dyn Connection>, String> {
+        Ok(Box::new(Stream(self.0.try_clone().map_err(|e| e.to_string())?)))
+    }
+
+    fn set_read_timeout(&self, timeout: Option<Duration>) -> Result<(), String> {
+        self.0.set_read_timeout(timeout).map_err(|e| e.to_string())
+    }
+
+    fn close(&self) {
+        let _ = self.0.shutdown(Shutdown::Both);
+    }
+}
+
+/// `<임시 디렉터리>/soksak/<name>-<pid>.sock` 소켓을 연다. 같은 경로의 이전 소켓 파일은
+/// 종료한 같은 번호의 프로세스가 남긴 것이므로 제거한다.
+pub fn listen(name: &str) -> Result<Box<dyn Listener>, String> {
+    let directory = std::env::temp_dir().join("soksak");
+    private_directory(&directory)?;
+    let path = directory.join(format!("{name}-{}.sock", std::process::id()));
+    match fs::remove_file(&path) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(format!("{}: {e}", path.display())),
+    }
+    let listener = UnixListener::bind(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).map_err(|e| format!("{}: {e}", path.display()))?;
+    Ok(Box::new(Socket { listener, path }))
+}
+
+/// 소켓 경로 address 에 연결한다.
+pub fn connect(address: &str) -> Result<Box<dyn Connection>, String> {
+    let stream = UnixStream::connect(address).map_err(|e| format!("{address}: {e}"))?;
+    Ok(Box::new(Stream(stream)))
+}

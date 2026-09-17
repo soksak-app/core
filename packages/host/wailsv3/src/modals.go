@@ -148,6 +148,7 @@ func (s *Surfaces) OverlayPlace(req PlaceRequest) (Rect, error) {
 	live.content.Card = req.Card
 	s.mu.Unlock()
 	s.Emit("modal-position", map[string]any{"id": req.ID, "instance": live.instance, "card": req.Card})
+	s.windowChanged()
 	return at, nil
 }
 
@@ -166,6 +167,7 @@ func (s *Surfaces) OverlayHide(id string) error {
 		application.InvokeSync(func() { system.FocusModal(view.NativeView(), false) })
 		view.Close()
 	}
+	s.windowChanged()
 	return nil
 }
 
@@ -231,7 +233,7 @@ func (s *Surfaces) ModalReady(id string, instance uint64) {
 	s.mu.Unlock()
 	if !first {
 		if current {
-			s.Emit("modal-rendered", id)
+			s.rendered(id)
 		}
 		return
 	}
@@ -240,7 +242,15 @@ func (s *Surfaces) ModalReady(id string, instance uint64) {
 		view.SetHidden(false)
 		system.FocusModal(view.NativeView(), true)
 	})
+	s.rendered(id)
+}
+
+// rendered 는 모달 문서가 렌더링을 마쳤음을 알린다. 갱신된 내용이 그 문서에 도달했는지는
+// 이 알림으로만 확인할 수 있으므로 진단 기록에도 남긴다.
+func (s *Surfaces) rendered(id string) {
 	s.Emit("modal-rendered", id)
+	s.log("diagnostics: modal rendered " + id)
+	s.windowChanged()
 }
 
 func (s *Surfaces) dialog() bool {

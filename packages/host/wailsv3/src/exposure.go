@@ -1,0 +1,763 @@
+// 노출 요청의 전달과 호스트 항목.
+//
+// 엔드포인트의 요청은 창의 메인 페이지에 exposure-request 이벤트로 전달하고, 페이지는
+// ExposureReply 로 답한다. 표면 페이지가 등록한 항목은 메인 페이지가 ExposureForward 로
+// 요청하고, 호스트가 그 표면 페이지에 전달한다. host 소유 항목은 호스트가 직접 처리한다.
+// 형식은 docs/spec/exposure.md 에 정의한다.
+
+package host
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/wailsapp/wails/v3/pkg/application"
+
+	"github.com/min-median-max/soksak/packages/host/wailsv3/src/platform"
+)
+
+// pageTimeout 은 문서의 답을 기다리는 시간이다.
+const pageTimeout = 10 * time.Second
+
+// hostEntry 는 호스트가 선언한 항목 하나다.
+type hostEntry struct {
+	Description string
+	// Schema 는 상태 값, Params 와 Result 는 명령의 매개변수와 결과 스키마다.
+	Schema, Params, Result map[string]any
+}
+
+// rectSchema 는 {x, y, width, height} 의 스키마다.
+var rectSchema = map[string]any{"type": "object", "properties": map[string]any{
+	"x": map[string]any{"type": "number"}, "y": map[string]any{"type": "number"},
+	"width": map[string]any{"type": "number"}, "height": map[string]any{"type": "number"},
+}}
+
+var emptyObject = map[string]any{"type": "object", "properties": map[string]any{}}
+var nullSchema = map[string]any{"type": "null"}
+
+var hostStatus = map[string]hostEntry{
+	"host.window": {
+		Description: "Window frame, content size, backing scale, key state, window buttons, native surfaces, and the open native modal.",
+		Schema: map[string]any{"type": "object", "properties": map[string]any{
+			"frame":    rectSchema,
+			"content":  rectSchema,
+			"scale":    map[string]any{"type": "number"},
+			"key":      map[string]any{"type": "boolean"},
+			"controls": map[string]any{"type": "array", "items": rectSchema},
+			"surfaces": map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{
+				"id": map[string]any{"type": "string"}, "frame": rectSchema,
+				"visible": map[string]any{"type": "boolean"}, "layer": map[string]any{"type": "number"},
+			}}},
+			"modal": map[string]any{"type": "object", "properties": map[string]any{
+				"id": map[string]any{"type": "string"}, "mode": map[string]any{"type": "string"},
+				"shown": map[string]any{"type": "boolean"}, "frame": rectSchema,
+			}},
+		}},
+	},
+}
+
+var hostCommands = map[string]hostEntry{
+	"host.window.close": {Description: "Closes the window through its normal close action.", Params: emptyObject, Result: nullSchema},
+	"host.window.maximize": {Description: "Maximizes the window, or restores it with on false.", Result: nullSchema,
+		Params: map[string]any{"type": "object", "properties": map[string]any{"on": map[string]any{"type": "boolean"}}}},
+	"host.window.resize": {Description: "Resizes the content area.", Result: nullSchema,
+		Params: map[string]any{"type": "object", "properties": map[string]any{
+			"width": map[string]any{"type": "number"}, "height": map[string]any{"type": "number"}}}},
+	"host.window.reload":    {Description: "Reloads the main page.", Params: emptyObject, Result: nullSchema},
+	"host.window.presented": {Description: "Resolves after the main page and visible application documents have presented their current geometry.", Params: emptyObject, Result: nullSchema},
+	"host.hit": {Description: "Returns the owner of a point in window coordinates.",
+		Params: map[string]any{"type": "object", "properties": map[string]any{
+			"x": map[string]any{"type": "number"}, "y": map[string]any{"type": "number"}}},
+		Result: map[string]any{"type": "object", "properties": map[string]any{
+			"kind":       map[string]any{"type": "string", "enum": []string{"page", "surface", "native"}},
+			"surface":    map[string]any{"type": "string"},
+			"identifier": map[string]any{"type": "string"}}}},
+	"host.quit": {Description: "Requests normal application termination, including pending saves.", Params: emptyObject, Result: nullSchema},
+}
+
+// listedEntries 는 exposure.list 에 넣을 호스트 항목을 이름 순서로 반환한다.
+func listedEntries(entries map[string]hostEntry, status bool) []map[string]any {
+	names := make([]string, 0, len(entries))
+	for name := range entries {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	out := make([]map[string]any, 0, len(names))
+	for _, name := range names {
+		entry := entries[name]
+		item := map[string]any{"name": name, "description": entry.Description, "registered": true}
+		if status {
+			item["schema"] = entry.Schema
+		} else {
+			item["params"] = entry.Params
+			item["result"] = entry.Result
+		}
+		out = append(out, item)
+	}
+	return out
+}
+
+// ExposureResult 는 문서가 보낸 답이다. 결과 또는 오류 하나를 담는다. ExposureForward 가 반환한다.
+type ExposureResult struct {
+	Result json.RawMessage `json:"result,omitempty"`
+	Error  *RPCError       `json:"error,omitempty"`
+}
+
+// waiter 는 답을 기다리는 요청 하나다. surface 가 비어 있으면 메인 페이지의 요청이다.
+type waiter struct {
+	owner   *Surfaces
+	surface string
+	reply   chan ExposureResult
+}
+
+// relay 는 문서에 보낸 요청과 그 답을 연결한다.
+type relay struct {
+	mu      sync.Mutex
+	next    uint64
+	waiting map[uint64]*waiter
+}
+
+func (r *relay) open(owner *Surfaces, surface string) (uint64, *waiter) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.next++
+	w := &waiter{owner: owner, surface: surface, reply: make(chan ExposureResult, 1)}
+	r.waiting[r.next] = w
+	return r.next, w
+}
+
+// resolve 는 요청 id 의 답을 전달한다. 요청을 받은 문서가 아닌 곳에서 온 답은 버린다.
+func (r *relay) resolve(id uint64, owner *Surfaces, surface string, reply ExposureResult) error {
+	r.mu.Lock()
+	w := r.waiting[id]
+	if w == nil || w.owner != owner || w.surface != surface {
+		r.mu.Unlock()
+		return fmt.Errorf("exposure reply %d has no matching request", id)
+	}
+	delete(r.waiting, id)
+	r.mu.Unlock()
+	w.reply <- reply
+	return nil
+}
+
+// abandon 은 사라진 문서에 보낸 요청에 1003 오류로 답한다. surfaces 가 nil 이면 창의 모든 요청이다.
+func (r *relay) abandon(owner *Surfaces, surfaces map[string]bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for id, w := range r.waiting {
+		if w.owner != owner || (surfaces != nil && !surfaces[w.surface]) {
+			continue
+		}
+		delete(r.waiting, id)
+		w.reply <- ExposureResult{Error: rpcError(codeNoWindow, "the document closed before it replied")}
+	}
+}
+
+// wait 는 답을 기다린다. 제한 시간이 지나면 요청을 지우고 1005 오류를 반환한다. timeout 이 0 이면
+// 답이나 abandon 까지 기다린다.
+func (r *relay) wait(id uint64, w *waiter, timeout time.Duration) ExposureResult {
+	if timeout == 0 {
+		return <-w.reply
+	}
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case reply := <-w.reply:
+		return reply
+	case <-timer.C:
+		r.mu.Lock()
+		delete(r.waiting, id)
+		r.mu.Unlock()
+		select {
+		case reply := <-w.reply:
+			return reply
+		default:
+		}
+		return ExposureResult{Error: rpcError(codeTimeout, "the document did not reply within %s", timeout)}
+	}
+}
+
+// ask 는 창 s 의 메인 페이지에 요청을 보내고 답을 기다린다.
+func (h *Host) ask(s *Surfaces, method string, params any, timeout time.Duration) (json.RawMessage, error) {
+	id, w := h.relay.open(s, "")
+	s.window.EmitEvent("exposure-request", map[string]any{"id": id, "method": method, "params": params})
+	reply := h.relay.wait(id, w, timeout)
+	if reply.Error != nil {
+		return nil, reply.Error
+	}
+	if len(reply.Result) == 0 {
+		return json.RawMessage(`null`), nil
+	}
+	return reply.Result, nil
+}
+
+// ExposureReplyRequest 는 문서가 요청 하나에 보낸 답이다.
+type ExposureReplyRequest struct {
+	ID     uint64          `json:"id"`
+	Result json.RawMessage `json:"result"`
+	Error  *RPCError       `json:"error"`
+}
+
+// ExposureReply 는 메인 페이지가 exposure-request 에 보낸 답을 받는다.
+func (h *Host) ExposureReply(ctx context.Context, req ExposureReplyRequest) error {
+	s, err := h.surface(ctx)
+	if err != nil {
+		return err
+	}
+	return h.relay.resolve(req.ID, s, "", ExposureResult{Result: req.Result, Error: req.Error})
+}
+
+// ExposureChange 는 감시 중인 상태의 새 값이다.
+type ExposureChange struct {
+	Name  string          `json:"name"`
+	Value json.RawMessage `json:"value"`
+}
+
+// ExposureChanged 는 메인 페이지가 알린 상태 변경을 그 상태를 감시하는 연결에 전달한다.
+func (h *Host) ExposureChanged(ctx context.Context, change ExposureChange) error {
+	s, err := h.surface(ctx)
+	if err != nil {
+		return err
+	}
+	if isHostName(change.Name) {
+		return fmt.Errorf("the page cannot change host status %s", change.Name)
+	}
+	h.endpoint.StatusChanged(s.name, change.Name, change.Value)
+	return nil
+}
+
+// ExposureForwardRequest 는 메인 페이지가 표면 페이지에 전달할 요청이다.
+type ExposureForwardRequest struct {
+	ID      json.RawMessage `json:"id"`
+	Surface string          `json:"surface"`
+	Method  string          `json:"method"`
+	Params  json.RawMessage `json:"params"`
+}
+
+// ExposureForward 는 요청을 표면 페이지에 전달하고 그 답 {result} 또는 {error} 를 반환한다.
+// 표면이 없거나 답하지 않으면 오류를 담은 답을 반환한다.
+func (h *Host) ExposureForward(ctx context.Context, req ExposureForwardRequest) (ExposureResult, error) {
+	s, err := h.surface(ctx)
+	if err != nil {
+		return ExposureResult{}, err
+	}
+	id, w := h.relay.open(s, req.Surface)
+	payload, err := json.Marshal(map[string]any{"event": "exposure-request",
+		"data": map[string]any{"id": id, "method": req.Method, "params": req.Params}})
+	if err != nil {
+		return ExposureResult{}, err
+	}
+	var sent bool
+	application.InvokeSync(func() {
+		if view := s.views[req.Surface]; view != nil {
+			view.execJS("window.__soksakNative?.receive(" + string(payload) + ")")
+			sent = true
+		}
+	})
+	if !sent {
+		h.relay.abandon(s, map[string]bool{req.Surface: true})
+	}
+	// status.next 는 값이 바뀔 때까지 답하지 않으므로 제한 시간이 없다. 표면이 닫히면 1003 으로 끝난다.
+	timeout := pageTimeout
+	if req.Method == "status.next" {
+		timeout = 0
+	}
+	reply := h.relay.wait(id, w, timeout)
+	if reply.Error == nil && len(reply.Result) == 0 {
+		reply.Result = json.RawMessage(`null`)
+	}
+	return reply, nil
+}
+
+// SurfaceRegistration 은 표면 페이지가 등록한 항목이다.
+type SurfaceRegistration struct {
+	Surface string `json:"surface"`
+	Kind    string `json:"kind"`
+	Name    string `json:"name"`
+}
+
+// surfaceOf 는 네이티브 웹뷰 viewID 가 표시하는 표면의 id 를 반환한다. 표면이 아니면 빈 값이다.
+func (s *Surfaces) surfaceOf(viewID uint64) string {
+	var id string
+	application.InvokeSync(func() {
+		if view := nativeViews[viewID]; view != nil && view.owner == s {
+			id = s.named[uintptr(view.handle)]
+		}
+	})
+	return id
+}
+
+// exposureRegister 는 표면 페이지의 등록을 메인 페이지에 전달한다.
+func (s *Surfaces) exposureRegister(viewID uint64, req SurfaceRegistration) error {
+	if surface := s.surfaceOf(viewID); surface == "" || surface != req.Surface {
+		return fmt.Errorf("this document is not surface %q", req.Surface)
+	}
+	if req.Kind != "status" && req.Kind != "command" && req.Kind != "dom" {
+		return fmt.Errorf("unknown exposure kind %q", req.Kind)
+	}
+	if !namePattern.MatchString(req.Name) || isHostName(req.Name) || strings.HasPrefix(req.Name, "core.") {
+		return fmt.Errorf("a surface cannot register %q", req.Name)
+	}
+	s.window.EmitEvent("exposure-registered", req)
+	return nil
+}
+
+// exposureReply 는 표면 페이지가 전달받은 요청에 보낸 답을 받는다.
+func (s *Surfaces) exposureReply(viewID uint64, req ExposureReplyRequest) error {
+	surface := s.surfaceOf(viewID)
+	if surface == "" {
+		return errors.New("only surface documents reply to forwarded requests")
+	}
+	return s.host.relay.resolve(req.ID, s, surface, ExposureResult{Result: req.Result, Error: req.Error})
+}
+
+// surfacesClosed 는 제거된 표면의 등록 해제를 메인 페이지에 알리고 그 표면에 보낸 요청을 끝낸다.
+func (s *Surfaces) surfacesClosed(ids []string) {
+	if len(ids) == 0 {
+		return
+	}
+	closed := map[string]bool{}
+	for _, id := range ids {
+		closed[id] = true
+		s.window.EmitEvent("exposure-registered", map[string]any{"surface": id, "closed": true})
+	}
+	s.host.relay.abandon(s, closed)
+}
+
+// byName 은 이름이 name 인 창을 반환한다.
+func (h *Host) byName(name string) *Surfaces {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for _, s := range h.windows {
+		if s.name == name {
+			return s
+		}
+	}
+	return nil
+}
+
+// hostBackend 는 엔드포인트에 창과 페이지를 제공한다. Host 의 공개 메서드는 페이지에 바인딩되므로
+// 이 메서드들은 별도 형식에 둔다.
+type hostBackend struct{ h *Host }
+
+func (b hostBackend) Windows() []WindowEntry {
+	b.h.mu.Lock()
+	windows := make([]*Surfaces, 0, len(b.h.windows))
+	for _, s := range b.h.windows {
+		windows = append(windows, s)
+	}
+	b.h.mu.Unlock()
+	out := make([]WindowEntry, 0, len(windows))
+	for _, s := range windows {
+		s.mu.Lock()
+		entry := WindowEntry{Window: s.name, Title: s.title, Project: s.root}
+		s.mu.Unlock()
+		entry.Key = s.window.IsFocused()
+		out = append(out, entry)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Window < out[j].Window })
+	return out
+}
+
+func (b hostBackend) HasWindow(window string) bool { return b.h.byName(window) != nil }
+
+func (b hostBackend) window(name string) (*Surfaces, error) {
+	s := b.h.byName(name)
+	if s == nil {
+		return nil, errMissingWindow(name)
+	}
+	return s, nil
+}
+
+func (b hostBackend) PageRequest(window, method string, params json.RawMessage) (json.RawMessage, error) {
+	s, err := b.window(window)
+	if err != nil {
+		return nil, err
+	}
+	return b.h.ask(s, method, params, pageTimeout)
+}
+
+func (b hostBackend) HostStatus(window, name string) (any, error) {
+	s, err := b.window(window)
+	if err != nil {
+		return nil, err
+	}
+	return s.windowState()
+}
+
+func (b hostBackend) HostCommand(window, name string, params json.RawMessage) (any, error) {
+	s, err := b.window(window)
+	if err != nil {
+		return nil, err
+	}
+	switch name {
+	case "host.window.close":
+		s.window.Close()
+	case "host.window.maximize":
+		var p struct {
+			On *bool `json:"on"`
+		}
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, rpcError(codeInvalidParams, "%v", err)
+		}
+		if p.On == nil || *p.On {
+			s.window.Maximise()
+		} else {
+			s.window.UnMaximise()
+		}
+	case "host.window.resize":
+		var p struct {
+			Width, Height *float64
+		}
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, rpcError(codeInvalidParams, "%v", err)
+		}
+		if p.Width == nil || p.Height == nil || *p.Width < 1 || *p.Height < 1 {
+			return nil, rpcError(codeInvalidParams, "width and height must be positive numbers")
+		}
+		s.window.SetSize(int(*p.Width), int(*p.Height))
+	case "host.window.reload":
+		s.window.Reload()
+	case "host.window.presented":
+		return nil, s.presented()
+	case "host.hit":
+		var p struct {
+			X, Y *float64
+		}
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, rpcError(codeInvalidParams, "%v", err)
+		}
+		if p.X == nil || p.Y == nil {
+			return nil, rpcError(codeInvalidParams, "x and y are required")
+		}
+		return s.hit(*p.X, *p.Y)
+	case "host.quit":
+		go application.Get().Quit()
+	default:
+		return nil, rpcError(codeUnknownName, "unknown command %s", name)
+	}
+	return nil, nil
+}
+
+var pointerPhaseCodes = map[string]int{"move": 0, "down": 1, "drag": 2, "up": 3, "scroll": 4}
+
+// activateTimeout 은 input.pointer 의 activate 가 활성화를 기다리는 시간이다.
+const activateTimeout = 5 * time.Second
+
+// errInactive 는 창이 키 창이 아니어서 이동을 전달하지 못했을 때의 오류다.
+func errInactive() *RPCError { return rpcError(codeInactive, "the window is not active") }
+
+// delivered 는 네이티브 키 입력의 결과를 엔드포인트 오류로 바꾼다.
+func delivered(ok bool, err error) error {
+	if err != nil {
+		return rpcError(codeNoInput, "%v", err)
+	}
+	if !ok {
+		return rpcError(codeInvalidParams, "the window did not accept the key: the key name is unknown")
+	}
+	return nil
+}
+
+func (b hostBackend) Pointer(window string, input PointerInput) error {
+	s, err := b.window(window)
+	if err != nil {
+		return err
+	}
+	if input.Activate {
+		if err := s.activate(); err != nil {
+			return err
+		}
+	}
+	button := 0
+	if input.Button == "right" {
+		button = 1
+	}
+	var result platform.PointerResult
+	application.InvokeSync(func() {
+		result, err = system.InjectPointer(s.window.NativeWindow(), input.X, input.Y, pointerPhaseCodes[input.Phase], button, input.DeltaX, input.DeltaY)
+	})
+	switch {
+	case err != nil:
+		return rpcError(codeNoInput, "%v", err)
+	case result == platform.PointerInactive:
+		return errInactive()
+	case result == platform.PointerRejected:
+		return rpcError(codeInvalidParams, "the window did not accept the input: the point is outside the content")
+	}
+	return nil
+}
+
+// activate 는 애플리케이션을 활성화하고 창을 키 창으로 만든 뒤, 창의 웹뷰가 활성 상태를 받을
+// 때까지 기다린다. 시스템이 활성화하지 않으면 1006 오류를 반환한다.
+func (s *Surfaces) activate() error {
+	done := make(chan bool, 1)
+	var err error
+	application.InvokeSync(func() {
+		err = system.ActivateWindow(s.window.NativeWindow(), activateTimeout.Seconds(), func(ok bool) { done <- ok })
+	})
+	if err != nil {
+		return rpcError(codeNoInput, "%v", err)
+	}
+	if !<-done {
+		return rpcError(codeInactive, "the system did not activate the application within %s", activateTimeout)
+	}
+	return nil
+}
+
+func (b hostBackend) Key(window string, input KeyInput) error {
+	s, err := b.window(window)
+	if err != nil {
+		return err
+	}
+	var ok bool
+	application.InvokeSync(func() {
+		ok, err = system.InjectKey(s.window.NativeWindow(), input.Key, input.Text, input.Modifiers, input.Down)
+	})
+	return delivered(ok, err)
+}
+
+// probe 는 창의 네이티브 검사 요청을 실행하고 결과를 into 로 읽는다. inspect 는 같은 UI 스레드
+// 작업에서 결과를 받은 뒤 실행한다.
+func (s *Surfaces) probe(request map[string]any, into any, inspect func()) error {
+	data, err := json.Marshal(request)
+	if err != nil {
+		return err
+	}
+	done := make(chan string, 1)
+	var started error
+	application.InvokeSync(func() {
+		started = system.Probe(s.window.NativeWindow(), string(data), func(text string) { done <- text })
+		if inspect != nil {
+			inspect()
+		}
+	})
+	if started != nil {
+		return started
+	}
+	var text string
+	select {
+	case text = <-done:
+	case <-time.After(pageTimeout):
+		return rpcError(codeTimeout, "native %s did not reply", request["op"])
+	}
+	var reply struct {
+		Result json.RawMessage `json:"result"`
+		Error  *string         `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(text), &reply); err != nil {
+		return err
+	}
+	if reply.Error != nil {
+		return errors.New(*reply.Error)
+	}
+	return json.Unmarshal(reply.Result, into)
+}
+
+// frame 은 {x, y, width, height} 이다.
+type frame struct {
+	X      float64 `json:"x"`
+	Y      float64 `json:"y"`
+	Width  float64 `json:"width"`
+	Height float64 `json:"height"`
+}
+
+type probeRect struct {
+	X, Y, W, H float64
+}
+
+func (r probeRect) frame() frame { return frame{X: r.X, Y: r.Y, Width: r.W, Height: r.H} }
+
+// probeState 는 네이티브 state 검사의 결과 중 사용하는 값이다.
+type probeState struct {
+	Frame    probeRect
+	W, H     float64
+	Scale    float64
+	Key      bool
+	Controls []struct {
+		probeRect
+		Hidden bool
+	}
+	Views []struct {
+		probeRect
+		View   uint64
+		Hidden bool
+		Layer  int
+	}
+}
+
+// WindowSurface 는 host.window 의 표면 하나다.
+type WindowSurface struct {
+	ID      string `json:"id"`
+	Frame   frame  `json:"frame"`
+	Visible bool   `json:"visible"`
+	Layer   int    `json:"layer"`
+}
+
+// WindowModal 은 host.window 의 열린 모달이다.
+type WindowModal struct {
+	ID    string `json:"id"`
+	Mode  string `json:"mode"`
+	Shown bool   `json:"shown"`
+	Frame *frame `json:"frame"`
+}
+
+// WindowControl 은 창 단추 하나의 영역이다.
+type WindowControl struct {
+	frame
+	Hidden bool `json:"hidden"`
+}
+
+// WindowStatus 는 host.window 의 값이다.
+type WindowStatus struct {
+	Frame    frame           `json:"frame"`
+	Content  frame           `json:"content"`
+	Scale    float64         `json:"scale"`
+	Key      bool            `json:"key"`
+	Controls []WindowControl `json:"controls"`
+	Surfaces []WindowSurface `json:"surfaces"`
+	Modal    *WindowModal    `json:"modal"`
+}
+
+// windowState 는 host.window 의 현재 값을 읽는다.
+func (s *Surfaces) windowState() (WindowStatus, error) {
+	var state probeState
+	named := map[uint64]string{}
+	var modalHandle uint64
+	err := s.probe(map[string]any{"op": "state"}, &state, func() {
+		for view, id := range s.named {
+			named[uint64(view)] = id
+		}
+		s.mu.Lock()
+		if s.modalView != nil {
+			modalHandle = uint64(uintptr(s.modalView.handle))
+		}
+		s.mu.Unlock()
+	})
+	if err != nil {
+		return WindowStatus{}, err
+	}
+	out := WindowStatus{
+		Frame: state.Frame.frame(), Content: frame{Width: state.W, Height: state.H},
+		Scale: state.Scale, Key: state.Key,
+		Controls: []WindowControl{}, Surfaces: []WindowSurface{},
+	}
+	for _, control := range state.Controls {
+		out.Controls = append(out.Controls, WindowControl{frame: control.frame(), Hidden: control.Hidden})
+	}
+	var modalFrame *frame
+	for _, view := range state.Views {
+		if id, ok := named[view.View]; ok {
+			out.Surfaces = append(out.Surfaces, WindowSurface{ID: id, Frame: view.frame(), Visible: !view.Hidden, Layer: view.Layer})
+		} else if modalHandle != 0 && view.View == modalHandle {
+			at := view.frame()
+			modalFrame = &at
+		}
+	}
+	s.mu.Lock()
+	if s.modal != nil {
+		out.Modal = &WindowModal{ID: s.modal.id, Mode: s.modal.content.Mode, Shown: s.modal.shown, Frame: modalFrame}
+	}
+	s.mu.Unlock()
+	return out, nil
+}
+
+// hit 은 창 좌표 (x, y) 의 소유자를 반환한다.
+func (s *Surfaces) hit(x, y float64) (map[string]any, error) {
+	var got struct {
+		View       uint64
+		Main       bool
+		Identifier string
+	}
+	named := map[uint64]string{}
+	var modalHandle uint64
+	var modalID string
+	err := s.probe(map[string]any{"op": "hit", "x": x, "y": y}, &got, func() {
+		for view, id := range s.named {
+			named[uint64(view)] = id
+		}
+		s.mu.Lock()
+		if s.modalView != nil && s.modal != nil {
+			modalHandle, modalID = uint64(uintptr(s.modalView.handle)), s.modal.id
+		}
+		s.mu.Unlock()
+	})
+	if err != nil {
+		return nil, err
+	}
+	switch {
+	case got.View != 0 && named[got.View] != "":
+		return map[string]any{"kind": "surface", "surface": named[got.View]}, nil
+	case got.View != 0 && got.View == modalHandle:
+		return map[string]any{"kind": "native", "identifier": "modal:" + modalID}, nil
+	case got.View != 0 && got.Main:
+		return map[string]any{"kind": "page"}, nil
+	default:
+		return map[string]any{"kind": "native", "identifier": got.Identifier}, nil
+	}
+}
+
+// presented 는 메인 페이지와 보이는 앱 문서가 현재 배치를 표시할 때까지 기다린다.
+func (s *Surfaces) presented() error {
+	done := make(chan struct{})
+	var err error
+	application.InvokeSync(func() {
+		err = system.AfterPresentation(s.window.NativeWindow(), func() { close(done) })
+	})
+	if err != nil {
+		return err
+	}
+	select {
+	case <-done:
+		return nil
+	case <-time.After(pageTimeout):
+		return rpcError(codeTimeout, "the window did not present within %s", pageTimeout)
+	}
+}
+
+// windowChanged 는 host.window 를 감시하는 연결에 새 값을 보낸다. 감시하는 연결이 없으면
+// 값을 읽지 않는다. UI 스레드에서도 호출하므로 값은 다른 고루틴에서 읽는다.
+func (s *Surfaces) windowChanged() {
+	if s.host == nil || s.host.endpoint == nil || !s.host.endpoint.Watching(s.name, "host.window") {
+		return
+	}
+	go func() {
+		state, err := s.windowState()
+		if err != nil {
+			s.log(fmt.Sprintf("host.window: %v", err))
+			return
+		}
+		s.host.endpoint.StatusChanged(s.name, "host.window", state)
+	}()
+}
+
+// rewatch 는 다시 로드된 메인 페이지에 이 창의 감시와 진단 기록을 다시 요청한다.
+func (s *Surfaces) rewatch() {
+	if s.host == nil || s.host.endpoint == nil {
+		return
+	}
+	for _, name := range s.host.endpoint.topics(s.name) {
+		var err error
+		switch {
+		case name == logTopic:
+			_, err = s.host.ask(s, "diagnostics.transcript", map[string]any{"on": true}, pageTimeout)
+		case !isHostName(name):
+			_, err = s.host.ask(s, "status.watch", map[string]any{"name": name}, pageTimeout)
+		}
+		if err != nil {
+			s.log(fmt.Sprintf("rewatch %s: %v", name, err))
+		}
+	}
+}
+
+// log 는 이 창의 진단 기록을 켠 연결에 줄 하나를 보낸다.
+func (s *Surfaces) log(line string) {
+	if s.host != nil && s.host.endpoint != nil {
+		s.host.endpoint.Log(s.name, line)
+	}
+}

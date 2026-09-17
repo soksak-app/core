@@ -103,10 +103,15 @@ export const native = Boolean(bridge);
 /**
  * 호출과 그 답을 애플리케이션 로그에 남길지 여부.
  *
- * 관측 부품이 요청할 때만 켠다. 기록기가 이 파일에 있으므로 두 애플리케이션이 같은
- * 형식으로 남기고, 형식이 서로 어긋날 수 없다.
+ * 진단 메서드 diagnostics.transcript 가 요청할 때만 켠다. 기록기가 이 파일에 있으므로
+ * 두 애플리케이션이 같은 형식으로 남기고, 형식이 서로 어긋날 수 없다.
  */
 let recording = false;
+
+/** 호출 기록을 켜거나 끈다. */
+export function setTranscript(on) {
+  recording = on === true;
+}
 
 /* 애플리케이션에는 콘솔이 없다. 여기서 실패를 잡으면 기록되지 않으므로 잡지
    않는다. 문서의 unhandledrejection 이 애플리케이션 로그로 전달한다. */
@@ -247,8 +252,6 @@ export function onSurfaceInput({ press, input }) {
 }
 
 if (native) {
-  // 관측 부품이 기록을 요청한다. 요청하지 않으면 한 줄도 남지 않는다.
-  bridge.on("observe-record", () => { recording = true; });
   bridge.on("surface-pressed", (id) => onPress(id));
   bridge.on("surface-input", (step) => onInput(step));
   // 모달은 여러 번 응답하므로 여기서 구독을 해제하지 않고 hide 에서 해제한다.

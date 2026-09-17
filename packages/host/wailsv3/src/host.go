@@ -2,17 +2,19 @@
 //
 // Wails 가 창과 자산 서버를 제공한다. 이 패키지는 창마다 페이지가 선언한 표면을 네이티브
 // 웹뷰로 배치하고, [data-native-modal] 요소를 모달 웹뷰로 표시하고, 사이드카 채널을
-// 연결한다. 운영체제별 동작은 platform 패키지가 선택한 구현이 수행한다.
+// 연결하고, 로컬 엔드포인트로 노출 항목을 제공한다. 운영체제별 동작은 platform 패키지가 선택한 구현이 수행한다.
 //
 // 애플리케이션은 스테이징한 프런트엔드를 frontend/ 아래에 포함한 파일 시스템을 Run 에
 // 전달한다. Wails 는 index.html 이 있는 디렉터리를 자산 루트로 사용하므로 창은 "/" 를 연다.
 package host
 
 import (
+	"fmt"
 	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -26,20 +28,13 @@ import (
 type Options struct {
 	// ConfigDir 은 설정 디렉터리다. 비어 있으면 사용자 설정 디렉터리의 com.soksak.wailsv3 을 사용한다.
 	ConfigDir string
-	// Observe 는 관측 서비스를 등록할지 나타낸다. 나머지 필드는 관측 서비스가 사용한다.
-	Observe Observation
 }
 
-// Observation 은 관측 서비스의 시작 동작이다. 각 필드의 형식은 diagnostics.go 에 적는다.
-type Observation struct {
-	Enabled    bool
-	Zoom       bool
-	Resize     string
-	Drive      string
-	Click      string
-	Transcript bool
-	Capture    string
-}
+// 엔드포인트가 알리는 애플리케이션 이름과 버전.
+const (
+	applicationName    = "wailsv3"
+	applicationVersion = "0.0.1"
+)
 
 // system 은 Run 이 선택한 운영체제 구현이다.
 var system platform.Platform
@@ -72,12 +67,30 @@ func Run(assets fs.FS, options Options) error {
 	if err != nil {
 		return err
 	}
+	// 엔드포인트는 창을 표시하기 전에 만든다. 만들 수 없으면 애플리케이션을 시작하지 않는다.
+	listener, address, err := system.Listen(applicationName)
+	if err != nil {
+		return fmt.Errorf("local endpoint: %w", err)
+	}
+	host.endpoint = NewEndpoint(hostBackend{host})
+	info := EndpointInfo{Transport: address.Transport, Address: address.Address, PID: os.Getpid(),
+		Application: applicationName, Version: applicationVersion, Started: time.Now()}
+	if err := host.endpoint.Serve(listener, info, host.workspace.directory); err != nil {
+		listener.Close()
+		return fmt.Errorf("local endpoint: %w", err)
+	}
+	defer host.endpoint.Close()
 	app := application.New(application.Options{
 		Name: "soksak", Description: "soksak layout running in Wails v3",
 		Assets:     application.AssetOptions{Handler: application.BundledAssetFileServer(assets)},
-		Services:   services(host, options),
+		Services:   []application.Service{application.NewService(host)},
 		ShouldQuit: host.shouldQuit,
-		OnShutdown: sidecars.Stop,
+		OnShutdown: func() {
+			sidecars.Stop()
+			if err := host.endpoint.Close(); err != nil {
+				log.Printf("local endpoint: %v", err)
+			}
+		},
 		KeyBindings: map[string]func(application.Window){
 			"CmdOrCtrl+Shift+N": func(application.Window) { go host.WindowNew() },
 		},

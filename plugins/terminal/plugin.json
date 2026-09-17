@@ -29,5 +29,46 @@
   ],
   "sidecars": [
     "@soksak/sidecar-shell"
-  ]
+  ],
+  "exposes": {
+    "status": [
+      {
+        "name": "terminal.output",
+        "description": "The output lines of the terminal surface, without line terminators.",
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    ],
+    "commands": [
+      {
+        "name": "terminal.write",
+        "description": "Writes text to the standard input of the surface's shell.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "data": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      }
+    ],
+    "dom": [
+      {
+        "name": "terminal.input",
+        "description": "The command line input field."
+      },
+      {
+        "name": "terminal.output",
+        "description": "The output area."
+      }
+    ]
+  }
 }

@@ -3,8 +3,16 @@
 package darwin
 
 /*
+#include <stdbool.h>
 #include <stdint.h>
+#include <stdlib.h>
+#include "input_inject.h"
 #import <Cocoa/Cocoa.h>
+
+extern void inputActivated(void *context, bool ok);
+static void activateWindow(void *window, double timeout, uintptr_t handle) {
+    sp_input_activate(window, timeout, inputActivated, (void *)handle);
+}
 
 // 누름이 지나가는 뷰 하나가 표면인지 알린다. 표면이면 0 이 아닌 값을 반환하고, 적중한
 // 뷰에서 위로 올라가는 탐색은 거기서 멈춘다.
@@ -106,6 +114,45 @@ func (implementation) WatchInput(window unsafe.Pointer, input platform.Input) (u
 	monitor := uintptr(C.surfaceWatchMouse(window, C.uintptr_t(handle)))
 	watchers[monitor] = handle
 	return monitor, nil
+}
+
+// InjectPointer 는 native/darwin 의 sp_input_pointer 로 입력을 전달한다. 앱을 활성화하지 않는다.
+func (implementation) InjectPointer(window unsafe.Pointer, x, y float64, phase, button int, deltaX, deltaY float64) (platform.PointerResult, error) {
+	result := C.sp_input_pointer(window, C.double(x), C.double(y), C.int(phase), C.int(button), C.double(deltaX), C.double(deltaY))
+	switch result {
+	case C.SP_INPUT_DELIVERED:
+		return platform.PointerDelivered, nil
+	case C.SP_INPUT_INACTIVE:
+		return platform.PointerInactive, nil
+	default:
+		return platform.PointerRejected, nil
+	}
+}
+
+//export inputActivated
+func inputActivated(context unsafe.Pointer, ok C.bool) {
+	handle := cgo.Handle(uintptr(context))
+	done := handle.Value().(func(bool))
+	handle.Delete()
+	done(bool(ok))
+}
+
+// ActivateWindow 는 native/darwin 의 sp_input_activate 로 창을 키 창으로 만든다.
+func (implementation) ActivateWindow(window unsafe.Pointer, timeout float64, done func(bool)) error {
+	C.activateWindow(window, C.double(timeout), C.uintptr_t(cgo.NewHandle(done)))
+	return nil
+}
+
+// InjectKey 는 native/darwin 의 sp_input_key 로 입력을 전달한다. text 가 비어 있으면 key 를 입력한다.
+func (implementation) InjectKey(window unsafe.Pointer, key, text string, modifiers uint, down bool) (bool, error) {
+	name := C.CString(key)
+	defer C.free(unsafe.Pointer(name))
+	var typed *C.char
+	if text != "" {
+		typed = C.CString(text)
+		defer C.free(unsafe.Pointer(typed))
+	}
+	return bool(C.sp_input_key(window, name, typed, C.uint(modifiers), C.bool(down))), nil
 }
 
 func (implementation) UnwatchInput(monitor uintptr) {

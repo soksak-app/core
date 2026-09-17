@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use tauri::webview::Color;
 use tauri::{LogicalPosition, LogicalSize, Webview, WebviewBuilder, WebviewUrl, Window};
 
+use crate::exposure;
 use crate::log_error;
 use crate::platform;
 use crate::surfaces::{aligned, isolate_webview, Rect};
@@ -75,6 +76,13 @@ pub(crate) struct Overlay {
 }
 
 impl Overlay {
+    /// 열린 모달의 요소 id, 모드, 표시 여부를 반환한다.
+    pub fn open_state(&self) -> Option<(String, String, bool)> {
+        self.open.lock().ok().and_then(|open| {
+            open.as_ref().map(|modal| (modal.id.clone(), modal.content.mode.clone(), modal.shown))
+        })
+    }
+
     /// 열린 모달이 dialog 모드인지 반환한다.
     pub fn dialog(&self) -> bool {
         self.open.lock().is_ok_and(|open| open.as_ref().is_some_and(|m| m.content.mode == "dialog"))
@@ -263,6 +271,7 @@ pub(crate) fn ready(window: &Window, id: String, instance: u64) -> Result<(), St
         let Some(modal) = held.as_mut().filter(|m| m.id == id && m.instance == instance) else { return Ok(()) };
         if modal.shown {
             emit_window(window, "modal-rendered", &id).map_err(|e| e.to_string())?;
+            exposure::log(window, &format!("observe: modal rendered {id}"));
             return Ok(());
         }
         modal.shown = true;
@@ -278,6 +287,8 @@ pub(crate) fn ready(window: &Window, id: String, instance: u64) -> Result<(), St
     view.show().map_err(|e| e.to_string())?;
     view.set_focus().map_err(|e| e.to_string())?;
     emit_window(window, "modal-rendered", &id).map_err(|e| e.to_string())?;
+    exposure::log(window, &format!("observe: modal rendered {id}"));
+    exposure::window_changed(window);
     Ok(())
 }
 
@@ -294,6 +305,7 @@ pub(crate) fn hide(window: &Window, id: String) -> Result<(), String> {
         *held = None;
     }
     state.discard()?;
+    exposure::window_changed(window);
     if let Some(main) = root_view(window) {
         main.set_focus().map_err(|e| e.to_string())?;
     }

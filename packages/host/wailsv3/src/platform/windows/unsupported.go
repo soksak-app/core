@@ -4,6 +4,7 @@ package windows
 
 import (
 	"fmt"
+	"net"
 	"unsafe"
 
 	"github.com/min-median-max/soksak/packages/host/wailsv3/src/platform"
@@ -158,6 +159,22 @@ func (implementation) CaptureWait() (bool, error) {
 
 func (implementation) CaptureStop() (int, error) {
 	return 0, unsupported("window capture")
+}
+
+func (implementation) InjectPointer(unsafe.Pointer, float64, float64, int, int, float64, float64) (platform.PointerResult, error) {
+	return platform.PointerRejected, unsupported("native pointer input")
+}
+
+func (implementation) ActivateWindow(unsafe.Pointer, float64, func(bool)) error {
+	return unsupported("window activation")
+}
+
+func (implementation) InjectKey(unsafe.Pointer, string, string, uint, bool) (bool, error) {
+	return false, unsupported("native key input")
+}
+
+func (implementation) Listen(string) (net.Listener, platform.Endpoint, error) {
+	return nil, platform.Endpoint{}, unsupported("local endpoint")
 }
 
 func (implementation) InstallDock(func()) error {

@@ -4,7 +4,9 @@
 //! [`Platform`] 으로만 네이티브 기능을 호출한다.
 
 use std::fs::Metadata;
+use std::io::{Read, Write};
 use std::path::Path;
+use std::time::Duration;
 
 use tauri::webview::PlatformWebview;
 use tauri::{AppHandle, WebviewWindowBuilder, Window, Wry};
@@ -26,7 +28,74 @@ pub type Frame = (f64, f64, f64, f64);
 /// 프로젝트 창 생성기.
 pub type WindowBuilder<'a> = WebviewWindowBuilder<'a, Wry, AppHandle<Wry>>;
 
-/// 운영체제가 제공하는 창, 웹뷰, 표면 배치, 도형, 입력, 캡처, Dock, 디렉터리 식별 기능.
+/// 로컬 엔드포인트의 연결 하나.
+pub trait Connection: Read + Write + Send {
+    /// 같은 연결을 가리키는 다른 값을 반환한다. 읽기와 쓰기를 다른 스레드에서 실행할 때 사용한다.
+    fn try_clone(&self) -> Result<Box<dyn Connection>, String>;
+    /// 읽기 대기 시간을 설정한다. None 은 제한하지 않는다.
+    fn set_read_timeout(&self, timeout: Option<Duration>) -> Result<(), String>;
+    /// 연결의 읽기와 쓰기를 모두 닫는다.
+    fn close(&self);
+}
+
+/// 로컬 엔드포인트의 수신 주소.
+pub trait Listener: Send + Sync {
+    /// 다음 연결을 기다린다.
+    fn accept(&self) -> Result<Box<dyn Connection>, String>;
+    /// endpoint.json 의 transport 값.
+    fn transport(&self) -> &'static str;
+    /// endpoint.json 의 address 값.
+    fn address(&self) -> String;
+    /// 주소가 만든 파일을 제거한다.
+    fn remove(&self);
+}
+
+/// 네이티브 입력으로 전달하는 포인터 동작. 좌표는 콘텐츠 영역 왼쪽 위 기준 포인트 값이다.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Pointer {
+    pub x: f64,
+    pub y: f64,
+    /// 0 이동, 1 누름, 2 끌기, 3 뗌, 4 스크롤.
+    pub phase: i32,
+    /// 0 왼쪽, 1 오른쪽.
+    pub button: i32,
+    pub delta_x: f64,
+    pub delta_y: f64,
+    /// 이동 전에 애플리케이션을 활성화하고 창을 키 창으로 만든다. phase 가 0 일 때만 참이다.
+    pub activate: bool,
+}
+
+/// 포인터 입력 전달 결과.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Delivery {
+    /// 창에 전달했다.
+    Delivered,
+    /// 창, 좌표, 단계가 올바르지 않다.
+    Rejected,
+    /// 버튼 없는 이동이며 창이 키 창이 아니다.
+    Inactive,
+}
+
+/// 네이티브 입력으로 전달하는 키 동작.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Key {
+    /// 키 이름 또는 문자 하나.
+    pub key: String,
+    /// 입력할 문자열. None 이면 key 를 사용한다.
+    pub text: Option<String>,
+    /// 비트 합: 1 Shift, 2 Control, 4 Option, 8 Command.
+    pub modifiers: u32,
+    pub down: bool,
+}
+
+/// 창 좌표의 한 점에 있는 뷰. chain 은 그 뷰부터 콘텐츠 뷰까지의 주소이고 identifier 는 그 뷰의
+/// 식별자이다.
+pub struct Hit {
+    pub chain: Vec<Handle>,
+    pub identifier: String,
+}
+
+/// 운영체제가 제공하는 창, 웹뷰, 표면 배치, 도형, 입력, 캡처, Dock, 디렉터리 식별, 엔드포인트 기능.
 ///
 /// 구현하지 않은 기능은 "not implemented" 오류를 반환한다.
 pub trait Platform: Send + Sync {
@@ -40,10 +109,13 @@ pub trait Platform: Send + Sync {
     fn place_window_controls(&self, window: Handle, x: f64, y: f64) -> Result<(), String>;
     /// 창 버튼이 차지하는 영역을 페이지 좌표로 반환한다.
     fn window_controls(&self, window: Handle) -> Result<Frame, String>;
+    #[cfg(feature = "diagnostics")]
     /// 창 서버가 창과 창에 붙은 창에 부여한 번호를 반환한다.
     fn window_numbers(&self, window: &Window) -> Result<Vec<isize>, String>;
-    /// 네이티브 상태 조회 요청을 실행하고 응답 줄을 reply 에 전달한다.
-    fn probe(&self, window: Handle, request: &str, reply: fn(String)) -> Result<(), String>;
+    /// 창 버튼의 영역과 숨김 여부를 콘텐츠 영역 왼쪽 위 기준으로 반환한다. 메인 스레드에서 호출한다.
+    fn window_buttons(&self, window: Handle) -> Result<Vec<(Frame, bool)>, String>;
+    /// 창 좌표의 점에 있는 뷰를 반환한다. 메인 스레드에서 호출한다.
+    fn hit(&self, window: Handle, x: f64, y: f64) -> Result<Hit, String>;
     /// 창이 모두 닫혀도 애플리케이션을 유지하는지 반환한다.
     fn stays_open_without_windows(&self) -> bool;
 
@@ -65,6 +137,8 @@ pub trait Platform: Send + Sync {
     fn round_corners(&self, view: &PlatformWebview, radius: f64) -> Result<(), String>;
     /// 입력 체인에서 웹뷰를 식별하는 뷰 주소를 반환한다.
     fn view_id(&self, view: &PlatformWebview) -> Result<Handle, String>;
+    /// 웹뷰의 표시 여부와 부모 뷰 안의 순서를 반환한다.
+    fn webview_layer(&self, view: &PlatformWebview) -> Result<(bool, usize), String>;
 
     // 표면 배치
 
@@ -105,15 +179,27 @@ pub trait Platform: Send + Sync {
     ) -> Result<Handle, String>;
     /// 입력 감시기를 제거한다.
     fn unwatch_input(&self, monitor: Handle) -> Result<(), String>;
+    /// 창에 포인터 입력을 전달하고 결과를 반환한다. activate 는 사용하지 않는다. 메인 스레드에서 호출한다.
+    fn input_pointer(&self, window: Handle, pointer: Pointer) -> Result<Delivery, String>;
+    /// 애플리케이션을 활성화하고 창을 키 창으로 만든다. 창의 웹뷰가 활성 상태를 반영하면
+    /// done(true), timeout 안에 활성화되지 않으면 done(false) 를 메인 스레드에서 호출한다.
+    /// 메인 스레드에서 호출한다.
+    fn input_activate(&self, window: Handle, timeout: Duration, done: Box<dyn FnOnce(bool) + Send>) -> Result<(), String>;
+    /// 창에 키 입력을 전달하고 전달 여부를 반환한다. 메인 스레드에서 호출한다.
+    fn input_key(&self, window: Handle, key: &Key) -> Result<bool, String>;
 
     // 캡처
 
+    #[cfg(feature = "diagnostics")]
     /// 창 번호의 창을 캡처 대상으로 준비한다.
     fn capture_open(&self, window_number: isize) -> Result<(), String>;
+    #[cfg(feature = "diagnostics")]
     /// directory 에 프레임 기록을 시작한다.
     fn capture_start(&self, directory: &str) -> Result<(), String>;
+    #[cfg(feature = "diagnostics")]
     /// 첫 프레임을 기다리고 기록 여부를 반환한다.
     fn capture_wait(&self) -> Result<bool, String>;
+    #[cfg(feature = "diagnostics")]
     /// 기록을 끝내고 기록한 프레임 수를 반환한다.
     fn capture_stop(&self) -> Result<i32, String>;
 
@@ -126,6 +212,16 @@ pub trait Platform: Send + Sync {
 
     /// 같은 디렉터리를 가리키는 경로에 같은 값을 반환한다.
     fn directory_identity(&self, path: &Path, metadata: &Metadata) -> Result<String, String>;
+    #[cfg(feature = "diagnostics")]
+    /// 현재 사용자만 접근할 수 있는 디렉터리를 상위 디렉터리와 함께 만든다.
+    fn private_directory(&self, path: &Path) -> Result<(), String>;
+
+    // 엔드포인트
+
+    /// 이름 name 의 로컬 엔드포인트 주소를 연다.
+    fn endpoint_listen(&self, name: &str) -> Result<Box<dyn Listener>, String>;
+    /// 로컬 엔드포인트 주소에 연결한다.
+    fn endpoint_connect(&self, address: &str) -> Result<Box<dyn Connection>, String>;
 }
 
 /// 현재 운영체제의 구현을 반환한다.

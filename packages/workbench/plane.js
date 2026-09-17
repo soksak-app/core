@@ -165,6 +165,7 @@ function initial() {
 function createCard(card) {
   const el = document.createElement("article");
   el.className = "card";
+  el.dataset.expose = "core.card";
   el.innerHTML = isPlace(card.id)
     ? '<header class="chrome"></header><div class="set"></div><footer class="status"></footer>'
     : '<header class="chrome"></header><div class="slot"></div><footer class="status"></footer>';
@@ -244,6 +245,7 @@ function updateCard(el, card) {
     for (const t of tabs) {
       const b = document.createElement("span");
       b.className = "tab";
+      b.dataset.expose = "core.card.tab";
       b.dataset.tabId = t.id;
       b.draggable = false;
       // 제목은 `textContent` 로 설정한다. 사용자 입력을 마크업으로 해석하지 않는다.
@@ -288,6 +290,7 @@ function updateCard(el, card) {
       const b = document.createElement("button");
       b.className = "chrome__act";
       b.dataset.do = what;
+      b.dataset.expose = { add: "core.card.add", x: "core.card.split-x", y: "core.card.split-y", close: "core.card.close" }[what];
       b.dataset.title = title;
       b.title = title;
       b.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true">${svg}</svg>`;
@@ -432,6 +435,23 @@ function beginTabDrag(e, cardId, tabId) {
 
 let picker = null;
 
+/* 선택 레이어가 열리고 닫힐 때 호출할 함수. 공개 항목이 등록한다. */
+let pickerChanged = () => {};
+
+/** 선택 레이어가 열리고 닫힐 때 호출할 함수를 등록한다. */
+export function onPicker(fn) {
+  pickerChanged = fn;
+}
+
+/** 선택 레이어의 상태. 제목과 항목을 요소에서 읽는다. */
+export const pickerState = () => ({
+  open: picker !== null,
+  title: picker ? pickerEl.getAttribute("aria-label") ?? "" : "",
+  items: picker ? [...pickerEl.querySelectorAll(".picker__item")].map((b) => ({
+    key: b.dataset.key, name: b.querySelector(".picker__name").textContent, active: b.dataset.active === "true",
+  })) : [],
+});
+
 const PICKER_ASK = {
   add: "새 탭에 무엇을 띄울까",
   x: "새 자리에 무엇을 띄울까",
@@ -500,6 +520,7 @@ function openLayer(anchor, ask, items, pick, align = "right") {
   for (const it of items) {
     const b = document.createElement("button");
     b.className = "picker__item";
+    b.dataset.expose = "core.picker.item";
     b.type = "button";
     b.dataset.key = it.key;
     b.dataset.active = String(!!it.active);
@@ -524,6 +545,7 @@ function openLayer(anchor, ask, items, pick, align = "right") {
   pickerEl.style.left = `${rect.x}px`;
   pickerEl.style.top = `${rect.y}px`;
   picker = { anchor, pick, rect };
+  pickerChanged();
   // DOM 은 네이티브 뷰 위에 그릴 수 없고, 웹뷰는 DOM 을 렌더링하는 네이티브 뷰다.
   // 애플리케이션이 이 요소를 받아 그런 뷰에 렌더링하므로 아래의 표면은 계속 실행된다.
   // 요소를 통째로 넘기므로 애플리케이션은 그 내용을 알 필요가 없다.
@@ -544,6 +566,7 @@ function openLayer(anchor, ask, items, pick, align = "right") {
 function closePicker() {
   if (!picker) return;
   picker = null;
+  pickerChanged();
   pickerEl.hidden = true;
   document.removeEventListener("pointerdown", onPickerOutside, true);
   document.removeEventListener("keydown", onPickerKey, true);
@@ -1075,5 +1098,7 @@ export function clear() {
   document.getElementById("focusMark").hidden = true;
 }
 
-export { settle, tabsOf, plane };
+export { settle, tabsOf, activeTab, plane };
 export const currentGrid = () => grid;
+/** 포커스된 카드의 id. */
+export const focused = () => focusedId;

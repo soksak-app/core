@@ -47,6 +47,9 @@ const METHOD = {
   overlayUpdate: "OverlayUpdate",
   overlayHide: "OverlayHide",
   windowControls: "WindowControls",
+  exposureReply: "ExposureReply",
+  exposureChanged: "ExposureChanged",
+  exposureForward: "ExposureForward",
 };
 
 export const host = {
@@ -70,6 +73,8 @@ export const host = {
 export const page = (() => {
   const call = (method, ...args) => window.__soksakNative.call(method, args);
   const listen = (event, fn) => window.__soksakNative.on(event, fn);
+  // 표면 id 는 문서 주소의 id 다. 워크벤치가 표면을 그 탭 id 로 연다.
+  const surface = new URLSearchParams(location.search).get("id");
   return {
     theme(fn) {
       call("Theme").then(fn);
@@ -82,6 +87,14 @@ export const page = (() => {
         if (message.sidecar === name && message.surface === surface) fn(message.body);
       }),
     }),
+    // 공개 항목의 등록과 요청. 요청 이벤트에 surface 가 있으면 이 표면의 것만 처리한다.
+    exposure: {
+      register: (kind, name) => call("ExposureRegister", { surface, kind, name }),
+      onRequest: (fn) => listen("exposure-request", (request) => {
+        if (request.surface === undefined || request.surface === surface) fn(request);
+      }),
+      reply: (id, payload) => call("ExposureReply", { id, ...payload }),
+    },
     modal: {
       content(id, instance, fn, place) {
         return Promise.all([listen("modal-content", (sent) => {

@@ -1,13 +1,13 @@
-//! 창 설정, 창 버튼, 창 번호, 네이티브 상태 조회.
+//! 창 설정, 창 버튼, 창 번호.
 
-use std::ffi::{c_char, c_void, CStr, CString};
-use std::sync::Mutex;
+use std::ffi::c_void;
 
 use objc2::msg_send;
 use objc2::runtime::AnyObject;
 use tauri::Window;
 
 use super::super::{Frame, Handle, WindowBuilder};
+use super::NSRect;
 
 /// 프로젝트 창의 제목 표시줄을 페이지 위에 겹치고 제목을 숨긴다. 비활성 창의 클릭도
 /// 웹뷰에 전달한다.
@@ -45,6 +45,7 @@ pub fn place_controls(window: Handle, x: f64, y: f64) {
     }
 }
 
+#[cfg(feature = "diagnostics")]
 /// 창 서버가 이 창과 이 창에 붙은 창에 부여한 번호를 반환한다.
 ///
 /// 캡처 도구는 창 번호로 창 서버의 합성 결과(페이지, 표면, 모달)를 읽는다. 창을 앞으로
@@ -69,24 +70,32 @@ pub fn numbers(window: Handle) -> Vec<isize> {
     }
 }
 
-/// 네이티브 상태 조회의 응답을 받는 함수.
-static REPLY: Mutex<Option<fn(String)>> = Mutex::new(None);
-
-extern "C" fn reply(text: *const c_char) {
-    let text = unsafe { CStr::from_ptr(text) }.to_string_lossy().into_owned();
-    if let Some(reply) = *REPLY.lock().unwrap_or_else(|e| e.into_inner()) {
-        reply(text);
+/// 창 버튼(닫기, 최소화, 확대)의 그려진 영역과 숨김 여부를 콘텐츠 영역 왼쪽 위 기준으로 반환한다.
+pub fn buttons(window: Handle) -> Vec<(Frame, bool)> {
+    let mut out = Vec::new();
+    unsafe {
+        let window = window as *mut AnyObject;
+        if window.is_null() {
+            return out;
+        }
+        let content: *mut AnyObject = msg_send![window, contentView];
+        if content.is_null() {
+            return out;
+        }
+        let bounds: NSRect = msg_send![content, bounds];
+        // NSWindowCloseButton 0, NSWindowMiniaturizeButton 1, NSWindowZoomButton 2.
+        for kind in 0usize..=2 {
+            let button: *mut AnyObject = msg_send![window, standardWindowButton: kind];
+            if button.is_null() {
+                continue;
+            }
+            let own: NSRect = msg_send![button, bounds];
+            let drawn: NSRect = msg_send![button, alignmentRectForFrame: own];
+            let rect: NSRect = msg_send![content, convertRect: drawn, fromView: button];
+            let hidden: bool = msg_send![button, isHiddenOrHasHiddenAncestor];
+            let top = bounds.size.y - (rect.origin.y + rect.size.y);
+            out.push(((rect.origin.x, top, rect.size.x, rect.size.y), hidden));
+        }
     }
-}
-
-/// native/darwin 의 상태 조회를 실행한다. 응답 줄은 reply 에 전달한다. 메인 스레드에서 호출한다.
-/// NUL 문자를 포함한 요청은 실행하지 않는다.
-pub fn probe(window: Handle, request: &str, answer: fn(String)) {
-    extern "C" {
-        fn spNativeProbe(window: *mut c_void, request: *const c_char, reply: extern "C" fn(*const c_char));
-    }
-    *REPLY.lock().unwrap_or_else(|e| e.into_inner()) = Some(answer);
-    if let Ok(text) = CString::new(request) {
-        unsafe { spNativeProbe(window as *mut c_void, text.as_ptr(), reply) }
-    }
+    out
 }

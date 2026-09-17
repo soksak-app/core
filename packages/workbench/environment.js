@@ -2,6 +2,7 @@
 //
 // 워크벤치는 특정 플러그인을 알지 않는다. 플러그인 목록, 새 스페이스의 배치,
 // 사이드바 기본값은 모두 이 파일이 불러온 값에서 온다.
+import { registry as exposure } from "./exposure.js";
 import { registerPlugin, registerSection } from "./registry.js";
 import { setSidebarDefaults } from "./settings.js";
 import {
@@ -39,6 +40,7 @@ export async function loadEnvironment() {
       });
     }
     for (const section of manifest.sections ?? []) registerSection(section);
+    if (manifest.exposes) exposure.declare(manifest.id, manifest.exposes);
   }
   setSidebarDefaults(environment.sidebars);
   loaded = environment;

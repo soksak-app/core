@@ -161,6 +161,8 @@ test("tools/call maps tools to endpoint methods", async (t) => {
   assert.equal((await call("dom_rect", { name: "core.tab", index: 1 })).index, 1);
   assert.equal(await call("dom_act", { name: "core.tab", action: "input", value: "v" }), null);
   assert.equal(await call("input_pointer", { x: 1, y: 2, phase: "move" }), null);
+  assert.equal(await call("input_pointer", { x: 1, y: 2, phase: "down", button: "right" }), null);
+  assert.equal(await call("input_pointer", { x: 1, y: 2, phase: "move", activate: true }), null);
   assert.equal(await call("input_key", { key: "Enter", phase: "down", modifiers: ["shift"] }), null);
   assert.deepEqual(
     endpoint.requests.map((m) => [m.method, m.params]),
@@ -171,6 +173,8 @@ test("tools/call maps tools to endpoint methods", async (t) => {
       ["dom.rect", { window: "main", name: "core.tab", index: 1 }],
       ["dom.act", { window: "main", name: "core.tab", action: "input", value: "v" }],
       ["input.pointer", { window: "main", x: 1, y: 2, phase: "move" }],
+      ["input.pointer", { window: "main", x: 1, y: 2, phase: "down", button: "right" }],
+      ["input.pointer", { window: "main", x: 1, y: 2, phase: "move", activate: true }],
       ["input.key", { window: "main", key: "Enter", phase: "down", modifiers: ["shift"] }],
     ],
   );
@@ -204,6 +208,14 @@ test("endpoint errors become tool errors with the code", async (t) => {
   const reply = await mcp.modern("tools/call", { name: "status_get", arguments: { window: "gone", name: "core.screen" } });
   assert.equal(reply.result.isError, true);
   assert.match(reply.result.content[0].text, /\(1003\)$/);
+});
+
+test("an inactive window error is returned with its message as-is", async (t) => {
+  const { sample, mcp } = await fixture(t, ["--window", "main"]);
+  sample.state.key = false;
+  const reply = await mcp.modern("tools/call", { name: "input_pointer", arguments: { x: 1, y: 1, phase: "move" } });
+  assert.equal(reply.result.isError, true);
+  assert.equal(reply.result.content[0].text, "window main is not the key window; pass activate to make it key (1006)");
 });
 
 test("an unknown tool is an invalid params error", async (t) => {

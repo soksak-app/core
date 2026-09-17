@@ -1,662 +1,271 @@
-// 개발 중 관측을 담당하는 서비스.
+//go:build diagnostics
+
+// 진단 빌드의 엔드포인트 메서드.
 //
-// 페이지는 화면에 합성된 결과를 읽을 수 없다. 표면과 모달은 이 애플리케이션이 만든
-// OS 뷰와 창이고 합성은 윈도 서버가 수행한다. 캡처 도구는 화면 영역이 아니라 창을
-// 지정해야 한다. 영역을 캡처하면 앞에 있는 다른 창이 함께 캡처되고, 창을 앞으로
-// 이동시키면 측정 대상 상태가 바뀐다.
+// 이 파일은 diagnostics 빌드 태그로만 컴파일되고, init 에서 diagnosticMethods 에 메서드를
+// 추가한다. 다른 빌드에는 이 메서드가 선언되지 않으므로 엔드포인트가 연결을 닫는다. 형식은
+// docs/spec/endpoint.md 의 진단 빌드 절에 정의한다.
 //
-// 제품의 계약이 아니라 별개 서비스다. 등록하지 않으면 이 파일은 실행되지 않는다.
-// 페이지 검사 줄의 기록(Report), 끌기 지시, 녹화, 호출 기록과 네이티브 검사 전달을 포함한다.
+// 페이지는 화면에 합성된 결과를 읽을 수 없다. 표면과 모달은 이 애플리케이션이 만든 OS 뷰이고
+// 합성은 윈도 서버가 수행하므로, 녹화는 화면 영역이 아니라 창 번호를 지정한다.
 
 package host
 
 import (
-	"bufio"
-	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
-	"log"
 	"math"
-	"net"
 	"os"
 	"path/filepath"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
-	"unsafe"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
-	"github.com/wailsapp/wails/v3/pkg/events"
 )
 
-type observer struct {
-	// options 는 명령행에서 받은 시작 동작이다.
-	options Observation
-	// configDir 은 --config-dir 로 받은 설정 디렉터리다. 비어 있으면 fixture 를 만들지 않는다.
-	configDir string
-	began     sync.Once
-	// 지금 녹화가 프레임을 적는 폴더. --capture 가 첫 값을 주고, 지시가 그 뒤의
-	// 값을 준다. 지시를 받는 고루틴과 이벤트 수신자가 함께 읽는다.
-	mu   sync.Mutex
-	into string
-	// 창이 크기를 알리는 수신자를 붙였는지.
-	sized sync.Once
-	// 이 폴더가 실행 하나만 받는지. 지시는 자기가 시킨 끌기만 녹화한다. --capture
-	// 는 사람이 끄는 경계도 담으라는 뜻이므로 계속 받는다.
-	once bool
+func init() {
+	diagnosticMethods["diagnostics.fixture"] = diagnosticFixture
+	diagnosticMethods["diagnostics.drag"] = diagnosticDrag
+	diagnosticMethods["diagnostics.capture.stop"] = diagnosticCaptureStop
+	diagnosticMethods["diagnostics.knob"] = diagnosticKnob
+	diagnosticMethods["diagnostics.transcript"] = diagnosticTranscript
 }
 
-// dir 는 지금 녹화가 적을 폴더를 반환한다. 빈 값이면 녹화하지 않는다.
-func (o *observer) dir() string {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	return o.into
-}
+// frameStep 은 끌기 한 걸음의 길이다. 페이지가 같은 값으로 걸음 수를 센다.
+const frameStep = 16 * time.Millisecond
 
-// writeTo 는 다음 녹화가 적을 폴더를 정한다. once 면 실행 하나만 받는다.
-func (o *observer) writeTo(into string, once bool) {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	o.into = into
-	o.once = once
-}
-
-// wrote 는 실행 하나가 끝났음을 알린다. 실행 하나만 받기로 한 폴더는 여기서 닫힌다.
-func (o *observer) wrote() {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	if o.once {
-		o.into = ""
-		o.once = false
-	}
-}
-
-func (o *observer) ServiceName() string { return "observe" }
-
-// ServiceStartup 이 관측을 시작한다.
-//
-// 첫 페이지 커밋에서 창을 보고하고 관측을 시작한다.
-func (o *observer) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
-	// 로그를 표준오류와 제어 연결에 함께 적는다. 제품은 이 서비스를 등록하지
-	// 않으므로 그 로그는 지금까지처럼 표준오류에만 간다.
-	log.SetOutput(io.MultiWriter(os.Stderr, logging))
-	app := application.Get()
-	offRecord := o.record()
-	// 모달의 문서가 렌더링할 때마다 남긴다. 갱신된 내용이 그 문서에 도달했는지는
-	// 이 보고로만 알 수 있다.
-	offRendered := app.Event.On("modal-rendered", func(e *application.CustomEvent) {
-		if e.Sender != "main" {
-			return
-		}
-		log.Printf("observe: modal rendered %v", e.Data)
-	})
-	// 관측은 페이지가 처음 커밋한 뒤에 시작한다. 그때 창이 화면에 있고 표면이 있다.
-	// 창 이벤트에 붙이면 이 서비스가 늦게 시작할 때 이미 지나간 이벤트를 기다린다.
-	offReady := app.Event.On("page-ready", func(e *application.CustomEvent) {
-		if e.Sender == "main" {
-			o.start()
-		}
-	})
-	go func() {
-		<-ctx.Done()
-		offRecord()
-		offRendered()
-		offReady()
-	}()
-	return nil
-}
-
-// start 는 창을 보고하고 요청된 동작을 시작한다. page-ready 는 페이지가 다시
-// 로드되면 다시 발행되므로 여기서 한 번만 실행한다.
-func (o *observer) start() {
-	o.began.Do(func() {
-		o.writeTo(o.options.Capture, false)
-		o.transcribe()
-		o.report()
-		o.open()
-		o.zoom()
-		o.resize()
-		o.drive()
-		o.click()
-		o.commands()
-	})
-}
-
-// transcribe 는 페이지에게 호출과 답을 기록하라고 요청한다. 기록기는 페이지에
-// 있으므로 두 애플리케이션이 같은 형식으로 남긴다.
-func (o *observer) transcribe() {
-	if !o.options.Transcript {
-		return
-	}
-	emitObservation("observe-record")
-}
-
-// open 은 이 창의 녹화를 준비한다. 윈도 서버의 창 목록을 읽는 것이 느리므로 한 번만
-// 읽는다.
-func (o *observer) open() {
-	// 윈도 서버의 창 목록 조회는 답을 기다린다. 그 답이 주 큐로 오는 경우 주
-	// 스레드에서 기다리면 서로를 기다리게 되므로, 창 번호만 주 스레드에서 읽고
-	// 조회는 이 고루틴에서 한다.
-	now := o.windows()
-	if len(now) > 0 {
-		if err := system.CaptureOpen(now[0]); err != nil {
-			log.Printf("observe: %v", err)
-		}
-	}
-}
-
-// record 는 갱신이 이어지는 동안 이 창을 녹화한다.
-//
-// 페이지가 갱신이 더 있는지를 보고하므로, 사람이 끄는 경계도 --drive 가 끄는 경계와
-// 같은 방식으로 녹화된다. 주기로 확인하지 않는다.
-func (o *observer) record() func() {
-	bus := application.Get().Event
-	offBegan := bus.On("run-began", func(e *application.CustomEvent) {
-		if e.Sender != "main" {
-			return
-		}
-		if into := o.dir(); into != "" {
-			captureStart(into)
-		}
-	})
-	offEnded := bus.On("run-ended", func(e *application.CustomEvent) {
-		if e.Sender != "main" {
-			return
-		}
-		o.mu.Lock()
-		controlled := o.once
-		o.mu.Unlock()
-		if controlled {
-			log.Print("observe: drag presented")
-			return
-		}
-		into := o.dir()
-		o.wrote()
-		if into != "" {
-			log.Printf("observe: wrote %d frames to %s", captureStop(), into)
-		}
-	})
-	return func() {
-		offBegan()
-		offEnded()
-	}
-}
-
-// windows는 관측할 메인 OS 창과 자식 창의 번호를 반환한다.
-// 설정과 메뉴는 웹뷰이므로 별도 창 번호가 없다.
-//
-// 자식 창 목록은 AppKit 의 것이므로 주 스레드에서 읽는다. 이벤트 수신자는 자기
-// 고루틴에서 실행되고, 그동안 주 스레드가 자식 창을 붙이거나 떼면 목록을 순회하는
-// 도중에 그 목록이 바뀐다.
-func (o *observer) windows() []int {
-	var now []int
-	application.InvokeSync(func() {
-		win, ok := mainWindow()
-		if !ok {
-			return
-		}
-		numbers, err := system.WindowNumbers(win.NativeWindow())
-		if err != nil {
-			log.Printf("observe: %v", err)
-		}
-		now = numbers
-	})
-	return now
-}
-
-// report 는 지금의 창 목록을 한 줄 남긴다.
-func (o *observer) report() {
-	if now := o.windows(); len(now) > 0 {
-		log.Printf("observe: windows %s", numbers(now))
-	}
-}
-
-// zoom 은 창을 최대화한다.
-//
-// 창의 단추가 서는 자리는 창의 크기에서 계산되므로, 크기가 바뀐 뒤에도 그 자리가
-// 유지되는지 검사할 수 있어야 한다.
-func (o *observer) zoom() {
-	if !o.options.Zoom {
-		return
-	}
-	application.InvokeSync(func() {
-		if win, ok := mainWindow(); ok {
-			win.Maximise()
-		}
-	})
-}
-
-// resize 는 창의 콘텐츠를 지정된 크기로 만들고 실제로 얻은 크기를 보고한다.
-//
-// 최대화와 달리 크기를 이 쪽이 정한다. 최대화가 주는 크기는 화면의 가용 영역이고,
-// 그 영역은 애플리케이션이 시작한 직후에 1pt 바뀐다 — 두 애플리케이션이 그 변화의
-// 양쪽에서 최대화하면 창의 크기가 서로 달라진다. 크기를 지정하면 그 경주가 결과를
-// 움직이지 못한다.
-//
-// 얻은 크기를 보고한다. 요청한 크기가 그대로 적용되지 않는 애플리케이션이 있으면
-// 그것을 읽는 쪽이 알아야 한다.
-func (o *observer) resize() {
-	if o.options.Resize == "" {
-		return
-	}
-	w, h, err := parseSize(o.options.Resize)
+// diagnosticHost 는 엔드포인트의 호스트를 반환한다.
+func diagnosticHost(e *Endpoint, params json.RawMessage) (*Host, *Surfaces, error) {
+	window, err := e.window(params)
 	if err != nil {
-		log.Printf("observe: --resize %v", err)
-		return
+		return nil, nil, err
 	}
-	o.size(w, h)
-}
-
-// parseSize 는 "width,height" 를 읽는다.
-func parseSize(spec string) (int, int, error) {
-	var w, h int
-	if _, err := fmt.Sscanf(spec, "%d,%d", &w, &h); err != nil || w <= 0 || h <= 0 {
-		return 0, 0, fmt.Errorf("takes width,height, got %q", spec)
-	}
-	return w, h, nil
-}
-
-// size 는 창의 콘텐츠를 이 크기로 만들고 얻은 크기를 보고한다.
-func (o *observer) size(w, h int) {
-	win, ok := mainWindow()
+	backend, ok := e.backend.(hostBackend)
 	if !ok {
-		return
+		return nil, nil, errors.New("diagnostic methods need the application host")
 	}
-	// 크기가 실제로 적용된 시점은 창이 알린다. 설정한 직후에 읽으면 아직 적용되지
-	// 않은 크기를 읽는 애플리케이션이 있다. 수신자는 한 번만 붙인다: 이 애플리케이션은
-	// 지시를 여러 번 받으므로, 부를 때마다 붙이면 한 번의 변경이 여러 줄로 남는다.
-	o.sized.Do(func() {
-		win.OnWindowEvent(events.Common.WindowDidResize, func(*application.WindowEvent) {
-			got, high := win.Size()
-			log.Printf("observe: sized %dx%d", got, high)
-		})
-	})
-	application.InvokeSync(func() { win.SetSize(w, h) })
+	s := backend.h.byName(window)
+	if s == nil {
+		return nil, nil, errMissingWindow(window)
+	}
+	return backend.h, s, nil
 }
 
-// drive 는 경계를 끄는 일을 페이지에 요청한다.
-//
-// 끌기 자체는 페이지가 수행한다. 두 애플리케이션이 같은 페이지를 실행하므로, 어느
-// 경계를 어떻게 끄는지는 한 번만 적힌다.
-func (o *observer) drive() {
-	if o.options.Drive == "" {
-		return
-	}
-	plan, err := parseDrive(o.options.Drive)
+// diagnosticFixture 는 <config-dir>/test-project 를 빈 폴더 설정으로 만들고, 페이지가 다른
+// 프로젝트를 닫고 공통 설정을 기본값으로 되돌린 뒤 그 프로젝트를 새 배치로 열게 한다.
+func diagnosticFixture(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+	h, s, err := diagnosticHost(e, params)
 	if err != nil {
-		log.Printf("observe: --drive %v", err)
-		return
+		return nil, err
 	}
-	go func() {
-		// 이 애플리케이션이 열지 않은 페이지가 렌더링될 때까지 기다린다. 외부
-		// 페이지의 렌더링 완료를 알리는 이벤트가 없으므로 요청받은 시각까지 기다린다.
-		time.Sleep(plan.wait)
-		startDrag(plan)
-	}()
+	root := filepath.Join(h.workspace.directory, "test-project")
+	if err := os.MkdirAll(root, 0700); err != nil {
+		return nil, err
+	}
+	if err := writeJSON(filepath.Join(root, ".soksak", "settings.json"), Record{}); err != nil {
+		return nil, err
+	}
+	return h.ask(s, "diagnostics.fixture", map[string]any{"root": root}, pageTimeout)
 }
 
-// startDrag 는 끌기를 요청하고 그 걸음의 시각을 보낸다.
-//
-// 페이지는 끌기가 무엇인지를 갖고, 걸음이 언제인지는 여기서 온다. 창이 앞에 없으면
-// 브라우저가 그 문서의 시계를 1초 가까이로 묶으므로, 페이지가 스스로 세면 끌기는
-// 요청한 속도의 수십 분의 일로 느려진다. 이 시계는 창이 어디에 있든 늦춰지지 않는다.
-//
-// 걸음의 수는 페이지가 세는 것과 같다. 그만큼 보내고 멈춘다.
-func startDrag(plan drivePlan) {
-	emitObservation("observe-drag", plan)
-	go func() {
-		tick := time.NewTicker(frame)
-		defer tick.Stop()
-		for left := plan.steps() * 2 * plan.Times; left > 0; left-- {
-			<-tick.C
-			emitObservation("observe-tick")
-		}
-	}()
+// dragPlan 은 경계 하나를 왕복하는 끌기다. 각 반복은 왕복이므로 경계는 제자리로 돌아온다.
+type dragPlan struct {
+	Axis  string  `json:"axis"`
+	Line  int     `json:"line"`
+	DX    float64 `json:"dx"`
+	DY    float64 `json:"dy"`
+	MS    int     `json:"ms"`
+	Times int     `json:"times"`
 }
 
-// frame 은 한 걸음의 길이다. 페이지의 observe.js 가 같은 값을 적는다.
-const frame = 16 * time.Millisecond
-
-// steps 는 한 쓸기의 걸음 수다. 페이지가 세는 것과 같은 식이다.
-func (p drivePlan) steps() int {
-	if n := int(math.Round(float64(p.MS) / float64(frame/time.Millisecond))); n > 1 {
+// steps 는 한 방향 이동의 걸음 수다. 페이지가 같은 식으로 센다.
+func (p dragPlan) steps() int {
+	if n := int(math.Round(float64(p.MS) / float64(frameStep/time.Millisecond))); n > 1 {
 		return n
 	}
 	return 1
 }
 
-// drivePlan 은 한 번의 끌기를 반복하는 계획이다. 각 반복은 왕복이므로 경계는 제자리로
-// 돌아오고 모든 회차가 같은 픽셀을 지난다.
-type drivePlan struct {
-	wait  time.Duration `json:"-"`
-	Axis  string        `json:"axis"`
-	Line  int           `json:"line"`
-	DX    float64       `json:"dx"`
-	DY    float64       `json:"dy"`
-	MS    int           `json:"ms"`
-	Times int           `json:"times"`
+// capture 는 진행 중인 녹화다. 녹화 구현은 애플리케이션에 하나다.
+var capture struct {
+	mu        sync.Mutex
+	directory string
 }
 
-// parseDrive 는 "wait,axis,line,dx,dy,ms,times" 를 읽는다. 페이지가 렌더링될 때까지
-// wait 밀리초 기다린 뒤 그 경계를 누르고 ms 동안 dx,dy 만큼 왕복하며, 이를 times 번
-// 반복한다.
-func parseDrive(spec string) (drivePlan, error) {
-	parts := strings.Split(spec, ",")
-	if len(parts) != 7 {
-		return drivePlan{}, fmt.Errorf("wants wait,axis,line,dx,dy,ms,times, got %q", spec)
+// diagnosticDrag 는 페이지에 끌기를 요청하고 걸음의 시각을 보낸다.
+//
+// 페이지는 경계를 찾아 걸음마다 입력을 적용한다. 창이 앞에 없으면 브라우저가 문서의 시계를
+// 늦추므로 걸음의 시각은 호스트가 diagnostics-tick 이벤트로 보낸다. 페이지가 끌기를 마치고
+// 답하면 마지막 배치가 표시될 때까지 기다린 뒤 답한다.
+func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+	h, s, err := diagnosticHost(e, params)
+	if err != nil {
+		return nil, err
 	}
-	if parts[1] != "x" && parts[1] != "y" {
-		return drivePlan{}, fmt.Errorf("axis is x or y, got %q", parts[1])
+	var p struct {
+		dragPlan
+		Capture bool `json:"capture"`
 	}
-	var n [5]float64
-	for i, at := range []int{0, 2, 3, 4, 5} {
-		v, err := strconv.ParseFloat(strings.TrimSpace(parts[at]), 64)
+	if err := decode(params, &p); err != nil {
+		return nil, err
+	}
+	plan := p.dragPlan
+	if plan.Axis != "x" && plan.Axis != "y" {
+		return nil, rpcError(codeInvalidParams, "axis must be x or y")
+	}
+	if plan.MS <= 0 || plan.Times < 1 {
+		return nil, rpcError(codeInvalidParams, "ms must be positive and times must be at least 1")
+	}
+	var frames string
+	if p.Capture {
+		frames, err = startCapture(h, s)
 		if err != nil {
-			return drivePlan{}, fmt.Errorf("%q is not a number", parts[at])
+			return nil, err
 		}
-		n[i] = v
 	}
-	times, err := strconv.Atoi(strings.TrimSpace(parts[6]))
-	if err != nil {
-		return drivePlan{}, fmt.Errorf("%q is not a number", parts[6])
-	}
-	return drivePlan{
-		wait: time.Duration(n[0]) * time.Millisecond,
-		Axis: parts[1], Line: int(n[1]),
-		DX: n[2], DY: n[3], MS: int(n[4]), Times: times,
-	}, nil
-}
-
-// numbers 는 창 번호를 다른 호스트와 같은 형식으로 적는다.
-func numbers(list []int) string {
-	out := make([]string, len(list))
-	for i, n := range list {
-		out[i] = strconv.Itoa(n)
-	}
-	return strings.Join(out, " ")
-}
-
-// ControlPort 는 이 애플리케이션이 지시를 받는 포트다. 다른 호스트는 다른 포트를
-// 쓰므로 둘이 함께 떠 있을 수 있다. e2e/app.mjs 가 같은 숫자를 적는다.
-const ControlPort = 49732
-
-// commands 는 지시를 받는 통로를 연다.
-//
-// 한 애플리케이션이 여러 번 몰 수 있고, 그 애플리케이션은 검사보다 오래 산다.
-// 그래서 검사를 다시 돌려도 창이 새로 뜨지 않는다. 새 창은 사람이 보고 있는 화면
-// 앞에 놓이므로, 뜨는 횟수가 곧 가리는 횟수다.
-//
-// 통로는 열린 포트다. 지시 한 줄을 받고, 그 지시가 끝날 때까지 이 애플리케이션의
-// 로그를 그대로 돌려보낸다. 부르는 쪽은 자기가 기다리는 줄을 읽으면 끊는다.
-func (o *observer) commands() {
-	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", ControlPort))
-	if err != nil {
-		log.Printf("observe: no control port, %v", err)
-		return
-	}
-	log.Printf("observe: control on %d", ControlPort)
+	ticks := plan.steps() * 2 * plan.Times
+	s.log(fmt.Sprintf("diagnostics: drag %s:%d by %g,%g in %d steps, %d times", plan.Axis, plan.Line, plan.DX, plan.DY, plan.steps(), plan.Times))
+	id, w := h.relay.open(s, "")
+	s.window.EmitEvent("exposure-request", map[string]any{"id": id, "method": "diagnostics.drag", "params": plan})
+	stop := make(chan struct{})
 	go func() {
-		for {
-			conn, err := ln.Accept()
-			if err != nil {
+		tick := time.NewTicker(frameStep)
+		defer tick.Stop()
+		for left := ticks; left > 0; left-- {
+			select {
+			case <-tick.C:
+				s.window.EmitEvent("diagnostics-tick")
+			case <-stop:
 				return
 			}
-			go o.serve(conn)
 		}
 	}()
-}
-
-// serve 는 연결 하나가 보내는 지시들을 수행한다.
-func (o *observer) serve(conn net.Conn) {
-	defer conn.Close()
-	logging.join(conn)
-	defer logging.leave(conn)
-	in := bufio.NewScanner(conn)
-	for in.Scan() {
-		o.command(strings.TrimSpace(in.Text()))
+	reply := h.relay.wait(id, w, time.Duration(ticks)*frameStep+pageTimeout)
+	close(stop)
+	if reply.Error != nil {
+		return nil, reply.Error
 	}
-}
-
-// logging 은 이 애플리케이션의 로그를 표준오류와 열린 연결들에 함께 적는다.
-//
-// 검사가 읽는 줄은 관측이 남기는 것과 페이지의 검증기가 남기는 것 둘 다이고, 둘
-// 모두 표준 로거를 지난다. 그래서 로거 하나만 갈래를 내면 된다.
-var logging = &fan{}
-
-type fan struct {
-	mu sync.Mutex
-	to []net.Conn
-}
-
-func (f *fan) join(conn net.Conn) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.to = append(f.to, conn)
-}
-
-func (f *fan) leave(conn net.Conn) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	for i, at := range f.to {
-		if at == conn {
-			f.to = append(f.to[:i], f.to[i+1:]...)
-			return
-		}
+	select {
+	case <-s.whenSettled():
+	case <-time.After(pageTimeout):
+		return nil, rpcError(codeTimeout, "the drag was not presented within %s", pageTimeout)
 	}
+	s.log("diagnostics: drag presented")
+	if p.Capture {
+		return map[string]any{"frames": frames}, nil
+	}
+	if len(reply.Result) == 0 {
+		return nil, nil
+	}
+	return reply.Result, nil
 }
 
-// Write 는 어느 연결이 실패해도 오류를 돌려주지 않는다. 로그는 실패해도 계속
-// 남아야 하고, 끊어진 연결은 그 연결을 쥔 쪽이 거둔다.
-func (f *fan) Write(p []byte) (int, error) {
-	f.mu.Lock()
-	to := append([]net.Conn(nil), f.to...)
-	f.mu.Unlock()
-	for _, conn := range to {
-		_, _ = conn.Write(p)
+// startCapture 는 창 s 의 녹화를 설정 디렉터리 아래 새 폴더에 시작하고 첫 프레임을 기다린다.
+func startCapture(h *Host, s *Surfaces) (string, error) {
+	capture.mu.Lock()
+	defer capture.mu.Unlock()
+	if capture.directory != "" {
+		return "", fmt.Errorf("a capture into %s is running", capture.directory)
 	}
-	return len(p), nil
-}
-
-// command 는 지시 한 줄을 수행한다.
-//
-// drag 는 --drive 와 같은 끌기이되 기다림이 없다. 그 기다림은 페이지가 처음
-// 그려지기를 기다리는 것이고, 지시를 받을 때 페이지는 이미 그려져 있다.
-func (o *observer) command(line string) {
-	verb, rest, _ := strings.Cut(line, " ")
-	switch verb {
-	case "":
-	case "drag":
-		// 폴더는 없어도 된다. 녹화 없이 끄는 지시는 화면이 아니라 로그를 읽는
-		// 검사의 것이다.
-		spec, into, _ := strings.Cut(rest, " ")
-		plan, err := parseDrive(spec)
-		if err != nil {
-			log.Printf("observe: drag %v", err)
-			return
-		}
-		plan.wait = 0
-		o.writeTo(into, true)
-		if into != "" {
-			captureStart(into)
-			if !captureWait() {
-				log.Printf("observe: capture did not produce an initial frame")
-				return
-			}
-		}
-		startDrag(plan)
-	case "quit":
-		log.Print("observe: quit requested")
-		application.Get().Quit()
-	case "stop":
-		into := o.dir()
-		o.wrote()
-		log.Printf("observe: wrote %d frames to %s", captureStop(), into)
-	case "fixture":
-		if o.configDir == "" {
-			log.Print("observe: fixture error: --config-dir is required for window tests")
-			return
-		}
-		root := filepath.Join(o.configDir, "test-project")
-		if err := os.MkdirAll(root, 0700); err != nil {
-			log.Printf("observe: fixture error: %v", err)
-			return
-		}
-		if err := writeJSON(filepath.Join(root, ".soksak", "settings.json"), Record{}); err != nil {
-			log.Printf("observe: fixture error: %v", err)
-			return
-		}
-		emitObservation("observe-fixture", root)
-	case "reset":
-		// 이 애플리케이션은 검사보다 오래 살고 검사는 여럿이다. 앞의 검사가 연
-		// 모달이나 옮긴 경계가 남아 있으면 다음 검사는 자기가 만들지 않은 상태를
-		// 잰다. 페이지를 다시 읽으면 모든 검사가 같은 자리에서 시작한다.
-		application.InvokeSync(func() {
-			win, ok := mainWindow()
-			if !ok {
-				return
-			}
-			// 이미 그 상태면 건드리지 않는다. 창의 크기를 다시 정하면 그 사이에
-			// 창의 단추가 제자리를 벗어나고, 페이지의 검사는 그것을 본다. 되돌릴
-			// 것이 없는데 되돌리는 일이 그 자체로 잴 것을 만든다.
-			if win.IsMaximised() {
-				win.UnMaximise()
-			}
-			if w, h := win.Size(); w != startWidth || h != startHeight {
-				win.SetSize(startWidth, startHeight)
-			}
-			win.Reload()
-		})
-		log.Printf("observe: reset")
-	case "click":
-		emitObservation("observe-click", rest)
-	case "native":
-		observeNative(rest)
-	case "transcript":
-		// 끄는 길은 없다. reset 이 페이지를 다시 읽으면 기록도 처음으로 돌아간다.
-		emitObservation("observe-record")
-		log.Printf("observe: transcript on")
-	case "zoom":
-		application.InvokeSync(func() {
-			win, ok := mainWindow()
-			if !ok {
-				return
-			}
-			if rest == "off" {
-				win.UnMaximise()
-			} else {
-				win.Maximise()
-			}
-		})
-		if rest == "off" {
-			log.Printf("observe: zoom off")
-		} else {
-			log.Printf("observe: zoom on")
-		}
-	case "size":
-		w, h, err := parseSize(rest)
-		if err != nil {
-			log.Printf("observe: size %v", err)
-			return
-		}
-		o.size(w, h)
-	case "knob":
-		name, value, ok := strings.Cut(rest, " ")
-		if !ok {
-			log.Printf("observe: knob takes a name and a value, got %q", rest)
-			return
-		}
-		at, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
-		if err != nil {
-			log.Printf("observe: knob %q is not a number", value)
-			return
-		}
-		emitObservation("observe-knob", map[string]any{"name": name, "value": at})
-	default:
-		log.Printf("observe: %q is not a command", verb)
+	directory := filepath.Join(h.workspace.directory, "captures", fmt.Sprintf("%s-%d", s.name, time.Now().UnixNano()))
+	if err := os.MkdirAll(directory, 0700); err != nil {
+		return "", err
 	}
-}
-
-// click 은 CSS 선택자로 지정한 페이지 요소를 누른다.
-//
-// 경계는 표면 위에 있으므로 좌표로 도달한다. 페이지 크롬의 버튼은 DOM 요소이므로
-// 문서만 클릭을 전달할 수 있고, 페이지의 관측 모듈이 그 일을 한다.
-func (o *observer) click() {
-	if o.options.Click == "" {
-		return
-	}
-	wait, selector, ok := strings.Cut(o.options.Click, ",")
-	if !ok {
-		log.Printf("observe: --click takes ms,selector, got %q", o.options.Click)
-		return
-	}
-	after, err := strconv.Atoi(strings.TrimSpace(wait))
+	// 윈도 서버의 창 목록 조회는 답을 기다리므로 창 번호만 주 스레드에서 읽는다.
+	var numbers []int
+	var err error
+	application.InvokeSync(func() { numbers, err = system.WindowNumbers(s.window.NativeWindow()) })
 	if err != nil {
-		log.Printf("observe: --click wait %q is not a number", wait)
-		return
+		return "", err
 	}
-	go func() {
-		// --drive 와 같은 기다림이다. 누를 요소가 언제 그려지는지 알리는 이벤트가
-		// 없다.
-		time.Sleep(time.Duration(after) * time.Millisecond)
-		emitObservation("observe-click", selector)
-	}()
-}
-
-func emitObservation(name string, data ...any) {
-	if win, ok := mainWindow(); ok {
-		win.EmitEvent(name, data...)
+	if len(numbers) == 0 {
+		return "", errors.New("the window has no window server number")
 	}
-}
-
-func mainWindow() (*application.WebviewWindow, bool) {
-	w, ok := application.Get().Window.GetByName("main")
-	if !ok {
-		return nil, false
+	if err := system.CaptureOpen(numbers[0]); err != nil {
+		return "", err
 	}
-	win, ok := w.(*application.WebviewWindow)
-	return win, ok
-}
-
-// Report 는 페이지 검사의 한 줄을 이 앱의 로그에 적는다. 페이지는 파일을 쓸 수 없고,
-// 페이지의 콘솔은 디버거 밖에서 보이지 않는다.
-func (s *Surfaces) Report(line string) error {
-	log.Println(line)
-	return nil
-}
-
-// observeNative 는 네이티브 검사 요청을 메인 창에서 실행하고 결과를 로그에 적는다.
-func observeNative(request string) {
-	application.InvokeSync(func() {
-		var handle unsafe.Pointer
-		if window, ok := mainWindow(); ok {
-			handle = window.NativeWindow()
-		}
-		err := system.Probe(handle, request, func(text string) { log.Printf("observe: native %s", text) })
-		if err != nil {
-			log.Printf("observe: %v", err)
-		}
-	})
-}
-
-func captureStart(directory string) {
 	if err := system.CaptureStart(directory); err != nil {
-		log.Printf("observe: %v", err)
+		return "", err
 	}
-}
-
-func captureStop() int {
-	frames, err := system.CaptureStop()
-	if err != nil {
-		log.Printf("observe: %v", err)
-	}
-	return frames
-}
-
-func captureWait() bool {
+	capture.directory = directory
 	ready, err := system.CaptureWait()
-	if err != nil {
-		log.Printf("observe: %v", err)
+	if err == nil && !ready {
+		err = errors.New("capture did not produce an initial frame")
 	}
-	return ready
+	if err != nil {
+		capture.directory = ""
+		_, _ = system.CaptureStop()
+		return "", err
+	}
+	return directory, nil
+}
+
+// diagnosticCaptureStop 은 녹화를 끝내고 프레임 폴더와 프레임 수를 반환한다.
+func diagnosticCaptureStop(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+	if _, _, err := diagnosticHost(e, params); err != nil {
+		return nil, err
+	}
+	capture.mu.Lock()
+	defer capture.mu.Unlock()
+	if capture.directory == "" {
+		return nil, errors.New("no capture is running")
+	}
+	count, err := system.CaptureStop()
+	directory := capture.directory
+	capture.directory = ""
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"frames": directory, "count": count}, nil
+}
+
+// diagnosticKnob 은 합성기의 검사 값을 페이지에 전달한다.
+func diagnosticKnob(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+	window, err := e.window(params)
+	if err != nil {
+		return nil, err
+	}
+	var p struct {
+		Name  string   `json:"name"`
+		Value *float64 `json:"value"`
+	}
+	if err := decode(params, &p); err != nil {
+		return nil, err
+	}
+	if p.Name == "" || p.Value == nil {
+		return nil, rpcError(codeInvalidParams, "name and a numeric value are required")
+	}
+	return e.backend.PageRequest(window, "diagnostics.knob", mustJSON(p))
+}
+
+// diagnosticTranscript 는 연결의 diagnostics.log 알림을 켜거나 끈다. 페이지는 첫 구독과 마지막
+// 해제에서 호출 기록의 시작과 종료를 받는다.
+func diagnosticTranscript(e *Endpoint, c *endpointConn, params json.RawMessage) (any, error) {
+	window, err := e.window(params)
+	if err != nil {
+		return nil, err
+	}
+	var p struct {
+		On *bool `json:"on"`
+	}
+	if err := decode(params, &p); err != nil {
+		return nil, err
+	}
+	if p.On == nil {
+		return nil, rpcError(codeInvalidParams, "on is required")
+	}
+	e.watching.Lock()
+	defer e.watching.Unlock()
+	t := topic{window, logTopic}
+	if !e.subscribe(c, t, *p.On) {
+		return nil, nil
+	}
+	if _, err := e.backend.PageRequest(window, "diagnostics.transcript", mustJSON(map[string]bool{"on": *p.On})); err != nil {
+		if *p.On {
+			e.subscribe(c, t, false)
+		}
+		return nil, err
+	}
+	return nil, nil
 }

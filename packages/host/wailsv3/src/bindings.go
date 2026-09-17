@@ -21,15 +21,6 @@ var webviewBootstrap string
 // backgroundScript 는 스테이징한 프런트엔드의 background.js 다. Run 이 읽는다.
 var backgroundScript string
 
-// services 는 이 애플리케이션이 등록할 서비스 목록이다. 관측은 요청했을 때만 등록한다.
-func services(host *Host, options Options) []application.Service {
-	list := []application.Service{application.NewService(host)}
-	if options.Observe.Enabled {
-		list = append(list, application.NewService(&observer{options: options.Observe, configDir: options.ConfigDir}))
-	}
-	return list
-}
-
 // 아래 메서드는 호출한 창의 Surfaces 에 요청을 전달한다.
 
 func (h *Host) WindowControls(ctx context.Context) (Rect, error) {
@@ -80,12 +71,16 @@ func (h *Host) OverlayHide(ctx context.Context, id string) error {
 	return s.OverlayHide(id)
 }
 
+// Report 는 페이지 검사의 한 줄을 로그에 적고 이 창의 진단 기록을 켠 연결에 보낸다. 페이지는
+// 파일을 쓸 수 없고, 페이지의 콘솔은 디버거 밖에서 보이지 않는다.
 func (h *Host) Report(ctx context.Context, line string) error {
 	s, err := h.surface(ctx)
 	if err != nil {
 		return err
 	}
-	return s.Report(line)
+	log.Println(line)
+	s.log(line)
+	return nil
 }
 
 func (h *Host) SetTheme(ctx context.Context, theme Theme) error {
@@ -141,11 +136,24 @@ func nativeArgs(call nativeCall, into ...any) error {
 	return nil
 }
 
-// invokeNative 는 추가 문서가 호출한 메서드를 실행한다. 추가 문서의 인터페이스는 Wails 바인딩과 별개다.
-func invokeNative(s *Surfaces, call nativeCall) (any, error) {
+// invokeNative 는 네이티브 웹뷰 viewID 의 문서가 호출한 메서드를 실행한다. 추가 문서의
+// 인터페이스는 Wails 바인딩과 별개다.
+func invokeNative(s *Surfaces, viewID uint64, call nativeCall) (any, error) {
 	var id, key, value string
 	var instance uint64
 	switch call.Method {
+	case "ExposureRegister":
+		var req SurfaceRegistration
+		if err := nativeArgs(call, &req); err != nil {
+			return nil, err
+		}
+		return nil, s.exposureRegister(viewID, req)
+	case "ExposureReply":
+		var req ExposureReplyRequest
+		if err := nativeArgs(call, &req); err != nil {
+			return nil, err
+		}
+		return nil, s.exposureReply(viewID, req)
 	case "Theme":
 		if err := nativeArgs(call); err != nil {
 			return nil, err
@@ -192,7 +200,7 @@ func dispatchNative(viewID uint64, body string) {
 	if owner == nil {
 		return
 	}
-	result, err := invokeNative(owner, call)
+	result, err := invokeNative(owner, viewID, call)
 	reply := map[string]any{"epoch": call.Epoch, "id": call.ID, "result": result}
 	if err != nil {
 		reply["error"] = err.Error()

@@ -22,7 +22,7 @@
 
 <!-- 창의 크롬. 브랜드, 프로젝트 탭, 그리고 자주 쓰는 스위치.
      프로젝트 탭은 설정에 따라 여기 서거나 왼쪽 세로 레일로 간다. -->
-<header class="chrome-bar">
+<header class="chrome-bar" data-expose="core.chrome.bar">
   <!-- 창을 끄는 영역. 막대의 빈 곳 전체를 덮고, 단추와 탭은 그 위에 배치된다.
        막대 자체에 표시하면 그 표시가 자식에게 상속되어 단추를 눌러도 창이
        이동한다. -->
@@ -56,6 +56,7 @@
 /* environment.json 을 가장 먼저 불러온다. 아래 모듈은 등록된 플러그인과 기본값을
    함수 호출 시점에 읽는다. */
 import { loadEnvironment } from "./environment.js";
+import { loadExposure } from "./exposure.js";
 import { openStore } from "@soksak/runtime";
 
 import { installTheme } from "soksak";
@@ -82,7 +83,8 @@ import { verify } from "./verify.js";
 /* 애플리케이션 인터페이스. 없으면 아무 일도 하지 않는 구현이 온다. */
 import { chrome, surfaces as host } from "./host.js";
 
-/* 관측이 지목한 요소를 누른다. 호스트가 요청할 때만 동작한다. */
+/* 코어의 공개 항목과 진단 메서드. 등록소가 호스트의 요청에 답한다. */
+import { coreChanged, installCoreExposure, setVerify } from "./core-exposure.js";
 import "./observe.js";
 
 /* 프로젝트와 그 안의 스페이스. 판은 한 번에 스페이스 하나를 그리고, 전환은 현재
@@ -97,7 +99,7 @@ import { adopt, capture, fresh, clear } from "./plane.js";
 
 import { createLibrary } from "./library.js";
 
-await loadEnvironment();
+await Promise.all([loadExposure(), loadEnvironment()]);
 
 // 선과 divider 의 모양은 이 시트가 정의한다. 이 문서는 색만 지정하고 아래 :root 가
 // 그 토큰을 이 문서의 색에 연결한다.
@@ -123,6 +125,7 @@ function showError(reason) {
     document.querySelector("header").after(el);
   }
   el.textContent = String(reason);
+  coreChanged();
 }
 
 /* ── 배선 ─────────────────────────────────────────────────────────────── */
@@ -144,6 +147,7 @@ onRun((going) => {
 function check() {
   if (!currentGrid() || projects.inLibrary()) return;
   const rows = verify(controlsAt);
+  setVerify(rows);
   const failed = rows.filter((r) => !r.ok);
   const line = failed.length === 0
     ? `verify: ${rows.length} pass`
@@ -204,21 +208,18 @@ onCommit((record) =>
 
 /* 판이 다시 그려지면 검증하고 표면을 보고한다. 판은 둘을 알지 않고 둘은 판을 읽기만
    하므로 이 문서에서 연결한다. */
-let ready = false;
 let presented = Promise.resolve();
 onRender(() => {
   const done = publish();
   presented = Promise.resolve(done);
   const record = latest();
   check();
+  coreChanged();
   Promise.resolve(done).then(() => {
     if (latest() !== record) return;
     check();
+    coreChanged();
     if (record?.settled !== false) projects.keep();
-    if (!ready) {
-      ready = true;
-      host.report(`observe: ready ${performance.timeOrigin}`);
-    }
   });
 });
 
@@ -285,9 +286,10 @@ function askControls() {
 }
 
 /** 크롬 행의 아이콘 버튼 하나를 만든다. */
-function act(name, title, on, onPick) {
+function act(name, title, on, onPick, expose) {
   const b = document.createElement("button");
   b.className = "act";
+  b.dataset.expose = expose;
   b.type = "button";
   b.title = title;
   b.dataset.on = String(on);
@@ -297,9 +299,10 @@ function act(name, title, on, onPick) {
 }
 
 /** 탭 하나를 만든다. 클릭은 전환, 더블클릭은 이름 변경, ✕ 는 닫기다. */
-function tab(text, on, { dot, onPick, onClose, onRename }) {
+function tab(text, on, { dot, onPick, onClose, onRename, expose }) {
   const el = document.createElement("button");
   el.className = "bar-tab";
+  el.dataset.expose = expose;
   el.type = "button";
   el.dataset.on = String(on);
   el.title = text;
@@ -343,9 +346,10 @@ function renameInPlace(el, was, take) {
 }
 
 /** 「+」 버튼을 만든다. 클릭하면 그 자리에서 입력을 받는다. */
-function addTabButton(text, onPick) {
+function addTabButton(text, onPick, expose) {
   const b = document.createElement("button");
   b.className = "bar-tab bar-tab--add";
+  b.dataset.expose = expose;
   b.type = "button";
   b.textContent = text;
   b.addEventListener("click", () => onPick(b));
@@ -377,6 +381,7 @@ function drawBars() {
   for (const p of browsing ? [] : projects.all()) {
     const el = tab(p.title, p.id === here?.id, {
       dot: p.color,
+      expose: "core.project-tab",
       onPick: () => { projects.activate(p.id); drawBars(); },
       onRename: (title) => projects.rename(p.id, title),
       onClose: () => projects.close(p.id),
@@ -392,35 +397,37 @@ function drawBars() {
     });
     into.appendChild(el);
   }
-  if (!browsing) into.appendChild(addTabButton("+", () => projects.browse()));
+  if (!browsing) into.appendChild(addTabButton("+", () => projects.browse(), "core.project-tab.add"));
 
   spaceBar.textContent = "";
   for (const sp of here?.spaces ?? []) {
     spaceBar.appendChild(tab(sp.title, sp.id === here.activeSpaceId, {
+      expose: "core.space-tab",
       onPick: () => { projects.activateSpace(sp.id); drawBars(); },
       onRename: (title) => projects.renameSpace(sp.id, title),
       onClose: here.spaces.length > 1
         ? () => { projects.closeSpace(sp.id); drawBars(); publish(); } : null,
     }));
   }
-  if (here) spaceBar.appendChild(addTabButton("+", () => { projects.addSpace(fresh()); drawBars(); }));
+  if (here) spaceBar.appendChild(addTabButton("+", () => { projects.addSpace(fresh()); drawBars(); }, "core.space-tab.add"));
 
   chromeActs.textContent = "";
-  if (!browsing) chromeActs.append(act("projects", "프로젝트 목록", false, () => projects.browse()));
+  if (!browsing) chromeActs.append(act("projects", "프로젝트 목록", false, () => projects.browse(), "core.chrome.projects"));
   chromeActs.append(
-    act("panel-left", "좌측 자리", value("left"), () => set({ left: !value("left") })),
-    act("panel-right", "우측 자리", value("right"), () => set({ right: !value("right") })),
+    act("panel-left", "좌측 자리", value("left"), () => set({ left: !value("left") }), "core.chrome.left"),
+    act("panel-right", "우측 자리", value("right"), () => set({ right: !value("right") }), "core.chrome.right"),
     // 모달의 모드 세그먼트와 같은 경로다. applyTheme 은 테마의 형태 값까지 다시
     // 적용하므로, 그것을 부르면 사용자가 정한 통로와 모서리가 되돌아간다.
     act(modeName() === "dark" ? "sun" : "moon", "밝게 / 어둡게", false,
-        () => set({ mode: modeName() === "dark" ? "light" : "dark" })),
+        () => set({ mode: modeName() === "dark" ? "light" : "dark" }), "core.chrome.mode"),
     // 모달이 열린 동안에는 오버레이가 이 버튼을 덮으므로 다시 눌리지 않는다. 켜짐
     // 상태도 표시하지 않는다. 구 프로젝트의 settings-toggle 과 같다.
-    act("settings", "설정", false, openSettings),
+    act("settings", "설정", false, openSettings, "core.chrome.settings"),
   );
 }
 
-const library = createLibrary(document.getElementById("library"));
+const library = createLibrary(document.getElementById("library"), coreChanged);
+await installCoreExposure({ library });
 addEventListener("keydown", (event) => {
   if (!(event.metaKey || event.ctrlKey)) return;
   if (!chrome && event.shiftKey && event.key.toLowerCase() === "n") { event.preventDefault(); projects.newWindow(); }
@@ -429,7 +436,7 @@ addEventListener("keydown", (event) => {
 
 const storage = await openStore();
 await connectSettings(storage);
-projects.onChange(() => { drawBars(); drawSettings(); library.render(); });
+projects.onChange(() => { drawBars(); drawSettings(); library.render(); coreChanged(); });
 await projects.initialise(storage);
 drawBars();
 
@@ -461,6 +468,7 @@ onSettingsChange(() => {
   settle();
   drawBars();
   drawSettings();
+  coreChanged();
 });
 
 /* 창 크기가 바뀌면 SoksakView 의 ResizeObserver 가 다시 그린다. 여기서 같은

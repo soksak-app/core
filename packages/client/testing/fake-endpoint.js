@@ -108,6 +108,8 @@ export function rpcError(code, message) {
 /** 창 하나와 선언 몇 개를 가진 기본 응답기. status 값은 values 에 두고 set 으로 바꾼다. */
 export function sampleHandlers() {
   const values = new Map([["core.screen", "home"]]);
+  // 창 main 이 key 창인지. 아니면 activate 없는 move 가 1006 으로 실패한다.
+  const state = { key: true };
   const watchers = new Map();
   const entries = {
     status: [
@@ -158,13 +160,21 @@ export function sampleHandlers() {
     },
     "dom.rect": (params) => (window(params), { x: 10, y: 20, width: 30, height: 40, index: params.index ?? 0, document: { x: 0, y: 0 } }),
     "dom.act": (params) => (window(params), null),
-    "input.pointer": (params) => (window(params), null),
+    "input.pointer": (params) => {
+      window(params);
+      if (params.phase === "move" && !state.key && params.activate !== true) {
+        throw rpcError(1006, "window main is not the key window; pass activate to make it key");
+      }
+      if (params.activate === true) state.key = true;
+      return null;
+    },
     "input.key": (params) => (window(params), null),
   };
   return {
     handlers,
     values,
     watchers,
+    state,
     // 값을 바꾸고 감시 중인 연결에 status.changed 를 보낸다.
     set(name, value) {
       values.set(name, value);

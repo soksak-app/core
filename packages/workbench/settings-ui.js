@@ -83,6 +83,7 @@ function choose(key, options, now) {
   wrap.className = "select-field";
   const el = document.createElement("select");
   el.dataset.set = key;
+  el.dataset.expose = "core.settings-modal.set";
   for (const [v, label] of options) {
     const o = document.createElement("option");
     o.value = v;
@@ -107,6 +108,7 @@ function segment(key, options, now) {
     const b = document.createElement("button");
     b.type = "button";
     b.dataset.key = `pick:${key}:${v}`;
+    b.dataset.expose = key === "scope" ? "core.settings-modal.scope" : "core.settings-modal.pick";
     b.dataset.on = String(v === now);
     b.textContent = label;
     el.appendChild(b);
@@ -120,6 +122,7 @@ function toggle(key, now) {
   el.type = "checkbox";
   el.className = "set-switch";
   el.dataset.set = key;
+  el.dataset.expose = "core.settings-modal.set";
   el.toggleAttribute("checked", now);
   return el;
 }
@@ -131,6 +134,7 @@ function slide(key, min, max, now, unit) {
   const el = document.createElement("input");
   el.type = "range";
   el.dataset.set = key;
+  el.dataset.expose = "core.settings-modal.set";
   el.min = String(min);
   el.max = String(max);
   el.setAttribute("value", String(now));
@@ -146,6 +150,7 @@ function press(key, label) {
   el.className = "ui-button";
   el.type = "button";
   el.dataset.key = key;
+  el.dataset.expose = key === "press:build" ? "core.settings-modal.build" : "core.settings-modal.reset";
   el.textContent = label;
   return el;
 }
@@ -161,6 +166,7 @@ function swatch(theme) {
   el.className = "th";
   el.type = "button";
   el.dataset.key = `theme:${theme.name}`;
+  el.dataset.expose = "core.settings-modal.theme";
   el.dataset.on = String(theme.name === themeName());
   const c = theme[modeName()];
   const gap = parseFloat(theme.shape.gap);
@@ -256,13 +262,14 @@ function makeCard() {
   el.className = "set-card";
   el.id = "settings";
   el.dataset.nativeModal = "dialog";
+  el.dataset.expose = "core.settings-modal.card";
   el.setAttribute("role", "dialog");
   el.setAttribute("aria-modal", "true");
   el.setAttribute("aria-label", NAME);
   el.innerHTML =
-    '<header class="set-card__head" data-grip>' +
+    '<header class="set-card__head" data-grip data-expose="core.settings-modal.grip">' +
       `<span class="set-card__title">${NAME}</span>` +
-      `<button class="act" type="button" data-key="close" title="닫는다">${icon("close")}</button>` +
+      `<button class="act" type="button" data-key="close" data-expose="core.settings-modal.close" title="닫는다">${icon("close")}</button>` +
     '</header>' +
     '<div class="set-card__body">' +
       '<nav class="set-card__nav"></nav>' +
@@ -284,9 +291,41 @@ export function onCommand(fn) {
   commanded = fn;
 }
 
+/* 모달을 그리거나 닫을 때 호출할 함수. 공개 항목이 등록한다. */
+let drawn = () => {};
+
+/** 모달을 그리거나 닫을 때 호출할 함수를 등록한다. */
+export function onSettingsDrawn(fn) {
+  drawn = fn;
+}
+
+/**
+ * 열린 모달의 공개 컨트롤. 이름마다 문서 순서의 번호를 붙인다. 네이티브 모달은 이
+ * 요소의 사본을 그리므로 두 문서의 순서가 같다.
+ */
+export function settingsModalState() {
+  if (!card) return { open: false, controls: [] };
+  const counts = new Map();
+  const controls = [...card.querySelectorAll("[data-expose]")].map((el) => {
+    const name = el.dataset.expose;
+    const index = counts.get(name) ?? 0;
+    counts.set(name, index + 1);
+    const on = el.dataset.on ?? (el.type === "checkbox" ? String(el.checked) : null);
+    return {
+      name, index,
+      key: el.dataset.key ?? el.dataset.set ?? null,
+      label: el.tagName === "SELECT" ? "" : el.textContent.trim(),
+      on: on === null ? null : on === "true",
+      value: "value" in el && el.tagName !== "BUTTON" ? String(el.value) : null,
+    };
+  });
+  return { open: true, controls };
+}
+
 /** 카드를 다시 그리고, 열려 있으면 호스트 뷰의 내용도 갱신한다. */
 export function drawSettings() {
   if (!card) return;
+  queueMicrotask(() => drawn());
   if (!settingProject()) scope = "common";
   nav.textContent = "";
   for (const [id, name] of SECTIONS) {
@@ -294,6 +333,7 @@ export function drawSettings() {
     b.className = "set-nav";
     b.type = "button";
     b.dataset.key = `nav:${id}`;
+    b.dataset.expose = "core.settings-modal.nav";
     b.dataset.on = String(id === here);
     b.textContent = name;
     nav.appendChild(b);
@@ -378,6 +418,7 @@ export function openSettings() {
   // 드래그가 동작한다. 호스트가 카드를 렌더링해도 오버레이는 이 문서에 남는다.
   scrim = document.createElement("div");
   scrim.className = "set-scrim";
+  scrim.dataset.expose = "core.settings-modal.scrim";
   card = makeCard();
   scrim.appendChild(card);
   document.body.appendChild(scrim);
@@ -397,8 +438,9 @@ export function openSettings() {
 }
 
 /** 모달을 닫고 오버레이와 카드를 제거한다. */
-function closeSettings() {
+export function closeSettings() {
   if (!card) return;
+  queueMicrotask(() => drawn());
   if (native) overlay.hide(card);
   else standIn(false);
   scrim.remove();

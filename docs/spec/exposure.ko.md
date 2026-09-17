@@ -83,17 +83,21 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 | 메서드 | 매개변수 | 결과 |
 | --- | --- | --- |
 | `windows.list` | 없음 | `[{window, title, project, key}]` |
-| `exposure.list` | `{window}` | 코어, 호스트, 로드된 플러그인의 선언 항목. 각 항목에 `registered`가 있다 |
+| `exposure.list` | `{window}` | `{status, commands, dom}`: 코어, 호스트, 로드된 플러그인의 선언 항목을 선언 형식으로 반환한다. 각 항목에 `registered`가 있다 |
 | `status.get` | `{window, name}` | 현재 값 |
 | `status.watch` | `{window, name}` | `null`. 이후 `status.unwatch`를 받거나 연결이 닫힐 때까지 값이 바뀔 때마다 호스트가 `status.changed` 알림 `{window, name, value}`를 보낸다 |
 | `status.unwatch` | `{window, name}` | `null` |
 | `command.run` | `{window, name, params}` | 명령 결과 |
 | `dom.rect` | `{window, name, index?}` | 소유 문서의 CSS 픽셀 좌표 `{x, y, width, height}`와, 창 좌표로 나타낸 문서 원점 `{document}` |
 | `dom.act` | `{window, name, index?, action, value?, event?}` | `null`. `action`은 `click`, `input`, `dispatch` 중 하나다. 페이지는 `isTrusted`가 false인 합성 DOM 이벤트를 받는다 |
-| `input.pointer` | `{window, x, y, phase, button?, deltaX?, deltaY?}` | `null`. 창 좌표를 쓴다. `phase`는 `move`, `down`, `drag`, `up`, `scroll` 중 하나다 |
+| `input.pointer` | `{window, x, y, phase, button?, deltaX?, deltaY?, activate?}` | `null`. 창 좌표를 쓴다. `phase`는 `move`, `down`, `drag`, `up`, `scroll` 중 하나다. `button`은 `left`(기본값) 또는 `right`다. `deltaX`, `deltaY`는 포인트 단위 스크롤 거리다. `activate`는 `move`에 적용한다 |
 | `input.key` | `{window, key, text?, modifiers?, phase}` | `null`. `key`는 키 이름(`Enter`, `Tab`, `Escape`, `Backspace`, `Delete`, `Space`, `ArrowLeft`, `ArrowRight`, `ArrowUp`, `ArrowDown`, `Home`, `End`, `PageUp`, `PageDown`) 또는 문자 하나다. `modifiers`는 `shift`, `control`, `option`, `command`의 배열이다. `phase`는 `down` 또는 `up`이다 |
 
-호스트는 `input.pointer`와 `input.key`를 네이티브 이벤트로 전달한다. macOS에서는 `-[NSWindow sendEvent:]`로 보내며, 페이지는 신뢰 이벤트를 받고 애플리케이션은 활성화되지 않는다.
+호스트는 `input.pointer`와 `input.key`를 네이티브 이벤트로 전달하며 페이지는 신뢰 이벤트를 받는다. `activate: true`인 `move`를 제외하면 애플리케이션을 활성화하지 않는다. macOS에서는 다음과 같다.
+
+- 키와 스크롤은 `-[NSWindow sendEvent:]`로 보낸다. AppKit은 비활성 창의 누름을 뷰에 전달하지 않으므로 누름·끌기·뗌은 좌표의 뷰에 보낸다.
+- WebKit은 창이 키 창일 때만 호버(`pointerover`, 버튼 없는 `pointermove`, `:hover`)를 갱신한다. 키 창이 아닌 창에 대한 `move`는 1006을 반환한다.
+- `activate: true`이면 호스트가 애플리케이션을 활성화하고 창을 키 창으로 만든 뒤, 창의 모든 웹뷰가 활성 상태를 웹 프로세스에 보낼 때까지 기다렸다가 이동을 전달한다. 사용자가 쓰고 있는 애플리케이션의 키보드 포커스를 가져온다. 시스템이 5초 안에 애플리케이션을 활성화하지 않으면 1006을 반환한다.
 
 실제 입력 경로를 검사하는 테스트는 `input.pointer`와 `input.key`만 사용한다. 테스트는 상태 준비에만 `dom.act`를 사용한다.
 
@@ -111,6 +115,9 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 | 메인 페이지 → 호스트 | 호출 `exposureForward` | 표면 페이지가 등록한 이름에 대한 `{id, surface, method, params}` |
 | 호스트 → 표면 페이지 | 이벤트 `exposure-request` | `{id, method, params}` |
 | 표면 페이지 → 호스트 | 호출 `exposureReply` | `{id, result}` 또는 `{id, error}`. 호스트는 이 값을 `exposureForward`의 결과로 메인 페이지에 반환한다 |
+| 메인 페이지 → 표면 페이지(`exposureForward` 경유) | `status.watch`, `status.unwatch` | `{name}`. 표면 페이지가 값 추적을 시작하거나 멈춘다 |
+| 메인 페이지 → 표면 페이지(`exposureForward` 경유) | `status.next` | `{name, version}`. 표면 페이지는 값이 `version`보다 새로우면 `{version, value}`를, `status.unwatch` 뒤에는 `{closed: true}`를 응답한다. 호스트는 이 요청에 제한 시간을 두지 않으며, 표면이 닫히면 1003으로 실패한다 |
+| 호스트 → 메인 페이지 | 이벤트 `diagnostics-tick` | 내용 없음. 진단 빌드에서만 `diagnostics.drag`의 단계마다 한 번 보낸다 |
 
 메인 페이지는 이름을 등록하거나 전달하기 전에 선언과 대조해 검증한다. 메인 페이지의 `exposureReply`는 호스트의 `exposure-request`에 대한 응답이고, 표면 페이지의 `exposureReply`는 전달된 요청에 대한 응답이다. 호스트는 호출한 웹뷰로 호출자를 구분한다.
 
@@ -136,5 +143,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 | 1003 | 소유 문서가 더 이상 없음 |
 | 1004 | 이 플랫폼에서 네이티브 입력을 사용할 수 없음 |
 | 1005 | 요청 시간 초과: 소유 문서가 10초 안에 응답하지 않음 |
+| 1006 | 창이 활성 상태가 아님: 포인터 `move`에는 키 창이 필요하거나, 시스템이 애플리케이션을 활성화하지 않음 |
+| -32000 | 등록된 명령이나 status 처리기가 실패함. `message`는 그 오류 메시지다 |
 
 [로컬 엔드포인트](endpoint.ko.md)는 선언되지 않은 메서드를 받으면 연결을 종료한다.

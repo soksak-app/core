@@ -1,0 +1,735 @@
+//! 엔드포인트 요청의 창 선택, 호스트 항목, 페이지 요청 중계.
+//!
+//! 호스트는 `windows.list`, `input.pointer`, `input.key`, 소유자가 `host` 인 이름을 직접 처리한다.
+//! 나머지 요청은 창의 메인 페이지에 `exposure-request` 이벤트로 보내고 `exposure_reply` 명령으로
+//! 응답을 받는다. 메인 페이지가 표면 페이지의 이름을 요청하면 `exposure_forward` 명령으로 표면
+//! 페이지에 전달한다. 호출한 문서는 명령의 웹뷰로 구분한다. 형식은 docs/spec/exposure.md 에 정의한다.
+
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::mpsc::{self, Sender};
+use std::sync::{Arc, Mutex, OnceLock};
+use std::time::Duration;
+
+use serde::Deserialize;
+use serde_json::{json, Map, Value};
+use tauri::{AppHandle, Emitter, EventTarget, LogicalSize, Manager, Webview, Window};
+
+use crate::endpoint::{Endpoint, Failure, Service, INVALID_PARAMS, MISSING_DOCUMENT, NOT_ACTIVE, NO_INPUT, TIMED_OUT, UNKNOWN_NAME};
+use crate::platform;
+use crate::surfaces::label_for;
+use crate::windows::{self, native_owner, root_view, window_data};
+
+pub use crate::platform::{Delivery, Key, Pointer};
+
+/// 문서가 응답해야 하는 시간.
+pub const TIMEOUT: Duration = Duration::from_secs(10);
+
+/// 애플리케이션 활성화를 기다리는 시간.
+const ACTIVATION: Duration = Duration::from_secs(5);
+
+/// endpoint.json 과 소켓 이름에 쓰는 애플리케이션 이름.
+const APPLICATION: &str = "tauriv2";
+
+/// 호스트가 선언하는 항목. 형식은 plugin.json 의 exposes 와 같고, 각 종류 안에서 이름 순서이다.
+fn host_declarations() -> Value {
+    let rect = json!({"type": "object", "properties": {
+        "x": {"type": "number"}, "y": {"type": "number"},
+        "width": {"type": "number"}, "height": {"type": "number"}}});
+    let empty = json!({"type": "object", "properties": {}});
+    let nothing = json!({"type": "null"});
+    json!({
+        "status": [{
+            "name": "host.window",
+            "description": "Window frame, content size, backing scale, key state, window buttons, native surfaces, and the open native modal.",
+            "schema": {"type": "object", "properties": {
+                "frame": rect,
+                "content": rect,
+                "scale": {"type": "number"},
+                "key": {"type": "boolean"},
+                "controls": {"type": "array", "items": rect},
+                "surfaces": {"type": "array", "items": {"type": "object", "properties": {
+                    "id": {"type": "string"}, "frame": rect,
+                    "visible": {"type": "boolean"}, "layer": {"type": "number"}}}},
+                "modal": {"type": "object", "properties": {
+                    "id": {"type": "string"}, "mode": {"type": "string"},
+                    "shown": {"type": "boolean"}, "frame": rect}},
+            }},
+        }],
+        "commands": [
+            {"name": "host.hit", "description": "Returns the owner of a point in window coordinates.",
+             "params": {"type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "number"}}},
+             "result": {"type": "object", "properties": {
+                 "kind": {"type": "string", "enum": ["page", "surface", "native"]},
+                 "surface": {"type": "string"}, "identifier": {"type": "string"}}}},
+            {"name": "host.quit", "description": "Requests normal application termination, including pending saves.",
+             "params": empty, "result": nothing},
+            {"name": "host.window.close", "description": "Closes the window through its normal close action.",
+             "params": empty, "result": nothing},
+            {"name": "host.window.maximize", "description": "Maximizes the window, or restores it with on false.",
+             "params": {"type": "object", "properties": {"on": {"type": "boolean"}}}, "result": nothing},
+            {"name": "host.window.presented", "description": "Resolves after the main page and visible application documents have presented their current geometry.",
+             "params": empty, "result": nothing},
+            {"name": "host.window.reload", "description": "Reloads the main page.",
+             "params": empty, "result": nothing},
+            {"name": "host.window.resize", "description": "Resizes the content area.",
+             "params": {"type": "object", "properties": {"width": {"type": "number"}, "height": {"type": "number"}}},
+             "result": nothing},
+        ],
+        "dom": [],
+    })
+}
+
+/// 페이지의 `exposure.list` 결과에 호스트 항목을 등록된 항목으로 추가한다.
+pub fn with_host_entries(listed: Value) -> Result<Value, Failure> {
+    let Value::Object(mut listed) = listed else {
+        return Err(Failure::new(-32603, "the page returned an exposure list that is not an object"));
+    };
+    let Value::Object(declared) = host_declarations() else { unreachable!("host declarations are an object") };
+    for (kind, entries) in declared {
+        let target = listed.entry(kind.clone()).or_insert_with(|| Value::Array(Vec::new()));
+        let Value::Array(target) = target else {
+            return Err(Failure::new(-32603, format!("the page returned {kind} that is not an array")));
+        };
+        for mut entry in entries.as_array().cloned().unwrap_or_default() {
+            entry["registered"] = Value::Bool(true);
+            target.push(entry);
+        }
+    }
+    Ok(Value::Object(listed))
+}
+
+fn number(params: &Map<String, Value>, name: &str) -> Result<f64, Failure> {
+    params.get(name).and_then(Value::as_f64).ok_or_else(|| Failure::params(format!("{name} must be a number")))
+}
+
+fn optional_number(params: &Map<String, Value>, name: &str) -> Result<f64, Failure> {
+    match params.get(name) {
+        None | Some(Value::Null) => Ok(0.0),
+        Some(_) => number(params, name),
+    }
+}
+
+/// `input.pointer` 의 매개변수를 읽는다.
+pub fn pointer(params: &Map<String, Value>) -> Result<Pointer, Failure> {
+    let phase = match params.get("phase").and_then(Value::as_str) {
+        Some("move") => 0,
+        Some("down") => 1,
+        Some("drag") => 2,
+        Some("up") => 3,
+        Some("scroll") => 4,
+        _ => return Err(Failure::params("phase must be move, down, drag, up, or scroll")),
+    };
+    let button = match params.get("button") {
+        None | Some(Value::Null) => 0,
+        Some(Value::String(button)) if button == "left" => 0,
+        Some(Value::String(button)) if button == "right" => 1,
+        Some(_) => return Err(Failure::params("button must be left or right")),
+    };
+    let activate = match params.get("activate") {
+        None | Some(Value::Null) => false,
+        Some(Value::Bool(activate)) => *activate,
+        Some(_) => return Err(Failure::params("activate must be a boolean")),
+    };
+    if activate && phase != 0 {
+        return Err(Failure::params("activate applies only to phase move"));
+    }
+    Ok(Pointer {
+        x: number(params, "x")?,
+        y: number(params, "y")?,
+        phase,
+        button,
+        delta_x: optional_number(params, "deltaX")?,
+        delta_y: optional_number(params, "deltaY")?,
+        activate,
+    })
+}
+
+/// `input.key` 의 매개변수를 읽는다.
+pub fn key(params: &Map<String, Value>) -> Result<Key, Failure> {
+    let key = match params.get("key") {
+        Some(Value::String(key)) if !key.is_empty() => key.clone(),
+        _ => return Err(Failure::params("key must be a non-empty string")),
+    };
+    let text = match params.get("text") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(text)) => Some(text.clone()),
+        Some(_) => return Err(Failure::params("text must be a string")),
+    };
+    let mut modifiers = 0;
+    match params.get("modifiers") {
+        None | Some(Value::Null) => {}
+        Some(Value::Array(names)) => {
+            for name in names {
+                modifiers |= match name.as_str() {
+                    Some("shift") => 1,
+                    Some("control") => 2,
+                    Some("option") => 4,
+                    Some("command") => 8,
+                    _ => return Err(Failure::params(format!("unknown modifier {name}"))),
+                };
+            }
+        }
+        Some(_) => return Err(Failure::params("modifiers must be an array of shift, control, option, command")),
+    }
+    let down = match params.get("phase").and_then(Value::as_str) {
+        Some("down") => true,
+        Some("up") => false,
+        _ => return Err(Failure::params("phase must be down or up")),
+    };
+    Ok(Key { key, text, modifiers, down })
+}
+
+type Waiting = (String, Sender<Result<Value, Failure>>);
+
+/// 문서에 보낸 요청과 그 응답의 대응.
+#[derive(Default)]
+pub struct Relay {
+    next: AtomicU64,
+    pending: Mutex<HashMap<u64, Waiting>>,
+}
+
+impl Relay {
+    /// send 로 요청 id 를 문서 target 에 보내고 target 의 응답을 timeout 동안 기다린다. timeout 이
+    /// None 이면 응답이나 문서 종료까지 기다린다. send 가 실패하면 문서가 없는 것으로 처리한다.
+    pub fn request(
+        &self,
+        target: &str,
+        timeout: Option<Duration>,
+        send: impl FnOnce(u64) -> Result<(), String>,
+    ) -> Result<Value, Failure> {
+        let id = self.next.fetch_add(1, Ordering::Relaxed) + 1;
+        let (tx, rx) = mpsc::channel();
+        self.pending.lock().map_err(|e| Failure::new(-32603, e.to_string()))?.insert(id, (target.to_string(), tx));
+        if let Err(error) = send(id) {
+            self.forget(id);
+            return Err(Failure::new(MISSING_DOCUMENT, error));
+        }
+        let Some(timeout) = timeout else {
+            return rx.recv().unwrap_or_else(|_| Err(Failure::new(MISSING_DOCUMENT, format!("{target} closed"))));
+        };
+        match rx.recv_timeout(timeout) {
+            Ok(outcome) => outcome,
+            Err(_) => {
+                self.forget(id);
+                Err(Failure::new(TIMED_OUT, format!("{target} did not reply within {} ms", timeout.as_millis())))
+            }
+        }
+    }
+
+    /// 문서 from 의 응답 `{id, result}` 또는 `{id, error}` 를 기다리는 요청에 전달한다. 전달했으면
+    /// true 이다. 다른 문서에 보낸 요청의 id 는 전달하지 않는다.
+    pub fn reply(&self, from: &str, payload: &Value) -> bool {
+        let Some(id) = payload.get("id").and_then(Value::as_u64) else { return false };
+        let waiting = {
+            let Ok(mut pending) = self.pending.lock() else { return false };
+            if !pending.get(&id).is_some_and(|(target, _)| target == from) {
+                return false;
+            }
+            pending.remove(&id)
+        };
+        let Some((_, tx)) = waiting else { return false };
+        let outcome = match payload.get("error") {
+            Some(error) if !error.is_null() => Err(Failure::new(
+                error.get("code").and_then(Value::as_i64).unwrap_or(-32603),
+                error.get("message").and_then(Value::as_str).unwrap_or("the document failed"),
+            )),
+            _ => Ok(payload.get("result").cloned().unwrap_or(Value::Null)),
+        };
+        tx.send(outcome).is_ok()
+    }
+
+    /// 문서 target 에 보낸 요청을 모두 오류 1003 으로 끝낸다.
+    pub fn abandon(&self, target: &str) {
+        self.abandon_matching(|held| held == target);
+    }
+
+    fn abandon_matching(&self, closed: impl Fn(&str) -> bool) {
+        let gone: Vec<Waiting> = match self.pending.lock() {
+            Ok(mut pending) => {
+                let ids: Vec<u64> = pending.iter().filter(|(_, (target, _))| closed(target)).map(|(id, _)| *id).collect();
+                ids.into_iter().filter_map(|id| pending.remove(&id)).collect()
+            }
+            Err(_) => return,
+        };
+        for (target, tx) in gone {
+            let _ = tx.send(Err(Failure::new(MISSING_DOCUMENT, format!("{target} closed"))));
+        }
+    }
+
+    fn forget(&self, id: u64) {
+        if let Ok(mut pending) = self.pending.lock() {
+            pending.remove(&id);
+        }
+    }
+}
+
+/// 애플리케이션의 엔드포인트, 중계, 마지막으로 보낸 host.window 값.
+#[derive(Default)]
+pub(crate) struct Exposure {
+    pub relay: Relay,
+    endpoint: OnceLock<Endpoint>,
+    reported: Mutex<HashMap<String, Value>>,
+}
+
+/// 엔드포인트를 열고 endpoint.json 을 쓴다.
+pub(crate) fn start(app: &AppHandle, directory: &std::path::Path) -> Result<(), String> {
+    let endpoint = Endpoint::start(directory, APPLICATION, Arc::new(Host(app.clone())))?;
+    app.state::<Exposure>().endpoint.set(endpoint).map_err(|_| "the endpoint is already started".to_string())
+}
+
+/// 엔드포인트를 닫고 소켓과 endpoint.json 을 제거한다.
+pub(crate) fn stop(app: &AppHandle) {
+    if let Some(endpoint) = app.state::<Exposure>().endpoint.get() {
+        endpoint.stop();
+    }
+}
+
+/// 창 window 의 기록을 요청한 연결에 줄 하나를 보낸다.
+pub(crate) fn log(window: &Window, line: &str) {
+    if let Some(endpoint) = window.state::<Exposure>().endpoint.get() {
+        endpoint.notifier().log(window.label(), line);
+    }
+}
+
+/// 명령을 호출한 웹뷰가 창의 메인 페이지인지 확인한다.
+fn main_page(webview: &Webview) -> Result<Window, String> {
+    let window = webview.window();
+    if webview.label() != window.label() {
+        return Err(format!("{} is not a main page", webview.label()));
+    }
+    Ok(window)
+}
+
+fn emit_to(app: &AppHandle, label: &str, event: &str, payload: Value) -> Result<(), String> {
+    app.emit_to(EventTarget::webview(label), event, payload).map_err(|e| e.to_string())
+}
+
+/// 호출한 문서의 응답을 기다리는 요청에 전달한다. 제한 시간이 지난 응답은 버린다.
+pub(crate) fn reply(webview: &Webview, request: Value) -> Result<(), String> {
+    webview.state::<Exposure>().relay.reply(webview.label(), &request);
+    Ok(())
+}
+
+#[derive(Deserialize)]
+pub(crate) struct Changed {
+    name: String,
+    value: Value,
+}
+
+/// 메인 페이지가 보낸 상태 변경을 감시하는 연결에 보낸다.
+pub(crate) fn changed(webview: &Webview, request: Changed) -> Result<(), String> {
+    let window = main_page(webview)?;
+    if let Some(endpoint) = window.state::<Exposure>().endpoint.get() {
+        endpoint.notifier().changed(window.label(), &request.name, request.value);
+    }
+    Ok(())
+}
+
+#[derive(Deserialize)]
+pub(crate) struct Forward {
+    surface: String,
+    method: String,
+    #[serde(default)]
+    params: Value,
+}
+
+/// 메인 페이지의 요청을 표면 페이지에 보내고 그 응답을 `{result}` 또는 `{error}` 로 반환한다.
+pub(crate) fn forward(webview: &Webview, request: Forward) -> Result<Value, String> {
+    let window = main_page(webview)?;
+    let label = label_for(&window, &request.surface);
+    let app = window.app_handle().clone();
+    let outcome = if window.get_webview(&label).is_none() {
+        Err(Failure::new(MISSING_DOCUMENT, format!("surface {} does not exist", request.surface)))
+    } else {
+        // status.next 는 표면 값이 바뀔 때 응답하므로 제한 시간을 두지 않는다. 표면이 닫히면 1003 이다.
+        let timeout = (request.method != "status.next").then_some(TIMEOUT);
+        window.state::<Exposure>().relay.request(&label, timeout, |id| {
+            emit_to(&app, &label, "exposure-request", json!({"id": id, "method": request.method, "params": request.params}))
+        })
+    };
+    Ok(match outcome {
+        Ok(result) => json!({"result": result}),
+        Err(error) => json!({"error": error}),
+    })
+}
+
+#[derive(Deserialize)]
+pub(crate) struct Register {
+    surface: String,
+    kind: String,
+    name: String,
+}
+
+/// 표면 페이지의 등록을 메인 페이지에 전달한다. 표면 페이지는 자신의 표면 id 로만 등록한다.
+pub(crate) fn register(webview: &Webview, request: Register) -> Result<(), String> {
+    let window = webview.window();
+    if webview.label() != label_for(&window, &request.surface) {
+        return Err(format!("{} cannot register for surface {}", webview.label(), request.surface));
+    }
+    if !matches!(request.kind.as_str(), "status" | "command" | "dom") {
+        return Err(format!("unknown exposure kind {}", request.kind));
+    }
+    emit_to(window.app_handle(), window.label(), "exposure-registered",
+        json!({"surface": request.surface, "kind": request.kind, "name": request.name}))
+}
+
+/// 표면 페이지가 닫히거나 다시 읽힐 때 그 등록과 대기 중인 요청을 제거한다.
+pub(crate) fn surface_closed(window: &Window, surface: &str) {
+    window.state::<Exposure>().relay.abandon(&label_for(window, surface));
+    if let Err(error) = emit_to(window.app_handle(), window.label(), "exposure-registered",
+        json!({"surface": surface, "closed": true}))
+    {
+        eprintln!("{error}");
+    }
+}
+
+/// 메인 페이지가 다시 읽힐 때 그 페이지에 보낸 요청을 끝낸다.
+pub(crate) fn page_reloaded(window: &Window) {
+    window.state::<Exposure>().relay.abandon(window.label());
+}
+
+/// 다시 읽힌 메인 페이지에 이 창의 감시와 진단 기록을 다시 요청한다. 페이지는 준비를 알린 뒤 호출한다.
+pub(crate) fn rewatch(window: &Window) {
+    let Some(notifier) = window.state::<Exposure>().endpoint.get().map(Endpoint::notifier) else { return };
+    let window = window.clone();
+    std::thread::spawn(move || {
+        let host = Host(window.app_handle().clone());
+        for name in notifier.watches(window.label()) {
+            if name == "host" || name.starts_with("host.") {
+                continue;
+            }
+            let mut params = Map::new();
+            params.insert("name".into(), Value::String(name.clone()));
+            if let Err(error) = host.page(&window, "status.watch", params, TIMEOUT) {
+                log(&window, &format!("rewatch {name}: {}", error.message));
+            }
+        }
+        if notifier.transcribed(window.label()) {
+            let mut params = Map::new();
+            params.insert("on".into(), Value::Bool(true));
+            if let Err(error) = host.page(&window, "diagnostics.transcript", params, TIMEOUT) {
+                log(&window, &format!("rewatch diagnostics.log: {}", error.message));
+            }
+        }
+    });
+}
+
+/// 창이 닫힐 때 창의 문서에 보낸 요청을 끝내고 창의 상태 기록을 제거한다.
+pub(crate) fn window_closed(window: &Window) {
+    let state = window.state::<Exposure>();
+    let main = window.label().to_string();
+    let surfaces = format!("surface-{main}-");
+    state.relay.abandon_matching(|target| target == main || target.starts_with(&surfaces));
+    if let Ok(mut reported) = state.reported.lock() {
+        reported.remove(&main);
+    };
+}
+
+/// 창의 host.window 값이 바뀌었을 수 있을 때 호출한다. 감시하는 연결이 있으면 값을 계산하고,
+/// 마지막으로 보낸 값과 다르면 보낸다. 네이티브 값은 메인 스레드에서 읽으므로 별도 스레드에서 계산한다.
+pub(crate) fn window_changed(window: &Window) {
+    let watched = window
+        .state::<Exposure>()
+        .endpoint
+        .get()
+        .is_some_and(|endpoint| endpoint.notifier().watched(window.label(), "host.window"));
+    if !watched {
+        return;
+    }
+    let window = window.clone();
+    std::thread::spawn(move || {
+        let value = match window_status(&window) {
+            Ok(value) => value,
+            Err(error) => {
+                eprintln!("host.window: {}", error.message);
+                return;
+            }
+        };
+        let state = window.state::<Exposure>();
+        {
+            let Ok(mut reported) = state.reported.lock() else { return };
+            if reported.get(window.label()) == Some(&value) {
+                return;
+            }
+            reported.insert(window.label().to_string(), value.clone());
+        }
+        if let Some(endpoint) = state.endpoint.get() {
+            endpoint.notifier().changed(window.label(), "host.window", value);
+        }
+    });
+}
+
+fn internal(error: impl ToString) -> Failure {
+    Failure::new(-32603, error.to_string())
+}
+
+/// 메인 스레드에서 work 를 실행하고 결과를 기다린다.
+pub(crate) fn on_main<T: Send + 'static>(
+    window: &Window,
+    work: impl FnOnce() -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
+    let (tx, rx) = mpsc::channel();
+    window.run_on_main_thread(move || {
+        let _ = tx.send(work());
+    }).map_err(|e| e.to_string())?;
+    rx.recv().map_err(|e| e.to_string())?
+}
+
+/// 웹뷰의 네이티브 뷰로 work 를 실행하고 결과를 기다린다.
+fn with_view<T: Send + 'static>(
+    webview: &Webview,
+    work: impl FnOnce(&tauri::webview::PlatformWebview) -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
+    let (tx, rx) = mpsc::channel();
+    webview.with_webview(move |view| {
+        let _ = tx.send(work(&view));
+    }).map_err(|e| e.to_string())?;
+    rx.recv().map_err(|e| e.to_string())?
+}
+
+/// [x, y, 너비, 높이] 를 {x, y, width, height} 로 바꾼다.
+fn rect([x, y, width, height]: [f64; 4]) -> Value {
+    json!({"x": x, "y": y, "width": width, "height": height})
+}
+
+/// 창의 host.window 값을 계산한다. 메인 스레드가 아닌 스레드에서 호출한다.
+fn window_status(window: &Window) -> Result<Value, Failure> {
+    let platform = platform::current().map_err(internal)?;
+    let scale = window.scale_factor().map_err(internal)?;
+    let at = window.outer_position().map_err(internal)?.to_logical::<f64>(scale);
+    let outer = window.outer_size().map_err(internal)?.to_logical::<f64>(scale);
+    let inner = window.inner_size().map_err(internal)?.to_logical::<f64>(scale);
+    let key = window.is_focused().map_err(internal)?;
+    let handle = native_owner(window).map_err(internal)?;
+    let buttons = on_main(window, move || platform.window_buttons(handle)).map_err(internal)?;
+    let controls: Vec<Value> = buttons
+        .into_iter()
+        .map(|((x, y, w, h), hidden)| json!({"x": x, "y": y, "width": w, "height": h, "hidden": hidden}))
+        .collect();
+    let prefix = format!("surface-{}-", window.label());
+    let mut surfaces = Vec::new();
+    for webview in window.webviews() {
+        let Some(surface) = webview.label().strip_prefix(&prefix).map(str::to_string) else { continue };
+        let (frame, (visible, layer)) = with_view(&webview, move |view| {
+            Ok((platform.webview_frame(view)?, platform.webview_layer(view)?))
+        })
+        .map_err(internal)?;
+        surfaces.push(json!({"id": surface, "frame": rect(frame), "visible": visible, "layer": layer}));
+    }
+    surfaces.sort_by(|a, b| a["id"].as_str().cmp(&b["id"].as_str()));
+    let overlay = &window_data(window).map_err(internal)?.overlay;
+    let modal = match overlay.open_state() {
+        Some((id, mode, shown)) => {
+            let view = overlay.view.lock().map_err(internal)?.clone();
+            let frame = match view {
+                Some(view) => Some(rect(with_view(&view, move |view| platform.webview_frame(view)).map_err(internal)?)),
+                None => None,
+            };
+            json!({"id": id, "mode": mode, "shown": shown, "frame": frame})
+        }
+        None => Value::Null,
+    };
+    Ok(json!({
+        "frame": {"x": at.x, "y": at.y, "width": outer.width, "height": outer.height},
+        "content": {"x": 0.0, "y": 0.0, "width": inner.width, "height": inner.height},
+        "scale": scale,
+        "key": key,
+        "controls": controls,
+        "surfaces": surfaces,
+        "modal": modal,
+    }))
+}
+
+/// 메인 페이지와 표시 중인 앱 문서가 현재 배치를 그릴 때까지 기다린다.
+pub(crate) fn presented(window: &Window, timeout: Duration) -> Result<(), Failure> {
+    let platform = platform::current().map_err(internal)?;
+    let main = root_view(window).ok_or_else(|| Failure::new(MISSING_DOCUMENT, "the main page is gone"))?;
+    let (tx, rx) = mpsc::channel();
+    let failed = tx.clone();
+    main.with_webview(move |view| {
+        let done = tx.clone();
+        if let Err(error) = platform.after_presentation(&view, Box::new(move || {
+            let _ = done.send(Ok(()));
+        })) {
+            let _ = failed.send(Err(error));
+        }
+    })
+    .map_err(internal)?;
+    match rx.recv_timeout(timeout) {
+        Ok(outcome) => outcome.map_err(internal),
+        Err(_) => Err(Failure::new(TIMED_OUT, "the window did not present within the time limit")),
+    }
+}
+
+/// 창 좌표의 점을 소유한 문서나 뷰를 반환한다.
+fn hit(window: &Window, x: f64, y: f64) -> Result<Value, Failure> {
+    let platform = platform::current().map_err(internal)?;
+    let handle = native_owner(window).map_err(internal)?;
+    let found = on_main(window, move || platform.hit(handle, x, y)).map_err(internal)?;
+    let context = window_data(window).map_err(internal)?;
+    let surface = {
+        let views = context.views.0.lock().map_err(internal)?;
+        found.chain.iter().find_map(|view| views.get(view).cloned())
+    };
+    if let Some(surface) = surface {
+        return Ok(json!({"kind": "surface", "surface": surface}));
+    }
+    let modal = context.overlay.view.lock().map_err(internal)?.clone();
+    if let (Some(view), Some((id, _, _))) = (modal, context.overlay.open_state()) {
+        let handle = with_view(&view, move |view| platform.view_id(view)).map_err(internal)?;
+        if found.chain.contains(&handle) {
+            return Ok(json!({"kind": "native", "identifier": format!("modal:{id}")}));
+        }
+    }
+    let main = root_view(window).ok_or_else(|| Failure::new(MISSING_DOCUMENT, "the main page is gone"))?;
+    let page = with_view(&main, move |view| platform.view_id(view)).map_err(internal)?;
+    if found.chain.contains(&page) {
+        return Ok(json!({"kind": "page"}));
+    }
+    Ok(json!({"kind": "native", "identifier": found.identifier}))
+}
+
+/// 엔드포인트 요청을 이 애플리케이션의 창에서 실행한다.
+pub(crate) struct Host(pub AppHandle);
+
+impl Host {
+    /// 창의 메인 페이지에 요청을 보내고 응답을 기다린다.
+    pub(crate) fn page(&self, window: &Window, method: &str, params: Map<String, Value>, timeout: Duration) -> Result<Value, Failure> {
+        self.page_then(window, method, params, timeout, || {})
+    }
+
+    /// page 와 같고, 요청을 보낸 뒤 응답을 기다리기 전에 sent 를 호출한다.
+    pub(crate) fn page_then(
+        &self,
+        window: &Window,
+        method: &str,
+        params: Map<String, Value>,
+        timeout: Duration,
+        sent: impl FnOnce(),
+    ) -> Result<Value, Failure> {
+        let label = window.label().to_string();
+        if root_view(window).is_none() {
+            return Err(Failure::new(MISSING_DOCUMENT, "the main page is gone"));
+        }
+        self.0.state::<Exposure>().relay.request(&label, Some(timeout), |id| {
+            emit_to(&self.0, &label, "exposure-request", json!({"id": id, "method": method, "params": params}))?;
+            sent();
+            Ok(())
+        })
+    }
+
+    /// 소유자가 host 인 이름의 요청을 실행한다.
+    fn host_entry(&self, window: &Window, method: &str, name: &str, params: &Map<String, Value>) -> Result<Value, Failure> {
+        let unknown = || Failure::new(UNKNOWN_NAME, format!("{name} is not declared"));
+        match (method, name) {
+            ("status.get", "host.window") => window_status(window),
+            ("status.watch" | "status.unwatch", "host.window") => Ok(Value::Null),
+            ("command.run", _) => {
+                let arguments = match params.get("params") {
+                    None | Some(Value::Null) => Map::new(),
+                    Some(Value::Object(arguments)) => arguments.clone(),
+                    Some(_) => return Err(Failure::params("params must be an object")),
+                };
+                self.host_command(window, name, &arguments).ok_or_else(unknown)?
+            }
+            _ => Err(unknown()),
+        }
+    }
+
+    fn host_command(&self, window: &Window, name: &str, arguments: &Map<String, Value>) -> Option<Result<Value, Failure>> {
+        let done = |result: tauri::Result<()>| result.map(|_| Value::Null).map_err(internal);
+        Some(match name {
+            "host.window.close" => done(window.close()),
+            "host.window.maximize" => match arguments.get("on") {
+                None | Some(Value::Bool(true)) => done(window.maximize()),
+                Some(Value::Bool(false)) => done(window.unmaximize()),
+                Some(_) => Err(Failure::params("on must be a boolean")),
+            },
+            "host.window.resize" => (|| {
+                let width = number(arguments, "width")?;
+                let height = number(arguments, "height")?;
+                if width <= 0.0 || height <= 0.0 {
+                    return Err(Failure::params("width and height must be positive"));
+                }
+                done(window.set_size(LogicalSize::new(width, height)))
+            })(),
+            "host.window.reload" => match root_view(window) {
+                Some(main) => done(main.reload()),
+                None => Err(Failure::new(MISSING_DOCUMENT, "the main page is gone")),
+            },
+            "host.window.presented" => presented(window, TIMEOUT).map(|_| Value::Null),
+            "host.hit" => (|| hit(window, number(arguments, "x")?, number(arguments, "y")?))(),
+            "host.quit" => {
+                self.0.exit(0);
+                Ok(Value::Null)
+            }
+            _ => return None,
+        })
+    }
+
+    /// 포인터 입력을 메인 스레드에서 전달한다. activate 이면 먼저 창을 활성화한다.
+    fn input_pointer(&self, window: &Window, pointer: Pointer) -> Result<Value, Failure> {
+        let platform = platform::current().map_err(|e| Failure::new(NO_INPUT, e))?;
+        let handle = native_owner(window).map_err(|e| Failure::new(NO_INPUT, e))?;
+        if pointer.activate {
+            let (tx, rx) = mpsc::channel();
+            on_main(window, move || {
+                platform.input_activate(handle, ACTIVATION, Box::new(move |ok| {
+                    let _ = tx.send(ok);
+                }))
+            })
+            .map_err(|e| Failure::new(NO_INPUT, e))?;
+            // 라이브러리는 ACTIVATION 이 지나면 done(false) 를 호출하므로 결과는 항상 도착한다.
+            if !rx.recv().unwrap_or(false) {
+                return Err(Failure::new(NOT_ACTIVE, "the system did not activate the application"));
+            }
+        }
+        match on_main(window, move || platform.input_pointer(handle, pointer)) {
+            Ok(Delivery::Delivered) => Ok(Value::Null),
+            Ok(Delivery::Inactive) => Err(Failure::new(NOT_ACTIVE, "the window is not active")),
+            Ok(Delivery::Rejected) => Err(Failure::new(INVALID_PARAMS, "the window did not accept the input")),
+            Err(error) => Err(Failure::new(NO_INPUT, error)),
+        }
+    }
+
+    /// 키 입력을 메인 스레드에서 전달한다.
+    fn input_key(&self, window: &Window, key: Key) -> Result<Value, Failure> {
+        let platform = platform::current().map_err(|e| Failure::new(NO_INPUT, e))?;
+        let handle = native_owner(window).map_err(|e| Failure::new(NO_INPUT, e))?;
+        match on_main(window, move || platform.input_key(handle, &key)) {
+            Ok(true) => Ok(Value::Null),
+            Ok(false) => Err(Failure::new(INVALID_PARAMS, "the window did not accept the input")),
+            Err(error) => Err(Failure::new(NO_INPUT, error)),
+        }
+    }
+}
+
+impl Service for Host {
+    fn windows(&self) -> Result<Value, Failure> {
+        windows::list(&self.0).map_err(internal)
+    }
+
+    fn exists(&self, window: &str) -> bool {
+        windows::find(&self.0, window).is_some()
+    }
+
+    fn call(&self, window: &str, method: &str, params: Map<String, Value>) -> Result<Value, Failure> {
+        let window = windows::find(&self.0, window)
+            .ok_or_else(|| Failure::new(MISSING_DOCUMENT, format!("window {window} does not exist")))?;
+        match method {
+            "input.pointer" => self.input_pointer(&window, pointer(&params)?),
+            "input.key" => self.input_key(&window, key(&params)?),
+            "exposure.list" => with_host_entries(self.page(&window, method, params, TIMEOUT)?),
+            #[cfg(feature = "diagnostics")]
+            _ if method.starts_with("diagnostics.") => crate::diagnostics::call(self, &window, method, params),
+            _ => {
+                let name = params.get("name").and_then(Value::as_str).unwrap_or_default().to_string();
+                if name == "host" || name.starts_with("host.") {
+                    return self.host_entry(&window, method, &name, &params);
+                }
+                self.page(&window, method, params, TIMEOUT)
+            }
+        }
+    }
+}

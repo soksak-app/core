@@ -153,16 +153,19 @@ function buildTools(window, exposure) {
     },
     {
       name: "input_pointer",
-      description: "Sends a native pointer event at window coordinates.",
+      description:
+        "Sends a native pointer event at window coordinates. A move to a window that is not the key window fails with 1006; " +
+        "activate: true on a move activates the application and makes the window key, which takes the keyboard focus from the user's application.",
       inputSchema: object(
         {
           window: windowProperty,
           x: { type: "number" },
           y: { type: "number" },
           phase: { type: "string", enum: ["move", "down", "drag", "up", "scroll"] },
-          button: { type: "integer" },
-          deltaX: { type: "number" },
-          deltaY: { type: "number" },
+          button: { type: "string", enum: ["left", "right"], description: "Defaults to left." },
+          deltaX: { type: "number", description: "Scroll distance in points." },
+          deltaY: { type: "number", description: "Scroll distance in points." },
+          activate: { type: "boolean", description: "Only for move: activate the application and make the window key first." },
         },
         ["x", "y", "phase"],
       ),
@@ -228,7 +231,7 @@ async function callTool(params) {
           value = await c.request("dom.act", withWindow(window, args, ["name", "index", "action", "value", "event"]));
           break;
         case "input_pointer":
-          value = await c.request("input.pointer", withWindow(window, args, ["x", "y", "phase", "button", "deltaX", "deltaY"]));
+          value = await c.request("input.pointer", withWindow(window, args, ["x", "y", "phase", "button", "deltaX", "deltaY", "activate"]));
           break;
         case "input_key":
           value = await c.request("input.key", withWindow(window, args, ["key", "text", "modifiers", "phase"]));

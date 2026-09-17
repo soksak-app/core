@@ -108,12 +108,15 @@ test("dom subcommands map to dom.rect and dom.act", async (t) => {
 
 test("input subcommands map to input.pointer and input.key", async (t) => {
   const { server, dir } = await fixture(t);
-  const pointer = await run(["input", "pointer", "--window", "main", "--x", "5", "--y", "6.5", "--phase", "down", "--button", "0", ...dir]);
+  const pointer = await run(["input", "pointer", "--window", "main", "--x", "5", "--y", "6.5", "--phase", "down", "--button", "right", ...dir]);
   assert.equal(pointer.code, 0, pointer.stderr);
+  const move = await run(["input", "pointer", "--window", "main", "--x", "1", "--y", "2", "--phase", "move", "--activate", ...dir]);
+  assert.equal(move.code, 0, move.stderr);
   const key = await run(["input", "key", "--window", "main", "--key", "a", "--phase", "down", "--modifiers", "shift,command", ...dir]);
   assert.equal(key.code, 0, key.stderr);
   assert.deepEqual(server.requests.map((m) => [m.method, m.params]), [
-    ["input.pointer", { window: "main", x: 5, y: 6.5, phase: "down", button: 0 }],
+    ["input.pointer", { window: "main", x: 5, y: 6.5, phase: "down", button: "right" }],
+    ["input.pointer", { window: "main", x: 1, y: 2, phase: "move", activate: true }],
     ["input.key", { window: "main", key: "a", phase: "down", modifiers: ["shift", "command"] }],
   ]);
 });
@@ -126,12 +129,22 @@ test("endpoint errors exit non-zero with the message and code", async (t) => {
   assert.equal(result.stdout, "");
 });
 
+test("an inactive window error is printed with its message and code", async (t) => {
+  const { sample, dir } = await fixture(t);
+  sample.state.key = false;
+  const result = await run(["input", "pointer", "--window", "main", "--x", "1", "--y", "1", "--phase", "move", ...dir]);
+  assert.equal(result.code, 1);
+  assert.equal(result.stderr, "soksak: window main is not the key window; pass activate to make it key (1006)\n");
+});
+
 test("usage errors exit with code 2", async (t) => {
   const { dir } = await fixture(t);
   assert.equal((await run(["status", "core.screen", ...dir])).code, 2);
   assert.equal((await run(["run", "x", "--window", "main", "--params", "{", ...dir])).code, 2);
   assert.equal((await run(["input", "pointer", "--window", "main", "--x", "a", "--y", "1", "--phase", "move", ...dir])).code, 2);
   assert.equal((await run(["windows", "--unknown", ...dir])).code, 2);
+  assert.equal((await run(["input", "pointer", "--window", "main", "--x", "1", "--y", "1", "--phase", "down", "--button", "0", ...dir])).code, 2);
+  assert.equal((await run(["input", "pointer", "--window", "main", "--x", "1", "--y", "1", "--phase", "down", "--activate", ...dir])).code, 2);
   const missing = await run(["windows"]);
   assert.equal(missing.code, 2);
   assert.match(missing.stderr, /--config-dir is required/);

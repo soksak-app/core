@@ -1,18 +1,113 @@
-//! 창 입력 감시와 웹뷰 포인터 라우팅 등록.
+//! 창 입력 감시, 웹뷰 포인터 라우팅 등록, 네이티브 입력 전달, 위치 판정.
 //!
 //! 표면은 네이티브 뷰이므로 표면에 대한 입력은 페이지에 전달되지 않고 창만 받는다.
 //! 포인터 라우팅은 native/darwin 에서 WebKit 비공개 입력 API 하나를 사용한다.
 
 use std::cell::Cell;
-use std::ffi::c_void;
+use std::ffi::{c_char, c_void, CString};
 
 use block2::RcBlock;
 use objc2::msg_send;
 use objc2::runtime::{AnyClass, AnyObject, Bool};
 use tauri::webview::PlatformWebview;
 
-use super::super::Handle;
+use std::time::Duration;
+
+use super::super::{Delivery, Handle, Hit, Key, Pointer};
 use super::{NSPoint, NSRect};
+
+extern "C" {
+    fn sp_input_pointer(window: *mut c_void, x: f64, y: f64, phase: i32, button: i32, delta_x: f64, delta_y: f64) -> i32;
+    fn sp_input_activate(window: *mut c_void, timeout: f64, done: extern "C" fn(*mut c_void, bool), context: *mut c_void);
+    fn sp_input_key(window: *mut c_void, key: *const c_char, text: *const c_char, modifiers: u32, down: bool) -> bool;
+}
+
+/// sp_input_pointer 의 결과 값.
+const SP_INPUT_DELIVERED: i32 = 0;
+const SP_INPUT_INACTIVE: i32 = 2;
+
+/// 창에 포인터 입력을 전달하고 결과를 반환한다. 메인 스레드에서 호출한다.
+pub fn pointer(window: Handle, pointer: Pointer) -> Delivery {
+    let result = unsafe {
+        sp_input_pointer(
+            window as *mut c_void,
+            pointer.x,
+            pointer.y,
+            pointer.phase,
+            pointer.button,
+            pointer.delta_x,
+            pointer.delta_y,
+        )
+    };
+    match result {
+        SP_INPUT_DELIVERED => Delivery::Delivered,
+        SP_INPUT_INACTIVE => Delivery::Inactive,
+        _ => Delivery::Rejected,
+    }
+}
+
+type Activated = Box<dyn FnOnce(bool) + Send>;
+
+extern "C" fn activated(context: *mut c_void, ok: bool) {
+    // context 는 activate 가 Box::into_raw 로 넘긴 값이고 라이브러리는 done 을 한 번 호출한다.
+    let done = unsafe { Box::from_raw(context as *mut Activated) };
+    done(ok);
+}
+
+/// 애플리케이션을 활성화하고 창을 키 창으로 만든 뒤 done 을 호출한다. 메인 스레드에서 호출한다.
+pub fn activate(window: Handle, timeout: Duration, done: Activated) {
+    let context = Box::into_raw(Box::new(done)) as *mut c_void;
+    unsafe { sp_input_activate(window as *mut c_void, timeout.as_secs_f64(), activated, context) }
+}
+
+/// 창에 키 입력을 전달하고 전달 여부를 반환한다. 메인 스레드에서 호출한다. NUL 문자를 포함한
+/// 키 이름과 문자열은 오류를 반환한다.
+pub fn key(window: Handle, key: &Key) -> Result<bool, String> {
+    let name = CString::new(key.key.as_str()).map_err(|e| e.to_string())?;
+    let text = key.text.as_deref().map(CString::new).transpose().map_err(|e| e.to_string())?;
+    let text = text.as_ref().map_or(std::ptr::null(), |text| text.as_ptr());
+    Ok(unsafe { sp_input_key(window as *mut c_void, name.as_ptr(), text, key.modifiers, key.down) })
+}
+
+/// 콘텐츠 영역 왼쪽 위 기준 점 x, y 에 있는 뷰와 그 상위 뷰 목록을 반환한다. 메인 스레드에서 호출한다.
+pub fn hit(window: Handle, x: f64, y: f64) -> Result<Hit, String> {
+    unsafe {
+        let window = window as *mut AnyObject;
+        if window.is_null() {
+            return Err("window is gone".into());
+        }
+        let content: *mut AnyObject = msg_send![window, contentView];
+        if content.is_null() {
+            return Err("window has no content view".into());
+        }
+        let bounds: NSRect = msg_send![content, bounds];
+        // hitTest: 는 받는 뷰의 부모 좌표를 사용한다.
+        let local = NSPoint { x, y: bounds.size.y - y };
+        let parent: *mut AnyObject = msg_send![content, superview];
+        let point: NSPoint = msg_send![content, convertPoint: local, toView: parent];
+        let found: *mut AnyObject = msg_send![content, hitTest: point];
+        let mut identifier = String::new();
+        if !found.is_null() {
+            let name: *mut AnyObject = msg_send![found, identifier];
+            if !name.is_null() {
+                let text: *const c_char = msg_send![name, UTF8String];
+                if !text.is_null() {
+                    identifier = std::ffi::CStr::from_ptr(text).to_string_lossy().into_owned();
+                }
+            }
+        }
+        let mut chain = Vec::new();
+        let mut view = found;
+        while !view.is_null() {
+            chain.push(view as Handle);
+            if view == content {
+                break;
+            }
+            view = msg_send![view, superview];
+        }
+        Ok(Hit { chain, identifier })
+    }
+}
 
 /// 애플리케이션 웹뷰를 공통 네이티브 포인터 라우팅에 등록하고 등록 여부를 반환한다.
 pub fn register(view: &PlatformWebview) -> bool {

@@ -1,6 +1,6 @@
 //! Windows 구현.
 //!
-//! 디렉터리 식별을 구현한다. 나머지 기능은 unsupported 에서 "not implemented on windows"
+//! 디렉터리 식별을 구현한다. 로컬 엔드포인트(named pipe)를 포함한 나머지 기능은 unsupported 에서 "not implemented on windows"
 //! 오류를 반환한다.
 
 use std::fs::Metadata;
@@ -9,7 +9,9 @@ use std::path::Path;
 use tauri::webview::PlatformWebview;
 use tauri::Window;
 
-use super::{Frame, Handle, Platform, WindowBuilder};
+use std::time::Duration;
+
+use super::{Connection, Delivery, Frame, Handle, Hit, Key, Listener, Platform, Pointer, WindowBuilder};
 
 #[path = "identity.rs"]
 mod identity;
@@ -32,11 +34,15 @@ impl Platform for Windows {
     fn window_controls(&self, window: Handle) -> Result<Frame, String> {
         unsupported::window_controls(window)
     }
+    #[cfg(feature = "diagnostics")]
     fn window_numbers(&self, window: &Window) -> Result<Vec<isize>, String> {
         unsupported::window_numbers(window)
     }
-    fn probe(&self, window: Handle, request: &str, reply: fn(String)) -> Result<(), String> {
-        unsupported::probe(window, request, reply)
+    fn window_buttons(&self, window: Handle) -> Result<Vec<(Frame, bool)>, String> {
+        unsupported::window_buttons(window)
+    }
+    fn hit(&self, window: Handle, x: f64, y: f64) -> Result<Hit, String> {
+        unsupported::hit(window, x, y)
     }
     /// Windows 애플리케이션은 마지막 창이 닫히면 종료한다.
     fn stays_open_without_windows(&self) -> bool {
@@ -66,6 +72,9 @@ impl Platform for Windows {
     }
     fn view_id(&self, view: &PlatformWebview) -> Result<Handle, String> {
         unsupported::view_id(view)
+    }
+    fn webview_layer(&self, view: &PlatformWebview) -> Result<(bool, usize), String> {
+        unsupported::webview_layer(view)
     }
 
     fn begin_layout(&self, window: Handle, ticket: u64, ready: Box<dyn Fn(bool)>) -> Result<(), String> {
@@ -108,16 +117,29 @@ impl Platform for Windows {
     fn unwatch_input(&self, monitor: Handle) -> Result<(), String> {
         unsupported::unwatch_input(monitor)
     }
+    fn input_pointer(&self, window: Handle, pointer: Pointer) -> Result<Delivery, String> {
+        unsupported::input_pointer(window, pointer)
+    }
+    fn input_activate(&self, window: Handle, timeout: Duration, done: Box<dyn FnOnce(bool) + Send>) -> Result<(), String> {
+        unsupported::input_activate(window, timeout, done)
+    }
+    fn input_key(&self, window: Handle, key: &Key) -> Result<bool, String> {
+        unsupported::input_key(window, key)
+    }
 
+    #[cfg(feature = "diagnostics")]
     fn capture_open(&self, window_number: isize) -> Result<(), String> {
         unsupported::capture_open(window_number)
     }
+    #[cfg(feature = "diagnostics")]
     fn capture_start(&self, directory: &str) -> Result<(), String> {
         unsupported::capture_start(directory)
     }
+    #[cfg(feature = "diagnostics")]
     fn capture_wait(&self) -> Result<bool, String> {
         unsupported::capture_wait()
     }
+    #[cfg(feature = "diagnostics")]
     fn capture_stop(&self) -> Result<i32, String> {
         unsupported::capture_stop()
     }
@@ -128,5 +150,16 @@ impl Platform for Windows {
 
     fn directory_identity(&self, path: &Path, _metadata: &Metadata) -> Result<String, String> {
         identity::identity(path)
+    }
+    #[cfg(feature = "diagnostics")]
+    fn private_directory(&self, path: &Path) -> Result<(), String> {
+        unsupported::private_directory(path)
+    }
+
+    fn endpoint_listen(&self, name: &str) -> Result<Box<dyn Listener>, String> {
+        unsupported::endpoint_listen(name)
+    }
+    fn endpoint_connect(&self, address: &str) -> Result<Box<dyn Connection>, String> {
+        unsupported::endpoint_connect(address)
     }
 }

@@ -1,0 +1,159 @@
+//! 페이지 요청 중계와 호스트 항목 테스트. 페이지는 요청을 받는 함수가 대신한다.
+
+use std::sync::Arc;
+use std::time::Duration;
+
+use serde_json::{json, Value};
+use soksak_host_tauriv2::exposure::{self, Relay};
+
+const WAIT: Duration = Duration::from_secs(5);
+
+#[test]
+fn reply_from_target_document_resolves_request() {
+    let relay = Arc::new(Relay::default());
+    let replying = relay.clone();
+    let result = relay.request("main", Some(WAIT), move |id| {
+        std::thread::spawn(move || {
+            assert!(replying.reply("main", &json!({"id": id, "result": {"ok": true}})));
+        });
+        Ok(())
+    });
+    assert_eq!(result.unwrap(), json!({"ok": true}));
+}
+
+#[test]
+fn missing_result_is_null() {
+    let relay = Arc::new(Relay::default());
+    let replying = relay.clone();
+    let result = relay.request("main", Some(WAIT), move |id| {
+        assert!(replying.reply("main", &json!({"id": id})));
+        Ok(())
+    });
+    assert_eq!(result.unwrap(), Value::Null);
+}
+
+#[test]
+fn error_reply_keeps_code_and_message() {
+    let relay = Arc::new(Relay::default());
+    let replying = relay.clone();
+    let failure = relay
+        .request("main", Some(WAIT), move |id| {
+            replying.reply("main", &json!({"id": id, "error": {"code": 1002, "message": "not registered"}}));
+            Ok(())
+        })
+        .unwrap_err();
+    assert_eq!((failure.code, failure.message.as_str()), (1002, "not registered"));
+}
+
+#[test]
+fn reply_from_another_document_is_ignored_and_request_times_out() {
+    let relay = Arc::new(Relay::default());
+    let replying = relay.clone();
+    let failure = relay
+        .request("main", Some(Duration::from_millis(50)), move |id| {
+            assert!(!replying.reply("surface-main-a", &json!({"id": id, "result": 1})));
+            Ok(())
+        })
+        .unwrap_err();
+    assert_eq!(failure.code, 1005);
+    assert!(!relay.reply("main", &json!({"id": 1, "result": 1})));
+}
+
+#[test]
+fn send_failure_is_reported_without_waiting() {
+    let relay = Relay::default();
+    let failure = relay.request("main", Some(WAIT), |_| Err("webview is gone".into())).unwrap_err();
+    assert_eq!(failure.code, 1003);
+}
+
+#[test]
+fn closed_document_fails_its_pending_requests() {
+    let relay = Arc::new(Relay::default());
+    let closing = relay.clone();
+    let failure = relay
+        .request("main", Some(WAIT), move |_| {
+            closing.abandon("main");
+            Ok(())
+        })
+        .unwrap_err();
+    assert_eq!(failure.code, 1003);
+}
+
+#[test]
+fn request_without_timeout_waits_until_the_document_closes() {
+    let relay = Arc::new(Relay::default());
+    let closing = relay.clone();
+    let failure = relay
+        .request("surface-main-a", None, move |_| {
+            // 응답 대기가 시작된 뒤 다른 스레드가 문서 종료를 알린다.
+            std::thread::spawn(move || closing.abandon("surface-main-a"));
+            Ok(())
+        })
+        .unwrap_err();
+    assert_eq!(failure.code, 1003);
+}
+
+#[test]
+fn host_entries_are_appended_as_registered() {
+    let listed = exposure::with_host_entries(json!({
+        "status": [{"name": "core.layout", "description": "Layout.", "schema": {}, "registered": true}],
+        "commands": [],
+        "dom": [],
+    }))
+    .unwrap();
+    let status: Vec<&str> = listed["status"].as_array().unwrap().iter().map(|e| e["name"].as_str().unwrap()).collect();
+    assert_eq!(status, ["core.layout", "host.window"]);
+    let commands: Vec<&str> = listed["commands"].as_array().unwrap().iter().map(|e| e["name"].as_str().unwrap()).collect();
+    assert_eq!(commands, [
+        "host.hit",
+        "host.quit",
+        "host.window.close",
+        "host.window.maximize",
+        "host.window.presented",
+        "host.window.reload",
+        "host.window.resize",
+    ]);
+    for entry in listed["status"].as_array().unwrap().iter().chain(listed["commands"].as_array().unwrap()) {
+        assert_eq!(entry["registered"], true);
+        assert!(entry["description"].as_str().is_some_and(|d| !d.is_empty()));
+    }
+    assert_eq!(listed["commands"][1]["result"], json!({"type": "null"}));
+    assert!(exposure::with_host_entries(json!([])).is_err());
+}
+
+#[test]
+fn pointer_and_key_params_are_validated() {
+    let pointer = exposure::pointer(&json!({"x": 1.5, "y": 2, "phase": "drag"}).as_object().unwrap().clone()).unwrap();
+    assert_eq!((pointer.x, pointer.y, pointer.phase, pointer.button), (1.5, 2.0, 2, 0));
+    let scroll = exposure::pointer(&json!({"x": 0, "y": 0, "phase": "scroll", "deltaY": -3, "button": "right"})
+        .as_object().unwrap().clone()).unwrap();
+    assert_eq!((scroll.phase, scroll.button, scroll.delta_y), (4, 1, -3.0));
+    assert_eq!(exposure::pointer(&json!({"x": 0, "y": 0, "phase": "press"}).as_object().unwrap().clone())
+        .unwrap_err().code, -32602);
+    assert_eq!(exposure::pointer(&json!({"y": 0, "phase": "move"}).as_object().unwrap().clone())
+        .unwrap_err().code, -32602);
+    let moved = exposure::pointer(&json!({"x": 0, "y": 0, "phase": "move", "activate": true}).as_object().unwrap().clone()).unwrap();
+    assert!(moved.activate);
+    assert!(!pointer.activate);
+    for params in [
+        json!({"x": 0, "y": 0, "phase": "down", "activate": true}),
+        json!({"x": 0, "y": 0, "phase": "move", "activate": "yes"}),
+        json!({"x": 0, "y": 0, "phase": "down", "button": "middle"}),
+        json!({"x": 0, "y": 0, "phase": "down", "button": 1}),
+    ] {
+        assert_eq!(exposure::pointer(params.as_object().unwrap()).unwrap_err().code, -32602, "{params}");
+    }
+
+    let key = exposure::key(&json!({"key": "Enter", "phase": "down", "modifiers": ["shift", "command"]})
+        .as_object().unwrap().clone()).unwrap();
+    assert_eq!((key.key.as_str(), key.text, key.modifiers, key.down), ("Enter", None, 9, true));
+    let key = exposure::key(&json!({"key": "a", "text": "A", "phase": "up", "modifiers": ["control", "option"]})
+        .as_object().unwrap().clone()).unwrap();
+    assert_eq!((key.text.as_deref(), key.modifiers, key.down), (Some("A"), 6, false));
+    assert_eq!(exposure::key(&json!({"key": "a", "phase": "down", "modifiers": 2}).as_object().unwrap().clone())
+        .unwrap_err().code, -32602);
+    assert_eq!(exposure::key(&json!({"key": "a", "phase": "hold"}).as_object().unwrap().clone())
+        .unwrap_err().code, -32602);
+    assert_eq!(exposure::key(&json!({"key": "a", "phase": "down", "modifiers": ["hyper"]}).as_object().unwrap().clone())
+        .unwrap_err().code, -32602);
+}

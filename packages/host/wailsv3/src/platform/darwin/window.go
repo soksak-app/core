@@ -35,6 +35,9 @@ static void nativeRunProbe(void *window, const char *request) { spNativeProbe(wi
 import "C"
 
 import (
+	"encoding/json"
+	"fmt"
+	"sync"
 	"unsafe"
 
 	"github.com/min-median-max/soksak/packages/host/wailsv3/src/platform"
@@ -71,19 +74,47 @@ func (implementation) WindowNumbers(window unsafe.Pointer) ([]int, error) {
 	return out, nil
 }
 
-// probeReply 는 마지막 Probe 호출이 전달한 결과 수신 함수다. 결과는 요청 이후 비동기로 도착한다.
-var probeReply func(string)
+// probes 는 결과를 기다리는 검사 요청의 수신 함수다. 요청의 ticket 으로 결과를 구분한다.
+var (
+	probeMu     sync.Mutex
+	probeSerial uint64
+	probes      = map[uint64]func(string){}
+)
 
 //export nativeProbeResult
 func nativeProbeResult(text *C.char) {
-	if probeReply != nil {
-		probeReply(C.GoString(text))
+	body := C.GoString(text)
+	var reply struct {
+		Ticket uint64 `json:"ticket"`
+	}
+	if err := json.Unmarshal([]byte(body), &reply); err != nil {
+		return
+	}
+	probeMu.Lock()
+	receive := probes[reply.Ticket]
+	delete(probes, reply.Ticket)
+	probeMu.Unlock()
+	if receive != nil {
+		receive(body)
 	}
 }
 
 func (implementation) Probe(window unsafe.Pointer, request string, reply func(string)) error {
-	probeReply = reply
-	text := C.CString(request)
+	var fields map[string]any
+	if err := json.Unmarshal([]byte(request), &fields); err != nil {
+		return fmt.Errorf("native probe request: %w", err)
+	}
+	probeMu.Lock()
+	probeSerial++
+	ticket := probeSerial
+	probes[ticket] = reply
+	probeMu.Unlock()
+	fields["ticket"] = ticket
+	data, err := json.Marshal(fields)
+	if err != nil {
+		return err
+	}
+	text := C.CString(string(data))
 	defer C.free(unsafe.Pointer(text))
 	C.nativeRunProbe(window, text)
 	return nil

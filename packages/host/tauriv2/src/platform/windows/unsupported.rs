@@ -3,7 +3,7 @@
 use tauri::webview::PlatformWebview;
 use tauri::Window;
 
-use super::super::{Frame, Handle, WindowBuilder};
+use super::super::{Connection, Delivery, Frame, Handle, Hit, Key, Listener, Pointer, WindowBuilder};
 
 /// operation 을 이름에 포함한 오류를 반환한다.
 fn missing<T>(operation: &str) -> Result<T, String> {
@@ -26,12 +26,17 @@ pub fn window_controls(_window: Handle) -> Result<Frame, String> {
     missing("window button area")
 }
 
+#[cfg(feature = "diagnostics")]
 pub fn window_numbers(_window: &Window) -> Result<Vec<isize>, String> {
     missing("window numbers")
 }
 
-pub fn probe(_window: Handle, _request: &str, _reply: fn(String)) -> Result<(), String> {
-    missing("native probe")
+pub fn window_buttons(_window: Handle) -> Result<Vec<(Frame, bool)>, String> {
+    missing("window buttons")
+}
+
+pub fn hit(_window: Handle, _x: f64, _y: f64) -> Result<Hit, String> {
+    missing("hit testing")
 }
 
 pub fn place_webview(_view: &PlatformWebview, _x: f64, _y: f64, _w: f64, _h: f64) -> Result<(), String> {
@@ -64,6 +69,10 @@ pub fn round_corners(_view: &PlatformWebview, _radius: f64) -> Result<(), String
 
 pub fn view_id(_view: &PlatformWebview) -> Result<Handle, String> {
     missing("webview identity")
+}
+
+pub fn webview_layer(_view: &PlatformWebview) -> Result<(bool, usize), String> {
+    missing("webview layer")
 }
 
 pub fn begin_layout(_window: Handle, _ticket: u64, _ready: Box<dyn Fn(bool)>) -> Result<(), String> {
@@ -114,22 +123,55 @@ pub fn unwatch_input(_monitor: Handle) -> Result<(), String> {
     missing("input monitoring")
 }
 
+pub fn input_pointer(_window: Handle, _pointer: Pointer) -> Result<Delivery, String> {
+    missing("native input")
+}
+
+pub fn input_activate(
+    _window: Handle,
+    _timeout: std::time::Duration,
+    _done: Box<dyn FnOnce(bool) + Send>,
+) -> Result<(), String> {
+    missing("native input")
+}
+
+pub fn input_key(_window: Handle, _key: &Key) -> Result<bool, String> {
+    missing("native input")
+}
+
+#[cfg(feature = "diagnostics")]
 pub fn capture_open(_window_number: isize) -> Result<(), String> {
     missing("window capture")
 }
 
+#[cfg(feature = "diagnostics")]
 pub fn capture_start(_directory: &str) -> Result<(), String> {
     missing("window capture")
 }
 
+#[cfg(feature = "diagnostics")]
 pub fn capture_wait() -> Result<bool, String> {
     missing("window capture")
 }
 
+#[cfg(feature = "diagnostics")]
 pub fn capture_stop() -> Result<i32, String> {
     missing("window capture")
 }
 
 pub fn install_dock_menu(_new_window: Box<dyn Fn()>) -> Result<(), String> {
     missing("Dock menu")
+}
+
+#[cfg(feature = "diagnostics")]
+pub fn private_directory(_path: &std::path::Path) -> Result<(), String> {
+    missing("private directory")
+}
+
+pub fn endpoint_listen(_name: &str) -> Result<Box<dyn Listener>, String> {
+    missing("local endpoint")
+}
+
+pub fn endpoint_connect(_address: &str) -> Result<Box<dyn Connection>, String> {
+    missing("local endpoint")
 }

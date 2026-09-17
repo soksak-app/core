@@ -5,7 +5,7 @@
 
 use serde_json::value::RawValue;
 use tauri::ipc::Invoke;
-use tauri::{AppHandle, Manager, Window};
+use tauri::{AppHandle, Manager, Webview, Window};
 
 use crate::modals::{self, OverlayContent, OverlayRequest, PlaceRequest, UpdateRequest};
 use crate::projects::{self, CreateProject, Folder};
@@ -14,7 +14,8 @@ use crate::sidecars::WindowSidecars;
 use crate::surfaces::{self, Placement, PresentRequest, PreparedSurfaces, Rect, SyncRequest};
 use crate::theme::{self, Theme};
 use crate::windows::{self, Geometry, OpenProject};
-use crate::{diagnostics, workspace};
+use crate::exposure::{self, Changed, Forward, Register};
+use crate::workspace;
 
 /// 모든 명령을 등록하는 핸들러를 반환한다.
 pub(crate) fn handler() -> impl Fn(Invoke) -> bool + Send + Sync + 'static {
@@ -44,7 +45,11 @@ pub(crate) fn handler() -> impl Fn(Invoke) -> bool + Send + Sync + 'static {
         sidecar_send,
         theme,
         set_theme,
-        report
+        report,
+        exposure_reply,
+        exposure_changed,
+        exposure_forward,
+        exposure_register
     ]
 }
 
@@ -198,9 +203,34 @@ fn set_theme(window: Window, theme: Theme) -> Result<(), String> {
     theme::set(&window, theme)
 }
 
-/// 페이지 자체 검사가 보낸 한 줄을 애플리케이션 로그에 기록한다. 페이지에는 쓸 파일이 없고,
-/// 디버거 밖에서 실행할 때 페이지 콘솔은 읽지 않는다.
+/// 페이지 자체 검사가 보낸 한 줄을 표준 오류와 창의 기록을 요청한 연결에 보낸다. 페이지에는 쓸
+/// 파일이 없고, 디버거 밖에서 실행할 때 페이지 콘솔은 읽지 않는다.
 #[tauri::command]
-fn report(line: String) {
-    diagnostics::say(&line);
+fn report(window: Window, line: String) {
+    eprintln!("{line}");
+    exposure::log(&window, &line);
+}
+
+/// 호스트가 보낸 요청에 대한 문서의 응답을 받는다.
+#[tauri::command]
+fn exposure_reply(webview: Webview, request: serde_json::Value) -> Result<(), String> {
+    exposure::reply(&webview, request)
+}
+
+/// 메인 페이지가 보낸 상태 변경을 감시하는 연결에 보낸다.
+#[tauri::command]
+fn exposure_changed(webview: Webview, request: Changed) -> Result<(), String> {
+    exposure::changed(&webview, request)
+}
+
+/// 메인 페이지의 요청을 표면 페이지에 보내고 응답을 반환한다.
+#[tauri::command(async)]
+fn exposure_forward(webview: Webview, request: Forward) -> Result<serde_json::Value, String> {
+    exposure::forward(&webview, request)
+}
+
+/// 표면 페이지의 항목 등록을 메인 페이지에 전달한다.
+#[tauri::command]
+fn exposure_register(webview: Webview, request: Register) -> Result<(), String> {
+    exposure::register(&webview, request)
 }

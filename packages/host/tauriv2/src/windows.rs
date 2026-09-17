@@ -80,6 +80,35 @@ pub(crate) fn notify_workspace(app: &AppHandle) {
     }
 }
 
+/// 등록된 창 중 label 의 창을 반환한다.
+pub(crate) fn find(app: &AppHandle, label: &str) -> Option<Window> {
+    let registered = app.state::<Windows>().windows.lock().is_ok_and(|windows| windows.contains_key(label));
+    if !registered {
+        return None;
+    }
+    app.get_window(label)
+}
+
+/// 등록된 창의 식별자, 제목, 소유 프로젝트 id, 키 창 여부를 창 식별자 순서로 반환한다.
+pub(crate) fn list(app: &AppHandle) -> Result<serde_json::Value, String> {
+    let registry = app.state::<Windows>();
+    let mut labels: Vec<String> = registry.windows.lock().map_err(|e| e.to_string())?.keys().cloned().collect();
+    labels.sort();
+    let owners = registry.owners.lock().map_err(|e| e.to_string())?.clone();
+    let mut listed = Vec::new();
+    for label in labels {
+        let Some(window) = app.get_window(&label) else { continue };
+        let project = owners.iter().find(|(_, owner)| **owner == label).map(|(id, _)| id.clone());
+        listed.push(serde_json::json!({
+            "window": label,
+            "title": window.title().map_err(|e| e.to_string())?,
+            "project": project,
+            "key": window.is_focused().map_err(|e| e.to_string())?,
+        }));
+    }
+    Ok(serde_json::Value::Array(listed))
+}
+
 /// 창에 열린 프로젝트 id 목록을 반환한다.
 pub(crate) fn opened(app: &AppHandle) -> Result<Vec<String>, String> {
     Ok(app.state::<Windows>().owners.lock().map_err(|e| e.to_string())?.keys().cloned().collect())
@@ -120,6 +149,7 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
             }
         }
         tauri::WindowEvent::Destroyed => {
+            crate::exposure::window_closed(&host);
             log_error(platform.cancel_layout(owner));
             if let Ok(mut monitor) = context.watching.0.lock() {
                 if let Some(monitor) = monitor.take() {
@@ -146,6 +176,10 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
         }
         tauri::WindowEvent::Resized(_) => {
             let _ = place_window_controls(&host);
+            crate::exposure::window_changed(&host);
+        }
+        tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Focused(_) | tauri::WindowEvent::ScaleFactorChanged { .. } => {
+            crate::exposure::window_changed(&host);
         }
         _ => {}
     });
@@ -235,6 +269,7 @@ pub(crate) fn window_state(window: &Window) -> Result<Option<Geometry>, String> 
 /// 페이지가 창 닫기 요청을 처리할 준비가 되었음을 기록한다.
 pub(crate) fn window_ready(window: &Window) -> Result<(), String> {
     window_data(window)?.ready.store(true, Ordering::Relaxed);
+    crate::exposure::rewatch(window);
     emit_window(window, "page-ready", ()).map_err(|e| e.to_string())
 }
 

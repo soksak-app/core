@@ -16,6 +16,20 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/events"
 )
 
+// windowTitle 은 프로젝트를 열지 않은 창의 제목이고, titleSuffix 는 프로젝트 창 제목의 끝이다.
+const (
+	windowTitle = "soksak / Wails v3"
+	titleSuffix = " / Wails v3"
+)
+
+// setTitle 은 창 제목을 바꾸고 windows.list 가 반환할 값으로 기록한다.
+func (s *Surfaces) setTitle(title string) {
+	s.mu.Lock()
+	s.title = title
+	s.mu.Unlock()
+	s.window.SetTitle(title)
+}
+
 // 창 자신의 단추를 두는 위치. 창의 왼쪽 위에서 잰 점이고, 맨 왼쪽 단추의 왼쪽 위
 // 모서리가 여기에 온다. 타우리 호스트가 같은 값을 쓰고, 페이지의 검증기가 그 결과를
 // 잰다.
@@ -24,7 +38,7 @@ const (
 	controlsAtY = 14.5
 )
 
-// 창을 만들 때의 콘텐츠 크기. 관측의 reset 이 창을 이 크기로 되돌린다.
+// 창을 만들 때의 콘텐츠 크기.
 const (
 	startWidth  = 1200
 	startHeight = 760
@@ -40,6 +54,9 @@ type Host struct {
 	windows    map[uint]*Surfaces
 	owners     map[string]*Surfaces
 	sidecars   *Sidecars
+	// endpoint 는 로컬 엔드포인트이고 relay 는 페이지에 보낸 노출 요청이다.
+	endpoint *Endpoint
+	relay    relay
 }
 
 // errNoWindow 는 이 애플리케이션의 창이 없을 때 반환한다. 여기의 호출은 모두 그 창에
@@ -55,7 +72,8 @@ func newHost(sidecars *Sidecars, configDir string) (*Host, error) {
 		}
 		directory = filepath.Join(config, "com.soksak.wailsv3")
 	}
-	return &Host{workspace: NewWorkspace(directory), windows: map[uint]*Surfaces{}, owners: map[string]*Surfaces{}, sidecars: sidecars}, nil
+	return &Host{workspace: NewWorkspace(directory), windows: map[uint]*Surfaces{}, owners: map[string]*Surfaces{}, sidecars: sidecars,
+		relay: relay{waiting: map[uint64]*waiter{}}}, nil
 }
 
 func (h *Host) surface(ctx context.Context) (*Surfaces, error) {
@@ -117,6 +135,7 @@ func (h *Host) WindowReady(ctx context.Context) error {
 	s.ready = true
 	h.mu.Unlock()
 	s.first.Do(func() { s.Emit("page-ready") })
+	go s.rewatch()
 	return nil
 }
 
@@ -149,11 +168,12 @@ func cancelLayout(win *application.WebviewWindow) {
 // newWindow 는 창 레지스트리 잠금을 해제한 상태에서 UI 스레드의 창 생성을 실행한다.
 func (h *Host) newWindow(name, url string) *Surfaces {
 	win := application.Get().Window.NewWithOptions(application.WebviewWindowOptions{
-		Name: name, Title: "soksak / Wails v3", Width: startWidth, Height: startHeight,
+		Name: name, Title: windowTitle, Width: startWidth, Height: startHeight,
 		Mac: application.MacWindow{TitleBar: application.MacTitleBarHidden},
 		URL: url, DevToolsEnabled: true, BackgroundColour: application.NewRGB(16, 17, 23),
 	})
 	s := NewSurfaces(win, h.sidecars)
+	s.host, s.name, s.title = h, name, windowTitle
 	h.mu.Lock()
 	h.windows[win.ID()] = s
 	h.mu.Unlock()
@@ -167,6 +187,12 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 	}
 	win.OnWindowEvent(events.Common.WindowDidResize, place)
 	win.OnWindowEvent(events.Common.WindowShow, place)
+	// host.window 를 감시하는 연결에 창의 위치, 크기와 키 상태 변경을 알린다.
+	changed := func(*application.WindowEvent) { s.windowChanged() }
+	for _, event := range []events.WindowEventType{events.Common.WindowDidResize, events.Common.WindowDidMove,
+		events.Common.WindowFocus, events.Common.WindowLostFocus} {
+		win.OnWindowEvent(event, changed)
+	}
 	win.OnWindowEvent(events.Mac.WebViewDidCommitNavigation, func(*application.WindowEvent) {
 		h.mu.Lock()
 		s.ready = false
@@ -191,6 +217,7 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 			return
 		}
 		s.close()
+		h.relay.abandon(s, nil)
 		h.notifyWorkspace()
 		if quit {
 			go application.Get().Quit()

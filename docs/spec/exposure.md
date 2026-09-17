@@ -83,17 +83,21 @@ Clients call these JSON-RPC 2.0 methods.
 | Method | Params | Result |
 | --- | --- | --- |
 | `windows.list` | none | `[{window, title, project, key}]` |
-| `exposure.list` | `{window}` | Declared entries of core, the host, and loaded plugins, each with `registered` |
+| `exposure.list` | `{window}` | `{status, commands, dom}`: the declared entries of core, the host, and loaded plugins in the declaration format, each with `registered` |
 | `status.get` | `{window, name}` | Current value |
 | `status.watch` | `{window, name}` | `null`; the host then sends `status.changed` notifications `{window, name, value}` on each change until `status.unwatch` or until the connection closes |
 | `status.unwatch` | `{window, name}` | `null` |
 | `command.run` | `{window, name, params}` | Command result |
 | `dom.rect` | `{window, name, index?}` | `{x, y, width, height}` in CSS pixels of the owning document, plus `{document}`: the document origin in window coordinates |
 | `dom.act` | `{window, name, index?, action, value?, event?}` | `null`. `action` is `click`, `input`, or `dispatch`. The page receives synthetic DOM events with `isTrusted` false |
-| `input.pointer` | `{window, x, y, phase, button?, deltaX?, deltaY?}` | `null`. Window coordinates. `phase` is `move`, `down`, `drag`, `up`, or `scroll` |
+| `input.pointer` | `{window, x, y, phase, button?, deltaX?, deltaY?, activate?}` | `null`. Window coordinates. `phase` is `move`, `down`, `drag`, `up`, or `scroll`. `button` is `left` (default) or `right`. `deltaX` and `deltaY` are scroll distances in points. `activate` applies to `move` |
 | `input.key` | `{window, key, text?, modifiers?, phase}` | `null`. `key` is a key name (`Enter`, `Tab`, `Escape`, `Backspace`, `Delete`, `Space`, `ArrowLeft`, `ArrowRight`, `ArrowUp`, `ArrowDown`, `Home`, `End`, `PageUp`, `PageDown`) or one character. `modifiers` is an array of `shift`, `control`, `option`, `command`. `phase` is `down` or `up` |
 
-The host delivers `input.pointer` and `input.key` as native events. On macOS it sends them through `-[NSWindow sendEvent:]`; the page receives trusted events, and the application is not activated.
+The host delivers `input.pointer` and `input.key` as native events, and the page receives trusted events. The application is not activated, except for `move` with `activate: true`. On macOS:
+
+- Keys and scroll go through `-[NSWindow sendEvent:]`. Presses, drags, and releases go to the view under the point, because AppKit does not deliver a press in an inactive window to the view.
+- WebKit updates hover (`pointerover`, `pointermove` without a button, `:hover`) only while the window is the key window. A `move` to a window that is not the key window returns 1006.
+- With `activate: true`, the host activates the application and makes the window key, waits until every webview of the window has sent the active state to its web process, and then delivers the move. This takes the keyboard focus from the application the user is using. If the system does not activate the application within 5 seconds, the request returns 1006.
 
 Tests that check a real input path use `input.pointer` and `input.key` only. Tests use `dom.act` only to set up state.
 
@@ -110,6 +114,9 @@ The host and the pages exchange these messages. They are internal to core and no
 | host → main page | event `exposure-registered` | `{surface, kind, name}`; `{surface, closed: true}` when the surface is removed |
 | main page → host | call `exposureForward` | `{id, surface, method, params}` for a name that a surface page registered |
 | host → surface page | event `exposure-request` | `{id, method, params}` |
+| main page → surface page (through `exposureForward`) | `status.watch`, `status.unwatch` | `{name}`. The surface page starts or stops following the value |
+| main page → surface page (through `exposureForward`) | `status.next` | `{name, version}`. The surface page replies `{version, value}` when its value is newer than `version`, or `{closed: true}` after `status.unwatch`. The host applies no timeout to this request; it fails with 1003 when the surface closes |
+| host → main page | event `diagnostics-tick` | No payload. Diagnostic builds only: one per step of `diagnostics.drag` |
 | surface page → host | call `exposureReply` | `{id, result}` or `{id, error}`; the host returns it to the main page as the result of `exposureForward` |
 
 The main page validates names against the declarations before it registers or forwards them. `exposureReply` from the main page answers an `exposure-request` of the host; `exposureReply` from a surface page answers a forwarded request. The host identifies the caller by its webview.
@@ -136,5 +143,7 @@ The page interface for surface pages is `page.exposure`: `register(kind, name)`,
 | 1003 | Owner document no longer exists |
 | 1004 | Native input is not available on this platform |
 | 1005 | Request timed out: the owning document did not reply within 10 seconds |
+| 1006 | The window is not active: a pointer `move` needs the key window, or the system did not activate the application |
+| -32000 | A registered command or status handler failed; `message` is its error message |
 
 The [local endpoint](endpoint.md) closes the connection after an undeclared method.
