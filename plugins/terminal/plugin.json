@@ -41,12 +41,50 @@
             "type": "string"
           }
         }
+      },
+      {
+        "name": "terminal.screen",
+        "description": "The output lines currently visible, the number of lines that fit in the output area, and its scroll position in CSS pixels.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "lines": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "rows": {
+              "type": "integer"
+            },
+            "scrollTop": {
+              "type": "number"
+            }
+          }
+        }
+      },
+      {
+        "name": "terminal.cwd",
+        "description": "The current directory the shell session last reported, or null before the first report.",
+        "schema": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      {
+        "name": "terminal.runs",
+        "description": "The number of terminal.run commands delivered to the shell session that have not finished.",
+        "schema": {
+          "type": "integer"
+        }
       }
     ],
     "commands": [
       {
         "name": "terminal.write",
-        "description": "Writes text to the standard input of the surface's shell.",
+        "description": "Writes text to the shell session: to the running command's input while a command runs, otherwise as the next command.",
         "params": {
           "type": "object",
           "properties": {
@@ -54,6 +92,52 @@
               "type": "string"
             }
           }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "terminal.run",
+        "description": "Runs a command once in the session's current directory without changing the session, and returns its merged output and exit status.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "command": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "output": {
+              "type": "string"
+            },
+            "exit": {
+              "type": "integer"
+            }
+          }
+        },
+        "timeout": 600000
+      },
+      {
+        "name": "terminal.interrupt",
+        "description": "Sends the interrupt signal to the command the session is running and to running terminal.run commands.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "terminal.clear",
+        "description": "Removes all output lines from the terminal surface.",
+        "params": {
+          "type": "object",
+          "properties": {}
         },
         "result": {
           "type": "null"
@@ -68,6 +152,14 @@
       {
         "name": "terminal.output",
         "description": "The output area."
+      },
+      {
+        "name": "terminal.interrupt",
+        "description": "The button that interrupts the running command."
+      },
+      {
+        "name": "terminal.clear",
+        "description": "The button that clears the output."
       }
     ]
   }

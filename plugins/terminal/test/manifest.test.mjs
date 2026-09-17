@@ -33,7 +33,25 @@ test("the surface page registers every declared exposure", () => {
   assert.deepEqual(registered, declared);
 });
 
-test("the terminal exposes its input, output, and write command", () => {
-  const names = Object.values(manifest.exposes).flat().map((entry) => entry.name).sort();
-  assert.deepEqual(names, ["terminal.input", "terminal.output", "terminal.output", "terminal.write"].sort());
+test("the terminal exposes its output, screen, directory, commands, and controls", () => {
+  const names = (kind) => manifest.exposes[kind].map((entry) => entry.name).sort();
+  assert.deepEqual(names("status"), ["terminal.cwd", "terminal.output", "terminal.runs", "terminal.screen"]);
+  assert.deepEqual(names("commands"), ["terminal.clear", "terminal.interrupt", "terminal.run", "terminal.write"]);
+  assert.deepEqual(names("dom"), ["terminal.clear", "terminal.input", "terminal.interrupt", "terminal.output"]);
+});
+
+test("a command that waits for a shell command declares a longer timeout", () => {
+  const run = manifest.exposes.commands.find((entry) => entry.name === "terminal.run");
+  assert.equal(run.timeout, 600000);
+});
+
+test("every control on the page names a declared command and a declared element", () => {
+  const html = readFileSync(new URL(`../${manifest.surface.page}`, import.meta.url), "utf8");
+  const commands = new Set(manifest.exposes.commands.map((entry) => entry.name));
+  const dom = new Set(manifest.exposes.dom.map((entry) => entry.name));
+  for (const [, command] of html.matchAll(/data-command="([^"]+)"/g)) assert.ok(commands.has(command), command);
+  for (const [, name] of html.matchAll(/data-expose="([^"]+)"/g)) assert.ok(dom.has(name), name);
+  for (const [control] of html.matchAll(/<(button|input)\b[^>]*>/g)) {
+    assert.match(control, /data-expose="/, `${control} has no data-expose`);
+  }
 });

@@ -1,6 +1,7 @@
 // 터미널 표면의 입력이 셸 사이드카를 거쳐 같은 표면의 출력으로 돌아오는지 검사한다.
 import assert from "node:assert/strict";
-import { realpathSync } from "node:fs";
+import { mkdirSync, realpathSync, rmSync } from "node:fs";
+import { join } from "node:path";
 import test from "node:test";
 
 import { APPS, fresh, open, terminalReady } from "./app.mjs";
@@ -40,5 +41,53 @@ for (const app of Object.values(APPS)) {
       const lines = await s.get("terminal.output", other.id);
       assert.ok(!lines.includes(marker), `surface ${other.id} received this surface's output`);
     }
+
+    // 보이는 줄에 마지막 출력이 있다.
+    const screen = await s.get("terminal.screen", terminal.surface);
+    assert.ok(screen.rows > 0 && screen.lines.includes(root), `terminal.screen = ${JSON.stringify(screen)}`);
+  });
+
+  test(`${app.name}: terminal commands run, report the directory, interrupt, and clear`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const root = realpathSync((await s.get("core.project")).root);
+    const [terminal] = await terminalReady(s);
+    const at = { surface: terminal.surface };
+    const inner = join(root, `terminal-${process.pid}`);
+    mkdirSync(inner);
+    t.after(() => rmSync(inner, { recursive: true, force: true }));
+
+    await s.until("terminal.cwd", (dir) => dir !== null && realpathSync(dir) === root,
+      "the session did not report the project directory", at);
+
+    const failed = await s.run("terminal.run", { command: "echo out; echo err >&2; exit 7" }, terminal.surface);
+    assert.deepEqual(failed, { output: "out\nerr\n", exit: 7 });
+
+    // 입력한 cd 는 세션의 디렉터리를 바꾸고, 이후 terminal.run 은 그 디렉터리에서 실행된다.
+    await typeLine(s, terminal.surface, `cd ${inner}`, `$ cd ${inner}`);
+    await s.until("terminal.cwd", (dir) => dir !== null && realpathSync(dir) === inner,
+      "the session did not report the changed directory", at);
+    const here = await s.run("terminal.run", { command: "pwd -P" }, terminal.surface);
+    assert.deepEqual(here, { output: `${inner}\n`, exit: 0 });
+
+    // 중단 단추는 실행 중인 세션 명령과 terminal.run 명령을 끝낸다.
+    await typeLine(s, terminal.surface, "sh -c 'echo started; exec sleep 30'", "started");
+    const long = s.run("terminal.run", { command: "sleep 30" }, terminal.surface);
+    // 실행 요청이 사이드카에 전달된 뒤에 누른 중단은 그 명령에 도달한다.
+    await s.until("terminal.runs", (count) => count === 1, "the run was not delivered", at);
+    const button = await s.rect("terminal.interrupt", undefined, terminal.surface);
+    const began = Date.now();
+    await s.click(button.document.x + button.x + button.width / 2, button.document.y + button.y + button.height / 2);
+    const stopped = await long;
+    assert.notEqual(stopped.exit, 0, "the interrupted run reports a failure");
+    assert.ok(Date.now() - began < 10_000, "the interrupt ended the run");
+    const after = `after-interrupt-${process.pid}`;
+    await typeLine(s, terminal.surface, `echo ${after}`, after);
+
+    await s.run("terminal.clear", {}, terminal.surface);
+    await s.until("terminal.output", (lines) => lines.length === 0, "the output was not cleared", at);
+    const cleared = await s.get("terminal.screen", terminal.surface);
+    assert.deepEqual(cleared.lines, []);
   });
 }

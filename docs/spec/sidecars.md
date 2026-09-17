@@ -41,15 +41,37 @@ The host records the window that first sends for a surface and delivers each sid
 
 ## shell
 
-`sidecars/shell` (`@soksak/sidecar-shell`) builds `build/soksak-shell` with `pnpm run build` and runs one shell process per surface in the surface's project directory. The shell is `$SHELL`, or `/bin/sh` when unset (`%COMSPEC%` or `cmd.exe` on Windows), and is not interactive. Its code is in `src/`: the entry point `src/main.go`, the protocol in the package `src/shell`, and the shell selection for each OS in `src/platform/{darwin,linux,windows}/`, which registers through `src/platform/platform.go` ([platform selection](hosts.md#platform-selection)). Its tests are in `tests/`.
+`sidecars/shell` (`@soksak/sidecar-shell`) builds `build/soksak-shell` with `pnpm run build` and runs one shell session per surface in the surface's project directory. It is a line console, not a terminal emulator. Its code is in `src/`: the entry point `src/main.go`, the protocol in the package `src/shell`, and the OS operations in `src/platform/{darwin,linux,windows}/`, which register through `src/platform/platform.go` ([platform selection](hosts.md#platform-selection)). Its tests are in `tests/`.
+
+The session shell is `$SHELL` when it is a POSIX shell (`sh`, `bash`, `zsh`, `ksh`, `dash`) and `/bin/sh` otherwise, because the session script uses POSIX syntax. It runs in its own process group without a terminal and executes a script that:
+
+- ignores the interrupt signal in the shell itself with `trap : INT`; commands started by the shell keep the default action;
+- reads commands one line at a time from a separate command pipe (file descriptor 3) and runs each with `eval`, so a construct that spans lines must be written on one line;
+- prints the current directory as a line that starts with the record separator (`\x1e`) and `cwd `, once at start and after each command.
+
+The command's standard input is a second pipe. Standard output and standard error of the session share one pipe, so their lines keep their order.
+
+A `write` goes to the command pipe while the shell has no child process, and to the running command's standard input while it has one; the sidecar counts the children of the shell process (`proc_listchildpids` on macOS, `/proc` on Linux). A line written before a command starts therefore becomes the next command, and a line written while it runs is that command's input.
 
 | Body | Effect |
 | --- | --- |
-| `{"op": "open"}` | Starts the surface's shell; an open request for a running shell does nothing |
-| `{"op": "write", "data": text}` | Writes `text` to the shell's standard input |
+| `{"op": "open"}` | Starts the surface's session; an open request for a running session does nothing |
+| `{"op": "write", "data": text}` | Writes `text` to the command pipe or to the running command, as described above |
+| `{"op": "run", "id": request, "command": text}` | Runs `text` once with `-c` in the last reported directory, in its own process group, and replies when it ends. The session's variables and directory do not change |
+| `{"op": "interrupt"}` | Sends the interrupt signal to the session's process group and to every running `run` command |
 
-The sidecar sends each output line as `{"text": line}` including its newline, and each failed request as `{"error": message}`. A closed surface ends its shell. When standard input closes, the sidecar ends every shell and exits.
+The sidecar sends these event bodies:
+
+| Event body | Meaning |
+| --- | --- |
+| `{"text": line}` | One output line including its newline |
+| `{"cwd": path}` | The session's current directory; the report line is not sent as text |
+| `{"id": request, "output": text, "exit": code}` | The merged output and exit status of a `run` |
+| `{"id": request, "error": message}` | A `run` that could not start or that lacks an id or a command |
+| `{"error": message}` | Another failed request |
+
+A closed surface ends its session and its `run` commands by terminating their process groups. When standard input closes, the sidecar ends every session and exits. On Windows every operation fails with `shell sessions are not implemented on windows`.
 
 ## Tests
 
-Each sidecar runs its tests in its own directory. `shell` tests its protocol and OS selection with `go test ./...` and validates its `sidecar.json` with `node --test tests/`. Each host tests its relay in `tests/sidecars_test.*` and its resolution from staged manifests with a fake sidecar executable and does not start a real sidecar.
+Each sidecar runs its tests in its own directory. `shell` tests its protocol, output order, directory reports, command input, `run` results, and interrupts with `go test ./...` and validates its `sidecar.json` with `node --test tests/`. Each host tests its relay in `tests/sidecars_test.*` and its resolution from staged manifests with a fake sidecar executable and does not start a real sidecar.

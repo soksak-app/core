@@ -3,7 +3,8 @@
 package windows
 
 import (
-	"os"
+	"errors"
+	"os/exec"
 
 	"github.com/min-median-max/soksak/sidecars/shell/src/platform"
 )
@@ -12,10 +13,12 @@ type implementation struct{}
 
 func init() { platform.Register(implementation{}) }
 
-// Shell 은 %COMSPEC% 을, 설정되지 않았으면 cmd.exe 를 반환한다.
-func (implementation) Shell() string {
-	if program := os.Getenv("COMSPEC"); program != "" {
-		return program
-	}
-	return "cmd.exe"
-}
+var errMissing = errors.New("shell sessions are not implemented on windows")
+
+func (implementation) Session() (*exec.Cmd, error)   { return nil, errMissing }
+func (implementation) Setup() string                 { return "" }
+func (implementation) DirectoryReport() string       { return "" }
+func (implementation) Run(string) (*exec.Cmd, error) { return nil, errMissing }
+func (implementation) Interrupt(int) error           { return errMissing }
+func (implementation) Terminate(int) error           { return errMissing }
+func (implementation) Children(int) (int, error)     { return 0, errMissing }
