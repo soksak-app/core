@@ -75,6 +75,8 @@ Manual appearance validation confirmed settings blur in both macOS hosts on 2026
 
 Debug builds (`make wailsv3-build tauriv2-build`) include the diagnostic methods of the [local endpoint](../spec/endpoint.md): `diagnostics.fixture`, `diagnostics.drag`, `diagnostics.capture.stop`, `diagnostics.knob`, and `diagnostics.transcript`. The `soksak` command and the `soksak-mcp` server send the same requests; for example `soksak status host.window --window main --config-dir DIR`.
 
+`pnpm -F @soksak/client run bench:application -- --config-dir DIR` measures sequential round trips of a running application on three paths: `windows.list` (host only), `status.get core.screen` (relayed to the main page), and `status.get core.surface.document` with a surface (relayed through the main page to a surface page). `bench` measures the transports alone. On 2026-09-17 (M3 Pro, debug builds, 2000 requests per path, two runs) the p50 values were: Wails host 142–157µs, page 1.5–1.7ms, surface 4.4–4.5ms; Tauri host 443µs, page 2.6–2.7ms, surface 1.4–7.5ms.
+
 The shared library has two native input suites. Run both when changing the shared input code:
 
 ```sh

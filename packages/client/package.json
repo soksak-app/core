@@ -12,6 +12,7 @@
   ],
   "scripts": {
     "bench": "node bench/transport.mjs",
+    "bench:application": "node bench/application.mjs",
     "test": "node --test test/"
   },
   "exports": {
