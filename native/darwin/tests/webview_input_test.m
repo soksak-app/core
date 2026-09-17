@@ -1,12 +1,7 @@
 // 설치된 WebKit에서 겹친 웹뷰의 포인터·키보드 입력과 제거 후 복원을 검사한다.
 #import <Cocoa/Cocoa.h>
-#import <WebKit/WebKit.h>
 #import "webview_input.h"
-
-@interface WKWebView (InputTestBarrier)
-- (void)_doAfterProcessingAllPendingMouseEvents:(void (^)(void))completion;
-- (void)_doAfterNextPresentationUpdate:(void (^)(void))completion;
-@end
+#import "private/webkit.h"
 
 // 앱을 활성화하지 않고 검사용 웹뷰에 키 창 상태를 제공한다.
 @interface SPInputTestWindow : NSWindow

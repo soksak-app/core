@@ -15,7 +15,11 @@
 | `WKWebView._setIgnoresMouseMoveEvents:` | 두 호스트의 [`webview_input.m`](../../native/darwin/src/webview_input.m), 등록·포인터 처리·제거 | 겹친 웹뷰의 포인터 추적을 AppKit 히트테스트 결과로 제한 |
 | `WKWebView` KVC `drawsBackground` (`_drawsBackground` / `_setDrawsBackground:`) | Wails [`webview.m`](../../packages/host/wailsv3/src/platform/darwin/webview.m)의 모달 생성; 두 호스트 [`window_probe.m`](../../native/darwin/src/window_probe.m)의 진단 조회 | 모달 웹뷰의 불투명 배경 비활성화 및 상태 조회 |
 | `WKWebViewConfiguration` KVC `drawsBackground` (`_setDrawsBackground:`) | Tauri → Wry 웹뷰 생성; [`modals.rs`](../../packages/host/tauriv2/src/modals.rs) `show`가 `background_color(Color(0, 0, 0, 0))` 요청; 메인도 배경색 설정 | 웹뷰 초기화 전에 배경 그리기 설정 |
+| `WKWebView._doAfterActivityStateUpdate:` | 두 호스트; [`input_inject.m`](../../native/darwin/src/input_inject.m), `sp_input_activate` | 창의 모든 웹뷰가 활성 창 상태를 웹 프로세스에 보낸 뒤에만 호버 이동을 전달 |
+| `CGEventField` 51(창 번호), `CGEventSetWindowLocation` | 두 호스트; [`input_inject.m`](../../native/darwin/src/input_inject.m), `sp_input_pointer`의 스크롤 | 창과 창 좌표를 가진 스크롤 `NSEvent` 생성 |
 | `WKWebView._doAfterProcessingAllPendingMouseEvents:` | [`native/darwin/tests/webview_input_test.m`](../../native/darwin/tests/webview_input_test.m)의 `drain`; 독립 검사 전용 | DOM 이벤트 횟수를 검사하기 전에 네이티브 마우스 처리 완료 대기 |
+
+공용 라이브러리의 비공개 선언은 모두 [`native/darwin/src/private/`](../../native/darwin/src/private/)의 `webkit.h`, `coregraphics.h`에 있다. 소스와 검사는 이 헤더를 포함하며 비공개 API를 직접 선언하지 않는다. 다른 플랫폼은 `native/<os>/src/private/`에 선언을 둔다.
 
 두 `drawsBackground` 항목의 대상 객체는 다르다. Wails는 생성된 뷰를 변경하고, Wry는 생성 전 구성을 변경한다. 프레임워크의 공개 Rust·Go 진입점도 비공개 네이티브 의존성을 포함할 수 있다.
 
@@ -88,10 +92,11 @@
 
 - 키: `+[NSEvent keyEventWithType:...]`와 `-[NSWindow sendEvent:]`. 키 창이 아닌 창에서도 포커스된 요소가 키를 받는다.
 - 포인터 누름·끌기·뗌: `hitTest:`가 반환한 뷰의 이벤트 메서드(`mouseDown:`, `mouseDragged:`, `mouseUp:`, 오른쪽 버튼 메서드). AppKit은 비활성 창의 누름을 첫 클릭으로 처리해 뷰에 전달하지 않으므로 `-[NSWindow sendEvent:]`를 사용하지 않는다.
-- 포인터 이동: 히트 뷰부터 상위로 올라가며 좌표를 포함하는 첫 추적 영역 소유자의 `mouseMoved:`.
+- 포인터 이동: 히트 뷰부터 상위로 올라가며 좌표를 포함하는 첫 추적 영역 소유자의 `mouseMoved:`. WebKit은 활성 페이지에서만 호버를 갱신한다. `WebFrame::handleMouseEvent`는 `FocusController::isActive()`가 아니면 버튼 없는 이동을 `passMouseMovedEventToScrollbars`로 넘기며, 이 상태는 `PageClientImpl::isViewWindowActive`(창의 `isKeyWindow`)에서만 온다. 이 값을 설정하는 WebKit 인터페이스는 없다. 따라서 `sp_input_pointer`는 키 창이 아닌 창의 이동에 `SP_INPUT_INACTIVE`를 반환하며 키 상태를 흉내 내지 않는다.
+- 활성화: `sp_input_activate`는 `-[NSWindow makeKeyAndOrderFront:]`와 `-[NSApplication activate]`를 호출하고, 키 창 알림과 앱 활성 알림을 모두 확인한 뒤, 다음 메인 큐 차례에 창의 모든 웹뷰에 `_doAfterActivityStateUpdate:`를 호출한다. 이 콜백은 WebKit이 예약된 활성 상태를 보낸 뒤(`WebPageProxy::dispatchActivityStateChange`) 실행되므로, 이후 마우스 이벤트는 같은 연결에서 그 상태 다음에 웹 프로세스에 도착한다. 시스템은 활성화를 거절할 수 있으며, 이때 함수는 제한 시간 뒤 실패를 보고한다.
 - 스크롤: **비공개 CoreGraphics 사용.** 창 정보를 가진 스크롤 `NSEvent`를 만드는 공개 API가 없다. 코드는 `CGEventCreateScrollWheelEvent2`로 이벤트를 만들고 문서화되지 않은 창 번호 필드(`CGEventField` 51)와 비공개 함수 `CGEventSetWindowLocation`을 설정한 뒤 `+[NSEvent eventWithCGEvent:]`로 변환한다. 변환 결과는 `window`와 `locationInWindow`를 가지며 `-[NSWindow sendEvent:]`가 좌표의 뷰에 전달한다. 변환한 이벤트에 창이 없으면 입력을 거부한다. 필드 51만 설정하면 좌표가 틀리고, `CGEventSetWindowLocation`만 호출하면 창이 없다. `CGEventPostToPid`는 비활성 애플리케이션에 스크롤을 전달하지 못했다(2026-09-17 검토).
 
-실패 증상: `tests/input_inject_test.m`이 포인터 이벤트 누락·비신뢰·위치 오류, 휠 이벤트 없음, 요청한 120픽셀과 다른 스크롤 거리, 클릭 후 포커스 상실을 보고한다. OS나 WebKit 업데이트 후 `make -C native/darwin test`를 실행한다. 공개 방법으로 창 정보를 가진 스크롤 이벤트를 만들 수 있게 되면 비공개 스크롤 호출을 교체한다.
+실패 증상: `tests/input_inject_test.m`이 포인터 이벤트 누락·비신뢰·위치 오류, 휠 이벤트 없음, 요청한 120픽셀과 다른 스크롤 거리, 클릭 후 포커스 상실을 보고한다. OS나 WebKit 업데이트 후 `make -C native/darwin test`와 `make -C native/darwin test-activation`(키보드 포커스를 가져감)을 실행한다. 공개 방법으로 창 정보를 가진 스크롤 이벤트를 만들 수 있게 되면 비공개 스크롤 호출을 교체한다.
 
 ## 업데이트 검토 절차
 

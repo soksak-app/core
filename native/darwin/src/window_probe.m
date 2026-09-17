@@ -49,23 +49,6 @@ void spNativeProbe(void *handle, const char *text, void (*reply)(const char *)) 
         probeReply(request, @YES, nil, reply);
         return;
     }
-    if ([op isEqualToString:@"mouse"]) {
-        NSView *content = window.contentView;
-        NSPoint point = NSMakePoint([request[@"x"] doubleValue], content.bounds.size.height - [request[@"y"] doubleValue]);
-        NSView *hit = [content hitTest:[content convertPoint:point toView:content.superview]];
-        point = [content convertPoint:point toView:nil];
-        NSString *phase = request[@"phase"];
-        if (![phase isEqualToString:@"down"] && ![phase isEqualToString:@"up"]) {
-            probeReply(request, nil, @"mouse phase must be down or up", reply); return;
-        }
-        BOOL down = [phase isEqualToString:@"down"];
-        NSEvent *event = [NSEvent mouseEventWithType:down ? NSEventTypeLeftMouseDown : NSEventTypeLeftMouseUp location:point
-            modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
-            context:nil eventNumber:1 clickCount:1 pressure:0];
-        if (down) [hit mouseDown:event]; else [hit mouseUp:event];
-        probeReply(request, @YES, nil, reply);
-        return;
-    }
     if ([op isEqualToString:@"presentation"]) {
         if (!views.count) { probeReply(request, nil, @"main webview not found", reply); return; }
         surfaceLayoutAfterPresentation(views.firstObject, ^{ probeReply(request, @YES, nil, reply); });
@@ -85,7 +68,8 @@ void spNativeProbe(void *handle, const char *text, void (*reply)(const char *)) 
         }
         for (WKWebView *view in views) {
             NSRect rect = [view convertRect:view.bounds toView:window.contentView];
-            [rows addObject:@{ @"url": view.URL.absoluteString ?: @"", @"hidden": @(view.isHiddenOrHasHiddenAncestor),
+            [rows addObject:@{ @"view": @((unsigned long long)(uintptr_t)view), @"main": @(view == views.firstObject),
+                @"url": view.URL.absoluteString ?: @"", @"hidden": @(view.isHiddenOrHasHiddenAncestor),
                 @"layer": @([view.superview.subviews indexOfObject:view]),
                 @"drawsBackground": [view valueForKey:@"drawsBackground"],
                 @"backgroundAlpha": @(view.underPageBackgroundColor.alphaComponent),
@@ -108,6 +92,8 @@ void spNativeProbe(void *handle, const char *text, void (*reply)(const char *)) 
         probeReply(request, @{ @"views": rows, @"controls": controls, @"windows": windows, @"window": @(window.windowNumber),
             @"screens": screens, @"scale": @(window.backingScaleFactor),
             @"x": @(window.frame.origin.x), @"y": @(window.frame.origin.y),
+            @"frame": @{ @"x": @(window.frame.origin.x), @"y": @(window.frame.origin.y),
+                @"w": @(window.frame.size.width), @"h": @(window.frame.size.height) },
             @"children": @(window.childWindows.count), @"key": @(window.isKeyWindow),
             @"front": @(NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier),
             @"pid": @(NSProcessInfo.processInfo.processIdentifier),
@@ -119,29 +105,13 @@ void spNativeProbe(void *handle, const char *text, void (*reply)(const char *)) 
         NSPoint point = NSMakePoint([request[@"x"] doubleValue], content.bounds.size.height - [request[@"y"] doubleValue]);
         NSView *hit = [content hitTest:[content convertPoint:point toView:content.superview]];
         for (WKWebView *view in views) {
-            if ([hit isDescendantOf:view]) { probeReply(request, @{ @"url": view.URL.absoluteString ?: @"" }, nil, reply); return; }
+            if ([hit isDescendantOf:view]) {
+                probeReply(request, @{ @"url": view.URL.absoluteString ?: @"", @"view": @((unsigned long long)(uintptr_t)view),
+                    @"main": @(view == views.firstObject) }, nil, reply);
+                return;
+            }
         }
         probeReply(request, @{ @"identifier": hit.identifier ?: @"" }, nil, reply);
-        return;
-    }
-    if ([op isEqualToString:@"eval"] || [op isEqualToString:@"evalAsync"]) {
-        NSString *match = request[@"match"] ?: @"index.html";
-        WKWebView *selected = nil;
-        for (WKWebView *view in views) {
-            if ([view.URL.absoluteString containsString:match] || ([match isEqualToString:@"main"] && view == views.firstObject)) { selected = view; break; }
-        }
-        if (!selected) { probeReply(request, nil, @"webview not found", reply); return; }
-        void (^finish)(id, NSError *) = ^(id value, NSError *error) {
-            probeReply(request, value, error.localizedDescription, reply);
-        };
-        // eval 은 식의 값을 반환한다. evalAsync 는 함수 본문을 실행하고 반환된 promise 가
-        // 완료될 때 값을 반환한다.
-        if ([op isEqualToString:@"eval"]) {
-            [selected evaluateJavaScript:request[@"script"] completionHandler:finish];
-        } else {
-            [selected callAsyncJavaScript:request[@"script"] arguments:@{} inFrame:nil
-                inContentWorld:WKContentWorld.pageWorld completionHandler:finish];
-        }
         return;
     }
     probeReply(request, nil, @"unknown native operation", reply);

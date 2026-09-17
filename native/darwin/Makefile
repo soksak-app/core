@@ -4,7 +4,8 @@
 # 헤더와 라이브러리 위치를 찾도록 soksak-darwin.pc 를 생성한다.
 #
 #   make          build/libsoksak-darwin.a, build/soksak-darwin.pc
-#   make test     입력 검사(기준 실행·등록 실행)와 입력 주입 검사를 실행한다
+#   make test             입력 검사(기준 실행·등록 실행)와 입력 주입 검사를 실행한다
+#   make test-activation  창 활성화 후 호버 검사를 실행한다. 애플리케이션을 활성화해 포커스를 가져간다
 
 SHELL := /bin/sh
 
@@ -19,11 +20,11 @@ FRAMEWORKS := -framework Cocoa -framework WebKit -framework QuartzCore -framewor
 MINIMUM    := -mmacosx-version-min=14.0
 CFLAGS     := -fblocks -fmodules -Wall -Werror -O2 $(MINIMUM)
 
-.PHONY: all test clean
+.PHONY: all test test-activation clean
 
 all: $(LIBRARY) $(PKGCONFIG)
 
-$(BUILD)/%.o: src/%.m $(wildcard src/*.h) Makefile | $(BUILD)
+$(BUILD)/%.o: src/%.m $(wildcard src/*.h src/private/*.h) Makefile | $(BUILD)
 	@clang $(CFLAGS) -c $< -o $@
 
 $(LIBRARY): $(OBJECTS)
@@ -41,16 +42,16 @@ $(PKGCONFIG): Makefile | $(BUILD)
 $(BUILD):
 	@mkdir -p $@
 
-$(BUILD)/webview_input_test: tests/webview_input_test.m $(LIBRARY)
-	@clang $(CFLAGS) -I$(CURDIR)/src $< -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) $(MINIMUM) -o $@
-
-$(BUILD)/input_inject_test: tests/input_inject_test.m $(LIBRARY)
+$(BUILD)/%_test: tests/%_test.m $(LIBRARY) $(wildcard src/*.h src/private/*.h)
 	@clang $(CFLAGS) -I$(CURDIR)/src $< -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) $(MINIMUM) -o $@
 
 test: $(BUILD)/webview_input_test $(BUILD)/input_inject_test
 	@$(BUILD)/webview_input_test --baseline
 	@$(BUILD)/webview_input_test
 	@$(BUILD)/input_inject_test
+
+test-activation: $(BUILD)/input_activate_test
+	@$(BUILD)/input_activate_test
 
 clean:
 	@rm -rf $(BUILD)

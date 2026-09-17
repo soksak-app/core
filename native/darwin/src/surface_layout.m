@@ -1,11 +1,7 @@
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
 #import "surface_layout.h"
-#import <WebKit/WebKit.h>
-
-@interface WKWebView (SPPresentation)
-- (void)_doAfterNextPresentationUpdate:(void (^)(void))done;
-@end
+#import "private/webkit.h"
 
 @interface SPLayoutRequest : NSObject
 @property(nonatomic, assign) void *owner;

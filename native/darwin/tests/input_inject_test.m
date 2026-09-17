@@ -2,13 +2,8 @@
 //
 // 창은 일반 NSWindow 이며 키 창 상태를 흉내 내지 않는다. 실제 애플리케이션 창과 같은 조건이다.
 #import <Cocoa/Cocoa.h>
-#import <WebKit/WebKit.h>
 #import "input_inject.h"
-
-@interface WKWebView (InputInjectTestBarrier)
-- (void)_doAfterProcessingAllPendingMouseEvents:(void (^)(void))completion;
-- (void)_doAfterNextPresentationUpdate:(void (^)(void))completion;
-@end
+#import "private/webkit.h"
 
 static int failures = 0;
 
@@ -70,10 +65,13 @@ int main(void) { @autoreleasepool {
     [view _doAfterNextPresentationUpdate:^{ painted = YES; }];
     until(^BOOL { return painted; });
 
-    check(sp_input_pointer(window, 150, 100, 0, 0, 0, 0), @"move accepted");
-    check(sp_input_pointer(window, 150, 100, 1, 0, 0, 0), @"press accepted");
-    check(sp_input_pointer(window, 160, 155, 2, 0, 0, 0), @"drag accepted");
-    check(sp_input_pointer(window, 160, 155, 3, 0, 0, 0), @"release accepted");
+    check(sp_input_pointer(window, 150, 100, 0, 0, 0, 0) == SP_INPUT_INACTIVE, @"a move without a button is reported as inactive in a window that is not key");
+    drain(view);
+    check([evaluate(view, @"probe.events.filter(e=>e.type==='pointermove').length") intValue] == 0, @"a rejected move sends nothing to the page");
+    evaluate(view, @"probe.events.length=0; null");
+    check(sp_input_pointer(window, 150, 100, 1, 0, 0, 0) == SP_INPUT_DELIVERED, @"press delivered");
+    check(sp_input_pointer(window, 160, 155, 2, 0, 0, 0) == SP_INPUT_DELIVERED, @"drag delivered");
+    check(sp_input_pointer(window, 160, 155, 3, 0, 0, 0) == SP_INPUT_DELIVERED, @"release delivered");
     drain(view);
     NSArray *pointer = evaluate(view, @"probe.events.filter(e=>e.type.startsWith('pointer')||e.type==='click')");
     NSArray *types = [pointer valueForKey:@"type"];
@@ -86,7 +84,7 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"pointer coordinates are CSS pixels from the top left: %@", down]);
 
     evaluate(view, @"probe.events.length=0; null");
-    check(sp_input_pointer(window, 100, 200, 4, 0, 0, 120), @"scroll accepted");
+    check(sp_input_pointer(window, 100, 200, 4, 0, 0, 120) == SP_INPUT_DELIVERED, @"scroll delivered");
     drain(view);
     until(^BOOL { return [evaluate(view, @"probe.events.filter(e=>e.type==='wheel').length") intValue] > 0; });
     NSArray *wheel = evaluate(view, @"probe.events.filter(e=>e.type==='wheel')");
@@ -95,7 +93,7 @@ int main(void) { @autoreleasepool {
     until(^BOOL { return [evaluate(view, @"document.getElementById('pad').scrollTop") doubleValue] > 0; });
     check([evaluate(view, @"document.getElementById('pad').scrollTop") doubleValue] == 120, @"scroll moves the element under the point by the requested 120 pixels");
 
-    check(sp_input_pointer(window, 50, 20, 1, 0, 0, 0) && sp_input_pointer(window, 50, 20, 3, 0, 0, 0), @"field click accepted");
+    check(sp_input_pointer(window, 50, 20, 1, 0, 0, 0) == SP_INPUT_DELIVERED && sp_input_pointer(window, 50, 20, 3, 0, 0, 0) == SP_INPUT_DELIVERED, @"field click delivered");
     drain(view);
     check([evaluate(view, @"document.activeElement && document.activeElement.id") isEqual:@"field"], @"a click focuses the field in an inactive window");
     evaluate(view, @"probe.events.length=0; null");

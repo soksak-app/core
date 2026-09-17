@@ -1,11 +1,8 @@
 #import <Cocoa/Cocoa.h>
 #import "webview_input.h"
-
-// This private WebKit API gates pointer tracking without disabling keyboard,
+// _setIgnoresMouseMoveEvents: gates pointer tracking without disabling keyboard,
 // clicks or drags. AppKit's hit test selects the webview that receives it.
-@interface WKWebView (PointerInput)
-- (void)_setIgnoresMouseMoveEvents:(BOOL)ignore;
-@end
+#import "private/webkit.h"
 
 static NSHashTable *inputViews;
 

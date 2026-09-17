@@ -1,10 +1,6 @@
 #import <Cocoa/Cocoa.h>
-#import <WebKit/WebKit.h>
 #import "webview_geometry.h"
-
-@interface WKWebView (SPSurfaceScale)
-- (void)_setOverrideDeviceScaleFactor:(double)scale;
-@end
+#import "private/webkit.h"
 
 @interface SPSurfaceCoordinates : NSView
 @property CGFloat scale;
