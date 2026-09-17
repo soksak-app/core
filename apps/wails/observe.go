@@ -375,7 +375,7 @@ var observing = flag.Bool("observe", false,
 	"register the observation service, which reports this window's number")
 
 // ControlPort 는 이 애플리케이션이 지시를 받는 포트다. 다른 호스트는 다른 포트를
-// 쓰므로 둘이 함께 떠 있을 수 있다. examples/test/app.mjs 가 같은 숫자를 적는다.
+// 쓰므로 둘이 함께 떠 있을 수 있다. e2e/app.mjs 가 같은 숫자를 적는다.
 const ControlPort = 49732
 
 // commands 는 지시를 받는 통로를 연다.

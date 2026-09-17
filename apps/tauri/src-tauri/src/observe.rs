@@ -49,7 +49,7 @@ pub fn given(name: &str) -> bool {
 }
 
 /// The port this application takes instructions on. The other host takes a
-/// different one, so both can be up at once. `examples/test/app.mjs` writes the
+/// different one, so both can be up at once. `e2e/app.mjs` writes the
 /// same numbers.
 const CONTROL_PORT: u16 = 49733;
 

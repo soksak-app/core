@@ -86,12 +86,15 @@ for(const [name,binary]of Object.entries(APPS))test(`${name}: library windows cr
  await run(binary,third,`await(await import('./projects.js')).activate('${created.id}');`);
  assert.equal((await state()).windows.length,3);
  assert.equal(await run(binary,third,`return(await import('./projects.js')).active();`),null);
- await run(binary,third,`const h=(await import('./framework/index.js')).host;
+ const rejected=await run(binary,third,`const h=(await import('@soksak/runtime')).host;
+  const reasons=[];
   for(const name of ['../escape','created']) {
-   try { await h.call('projectCreate',{parent:${JSON.stringify(temporary)},name}); throw new Error('invalid creation succeeded'); }
-   catch(error) { if(error.message==='invalid creation succeeded') throw error; }
+   try { await h.call('projectCreate',{parent:${JSON.stringify(temporary)},name}); reasons.push('invalid creation succeeded'); }
+   catch(error) { reasons.push(error instanceof TypeError ? 'TypeError: '+error.message : 'rejected'); }
   }
+  return reasons;
  `);
+ assert.deepEqual(rejected,['rejected','rejected'],'the host must reject an escaping name and an existing directory');
  assert.equal(existsSync(join(temporary,'created')),true);
  assert.equal(await evaluate(binary,third,'document.body.dataset.screen'),'library');
  t.diagnostic('same OS window reused for creation and saved projects; Dock menu creates an unassigned library window');

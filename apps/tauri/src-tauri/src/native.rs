@@ -22,7 +22,7 @@
 //! here, so a surface on those platforms is always solid and a press on it does
 //! not move focus.
 //!
-//! Pointer routing in examples/native uses one private WebKit input API.
+//! Pointer routing in native/darwin uses one private WebKit input API.
 
 use tauri::webview::PlatformWebview;
 

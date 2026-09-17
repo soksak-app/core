@@ -918,7 +918,7 @@ fn place_window_controls(window: &Window) -> Result<(), String> {
 
 /// Where the window's own buttons are placed, in points from the window's top
 /// left, measured to the leftmost button's frame. The Wails host places them at
-/// the same point, and `examples/test/controls.test.mjs` measures the result in
+/// the same point, and `e2e/controls.test.mjs` measures the result in
 /// both.
 const CONTROLS_AT: (f64, f64) = (12.0, 14.5);
 
