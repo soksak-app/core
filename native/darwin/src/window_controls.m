@@ -16,15 +16,23 @@
 - (void)place;
 @end
 
+static char controlsKey;
+
 @implementation SPWindowControls
 - (void)willRemoveSubview:(NSView *)view {
     [super willRemoveSubview:view];
-    if (self.suspended || self.returning) return;
+    if (self.suspended || self.returning || !self.window) return;
     self.returning = YES;
+    // 블록은 뷰나 창을 붙잡지 않는다. 그 사이에 창이 닫혀 해제되면 뷰가 가리키는 창도 사라지므로,
+    // 실행할 때 창 번호로 창을 다시 찾는다.
+    NSInteger number = self.window.windowNumber;
     CFRunLoopRef main = CFRunLoopGetMain();
     CFRunLoopPerformBlock(main, kCFRunLoopCommonModes, ^{
-        self.returning = NO;
-        [self place];
+        NSWindow *window = [NSApp windowWithWindowNumber:number];
+        SPWindowControls *controls = window ? objc_getAssociatedObject(window, &controlsKey) : nil;
+        if (!controls) return;
+        controls.returning = NO;
+        [controls place];
     });
     CFRunLoopWakeUp(main);
 }
@@ -70,7 +78,6 @@
 }
 @end
 
-static char controlsKey;
 
 bool windowPlaceControls(void *handle, double x, double centreY) {
     NSCAssert(NSThread.isMainThread, @"Window controls belong to the main thread");
