@@ -67,14 +67,15 @@ The host creates the endpoint before it shows windows. If the host cannot create
 
 ## Diagnostic builds
 
-The following methods exist only in diagnostic builds (Go build tag `diagnostics`, cargo feature `diagnostics`). Other builds reject them as undeclared methods.
+The following methods exist only in diagnostic builds (Go build tag `diagnostics`, cargo feature `diagnostics`). Other builds reject them as undeclared methods. `make wailsv3-build` and `make tauriv2-build` produce diagnostic builds; the release targets do not.
 
-| Method | Purpose |
-| --- | --- |
-| `diagnostics.drag` | Runs a drag gesture |
-| `diagnostics.capture.start` | Starts a window capture |
-| `diagnostics.capture.stop` | Stops a capture and returns its file paths |
-| `diagnostics.transcript` | Returns a dump of the native window and view state |
+| Method | Params | Purpose |
+| --- | --- | --- |
+| `diagnostics.fixture` | `{window}` | Creates `<config-dir>/test-project` with empty folder settings, removes other projects, resets common settings, opens the project in the window, and returns `{root}` |
+| `diagnostics.drag` | `{window, axis, line, dx, dy, ms, times, capture?}` | Drags boundary `line` on `axis` by `dx, dy` over `ms` and back, `times` round trips, with host-timed steps. With `capture: true` the host records the window and returns `{frames: directory}` after the gesture has been presented |
+| `diagnostics.capture.stop` | `{window}` | Stops a capture and returns `{frames, count}` |
+| `diagnostics.knob` | `{window, name, value}` | Sets a compositor test value (`latency`, `skew`) |
+| `diagnostics.transcript` | `{window, on}` | Starts or stops `diagnostics.log` notifications `{window, line}` for host requests, replies, and page verification lines |
 
 The host writes large data, such as captures, to files under the configuration directory, and the reply contains the file paths. The requester removes the capture files after measurement.
 
