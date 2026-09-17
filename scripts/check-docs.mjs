@@ -5,7 +5,8 @@ import { dirname, extname, resolve } from "node:path";
 const files = [...new Set(execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
   { encoding: "utf8" }).split("\0"))].filter((file) => file.endsWith(".md") && existsSync(file));
 const errors = [];
-const withoutCode = (text) => text.replace(/^(`{3,}|~{3,}).*\n[\s\S]*?^\1\s*$/gm, "");
+// 코드 블록을 같은 수의 빈 줄로 바꾼다. 오류의 줄 번호가 원본과 같게 유지된다.
+const withoutCode = (text) => text.replace(/^(`{3,}|~{3,}).*\n[\s\S]*?^\1\s*$/gm, (block) => block.replace(/[^\n]/g, ""));
 const anchors = (text) => {
   const found = new Set();
   for (const match of withoutCode(text).matchAll(/^#{1,6}\s+(.+)$/gm)) {
@@ -21,6 +22,13 @@ for (const file of files) {
   const partner = file.endsWith(".ko.md") ? file.replace(/\.ko\.md$/, ".md") : file.replace(/\.md$/, ".ko.md");
   if (!existsSync(partner)) errors.push(`${file}: missing translation pair ${partner}`);
   const text = withoutCode(readFileSync(file, "utf8"));
+  // 빈 줄로 끊긴 표: 표 행, 빈 줄, 표 행이 이어지면 뒤의 행은 표에 속하지 않는다.
+  const lines = text.split("\n");
+  lines.forEach((line, index) => {
+    if (line.startsWith("|") && index >= 2 && lines[index - 1].trim() === "" && lines[index - 2].startsWith("|")) {
+      errors.push(`${file}:${index + 1}: table row separated from its table by a blank line`);
+    }
+  });
   for (const match of text.matchAll(/\[[^\]]*\]\(([^)]+)\)/g)) {
     const target = match[1].replace(/^<|>$/g, "");
     if (/^[a-z][a-z\d+.-]*:/i.test(target)) continue;

@@ -135,7 +135,6 @@ The page interface for surface pages is `page.exposure`: `register(kind, name)`,
 | 1002 | Name is declared but not registered |
 | 1003 | Owner document no longer exists |
 | 1004 | Native input is not available on this platform |
-
 | 1005 | Request timed out: the owning document did not reply within 10 seconds |
 
 The [local endpoint](endpoint.md) closes the connection after an undeclared method.

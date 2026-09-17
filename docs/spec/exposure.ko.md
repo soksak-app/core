@@ -57,26 +57,73 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 
 네이티브 호스트는 [사이드카](sidecars.ko.md) 메시지를 전달하는 방식과 같은 방식으로 표면 페이지와 메인 페이지 등록소 사이에서 등록과 요청을 전달한다. 표면 페이지가 닫히면 등록소는 그 페이지의 등록을 제거한다.
 
+## 창
+
+애플리케이션에는 창이 하나 이상 있고, 창마다 메인 페이지와 등록소가 따로 있다. `windows.list`를 제외한 모든 메서드는 `window`를 받는다. 이 값은 `windows.list`가 반환하는 식별자다. 더 이상 없는 창을 요청하면 오류 1003을 반환한다.
+
+## 호스트 항목
+
+네이티브 호스트는 같은 형식으로 소유자가 `host`인 항목을 선언하고 직접 처리한다.
+
+| 종류 | 이름 | 의미 |
+| --- | --- | --- |
+| status | `host.window` | `{frame, content, scale, key, controls, surfaces, modal}`: 창 프레임, 콘텐츠 크기, 백킹 배율, 키 창 여부, 창 단추 프레임, 표시 여부와 레이어를 포함한 네이티브 표면 프레임, 열린 네이티브 모달 |
+| command | `host.window.close` | 창의 일반 닫기 동작으로 창을 닫는다 |
+| command | `host.window.maximize` | 창을 최대화한다. `{on: false}`이면 원래 크기로 되돌린다 |
+| command | `host.window.resize` | 콘텐츠 영역 크기를 `{width, height}`로 바꾼다 |
+| command | `host.window.reload` | 메인 페이지를 다시 로드한다 |
+| command | `host.window.presented` | 메인 페이지와 표시 중인 애플리케이션 문서가 현재 배치를 화면에 표시한 뒤 완료된다 |
+| command | `host.hit` | 창 좌표의 점 `{x, y}`를 소유한 대상을 반환한다: `{kind: "page"}`, `{kind: "surface", surface}`, 또는 `{kind: "native", identifier}` |
+| command | `host.quit` | 대기 중인 저장을 포함한 일반 애플리케이션 종료를 요청한다 |
+
 ## 메서드
 
 클라이언트는 다음 JSON-RPC 2.0 메서드를 호출한다.
 
 | 메서드 | 매개변수 | 결과 |
 | --- | --- | --- |
-| `exposure.list` | 없음 | 코어와 로드된 플러그인의 선언 항목 |
-| `status.get` | `{name}` | 현재 값 |
-| `status.watch` | `{name}` | `null`. 이후 `status.unwatch` 전까지 호스트가 `status.changed` 알림 `{name, value}`를 보낸다 |
-| `status.unwatch` | `{name}` | `null` |
-| `command.run` | `{name, params}` | 명령 결과 |
-| `dom.rect` | `{name, index?}` | `{x, y, width, height, window}`: 소유 문서의 CSS 픽셀 좌표와, 창 좌표로 나타낸 문서 위치 |
-| `dom.act` | `{name, index?, action, value?, event?}` | `null`. `action`은 `click`, `input`, `dispatch` 중 하나다. 페이지는 `isTrusted`가 false인 합성 DOM 이벤트를 받는다 |
-| `input.pointer` | `{window, x, y, phase, button?, scroll?}` | `null`. `phase`는 `move`, `down`, `drag`, `up` 중 하나다 |
+| `windows.list` | 없음 | `[{window, title, project, key}]` |
+| `exposure.list` | `{window}` | 코어, 호스트, 로드된 플러그인의 선언 항목. 각 항목에 `registered`가 있다 |
+| `status.get` | `{window, name}` | 현재 값 |
+| `status.watch` | `{window, name}` | `null`. 이후 `status.unwatch`를 받거나 연결이 닫힐 때까지 값이 바뀔 때마다 호스트가 `status.changed` 알림 `{window, name, value}`를 보낸다 |
+| `status.unwatch` | `{window, name}` | `null` |
+| `command.run` | `{window, name, params}` | 명령 결과 |
+| `dom.rect` | `{window, name, index?}` | 소유 문서의 CSS 픽셀 좌표 `{x, y, width, height}`와, 창 좌표로 나타낸 문서 원점 `{document}` |
+| `dom.act` | `{window, name, index?, action, value?, event?}` | `null`. `action`은 `click`, `input`, `dispatch` 중 하나다. 페이지는 `isTrusted`가 false인 합성 DOM 이벤트를 받는다 |
+| `input.pointer` | `{window, x, y, phase, button?, deltaX?, deltaY?}` | `null`. 창 좌표를 쓴다. `phase`는 `move`, `down`, `drag`, `up`, `scroll` 중 하나다 |
 | `input.key` | `{window, key, text?, modifiers?, phase}` | `null`. `phase`는 `down` 또는 `up`이다 |
-| `host.status` | `{window}` | 창 단추 프레임, 네이티브 뷰 프레임, 백킹 배율, 표시 상태 |
 
 호스트는 `input.pointer`와 `input.key`를 네이티브 이벤트로 전달한다. macOS에서는 `-[NSWindow sendEvent:]`로 보내며, 페이지는 신뢰 이벤트를 받고 애플리케이션은 활성화되지 않는다.
 
 실제 입력 경로를 검사하는 테스트는 `input.pointer`와 `input.key`만 사용한다. 테스트는 상태 준비에만 `dom.act`를 사용한다.
+
+## 전달
+
+호스트와 페이지는 다음 메시지를 주고받는다. 이 메시지는 코어 내부용이며 엔드포인트에 포함되지 않는다.
+
+| 방향 | 메시지 | 내용 |
+| --- | --- | --- |
+| 호스트 → 메인 페이지 | 이벤트 `exposure-request` | 코어와 플러그인 이름에 대한 `exposure.list`, `status.*`, `command.run`, `dom.*`의 `{id, method, params}` |
+| 메인 페이지 → 호스트 | 호출 `exposureReply` | `{id, result}` 또는 `{id, error: {code, message}}` |
+| 메인 페이지 → 호스트 | 호출 `exposureChanged` | 감시 중인 상태의 `{name, value}` |
+| 표면 페이지 → 호스트 | 호출 `exposureRegister` | `{surface, kind, name}` |
+| 호스트 → 메인 페이지 | 이벤트 `exposure-registered` | `{surface, kind, name}`. 표면이 제거되면 `{surface, closed: true}` |
+| 메인 페이지 → 호스트 | 호출 `exposureForward` | 표면 페이지가 등록한 이름에 대한 `{id, surface, method, params}` |
+| 호스트 → 표면 페이지 | 이벤트 `exposure-request` | `{id, method, params}` |
+| 표면 페이지 → 호스트 | 호출 `exposureReply` | `{id, result}` 또는 `{id, error}`. 호스트는 이 값을 `exposureForward`의 결과로 메인 페이지에 반환한다 |
+
+메인 페이지는 이름을 등록하거나 전달하기 전에 선언과 대조해 검증한다. 메인 페이지의 `exposureReply`는 호스트의 `exposure-request`에 대한 응답이고, 표면 페이지의 `exposureReply`는 전달된 요청에 대한 응답이다. 호스트는 호출한 웹뷰로 호출자를 구분한다.
+
+런타임 모듈은 이 호출을 프레임워크 바인딩에 대응시킨다.
+
+| 호출 | Wails 메서드 | Tauri 명령 |
+| --- | --- | --- |
+| `exposureReply` | `ExposureReply` | `exposure_reply` |
+| `exposureChanged` | `ExposureChanged` | `exposure_changed` |
+| `exposureForward` | `ExposureForward` | `exposure_forward` |
+| `exposureRegister` | `ExposureRegister` (표면 브리지) | `exposure_register` |
+
+표면 페이지의 페이지 인터페이스는 `page.exposure`이며 `register(kind, name)`, 전달된 요청마다 `fn({id, method, params})`를 호출하는 `onRequest(fn)`, `reply(id, payload)`로 구성된다. 메인 페이지는 `host.on("exposure-request", fn)`, `host.on("exposure-registered", fn)`, 그리고 위 호출을 담은 `host.call(...)`을 사용한다.
 
 ## 오류
 
@@ -88,5 +135,6 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 | 1002 | 선언되었지만 등록되지 않은 이름 |
 | 1003 | 소유 문서가 더 이상 없음 |
 | 1004 | 이 플랫폼에서 네이티브 입력을 사용할 수 없음 |
+| 1005 | 요청 시간 초과: 소유 문서가 10초 안에 응답하지 않음 |
 
 [로컬 엔드포인트](endpoint.ko.md)는 선언되지 않은 메서드를 받으면 연결을 종료한다.

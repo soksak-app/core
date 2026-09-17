@@ -67,14 +67,15 @@ HTTP 요청 줄은 최대 길이보다 큰 길이 접두 또는 올바르지 않
 
 ## 진단 빌드
 
-다음 메서드는 진단 빌드(Go 빌드 태그 `diagnostics`, cargo feature `diagnostics`)에만 있다. 다른 빌드는 이 메서드를 선언되지 않은 메서드로 거부한다.
+다음 메서드는 진단 빌드(Go 빌드 태그 `diagnostics`, cargo feature `diagnostics`)에만 있다. 다른 빌드는 이 메서드를 선언되지 않은 메서드로 거부한다. `make wailsv3-build`와 `make tauriv2-build`는 진단 빌드를 만들고, 배포 대상은 진단 빌드를 만들지 않는다.
 
-| 메서드 | 용도 |
-| --- | --- |
-| `diagnostics.drag` | 드래그 동작을 실행한다 |
-| `diagnostics.capture.start` | 창 캡처를 시작한다 |
-| `diagnostics.capture.stop` | 캡처를 중지하고 파일 경로를 반환한다 |
-| `diagnostics.transcript` | 네이티브 창과 뷰 상태의 덤프를 반환한다 |
+| 메서드 | 매개변수 | 용도 |
+| --- | --- | --- |
+| `diagnostics.fixture` | `{window}` | 빈 폴더 설정을 가진 `<config-dir>/test-project`를 만들고, 다른 프로젝트를 제거하고, 공통 설정을 초기화하고, 창에서 그 프로젝트를 연 뒤 `{root}`를 반환한다 |
+| `diagnostics.drag` | `{window, axis, line, dx, dy, ms, times, capture?}` | `axis`의 경계 `line`을 `ms` 동안 `dx, dy`만큼 끌었다가 되돌리는 왕복을 `times`번 실행한다. 단계 시각은 호스트가 정한다. `capture: true`이면 호스트가 창을 기록하고, 동작이 화면에 표시된 뒤 `{frames: directory}`를 반환한다 |
+| `diagnostics.capture.stop` | `{window}` | 캡처를 중지하고 `{frames, count}`를 반환한다 |
+| `diagnostics.knob` | `{window, name, value}` | 합성기 테스트 값(`latency`, `skew`)을 설정한다 |
+| `diagnostics.transcript` | `{window, on}` | 호스트 요청, 응답, 페이지 검증 줄에 대한 `diagnostics.log` 알림 `{window, line}`을 시작하거나 중지한다 |
 
 호스트는 캡처 같은 큰 데이터를 설정 디렉터리 아래 파일에 기록하고, 응답에는 파일 경로를 담는다. 요청자는 측정 후 캡처 파일을 삭제한다.
 
