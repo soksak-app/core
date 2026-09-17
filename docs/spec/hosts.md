@@ -180,5 +180,5 @@ The debug executables are `target/debug/soksak-wailsv3` and `target/debug/soksak
 | Path | Contents |
 | --- | --- |
 | `src/` | `<name>.h` and `<name>.m` sources, including `capture.m`, which both hosts use for window capture. File names have no `_darwin` suffix because the directory identifies the platform |
-| `tests/` | `window_motion_test.m`, `input_inject_test.m`, `window_facts_test.m`, `window_controls_test.m`, `surface_layout_test.m`, `webview_focus_test.m`, `webview_geometry_test.m` (`make test`, no activation); `input_activate_test.m` and `webview_input_test.m` (`make test-activation`, activates the application) |
+| `tests/` | `window_motion_test.m`, `input_inject_test.m`, `window_facts_test.m`, `window_controls_test.m`, `surface_layout_test.m`, `webview_focus_test.m`, `webview_geometry_test.m` (`make test`, no activation); `input_activate_test.m`, `webview_input_test.m`, and `webview_inspector_test.m` (`make test-activation`, activates the application) |
 | `Makefile` | Builds a static library that the hosts find through pkg-config as `soksak-darwin`; `make -C native/darwin test` and `make -C native/darwin test-activation` run the input checks |

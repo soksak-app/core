@@ -27,6 +27,8 @@ An older confirmation must not commit a newer preparation. Main-document navigat
 
 While a window's transaction is open, none of that window's changes reach the screen, and a newer preparation of the same window extends the open transaction. A wait for the window's presented state (`host.window.presented`) therefore ends only after a presentation update that follows the commit of every open or queued preparation of the window, and reports the target time of the screen's next refresh after that update.
 
+A surface keeps the frame the host applied. WebKit moves an inspected web view to the rest of the window when its Web Inspector is attached, and leaves it there when the inspector closes; the host restores the frame it last applied, so an open inspector overlaps the surface instead of moving it.
+
 Native layer transactions are shared by the UI thread. Preparations from different project windows are queued until the current window commits or cancels. A window's reload or closure cancels only that window's active and queued preparations. Waiting requests do not block the UI thread.
 
 The host controls native view geometry. Each content webview renders its document independently; a delayed web document renderer must not stop the main window's layout updates.

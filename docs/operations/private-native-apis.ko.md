@@ -21,6 +21,7 @@
 | `NSWindow._setWindowResolution:`, `NSWindow._adjustWindowResolution` 재정의 | [`webview_geometry_test.m`](../../native/darwin/tests/webview_geometry_test.m) 전용. WebKitTestRunner가 쓰는 메서드 | 해당 디스플레이 없이 검사 창의 백킹 배율을 2나 1로 정해 어느 기기에서나 배율 동작을 검사 |
 | `WKWebView._doAfterActivityStateUpdate:` | 두 호스트; [`input_inject.m`](../../native/darwin/src/input_inject.m), `sp_input_activate` | 창의 모든 웹뷰가 활성 창 상태를 웹 프로세스에 보낸 뒤에만 호버 이동을 전달 |
 | `CGEventField` 51(창 번호), `CGEventSetWindowLocation` | 두 호스트; [`input_inject.m`](../../native/darwin/src/input_inject.m), `sp_input_pointer`의 스크롤 | 창과 창 좌표를 가진 스크롤 `NSEvent` 생성 |
+| `WKWebView._inspector`와 `_WKInspector`(`connect`, `show`, `attach`, `close`, `isVisible`, `isConnected`, `inspectorWebView`) | [`native/darwin/tests/webview_inspector_test.m`](../../native/darwin/tests/webview_inspector_test.m), 검사 전용 | 표면 웹뷰의 웹 인스펙터를 열고 창에 붙여 표면이 자리를 유지하는지 확인 |
 | `WKWebView._doAfterProcessingAllPendingMouseEvents:` | [`native/darwin/tests/webview_input_test.m`](../../native/darwin/tests/webview_input_test.m)의 `drain`; 독립 검사 전용 | DOM 이벤트 횟수를 검사하기 전에 네이티브 마우스 처리 완료 대기 |
 
 공용 라이브러리의 비공개 선언은 모두 [`native/darwin/src/private/`](../../native/darwin/src/private/)의 `webkit.h`, `coregraphics.h`에 있다. 소스와 검사는 이 헤더를 포함하며 비공개 API를 직접 선언하지 않는다. 다른 플랫폼은 `native/<os>/src/private/`에 선언을 둔다.

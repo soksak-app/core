@@ -5,7 +5,7 @@
 #
 #   make          build/libsoksak-darwin.a, build/soksak-darwin.pc
 #   make test             입력 주입, 창 상태, 창 단추 배치, 표시 대기, 웹뷰 초점, 문서 영역 검사를 실행한다. 애플리케이션을 활성화하지 않는다
-#   make test-activation  창 활성화 후 호버 검사와 겹친 웹뷰 입력 검사(기준 실행·등록 실행)를
+#   make test-activation  창 활성화 후 호버 검사, 겹친 웹뷰 입력 검사(기준 실행·등록 실행), 웹 인스펙터 검사를
 #                         실행한다. 애플리케이션을 활성화해 포커스를 가져간다
 
 SHELL := /bin/sh
@@ -56,8 +56,9 @@ test: $(BUILD)/window_motion_test $(BUILD)/input_inject_test $(BUILD)/window_fac
 	@$(BUILD)/webview_geometry_test
 	@$(BUILD)/document_view_test
 
-test-activation: $(BUILD)/input_activate_test $(BUILD)/webview_input_test
+test-activation: $(BUILD)/input_activate_test $(BUILD)/webview_input_test $(BUILD)/webview_inspector_test
 	@$(BUILD)/input_activate_test
+	@$(BUILD)/webview_inspector_test
 	@$(BUILD)/webview_input_test --baseline
 	@$(BUILD)/webview_input_test
 
