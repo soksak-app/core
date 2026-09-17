@@ -2,8 +2,6 @@
 
 [한국어](hosts.ko.md)
 
-This specification is partly implemented. The exposure and local endpoint files (`exposure.*`, `endpoint.*`, `platform/<os>/endpoint.*`, and `tests/endpoint_test.*`, `tests/exposure_test.*`) do not exist yet; [exposure](exposure.md) and [local endpoint](endpoint.md) define them, and [feature status](../features.md) tracks their implementation.
-
 Core's native side lives in two library packages with the same structure. [Native host interfaces](native-host.md) defines the operations the workbench page uses.
 
 | Package | Language | Identity |
@@ -14,8 +12,6 @@ Core's native side lives in two library packages with the same structure. [Nativ
 The applications `apps/wailsv3` and `apps/tauriv2` contain only `src/main.*`, `environment.json`, `runtime/index.js`, tests, manifests, and framework configuration. `apps/wailsv3/src/main.go` reads the command-line flags into `host.Options` and calls `host.Run(assets, options)`. `apps/tauriv2/src/main.rs` calls `soksak_host_tauriv2::run(tauri::generate_context!(), BACKGROUND)`, where `BACKGROUND` is the staged `frontend/background.js`.
 
 ## Host tree
-
-Files marked "not implemented" are part of this specification and do not exist yet.
 
 ```
 packages/host/wailsv3/                     packages/host/tauriv2/
@@ -53,15 +49,14 @@ packages/host/wailsv3/                     packages/host/tauriv2/
         endpoint.go  Unix socket                      endpoint.rs
       windows/                                   windows/
         windows.go     package documentation, registration  windows.rs
-        endpoint.go    named pipe                       endpoint.rs    not implemented
         identity.go    file ID                          identity.rs
-        unsupported.go remaining "not implemented"      unsupported.rs
+        unsupported.go "not implemented" operations, including the named-pipe endpoint  unsupported.rs
       linux/  (added when implemented)           linux/
   tests/                                     tests/
     sidecars_test.go                           sidecars_test.rs
     workspace_test.go                          workspace_test.rs
-    endpoint_test.go                           endpoint_test.rs   not implemented
-    exposure_test.go                           exposure_test.rs   not implemented
+    endpoint_test.go                           endpoint_test.rs
+    exposure_test.go                           exposure_test.rs
 ```
 
 ## Rules
@@ -170,5 +165,5 @@ The debug executables are `target/debug/soksak-wailsv3` and `target/debug/soksak
 | Path | Contents |
 | --- | --- |
 | `src/` | `<name>.h` and `<name>.m` sources, including `capture.m`, which both hosts use for window capture. File names have no `_darwin` suffix because the directory identifies the platform |
-| `tests/` | `input_inject_test.m` (`make test`, no activation); `input_activate_test.m` and `webview_input_test.m` (`make test-activation`, activates the application) |
+| `tests/` | `input_inject_test.m`, `window_facts_test.m`, `surface_layout_test.m` (`make test`, no activation); `input_activate_test.m` and `webview_input_test.m` (`make test-activation`, activates the application) |
 | `Makefile` | Builds a static library that the hosts find through pkg-config as `soksak-darwin`; `make -C native/darwin test` and `make -C native/darwin test-activation` run the input checks |

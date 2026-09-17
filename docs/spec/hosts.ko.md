@@ -2,8 +2,6 @@
 
 [English](hosts.md)
 
-이 명세는 일부만 구현되었다. 노출과 로컬 엔드포인트 파일(`exposure.*`, `endpoint.*`, `platform/<os>/endpoint.*`, `tests/endpoint_test.*`, `tests/exposure_test.*`)은 아직 없다. [노출](exposure.ko.md)과 [로컬 엔드포인트](endpoint.ko.md)가 이 파일들을 정의하고, [기능 상태](../features.ko.md)가 구현 여부를 기록한다.
-
 코어의 네이티브 쪽은 같은 구조를 가진 두 라이브러리 패키지에 있다. [네이티브 호스트 인터페이스](native-host.ko.md)가 워크벤치 페이지가 사용하는 연산을 정의한다.
 
 | 패키지 | 언어 | 식별 |
@@ -14,8 +12,6 @@
 애플리케이션 `apps/wailsv3`와 `apps/tauriv2`는 `src/main.*`, `environment.json`, `runtime/index.js`, 테스트, 매니페스트, 프레임워크 설정만 가진다. `apps/wailsv3/src/main.go`는 명령행 플래그를 `host.Options`로 읽고 `host.Run(assets, options)`를 호출한다. `apps/tauriv2/src/main.rs`는 `soksak_host_tauriv2::run(tauri::generate_context!(), BACKGROUND)`를 호출하며, `BACKGROUND`는 스테이징된 `frontend/background.js`다.
 
 ## 호스트 트리
-
-"미구현"으로 표시한 파일은 이 명세에 포함되지만 아직 없다.
 
 ```
 packages/host/wailsv3/                     packages/host/tauriv2/
@@ -53,15 +49,14 @@ packages/host/wailsv3/                     packages/host/tauriv2/
         endpoint.go  Unix 소켓                        endpoint.rs
       windows/                                   windows/
         windows.go     패키지 문서, 등록                windows.rs
-        endpoint.go    named pipe                       endpoint.rs    미구현
         identity.go    파일 ID                          identity.rs
-        unsupported.go 나머지 "not implemented"         unsupported.rs
+        unsupported.go named pipe 엔드포인트를 포함한 "not implemented" 동작  unsupported.rs
       linux/  (구현 시 추가)                     linux/
   tests/                                     tests/
     sidecars_test.go                           sidecars_test.rs
     workspace_test.go                          workspace_test.rs
-    endpoint_test.go                           endpoint_test.rs   미구현
-    exposure_test.go                           exposure_test.rs   미구현
+    endpoint_test.go                           endpoint_test.rs
+    exposure_test.go                           exposure_test.rs
 ```
 
 ## 규칙
@@ -170,5 +165,5 @@ Wails 바인딩 서비스 이름은 `github.com/min-median-max/soksak/packages/h
 | 경로 | 내용 |
 | --- | --- |
 | `src/` | `<이름>.h`와 `<이름>.m` 소스. 두 호스트가 창 캡처에 사용하는 `capture.m`을 포함한다. 디렉터리가 플랫폼을 나타내므로 파일 이름에 `_darwin` 접미사가 없다 |
-| `tests/` | `input_inject_test.m`(`make test`, 활성화 없음), `input_activate_test.m`과 `webview_input_test.m`(`make test-activation`, 애플리케이션 활성화) |
+| `tests/` | `input_inject_test.m`, `window_facts_test.m`, `surface_layout_test.m`(`make test`, 활성화 없음), `input_activate_test.m`과 `webview_input_test.m`(`make test-activation`, 애플리케이션 활성화) |
 | `Makefile` | 호스트가 pkg-config에서 `soksak-darwin`으로 찾는 정적 라이브러리를 빌드한다. `make -C native/darwin test`와 `make -C native/darwin test-activation`이 입력 검사를 실행한다 |

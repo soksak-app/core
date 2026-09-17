@@ -72,10 +72,4 @@ for (const app of Object.values(APPS)) {
     await fresh(s);
     assertAligned(await drag(t, s, PLAN, { capture: true }));
   });
-
-  // 이 검사는 외부 문서에서 700ms 동안 실행되는 스크립트를 필요로 한다. 외부 문서는 공개 항목을
-  // 등록하지 않고, 임의 코드 실행은 제거되었으므로 그 스크립트를 실행할 방법이 없다.
-  test(`${app.name}: an external document's busy script does not stop the main layout`, (t) => {
-    t.skip("requires running a script in the external document, which the endpoint does not offer");
-  });
 }

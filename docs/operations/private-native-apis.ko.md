@@ -37,7 +37,7 @@
 
 이 수정을 유지한다. JavaScript 실행이나 DOM 애니메이션 프레임 콜백의 완료는 각 웹뷰가 새 문서 좌표를 표시했다는 확인이 아니다. 호스트는 해당 프로젝트 창의 메인과 표시 중인 앱 문서를 기다린 뒤 네이티브 트랜잭션을 커밋한다. `CATransaction`은 UI 스레드에 속하므로 서로 다른 창의 준비를 직렬화하며, 탐색과 닫기는 해당 창의 준비만 취소한다. 외부 문서는 참여하지 않으므로 외부 렌더러의 긴 작업이 메인 창 배치를 중단시키지 않는다.
 
-콜백 시점, 그리기 완료, 탐색·프로세스 종료 중 동작을 검토한다. 구현은 실행 중인 프로세스나 그리기 영역이 없으면 즉시 완료할 수 있으므로 콜백만으로 캡처된 픽셀을 확인한 것으로 처리하지 않는다. 문서 준비 확인과 전체 녹화가 계속 필요하다. 외부 문서의 700ms 작업과 다시 로드 후 정리를 포함해 [`outside.test.mjs`](../../e2e/outside.test.mjs), [`paint.test.mjs`](../../e2e/paint.test.mjs), [`hosts.test.mjs`](../../e2e/hosts.test.mjs)를 검증한다. [`projects.test.mjs`](../../e2e/projects.test.mjs)는 독립 프로젝트 창, 모달 전달, 닫기·다시 열기 정리도 검증한다.
+콜백 시점, 그리기 완료, 탐색·프로세스 종료 중 동작을 검토한다. 구현은 실행 중인 프로세스나 그리기 영역이 없으면 즉시 완료할 수 있으므로 콜백만으로 캡처된 픽셀을 확인한 것으로 처리하지 않는다. 문서 준비 확인과 전체 녹화가 계속 필요하다. 대기 대상 문서를 검사하는 [`surface_layout_test.m`](../../native/darwin/tests/surface_layout_test.m)을 실행하고, 다시 로드 후 정리를 포함해 [`outside.test.mjs`](../../e2e/outside.test.mjs), [`paint.test.mjs`](../../e2e/paint.test.mjs), [`hosts.test.mjs`](../../e2e/hosts.test.mjs)를 검증한다. [`projects.test.mjs`](../../e2e/projects.test.mjs)는 독립 프로젝트 창, 모달 전달, 닫기·다시 열기 정리도 검증한다.
 
 [`WKWebView.mm`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/WKWebView.mm)의 `_doAfterNextPresentationUpdate:`와 [`WebPageProxy.cpp`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/WebPageProxy.cpp)의 `WebPageProxy::callAfterNextPresentationUpdate`를 검토한다.
 
