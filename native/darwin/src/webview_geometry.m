@@ -1,6 +1,6 @@
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
-#import "webview_geometry_darwin.h"
+#import "webview_geometry.h"
 
 @interface WKWebView (SPSurfaceScale)
 - (void)_setOverrideDeviceScaleFactor:(double)scale;

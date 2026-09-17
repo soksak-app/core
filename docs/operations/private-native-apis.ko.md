@@ -10,12 +10,12 @@
 
 | API 또는 키 | 호출 위치와 범위 | 목적 |
 | --- | --- | --- |
-| `WKWebView._setOverrideDeviceScaleFactor:` | 두 호스트의 [`webview_geometry_darwin.m`](../../native/darwin/webview_geometry_darwin.m), `webviewAttachSurface` | 장치 픽셀 컨테이너의 로컬 한 단위를 backing 픽셀 하나로 렌더링 |
-| `WKWebView._doAfterNextPresentationUpdate:` | 두 호스트의 [`surface_layout_darwin.m`](../../native/darwin/surface_layout_darwin.m), `surfaceLayoutAfterPresentation`; 프로브와 독립 입력 검사에서도 사용 | 네이티브 좌표 커밋 또는 렌더링 결과 측정 전에 웹뷰 표시 완료 확인 |
-| `WKWebView._setIgnoresMouseMoveEvents:` | 두 호스트의 [`webview_input_darwin.m`](../../native/darwin/webview_input_darwin.m), 등록·포인터 처리·제거 | 겹친 웹뷰의 포인터 추적을 AppKit 히트테스트 결과로 제한 |
-| `WKWebView` KVC `drawsBackground` (`_drawsBackground` / `_setDrawsBackground:`) | Wails [`webview_darwin.m`](../../apps/wails/webview_darwin.m)의 모달 생성; 두 호스트 [`window_probe_darwin.m`](../../native/darwin/window_probe_darwin.m)의 진단 조회 | 모달 웹뷰의 불투명 배경 비활성화 및 상태 조회 |
+| `WKWebView._setOverrideDeviceScaleFactor:` | 두 호스트의 [`webview_geometry.m`](../../native/darwin/src/webview_geometry.m), `webviewAttachSurface` | 장치 픽셀 컨테이너의 로컬 한 단위를 backing 픽셀 하나로 렌더링 |
+| `WKWebView._doAfterNextPresentationUpdate:` | 두 호스트의 [`surface_layout.m`](../../native/darwin/src/surface_layout.m), `surfaceLayoutAfterPresentation`; 프로브와 독립 입력 검사에서도 사용 | 네이티브 좌표 커밋 또는 렌더링 결과 측정 전에 웹뷰 표시 완료 확인 |
+| `WKWebView._setIgnoresMouseMoveEvents:` | 두 호스트의 [`webview_input.m`](../../native/darwin/src/webview_input.m), 등록·포인터 처리·제거 | 겹친 웹뷰의 포인터 추적을 AppKit 히트테스트 결과로 제한 |
+| `WKWebView` KVC `drawsBackground` (`_drawsBackground` / `_setDrawsBackground:`) | Wails [`webview_darwin.m`](../../apps/wails/webview_darwin.m)의 모달 생성; 두 호스트 [`window_probe.m`](../../native/darwin/src/window_probe.m)의 진단 조회 | 모달 웹뷰의 불투명 배경 비활성화 및 상태 조회 |
 | `WKWebViewConfiguration` KVC `drawsBackground` (`_setDrawsBackground:`) | Tauri → Wry 웹뷰 생성; [`overlay_show`](../../apps/tauri/src-tauri/src/main.rs)가 `background_color(Color(0, 0, 0, 0))` 요청; 메인도 배경색 설정 | 웹뷰 초기화 전에 배경 그리기 설정 |
-| `WKWebView._doAfterProcessingAllPendingMouseEvents:` | [`native/darwin/tests/webview-input.m`](../../native/darwin/tests/webview-input.m)의 `drain`; 독립 검사 전용 | DOM 이벤트 횟수를 검사하기 전에 네이티브 마우스 처리 완료 대기 |
+| `WKWebView._doAfterProcessingAllPendingMouseEvents:` | [`native/darwin/tests/webview_input_test.m`](../../native/darwin/tests/webview_input_test.m)의 `drain`; 독립 검사 전용 | DOM 이벤트 횟수를 검사하기 전에 네이티브 마우스 처리 완료 대기 |
 
 두 `drawsBackground` 항목의 대상 객체는 다르다. Wails는 생성된 뷰를 변경하고, Wry는 생성 전 구성을 변경한다. 프레임워크의 공개 Rust·Go 진입점도 비공개 네이티브 의존성을 포함할 수 있다.
 
@@ -78,7 +78,7 @@
 
 ## 공개 Dock 메뉴 연동
 
-[`dock_menu_darwin.m`](../../native/darwin/dock_menu_darwin.m)은 공개 `NSApplicationDelegate.applicationDockMenu:` 콜백과 새 창용 `NSMenu` 동작을 등록한다. 두 호스트는 Dock 메뉴 등록 API를 제공하지 않는다. 앱은 공개 Objective-C 런타임의 `class_addMethod`로 없는 콜백을 추가하며 프레임워크 델리게이트나 기존 메서드를 교체하지 않는다. 델리게이트가 없거나 이미 콜백을 구현하면 등록에 실패한다. Wails·Tauri 콜백은 AppKit 콜백 밖에서 기존 공개 창 생성 API를 실행한다. 비공개 셀렉터나 프레임워크 포크는 추가하지 않는다.
+[`dock_menu.m`](../../native/darwin/src/dock_menu.m)은 공개 `NSApplicationDelegate.applicationDockMenu:` 콜백과 새 창용 `NSMenu` 동작을 등록한다. 두 호스트는 Dock 메뉴 등록 API를 제공하지 않는다. 앱은 공개 Objective-C 런타임의 `class_addMethod`로 없는 콜백을 추가하며 프레임워크 델리게이트나 기존 메서드를 교체하지 않는다. 델리게이트가 없거나 이미 콜백을 구현하면 등록에 실패한다. Wails·Tauri 콜백은 AppKit 콜백 밖에서 기존 공개 창 생성 API를 실행한다. 비공개 셀렉터나 프레임워크 포크는 추가하지 않는다.
 
 프레임워크 업데이트 후 해당 콜백이나 Dock 메뉴 API를 제공하는지 확인한다. 모든 창을 닫은 경우를 포함해 메뉴 항목과 라이브러리 창 생성을 검사한다. 이 연동은 앱 메뉴에 관한 것이며 표면 렌더링이나 웹뷰 입력에 관한 것이 아니다.
 

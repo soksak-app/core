@@ -10,12 +10,12 @@ This is the canonical inventory for application calls, diagnostic calls, and the
 
 | API or key | Caller and scope | Purpose |
 | --- | --- | --- |
-| `WKWebView._setOverrideDeviceScaleFactor:` | Both hosts; [`webview_geometry_darwin.m`](../../native/darwin/webview_geometry_darwin.m), `webviewAttachSurface` | Render one backing pixel per device-pixel container unit |
-| `WKWebView._doAfterNextPresentationUpdate:` | Both hosts; [`surface_layout_darwin.m`](../../native/darwin/surface_layout_darwin.m), `surfaceLayoutAfterPresentation`; also used by probes and the standalone input check | Confirm webview presentation before committing native geometry or measuring rendered output |
-| `WKWebView._setIgnoresMouseMoveEvents:` | Both hosts; [`webview_input_darwin.m`](../../native/darwin/webview_input_darwin.m), registration, pointer routing, and removal | Restrict overlapping webview pointer tracking to the AppKit hit-test result |
-| `WKWebView` KVC `drawsBackground` (`_drawsBackground` / `_setDrawsBackground:`) | Wails modal creation in [`webview_darwin.m`](../../apps/wails/webview_darwin.m); both hosts' diagnostic reads in [`window_probe_darwin.m`](../../native/darwin/window_probe_darwin.m) | Disable the modal webview's opaque background and inspect that state |
+| `WKWebView._setOverrideDeviceScaleFactor:` | Both hosts; [`webview_geometry.m`](../../native/darwin/src/webview_geometry.m), `webviewAttachSurface` | Render one backing pixel per device-pixel container unit |
+| `WKWebView._doAfterNextPresentationUpdate:` | Both hosts; [`surface_layout.m`](../../native/darwin/src/surface_layout.m), `surfaceLayoutAfterPresentation`; also used by probes and the standalone input check | Confirm webview presentation before committing native geometry or measuring rendered output |
+| `WKWebView._setIgnoresMouseMoveEvents:` | Both hosts; [`webview_input.m`](../../native/darwin/src/webview_input.m), registration, pointer routing, and removal | Restrict overlapping webview pointer tracking to the AppKit hit-test result |
+| `WKWebView` KVC `drawsBackground` (`_drawsBackground` / `_setDrawsBackground:`) | Wails modal creation in [`webview_darwin.m`](../../apps/wails/webview_darwin.m); both hosts' diagnostic reads in [`window_probe.m`](../../native/darwin/src/window_probe.m) | Disable the modal webview's opaque background and inspect that state |
 | `WKWebViewConfiguration` KVC `drawsBackground` (`_setDrawsBackground:`) | Tauri → Wry webview creation; [`overlay_show`](../../apps/tauri/src-tauri/src/main.rs) requests `background_color(Color(0, 0, 0, 0))`; main also configures a background color | Configure background drawing before initializing the webview |
-| `WKWebView._doAfterProcessingAllPendingMouseEvents:` | [`native/darwin/tests/webview-input.m`](../../native/darwin/tests/webview-input.m), `drain`; standalone check only | Wait for native mouse processing before asserting DOM event counts |
+| `WKWebView._doAfterProcessingAllPendingMouseEvents:` | [`native/darwin/tests/webview_input_test.m`](../../native/darwin/tests/webview_input_test.m), `drain`; standalone check only | Wait for native mouse processing before asserting DOM event counts |
 
 The two `drawsBackground` entries affect different objects. Wails changes the created view; Wry changes its configuration before creation. A framework's public Rust or Go entry point can therefore still introduce a private native dependency.
 
@@ -78,7 +78,7 @@ Inventory entries describe active or explicitly conditional application paths, n
 
 ## Public Dock menu integration
 
-[`dock_menu_darwin.m`](../../native/darwin/dock_menu_darwin.m) registers the public `NSApplicationDelegate.applicationDockMenu:` callback and an `NSMenu` action for New Window. Neither host exposes Dock-menu registration. The application adds this missing callback with public Objective-C runtime `class_addMethod`; it does not replace the framework delegate or an existing method. Registration fails if the delegate is unavailable or already implements the callback. Wails and Tauri callbacks invoke their existing public window creation APIs outside the AppKit callback. No private selector or framework fork is added.
+[`dock_menu.m`](../../native/darwin/src/dock_menu.m) registers the public `NSApplicationDelegate.applicationDockMenu:` callback and an `NSMenu` action for New Window. Neither host exposes Dock-menu registration. The application adds this missing callback with public Objective-C runtime `class_addMethod`; it does not replace the framework delegate or an existing method. Registration fails if the delegate is unavailable or already implements the callback. Wails and Tauri callbacks invoke their existing public window creation APIs outside the AppKit callback. No private selector or framework fork is added.
 
 After a framework update, check whether it supplies this callback or a Dock-menu API. Verify the menu item and creation of a library window, including after closing all windows. This integration concerns application menus, not surface rendering or webview input.
 

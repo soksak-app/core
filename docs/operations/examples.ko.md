@@ -83,6 +83,6 @@ pnpm -F @soksak/e2e run verify
 make -C native/darwin test
 ```
 
-이 대상은 공용 라이브러리로 `native/darwin/build/webview-input`을 빌드하고 기준 실행과 입력 등록 실행을 차례로 수행한다.
+이 대상은 공용 라이브러리로 `native/darwin/build/webview_input_test`을 빌드하고 기준 실행과 입력 등록 실행을 차례로 수행한다.
 
 기준 실행은 겹친 DOM의 중복 포인터 이동을 확인한다. 입력 등록 실행은 단일 대상 포인터 추적, 키보드 입력 유지, 오버레이 숨김·제거 후 정리를 검사한다. 두 실행 모두 지연된 커서 응답을 검사하지 않는다.

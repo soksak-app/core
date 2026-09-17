@@ -1,7 +1,7 @@
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
-#import "window_probe_darwin.h"
-#import "surface_layout_darwin.h"
+#import "window_probe.h"
+#import "surface_layout.h"
 
 static void probeViews(NSView *parent, NSMutableArray *views) {
     if ([parent isKindOfClass:WKWebView.class]) { [views addObject:parent]; return; }

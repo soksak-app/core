@@ -9,8 +9,8 @@ package main
 #cgo CFLAGS: -x objective-c -fmodules
 #cgo LDFLAGS: -framework Cocoa -framework WebKit
 #cgo pkg-config: soksak-darwin
-#include "window_controls_darwin.h"
-#include "webview_geometry_darwin.h"
+#include "window_controls.h"
+#include "webview_geometry.h"
 #include <stdlib.h>
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>

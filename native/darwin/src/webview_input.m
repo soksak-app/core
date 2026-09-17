@@ -1,5 +1,5 @@
 #import <Cocoa/Cocoa.h>
-#import "webview_input_darwin.h"
+#import "webview_input.h"
 
 // This private WebKit API gates pointer tracking without disabling keyboard,
 // clicks or drags. AppKit's hit test selects the webview that receives it.

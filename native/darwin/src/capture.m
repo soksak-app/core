@@ -1,29 +1,28 @@
-// A window's own composite, read from inside the application.
+// 애플리케이션 창을 ScreenCaptureKit 스트림으로 녹화한다.
 //
-// The window server draws the page, the surfaces and the modal together, and the
-// result of that is what has to be looked at. It has to be read as a stream: a
-// screenshot asked for one at a time is answered with a composite made for that
-// request, so a state that lasts one frame between a view being resized and its
-// page being painted is never in it. A stream delivers the frames the compositor
-// actually showed.
+// 윈도 서버가 페이지와 표면과 모달을 합성하므로, 측정 대상은 그 합성 결과다. 한 장씩
+// 요청하는 스크린샷은 요청 시점에 맞춰 만들어진 합성을 반환하므로, 리사이즈와 다음
+// 렌더 사이의 한 프레임짜리 상태는 담기지 않는다. 스트림은 합성기가 표시한 프레임을
+// 그대로 전달한다.
 //
-// Written in Objective-C because the frames arrive as a message, which needs an
-// object to arrive at. Rust calls the three functions at the bottom.
-
+// CGWindowListCreateImage 는 macOS 15 부터 컴파일이 거부된다. ScreenCaptureKit 이
+// 대체 인터페이스다.
 #import <Cocoa/Cocoa.h>
+#import "capture.h"
 #import <ScreenCaptureKit/ScreenCaptureKit.h>
 
 static dispatch_semaphore_t captureFirstFrame;
 static dispatch_queue_t captureQueue;
 static int captureBefore;
 
+// 프레임을 받아 파일로 적는다. 프레임이 메시지로 전달되므로 수신 객체가 필요하다.
 @interface SPCapture : NSObject <SCStreamOutput, SCStreamDelegate>
 @property (nonatomic, copy) NSString* directory;
 @property (nonatomic) int written;
 @property (nonatomic) int idle;
 @end
 
-// The status attached to a frame. A frame with no status is a complete one.
+// frameStatus 는 프레임에 붙은 상태를 읽는다. 상태가 없으면 완성된 프레임으로 본다.
 static SCFrameStatus frameStatus(CMSampleBufferRef sample) {
     CFArrayRef list = CMSampleBufferGetSampleAttachmentsArray(sample, false);
     if (list == NULL || CFArrayGetCount(list) == 0) return SCFrameStatusComplete;
@@ -42,17 +41,16 @@ static SCFrameStatus frameStatus(CMSampleBufferRef sample) {
     didOutputSampleBuffer:(CMSampleBufferRef)sample
                    ofType:(SCStreamOutputType)type {
     if (type != SCStreamOutputTypeScreen) return;
-    // A window that is not redrawn still delivers frames at the configured rate,
-    // each marked idle and carrying no image. Counting them tells the reason for
-    // a recording of no frames.
+    // 창이 다시 그려지지 않으면 프레임은 정해진 간격으로 계속 오되 모두 idle 로
+    // 표시되고 이미지가 없다. 이것을 세어 두면 0 장인 이유를 말할 수 있다.
     if (frameStatus(sample) != SCFrameStatusComplete) {
         self.idle++;
         return;
     }
     CVImageBufferRef buffer = CMSampleBufferGetImageBuffer(sample);
     if (buffer == NULL) return;
-    // The frame is written as it arrived. Encoding it here costs frames, and a
-    // dropped frame is the one worth looking at.
+    // 프레임을 원시 데이터 그대로 적는다. 여기서 인코딩하면 그 시간 동안 프레임이
+    // 버려지고, 버려진 프레임이 측정 대상이다.
     CVPixelBufferLockBaseAddress(buffer, kCVPixelBufferLock_ReadOnly);
     size_t width = CVPixelBufferGetWidth(buffer);
     size_t height = CVPixelBufferGetHeight(buffer);
@@ -84,17 +82,17 @@ static SCFrameStatus frameStatus(CMSampleBufferRef sample) {
 
 @end
 
-// What every capture goes through. Asking the system for the window list costs
-// far more than a frame does, so it is asked once.
+// 모든 캡처가 사용하는 값. 윈도 서버의 창 목록 조회가 프레임 한 장보다 훨씬 느리므로
+// 한 번만 조회한다.
 static SCContentFilter* captureFilter = nil;
 static SCStreamConfiguration* captureConfig = nil;
 static SCStream* captureStream = nil;
 static SPCapture* captureSink = nil;
 
-// Looks the window up and keeps what a capture needs.
+// sp_capture_open 은 창을 조회해 캡처에 필요한 값을 보관한다.
 //
-// The lookup is answered later, so the answer is waited for. Without the wait a
-// capture started in the meantime does nothing and leaves no reason why.
+// 조회는 비동기이므로 답을 기다린다. 기다리지 않으면 그 사이에 시작한 캡처가 조용히
+// 아무 일도 하지 않고, 프레임이 0 장인 이유가 어디에도 남지 않는다.
 void sp_capture_open(long windowNumber) {
     dispatch_semaphore_t answered = dispatch_semaphore_create(0);
     [SCShareableContent getShareableContentWithCompletionHandler:
@@ -109,18 +107,18 @@ void sp_capture_open(long windowNumber) {
             if ((long)window.windowID != windowNumber) continue;
             SCContentFilter* filter = [[SCContentFilter alloc] initWithDesktopIndependentWindow:window];
             SCStreamConfiguration* config = [[SCStreamConfiguration alloc] init];
-            // Preserve backing pixels so downsampling does not blend thin-line colors.
+            // 장치 픽셀을 유지하여 가는 선의 색상이 축소 과정에서 혼합되지 않도록 한다.
             config.width = (size_t)(filter.contentRect.size.width * filter.pointPixelScale);
             config.height = (size_t)(filter.contentRect.size.height * filter.pointPixelScale);
             config.pixelFormat = kCVPixelFormatType_32BGRA;
             config.showsCursor = NO;
             config.captureResolution = SCCaptureResolutionBest;
+            // 화면이 갱신되는 만큼 받는다. 변경이 없으면 프레임도 오지 않는다.
             config.minimumFrameInterval = CMTimeMake(1, 120);
             config.queueDepth = 8;
             captureConfig = config;
-            // The filter is assigned last. sp_capture_start reads it to decide
-            // whether a capture can begin, so assigning it first would let a
-            // stream be built with no configuration.
+            // 필터를 마지막에 둔다. sp_capture_start 가 필터로 준비 여부를 판단하므로,
+            // 먼저 두면 설정이 없는 채로 스트림을 만들 수 있다.
             captureFilter = filter;
             dispatch_semaphore_signal(answered);
             return;
@@ -129,6 +127,7 @@ void sp_capture_open(long windowNumber) {
         dispatch_semaphore_signal(answered);
     }];
     dispatch_semaphore_wait(answered, dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC));
+    dispatch_release(answered);
 }
 
 void sp_capture_start(const char* directory) {
@@ -137,11 +136,12 @@ void sp_capture_start(const char* directory) {
         return;
     }
     if (captureStream != nil) return;
-    // The sink is made once. A new one per recording restarts the frame numbers
-    // at one and overwrites the files an earlier recording wrote.
+    // 수신 객체는 한 번만 만든다. 녹화마다 새로 만들면 프레임 번호가 1 부터 다시
+    // 시작해 앞선 녹화가 적은 파일을 덮어쓴다.
     if (captureSink == nil) captureSink = [[SPCapture alloc] init];
     captureBefore = captureSink.written;
     captureSink.idle = 0;
+    if (captureFirstFrame) dispatch_release(captureFirstFrame);
     captureFirstFrame = dispatch_semaphore_create(0);
     captureSink.directory = [NSString stringWithUTF8String:directory];
     captureStream = [[SCStream alloc] initWithFilter:captureFilter
@@ -156,6 +156,7 @@ void sp_capture_start(const char* directory) {
     if (error != nil) {
         fprintf(stderr, "observe: capture output not added, %s\n",
             error.localizedDescription.UTF8String);
+        [captureStream release];
         captureStream = nil;
         return;
     }
@@ -167,7 +168,6 @@ void sp_capture_start(const char* directory) {
     }];
 }
 
-// The control thread waits for an initial image before starting drag input.
 int sp_capture_wait(void) {
     return captureStream != nil && dispatch_semaphore_wait(captureFirstFrame,
         dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC)) == 0;
@@ -192,6 +192,9 @@ int sp_capture_stop(void) {
     dispatch_semaphore_wait(stopped, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
     dispatch_sync(captureQueue, ^{});
     captureStream = nil;
+    dispatch_release(captureQueue);
+    dispatch_release(stopped);
+    [stream release];
     if (captureSink.written == captureBefore && captureSink.idle > 0) {
         fprintf(stderr, "observe: the window was not redrawn during %d frames; "
             "the display is off or the window is not on screen\n", captureSink.idle);

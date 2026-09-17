@@ -1,4 +1,4 @@
-package main
+package shell_test
 
 import (
 	"bufio"
@@ -7,13 +7,15 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"soksak/sidecars/shell/src/shell"
 )
 
 // harness 는 Serve 를 실행하고 요청 전송과 이벤트 수신을 제공한다.
 type harness struct {
 	t      *testing.T
 	input  *io.PipeWriter
-	events chan Event
+	events chan shell.Event
 	done   chan error
 }
 
@@ -21,16 +23,16 @@ func start(t *testing.T) *harness {
 	t.Helper()
 	inRead, inWrite := io.Pipe()
 	outRead, outWrite := io.Pipe()
-	s := &harness{t: t, input: inWrite, events: make(chan Event, 64), done: make(chan error, 1)}
+	s := &harness{t: t, input: inWrite, events: make(chan shell.Event, 64), done: make(chan error, 1)}
 	go func() {
-		err := Serve(inRead, outWrite)
+		err := shell.Serve(inRead, outWrite)
 		outWrite.Close()
 		s.done <- err
 	}()
 	go func() {
 		scanner := bufio.NewScanner(outRead)
 		for scanner.Scan() {
-			var event Event
+			var event shell.Event
 			if err := json.Unmarshal(scanner.Bytes(), &event); err != nil {
 				t.Errorf("invalid event %q: %v", scanner.Text(), err)
 				continue
@@ -50,7 +52,7 @@ func (s *harness) send(line string) {
 }
 
 // next 는 다음 이벤트를 반환한다. 이벤트가 오지 않으면 테스트를 실패시킨다.
-func (s *harness) next() Event {
+func (s *harness) next() shell.Event {
 	s.t.Helper()
 	select {
 	case event, ok := <-s.events:
@@ -61,7 +63,7 @@ func (s *harness) next() Event {
 	case <-time.After(10 * time.Second):
 		s.t.Fatal("no event within 10s")
 	}
-	return Event{}
+	return shell.Event{}
 }
 
 func (s *harness) finish() error {

@@ -4,8 +4,8 @@
   "private": true,
   "description": "Shell sidecar: one shell process per surface over line-delimited JSON.",
   "scripts": {
-    "build": "go build -o build/soksak-shell .",
-    "test": "go test ./... && node --test test/"
+    "build": "go build -o build/soksak-shell ./src",
+    "test": "go test ./... && node --test tests/"
   },
   "type": "module",
   "files": [

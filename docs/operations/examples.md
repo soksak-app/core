@@ -83,6 +83,6 @@ The standalone overlapping-webview input check uses a temporary native window wi
 make -C native/darwin test
 ```
 
-The target builds `native/darwin/build/webview-input` against the shared library and runs the baseline and registered-input runs in that order.
+The target builds `native/darwin/build/webview_input_test` against the shared library and runs the baseline and registered-input runs in that order.
 
 The baseline expects duplicate pointer movement in overlapping DOMs. The registered-input run requires exclusive pointer tracking, retained keyboard input, and cleanup after hiding or removing the overlay. Neither run tests delayed cursor responses.

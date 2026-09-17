@@ -1,6 +1,6 @@
 #import <Cocoa/Cocoa.h>
 #import <objc/runtime.h>
-#import "dock_menu_darwin.h"
+#import "dock_menu.h"
 
 @interface SPDockMenu : NSMenu
 @property(copy) void (^newWindow)(void);

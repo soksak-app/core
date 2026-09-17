@@ -1,4 +1,4 @@
-// 셸 사이드카. 표준 입력으로 요청을 받고 표준 출력으로 셸 출력을 보낸다.
+// Package shell 은 셸 사이드카의 요청 처리와 셸 세션을 구현한다.
 //
 // 한 줄에 JSON 메시지 하나를 사용한다. 형식은 docs/spec/sidecars.md 에 정의한다.
 //
@@ -8,8 +8,8 @@
 //	출력  {"surface": id, "body": {"text": 텍스트}}
 //	      {"surface": id, "body": {"error": 메시지}}
 //
-// 표준 입력이 닫히면 모든 셸을 종료하고 끝난다.
-package main
+// Serve 는 입력이 닫히면 모든 셸을 종료하고 반환한다.
+package shell
 
 import (
 	"bufio"
@@ -17,7 +17,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"os"
 	"sync"
 )
 
@@ -91,12 +90,5 @@ func handle(shells *Shells, request Request) error {
 		return shells.Write(request.Surface, request.Body.Data)
 	default:
 		return fmt.Errorf("unknown op: %q", request.Body.Op)
-	}
-}
-
-func main() {
-	log.SetFlags(0)
-	if err := Serve(os.Stdin, os.Stdout); err != nil {
-		log.Fatalf("shell sidecar: %v", err)
 	}
 }

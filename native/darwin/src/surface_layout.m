@@ -1,6 +1,6 @@
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
-#import "surface_layout_darwin.h"
+#import "surface_layout.h"
 #import <WebKit/WebKit.h>
 
 @interface WKWebView (SPPresentation)

@@ -1,9 +1,9 @@
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import "webview_darwin.h"
-#import "webview_input_darwin.h"
-#import "surface_layout_darwin.h"
-#import "webview_geometry_darwin.h"
+#import "webview_input.h"
+#import "surface_layout.h"
+#import "webview_geometry.h"
 
 extern void nativeMessage(unsigned long long identifier, char *message);
 

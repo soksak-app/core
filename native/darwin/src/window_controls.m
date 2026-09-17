@@ -1,6 +1,6 @@
 #import <Cocoa/Cocoa.h>
 #import <objc/runtime.h>
-#import "window_controls_darwin.h"
+#import "window_controls.h"
 
 // AppKit can reclaim its buttons when the recording indicator changes, even
 // without resizing the window. Relayout the container when a button leaves it.

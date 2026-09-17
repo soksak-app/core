@@ -8,7 +8,6 @@ description = "soksak layout running in Tauri v2"
 tauri-build = { version = "2", features = [] }
 
 [target.'cfg(target_os = "macos")'.build-dependencies]
-cc = "1"
 pkg-config = "0.3"
 
 [dependencies]

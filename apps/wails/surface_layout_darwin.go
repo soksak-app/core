@@ -3,7 +3,7 @@
 package main
 
 /*
-#include "surface_layout_darwin.h"
+#include "surface_layout.h"
 #include "webview_darwin.h"
 */
 import "C"

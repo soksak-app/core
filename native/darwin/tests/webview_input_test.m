@@ -1,7 +1,7 @@
 // 설치된 WebKit에서 겹친 웹뷰의 포인터·키보드 입력과 제거 후 복원을 검사한다.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
-#import "webview_input_darwin.h"
+#import "webview_input.h"
 
 @interface WKWebView (InputTestBarrier)
 - (void)_doAfterProcessingAllPendingMouseEvents:(void (^)(void))completion;
