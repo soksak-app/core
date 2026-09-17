@@ -1,0 +1,14 @@
+{
+  "name": "@soksak/client",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Client for the soksak local endpoint.",
+  "files": [
+    "frame.js"
+  ],
+  "scripts": {
+    "bench": "node bench/transport.mjs",
+    "test": "node --test test/"
+  }
+}
