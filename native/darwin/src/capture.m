@@ -86,11 +86,14 @@ static SCFrameStatus frameStatus(CMSampleBufferRef sample) {
         FILE* file = fopen(pending.UTF8String, "wb");
         if (file != NULL) {
             uint32_t head[3] = { (uint32_t)width, (uint32_t)height, (uint32_t)stride };
-            fwrite(head, sizeof(head), 1, file);
-            fwrite(base, stride, height, file);
-            // Counted once the file holds the frame, so the count and the
-            // directory cannot disagree.
-            if (fclose(file) == 0 && rename(pending.UTF8String, path.UTF8String) == 0) {
+            // 파일이 프레임 전체를 담았을 때만 센다. 그래야 개수와 디렉터리가 어긋나지 않는다.
+            // 쓰기에 실패한 파일은 남기지 않는다.
+            bool whole = fwrite(head, sizeof(head), 1, file) == 1 && fwrite(base, stride, height, file) == height;
+            bool closed = fclose(file) == 0;
+            if (!whole || !closed) {
+                fprintf(stderr, "observe: frame %d was not written, %s\n", self.written + 1, strerror(errno));
+                unlink(pending.UTF8String);
+            } else if (rename(pending.UTF8String, path.UTF8String) == 0) {
                 self.written++;
                 if (self.written == captureBefore + 1) dispatch_semaphore_signal(captureFirstFrame);
             }
