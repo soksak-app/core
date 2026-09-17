@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // 애플리케이션의 프런트엔드를 한 디렉터리에 배치한다.
 //
-//   soksak-stage <출력 디렉터리> [--executables <디렉터리>]
+//   soksak-stage <출력 디렉터리> [--executables <디렉터리>] [--diagnostics]
 //
 // 현재 디렉터리의 애플리케이션 패키지에서 environment.json 을 읽는다. 패키지 위치는
 // Node 모듈 해석으로 찾는다. 파일은 복사만 하고 내용을 바꾸지 않는다.
@@ -14,6 +14,11 @@
 //
 // --executables 를 지정하면 사이드카 실행 파일을 그 디렉터리에 파일 이름 그대로 복사한다.
 // 네이티브 호스트는 자기 실행 파일과 같은 디렉터리에서 사이드카 실행 파일을 찾는다.
+//
+//   <출력>/diagnostics.js           --diagnostics 이면 워크벤치의 observe.js(페이지 진단 메서드),
+//                                  아니면 빈 모듈. 진단 코드는 진단 빌드에만 들어간다
+//   <출력>/transcript.js            --diagnostics 이면 진단 모듈이 쓰는 호출 기록기
+
 import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { basename, dirname, join, resolve } from "node:path";
@@ -22,11 +27,18 @@ import {
   ENVIRONMENT, MANIFEST, RUNTIME, SIDECAR, modulePath, validateEnvironment, validateManifest, validateSidecar,
 } from "@soksak/plugin-api";
 
+const USAGE = "usage: soksak-stage <output directory> [--executables <directory>] [--diagnostics]";
 const args = process.argv.slice(2);
-const [out] = args;
-const executables = args[1] === "--executables" ? args[2] : undefined;
-if (!out || !(args.length === 1 || (args.length === 3 && executables))) {
-  console.error("usage: soksak-stage <output directory> [--executables <directory>]");
+const [out, ...rest] = args;
+let executables;
+let diagnostics = false;
+for (let i = 0; i < rest.length; i++) {
+  if (rest[i] === "--executables" && rest[i + 1] && executables === undefined) executables = rest[++i];
+  else if (rest[i] === "--diagnostics" && !diagnostics) diagnostics = true;
+  else { console.error(USAGE); process.exit(2); }
+}
+if (!out || out.startsWith("--")) {
+  console.error(USAGE);
   process.exit(2);
 }
 
@@ -79,5 +91,11 @@ for (const name of environment.plugins) {
   }
 }
 cpSync(runtime, join(target, RUNTIME), { recursive: true });
+if (diagnostics) {
+  copyFileSync(join(workbench, "observe.js"), join(target, "diagnostics.js"));
+  copyFileSync(join(workbench, "transcript.js"), join(target, "transcript.js"));
+}
+else writeFileSync(join(target, "diagnostics.js"), "// 진단 빌드가 아니다. 진단 메서드가 없다.\nexport {};\n");
 writeFileSync(join(target, ENVIRONMENT), `${JSON.stringify(environment, null, 2)}\n`);
-console.log(`staged ${environment.plugins.length} plugins and ${sidecars.size} sidecars into ${target}`);
+console.log(`staged ${environment.plugins.length} plugins and ${sidecars.size} sidecars into ${target}` +
+  (diagnostics ? " with diagnostics" : ""));

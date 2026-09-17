@@ -1,9 +1,13 @@
 SHELL := /bin/sh
 
-.PHONY: preflight prepare build verify docs-check boundaries platforms hosts-check e2e-check
+.PHONY: preflight prepare build verify docs-check boundaries platforms hosts-check e2e-check exposure-check release-check
 
 docs-check:
 	@node scripts/check-docs.mjs
+
+# release 빌드를 만들고, 스테이징된 프런트엔드와 release 실행 파일에 진단 코드가 없는지 검사한다.
+release-check: wailsv3-build-release tauriv2-build-release
+	@node scripts/check-release.mjs
 
 # 코어, 플러그인, 사이드카가 서로의 이름을 코드에 적지 않았는지 검사한다.
 boundaries:
@@ -12,6 +16,10 @@ boundaries:
 # 창 검사가 엔드포인트의 선언된 항목과 네이티브 입력만 쓰는지 검사한다.
 e2e-check:
 	@node scripts/check-e2e.mjs
+
+# UI 조작이 명령을 거치고, 표시한 이름이 모두 선언되고 등록되었는지 검사한다.
+exposure-check:
+	@node scripts/check-exposure.mjs
 
 # 운영체제별 코드가 platform/<os>/ 아래에만 있는지 검사한다.
 platforms:
@@ -30,7 +38,7 @@ prepare: preflight
 build: prepare
 	@pnpm build
 
-verify: prepare docs-check
+verify: prepare docs-check exposure-check
 	@pnpm test
 	@pnpm breaks
 	@pnpm build
@@ -76,15 +84,17 @@ native-darwin:
 sidecars:
 	@$(GO_ENV) pnpm --filter "./sidecars/*" run build
 
-# 프런트엔드와 사이드카 실행 파일을 배치한다. 인자는 실행 파일 디렉터리(앱 디렉터리 기준)다.
-stage-wailsv3 = pnpm -F @soksak/wailsv3 exec soksak-stage src/frontend --executables $(1)
-stage-tauriv2 = pnpm -F @soksak/tauriv2 exec soksak-stage src/frontend --executables $(1)
+# 프런트엔드와 사이드카 실행 파일을 배치한다. 첫 인자는 실행 파일 디렉터리(앱 디렉터리
+# 기준), 둘째 인자는 추가 플래그다. debug 는 페이지 진단 모듈을 넣고(--diagnostics),
+# release 는 넣지 않는다.
+stage-wailsv3 = pnpm -F @soksak/wailsv3 exec soksak-stage src/frontend --executables $(1) $(2)
+stage-tauriv2 = pnpm -F @soksak/tauriv2 exec soksak-stage src/frontend --executables $(1) $(2)
 
 frontend-wailsv3: build sidecars
-	@$(call stage-wailsv3,../../target/debug)
+	@$(call stage-wailsv3,../../target/debug,--diagnostics)
 
 frontend-tauriv2: build sidecars
-	@$(call stage-tauriv2,../../target/debug)
+	@$(call stage-tauriv2,../../target/debug,--diagnostics)
 
 # generate_context! 가 프런트엔드를 포함하므로 크레이트를 다시 빌드하게 한다.
 tauriv2-build: native-darwin frontend-tauriv2
@@ -124,7 +134,7 @@ native-test: native-darwin frontend-wailsv3 frontend-tauriv2
 	@$(CARGO_ENV) cargo test -p soksak-host-tauriv2 --features diagnostics
 
 # 이미 실행 중인 앱의 창을 로컬 엔드포인트로 순차 검사한다. 하네스는 앱을 실행하지 않는다.
-examples-verify: docs-check e2e-check
+examples-verify: docs-check e2e-check exposure-check
 	@pnpm -F @soksak/e2e run verify
 
 # 두 앱의 두 프로필 빌드와 각 크기.

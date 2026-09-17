@@ -25,6 +25,9 @@ test("exposes with the three kinds are accepted in a manifest and in a core file
   const shared = exposes();
   shared.dom[0].name = "probe.lines";
   assert.equal(validateExposes("probe", shared), shared, "a status and a dom entry may share a name");
+  const slow = exposes();
+  slow.commands[0].timeout = 600000;
+  assert.equal(validateExposes("probe", slow).commands[0].timeout, 600000, "a command may declare how long its reply takes");
   const core = { exposes: { status: [{ name: "core.value", description: "Value.", schema: {} }] } };
   assert.equal(validateExposureFile(core), core);
 });
@@ -44,6 +47,10 @@ test("exposes are rejected for each invalid field", () => {
     [(e) => { delete e.commands[0].result; }, /result is required/],
     [(e) => { e.commands[0].params = { type: "string" }; }, /params must be an object schema/],
     [(e) => { e.dom[0].many = "yes"; }, /many must be a boolean/],
+    [(e) => { e.commands[0].timeout = 0; }, /timeout must be an integer from 1 to 600000/],
+    [(e) => { e.commands[0].timeout = 600001; }, /timeout must be an integer/],
+    [(e) => { e.commands[0].timeout = 1.5; }, /timeout must be an integer/],
+    [(e) => { e.status[0].timeout = 10; }, /unknown field timeout/],
     [(e) => { e.dom[0].schema = {}; }, /unknown field schema/],
     [(e) => { e.events = []; }, /unknown field events/],
     [(e) => { e.dom = {}; }, /dom must be an array/],

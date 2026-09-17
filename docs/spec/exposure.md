@@ -37,6 +37,7 @@ A name has the form `<owner>.<name>`. `owner` is `core`, `host`, or a plugin id.
 | command | `description` | One-sentence description |
 | command | `params` | Parameter schema |
 | command | `result` | Result schema |
+| command | `timeout` | Optional. How long the host waits for a surface page's reply, in milliseconds from 1 to 600000; the default is 10 seconds |
 | dom | `name` | Entry name |
 | dom | `description` | One-sentence description |
 | dom | `many` | Optional. `true` when several elements share the name; requests address one element with `index` |
@@ -44,6 +45,17 @@ A name has the form `<owner>.<name>`. `owner` is `core`, `host`, or a plugin id.
 A schema is a JSON Schema subset with the keywords `type`, `properties`, `items`, and `enum`.
 
 The element for a dom entry carries the attribute `data-expose="<name>"`. Without `many`, exactly one element has the name.
+
+## User interface
+
+People and external clients operate a document through the same entries.
+
+- Every user operation of a document runs a declared command. A control points to its command with `data-command="<name>"` and, for fixed parameters, `data-params` with a JSON object. A control that enters a value adds it as the parameter named by `data-value` (`value` by default). Commands are declared first (`exposure.json`, `plugin.json`); a document connects elements only to declared commands with `createBinder(run)` of `@soksak/plugin-api`: `bind(element, name, params, {event, when, stop, failed})` runs the command on an event, `mark(element, name, params, valueName)` sets the attributes, and `delegate(root)` runs clicks and value changes of marked descendants. Binding or marking an undeclared name throws. The workbench uses `packages/workbench/commands.js` (a binder over the registry), and a plugin page uses `expose.bind`, `expose.mark`, and `expose.delegate`, which run the commands the page registered. Handlers do not call module functions themselves. A continuous gesture, such as a tab drag, has a command that produces its result (`core.tab.move`), and keyboard shortcuts run commands.
+- Every visible state of a document can be read through a status.
+- Every interactive element (`button`, `input`, `select`, `textarea`, `role="button"`, and `contenteditable`) is connected to a command, either bound or carrying `data-command` under a delegated root, and has a dom name.
+- A native modal renders a copy of its element and answers with the control's key; the main page runs the command of the matching control in its own element.
+
+Coverage is judged in the running document. The binder's `audit(root)` lists interactive elements that are not connected or have no dom name as `{tag, expose, command, text}`; the main page publishes it as `core.page.audit` and every plugin page as `unbound` in `core.surface.document`. `e2e/audit.test.mjs` visits every screen, modal section, menu, editing state, and visible plugin surface of both applications and requires empty lists. `scripts/check-exposure.mjs` (`make exposure-check`) checks only what the sources state, for the workbench and for plugin pages (`plugins/*/ui`): every name written in a source is declared, every declared status and command is registered, and every declared dom name is written as an exposed value.
 
 ## Registration
 
@@ -63,7 +75,7 @@ The native host relays registrations and requests between a surface page and the
 
 | Kind | Name | Meaning |
 | --- | --- | --- |
-| status | `core.surface.document` | `{url, timeOrigin, readyState, themed, scale, body, viewport, filter}`: the document address, time origin, ready state, whether the first theme is applied, device pixel ratio, body and visual viewport sizes in CSS pixels, and the computed `filter` of the root element |
+| status | `core.surface.document` | `{url, timeOrigin, readyState, themed, scale, body, viewport, filter, unbound}`: the document address, time origin, ready state, whether the first theme is applied, device pixel ratio, body and visual viewport sizes in CSS pixels, the computed `filter` of the root element, and the audit of its interactive elements (as in `core.page.audit`) |
 | status | `core.surface.input` | The last 32 trusted or untrusted input events of the document in order: `{sequence, type, trusted, x, y, key}` for `pointerdown`, `pointerup`, `pointermove`, `click`, `wheel`, and `keydown`. `sequence` starts at 1 and increases by one for each recorded event |
 | command | `core.surface.hit` | `{x, y}` in CSS pixels; returns `true` when an element of the document is at the point |
 
@@ -109,10 +121,10 @@ Clients call these JSON-RPC 2.0 methods.
 | --- | --- | --- |
 | `windows.list` | none | `[{window, title, project, key, ready}]`. `project` is the root directory of the project last opened in the window, or `null`. `ready` is true after the main page of the window reports ready and false while it loads; requests for a window whose page is loading fail with 1003 |
 | `exposure.list` | `{window}` | `{status, commands, dom}`: the declared entries of core, the host, and loaded plugins in the declaration format, each with `registered` |
-| `status.get` | `{window, name}` | Current value |
+| `status.get` | `{window, name, surface?}` | Current value |
 | `status.watch` | `{window, name, surface?}` | `null`; the host then sends `status.changed` notifications `{window, name, surface?, value}` on each change until `status.unwatch` or until the connection closes. Watches with different `surface` values are separate |
-| `status.unwatch` | `{window, name}` | `null` |
-| `command.run` | `{window, name, params}` | Command result |
+| `status.unwatch` | `{window, name, surface?}` | `null` |
+| `command.run` | `{window, name, params, surface?}` | Command result |
 | `dom.rect` | `{window, name, index?}` | `{x, y, width, height}` in CSS pixels of the owning document, plus `{document}`: the document origin in window coordinates |
 | `dom.act` | `{window, name, index?, action, value?, event?}` | `null`. `action` is `click`, `input`, or `dispatch`. The page receives synthetic DOM events with `isTrusted` false |
 | `input.pointer` | `{window, x, y, phase, button?, deltaX?, deltaY?, activate?}` | `null`. Window coordinates. `phase` is `move`, `down`, `drag`, `up`, or `scroll`. `button` is `left` (default) or `right`. `deltaX` and `deltaY` are scroll distances in points. `activate` applies to `move` |
@@ -137,7 +149,7 @@ The host and the pages exchange these messages. They are internal to core and no
 | main page → host | call `exposureChanged` | `{name, surface?, value}` for a watched status; `surface` is present when the watch named one |
 | surface page → host | call `exposureRegister` | `{surface, kind, name}` |
 | host → main page | event `exposure-registered` | `{surface, kind, name}`; `{surface, closed: true}` when the surface is removed. Surfaces outlive a reload of the main page, so after the main page reports ready the host sends every live registration again |
-| main page → host | call `exposureForward` | `{id, surface, method, params}` for a name that a surface page registered |
+| main page → host | call `exposureForward` | `{id, surface, method, params, timeout?}` for a name that a surface page registered. `timeout` is an integer from 1 to 600000 milliseconds, taken from the command declaration; without it the host waits 10 seconds. `status.next` takes no `timeout`. An invalid `timeout` returns -32602 |
 | host → surface page | event `exposure-request` | `{id, method, params}` |
 | main page → surface page (through `exposureForward`) | `status.watch`, `status.unwatch` | `{name}`. The surface page starts or stops following the value |
 | main page → surface page (through `exposureForward`) | `status.next` | `{name, version}`. The surface page replies `{version, value}` when its value is newer than `version`, or `{closed: true}` after `status.unwatch`. The host applies no timeout to this request; it fails with 1003 when the surface closes |

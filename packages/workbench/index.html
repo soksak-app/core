@@ -41,7 +41,7 @@
 
 <main class="stage"><div class="plane" id="plane">
   <svg class="rail" id="rail"><path id="railPath"></path></svg>
-  <div class="drop" id="drop" hidden></div>
+  <div class="drop" id="drop" data-expose="core.drop" hidden></div>
   <div class="picker" id="picker" data-native-modal="menu" hidden></div>
   <div class="focus-mark" id="focusMark" hidden></div>
 </div></main>
@@ -64,7 +64,7 @@ import { installTheme } from "soksak";
 /* 판 외부의 값은 settings 가 갖는다. 이 문서는 값이 바뀌었을 때 판을 다시 만든다.
    설정이 판을 직접 호출하면 설정을 추가할 때마다 호출할 함수를 정해야 한다. */
 import {
-  halfGap, install, modeName, onSettingsChange, set, value, connectSettings,
+  halfGap, install, modeName, onSettingsChange, value, connectSettings,
 } from "./settings.js";
 
 /* 표면을 모사하고 보고한다. 판은 슬롯 요소에 값을 기록만 하고 측정과 보고는 이쪽이
@@ -85,7 +85,8 @@ import { chrome, surfaces as host } from "./host.js";
 
 /* 코어의 공개 항목과 진단 메서드. 등록소가 호스트의 요청에 답한다. */
 import { coreChanged, installCoreExposure, setVerify } from "./core-exposure.js";
-import "./observe.js";
+/* 진단 빌드에서만 진단 메서드가 들어 있다. 다른 빌드에서는 빈 모듈이다. */
+import "./diagnostics.js";
 
 /* 프로젝트와 그 안의 스페이스. 판은 한 번에 스페이스 하나를 그리고, 전환은 현재
    상태를 저장한 뒤 다른 상태를 적용하는 것이다. */
@@ -93,9 +94,10 @@ import * as projects from "./projects.js";
 import * as registry from "./registry.js";
 
 /* 설정 모달. 사이드바를 연결할 자리 목록은 등록된 플러그인이 정한다. */
-import { drawSettings, onCommand, openSettings } from "./settings-ui.js";
+import { drawSettings } from "./settings-ui.js";
+import { bind, run } from "./commands.js";
 import { icon } from "./icons.js";
-import { adopt, capture, fresh, clear } from "./plane.js";
+import { adopt, capture, fresh, clear, onDrag } from "./plane.js";
 
 import { createLibrary } from "./library.js";
 
@@ -285,8 +287,8 @@ function askControls() {
   });
 }
 
-/** 크롬 행의 아이콘 버튼 하나를 만든다. */
-function act(name, title, on, onPick, expose) {
+/** 크롬 행의 아이콘 버튼 하나를 만든다. 누르면 command 를 params 로 실행한다. */
+function act(name, title, on, command, params, expose) {
   const b = document.createElement("button");
   b.className = "act";
   b.dataset.expose = expose;
@@ -294,12 +296,19 @@ function act(name, title, on, onPick, expose) {
   b.title = title;
   b.dataset.on = String(on);
   b.innerHTML = icon(name);
-  b.addEventListener("click", onPick);
+  bind(b, command, params);
   return b;
 }
 
-/** 탭 하나를 만든다. 클릭은 전환, 더블클릭은 이름 변경, ✕ 는 닫기다. */
-function tab(text, on, { dot, onPick, onClose, onRename, expose }) {
+/**
+ * 탭 하나를 만든다. 클릭은 전환, 더블클릭은 이름 변경, ✕ 는 닫기다. 셋 다 명령이다.
+ *
+ *   pick    {command, params}
+ *   close   {command, params} 또는 없음
+ *   rename  {kind, id} 또는 없음
+ */
+function tab(text, on, { dot, pick, close, rename, expose, closeExpose }) {
+  if (rename && renaming?.kind === rename.kind && renaming.id === rename.id) return renameField(text);
   const el = document.createElement("button");
   el.className = "bar-tab";
   el.dataset.expose = expose;
@@ -312,47 +321,88 @@ function tab(text, on, { dot, onPick, onClose, onRename, expose }) {
   name.className = "bar-tab__name";
   name.textContent = text;
   el.appendChild(name);
-  el.addEventListener("click", onPick);
-  if (onRename) el.addEventListener("dblclick", () => renameInPlace(el, text, onRename));
-  if (onClose) {
+  bind(el, pick.command, pick.params);
+  if (rename) {
+    el.dataset.rename = JSON.stringify(rename);
+    el.addEventListener("dblclick", () => run("core.rename.begin", rename));
+  }
+  if (close) {
     const x = document.createElement("span");
     x.className = "bar-tab__x";
+    x.dataset.expose = closeExpose;
+    x.setAttribute("role", "button");
     x.textContent = "✕";
-    x.addEventListener("click", (e) => { e.stopPropagation(); onClose(); });
+    bind(x, close.command, close.params, { stop: true });
     el.appendChild(x);
   }
   return el;
 }
 
-/** 탭 자리에서 이름을 변경한다. 빈 값이면 이전 이름을 유지한다. */
-function renameInPlace(el, was, take) {
+/* 진행 중인 이름 변경. {kind: "project"|"space", id, value}. */
+let renaming = null;
+
+/** 이름 변경 중인 탭 자리의 입력 칸. Enter 는 확정, Escape 는 취소, 초점을 잃으면 확정한다. */
+function renameField(was) {
   const input = document.createElement("input");
   input.className = "bar-tab__root";
-  input.value = was;
-  el.replaceWith(input);
-  input.focus();
-  input.select();
-  const done = (keep) => {
-    const title = input.value.trim();
-    input.remove();
-    if (keep && title) take(title);
-    drawBars();
-  };
+  input.dataset.expose = "core.rename.input";
+  input.value = renaming.value ?? was;
+  // 입력한 값은 core.rename.set 으로 기록한다. 확정은 그 값을 쓴다.
+  bind(input, "core.rename.set", () => ({ value: input.value }), { event: "input" });
   input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") done(true);
-    if (e.key === "Escape") done(false);
+    if (e.key === "Enter") return run("core.rename.commit");
+    if (e.key === "Escape") return run("core.rename.cancel");
   });
-  input.addEventListener("blur", () => done(true));
+  input.addEventListener("focusout", () => { if (renaming) return run("core.rename.commit"); });
+  queueMicrotask(() => { if (input.isConnected) { input.focus(); input.select(); } });
+  return input;
 }
 
-/** 「+」 버튼을 만든다. 클릭하면 그 자리에서 입력을 받는다. */
-function addTabButton(text, onPick, expose) {
+/** 이름 변경 명령이 부르는 연산. */
+const renames = {
+  begin({ kind, id }) {
+    const list = kind === "project" ? projects.all() : kind === "space" ? projects.active()?.spaces ?? [] : null;
+    if (!list) throw new Error(`unknown rename target ${kind}`);
+    const found = list.find((item) => item.id === id);
+    if (!found) throw new Error(`no ${kind} ${id}`);
+    renaming = { kind, id, value: found.title };
+    drawBars();
+    coreChanged();
+  },
+  set(value) {
+    if (!renaming) throw new Error("nothing is being renamed");
+    renaming.value = String(value);
+    coreChanged();
+  },
+  async commit() {
+    if (!renaming) throw new Error("nothing is being renamed");
+    const { kind, id, value } = renaming;
+    renaming = null;
+    const title = value.trim();
+    if (title) {
+      if (kind === "project") await projects.rename(id, title);
+      else projects.renameSpace(id, title);
+    }
+    drawBars();
+    coreChanged();
+  },
+  cancel() {
+    if (!renaming) throw new Error("nothing is being renamed");
+    renaming = null;
+    drawBars();
+    coreChanged();
+  },
+  state: () => renaming && { ...renaming },
+};
+
+/** 「+」 버튼을 만든다. */
+function addTabButton(text, command, expose) {
   const b = document.createElement("button");
   b.className = "bar-tab bar-tab--add";
   b.dataset.expose = expose;
   b.type = "button";
   b.textContent = text;
-  b.addEventListener("click", () => onPick(b));
+  bind(b, command);
   return b;
 }
 
@@ -369,6 +419,7 @@ function drawBars() {
   if (toLeft && !rail) {
     rail = document.createElement("div");
     rail.className = "rail-projects";
+    rail.dataset.expose = "core.rail.projects";
     shell.prepend(rail);
   } else if (!toLeft && rail) {
     rail.remove();
@@ -382,57 +433,82 @@ function drawBars() {
     const el = tab(p.title, p.id === here?.id, {
       dot: p.color,
       expose: "core.project-tab",
-      onPick: () => { projects.activate(p.id); drawBars(); },
-      onRename: (title) => projects.rename(p.id, title),
-      onClose: () => projects.close(p.id),
+      closeExpose: "core.project-tab.close",
+      pick: { command: "core.project.activate", params: { id: p.id } },
+      rename: { kind: "project", id: p.id },
+      close: { command: "core.project.close", params: { id: p.id } },
     });
-    el.draggable = true;
-    el.addEventListener("dragstart", (e) => e.dataTransfer.setData("text/plain", p.id));
-    el.addEventListener("dragover", (e) => e.preventDefault());
-    el.addEventListener("drop", (e) => {
-      e.preventDefault();
-      const ids = projects.all().map((p) => p.id);
-      const from = ids.indexOf(e.dataTransfer.getData("text/plain"));
-      if (from >= 0) projects.move(ids[from], ids.indexOf(p.id) - from);
-    });
+    // 끌어 놓은 순서 변경은 core.project.move 가 만든다.
+    if (el.tagName === "BUTTON") {
+      el.draggable = true;
+      el.addEventListener("dragstart", (e) => e.dataTransfer.setData("text/plain", p.id));
+      el.addEventListener("dragover", (e) => e.preventDefault());
+      el.addEventListener("drop", (e) => {
+        e.preventDefault();
+        const ids = projects.all().map((p) => p.id);
+        const from = ids.indexOf(e.dataTransfer.getData("text/plain"));
+        if (from >= 0) return run("core.project.move", { id: ids[from], delta: ids.indexOf(p.id) - from });
+      });
+    }
     into.appendChild(el);
   }
-  if (!browsing) into.appendChild(addTabButton("+", () => projects.browse(), "core.project-tab.add"));
+  if (!browsing) into.appendChild(addTabButton("+", "core.projects.browse", "core.project-tab.add"));
 
   spaceBar.textContent = "";
   for (const sp of here?.spaces ?? []) {
     spaceBar.appendChild(tab(sp.title, sp.id === here.activeSpaceId, {
       expose: "core.space-tab",
-      onPick: () => { projects.activateSpace(sp.id); drawBars(); },
-      onRename: (title) => projects.renameSpace(sp.id, title),
-      onClose: here.spaces.length > 1
-        ? () => { projects.closeSpace(sp.id); drawBars(); publish(); } : null,
+      closeExpose: "core.space-tab.close",
+      pick: { command: "core.space.activate", params: { id: sp.id } },
+      rename: { kind: "space", id: sp.id },
+      close: here.spaces.length > 1 ? { command: "core.space.close", params: { id: sp.id } } : null,
     }));
   }
-  if (here) spaceBar.appendChild(addTabButton("+", () => { projects.addSpace(fresh()); drawBars(); }, "core.space-tab.add"));
+  if (here) spaceBar.appendChild(addTabButton("+", "core.space.add", "core.space-tab.add"));
 
   chromeActs.textContent = "";
-  if (!browsing) chromeActs.append(act("projects", "프로젝트 목록", false, () => projects.browse(), "core.chrome.projects"));
+  if (!browsing) chromeActs.append(act("projects", "프로젝트 목록", false, "core.projects.browse", {}, "core.chrome.projects"));
   chromeActs.append(
-    act("panel-left", "좌측 자리", value("left"), () => set({ left: !value("left") }), "core.chrome.left"),
-    act("panel-right", "우측 자리", value("right"), () => set({ right: !value("right") }), "core.chrome.right"),
-    // 모달의 모드 세그먼트와 같은 경로다. applyTheme 은 테마의 형태 값까지 다시
+    act("panel-left", "좌측 자리", value("left"), "core.settings.set", { patch: { left: !value("left") } }, "core.chrome.left"),
+    act("panel-right", "우측 자리", value("right"), "core.settings.set", { patch: { right: !value("right") } }, "core.chrome.right"),
+    // 모달의 모드 세그먼트와 같은 경로다. 테마 명령은 테마의 형태 값까지 다시
     // 적용하므로, 그것을 부르면 사용자가 정한 통로와 모서리가 되돌아간다.
     act(modeName() === "dark" ? "sun" : "moon", "밝게 / 어둡게", false,
-        () => set({ mode: modeName() === "dark" ? "light" : "dark" }), "core.chrome.mode"),
+        "core.settings.set", { patch: { mode: modeName() === "dark" ? "light" : "dark" } }, "core.chrome.mode"),
     // 모달이 열린 동안에는 오버레이가 이 버튼을 덮으므로 다시 눌리지 않는다. 켜짐
     // 상태도 표시하지 않는다. 구 프로젝트의 settings-toggle 과 같다.
-    act("settings", "설정", false, openSettings, "core.chrome.settings"),
+    act("settings", "설정", false, "core.settings.open", {}, "core.chrome.settings"),
   );
 }
 
 const library = createLibrary(document.getElementById("library"), coreChanged);
-await installCoreExposure({ library });
+/** 판을 초기 배치로 다시 만든다. 라이브러리 화면에서는 판이 없다. */
+function resetLayout() {
+  if (projects.inLibrary()) throw new Error("the library has no layout");
+  build();
+  drawBars();
+  drawSettings();
+}
+await installCoreExposure({
+  library, renames, resetLayout,
+  chrome: () => ({
+    controlsWidth: controlsAt ? controlsAt.x + controlsAt.w : 0,
+    projectTabs: shell.querySelector(".rail-projects") ? "left" : "top",
+  }),
+});
+onDrag(coreChanged);
+/* 키보드 단축키도 명령을 실행한다. */
 addEventListener("keydown", (event) => {
   if (!(event.metaKey || event.ctrlKey)) return;
-  if (!chrome && event.shiftKey && event.key.toLowerCase() === "n") { event.preventDefault(); projects.newWindow(); }
-  if (event.key.toLowerCase() === "k" && projects.inLibrary()) { event.preventDefault(); library.search(); }
+  if (!chrome && event.shiftKey && event.key.toLowerCase() === "n") { event.preventDefault(); return run("core.window.new"); }
+  if (event.key.toLowerCase() === "k" && projects.inLibrary()) {
+    event.preventDefault();
+    return run("core.focus.set", { name: "core.library.search" });
+  }
 });
+/* 키보드 초점의 이동을 core.focus 로 알린다. */
+addEventListener("focusin", coreChanged);
+addEventListener("focusout", coreChanged);
 
 const storage = await openStore();
 await connectSettings(storage);
@@ -446,15 +522,6 @@ addEventListener("resize", () => {
   geometrySave = setTimeout(() => projects.saveGeometry().catch(showError), 200);
 });
 if (!chrome) addEventListener("pagehide", () => { projects.flush().catch(showError); });
-
-/* ⚙ 의 값이 아닌 누름. 이 문서가 판을 소유하므로 여기서 수행한다. */
-onCommand((name) => {
-  if (name !== "build") return;
-  if (projects.inLibrary()) return;
-  build();
-  drawBars();
-  drawSettings();
-});
 
 /* 합성 손잡이가 바뀌면 다시 그린다. 손잡이는 렌더에서 읽히므로 다시 그리지 않으면
    바꾼 값이 나타나지 않는다. */

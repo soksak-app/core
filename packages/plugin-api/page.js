@@ -89,6 +89,7 @@ function exposeSurfaceDocument() {
       : null,
     viewport: { width: visualViewport.width, height: visualViewport.height },
     filter: getComputedStyle(root).filter,
+    unbound: document.body ? expose.audit(document.body) : [],
   }));
   const events = [];
   let sequence = 0;
@@ -104,6 +105,11 @@ function exposeSurfaceDocument() {
   addEventListener("resize", documentState.notify);
   visualViewport.addEventListener("resize", documentState.notify);
   new MutationObserver(documentState.notify).observe(root, { attributes: true, attributeFilter: ["style", "class"] });
+  // 조작 요소가 더해지거나 이름과 명령이 바뀌면 unbound 가 달라진다.
+  new MutationObserver(documentState.notify).observe(root, {
+    subtree: true, childList: true, attributes: true, attributeFilter: ["data-command", "data-expose", "role", "contenteditable"],
+  });
+  expose.onBinding(documentState.notify);
   Promise.all([
     expose.status("core.surface.document", documentState.read, documentState.subscribe),
     expose.status("core.surface.input", input.read, input.subscribe),

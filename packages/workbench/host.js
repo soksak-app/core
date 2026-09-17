@@ -10,7 +10,6 @@
 // 런타임 모듈(@soksak/runtime)이 담당한다.
 import { host as bridge } from "@soksak/runtime";
 import { plugins } from "./registry.js";
-import { createTranscript } from "./transcript.js";
 
 /** 표면이 표시할 대상을 URL 로 변환한다. `url` 은 외부, `page` 는 이 호스트의 문서. */
 function surfaceURL(surface) {
@@ -101,23 +100,26 @@ function overlayFrame(el, rect) {
  */
 export const native = Boolean(bridge);
 
-/**
- * 호출과 그 답의 기록기. 진단 메서드 diagnostics.transcript 가 요청할 때만 켠다. 기록기가
- * 이 패키지에 있으므로 두 애플리케이션이 같은 형식과 순서로 남긴다.
- */
-const transcript = createTranscript((line) => bridge.call("report", line));
+/* 호출과 그 답을 받는 함수. 진단 빌드의 진단 모듈만 설치한다. */
+let watcher = null;
 
-/** 호출 기록을 켜거나 끈다. */
-export function setTranscript(on) {
-  transcript.set(on);
+/**
+ * 애플리케이션 호출을 fn(name, payload, answered) 로 알린다. answered 는 답의 promise 다.
+ * fn 이 보내는 report 호출은 알리지 않는다.
+ */
+export function watchCalls(fn) {
+  watcher = fn;
 }
+
+/** 줄 하나를 애플리케이션 로그로 보낸다. */
+export const report = (line) => bridge.call("report", line);
 
 /* 애플리케이션에는 콘솔이 없다. 여기서 실패를 잡으면 기록되지 않으므로 잡지
    않는다. 문서의 unhandledrejection 이 애플리케이션 로그로 전달한다. */
 const tell = (name, payload) => {
   const answered = bridge.call(name, payload);
   // report 자신은 남기지 않는다. 남기면 그 기록이 다시 기록을 부른다.
-  if (name !== "report") transcript.record(name, payload, answered);
+  if (watcher && name !== "report") watcher(name, payload, answered);
   return answered;
 };
 

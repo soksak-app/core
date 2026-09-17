@@ -58,10 +58,10 @@ test("both hosts answer the same page the same way", async (t) => {
     const log = await s.transcript();
     await drag(t, s, PLAN);
     await log.until(settled, "the drag did not end with a settled commit");
-    await s.act("core.chrome.settings", "click");
+    await s.run("core.settings.open");
     const { controls } = await s.until("core.settings-modal", (modal) => modal.open, "settings did not open");
-    const nav = controls.find((c) => c.key === "nav:compositing");
-    await s.act("core.settings-modal.nav", "click", { index: nav.index });
+    assert.ok(controls.some((c) => c.key === "nav:compositing"), "settings must have a compositing section");
+    await s.run("core.settings-modal.nav", { section: "compositing" });
     await log.until((lines) => lines.some((line) => line.startsWith("host overlayPlace")), "settings were not placed");
     logs[name] = await log.stop();
     await s.run("core.settings.close");

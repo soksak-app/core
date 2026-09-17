@@ -9,6 +9,10 @@
  * 워크벤치 파일은 문서 루트에 놓인다. 다른 패키지는 `modules/<패키지 이름>/` 아래에
  * 패키지 안의 경로 그대로 놓인다. 런타임 모듈은 `runtime/` 에 놓인다.
  */
+import { createBinder } from "./binder.js";
+
+export { INTERACTIVE, commandOf, createBinder, valueOf } from "./binder.js";
+
 export const ENVIRONMENT = "environment.json";
 export const MANIFEST = "plugin.json";
 export const SIDECAR = "sidecar.json";
@@ -322,12 +326,16 @@ export function matchesSchema(schema, value) {
  *
  *   owner   이름의 앞부분. core, host, 또는 플러그인 id
  *   status  {name, description, schema}
- *   commands {name, description, params, result}. params 는 type object 스키마다
+ *   commands {name, description, params, result, timeout?}. params 는 type object 스키마다.
+ *           timeout 은 호스트가 표면의 답을 기다리는 시간(ms, 1–600000)이다
  *   dom     {name, description, many?}
  *
  * 이름은 `<owner>.<name>` 이고 소문자, 숫자, 점, 하이픈으로 이루어진다. 한 종류 안에서
  * 같은 이름은 한 번만 선언한다. 종류가 다르면 같은 이름을 쓸 수 있다.
  */
+/** 명령 선언의 timeout 상한(ms). */
+export const COMMAND_TIMEOUT_MAX = 600000;
+
 export function validateExposes(owner, exposes) {
   if (typeof owner !== "string" || !OWNER.test(owner)) throw new Error(`exposes: invalid owner ${owner}`);
   const where = `${owner} exposes`;
@@ -346,7 +354,8 @@ export function validateExposes(owner, exposes) {
       if (seen.has(`${key} ${name}`)) throw new Error(`${where}: duplicate ${key} ${name}`);
       seen.add(`${key} ${name}`);
       const at = `${where} ${name}`;
-      only(at, entry, ["name", "description", ...fields[key], ...(key === "dom" ? ["many"] : [])]);
+      only(at, entry, ["name", "description", ...fields[key], ...(key === "dom" ? ["many"] : []),
+        ...(key === "commands" ? ["timeout"] : [])]);
       if (!isText(entry.description)) throw new Error(`${at}: description is required`);
       for (const field of fields[key]) {
         if (entry[field] === undefined) throw new Error(`${at}: ${field} is required`);
@@ -354,6 +363,10 @@ export function validateExposes(owner, exposes) {
       }
       if (key === "commands" && entry.params.type !== "object") throw new Error(`${at}: params must be an object schema`);
       if (entry.many !== undefined && typeof entry.many !== "boolean") throw new Error(`${at}: many must be a boolean`);
+      if (entry.timeout !== undefined
+        && !(Number.isInteger(entry.timeout) && entry.timeout >= 1 && entry.timeout <= COMMAND_TIMEOUT_MAX)) {
+        throw new Error(`${at}: timeout must be an integer from 1 to ${COMMAND_TIMEOUT_MAX} milliseconds`);
+      }
     }
   }
   return exposes;
@@ -620,9 +633,11 @@ export async function replyPayload(work) {
  */
 export function createExpose(port, load) {
   let entries = null;
+  let loaded = null;
   const ready = () => {
     entries ??= Promise.resolve().then(load).then(async (declared) => {
       const made = exposureEntries(declared);
+      loaded = made;
       await port.onRequest(({ id, method, params }) => {
         replyPayload(() => made.answer(method, params)).then((payload) => port.reply(id, payload));
       });
@@ -638,7 +653,30 @@ export function createExpose(port, load) {
     registered.add(key);
     await port.register(kind, name);
   };
+  const bindings = new Set();
+  const binder = createBinder((name, params) => ready().then((e) => e.answer("command.run", { name, params })), {
+    check(name) {
+      if (!loaded?.declared.has(declarationKey("command", name))) throw new Error(`command ${name} is not declared`);
+    },
+    changed: () => { for (const fn of bindings) fn(); },
+  });
+  /* 연결은 선언을 읽은 뒤 한다. 선언되지 않은 명령이면 반환한 promise 가 거절된다. */
+  const binding = (fn) => async (...args) => {
+    await ready();
+    return fn(...args);
+  };
   return {
+    /** 요소를 이 문서에 등록된 명령에 연결한다. createBinder 의 bind, mark, delegate 다. */
+    bind: binding(binder.bind),
+    mark: binding(binder.mark),
+    delegate: binding(binder.delegate),
+    /** root 안에서 명령이나 dom 이름이 없는 조작 요소. */
+    audit: (root) => binder.audit(root),
+    /** 연결이 바뀌면 fn 을 호출한다. 해제 함수를 반환한다. */
+    onBinding(fn) {
+      bindings.add(fn);
+      return () => bindings.delete(fn);
+    },
     status: (name, read, subscribe) => register("status", name, (e) => e.status(name, read, subscribe)),
     command: (name, run) => register("command", name, (e) => e.command(name, run)),
     dom: (name, element) => register("dom", name, (e) => {

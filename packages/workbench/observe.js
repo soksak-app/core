@@ -10,7 +10,8 @@
 // 호스트가 요청하지 않으면 실행되지 않는다.
 import { setKnob } from "./compositor.js";
 import { registry } from "./exposure.js";
-import { setTranscript } from "./host.js";
+import { native, report, watchCalls } from "./host.js";
+import { createTranscript } from "./transcript.js";
 import { host } from "@soksak/runtime";
 import { surfaceInput } from "./plane.js";
 
@@ -39,8 +40,12 @@ registry.method("diagnostics.knob", ({ name, value }) => {
   return null;
 });
 
+// 호출 기록기. 기록기가 이 패키지에 있으므로 두 애플리케이션이 같은 형식과 순서로 남긴다.
+const transcript = createTranscript(report);
+if (native) watchCalls((name, payload, answered) => transcript.record(name, payload, answered));
+
 registry.method("diagnostics.transcript", ({ on }) => {
-  setTranscript(on === true);
+  transcript.set(on === true);
   return null;
 });
 

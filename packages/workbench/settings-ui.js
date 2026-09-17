@@ -10,16 +10,17 @@
 // [data-native-modal] 요소다. DOM 은 네이티브 표면 위에 그릴 수 없으므로 호스트가
 // 이 요소를 별도 뷰에 렌더링한다. 그 뷰는 사본이므로 여기서 등록한 리스너가 동작하지
 // 않는다. 모든 컨트롤에 data-key 또는 data-set 을 붙이고 응답을 answer() 하나로
-// 받는다.
+// 받는다. 각 컨트롤은 data-command 로 실행할 코어 명령을 가리키고, answer() 는 그
+// 명령을 실행한다.
 import { standIn } from "./compositor.js";
 import { native, overlay } from "./host.js";
 import { active } from "./projects.js";
 import { icon } from "./icons.js";
-import { onAnswer, onGripDrag, showValue } from "./card.js";
+import { onGripDrag, showValue } from "./card.js";
+import { commandOf, delegate, mark, run } from "./commands.js";
 import { plugins, section } from "./registry.js";
 import {
-  FONTS, MODES, THEMES, applyTheme, link, set,
-  scopedValue, settingProject, overridden, reset,
+  FONTS, MODES, THEMES, scopedValue, settingProject, overridden,
 } from "./settings.js";
 
 /* 열려 있는 동안에만 존재한다. 숨겨 두면 표시 여부를 CSS 가 결정하게 되고,
@@ -77,6 +78,16 @@ function group(name, text, children) {
    호스트에 전송하는 것은 innerHTML 이고 직렬화되는 것은 속성뿐이다.
    checked/selected/value 를 프로퍼티로만 설정하면 사본이 초기값으로 렌더링된다. */
 
+/**
+ * 값을 입력하는 컨트롤의 명령. 설정 이름이면 core.settings.change, 사이드바 연결
+ * (link:<자리>:<플러그인>)이면 core.settings.link 다.
+ */
+function valueCommand(el, key) {
+  const [kind, place, plugin] = key.split(":");
+  if (kind === "link") mark(el, "core.settings.link", { place, plugin: plugin || null, scope }, "set");
+  else mark(el, "core.settings.change", { key, scope });
+}
+
 /** select 를 만든다. 선택한 값이 key 와 함께 반환된다. */
 function choose(key, options, now) {
   const wrap = document.createElement("span");
@@ -84,6 +95,7 @@ function choose(key, options, now) {
   const el = document.createElement("select");
   el.dataset.set = key;
   el.dataset.expose = "core.settings-modal.set";
+  valueCommand(el, key);
   for (const [v, label] of options) {
     const o = document.createElement("option");
     o.value = v;
@@ -109,6 +121,8 @@ function segment(key, options, now) {
     b.type = "button";
     b.dataset.key = `pick:${key}:${v}`;
     b.dataset.expose = key === "scope" ? "core.settings-modal.scope" : "core.settings-modal.pick";
+    if (key === "scope") mark(b, "core.settings-modal.scope", { scope: v });
+    else mark(b, "core.settings.change", { key, value: v, scope });
     b.dataset.on = String(v === now);
     b.textContent = label;
     el.appendChild(b);
@@ -123,6 +137,7 @@ function toggle(key, now) {
   el.className = "set-switch";
   el.dataset.set = key;
   el.dataset.expose = "core.settings-modal.set";
+  valueCommand(el, key);
   el.toggleAttribute("checked", now);
   return el;
 }
@@ -135,6 +150,7 @@ function slide(key, min, max, now, unit) {
   el.type = "range";
   el.dataset.set = key;
   el.dataset.expose = "core.settings-modal.set";
+  valueCommand(el, key);
   el.min = String(min);
   el.max = String(max);
   el.setAttribute("value", String(now));
@@ -151,6 +167,8 @@ function press(key, label) {
   el.type = "button";
   el.dataset.key = key;
   el.dataset.expose = key === "press:build" ? "core.settings-modal.build" : "core.settings-modal.reset";
+  if (key === "press:build") mark(el, "core.layout.reset");
+  else mark(el, "core.settings.reset", { key: key.split(":")[1] });
   el.textContent = label;
   return el;
 }
@@ -167,6 +185,7 @@ function swatch(theme) {
   el.type = "button";
   el.dataset.key = `theme:${theme.name}`;
   el.dataset.expose = "core.settings-modal.theme";
+  mark(el, "core.settings.theme", { name: theme.name, scope });
   el.dataset.on = String(theme.name === themeName());
   const c = theme[modeName()];
   const gap = parseFloat(theme.shape.gap);
@@ -269,26 +288,19 @@ function makeCard() {
   el.innerHTML =
     '<header class="set-card__head" data-grip data-expose="core.settings-modal.grip">' +
       `<span class="set-card__title">${NAME}</span>` +
-      `<button class="act" type="button" data-key="close" data-expose="core.settings-modal.close" title="닫는다">${icon("close")}</button>` +
+      `<button class="act" type="button" data-key="close" data-expose="core.settings-modal.close" data-command="core.settings.close" title="닫는다">${icon("close")}</button>` +
     '</header>' +
     '<div class="set-card__body">' +
       '<nav class="set-card__nav"></nav>' +
       '<div class="set-card__pane"></div>' +
     '</div>';
-  onAnswer(el, answer);
+  // 호스트가 없으면 이 문서의 카드가 입력을 받는다. 컨트롤이 가리키는 명령을 실행한다.
+  delegate(el);
   // 호스트가 있으면 이 요소는 렌더링되지 않는다. 그립 드래그는 사본이 있는 뷰에서
   // 발생하고 그 결과가 answer() 로 전달된다.
-  onGripDrag(el, (dx, dy) => answer("move", `${dx},${dy}`));
+  onGripDrag(el, (dx, dy) => run("core.settings-modal.move", { dx, dy }));
   showValue(el);
   return el;
-}
-
-/* 값이 아닌 것을 누른 것. 이 모달은 그것을 수행하지 않고 알린다. */
-let commanded = () => {};
-
-/** 값이 아닌 누름을 받을 함수를 등록한다. 지금은 「초기 배치로」 하나다. */
-export function onCommand(fn) {
-  commanded = fn;
 }
 
 /* 모달을 그리거나 닫을 때 호출할 함수. 공개 항목이 등록한다. */
@@ -317,9 +329,34 @@ export function settingsModalState() {
       label: el.tagName === "SELECT" ? "" : el.textContent.trim(),
       on: on === null ? null : on === "true",
       value: "value" in el && el.tagName !== "BUTTON" ? String(el.value) : null,
+      command: commandOf(el),
     };
   });
-  return { open: true, controls };
+  const r = card.getBoundingClientRect();
+  return { open: true, section: here, scope, card: { x: r.left, y: r.top, w: r.width, h: r.height }, controls };
+}
+
+/** 모달의 절을 바꾼다. */
+export function showSection(id) {
+  if (!card) throw new Error("settings are not open");
+  if (!SECTIONS.some(([known]) => known === id)) throw new Error(`unknown settings section ${id}`);
+  here = id;
+  drawSettings();
+}
+
+/** 모달의 범위를 바꾼다. 프로젝트 범위는 프로젝트가 선택된 동안만 있다. */
+export function showScope(next) {
+  if (!card) throw new Error("settings are not open");
+  if (next !== "common" && !(next === "project" && settingProject())) throw new Error(`scope ${next} is not available`);
+  scope = next;
+  drawSettings();
+}
+
+/** 모달 카드를 옮긴다. */
+export function moveSettings(dx, dy) {
+  if (!card) throw new Error("settings are not open");
+  moveBy(dx, dy);
+  queueMicrotask(() => drawn());
 }
 
 /** 카드를 다시 그리고, 열려 있으면 호스트 뷰의 내용도 갱신한다. */
@@ -334,6 +371,7 @@ export function drawSettings() {
     b.type = "button";
     b.dataset.key = `nav:${id}`;
     b.dataset.expose = "core.settings-modal.nav";
+    mark(b, "core.settings-modal.nav", { section: id });
     b.dataset.on = String(id === here);
     b.textContent = name;
     nav.appendChild(b);
@@ -366,27 +404,21 @@ export function drawSettings() {
  * 카드의 응답 하나를 처리한다. key 가 대상, value 가 값이다.
  *
  * 컨트롤마다 리스너를 등록하지 않는다. 네이티브 뷰는 이 요소의 사본을 렌더링하므로
- * 거기 등록한 리스너가 동작하지 않는다.
+ * 거기 등록한 리스너가 동작하지 않는다. 응답한 컨트롤을 이 문서의 카드에서 찾아 그
+ * 컨트롤의 명령을 실행한다. 누름은 value 가 비어 있고, 값 입력은 그 값을 더한다.
  */
 function answer(key, val) {
-  if (key === "scope") { scope = val; return drawSettings(); }
-  if (key === "close") return closeSettings();
-  if (key === "move") return moveBy(...val.split(",").map(Number));
-  const [kind, a, b] = key.split(":");
-  if (kind === "nav") { here = a; return drawSettings(); }
-  // seg 의 버튼은 값을 key 에 담아 전달한다. 아래의 설정 이름 처리로 넘긴다.
-  if (kind === "pick") return answer(a, b);
-  if (kind === "reset") return reset(a);
-  if (kind === "theme") return applyTheme(a, modeName(), scope);
-  if (kind === "press") return commanded(a);
-  if (kind === "link") return link(a, b || null, val || null, scope);
-  // 손잡이는 다음 렌더에 반영된다. 알리지 않으면 바꾼 값이 화면에도, 검증 결과에도
-  // 나타나지 않는다.
-  // 나머지 key 는 설정 이름이다. 컨트롤이 문자열을 주므로 현재 값의 타입으로
-  // 변환 방식을 결정한다.
-  const now = value(key);
-  set({ [key]: typeof now === "boolean" ? val === "true"
-    : typeof now === "number" ? Number(val) : val }, scope);
+  if (!card || key === "") return;
+  // 사본의 머리를 끈 거리. 머리가 가리키는 이동 명령을 실행한다.
+  if (key === "move") {
+    const [dx, dy] = val.split(",").map(Number);
+    return run("core.settings-modal.move", { dx, dy });
+  }
+  const pressed = card.querySelector(`[data-key="${CSS.escape(key)}"]`);
+  const field = pressed ? null : card.querySelector(`[data-set="${CSS.escape(key)}"]`);
+  const found = pressed ? commandOf(pressed) : field ? commandOf(field, val) : null;
+  if (!found) throw new Error(`settings control ${key} is not in the card`);
+  return run(found.name, found.params);
 }
 
 /** 카드의 위치와 크기를 판 기준으로 측정해 반환한다. 호스트가 이 좌표로 뷰를 배치한다. */

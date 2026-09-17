@@ -51,7 +51,7 @@ The workbench loads `environment.json` and every listed `plugin.json` before it 
 
 ## Staged layout
 
-`soksak-stage <output> [--executables <dir>]` runs in an application directory and resolves packages through Node module resolution. It copies files without changing them:
+`soksak-stage <output> [--executables <dir>] [--diagnostics]` runs in an application directory and resolves packages through Node module resolution. It copies files without changing them:
 
 | Path | Source |
 | --- | --- |
@@ -60,8 +60,9 @@ The workbench loads `environment.json` and every listed `plugin.json` before it 
 | `/runtime/` | The application's `runtime` directory |
 | `/environment.json` | The application's `environment.json` |
 | `/modules/<sidecar>/sidecar.json` | `sidecar.json` of each sidecar package listed in a plugin's `sidecars` |
+| `/diagnostics.js` | With `--diagnostics`, the workbench's `observe.js` (the page diagnostic methods); otherwise an empty module |
 
-With `--executables <dir>`, the tool also copies each sidecar's built `executable` file into `<dir>` under its file name and fails when the file is not built. The debug staging targets `frontend-wailsv3` and `frontend-tauriv2` and the release build targets run the `sidecars` target, which builds every sidecar package, and then stage into `apps/<app>/src/frontend` with `--executables` set to the directory of the application executable (`target/debug` or `target/release`).
+With `--executables <dir>`, the tool also copies each sidecar's built `executable` file into `<dir>` under its file name and fails when the file is not built. The debug staging targets `frontend-wailsv3` and `frontend-tauriv2` and the release build targets run the `sidecars` target, which builds every sidecar package, and then stage into `apps/<app>/src/frontend` with `--executables` set to the directory of the application executable (`target/debug` or `target/release`). The debug targets add `--diagnostics`; release builds contain no page diagnostic code.
 
 Every page declares one import map equal to `PAGE_IMPORTS`: `soksak`, `@soksak/plugin-api`, `@soksak/plugin-api/page`, `@soksak/runtime`, and `@soksak/workbench/`.
 

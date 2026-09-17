@@ -279,7 +279,7 @@ export function applyTheme(name, next, scope) {
   if (!MODES.includes(next)) throw new Error(`unknown mode: ${next}`);
   const theme = themeOf(name);
   // 테마 선택이 형태 네 값도 함께 설정한다.
-  set({
+  return set({
     theme: theme.name, mode: next,
     gap: parseFloat(theme.shape.gap), radius: parseFloat(theme.shape.r),
     font: theme.shape.font, size: parseFloat(theme.shape.size),

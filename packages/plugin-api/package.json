@@ -11,9 +11,13 @@
   },
   "files": [
     "index.js",
+    "binder.js",
     "page.js"
   ],
   "scripts": {
     "test": "node --test test/"
+  },
+  "devDependencies": {
+    "jsdom": "^30.0.1"
   }
 }

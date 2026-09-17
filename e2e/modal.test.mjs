@@ -37,7 +37,7 @@ async function background(s, enabled) {
 
 /** 설정 모달을 열고 문서가 렌더를 보고할 때까지 기다린다. */
 async function openSettings(s) {
-  await s.act("core.chrome.settings", "click");
+  await s.run("core.settings.open");
   return s.until("core.modal", (modal) => modal?.id === "settings" && modal.document !== null,
     "settings did not render");
 }
@@ -51,8 +51,8 @@ async function control(s, name, key) {
 
 async function openCompositing(s) {
   await openSettings(s);
-  const nav = await control(s, "core.settings-modal.nav", "nav:compositing");
-  await s.act("core.settings-modal.nav", "click", { index: nav.index });
+  await control(s, "core.settings-modal.nav", "nav:compositing");
+  await s.run("core.settings-modal.nav", { section: "compositing" });
   await control(s, "core.settings-modal.build", "press:build");
 }
 
@@ -85,7 +85,7 @@ for (const app of Object.values(APPS)) {
     settingsAboveSurfaces(before);
     const old = new Set(before.surfaces.map((x) => x.id));
     const build = await control(s, "core.settings-modal.build", "press:build");
-    await s.act("core.settings-modal.build", "click", { index: build.index });
+    await s.run(build.command.name, build.command.params);
     const after = await s.until("host.window",
       (state) => state.surfaces.some((x) => x.visible && !old.has(x.id)) && state.modal?.shown,
       "the layout rebuild did not display new native surfaces");
@@ -150,8 +150,10 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
-    for (const name of ["core.card.add", "core.card.split-x", "core.card.split-y"]) {
-      await s.act(name, "click", { index: 0 });
+    const card = (await s.get("core.grid")).cards.find((c) => c.pane === 0).id;
+    for (const menu of ["add", "split-x", "split-y"]) {
+      const name = `core.card.${menu}`;
+      await s.run("core.card.menu", { card, menu });
       const state = await s.until("host.window", (w) => w.modal?.id === "picker" && w.modal.shown,
         `${name} did not show its menu`);
       transparent(state.modal);

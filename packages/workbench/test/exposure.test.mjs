@@ -217,6 +217,32 @@ test("requests for surface names are forwarded to the preferred surface with its
   assert.equal((await made.handle({ method: "status.get", params: { name: "probe.lines" } })).error.code, EXPOSURE_ERRORS.unregistered);
 });
 
+test("a forwarded command carries the timeout its declaration gives, and other requests carry none", async () => {
+  const host = fakeHost(() => ({ result: null }));
+  const made = createRegistry({ call: host.call });
+  made.declare("core", coreExposes());
+  const slow = probeExposes();
+  slow.commands.push({ name: "probe.wait", description: "Waits.", params: { type: "object" }, result: {}, timeout: 120000 });
+  made.declare("probe", slow);
+  made.configure({ surfacePlugin: () => "probe" });
+  for (const name of ["probe.send", "probe.wait"]) made.registered({ surface: "tab-a", kind: "command", name });
+  made.registered({ surface: "tab-a", kind: "status", name: "probe.lines" });
+  await made.handle({ method: "command.run", params: { name: "probe.wait", params: {} } });
+  await made.handle({ method: "command.run", params: { name: "probe.send", params: {} } });
+  await made.handle({ method: "status.get", params: { name: "probe.lines" } });
+  const forwarded = host.calls.filter(([name]) => name === "exposureForward").map(([, arg]) => arg);
+  assert.deepEqual(forwarded.map((arg) => arg.timeout), [120000, undefined, undefined]);
+  assert.equal(Object.hasOwn(forwarded[1], "timeout"), false);
+});
+
+test("run executes a core command locally with schema checks", async () => {
+  const made = coreRegistry(null);
+  made.command("core.fixture.add", ({ n }) => n + 1);
+  assert.equal(await made.run("core.fixture.add", { n: 2 }), 3);
+  await assert.rejects(made.run("core.fixture.add", { n: "two" }), { code: EXPOSURE_ERRORS.invalidParams });
+  await assert.rejects(made.run("core.fixture.missing", {}), { code: EXPOSURE_ERRORS.unknownName });
+});
+
 test("a watched surface status follows status.next replies until unwatch", async () => {
   let release = null;
   const host = fakeHost(({ method, params }) => {

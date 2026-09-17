@@ -37,6 +37,7 @@
 | command | `description` | 한 문장 설명 |
 | command | `params` | 매개변수 스키마 |
 | command | `result` | 결과 스키마 |
+| command | `timeout` | 선택. 호스트가 표면 페이지의 답을 기다리는 시간(ms, 1–600000). 없으면 10초다 |
 | dom | `name` | 항목 이름 |
 | dom | `description` | 한 문장 설명 |
 | dom | `many` | 선택. 여러 요소가 같은 이름을 쓰면 `true`이며, 요청은 `index`로 요소 하나를 지정한다 |
@@ -44,6 +45,17 @@
 스키마는 `type`, `properties`, `items`, `enum` 키워드만 쓰는 JSON Schema 부분집합이다.
 
 dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 없으면 그 이름을 가진 요소는 정확히 하나다.
+
+## 사용자 인터페이스
+
+사람과 외부 클라이언트는 같은 항목으로 문서를 조작한다.
+
+- 문서의 모든 사용자 조작은 선언된 명령을 실행한다. 컨트롤은 `data-command="<이름>"`으로 명령을 가리키고, 고정 매개변수는 `data-params`에 JSON 객체로 적는다. 값을 입력하는 컨트롤은 그 값을 `data-value`가 가리키는 매개변수 이름(기본 `value`)으로 더한다. 명령을 먼저 선언하고(`exposure.json`, `plugin.json`), 문서는 `@soksak/plugin-api`의 `createBinder(run)`으로 선언된 명령에만 요소를 연결한다. `bind(요소, 이름, 매개변수, {event, when, stop, failed})`는 이벤트에서 명령을 실행하고, `mark(요소, 이름, 매개변수, 값 이름)`은 속성을 붙이며, `delegate(루트)`는 표시된 하위 요소의 누름과 값 변경을 실행한다. 선언되지 않은 이름을 연결하거나 표시하면 예외를 던진다. 워크벤치는 `packages/workbench/commands.js`(등록소 위의 연결기)를, 플러그인 페이지는 페이지가 등록한 명령을 실행하는 `expose.bind`, `expose.mark`, `expose.delegate`를 쓴다. 처리기는 모듈 함수를 직접 부르지 않는다. 탭 드래그 같은 연속 조작은 결과를 만드는 명령(`core.tab.move`)을 가지며, 키보드 단축키도 명령을 실행한다.
+- 문서에 보이는 모든 상태는 status로 읽을 수 있다.
+- 모든 조작 요소(`button`, `input`, `select`, `textarea`, `role="button"`, `contenteditable`)는 명령에 연결되고(직접 연결되거나, 위임한 루트 안에서 `data-command`를 가짐) dom 이름을 가진다.
+- 네이티브 모달은 요소의 사본을 그리고 컨트롤의 key로 답한다. 메인 페이지는 자기 요소에서 그 컨트롤을 찾아 명령을 실행한다.
+
+충족 여부는 실행 중인 문서에서 판단한다. 연결기의 `audit(루트)`는 연결되지 않았거나 dom 이름이 없는 조작 요소를 `{tag, expose, command, text}`로 나열한다. 메인 페이지는 이를 `core.page.audit`로, 모든 플러그인 페이지는 `core.surface.document`의 `unbound`로 공개한다. `e2e/audit.test.mjs`가 두 앱의 모든 화면, 모달 구역, 메뉴, 편집 상태, 보이는 플러그인 표면을 방문해 빈 목록을 요구한다. `scripts/check-exposure.mjs`(`make exposure-check`)는 워크벤치와 플러그인 페이지(`plugins/*/ui`)에서 소스가 적은 것만 검사한다. 소스에 적은 이름은 모두 선언되고, 선언한 status와 명령은 등록되며, 선언한 dom 이름은 공개 값으로 적혀 있다.
 
 ## 등록
 
@@ -63,7 +75,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 
 | 종류 | 이름 | 의미 |
 | --- | --- | --- |
-| status | `core.surface.document` | `{url, timeOrigin, readyState, themed, scale, body, viewport, filter}`: 문서 주소, 시간 원점, 준비 상태, 첫 테마 적용 여부, 기기 픽셀 비율, CSS 픽셀 단위 body와 시각 뷰포트 크기, 루트 요소의 계산된 `filter` |
+| status | `core.surface.document` | `{url, timeOrigin, readyState, themed, scale, body, viewport, filter, unbound}`: 문서 주소, 시간 원점, 준비 상태, 첫 테마 적용 여부, 기기 픽셀 비율, CSS 픽셀 단위 body와 시각 뷰포트 크기, 루트 요소의 계산된 `filter`, 조작 요소의 audit(`core.page.audit`와 같은 형식) |
 | status | `core.surface.input` | 문서의 최근 입력 이벤트 32개(신뢰 여부 포함)를 순서대로 담는다. `pointerdown`, `pointerup`, `pointermove`, `click`, `wheel`, `keydown`에 대한 `{sequence, type, trusted, x, y, key}`. `sequence`는 1부터 기록한 이벤트마다 1씩 증가한다 |
 | command | `core.surface.hit` | CSS 픽셀 단위 `{x, y}`. 그 점에 문서의 요소가 있으면 `true`를 반환한다 |
 
@@ -109,10 +121,10 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 | --- | --- | --- |
 | `windows.list` | 없음 | `[{window, title, project, key, ready}]`. `project`는 창에 마지막으로 열린 프로젝트의 루트 디렉터리이며 없으면 `null`이다. `ready`는 창의 메인 페이지가 준비를 알린 뒤 참이고 로드하는 동안 거짓이다. 페이지가 로드 중인 창에 대한 요청은 1003으로 실패한다 |
 | `exposure.list` | `{window}` | `{status, commands, dom}`: 코어, 호스트, 로드된 플러그인의 선언 항목을 선언 형식으로 반환한다. 각 항목에 `registered`가 있다 |
-| `status.get` | `{window, name}` | 현재 값 |
+| `status.get` | `{window, name, surface?}` | 현재 값 |
 | `status.watch` | `{window, name, surface?}` | `null`. 이후 `status.unwatch`를 받거나 연결이 닫힐 때까지 값이 바뀔 때마다 호스트가 `status.changed` 알림 `{window, name, surface?, value}`를 보낸다. `surface` 값이 다른 감시는 서로 별개다 |
-| `status.unwatch` | `{window, name}` | `null` |
-| `command.run` | `{window, name, params}` | 명령 결과 |
+| `status.unwatch` | `{window, name, surface?}` | `null` |
+| `command.run` | `{window, name, params, surface?}` | 명령 결과 |
 | `dom.rect` | `{window, name, index?}` | 소유 문서의 CSS 픽셀 좌표 `{x, y, width, height}`와, 창 좌표로 나타낸 문서 원점 `{document}` |
 | `dom.act` | `{window, name, index?, action, value?, event?}` | `null`. `action`은 `click`, `input`, `dispatch` 중 하나다. 페이지는 `isTrusted`가 false인 합성 DOM 이벤트를 받는다 |
 | `input.pointer` | `{window, x, y, phase, button?, deltaX?, deltaY?, activate?}` | `null`. 창 좌표를 쓴다. `phase`는 `move`, `down`, `drag`, `up`, `scroll` 중 하나다. `button`은 `left`(기본값) 또는 `right`다. `deltaX`, `deltaY`는 포인트 단위 스크롤 거리다. `activate`는 `move`에 적용한다 |
@@ -137,7 +149,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 | 메인 페이지 → 호스트 | 호출 `exposureChanged` | 감시 중인 상태의 `{name, surface?, value}`. 감시가 표면을 지정했으면 `surface`가 있다 |
 | 표면 페이지 → 호스트 | 호출 `exposureRegister` | `{surface, kind, name}` |
 | 호스트 → 메인 페이지 | 이벤트 `exposure-registered` | `{surface, kind, name}`. 표면이 제거되면 `{surface, closed: true}`. 표면은 메인 페이지를 다시 읽어도 남으므로 메인 페이지가 준비를 알린 뒤 호스트가 살아 있는 등록을 모두 다시 보낸다 |
-| 메인 페이지 → 호스트 | 호출 `exposureForward` | 표면 페이지가 등록한 이름에 대한 `{id, surface, method, params}` |
+| 메인 페이지 → 호스트 | 호출 `exposureForward` | 표면 페이지가 등록한 이름에 대한 `{id, surface, method, params, timeout?}`. `timeout`은 명령 선언에서 가져온 1 이상 600000 이하의 정수 밀리초이며, 없으면 호스트는 10초를 기다린다. `status.next`는 `timeout`을 받지 않는다. 올바르지 않은 `timeout`은 -32602를 반환한다 |
 | 호스트 → 표면 페이지 | 이벤트 `exposure-request` | `{id, method, params}` |
 | 표면 페이지 → 호스트 | 호출 `exposureReply` | `{id, result}` 또는 `{id, error}`. 호스트는 이 값을 `exposureForward`의 결과로 메인 페이지에 반환한다 |
 | 메인 페이지 → 표면 페이지(`exposureForward` 경유) | `status.watch`, `status.unwatch` | `{name}`. 표면 페이지가 값 추적을 시작하거나 멈춘다 |

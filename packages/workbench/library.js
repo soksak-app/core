@@ -4,6 +4,7 @@ import { fresh } from "./plane.js";
 import { windows } from "@soksak/runtime";
 import { icon } from "./icons.js";
 import { isPlace, plugin } from "./registry.js";
+import { delegate, mark } from "./commands.js";
 
 const TINTS = ["#ffb36b", "#7fe3b0", "#7db4ff", "#e08bd8", "#f2d16b"];
 const element = (tag, cls, text) => {
@@ -22,15 +23,15 @@ export function createLibrary(root, rendered = () => {}) {
     <main class="library-main">
       <header class="library-heading">
         <h1>프로젝트</h1>
-        <label class="select-field library-sort"><select aria-label="프로젝트 정렬" data-expose="core.library.sort"><option value="saved">저장 순서</option><option value="name">이름</option><option value="recent">최근</option><option value="open">열림</option></select></label>
-        <label class="library-search"><span class="sr-only">프로젝트 검색</span><input class="text-field" type="search" data-expose="core.library.search" placeholder="이름 또는 폴더 검색" autocomplete="off"></label>
+        <label class="select-field library-sort"><select aria-label="프로젝트 정렬" data-expose="core.library.sort" data-command="core.library.sort" data-value="order"><option value="saved">저장 순서</option><option value="name">이름</option><option value="recent">최근</option><option value="open">열림</option></select></label>
+        <label class="library-search"><span class="sr-only">프로젝트 검색</span><input class="text-field" type="search" data-expose="core.library.search" data-command="core.library.search" data-value="query" data-live placeholder="이름 또는 폴더 검색" autocomplete="off"></label>
       </header>
       <div class="library-error" role="alert" hidden></div>
       <div class="library-form" hidden></div>
-      <div class="library-empty" hidden><h2>프로젝트를 시작하세요</h2><p>새 프로젝트를 만들거나 기존 폴더를 여세요.</p></div>
+      <div class="library-empty" data-expose="core.library.empty" hidden><h2>프로젝트를 시작하세요</h2><p>새 프로젝트를 만들거나 기존 폴더를 여세요.</p></div>
       <div class="library-grid" role="list"></div>
     </main>
-    <footer class="library-footer"><span class="library-count"></span><button type="button" class="library-return" data-expose="core.library.return" hidden>작업 화면으로 돌아가기</button><button type="button" data-action="window" data-expose="core.library.window">＋ 새 창</button></footer>`;
+    <footer class="library-footer"><span class="library-count"></span><button type="button" class="library-return" data-expose="core.library.return" data-command="core.library.return" hidden>작업 화면으로 돌아가기</button><button type="button" data-action="window" data-expose="core.library.window" data-command="core.library.window">＋ 새 창</button></footer>`;
   const grid = root.querySelector('.library-grid');
   const search = root.querySelector('input[type=search]');
   const sort = root.querySelector('select');
@@ -50,40 +51,54 @@ export function createLibrary(root, rendered = () => {}) {
   function record(root) {
     return projects.open({ root, color:TINTS.find(t=>!projects.all().some(p=>p.color===t)) ?? TINTS[0], layout:fresh() });
   }
-  function showForm() {
+  let formMode = null;
+  function showForm(mode = windows.createsFolders ? 'create' : 'open') {
+    if (mode === 'create' && !windows.createsFolders) throw new Error('this application cannot create folders');
+    if (mode !== 'create' && mode !== 'open') throw new Error(`unknown form mode ${mode}`);
+    formMode = mode;
     error.hidden = true;
     form.hidden = false;
     form.innerHTML = '';
-    const creates = windows.createsFolders;
+    const creates = mode === 'create';
     const heading = element('h2', '', creates?'새 프로젝트':'폴더 열기');
     const fields = element('form', 'library-fields');
     function field(name, title, placeholder, expose) {
       const label=element('label','',title), input=element('input','text-field');
       input.name=name; input.dataset.expose=expose; input.placeholder=placeholder; input.required=true; input.autocomplete='off';
+      mark(input,'core.library.form.set',{field:name}); input.dataset.live='';
       label.append(input); fields.append(label); return input;
     }
     const name=creates?field('name','프로젝트 폴더 이름','my-project','core.library.form.name'):null;
     const parent=field('parent',creates?'생성 위치':'폴더 경로','/Users/…','core.library.form.parent');
     if (creates) {
       const choose=element('button','ui-button','폴더 선택'); choose.type='button'; choose.dataset.expose='core.library.form.choose';
-      choose.onclick=()=>perform(async()=>{ const path=await windows.chooseFolder(); if(path) parent.value=path; });
+      mark(choose,'core.library.choose-folder');
       parent.parentElement.append(choose);
     }
     const actions=element('div','library-form__actions');
-    const cancel=element('button','ui-button','취소'); cancel.type='button'; cancel.dataset.expose='core.library.form.cancel'; cancel.onclick=()=>{form.hidden=true;rendered();};
-    const submit=element('button','ui-button library-primary',creates?'생성 후 열기':'열기'); submit.type='submit'; submit.dataset.expose='core.library.form.submit';
+    const cancel=element('button','ui-button','취소'); cancel.type='button'; cancel.dataset.expose='core.library.form.cancel'; mark(cancel,'core.library.form.cancel');
+    const submit=element('button','ui-button library-primary',creates?'생성 후 열기':'열기'); submit.type='button'; submit.dataset.expose='core.library.form.submit'; mark(submit,'core.library.form.submit');
     actions.append(cancel,submit); fields.append(actions); form.append(heading,fields);
-    fields.onsubmit=(event)=>{event.preventDefault();perform(async()=>{
-      let root=parent.value.trim();
-      if(creates) root=(await windows.createFolder({parent:root,name:name.value.trim()})).root;
-      await record(root); form.hidden=true;
-    });};
+    // Enter 는 제출 명령을 실행한다. 폼의 기본 제출은 쓰지 않는다.
+    fields.addEventListener('keydown',(event)=>{ if(event.key==='Enter'){ event.preventDefault(); submit.click(); } });
     fields.querySelector('input').focus();
     rendered();
   }
-  root.querySelector('[data-action=window]').onclick=()=>perform(()=>projects.newWindow());
-  back.onclick=()=>perform(()=>projects.activate(projects.active().id));
-  search.oninput=render; sort.onchange=render;
+  function formField(name) {
+    const input = form.querySelector(`input[name="${name}"]`);
+    if (form.hidden || !input) throw new Error(`the form has no ${name} field`);
+    return input;
+  }
+  function closeForm() { form.hidden = true; formMode = null; rendered(); }
+  async function submitForm() {
+    if (form.hidden) throw new Error('the form is not open');
+    await perform(async()=>{
+      let target=formField('parent').value.trim();
+      if(formMode==='create') target=(await windows.createFolder({parent:target,name:formField('name').value.trim()})).root;
+      await record(target); form.hidden=true; formMode=null;
+    });
+  }
+  delegate(root);
 
   function render() {
     if (!projects.inLibrary()) return;
@@ -101,7 +116,7 @@ export function createLibrary(root, rendered = () => {}) {
       card.dataset.open=String(projects.isOpen(project.id));
       const choose=element('button','library-project__open'); choose.type='button'; choose.title=project.root; choose.dataset.expose='core.library.open';
       choose.setAttribute('aria-label',`${project.title} 열기`);
-      choose.onclick=()=>perform(()=>projects.activate(project.id));
+      mark(choose,'core.library.open',{id:project.id});
       choose.append(preview(project));
       const text=element('div','library-project__text');
       text.append(element('h2','',project.title),element('p','library-project__path',project.root));
@@ -114,13 +129,15 @@ export function createLibrary(root, rendered = () => {}) {
       text.append(meta); choose.append(text);
       const pin=element('button','act library-project__pin');pin.type='button';pin.dataset.expose='core.library.pin';pin.innerHTML=icon('star');
       pin.title=project.pinned?'고정 해제':'프로젝트 고정';pin.setAttribute('aria-pressed',String(Boolean(project.pinned)));
-      pin.onclick=()=>perform(()=>projects.pin(project.id,!project.pinned));
+      mark(pin,'core.library.pin',{id:project.id,pinned:!project.pinned});
       card.append(choose,pin); grid.append(card);
     }
     const add=element('button','library-add',windows.createsFolders?'＋ 새 프로젝트':'＋ 폴더 열기');add.type='button';add.dataset.action='create';add.dataset.expose='core.library.add';
-    add.onclick=showForm;grid.append(add);
+    mark(add,'core.library.form.open');grid.append(add);
     const empty=root.querySelector('.library-empty');empty.hidden=all.length>0;
-    if(!shown.length&&all.length) grid.prepend(element('p','library-no-results','일치하는 프로젝트가 없습니다.'));
+    if(!shown.length&&all.length) {
+      const none=element('p','library-no-results','일치하는 프로젝트가 없습니다.'); none.dataset.expose='core.library.no-results'; grid.prepend(none);
+    }
     rendered();
   }
   /** 화면의 상태. 미리보기 사각형은 뷰포트 기준이다. */
@@ -131,14 +148,34 @@ export function createLibrary(root, rendered = () => {}) {
         const r=pane.getBoundingClientRect();return {card:pane.dataset.cardId,x:r.x,y:r.y,w:r.width,h:r.height};
       });
     }
+    const input=(name)=>form.querySelector(`input[name="${name}"]`)?.value ?? null;
     return {
       shown:[...grid.querySelectorAll('.library-project')].map(card=>card.dataset.projectId),
+      pinned:[...grid.querySelectorAll('.library-project')].filter(card=>card.querySelector('.library-project__pin').getAttribute('aria-pressed')==='true').map(card=>card.dataset.projectId),
       count:root.querySelector('.library-count').textContent,
       query:search.value, sort:sort.value, form:!form.hidden,
+      formState:form.hidden?null:{mode:formMode,name:input('name'),parent:input('parent')},
+      returnVisible:!back.hidden, pending, empty:!root.querySelector('.library-empty').hidden,
+      noResults:Boolean(grid.querySelector('.library-no-results')),
       error:error.hidden?null:error.textContent, previews,
     };
   }
-  return {render, state, search:()=>search.focus()};
+  const SORTS=['saved','name','recent','open'];
+  /* 명령이 부르는 연산. */
+  const actions={
+    search(query){ search.value=query; render(); },
+    sort(order){ if(!SORTS.includes(order)) throw new Error(`unknown sort ${order}`); sort.value=order; render(); },
+    open:(id)=>perform(()=>projects.activate(id)),
+    pin:(id,pinned)=>perform(()=>projects.pin(id,pinned)),
+    newWindow:()=>perform(()=>projects.newWindow()),
+    back(){ if(back.hidden) throw new Error('there is no workspace to return to'); return perform(()=>projects.activate(projects.active().id)); },
+    openForm:(mode)=>showForm(mode),
+    cancelForm(){ if(form.hidden) throw new Error('the form is not open'); closeForm(); },
+    setField(name,value){ formField(name).value=value; rendered(); },
+    chooseFolder(){ formField('parent'); return perform(async()=>{ const path=await windows.chooseFolder(); if(path) formField('parent').value=path; }); },
+    submitForm,
+  };
+  return {render, state, actions};
 }
 
 function preview(project) {

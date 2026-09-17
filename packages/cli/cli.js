@@ -10,7 +10,7 @@ commands:
   list --window W
   status NAME --window W [--surface S] [--watch]
   run NAME --window W [--surface S] [--params JSON]
-  dom rect|click|input NAME --window W [--surface S] [--index N] [--value V]
+  dom rect|click|input|dispatch NAME --window W [--surface S] [--index N] [--value V] [--event JSON]
   input pointer --window W --x X --y Y --phase move|down|drag|up|scroll [--button left|right] [--delta-x N] [--delta-y N] [--activate]
   input key --window W --key K --phase down|up [--text T] [--modifiers shift,control,option,command]
 
@@ -25,6 +25,7 @@ const options = {
   params: { type: "string" },
   index: { type: "string" },
   value: { type: "string" },
+  event: { type: "string" },
   x: { type: "string" },
   y: { type: "string" },
   phase: { type: "string" },
@@ -58,6 +59,16 @@ function positional(positionals, index, what) {
   return positionals[index];
 }
 
+// 옵션 값을 JSON 으로 읽는다. 없거나 형식이 틀리면 사용법 오류다.
+function json(values, name) {
+  const text = required(values, name);
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    throw new UsageError(`--${name} is not valid JSON: ${error.message}`);
+  }
+}
+
 // undefined 인 필드를 뺀 객체를 만든다.
 function compact(object) {
   return Object.fromEntries(Object.entries(object).filter(([, value]) => value !== undefined));
@@ -82,14 +93,7 @@ function plan(positionals, values) {
     }
     case "run": {
       const name = positional(positionals, 1, "NAME");
-      let params = {};
-      if (values.params !== undefined) {
-        try {
-          params = JSON.parse(values.params);
-        } catch (error) {
-          throw new UsageError(`--params is not valid JSON: ${error.message}`);
-        }
-      }
+      const params = values.params === undefined ? {} : json(values, "params");
       return { method: "command.run", params: compact({ window: window(), name, surface: values.surface, params }) };
     }
     case "dom": {
@@ -99,6 +103,13 @@ function plan(positionals, values) {
       if (action === "rect") return { method: "dom.rect", params: compact(base) };
       if (action === "click") return { method: "dom.act", params: compact({ ...base, action: "click" }) };
       if (action === "input") return { method: "dom.act", params: compact({ ...base, action: "input", value: required(values, "value") }) };
+      if (action === "dispatch") {
+        const event = json(values, "event");
+        if (typeof event !== "object" || event === null || Array.isArray(event) || typeof event.type !== "string") {
+          throw new UsageError("--event must be a JSON object with a type");
+        }
+        return { method: "dom.act", params: compact({ ...base, action: "dispatch", event }) };
+      }
       throw new UsageError(`unknown dom action: ${action}`);
     }
     case "input": {

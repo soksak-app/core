@@ -8,13 +8,20 @@
 import { registry, connectExposure, revisitRegistrations } from "./exposure.js";
 import * as projects from "./projects.js";
 import {
-  activeTab, capture, currentGrid, focused, fresh, onPicker, pickerState, plane, settle, tabsOf,
+  activeTab, addTabTo, capture, cardActs, closeCard, closePicker, closeTabById, currentGrid, dragState, focusCard,
+  focused, fresh, moveTab, onPicker, openCardMenu, openCardTabs, pickItem, pickerState, plane, railState, selectTab,
+  settle, splitCard, tabsOf,
 } from "./plane.js";
-import { defaults, onSaved, overridden, reset, saving, set, settingProject, value } from "./settings.js";
-import { closeSettings, onSettingsDrawn, openSettings, settingsModalState } from "./settings-ui.js";
+import {
+  applyTheme, defaults, link, onSaved, overridden, reset, saving, scopedValue, set, settingProject, value,
+} from "./settings.js";
+import {
+  closeSettings, moveSettings, onSettingsDrawn, openSettings, settingsModalState, showScope, showSection,
+} from "./settings-ui.js";
 import { latest, seated } from "./compositor.js";
 import { modalState, onModalState } from "./host.js";
 import { windows } from "@soksak/runtime";
+import { audit, onBinding } from "./commands.js";
 
 /* 감시 중인 코어 status 의 수신자. */
 const watchers = new Set();
@@ -108,6 +115,7 @@ function gridState() {
       pane: el.querySelector(".chrome__acts") ? pane++ : null,
       tabs: tabs.map(({ id, plugin, title }) => ({ id, plugin, title })),
       active: tabs.length ? activeTab(card).id : null,
+      acts: cardActs(card.id),
     };
   }).filter(Boolean);
   const lines = (axis) => grid.lines(axis).map((_, k) => grid.boundaryPos(axis, k));
@@ -130,6 +138,32 @@ function surfacesState() {
 
 const withOpen = (project) => ({ ...project, open: projects.isOpen(project.id) });
 
+/** 키보드 초점이 있는 요소의 공개 이름과 순서. 공개 이름이 없으면 null 이다. */
+function focusState() {
+  const el = document.activeElement?.closest?.("[data-expose]");
+  if (!el || el === document.body) return null;
+  const name = el.dataset.expose;
+  return { name, index: [...document.querySelectorAll(`[data-expose="${name}"]`)].indexOf(el) };
+}
+
+/** 공개 이름의 요소에 키보드 초점을 준다. */
+function focusElement(name, index = 0) {
+  if (!registry.list().dom.some((entry) => entry.name === name)) throw new Error(`unknown dom ${name}`);
+  const el = document.querySelectorAll(`[data-expose="${name}"]`)[index];
+  if (!el) throw new Error(`dom ${name} has no element at index ${index}`);
+  el.focus();
+}
+
+/** 설정 하나를 입력 값으로 바꾼다. 컨트롤은 문자열을 주므로 현재 값의 타입으로 변환한다. */
+function changeSetting(key, input, scope) {
+  if (!Object.hasOwn(defaults, key)) throw new Error(`Unknown setting: ${key}`);
+  const now = scopedValue(key, scope ?? "common");
+  const next = typeof now === "boolean" ? input === true || input === "true"
+    : typeof now === "number" ? Number(input) : String(input);
+  if (typeof now === "number" && !Number.isFinite(next)) throw new Error(`${key} requires a number`);
+  return set({ [key]: next }, scope);
+}
+
 function need(project, id) {
   if (!project) throw new Error(`Unknown project: ${id}`);
   return project;
@@ -140,7 +174,7 @@ function need(project, id) {
  *
  *   library  createLibrary 의 반환값
  */
-export async function installCoreExposure({ library }) {
+export async function installCoreExposure({ library, renames, resetLayout, chrome }) {
   status("core.window.document", () => ({
     timeOrigin: performance.timeOrigin,
     readyState: document.readyState,
@@ -154,6 +188,8 @@ export async function installCoreExposure({ library }) {
     screen: document.body.dataset.screen,
     modal: settingsModalState().open ? "settings" : pickerState().open ? "picker" : null,
   }));
+  status("core.page.audit", () => ({ unbound: audit(document.body) }));
+  onBinding(coreChanged);
   status("core.page.error", () => document.getElementById("applicationError")?.textContent ?? null);
   status("core.projects", () => projects.all().map(withOpen));
   status("core.project", () => {
@@ -174,9 +210,26 @@ export async function installCoreExposure({ library }) {
   status("core.library", () => library.state());
   status("core.verify", () => verified);
   status("core.modal", modalState);
+  status("core.drag", dragState);
+  status("core.rename", renames.state);
+  status("core.focus", focusState);
+  status("core.chrome", chrome);
+  status("core.rail", () => (currentGrid() ? railState() : null));
 
   registry.command("core.settings.set", async ({ patch, scope }) => { await set(patch, scope); });
   registry.command("core.settings.reset", async ({ key }) => { await reset(key); });
+  registry.command("core.settings.change", async ({ key, value: input, scope }) => {
+    await changeSetting(key, input, scope);
+  });
+  registry.command("core.settings.theme", async ({ name, mode, scope }) => {
+    await applyTheme(name, mode ?? scopedValue("mode", scope ?? "common"), scope);
+  });
+  registry.command("core.settings.link", async ({ place, plugin = null, set: setId, scope }) => {
+    if (!["left", "right", "rail"].includes(place)) throw new Error(`unknown place ${place}`);
+    const id = setId === "" || setId === undefined ? null : setId;
+    if (id !== null && !value("sets").some((s) => s.id === id)) throw new Error(`unknown set ${id}`);
+    await link(place, plugin, id, scope);
+  });
   registry.command("core.settings.open", () => { openSettings(); });
   registry.command("core.settings.close", () => { closeSettings(); });
   registry.command("core.projects.browse", async () => { await projects.browse(); });
@@ -206,6 +259,41 @@ export async function installCoreExposure({ library }) {
     if (!grid?.setSize(card, axis, size)) throw new Error(`cannot size ${card} on ${axis}`);
     settle();
   });
+  registry.command("core.settings-modal.nav", ({ section }) => { showSection(section); });
+  registry.command("core.settings-modal.scope", ({ scope }) => { showScope(scope); });
+  registry.command("core.settings-modal.move", ({ dx, dy }) => { moveSettings(dx, dy); });
+  registry.command("core.layout.reset", () => { resetLayout(); });
+
+  registry.command("core.card.focus", ({ card }) => { focusCard(card); });
+  registry.command("core.card.menu", ({ card, menu }) => { openCardMenu(card, menu); });
+  registry.command("core.card.tab-list", ({ card }) => { openCardTabs(card); });
+  registry.command("core.card.add-tab", ({ card, plugin }) => ({ tab: addTabTo(card, plugin) }));
+  registry.command("core.card.split", ({ card, axis, plugin }) => splitCard(card, axis, plugin));
+  registry.command("core.card.close", ({ card }) => { closeCard(card); });
+  registry.command("core.tab.select", ({ tab }) => { selectTab(tab); });
+  registry.command("core.tab.close", ({ tab }) => { closeTabById(tab); });
+  registry.command("core.tab.move", ({ tab, card, zone }) => { moveTab(tab, card, zone); });
+  registry.command("core.picker.pick", ({ index }) => { pickItem(index); });
+  registry.command("core.picker.close", () => { closePicker(); });
+
+  registry.command("core.library.search", ({ query }) => { library.actions.search(query); });
+  registry.command("core.library.sort", ({ order }) => { library.actions.sort(order); });
+  registry.command("core.library.open", async ({ id }) => { await library.actions.open(id); });
+  registry.command("core.library.pin", async ({ id, pinned }) => { await library.actions.pin(id, pinned); });
+  registry.command("core.library.window", async () => { await library.actions.newWindow(); });
+  registry.command("core.library.return", async () => { await library.actions.back(); });
+  registry.command("core.library.form.open", ({ mode }) => { library.actions.openForm(mode); });
+  registry.command("core.library.form.cancel", () => { library.actions.cancelForm(); });
+  registry.command("core.library.form.set", ({ field, value: input }) => { library.actions.setField(field, input); });
+  registry.command("core.library.form.submit", async () => { await library.actions.submitForm(); });
+  registry.command("core.library.choose-folder", async () => { await library.actions.chooseFolder(); });
+
+  registry.command("core.rename.begin", ({ kind, id }) => { renames.begin({ kind, id }); });
+  registry.command("core.rename.set", ({ value: input }) => { renames.set(input); });
+  registry.command("core.rename.commit", async () => { await renames.commit(); });
+  registry.command("core.rename.cancel", () => { renames.cancel(); });
+  registry.command("core.focus.set", ({ name, index }) => { focusElement(name, index); });
+
   registry.command("core.boundary.move", ({ axis, line, position }) => {
     const grid = currentGrid();
     if (!grid?.hasBoundary(axis, line)) throw new Error(`no ${axis} boundary at line ${line}`);

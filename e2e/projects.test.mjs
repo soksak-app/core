@@ -23,10 +23,12 @@ async function control(s, name, key, predicate = () => true, message = `settings
   return controls.find((c) => c.name === name && c.key === key);
 }
 
-/** 설정 모달 컨트롤을 누른다. */
-async function press(s, name, key) {
-  const found = await control(s, name, key);
-  await s.act(name, "click", { index: found.index });
+/** 설정 모달 컨트롤이 가리키는 명령을 실행한다. value 는 값 입력 컨트롤의 값이다. */
+async function press(s, name, key, value) {
+  const { command } = await control(s, name, key);
+  const params = { ...command.params };
+  if (value !== undefined) params.value = value;
+  await s.run(command.name, params);
 }
 
 /** 설정 모달이 열리고 네이티브 모달이 표시될 때까지 기다린다. */
@@ -35,9 +37,9 @@ async function openSettings(s) {
   await s.until("host.window", (w) => w.modal?.id === "settings" && w.modal.shown, "settings did not render");
 }
 
-/** 설정 모달을 닫기 단추로 닫는다. */
+/** 설정 모달을 닫는다. */
 async function closeSettings(s) {
-  await s.act("core.settings-modal.close", "click");
+  await s.run("core.settings.close");
   await s.until("host.window", (w) => w.modal === null, "settings did not close");
 }
 
@@ -136,8 +138,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(read(join(config, "settings.json")).mode, "dark");
     const commonLatency = read(join(config, "settings.json")).latency;
     await press(child, "core.settings-modal.nav", "nav:compositing");
-    const latency = await control(child, "core.settings-modal.set", "latency");
-    await child.act("core.settings-modal.set", "input", { index: latency.index, value: "7" });
+    await press(child, "core.settings-modal.set", "latency", "7");
     await child.until("core.settings", (value) => value.overridden.includes("latency") && !value.saving,
       "category change did not retain project scope");
     assert.equal(read(join(second.root, ".soksak/settings.json")).latency, 7);
@@ -179,7 +180,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(read(join(config, "settings.json")).mode, "light");
     assert.deepEqual(read(join(second.root, ".soksak/settings.json")), projectSettings);
     await closeSettings(child);
-    await child.act("core.chrome.mode", "click");
+    await child.run("core.settings.set", { patch: { mode: "dark" } });
     await s.until("core.settings", (value) => value.values.mode === "dark", "library appearance action did not update common settings");
     await child.until("core.settings", (value) => !value.saving, "the common setting was not saved");
     assert.deepEqual(read(join(second.root, ".soksak/settings.json")), projectSettings);

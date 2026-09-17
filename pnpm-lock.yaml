@@ -92,7 +92,11 @@ importers:
         specifier: workspace:*
         version: link:../client
 
-  packages/plugin-api: {}
+  packages/plugin-api:
+    devDependencies:
+      jsdom:
+        specifier: ^30.0.1
+        version: 30.0.1
 
   packages/soksak:
     devDependencies:

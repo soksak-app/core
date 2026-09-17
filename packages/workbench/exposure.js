@@ -55,9 +55,16 @@ export function createRegistry({ call = null } = {}) {
     if (call) call("exposureChanged", surface === undefined ? { name, value } : { name, surface, value });
   };
 
+  /**
+   * 요청을 표면에 전달한다. 명령 선언에 timeout 이 있으면 호스트가 그 시간만큼 기다린다.
+   */
   async function forward(surface, method, params) {
     if (!call) throw new ExposureError(EXPOSURE_ERRORS.gone, `surface ${surface} has no host`);
-    const reply = await call("exposureForward", { id: ++forwards, surface, method, params });
+    const request = { id: ++forwards, surface, method, params };
+    const timeout = method === "command.run"
+      ? declared.get(declarationKey("command", params?.name))?.declaration.timeout : undefined;
+    if (timeout !== undefined) request.timeout = timeout;
+    const reply = await call("exposureForward", request);
     if (reply?.error) throw new ExposureError(reply.error.code, reply.error.message);
     return reply?.result ?? null;
   }
@@ -169,6 +176,15 @@ export function createRegistry({ call = null } = {}) {
     command: (name, run) => core.command(name, run),
     /** 코어 dom 항목을 등록한다. 요소는 요청 시점에 data-expose 속성으로 찾는다. */
     dom: (name, provide = byAttribute(name)) => core.dom(name, provide),
+
+    /**
+     * 이 문서의 코어 명령 하나를 실행한다. 선언의 params 스키마로 검사한다. 문서의 UI 가
+     * 조작을 이 경로로 수행하므로, 사람의 조작과 외부 요청이 같은 명령을 거친다.
+     */
+    run: (name, params = {}) => core.answer("command.run", { name, params }),
+
+    /** 선언된 이름인지. */
+    declared: (kind, name) => declared.has(declarationKey(kind, name)),
 
     /** 요청 이름으로 처리하는 메서드를 등록한다. 진단 메서드가 사용한다. */
     method(name, fn) {

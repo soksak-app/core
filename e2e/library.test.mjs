@@ -73,23 +73,24 @@ for (const app of Object.values(APPS)) {
     assert.deepEqual([blank.surfaces.length, blank.modal], [0, null], "a library window has only its main document");
 
     // 실제 라이브러리 생성 폼을 제출한다.
-    await child.act("core.library.add", "click");
-    await child.act("core.library.form.name", "input", { value: "created" });
-    await child.act("core.library.form.parent", "input", { value: temporary });
-    await child.act("core.library.form.submit", "click");
+    await child.run("core.library.form.open", { mode: "create" });
+    await child.run("core.library.form.set", { field: "name", value: "created" });
+    await child.run("core.library.form.set", { field: "parent", value: temporary });
+    await child.run("core.library.form.submit");
     await child.until("core.screen", (screen) => screen.screen === "workspace", "created project did not replace the library");
     assert.equal((await s.get("host.windows")).length, 2);
     const created = await child.get("core.project");
     assert.equal(created.root, join(temporary, "created"));
     assert.equal(existsSync(created.root), true);
     await child.until("core.grid", (grid) => grid?.cards.length > 0, "new project cards did not render");
-    await child.act("core.chrome.projects", "click");
+    await child.run("core.projects.browse");
     await child.until("core.screen", (screen) => screen.screen === "library", "project list button did not open the library");
     await child.until("core.library", (state) => state.count === "프로젝트 2 · 열림 2", "open project count is not actual");
     const order = (await child.get("core.library")).shown;
-    await child.act("core.library.pin", "click", { index: order.indexOf(created.id) });
+    assert.ok(order.includes(created.id), "the library must list the created project");
+    await child.run("core.library.pin", { id: created.id, pinned: true });
     await child.until("core.projects", (list) => list.find((p) => p.id === created.id)?.pinned, "pin was not saved");
-    await child.act("core.library.search", "input", { value: "created" });
+    await child.run("core.library.search", { query: "created" });
     await shown(child, 1, "search did not filter the library");
     await child.run("core.project.activate", { id: created.id });
     assert.equal((await s.get("host.windows")).length, 2);
@@ -101,7 +102,8 @@ for (const app of Object.values(APPS)) {
     await s.run("core.window.new");
     child = s.on(added(await s.windows(2, "second library window did not open"), [s.window]));
     const libraryOrder = (await shown(child, 2, "saved library did not render")).shown;
-    await child.act("core.library.open", "click", { index: libraryOrder.indexOf(created.id) });
+    assert.ok(libraryOrder.includes(created.id), "the library must list the saved project");
+    await child.run("core.library.open", { id: created.id });
     await child.until("core.screen", (screen) => screen.screen === "workspace", "saved project did not reuse the new window");
     assert.equal((await s.get("host.windows")).length, 2);
 

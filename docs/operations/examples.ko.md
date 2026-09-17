@@ -20,7 +20,7 @@ make wailsv3-build tauriv2-build
 
 브라우저 애플리케이션은 `pnpm example`로 실행하고 `http://localhost:8749/index.html`을 연다. 모든 패키지 테스트는 `pnpm test`로 실행한다.
 
-빌드 대상은 `native/darwin`, 워크벤치, 사이드카를 빌드한 뒤 각 애플리케이션에서 `soksak-stage src/frontend --executables <실행 파일 디렉터리>`를 실행한다. 이 도구는 워크벤치, 배치 라이브러리, 플러그인 API, `environment.json`에 적힌 플러그인, 애플리케이션의 `runtime/` 디렉터리를 생성된 `apps/<app>/src/frontend/`에 배치하고, 사이드카 실행 파일을 실행 파일 디렉터리에 복사한다. 두 실행 파일 모두 빌드 시 프런트엔드를 포함한다. 실행 중인 프로세스에는 새 프런트엔드가 적용되지 않으므로 빌드 후 해당 앱을 다시 실행한다.
+빌드 대상은 `native/darwin`, 워크벤치, 사이드카를 빌드한 뒤 각 애플리케이션에서 `soksak-stage src/frontend --executables <실행 파일 디렉터리>`를 실행한다. 이 도구는 워크벤치, 배치 라이브러리, 플러그인 API, `environment.json`에 적힌 플러그인, 애플리케이션의 `runtime/` 디렉터리를 생성된 `apps/<app>/src/frontend/`에 배치하고, 사이드카 실행 파일을 실행 파일 디렉터리에 복사한다. 디버그 대상은 `--diagnostics`를 더해 페이지 진단 모듈(`diagnostics.js`)을 배치하고, 릴리스 대상은 빈 모듈을 배치한다. 두 실행 파일 모두 빌드 시 프런트엔드를 포함한다. 실행 중인 프로세스에는 새 프런트엔드가 적용되지 않으므로 빌드 후 해당 앱을 다시 실행한다.
 
 디버그 실행 파일은 `target/debug/soksak-wailsv3`와 `target/debug/soksak-tauriv2`다. 릴리스 빌드는 `make wailsv3-build-release tauriv2-build-release`를 사용하며 `target/release/soksak-wailsv3`와 `target/release/soksak-tauriv2`를 만든다. `make examples-size`는 두 프로파일을 빌드하고 크기를 출력한다.
 
@@ -39,9 +39,9 @@ make wailsv3-build tauriv2-build
 pnpm -F @soksak/e2e run verify
 ```
 
-하네스(`e2e/app.mjs`)는 `@soksak/client`로 `<config-dir>/endpoint.json`을 읽어 연결한다([로컬 엔드포인트](../spec/endpoint.ko.md)). `application`이 기대한 호스트인지, `executable`이 이 체크아웃의 실행 파일인지 확인한다. 임시 디렉터리의 잠금 파일 `soksak-check.lock`이 동시 실행을 막으며, 두 번째 실행은 측정하지 않고 실패한다. 검사는 앱을 시작하지 않는다. 상태 조회와 변경은 선언된 항목([노출](../spec/exposure.ko.md))만 사용한다. status 값, 명령, DOM 항목, 호스트 항목, 디버그 빌드의 진단 메서드다. 대기는 `status.watch` 알림과 `host.window.presented`를 사용하며 하네스에는 폴링 반복이나 고정 지연이 없다. 실제 입력 검사는 애플리케이션을 활성화하지 않는 `input.pointer`와 `input.key`를 사용한다. `make e2e-check`는 `e2e/`의 `eval`, `Function` 생성자, 제거된 네이티브 프로브, 제거된 TCP 제어 포트를 거부한다. 실행 중인 앱이 없으면 실패하고, 바이너리가 없으면 건너뜀으로 표시한다. 호스트 검사를 건너뛴 실행으로 두 호스트를 검증했다고 기록하지 않는다.
+하네스(`e2e/app.mjs`)는 `@soksak/client`로 `<config-dir>/endpoint.json`을 읽어 연결한다([로컬 엔드포인트](../spec/endpoint.ko.md)). `application`이 기대한 호스트인지, `executable`이 이 체크아웃의 실행 파일인지 확인한다. 임시 디렉터리의 잠금 파일 `soksak-check.lock`이 동시 실행을 막으며, 두 번째 실행은 측정하지 않고 실패한다. 검사는 앱을 시작하지 않는다. 상태 조회와 변경은 선언된 항목([노출](../spec/exposure.ko.md))만 사용한다. status 값, 명령, DOM 항목, 호스트 항목, 디버그 빌드의 진단 메서드다. 대기는 `status.watch` 알림과 `host.window.presented`를 사용하며 하네스에는 폴링 반복이나 고정 지연이 없다. 실제 입력 검사는 애플리케이션을 활성화하지 않는 `input.pointer`와 `input.key`를 사용한다. `make e2e-check`는 `e2e/`의 타이머, `eval`, `Function` 생성자, 제거된 네이티브 프로브, 제거된 TCP 제어 포트를 거부한다. 실행 중인 앱이 없으면 실패하고, 바이너리가 없으면 건너뜀으로 표시한다. 호스트 검사를 건너뛴 실행으로 두 호스트를 검증했다고 기록하지 않는다.
 
-`make examples-verify`는 `make e2e-check`, 문서 검사, 창 검사를 실행한다. 검증 전에 두 앱을 빌드하고 다시 실행한다. 실행 파일을 다시 빌드해도 이미 실행 중인 프로세스는 교체되지 않는다.
+`make examples-verify`는 `make e2e-check`, `make exposure-check`, 문서 검사, 창 검사를 실행한다. 검증 전에 두 앱을 빌드하고 다시 실행한다. 실행 파일을 다시 빌드해도 이미 실행 중인 프로세스는 교체되지 않는다.
 
 일회용 설정 디렉터리를 사용한다. 하네스는 해당 디렉터리의 프로젝트 목록과 공통 설정을 교체하고 검사 전용 설정을 포함한 `test-project` 폴더를 생성한다. 프로젝트 창 검사는 추가 임시 프로젝트 폴더를 생성하고 일반 파일과 창 API를 실행한다.
 
@@ -49,7 +49,7 @@ pnpm -F @soksak/e2e run verify
 
 녹화는 임시 파일이다. 각 검사는 통과 여부와 무관하게 끝날 때 프레임 디렉터리를 지운다. 실패 메시지는 측정값과 프레임 번호만 보고하며 하네스는 이미지를 쓰지 않는다.
 
-`outside.test.mjs`는 측정 가능한 모든 프레임에서 카드 밖 표면 픽셀 0, 왕복 두 번 전체, 터미널 콘텐츠, DOM 입력 구분선, 카드 UI, 사이드바, 레일의 일정한 상대 좌표를 검사한다. `paint.test.mjs`는 렌더링되지 않은 영역을 검사하고, 드래그 동안의 모든 `core.verify` 결과에 실패 행이 없어야 한다. `footer.test.mjs`는 실제 표면 높이가 0.5pt 단위인지 확인하고, 표면 문서 크기를 `core.surface.document`와 비교하며, 마지막 장치 픽셀에서 `core.surface.hit`을 확인하고, 가로 디바이더 드래그 전체 프레임에서 푸터 픽셀을 검사한다. 이 검사에는 2× 디스플레이가 필요하다. `modal.test.mjs`는 순서, 투명도, 배경 블러(`core.window.document`, `core.surface.document`, `core.modal`), `host.hit`의 네이티브 입력 대상, 닫기, 네이티브 드래그 입력에 의한 이동, 크기 변경, 다시 로드 후 제거를 검사한다. `controls.test.mjs`는 최대화와 녹화 후 `host.window`의 버튼 좌표를 읽는다. `hosts.test.mjs`는 `diagnostics.transcript` 줄의 최종 요청과 표시 좌표를 비교한다. 준비 식별자는 해당 창 내부 값이다.
+`outside.test.mjs`는 측정 가능한 모든 프레임에서 카드 밖 표면 픽셀 0, 왕복 두 번 전체, 터미널 콘텐츠, DOM 입력 구분선, 카드 UI, 사이드바, 레일의 일정한 상대 좌표를 검사한다. `paint.test.mjs`는 렌더링되지 않은 영역을 검사하고, 드래그 동안의 모든 `core.verify` 결과에 실패 행이 없어야 한다. `footer.test.mjs`는 실제 표면 높이가 0.5pt 단위인지 확인하고, 표면 문서 크기를 `core.surface.document`와 비교하며, 마지막 장치 픽셀에서 `core.surface.hit`을 확인하고, 가로 디바이더 드래그 전체 프레임에서 푸터 픽셀을 검사한다. 이 검사에는 2× 디스플레이가 필요하다. `modal.test.mjs`는 순서, 투명도, 배경 블러(`core.window.document`, `core.surface.document`, `core.modal`), `host.hit`의 네이티브 입력 대상, 닫기, 네이티브 드래그 입력에 의한 이동, 크기 변경, 다시 로드 후 제거를 검사한다. `commands.test.mjs`는 카드, 탭, 메뉴, 설정, 라이브러리, 이름 변경 명령을 실행하고 각 결과를 status로 확인한다. `audit.test.mjs`는 모든 화면, 설정 구역과 범위, 메뉴, 이름 변경 상태, 보이는 플러그인 표면을 방문해 `core.page.audit`와 `core.surface.document`의 `unbound`가 비어 있기를 요구한다. `controls.test.mjs`는 최대화와 녹화 후 `host.window`의 버튼 좌표를 읽는다. `hosts.test.mjs`는 `diagnostics.transcript` 줄의 최종 요청과 표시 좌표를 비교한다. 준비 식별자는 해당 창 내부 값이다.
 
 `projects.test.mjs`는 공통·폴더 설정 파일, 일반 범위 탭 위치, 각 탭의 파일 저장, 분류 전환 후 범위 유지, 재정의 제거, 라이브러리 전역 범위 전용 설정과 외관 동작, 작업 화면 덮어쓰기 복원, 폴더 별칭, 탭·창 정책, 독립 모달, 네이티브 창 닫기·다시 열기 후 배치와 창 좌표 복원을 검사한다. `library.test.mjs`는 생성·선택 후 창 재사용, 디렉터리 작업 실패, 실제 열림 상태, 고정, 검색, 작업 화면 복귀, `host.dock`의 Dock 새 창을 검사한다. 미리보기 검사는 카드 순서와 분할 방향을 작업 화면과 비교하고 행 높이, 사이드바 폭, 간격의 균일성과 렌더러 좌표 미저장을 요구한다. `terminal.test.mjs`는 네이티브 입력으로 터미널 입력 칸을 누르고 한 줄을 입력한 뒤 `terminal.output`에 줄이 나타날 때까지 기다리며, `echo` 출력 한 번, `pwd`의 프로젝트 디렉터리, 다른 터미널 탭에 출력 없음을 요구한다. 설정 우선순위와 브라우저 저장소 트랜잭션은 `packages/workbench`와 `apps/browser`의 `pnpm test`가 검사한다. `make native-test`는 `make -C native/darwin test`, `packages/host/wailsv3`와 `sidecars/shell`의 `go test`, `cargo test -p soksak-host-tauriv2`를 실행하며, 호스트 검사는 파일 저장, 사이드카 중계, 엔드포인트를 다룬다.
 
@@ -73,7 +73,7 @@ pnpm -F @soksak/e2e run verify
 
 ## 진단
 
-디버그 빌드(`make wailsv3-build tauriv2-build`)는 [로컬 엔드포인트](../spec/endpoint.ko.md)의 진단 메서드 `diagnostics.fixture`, `diagnostics.drag`, `diagnostics.capture.stop`, `diagnostics.knob`, `diagnostics.transcript`를 포함한다. `soksak` 명령과 `soksak-mcp` 서버도 같은 요청을 보낸다. 예를 들어 `soksak status host.window --window main --config-dir DIR`이다.
+디버그 빌드(`make wailsv3-build tauriv2-build`)는 [로컬 엔드포인트](../spec/endpoint.ko.md)의 진단 메서드 `diagnostics.fixture`, `diagnostics.drag`, `diagnostics.capture.stop`, `diagnostics.knob`, `diagnostics.transcript`를 포함한다. `soksak` 명령과 `soksak-mcp` 서버도 같은 요청을 보낸다. 예를 들어 `soksak status core.screen --window main --config-dir DIR`이다. `soksak dom dispatch NAME --window main --event '{"type":"click"}' --config-dir DIR`는 선언된 DOM 항목에 합성 이벤트를 보낸다. 실제 입력 검사는 `input.pointer`와 `input.key`를 쓴다.
 
 `pnpm -F @soksak/client run bench:application -- --config-dir DIR`은 실행 중인 애플리케이션의 세 경로 순차 왕복을 잰다. `windows.list`(호스트만 응답), `status.get core.screen`(메인 페이지에 중계), 표면을 지정한 `status.get core.surface.document`(메인 페이지를 거쳐 표면 페이지에 중계)다. `bench`는 전송만 잰다. 2026-09-17(M3 Pro, 디버그 빌드, 경로당 2000회, 두 번 실행)의 p50은 Wails 호스트 142–157µs, 페이지 1.5–1.7ms, 표면 4.4–4.5ms, Tauri 호스트 443µs, 페이지 2.6–2.7ms, 표면 1.4–7.5ms였다.
 

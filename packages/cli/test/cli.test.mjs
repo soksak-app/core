@@ -96,12 +96,14 @@ test("dom subcommands map to dom.rect and dom.act", async (t) => {
   assert.equal(JSON.parse(rect.stdout).index, 2);
   assert.equal((await run(["dom", "click", "core.tab", "--window", "main", ...dir])).code, 0);
   assert.equal((await run(["dom", "input", "core.tab", "--window", "main", "--value", "abc", ...dir])).code, 0);
+  assert.equal((await run(["dom", "dispatch", "core.tab", "--window", "main", "--event", '{"type":"keydown","key":"Escape"}', ...dir])).code, 0);
   assert.deepEqual(
     server.requests.map((m) => [m.method, m.params]),
     [
       ["dom.rect", { window: "main", name: "core.tab", index: 2 }],
       ["dom.act", { window: "main", name: "core.tab", action: "click" }],
       ["dom.act", { window: "main", name: "core.tab", action: "input", value: "abc" }],
+      ["dom.act", { window: "main", name: "core.tab", action: "dispatch", event: { type: "keydown", key: "Escape" } }],
     ],
   );
 });
@@ -143,6 +145,9 @@ test("usage errors exit with code 2", async (t) => {
   assert.equal((await run(["run", "x", "--window", "main", "--params", "{", ...dir])).code, 2);
   assert.equal((await run(["input", "pointer", "--window", "main", "--x", "a", "--y", "1", "--phase", "move", ...dir])).code, 2);
   assert.equal((await run(["windows", "--unknown", ...dir])).code, 2);
+  assert.equal((await run(["dom", "dispatch", "core.tab", "--window", "main", ...dir])).code, 2, "dispatch needs --event");
+  assert.equal((await run(["dom", "dispatch", "core.tab", "--window", "main", "--event", '"keydown"', ...dir])).code, 2);
+  assert.equal((await run(["dom", "dispatch", "core.tab", "--window", "main", "--event", "{", ...dir])).code, 2);
   assert.equal((await run(["input", "pointer", "--window", "main", "--x", "1", "--y", "1", "--phase", "down", "--button", "0", ...dir])).code, 2);
   assert.equal((await run(["input", "pointer", "--window", "main", "--x", "1", "--y", "1", "--phase", "down", "--activate", ...dir])).code, 2);
   const missing = await run(["windows"]);

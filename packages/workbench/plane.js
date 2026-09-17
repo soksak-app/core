@@ -11,6 +11,7 @@ import { environment } from "./environment.js";
 import { standIn } from "./compositor.js";
 import { native, onSurfaceInput, overlay, shapes } from "./host.js";
 import { issueId } from "./ids.js";
+import { bind, delegate, mark, run } from "./commands.js";
 
 const NEEDS = ["cards", "card", "insertAt", "moveTo", "standings", "moveBoundary", "zoneAt",
   "splitToward", "replace"];
@@ -171,10 +172,11 @@ function createCard(card) {
     : '<header class="chrome"></header><div class="slot"></div><footer class="status"></footer>';
   // 카드 객체를 클로저에 담지 않고 요소의 data-card-id 를 읽는다. 스페이스를
   // 바꾸면 같은 id 로 새 카드 객체가 만들어지므로, 담아 둔 참조는 없어진 객체다.
+  el.dataset.command = "core.card.focus";
   el.addEventListener("pointerdown", (e) => {
     const id = el.dataset.cardId;
-    if (!id || isPlace(id) || e.target.closest(".tab__x, .chrome__act")) return;
-    if (focusedId !== id) { focusedId = id; settle(); }
+    if (!id || isPlace(id) || e.target.closest(".tab__x, .chrome__act, .chrome__ham")) return;
+    if (focusedId !== id) return run("core.card.focus", { card: id });
   });
   return el;
 }
@@ -221,14 +223,12 @@ function updateCard(el, card) {
   if (!ham) {
     ham = document.createElement("button");
     ham.className = "chrome__ham";
+    ham.dataset.expose = "core.card.tab-list";
     ham.type = "button";
     ham.title = "탭 목록";
     ham.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true">' +
       '<path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/></svg>';
-    ham.addEventListener("click", () => {
-      if (picker?.anchor === ham) { closePicker(); return; }
-      openTabList(ham, el.dataset.cardId);
-    });
+    bind(ham, "core.card.tab-list", () => ({ card: el.dataset.cardId }));
     chrome.insertBefore(ham, chrome.firstChild);
   }
   let strip = chrome.querySelector(".chrome__tabs");
@@ -248,19 +248,20 @@ function updateCard(el, card) {
       b.dataset.expose = "core.card.tab";
       b.dataset.tabId = t.id;
       b.draggable = false;
+      mark(b, "core.tab.select", { tab: t.id });
       // 제목은 `textContent` 로 설정한다. 사용자 입력을 마크업으로 해석하지 않는다.
       b.innerHTML = '<span class="tab__name"></span>' +
-        '<button class="tab__x" title="닫기">&#10005;</button>';
+        '<button class="tab__x" title="닫기" data-expose="core.card.tab-close">&#10005;</button>';
       b.querySelector(".tab__name").textContent = t.title;
+      // 누름은 탭을 고르고 드래그를 시작한다. 놓은 자리의 결과는 core.tab.move 가 만든다.
       b.addEventListener("pointerdown", (e) => {
         if (e.target.closest(".tab__x")) return;
         const own = grid.card(el.dataset.cardId);
         if (!own) return;
-        own.data.activeId = t.id;
-        focusedId = own.id;
         beginTabDrag(e, own.id, t.id);
+        return run("core.tab.select", { tab: t.id });
       });
-      b.querySelector(".tab__x").addEventListener("click", () => closeTab(el.dataset.cardId, t.id));
+      bind(b.querySelector(".tab__x"), "core.tab.close", { tab: t.id });
       strip.appendChild(b);
     }
   }
@@ -294,27 +295,9 @@ function updateCard(el, card) {
       b.dataset.title = title;
       b.title = title;
       b.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true">${svg}</svg>`;
-      b.addEventListener("click", () => {
-        const own = grid.card(el.dataset.cardId);
-        if (!own) return;
-        if (what === "close") {
-          grid.close(own.id);
-          if (!grid.card(focusedId)) focusedId = grid.cards.find((c) => !isPlace(c.id))?.id ?? null;
-          settle();
-          return;
-        }
-        // 버튼은 토글이다. 레이어를 연 버튼을 다시 누르면 닫힌다.
-        if (picker?.anchor === b) { closePicker(); return; }
-        // 나머지 3개는 탭을 생성한다. + 는 이 카드에, 분할은 새 카드에 생성한다.
-        // 여기서는 선택 레이어만 표시하고 생성하지 않는다. 미리 생성하면 취소 시
-        // 제거해야 한다.
-        //
-        // 분할은 활성 탭을 이동시키지 않는다. 탭 이동은 T4(변에 드롭)가 담당한다.
-        // 두 방식이 겹치면 탭 개수에 따라 같은 버튼의 동작이 달라진다.
-        focusedId = own.id;
-        settle();
-        openPicker(b, what, own.id);
-      });
+      // 닫기는 카드를 닫는다. 나머지 3개는 무엇을 띄울지 묻는 메뉴를 연다.
+      if (what === "close") bind(b, "core.card.close", () => ({ card: el.dataset.cardId }));
+      else bind(b, "core.card.menu", () => ({ card: el.dataset.cardId, menu: MENU_OF[what] }));
       acts.appendChild(b);
     }
     chrome.appendChild(acts);
@@ -351,6 +334,7 @@ function updateCard(el, card) {
 function closeTab(cardId, tabId) {
   const card = grid.card(cardId);
   if (!card) return;
+  if (!tabsOf(card).some((t) => t.id === tabId)) return;
   card.data.tabs = tabsOf(card).filter((t) => t.id !== tabId);
   if (card.data.tabs.length === 0) {
     // 닫을 수 없는 카드는 남으므로 탭 하나를 다시 넣는다. 종류는 포커스가 보던
@@ -369,6 +353,24 @@ function closeTab(cardId, tabId) {
 /* ── 탭 드래그 — T3/T4/T5 ─────────────────────────────────────────────── */
 
 let tabDrag = null;
+
+/* 탭 드래그의 상태가 바뀔 때 호출할 함수. 공개 항목이 등록한다. */
+let dragChanged = () => {};
+
+/** 탭 드래그의 상태가 바뀔 때 호출할 함수를 등록한다. */
+export function onDrag(fn) {
+  dragChanged = fn;
+}
+
+/* 지금 그린 드롭 미리보기. 판 좌표다. */
+let dropPreview = null;
+
+/** 진행 중인 탭 드래그. 끌리는 탭, 출발 카드, 놓을 자리, 미리보기 사각형이다. */
+export const dragState = () => (tabDrag ? {
+  tab: tabDrag.tabId, card: tabDrag.cardId, moved: tabDrag.moved,
+  target: tabDrag.hit ? { card: tabDrag.hit.id, zone: tabDrag.hit.zone } : null,
+  preview: dropPreview,
+} : null);
 
 /* 카드 보더의 두께. 머리와 발은 보더 안쪽의 행이고 zoneAt 은 카드의 rect 로 재는데
    그 rect 는 보더를 포함하므로, 보더만큼 더해야 구획의 경계가 그려진 머리의 끝에
@@ -397,6 +399,7 @@ function beginTabDrag(e, cardId, tabId) {
   const el = e.currentTarget;
   el.setPointerCapture(e.pointerId);
   el.dataset.dragging = "true";
+  dragChanged();
 
   const onMove = (ev) => {
     if (!tabDrag) return;
@@ -409,6 +412,7 @@ function beginTabDrag(e, cardId, tabId) {
       { headerPx: band.headerPx, footerPx: band.footerPx, centreOnly: only });
     // 구획이 없는 드롭은 놓아도 배치가 거절한다. 그 자리를 잡지 않는다.
     if (!showDrop(tabDrag.cardId, tabDrag.hit)) tabDrag.hit = null;
+    dragChanged();
   };
   const onUp = (ev) => {
     if (!tabDrag) return;
@@ -421,8 +425,9 @@ function beginTabDrag(e, cardId, tabId) {
     el.removeEventListener("pointermove", onMove);
     el.removeEventListener("pointerup", onUp);
     el.removeEventListener("pointercancel", onUp);
-    if (drag.moved && drag.hit) dropTab(drag.cardId, drag.tabId, drag.hit);
-    else settle();
+    dragChanged();
+    if (drag.moved && drag.hit) return run("core.tab.move", { tab: drag.tabId, card: drag.hit.id, zone: drag.hit.zone });
+    settle();
   };
   el.addEventListener("pointermove", onMove);
   el.addEventListener("pointerup", onUp);
@@ -452,31 +457,29 @@ export const pickerState = () => ({
   })) : [],
 });
 
+/* 카드 도구 버튼의 data-do 와 core.card.menu 의 menu 값. */
+const MENU_OF = { add: "add", x: "split-x", y: "split-y" };
+const DO_OF = Object.fromEntries(Object.entries(MENU_OF).map(([what, menu]) => [menu, what]));
+
 const PICKER_ASK = {
   add: "새 탭에 무엇을 띄울까",
   x: "새 자리에 무엇을 띄울까",
   y: "새 자리에 무엇을 띄울까",
 };
 
-pickerEl.addEventListener("click", (e) => {
-  const item = e.target.closest(".picker__item");
-  if (!item || !picker) return;
-  const { pick } = picker, key = item.dataset.key;
-  closePicker();
-  pick(key);
-});
+delegate(pickerEl);
 
 const onPickerOutside = (e) => {
   if (pickerEl.contains(e.target)) return;
   // 레이어를 연 버튼은 자기 클릭으로 레이어를 닫으므로, 그 버튼 위의 누름은 바깥
   // 누름이 아니다. 여기서 닫으면 그 클릭이 레이어를 다시 연다.
   if (picker?.anchor?.contains(e.target)) return;
-  closePicker();
+  return run("core.picker.close");
 };
 const onPickerKey = (e) => {
   if (e.key !== "Escape") return;
   e.stopPropagation();
-  closePicker();
+  return run("core.picker.close");
 };
 
 /** 새 탭의 플러그인 종류를 선택받는다. + 와 분할 버튼이 함께 사용한다. */
@@ -517,10 +520,11 @@ function openLayer(anchor, ask, items, pick, align = "right") {
   head.className = "picker__head";
   head.textContent = ask;                  // 레이어 너비를 측정하기 전에 설정한다
   pickerEl.appendChild(head);
-  for (const it of items) {
+  for (const [index, it] of items.entries()) {
     const b = document.createElement("button");
     b.className = "picker__item";
     b.dataset.expose = "core.picker.item";
+    mark(b, "core.picker.pick", { index });
     b.type = "button";
     b.dataset.key = it.key;
     b.dataset.active = String(!!it.active);
@@ -544,7 +548,7 @@ function openLayer(anchor, ask, items, pick, align = "right") {
   };
   pickerEl.style.left = `${rect.x}px`;
   pickerEl.style.top = `${rect.y}px`;
-  picker = { anchor, pick, rect };
+  picker = { anchor, pick, rect, keys: items.map((it) => it.key) };
   pickerChanged();
   // DOM 은 네이티브 뷰 위에 그릴 수 없고, 웹뷰는 DOM 을 렌더링하는 네이티브 뷰다.
   // 애플리케이션이 이 요소를 받아 그런 뷰에 렌더링하므로 아래의 표면은 계속 실행된다.
@@ -552,7 +556,10 @@ function openLayer(anchor, ask, items, pick, align = "right") {
   if (native) {
     // 모달은 닫힘을 빈 key 로 보고한다. 그것을 선택으로 넘기면 등록되지 않은
     // 플러그인을 찾다 예외가 난다.
-    overlay.show(pickerEl, rect, (key) => { closePicker(); if (key) pick(key); });
+    overlay.show(pickerEl, rect, (key) => {
+      const index = items.findIndex((it) => it.key === key);
+      return index < 0 ? run("core.picker.close") : run("core.picker.pick", { index });
+    });
     pickerEl.hidden = true;
   } else {
     standIn(true, rect);
@@ -583,6 +590,7 @@ function addTab(cardId, plugin) {
   card.data.activeId = t.id;
   focusedId = cardId;
   settle();
+  return t.id;
 }
 
 /** 쪼개기 버튼의 후속 처리. 새 카드를 만들고 선택한 종류의 탭을 그 카드에 추가한다. */
@@ -595,6 +603,7 @@ function splitWith(cardId, axis, plugin) {
   const born = grid.split(cardId, axis, { data: { tabs: [t], activeId: t.id } });
   if (born) focusedId = born;
   settle();
+  return born ? { card: born, tab: t.id } : null;
 }
 
 /* 미리보기가 호스트의 뷰에 있는가. 드래그 한 번 동안 그 뷰를 유지하고 위치만
@@ -630,6 +639,7 @@ function dropRect(fromId, hit) {
 function showDrop(fromId, hit) {
   const half = hit && !isPlace(hit.id) ? dropRect(fromId, hit) : undefined;
   if (!half) { hideDrop(); return null; }
+  dropPreview = { x: half.x, y: half.y, w: half.w, h: half.h };
   // 미리보기는 표면 위에 그려야 한다. 호스트가 있으면 네이티브 도형으로 그린다 —
   // 채움이 반투명이라 웹뷰로는 표면 위에 합성되지 않는다. 모양은 이 문서의 CSS 가
   // 정하고 그 계산값을 그대로 보낸다.
@@ -652,6 +662,7 @@ function showDrop(fromId, hit) {
 
 /** 미리보기를 지운다. 호스트가 그리고 있으면 그 도형도 없앤다. */
 function hideDrop() {
+  dropPreview = null;
   if (dropShown) {
     shapes.clear("drop");
     dropShown = false;
@@ -1037,6 +1048,10 @@ export function build(kept = fresh()) {
     // 판의 렌더는 뷰가 그리는 것과 이 문서가 그리는 것으로 이루어진다. onChange 는
     // 뷰가 그린 직후에 발생하므로, 나머지를 여기서 그리고 그 뒤에 수신자를 호출한다.
     onChange: (reason) => {
+      // 경계선의 잡는 영역은 뷰가 만든다. 이름은 여기서 붙인다.
+      for (const divider of plane.querySelectorAll(".sp-divider:not([data-expose])")) {
+        divider.dataset.expose = "core.divider";
+      }
       markFocus();
       centreTabs();
       railShape = drawRail();
@@ -1096,6 +1111,143 @@ export function clear() {
   grid = null;
   railPath.setAttribute("d", "");
   document.getElementById("focusMark").hidden = true;
+}
+
+/* ── 명령이 부르는 연산 ────────────────────────────────────────────────────
+   UI 요소는 명령을 실행하고, 명령은 아래 연산을 부른다. 잘못된 대상은 예외로 알린다. */
+
+/** 판의 일반 카드. 없거나 자리 카드이면 예외를 던진다. */
+function paneCard(id) {
+  const card = grid?.card(id);
+  if (!card || isPlace(id)) throw new Error(`no card ${id}`);
+  return card;
+}
+
+/** 탭을 가진 카드. 없으면 예외를 던진다. */
+function cardOfTab(tabId) {
+  const card = grid?.cards.find((c) => tabsOf(c).some((t) => t.id === tabId));
+  if (!card) throw new Error(`no tab ${tabId}`);
+  return card;
+}
+
+function knownPlugin(id) {
+  if (!plugins().some((p) => p.id === id)) throw new Error(`unknown plugin ${id}`);
+}
+
+/** 카드의 요소. 도구 버튼과 탭 목록 버튼이 그 안에 있다. */
+const cardElement = (id) => plane.querySelector(`.card[data-card-id="${CSS.escape(id)}"]`);
+
+export function focusCard(id) {
+  paneCard(id);
+  focusedId = id;
+  settle();
+}
+
+/** 카드의 추가·분할 메뉴를 연다. 같은 메뉴가 열려 있으면 닫는다. */
+export function openCardMenu(id, menu) {
+  paneCard(id);
+  const what = DO_OF[menu];
+  if (!what) throw new Error(`unknown menu ${menu}`);
+  const anchor = cardElement(id)?.querySelector(`.chrome__act[data-do="${what}"]`);
+  if (!anchor) throw new Error(`card ${id} has no ${menu} button`);
+  if (anchor.disabled) throw new Error(`card ${id} cannot ${menu}`);
+  if (picker?.anchor === anchor) { closePicker(); return; }
+  focusedId = id;
+  settle();
+  openPicker(anchor, what, id);
+}
+
+/** 카드의 탭 목록을 연다. 열려 있으면 닫는다. */
+export function openCardTabs(id) {
+  paneCard(id);
+  const anchor = cardElement(id)?.querySelector(".chrome__ham");
+  if (!anchor) throw new Error(`card ${id} has no tab list button`);
+  if (picker?.anchor === anchor) { closePicker(); return; }
+  openTabList(anchor, id);
+}
+
+export function addTabTo(id, kind) {
+  paneCard(id);
+  knownPlugin(kind);
+  return addTab(id, kind);
+}
+
+export function splitCard(id, axis, kind) {
+  paneCard(id);
+  knownPlugin(kind);
+  if (axis !== "x" && axis !== "y") throw new Error(`unknown axis ${axis}`);
+  const made = splitWith(id, axis, kind);
+  if (!made) throw new Error(`card ${id} cannot split on ${axis}`);
+  return made;
+}
+
+export function closeCard(id) {
+  paneCard(id);
+  if (!grid.canClose(id)) throw new Error(`card ${id} cannot close`);
+  grid.close(id);
+  if (!grid.card(focusedId)) focusedId = grid.cards.find((c) => !isPlace(c.id))?.id ?? null;
+  settle();
+}
+
+export function selectTab(tabId) {
+  const card = cardOfTab(tabId);
+  card.data.activeId = tabId;
+  focusedId = card.id;
+  settle();
+}
+
+export function closeTabById(tabId) {
+  closeTab(cardOfTab(tabId).id, tabId);
+}
+
+const ZONES = ["centre", "left", "right", "top", "bottom"];
+
+/** 탭을 카드의 가운데나 변으로 옮긴다. 드래그를 놓은 결과와 같다. */
+export function moveTab(tabId, cardId, zone) {
+  const from = cardOfTab(tabId);
+  paneCard(cardId);
+  if (!ZONES.includes(zone)) throw new Error(`unknown zone ${zone}`);
+  const hit = { id: cardId, zone };
+  if (zone !== "centre" && dropRect(from.id, hit) === undefined) {
+    throw new Error(`tab ${tabId} cannot move to the ${zone} of ${cardId}`);
+  }
+  dropTab(from.id, tabId, hit);
+}
+
+/** 열린 선택 레이어의 항목 하나를 고른다. */
+export function pickItem(index) {
+  if (!picker) throw new Error("no menu is open");
+  const key = picker.keys[index];
+  if (key === undefined) throw new Error(`the menu has no item ${index}`);
+  const { pick } = picker;
+  closePicker();
+  pick(key);
+}
+
+export { closePicker };
+
+/** 카드 도구 버튼의 상태. 비활성, 숨김, 머리의 접힘 단계. */
+export function cardActs(id) {
+  const chrome = cardElement(id)?.querySelector(".chrome");
+  const acts = chrome?.querySelector(".chrome__acts");
+  if (!acts) return null;
+  const buttons = Object.fromEntries([...acts.querySelectorAll(".chrome__act")].map((b) => [
+    b.dataset.do === "close" ? "close" : MENU_OF[b.dataset.do],
+    { enabled: !b.disabled, hidden: b.hidden, title: b.title },
+  ]));
+  return { ...buttons, fit: chrome.dataset.fit ?? "strip" };
+}
+
+/** 레일 외곽선과 포커스 표식. */
+export function railState() {
+  const mark = document.getElementById("focusMark");
+  return {
+    path: railShape.shape.path,
+    focusMark: mark.hidden ? null : {
+      x: parseFloat(mark.style.left), y: parseFloat(mark.style.top),
+      w: parseFloat(mark.style.width), h: parseFloat(mark.style.height),
+    },
+  };
 }
 
 export { settle, tabsOf, activeTab, plane };
