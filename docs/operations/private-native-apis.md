@@ -16,6 +16,7 @@ This is the canonical inventory for application calls, diagnostic calls, and the
 | `WKWebView` KVC `drawsBackground` (`_drawsBackground` / `_setDrawsBackground:`) | Wails modal creation in [`webview.m`](../../packages/host/wailsv3/src/platform/darwin/webview.m); both hosts' `host.window` reads in [`window_facts.m`](../../native/darwin/src/window_facts.m) | Disable the modal webview's opaque background and report that state |
 | `WKWebViewConfiguration` KVC `drawsBackground` (`_setDrawsBackground:`) | Tauri → Wry webview creation; [`modals.rs`](../../packages/host/tauriv2/src/modals.rs) `show` requests `background_color(Color(0, 0, 0, 0))`; main also configures a background color | Configure background drawing before initializing the webview |
 | `WKWebView._doAfterProcessingAllPendingMouseEvents:` | [`native/darwin/tests/`](../../native/darwin/tests/) input checks, `drain`; checks only | Wait for native mouse processing before asserting DOM event counts |
+| `WKWebView._setShouldSuppressFirstResponderChanges:` | Both hosts; [`webview_input.m`](../../native/darwin/src/webview_input.m), `webviewIgnorePageFocus`, for surface and modal webviews | Keep a page from moving the window's keyboard focus when it focuses an element |
 | `WKWebView._doAfterActivityStateUpdate:` | Both hosts; [`input_inject.m`](../../native/darwin/src/input_inject.m), `sp_input_activate` | Deliver a hover move only after each webview has sent the active window state to its web process |
 | `CGEventField` 51 (window number), `CGEventSetWindowLocation` | Both hosts; [`input_inject.m`](../../native/darwin/src/input_inject.m), scroll in `sp_input_pointer` | Create a scroll `NSEvent` that carries its window and window location |
 
@@ -58,6 +59,12 @@ Review the exact KVC key, its receiver class, and whether configuration-time and
 Verify initial transparency, captured shading and blur, clear settings content after navigation, menus without a backdrop, and close/reload cleanup with [`modal.test.mjs`](../../e2e/modal.test.mjs) and [manual acceptance](examples.md#manual-acceptance). Transparency does not correct fractional geometry; surface dimensions must independently pass the footer checks.
 
 The view and configuration declarations are in [`WKWebViewPrivate.h`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/WKWebViewPrivate.h) and [`WKWebViewConfigurationPrivate.h`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/WKWebViewConfigurationPrivate.h). The active framework creation path is in [Wry 0.56.1 `wkwebview/mod.rs`](https://github.com/tauri-apps/wry/blob/wry-v0.56.1/src/wkwebview/mod.rs).
+
+### Page focus in surface and modal webviews
+
+Keep this setting for surface and modal webviews. When a page focuses an element while its web view is not the first responder, WebKit sends `MakeFirstResponder` to the UI process, and `PageClientImpl::makeFirstResponder` makes the web view the window's first responder. A terminal surface that focused its input after loading took the keys from an open menu, so a native Escape did not close the menu. `_setShouldSuppressFirstResponderChanges:YES` makes `PageClientImpl::makeFirstResponder` return without changing the first responder. AppKit clicks and the host's own `-[NSWindow makeFirstResponder:]` calls are not affected. The main page does not use the setting and can still move the focus. The function reports failure when the selector is missing, and both hosts then fail to create the webview.
+
+Verify with [`webview_focus_test.m`](../../native/darwin/tests/webview_focus_test.m), which fails without the setting, and the menu Escape steps of [`modal.test.mjs`](../../e2e/modal.test.mjs). Review `PageClientImpl::makeFirstResponder` in [`PageClientImplMac.mm`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/mac/PageClientImplMac.mm) and the declaration in [`WKWebViewPrivate.h`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/WKWebViewPrivate.h).
 
 ### Mouse-processing completion in the standalone check
 

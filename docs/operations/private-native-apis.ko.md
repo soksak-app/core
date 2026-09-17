@@ -15,6 +15,7 @@
 | `WKWebView._setIgnoresMouseMoveEvents:` | 두 호스트의 [`webview_input.m`](../../native/darwin/src/webview_input.m), 등록·포인터 처리·제거 | 겹친 웹뷰의 포인터 추적을 AppKit 히트테스트 결과로 제한 |
 | `WKWebView` KVC `drawsBackground` (`_drawsBackground` / `_setDrawsBackground:`) | Wails [`webview.m`](../../packages/host/wailsv3/src/platform/darwin/webview.m)의 모달 생성; 두 호스트 [`window_facts.m`](../../native/darwin/src/window_facts.m)의 `host.window` 조회 | 모달 웹뷰의 불투명 배경 비활성화 및 상태 보고 |
 | `WKWebViewConfiguration` KVC `drawsBackground` (`_setDrawsBackground:`) | Tauri → Wry 웹뷰 생성; [`modals.rs`](../../packages/host/tauriv2/src/modals.rs) `show`가 `background_color(Color(0, 0, 0, 0))` 요청; 메인도 배경색 설정 | 웹뷰 초기화 전에 배경 그리기 설정 |
+| `WKWebView._setShouldSuppressFirstResponderChanges:` | 두 호스트; [`webview_input.m`](../../native/darwin/src/webview_input.m)의 `webviewIgnorePageFocus`, 표면과 모달 웹뷰 | 페이지가 요소에 초점을 줄 때 창의 키보드 초점을 옮기지 않게 함 |
 | `WKWebView._doAfterActivityStateUpdate:` | 두 호스트; [`input_inject.m`](../../native/darwin/src/input_inject.m), `sp_input_activate` | 창의 모든 웹뷰가 활성 창 상태를 웹 프로세스에 보낸 뒤에만 호버 이동을 전달 |
 | `CGEventField` 51(창 번호), `CGEventSetWindowLocation` | 두 호스트; [`input_inject.m`](../../native/darwin/src/input_inject.m), `sp_input_pointer`의 스크롤 | 창과 창 좌표를 가진 스크롤 `NSEvent` 생성 |
 | `WKWebView._doAfterProcessingAllPendingMouseEvents:` | [`native/darwin/tests/webview_input_test.m`](../../native/darwin/tests/webview_input_test.m)의 `drain`; 독립 검사 전용 | DOM 이벤트 횟수를 검사하기 전에 네이티브 마우스 처리 완료 대기 |
@@ -58,6 +59,12 @@
 [`modal.test.mjs`](../../e2e/modal.test.mjs)와 [수동 인수](examples.ko.md#수동-인수)로 초기 투명도, 캡처된 반투명 배경·블러, 설정 탐색 후 선명한 콘텐츠, 배경 효과 없는 메뉴, 닫기·다시 로드 후 정리를 검증한다. 투명도는 소수점 좌표를 수정하지 않는다. 표면 크기는 푸터 검사를 별도로 통과해야 한다.
 
 뷰와 구성의 선언은 [`WKWebViewPrivate.h`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/WKWebViewPrivate.h)와 [`WKWebViewConfigurationPrivate.h`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/WKWebViewConfigurationPrivate.h)에 있다. 현재 프레임워크 생성 경로는 [Wry 0.56.1 `wkwebview/mod.rs`](https://github.com/tauri-apps/wry/blob/wry-v0.56.1/src/wkwebview/mod.rs)에 있다.
+
+### 표면과 모달 웹뷰의 페이지 초점
+
+표면과 모달 웹뷰에는 이 설정을 유지한다. 웹뷰가 첫 응답자가 아닐 때 페이지가 요소에 초점을 주면 WebKit이 UI 프로세스에 `MakeFirstResponder`를 보내고, `PageClientImpl::makeFirstResponder`가 그 웹뷰를 창의 첫 응답자로 만든다. 불러온 뒤 입력칸에 초점을 주는 터미널 표면이 열린 메뉴의 키 입력을 가져가 네이티브 Escape가 메뉴를 닫지 못했다. `_setShouldSuppressFirstResponderChanges:YES`이면 `PageClientImpl::makeFirstResponder`가 첫 응답자를 바꾸지 않고 돌아간다. AppKit 클릭과 호스트가 직접 호출하는 `-[NSWindow makeFirstResponder:]`는 영향을 받지 않는다. 메인 페이지는 이 설정을 쓰지 않으며 초점을 옮길 수 있다. 선택자가 없으면 함수가 실패를 반환하고 두 호스트는 웹뷰 생성을 실패로 처리한다.
+
+설정이 없으면 실패하는 [`webview_focus_test.m`](../../native/darwin/tests/webview_focus_test.m)과 [`modal.test.mjs`](../../e2e/modal.test.mjs)의 메뉴 Escape 단계로 검증한다. [`PageClientImplMac.mm`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/mac/PageClientImplMac.mm)의 `PageClientImpl::makeFirstResponder`와 [`WKWebViewPrivate.h`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/WKWebViewPrivate.h)의 선언을 검토한다.
 
 ### 독립 검사의 마우스 처리 완료
 

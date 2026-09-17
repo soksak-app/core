@@ -119,7 +119,8 @@ void *nativeWebviewCreate(void *handle, unsigned long long identifier, const cha
             if ([[view valueForKey:@"drawsBackground"] boolValue]) { [view release]; return NULL; }
         } @catch (NSException *error) { [view release]; return NULL; }
     }
-    if (!webviewInputRegister(view)) { [view release]; return NULL; }
+    // 표면과 모달의 페이지는 창의 키보드 초점을 옮기지 않는다. 메인 페이지는 옮긴다.
+    if (!webviewInputRegister(view) || !webviewIgnorePageFocus(view)) { [view release]; return NULL; }
     // 새 표면은 메인 웹뷰 위, 기존 모달 아래에 둔다. 모달은 여기서 숨긴 상태로 두고
     // 렌더링을 마치면 위로 올린다.
     [window.contentView addSubview:view positioned:NSWindowAbove relativeTo:root];

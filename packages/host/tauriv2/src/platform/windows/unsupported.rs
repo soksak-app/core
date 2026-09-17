@@ -64,6 +64,10 @@ pub fn round_corners(_view: &PlatformWebview, _radius: f64) -> Result<(), String
     missing("webview corners")
 }
 
+pub fn focus_webview(_view: &PlatformWebview) -> Result<(), String> {
+    missing("webview focus")
+}
+
 pub fn view_id(_view: &PlatformWebview) -> Result<Handle, String> {
     missing("webview identity")
 }
@@ -102,6 +106,10 @@ pub fn destroy_shape(_shape: Handle) -> Result<(), String> {
 
 pub fn register_input(_view: &PlatformWebview) -> Result<bool, String> {
     missing("webview input routing")
+}
+
+pub fn ignore_page_focus(_view: &PlatformWebview) -> Result<bool, String> {
+    missing("webview focus isolation")
 }
 
 pub fn watch_input(

@@ -8,6 +8,7 @@
 - (void)_doAfterNextPresentationUpdate:(void (^)(void))completion;
 // WKWebViewPrivate.h (mac)
 - (void)_setIgnoresMouseMoveEvents:(BOOL)ignore;
+- (void)_setShouldSuppressFirstResponderChanges:(BOOL)suppress;
 // WKWebViewPrivateForTesting.h
 - (void)_doAfterActivityStateUpdate:(void (^)(void))completion;
 - (void)_doAfterProcessingAllPendingMouseEvents:(void (^)(void))completion;

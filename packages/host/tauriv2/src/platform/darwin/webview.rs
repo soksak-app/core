@@ -91,6 +91,19 @@ pub fn raise(webview: &PlatformWebview) {
     }
 }
 
+/// 웹뷰를 창의 첫 응답자로 만든다. 메인 스레드에서 호출한다.
+pub fn focus(webview: &PlatformWebview) -> Result<(), String> {
+    unsafe {
+        let view = webview.inner() as *mut AnyObject;
+        let window: *mut AnyObject = msg_send![view, window];
+        if window.is_null() {
+            return Err("the webview is not in a window".into());
+        }
+        let taken: bool = msg_send![window, makeFirstResponder: view];
+        if taken { Ok(()) } else { Err("the window did not give the webview keyboard focus".into()) }
+    }
+}
+
 /// 웹뷰가 그리는 뷰의 주소를 반환한다. 입력 체인의 뷰 주소와 비교해 웹뷰를 식별한다.
 pub fn id(webview: &PlatformWebview) -> Handle {
     webview.inner() as Handle

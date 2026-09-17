@@ -77,6 +77,9 @@ impl Platform for Windows {
     fn round_corners(&self, view: &PlatformWebview, radius: f64) -> Result<(), String> {
         unsupported::round_corners(view, radius)
     }
+    fn focus_webview(&self, view: &PlatformWebview) -> Result<(), String> {
+        unsupported::focus_webview(view)
+    }
     fn view_id(&self, view: &PlatformWebview) -> Result<Handle, String> {
         unsupported::view_id(view)
     }
@@ -109,6 +112,9 @@ impl Platform for Windows {
 
     fn register_input(&self, view: &PlatformWebview) -> Result<bool, String> {
         unsupported::register_input(view)
+    }
+    fn ignore_page_focus(&self, view: &PlatformWebview) -> Result<bool, String> {
+        unsupported::ignore_page_focus(view)
     }
     fn watch_input(
         &self,

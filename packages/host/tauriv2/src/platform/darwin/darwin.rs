@@ -130,6 +130,9 @@ impl Platform for Darwin {
         webview::corners(view, radius);
         Ok(())
     }
+    fn focus_webview(&self, view: &PlatformWebview) -> Result<(), String> {
+        webview::focus(view)
+    }
     fn view_id(&self, view: &PlatformWebview) -> Result<Handle, String> {
         Ok(webview::id(view))
     }
@@ -168,6 +171,9 @@ impl Platform for Darwin {
 
     fn register_input(&self, view: &PlatformWebview) -> Result<bool, String> {
         Ok(input::register(view))
+    }
+    fn ignore_page_focus(&self, view: &PlatformWebview) -> Result<bool, String> {
+        Ok(input::ignore_page_focus(view))
     }
     fn watch_input(
         &self,

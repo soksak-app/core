@@ -117,6 +117,14 @@ pub fn register(view: &PlatformWebview) -> bool {
     unsafe { webviewInputRegister(view.inner().cast()).as_bool() }
 }
 
+/// 웹뷰의 페이지가 요소에 초점을 줘도 창의 키보드 초점을 옮기지 않게 하고 성공 여부를 반환한다.
+pub fn ignore_page_focus(view: &PlatformWebview) -> bool {
+    extern "C" {
+        fn webviewIgnorePageFocus(view: *const c_void) -> Bool;
+    }
+    unsafe { webviewIgnorePageFocus(view.inner().cast()).as_bool() }
+}
+
 /// 창이 받는 입력의 대상 뷰와 위치를 전달한다.
 ///
 /// pressed 는 입력을 받는 뷰부터 창 콘텐츠 뷰까지의 뷰 주소 목록을 받는다. AppKit 이 정한

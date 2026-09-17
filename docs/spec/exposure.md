@@ -83,7 +83,7 @@ An application has one or more windows, and each window has its own main page an
 
 The native host declares entries with owner `host` in the same format and serves them itself.
 
-Screen coordinates are points with the origin at the top-left corner of the primary display and y increasing downward. `order` is the drawing order of the webviews in the window: the main page is 0, and a larger value is drawn above a smaller one. `background` is `{draws, alpha}`: whether the modal webview paints its own background, and the alpha of its under-page background color.
+Screen coordinates are points with the origin at the top-left corner of the primary display and y increasing downward. `shown` is true once the modal webview is visible and has received keyboard focus. `order` is the drawing order of the webviews in the window: the main page is 0, and a larger value is drawn above a smaller one. `background` is `{draws, alpha}`: whether the modal webview paints its own background, and the alpha of its under-page background color.
 
 | Kind | Name | Meaning |
 | --- | --- | --- |

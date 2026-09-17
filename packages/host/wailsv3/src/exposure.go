@@ -765,7 +765,7 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 	var modal *WindowModal
 	s.mu.Lock()
 	if s.modal != nil {
-		modal = &WindowModal{ID: s.modal.id, Mode: s.modal.content.Mode, Shown: s.modal.shown}
+		modal = &WindowModal{ID: s.modal.id, Mode: s.modal.content.Mode, Shown: s.modal.visible}
 	}
 	s.mu.Unlock()
 	for order, view := range facts.Webviews {

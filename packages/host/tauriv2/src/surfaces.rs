@@ -148,7 +148,7 @@ fn watch_presses(window: &Window, views: &Views, watching: &Watching) -> Result<
         return Ok(());
     }
     let main = root_view(window).ok_or("the main webview is gone")?;
-    isolate_webview(&main)?;
+    isolate_webview(&main, PageFocus::Allowed)?;
     let platform = platform::current()?;
     let named = views.0.clone();
     let watched = watching.0.clone();
@@ -186,11 +186,15 @@ fn watch_presses(window: &Window, views: &Views, watching: &Watching) -> Result<
 ///
 /// 명령은 AppKit 스레드 밖에서 실행된다. 겹치는 웹뷰를 사용 가능하다고 알리기 전에 등록
 /// 실패를 호출자에게 반환한다.
-pub(crate) fn isolate_webview(view: &Webview) -> Result<(), String> {
+pub(crate) fn isolate_webview(view: &Webview, page_focus: PageFocus) -> Result<(), String> {
     let platform = platform::current()?;
     let (tx, rx) = mpsc::channel();
     view.with_webview(move |webview| {
-        let _ = tx.send(platform.register_input(&webview));
+        let isolated = platform.register_input(&webview).and_then(|registered| match page_focus {
+            PageFocus::Allowed => Ok(registered),
+            PageFocus::Ignored => Ok(registered && platform.ignore_page_focus(&webview)?),
+        });
+        let _ = tx.send(isolated);
     })
     .map_err(|e| e.to_string())?;
     if rx.recv().map_err(|e| e.to_string())?? {
@@ -198,6 +202,14 @@ pub(crate) fn isolate_webview(view: &Webview) -> Result<(), String> {
     } else {
         Err("this WebKit cannot install native webview input isolation".into())
     }
+}
+
+/// 웹뷰의 페이지가 요소에 초점을 줄 때 창의 키보드 초점도 옮기는지 나타낸다. 메인 페이지만 옮긴다.
+/// 표면과 모달은 사용자의 클릭이나 호스트를 통해서만 초점을 받는다.
+#[derive(Clone, Copy)]
+pub(crate) enum PageFocus {
+    Allowed,
+    Ignored,
 }
 
 /// 페이지가 선언한 표면에 창의 자식 웹뷰를 맞추고 표면 배치 트랜잭션을 준비한다.
@@ -278,12 +290,14 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
             } else {
                 WebviewUrl::App(s.url.clone().into())
             };
-            let builder = WebviewBuilder::new(&label, target).initialization_script(background);
+            // 표면은 만들어질 때 키보드 초점을 가져가지 않는다. Tauri 의 기본값은 가져가는 것이라
+            // 늦게 만들어진 표면이 열린 메뉴나 사용자가 입력 중인 문서의 초점을 빼앗는다.
+            let builder = WebviewBuilder::new(&label, target).initialization_script(background).focused(false);
             window.add_child(builder, position, size).map_err(|e| e.to_string())?;
             if let Some(webview) = window.get_webview(&label) {
                 // 자식 웹뷰는 생성 시 표시 여부를 받지 않으므로 표시된 상태로 만들어진다.
                 // 숨긴 표면은 첫 프레임에 나타나기 전에 여기서 숨긴다.
-                isolate_webview(&webview)?;
+                isolate_webview(&webview, PageFocus::Ignored)?;
                 if !visible {
                     webview.hide().map_err(|e| e.to_string())?;
                 }

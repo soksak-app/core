@@ -36,3 +36,13 @@ void webviewInputUnregister(WKWebView *view) {
     [view _setIgnoresMouseMoveEvents:NO];
     [inputViews removeObject:view];
 }
+
+BOOL webviewIgnorePageFocus(WKWebView *view) {
+    NSCAssert(NSThread.isMainThread, @"webview focus belongs to the main thread");
+    // WebKit moves the first responder to the web view when its page focuses an
+    // element (PageClientImpl::makeFirstResponder). A surface that finishes
+    // loading would take the keys from an open menu or the page being typed in.
+    if (![view respondsToSelector:@selector(_setShouldSuppressFirstResponderChanges:)]) return NO;
+    [view _setShouldSuppressFirstResponderChanges:YES];
+    return YES;
+}

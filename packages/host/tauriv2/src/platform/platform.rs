@@ -143,6 +143,8 @@ pub trait Platform: Send + Sync {
     fn raise_webview(&self, view: &PlatformWebview) -> Result<(), String>;
     /// 웹뷰의 모서리를 radius 논리 픽셀만큼 둥글게 자른다.
     fn round_corners(&self, view: &PlatformWebview, radius: f64) -> Result<(), String>;
+    /// 웹뷰를 창의 첫 응답자로 만들어 키보드 입력을 받게 한다. 창이 거절하면 오류를 반환한다.
+    fn focus_webview(&self, view: &PlatformWebview) -> Result<(), String>;
     /// 입력 체인에서 웹뷰를 식별하는 뷰 주소를 반환한다.
     fn view_id(&self, view: &PlatformWebview) -> Result<Handle, String>;
 
@@ -172,6 +174,8 @@ pub trait Platform: Send + Sync {
 
     /// 웹뷰를 공통 포인터 라우팅에 등록하고 등록 여부를 반환한다.
     fn register_input(&self, view: &PlatformWebview) -> Result<bool, String>;
+    /// 웹뷰의 페이지가 창의 키보드 초점을 옮기지 못하게 하고 적용 여부를 반환한다.
+    fn ignore_page_focus(&self, view: &PlatformWebview) -> Result<bool, String>;
     /// 창의 입력을 감시하고 감시기 주소를 반환한다.
     ///
     /// pressed 는 입력을 받은 뷰부터 콘텐츠 뷰까지의 주소 목록을 받고, 입력이 이 앱의 뷰에

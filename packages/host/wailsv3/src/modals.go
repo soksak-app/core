@@ -54,8 +54,10 @@ type modal struct {
 	// 마지막으로 보낸 것이다.
 	id      string
 	content OverlayContent
-	// 페이지가 렌더링을 마쳐 웹뷰를 표시했는지 나타낸다.
+	// 페이지가 렌더링을 마쳐 웹뷰 표시를 시작했는지 나타낸다. 같은 표시를 두 번 하지 않는다.
 	shown bool
+	// 웹뷰를 표시하고 키보드 초점을 넘겼는지 나타낸다. host.window 가 이 값을 보고한다.
+	visible bool
 }
 
 // OverlayPick 은 모달 페이지가 바꾼 키와 값을 발행한다. 의미는 메인 페이지가 결정한다.
@@ -242,6 +244,11 @@ func (s *Surfaces) ModalReady(id string, instance uint64) {
 		view.SetHidden(false)
 		system.FocusModal(view.NativeView(), true)
 	})
+	s.mu.Lock()
+	if s.modal == live {
+		live.visible = true
+	}
+	s.mu.Unlock()
 	s.rendered(id)
 }
 
