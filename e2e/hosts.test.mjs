@@ -61,13 +61,13 @@ test("both hosts answer the same page the same way", async (t) => {
     logs[name] = dragged + clicked;
   }
 
-  const wails = transcript(logs.wails);
-  const tauri = transcript(logs.tauri);
+  const wails = transcript(logs.wailsv3);
+  const tauri = transcript(logs.tauriv2);
 
   const restedWails = atRest(wails);
   const restedTauri = atRest(tauri);
-  assert.ok(restedWails, `the Wails host recorded no settled commit:\n${logs.wails}`);
-  assert.ok(restedTauri, `the Tauri host recorded no settled commit:\n${logs.tauri}`);
+  assert.ok(restedWails, `the Wails host recorded no settled commit:\n${logs.wailsv3}`);
+  assert.ok(restedTauri, `the Tauri host recorded no settled commit:\n${logs.tauriv2}`);
   assert.equal(
     restedTauri.request, restedWails.request,
     "the two hosts give the page a different plane to lay out",
@@ -104,11 +104,11 @@ test("both hosts lay out the same page the same way after a resize", async (t) =
     rested[name] = found;
   }
   assert.equal(
-    rested.tauri.request, rested.wails.request,
+    rested.tauriv2.request, rested.wailsv3.request,
     `the two hosts give the page a different plane at ${SIZE.w}x${SIZE.h}`,
   );
   assert.equal(
-    rested.tauri.answer, rested.wails.answer,
+    rested.tauriv2.answer, rested.wailsv3.answer,
     `the two hosts place the same surfaces differently at ${SIZE.w}x${SIZE.h}`,
   );
 });
