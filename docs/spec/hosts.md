@@ -93,7 +93,7 @@ The shell sidecar uses the same Go mechanism in `sidecars/shell/src/platform/`.
 
 ### Window buttons
 
-Both hosts place the window's own buttons inside the page's first row (`.chrome-bar` in `packages/workbench/app.css`, 45px): the left edge of the leftmost button at x 12, and the vertical centre of the buttons' visible area at y 22.5, both in content coordinates. The native library computes the frame from the actual button size. The hosts place the buttons when the page reports that it is ready and after each resize; a placement that cannot be applied makes the ready call fail. AppKit can take the buttons back when the recording indicator changes, and the library places them again. `host.window` reports the visible area in `controls`.
+Both hosts place the window's own buttons inside the page's first row (`.chrome-bar` in `packages/workbench/app.css`, 45px): the left edge of the leftmost button at x 12, and the vertical centre of the buttons' visible area at y 22.5, both in content coordinates. The native library computes the frame from the actual button size. The hosts place the buttons when the page reports that it is ready and after each resize; a placement that cannot be applied makes the ready call fail. AppKit takes the buttons back into the title bar when the window title or the recording indicator changes; the library places them again in a run loop block, before the next display pass. `host.window` reports the visible area in `controls`.
 
 ## Windows state
 

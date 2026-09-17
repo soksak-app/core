@@ -2,20 +2,31 @@
 #import <objc/runtime.h>
 #import "window_controls.h"
 
-// AppKit can reclaim its buttons when the recording indicator changes, even
-// without resizing the window. Relayout the container when a button leaves it.
+// AppKit takes its buttons back into the title bar when the window title or
+// the recording indicator changes (-[NSThemeFrame _updateButtons]), even without
+// a resize. The container puts them back in a run loop block, which runs before
+// the next display pass; waiting for the next layout pass let the title bar
+// position reach the screen.
 @interface SPWindowControls : NSView
 @property(assign) NSView *home;
 @property CGFloat left;
 @property CGFloat centre;
 @property BOOL suspended;
+@property BOOL returning;
 - (void)place;
 @end
 
 @implementation SPWindowControls
 - (void)willRemoveSubview:(NSView *)view {
     [super willRemoveSubview:view];
-    self.needsLayout = YES;
+    if (self.suspended || self.returning) return;
+    self.returning = YES;
+    CFRunLoopRef main = CFRunLoopGetMain();
+    CFRunLoopPerformBlock(main, kCFRunLoopCommonModes, ^{
+        self.returning = NO;
+        [self place];
+    });
+    CFRunLoopWakeUp(main);
 }
 - (void)layout {
     [super layout];

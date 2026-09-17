@@ -44,8 +44,9 @@ for (const app of Object.values(APPS)) {
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await drag(t, s, PLAN, { capture: true });
-    // 녹화가 끝나면 AppKit 이 단추를 되찾고, 라이브러리가 다음 레이아웃 단계에서 다시 둔다.
-    // 레이아웃은 화면을 그리기 전에 실행되므로 다음 표시 이후의 위치를 잰다.
+    // 창 제목이나 녹화 표시가 바뀌면 AppKit 이 단추를 되가져가고, 라이브러리가 다음 실행 루프
+    // 차례 전에 다시 둔다. 같은 차례에 처리되는 요청은 그 사이의 위치를 읽을 수 있으므로 다음
+    // 표시 이후의 위치를 잰다.
     await s.presented();
     await centred(s, "after recording");
   });
