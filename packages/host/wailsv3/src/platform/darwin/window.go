@@ -48,8 +48,10 @@ func (implementation) PrepareWindow(window unsafe.Pointer) error {
 	return nil
 }
 
-func (implementation) PlaceWindowControls(window unsafe.Pointer, x, y float64) error {
-	C.windowPlaceControls(window, C.double(x), C.double(y))
+func (implementation) PlaceWindowControls(window unsafe.Pointer, x, centreY float64) error {
+	if !C.windowPlaceControls(window, C.double(x), C.double(centreY)) {
+		return errors.New("the window has no standard buttons or content view to place")
+	}
 	return nil
 }
 

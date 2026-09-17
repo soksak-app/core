@@ -47,8 +47,9 @@ type Input struct {
 type Platform interface {
 	// PrepareWindow 는 창의 콘텐츠 뷰와 메인 웹뷰의 크기를 맞춘다.
 	PrepareWindow(window unsafe.Pointer) error
-	// PlaceWindowControls 는 창 단추의 왼쪽 위 모서리를 콘텐츠 왼쪽 위 기준 (x, y) 에 둔다.
-	PlaceWindowControls(window unsafe.Pointer, x, y float64) error
+	// PlaceWindowControls 는 맨 왼쪽 창 단추의 왼쪽 끝을 x 에, 단추가 보이는 영역의 세로 중앙을
+	// centreY 에 둔다(콘텐츠 왼쪽 위 기준). 창에 단추를 둘 수 없으면 오류를 반환한다.
+	PlaceWindowControls(window unsafe.Pointer, x, centreY float64) error
 	// WindowControls 는 창 단추가 차지하는 영역을 페이지 좌표로 반환한다.
 	WindowControls(window unsafe.Pointer) (Rect, error)
 	// WindowNumbers 는 창과 자식 창의 윈도 서버 번호를 반환한다. 창 자신의 번호가 처음이다.

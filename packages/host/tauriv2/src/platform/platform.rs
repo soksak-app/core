@@ -107,8 +107,9 @@ pub trait Platform: Send + Sync {
     fn prepare_window<'a>(&self, builder: WindowBuilder<'a>) -> Result<WindowBuilder<'a>, String>;
     /// 창의 네이티브 주소를 반환한다.
     fn window_handle(&self, window: &Window) -> Result<Handle, String>;
-    /// 창 버튼을 창 왼쪽 위 기준 x, y 에 배치한다.
-    fn place_window_controls(&self, window: Handle, x: f64, y: f64) -> Result<(), String>;
+    /// 맨 왼쪽 창 단추의 왼쪽 끝을 x 에, 단추가 보이는 영역의 세로 중앙을 centre_y 에 둔다(콘텐츠
+    /// 왼쪽 위 기준). 창에 단추를 둘 수 없으면 오류를 반환한다.
+    fn place_window_controls(&self, window: Handle, x: f64, centre_y: f64) -> Result<(), String>;
     /// 창 버튼이 차지하는 영역을 페이지 좌표로 반환한다.
     fn window_controls(&self, window: Handle) -> Result<Frame, String>;
     #[cfg(feature = "diagnostics")]

@@ -37,13 +37,15 @@ pub fn controls(window: Handle) -> Frame {
     (rect[0], rect[1], rect[2], rect[3])
 }
 
-/// 창 버튼을 두 macOS 호스트가 공유하는 컨테이너에 배치한다.
-pub fn place_controls(window: Handle, x: f64, y: f64) {
-    unsafe {
-        extern "C" {
-            fn windowPlaceControls(window: *mut c_void, x: f64, y: f64);
-        }
-        windowPlaceControls(window as *mut c_void, x, y);
+/// 창 버튼을 두 macOS 호스트가 공유하는 컨테이너에 배치한다. 둘 수 없으면 오류를 반환한다.
+pub fn place_controls(window: Handle, x: f64, centre_y: f64) -> Result<(), String> {
+    extern "C" {
+        fn windowPlaceControls(window: *mut c_void, x: f64, centre_y: f64) -> bool;
+    }
+    if unsafe { windowPlaceControls(window as *mut c_void, x, centre_y) } {
+        Ok(())
+    } else {
+        Err("the window has no standard buttons or content view to place".into())
     }
 }
 

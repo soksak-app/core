@@ -6,7 +6,8 @@
 // without resizing the window. Relayout the container when a button leaves it.
 @interface SPWindowControls : NSView
 @property(assign) NSView *home;
-@property NSPoint position;
+@property CGFloat left;
+@property CGFloat centre;
 @property BOOL suspended;
 - (void)place;
 @end
@@ -31,8 +32,13 @@
         if (button && button.superview != self) [self addSubview:button];
     }
     NSRect a = first.frame, b = last.frame;
-    self.frame = NSMakeRect(self.position.x - a.origin.x,
-        self.superview.bounds.size.height - self.position.y - NSMaxY(a),
+    // 단추가 보이는 영역은 프레임보다 작고 프레임 안에서 위아래 여백이 다르다. 보이는 영역의
+    // 세로 중앙을 centre 에 맞춘다. 이 뷰는 뒤집히지 않았으므로 y 는 위로 증가한다.
+    NSRect drawn = [self convertRect:[first alignmentRectForFrame:first.bounds] fromView:first];
+    CGFloat drawnTop = NSMaxY(a) - NSMaxY(drawn);
+    CGFloat top = self.centre - drawnTop - NSHeight(drawn) / 2;
+    self.frame = NSMakeRect(self.left - a.origin.x,
+        self.superview.bounds.size.height - top - NSMaxY(a),
         NSMaxX(b) + a.origin.x, NSMaxY(a) + a.origin.y);
 }
 - (void)windowResized:(NSNotification *)note { [self place]; }
@@ -55,13 +61,13 @@
 
 static char controlsKey;
 
-void windowPlaceControls(void *handle, double x, double y) {
+bool windowPlaceControls(void *handle, double x, double centreY) {
     NSCAssert(NSThread.isMainThread, @"Window controls belong to the main thread");
     NSWindow *window = (NSWindow *)handle;
     SPWindowControls *controls = objc_getAssociatedObject(window, &controlsKey);
     if (!controls) {
         NSButton *close = [window standardWindowButton:NSWindowCloseButton];
-        if (!close || !window.contentView) return;
+        if (!close || !window.contentView) return false;
         controls = [[[SPWindowControls alloc] initWithFrame:NSZeroRect] autorelease];
         controls.home = close.superview;
         [window.contentView addSubview:controls positioned:NSWindowAbove relativeTo:nil];
@@ -72,8 +78,10 @@ void windowPlaceControls(void *handle, double x, double y) {
         [center addObserver:controls selector:@selector(enterFullScreen:) name:NSWindowWillEnterFullScreenNotification object:window];
         [center addObserver:controls selector:@selector(exitFullScreen:) name:NSWindowDidExitFullScreenNotification object:window];
     }
-    controls.position = NSMakePoint(x, y);
+    controls.left = x;
+    controls.centre = centreY;
     [controls place];
+    return true;
 }
 
 // Reading a position must not repair it: callers need the actual geometry.

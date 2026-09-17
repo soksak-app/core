@@ -89,7 +89,11 @@ The shell sidecar uses the same Go mechanism in `sidecars/shell/src/platform/`.
 | Capture | Window capture: open, start, wait for the first frame, stop |
 | Dock | Dock menu installation |
 | Identity | Directory identity |
-| Endpoint | [Local endpoint](endpoint.md) transport; not implemented |
+| Endpoint | [Local endpoint](endpoint.md) transport: Unix socket on macOS; not implemented on Windows |
+
+### Window buttons
+
+Both hosts place the window's own buttons inside the page's first row (`.chrome-bar` in `packages/workbench/app.css`, 45px): the left edge of the leftmost button at x 12, and the vertical centre of the buttons' visible area at y 22.5, both in content coordinates. The native library computes the frame from the actual button size. The hosts place the buttons when the page reports that it is ready and after each resize; a placement that cannot be applied makes the ready call fail. AppKit can take the buttons back when the recording indicator changes, and the library places them again. `host.window` reports the visible area in `controls`.
 
 ## Windows state
 
@@ -165,5 +169,5 @@ The debug executables are `target/debug/soksak-wailsv3` and `target/debug/soksak
 | Path | Contents |
 | --- | --- |
 | `src/` | `<name>.h` and `<name>.m` sources, including `capture.m`, which both hosts use for window capture. File names have no `_darwin` suffix because the directory identifies the platform |
-| `tests/` | `input_inject_test.m`, `window_facts_test.m`, `surface_layout_test.m` (`make test`, no activation); `input_activate_test.m` and `webview_input_test.m` (`make test-activation`, activates the application) |
+| `tests/` | `input_inject_test.m`, `window_facts_test.m`, `window_controls_test.m`, `surface_layout_test.m` (`make test`, no activation); `input_activate_test.m` and `webview_input_test.m` (`make test-activation`, activates the application) |
 | `Makefile` | Builds a static library that the hosts find through pkg-config as `soksak-darwin`; `make -C native/darwin test` and `make -C native/darwin test-activation` run the input checks |

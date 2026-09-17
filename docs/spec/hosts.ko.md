@@ -89,7 +89,11 @@ Rust: `src/platform/platform.rs`는 각 운영체제 모듈을 `#[cfg(target_os 
 | 캡처 | 창 캡처: 대상 지정, 시작, 첫 프레임 대기, 종료 |
 | Dock | Dock 메뉴 설치 |
 | 식별 | 디렉터리 식별 |
-| 엔드포인트 | [로컬 엔드포인트](endpoint.ko.md) 전송. 미구현 |
+| 엔드포인트 | [로컬 엔드포인트](endpoint.ko.md) 전송: macOS는 Unix 소켓, Windows는 미구현 |
+
+### 창 단추
+
+두 호스트는 창 자신의 단추를 페이지 첫 행(`packages/workbench/app.css`의 `.chrome-bar`, 45px) 안에 둔다. 맨 왼쪽 단추의 왼쪽 끝은 x 12, 단추가 보이는 영역의 세로 중앙은 y 22.5이며 둘 다 콘텐츠 좌표다. 네이티브 라이브러리가 실제 단추 크기로 프레임을 계산한다. 호스트는 페이지가 준비를 알릴 때와 창 크기가 바뀔 때마다 단추를 두며, 배치를 적용할 수 없으면 준비 호출이 실패한다. 녹화 표시가 바뀌면 AppKit이 단추를 되찾을 수 있으며, 라이브러리가 다시 배치한다. `host.window`는 보이는 영역을 `controls`로 보고한다.
 
 ## Windows 상태
 
@@ -165,5 +169,5 @@ Wails 바인딩 서비스 이름은 `github.com/min-median-max/soksak/packages/h
 | 경로 | 내용 |
 | --- | --- |
 | `src/` | `<이름>.h`와 `<이름>.m` 소스. 두 호스트가 창 캡처에 사용하는 `capture.m`을 포함한다. 디렉터리가 플랫폼을 나타내므로 파일 이름에 `_darwin` 접미사가 없다 |
-| `tests/` | `input_inject_test.m`, `window_facts_test.m`, `surface_layout_test.m`(`make test`, 활성화 없음), `input_activate_test.m`과 `webview_input_test.m`(`make test-activation`, 애플리케이션 활성화) |
+| `tests/` | `input_inject_test.m`, `window_facts_test.m`, `window_controls_test.m`, `surface_layout_test.m`(`make test`, 활성화 없음), `input_activate_test.m`과 `webview_input_test.m`(`make test-activation`, 애플리케이션 활성화) |
 | `Makefile` | 호스트가 pkg-config에서 `soksak-darwin`으로 찾는 정적 라이브러리를 빌드한다. `make -C native/darwin test`와 `make -C native/darwin test-activation`이 입력 검사를 실행한다 |

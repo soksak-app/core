@@ -19,7 +19,7 @@ pub fn window_handle(_window: &Window) -> Result<Handle, String> {
     missing("native window handle")
 }
 
-pub fn place_window_controls(_window: Handle, _x: f64, _y: f64) -> Result<(), String> {
+pub fn place_window_controls(_window: Handle, _x: f64, _centre_y: f64) -> Result<(), String> {
     missing("window button placement")
 }
 

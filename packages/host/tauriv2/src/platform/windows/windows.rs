@@ -29,8 +29,8 @@ impl Platform for Windows {
     fn window_handle(&self, window: &Window) -> Result<Handle, String> {
         unsupported::window_handle(window)
     }
-    fn place_window_controls(&self, window: Handle, x: f64, y: f64) -> Result<(), String> {
-        unsupported::place_window_controls(window, x, y)
+    fn place_window_controls(&self, window: Handle, x: f64, centre_y: f64) -> Result<(), String> {
+        unsupported::place_window_controls(window, x, centre_y)
     }
     fn window_controls(&self, window: Handle) -> Result<Frame, String> {
         unsupported::window_controls(window)

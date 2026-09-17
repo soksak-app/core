@@ -33,12 +33,12 @@ func (s *Surfaces) setTitle(title string) {
 	}
 }
 
-// 창 자신의 단추를 두는 위치. 창의 왼쪽 위에서 잰 점이고, 맨 왼쪽 단추의 왼쪽 위
-// 모서리가 여기에 온다. 타우리 호스트가 같은 값을 쓰고, 페이지의 검증기가 그 결과를
-// 잰다.
+// 창 자신의 단추를 두는 위치. 콘텐츠 왼쪽 위에서 잰 값으로, 맨 왼쪽 단추의 왼쪽 끝이
+// controlsAtX 에, 단추의 세로 중앙이 페이지 첫 행(packages/workbench/app.css 의 .chrome-bar,
+// 45px)의 세로 중앙에 온다. 타우리 호스트가 같은 값을 쓰고, 페이지의 검증기가 그 결과를 잰다.
 const (
-	controlsAtX = 12
-	controlsAtY = 14.5
+	controlsAtX       = 12
+	controlsAtCentreY = 22.5
 )
 
 // 창을 만들 때의 콘텐츠 크기.
@@ -139,6 +139,15 @@ func (h *Host) WindowReady(ctx context.Context) error {
 	readied := s.readied
 	s.readied = nil
 	h.mu.Unlock()
+	// 첫 창은 생성과 함께 표시되어 WindowShow 가 오지 않을 수 있다. 페이지가 준비되면 창이
+	// 표시된 상태이므로 여기서도 단추를 둔다.
+	var placed error
+	application.InvokeSync(func() {
+		placed = system.PlaceWindowControls(s.window.NativeWindow(), controlsAtX, controlsAtCentreY)
+	})
+	if placed != nil {
+		return fmt.Errorf("window buttons: %w", placed)
+	}
 	s.first.Do(func() { s.Emit("page-ready") })
 	s.replayRegistrations()
 	go h.windowsChanged()
@@ -191,7 +200,7 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 	place := func(*application.WindowEvent) {
 		application.InvokeSync(func() {
 			prepareWindow(win)
-			if err := system.PlaceWindowControls(win.NativeWindow(), controlsAtX, controlsAtY); err != nil {
+			if err := system.PlaceWindowControls(win.NativeWindow(), controlsAtX, controlsAtCentreY); err != nil {
 				log.Printf("window: %v", err)
 			}
 		})

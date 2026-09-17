@@ -45,9 +45,10 @@ pub(crate) struct Windows {
     owners: Mutex<HashMap<String, String>>,
 }
 
-/// 창 버튼 위치. 창 왼쪽 위에서 가장 왼쪽 버튼 프레임까지의 포인트 값이다. Wails 호스트도 같은
-/// 위치에 배치하고, `e2e/controls.test.mjs` 가 두 호스트의 결과를 측정한다.
-const CONTROLS_AT: (f64, f64) = (12.0, 14.5);
+/// 창 버튼 위치. 콘텐츠 왼쪽 위에서 잰 값으로, 맨 왼쪽 버튼의 왼쪽 끝과 버튼의 세로 중앙이다.
+/// 세로 중앙은 페이지 첫 행(`packages/workbench/app.css` 의 `.chrome-bar`, 45px)의 가운데다.
+/// Wails 호스트도 같은 위치에 배치하고, `e2e/controls.test.mjs` 가 두 호스트의 결과를 측정한다.
+const CONTROLS_AT: (f64, f64) = (12.0, 22.5);
 
 /// 창의 상태를 반환한다.
 pub(crate) fn window_data(window: &Window) -> Result<Arc<WindowData>, String> {
@@ -139,12 +140,11 @@ pub(crate) fn window_new(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// 창을 등록부에 추가하고 창 버튼을 배치하고 창 이벤트를 처리한다.
+/// 창을 등록부에 추가하고 창 이벤트를 처리한다. 창 버튼은 페이지가 준비될 때와 창 크기가 바뀔 때 배치한다.
 pub(crate) fn register(window: Window) -> Result<(), String> {
     let context = Arc::new(WindowData::default());
     window.state::<Windows>().windows.lock().map_err(|e| e.to_string())?
         .insert(window.label().into(), context.clone());
-    place_window_controls(&window)?;
     let platform = platform::current()?;
     let owner = native_owner(&window)?;
     let host = window.clone();
@@ -183,7 +183,7 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
             crate::exposure::windows_changed(host.app_handle());
         }
         tauri::WindowEvent::Resized(_) => {
-            let _ = place_window_controls(&host);
+            log_error(place_window_controls(&host));
             crate::exposure::window_changed(&host);
         }
         tauri::WindowEvent::Focused(_) => {
@@ -282,6 +282,9 @@ pub(crate) fn window_state(window: &Window) -> Result<Option<Geometry>, String> 
 
 /// 페이지가 창 닫기 요청을 처리할 준비가 되었음을 기록한다.
 pub(crate) fn window_ready(window: &Window) -> Result<(), String> {
+    // 창을 등록할 때 AppKit 이 아직 단추를 만들지 않았을 수 있다. 페이지가 준비되면 창이
+    // 표시된 상태이므로 여기서도 단추를 둔다.
+    place_window_controls(window)?;
     let data = window_data(window)?;
     data.ready.store(true, Ordering::Relaxed);
     crate::exposure::replay_registrations(window);
@@ -323,17 +326,14 @@ pub(crate) fn quit(app: &AppHandle, api: tauri::ExitRequestApi) {
     }
 }
 
-/// 창 버튼을 페이지 첫 줄 안에 배치한다.
+/// 창 버튼을 페이지 첫 줄 안에 배치하고 결과를 반환한다.
 ///
 /// 플랫폼은 표준 제목 표시줄 높이에 맞춰 버튼을 배치하고, 그 높이는 페이지 첫 줄보다 낮다.
+/// AppKit 은 메인 스레드에서 뷰를 배치한다. 호출하는 창 이벤트와 동기 명령은 메인 스레드에서
+/// 실행되고, 네이티브 함수가 이를 확인한다.
 fn place_window_controls(window: &Window) -> Result<(), String> {
-    let platform = platform::current()?;
     let handle = native_owner(window)?;
-    // AppKit 은 메인 스레드에서 뷰를 배치한다. setup 에서 호출하면 이미 메인 스레드이므로
-    // 클로저가 바로 실행된다.
-    window
-        .run_on_main_thread(move || log_error(platform.place_window_controls(handle, CONTROLS_AT.0, CONTROLS_AT.1)))
-        .map_err(|e| e.to_string())
+    platform::current()?.place_window_controls(handle, CONTROLS_AT.0, CONTROLS_AT.1)
 }
 
 /// 창 버튼이 차지하는 영역을 페이지 좌표로 반환한다. 페이지는 첫 줄에서 그 영역을 비운다.
