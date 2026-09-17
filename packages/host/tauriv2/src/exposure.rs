@@ -28,6 +28,9 @@ pub const TIMEOUT: Duration = Duration::from_secs(10);
 /// 애플리케이션 활성화를 기다리는 시간.
 const ACTIVATION: Duration = Duration::from_secs(5);
 
+/// input.pointer 의 누름과 뗌이 문서의 수신을 기다리는 시간.
+const RECEIPT: Duration = Duration::from_secs(2);
+
 /// endpoint.json 과 소켓 이름에 쓰는 애플리케이션 이름.
 const APPLICATION: &str = "tauriv2";
 
@@ -45,24 +48,29 @@ fn host_declarations() -> Value {
             "schema": {"type": "array", "items": {"type": "string"}},
         }, {
             "name": "host.screens",
-            "description": "The displays in screen coordinates with their backing scale.",
+            "description": "The displays in screen coordinates with their backing scale and the area not covered by the menu bar and Dock.",
             "schema": {"type": "array", "items": {"type": "object", "properties": {
+                "visible": rect,
                 "x": {"type": "number"}, "y": {"type": "number"},
                 "width": {"type": "number"}, "height": {"type": "number"},
                 "scale": {"type": "number"}}}},
         }, {
             "name": "host.window",
-            "description": "Window frame in screen coordinates, content size, backing scale, key and application active state, child window count, window buttons, native surfaces, and the open native modal.",
+            "description": "Window frame in screen coordinates, content size, backing scale, maximized, key and application active state, child window count, window buttons, native surfaces, and the open native modal.",
             "schema": {"type": "object", "properties": {
                 "frame": rect,
                 "content": rect,
                 "scale": {"type": "number"},
+                "maximized": {"type": "boolean"},
                 "key": {"type": "boolean"},
                 "active": {"type": "boolean"},
                 "children": {"type": "integer"},
                 "controls": {"type": "array", "items": rect},
                 "surfaces": {"type": "array", "items": {"type": "object", "properties": {
                     "id": {"type": "string"}, "frame": rect,
+                    "visible": {"type": "boolean"}, "order": {"type": "integer"}}}},
+                "documents": {"type": "array", "items": {"type": "object", "properties": {
+                    "surface": {"type": "string"}, "document": {"type": "string"}, "frame": rect,
                     "visible": {"type": "boolean"}, "order": {"type": "integer"}}}},
                 "modal": {"type": "object", "properties": {
                     "id": {"type": "string"}, "mode": {"type": "string"},
@@ -83,12 +91,15 @@ fn host_declarations() -> Value {
             {"name": "host.hit", "description": "Returns the owner of a point in window coordinates.",
              "params": {"type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "number"}}},
              "result": {"type": "object", "properties": {
-                 "kind": {"type": "string", "enum": ["page", "surface", "native"]},
-                 "surface": {"type": "string"}, "identifier": {"type": "string"}}}},
+                 "kind": {"type": "string", "enum": ["page", "surface", "document", "native"]},
+                 "surface": {"type": "string"}, "document": {"type": "string"},
+                 "identifier": {"type": "string"}}}},
             {"name": "host.quit", "description": "Requests normal application termination, including pending saves.",
              "params": empty, "result": nothing},
             {"name": "host.window.close", "description": "Closes the window through its normal close action.",
              "params": empty, "result": nothing},
+            {"name": "host.window.fullscreen", "description": "Enters full screen, or leaves it with on false.",
+             "params": {"type": "object", "properties": {"on": {"type": "boolean"}}}, "result": nothing},
             {"name": "host.window.maximize", "description": "Maximizes the window, or restores it with on false.",
              "params": {"type": "object", "properties": {"on": {"type": "boolean"}}}, "result": nothing},
             {"name": "host.window.move", "description": "Moves the window frame origin to a point in screen coordinates.",
@@ -590,7 +601,7 @@ pub(crate) fn on_main<T: Send + 'static>(
 }
 
 /// 웹뷰의 네이티브 뷰로 work 를 실행하고 결과를 기다린다.
-fn with_view<T: Send + 'static>(
+pub(crate) fn with_view<T: Send + 'static>(
     webview: &Webview,
     work: impl FnOnce(&tauri::webview::PlatformWebview) -> Result<T, String> + Send + 'static,
 ) -> Result<T, String> {
@@ -612,13 +623,19 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
         let view = with_view(&webview, move |view| platform.view_id(view)).map_err(internal)?;
         named.insert(view, surface);
     }
-    let overlay = &window_data(window).map_err(internal)?.overlay;
-    let modal_view = match overlay.view.lock().map_err(internal)?.clone() {
+    let context = window_data(window).map_err(internal)?;
+    let documents = context.documents.names();
+    let overlay = &context.overlay;
+    // 잠금은 복사한 뒤 바로 놓는다. 메인 스레드 작업(with_view)을 기다리는 동안 잠금을 쥐면, 같은
+    // 잠금을 기다리는 메인 스레드의 모달 배치와 서로 기다린다.
+    let modal = overlay.view.lock().map_err(internal)?.clone();
+    let modal_view = match modal {
         Some(view) => Some(with_view(&view, move |view| platform.view_id(view)).map_err(internal)?),
         None => None,
     };
     let facts = on_main(window, move || platform.window_facts(handle)).map_err(internal)?;
     let mut surfaces = Vec::new();
+    let mut attached = Vec::new();
     let mut modal = match overlay.open_state() {
         Some((id, mode, shown)) => json!({"id": id, "mode": mode, "shown": shown,
             "frame": null, "order": null, "background": null}),
@@ -631,6 +648,9 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
         if let Some(surface) = named.get(&address) {
             surfaces.push(json!({"id": surface, "frame": rect(view),
                 "visible": !view["hidden"].as_bool().unwrap_or(false), "order": order}));
+        } else if let Some((surface, document)) = documents.get(&address) {
+            attached.push(json!({"surface": surface, "document": document, "frame": rect(view),
+                "visible": !view["hidden"].as_bool().unwrap_or(false), "order": order}));
         } else if modal.is_object() && modal_view == Some(address) {
             modal["frame"] = rect(view);
             modal["order"] = json!(order);
@@ -641,11 +661,13 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
         "frame": facts["frame"],
         "content": {"x": 0.0, "y": 0.0, "width": facts["content"]["width"], "height": facts["content"]["height"]},
         "scale": facts["scale"],
+        "maximized": facts["zoomed"],
         "key": facts["key"],
         "active": facts["active"],
         "children": facts["children"],
         "controls": facts["controls"],
         "surfaces": surfaces,
+        "documents": attached,
         "modal": modal,
     }))
 }
@@ -689,12 +711,16 @@ fn hit(window: &Window, x: f64, y: f64) -> Result<Value, Failure> {
     let handle = native_owner(window).map_err(internal)?;
     let found = on_main(window, move || platform.hit(handle, x, y)).map_err(internal)?;
     let context = window_data(window).map_err(internal)?;
-    let surface = {
+    let documents = context.documents.names();
+    let owner = {
         let views = context.views.0.lock().map_err(internal)?;
-        found.chain.iter().find_map(|view| views.get(view).cloned())
+        found.chain.iter().find_map(|view| match documents.get(view) {
+            Some((surface, document)) => Some(json!({"kind": "document", "surface": surface, "document": document})),
+            None => views.get(view).map(|surface| json!({"kind": "surface", "surface": surface})),
+        })
     };
-    if let Some(surface) = surface {
-        return Ok(json!({"kind": "surface", "surface": surface}));
+    if let Some(owner) = owner {
+        return Ok(owner);
     }
     let modal = context.overlay.view.lock().map_err(internal)?.clone();
     if let (Some(view), Some((id, _, _))) = (modal, context.overlay.open_state()) {
@@ -717,23 +743,29 @@ pub(crate) struct Host(pub AppHandle);
 impl Host {
     /// 창의 메인 페이지에 요청을 보내고 응답을 기다린다.
     pub(crate) fn page(&self, window: &Window, method: &str, params: Map<String, Value>, timeout: Duration) -> Result<Value, Failure> {
-        self.page_then(window, method, params, timeout, || {})
+        self.page_then(window, method, params, Some(timeout), || {})
     }
 
-    /// page 와 같고, 요청을 보낸 뒤 응답을 기다리기 전에 sent 를 호출한다.
+    /// page 와 같고, 요청을 보낸 뒤 응답을 기다리기 전에 sent 를 호출한다. timeout 이 None 이면 답이나
+    /// 페이지 종료까지 기다린다. 준비되지 않은 페이지는 요청을 받지 못하므로 1003 을 반환한다. 요청을
+    /// 등록한 뒤 준비 여부를 보므로, 그 사이 다시 읽힌 페이지의 요청은 여기서 거부되거나 abandon 으로 끝난다.
     pub(crate) fn page_then(
         &self,
         window: &Window,
         method: &str,
         params: Map<String, Value>,
-        timeout: Duration,
+        timeout: Option<Duration>,
         sent: impl FnOnce(),
     ) -> Result<Value, Failure> {
         let label = window.label().to_string();
         if root_view(window).is_none() {
             return Err(Failure::new(MISSING_DOCUMENT, "the main page is gone"));
         }
-        self.0.state::<Exposure>().relay.request(&label, Some(timeout), |id| {
+        let data = window_data(window).map_err(|e| Failure::new(MISSING_DOCUMENT, e))?;
+        self.0.state::<Exposure>().relay.request(&label, timeout, |id| {
+            if !data.ready.load(Ordering::Relaxed) {
+                return Err("the main page is not ready".to_string());
+            }
             emit_to(&self.0, &label, "exposure-request", json!({"id": id, "method": method, "params": params}))?;
             sent();
             Ok(())
@@ -774,6 +806,11 @@ impl Host {
             "host.window.maximize" => match arguments.get("on") {
                 None | Some(Value::Bool(true)) => done(window.maximize()),
                 Some(Value::Bool(false)) => done(window.unmaximize()),
+                Some(_) => Err(Failure::params("on must be a boolean")),
+            },
+            "host.window.fullscreen" => match arguments.get("on") {
+                None | Some(Value::Bool(true)) => done(window.set_fullscreen(true)),
+                Some(Value::Bool(false)) => done(window.set_fullscreen(false)),
                 Some(_) => Err(Failure::params("on must be a boolean")),
             },
             "host.window.resize" => (|| {
@@ -817,21 +854,29 @@ impl Host {
         if pointer.activate {
             let (tx, rx) = mpsc::channel();
             on_main(window, move || {
-                platform.input_activate(handle, ACTIVATION, Box::new(move |ok| {
-                    let _ = tx.send(ok);
+                platform.input_activate(handle, ACTIVATION, Box::new(move |result| {
+                    let _ = tx.send(result);
                 }))
             })
             .map_err(|e| Failure::new(NO_INPUT, e))?;
-            // 라이브러리는 ACTIVATION 이 지나면 done(false) 를 호출하므로 결과는 항상 도착한다.
-            if !rx.recv().unwrap_or(false) {
-                return Err(Failure::new(NOT_ACTIVE, "the system did not activate the application"));
-            }
+            // 라이브러리는 ACTIVATION 이 지나면 멈춘 단계로 done 을 호출하므로 결과는 항상 도착한다.
+            rx.recv()
+                .map_err(|e| e.to_string())
+                .and_then(|result| result)
+                .map_err(|e| Failure::new(NOT_ACTIVE, e))?;
         }
-        match on_main(window, move || platform.input_pointer(handle, pointer)) {
-            Ok(Delivery::Delivered) => Ok(Value::Null),
-            Ok(Delivery::Inactive) => Err(Failure::new(NOT_ACTIVE, "the window is not active")),
-            Ok(Delivery::Rejected) => Err(Failure::new(INVALID_PARAMS, "the window did not accept the input")),
-            Err(error) => Err(Failure::new(NO_INPUT, error)),
+        let (tx, rx) = mpsc::channel();
+        on_main(window, move || platform.input_pointer(handle, pointer, RECEIPT, Box::new(move |delivery| {
+            let _ = tx.send(delivery);
+        })))
+        .map_err(|e| Failure::new(NO_INPUT, e))?;
+        // 라이브러리는 RECEIPT 가 지나면 Unreceived 로 done 을 호출하므로 결과는 항상 도착한다.
+        match rx.recv().map_err(|e| Failure::new(NO_INPUT, e.to_string()))? {
+            Delivery::Delivered => Ok(Value::Null),
+            Delivery::Inactive => Err(Failure::new(NOT_ACTIVE, "the window is not active")),
+            Delivery::Rejected => Err(Failure::new(INVALID_PARAMS, "the window did not accept the input")),
+            Delivery::Unreceived => Err(Failure::new(TIMED_OUT, format!(
+                "the document did not receive the input within {} ms", RECEIPT.as_millis()))),
         }
     }
 
@@ -870,7 +915,9 @@ impl Service for Host {
                 if name == "host" || name.starts_with("host.") {
                     return self.host_entry(&window, method, &name, &params);
                 }
-                self.page(&window, method, params, TIMEOUT)
+                // 메인 페이지는 표면에 전달한 명령을 선언의 제한 시간 안에 끝내므로 command.run 에는 제한을 두지 않는다.
+                let timeout = if method == "command.run" { None } else { Some(TIMEOUT) };
+                self.page_then(&window, method, params, timeout, || {})
             }
         }
     }

@@ -15,10 +15,17 @@ import (
 	"sync"
 )
 
+// CaptureTarget 은 녹화 대상이다. Display 이면 창이 있는 디스플레이에서 이 앱의 창을 녹화한다.
+// 창 녹화는 창이 다른 Space(전체 화면)로 옮겨지면 멈춘다.
+type CaptureTarget struct {
+	Window  int
+	Display bool
+}
+
 // Capture 는 녹화 장치다. 플랫폼 구현이나 검사의 가짜가 제공한다.
 type Capture interface {
-	// Open 은 윈도 서버 번호의 창을 녹화 대상으로 정한다.
-	Open(windowNumber int) error
+	// Open 은 윈도 서버 번호 target.Window 의 창을 녹화 대상으로 정한다.
+	Open(target CaptureTarget) error
 	// Start 는 directory 에 프레임 기록을 시작한다.
 	Start(directory string) error
 	// Wait 는 첫 프레임이 기록되었는지 반환한다.
@@ -27,17 +34,17 @@ type Capture interface {
 	Stop() (int, error)
 }
 
-// Recording 은 진행 중인 녹화의 폴더와 녹화 대상으로 준비한 창 번호다. 영값을 사용한다.
+// Recording 은 진행 중인 녹화의 폴더와 녹화 대상으로 준비한 대상이다. 영값을 사용한다.
 type Recording struct {
 	mu        sync.Mutex
 	directory string
-	opened    int
+	opened    CaptureTarget
 	hasOpened bool
 }
 
-// Start 는 directory 를 만들고 windowNumber 의 창을 그 폴더에 녹화하기 시작한다. 첫 프레임이
-// 기록된 뒤 반환한다. 실패하면 녹화를 멈추고 폴더를 지운다.
-func (r *Recording) Start(capture Capture, windowNumber int, directory string) error {
+// Start 는 directory 를 만들고 target 을 그 폴더에 녹화하기 시작한다. 첫 프레임이 기록된 뒤
+// 반환한다. 실패하면 녹화를 멈추고 폴더를 지운다.
+func (r *Recording) Start(capture Capture, target CaptureTarget, directory string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.directory != "" {
@@ -46,7 +53,7 @@ func (r *Recording) Start(capture Capture, windowNumber int, directory string) e
 	if err := os.MkdirAll(directory, 0700); err != nil {
 		return err
 	}
-	if err := r.begin(capture, windowNumber, directory); err != nil {
+	if err := r.begin(capture, target, directory); err != nil {
 		_ = os.RemoveAll(directory)
 		return err
 	}
@@ -54,14 +61,14 @@ func (r *Recording) Start(capture Capture, windowNumber int, directory string) e
 	return nil
 }
 
-func (r *Recording) begin(capture Capture, windowNumber int, directory string) error {
-	// 녹화 대상 준비는 윈도 서버 목록을 조회하므로 창이 바뀔 때만 실행한다.
-	if !r.hasOpened || r.opened != windowNumber {
+func (r *Recording) begin(capture Capture, target CaptureTarget, directory string) error {
+	// 녹화 대상 준비는 윈도 서버 목록을 조회하므로 대상이 바뀔 때만 실행한다.
+	if !r.hasOpened || r.opened != target {
 		r.hasOpened = false
-		if err := capture.Open(windowNumber); err != nil {
+		if err := capture.Open(target); err != nil {
 			return err
 		}
-		r.opened, r.hasOpened = windowNumber, true
+		r.opened, r.hasOpened = target, true
 	}
 	if err := capture.Start(directory); err != nil {
 		return err

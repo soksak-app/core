@@ -22,6 +22,8 @@ for (const app of Object.values(APPS)) {
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const temporary = realpathSync(mkdtempSync(join(tmpdir(), "soksak-library-")));
+    // 폴더 삭제는 앱 정리와 별개로 가장 마지막에 실행한다(정리는 등록의 역순).
+    s.cleanup(() => rmSync(temporary, { recursive: true, force: true }));
     s.cleanup(async () => {
       for (const window of await s.get("host.windows")) {
         if (window.window !== s.window) await s.on(window.window).close();
@@ -33,7 +35,6 @@ for (const app of Object.values(APPS)) {
       const remaining = await s.get("core.projects");
       if (remaining.length) await s.run("core.project.activate", { id: remaining[0].id });
       await s.run("core.projects.flush");
-      rmSync(temporary, { recursive: true, force: true });
     });
 
     const geometry = (await s.get("core.grid")).cards.map(({ id, x, y, w, h }) => ({ id, x, y, w, h }));

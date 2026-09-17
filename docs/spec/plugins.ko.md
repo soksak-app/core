@@ -27,12 +27,13 @@
 | --- | --- | --- |
 | `id` | 예 | 소문자 식별자. 탭과 설정이 참조한다 |
 | `name` | 예 | 표시 이름 |
-| `surface` | 아니오 | 외부 페이지는 `{ "url": "https://…" }`, 패키지 안의 문서는 `{ "page": "ui/page.html" }` |
+| `surface` | 아니오 | `{ "page": "ui/page.html" }`: 패키지 안의 문서. 페이지는 [문서 영역](native-surfaces.ko.md#문서-영역)에 웹 문서를 표시하며, 웹 주소는 표면이 아니다 |
+| `home` | 아니오 | 표면 페이지가 처음 여는 `http` 또는 `https` 주소. `surface`가 필요하다 |
 | `mark` | `surface`가 있으면 | 추가 메뉴와 새 탭 제목에 표시하는 짧은 텍스트 |
 | `icon` | `surface`가 있으면 | 16×16 뷰박스용 SVG 요소 |
 | `sections` | 아니오 | 사이드바 섹션 `{ "id": "<플러그인 id>.<이름>", "name" }` |
 | `preview` | 아니오 | `{ "ink": "--<토큰>" }`: 라이브러리 미리보기에서 플러그인 카드의 색을 정하는 테마 토큰 이름. `surface`가 필요하다 |
-| `sidecars` | 아니오 | 표면 페이지가 사용하는 [사이드카](sidecars.ko.md)의 패키지 이름. `page` 표면이 필요하다. 각각 플러그인 `package.json`의 의존성이어야 한다 |
+| `sidecars` | 아니오 | 표면 페이지가 사용하는 [사이드카](sidecars.ko.md)의 패키지 이름. `surface`가 필요하다. 각각 플러그인 `package.json`의 의존성이어야 한다 |
 
 플러그인은 `surface`와 `sections` 중 하나 이상이 필요하다. 표면이 있는 플러그인만 추가 메뉴에 표시되고 레일을 갖는다. 워크벤치는 `page` 표면을 `modules/<패키지 이름>/<page>?id=<탭 id>`로 연다. 정의되지 않은 필드는 거부한다.
 
@@ -73,7 +74,7 @@
 | 내보내는 값 | 의미 |
 | --- | --- |
 | `host` | 메인 페이지 호스트 인터페이스(`call`, `on`, `page`, `draggable`). 네이티브 호스트가 없으면 `null` |
-| `page` | 표면·모달 페이지 인터페이스(`theme`, `sidecar`, `modal`). 네이티브 호스트가 없으면 `null` |
+| `page` | 표면·모달 페이지 인터페이스(`theme`, `sidecar`, `exposure`, `document`, `modal`). 네이티브 호스트가 없으면 `null` |
 | `openStore()` | 작업 공간 저장소를 반환한다. 브라우저 애플리케이션은 IndexedDB를, 네이티브 애플리케이션은 `HostWorkspaceStore`를 사용한다 |
 | `windows` | 창과 프로젝트 폴더 인터페이스. 네이티브 애플리케이션은 `@soksak/workbench/host-windows.js`의 `hostWindows(host)`를, 브라우저 애플리케이션은 자체 구현을 내보낸다 |
 
@@ -96,7 +97,7 @@
 
 워크벤치는 이 내보내는 값만 사용하고 런타임에 따라 분기하지 않는다.
 
-플러그인 페이지는 `@soksak/plugin-api/page`에서 `followTheme`와 `page`를 가져오고 워크벤치 파일을 가져오지 않는다.
+플러그인 페이지는 `@soksak/plugin-api/page`에서 다음을 가져오고 워크벤치 파일을 가져오지 않는다: `followTheme`, `page`, `expose`([공개 항목](exposure.ko.md)), `ownManifest()`(검사한 페이지의 `plugin.json`), `attachDocument(element, name)`(요소의 [문서 영역](native-surfaces.ko.md#문서-영역). 네이티브 호스트가 없으면 `null`).
 
 ## 테스트
 

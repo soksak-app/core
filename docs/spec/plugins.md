@@ -27,12 +27,13 @@ Common functionality belongs to the workbench or the native host so plugins do n
 | --- | --- | --- |
 | `id` | yes | Lowercase identifier. Tabs and settings reference it |
 | `name` | yes | Display name |
-| `surface` | no | `{ "url": "https://…" }` for an external page, or `{ "page": "ui/page.html" }` for a document inside the package |
+| `surface` | no | `{ "page": "ui/page.html" }`: a document inside the package. A page shows web documents in [document regions](native-surfaces.md#document-regions); a web address is not a surface |
+| `home` | no | The `http` or `https` address the surface page opens first; requires `surface` |
 | `mark` | with `surface` | Short text shown in the add menu and new tab titles |
 | `icon` | with `surface` | SVG elements for a 16×16 view box |
 | `sections` | no | Sidebar sections `{ "id": "<plugin id>.<name>", "name" }` |
 | `preview` | no | `{ "ink": "--<token>" }`: the theme token name that colors the plugin's cards in library previews; requires `surface` |
-| `sidecars` | no | Package names of the [sidecars](sidecars.md) the page surface uses; requires a `page` surface. Each must be a dependency in the plugin's `package.json` |
+| `sidecars` | no | Package names of the [sidecars](sidecars.md) the page surface uses; requires `surface`. Each must be a dependency in the plugin's `package.json` |
 
 A plugin requires `surface`, `sections`, or both. Only plugins with a surface appear in the add menu and own a rail. The workbench opens a `page` surface at `modules/<package name>/<page>?id=<tab id>`. Unknown fields are rejected.
 
@@ -73,7 +74,7 @@ Every page declares one import map equal to `PAGE_IMPORTS`: `soksak`, `@soksak/p
 | Export | Meaning |
 | --- | --- |
 | `host` | Main-page host interface (`call`, `on`, `page`, `draggable`), or `null` without a native host |
-| `page` | Surface and modal page interface (`theme`, `sidecar`, `modal`), or `null` without a native host |
+| `page` | Surface and modal page interface (`theme`, `sidecar`, `exposure`, `document`, `modal`), or `null` without a native host |
 | `openStore()` | Returns the workspace store. The browser application uses IndexedDB; native applications return `HostWorkspaceStore` |
 | `windows` | Window and project-folder interface. Native applications export `hostWindows(host)` from `@soksak/workbench/host-windows.js`; the browser application exports its own implementation |
 
@@ -96,7 +97,7 @@ Every page declares one import map equal to `PAGE_IMPORTS`: `soksak`, `@soksak/p
 
 The workbench uses only these exports and does not branch on the runtime.
 
-Plugin pages import `followTheme` and `page` from `@soksak/plugin-api/page` and do not import workbench files.
+Plugin pages import from `@soksak/plugin-api/page` and do not import workbench files: `followTheme`, `page`, `expose` ([exposure](exposure.md)), `ownManifest()` (the page's validated `plugin.json`), and `attachDocument(element, name)` (a [document region](native-surfaces.md#document-regions) on the element, or `null` without a native host).
 
 ## Tests
 

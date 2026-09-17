@@ -12,7 +12,9 @@
   "files": [
     "index.js",
     "binder.js",
-    "page.js"
+    "document-region.js",
+    "page.js",
+    "sidecar-port.js"
   ],
   "scripts": {
     "test": "node --test test/"

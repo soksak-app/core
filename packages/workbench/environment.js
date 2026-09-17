@@ -19,7 +19,6 @@ async function readJson(path) {
 
 /** 표면 선언을 탭 id 로 표면 대상을 반환하는 함수로 바꾼다. */
 function surfaceOf(name, surface) {
-  if (surface.url !== undefined) return () => ({ url: surface.url });
   const page = modulePath(name, surface.page);
   return (tabId) => ({ page: `${page}?id=${encodeURIComponent(tabId)}` });
 }

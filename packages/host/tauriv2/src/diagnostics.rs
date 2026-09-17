@@ -18,7 +18,7 @@ use tauri::{Emitter, EventTarget, Manager, Window};
 use crate::endpoint::Failure;
 use crate::exposure::{self, on_main, Host, TIMEOUT};
 use crate::platform;
-use crate::recording::{Capture, Recording};
+use crate::recording::{Capture, Recording, Target};
 use crate::workspace::Workspace;
 
 /// 끌기 한 단계의 간격. 페이지도 같은 값으로 단계 수를 계산한다.
@@ -31,8 +31,8 @@ static RECORDING: Recording = Recording::new();
 struct PlatformCapture(&'static dyn platform::Platform);
 
 impl Capture for PlatformCapture {
-    fn open(&self, window_number: isize) -> Result<(), String> {
-        self.0.capture_open(window_number)
+    fn open(&self, target: Target) -> Result<(), String> {
+        self.0.capture_open(target.window, target.display)
     }
     fn start(&self, directory: &Path) -> Result<(), String> {
         self.0.capture_start(&directory.to_string_lossy())
@@ -61,6 +61,15 @@ pub(crate) fn call(host: &Host, window: &Window, method: &str, params: Map<Strin
     match method {
         "diagnostics.fixture" => fixture(host, window),
         "diagnostics.drag" => drag(host, window, params),
+        "diagnostics.capture.start" => {
+            let display = match params.get("display") {
+                None | Some(Value::Null) => false,
+                Some(Value::Bool(display)) => *display,
+                Some(_) => return Err(Failure::params("display must be a boolean")),
+            };
+            let frames = capture_start(window, display)?;
+            Ok(json!({"frames": frames.to_string_lossy()}))
+        }
         "diagnostics.capture.stop" => capture_stop(),
         "diagnostics.knob" => {
             if !params.get("name").is_some_and(Value::is_string) || !params.get("value").is_some_and(Value::is_number) {
@@ -109,7 +118,7 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
     let per = ((ms / FRAME.as_millis() as f64).round() as u64).max(1);
     let steps = per * 2 * times;
 
-    let frames = if capture { Some(capture_start(window)?) } else { None };
+    let frames = if capture { Some(capture_start(window, false)?) } else { None };
 
     exposure::log(window, &format!("diagnostics: drag {}:{} by {},{} in {per} steps, {times} times",
         params["axis"].as_str().unwrap_or_default(), params["line"], params["dx"], params["dy"]));
@@ -117,7 +126,7 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
     let label = window.label().to_string();
     let length = FRAME * steps as u32;
     // 페이지는 끌기를 시작할 때 이전 단계를 버리므로 단계는 요청 이벤트를 보낸 뒤 보낸다.
-    let result = host.page_then(window, "diagnostics.drag", params, TIMEOUT + length, move || tick(app, label, steps));
+    let result = host.page_then(window, "diagnostics.drag", params, Some(TIMEOUT + length), move || tick(app, label, steps));
     let finished = (|| -> Result<Value, Failure> {
         let result = result?;
         // 마지막 배치가 커밋되고 표시될 때까지 기다린다. 다음 표시 한 번만 기다리면 마지막 단계의
@@ -163,8 +172,8 @@ fn tick(app: tauri::AppHandle, label: String, steps: u64) {
     });
 }
 
-/// 창 기록을 시작하고 기록 디렉터리를 반환한다.
-fn capture_start(window: &Window) -> Result<PathBuf, Failure> {
+/// 창 기록을 시작하고 기록 디렉터리를 반환한다. display 이면 창이 있는 디스플레이에서 이 앱의 창을 기록한다.
+fn capture_start(window: &Window, display: bool) -> Result<PathBuf, Failure> {
     let platform = platform::current().map_err(internal)?;
     let held = window.clone();
     let numbers = on_main(window, move || platform.window_numbers(&held)).map_err(internal)?;
@@ -177,13 +186,15 @@ fn capture_start(window: &Window) -> Result<PathBuf, Failure> {
         .join(format!("{stamp}-{}", CAPTURES.fetch_add(1, Ordering::Relaxed)));
     let recorder = recorder()?;
     RECORDING
-        .start(&recorder, number, &directory, &|path| recorder.0.private_directory(path))
+        .start(&recorder, Target { window: number, display }, &directory, &|path| recorder.0.private_directory(path))
         .map_err(internal)?;
     Ok(directory)
 }
 
 /// 진행 중인 기록을 끝내고 디렉터리와 프레임 수를 반환한다.
 fn capture_stop() -> Result<Value, Failure> {
-    let (directory, count) = RECORDING.finish(&recorder()?).map_err(internal)?;
-    Ok(json!({"frames": directory.to_string_lossy(), "count": count}))
+    let recorder = recorder()?;
+    let (directory, count) = RECORDING.finish(&recorder).map_err(internal)?;
+    let gap = recorder.0.capture_longest_gap().map_err(internal)?;
+    Ok(json!({"frames": directory.to_string_lossy(), "count": count, "longestGap": gap}))
 }

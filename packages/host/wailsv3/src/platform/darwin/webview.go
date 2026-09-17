@@ -86,8 +86,19 @@ import (
 	"github.com/min-median-max/soksak/packages/host/wailsv3/src/platform"
 )
 
-// receive 는 마지막으로 만든 웹뷰의 메시지 수신 함수다. 호스트는 모든 웹뷰에 같은 함수를 전달한다.
+// receive 와 committed 는 마지막으로 만든 웹뷰의 수신 함수다. 호스트는 모든 웹뷰에 같은 함수를 전달한다.
 var receive func(identifier uint64, body string)
+var committed func(identifier uint64)
+
+//export nativeCommitted
+func nativeCommitted(identifier C.ulonglong) {
+	handler := committed
+	if handler == nil {
+		return
+	}
+	// 수신자는 주 스레드를 기다릴 수 있다. 호출하기 전에 WebKit 으로 반환한다.
+	go handler(uint64(identifier))
+}
 
 //export nativeMessage
 func nativeMessage(identifier C.ulonglong, message *C.char) {
@@ -102,6 +113,7 @@ func nativeMessage(identifier C.ulonglong, message *C.char) {
 
 func (implementation) CreateWebview(window unsafe.Pointer, options platform.WebviewOptions) (unsafe.Pointer, error) {
 	receive = options.Receive
+	committed = options.Committed
 	script := C.CString(options.Script)
 	defer C.free(unsafe.Pointer(script))
 	handle := C.nativeWebviewCreate(window, C.ulonglong(options.Identifier), script,

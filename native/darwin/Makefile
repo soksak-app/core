@@ -4,7 +4,7 @@
 # 헤더와 라이브러리 위치를 찾도록 soksak-darwin.pc 를 생성한다.
 #
 #   make          build/libsoksak-darwin.a, build/soksak-darwin.pc
-#   make test             입력 주입, 창 상태, 창 단추 배치, 표시 대기, 웹뷰 초점 검사를 실행한다. 애플리케이션을 활성화하지 않는다
+#   make test             입력 주입, 창 상태, 창 단추 배치, 표시 대기, 웹뷰 초점, 문서 영역 검사를 실행한다. 애플리케이션을 활성화하지 않는다
 #   make test-activation  창 활성화 후 호버 검사와 겹친 웹뷰 입력 검사(기준 실행·등록 실행)를
 #                         실행한다. 애플리케이션을 활성화해 포커스를 가져간다
 
@@ -15,7 +15,7 @@ BUILD      := $(CURDIR)/build
 OBJECTS    := $(SOURCES:src/%.m=$(BUILD)/%.o)
 LIBRARY    := $(BUILD)/libsoksak-darwin.a
 PKGCONFIG  := $(BUILD)/soksak-darwin.pc
-FRAMEWORKS := -framework Cocoa -framework WebKit -framework QuartzCore -framework ScreenCaptureKit -framework CoreMedia -framework CoreVideo
+FRAMEWORKS := -framework Cocoa -framework WebKit -framework QuartzCore -framework CoreImage -framework ScreenCaptureKit -framework CoreMedia -framework CoreVideo
 # 소스가 사용하는 가장 새로운 API 는 macOS 14.0 의 것이다(capture.m 의 ScreenCaptureKit).
 # 사용하는 빌드가 같은 최소 버전으로 컴파일·링크하도록 .pc 의 Cflags 와 Libs 에도 넣는다.
 MINIMUM    := -mmacosx-version-min=14.0
@@ -44,14 +44,16 @@ $(BUILD):
 	@mkdir -p $@
 
 $(BUILD)/%_test: tests/%_test.m $(LIBRARY) $(wildcard src/*.h src/private/*.h)
-	@clang $(CFLAGS) -I$(CURDIR)/src $< -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) $(MINIMUM) -o $@
+	@clang $(CFLAGS) -I$(CURDIR)/src $< -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
 
-test: $(BUILD)/input_inject_test $(BUILD)/window_facts_test $(BUILD)/window_controls_test $(BUILD)/surface_layout_test $(BUILD)/webview_focus_test
+test: $(BUILD)/input_inject_test $(BUILD)/window_facts_test $(BUILD)/window_controls_test $(BUILD)/surface_layout_test $(BUILD)/webview_focus_test $(BUILD)/webview_geometry_test $(BUILD)/document_view_test
 	@$(BUILD)/input_inject_test
 	@$(BUILD)/window_facts_test
 	@$(BUILD)/window_controls_test
 	@$(BUILD)/surface_layout_test
 	@$(BUILD)/webview_focus_test
+	@$(BUILD)/webview_geometry_test
+	@$(BUILD)/document_view_test
 
 test-activation: $(BUILD)/input_activate_test $(BUILD)/webview_input_test
 	@$(BUILD)/input_activate_test

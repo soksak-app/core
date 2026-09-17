@@ -11,11 +11,13 @@
 | API 또는 키 | 호출 위치와 범위 | 목적 |
 | --- | --- | --- |
 | `WKWebView._setOverrideDeviceScaleFactor:` | 두 호스트의 [`webview_geometry.m`](../../native/darwin/src/webview_geometry.m), `webviewAttachSurface` | 장치 픽셀 컨테이너의 로컬 한 단위를 backing 픽셀 하나로 렌더링 |
-| `WKWebView._doAfterNextPresentationUpdate:` | 두 호스트의 [`surface_layout.m`](../../native/darwin/src/surface_layout.m), `surfaceLayoutAfterPresentation`; 프로브와 독립 입력 검사에서도 사용 | 네이티브 좌표 커밋 또는 렌더링 결과 측정 전에 웹뷰 표시 완료 확인 |
-| `WKWebView._setIgnoresMouseMoveEvents:` | 두 호스트의 [`webview_input.m`](../../native/darwin/src/webview_input.m), 등록·포인터 처리·제거 | 겹친 웹뷰의 포인터 추적을 AppKit 히트테스트 결과로 제한 |
+| 문서 웹뷰의 `WKWebView._setOverrideDeviceScaleFactor:` | 두 호스트의 [`webview_geometry.m`](../../native/darwin/src/webview_geometry.m), `webviewMatchSurface`. [`document_view.m`](../../native/darwin/src/document_view.m)의 `sp_document_create`가 호출 | 장치 픽셀 표면 안의 문서 영역을 표면과 같은 밀도로 렌더링 |
+| `WKWebView._doAfterNextPresentationUpdate:` | 두 호스트의 [`surface_layout.m`](../../native/darwin/src/surface_layout.m), `surfaceLayoutAfterPresentation`; [`input_inject.m`](../../native/darwin/src/input_inject.m), `sp_input_pointer_then`; 프로브와 독립 입력 검사에서도 사용 | 네이티브 좌표 커밋, 새 문서로의 네이티브 스크롤 전달, 렌더링 결과 측정 전에 웹뷰 표시 완료 확인 |
+| `WKWebView._setIgnoresMouseMoveEvents:` | 두 호스트의 [`webview_input.m`](../../native/darwin/src/webview_input.m), 등록·포인터 처리·제거. 표면, 모달, 문서 영역 웹뷰 | 겹친 웹뷰의 포인터 추적을 AppKit 히트테스트 결과로 제한 |
 | `WKWebView` KVC `drawsBackground` (`_drawsBackground` / `_setDrawsBackground:`) | Wails [`webview.m`](../../packages/host/wailsv3/src/platform/darwin/webview.m)의 모달 생성; 두 호스트 [`window_facts.m`](../../native/darwin/src/window_facts.m)의 `host.window` 조회 | 모달 웹뷰의 불투명 배경 비활성화 및 상태 보고 |
 | `WKWebViewConfiguration` KVC `drawsBackground` (`_setDrawsBackground:`) | Tauri → Wry 웹뷰 생성; [`modals.rs`](../../packages/host/tauriv2/src/modals.rs) `show`가 `background_color(Color(0, 0, 0, 0))` 요청; 메인도 배경색 설정 | 웹뷰 초기화 전에 배경 그리기 설정 |
-| `WKWebView._setShouldSuppressFirstResponderChanges:` | 두 호스트; [`webview_input.m`](../../native/darwin/src/webview_input.m)의 `webviewIgnorePageFocus`, 표면과 모달 웹뷰 | 페이지가 요소에 초점을 줄 때 창의 키보드 초점을 옮기지 않게 함 |
+| `WKWebView._setShouldSuppressFirstResponderChanges:` | 두 호스트; [`webview_input.m`](../../native/darwin/src/webview_input.m)의 `webviewIgnorePageFocus`, 표면, 모달, 문서 영역 웹뷰 | 페이지가 요소에 초점을 줄 때 창의 키보드 초점을 옮기지 않게 함 |
+| `NSWindow._setWindowResolution:`, `NSWindow._adjustWindowResolution` 재정의 | [`webview_geometry_test.m`](../../native/darwin/tests/webview_geometry_test.m) 전용. WebKitTestRunner가 쓰는 메서드 | 해당 디스플레이 없이 검사 창의 백킹 배율을 2나 1로 정해 어느 기기에서나 배율 동작을 검사 |
 | `WKWebView._doAfterActivityStateUpdate:` | 두 호스트; [`input_inject.m`](../../native/darwin/src/input_inject.m), `sp_input_activate` | 창의 모든 웹뷰가 활성 창 상태를 웹 프로세스에 보낸 뒤에만 호버 이동을 전달 |
 | `CGEventField` 51(창 번호), `CGEventSetWindowLocation` | 두 호스트; [`input_inject.m`](../../native/darwin/src/input_inject.m), `sp_input_pointer`의 스크롤 | 창과 창 좌표를 가진 스크롤 `NSEvent` 생성 |
 | `WKWebView._doAfterProcessingAllPendingMouseEvents:` | [`native/darwin/tests/webview_input_test.m`](../../native/darwin/tests/webview_input_test.m)의 `drain`; 독립 검사 전용 | DOM 이벤트 횟수를 검사하기 전에 네이티브 마우스 처리 완료 대기 |
@@ -28,15 +30,15 @@
 
 ### 장치 배율
 
-이 수정을 유지한다. 네이티브 높이에 0.5pt가 포함되면 문서 배치 전에 네이티브 그리기 크기가 정수로 변환되어 빈 영역이 발생했다. 장치 픽셀 컨테이너는 배치 정밀도를 낮추지 않고 정수 로컬 크기를 제공한다. 공개 `pageZoom`은 CSS 크기를 유지하지만 해당 로컬 좌표의 backing 밀도를 독립적으로 설정하지 않는다. `_setOverrideDeviceScaleFactor:1`은 각 콘텐츠 웹뷰를 등록할 때 한 번 그 밀도를 설정하며, 이후 화면 배율 변경은 컨테이너와 페이지 줌으로 처리한다. 메인과 모달 웹뷰에는 이 수정을 적용하지 않는다.
+이 수정을 유지한다. 네이티브 높이에 0.5pt가 포함되면 문서 배치 전에 네이티브 그리기 크기가 정수로 변환되어 빈 영역이 발생했다. 장치 픽셀 컨테이너는 배치 정밀도를 낮추지 않고 정수 로컬 크기를 제공한다. 공개 `pageZoom`은 CSS 크기를 유지하지만 해당 로컬 좌표의 backing 밀도를 독립적으로 설정하지 않는다. `_setOverrideDeviceScaleFactor:1`은 각 콘텐츠 웹뷰를 등록할 때 한 번 그 밀도를 설정하며, 이후 화면 배율 변경은 컨테이너와 페이지 줌으로 처리한다. 메인과 모달 웹뷰에는 이 수정을 적용하지 않는다. 문서 영역은 표면의 하위 뷰이며, 표면이 장치 픽셀 컨테이너 안에 있을 때만 같은 설정을 받아 영역의 로컬 한 단위도 backing 픽셀 하나가 된다. 페이지 줌은 표면을 따른다. [`webview_geometry_test.m`](../../native/darwin/tests/webview_geometry_test.m)이 2×, 1× 변경 후, 2× 복귀 후 영역의 장치 픽셀 배율과 CSS 크기를 검사한다.
 
-업데이트 후 선택자의 시그니처와 사용자 지정 배율·기본 배율의 의미를 검토한다. 의미가 변경되면 CSS 크기, 렌더링 밀도 또는 입력 좌표가 잘못될 수 있다. [`footer.test.mjs`](../../e2e/footer.test.mjs)와 [`geometry.test.mjs`](../../e2e/geometry.test.mjs)로 실제 0.5pt 문서 영역, 마지막 장치 픽셀, 창 크기 변경, 2×↔1× 화면 전환을 검증한다. 좌표 계약은 [네이티브 표면](../spec/native-surfaces.ko.md)에 정의한다.
+업데이트 후 선택자의 시그니처와 사용자 지정 배율·기본 배율의 의미를 검토한다. 의미가 변경되면 CSS 크기, 렌더링 밀도 또는 입력 좌표가 잘못될 수 있다. [`webview_geometry_test.m`](../../native/darwin/tests/webview_geometry_test.m)으로 0.5pt 문서 영역, 마지막 장치 픽셀, 2×↔1× 전환을, [`geometry.test.mjs`](../../e2e/geometry.test.mjs)로 창 크기 변경을 검증한다. 좌표 계약은 [네이티브 표면](../spec/native-surfaces.ko.md)에 정의한다.
 
 선언은 [`WKWebViewPrivate.h`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/WKWebViewPrivate.h)에 있다. 구현은 [`WebPageProxy.cpp`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/WebPageProxy.cpp)의 `WebPageProxy::setCustomDeviceScaleFactor`와 `deviceScaleFactor`를 사용한다.
 
 ### 표시 완료
 
-이 수정을 유지한다. JavaScript 실행이나 DOM 애니메이션 프레임 콜백의 완료는 각 웹뷰가 새 문서 좌표를 표시했다는 확인이 아니다. 호스트는 해당 프로젝트 창의 메인과 표시 중인 앱 문서를 기다린 뒤 네이티브 트랜잭션을 커밋한다. `CATransaction`은 UI 스레드에 속하므로 서로 다른 창의 준비를 직렬화하며, 탐색과 닫기는 해당 창의 준비만 취소한다. 외부 문서는 참여하지 않으므로 외부 렌더러의 긴 작업이 메인 창 배치를 중단시키지 않는다.
+이 수정을 유지한다. JavaScript 실행이나 DOM 애니메이션 프레임 콜백의 완료는 각 웹뷰가 새 문서 좌표를 표시했다는 확인이 아니다. 호스트는 해당 프로젝트 창의 메인과 표시 중인 앱 문서를 기다린 뒤 네이티브 트랜잭션을 커밋한다. `CATransaction`은 UI 스레드에 속하므로 서로 다른 창의 준비를 직렬화하며, 탐색과 닫기는 해당 창의 준비만 취소한다. 문서 영역은 참여하지 않으므로 웹 문서 렌더러의 긴 작업이 메인 창 배치를 중단시키지 않는다.
 
 콜백 시점, 그리기 완료, 탐색·프로세스 종료 중 동작을 검토한다. 구현은 실행 중인 프로세스나 그리기 영역이 없으면 즉시 완료할 수 있으므로 콜백만으로 캡처된 픽셀을 확인한 것으로 처리하지 않는다. 문서 준비 확인과 전체 녹화가 계속 필요하다. 대기 대상 문서를 검사하는 [`surface_layout_test.m`](../../native/darwin/tests/surface_layout_test.m)을 실행하고, 다시 로드 후 정리를 포함해 [`outside.test.mjs`](../../e2e/outside.test.mjs), [`paint.test.mjs`](../../e2e/paint.test.mjs), [`hosts.test.mjs`](../../e2e/hosts.test.mjs)를 검증한다. [`projects.test.mjs`](../../e2e/projects.test.mjs)는 독립 프로젝트 창, 모달 전달, 닫기·다시 열기 정리도 검증한다.
 
@@ -100,7 +102,7 @@
 - 키: `+[NSEvent keyEventWithType:...]`와 `-[NSWindow sendEvent:]`. 키 창이 아닌 창에서도 포커스된 요소가 키를 받는다.
 - 포인터 누름·끌기·뗌: `hitTest:`가 반환한 뷰의 이벤트 메서드(`mouseDown:`, `mouseDragged:`, `mouseUp:`, 오른쪽 버튼 메서드). AppKit은 비활성 창의 누름을 첫 클릭으로 처리해 뷰에 전달하지 않으므로 `-[NSWindow sendEvent:]`를 사용하지 않는다.
 - 포인터 이동: 히트 뷰부터 상위로 올라가며 좌표를 포함하는 첫 추적 영역 소유자의 `mouseMoved:`. WebKit은 활성 페이지에서만 호버를 갱신한다. `WebFrame::handleMouseEvent`는 `FocusController::isActive()`가 아니면 버튼 없는 이동을 `passMouseMovedEventToScrollbars`로 넘기며, 이 상태는 `PageClientImpl::isViewWindowActive`(창의 `isKeyWindow`)에서만 온다. 이 값을 설정하는 WebKit 인터페이스는 없다. 따라서 `sp_input_pointer`는 키 창이 아닌 창의 이동에 `SP_INPUT_INACTIVE`를 반환하며 키 상태를 흉내 내지 않는다.
-- 활성화: `sp_input_activate`는 `-[NSWindow makeKeyAndOrderFront:]`와 `-[NSApplication activate]`를 호출하고, 키 창 알림과 앱 활성 알림을 모두 확인한 뒤, 다음 메인 큐 차례에 창의 모든 웹뷰에 `_doAfterActivityStateUpdate:`를 호출한다. 이 콜백은 WebKit이 예약된 활성 상태를 보낸 뒤(`WebPageProxy::dispatchActivityStateChange`) 실행되므로, 이후 마우스 이벤트는 같은 연결에서 그 상태 다음에 웹 프로세스에 도착한다. 시스템은 활성화를 거절할 수 있으며, 이때 함수는 제한 시간 뒤 실패를 보고한다.
+- 활성화: `sp_input_activate`는 `-[NSWindow makeKeyAndOrderFront:]`와 `-[NSApplication activate]`를 호출하고, 키 창 알림과 앱 활성 알림을 모두 확인한 뒤, 다음 메인 큐 차례에 창의 모든 웹뷰에 `_doAfterActivityStateUpdate:`를 호출한다. 이 콜백은 WebKit이 예약된 활성 상태를 보낸 뒤(`WebPageProxy::dispatchActivityStateChange`) 실행되므로, 이후 마우스 이벤트는 같은 연결에서 그 상태 다음에 웹 프로세스에 도착한다. 시스템은 활성화를 거절할 수 있고, 다른 애플리케이션이나 창이 포커스를 가져갈 수 있다. 함수는 멈춘 단계(`sp_activate_result`)와 최전면 애플리케이션을 보고하며, `tests/input_activate_test.m`이 각 조건을 만들어 검사한다.
 - 스크롤: **비공개 CoreGraphics 사용.** 창 정보를 가진 스크롤 `NSEvent`를 만드는 공개 API가 없다. 코드는 `CGEventCreateScrollWheelEvent2`로 이벤트를 만들고 문서화되지 않은 창 번호 필드(`CGEventField` 51)와 비공개 함수 `CGEventSetWindowLocation`을 설정한 뒤 `+[NSEvent eventWithCGEvent:]`로 변환한다. 변환 결과는 `window`와 `locationInWindow`를 가지며 `-[NSWindow sendEvent:]`가 좌표의 뷰에 전달한다. 변환한 이벤트에 창이 없으면 입력을 거부한다. 필드 51만 설정하면 좌표가 틀리고, `CGEventSetWindowLocation`만 호출하면 창이 없다. `CGEventPostToPid`는 비활성 애플리케이션에 스크롤을 전달하지 못했다(2026-09-17 검토).
 
 실패 증상: `tests/input_inject_test.m`이 포인터 이벤트 누락·비신뢰·위치 오류, 휠 이벤트 없음, 요청한 120픽셀과 다른 스크롤 거리, 클릭 후 포커스 상실을 보고한다. OS나 WebKit 업데이트 후 `make -C native/darwin test`와 `make -C native/darwin test-activation`(키보드 포커스를 가져감)을 실행한다. 공개 방법으로 창 정보를 가진 스크롤 이벤트를 만들 수 있게 되면 비공개 스크롤 호출을 교체한다.

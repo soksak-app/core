@@ -131,6 +131,9 @@ importers:
       '@soksak/plugin-api':
         specifier: workspace:*
         version: link:../../packages/plugin-api
+      jsdom:
+        specifier: ^30.0.1
+        version: 30.0.1
 
   plugins/files:
     devDependencies:

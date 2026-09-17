@@ -1,7 +1,7 @@
 // 네이티브 표면과 모달 뷰를 애플리케이션에 요청한다.
 //
 // 페이지는 커밋마다 표면의 프레임을 선언하고 호스트가 각각을 웹뷰로 만든다.
-// 표면은 플러그인이 선언한 외부 URL 또는 이 호스트가 서비스하는 문서를 표시한다.
+// 표면은 플러그인 패키지 안의, 이 호스트가 서비스하는 문서를 표시한다.
 //
 // DOM 은 네이티브 뷰 위에 그릴 수 없으므로 [data-native-modal] 요소는 별도 뷰에
 // 렌더링한다. 그 뷰는 메인창 내부에 배치되어 표면 위에 그려진다.
@@ -10,13 +10,6 @@
 // 런타임 모듈(@soksak/runtime)이 담당한다.
 import { host as bridge } from "@soksak/runtime";
 import { plugins } from "./registry.js";
-
-/** 표면이 표시할 대상을 URL 로 변환한다. `url` 은 외부, `page` 는 이 호스트의 문서. */
-function surfaceURL(surface) {
-  if (surface.url) return surface.url;
-  if (surface.page) return bridge.page(surface.page);
-  throw new Error(`surface declares neither url nor page: ${JSON.stringify(surface)}`);
-}
 
 /**
  * 계산된 CSS 색을 [r, g, b, a] 로 반환한다. 알파가 없으면 1 이다.
@@ -175,10 +168,7 @@ export const surfaces = native ? {
       const surfaces = record.surfaces.map((s) => ({
         id: s.id,
         dim: s.dim,
-        url: surfaceURL(s.surface),
-        // URL 이 이 호스트 외부인지 여부. 애플리케이션은 외부 주소를 그대로 열고
-        // 자체 문서는 자기 서버로 연다. 표면의 종류는 알 필요가 없다.
-        external: !!s.surface.url,
+        url: bridge.page(s.surface.page),
         visible: s.visible,
         ...toPage(s.applied),
       }));

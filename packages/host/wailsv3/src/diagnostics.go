@@ -27,6 +27,7 @@ import (
 func init() {
 	diagnosticMethods["diagnostics.fixture"] = diagnosticFixture
 	diagnosticMethods["diagnostics.drag"] = diagnosticDrag
+	diagnosticMethods["diagnostics.capture.start"] = diagnosticCaptureStart
 	diagnosticMethods["diagnostics.capture.stop"] = diagnosticCaptureStop
 	diagnosticMethods["diagnostics.knob"] = diagnosticKnob
 	diagnosticSubscriptions["diagnostics.transcript"] = transcriptTopic
@@ -103,7 +104,9 @@ var recording Recording
 // platformCapture 는 플랫폼의 창 녹화 연산이다.
 type platformCapture struct{ platform.Capturer }
 
-func (c platformCapture) Open(windowNumber int) error  { return c.CaptureOpen(windowNumber) }
+func (c platformCapture) Open(target CaptureTarget) error {
+	return c.CaptureOpen(target.Window, target.Display)
+}
 func (c platformCapture) Start(directory string) error { return c.CaptureStart(directory) }
 func (c platformCapture) Wait() (bool, error)          { return c.CaptureWait() }
 func (c platformCapture) Stop() (int, error)           { return c.CaptureStop() }
@@ -143,7 +146,7 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, 
 	}
 	var frames string
 	if p.Capture {
-		frames, err = startCapture(h, s)
+		frames, err = startCapture(h, s, false)
 		if err != nil {
 			return nil, err
 		}
@@ -204,7 +207,8 @@ func dragResult(s *Surfaces, reply ExposureResult) (map[string]any, error) {
 }
 
 // startCapture 는 창 s 의 녹화를 설정 디렉터리 아래 새 폴더에 시작하고 첫 프레임을 기다린다.
-func startCapture(h *Host, s *Surfaces) (string, error) {
+// display 이면 창이 있는 디스플레이에서 이 앱의 창을 녹화한다.
+func startCapture(h *Host, s *Surfaces, display bool) (string, error) {
 	capture, err := recorder()
 	if err != nil {
 		return "", err
@@ -219,10 +223,29 @@ func startCapture(h *Host, s *Surfaces) (string, error) {
 		return "", errors.New("the window has no window server number")
 	}
 	directory := filepath.Join(h.workspace.directory, "captures", fmt.Sprintf("%s-%d", s.name, time.Now().UnixNano()))
-	if err := recording.Start(capture, numbers[0], directory); err != nil {
+	if err := recording.Start(capture, CaptureTarget{Window: numbers[0], Display: display}, directory); err != nil {
 		return "", err
 	}
 	return directory, nil
+}
+
+// diagnosticCaptureStart 는 창 녹화를 시작하고 프레임 폴더를 반환한다.
+func diagnosticCaptureStart(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+	h, s, err := diagnosticHost(e, params)
+	if err != nil {
+		return nil, err
+	}
+	var p struct {
+		Display bool `json:"display"`
+	}
+	if err := decode(params, &p); err != nil {
+		return nil, err
+	}
+	directory, err := startCapture(h, s, p.Display)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"frames": directory}, nil
 }
 
 // diagnosticCaptureStop 은 녹화를 끝내고 프레임 폴더와 프레임 수를 반환한다.
@@ -238,7 +261,7 @@ func diagnosticCaptureStop(e *Endpoint, _ *endpointConn, params json.RawMessage)
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"frames": directory, "count": count}, nil
+	return map[string]any{"frames": directory, "count": count, "longestGap": capture.CaptureLongestGap()}, nil
 }
 
 // diagnosticKnob 은 합성기의 검사 값을 페이지에 전달한다.

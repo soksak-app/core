@@ -61,8 +61,8 @@ test("exposes are rejected for each invalid field", () => {
     assert.throws(() => validateExposes("probe", value), message);
   }
   assert.throws(() => validateExposes("Probe", {}), /invalid owner/);
-  assert.throws(() => validateManifest({ ...page, surface: { url: "https://example.com" }, exposes: exposes() }),
-    /exposes require a page surface/);
+  assert.throws(() => validateManifest({ id: "probe", name: "Probe", sections: [{ id: "probe.list", name: "List" }], exposes: exposes() }),
+    /exposes require a surface/);
   assert.throws(() => validateExposureFile({ exposes: exposes() }), /must be core.<name>/);
   assert.throws(() => validateExposureFile({ exposes: {}, extra: 1 }), /unknown field extra/);
 });

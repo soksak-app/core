@@ -4,6 +4,7 @@
 #import <Cocoa/Cocoa.h>
 #import "input_inject.h"
 #import "private/webkit.h"
+#import "webview_input.h"
 
 static int failures = 0;
 
@@ -57,6 +58,87 @@ static void drain(WKWebView *view) {
     __block BOOL done = NO;
     [view _doAfterProcessingAllPendingMouseEvents:^{ done = YES; }];
     until(^BOOL { return done; });
+}
+
+typedef struct { BOOL done; sp_input_result result; NSUInteger seen; WKWebView *view; } SPReceipt;
+
+static void received(void *context, sp_input_result result) {
+    SPReceipt *receipt = context;
+    receipt->result = result;
+    // 완료 시점에 문서가 받은 누름과 뗌의 수. 메인 스레드에서 동기적으로 읽는다.
+    receipt->seen = [evaluate(receipt->view, @"probe.events.filter(e=>e.type==='pointerdown'||e.type==='pointerup').length") unsignedIntegerValue];
+    receipt->done = YES;
+}
+
+typedef struct { BOOL done; sp_input_result result; NSTimeInterval started; NSTimeInterval took; } SPTimed;
+
+static void timed(void *context, sp_input_result result) {
+    SPTimed *state = context;
+    state->result = result;
+    state->took = [NSDate timeIntervalSinceReferenceDate] - state->started;
+    state->done = YES;
+}
+
+static SPReceipt pointerThen(NSWindow *window, WKWebView *view, double x, double y, int phase, double timeout) {
+    SPReceipt receipt = {NO, SP_INPUT_REJECTED, 0, view};
+    SPReceipt *state = &receipt;
+    sp_input_pointer_then(window, x, y, phase, 0, 0, 0, timeout, received, state);
+    until(^BOOL { return state->done; });
+    return receipt;
+}
+
+// 누름과 뗌의 완료가 문서의 수신 뒤에 불리는지 검사한다. 수신은 페이지가 볼 수 없는 content world 가 알린다.
+static void checkReceipts(void) {
+    NSWindow *window = [[[NSWindow alloc] initWithContentRect:awayFromPointer(NSMakeSize(300, 200))
+        styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO] autorelease];
+    [window setReleasedWhenClosed:NO];
+    WKWebView *view = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 300, 200)] autorelease];
+    window.contentView = view;
+    [view loadHTMLString:@"<!doctype html><body style='margin:0;height:200px'><script>window.probe={events:[]};"
+        "for (const type of ['pointerdown','pointerup']) addEventListener(type,e=>probe.events.push({type}),true);"
+        "</script>" baseURL:nil];
+    until(^BOOL { return [evaluate(view, @"Boolean(window.probe)") boolValue]; });
+    [window orderBack:nil];
+
+    // 등록하지 않은 웹뷰는 수신을 알리지 않으므로 전달 즉시 완료한다.
+    SPReceipt unregistered = pointerThen(window, view, 50, 50, 1, 5);
+    check(unregistered.result == SP_INPUT_DELIVERED, @"a press into an unregistered webview completes when it is delivered");
+    pointerThen(window, view, 50, 50, 3, 5);
+    drain(view);
+
+    check(webviewInputRegister(view), @"the webview registers for pointer input");
+    check([evaluate(view, @"typeof window.webkit?.messageHandlers?.soksakInputReceipt") isEqual:@"undefined"],
+        @"the page cannot see the input receipt handler");
+    evaluate(view, @"probe.events.length=0; null");
+    pointerOutside(window);
+    SPReceipt down = pointerThen(window, view, 50, 50, 1, 5);
+    check(down.result == SP_INPUT_DELIVERED && down.seen == 1,
+        [NSString stringWithFormat:@"a press completes after the document received it (%d, %lu events)", down.result, (unsigned long)down.seen]);
+    SPReceipt up = pointerThen(window, view, 50, 50, 3, 5);
+    check(up.result == SP_INPUT_DELIVERED && up.seen == 2,
+        [NSString stringWithFormat:@"a release completes after the document received it (%d, %lu events)", up.result, (unsigned long)up.seen]);
+
+    // 바쁜 문서는 끝난 뒤에 누름을 받으므로 완료도 그 뒤다.
+    [view evaluateJavaScript:@"{const end=Date.now()+1000; while(Date.now()<end){}} null" completionHandler:nil];
+    SPTimed late = {NO, SP_INPUT_REJECTED, [NSDate timeIntervalSinceReferenceDate], 0};
+    SPTimed *lateState = &late;
+    sp_input_pointer_then(window, 50, 50, 1, 0, 0, 0, 5, timed, lateState);
+    until(^BOOL { return lateState->done; });
+    check(late.result == SP_INPUT_DELIVERED && late.took >= 0.9,
+        [NSString stringWithFormat:@"a press completes only after a busy document is free to receive it (%d after %.3fs)", late.result, late.took]);
+    pointerThen(window, view, 50, 50, 3, 5);
+
+    // 문서가 바쁘면 수신이 늦어지고, 제한 시간이 지나면 받지 않은 것으로 알린다.
+    [view evaluateJavaScript:@"{const end=Date.now()+2500; while(Date.now()<end){}} null" completionHandler:nil];
+    SPTimed busy = {NO, SP_INPUT_DELIVERED, [NSDate timeIntervalSinceReferenceDate], 0};
+    SPTimed *busyState = &busy;
+    sp_input_pointer_then(window, 50, 50, 1, 0, 0, 0, 0.5, timed, busyState);
+    until(^BOOL { return busyState->done; });
+    check(busy.result == SP_INPUT_UNRECEIVED && busy.took >= 0.45 && busy.took < 2,
+        [NSString stringWithFormat:@"a press a busy document does not receive in time is reported (%d after %.3fs)", busy.result, busy.took]);
+    pointerThen(window, view, 50, 50, 3, 5);
+    webviewInputUnregister(view);
+    [window close];
 }
 
 int main(void) { @autoreleasepool {
@@ -148,5 +230,6 @@ int main(void) { @autoreleasepool {
     check(!NSApp.isActive, @"application stays inactive");
     check(NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier != getpid(), @"this process did not become the frontmost application");
     [window close];
+    checkReceipts();
     return failures ? 1 : 0;
 }}

@@ -174,6 +174,23 @@ func invokeNative(s *Surfaces, viewID uint64, call nativeCall) (any, error) {
 		}
 		s.ModalReady(id, instance)
 		return nil, nil
+	case "DocumentAttach", "DocumentPlace", "DocumentLoad", "DocumentGo", "DocumentDetach":
+		var req DocumentRequest
+		if err := nativeArgs(call, &req); err != nil {
+			return nil, err
+		}
+		switch call.Method {
+		case "DocumentAttach":
+			return nil, s.attachDocument(viewID, req)
+		case "DocumentPlace":
+			return nil, s.placeDocument(viewID, req)
+		case "DocumentLoad":
+			return nil, s.loadDocument(viewID, req)
+		case "DocumentGo":
+			return s.goDocument(viewID, req)
+		default:
+			return nil, s.detachDocument(viewID, req)
+		}
 	case "OverlayPick":
 		if err := nativeArgs(call, &id, &instance, &key, &value); err != nil {
 			return nil, err
@@ -181,6 +198,19 @@ func invokeNative(s *Surfaces, viewID uint64, call nativeCall) (any, error) {
 		return nil, s.OverlayPick(id, instance, key, value)
 	default:
 		return nil, fmt.Errorf("unknown native call: %s", call.Method)
+	}
+}
+
+// committedNative 는 네이티브 웹뷰 viewID 가 새 문서를 표시하기 시작했음을 소유 창에 알린다.
+func committedNative(viewID uint64) {
+	var owner *Surfaces
+	application.InvokeSync(func() {
+		if view := nativeViews[viewID]; view != nil {
+			owner = view.owner
+		}
+	})
+	if owner != nil {
+		owner.surfaceCommitted(viewID)
 	}
 }
 

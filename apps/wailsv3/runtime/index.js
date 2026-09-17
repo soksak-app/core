@@ -95,6 +95,17 @@ export const page = (() => {
       }),
       reply: (id, payload) => call("ExposureReply", { id, ...payload }),
     },
+    // 이 표면의 문서 영역. 호스트는 호출한 웹뷰가 surface 인지 확인하고 상태를 이 표면에만 보낸다.
+    document: {
+      attach: (document) => call("DocumentAttach", { surface, document }),
+      place: (document, insets, visible) => call("DocumentPlace", { surface, document, ...insets, visible }),
+      load: (document, url) => call("DocumentLoad", { surface, document, url }),
+      go: (document, action) => call("DocumentGo", { surface, document, action }),
+      detach: (document) => call("DocumentDetach", { surface, document }),
+      onState: (fn) => listen("document-state", (sent) => {
+        if (sent.surface === surface) fn(sent.document, sent.state);
+      }),
+    },
     modal: {
       content(id, instance, fn, place) {
         return Promise.all([listen("modal-content", (sent) => {

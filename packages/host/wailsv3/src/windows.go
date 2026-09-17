@@ -220,6 +220,8 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 		h.mu.Lock()
 		s.ready = false
 		h.mu.Unlock()
+		// 이전 페이지에 보낸 요청은 답을 받지 못한다.
+		h.relay.abandon(s, map[string]bool{"": true})
 		go h.windowsChanged()
 		application.InvokeSync(func() { cancelLayout(win) })
 		s.discardOverlay()

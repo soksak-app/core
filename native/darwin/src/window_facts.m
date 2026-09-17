@@ -68,6 +68,7 @@ char *sp_window_facts(void *handle) {
         @"content": @{ @"width": @(content.bounds.size.width), @"height": @(content.bounds.size.height) },
         @"scale": @(window.backingScaleFactor),
         @"key": @(window.isKeyWindow),
+        @"zoomed": @(window.isZoomed),
         @"active": @(NSApp.isActive),
         @"children": @(window.childWindows.count),
         @"controls": controls,
@@ -94,6 +95,7 @@ char *sp_screens(void) {
     for (NSScreen *screen in NSScreen.screens) {
         NSMutableDictionary *row = [screenRect(screen.frame) mutableCopy];
         row[@"scale"] = @(screen.backingScaleFactor);
+        row[@"visible"] = screenRect(screen.visibleFrame);
         [screens addObject:row];
         [row release];
     }

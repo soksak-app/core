@@ -61,6 +61,8 @@ for (const app of Object.values(APPS)) {
     const secondRoot = join(temporary, "second"); mkdirSync(secondRoot);
     const thirdRoot = join(temporary, "third"); mkdirSync(thirdRoot);
     const alias = join(temporary, "alias"); symlinkSync(secondRoot, alias);
+    // 폴더 삭제는 앱 정리와 별개로 가장 마지막에 실행한다(정리는 등록의 역순).
+    s.cleanup(() => rmSync(temporary, { recursive: true, force: true }));
     s.cleanup(async () => {
       for (const window of await s.get("host.windows")) {
         if (window.window !== s.window) await s.on(window.window).close();
@@ -73,7 +75,6 @@ for (const app of Object.values(APPS)) {
       if (!(await s.get("core.project")) && remaining.length) await s.run("core.project.activate", { id: remaining[0].id });
       await s.run("core.projects.flush");
       assert.equal(await s.get("core.page.error") ?? "", "");
-      rmSync(temporary, { recursive: true, force: true });
     });
 
     const first = await s.get("core.project");

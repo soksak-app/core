@@ -41,8 +41,8 @@ func (implementation) WindowNumbers(window unsafe.Pointer) ([]int, error) {
 	return out, nil
 }
 
-func (implementation) CaptureOpen(windowNumber int) error {
-	C.sp_capture_open(C.long(windowNumber))
+func (implementation) CaptureOpen(windowNumber int, display bool) error {
+	C.sp_capture_open(C.long(windowNumber), C.bool(display))
 	return nil
 }
 
@@ -56,3 +56,5 @@ func (implementation) CaptureStart(directory string) error {
 func (implementation) CaptureStop() (int, error) { return int(C.sp_capture_stop()), nil }
 
 func (implementation) CaptureWait() (bool, error) { return C.sp_capture_wait() != 0, nil }
+
+func (implementation) CaptureLongestGap() float64 { return float64(C.sp_capture_longest_gap()) }

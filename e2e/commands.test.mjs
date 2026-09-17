@@ -163,6 +163,35 @@ for (const app of Object.values(APPS)) {
     await s.until("core.screen", (screen) => screen.screen === "workspace", "core.library.return did not return to the workspace");
   });
 
+  test(`${app.name}: layout commands return after the new layout is drawn`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    /** 문서에 그려진 카드 요소들의 너비. */
+    const drawnWidths = async () => {
+      const widths = [];
+      for (let index = 0; ; index++) {
+        const rect = await s.rect("core.card", index).catch(() => null);
+        if (!rect) return widths;
+        widths.push(rect.width);
+      }
+    };
+    const start = await s.get("core.grid");
+    const browser = cardOf(start, "browser");
+    await s.run("core.boundary.move", { axis: "x", line: 2, position: start.lines.x[2] - 60 });
+    const moved = cardOf(await s.get("core.grid"), "browser");
+    assert.notEqual(moved.w, browser.w, "the boundary move did not change the card");
+    const afterMove = await drawnWidths();
+    assert.ok(afterMove.includes(moved.w) && !afterMove.includes(browser.w),
+      `core.boundary.move returned before the card was drawn at ${moved.w}: ${afterMove}`);
+
+    await s.run("core.grid.size", { card: "right", axis: "x", size: cardOf(await s.get("core.grid"), "right").w + 40 });
+    const sized = cardOf(await s.get("core.grid"), "right");
+    const afterSize = await drawnWidths();
+    assert.ok(afterSize.includes(sized.w),
+      `core.grid.size returned before the card was drawn at ${sized.w}: ${afterSize}`);
+  });
+
   test(`${app.name}: rename commands edit and cancel a space title`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);

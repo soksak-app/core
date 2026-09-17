@@ -31,6 +31,8 @@ type WebviewOptions struct {
 	FillParent bool
 	// Receive 는 웹뷰의 문서가 보낸 메시지를 받는다. UI 스레드 밖에서 호출된다.
 	Receive func(identifier uint64, body string)
+	// Committed 는 웹뷰가 새 문서를 표시하기 시작했음을 받는다. UI 스레드 밖에서 호출된다.
+	Committed func(identifier uint64)
 }
 
 // Input 은 표면 위 입력을 받는 함수들이다.
@@ -46,14 +48,17 @@ type Input struct {
 type Capturer interface {
 	// WindowNumbers 는 창과 자식 창의 윈도 서버 번호를 반환한다. 창 자신의 번호가 처음이다.
 	WindowNumbers(window unsafe.Pointer) ([]int, error)
-	// CaptureOpen 은 윈도 서버 번호 windowNumber 의 창을 녹화 대상으로 정한다.
-	CaptureOpen(windowNumber int) error
+	// CaptureOpen 은 윈도 서버 번호 windowNumber 의 창을 녹화 대상으로 정한다. display 이면 창이 있는
+	// 디스플레이에서 이 앱의 창을 녹화한다.
+	CaptureOpen(windowNumber int, display bool) error
 	// CaptureStart 는 directory 에 프레임 기록을 시작한다.
 	CaptureStart(directory string) error
 	// CaptureWait 는 첫 프레임이 기록되었는지 반환한다.
 	CaptureWait() (bool, error)
 	// CaptureStop 은 녹화를 끝내고 기록한 프레임 수를 반환한다.
 	CaptureStop() (int, error)
+	// CaptureLongestGap 은 마지막으로 멈춘 녹화에서 연속한 프레임 사이의 가장 긴 표시 간격(ms)이다.
+	CaptureLongestGap() float64
 }
 
 // Platform 은 운영체제마다 다른 동작이다.
@@ -103,6 +108,21 @@ type Platform interface {
 	// AlignRect 는 페이지 좌표의 영역을 디스플레이 픽셀에 안쪽으로 맞춘다.
 	AlignRect(window unsafe.Pointer, at Rect) (Rect, error)
 
+	// CreateDocument 는 표면 웹뷰 surface 안에 외부 문서 웹뷰를 숨긴 상태로 만든다. store 는 영구 데이터
+	// 저장소의 이름이다. changed 는 상태 JSON({url, title, loading, progress, canGoBack, canGoForward,
+	// error, scroll}) 을 UI 스레드에서 받는다.
+	CreateDocument(surface unsafe.Pointer, store string, changed func(state string)) (unsafe.Pointer, error)
+	// LoadDocument 는 http 또는 https 주소를 연다. 그 밖의 주소이면 false 를 반환한다.
+	LoadDocument(document unsafe.Pointer, url string) bool
+	// GoDocument 는 뒤로 0, 앞으로 1, 다시 읽기 2, 멈춤 3 을 실행하고 실행했는지 반환한다.
+	GoDocument(document unsafe.Pointer, action int) bool
+	// PlaceDocument 는 표면 뷰포트의 CSS 픽셀 여백으로 문서 영역을 정한다.
+	PlaceDocument(document unsafe.Pointer, left, top, right, bottom float64, visible bool)
+	// SetDocumentBackground 는 대화 상자가 열린 동안 문서를 흐리게 표시한다.
+	SetDocumentBackground(document unsafe.Pointer, enabled bool)
+	// CloseDocument 는 문서 웹뷰를 제거한다. 이후 changed 는 호출되지 않는다.
+	CloseDocument(document unsafe.Pointer)
+
 	// BeginLayout 은 표면 배치 트랜잭션을 시작한다. 배치가 가능해지면 ready 를 UI 스레드에서 호출한다.
 	BeginLayout(window unsafe.Pointer, ticket uint64, ready func(allowed bool)) error
 	// CommitLayout 은 ticket 의 배치를 확정하고 확정했는지 반환한다.
@@ -128,10 +148,13 @@ type Platform interface {
 
 	// InjectPointer 는 창의 콘텐츠 영역 좌표 (x, y) 에 포인터 입력을 전달하고 그 결과를 반환한다.
 	// phase 는 이동 0, 누름 1, 끌기 2, 뗌 3, 스크롤 4 이고 button 은 왼쪽 0, 오른쪽 1 이다.
-	InjectPointer(window unsafe.Pointer, x, y float64, phase, button int, deltaX, deltaY float64) (PointerResult, error)
+	// 누름과 뗌은 좌표의 문서가 그 이벤트를 받거나 receive 초가 지난 뒤 done 을 UI 스레드에서 호출한다.
+	// 다른 단계는 전달한 즉시 호출한다.
+	InjectPointer(window unsafe.Pointer, x, y float64, phase, button int, deltaX, deltaY, receive float64, done func(PointerResult)) error
 	// ActivateWindow 는 애플리케이션을 활성화하고 창을 키 창으로 만든다. 창의 모든 웹뷰가 활성
-	// 상태를 받은 뒤 done(true) 를, timeout 초 안에 활성화되지 않으면 done(false) 를 UI 스레드에서 호출한다.
-	ActivateWindow(window unsafe.Pointer, timeout float64, done func(ok bool)) error
+	// 상태를 받은 뒤 done(nil) 을, timeout 초 안에 끝나지 않으면 멈춘 단계를 적은 오류로 done 을
+	// UI 스레드에서 호출한다.
+	ActivateWindow(window unsafe.Pointer, timeout float64, done func(error)) error
 	// InjectKey 는 창에 키 입력을 전달하고 전달했는지 반환한다. modifiers 는 1 Shift, 2 Control,
 	// 4 Option, 8 Command 의 비트 합이다.
 	InjectKey(window unsafe.Pointer, key, text string, modifiers uint, down bool) (bool, error)
@@ -162,6 +185,8 @@ const (
 	PointerRejected
 	// PointerInactive 는 버튼 없는 이동이고 창이 키 창이 아니어서 전달하지 않았다는 뜻이다.
 	PointerInactive
+	// PointerUnreceived 는 누름이나 뗌을 전달했지만 문서가 제한 시간 안에 받지 않았다는 뜻이다.
+	PointerUnreceived
 )
 
 // Endpoint 는 로컬 엔드포인트의 전송과 주소다.

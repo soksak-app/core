@@ -9,9 +9,19 @@ package darwin
 #include "input_inject.h"
 #import <Cocoa/Cocoa.h>
 
-extern void inputActivated(void *context, bool ok);
+extern void inputActivated(void *context, int result, char *frontmost);
+static void activated(void *context, sp_activate_result result, const char *frontmost) {
+    inputActivated(context, (int)result, (char *)frontmost);
+}
 static void activateWindow(void *window, double timeout, uintptr_t handle) {
-    sp_input_activate(window, timeout, inputActivated, (void *)handle);
+    sp_input_activate(window, timeout, activated, (void *)handle);
+}
+
+extern void inputDelivered(void *context, int result);
+static void delivered(void *context, sp_input_result result) { inputDelivered(context, (int)result); }
+static void injectPointer(void *window, double x, double y, int phase, int button, double deltaX, double deltaY,
+    double receive, uintptr_t handle) {
+    sp_input_pointer_then(window, x, y, phase, button, deltaX, deltaY, receive, delivered, (void *)handle);
 }
 
 // 누름이 지나가는 뷰 하나가 표면인지 알린다. 표면이면 0 이 아닌 값을 반환하고, 적중한
@@ -87,6 +97,8 @@ static void surfaceUnwatchMouse(uintptr_t monitor) { if (monitor) [NSEvent remov
 import "C"
 
 import (
+	"errors"
+	"fmt"
 	"runtime/cgo"
 	"unsafe"
 
@@ -116,30 +128,68 @@ func (implementation) WatchInput(window unsafe.Pointer, input platform.Input) (u
 	return monitor, nil
 }
 
-// InjectPointer 는 native/darwin 의 sp_input_pointer 로 입력을 전달한다. 앱을 활성화하지 않는다.
-func (implementation) InjectPointer(window unsafe.Pointer, x, y float64, phase, button int, deltaX, deltaY float64) (platform.PointerResult, error) {
-	result := C.sp_input_pointer(window, C.double(x), C.double(y), C.int(phase), C.int(button), C.double(deltaX), C.double(deltaY))
-	switch result {
+// InjectPointer 는 native/darwin 의 sp_input_pointer_then 으로 입력을 전달한다. 앱을 활성화하지 않는다.
+func (implementation) InjectPointer(window unsafe.Pointer, x, y float64, phase, button int, deltaX, deltaY, receive float64, done func(platform.PointerResult)) error {
+	C.injectPointer(window, C.double(x), C.double(y), C.int(phase), C.int(button), C.double(deltaX), C.double(deltaY),
+		C.double(receive), C.uintptr_t(cgo.NewHandle(done)))
+	return nil
+}
+
+//export inputDelivered
+func inputDelivered(context unsafe.Pointer, result C.int) {
+	handle := cgo.Handle(uintptr(context))
+	done := handle.Value().(func(platform.PointerResult))
+	handle.Delete()
+	switch C.sp_input_result(result) {
 	case C.SP_INPUT_DELIVERED:
-		return platform.PointerDelivered, nil
+		done(platform.PointerDelivered)
 	case C.SP_INPUT_INACTIVE:
-		return platform.PointerInactive, nil
+		done(platform.PointerInactive)
+	case C.SP_INPUT_UNRECEIVED:
+		done(platform.PointerUnreceived)
 	default:
-		return platform.PointerRejected, nil
+		done(platform.PointerRejected)
 	}
 }
 
+type activation struct {
+	timeout float64
+	done    func(error)
+}
+
 //export inputActivated
-func inputActivated(context unsafe.Pointer, ok C.bool) {
+func inputActivated(context unsafe.Pointer, result C.int, frontmost *C.char) {
 	handle := cgo.Handle(uintptr(context))
-	done := handle.Value().(func(bool))
+	a := handle.Value().(activation)
 	handle.Delete()
-	done(bool(ok))
+	name := "unknown"
+	if frontmost != nil {
+		name = C.GoString(frontmost)
+	}
+	a.done(activationResult(C.sp_activate_result(result), a.timeout, name))
+}
+
+// activationResult 는 sp_input_activate 의 결과를 멈춘 단계와 최전면 애플리케이션을 적은 오류로 바꾼다.
+func activationResult(result C.sp_activate_result, timeout float64, frontmost string) error {
+	switch result {
+	case C.SP_ACTIVATE_DONE:
+		return nil
+	case C.SP_ACTIVATE_REFUSED:
+		return fmt.Errorf("the system did not activate the application within %gs; the frontmost application is %s", timeout, frontmost)
+	case C.SP_ACTIVATE_NOT_KEY:
+		return fmt.Errorf("the application is active but the window did not become key within %gs; the frontmost application is %s", timeout, frontmost)
+	case C.SP_ACTIVATE_PENDING:
+		return fmt.Errorf("the window's webviews did not apply the active state within %gs", timeout)
+	case C.SP_ACTIVATE_LOST:
+		return fmt.Errorf("the window lost activation before its webviews applied it; the frontmost application is %s", frontmost)
+	default:
+		return errors.New("the window cannot be activated")
+	}
 }
 
 // ActivateWindow 는 native/darwin 의 sp_input_activate 로 창을 키 창으로 만든다.
-func (implementation) ActivateWindow(window unsafe.Pointer, timeout float64, done func(bool)) error {
-	C.activateWindow(window, C.double(timeout), C.uintptr_t(cgo.NewHandle(done)))
+func (implementation) ActivateWindow(window unsafe.Pointer, timeout float64, done func(error)) error {
+	C.activateWindow(window, C.double(timeout), C.uintptr_t(cgo.NewHandle(activation{timeout, done})))
 	return nil
 }
 

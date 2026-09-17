@@ -6,7 +6,7 @@ use tauri::webview::PlatformWebview;
 use serde_json::Value;
 use tauri::Window;
 
-use super::super::{Connection, Delivery, Frame, Handle, Hit, Key, Listener, Pointer, WindowBuilder};
+use super::super::{Connection, Delivery, Frame, Handle, Hit, Insets, Key, Listener, Pointer, WindowBuilder};
 
 /// operation 을 이름에 포함한 오류를 반환한다.
 fn missing<T>(operation: &str) -> Result<T, String> {
@@ -70,6 +70,30 @@ pub fn focus_webview(_view: &PlatformWebview) -> Result<(), String> {
     missing("webview focus")
 }
 
+pub fn create_document(_surface: Handle, _store: &str, _changed: Box<dyn Fn(String)>) -> Result<Handle, String> {
+    missing("document view")
+}
+
+pub fn load_document(_document: Handle, _url: &str) -> Result<bool, String> {
+    missing("document navigation")
+}
+
+pub fn go_document(_document: Handle, _action: i32) -> Result<bool, String> {
+    missing("document history")
+}
+
+pub fn place_document(_document: Handle, _insets: Insets, _visible: bool) -> Result<(), String> {
+    missing("document placement")
+}
+
+pub fn set_document_background(_document: Handle, _enabled: bool) -> Result<(), String> {
+    missing("document background")
+}
+
+pub fn close_document(_document: Handle) -> Result<(), String> {
+    missing("document removal")
+}
+
 pub fn view_id(_view: &PlatformWebview) -> Result<Handle, String> {
     missing("webview identity")
 }
@@ -126,14 +150,19 @@ pub fn unwatch_input(_monitor: Handle) -> Result<(), String> {
     missing("input monitoring")
 }
 
-pub fn input_pointer(_window: Handle, _pointer: Pointer) -> Result<Delivery, String> {
+pub fn input_pointer(
+    _window: Handle,
+    _pointer: Pointer,
+    _receive: std::time::Duration,
+    _done: Box<dyn FnOnce(Delivery) + Send>,
+) -> Result<(), String> {
     missing("native input")
 }
 
 pub fn input_activate(
     _window: Handle,
     _timeout: std::time::Duration,
-    _done: Box<dyn FnOnce(bool) + Send>,
+    _done: Box<dyn FnOnce(Result<(), String>) + Send>,
 ) -> Result<(), String> {
     missing("native input")
 }
@@ -143,7 +172,7 @@ pub fn input_key(_window: Handle, _key: &Key) -> Result<bool, String> {
 }
 
 #[cfg(feature = "diagnostics")]
-pub fn capture_open(_window_number: isize) -> Result<(), String> {
+pub fn capture_open(_window_number: isize, _display: bool) -> Result<(), String> {
     missing("window capture")
 }
 
@@ -159,6 +188,11 @@ pub fn capture_wait() -> Result<bool, String> {
 
 #[cfg(feature = "diagnostics")]
 pub fn capture_stop() -> Result<i32, String> {
+    missing("window capture")
+}
+
+#[cfg(feature = "diagnostics")]
+pub fn capture_longest_gap() -> Result<f64, String> {
     missing("window capture")
 }
 

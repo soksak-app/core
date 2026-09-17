@@ -77,7 +77,8 @@ The following methods exist only in diagnostic builds (Go build tag `diagnostics
 | --- | --- | --- |
 | `diagnostics.fixture` | `{window}` | Creates `<config-dir>/test-project` with empty folder settings, removes other projects, resets common settings, opens the project in the window, and returns `{root}` |
 | `diagnostics.drag` | `{window, axis, line, dx, dy, ms, times, capture?}` | Drags boundary `line` on `axis` by `dx, dy` over `ms` and back, `times` round trips, with host-timed steps. Returns the page's drag result `{from, steps, took, asked, late, deepest}` after the gesture has been presented. With `capture: true` the host also records the window and adds `frames`, the frame directory; if the drag fails, the host stops the capture and removes the directory |
-| `diagnostics.capture.stop` | `{window}` | Stops a capture and returns `{frames, count}` |
+| `diagnostics.capture.start` | `{window}` | Starts recording the window after its first frame and returns `{frames}`, the frame directory |
+| `diagnostics.capture.stop` | `{window}` | Stops a capture and returns `{frames, count, longestGap}`; `longestGap` is the longest display interval in milliseconds between consecutive recorded frames |
 | `diagnostics.knob` | `{window, name, value}` | Sets a compositor test value (`latency`, `skew`) |
 | `diagnostics.transcript` | `{window, on}` | Starts or stops `diagnostics.log` notifications `{window, line}` for host requests, replies, and page verification lines |
 

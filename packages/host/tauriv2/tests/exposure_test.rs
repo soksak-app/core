@@ -109,6 +109,7 @@ fn host_entries_are_appended_as_registered() {
         "host.hit",
         "host.quit",
         "host.window.close",
+        "host.window.fullscreen",
         "host.window.maximize",
         "host.window.move",
         "host.window.presented",

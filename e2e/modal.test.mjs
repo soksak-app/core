@@ -17,6 +17,9 @@ function settingsAboveSurfaces(state) {
   for (const surface of state.surfaces) {
     assert.ok(modal.order > surface.order, `native surface ${surface.id} covers settings: ${JSON.stringify(state.surfaces)}`);
   }
+  for (const region of state.documents) {
+    assert.ok(modal.order > region.order, `document region ${region.surface}/${region.document} covers settings`);
+  }
   assert.equal(state.children, 0, "settings must not create a child OS window");
   transparent(modal);
   assert.deepEqual(modal.frame, { x: 0, y: 0, width: state.content.width, height: state.content.height },
@@ -120,6 +123,7 @@ for (const app of Object.values(APPS)) {
     await s.presented();
     settingsAboveSurfaces(await s.get("host.window"));
     await background(s, true);
+    // 브라우저 표면의 가운데 오른쪽은 그 표면의 문서 영역이다.
     const frame = browser.applied;
     const point = { x: frame.x + frame.w - 4, y: frame.y + frame.h / 2 };
     assert.deepEqual(await s.run("host.hit", point), { kind: "native", identifier: "modal:settings" },
@@ -142,8 +146,8 @@ for (const app of Object.values(APPS)) {
     await s.until("host.window", (state) => state.modal === null, "settings did not close");
     await background(s, false);
     await s.presented();
-    assert.deepEqual(await s.run("host.hit", point), { kind: "surface", surface: browser.surface },
-      "closing settings must restore native browser input");
+    assert.deepEqual(await s.run("host.hit", point), { kind: "document", surface: browser.surface, document: "page" },
+      "closing settings must restore native input to the browser document");
   });
 
   test(`${app.name}: add and split menus are transparent and have no backdrop`, async (t) => {

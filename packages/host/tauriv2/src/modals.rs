@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use tauri::webview::Color;
 use tauri::{LogicalPosition, LogicalSize, Webview, WebviewBuilder, WebviewUrl, Window};
 
+use crate::documents;
 use crate::exposure;
 use crate::log_error;
 use crate::platform;
@@ -144,6 +145,7 @@ struct Picked {
 
 /// 창의 메인 웹뷰와 표면 웹뷰에 모달 배경 상태를 설정한다.
 pub(crate) fn set_background(window: &Window, enabled: bool) -> Result<(), String> {
+    documents::set_background(window, enabled);
     for view in window.webviews() {
         if view.label() == window.label() || view.label().starts_with("surface-") {
             view.eval(format!("window.__soksakBackground = {enabled}"))

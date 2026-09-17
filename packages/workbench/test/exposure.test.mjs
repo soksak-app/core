@@ -341,3 +341,18 @@ test("surface pages register core surface entries, and requests can name the sur
   await made.handle({ method: "status.unwatch", params: { name: "core.surface.fixture", surface: "tab-b" } });
   assert.deepEqual(forwarded("status.unwatch"), [["tab-b", { name: "core.surface.fixture" }]]);
 });
+
+test("a core command answers after the configured settling work", async () => {
+  const made = createRegistry();
+  made.declare("core", coreExposes());
+  made.command("core.fixture.add", ({ n }) => n + 1);
+  let release;
+  const drawing = new Promise((resolve) => { release = resolve; });
+  made.configure({ settled: () => drawing });
+  let answered = false;
+  const answer = made.run("core.fixture.add", { n: 1 }).then((value) => { answered = true; return value; });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(answered, false, "the command answered before the settling work finished");
+  release();
+  assert.equal(await answer, 2);
+});

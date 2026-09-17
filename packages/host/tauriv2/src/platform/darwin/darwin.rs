@@ -13,13 +13,15 @@ use tauri::Window;
 
 use std::time::Duration;
 
-use super::{Connection, Delivery, Frame, Handle, Hit, Key, Listener, Platform, Pointer, WindowBuilder};
+use super::{Connection, Delivery, Frame, Handle, Hit, Insets, Key, Listener, Platform, Pointer, WindowBuilder};
 
 #[cfg(feature = "diagnostics")]
 #[path = "capture.rs"]
 mod capture;
 #[path = "dock.rs"]
 mod dock;
+#[path = "document.rs"]
+mod document;
 #[path = "endpoint.rs"]
 mod endpoint;
 #[path = "identity.rs"]
@@ -133,6 +135,27 @@ impl Platform for Darwin {
     fn focus_webview(&self, view: &PlatformWebview) -> Result<(), String> {
         webview::focus(view)
     }
+    fn create_document(&self, surface: Handle, store: &str, changed: Box<dyn Fn(String)>) -> Result<Handle, String> {
+        document::create(surface, store, changed)
+    }
+    fn load_document(&self, document: Handle, url: &str) -> Result<bool, String> {
+        document::load(document, url)
+    }
+    fn go_document(&self, document: Handle, action: i32) -> Result<bool, String> {
+        Ok(document::go(document, action))
+    }
+    fn place_document(&self, document: Handle, insets: Insets, visible: bool) -> Result<(), String> {
+        document::place(document, insets, visible);
+        Ok(())
+    }
+    fn set_document_background(&self, document: Handle, enabled: bool) -> Result<(), String> {
+        document::background(document, enabled);
+        Ok(())
+    }
+    fn close_document(&self, document: Handle) -> Result<(), String> {
+        document::close(document);
+        Ok(())
+    }
     fn view_id(&self, view: &PlatformWebview) -> Result<Handle, String> {
         Ok(webview::id(view))
     }
@@ -187,10 +210,11 @@ impl Platform for Darwin {
         input::unwatch(monitor);
         Ok(())
     }
-    fn input_pointer(&self, window: Handle, pointer: Pointer) -> Result<Delivery, String> {
-        Ok(input::pointer(window, pointer))
+    fn input_pointer(&self, window: Handle, pointer: Pointer, receive: Duration, done: Box<dyn FnOnce(Delivery) + Send>) -> Result<(), String> {
+        input::pointer(window, pointer, receive, done);
+        Ok(())
     }
-    fn input_activate(&self, window: Handle, timeout: Duration, done: Box<dyn FnOnce(bool) + Send>) -> Result<(), String> {
+    fn input_activate(&self, window: Handle, timeout: Duration, done: Box<dyn FnOnce(Result<(), String>) + Send>) -> Result<(), String> {
         input::activate(window, timeout, done);
         Ok(())
     }
@@ -199,8 +223,8 @@ impl Platform for Darwin {
     }
 
     #[cfg(feature = "diagnostics")]
-    fn capture_open(&self, window_number: isize) -> Result<(), String> {
-        capture::open(window_number);
+    fn capture_open(&self, window_number: isize, display: bool) -> Result<(), String> {
+        capture::open(window_number, display);
         Ok(())
     }
     #[cfg(feature = "diagnostics")]
@@ -215,6 +239,10 @@ impl Platform for Darwin {
     #[cfg(feature = "diagnostics")]
     fn capture_stop(&self) -> Result<i32, String> {
         Ok(capture::stop())
+    }
+    #[cfg(feature = "diagnostics")]
+    fn capture_longest_gap(&self) -> Result<f64, String> {
+        Ok(capture::longest_gap())
     }
 
     fn install_dock_menu(&self, new_window: Box<dyn Fn()>) -> Result<(), String> {

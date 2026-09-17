@@ -12,7 +12,7 @@ use tauri::Window;
 
 use std::time::Duration;
 
-use super::{Connection, Delivery, Frame, Handle, Hit, Key, Listener, Platform, Pointer, WindowBuilder};
+use super::{Connection, Delivery, Frame, Handle, Hit, Insets, Key, Listener, Platform, Pointer, WindowBuilder};
 
 #[path = "identity.rs"]
 mod identity;
@@ -80,6 +80,24 @@ impl Platform for Windows {
     fn focus_webview(&self, view: &PlatformWebview) -> Result<(), String> {
         unsupported::focus_webview(view)
     }
+    fn create_document(&self, surface: Handle, store: &str, changed: Box<dyn Fn(String)>) -> Result<Handle, String> {
+        unsupported::create_document(surface, store, changed)
+    }
+    fn load_document(&self, document: Handle, url: &str) -> Result<bool, String> {
+        unsupported::load_document(document, url)
+    }
+    fn go_document(&self, document: Handle, action: i32) -> Result<bool, String> {
+        unsupported::go_document(document, action)
+    }
+    fn place_document(&self, document: Handle, insets: Insets, visible: bool) -> Result<(), String> {
+        unsupported::place_document(document, insets, visible)
+    }
+    fn set_document_background(&self, document: Handle, enabled: bool) -> Result<(), String> {
+        unsupported::set_document_background(document, enabled)
+    }
+    fn close_document(&self, document: Handle) -> Result<(), String> {
+        unsupported::close_document(document)
+    }
     fn view_id(&self, view: &PlatformWebview) -> Result<Handle, String> {
         unsupported::view_id(view)
     }
@@ -127,10 +145,10 @@ impl Platform for Windows {
     fn unwatch_input(&self, monitor: Handle) -> Result<(), String> {
         unsupported::unwatch_input(monitor)
     }
-    fn input_pointer(&self, window: Handle, pointer: Pointer) -> Result<Delivery, String> {
-        unsupported::input_pointer(window, pointer)
+    fn input_pointer(&self, window: Handle, pointer: Pointer, receive: Duration, done: Box<dyn FnOnce(Delivery) + Send>) -> Result<(), String> {
+        unsupported::input_pointer(window, pointer, receive, done)
     }
-    fn input_activate(&self, window: Handle, timeout: Duration, done: Box<dyn FnOnce(bool) + Send>) -> Result<(), String> {
+    fn input_activate(&self, window: Handle, timeout: Duration, done: Box<dyn FnOnce(Result<(), String>) + Send>) -> Result<(), String> {
         unsupported::input_activate(window, timeout, done)
     }
     fn input_key(&self, window: Handle, key: &Key) -> Result<bool, String> {
@@ -138,8 +156,8 @@ impl Platform for Windows {
     }
 
     #[cfg(feature = "diagnostics")]
-    fn capture_open(&self, window_number: isize) -> Result<(), String> {
-        unsupported::capture_open(window_number)
+    fn capture_open(&self, window_number: isize, display: bool) -> Result<(), String> {
+        unsupported::capture_open(window_number, display)
     }
     #[cfg(feature = "diagnostics")]
     fn capture_start(&self, directory: &str) -> Result<(), String> {
@@ -152,6 +170,10 @@ impl Platform for Windows {
     #[cfg(feature = "diagnostics")]
     fn capture_stop(&self) -> Result<i32, String> {
         unsupported::capture_stop()
+    }
+    #[cfg(feature = "diagnostics")]
+    fn capture_longest_gap(&self) -> Result<f64, String> {
+        unsupported::capture_longest_gap()
     }
 
     fn install_dock_menu(&self, new_window: Box<dyn Fn()>) -> Result<(), String> {

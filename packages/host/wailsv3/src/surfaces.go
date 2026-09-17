@@ -31,8 +31,7 @@ type Rect struct {
 
 type Surface struct {
 	ID string `json:"id"`
-	// 자산 서버가 이 애플리케이션의 주소를 처리하고 나머지는 그대로 전달하므로, 호스트는
-	// 두 종류를 구분하지 않는다.
+	// URL 은 이 애플리케이션이 서비스하는 표면 페이지의 경로다.
 	URL     string `json:"url"`
 	Visible bool   `json:"visible"`
 	// 페이지가 초점을 잃은 표면을 흐리게 표시하도록 요청했는지 나타낸다.
@@ -104,6 +103,8 @@ type Surfaces struct {
 	nextModal uint64
 	modal     *modal
 	shapes    map[string]*nativeShape
+	// documents 는 표면 페이지가 붙인 문서 영역이다.
+	documents *Documents
 	sidecars  *Sidecars
 	watch     sync.Once
 
@@ -114,10 +115,11 @@ type Surfaces struct {
 func NewSurfaces(win *application.WebviewWindow, sidecars *Sidecars) *Surfaces {
 	s := &Surfaces{
 		window: win, projects: map[string]bool{}, sidecars: sidecars,
-		views:  map[string]*nativeWebview{},
-		named:  map[uintptr]string{},
-		live:   map[string]bool{},
-		shapes: map[string]*nativeShape{},
+		views:     map[string]*nativeWebview{},
+		named:     map[uintptr]string{},
+		live:      map[string]bool{},
+		shapes:    map[string]*nativeShape{},
+		documents: NewDocuments(),
 		// 아직 테마를 받지 않았을 때의 값. 빈 맵이 아니면 JSON 에 null 이 실리고,
 		// 이 값을 받는 페이지는 토큰을 순회하다 멈춘다.
 		theme: Theme{Tokens: map[string]string{}},
@@ -411,6 +413,7 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]str
 			continue
 		}
 		s.resizing(id, view, false)
+		s.closeSurfaceDocuments(id)
 		delete(s.named, uintptr(view.NativeView()))
 		view.Close()
 		delete(s.views, id)
@@ -432,6 +435,7 @@ func newNativeWebview(owner *Surfaces, options nativeWebviewOptions) (*nativeWeb
 			Hidden: options.Hidden, Transparent: options.Transparent,
 			FillParent: options.FillParent,
 			Receive:    dispatchNative,
+			Committed:  committedNative,
 		})
 		if err != nil {
 			return

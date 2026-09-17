@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex};
 use serde::{Deserialize, Serialize};
 use tauri::{LogicalPosition, LogicalSize, Manager, Runtime, Webview, WebviewBuilder, WebviewUrl, Window};
 
+use crate::documents;
 use crate::exposure;
 use crate::log_error;
 use crate::platform::{self, Handle};
@@ -21,11 +22,8 @@ pub(crate) struct Background(pub &'static str);
 #[derive(Debug, Deserialize)]
 pub(crate) struct Surface {
     id: String,
-    /// 표면이 표시할 주소.
+    /// 이 애플리케이션이 서비스하는 표면 페이지의 경로.
     url: String,
-    /// 주소가 이 앱 밖에 있는지 나타낸다. 이 앱의 주소는 프론트엔드 경로이다. 종류를 여기에
-    /// 적으면 페이지가 플러그인을 추가할 때마다 이 파일을 수정해야 한다.
-    external: bool,
     x: f64,
     y: f64,
     w: f64,
@@ -285,11 +283,7 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
                 continue;
             }
 
-            let target = if s.external {
-                WebviewUrl::External(s.url.parse().map_err(|_| format!("bad url: {}", s.url))?)
-            } else {
-                WebviewUrl::App(s.url.clone().into())
-            };
+            let target = WebviewUrl::App(s.url.clone().into());
             // 표면은 만들어질 때 키보드 초점을 가져가지 않는다. Tauri 의 기본값은 가져가는 것이라
             // 늦게 만들어진 표면이 열린 메뉴나 사용자가 입력 중인 문서의 초점을 빼앗는다.
             let builder = WebviewBuilder::new(&label, target).initialization_script(background).focused(false);
@@ -343,6 +337,7 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
                     named.retain(|_, held| *held != id);
                 }
                 webview.close().map_err(|e| e.to_string())?;
+                documents::close_surface(window, &id);
                 exposure::surface_closed(window, &id);
             }
         }

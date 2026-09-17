@@ -1,7 +1,8 @@
-// 실제 화면 배율과 네이티브 입력으로 표면의 문서 좌표를 검사한다.
+// 창 크기 변경 뒤 표면의 문서 좌표와 네이티브 입력을 검사한다. 배율 변경은
+// native/darwin/tests/webview_geometry_test.m 이 검사한다.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { APPS, fresh as prepare, halfPointRow, open } from "./app.mjs";
+import { APPS, fresh as prepare, open } from "./app.mjs";
 
 /**
  * 표시 완료 후 네이티브 표면, DOM 슬롯, 표면 문서의 배율과 크기가 일치할 때까지 기다리고
@@ -64,22 +65,5 @@ for (const app of Object.values(APPS)) {
     await s.run("host.window.resize", { width: 997, height: 647 });
     await s.until("host.window", (w) => w.content.width === 997 && w.content.height === 647, "the window did not resize");
     await clickLastPixel(s, shell.surface, scale);
-  });
-
-  test(`${app.name}: display-scale changes preserve document geometry and native input`, async (t) => {
-    const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
-    const initial = await s.get("host.window");
-    const screens = await s.get("host.screens");
-    const other = screens.find((screen) => screen.scale !== initial.scale);
-    if (!other) return t.skip("two displays with different scale factors are required");
-    const shell = await prepare(s);
-    s.cleanup(() => s.run("host.window.move", { x: initial.frame.x, y: initial.frame.y }));
-    await halfPointRow(s);
-    await clickLastPixel(s, shell.surface, initial.scale);
-    await s.run("host.window.move", { x: other.x + 20, y: other.y + 20 });
-    await clickLastPixel(s, shell.surface, other.scale);
-    await s.run("host.window.move", { x: initial.frame.x, y: initial.frame.y });
-    await clickLastPixel(s, shell.surface, initial.scale);
   });
 }

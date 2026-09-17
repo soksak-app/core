@@ -174,7 +174,11 @@ function need(project, id) {
  *
  *   library  createLibrary 의 반환값
  */
-export async function installCoreExposure({ library, renames, resetLayout, chrome }) {
+/**
+ * drawn 은 판이 예약된 그리기를 모두 마치면 이행되는 promise 를 반환한다. 코어 명령은 실행 뒤 그
+ * 그리기를 기다린 다음 답한다. 명령이 배치를 바꾸면 답을 받은 쪽은 이미 그려진 배치를 읽는다.
+ */
+export async function installCoreExposure({ library, renames, resetLayout, chrome, drawn }) {
   status("core.window.document", () => ({
     timeOrigin: performance.timeOrigin,
     readyState: document.readyState,
@@ -311,5 +315,5 @@ export async function installCoreExposure({ library, renames, resetLayout, chrom
   onModalState(coreChanged);
   onSaved(coreChanged);
 
-  await connectExposure({ surfacePlugin, preferred, origin, registrationChanged: coreChanged });
+  await connectExposure({ surfacePlugin, preferred, origin, registrationChanged: coreChanged, settled: drawn });
 }

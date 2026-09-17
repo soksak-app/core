@@ -15,7 +15,7 @@ The [project contract](projects.md) defines directory identity, persistence, set
 
 The add and split buttons select a plugin for a new tab. Dropping a tab on a card center adds it to that card; dropping it at a card edge creates adjacent space. Moving the only tab in a card moves the card.
 
-Plugins declare surfaces as `{url}` for an external document or `{page}` for a document inside the plugin package, and declare sidebar sections. The [plugin specification](plugins.md) defines the declaration files. Settings stores section sets and their assignments to the left sidebar, plugin rail, or right sidebar.
+Plugins declare surfaces as `{page}`, a document inside the plugin package, and declare sidebar sections. A page shows web documents in document regions. The [plugin specification](plugins.md) defines the declaration files. Settings stores section sets and their assignments to the left sidebar, plugin rail, or right sidebar.
 
 The browser application simulates native surfaces. Its commit-delay and placement-offset controls exercise the page verifier. Browser checks do not verify native composition; native acceptance requires the host checks in [verification](../operations/examples.md).
 

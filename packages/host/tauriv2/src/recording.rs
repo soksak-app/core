@@ -7,10 +7,18 @@
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
+/// 녹화 대상. display 이면 창이 있는 디스플레이에서 이 앱의 창을 녹화한다. 창 녹화는 창이 다른
+/// Space(전체 화면)로 옮겨지면 멈춘다.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Target {
+    pub window: isize,
+    pub display: bool,
+}
+
 /// 녹화 장치. 플랫폼 구현이나 검사의 가짜가 제공한다.
 pub trait Capture {
-    /// 창 서버 번호의 창을 녹화 대상으로 정한다.
-    fn open(&self, window_number: isize) -> Result<(), String>;
+    /// 창 서버 번호 target.window 의 창을 녹화 대상으로 정한다.
+    fn open(&self, target: Target) -> Result<(), String>;
     /// directory 에 프레임 기록을 시작한다.
     fn start(&self, directory: &Path) -> Result<(), String>;
     /// 첫 프레임이 기록되었는지 반환한다.
@@ -21,10 +29,10 @@ pub trait Capture {
 
 struct State {
     directory: Option<PathBuf>,
-    opened: Option<isize>,
+    opened: Option<Target>,
 }
 
-/// 진행 중인 녹화의 폴더와 녹화 대상으로 준비한 창 번호.
+/// 진행 중인 녹화의 폴더와 녹화 대상으로 준비한 대상.
 pub struct Recording {
     state: Mutex<State>,
 }
@@ -34,12 +42,12 @@ impl Recording {
         Recording { state: Mutex::new(State { directory: None, opened: None }) }
     }
 
-    /// directory 를 make 로 만들고 window_number 의 창을 그 폴더에 녹화하기 시작한다. 첫 프레임이
+    /// directory 를 make 로 만들고 target 을 그 폴더에 녹화하기 시작한다. 첫 프레임이
     /// 기록된 뒤 반환한다. 실패하면 녹화를 멈추고 폴더를 지운다.
     pub fn start(
         &self,
         capture: &dyn Capture,
-        window_number: isize,
+        target: Target,
         directory: &Path,
         make: &dyn Fn(&Path) -> Result<(), String>,
     ) -> Result<(), String> {
@@ -49,11 +57,11 @@ impl Recording {
         }
         make(directory)?;
         let started = (|| -> Result<(), String> {
-            // 녹화 대상 준비는 창 서버 목록을 조회하므로 창이 바뀔 때만 실행한다.
-            if state.opened != Some(window_number) {
+            // 녹화 대상 준비는 창 서버 목록을 조회하므로 대상이 바뀔 때만 실행한다.
+            if state.opened != Some(target) {
                 state.opened = None;
-                capture.open(window_number)?;
-                state.opened = Some(window_number);
+                capture.open(target)?;
+                state.opened = Some(target);
             }
             capture.start(directory)?;
             match capture.wait() {

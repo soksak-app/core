@@ -94,12 +94,22 @@ export async function open(t, app) {
   }
   const session = new Session(app, client);
   // 검사의 정리는 연결을 닫기 전에 실행한다. node:test 는 after 훅을 등록 순서로 실행한다.
+  // 정리 하나가 실패해도(앱이 응답하지 않는 경우 등) 나머지 정리는 실행하고, 실패는 모아서 알린다.
   t.after(async () => {
+    const failures = [];
     try {
-      for (const clean of session.cleanups.reverse()) await clean();
+      for (const clean of session.cleanups.reverse()) {
+        try {
+          await clean();
+        } catch (error) {
+          failures.push(error);
+        }
+      }
     } finally {
       client.close();
     }
+    if (failures.length === 1) throw failures[0];
+    if (failures.length) throw new AggregateError(failures, `${failures.length} cleanup steps failed`);
   });
   const { endpoint } = client;
   if (endpoint.application !== app.name) {
@@ -318,13 +328,6 @@ export async function fresh(s) {
   return shell;
 }
 
-/** 수평 경계 1 을 정수 위치에서 반 점 떨어진 곳으로 옮긴다. 그 아래 경계의 표면 높이가 반 점이 된다. */
-export async function halfPointRow(s) {
-  const grid = await s.get("core.grid");
-  await s.run("core.boundary.move", { axis: "y", line: 1, position: Math.floor(grid.lines.y[1]) + 10.5 });
-  await s.presented();
-}
-
 /** 보이는 셸 표면들이 등록되고 테마를 적용할 때까지 기다린 뒤 그 표면들을 반환한다. */
 export async function shellReady(s) {
   const surfaces = await s.until("core.surfaces",
@@ -361,6 +364,9 @@ export async function drag(t, s, plan, { capture = false } = {}) {
 
 const MARGIN = 1.25;
 
+/** 녹화 프레임 사이 표시 간격의 허용 한도(ms). 끌기 동안 화면은 프레임마다 바뀐다. */
+const GAP = 100;
+
 const paced = ({ took, asked }) => took <= asked * MARGIN && took >= asked / MARGIN;
 
 async function dragOnce(t, s, plan, capture) {
@@ -369,5 +375,10 @@ async function dragOnce(t, s, plan, capture) {
   if (!capture) return result;
   t.after(() => rmSync(result.frames, { recursive: true, force: true }));
   const stopped = await s.request("diagnostics.capture.stop");
-  return { ...result, count: stopped.count };
+  // 녹화가 한 번에 이만큼 넘게 끊겼다면 그 사이 화면은 기록되지 않았다. 측정되지 않은 구간은 통과가 아니다.
+  if (stopped.longestGap > GAP) {
+    throw new Error(`the recording has a ${stopped.longestGap.toFixed(0)}ms gap between frames; ` +
+      `frames longer than ${GAP}ms apart were not recorded, so this run did not measure the whole gesture`);
+  }
+  return { ...result, count: stopped.count, longestGap: stopped.longestGap };
 }

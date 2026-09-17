@@ -12,6 +12,8 @@
 // 호버가 필요한 호출자는 sp_input_activate 로 창을 실제로 활성화한 뒤 이동을 보낸다.
 #import <Cocoa/Cocoa.h>
 #import "input_inject.h"
+#import "webview_input.h"
+#import "webview_geometry.h"
 #import "private/coregraphics.h"
 #import "private/webkit.h"
 
@@ -84,7 +86,8 @@ sp_input_result sp_input_pointer(void *handle, double x, double y, int phase, in
         NSEvent *event = [NSEvent eventWithCGEvent:scroll];
         CFRelease(scroll);
         if (event.window != window) return SP_INPUT_REJECTED;
-        [window sendEvent:event];
+        // 실제 휠 이벤트는 앱의 이벤트 모니터가 표면 좌표계 단위로 바꾼다. sendEvent 는 모니터를 거치지 않는다.
+        [window sendEvent:webviewScrollInViewUnits(event, hitView(window, point))];
         return SP_INPUT_DELIVERED;
     }
     NSView *hit = hitView(window, point);
@@ -112,6 +115,42 @@ sp_input_result sp_input_pointer(void *handle, double x, double y, int phase, in
     }
 }
 
+// 좌표에서 이벤트를 받는 가장 안쪽 웹뷰.
+static WKWebView *webViewAt(NSWindow *window, double x, double y) {
+    NSView *view = hitView(window, windowPoint(window, x, y));
+    while (view && ![view isKindOfClass:WKWebView.class]) view = view.superview;
+    return (WKWebView *)view;
+}
+
+void sp_input_pointer_then(void *handle, double x, double y, int phase, int button, double deltaX, double deltaY,
+    double timeoutSeconds, sp_input_done done, void *context) {
+    NSWindow *window = (__bridge NSWindow *)handle;
+    WKWebView *target = window && NSThread.isMainThread ? webViewAt(window, x, y) : nil;
+    if (phase == 4 && target) {
+        // 새 문서의 스크롤 트리가 표시되기 전에 받은 휠 이벤트는 문서를 움직이지 않는다. 대상 웹뷰가 현재
+        // 상태를 표시한 뒤 전달한다. 제한 시간 안에 표시하지 않으면 전달하지 않고 알린다.
+        __block BOOL finished = NO;
+        [target _doAfterNextPresentationUpdate:^{
+            if (finished) return;
+            finished = YES;
+            done(context, sp_input_pointer(handle, x, y, phase, button, deltaX, deltaY));
+        }];
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(timeoutSeconds * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            if (finished) return;
+            finished = YES;
+            done(context, SP_INPUT_UNRECEIVED);
+        });
+        return;
+    }
+    sp_input_result result = sp_input_pointer(handle, x, y, phase, button, deltaX, deltaY);
+    if (result != SP_INPUT_DELIVERED || (phase != 1 && phase != 3)) { done(context, result); return; }
+    // 누름과 뗌을 받은 뷰는 좌표의 가장 안쪽 웹뷰다. 이벤트를 전달한 같은 차례에 수신을 기다린다.
+    if (!target) { done(context, result); return; }
+    webviewInputReceive(target, phase == 1 ? @"pointerdown" : @"pointerup", timeoutSeconds, ^(BOOL received) {
+        done(context, received ? SP_INPUT_DELIVERED : SP_INPUT_UNRECEIVED);
+    });
+}
+
 static void collectWebViews(NSView *view, NSMutableArray<WKWebView *> *found) {
     if ([view isKindOfClass:WKWebView.class]) [found addObject:(WKWebView *)view];
     for (NSView *child in view.subviews) collectWebViews(child, found);
@@ -134,9 +173,16 @@ static void afterWebViewsActive(NSWindow *window, void (^done)(void)) {
     });
 }
 
-void sp_input_activate(void *handle, double timeoutSeconds, void (*done)(void *context, bool ok), void *context) {
+static void report(sp_activate_done done, void *context, sp_activate_result result) {
+    if (result == SP_ACTIVATE_DONE) { done(context, result, NULL); return; }
+    NSRunningApplication *front = NSWorkspace.sharedWorkspace.frontmostApplication;
+    NSString *name = front.bundleIdentifier ?: front.localizedName;
+    done(context, result, name.UTF8String);
+}
+
+void sp_input_activate(void *handle, double timeoutSeconds, sp_activate_done done, void *context) {
     NSWindow *window = (__bridge NSWindow *)handle;
-    if (!window || !NSThread.isMainThread) { done(context, false); return; }
+    if (!window || !NSThread.isMainThread) { report(done, context, SP_ACTIVATE_REJECTED); return; }
     NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
     __block bool finished = false;
     __block bool waiting = true;
@@ -148,31 +194,38 @@ void sp_input_activate(void *handle, double timeoutSeconds, void (*done)(void *c
         [center removeObserver:keyObserver];
         [center removeObserver:appObserver];
     };
-    void (^finish)(bool) = ^(bool ok) {
+    void (^finish)(sp_activate_result) = ^(sp_activate_result result) {
         if (finished) return;
         finished = true;
         stopWaiting();
-        done(context, ok);
+        report(done, context, result);
+    };
+    // 웹뷰가 활성 상태를 보낸 뒤에도 활성 상태인지 확인한다. 그 사이 다른 앱이나 창이 초점을 가져갈 수 있다.
+    void (^applied)(void) = ^{
+        finish(NSApp.isActive && window.isKeyWindow ? SP_ACTIVATE_DONE : SP_ACTIVATE_LOST);
     };
     // 키 창 알림과 앱 활성 알림의 순서는 정해져 있지 않으므로 두 알림에서 모두 확인한다.
     void (^check)(void) = ^{
         if (!waiting || !NSApp.isActive || !window.isKeyWindow) return;
         stopWaiting();
-        afterWebViewsActive(window, ^{ finish(true); });
+        afterWebViewsActive(window, applied);
     };
+    // 시스템은 활성화 요청을 거절할 수 있고(macOS 14 협조적 활성화), 활성화 직후 사용자가 다른 앱으로
+    // 포커스를 옮길 수도 있다. 제한 시간은 활성화와 웹뷰 상태 전송 전체에 적용해 멈춘 단계를 반드시 보고한다.
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(timeoutSeconds * NSEC_PER_SEC)),
+        dispatch_get_main_queue(), ^{
+            if (!waiting) finish(SP_ACTIVATE_PENDING);
+            else finish(NSApp.isActive ? SP_ACTIVATE_NOT_KEY : SP_ACTIVATE_REFUSED);
+        });
     if (NSApp.isActive && window.isKeyWindow) {
         waiting = false;
-        afterWebViewsActive(window, ^{ finish(true); });
+        afterWebViewsActive(window, applied);
         return;
     }
     keyObserver = [center addObserverForName:NSWindowDidBecomeKeyNotification object:window queue:nil
         usingBlock:^(NSNotification *note) { check(); }];
     appObserver = [center addObserverForName:NSApplicationDidBecomeActiveNotification object:NSApp queue:nil
         usingBlock:^(NSNotification *note) { check(); }];
-    // 시스템은 활성화 요청을 거절할 수 있고(macOS 14 협조적 활성화), 활성화 직후 사용자가 다른 앱으로
-    // 포커스를 옮길 수도 있다. 제한 시간은 활성화와 웹뷰 상태 전송 전체에 적용해 결과를 반드시 보고한다.
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(timeoutSeconds * NSEC_PER_SEC)),
-        dispatch_get_main_queue(), ^{ finish(false); });
     [window makeKeyAndOrderFront:nil];
     [NSApp activate];
 }

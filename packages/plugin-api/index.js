@@ -12,6 +12,8 @@
 import { createBinder } from "./binder.js";
 
 export { INTERACTIVE, commandOf, createBinder, valueOf } from "./binder.js";
+export { DOCUMENT_ACTIONS, DOCUMENT_NAME, attachRegion, regionInsets } from "./document-region.js";
+export { orderedSidecar } from "./sidecar-port.js";
 
 export const ENVIRONMENT = "environment.json";
 export const MANIFEST = "plugin.json";
@@ -69,7 +71,8 @@ function only(where, value, keys) {
  *   name      화면에 표시할 이름
  *   mark      `+` 메뉴와 탭 제목에 표시할 짧은 표식. surface 가 있으면 필수
  *   icon      16×16 뷰박스 SVG 요소. surface 가 있으면 필수
- *   surface   카드 표면. `{ url }` 은 외부 주소, `{ page }` 는 패키지 안의 문서 경로
+ *   surface   카드 표면. `{ page }` 는 패키지 안의 문서 경로다. 외부 문서는 그 페이지의 문서 영역에 연다
+ *   home      표면 페이지가 처음 여는 http 또는 https 주소. page 표면이 있어야 한다
  *   sections  사이드바에 표시할 수 있는 섹션. id 는 `<플러그인 id>.<이름>` 형식
  *   preview   라이브러리 미리보기의 색. `ink` 는 테마 토큰 이름(`--rail` 등). surface 가 있어야 한다
  *   sidecars  표면 페이지가 사용하는 사이드카 패키지 이름. 플러그인 package.json 의 의존성이어야 한다
@@ -77,7 +80,7 @@ function only(where, value, keys) {
  */
 export function validateManifest(manifest) {
   if (!isObject(manifest)) throw new Error("plugin.json: expected an object");
-  only("plugin.json", manifest, ["id", "name", "mark", "icon", "surface", "sections", "preview", "sidecars", "exposes"]);
+  only("plugin.json", manifest, ["id", "name", "mark", "icon", "surface", "home", "sections", "preview", "sidecars", "exposes"]);
   const { id } = manifest;
   if (typeof id !== "string" || !ID.test(id)) throw new Error(`plugin.json: invalid id ${id}`);
   const where = `plugin ${id}`;
@@ -85,15 +88,9 @@ export function validateManifest(manifest) {
   if (manifest.surface !== undefined) {
     const surface = manifest.surface;
     if (!isObject(surface)) throw new Error(`${where}: surface must be an object`);
-    only(`${where} surface`, surface, ["url", "page"]);
-    const kinds = ["url", "page"].filter((key) => key in surface);
-    if (kinds.length !== 1 || !isText(surface[kinds[0]])) {
-      throw new Error(`${where}: surface requires exactly one of url or page`);
-    }
-    if (surface.url !== undefined && !/^https?:\/\//.test(surface.url)) {
-      throw new Error(`${where}: surface url must use http or https`);
-    }
-    if (surface.page !== undefined && (surface.page.startsWith("/") || surface.page.split("/").includes(".."))) {
+    only(`${where} surface`, surface, ["page"]);
+    if (!isText(surface.page)) throw new Error(`${where}: surface requires a page`);
+    if (surface.page.startsWith("/") || surface.page.split("/").includes("..")) {
       throw new Error(`${where}: surface page must be a path inside the package`);
     }
     if (!isText(manifest.mark)) throw new Error(`${where}: mark is required with a surface`);
@@ -121,12 +118,18 @@ export function validateManifest(manifest) {
       throw new Error(`${where}: preview.ink must be a theme token name`);
     }
   }
+  if (manifest.home !== undefined) {
+    if (manifest.surface === undefined) throw new Error(`${where}: home requires a surface`);
+    if (!isText(manifest.home) || !/^https?:\/\/[^/]/.test(manifest.home)) {
+      throw new Error(`${where}: home must be an http or https address`);
+    }
+  }
   if (manifest.sidecars !== undefined) {
-    if (manifest.surface?.page === undefined) throw new Error(`${where}: sidecars require a page surface`);
+    if (manifest.surface === undefined) throw new Error(`${where}: sidecars require a surface`);
     checkSidecars(`${where} sidecars`, manifest.sidecars);
   }
   if (manifest.exposes !== undefined) {
-    if (manifest.surface?.page === undefined) throw new Error(`${where}: exposes require a page surface`);
+    if (manifest.surface === undefined) throw new Error(`${where}: exposes require a surface`);
     validateExposes(id, manifest.exposes);
   }
   if (manifest.surface === undefined && manifest.sections === undefined) {

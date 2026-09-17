@@ -42,18 +42,103 @@ static void drain(WKWebView *view) {
     until(^BOOL { return done; });
 }
 
-typedef struct { BOOL done; bool ok; } SPActivation;
+typedef struct { BOOL done; sp_activate_result result; char frontmost[256]; } SPActivation;
 
-static void activated(void *context, bool ok) {
+static void activated(void *context, sp_activate_result result, const char *frontmost) {
     SPActivation *state = context;
-    state->ok = ok;
+    state->result = result;
+    snprintf(state->frontmost, sizeof state->frontmost, "%s", frontmost ?: "");
     state->done = YES;
+}
+
+static SPActivation activate(NSWindow *window, double timeout) {
+    __block SPActivation state = {NO, SP_ACTIVATE_DONE, ""};
+    sp_input_activate(window, timeout, activated, &state);
+    until(^BOOL { return state.done; });
+    return state;
+}
+
+// 활성 상태 전송이 끝났다고 알리지 않는 웹뷰.
+@interface SPStalledWebView : WKWebView
+@end
+@implementation SPStalledWebView
+- (void)_doAfterActivityStateUpdate:(void (^)(void))completionHandler {}
+@end
+
+// 활성 상태 전송을 기다리는 동안 다른 창이 키 창이 되는 웹뷰.
+@interface SPYieldingWebView : WKWebView
+@property(assign) NSWindow *other;
+@end
+@implementation SPYieldingWebView
+- (void)_doAfterActivityStateUpdate:(void (^)(void))completionHandler {
+    [super _doAfterActivityStateUpdate:completionHandler];
+    [self.other makeKeyWindow];
+}
+@end
+
+// 키 창이 될 수 없는 창.
+@interface SPUnkeyableWindow : NSWindow
+@end
+@implementation SPUnkeyableWindow
+- (BOOL)canBecomeKeyWindow { return NO; }
+@end
+
+static NSWindow *makeWindow(Class type, NSView *content) {
+    NSWindow *window = [[type alloc] initWithContentRect:NSMakeRect(120, 120, 400, 300)
+        styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+    [window setReleasedWhenClosed:NO];
+    window.ignoresMouseEvents = YES;
+    if (content) window.contentView = content;
+    return [window autorelease];
+}
+
+// 활성화가 멈춘 단계를 결과로 알리는지 조건을 만들어 확인한다.
+static void checkFailures(void) {
+    check(activate(nil, 1).result == SP_ACTIVATE_REJECTED, @"activating without a window is rejected");
+
+    // 활성화가 금지된 애플리케이션은 시스템이 활성화하지 않는다.
+    NSWindow *refused = makeWindow(NSWindow.class, nil);
+    SPActivation state = activate(refused, 1);
+    check(state.result == SP_ACTIVATE_REFUSED && state.frontmost[0] != 0 && !NSApp.isActive,
+        [NSString stringWithFormat:@"a refused activation reports the frontmost application (%d, %s)", state.result, state.frontmost]);
+    [refused close];
+    [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
+
+    SPStalledWebView *stalled = [[[SPStalledWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 300)] autorelease];
+    NSWindow *pending = makeWindow(NSWindow.class, stalled);
+    state = activate(pending, 1);
+    check(state.result == SP_ACTIVATE_PENDING,
+        [NSString stringWithFormat:@"a webview that does not apply the active state reports pending (%d)", state.result]);
+
+    NSWindow *other = makeWindow(NSWindow.class, nil);
+    [other orderFront:nil];
+    SPYieldingWebView *yielding = [[[SPYieldingWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 300)] autorelease];
+    yielding.other = other;
+    // 앱의 표면처럼 문서를 읽은 웹뷰로 검사한다.
+    [yielding loadHTMLString:@"<!doctype html><script>window.probe = true</script>" baseURL:nil];
+    until(^BOOL { return [evaluate(yielding, @"Boolean(window.probe)") boolValue]; });
+    NSWindow *lost = makeWindow(NSWindow.class, yielding);
+    state = activate(lost, 5);
+    check(state.result == SP_ACTIVATE_LOST && other.isKeyWindow,
+        [NSString stringWithFormat:@"a window that loses key status before the state is applied reports lost (%d)", state.result]);
+
+    // 앱이 활성인 상태에서 키 창이 될 수 없는 창을 활성화한다.
+    state = activate(other, 5);
+    check(state.result == SP_ACTIVATE_DONE,
+        [NSString stringWithFormat:@"an ordinary window activates (%d, frontmost %s)", state.result, state.frontmost]);
+    NSWindow *unkeyable = makeWindow(SPUnkeyableWindow.class, nil);
+    state = activate(unkeyable, 1);
+    check(state.result == SP_ACTIVATE_NOT_KEY && NSApp.isActive,
+        [NSString stringWithFormat:@"an active application whose window cannot become key reports not key (%d)", state.result]);
+
+    for (NSWindow *window in @[pending, other, lost, unkeyable]) [window close];
 }
 
 int main(void) { @autoreleasepool {
     [NSApplication sharedApplication];
-    [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
+    [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     [NSApp finishLaunching];
+    checkFailures();
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(120, 120, 400, 300)
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
     [window setReleasedWhenClosed:NO];
@@ -71,10 +156,9 @@ int main(void) { @autoreleasepool {
     [window orderFront:nil];
     until(^BOOL { return [evaluate(view, @"Boolean(window.probe)") boolValue]; });
 
-    __block SPActivation state = {NO, false};
-    sp_input_activate(window, 5, activated, &state);
-    until(^BOOL { return state.done; });
-    check(state.ok, @"activation completes");
+    SPActivation state = activate(window, 5);
+    check(state.result == SP_ACTIVATE_DONE,
+        [NSString stringWithFormat:@"activation completes (%d, frontmost %s)", state.result, state.frontmost]);
     check(NSApp.isActive && window.isKeyWindow, @"the application is active and the window is key");
 
     check(sp_input_pointer(window, 150, 100, 0, 0, 0, 0) == SP_INPUT_DELIVERED, @"move delivered");

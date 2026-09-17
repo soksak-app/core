@@ -7,6 +7,7 @@ use serde_json::value::RawValue;
 use tauri::ipc::Invoke;
 use tauri::{AppHandle, Manager, Webview, Window};
 
+use crate::documents;
 use crate::modals::{self, OverlayContent, OverlayRequest, PlaceRequest, UpdateRequest};
 use crate::projects::{self, CreateProject, Folder};
 use crate::shapes::{self, ShapeRequest};
@@ -49,7 +50,12 @@ pub(crate) fn handler() -> impl Fn(Invoke) -> bool + Send + Sync + 'static {
         exposure_reply,
         exposure_changed,
         exposure_forward,
-        exposure_register
+        exposure_register,
+        document_attach,
+        document_place,
+        document_load,
+        document_go,
+        document_detach
     ]
 }
 
@@ -233,4 +239,34 @@ fn exposure_forward(webview: Webview, request: Forward) -> Result<serde_json::Va
 #[tauri::command]
 fn exposure_register(webview: Webview, request: Register) -> Result<(), String> {
     exposure::register(&webview, request)
+}
+
+/// 호출한 표면 페이지의 요소에 문서 영역을 붙인다.
+#[tauri::command(async)]
+fn document_attach(webview: Webview, request: documents::Request) -> Result<(), String> {
+    documents::attach(&webview, request)
+}
+
+/// 문서 영역을 표면 뷰포트 여백으로 배치한다.
+#[tauri::command(async)]
+fn document_place(webview: Webview, request: documents::Request) -> Result<(), String> {
+    documents::place(&webview, request)
+}
+
+/// 문서 영역에 http 또는 https 주소를 연다.
+#[tauri::command(async)]
+fn document_load(webview: Webview, request: documents::Request) -> Result<(), String> {
+    documents::load(&webview, request)
+}
+
+/// 문서 영역의 기록 이동, 다시 읽기, 멈춤을 실행한다.
+#[tauri::command(async)]
+fn document_go(webview: Webview, request: documents::Request) -> Result<bool, String> {
+    documents::go(&webview, request)
+}
+
+/// 문서 영역을 닫는다.
+#[tauri::command(async)]
+fn document_detach(webview: Webview, request: documents::Request) -> Result<(), String> {
+    documents::detach(&webview, request)
 }

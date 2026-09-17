@@ -87,6 +87,32 @@ func (implementation) EvaluateScript(unsafe.Pointer, string) {
 	unreachable("native webview script evaluation")
 }
 
+func (implementation) CreateDocument(unsafe.Pointer, string, func(string)) (unsafe.Pointer, error) {
+	return nil, unsupported("document view")
+}
+
+func (implementation) LoadDocument(unsafe.Pointer, string) bool {
+	unreachable("document navigation")
+	return false
+}
+
+func (implementation) GoDocument(unsafe.Pointer, int) bool {
+	unreachable("document history")
+	return false
+}
+
+func (implementation) PlaceDocument(unsafe.Pointer, float64, float64, float64, float64, bool) {
+	unreachable("document placement")
+}
+
+func (implementation) SetDocumentBackground(unsafe.Pointer, bool) {
+	unreachable("document background")
+}
+
+func (implementation) CloseDocument(unsafe.Pointer) {
+	unreachable("document removal")
+}
+
 func (implementation) CloseWebview(unsafe.Pointer) {
 	unreachable("native webview close")
 }
@@ -161,11 +187,11 @@ func (implementation) UnwatchInput(uintptr) {
 	unreachable("surface input release")
 }
 
-func (implementation) InjectPointer(unsafe.Pointer, float64, float64, int, int, float64, float64) (platform.PointerResult, error) {
-	return platform.PointerRejected, unsupported("native pointer input")
+func (implementation) InjectPointer(unsafe.Pointer, float64, float64, int, int, float64, float64, float64, func(platform.PointerResult)) error {
+	return unsupported("native pointer input")
 }
 
-func (implementation) ActivateWindow(unsafe.Pointer, float64, func(bool)) error {
+func (implementation) ActivateWindow(unsafe.Pointer, float64, func(error)) error {
 	return unsupported("window activation")
 }
 

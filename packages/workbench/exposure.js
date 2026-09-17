@@ -48,7 +48,11 @@ export function createRegistry({ call = null } = {}) {
   const pending = new Map();
   /* 감시 중인 표면 status. 감시 키마다 따라가는 표면, 요청한 표면, 마지막 버전. */
   const following = new Map();
-  let options = { surfacePlugin: () => null, preferred: () => [], origin: () => null, registrationChanged: () => {} };
+  let options = {
+    surfacePlugin: () => null, preferred: () => [], origin: () => null, registrationChanged: () => {},
+    // 코어 명령이 실행된 뒤 기다릴 작업. 문서는 판의 그리기를 넘겨, 배치를 바꾼 명령이 그려진 뒤 답하게 한다.
+    settled: () => undefined,
+  };
   let forwards = 0;
 
   const changed = (name, value, surface) => {
@@ -173,7 +177,11 @@ export function createRegistry({ call = null } = {}) {
 
     /** 코어 status 를 등록한다. subscribe(fn) 은 해제 함수를 반환한다. */
     status: (name, read, subscribe) => core.status(name, read, subscribe),
-    command: (name, run) => core.command(name, run),
+    command: (name, run) => core.command(name, async (params) => {
+      const result = await run(params);
+      await options.settled();
+      return result;
+    }),
     /** 코어 dom 항목을 등록한다. 요소는 요청 시점에 data-expose 속성으로 찾는다. */
     dom: (name, provide = byAttribute(name)) => core.dom(name, provide),
 

@@ -17,19 +17,51 @@ use super::super::{Delivery, Handle, Hit, Key, Pointer};
 use super::{NSPoint, NSRect};
 
 extern "C" {
-    fn sp_input_pointer(window: *mut c_void, x: f64, y: f64, phase: i32, button: i32, delta_x: f64, delta_y: f64) -> i32;
-    fn sp_input_activate(window: *mut c_void, timeout: f64, done: extern "C" fn(*mut c_void, bool), context: *mut c_void);
+    fn sp_input_pointer_then(
+        window: *mut c_void,
+        x: f64,
+        y: f64,
+        phase: i32,
+        button: i32,
+        delta_x: f64,
+        delta_y: f64,
+        receive: f64,
+        done: extern "C" fn(*mut c_void, i32),
+        context: *mut c_void,
+    );
+    fn sp_input_activate(
+        window: *mut c_void,
+        timeout: f64,
+        done: extern "C" fn(*mut c_void, i32, *const c_char),
+        context: *mut c_void,
+    );
     fn sp_input_key(window: *mut c_void, key: *const c_char, text: *const c_char, modifiers: u32, down: bool) -> bool;
 }
 
 /// sp_input_pointer 의 결과 값.
 const SP_INPUT_DELIVERED: i32 = 0;
 const SP_INPUT_INACTIVE: i32 = 2;
+const SP_INPUT_UNRECEIVED: i32 = 3;
 
-/// 창에 포인터 입력을 전달하고 결과를 반환한다. 메인 스레드에서 호출한다.
-pub fn pointer(window: Handle, pointer: Pointer) -> Delivery {
-    let result = unsafe {
-        sp_input_pointer(
+type Delivered = Box<dyn FnOnce(Delivery) + Send>;
+
+extern "C" fn delivered(context: *mut c_void, result: i32) {
+    // context 는 pointer 가 Box::into_raw 로 넘긴 값이고 라이브러리는 done 을 한 번 호출한다.
+    let done = unsafe { Box::from_raw(context as *mut Delivered) };
+    done(match result {
+        SP_INPUT_DELIVERED => Delivery::Delivered,
+        SP_INPUT_INACTIVE => Delivery::Inactive,
+        SP_INPUT_UNRECEIVED => Delivery::Unreceived,
+        _ => Delivery::Rejected,
+    });
+}
+
+/// 창에 포인터 입력을 전달하고 결과를 done 으로 알린다. 누름과 뗌은 문서가 받은 뒤 알린다.
+/// 메인 스레드에서 호출한다.
+pub fn pointer(window: Handle, pointer: Pointer, receive: Duration, done: Delivered) {
+    let context = Box::into_raw(Box::new(done)) as *mut c_void;
+    unsafe {
+        sp_input_pointer_then(
             window as *mut c_void,
             pointer.x,
             pointer.y,
@@ -37,26 +69,59 @@ pub fn pointer(window: Handle, pointer: Pointer) -> Delivery {
             pointer.button,
             pointer.delta_x,
             pointer.delta_y,
+            receive.as_secs_f64(),
+            delivered,
+            context,
         )
-    };
-    match result {
-        SP_INPUT_DELIVERED => Delivery::Delivered,
-        SP_INPUT_INACTIVE => Delivery::Inactive,
-        _ => Delivery::Rejected,
     }
 }
 
-type Activated = Box<dyn FnOnce(bool) + Send>;
+type Activated = Box<dyn FnOnce(Result<(), String>) + Send>;
 
-extern "C" fn activated(context: *mut c_void, ok: bool) {
+/// sp_input_activate 의 결과 값.
+const SP_ACTIVATE_DONE: i32 = 0;
+const SP_ACTIVATE_REFUSED: i32 = 2;
+const SP_ACTIVATE_NOT_KEY: i32 = 3;
+const SP_ACTIVATE_PENDING: i32 = 4;
+const SP_ACTIVATE_LOST: i32 = 5;
+
+struct Activation {
+    timeout: Duration,
+    done: Activated,
+}
+
+extern "C" fn activated(context: *mut c_void, result: i32, frontmost: *const c_char) {
     // context 는 activate 가 Box::into_raw 로 넘긴 값이고 라이브러리는 done 을 한 번 호출한다.
-    let done = unsafe { Box::from_raw(context as *mut Activated) };
-    done(ok);
+    let activation = unsafe { Box::from_raw(context as *mut Activation) };
+    let frontmost = if frontmost.is_null() {
+        "unknown".to_string()
+    } else {
+        unsafe { std::ffi::CStr::from_ptr(frontmost) }.to_string_lossy().into_owned()
+    };
+    (activation.done)(activation_result(result, activation.timeout.as_secs_f64(), &frontmost));
+}
+
+/// 활성화 결과를 멈춘 단계와 최전면 애플리케이션을 적은 오류로 바꾼다.
+fn activation_result(result: i32, timeout: f64, frontmost: &str) -> Result<(), String> {
+    match result {
+        SP_ACTIVATE_DONE => Ok(()),
+        SP_ACTIVATE_REFUSED => Err(format!(
+            "the system did not activate the application within {timeout}s; the frontmost application is {frontmost}"
+        )),
+        SP_ACTIVATE_NOT_KEY => Err(format!(
+            "the application is active but the window did not become key within {timeout}s; the frontmost application is {frontmost}"
+        )),
+        SP_ACTIVATE_PENDING => Err(format!("the window's webviews did not apply the active state within {timeout}s")),
+        SP_ACTIVATE_LOST => Err(format!(
+            "the window lost activation before its webviews applied it; the frontmost application is {frontmost}"
+        )),
+        _ => Err("the window cannot be activated".to_string()),
+    }
 }
 
 /// 애플리케이션을 활성화하고 창을 키 창으로 만든 뒤 done 을 호출한다. 메인 스레드에서 호출한다.
 pub fn activate(window: Handle, timeout: Duration, done: Activated) {
-    let context = Box::into_raw(Box::new(done)) as *mut c_void;
+    let context = Box::into_raw(Box::new(Activation { timeout, done })) as *mut c_void;
     unsafe { sp_input_activate(window as *mut c_void, timeout.as_secs_f64(), activated, context) }
 }
 

@@ -44,18 +44,23 @@ var nullSchema = map[string]any{"type": "null"}
 
 var hostStatus = map[string]hostEntry{
 	"host.window": {
-		Description: "Window frame in screen coordinates, content size, backing scale, key and application active state, child window count, window buttons, native surfaces, and the open native modal.",
+		Description: "Window frame in screen coordinates, content size, backing scale, maximized, key and application active state, child window count, window buttons, native surfaces, document regions, and the open native modal.",
 		Schema: map[string]any{"type": "object", "properties": map[string]any{
-			"frame":    rectSchema,
-			"content":  rectSchema,
-			"scale":    map[string]any{"type": "number"},
-			"key":      map[string]any{"type": "boolean"},
-			"active":   map[string]any{"type": "boolean"},
-			"children": map[string]any{"type": "integer"},
-			"controls": map[string]any{"type": "array", "items": rectSchema},
+			"frame":     rectSchema,
+			"content":   rectSchema,
+			"scale":     map[string]any{"type": "number"},
+			"maximized": map[string]any{"type": "boolean"},
+			"key":       map[string]any{"type": "boolean"},
+			"active":    map[string]any{"type": "boolean"},
+			"children":  map[string]any{"type": "integer"},
+			"controls":  map[string]any{"type": "array", "items": rectSchema},
 			"surfaces": map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{
 				"id": map[string]any{"type": "string"}, "frame": rectSchema,
 				"visible": map[string]any{"type": "boolean"}, "order": map[string]any{"type": "integer"},
+			}}},
+			"documents": map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{
+				"surface": map[string]any{"type": "string"}, "document": map[string]any{"type": "string"},
+				"frame": rectSchema, "visible": map[string]any{"type": "boolean"}, "order": map[string]any{"type": "integer"},
 			}}},
 			"modal": map[string]any{"type": "object", "properties": map[string]any{
 				"id": map[string]any{"type": "string"}, "mode": map[string]any{"type": "string"},
@@ -67,9 +72,10 @@ var hostStatus = map[string]hostEntry{
 		}},
 	},
 	"host.screens": {
-		Description: "The displays in screen coordinates with their backing scale.",
+		Description: "The displays in screen coordinates with their backing scale and the area not covered by the menu bar and Dock.",
 		Schema: map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{
-			"x": map[string]any{"type": "number"}, "y": map[string]any{"type": "number"},
+			"visible": rectSchema,
+			"x":       map[string]any{"type": "number"}, "y": map[string]any{"type": "number"},
 			"width": map[string]any{"type": "number"}, "height": map[string]any{"type": "number"},
 			"scale": map[string]any{"type": "number"},
 		}}},
@@ -92,6 +98,8 @@ var hostCommands = map[string]hostEntry{
 	"host.window.close": {Description: "Closes the window through its normal close action.", Params: emptyObject, Result: nullSchema},
 	"host.window.maximize": {Description: "Maximizes the window, or restores it with on false.", Result: nullSchema,
 		Params: map[string]any{"type": "object", "properties": map[string]any{"on": map[string]any{"type": "boolean"}}}},
+	"host.window.fullscreen": {Description: "Enters full screen, or leaves it with on false.", Result: nullSchema,
+		Params: map[string]any{"type": "object", "properties": map[string]any{"on": map[string]any{"type": "boolean"}}}},
 	"host.window.resize": {Description: "Resizes the content area.", Result: nullSchema,
 		Params: map[string]any{"type": "object", "properties": map[string]any{
 			"width": map[string]any{"type": "number"}, "height": map[string]any{"type": "number"}}}},
@@ -106,8 +114,9 @@ var hostCommands = map[string]hostEntry{
 		Params: map[string]any{"type": "object", "properties": map[string]any{
 			"x": map[string]any{"type": "number"}, "y": map[string]any{"type": "number"}}},
 		Result: map[string]any{"type": "object", "properties": map[string]any{
-			"kind":       map[string]any{"type": "string", "enum": []string{"page", "surface", "native"}},
+			"kind":       map[string]any{"type": "string", "enum": []string{"page", "surface", "document", "native"}},
 			"surface":    map[string]any{"type": "string"},
+			"document":   map[string]any{"type": "string"},
 			"identifier": map[string]any{"type": "string"}}}},
 	"host.quit": {Description: "Requests normal application termination, including pending saves.", Params: emptyObject, Result: nullSchema},
 }
@@ -214,9 +223,25 @@ func (r *relay) wait(id uint64, w *waiter, timeout time.Duration) ExposureResult
 	}
 }
 
-// ask 는 창 s 의 메인 페이지에 요청을 보내고 답을 기다린다.
+// forget 은 보내지 않은 요청을 지운다.
+func (r *relay) forget(id uint64) {
+	r.mu.Lock()
+	delete(r.waiting, id)
+	r.mu.Unlock()
+}
+
+// ask 는 창 s 의 메인 페이지에 요청을 보내고 답을 기다린다. timeout 이 0 이면 답이나 페이지 종료까지
+// 기다린다. 준비되지 않은 페이지는 요청을 받지 못하므로 1003 을 반환한다. 요청을 등록한 뒤 준비
+// 여부를 보므로, 그 사이 다시 읽힌 페이지의 요청은 여기서 거부되거나 abandon 으로 끝난다.
 func (h *Host) ask(s *Surfaces, method string, params any, timeout time.Duration) (json.RawMessage, error) {
 	id, w := h.relay.open(s, "")
+	h.mu.Lock()
+	ready := s.ready
+	h.mu.Unlock()
+	if !ready {
+		h.relay.forget(id)
+		return nil, rpcError(codeNoWindow, "the main page is not ready")
+	}
 	s.window.EmitEvent("exposure-request", map[string]any{"id": id, "method": method, "params": params})
 	reply := h.relay.wait(id, w, timeout)
 	if reply.Error != nil {
@@ -490,7 +515,12 @@ func (b hostBackend) PageRequest(window, method string, params json.RawMessage) 
 	if err != nil {
 		return nil, err
 	}
-	return b.h.ask(s, method, params, pageTimeout)
+	// 메인 페이지는 표면에 전달한 명령을 선언의 제한 시간 안에 끝내므로 command.run 에는 제한을 두지 않는다.
+	timeout := pageTimeout
+	if method == "command.run" {
+		timeout = 0
+	}
+	return b.h.ask(s, method, params, timeout)
 }
 
 func (b hostBackend) HostStatus(window, name string) (any, error) {
@@ -528,6 +558,18 @@ func (b hostBackend) HostCommand(window, name string, params json.RawMessage) (a
 			s.window.Maximise()
 		} else {
 			s.window.UnMaximise()
+		}
+	case "host.window.fullscreen":
+		var p struct {
+			On *bool `json:"on"`
+		}
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, rpcError(codeInvalidParams, "%v", err)
+		}
+		if p.On == nil || *p.On {
+			s.window.Fullscreen()
+		} else {
+			s.window.UnFullscreen()
 		}
 	case "host.window.resize":
 		var p struct {
@@ -591,6 +633,9 @@ func (b hostBackend) HostCommand(window, name string, params json.RawMessage) (a
 
 var pointerPhaseCodes = map[string]int{"move": 0, "down": 1, "drag": 2, "up": 3, "scroll": 4}
 
+// receiveTimeout 은 input.pointer 의 누름과 뗌이 문서의 수신을 기다리는 시간이다.
+const receiveTimeout = 2 * time.Second
+
 // activateTimeout 은 input.pointer 의 activate 가 활성화를 기다리는 시간이다.
 const activateTimeout = 5 * time.Second
 
@@ -622,34 +667,38 @@ func (b hostBackend) Pointer(window string, input PointerInput) error {
 	if input.Button == "right" {
 		button = 1
 	}
-	var result platform.PointerResult
+	done := make(chan platform.PointerResult, 1)
 	application.InvokeSync(func() {
-		result, err = system.InjectPointer(s.window.NativeWindow(), input.X, input.Y, pointerPhaseCodes[input.Phase], button, input.DeltaX, input.DeltaY)
+		err = system.InjectPointer(s.window.NativeWindow(), input.X, input.Y, pointerPhaseCodes[input.Phase], button,
+			input.DeltaX, input.DeltaY, receiveTimeout.Seconds(), func(result platform.PointerResult) { done <- result })
 	})
-	switch {
-	case err != nil:
+	if err != nil {
 		return rpcError(codeNoInput, "%v", err)
-	case result == platform.PointerInactive:
+	}
+	switch <-done {
+	case platform.PointerInactive:
 		return errInactive()
-	case result == platform.PointerRejected:
+	case platform.PointerRejected:
 		return rpcError(codeInvalidParams, "the window did not accept the input: the point is outside the content")
+	case platform.PointerUnreceived:
+		return rpcError(codeTimeout, "the document did not receive the input within %s", receiveTimeout)
 	}
 	return nil
 }
 
 // activate 는 애플리케이션을 활성화하고 창을 키 창으로 만든 뒤, 창의 웹뷰가 활성 상태를 받을
-// 때까지 기다린다. 시스템이 활성화하지 않으면 1006 오류를 반환한다.
+// 때까지 기다린다. 활성화가 끝나지 않으면 멈춘 단계를 적은 1006 오류를 반환한다.
 func (s *Surfaces) activate() error {
-	done := make(chan bool, 1)
+	done := make(chan error, 1)
 	var err error
 	application.InvokeSync(func() {
-		err = system.ActivateWindow(s.window.NativeWindow(), activateTimeout.Seconds(), func(ok bool) { done <- ok })
+		err = system.ActivateWindow(s.window.NativeWindow(), activateTimeout.Seconds(), func(result error) { done <- result })
 	})
 	if err != nil {
 		return rpcError(codeNoInput, "%v", err)
 	}
-	if !<-done {
-		return rpcError(codeInactive, "the system did not activate the application within %s", activateTimeout)
+	if err := <-done; err != nil {
+		return rpcError(codeInactive, "%v", err)
 	}
 	return nil
 }
@@ -699,6 +748,7 @@ type windowFacts struct {
 		Height float64 `json:"height"`
 	} `json:"content"`
 	Scale    float64         `json:"scale"`
+	Zoomed   bool            `json:"zoomed"`
 	Key      bool            `json:"key"`
 	Active   bool            `json:"active"`
 	Children int             `json:"children"`
@@ -718,6 +768,15 @@ type WindowSurface struct {
 	Frame   frame  `json:"frame"`
 	Visible bool   `json:"visible"`
 	Order   int    `json:"order"`
+}
+
+// WindowDocument 는 host.window 의 문서 영역 하나다.
+type WindowDocument struct {
+	Surface  string `json:"surface"`
+	Document string `json:"document"`
+	Frame    frame  `json:"frame"`
+	Visible  bool   `json:"visible"`
+	Order    int    `json:"order"`
 }
 
 // ModalBackground 는 모달 웹뷰의 배경 그리기 상태다.
@@ -744,15 +803,17 @@ type WindowControl struct {
 
 // WindowStatus 는 host.window 의 값이다.
 type WindowStatus struct {
-	Frame    frame           `json:"frame"`
-	Content  frame           `json:"content"`
-	Scale    float64         `json:"scale"`
-	Key      bool            `json:"key"`
-	Active   bool            `json:"active"`
-	Children int             `json:"children"`
-	Controls []WindowControl `json:"controls"`
-	Surfaces []WindowSurface `json:"surfaces"`
-	Modal    *WindowModal    `json:"modal"`
+	Frame     frame            `json:"frame"`
+	Content   frame            `json:"content"`
+	Scale     float64          `json:"scale"`
+	Maximized bool             `json:"maximized"`
+	Key       bool             `json:"key"`
+	Active    bool             `json:"active"`
+	Children  int              `json:"children"`
+	Controls  []WindowControl  `json:"controls"`
+	Surfaces  []WindowSurface  `json:"surfaces"`
+	Documents []WindowDocument `json:"documents"`
+	Modal     *WindowModal     `json:"modal"`
 }
 
 // viewNames 는 UI 스레드에서 표면 웹뷰의 id 와 모달 웹뷰의 주소를 읽는다.
@@ -773,16 +834,17 @@ func (s *Surfaces) viewNames() (named map[uint64]string, modalHandle uint64) {
 func (s *Surfaces) windowState() (WindowStatus, error) {
 	var facts windowFacts
 	var named map[uint64]string
+	var documents map[uint64]DocumentKey
 	var modalHandle uint64
 	err := native(func() (string, error) { return system.WindowFacts(s.window.NativeWindow()) }, &facts,
-		func() { named, modalHandle = s.viewNames() })
+		func() { named, modalHandle = s.viewNames(); documents = s.documents.Names() })
 	if err != nil {
 		return WindowStatus{}, err
 	}
 	out := WindowStatus{
 		Frame: facts.Frame, Content: frame{Width: facts.Content.Width, Height: facts.Content.Height},
-		Scale: facts.Scale, Key: facts.Key, Active: facts.Active, Children: facts.Children,
-		Controls: facts.Controls, Surfaces: []WindowSurface{},
+		Scale: facts.Scale, Maximized: facts.Zoomed, Key: facts.Key, Active: facts.Active, Children: facts.Children,
+		Controls: facts.Controls, Surfaces: []WindowSurface{}, Documents: []WindowDocument{},
 	}
 	if out.Controls == nil {
 		out.Controls = []WindowControl{}
@@ -796,6 +858,9 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 	for order, view := range facts.Webviews {
 		if id, ok := named[view.View]; ok {
 			out.Surfaces = append(out.Surfaces, WindowSurface{ID: id, Frame: view.frame, Visible: !view.Hidden, Order: order})
+		} else if key, ok := documents[view.View]; ok {
+			out.Documents = append(out.Documents, WindowDocument{Surface: key.Surface, Document: key.Name,
+				Frame: view.frame, Visible: !view.Hidden, Order: order})
 		} else if modal != nil && modalHandle != 0 && view.View == modalHandle {
 			at, index := view.frame, order
 			modal.Frame, modal.Order = &at, &index
@@ -808,7 +873,7 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 
 // screens 는 host.screens 의 현재 값을 읽는다.
 func screens() (any, error) {
-	var out []map[string]float64
+	var out []map[string]any
 	if err := native(system.Screens, &out, nil); err != nil {
 		return nil, err
 	}
@@ -832,10 +897,12 @@ func (s *Surfaces) hit(x, y float64) (map[string]any, error) {
 		Identifier string `json:"identifier"`
 	}
 	var named map[uint64]string
+	var documents map[uint64]DocumentKey
 	var modalHandle uint64
 	var modalID string
 	err := native(func() (string, error) { return system.WindowHit(s.window.NativeWindow(), x, y) }, &got, func() {
 		named, modalHandle = s.viewNames()
+		documents = s.documents.Names()
 		s.mu.Lock()
 		if s.modal != nil {
 			modalID = s.modal.id
@@ -846,6 +913,9 @@ func (s *Surfaces) hit(x, y float64) (map[string]any, error) {
 		return nil, err
 	}
 	switch {
+	case got.View != 0 && documents[got.View].Surface != "":
+		key := documents[got.View]
+		return map[string]any{"kind": "document", "surface": key.Surface, "document": key.Name}, nil
 	case got.View != 0 && named[got.View] != "":
 		return map[string]any{"kind": "surface", "surface": named[got.View]}, nil
 	case got.View != 0 && got.View == modalHandle && modalID != "":

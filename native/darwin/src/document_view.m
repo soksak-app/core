@@ -1,0 +1,336 @@
+// 표면 문서 안의 외부 문서 웹뷰.
+//
+// 상태는 WKWebView 의 KVO 속성과 WKNavigationDelegate 로 읽는다. 스크롤 위치는 문서 전용
+// 콘텐츠 월드(WKContentWorld)의 스크립트가 scroll 이벤트마다 보낸다. 그 월드와 메시지
+// 처리기는 문서 페이지의 스크립트에서 보이지 않는다.
+#import <Cocoa/Cocoa.h>
+#import <CommonCrypto/CommonDigest.h>
+#import <CoreImage/CoreImage.h>
+#import <WebKit/WebKit.h>
+#import "document_view.h"
+#import "webview_geometry.h"
+#import "webview_input.h"
+
+static NSString *const kScrollMessage = @"soksakDocumentScroll";
+
+static NSString *const kScrollScript = @"(() => {"
+    "const post = () => window.webkit.messageHandlers.soksakDocumentScroll.postMessage("
+    "{ x: window.scrollX, y: window.scrollY });"
+    "addEventListener('scroll', post, { capture: true, passive: true });"
+    "addEventListener('load', post);"
+    "post();"
+    "})();";
+
+static NSArray<NSString *> *observedKeys(void) {
+    return @[ @"URL", @"title", @"loading", @"estimatedProgress", @"canGoBack", @"canGoForward" ];
+}
+
+@class SPDocumentView;
+
+// 메시지 처리기. 사용자 콘텐츠 컨트롤러가 처리기를 보유하므로 뷰를 약하게 가리킨다.
+@interface SPDocumentScroll : NSObject <WKScriptMessageHandler>
+@property(assign) SPDocumentView *view;
+@end
+
+@interface SPDocumentView : WKWebView <WKNavigationDelegate, WKUIDelegate>
+@property sp_document_changed changed;
+@property void *context;
+@property(retain) SPDocumentScroll *scroll;
+@property(copy) NSString *failure;
+// 진행 중인 주 프레임 이동. 요청하거나 시작한 때부터 끝나거나 실패할 때까지 읽는 중으로 보고한다.
+// 대체된 이전 이동이 취소되면 새 이동이 시작되기 전에 WKWebView.loading 이 NO 가 되기 때문이다.
+@property(retain) WKNavigation *navigation;
+@property NSPoint offset;
+@property NSEdgeInsets insets;
+@property BOOL wanted;
+@property BOOL placed;
+@property BOOL pending;
+@property BOOL closed;
+- (void)report;
+- (void)request:(WKNavigation *)navigation;
+- (BOOL)requestIfStarted:(WKNavigation *)navigation;
+- (void)applyInsets;
+- (void)surfaceScaleChanged;
+@end
+
+@implementation SPDocumentScroll
+- (void)userContentController:(WKUserContentController *)controller didReceiveScriptMessage:(WKScriptMessage *)message {
+    SPDocumentView *view = self.view;
+    if (!view || !message.frameInfo.isMainFrame || ![message.body isKindOfClass:NSDictionary.class]) return;
+    NSDictionary *body = message.body;
+    if (![body[@"x"] isKindOfClass:NSNumber.class] || ![body[@"y"] isKindOfClass:NSNumber.class]) return;
+    NSPoint offset = NSMakePoint([body[@"x"] doubleValue], [body[@"y"] doubleValue]);
+    if (NSEqualPoints(offset, view.offset)) return;
+    view.offset = offset;
+    [view report];
+}
+@end
+
+@implementation SPDocumentView
+
+- (void)dealloc {
+    [_scroll release];
+    [_failure release];
+    [_navigation release];
+    [super dealloc];
+}
+
+// 같은 실행 루프 차례의 여러 변경을 한 번의 보고로 묶는다.
+- (void)report {
+    if (self.closed || self.pending) return;
+    self.pending = YES;
+    [self retain];
+    CFRunLoopPerformBlock(CFRunLoopGetMain(), kCFRunLoopCommonModes, ^{
+        self.pending = NO;
+        if (!self.closed) [self deliver];
+        [self release];
+    });
+    CFRunLoopWakeUp(CFRunLoopGetMain());
+}
+
+- (void)deliver {
+    NSDictionary *state = @{
+        @"url": self.URL.absoluteString ?: @"",
+        @"title": self.title ?: @"",
+        @"loading": @(self.loading || self.navigation != nil),
+        @"progress": @(self.estimatedProgress),
+        @"canGoBack": @(self.canGoBack),
+        @"canGoForward": @(self.canGoForward),
+        @"error": self.failure ?: (id)NSNull.null,
+        @"scroll": @{ @"x": @(self.offset.x), @"y": @(self.offset.y) },
+    };
+    NSData *data = [NSJSONSerialization dataWithJSONObject:state options:0 error:nil];
+    if (!data) return;
+    NSString *text = [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease];
+    self.changed(self.context, text.UTF8String);
+}
+
+- (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context {
+    if (object == self) [self report];
+}
+
+- (void)request:(WKNavigation *)navigation {
+    self.navigation = navigation;
+    [self report];
+}
+
+- (BOOL)requestIfStarted:(WKNavigation *)navigation {
+    if (!navigation) return NO;
+    [self request:navigation];
+    return YES;
+}
+
+// 이동이 끝났다. 진행 중인 이동이 아니면 대체된 이동이므로 무시한다.
+- (void)settle:(WKNavigation *)navigation {
+    if (navigation == self.navigation) self.navigation = nil;
+}
+
+- (void)webView:(WKWebView *)view didStartProvisionalNavigation:(WKNavigation *)navigation {
+    self.navigation = navigation;
+    self.failure = nil;
+    [self report];
+}
+
+- (void)fail:(NSError *)error {
+    // 새 이동이 이전 이동을 취소한 경우는 실패가 아니다.
+    if ([error.domain isEqualToString:NSURLErrorDomain] && error.code == NSURLErrorCancelled) return;
+    self.failure = error.localizedDescription;
+    [self report];
+}
+
+- (void)webView:(WKWebView *)view didFailProvisionalNavigation:(WKNavigation *)navigation withError:(NSError *)error {
+    [self settle:navigation];
+    [self fail:error];
+}
+
+- (void)webView:(WKWebView *)view didFailNavigation:(WKNavigation *)navigation withError:(NSError *)error {
+    [self settle:navigation];
+    [self fail:error];
+}
+
+- (void)webView:(WKWebView *)view didFinishNavigation:(WKNavigation *)navigation {
+    [self settle:navigation];
+    [self report];
+}
+
+// 문서 영역은 웹 주소만 연다. 앱의 스킴과 파일 주소는 거부한다.
+static BOOL webAddress(NSURL *url) {
+    NSString *scheme = url.scheme.lowercaseString;
+    return [scheme isEqualToString:@"http"] || [scheme isEqualToString:@"https"] || [url.absoluteString isEqualToString:@"about:blank"];
+}
+
+- (void)webView:(WKWebView *)view decidePolicyForNavigationAction:(WKNavigationAction *)action
+    decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler {
+    if (!webAddress(action.request.URL)) {
+        self.failure = [NSString stringWithFormat:@"%@ is not a web address", action.request.URL.absoluteString];
+        // 거부한 주 프레임 이동은 시작되지 않는다. 진행 중인 이동은 이 결정을 받은 이동이다.
+        if (action.targetFrame.isMainFrame) self.navigation = nil;
+        [self report];
+        decisionHandler(WKNavigationActionPolicyCancel);
+        return;
+    }
+    decisionHandler(WKNavigationActionPolicyAllow);
+}
+
+// 새 창을 요청한 이동은 같은 영역에서 연다.
+- (WKWebView *)webView:(WKWebView *)view createWebViewWithConfiguration:(WKWebViewConfiguration *)configuration
+    forNavigationAction:(WKNavigationAction *)action windowFeatures:(WKWindowFeatures *)features {
+    if (webAddress(action.request.URL)) [self request:[self loadRequest:action.request]];
+    return nil;
+}
+
+// 여백을 표면 뷰의 좌표로 바꾼다. 표면 뷰의 한 단위는 CSS 픽셀에 pageZoom 을 곱한 값이다.
+- (void)applyInsets {
+    WKWebView *surface = (WKWebView *)self.superview;
+    if (!surface) return;
+    CGFloat zoom = surface.pageZoom;
+    NSRect bounds = surface.bounds;
+    NSEdgeInsets insets = self.insets;
+    CGFloat width = NSWidth(bounds) - (insets.left + insets.right) * zoom;
+    CGFloat height = NSHeight(bounds) - (insets.top + insets.bottom) * zoom;
+    CGFloat top = insets.top * zoom;
+    CGFloat y = surface.isFlipped ? top : NSHeight(bounds) - top - height;
+    self.frame = NSMakeRect(insets.left * zoom, y, MAX(width, 0), MAX(height, 0));
+    self.pageZoom = zoom;
+    self.hidden = !self.wanted || width < 1 || height < 1;
+}
+
+- (void)surfaceScaleChanged {
+    if (self.placed) [self applyInsets];
+}
+
+// 표면 크기가 바뀌면 영역을 여백으로 다시 정한다. 비례 조정(autoresizing)은 표면이 여백보다
+// 작아졌던 크기를 잃는다.
+- (void)viewWillMoveToSuperview:(NSView *)superview {
+    if (self.superview) {
+        [NSNotificationCenter.defaultCenter removeObserver:self name:NSViewFrameDidChangeNotification object:self.superview];
+    }
+    [super viewWillMoveToSuperview:superview];
+}
+
+- (void)viewDidMoveToSuperview {
+    [super viewDidMoveToSuperview];
+    if (!self.superview) return;
+    self.superview.postsFrameChangedNotifications = YES;
+    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(surfaceResized:)
+        name:NSViewFrameDidChangeNotification object:self.superview];
+}
+
+- (void)surfaceResized:(NSNotification *)notification {
+    if (self.placed) [self applyInsets];
+}
+
+@end
+
+// 저장소 이름에서 고정된 UUID 를 만든다(SHA-256 의 앞 16바이트, 버전 5 형식).
+static NSUUID *storeIdentifier(const char *name) {
+    unsigned char digest[CC_SHA256_DIGEST_LENGTH];
+    CC_SHA256(name, (CC_LONG)strlen(name), digest);
+    digest[6] = (digest[6] & 0x0F) | 0x50;
+    digest[8] = (digest[8] & 0x3F) | 0x80;
+    return [[[NSUUID alloc] initWithUUIDBytes:digest] autorelease];
+}
+
+void *sp_document_create(void *surfaceHandle, const char *store, sp_document_changed changed, void *context) {
+    NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
+    WKWebView *surface = (WKWebView *)surfaceHandle;
+    if (!surface || !store || !changed || !surface.window) return NULL;
+    WKWebViewConfiguration *configuration = [[[WKWebViewConfiguration alloc] init] autorelease];
+    configuration.websiteDataStore = [WKWebsiteDataStore dataStoreForIdentifier:storeIdentifier(store)];
+    WKContentWorld *world = [WKContentWorld worldWithName:@"soksak-document"];
+    SPDocumentScroll *scroll = [[SPDocumentScroll new] autorelease];
+    [configuration.userContentController addScriptMessageHandler:scroll contentWorld:world name:kScrollMessage];
+    WKUserScript *script = [[[WKUserScript alloc] initWithSource:kScrollScript
+        injectionTime:WKUserScriptInjectionTimeAtDocumentEnd forMainFrameOnly:YES inContentWorld:world] autorelease];
+    [configuration.userContentController addUserScript:script];
+
+    SPDocumentView *view = [[SPDocumentView alloc] initWithFrame:NSZeroRect configuration:configuration];
+    scroll.view = view;
+    view.scroll = scroll;
+    view.changed = changed;
+    view.context = context;
+    view.navigationDelegate = view;
+    view.UIDelegate = view;
+    view.hidden = YES;
+    if (!webviewInputRegister(view) || !webviewIgnorePageFocus(view)) {
+        [view release];
+        return NULL;
+    }
+    [surface addSubview:view];
+    webviewMatchSurface(view, surface);
+    for (NSString *key in observedKeys()) [view addObserver:view forKeyPath:key options:0 context:NULL];
+    return view; // sp_document_close 까지 호출자가 이 참조를 소유한다.
+}
+
+bool sp_document_load(void *handle, const char *address) {
+    NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
+    SPDocumentView *view = (SPDocumentView *)handle;
+    NSURL *url = address ? [NSURL URLWithString:[NSString stringWithUTF8String:address]] : nil;
+    if (!url || !webAddress(url)) return false;
+    [view request:[view loadRequest:[NSURLRequest requestWithURL:url]]];
+    return true;
+}
+
+bool sp_document_go(void *handle, int action) {
+    NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
+    SPDocumentView *view = (SPDocumentView *)handle;
+    switch (action) {
+        case 0: return [view requestIfStarted:[view goBack]];
+        case 1: return [view requestIfStarted:[view goForward]];
+        case 2: return [view requestIfStarted:[view reload]];
+        case 3: [view stopLoading]; return true;
+        default: return false;
+    }
+}
+
+void sp_document_place(void *handle, double left, double top, double right, double bottom, bool visible) {
+    NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
+    SPDocumentView *view = (SPDocumentView *)handle;
+    view.insets = NSEdgeInsetsMake(top, left, bottom, right);
+    view.wanted = visible;
+    view.placed = YES;
+    [view applyInsets];
+}
+
+void sp_document_frame(void *handle, double *out) {
+    NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
+    NSView *view = (NSView *)handle;
+    NSView *content = view.window.contentView;
+    if (!content) return;
+    NSRect frame = [view convertRect:view.bounds toView:content];
+    out[0] = frame.origin.x;
+    out[1] = content.isFlipped ? frame.origin.y : NSHeight(content.bounds) - NSMaxY(frame);
+    out[2] = frame.size.width;
+    out[3] = frame.size.height;
+    out[4] = view.isHiddenOrHasHiddenAncestor ? 0 : 1;
+}
+
+void sp_document_background(void *handle, bool enabled) {
+    NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
+    NSView *view = (NSView *)handle;
+    view.wantsLayer = YES;
+    view.layerUsesCoreImageFilters = YES;
+    if (!enabled) {
+        view.contentFilters = @[];
+        return;
+    }
+    // 표면 문서의 CSS blur(3px) 와 같은 반경이다. 뷰의 한 단위는 CSS 픽셀에 pageZoom 을 곱한 값이다.
+    CIFilter *blur = [CIFilter filterWithName:@"CIGaussianBlur"];
+    [blur setValue:@(3 * ((WKWebView *)view).pageZoom) forKey:kCIInputRadiusKey];
+    view.contentFilters = @[ blur ];
+}
+
+void sp_document_close(void *handle) {
+    NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
+    SPDocumentView *view = (SPDocumentView *)handle;
+    view.closed = YES;
+    for (NSString *key in observedKeys()) [view removeObserver:view forKeyPath:key];
+    view.scroll.view = nil;
+    [view.configuration.userContentController removeAllScriptMessageHandlers];
+    view.navigationDelegate = nil;
+    view.UIDelegate = nil;
+    webviewInputUnregister(view);
+    [view stopLoading];
+    [view removeFromSuperview];
+    [view release];
+}

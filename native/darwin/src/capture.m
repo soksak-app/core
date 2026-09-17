@@ -8,6 +8,7 @@
 // CGWindowListCreateImage 는 macOS 15 부터 컴파일이 거부된다. ScreenCaptureKit 이
 // 대체 인터페이스다.
 #import <Cocoa/Cocoa.h>
+#import <QuartzCore/QuartzCore.h>
 #import "capture.h"
 #import <ScreenCaptureKit/ScreenCaptureKit.h>
 
@@ -17,12 +18,26 @@ static uint64_t captureStopAfter;
 static dispatch_semaphore_t captureCaughtUp;
 static dispatch_queue_t captureQueue;
 static int captureBefore;
+// 프레임을 디스크에 쓰는 직렬 큐와, 쓰기를 기다리는 프레임 수의 상한.
+static dispatch_queue_t captureWriter;
+static dispatch_semaphore_t capturePending;
+static const long kCapturePending = 64;
 
 // 프레임을 받아 파일로 적는다. 프레임이 메시지로 전달되므로 수신 객체가 필요하다.
 @interface SPCapture : NSObject <SCStreamOutput, SCStreamDelegate>
 @property (nonatomic, copy) NSString* directory;
 @property (nonatomic) int written;
 @property (nonatomic) int idle;
+// 완성되지 않은 프레임의 상태별 수. 인덱스는 SCFrameStatus 값이다.
+@property (nonatomic) int *statuses;
+// 받은 완성 프레임 수, 쓰기 큐에 넣은 수, 쓰기 대기 상한 때문에 기다린 횟수, 가장 느린 쓰기(초),
+// 연속한 완성 프레임 사이의 가장 긴 표시 간격(mach 시각). written 과 slowestWrite 는 쓰기 큐가 바꾼다.
+@property (nonatomic) int complete;
+@property (nonatomic) int queued;
+@property (nonatomic) int waited;
+@property (nonatomic) double slowestWrite;
+@property (nonatomic) uint64_t lastShown;
+@property (nonatomic) uint64_t longestGap;
 @end
 
 // displayTime 은 프레임이 화면에 표시된 mach 절대 시각을 읽는다. 없으면 0 이다.
@@ -34,6 +49,27 @@ static uint64_t displayTime(CMSampleBufferRef sample) {
     uint64_t value = 0;
     if (time != NULL) CFNumberGetValue(time, kCFNumberSInt64Type, &value);
     return value;
+}
+
+// frameNumber 는 프레임에 붙은 숫자 정보를 읽는다. 없으면 0 이다.
+static double frameNumber(CMSampleBufferRef sample, SCStreamFrameInfo key) {
+    CFArrayRef list = CMSampleBufferGetSampleAttachmentsArray(sample, false);
+    if (list == NULL || CFArrayGetCount(list) == 0) return 0;
+    CFNumberRef value = CFDictionaryGetValue(CFArrayGetValueAtIndex(list, 0), (__bridge CFStringRef)key);
+    double number = 0;
+    if (value != NULL) CFNumberGetValue(value, kCFNumberDoubleType, &number);
+    return number;
+}
+
+// contentRect 는 버퍼 안에서 창이 그려진 사각형(버퍼 포인트 단위)을 읽는다.
+static CGRect contentRect(CMSampleBufferRef sample) {
+    CFArrayRef list = CMSampleBufferGetSampleAttachmentsArray(sample, false);
+    CGRect rect = CGRectZero;
+    if (list == NULL || CFArrayGetCount(list) == 0) return rect;
+    CFDictionaryRef value = CFDictionaryGetValue(CFArrayGetValueAtIndex(list, 0),
+        (__bridge CFStringRef)SCStreamFrameInfoContentRect);
+    if (value != NULL) CGRectMakeWithDictionaryRepresentation(value, &rect);
+    return rect;
 }
 
 // frameStatus 는 프레임에 붙은 상태를 읽는다. 상태가 없으면 완성된 프레임으로 본다.
@@ -66,40 +102,79 @@ static SCFrameStatus frameStatus(CMSampleBufferRef sample) {
 - (void)write:(CMSampleBufferRef)sample {
     // 창이 다시 그려지지 않으면 프레임은 정해진 간격으로 계속 오되 모두 idle 로
     // 표시되고 이미지가 없다. 이것을 세어 두면 0 장인 이유를 말할 수 있다.
-    if (frameStatus(sample) != SCFrameStatusComplete) {
-        self.idle++;
+    SCFrameStatus status = frameStatus(sample);
+    if (status != SCFrameStatusComplete) {
+        if (status == SCFrameStatusIdle) self.idle++;
+        if ((int)status >= 0 && (int)status < 6) self.statuses[status]++;
         return;
     }
     CVImageBufferRef buffer = CMSampleBufferGetImageBuffer(sample);
     if (buffer == NULL) return;
-    // 프레임을 원시 데이터 그대로 적는다. 여기서 인코딩하면 그 시간 동안 프레임이
-    // 버려지고, 버려진 프레임이 측정 대상이다.
+    self.complete++;
+    uint64_t shown = displayTime(sample);
+    if (self.lastShown != 0 && shown > self.lastShown && shown - self.lastShown > self.longestGap) {
+        self.longestGap = shown - self.lastShown;
+    }
+    self.lastShown = shown;
+    // 처리기가 디스크 쓰기를 기다리면 그동안 스트림이 프레임을 버리고, 버려진 프레임이 측정 대상이다.
+    // 처리기는 프레임을 메모리로 복사만 하고 쓰기는 쓰기 큐가 한다. 쓰기를 기다리는 프레임은
+    // kCapturePending 장까지이며, 그보다 밀리면 처리기가 기다리고 그 횟수를 알린다.
+    if (dispatch_semaphore_wait(capturePending, DISPATCH_TIME_NOW) != 0) {
+        self.waited++;
+        dispatch_semaphore_wait(capturePending, DISPATCH_TIME_FOREVER);
+    }
     CVPixelBufferLockBaseAddress(buffer, kCVPixelBufferLock_ReadOnly);
     size_t width = CVPixelBufferGetWidth(buffer);
     size_t height = CVPixelBufferGetHeight(buffer);
     size_t stride = CVPixelBufferGetBytesPerRow(buffer);
     const uint8_t* base = (const uint8_t*)CVPixelBufferGetBaseAddress(buffer);
-    if (base != NULL) {
-        NSString* path = [self.directory stringByAppendingPathComponent:
-            [NSString stringWithFormat:@"frame-%04d.bgra", self.written + 1]];
-        NSString* pending = [path stringByAppendingString:@".partial"];
-        FILE* file = fopen(pending.UTF8String, "wb");
-        if (file != NULL) {
-            uint32_t head[3] = { (uint32_t)width, (uint32_t)height, (uint32_t)stride };
-            // 파일이 프레임 전체를 담았을 때만 센다. 그래야 개수와 디렉터리가 어긋나지 않는다.
-            // 쓰기에 실패한 파일은 남기지 않는다.
-            bool whole = fwrite(head, sizeof(head), 1, file) == 1 && fwrite(base, stride, height, file) == height;
-            bool closed = fclose(file) == 0;
-            if (!whole || !closed) {
-                fprintf(stderr, "observe: frame %d was not written, %s\n", self.written + 1, strerror(errno));
-                unlink(pending.UTF8String);
-            } else if (rename(pending.UTF8String, path.UTF8String) == 0) {
-                self.written++;
-                if (self.written == captureBefore + 1) dispatch_semaphore_signal(captureFirstFrame);
-            }
-        }
+    if (base == NULL) {
+        CVPixelBufferUnlockBaseAddress(buffer, kCVPixelBufferLock_ReadOnly);
+        dispatch_semaphore_signal(capturePending);
+        return;
+    }
+    // 크기가 바뀌는 창을 재려면 프레임마다 창이 그려진 영역과 배율, 표시 시각이 필요하다.
+    CGRect rect = contentRect(sample);
+    mach_timebase_info_data_t timebase;
+    mach_timebase_info(&timebase);
+    uint32_t head[3] = { (uint32_t)width, (uint32_t)height, (uint32_t)stride };
+    double info[7] = { rect.origin.x, rect.origin.y, rect.size.width, rect.size.height,
+        frameNumber(sample, SCStreamFrameInfoContentScale), frameNumber(sample, SCStreamFrameInfoScaleFactor),
+        (double)shown * timebase.numer / timebase.denom / 1e6 };
+    size_t size = sizeof(head) + sizeof(info) + stride * height;
+    uint8_t *copy = malloc(size);
+    if (copy != NULL) {
+        memcpy(copy, head, sizeof(head));
+        memcpy(copy + sizeof(head), info, sizeof(info));
+        memcpy(copy + sizeof(head) + sizeof(info), base, stride * height);
     }
     CVPixelBufferUnlockBaseAddress(buffer, kCVPixelBufferLock_ReadOnly);
+    if (copy == NULL) {
+        fprintf(stderr, "observe: frame %d was not copied, %s\n", self.queued + 1, strerror(errno));
+        dispatch_semaphore_signal(capturePending);
+        return;
+    }
+    int number = ++self.queued;
+    NSString* path = [self.directory stringByAppendingPathComponent:[NSString stringWithFormat:@"frame-%04d.bgra", number]];
+    dispatch_async(captureWriter, ^{
+        CFTimeInterval began = CACurrentMediaTime();
+        NSString* pending = [path stringByAppendingString:@".partial"];
+        FILE* file = fopen(pending.UTF8String, "wb");
+        // 파일이 프레임 전체를 담았을 때만 센다. 그래야 개수와 디렉터리가 어긋나지 않는다.
+        // 쓰기에 실패한 파일은 남기지 않는다.
+        bool whole = file != NULL && fwrite(copy, size, 1, file) == 1;
+        bool closed = file != NULL && fclose(file) == 0;
+        if (!whole || !closed) {
+            fprintf(stderr, "observe: frame %d was not written, %s\n", number, strerror(errno));
+            unlink(pending.UTF8String);
+        } else if (rename(pending.UTF8String, path.UTF8String) == 0) {
+            self.written++;
+            if (self.written == captureBefore + 1) dispatch_semaphore_signal(captureFirstFrame);
+        }
+        free(copy);
+        self.slowestWrite = MAX(self.slowestWrite, CACurrentMediaTime() - began);
+        dispatch_semaphore_signal(capturePending);
+    });
 }
 
 - (void)stream:(SCStream*)stream didStopWithError:(NSError*)error {
@@ -119,7 +194,9 @@ static SPCapture* captureSink = nil;
 //
 // 조회는 비동기이므로 답을 기다린다. 기다리지 않으면 그 사이에 시작한 캡처가 조용히
 // 아무 일도 하지 않고, 프레임이 0 장인 이유가 어디에도 남지 않는다.
-void sp_capture_open(long windowNumber) {
+void sp_capture_open(long windowNumber, bool display) {
+    // 이전 대상을 지운다. 조회에 실패하면 이전 대상을 녹화하지 않고 녹화가 시작되지 않는다.
+    captureFilter = nil;
     dispatch_semaphore_t answered = dispatch_semaphore_create(0);
     [SCShareableContent getShareableContentWithCompletionHandler:
         ^(SCShareableContent* content, NSError* error) {
@@ -131,7 +208,25 @@ void sp_capture_open(long windowNumber) {
         }
         for (SCWindow* window in content.windows) {
             if ((long)window.windowID != windowNumber) continue;
-            SCContentFilter* filter = [[SCContentFilter alloc] initWithDesktopIndependentWindow:window];
+            SCContentFilter* filter = nil;
+            if (display) {
+                // 창의 중심이 있는 디스플레이에서 이 앱의 창만 담는다. 다른 앱의 창은 기록하지 않는다.
+                CGPoint centre = CGPointMake(CGRectGetMidX(window.frame), CGRectGetMidY(window.frame));
+                for (SCDisplay* candidate in content.displays) {
+                    if (!CGRectContainsPoint(candidate.frame, centre)) continue;
+                    NSMutableArray* own = [NSMutableArray array];
+                    if (window.owningApplication != nil) [own addObject:window.owningApplication];
+                    filter = [[SCContentFilter alloc] initWithDisplay:candidate includingApplications:own exceptingWindows:@[]];
+                    break;
+                }
+                if (filter == nil) {
+                    fprintf(stderr, "observe: window %ld is on no display\n", windowNumber);
+                    dispatch_semaphore_signal(answered);
+                    return;
+                }
+            } else {
+                filter = [[SCContentFilter alloc] initWithDesktopIndependentWindow:window];
+            }
             SCStreamConfiguration* config = [[SCStreamConfiguration alloc] init];
             // 장치 픽셀을 유지하여 가는 선의 색상이 축소 과정에서 혼합되지 않도록 한다.
             config.width = (size_t)(filter.contentRect.size.width * filter.pointPixelScale);
@@ -168,8 +263,21 @@ void sp_capture_start(const char* directory) {
     // 수신 객체는 한 번만 만든다. 녹화마다 새로 만들면 프레임 번호가 1 부터 다시
     // 시작해 앞선 녹화가 적은 파일을 덮어쓴다.
     if (captureSink == nil) captureSink = [[SPCapture alloc] init];
+    if (!captureWriter) {
+        captureWriter = dispatch_queue_create("sp.capture.writer", DISPATCH_QUEUE_SERIAL);
+        capturePending = dispatch_semaphore_create(kCapturePending);
+    }
     captureBefore = captureSink.written;
+    captureSink.queued = captureSink.written;
+    captureSink.waited = 0;
     captureSink.idle = 0;
+    captureSink.complete = 0;
+    captureSink.slowestWrite = 0;
+    captureSink.lastShown = 0;
+    captureSink.longestGap = 0;
+    static int statuses[6];
+    memset(statuses, 0, sizeof statuses);
+    captureSink.statuses = statuses;
     if (captureFirstFrame) dispatch_release(captureFirstFrame);
     captureFirstFrame = dispatch_semaphore_create(0);
     captureSink.directory = [NSString stringWithUTF8String:directory];
@@ -235,13 +343,33 @@ int sp_capture_stop(void) {
     }];
     dispatch_semaphore_wait(stopped, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
     dispatch_sync(captureQueue, ^{});
+    // 복사해 둔 프레임을 모두 쓴 뒤 센다.
+    dispatch_sync(captureWriter, ^{});
     captureStream = nil;
     dispatch_release(captureQueue);
     dispatch_release(stopped);
     [stream release];
+    // 기록되지 않은 프레임의 이유를 남긴다. blank 는 창이 보이지 않고, suspended 는 스트림이 멈췄다.
+    int *counts = captureSink.statuses;
+    mach_timebase_info_data_t timebase;
+    mach_timebase_info(&timebase);
+    fprintf(stderr, "observe: %d complete frames received, %d written, %d waited for the writer, "
+        "slowest write %.1fms, longest display gap %.1fms\n",
+        captureSink.complete, captureSink.written - captureBefore, captureSink.waited, captureSink.slowestWrite * 1000,
+        (double)captureSink.longestGap * timebase.numer / timebase.denom / 1e6);
+    if (counts[SCFrameStatusBlank] || counts[SCFrameStatusSuspended]) {
+        fprintf(stderr, "observe: %d blank and %d suspended frames were not written\n",
+            counts[SCFrameStatusBlank], counts[SCFrameStatusSuspended]);
+    }
     if (captureSink.written == captureBefore && captureSink.idle > 0) {
         fprintf(stderr, "observe: the window was not redrawn during %d frames; "
             "the display is off or the window is not on screen\n", captureSink.idle);
     }
     return captureSink.written - captureBefore;
+}
+
+double sp_capture_longest_gap(void) {
+    mach_timebase_info_data_t timebase;
+    mach_timebase_info(&timebase);
+    return (double)captureSink.longestGap * timebase.numer / timebase.denom / 1e6;
 }

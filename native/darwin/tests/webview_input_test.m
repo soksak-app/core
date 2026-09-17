@@ -43,11 +43,12 @@ static void drain(WKWebView *view) {
     until(^BOOL { return done; });
 }
 
-typedef struct { BOOL done; bool ok; } SPActivation;
+typedef struct { BOOL done; sp_activate_result result; char frontmost[256]; } SPActivation;
 
-static void activated(void *context, bool ok) {
+static void activated(void *context, sp_activate_result result, const char *frontmost) {
     SPActivation *state = context;
-    state->ok = ok;
+    state->result = result;
+    snprintf(state->frontmost, sizeof state->frontmost, "%s", frontmost ?: "");
     state->done = YES;
 }
 
@@ -144,10 +145,12 @@ int main(int argc, const char **argv) { @autoreleasepool {
     }
     [window orderFront:nil];
     for (WKWebView *view in views) until(^BOOL { return [evaluate(view, @"Boolean(window.probe)") boolValue]; });
-    __block SPActivation activation = {NO, false};
+    __block SPActivation activation = {NO, SP_ACTIVATE_DONE, ""};
     sp_input_activate(window, 5, activated, &activation);
     until(^BOOL { return activation.done; });
-    require(activation.ok && window.isKeyWindow, @"the window did not become the key window of the active application");
+    require(activation.result == SP_ACTIVATE_DONE, [NSString stringWithFormat:
+        @"the window did not become the key window of the active application (%d, frontmost %s)",
+        activation.result, activation.frontmost]);
     for (WKWebView *view in views) {
         __block BOOL painted = NO;
         [view _doAfterNextPresentationUpdate:^{ painted = YES; }];

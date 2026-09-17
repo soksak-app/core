@@ -4,8 +4,9 @@
   "mark": "www",
   "icon": "<rect x=\"2\" y=\"3\" width=\"12\" height=\"10\" rx=\"2\"/><path d=\"M2 6.25h12M4.3 4.6h.01M6.1 4.6h.01\"/>",
   "surface": {
-    "url": "https://www.google.com"
+    "page": "ui/browser.html"
   },
+  "home": "https://www.google.com",
   "preview": {
     "ink": "--rail"
   },
@@ -26,5 +27,136 @@
       "id": "browser.history",
       "name": "히스토리"
     }
-  ]
+  ],
+  "exposes": {
+    "status": [
+      {
+        "name": "browser.location",
+        "description": "The state of the document region: address, title, loading and its progress from 0 to 1, whether history can go back or forward, the last load error or null, and the document scroll position in CSS pixels.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "loading": {
+              "type": "boolean"
+            },
+            "progress": {
+              "type": "number"
+            },
+            "canGoBack": {
+              "type": "boolean"
+            },
+            "canGoForward": {
+              "type": "boolean"
+            },
+            "error": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "scroll": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "number"
+                },
+                "y": {
+                  "type": "number"
+                }
+              }
+            }
+          }
+        }
+      }
+    ],
+    "commands": [
+      {
+        "name": "browser.navigate",
+        "description": "Opens an http or https address in the document region.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "browser.back",
+        "description": "Goes back in the document history and returns whether there was an entry to go to.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "boolean"
+        }
+      },
+      {
+        "name": "browser.forward",
+        "description": "Goes forward in the document history and returns whether there was an entry to go to.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "boolean"
+        }
+      },
+      {
+        "name": "browser.reload",
+        "description": "Reloads the document and returns whether a document was loaded.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "boolean"
+        }
+      },
+      {
+        "name": "browser.stop",
+        "description": "Stops any load in progress and returns true.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "boolean"
+        }
+      }
+    ],
+    "dom": [
+      {
+        "name": "browser.address",
+        "description": "The address field."
+      },
+      {
+        "name": "browser.back",
+        "description": "The button that goes back."
+      },
+      {
+        "name": "browser.forward",
+        "description": "The button that goes forward."
+      },
+      {
+        "name": "browser.reload",
+        "description": "The button that reloads the document, or stops loading while it loads."
+      },
+      {
+        "name": "browser.document",
+        "description": "The element the document region occupies."
+      }
+    ]
+  }
 }

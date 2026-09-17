@@ -77,7 +77,8 @@ HTTP 요청 줄은 최대 길이보다 큰 길이 접두 또는 올바르지 않
 | --- | --- | --- |
 | `diagnostics.fixture` | `{window}` | 빈 폴더 설정을 가진 `<config-dir>/test-project`를 만들고, 다른 프로젝트를 제거하고, 공통 설정을 초기화하고, 창에서 그 프로젝트를 연 뒤 `{root}`를 반환한다 |
 | `diagnostics.drag` | `{window, axis, line, dx, dy, ms, times, capture?}` | `axis`의 경계 `line`을 `ms` 동안 `dx, dy`만큼 끌었다가 되돌리는 왕복을 `times`번 실행한다. 단계 시각은 호스트가 정한다. 동작이 화면에 표시된 뒤 페이지의 끌기 결과 `{from, steps, took, asked, late, deepest}`를 반환한다. `capture: true`이면 호스트가 창도 기록하고 프레임 폴더 `frames`를 더한다. 끌기가 실패하면 호스트가 기록을 멈추고 폴더를 지운다 |
-| `diagnostics.capture.stop` | `{window}` | 캡처를 중지하고 `{frames, count}`를 반환한다 |
+| `diagnostics.capture.start` | `{window}` | 창 녹화를 시작하고 첫 프레임이 기록된 뒤 프레임 폴더 `{frames}`를 반환한다 |
+| `diagnostics.capture.stop` | `{window}` | 캡처를 중지하고 `{frames, count, longestGap}`를 반환한다. `longestGap`은 연속한 기록 프레임 사이의 가장 긴 표시 간격(ms)이다 |
 | `diagnostics.knob` | `{window, name, value}` | 합성기 테스트 값(`latency`, `skew`)을 설정한다 |
 | `diagnostics.transcript` | `{window, on}` | 호스트 요청, 응답, 페이지 검증 줄에 대한 `diagnostics.log` 알림 `{window, line}`을 시작하거나 중지한다 |
 

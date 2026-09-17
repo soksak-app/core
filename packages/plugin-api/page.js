@@ -2,13 +2,23 @@
 //
 // 표면과 모달은 각각 별도 문서라 메인 페이지의 스타일시트를 상속하지 않는다. 호스트가
 // 보낸 테마 토큰을 자기 루트에 설정한다.
-import { page } from "@soksak/runtime";
+import { page as runtimePage } from "@soksak/runtime";
 import {
-  EXPOSURE, MANIFEST, SURFACE_CORE, createExpose, declarationMap, modulePath, pagePackage, validateExposureFile,
-  validateManifest,
+  EXPOSURE, MANIFEST, SURFACE_CORE, attachRegion, createExpose, declarationMap, modulePath, orderedSidecar, pagePackage,
+  validateExposureFile, validateManifest,
 } from "@soksak/plugin-api";
 
-export { page };
+/* 사이드카 이름마다 하나의 포트. 같은 사이드카로 보내는 모든 전송이 한 순서를 따른다. */
+const sidecars = new Map();
+
+/** 런타임의 page. 사이드카 전송은 호출한 순서대로 전달된다. 네이티브 호스트가 없으면 null 이다. */
+export const page = runtimePage ? Object.freeze({
+  ...runtimePage,
+  sidecar(name) {
+    if (!sidecars.has(name)) sidecars.set(name, orderedSidecar(runtimePage.sidecar(name)));
+    return sidecars.get(name);
+  },
+}) : null;
 
 /**
  * 받은 테마를 이 문서의 루트에 설정한다. 값이 바뀌면 다시 호출된다.
@@ -38,14 +48,19 @@ async function fetchJson(path) {
   return response.json();
 }
 
-/**
- * 이 문서가 등록할 수 있는 공개 항목. 문서는 `modules/<패키지>/...` 에 있으므로 같은
- * 패키지의 plugin.json 선언을 읽고, 코어 선언 중 표면 문서 항목(core.surface.*)을 더한다.
- */
-async function ownDeclarations() {
+/** 이 문서가 속한 플러그인 패키지의 plugin.json. 문서는 `modules/<패키지>/...` 에 있다. */
+export async function ownManifest() {
   const name = pagePackage(location.pathname);
   if (!name) throw new Error(`${location.pathname} is not a plugin page`);
-  const plugin = validateManifest(await fetchJson(`/${modulePath(name, MANIFEST)}`)).exposes ?? {};
+  return validateManifest(await fetchJson(`/${modulePath(name, MANIFEST)}`));
+}
+
+/**
+ * 이 문서가 등록할 수 있는 공개 항목. 같은 패키지의 plugin.json 선언에 코어 선언 중 표면
+ * 문서 항목(core.surface.*)을 더한다.
+ */
+async function ownDeclarations() {
+  const plugin = (await ownManifest()).exposes ?? {};
   const core = validateExposureFile(await fetchJson(`/${EXPOSURE}`)).exposes;
   const surfaceCore = Object.fromEntries(Object.entries(core)
     .map(([key, list]) => [key, list.filter((entry) => entry.name.startsWith(SURFACE_CORE))]));
@@ -54,6 +69,12 @@ async function ownDeclarations() {
 
 /** 표면 페이지의 공개 항목 등록 함수. 네이티브 호스트가 없으면 null 이다. */
 export const expose = page?.exposure ? createExpose(page.exposure, ownDeclarations) : null;
+
+/**
+ * 이 표면 페이지의 요소 element 에 문서 영역 name 을 붙인다. 네이티브 호스트가 없으면 null 이다.
+ * 반환 값은 packages/plugin-api/document-region.js 의 attachRegion 결과다.
+ */
+export const attachDocument = page?.document ? (element, name) => attachRegion(page.document, element, name) : null;
 
 /* 표면 문서의 입력 기록. docs/spec/exposure.md 의 core.surface.input 이다. */
 const INPUT_TYPES = ["pointerdown", "pointerup", "pointermove", "click", "wheel", "keydown"];

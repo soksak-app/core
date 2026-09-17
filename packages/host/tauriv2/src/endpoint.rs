@@ -63,6 +63,7 @@ const TRANSCRIPT: &str = "diagnostics.transcript";
 const DIAGNOSTICS: &[&str] = &[
     "diagnostics.fixture",
     "diagnostics.drag",
+    "diagnostics.capture.start",
     "diagnostics.capture.stop",
     "diagnostics.knob",
     TRANSCRIPT,

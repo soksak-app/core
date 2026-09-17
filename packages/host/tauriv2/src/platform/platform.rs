@@ -76,6 +76,8 @@ pub enum Delivery {
     Rejected,
     /// 버튼 없는 이동이며 창이 키 창이 아니다.
     Inactive,
+    /// 누름이나 뗌을 전달했지만 문서가 제한 시간 안에 받지 않았다.
+    Unreceived,
 }
 
 /// 네이티브 입력으로 전달하는 키 동작.
@@ -100,6 +102,16 @@ pub struct Hit {
 /// 운영체제가 제공하는 창, 웹뷰, 표면 배치, 도형, 입력, 캡처, Dock, 디렉터리 식별, 엔드포인트 기능.
 ///
 /// 구현하지 않은 기능은 "not implemented" 오류를 반환한다.
+/// 표면 뷰포트의 CSS 픽셀 여백(왼쪽, 위, 오른쪽, 아래).
+#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Deserialize)]
+#[serde(default)]
+pub struct Insets {
+    pub left: f64,
+    pub top: f64,
+    pub right: f64,
+    pub bottom: f64,
+}
+
 pub trait Platform: Send + Sync {
     // 창
 
@@ -145,6 +157,23 @@ pub trait Platform: Send + Sync {
     fn round_corners(&self, view: &PlatformWebview, radius: f64) -> Result<(), String>;
     /// 웹뷰를 창의 첫 응답자로 만들어 키보드 입력을 받게 한다. 창이 거절하면 오류를 반환한다.
     fn focus_webview(&self, view: &PlatformWebview) -> Result<(), String>;
+
+    // 문서 영역
+
+    /// 표면 웹뷰 surface 안에 외부 문서 웹뷰를 숨긴 상태로 만든다. store 는 영구 데이터 저장소의
+    /// 이름이다. changed 는 상태 JSON({url, title, loading, progress, canGoBack, canGoForward,
+    /// error, scroll}) 을 메인 스레드에서 받는다. 메인 스레드에서 호출한다.
+    fn create_document(&self, surface: Handle, store: &str, changed: Box<dyn Fn(String)>) -> Result<Handle, String>;
+    /// http 또는 https 주소를 연다. 그 밖의 주소이면 false 를 반환한다. 메인 스레드에서 호출한다.
+    fn load_document(&self, document: Handle, url: &str) -> Result<bool, String>;
+    /// 뒤로 0, 앞으로 1, 다시 읽기 2, 멈춤 3 을 실행하고 실행했는지 반환한다. 메인 스레드에서 호출한다.
+    fn go_document(&self, document: Handle, action: i32) -> Result<bool, String>;
+    /// 표면 뷰포트의 CSS 픽셀 여백으로 문서 영역을 정한다. 메인 스레드에서 호출한다.
+    fn place_document(&self, document: Handle, insets: Insets, visible: bool) -> Result<(), String>;
+    /// 대화 상자가 열린 동안 문서를 흐리게 표시한다. 메인 스레드에서 호출한다.
+    fn set_document_background(&self, document: Handle, enabled: bool) -> Result<(), String>;
+    /// 문서 웹뷰를 제거한다. 이후 changed 는 호출되지 않는다. 메인 스레드에서 호출한다.
+    fn close_document(&self, document: Handle) -> Result<(), String>;
     /// 입력 체인에서 웹뷰를 식별하는 뷰 주소를 반환한다.
     fn view_id(&self, view: &PlatformWebview) -> Result<Handle, String>;
 
@@ -190,19 +219,32 @@ pub trait Platform: Send + Sync {
     /// 입력 감시기를 제거한다.
     fn unwatch_input(&self, monitor: Handle) -> Result<(), String>;
     /// 창에 포인터 입력을 전달하고 결과를 반환한다. activate 는 사용하지 않는다. 메인 스레드에서 호출한다.
-    fn input_pointer(&self, window: Handle, pointer: Pointer) -> Result<Delivery, String>;
+    /// 누름과 뗌은 좌표의 문서가 그 이벤트를 받거나 receive 가 지난 뒤 done 을 메인 스레드에서
+    /// 호출한다. 다른 단계는 전달한 즉시 호출한다.
+    fn input_pointer(
+        &self,
+        window: Handle,
+        pointer: Pointer,
+        receive: Duration,
+        done: Box<dyn FnOnce(Delivery) + Send>,
+    ) -> Result<(), String>;
     /// 애플리케이션을 활성화하고 창을 키 창으로 만든다. 창의 웹뷰가 활성 상태를 반영하면
-    /// done(true), timeout 안에 활성화되지 않으면 done(false) 를 메인 스레드에서 호출한다.
+    /// done(Ok), timeout 안에 끝나지 않으면 멈춘 단계를 적은 done(Err) 를 메인 스레드에서 호출한다.
     /// 메인 스레드에서 호출한다.
-    fn input_activate(&self, window: Handle, timeout: Duration, done: Box<dyn FnOnce(bool) + Send>) -> Result<(), String>;
+    fn input_activate(
+        &self,
+        window: Handle,
+        timeout: Duration,
+        done: Box<dyn FnOnce(Result<(), String>) + Send>,
+    ) -> Result<(), String>;
     /// 창에 키 입력을 전달하고 전달 여부를 반환한다. 메인 스레드에서 호출한다.
     fn input_key(&self, window: Handle, key: &Key) -> Result<bool, String>;
 
     // 캡처
 
     #[cfg(feature = "diagnostics")]
-    /// 창 번호의 창을 캡처 대상으로 준비한다.
-    fn capture_open(&self, window_number: isize) -> Result<(), String>;
+    /// 창 번호의 창을 캡처 대상으로 준비한다. display 이면 창이 있는 디스플레이에서 이 앱의 창을 캡처한다.
+    fn capture_open(&self, window_number: isize, display: bool) -> Result<(), String>;
     #[cfg(feature = "diagnostics")]
     /// directory 에 프레임 기록을 시작한다.
     fn capture_start(&self, directory: &str) -> Result<(), String>;
@@ -212,6 +254,9 @@ pub trait Platform: Send + Sync {
     #[cfg(feature = "diagnostics")]
     /// 기록을 끝내고 기록한 프레임 수를 반환한다.
     fn capture_stop(&self) -> Result<i32, String>;
+    #[cfg(feature = "diagnostics")]
+    /// 마지막으로 멈춘 기록에서 연속한 프레임 사이의 가장 긴 표시 간격(ms).
+    fn capture_longest_gap(&self) -> Result<f64, String>;
 
     // Dock
 

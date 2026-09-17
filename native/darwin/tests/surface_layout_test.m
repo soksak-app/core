@@ -1,11 +1,11 @@
 // 표시 대기가 메인 문서와 같은 출처의 보이는 문서만 기다리고, 외부 문서와 숨긴 문서는 기다리지
-// 않는지 검사한다. 각 웹뷰의 웹 프로세스를 스크립트로 붙잡은 동안 대기가 끝나는 시간을 잰다.
+// 않는지 검사한다. 각 웹뷰의 웹 프로세스를 스크립트로 붙잡은 동안 대기가 그 스크립트보다 먼저 끝나는지 본다.
 // 애플리케이션을 활성화하지 않는다.
 #import <Cocoa/Cocoa.h>
 #import "surface_layout.h"
 #import "private/webkit.h"
 
-static const NSTimeInterval kBusy = 1.5;
+static const NSTimeInterval kBusy = 3;
 
 static int failures = 0;
 
@@ -67,24 +67,27 @@ static WKWebView *page(NSWindow *window, WKWebViewConfiguration *configuration, 
     return view;
 }
 
-// busy 의 웹 프로세스를 붙잡은 뒤 메인 웹뷰 크기를 바꾸고, 표시 대기가 끝날 때까지의 시간을 반환한다.
-static NSTimeInterval waitWhileBusy(WKWebView *main, WKWebView *busy, SPBusySignal *signal) {
+typedef struct { NSTimeInterval took; BOOL beforeRelease; } SPWait;
+
+// busy 의 웹 프로세스를 붙잡은 뒤 메인 웹뷰 크기를 바꾸고, 표시 대기가 끝날 때까지의 시간과 그 대기가
+// busy 의 스크립트가 끝나기 전에 끝났는지 반환한다. 순서로 판정하므로 기계 부하와 무관하다.
+static SPWait waitWhileBusy(WKWebView *main, WKWebView *busy, SPBusySignal *signal) {
     signal.started = NO;
     __block BOOL released = NO;
+    __block BOOL presented = NO;
+    __block BOOL beforeRelease = NO;
     [busy evaluateJavaScript:[NSString stringWithFormat:
         @"webkit.messageHandlers.busy.postMessage(0); {const end=Date.now()+%d; while(Date.now()<end){}} true",
-        (int)(kBusy * 1000)] completionHandler:^(id value, NSError *error) { released = YES; }];
+        (int)(kBusy * 1000)] completionHandler:^(id value, NSError *error) { beforeRelease = presented; released = YES; }];
     until(^BOOL { return signal.started; });
     NSRect frame = main.frame;
     frame.size.width -= 1;
     main.frame = frame;
-    __block BOOL presented = NO;
     NSDate *start = [NSDate date];
-    surfaceLayoutAfterPresentation(main, ^{ presented = YES; });
-    until(^BOOL { return presented; });
-    NSTimeInterval took = -start.timeIntervalSinceNow;
-    until(^BOOL { return released; });
-    return took;
+    __block NSTimeInterval took = 0;
+    surfaceLayoutAfterPresentation(main, ^{ took = -start.timeIntervalSinceNow; presented = YES; });
+    until(^BOOL { return presented && released; });
+    return (SPWait){ took, beforeRelease };
 }
 
 int main(void) { @autoreleasepool {
@@ -109,18 +112,18 @@ int main(void) { @autoreleasepool {
     [main _doAfterNextPresentationUpdate:^{ painted = YES; }];
     until(^BOOL { return painted; });
 
-    NSTimeInterval externalWait = waitWhileBusy(main, external, signal);
-    check(externalWait < kBusy / 2,
-        [NSString stringWithFormat:@"a busy external document does not delay the presentation wait (%.3fs)", externalWait]);
+    SPWait externalWait = waitWhileBusy(main, external, signal);
+    check(externalWait.beforeRelease,
+        [NSString stringWithFormat:@"a busy external document does not delay the presentation wait (%.3fs)", externalWait.took]);
 
-    NSTimeInterval applicationWait = waitWhileBusy(main, application, signal);
-    check(applicationWait >= kBusy * 0.8,
-        [NSString stringWithFormat:@"the wait includes a visible document of the main origin (%.3fs)", applicationWait]);
+    SPWait visibleWait = waitWhileBusy(main, application, signal);
+    check(!visibleWait.beforeRelease,
+        [NSString stringWithFormat:@"the wait includes a visible document of the main origin (%.3fs)", visibleWait.took]);
 
     application.hidden = YES;
-    NSTimeInterval hiddenWait = waitWhileBusy(main, application, signal);
-    check(hiddenWait < kBusy / 2,
-        [NSString stringWithFormat:@"a hidden document of the main origin does not delay the wait (%.3fs)", hiddenWait]);
+    SPWait hiddenWait = waitWhileBusy(main, application, signal);
+    check(hiddenWait.beforeRelease,
+        [NSString stringWithFormat:@"a hidden document of the main origin does not delay the wait (%.3fs)", hiddenWait.took]);
 
     [window close];
     [window release];

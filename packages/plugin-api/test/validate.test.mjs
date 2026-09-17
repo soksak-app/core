@@ -31,7 +31,7 @@ test("a manifest with a page surface or with sections only is accepted", () => {
   assert.equal(validateManifest(card), card);
   assert.equal(validateManifest(side), side);
   assert.equal(validateManifest({ ...card, preview: { ink: "--surface-fg" } }).preview.ink, "--surface-fg");
-  assert.equal(validateManifest({ ...card, sidecars: undefined, surface: { url: "https://example.com" } }).id, "probe");
+  assert.equal(validateManifest({ ...card, home: "https://example.com/start" }).home, "https://example.com/start");
 });
 
 test("a manifest is rejected for each invalid field", () => {
@@ -39,8 +39,12 @@ test("a manifest is rejected for each invalid field", () => {
     [{ ...card, id: "Probe" }, /invalid id/],
     [{ ...card, name: "" }, /name is required/],
     [{ ...card, extra: 1 }, /unknown field extra/],
-    [{ ...card, surface: { url: "https://a", page: "b" } }, /exactly one/],
-    [{ ...card, surface: { url: "file:///etc" } }, /http or https/],
+    [{ ...card, surface: { url: "https://a" } }, /unknown field url/],
+    [{ ...card, surface: { url: "https://a", page: "b" } }, /unknown field url/],
+    [{ ...card, surface: {} }, /surface requires a page/],
+    [{ ...card, home: "file:///etc" }, /home must be an http or https address/],
+    [{ ...card, home: "https:///" }, /home must be an http or https address/],
+    [{ ...side, home: "https://example.com" }, /home requires a surface/],
     [{ ...card, surface: { page: "../x.html" } }, /inside the package/],
     [{ ...card, surface: { page: "/x.html" } }, /inside the package/],
     [{ ...card, mark: undefined }, /mark is required/],
@@ -48,7 +52,7 @@ test("a manifest is rejected for each invalid field", () => {
     [{ ...side, sections: [{ id: "other.list", name: "x" }] }, /must be side.<name>/],
     [{ ...side, sections: [side.sections[0], side.sections[0]] }, /duplicate section/],
     [{ id: "empty", name: "Empty" }, /surface or sections/],
-    [{ ...card, surface: { url: "https://example.com" } }, /sidecars require a page surface/],
+    [{ ...side, sidecars: ["@scope/sidecar-worker"] }, /sidecars require a surface/],
     [{ ...card, sidecars: ["Worker"] }, /expected sidecar package names/],
     [{ ...card, preview: { ink: "red" } }, /preview.ink must be a theme token/],
     [{ ...card, preview: { ink: "--rail", fill: "--bg" } }, /unknown field fill/],

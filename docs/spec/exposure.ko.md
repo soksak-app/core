@@ -2,7 +2,7 @@
 
 [English](exposure.md)
 
-코어, 플러그인 API, 셸 플러그인, macOS 호스트가 이 명세를 구현하며 [기능 상태](../features.ko.md)가 검증 결과를 기록한다.
+코어, 플러그인 API, 셸·브라우저 플러그인, macOS 호스트가 이 명세를 구현하며 [기능 상태](../features.ko.md)가 검증 결과를 기록한다.
 
 코어(워크벤치와 네이티브 호스트)는 선언된 상태 값, 명령, DOM 요소를 [로컬 엔드포인트](endpoint.ko.md)로 외부 클라이언트에 공개한다. 임의 코드를 실행하는 메서드는 없다.
 
@@ -59,7 +59,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 
 ## 등록
 
-워크벤치는 코어 항목을 메인 페이지의 등록소에 등록한다. 플러그인 표면 페이지는 `@soksak/plugin-api/page`로 항목을 등록한다.
+워크벤치는 코어 항목을 메인 페이지의 등록소에 등록한다. 플러그인 표면 페이지는 `@soksak/plugin-api/page`로 항목을 등록한다. 코어 명령은 명령이 예약한 판의 그리기가 끝난 뒤 답한다. 배치를 바꾸는 명령 뒤에 배치를 읽는 쪽은 그려진 배치를 읽는다.
 
 | 함수 | 등록 대상 |
 | --- | --- |
@@ -99,17 +99,18 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 
 | 종류 | 이름 | 의미 |
 | --- | --- | --- |
-| status | `host.window` | `{frame, content, scale, key, active, children, controls, surfaces, modal}`: 창 프레임, 콘텐츠 크기, 백킹 배율, 키 창 여부, 애플리케이션 활성 여부, 자식 OS 창 수, `hidden`을 포함한 창 단추 프레임, 네이티브 표면 `{id, frame, visible, order}`, 열린 네이티브 모달 `{id, mode, shown, frame, order, background}` 또는 `null` |
+| status | `host.window` | `{frame, content, scale, maximized, key, active, children, controls, surfaces, documents, modal}`: 창 프레임, 콘텐츠 크기, 백킹 배율, 프레임이 최대화 프레임인지, 키 창 여부, 애플리케이션 활성 여부, 자식 OS 창 수, `hidden`을 포함한 창 단추 프레임, 네이티브 표면 `{id, frame, visible, order}`, [문서 영역](native-surfaces.ko.md#문서-영역) `{surface, document, frame, visible, order}`, 열린 네이티브 모달 `{id, mode, shown, frame, order, background}` 또는 `null` |
 | status | `host.windows` | `windows.list` 결과. 창이 열리거나 닫힐 때와 창의 제목, 프로젝트, 키 상태, 페이지 준비 상태가 바뀔 때 바뀐다 |
-| status | `host.screens` | `[{x, y, width, height, scale}]`: 화면 좌표의 디스플레이와 백킹 배율 |
+| status | `host.screens` | `[{x, y, width, height, scale, visible}]`: 화면 좌표의 디스플레이와 백킹 배율, 그리고 메뉴 막대와 Dock 을 뺀 영역 `visible`(최대화한 창의 프레임) |
 | status | `host.dock` | 애플리케이션 Dock 메뉴 항목 제목의 순서 목록 |
 | command | `host.window.close` | 창의 일반 닫기 동작으로 창을 닫는다 |
 | command | `host.window.move` | 창 프레임 원점을 화면 좌표 `{x, y}`로 옮긴다 |
 | command | `host.window.maximize` | 창을 최대화한다. `{on: false}`이면 원래 크기로 되돌린다 |
+| command | `host.window.fullscreen` | 창을 별도 Space 의 전체 화면으로 전환한다. `{on: false}`이면 전체 화면을 끝낸다 |
 | command | `host.window.resize` | 콘텐츠 영역 크기를 `{width, height}`로 바꾼다 |
 | command | `host.window.reload` | 메인 페이지를 다시 로드하고 새 페이지가 준비를 알린 뒤 완료한다. 10초 안에 알리지 않으면 1005다 |
 | command | `host.window.presented` | 메인 페이지와 표시 중인 애플리케이션 문서가 현재 배치를 화면에 표시한 뒤 완료된다 |
-| command | `host.hit` | 창 좌표의 점 `{x, y}`를 소유한 대상을 반환한다: `{kind: "page"}`, `{kind: "surface", surface}`, 또는 `{kind: "native", identifier}` |
+| command | `host.hit` | 창 좌표의 점 `{x, y}`를 소유한 대상을 반환한다: `{kind: "page"}`, `{kind: "surface", surface}`, 문서 영역이면 `{kind: "document", surface, document}`, 또는 `{kind: "native", identifier}` |
 | command | `host.dock.select` | 제목이 `{title}`인 Dock 메뉴 항목을 실행한다 |
 | command | `host.quit` | 대기 중인 저장을 포함한 일반 애플리케이션 종료를 요청한다 |
 
@@ -133,8 +134,9 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 호스트는 `input.pointer`와 `input.key`를 네이티브 이벤트로 전달하며 페이지는 신뢰 이벤트를 받는다. `activate: true`인 `move`를 제외하면 애플리케이션을 활성화하지 않는다. macOS에서는 다음과 같다.
 
 - 키와 스크롤은 `-[NSWindow sendEvent:]`로 보낸다. AppKit은 비활성 창의 누름을 뷰에 전달하지 않으므로 누름·끌기·뗌은 좌표의 뷰에 보낸다.
+- 웹뷰에 대한 `down`과 `up`은 그 웹뷰의 문서가 신뢰 `pointerdown` 또는 `pointerup`을 받은 뒤 반환한다. 페이지가 볼 수 없는 별도 WebKit content world의 스크립트가 수신을 알린다. 입력 칸에 초점이 있으면 WebKit은 마우스 이벤트를 먼저 입력기에 비동기로 넘기므로, 이렇게 하지 않으면 이어서 보낸 누름과 뗌이 문서에 반대 순서로 도착할 수 있다. 문서가 2초 안에 받지 않으면 1005를 반환한다. `scroll`은 좌표의 웹뷰가 현재 상태를 표시한 뒤 전달한다. WebKit은 스크롤 트리가 표시되기 전에 받은 휠 이벤트로 새 문서를 스크롤하지 않기 때문이다. 웹뷰가 2초 안에 표시하지 않으면 1005를 반환한다.
 - WebKit은 창이 키 창일 때만 호버(`pointerover`, 버튼 없는 `pointermove`, `:hover`)를 갱신한다. 키 창이 아닌 창에 대한 `move`는 1006을 반환한다.
-- `activate: true`이면 호스트가 애플리케이션을 활성화하고 창을 키 창으로 만든 뒤, 창의 모든 웹뷰가 활성 상태를 웹 프로세스에 보낼 때까지 기다렸다가 이동을 전달한다. 사용자가 쓰고 있는 애플리케이션의 키보드 포커스를 가져온다. 시스템이 5초 안에 애플리케이션을 활성화하지 않으면 1006을 반환한다.
+- `activate: true`이면 호스트가 애플리케이션을 활성화하고 창을 키 창으로 만든 뒤, 창의 모든 웹뷰가 활성 상태를 웹 프로세스에 보낼 때까지 기다렸다가 이동을 전달한다. 사용자가 쓰고 있는 애플리케이션의 키보드 포커스를 가져온다. 활성화가 5초 안에 끝나지 않으면 멈춘 단계를 적은 1006을 반환한다. 단계는 시스템이 애플리케이션을 활성화하지 않음, 창이 키 창이 되지 않음, 웹뷰가 활성 상태를 반영하지 않음, 반영 전에 창이 활성 상태를 잃음이다. 웹뷰 단계를 뺀 메시지에는 최전면 애플리케이션을 적는다.
 
 실제 입력 경로를 검사하는 테스트는 `input.pointer`와 `input.key`만 사용한다. 테스트는 상태 준비에만 `dom.act`를 사용한다.
 
@@ -144,7 +146,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 
 | 방향 | 메시지 | 내용 |
 | --- | --- | --- |
-| 호스트 → 메인 페이지 | 이벤트 `exposure-request` | 코어와 플러그인 이름에 대한 `exposure.list`, `status.*`, `command.run`, `dom.*`의 `{id, method, params}` |
+| 호스트 → 메인 페이지 | 이벤트 `exposure-request` | 코어와 플러그인 이름에 대한 `exposure.list`, `status.*`, `command.run`, `dom.*`의 `{id, method, params}`. 호스트는 답을 10초 기다린다. `command.run`은 예외이며, 메인 페이지가 전달한 명령의 제한 시간 안에 답한다. 준비되지 않은 메인 페이지는 1003을 반환하고, 다시 읽히거나 닫히는 메인 페이지에 보낸 요청은 1003으로 끝난다 |
 | 메인 페이지 → 호스트 | 호출 `exposureReply` | `{id, result}` 또는 `{id, error: {code, message}}` |
 | 메인 페이지 → 호스트 | 호출 `exposureChanged` | 감시 중인 상태의 `{name, surface?, value}`. 감시가 표면을 지정했으면 `surface`가 있다 |
 | 표면 페이지 → 호스트 | 호출 `exposureRegister` | `{surface, kind, name}` |

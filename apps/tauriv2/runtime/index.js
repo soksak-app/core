@@ -96,6 +96,18 @@ export const page = (() => {
       }),
       reply: (id, payload) => invoke("exposure_reply", { request: { id, ...payload } }),
     },
+    // 이 표면의 문서 영역. 호스트는 호출한 웹뷰가 surface 인지 확인하고 상태를 이 표면에만 보낸다.
+    document: {
+      attach: (document) => invoke("document_attach", { request: { surface, document } }),
+      place: (document, insets, visible) =>
+        invoke("document_place", { request: { surface, document, ...insets, visible } }),
+      load: (document, url) => invoke("document_load", { request: { surface, document, url } }),
+      go: (document, action) => invoke("document_go", { request: { surface, document, action } }),
+      detach: (document) => invoke("document_detach", { request: { surface, document } }),
+      onState: (fn) => listen("document-state", (e) => {
+        if (e.payload.surface === surface) fn(e.payload.document, e.payload.state);
+      }),
+    },
     modal: {
       content(id, instance, fn, place) {
         // 이벤트는 모든 페이지가 받는다. 자기 모달의 것만 취한다.

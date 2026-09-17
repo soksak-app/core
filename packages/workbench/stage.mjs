@@ -23,6 +23,7 @@ import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, writ
 import { createRequire } from "node:module";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { replaceFile } from "./replace-file.mjs";
 import {
   ENVIRONMENT, MANIFEST, RUNTIME, SIDECAR, modulePath, validateEnvironment, validateManifest, validateSidecar,
 } from "@soksak/plugin-api";
@@ -87,7 +88,7 @@ for (const name of environment.plugins) {
     if (!executableTarget) continue;
     const built = join(sidecarDir, declared.executable);
     if (!existsSync(built)) throw new Error(`${sidecar}: ${declared.executable} is not built`);
-    copyFileSync(built, join(executableTarget, basename(declared.executable)));
+    replaceFile(built, join(executableTarget, basename(declared.executable)));
   }
 }
 cpSync(runtime, join(target, RUNTIME), { recursive: true });

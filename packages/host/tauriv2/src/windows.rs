@@ -33,6 +33,8 @@ pub(crate) struct WindowData {
     pub readied: Mutex<Vec<std::sync::mpsc::Sender<()>>>,
     /// 표면 페이지가 등록한 항목 (표면, 종류, 이름). 메인 페이지가 다시 읽히면 새 페이지에 다시 알린다.
     pub registrations: Mutex<Vec<(String, String, String)>>,
+    /// 표면 페이지의 문서 영역.
+    pub documents: crate::documents::Documents,
 }
 
 /// 애플리케이션의 창 등록부와 프로젝트 소유 창.

@@ -29,11 +29,44 @@
         view.frame = NSMakeRect(frame.origin.x * ratio, frame.origin.y * ratio,
             frame.size.width * ratio, frame.size.height * ratio);
         view.pageZoom = scale;
+        // 표면 안의 문서 웹뷰는 표면의 단위를 따르므로 배율이 바뀌면 다시 배치한다.
+        for (NSView *child in view.subviews) {
+            if ([child respondsToSelector:@selector(surfaceScaleChanged)]) [child performSelector:@selector(surfaceScaleChanged)];
+        }
     }
 }
 - (void)viewDidMoveToWindow { [super viewDidMoveToWindow]; [self updateScale]; }
 - (void)viewDidChangeBackingProperties { [super viewDidChangeBackingProperties]; [self updateScale]; }
 @end
+
+NSEvent *webviewScrollInViewUnits(NSEvent *event, NSView *view) {
+    CGFloat scale = 1;
+    for (NSView *parent = view; parent; parent = parent.superview) {
+        if ([parent isKindOfClass:SPSurfaceCoordinates.class]) {
+            scale = ((SPSurfaceCoordinates *)parent).scale;
+            break;
+        }
+    }
+    if (scale <= 0 || scale == 1) return event;
+    CGEventRef copy = CGEventCreateCopy(event.CGEvent);
+    if (!copy) return event;
+    // 줄, 포인트, 고정소수점 이동량을 모두 바꾼다. NSEvent 는 연속 스크롤에서 포인트 값을,
+    // 줄 단위 스크롤에서 고정소수점 값을 이동량으로 쓴다.
+    const CGEventField lines[2] = { kCGScrollWheelEventDeltaAxis1, kCGScrollWheelEventDeltaAxis2 };
+    const CGEventField points[2] = { kCGScrollWheelEventPointDeltaAxis1, kCGScrollWheelEventPointDeltaAxis2 };
+    const CGEventField fixed[2] = { kCGScrollWheelEventFixedPtDeltaAxis1, kCGScrollWheelEventFixedPtDeltaAxis2 };
+    for (int axis = 0; axis < 2; axis++) {
+        double line = CGEventGetDoubleValueField(copy, fixed[axis]);
+        int64_t whole = CGEventGetIntegerValueField(copy, lines[axis]);
+        int64_t point = CGEventGetIntegerValueField(copy, points[axis]);
+        CGEventSetIntegerValueField(copy, lines[axis], llround(whole * scale));
+        CGEventSetIntegerValueField(copy, points[axis], llround(point * scale));
+        CGEventSetDoubleValueField(copy, fixed[axis], line * scale);
+    }
+    NSEvent *scaled = [NSEvent eventWithCGEvent:copy];
+    CFRelease(copy);
+    return scaled ?: event;
+}
 
 void webviewAttachSurface(void *handle, void *mainHandle) {
     NSCAssert(NSThread.isMainThread, @"webview geometry requires the UI thread");
@@ -59,6 +92,15 @@ void webviewAttachSurface(void *handle, void *mainHandle) {
     view.pageZoom = container.scale;
     [view _setOverrideDeviceScaleFactor:1];
     [view release];
+}
+
+void webviewMatchSurface(void *handle, void *surfaceHandle) {
+    NSCAssert(NSThread.isMainThread, @"webview geometry requires the UI thread");
+    WKWebView *view = (WKWebView *)handle;
+    WKWebView *surface = (WKWebView *)surfaceHandle;
+    view.pageZoom = surface.pageZoom;
+    // 장치 픽셀 좌표계의 표면 안에서는 표면과 같이 로컬 좌표 한 단위를 장치 픽셀 하나로 렌더링한다.
+    if ([surface.superview isKindOfClass:SPSurfaceCoordinates.class]) [view _setOverrideDeviceScaleFactor:1];
 }
 
 void webviewSetFrame(void *handle, double x, double y, double width, double height) {

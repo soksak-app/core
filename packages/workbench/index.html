@@ -491,6 +491,8 @@ function resetLayout() {
 }
 await installCoreExposure({
   library, renames, resetLayout,
+  // 판의 그리기 순서. 배치를 바꾼 코어 명령은 이것을 기다린 뒤 답한다.
+  drawn: () => drawing,
   chrome: () => ({
     controlsWidth: controlsAt ? controlsAt.x + controlsAt.w : 0,
     projectTabs: workarea.querySelector(".rail-projects") ? "left" : "top",

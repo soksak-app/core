@@ -1,31 +1,17 @@
-// 소수점 입력에서도 DOM 슬롯, 네이티브 표면, 문서 크기와 푸터 표시가 일치하는지 검사한다.
+// 세로 경계를 끄는 동안 표면 아래 footer 의 어두운 테두리가 비지 않는지 녹화로 검사한다.
+// 1×·2× 배율과 반 포인트 표면 크기는 native/darwin/tests/webview_geometry_test.m 이 검사한다.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { APPS, drag, fresh, halfPointRow, open } from "./app.mjs";
+import { APPS, drag, fresh, open } from "./app.mjs";
 import { frames, pixel, readFrame } from "./frame.mjs";
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: vertical dragging preserves the footer border with fractional input`, async (t) => {
+  test(`${app.name}: vertical dragging preserves the footer border`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     const shell = await fresh(s);
     const initial = await s.get("host.window");
-    assert.equal(initial.scale, 2, "fractional rendering verification requires a 2× display");
-    await halfPointRow(s);
-    const state = await s.get("host.window");
-    const surface = state.surfaces.find((x) => x.id === shell.surface).frame;
-    assert.equal(surface.height % 1, .5, "the check must retain a half-point native height");
-    const document = await s.until("core.surface.document",
-      (doc) => doc.body.height === surface.height, "the document did not take the half-point height",
-      { surface: shell.surface });
-    t.diagnostic(`native ${surface.width}×${surface.height}; document ${document.body.width}×${document.body.height}`);
-    assert.deepEqual([document.body.width, document.body.height], [surface.width, surface.height],
-      "the document must cover the complete fractional native surface");
-    const slot = (await s.surfaces()).find((x) => x.surface === shell.surface).declared;
-    assert.deepEqual([surface.width, surface.height], [slot.w, slot.h], "the native surface must exactly fill its DOM slot");
-    const lastPixel = await s.run("core.surface.hit", { x: surface.width / 2, y: surface.height - .25 }, shell.surface);
-    assert.equal(lastPixel, true, "the document must receive input in the final device pixel");
-
+    const surface = initial.surfaces.find((x) => x.id === shell.surface).frame;
     const run = await drag(t, s, { axis: "y", line: 1, dx: 0, dy: 173, ms: 400, times: 2 }, { capture: true });
     const files = frames(run.frames);
     assert.ok(files.length > 30, `only ${files.length} frames recorded`);

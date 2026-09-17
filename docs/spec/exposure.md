@@ -2,7 +2,7 @@
 
 [한국어](exposure.ko.md)
 
-Core, the plugin API, the shell plugin, and the macOS hosts implement this specification; [feature status](../features.md) records its validation.
+Core, the plugin API, the shell and browser plugins, and the macOS hosts implement this specification; [feature status](../features.md) records its validation.
 
 Core (the workbench and the native host) publishes declared status values, commands, and DOM elements to external clients through the [local endpoint](endpoint.md). No method executes arbitrary code.
 
@@ -59,7 +59,7 @@ Coverage is judged in the running document. The binder's `audit(root)` lists int
 
 ## Registration
 
-The workbench registers core entries in the registry of the main page. A plugin surface page registers its entries through `@soksak/plugin-api/page`.
+The workbench registers core entries in the registry of the main page. A plugin surface page registers its entries through `@soksak/plugin-api/page`. A core command answers after the plane has finished the draws the command scheduled, so a caller that reads the layout after a command that changes it reads the drawn layout.
 
 | Function | Registers |
 | --- | --- |
@@ -99,17 +99,18 @@ Screen coordinates are points with the origin at the top-left corner of the prim
 
 | Kind | Name | Meaning |
 | --- | --- | --- |
-| status | `host.window` | `{frame, content, scale, key, active, children, controls, surfaces, modal}`: window frame, content size, backing scale, key-window state, whether the application is active, the number of child OS windows, window button frames with `hidden`, native surfaces `{id, frame, visible, order}`, and the open native modal `{id, mode, shown, frame, order, background}` or `null` |
+| status | `host.window` | `{frame, content, scale, maximized, key, active, children, controls, surfaces, documents, modal}`: window frame, content size, backing scale, whether the frame is the maximized frame, key-window state, whether the application is active, the number of child OS windows, window button frames with `hidden`, native surfaces `{id, frame, visible, order}`, [document regions](native-surfaces.md#document-regions) `{surface, document, frame, visible, order}`, and the open native modal `{id, mode, shown, frame, order, background}` or `null` |
 | status | `host.windows` | The `windows.list` result. It changes when a window opens or closes and when a window title, project, key state, or page readiness changes |
-| status | `host.screens` | `[{x, y, width, height, scale}]`: the displays in screen coordinates with their backing scale |
+| status | `host.screens` | `[{x, y, width, height, scale, visible}]`: the displays in screen coordinates with their backing scale, and `visible`, the area not covered by the menu bar and Dock, which is the maximized window frame |
 | status | `host.dock` | The titles of the application's Dock menu items in order |
 | command | `host.window.close` | Closes the window through its normal close action |
 | command | `host.window.move` | Moves the window frame origin to `{x, y}` in screen coordinates |
 | command | `host.window.maximize` | Maximizes the window, or restores it with `{on: false}` |
+| command | `host.window.fullscreen` | Enters full screen in its own Space, or leaves it with `{on: false}` |
 | command | `host.window.resize` | Resizes the content area to `{width, height}` |
 | command | `host.window.reload` | Reloads the main page and resolves after the new page reports ready; 1005 if it does not within 10 seconds |
 | command | `host.window.presented` | Resolves after the main page and visible application documents have presented their current geometry |
-| command | `host.hit` | Returns the owner of the point `{x, y}` in window coordinates: `{kind: "page"}`, `{kind: "surface", surface}`, or `{kind: "native", identifier}` |
+| command | `host.hit` | Returns the owner of the point `{x, y}` in window coordinates: `{kind: "page"}`, `{kind: "surface", surface}`, `{kind: "document", surface, document}` for a document region, or `{kind: "native", identifier}` |
 | command | `host.dock.select` | Performs the Dock menu item with `{title}` |
 | command | `host.quit` | Requests normal application termination, including pending saves |
 
@@ -133,8 +134,9 @@ Clients call these JSON-RPC 2.0 methods.
 The host delivers `input.pointer` and `input.key` as native events, and the page receives trusted events. The application is not activated, except for `move` with `activate: true`. On macOS:
 
 - Keys and scroll go through `-[NSWindow sendEvent:]`. Presses, drags, and releases go to the view under the point, because AppKit does not deliver a press in an inactive window to the view.
+- A `down` or `up` into a web view returns after that view's document has received the trusted `pointerdown` or `pointerup`. A script in a separate WebKit content world, which the page cannot see, reports the receipt. While a text field has focus, WebKit passes mouse events to the input method asynchronously first, so a press and a release sent one after the other could otherwise reach the document in the opposite order. If the document does not receive the event within 2 seconds, the request returns 1005. A `scroll` is delivered after the web view under the point has presented its current state, because WebKit does not scroll a new document with a wheel event received before its scrolling tree is presented; if the view does not present within 2 seconds, the request returns 1005.
 - WebKit updates hover (`pointerover`, `pointermove` without a button, `:hover`) only while the window is the key window. A `move` to a window that is not the key window returns 1006.
-- With `activate: true`, the host activates the application and makes the window key, waits until every webview of the window has sent the active state to its web process, and then delivers the move. This takes the keyboard focus from the application the user is using. If the system does not activate the application within 5 seconds, the request returns 1006.
+- With `activate: true`, the host activates the application and makes the window key, waits until every webview of the window has sent the active state to its web process, and then delivers the move. This takes the keyboard focus from the application the user is using. If activation does not finish within 5 seconds, the request returns 1006 with the step that stopped: the system did not activate the application, the window did not become key, the webviews did not apply the active state, or the window lost activation before they did. Except for the webview step, the message names the frontmost application.
 
 Tests that check a real input path use `input.pointer` and `input.key` only. Tests use `dom.act` only to set up state.
 
@@ -144,7 +146,7 @@ The host and the pages exchange these messages. They are internal to core and no
 
 | Direction | Message | Content |
 | --- | --- | --- |
-| host → main page | event `exposure-request` | `{id, method, params}` for `exposure.list`, `status.*`, `command.run`, `dom.*` of core and plugin names |
+| host → main page | event `exposure-request` | `{id, method, params}` for `exposure.list`, `status.*`, `command.run`, `dom.*` of core and plugin names. The host waits 10 seconds for the answer, except for `command.run`, which the main page answers within the timeout of a forwarded command; a main page that is not ready returns 1003, and requests to a main page that reloads or closes end with 1003 |
 | main page → host | call `exposureReply` | `{id, result}` or `{id, error: {code, message}}` |
 | main page → host | call `exposureChanged` | `{name, surface?, value}` for a watched status; `surface` is present when the watch named one |
 | surface page → host | call `exposureRegister` | `{surface, kind, name}` |

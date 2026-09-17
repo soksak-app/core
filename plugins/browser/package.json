@@ -3,14 +3,16 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "description": "Browser plugin: a surface that shows an external page.",
+  "description": "Browser plugin: an address bar and a document region that shows web pages.",
   "files": [
-    "plugin.json"
+    "plugin.json",
+    "ui"
   ],
   "scripts": {
     "test": "node --test test/"
   },
   "devDependencies": {
-    "@soksak/plugin-api": "workspace:*"
+    "@soksak/plugin-api": "workspace:*",
+    "jsdom": "^30.0.1"
   }
 }

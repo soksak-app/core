@@ -15,6 +15,7 @@ use tauri::Manager;
 mod bindings;
 #[cfg(feature = "diagnostics")]
 mod diagnostics;
+pub mod documents;
 pub mod endpoint;
 pub mod exposure;
 mod modals;
@@ -95,6 +96,7 @@ pub fn run(context: tauri::Context<tauri::Wry>, background: &'static str) {
             let Ok(context) = windows::window_data(&window) else { return };
             let surface = format!("surface-{}-", window.label());
             if let Some(id) = view.label().strip_prefix(&surface) {
+                documents::close_surface(&window, id);
                 exposure::surface_closed(&window, id);
             }
             if view.label().starts_with("surface-") {

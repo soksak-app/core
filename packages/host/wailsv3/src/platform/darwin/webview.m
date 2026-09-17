@@ -7,6 +7,7 @@
 #import "webview_geometry.h"
 
 extern void nativeMessage(unsigned long long identifier, char *message);
+extern void nativeCommitted(unsigned long long identifier);
 
 @interface SPNativeBridge : NSObject <WKScriptMessageHandler>
 @property unsigned long long identifier;
@@ -29,12 +30,15 @@ extern void nativeMessage(unsigned long long identifier, char *message);
 @end
 
 @interface SPNativeWebview : WKWebView <WKNavigationDelegate>
+// 호스트가 이 웹뷰의 메시지에 붙이는 번호. NSView 의 identifier 와 다르다.
+@property unsigned long long messageIdentifier;
 @property(copy) NSURL *baseURL;
 @property BOOL backgroundEnabled;
 @end
 
 @implementation SPNativeWebview
 - (void)webView:(WKWebView *)view didCommitNavigation:(WKNavigation *)navigation {
+    nativeCommitted(self.messageIdentifier);
     [self evaluateJavaScript:self.backgroundEnabled ? @"window.__soksakBackground = true" : @"window.__soksakBackground = false" completionHandler:^(id result, NSError *error) {
         if (error) NSLog(@"surface background failed: %@", error);
     }];
@@ -106,6 +110,7 @@ void *nativeWebviewCreate(void *handle, unsigned long long identifier, const cha
     configuration.userContentController = controller;
     [controller release];
     SPNativeWebview *view = [[SPNativeWebview alloc] initWithFrame:NSZeroRect configuration:configuration];
+    view.messageIdentifier = identifier;
     [configuration release];
     view.baseURL = root.URL;
     view.UIDelegate = root.UIDelegate;

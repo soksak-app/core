@@ -275,5 +275,6 @@ func (s *Surfaces) setBackground(enabled bool) {
 		for _, view := range s.views {
 			view.setBackground(enabled)
 		}
+		s.setDocumentsBackground(enabled)
 	})
 }
