@@ -12,8 +12,8 @@ pnpm example
 Open `http://localhost:8749/index.html` for the browser application. To build and run a native application on macOS 14.0 or later:
 
 ```sh
-make wails
-make tauri
+make wailsv3
+make tauriv2
 ```
 
 Startup displays the project library. Create a project or select a saved project to use that same window. The title bar’s project-list button returns to the library while preserving current work. New Window, including the macOS Dock menu, opens another library screen. The common opening mode applies when a window already owns a project. Common settings are stored in the application configuration directory; folder overrides are stored in `.soksak/settings.json` inside the project.

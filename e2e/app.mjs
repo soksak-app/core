@@ -10,13 +10,13 @@ import { bounds } from "./surface.mjs";
 // 검사하는 애플리케이션 실행 파일. 작업 디렉터리와 무관하게 이 파일 위치를 기준으로 찾는다.
 const built = (path) => fileURLToPath(new URL(`../apps/${path}`, import.meta.url));
 export const APPS = {
-  wails: built("wails/bin/wails"),
-  tauri: built("tauri/src-tauri/target/debug/soksak-tauri"),
+  wailsv3: built("wailsv3/bin/soksak-wailsv3"),
+  tauriv2: built("tauriv2/target/debug/soksak-tauriv2"),
 };
 
 const CONTROL = {
-  wails: 49732,
-  tauri: 49733,
+  wailsv3: 49732,
+  tauriv2: 49733,
 };
 
 const OPENS = 20_000;

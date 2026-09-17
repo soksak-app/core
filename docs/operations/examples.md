@@ -2,7 +2,7 @@
 
 [한국어](examples.ko.md)
 
-Run commands from the repository root. Use the package-manager version in `package.json`, a Go toolchain compatible with `apps/wails/go.mod`, and a Rust toolchain compatible with the Tauri crate. Native validation currently runs on macOS with the Command Line Tools SDK and screen-recording permission for capture.
+Run commands from the repository root. Use the package-manager version in `package.json`, a Go toolchain compatible with `apps/wailsv3/go.mod`, and a Rust toolchain compatible with the Tauri crate. Native validation currently runs on macOS with the Command Line Tools SDK and screen-recording permission for capture.
 
 ## Native updates
 
@@ -13,7 +13,7 @@ Read the [private native API inventory](private-native-apis.md) before updating 
 ```sh
 make prepare
 pnpm build
-make wails-build tauri-build
+make wailsv3-build tauriv2-build
 ```
 
 `native/darwin` builds `libsoksak-darwin.a` and `soksak-darwin.pc` in `native/darwin/build/`. The Makefile adds that directory to `PKG_CONFIG_PATH`; Wails and Tauri locate the headers and link flags through pkg-config. Both native applications require macOS 14.0 because the capture code uses ScreenCaptureKit APIs introduced in macOS 14.0. The Makefile passes this minimum to Go through `CGO_CFLAGS` and `-extldflags`, and to Rust through `MACOSX_DEPLOYMENT_TARGET`.
@@ -22,15 +22,15 @@ Run the browser application with `pnpm example` and open `http://localhost:8749/
 
 The build targets build `native/darwin` and run `pnpm run frontend` in each application. That script stages the workbench, the layout library, the plugin API, the plugins named in `environment.json`, and the application's `runtime/` directory into the generated `frontend/`. Both binaries embed the frontend at build time. A running process does not acquire a newly built frontend; restart the corresponding application after building.
 
-Debug binaries are `apps/wails/bin/wails` and `apps/tauri/src-tauri/target/debug/soksak-tauri`. Release builds use `make wails-build-release tauri-build-release`. `make examples-size` builds both profiles and reports their sizes.
+Debug binaries are `apps/wailsv3/bin/soksak-wailsv3` and `apps/tauriv2/target/debug/soksak-tauriv2`. Release builds use `make wailsv3-build-release tauriv2-build-release`. `make examples-size` builds both profiles and reports their sizes.
 
 ## Window checks
 
 Start each application once, from separate terminals:
 
 ```sh
-./apps/wails/bin/wails --observe --config-dir /tmp/soksak-check-wails
-./apps/tauri/src-tauri/target/debug/soksak-tauri --observe --config-dir /tmp/soksak-check-tauri
+./apps/wailsv3/bin/soksak-wailsv3 --observe --config-dir /tmp/soksak-check-wailsv3
+./apps/tauriv2/target/debug/soksak-tauriv2 --observe --config-dir /tmp/soksak-check-tauriv2
 ```
 
 Keep the display on and both windows available for rendering. Run:

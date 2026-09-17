@@ -30,7 +30,7 @@ importers:
         specifier: ^6.2.5
         version: 6.2.5
 
-  apps/tauri:
+  apps/tauriv2:
     dependencies:
       '@soksak/plugin-browser':
         specifier: workspace:*
@@ -49,7 +49,7 @@ importers:
         specifier: workspace:*
         version: link:../../packages/plugin-api
 
-  apps/wails:
+  apps/wailsv3:
     dependencies:
       '@soksak/plugin-browser':
         specifier: workspace:*

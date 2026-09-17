@@ -215,7 +215,7 @@ for (const [name,binary] of Object.entries(APPS)) {
     assert.equal(afterOpen.h,beforeClose.h);
     assert.equal(await mode(binary,child),'light');
     await run(binary,main,`await (await import('./projects.js')).activate(${JSON.stringify(first.id)});`);
-    assert.equal((await state(binary,main)).windows.find(w=>w.number===main).title, `${first.title} / ${name==='wails'?'Wails v3':'Tauri v2'}`);
+    assert.equal((await state(binary,main)).windows.find(w=>w.number===main).title, `${first.title} / ${name==='wailsv3'?'Wails v3':'Tauri v2'}`);
     await nativeProbe(binary,{op:'close',window:child});
     await until(()=>state(binary,main),s=>s.windows.length===1,'restored project window did not close');
     await run(binary,main,`const p=await import('./projects.js');

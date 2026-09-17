@@ -221,7 +221,7 @@ fn sync_surfaces(
             WebviewUrl::App(s.url.clone().into())
         };
         let builder = WebviewBuilder::new(&label, target)
-            .initialization_script(include_str!("../../frontend/background.js"));
+            .initialization_script(include_str!("../frontend/background.js"));
         window
             .add_child(builder, position, size)
             .map_err(|e| e.to_string())?;

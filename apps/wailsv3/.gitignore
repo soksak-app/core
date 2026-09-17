@@ -3,4 +3,4 @@ frontend/
 # go build 출력
 bin/
 # go build 를 -o 없이 실행하면 모듈 이름으로 출력한다
-/wails
+/wailsv3

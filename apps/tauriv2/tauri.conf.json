@@ -4,7 +4,7 @@
   "version": "0.0.1",
   "identifier": "dev.soksak.example",
   "build": {
-    "frontendDist": "../frontend"
+    "frontendDist": "frontend"
   },
   "app": {
     "windows": [

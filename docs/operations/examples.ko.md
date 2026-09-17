@@ -2,7 +2,7 @@
 
 [English](examples.md)
 
-저장소 루트에서 명령을 실행한다. `package.json`의 패키지 관리자 버전, `apps/wails/go.mod`와 호환되는 Go 도구 체인, Tauri 크레이트와 호환되는 Rust 도구 체인을 사용한다. 현재 네이티브 검증은 macOS에서 Command Line Tools SDK와 캡처를 위한 화면 기록 권한을 사용한다.
+저장소 루트에서 명령을 실행한다. `package.json`의 패키지 관리자 버전, `apps/wailsv3/go.mod`와 호환되는 Go 도구 체인, Tauri 크레이트와 호환되는 Rust 도구 체인을 사용한다. 현재 네이티브 검증은 macOS에서 Command Line Tools SDK와 캡처를 위한 화면 기록 권한을 사용한다.
 
 ## 네이티브 업데이트
 
@@ -13,7 +13,7 @@
 ```sh
 make prepare
 pnpm build
-make wails-build tauri-build
+make wailsv3-build tauriv2-build
 ```
 
 `native/darwin`은 `native/darwin/build/`에 `libsoksak-darwin.a`와 `soksak-darwin.pc`를 생성한다. Makefile은 이 디렉터리를 `PKG_CONFIG_PATH`에 추가하고, Wails와 Tauri는 pkg-config로 헤더와 링크 옵션을 찾는다. 캡처 코드가 macOS 14.0에서 추가된 ScreenCaptureKit API를 사용하므로 두 네이티브 애플리케이션의 최소 버전은 macOS 14.0이다. Makefile은 이 값을 Go에는 `CGO_CFLAGS`와 `-extldflags`로, Rust에는 `MACOSX_DEPLOYMENT_TARGET`으로 전달한다.
@@ -22,15 +22,15 @@ make wails-build tauri-build
 
 빌드 대상은 `native/darwin`을 빌드하고 각 애플리케이션에서 `pnpm run frontend`를 실행한다. 이 스크립트는 워크벤치, 배치 라이브러리, 플러그인 API, `environment.json`에 적힌 플러그인, 애플리케이션의 `runtime/` 디렉터리를 생성된 `frontend/`에 배치한다. 두 바이너리 모두 빌드 시 프런트엔드를 포함한다. 실행 중인 프로세스에는 새 프런트엔드가 적용되지 않으므로 빌드 후 해당 앱을 다시 실행한다.
 
-디버그 바이너리는 `apps/wails/bin/wails`와 `apps/tauri/src-tauri/target/debug/soksak-tauri`다. 릴리스 빌드는 `make wails-build-release tauri-build-release`를 사용한다. `make examples-size`는 두 프로파일을 빌드하고 크기를 출력한다.
+디버그 바이너리는 `apps/wailsv3/bin/soksak-wailsv3`와 `apps/tauriv2/target/debug/soksak-tauriv2`다. 릴리스 빌드는 `make wailsv3-build-release tauriv2-build-release`를 사용한다. `make examples-size`는 두 프로파일을 빌드하고 크기를 출력한다.
 
 ## 창 검사
 
 각각 다른 터미널에서 앱을 한 번씩 실행한다.
 
 ```sh
-./apps/wails/bin/wails --observe --config-dir /tmp/soksak-check-wails
-./apps/tauri/src-tauri/target/debug/soksak-tauri --observe --config-dir /tmp/soksak-check-tauri
+./apps/wailsv3/bin/soksak-wailsv3 --observe --config-dir /tmp/soksak-check-wailsv3
+./apps/tauriv2/target/debug/soksak-tauriv2 --observe --config-dir /tmp/soksak-check-tauriv2
 ```
 
 디스플레이를 켜고 두 창이 렌더링 가능한 상태에서 실행한다.

@@ -1,9 +1,9 @@
 {
-  "name": "@soksak/tauri",
+  "name": "@soksak/wailsv3",
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "description": "Tauri v2 application hosting the workbench with native webview surfaces.",
+  "description": "Wails v3 application hosting the workbench with native webview surfaces.",
   "scripts": {
     "test": "node --test test/"
   },
