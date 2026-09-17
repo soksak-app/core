@@ -182,6 +182,9 @@ impl Platform for Windows {
     fn on_termination(&self, quit: Box<dyn Fn() + Send>) -> Result<(), String> {
         unsupported::on_termination(quit)
     }
+    fn instant_window_resize(&self) -> Result<(), String> {
+        unsupported::instant_window_resize()
+    }
     fn install_dock_menu(&self, new_window: Box<dyn Fn()>) -> Result<(), String> {
         unsupported::install_dock_menu(new_window)
     }

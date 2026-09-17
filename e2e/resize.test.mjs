@@ -13,6 +13,12 @@ import { frames, readFrame } from "./frame.mjs";
  */
 const LAG = 12;
 
+/** 창이 새 크기에 도달한 뒤 배치가 따라오기까지 허용하는 시간(ms). */
+const CATCH_UP = 150;
+
+/** 배치가 따라오는 구간까지 녹화하려고 표시 시각 뒤로 더 담는 시간(ms). */
+const SETTLE = 100;
+
 /** 카드 테두리와 글자보다 어두운 밝기. 창 배경과 빈 영역은 이보다 어둡다. */
 const BRIGHT = 70;
 
@@ -64,7 +70,8 @@ async function record(s, change, sized) {
         "the surfaces did not follow the window");
       ({ displayed } = await s.presented());
     } finally {
-      await s.request("diagnostics.capture.stop", { after: displayed });
+      // 창이 새 크기에 도달한 뒤 배치가 따라오는 구간까지 담는다.
+      await s.request("diagnostics.capture.stop", { after: displayed ? displayed + SETTLE : 0 });
     }
     return { displayed, measured: frames(directory).map((path) => measure(readFrame(path))) };
   } finally {
@@ -91,6 +98,8 @@ function assertSettled(t, { displayed, measured }, label) {
   const late = measured.filter(off);
   const took = late.length ? late.at(-1).time - first.time : 0;
   t.diagnostic(`${label}: ${late.length} of ${measured.length} frames show the layout behind the window, the last at ${took.toFixed(0)}ms`);
+  assert.ok(took <= CATCH_UP, `${label}: the layout stayed behind the window for ${took.toFixed(0)}ms, more than ${CATCH_UP}ms ` +
+    `(${shown}; last frames ${tail.join(", ")})`);
   assert.ok(!off(last), `${label}: the settled frame shows the layout behind the window ` +
     `(window ${last.window.width.toFixed(0)}×${last.window.height.toFixed(0)}, gap ${last.gap.x.toFixed(0)},${last.gap.y.toFixed(0)}, ` +
     `base gap ${first.gap.x.toFixed(0)},${first.gap.y.toFixed(0)}; ${shown}; last frames ${tail.join(", ")})`);

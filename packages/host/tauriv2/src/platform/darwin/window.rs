@@ -114,3 +114,11 @@ pub fn screens() -> Result<Value, String> {
     }
     facts_value(unsafe { sp_screens() }, "display list")
 }
+
+/// 창 확대와 애니메이션 크기 변경을 한 화면 갱신 안에 끝나게 한다.
+pub fn instant_resize() {
+    extern "C" {
+        fn windowResizeInstant();
+    }
+    unsafe { windowResizeInstant() }
+}

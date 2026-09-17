@@ -172,6 +172,10 @@ type Platform interface {
 	// 뒤의 종료 신호는 기본 동작으로 프로세스를 끝낸다.
 	OnTermination(quit func()) error
 
+	// InstantWindowResize 는 창 확대와 애니메이션 크기 변경을 한 화면 갱신 안에 끝나게 한다.
+	// 창을 만들기 전에 호출한다.
+	InstantWindowResize() error
+
 	// InstallDock 은 Dock 메뉴를 등록한다. 새 창 항목은 newWindow 를 호출한다.
 	InstallDock(newWindow func()) error
 	// DockItems 는 Dock 메뉴 항목의 제목을 JSON 배열로 반환한다. UI 스레드에서 호출한다.

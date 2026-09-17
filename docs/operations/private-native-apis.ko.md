@@ -10,6 +10,7 @@
 
 | API 또는 키 | 호출 위치와 범위 | 목적 |
 | --- | --- | --- |
+| `NSWindowResizeTime` 사용자 기본값 | 두 호스트의 [`window_motion.m`](../../native/darwin/src/window_motion.m), `windowResizeInstant`. 첫 창을 만들기 전에 등록 | 창 프레임과 웹 내용이 따로 표시되므로 창 확대·크기 변경 애니메이션을 화면 갱신 한 번으로 줄임 |
 | `WKWebView._setOverrideDeviceScaleFactor:` | 두 호스트의 [`webview_geometry.m`](../../native/darwin/src/webview_geometry.m), `webviewAttachSurface` | 장치 픽셀 컨테이너의 로컬 한 단위를 backing 픽셀 하나로 렌더링 |
 | 문서 웹뷰의 `WKWebView._setOverrideDeviceScaleFactor:` | 두 호스트의 [`webview_geometry.m`](../../native/darwin/src/webview_geometry.m), `webviewMatchSurface`. [`document_view.m`](../../native/darwin/src/document_view.m)의 `sp_document_create`가 호출 | 장치 픽셀 표면 안의 문서 영역을 표면과 같은 밀도로 렌더링 |
 | `WKWebView._doAfterNextPresentationUpdate:` | 두 호스트의 [`surface_layout.m`](../../native/darwin/src/surface_layout.m), `surfaceLayoutAfterPresentation`과 `surfaceLayoutAfterSettled`; [`input_inject.m`](../../native/darwin/src/input_inject.m), `sp_input_pointer_then`; 프로브와 독립 입력 검사에서도 사용 | 네이티브 좌표 커밋, 새 문서로의 네이티브 스크롤 전달, 렌더링 결과 측정 전에 웹뷰 표시 완료 확인 |

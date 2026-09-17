@@ -10,6 +10,7 @@ This is the canonical inventory for application calls, diagnostic calls, and the
 
 | API or key | Caller and scope | Purpose |
 | --- | --- | --- |
+| `NSWindowResizeTime` user default | Both hosts; [`window_motion.m`](../../native/darwin/src/window_motion.m), `windowResizeInstant`, registered before the first window | Shorten the window zoom and resize animation to one display frame, because the window frame and the web content are presented separately |
 | `WKWebView._setOverrideDeviceScaleFactor:` | Both hosts; [`webview_geometry.m`](../../native/darwin/src/webview_geometry.m), `webviewAttachSurface` | Render one backing pixel per device-pixel container unit |
 | `WKWebView._setOverrideDeviceScaleFactor:` on document views | Both hosts; [`webview_geometry.m`](../../native/darwin/src/webview_geometry.m), `webviewMatchSurface`, called by `sp_document_create` in [`document_view.m`](../../native/darwin/src/document_view.m) | Render a document region inside a device-pixel surface at the surface's density |
 | `WKWebView._doAfterNextPresentationUpdate:` | Both hosts; [`surface_layout.m`](../../native/darwin/src/surface_layout.m), `surfaceLayoutAfterPresentation` and `surfaceLayoutAfterSettled`; [`input_inject.m`](../../native/darwin/src/input_inject.m), `sp_input_pointer_then`; also used by probes and the standalone input check | Confirm webview presentation before committing native geometry, delivering a native scroll to a new document, or measuring rendered output |

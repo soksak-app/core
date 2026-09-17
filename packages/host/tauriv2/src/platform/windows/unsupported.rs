@@ -204,6 +204,10 @@ pub fn on_termination(_quit: Box<dyn Fn() + Send>) -> Result<(), String> {
     missing("termination requests")
 }
 
+pub fn instant_window_resize() -> Result<(), String> {
+    missing("window resize animation")
+}
+
 pub fn install_dock_menu(_new_window: Box<dyn Fn()>) -> Result<(), String> {
     missing("Dock menu")
 }

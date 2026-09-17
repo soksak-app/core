@@ -267,6 +267,11 @@ pub trait Platform: Send + Sync {
     /// 신호는 기본 동작으로 프로세스를 끝낸다.
     fn on_termination(&self, quit: Box<dyn Fn() + Send>) -> Result<(), String>;
 
+    // 창 동작
+
+    /// 창 확대와 애니메이션 크기 변경을 한 화면 갱신 안에 끝나게 한다. 창을 만들기 전에 호출한다.
+    fn instant_window_resize(&self) -> Result<(), String>;
+
     // Dock
 
     /// Dock 메뉴에 새 창 항목을 설치한다. 항목을 선택하면 new_window 를 호출한다.

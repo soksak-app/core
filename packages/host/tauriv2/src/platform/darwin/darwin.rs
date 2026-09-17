@@ -254,6 +254,10 @@ impl Platform for Darwin {
     fn on_termination(&self, quit: Box<dyn Fn() + Send>) -> Result<(), String> {
         termination::on_termination(quit)
     }
+    fn instant_window_resize(&self) -> Result<(), String> {
+        window::instant_resize();
+        Ok(())
+    }
     fn install_dock_menu(&self, new_window: Box<dyn Fn()>) -> Result<(), String> {
         dock::install(new_window)
     }

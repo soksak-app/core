@@ -97,6 +97,7 @@ Rust: `src/platform/platform.rs`는 각 운영체제 모듈을 `#[cfg(target_os 
 | 캡처 | 창 캡처: 대상 지정, 시작, 첫 프레임 대기, 종료 |
 | 문서 영역 | 표면 웹뷰 안의 생성, 이동, 기록 동작, 여백에 따른 배치, 대화 상자 흐림, 닫기 |
 | 종료 | 종료 신호(SIGTERM, SIGINT, SIGHUP). 첫 신호는 호스트의 종료 요청을 부르고, 그 뒤의 신호는 기본 동작으로 프로세스를 끝낸다 |
+| 창 동작 | 창을 만들기 전에 창 크기 변경 애니메이션 길이 줄이기 |
 | Dock | Dock 메뉴 설치 |
 | 식별 | 디렉터리 식별 |
 | 엔드포인트 | [로컬 엔드포인트](endpoint.ko.md) 전송: macOS는 Unix 소켓, Windows는 미구현 |
@@ -179,5 +180,5 @@ Wails 바인딩 서비스 이름은 `github.com/min-median-max/soksak/packages/h
 | 경로 | 내용 |
 | --- | --- |
 | `src/` | `<이름>.h`와 `<이름>.m` 소스. 두 호스트가 창 캡처에 사용하는 `capture.m`을 포함한다. 디렉터리가 플랫폼을 나타내므로 파일 이름에 `_darwin` 접미사가 없다 |
-| `tests/` | `input_inject_test.m`, `window_facts_test.m`, `window_controls_test.m`, `surface_layout_test.m`, `webview_focus_test.m`, `webview_geometry_test.m`(`make test`, 활성화 없음), `input_activate_test.m`과 `webview_input_test.m`(`make test-activation`, 애플리케이션 활성화) |
+| `tests/` | `window_motion_test.m`, `input_inject_test.m`, `window_facts_test.m`, `window_controls_test.m`, `surface_layout_test.m`, `webview_focus_test.m`, `webview_geometry_test.m`(`make test`, 활성화 없음), `input_activate_test.m`과 `webview_input_test.m`(`make test-activation`, 애플리케이션 활성화) |
 | `Makefile` | 호스트가 pkg-config에서 `soksak-darwin`으로 찾는 정적 라이브러리를 빌드한다. `make -C native/darwin test`와 `make -C native/darwin test-activation`이 입력 검사를 실행한다 |

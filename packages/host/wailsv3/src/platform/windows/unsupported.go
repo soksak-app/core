@@ -58,6 +58,10 @@ func (implementation) OnTermination(func()) error {
 	return unsupported("termination requests")
 }
 
+func (implementation) InstantWindowResize() error {
+	return unsupported("window resize animation")
+}
+
 func (implementation) DockItems() (string, error) {
 	return "", unsupported("Dock menu")
 }

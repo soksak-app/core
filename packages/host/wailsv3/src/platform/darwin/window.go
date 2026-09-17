@@ -9,6 +9,7 @@ package darwin
 #include <stdlib.h>
 #include "window_controls.h"
 #include "window_facts.h"
+#include "window_motion.h"
 #import <Cocoa/Cocoa.h>
 
 void nativeWindowPrepare(void *window);
@@ -72,4 +73,9 @@ func (implementation) MoveWindow(window unsafe.Pointer, x, y float64) error {
 
 func (implementation) Screens() (string, error) {
 	return facts(C.sp_screens(), "display list")
+}
+
+func (implementation) InstantWindowResize() error {
+	C.windowResizeInstant()
+	return nil
 }

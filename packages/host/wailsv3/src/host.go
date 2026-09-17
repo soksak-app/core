@@ -46,6 +46,11 @@ func Run(assets fs.FS, options Options) error {
 		return err
 	}
 	system = current
+	// 창 확대 애니메이션은 창 프레임만 움직이고 웹 문서는 그 뒤에 따라온다. AppKit 이 기본값을
+	// 읽기 전에 그 길이를 줄인다.
+	if err := system.InstantWindowResize(); err != nil {
+		return err
+	}
 	// 종료 신호는 엔드포인트를 만들기 전부터 받는다. 일반 종료는 애플리케이션이 시작한 뒤에
 	// 요청한다. 일반 종료는 준비된 창의 저장을 마친 뒤 엔드포인트를 닫는다.
 	started := make(chan struct{})
