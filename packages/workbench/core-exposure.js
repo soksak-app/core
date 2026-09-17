@@ -5,12 +5,12 @@
 // status 의 변경은 coreChanged() 호출로 알린다. 문서가 판의 렌더, 프로젝트와 설정의
 // 변경, 모달과 라이브러리의 그리기 뒤에 호출하고, 등록소는 감시 중인 값 중 달라진
 // 것만 호스트에 보낸다.
-import { registry, connectExposure } from "./exposure.js";
+import { registry, connectExposure, revisitRegistrations } from "./exposure.js";
 import * as projects from "./projects.js";
 import {
   activeTab, capture, currentGrid, focused, fresh, onPicker, pickerState, plane, settle, tabsOf,
 } from "./plane.js";
-import { defaults, overridden, reset, set, settingProject, value } from "./settings.js";
+import { defaults, onSaved, overridden, reset, saving, set, settingProject, value } from "./settings.js";
 import { closeSettings, onSettingsDrawn, openSettings, settingsModalState } from "./settings-ui.js";
 import { latest, seated } from "./compositor.js";
 import { modalState, onModalState } from "./host.js";
@@ -24,6 +24,7 @@ let scheduled = false;
  * 코어 상태가 바뀌었을 수 있음을 알린다. 같은 작업 안의 여러 호출은 한 번으로 묶는다.
  */
 export function coreChanged() {
+  revisitRegistrations();
   if (scheduled || watchers.size === 0) return;
   scheduled = true;
   queueMicrotask(() => {
@@ -166,6 +167,7 @@ export async function installCoreExposure({ library }) {
     values: Object.fromEntries(Object.keys(defaults).map((key) => [key, value(key)])),
     project: settingProject(),
     overridden: Object.keys(defaults).filter(overridden),
+    saving: saving(),
   }));
   status("core.settings-modal", settingsModalState);
   status("core.picker", pickerState);
@@ -219,6 +221,7 @@ export async function installCoreExposure({ library }) {
   onPicker(coreChanged);
   onSettingsDrawn(coreChanged);
   onModalState(coreChanged);
+  onSaved(coreChanged);
 
-  await connectExposure({ surfacePlugin, preferred, origin });
+  await connectExposure({ surfacePlugin, preferred, origin, registrationChanged: coreChanged });
 }

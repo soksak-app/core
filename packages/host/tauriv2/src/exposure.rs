@@ -40,6 +40,17 @@ fn host_declarations() -> Value {
     let nothing = json!({"type": "null"});
     json!({
         "status": [{
+            "name": "host.dock",
+            "description": "The titles of the application's Dock menu items in order.",
+            "schema": {"type": "array", "items": {"type": "string"}},
+        }, {
+            "name": "host.screens",
+            "description": "The displays in screen coordinates with their backing scale.",
+            "schema": {"type": "array", "items": {"type": "object", "properties": {
+                "x": {"type": "number"}, "y": {"type": "number"},
+                "width": {"type": "number"}, "height": {"type": "number"},
+                "scale": {"type": "number"}}}},
+        }, {
             "name": "host.window",
             "description": "Window frame in screen coordinates, content size, backing scale, key and application active state, child window count, window buttons, native surfaces, and the open native modal.",
             "schema": {"type": "object", "properties": {
@@ -60,16 +71,11 @@ fn host_declarations() -> Value {
                         "draws": {"type": "boolean"}, "alpha": {"type": "number"}}}}},
             }},
         }, {
-            "name": "host.dock",
-            "description": "The titles of the application's Dock menu items in order.",
-            "schema": {"type": "array", "items": {"type": "string"}},
-        }, {
-            "name": "host.screens",
-            "description": "The displays in screen coordinates with their backing scale.",
+            "name": "host.windows",
+            "description": "The windows of the application in the windows.list format.",
             "schema": {"type": "array", "items": {"type": "object", "properties": {
-                "x": {"type": "number"}, "y": {"type": "number"},
-                "width": {"type": "number"}, "height": {"type": "number"},
-                "scale": {"type": "number"}}}},
+                "window": {"type": "string"}, "title": {"type": "string"},
+                "project": {"type": "string"}, "key": {"type": "boolean"}, "ready": {"type": "boolean"}}}},
         }],
         "commands": [
             {"name": "host.dock.select", "description": "Performs the Dock menu item with the title.",
@@ -392,13 +398,49 @@ pub(crate) fn register(webview: &Webview, request: Register) -> Result<(), Strin
     if !matches!(request.kind.as_str(), "status" | "command" | "dom") {
         return Err(format!("unknown exposure kind {}", request.kind));
     }
+    // 표면이 등록하는 코어 이름은 core.surface.* 뿐이다(docs/spec/exposure.md).
+    let name = &request.name;
+    let core = name.starts_with("core.") && !name.starts_with("core.surface.");
+    if !crate::endpoint::valid_name(name) || name.starts_with("host.") || core {
+        return Err(format!("a surface cannot register {name:?}"));
+    }
+    let entry = (request.surface.clone(), request.kind.clone(), request.name.clone());
+    {
+        let data = window_data(&window)?;
+        let mut registrations = data.registrations.lock().map_err(|e| e.to_string())?;
+        if !registrations.contains(&entry) {
+            registrations.push(entry);
+        }
+    }
     emit_to(window.app_handle(), window.label(), "exposure-registered",
         json!({"surface": request.surface, "kind": request.kind, "name": request.name}))
+}
+
+/// 표면 페이지의 등록을 다시 읽힌 메인 페이지에 다시 알린다. 표면은 메인 페이지가 다시 읽혀도
+/// 남으므로, 새 페이지는 이전 페이지가 받은 등록을 이 호출로 받는다.
+pub(crate) fn replay_registrations(window: &Window) {
+    let Ok(data) = window_data(window) else { return };
+    let registrations = match data.registrations.lock() {
+        Ok(list) => list.clone(),
+        Err(_) => return,
+    };
+    for (surface, kind, name) in registrations {
+        if let Err(error) = emit_to(window.app_handle(), window.label(), "exposure-registered",
+            json!({"surface": surface, "kind": kind, "name": name}))
+        {
+            eprintln!("{error}");
+        }
+    }
 }
 
 /// 표면 페이지가 닫히거나 다시 읽힐 때 그 등록과 대기 중인 요청을 제거한다.
 pub(crate) fn surface_closed(window: &Window, surface: &str) {
     window.state::<Exposure>().relay.abandon(&label_for(window, surface));
+    if let Ok(data) = window_data(window) {
+        if let Ok(mut registrations) = data.registrations.lock() {
+            registrations.retain(|(owner, _, _)| owner != surface);
+        }
+    }
     if let Err(error) = emit_to(window.app_handle(), window.label(), "exposure-registered",
         json!({"surface": surface, "closed": true}))
     {
@@ -409,6 +451,7 @@ pub(crate) fn surface_closed(window: &Window, surface: &str) {
 /// 메인 페이지가 다시 읽힐 때 그 페이지에 보낸 요청을 끝낸다.
 pub(crate) fn page_reloaded(window: &Window) {
     window.state::<Exposure>().relay.abandon(window.label());
+    windows_changed(window.app_handle());
 }
 
 /// 다시 읽힌 메인 페이지에 이 창의 감시와 진단 기록을 다시 요청한다. 페이지는 준비를 알린 뒤 호출한다.
@@ -444,6 +487,28 @@ pub(crate) fn window_closed(window: &Window) {
     if let Ok(mut reported) = state.reported.lock() {
         reported.remove(&main);
     };
+}
+
+/// 창 목록이 바뀌었을 수 있을 때 호출한다. host.windows 를 감시하는 창마다 windows.list 결과를 보낸다.
+/// 창 목록은 창 레지스트리를 잠그므로 별도 스레드에서 읽는다.
+pub(crate) fn windows_changed(app: &AppHandle) {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        let Some(notifier) = app.state::<Exposure>().endpoint.get().map(Endpoint::notifier) else { return };
+        let list = match windows::list(&app) {
+            Ok(list) => list,
+            Err(error) => {
+                eprintln!("host.windows: {error}");
+                return;
+            }
+        };
+        for entry in list.as_array().cloned().unwrap_or_default() {
+            let Some(window) = entry["window"].as_str() else { continue };
+            if notifier.watched(window, "host.windows") {
+                notifier.changed(window, "host.windows", None, list.clone());
+            }
+        }
+    });
 }
 
 /// 창의 host.window 값이 바뀌었을 수 있을 때 호출한다. 감시하는 연결이 있으면 값을 계산하고,
@@ -557,6 +622,18 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
     }))
 }
 
+/// 메인 페이지를 다시 읽고, 새 페이지가 준비를 알릴 때까지 기다린다.
+fn reload(window: &Window) -> Result<Value, Failure> {
+    let main = root_view(window).ok_or_else(|| Failure::new(MISSING_DOCUMENT, "the main page is gone"))?;
+    let (tx, rx) = mpsc::channel();
+    window_data(window).map_err(internal)?.readied.lock().map_err(internal)?.push(tx);
+    main.reload().map_err(internal)?;
+    match rx.recv_timeout(TIMEOUT) {
+        Ok(()) => Ok(Value::Null),
+        Err(_) => Err(Failure::new(TIMED_OUT, "the reloaded page did not report ready within the time limit")),
+    }
+}
+
 /// 메인 페이지와 표시 중인 앱 문서가 현재 배치를 그릴 때까지 기다린다.
 pub(crate) fn presented(window: &Window, timeout: Duration) -> Result<(), Failure> {
     let platform = platform::current().map_err(internal)?;
@@ -644,11 +721,12 @@ impl Host {
                 let platform = platform::current().map_err(internal)?;
                 on_main(window, move || platform.screens()).map_err(internal)
             }
+            ("status.get", "host.windows") => windows::list(&self.0).map_err(internal),
             ("status.get", "host.dock") => {
                 let platform = platform::current().map_err(internal)?;
                 on_main(window, move || platform.dock_items()).map_err(internal)
             }
-            ("status.watch" | "status.unwatch", "host.window" | "host.screens" | "host.dock") => Ok(Value::Null),
+            ("status.watch" | "status.unwatch", "host.window" | "host.windows" | "host.screens" | "host.dock") => Ok(Value::Null),
             ("command.run", _) => {
                 let arguments = match params.get("params") {
                     None | Some(Value::Null) => Map::new(),
@@ -678,10 +756,7 @@ impl Host {
                 }
                 done(window.set_size(LogicalSize::new(width, height)))
             })(),
-            "host.window.reload" => match root_view(window) {
-                Some(main) => done(main.reload()),
-                None => Err(Failure::new(MISSING_DOCUMENT, "the main page is gone")),
-            },
+            "host.window.reload" => reload(window),
             "host.window.presented" => presented(window, TIMEOUT).map(|_| Value::Null),
             "host.window.move" => (|| {
                 let x = number(arguments, "x")?;

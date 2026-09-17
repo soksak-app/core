@@ -102,7 +102,7 @@ fn host_entries_are_appended_as_registered() {
     }))
     .unwrap();
     let status: Vec<&str> = listed["status"].as_array().unwrap().iter().map(|e| e["name"].as_str().unwrap()).collect();
-    assert_eq!(status, ["core.layout", "host.window", "host.dock", "host.screens"]);
+    assert_eq!(status, ["core.layout", "host.dock", "host.screens", "host.window", "host.windows"]);
     let commands: Vec<&str> = listed["commands"].as_array().unwrap().iter().map(|e| e["name"].as_str().unwrap()).collect();
     assert_eq!(commands, [
         "host.dock.select",

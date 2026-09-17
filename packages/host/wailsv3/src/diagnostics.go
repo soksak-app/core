@@ -144,6 +144,9 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, 
 	reply := h.relay.wait(id, w, time.Duration(ticks)*frameStep+pageTimeout)
 	close(stop)
 	if reply.Error != nil {
+		if p.Capture {
+			stopCapture()
+		}
 		return nil, reply.Error
 	}
 	select {
@@ -152,13 +155,16 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, 
 		return nil, rpcError(codeTimeout, "the drag was not presented within %s", pageTimeout)
 	}
 	s.log("diagnostics: drag presented")
+	result := map[string]any{}
+	if len(reply.Result) > 0 && string(reply.Result) != "null" {
+		if err := json.Unmarshal(reply.Result, &result); err != nil {
+			return nil, fmt.Errorf("the page drag result is not an object: %w", err)
+		}
+	}
 	if p.Capture {
-		return map[string]any{"frames": frames}, nil
+		result["frames"] = frames
 	}
-	if len(reply.Result) == 0 {
-		return nil, nil
-	}
-	return reply.Result, nil
+	return result, nil
 }
 
 // startCapture 는 창 s 의 녹화를 설정 디렉터리 아래 새 폴더에 시작하고 첫 프레임을 기다린다.
@@ -199,6 +205,18 @@ func startCapture(h *Host, s *Surfaces) (string, error) {
 		return "", err
 	}
 	return directory, nil
+}
+
+// stopCapture 는 실패한 끌기의 녹화를 끝낸다. 프레임 폴더는 요청자가 받지 못했으므로 지운다.
+func stopCapture() {
+	capture.mu.Lock()
+	defer capture.mu.Unlock()
+	if capture.directory == "" {
+		return
+	}
+	_, _ = system.CaptureStop()
+	_ = os.RemoveAll(capture.directory)
+	capture.directory = ""
 }
 
 // diagnosticCaptureStop 은 녹화를 끝내고 프레임 폴더와 프레임 수를 반환한다.

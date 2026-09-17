@@ -33,7 +33,7 @@ test("windows prints the window list as JSON", async (t) => {
   const { dir } = await fixture(t);
   const result = await run(["windows", ...dir]);
   assert.equal(result.code, 0, result.stderr);
-  assert.deepEqual(JSON.parse(result.stdout), [{ window: "main", title: "soksak", project: null, key: true }]);
+  assert.deepEqual(JSON.parse(result.stdout), [{ window: "main", title: "soksak", project: null, key: true, ready: true }]);
 });
 
 test("list sends exposure.list for the window", async (t) => {

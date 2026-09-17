@@ -57,10 +57,13 @@ func errMissingWindow(window string) *RPCError {
 
 // WindowEntry 는 windows.list 의 항목이다.
 type WindowEntry struct {
-	Window  string `json:"window"`
-	Title   string `json:"title"`
-	Project string `json:"project"`
-	Key     bool   `json:"key"`
+	Window string `json:"window"`
+	Title  string `json:"title"`
+	// Project 는 창에 마지막으로 열린 프로젝트의 루트 디렉터리다. 없으면 null 이다.
+	Project *string `json:"project"`
+	Key     bool    `json:"key"`
+	// Ready 는 창의 메인 페이지가 준비를 알렸는지다. 다시 읽는 동안에는 거짓이다.
+	Ready bool `json:"ready"`
 }
 
 // PointerInput 은 input.pointer 의 값이다. Phase 는 move, down, drag, up, scroll 중 하나이고
@@ -105,6 +108,7 @@ type EndpointInfo struct {
 	PID         int       `json:"pid"`
 	Application string    `json:"application"`
 	Version     string    `json:"version"`
+	Executable  string    `json:"executable"`
 	Started     time.Time `json:"started"`
 }
 
@@ -158,6 +162,13 @@ func NewEndpoint(backend Backend) *Endpoint {
 func (e *Endpoint) Serve(listener net.Listener, info EndpointInfo, configDir string) error {
 	file := filepath.Join(configDir, "endpoint.json")
 	info.Started = info.Started.UTC().Truncate(time.Second)
+	executable, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	if info.Executable, err = filepath.EvalSymlinks(executable); err != nil {
+		return err
+	}
 	if err := writeJSON(file, info); err != nil {
 		return err
 	}

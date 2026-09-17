@@ -33,9 +33,9 @@ packages/host/wailsv3/                     packages/host/tauriv2/
     shapes.go      표면 위 외곽선                     shapes.rs
     theme.go       테마 저장과 전달                   theme.rs
     sidecars.go    사이드카 채널                      sidecars.rs
-    exposure.go    노출 요청 전달                     exposure.rs      미구현
-    endpoint.go    JSON-RPC 서버                      endpoint.rs      미구현
-    diagnostics.go 진단, --observe로 등록             diagnostics.rs
+    exposure.go    노출 요청 전달                     exposure.rs
+    endpoint.go    JSON-RPC 서버                      endpoint.rs
+    diagnostics.go 진단 메서드(빌드 태그)             diagnostics.rs
     bridge.js      추가 웹뷰 호출 통로                차이 H3
     platform/                                  platform/
       platform.go  인터페이스와 선택             platform.rs
@@ -50,7 +50,7 @@ packages/host/wailsv3/                     packages/host/tauriv2/
         capture.go   캡처 호출                        capture.rs
         dock.go      Dock 메뉴                        dock.rs
         identity.go  디렉터리 식별                    identity.rs
-        endpoint.go  Unix 소켓                        endpoint.rs      미구현
+        endpoint.go  Unix 소켓                        endpoint.rs
       windows/                                   windows/
         windows.go     패키지 문서, 등록                windows.rs
         endpoint.go    named pipe                       endpoint.rs    미구현

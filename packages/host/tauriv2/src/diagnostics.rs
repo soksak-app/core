@@ -104,14 +104,23 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
                 }
             }
         }
+        // 요청자는 프레임 폴더를 받지 못했으므로 지운다.
+        if let Some(frames) = &frames {
+            let _ = std::fs::remove_dir_all(frames);
+        }
     }
     let result = result?;
     presented(window, TIMEOUT)?;
     exposure::log(window, "diagnostics: drag presented");
-    Ok(match frames {
-        Some(frames) => json!({"frames": frames.to_string_lossy()}),
-        None => result,
-    })
+    let mut merged = match result {
+        Value::Object(fields) => fields,
+        Value::Null => Map::new(),
+        _ => return Err(Failure::new(-32603, "the page drag result is not an object")),
+    };
+    if let Some(frames) = frames {
+        merged.insert("frames".into(), Value::String(frames.to_string_lossy().into_owned()));
+    }
+    Ok(Value::Object(merged))
 }
 
 /// 페이지에 끌기 단계 시각을 steps 번 보낸다. 각 단계는 시작 시각 기준의 예정 시각에 보낸다.

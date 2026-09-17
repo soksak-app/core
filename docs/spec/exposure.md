@@ -2,7 +2,7 @@
 
 [한국어](exposure.ko.md)
 
-This specification is not implemented yet; [feature status](../features.md) tracks its implementation.
+Core, the plugin API, the terminal plugin, and the macOS hosts implement this specification; [feature status](../features.md) records its validation.
 
 Core (the workbench and the native host) publishes declared status values, commands, and DOM elements to external clients through the [local endpoint](endpoint.md). No method executes arbitrary code.
 
@@ -64,7 +64,7 @@ The native host relays registrations and requests between a surface page and the
 | Kind | Name | Meaning |
 | --- | --- | --- |
 | status | `core.surface.document` | `{url, timeOrigin, readyState, themed, scale, body, viewport, filter}`: the document address, time origin, ready state, whether the first theme is applied, device pixel ratio, body and visual viewport sizes in CSS pixels, and the computed `filter` of the root element |
-| status | `core.surface.input` | The last 32 trusted or untrusted input events of the document in order: `{type, trusted, x, y, key}` for `pointerdown`, `pointerup`, `pointermove`, `click`, `wheel`, and `keydown` |
+| status | `core.surface.input` | The last 32 trusted or untrusted input events of the document in order: `{sequence, type, trusted, x, y, key}` for `pointerdown`, `pointerup`, `pointermove`, `click`, `wheel`, and `keydown`. `sequence` starts at 1 and increases by one for each recorded event |
 | command | `core.surface.hit` | `{x, y}` in CSS pixels; returns `true` when an element of the document is at the point |
 
 ### Modal documents
@@ -88,13 +88,14 @@ Screen coordinates are points with the origin at the top-left corner of the prim
 | Kind | Name | Meaning |
 | --- | --- | --- |
 | status | `host.window` | `{frame, content, scale, key, active, children, controls, surfaces, modal}`: window frame, content size, backing scale, key-window state, whether the application is active, the number of child OS windows, window button frames with `hidden`, native surfaces `{id, frame, visible, order}`, and the open native modal `{id, mode, shown, frame, order, background}` or `null` |
+| status | `host.windows` | The `windows.list` result. It changes when a window opens or closes and when a window title, project, key state, or page readiness changes |
 | status | `host.screens` | `[{x, y, width, height, scale}]`: the displays in screen coordinates with their backing scale |
 | status | `host.dock` | The titles of the application's Dock menu items in order |
 | command | `host.window.close` | Closes the window through its normal close action |
 | command | `host.window.move` | Moves the window frame origin to `{x, y}` in screen coordinates |
 | command | `host.window.maximize` | Maximizes the window, or restores it with `{on: false}` |
 | command | `host.window.resize` | Resizes the content area to `{width, height}` |
-| command | `host.window.reload` | Reloads the main page |
+| command | `host.window.reload` | Reloads the main page and resolves after the new page reports ready; 1005 if it does not within 10 seconds |
 | command | `host.window.presented` | Resolves after the main page and visible application documents have presented their current geometry |
 | command | `host.hit` | Returns the owner of the point `{x, y}` in window coordinates: `{kind: "page"}`, `{kind: "surface", surface}`, or `{kind: "native", identifier}` |
 | command | `host.dock.select` | Performs the Dock menu item with `{title}` |
@@ -106,7 +107,7 @@ Clients call these JSON-RPC 2.0 methods.
 
 | Method | Params | Result |
 | --- | --- | --- |
-| `windows.list` | none | `[{window, title, project, key}]` |
+| `windows.list` | none | `[{window, title, project, key, ready}]`. `project` is the root directory of the project last opened in the window, or `null`. `ready` is true after the main page of the window reports ready and false while it loads; requests for a window whose page is loading fail with 1003 |
 | `exposure.list` | `{window}` | `{status, commands, dom}`: the declared entries of core, the host, and loaded plugins in the declaration format, each with `registered` |
 | `status.get` | `{window, name}` | Current value |
 | `status.watch` | `{window, name, surface?}` | `null`; the host then sends `status.changed` notifications `{window, name, surface?, value}` on each change until `status.unwatch` or until the connection closes. Watches with different `surface` values are separate |
@@ -135,7 +136,7 @@ The host and the pages exchange these messages. They are internal to core and no
 | main page → host | call `exposureReply` | `{id, result}` or `{id, error: {code, message}}` |
 | main page → host | call `exposureChanged` | `{name, surface?, value}` for a watched status; `surface` is present when the watch named one |
 | surface page → host | call `exposureRegister` | `{surface, kind, name}` |
-| host → main page | event `exposure-registered` | `{surface, kind, name}`; `{surface, closed: true}` when the surface is removed |
+| host → main page | event `exposure-registered` | `{surface, kind, name}`; `{surface, closed: true}` when the surface is removed. Surfaces outlive a reload of the main page, so after the main page reports ready the host sends every live registration again |
 | main page → host | call `exposureForward` | `{id, surface, method, params}` for a name that a surface page registered |
 | host → surface page | event `exposure-request` | `{id, method, params}` |
 | main page → surface page (through `exposureForward`) | `status.watch`, `status.unwatch` | `{name}`. The surface page starts or stops following the value |
@@ -143,7 +144,7 @@ The host and the pages exchange these messages. They are internal to core and no
 | host → main page | event `diagnostics-tick` | No payload. Diagnostic builds only: one per step of `diagnostics.drag` |
 | surface page → host | call `exposureReply` | `{id, result}` or `{id, error}`; the host returns it to the main page as the result of `exposureForward` |
 
-The main page validates names against the declarations before it registers or forwards them. `exposureReply` from the main page answers an `exposure-request` of the host; `exposureReply` from a surface page answers a forwarded request. The host identifies the caller by its webview.
+The main page validates names against the declarations before it registers or forwards them. It keeps a registration from a surface that no loaded layout contains yet, and applies or rejects it when a layout containing the surface is loaded. `exposureReply` from the main page answers an `exposure-request` of the host; `exposureReply` from a surface page answers a forwarded request. The host identifies the caller by its webview.
 
 The runtime modules map these calls to framework bindings:
 

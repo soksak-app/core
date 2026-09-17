@@ -73,7 +73,9 @@ type Surfaces struct {
 	projects map[string]bool
 	root     string
 	ready    bool
-	monitor  uintptr
+	// readied 는 다음 WindowReady 를 기다리는 채널이다. Host.mu 로 보호한다.
+	readied []chan struct{}
+	monitor uintptr
 
 	// 호스트 호출 사이의 모달 상태와 테마를 보호한다.
 	// 뷰는 주 스레드에서만 다루므로 잠금이 필요 없고, 이 잠금을 잡은 경로는 주 스레드를
@@ -86,6 +88,8 @@ type Surfaces struct {
 	// 연속 크기 변경 중인 표면. 표면은 프레임마다 호출을 받지 않고 연속 변경의 시작과
 	// 끝을 받는다.
 	live map[string]bool
+	// registrations 는 표면 페이지가 등록한 항목이다. 메인 페이지가 다시 읽히면 새 페이지에 다시 알린다.
+	registrations map[string][]SurfaceRegistration
 	// 연속 갱신이 진행 중인지 나타낸다. 페이지가 커밋마다 알리고, 이 값으로 run-began 과
 	// run-ended 를 프레임마다가 아니라 연속 갱신의 시작과 끝에만 발행한다.
 	running bool

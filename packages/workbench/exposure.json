@@ -298,7 +298,7 @@
       },
       {
         "name": "core.settings",
-        "description": "The effective settings, the project that project-scope changes apply to, and the keys that the project overrides.",
+        "description": "The effective settings, the project that project-scope changes apply to, the keys that the project overrides, and whether a change is still being saved.",
         "schema": {
           "type": "object",
           "properties": {
@@ -316,6 +316,9 @@
               "items": {
                 "type": "string"
               }
+            },
+            "saving": {
+              "type": "boolean"
             }
           }
         }
@@ -524,6 +527,9 @@
           "items": {
             "type": "object",
             "properties": {
+              "sequence": {
+                "type": "integer"
+              },
               "type": {
                 "type": "string"
               },

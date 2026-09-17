@@ -28,6 +28,9 @@ func (s *Surfaces) setTitle(title string) {
 	s.title = title
 	s.mu.Unlock()
 	s.window.SetTitle(title)
+	if s.host != nil {
+		go s.host.windowsChanged()
+	}
 }
 
 // 창 자신의 단추를 두는 위치. 창의 왼쪽 위에서 잰 점이고, 맨 왼쪽 단추의 왼쪽 위
@@ -133,8 +136,15 @@ func (h *Host) WindowReady(ctx context.Context) error {
 	}
 	h.mu.Lock()
 	s.ready = true
+	readied := s.readied
+	s.readied = nil
 	h.mu.Unlock()
 	s.first.Do(func() { s.Emit("page-ready") })
+	s.replayRegistrations()
+	go h.windowsChanged()
+	for _, ready := range readied {
+		close(ready)
+	}
 	go s.rewatch()
 	return nil
 }
@@ -177,6 +187,7 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 	h.mu.Lock()
 	h.windows[win.ID()] = s
 	h.mu.Unlock()
+	go h.windowsChanged()
 	place := func(*application.WindowEvent) {
 		application.InvokeSync(func() {
 			prepareWindow(win)
@@ -188,7 +199,10 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 	win.OnWindowEvent(events.Common.WindowDidResize, place)
 	win.OnWindowEvent(events.Common.WindowShow, place)
 	// host.window 를 감시하는 연결에 창의 위치, 크기와 키 상태 변경을 알린다.
-	changed := func(*application.WindowEvent) { s.windowChanged() }
+	changed := func(*application.WindowEvent) {
+		s.windowChanged()
+		go h.windowsChanged()
+	}
 	for _, event := range []events.WindowEventType{events.Common.WindowDidResize, events.Common.WindowDidMove,
 		events.Common.WindowFocus, events.Common.WindowLostFocus} {
 		win.OnWindowEvent(event, changed)
@@ -197,6 +211,7 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 		h.mu.Lock()
 		s.ready = false
 		h.mu.Unlock()
+		go h.windowsChanged()
 		application.InvokeSync(func() { cancelLayout(win) })
 		s.discardOverlay()
 	})
@@ -219,6 +234,7 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 		s.close()
 		h.relay.abandon(s, nil)
 		h.notifyWorkspace()
+		go h.windowsChanged()
 		if quit {
 			go application.Get().Quit()
 		}

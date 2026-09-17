@@ -33,9 +33,9 @@ packages/host/wailsv3/                     packages/host/tauriv2/
     shapes.go      outlines above surfaces            shapes.rs
     theme.go       theme storage and delivery         theme.rs
     sidecars.go    sidecar channel                    sidecars.rs
-    exposure.go    exposure request relay             exposure.rs      not implemented
-    endpoint.go    JSON-RPC server                    endpoint.rs      not implemented
-    diagnostics.go diagnostics, registered by --observe   diagnostics.rs
+    exposure.go    exposure request relay             exposure.rs
+    endpoint.go    JSON-RPC server                    endpoint.rs
+    diagnostics.go diagnostic methods (build tag)     diagnostics.rs
     bridge.js      call channel for additional webviews   difference H3
     platform/                                  platform/
       platform.go  interface and selection       platform.rs
@@ -50,7 +50,7 @@ packages/host/wailsv3/                     packages/host/tauriv2/
         capture.go   capture calls                    capture.rs
         dock.go      Dock menu                        dock.rs
         identity.go  directory identity               identity.rs
-        endpoint.go  Unix socket                      endpoint.rs      not implemented
+        endpoint.go  Unix socket                      endpoint.rs
       windows/                                   windows/
         windows.go     package documentation, registration  windows.rs
         endpoint.go    named pipe                       endpoint.rs    not implemented

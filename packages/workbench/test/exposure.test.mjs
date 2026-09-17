@@ -160,15 +160,30 @@ test("diagnostic methods are answered by their registered handlers", async () =>
 test("surface registrations are checked against the declarations and the surface's plugin", () => {
   const made = coreRegistry(fakeHost());
   const plugins = { "tab-a": "probe", "tab-b": "probe", "tab-c": "other" };
-  made.configure({ surfacePlugin: (surface) => plugins[surface] ?? null });
+  let changes = 0;
+  made.configure({ surfacePlugin: (surface) => plugins[surface] ?? null, registrationChanged: () => changes++ });
   made.registered({ surface: "tab-a", kind: "status", name: "probe.lines" });
   made.registered({ surface: "tab-a", kind: "dom", name: "probe.lines" });
   assert.throws(() => made.registered({ surface: "tab-a", kind: "command", name: "probe.lines" }), /undeclared command probe.lines/);
   assert.throws(() => made.registered({ surface: "tab-a", kind: "status", name: "core.fixture.count" }), /undeclared/);
   assert.throws(() => made.registered({ surface: "tab-c", kind: "command", name: "probe.send" }), /of plugin other cannot register/);
-  assert.throws(() => made.registered({ surface: "tab-x", kind: "command", name: "probe.send" }), /of plugin null/);
+  made.registered({ surface: "tab-x", kind: "command", name: "probe.send" });
+  made.registered({ surface: "tab-z", kind: "command", name: "probe.send" });
+  assert.deepEqual([made.namesOf("tab-x"), made.namesOf("tab-z")], [[], []], "surfaces of unknown plugins are held");
+  plugins["tab-x"] = "probe";
+  plugins["tab-z"] = "other";
+  assert.throws(() => made.revisit(), /tab-z of plugin other cannot register/, "held registrations are checked when the surface is known");
+  assert.deepEqual([made.namesOf("tab-x"), made.namesOf("tab-z")], [["command probe.send"], []]);
+  made.revisit();
+  made.registered({ surface: "tab-y", kind: "command", name: "probe.send" });
+  made.registered({ surface: "tab-y", closed: true });
+  plugins["tab-y"] = "probe";
+  made.revisit();
+  assert.deepEqual(made.namesOf("tab-y"), [], "a closed surface drops its held registrations");
   assert.deepEqual(made.namesOf("tab-a"), ["status probe.lines", "dom probe.lines"]);
+  assert.equal(changes, 4, "each accepted registration and closed surface is reported");
   made.registered({ surface: "tab-a", closed: true });
+  assert.equal(changes, 5, "a closed surface is reported");
   assert.deepEqual(made.namesOf("tab-a"), []);
   assert.equal(made.list().status.find((entry) => entry.name === "probe.lines").registered, false);
 });
@@ -273,8 +288,8 @@ test("surface pages register core surface entries, and requests can name the sur
   made.registered({ surface: "tab-a", kind: "status", name: "core.surface.fixture" });
   made.registered({ surface: "tab-b", kind: "status", name: "core.surface.fixture" });
   made.registered({ surface: "tab-b", kind: "status", name: "probe.lines" });
-  assert.throws(() => made.registered({ surface: "tab-x", kind: "status", name: "core.surface.fixture" }), /of plugin null/,
-    "a core surface entry needs a known surface");
+  made.registered({ surface: "tab-x", kind: "status", name: "core.surface.fixture" });
+  assert.deepEqual(made.namesOf("tab-x"), [], "a core surface entry of an unknown surface is held");
   assert.equal(made.list().status.find((entry) => entry.name === "core.surface.fixture").registered, true);
 
   const get = (params) => made.handle({ method: "status.get", params });

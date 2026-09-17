@@ -181,6 +181,8 @@ fn endpoint_file_is_written_and_removed() {
     assert_eq!(written["pid"], std::process::id());
     assert_eq!(written["application"], "test-file");
     assert_eq!(written["version"], "0.0.1");
+    let executable = std::fs::canonicalize(std::env::current_exe().unwrap()).unwrap();
+    assert_eq!(written["executable"], executable.to_string_lossy().as_ref());
     let started = written["started"].as_str().unwrap();
     assert_eq!(started.len(), "2026-09-17T09:00:00Z".len());
     assert!(started.ends_with('Z'));
@@ -258,5 +260,20 @@ fn surface_watches_are_separate() {
     assert_eq!(method, "status.unwatch");
     assert_eq!(params, json!({"name": "probe.lines", "surface": "tab-a"}));
     assert!(notifier.watched("w1", "probe.lines"), "the watch without a surface remains");
+    endpoint.stop();
+}
+
+#[test]
+fn names_must_have_the_owner_form() {
+    let config = tempfile::tempdir().unwrap();
+    let (fake, _) = Fake::new();
+    let endpoint = start(config.path(), "test-names", fake.clone());
+    let mut connection = open(&endpoint);
+    for (id, name) in [(1, json!("layout")), (2, json!("Core.layout")), (3, json!("core.")), (4, json!(3))] {
+        let reply = request(&mut connection, id, "status.get", json!({"window": "w1", "name": name}));
+        assert_eq!(reply["error"]["code"], -32602, "{name}");
+    }
+    assert!(fake.calls().is_empty());
+    assert!(endpoint::valid_name("core.surface.document") && endpoint::valid_name("plugin-x.a-1"));
     endpoint.stop();
 }

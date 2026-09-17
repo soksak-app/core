@@ -35,6 +35,7 @@ const watchKey = (name, surface) => JSON.stringify([name, surface ?? null]);
  *   surfacePlugin(surface)  표면을 소유한 플러그인 id. 모르는 표면이면 null
  *   preferred()             이름을 등록한 표면이 여럿일 때 고를 순서. 표면 id 배열
  *   origin(surface)         표면 문서의 원점 {x, y}. 창 좌표이고, 모르면 null
+ *   registrationChanged()   표면의 등록이 바뀐 뒤 호출된다
  */
 export function createRegistry({ call = null } = {}) {
   const declared = new Map();
@@ -43,9 +44,11 @@ export function createRegistry({ call = null } = {}) {
   const methods = new Map();
   /* 선언 키마다 그 항목을 등록한 표면. 등록 순서를 유지한다. */
   const surfaces = new Map();
+  /* 소유 플러그인을 아직 모르는 표면의 등록. 표면을 담은 배치를 불러오면 revisit 이 반영한다. */
+  const pending = new Map();
   /* 감시 중인 표면 status. 감시 키마다 따라가는 표면, 요청한 표면, 마지막 버전. */
   const following = new Map();
-  let options = { surfacePlugin: () => null, preferred: () => [], origin: () => null };
+  let options = { surfacePlugin: () => null, preferred: () => [], origin: () => null, registrationChanged: () => {} };
   let forwards = 0;
 
   const changed = (name, value, surface) => {
@@ -179,8 +182,10 @@ export function createRegistry({ call = null } = {}) {
      */
     registered({ surface, kind, name, closed }) {
       if (closed) {
+        pending.delete(surface);
         for (const owners of surfaces.values()) owners.delete(surface);
         for (const [watched, watch] of following) if (watch.surface === surface) following.delete(watched);
+        options.registrationChanged();
         return;
       }
       const key = declarationKey(kind, name);
@@ -188,13 +193,40 @@ export function createRegistry({ call = null } = {}) {
         throw new Error(`surface ${surface} registered undeclared ${kind} ${name}`);
       }
       const plugin = options.surfacePlugin(surface);
-      if (plugin === null || (ownerOf(name) !== "core" && plugin !== ownerOf(name))) {
+      if (plugin === null) {
+        // 메인 페이지가 다시 읽히면 호스트는 배치를 불러오기 전에 등록을 다시 보낸다.
+        if (!pending.has(surface)) pending.set(surface, []);
+        pending.get(surface).push({ kind, name });
+        return;
+      }
+      if (ownerOf(name) !== "core" && plugin !== ownerOf(name)) {
         throw new Error(`surface ${surface} of plugin ${plugin} cannot register ${name}`);
       }
       if (!surfaces.has(key)) surfaces.set(key, new Map());
       const owners = surfaces.get(key);
       owners.delete(surface);
       owners.set(surface, kind);
+      options.registrationChanged();
+    },
+
+    /**
+     * 소유 플러그인을 알게 된 표면의 보류된 등록을 반영한다. 선언이나 플러그인과 맞지 않는
+     * 등록은 반영하지 않고, 모아서 예외로 던진다.
+     */
+    revisit() {
+      const errors = [];
+      for (const [surface, list] of [...pending]) {
+        if (options.surfacePlugin(surface) === null) continue;
+        pending.delete(surface);
+        for (const entry of list) {
+          try {
+            this.registered({ surface, ...entry });
+          } catch (error) {
+            errors.push(error.message);
+          }
+        }
+      }
+      if (errors.length) throw new Error(errors.join("; "));
     },
 
     /** 이 항목을 등록한 표면 id. 등록 순서다. */
@@ -217,6 +249,15 @@ export function createRegistry({ call = null } = {}) {
 
 /** 이 문서의 등록소. */
 export const registry = createRegistry({ call: host ? (name, arg) => host.call(name, arg) : null });
+
+/** 보류된 표면 등록을 반영한다. 선언과 맞지 않는 등록은 호스트 로그로 보고한다. */
+export function revisitRegistrations() {
+  try {
+    registry.revisit();
+  } catch (error) {
+    if (host) host.call("report", `exposure: ${error.message}`);
+  }
+}
 
 /** 코어 선언 파일을 불러와 등록소에 더한다. */
 export async function loadExposure() {

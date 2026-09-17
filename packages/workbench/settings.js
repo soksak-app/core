@@ -308,8 +308,23 @@ export function set(patch, scope = projectId ? "project" : "common") {
   revision++;
   apply();
   const saved = writing.then(() => store.settings(id, patch));
-  writing = saved.finally(async () => { changes--; if (!changes) await refresh(); });
+  writing = saved.finally(async () => {
+    changes--;
+    if (changes) return;
+    await refresh();
+    savedListener();
+  });
   return writing;
+}
+
+let savedListener = () => {};
+
+/** 저장 중인 설정 변경이 있는지 반환한다. */
+export const saving = () => changes > 0;
+
+/** 저장 중인 변경이 모두 저장되면 fn 을 호출한다. */
+export function onSaved(fn) {
+  savedListener = fn;
 }
 
 /** 값을 문서 루트에 설정한다. 시작 시 한 번, 이후 변경할 때마다 호출한다. */

@@ -2,7 +2,7 @@
 
 [한국어](endpoint.ko.md)
 
-This specification is not implemented yet; [feature status](../features.md) tracks its implementation.
+The macOS hosts implement this specification; [feature status](../features.md) records its validation. Windows and Linux transports are not implemented.
 
 The native host serves the [exposure](exposure.md) methods to local clients over a JSON-RPC 2.0 endpoint. Every build includes the endpoint because exposure is a product feature.
 
@@ -29,6 +29,7 @@ When the endpoint is ready, the host writes `<config-dir>/endpoint.json`.
   "pid": 1234,
   "application": "wailsv3",
   "version": "0.0.1",
+  "executable": "/path/to/soksak-wailsv3",
   "started": "2026-09-17T09:00:00Z"
 }
 ```
@@ -40,6 +41,7 @@ When the endpoint is ready, the host writes `<config-dir>/endpoint.json`.
 | `pid` | Host process id |
 | `application` | `wailsv3` or `tauriv2` |
 | `version` | Application version |
+| `executable` | Absolute path of the host executable with symbolic links resolved |
 | `started` | Start time in ISO 8601 |
 
 The host removes the file on exit. A client reads the file to connect. When the process with `pid` is not running, the client reports an error and does not connect.
@@ -72,7 +74,7 @@ The following methods exist only in diagnostic builds (Go build tag `diagnostics
 | Method | Params | Purpose |
 | --- | --- | --- |
 | `diagnostics.fixture` | `{window}` | Creates `<config-dir>/test-project` with empty folder settings, removes other projects, resets common settings, opens the project in the window, and returns `{root}` |
-| `diagnostics.drag` | `{window, axis, line, dx, dy, ms, times, capture?}` | Drags boundary `line` on `axis` by `dx, dy` over `ms` and back, `times` round trips, with host-timed steps. With `capture: true` the host records the window and returns `{frames: directory}` after the gesture has been presented |
+| `diagnostics.drag` | `{window, axis, line, dx, dy, ms, times, capture?}` | Drags boundary `line` on `axis` by `dx, dy` over `ms` and back, `times` round trips, with host-timed steps. Returns the page's drag result `{from, steps, took, asked, late, deepest}` after the gesture has been presented. With `capture: true` the host also records the window and adds `frames`, the frame directory; if the drag fails, the host stops the capture and removes the directory |
 | `diagnostics.capture.stop` | `{window}` | Stops a capture and returns `{frames, count}` |
 | `diagnostics.knob` | `{window, name, value}` | Sets a compositor test value (`latency`, `skew`) |
 | `diagnostics.transcript` | `{window, on}` | Starts or stops `diagnostics.log` notifications `{window, line}` for host requests, replies, and page verification lines |

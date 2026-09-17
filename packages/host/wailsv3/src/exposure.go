@@ -73,6 +73,14 @@ var hostStatus = map[string]hostEntry{
 			"scale": map[string]any{"type": "number"},
 		}}},
 	},
+	"host.windows": {
+		Description: "The windows of the application in the windows.list format.",
+		Schema: map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{
+			"window": map[string]any{"type": "string"}, "title": map[string]any{"type": "string"},
+			"project": map[string]any{"type": "string"}, "key": map[string]any{"type": "boolean"},
+			"ready": map[string]any{"type": "boolean"},
+		}}},
+	},
 	"host.dock": {
 		Description: "The titles of the application's Dock menu items in order.",
 		Schema:      map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
@@ -324,11 +332,54 @@ func (s *Surfaces) exposureRegister(viewID uint64, req SurfaceRegistration) erro
 	if req.Kind != "status" && req.Kind != "command" && req.Kind != "dom" {
 		return fmt.Errorf("unknown exposure kind %q", req.Kind)
 	}
-	if !namePattern.MatchString(req.Name) || isHostName(req.Name) || strings.HasPrefix(req.Name, "core.") {
+	// 표면이 등록하는 코어 이름은 core.surface.* 뿐이다(docs/spec/exposure.md).
+	core := strings.HasPrefix(req.Name, "core.") && !strings.HasPrefix(req.Name, "core.surface.")
+	if !namePattern.MatchString(req.Name) || isHostName(req.Name) || core {
 		return fmt.Errorf("a surface cannot register %q", req.Name)
 	}
+	s.mu.Lock()
+	if s.registrations == nil {
+		s.registrations = map[string][]SurfaceRegistration{}
+	}
+	known := false
+	for _, previous := range s.registrations[req.Surface] {
+		known = known || previous == req
+	}
+	if !known {
+		s.registrations[req.Surface] = append(s.registrations[req.Surface], req)
+	}
+	s.mu.Unlock()
 	s.window.EmitEvent("exposure-registered", req)
 	return nil
+}
+
+// replayRegistrations 는 표면 페이지의 등록을 다시 읽힌 메인 페이지에 다시 알린다. 표면은 메인
+// 페이지가 다시 읽혀도 남으므로, 새 페이지는 이전 페이지가 받은 등록을 이 호출로 받는다.
+func (s *Surfaces) replayRegistrations() {
+	s.mu.Lock()
+	var all []SurfaceRegistration
+	for _, list := range s.registrations {
+		all = append(all, list...)
+	}
+	s.mu.Unlock()
+	for _, req := range all {
+		s.window.EmitEvent("exposure-registered", req)
+	}
+}
+
+// reloadPage 는 메인 페이지를 다시 읽고, 새 페이지가 준비를 알릴 때까지 기다린다.
+func (s *Surfaces) reloadPage() error {
+	ready := make(chan struct{})
+	s.host.mu.Lock()
+	s.readied = append(s.readied, ready)
+	s.host.mu.Unlock()
+	s.window.Reload()
+	select {
+	case <-ready:
+		return nil
+	case <-time.After(pageTimeout):
+		return rpcError(codeTimeout, "the reloaded page did not report ready within %s", pageTimeout)
+	}
 }
 
 // exposureReply 는 표면 페이지가 전달받은 요청에 보낸 답을 받는다.
@@ -346,6 +397,11 @@ func (s *Surfaces) surfacesClosed(ids []string) {
 		return
 	}
 	closed := map[string]bool{}
+	s.mu.Lock()
+	for _, id := range ids {
+		delete(s.registrations, id)
+	}
+	s.mu.Unlock()
 	for _, id := range ids {
 		closed[id] = true
 		s.window.EmitEvent("exposure-registered", map[string]any{"surface": id, "closed": true})
@@ -372,14 +428,20 @@ type hostBackend struct{ h *Host }
 func (b hostBackend) Windows() []WindowEntry {
 	b.h.mu.Lock()
 	windows := make([]*Surfaces, 0, len(b.h.windows))
+	ready := map[*Surfaces]bool{}
 	for _, s := range b.h.windows {
 		windows = append(windows, s)
+		ready[s] = s.ready
 	}
 	b.h.mu.Unlock()
 	out := make([]WindowEntry, 0, len(windows))
 	for _, s := range windows {
 		s.mu.Lock()
-		entry := WindowEntry{Window: s.name, Title: s.title, Project: s.root}
+		entry := WindowEntry{Window: s.name, Title: s.title, Ready: ready[s]}
+		if s.root != "" {
+			root := s.root
+			entry.Project = &root
+		}
 		s.mu.Unlock()
 		entry.Key = s.window.IsFocused()
 		out = append(out, entry)
@@ -416,6 +478,8 @@ func (b hostBackend) HostStatus(window, name string) (any, error) {
 		return screens()
 	case "host.dock":
 		return dockItems()
+	case "host.windows":
+		return b.Windows(), nil
 	}
 	return s.windowState()
 }
@@ -478,7 +542,7 @@ func (b hostBackend) HostCommand(window, name string, params json.RawMessage) (a
 		application.InvokeSync(func() { selected = system.DockSelect(*p.Title) })
 		return nil, selected
 	case "host.window.reload":
-		s.window.Reload()
+		return nil, s.reloadPage()
 	case "host.window.presented":
 		return nil, s.presented()
 	case "host.hit":
@@ -783,6 +847,20 @@ func (s *Surfaces) presented() error {
 		return nil
 	case <-time.After(pageTimeout):
 		return rpcError(codeTimeout, "the window did not present within %s", pageTimeout)
+	}
+}
+
+// windowsChanged 는 host.windows 를 감시하는 연결에 창 목록을 보낸다. 값은 windows.list 의 결과이고,
+// 창이 열리거나 닫히거나 제목, 프로젝트, 키 상태가 바뀔 때 호출한다.
+func (h *Host) windowsChanged() {
+	if h.endpoint == nil {
+		return
+	}
+	list := hostBackend{h}.Windows()
+	for _, entry := range list {
+		if h.endpoint.Watching(entry.Window, "host.windows") {
+			h.endpoint.StatusChanged(entry.Window, "host.windows", "", list)
+		}
 	}
 }
 

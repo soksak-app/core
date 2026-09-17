@@ -29,6 +29,10 @@ pub(crate) struct WindowData {
     pub running: Running,
     pub root: Mutex<String>,
     pub ready: AtomicBool,
+    /// 다음 페이지 준비를 기다리는 요청.
+    pub readied: Mutex<Vec<std::sync::mpsc::Sender<()>>>,
+    /// 표면 페이지가 등록한 항목 (표면, 종류, 이름). 메인 페이지가 다시 읽히면 새 페이지에 다시 알린다.
+    pub registrations: Mutex<Vec<(String, String, String)>>,
 }
 
 /// 애플리케이션의 창 등록부와 프로젝트 소유 창.
@@ -94,12 +98,14 @@ pub(crate) fn list(app: &AppHandle) -> Result<serde_json::Value, String> {
     let registry = app.state::<Windows>();
     let mut labels: Vec<String> = registry.windows.lock().map_err(|e| e.to_string())?.keys().cloned().collect();
     labels.sort();
-    let owners = registry.owners.lock().map_err(|e| e.to_string())?.clone();
     let mut listed = Vec::new();
     for label in labels {
         let Some(window) = app.get_window(&label) else { continue };
-        let project = owners.iter().find(|(_, owner)| **owner == label).map(|(id, _)| id.clone());
+        let root = window_data(&window)?.root.lock().map_err(|e| e.to_string())?.clone();
+        let project = if root.is_empty() { None } else { Some(root) };
+        let ready = window_data(&window)?.ready.load(Ordering::Relaxed);
         listed.push(serde_json::json!({
+            "ready": ready,
             "window": label,
             "title": window.title().map_err(|e| e.to_string())?,
             "project": project,
@@ -122,6 +128,7 @@ fn new_window(app: &AppHandle, label: &str, url: &str, title: &str) -> Result<Wi
     let created = platform::current()?.prepare_window(created)?;
     let window = created.build().map_err(|e| e.to_string())?.as_ref().window();
     register(window.clone())?;
+    crate::exposure::windows_changed(app);
     Ok(window)
 }
 
@@ -173,12 +180,17 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
                 }
             };
             notify_workspace(host.app_handle());
+            crate::exposure::windows_changed(host.app_handle());
         }
         tauri::WindowEvent::Resized(_) => {
             let _ = place_window_controls(&host);
             crate::exposure::window_changed(&host);
         }
-        tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Focused(_) | tauri::WindowEvent::ScaleFactorChanged { .. } => {
+        tauri::WindowEvent::Focused(_) => {
+            crate::exposure::window_changed(&host);
+            crate::exposure::windows_changed(host.app_handle());
+        }
+        tauri::WindowEvent::Moved(_) | tauri::WindowEvent::ScaleFactorChanged { .. } => {
             crate::exposure::window_changed(&host);
         }
         _ => {}
@@ -218,6 +230,7 @@ pub(crate) fn project_open(window: &Window, request: OpenProject) -> Result<serd
         let owner = window.get_window(&label).ok_or("project window is closed")?;
         *window_data(&owner)?.root.lock().map_err(|e| e.to_string())? = folder.root;
         owner.set_title(&format!("{} / Tauri v2", request.title)).map_err(|e| e.to_string())?;
+        crate::exposure::windows_changed(window.app_handle());
         if label != window.label() {
             emit_window(&owner, "project-activate", &request.id).map_err(|e| e.to_string())?;
             owner.show().map_err(|e| e.to_string())?;
@@ -235,6 +248,7 @@ pub(crate) fn project_open(window: &Window, request: OpenProject) -> Result<serd
     registry.owners.lock().map_err(|e| e.to_string())?.insert(request.id, owner.label().into());
     *window_data(&owner)?.root.lock().map_err(|e| e.to_string())? = folder.root;
     owner.set_title(&format!("{} / Tauri v2", request.title)).map_err(|e| e.to_string())?;
+    crate::exposure::windows_changed(window.app_handle());
     if let Some(g) = request.geometry.filter(|g| g.width > 0.0 && g.height > 0.0) {
         owner.set_size(LogicalSize::new(g.width, g.height)).map_err(|e| e.to_string())?;
         owner.set_position(tauri::PhysicalPosition::new(g.x, g.y)).map_err(|e| e.to_string())?;
@@ -268,7 +282,13 @@ pub(crate) fn window_state(window: &Window) -> Result<Option<Geometry>, String> 
 
 /// 페이지가 창 닫기 요청을 처리할 준비가 되었음을 기록한다.
 pub(crate) fn window_ready(window: &Window) -> Result<(), String> {
-    window_data(window)?.ready.store(true, Ordering::Relaxed);
+    let data = window_data(window)?;
+    data.ready.store(true, Ordering::Relaxed);
+    crate::exposure::replay_registrations(window);
+    crate::exposure::windows_changed(window.app_handle());
+    for ready in data.readied.lock().map_err(|e| e.to_string())?.drain(..) {
+        let _ = ready.send(());
+    }
     crate::exposure::rewatch(window);
     emit_window(window, "page-ready", ()).map_err(|e| e.to_string())
 }

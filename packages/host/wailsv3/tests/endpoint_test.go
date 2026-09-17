@@ -264,6 +264,12 @@ func TestEndpointNameErrors(t *testing.T) {
 	if got.Error == nil || got.Error.Code != -32602 {
 		t.Fatalf("missing name: %+v", got)
 	}
+	for id, name := range []any{"layout", "Core.layout", "core.", 3} {
+		got = call(t, conn, 10+id, "status.get", map[string]any{"window": "main", "name": name})
+		if got.Error == nil || got.Error.Code != -32602 {
+			t.Fatalf("name %v: %+v", name, got)
+		}
+	}
 	got = call(t, conn, 3, "input.pointer", map[string]any{"window": "main", "x": 1, "y": 2, "phase": "hover"})
 	if got.Error == nil || got.Error.Code != -32602 {
 		t.Fatalf("invalid pointer phase: %+v", got)
@@ -338,6 +344,11 @@ func TestEndpointFileIsWrittenAndRemoved(t *testing.T) {
 	if info["transport"] != "unix" || info["address"] != address || info["pid"] != float64(os.Getpid()) ||
 		info["application"] != "wailsv3" || info["version"] != "0.0.1" {
 		t.Fatalf("endpoint.json: %v", info)
+	}
+	executable, _ := os.Executable()
+	executable, _ = filepath.EvalSymlinks(executable)
+	if info["executable"] != executable {
+		t.Fatalf("executable %v, want %s", info["executable"], executable)
 	}
 	if _, err := time.Parse(time.RFC3339, info["started"].(string)); err != nil {
 		t.Fatalf("started is not ISO 8601: %v", info["started"])

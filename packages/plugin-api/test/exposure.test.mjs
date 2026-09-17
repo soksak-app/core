@@ -189,23 +189,28 @@ test("a surface page registers declared names once through its port and answers 
     reply: (id, payload) => { replies.push([id, payload]); },
   };
   let loads = 0;
-  const expose = createExpose(port, async () => { loads++; return declarationMap(exposes()); });
+  const declared = exposes();
+  declared.dom[0].name = "probe.lines";
+  const expose = createExpose(port, async () => { loads++; return declarationMap(declared); });
   await expose.command("probe.send", ({ data }) => data.length);
   const rows = [element(), element()];
   await expose.dom("probe.row", rows[0]);
   await expose.dom("probe.row", rows[1]);
   await assert.rejects(expose.status("probe.unknown", () => 1, () => {}), /not declared/);
+  await expose.status("probe.lines", () => [], () => () => {});
+  await expose.dom("probe.lines", element());
   assert.equal(loads, 1);
-  assert.deepEqual(registered, [["command", "probe.send"], ["dom", "probe.row"]]);
+  assert.deepEqual(registered, [["command", "probe.send"], ["dom", "probe.row"], ["status", "probe.lines"], ["dom", "probe.lines"]],
+    "the same name registers once per kind");
   assert.equal(rows[1].dataset.expose, "probe.row");
 
   request({ id: 7, method: "command.run", params: { name: "probe.send", params: { data: "abc" } } });
   request({ id: 8, method: "dom.rect", params: { name: "probe.row", index: 1 } });
-  request({ id: 9, method: "status.get", params: { name: "probe.lines" } });
+  request({ id: 9, method: "status.get", params: { name: "probe.missing" } });
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(replies.sort((a, b) => a[0] - b[0]), [
     [7, { result: 3 }],
     [8, { result: { x: 1, y: 2, width: 3, height: 4 } }],
-    [9, { error: { code: EXPOSURE_ERRORS.unregistered, message: "status probe.lines is not registered" } }],
+    [9, { error: { code: EXPOSURE_ERRORS.unknownName, message: "unknown status probe.missing" } }],
   ]);
 });

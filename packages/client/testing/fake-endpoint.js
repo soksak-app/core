@@ -132,7 +132,7 @@ export function sampleHandlers() {
     if (params?.window !== "main") throw rpcError(1003, `window ${params?.window} does not exist`);
   };
   const handlers = {
-    "windows.list": () => [{ window: "main", title: "soksak", project: null, key: true }],
+    "windows.list": () => [{ window: "main", title: "soksak", project: null, key: true, ready: true }],
     "exposure.list": (params) => (window(params), entries),
     "status.get": (params) => {
       window(params);

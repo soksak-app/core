@@ -206,12 +206,16 @@ impl Endpoint {
         let file = directory.join("endpoint.json");
         let shared = Arc::new(Shared { service, peers: Mutex::new(HashMap::new()), next: AtomicU64::new(1) });
         let endpoint = Endpoint { shared, listener, address, file, stopped: Arc::new(AtomicBool::new(false)) };
+        let executable = std::env::current_exe()
+            .and_then(std::fs::canonicalize)
+            .map_err(|error| format!("executable path: {error}"))?;
         let record = json!({
             "transport": endpoint.listener.transport(),
             "address": endpoint.address,
             "pid": std::process::id(),
             "application": application,
             "version": env!("CARGO_PKG_VERSION"),
+            "executable": executable.to_string_lossy(),
             "started": timestamp(SystemTime::now()),
         });
         if let Err(error) = write_record(directory, &endpoint.file, &record) {
@@ -420,6 +424,9 @@ fn run(shared: &Shared, peer: u64, method: &str, params: Option<Value>) -> Resul
         Some(Value::String(window)) => window,
         _ => return Err(Failure::params("window must be a string")),
     };
+    if matches!(method, "status.get" | "status.watch" | "status.unwatch" | "command.run" | "dom.rect" | "dom.act") {
+        name(&params)?;
+    }
     if !shared.service.exists(&window) {
         return Err(Failure::new(MISSING_DOCUMENT, format!("window {window} does not exist")));
     }
@@ -466,9 +473,16 @@ fn run(shared: &Shared, peer: u64, method: &str, params: Option<Value>) -> Resul
 /// params 의 name 을 반환한다.
 fn name(params: &Map<String, Value>) -> Result<String, Failure> {
     match params.get("name") {
-        Some(Value::String(name)) => Ok(name.clone()),
-        _ => Err(Failure::params("name must be a string")),
+        Some(Value::String(name)) if valid_name(name) => Ok(name.clone()),
+        _ => Err(Failure::params("name is required and must have the form <owner>.<name>")),
     }
+}
+
+/// 이름이 `<소유자>.<이름>` 형식인지 반환한다. 각 부분은 소문자, 숫자, 하이픈이다.
+pub fn valid_name(name: &str) -> bool {
+    let parts: Vec<&str> = name.split('.').collect();
+    parts.len() >= 2
+        && parts.iter().all(|part| !part.is_empty() && part.bytes().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'-'))
 }
 
 /// params 의 name 과 surface 로 감시 키를 만든다.

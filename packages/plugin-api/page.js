@@ -91,10 +91,11 @@ function exposeSurfaceDocument() {
     filter: getComputedStyle(root).filter,
   }));
   const events = [];
+  let sequence = 0;
   const input = observed(() => events.slice());
   for (const type of INPUT_TYPES) {
     addEventListener(type, (event) => {
-      events.push({ type, trusted: event.isTrusted, x: event.clientX ?? null, y: event.clientY ?? null, key: event.key ?? null });
+      events.push({ sequence: ++sequence, type, trusted: event.isTrusted, x: event.clientX ?? null, y: event.clientY ?? null, key: event.key ?? null });
       if (events.length > INPUT_KEPT) events.shift();
       input.notify();
     }, true);

@@ -2,7 +2,7 @@
 
 [English](endpoint.md)
 
-이 명세는 아직 구현되지 않았으며, [기능 상태](../features.ko.md)가 구현 여부를 기록한다.
+macOS 호스트가 이 명세를 구현하며 [기능 상태](../features.ko.md)가 검증 결과를 기록한다. Windows와 Linux 전송은 구현하지 않았다.
 
 네이티브 호스트는 JSON-RPC 2.0 엔드포인트로 로컬 클라이언트에 [노출](exposure.ko.md) 메서드를 제공한다. 노출은 제품 기능이므로 모든 빌드에 엔드포인트가 포함된다.
 
@@ -29,6 +29,7 @@
   "pid": 1234,
   "application": "wailsv3",
   "version": "0.0.1",
+  "executable": "/path/to/soksak-wailsv3",
   "started": "2026-09-17T09:00:00Z"
 }
 ```
@@ -40,6 +41,7 @@
 | `pid` | 호스트 프로세스 id |
 | `application` | `wailsv3` 또는 `tauriv2` |
 | `version` | 애플리케이션 버전 |
+| `executable` | 심볼릭 링크를 해석한 호스트 실행 파일의 절대 경로 |
 | `started` | ISO 8601 시작 시각 |
 
 호스트는 종료할 때 파일을 삭제한다. 클라이언트는 이 파일을 읽어 연결한다. `pid` 프로세스가 실행 중이 아니면 클라이언트는 오류를 보고하고 연결하지 않는다.
@@ -72,7 +74,7 @@ HTTP 요청 줄은 최대 길이보다 큰 길이 접두 또는 올바르지 않
 | 메서드 | 매개변수 | 용도 |
 | --- | --- | --- |
 | `diagnostics.fixture` | `{window}` | 빈 폴더 설정을 가진 `<config-dir>/test-project`를 만들고, 다른 프로젝트를 제거하고, 공통 설정을 초기화하고, 창에서 그 프로젝트를 연 뒤 `{root}`를 반환한다 |
-| `diagnostics.drag` | `{window, axis, line, dx, dy, ms, times, capture?}` | `axis`의 경계 `line`을 `ms` 동안 `dx, dy`만큼 끌었다가 되돌리는 왕복을 `times`번 실행한다. 단계 시각은 호스트가 정한다. `capture: true`이면 호스트가 창을 기록하고, 동작이 화면에 표시된 뒤 `{frames: directory}`를 반환한다 |
+| `diagnostics.drag` | `{window, axis, line, dx, dy, ms, times, capture?}` | `axis`의 경계 `line`을 `ms` 동안 `dx, dy`만큼 끌었다가 되돌리는 왕복을 `times`번 실행한다. 단계 시각은 호스트가 정한다. 동작이 화면에 표시된 뒤 페이지의 끌기 결과 `{from, steps, took, asked, late, deepest}`를 반환한다. `capture: true`이면 호스트가 창도 기록하고 프레임 폴더 `frames`를 더한다. 끌기가 실패하면 호스트가 기록을 멈추고 폴더를 지운다 |
 | `diagnostics.capture.stop` | `{window}` | 캡처를 중지하고 `{frames, count}`를 반환한다 |
 | `diagnostics.knob` | `{window, name, value}` | 합성기 테스트 값(`latency`, `skew`)을 설정한다 |
 | `diagnostics.transcript` | `{window, on}` | 호스트 요청, 응답, 페이지 검증 줄에 대한 `diagnostics.log` 알림 `{window, line}`을 시작하거나 중지한다 |

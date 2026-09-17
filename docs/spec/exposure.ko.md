@@ -2,7 +2,7 @@
 
 [English](exposure.md)
 
-이 명세는 아직 구현되지 않았으며, [기능 상태](../features.ko.md)가 구현 여부를 기록한다.
+코어, 플러그인 API, 터미널 플러그인, macOS 호스트가 이 명세를 구현하며 [기능 상태](../features.ko.md)가 검증 결과를 기록한다.
 
 코어(워크벤치와 네이티브 호스트)는 선언된 상태 값, 명령, DOM 요소를 [로컬 엔드포인트](endpoint.ko.md)로 외부 클라이언트에 공개한다. 임의 코드를 실행하는 메서드는 없다.
 
@@ -64,7 +64,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 | 종류 | 이름 | 의미 |
 | --- | --- | --- |
 | status | `core.surface.document` | `{url, timeOrigin, readyState, themed, scale, body, viewport, filter}`: 문서 주소, 시간 원점, 준비 상태, 첫 테마 적용 여부, 기기 픽셀 비율, CSS 픽셀 단위 body와 시각 뷰포트 크기, 루트 요소의 계산된 `filter` |
-| status | `core.surface.input` | 문서의 최근 입력 이벤트 32개(신뢰 여부 포함)를 순서대로 담는다. `pointerdown`, `pointerup`, `pointermove`, `click`, `wheel`, `keydown`에 대한 `{type, trusted, x, y, key}` |
+| status | `core.surface.input` | 문서의 최근 입력 이벤트 32개(신뢰 여부 포함)를 순서대로 담는다. `pointerdown`, `pointerup`, `pointermove`, `click`, `wheel`, `keydown`에 대한 `{sequence, type, trusted, x, y, key}`. `sequence`는 1부터 기록한 이벤트마다 1씩 증가한다 |
 | command | `core.surface.hit` | CSS 픽셀 단위 `{x, y}`. 그 점에 문서의 요소가 있으면 `true`를 반환한다 |
 
 ### 모달 문서
@@ -88,13 +88,14 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 | 종류 | 이름 | 의미 |
 | --- | --- | --- |
 | status | `host.window` | `{frame, content, scale, key, active, children, controls, surfaces, modal}`: 창 프레임, 콘텐츠 크기, 백킹 배율, 키 창 여부, 애플리케이션 활성 여부, 자식 OS 창 수, `hidden`을 포함한 창 단추 프레임, 네이티브 표면 `{id, frame, visible, order}`, 열린 네이티브 모달 `{id, mode, shown, frame, order, background}` 또는 `null` |
+| status | `host.windows` | `windows.list` 결과. 창이 열리거나 닫힐 때와 창의 제목, 프로젝트, 키 상태, 페이지 준비 상태가 바뀔 때 바뀐다 |
 | status | `host.screens` | `[{x, y, width, height, scale}]`: 화면 좌표의 디스플레이와 백킹 배율 |
 | status | `host.dock` | 애플리케이션 Dock 메뉴 항목 제목의 순서 목록 |
 | command | `host.window.close` | 창의 일반 닫기 동작으로 창을 닫는다 |
 | command | `host.window.move` | 창 프레임 원점을 화면 좌표 `{x, y}`로 옮긴다 |
 | command | `host.window.maximize` | 창을 최대화한다. `{on: false}`이면 원래 크기로 되돌린다 |
 | command | `host.window.resize` | 콘텐츠 영역 크기를 `{width, height}`로 바꾼다 |
-| command | `host.window.reload` | 메인 페이지를 다시 로드한다 |
+| command | `host.window.reload` | 메인 페이지를 다시 로드하고 새 페이지가 준비를 알린 뒤 완료한다. 10초 안에 알리지 않으면 1005다 |
 | command | `host.window.presented` | 메인 페이지와 표시 중인 애플리케이션 문서가 현재 배치를 화면에 표시한 뒤 완료된다 |
 | command | `host.hit` | 창 좌표의 점 `{x, y}`를 소유한 대상을 반환한다: `{kind: "page"}`, `{kind: "surface", surface}`, 또는 `{kind: "native", identifier}` |
 | command | `host.dock.select` | 제목이 `{title}`인 Dock 메뉴 항목을 실행한다 |
@@ -106,7 +107,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 
 | 메서드 | 매개변수 | 결과 |
 | --- | --- | --- |
-| `windows.list` | 없음 | `[{window, title, project, key}]` |
+| `windows.list` | 없음 | `[{window, title, project, key, ready}]`. `project`는 창에 마지막으로 열린 프로젝트의 루트 디렉터리이며 없으면 `null`이다. `ready`는 창의 메인 페이지가 준비를 알린 뒤 참이고 로드하는 동안 거짓이다. 페이지가 로드 중인 창에 대한 요청은 1003으로 실패한다 |
 | `exposure.list` | `{window}` | `{status, commands, dom}`: 코어, 호스트, 로드된 플러그인의 선언 항목을 선언 형식으로 반환한다. 각 항목에 `registered`가 있다 |
 | `status.get` | `{window, name}` | 현재 값 |
 | `status.watch` | `{window, name, surface?}` | `null`. 이후 `status.unwatch`를 받거나 연결이 닫힐 때까지 값이 바뀔 때마다 호스트가 `status.changed` 알림 `{window, name, surface?, value}`를 보낸다. `surface` 값이 다른 감시는 서로 별개다 |
@@ -135,7 +136,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 | 메인 페이지 → 호스트 | 호출 `exposureReply` | `{id, result}` 또는 `{id, error: {code, message}}` |
 | 메인 페이지 → 호스트 | 호출 `exposureChanged` | 감시 중인 상태의 `{name, surface?, value}`. 감시가 표면을 지정했으면 `surface`가 있다 |
 | 표면 페이지 → 호스트 | 호출 `exposureRegister` | `{surface, kind, name}` |
-| 호스트 → 메인 페이지 | 이벤트 `exposure-registered` | `{surface, kind, name}`. 표면이 제거되면 `{surface, closed: true}` |
+| 호스트 → 메인 페이지 | 이벤트 `exposure-registered` | `{surface, kind, name}`. 표면이 제거되면 `{surface, closed: true}`. 표면은 메인 페이지를 다시 읽어도 남으므로 메인 페이지가 준비를 알린 뒤 호스트가 살아 있는 등록을 모두 다시 보낸다 |
 | 메인 페이지 → 호스트 | 호출 `exposureForward` | 표면 페이지가 등록한 이름에 대한 `{id, surface, method, params}` |
 | 호스트 → 표면 페이지 | 이벤트 `exposure-request` | `{id, method, params}` |
 | 표면 페이지 → 호스트 | 호출 `exposureReply` | `{id, result}` 또는 `{id, error}`. 호스트는 이 값을 `exposureForward`의 결과로 메인 페이지에 반환한다 |
@@ -143,7 +144,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 | 메인 페이지 → 표면 페이지(`exposureForward` 경유) | `status.next` | `{name, version}`. 표면 페이지는 값이 `version`보다 새로우면 `{version, value}`를, `status.unwatch` 뒤에는 `{closed: true}`를 응답한다. 호스트는 이 요청에 제한 시간을 두지 않으며, 표면이 닫히면 1003으로 실패한다 |
 | 호스트 → 메인 페이지 | 이벤트 `diagnostics-tick` | 내용 없음. 진단 빌드에서만 `diagnostics.drag`의 단계마다 한 번 보낸다 |
 
-메인 페이지는 이름을 등록하거나 전달하기 전에 선언과 대조해 검증한다. 메인 페이지의 `exposureReply`는 호스트의 `exposure-request`에 대한 응답이고, 표면 페이지의 `exposureReply`는 전달된 요청에 대한 응답이다. 호스트는 호출한 웹뷰로 호출자를 구분한다.
+메인 페이지는 이름을 등록하거나 전달하기 전에 선언과 대조해 검증한다. 불러온 배치에 아직 없는 표면의 등록은 보관했다가, 그 표면을 담은 배치를 불러오면 반영하거나 거부한다. 메인 페이지의 `exposureReply`는 호스트의 `exposure-request`에 대한 응답이고, 표면 페이지의 `exposureReply`는 전달된 요청에 대한 응답이다. 호스트는 호출한 웹뷰로 호출자를 구분한다.
 
 런타임 모듈은 이 호출을 프레임워크 바인딩에 대응시킨다.
 

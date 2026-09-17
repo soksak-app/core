@@ -633,8 +633,9 @@ export function createExpose(port, load) {
   const registered = new Set();
   const register = async (kind, name, add) => {
     add(await ready());
-    if (registered.has(name)) return;
-    registered.add(name);
+    const key = declarationKey(kind, name);
+    if (registered.has(key)) return;
+    registered.add(key);
     await port.register(kind, name);
   };
   return {
