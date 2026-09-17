@@ -1,0 +1,98 @@
+# 로컬 엔드포인트
+
+[English](endpoint.md)
+
+이 명세는 아직 구현되지 않았으며, [기능 상태](../features.ko.md)가 구현 여부를 기록한다.
+
+네이티브 호스트는 JSON-RPC 2.0 엔드포인트로 로컬 클라이언트에 [노출](exposure.ko.md) 메서드를 제공한다. 노출은 제품 기능이므로 모든 빌드에 엔드포인트가 포함된다.
+
+## 전송
+
+| OS | 전송 | 주소와 접근 |
+| --- | --- | --- |
+| macOS | Unix 도메인 소켓 | 사용자별 임시 디렉터리(`confstr(_CS_DARWIN_USER_TEMP_DIR)` 또는 `TMPDIR`) 아래 `soksak/`의 소켓. 호스트가 디렉터리를 모드 0700으로 생성한다 |
+| Linux | Unix 도메인 소켓 | `$XDG_RUNTIME_DIR/soksak`의 소켓. 호스트가 디렉터리를 모드 0700으로 생성한다 |
+| Windows | named pipe | `\\.\pipe\soksak-<id>`. 보안 설명자는 현재 사용자만 허용한다 |
+
+소켓 경로 길이가 macOS에서 104바이트, Linux에서 108바이트로 제한되므로 소켓을 설정 디렉터리에 두지 않는다.
+
+구현 위치: 각 [네이티브 호스트](hosts.ko.md)의 `src/platform/<os>/endpoint.*`.
+
+## 주소 확인
+
+엔드포인트가 준비되면 호스트는 `<config-dir>/endpoint.json`을 기록한다.
+
+```json
+{
+  "transport": "unix",
+  "address": "/path/to/socket",
+  "pid": 1234,
+  "application": "wailsv3",
+  "version": "0.0.1",
+  "started": "2026-09-17T09:00:00Z"
+}
+```
+
+| 필드 | 값 |
+| --- | --- |
+| `transport` | `unix` 또는 `pipe` |
+| `address` | 소켓 경로 또는 파이프 이름 |
+| `pid` | 호스트 프로세스 id |
+| `application` | `wailsv3` 또는 `tauriv2` |
+| `version` | 애플리케이션 버전 |
+| `started` | ISO 8601 시작 시각 |
+
+호스트는 종료할 때 파일을 삭제한다. 클라이언트는 이 파일을 읽어 연결한다. `pid` 프로세스가 실행 중이 아니면 클라이언트는 오류를 보고하고 연결하지 않는다.
+
+## 프레임
+
+각 메시지는 4바이트 빅엔디언 부호 없는 길이와, 그 길이만큼의 UTF-8 JSON-RPC 2.0 객체 하나로 구성된다. 최대 길이는 16 MiB다.
+
+연결은 여러 요청 동안 유지된다. 요청은 `id`로 구분해 다중화한다. 서버 알림에는 `id`가 없다.
+
+## 연결 종료
+
+호스트는 다음 중 하나를 받으면 연결을 종료한다.
+
+- 최대 길이보다 큰 길이 접두;
+- 올바른 JSON이 아닌 본문;
+- JSON-RPC 2.0 객체가 아닌 JSON 값;
+- 선언되지 않은 메서드.
+
+HTTP 요청 줄은 최대 길이보다 큰 길이 접두 또는 올바르지 않은 JSON으로 읽히므로, 호스트는 메서드를 실행하기 전에 연결을 종료한다.
+
+## 시작
+
+호스트는 창을 표시하기 전에 엔드포인트를 생성한다. 엔드포인트를 생성하지 못하면 애플리케이션은 오류와 함께 종료한다.
+
+## 진단 빌드
+
+다음 메서드는 진단 빌드(Go 빌드 태그 `diagnostics`, cargo feature `diagnostics`)에만 있다. 다른 빌드는 이 메서드를 선언되지 않은 메서드로 거부한다.
+
+| 메서드 | 용도 |
+| --- | --- |
+| `diagnostics.drag` | 드래그 동작을 실행한다 |
+| `diagnostics.capture.start` | 창 캡처를 시작한다 |
+| `diagnostics.capture.stop` | 캡처를 중지하고 파일 경로를 반환한다 |
+| `diagnostics.transcript` | 네이티브 창과 뷰 상태의 덤프를 반환한다 |
+
+호스트는 캡처 같은 큰 데이터를 설정 디렉터리 아래 파일에 기록하고, 응답에는 파일 경로를 담는다. 요청자는 측정 후 캡처 파일을 삭제한다.
+
+## 클라이언트
+
+| 패키지 | 역할 |
+| --- | --- |
+| `packages/client` | `endpoint.json`을 읽고 연결해 요청을 보내는 라이브러리 |
+| `packages/cli` | 하위 명령 `status`, `run`, `dom`, `input`, `watch`를 가진 `soksak` 명령 |
+| `packages/mcp` | stdio MCP 서버. `exposure.list`로 도구를 생성하며 네트워크 포트를 열지 않는다 |
+
+창 검사는 `packages/client`를 사용한다.
+
+## 검사
+
+각 플랫폼은 엔드포인트에 대해 다음 검사를 실행한다.
+
+- HTTP 요청 줄을 보내면 연결이 종료되고 메서드가 실행되지 않는다;
+- 다른 사용자는 연결할 수 없다;
+- 선언되지 않은 메서드를 보내면 연결이 종료된다;
+- 정상 종료 시 호스트가 `endpoint.json`을 삭제한다.
