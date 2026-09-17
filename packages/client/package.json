@@ -5,11 +5,18 @@
   "type": "module",
   "description": "Client for the soksak local endpoint.",
   "files": [
+    "client.js",
     "frame.js",
-    "platform"
+    "platform",
+    "testing"
   ],
   "scripts": {
     "bench": "node bench/transport.mjs",
     "test": "node --test test/"
+  },
+  "exports": {
+    ".": "./client.js",
+    "./frame.js": "./frame.js",
+    "./testing": "./testing/fake-endpoint.js"
   }
 }

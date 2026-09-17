@@ -84,7 +84,7 @@ The host writes large data, such as captures, to files under the configuration d
 | Package | Role |
 | --- | --- |
 | `packages/client` | Library that reads `endpoint.json`, connects, and sends requests |
-| `packages/cli` | `soksak` command with the subcommands `status`, `run`, `dom`, `input`, and `watch` |
+| `packages/cli` | `soksak` command with the subcommands `windows`, `list`, `status` (`--watch` prints each change), `run`, `dom`, and `input`. Every subcommand requires `--config-dir` |
 | `packages/mcp` | stdio MCP server. It generates its tools from `exposure.list` and opens no network port |
 
 Window checks use `packages/client`.

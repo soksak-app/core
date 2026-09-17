@@ -1,0 +1,19 @@
+{
+  "name": "@soksak/mcp",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "stdio MCP server that exposes the local endpoint of a running soksak application as tools.",
+  "bin": {
+    "soksak-mcp": "./mcp.js"
+  },
+  "files": [
+    "mcp.js"
+  ],
+  "scripts": {
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "@soksak/client": "workspace:*"
+  }
+}

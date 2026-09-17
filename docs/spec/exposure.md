@@ -91,7 +91,7 @@ Clients call these JSON-RPC 2.0 methods.
 | `dom.rect` | `{window, name, index?}` | `{x, y, width, height}` in CSS pixels of the owning document, plus `{document}`: the document origin in window coordinates |
 | `dom.act` | `{window, name, index?, action, value?, event?}` | `null`. `action` is `click`, `input`, or `dispatch`. The page receives synthetic DOM events with `isTrusted` false |
 | `input.pointer` | `{window, x, y, phase, button?, deltaX?, deltaY?}` | `null`. Window coordinates. `phase` is `move`, `down`, `drag`, `up`, or `scroll` |
-| `input.key` | `{window, key, text?, modifiers?, phase}` | `null`. `phase` is `down` or `up` |
+| `input.key` | `{window, key, text?, modifiers?, phase}` | `null`. `key` is a key name (`Enter`, `Tab`, `Escape`, `Backspace`, `Delete`, `Space`, `ArrowLeft`, `ArrowRight`, `ArrowUp`, `ArrowDown`, `Home`, `End`, `PageUp`, `PageDown`) or one character. `modifiers` is an array of `shift`, `control`, `option`, `command`. `phase` is `down` or `up` |
 
 The host delivers `input.pointer` and `input.key` as native events. On macOS it sends them through `-[NSWindow sendEvent:]`; the page receives trusted events, and the application is not activated.
 

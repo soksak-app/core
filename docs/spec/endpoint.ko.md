@@ -84,7 +84,7 @@ HTTP 요청 줄은 최대 길이보다 큰 길이 접두 또는 올바르지 않
 | 패키지 | 역할 |
 | --- | --- |
 | `packages/client` | `endpoint.json`을 읽고 연결해 요청을 보내는 라이브러리 |
-| `packages/cli` | 하위 명령 `status`, `run`, `dom`, `input`, `watch`를 가진 `soksak` 명령 |
+| `packages/cli` | 하위 명령 `windows`, `list`, `status`(`--watch`는 변경마다 출력), `run`, `dom`, `input`을 가진 `soksak` 명령. 모든 하위 명령에 `--config-dir`가 필요하다 |
 | `packages/mcp` | stdio MCP 서버. `exposure.list`로 도구를 생성하며 네트워크 포트를 열지 않는다 |
 
 창 검사는 `packages/client`를 사용한다.

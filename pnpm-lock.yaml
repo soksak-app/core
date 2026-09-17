@@ -70,11 +70,23 @@ importers:
 
   e2e: {}
 
+  packages/cli:
+    dependencies:
+      '@soksak/client':
+        specifier: workspace:*
+        version: link:../client
+
   packages/client: {}
 
   packages/host/tauriv2: {}
 
   packages/host/wailsv3: {}
+
+  packages/mcp:
+    dependencies:
+      '@soksak/client':
+        specifier: workspace:*
+        version: link:../client
 
   packages/plugin-api: {}
 
