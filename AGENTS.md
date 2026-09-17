@@ -12,6 +12,14 @@ This workspace contains the headless layout library `soksak`, the workbench fron
 - Remove harmful or unnecessary changes. Preserve correct unrelated changes separately and describe their actual purpose in the commit.
 - Verify behavior before rewriting commits. Do not merge or push without authorization.
 
+## Structure
+
+- Core (`packages/`), plugins (`plugins/`), and sidecars (`sidecars/`) do not name each other in code or tests. Only declaration files connect them: `environment.json` lists plugins, `plugin.json` lists sidecar packages, and `sidecar.json` describes a sidecar. `make boundaries` checks this rule.
+- Common functionality belongs to core so plugins do not reimplement it. Plugin functionality does not move into core. A sidecar holds native functionality for one domain.
+- Platform-specific files live only under `platform/<os>/` (`darwin`, `windows`, `linux`) in the owning package. Do not add stub files for other platforms.
+- Native code packages (Go, Rust, Objective-C) keep code in `src/`, tests in `tests/`, and manifests and build files at the root. Go and Rust files that serve the same role have the same name; test files end in `_test` in both languages. The [native host specification](docs/spec/hosts.md) lists the allowed differences.
+- Recordings made by checks are removed when the check ends.
+
 ## Documentation
 
 - Read the applicable specification before changing behavior. Update it first when the contract changes and mark incomplete implementation in [features](docs/features.md).
@@ -26,7 +34,7 @@ This workspace contains the headless layout library `soksak`, the workbench fron
 ## Verification
 
 - Run `make docs-check` for every change and review the documents against the code; structural checks do not verify meaning.
-- Run `pnpm test` for every code change; each package runs its own tests. Run `make verify` for library changes. Commit generated `dist/` changes together with their source; the final check requires no difference between source output and committed files.
+- Run `pnpm test` and `make boundaries` for every code change; each package runs its own tests. Run `make native-test` for native code changes. Run `make verify` for library changes. Commit generated `dist/` changes together with their source; the final check requires no difference between source output and committed files.
 - For native or example behavior, follow [example verification](docs/operations/examples.md). Build both hosts, then run the affected checks against those binaries.
 - Window tests connect to applications already running with `--observe --config-dir PATH`, using a disposable configuration directory and project folders. They must not launch applications or independently activate windows. Project-window checks may invoke the application’s project-open command, which creates or focuses windows as specified.
 - A recording must include the full gesture at the requested rate. Missing frames or incomplete input is a failure, not a passing measurement.
