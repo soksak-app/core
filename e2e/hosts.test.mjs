@@ -2,15 +2,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { APPS, ask } from "./app.mjs";
+import { APPS, drag, fresh, open } from "./app.mjs";
 
-const DRIVE = "4000,x,2,-120,0,48,2";
+const PLAN = { axis: "x", line: 2, dx: -120, dy: 0, ms: 48, times: 2 };
 
-const CLICK = 'button.act[title="설정"];.set-nav[data-key="nav:compositing"]';
+const LINE = /^host (\w+) (\{.*\}|\[.*\]|null) -> (.*)$/;
 
-const LINE = /host (\w+) (\{.*\}|\[.*\]|null) -> (.*)$/;
-
-function transcript(log) {
+/** 전사 줄을 호출 이름별 요청과 응답 목록으로 정리한다. 창마다 다른 id 는 순서 이름으로 바꾼다. */
+function transcript(lines) {
   const names = new Map();
   const same = (text) =>
     text.replace(/"ticket":\d+,/g, "").replace(/(prj|spc|tab)-[a-z0-9]+/g, (id, kind) => {
@@ -18,7 +17,7 @@ function transcript(log) {
       return names.get(id);
     });
   const calls = new Map();
-  for (const line of log.split("\n")) {
+  for (const line of lines) {
     const found = LINE.exec(line);
     if (!found) continue;
     const [, name, request, answer] = found;
@@ -34,52 +33,49 @@ const atRest = (calls) => {
   return prepared && presented && { request: prepared.request, answer: presented.answer };
 };
 
-const presented = (text) => /host presentSurfaces .*"settled":true.* ->/.test(text);
+const SIZE = { width: 1000, height: 620 };
 
-const SIZE = { w: 1000, h: 620 };
+/** 페이지가 확정된 배치를 표시했다는 줄. */
+const settled = (lines) => lines.some((line) => /^host presentSurfaces .*"settled":true.* ->/.test(line));
 
-const SIZED = `observe: sized ${SIZE.w}x${SIZE.h}`;
-
-const afterResize = (log = "") => {
-  const at = log.lastIndexOf(SIZED);
-  return at < 0 ? null : log.slice(at);
-};
+/** 두 앱에 모두 연결한다. 한쪽이 빌드되지 않았으면 null 이다. */
+async function both(t) {
+  const sessions = {};
+  for (const app of Object.values(APPS)) {
+    const s = await open(t, app);
+    if (!s) return null;
+    sessions[app.name] = s;
+  }
+  return sessions;
+}
 
 test("both hosts answer the same page the same way", async (t) => {
+  const sessions = await both(t);
+  if (!sessions) return t.skip("both hosts must be built");
   const logs = {};
-  for (const [name, binary] of Object.entries(APPS)) {
-    const dragged = await ask(
-      binary,
-      ["transcript on", `drag ${DRIVE} `],
-      (text) => /observe: shaking done/.test(text) && presented(text),
-      { timeout: 20_000 },
-    );
-    if (!dragged) return t.skip(`${binary} is not built`);
-    const clicked = await ask(binary, `click ${CLICK}`,
-      (text) => /host overlayPlace/.test(text),
-      { timeout: 20_000, from: false });
-    logs[name] = dragged + clicked;
+  for (const [name, s] of Object.entries(sessions)) {
+    await fresh(s);
+    const log = await s.transcript();
+    await drag(t, s, PLAN);
+    await log.until(settled, "the drag did not end with a settled commit");
+    await s.act("core.chrome.settings", "click");
+    const { controls } = await s.until("core.settings-modal", (modal) => modal.open, "settings did not open");
+    const nav = controls.find((c) => c.key === "nav:compositing");
+    await s.act("core.settings-modal.nav", "click", { index: nav.index });
+    await log.until((lines) => lines.some((line) => line.startsWith("host overlayPlace")), "settings were not placed");
+    logs[name] = await log.stop();
+    await s.run("core.settings.close");
   }
 
   const wails = transcript(logs.wailsv3);
   const tauri = transcript(logs.tauriv2);
-
   const restedWails = atRest(wails);
   const restedTauri = atRest(tauri);
-  assert.ok(restedWails, `the Wails host recorded no settled commit:\n${logs.wailsv3}`);
-  assert.ok(restedTauri, `the Tauri host recorded no settled commit:\n${logs.tauriv2}`);
-  assert.equal(
-    restedTauri.request, restedWails.request,
-    "the two hosts give the page a different plane to lay out",
-  );
-  assert.equal(
-    restedTauri.answer, restedWails.answer,
-    "the two hosts place the same surfaces differently",
-  );
-  assert.deepEqual(
-    [...tauri.keys()].sort(), [...wails.keys()].sort(),
-    "the two hosts were asked for different things",
-  );
+  assert.ok(restedWails, `the Wails host recorded no settled commit:\n${logs.wailsv3.join("\n")}`);
+  assert.ok(restedTauri, `the Tauri host recorded no settled commit:\n${logs.tauriv2.join("\n")}`);
+  assert.equal(restedTauri.request, restedWails.request, "the two hosts give the page a different plane to lay out");
+  assert.equal(restedTauri.answer, restedWails.answer, "the two hosts place the same surfaces differently");
+  assert.deepEqual([...tauri.keys()].sort(), [...wails.keys()].sort(), "the two hosts were asked for different things");
   for (const name of wails.keys()) {
     if (name === "syncSurfaces" || name === "presentSurfaces") continue;
     const mine = wails.get(name).at(-1);
@@ -90,25 +86,24 @@ test("both hosts answer the same page the same way", async (t) => {
 });
 
 test("both hosts lay out the same page the same way after a resize", async (t) => {
+  const sessions = await both(t);
+  if (!sessions) return t.skip("both hosts must be built");
   const rested = {};
-  for (const [name, binary] of Object.entries(APPS)) {
-    const log = await ask(
-      binary,
-      ["transcript on", `size ${SIZE.w},${SIZE.h}`],
-      (text) => presented(afterResize(text) ?? ""),
-      { timeout: 30_000 },
-    );
-    if (!log) return t.skip(`${binary} is not built`);
-    const found = atRest(transcript(afterResize(log)));
-    assert.ok(found, `${name} recorded no settled commit after the resize:\n${log}`);
+  for (const [name, s] of Object.entries(sessions)) {
+    await fresh(s);
+    const log = await s.transcript();
+    await s.run("host.window.resize", SIZE);
+    await s.until("host.window", (w) => w.content.width === SIZE.width && w.content.height === SIZE.height,
+      "the window did not resize");
+    await s.until("core.window.document", (doc) => doc.width === SIZE.width && doc.height === SIZE.height,
+      "the main document did not take the new size");
+    const lines = await log.until(settled, "the resize did not end with a settled commit").then(() => log.stop());
+    const found = atRest(transcript(lines));
+    assert.ok(found, `${name} recorded no settled commit after the resize:\n${lines.join("\n")}`);
     rested[name] = found;
   }
-  assert.equal(
-    rested.tauriv2.request, rested.wailsv3.request,
-    `the two hosts give the page a different plane at ${SIZE.w}x${SIZE.h}`,
-  );
-  assert.equal(
-    rested.tauriv2.answer, rested.wailsv3.answer,
-    `the two hosts place the same surfaces differently at ${SIZE.w}x${SIZE.h}`,
-  );
+  assert.equal(rested.tauriv2.request, rested.wailsv3.request,
+    `the two hosts give the page a different plane at ${SIZE.width}x${SIZE.height}`);
+  assert.equal(rested.tauriv2.answer, rested.wailsv3.answer,
+    `the two hosts place the same surfaces differently at ${SIZE.width}x${SIZE.height}`);
 });

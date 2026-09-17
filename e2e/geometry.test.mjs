@@ -1,95 +1,85 @@
-// 실제 화면 배율과 AppKit 입력으로 표면의 문서 좌표를 검사한다.
+// 실제 화면 배율과 네이티브 입력으로 표면의 문서 좌표를 검사한다.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { APPS, ask, nativeProbe } from "./app.mjs";
+import { APPS, fresh as prepare, halfPointRow, open } from "./app.mjs";
 
-async function geometry(binary, scale) {
-  const until = Date.now() + 10_000;
-  let state, surface, document, slot, mainScale;
-  for (;;) {
-    await nativeProbe(binary, { op: "presentation" });
-    state = await nativeProbe(binary, { op: "state" });
-    surface = state.views.find(view => !view.hidden && view.url.includes("terminal.html"));
-    assert.ok(surface, "the terminal surface must be visible");
-    const id = new URL(surface.url).searchParams.get("id");
-    [mainScale, slot] = await nativeProbe(binary, { op: "eval", match: "main", script: `(() => {
-      const r = document.querySelector('[data-native-surface-id="${id}"]').getBoundingClientRect();
-      return [devicePixelRatio, [r.x, r.y, r.width, r.height]];
-    })()` });
-    document = await nativeProbe(binary, { op: "eval", match: surface.url, script: `(() => {
-      const r = document.body.getBoundingClientRect();
-      return [devicePixelRatio, r.width, r.height, visualViewport.width, visualViewport.height];
-    })()` });
-    if (state.scale === scale && mainScale === scale && document[0] === scale &&
-      [surface.x, surface.y, surface.w, surface.h].every((n, i) => n === slot[i]) &&
-      document.slice(1).every((n, i) => n === (i % 2 === 0 ? surface.w : surface.h))) break;
-    assert.ok(Date.now() < until, `native/document geometry did not converge: ${JSON.stringify({
-      scale, mainScale, surface, slot, document,
-    })}`);
-    await new Promise(resolve => setTimeout(resolve, 20));
-  }
-  return { state, surface };
+/**
+ * 표시 완료 후 네이티브 표면, DOM 슬롯, 표면 문서의 배율과 크기가 일치할 때까지 기다리고
+ * 표면의 창 좌표 프레임을 반환한다.
+ */
+async function geometry(s, surface, scale) {
+  const content = (await s.get("host.window")).content;
+  await s.until("core.window.document", (doc) => doc.width === content.width && doc.height === content.height,
+    `the main document did not take the content size ${content.width}×${content.height}`);
+  await s.until("core.surfaces", (list) => {
+    const placed = list.find((x) => x.surface === surface);
+    return placed && ["x", "y", "w", "h"].every((k) => placed.applied[k] === placed.declared[k]);
+  }, "the host did not apply the declared surface frame");
+  await s.presented();
+  const state = await s.get("host.window");
+  const frame = state.surfaces.find((x) => x.id === surface).frame;
+  assert.equal(state.scale, scale, "the window must report the expected backing scale");
+  const main = await s.until("core.window.document", (doc) => doc.scale === scale,
+    `the main document did not take scale ${scale}`);
+  const slot = (await s.surfaces()).find((x) => x.surface === surface).declared;
+  assert.deepEqual([frame.x, frame.y, frame.width, frame.height], [slot.x, slot.y, slot.w, slot.h],
+    `the native surface must fill its DOM slot at scale ${main.scale}`);
+  await s.until("core.surface.document", (doc) => doc.scale === scale
+    && doc.body.width === frame.width && doc.body.height === frame.height
+    && doc.viewport.width === frame.width && doc.viewport.height === frame.height,
+  `the surface document did not match ${JSON.stringify(frame)} at scale ${scale}`, { surface });
+  return { state, frame };
 }
 
-async function clickLastPixel(binary, scale) {
-  const { state, surface } = await geometry(binary, scale);
-  const x = surface.w / 2, y = surface.h - 0.5 / scale;
-  const point = { x: surface.x + x, y: surface.y + y };
-  assert.equal((await nativeProbe(binary, { op: "hit", ...point })).url, surface.url);
-  await nativeProbe(binary, { op: "eval", match: surface.url, script: `
-    window.geometryEvents = {};
-    for (const type of ['pointerdown', 'click'])
-      addEventListener(type, e => { window.geometryEvents[type] = [e.isTrusted, e.clientX, e.clientY]; }, {once:true});
-    null;
-  ` });
-  for (const [phase, type] of [["down", "pointerdown"], ["up", "click"]]) {
-    await nativeProbe(binary, { op: "mouse", phase, ...point });
-    const until = Date.now() + 5_000;
-    let event;
-    while (!(event = await nativeProbe(binary, { op: "eval", match: surface.url,
-      script: `window.geometryEvents['${type}'] ?? null` }))) {
-      assert.ok(Date.now() < until, `the final device pixel did not receive ${type}`);
-      await new Promise(resolve => setTimeout(resolve, 20));
-    }
-    assert.equal(event[0], true, "the event must come through native event handling");
-    const tolerance = type === "pointerdown" ? 0.001 : 1;
-    assert.ok(Math.abs(event[1] - x) < tolerance && Math.abs(event[2] - y) < tolerance,
-      `native input coordinates changed: expected ${x},${y}, received ${event.slice(1)}`);
+/** 표면의 마지막 기기 픽셀 행을 네이티브 입력으로 누르고, 문서가 받은 좌표를 확인한다. */
+async function clickLastPixel(s, surface, scale) {
+  const { state, frame } = await geometry(s, surface, scale);
+  const x = frame.width / 2, y = frame.height - 0.5 / scale;
+  const point = { x: frame.x + x, y: frame.y + y };
+  assert.deepEqual(await s.run("host.hit", point), { kind: "surface", surface });
+  const seen = (await s.get("core.surface.input", surface)).at(-1)?.sequence ?? 0;
+  const fresh = (list) => list.filter((e) => e.sequence > seen);
+  await s.pointer(point.x, point.y, "down");
+  const down = await s.until("core.surface.input", (events) => fresh(events).some((e) => e.type === "pointerdown"),
+    "the final device pixel did not receive pointerdown", { surface });
+  await s.pointer(point.x, point.y, "up");
+  const events = await s.until("core.surface.input", (list) => fresh(list).some((e) => e.type === "click"),
+    "the final device pixel did not receive click", { surface });
+  for (const [type, tolerance, list] of [["pointerdown", 0.001, down], ["click", 1, events]]) {
+    const event = fresh(list).find((e) => e.type === type);
+    assert.equal(event.trusted, true, `${type} must come through native event handling`);
+    assert.ok(Math.abs(event.x - x) < tolerance && Math.abs(event.y - y) < tolerance,
+      `native input coordinates changed: expected ${x},${y}, received ${event.x},${event.y} for ${type}`);
   }
-  assert.equal((await nativeProbe(binary, { op: "state" })).front, state.front,
-    "the input probe must not activate the application");
+  assert.equal((await s.get("host.window")).active, state.active, "native input must not change application activation");
 }
 
-for (const [name, binary] of Object.entries(APPS)) {
-  test(`${name}: resizing preserves document geometry and native input`, async (t) => {
-    const initial = await nativeProbe(binary, { op: "state" }, true);
-    if (!initial) return t.skip(`${binary} is not built`);
-    await clickLastPixel(binary, initial.scale);
-    await ask(binary, ["transcript on", "size 997,647"],
-      text => /host presentSurfaces .*"settled":true.* ->/.test(text), { from: false });
-    await clickLastPixel(binary, initial.scale);
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: resizing preserves document geometry and native input`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    const terminal = await prepare(s);
+    const { scale } = await s.get("host.window");
+    await clickLastPixel(s, terminal.surface, scale);
+    await s.run("host.window.resize", { width: 997, height: 647 });
+    await s.until("host.window", (w) => w.content.width === 997 && w.content.height === 647, "the window did not resize");
+    await clickLastPixel(s, terminal.surface, scale);
   });
 
-  test(`${name}: display-scale changes preserve document geometry and native input`, async (t) => {
-    const initial = await nativeProbe(binary, { op: "state" }, true);
-    if (!initial) return t.skip(`${binary} is not built`);
-    const other = initial.screens.find(screen => screen.scale !== initial.scale);
+  test(`${app.name}: display-scale changes preserve document geometry and native input`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    const initial = await s.get("host.window");
+    const screens = await s.get("host.screens");
+    const other = screens.find((screen) => screen.scale !== initial.scale);
     if (!other) return t.skip("two displays with different scale factors are required");
-    try {
-      await ask(binary, ["transcript on", "native " + JSON.stringify({ op: "eval", match: "main", script: `
-        import('./plane.js').then(p => {
-          const g = p.currentGrid();
-          g.moveBoundary('y', 1, Math.floor(g.boundaryPos('y', 1)) + 10.5, false);
-          p.settle();
-        }); null;
-      ` })], text => /host presentSurfaces .*"settled":true.* ->/.test(text), { from: false });
-      await clickLastPixel(binary, initial.scale);
-      await nativeProbe(binary, { op: "position", x: other.x + 20, y: other.y + 20 });
-      await clickLastPixel(binary, other.scale);
-      await nativeProbe(binary, { op: "position", x: initial.x, y: initial.y });
-      await clickLastPixel(binary, initial.scale);
-    } finally {
-      await nativeProbe(binary, { op: "position", x: initial.x, y: initial.y });
-    }
+    const terminal = await prepare(s);
+    s.cleanup(() => s.run("host.window.move", { x: initial.frame.x, y: initial.frame.y }));
+    await halfPointRow(s);
+    await clickLastPixel(s, terminal.surface, initial.scale);
+    await s.run("host.window.move", { x: other.x + 20, y: other.y + 20 });
+    await clickLastPixel(s, terminal.surface, other.scale);
+    await s.run("host.window.move", { x: initial.frame.x, y: initial.frame.y });
+    await clickLastPixel(s, terminal.surface, initial.scale);
   });
 }

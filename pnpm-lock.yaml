@@ -68,7 +68,11 @@ importers:
         specifier: workspace:*
         version: link:../../packages/plugin-api
 
-  e2e: {}
+  e2e:
+    dependencies:
+      '@soksak/client':
+        specifier: workspace:*
+        version: link:../packages/client
 
   packages/cli:
     dependencies:

@@ -6,5 +6,8 @@
   "type": "module",
   "scripts": {
     "verify": "node --test --test-concurrency=1 ."
+  },
+  "dependencies": {
+    "@soksak/client": "workspace:*"
   }
 }

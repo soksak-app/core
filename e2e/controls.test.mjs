@@ -2,40 +2,48 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { APPS, ask, shake, nativeProbe } from "./app.mjs";
+import { APPS, drag, fresh, open } from "./app.mjs";
 
-const DRIVE = "5000,x,2,-250,0,48,3";
+const PLAN = { axis: "x", line: 2, dx: -250, dy: 0, ms: 48, times: 3 };
 
-for (const [name, binary] of Object.entries(APPS)) {
-  test(`${name}: maximising the window leaves its own buttons in place`, async (t) => {
-    const log = await ask(binary, ["transcript on", "zoom on"],
-      (text) => /host presentSurfaces .*"settled":true.* ->/.test(text));
-    if (!log) return t.skip(`${binary} is not built`);
-    const state = await nativeProbe(binary, { op: "state" });
-    const bar = await nativeProbe(binary, { op: "eval", match: "main", script:
-      'document.querySelector(".chrome-bar").getBoundingClientRect().toJSON()' });
-    assert.equal(state.controls.length, 3);
-    for (const button of state.controls) {
-      assert.ok(Math.abs(button.y + button.h / 2 - (bar.top + bar.height / 2)) <= 0.25,
-        `native button is outside the row centre after maximising: ${JSON.stringify(button)}`);
+/** 창 버튼 세 개가 보이고 창 머리 행의 가운데에 있는지 확인한다. */
+async function centred(s, when) {
+  const state = await s.get("host.window");
+  const bar = await s.rect("core.chrome.bar");
+  assert.equal(state.controls.length, 3);
+  for (const button of state.controls) {
+    assert.equal(button.hidden, false, `a native button is hidden ${when}`);
+    const offset = button.y + button.height / 2 - (bar.y + bar.height / 2);
+    assert.ok(Math.abs(offset) <= 0.25,
+      `native button is ${offset}pt from the row centre ${when}: ${JSON.stringify(button)}, row ${JSON.stringify(bar)}`);
+  }
+}
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: maximising the window leaves its own buttons in place`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const before = (await s.get("host.window")).frame;
+    await s.run("host.window.maximize", { on: true });
+    try {
+      await s.until("host.window", (w) => w.frame.width !== before.width || w.frame.height !== before.height,
+        "the window did not maximise");
+      await s.presented();
+      await centred(s, "after maximising");
+    } finally {
+      await s.run("host.window.maximize", { on: false });
+      await s.until("host.window", (w) => w.frame.width === before.width && w.frame.height === before.height,
+        "the window did not return to its size");
+      await s.presented();
     }
   });
 
-  test(`${name}: stopping a window recording leaves the native buttons centred`, async (t) => {
-    const run = await shake(binary, DRIVE);
-    if (!run) return t.skip(`${binary} is not built`);
-    try {
-      const state = await nativeProbe(binary, { op: "state" });
-      const bar = await nativeProbe(binary, { op: "eval", match: "main", script:
-        'document.querySelector(".chrome-bar").getBoundingClientRect().toJSON()' });
-      assert.equal(state.controls.length, 3);
-      for (const button of state.controls) {
-        assert.equal(button.hidden, false);
-        assert.ok(Math.abs(button.y + button.h / 2 - (bar.top + bar.height / 2)) <= 0.25,
-          `native button is outside the row centre after recording: ${JSON.stringify(button)}`);
-      }
-    } finally {
-      run.clean();
-    }
+  test(`${app.name}: stopping a window recording leaves the native buttons centred`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    await drag(t, s, PLAN, { capture: true });
+    await centred(s, "after recording");
   });
 }

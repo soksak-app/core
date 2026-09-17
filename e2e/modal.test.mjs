@@ -2,180 +2,201 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { APPS, ask, nativeProbe } from "./app.mjs";
+import { APPS, fresh, open } from "./app.mjs";
 
-const renders = (log, id) =>
-  log.split("\n").filter((line) => line.endsWith(`observe: modal rendered ${id}`)).length;
-
-const nativeState = (binary, from = false) => nativeProbe(binary, { op: "state" }, from);
-const evaluate = (binary, match, script) => nativeProbe(binary, { op: "eval", match, script });
-
-function transparent(view) {
-  assert.equal(view.drawsBackground, false, "the native webview must not paint a background before its DOM");
-  assert.equal(view.backgroundAlpha, 0, "the under-page background must also be transparent");
+/** 모달 웹뷰가 자기 배경을 칠하지 않는지 확인한다. */
+function transparent(modal) {
+  assert.equal(modal.background.draws, false, "the native webview must not paint a background before its DOM");
+  assert.equal(modal.background.alpha, 0, "the under-page background must also be transparent");
 }
 
+/** 설정 모달이 모든 네이티브 표면 위에서 창 전체를 덮는지 확인한다. */
 function settingsAboveSurfaces(state) {
-  const modal = state.views.findIndex((view) => view.url.includes("overlay.html?id=settings"));
-  assert.ok(modal > 0, "the settings webview must exist in the main window");
-  assert.equal(state.views[modal].hidden, false);
-  assert.equal(modal, state.views.length - 1,
-    `a native surface covers settings: ${JSON.stringify(state.views)}`);
+  const { modal } = state;
+  assert.ok(modal && modal.id === "settings" && modal.shown, `settings must be shown: ${JSON.stringify(modal)}`);
+  for (const surface of state.surfaces) {
+    assert.ok(modal.order > surface.order, `native surface ${surface.id} covers settings: ${JSON.stringify(state.surfaces)}`);
+  }
   assert.equal(state.children, 0, "settings must not create a child OS window");
-  transparent(state.views[modal]);
-  const view = state.views[modal];
-  assert.deepEqual([view.x, view.y, view.w, view.h], [0, 0, state.w, state.h],
+  transparent(modal);
+  assert.deepEqual(modal.frame, { x: 0, y: 0, width: state.content.width, height: state.content.height },
     "the settings webview must cover background native content");
 }
 
-async function background(binary, state, enabled) {
-  for (const [index, view] of state.views.entries()) {
-    if (view.url.includes("overlay.html")) continue;
-    const match = index === 0 ? "main" : view.url;
-    const until = Date.now() + 10_000;
-    for (;;) {
-      const document = await evaluate(binary, match, '[location.href, document.readyState]');
-      if (document[0] !== "about:blank" && document[1] !== "loading") break;
-      assert.ok(Date.now() < until, `${view.url}: the document did not load`);
-      await new Promise((resolve) => setTimeout(resolve, 50));
-    }
-    assert.equal(await evaluate(binary, match, 'getComputedStyle(document.documentElement).filter'),
-      enabled ? "blur(3px)" : "none", `${view.url}: background blur must match dialog visibility`);
+/** 배경 흐림이 메인 문서와 보이는 플러그인 표면 문서에 enabled 대로 적용되었는지 확인한다. */
+async function background(s, enabled) {
+  await s.until("core.window.document", (doc) => doc.background === enabled,
+    `the main document background state must be ${enabled}`);
+  for (const surface of await s.surfaces()) {
+    if (!surface.exposes.includes("status core.surface.document")) continue;
+    await s.until("core.surface.document", (doc) => doc.readyState !== "loading"
+      && doc.filter === (enabled ? "blur(3px)" : "none"),
+    `${surface.surface}: background blur must match dialog visibility`, { surface: surface.surface });
   }
 }
 
-async function until(read, accept, message) {
-  const end = Date.now()+10000;
-  let value;
-  do {
-    value = await read();
-    if (accept(value)) return value;
-    await new Promise(resolve=>setTimeout(resolve,20));
-  } while (Date.now()<end);
-  assert.fail(`${message}: ${JSON.stringify(value)}`);
+/** 설정 모달을 열고 문서가 렌더를 보고할 때까지 기다린다. */
+async function openSettings(s) {
+  await s.act("core.chrome.settings", "click");
+  return s.until("core.modal", (modal) => modal?.id === "settings" && modal.document !== null,
+    "settings did not render");
 }
 
-async function openCompositing(binary) {
-  const log = await ask(binary, 'click button.act[title="설정"]', text=>renders(text,'settings')>=1);
-  if (!log) return null;
-  await evaluate(binary,'overlay.html', `document.querySelector('[data-key="nav:compositing"]').click(); null`);
-  await until(()=>evaluate(binary,'overlay.html',`Boolean(document.querySelector('[data-key="press:build"]'))`),Boolean,'settings content did not update');
-  return true;
+/** 이름과 키로 설정 모달 컨트롤을 찾는다. */
+async function control(s, name, key) {
+  const { controls } = await s.until("core.settings-modal",
+    (modal) => modal.controls.some((c) => c.name === name && c.key === key), `settings control ${key} did not appear`);
+  return controls.find((c) => c.name === name && c.key === key);
 }
 
-for (const [name, binary] of Object.entries(APPS)) {
-  test(`${name}: an open modal's document receives the content the page updates`, async (t) => {
-    if (!await openCompositing(binary)) return t.skip(`${binary} is not built`);
-    assert.equal(await evaluate(binary, "overlay.html", 'getComputedStyle(document.documentElement).filter'),
-      "none", "settings navigation must not copy the background blur into the dialog");
-    assert.equal(await evaluate(binary, "overlay.html", 'getComputedStyle(document.body).backgroundColor'),
-      "rgba(0, 0, 0, 0.5)", "settings navigation must preserve one 50% backdrop");
+async function openCompositing(s) {
+  await openSettings(s);
+  const nav = await control(s, "core.settings-modal.nav", "nav:compositing");
+  await s.act("core.settings-modal.nav", "click", { index: nav.index });
+  await control(s, "core.settings-modal.build", "press:build");
+}
+
+/** 모달 문서의 사각형이 메인 문서의 카드 사각형과 같아질 때까지 기다린다. */
+async function modalAt(s, card) {
+  return s.until("core.modal", (modal) => ["x", "y", "width", "height"].every((k) => modal?.document?.rect[k] === card[k]),
+    `the modal document did not move to ${JSON.stringify(card)}`);
+}
+
+const rectOf = ({ x, y, width, height }) => ({ x, y, width, height });
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: an open modal's document receives the content the page updates`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    await openCompositing(s);
+    const { document } = await s.get("core.modal");
+    assert.equal(document.filter, "none", "settings navigation must not copy the background blur into the dialog");
+    assert.equal(document.bodyBackground, "rgba(0, 0, 0, 0.5)", "settings navigation must preserve one 50% backdrop");
   });
 
-  test(`${name}: rebuilding the layout from settings keeps settings above new surfaces`, async (t) => {
-    if (!await openCompositing(binary)) return t.skip(`${binary} is not built`);
-    const before = await nativeState(binary);
+  test(`${app.name}: rebuilding the layout from settings keeps settings above new surfaces`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    await openCompositing(s);
+    await s.presented();
+    const before = await s.get("host.window");
     settingsAboveSurfaces(before);
-    await ask(binary, ['transcript on', 'click button[data-key="press:build"]'],
-      (text) => renders(text, "settings") >= 1 && /host presentSurfaces .*"settled":true.* ->/.test(text),
-      { from: false });
-    const old = new Set(before.views.filter(v=>v.url.includes("terminal.html")).map(v=>v.url));
-    const after = await until(()=>nativeState(binary), state=>state.views.some(v=>!v.hidden&&v.url.includes("terminal.html")&&!old.has(v.url)),
+    const old = new Set(before.surfaces.map((x) => x.id));
+    const build = await control(s, "core.settings-modal.build", "press:build");
+    await s.act("core.settings-modal.build", "click", { index: build.index });
+    const after = await s.until("host.window",
+      (state) => state.surfaces.some((x) => x.visible && !old.has(x.id)) && state.modal?.shown,
       "the layout rebuild did not display new native surfaces");
-    assert.notDeepEqual(after.views.filter((v) => v.url.includes("terminal.html")).map((v) => v.url),
-      before.views.filter((v) => v.url.includes("terminal.html")).map((v) => v.url),
-      "the layout rebuild must create new native surfaces");
-    settingsAboveSurfaces(after);
+    assert.ok(after.surfaces.some((x) => !old.has(x.id)), "the layout rebuild must create new native surfaces");
+    await s.presented();
+    settingsAboveSurfaces(await s.get("host.window"));
   });
 
-  test(`${name}: reloading the main document removes its settings webview`, async (t) => {
-    const opened = await ask(binary, 'click button.act[title="설정"]',
-      (text) => renders(text, "settings") >= 1);
-    if (!opened) return t.skip(`${binary} is not built`);
-    settingsAboveSurfaces(await nativeState(binary));
-    const reloaded = await nativeState(binary, true);
-    assert.equal(reloaded.views.some((view) => view.url.includes("overlay.html")), false,
+  test(`${app.name}: reloading the main document removes its settings webview`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    await openSettings(s);
+    await s.presented();
+    settingsAboveSurfaces(await s.get("host.window"));
+    const origin = (await s.get("core.window.document")).timeOrigin;
+    await s.run("host.window.reload");
+    await s.until("core.window.document", (doc) => doc.timeOrigin !== origin && doc.readyState === "complete",
+      "the main document did not reload");
+    await s.until("host.window", (state) => state.modal === null,
       "the old document's overlay survives after its owning DOM is gone");
-    await background(binary, reloaded, false);
+    await background(s, false);
   });
 
-  test(`${name}: settings blocks background input and closes only through its close button`, async (t) => {
-    const opened = await ask(binary, ['transcript on', 'click button.act[title="설정"]'],
-      (text) => renders(text, "settings") >= 1);
-    if (!opened) return t.skip(`${binary} is not built`);
-    const before = await nativeState(binary);
-    settingsAboveSurfaces(before);
-    await background(binary, before, true);
-    const browser = before.views.find((view) => view.url.startsWith("https:"));
-    const point = { x: browser.x + browser.w - 4, y: browser.y + browser.h / 2 };
-    const hit = await nativeProbe(binary, { op: "hit", ...point });
-    assert.ok(hit.url.includes("overlay.html?id=settings"), "native input must reach the settings webview");
-    await evaluate(binary, "overlay.html", 'document.body.dispatchEvent(new KeyboardEvent("keydown", {key:"Escape", bubbles:true})); null');
-    const remains = await evaluate(binary, "main", `
-      document.querySelector('.set-scrim').dispatchEvent(new PointerEvent('pointerdown', {bubbles:true}));
-      document.body.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true}));
-      !!document.querySelector('#settings');
-    `);
-    assert.equal(remains, true, "background clicks and Escape must not dismiss settings");
-    settingsAboveSurfaces(await nativeState(binary));
-    assert.deepEqual(await evaluate(binary, "overlay.html", `[
-      document.querySelector('[data-native-modal]').dataset.nativeModal,
-      getComputedStyle(document.documentElement).backgroundColor,
-      getComputedStyle(document.body).backgroundColor
-    ]`), ["dialog", "rgba(0, 0, 0, 0)", "rgba(0, 0, 0, 0.5)"]);
-    await ask(binary, 'click .set-card__head .act[data-key="close"]',
-      (text) => text.includes("host overlayHide"), { from: false });
-    const closed = await nativeState(binary);
-    await background(binary, closed, false);
-    assert.equal(closed.views.some((view) => view.url.includes("overlay.html")), false);
-    assert.equal((await nativeProbe(binary, { op: "hit", ...point })).url, browser.url,
+  test(`${app.name}: settings blocks background input and closes only through its close button`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const [browser] = await s.surfaces("browser");
+    assert.ok(browser, "a browser surface must be visible");
+    await openSettings(s);
+    await s.presented();
+    settingsAboveSurfaces(await s.get("host.window"));
+    await background(s, true);
+    const frame = browser.applied;
+    const point = { x: frame.x + frame.w - 4, y: frame.y + frame.h / 2 };
+    assert.deepEqual(await s.run("host.hit", point), { kind: "native", identifier: "modal:settings" },
+      "native input must reach the settings webview");
+
+    // 모달 안을 눌러 키보드 초점을 모달 문서에 둔 뒤 Escape 를 보낸다.
+    const card = await s.rect("core.settings-modal.card");
+    await s.click(card.x + card.width / 2, card.y + card.height - 8);
+    await s.press("Escape");
+    await s.act("core.settings-modal.scrim", "dispatch", { event: { type: "pointerdown" } });
+    await s.act("core.settings-modal.scrim", "dispatch", { event: { type: "keydown", key: "Escape" } });
+    await s.presented();
+    assert.equal((await s.get("core.settings-modal")).open, true, "background clicks and Escape must not dismiss settings");
+    settingsAboveSurfaces(await s.get("host.window"));
+    const { document } = await s.get("core.modal");
+    assert.deepEqual([document.mode, document.htmlBackground, document.bodyBackground],
+      ["dialog", "rgba(0, 0, 0, 0)", "rgba(0, 0, 0, 0.5)"]);
+
+    await s.act("core.settings-modal.close", "click");
+    await s.until("host.window", (state) => state.modal === null, "settings did not close");
+    await background(s, false);
+    await s.presented();
+    assert.deepEqual(await s.run("host.hit", point), { kind: "surface", surface: browser.surface },
       "closing settings must restore native browser input");
   });
 
-  test(`${name}: add and split menus are transparent and have no backdrop`, async (t) => {
-    for (const action of ["add", "x", "y"]) {
-      const opened = await ask(binary, ['transcript on', `click .chrome__act[data-do="${action}"]`],
-        (text) => renders(text, "picker") >= 1);
-      if (!opened) return t.skip(`${binary} is not built`);
-      const state = await nativeState(binary);
-      const menu = state.views.at(-1);
-      assert.ok(menu.url.includes("overlay.html?id=picker"));
-      transparent(menu);
-      await background(binary, state, false);
-      assert.equal(await evaluate(binary, "overlay.html", 'getComputedStyle(document.body).backgroundColor'),
-        "rgba(0, 0, 0, 0)", `${action} must not shade the background`);
-      await ask(binary, 'native ' + JSON.stringify({ op: "eval", match: "overlay.html", script:
-        'document.body.dispatchEvent(new KeyboardEvent("keydown", {key:"Escape", bubbles:true})); null' }),
-        (text) => text.includes("host overlayHide"), { from: false });
-      assert.equal((await nativeState(binary)).views.some((v) => v.url.includes("overlay.html")), false,
-        `${action} must retain Escape cancellation`);
+  test(`${app.name}: add and split menus are transparent and have no backdrop`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    for (const name of ["core.card.add", "core.card.split-x", "core.card.split-y"]) {
+      await s.act(name, "click", { index: 0 });
+      const state = await s.until("host.window", (w) => w.modal?.id === "picker" && w.modal.shown,
+        `${name} did not show its menu`);
+      transparent(state.modal);
+      await background(s, false);
+      const { document } = await s.until("core.modal", (modal) => modal?.id === "picker" && modal.document !== null,
+        `${name} menu did not render`);
+      assert.equal(document.bodyBackground, "rgba(0, 0, 0, 0)", `${name} must not shade the background`);
+      // 메뉴는 열릴 때 키보드 초점을 받으므로 네이티브 Escape 가 메뉴 문서에 도달한다.
+      await s.press("Escape");
+      await s.until("host.window", (w) => w.modal === null, `${name} must retain Escape cancellation`);
     }
   });
 
-  test(`${name}: moving settings and resizing the parent preserves its native coverage`, async (t) => {
-    const opened = await ask(binary, ['transcript on', 'click button.act[title="설정"]'],
-      (text) => renders(text, "settings") >= 1);
-    if (!opened) return t.skip(`${binary} is not built`);
-    const rect = 'document.querySelector("#settings").getBoundingClientRect().toJSON()';
-    const before = await evaluate(binary, "main", rect);
-    await ask(binary, 'native ' + JSON.stringify({ op: "eval", match: "overlay.html", script: `
-      document.querySelector('[data-grip]').dispatchEvent(new MouseEvent('mousedown', {bubbles:true, button:0, screenX:100, screenY:100}));
-      window.dispatchEvent(new MouseEvent('mousemove', {screenX:170, screenY:130, buttons:1}));
-      window.dispatchEvent(new MouseEvent('mouseup'));
-      null;
-    ` }), (text) => text.includes("host overlayPlace"), { from: false });
-    const moved = await evaluate(binary, "main", rect);
-    assert.deepEqual([moved.x - before.x, moved.y - before.y], [70, 30]);
-    assert.deepEqual(await evaluate(binary, "overlay.html",
-      'document.querySelector("[data-native-modal]").getBoundingClientRect().toJSON()'), moved);
-    settingsAboveSurfaces(await nativeState(binary));
-    await ask(binary, 'size 1000,620', (text) => text.includes("host overlayPlace"), { from: false });
-    const state = await nativeState(binary);
+  test(`${app.name}: moving settings and resizing the parent preserves its native coverage`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    await openSettings(s);
+    await s.presented();
+    const before = await s.rect("core.settings-modal.card");
+    await modalAt(s, rectOf(before));
+    const grip = await s.rect("core.settings-modal.grip");
+    const from = { x: grip.x + grip.width / 2, y: grip.y + grip.height / 2 };
+    await s.pointer(from.x, from.y, "down");
+    await s.pointer(from.x + 35, from.y + 15, "drag");
+    await s.pointer(from.x + 70, from.y + 30, "drag");
+    await s.pointer(from.x + 70, from.y + 30, "up");
+    const moved = await s.until("core.modal",
+      (modal) => modal.document.rect.x === before.x + 70 && modal.document.rect.y === before.y + 30,
+      "dragging the settings header by 70,30 did not move the card by the same distance");
+    assert.deepEqual(rectOf(await s.rect("core.settings-modal.card")), moved.document.rect);
+    await s.presented();
+    settingsAboveSurfaces(await s.get("host.window"));
+
+    await s.run("host.window.resize", { width: 1000, height: 620 });
+    const state = await s.until("host.window", (w) => w.content.width === 1000 && w.content.height === 620
+      && w.modal?.frame?.width === 1000 && w.modal.frame.height === 620, "the window and settings did not resize");
     settingsAboveSurfaces(state);
-    const resized = await evaluate(binary, "main", rect);
-    assert.ok(resized.left >= 0 && resized.top >= 0 && resized.right <= state.w && resized.bottom <= state.h);
-    assert.deepEqual(await evaluate(binary, "overlay.html",
-      'document.querySelector("[data-native-modal]").getBoundingClientRect().toJSON()'), resized);
-    await background(binary, state, true);
+    await s.until("core.window.document", (doc) => doc.width === 1000 && doc.height === 620,
+      "the main document did not take the new size");
+    await s.presented();
+    const resized = rectOf(await s.rect("core.settings-modal.card"));
+    assert.ok(resized.x >= 0 && resized.y >= 0 && resized.x + resized.width <= 1000 && resized.y + resized.height <= 620,
+      `settings must stay inside the window: ${JSON.stringify(resized)}`);
+    await modalAt(s, resized);
+    await background(s, true);
   });
 }

@@ -1,232 +1,248 @@
 // 파일 저장·설정 상속·프로젝트 창의 실제 네이티브 동작을 검사한다.
-import test from 'node:test';
-import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, symlinkSync, readFileSync, rmSync, realpathSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join, dirname } from 'node:path';
-import { APPS, nativeProbe } from './app.mjs';
+import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import test from "node:test";
 
-const wait = (ms) => new Promise(resolve => setTimeout(resolve,ms));
-async function until(read, accept, message) {
-  const end = Date.now()+15000;
-  let value;
-  do {
-    value = await read();
-    if (accept(value)) return value;
-    await wait(25);
-  } while (Date.now()<end);
-  assert.fail(`${message}: ${JSON.stringify(value)}`);
-}
-const evaluate = (binary, window, script, match='main') => nativeProbe(binary,{op:'eval',window,match,script});
-async function run(binary, window, code) {
-  await evaluate(binary,window,`window.__projectCheck = null;
-    (async()=>{ try { const result = await (async()=>{ ${code} })();
-      window.__projectCheck = {result: result ?? null};
-    } catch(e) { window.__projectCheck = {error:String(e),stack:e.stack}; } })(); null`);
-  const answer = await until(()=>evaluate(binary,window,'window.__projectCheck'),v=>v!==null,'project operation did not complete');
-  assert.equal(answer.error,undefined,answer.stack);
-  return answer.result;
-}
-const settings = (binary, window, patch, scope) => run(binary,window,
-  `const s=await import('./settings.js'); await s.set(${JSON.stringify(patch)},${JSON.stringify(scope)}); return s.value('mode');`);
-const mode = (binary,window) => run(binary,window,`return (await import('./settings.js')).value('mode');`);
-const state = (binary,window) => nativeProbe(binary,{op:'state',window});
-const read = (path) => JSON.parse(readFileSync(path,'utf8'));
+import { APPS, failure, fresh, open } from "./app.mjs";
 
-for (const [name,binary] of Object.entries(APPS)) {
-  test(`${name}: project windows persist files, inherit settings, and isolate native state`, async (t) => {
-    const initial = await nativeProbe(binary,{op:'state'},true);
-    if (!initial) return t.skip(`${binary} is not built`);
-    const main = initial.window;
-    const temporary = realpathSync(mkdtempSync(join(tmpdir(),'soksak-projects-')));
-    const secondRoot = join(temporary,'second'); mkdirSync(secondRoot);
-    const thirdRoot = join(temporary,'third'); mkdirSync(thirdRoot);
-    const alias = join(temporary,'alias'); symlinkSync(secondRoot,alias);
-    let second;
-    t.after(async()=>{
-      const current = await state(binary,main);
-      for (const window of current.windows) if (window.number !== main) {
-        await nativeProbe(binary,{op:'close',window:window.number});
+const read = (path) => JSON.parse(readFileSync(path, "utf8"));
+
+const mode = async (s) => (await s.get("core.settings")).values.mode;
+
+const settings = (s, patch, scope) => s.run("core.settings.set", { patch, scope });
+
+/** 창 목록에서 known 에 없는 창 하나. */
+const added = (list, known) => list.find((w) => !known.includes(w.window)).window;
+
+/** 설정 모달 컨트롤이 나타날 때까지 기다리고 그 컨트롤을 반환한다. */
+async function control(s, name, key, predicate = () => true, message = `settings control ${key} did not appear`) {
+  const { controls } = await s.until("core.settings-modal",
+    (modal) => modal.controls.some((c) => c.name === name && c.key === key && predicate(c)), message);
+  return controls.find((c) => c.name === name && c.key === key);
+}
+
+/** 설정 모달 컨트롤을 누른다. */
+async function press(s, name, key) {
+  const found = await control(s, name, key);
+  await s.act(name, "click", { index: found.index });
+}
+
+/** 설정 모달이 열리고 네이티브 모달이 표시될 때까지 기다린다. */
+async function openSettings(s) {
+  await s.run("core.settings.open");
+  await s.until("host.window", (w) => w.modal?.id === "settings" && w.modal.shown, "settings did not render");
+}
+
+/** 설정 모달을 닫기 단추로 닫는다. */
+async function closeSettings(s) {
+  await s.act("core.settings-modal.close", "click");
+  await s.until("host.window", (w) => w.modal === null, "settings did not close");
+}
+
+/** 설정 범위 탭. 제목, 선택 여부, 인덱스. */
+async function scopeTabs(s) {
+  const { controls } = await s.until("core.settings-modal",
+    (modal) => modal.controls.some((c) => c.name === "core.settings-modal.scope"), "scope tabs did not render");
+  return controls.filter((c) => c.name === "core.settings-modal.scope");
+}
+
+const hasKey = async (s, prefix) => (await s.get("core.settings-modal")).controls.some((c) => c.key?.startsWith(prefix));
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: project windows persist files, inherit settings, and isolate native state`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const temporary = realpathSync(mkdtempSync(join(tmpdir(), "soksak-projects-")));
+    const secondRoot = join(temporary, "second"); mkdirSync(secondRoot);
+    const thirdRoot = join(temporary, "third"); mkdirSync(thirdRoot);
+    const alias = join(temporary, "alias"); symlinkSync(secondRoot, alias);
+    s.cleanup(async () => {
+      for (const window of await s.get("host.windows")) {
+        if (window.window !== s.window) await s.on(window.window).close();
       }
-      await until(()=>state(binary,main),s=>s.windows.length===1,'project window did not close');
-      await run(binary,main,`const p=await import('./projects.js');
-        for (const project of [...p.all()]) if (project.root.startsWith(${JSON.stringify(temporary)})) await p.close(project.id);
-        if (!p.active() && p.all().length) await p.activate(p.all()[0].id);
-        await p.flush();`);
-      assert.equal(await evaluate(binary,main,'document.querySelector("#applicationError")?.textContent ?? ""'),'');
-      rmSync(temporary,{recursive:true,force:true});
+      await s.windows(1, "project window did not close");
+      for (const item of await s.get("core.projects")) {
+        if (item.root.startsWith(temporary)) await s.run("core.project.close", { id: item.id });
+      }
+      const remaining = await s.get("core.projects");
+      if (!(await s.get("core.project")) && remaining.length) await s.run("core.project.activate", { id: remaining[0].id });
+      await s.run("core.projects.flush");
+      assert.equal(await s.get("core.page.error") ?? "", "");
+      rmSync(temporary, { recursive: true, force: true });
     });
 
-    const first = await run(binary,main,`return (await import('./projects.js')).active();`);
+    const first = await s.get("core.project");
     const config = dirname(first.root);
-    await settings(binary,main,{projectOpening:'windows',mode:'light'},'common');
-    assert.equal(read(join(config,'settings.json')).mode,'light');
-    assert.equal(Object.hasOwn(read(join(first.root,'.soksak/settings.json')),'mode'),false);
-    second = await run(binary,main,`const p=await import('./projects.js'),v=await import('./plane.js');
-      return p.open({root:${JSON.stringify(secondRoot)},color:'#7fe3b0',layout:v.fresh()});`);
-    const created = await until(()=>state(binary,main),s=>s.windows.length===2,'second OS window was not created');
-    let child = created.windows.find(w=>w.number!==main).number;
-    await until(()=>evaluate(binary,child,'document.querySelectorAll(".card[data-card-id]").length'),n=>n>0,'project cards did not render');
-    assert.equal(await run(binary,main,`return (await import('./projects.js')).active().id;`),first.id);
-    assert.equal(await run(binary,child,`return (await import('./projects.js')).active().id;`),second.id);
-    assert.equal(await mode(binary,child),'light');
-    await settings(binary,child,{mode:'dark'},'project');
-    assert.deepEqual(read(join(second.root,'.soksak/settings.json')),{mode:'dark'});
-    assert.equal(await mode(binary,main),'light');
-    await settings(binary,main,{mode:'dark'},'common');
-    await settings(binary,main,{mode:'light'},'common');
-    assert.equal(await mode(binary,child),'dark');
-    await run(binary,child,`await (await import('./settings.js')).reset('mode');`);
-    assert.deepEqual(read(join(second.root,'.soksak/settings.json')),{});
-    await until(()=>mode(binary,child),m=>m==='light','reset did not restore common settings');
-    assert.equal(await run(binary,child,`try { (await import('./settings.js')).set({projectOpening:'tabs'},'project'); return false; } catch { return true; }`),true);
+    await settings(s, { projectOpening: "windows", mode: "light" }, "common");
+    assert.equal(read(join(config, "settings.json")).mode, "light");
+    assert.equal(Object.hasOwn(read(join(first.root, ".soksak/settings.json")), "mode"), false);
+    const second = await s.run("core.project.open", { root: secondRoot, color: "#7fe3b0" });
+    let child = s.on(added(await s.windows(2, "second OS window was not created"), [s.window]));
+    await child.until("core.grid", (grid) => grid?.cards.length > 0, "project cards did not render");
+    assert.equal((await s.get("core.project")).id, first.id);
+    assert.equal((await child.get("core.project")).id, second.id);
+    assert.equal(await mode(child), "light");
+    await settings(child, { mode: "dark" }, "project");
+    assert.deepEqual(read(join(second.root, ".soksak/settings.json")), { mode: "dark" });
+    assert.equal(await mode(s), "light");
+    await settings(s, { mode: "dark" }, "common");
+    await settings(s, { mode: "light" }, "common");
+    assert.equal(await mode(child), "dark");
+    await child.run("core.settings.reset", { key: "mode" });
+    assert.deepEqual(read(join(second.root, ".soksak/settings.json")), {});
+    await child.until("core.settings", (value) => value.values.mode === "light", "reset did not restore common settings");
+    assert.equal(await failure(settings(child, { projectOpening: "tabs" }, "project")), -32000,
+      "a common-only setting must be rejected in the project scope");
 
-    const reopened = await run(binary,main,`const p=await import('./projects.js'),v=await import('./plane.js');
-      return p.open({root:${JSON.stringify(alias)},color:'#fff',layout:v.fresh()});`);
-    assert.equal(reopened.id,second.id);
-    assert.equal((await state(binary,main)).windows.length,2);
-    assert.equal(await run(binary,main,`return (await import('./projects.js')).all().length;`),2);
+    const reopened = await s.run("core.project.open", { root: alias, color: "#fff" });
+    assert.equal(reopened.id, second.id);
+    assert.equal((await s.get("host.windows")).length, 2);
+    assert.equal((await s.get("core.projects")).length, 2);
 
-    const concurrent = await Promise.all([main,child].map(window=>run(binary,window,
-      `return (await import('./projects.js')).open({root:${JSON.stringify(thirdRoot)},color:'#7db4ff',layout:(await import('./plane.js')).fresh()});`)));
-    assert.equal(concurrent[0].id,concurrent[1].id);
-    const shared = await until(()=>state(binary,main),s=>s.windows.length===3,'concurrent opens did not create one shared project window');
-    const sharedWindow = shared.windows.find(w=>w.number!==main&&w.number!==child).number;
-    await until(()=>evaluate(binary,sharedWindow,'document.querySelectorAll(".card[data-card-id]").length'),n=>n>0,'shared project did not render');
-    assert.equal(await run(binary,main,`return (await import('./projects.js')).all().length;`),3);
-    await nativeProbe(binary,{op:'close',window:sharedWindow});
-    await until(()=>state(binary,main),s=>s.windows.length===2,'shared project did not close');
-    await run(binary,main,`await (await import('./projects.js')).close(${JSON.stringify(concurrent[0].id)});`);
+    const concurrent = await Promise.all([s, child].map((w) => w.run("core.project.open", { root: thirdRoot, color: "#7db4ff" })));
+    assert.equal(concurrent[0].id, concurrent[1].id);
+    const shared = s.on(added(await s.windows(3, "concurrent opens did not create one shared project window"),
+      [s.window, child.window]));
+    await shared.until("core.grid", (grid) => grid?.cards.length > 0, "shared project did not render");
+    assert.equal((await s.get("core.projects")).length, 3);
+    await shared.close();
+    await s.windows(2, "shared project did not close");
+    await s.run("core.project.close", { id: concurrent[0].id });
 
-    await settings(binary,main,{mode:'dark'},'common');
-    await run(binary,child,`(await import('./settings-ui.js')).openSettings();`);
-    await until(()=>state(binary,child),s=>s.views.some(v=>!v.hidden&&v.url.includes('overlay.html')),'child settings did not render');
-    assert.equal(await evaluate(binary,main,'Boolean(window.__soksakBackground)'),false);
-    assert.equal(await evaluate(binary,child,'Boolean(window.__soksakBackground)'),true);
-    await run(binary,main,`(await import('./settings-ui.js')).openSettings();`);
-    await until(()=>state(binary,main),s=>s.views.some(v=>!v.hidden&&v.url.includes('overlay.html')),'main settings did not render');
-    const childModal = (await state(binary,child)).views.find(v=>v.url.includes('overlay.html')).url;
-    const scopeTabs = await evaluate(binary,child,`({
-      navScopes:document.querySelectorAll('.set-card__nav [data-key^="pick:scope:"]').length,
-      tabs:[...document.querySelectorAll('.set-card__pane .set-scope-tabs button')].map(b=>({
-        label:b.textContent,selected:b.getAttribute('aria-pressed'),x:b.getBoundingClientRect().x,y:b.getBoundingClientRect().y
-      }))
-    })`,childModal);
-    assert.equal(scopeTabs.navScopes,0);
-    assert.deepEqual(scopeTabs.tabs.map(b=>b.label),['전역','프로젝트']);
-    assert.deepEqual(scopeTabs.tabs.map(b=>b.selected),['true','false']);
-    assert.equal(scopeTabs.tabs[0].y,scopeTabs.tabs[1].y);
-    assert.ok(scopeTabs.tabs[0].x<scopeTabs.tabs[1].x);
-    await evaluate(binary,child,`document.querySelector('[data-key="pick:scope:project"]').click(); null`,childModal);
-    await until(()=>evaluate(binary,child,`Boolean(document.querySelector('[data-key="pick:scope:project"][data-on="true"]'))`,childModal),Boolean,'folder settings scope was not selected');
-    assert.equal(await evaluate(binary,child,`Boolean(document.querySelector('[data-key^="pick:projectOpening:"]'))`,childModal),false);
-    await evaluate(binary,child,`document.querySelector('[data-key="pick:mode:light"]').click(); null`,childModal);
-    await until(()=>mode(binary,child),m=>m==='light','modal did not update its project');
-    assert.equal(await mode(binary,main),'dark');
-    assert.equal(read(join(second.root,'.soksak/settings.json')).mode,'light');
-    assert.equal(read(join(config,'settings.json')).mode,'dark');
-    const commonLatency = read(join(config,'settings.json')).latency;
-    await evaluate(binary,child,`document.querySelector('[data-key="nav:compositing"]').click();null`,childModal);
-    await until(()=>evaluate(binary,child,`Boolean(document.querySelector('[data-set="latency"]'))`,childModal),Boolean,'compositing settings did not open');
-    await evaluate(binary,child,`const input=document.querySelector('[data-set="latency"]');input.value='7';input.dispatchEvent(new Event('change',{bubbles:true}));null`,childModal);
-    await until(()=>read(join(second.root,'.soksak/settings.json')).latency,n=>n===7,'category change did not retain project scope');
-    assert.equal(read(join(config,'settings.json')).latency,commonLatency);
-    await until(()=>evaluate(binary,child,`Boolean(document.querySelector('[data-key="reset:latency"]'))`,childModal),Boolean,'project override reset did not appear');
-    await evaluate(binary,child,`document.querySelector('[data-key="reset:latency"]').click();null`,childModal);
-    await until(()=>read(join(second.root,'.soksak/settings.json')).latency,n=>n===undefined,'project override was not removed');
-    await evaluate(binary,child,`document.querySelector('[data-key="nav:general"]').click();null`,childModal);
-    await until(()=>evaluate(binary,child,`Boolean(document.querySelector('.set-scope-tabs [data-key="pick:scope:project"][aria-pressed="true"]'))`,childModal),Boolean,'General did not retain the selected project tab');
-    await evaluate(binary,child,`document.querySelector('[data-key="pick:scope:common"]').click();null`,childModal);
-    await until(()=>evaluate(binary,child,`Boolean(document.querySelector('[data-key^="pick:projectOpening:"]'))`,childModal),Boolean,'Global tab did not display the common-only setting');
-    await evaluate(binary,child,`document.querySelector('[data-key="pick:mode:light"]').click();null`,childModal);
-    await until(()=>mode(binary,main),m=>m==='light','Global tab did not update the other project');
-    assert.equal(read(join(config,'settings.json')).mode,'light');
-    await evaluate(binary,child,`document.querySelector('[data-key="pick:scope:project"]').click();null`,childModal);
-    await until(()=>evaluate(binary,child,`Boolean(document.querySelector('[data-key="pick:scope:project"][aria-pressed="true"]'))`,childModal),Boolean,'project scope was not selected before leaving the workspace');
-    await evaluate(binary,child,`document.querySelector('[data-key="close"]').click(); null`,childModal);
-    await until(()=>state(binary,child),s=>!s.views.some(v=>v.url.includes('overlay.html')),'child settings did not close');
-    assert.equal((await state(binary,main)).views.some(v=>!v.hidden&&v.url.includes('overlay.html')),true);
-    const mainModal = (await state(binary,main)).views.find(v=>v.url.includes('overlay.html')).url;
-    await evaluate(binary,main,`document.querySelector('[data-key="close"]').click(); null`,mainModal);
-    await until(()=>state(binary,main),s=>!s.views.some(v=>v.url.includes('overlay.html')),'main settings did not close');
+    await settings(s, { mode: "dark" }, "common");
+    await openSettings(child);
+    assert.equal((await s.get("core.window.document")).background, false);
+    assert.equal((await child.get("core.window.document")).background, true);
+    await openSettings(s);
+    const tabs = await scopeTabs(child);
+    assert.equal((await child.get("core.settings-modal")).controls
+      .filter((c) => c.name === "core.settings-modal.nav" && c.key?.startsWith("pick:scope:")).length, 0);
+    assert.deepEqual(tabs.map((b) => b.label), ["전역", "프로젝트"]);
+    assert.deepEqual(tabs.map((b) => b.on), [true, false]);
+    const [globalTab, projectTab] = await Promise.all(tabs.map((b) => child.rect("core.settings-modal.scope", b.index)));
+    assert.equal(globalTab.y, projectTab.y);
+    assert.ok(globalTab.x < projectTab.x);
+    await press(child, "core.settings-modal.scope", "pick:scope:project");
+    await control(child, "core.settings-modal.scope", "pick:scope:project", (c) => c.on, "folder settings scope was not selected");
+    assert.equal(await hasKey(child, "pick:projectOpening:"), false);
+    await press(child, "core.settings-modal.pick", "pick:mode:light");
+    await child.until("core.settings", (value) => value.values.mode === "light", "modal did not update its project");
+    await child.until("core.settings", (value) => !value.saving, "the project setting was not saved");
+    assert.equal(await mode(s), "dark");
+    assert.equal(read(join(second.root, ".soksak/settings.json")).mode, "light");
+    assert.equal(read(join(config, "settings.json")).mode, "dark");
+    const commonLatency = read(join(config, "settings.json")).latency;
+    await press(child, "core.settings-modal.nav", "nav:compositing");
+    const latency = await control(child, "core.settings-modal.set", "latency");
+    await child.act("core.settings-modal.set", "input", { index: latency.index, value: "7" });
+    await child.until("core.settings", (value) => value.overridden.includes("latency") && !value.saving,
+      "category change did not retain project scope");
+    assert.equal(read(join(second.root, ".soksak/settings.json")).latency, 7);
+    assert.equal(read(join(config, "settings.json")).latency, commonLatency);
+    await press(child, "core.settings-modal.reset", "reset:latency");
+    await child.until("core.settings", (value) => !value.overridden.includes("latency") && !value.saving,
+      "project override was not removed");
+    assert.equal(read(join(second.root, ".soksak/settings.json")).latency, undefined);
+    await press(child, "core.settings-modal.nav", "nav:general");
+    await control(child, "core.settings-modal.scope", "pick:scope:project", (c) => c.on,
+      "General did not retain the selected project tab");
+    await press(child, "core.settings-modal.scope", "pick:scope:common");
+    await control(child, "core.settings-modal.pick", "pick:projectOpening:windows", () => true,
+      "Global tab did not display the common-only setting");
+    await press(child, "core.settings-modal.pick", "pick:mode:light");
+    await s.until("core.settings", (value) => value.values.mode === "light", "Global tab did not update the other project");
+    await child.until("core.settings", (value) => !value.saving, "the common setting was not saved");
+    assert.equal(read(join(config, "settings.json")).mode, "light");
+    await press(child, "core.settings-modal.scope", "pick:scope:project");
+    await control(child, "core.settings-modal.scope", "pick:scope:project", (c) => c.on,
+      "project scope was not selected before leaving the workspace");
+    await closeSettings(child);
+    assert.equal((await s.get("host.window")).modal?.shown, true);
+    await closeSettings(s);
 
-    await settings(binary,main,{mode:'dark'},'common');
-    const projectSettings = read(join(second.root,'.soksak/settings.json'));
-    await run(binary,child,`await (await import('./projects.js')).browse();`);
-    assert.equal(await evaluate(binary,child,'document.body.dataset.screen'),'library');
-    assert.equal(await mode(binary,child),'dark','library must apply common settings after leaving a project');
-    assert.equal(await evaluate(binary,child,'document.documentElement.style.colorScheme'),'dark');
-    await run(binary,child,`(await import('./settings-ui.js')).openSettings();`);
-    const libraryModal = (await until(()=>state(binary,child),s=>s.views.some(v=>v.url.includes('overlay.html')),'library settings did not open')).views.find(v=>v.url.includes('overlay.html')).url;
-    const libraryTabs = await until(()=>evaluate(binary,child,`[...document.querySelectorAll('.set-scope-tabs button')].map(b=>({label:b.textContent,selected:b.getAttribute('aria-pressed')}))`,libraryModal),tabs=>tabs.length>0,'library scope tab did not render');
-    assert.deepEqual(libraryTabs,[{label:'전역',selected:'true'}]);
-    assert.equal(await evaluate(binary,child,`Boolean(document.querySelector('[data-key^="pick:projectOpening:"]'))`,libraryModal),true);
-    await evaluate(binary,child,`document.querySelector('[data-key="pick:mode:light"]').click();null`,libraryModal);
-    await until(()=>mode(binary,main),m=>m==='light','library settings did not update common settings');
-    assert.equal(read(join(config,'settings.json')).mode,'light');
-    assert.deepEqual(read(join(second.root,'.soksak/settings.json')),projectSettings);
-    await evaluate(binary,child,`document.querySelector('[data-key="close"]').click();null`,libraryModal);
-    await until(()=>state(binary,child),s=>!s.views.some(v=>v.url.includes('overlay.html')),'library settings did not close');
-    await evaluate(binary,child,`document.querySelector('button[title="밝게 / 어둡게"]').click();null`);
-    await until(()=>mode(binary,main),m=>m==='dark','library appearance action did not update common settings');
-    assert.deepEqual(read(join(second.root,'.soksak/settings.json')),projectSettings);
-    await run(binary,child,`await (await import('./projects.js')).activate(${JSON.stringify(second.id)});`);
-    assert.equal(await mode(binary,child),'light','workspace must restore its project override');
-    assert.equal(await evaluate(binary,child,'document.documentElement.style.colorScheme'),'light');
-    await run(binary,child,`(await import('./settings-ui.js')).openSettings();`);
-    const restoredModal = (await until(()=>state(binary,child),s=>s.views.some(v=>v.url.includes('overlay.html')),'restored workspace settings did not open')).views.find(v=>v.url.includes('overlay.html')).url;
-    const restoredTabs = await until(()=>evaluate(binary,child,`[...document.querySelectorAll('.set-scope-tabs button')].map(b=>b.textContent)`,restoredModal),tabs=>tabs.length>0,'restored workspace scope tabs did not render');
-    assert.deepEqual(restoredTabs,['전역','프로젝트']);
-    await evaluate(binary,child,`document.querySelector('[data-key="close"]').click();null`,restoredModal);
-    await until(()=>state(binary,child),s=>!s.views.some(v=>v.url.includes('overlay.html')),'restored workspace settings did not close');
+    await settings(s, { mode: "dark" }, "common");
+    const projectSettings = read(join(second.root, ".soksak/settings.json"));
+    await child.run("core.projects.browse");
+    assert.equal((await child.get("core.screen")).screen, "library");
+    assert.equal(await mode(child), "dark", "library must apply common settings after leaving a project");
+    assert.equal((await child.get("core.window.document")).scheme, "dark");
+    await openSettings(child);
+    const libraryTabs = await scopeTabs(child);
+    assert.deepEqual(libraryTabs.map((b) => ({ label: b.label, on: b.on })), [{ label: "전역", on: true }]);
+    assert.equal(await hasKey(child, "pick:projectOpening:"), true);
+    await press(child, "core.settings-modal.pick", "pick:mode:light");
+    await s.until("core.settings", (value) => value.values.mode === "light", "library settings did not update common settings");
+    await child.until("core.settings", (value) => !value.saving, "the common setting was not saved");
+    assert.equal(read(join(config, "settings.json")).mode, "light");
+    assert.deepEqual(read(join(second.root, ".soksak/settings.json")), projectSettings);
+    await closeSettings(child);
+    await child.act("core.chrome.mode", "click");
+    await s.until("core.settings", (value) => value.values.mode === "dark", "library appearance action did not update common settings");
+    await child.until("core.settings", (value) => !value.saving, "the common setting was not saved");
+    assert.deepEqual(read(join(second.root, ".soksak/settings.json")), projectSettings);
+    await child.run("core.project.activate", { id: second.id });
+    assert.equal(await mode(child), "light", "workspace must restore its project override");
+    assert.equal((await child.get("core.window.document")).scheme, "light");
+    await openSettings(child);
+    assert.deepEqual((await scopeTabs(child)).map((b) => b.label), ["전역", "프로젝트"]);
+    await closeSettings(child);
 
-    await settings(binary,main,{projectOpening:'tabs'},'common');
-    const third = await run(binary,main,`const p=await import('./projects.js'),v=await import('./plane.js');
-      return p.open({root:${JSON.stringify(thirdRoot)},color:'#7db4ff',layout:v.fresh()});`);
-    assert.equal((await state(binary,main)).windows.length,2);
-    assert.equal(await run(binary,main,`return (await import('./projects.js')).active().id;`),third.id);
-    assert.equal(await run(binary,child,`return (await import('./projects.js')).active().id;`),second.id);
-    await run(binary,child,`const p=await import('./projects.js'),v=await import('./plane.js');
-      const space=p.addSpace(v.fresh()); p.renameSpace(space.id,'Saved space');
-      v.currentGrid().setSize("rail-terminal","x",213); v.currentGrid().setSize("left","x",215); v.settle();
-      await (await import('./settings.js')).set({left:false},'project'); await p.flush();`);
-    const beforeClose = await state(binary,child);
-    await nativeProbe(binary,{op:'position',window:child,x:beforeClose.x+30,y:beforeClose.y+20});
-    await nativeProbe(binary,{op:'close',window:child});
-    await until(()=>state(binary,main),s=>s.windows.length===1,'native close did not complete');
-    const saved = read(join(config,'projects.json')).find(p=>p.id===second.id);
-    assert.equal(saved.spaces.find(s=>s.id===saved.activeSpaceId).title,'Saved space');
-    assert.equal(saved.spaces.find(s=>s.id===saved.activeSpaceId).layout.railWidth.terminal,213);
-    assert.ok(saved.geometry.width>0);
-    assert.equal((await state(binary,main)).views.some(v=>!v.hidden&&v.url.includes('terminal.html')),true);
-    await settings(binary,main,{projectOpening:'windows'},'common');
-    await run(binary,main,`await (await import('./projects.js')).activate(${JSON.stringify(second.id)});`);
-    child = (await until(()=>state(binary,main),s=>s.windows.length===2,'saved project did not reopen')).windows.find(w=>w.number!==main).number;
-    await until(()=>evaluate(binary,child,'document.querySelectorAll(".card[data-card-id]").length'),n=>n>0,'saved project did not render');
-    const restored = await run(binary,child,`const p=await import('./projects.js'),v=await import('./plane.js'); return {p:p.active(),layout:v.capture()};`);
-    assert.equal(restored.p.activeSpaceId,saved.activeSpaceId);
-    assert.equal(restored.layout.railWidth.terminal,213);
-    await settings(binary,child,{left:true},'project');
-    assert.equal(await run(binary,child,`return (await import('./plane.js')).currentGrid().card('left').width;`),215);
-    const afterOpen = await state(binary,child);
-    assert.equal(afterOpen.x,beforeClose.x+30);
-    assert.equal(afterOpen.y,beforeClose.y+20, JSON.stringify({before:beforeClose, saved:saved.geometry, after:afterOpen}));
-    assert.equal(afterOpen.w,beforeClose.w);
-    assert.equal(afterOpen.h,beforeClose.h);
-    assert.equal(await mode(binary,child),'light');
-    await run(binary,main,`await (await import('./projects.js')).activate(${JSON.stringify(first.id)});`);
-    assert.equal((await state(binary,main)).windows.find(w=>w.number===main).title, `${first.title} / ${name==='wailsv3'?'Wails v3':'Tauri v2'}`);
-    await nativeProbe(binary,{op:'close',window:child});
-    await until(()=>state(binary,main),s=>s.windows.length===1,'restored project window did not close');
-    await run(binary,main,`const p=await import('./projects.js');
-      await p.move(${JSON.stringify(third.id)},-2); await p.rename(${JSON.stringify(third.id)},'First saved project');
-      await p.flush();`);
-    const origin = await evaluate(binary,main,'performance.timeOrigin');
-    await evaluate(binary,main,'location.reload(); null');
-    await until(()=>evaluate(binary,main,'performance.timeOrigin'),v=>v!==origin,'main document did not reload');
-    await until(()=>run(binary,main,`return (await import('./projects.js')).active()?.id ?? null;`),id=>id===first.id,'reload did not retain the current project');
-    assert.equal((await state(binary,main)).windows.length,1);
-    assert.equal(await run(binary,main,`return (await import('./projects.js')).all()[0].title;`),'First saved project');
-    t.diagnostic('verified common/project JSON files, native modal isolation, directory aliases, tab/window policy, and close/reopen persistence');
+    await settings(s, { projectOpening: "tabs" }, "common");
+    const third = await s.run("core.project.open", { root: thirdRoot, color: "#7db4ff" });
+    assert.equal((await s.get("host.windows")).length, 2);
+    assert.equal((await s.get("core.project")).id, third.id);
+    assert.equal((await child.get("core.project")).id, second.id);
+    const space = await child.run("core.space.add");
+    await child.run("core.space.rename", { id: space.id, title: "Saved space" });
+    await child.run("core.grid.size", { card: "rail-terminal", axis: "x", size: 213 });
+    await child.run("core.grid.size", { card: "left", axis: "x", size: 215 });
+    await settings(child, { left: false }, "project");
+    await child.run("core.projects.flush");
+    const beforeClose = (await child.get("host.window")).frame;
+    await child.run("host.window.move", { x: beforeClose.x + 30, y: beforeClose.y + 20 });
+    await child.until("host.window", (w) => w.frame.x === beforeClose.x + 30 && w.frame.y === beforeClose.y + 20,
+      "the window did not move");
+    await child.close();
+    await s.windows(1, "native close did not complete");
+    const saved = read(join(config, "projects.json")).find((p) => p.id === second.id);
+    assert.equal(saved.spaces.find((x) => x.id === saved.activeSpaceId).title, "Saved space");
+    assert.equal(saved.spaces.find((x) => x.id === saved.activeSpaceId).layout.railWidth.terminal, 213);
+    assert.ok(saved.geometry.width > 0);
+    await s.until("core.surfaces", (list) => list.some((x) => x.visible && x.plugin === "terminal"),
+      "the main window must keep its terminal surface");
+    await settings(s, { projectOpening: "windows" }, "common");
+    await s.run("core.project.activate", { id: second.id });
+    child = s.on(added(await s.windows(2, "saved project did not reopen"), [s.window]));
+    await child.until("core.grid", (grid) => grid?.cards.length > 0, "saved project did not render");
+    assert.equal((await child.get("core.project")).activeSpaceId, saved.activeSpaceId);
+    assert.equal((await child.get("core.layout")).railWidth.terminal, 213);
+    await settings(child, { left: true }, "project");
+    const shownLeft = await child.until("core.grid", (grid) => grid?.cards.some((c) => c.id === "left"),
+      "the left sidebar did not return");
+    assert.equal(shownLeft.cards.find((c) => c.id === "left").width, 215);
+    const afterOpen = (await child.get("host.window")).frame;
+    assert.deepEqual(afterOpen, { ...beforeClose, x: beforeClose.x + 30, y: beforeClose.y + 20 },
+      JSON.stringify({ before: beforeClose, saved: saved.geometry, after: afterOpen }));
+    assert.equal(await mode(child), "light");
+    await s.run("core.project.activate", { id: first.id });
+    const title = `${first.title} / ${app.name === "wailsv3" ? "Wails v3" : "Tauri v2"}`;
+    await s.until("host.windows", (list) => list.find((w) => w.window === s.window)?.title === title,
+      "the main window title did not follow the project");
+    await child.close();
+    await s.windows(1, "restored project window did not close");
+    await s.run("core.project.move", { id: third.id, delta: -2 });
+    await s.run("core.project.rename", { id: third.id, title: "First saved project" });
+    await s.run("core.projects.flush");
+    const origin = (await s.get("core.window.document")).timeOrigin;
+    await s.run("host.window.reload");
+    await s.until("core.window.document", (doc) => doc.timeOrigin !== origin && doc.readyState === "complete",
+      "main document did not reload");
+    await s.until("core.project", (value) => value?.id === first.id, "reload did not retain the current project");
+    assert.equal((await s.get("host.windows")).length, 1);
+    assert.equal((await s.get("core.projects"))[0].title, "First saved project");
+    t.diagnostic("verified common/project JSON files, native modal isolation, directory aliases, tab/window policy, and close/reopen persistence");
   });
 }
