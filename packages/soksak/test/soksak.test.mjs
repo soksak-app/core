@@ -18,28 +18,28 @@ test("a fresh soksak is one card filling the plane", () => {
 test("cards that meet read the same line, so a boundary cannot drift", () => {
   const grid = three();
   const sidebar = grid.rect("sidebar");
-  const terminal = grid.rect("terminal");
-  assert.equal(sidebar.x + sidebar.w + grid.gap, terminal.x);
+  const upper = grid.rect("upper");
+  assert.equal(sidebar.x + sidebar.w + grid.gap, upper.x);
   grid.moveBoundary("x", 1, 0.5 * W);
   const movedSidebar = grid.rect("sidebar");
-  const movedTerminal = grid.rect("terminal");
+  const movedTerminal = grid.rect("upper");
   assert.equal(movedSidebar.x + movedSidebar.w + grid.gap, movedTerminal.x);
   assertTiling(grid, "after moving the shared line");
 });
 
 test("splitting keeps the original card and its near half", () => {
   const grid = three();
-  const before = grid.card("terminal");
-  const beforeRect = grid.rect("terminal");
-  const id = grid.split("terminal", "x");
+  const before = grid.card("upper");
+  const beforeRect = grid.rect("upper");
+  const id = grid.split("upper", "x");
 
   assert.deepEqual(
-    { id: grid.card("terminal").id, data: grid.card("terminal").data },
+    { id: grid.card("upper").id, data: grid.card("upper").data },
     { id: before.id, data: before.data },
     "the original card is still the one answering to the name",
   );
   assert.equal(grid.cards.length, 4);
-  const after = grid.rect("terminal");
+  const after = grid.rect("upper");
   assert.equal(after.x, beforeRect.x, "the original keeps the near edge");
   assert.ok(after.w < beforeRect.w);
   assert.ok(grid.rect(id).x > after.x, "the new card takes the far half");
@@ -48,17 +48,17 @@ test("splitting keeps the original card and its near half", () => {
 
 test("a card spanning the new line widens its span instead of being cut", () => {
   const grid = three();
-  const before = grid.rect("browser");
-  grid.split("terminal", "x");
-  const after = grid.rect("browser");
+  const before = grid.rect("lower");
+  grid.split("upper", "x");
+  const after = grid.rect("lower");
   assert.deepEqual(
     { x: after.x, w: after.w },
     { x: before.x, w: before.w },
     "the card below is untouched",
   );
-  assert.equal(grid.crossings(grid.card("browser")), 1, "it now spans one virtual line");
+  assert.equal(grid.crossings(grid.card("lower")), 1, "it now spans one virtual line");
   // The count is over both axes: the sidebar spans across the line between
-  // terminal and browser, and reading only one axis reports it as none.
+  // upper and lower, and reading only one axis reports it as none.
   assert.equal(
     grid.crossings(grid.card("sidebar")),
     1,
@@ -69,12 +69,12 @@ test("a card spanning the new line widens its span instead of being cut", () => 
 
 test("a later split snaps to the line another card already made", () => {
   const grid = three();
-  const first = grid.split("terminal", "x");
+  const first = grid.split("upper", "x");
   const lines = grid.lines("x").length;
   grid.moveBoundary("x", 2, 0.75 * W);
   const moved = grid.boundaryPos("x", 2);
 
-  const second = grid.split("browser", "x");
+  const second = grid.split("lower", "x");
   assert.equal(grid.lines("x").length, lines, "no new line was drawn");
   assert.equal(grid.boundaryPos("x", 2), moved, "the line did not move");
   assert.equal(grid.rect(first).x, grid.rect(second).x, "both new cards share the edge");
@@ -142,7 +142,7 @@ test("a fixed card is never split and never closed", () => {
 
 test("state round-trips through JSON", () => {
   const grid = three();
-  grid.split("terminal", "x", { id: "editor", data: { pty: 7 } });
+  grid.split("upper", "x", { id: "editor", data: { pty: 7 } });
   grid.setSize("sidebar", "x", 210);
   grid.setFixed("sidebar", true);
   grid.moveBoundary("x", 2, 0.7 * W);
@@ -188,11 +188,11 @@ test("every field of a card survives the round trip", () => {
 
 test("a split carries the payload the host gives the new card", () => {
   const grid = three();
-  const id = grid.split("terminal", "x", { id: "editor", data: { title: "editor", layer: 20 } });
+  const id = grid.split("upper", "x", { id: "editor", data: { title: "editor", layer: 20 } });
   assert.equal(id, "editor");
   assert.deepEqual(grid.card("editor").data, { title: "editor", layer: 20 });
   // and the source keeps its own — a payload is never shared between two cards
-  assert.equal(grid.card("terminal").data, undefined);
+  assert.equal(grid.card("upper").data, undefined);
 });
 
 test("a split without a payload leaves data undefined rather than copying", () => {

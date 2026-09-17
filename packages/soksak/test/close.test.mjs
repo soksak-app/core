@@ -6,19 +6,19 @@ import { assertTiling, fuzz, H, make, three, W } from "./helpers.mjs";
 
 test("one matching neighbour takes the closed card's space", () => {
   const grid = three();
-  const before = grid.rect("browser");
-  assert.equal(grid.fill("terminal").side, "below");
-  assert.equal(grid.close("terminal"), true);
-  assert.ok(grid.rect("browser").h > before.h);
+  const before = grid.rect("lower");
+  assert.equal(grid.fill("upper").side, "below");
+  assert.equal(grid.close("upper"), true);
+  assert.ok(grid.rect("lower").h > before.h);
   assertTiling(grid, "after closing into one neighbour");
 });
 
 test("several neighbours tile the side together", () => {
   const grid = three();
-  grid.split("terminal", "x");
-  // browser now spans both columns; the two cards above it only cover its
+  grid.split("upper", "x");
+  // lower now spans both columns; the two cards above it only cover its
   // width together, which a single-neighbour rule would refuse
-  const wide = grid.card("browser");
+  const wide = grid.card("lower");
   assert.equal(wide.c1 - wide.c0, 2, "it spans two columns");
   const fill = grid.fill(wide.id);
   assert.ok(fill, "it can still be closed");
@@ -92,8 +92,8 @@ test("a fixed card does not fill", () => {
   // The sidebar is fixed and beside the panes, so it is the one that must not
   // be offered as a filler.
   assert.equal(grid.card("sidebar").fixed, true);
-  const beside = grid.fill("terminal");
-  assert.ok(beside, "a card beside the terminal can take its space");
+  const beside = grid.fill("upper");
+  assert.ok(beside, "a card beside the upper card can take its space");
   assert.ok(beside.cards.every((p) => p.id !== "sidebar"), "the sidebar was offered");
 
   // And a fixed card is never the one filled. Its two neighbours tile its side
@@ -107,17 +107,17 @@ test("a fixed card does not fill", () => {
 test("fillOrder picks the axis when both sides could take the space", () => {
   const build = (fillOrder) => {
     const grid = three({ fillOrder });
-    grid.split("terminal", "x");
-    grid.split("browser", "x");
+    grid.split("upper", "x");
+    grid.split("lower", "x");
     return grid;
   };
   const vertical = build("v");
   const horizontal = build("h");
-  assert.equal(vertical.fill("terminal").side, "below");
-  assert.equal(horizontal.fill("terminal").side, "right");
+  assert.equal(vertical.fill("upper").side, "below");
+  assert.equal(horizontal.fill("upper").side, "right");
 
-  vertical.close("terminal");
-  horizontal.close("terminal");
+  vertical.close("upper");
+  horizontal.close("upper");
   assert.notDeepEqual(vertical.toJSON().cards, horizontal.toJSON().cards);
   assertTiling(vertical, "vertical fill");
   assertTiling(horizontal, "horizontal fill");

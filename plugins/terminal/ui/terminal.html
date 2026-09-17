@@ -51,8 +51,8 @@
     if (atEnd) out.scrollTop = out.scrollHeight;
   }
 
-  // 셸 사이드카가 이 표면의 셸 세션을 실행한다. 형식은 sidecars/shell 에 정의한다.
-  const shell = page.sidecar("shell");
+  // 셸 사이드카가 이 표면의 셸 세션을 실행한다. plugin.json 이 이 사이드카를 의존성으로 선언한다.
+  const shell = page.sidecar("@soksak/sidecar-shell");
   // 출력 수신을 등록한 뒤 셸을 연다. 먼저 열면 첫 출력이 등록 전에 도착할 수 있다.
   await shell.on(id, (body) => write(body.error === undefined ? body.text : `error: ${body.error}\n`));
   // 요청 실패는 출력에 표시한다.

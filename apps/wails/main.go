@@ -32,7 +32,7 @@ const (
 func main() {
 	flag.Parse()
 
-	environment, err := fs.ReadFile(assets, "frontend/environment.json")
+	frontend, err := fs.Sub(assets, "frontend")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -40,7 +40,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	sidecars, err := NewSidecars(environment, filepath.Dir(executable))
+	sidecars, err := NewSidecars(frontend, filepath.Dir(executable))
 	if err != nil {
 		log.Fatal(err)
 	}

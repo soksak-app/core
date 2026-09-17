@@ -18,6 +18,7 @@
     "environment.js",
     "host.js",
     "host-store.js",
+    "host-windows.js",
     "icons.js",
     "ids.js",
     "library.js",

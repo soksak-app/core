@@ -6,7 +6,22 @@ A sidecar is a native process that holds functionality for one domain, such as s
 
 ## Declaration and startup
 
-A plugin lists the sidecars its page uses in `plugin.json`, and a native application lists the sidecars it runs in `environment.json` ([plugins](plugins.md)). The host reads `environment.json` from its embedded frontend. It starts a declared sidecar when a page first sends to it, using the executable `soksak-<name>` in the directory of the application executable. The Makefile builds each sidecar and copies it there. A request for an undeclared sidecar, or after the host stops its sidecars, fails.
+A sidecar is a package in `sidecars/<name>` with a `sidecar.json` file. The sidecar identity is its package name, for example `@soksak/sidecar-shell`. [`validateSidecar`](../../packages/plugin-api/index.js) checks the file:
+
+| Field | Meaning |
+| --- | --- |
+| `executable` | Path of the built executable inside the package |
+| `protocol` | Message format version. The current version is `1` |
+
+A plugin lists the sidecar package names its page uses in `plugin.json` and declares each one as a dependency in its `package.json` ([plugins](plugins.md)). `soksak-stage --executables <dir>` copies each `sidecar.json` into the staged frontend and each built executable into `<dir>`.
+
+The host reads only the staged frontend to resolve sidecars:
+
+1. `environment.json` lists the plugin packages.
+2. `modules/<plugin>/plugin.json` lists the sidecar packages of each plugin.
+3. `modules/<sidecar>/sidecar.json` gives the `executable` path and `protocol` of each sidecar.
+
+The host runs `<application executable directory>/<file name of executable>`. It fails at startup when a `sidecar.json` is missing, its `executable` is not a path inside the package, or its `protocol` is not `1`. It starts a sidecar when a page first sends to it. A request for a sidecar that no plugin declares fails with `sidecar <name> is not declared by any plugin`; a request after the host stops its sidecars also fails.
 
 ## Messages
 
@@ -18,15 +33,15 @@ Each message is one JSON object on one line.
 | Host → sidecar | `{"surface": id, "closed": true}` when the surface is removed or its window closes |
 | Sidecar → host | `{"surface": id, "body": value}` |
 
-The host records the window that first sends for a surface and delivers each sidecar message only to that window, as the `sidecar-message` event `{sidecar, surface, body}`. A request from another window for the same surface fails. When the application exits, the host closes each sidecar's standard input and waits for the process to end.
+The host records the window that first sends for a surface and delivers each sidecar message only to that window, as the `sidecar-message` event `{sidecar, surface, body}`, where `sidecar` is the package name. A request from another window for the same surface fails. When the application exits, the host closes each sidecar's standard input and waits for the process to end.
 
 ## Page interface
 
-`page.sidecar(name)` returns `send(surface, body)` and `on(surface, fn)`. `on` returns a promise that resolves after the subscription is registered; a page subscribes before its first request.
+`page.sidecar(name)` takes a sidecar package name and returns `send(surface, body)` and `on(surface, fn)`. `on` returns a promise that resolves after the subscription is registered; a page subscribes before its first request.
 
 ## shell
 
-`sidecars/shell` runs one shell process per surface in the surface's project directory. The shell is `$SHELL`, or `/bin/sh` when unset (`%COMSPEC%` or `cmd.exe` on Windows), and is not interactive.
+`sidecars/shell` (`@soksak/sidecar-shell`) builds `build/soksak-shell` with `pnpm run build` and runs one shell process per surface in the surface's project directory. The shell is `$SHELL`, or `/bin/sh` when unset (`%COMSPEC%` or `cmd.exe` on Windows), and is not interactive.
 
 | Body | Effect |
 | --- | --- |
@@ -37,4 +52,4 @@ The sidecar sends each output line as `{"text": line}` including its newline, an
 
 ## Tests
 
-Each sidecar tests its protocol in its own directory (`go test ./...` for `shell`). Each host tests its relay with a fake sidecar executable and does not start a real sidecar.
+Each sidecar runs its tests in its own directory. `shell` tests its protocol with `go test ./...` and validates its `sidecar.json` with a Node test. Each host tests its relay and its resolution from staged manifests with a fake sidecar executable and does not start a real sidecar.

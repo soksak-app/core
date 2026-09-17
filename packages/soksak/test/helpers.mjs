@@ -18,8 +18,8 @@ export function three(options = {}) {
       ys: [0, 0.52, 1],
       cards: [
         { id: "sidebar", c0: 0, c1: 1, r0: 0, r1: 2, fixed: true },
-        { id: "terminal", c0: 1, c1: 2, r0: 0, r1: 1 },
-        { id: "browser", c0: 1, c1: 2, r0: 1, r1: 2 },
+        { id: "upper", c0: 1, c1: 2, r0: 0, r1: 1 },
+        { id: "lower", c0: 1, c1: 2, r0: 1, r1: 2 },
       ],
     },
     { width: W, height: H, ...options },

@@ -20,8 +20,6 @@ body[data-screen=library] #chromeActs .act[title="우측 자리"]{display:none}
 .library-project__open{display:block;width:100%;height:100%;text-align:left;padding:0;border:0;background:transparent;color:var(--fg)}
 .library-preview{display:grid;gap:var(--space-2);height:145px;margin:var(--half-gap);padding:var(--space-4) calc(var(--space-4) * 2);border-radius:var(--r-xs);overflow:hidden;background:var(--bg)}
 .library-preview__pane{--preview-ink:var(--muted);min-width:0;min-height:0;overflow:hidden;padding:var(--space-2);border:var(--bw) solid color-mix(in srgb,var(--preview-ink) 24%,var(--card));border-radius:var(--r-xs);background:color-mix(in srgb,var(--preview-ink) 10%,var(--card));color:color-mix(in srgb,var(--preview-ink) 65%,var(--card))}
-.library-preview__pane[data-plugin=terminal]{--preview-ink:var(--surface-fg)}
-.library-preview__pane[data-plugin=browser]{--preview-ink:var(--rail)}
 .library-preview__mark{display:block;width:14px;height:14px;max-width:100%}
 .library-preview__mark svg{display:block;width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:1.25;stroke-linecap:round;stroke-linejoin:round}
 .library-preview__pane::after{content:"";display:block;width:60%;height:3px;margin-top:var(--space-2);border-radius:var(--r-xs);background:currentColor;box-shadow:0 7px 0 currentColor;opacity:.35}

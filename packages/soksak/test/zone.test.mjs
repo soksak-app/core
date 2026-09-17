@@ -19,7 +19,7 @@ const zone = (grid, id, fx, fy, options = {}) =>
 
 test("the middle of a card is the card itself", () => {
   const grid = three();
-  assert.deepEqual(zone(grid, "terminal", 0.5, 0.5), { id: "terminal", zone: "centre" });
+  assert.deepEqual(zone(grid, "upper", 0.5, 0.5), { id: "upper", zone: "centre" });
 });
 
 test("near an edge is the side nearest the point", () => {
@@ -30,28 +30,28 @@ test("near an edge is the side nearest the point", () => {
     [0.5, 0.05, "top"],
     [0.5, 0.95, "bottom"],
   ]) {
-    assert.deepEqual(zone(grid, "terminal", fx, fy), { id: "terminal", zone: side }, side);
+    assert.deepEqual(zone(grid, "upper", fx, fy), { id: "upper", zone: side }, side);
   }
 });
 
 test("chrome is never a side — a header is not the top of the body", () => {
   const grid = three();
-  const r = grid.rect("terminal");
+  const r = grid.rect("upper");
   assert.deepEqual(
     grid.zoneAt(r.x + r.w / 2, r.y + HEADER / 2, { headerPx: HEADER, footerPx: FOOTER }),
-    { id: "terminal", zone: "centre" },
+    { id: "upper", zone: "centre" },
     "over the header",
   );
   assert.deepEqual(
     grid.zoneAt(r.x + r.w / 2, r.y + r.h - FOOTER / 2, { headerPx: HEADER, footerPx: FOOTER }),
-    { id: "terminal", zone: "centre" },
+    { id: "upper", zone: "centre" },
     "over the status bar",
   );
 });
 
 test("the band is a fraction, so a small card aims like a large one", () => {
   const grid = three();
-  grid.split("terminal", "x");
+  grid.split("upper", "x");
   const small = grid.cards.find((c) => c.id.startsWith("card-")).id;
   assert.deepEqual(zone(grid, small, 0.05, 0.5), { id: small, zone: "left" });
   assert.deepEqual(zone(grid, small, 0.5, 0.5), { id: small, zone: "centre" });
@@ -60,12 +60,12 @@ test("the band is a fraction, so a small card aims like a large one", () => {
 test("a card dragged onto itself only ever returns centre", () => {
   const grid = three();
   assert.deepEqual(
-    zone(grid, "terminal", 0.05, 0.5, { centreOnly: "terminal" }),
-    { id: "terminal", zone: "centre" },
+    zone(grid, "upper", 0.05, 0.5, { centreOnly: "upper" }),
+    { id: "upper", zone: "centre" },
     "there is no side of itself to land on",
   );
-  assert.deepEqual(zone(grid, "browser", 0.05, 0.5, { centreOnly: "terminal" }), {
-    id: "browser",
+  assert.deepEqual(zone(grid, "lower", 0.05, 0.5, { centreOnly: "upper" }), {
+    id: "lower",
     zone: "left",
   });
 });
@@ -81,8 +81,8 @@ test("a point outside every card lands nowhere", () => {
 
 test("every card returns a zone for its own area only", () => {
   const grid = three();
-  grid.split("terminal", "x");
-  grid.split("browser", "y");
+  grid.split("upper", "x");
+  grid.split("lower", "y");
   for (const card of grid.cards) {
     const hit = zone(grid, card.id, 0.5, 0.5);
     assert.equal(hit?.id, card.id, `${card.id} answered for its own middle`);

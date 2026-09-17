@@ -1,7 +1,7 @@
 // 프로젝트 목록과 생성·열기 화면. 콘텐츠 웹뷰와 셸은 프로젝트를 열 때 생성한다.
 import * as projects from "./projects.js";
 import { fresh } from "./plane.js";
-import { host } from "@soksak/runtime";
+import { windows } from "@soksak/runtime";
 import { icon } from "./icons.js";
 import { isPlace, plugin } from "./registry.js";
 
@@ -50,27 +50,28 @@ export function createLibrary(root) {
     error.hidden = true;
     form.hidden = false;
     form.innerHTML = '';
-    const heading = element('h2', '', host?'새 프로젝트':'폴더 열기');
+    const creates = windows.createsFolders;
+    const heading = element('h2', '', creates?'새 프로젝트':'폴더 열기');
     const fields = element('form', 'library-fields');
     function field(name, title, placeholder) {
       const label=element('label','',title), input=element('input','text-field');
       input.name=name; input.placeholder=placeholder; input.required=true; input.autocomplete='off';
       label.append(input); fields.append(label); return input;
     }
-    const name=host?field('name','프로젝트 폴더 이름','my-project'):null;
-    const parent=field('parent',host?'생성 위치':'폴더 경로','/Users/…');
-    if (host) {
+    const name=creates?field('name','프로젝트 폴더 이름','my-project'):null;
+    const parent=field('parent',creates?'생성 위치':'폴더 경로','/Users/…');
+    if (creates) {
       const choose=element('button','ui-button','폴더 선택'); choose.type='button';
-      choose.onclick=()=>perform(async()=>{ const path=await host.call('folderChoose'); if(path) parent.value=path; });
+      choose.onclick=()=>perform(async()=>{ const path=await windows.chooseFolder(); if(path) parent.value=path; });
       parent.parentElement.append(choose);
     }
     const actions=element('div','library-form__actions');
     const cancel=element('button','ui-button','취소'); cancel.type='button'; cancel.onclick=()=>{form.hidden=true;};
-    const submit=element('button','ui-button library-primary',host?'생성 후 열기':'열기'); submit.type='submit';
+    const submit=element('button','ui-button library-primary',creates?'생성 후 열기':'열기'); submit.type='submit';
     actions.append(cancel,submit); fields.append(actions); form.append(heading,fields);
     fields.onsubmit=(event)=>{event.preventDefault();perform(async()=>{
       let root=parent.value.trim();
-      if(host) root=(await host.call('projectCreate',{parent:root,name:name.value.trim()})).root;
+      if(creates) root=(await windows.createFolder({parent:root,name:name.value.trim()})).root;
       await record(root); form.hidden=true;
     });};
     fields.querySelector('input').focus();
@@ -111,7 +112,7 @@ export function createLibrary(root) {
       pin.onclick=()=>perform(()=>projects.pin(project.id,!project.pinned));
       card.append(choose,pin); grid.append(card);
     }
-    const add=element('button','library-add',host?'＋ 새 프로젝트':'＋ 폴더 열기');add.type='button';add.dataset.action='create';
+    const add=element('button','library-add',windows.createsFolders?'＋ 새 프로젝트':'＋ 폴더 열기');add.type='button';add.dataset.action='create';
     add.onclick=showForm;grid.append(add);
     const empty=root.querySelector('.library-empty');empty.hidden=all.length>0;
     if(!shown.length&&all.length) grid.prepend(element('p','library-no-results','일치하는 프로젝트가 없습니다.'));
@@ -136,6 +137,8 @@ function preview(project) {
     const active=tabs.find(t=>t.id===card.data?.activeId) ?? tabs[0];
     pane.dataset.plugin=isPlace(card.id)?'sidebar':active?.plugin ?? '';
     if(active) {
+      const {ink}=plugin(active.plugin);
+      if(ink) pane.style.setProperty('--preview-ink',`var(${ink})`);
       const mark=element('span','library-preview__mark');
       mark.innerHTML=`<svg viewBox="0 0 16 16">${plugin(active.plugin).svg}</svg>`;
       pane.append(mark);

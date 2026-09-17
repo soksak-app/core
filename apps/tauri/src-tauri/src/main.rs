@@ -992,11 +992,12 @@ fn main() {
             app.set_menu(menu)?;
             let directory = observe::flag("config-dir").map(std::path::PathBuf::from).unwrap_or(app.path().app_config_dir()?);
             app.manage(workspace::Workspace::new(directory));
-            let environment = app.asset_resolver().get("environment.json".into())
-                .ok_or("environment.json is missing from the frontend")?;
             let executable = std::env::current_exe()?;
             let sidecar_directory = executable.parent().ok_or("executable has no directory")?.to_path_buf();
-            app.manage(WindowSidecars::new(&environment.bytes, sidecar_directory)?);
+            let resolver = app.asset_resolver();
+            let read = |path: &str| resolver.get(path.into()).map(|asset| asset.bytes);
+            let sidecars = WindowSidecars::new(&read, sidecar_directory)?;
+            app.manage(sidecars);
             if let Some(window) = app.get_webview_window("main") { windows::register(window.as_ref().window())?; }
             Ok(())
         })

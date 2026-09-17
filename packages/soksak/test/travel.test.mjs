@@ -17,8 +17,8 @@ const railed = () =>
       cards: [
         { id: "left", c0: 0, c1: 1, r0: 0, r1: 2, width: 180, fixed: true },
         { id: "rail", c0: 1, c1: 2, r0: 0, r1: 2, width: 190, fixed: true },
-        { id: "terminal", c0: 2, c1: 3, r0: 0, r1: 1 },
-        { id: "browser", c0: 2, c1: 3, r0: 1, r1: 2 },
+        { id: "upper", c0: 2, c1: 3, r0: 0, r1: 1 },
+        { id: "lower", c0: 2, c1: 3, r0: 1, r1: 2 },
       ],
     },
     { width: W, height: H },
@@ -32,9 +32,9 @@ test("a rail reaches across the plane, whatever is beside it", () => {
 
 test("it can only stand where nothing spans the boundary", () => {
   const grid = railed();
-  grid.split("terminal", "x");        // a line only the top row breaks on
+  grid.split("upper", "x");        // a line only the top row breaks on
   const blocked = grid.lines("x").length - 2;
-  assert.equal(grid.canInsertAt("x", blocked), false, "browser spans it");
+  assert.equal(grid.canInsertAt("x", blocked), false, "lower spans it");
   assert.ok(grid.standings("x").length > 0, "and the full-height ones remain");
   assert.ok(!grid.standings("x").includes(blocked));
 });
@@ -63,8 +63,8 @@ test("travelling changes no other card's spans and no row boundary", () => {
 
 test("travelling between interior boundaries changes no other card's width", () => {
   const grid = railed();
-  grid.split("terminal", "x");
-  grid.split("browser", "x");
+  grid.split("upper", "x");
+  grid.split("lower", "x");
   const before = Object.fromEntries(
     grid.cards.filter((c) => c.id !== "rail").map((c) => [c.id, grid.rect(c.id).w]),
   );
@@ -84,8 +84,8 @@ test("travelling between interior boundaries changes no other card's width", () 
 
 test("standing on the plane's border moves the corridor, not the share", () => {
   const grid = railed();
-  grid.split("terminal", "x");
-  grid.split("browser", "x");
+  grid.split("upper", "x");
+  grid.split("lower", "x");
   const xs = () => grid.lines("x");
   const share = (id) => {
     const c = grid.card(id);
@@ -94,8 +94,8 @@ test("standing on the plane's border moves the corridor, not the share", () => {
   const before = Object.fromEntries(
     grid.cards.filter((c) => c.id !== "rail").map((c) => [c.id, share(c.id)]),
   );
-  const drawn = grid.rect("terminal").w + grid.rect("card-1").w;
-  assert.notEqual(grid.rect("terminal").w, grid.rect("card-1").w, "card-1 is flush with the border");
+  const drawn = grid.rect("upper").w + grid.rect("card-1").w;
+  assert.notEqual(grid.rect("upper").w, grid.rect("card-1").w, "card-1 is flush with the border");
 
   assert.equal(grid.moveTo("rail", "x", xs().length - 1), true);
 
@@ -106,9 +106,9 @@ test("standing on the plane's border moves the corridor, not the share", () => {
     assert.ok(Math.abs(share(id) - span) < 1e-9, `${id} kept its share`);
   }
   assert.equal(grid.rect("rail").w, 190);
-  assert.ok(Math.abs(grid.rect("terminal").w - grid.rect("card-1").w) < 1e-9,
+  assert.ok(Math.abs(grid.rect("upper").w - grid.rect("card-1").w) < 1e-9,
             "equal shares now draw equal");
-  assert.ok(Math.abs(grid.rect("terminal").w + grid.rect("card-1").w - drawn) < 1e-9);
+  assert.ok(Math.abs(grid.rect("upper").w + grid.rect("card-1").w - drawn) < 1e-9);
   assertTiling(grid, "rail on the border");
 });
 
@@ -118,13 +118,13 @@ test("it lands on the boundary it was sent to", () => {
   assert.equal(near.moveTo("rail", "x", 1), true);
   const nearRail = near.rect("rail");
   assert.ok(near.rect("left").x + near.rect("left").w < nearRail.x, "left is before it");
-  assert.ok(near.rect("terminal").x > nearRail.x, "the panes are after it");
+  assert.ok(near.rect("upper").x > nearRail.x, "the panes are after it");
 
   // to the far boundary: everything else stands before it
   const far = railed();
   assert.equal(far.moveTo("rail", "x", 3), true);
   const farRail = far.rect("rail");
-  for (const id of ["left", "terminal", "browser"]) {
+  for (const id of ["left", "upper", "lower"]) {
     assert.ok(far.rect(id).x + far.rect(id).w <= farRail.x + 0.01, `${id} is before it`);
   }
   assertTiling(far, "landed at the far boundary");
@@ -132,7 +132,7 @@ test("it lands on the boundary it was sent to", () => {
 
 test("a refused travel leaves the arrangement untouched", () => {
   const grid = railed();
-  grid.split("terminal", "x");
+  grid.split("upper", "x");
   const blocked = grid.lines("x").length - 2;
   const before = JSON.stringify(grid.toJSON());
   assert.equal(grid.moveTo("rail", "x", blocked), false, "a card spans it");
@@ -141,7 +141,7 @@ test("a refused travel leaves the arrangement untouched", () => {
 
 test("a card that does not reach across cannot travel this way", () => {
   const grid = railed();
-  assert.equal(grid.moveTo("terminal", "x", 1), false, "it stands in one row only");
+  assert.equal(grid.moveTo("upper", "x", 1), false, "it stands in one row only");
 });
 
 test("standing still is success and changes nothing", () => {

@@ -8,3 +8,4 @@ export const host = null;
 export const page = null;
 
 export const openStore = () => WorkspaceStore.open();
+export { windows } from "./windows.js";

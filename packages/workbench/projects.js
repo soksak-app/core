@@ -1,7 +1,7 @@
 // 프로젝트 목록은 공유 저장소에, 활성 프로젝트와 창 소유권은 실행 중인 창에 저장한다.
 import { issueId } from "./ids.js";
 import { selectProject, value, flushSettings } from "./settings.js";
-import { host } from "@soksak/runtime";
+import { windows } from "@soksak/runtime";
 
 let store;
 let projects = [];
@@ -19,7 +19,7 @@ export const all = () => projects;
 export const active = () => projects.find((p) => p.id === activeProjectId) ?? null;
 export const local = () => projects.filter((p) => owned.has(p.id));
 export const inLibrary = () => browsing;
-export const isOpen = (id) => host ? openProjects.has(id) : owned.has(id);
+export const isOpen = (id) => openProjects.has(id) || owned.has(id);
 export async function browse() {
   await flush();
   browsing = true;
@@ -27,11 +27,7 @@ export async function browse() {
   await selectProject(null);
   changed();
 }
-export function newWindow() {
-  if (host) return host.call("windowNew");
-  const target = new URL(location.href); target.search = "";
-  if (!window.open(target, "_blank")) throw new Error("The browser blocked the new window");
-}
+export const newWindow = () => windows.newWindow();
 export const pin = (id, pinned) => store.patch(id, { pinned });
 export function onSwitch(callbacks) { listener = callbacks; }
 export function onChange(fn) { changed = fn; }
@@ -40,16 +36,14 @@ export async function initialise(storage) {
   store = storage;
   await refresh();
   store.onChange(() => { refresh().catch(failed); });
-  if (host) {
-    await host.on("project-activate", (id) => activateHere(id).catch(failed));
-    await host.on("project-close-request", () => closeWindow().catch(failed));
-  }
+  await windows.onActivate((id) => activateHere(id).catch(failed));
+  await windows.onCloseRequest(() => closeWindow().catch(failed));
   const requested = new URL(location.href).searchParams.get("project");
   const first = requested ? projects.find((p) => p.id === requested) : null;
   if (first) {
     try { await activate(first.id); } catch (error) { failed(error); }
   }
-  if (host) await host.call("windowReady");
+  await windows.ready();
   changed();
 }
 
@@ -116,26 +110,20 @@ export async function activate(id) {
   if (!project) throw new Error(`Unknown project: ${id}`);
   await keep();
   await saveGeometry();
-  if (host) {
-    const folder = await host.call("projectFolder", project.root);
-    if (folder.identity !== project.identity) throw new Error(`Project directory has changed: ${project.root}`);
-    const result = await host.call("projectOpen", { id, root: project.root, title: project.title,
-      separate: value("projectOpening") === "windows", geometry: project.geometry ?? null });
-    await store.patch(id, { lastOpened: Date.now() });
-    if (!result.local) { if (active()) await activateHere(activeProjectId); return; }
-  } else if (active() && !owned.has(id) && value("projectOpening") === "windows") {
-    const target = new URL(location.href); target.searchParams.set("project", id);
-    const opened = window.open(target, `soksak-${id}`);
-    if (!opened) throw new Error("The browser blocked the project window");
-    return;
-  }
+  const folder = await windows.folder(project.root);
+  if (folder.identity !== project.identity) throw new Error(`Project directory has changed: ${project.root}`);
+  const result = await windows.openProject({
+    id, root: project.root, title: project.title, geometry: project.geometry ?? null,
+    separate: value("projectOpening") === "windows", current: active() && !owned.has(id) ? activeProjectId : null,
+  });
+  await store.patch(id, { lastOpened: Date.now() });
+  if (!result.local) { if (active()) await activateHere(activeProjectId); return; }
   await activateHere(id);
-  if (!host) await store.patch(id, { lastOpened: Date.now() });
 }
 
 export async function open({ root, color, layout }) {
   if (!root.trim()) throw new Error("Project directory is empty");
-  const folder = host ? await host.call("projectFolder", root) : { root: root.trim(), identity: `browser:${root.trim()}` };
+  const folder = await windows.folder(root);
   const space = { id: issueId("space"), title: "SPACE1", layout };
   const project = await store.add({
     id: issueId("project"), ...folder, title: folder.root.split(/[\\/]/).filter(Boolean).at(-1), color,
@@ -148,7 +136,7 @@ export async function open({ root, color, layout }) {
 
 export async function close(id) {
   if (id === activeProjectId) await keep();
-  if (host) await host.call("projectRelease", id);
+  await windows.releaseProject(id);
   owned.delete(id);
   await store.remove(id);
   await refresh();
@@ -206,8 +194,8 @@ export function renameSpace(id, title) {
 
 export async function saveGeometry() {
   const id = activeProjectId;
-  if (!id || !host || browsing) return;
-  const geometry = await host.call("windowState");
+  if (!id || browsing) return;
+  const geometry = await windows.state();
   if (geometry) await store.patch(id, { geometry });
 }
 
@@ -219,5 +207,5 @@ export async function flush() {
 
 async function closeWindow() {
   await flush();
-  await host.call("windowClose");
+  await windows.close();
 }

@@ -132,8 +132,8 @@ const start = () =>
       cards: [
         { id: "left", c0: 0, c1: 1, r0: 0, r1: 2, width: 180, fixed: true },
         { id: "rail", c0: 1, c1: 2, r0: 0, r1: 2, width: 190, fixed: true },
-        { id: "terminal", c0: 2, c1: 3, r0: 0, r1: 1 },
-        { id: "browser", c0: 2, c1: 3, r0: 1, r1: 2 },
+        { id: "upper", c0: 2, c1: 3, r0: 0, r1: 1 },
+        { id: "lower", c0: 2, c1: 3, r0: 1, r1: 2 },
         { id: "right", c0: 3, c1: 4, r0: 0, r1: 2, width: 200, fixed: true },
       ],
     },

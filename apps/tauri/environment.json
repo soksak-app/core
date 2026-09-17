@@ -136,8 +136,5 @@
         "set": "set-browser"
       }
     ]
-  },
-  "sidecars": [
-    "shell"
-  ]
+  }
 }

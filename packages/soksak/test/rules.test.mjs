@@ -97,7 +97,7 @@ test("R3 — no card ever spans over a card, and the check is integers", () => {
   }
   // Dragging moves coordinates and can never change the answer.
   const grid = three();
-  grid.split("terminal", "x");
+  grid.split("upper", "x");
   const before = ["x", "y"].map((a) => grid.standings(a).join(","));
   for (const d of grid.dividers()) {
     grid.moveBoundary(d.axis, d.line, grid.boundaryPos(d.axis, d.line) + 200);
@@ -436,8 +436,8 @@ test("R7 — only a fixed card leaves another with nowhere to go", () => {
       { xs: [0, 0.16, 0.32, 0.84, 1], ys: [0, 0.5, 1], cards: [
         { id: "left", c0: 0, c1: 1, r0: 0, r1: 2, fixed },
         { id: "rail", c0: 1, c1: 2, r0: 0, r1: 2, fixed },
-        { id: "terminal", c0: 2, c1: 3, r0: 0, r1: 1 },
-        { id: "browser", c0: 2, c1: 3, r0: 1, r1: 2 },
+        { id: "upper", c0: 2, c1: 3, r0: 0, r1: 1 },
+        { id: "lower", c0: 2, c1: 3, r0: 1, r1: 2 },
         { id: "right", c0: 3, c1: 4, r0: 0, r1: 2, fixed },
       ] },
       { width: 1440, height: 900 },
@@ -523,8 +523,8 @@ test("R1 — where a line stands does not depend on which cards read it", () => 
     { xs: [0, 1 / 3, 0.432086, 2 / 3, 1], ys: [0, 0.52, 1], cards: [
       { id: "left", c0: 0, c1: 1, r0: 0, r1: 2, width: 190, fixed: true },
       { id: "rail", c0: 1, c1: 2, r0: 0, r1: 2, width: 280, fixed: true },
-      { id: "terminal", c0: 2, c1: 3, r0: 0, r1: 1 },
-      { id: "browser", c0: 2, c1: 3, r0: 1, r1: 2 },
+      { id: "upper", c0: 2, c1: 3, r0: 0, r1: 1 },
+      { id: "lower", c0: 2, c1: 3, r0: 1, r1: 2 },
       { id: "right", c0: 3, c1: 4, r0: 0, r1: 2, width: 210, fixed: true },
     ] },
     { width: 1950, height: 560, gap: 24 },

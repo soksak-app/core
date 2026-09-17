@@ -70,6 +70,8 @@ importers:
 
   e2e: {}
 
+  packages/client: {}
+
   packages/plugin-api: {}
 
   packages/soksak:
@@ -113,12 +115,20 @@ importers:
         version: link:../../packages/plugin-api
 
   plugins/terminal:
+    dependencies:
+      '@soksak/sidecar-shell':
+        specifier: workspace:*
+        version: link:../../sidecars/shell
     devDependencies:
       '@soksak/plugin-api':
         specifier: workspace:*
         version: link:../../packages/plugin-api
 
-  sidecars/shell: {}
+  sidecars/shell:
+    devDependencies:
+      '@soksak/plugin-api':
+        specifier: workspace:*
+        version: link:../../packages/plugin-api
 
 packages:
 

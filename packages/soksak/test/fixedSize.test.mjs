@@ -16,8 +16,8 @@ const edges = (options = {}) =>
       ys: [0, 0.5, 1],
       cards: [
         { id: "left", c0: 0, c1: 1, r0: 0, r1: 2, width: 180, fixed: true },
-        { id: "terminal", c0: 1, c1: 2, r0: 0, r1: 1 },
-        { id: "browser", c0: 1, c1: 2, r0: 1, r1: 2 },
+        { id: "upper", c0: 1, c1: 2, r0: 0, r1: 1 },
+        { id: "lower", c0: 1, c1: 2, r0: 1, r1: 2 },
         { id: "right", c0: 2, c1: 3, r0: 0, r1: 2, width: 200, fixed: true },
       ],
     },
@@ -28,15 +28,15 @@ test("a slot with a px size takes it; the rest share what is left", () => {
   const grid = edges();
   const left = grid.rect("left");
   const right = grid.rect("right");
-  const terminal = grid.rect("terminal");
+  const upper = grid.rect("upper");
 
   assert.equal(left.x, 0, "it starts at the plane's border");
   assert.equal(left.w, 180, "the size it asked for, wherever it stands and whatever the gap");
   assert.equal(right.x + right.w, W, "the far one ends at the border");
   assert.equal(right.w, 200);
 
-  assert.equal(terminal.x - (left.x + left.w), grid.gap, "one full corridor, like any two cards");
-  assert.equal(right.x - (terminal.x + terminal.w), grid.gap);
+  assert.equal(upper.x - (left.x + left.w), grid.gap, "one full corridor, like any two cards");
+  assert.equal(right.x - (upper.x + upper.w), grid.gap);
   assertTiling(grid, "with two fixed cards");
 });
 
@@ -46,8 +46,8 @@ test("a card in a middle slot spans the plane and nothing crosses it", () => {
       xs: [0, 0.5, 0.75, 1],
       ys: [0, 0.5, 1],
       cards: [
-        { id: "terminal", c0: 0, c1: 1, r0: 0, r1: 1 },
-        { id: "browser", c0: 0, c1: 1, r0: 1, r1: 2 },
+        { id: "upper", c0: 0, c1: 1, r0: 0, r1: 1 },
+        { id: "lower", c0: 0, c1: 1, r0: 1, r1: 2 },
         { id: "rail", c0: 1, c1: 2, r0: 0, r1: 2, width: 190, fixed: true },
         { id: "editor", c0: 2, c1: 3, r0: 0, r1: 2 },
       ],
@@ -66,9 +66,9 @@ test("a card in a middle slot spans the plane and nothing crosses it", () => {
 
 test("resizing the plane changes the sharing cards", () => {
   const grid = edges();
-  const before = { left: grid.rect("left").w, right: grid.rect("right").w, mid: grid.rect("terminal").w };
+  const before = { left: grid.rect("left").w, right: grid.rect("right").w, mid: grid.rect("upper").w };
   grid.resize(W + 400, H);
-  const after = { left: grid.rect("left").w, right: grid.rect("right").w, mid: grid.rect("terminal").w };
+  const after = { left: grid.rect("left").w, right: grid.rect("right").w, mid: grid.rect("upper").w };
 
   assert.equal(after.left, before.left, "a fixed width is fixed");
   assert.equal(after.right, before.right);
@@ -121,15 +121,15 @@ test("move keeps the card's px size", () => {
       ys: [0, 0.5, 1],
       cards: [
         { id: "rail", c0: 0, c1: 1, r0: 0, r1: 2, width: 190 },
-        { id: "terminal", c0: 1, c1: 2, r0: 0, r1: 1 },
-        { id: "browser", c0: 1, c1: 2, r0: 1, r1: 2 },
+        { id: "upper", c0: 1, c1: 2, r0: 0, r1: 1 },
+        { id: "lower", c0: 1, c1: 2, r0: 1, r1: 2 },
       ],
     },
     { width: W, height: H },
   );
-  assert.equal(grid.move("rail", "browser", "right"), true, "a rail is repositioned by move");
+  assert.equal(grid.move("rail", "lower", "right"), true, "a rail is repositioned by move");
   assert.equal(grid.card("rail").width, 190, "and arrives the size it left");
-  assert.ok(grid.rect("rail").x > grid.rect("browser").x, "on the side it was sent to");
+  assert.ok(grid.rect("rail").x > grid.rect("lower").x, "on the side it was sent to");
   assertTiling(grid, "after the rail travelled");
 });
 
@@ -190,15 +190,15 @@ test("centring works beside a card with a px size", () => {
   grid.moveBoundary("x", 1, 300);
   grid.centerBoundary("x", 1);
   assert.ok(
-    Math.abs(grid.rect("left").w - grid.rect("terminal").w) < 0.01,
-    `${grid.rect("left").w} and ${grid.rect("terminal").w}`,
+    Math.abs(grid.rect("left").w - grid.rect("upper").w) < 0.01,
+    `${grid.rect("left").w} and ${grid.rect("upper").w}`,
   );
 
   const shared = three();
   shared.moveBoundary("x", 1, 200);
   shared.centerBoundary("x", 1);
   assert.ok(
-    Math.abs(shared.rect("sidebar").w - shared.rect("terminal").w) < 0.01,
+    Math.abs(shared.rect("sidebar").w - shared.rect("upper").w) < 0.01,
     "two sharing cards come out equal too",
   );
 

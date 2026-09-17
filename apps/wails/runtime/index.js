@@ -9,6 +9,7 @@
 // 런타임은 /wails/runtime.js 의 ES 모듈이므로 script 태그가 아니라 import 로
 // 로드한다. import 는 비동기이므로 아래 두 인터페이스는 완료를 기다린 뒤 호출한다.
 import { HostWorkspaceStore } from "@soksak/workbench/host-store.js";
+import { hostWindows } from "@soksak/workbench/host-windows.js";
 
 const SERVICE = "main.Host";
 
@@ -97,3 +98,6 @@ export const page = (() => {
 
 /** 설정과 프로젝트 목록은 네이티브 호스트가 저장한다. */
 export const openStore = async () => new HostWorkspaceStore(host);
+
+/** 창과 프로젝트 폴더는 네이티브 호스트가 관리한다. */
+export const windows = hostWindows(host);

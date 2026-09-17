@@ -6,6 +6,9 @@
   "surface": {
     "url": "https://www.google.com"
   },
+  "preview": {
+    "ink": "--rail"
+  },
   "sections": [
     {
       "id": "browser.dom",

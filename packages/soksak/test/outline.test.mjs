@@ -10,7 +10,7 @@ const arcs = (path) => (path.match(/A/g) ?? []).length;
 
 test("cards separated by a corridor need pad to close into one shape", () => {
   const grid = three();
-  const rects = ["sidebar", "terminal"].map((id) => grid.rect(id));
+  const rects = ["sidebar", "upper"].map((id) => grid.rect(id));
   const half = grid.gap / 2;
 
   assert.equal(outline(rects, { pad: 0 }).loops.length, 2, "borders alone stay apart");
@@ -21,7 +21,7 @@ test("cards separated by a corridor need pad to close into one shape", () => {
 
 test("binding two cards at right angles gives a rounded L", () => {
   const grid = three();
-  const rects = ["sidebar", "terminal"].map((id) => grid.rect(id));
+  const rects = ["sidebar", "upper"].map((id) => grid.rect(id));
   const shape = outline(rects, { pad: grid.gap / 2, radius: 14 + grid.gap / 2 });
   assert.equal(shape.loops.length, 1);
   assert.equal(shape.loops[0].length, 6, "an L has six corners");
@@ -32,8 +32,8 @@ test("binding two cards at right angles gives a rounded L", () => {
 test("a card left out of the outline stays outside it", () => {
   const grid = three();
   for (const [inside, outsideId] of [
-    ["terminal", "browser"],
-    ["browser", "terminal"],
+    ["upper", "lower"],
+    ["lower", "upper"],
   ]) {
     const shape = outline(
       ["sidebar", inside].map((id) => grid.rect(id)),

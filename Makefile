@@ -1,9 +1,13 @@
 SHELL := /bin/sh
 
-.PHONY: preflight prepare build verify docs-check
+.PHONY: preflight prepare build verify docs-check boundaries
 
 docs-check:
 	@node scripts/check-docs.mjs
+
+# 코어, 플러그인, 사이드카가 서로의 이름을 코드에 적지 않았는지 검사한다.
+boundaries:
+	@node scripts/check-boundaries.mjs
 
 preflight:
 	@scripts/check-build-environment.sh
@@ -52,36 +56,36 @@ WAILS_RELEASE = apps/wails/bin/wails-release
 native-darwin:
 	@$(MAKE) -C native/darwin
 
-# 사이드카. 네이티브 앱은 실행 파일과 같은 디렉터리에서 soksak-<이름> 을 찾는다.
-SIDECARS = sidecars/shell/build/soksak-shell
-
+# 사이드카. 각 사이드카 패키지의 build 스크립트가 실행 파일을 만들고, 스테이징이 플러그인이
+# 의존하는 사이드카의 실행 파일을 애플리케이션 실행 파일 옆에 복사한다.
 sidecars:
-	@$(GO_ENV) go build -C sidecars/shell -ldflags "$(GO_LINK)" -o build/soksak-shell .
+	@$(GO_ENV) pnpm --filter "./sidecars/*" run build
 
-frontend-wails: build
-	@pnpm -F @soksak/wails run frontend
+# 프런트엔드와 사이드카 실행 파일을 배치한다. 인자는 실행 파일 디렉터리(앱 디렉터리 기준)다.
+stage-wails = pnpm -F @soksak/wails exec soksak-stage frontend --executables $(1)
+stage-tauri = pnpm -F @soksak/tauri exec soksak-stage frontend --executables $(1)
 
-frontend-tauri: build
-	@pnpm -F @soksak/tauri run frontend
+frontend-wails: build sidecars
+	@$(call stage-wails,bin)
+
+frontend-tauri: build sidecars
+	@$(call stage-tauri,src-tauri/target/debug)
 
 # generate_context! 가 프런트엔드를 포함하므로 크레이트를 다시 빌드하게 한다.
-tauri-build: native-darwin sidecars frontend-tauri
+tauri-build: native-darwin frontend-tauri
 	@touch apps/tauri/src-tauri/src/main.rs
 	@cd apps/tauri/src-tauri && $(CARGO_ENV) cargo build
-	@cp $(SIDECARS) $(dir $(TAURI_DEBUG))
 
-tauri-build-release: native-darwin sidecars frontend-tauri
+tauri-build-release: native-darwin build sidecars
+	@$(call stage-tauri,src-tauri/target/release)
 	@touch apps/tauri/src-tauri/src/main.rs
 	@cd apps/tauri/src-tauri && $(CARGO_ENV) cargo build --release
-	@cp $(SIDECARS) $(dir $(TAURI_RELEASE))
 
-wails-build: native-darwin sidecars frontend-wails
+wails-build: native-darwin frontend-wails
 	@$(GO_ENV) go build -C apps/wails -ldflags "$(GO_LINK)" -o bin/wails .
-	@cp $(SIDECARS) apps/wails/bin/
 
-wails-build-release: native-darwin sidecars frontend-wails
+wails-build-release: native-darwin frontend-wails
 	@$(GO_ENV) go build -C apps/wails -trimpath -ldflags "-s -w $(GO_LINK)" -o bin/wails-release .
-	@cp $(SIDECARS) apps/wails/bin/
 
 tauri: tauri-build
 	@./$(TAURI_DEBUG)

@@ -6,11 +6,11 @@ import { assertTiling, fuzz, H, make, three, W } from "./helpers.mjs";
 
 test("dragging a line moves every card referencing it", () => {
   const grid = three();
-  grid.split("terminal", "x");
-  grid.split("browser", "x");
-  const before = ["terminal", "browser"].map((id) => grid.rect(id).w);
+  grid.split("upper", "x");
+  grid.split("lower", "x");
+  const before = ["upper", "lower"].map((id) => grid.rect(id).w);
   grid.moveBoundary("x", 2, 0.5 * W);
-  const after = ["terminal", "browser"].map((id) => grid.rect(id).w);
+  const after = ["upper", "lower"].map((id) => grid.rect(id).w);
   assert.ok(after[0] !== before[0]);
   assert.equal(after[0].toFixed(4), after[1].toFixed(4), "both follow the same line");
   assertTiling(grid, "after a shared drag");
@@ -115,12 +115,12 @@ test("centring makes the two cards beside a line the same size", () => {
   grid.moveBoundary("x", 1, 0.12 * W);
   grid.centerBoundary("x", 1);
   const a = grid.rect("sidebar");
-  const b = grid.rect("terminal");
+  const b = grid.rect("upper");
   assert.ok(Math.abs(a.w - b.w) < 0.01, `${a.w} vs ${b.w}`);
 
   grid.centerBoundary("y", 1);
-  const top = grid.rect("terminal");
-  const bottom = grid.rect("browser");
+  const top = grid.rect("upper");
+  const bottom = grid.rect("lower");
   assert.ok(Math.abs(top.h - bottom.h) < 0.01, `${top.h} vs ${bottom.h}`);
   assertTiling(grid, "after centring");
 });
@@ -152,8 +152,8 @@ test("centring past a line no card reads moves that boundary and no other", () =
 
 test("an unreferenced line survives a close and is removed by tidy", () => {
   const grid = three();
-  grid.split("terminal", "y");
-  grid.split("terminal", "y");
+  grid.split("upper", "y");
+  grid.split("upper", "y");
   assert.equal(grid.virtualCount(), 0);
   const lines = grid.lines("y").length;
 
@@ -170,7 +170,7 @@ test("an unreferenced line survives a close and is removed by tidy", () => {
 
 test("dividers cover referenced lines; rules cover every line", () => {
   const grid = three();
-  grid.split("terminal", "x");
+  grid.split("upper", "x");
   const dividers = grid.dividers();
   const rules = grid.rules();
 

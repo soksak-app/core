@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  PAGE_IMPORTS, checkReferences, modulePath, pageImports, validateEnvironment, validateManifest,
+  PAGE_IMPORTS, checkReferences, modulePath, pageImports, validateEnvironment, validateManifest, validateSidecar,
 } from "../index.js";
 
 const card = {
-  id: "probe", name: "Probe", mark: "p", icon: "<path/>", surface: { page: "ui/probe.html" }, sidecars: ["worker"],
+  id: "probe", name: "Probe", mark: "p", icon: "<path/>", surface: { page: "ui/probe.html" }, sidecars: ["@scope/sidecar-worker"],
 };
 const side = { id: "side", name: "Side", sections: [{ id: "side.list", name: "List" }] };
 const environment = () => ({
@@ -30,6 +30,7 @@ const environment = () => ({
 test("a manifest with a page surface or with sections only is accepted", () => {
   assert.equal(validateManifest(card), card);
   assert.equal(validateManifest(side), side);
+  assert.equal(validateManifest({ ...card, preview: { ink: "--surface-fg" } }).preview.ink, "--surface-fg");
   assert.equal(validateManifest({ ...card, sidecars: undefined, surface: { url: "https://example.com" } }).id, "probe");
 });
 
@@ -48,8 +49,11 @@ test("a manifest is rejected for each invalid field", () => {
     [{ ...side, sections: [side.sections[0], side.sections[0]] }, /duplicate section/],
     [{ id: "empty", name: "Empty" }, /surface or sections/],
     [{ ...card, surface: { url: "https://example.com" } }, /sidecars require a page surface/],
-    [{ ...card, sidecars: ["Worker"] }, /expected sidecar names/],
-    [{ ...card, sidecars: ["worker", "worker"] }, /duplicate sidecar/],
+    [{ ...card, sidecars: ["Worker"] }, /expected sidecar package names/],
+    [{ ...card, preview: { ink: "red" } }, /preview.ink must be a theme token/],
+    [{ ...card, preview: { ink: "--rail", fill: "--bg" } }, /unknown field fill/],
+    [{ ...side, preview: { ink: "--rail" } }, /preview requires a surface/],
+    [{ ...card, sidecars: ["@scope/sidecar-worker", "@scope/sidecar-worker"] }, /duplicate sidecar/],
   ];
   for (const [manifest, message] of cases) assert.throws(() => validateManifest(manifest), message);
 });
@@ -92,13 +96,21 @@ test("references to missing plugins and sections are rejected", () => {
   assert.throws(() => checkReferences(environment(), [card, side, { ...side }]), /same id/);
 });
 
-test("sidecar references are checked only in an environment that declares sidecars", () => {
-  const hosted = { ...environment(), sidecars: ["worker"] };
-  assert.equal(validateEnvironment(hosted), hosted);
-  checkReferences(hosted, [card, side]);
-  checkReferences(environment(), [card, side]);
-  assert.throws(() => checkReferences({ ...hosted, sidecars: [] }, [card, side]), /undeclared sidecar worker/);
-  assert.throws(() => validateEnvironment({ ...hosted, sidecars: ["worker", "worker"] }), /duplicate sidecar/);
+test("an environment has no sidecar field", () => {
+  assert.throws(() => validateEnvironment({ ...environment(), sidecars: ["@scope/sidecar-worker"] }), /unknown field sidecars/);
+});
+
+test("a sidecar manifest names an executable inside its package and a protocol version", () => {
+  const sidecar = { executable: "build/worker", protocol: 1 };
+  assert.equal(validateSidecar(sidecar), sidecar);
+  const cases = [
+    [{ ...sidecar, name: "worker" }, /unknown field name/],
+    [{ ...sidecar, executable: "../worker" }, /executable must be a path inside the package/],
+    [{ ...sidecar, executable: "/bin/sh" }, /executable must be a path inside the package/],
+    [{ ...sidecar, protocol: 2 }, /protocol must be 1/],
+    [[], /expected an object/],
+  ];
+  for (const [value, message] of cases) assert.throws(() => validateSidecar(value), message);
 });
 
 test("page imports resolve inside the staged layout", () => {

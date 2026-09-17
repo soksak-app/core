@@ -14,17 +14,17 @@ import { H, W, three } from "./helpers.mjs";
 
 test("everything the API hands back is a copy the host may keep", () => {
   const grid = three();
-  grid.split("terminal", "x", { id: "editor", data: { pty: 3 } });
+  grid.split("upper", "x", { id: "editor", data: { pty: 3 } });
 
-  // `browser` spans the line the split just made, so cardsCrossing has someone
+  // `lower` spans the line the split just made, so cardsCrossing has someone
   // to answer with. Without that the loop below skipped it.
   const crossing = grid.cardsCrossing("x", 2);
   assert.equal(crossing.length, 1, "a card spans the new line");
   for (const [what, got] of [
     ["cards", grid.cards[0]],
-    ["card()", grid.card("terminal")],
+    ["card()", grid.card("upper")],
     ["cardsCrossing", crossing[0]],
-    ["fill().cards", grid.fill("terminal")?.cards[0]],
+    ["fill().cards", grid.fill("upper")?.cards[0]],
   ]) {
     assert.ok(got, `${what} answered`);
     assert.equal(Object.isFrozen(got), true, `${what} is frozen`);
@@ -32,7 +32,7 @@ test("everything the API hands back is a copy the host may keep", () => {
 
   // Writing to one changes nothing, whether it throws or is ignored.
   const rects = JSON.stringify([...grid.rects()]);
-  for (const got of [grid.cards[0], grid.card("terminal"), ...crossing]) {
+  for (const got of [grid.cards[0], grid.card("upper"), ...crossing]) {
     try {
       got.r0 = 0;
       got.width = 9;
@@ -71,9 +71,9 @@ test("an unknown id is answered, not thrown on, and changes nothing", () => {
   assert.equal(grid.setFixed("nobody", true), false);
   assert.equal(grid.setSize("nobody", "x", 100), false);
   assert.equal(grid.setData("nobody", { a: 1 }), false);
-  assert.equal(grid.move("nobody", "terminal", "left"), false);
+  assert.equal(grid.move("nobody", "upper", "left"), false);
   assert.equal(grid.moveTo("nobody", "x", 1), false);
-  assert.equal(grid.canMove("nobody", "terminal", "left"), false);
+  assert.equal(grid.canMove("nobody", "upper", "left"), false);
 
   assert.equal(JSON.stringify(grid.toJSON()), before, "and none of them changed anything");
 });
@@ -186,7 +186,7 @@ test("outline returns a value for nothing, and for rects that do not meet", () =
 
 test("the arguments each method reads are the ones it is given", () => {
   const grid = three();
-  grid.split("terminal", "x", { id: "beside" });
+  grid.split("upper", "x", { id: "beside" });
 
   // isSlicing reads the list it is handed, not always its own.
   assert.equal(grid.isSlicing(), true);
@@ -201,14 +201,14 @@ test("the arguments each method reads are the ones it is given", () => {
     "a pinwheel handed in is answered for",
   );
 
-  // standings honours `without`. `browser` spans the line the split just made,
+  // standings honours `without`. `lower` spans the line the split just made,
   // so it blocks that boundary until it is the card being ignored.
   const crossed = grid.cardsCrossing("x", 2).map((c) => c.id);
-  assert.deepEqual(crossed, ["browser"], "browser spans the new line");
+  assert.deepEqual(crossed, ["lower"], "lower spans the new line");
   const all = grid.standings("x");
-  const without = grid.standings("x", "browser");
+  const without = grid.standings("x", "lower");
   assert.ok(!all.includes(2), "so nothing may stand there");
-  assert.ok(without.includes(2), "unless browser is the one being ignored");
+  assert.ok(without.includes(2), "unless lower is the one being ignored");
 
   // canInsertAt checks the index, not only what crosses.
   for (const line of [-1, 1.5, NaN, 99]) {
@@ -248,7 +248,7 @@ test("zoneAt returns nothing for a point that is not one", () => {
   for (const [x, y] of [[NaN, 10], [10, NaN], [Infinity, 10], [-1e9, -1e9]]) {
     assert.equal(grid.zoneAt(x, y), null, `${x},${y}`);
   }
-  assert.ok(grid.zoneAt(grid.rect("terminal").x + 10, grid.rect("terminal").y + 10), "a real point lands");
+  assert.ok(grid.zoneAt(grid.rect("upper").x + 10, grid.rect("upper").y + 10), "a real point lands");
 });
 
 test("outline's radius follows pad, and it reports its corners", () => {
@@ -327,7 +327,7 @@ test("a boundary at the plane's edge returns px, not nothing", () => {
 
 test("centring the plane's border changes nothing, and centring a boundary halves it", () => {
   const grid = three();
-  grid.split("terminal", "x");
+  grid.split("upper", "x");
   for (const axis of ["x", "y"]) {
     const last = grid.lines(axis).length - 1;
     const before = [...grid.lines(axis)];
@@ -421,21 +421,21 @@ test("a card cannot be inserted at the size of the plane or more", () => {
 test("replace updates the canonical arrangement without replacing the grid", () => {
   const grid = new Soksak(undefined, { width: 1200, height: 800, minSize: 0 });
   const first = grid.card("card");
-  const next = grid.split("card", "x", { id: "browser", data: { program: "browser" } });
-  assert.equal(next, "browser");
+  const next = grid.split("card", "x", { id: "lower", data: { program: "lower" } });
+  assert.equal(next, "lower");
 
   grid.replace({
     xs: [0, 0.25, 1],
     ys: [0, 1],
     cards: [
-      { id: "terminal", c0: 0, c1: 1, r0: 0, r1: 1, data: { program: "terminal" } },
-      { id: "browser", c0: 1, c1: 2, r0: 0, r1: 1, data: { program: "browser" } },
+      { id: "upper", c0: 0, c1: 1, r0: 0, r1: 1, data: { program: "upper" } },
+      { id: "lower", c0: 1, c1: 2, r0: 0, r1: 1, data: { program: "lower" } },
     ],
   });
 
   assert.equal(grid.card("card"), undefined);
-  assert.equal(grid.card("terminal").data.program, "terminal");
-  assert.deepEqual(grid.rect("browser"), { x: 312, y: 0, w: 888, h: 800 });
+  assert.equal(grid.card("upper").data.program, "upper");
+  assert.deepEqual(grid.rect("lower"), { x: 312, y: 0, w: 888, h: 800 });
   // 판은 그대로이고 배치만 바뀌었다. 바뀌기 전의 카드는 이 배치에 없다.
   assert.equal(first.id, "card");
   assert.equal(grid.card(first.id), undefined, "the card that was replaced is gone");

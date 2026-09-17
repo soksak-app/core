@@ -3,6 +3,7 @@
 // 커맨드를 이름으로 호출한다. Tauri 가 페이지 스크립트보다 먼저 인터페이스를
 // 주입하므로 대기가 필요 없다. 표면과 모달 페이지도 같은 인터페이스를 사용한다.
 import { HostWorkspaceStore } from "@soksak/workbench/host-store.js";
+import { hostWindows } from "@soksak/workbench/host-windows.js";
 
 const COMMAND = {
   workspace: "workspace",
@@ -96,3 +97,6 @@ export const page = (() => {
 
 /** 설정과 프로젝트 목록은 네이티브 호스트가 저장한다. */
 export const openStore = async () => new HostWorkspaceStore(host);
+
+/** 창과 프로젝트 폴더는 네이티브 호스트가 관리한다. */
+export const windows = hostWindows(host);

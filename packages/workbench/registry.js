@@ -18,6 +18,7 @@ const registeredSections = [];
  * @param {string} plugin.name  `+` 메뉴에 표시할 이름
  * @param {string} plugin.mark  메뉴 오른쪽 표시이자 탭 제목의 접두사
  * @param {string} plugin.svg   16×16 뷰박스 기준 아이콘 경로
+ * @param {string|null} plugin.ink 라이브러리 미리보기 색의 테마 토큰 이름. 없으면 기본 색
  * @param {(tabId: string) => {url: string} | {page: string}} plugin.surface
  *        표면이 표시할 대상. `url` 은 외부 주소, `page` 는 이 호스트가 서비스하는
  *        문서다. 호스트는 둘만 구분하고 플러그인 종류는 알지 않는다. 표면 하나는

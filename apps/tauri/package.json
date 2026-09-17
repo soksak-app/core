@@ -5,7 +5,6 @@
   "type": "module",
   "description": "Tauri v2 application hosting the workbench with native webview surfaces.",
   "scripts": {
-    "frontend": "soksak-stage frontend",
     "test": "node --test test/"
   },
   "dependencies": {

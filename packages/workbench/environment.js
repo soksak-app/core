@@ -34,6 +34,7 @@ export async function loadEnvironment() {
     if (manifest.surface) {
       registerPlugin({
         id: manifest.id, name: manifest.name, mark: manifest.mark, svg: manifest.icon,
+        ink: manifest.preview?.ink ?? null,
         surface: surfaceOf(name, manifest.surface),
       });
     }

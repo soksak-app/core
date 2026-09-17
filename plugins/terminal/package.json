@@ -13,5 +13,8 @@
   },
   "devDependencies": {
     "@soksak/plugin-api": "workspace:*"
+  },
+  "dependencies": {
+    "@soksak/sidecar-shell": "workspace:*"
   }
 }

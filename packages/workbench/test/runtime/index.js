@@ -5,3 +5,5 @@ export const page = null;
 export const openStore = () => {
   throw new Error("workbench tests do not open a store");
 };
+
+export const windows = null;

@@ -9,11 +9,11 @@ const ids = (grid) => grid.cards.map((p) => p.id).sort().join(",");
 test("splitToward puts the new card on the side that was named", () => {
   for (const [side, ahead] of [["right", false], ["left", true], ["bottom", false], ["top", true]]) {
     const grid = three();
-    const before = grid.rect("terminal");
-    const id = grid.splitToward("terminal", side, { data: { mark: side } });
+    const before = grid.rect("upper");
+    const id = grid.splitToward("upper", side, { data: { mark: side } });
     assert.ok(id, side);
     const fresh = grid.rect(id);
-    const kept = grid.rect("terminal");
+    const kept = grid.rect("upper");
 
     if (side === "left" || side === "right") {
       const [near, far] = ahead ? [fresh, kept] : [kept, fresh];
@@ -31,29 +31,29 @@ test("splitToward puts the new card on the side that was named", () => {
 
 test("move takes the card and its data to the target side", () => {
   const grid = three();
-  grid.setData("terminal", { live: "pty-1" });
-  grid.setData("browser", { live: "webview-1" });
-  grid.split("browser", "y");          // give the layout somewhere to fill from
+  grid.setData("upper", { live: "pty-1" });
+  grid.setData("lower", { live: "webview-1" });
+  grid.split("lower", "y");          // give the layout somewhere to fill from
 
   const before = ids(grid);
-  assert.equal(grid.move("terminal", grid.cards.at(-1).id, "right"), true);
+  assert.equal(grid.move("upper", grid.cards.at(-1).id, "right"), true);
 
   assert.equal(ids(grid), before, "a move creates and destroys nothing");
-  assert.deepEqual(grid.card("terminal").data, { live: "pty-1" }, "the surface came along");
+  assert.deepEqual(grid.card("upper").data, { live: "pty-1" }, "the surface came along");
   assertTiling(grid, "after the move");
 });
 
 test("move places the card on the named side", () => {
   for (const side of ["left", "right", "top", "bottom"]) {
     const grid = three();
-    grid.split("browser", "y");
+    grid.split("lower", "y");
     const target = grid.cards.find((p) => p.id.startsWith("card-")).id;
     // Every side must be reachable here, so a build that refuses them all
     // cannot pass by skipping the body.
-    assert.equal(grid.canMove("terminal", target, side), true, `canMove ${side}`);
+    assert.equal(grid.canMove("upper", target, side), true, `canMove ${side}`);
 
-    assert.equal(grid.move("terminal", target, side), true, side);
-    const moved = grid.rect("terminal");
+    assert.equal(grid.move("upper", target, side), true, side);
+    const moved = grid.rect("upper");
     const t = grid.rect(target);
     if (side === "left") assert.ok(moved.x < t.x, side);
     if (side === "right") assert.ok(moved.x > t.x, side);
@@ -77,21 +77,21 @@ test("a refused move changes nothing", () => {
   );
   assert.equal(alone.move("only", "side", "right"), false);
 
-  assert.equal(grid.move("terminal", "missing", "right"), false, "unknown target");
-  assert.equal(grid.move("sidebar", "terminal", "right"), false, "a fixed card stays");
-  assert.equal(grid.move("terminal", "terminal", "right"), false, "beside itself is nothing");
+  assert.equal(grid.move("upper", "missing", "right"), false, "unknown target");
+  assert.equal(grid.move("sidebar", "upper", "right"), false, "a fixed card stays");
+  assert.equal(grid.move("upper", "upper", "right"), false, "beside itself is nothing");
   assert.equal(JSON.stringify(grid.toJSON()), before, "every refusal left the grid untouched");
 });
 
 test("canMove does not change the state", () => {
   const grid = three();
-  grid.split("browser", "y");
+  grid.split("lower", "y");
   const target = grid.cards.at(-1).id;
   const before = JSON.stringify(grid.toJSON());
 
-  const answer = grid.canMove("terminal", target, "right");
+  const answer = grid.canMove("upper", target, "right");
   assert.equal(JSON.stringify(grid.toJSON()), before, "asking is not doing");
-  assert.equal(grid.move("terminal", target, "right"), answer, "and the answer was right");
+  assert.equal(grid.move("upper", target, "right"), answer, "and the answer was right");
 });
 
 test("moving leaves a slicing arrangement", () => {
@@ -121,16 +121,16 @@ test("moving leaves a slicing arrangement", () => {
 
 test("a split does not change which card holds which id", () => {
   const grid = three();
-  grid.setData("terminal", { live: "pty-1" });
+  grid.setData("upper", { live: "pty-1" });
 
-  const born = grid.splitToward("terminal", "left", { data: { live: "pty-2" } });
+  const born = grid.splitToward("upper", "left", { data: { live: "pty-2" } });
   // A host holds ids, so a split must not swap which card carries which id.
-  assert.equal(grid.card("terminal").id, "terminal", "its name did not change underneath");
-  assert.deepEqual(grid.card("terminal").data, { live: "pty-1" }, "nor did what it holds");
+  assert.equal(grid.card("upper").id, "upper", "its name did not change underneath");
+  assert.deepEqual(grid.card("upper").data, { live: "pty-1" }, "nor did what it holds");
   assert.deepEqual(grid.card(born).data, { live: "pty-2" });
 
   // left means left: the new card is the one nearer the start
-  assert.ok(grid.rect(born).x < grid.rect("terminal").x);
+  assert.ok(grid.rect(born).x < grid.rect("upper").x);
   assertTiling(grid, "after splitting toward the left");
 });
 
@@ -139,8 +139,8 @@ test("no existing id is reassigned", () => {
   // Keyed by id and by what the card holds, not by the frozen copy the grid
   // handed out: comparing that copy's id to itself asserts nothing.
   const before = new Map(grid.cards.map((c) => [c.id, JSON.stringify(grid.rect(c.id))]));
-  grid.splitToward("terminal", "top", { id: "above", data: {} });
-  grid.splitToward("browser", "left", { id: "beside", data: {} });
+  grid.splitToward("upper", "top", { id: "above", data: {} });
+  grid.splitToward("lower", "left", { id: "beside", data: {} });
 
   for (const id of before.keys()) {
     assert.ok(grid.card(id), `${id} is still there under its own name`);

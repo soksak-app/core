@@ -1,8 +1,16 @@
 // 사이드카 채널.
 //
-// environment.json 에 선언된 사이드카를 처음 사용할 때 실행하고, 표면 페이지와 사이드카
-// 사이에서 한 줄 JSON 메시지를 전달한다. 메시지 본문은 해석하지 않는다. 형식은
-// docs/spec/sidecars.md 에 정의한다.
+// 플러그인이 plugin.json 에 의존성으로 선언한 사이드카를 처음 사용할 때 실행하고,
+// 표면 페이지와 사이드카 사이에서 한 줄 JSON 메시지를 전달한다. 메시지 본문은 해석하지
+// 않는다. 형식은 docs/spec/sidecars.md 에 정의한다.
+//
+// 사이드카는 스테이징된 설정 파일로만 찾는다.
+//
+//	environment.json                  plugins: 플러그인 패키지 이름
+//	modules/<플러그인>/plugin.json     sidecars: 사이드카 패키지 이름
+//	modules/<사이드카>/sidecar.json    executable: 패키지 안의 실행 파일 경로
+//
+// 실행 파일은 애플리케이션 실행 파일과 같은 디렉터리에 같은 파일 이름으로 놓인다.
 package main
 
 import (
@@ -10,10 +18,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -53,26 +64,61 @@ type sidecarOwner interface {
 // Sidecars 는 애플리케이션 하나의 사이드카 프로세스와 표면 소유 창을 관리한다.
 type Sidecars struct {
 	mu        sync.Mutex
-	directory string
-	declared  map[string]bool
+	declared  map[string]string
 	running   map[string]*sidecar
 	owners    map[string]sidecarOwner
 	stopped   bool
 }
 
-// NewSidecars 는 environment.json 의 sidecars 목록으로 채널을 생성한다. 실행 파일은
-// directory 에서 soksak-<이름> 으로 찾는다.
-func NewSidecars(environment []byte, directory string) (*Sidecars, error) {
-	var declared struct {
-		Sidecars []string `json:"sidecars"`
+// NewSidecars 는 스테이징된 프런트엔드 frontend 의 설정 파일로 사이드카를 찾아 채널을 생성한다.
+// 실행 파일은 directory 에서 찾는다. 설정 파일이 없거나 형식이 틀리면 실패한다.
+func NewSidecars(frontend fs.FS, directory string) (*Sidecars, error) {
+	read := func(name string, into any) error {
+		data, err := fs.ReadFile(frontend, name)
+		if err != nil {
+			return fmt.Errorf("%s: %w", name, err)
+		}
+		if err := json.Unmarshal(data, into); err != nil {
+			return fmt.Errorf("%s: %w", name, err)
+		}
+		return nil
 	}
-	if err := json.Unmarshal(environment, &declared); err != nil {
-		return nil, fmt.Errorf("environment.json: %w", err)
+	var environment struct {
+		Plugins []string `json:"plugins"`
 	}
-	c := &Sidecars{directory: directory, declared: map[string]bool{},
+	if err := read("environment.json", &environment); err != nil {
+		return nil, err
+	}
+	c := &Sidecars{declared: map[string]string{},
 		running: map[string]*sidecar{}, owners: map[string]sidecarOwner{}}
-	for _, name := range declared.Sidecars {
-		c.declared[name] = true
+	for _, plugin := range environment.Plugins {
+		var manifest struct {
+			Sidecars []string `json:"sidecars"`
+		}
+		if err := read(path.Join("modules", plugin, "plugin.json"), &manifest); err != nil {
+			return nil, err
+		}
+		for _, name := range manifest.Sidecars {
+			if _, known := c.declared[name]; known {
+				continue
+			}
+			file := path.Join("modules", name, "sidecar.json")
+			var declared struct {
+				Executable string `json:"executable"`
+				Protocol   int    `json:"protocol"`
+			}
+			if err := read(file, &declared); err != nil {
+				return nil, err
+			}
+			if declared.Executable == "" || path.IsAbs(declared.Executable) ||
+				strings.Contains("/"+declared.Executable+"/", "/../") {
+				return nil, fmt.Errorf("%s: executable must be a path inside the package", file)
+			}
+			if declared.Protocol != 1 {
+				return nil, fmt.Errorf("%s: protocol must be 1", file)
+			}
+			c.declared[name] = filepath.Join(directory, path.Base(declared.Executable))
+		}
 	}
 	return c, nil
 }
@@ -84,8 +130,8 @@ func (c *Sidecars) Send(owner sidecarOwner, name, surface string, body json.RawM
 	if c.stopped {
 		return fmt.Errorf("sidecars are stopped")
 	}
-	if !c.declared[name] {
-		return fmt.Errorf("sidecar %s is not declared in environment.json", name)
+	if _, ok := c.declared[name]; !ok {
+		return fmt.Errorf("sidecar %s is not declared by any plugin", name)
 	}
 	if other, ok := c.owners[surface]; ok && other != owner {
 		return fmt.Errorf("surface %s belongs to another window", surface)
@@ -148,7 +194,7 @@ func (c *Sidecars) process(name string) (*sidecar, error) {
 	if process, ok := c.running[name]; ok {
 		return process, nil
 	}
-	cmd := exec.Command(filepath.Join(c.directory, "soksak-"+name))
+	cmd := exec.Command(c.declared[name])
 	cmd.Stderr = os.Stderr
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
