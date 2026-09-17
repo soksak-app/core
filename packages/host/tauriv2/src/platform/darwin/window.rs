@@ -37,15 +37,16 @@ pub fn controls(window: Handle) -> Frame {
     (rect[0], rect[1], rect[2], rect[3])
 }
 
-/// 창 버튼을 두 macOS 호스트가 공유하는 컨테이너에 배치한다. 둘 수 없으면 오류를 반환한다.
-pub fn place_controls(window: Handle, x: f64, centre_y: f64) -> Result<(), String> {
+/// 창의 제목줄을 도구막대 높이로 만들고 그 높이를 반환한다. 만들 수 없으면 오류를 반환한다.
+pub fn unified_titlebar(window: Handle) -> Result<f64, String> {
     extern "C" {
-        fn windowPlaceControls(window: *mut c_void, x: f64, centre_y: f64) -> bool;
+        fn windowUnifiedTitlebar(window: *mut c_void) -> f64;
     }
-    if unsafe { windowPlaceControls(window as *mut c_void, x, centre_y) } {
-        Ok(())
+    let row = unsafe { windowUnifiedTitlebar(window as *mut c_void) };
+    if row > 0.0 {
+        Ok(row)
     } else {
-        Err("the window has no standard buttons or content view to place".into())
+        Err("the window has no standard buttons or content view for a title bar".into())
     }
 }
 

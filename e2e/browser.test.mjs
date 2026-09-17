@@ -42,7 +42,10 @@ async function regionRect(s, surface) {
   return { x: rect.document.x + rect.x, y: rect.document.y + rect.y, width: rect.width, height: rect.height };
 }
 
-const near = (a, b) => ["x", "y", "width", "height"].every((key) => Math.abs(a[key] - b[key]) < 0.01);
+/** 네이티브 프레임은 장치 픽셀 단위이고 요소의 사각형은 CSS 픽셀이므로 한 장치 픽셀까지 허용한다. */
+const DEVICE_PIXEL = 0.5;
+
+const near = (a, b) => ["x", "y", "width", "height"].every((key) => Math.abs(a[key] - b[key]) <= DEVICE_PIXEL);
 
 /** host.window 의 문서 영역 프레임이 요소의 사각형과 같아질 때까지 기다린다. */
 async function placed(s, surface, message) {

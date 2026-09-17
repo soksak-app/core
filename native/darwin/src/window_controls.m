@@ -1,105 +1,25 @@
 #import <Cocoa/Cocoa.h>
-#import <objc/runtime.h>
 #import "window_controls.h"
 
-// AppKit takes its buttons back into the title bar when the window title or
-// the recording indicator changes (-[NSThemeFrame _updateButtons]), even without
-// a resize. The container puts them back in a run loop block, which runs before
-// the next display pass; waiting for the next layout pass let the title bar
-// position reach the screen.
-@interface SPWindowControls : NSView
-@property(assign) NSView *home;
-@property CGFloat left;
-@property CGFloat centre;
-@property BOOL suspended;
-@property BOOL returning;
-- (void)place;
-@end
-
-static char controlsKey;
-
-@implementation SPWindowControls
-- (void)willRemoveSubview:(NSView *)view {
-    [super willRemoveSubview:view];
-    if (self.suspended || self.returning || !self.window) return;
-    self.returning = YES;
-    // 블록은 뷰나 창을 붙잡지 않는다. 그 사이에 창이 닫혀 해제되면 뷰가 가리키는 창도 사라지므로,
-    // 실행할 때 창 번호로 창을 다시 찾는다.
-    NSInteger number = self.window.windowNumber;
-    CFRunLoopRef main = CFRunLoopGetMain();
-    CFRunLoopPerformBlock(main, kCFRunLoopCommonModes, ^{
-        NSWindow *window = [NSApp windowWithWindowNumber:number];
-        SPWindowControls *controls = window ? objc_getAssociatedObject(window, &controlsKey) : nil;
-        if (!controls) return;
-        controls.returning = NO;
-        [controls place];
-    });
-    CFRunLoopWakeUp(main);
-}
-- (void)layout {
-    [super layout];
-    [self place];
-}
-- (void)place {
-    NSWindow *window = self.window;
-    if (!window || self.suspended) return;
-    NSButton *first = [window standardWindowButton:NSWindowCloseButton];
-    NSButton *last = [window standardWindowButton:NSWindowZoomButton];
-    if (!first || !last) return;
-    for (NSUInteger kind = NSWindowCloseButton; kind <= NSWindowZoomButton; kind++) {
-        NSButton *button = [window standardWindowButton:kind];
-        if (button && button.superview != self) [self addSubview:button];
-    }
-    NSRect a = first.frame, b = last.frame;
-    // 단추가 보이는 영역은 프레임보다 작고 프레임 안에서 위아래 여백이 다르다. 보이는 영역의
-    // 세로 중앙을 centre 에 맞춘다. 이 뷰는 뒤집히지 않았으므로 y 는 위로 증가한다.
-    NSRect drawn = [self convertRect:[first alignmentRectForFrame:first.bounds] fromView:first];
-    CGFloat drawnTop = NSMaxY(a) - NSMaxY(drawn);
-    CGFloat top = self.centre - drawnTop - NSHeight(drawn) / 2;
-    self.frame = NSMakeRect(self.left - a.origin.x,
-        self.superview.bounds.size.height - top - NSMaxY(a),
-        NSMaxX(b) + a.origin.x, NSMaxY(a) + a.origin.y);
-}
-- (void)windowResized:(NSNotification *)note { [self place]; }
-- (void)enterFullScreen:(NSNotification *)note {
-    self.suspended = YES;
-    for (NSUInteger kind = NSWindowCloseButton; kind <= NSWindowZoomButton; kind++) {
-        NSButton *button = [self.window standardWindowButton:kind];
-        if (button) [self.home addSubview:button];
-    }
-}
-- (void)exitFullScreen:(NSNotification *)note {
-    self.suspended = NO;
-    [self place];
-}
-- (void)dealloc {
-    [NSNotificationCenter.defaultCenter removeObserver:self];
-    [super dealloc];
-}
-@end
-
-
-bool windowPlaceControls(void *handle, double x, double centreY) {
+// AppKit 이 창 단추를 소유한다. 단추를 다른 뷰로 옮기면 AppKit 이 제목이나 녹화 표시가 바뀔 때
+// (-[NSThemeFrame _updateButtons]) 되찾아 가고, 되돌리는 사이에 단추가 사라지거나 제목줄 자리로
+// 당겨진 프레임이 화면에 나온다(측정: 창 이동·크기 변경 48회당 1~2 프레임). 대신 제목줄을 도구막대
+// 높이로 만들어 AppKit 이 그 높이의 세로 가운데에 단추를 두게 한다.
+double windowUnifiedTitlebar(void *handle) {
     NSCAssert(NSThread.isMainThread, @"Window controls belong to the main thread");
     NSWindow *window = (NSWindow *)handle;
-    SPWindowControls *controls = objc_getAssociatedObject(window, &controlsKey);
-    if (!controls) {
-        NSButton *close = [window standardWindowButton:NSWindowCloseButton];
-        if (!close || !window.contentView) return false;
-        controls = [[[SPWindowControls alloc] initWithFrame:NSZeroRect] autorelease];
-        controls.home = close.superview;
-        [window.contentView addSubview:controls positioned:NSWindowAbove relativeTo:nil];
-        objc_setAssociatedObject(window, &controlsKey, controls, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
-        window.contentView.postsFrameChangedNotifications = YES;
-        [center addObserver:controls selector:@selector(windowResized:) name:NSViewFrameDidChangeNotification object:window.contentView];
-        [center addObserver:controls selector:@selector(enterFullScreen:) name:NSWindowWillEnterFullScreenNotification object:window];
-        [center addObserver:controls selector:@selector(exitFullScreen:) name:NSWindowDidExitFullScreenNotification object:window];
+    if (![window standardWindowButton:NSWindowCloseButton] || !window.contentView) return 0;
+    if (!window.toolbar) {
+        NSToolbar *toolbar = [[[NSToolbar alloc] initWithIdentifier:@"soksak"] autorelease];
+        // 항목이 없는 도구막대다. 제목줄 높이만 정하고 아무것도 그리지 않는다.
+        toolbar.showsBaselineSeparator = NO;
+        window.toolbar = toolbar;
     }
-    controls.left = x;
-    controls.centre = centreY;
-    [controls place];
-    return true;
+    window.toolbarStyle = NSWindowToolbarStyleUnifiedCompact;
+    window.titlebarAppearsTransparent = YES;
+    window.titleVisibility = NSWindowTitleHidden;
+    [window layoutIfNeeded];
+    return window.frame.size.height - window.contentLayoutRect.size.height;
 }
 
 // Reading a position must not repair it: callers need the actual geometry.

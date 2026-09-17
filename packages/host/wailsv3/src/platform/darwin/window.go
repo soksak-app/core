@@ -34,11 +34,12 @@ func (implementation) PrepareWindow(window unsafe.Pointer) error {
 	return nil
 }
 
-func (implementation) PlaceWindowControls(window unsafe.Pointer, x, centreY float64) error {
-	if !C.windowPlaceControls(window, C.double(x), C.double(centreY)) {
-		return errors.New("the window has no standard buttons or content view to place")
+func (implementation) UnifiedTitlebar(window unsafe.Pointer) (float64, error) {
+	row := float64(C.windowUnifiedTitlebar(window))
+	if row <= 0 {
+		return 0, errors.New("the window has no standard buttons or content view for a title bar")
 	}
-	return nil
+	return row, nil
 }
 
 func (implementation) WindowControls(window unsafe.Pointer) (platform.Rect, error) {

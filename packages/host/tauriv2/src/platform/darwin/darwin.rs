@@ -81,8 +81,8 @@ impl Platform for Darwin {
     fn window_handle(&self, window: &Window) -> Result<Handle, String> {
         window::handle(window)
     }
-    fn place_window_controls(&self, window: Handle, x: f64, centre_y: f64) -> Result<(), String> {
-        window::place_controls(window, x, centre_y)
+    fn unified_titlebar(&self, window: Handle) -> Result<f64, String> {
+        window::unified_titlebar(window)
     }
     fn window_controls(&self, window: Handle) -> Result<Frame, String> {
         Ok(window::controls(window))

@@ -89,7 +89,7 @@ The shell sidecar uses the same Go mechanism in `sidecars/shell/src/platform/`.
 
 | Area | Operations |
 | --- | --- |
-| Window | Window preparation, window button placement and area, window server numbers, native inspection requests |
+| Window | Window preparation, the unified title bar, the window button area, window server numbers, native inspection requests |
 | Webview | Creation, placement, frame, visibility, background, opacity, live resize, close (Wails also navigation, script evaluation, modal configuration and focus, pixel alignment; Tauri also ordering, corner radius, view identity) |
 | Surface layout | Transaction begin, commit, cancel, and completion after presentation |
 | Shapes | Outline views above surfaces: creation, frame, style, removal |
@@ -104,7 +104,7 @@ The shell sidecar uses the same Go mechanism in `sidecars/shell/src/platform/`.
 
 ### Window buttons
 
-Both hosts place the window's own buttons inside the page's first row (`.chrome-bar` in `packages/workbench/app.css`, 45px): the left edge of the leftmost button at x 12, and the vertical centre of the buttons' visible area at y 22.5, both in content coordinates. The native library computes the frame from the actual button size. The hosts place the buttons when the page reports that it is ready and after each resize; a placement that cannot be applied makes the ready call fail. AppKit takes the buttons back into the title bar when the window title or the recording indicator changes; the library places them again in a run loop block, before the next display pass. `host.window` reports the visible area in `controls`.
+AppKit owns the window's own buttons. Each host gives its window an empty toolbar with the unified compact style (`windowUnifiedTitlebar`), which makes the title bar 40pt tall and has AppKit centre the buttons in it. The page reads the button area (`chrome.controls()`), reserves its width in the first row, and takes the row height from it: the row is twice the distance from the window top to the centre of the buttons (`--chrome-h` in `packages/workbench/app.css`). `host.window` reports the visible area in `controls`. Moving the buttons into the page's own view is what made AppKit take them back on a title or recording-indicator change, which showed one frame with the buttons missing or at the title bar position in about one of 48 window moves and resizes.
 
 ## Windows state
 

@@ -30,8 +30,8 @@ func (implementation) PrepareWindow(unsafe.Pointer) error {
 	return unsupported("window preparation")
 }
 
-func (implementation) PlaceWindowControls(unsafe.Pointer, float64, float64) error {
-	return unsupported("window control placement")
+func (implementation) UnifiedTitlebar(unsafe.Pointer) (float64, error) {
+	return 0, unsupported("window title bar")
 }
 
 func (implementation) WindowControls(unsafe.Pointer) (platform.Rect, error) {

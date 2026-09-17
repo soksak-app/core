@@ -281,6 +281,8 @@ function askControls() {
     if (!at || at.w <= 0) return;
     controlsAt = at;
     document.documentElement.style.setProperty("--controls-w", `${at.x + at.w}px`);
+    // 창은 제목줄 높이의 세로 가운데에 단추를 둔다. 그 높이를 첫 행의 높이로 쓴다.
+    document.documentElement.style.setProperty("--chrome-h", `${2 * (at.y + at.h / 2)}px`);
     // 답이 도착해도 렌더는 발생하지 않는다. 검증이 이 값을 읽으므로 여기서 한 번
     // 더 실행한다.
     check();

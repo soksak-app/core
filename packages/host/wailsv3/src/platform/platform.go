@@ -68,9 +68,10 @@ type Capturer interface {
 type Platform interface {
 	// PrepareWindow 는 창의 콘텐츠 뷰와 메인 웹뷰의 크기를 맞춘다.
 	PrepareWindow(window unsafe.Pointer) error
-	// PlaceWindowControls 는 맨 왼쪽 창 단추의 왼쪽 끝을 x 에, 단추가 보이는 영역의 세로 중앙을
-	// centreY 에 둔다(콘텐츠 왼쪽 위 기준). 창에 단추를 둘 수 없으면 오류를 반환한다.
-	PlaceWindowControls(window unsafe.Pointer, x, centreY float64) error
+	// UnifiedTitlebar 는 창의 제목줄을 도구막대 높이로 만들고 그 높이(pt)를 반환한다. AppKit 이 그
+	// 높이의 세로 가운데에 창 단추를 두므로 호스트는 단추를 옮기지 않는다. 창에 단추가 없으면
+	// 오류를 반환한다.
+	UnifiedTitlebar(window unsafe.Pointer) (float64, error)
 	// WindowControls 는 창 단추가 차지하는 영역을 페이지 좌표로 반환한다.
 	WindowControls(window unsafe.Pointer) (Rect, error)
 	// WindowFacts 는 창의 프레임, 활성 상태, 창 단추와 웹뷰를 JSON 으로 반환한다. 형식은
