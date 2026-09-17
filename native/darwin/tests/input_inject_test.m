@@ -7,6 +7,26 @@
 
 static int failures = 0;
 
+// 실제 포인터가 창 위에 있으면 AppKit 과 WebKit 이 그 이동도 처리하므로 검사 이벤트에 섞인다.
+// 창을 포인터에서 떨어진 곳에 두고, 측정 동안 포인터가 창에 들어오면 측정을 무효로 보고한다.
+static void pointerOutside(NSWindow *window) {
+    if (!NSPointInRect(NSEvent.mouseLocation, window.frame)) return;
+    fprintf(stderr, "FAIL: the pointer is over the test window, so its movements reach the page too; "
+        "rerun without moving the pointer over the window\n");
+    exit(1);
+}
+
+static NSRect awayFromPointer(NSSize size) {
+    NSPoint pointer = NSEvent.mouseLocation;
+    NSRect screen = NSScreen.mainScreen.visibleFrame;
+    for (NSScreen *candidate in NSScreen.screens) {
+        if (NSPointInRect(pointer, candidate.frame)) screen = candidate.visibleFrame;
+    }
+    CGFloat left = pointer.x < NSMidX(screen) ? NSMaxX(screen) - size.width - 20 : NSMinX(screen) + 20;
+    CGFloat bottom = pointer.y < NSMidY(screen) ? NSMaxY(screen) - size.height - 60 : NSMinY(screen) + 20;
+    return NSMakeRect(left, bottom, size.width, size.height);
+}
+
 static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
@@ -44,7 +64,7 @@ int main(void) { @autoreleasepool {
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     [NSApp finishLaunching];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
-    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(120, 120, 400, 300)
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:awayFromPointer(NSMakeSize(400, 300))
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
     [window setReleasedWhenClosed:NO];
     window.acceptsMouseMovedEvents = YES;
@@ -69,10 +89,12 @@ int main(void) { @autoreleasepool {
     drain(view);
     check([evaluate(view, @"probe.events.filter(e=>e.type==='pointermove').length") intValue] == 0, @"a rejected move sends nothing to the page");
     evaluate(view, @"probe.events.length=0; null");
+    pointerOutside(window);
     check(sp_input_pointer(window, 150, 100, 1, 0, 0, 0) == SP_INPUT_DELIVERED, @"press delivered");
     check(sp_input_pointer(window, 160, 155, 2, 0, 0, 0) == SP_INPUT_DELIVERED, @"drag delivered");
     check(sp_input_pointer(window, 160, 155, 3, 0, 0, 0) == SP_INPUT_DELIVERED, @"release delivered");
     drain(view);
+    pointerOutside(window);
     NSArray *pointer = evaluate(view, @"probe.events.filter(e=>e.type.startsWith('pointer')||e.type==='click')");
     NSArray *types = [pointer valueForKey:@"type"];
     check([types containsObject:@"pointerdown"] && [types containsObject:@"pointerup"] && [types containsObject:@"click"],

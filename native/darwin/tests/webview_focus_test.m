@@ -29,19 +29,22 @@ static void focusInPage(WKWebView *view) {
     until(^BOOL { return settled; });
 }
 
+// 문서 불러오기가 끝나면 알린다.
+@interface SPLoaded : NSObject <WKNavigationDelegate>
+@property BOOL finished;
+@end
+@implementation SPLoaded
+- (void)webView:(WKWebView *)view didFinishNavigation:(WKNavigation *)navigation { self.finished = YES; }
+@end
+
 static WKWebView *page(NSWindow *window, NSRect frame) {
     WKWebView *view = [[[WKWebView alloc] initWithFrame:frame] autorelease];
     [window.contentView addSubview:view];
+    SPLoaded *loaded = [[SPLoaded new] autorelease];
+    view.navigationDelegate = loaded;
     [view loadHTMLString:@"<!doctype html><input id='field'>" baseURL:nil];
-    __block BOOL ready = NO;
-    until(^BOOL {
-        if (!view.isLoading && !ready) {
-            [view evaluateJavaScript:@"document.readyState" completionHandler:^(id value, NSError *error) {
-                ready = [value isEqual:@"complete"];
-            }];
-        }
-        return ready;
-    });
+    until(^BOOL { return loaded.finished; });
+    view.navigationDelegate = nil;
     return view;
 }
 
