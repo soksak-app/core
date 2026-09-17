@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: preflight prepare build verify docs-check boundaries platforms hosts-check
+.PHONY: preflight prepare build verify docs-check boundaries platforms hosts-check e2e-check
 
 docs-check:
 	@node scripts/check-docs.mjs
@@ -8,6 +8,10 @@ docs-check:
 # 코어, 플러그인, 사이드카가 서로의 이름을 코드에 적지 않았는지 검사한다.
 boundaries:
 	@node scripts/check-boundaries.mjs
+
+# 창 검사가 엔드포인트의 선언된 항목과 네이티브 입력만 쓰는지 검사한다.
+e2e-check:
+	@node scripts/check-e2e.mjs
 
 # 운영체제별 코드가 platform/<os>/ 아래에만 있는지 검사한다.
 platforms:
@@ -53,7 +57,9 @@ export PATH := $(HOME)/.cargo/bin:$(PATH)
 # Rust 와 cc 는 MACOSX_DEPLOYMENT_TARGET 을 읽는다.
 MACOS_MINIMUM = 14.0
 export PKG_CONFIG_PATH := $(CURDIR)/native/darwin/build
-GO_ENV       = CGO_CFLAGS="-O2 -g -mmacosx-version-min=$(MACOS_MINIMUM)"
+# go build 는 cgo 가 링크하는 정적 라이브러리의 내용을 캐시 키에 넣지 않고 CGO_CFLAGS 는 넣는다.
+# 라이브러리 해시를 CGO_CFLAGS 에 넣어 라이브러리가 바뀌면 cgo 패키지를 다시 컴파일하고 다시 링크한다.
+GO_ENV       = CGO_CFLAGS="-O2 -g -mmacosx-version-min=$(MACOS_MINIMUM) -DSOKSAK_DARWIN_LIBRARY=$$(shasum -a 256 native/darwin/build/libsoksak-darwin.a | cut -c1-16)"
 GO_LINK      = -extldflags=-mmacosx-version-min=$(MACOS_MINIMUM)
 CARGO_ENV    = MACOSX_DEPLOYMENT_TARGET=$(MACOS_MINIMUM)
 
@@ -117,8 +123,8 @@ native-test: native-darwin frontend-wailsv3 frontend-tauriv2
 	@$(CARGO_ENV) cargo test -p soksak-host-tauriv2
 	@$(CARGO_ENV) cargo test -p soksak-host-tauriv2 --features diagnostics
 
-# 이미 실행 중인 앱의 창을 순차 검사한다. 하네스는 앱을 실행하지 않는다.
-examples-verify: docs-check
+# 이미 실행 중인 앱의 창을 로컬 엔드포인트로 순차 검사한다. 하네스는 앱을 실행하지 않는다.
+examples-verify: docs-check e2e-check
 	@pnpm -F @soksak/e2e run verify
 
 # 두 앱의 두 프로필 빌드와 각 크기.

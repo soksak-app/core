@@ -106,6 +106,23 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"keys reach the focused field in a window that is not key: %@", keysSeen]);
     check([evaluate(view, @"document.getElementById('field').value") isEqual:@"a"], @"text input reaches the field");
 
+    // 창 안의 다른 웹뷰를 누르면 AppKit 과 같이 그 웹뷰가 키 입력을 받는다.
+    WKWebView *child = [[WKWebView alloc] initWithFrame:NSMakeRect(220, 0, 180, 50)];
+    [view addSubview:child];
+    [child loadHTMLString:@"<!doctype html><input id='other' style='width:160px'><script>window.ready=true</script>" baseURL:nil];
+    until(^BOOL { return [evaluate(child, @"Boolean(window.ready)") boolValue]; });
+    // WKWebView 는 뒤집힌 좌표계라 하위 뷰의 frame 이 곧 콘텐츠 영역 왼쪽 위 기준이다.
+    check(sp_input_pointer(window, 300, 20, 1, 0, 0, 0) == SP_INPUT_DELIVERED && sp_input_pointer(window, 300, 20, 3, 0, 0, 0) == SP_INPUT_DELIVERED,
+        @"child webview click delivered");
+    drain(child);
+    check(window.firstResponder == child || [(NSView *)window.firstResponder isDescendantOf:child],
+        @"pressing a webview makes it the first responder");
+    check(sp_input_key(window, "b", NULL, 0, true) && sp_input_key(window, "b", NULL, 0, false), @"key after child click accepted");
+    until(^BOOL { return [[evaluate(child, @"document.getElementById('other').value") description] isEqual:@"b"]; });
+    check([evaluate(child, @"document.getElementById('other').value") isEqual:@"b"], @"keys reach the pressed webview");
+    check([evaluate(view, @"document.getElementById('field').value") isEqual:@"a"], @"the previous webview keeps its text");
+    [child release];
+
     check(!NSApp.isActive, @"application stays inactive");
     check(NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier != getpid(), @"this process did not become the frontmost application");
     [window close];

@@ -48,15 +48,19 @@ int main(void) { @autoreleasepool {
     check([views[0][@"view"] unsignedLongLongValue] == (uintptr_t)main && [views[1][@"view"] unsignedLongLongValue] == (uintptr_t)top,
         @"webviews are listed in drawing order with the main page first");
     NSDictionary *upper = views[1];
-    // WKWebView 는 뒤집히지 않은 좌표계라 부모 아래 기준 y 50, 높이 100 은 위 기준 y 150 이다.
-    check([upper[@"x"] doubleValue] == 100 && [upper[@"y"] doubleValue] == 150 && [upper[@"width"] doubleValue] == 200
+    // WKWebView 는 뒤집힌 좌표계라 하위 뷰의 frame 이 곧 콘텐츠 영역 왼쪽 위 기준이다.
+    check(main.isFlipped, @"the main webview is a flipped view");
+    check([upper[@"x"] doubleValue] == 100 && [upper[@"y"] doubleValue] == 50 && [upper[@"width"] doubleValue] == 200
         && [upper[@"height"] doubleValue] == 100, [NSString stringWithFormat:@"child webview frame in window coordinates: %@", upper]);
     check(![upper[@"draws"] boolValue] && [upper[@"alpha"] doubleValue] == 0 && [views[0][@"draws"] boolValue],
         @"background drawing and under-page alpha are reported per webview");
 
-    NSDictionary *hit = parse(sp_window_hit(window, 150, 200));
+    char *raw = sp_window_hit(window, 10, 10);
+    check(strstr(raw, "\"main\":true") != NULL, [NSString stringWithFormat:@"main is a JSON boolean: %s", raw]);
+    sp_facts_free(raw);
+    NSDictionary *hit = parse(sp_window_hit(window, 150, 100));
     check([hit[@"view"] unsignedLongLongValue] == (uintptr_t)top && ![hit[@"main"] boolValue], @"a point inside the child webview hits it");
-    hit = parse(sp_window_hit(window, 10, 10));
+    hit = parse(sp_window_hit(window, 150, 200));
     check([hit[@"view"] unsignedLongLongValue] == (uintptr_t)main && [hit[@"main"] boolValue], @"a point outside it hits the main webview");
 
     NSArray *screens = parse(sp_screens());

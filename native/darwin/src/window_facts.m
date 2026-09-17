@@ -21,10 +21,12 @@ static NSDictionary *screenRect(NSRect rect) {
         @"width": @(rect.size.width), @"height": @(rect.size.height) };
 }
 
-static NSDictionary *windowRect(NSWindow *window, NSRect rect) {
-    CGFloat height = window.contentView.bounds.size.height;
-    return @{ @"x": @(rect.origin.x), @"y": @(height - NSMaxY(rect)),
-        @"width": @(rect.size.width), @"height": @(rect.size.height) };
+// 창 기준 좌표(왼쪽 아래 원점)의 사각형을 콘텐츠 영역 왼쪽 위 기준으로 바꾼다. 콘텐츠 뷰는
+// 창 기준 좌표의 원점에 있다.
+static NSDictionary *windowRect(NSWindow *window, NSRect base) {
+    CGFloat height = window.contentView.frame.size.height;
+    return @{ @"x": @(base.origin.x), @"y": @(height - NSMaxY(base)),
+        @"width": @(base.size.width), @"height": @(base.size.height) };
 }
 
 static void collectWebViews(NSView *view, NSMutableArray<WKWebView *> *found) {
@@ -41,7 +43,7 @@ char *sp_window_facts(void *handle) {
     for (NSUInteger kind = NSWindowCloseButton; kind <= NSWindowZoomButton; kind++) {
         NSButton *button = [window standardWindowButton:kind];
         if (!button) continue;
-        NSRect rect = [content convertRect:[button alignmentRectForFrame:button.bounds] fromView:button];
+        NSRect rect = [button convertRect:[button alignmentRectForFrame:button.bounds] toView:nil];
         NSMutableDictionary *row = [windowRect(window, rect) mutableCopy];
         row[@"hidden"] = @(button.isHiddenOrHasHiddenAncestor);
         [controls addObject:row];
@@ -51,7 +53,7 @@ char *sp_window_facts(void *handle) {
     collectWebViews(content, views);
     NSMutableArray *webviews = [NSMutableArray array];
     for (WKWebView *view in views) {
-        NSRect rect = [view convertRect:view.bounds toView:content];
+        NSRect rect = [view convertRect:view.bounds toView:nil];
         NSMutableDictionary *row = [windowRect(window, rect) mutableCopy];
         row[@"view"] = @((unsigned long long)(uintptr_t)view);
         row[@"hidden"] = @(view.isHiddenOrHasHiddenAncestor);
@@ -77,13 +79,13 @@ char *sp_window_hit(void *handle, double x, double y) {
     NSWindow *window = (NSWindow *)handle;
     NSView *content = window.contentView;
     if (!window || !content) return NULL;
-    NSPoint local = NSMakePoint(x, content.bounds.size.height - y);
-    NSView *hit = [content hitTest:[content convertPoint:local toView:content.superview]];
+    NSPoint base = NSMakePoint(x, content.frame.size.height - y);
+    NSView *hit = [content hitTest:[content.superview convertPoint:base fromView:nil]];
     NSView *owner = hit;
     while (owner && ![owner isKindOfClass:WKWebView.class]) owner = owner.superview;
     NSMutableArray<WKWebView *> *views = [NSMutableArray array];
     collectWebViews(content, views);
-    return copyJSON(@{ @"view": @((unsigned long long)(uintptr_t)owner), @"main": @(owner && owner == views.firstObject),
+    return copyJSON(@{ @"view": @((unsigned long long)(uintptr_t)owner), @"main": owner && owner == views.firstObject ? @YES : @NO,
         @"identifier": hit.identifier ?: @"" });
 }
 

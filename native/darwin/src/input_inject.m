@@ -92,6 +92,10 @@ sp_input_result sp_input_pointer(void *handle, double x, double y, int phase, in
     BOOL right = button == 1;
     switch (phase) {
         case 1:
+            // -[NSWindow sendEvent:] 는 누른 뷰가 받을 수 있으면 첫 응답자로 만든 뒤 누름을 전달한다.
+            // 이 경로는 뷰에 직접 전달하므로 같은 순서를 따른다. 호스트의 표면 웹뷰는 누름만으로
+            // 첫 응답자가 되지 않는다(e2e/terminal.test.mjs). 창이나 앱을 활성화하지 않는다.
+            if (hit != window.firstResponder && hit.acceptsFirstResponder) [window makeFirstResponder:hit];
             if (right) [hit rightMouseDown:mouseEvent(window, NSEventTypeRightMouseDown, point, 1, 1)];
             else [hit mouseDown:mouseEvent(window, NSEventTypeLeftMouseDown, point, 1, 1)];
             return SP_INPUT_DELIVERED;
