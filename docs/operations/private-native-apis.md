@@ -84,14 +84,14 @@ After a framework update, check whether it supplies this callback or a Dock-menu
 
 ## Native input injection
 
-[`input_inject.m`](../../native/darwin/src/input_inject.m) delivers pointer and key input to an application window without activating the application. It uses public AppKit calls with these conditions:
+[`input_inject.m`](../../native/darwin/src/input_inject.m) delivers pointer and key input to an application window without activating the application. It uses public AppKit calls, except for scroll, with these conditions:
 
 - Keys: `-[NSWindow sendEvent:]` with `+[NSEvent keyEventWithType:...]`. A focused element receives the keys in a window that is not the key window.
 - Pointer press, drag, release: the event method (`mouseDown:`, `mouseDragged:`, `mouseUp:`, right-button variants) of the view returned by `hitTest:`. `-[NSWindow sendEvent:]` is not used for these because AppKit treats a press in an inactive window as a first click and does not deliver it to the view.
 - Pointer movement: `mouseMoved:` of the owner of the first tracking area that contains the point, from the hit view upward.
-- Scroll: **nonstandard use.** No public API creates a scroll `NSEvent` that carries a window. The code creates the event with `CGEventCreateScrollWheelEvent2`, which has no window, and stores the window coordinates in the screen-location field (`CGEventSetLocation(x, topOfMainScreen - y)`), because WebKit reads `locationInWindow` of such an event as window coordinates. `CGEventSetWindowLocation` (private) and `CGEventPostToPid` did not deliver the scroll in the review on 2026-09-17.
+- Scroll: **private CoreGraphics use.** No public API creates a scroll `NSEvent` that carries a window. The code creates the event with `CGEventCreateScrollWheelEvent2`, sets the undocumented window-number field (`CGEventField` 51) and the private `CGEventSetWindowLocation`, and converts it with `+[NSEvent eventWithCGEvent:]`. The result has `window` and `locationInWindow` set, and `-[NSWindow sendEvent:]` delivers it to the view under the point. The code rejects the input when the converted event has no window. With only field 51 the location is wrong; with only `CGEventSetWindowLocation` the event has no window. `CGEventPostToPid` did not deliver the scroll to an inactive application (review on 2026-09-17).
 
-Failure signs: `tests/input_inject_test.m` reports missing, untrusted, or misplaced pointer events, no wheel event, a scroll distance other than the requested 120 pixels, or a lost focus after a click. After an OS or WebKit update, run `make -C native/darwin test`; remove the scroll workaround when a public method delivers a windowed scroll event.
+Failure signs: `tests/input_inject_test.m` reports missing, untrusted, or misplaced pointer events, no wheel event, a scroll distance other than the requested 120 pixels, or a lost focus after a click. After an OS or WebKit update, run `make -C native/darwin test`; replace the private scroll calls when a public method creates a windowed scroll event.
 
 ## Update review procedure
 

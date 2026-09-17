@@ -4,9 +4,14 @@
 // 활성 상태가 아니면 AppKit 이 첫 클릭으로 처리해 뷰에 전달하지 않으므로, 좌표의 뷰를
 // 히트 테스트해 그 뷰의 이벤트 메서드로 전달한다. 이동은 좌표를 포함하는 추적 영역의
 // 소유자에게 전달한다. 어느 경우든 웹뷰는 네이티브 이벤트를 받아 페이지에 신뢰 이벤트를
-// 전달한다. 시스템 커서를 움직이지 않고 애플리케이션을 활성화하지 않는다.
+// 전달한다. 스크롤은 창 정보를 가진 이벤트로 만들어 -[NSWindow sendEvent:] 로 전달한다.
+// 시스템 커서를 움직이지 않고 애플리케이션을 활성화하지 않는다.
 #import <Cocoa/Cocoa.h>
 #import "input_inject.h"
+
+// CoreGraphics 의 공개되지 않은 이벤트 필드와 함수다. docs/operations/private-native-apis.md 참고.
+static const CGEventField kCGEventWindowNumberField = (CGEventField)51;
+extern void CGEventSetWindowLocation(CGEventRef event, CGPoint location);
 
 // 콘텐츠 영역 왼쪽 위 기준 좌표를 창 좌표로 바꾼다. 콘텐츠 뷰의 좌표계 방향을 따른다.
 static NSPoint windowPoint(NSWindow *window, double x, double y) {
@@ -57,25 +62,28 @@ bool sp_input_pointer(void *handle, double x, double y, int phase, int button, d
     if (!window || !NSThread.isMainThread) return false;
     NSPoint point = windowPoint(window, x, y);
     if (phase == 0) return moveTo(window, point);
-    NSView *hit = hitView(window, point);
-    if (!hit) return false;
     if (phase == 4) {
-        // 공개 API 에는 창 정보를 가진 스크롤 이벤트를 만드는 방법이 없다. CGEvent 로 만든
-        // 이벤트는 창이 없고, WebKit 은 그 이벤트의 locationInWindow 를 창 좌표로 읽는다.
-        // 그래서 화면 좌표 필드에 창 좌표를 넣는다. 이 동작에 의존하므로
-        // docs/operations/private-native-apis.md 에 기록하고 tests/input_inject_test.m 이
-        // 실제 스크롤 여부를 검사한다.
+        // 공개 API 에는 창 정보를 가진 스크롤 이벤트를 만드는 방법이 없다. CGEvent 에 창 번호
+        // (필드 51)와 창 좌표(CGEventSetWindowLocation)를 넣으면 창과 locationInWindow 를
+        // 가진 NSEvent 가 되고, -[NSWindow sendEvent:] 가 좌표의 뷰에 전달한다. 둘 다 공개되지
+        // 않은 CoreGraphics 기능이므로 docs/operations/private-native-apis.md 에 기록하고
+        // tests/input_inject_test.m 이 실제 스크롤 여부를 검사한다.
         CGEventRef scroll = CGEventCreateScrollWheelEvent2(NULL, kCGScrollEventUnitPixel, 2,
             (int32_t)-deltaY, (int32_t)-deltaX, 0);
         if (!scroll) return false;
+        NSPoint screen = [window convertPointToScreen:point];
         CGFloat top = NSMaxY(NSScreen.screens.firstObject.frame);
-        CGEventSetLocation(scroll, CGPointMake(point.x, top - point.y));
+        CGEventSetLocation(scroll, CGPointMake(screen.x, top - screen.y));
+        CGEventSetIntegerValueField(scroll, kCGEventWindowNumberField, window.windowNumber);
+        CGEventSetWindowLocation(scroll, CGPointMake(point.x, NSHeight(window.frame) - point.y));
         NSEvent *event = [NSEvent eventWithCGEvent:scroll];
         CFRelease(scroll);
-        if (!event) return false;
-        [hit scrollWheel:event];
+        if (event.window != window) return false;
+        [window sendEvent:event];
         return true;
     }
+    NSView *hit = hitView(window, point);
+    if (!hit) return false;
     BOOL right = button == 1;
     switch (phase) {
         case 1:

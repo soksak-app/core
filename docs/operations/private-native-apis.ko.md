@@ -84,14 +84,14 @@
 
 ## 네이티브 입력 주입
 
-[`input_inject.m`](../../native/darwin/src/input_inject.m)은 애플리케이션을 활성화하지 않고 창에 포인터와 키 입력을 전달한다. 다음 조건으로 공개 AppKit 호출을 사용한다.
+[`input_inject.m`](../../native/darwin/src/input_inject.m)은 애플리케이션을 활성화하지 않고 창에 포인터와 키 입력을 전달한다. 스크롤을 제외하고 다음 조건으로 공개 AppKit 호출을 사용한다.
 
 - 키: `+[NSEvent keyEventWithType:...]`와 `-[NSWindow sendEvent:]`. 키 창이 아닌 창에서도 포커스된 요소가 키를 받는다.
 - 포인터 누름·끌기·뗌: `hitTest:`가 반환한 뷰의 이벤트 메서드(`mouseDown:`, `mouseDragged:`, `mouseUp:`, 오른쪽 버튼 메서드). AppKit은 비활성 창의 누름을 첫 클릭으로 처리해 뷰에 전달하지 않으므로 `-[NSWindow sendEvent:]`를 사용하지 않는다.
 - 포인터 이동: 히트 뷰부터 상위로 올라가며 좌표를 포함하는 첫 추적 영역 소유자의 `mouseMoved:`.
-- 스크롤: **비정석 사용.** 창 정보를 가진 스크롤 `NSEvent`를 만드는 공개 API가 없다. 코드는 창이 없는 이벤트를 `CGEventCreateScrollWheelEvent2`로 만들고, WebKit이 그런 이벤트의 `locationInWindow`를 창 좌표로 읽으므로 화면 좌표 필드에 창 좌표를 기록한다(`CGEventSetLocation(x, 주 화면 상단 - y)`). 2026-09-17 검토에서 `CGEventSetWindowLocation`(비공개)과 `CGEventPostToPid`는 스크롤을 전달하지 못했다.
+- 스크롤: **비공개 CoreGraphics 사용.** 창 정보를 가진 스크롤 `NSEvent`를 만드는 공개 API가 없다. 코드는 `CGEventCreateScrollWheelEvent2`로 이벤트를 만들고 문서화되지 않은 창 번호 필드(`CGEventField` 51)와 비공개 함수 `CGEventSetWindowLocation`을 설정한 뒤 `+[NSEvent eventWithCGEvent:]`로 변환한다. 변환 결과는 `window`와 `locationInWindow`를 가지며 `-[NSWindow sendEvent:]`가 좌표의 뷰에 전달한다. 변환한 이벤트에 창이 없으면 입력을 거부한다. 필드 51만 설정하면 좌표가 틀리고, `CGEventSetWindowLocation`만 호출하면 창이 없다. `CGEventPostToPid`는 비활성 애플리케이션에 스크롤을 전달하지 못했다(2026-09-17 검토).
 
-실패 증상: `tests/input_inject_test.m`이 포인터 이벤트 누락·비신뢰·위치 오류, 휠 이벤트 없음, 요청한 120픽셀과 다른 스크롤 거리, 클릭 후 포커스 상실을 보고한다. OS나 WebKit 업데이트 후 `make -C native/darwin test`를 실행한다. 공개 방법으로 창 정보를 가진 스크롤 이벤트를 전달할 수 있게 되면 스크롤 우회 코드를 제거한다.
+실패 증상: `tests/input_inject_test.m`이 포인터 이벤트 누락·비신뢰·위치 오류, 휠 이벤트 없음, 요청한 120픽셀과 다른 스크롤 거리, 클릭 후 포커스 상실을 보고한다. OS나 WebKit 업데이트 후 `make -C native/darwin test`를 실행한다. 공개 방법으로 창 정보를 가진 스크롤 이벤트를 만들 수 있게 되면 비공개 스크롤 호출을 교체한다.
 
 ## 업데이트 검토 절차
 
