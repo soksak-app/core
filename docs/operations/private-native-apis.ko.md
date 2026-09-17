@@ -62,7 +62,7 @@
 
 ### 표면과 모달 웹뷰의 페이지 초점
 
-표면과 모달 웹뷰에는 이 설정을 유지한다. 웹뷰가 첫 응답자가 아닐 때 페이지가 요소에 초점을 주면 WebKit이 UI 프로세스에 `MakeFirstResponder`를 보내고, `PageClientImpl::makeFirstResponder`가 그 웹뷰를 창의 첫 응답자로 만든다. 불러온 뒤 입력칸에 초점을 주는 터미널 표면이 열린 메뉴의 키 입력을 가져가 네이티브 Escape가 메뉴를 닫지 못했다. `_setShouldSuppressFirstResponderChanges:YES`이면 `PageClientImpl::makeFirstResponder`가 첫 응답자를 바꾸지 않고 돌아간다. AppKit 클릭과 호스트가 직접 호출하는 `-[NSWindow makeFirstResponder:]`는 영향을 받지 않는다. 메인 페이지는 이 설정을 쓰지 않으며 초점을 옮길 수 있다. 선택자가 없으면 함수가 실패를 반환하고 두 호스트는 웹뷰 생성을 실패로 처리한다.
+표면과 모달 웹뷰에는 이 설정을 유지한다. 웹뷰가 첫 응답자가 아닐 때 페이지가 요소에 초점을 주면 WebKit이 UI 프로세스에 `MakeFirstResponder`를 보내고, `PageClientImpl::makeFirstResponder`가 그 웹뷰를 창의 첫 응답자로 만든다. 불러온 뒤 입력칸에 초점을 주는 셸 표면이 열린 메뉴의 키 입력을 가져가 네이티브 Escape가 메뉴를 닫지 못했다. `_setShouldSuppressFirstResponderChanges:YES`이면 `PageClientImpl::makeFirstResponder`가 첫 응답자를 바꾸지 않고 돌아간다. AppKit 클릭과 호스트가 직접 호출하는 `-[NSWindow makeFirstResponder:]`는 영향을 받지 않는다. 메인 페이지는 이 설정을 쓰지 않으며 초점을 옮길 수 있다. 선택자가 없으면 함수가 실패를 반환하고 두 호스트는 웹뷰 생성을 실패로 처리한다.
 
 설정이 없으면 실패하는 [`webview_focus_test.m`](../../native/darwin/tests/webview_focus_test.m)과 [`modal.test.mjs`](../../e2e/modal.test.mjs)의 메뉴 Escape 단계로 검증한다. [`PageClientImplMac.mm`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/mac/PageClientImplMac.mm)의 `PageClientImpl::makeFirstResponder`와 [`WKWebViewPrivate.h`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/WKWebViewPrivate.h)의 선언을 검토한다.
 

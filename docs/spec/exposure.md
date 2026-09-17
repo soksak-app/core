@@ -2,7 +2,7 @@
 
 [한국어](exposure.ko.md)
 
-Core, the plugin API, the terminal plugin, and the macOS hosts implement this specification; [feature status](../features.md) records its validation.
+Core, the plugin API, the shell plugin, and the macOS hosts implement this specification; [feature status](../features.md) records its validation.
 
 Core (the workbench and the native host) publishes declared status values, commands, and DOM elements to external clients through the [local endpoint](endpoint.md). No method executes arbitrary code.
 

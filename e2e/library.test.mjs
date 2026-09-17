@@ -41,7 +41,7 @@ for (const app of Object.values(APPS)) {
     await s.run("core.settings.set", { patch: { projectOpening: "windows" }, scope: "common" });
     await s.run("core.projects.browse");
     assert.equal((await s.get("core.screen")).screen, "library");
-    assert.equal((await s.surfaces("terminal")).length, 0);
+    assert.equal((await s.surfaces("shell")).length, 0);
     assert.equal((await s.get("host.window")).surfaces.some((x) => x.visible), false, "the library shows no native surface");
     const library = await shown(s, 1, "the library did not list the project");
     const preview = library.previews[first.id].map(({ card, x, y, w, h }) => ({ id: card, x, y, w, h }));
@@ -53,12 +53,12 @@ for (const app of Object.values(APPS)) {
         if (a.y + a.h <= b.y) assert.ok(pa.y + pa.h < pb.y, `${a.id} must remain above ${b.id}`);
       }
     }
-    const [left, rail, terminal, browser, right] = ["left", "rail-terminal", "terminal", "browser", "right"]
+    const [left, rail, shell, browser, right] = ["left", "rail-shell", "shell", "browser", "right"]
       .map((id) => preview.find((c) => c.id === id));
     assert.ok(Math.abs(left.w - right.w) <= 1 / 64, "sidebar widths must be uniform");
-    assert.ok(Math.abs(terminal.h - browser.h) <= 1 / 64, "split rows must have equal heights");
-    const gaps = [rail.x - left.x - left.w, terminal.x - rail.x - rail.w, right.x - terminal.x - terminal.w,
-      browser.y - terminal.y - terminal.h];
+    assert.ok(Math.abs(shell.h - browser.h) <= 1 / 64, "split rows must have equal heights");
+    const gaps = [rail.x - left.x - left.w, shell.x - rail.x - rail.w, right.x - shell.x - shell.w,
+      browser.y - shell.y - shell.h];
     assert.ok(gaps.every((gap) => gap > 0 && Math.abs(gap - gaps[0]) <= 1 / 64), "pane gaps must be uniform on both axes");
     const saved = await project(s, first.id);
     const space = saved.spaces.find((x) => x.id === saved.activeSpaceId);

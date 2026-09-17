@@ -1,29 +1,25 @@
 {
-  "id": "terminal",
-  "name": "터미널",
+  "id": "shell",
+  "name": "셸",
   "mark": ">_",
   "icon": "<rect x=\"2\" y=\"3\" width=\"12\" height=\"10\" rx=\"2\"/><path d=\"M5 6.5l2 1.75L5 10M8.5 10.25H11\"/>",
   "surface": {
-    "page": "ui/terminal.html"
+    "page": "ui/shell.html"
   },
   "preview": {
     "ink": "--surface-fg"
   },
   "sections": [
     {
-      "id": "terminal.history",
+      "id": "shell.history",
       "name": "실행 기록"
     },
     {
-      "id": "terminal.cwd",
+      "id": "shell.cwd",
       "name": "cwd"
     },
     {
-      "id": "terminal.pty",
-      "name": "PTY"
-    },
-    {
-      "id": "terminal.jobs",
+      "id": "shell.jobs",
       "name": "작업"
     }
   ],
@@ -33,8 +29,8 @@
   "exposes": {
     "status": [
       {
-        "name": "terminal.output",
-        "description": "The output lines of the terminal surface, without line terminators.",
+        "name": "shell.output",
+        "description": "The output lines of the shell surface, without line terminators.",
         "schema": {
           "type": "array",
           "items": {
@@ -43,7 +39,7 @@
         }
       },
       {
-        "name": "terminal.screen",
+        "name": "shell.screen",
         "description": "The output lines currently visible, the number of lines that fit in the output area, and its scroll position in CSS pixels.",
         "schema": {
           "type": "object",
@@ -64,7 +60,7 @@
         }
       },
       {
-        "name": "terminal.cwd",
+        "name": "shell.cwd",
         "description": "The current directory the shell session last reported, or null before the first report.",
         "schema": {
           "type": [
@@ -74,8 +70,8 @@
         }
       },
       {
-        "name": "terminal.runs",
-        "description": "The number of terminal.run commands delivered to the shell session that have not finished.",
+        "name": "shell.runs",
+        "description": "The number of shell.run commands delivered to the shell session that have not finished.",
         "schema": {
           "type": "integer"
         }
@@ -83,7 +79,7 @@
     ],
     "commands": [
       {
-        "name": "terminal.write",
+        "name": "shell.write",
         "description": "Writes text to the shell session: to the running command's input while a command runs, otherwise as the next command.",
         "params": {
           "type": "object",
@@ -98,7 +94,7 @@
         }
       },
       {
-        "name": "terminal.run",
+        "name": "shell.run",
         "description": "Runs a command once in the session's current directory without changing the session, and returns its merged output and exit status.",
         "params": {
           "type": "object",
@@ -122,8 +118,8 @@
         "timeout": 600000
       },
       {
-        "name": "terminal.interrupt",
-        "description": "Sends the interrupt signal to the command the session is running and to running terminal.run commands.",
+        "name": "shell.interrupt",
+        "description": "Sends the interrupt signal to the command the session is running and to running shell.run commands.",
         "params": {
           "type": "object",
           "properties": {}
@@ -133,8 +129,8 @@
         }
       },
       {
-        "name": "terminal.clear",
-        "description": "Removes all output lines from the terminal surface.",
+        "name": "shell.clear",
+        "description": "Removes all output lines from the shell surface.",
         "params": {
           "type": "object",
           "properties": {}
@@ -146,19 +142,19 @@
     ],
     "dom": [
       {
-        "name": "terminal.input",
+        "name": "shell.input",
         "description": "The command line input field."
       },
       {
-        "name": "terminal.output",
+        "name": "shell.output",
         "description": "The output area."
       },
       {
-        "name": "terminal.interrupt",
+        "name": "shell.interrupt",
         "description": "The button that interrupts the running command."
       },
       {
-        "name": "terminal.clear",
+        "name": "shell.clear",
         "description": "The button that clears the output."
       }
     ]

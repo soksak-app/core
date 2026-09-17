@@ -1,11 +1,11 @@
 import { pixel } from "./frame.mjs";
 
-// 터미널 입력 구분선의 색. midnight 테마의 --surface-fg(#7fe3b0) 22% 를 --surface(#0d1a14)
-// 위에 합성한 sRGB 값이다(plugins/terminal/ui/terminal.html).
+// 셸 입력 구분선의 색. midnight 테마의 --surface-fg(#7fe3b0) 22% 를 --surface(#0d1a14)
+// 위에 합성한 sRGB 값이다(plugins/shell/ui/shell.html).
 const LINE = [38, 70, 54];
 
-// 터미널 입력 구분선은 웹뷰 배경과 별도로 문서의 실제 표시 폭을 확인한다.
-function terminalLine(frame, at) {
+// 셸 입력 구분선은 웹뷰 배경과 별도로 문서의 실제 표시 폭을 확인한다.
+function shellLine(frame, at) {
   const cx = Math.round((at.surface.l + at.surface.r) / 2);
   let best = null;
   for (let y = at.row + 3; y < frame.height * .6; y++) {
@@ -24,7 +24,7 @@ const CARD = [25, 27, 36];
 
 // 초기 배치의 레일 사이드바 아래쪽에서 카드 배경과 외곽 레일을 측정한다.
 export function alignment(frame, at) {
-  const line = terminalLine(frame, at);
+  const line = shellLine(frame, at);
   if (!line) return null;
   const y = Math.floor(frame.height * .75);
   const card = (x) => pixel(frame, x, y).every((value, i) => Math.abs(value - CARD[i]) <= 5);

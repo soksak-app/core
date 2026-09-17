@@ -8,22 +8,22 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: vertical dragging preserves the footer border with fractional input`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
-    const terminal = await fresh(s);
+    const shell = await fresh(s);
     const initial = await s.get("host.window");
     assert.equal(initial.scale, 2, "fractional rendering verification requires a 2× display");
     await halfPointRow(s);
     const state = await s.get("host.window");
-    const surface = state.surfaces.find((x) => x.id === terminal.surface).frame;
+    const surface = state.surfaces.find((x) => x.id === shell.surface).frame;
     assert.equal(surface.height % 1, .5, "the check must retain a half-point native height");
     const document = await s.until("core.surface.document",
       (doc) => doc.body.height === surface.height, "the document did not take the half-point height",
-      { surface: terminal.surface });
+      { surface: shell.surface });
     t.diagnostic(`native ${surface.width}×${surface.height}; document ${document.body.width}×${document.body.height}`);
     assert.deepEqual([document.body.width, document.body.height], [surface.width, surface.height],
       "the document must cover the complete fractional native surface");
-    const slot = (await s.surfaces()).find((x) => x.surface === terminal.surface).declared;
+    const slot = (await s.surfaces()).find((x) => x.surface === shell.surface).declared;
     assert.deepEqual([surface.width, surface.height], [slot.w, slot.h], "the native surface must exactly fill its DOM slot");
-    const lastPixel = await s.run("core.surface.hit", { x: surface.width / 2, y: surface.height - .25 }, terminal.surface);
+    const lastPixel = await s.run("core.surface.hit", { x: surface.width / 2, y: surface.height - .25 }, shell.surface);
     assert.equal(lastPixel, true, "the document must receive input in the final device pixel");
 
     const run = await drag(t, s, { axis: "y", line: 1, dx: 0, dy: 173, ms: 400, times: 2 }, { capture: true });

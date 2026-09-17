@@ -1,9 +1,9 @@
 {
-  "name": "@soksak/plugin-terminal",
+  "name": "@soksak/plugin-shell",
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "description": "Terminal plugin: a console surface connected to a shell session.",
+  "description": "Shell plugin: a console surface connected to a shell session.",
   "files": [
     "plugin.json",
     "ui"

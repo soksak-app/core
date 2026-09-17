@@ -11,7 +11,7 @@
     "@soksak/workbench": "workspace:*",
     "@soksak/plugin-browser": "workspace:*",
     "@soksak/plugin-files": "workspace:*",
-    "@soksak/plugin-terminal": "workspace:*"
+    "@soksak/plugin-shell": "workspace:*"
   },
   "devDependencies": {
     "@soksak/plugin-api": "workspace:*"

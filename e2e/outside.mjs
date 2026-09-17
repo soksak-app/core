@@ -16,7 +16,7 @@
 import { pixel } from "./frame.mjs";
 
 /**
- * 터미널 표면의 배경. 기본 테마 midnight 의 --surface(#0d1a14)다. 캡처는 sRGB 로 기록하므로
+ * 셸 표면의 배경. 기본 테마 midnight 의 --surface(#0d1a14)다. 캡처는 sRGB 로 기록하므로
  * 테마 값을 그대로 쓴다(packages/workbench/settings.js).
  */
 const TERM = [13, 26, 20];

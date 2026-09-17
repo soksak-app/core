@@ -33,15 +33,15 @@ test("the surface page registers every declared exposure", () => {
   assert.deepEqual(registered, declared);
 });
 
-test("the terminal exposes its output, screen, directory, commands, and controls", () => {
+test("the shell exposes its output, screen, directory, commands, and controls", () => {
   const names = (kind) => manifest.exposes[kind].map((entry) => entry.name).sort();
-  assert.deepEqual(names("status"), ["terminal.cwd", "terminal.output", "terminal.runs", "terminal.screen"]);
-  assert.deepEqual(names("commands"), ["terminal.clear", "terminal.interrupt", "terminal.run", "terminal.write"]);
-  assert.deepEqual(names("dom"), ["terminal.clear", "terminal.input", "terminal.interrupt", "terminal.output"]);
+  assert.deepEqual(names("status"), ["shell.cwd", "shell.output", "shell.runs", "shell.screen"]);
+  assert.deepEqual(names("commands"), ["shell.clear", "shell.interrupt", "shell.run", "shell.write"]);
+  assert.deepEqual(names("dom"), ["shell.clear", "shell.input", "shell.interrupt", "shell.output"]);
 });
 
 test("a command that waits for a shell command declares a longer timeout", () => {
-  const run = manifest.exposes.commands.find((entry) => entry.name === "terminal.run");
+  const run = manifest.exposes.commands.find((entry) => entry.name === "shell.run");
   assert.equal(run.timeout, 600000);
 });
 

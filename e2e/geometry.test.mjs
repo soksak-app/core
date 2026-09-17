@@ -58,12 +58,12 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: resizing preserves document geometry and native input`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
-    const terminal = await prepare(s);
+    const shell = await prepare(s);
     const { scale } = await s.get("host.window");
-    await clickLastPixel(s, terminal.surface, scale);
+    await clickLastPixel(s, shell.surface, scale);
     await s.run("host.window.resize", { width: 997, height: 647 });
     await s.until("host.window", (w) => w.content.width === 997 && w.content.height === 647, "the window did not resize");
-    await clickLastPixel(s, terminal.surface, scale);
+    await clickLastPixel(s, shell.surface, scale);
   });
 
   test(`${app.name}: display-scale changes preserve document geometry and native input`, async (t) => {
@@ -73,13 +73,13 @@ for (const app of Object.values(APPS)) {
     const screens = await s.get("host.screens");
     const other = screens.find((screen) => screen.scale !== initial.scale);
     if (!other) return t.skip("two displays with different scale factors are required");
-    const terminal = await prepare(s);
+    const shell = await prepare(s);
     s.cleanup(() => s.run("host.window.move", { x: initial.frame.x, y: initial.frame.y }));
     await halfPointRow(s);
-    await clickLastPixel(s, terminal.surface, initial.scale);
+    await clickLastPixel(s, shell.surface, initial.scale);
     await s.run("host.window.move", { x: other.x + 20, y: other.y + 20 });
-    await clickLastPixel(s, terminal.surface, other.scale);
+    await clickLastPixel(s, shell.surface, other.scale);
     await s.run("host.window.move", { x: initial.frame.x, y: initial.frame.y });
-    await clickLastPixel(s, terminal.surface, initial.scale);
+    await clickLastPixel(s, shell.surface, initial.scale);
   });
 }

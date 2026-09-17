@@ -16,9 +16,9 @@ importers:
       '@soksak/plugin-files':
         specifier: workspace:*
         version: link:../../plugins/files
-      '@soksak/plugin-terminal':
+      '@soksak/plugin-shell':
         specifier: workspace:*
-        version: link:../../plugins/terminal
+        version: link:../../plugins/shell
       '@soksak/workbench':
         specifier: workspace:*
         version: link:../../packages/workbench
@@ -38,9 +38,9 @@ importers:
       '@soksak/plugin-files':
         specifier: workspace:*
         version: link:../../plugins/files
-      '@soksak/plugin-terminal':
+      '@soksak/plugin-shell':
         specifier: workspace:*
-        version: link:../../plugins/terminal
+        version: link:../../plugins/shell
       '@soksak/workbench':
         specifier: workspace:*
         version: link:../../packages/workbench
@@ -57,9 +57,9 @@ importers:
       '@soksak/plugin-files':
         specifier: workspace:*
         version: link:../../plugins/files
-      '@soksak/plugin-terminal':
+      '@soksak/plugin-shell':
         specifier: workspace:*
-        version: link:../../plugins/terminal
+        version: link:../../plugins/shell
       '@soksak/workbench':
         specifier: workspace:*
         version: link:../../packages/workbench
@@ -138,7 +138,7 @@ importers:
         specifier: workspace:*
         version: link:../../packages/plugin-api
 
-  plugins/terminal:
+  plugins/shell:
     dependencies:
       '@soksak/sidecar-shell':
         specifier: workspace:*

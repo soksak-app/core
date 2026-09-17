@@ -1,6 +1,6 @@
 /* 라이브러리는 프로젝트 미선택 창과 프로젝트 선택 화면에서 사용한다. */
 .chrome-bar{order:-1}
-#library[hidden],body[data-screen=workspace] #library,body[data-screen=library] #shell,
+#library[hidden],body[data-screen=workspace] #library,body[data-screen=library] #workarea,
 body[data-screen=library] #projectBar,body[data-screen=library] #chromeActs .act[title="좌측 자리"],
 body[data-screen=library] #chromeActs .act[title="우측 자리"]{display:none}
 #library{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) 22px;flex:1;min-height:0;background:var(--bg);font-size:var(--text-control)}

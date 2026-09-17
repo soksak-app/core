@@ -198,7 +198,7 @@ for (const app of Object.values(APPS)) {
     assert.equal((await child.get("core.project")).id, second.id);
     const space = await child.run("core.space.add");
     await child.run("core.space.rename", { id: space.id, title: "Saved space" });
-    await child.run("core.grid.size", { card: "rail-terminal", axis: "x", size: 213 });
+    await child.run("core.grid.size", { card: "rail-shell", axis: "x", size: 213 });
     await child.run("core.grid.size", { card: "left", axis: "x", size: 215 });
     await settings(child, { left: false }, "project");
     await child.run("core.projects.flush");
@@ -210,16 +210,16 @@ for (const app of Object.values(APPS)) {
     await s.windows(1, "native close did not complete");
     const saved = read(join(config, "projects.json")).find((p) => p.id === second.id);
     assert.equal(saved.spaces.find((x) => x.id === saved.activeSpaceId).title, "Saved space");
-    assert.equal(saved.spaces.find((x) => x.id === saved.activeSpaceId).layout.railWidth.terminal, 213);
+    assert.equal(saved.spaces.find((x) => x.id === saved.activeSpaceId).layout.railWidth.shell, 213);
     assert.ok(saved.geometry.width > 0);
-    await s.until("core.surfaces", (list) => list.some((x) => x.visible && x.plugin === "terminal"),
-      "the main window must keep its terminal surface");
+    await s.until("core.surfaces", (list) => list.some((x) => x.visible && x.plugin === "shell"),
+      "the main window must keep its shell surface");
     await settings(s, { projectOpening: "windows" }, "common");
     await s.run("core.project.activate", { id: second.id });
     child = s.on(added(await s.windows(2, "saved project did not reopen"), [s.window]));
     await child.until("core.grid", (grid) => grid?.cards.length > 0, "saved project did not render");
     assert.equal((await child.get("core.project")).activeSpaceId, saved.activeSpaceId);
-    assert.equal((await child.get("core.layout")).railWidth.terminal, 213);
+    assert.equal((await child.get("core.layout")).railWidth.shell, 213);
     await settings(child, { left: true }, "project");
     const shownLeft = await child.until("core.grid", (grid) => grid?.cards.some((c) => c.id === "left"),
       "the left sidebar did not return");

@@ -1,8 +1,8 @@
 <!doctype html>
 <meta charset="utf-8">
-<title>terminal</title>
+<title>shell</title>
 <!--
-  터미널 표면. 창 안의 웹뷰이고 셸 프로세스가 연결된다.
+  셸 표면. 창 안의 웹뷰이고 셸 프로세스가 연결된다.
 
   터미널 에뮬레이터가 아니라 콘솔이다. 출력은 줄 단위 텍스트이고 입력은 한 줄 단위다.
   출력은 줄마다 요소 하나로 그려 보이는 줄을 잴 수 있게 한다.
@@ -28,11 +28,11 @@
                  font: inherit; opacity: .55; cursor: default }
   #line button:hover { opacity: 1 }
 </style>
-<div id="out" data-expose="terminal.output"></div>
-<div id="line"><span>$</span><input id="in" data-expose="terminal.input" autocomplete="off" spellcheck="false"
-  aria-label="명령"><button type="button" data-expose="terminal.interrupt" data-command="terminal.interrupt"
-  title="실행 중인 명령 중단">^C</button><button type="button" data-expose="terminal.clear"
-  data-command="terminal.clear" title="출력 지우기">⌫</button></div>
+<div id="out" data-expose="shell.output"></div>
+<div id="line"><span>$</span><input id="in" data-expose="shell.input" autocomplete="off" spellcheck="false"
+  aria-label="명령"><button type="button" data-expose="shell.interrupt" data-command="shell.interrupt"
+  title="실행 중인 명령 중단">^C</button><button type="button" data-expose="shell.clear"
+  data-command="shell.clear" title="출력 지우기">⌫</button></div>
 <script type="importmap">
 {"imports": {
   "soksak": "/modules/soksak/dist/index.js",
@@ -81,7 +81,7 @@
       };
     },
     cwd: () => cwd,
-    /** 사이드카에 전달했고 아직 끝나지 않은 terminal.run 수. */
+    /** 사이드카에 전달했고 아직 끝나지 않은 shell.run 수. */
     runs: () => delivered.size,
   };
 
@@ -145,17 +145,17 @@
   // 공개 항목은 첫 테마를 적용한 뒤 등록한다. 등록된 문서는 표시할 준비가 된 문서다.
   await themed;
   await Promise.all([
-    expose.status("terminal.output", read.output, watch("output")),
-    expose.status("terminal.screen", read.screen, watch("screen")),
-    expose.status("terminal.cwd", read.cwd, watch("cwd")),
-    expose.status("terminal.runs", read.runs, watch("runs")),
-    expose.command("terminal.write", async ({ data }) => {
-      if (typeof data !== "string") throw new Error("terminal.write requires data");
+    expose.status("shell.output", read.output, watch("output")),
+    expose.status("shell.screen", read.screen, watch("screen")),
+    expose.status("shell.cwd", read.cwd, watch("cwd")),
+    expose.status("shell.runs", read.runs, watch("runs")),
+    expose.command("shell.write", async ({ data }) => {
+      if (typeof data !== "string") throw new Error("shell.write requires data");
       await send({ op: "write", data });
       return null;
     }),
-    expose.command("terminal.run", ({ command }) => {
-      if (typeof command !== "string" || command === "") throw new Error("terminal.run requires a command");
+    expose.command("shell.run", ({ command }) => {
+      if (typeof command !== "string" || command === "") throw new Error("shell.run requires a command");
       const request = `run-${++nextRun}`;
       const done = new Promise((resolve, reject) => runs.set(request, { resolve, reject }));
       send({ op: "run", id: request, command }).then(() => {
@@ -169,27 +169,27 @@
       });
       return done;
     }),
-    expose.command("terminal.interrupt", async () => {
+    expose.command("shell.interrupt", async () => {
       await send({ op: "interrupt" });
       return null;
     }),
-    expose.command("terminal.clear", () => {
+    expose.command("shell.clear", () => {
       out.replaceChildren();
       open = false;
       changed("output");
       changed("screen");
       return null;
     }),
-    expose.dom("terminal.input", input),
-    expose.dom("terminal.output", out),
-    expose.dom("terminal.interrupt", document.querySelector('[data-command="terminal.interrupt"]')),
-    expose.dom("terminal.clear", document.querySelector('[data-command="terminal.clear"]')),
+    expose.dom("shell.input", input),
+    expose.dom("shell.output", out),
+    expose.dom("shell.interrupt", document.querySelector('[data-command="shell.interrupt"]')),
+    expose.dom("shell.clear", document.querySelector('[data-command="shell.clear"]')),
   ]);
 
   // 조작은 선언된 명령에 연결한다. 단추는 data-command 가 가리키는 명령을 실행하고, 입력
-  // 줄의 Enter 는 그 줄을 출력에 표시한 뒤 terminal.write 로 셸에 보낸다.
+  // 줄의 Enter 는 그 줄을 출력에 표시한 뒤 shell.write 로 셸에 보낸다.
   await expose.delegate(document.getElementById("line"), { failed: fail });
-  await expose.bind(input, "terminal.write", () => {
+  await expose.bind(input, "shell.write", () => {
     const line = input.value;
     input.value = "";
     write(`$ ${line}\n`);

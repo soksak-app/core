@@ -1,12 +1,12 @@
 {
   "runtime": "runtime",
   "plugins": [
-    "@soksak/plugin-terminal",
+    "@soksak/plugin-shell",
     "@soksak/plugin-browser",
     "@soksak/plugin-files"
   ],
   "workspace": {
-    "focus": "terminal",
+    "focus": "shell",
     "grid": {
       "xs": [
         0,
@@ -30,18 +30,18 @@
           "fixed": true
         },
         {
-          "id": "terminal",
+          "id": "shell",
           "c0": 1,
           "c1": 2,
           "r0": 0,
           "r1": 1,
           "tabs": [
             {
-              "plugin": "terminal",
+              "plugin": "shell",
               "title": ">_ 셸"
             },
             {
-              "plugin": "terminal",
+              "plugin": "shell",
               "title": ">_ 빌드"
             }
           ]
@@ -85,16 +85,15 @@
         "id": "set-shell",
         "title": "셸",
         "sections": [
-          "terminal.history",
-          "terminal.cwd"
+          "shell.history",
+          "shell.cwd"
         ]
       },
       {
         "id": "set-process",
         "title": "프로세스",
         "sections": [
-          "terminal.pty",
-          "terminal.jobs"
+          "shell.jobs"
         ]
       },
       {
@@ -122,12 +121,12 @@
       },
       {
         "place": "rail",
-        "plugin": "terminal",
+        "plugin": "shell",
         "set": "set-shell"
       },
       {
         "place": "right",
-        "plugin": "terminal",
+        "plugin": "shell",
         "set": "set-process"
       },
       {

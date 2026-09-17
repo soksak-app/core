@@ -1,6 +1,6 @@
 // 경계를 흔드는 동안 표면에 렌더링되지 않은 영역이 나타나는지 검사한다.
 //
-// 웹뷰는 레이아웃한 영역만 렌더링하고 나머지는 흰색으로 채운다. 터미널 표면과 그
+// 웹뷰는 레이아웃한 영역만 렌더링하고 나머지는 흰색으로 채운다. 셸 표면과 그
 // 표면이 놓인 행은 모두 어두우므로, 그 행의 흰 픽셀이 렌더링되지 않은 영역이다.
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -12,8 +12,8 @@ import { area, bare } from "./surface.mjs";
 /**
  * 흔들 경계와 폭.
  *
- * 예제의 초기 배치는 고정되어 있다. x:2 는 터미널 카드의 왼쪽 경계, y:1 은 그 아래
- * 경계다. 둘 다 터미널 표면이 커졌다 작아진다. 누른 채로 왕복하므로 경계는 원래 위치로
+ * 예제의 초기 배치는 고정되어 있다. x:2 는 셸 카드의 왼쪽 경계, y:1 은 그 아래
+ * 경계다. 둘 다 셸 표면이 커졌다 작아진다. 누른 채로 왕복하므로 경계는 원래 위치로
  * 돌아온다. 경계를 좌표가 아니라 번호로 지정하므로 창의 크기가 달라도 빗나가지 않는다.
  */
 const PLANS = {
@@ -61,7 +61,7 @@ for (const app of Object.values(APPS)) {
         most = Math.max(most, size);
       });
       assert.ok(most - least >= MOVED,
-        `the terminal surface changed by ${most - least} while the boundary was shaken, so the boundary did not move`);
+        `the shell surface changed by ${most - least} while the boundary was shaken, so the boundary did not move`);
       assert.equal(worst.n, 0,
         `${seen} of ${files.length} frames show unrendered area; the worst is ${worst.n} pixels in frame ${worst.frame}`);
     });

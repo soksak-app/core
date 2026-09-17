@@ -297,7 +297,7 @@ const START = { width: 1200, height: 760 };
 
 /**
  * 창을 검사 시작 상태로 만든다. 다른 창을 닫고, 창 크기를 시작 크기로 되돌리고, 테스트 프로젝트를 새 배치로 열고 메인 문서를 다시 읽은 뒤,
- * 첫 터미널 문서가 테마를 적용할 때까지 기다리고 표시 완료를 확인한다.
+ * 첫 셸 문서가 테마를 적용할 때까지 기다리고 표시 완료를 확인한다.
  */
 export async function fresh(s) {
   for (const window of await s.get("host.windows")) {
@@ -313,9 +313,9 @@ export async function fresh(s) {
   await s.run("host.window.reload");
   await s.until("core.window.document", (doc) => doc.timeOrigin !== before && doc.readyState === "complete",
     "the main document did not reload");
-  const [terminal] = await terminalReady(s);
+  const [shell] = await shellReady(s);
   await s.presented();
-  return terminal;
+  return shell;
 }
 
 /** 수평 경계 1 을 정수 위치에서 반 점 떨어진 곳으로 옮긴다. 그 아래 경계의 표면 높이가 반 점이 된다. */
@@ -325,17 +325,17 @@ export async function halfPointRow(s) {
   await s.presented();
 }
 
-/** 보이는 터미널 표면들이 등록되고 테마를 적용할 때까지 기다린 뒤 그 표면들을 반환한다. */
-export async function terminalReady(s) {
+/** 보이는 셸 표면들이 등록되고 테마를 적용할 때까지 기다린 뒤 그 표면들을 반환한다. */
+export async function shellReady(s) {
   const surfaces = await s.until("core.surfaces",
-    (all) => all.some((x) => x.visible && x.plugin === "terminal" && x.exposes.includes("status core.surface.document")),
-    "no visible terminal surface registered its document");
-  const terminals = surfaces.filter((x) => x.visible && x.plugin === "terminal");
-  for (const terminal of terminals) {
+    (all) => all.some((x) => x.visible && x.plugin === "shell" && x.exposes.includes("status core.surface.document")),
+    "no visible shell surface registered its document");
+  const shells = surfaces.filter((x) => x.visible && x.plugin === "shell");
+  for (const shell of shells) {
     await s.until("core.surface.document", (doc) => doc.readyState === "complete" && doc.themed,
-      `terminal ${terminal.surface} did not apply its theme`, { surface: terminal.surface });
+      `shell ${shell.surface} did not apply its theme`, { surface: shell.surface });
   }
-  return terminals;
+  return shells;
 }
 
 /**

@@ -10,7 +10,7 @@ A workspace for the soksak layout library, its workbench frontend, plugins, and 
 | [`packages/workbench`](docs/spec/plugins.md) | Workbench frontend and plugin loading |
 | [`packages/plugin-api`](docs/spec/plugins.md) | Plugin and environment formats |
 | [`packages/host`](docs/spec/hosts.md) | Wails v3 and Tauri v2 native host libraries |
-| `plugins/` | Browser, terminal, and files plugins |
+| `plugins/` | Browser, shell, and files plugins |
 | [`sidecars`](docs/spec/sidecars.md) | Native processes used by plugins |
 | [`apps`](apps/README.md) | Browser, Wails, and Tauri applications |
 | `native/darwin` | Shared macOS native library |
