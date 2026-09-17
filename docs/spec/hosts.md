@@ -153,7 +153,7 @@ The debug executables are `target/debug/soksak-wailsv3` and `target/debug/soksak
 | `make wailsv3-build`, `make tauriv2-build` | Build `native/darwin`, the frontend, and the sidecars, stage them, and build the debug executable |
 | `make wailsv3-build-release`, `make tauriv2-build-release` | Build the release executable |
 | `make wailsv3`, `make tauriv2` | Build and run the debug executable |
-| `make native-test` | Run the shared input check, `go test` for `packages/host/wailsv3` and `sidecars/shell`, and `cargo test -p soksak-host-tauriv2` |
+| `make native-test` | Run `make -C native/darwin test`, `go test` for `packages/host/wailsv3` and `sidecars/shell`, and `cargo test -p soksak-host-tauriv2`, the host tests with and without diagnostics |
 | `make platforms` | Run `scripts/check-platforms.mjs` |
 | `make hosts-check` | Run `scripts/check-hosts.mjs` |
 
@@ -170,5 +170,5 @@ The debug executables are `target/debug/soksak-wailsv3` and `target/debug/soksak
 | Path | Contents |
 | --- | --- |
 | `src/` | `<name>.h` and `<name>.m` sources, including `capture.m`, which both hosts use for window capture. File names have no `_darwin` suffix because the directory identifies the platform |
-| `tests/` | `webview_input_test.m`, the standalone input check |
-| `Makefile` | Builds a static library that the hosts find through pkg-config as `soksak-darwin`; `make -C native/darwin test` runs the input check |
+| `tests/` | `input_inject_test.m` (`make test`, no activation); `input_activate_test.m` and `webview_input_test.m` (`make test-activation`, activates the application) |
+| `Makefile` | Builds a static library that the hosts find through pkg-config as `soksak-darwin`; `make -C native/darwin test` and `make -C native/darwin test-activation` run the input checks |

@@ -1,7 +1,7 @@
 // 창을 활성화한 뒤 버튼 없는 이동이 페이지의 호버를 갱신하는지 검사한다.
 //
 // 이 검사는 애플리케이션을 활성화하므로 사용자의 포커스를 가져간다. make test 에 포함하지 않고
-// make test-activation 으로만 실행한다.
+// make test-activation 으로만 실행한다. 창은 ignoresMouseEvents 로 실제 마우스 이벤트를 받지 않는다.
 #import <Cocoa/Cocoa.h>
 #import "input_inject.h"
 #import "private/webkit.h"
@@ -57,6 +57,7 @@ int main(void) { @autoreleasepool {
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(120, 120, 400, 300)
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
     [window setReleasedWhenClosed:NO];
+    window.ignoresMouseEvents = YES;
     WKWebView *view = [[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 300)];
     window.contentView = view;
     NSString *html = @"<!doctype html><style>html,body{margin:0;width:100%;height:100%}"
@@ -70,7 +71,7 @@ int main(void) { @autoreleasepool {
     [window orderFront:nil];
     until(^BOOL { return [evaluate(view, @"Boolean(window.probe)") boolValue]; });
 
-    SPActivation state = {NO, false};
+    __block SPActivation state = {NO, false};
     sp_input_activate(window, 5, activated, &state);
     until(^BOOL { return state.done; });
     check(state.ok, @"activation completes");

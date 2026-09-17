@@ -1,24 +1,24 @@
 // 설치된 WebKit에서 겹친 웹뷰의 포인터·키보드 입력과 제거 후 복원을 검사한다.
+//
+// WebKit 은 키 창에서만 호버를 갱신하므로 이 검사는 애플리케이션을 활성화해 사용자의 포커스를
+// 가져간다. make test 에 포함하지 않고 make test-activation 으로만 실행한다. 창은
+// ignoresMouseEvents 로 실제 마우스 이벤트를 받지 않으며, 검사가 만든 이벤트만 웹뷰에 도달한다.
 #import <Cocoa/Cocoa.h>
+#import "input_inject.h"
 #import "webview_input.h"
 #import "private/webkit.h"
-
-// 앱을 활성화하지 않고 검사용 웹뷰에 키 창 상태를 제공한다.
-@interface SPInputTestWindow : NSWindow
-@end
-@implementation SPInputTestWindow
-- (BOOL)isKeyWindow { return YES; }
-@end
 
 static void require(BOOL condition, NSString *message) {
     if (!condition) { fprintf(stderr, "FAIL: %s\n", message.UTF8String); exit(1); }
 }
 
+// 활성화 알림은 애플리케이션 이벤트로 도착하므로 이벤트를 꺼내 처리하며 기다린다.
 static void until(BOOL (^done)(void)) {
     NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
     while (!done() && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
-                               beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny
+            untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01] inMode:NSDefaultRunLoopMode dequeue:YES];
+        if (event) [NSApp sendEvent:event];
     }
     require(done(), @"WebKit did not answer within 10 seconds");
 }
@@ -40,6 +40,14 @@ static void drain(WKWebView *view) {
     require([view respondsToSelector:@selector(_doAfterProcessingAllPendingMouseEvents:)], @"WebKit has no native mouse-event barrier");
     [view _doAfterProcessingAllPendingMouseEvents:^{ done = YES; }];
     until(^BOOL { return done; });
+}
+
+typedef struct { BOOL done; bool ok; } SPActivation;
+
+static void activated(void *context, bool ok) {
+    SPActivation *state = context;
+    state->ok = ok;
+    state->done = YES;
 }
 
 static id observer(WKWebView *view) {
@@ -77,6 +85,13 @@ static void expectMoves(NSArray *views, NSArray *expected, NSString *stage) {
     printf("PASS: %s %s\n", stage.UTF8String, actual.description.UTF8String);
 }
 
+// 뷰를 창에 다시 붙이면 WebKit 이 활성 상태 전송을 다시 예약한다. 그 전송이 끝난 뒤에 이동을 보낸다.
+static void settle(WKWebView *view) {
+    __block BOOL done = NO;
+    [view _doAfterActivityStateUpdate:^{ done = YES; }];
+    until(^BOOL { return done; });
+}
+
 static void reset(NSArray *views) {
     for (WKWebView *view in views) evaluate(view, @"probe.moves = 0");
 }
@@ -86,18 +101,15 @@ int main(int argc, const char **argv) { @autoreleasepool {
     for (int i = 1; i < argc; ++i) {
         baseline |= strcmp(argv[i], "--baseline") == 0;
     }
-    pid_t front = NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier;
     [NSApplication sharedApplication];
-    // Finish application launch before creating windows. Launching with an
-    // already visible first window activates even an accessory application.
-    [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
-    [NSApp finishLaunching];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
-    NSWindow *window = [[SPInputTestWindow alloc] initWithContentRect:NSMakeRect(100,100,500,400)
+    [NSApp finishLaunching];
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(100,100,500,400)
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
     [window setReleasedWhenClosed:NO];
     window.title = @"WebKit input regression";
     window.acceptsMouseMovedEvents = YES;
+    window.ignoresMouseEvents = YES;
     WKWebView *bottom = [[WKWebView alloc] initWithFrame:NSMakeRect(0,0,500,400)];
     WKWebView *top = [[WKWebView alloc] initWithFrame:NSMakeRect(200,50,250,250)];
     NSArray *views = @[bottom, top];
@@ -108,9 +120,12 @@ int main(int argc, const char **argv) { @autoreleasepool {
         if (!baseline) require(webviewInputRegister(view), @"required webview pointer-input API is unavailable");
         [view loadHTMLString:html baseURL:nil];
     }
-    [window orderBack:nil];
-    require(NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier == front, @"probe changed the frontmost application");
+    [window orderFront:nil];
     for (WKWebView *view in views) until(^BOOL { return [evaluate(view, @"Boolean(window.probe)") boolValue]; });
+    __block SPActivation activation = {NO, false};
+    sp_input_activate(window, 5, activated, &activation);
+    until(^BOOL { return activation.done; });
+    require(activation.ok && window.isKeyWindow, @"the window did not become the key window of the active application");
     for (WKWebView *view in views) {
         __block BOOL painted = NO;
         [view _doAfterNextPresentationUpdate:^{ painted = YES; }];
@@ -131,10 +146,12 @@ int main(int argc, const char **argv) { @autoreleasepool {
         top.hidden = NO;
 
         [window.contentView addSubview:bottom positioned:NSWindowAbove relativeTo:nil];
+        settle(bottom);
         reset(views);
         move(window, views, NSMakePoint(300,150));
         expectMoves(views, @[@1,@0], @"native z-order is authoritative");
         [window.contentView addSubview:top positioned:NSWindowAbove relativeTo:nil];
+        settle(top);
 
         top.frame = NSMakeRect(10,10,250,250);
         reset(views);
@@ -178,8 +195,6 @@ int main(int argc, const char **argv) { @autoreleasepool {
     }
     for (WKWebView *view in views) webviewInputUnregister(view);
     [window orderOut:nil];
-    require(NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier == front, @"probe changed the frontmost application");
-    printf("PASS: no application activation\n");
     [top release]; [bottom release]; [window close]; [window release];
     return 0;
 } }

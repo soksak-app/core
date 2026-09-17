@@ -13,8 +13,8 @@ typedef enum {
 sp_input_result sp_input_pointer(void *window, double x, double y, int phase, int button, double deltaX, double deltaY);
 
 // 애플리케이션을 활성화하고 창을 키 창으로 만든다. 창이 키 창이 되고 창 안의 모든 웹뷰가 활성
-// 상태를 웹 프로세스에 보낸 뒤 done(context, true) 를 메인 스레드에서 호출한다. 시스템이
-// timeoutSeconds 안에 활성화하지 않으면 done(context, false) 를 호출한다. 메인 스레드에서 호출한다.
+// 상태를 웹 프로세스에 보낸 뒤 done(context, true) 를 메인 스레드에서 호출한다. 이 과정이
+// timeoutSeconds 안에 끝나지 않으면 done(context, false) 를 호출한다. done 은 한 번만 호출된다. 메인 스레드에서 호출한다.
 void sp_input_activate(void *window, double timeoutSeconds, void (*done)(void *context, bool ok), void *context);
 
 // key 는 키 이름(Enter, Tab, Escape, Backspace, ArrowLeft 등) 또는 문자 하나다. text 는 입력할

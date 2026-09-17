@@ -77,12 +77,15 @@ Manual appearance validation confirmed settings blur in both macOS hosts on 2026
 
 The native probe's `state` operation reports screen scales and window position. The optional `window` field selects an OS window by its reported number; `close` uses its normal close action and save sequence. The observe command `quit` requests normal framework application termination, including pending project saves. `position` uses AppKit global coordinates; `mouse` uses coordinates from the content area's top-left corner with a `down` or `up` phase. Neither operation activates the application. `eval` returns the value of an expression in the webview whose URL contains `match` (`main` selects the main document); `evalAsync` runs a function body and returns the value of its promise.
 
-The standalone overlapping-webview input check uses a temporary native window without activating the application. Run it when changing the shared input code:
+The shared library has two native input suites. Run both when changing the shared input code:
 
 ```sh
 make -C native/darwin test
+make -C native/darwin test-activation
 ```
 
-The target builds `native/darwin/build/webview_input_test` against the shared library and runs the baseline and registered-input runs in that order.
+`test` runs `input_inject_test` in a window of an inactive application. It checks presses, drags, scroll, keys, focus, and the inactive result for a move without a button, and it does not activate the application.
+
+`test-activation` activates the test application and therefore takes the keyboard focus. Its windows set `ignoresMouseEvents`, so the user's pointer does not reach them. It runs `input_activate_test` (hover after activation) and then the overlapping-webview check `webview_input_test`, first as the baseline run and then as the registered-input run.
 
 The baseline expects duplicate pointer movement in overlapping DOMs. The registered-input run requires exclusive pointer tracking, retained keyboard input, and cleanup after hiding or removing the overlay. Neither run tests delayed cursor responses.

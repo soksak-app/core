@@ -153,7 +153,7 @@ Wails 바인딩 서비스 이름은 `github.com/min-median-max/soksak/packages/h
 | `make wailsv3-build`, `make tauriv2-build` | `native/darwin`, 프런트엔드, 사이드카를 빌드하고 스테이징한 뒤 디버그 실행 파일을 빌드한다 |
 | `make wailsv3-build-release`, `make tauriv2-build-release` | 릴리스 실행 파일을 빌드한다 |
 | `make wailsv3`, `make tauriv2` | 디버그 실행 파일을 빌드하고 실행한다 |
-| `make native-test` | 공용 입력 검사, `packages/host/wailsv3`와 `sidecars/shell`의 `go test`, `cargo test -p soksak-host-tauriv2`를 실행한다 |
+| `make native-test` | `make -C native/darwin test`, `packages/host/wailsv3`와 `sidecars/shell`의 `go test`, `cargo test -p soksak-host-tauriv2`를 실행한다. 호스트 검사는 진단 빌드와 일반 빌드로 각각 실행한다 |
 | `make platforms` | `scripts/check-platforms.mjs`를 실행한다 |
 | `make hosts-check` | `scripts/check-hosts.mjs`를 실행한다 |
 
@@ -170,5 +170,5 @@ Wails 바인딩 서비스 이름은 `github.com/min-median-max/soksak/packages/h
 | 경로 | 내용 |
 | --- | --- |
 | `src/` | `<이름>.h`와 `<이름>.m` 소스. 두 호스트가 창 캡처에 사용하는 `capture.m`을 포함한다. 디렉터리가 플랫폼을 나타내므로 파일 이름에 `_darwin` 접미사가 없다 |
-| `tests/` | 독립 입력 검사 `webview_input_test.m` |
-| `Makefile` | 호스트가 pkg-config에서 `soksak-darwin`으로 찾는 정적 라이브러리를 빌드한다. `make -C native/darwin test`가 입력 검사를 실행한다 |
+| `tests/` | `input_inject_test.m`(`make test`, 활성화 없음), `input_activate_test.m`과 `webview_input_test.m`(`make test-activation`, 애플리케이션 활성화) |
+| `Makefile` | 호스트가 pkg-config에서 `soksak-darwin`으로 찾는 정적 라이브러리를 빌드한다. `make -C native/darwin test`와 `make -C native/darwin test-activation`이 입력 검사를 실행한다 |

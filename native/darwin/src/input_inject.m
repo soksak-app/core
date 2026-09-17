@@ -165,9 +165,10 @@ void sp_input_activate(void *handle, double timeoutSeconds, void (*done)(void *c
         usingBlock:^(NSNotification *note) { check(); }];
     appObserver = [center addObserverForName:NSApplicationDidBecomeActiveNotification object:NSApp queue:nil
         usingBlock:^(NSNotification *note) { check(); }];
-    // 시스템은 활성화 요청을 거절할 수 있다(macOS 14 협조적 활성화). 제한 시간은 거절을 보고하기 위한 것이다.
+    // 시스템은 활성화 요청을 거절할 수 있고(macOS 14 협조적 활성화), 활성화 직후 사용자가 다른 앱으로
+    // 포커스를 옮길 수도 있다. 제한 시간은 활성화와 웹뷰 상태 전송 전체에 적용해 결과를 반드시 보고한다.
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(timeoutSeconds * NSEC_PER_SEC)),
-        dispatch_get_main_queue(), ^{ if (waiting) finish(false); });
+        dispatch_get_main_queue(), ^{ finish(false); });
     [window makeKeyAndOrderFront:nil];
     [NSApp activate];
 }
