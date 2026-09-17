@@ -1,8 +1,9 @@
 // 설치된 WebKit에서 겹친 웹뷰의 포인터·키보드 입력과 제거 후 복원을 검사한다.
 //
 // WebKit 은 키 창에서만 호버를 갱신하므로 이 검사는 애플리케이션을 활성화해 사용자의 포커스를
-// 가져간다. make test 에 포함하지 않고 make test-activation 으로만 실행한다. 창은
-// ignoresMouseEvents 로 실제 마우스 이벤트를 받지 않으며, 검사가 만든 이벤트만 웹뷰에 도달한다.
+// 가져간다. make test 에 포함하지 않고 make test-activation 으로만 실행한다. AppKit 은 실제
+// 포인터가 있는 추적 영역에도 이동을 전달하므로, 창을 포인터에서 떨어진 곳에 두고 포인터가 창에
+// 들어오면 측정을 실패로 보고한다.
 #import <Cocoa/Cocoa.h>
 #import "input_inject.h"
 #import "webview_input.h"
@@ -59,18 +60,32 @@ static id observer(WKWebView *view) {
     return nil;
 }
 
+// AppKit also delivers a posted movement to the tracking areas the real pointer is in.
+// The window is placed away from the pointer, and a movement is valid only while the
+// pointer stays outside it.
+static void pointerOutside(NSWindow *window) {
+    require(!NSPointInRect(NSEvent.mouseLocation, window.frame),
+        @"the pointer is over the test window, so AppKit delivers movements to its tracking areas too; "
+        "rerun without moving the pointer over the window");
+}
+
 static void deliver(NSWindow *window, NSArray *views, NSPoint point) {
+    require(NSApp.isActive && window.isKeyWindow, @"the window must be the key window of the active application");
+    pointerOutside(window);
     NSEvent *event = [NSEvent mouseEventWithType:NSEventTypeMouseMoved location:point
         modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime
         windowNumber:window.windowNumber context:nil eventNumber:1 clickCount:0 pressure:0];
-    // AppKit delivers a movement to each overlapping tracking area. Use the
-    // actual WebKit observer, not a DOM-dispatched or mocked mouse event.
+    // -[NSApplication sendEvent:] runs the local monitors that route the pointer.
+    // AppKit then delivers the movement to each overlapping tracking area the
+    // pointer is in; deliver it to each actual WebKit observer, as AppKit does when
+    // the pointer is over both webviews.
     [NSApp postEvent:event atStart:NO];
     NSEvent *posted = [NSApp nextEventMatchingMask:NSEventMaskMouseMoved untilDate:[NSDate dateWithTimeIntervalSinceNow:1]
         inMode:NSDefaultRunLoopMode dequeue:YES];
     require(posted != nil, @"AppKit did not dequeue the test mouse event");
     [NSApp sendEvent:posted];
     for (WKWebView *view in views) [observer(view) mouseMoved:event];
+    pointerOutside(window);
 }
 
 static void move(NSWindow *window, NSArray *views, NSPoint point) {
@@ -104,7 +119,14 @@ int main(int argc, const char **argv) { @autoreleasepool {
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
     [NSApp finishLaunching];
-    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(100,100,500,400)
+    // 창을 포인터에서 떨어진 곳에 둔다. 포인터가 있는 화면의 반대쪽 절반이다.
+    NSPoint pointer = NSEvent.mouseLocation;
+    NSRect screen = NSScreen.mainScreen.visibleFrame;
+    for (NSScreen *candidate in NSScreen.screens) {
+        if (NSPointInRect(pointer, candidate.frame)) screen = candidate.visibleFrame;
+    }
+    CGFloat left = pointer.x < NSMidX(screen) ? NSMaxX(screen) - 520 : NSMinX(screen) + 20;
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(left, NSMinY(screen) + 20, 500, 400)
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
     [window setReleasedWhenClosed:NO];
     window.title = @"WebKit input regression";

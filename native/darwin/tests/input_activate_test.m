@@ -1,7 +1,7 @@
 // 창을 활성화한 뒤 버튼 없는 이동이 페이지의 호버를 갱신하는지 검사한다.
 //
 // 이 검사는 애플리케이션을 활성화하므로 사용자의 포커스를 가져간다. make test 에 포함하지 않고
-// make test-activation 으로만 실행한다. 창은 ignoresMouseEvents 로 실제 마우스 이벤트를 받지 않는다.
+// make test-activation 으로만 실행한다. 이동은 추적 영역 소유자에게 직접 전달하므로 실제 포인터 위치와 무관하다.
 #import <Cocoa/Cocoa.h>
 #import "input_inject.h"
 #import "private/webkit.h"
