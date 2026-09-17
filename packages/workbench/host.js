@@ -10,6 +10,7 @@
 // 런타임 모듈(@soksak/runtime)이 담당한다.
 import { host as bridge } from "@soksak/runtime";
 import { plugins } from "./registry.js";
+import { createTranscript } from "./transcript.js";
 
 /** 표면이 표시할 대상을 URL 로 변환한다. `url` 은 외부, `page` 는 이 호스트의 문서. */
 function surfaceURL(surface) {
@@ -101,16 +102,14 @@ function overlayFrame(el, rect) {
 export const native = Boolean(bridge);
 
 /**
- * 호출과 그 답을 애플리케이션 로그에 남길지 여부.
- *
- * 진단 메서드 diagnostics.transcript 가 요청할 때만 켠다. 기록기가 이 파일에 있으므로
- * 두 애플리케이션이 같은 형식으로 남기고, 형식이 서로 어긋날 수 없다.
+ * 호출과 그 답의 기록기. 진단 메서드 diagnostics.transcript 가 요청할 때만 켠다. 기록기가
+ * 이 패키지에 있으므로 두 애플리케이션이 같은 형식과 순서로 남긴다.
  */
-let recording = false;
+const transcript = createTranscript((line) => bridge.call("report", line));
 
 /** 호출 기록을 켜거나 끈다. */
 export function setTranscript(on) {
-  recording = on === true;
+  transcript.set(on);
 }
 
 /* 애플리케이션에는 콘솔이 없다. 여기서 실패를 잡으면 기록되지 않으므로 잡지
@@ -118,26 +117,8 @@ export function setTranscript(on) {
 const tell = (name, payload) => {
   const answered = bridge.call(name, payload);
   // report 자신은 남기지 않는다. 남기면 그 기록이 다시 기록을 부른다.
-  if (recording && name !== "report") {
-    Promise.resolve(answered).then((answer) => {
-      bridge.call("report", `host ${name} ${say(payload)} -> ${say(answer)}`);
-    // 실패한 호출은 tellInTurn 이 보고한다. 여기서 받지 않으면 그 실패가 처리되지
-    // 않은 거절이 되어, 기록을 켰을 때만 같은 실패가 두 번 남는다.
-    }, () => {});
-  }
+  if (name !== "report") transcript.record(name, payload, answered);
   return answered;
-};
-
-/**
- * 기록 한 줄에 담기는 값.
- *
- * 답이 없는 호출을 한 가지로 적는다. 프레임워크마다 빈 답의 모양이 달라, 그대로
- * 적으면 답이 없다는 같은 사실이 서로 다르게 남는다.
- */
-const say = (value) => {
-  const empty = value == null ||
-    (typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0);
-  return empty ? "null" : JSON.stringify(value);
 };
 
 /**

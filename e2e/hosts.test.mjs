@@ -75,7 +75,10 @@ test("both hosts answer the same page the same way", async (t) => {
   assert.ok(restedTauri, `the Tauri host recorded no settled commit:\n${logs.tauriv2.join("\n")}`);
   assert.equal(restedTauri.request, restedWails.request, "the two hosts give the page a different plane to lay out");
   assert.equal(restedTauri.answer, restedWails.answer, "the two hosts place the same surfaces differently");
-  assert.deepEqual([...tauri.keys()].sort(), [...wails.keys()].sort(), "the two hosts were asked for different things");
+  const onlyWails = [...wails.keys()].filter((name) => !tauri.has(name));
+  const onlyTauri = [...tauri.keys()].filter((name) => !wails.has(name));
+  assert.deepEqual({ onlyWails, onlyTauri }, { onlyWails: [], onlyTauri: [] },
+    "the two hosts were asked for different things");
   for (const name of wails.keys()) {
     if (name === "syncSurfaces" || name === "presentSurfaces") continue;
     const mine = wails.get(name).at(-1);

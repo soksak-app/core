@@ -28,6 +28,7 @@
     "registry.js",
     "settings.js",
     "settings-scope.js",
+    "transcript.js",
     "settings-ui.js",
     "verify.js",
     "exposure.json",
