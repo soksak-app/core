@@ -3,12 +3,15 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { connect, createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { frames, readFrame } from "./frame.mjs";
 import { bounds } from "./surface.mjs";
 
+// 검사하는 애플리케이션 실행 파일. 작업 디렉터리와 무관하게 이 파일 위치를 기준으로 찾는다.
+const built = (path) => fileURLToPath(new URL(`../apps/${path}`, import.meta.url));
 export const APPS = {
-  wails: "apps/wails/bin/wails",
-  tauri: "apps/tauri/src-tauri/target/debug/soksak-tauri",
+  wails: built("wails/bin/wails"),
+  tauri: built("tauri/src-tauri/target/debug/soksak-tauri"),
 };
 
 const CONTROL = {
