@@ -157,6 +157,7 @@ test("tools/call maps tools to endpoint methods", async (t) => {
   };
   assert.equal((await call("windows_list", {}))[0].window, "main");
   assert.equal(await call("status_get", { name: "core.screen" }), "home");
+  assert.equal(await call("status_get", { name: "core.screen", surface: "tab-a" }), "home");
   assert.deepEqual(await call("command_run_core_project_open", { params: { root: "/p" } }), { opened: "/p" });
   assert.equal((await call("dom_rect", { name: "core.tab", index: 1 })).index, 1);
   assert.equal(await call("dom_act", { name: "core.tab", action: "input", value: "v" }), null);
@@ -169,6 +170,7 @@ test("tools/call maps tools to endpoint methods", async (t) => {
     [
       ["windows.list", undefined],
       ["status.get", { window: "main", name: "core.screen" }],
+      ["status.get", { window: "main", name: "core.screen", surface: "tab-a" }],
       ["command.run", { window: "main", name: "core.project.open", params: { root: "/p" } }],
       ["dom.rect", { window: "main", name: "core.tab", index: 1 }],
       ["dom.act", { window: "main", name: "core.tab", action: "input", value: "v" }],

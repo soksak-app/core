@@ -30,7 +30,7 @@
   import { followTheme, page } from "@soksak/plugin-api/page";
   import { onAnswer, onGripDrag, showValue } from "./card.js";
 
-  followTheme();
+  followTheme().then(report);
 
   const id = new URLSearchParams(location.search).get("id");
   const instance = Number(new URLSearchParams(location.search).get("instance"));
@@ -44,7 +44,23 @@
     root.style.top = `${y}px`;
     root.style.width = `${w}px`;
     root.style.height = `${h}px`;
+    report();
   }
+
+  /* 이 문서의 상태를 메인 페이지에 보고한다. 메인 페이지는 core.modal 로 공개한다
+     (docs/spec/exposure.md). 렌더 전에는 보고할 요소가 없다. */
+  function report() {
+    if (!root) return;
+    const r = root.getBoundingClientRect();
+    page.modal.answer(id, instance, "document", JSON.stringify({
+      mode: root.dataset.nativeModal,
+      filter: getComputedStyle(document.documentElement).filter,
+      htmlBackground: getComputedStyle(document.documentElement).backgroundColor,
+      bodyBackground: getComputedStyle(document.body).backgroundColor,
+      rect: { x: r.left, y: r.top, width: r.width, height: r.height },
+    }));
+  }
+  new MutationObserver(report).observe(document.documentElement, { attributes: true, attributeFilter: ["style", "class"] });
 
   function render({ mode, title, css, className, html, border, card }) {
     if (!sheet) {

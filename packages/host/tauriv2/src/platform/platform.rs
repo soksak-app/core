@@ -8,6 +8,8 @@ use std::io::{Read, Write};
 use std::path::Path;
 use std::time::Duration;
 
+use serde_json::Value;
+
 use tauri::webview::PlatformWebview;
 use tauri::{AppHandle, WebviewWindowBuilder, Window, Wry};
 
@@ -112,10 +114,15 @@ pub trait Platform: Send + Sync {
     #[cfg(feature = "diagnostics")]
     /// 창 서버가 창과 창에 붙은 창에 부여한 번호를 반환한다.
     fn window_numbers(&self, window: &Window) -> Result<Vec<isize>, String>;
-    /// 창 버튼의 영역과 숨김 여부를 콘텐츠 영역 왼쪽 위 기준으로 반환한다. 메인 스레드에서 호출한다.
-    fn window_buttons(&self, window: Handle) -> Result<Vec<(Frame, bool)>, String>;
     /// 창 좌표의 점에 있는 뷰를 반환한다. 메인 스레드에서 호출한다.
     fn hit(&self, window: Handle, x: f64, y: f64) -> Result<Hit, String>;
+    /// 창의 프레임, 활성 상태, 창 버튼과 웹뷰를 JSON 으로 반환한다. 형식은
+    /// native/darwin/src/window_facts.h 의 sp_window_facts 와 같다. 메인 스레드에서 호출한다.
+    fn window_facts(&self, window: Handle) -> Result<Value, String>;
+    /// 창 프레임의 왼쪽 위를 화면 좌표 (x, y) 로 옮긴다. 메인 스레드에서 호출한다.
+    fn move_window(&self, window: Handle, x: f64, y: f64) -> Result<(), String>;
+    /// 디스플레이 [{x, y, width, height, scale}] 를 화면 좌표로 반환한다. 메인 스레드에서 호출한다.
+    fn screens(&self) -> Result<Value, String>;
     /// 창이 모두 닫혀도 애플리케이션을 유지하는지 반환한다.
     fn stays_open_without_windows(&self) -> bool;
 
@@ -137,8 +144,6 @@ pub trait Platform: Send + Sync {
     fn round_corners(&self, view: &PlatformWebview, radius: f64) -> Result<(), String>;
     /// 입력 체인에서 웹뷰를 식별하는 뷰 주소를 반환한다.
     fn view_id(&self, view: &PlatformWebview) -> Result<Handle, String>;
-    /// 웹뷰의 표시 여부와 부모 뷰 안의 순서를 반환한다.
-    fn webview_layer(&self, view: &PlatformWebview) -> Result<(bool, usize), String>;
 
     // 표면 배치
 
@@ -207,6 +212,10 @@ pub trait Platform: Send + Sync {
 
     /// Dock 메뉴에 새 창 항목을 설치한다. 항목을 선택하면 new_window 를 호출한다.
     fn install_dock_menu(&self, new_window: Box<dyn Fn()>) -> Result<(), String>;
+    /// Dock 메뉴 항목의 제목 목록을 반환한다. 메인 스레드에서 호출한다.
+    fn dock_items(&self) -> Result<Value, String>;
+    /// 제목이 title 인 Dock 메뉴 항목을 실행한다. 메인 스레드에서 호출한다.
+    fn dock_select(&self, title: &str) -> Result<(), String>;
 
     // 디렉터리 식별
 

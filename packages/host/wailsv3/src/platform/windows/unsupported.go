@@ -42,8 +42,28 @@ func (implementation) WindowNumbers(unsafe.Pointer) ([]int, error) {
 	return nil, unsupported("window numbers")
 }
 
-func (implementation) Probe(unsafe.Pointer, string, func(string)) error {
-	return unsupported("native inspection")
+func (implementation) WindowFacts(unsafe.Pointer) (string, error) {
+	return "", unsupported("window state")
+}
+
+func (implementation) WindowHit(unsafe.Pointer, float64, float64) (string, error) {
+	return "", unsupported("window hit testing")
+}
+
+func (implementation) MoveWindow(unsafe.Pointer, float64, float64) error {
+	return unsupported("window placement")
+}
+
+func (implementation) Screens() (string, error) {
+	return "", unsupported("display list")
+}
+
+func (implementation) DockItems() (string, error) {
+	return "", unsupported("Dock menu")
+}
+
+func (implementation) DockSelect(string) error {
+	return unsupported("Dock menu")
 }
 
 func (implementation) CreateWebview(unsafe.Pointer, platform.WebviewOptions) (unsafe.Pointer, error) {

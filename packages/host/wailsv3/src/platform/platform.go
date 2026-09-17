@@ -53,9 +53,17 @@ type Platform interface {
 	WindowControls(window unsafe.Pointer) (Rect, error)
 	// WindowNumbers 는 창과 자식 창의 윈도 서버 번호를 반환한다. 창 자신의 번호가 처음이다.
 	WindowNumbers(window unsafe.Pointer) ([]int, error)
-	// Probe 는 네이티브 검사 요청(JSON)을 실행하고 결과(JSON)를 reply 에 전달한다. reply 는 요청마다
-	// 한 번 호출되고, 요청을 실행하는 동안 또는 그 뒤에 UI 스레드에서 호출된다.
-	Probe(window unsafe.Pointer, request string, reply func(string)) error
+	// WindowFacts 는 창의 프레임, 활성 상태, 창 단추와 웹뷰를 JSON 으로 반환한다. 형식은
+	// native/darwin/src/window_facts.h 의 sp_window_facts 와 같다. UI 스레드에서 호출한다.
+	WindowFacts(window unsafe.Pointer) (string, error)
+	// WindowHit 는 창 좌표 (x, y) 의 히트 테스트 결과 {view, main, identifier} 를 JSON 으로 반환한다.
+	// UI 스레드에서 호출한다.
+	WindowHit(window unsafe.Pointer, x, y float64) (string, error)
+	// MoveWindow 는 창 프레임의 왼쪽 위를 화면 좌표 (x, y) 로 옮긴다. UI 스레드에서 호출한다.
+	MoveWindow(window unsafe.Pointer, x, y float64) error
+	// Screens 는 디스플레이 [{x, y, width, height, scale}] 를 화면 좌표의 JSON 으로 반환한다.
+	// UI 스레드에서 호출한다.
+	Screens() (string, error)
 
 	// CreateWebview 는 창의 메인 웹뷰 위에 네이티브 웹뷰를 추가하고 그 핸들을 반환한다.
 	CreateWebview(window unsafe.Pointer, options WebviewOptions) (unsafe.Pointer, error)
@@ -129,6 +137,10 @@ type Platform interface {
 
 	// InstallDock 은 Dock 메뉴를 등록한다. 새 창 항목은 newWindow 를 호출한다.
 	InstallDock(newWindow func()) error
+	// DockItems 는 Dock 메뉴 항목의 제목을 JSON 배열로 반환한다. UI 스레드에서 호출한다.
+	DockItems() (string, error)
+	// DockSelect 는 제목이 title 인 Dock 메뉴 항목을 실행한다. UI 스레드에서 호출한다.
+	DockSelect(title string) error
 
 	// DirectoryIdentity 는 디렉터리를 식별하는 문자열을 반환한다.
 	DirectoryIdentity(path string, info os.FileInfo) (string, error)

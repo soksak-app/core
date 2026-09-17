@@ -118,6 +118,17 @@ var diagnosticMethods = map[string]endpointMethod{}
 type topic struct {
 	window string
 	name   string
+	// surface 는 감시가 지정한 표면이다. 지정하지 않은 감시는 빈 문자열이다.
+	surface string
+}
+
+// watchParams 는 페이지에 보낼 감시 요청의 params 다.
+func (t topic) watchParams() map[string]string {
+	params := map[string]string{"name": t.name}
+	if t.surface != "" {
+		params["surface"] = t.surface
+	}
+	return params
 }
 
 // logTopic 은 diagnostics.log 알림을 받는 연결의 topic 이름이다. 상태 이름은 점으로 구분한
@@ -197,21 +208,26 @@ func (e *Endpoint) accept(listener net.Listener) {
 	}
 }
 
-// StatusChanged 는 창 window 의 상태 name 을 감시하는 연결에 새 값을 알린다.
-func (e *Endpoint) StatusChanged(window, name string, value any) {
-	e.publish(topic{window, name}, "status.changed", map[string]any{"window": window, "name": name, "value": value})
+// StatusChanged 는 창 window 의 상태 name 을 감시하는 연결에 새 값을 알린다. surface 는 감시가
+// 지정한 표면이며, 지정하지 않은 감시의 변경이면 빈 문자열이다.
+func (e *Endpoint) StatusChanged(window, name, surface string, value any) {
+	params := map[string]any{"window": window, "name": name, "value": value}
+	if surface != "" {
+		params["surface"] = surface
+	}
+	e.publish(topic{window, name, surface}, "status.changed", params)
 }
 
 // Watching 은 창 window 의 상태 name 을 감시하는 연결이 있는지 반환한다.
 func (e *Endpoint) Watching(window, name string) bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	return e.counts[topic{window, name}] > 0
+	return e.counts[topic{window, name, ""}] > 0
 }
 
 // Log 는 창 window 의 진단 기록을 켠 연결에 줄 하나를 알린다.
 func (e *Endpoint) Log(window, line string) {
-	e.publish(topic{window, logTopic}, "diagnostics.log", map[string]any{"window": window, "line": line})
+	e.publish(topic{window, logTopic, ""}, "diagnostics.log", map[string]any{"window": window, "line": line})
 }
 
 func (e *Endpoint) publish(t topic, method string, params any) {
@@ -254,18 +270,18 @@ func (e *Endpoint) subscribe(c *endpointConn, t topic, on bool) (edge bool) {
 	return true
 }
 
-// topics 는 페이지가 알림을 보내야 하는 창 window 의 topic 이름이다. 페이지가 다시 로드되면
-// 호스트가 이 목록으로 감시를 다시 요청한다.
-func (e *Endpoint) topics(window string) []string {
+// topics 는 페이지가 알림을 보내야 하는 창 window 의 topic 이다. 페이지가 다시 로드되면 호스트가
+// 이 목록으로 감시를 다시 요청한다.
+func (e *Endpoint) topics(window string) []topic {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	var names []string
+	var out []topic
 	for t := range e.counts {
 		if t.window == window {
-			names = append(names, t.name)
+			out = append(out, t)
 		}
 	}
-	return names
+	return out
 }
 
 // endpointConn 은 연결 하나와 그 연결의 구독이다. topics 는 Endpoint.mu 로 보호한다.
@@ -374,7 +390,7 @@ func (e *Endpoint) release(t topic) {
 	case t.name == logTopic:
 		_, err = e.backend.PageRequest(t.window, "diagnostics.transcript", json.RawMessage(`{"on":false}`))
 	case !isHostName(t.name):
-		_, err = e.backend.PageRequest(t.window, "status.unwatch", mustJSON(map[string]string{"name": t.name}))
+		_, err = e.backend.PageRequest(t.window, "status.unwatch", mustJSON(t.watchParams()))
 	}
 	if err != nil {
 		log.Printf("endpoint: release %s on %s: %v", t.name, t.window, err)
@@ -440,8 +456,9 @@ func isHostName(name string) bool { return strings.HasPrefix(name, "host.") }
 
 // target 은 창을 지정하는 요청의 공통 매개변수다.
 type target struct {
-	Window *string `json:"window"`
-	Name   *string `json:"name"`
+	Window  *string `json:"window"`
+	Name    *string `json:"name"`
+	Surface *string `json:"surface"`
 }
 
 // decode 는 params 를 into 로 읽는다. 객체가 아니면 매개변수 오류다.
@@ -542,12 +559,22 @@ func statusWatch(e *Endpoint, c *endpointConn, params json.RawMessage, on bool) 
 		if _, ok := hostStatus[name]; !ok {
 			return nil, rpcError(codeUnknownName, "unknown status %s", name)
 		}
-		e.subscribe(c, topic{window, name}, on)
+		e.subscribe(c, topic{window, name, ""}, on)
 		return nil, nil
+	}
+	var fields target
+	if err := decode(params, &fields); err != nil {
+		return nil, err
+	}
+	t := topic{window: window, name: name}
+	if fields.Surface != nil {
+		if *fields.Surface == "" {
+			return nil, rpcError(codeInvalidParams, "surface must not be empty")
+		}
+		t.surface = *fields.Surface
 	}
 	e.watching.Lock()
 	defer e.watching.Unlock()
-	t := topic{window, name}
 	if !e.subscribe(c, t, on) {
 		return nil, nil
 	}

@@ -233,6 +233,24 @@ export const surfaces = native ? {
 let pick = null;
 let shown = null;
 
+/* 열린 모달 문서가 마지막으로 보고한 상태. docs/spec/exposure.md 의 core.modal 이다. */
+let modalDocument = null;
+const modalListeners = new Set();
+const modalChanged = () => { for (const fn of modalListeners) fn(); };
+
+/** 열린 모달과 그 문서가 보고한 상태. 열린 모달이 없으면 null 이다. */
+export function modalState() {
+  if (!shown) return null;
+  const el = document.getElementById(shown);
+  return { id: shown, mode: el?.dataset.nativeModal ?? null, document: modalDocument };
+}
+
+/** 모달 상태가 바뀌면 fn 을 호출한다. 해제 함수를 반환한다. */
+export function onModalState(fn) {
+  modalListeners.add(fn);
+  return () => modalListeners.delete(fn);
+}
+
 /* 애플리케이션이 페이지로 보내는 입력의 수신자. 판이 등록한다. */
 let onPress = () => {};
 let onInput = () => {};
@@ -258,7 +276,14 @@ if (native) {
   // 답에는 어느 모달의 것인지가 함께 온다. 닫힌 모달이 마지막으로 보낸 답이 다음
   // 모달의 수신자에게 가지 않도록 그것으로 거른다.
   bridge.on("overlay-pick", ({ id, key, value }) => {
-    if (pick && id === shown) pick(key, value);
+    if (id !== shown) return;
+    // 모달 문서의 상태 보고는 응답이 아니다. 요소의 수신자에게 전달하지 않는다.
+    if (key === "document") {
+      modalDocument = JSON.parse(value);
+      modalChanged();
+      return;
+    }
+    if (pick) pick(key, value);
   });
 }
 
@@ -306,6 +331,8 @@ export const overlay = native ? {
       const name = el.getAttribute("aria-label");
       if (!name) throw new Error(`${el.id} needs an aria-label to name its overlay`);
       shown = el.id;
+      modalDocument = null;
+      modalChanged();
       const style = getComputedStyle(el);
       tellInTurn("overlayShow", {
         id: shown,
@@ -340,6 +367,8 @@ export const overlay = native ? {
       const id = shown;
       shown = null;
       pick = null;
+      modalDocument = null;
+      modalChanged();
       if (id) tellInTurn("overlayHide", id);
     },
 } : {

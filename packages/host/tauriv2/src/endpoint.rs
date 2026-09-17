@@ -95,10 +95,30 @@ pub trait Service: Send + Sync + 'static {
     fn call(&self, window: &str, method: &str, params: Map<String, Value>) -> Result<Value, Failure>;
 }
 
+/// 감시 하나. surface 는 감시가 지정한 표면이며, 지정한 감시와 지정하지 않은 감시는 서로 다르다.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct Watch {
+    pub window: String,
+    pub name: String,
+    pub surface: Option<String>,
+}
+
+impl Watch {
+    /// 페이지에 보낼 감시 요청의 params.
+    pub fn params(&self) -> Map<String, Value> {
+        let mut params = Map::new();
+        params.insert("name".into(), Value::String(self.name.clone()));
+        if let Some(surface) = &self.surface {
+            params.insert("surface".into(), Value::String(surface.clone()));
+        }
+        params
+    }
+}
+
 /// 연결 하나의 쓰기 대상과 감시 목록.
 struct Peer {
     writer: Arc<Mutex<Box<dyn Connection>>>,
-    watches: HashSet<(String, String)>,
+    watches: HashSet<Watch>,
     transcript: HashSet<String>,
 }
 
@@ -113,24 +133,24 @@ struct Shared {
 pub struct Notifier(Arc<Shared>);
 
 impl Notifier {
-    /// 창 window 의 name 을 감시하는 연결이 있는지 반환한다.
+    /// 창 window 의 name 을 표면 지정 없이 감시하는 연결이 있는지 반환한다.
     pub fn watched(&self, window: &str, name: &str) -> bool {
-        watched(&self.0, window, name)
+        watched(&self.0, &Watch { window: window.into(), name: name.into(), surface: None })
     }
 
-    /// 창 window 에서 감시 중인 이름을 반환한다.
-    pub fn watches(&self, window: &str) -> Vec<String> {
-        let mut names: Vec<String> = match self.0.peers.lock() {
+    /// 창 window 의 감시를 반환한다.
+    pub fn watches(&self, window: &str) -> Vec<Watch> {
+        let mut watches: Vec<Watch> = match self.0.peers.lock() {
             Ok(peers) => peers.values()
                 .flat_map(|peer| peer.watches.iter())
-                .filter(|(w, _)| w == window)
-                .map(|(_, name)| name.clone())
+                .filter(|watch| watch.window == window)
+                .cloned()
                 .collect(),
             Err(_) => Vec::new(),
         };
-        names.sort();
-        names.dedup();
-        names
+        watches.sort();
+        watches.dedup();
+        watches
     }
 
     /// 창 window 의 기록을 요청한 연결이 있는지 반환한다.
@@ -138,11 +158,14 @@ impl Notifier {
         transcribed(&self.0, window)
     }
 
-    /// 창 window 의 name 을 감시하는 연결에 `status.changed` 를 보낸다.
-    pub fn changed(&self, window: &str, name: &str, value: Value) {
-        let key = (window.to_string(), name.to_string());
-        let message = json!({"jsonrpc": "2.0", "method": "status.changed",
-            "params": {"window": window, "name": name, "value": value}});
+    /// 창 window 의 name 을 감시하는 연결에 `status.changed` 를 보낸다. surface 는 감시가 지정한 표면이다.
+    pub fn changed(&self, window: &str, name: &str, surface: Option<&str>, value: Value) {
+        let key = Watch { window: window.into(), name: name.into(), surface: surface.map(str::to_string) };
+        let mut params = json!({"window": window, "name": name, "value": value});
+        if let Some(surface) = surface {
+            params["surface"] = Value::String(surface.to_string());
+        }
+        let message = json!({"jsonrpc": "2.0", "method": "status.changed", "params": params});
         self.send(|peer| peer.watches.contains(&key), &message);
     }
 
@@ -402,7 +425,7 @@ fn run(shared: &Shared, peer: u64, method: &str, params: Option<Value>) -> Resul
     }
     match method {
         "status.watch" => {
-            let key = (window.clone(), name(&params)?);
+            let key = watch_key(&window, &params)?;
             let result = shared.service.call(&window, method, params)?;
             with_peer(shared, peer, |state| {
                 state.watches.insert(key);
@@ -410,11 +433,11 @@ fn run(shared: &Shared, peer: u64, method: &str, params: Option<Value>) -> Resul
             Ok(result)
         }
         "status.unwatch" => {
-            let key = (window.clone(), name(&params)?);
+            let key = watch_key(&window, &params)?;
             with_peer(shared, peer, |state| {
                 state.watches.remove(&key);
             });
-            if watched(shared, &key.0, &key.1) {
+            if watched(shared, &key) {
                 return Ok(Value::Null);
             }
             shared.service.call(&window, method, params)
@@ -448,6 +471,16 @@ fn name(params: &Map<String, Value>) -> Result<String, Failure> {
     }
 }
 
+/// params 의 name 과 surface 로 감시 키를 만든다.
+fn watch_key(window: &str, params: &Map<String, Value>) -> Result<Watch, Failure> {
+    let surface = match params.get("surface") {
+        None => None,
+        Some(Value::String(surface)) if !surface.is_empty() => Some(surface.clone()),
+        Some(_) => return Err(Failure::params("surface must be a non-empty string")),
+    };
+    Ok(Watch { window: window.into(), name: name(params)?, surface })
+}
+
 fn with_peer(shared: &Shared, peer: u64, change: impl FnOnce(&mut Peer)) {
     if let Ok(mut peers) = shared.peers.lock() {
         if let Some(state) = peers.get_mut(&peer) {
@@ -456,11 +489,9 @@ fn with_peer(shared: &Shared, peer: u64, change: impl FnOnce(&mut Peer)) {
     }
 }
 
-/// 창 window 의 name 을 감시하는 연결이 있는지 반환한다.
-fn watched(shared: &Shared, window: &str, name: &str) -> bool {
-    shared.peers.lock().is_ok_and(|peers| {
-        peers.values().any(|peer| peer.watches.iter().any(|(w, n)| w == window && n == name))
-    })
+/// 감시 key 를 가진 연결이 있는지 반환한다.
+fn watched(shared: &Shared, key: &Watch) -> bool {
+    shared.peers.lock().is_ok_and(|peers| peers.values().any(|peer| peer.watches.contains(key)))
 }
 
 /// 창 window 의 기록을 요청한 연결이 있는지 반환한다.
@@ -471,13 +502,11 @@ fn transcribed(shared: &Shared, window: &str) -> bool {
 /// 닫힌 연결의 감시를 제거하고, 남은 감시자가 없는 값의 감시 해제를 페이지에 요청한다.
 fn forget(shared: &Shared, peer: u64) {
     let Some(state) = shared.peers.lock().ok().and_then(|mut peers| peers.remove(&peer)) else { return };
-    for (window, name) in state.watches {
-        if watched(shared, &window, &name) || !shared.service.exists(&window) {
+    for watch in state.watches {
+        if watched(shared, &watch) || !shared.service.exists(&watch.window) {
             continue;
         }
-        let mut params = Map::new();
-        params.insert("name".into(), Value::String(name));
-        let _ = shared.service.call(&window, "status.unwatch", params);
+        let _ = shared.service.call(&watch.window, "status.unwatch", watch.params());
     }
     for window in state.transcript {
         if transcribed(shared, &window) || !shared.service.exists(&window) {

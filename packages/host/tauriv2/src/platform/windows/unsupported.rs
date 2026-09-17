@@ -1,6 +1,7 @@
 //! Windows 에서 구현하지 않은 플랫폼 기능. 모든 함수가 "not implemented on windows" 오류를 반환한다.
 
 use tauri::webview::PlatformWebview;
+use serde_json::Value;
 use tauri::Window;
 
 use super::super::{Connection, Delivery, Frame, Handle, Hit, Key, Listener, Pointer, WindowBuilder};
@@ -29,10 +30,6 @@ pub fn window_controls(_window: Handle) -> Result<Frame, String> {
 #[cfg(feature = "diagnostics")]
 pub fn window_numbers(_window: &Window) -> Result<Vec<isize>, String> {
     missing("window numbers")
-}
-
-pub fn window_buttons(_window: Handle) -> Result<Vec<(Frame, bool)>, String> {
-    missing("window buttons")
 }
 
 pub fn hit(_window: Handle, _x: f64, _y: f64) -> Result<Hit, String> {
@@ -69,10 +66,6 @@ pub fn round_corners(_view: &PlatformWebview, _radius: f64) -> Result<(), String
 
 pub fn view_id(_view: &PlatformWebview) -> Result<Handle, String> {
     missing("webview identity")
-}
-
-pub fn webview_layer(_view: &PlatformWebview) -> Result<(bool, usize), String> {
-    missing("webview layer")
 }
 
 pub fn begin_layout(_window: Handle, _ticket: u64, _ready: Box<dyn Fn(bool)>) -> Result<(), String> {
@@ -161,6 +154,26 @@ pub fn capture_stop() -> Result<i32, String> {
 
 pub fn install_dock_menu(_new_window: Box<dyn Fn()>) -> Result<(), String> {
     missing("Dock menu")
+}
+
+pub fn dock_items() -> Result<Value, String> {
+    missing("Dock menu")
+}
+
+pub fn dock_select(_title: &str) -> Result<(), String> {
+    missing("Dock menu")
+}
+
+pub fn window_facts(_window: Handle) -> Result<Value, String> {
+    missing("window state")
+}
+
+pub fn move_window(_window: Handle, _x: f64, _y: f64) -> Result<(), String> {
+    missing("window placement")
+}
+
+pub fn screens() -> Result<Value, String> {
+    missing("display list")
 }
 
 #[cfg(feature = "diagnostics")]

@@ -57,6 +57,24 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 
 네이티브 호스트는 [사이드카](sidecars.ko.md) 메시지를 전달하는 방식과 같은 방식으로 표면 페이지와 메인 페이지 등록소 사이에서 등록과 요청을 전달한다. 표면 페이지가 닫히면 등록소는 그 페이지의 등록을 제거한다.
 
+### 표면 문서
+
+`@soksak/plugin-api/page`는 모든 플러그인 표면 페이지에 다음 코어 항목을 등록하므로 플러그인이 구현하지 않는다. 코어는 이 항목을 `exposure.json`에 선언한다. 표면 페이지가 등록하는 코어 이름은 이 항목뿐이다.
+
+| 종류 | 이름 | 의미 |
+| --- | --- | --- |
+| status | `core.surface.document` | `{url, timeOrigin, readyState, themed, scale, body, viewport, filter}`: 문서 주소, 시간 원점, 준비 상태, 첫 테마 적용 여부, 기기 픽셀 비율, CSS 픽셀 단위 body와 시각 뷰포트 크기, 루트 요소의 계산된 `filter` |
+| status | `core.surface.input` | 문서의 최근 입력 이벤트 32개(신뢰 여부 포함)를 순서대로 담는다. `pointerdown`, `pointerup`, `pointermove`, `click`, `wheel`, `keydown`에 대한 `{type, trusted, x, y, key}` |
+| command | `core.surface.hit` | CSS 픽셀 단위 `{x, y}`. 그 점에 문서의 요소가 있으면 `true`를 반환한다 |
+
+### 모달 문서
+
+네이티브 모달 문서는 렌더, 배치, 테마 변경마다 모달 응답 경로로 키 `document`를 사용해 자기 상태를 메인 페이지에 보고한다. 메인 페이지는 이를 status `core.modal`로 공개한다. 열린 모달이 없으면 `null`이고, 있으면 `{id, mode, document}`다. `document`는 첫 보고 전에는 `null`이며 이후 `{mode, filter, htmlBackground, bodyBackground, rect}`다: 렌더한 요소의 `data-native-modal`, 루트의 계산된 `filter`, 루트와 body의 계산된 배경색, CSS 픽셀 단위 요소 사각형.
+
+### 표면 선택
+
+여러 표면 페이지가 같은 이름을 등록할 수 있다. 이런 이름에 대한 `status.get`, `status.watch`, `status.unwatch`, `command.run`, `dom.rect`, `dom.act` 요청은 `core.surfaces`의 식별자인 `surface`를 포함할 수 있다. `surface`가 없으면 메인 페이지가 포커스된 카드의 활성 탭, 최근 배치의 보이는 표면, 마지막 등록 순서로 고른다. 그 이름을 등록하지 않은 `surface`는 1002를 반환한다.
+
 ## 창
 
 애플리케이션에는 창이 하나 이상 있고, 창마다 메인 페이지와 등록소가 따로 있다. `windows.list`를 제외한 모든 메서드는 `window`를 받는다. 이 값은 `windows.list`가 반환하는 식별자다. 더 이상 없는 창을 요청하면 오류 1003을 반환한다.
@@ -65,15 +83,21 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 
 네이티브 호스트는 같은 형식으로 소유자가 `host`인 항목을 선언하고 직접 처리한다.
 
+화면 좌표는 주 디스플레이의 왼쪽 위를 원점으로 하고 y가 아래로 증가하는 포인트 값이다. `order`는 창 안 웹뷰의 그리기 순서다. 메인 페이지가 0이며 값이 클수록 위에 그려진다. `background`는 `{draws, alpha}`이며 모달 웹뷰가 자기 배경을 칠하는지와 페이지 아래 배경색의 알파다.
+
 | 종류 | 이름 | 의미 |
 | --- | --- | --- |
-| status | `host.window` | `{frame, content, scale, key, controls, surfaces, modal}`: 창 프레임, 콘텐츠 크기, 백킹 배율, 키 창 여부, 창 단추 프레임, 표시 여부와 레이어를 포함한 네이티브 표면 프레임, 열린 네이티브 모달 |
+| status | `host.window` | `{frame, content, scale, key, active, children, controls, surfaces, modal}`: 창 프레임, 콘텐츠 크기, 백킹 배율, 키 창 여부, 애플리케이션 활성 여부, 자식 OS 창 수, `hidden`을 포함한 창 단추 프레임, 네이티브 표면 `{id, frame, visible, order}`, 열린 네이티브 모달 `{id, mode, shown, frame, order, background}` 또는 `null` |
+| status | `host.screens` | `[{x, y, width, height, scale}]`: 화면 좌표의 디스플레이와 백킹 배율 |
+| status | `host.dock` | 애플리케이션 Dock 메뉴 항목 제목의 순서 목록 |
 | command | `host.window.close` | 창의 일반 닫기 동작으로 창을 닫는다 |
+| command | `host.window.move` | 창 프레임 원점을 화면 좌표 `{x, y}`로 옮긴다 |
 | command | `host.window.maximize` | 창을 최대화한다. `{on: false}`이면 원래 크기로 되돌린다 |
 | command | `host.window.resize` | 콘텐츠 영역 크기를 `{width, height}`로 바꾼다 |
 | command | `host.window.reload` | 메인 페이지를 다시 로드한다 |
 | command | `host.window.presented` | 메인 페이지와 표시 중인 애플리케이션 문서가 현재 배치를 화면에 표시한 뒤 완료된다 |
 | command | `host.hit` | 창 좌표의 점 `{x, y}`를 소유한 대상을 반환한다: `{kind: "page"}`, `{kind: "surface", surface}`, 또는 `{kind: "native", identifier}` |
+| command | `host.dock.select` | 제목이 `{title}`인 Dock 메뉴 항목을 실행한다 |
 | command | `host.quit` | 대기 중인 저장을 포함한 일반 애플리케이션 종료를 요청한다 |
 
 ## 메서드
@@ -85,7 +109,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 | `windows.list` | 없음 | `[{window, title, project, key}]` |
 | `exposure.list` | `{window}` | `{status, commands, dom}`: 코어, 호스트, 로드된 플러그인의 선언 항목을 선언 형식으로 반환한다. 각 항목에 `registered`가 있다 |
 | `status.get` | `{window, name}` | 현재 값 |
-| `status.watch` | `{window, name}` | `null`. 이후 `status.unwatch`를 받거나 연결이 닫힐 때까지 값이 바뀔 때마다 호스트가 `status.changed` 알림 `{window, name, value}`를 보낸다 |
+| `status.watch` | `{window, name, surface?}` | `null`. 이후 `status.unwatch`를 받거나 연결이 닫힐 때까지 값이 바뀔 때마다 호스트가 `status.changed` 알림 `{window, name, surface?, value}`를 보낸다. `surface` 값이 다른 감시는 서로 별개다 |
 | `status.unwatch` | `{window, name}` | `null` |
 | `command.run` | `{window, name, params}` | 명령 결과 |
 | `dom.rect` | `{window, name, index?}` | 소유 문서의 CSS 픽셀 좌표 `{x, y, width, height}`와, 창 좌표로 나타낸 문서 원점 `{document}` |
@@ -109,7 +133,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 | --- | --- | --- |
 | 호스트 → 메인 페이지 | 이벤트 `exposure-request` | 코어와 플러그인 이름에 대한 `exposure.list`, `status.*`, `command.run`, `dom.*`의 `{id, method, params}` |
 | 메인 페이지 → 호스트 | 호출 `exposureReply` | `{id, result}` 또는 `{id, error: {code, message}}` |
-| 메인 페이지 → 호스트 | 호출 `exposureChanged` | 감시 중인 상태의 `{name, value}` |
+| 메인 페이지 → 호스트 | 호출 `exposureChanged` | 감시 중인 상태의 `{name, surface?, value}`. 감시가 표면을 지정했으면 `surface`가 있다 |
 | 표면 페이지 → 호스트 | 호출 `exposureRegister` | `{surface, kind, name}` |
 | 호스트 → 메인 페이지 | 이벤트 `exposure-registered` | `{surface, kind, name}`. 표면이 제거되면 `{surface, closed: true}` |
 | 메인 페이지 → 호스트 | 호출 `exposureForward` | 표면 페이지가 등록한 이름에 대한 `{id, surface, method, params}` |

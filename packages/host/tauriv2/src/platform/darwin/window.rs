@@ -1,13 +1,15 @@
 //! 창 설정, 창 버튼, 창 번호.
 
-use std::ffi::c_void;
+use std::ffi::{c_char, c_void, CStr};
 
+#[cfg(feature = "diagnostics")]
 use objc2::msg_send;
+#[cfg(feature = "diagnostics")]
 use objc2::runtime::AnyObject;
+use serde_json::Value;
 use tauri::Window;
 
 use super::super::{Frame, Handle, WindowBuilder};
-use super::NSRect;
 
 /// 프로젝트 창의 제목 표시줄을 페이지 위에 겹치고 제목을 숨긴다. 비활성 창의 클릭도
 /// 웹뷰에 전달한다.
@@ -70,32 +72,43 @@ pub fn numbers(window: Handle) -> Vec<isize> {
     }
 }
 
-/// 창 버튼(닫기, 최소화, 확대)의 그려진 영역과 숨김 여부를 콘텐츠 영역 왼쪽 위 기준으로 반환한다.
-pub fn buttons(window: Handle) -> Vec<(Frame, bool)> {
-    let mut out = Vec::new();
-    unsafe {
-        let window = window as *mut AnyObject;
-        if window.is_null() {
-            return out;
-        }
-        let content: *mut AnyObject = msg_send![window, contentView];
-        if content.is_null() {
-            return out;
-        }
-        let bounds: NSRect = msg_send![content, bounds];
-        // NSWindowCloseButton 0, NSWindowMiniaturizeButton 1, NSWindowZoomButton 2.
-        for kind in 0usize..=2 {
-            let button: *mut AnyObject = msg_send![window, standardWindowButton: kind];
-            if button.is_null() {
-                continue;
-            }
-            let own: NSRect = msg_send![button, bounds];
-            let drawn: NSRect = msg_send![button, alignmentRectForFrame: own];
-            let rect: NSRect = msg_send![content, convertRect: drawn, fromView: button];
-            let hidden: bool = msg_send![button, isHiddenOrHasHiddenAncestor];
-            let top = bounds.size.y - (rect.origin.y + rect.size.y);
-            out.push(((rect.origin.x, top, rect.size.x, rect.size.y), hidden));
-        }
+/// native/darwin 이 반환한 JSON 문자열을 읽고 해제한다.
+pub(super) fn facts_value(text: *mut c_char, what: &str) -> Result<Value, String> {
+    extern "C" {
+        fn sp_facts_free(text: *mut c_char);
     }
-    out
+    if text.is_null() {
+        return Err(format!("{what}: the window is gone"));
+    }
+    let parsed = serde_json::from_slice(unsafe { CStr::from_ptr(text) }.to_bytes()).map_err(|e| format!("{what}: {e}"));
+    unsafe { sp_facts_free(text) };
+    parsed
+}
+
+/// 창의 프레임, 활성 상태, 창 버튼과 웹뷰.
+pub fn facts(window: Handle) -> Result<Value, String> {
+    extern "C" {
+        fn sp_window_facts(window: *mut c_void) -> *mut c_char;
+    }
+    facts_value(unsafe { sp_window_facts(window as *mut c_void) }, "window state")
+}
+
+/// 창 프레임의 왼쪽 위를 화면 좌표로 옮긴다.
+pub fn move_to(window: Handle, x: f64, y: f64) -> Result<(), String> {
+    extern "C" {
+        fn sp_window_move(window: *mut c_void, x: f64, y: f64) -> bool;
+    }
+    if unsafe { sp_window_move(window as *mut c_void, x, y) } {
+        Ok(())
+    } else {
+        Err("window placement: the window is gone".into())
+    }
+}
+
+/// 디스플레이 목록.
+pub fn screens() -> Result<Value, String> {
+    extern "C" {
+        fn sp_screens() -> *mut c_char;
+    }
+    facts_value(unsafe { sp_screens() }, "display list")
 }

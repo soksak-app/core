@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use serde_json::{json, Map, Value};
-use soksak_host_tauriv2::endpoint::{self, Connection, Endpoint, Failure, Service};
+use soksak_host_tauriv2::endpoint::{self, Connection, Endpoint, Failure, Service, Watch};
 
 /// 요청을 기록하고 창 w1 만 가진 서비스.
 struct Fake {
@@ -203,10 +203,10 @@ fn watchers_belong_to_their_connection() {
     assert_eq!(request(&mut first, 1, "status.watch", json!({"window": "w1", "name": "core.layout"}))["result"], Value::Null);
     assert!(notifier.watched("w1", "core.layout"));
     assert!(!notifier.watched("w1", "core.other"));
-    assert_eq!(notifier.watches("w1"), ["core.layout"]);
+    assert_eq!(notifier.watches("w1"), [Watch { window: "w1".into(), name: "core.layout".into(), surface: None }]);
 
     // 두 번째 연결은 감시하지 않았으므로 알림 대신 자신의 응답을 먼저 받는다.
-    notifier.changed("w1", "core.layout", json!(1));
+    notifier.changed("w1", "core.layout", None, json!(1));
     assert_eq!(receive(&mut first), Some(json!({"jsonrpc": "2.0", "method": "status.changed",
         "params": {"window": "w1", "name": "core.layout", "value": 1}})));
     assert_eq!(request(&mut second, 2, "status.get", json!({"window": "w1", "name": "core.layout"}))["id"], 2);
@@ -214,7 +214,7 @@ fn watchers_belong_to_their_connection() {
     // 두 번째 연결의 감시 해제는 첫 번째 연결의 감시를 바꾸지 않는다.
     request(&mut second, 3, "status.watch", json!({"window": "w1", "name": "core.layout"}));
     request(&mut second, 4, "status.unwatch", json!({"window": "w1", "name": "core.layout"}));
-    notifier.changed("w1", "core.layout", json!(2));
+    notifier.changed("w1", "core.layout", None, json!(2));
     assert_eq!(receive(&mut first).unwrap()["params"]["value"], 2);
     assert!(!fake.calls().iter().any(|(_, method, _)| method == "status.unwatch"));
 
@@ -226,5 +226,37 @@ fn watchers_belong_to_their_connection() {
     assert_eq!(params, json!({"name": "core.layout"}));
     assert!(!notifier.watched("w1", "core.layout"));
     assert!(notifier.watches("w1").is_empty());
+    endpoint.stop();
+}
+
+#[test]
+fn surface_watches_are_separate() {
+    let config = tempfile::tempdir().unwrap();
+    let (fake, seen) = Fake::new();
+    let endpoint = start(config.path(), "test-surface", fake.clone());
+    let notifier = endpoint.notifier();
+    let mut connection = open(&endpoint);
+    let named = json!({"window": "w1", "name": "probe.lines", "surface": "tab-a"});
+    assert_eq!(request(&mut connection, 1, "status.watch", named.clone())["result"], Value::Null);
+    assert_eq!(request(&mut connection, 2, "status.watch", json!({"window": "w1", "name": "probe.lines"}))["result"], Value::Null);
+    let reply = request(&mut connection, 3, "status.watch", json!({"window": "w1", "name": "probe.lines", "surface": ""}));
+    assert_eq!(reply["error"]["code"], -32602);
+    let watched: Vec<Value> = fake.calls().iter().filter(|(_, method, _)| method == "status.watch").map(|(_, _, params)| params.clone()).collect();
+    assert_eq!(watched, [json!({"name": "probe.lines", "surface": "tab-a"}), json!({"name": "probe.lines"})]);
+    assert_eq!(notifier.watches("w1").len(), 2);
+
+    notifier.changed("w1", "probe.lines", Some("tab-a"), json!(["a"]));
+    assert_eq!(receive(&mut connection), Some(json!({"jsonrpc": "2.0", "method": "status.changed",
+        "params": {"window": "w1", "name": "probe.lines", "surface": "tab-a", "value": ["a"]}})));
+    notifier.changed("w1", "probe.lines", None, json!(["b"]));
+    assert_eq!(receive(&mut connection), Some(json!({"jsonrpc": "2.0", "method": "status.changed",
+        "params": {"window": "w1", "name": "probe.lines", "value": ["b"]}})));
+
+    while seen.try_recv().is_ok() {}
+    request(&mut connection, 4, "status.unwatch", named);
+    let (_, method, params) = seen.recv_timeout(Duration::from_secs(5)).unwrap();
+    assert_eq!(method, "status.unwatch");
+    assert_eq!(params, json!({"name": "probe.lines", "surface": "tab-a"}));
+    assert!(notifier.watched("w1", "probe.lines"), "the watch without a surface remains");
     endpoint.stop();
 }

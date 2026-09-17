@@ -8,7 +8,7 @@ package darwin
 #cgo pkg-config: soksak-darwin
 #include <stdlib.h>
 #include "window_controls.h"
-#include "window_probe.h"
+#include "window_facts.h"
 #import <Cocoa/Cocoa.h>
 
 void nativeWindowPrepare(void *window);
@@ -27,17 +27,12 @@ static int windowNumbers(void* nsWindow, long* out, int max) {
     }
     return n;
 }
-
-extern void nativeProbeResult(char *);
-static void probeToGo(const char *text) { nativeProbeResult((char *)text); }
-static void nativeRunProbe(void *window, const char *request) { spNativeProbe(window, request, probeToGo); }
 */
 import "C"
 
 import (
-	"encoding/json"
+	"errors"
 	"fmt"
-	"sync"
 	"unsafe"
 
 	"github.com/min-median-max/soksak/packages/host/wailsv3/src/platform"
@@ -74,48 +69,30 @@ func (implementation) WindowNumbers(window unsafe.Pointer) ([]int, error) {
 	return out, nil
 }
 
-// probes 는 결과를 기다리는 검사 요청의 수신 함수다. 요청의 ticket 으로 결과를 구분한다.
-var (
-	probeMu     sync.Mutex
-	probeSerial uint64
-	probes      = map[uint64]func(string){}
-)
-
-//export nativeProbeResult
-func nativeProbeResult(text *C.char) {
-	body := C.GoString(text)
-	var reply struct {
-		Ticket uint64 `json:"ticket"`
+// facts 는 native/darwin 이 반환한 JSON 문자열을 Go 문자열로 옮기고 해제한다.
+func facts(text *C.char, what string) (string, error) {
+	if text == nil {
+		return "", fmt.Errorf("%s: the window is gone", what)
 	}
-	if err := json.Unmarshal([]byte(body), &reply); err != nil {
-		return
-	}
-	probeMu.Lock()
-	receive := probes[reply.Ticket]
-	delete(probes, reply.Ticket)
-	probeMu.Unlock()
-	if receive != nil {
-		receive(body)
-	}
+	defer C.sp_facts_free(text)
+	return C.GoString(text), nil
 }
 
-func (implementation) Probe(window unsafe.Pointer, request string, reply func(string)) error {
-	var fields map[string]any
-	if err := json.Unmarshal([]byte(request), &fields); err != nil {
-		return fmt.Errorf("native probe request: %w", err)
+func (implementation) WindowFacts(window unsafe.Pointer) (string, error) {
+	return facts(C.sp_window_facts(window), "window state")
+}
+
+func (implementation) WindowHit(window unsafe.Pointer, x, y float64) (string, error) {
+	return facts(C.sp_window_hit(window, C.double(x), C.double(y)), "window hit testing")
+}
+
+func (implementation) MoveWindow(window unsafe.Pointer, x, y float64) error {
+	if !C.sp_window_move(window, C.double(x), C.double(y)) {
+		return errors.New("window placement: the window is gone")
 	}
-	probeMu.Lock()
-	probeSerial++
-	ticket := probeSerial
-	probes[ticket] = reply
-	probeMu.Unlock()
-	fields["ticket"] = ticket
-	data, err := json.Marshal(fields)
-	if err != nil {
-		return err
-	}
-	text := C.CString(string(data))
-	defer C.free(unsafe.Pointer(text))
-	C.nativeRunProbe(window, text)
 	return nil
+}
+
+func (implementation) Screens() (string, error) {
+	return facts(C.sp_screens(), "display list")
 }

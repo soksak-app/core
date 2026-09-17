@@ -466,6 +466,131 @@
             }
           }
         }
+      },
+      {
+        "name": "core.surface.document",
+        "description": "Registered by every plugin surface page: its address, time origin, ready state, whether the first theme is applied, device pixel ratio, body and viewport sizes, and the root filter.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string"
+            },
+            "timeOrigin": {
+              "type": "number"
+            },
+            "readyState": {
+              "type": "string"
+            },
+            "themed": {
+              "type": "boolean"
+            },
+            "scale": {
+              "type": "number"
+            },
+            "body": {
+              "type": "object",
+              "properties": {
+                "width": {
+                  "type": "number"
+                },
+                "height": {
+                  "type": "number"
+                }
+              }
+            },
+            "viewport": {
+              "type": "object",
+              "properties": {
+                "width": {
+                  "type": "number"
+                },
+                "height": {
+                  "type": "number"
+                }
+              }
+            },
+            "filter": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
+        "name": "core.surface.input",
+        "description": "Registered by every plugin surface page: its last 32 pointer, click, wheel, and key events in order.",
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string"
+              },
+              "trusted": {
+                "type": "boolean"
+              },
+              "x": {
+                "type": "number"
+              },
+              "y": {
+                "type": "number"
+              },
+              "key": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "core.modal",
+        "description": "The open native modal of this window with the state its document reported, or null.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "mode": {
+              "type": "string"
+            },
+            "document": {
+              "type": "object",
+              "properties": {
+                "mode": {
+                  "type": "string"
+                },
+                "filter": {
+                  "type": "string"
+                },
+                "htmlBackground": {
+                  "type": "string"
+                },
+                "bodyBackground": {
+                  "type": "string"
+                },
+                "rect": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "number"
+                    },
+                    "y": {
+                      "type": "number"
+                    },
+                    "width": {
+                      "type": "number"
+                    },
+                    "height": {
+                      "type": "number"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     ],
     "commands": [
@@ -806,6 +931,24 @@
               "type": "number"
             }
           }
+        }
+      },
+      {
+        "name": "core.surface.hit",
+        "description": "Registered by every plugin surface page: whether an element of the document is at the point in CSS pixels.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            }
+          }
+        },
+        "result": {
+          "type": "boolean"
         }
       }
     ],

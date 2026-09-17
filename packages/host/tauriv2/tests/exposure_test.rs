@@ -102,13 +102,15 @@ fn host_entries_are_appended_as_registered() {
     }))
     .unwrap();
     let status: Vec<&str> = listed["status"].as_array().unwrap().iter().map(|e| e["name"].as_str().unwrap()).collect();
-    assert_eq!(status, ["core.layout", "host.window"]);
+    assert_eq!(status, ["core.layout", "host.window", "host.dock", "host.screens"]);
     let commands: Vec<&str> = listed["commands"].as_array().unwrap().iter().map(|e| e["name"].as_str().unwrap()).collect();
     assert_eq!(commands, [
+        "host.dock.select",
         "host.hit",
         "host.quit",
         "host.window.close",
         "host.window.maximize",
+        "host.window.move",
         "host.window.presented",
         "host.window.reload",
         "host.window.resize",
@@ -117,7 +119,8 @@ fn host_entries_are_appended_as_registered() {
         assert_eq!(entry["registered"], true);
         assert!(entry["description"].as_str().is_some_and(|d| !d.is_empty()));
     }
-    assert_eq!(listed["commands"][1]["result"], json!({"type": "null"}));
+    assert_eq!(listed["commands"][2]["name"], "host.quit");
+    assert_eq!(listed["commands"][2]["result"], json!({"type": "null"}));
     assert!(exposure::with_host_entries(json!([])).is_err());
 }
 

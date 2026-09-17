@@ -41,22 +41,39 @@ fn host_declarations() -> Value {
     json!({
         "status": [{
             "name": "host.window",
-            "description": "Window frame, content size, backing scale, key state, window buttons, native surfaces, and the open native modal.",
+            "description": "Window frame in screen coordinates, content size, backing scale, key and application active state, child window count, window buttons, native surfaces, and the open native modal.",
             "schema": {"type": "object", "properties": {
                 "frame": rect,
                 "content": rect,
                 "scale": {"type": "number"},
                 "key": {"type": "boolean"},
+                "active": {"type": "boolean"},
+                "children": {"type": "integer"},
                 "controls": {"type": "array", "items": rect},
                 "surfaces": {"type": "array", "items": {"type": "object", "properties": {
                     "id": {"type": "string"}, "frame": rect,
-                    "visible": {"type": "boolean"}, "layer": {"type": "number"}}}},
+                    "visible": {"type": "boolean"}, "order": {"type": "integer"}}}},
                 "modal": {"type": "object", "properties": {
                     "id": {"type": "string"}, "mode": {"type": "string"},
-                    "shown": {"type": "boolean"}, "frame": rect}},
+                    "shown": {"type": "boolean"}, "frame": rect, "order": {"type": "integer"},
+                    "background": {"type": "object", "properties": {
+                        "draws": {"type": "boolean"}, "alpha": {"type": "number"}}}}},
             }},
+        }, {
+            "name": "host.dock",
+            "description": "The titles of the application's Dock menu items in order.",
+            "schema": {"type": "array", "items": {"type": "string"}},
+        }, {
+            "name": "host.screens",
+            "description": "The displays in screen coordinates with their backing scale.",
+            "schema": {"type": "array", "items": {"type": "object", "properties": {
+                "x": {"type": "number"}, "y": {"type": "number"},
+                "width": {"type": "number"}, "height": {"type": "number"},
+                "scale": {"type": "number"}}}},
         }],
         "commands": [
+            {"name": "host.dock.select", "description": "Performs the Dock menu item with the title.",
+             "params": {"type": "object", "properties": {"title": {"type": "string"}}}, "result": nothing},
             {"name": "host.hit", "description": "Returns the owner of a point in window coordinates.",
              "params": {"type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "number"}}},
              "result": {"type": "object", "properties": {
@@ -68,6 +85,9 @@ fn host_declarations() -> Value {
              "params": empty, "result": nothing},
             {"name": "host.window.maximize", "description": "Maximizes the window, or restores it with on false.",
              "params": {"type": "object", "properties": {"on": {"type": "boolean"}}}, "result": nothing},
+            {"name": "host.window.move", "description": "Moves the window frame origin to a point in screen coordinates.",
+             "params": {"type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "number"}}},
+             "result": nothing},
             {"name": "host.window.presented", "description": "Resolves after the main page and visible application documents have presented their current geometry.",
              "params": empty, "result": nothing},
             {"name": "host.window.reload", "description": "Reloads the main page.",
@@ -314,6 +334,8 @@ pub(crate) fn reply(webview: &Webview, request: Value) -> Result<(), String> {
 #[derive(Deserialize)]
 pub(crate) struct Changed {
     name: String,
+    #[serde(default)]
+    surface: Option<String>,
     value: Value,
 }
 
@@ -321,7 +343,7 @@ pub(crate) struct Changed {
 pub(crate) fn changed(webview: &Webview, request: Changed) -> Result<(), String> {
     let window = main_page(webview)?;
     if let Some(endpoint) = window.state::<Exposure>().endpoint.get() {
-        endpoint.notifier().changed(window.label(), &request.name, request.value);
+        endpoint.notifier().changed(window.label(), &request.name, request.surface.as_deref(), request.value);
     }
     Ok(())
 }
@@ -395,14 +417,12 @@ pub(crate) fn rewatch(window: &Window) {
     let window = window.clone();
     std::thread::spawn(move || {
         let host = Host(window.app_handle().clone());
-        for name in notifier.watches(window.label()) {
-            if name == "host" || name.starts_with("host.") {
+        for watch in notifier.watches(window.label()) {
+            if watch.name.starts_with("host.") {
                 continue;
             }
-            let mut params = Map::new();
-            params.insert("name".into(), Value::String(name.clone()));
-            if let Err(error) = host.page(&window, "status.watch", params, TIMEOUT) {
-                log(&window, &format!("rewatch {name}: {}", error.message));
+            if let Err(error) = host.page(&window, "status.watch", watch.params(), TIMEOUT) {
+                log(&window, &format!("rewatch {}: {}", watch.name, error.message));
             }
         }
         if notifier.transcribed(window.label()) {
@@ -455,7 +475,7 @@ pub(crate) fn window_changed(window: &Window) {
             reported.insert(window.label().to_string(), value.clone());
         }
         if let Some(endpoint) = state.endpoint.get() {
-            endpoint.notifier().changed(window.label(), "host.window", value);
+            endpoint.notifier().changed(window.label(), "host.window", None, value);
         }
     });
 }
@@ -488,54 +508,50 @@ fn with_view<T: Send + 'static>(
     rx.recv().map_err(|e| e.to_string())?
 }
 
-/// [x, y, 너비, 높이] 를 {x, y, width, height} 로 바꾼다.
-fn rect([x, y, width, height]: [f64; 4]) -> Value {
-    json!({"x": x, "y": y, "width": width, "height": height})
-}
-
 /// 창의 host.window 값을 계산한다. 메인 스레드가 아닌 스레드에서 호출한다.
 fn window_status(window: &Window) -> Result<Value, Failure> {
     let platform = platform::current().map_err(internal)?;
-    let scale = window.scale_factor().map_err(internal)?;
-    let at = window.outer_position().map_err(internal)?.to_logical::<f64>(scale);
-    let outer = window.outer_size().map_err(internal)?.to_logical::<f64>(scale);
-    let inner = window.inner_size().map_err(internal)?.to_logical::<f64>(scale);
-    let key = window.is_focused().map_err(internal)?;
     let handle = native_owner(window).map_err(internal)?;
-    let buttons = on_main(window, move || platform.window_buttons(handle)).map_err(internal)?;
-    let controls: Vec<Value> = buttons
-        .into_iter()
-        .map(|((x, y, w, h), hidden)| json!({"x": x, "y": y, "width": w, "height": h, "hidden": hidden}))
-        .collect();
     let prefix = format!("surface-{}-", window.label());
-    let mut surfaces = Vec::new();
+    let mut named = HashMap::new();
     for webview in window.webviews() {
         let Some(surface) = webview.label().strip_prefix(&prefix).map(str::to_string) else { continue };
-        let (frame, (visible, layer)) = with_view(&webview, move |view| {
-            Ok((platform.webview_frame(view)?, platform.webview_layer(view)?))
-        })
-        .map_err(internal)?;
-        surfaces.push(json!({"id": surface, "frame": rect(frame), "visible": visible, "layer": layer}));
+        let view = with_view(&webview, move |view| platform.view_id(view)).map_err(internal)?;
+        named.insert(view, surface);
     }
-    surfaces.sort_by(|a, b| a["id"].as_str().cmp(&b["id"].as_str()));
     let overlay = &window_data(window).map_err(internal)?.overlay;
-    let modal = match overlay.open_state() {
-        Some((id, mode, shown)) => {
-            let view = overlay.view.lock().map_err(internal)?.clone();
-            let frame = match view {
-                Some(view) => Some(rect(with_view(&view, move |view| platform.webview_frame(view)).map_err(internal)?)),
-                None => None,
-            };
-            json!({"id": id, "mode": mode, "shown": shown, "frame": frame})
-        }
+    let modal_view = match overlay.view.lock().map_err(internal)?.clone() {
+        Some(view) => Some(with_view(&view, move |view| platform.view_id(view)).map_err(internal)?),
+        None => None,
+    };
+    let facts = on_main(window, move || platform.window_facts(handle)).map_err(internal)?;
+    let mut surfaces = Vec::new();
+    let mut modal = match overlay.open_state() {
+        Some((id, mode, shown)) => json!({"id": id, "mode": mode, "shown": shown,
+            "frame": null, "order": null, "background": null}),
         None => Value::Null,
     };
+    let rect = |view: &Value| json!({"x": view["x"], "y": view["y"], "width": view["width"], "height": view["height"]});
+    for (order, view) in facts["webviews"].as_array().cloned().unwrap_or_default().iter().enumerate() {
+        let Some(address) = view["view"].as_u64() else { continue };
+        let address = address as platform::Handle;
+        if let Some(surface) = named.get(&address) {
+            surfaces.push(json!({"id": surface, "frame": rect(view),
+                "visible": !view["hidden"].as_bool().unwrap_or(false), "order": order}));
+        } else if modal.is_object() && modal_view == Some(address) {
+            modal["frame"] = rect(view);
+            modal["order"] = json!(order);
+            modal["background"] = json!({"draws": view["draws"], "alpha": view["alpha"]});
+        }
+    }
     Ok(json!({
-        "frame": {"x": at.x, "y": at.y, "width": outer.width, "height": outer.height},
-        "content": {"x": 0.0, "y": 0.0, "width": inner.width, "height": inner.height},
-        "scale": scale,
-        "key": key,
-        "controls": controls,
+        "frame": facts["frame"],
+        "content": {"x": 0.0, "y": 0.0, "width": facts["content"]["width"], "height": facts["content"]["height"]},
+        "scale": facts["scale"],
+        "key": facts["key"],
+        "active": facts["active"],
+        "children": facts["children"],
+        "controls": facts["controls"],
         "surfaces": surfaces,
         "modal": modal,
     }))
@@ -624,7 +640,15 @@ impl Host {
         let unknown = || Failure::new(UNKNOWN_NAME, format!("{name} is not declared"));
         match (method, name) {
             ("status.get", "host.window") => window_status(window),
-            ("status.watch" | "status.unwatch", "host.window") => Ok(Value::Null),
+            ("status.get", "host.screens") => {
+                let platform = platform::current().map_err(internal)?;
+                on_main(window, move || platform.screens()).map_err(internal)
+            }
+            ("status.get", "host.dock") => {
+                let platform = platform::current().map_err(internal)?;
+                on_main(window, move || platform.dock_items()).map_err(internal)
+            }
+            ("status.watch" | "status.unwatch", "host.window" | "host.screens" | "host.dock") => Ok(Value::Null),
             ("command.run", _) => {
                 let arguments = match params.get("params") {
                     None | Some(Value::Null) => Map::new(),
@@ -659,6 +683,21 @@ impl Host {
                 None => Err(Failure::new(MISSING_DOCUMENT, "the main page is gone")),
             },
             "host.window.presented" => presented(window, TIMEOUT).map(|_| Value::Null),
+            "host.window.move" => (|| {
+                let x = number(arguments, "x")?;
+                let y = number(arguments, "y")?;
+                let platform = platform::current().map_err(internal)?;
+                let handle = native_owner(window).map_err(internal)?;
+                on_main(window, move || platform.move_window(handle, x, y)).map_err(internal)?;
+                Ok(Value::Null)
+            })(),
+            "host.dock.select" => (|| {
+                let title = arguments.get("title").and_then(Value::as_str)
+                    .ok_or_else(|| Failure::params("title must be a string"))?.to_string();
+                let platform = platform::current().map_err(internal)?;
+                on_main(window, move || platform.dock_select(&title)).map_err(internal)?;
+                Ok(Value::Null)
+            })(),
             "host.hit" => (|| hit(window, number(arguments, "x")?, number(arguments, "y")?))(),
             "host.quit" => {
                 self.0.exit(0);

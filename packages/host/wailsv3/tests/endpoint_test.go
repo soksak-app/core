@@ -20,6 +20,8 @@ import (
 type fakeBackend struct {
 	mu       sync.Mutex
 	requests []string
+	// bodies 는 페이지 요청의 params 다. requests 와 같은 순서다.
+	bodies   []string
 	commands []string
 	keys     []host.KeyInput
 	pointers []host.PointerInput
@@ -38,6 +40,7 @@ func (b *fakeBackend) HasWindow(window string) bool { return window == "main" }
 func (b *fakeBackend) PageRequest(window, method string, params json.RawMessage) (json.RawMessage, error) {
 	b.mu.Lock()
 	b.requests = append(b.requests, method)
+	b.bodies = append(b.bodies, string(params))
 	b.mu.Unlock()
 	if method == "status.unwatch" {
 		b.unwatched <- struct{}{}
@@ -359,7 +362,7 @@ func TestWatchersBelongToTheirConnection(t *testing.T) {
 	if got := call(t, first, 1, "status.watch", watch); got.Error != nil {
 		t.Fatalf("status.watch: %+v", got)
 	}
-	endpoint.StatusChanged("main", "core.layout", 1)
+	endpoint.StatusChanged("main", "core.layout", "", 1)
 	got, err := receive(t, first)
 	if err != nil || got.Method != "status.changed" || got.ID != nil {
 		t.Fatalf("watching connection got %+v (%v)", got, err)
@@ -379,7 +382,7 @@ func TestWatchersBelongToTheirConnection(t *testing.T) {
 	if got := call(t, first, 3, "status.unwatch", watch); got.Error != nil {
 		t.Fatalf("status.unwatch: %+v", got)
 	}
-	endpoint.StatusChanged("main", "core.layout", 2)
+	endpoint.StatusChanged("main", "core.layout", "", 2)
 	got, err = receive(t, second)
 	if err != nil || got.Method != "status.changed" {
 		t.Fatalf("second connection got %+v (%v)", got, err)
@@ -404,5 +407,63 @@ func TestWatchersBelongToTheirConnection(t *testing.T) {
 	case <-backend.unwatched:
 	case <-time.After(2 * time.Second):
 		t.Fatalf("page did not receive status.unwatch after the last watcher closed")
+	}
+}
+
+func TestSurfaceWatchesAreSeparate(t *testing.T) {
+	backend := newFakeBackend()
+	endpoint, address, _ := serve(t, backend)
+	conn := dial(t, address)
+	named := map[string]any{"window": "main", "name": "probe.lines", "surface": "tab-a"}
+	chosen := map[string]any{"window": "main", "name": "probe.lines"}
+	if got := call(t, conn, 1, "status.watch", named); got.Error != nil {
+		t.Fatalf("status.watch with surface: %+v", got)
+	}
+	if got := call(t, conn, 2, "status.watch", chosen); got.Error != nil {
+		t.Fatalf("status.watch without surface: %+v", got)
+	}
+	if got := call(t, conn, 3, "status.watch", map[string]any{"window": "main", "name": "probe.lines", "surface": ""}); got.Error == nil || got.Error.Code != -32602 {
+		t.Fatalf("empty surface: %+v", got)
+	}
+	backend.mu.Lock()
+	bodies := append([]string(nil), backend.bodies...)
+	backend.mu.Unlock()
+	if len(bodies) != 2 || bodies[0] != `{"name":"probe.lines","surface":"tab-a"}` || bodies[1] != `{"name":"probe.lines"}` {
+		t.Fatalf("page received %v", bodies)
+	}
+	endpoint.StatusChanged("main", "probe.lines", "tab-a", []string{"a"})
+	got, err := receive(t, conn)
+	if err != nil || got.Method != "status.changed" {
+		t.Fatalf("notification %+v (%v)", got, err)
+	}
+	var change map[string]any
+	if err := json.Unmarshal(got.Params, &change); err != nil || change["surface"] != "tab-a" {
+		t.Fatalf("status.changed params %s", got.Params)
+	}
+	endpoint.StatusChanged("main", "probe.lines", "", []string{"b"})
+	got, err = receive(t, conn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	change = nil
+	if err := json.Unmarshal(got.Params, &change); err != nil {
+		t.Fatal(err)
+	}
+	if _, has := change["surface"]; has {
+		t.Fatalf("a change of a watch without surface names one: %s", got.Params)
+	}
+	if got := call(t, conn, 4, "status.unwatch", named); got.Error != nil {
+		t.Fatalf("status.unwatch: %+v", got)
+	}
+	select {
+	case <-backend.unwatched:
+	case <-time.After(2 * time.Second):
+		t.Fatal("page did not receive status.unwatch")
+	}
+	backend.mu.Lock()
+	last := backend.bodies[len(backend.bodies)-1]
+	backend.mu.Unlock()
+	if last != `{"name":"probe.lines","surface":"tab-a"}` {
+		t.Fatalf("unwatch params %s", last)
 	}
 }

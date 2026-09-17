@@ -75,7 +75,7 @@ class Client {
   #nextId = 1;
   #pending = new Map();
   #listeners = new Map();
-  // window 와 name 별 status.watch 사용 수. 호스트는 연결당 하나의 감시만 기록하므로 마지막 사용이 끝날 때 unwatch 한다.
+  // window, name, surface 별 status.watch 사용 수. 호스트는 연결당 하나의 감시만 기록하므로 마지막 사용이 끝날 때 unwatch 한다.
   #watches = new Map();
   #closed = null;
   #ended;
@@ -120,9 +120,11 @@ class Client {
   /**
    * status.watch 로 값을 감시하고 predicate 를 만족하는 첫 값으로 이행한다.
    * 현재 값도 검사한다. timeout(ms) 안에 만족하지 않으면 code "ETIMEDOUT" 로 거부한다.
+   * surface 는 표면 페이지가 등록한 이름의 표면을 지정한다.
    */
-  watch(window, name, predicate, { timeout = 10000 } = {}) {
-    const key = JSON.stringify([window, name]);
+  watch(window, name, predicate, { timeout = 10000, surface } = {}) {
+    const key = JSON.stringify([window, name, surface ?? null]);
+    const target = surface === undefined ? { window, name } : { window, name, surface };
     return new Promise((resolve, reject) => {
       let done = false;
       let timer;
@@ -132,7 +134,7 @@ class Client {
         clearTimeout(timer);
         off();
         offClose();
-        this.#release(key, window, name);
+        this.#release(key, target);
         if (error) reject(error);
         else resolve(value);
       };
@@ -148,7 +150,7 @@ class Client {
       };
       // status.watch 응답 전에 도착하는 알림도 받도록 먼저 등록한다.
       const off = this.on("status.changed", (params) => {
-        if (params?.window === window && params?.name === name) check(params.value);
+        if (params?.window === window && params?.name === name && params?.surface === surface) check(params.value);
       });
       const offClose = this.#onClose((error) => finish(error));
       if (timeout !== Infinity) {
@@ -158,8 +160,8 @@ class Client {
           finish(error);
         }, timeout);
       }
-      this.#acquire(key, window, name)
-        .then(() => (done ? undefined : this.request("status.get", { window, name })))
+      this.#acquire(key, target)
+        .then(() => (done ? undefined : this.request("status.get", target)))
         .then((value) => {
           if (!done) check(value);
         })
@@ -192,13 +194,13 @@ class Client {
     return () => this.#closeListeners.delete(fn);
   }
 
-  #acquire(key, window, name) {
+  #acquire(key, target) {
     const entry = this.#watches.get(key);
     if (entry) {
       entry.count += 1;
       return entry.ready;
     }
-    const created = { count: 1, ready: this.request("status.watch", { window, name }) };
+    const created = { count: 1, ready: this.request("status.watch", target) };
     this.#watches.set(key, created);
     created.ready.catch(() => {
       if (this.#watches.get(key) === created) this.#watches.delete(key);
@@ -206,7 +208,7 @@ class Client {
     return created.ready;
   }
 
-  #release(key, window, name) {
+  #release(key, target) {
     const entry = this.#watches.get(key);
     if (!entry) return;
     entry.count -= 1;
@@ -214,7 +216,7 @@ class Client {
     this.#watches.delete(key);
     if (this.#closed) return;
     entry.ready.then(
-      () => this.request("status.unwatch", { window, name }).catch(() => {}),
+      () => this.request("status.unwatch", target).catch(() => {}),
       () => {},
     );
   }

@@ -257,7 +257,7 @@ func diagnosticTranscript(e *Endpoint, c *endpointConn, params json.RawMessage) 
 	}
 	e.watching.Lock()
 	defer e.watching.Unlock()
-	t := topic{window, logTopic}
+	t := topic{window, logTopic, ""}
 	if !e.subscribe(c, t, *p.On) {
 		return nil, nil
 	}

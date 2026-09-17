@@ -73,6 +73,10 @@ async function selectWindow(c, requested) {
 }
 
 const windowProperty = { type: "string", description: "Window identifier from windows_list. Defaults to the selected window." };
+const surfaceProperty = {
+  type: "string",
+  description: "Surface identifier from status core.surfaces, for names that surface pages register. Defaults to the page's choice.",
+};
 
 function nameProperty(entries, description) {
   const names = entries.map((entry) => entry.name);
@@ -99,7 +103,7 @@ function buildTools(window, exposure) {
     {
       name: "status_get",
       description: `Returns the current value of a status in window ${window}.\n${describe(status)}`,
-      inputSchema: object({ window: windowProperty, name: nameProperty(status, "Status name.") }, ["name"]),
+      inputSchema: object({ window: windowProperty, name: nameProperty(status, "Status name."), surface: surfaceProperty }, ["name"]),
       annotations: { readOnlyHint: true },
     },
     {
@@ -111,6 +115,7 @@ function buildTools(window, exposure) {
         {
           window: windowProperty,
           name: nameProperty(status, "Status name."),
+          surface: surfaceProperty,
           equals: { description: "Value to wait for." },
           timeout: { type: "number", description: "Timeout in milliseconds." },
         },
@@ -123,7 +128,7 @@ function buildTools(window, exposure) {
     tools.push({
       name: COMMAND_PREFIX + command.name.replaceAll(".", "_"),
       description: `Runs command ${command.name}${command.registered ? "" : " (not registered)"}: ${command.description}`,
-      inputSchema: object({ window: windowProperty, params: command.params ?? { type: "object" } }),
+      inputSchema: object({ window: windowProperty, surface: surfaceProperty, params: command.params ?? { type: "object" } }),
     });
   }
   tools.push(
@@ -131,7 +136,7 @@ function buildTools(window, exposure) {
       name: "dom_rect",
       description: `Returns the rectangle of a declared DOM element in CSS pixels and its document origin in window coordinates.\n${describe(dom)}`,
       inputSchema: object(
-        { window: windowProperty, name: nameProperty(dom, "DOM entry name."), index: { type: "integer", description: "Element index for entries with many elements." } },
+        { window: windowProperty, name: nameProperty(dom, "DOM entry name."), surface: surfaceProperty, index: { type: "integer", description: "Element index for entries with many elements." } },
         ["name"],
       ),
       annotations: { readOnlyHint: true },
@@ -143,6 +148,7 @@ function buildTools(window, exposure) {
         {
           window: windowProperty,
           name: nameProperty(dom, "DOM entry name."),
+          surface: surfaceProperty,
           index: { type: "integer" },
           action: { type: "string", enum: ["click", "input", "dispatch"] },
           value: { type: "string", description: "Value for the input action." },
@@ -219,16 +225,16 @@ async function callTool(params) {
       const window = await selectWindow(c, args.window);
       switch (name) {
         case "status_get":
-          value = await c.request("status.get", withWindow(window, args, ["name"]));
+          value = await c.request("status.get", withWindow(window, args, ["name", "surface"]));
           break;
         case "status_watch_once":
           value = await watchOnce(c, window, args);
           break;
         case "dom_rect":
-          value = await c.request("dom.rect", withWindow(window, args, ["name", "index"]));
+          value = await c.request("dom.rect", withWindow(window, args, ["name", "surface", "index"]));
           break;
         case "dom_act":
-          value = await c.request("dom.act", withWindow(window, args, ["name", "index", "action", "value", "event"]));
+          value = await c.request("dom.act", withWindow(window, args, ["name", "surface", "index", "action", "value", "event"]));
           break;
         case "input_pointer":
           value = await c.request("input.pointer", withWindow(window, args, ["x", "y", "phase", "button", "deltaX", "deltaY", "activate"]));
@@ -238,7 +244,7 @@ async function callTool(params) {
           break;
         default:
           value = await c.request("command.run", {
-            window,
+            ...withWindow(window, args, ["surface"]),
             name: name.slice(COMMAND_PREFIX.length).replaceAll("_", "."),
             params: args.params ?? {},
           });
@@ -254,18 +260,21 @@ async function callTool(params) {
 async function watchOnce(c, window, args) {
   if (typeof args.name !== "string") throw new Error("name is required");
   const timeout = args.timeout ?? 10000;
+  const surface = args.surface;
   if ("equals" in args) {
-    return c.watch(window, args.name, (value) => isDeepStrictEqual(value, args.equals), { timeout });
+    return c.watch(window, args.name, (value) => isDeepStrictEqual(value, args.equals), { timeout, surface });
   }
   // 현재 값을 건너뛰고 다음 변경 알림의 값을 반환한다.
   let changed;
   const off = c.on("status.changed", (params) => {
-    if (changed === undefined && params?.window === window && params?.name === args.name) changed = { value: params.value };
+    if (changed === undefined && params?.window === window && params?.name === args.name && params?.surface === surface) {
+      changed = { value: params.value };
+    }
   });
   try {
     // 이 수신 함수가 watch 의 수신 함수보다 먼저 등록되었으므로, 알림 값으로 predicate 가 호출될 때 changed 가 이미 있다.
     // status.get 의 현재 값으로 호출될 때는 알림이 없으면 만족하지 않는다.
-    await c.watch(window, args.name, () => changed !== undefined, { timeout });
+    await c.watch(window, args.name, () => changed !== undefined, { timeout, surface });
     return changed.value;
   } finally {
     off();

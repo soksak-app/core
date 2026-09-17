@@ -155,3 +155,11 @@ test("a missing endpoint.json exits non-zero naming the file", async (t) => {
   assert.equal(result.code, 1);
   assert.match(result.stderr, /\/nonexistent\/soksak\/endpoint\.json/);
 });
+
+test("--surface names the surface of status, run, and dom requests", async (t) => {
+  const { server, dir } = await fixture(t);
+  assert.equal((await run(["status", "core.screen", "--window", "main", "--surface", "tab-a", ...dir])).code, 0);
+  assert.equal((await run(["run", "core.project.open", "--window", "main", "--surface", "tab-a", ...dir])).code, 0);
+  assert.equal((await run(["dom", "rect", "core.tab", "--window", "main", "--surface", "tab-a", ...dir])).code, 0);
+  assert.deepEqual(server.requests.map((m) => m.params.surface), ["tab-a", "tab-a", "tab-a"]);
+});

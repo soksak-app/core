@@ -13,7 +13,7 @@
 | `WKWebView._setOverrideDeviceScaleFactor:` | 두 호스트의 [`webview_geometry.m`](../../native/darwin/src/webview_geometry.m), `webviewAttachSurface` | 장치 픽셀 컨테이너의 로컬 한 단위를 backing 픽셀 하나로 렌더링 |
 | `WKWebView._doAfterNextPresentationUpdate:` | 두 호스트의 [`surface_layout.m`](../../native/darwin/src/surface_layout.m), `surfaceLayoutAfterPresentation`; 프로브와 독립 입력 검사에서도 사용 | 네이티브 좌표 커밋 또는 렌더링 결과 측정 전에 웹뷰 표시 완료 확인 |
 | `WKWebView._setIgnoresMouseMoveEvents:` | 두 호스트의 [`webview_input.m`](../../native/darwin/src/webview_input.m), 등록·포인터 처리·제거 | 겹친 웹뷰의 포인터 추적을 AppKit 히트테스트 결과로 제한 |
-| `WKWebView` KVC `drawsBackground` (`_drawsBackground` / `_setDrawsBackground:`) | Wails [`webview.m`](../../packages/host/wailsv3/src/platform/darwin/webview.m)의 모달 생성; 두 호스트 [`window_probe.m`](../../native/darwin/src/window_probe.m)의 진단 조회 | 모달 웹뷰의 불투명 배경 비활성화 및 상태 조회 |
+| `WKWebView` KVC `drawsBackground` (`_drawsBackground` / `_setDrawsBackground:`) | Wails [`webview.m`](../../packages/host/wailsv3/src/platform/darwin/webview.m)의 모달 생성; 두 호스트 [`window_facts.m`](../../native/darwin/src/window_facts.m)의 `host.window` 조회 | 모달 웹뷰의 불투명 배경 비활성화 및 상태 보고 |
 | `WKWebViewConfiguration` KVC `drawsBackground` (`_setDrawsBackground:`) | Tauri → Wry 웹뷰 생성; [`modals.rs`](../../packages/host/tauriv2/src/modals.rs) `show`가 `background_color(Color(0, 0, 0, 0))` 요청; 메인도 배경색 설정 | 웹뷰 초기화 전에 배경 그리기 설정 |
 | `WKWebView._doAfterActivityStateUpdate:` | 두 호스트; [`input_inject.m`](../../native/darwin/src/input_inject.m), `sp_input_activate` | 창의 모든 웹뷰가 활성 창 상태를 웹 프로세스에 보낸 뒤에만 호버 이동을 전달 |
 | `CGEventField` 51(창 번호), `CGEventSetWindowLocation` | 두 호스트; [`input_inject.m`](../../native/darwin/src/input_inject.m), `sp_input_pointer`의 스크롤 | 창과 창 좌표를 가진 스크롤 `NSEvent` 생성 |

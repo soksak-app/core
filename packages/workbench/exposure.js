@@ -9,14 +9,20 @@
 // 받는 경로와 표면이 없다.
 import { host } from "@soksak/runtime";
 import {
-  EXPOSE_KINDS, EXPOSURE, EXPOSURE_ERRORS, ExposureError, METHOD_KINDS, declarationKey, declarationMap, exposureEntries,
-  replyPayload, validateExposes, validateExposureFile,
+  EXPOSE_KINDS, EXPOSURE, EXPOSURE_ERRORS, ExposureError, METHOD_KINDS, SURFACE_CORE, declarationKey, declarationMap,
+  exposureEntries, replyPayload, validateExposes, validateExposureFile,
 } from "@soksak/plugin-api";
 
 /** 코어 dom 항목의 요소. 메인 문서에서 data-expose 속성으로 찾는다. */
 const byAttribute = (name) => () => [...document.querySelectorAll(`[data-expose="${name}"]`)];
 
 const ownerOf = (name) => name.slice(0, name.indexOf("."));
+
+/** 표면 문서가 등록하는 이름인지. 플러그인 이름과 core.surface.* 이다. */
+const surfaceName = (name) => ownerOf(name) !== "core" || name.startsWith(SURFACE_CORE);
+
+/** 감시 하나의 키. 표면을 지정한 감시와 지정하지 않은 감시는 서로 다르다. */
+const watchKey = (name, surface) => JSON.stringify([name, surface ?? null]);
 
 /**
  * 등록소 하나를 만든다.
@@ -37,13 +43,13 @@ export function createRegistry({ call = null } = {}) {
   const methods = new Map();
   /* 선언 키마다 그 항목을 등록한 표면. 등록 순서를 유지한다. */
   const surfaces = new Map();
-  /* 감시 중인 표면 status. 이름마다 따라가는 표면과 마지막 버전. */
+  /* 감시 중인 표면 status. 감시 키마다 따라가는 표면, 요청한 표면, 마지막 버전. */
   const following = new Map();
   let options = { surfacePlugin: () => null, preferred: () => [], origin: () => null };
   let forwards = 0;
 
-  const changed = (name, value) => {
-    if (call) call("exposureChanged", { name, value });
+  const changed = (name, value, surface) => {
+    if (call) call("exposureChanged", surface === undefined ? { name, value } : { name, surface, value });
   };
 
   async function forward(surface, method, params) {
@@ -53,9 +59,16 @@ export function createRegistry({ call = null } = {}) {
     return reply?.result ?? null;
   }
 
-  /** 항목을 등록한 표면 중 요청을 받을 표면. */
-  function pick(kind, name) {
+  /** 항목을 등록한 표면 중 요청을 받을 표면. 요청이 표면을 지정하면 그 표면이다. */
+  function pick(kind, name, requested) {
     const owners = surfaces.get(declarationKey(kind, name));
+    if (requested !== undefined) {
+      if (typeof requested !== "string") throw new ExposureError(EXPOSURE_ERRORS.invalidParams, "surface must be a string");
+      if (!owners?.has(requested)) {
+        throw new ExposureError(EXPOSURE_ERRORS.unregistered, `surface ${requested} has not registered ${kind} ${name}`);
+      }
+      return requested;
+    }
     if (!owners?.size) throw new ExposureError(EXPOSURE_ERRORS.unregistered, `${kind} ${name} is not registered`);
     const first = options.preferred().find((surface) => owners.has(surface));
     return first ?? [...owners.keys()].at(-1);
@@ -66,19 +79,25 @@ export function createRegistry({ call = null } = {}) {
    * exposureChanged 를 호출한다. 호스트는 status.next 에 대기 시간을 두지 않는다.
    * 감시가 끝나거나 전달이 실패하면(표면이 사라진 경우 등) 멈춘다.
    */
-  async function follow(name, watch) {
-    while (following.get(name) === watch) {
+  async function follow(key, name, watch) {
+    while (following.get(key) === watch) {
       let answer;
       try {
         answer = await forward(watch.surface, "status.next", { name, version: watch.version });
       } catch {
         break;
       }
-      if (following.get(name) !== watch || answer?.closed) break;
+      if (following.get(key) !== watch || answer?.closed) break;
       watch.version = answer.version;
-      changed(name, answer.value);
+      changed(name, answer.value, watch.requested);
     }
-    if (following.get(name) === watch) following.delete(name);
+    if (following.get(key) === watch) following.delete(key);
+  }
+
+  /** 같은 표면을 따라가는 다른 감시가 없으면 표면의 감시를 끝낸다. */
+  async function release(watch, name) {
+    const shared = [...following.values()].some((other) => other.surface === watch.surface && other.name === name);
+    if (!shared) await forward(watch.surface, "status.unwatch", { name }).catch(() => {});
   }
 
   async function answer(method, params) {
@@ -87,20 +106,23 @@ export function createRegistry({ call = null } = {}) {
     const name = params?.name;
     const kind = METHOD_KINDS[method];
     const found = kind && typeof name === "string" ? declared.get(declarationKey(kind, name)) : undefined;
-    if (!found || ownerOf(name) === "core") return core.answer(method, params, changed);
+    if (!found || !surfaceName(name)) return core.answer(method, params, changed);
+    const requested = params.surface;
+    const key = watchKey(name, requested);
     if (method === "status.unwatch") {
-      const watch = following.get(name);
-      following.delete(name);
-      if (watch) await forward(watch.surface, method, { name }).catch(() => {});
+      const watch = following.get(key);
+      following.delete(key);
+      if (watch) await release(watch, name);
       return null;
     }
-    if (method === "status.watch" && following.has(name)) return null;
-    const surface = pick(kind, name);
-    const result = await forward(surface, method, params);
+    if (method === "status.watch" && following.has(key)) return null;
+    const surface = pick(kind, name, requested);
+    const result = await forward(surface, method, method === "status.watch" ? { name } : params);
     if (method === "status.watch") {
-      const watch = { surface, version: 0 };
-      following.set(name, watch);
-      follow(name, watch);
+      // 표면의 문서는 이름마다 값 하나를 따라가므로 각 감시는 버전 0 부터 받는다.
+      const watch = { surface, requested, name, version: 0 };
+      following.set(key, watch);
+      follow(key, name, watch);
     }
     if (method === "dom.rect") return { ...result, document: options.origin(surface) };
     return result;
@@ -113,8 +135,8 @@ export function createRegistry({ call = null } = {}) {
     for (const [key, { kind, declaration }] of declared) {
       out[keyOf[kind]].push({
         ...declaration,
-        registered: ownerOf(declaration.name) === "core"
-          ? core.registered(kind, declaration.name) : (surfaces.get(key)?.size ?? 0) > 0,
+        registered: surfaceName(declaration.name)
+          ? (surfaces.get(key)?.size ?? 0) > 0 : core.registered(kind, declaration.name),
       });
     }
     return out;
@@ -162,11 +184,11 @@ export function createRegistry({ call = null } = {}) {
         return;
       }
       const key = declarationKey(kind, name);
-      if (!declared.has(key) || ownerOf(name) === "core") {
+      if (!declared.has(key) || !surfaceName(name)) {
         throw new Error(`surface ${surface} registered undeclared ${kind} ${name}`);
       }
       const plugin = options.surfacePlugin(surface);
-      if (plugin !== ownerOf(name)) {
+      if (plugin === null || (ownerOf(name) !== "core" && plugin !== ownerOf(name))) {
         throw new Error(`surface ${surface} of plugin ${plugin} cannot register ${name}`);
       }
       if (!surfaces.has(key)) surfaces.set(key, new Map());

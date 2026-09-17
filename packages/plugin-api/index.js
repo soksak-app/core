@@ -16,6 +16,9 @@ export const RUNTIME = "runtime";
 /** 코어가 공개하는 항목의 선언 파일. 워크벤치 패키지 루트에 있다. */
 export const EXPOSURE = "exposure.json";
 
+/** 표면 문서가 등록하는 코어 항목의 이름 접두사. 다른 코어 항목은 메인 문서가 등록한다. */
+export const SURFACE_CORE = "core.surface.";
+
 /** 패키지 안의 경로를 문서 루트 기준 경로로 반환한다. */
 export const modulePath = (name, path) => `modules/${name}/${path}`;
 

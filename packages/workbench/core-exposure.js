@@ -13,6 +13,7 @@ import {
 import { defaults, overridden, reset, set, settingProject, value } from "./settings.js";
 import { closeSettings, onSettingsDrawn, openSettings, settingsModalState } from "./settings-ui.js";
 import { latest, seated } from "./compositor.js";
+import { modalState, onModalState } from "./host.js";
 import { windows } from "@soksak/runtime";
 
 /* 감시 중인 코어 status 의 수신자. */
@@ -170,6 +171,7 @@ export async function installCoreExposure({ library }) {
   status("core.picker", pickerState);
   status("core.library", () => library.state());
   status("core.verify", () => verified);
+  status("core.modal", modalState);
 
   registry.command("core.settings.set", async ({ patch, scope }) => { await set(patch, scope); });
   registry.command("core.settings.reset", async ({ key }) => { await reset(key); });
@@ -216,6 +218,7 @@ export async function installCoreExposure({ library }) {
 
   onPicker(coreChanged);
   onSettingsDrawn(coreChanged);
+  onModalState(coreChanged);
 
   await connectExposure({ surfacePlugin, preferred, origin });
 }

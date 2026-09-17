@@ -8,6 +8,7 @@ use std::fs::Metadata;
 use std::path::Path;
 
 use tauri::webview::PlatformWebview;
+use serde_json::Value;
 use tauri::Window;
 
 use std::time::Duration;
@@ -87,11 +88,17 @@ impl Platform for Darwin {
     fn window_numbers(&self, window: &Window) -> Result<Vec<isize>, String> {
         Ok(window::numbers(window::handle(window)?))
     }
-    fn window_buttons(&self, window: Handle) -> Result<Vec<(Frame, bool)>, String> {
-        Ok(window::buttons(window))
-    }
     fn hit(&self, window: Handle, x: f64, y: f64) -> Result<Hit, String> {
         input::hit(window, x, y)
+    }
+    fn window_facts(&self, window: Handle) -> Result<Value, String> {
+        window::facts(window)
+    }
+    fn move_window(&self, window: Handle, x: f64, y: f64) -> Result<(), String> {
+        window::move_to(window, x, y)
+    }
+    fn screens(&self) -> Result<Value, String> {
+        window::screens()
     }
     fn stays_open_without_windows(&self) -> bool {
         true
@@ -126,9 +133,6 @@ impl Platform for Darwin {
     }
     fn view_id(&self, view: &PlatformWebview) -> Result<Handle, String> {
         Ok(webview::id(view))
-    }
-    fn webview_layer(&self, view: &PlatformWebview) -> Result<(bool, usize), String> {
-        Ok(webview::layer(view))
     }
 
     fn begin_layout(&self, window: Handle, ticket: u64, ready: Box<dyn Fn(bool)>) -> Result<(), String> {
@@ -210,6 +214,12 @@ impl Platform for Darwin {
 
     fn install_dock_menu(&self, new_window: Box<dyn Fn()>) -> Result<(), String> {
         dock::install(new_window)
+    }
+    fn dock_items(&self) -> Result<Value, String> {
+        dock::items()
+    }
+    fn dock_select(&self, title: &str) -> Result<(), String> {
+        dock::select(title)
     }
 
     fn directory_identity(&self, _path: &Path, metadata: &Metadata) -> Result<String, String> {

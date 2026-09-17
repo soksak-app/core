@@ -7,6 +7,7 @@ use std::fs::Metadata;
 use std::path::Path;
 
 use tauri::webview::PlatformWebview;
+use serde_json::Value;
 use tauri::Window;
 
 use std::time::Duration;
@@ -38,11 +39,17 @@ impl Platform for Windows {
     fn window_numbers(&self, window: &Window) -> Result<Vec<isize>, String> {
         unsupported::window_numbers(window)
     }
-    fn window_buttons(&self, window: Handle) -> Result<Vec<(Frame, bool)>, String> {
-        unsupported::window_buttons(window)
-    }
     fn hit(&self, window: Handle, x: f64, y: f64) -> Result<Hit, String> {
         unsupported::hit(window, x, y)
+    }
+    fn window_facts(&self, window: Handle) -> Result<Value, String> {
+        unsupported::window_facts(window)
+    }
+    fn move_window(&self, window: Handle, x: f64, y: f64) -> Result<(), String> {
+        unsupported::move_window(window, x, y)
+    }
+    fn screens(&self) -> Result<Value, String> {
+        unsupported::screens()
     }
     /// Windows 애플리케이션은 마지막 창이 닫히면 종료한다.
     fn stays_open_without_windows(&self) -> bool {
@@ -72,9 +79,6 @@ impl Platform for Windows {
     }
     fn view_id(&self, view: &PlatformWebview) -> Result<Handle, String> {
         unsupported::view_id(view)
-    }
-    fn webview_layer(&self, view: &PlatformWebview) -> Result<(bool, usize), String> {
-        unsupported::webview_layer(view)
     }
 
     fn begin_layout(&self, window: Handle, ticket: u64, ready: Box<dyn Fn(bool)>) -> Result<(), String> {
@@ -146,6 +150,12 @@ impl Platform for Windows {
 
     fn install_dock_menu(&self, new_window: Box<dyn Fn()>) -> Result<(), String> {
         unsupported::install_dock_menu(new_window)
+    }
+    fn dock_items(&self) -> Result<Value, String> {
+        unsupported::dock_items()
+    }
+    fn dock_select(&self, title: &str) -> Result<(), String> {
+        unsupported::dock_select(title)
     }
 
     fn directory_identity(&self, path: &Path, _metadata: &Metadata) -> Result<String, String> {

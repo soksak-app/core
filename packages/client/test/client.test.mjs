@@ -194,3 +194,25 @@ test("a missing endpoint.json is an error naming the file", async (t) => {
 test("rpcError helper keeps the code", () => {
   assert.equal(rpcError(1002, "x").code, 1002);
 });
+
+test("a watch with a surface requests that surface and ignores changes of other watches", async (t) => {
+  let watcher = null;
+  let watched;
+  const ready = new Promise((resolve) => (watched = resolve));
+  const server = await startFakeEndpoint({
+    "status.watch": (params, connection) => { watcher = connection; return null; },
+    "status.get": () => { watched(); return []; },
+    "status.unwatch": () => null,
+  });
+  t.after(() => server.close());
+  const client = await connect({ configDir: server.configDir });
+  t.after(() => client.close());
+  const waiting = client.watch("main", "probe.lines", (lines) => lines.includes("x"), { surface: "tab-a", timeout: 5000 });
+  await ready;
+  watcher.notify("status.changed", { window: "main", name: "probe.lines", value: ["x"] });
+  watcher.notify("status.changed", { window: "main", name: "probe.lines", surface: "tab-b", value: ["x"] });
+  watcher.notify("status.changed", { window: "main", name: "probe.lines", surface: "tab-a", value: ["x", "y"] });
+  assert.deepEqual(await waiting, ["x", "y"]);
+  assert.deepEqual(server.requests.filter((m) => m.method !== "status.unwatch").map((m) => m.params),
+    Array(2).fill({ window: "main", name: "probe.lines", surface: "tab-a" }));
+});

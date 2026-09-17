@@ -96,20 +96,3 @@ pub fn id(webview: &PlatformWebview) -> Handle {
     webview.inner() as Handle
 }
 
-/// 웹뷰의 표시 여부와 부모 뷰의 하위 뷰 중 순서를 반환한다. 순서가 클수록 위에 그린다.
-pub fn layer(webview: &PlatformWebview) -> (bool, usize) {
-    unsafe {
-        let view = webview.inner() as *mut AnyObject;
-        if view.is_null() {
-            return (false, 0);
-        }
-        let hidden: bool = msg_send![view, isHiddenOrHasHiddenAncestor];
-        let parent: *mut AnyObject = msg_send![view, superview];
-        if parent.is_null() {
-            return (!hidden, 0);
-        }
-        let siblings: *mut AnyObject = msg_send![parent, subviews];
-        let index: usize = msg_send![siblings, indexOfObject: view];
-        (!hidden, index)
-    }
-}

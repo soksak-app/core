@@ -8,9 +8,9 @@ const usage = `usage: soksak <command> [options]
 commands:
   windows
   list --window W
-  status NAME --window W [--watch]
-  run NAME --window W [--params JSON]
-  dom rect|click|input NAME --window W [--index N] [--value V]
+  status NAME --window W [--surface S] [--watch]
+  run NAME --window W [--surface S] [--params JSON]
+  dom rect|click|input NAME --window W [--surface S] [--index N] [--value V]
   input pointer --window W --x X --y Y --phase move|down|drag|up|scroll [--button left|right] [--delta-x N] [--delta-y N] [--activate]
   input key --window W --key K --phase down|up [--text T] [--modifiers shift,control,option,command]
 
@@ -20,6 +20,7 @@ common options:
 const options = {
   "config-dir": { type: "string" },
   window: { type: "string" },
+  surface: { type: "string" },
   watch: { type: "boolean" },
   params: { type: "string" },
   index: { type: "string" },
@@ -73,7 +74,11 @@ function plan(positionals, values) {
       return { method: "exposure.list", params: { window: window() } };
     case "status": {
       const name = positional(positionals, 1, "NAME");
-      return { method: values.watch ? "status.watch" : "status.get", params: { window: window(), name }, watch: values.watch };
+      return {
+        method: values.watch ? "status.watch" : "status.get",
+        params: compact({ window: window(), name, surface: values.surface }),
+        watch: values.watch,
+      };
     }
     case "run": {
       const name = positional(positionals, 1, "NAME");
@@ -85,12 +90,12 @@ function plan(positionals, values) {
           throw new UsageError(`--params is not valid JSON: ${error.message}`);
         }
       }
-      return { method: "command.run", params: { window: window(), name, params } };
+      return { method: "command.run", params: compact({ window: window(), name, surface: values.surface, params }) };
     }
     case "dom": {
       const action = positional(positionals, 1, "dom action");
       const name = positional(positionals, 2, "NAME");
-      const base = { window: window(), name, index: number(values, "index") };
+      const base = { window: window(), name, surface: values.surface, index: number(values, "index") };
       if (action === "rect") return { method: "dom.rect", params: compact(base) };
       if (action === "click") return { method: "dom.act", params: compact({ ...base, action: "click" }) };
       if (action === "input") return { method: "dom.act", params: compact({ ...base, action: "input", value: required(values, "value") }) };
@@ -140,7 +145,7 @@ function plan(positionals, values) {
 }
 
 // status --watch: 현재 값과 이후 변경마다 한 줄씩 출력한다. 연결이 끊기면 오류로 끝난다.
-async function watch(client, { window, name }, stdout) {
+async function watch(client, { window, name, surface }, stdout) {
   let stopped = false;
   const stop = () => {
     stopped = true;
@@ -152,7 +157,7 @@ async function watch(client, { window, name }, stdout) {
     await client.watch(window, name, (value) => {
       stdout.write(`${JSON.stringify(value)}\n`);
       return false;
-    }, { timeout: Infinity });
+    }, { timeout: Infinity, surface });
   } catch (error) {
     if (!stopped) throw error;
   }

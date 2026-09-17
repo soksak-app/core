@@ -43,22 +43,39 @@ var nullSchema = map[string]any{"type": "null"}
 
 var hostStatus = map[string]hostEntry{
 	"host.window": {
-		Description: "Window frame, content size, backing scale, key state, window buttons, native surfaces, and the open native modal.",
+		Description: "Window frame in screen coordinates, content size, backing scale, key and application active state, child window count, window buttons, native surfaces, and the open native modal.",
 		Schema: map[string]any{"type": "object", "properties": map[string]any{
 			"frame":    rectSchema,
 			"content":  rectSchema,
 			"scale":    map[string]any{"type": "number"},
 			"key":      map[string]any{"type": "boolean"},
+			"active":   map[string]any{"type": "boolean"},
+			"children": map[string]any{"type": "integer"},
 			"controls": map[string]any{"type": "array", "items": rectSchema},
 			"surfaces": map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{
 				"id": map[string]any{"type": "string"}, "frame": rectSchema,
-				"visible": map[string]any{"type": "boolean"}, "layer": map[string]any{"type": "number"},
+				"visible": map[string]any{"type": "boolean"}, "order": map[string]any{"type": "integer"},
 			}}},
 			"modal": map[string]any{"type": "object", "properties": map[string]any{
 				"id": map[string]any{"type": "string"}, "mode": map[string]any{"type": "string"},
-				"shown": map[string]any{"type": "boolean"}, "frame": rectSchema,
+				"shown": map[string]any{"type": "boolean"}, "frame": rectSchema, "order": map[string]any{"type": "integer"},
+				"background": map[string]any{"type": "object", "properties": map[string]any{
+					"draws": map[string]any{"type": "boolean"}, "alpha": map[string]any{"type": "number"},
+				}},
 			}},
 		}},
+	},
+	"host.screens": {
+		Description: "The displays in screen coordinates with their backing scale.",
+		Schema: map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{
+			"x": map[string]any{"type": "number"}, "y": map[string]any{"type": "number"},
+			"width": map[string]any{"type": "number"}, "height": map[string]any{"type": "number"},
+			"scale": map[string]any{"type": "number"},
+		}}},
+	},
+	"host.dock": {
+		Description: "The titles of the application's Dock menu items in order.",
+		Schema:      map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 	},
 }
 
@@ -69,6 +86,11 @@ var hostCommands = map[string]hostEntry{
 	"host.window.resize": {Description: "Resizes the content area.", Result: nullSchema,
 		Params: map[string]any{"type": "object", "properties": map[string]any{
 			"width": map[string]any{"type": "number"}, "height": map[string]any{"type": "number"}}}},
+	"host.window.move": {Description: "Moves the window frame origin to a point in screen coordinates.", Result: nullSchema,
+		Params: map[string]any{"type": "object", "properties": map[string]any{
+			"x": map[string]any{"type": "number"}, "y": map[string]any{"type": "number"}}}},
+	"host.dock.select": {Description: "Performs the Dock menu item with the title.", Result: nullSchema,
+		Params: map[string]any{"type": "object", "properties": map[string]any{"title": map[string]any{"type": "string"}}}},
 	"host.window.reload":    {Description: "Reloads the main page.", Params: emptyObject, Result: nullSchema},
 	"host.window.presented": {Description: "Resolves after the main page and visible application documents have presented their current geometry.", Params: emptyObject, Result: nullSchema},
 	"host.hit": {Description: "Returns the owner of a point in window coordinates.",
@@ -215,8 +237,9 @@ func (h *Host) ExposureReply(ctx context.Context, req ExposureReplyRequest) erro
 
 // ExposureChange 는 감시 중인 상태의 새 값이다.
 type ExposureChange struct {
-	Name  string          `json:"name"`
-	Value json.RawMessage `json:"value"`
+	Name    string          `json:"name"`
+	Surface string          `json:"surface"`
+	Value   json.RawMessage `json:"value"`
 }
 
 // ExposureChanged 는 메인 페이지가 알린 상태 변경을 그 상태를 감시하는 연결에 전달한다.
@@ -228,7 +251,7 @@ func (h *Host) ExposureChanged(ctx context.Context, change ExposureChange) error
 	if isHostName(change.Name) {
 		return fmt.Errorf("the page cannot change host status %s", change.Name)
 	}
-	h.endpoint.StatusChanged(s.name, change.Name, change.Value)
+	h.endpoint.StatusChanged(s.name, change.Name, change.Surface, change.Value)
 	return nil
 }
 
@@ -388,6 +411,12 @@ func (b hostBackend) HostStatus(window, name string) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	switch name {
+	case "host.screens":
+		return screens()
+	case "host.dock":
+		return dockItems()
+	}
 	return s.windowState()
 }
 
@@ -422,6 +451,32 @@ func (b hostBackend) HostCommand(window, name string, params json.RawMessage) (a
 			return nil, rpcError(codeInvalidParams, "width and height must be positive numbers")
 		}
 		s.window.SetSize(int(*p.Width), int(*p.Height))
+	case "host.window.move":
+		var p struct {
+			X, Y *float64
+		}
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, rpcError(codeInvalidParams, "%v", err)
+		}
+		if p.X == nil || p.Y == nil {
+			return nil, rpcError(codeInvalidParams, "x and y are required")
+		}
+		var moved error
+		application.InvokeSync(func() { moved = system.MoveWindow(s.window.NativeWindow(), *p.X, *p.Y) })
+		return nil, moved
+	case "host.dock.select":
+		var p struct {
+			Title *string
+		}
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, rpcError(codeInvalidParams, "%v", err)
+		}
+		if p.Title == nil {
+			return nil, rpcError(codeInvalidParams, "title is required")
+		}
+		var selected error
+		application.InvokeSync(func() { selected = system.DockSelect(*p.Title) })
+		return nil, selected
 	case "host.window.reload":
 		s.window.Reload()
 	case "host.window.presented":
@@ -522,41 +577,21 @@ func (b hostBackend) Key(window string, input KeyInput) error {
 	return delivered(ok, err)
 }
 
-// probe 는 창의 네이티브 검사 요청을 실행하고 결과를 into 로 읽는다. inspect 는 같은 UI 스레드
-// 작업에서 결과를 받은 뒤 실행한다.
-func (s *Surfaces) probe(request map[string]any, into any, inspect func()) error {
-	data, err := json.Marshal(request)
-	if err != nil {
-		return err
-	}
-	done := make(chan string, 1)
-	var started error
+// native 는 UI 스레드에서 read 로 네이티브 JSON 을 읽어 into 에 넣는다. inspect 는 같은 UI 스레드
+// 작업에서 읽은 뒤 실행한다.
+func native(read func() (string, error), into any, inspect func()) error {
+	var text string
+	var err error
 	application.InvokeSync(func() {
-		started = system.Probe(s.window.NativeWindow(), string(data), func(text string) { done <- text })
-		if inspect != nil {
+		text, err = read()
+		if err == nil && inspect != nil {
 			inspect()
 		}
 	})
-	if started != nil {
-		return started
-	}
-	var text string
-	select {
-	case text = <-done:
-	case <-time.After(pageTimeout):
-		return rpcError(codeTimeout, "native %s did not reply", request["op"])
-	}
-	var reply struct {
-		Result json.RawMessage `json:"result"`
-		Error  *string         `json:"error"`
-	}
-	if err := json.Unmarshal([]byte(text), &reply); err != nil {
+	if err != nil {
 		return err
 	}
-	if reply.Error != nil {
-		return errors.New(*reply.Error)
-	}
-	return json.Unmarshal(reply.Result, into)
+	return json.Unmarshal([]byte(text), into)
 }
 
 // frame 은 {x, y, width, height} 이다.
@@ -567,28 +602,25 @@ type frame struct {
 	Height float64 `json:"height"`
 }
 
-type probeRect struct {
-	X, Y, W, H float64
-}
-
-func (r probeRect) frame() frame { return frame{X: r.X, Y: r.Y, Width: r.W, Height: r.H} }
-
-// probeState 는 네이티브 state 검사의 결과 중 사용하는 값이다.
-type probeState struct {
-	Frame    probeRect
-	W, H     float64
-	Scale    float64
-	Key      bool
-	Controls []struct {
-		probeRect
-		Hidden bool
-	}
-	Views []struct {
-		probeRect
-		View   uint64
-		Hidden bool
-		Layer  int
-	}
+// windowFacts 는 native/darwin 의 sp_window_facts 결과다.
+type windowFacts struct {
+	Frame   frame `json:"frame"`
+	Content struct {
+		Width  float64 `json:"width"`
+		Height float64 `json:"height"`
+	} `json:"content"`
+	Scale    float64         `json:"scale"`
+	Key      bool            `json:"key"`
+	Active   bool            `json:"active"`
+	Children int             `json:"children"`
+	Controls []WindowControl `json:"controls"`
+	Webviews []struct {
+		frame
+		View   uint64  `json:"view"`
+		Hidden bool    `json:"hidden"`
+		Draws  bool    `json:"draws"`
+		Alpha  float64 `json:"alpha"`
+	} `json:"webviews"`
 }
 
 // WindowSurface 는 host.window 의 표면 하나다.
@@ -596,15 +628,23 @@ type WindowSurface struct {
 	ID      string `json:"id"`
 	Frame   frame  `json:"frame"`
 	Visible bool   `json:"visible"`
-	Layer   int    `json:"layer"`
+	Order   int    `json:"order"`
 }
 
-// WindowModal 은 host.window 의 열린 모달이다.
+// ModalBackground 는 모달 웹뷰의 배경 그리기 상태다.
+type ModalBackground struct {
+	Draws bool    `json:"draws"`
+	Alpha float64 `json:"alpha"`
+}
+
+// WindowModal 은 host.window 의 열린 모달이다. 뷰가 아직 없으면 Frame, Order, Background 가 null 이다.
 type WindowModal struct {
-	ID    string `json:"id"`
-	Mode  string `json:"mode"`
-	Shown bool   `json:"shown"`
-	Frame *frame `json:"frame"`
+	ID         string           `json:"id"`
+	Mode       string           `json:"mode"`
+	Shown      bool             `json:"shown"`
+	Frame      *frame           `json:"frame"`
+	Order      *int             `json:"order"`
+	Background *ModalBackground `json:"background"`
 }
 
 // WindowControl 은 창 단추 하나의 영역이다.
@@ -619,71 +659,97 @@ type WindowStatus struct {
 	Content  frame           `json:"content"`
 	Scale    float64         `json:"scale"`
 	Key      bool            `json:"key"`
+	Active   bool            `json:"active"`
+	Children int             `json:"children"`
 	Controls []WindowControl `json:"controls"`
 	Surfaces []WindowSurface `json:"surfaces"`
 	Modal    *WindowModal    `json:"modal"`
 }
 
+// viewNames 는 UI 스레드에서 표면 웹뷰의 id 와 모달 웹뷰의 주소를 읽는다.
+func (s *Surfaces) viewNames() (named map[uint64]string, modalHandle uint64) {
+	named = map[uint64]string{}
+	for view, id := range s.named {
+		named[uint64(view)] = id
+	}
+	s.mu.Lock()
+	if s.modalView != nil {
+		modalHandle = uint64(uintptr(s.modalView.handle))
+	}
+	s.mu.Unlock()
+	return named, modalHandle
+}
+
 // windowState 는 host.window 의 현재 값을 읽는다.
 func (s *Surfaces) windowState() (WindowStatus, error) {
-	var state probeState
-	named := map[uint64]string{}
+	var facts windowFacts
+	var named map[uint64]string
 	var modalHandle uint64
-	err := s.probe(map[string]any{"op": "state"}, &state, func() {
-		for view, id := range s.named {
-			named[uint64(view)] = id
-		}
-		s.mu.Lock()
-		if s.modalView != nil {
-			modalHandle = uint64(uintptr(s.modalView.handle))
-		}
-		s.mu.Unlock()
-	})
+	err := native(func() (string, error) { return system.WindowFacts(s.window.NativeWindow()) }, &facts,
+		func() { named, modalHandle = s.viewNames() })
 	if err != nil {
 		return WindowStatus{}, err
 	}
 	out := WindowStatus{
-		Frame: state.Frame.frame(), Content: frame{Width: state.W, Height: state.H},
-		Scale: state.Scale, Key: state.Key,
-		Controls: []WindowControl{}, Surfaces: []WindowSurface{},
+		Frame: facts.Frame, Content: frame{Width: facts.Content.Width, Height: facts.Content.Height},
+		Scale: facts.Scale, Key: facts.Key, Active: facts.Active, Children: facts.Children,
+		Controls: facts.Controls, Surfaces: []WindowSurface{},
 	}
-	for _, control := range state.Controls {
-		out.Controls = append(out.Controls, WindowControl{frame: control.frame(), Hidden: control.Hidden})
+	if out.Controls == nil {
+		out.Controls = []WindowControl{}
 	}
-	var modalFrame *frame
-	for _, view := range state.Views {
-		if id, ok := named[view.View]; ok {
-			out.Surfaces = append(out.Surfaces, WindowSurface{ID: id, Frame: view.frame(), Visible: !view.Hidden, Layer: view.Layer})
-		} else if modalHandle != 0 && view.View == modalHandle {
-			at := view.frame()
-			modalFrame = &at
-		}
-	}
+	var modal *WindowModal
 	s.mu.Lock()
 	if s.modal != nil {
-		out.Modal = &WindowModal{ID: s.modal.id, Mode: s.modal.content.Mode, Shown: s.modal.shown, Frame: modalFrame}
+		modal = &WindowModal{ID: s.modal.id, Mode: s.modal.content.Mode, Shown: s.modal.shown}
 	}
 	s.mu.Unlock()
+	for order, view := range facts.Webviews {
+		if id, ok := named[view.View]; ok {
+			out.Surfaces = append(out.Surfaces, WindowSurface{ID: id, Frame: view.frame, Visible: !view.Hidden, Order: order})
+		} else if modal != nil && modalHandle != 0 && view.View == modalHandle {
+			at, index := view.frame, order
+			modal.Frame, modal.Order = &at, &index
+			modal.Background = &ModalBackground{Draws: view.Draws, Alpha: view.Alpha}
+		}
+	}
+	out.Modal = modal
+	return out, nil
+}
+
+// screens 는 host.screens 의 현재 값을 읽는다.
+func screens() (any, error) {
+	var out []map[string]float64
+	if err := native(system.Screens, &out, nil); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// dockItems 는 host.dock 의 현재 값을 읽는다.
+func dockItems() (any, error) {
+	var out []string
+	if err := native(system.DockItems, &out, nil); err != nil {
+		return nil, err
+	}
 	return out, nil
 }
 
 // hit 은 창 좌표 (x, y) 의 소유자를 반환한다.
 func (s *Surfaces) hit(x, y float64) (map[string]any, error) {
 	var got struct {
-		View       uint64
-		Main       bool
-		Identifier string
+		View       uint64 `json:"view"`
+		Main       bool   `json:"main"`
+		Identifier string `json:"identifier"`
 	}
-	named := map[uint64]string{}
+	var named map[uint64]string
 	var modalHandle uint64
 	var modalID string
-	err := s.probe(map[string]any{"op": "hit", "x": x, "y": y}, &got, func() {
-		for view, id := range s.named {
-			named[uint64(view)] = id
-		}
+	err := native(func() (string, error) { return system.WindowHit(s.window.NativeWindow(), x, y) }, &got, func() {
+		named, modalHandle = s.viewNames()
 		s.mu.Lock()
-		if s.modalView != nil && s.modal != nil {
-			modalHandle, modalID = uint64(uintptr(s.modalView.handle)), s.modal.id
+		if s.modal != nil {
+			modalID = s.modal.id
 		}
 		s.mu.Unlock()
 	})
@@ -693,9 +759,9 @@ func (s *Surfaces) hit(x, y float64) (map[string]any, error) {
 	switch {
 	case got.View != 0 && named[got.View] != "":
 		return map[string]any{"kind": "surface", "surface": named[got.View]}, nil
-	case got.View != 0 && got.View == modalHandle:
+	case got.View != 0 && got.View == modalHandle && modalID != "":
 		return map[string]any{"kind": "native", "identifier": "modal:" + modalID}, nil
-	case got.View != 0 && got.Main:
+	case got.Main:
 		return map[string]any{"kind": "page"}, nil
 	default:
 		return map[string]any{"kind": "native", "identifier": got.Identifier}, nil
@@ -732,7 +798,7 @@ func (s *Surfaces) windowChanged() {
 			s.log(fmt.Sprintf("host.window: %v", err))
 			return
 		}
-		s.host.endpoint.StatusChanged(s.name, "host.window", state)
+		s.host.endpoint.StatusChanged(s.name, "host.window", "", state)
 	}()
 }
 
@@ -741,16 +807,20 @@ func (s *Surfaces) rewatch() {
 	if s.host == nil || s.host.endpoint == nil {
 		return
 	}
-	for _, name := range s.host.endpoint.topics(s.name) {
+	for _, t := range s.host.endpoint.topics(s.name) {
 		var err error
 		switch {
-		case name == logTopic:
+		case t.name == logTopic:
 			_, err = s.host.ask(s, "diagnostics.transcript", map[string]any{"on": true}, pageTimeout)
-		case !isHostName(name):
-			_, err = s.host.ask(s, "status.watch", map[string]any{"name": name}, pageTimeout)
+		case !isHostName(t.name):
+			params := map[string]any{}
+			for key, value := range t.watchParams() {
+				params[key] = value
+			}
+			_, err = s.host.ask(s, "status.watch", params, pageTimeout)
 		}
 		if err != nil {
-			s.log(fmt.Sprintf("rewatch %s: %v", name, err))
+			s.log(fmt.Sprintf("rewatch %s: %v", t.name, err))
 		}
 	}
 }
