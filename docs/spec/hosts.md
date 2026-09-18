@@ -152,7 +152,7 @@ The debug executables are `target/debug/soksak-wailsv3` and `target/debug/soksak
 
 | File | Contents |
 | --- | --- |
-| `go.work` | Uses `apps/wailsv3`, `packages/host/wailsv3`, and `sidecars/shell`; replaces the host module `v0.0.0` with `./packages/host/wailsv3` |
+| `go.work` | Uses `apps/wailsv3`, `packages/host/wailsv3`, `sidecars/shell`, and `sidecars/ptyd`; replaces the host module `v0.0.0` with `./packages/host/wailsv3` |
 | `Cargo.toml` | Workspace with members `apps/tauriv2` and `packages/host/tauriv2`, the shared `[patch.crates-io]` for the Tauri crates, and the `dev` profile |
 | `Cargo.lock` | The single lock file for both crates |
 | `target/` | Cargo output and both application executables; excluded by `.gitignore` |

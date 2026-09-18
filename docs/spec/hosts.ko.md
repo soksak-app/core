@@ -152,7 +152,7 @@ Wails 바인딩 서비스 이름은 `github.com/min-median-max/soksak/packages/h
 
 | 파일 | 내용 |
 | --- | --- |
-| `go.work` | `apps/wailsv3`, `packages/host/wailsv3`, `sidecars/shell`을 사용하고, 호스트 모듈 `v0.0.0`을 `./packages/host/wailsv3`로 대체한다 |
+| `go.work` | `apps/wailsv3`, `packages/host/wailsv3`, `sidecars/shell`, `sidecars/ptyd`를 사용하고, 호스트 모듈 `v0.0.0`을 `./packages/host/wailsv3`로 대체한다 |
 | `Cargo.toml` | 멤버 `apps/tauriv2`와 `packages/host/tauriv2`, Tauri 크레이트에 대한 공용 `[patch.crates-io]`, `dev` 프로필을 가진 워크스페이스 |
 | `Cargo.lock` | 두 크레이트가 공유하는 하나의 잠금 파일 |
 | `target/` | Cargo 출력과 두 애플리케이션 실행 파일. `.gitignore`가 제외한다 |

@@ -4,6 +4,7 @@ use (
 	./apps/wailsv3
 	./packages/host/wailsv3
 	./sidecars/shell
+	./sidecars/ptyd
 )
 
 // 앱 go.mod 가 선언한 호스트 의존성을 이 저장소의 모듈로 해석한다.

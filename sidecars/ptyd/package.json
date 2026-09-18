@@ -1,0 +1,14 @@
+{
+  "name": "@soksak/sidecar-ptyd",
+  "version": "0.0.1",
+  "private": true,
+  "description": "PTY daemon helper: manages PTY sessions.",
+  "scripts": {
+    "build": "go build $SOKSAK_GO_FLAGS -o build/soksak-ptyd ./src",
+    "test": "go test ./..."
+  },
+  "type": "module",
+  "files": [
+    "build/soksak-ptyd"
+  ]
+}
