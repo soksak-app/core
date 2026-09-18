@@ -58,6 +58,50 @@ pub trait DaemonFinder: Send + Sync {
     fn find_or_start(&self, identity: &DaemonIdentity) -> Result<String, String>;
 }
 
+/// 데몬 클라이언트 라이터
+pub struct DaemonWriter {
+    write_half: tokio::net::unix::OwnedWriteHalf,
+}
+
+impl DaemonWriter {
+    pub async fn send_request(&mut self, req: &DaemonRequest) -> Result<(), String> {
+        let json = serde_json::to_string(req)
+            .map_err(|e| format!("Failed to serialize request: {}", e))?;
+        self.write_half.write_all(json.as_bytes())
+            .await
+            .map_err(|e| format!("Failed to write to daemon: {}", e))?;
+        self.write_half.write_all(b"\n")
+            .await
+            .map_err(|e| format!("Failed to write newline: {}", e))?;
+        self.write_half.flush()
+            .await
+            .map_err(|e| format!("Failed to flush: {}", e))?;
+        Ok(())
+    }
+}
+
+/// 데몬 클라이언트 리더
+pub struct DaemonReader {
+    reader: BufReader<tokio::net::unix::OwnedReadHalf>,
+}
+
+impl DaemonReader {
+    pub async fn read_response(&mut self) -> Result<Option<DaemonResponse>, String> {
+        let mut line = String::new();
+        let n = self.reader.read_line(&mut line)
+            .await
+            .map_err(|e| format!("Failed to read from daemon: {}", e))?;
+
+        if n == 0 {
+            return Ok(None);
+        }
+
+        let resp = serde_json::from_str::<DaemonResponse>(&line)
+            .map_err(|e| format!("Failed to parse daemon response: {}", e))?;
+        Ok(Some(resp))
+    }
+}
+
 /// 데몬 클라이언트
 pub struct DaemonClient {
     write_half: tokio::net::unix::OwnedWriteHalf,
@@ -77,6 +121,17 @@ impl DaemonClient {
             write_half,
             reader,
         })
+    }
+
+    pub fn into_split(self) -> (DaemonWriter, DaemonReader) {
+        (
+            DaemonWriter {
+                write_half: self.write_half,
+            },
+            DaemonReader {
+                reader: self.reader,
+            },
+        )
     }
 
     pub async fn send_request(&mut self, req: &DaemonRequest) -> Result<(), String> {

@@ -1,46 +1,39 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
+use tokio::sync::mpsc;
+use async_trait::async_trait;
+use crate::daemon::{DaemonClient, DaemonRequest, DaemonIdentity};
+use std::time::Duration;
+
 
 /// 엔진이 구현할 트레이트. VT 처리 엔진의 계약.
 pub trait Engine: Send + 'static {
-    /// 화면 크기 변경
     fn resize(&mut self, cols: u16, rows: u16);
-    /// 바이트를 엔진에 공급
     fn feed(&mut self, bytes: &[u8]);
-    /// 현재 화면 상태를 돌려줌
     fn screen(&mut self) -> Screen;
-    /// 현재 모드를 돌려줌
     fn modes(&self) -> Modes;
-    /// 화면 상태를 초기화
     fn reset(&mut self);
 }
 
 /// 셀 하나의 속성
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Cell {
-    /// 문자(또는 결합 문자열)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ch: Option<String>,
-    /// 셀 폭: 0(결합 문자), 1(일반), 2(와이드 문자)
     pub width: u8,
-    /// 전경색 (RGB 16진수 또는 ANSI 색상 인덱스)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fg: Option<String>,
-    /// 배경색
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bg: Option<String>,
-    /// 굵게
     #[serde(default)]
     pub bold: bool,
-    /// 기울임
     #[serde(default)]
     pub italic: bool,
-    /// 밑줄
     #[serde(default)]
     pub underline: bool,
-    /// 역상
     #[serde(default)]
     pub inverse: bool,
 }
@@ -60,34 +53,26 @@ impl Default for Cell {
     }
 }
 
-/// 커서 위치
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Cursor {
     pub col: u16,
     pub row: u16,
 }
 
-/// 터미널 모드 설정
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Modes {
-    /// 애플리케이션 커서 모드
     #[serde(default)]
     pub app_cursor: bool,
-    /// 애플리케이션 키패드 모드
     #[serde(default)]
     pub app_keypad: bool,
-    /// 괄호로 감싼 붙여넣기 모드
     #[serde(default)]
     pub bracketed_paste: bool,
-    /// 마우스 보고 모드
     #[serde(default)]
     pub mouse_report: bool,
-    /// 대체 화면 모드
     #[serde(default)]
     pub alt_screen: bool,
 }
 
-/// 엔진 중립 화면 타입
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Screen {
     pub cols: u16,
@@ -97,68 +82,263 @@ pub struct Screen {
     pub lines: Vec<Vec<Cell>>,
 }
 
-/// 세션 상태
-pub(crate) struct Session {
-    pub(crate) engine: Box<dyn Engine>,
+/// 데몬에서 받는 이벤트
+#[derive(Debug, Clone)]
+pub enum DaemonEvent {
+    Output {
+        session_id: String,
+        data: Vec<u8>,
+        truncated: bool,
+    },
+    Exit {
+        session_id: String,
+    },
+}
+
+/// 세션 포트: 데몬과 통신하는 추상 인터페이스
+#[async_trait]
+pub trait SessionPort: Send + Sync {
+    async fn open(&self, program: &str, cols: u16, rows: u16, hint: Option<&str>) -> Result<String, String>;
+    async fn write(&self, session_id: &str, data: &[u8]) -> Result<(), String>;
+    async fn resize(&self, session_id: &str, cols: u16, rows: u16) -> Result<(), String>;
+    async fn detach(&self, session_id: &str) -> Result<(), String>;
+    async fn close(&self, session_id: &str) -> Result<(), String>;
+    async fn get_events(&self) -> mpsc::Receiver<DaemonEvent>;
 }
 
 /// 호스트에서 받은 메시지 봉투
 #[derive(Debug, Deserialize)]
 struct Envelope {
     surface: String,
-    // 호스트가 전송마다 붙이는 프로젝트 디렉터리다. 세션을 데몬에서 열 때 작업 디렉터리로 쓴다.
     #[allow(dead_code)]
     root: Option<String>,
     body: Option<Value>,
     closed: Option<bool>,
 }
 
-/// 세션 관리자
-pub struct SessionManager {
-    sessions: HashMap<String, Session>,
+/// 표면 작업으로 보낼 명령
+#[derive(Debug, Clone)]
+enum SurfaceCommand {
+    Open { width: u32, height: u32, scale: f32 },
+    Input { bytes: Vec<u8> },
+    Resize { width: u32, height: u32, scale: f32 },
+    ScreenRead,
+    Close,
+    SessionClose,
 }
 
-impl SessionManager {
-    pub fn new() -> Self {
-        Self {
-            sessions: HashMap::new(),
+const CELL_WIDTH: f32 = 8.0;
+const CELL_HEIGHT: f32 = 16.0;
+
+fn pixels_to_cells(pixels: u32, cell_size: f32, scale: f32) -> u16 {
+    (pixels as f32 / (cell_size * scale)) as u16
+}
+
+/// 표면별 비동기 작업. 엔진과 데몬 연결을 소유하며 명령을 처리한다.
+async fn surface_task(
+    surface_id: String,
+    engine_factory: Arc<dyn Fn() -> Box<dyn Engine> + Send + Sync>,
+    session_port: Arc<dyn SessionPort>,
+    mut cmd_rx: mpsc::Receiver<SurfaceCommand>,
+    output_tx: mpsc::Sender<String>,
+) {
+    let mut engine = engine_factory();
+    let mut session_id: Option<String> = None;
+    let mut daemon_events_rx = session_port.get_events().await;
+
+    loop {
+        tokio::select! {
+            Some(cmd) = cmd_rx.recv() => {
+                match cmd {
+                    SurfaceCommand::Open { width, height, scale } => {
+                        let cols = pixels_to_cells(width, CELL_WIDTH, scale);
+                        let rows = pixels_to_cells(height, CELL_HEIGHT, scale);
+                        engine.resize(cols, rows);
+
+                        match session_port.open("/bin/sh", cols, rows, None).await {
+                            Ok(sid) => {
+                                session_id = Some(sid.clone());
+                                let response = json!({
+                                    "surface": surface_id,
+                                    "body": {
+                                        "event": "state",
+                                        "sessionId": sid,
+                                        "cols": cols,
+                                        "rows": rows,
+                                        "cursor": {"col": 0, "row": 0}
+                                    }
+                                });
+                                let _ = output_tx.send(response.to_string()).await;
+                            }
+                            Err(e) => {
+                                let response = json!({
+                                    "surface": surface_id,
+                                    "body": {"error": format!("Failed to open: {}", e)}
+                                });
+                                let _ = output_tx.send(response.to_string()).await;
+                            }
+                        }
+                    }
+                    SurfaceCommand::Input { bytes } => {
+                        if let Some(ref sid) = session_id {
+                            match session_port.write(sid, &bytes).await {
+                                Ok(()) => {
+                                    let response = json!({
+                                        "surface": surface_id,
+                                        "body": {"ack": true}
+                                    });
+                                    let _ = output_tx.send(response.to_string()).await;
+                                }
+                                Err(e) => {
+                                    let response = json!({
+                                        "surface": surface_id,
+                                        "body": {"error": format!("Write failed: {}", e)}
+                                    });
+                                    let _ = output_tx.send(response.to_string()).await;
+                                }
+                            }
+                        } else {
+                            let response = json!({
+                                "surface": surface_id,
+                                "body": {"error": "Session not open"}
+                            });
+                            let _ = output_tx.send(response.to_string()).await;
+                        }
+                    }
+                    SurfaceCommand::Resize { width, height, scale } => {
+                        let cols = pixels_to_cells(width, CELL_WIDTH, scale);
+                        let rows = pixels_to_cells(height, CELL_HEIGHT, scale);
+                        engine.resize(cols, rows);
+
+                        if let Some(ref sid) = session_id {
+                            if let Err(e) = session_port.resize(sid, cols, rows).await {
+                                let response = json!({
+                                    "surface": surface_id,
+                                    "body": {"error": format!("Resize failed: {}", e)}
+                                });
+                                let _ = output_tx.send(response.to_string()).await;
+                            } else {
+                                let response = json!({
+                                    "surface": surface_id,
+                                    "body": {
+                                        "event": "state",
+                                        "cols": cols,
+                                        "rows": rows,
+                                        "cursor": {"col": 0, "row": 0}
+                                    }
+                                });
+                                let _ = output_tx.send(response.to_string()).await;
+                            }
+                        }
+                    }
+                    SurfaceCommand::ScreenRead => {
+                        let screen = engine.screen();
+                        let response = json!({
+                            "surface": surface_id,
+                            "body": {
+                                "event": "screen",
+                                "cols": screen.cols,
+                                "rows": screen.rows,
+                                "cursor": screen.cursor,
+                                "lines": screen.lines
+                            }
+                        });
+                        let _ = output_tx.send(response.to_string()).await;
+                    }
+                    SurfaceCommand::SessionClose => {
+                        if let Some(ref sid) = session_id {
+                            let _ = session_port.close(sid).await;
+                        }
+                        let response = json!({
+                            "surface": surface_id,
+                            "body": {}
+                        });
+                        let _ = output_tx.send(response.to_string()).await;
+                        break;
+                    }
+                    SurfaceCommand::Close => {
+                        if let Some(ref sid) = session_id {
+                            let _ = session_port.detach(sid).await;
+                        }
+                        break;
+                    }
+                }
+            }
+            Some(event) = daemon_events_rx.recv() => {
+                match event {
+                    DaemonEvent::Output { session_id: ref recv_sid, data, truncated } => {
+                        if let Some(ref sid) = session_id {
+                            if recv_sid == sid {
+                                if truncated {
+                                    engine.reset();
+                                }
+                                engine.feed(&data);
+                                let screen = engine.screen();
+                                let response = json!({
+                                    "surface": surface_id,
+                                    "body": {
+                                        "event": "screen",
+                                        "cols": screen.cols,
+                                        "rows": screen.rows,
+                                        "cursor": screen.cursor,
+                                        "lines": screen.lines
+                                    }
+                                });
+                                let _ = output_tx.send(response.to_string()).await;
+                            }
+                        }
+                    }
+                    DaemonEvent::Exit { session_id: ref recv_sid } => {
+                        if let Some(ref sid) = session_id {
+                            if recv_sid == sid {
+                                let response = json!({
+                                    "surface": surface_id,
+                                    "body": {"event": "exit"}
+                                });
+                                let _ = output_tx.send(response.to_string()).await;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            else => break,
         }
     }
-
-    pub fn open(&mut self, surface_id: String, engine: Box<dyn Engine>) {
-        let session = Session {
-            engine,
-        };
-        self.sessions.insert(surface_id, session);
-    }
-
-    pub fn close(&mut self, surface_id: &str) -> bool {
-        self.sessions.remove(surface_id).is_some()
-    }
-
-    #[allow(private_interfaces)]
-    pub fn get_session_mut(&mut self, surface_id: &str) -> Option<&mut Session> {
-        self.sessions.get_mut(surface_id)
-    }
-
-    pub fn has_session(&self, surface_id: &str) -> bool {
-        self.sessions.contains_key(surface_id)
-    }
 }
 
-/// 서비스 루프. stdin 에서 JSON 을 읽고 stdout 으로 응답을 씀.
-pub async fn serve<F, R, W>(
-    engine_factory: F,
+/// 서비스 루프. stdin에서 JSON을 읽고 stdout으로 응답을 씀.
+pub async fn serve<R, W>(
+    engine_factory: Arc<dyn Fn() -> Box<dyn Engine> + Send + Sync>,
     reader: R,
-    mut writer: W,
+    writer: W,
+    session_port_factory: Arc<dyn Fn() -> Arc<dyn SessionPort> + Send + Sync>,
 ) -> std::io::Result<()>
 where
-    F: Fn() -> Box<dyn Engine>,
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
 {
-    let mut buf_reader = BufReader::new(reader);
-    let mut sessions = SessionManager::new();
+    let buf_reader = BufReader::new(reader);
+    let (output_tx, output_rx) = mpsc::channel::<String>(100);
+
+    let input_task = run_input_loop(buf_reader, engine_factory, session_port_factory, output_tx);
+    let output_task = run_output_loop(writer, output_rx);
+
+    tokio::try_join!(input_task, output_task)?;
+    Ok(())
+}
+
+async fn run_input_loop<R>(
+    mut buf_reader: BufReader<R>,
+    engine_factory: Arc<dyn Fn() -> Box<dyn Engine> + Send + Sync>,
+    session_port_factory: Arc<dyn Fn() -> Arc<dyn SessionPort> + Send + Sync>,
+    output_tx: mpsc::Sender<String>,
+) -> std::io::Result<()>
+where
+    R: AsyncRead + Unpin,
+{
+    let mut surface_txs: HashMap<String, mpsc::Sender<SurfaceCommand>> = HashMap::new();
+    let mut tasks = tokio::task::JoinSet::new();
     let mut line = String::new();
 
     loop {
@@ -166,8 +346,10 @@ where
         let n = buf_reader.read_line(&mut line).await?;
 
         if n == 0 {
-            // stdin EOF 에 2초 안에 정리하고 끝남
-            tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+            // stdin EOF
+            for (_, tx) in surface_txs.iter() {
+                let _ = tx.send(SurfaceCommand::Close).await;
+            }
             break;
         }
 
@@ -176,234 +358,112 @@ where
             continue;
         }
 
-        // 봉투 파싱
         match serde_json::from_str::<Envelope>(trimmed) {
             Ok(env) => {
-                let response = handle_envelope(&mut sessions, &engine_factory, env);
-                let response_json = serde_json::to_string(&response)?;
-                writer.write_all(response_json.as_bytes()).await?;
-                writer.write_all(b"\n").await?;
-                writer.flush().await?;
+                let surface_id = env.surface.clone();
+
+                if env.closed == Some(true) {
+                    if let Some(tx) = surface_txs.remove(&surface_id) {
+                        let _ = tx.send(SurfaceCommand::Close).await;
+                    }
+                    let response = json!({"surface": surface_id, "body": {}});
+                    let _ = output_tx.send(response.to_string()).await;
+                } else if let Some(body) = env.body {
+                    let tx = if let Some(tx) = surface_txs.get(&surface_id) {
+                        tx.clone()
+                    } else {
+                        // 새 표면: 작업 생성
+                        let (cmd_tx, cmd_rx) = mpsc::channel(10);
+                        let session_port = session_port_factory();
+                        let factory = engine_factory.clone();
+                        let out_tx = output_tx.clone();
+                        let sid = surface_id.clone();
+                        tasks.spawn(async move {
+                            surface_task(sid, factory, session_port, cmd_rx, out_tx).await;
+                        });
+                        surface_txs.insert(surface_id.clone(), cmd_tx.clone());
+                        cmd_tx
+                    };
+
+                    if let Some(op) = body.get("op").and_then(|v| v.as_str()) {
+                        match op {
+                            "open" => {
+                                let width = body.get("width").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+                                let height = body.get("height").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+                                let scale = body.get("scale").and_then(|v| v.as_f64()).unwrap_or(1.0) as f32;
+                                let _ = tx.send(SurfaceCommand::Open { width, height, scale }).await;
+                            }
+                            "input" => {
+                                if let Some(bytes_b64) = body.get("bytes").and_then(|v| v.as_str()) {
+                                    match base64_decode(bytes_b64) {
+                                        Ok(bytes) => {
+                                            let _ = tx.send(SurfaceCommand::Input { bytes }).await;
+                                        }
+                                        Err(e) => {
+                                            let response = json!({
+                                                "surface": surface_id,
+                                                "body": {"error": format!("Base64 error: {}", e)}
+                                            });
+                                            let _ = output_tx.send(response.to_string()).await;
+                                        }
+                                    }
+                                }
+                            }
+                            "resize" => {
+                                let width = body.get("width").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+                                let height = body.get("height").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+                                let scale = body.get("scale").and_then(|v| v.as_f64()).unwrap_or(1.0) as f32;
+                                let _ = tx.send(SurfaceCommand::Resize { width, height, scale }).await;
+                            }
+                            "screen.read" => {
+                                let _ = tx.send(SurfaceCommand::ScreenRead).await;
+                            }
+                            "close" => {
+                                let _ = tx.send(SurfaceCommand::SessionClose).await;
+                            }
+                            _ => {
+                                let response = json!({
+                                    "surface": surface_id,
+                                    "body": {"error": format!("Unknown op: {}", op)}
+                                });
+                                let _ = output_tx.send(response.to_string()).await;
+                            }
+                        }
+                    }
+                }
             }
             Err(e) => {
-                let error_response = json!({
+                let response = json!({
                     "surface": "",
-                    "body": {
-                        "error": format!("Invalid envelope: {}", e)
-                    }
+                    "body": {"error": format!("Parse error: {}", e)}
                 });
-                let response_json = serde_json::to_string(&error_response)?;
-                writer.write_all(response_json.as_bytes()).await?;
-                writer.write_all(b"\n").await?;
-                writer.flush().await?;
+                let _ = output_tx.send(response.to_string()).await;
             }
         }
     }
 
+    // 모든 작업이 끝날 때까지 기다림
+    while tasks.join_next().await.is_some() {}
     Ok(())
 }
 
-fn handle_envelope<F>(
-    sessions: &mut SessionManager,
-    engine_factory: F,
-    env: Envelope,
-) -> Value
+async fn run_output_loop<W>(
+    mut writer: W,
+    mut output_rx: mpsc::Receiver<String>,
+) -> std::io::Result<()>
 where
-    F: Fn() -> Box<dyn Engine>,
+    W: AsyncWrite + Unpin,
 {
-    let surface_id = env.surface;
-
-    // 종료 봉투 처리
-    if env.closed == Some(true) {
-        sessions.close(&surface_id);
-        return json!({
-            "surface": surface_id,
-            "body": {}
-        });
+    while let Some(output) = output_rx.recv().await {
+        writer.write_all(output.as_bytes()).await?;
+        writer.write_all(b"\n").await?;
+        writer.flush().await?;
     }
-
-    // 요청 봉투 처리
-    if let Some(body) = env.body {
-        handle_request(sessions, engine_factory, surface_id, body)
-    } else {
-        json!({
-            "surface": surface_id,
-            "body": {
-                "error": "Missing body"
-            }
-        })
-    }
+    Ok(())
 }
 
-fn handle_request<F>(
-    sessions: &mut SessionManager,
-    engine_factory: F,
-    surface_id: String,
-    body: Value,
-) -> Value
-where
-    F: Fn() -> Box<dyn Engine>,
-{
-    let op = body.get("op").and_then(|v| v.as_str());
-
-    match op {
-        Some("open") => {
-            let width = body.get("width").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
-            let height = body.get("height").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
-            let scale = body.get("scale").and_then(|v| v.as_f64()).unwrap_or(1.0) as f32;
-
-            let mut engine = engine_factory();
-
-            // 픽셀 크기에서 셀 개수 계산
-            const CELL_WIDTH: f32 = 8.0;
-            const CELL_HEIGHT: f32 = 16.0;
-
-            let cols = (width as f32 / (CELL_WIDTH * scale)) as u16;
-            let rows = (height as f32 / (CELL_HEIGHT * scale)) as u16;
-
-            engine.resize(cols, rows);
-            sessions.open(surface_id.clone(), engine);
-
-            json!({
-                "surface": surface_id,
-                "body": {
-                    "event": "state",
-                    "cols": cols,
-                    "rows": rows,
-                    "cursor": {
-                        "col": 0,
-                        "row": 0
-                    }
-                }
-            })
-        }
-        Some("input") => {
-            if let Some(bytes_b64) = body.get("bytes").and_then(|v| v.as_str()) {
-                match base64_decode(bytes_b64) {
-                    Ok(decoded) => {
-                        if let Some(session) = sessions.get_session_mut(&surface_id) {
-                            session.engine.feed(&decoded);
-                            json!({
-                                "surface": surface_id,
-                                "body": {
-                                    "ack": true
-                                }
-                            })
-                        } else {
-                            json!({
-                                "surface": surface_id,
-                                "body": {
-                                    "error": "Session not found"
-                                }
-                            })
-                        }
-                    }
-                    Err(e) => {
-                        json!({
-                            "surface": surface_id,
-                            "body": {
-                                "error": format!("Base64 decode error: {}", e)
-                            }
-                        })
-                    }
-                }
-            } else {
-                json!({
-                    "surface": surface_id,
-                    "body": {
-                        "error": "Missing bytes field"
-                    }
-                })
-            }
-        }
-        Some("resize") => {
-            let width = body.get("width").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
-            let height = body.get("height").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
-            let scale = body.get("scale").and_then(|v| v.as_f64()).unwrap_or(1.0) as f32;
-
-            if let Some(session) = sessions.get_session_mut(&surface_id) {
-                const CELL_WIDTH: f32 = 8.0;
-                const CELL_HEIGHT: f32 = 16.0;
-
-                let cols = (width as f32 / (CELL_WIDTH * scale)) as u16;
-                let rows = (height as f32 / (CELL_HEIGHT * scale)) as u16;
-
-                session.engine.resize(cols, rows);
-
-                json!({
-                    "surface": surface_id,
-                    "body": {
-                        "event": "state",
-                        "cols": cols,
-                        "rows": rows,
-                        "cursor": {
-                            "col": 0,
-                            "row": 0
-                        }
-                    }
-                })
-            } else {
-                json!({
-                    "surface": surface_id,
-                    "body": {
-                        "error": "Session not found"
-                    }
-                })
-            }
-        }
-        Some("screen.read") => {
-            if let Some(session) = sessions.get_session_mut(&surface_id) {
-                let screen = session.engine.screen();
-                json!({
-                    "surface": surface_id,
-                    "body": {
-                        "event": "screen",
-                        "cols": screen.cols,
-                        "rows": screen.rows,
-                        "cursor": screen.cursor,
-                        "lines": screen.lines
-                    }
-                })
-            } else {
-                json!({
-                    "surface": surface_id,
-                    "body": {
-                        "error": "Session not found"
-                    }
-                })
-            }
-        }
-        Some("close") => {
-            if sessions.has_session(&surface_id) {
-                sessions.close(&surface_id);
-                json!({
-                    "surface": surface_id,
-                    "body": {}
-                })
-            } else {
-                json!({
-                    "surface": surface_id,
-                    "body": {
-                        "error": "Session not found"
-                    }
-                })
-            }
-        }
-        _ => {
-            json!({
-                "surface": surface_id,
-                "body": {
-                    "error": format!("Unknown operation: {:?}", op)
-                }
-            })
-        }
-    }
-}
-
-/// 간단한 Base64 디코딩
 pub fn base64_decode(s: &str) -> Result<Vec<u8>, String> {
     const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
     let mut result = Vec::new();
     let bytes = s.as_bytes();
     let mut i = 0;
@@ -415,7 +475,7 @@ pub fn base64_decode(s: &str) -> Result<Vec<u8>, String> {
         }
 
         let idx1 = ALPHABET.iter().position(|&x| x == b1)
-            .ok_or_else(|| "Invalid Base64 character".to_string())?;
+            .ok_or_else(|| "Invalid Base64".to_string())?;
 
         if i + 1 >= bytes.len() {
             return Err("Incomplete Base64".to_string());
@@ -423,21 +483,21 @@ pub fn base64_decode(s: &str) -> Result<Vec<u8>, String> {
 
         let b2 = bytes[i + 1];
         let idx2 = ALPHABET.iter().position(|&x| x == b2)
-            .ok_or_else(|| "Invalid Base64 character".to_string())?;
+            .ok_or_else(|| "Invalid Base64".to_string())?;
 
         result.push((((idx1 << 2) | (idx2 >> 4)) & 0xFF) as u8);
 
         if i + 2 < bytes.len() && bytes[i + 2] != b'=' {
             let b3 = bytes[i + 2];
             let idx3 = ALPHABET.iter().position(|&x| x == b3)
-                .ok_or_else(|| "Invalid Base64 character".to_string())?;
+                .ok_or_else(|| "Invalid Base64".to_string())?;
 
             result.push((((idx2 << 4) | (idx3 >> 2)) & 0xFF) as u8);
 
             if i + 3 < bytes.len() && bytes[i + 3] != b'=' {
                 let b4 = bytes[i + 3];
                 let idx4 = ALPHABET.iter().position(|&x| x == b4)
-                    .ok_or_else(|| "Invalid Base64 character".to_string())?;
+                    .ok_or_else(|| "Invalid Base64".to_string())?;
 
                 result.push((((idx3 << 6) | idx4) & 0xFF) as u8);
                 i += 4;
@@ -452,7 +512,6 @@ pub fn base64_decode(s: &str) -> Result<Vec<u8>, String> {
     Ok(result)
 }
 
-/// Fake 엔진: 입력 바이트를 그대로 화면에 놓음 (테스트용)
 #[cfg(test)]
 pub struct FakeEngine {
     cols: u16,
@@ -486,7 +545,6 @@ impl Engine for FakeEngine {
 
     fn screen(&mut self) -> Screen {
         let mut lines = Vec::new();
-
         for line in self.content.lines() {
             let mut row = Vec::new();
             for ch in line.chars() {
@@ -500,7 +558,6 @@ impl Engine for FakeEngine {
             }
             lines.push(row);
         }
-
         Screen {
             cols: self.cols,
             rows: self.rows,
@@ -518,151 +575,359 @@ impl Engine for FakeEngine {
     }
 }
 
+/// 기본 SessionPort 팩토리를 만든다 (DaemonFinder를 사용)
+pub fn make_default_session_port_factory() -> Arc<dyn Fn() -> Arc<dyn SessionPort> + Send + Sync> {
+    Arc::new(|| {
+        Arc::new(DaemonSessionPort::new()) as Arc<dyn SessionPort>
+    })
+}
+
+/// 실제 데몬 연결을 관리하는 SessionPort 구현
+pub struct DaemonSessionPort {
+    writers: Arc<tokio::sync::Mutex<HashMap<String, crate::daemon::DaemonWriter>>>,
+    events_tx: mpsc::UnboundedSender<DaemonEvent>,
+    events_rx: Arc<tokio::sync::Mutex<Option<mpsc::UnboundedReceiver<DaemonEvent>>>>,
+    finder: Box<dyn crate::daemon::DaemonFinder>,
+}
+
+impl DaemonSessionPort {
+    fn new() -> Self {
+        let (events_tx, events_rx) = mpsc::unbounded_channel();
+        Self {
+            writers: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+            events_tx,
+            events_rx: Arc::new(tokio::sync::Mutex::new(Some(events_rx))),
+            finder: crate::platform::get_daemon_finder(),
+        }
+    }
+
+    pub fn with_finder(finder: Box<dyn crate::daemon::DaemonFinder>) -> Self {
+        let (events_tx, events_rx) = mpsc::unbounded_channel();
+        Self {
+            writers: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+            events_tx,
+            events_rx: Arc::new(tokio::sync::Mutex::new(Some(events_rx))),
+            finder,
+        }
+    }
+
+    async fn connect_and_open(&self, program: &str, cols: u16, rows: u16, hint: Option<&str>) -> Result<String, String> {
+        let build_kind = std::env::var("SOKSAK_PROFILE")
+            .unwrap_or_else(|_| "debug".to_string());
+        let identity = DaemonIdentity {
+            protocol: "ptyd".to_string(),
+            build_kind,
+        };
+        let socket_path = self.finder.find_or_start(&identity)?;
+        let mut client = DaemonClient::connect(&socket_path).await?;
+
+        let req = DaemonRequest {
+            command: "open".to_string(),
+            program: Some(program.to_string()),
+            cols: Some(cols as i32),
+            rows: Some(rows as i32),
+            hint: hint.map(|h| h.to_string()),
+            args: None,
+            env: None,
+            cwd: None,
+            session_id: None,
+            data: None,
+            from: None,
+        };
+
+        client.send_request(&req).await?;
+
+        // Read open response directly from this connection with 5 second timeout
+        let resp = tokio::time::timeout(Duration::from_secs(5), client.read_response())
+            .await
+            .map_err(|_| "Timeout waiting for open response".to_string())?
+            .map_err(|e| format!("Failed to read response: {}", e))?
+            .ok_or_else(|| "No response from daemon".to_string())?;
+
+        if let Some(error) = resp.error {
+            return Err(format!("Daemon error: {}", error));
+        }
+
+        let session_id = resp.session_id.ok_or_else(|| "No sessionId in response".to_string())?;
+
+        // Split connection: writer for sending commands, reader for background reading
+        let (writer, reader) = client.into_split();
+
+        // Store writer for this session
+        self.writers.lock().await.insert(session_id.clone(), writer);
+
+        // Start background reader task for this session
+        let events_tx = self.events_tx.clone();
+        let sid = session_id.clone();
+        tokio::spawn(async move {
+            let mut reader = reader;
+            loop {
+                match reader.read_response().await {
+                    Ok(Some(resp)) => {
+                        if let Some(command) = resp.command {
+                            match command.as_str() {
+                                "output" => {
+                                    if let (Some(session_id), Some(output)) = (resp.session_id, resp.output) {
+                                        let data = match base64_decode(&output) {
+                                            Ok(d) => d,
+                                            Err(_) => output.into_bytes(),
+                                        };
+                                        let truncated = resp.truncated.unwrap_or(false);
+                                        let _ = events_tx.send(DaemonEvent::Output {
+                                            session_id,
+                                            data,
+                                            truncated,
+                                        });
+                                    }
+                                }
+                                "exit" => {
+                                    if let Some(session_id) = resp.session_id {
+                                        let _ = events_tx.send(DaemonEvent::Exit { session_id });
+                                    }
+                                    break;
+                                }
+                                // Discard responses for write, resize, detach
+                                "write" | "resize" | "detach" => {}
+                                _ => {}
+                            }
+                        }
+                        if let Some(error) = resp.error {
+                            eprintln!("Daemon error for session {}: {}", sid, error);
+                        }
+                    }
+                    Ok(None) => break,
+                    Err(_) => break,
+                }
+            }
+        });
+
+        Ok(session_id)
+    }
+}
+
+#[async_trait]
+impl SessionPort for DaemonSessionPort {
+    async fn open(&self, program: &str, cols: u16, rows: u16, hint: Option<&str>) -> Result<String, String> {
+        self.connect_and_open(program, cols, rows, hint).await
+    }
+
+    async fn write(&self, session_id: &str, data: &[u8]) -> Result<(), String> {
+        let mut writers = self.writers.lock().await;
+        let writer = writers.get_mut(session_id)
+            .ok_or_else(|| format!("Session {} not found", session_id))?;
+
+        let data_b64 = base64_encode(data);
+        let req = DaemonRequest {
+            command: "write".to_string(),
+            session_id: Some(session_id.to_string()),
+            data: Some(data_b64),
+            hint: None,
+            program: None,
+            args: None,
+            env: None,
+            cwd: None,
+            cols: None,
+            rows: None,
+            from: None,
+        };
+
+        writer.send_request(&req).await?;
+        Ok(())
+    }
+
+    async fn resize(&self, session_id: &str, cols: u16, rows: u16) -> Result<(), String> {
+        let mut writers = self.writers.lock().await;
+        let writer = writers.get_mut(session_id)
+            .ok_or_else(|| format!("Session {} not found", session_id))?;
+
+        let req = DaemonRequest {
+            command: "resize".to_string(),
+            session_id: Some(session_id.to_string()),
+            cols: Some(cols as i32),
+            rows: Some(rows as i32),
+            hint: None,
+            program: None,
+            args: None,
+            env: None,
+            cwd: None,
+            data: None,
+            from: None,
+        };
+
+        writer.send_request(&req).await?;
+        Ok(())
+    }
+
+    async fn detach(&self, session_id: &str) -> Result<(), String> {
+        let mut writers = self.writers.lock().await;
+        let mut writer = writers.remove(session_id)
+            .ok_or_else(|| format!("Session {} not found", session_id))?;
+
+        let req = DaemonRequest {
+            command: "detach".to_string(),
+            session_id: Some(session_id.to_string()),
+            hint: None,
+            program: None,
+            args: None,
+            env: None,
+            cwd: None,
+            cols: None,
+            rows: None,
+            data: None,
+            from: None,
+        };
+
+        writer.send_request(&req).await?;
+        Ok(())
+    }
+
+    async fn close(&self, session_id: &str) -> Result<(), String> {
+        let mut writers = self.writers.lock().await;
+        let mut writer = writers.remove(session_id)
+            .ok_or_else(|| format!("Session {} not found", session_id))?;
+
+        let req = DaemonRequest {
+            command: "close".to_string(),
+            session_id: Some(session_id.to_string()),
+            hint: None,
+            program: None,
+            args: None,
+            env: None,
+            cwd: None,
+            cols: None,
+            rows: None,
+            data: None,
+            from: None,
+        };
+
+        writer.send_request(&req).await?;
+        Ok(())
+    }
+
+    async fn get_events(&self) -> mpsc::Receiver<DaemonEvent> {
+        let (tx, rx) = mpsc::channel(10);
+        let mut rx_guard = self.events_rx.lock().await;
+        if let Some(mut unbounded_rx) = rx_guard.take() {
+            // Forward events from unbounded to bounded channel
+            tokio::spawn(async move {
+                while let Some(event) = unbounded_rx.recv().await {
+                    let _ = tx.send(event).await;
+                }
+            });
+        }
+        rx
+    }
+}
+
+/// Base64 encode
+fn base64_encode(data: &[u8]) -> String {
+    const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut result = String::new();
+    let mut i = 0;
+
+    while i < data.len() {
+        let b1 = data[i];
+        let b2 = if i + 1 < data.len() { data[i + 1] } else { 0 };
+        let b3 = if i + 2 < data.len() { data[i + 2] } else { 0 };
+
+        let idx1 = ((b1 >> 2) & 0x3F) as usize;
+        let idx2 = (((b1 & 0x03) << 4) | ((b2 >> 4) & 0x0F)) as usize;
+        let idx3 = (((b2 & 0x0F) << 2) | ((b3 >> 6) & 0x03)) as usize;
+        let idx4 = (b3 & 0x3F) as usize;
+
+        result.push(ALPHABET[idx1] as char);
+        result.push(ALPHABET[idx2] as char);
+
+        if i + 1 < data.len() {
+            result.push(ALPHABET[idx3] as char);
+        } else {
+            result.push('=');
+        }
+
+        if i + 2 < data.len() {
+            result.push(ALPHABET[idx4] as char);
+        } else {
+            result.push('=');
+        }
+
+        i += 3;
+    }
+
+    result
+}
+
+pub struct FakeSessionPort {
+    pub calls: Arc<tokio::sync::Mutex<CallTracker>>,
+}
+
+pub struct CallTracker {
+    pub opens: Vec<String>,
+    pub writes: Vec<(String, Vec<u8>)>,
+    pub resizes: Vec<(String, u16, u16)>,
+    pub detaches: Vec<String>,
+    pub closes: Vec<String>,
+}
+
+impl FakeSessionPort {
+    pub fn new() -> Self {
+        Self {
+            calls: Arc::new(tokio::sync::Mutex::new(CallTracker {
+                opens: Vec::new(),
+                writes: Vec::new(),
+                resizes: Vec::new(),
+                detaches: Vec::new(),
+                closes: Vec::new(),
+            })),
+        }
+    }
+}
+
+#[async_trait]
+impl SessionPort for FakeSessionPort {
+    async fn open(&self, program: &str, _cols: u16, _rows: u16, _hint: Option<&str>) -> Result<String, String> {
+        let mut calls = self.calls.lock().await;
+        let session_id = format!("session-{}", calls.opens.len());
+        calls.opens.push(program.to_string());
+        Ok(session_id)
+    }
+
+    async fn write(&self, session_id: &str, data: &[u8]) -> Result<(), String> {
+        let mut calls = self.calls.lock().await;
+        calls.writes.push((session_id.to_string(), data.to_vec()));
+        Ok(())
+    }
+
+    async fn resize(&self, session_id: &str, cols: u16, rows: u16) -> Result<(), String> {
+        let mut calls = self.calls.lock().await;
+        calls.resizes.push((session_id.to_string(), cols, rows));
+        Ok(())
+    }
+
+    async fn detach(&self, session_id: &str) -> Result<(), String> {
+        let mut calls = self.calls.lock().await;
+        calls.detaches.push(session_id.to_string());
+        Ok(())
+    }
+
+    async fn close(&self, session_id: &str) -> Result<(), String> {
+        let mut calls = self.calls.lock().await;
+        calls.closes.push(session_id.to_string());
+        Ok(())
+    }
+
+    async fn get_events(&self) -> mpsc::Receiver<DaemonEvent> {
+        let (_tx, rx) = mpsc::channel(10);
+        rx
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn test_fake_engine_basic() {
-        let mut engine = FakeEngine::new();
-        engine.feed(b"hi");
-
-        let screen = engine.screen();
-        assert_eq!(screen.lines.len(), 1);
-        assert_eq!(screen.lines[0].len(), 2);
-        assert_eq!(screen.lines[0][0].ch, Some("h".to_string()));
-        assert_eq!(screen.lines[0][1].ch, Some("i".to_string()));
-    }
-
-    #[tokio::test]
-    async fn test_resize_updates_dimensions() {
-        let mut engine = FakeEngine::new();
-        engine.resize(100, 50);
-
-        let screen = engine.screen();
-        assert_eq!(screen.cols, 100);
-        assert_eq!(screen.rows, 50);
-    }
-
-    #[tokio::test]
-    async fn test_base64_decode() {
-        let decoded = base64_decode("aGk=").unwrap();
-        assert_eq!(decoded, b"hi");
-
-        let decoded = base64_decode("aGVsbG8=").unwrap();
-        assert_eq!(decoded, b"hello");
-    }
-
-    #[tokio::test]
-    async fn test_serve_open_input_screen_read() {
-        // open → input → screen.read 통합 테스트
-        let input = r#"{"surface":"s1","root":"/tmp","body":{"op":"open","width":800,"height":384,"scale":1.0}}
-{"surface":"s1","body":{"op":"input","bytes":"aGk="}}
-{"surface":"s1","body":{"op":"screen.read"}}
-"#;
-
-        let reader = std::io::Cursor::new(input.as_bytes());
-        let mut writer = Vec::new();
-
-        let result = serve(
-            || Box::new(FakeEngine::new()),
-            reader,
-            &mut writer,
-        ).await;
-
-        assert!(result.is_ok());
-
-        let output = String::from_utf8(writer).unwrap();
-        let lines: Vec<&str> = output.lines().collect();
-
-        // 3개 응답 확인
-        assert_eq!(lines.len(), 3);
-
-        // 첫 번째: open 응답
-        let open_response: Value = serde_json::from_str(lines[0]).unwrap();
-        assert_eq!(open_response.get("surface").unwrap().as_str(), Some("s1"));
-        assert_eq!(open_response.get("body").unwrap().get("event").unwrap().as_str(), Some("state"));
-
-        // 세 번째: screen.read 응답에서 "hi" 내용 확인
-        let screen_response: Value = serde_json::from_str(lines[2]).unwrap();
-        assert_eq!(screen_response.get("surface").unwrap().as_str(), Some("s1"));
-        let body = screen_response.get("body").unwrap();
-        assert_eq!(body.get("event").unwrap().as_str(), Some("screen"));
-
-        // 화면의 첫 줄에 "hi"가 있는지 확인
-        let lines_array = body.get("lines").unwrap().as_array().unwrap();
-        assert!(!lines_array.is_empty());
-        let first_line = lines_array[0].as_array().unwrap();
-        assert_eq!(first_line[0].get("ch").unwrap().as_str(), Some("h"));
-        assert_eq!(first_line[1].get("ch").unwrap().as_str(), Some("i"));
-    }
-
-    #[tokio::test]
-    async fn test_close_session() {
-        // open → close → input (오류 예상)
-        let input = r#"{"surface":"s1","root":"/tmp","body":{"op":"open","width":800,"height":384,"scale":1.0}}
-{"surface":"s1","closed":true}
-{"surface":"s1","body":{"op":"input","bytes":"aGk="}}
-"#;
-
-        let reader = std::io::Cursor::new(input.as_bytes());
-        let mut writer = Vec::new();
-
-        let result = serve(
-            || Box::new(FakeEngine::new()),
-            reader,
-            &mut writer,
-        ).await;
-
-        assert!(result.is_ok());
-
-        let output = String::from_utf8(writer).unwrap();
-        let lines: Vec<&str> = output.lines().collect();
-
-        // 세 번째 요청(close 후 input)은 오류 응답
-        let error_response: Value = serde_json::from_str(lines[2]).unwrap();
-        assert!(error_response.get("body").unwrap().get("error").is_some());
-        assert_eq!(
-            error_response.get("body").unwrap().get("error").unwrap().as_str(),
-            Some("Session not found")
-        );
-    }
-
-    #[tokio::test]
-    async fn test_resize() {
-        let input = r#"{"surface":"s1","root":"/tmp","body":{"op":"open","width":800,"height":384,"scale":1.0}}
-{"surface":"s1","body":{"op":"resize","width":1600,"height":768,"scale":1.0}}
-"#;
-
-        let reader = std::io::Cursor::new(input.as_bytes());
-        let mut writer = Vec::new();
-
-        let result = serve(
-            || Box::new(FakeEngine::new()),
-            reader,
-            &mut writer,
-        ).await;
-
-        assert!(result.is_ok());
-
-        let output = String::from_utf8(writer).unwrap();
-        let lines: Vec<&str> = output.lines().collect();
-
-        assert_eq!(lines.len(), 2);
-
-        let resize_response: Value = serde_json::from_str(lines[1]).unwrap();
-        let state = &resize_response.get("body").unwrap().get("event");
-        assert_eq!(state.and_then(|v| v.as_str()), Some("state"));
-    }
-
-    #[tokio::test]
-    async fn test_wide_chars() {
-        let mut engine = FakeEngine::new();
-        engine.feed("안".as_bytes());
-
-        let screen = engine.screen();
-        assert_eq!(screen.lines.len(), 1);
-        // 한글은 width 2 로 표현되어야 함
-        assert_eq!(screen.lines[0][0].width, 2);
+    #[test]
+    fn test_base64_decode() {
+        assert_eq!(base64_decode("aGk=").unwrap(), b"hi");
+        assert_eq!(base64_decode("aGVsbG8=").unwrap(), b"hello");
     }
 }

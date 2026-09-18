@@ -2,7 +2,8 @@ use alacritty_terminal::event::{Event, EventListener};
 use alacritty_terminal::grid::Dimensions;
 use alacritty_terminal::term::{Config, Term, TermMode};
 use alacritty_terminal::vte::ansi::Processor;
-use soksak_sidecar_vt_core::{Cell, Cursor, Engine, Modes, Screen};
+use soksak_sidecar_vt_core::{Cell, Cursor, Engine, Modes, Screen, serve, make_default_session_port_factory};
+use std::sync::Arc;
 
 /// 간단한 크기 구조체
 #[derive(Clone, Copy)]
@@ -203,10 +204,12 @@ impl Engine for AlacrittyEngine {
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
-    soksak_sidecar_vt_core::serve(
-        || Box::new(AlacrittyEngine::new()),
+    let engine_factory = Arc::new(|| Box::new(AlacrittyEngine::new()) as Box<dyn Engine>);
+    serve(
+        engine_factory,
         tokio::io::stdin(),
         tokio::io::stdout(),
+        make_default_session_port_factory(),
     )
     .await
 }
