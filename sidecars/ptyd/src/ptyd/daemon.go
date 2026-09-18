@@ -12,17 +12,31 @@ import (
 	"time"
 )
 
+// clientConnection은 클라이언트 연결의 상태를 추적한다.
+type clientConnection struct {
+	conn      net.Conn
+	writer    *bufio.Writer
+	writeMu   sync.Mutex // 쓰기 직렬화
+	consumers []*Consumer
+}
+
+// OutputMessage는 연결으로 전송할 출력 메시지다.
+type OutputMessage struct {
+	Entry     RingEntry
+	Truncated bool
+}
+
 // Daemon은 PTY 세션을 관리하는 데몬이다.
 type Daemon struct {
 	mu sync.Mutex
 
-	identity        DaemonIdentity
-	socketDir       string
-	listener        net.Listener
-	address         string
-	idleTimeout     time.Duration
-	lastActivity    time.Time
-	shutdownChan    chan struct{}
+	identity     DaemonIdentity
+	socketDir    string
+	listener     net.Listener
+	address      string
+	idleTimeout  time.Duration
+	lastActivity time.Time
+	shutdownChan chan struct{}
 
 	sessions map[string]*Session
 	hints    map[string]string
@@ -87,8 +101,13 @@ func (d *Daemon) acceptLoop() {
 func (d *Daemon) handleClient(conn net.Conn) {
 	defer conn.Close()
 
+	cc := &clientConnection{
+		conn:   conn,
+		writer: bufio.NewWriter(conn),
+	}
+	defer d.cleanupConsumers(cc)
+
 	scanner := bufio.NewScanner(conn)
-	writer := bufio.NewWriter(conn)
 
 	for scanner.Scan() {
 		line := scanner.Bytes()
@@ -96,31 +115,77 @@ func (d *Daemon) handleClient(conn net.Conn) {
 		req, err := ParseRequest(line)
 		if err != nil {
 			resp := Response{Error: err.Error()}
-			if b, err := EncodeResponse(resp); err == nil {
-				writer.Write(b)
-				writer.WriteByte('\n')
-			}
-			writer.Flush()
+			d.writeResponse(cc, resp)
 			continue
 		}
 
-		resp := d.handleRequest(req)
+		resp := d.handleRequest(cc, req)
 
-		if b, err := EncodeResponse(resp); err == nil {
-			writer.Write(b)
-			writer.WriteByte('\n')
-			writer.Flush()
-		}
+		d.writeResponse(cc, resp)
 
 		d.updateLastActivity()
 	}
 }
 
+// writeResponse는 응답을 클라이언트에 직렬화해 쓴다.
+func (d *Daemon) writeResponse(cc *clientConnection, resp Response) {
+	cc.writeMu.Lock()
+	defer cc.writeMu.Unlock()
+
+	if b, err := EncodeResponse(resp); err == nil {
+		cc.writer.Write(b)
+		cc.writer.WriteByte('\n')
+		cc.writer.Flush()
+	}
+}
+
+// cleanupConsumers는 연결의 모든 소비자를 정리한다.
+func (d *Daemon) cleanupConsumers(cc *clientConnection) {
+	for _, consumer := range cc.consumers {
+		d.mu.Lock()
+		session, ok := d.sessions[consumer.SessionID]
+		d.mu.Unlock()
+
+		if ok {
+			session.Detach(consumer)
+		}
+	}
+}
+
+// forwardConsumerOutput는 소비자의 출력을 클라이언트에 전달한다.
+func (d *Daemon) forwardConsumerOutput(cc *clientConnection, consumer *Consumer) {
+	// 실시간 출력을 기다림
+	for {
+		select {
+		case entry, ok := <-consumer.Ch:
+			if !ok {
+				return
+			}
+			resp := Response{
+				Command:   "output",
+				SessionID: consumer.SessionID,
+				Output:    entry.Data,
+				Sequence:  entry.Sequence,
+			}
+			d.writeResponse(cc, resp)
+
+		case <-consumer.Done:
+			// 세션이 종료됨
+			resp := Response{
+				Command:   "exit",
+				SessionID: consumer.SessionID,
+			}
+			d.writeResponse(cc, resp)
+			return
+		}
+	}
+}
+
 // handleRequest는 요청을 처리하고 응답을 반환한다.
-func (d *Daemon) handleRequest(req Request) Response {
+func (d *Daemon) handleRequest(cc *clientConnection, req Request) Response {
 	switch req.Command {
 	case "open":
-		return d.handleOpen(req)
+		return d.handleOpen(cc, req)
 	case "write":
 		return d.handleWrite(req)
 	case "resize":
@@ -128,9 +193,9 @@ func (d *Daemon) handleRequest(req Request) Response {
 	case "signal":
 		return d.handleSignal(req)
 	case "attach":
-		return d.handleAttach(req)
+		return d.handleAttach(cc, req)
 	case "detach":
-		return d.handleDetach(req)
+		return d.handleDetach(cc, req)
 	case "close":
 		return d.handleClose(req)
 	case "list":
@@ -143,18 +208,45 @@ func (d *Daemon) handleRequest(req Request) Response {
 }
 
 // handleOpen은 새 세션을 열거나 기존 세션을 찾는다.
-func (d *Daemon) handleOpen(req Request) Response {
+func (d *Daemon) handleOpen(cc *clientConnection, req Request) Response {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
 	if req.Hint != "" {
 		if sessionID, ok := d.hints[req.Hint]; ok {
 			if session, ok := d.sessions[sessionID]; ok && !session.Closed() {
+				// 기존 세션을 찾음. 이 연결을 소비자로 등록
+				consumer := &Consumer{
+					SessionID: sessionID,
+					Ch:        make(chan RingEntry, 100),
+					Done:      make(chan struct{}),
+				}
+
+				truncated, entries := session.Attach(consumer, 0)
+
+				cc.consumers = append(cc.consumers, consumer)
+
+				// 출력 전달 고루틴 시작
+				go d.forwardConsumerOutput(cc, consumer)
+
+				// 기존 항목들 전송 (truncated는 첫 번째 항목에만 표시)
+				for i, entry := range entries {
+					showTruncated := truncated && i == 0
+					resp := Response{
+						Command:   "output",
+						SessionID: sessionID,
+						Output:    entry.Data,
+						Sequence:  entry.Sequence,
+						Truncated: showTruncated,
+					}
+					d.writeResponse(cc, resp)
+				}
+
 				return Response{
-					Command:      "open",
-					SessionID:    sessionID,
-					DefaultCols:  80,
-					DefaultRows:  24,
+					Command:     "open",
+					SessionID:   sessionID,
+					DefaultCols: 80,
+					DefaultRows: 24,
 				}
 			}
 		}
@@ -197,11 +289,24 @@ func (d *Daemon) handleOpen(req Request) Response {
 		d.hints[req.Hint] = sessionID
 	}
 
+	// 이 연결을 소비자로 등록
+	consumer := &Consumer{
+		SessionID: sessionID,
+		Ch:        make(chan RingEntry, 100),
+		Done:      make(chan struct{}),
+	}
+
+	session.Attach(consumer, 0)
+	cc.consumers = append(cc.consumers, consumer)
+
+	// 출력 전달 고루틴 시작
+	go d.forwardConsumerOutput(cc, consumer)
+
 	return Response{
-		Command:      "open",
-		SessionID:    sessionID,
-		DefaultCols:  cols,
-		DefaultRows:  rows,
+		Command:     "open",
+		SessionID:   sessionID,
+		DefaultCols: cols,
+		DefaultRows: rows,
 	}
 }
 
@@ -274,7 +379,7 @@ func (d *Daemon) handleSignal(req Request) Response {
 	return Response{Command: "signal"}
 }
 
-func (d *Daemon) handleAttach(req Request) Response {
+func (d *Daemon) handleAttach(cc *clientConnection, req Request) Response {
 	d.mu.Lock()
 	session, ok := d.sessions[req.SessionID]
 	d.mu.Unlock()
@@ -286,24 +391,51 @@ func (d *Daemon) handleAttach(req Request) Response {
 	consumer := &Consumer{
 		SessionID: req.SessionID,
 		Ch:        make(chan RingEntry, 100),
+		Done:      make(chan struct{}),
 	}
 
 	truncated, entries := session.Attach(consumer, req.From)
 
+	cc.consumers = append(cc.consumers, consumer)
+
+	// 출력 전달 고루틴 시작
+	go d.forwardConsumerOutput(cc, consumer)
+
+	// 기존 항목들 전송 (truncated는 첫 번째 항목에만 표시)
+	for i, entry := range entries {
+		showTruncated := truncated && i == 0
+		resp := Response{
+			Command:   "output",
+			SessionID: req.SessionID,
+			Output:    entry.Data,
+			Sequence:  entry.Sequence,
+			Truncated: showTruncated,
+		}
+		d.writeResponse(cc, resp)
+	}
+
 	return Response{
 		Command:   "attach",
 		Truncated: truncated,
-		Entries:   entries,
 	}
 }
 
-func (d *Daemon) handleDetach(req Request) Response {
+func (d *Daemon) handleDetach(cc *clientConnection, req Request) Response {
 	d.mu.Lock()
-	_, ok := d.sessions[req.SessionID]
+	session, ok := d.sessions[req.SessionID]
 	d.mu.Unlock()
 
 	if !ok {
 		return Response{Error: "session not found"}
+	}
+
+	// cc의 consumer 목록에서 이 sessionID에 해당하는 consumer를 찾아 제거
+	for i, consumer := range cc.consumers {
+		if consumer.SessionID == req.SessionID {
+			session.Detach(consumer)
+			cc.consumers = append(cc.consumers[:i], cc.consumers[i+1:]...)
+			break
+		}
 	}
 
 	return Response{Command: "detach"}

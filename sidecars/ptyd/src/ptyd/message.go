@@ -7,41 +7,41 @@ import (
 
 // Request는 클라이언트가 보내는 JSON 요청이다.
 type Request struct {
-	Command string `json:"command"`
-	Hint string `json:"hint,omitempty"`
-	Program string `json:"program,omitempty"`
-	Args []string `json:"args,omitempty"`
-	Env map[string]string `json:"env,omitempty"`
-	Cwd string `json:"cwd,omitempty"`
-	Cols int `json:"cols,omitempty"`
-	Rows int `json:"rows,omitempty"`
-	SessionID string `json:"sessionId,omitempty"`
-	Data string `json:"data,omitempty"`
-	Name string `json:"name,omitempty"`
-	From int64 `json:"from,omitempty"`
+	Command   string            `json:"command"`
+	Hint      string            `json:"hint,omitempty"`
+	Program   string            `json:"program,omitempty"`
+	Args      []string          `json:"args,omitempty"`
+	Env       map[string]string `json:"env,omitempty"`
+	Cwd       string            `json:"cwd,omitempty"`
+	Cols      int               `json:"cols,omitempty"`
+	Rows      int               `json:"rows,omitempty"`
+	SessionID string            `json:"sessionId,omitempty"`
+	Data      string            `json:"data,omitempty"`
+	Name      string            `json:"name,omitempty"`
+	From      int64             `json:"from,omitempty"`
 }
 
 // Response는 데몬이 보내는 JSON 응답이다.
 type Response struct {
-	Command string `json:"command,omitempty"`
-	SessionID string `json:"sessionId,omitempty"`
-	DefaultCols int `json:"defaultCols,omitempty"`
-	DefaultRows int `json:"defaultRows,omitempty"`
-	Output string `json:"output,omitempty"`
-	Truncated bool `json:"truncated,omitempty"`
-	Sequence int64 `json:"sequence,omitempty"`
-	ResizeCols int `json:"resizeCols,omitempty"`
-	ResizeRows int `json:"resizeRows,omitempty"`
-	Entries []RingEntry `json:"entries,omitempty"`
-	Sessions []SessionInfo `json:"sessions,omitempty"`
-	Error string `json:"error,omitempty"`
+	Command     string        `json:"command,omitempty"`
+	SessionID   string        `json:"sessionId,omitempty"`
+	DefaultCols int           `json:"defaultCols,omitempty"`
+	DefaultRows int           `json:"defaultRows,omitempty"`
+	Output      string        `json:"output,omitempty"`
+	Truncated   bool          `json:"truncated,omitempty"`
+	Sequence    int64         `json:"sequence,omitempty"`
+	ResizeCols  int           `json:"resizeCols,omitempty"`
+	ResizeRows  int           `json:"resizeRows,omitempty"`
+	Entries     []RingEntry   `json:"entries,omitempty"`
+	Sessions    []SessionInfo `json:"sessions,omitempty"`
+	Error       string        `json:"error,omitempty"`
 }
 
 // SessionInfo는 list 응답에서 세션 정보.
 type SessionInfo struct {
 	SessionID string `json:"sessionId"`
-	Consumers int `json:"consumers"`
-	Closed bool `json:"closed"`
+	Consumers int    `json:"consumers"`
+	Closed    bool   `json:"closed"`
 }
 
 // ParseRequest는 JSON 라인을 파싱한다.

@@ -178,7 +178,7 @@ func TestIdleShutdown(t *testing.T) {
 }
 
 // Test1: echo hi
-// open /bin/sh -c 'echo hi' → verify "hi" in ring, exit code 0
+// open /bin/sh -c 'echo hi' → verify "hi" in output, exit code 0
 func TestI1EchoHi(t *testing.T) {
 	socketDir := "/tmp/sp-test-i1-" + fmt.Sprintf("%d", os.Getpid())
 	os.RemoveAll(socketDir)
@@ -227,28 +227,41 @@ func TestI1EchoHi(t *testing.T) {
 		t.Fatalf("no sessionId in response: %s", respLine)
 	}
 
-	// Wait for output
-	time.Sleep(200 * time.Millisecond)
+	// Wait for output message
+	foundHi := false
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+		respLine, err := reader.ReadBytes('\n')
+		conn.SetReadDeadline(time.Time{})
 
-	// Read ring
-	attachReq := map[string]interface{}{
-		"command":   "attach",
-		"sessionId": sessionID,
-		"from":      0,
-	}
-	reqJSON, _ = json.Marshal(attachReq)
-	conn.Write(append(reqJSON, '\n'))
-	respLine, _ = reader.ReadBytes('\n')
+		if err != nil {
+			if strings.Contains(err.Error(), "deadline exceeded") {
+				continue
+			}
+			break
+		}
 
-	// Check for entries in response
-	if !strings.Contains(string(respLine), "entries") {
-		t.Errorf("'entries' not found in ring. Response: %s", respLine)
-	}
-	if !strings.Contains(string(respLine), "aGk") {
-		t.Errorf("'hi' data not found in entries. Response: %s", respLine)
+		var msg map[string]interface{}
+		if json.Unmarshal(respLine, &msg) == nil {
+			if cmd, ok := msg["command"].(string); ok && cmd == "output" {
+				if outputB64, ok := msg["output"].(string); ok {
+					if outputData, err := base64.StdEncoding.DecodeString(outputB64); err == nil {
+						if strings.Contains(string(outputData), "hi") {
+							foundHi = true
+							break
+						}
+					}
+				}
+			}
+		}
 	}
 
-	// Close and verify exit code
+	if !foundHi {
+		t.Errorf("'hi' data not found in output messages")
+	}
+
+	// Close
 	closeReq := map[string]interface{}{
 		"command":   "close",
 		"sessionId": sessionID,
@@ -318,23 +331,42 @@ func TestI2CatRoundTrip(t *testing.T) {
 	}
 	reqJSON, _ = json.Marshal(writeReq)
 	conn.Write(append(reqJSON, '\n'))
-	reader.ReadBytes('\n')
+	reader.ReadBytes('\n') // read write response
 
 	time.Sleep(100 * time.Millisecond)
 
-	// Read ring to verify output
-	attachReq := map[string]interface{}{
-		"command":   "attach",
-		"sessionId": sessionID,
-		"from":      0,
-	}
-	reqJSON, _ = json.Marshal(attachReq)
-	conn.Write(append(reqJSON, '\n'))
-	respLine, _ = reader.ReadBytes('\n')
+	// Wait for output message
+	foundData := false
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+		respLine, err := reader.ReadBytes('\n')
+		conn.SetReadDeadline(time.Time{})
 
-	// Check for entries - the actual data will be base64 encoded
-	if !strings.Contains(string(respLine), "entries") {
-		t.Errorf("'entries' not found in output: %s", respLine)
+		if err != nil {
+			if strings.Contains(err.Error(), "deadline exceeded") {
+				continue
+			}
+			break
+		}
+
+		var msg map[string]interface{}
+		if json.Unmarshal(respLine, &msg) == nil {
+			if cmd, ok := msg["command"].(string); ok && cmd == "output" {
+				if outputB64, ok := msg["output"].(string); ok {
+					if outputData, err := base64.StdEncoding.DecodeString(outputB64); err == nil {
+						if strings.Contains(string(outputData), "hello world") {
+							foundData = true
+							break
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if !foundData {
+		t.Errorf("'hello world' not found in output messages")
 	}
 
 	// Close

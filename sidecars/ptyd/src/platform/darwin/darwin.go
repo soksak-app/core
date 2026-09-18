@@ -17,6 +17,7 @@ func init() { platform.Register(implementation{}) }
 
 // Daemonize는 프로세스를 데몬으로 만든다.
 // setsid()를 호출하고 stdin/stdout/stderr를 /dev/null로 리다이렉트한다.
+// PTYD_LOG 환경변수가 설정되면 stderr을 그 파일로 리다이렉트한다.
 func (implementation) Daemonize() error {
 	// setsid() 호출: 새 세션과 프로세스 그룹 생성
 	if _, err := syscall.Setsid(); err != nil {
@@ -30,14 +31,26 @@ func (implementation) Daemonize() error {
 	}
 	defer devNull.Close()
 
-	// stdin, stdout, stderr를 /dev/null로 리다이렉트
+	// stdin, stdout를 /dev/null로 리다이렉트
 	if err := syscall.Dup2(int(devNull.Fd()), 0); err != nil {
 		return fmt.Errorf("dup2 stdin: %w", err)
 	}
 	if err := syscall.Dup2(int(devNull.Fd()), 1); err != nil {
 		return fmt.Errorf("dup2 stdout: %w", err)
 	}
-	if err := syscall.Dup2(int(devNull.Fd()), 2); err != nil {
+
+	// stderr: PTYD_LOG 에 경로가 있으면 그 파일로, 없으면 /dev/null 로.
+	// 기본값이 /dev/null 이라 데몬의 사고가 흔적 없이 묻히므로 진단용 통로를 하나 남긴다.
+	stderr := devNull
+	if logPath := os.Getenv("PTYD_LOG"); logPath != "" {
+		logFile, err := os.OpenFile(logPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
+		if err != nil {
+			return fmt.Errorf("open log file: %w", err)
+		}
+		defer logFile.Close()
+		stderr = logFile
+	}
+	if err := syscall.Dup2(int(stderr.Fd()), 2); err != nil {
 		return fmt.Errorf("dup2 stderr: %w", err)
 	}
 

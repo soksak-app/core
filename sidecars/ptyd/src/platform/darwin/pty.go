@@ -56,7 +56,9 @@ func AllocatePTY() (*PTYPair, error) {
 	}
 
 	// 슬레이브 PTY 파일 열기
-	slave, err := os.OpenFile(slaveNameStr, os.O_RDWR, 0)
+	// O_NOCTTY: 세션 리더(setsid()로 생성됨)가 이 tty를 제어 터미널로 삼지 않도록 함.
+	// 없으면 자식 프로세스 종료 시 커널이 포그라운드 프로세스 그룹에 SIGHUP을 보내 데몬이 죽는다.
+	slave, err := os.OpenFile(slaveNameStr, os.O_RDWR|syscall.O_NOCTTY, 0)
 	if err != nil {
 		master.Close()
 		return nil, fmt.Errorf("open slave %s: %w", slaveNameStr, err)

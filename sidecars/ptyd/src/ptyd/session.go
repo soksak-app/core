@@ -26,19 +26,19 @@ type Session struct {
 	id string
 
 	// PTY와 프로세스 (플랫폼별)
-	sessionHandle any           // 플랫폼 세션 핸들 (darwin: *platform/darwin.SessionHandle)
-	ptmasterReader io.Reader    // PTY 마스터 읽기
-	ptmasterWriter io.Writer    // PTY 마스터 쓰기
-	closed        bool          // 종료 여부
-	exitCode      int           // 종료 코드 (-1 = 실행 중)
-	closeChan     chan struct{} // 종료 신호
+	sessionHandle  any           // 플랫폼 세션 핸들 (darwin: *platform/darwin.SessionHandle)
+	ptmasterReader io.Reader     // PTY 마스터 읽기
+	ptmasterWriter io.Writer     // PTY 마스터 쓰기
+	closed         bool          // 종료 여부
+	exitCode       int           // 종료 코드 (-1 = 실행 중)
+	closeChan      chan struct{} // 종료 신호
 
 	// 링 버퍼: 각 항목은 순번과 함께 저장되고, 소비자들에게 배송된다.
 	// 링은 최대 크기가 고정되고(예: 10000개 항목), 넘으면 오래된 것부터 버린다.
-	ring      []RingEntry
-	ringSize  int
-	nextSeq   int64 // 다음 쓰기의 순번
-	totalSeq  int64 // 누적 순번 (truncation 판단용)
+	ring     []RingEntry
+	ringSize int
+	nextSeq  int64 // 다음 쓰기의 순번
+	totalSeq int64 // 누적 순번 (truncation 판단용)
 
 	// 소비자 추적
 	consumers map[*Consumer]bool
@@ -47,8 +47,9 @@ type Session struct {
 // Consumer는 세션에 붙은 클라이언트다.
 type Consumer struct {
 	SessionID string
-	from      int64     // 다음 받을 순번
-	Ch        chan<- RingEntry
+	from      int64          // 다음 받을 순번
+	Ch        chan RingEntry // 소비자가 값을 받을 채널
+	Done      chan struct{}  // 종료 신호를 받을 채널
 }
 
 // NewSession은 새 세션을 만든다.
@@ -61,7 +62,7 @@ func NewSession(id string, ringSize int) *Session {
 		ring:      make([]RingEntry, 0, ringSize),
 		ringSize:  ringSize,
 		consumers: make(map[*Consumer]bool),
-		exitCode: -1,
+		exitCode:  -1,
 		closeChan: make(chan struct{}),
 	}
 }
@@ -126,6 +127,7 @@ func (s *Session) addToRing(entry RingEntry) {
 			case consumer.Ch <- entry:
 				consumer.from++
 			default:
+				// 채널이 가득 차면 무시 (소비자가 처리 못함)
 			}
 		}
 	}
@@ -302,6 +304,9 @@ func (s *Session) waitForExit() {
 		s.mu.Lock()
 		s.exitCode = code
 		s.mu.Unlock()
+
+		// 모든 소비자에게 종료 알림
+		s.NotifyConsumersOfExit()
 	}
 }
 
@@ -376,4 +381,19 @@ func (s *Session) GetNextSeq() int64 {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.nextSeq
+}
+
+// NotifyConsumersOfExit은 모든 소비자에게 세션 종료를 알린다.
+func (s *Session) NotifyConsumersOfExit() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for consumer := range s.consumers {
+		select {
+		case <-consumer.Done:
+			// 이미 종료됨
+		default:
+			close(consumer.Done)
+		}
+	}
 }
