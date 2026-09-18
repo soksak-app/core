@@ -108,7 +108,7 @@ static WKWebView *page(NSWindow *window, WKWebViewConfiguration *configuration, 
     return view;
 }
 
-typedef struct { NSTimeInterval took; BOOL beforeRelease; double requested; double displayed; } SPWait;
+typedef struct { NSTimeInterval took; BOOL beforeRelease; double requested; double finished; double displayed; } SPWait;
 
 // busy 의 웹 프로세스를 붙잡은 뒤 메인 웹뷰 크기를 바꾸고, 표시 대기가 끝날 때까지의 시간과 그 대기가
 // busy 의 스크립트가 끝나기 전에 끝났는지 반환한다. 순서로 판정하므로 기계 부하와 무관하다.
@@ -127,14 +127,17 @@ static SPWait waitWhileBusy(WKWebView *main, WKWebView *busy, SPBusySignal *sign
     NSDate *start = [NSDate date];
     __block NSTimeInterval took = 0;
     __block double displayed = 0;
+    __block double finished = 0;
+    // 요청·완료·표시 시각은 모두 같은 시계(CACurrentMediaTime)로 잰다.
     double requested = CACurrentMediaTime() * 1000;
     surfaceLayoutAfterSettled(main, ^(double at) {
         took = -start.timeIntervalSinceNow;
+        finished = CACurrentMediaTime() * 1000;
         displayed = at;
         presented = YES;
     });
     until(^BOOL { return presented && released; });
-    return (SPWait){ took, beforeRelease, requested, displayed };
+    return (SPWait){ took, beforeRelease, requested, finished, displayed };
 }
 
 int main(void) { @autoreleasepool {
@@ -169,10 +172,11 @@ int main(void) { @autoreleasepool {
     check(!visibleWait.beforeRelease,
         [NSString stringWithFormat:@"the wait includes a visible document of the main origin (%.3fs)", visibleWait.took]);
     // 표시 시각은 요청보다 늦고, 대기를 마친 시점에서 한 번의 화면 갱신 안이다.
-    double finished = visibleWait.requested + visibleWait.took * 1000;
-    check(visibleWait.displayed > finished && visibleWait.displayed < finished + 100,
+    // 표시 시각은 디스플레이 링크 틱의 목표 시각이다. 메인 스레드가 늦으면 틱이 목표 시각을 지나서
+    // 도착하므로 표시 시각이 완료 시각보다 앞설 수 있다. 완료보다 늦다는 것은 약속이 아니다.
+    check(visibleWait.displayed > visibleWait.requested && visibleWait.displayed < visibleWait.finished + 100,
         [NSString stringWithFormat:@"the wait reports the display time of the presented frame (requested %.1fms, finished %.1fms, displayed %.1fms)",
-            visibleWait.requested, finished, visibleWait.displayed]);
+            visibleWait.requested, visibleWait.finished, visibleWait.displayed]);
 
     application.hidden = YES;
     SPWait hiddenWait = waitWhileBusy(main, application, signal);
