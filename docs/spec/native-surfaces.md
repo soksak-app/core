@@ -41,6 +41,17 @@ On macOS, content webviews use a shared native container whose coordinates are d
 
 The [private native API inventory](../operations/private-native-apis.md) records the geometry, presentation, and input dependencies, their necessity, and the first review steps after native updates.
 
+## Regions
+
+A region is a place on a surface where native content is displayed. The page specifies the region's element, and native content appears in that place. The position is set by insets (`left/top/right/bottom`) from the edges of the surface viewport. The region moves, hides, and closes with its surface.
+
+Regions are below modal dialogs and excluded from the presentation-wait. Each region has a unique name within its surface. The host reports the region's name, rectangle, visibility, and focused state through `host.window`.
+
+There are two kinds of region suppliers:
+
+- **Document regions**: Created by the core as subviews of surfaces, hosting web documents.
+- **Image regions**: Created by external sidecars, supplying shared images as native surfaces.
+
 ## Document regions
 
 A surface page shows a web document in one of its elements through a document region. Surfaces themselves always show a page of their plugin package ([plugins](plugins.md)); a web address is never a surface.
@@ -55,6 +66,17 @@ A surface page shows a web document in one of its elements through a document re
 - While a dialog is open, the host blurs regions with the same radius as the surface document blur.
 - Regions participate in native input like surfaces: pointer input reaches the region under the point without activating the application, and page focus changes do not move the application's keyboard focus. `host.window` lists regions as `documents` and `host.hit` reports `{kind: "document", surface, document}` ([exposure](exposure.md)).
 - The presentation wait excludes regions. Their content renders independently.
+
+## Image regions
+
+Images are created by sidecars and supplied to the core through a region. The core receives only an opaque token and pixel size; it knows neither the image buffer nor the supplier's identity beyond the token.
+
+- **Image supply and size validation**: The host creates a region by name under a surface and assigns it a supplier sidecar. The sidecar presents an image with a token and dimensions. Dimensions must match the region's size; if dimensions differ, the presentation is rejected with an error.
+- **Device pixel reporting**: The region reports its size in device pixels, not CSS pixels.
+- **Input handling**: Pointer events pass through to the surface document below. Keyboard, input composition, and accessibility belong to the region. The region receives key events; keys are delivered to the owning page as events. Focus changes only on host request, and the current position is observed only through `host.window`.
+- **Accessibility**: The region is an accessibility element. Its value is the screen text provided by the owner.
+- **Image release**: The core releases an image to its supplier when the transaction that presents the next image completes. The supplier must not draw over an image the core has not released. How many images a supplier keeps and what it does when none is free is the supplier's own policy.
+- **Authorization**: The region specifies which sidecar is authorized to supply images. The host rejects images from unregistered sidecars with an error.
 
 ## Acceptance criteria
 
@@ -77,3 +99,9 @@ Surface placement, visibility, stacking, and input follow the same contract in e
 Platform and framework defects are corrected in the host's native core within this repository when necessary. Private APIs are permitted when the required behavior cannot be obtained correctly through public APIs. Each correction must identify the cause, justify the API's role using its actual behavior, use the smallest sufficient implementation, and verify geometry, rendering, input, and lifecycle on the affected platform. Remove harmful or unnecessary changes. Passing tests is evidence of tested behavior; implementation review must also establish necessity and correct API use. API availability and maintenance risks are documented separately from the technical validity of the correction. Differences between hosts require diagnosis of the framework integration and native behavior; they do not establish the cause by themselves.
 
 Native presentation validation currently targets macOS. Windows and Linux behavior is unverified. No framework fork is part of this implementation.
+
+### darwin
+
+Image region tokens on macOS consist of a global IOSurface identifier and a 16-byte nonce attached to that surface. When the host receives an image, it looks up the surface by identifier and rejects the image if the nonce does not match. This guards against reuse of recycled 32-bit identifiers.
+
+IOSurface identifiers are in the global namespace of the user who owns the process. Different processes of the same user can look up and open the surface; this trust boundary is the same as the endpoint socket used for sidecar communication.
