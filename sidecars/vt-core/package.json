@@ -1,0 +1,10 @@
+{
+  "name": "@soksak/sidecar-vt-core",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Common VT layer: protocol, session lifetime, screen types, Engine trait.",
+  "type": "module",
+  "devDependencies": {
+    "@soksak/plugin-api": "workspace:*"
+  }
+}

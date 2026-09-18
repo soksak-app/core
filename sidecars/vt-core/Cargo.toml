@@ -1,0 +1,17 @@
+[package]
+name = "soksak-sidecar-vt-core"
+version = "0.0.1"
+edition = "2021"
+description = "Common VT layer: protocol, session lifetime, screen types, Engine trait."
+
+[lib]
+path = "src/vt-core.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["raw_value"] }
+tokio = { version = "1", features = ["io-util", "rt", "time"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }

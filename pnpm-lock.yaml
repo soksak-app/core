@@ -151,7 +151,15 @@ importers:
         specifier: workspace:*
         version: link:../../packages/plugin-api
 
+  sidecars/ptyd: {}
+
   sidecars/shell:
+    devDependencies:
+      '@soksak/plugin-api':
+        specifier: workspace:*
+        version: link:../../packages/plugin-api
+
+  sidecars/vt-core:
     devDependencies:
       '@soksak/plugin-api':
         specifier: workspace:*

@@ -139,6 +139,7 @@ native-test: native-darwin frontend-wailsv3 frontend-tauriv2
 	@$(MAKE) -C native/darwin test
 	@$(GO_ENV) go test -ldflags "$(GO_LINK)" ./packages/host/wailsv3/... ./sidecars/shell/... ./sidecars/ptyd/...
 	@$(GO_ENV) go test -tags diagnostics -ldflags "$(GO_LINK)" ./packages/host/wailsv3/...
+	@$(CARGO_ENV) cargo test --manifest-path sidecars/Cargo.toml --workspace
 	@$(CARGO_ENV) cargo test -p soksak-host-tauriv2
 	@$(CARGO_ENV) cargo test -p soksak-host-tauriv2 --features diagnostics
 
