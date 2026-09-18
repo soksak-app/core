@@ -164,6 +164,7 @@ The debug executables are `target/debug/soksak-wailsv3` and `target/debug/soksak
 | `make wailsv3-build`, `make tauriv2-build` | Build `native/darwin`, the frontend, and the sidecars, stage them, and build the debug executable |
 | `make wailsv3-build-release`, `make tauriv2-build-release` | Build the release executable |
 | `make wailsv3`, `make tauriv2` | Build and run the debug executable |
+| `make sidecars-debug`, `make sidecars-release` | Build the sidecar packages the applications declare, and their helpers, in that profile. The build list comes from `scripts/sidecar-packages.mjs`, not from a directory glob |
 | `make native-test` | Run `make -C native/darwin test`, `go test` for `packages/host/wailsv3` and `sidecars/shell`, and `cargo test -p soksak-host-tauriv2`, the host tests with and without diagnostics |
 | `make platforms` | Run `scripts/check-platforms.mjs` |
 | `make hosts-check` | Run `scripts/check-hosts.mjs` |

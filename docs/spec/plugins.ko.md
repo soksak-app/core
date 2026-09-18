@@ -64,7 +64,7 @@
 | `/diagnostics.js` | `--diagnostics`이면 워크벤치의 `observe.js`(페이지 진단 메서드), 아니면 빈 모듈 |
 | `/transcript.js` | `--diagnostics`이면 워크벤치의 `transcript.js`(진단 모듈이 쓰는 호출 기록기), 아니면 없음 |
 
-`--executables <디렉터리>`를 지정하면 각 사이드카의 빌드된 `executable` 파일을 파일 이름 그대로 `<디렉터리>`에 복사하고, 파일이 빌드되지 않았으면 실패한다. 디버그 스테이징 대상 `frontend-wailsv3`, `frontend-tauriv2`와 릴리스 빌드 대상은 모든 사이드카 패키지를 빌드하는 `sidecars` 대상을 실행한 뒤 애플리케이션 실행 파일의 디렉터리(`target/debug` 또는 `target/release`)를 `--executables`로 지정해 `apps/<app>/src/frontend`에 스테이징한다. 디버그 대상은 `--diagnostics`를 더하며, 릴리스 빌드에는 페이지 진단 코드가 없다.
+`--executables <디렉터리>`를 지정하면 각 사이드카의 빌드된 `executable` 파일을 파일 이름 그대로 `<디렉터리>`에 복사하고, 파일이 빌드되지 않았으면 실패한다. 디버그 스테이징 대상 `frontend-wailsv3`, `frontend-tauriv2`는 `sidecars-debug`를, 릴리스 빌드 대상은 `sidecars-release`를 실행한다. 두 대상은 애플리케이션이 선언한 사이드카와 그 사이드카가 선언한 헬퍼를 해당 프로필로 빌드한다. 그 뒤 애플리케이션 실행 파일의 디렉터리(`target/debug` 또는 `target/release`)를 `--executables`로 지정해 `apps/<app>/src/frontend`에 스테이징한다. 디버그 대상은 `--diagnostics`를 더하며, 릴리스 빌드에는 페이지 진단 코드가 없다.
 
 모든 페이지는 `PAGE_IMPORTS`와 같은 import map 하나를 선언한다. 항목은 `soksak`, `@soksak/plugin-api`, `@soksak/plugin-api/page`, `@soksak/runtime`, `@soksak/workbench/`다.
 

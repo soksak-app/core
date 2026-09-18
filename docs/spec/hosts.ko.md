@@ -164,6 +164,7 @@ Wails 바인딩 서비스 이름은 `github.com/min-median-max/soksak/packages/h
 | `make wailsv3-build`, `make tauriv2-build` | `native/darwin`, 프런트엔드, 사이드카를 빌드하고 스테이징한 뒤 디버그 실행 파일을 빌드한다 |
 | `make wailsv3-build-release`, `make tauriv2-build-release` | 릴리스 실행 파일을 빌드한다 |
 | `make wailsv3`, `make tauriv2` | 디버그 실행 파일을 빌드하고 실행한다 |
+| `make sidecars-debug`, `make sidecars-release` | 애플리케이션이 선언한 사이드카와 그 헬퍼를 해당 프로필로 빌드한다. 빌드 목록은 디렉터리 글로브가 아니라 `scripts/sidecar-packages.mjs` 가 선언에서 유도한다 |
 | `make native-test` | `make -C native/darwin test`, `packages/host/wailsv3`와 `sidecars/shell`의 `go test`, `cargo test -p soksak-host-tauriv2`를 실행한다. 호스트 검사는 진단 빌드와 일반 빌드로 각각 실행한다 |
 | `make platforms` | `scripts/check-platforms.mjs`를 실행한다 |
 | `make hosts-check` | `scripts/check-hosts.mjs`를 실행한다 |

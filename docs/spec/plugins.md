@@ -64,7 +64,7 @@ The workbench loads `environment.json` and every listed `plugin.json` before it 
 | `/diagnostics.js` | With `--diagnostics`, the workbench's `observe.js` (the page diagnostic methods); otherwise an empty module |
 | `/transcript.js` | With `--diagnostics`, the workbench's `transcript.js` (the call recorder of the diagnostic module); otherwise absent |
 
-With `--executables <dir>`, the tool also copies each sidecar's built `executable` file into `<dir>` under its file name and fails when the file is not built. The debug staging targets `frontend-wailsv3` and `frontend-tauriv2` and the release build targets run the `sidecars` target, which builds every sidecar package, and then stage into `apps/<app>/src/frontend` with `--executables` set to the directory of the application executable (`target/debug` or `target/release`). The debug targets add `--diagnostics`; release builds contain no page diagnostic code.
+With `--executables <dir>`, the tool also copies each sidecar's built `executable` file into `<dir>` under its file name and fails when the file is not built. The debug staging targets `frontend-wailsv3` and `frontend-tauriv2` run `sidecars-debug` and the release build targets run `sidecars-release`; those targets build the sidecar packages the applications declare and the helpers those sidecars declare, in that profile. They then stage into `apps/<app>/src/frontend` with `--executables` set to the directory of the application executable (`target/debug` or `target/release`). The debug targets add `--diagnostics`; release builds contain no page diagnostic code.
 
 Every page declares one import map equal to `PAGE_IMPORTS`: `soksak`, `@soksak/plugin-api`, `@soksak/plugin-api/page`, `@soksak/runtime`, and `@soksak/workbench/`.
 

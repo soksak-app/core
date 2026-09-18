@@ -51,7 +51,7 @@ verify: prepare docs-check exposure-check
 # 각 앱은 debug 와 release 두 프로필로 빌드한다. release 는 각 도구의 표준 축소
 # 옵션(cargo release 프로필, Go 의 -s -w -trimpath)을 사용한다. debug 는 진단 빌드(Go 태그·cargo
 # 기능 diagnostics)이고 release 는 진단 메서드를 포함하지 않는다.
-.PHONY: native-darwin sidecars frontend-wailsv3 frontend-tauriv2 native-test \
+.PHONY: native-darwin sidecars-debug sidecars-release frontend-wailsv3 frontend-tauriv2 native-test \
         tauriv2 tauriv2-release tauriv2-build tauriv2-build-release \
         wailsv3 wailsv3-release wailsv3-build wailsv3-build-release \
         examples-verify examples-size
@@ -79,10 +79,19 @@ WAILS_RELEASE = target/release/soksak-wailsv3
 native-darwin:
 	@$(MAKE) -C native/darwin
 
-# 사이드카. 각 사이드카 패키지의 build 스크립트가 실행 파일을 만들고, 스테이징이 플러그인이
-# 의존하는 사이드카의 실행 파일을 애플리케이션 실행 파일 옆에 복사한다.
-sidecars:
-	@$(GO_ENV) pnpm --filter "./sidecars/*" run build
+# 사이드카. 빌드할 패키지는 선언에서 나온다(environment.json 의 플러그인 → plugin.json 의
+# 사이드카 → sidecar.json 의 helpers). 각 패키지의 build 스크립트는 SOKSAK_PROFILE 을 읽고,
+# 스테이징이 그 실행 파일을 애플리케이션 실행 파일 옆에 복사한다.
+SIDECAR_PACKAGES = $(shell node scripts/sidecar-packages.mjs)
+
+sidecars-debug:
+	@$(GO_ENV) SOKSAK_PROFILE=debug pnpm $(SIDECAR_PACKAGES) run build
+
+# 릴리스는 기호와 빌드 경로를 빼고 재현 가능한 산출물을 만든다. 각 패키지의 build 스크립트가
+# 자기 언어의 플래그 변수를 읽는다.
+sidecars-release:
+	@$(GO_ENV) SOKSAK_PROFILE=release SOKSAK_GO_FLAGS="-trimpath -ldflags=-s -ldflags=-w" \
+		SOKSAK_CARGO_FLAGS=--release pnpm $(SIDECAR_PACKAGES) run build
 
 # 프런트엔드와 사이드카 실행 파일을 배치한다. 첫 인자는 실행 파일 디렉터리(앱 디렉터리
 # 기준), 둘째 인자는 추가 플래그다. debug 는 페이지 진단 모듈을 넣고(--diagnostics),
@@ -90,10 +99,10 @@ sidecars:
 stage-wailsv3 = pnpm -F @soksak/wailsv3 exec soksak-stage src/frontend --executables $(1) $(2)
 stage-tauriv2 = pnpm -F @soksak/tauriv2 exec soksak-stage src/frontend --executables $(1) $(2)
 
-frontend-wailsv3: build sidecars
+frontend-wailsv3: build sidecars-debug
 	@$(call stage-wailsv3,../../target/debug,--diagnostics)
 
-frontend-tauriv2: build sidecars
+frontend-tauriv2: build sidecars-debug
 	@$(call stage-tauriv2,../../target/debug,--diagnostics)
 
 # generate_context! 가 프런트엔드를 포함하므로 크레이트를 다시 빌드하게 한다.
@@ -101,7 +110,7 @@ tauriv2-build: native-darwin frontend-tauriv2
 	@touch apps/tauriv2/src/main.rs
 	@$(CARGO_ENV) cargo build -p soksak-tauriv2 --features diagnostics
 
-tauriv2-build-release: native-darwin build sidecars
+tauriv2-build-release: native-darwin build sidecars-release
 	@$(call stage-tauriv2,../../target/release)
 	@touch apps/tauriv2/src/main.rs
 	@$(CARGO_ENV) cargo build --release -p soksak-tauriv2
@@ -109,7 +118,7 @@ tauriv2-build-release: native-darwin build sidecars
 wailsv3-build: native-darwin frontend-wailsv3
 	@$(GO_ENV) go build -C apps/wailsv3 -tags diagnostics -ldflags "$(GO_LINK)" -o ../../$(WAILS_DEBUG) ./src
 
-wailsv3-build-release: native-darwin build sidecars
+wailsv3-build-release: native-darwin build sidecars-release
 	@$(call stage-wailsv3,../../target/release)
 	@$(GO_ENV) go build -C apps/wailsv3 -trimpath -ldflags "-s -w $(GO_LINK)" -o ../../$(WAILS_RELEASE) ./src
 

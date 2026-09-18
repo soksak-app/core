@@ -10,5 +10,6 @@ node_modules/
 .ds-sync/
 ds-bundle/
 
-# Rust 워크스페이스의 cargo 출력
+# Rust 워크스페이스의 cargo 출력. 루트 규칙은 고정 경로라 사이드카 워크스페이스를 덮지 않는다.
 /target/
+/sidecars/target/
