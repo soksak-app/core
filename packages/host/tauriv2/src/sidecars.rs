@@ -12,8 +12,11 @@
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Component, Path, PathBuf};
-use std::process::{Child, ChildStdin, Command, Stdio};
+use std::process::{Child, Command, Stdio};
+use std::sync::mpsc::{sync_channel, SyncSender};
 use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
@@ -61,7 +64,7 @@ struct Event {
 
 struct Process {
     child: Child,
-    stdin: ChildStdin,
+    outbox: SyncSender<Vec<u8>>, // 용량 256인 채널
 }
 
 struct State<O> {
@@ -75,13 +78,8 @@ pub struct Sidecars<O: Owner> {
     /// 사이드카 패키지 이름과 실행 파일 경로.
     declared: HashMap<String, PathBuf>,
     state: Arc<Mutex<State<O>>>,
-}
-
-fn write_request(process: &mut Process, request: &Request) -> Result<(), String> {
-    let mut line = serde_json::to_vec(request).map_err(|e| e.to_string())?;
-    line.push(b'\n');
-    process.stdin.write_all(&line).map_err(|e| e.to_string())?;
-    process.stdin.flush().map_err(|e| e.to_string())
+    /// 테스트에서 주입 가능한 Stop() 기한. 기본값 5초.
+    pub stop_timeout: Duration,
 }
 
 impl<O: Owner> Sidecars<O> {
@@ -103,7 +101,10 @@ impl<O: Owner> Sidecars<O> {
             executable: String,
             protocol: u64,
         }
-        fn load<T: serde::de::DeserializeOwned>(read: &dyn Fn(&str) -> Option<Vec<u8>>, path: &str) -> Result<T, String> {
+        fn load<T: serde::de::DeserializeOwned>(
+            read: &dyn Fn(&str) -> Option<Vec<u8>>,
+            path: &str,
+        ) -> Result<T, String> {
             let bytes = read(path).ok_or_else(|| format!("{path} is missing from the frontend"))?;
             serde_json::from_slice(&bytes).map_err(|e| format!("{path}: {e}"))
         }
@@ -118,24 +119,56 @@ impl<O: Owner> Sidecars<O> {
                 let path = format!("modules/{name}/sidecar.json");
                 let sidecar: Sidecar = load(read, &path)?;
                 if sidecar.protocol != 1 {
-                    return Err(format!("{path}: protocol {} is not supported", sidecar.protocol));
+                    return Err(format!(
+                        "{path}: protocol {} is not supported",
+                        sidecar.protocol
+                    ));
                 }
                 let executable = Path::new(&sidecar.executable);
-                let inside = executable.components().all(|c| matches!(c, Component::Normal(_) | Component::CurDir));
-                let file = executable.file_name().filter(|_| inside)
-                    .ok_or_else(|| format!("{path}: executable {} is not a path inside the package", sidecar.executable))?;
+                let inside = executable
+                    .components()
+                    .all(|c| matches!(c, Component::Normal(_) | Component::CurDir));
+                let file = executable.file_name().filter(|_| inside).ok_or_else(|| {
+                    format!(
+                        "{path}: executable {} is not a path inside the package",
+                        sidecar.executable
+                    )
+                })?;
                 declared.insert(name, directory.join(file));
             }
         }
         Ok(Self {
             declared,
-            state: Arc::new(Mutex::new(State { running: HashMap::new(), owners: HashMap::new(), stopped: false })),
+            state: Arc::new(Mutex::new(State {
+                running: HashMap::new(),
+                owners: HashMap::new(),
+                stopped: false,
+            })),
+            stop_timeout: Duration::from_secs(5),
         })
     }
 
     /// owner 창의 표면 surface 에서 온 body 를 사이드카 name 에 전달한다.
-    pub fn send(&self, owner: &O, name: &str, surface: &str, body: &RawValue) -> Result<(), String> {
+    /// 뮤텍스 밖에서 직렬화하고 논블로킹 채널로 전송하므로, 사이드카가 느려도 다른 전송을 차단하지 않는다.
+    pub fn send(
+        &self,
+        owner: &O,
+        name: &str,
+        surface: &str,
+        body: &RawValue,
+    ) -> Result<(), String> {
         let root = owner.root()?;
+
+        // 먼저 뮤텍스 밖에서 JSON 직렬화한다.
+        let mut line = serde_json::to_vec(&Request {
+            surface,
+            root: Some(&root),
+            closed: false,
+            body: Some(body),
+        })
+        .map_err(|e| e.to_string())?;
+        line.push(b'\n');
+
         let mut state = self.state.lock().map_err(|e| e.to_string())?;
         if state.stopped {
             return Err("sidecars are stopped".into());
@@ -153,58 +186,135 @@ impl<O: Owner> Sidecars<O> {
             state.running.insert(name.to_string(), process);
         }
         state.owners.insert(surface.to_string(), owner.clone());
-        let process = state.running.get_mut(name).expect("started above");
-        write_request(process, &Request { surface, root: Some(&root), closed: false, body: Some(body) })
+        let process = state.running.get(name).expect("started above");
+
+        // 논블로킹으로 채널에 전송한다. 채널이 가득 차면 "is not keeping up" 오류를 반환한다.
+        process
+            .outbox
+            .try_send(line)
+            .map_err(|_| format!("sidecar {name} is not keeping up"))
     }
 
     /// owner 창의 표면 중 alive 에 없는 것을 실행 중인 모든 사이드카에 알린다.
     pub fn retain(&self, owner: &O, alive: &dyn Fn(&str) -> bool) -> Result<(), String> {
         let mut state = self.state.lock().map_err(|e| e.to_string())?;
         let key = owner.key();
-        let gone: Vec<String> = state.owners.iter()
+        let gone: Vec<String> = state
+            .owners
+            .iter()
             .filter(|(surface, current)| current.key() == key && !alive(surface))
             .map(|(surface, _)| surface.clone())
             .collect();
+
         for surface in gone {
             state.owners.remove(&surface);
-            for (name, process) in state.running.iter_mut() {
-                if let Err(error) = write_request(process, &Request { surface: &surface, root: None, closed: true, body: None }) {
-                    eprintln!("sidecar {name}: close {surface}: {error}");
+
+            // 뮤텍스 밖에서 직렬화한다.
+            let mut line = serde_json::to_vec(&Request {
+                surface: &surface,
+                root: None,
+                closed: true,
+                body: None,
+            })
+            .map_err(|e| e.to_string())?;
+            line.push(b'\n');
+
+            for (name, process) in state.running.iter() {
+                // 논블로킹으로 채널에 전송한다. 실패해도 로그만 한다.
+                if let Err(_) = process.outbox.try_send(line.clone()) {
+                    eprintln!("sidecar {name}: close {surface}: outbox full");
                 }
             }
         }
         Ok(())
     }
 
-    /// 모든 사이드카의 표준 입력을 닫고 종료를 기다린다.
+    /// 모든 사이드카를 종료한다. 채널을 닫아 쓰기 스레드에 EOF 신호를 보내고 프로세스를 강제 종료한다.
     pub fn stop(&self) {
         let processes: Vec<(String, Process)> = {
             let mut state = self.state.lock().expect("sidecar state");
             state.stopped = true;
             state.running.drain().collect()
         };
-        for (name, process) in processes {
-            let Process { mut child, stdin } = process;
-            drop(stdin);
-            if let Err(error) = child.wait() {
-                eprintln!("sidecar {name}: {error}");
-            }
+
+        // 모든 프로세스를 병렬로 기다린다. 프로세스가 스레드로 move되면서 outbox가 자동으로 drop되어
+        // 쓰기 스레드의 stdin이 close되고 자식이 EOF를 받는다.
+        let deadline = std::time::Instant::now() + self.stop_timeout;
+        let mut handles = Vec::new();
+        for (_name, process) in processes {
+            let handle = thread::spawn(move || {
+                // outbox를 즉시 drop한다. 이렇게 하면 쓰기 스레드가 EOF를 받고 stdin을 close한다.
+                drop(process.outbox);
+
+                let mut child = process.child;
+                let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+                let start = std::time::Instant::now();
+
+                // 프로세스가 종료되기를 기다린다 (기한까지).
+                loop {
+                    match child.try_wait() {
+                        Ok(Some(_status)) => {
+                            // 정상 종료됨.
+                            break;
+                        }
+                        Ok(None) => {
+                            // 프로세스가 여전히 실행 중.
+                            if start.elapsed() >= remaining {
+                                // 기한 초과. 강제 종료.
+                                let _ = child.kill();
+                                let _ = child.wait();
+                                break;
+                            }
+                            thread::sleep(Duration::from_millis(1));
+                        }
+                        Err(_) => {
+                            // wait() 오류. 이미 종료되었거나 이미 waited.
+                            break;
+                        }
+                    }
+                }
+            });
+            handles.push(handle);
+        }
+
+        // 모든 스레드가 완료될 때까지 기다린다.
+        for handle in handles {
+            let _ = handle.join();
         }
     }
 
     fn start(&self, name: &str) -> Result<Process, String> {
-        let program = self.declared.get(name).ok_or_else(|| format!("sidecar {name} is not declared by any plugin"))?;
+        let program = self
+            .declared
+            .get(name)
+            .ok_or_else(|| format!("sidecar {name} is not declared by any plugin"))?;
         let mut child = Command::new(program)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
             .spawn()
             .map_err(|e| format!("sidecar {name}: {}: {e}", program.display()))?;
-        let stdin = child.stdin.take().ok_or("sidecar stdin is missing")?;
+        let mut stdin = child.stdin.take().ok_or("sidecar stdin is missing")?;
         let stdout = child.stdout.take().ok_or("sidecar stdout is missing")?;
+
+        // 용량 256인 동기 채널 생성
+        let (tx, rx) = sync_channel::<Vec<u8>>(256);
+
+        // 쓰기 스레드: outbox 채널에서 읽어 stdin에 쓴다
+        let write_name = name.to_string();
+        thread::spawn(move || {
+            for line in rx.iter() {
+                if let Err(e) = stdin.write_all(&line) {
+                    eprintln!("sidecar {write_name}: write: {e}");
+                    break;
+                }
+            }
+        });
+
+        // 읽기 스레드: stdout에서 읽어 이벤트를 전달한다
         let state = Arc::clone(&self.state);
         let sidecar = name.to_string();
-        std::thread::spawn(move || {
+        thread::spawn(move || {
             let mut reader = BufReader::new(stdout);
             let mut line = Vec::new();
             loop {
@@ -224,21 +334,30 @@ impl<O: Owner> Sidecars<O> {
                         continue;
                     }
                 };
-                let owner = state.lock().ok().and_then(|state| state.owners.get(&event.surface).cloned());
+                let owner = state
+                    .lock()
+                    .ok()
+                    .and_then(|state| state.owners.get(&event.surface).cloned());
                 if let Some(owner) = owner {
-                    owner.deliver(Message { sidecar: sidecar.clone(), surface: event.surface, body: event.body });
+                    owner.deliver(Message {
+                        sidecar: sidecar.clone(),
+                        surface: event.surface,
+                        body: event.body,
+                    });
                 }
             }
             if let Ok(mut state) = state.lock() {
                 if !state.stopped {
                     eprintln!("sidecar {sidecar} closed its output");
-                    if let Some(mut process) = state.running.remove(&sidecar) {
-                        let _ = process.child.wait();
+                    if let Some(process) = state.running.remove(&sidecar) {
+                        // process를 drop 하지만 child 를 wait 하지는 않는다
+                        drop(process);
                     }
                 }
             }
         });
-        Ok(Process { child, stdin })
+
+        Ok(Process { child, outbox: tx })
     }
 }
 

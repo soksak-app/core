@@ -30,7 +30,14 @@ impl Owner for FakeOwner {
 
 fn owner(key: &str, root: &str) -> (FakeOwner, Receiver<Message>) {
     let (sent, received) = channel();
-    (FakeOwner { key: key.into(), root: root.into(), sent }, received)
+    (
+        FakeOwner {
+            key: key.into(),
+            root: root.into(),
+            sent,
+        },
+        received,
+    )
 }
 
 fn raw(text: &str) -> Box<RawValue> {
@@ -41,9 +48,18 @@ type Files = HashMap<&'static str, String>;
 
 fn files(sidecar: &str) -> Files {
     HashMap::from([
-        ("environment.json", r#"{"plugins":["@fixture/plugin"]}"#.to_string()),
-        ("modules/@fixture/plugin/plugin.json", r#"{"sidecars":["@fixture/sidecar-echo"]}"#.to_string()),
-        ("modules/@fixture/sidecar-echo/sidecar.json", sidecar.to_string()),
+        (
+            "environment.json",
+            r#"{"plugins":["@fixture/plugin"]}"#.to_string(),
+        ),
+        (
+            "modules/@fixture/plugin/plugin.json",
+            r#"{"sidecars":["@fixture/sidecar-echo"]}"#.to_string(),
+        ),
+        (
+            "modules/@fixture/sidecar-echo/sidecar.json",
+            sidecar.to_string(),
+        ),
     ])
 }
 
@@ -61,7 +77,11 @@ fn echo_sidecars() -> (Sidecars<FakeOwner>, tempfile::TempDir) {
     let program = directory.path().join("echo");
     std::fs::write(&program, format!("#!/bin/sh\ntee {}\n", record.display())).unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let sidecars = create(&files(r#"{"executable":"build/echo","protocol":1}"#), directory.path()).unwrap();
+    let sidecars = create(
+        &files(r#"{"executable":"build/echo","protocol":1}"#),
+        directory.path(),
+    )
+    .unwrap();
     (sidecars, directory)
 }
 
@@ -70,36 +90,69 @@ fn messages_reach_the_owning_window_only() {
     let (sidecars, directory) = echo_sidecars();
     let (first, first_events) = owner("a", "/projects/a");
     let (second, second_events) = owner("b", "/projects/b");
-    sidecars.send(&first, ECHO, "s1", &raw(r#"{"op":"open"}"#)).unwrap();
-    sidecars.send(&second, ECHO, "s2", &raw(r#"{"op":"open"}"#)).unwrap();
+    sidecars
+        .send(&first, ECHO, "s1", &raw(r#"{"op":"open"}"#))
+        .unwrap();
+    sidecars
+        .send(&second, ECHO, "s2", &raw(r#"{"op":"open"}"#))
+        .unwrap();
     let event = first_events.recv_timeout(Duration::from_secs(10)).unwrap();
-    assert_eq!((event.sidecar.as_str(), event.surface.as_str(), event.body.get()), (ECHO, "s1", r#"{"op":"open"}"#));
-    assert_eq!(second_events.recv_timeout(Duration::from_secs(10)).unwrap().surface, "s2");
+    assert_eq!(
+        (
+            event.sidecar.as_str(),
+            event.surface.as_str(),
+            event.body.get()
+        ),
+        (ECHO, "s1", r#"{"op":"open"}"#)
+    );
+    assert_eq!(
+        second_events
+            .recv_timeout(Duration::from_secs(10))
+            .unwrap()
+            .surface,
+        "s2"
+    );
     let error = sidecars.send(&second, ECHO, "s1", &raw("{}")).unwrap_err();
     assert!(error.contains("another window"), "{error}");
     sidecars.retain(&first, &|_| false).unwrap();
     sidecars.stop();
     let requests = std::fs::read_to_string(directory.path().join("requests")).unwrap();
-    assert_eq!(requests, concat!(
-        r#"{"surface":"s1","root":"/projects/a","body":{"op":"open"}}"#, "\n",
-        r#"{"surface":"s2","root":"/projects/b","body":{"op":"open"}}"#, "\n",
-        r#"{"surface":"s1","closed":true}"#, "\n",
-    ));
+    assert_eq!(
+        requests,
+        concat!(
+            r#"{"surface":"s1","root":"/projects/a","body":{"op":"open"}}"#,
+            "\n",
+            r#"{"surface":"s2","root":"/projects/b","body":{"op":"open"}}"#,
+            "\n",
+            r#"{"surface":"s1","closed":true}"#,
+            "\n",
+        )
+    );
 }
 
 #[test]
 fn undeclared_and_stopped_sidecars_are_rejected() {
     let (sidecars, _directory) = echo_sidecars();
     let (window, _events) = owner("a", "/projects/a");
-    assert!(sidecars.send(&window, "other", "s1", &raw("{}")).unwrap_err().contains("not declared"));
+    assert!(sidecars
+        .send(&window, "other", "s1", &raw("{}"))
+        .unwrap_err()
+        .contains("not declared"));
     sidecars.stop();
-    assert!(sidecars.send(&window, ECHO, "s1", &raw("{}")).unwrap_err().contains("stopped"));
+    assert!(sidecars
+        .send(&window, ECHO, "s1", &raw("{}"))
+        .unwrap_err()
+        .contains("stopped"));
 }
 
 #[test]
 fn a_missing_executable_fails() {
     let directory = tempfile::tempdir().unwrap();
-    let sidecars = create(&files(r#"{"executable":"build/echo","protocol":1}"#), directory.path()).unwrap();
+    let sidecars = create(
+        &files(r#"{"executable":"build/echo","protocol":1}"#),
+        directory.path(),
+    )
+    .unwrap();
     let (window, _events) = owner("a", "/");
     let error = sidecars.send(&window, ECHO, "s1", &raw("{}")).unwrap_err();
     assert!(error.contains(&format!("sidecar {ECHO}")), "{error}");
@@ -109,23 +162,45 @@ fn a_missing_executable_fails() {
 fn a_sidecar_without_sidecar_json_fails() {
     let directory = tempfile::tempdir().unwrap();
     let mut files = files(r#"{"executable":"build/echo","protocol":1}"#);
-    files.insert("modules/@fixture/plugin/plugin.json", r#"{"sidecars":["@fixture/sidecar-missing"]}"#.into());
+    files.insert(
+        "modules/@fixture/plugin/plugin.json",
+        r#"{"sidecars":["@fixture/sidecar-missing"]}"#.into(),
+    );
     let error = create(&files, directory.path()).err().unwrap();
-    assert!(error.contains("modules/@fixture/sidecar-missing/sidecar.json"), "{error}");
+    assert!(
+        error.contains("modules/@fixture/sidecar-missing/sidecar.json"),
+        "{error}"
+    );
 }
 
 #[test]
 fn an_executable_outside_the_package_fails() {
     let directory = tempfile::tempdir().unwrap();
-    let error = create(&files(r#"{"executable":"../escape","protocol":1}"#), directory.path()).err().unwrap();
-    assert!(error.contains("modules/@fixture/sidecar-echo/sidecar.json"), "{error}");
+    let error = create(
+        &files(r#"{"executable":"../escape","protocol":1}"#),
+        directory.path(),
+    )
+    .err()
+    .unwrap();
+    assert!(
+        error.contains("modules/@fixture/sidecar-echo/sidecar.json"),
+        "{error}"
+    );
 }
 
 #[test]
 fn an_unsupported_protocol_fails() {
     let directory = tempfile::tempdir().unwrap();
-    let error = create(&files(r#"{"executable":"build/echo","protocol":2}"#), directory.path()).err().unwrap();
-    assert!(error.contains("modules/@fixture/sidecar-echo/sidecar.json"), "{error}");
+    let error = create(
+        &files(r#"{"executable":"build/echo","protocol":2}"#),
+        directory.path(),
+    )
+    .err()
+    .unwrap();
+    assert!(
+        error.contains("modules/@fixture/sidecar-echo/sidecar.json"),
+        "{error}"
+    );
 }
 
 #[test]
@@ -138,4 +213,206 @@ fn plugins_without_sidecars_declare_none() {
     let (window, _events) = owner("a", "/");
     let error = sidecars.send(&window, ECHO, "s1", &raw("{}")).unwrap_err();
     assert!(error.contains("is not declared by any plugin"), "{error}");
+}
+
+#[test]
+fn slow_sidecar_does_not_block_other_sends() {
+    // 느린 사이드카는 stdin을 읽지 않고, 다른 사이드카는 정상적으로 동작한다.
+    // 느린 사이드카에 256번 이상 보내면 언젠가는 "is not keeping up" 오류로 실패한다.
+    // 그 상태에서 다른 사이드카 전송과 stop() 이 100ms 안에 끝난다 (이것이 핵심 단언이다).
+
+    let directory = tempfile::tempdir().unwrap();
+
+    // 느린 사이드카: stdin을 읽지 않지만 stdin EOF에 정상 종료한다.
+    let slow_program = directory.path().join("slow");
+    std::fs::write(&slow_program, "#!/bin/sh\nexec cat >/dev/null\n").unwrap();
+    std::fs::set_permissions(&slow_program, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    // 빠른 사이드카: 받은 줄을 그대로 출력한다.
+    let fast_program = directory.path().join("fast");
+    std::fs::write(&fast_program, "#!/bin/sh\ntee /dev/null\n").unwrap();
+    std::fs::set_permissions(&fast_program, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    // 두 사이드카를 선언한 프런트엔드
+    let mut files = HashMap::new();
+    files.insert(
+        "environment.json",
+        r#"{"plugins":["@fixture/plugin"]}"#.to_string(),
+    );
+    files.insert(
+        "modules/@fixture/plugin/plugin.json",
+        r#"{"sidecars":["@fixture/sidecar-slow","@fixture/sidecar-fast"]}"#.to_string(),
+    );
+    files.insert(
+        "modules/@fixture/sidecar-slow/sidecar.json",
+        r#"{"executable":"build/slow","protocol":1}"#.to_string(),
+    );
+    files.insert(
+        "modules/@fixture/sidecar-fast/sidecar.json",
+        r#"{"executable":"build/fast","protocol":1}"#.to_string(),
+    );
+
+    let mut sidecars = create(&files, directory.path()).unwrap();
+    // 테스트를 위해 기한을 100ms로 설정한다.
+    sidecars.stop_timeout = Duration::from_millis(100);
+    let (owner, _events) = owner("a", "/projects/test");
+
+    // 느린 사이드카에 채널이 가득 찰 때까지 보낸다.
+    let large_body = raw(&format!(r#"{{"data":"{}"}}"#, "x".repeat(20 * 1024)));
+    let mut last_err = None;
+    for i in 0..500 {
+        match sidecars.send(&owner, "@fixture/sidecar-slow", "s1", &large_body) {
+            Err(e) => {
+                last_err = Some(e.clone());
+                if e.contains("is not keeping up") {
+                    break; // 채널이 가득 찬 것을 확인했다
+                }
+                panic!("send {}: unexpected error: {}", i, e);
+            }
+            Ok(()) => {}
+        }
+    }
+
+    // 마침내 "is not keeping up" 오류를 받았는지 확인한다.
+    assert!(
+        last_err.is_some() && last_err.as_ref().unwrap().contains("is not keeping up"),
+        "want 'is not keeping up', got {:?}",
+        last_err
+    );
+
+    // 이제 다른 사이드카 전송과 stop() 이 100ms 안에 끝나야 한다.
+    let start = std::time::Instant::now();
+
+    // 빠른 사이드카로 보낸다 (이것이 일반적인 경우다).
+    sidecars
+        .send(
+            &owner,
+            "@fixture/sidecar-fast",
+            "s2",
+            &raw(r#"{"data":"test"}"#),
+        )
+        .unwrap();
+
+    // stop() 호출.
+    sidecars.stop();
+
+    let elapsed = start.elapsed();
+    assert!(
+        elapsed < Duration::from_millis(110),
+        "fast send + stop took {:?}, want < 110ms",
+        elapsed
+    );
+}
+
+#[test]
+fn stop_graceful_shutdown() {
+    // stdin EOF에 사이드카가 정상 종료되는지 검증한다.
+
+    let directory = tempfile::tempdir().unwrap();
+
+    // 사이드카: stdin EOF에 정상 종료한다.
+    let graceful_program = directory.path().join("graceful");
+    std::fs::write(
+        &graceful_program,
+        "#!/bin/sh\nwhile read line; do echo \"$line\"; done\nexit 0\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&graceful_program, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    let files = HashMap::from([
+        (
+            "environment.json",
+            r#"{"plugins":["@fixture/plugin"]}"#.to_string(),
+        ),
+        (
+            "modules/@fixture/plugin/plugin.json",
+            r#"{"sidecars":["@fixture/sidecar-graceful"]}"#.to_string(),
+        ),
+        (
+            "modules/@fixture/sidecar-graceful/sidecar.json",
+            r#"{"executable":"build/graceful","protocol":1}"#.to_string(),
+        ),
+    ]);
+
+    let mut sidecars = create(&files, directory.path()).unwrap();
+    // 테스트를 위해 기한을 1초로 설정한다.
+    sidecars.stop_timeout = Duration::from_secs(1);
+    let (owner, _events) = owner("a", "/projects/test");
+
+    // 사이드카를 시작한다.
+    sidecars
+        .send(
+            &owner,
+            "@fixture/sidecar-graceful",
+            "s1",
+            &raw(r#"{"test":"data"}"#),
+        )
+        .unwrap();
+
+    // 즉시 stop() 호출. stdin EOF에 정상 종료되어야 한다.
+    let start = std::time::Instant::now();
+    sidecars.stop();
+    let elapsed = start.elapsed();
+
+    // 정상 종료는 250ms 안에 일어나야 한다 (기한까지 기다리지 않음).
+    assert!(
+        elapsed < Duration::from_millis(250),
+        "graceful stop took {:?}, want < 250ms",
+        elapsed
+    );
+}
+
+#[test]
+fn stop_forced_kill() {
+    // 기한을 초과해도 종료하지 않는 사이드카를 kill 하는지 검증한다.
+
+    let directory = tempfile::tempdir().unwrap();
+
+    // 사이드카: stdin EOF를 무시하고 계속 실행한다.
+    let stubborn_program = directory.path().join("stubborn");
+    std::fs::write(&stubborn_program, "#!/bin/sh\ncat >/dev/null &\nwait\n").unwrap();
+    std::fs::set_permissions(&stubborn_program, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    let files = HashMap::from([
+        (
+            "environment.json",
+            r#"{"plugins":["@fixture/plugin"]}"#.to_string(),
+        ),
+        (
+            "modules/@fixture/plugin/plugin.json",
+            r#"{"sidecars":["@fixture/sidecar-stubborn"]}"#.to_string(),
+        ),
+        (
+            "modules/@fixture/sidecar-stubborn/sidecar.json",
+            r#"{"executable":"build/stubborn","protocol":1}"#.to_string(),
+        ),
+    ]);
+
+    let mut sidecars = create(&files, directory.path()).unwrap();
+    // 테스트를 위해 기한을 100ms로 설정한다.
+    sidecars.stop_timeout = Duration::from_millis(100);
+    let (owner, _events) = owner("a", "/projects/test");
+
+    // 사이드카를 시작한다.
+    sidecars
+        .send(
+            &owner,
+            "@fixture/sidecar-stubborn",
+            "s1",
+            &raw(r#"{"test":"data"}"#),
+        )
+        .unwrap();
+
+    // stop() 호출. 기한 후 kill 되어야 한다.
+    let start = std::time::Instant::now();
+    sidecars.stop();
+    let elapsed = start.elapsed();
+
+    // stop()은 기한만큼 기다렸다가 kill 해야 하므로 약 100ms 정도 걸려야 한다.
+    // 범위: 80ms ~ 150ms (정확한 시간 측정에 여유를 둠).
+    assert!(
+        elapsed >= Duration::from_millis(80) && elapsed <= Duration::from_millis(150),
+        "forced kill stop took {:?}, want ~100ms",
+        elapsed
+    );
 }

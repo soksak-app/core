@@ -16,6 +16,7 @@ package host
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -27,6 +28,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 )
 
 // SidecarMessage 는 사이드카가 보낸 메시지를 페이지에 전달하는 이벤트 값이다.
@@ -49,11 +51,13 @@ type sidecarEvent struct {
 }
 
 type sidecar struct {
-	name    string
-	cmd     *exec.Cmd
-	stdin   io.WriteCloser
-	encoder *json.Encoder
-	exited  chan struct{}
+	name       string
+	cmd        *exec.Cmd
+	stdin      io.WriteCloser
+	outbox     chan []byte
+	exited     chan struct{}
+	muClosed   sync.Mutex
+	closedMsgs map[string][]byte // surface → 마지막 closed 메시지. 같은 표면의 것을 교체한다.
 }
 
 // SidecarOwner 는 표면을 소유한 창이다. 사이드카 메시지의 root 를 제공하고 이벤트를 받는다.
@@ -64,11 +68,12 @@ type SidecarOwner interface {
 
 // Sidecars 는 애플리케이션 하나의 사이드카 프로세스와 표면 소유 창을 관리한다.
 type Sidecars struct {
-	mu       sync.Mutex
-	declared map[string]string
-	running  map[string]*sidecar
-	owners   map[string]SidecarOwner
-	stopped  bool
+	mu          sync.Mutex
+	declared    map[string]string
+	running     map[string]*sidecar
+	owners      map[string]SidecarOwner
+	stopped     bool
+	StopTimeout time.Duration // 테스트에서 주입 가능한 Stop() 기한. 기본값 5초.
 }
 
 // NewSidecars 는 스테이징된 프런트엔드 frontend 의 설정 파일로 사이드카를 찾아 채널을 생성한다.
@@ -90,8 +95,12 @@ func NewSidecars(frontend fs.FS, directory string) (*Sidecars, error) {
 	if err := read("environment.json", &environment); err != nil {
 		return nil, err
 	}
-	c := &Sidecars{declared: map[string]string{},
-		running: map[string]*sidecar{}, owners: map[string]SidecarOwner{}}
+	c := &Sidecars{
+		declared: map[string]string{},
+		running: map[string]*sidecar{},
+		owners: map[string]SidecarOwner{},
+		StopTimeout: 5 * time.Second,
+	}
 	for _, plugin := range environment.Plugins {
 		var manifest struct {
 			Sidecars []string `json:"sidecars"`
@@ -125,7 +134,15 @@ func NewSidecars(frontend fs.FS, directory string) (*Sidecars, error) {
 }
 
 // Send 는 owner 창의 표면 surface 에서 온 body 를 사이드카 name 에 전달한다.
+// 뮤텍스 밖에서 직렬화하고 논블로킹 채널로 전송하므로, 사이드카가 느려도 다른 전송을 차단하지 않는다.
 func (c *Sidecars) Send(owner SidecarOwner, name, surface string, body json.RawMessage) error {
+	// 먼저 뮤텍스 밖에서 JSON 직렬화한다.
+	line, err := json.Marshal(sidecarRequest{Surface: surface, Root: owner.ProjectRoot(), Body: body})
+	if err != nil {
+		return fmt.Errorf("sidecar %s: %w", name, err)
+	}
+	line = append(line, '\n')
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.stopped {
@@ -142,7 +159,14 @@ func (c *Sidecars) Send(owner SidecarOwner, name, surface string, body json.RawM
 		return err
 	}
 	c.owners[surface] = owner
-	return process.encoder.Encode(sidecarRequest{Surface: surface, Root: owner.ProjectRoot(), Body: body})
+
+	// 논블로킹으로 채널에 전송한다. 채널이 가득 차면 "is not keeping up" 오류를 반환한다.
+	select {
+	case process.outbox <- line:
+		return nil
+	default:
+		return fmt.Errorf("sidecar %s is not keeping up", name)
+	}
 }
 
 // Close 는 제거된 표면을 실행 중인 모든 사이드카에 알린다.
@@ -153,9 +177,24 @@ func (c *Sidecars) Close(surface string) {
 		return
 	}
 	delete(c.owners, surface)
+
+	// 뮤텍스 밖에서 직렬화한다.
+	line, err := json.Marshal(sidecarRequest{Surface: surface, Closed: true})
+	if err != nil {
+		log.Printf("sidecar close %s: marshal: %v", surface, err)
+		return
+	}
+	line = append(line, '\n')
+
 	for _, process := range c.running {
-		if err := process.encoder.Encode(sidecarRequest{Surface: surface, Closed: true}); err != nil {
-			log.Printf("sidecar %s: close %s: %v", process.name, surface, err)
+		// 논블로킹으로 채널에 전송한다. 채널이 가득 차면 closedMsgs에 저장한다.
+		select {
+		case process.outbox <- line:
+		default:
+			// 채널이 가득 찼으므로 closedMsgs에 저장 (같은 표면의 이전 것을 교체)
+			process.muClosed.Lock()
+			process.closedMsgs[surface] = line
+			process.muClosed.Unlock()
 		}
 	}
 }
@@ -175,7 +214,8 @@ func (c *Sidecars) CloseOwner(owner SidecarOwner) {
 	}
 }
 
-// Stop 은 모든 사이드카의 표준 입력을 닫고 종료를 기다린다.
+// Stop 은 모든 사이드카를 종료한다. 채널을 닫아 쓰기 고루틴에 EOF 신호를 보내고,
+// 최대 stopTimeout 동안 프로세스 종료를 기다린 뒤 응답하지 않으면 강제 종료한다.
 func (c *Sidecars) Stop() {
 	c.mu.Lock()
 	c.stopped = true
@@ -184,10 +224,40 @@ func (c *Sidecars) Stop() {
 		processes = append(processes, process)
 	}
 	c.mu.Unlock()
+
+	// 모든 사이드카에 대해 채널을 닫아 EOF 신호를 보낸다.
+	// 쓰기 고루틴이 채널 닫힘을 감지하고 stdin을 닫는다.
 	for _, process := range processes {
-		_ = process.stdin.Close()
-		<-process.exited
+		close(process.outbox)
 	}
+
+	// 모든 프로세스를 병렬로 기다린다. 기한을 넘기면 kill하고 Wait()로 좀비를 수집한다.
+	ctx, cancel := context.WithTimeout(context.Background(), c.StopTimeout)
+	defer cancel()
+
+	var wg sync.WaitGroup
+	for _, process := range processes {
+		wg.Add(1)
+		go func(p *sidecar) {
+			defer wg.Done()
+			// 프로세스가 종료되기를 기다린다.
+			done := make(chan error, 1)
+			go func() {
+				done <- p.cmd.Wait()
+			}()
+
+			select {
+			case <-done:
+				// 프로세스가 정상 종료됨.
+			case <-ctx.Done():
+				// 기한 초과. 강제 종료.
+				_ = p.cmd.Process.Kill()
+				// Wait() 호출하여 좀비 수집.
+				_ = p.cmd.Wait()
+			}
+		}(process)
+	}
+	wg.Wait()
 }
 
 // process 는 실행 중인 사이드카를 반환하고, 없으면 실행한다. c.mu 를 잡은 상태로 호출한다.
@@ -211,10 +281,27 @@ func (c *Sidecars) process(name string) (*sidecar, error) {
 		stdout.Close()
 		return nil, fmt.Errorf("sidecar %s: %w", name, err)
 	}
-	process := &sidecar{name: name, cmd: cmd, stdin: stdin, encoder: json.NewEncoder(stdin), exited: make(chan struct{})}
+	process := &sidecar{
+		name: name, cmd: cmd, stdin: stdin,
+		outbox: make(chan []byte, 256),
+		exited: make(chan struct{}),
+		closedMsgs: make(map[string][]byte),
+	}
 	c.running[name] = process
-	go c.read(process, stdout)
+	go c.write(process)      // 쓰기 고루틴: outbox 채널에서 읽어 stdin 에 쓴다.
+	go c.read(process, stdout) // 읽기 고루틴: stdout 에서 읽어 이벤트를 전달한다.
 	return process, nil
+}
+
+// write 는 outbox 채널에서 바이트를 읽어 사이드카의 stdin 에 쓴다. 채널이 닫히면 stdin 을 닫고 종료한다.
+func (c *Sidecars) write(process *sidecar) {
+	for line := range process.outbox {
+		if _, err := process.stdin.Write(line); err != nil {
+			log.Printf("sidecar %s: write: %v", process.name, err)
+			break
+		}
+	}
+	_ = process.stdin.Close()
 }
 
 // read 는 사이드카의 출력을 표면 소유 창에 전달하고, 출력이 끝나면 프로세스를 정리한다.

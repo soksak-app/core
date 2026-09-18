@@ -166,3 +166,157 @@ func TestApplicationWithoutSidecarsRejectsSends(t *testing.T) {
 		t.Fatalf("send = %v", err)
 	}
 }
+
+func TestSlowSidecarDoesNotBlockOtherSends(t *testing.T) {
+	// 느린 사이드카는 stdin 을 읽지 않고, 다른 사이드카는 정상적으로 동작한다.
+	// 느린 사이드카에 257번 보내면 256번째는 성공하고 257번째는 "is not keeping up" 오류로 실패한다.
+	// 그 상태에서 다른 사이드카 전송과 Stop() 이 100ms 안에 끝난다 (이것이 핵심 단언이다).
+
+	directory := t.TempDir()
+
+	// 느린 사이드카: stdin 을 읽지 않지만 stdin EOF에 정상 종료한다.
+	slowScript := "#!/bin/sh\nexec cat >/dev/null\n"
+	if err := os.WriteFile(filepath.Join(directory, "slow"), []byte(slowScript), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// 빠른 사이드카: 받은 줄을 그대로 출력한다.
+	fastScript := "#!/bin/sh\ntee /dev/null\n"
+	if err := os.WriteFile(filepath.Join(directory, "fast"), []byte(fastScript), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// 두 사이드카를 선언한 프런트엔드를 설정한다.
+	frontend := fstest.MapFS{
+		"environment.json": {Data: []byte(`{"plugins":["@fixture/plugin"]}`)},
+		"modules/@fixture/plugin/plugin.json": {Data: []byte(`{
+			"id":"plugin",
+			"sidecars":["@fixture/sidecar-slow","@fixture/sidecar-fast"]
+		}`)},
+		"modules/@fixture/sidecar-slow/sidecar.json": {Data: []byte(`{"executable":"build/slow","protocol":1}`)},
+		"modules/@fixture/sidecar-fast/sidecar.json": {Data: []byte(`{"executable":"build/fast","protocol":1}`)},
+	}
+	sidecars, err := host.NewSidecars(frontend, directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 테스트를 위해 기한을 100ms로 설정한다.
+	sidecars.StopTimeout = 100 * time.Millisecond
+
+	owner := newFakeOwner("/projects/test")
+
+	// 느린 사이드카에 채널이 가득 찰 때까지 보낸다.
+	// 파이프 버퍼(64KB)를 빠르게 채우기 위해 각 메시지를 크게 만든다.
+	largeBody := json.RawMessage(`{"data":"` + strings.Repeat("x", 20*1024) + `"}`)
+	var lastErr error
+	sentCount := 0
+	for i := 0; i < 500; i++ { // 최대 500번 시도
+		err := sidecars.Send(owner, "@fixture/sidecar-slow", "s1", largeBody)
+		if err != nil {
+			lastErr = err
+			if strings.Contains(err.Error(), "is not keeping up") {
+				break // 채널이 가득 찬 것을 확인했다
+			}
+			t.Fatalf("send %d: unexpected error: %v", i, err)
+		}
+		sentCount++
+	}
+
+	// 마침내 "is not keeping up" 오류를 받았는지 확인한다.
+	if lastErr == nil || !strings.Contains(lastErr.Error(), "is not keeping up") {
+		t.Fatalf("after %d sends: want 'is not keeping up', got %v", sentCount, lastErr)
+	}
+
+	err = lastErr
+
+	// 이제 다른 사이드카 전송과 Stop() 이 100ms 안에 끝나야 한다.
+	start := time.Now()
+
+	// 빠른 사이드카로 보낸다 (이것이 일반적인 경우다).
+	if err := sidecars.Send(owner, "@fixture/sidecar-fast", "s2", json.RawMessage(`{"data":"test"}`)); err != nil {
+		t.Fatalf("fast send: %v", err)
+	}
+
+	// Stop() 호출.
+	sidecars.Stop()
+
+	elapsed := time.Since(start)
+	if elapsed > 110*time.Millisecond {
+		t.Errorf("fast send + stop took %v, want < 110ms", elapsed)
+	}
+}
+
+// TestStopGracefulShutdown 은 stdin EOF 에 사이드카가 정상 종료되는지 검증한다.
+func TestStopGracefulShutdown(t *testing.T) {
+	directory := t.TempDir()
+
+	// 사이드카: stdin EOF 에 정상 종료한다.
+	gracefulScript := "#!/bin/sh\nwhile read line; do echo \"$line\"; done\nexit 0\n"
+	if err := os.WriteFile(filepath.Join(directory, "graceful"), []byte(gracefulScript), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// 사이드카를 선언한 프런트엔드를 설정한다.
+	fe := frontend(`{"executable":"build/graceful","protocol":1}`)
+	sidecars, err := host.NewSidecars(fe, directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 테스트를 위해 기한을 1초로 설정한다.
+	sidecars.StopTimeout = 1 * time.Second
+
+	owner := newFakeOwner("/projects/test")
+
+	// 사이드카를 시작한다.
+	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"test":"data"}`)); err != nil {
+		t.Fatalf("send: %v", err)
+	}
+
+	// 즉시 Stop() 호출. stdin EOF에 정상 종료되어야 한다.
+	start := time.Now()
+	sidecars.Stop()
+	elapsed := time.Since(start)
+
+	// 정상 종료는 250ms 안에 일어나야 한다 (기한까지 기다리지 않음).
+	if elapsed > 250*time.Millisecond {
+		t.Errorf("graceful stop took %v, want < 250ms", elapsed)
+	}
+}
+
+// TestStopForcedKill 은 기한을 초과해도 종료하지 않는 사이드카를 kill 하는지 검증한다.
+func TestStopForcedKill(t *testing.T) {
+	directory := t.TempDir()
+
+	// 사이드카: stdin EOF 를 무시하고 계속 실행한다.
+	stubborn := "#!/bin/sh\ncat >/dev/null &\nwait\n"
+	if err := os.WriteFile(filepath.Join(directory, "stubborn"), []byte(stubborn), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// 사이드카를 선언한 프런트엔드를 설정한다.
+	fe := frontend(`{"executable":"build/stubborn","protocol":1}`)
+	sidecars, err := host.NewSidecars(fe, directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 테스트를 위해 기한을 100ms로 설정한다.
+	sidecars.StopTimeout = 100 * time.Millisecond
+
+	owner := newFakeOwner("/projects/test")
+
+	// 사이드카를 시작한다.
+	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"test":"data"}`)); err != nil {
+		t.Fatalf("send: %v", err)
+	}
+
+	// Stop() 호출. 기한 후 kill 되어야 한다.
+	start := time.Now()
+	sidecars.Stop()
+	elapsed := time.Since(start)
+
+	// Stop() 은 기한만큼 기다렸다가 kill 해야 하므로 약 100ms 정도 걸려야 한다.
+	// 범위: 80ms ~ 150ms (정확한 시간 측정에 여유를 둠).
+	if elapsed < 80*time.Millisecond || elapsed > 150*time.Millisecond {
+		t.Errorf("forced kill stop took %v, want ~100ms", elapsed)
+	}
+}
