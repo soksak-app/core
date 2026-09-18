@@ -117,6 +117,36 @@ test("a sidecar manifest names an executable inside its package and a protocol v
   for (const [value, message] of cases) assert.throws(() => validateSidecar(value), message);
 });
 
+test("a sidecar manifest may include optional helpers field with package and executable", () => {
+  const base = { executable: "build/worker", protocol: 1 };
+  const withHelpers = {
+    ...base,
+    helpers: [
+      { package: "@scope/helper", executable: "build/ptyd" },
+      { package: "lib-shared", executable: "dist/helper" },
+    ],
+  };
+  assert.equal(validateSidecar(withHelpers), withHelpers);
+});
+
+test("a sidecar helpers field is rejected for invalid cases", () => {
+  const base = { executable: "build/worker", protocol: 1 };
+  const cases = [
+    [{ ...base, helpers: [{ package: "@scope/helper", executable: "build/ptyd", extra: "field" }] }, /unknown field extra/],
+    [{ ...base, helpers: [{ package: "lib-shared" }] }, /executable must be a path inside the package/],
+    [{ ...base, helpers: [{ executable: "build/helper" }] }, /package must be a package name/],
+    [{ ...base, helpers: [{ package: "Bad Name", executable: "build/helper" }] }, /package must be a package name/],
+    [{ ...base, helpers: [{ package: "lib-shared", executable: "/bin/helper" }] }, /must be a path inside the package/],
+    [{ ...base, helpers: [{ package: "lib-shared", executable: "../helper" }] }, /must be a path inside the package/],
+    [{ ...base, helpers: [
+      { package: "@scope/helper", executable: "build/ptyd" },
+      { package: "lib-shared", executable: "build/ptyd" },
+    ] }, /ptyd is declared twice/],
+    [{ ...base, helpers: [{ package: "lib-shared", executable: "dist/worker" }] }, /worker is declared twice/],
+  ];
+  for (const [value, message] of cases) assert.throws(() => validateSidecar(value), message);
+});
+
 test("page imports resolve inside the staged layout", () => {
   assert.equal(PAGE_IMPORTS["soksak"], "/modules/soksak/dist/index.js");
   assert.equal(PAGE_IMPORTS["@soksak/runtime"], "/runtime/index.js");

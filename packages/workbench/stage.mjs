@@ -74,6 +74,21 @@ for (const name of ["soksak", "@soksak/plugin-api"]) {
 }
 if (executableTarget) mkdirSync(executableTarget, { recursive: true });
 const sidecars = new Set();
+// 호스트는 실행 파일을 파일 이름으로 찾고 스테이징은 그 이름으로 한 디렉터리에 모은다. 서로 다른
+// 원본이 같은 이름을 요구하면 나중 것이 앞의 것을 조용히 덮으므로 여기서 멈춘다.
+const placed = new Map();
+
+/** 빌드된 실행 파일을 파일 이름 그대로 실행 파일 디렉터리에 둔다. */
+function place(owner, dir, path) {
+  const built = join(dir, path);
+  const file = basename(path);
+  const taken = placed.get(file);
+  if (taken && taken !== built) throw new Error(`${owner}: ${file} is already staged from ${taken}`);
+  placed.set(file, built);
+  if (!existsSync(built)) throw new Error(`${owner}: ${path} is not built`);
+  replaceFile(built, join(executableTarget, file));
+}
+
 for (const name of environment.plugins) {
   const dir = packageDir(app, name);
   const manifest = validateManifest(readJson(join(dir, MANIFEST)));
@@ -86,9 +101,12 @@ for (const name of environment.plugins) {
     mkdirSync(join(target, modulePath(sidecar, "")), { recursive: true });
     copyFileSync(join(sidecarDir, SIDECAR), join(target, modulePath(sidecar, SIDECAR)));
     if (!executableTarget) continue;
-    const built = join(sidecarDir, declared.executable);
-    if (!existsSync(built)) throw new Error(`${sidecar}: ${declared.executable} is not built`);
-    replaceFile(built, join(executableTarget, basename(declared.executable)));
+
+    place(sidecar, sidecarDir, declared.executable);
+    // 헬퍼는 그 사이드카의 의존성이므로 사이드카 디렉터리에서 해석한다.
+    for (const helper of declared.helpers ?? []) {
+      place(helper.package, packageDir(sidecarDir, helper.package), helper.executable);
+    }
   }
 }
 cpSync(runtime, join(target, RUNTIME), { recursive: true });
