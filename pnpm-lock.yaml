@@ -159,6 +159,15 @@ importers:
         specifier: workspace:*
         version: link:../../packages/plugin-api
 
+  sidecars/vt-alacritty:
+    dependencies:
+      '@soksak/sidecar-ptyd':
+        specifier: workspace:*
+        version: link:../ptyd
+      '@soksak/sidecar-vt-core':
+        specifier: workspace:*
+        version: link:../vt-core
+
   sidecars/vt-core:
     devDependencies:
       '@soksak/plugin-api':

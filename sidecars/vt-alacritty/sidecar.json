@@ -1,0 +1,10 @@
+{
+  "executable": "build/soksak-vt-alacritty",
+  "protocol": 1,
+  "helpers": [
+    {
+      "package": "@soksak/sidecar-ptyd",
+      "executable": "build/soksak-ptyd"
+    }
+  ]
+}

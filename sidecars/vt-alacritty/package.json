@@ -1,0 +1,18 @@
+{
+  "name": "@soksak/sidecar-vt-alacritty",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "files": [
+    "sidecar.json",
+    "build/soksak-vt-alacritty"
+  ],
+  "scripts": {
+    "build": "sh -c 'PROFILE=\"${SOKSAK_PROFILE:-debug}\"; cargo build $SOKSAK_CARGO_FLAGS --manifest-path ../Cargo.toml -p soksak-sidecar-vt-alacritty && mkdir -p build && cp ../target/\"$PROFILE\"/soksak-vt-alacritty build/soksak-vt-alacritty'",
+    "test": "echo no tests"
+  },
+  "dependencies": {
+    "@soksak/sidecar-vt-core": "workspace:*",
+    "@soksak/sidecar-ptyd": "workspace:*"
+  }
+}
