@@ -2,6 +2,7 @@
 pub mod protocol;
 pub mod daemon;
 pub mod platform;
+pub mod encoding;
 
 pub use protocol::{Engine, Screen, Modes, Cell, Cursor, serve, SessionManager};
 pub use daemon::{DaemonIdentity, DaemonClient, DaemonRequest, DaemonResponse, DaemonFinder};
