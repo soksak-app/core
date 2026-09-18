@@ -1006,7 +1006,8 @@ function drawRail() {
   // 변의 두 끝이 서로 다른 줄에 놓인다.
   const corner = cardRadius();
   const shape = outline(rects, { pad, radius: corner === 0 ? 0 : corner + pad });
-  document.getElementById("rail").setAttribute("viewBox", `0 0 ${grid.width} ${grid.height}`);
+  // viewBox 를 두면 판이 커질 때 요소가 먼저 늘어나면서 이전 경로가 함께 늘어나, 레일이 카드보다
+  // 먼저 움직이는 것으로 보인다. 좌표계를 CSS 픽셀로 두면 다시 그릴 때까지 카드처럼 제자리에 있다.
   railPath.setAttribute("d", shape.path);
   return { shape, rects };
 }

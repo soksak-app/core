@@ -59,6 +59,7 @@ A surface page shows a web document in one of its elements through a document re
 ## Acceptance criteria
 
 - Recorded native content stays within its card on every measurable frame. Native content, card chrome, the rail sidebar, and its outer rail must preserve their relative geometry in the same frame; temporary inset growth does not satisfy this requirement.
+- Page drawing that follows the cards, such as the rail outline, uses the plane's CSS pixels. A coordinate system that scales with its element fits the previous drawing to the new box, which moves it before the cards move.
 - Drag input completes at the requested rate and recording includes the complete drag. Recording starts before input. A controlled test stops recording only after the capture contains the final geometry; a presentation callback or frame timestamp alone is insufficient.
 - A run must fail if it records too few frames or cannot identify the surface and card in most frames.
 - Continuous input must continue to update the displayed layout; postponing all rendering until release does not satisfy this specification.
