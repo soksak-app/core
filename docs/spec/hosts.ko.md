@@ -74,6 +74,7 @@ packages/host/wailsv3/                     packages/host/tauriv2/
 - Rust 모듈은 `#[path = "..."]` 속성을 사용하므로 크레이트에 `lib.rs`와 `mod.rs`가 없다.
 - 플랫폼 코드는 `src/platform/<os>/` 아래에만 있으며 `os`는 `darwin`, `windows`, `linux` 중 하나다.
 - 대체(stub) 파일은 없다. 플랫폼이 구현하지 않은 연산은 `src/platform/<os>/unsupported.*`에서 오류를 반환한다.
+- `native/darwin`이 내보내는 C 이름이 프레임워크의 이름과 겹치면 `sp_`로 시작한다. Wails는 자기 `windowFullscreen`을 컴파일하고, 링커가 둘 중 하나를 골라 호출이 프레임워크 함수로 갔으며 호스트는 그 반환값을 실패로 읽었다.
 
 ## 플랫폼 선택
 
@@ -89,7 +90,7 @@ Rust: `src/platform/platform.rs`는 각 운영체제 모듈을 `#[cfg(target_os 
 
 | 영역 | 연산 |
 | --- | --- |
-| 창 | 창 준비, 통합 제목줄, 창 단추 영역, 윈도 서버 번호, 네이티브 검사 요청 |
+| 창 | 창 준비, 통합 제목줄, 전체 화면, 창 단추 영역, 윈도 서버 번호, 네이티브 검사 요청 |
 | 웹뷰 | 생성, 배치, 영역, 표시 여부, 배경, 불투명도, 연속 크기 변경, 닫기(Wails는 탐색, 스크립트 실행, 모달 설정과 초점, 픽셀 정렬도 포함하고, Tauri는 순서, 모서리 반경, 뷰 식별도 포함한다) |
 | 표면 배치 | 트랜잭션 시작, 커밋, 취소, 표시 후 완료 |
 | 외곽선 | 표면 위 외곽선 뷰의 생성, 영역, 스타일, 제거 |
@@ -180,5 +181,5 @@ Wails 바인딩 서비스 이름은 `github.com/min-median-max/soksak/packages/h
 | 경로 | 내용 |
 | --- | --- |
 | `src/` | `<이름>.h`와 `<이름>.m` 소스. 두 호스트가 창 캡처에 사용하는 `capture.m`을 포함한다. 디렉터리가 플랫폼을 나타내므로 파일 이름에 `_darwin` 접미사가 없다 |
-| `tests/` | `window_motion_test.m`, `input_inject_test.m`, `window_facts_test.m`, `window_controls_test.m`, `surface_layout_test.m`, `webview_focus_test.m`, `webview_geometry_test.m`(`make test`, 활성화 없음), `input_activate_test.m`, `webview_input_test.m`, `webview_inspector_test.m`(`make test-activation`, 애플리케이션 활성화) |
+| `tests/` | `window_motion_test.m`, `input_inject_test.m`, `window_facts_test.m`, `window_controls_test.m`, `surface_layout_test.m`, `webview_focus_test.m`, `webview_geometry_test.m`(`make test`, 활성화 없음), `input_activate_test.m`, `webview_input_test.m`, `webview_inspector_test.m`, `window_fullscreen_test.m`(`make test-activation`, 애플리케이션 활성화) |
 | `Makefile` | 호스트가 pkg-config에서 `soksak-darwin`으로 찾는 정적 라이브러리를 빌드한다. `make -C native/darwin test`와 `make -C native/darwin test-activation`이 입력 검사를 실행한다 |

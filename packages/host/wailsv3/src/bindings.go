@@ -23,12 +23,12 @@ var backgroundScript string
 
 // 아래 메서드는 호출한 창의 Surfaces 에 요청을 전달한다.
 
-func (h *Host) WindowControls(ctx context.Context) (Rect, error) {
+func (h *Host) WindowControls(ctx context.Context) (Chrome, error) {
 	s, err := h.surface(ctx)
 	if err != nil {
-		return Rect{}, err
+		return Chrome{}, err
 	}
-	return s.WindowControls()
+	return s.WindowChrome()
 }
 
 func (h *Host) OverlayShow(ctx context.Context, req OverlayRequest) (Rect, error) {

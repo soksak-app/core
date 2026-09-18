@@ -119,6 +119,10 @@ pub trait Platform: Send + Sync {
     fn prepare_window<'a>(&self, builder: WindowBuilder<'a>) -> Result<WindowBuilder<'a>, String>;
     /// 창의 네이티브 주소를 반환한다.
     fn window_handle(&self, window: &Window) -> Result<Handle, String>;
+    /// 창을 전체 화면으로 바꾸거나 되돌리고, 전환이 끝나면 done 을 호출한다. 전환 중에 온 요청은
+    /// 그 전환이 끝난 뒤에 처리한다.
+    fn fullscreen(&self, window: Handle, on: bool, done: Box<dyn Fn()>) -> Result<(), String>;
+
     /// 창의 제목줄을 도구막대 높이로 만들고 그 높이(pt)를 반환한다. AppKit 이 그 높이의 세로 가운데에
     /// 창 단추를 두므로 호스트는 단추를 옮기지 않는다. 창에 단추가 없으면 오류를 반환한다.
     fn unified_titlebar(&self, window: Handle) -> Result<f64, String>;

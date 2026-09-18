@@ -569,11 +569,7 @@ func (b hostBackend) HostCommand(window, name string, params json.RawMessage) (a
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, rpcError(codeInvalidParams, "%v", err)
 		}
-		if p.On == nil || *p.On {
-			s.window.Fullscreen()
-		} else {
-			s.window.UnFullscreen()
-		}
+		return nil, s.fullscreen(p.On == nil || *p.On)
 	case "host.window.resize":
 		var p struct {
 			Width, Height *float64
@@ -931,6 +927,25 @@ func (s *Surfaces) hit(x, y float64) (map[string]any, error) {
 		return map[string]any{"kind": "page"}, nil
 	default:
 		return map[string]any{"kind": "native", "identifier": got.Identifier}, nil
+	}
+}
+
+// fullscreen 은 창을 전체 화면으로 바꾸거나 되돌리고 전환이 끝난 뒤 반환한다. macOS 는 전환 중의
+// 요청을 무시하므로 네이티브 코드가 그 전환이 끝난 뒤에 이어서 처리한다.
+func (s *Surfaces) fullscreen(on bool) error {
+	done := make(chan struct{}, 1)
+	var err error
+	application.InvokeSync(func() {
+		err = system.Fullscreen(s.window.NativeWindow(), on, func() { done <- struct{}{} })
+	})
+	if err != nil {
+		return err
+	}
+	select {
+	case <-done:
+		return nil
+	case <-time.After(pageTimeout):
+		return rpcError(codeTimeout, "the window did not change full screen within %s", pageTimeout)
 	}
 }
 

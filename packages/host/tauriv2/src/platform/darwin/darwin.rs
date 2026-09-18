@@ -81,6 +81,9 @@ impl Platform for Darwin {
     fn window_handle(&self, window: &Window) -> Result<Handle, String> {
         window::handle(window)
     }
+    fn fullscreen(&self, window: Handle, on: bool, done: Box<dyn Fn()>) -> Result<(), String> {
+        window::fullscreen(window, on, done)
+    }
     fn unified_titlebar(&self, window: Handle) -> Result<f64, String> {
         window::unified_titlebar(window)
     }

@@ -273,6 +273,29 @@ func (h *Host) shouldQuit() bool {
 	return len(windows) == 0
 }
 
+// Chrome 은 페이지가 첫 행을 그리는 데 쓰는 창의 값이다. Controls 는 창 단추가 차지하는 영역이고
+// Row 는 제목줄의 높이(pt)다. 전체 화면처럼 제목줄이 없으면 Row 는 0 이고, 페이지는 쓰던 높이를 지킨다.
+type Chrome struct {
+	Controls Rect    `json:"controls"`
+	Row      float64 `json:"row"`
+}
+
+// WindowChrome 은 창 단추 영역과 제목줄 높이를 반환한다. 페이지는 첫 행에서 단추만큼을 비우고
+// 행의 높이를 제목줄에 맞춘다.
+func (s *Surfaces) WindowChrome() (Chrome, error) {
+	controls, err := s.WindowControls()
+	if err != nil {
+		return Chrome{}, err
+	}
+	win, ok := s.window, s.window != nil
+	if !ok {
+		return Chrome{}, errNoWindow
+	}
+	var row float64
+	application.InvokeSync(func() { row, _ = system.UnifiedTitlebar(win.NativeWindow()) })
+	return Chrome{Controls: controls, Row: row}, nil
+}
+
 // WindowControls 는 창 단추가 차지하는 영역을 페이지 좌표로 반환한다. 페이지는 첫 행에서
 // 그만큼을 비운다. 빈 영역은 창이 단추를 그리지 않는다는 뜻이다.
 func (s *Surfaces) WindowControls() (Rect, error) {

@@ -331,8 +331,9 @@ export function verify(controls = null) {
 
   // W — 창이 그리는 단추는 첫 행의 상하 가운데에 위치한다. 단추는 OS 가 그리고
   // 페이지는 그 영역을 읽을 수 없으므로, 호스트가 반환한 영역을 첫 행과 비교한다.
-  if (controls) {
-    const bar = document.querySelector(".chrome-bar").getBoundingClientRect();
+  // 전체 화면에서는 창이 단추를 첫 행 밖으로 옮긴다. 그때는 비교할 것이 없다.
+  const bar = document.querySelector(".chrome-bar").getBoundingClientRect();
+  if (controls && controls.y + controls.h <= bar.bottom) {
     const above = controls.y - bar.top;
     const below = bar.bottom - (controls.y + controls.h);
     add("W 창 단추는 첫 행 가운데", Math.abs(above - below) <= 0.5,

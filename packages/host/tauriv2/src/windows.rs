@@ -340,6 +340,22 @@ fn unified_titlebar(window: &Window) -> Result<(), String> {
     }).map_err(|e| e.to_string())
 }
 
+/// 페이지가 첫 줄을 그리는 데 쓰는 창의 값. controls 는 창 단추 영역이고 row 는 제목줄 높이(pt)다.
+/// 전체 화면처럼 제목줄이 없으면 row 는 0 이고, 페이지는 쓰던 높이를 지킨다.
+#[derive(Serialize)]
+pub(crate) struct Chrome {
+    controls: Rect,
+    row: f64,
+}
+
+/// 창 단추 영역과 제목줄 높이를 반환한다.
+pub(crate) fn window_chrome(window: &Window) -> Result<Chrome, String> {
+    let controls = window_controls(window)?;
+    let handle = native_owner(window)?;
+    let row = crate::exposure::on_main(window, move || Ok(platform::current()?.unified_titlebar(handle).unwrap_or(0.0)))?;
+    Ok(Chrome { controls, row })
+}
+
 /// 창 버튼이 차지하는 영역을 페이지 좌표로 반환한다. 페이지는 첫 줄에서 그 영역을 비운다.
 pub(crate) fn window_controls(window: &Window) -> Result<Rect, String> {
     let handle = native_owner(window)?;

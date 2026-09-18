@@ -56,9 +56,10 @@ test: $(BUILD)/window_motion_test $(BUILD)/input_inject_test $(BUILD)/window_fac
 	@$(BUILD)/webview_geometry_test
 	@$(BUILD)/document_view_test
 
-test-activation: $(BUILD)/input_activate_test $(BUILD)/webview_input_test $(BUILD)/webview_inspector_test
+test-activation: $(BUILD)/input_activate_test $(BUILD)/webview_input_test $(BUILD)/webview_inspector_test $(BUILD)/window_fullscreen_test
 	@$(BUILD)/input_activate_test
 	@$(BUILD)/webview_inspector_test
+	@$(BUILD)/window_fullscreen_test
 	@$(BUILD)/webview_input_test --baseline
 	@$(BUILD)/webview_input_test
 

@@ -21,6 +21,10 @@ pub fn window_handle(_window: &Window) -> Result<Handle, String> {
     missing("native window handle")
 }
 
+pub fn fullscreen(_window: Handle, _on: bool, _done: Box<dyn Fn()>) -> Result<(), String> {
+    missing("full screen")
+}
+
 pub fn unified_titlebar(_window: Handle) -> Result<f64, String> {
     missing("window button placement")
 }

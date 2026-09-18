@@ -54,6 +54,27 @@ for (const app of Object.values(APPS)) {
     await centred(s, "after recording");
   });
 
+  test(`${app.name}: full screen keeps the first row height`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const row = (await s.rect("core.chrome.bar")).height;
+    assert.ok(row > 0, "the first row has no height");
+    await s.run("host.window.fullscreen", { on: true });
+    try {
+      await s.until("host.window", (w) => w.content.height > 760, "the window did not enter full screen");
+      await s.presented();
+      // 전체 화면에서는 창이 단추를 첫 행 밖으로 옮긴다. 행의 높이는 제목줄을 따르므로 그대로다.
+      assert.equal((await s.rect("core.chrome.bar")).height, row, "full screen changed the first row height");
+      assert.equal((await s.get("core.verify")).failed, 0, "the page reported a failed check in full screen");
+    } finally {
+      await s.run("host.window.fullscreen", { on: false });
+      await s.until("host.window", (w) => w.content.height === 760, "the window did not leave full screen");
+      await s.presented();
+    }
+    assert.equal((await s.rect("core.chrome.bar")).height, row, "leaving full screen changed the first row height");
+  });
+
   test(`${app.name}: moving, resizing, and renaming keep the buttons centred in the first row`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);

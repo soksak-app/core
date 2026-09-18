@@ -29,6 +29,9 @@ impl Platform for Windows {
     fn window_handle(&self, window: &Window) -> Result<Handle, String> {
         unsupported::window_handle(window)
     }
+    fn fullscreen(&self, window: Handle, on: bool, done: Box<dyn Fn()>) -> Result<(), String> {
+        unsupported::fullscreen(window, on, done)
+    }
     fn unified_titlebar(&self, window: Handle) -> Result<f64, String> {
         unsupported::unified_titlebar(window)
     }

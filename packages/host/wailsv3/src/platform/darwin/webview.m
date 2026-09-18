@@ -5,6 +5,7 @@
 #import "webview_input.h"
 #import "surface_layout.h"
 #import "webview_geometry.h"
+#import "window_fullscreen.h"
 
 extern void nativeMessage(unsigned long long identifier, char *message);
 extern void nativeCommitted(unsigned long long identifier);
@@ -171,4 +172,9 @@ void nativeWebviewClose(void *handle) {
 extern void nativeLayoutReady(uintptr_t callback, bool allowed);
 void nativeWindowLayoutBegin(void *window, uint64_t ticket, uintptr_t callback) {
     surfaceLayoutBegin(window, ticket, ^(int allowed) { nativeLayoutReady(callback, allowed); });
+}
+
+extern void nativeFullscreenDone(uintptr_t callback);
+bool nativeWindowFullscreen(void *handle, bool on, uintptr_t callback) {
+    return sp_window_fullscreen(handle, on, ^{ nativeFullscreenDone(callback); });
 }

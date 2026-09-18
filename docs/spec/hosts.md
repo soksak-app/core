@@ -74,6 +74,7 @@ packages/host/wailsv3/                     packages/host/tauriv2/
 - Rust modules use `#[path = "..."]` attributes, so the crate has no `lib.rs` or `mod.rs`.
 - Platform code exists only under `src/platform/<os>/`, where `os` is `darwin`, `windows`, or `linux`.
 - No stub files exist. An operation that a platform does not implement returns an error from `src/platform/<os>/unsupported.*`.
+- A C name that `native/darwin` exports starts with `sp_` when a framework exports the same name. Wails compiles its own `windowFullscreen`, and the linker picked one of the two: the call reached the framework's function and the host read its return value as a failure.
 
 ## Platform selection
 
@@ -89,7 +90,7 @@ The shell sidecar uses the same Go mechanism in `sidecars/shell/src/platform/`.
 
 | Area | Operations |
 | --- | --- |
-| Window | Window preparation, the unified title bar, the window button area, window server numbers, native inspection requests |
+| Window | Window preparation, the unified title bar, full screen, the window button area, window server numbers, native inspection requests |
 | Webview | Creation, placement, frame, visibility, background, opacity, live resize, close (Wails also navigation, script evaluation, modal configuration and focus, pixel alignment; Tauri also ordering, corner radius, view identity) |
 | Surface layout | Transaction begin, commit, cancel, and completion after presentation |
 | Shapes | Outline views above surfaces: creation, frame, style, removal |
@@ -180,5 +181,5 @@ The debug executables are `target/debug/soksak-wailsv3` and `target/debug/soksak
 | Path | Contents |
 | --- | --- |
 | `src/` | `<name>.h` and `<name>.m` sources, including `capture.m`, which both hosts use for window capture. File names have no `_darwin` suffix because the directory identifies the platform |
-| `tests/` | `window_motion_test.m`, `input_inject_test.m`, `window_facts_test.m`, `window_controls_test.m`, `surface_layout_test.m`, `webview_focus_test.m`, `webview_geometry_test.m` (`make test`, no activation); `input_activate_test.m`, `webview_input_test.m`, and `webview_inspector_test.m` (`make test-activation`, activates the application) |
+| `tests/` | `window_motion_test.m`, `input_inject_test.m`, `window_facts_test.m`, `window_controls_test.m`, `surface_layout_test.m`, `webview_focus_test.m`, `webview_geometry_test.m` (`make test`, no activation); `input_activate_test.m`, `webview_input_test.m`, `webview_inspector_test.m`, and `window_fullscreen_test.m` (`make test-activation`, activates the application) |
 | `Makefile` | Builds a static library that the hosts find through pkg-config as `soksak-darwin`; `make -C native/darwin test` and `make -C native/darwin test-activation` run the input checks |

@@ -106,7 +106,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 | command | `host.window.close` | 창의 일반 닫기 동작으로 창을 닫는다 |
 | command | `host.window.move` | 창 프레임 원점을 화면 좌표 `{x, y}`로 옮긴다 |
 | command | `host.window.maximize` | 창을 최대화한다. `{on: false}`이면 원래 크기로 되돌린다 |
-| command | `host.window.fullscreen` | 창을 별도 Space 의 전체 화면으로 전환한다. `{on: false}`이면 전체 화면을 끝낸다 |
+| command | `host.window.fullscreen` | 전체 화면으로 바꾸거나 `on`이 false 이면 되돌린다. 전환이 끝난 뒤에 답한다. macOS 는 전환 중의 요청을 무시하므로 호스트가 그 전환이 끝난 뒤에 적용한다 |
 | command | `host.window.resize` | 콘텐츠 영역 크기를 `{width, height}`로 바꾼다 |
 | command | `host.window.reload` | 메인 페이지를 다시 로드하고 새 페이지가 준비를 알린 뒤 완료한다. 10초 안에 알리지 않으면 1005다 |
 | command | `host.window.presented` | 메인 페이지와 표시 중인 애플리케이션 문서가 현재 배치를 화면에 표시한 뒤 완료된다. 창의 열린 표면 배치 트랜잭션이 먼저 커밋되기를 기다린다([네이티브 표면](native-surfaces.ko.md)). 그 상태를 보여 주는 화면 갱신 시각(ms, 녹화 프레임 시각과 같은 시계) `{displayed}`를 반환한다(표시 뒤 창이 있는 화면의 다음 갱신. 창이 어느 화면에도 없으면 호출 시각) |

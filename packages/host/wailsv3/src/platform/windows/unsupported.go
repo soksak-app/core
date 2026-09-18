@@ -30,6 +30,10 @@ func (implementation) PrepareWindow(unsafe.Pointer) error {
 	return unsupported("window preparation")
 }
 
+func (implementation) Fullscreen(unsafe.Pointer, bool, func()) error {
+	return unsupported("full screen")
+}
+
 func (implementation) UnifiedTitlebar(unsafe.Pointer) (float64, error) {
 	return 0, unsupported("window title bar")
 }

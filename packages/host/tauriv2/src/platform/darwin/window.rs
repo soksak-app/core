@@ -2,6 +2,8 @@
 
 use std::ffi::{c_char, c_void, CStr};
 
+use block2::{Block, RcBlock};
+
 #[cfg(feature = "diagnostics")]
 use objc2::msg_send;
 #[cfg(feature = "diagnostics")]
@@ -35,6 +37,19 @@ pub fn controls(window: Handle) -> Frame {
         windowControls(window as *mut c_void, rect.as_mut_ptr());
     }
     (rect[0], rect[1], rect[2], rect[3])
+}
+
+/// 창을 전체 화면으로 바꾸거나 되돌리고 전환이 끝나면 done 을 호출한다.
+pub fn fullscreen(window: Handle, on: bool, done: Box<dyn Fn()>) -> Result<(), String> {
+    extern "C" {
+        fn sp_window_fullscreen(window: *mut c_void, on: bool, done: &Block<dyn Fn()>) -> bool;
+    }
+    let done = RcBlock::new(done);
+    if unsafe { sp_window_fullscreen(window as *mut c_void, on, &done) } {
+        Ok(())
+    } else {
+        Err("the window does not support full screen".into())
+    }
 }
 
 /// 창의 제목줄을 도구막대 높이로 만들고 그 높이를 반환한다. 만들 수 없으면 오류를 반환한다.

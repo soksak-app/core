@@ -685,6 +685,20 @@ fn reload(window: &Window) -> Result<Value, Failure> {
 }
 
 /// 메인 페이지와 표시 중인 앱 문서가 현재 배치를 그릴 때까지 기다린다.
+/// 창을 전체 화면으로 바꾸거나 되돌리고 전환이 끝난 뒤 반환한다. macOS 는 전환 중의 요청을
+/// 무시하므로 네이티브 코드가 그 전환이 끝난 뒤에 이어서 처리한다.
+fn fullscreen(window: &Window, on: bool) -> Result<Value, Failure> {
+    let platform = platform::current().map_err(internal)?;
+    let handle = native_owner(window).map_err(internal)?;
+    let (tx, rx) = mpsc::channel();
+    on_main(window, move || platform.fullscreen(handle, on, Box::new(move || { let _ = tx.send(()); })))
+        .map_err(internal)?;
+    match rx.recv_timeout(TIMEOUT) {
+        Ok(()) => Ok(Value::Null),
+        Err(_) => Err(Failure::new(TIMED_OUT, "the window did not change full screen within the time limit")),
+    }
+}
+
 /// 창의 표면 배치 트랜잭션이 확정되고 메인 문서와 보이는 앱 문서가 현재 배치를 표시할 때까지 기다리고,
 /// 그 화면의 표시 시각(ms, mach 절대 시각)을 반환한다.
 pub(crate) fn presented(window: &Window, timeout: Duration) -> Result<f64, Failure> {
@@ -811,8 +825,8 @@ impl Host {
                 Some(_) => Err(Failure::params("on must be a boolean")),
             },
             "host.window.fullscreen" => match arguments.get("on") {
-                None | Some(Value::Bool(true)) => done(window.set_fullscreen(true)),
-                Some(Value::Bool(false)) => done(window.set_fullscreen(false)),
+                None | Some(Value::Bool(true)) => fullscreen(window, true),
+                Some(Value::Bool(false)) => fullscreen(window, false),
                 Some(_) => Err(Failure::params("on must be a boolean")),
             },
             "host.window.resize" => (|| {

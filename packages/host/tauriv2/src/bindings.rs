@@ -187,8 +187,8 @@ fn overlay_pick(window: Window, id: String, instance: u64, key: String, value: S
 
 /// 창 버튼이 차지하는 영역을 반환한다.
 #[tauri::command]
-fn window_controls(window: Window) -> Result<Rect, String> {
-    windows::window_controls(&window)
+fn window_controls(window: Window) -> Result<windows::Chrome, String> {
+    windows::window_chrome(&window)
 }
 
 /// 표면 페이지가 보낸 메시지를 사이드카에 전달한다.

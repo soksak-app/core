@@ -9,7 +9,10 @@ package darwin
 #include <stdlib.h>
 #include "window_controls.h"
 #include "window_facts.h"
+#include "window_fullscreen.h"
 #include "window_motion.h"
+
+bool nativeWindowFullscreen(void *window, bool on, uintptr_t callback);
 #import <Cocoa/Cocoa.h>
 
 void nativeWindowPrepare(void *window);
@@ -19,6 +22,7 @@ import "C"
 import (
 	"errors"
 	"fmt"
+	"runtime/cgo"
 	"unsafe"
 
 	"github.com/min-median-max/soksak/packages/host/wailsv3/src/platform"
@@ -32,6 +36,23 @@ func init() { platform.Register(implementation{}) }
 func (implementation) PrepareWindow(window unsafe.Pointer) error {
 	C.nativeWindowPrepare(window)
 	return nil
+}
+
+func (implementation) Fullscreen(window unsafe.Pointer, on bool, done func()) error {
+	handle := cgo.NewHandle(done)
+	if !bool(C.nativeWindowFullscreen(window, C.bool(on), C.uintptr_t(handle))) {
+		handle.Delete()
+		return errors.New("the window does not support full screen")
+	}
+	return nil
+}
+
+//export nativeFullscreenDone
+func nativeFullscreenDone(value C.uintptr_t) {
+	handle := cgo.Handle(value)
+	done := handle.Value().(func())
+	handle.Delete()
+	done()
 }
 
 func (implementation) UnifiedTitlebar(window unsafe.Pointer) (float64, error) {

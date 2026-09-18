@@ -106,7 +106,7 @@ Screen coordinates are points with the origin at the top-left corner of the prim
 | command | `host.window.close` | Closes the window through its normal close action |
 | command | `host.window.move` | Moves the window frame origin to `{x, y}` in screen coordinates |
 | command | `host.window.maximize` | Maximizes the window, or restores it with `{on: false}` |
-| command | `host.window.fullscreen` | Enters full screen in its own Space, or leaves it with `{on: false}` |
+| command | `host.window.fullscreen` | Enters full screen, or leaves it with `on` false. It answers after the transition; macOS ignores a request made during one, so the host applies it when that transition ends |
 | command | `host.window.resize` | Resizes the content area to `{width, height}` |
 | command | `host.window.reload` | Reloads the main page and resolves after the new page reports ready; 1005 if it does not within 10 seconds |
 | command | `host.window.presented` | Resolves after the main page and visible application documents have presented their current geometry. It waits for the window's open surface layout transactions to commit first ([native surfaces](native-surfaces.md)). Returns `{displayed}`, the time in milliseconds of the display refresh that shows that state, on the clock of recorded frame times (the next refresh of the window's screen after the presentation; the call time when the window is on no screen) |
