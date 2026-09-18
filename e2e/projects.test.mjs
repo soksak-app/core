@@ -214,7 +214,11 @@ for (const app of Object.values(APPS)) {
     const saved = read(join(config, "projects.json")).find((p) => p.id === second.id);
     assert.equal(saved.spaces.find((x) => x.id === saved.activeSpaceId).title, "Saved space");
     assert.equal(saved.spaces.find((x) => x.id === saved.activeSpaceId).layout.railWidth.shell, 213);
-    assert.ok(saved.geometry.width > 0);
+    // 저장한 위치와 크기는 호스트가 보고하는 창 좌표와 같은 단위여야 한다. 화면 배율이 2 인 곳에서
+    // 물리 픽셀로 저장하면 같은 파일이 다른 자리를 가리키고, 창은 화면 밖으로 밀려난다.
+    assert.deepEqual(saved.geometry, { x: beforeClose.x + 30, y: beforeClose.y + 20,
+      width: beforeClose.width, height: beforeClose.height },
+      `the saved geometry is not in window points (${JSON.stringify(beforeClose)})`);
     await s.until("core.surfaces", (list) => list.some((x) => x.visible && x.plugin === "shell"),
       "the main window must keep its shell surface");
     await settings(s, { projectOpening: "windows" }, "common");

@@ -250,7 +250,7 @@ pub(crate) fn project_open(window: &Window, request: OpenProject) -> Result<serd
     crate::exposure::windows_changed(window.app_handle());
     if let Some(g) = request.geometry.filter(|g| g.width > 0.0 && g.height > 0.0) {
         owner.set_size(LogicalSize::new(g.width, g.height)).map_err(|e| e.to_string())?;
-        owner.set_position(tauri::PhysicalPosition::new(g.x, g.y)).map_err(|e| e.to_string())?;
+        owner.set_position(tauri::LogicalPosition::new(g.x, g.y)).map_err(|e| e.to_string())?;
     }
     notify_workspace(window.app_handle());
     Ok(serde_json::json!({"local": owner.label() == window.label()}))
@@ -271,11 +271,11 @@ pub(crate) fn window_state(window: &Window) -> Result<Option<Geometry>, String> 
     {
         return Ok(None);
     }
-    let at = window.outer_position().map_err(|e| e.to_string())?;
-    let size = window
-        .inner_size()
-        .map_err(|e| e.to_string())?
-        .to_logical::<f64>(window.scale_factor().map_err(|e| e.to_string())?);
+    // 위치와 크기는 창 좌표로 저장한다. 물리 픽셀로 저장하면 배율이 2 인 화면에서 같은 수가 두 배
+    // 떨어진 자리를 가리켜, 다시 열 때마다 창이 화면 밖으로 밀려난다.
+    let scale = window.scale_factor().map_err(|e| e.to_string())?;
+    let at = window.outer_position().map_err(|e| e.to_string())?.to_logical::<i32>(scale);
+    let size = window.inner_size().map_err(|e| e.to_string())?.to_logical::<f64>(scale);
     Ok(Some(Geometry { x: at.x, y: at.y, width: size.width, height: size.height }))
 }
 
