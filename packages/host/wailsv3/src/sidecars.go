@@ -96,9 +96,9 @@ func NewSidecars(frontend fs.FS, directory string) (*Sidecars, error) {
 		return nil, err
 	}
 	c := &Sidecars{
-		declared: map[string]string{},
-		running: map[string]*sidecar{},
-		owners: map[string]SidecarOwner{},
+		declared:    map[string]string{},
+		running:     map[string]*sidecar{},
+		owners:      map[string]SidecarOwner{},
 		StopTimeout: 5 * time.Second,
 	}
 	for _, plugin := range environment.Plugins {
@@ -283,12 +283,12 @@ func (c *Sidecars) process(name string) (*sidecar, error) {
 	}
 	process := &sidecar{
 		name: name, cmd: cmd, stdin: stdin,
-		outbox: make(chan []byte, 256),
-		exited: make(chan struct{}),
+		outbox:     make(chan []byte, 256),
+		exited:     make(chan struct{}),
 		closedMsgs: make(map[string][]byte),
 	}
 	c.running[name] = process
-	go c.write(process)      // 쓰기 고루틴: outbox 채널에서 읽어 stdin 에 쓴다.
+	go c.write(process)        // 쓰기 고루틴: outbox 채널에서 읽어 stdin 에 쓴다.
 	go c.read(process, stdout) // 읽기 고루틴: stdout 에서 읽어 이벤트를 전달한다.
 	return process, nil
 }
@@ -318,6 +318,10 @@ func (c *Sidecars) read(process *sidecar, stdout io.Reader) {
 		owner := c.owners[event.Surface]
 		c.mu.Unlock()
 		if owner != nil {
+			// 이미지 봉투 여부 확인
+			if c.tryHandleImageEnvelope(owner, process.name, event.Surface, event.Body) {
+				continue
+			}
 			owner.Emit("sidecar-message", SidecarMessage{Sidecar: process.name, Surface: event.Surface, Body: event.Body})
 		}
 	}
@@ -332,4 +336,16 @@ func (c *Sidecars) read(process *sidecar, stdout io.Reader) {
 		log.Printf("sidecar %s exited: %v", process.name, err)
 	}
 	close(process.exited)
+}
+
+// tryHandleImageEnvelope 은 이벤트가 이미지 봉투인지 확인하고 처리한다. 봉투면 true 를 반환한다.
+func (c *Sidecars) tryHandleImageEnvelope(owner SidecarOwner, sidecarName, surface string, body json.RawMessage) bool {
+	// 오너가 이미지 봉투 결정 핸들러를 가지고 있는지 확인
+	if decider, ok := owner.(interface {
+		DecideImageEnvelope(sidecarName, surface string, body json.RawMessage) bool
+	}); ok {
+		return decider.DecideImageEnvelope(sidecarName, surface, body)
+	}
+
+	return false
 }

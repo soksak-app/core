@@ -105,8 +105,10 @@ type Surfaces struct {
 	shapes    map[string]*nativeShape
 	// documents 는 표면 페이지가 붙인 문서 영역이다.
 	documents *Documents
-	sidecars  *Sidecars
-	watch     sync.Once
+	// images 는 표면 페이지가 붙인 그림 영역이다.
+	images   *Images
+	sidecars *Sidecars
+	watch    sync.Once
 
 	// 메인 페이지가 마지막으로 정한 테마. 페이지는 로드한 뒤 Theme 을 호출한다.
 	theme Theme
@@ -120,6 +122,7 @@ func NewSurfaces(win *application.WebviewWindow, sidecars *Sidecars) *Surfaces {
 		live:      map[string]bool{},
 		shapes:    map[string]*nativeShape{},
 		documents: NewDocuments(),
+		images:    NewImages(),
 		// 아직 테마를 받지 않았을 때의 값. 빈 맵이 아니면 JSON 에 null 이 실리고,
 		// 이 값을 받는 페이지는 토큰을 순회하다 멈춘다.
 		theme: Theme{Tokens: map[string]string{}},
@@ -160,6 +163,26 @@ func (s *Surfaces) ProjectRoot() string {
 // SidecarSend 는 이 창의 표면 페이지가 보낸 메시지를 사이드카에 전달한다.
 func (s *Surfaces) SidecarSend(name, surface string, body json.RawMessage) error {
 	return s.sidecars.Send(s, name, surface, body)
+}
+
+// DecideImageEnvelope 은 사이드카가 보낸 이미지 봉투를 결정하고 처리한다.
+func (s *Surfaces) DecideImageEnvelope(sidecarName, surface string, body json.RawMessage) bool {
+	sidecars := s.sidecars
+	return HandleEnvelope(body, sidecarName, surface, s.images,
+		func(work func() error) error {
+			application.InvokeSync(func() {
+				_ = work()
+			})
+			return nil
+		},
+		func(response map[string]interface{}) error {
+			responseBytes, err := json.Marshal(response)
+			if err != nil {
+				return err
+			}
+			return sidecars.Send(s, sidecarName, surface, json.RawMessage(responseBytes))
+		},
+	)
 }
 
 // run 은 run-began 과 run-ended 를 발행한다. 페이지가 갱신이 더 있는지 알리고, 이 함수는
@@ -414,6 +437,10 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]str
 		}
 		s.resizing(id, view, false)
 		s.closeSurfaceDocuments(id)
+		s.images.CloseSurface(id, func(handle unsafe.Pointer) {
+			system.CloseImage(handle)
+			s.windowChanged()
+		})
 		delete(s.named, uintptr(view.NativeView()))
 		view.Close()
 		delete(s.views, id)

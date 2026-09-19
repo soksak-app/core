@@ -248,3 +248,31 @@ pub fn endpoint_listen(_directory: &Path, _name: &str) -> Result<Box<dyn Listene
 pub fn endpoint_connect(_address: &str) -> Result<Box<dyn Connection>, String> {
     missing("local endpoint")
 }
+
+pub fn create_image(_surface: Handle, _name: &str, _event: Box<dyn Fn(String)>) -> Result<Handle, String> {
+    missing("image view")
+}
+
+pub fn place_image(_image: Handle, _insets: Insets, _visible: bool) -> Result<(), String> {
+    missing("image placement")
+}
+
+pub fn present_image(_image: Handle, _token_id: u32, _nonce: [u8; 16], _width: f64, _height: f64) -> Result<bool, String> {
+    missing("image presentation")
+}
+
+pub fn focus_image(_image: Handle) -> Result<(), String> {
+    missing("image focus")
+}
+
+pub fn caret_image(_image: Handle, _x: f64, _y: f64, _w: f64, _h: f64) -> Result<(), String> {
+    missing("image caret")
+}
+
+pub fn text_image(_image: Handle, _utf8: &str) -> Result<(), String> {
+    missing("image text")
+}
+
+pub fn close_image(_image: Handle) -> Result<(), String> {
+    missing("image removal")
+}

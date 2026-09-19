@@ -318,3 +318,34 @@ func (s *Surfaces) emitToSurface(surface, name string, data any) {
 	}
 	view.execJS("window.__soksakNative?.receive(" + string(payload) + ")")
 }
+
+// Image region methods - similar pattern to document regions
+func (s *Surfaces) attachImage(viewID uint64, req ImageRequest) error {
+	// TODO: Implement image attach
+	return fmt.Errorf("image attach not yet implemented")
+}
+
+func (s *Surfaces) placeImage(viewID uint64, req ImageRequest) error {
+	// TODO: Implement image place
+	return fmt.Errorf("image place not yet implemented")
+}
+
+func (s *Surfaces) focusImage(viewID uint64, req ImageRequest) error {
+	// TODO: Implement image focus
+	return fmt.Errorf("image focus not yet implemented")
+}
+
+func (s *Surfaces) caretImage(viewID uint64, req ImageRequest, x, y, w, h float64) error {
+	// TODO: Implement image caret
+	return fmt.Errorf("image caret not yet implemented")
+}
+
+func (s *Surfaces) textImage(viewID uint64, req ImageRequest, text string) error {
+	// TODO: Implement image text
+	return fmt.Errorf("image text not yet implemented")
+}
+
+func (s *Surfaces) detachImage(viewID uint64, req ImageRequest) error {
+	// TODO: Implement image detach
+	return fmt.Errorf("image detach not yet implemented")
+}

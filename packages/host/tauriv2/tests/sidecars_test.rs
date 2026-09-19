@@ -219,7 +219,9 @@ fn plugins_without_sidecars_declare_none() {
 fn slow_sidecar_does_not_block_other_sends() {
     // 느린 사이드카는 stdin을 읽지 않고, 다른 사이드카는 정상적으로 동작한다.
     // 느린 사이드카에 256번 이상 보내면 언젠가는 "is not keeping up" 오류로 실패한다.
-    // 그 상태에서 다른 사이드카 전송과 stop() 이 100ms 안에 끝난다 (이것이 핵심 단언이다).
+    // 이 테스트는 두 가지 성질을 확인한다:
+    // 1. 느린 사이드카 채널이 가득 찼을 때도, 빠른 사이드카로의 send() 는 블로킹되지 않는다.
+    // 2. stop() 이 stop_timeout 을 지키고 있다.
 
     let directory = tempfile::tempdir().unwrap();
 
@@ -280,10 +282,11 @@ fn slow_sidecar_does_not_block_other_sends() {
         last_err
     );
 
-    // 이제 다른 사이드카 전송과 stop() 이 100ms 안에 끝나야 한다.
+    // 성질 1: 느린 사이드카 채널이 가득 찼을 때도 빠른 사이드카 send() 는 블로킹되지 않는다.
+    // send() 는 채널에 넣고 즉시 돌아올 뿐이므로 50ms 미만이어야 한다.
+    // (첫 send 는 프로세스 기동을 포함할 수 있으므로, 미리 한 번 보내 프로세스를 띄운 후,
+    // 두 번째 send 를 시간 측정한다.)
     let start = std::time::Instant::now();
-
-    // 빠른 사이드카로 보낸다 (이것이 일반적인 경우다).
     sidecars
         .send(
             &owner,
@@ -292,25 +295,35 @@ fn slow_sidecar_does_not_block_other_sends() {
             &raw(r#"{"data":"test"}"#),
         )
         .unwrap();
-
-    // stop() 호출.
-    sidecars.stop();
-
-    let elapsed = start.elapsed();
+    let send_elapsed = start.elapsed();
     assert!(
-        elapsed < Duration::from_millis(110),
-        "fast send + stop took {:?}, want < 110ms",
-        elapsed
+        send_elapsed < Duration::from_millis(50),
+        "fast send took {:?}, want < 50ms",
+        send_elapsed
+    );
+
+    // 성질 2: stop() 이 stop_timeout(100ms) 을 지키고 있다.
+    // 200ms 기한으로 단언하면, 기본 5초와 명확히 구별된다.
+    // 이전 코드는 send 와 stop 을 함께 재서 110ms 단언했는데, 이는
+    // "OS 가 프로세스를 죽이고 수거하는 데 10ms 이하" 라는 불합리한 주장이었다.
+    let start = std::time::Instant::now();
+    sidecars.stop();
+    let stop_elapsed = start.elapsed();
+    assert!(
+        stop_elapsed < Duration::from_millis(200),
+        "stop() took {:?}, want < 200ms (2 × stop_timeout)",
+        stop_elapsed
     );
 }
 
 #[test]
 fn stop_graceful_shutdown() {
-    // stdin EOF에 사이드카가 정상 종료되는지 검증한다.
+    // 사이드카가 실제로 stdin 을 읽고 있을 때 stop() 이 stdin EOF 에 의해 정상 종료되는지 검증한다.
+    // 측정은 사이드카가 send 의 에코를 받은 뒤 시작해서, 기한(1초)까지 기다리지 않고 즉시 종료되는지 확인한다.
 
     let directory = tempfile::tempdir().unwrap();
 
-    // 사이드카: stdin EOF에 정상 종료한다.
+    // 사이드카: 받은 줄을 그대로 에코하고 stdin EOF에 정상 종료한다.
     let graceful_program = directory.path().join("graceful");
     std::fs::write(
         &graceful_program,
@@ -337,7 +350,7 @@ fn stop_graceful_shutdown() {
     let mut sidecars = create(&files, directory.path()).unwrap();
     // 테스트를 위해 기한을 1초로 설정한다.
     sidecars.stop_timeout = Duration::from_secs(1);
-    let (owner, _events) = owner("a", "/projects/test");
+    let (owner, events) = owner("a", "/projects/test");
 
     // 사이드카를 시작한다.
     sidecars
@@ -349,7 +362,14 @@ fn stop_graceful_shutdown() {
         )
         .unwrap();
 
-    // 즉시 stop() 호출. stdin EOF에 정상 종료되어야 한다.
+    // 사이드카가 실제로 stdin 을 읽고 있음을 확인한다: 에코 이벤트를 기다린다.
+    // 이렇게 하면 shell 프로세스 기동 시간이 측정에 포함되지 않는다.
+    let event = events
+        .recv_timeout(Duration::from_secs(5))
+        .expect("no echo event within 5s");
+    assert_eq!((event.sidecar.as_str(), event.surface.as_str()), ("@fixture/sidecar-graceful", "s1"));
+
+    // 이제 stop() 호출을 시간 측정한다. stdin EOF에 정상 종료되어야 한다.
     let start = std::time::Instant::now();
     sidecars.stop();
     let elapsed = start.elapsed();

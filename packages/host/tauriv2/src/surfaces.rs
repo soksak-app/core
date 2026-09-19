@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{LogicalPosition, LogicalSize, Manager, Runtime, Webview, WebviewBuilder, WebviewUrl, Window};
 
 use crate::documents;
+use crate::images;
 use crate::exposure;
 use crate::log_error;
 use crate::platform::{self, Handle};
@@ -338,6 +339,7 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
                 }
                 webview.close().map_err(|e| e.to_string())?;
                 documents::close_surface(window, &id);
+                images::close_surface(window, &id);
                 exposure::surface_closed(window, &id);
             }
         }

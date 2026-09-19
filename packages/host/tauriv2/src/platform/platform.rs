@@ -181,6 +181,27 @@ pub trait Platform: Send + Sync {
     /// 입력 체인에서 웹뷰를 식별하는 뷰 주소를 반환한다.
     fn view_id(&self, view: &PlatformWebview) -> Result<Handle, String>;
 
+    // 그림 영역
+
+    /// 표면 웹뷰 surface 안에 외부 그림 표시 영역을 만든다. name 은 영역 이름이다.
+    /// event 는 키보드·IME·입력 이벤트를 JSON 문자열({key, insert, compose, focus, size, error})으로
+    /// 메인 스레드에서 받는다. 메인 스레드에서 호출한다.
+    fn create_image(&self, surface: Handle, name: &str, event: Box<dyn Fn(String)>) -> Result<Handle, String>;
+    /// 표면 뷰포트의 CSS 픽셀 여백으로 그림 영역을 정한다. 메인 스레드에서 호출한다.
+    fn place_image(&self, image: Handle, insets: Insets, visible: bool) -> Result<(), String>;
+    /// 외부 IOSurface 를 표시한다. token_id 는 IOSurface 의 전역 ID, nonce 는 논스 대조용
+    /// 16바이트 데이터, width·height 는 장치 픽셀 단위의 크기다. 성공하면 true,
+    /// 찾지 못했거나 크기가 맞지 않으면 false 를 반환한다. 메인 스레드에서 호출한다.
+    fn present_image(&self, image: Handle, token_id: u32, nonce: [u8; 16], width: f64, height: f64) -> Result<bool, String>;
+    /// 영역을 첫 응답자로 만들고 포커스 이벤트를 보낸다. 메인 스레드에서 호출한다.
+    fn focus_image(&self, image: Handle) -> Result<(), String>;
+    /// 캐럿(입력 커서) 위치를 받아 둔다. 메인 스레드에서 호출한다.
+    fn caret_image(&self, image: Handle, x: f64, y: f64, w: f64, h: f64) -> Result<(), String>;
+    /// 접근성 값으로 보일 문자열을 받아 둔다. 메인 스레드에서 호출한다.
+    fn text_image(&self, image: Handle, utf8: &str) -> Result<(), String>;
+    /// 그림 영역을 제거한다. 이후 event 는 호출되지 않는다. 메인 스레드에서 호출한다.
+    fn close_image(&self, image: Handle) -> Result<(), String>;
+
     // 표면 배치
 
     /// 창의 표면 배치 트랜잭션 ticket 을 시작하고 시작 허용 여부를 ready 에 전달한다.

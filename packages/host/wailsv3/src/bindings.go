@@ -191,6 +191,33 @@ func invokeNative(s *Surfaces, viewID uint64, call nativeCall) (any, error) {
 		default:
 			return nil, s.detachDocument(viewID, req)
 		}
+	case "ImageAttach", "ImagePlace", "ImageFocus", "ImageCaret", "ImageText", "ImageDetach":
+		var req ImageRequest
+		if err := nativeArgs(call, &req); err != nil {
+			return nil, err
+		}
+		switch call.Method {
+		case "ImageAttach":
+			return nil, s.attachImage(viewID, req)
+		case "ImagePlace":
+			return nil, s.placeImage(viewID, req)
+		case "ImageFocus":
+			return nil, s.focusImage(viewID, req)
+		case "ImageCaret":
+			var x, y, w, h float64
+			if err := nativeArgs(call, &req, &x, &y, &w, &h); err != nil {
+				return nil, err
+			}
+			return nil, s.caretImage(viewID, req, x, y, w, h)
+		case "ImageText":
+			var text string
+			if err := nativeArgs(call, &req, &text); err != nil {
+				return nil, err
+			}
+			return nil, s.textImage(viewID, req, text)
+		default:
+			return nil, s.detachImage(viewID, req)
+		}
 	case "OverlayPick":
 		if err := nativeArgs(call, &id, &instance, &key, &value); err != nil {
 			return nil, err

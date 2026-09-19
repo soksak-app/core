@@ -18,10 +18,11 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
+use wait_timeout::ChildExt;
+
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use tauri::Window;
-
 use crate::windows::{emit_window, window_data};
 
 /// 사이드카가 보낸 메시지를 페이지에 전달하는 이벤트 값.
@@ -35,6 +36,20 @@ pub struct Message {
     pub body: Box<RawValue>,
 }
 
+/// 사이드카 outbox 채널의 메시지 유형.
+enum Outgoing {
+    /// 사이드카로 전송할 한 줄.
+    Line(Vec<u8>),
+    /// 사이드카 stdin 을 닫으라는 신호.
+    Close,
+}
+
+/// 사이드카로 응답을 전송하는 인터페이스.
+pub trait ResponseSender: Send {
+    /// 응답 JSON 을 사이드카에 전송한다.
+    fn send(&self, surface: &str, body: &RawValue) -> Result<(), String>;
+}
+
 /// 표면을 소유한 창. 사이드카 메시지의 root 를 제공하고 이벤트를 받는다.
 pub trait Owner: Clone + Send + 'static {
     /// 소유 창을 구분하는 값.
@@ -43,6 +58,17 @@ pub trait Owner: Clone + Send + 'static {
     fn root(&self) -> Result<String, String>;
     /// 사이드카가 보낸 메시지를 창의 페이지에 전달한다.
     fn deliver(&self, message: Message);
+    /// 이미지 봉투를 결정하여 처리한다. 기본 구현은 없음.
+    /// 반환값: 이미지 봉투를 처리했는지 여부.
+    fn decide_image_envelope(
+        &self,
+        _sidecar_name: &str,
+        _surface: &str,
+        _body: &RawValue,
+        _response_sender: &dyn ResponseSender,
+    ) -> bool {
+        false
+    }
 }
 
 #[derive(Serialize)]
@@ -62,9 +88,33 @@ struct Event {
     body: Box<RawValue>,
 }
 
+/// 읽기 스레드의 응답 전송기. 사이드카 outbox 채널로 응답을 전송한다.
+struct ReadThreadResponseSender {
+    sidecar_name: String,
+    tx: SyncSender<Outgoing>,
+}
+
+impl ResponseSender for ReadThreadResponseSender {
+    fn send(&self, surface: &str, body: &RawValue) -> Result<(), String> {
+        #[derive(Serialize)]
+        struct Response<'a> {
+            surface: &'a str,
+            body: &'a RawValue,
+        }
+
+        let response = Response { surface, body };
+        let mut line = serde_json::to_vec(&response)
+            .map_err(|e| format!("response serialization: {e}"))?;
+        line.push(b'\n');
+
+        self.tx.try_send(Outgoing::Line(line))
+            .map_err(|_| format!("sidecar {} response queue full", self.sidecar_name))
+    }
+}
+
 struct Process {
     child: Child,
-    outbox: SyncSender<Vec<u8>>, // 용량 256인 채널
+    outbox: SyncSender<Outgoing>, // 용량 256인 채널
 }
 
 struct State<O> {
@@ -191,7 +241,7 @@ impl<O: Owner> Sidecars<O> {
         // 논블로킹으로 채널에 전송한다. 채널이 가득 차면 "is not keeping up" 오류를 반환한다.
         process
             .outbox
-            .try_send(line)
+            .try_send(Outgoing::Line(line))
             .map_err(|_| format!("sidecar {name} is not keeping up"))
     }
 
@@ -221,7 +271,7 @@ impl<O: Owner> Sidecars<O> {
 
             for (name, process) in state.running.iter() {
                 // 논블로킹으로 채널에 전송한다. 실패해도 로그만 한다.
-                if let Err(_) = process.outbox.try_send(line.clone()) {
+                if let Err(_) = process.outbox.try_send(Outgoing::Line(line.clone())) {
                     eprintln!("sidecar {name}: close {surface}: outbox full");
                 }
             }
@@ -229,7 +279,8 @@ impl<O: Owner> Sidecars<O> {
         Ok(())
     }
 
-    /// 모든 사이드카를 종료한다. 채널을 닫아 쓰기 스레드에 EOF 신호를 보내고 프로세스를 강제 종료한다.
+    /// 모든 사이드카를 종료한다. 채널에 Close 신호를 보내 쓰기 스레드를 종료하고 stdin을 닫은 후
+    /// 프로세스 종료를 대기하고, 기한 초과 시 강제 종료한다.
     pub fn stop(&self) {
         let processes: Vec<(String, Process)> = {
             let mut state = self.state.lock().expect("sidecar state");
@@ -237,40 +288,36 @@ impl<O: Owner> Sidecars<O> {
             state.running.drain().collect()
         };
 
-        // 모든 프로세스를 병렬로 기다린다. 프로세스가 스레드로 move되면서 outbox가 자동으로 drop되어
-        // 쓰기 스레드의 stdin이 close되고 자식이 EOF를 받는다.
+        // 모든 프로세스를 병렬로 기다린다.
         let deadline = std::time::Instant::now() + self.stop_timeout;
         let mut handles = Vec::new();
         for (_name, process) in processes {
             let handle = thread::spawn(move || {
-                // outbox를 즉시 drop한다. 이렇게 하면 쓰기 스레드가 EOF를 받고 stdin을 close한다.
-                drop(process.outbox);
+                // Close 신호를 보낸다. 쓰기 스레드가 이를 받으면 블로킹 루프를 빠져나가고 stdin을 close한다.
+                if let Err(_) = process.outbox.try_send(Outgoing::Close) {
+                    // 채널이 가득 참: 별도 스레드에서 블로킹 send를 시도한다.
+                    // 이 스레드는 stop()을 막지 않는다.
+                    let tx = process.outbox.clone();
+                    thread::spawn(move || {
+                        let _ = tx.send(Outgoing::Close);
+                    });
+                }
 
                 let mut child = process.child;
                 let remaining = deadline.saturating_duration_since(std::time::Instant::now());
-                let start = std::time::Instant::now();
 
-                // 프로세스가 종료되기를 기다린다 (기한까지).
-                loop {
-                    match child.try_wait() {
-                        Ok(Some(_status)) => {
-                            // 정상 종료됨.
-                            break;
-                        }
-                        Ok(None) => {
-                            // 프로세스가 여전히 실행 중.
-                            if start.elapsed() >= remaining {
-                                // 기한 초과. 강제 종료.
-                                let _ = child.kill();
-                                let _ = child.wait();
-                                break;
-                            }
-                            thread::sleep(Duration::from_millis(1));
-                        }
-                        Err(_) => {
-                            // wait() 오류. 이미 종료되었거나 이미 waited.
-                            break;
-                        }
+                // wait-timeout 크레이트를 사용하여 SIGCHLD 기반 대기 (폴링 없음)
+                match child.wait_timeout(remaining) {
+                    Ok(Some(_status)) => {
+                        // 정상 종료됨.
+                    }
+                    Ok(None) => {
+                        // 기한 초과. 강제 종료.
+                        let _ = child.kill();
+                        let _ = child.wait();
+                    }
+                    Err(_) => {
+                        // wait() 오류. 이미 종료되었거나 이미 waited.
                     }
                 }
             });
@@ -283,6 +330,7 @@ impl<O: Owner> Sidecars<O> {
         }
     }
 
+    /// 이벤트가 이미지 봉투인지 확인하고 처리한다. 봉투면 true 를 반환한다.
     fn start(&self, name: &str) -> Result<Process, String> {
         let program = self
             .declared
@@ -298,22 +346,29 @@ impl<O: Owner> Sidecars<O> {
         let stdout = child.stdout.take().ok_or("sidecar stdout is missing")?;
 
         // 용량 256인 동기 채널 생성
-        let (tx, rx) = sync_channel::<Vec<u8>>(256);
+        let (tx, rx) = sync_channel::<Outgoing>(256);
 
         // 쓰기 스레드: outbox 채널에서 읽어 stdin에 쓴다
         let write_name = name.to_string();
         thread::spawn(move || {
-            for line in rx.iter() {
-                if let Err(e) = stdin.write_all(&line) {
-                    eprintln!("sidecar {write_name}: write: {e}");
-                    break;
+            for message in rx.iter() {
+                match message {
+                    Outgoing::Line(line) => {
+                        if let Err(e) = stdin.write_all(&line) {
+                            eprintln!("sidecar {write_name}: write: {e}");
+                            break;
+                        }
+                    }
+                    Outgoing::Close => break,
                 }
             }
+            // stdin이 여기서 drop 되어 닫힌다
         });
 
         // 읽기 스레드: stdout에서 읽어 이벤트를 전달한다
         let state = Arc::clone(&self.state);
         let sidecar = name.to_string();
+        let tx_clone = tx.clone();
         thread::spawn(move || {
             let mut reader = BufReader::new(stdout);
             let mut line = Vec::new();
@@ -339,6 +394,14 @@ impl<O: Owner> Sidecars<O> {
                     .ok()
                     .and_then(|state| state.owners.get(&event.surface).cloned());
                 if let Some(owner) = owner {
+                    let response_sender = ReadThreadResponseSender {
+                        sidecar_name: sidecar.clone(),
+                        tx: tx_clone.clone(),
+                    };
+                    // 이미지 봉투 여부 확인 및 처리
+                    if try_handle_image_envelope(&owner, &sidecar, &event.surface, &event.body, &response_sender) {
+                        continue;
+                    }
                     owner.deliver(Message {
                         sidecar: sidecar.clone(),
                         surface: event.surface,
@@ -361,6 +424,12 @@ impl<O: Owner> Sidecars<O> {
     }
 }
 
+/// 이벤트가 이미지 봉투인지 확인하고 처리한다. 봉투면 true 를 반환한다.
+fn try_handle_image_envelope<O: Owner>(owner: &O, sidecar_name: &str, surface: &str, body: &RawValue, response_sender: &dyn ResponseSender) -> bool {
+    // 이미지 봉투 여부 확인 및 결정을 요청한다.
+    owner.decide_image_envelope(sidecar_name, surface, body, response_sender)
+}
+
 /// 사이드카 채널에서 사용하는 창. 창 레이블로 구분하고 창의 프로젝트 디렉터리를 root 로 사용한다.
 pub(crate) type WindowSidecars = Sidecars<Window>;
 
@@ -377,5 +446,51 @@ impl Owner for Window {
         if let Err(error) = emit_window(self, "sidecar-message", message) {
             eprintln!("sidecar message: {error}");
         }
+    }
+    fn decide_image_envelope(
+        &self,
+        sidecar_name: &str,
+        surface: &str,
+        body: &RawValue,
+        response_sender: &dyn ResponseSender,
+    ) -> bool {
+        let data = match window_data(self) {
+            Ok(d) => d,
+            Err(_) => return false,
+        };
+
+        let window = self.clone();
+        let surface_copy = surface.to_string();
+        let sender_copy = Arc::new(Mutex::new(Vec::<serde_json::Value>::new()));
+        let sender_copy_clone = Arc::clone(&sender_copy);
+
+        let is_image = crate::images::handle_envelope(
+            body.get(),
+            sidecar_name,
+            surface,
+            &data.images,
+            &|work: Box<dyn Fn() -> Result<(), String> + Send>| {
+                window.run_on_main_thread(move || { let _ = work(); }).map_err(|e| e.to_string())
+            },
+            &|response: serde_json::Value| {
+                if let Ok(mut queue) = sender_copy_clone.lock() {
+                    queue.push(response);
+                }
+                Ok(())
+            },
+        );
+
+        if is_image {
+            if let Ok(queue) = sender_copy.lock() {
+                for resp in queue.iter() {
+                    if let Ok(body_str) = serde_json::to_string(resp) {
+                        if let Ok(response_body) = RawValue::from_string(body_str) {
+                            let _ = response_sender.send(&surface_copy, &response_body);
+                        }
+                    }
+                }
+            }
+        }
+        is_image
     }
 }

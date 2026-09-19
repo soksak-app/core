@@ -35,6 +35,8 @@ pub(crate) struct WindowData {
     pub registrations: Mutex<Vec<(String, String, String)>>,
     /// 표면 페이지의 문서 영역.
     pub documents: crate::documents::Documents,
+    /// 표면 페이지의 그림 영역.
+    pub images: crate::images::Images,
 }
 
 /// 애플리케이션의 창 등록부와 프로젝트 소유 창.

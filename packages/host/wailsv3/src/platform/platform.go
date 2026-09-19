@@ -129,6 +129,25 @@ type Platform interface {
 	// CloseDocument 는 문서 웹뷰를 제거한다. 이후 changed 는 호출되지 않는다.
 	CloseDocument(document unsafe.Pointer)
 
+	// CreateImage 는 표면 웹뷰 surface 안에 외부 그림 표시 영역을 만든다. event 는
+	// 키보드·IME·입력 이벤트를 JSON 문자열({key, insert, compose, focus, size, error})으로
+	// 메인 스레드에서 받는다.
+	CreateImage(surface unsafe.Pointer, name string, event func(json string)) (unsafe.Pointer, error)
+	// PlaceImage 는 표면 뷰포트의 CSS 픽셀 여백으로 그림 영역을 정한다.
+	PlaceImage(image unsafe.Pointer, left, top, right, bottom float64, visible bool)
+	// PresentImage 는 외부 IOSurface 를 표시한다. token_id 는 IOSurface 의 전역 ID,
+	// nonce 는 논스 대조용 16바이트 데이터, width·height 는 장치 픽셀 단위의 크기다.
+	// 성공하면 true, 찾지 못했거나 크기가 맞지 않으면 false 를 반환한다.
+	PresentImage(image unsafe.Pointer, token_id uint32, nonce [16]byte, width, height float64) bool
+	// FocusImage 는 영역을 첫 응답자로 만들고 포커스 이벤트를 보낸다.
+	FocusImage(image unsafe.Pointer)
+	// CaretImage 는 캐럿(입력 커서) 위치를 받아 둔다.
+	CaretImage(image unsafe.Pointer, x, y, w, h float64)
+	// TextImage 는 접근성 값으로 보일 문자열을 받아 둔다.
+	TextImage(image unsafe.Pointer, utf8 string)
+	// CloseImage 는 그림 영역을 제거한다. 이후 event 는 호출되지 않는다.
+	CloseImage(image unsafe.Pointer)
+
 	// BeginLayout 은 표면 배치 트랜잭션을 시작한다. 배치가 가능해지면 ready 를 UI 스레드에서 호출한다.
 	BeginLayout(window unsafe.Pointer, ticket uint64, ready func(allowed bool)) error
 	// CommitLayout 은 ticket 의 배치를 확정하고 확정했는지 반환한다.

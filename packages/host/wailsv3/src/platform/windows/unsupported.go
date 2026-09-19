@@ -222,3 +222,32 @@ func (implementation) Listen(string, string) (net.Listener, platform.Endpoint, e
 func (implementation) InstallDock(func()) error {
 	return unsupported("Dock menu")
 }
+
+func (implementation) CreateImage(unsafe.Pointer, string, func(string)) (unsafe.Pointer, error) {
+	return nil, unsupported("image view")
+}
+
+func (implementation) PlaceImage(unsafe.Pointer, float64, float64, float64, float64, bool) {
+	unreachable("image placement")
+}
+
+func (implementation) PresentImage(unsafe.Pointer, uint32, [16]byte, float64, float64) bool {
+	unreachable("image presentation")
+	return false
+}
+
+func (implementation) FocusImage(unsafe.Pointer) {
+	unreachable("image focus")
+}
+
+func (implementation) CaretImage(unsafe.Pointer, float64, float64, float64, float64) {
+	unreachable("image caret")
+}
+
+func (implementation) TextImage(unsafe.Pointer, string) {
+	unreachable("image text")
+}
+
+func (implementation) CloseImage(unsafe.Pointer) {
+	unreachable("image removal")
+}

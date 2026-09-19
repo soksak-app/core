@@ -22,6 +22,8 @@ mod capture;
 mod dock;
 #[path = "document.rs"]
 mod document;
+#[path = "image.rs"]
+mod image;
 #[path = "endpoint.rs"]
 mod endpoint;
 #[path = "identity.rs"]
@@ -163,6 +165,32 @@ impl Platform for Darwin {
     }
     fn view_id(&self, view: &PlatformWebview) -> Result<Handle, String> {
         Ok(webview::id(view))
+    }
+
+    fn create_image(&self, surface: Handle, name: &str, event: Box<dyn Fn(String)>) -> Result<Handle, String> {
+        image::create(surface, name, event)
+    }
+    fn place_image(&self, image: Handle, insets: Insets, visible: bool) -> Result<(), String> {
+        image::place(image, insets.left, insets.top, insets.right, insets.bottom, visible);
+        Ok(())
+    }
+    fn present_image(&self, image: Handle, token_id: u32, nonce: [u8; 16], width: f64, height: f64) -> Result<bool, String> {
+        Ok(image::present(image, token_id, &nonce, width, height))
+    }
+    fn focus_image(&self, image: Handle) -> Result<(), String> {
+        image::focus(image);
+        Ok(())
+    }
+    fn caret_image(&self, image: Handle, x: f64, y: f64, w: f64, h: f64) -> Result<(), String> {
+        image::caret(image, x, y, w, h);
+        Ok(())
+    }
+    fn text_image(&self, image: Handle, utf8: &str) -> Result<(), String> {
+        image::text(image, utf8)
+    }
+    fn close_image(&self, image: Handle) -> Result<(), String> {
+        image::close(image);
+        Ok(())
     }
 
     fn begin_layout(&self, window: Handle, ticket: u64, ready: Box<dyn Fn(bool)>) -> Result<(), String> {

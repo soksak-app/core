@@ -8,6 +8,7 @@ use tauri::ipc::Invoke;
 use tauri::{AppHandle, Manager, Webview, Window};
 
 use crate::documents;
+use crate::images;
 use crate::modals::{self, OverlayRequest, PlaceRequest, RevisedContent, UpdateRequest};
 use crate::projects::{self, CreateProject, Folder};
 use crate::shapes::{self, ShapeRequest};
@@ -55,7 +56,13 @@ pub(crate) fn handler() -> impl Fn(Invoke) -> bool + Send + Sync + 'static {
         document_place,
         document_load,
         document_go,
-        document_detach
+        document_detach,
+        image_attach,
+        image_place,
+        image_focus,
+        image_caret,
+        image_text,
+        image_detach
     ]
 }
 
@@ -269,4 +276,40 @@ fn document_go(webview: Webview, request: documents::Request) -> Result<bool, St
 #[tauri::command(async)]
 fn document_detach(webview: Webview, request: documents::Request) -> Result<(), String> {
     documents::detach(&webview, request)
+}
+
+/// 호출한 표면 페이지의 요소에 그림 영역을 붙인다.
+#[tauri::command(async)]
+fn image_attach(webview: Webview, request: images::Request) -> Result<(), String> {
+    images::attach(&webview, request)
+}
+
+/// 그림 영역을 표면 뷰포트 여백으로 배치한다.
+#[tauri::command(async)]
+fn image_place(webview: Webview, request: images::Request) -> Result<(), String> {
+    images::place(&webview, request)
+}
+
+/// 그림 영역을 첫 응답자로 만들고 포커스 이벤트를 보낸다.
+#[tauri::command(async)]
+fn image_focus(webview: Webview, request: images::Request) -> Result<(), String> {
+    images::focus(&webview, request)
+}
+
+/// 캐럿(입력 커서) 위치를 받아 둔다.
+#[tauri::command(async)]
+fn image_caret(webview: Webview, request: images::Request, x: f64, y: f64, w: f64, h: f64) -> Result<(), String> {
+    images::caret(&webview, request, x, y, w, h)
+}
+
+/// 접근성 값으로 보일 문자열을 받아 둔다.
+#[tauri::command(async)]
+fn image_text(webview: Webview, request: images::Request, text: String) -> Result<(), String> {
+    images::text(&webview, request, text)
+}
+
+/// 그림 영역을 닫는다.
+#[tauri::command(async)]
+fn image_detach(webview: Webview, request: images::Request) -> Result<(), String> {
+    images::detach(&webview, request)
 }
