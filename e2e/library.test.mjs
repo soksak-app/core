@@ -1,11 +1,13 @@
 // 라이브러리 시작, 기존 OS 창 재사용, 폴더 생성과 작업 화면 복원을 검사한다.
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
 import { APPS, failure, fresh, open } from "./app.mjs";
+import { frames, pixel, readFrame } from "./frame.mjs";
 
 /** 창 목록에서 known 에 없는 창 하나. */
 const added = (list, known) => list.find((w) => !known.includes(w.window)).window;
@@ -15,6 +17,75 @@ const shown = (s, count, message) => s.until("core.library", (library) => librar
 
 /** 프로젝트 저장이 끝날 때까지 기다린 뒤 이름이 id 인 프로젝트를 반환한다. */
 const project = async (s, id) => (await s.get("core.projects")).find((p) => p.id === id);
+
+/** 여러 terminal session이 공유하는 PTY daemon 수를 센다. */
+function ptydCount() {
+  return execFileSync("ps", ["-axo", "command"], { encoding: "utf8" })
+    .split("\n")
+    .filter((line) => /(?:^|\/)soksak-ptyd(?:\s|$)/.test(line)).length;
+}
+
+/** 라이브러리 명령이 내부에서 오류를 삼키고 화면만 전환한 상태를 통과시키지 않는다. */
+async function assertNoLibraryError(s, message) {
+  const library = await s.get("core.library");
+  assert.equal(library.error, null, `${message}: library reported ${library.error}`);
+}
+
+/** 프로젝트 복귀가 DOM 슬롯뿐 아니라 보이는 네이티브 그림 래스터까지 복원했는지 검사한다. */
+async function assertVisibleTerminalRasters(s, minimum, message) {
+  const surfaces = await s.surfaces("terminal");
+  assert.ok(surfaces.length >= minimum, `${message}: expected at least ${minimum} visible terminals, got ${surfaces.length}`);
+  const window = await s.until("host.window", (state) => surfaces.every((surface) => {
+    const region = state.regions.find((item) => item.surface === surface.surface);
+    return region?.visible && region.presented && region.frame.width > 0 && region.frame.height > 0;
+  }), `${message}: native regions did not settle`);
+  for (const surface of surfaces) {
+    const region = window.regions.find((item) => item.surface === surface.surface);
+    assert.ok(region, `${message}: ${surface.surface} has no native image region`);
+    assert.equal(region.visible, true,
+      `${message}: ${surface.surface} is a visible terminal surface but its native image region is hidden`);
+    assert.ok(region.presented, `${message}: ${surface.surface} has no presented raster`);
+    assert.ok(region.frame.width > 0 && region.frame.height > 0,
+      `${message}: ${surface.surface} has an empty native frame`);
+  }
+}
+
+/** 호스트 native surface 목록에 grid가 소유하지 않는 웹뷰가 남지 않았는지 검사한다. */
+async function assertNoOrphanNativeSurfaces(s, message) {
+  const grid = await s.get("core.grid");
+  const host = await s.get("host.window");
+  const owned = new Set(grid.cards.flatMap((card) => card.tabs.map((tab) => tab.id)));
+  const orphan = host.surfaces.filter((surface) => !owned.has(surface.id));
+  assert.deepEqual(orphan, [], `${message}: orphan native surfaces ${orphan.map((surface) => surface.id).join(", ")}`);
+}
+
+/** 복귀 전환 전체를 녹화한 실제 픽셀에서 터미널 영역의 DOM 흰색 노출을 검사한다. */
+function assertNoWhiteTerminalBleed(frameFiles, regions, message) {
+  assert.ok(frameFiles.length > 0, `${message}: capture produced no frames`);
+  let worst = { ratio: 0, frame: -1, surface: "" };
+  for (const [frameIndex, path] of frameFiles.entries()) {
+    const frame = readFrame(path);
+    for (const region of regions) {
+      const x0 = Math.max(0, Math.floor(region.frame.x));
+      const y0 = Math.max(0, Math.floor(region.frame.y));
+      const x1 = Math.min(frame.width, Math.ceil(region.frame.x + region.frame.width));
+      const y1 = Math.min(frame.height, Math.ceil(region.frame.y + region.frame.height));
+      let white = 0;
+      let samples = 0;
+      for (let y = y0; y < y1; y += 2) {
+        for (let x = x0; x < x1; x += 2) {
+          const [r, g, b] = pixel(frame, x, y);
+          samples++;
+          if (r >= 245 && g >= 245 && b >= 245) white++;
+        }
+      }
+      const ratio = samples ? white / samples : 0;
+      if (ratio > worst.ratio) worst = { ratio, frame: frameIndex, surface: region.surface };
+    }
+  }
+  assert.ok(worst.ratio <= 0.01,
+    `${message}: ${worst.surface} exposed ${(worst.ratio * 100).toFixed(2)}% white pixels in frame ${worst.frame}`);
+}
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: library windows create and open projects in place`, async (t) => {
@@ -37,8 +108,10 @@ for (const app of Object.values(APPS)) {
       await s.run("core.projects.flush");
     });
 
-    const geometry = (await s.get("core.grid")).cards.map(({ id, x, y, w, h }) => ({ id, x, y, w, h }));
+    const grid = await s.until("core.grid", (value) => value?.cards?.length > 0, "the project grid did not render");
+    const geometry = grid.cards.map(({ id, x, y, w, h }) => ({ id, x, y, w, h }));
     const first = await s.get("core.project");
+    const ptydBefore = ptydCount();
     await s.run("core.settings.set", { patch: { projectOpening: "windows" }, scope: "common" });
     await s.run("core.projects.browse");
     assert.equal((await s.get("core.screen")).screen, "library");
@@ -64,6 +137,61 @@ for (const app of Object.values(APPS)) {
     const saved = await project(s, first.id);
     const space = saved.spaces.find((x) => x.id === saved.activeSpaceId);
     assert.equal("preview" in space.layout, false, "screen state must not store renderer coordinates for previews");
+
+    await s.run("core.library.open", { id: first.id });
+    await s.until("core.screen", (screen) => screen.screen === "workspace", "the project did not reopen after the preview check");
+    await assertNoLibraryError(s, "the preview project return");
+    // 세 개의 보이는 터미널을 만든 뒤 라이브러리로 나갔다가 같은 프로젝트로 돌아온다.
+    // 복귀 명령이 DOM만 복원하고 native image raster를 늦게 표시하면 이 검사가 실패한다.
+    let terminalCount = (await s.surfaces("terminal")).filter((surface) => surface.visible).length;
+    if (terminalCount === 0) {
+      const source = grid.cards.find((card) => card.id === "shell" && card.tabs.length > 0);
+      if (!source) return t.skip("terminal source card not found");
+      await s.run("core.card.split", { card: source.id, axis: "x", plugin: "terminal" });
+      await s.until("core.surfaces", (surfaces) => surfaces.filter((surface) =>
+        surface.visible && surface.plugin === "terminal").length > terminalCount,
+      "the first terminal card did not render");
+      terminalCount = 1;
+    }
+    while (terminalCount < 3) {
+      const current = await s.get("core.grid");
+      const terminalCard = current.cards.find((card) =>
+        card.active && card.tabs.find((tab) => tab.id === card.active)?.plugin === "terminal");
+      assert.ok(terminalCard, "a visible terminal card was not found");
+      await s.run("core.card.split", { card: terminalCard.id, axis: "x", plugin: "terminal" });
+      const next = await s.until("core.surfaces", (surfaces) => surfaces.filter((surface) =>
+        surface.visible && surface.plugin === "terminal").length > terminalCount,
+      "a terminal card split did not produce another visible terminal");
+      terminalCount = next.filter((surface) => surface.visible && surface.plugin === "terminal").length;
+    }
+    await s.until("core.surfaces", (surfaces) => surfaces.filter((item) => item.visible && item.plugin === "terminal").length >= 3,
+      "three visible terminal surfaces did not render");
+    const ptydAtThree = ptydCount();
+    assert.ok(ptydAtThree <= ptydBefore + 1,
+      `creating three terminal surfaces started too many ptyd processes: before=${ptydBefore}, after=${ptydAtThree}`);
+    await s.presented();
+    await assertVisibleTerminalRasters(s, 3, "before leaving the project");
+    await s.request("diagnostics.capture.start", {});
+    await s.run("core.projects.browse");
+    await s.until("core.screen", (screen) => screen.screen === "library", "the project did not enter the library");
+    await s.run("core.library.open", { id: first.id });
+    await s.until("core.screen", (screen) => screen.screen === "workspace", "the project did not return from the library");
+    await assertNoLibraryError(s, "the measured project return");
+    const stopped = await s.request("diagnostics.capture.stop", { after: 0 });
+    const returned = await s.get("host.window");
+    const expectedTerminals = (await s.surfaces("terminal")).filter((surface) => surface.visible);
+    const returnedTerminals = expectedTerminals.map((surface) => {
+      const region = returned.regions.find((item) => item.surface === surface.surface);
+      assert.ok(region, `project return pixel composition: ${surface.surface} has no native region to measure`);
+      assert.equal(region.visible, true,
+        `project return pixel composition: ${surface.surface} is visible in DOM but native region is hidden`);
+      return region;
+    });
+    assertNoWhiteTerminalBleed(frames(stopped.frames), returnedTerminals, "project return pixel composition");
+    await assertVisibleTerminalRasters(s, 3, "immediately after returning to the project");
+    await assertNoOrphanNativeSurfaces(s, "immediately after returning to the project");
+    assert.equal(ptydCount(), ptydAtThree,
+      `project return created additional ptyd processes: before return=${ptydAtThree}, after return=${ptydCount()}`);
 
     await s.run("core.window.new");
     const two = await s.windows(2, "new OS window was not created");
