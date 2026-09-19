@@ -24,7 +24,8 @@ type clientConnection struct {
 
 // Daemon은 PTY 세션을 관리하는 데몬이다.
 type Daemon struct {
-	mu sync.Mutex
+	mu           sync.Mutex
+	shutdownOnce sync.Once
 
 	identity          DaemonIdentity
 	socketDir         string
@@ -644,7 +645,7 @@ func (d *Daemon) handleList(req Request) Response {
 func (d *Daemon) handlePurge(req Request) Response {
 	d.mu.Lock()
 	if len(d.sessions) == 0 {
-		close(d.shutdownChan)
+		d.requestShutdown()
 	}
 	d.mu.Unlock()
 
@@ -665,7 +666,7 @@ func (d *Daemon) idleCheckLoop() {
 				idle := time.Since(d.idleTimerStarted)
 				if idle > d.idleTimeout {
 					log.Printf("ptyd: idle timeout reached, shutting down")
-					close(d.shutdownChan)
+					d.requestShutdown()
 					d.mu.Unlock()
 					return
 				}
@@ -675,6 +676,18 @@ func (d *Daemon) idleCheckLoop() {
 			return
 		}
 	}
+}
+
+// requestShutdown signals the daemon to stop exactly once. The caller may hold d.mu.
+func (d *Daemon) requestShutdown() {
+	d.shutdownOnce.Do(func() { close(d.shutdownChan) })
+}
+
+// Shutdown asks the daemon to stop and closes its listener and PTY sessions.
+// It is safe to call more than once.
+func (d *Daemon) Shutdown() {
+	d.requestShutdown()
+	_ = d.Stop()
 }
 
 // Stop은 데몬을 정지한다.

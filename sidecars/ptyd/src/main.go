@@ -53,6 +53,7 @@ func main() {
 		BuildKind: buildKind,
 		PID:       os.Getpid(),
 	}
+	parentPID := os.Getppid()
 
 	daemon := ptyd.NewDaemon(identity, socketDir, idleTimeout)
 	if err := daemon.Start(); err != nil {
@@ -82,5 +83,20 @@ func main() {
 		os.Exit(2)
 	}
 
+	// The daemon is started by a sidecar and deliberately detaches its terminal,
+	// but it must not outlive that sidecar. Without this guard, test and host
+	// restarts leave orphaned PTY daemons adopted by launchd.
+	go func() {
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			if os.Getppid() != parentPID {
+				daemon.Shutdown()
+				return
+			}
+		}
+	}()
+
 	daemon.Wait()
+	_ = daemon.Stop()
 }

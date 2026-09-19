@@ -1,11 +1,13 @@
 use crate::daemon::DaemonFinder;
 
 #[cfg(target_os = "macos")]
-pub use crate::platform::darwin::frame::{Frame, Metrics, metrics};
+pub use crate::platform::darwin::frame::{metrics, Frame, Metrics};
 
 #[cfg(target_os = "macos")]
 pub struct ImageState {
     pub name: String,
+    pub generation: u64,
+    pub raster: u64,
     pub frame: Frame,
     pub metrics: Metrics,
     pub sequence: u32,
@@ -18,11 +20,20 @@ pub struct ImageState {
 
 #[cfg(target_os = "macos")]
 impl ImageState {
-    pub fn new(name: String, width_px: u32, height_px: u32, scale: f32) -> Option<ImageState> {
+    pub fn new(
+        name: String,
+        generation: u64,
+        raster: u64,
+        width_px: u32,
+        height_px: u32,
+        scale: f32,
+    ) -> Option<ImageState> {
         let frame = Frame::new(width_px, height_px)?;
         let device_metrics = metrics(13.0, scale);
         Some(ImageState {
             name,
+            generation,
+            raster,
             frame,
             metrics: device_metrics,
             sequence: 0,
@@ -40,7 +51,14 @@ pub struct ImageState;
 
 #[cfg(not(target_os = "macos"))]
 impl ImageState {
-    pub fn new(_name: String, _width_px: u32, _height_px: u32, _scale: f32) -> Option<ImageState> {
+    pub fn new(
+        _name: String,
+        _generation: u64,
+        _raster: u64,
+        _width_px: u32,
+        _height_px: u32,
+        _scale: f32,
+    ) -> Option<ImageState> {
         None
     }
 }

@@ -1,3 +1,4 @@
+use soksak_sidecar_vt_core::platform::DarwinDaemonFinder;
 /// End-to-end integration test with real ptyd daemon
 ///
 /// This test verifies the complete flow from serve() function through DaemonSessionPort
@@ -6,19 +7,15 @@
 /// 2. serve() can send input to the daemon
 /// 3. daemon output is captured and converted to screen events
 ///
-/// NOTE: This test currently fails because the daemon is not sending output responses
-/// for shell commands. This appears to be a PTY configuration issue where the shell's
-/// output is not being captured by the daemon. The daemon_integration.rs tests confirm
-/// that the daemon can handle output (they pass), so the issue is specific to how
-/// serve() is using DaemonSessionPort with a /bin/sh session.
-use soksak_sidecar_vt_core::protocol::{serve, Engine, Screen, Cursor, Modes, Cell, SessionPort};
-use soksak_sidecar_vt_core::platform::DarwinDaemonFinder;
+use soksak_sidecar_vt_core::protocol::{
+    serve, Cell, Cursor, Engine, Modes, Screen, SessionPort,
+};
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::io::{AsyncWriteExt, AsyncBufReadExt};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 
 /// Simple engine that builds a screen from bytes
 /// \r moves to column 0, \n moves to next line, other bytes are cells
@@ -94,7 +91,12 @@ impl Engine for SimpleEngine {
                 col: self.current_col as u16,
                 row: self.current_row as u16,
             },
-            lines: self.screen.iter().filter(|line| !line.is_empty()).cloned().collect(),
+            lines: self
+                .screen
+                .iter()
+                .filter(|line| !line.is_empty())
+                .cloned()
+                .collect(),
         }
     }
 
@@ -121,8 +123,7 @@ fn create_socket_dir(dir: &std::path::Path) -> std::io::Result<()> {
 #[tokio::test]
 async fn test_b_serve_roundtrip_with_real_daemon() {
     // Create temporary directories
-    let temp_dir = tempfile::TempDir::new()
-        .expect("Failed to create temp directory");
+    let temp_dir = tempfile::TempDir::new().expect("Failed to create temp directory");
     let socket_dir = temp_dir.path().join("sockets");
     let exe_dir = temp_dir.path().join("exes");
 
@@ -154,9 +155,12 @@ async fn test_b_serve_roundtrip_with_real_daemon() {
 
     // Create finder and port
     let finder = DarwinDaemonFinder::with_dirs(exe_dir.clone(), socket_dir.clone());
-    eprintln!("Finder created with exe_dir: {:?}, socket_dir: {:?}", exe_dir, socket_dir);
+    eprintln!(
+        "Finder created with exe_dir: {:?}, socket_dir: {:?}",
+        exe_dir, socket_dir
+    );
     let port: Arc<dyn SessionPort> = Arc::new(
-        soksak_sidecar_vt_core::protocol::DaemonSessionPort::with_finder(Box::new(finder))
+        soksak_sidecar_vt_core::protocol::DaemonSessionPort::with_finder(Box::new(finder)),
     );
     let port_for_factory = port.clone();
     let factory = Arc::new(move || port_for_factory.clone());
@@ -176,13 +180,10 @@ async fn test_b_serve_roundtrip_with_real_daemon() {
     });
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
-    // 1) Send open command - use /bin/sh with -c to run "echo hi"
-    // But actually, since serve doesn't support passing args, we need to use a shell script
-    // OR we can just use sh interactively - but let's use the simpler approach of
-    // sending input that will result in shell output. Since the shell doesn't automatically
-    // output prompts in non-interactive mode, let's add a printf command
+    // 1) Open the image-backed session, then provide the raster chosen by the host.
     to_serve
-        .write_all(br#"{"surface":"s1","root":"/tmp","body":{"op":"open","width":800,"height":384,"scale":1.0}}
+        .write_all(br#"{"surface":"s1","root":"/tmp","body":{"op":"open","image":"view"}}
+{"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#)
         .await
         .expect("Failed to write open command");
@@ -198,7 +199,8 @@ async fn test_b_serve_roundtrip_with_real_daemon() {
         serde_json::from_str(&state_line).expect("failed to parse state JSON");
     assert_eq!(
         state_json["body"]["event"], "state",
-        "expected state event, got: {}", state_line
+        "expected state event, got: {}",
+        state_line
     );
     let _session_id = state_json["body"]["sessionId"]
         .as_str()
@@ -236,8 +238,7 @@ async fn test_b_serve_roundtrip_with_real_daemon() {
             break;
         }
 
-        let screen_line = tokio::time::timeout(remaining, lines.next_line())
-            .await;
+        let screen_line = tokio::time::timeout(remaining, lines.next_line()).await;
 
         match screen_line {
             Ok(Ok(Some(line))) => {
@@ -293,16 +294,16 @@ async fn test_b_serve_roundtrip_with_real_daemon() {
     }
 
     eprintln!("Event count: {}", event_count);
-    assert!(found_hi, "Did not find 'hi' in screen output within 10 seconds");
+    assert!(
+        found_hi,
+        "Did not find 'hi' in screen output within 10 seconds"
+    );
 
     // 4) Close stdin and wait for serve to complete
     drop(to_serve);
     task.await.expect("task join failed");
 
-    println!(
-        "Found 'hi' in screen event: {}",
-        found_hi_line
-    );
+    println!("Found 'hi' in screen event: {}", found_hi_line);
 }
 
 /// Simple base64 encoder for the test
