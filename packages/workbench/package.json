@@ -33,7 +33,10 @@
     "verify.js",
     "exposure.json",
     "exposure.js",
-    "core-exposure.js"
+    "core-exposure.js",
+    "stage.mjs",
+    "staged.js",
+    "replace-file.mjs"
   ],
   "scripts": {
     "test": "node --test --experimental-test-module-mocks test/"

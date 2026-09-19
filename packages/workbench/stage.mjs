@@ -24,6 +24,7 @@ import { createRequire } from "node:module";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { replaceFile } from "./replace-file.mjs";
+import { STAGED } from "./staged.js";
 import {
   ENVIRONMENT, MANIFEST, RUNTIME, SIDECAR, modulePath, validateEnvironment, validateManifest, validateSidecar,
 } from "@soksak/plugin-api";
@@ -115,6 +116,24 @@ if (diagnostics) {
   copyFileSync(join(workbench, "transcript.js"), join(target, "transcript.js"));
 }
 else writeFileSync(join(target, "diagnostics.js"), "// 진단 빌드가 아니다. 진단 메서드가 없다.\nexport {};\n");
+
 writeFileSync(join(target, ENVIRONMENT), `${JSON.stringify(environment, null, 2)}\n`);
+
+// STAGED 목록의 파일들이 실제로 만들어졌는지 검증.
+// 선언과 실제가 갈라지지 않도록 한다.
+for (const stagedFile of STAGED.always) {
+  const stagedPath = join(target, stagedFile);
+  if (!existsSync(stagedPath)) {
+    throw new Error(`declared always-staged file not created: ${stagedFile}`);
+  }
+}
+if (diagnostics) {
+  for (const stagedFile of STAGED.diagnostics) {
+    const stagedPath = join(target, stagedFile);
+    if (!existsSync(stagedPath)) {
+      throw new Error(`declared diagnostics-staged file not created: ${stagedFile}`);
+    }
+  }
+}
 console.log(`staged ${environment.plugins.length} plugins and ${sidecars.size} sidecars into ${target}` +
   (diagnostics ? " with diagnostics" : ""));
