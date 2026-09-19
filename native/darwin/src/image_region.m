@@ -149,11 +149,126 @@
 }
 
 - (void)keyDown:(NSEvent *)event {
+    // Command 조합은 보고하지 않고 메뉴에 넘긴다.
+    if (event.modifierFlags & NSEventModifierFlagCommand) {
+        [super keyDown:event];
+        return;
+    }
+
+    // 조합 중이면 입력기로 넘긴다.
+    if ([self hasMarkedText]) {
+        [self interpretKeyEvents:@[ event ]];
+        return;
+    }
+
+    // 특수 키 또는 Ctrl/Option 조합인지 확인한다.
+    NSString *characters = event.charactersIgnoringModifiers;
+    if (characters.length == 0) {
+        [self interpretKeyEvents:@[ event ]];
+        return;
+    }
+
+    unichar ch = [characters characterAtIndex:0];
+    NSEventModifierFlags flags = event.modifierFlags;
+    BOOL hasCtrlOrOption = (flags & NSEventModifierFlagControl) || (flags & NSEventModifierFlagOption);
+
+    // 특수 키 판정 - function keys와 특정 문자 코드
+    BOOL isSpecialKey = NO;
+    NSString *keyName = nil;
+
+    // Function keys
+    if (ch == NSUpArrowFunctionKey) {
+        isSpecialKey = YES;
+        keyName = @"Up";
+    } else if (ch == NSDownArrowFunctionKey) {
+        isSpecialKey = YES;
+        keyName = @"Down";
+    } else if (ch == NSLeftArrowFunctionKey) {
+        isSpecialKey = YES;
+        keyName = @"Left";
+    } else if (ch == NSRightArrowFunctionKey) {
+        isSpecialKey = YES;
+        keyName = @"Right";
+    } else if (ch == NSHomeFunctionKey) {
+        isSpecialKey = YES;
+        keyName = @"Home";
+    } else if (ch == NSEndFunctionKey) {
+        isSpecialKey = YES;
+        keyName = @"End";
+    } else if (ch == NSPageUpFunctionKey) {
+        isSpecialKey = YES;
+        keyName = @"PageUp";
+    } else if (ch == NSPageDownFunctionKey) {
+        isSpecialKey = YES;
+        keyName = @"PageDown";
+    } else if (ch == NSDeleteFunctionKey) {  // 앞으로 지우기
+        isSpecialKey = YES;
+        keyName = @"Delete";
+    } else if (ch == NSInsertFunctionKey) {
+        isSpecialKey = YES;
+        keyName = @"Insert";
+    } else if (ch >= NSF1FunctionKey && ch <= NSF12FunctionKey) {
+        isSpecialKey = YES;
+        NSUInteger fNum = ch - NSF1FunctionKey + 1;
+        keyName = [NSString stringWithFormat:@"F%lu", (unsigned long)fNum];
+    }
+    // 특정 문자들
+    else if (ch == '\r' || ch == NSEnterCharacter) {
+        isSpecialKey = YES;
+        keyName = @"Enter";
+    } else if (ch == '\t') {
+        isSpecialKey = YES;
+        keyName = @"Tab";
+    } else if (ch == NSBackTabCharacter) {
+        isSpecialKey = YES;
+        keyName = @"Tab";
+    } else if (ch == 0x7f) {  // Backspace
+        isSpecialKey = YES;
+        keyName = @"Backspace";
+    } else if (ch == 0x1b) {  // Escape
+        isSpecialKey = YES;
+        keyName = @"Escape";
+    }
+
+    // 특수 키이거나 Ctrl/Option 조합인 경우 key 이벤트를 보고한다.
+    if (isSpecialKey || hasCtrlOrOption) {
+        BOOL shift = (flags & NSEventModifierFlagShift) != 0;
+        BOOL alt = (flags & NSEventModifierFlagOption) != 0;
+        BOOL ctrl = (flags & NSEventModifierFlagControl) != 0;
+
+        // BackTab은 shift:true로 보고한다.
+        if (ch == NSBackTabCharacter) {
+            shift = YES;
+        }
+
+        NSString *json;
+        if (isSpecialKey) {
+            json = [NSString stringWithFormat:@"{\"type\":\"key\",\"key\":\"%@\",\"shift\":%s,\"alt\":%s,\"ctrl\":%s}",
+                keyName,
+                shift ? "true" : "false",
+                alt ? "true" : "false",
+                ctrl ? "true" : "false"];
+        } else {
+            // Ctrl/Option 조합 문자
+            NSString *textChar = [[NSString stringWithCharacters:&ch length:1] stringByReplacingOccurrencesOfString:@"\\" withString:@"\\\\"];
+            textChar = [textChar stringByReplacingOccurrencesOfString:@"\"" withString:@"\\\""];
+            json = [NSString stringWithFormat:@"{\"type\":\"key\",\"key\":\"Char\",\"text\":\"%@\",\"shift\":%s,\"alt\":%s,\"ctrl\":%s}",
+                textChar,
+                shift ? "true" : "false",
+                alt ? "true" : "false",
+                ctrl ? "true" : "false"];
+        }
+        [self report:json.UTF8String];
+        return;
+    }
+
+    // 일반 문자는 입력기로 넘긴다.
     [self interpretKeyEvents:@[ event ]];
 }
 
 - (void)doCommandBySelector:(SEL)selector {
-    // 아무것도 하지 않는다. 키를 두 번 보고하지 않기 위해서다.
+    // 아무것도 하지 않는다. keyDown: 에서 특수 키를 이미 처리했으므로
+    // 이 경로로 오는 키가 없다.
 }
 
 - (void)insertText:(id)string replacementRange:(NSRange)range {

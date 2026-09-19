@@ -355,6 +355,344 @@ int main(void) { @autoreleasepool {
         CFRelease(testSurface9);
     }
 
+    // TEST 10: 키 이벤트 - 위 화살표
+    {
+        [collectedEvents removeAllObjects];
+        unsigned char nonce10[16];
+        IOSurfaceRef testSurface10 = createColoredGlobalSurface(100, 100, nonce10);
+        IOSurfaceID sid10 = IOSurfaceGetID(testSurface10);
+
+        void *region10 = sp_region_create(surface, "test10", testEvent, NULL);
+        sp_region_place(region10, 10, 10, 10, 10, true);
+        sp_region_present(region10, sid10, nonce10, 100, 100);
+        sp_region_focus(region10);
+
+        id regionView = (id)region10;
+        NSEvent *upEvent = [NSEvent keyEventWithType:NSEventTypeKeyDown
+            location:NSZeroPoint
+            modifierFlags:0
+            timestamp:0
+            windowNumber:0
+            context:nil
+            characters:@""
+            charactersIgnoringModifiers:@""  // NSUpArrowFunctionKey
+            isARepeat:NO
+            keyCode:126];
+
+        [collectedEvents removeAllObjects];
+        [regionView keyDown:upEvent];
+
+        check([collectedEvents count] == 1,
+            [NSString stringWithFormat:@"TEST 10: exactly 1 event for Up arrow (got %lu)", [collectedEvents count]]);
+        if ([collectedEvents count] > 0) {
+            NSString *eventStr = [collectedEvents objectAtIndex:0];
+            BOOL isKeyEvent = [eventStr rangeOfString:@"\"type\":\"key\""].location != NSNotFound;
+            BOOL hasKeyUp = [eventStr rangeOfString:@"\"key\":\"Up\""].location != NSNotFound;
+            BOOL noInsert = [eventStr rangeOfString:@"\"insert\""].location == NSNotFound;
+            BOOL correctFlags = [eventStr rangeOfString:@"\"shift\":false,\"alt\":false,\"ctrl\":false"].location != NSNotFound;
+            check(isKeyEvent && hasKeyUp && noInsert && correctFlags,
+                [NSString stringWithFormat:@"TEST 10: event is correct key event (got: %@)", eventStr]);
+        }
+
+        sp_region_close(region10);
+        CFRelease(testSurface10);
+    }
+
+    // TEST 11: 키 이벤트 - Return
+    {
+        [collectedEvents removeAllObjects];
+        unsigned char nonce11[16];
+        IOSurfaceRef testSurface11 = createColoredGlobalSurface(100, 100, nonce11);
+        IOSurfaceID sid11 = IOSurfaceGetID(testSurface11);
+
+        void *region11 = sp_region_create(surface, "test11", testEvent, NULL);
+        sp_region_place(region11, 10, 10, 10, 10, true);
+        sp_region_present(region11, sid11, nonce11, 100, 100);
+        sp_region_focus(region11);
+
+        id regionView = (id)region11;
+        NSEvent *returnEvent = [NSEvent keyEventWithType:NSEventTypeKeyDown
+            location:NSZeroPoint
+            modifierFlags:0
+            timestamp:0
+            windowNumber:0
+            context:nil
+            characters:@"\r"
+            charactersIgnoringModifiers:@"\r"
+            isARepeat:NO
+            keyCode:36];
+
+        [collectedEvents removeAllObjects];
+        [regionView keyDown:returnEvent];
+
+        check([collectedEvents count] == 1,
+            [NSString stringWithFormat:@"TEST 11: exactly 1 event for Return (got %lu)", [collectedEvents count]]);
+        if ([collectedEvents count] > 0) {
+            NSString *eventStr = [collectedEvents objectAtIndex:0];
+            BOOL hasKeyEnter = [eventStr rangeOfString:@"\"key\":\"Enter\""].location != NSNotFound;
+            check(hasKeyEnter,
+                [NSString stringWithFormat:@"TEST 11: event has key:Enter (got: %@)", eventStr]);
+        }
+
+        sp_region_close(region11);
+        CFRelease(testSurface11);
+    }
+
+    // TEST 12: 키 이벤트 - Backspace
+    {
+        [collectedEvents removeAllObjects];
+        unsigned char nonce12[16];
+        IOSurfaceRef testSurface12 = createColoredGlobalSurface(100, 100, nonce12);
+        IOSurfaceID sid12 = IOSurfaceGetID(testSurface12);
+
+        void *region12 = sp_region_create(surface, "test12", testEvent, NULL);
+        sp_region_place(region12, 10, 10, 10, 10, true);
+        sp_region_present(region12, sid12, nonce12, 100, 100);
+        sp_region_focus(region12);
+
+        id regionView = (id)region12;
+        NSEvent *backspaceEvent = [NSEvent keyEventWithType:NSEventTypeKeyDown
+            location:NSZeroPoint
+            modifierFlags:0
+            timestamp:0
+            windowNumber:0
+            context:nil
+            characters:@"\x7f"
+            charactersIgnoringModifiers:@"\x7f"
+            isARepeat:NO
+            keyCode:51];
+
+        [collectedEvents removeAllObjects];
+        [regionView keyDown:backspaceEvent];
+
+        check([collectedEvents count] == 1,
+            [NSString stringWithFormat:@"TEST 12: exactly 1 event for Backspace (got %lu)", [collectedEvents count]]);
+        if ([collectedEvents count] > 0) {
+            NSString *eventStr = [collectedEvents objectAtIndex:0];
+            BOOL hasKeyBackspace = [eventStr rangeOfString:@"\"key\":\"Backspace\""].location != NSNotFound;
+            check(hasKeyBackspace,
+                [NSString stringWithFormat:@"TEST 12: event has key:Backspace (got: %@)", eventStr]);
+        }
+
+        sp_region_close(region12);
+        CFRelease(testSurface12);
+    }
+
+    // TEST 13: 키 이벤트 - Ctrl+C
+    {
+        [collectedEvents removeAllObjects];
+        unsigned char nonce13[16];
+        IOSurfaceRef testSurface13 = createColoredGlobalSurface(100, 100, nonce13);
+        IOSurfaceID sid13 = IOSurfaceGetID(testSurface13);
+
+        void *region13 = sp_region_create(surface, "test13", testEvent, NULL);
+        sp_region_place(region13, 10, 10, 10, 10, true);
+        sp_region_present(region13, sid13, nonce13, 100, 100);
+        sp_region_focus(region13);
+
+        id regionView = (id)region13;
+        NSEvent *ctrlCEvent = [NSEvent keyEventWithType:NSEventTypeKeyDown
+            location:NSZeroPoint
+            modifierFlags:NSEventModifierFlagControl
+            timestamp:0
+            windowNumber:0
+            context:nil
+            characters:@"c"
+            charactersIgnoringModifiers:@"c"
+            isARepeat:NO
+            keyCode:8];
+
+        [collectedEvents removeAllObjects];
+        [regionView keyDown:ctrlCEvent];
+
+        check([collectedEvents count] == 1,
+            [NSString stringWithFormat:@"TEST 13: exactly 1 event for Ctrl+C (got %lu)", [collectedEvents count]]);
+        if ([collectedEvents count] > 0) {
+            NSString *eventStr = [collectedEvents objectAtIndex:0];
+            BOOL isKeyEvent = [eventStr rangeOfString:@"\"type\":\"key\""].location != NSNotFound;
+            BOOL hasKeyChar = [eventStr rangeOfString:@"\"key\":\"Char\""].location != NSNotFound;
+            BOOL hasTextC = [eventStr rangeOfString:@"\"text\":\"c\""].location != NSNotFound;
+            BOOL hasCtrl = [eventStr rangeOfString:@"\"ctrl\":true"].location != NSNotFound;
+            BOOL noInsert = [eventStr rangeOfString:@"\"insert\""].location == NSNotFound;
+            check(isKeyEvent && hasKeyChar && hasTextC && hasCtrl && noInsert,
+                [NSString stringWithFormat:@"TEST 13: event is correct Ctrl+C event (got: %@)", eventStr]);
+        }
+
+        sp_region_close(region13);
+        CFRelease(testSurface13);
+    }
+
+    // TEST 14: 키 이벤트 - 일반 문자 'a'
+    {
+        [collectedEvents removeAllObjects];
+        unsigned char nonce14[16];
+        IOSurfaceRef testSurface14 = createColoredGlobalSurface(100, 100, nonce14);
+        IOSurfaceID sid14 = IOSurfaceGetID(testSurface14);
+
+        void *region14 = sp_region_create(surface, "test14", testEvent, NULL);
+        sp_region_place(region14, 10, 10, 10, 10, true);
+        sp_region_present(region14, sid14, nonce14, 100, 100);
+        sp_region_focus(region14);
+
+        id regionView = (id)region14;
+        NSEvent *aEvent = [NSEvent keyEventWithType:NSEventTypeKeyDown
+            location:NSZeroPoint
+            modifierFlags:0
+            timestamp:0
+            windowNumber:0
+            context:nil
+            characters:@"a"
+            charactersIgnoringModifiers:@"a"
+            isARepeat:NO
+            keyCode:0];
+
+        [collectedEvents removeAllObjects];
+        [regionView keyDown:aEvent];
+
+        check([collectedEvents count] == 1,
+            [NSString stringWithFormat:@"TEST 14: exactly 1 event for 'a' (got %lu)", [collectedEvents count]]);
+        if ([collectedEvents count] > 0) {
+            NSString *eventStr = [collectedEvents objectAtIndex:0];
+            BOOL isInsertEvent = [eventStr rangeOfString:@"\"type\":\"insert\""].location != NSNotFound;
+            BOOL hasTextA = [eventStr rangeOfString:@"\"text\":\"a\""].location != NSNotFound;
+            BOOL noKeyEvent = [eventStr rangeOfString:@"\"type\":\"key\""].location == NSNotFound;
+            check(isInsertEvent && hasTextA && noKeyEvent,
+                [NSString stringWithFormat:@"TEST 14: event is insert event for 'a' (got: %@)", eventStr]);
+        }
+
+        sp_region_close(region14);
+        CFRelease(testSurface14);
+    }
+
+    // TEST 15: 키 이벤트 - Shift+Tab
+    {
+        [collectedEvents removeAllObjects];
+        unsigned char nonce15[16];
+        IOSurfaceRef testSurface15 = createColoredGlobalSurface(100, 100, nonce15);
+        IOSurfaceID sid15 = IOSurfaceGetID(testSurface15);
+
+        void *region15 = sp_region_create(surface, "test15", testEvent, NULL);
+        sp_region_place(region15, 10, 10, 10, 10, true);
+        sp_region_present(region15, sid15, nonce15, 100, 100);
+        sp_region_focus(region15);
+
+        id regionView = (id)region15;
+        NSEvent *backTabEvent = [NSEvent keyEventWithType:NSEventTypeKeyDown
+            location:NSZeroPoint
+            modifierFlags:NSEventModifierFlagShift
+            timestamp:0
+            windowNumber:0
+            context:nil
+            characters:@"\x19"  // NSBackTabCharacter
+            charactersIgnoringModifiers:@"\x19"
+            isARepeat:NO
+            keyCode:48];
+
+        [collectedEvents removeAllObjects];
+        [regionView keyDown:backTabEvent];
+
+        check([collectedEvents count] == 1,
+            [NSString stringWithFormat:@"TEST 15: exactly 1 event for Shift+Tab (got %lu)", [collectedEvents count]]);
+        if ([collectedEvents count] > 0) {
+            NSString *eventStr = [collectedEvents objectAtIndex:0];
+            BOOL hasKeyTab = [eventStr rangeOfString:@"\"key\":\"Tab\""].location != NSNotFound;
+            BOOL hasShift = [eventStr rangeOfString:@"\"shift\":true"].location != NSNotFound;
+            check(hasKeyTab && hasShift,
+                [NSString stringWithFormat:@"TEST 15: event has key:Tab and shift:true (got: %@)", eventStr]);
+        }
+
+        sp_region_close(region15);
+        CFRelease(testSurface15);
+    }
+
+    // TEST 16: 조합 중 Return - key 이벤트 없음
+    {
+        [collectedEvents removeAllObjects];
+        unsigned char nonce16[16];
+        IOSurfaceRef testSurface16 = createColoredGlobalSurface(100, 100, nonce16);
+        IOSurfaceID sid16 = IOSurfaceGetID(testSurface16);
+
+        void *region16 = sp_region_create(surface, "test16", testEvent, NULL);
+        sp_region_place(region16, 10, 10, 10, 10, true);
+        sp_region_present(region16, sid16, nonce16, 100, 100);
+        sp_region_focus(region16);
+
+        id regionView = (id)region16;
+
+        // 조합 시작
+        [(id<NSTextInputClient>)regionView setMarkedText:@"ㅎ" selectedRange:NSMakeRange(1, 0) replacementRange:NSMakeRange(NSNotFound, 0)];
+        [collectedEvents removeAllObjects];
+
+        // 조합 중에 Return
+        NSEvent *returnEvent = [NSEvent keyEventWithType:NSEventTypeKeyDown
+            location:NSZeroPoint
+            modifierFlags:0
+            timestamp:0
+            windowNumber:0
+            context:nil
+            characters:@"\r"
+            charactersIgnoringModifiers:@"\r"
+            isARepeat:NO
+            keyCode:36];
+
+        [regionView keyDown:returnEvent];
+
+        BOOL foundKeyEvent = NO;
+        for (NSString *eventStr in collectedEvents) {
+            if ([eventStr rangeOfString:@"\"type\":\"key\""].location != NSNotFound) {
+                foundKeyEvent = YES;
+                break;
+            }
+        }
+        check(!foundKeyEvent,
+            [NSString stringWithFormat:@"TEST 16: no key event during composition (got %lu events)", [collectedEvents count]]);
+
+        sp_region_close(region16);
+        CFRelease(testSurface16);
+    }
+
+    // TEST 17: Command+C - key/insert 이벤트 없음
+    {
+        [collectedEvents removeAllObjects];
+        unsigned char nonce17[16];
+        IOSurfaceRef testSurface17 = createColoredGlobalSurface(100, 100, nonce17);
+        IOSurfaceID sid17 = IOSurfaceGetID(testSurface17);
+
+        void *region17 = sp_region_create(surface, "test17", testEvent, NULL);
+        sp_region_place(region17, 10, 10, 10, 10, true);
+        sp_region_present(region17, sid17, nonce17, 100, 100);
+        sp_region_focus(region17);
+
+        id regionView = (id)region17;
+        NSEvent *cmdCEvent = [NSEvent keyEventWithType:NSEventTypeKeyDown
+            location:NSZeroPoint
+            modifierFlags:NSEventModifierFlagCommand
+            timestamp:0
+            windowNumber:0
+            context:nil
+            characters:@"c"
+            charactersIgnoringModifiers:@"c"
+            isARepeat:NO
+            keyCode:8];
+
+        [collectedEvents removeAllObjects];
+        [regionView keyDown:cmdCEvent];
+
+        BOOL foundKeyOrInsert = NO;
+        for (NSString *eventStr in collectedEvents) {
+            if ([eventStr rangeOfString:@"\"type\":\"key\""].location != NSNotFound ||
+                [eventStr rangeOfString:@"\"type\":\"insert\""].location != NSNotFound) {
+                foundKeyOrInsert = YES;
+                break;
+            }
+        }
+        check(!foundKeyOrInsert,
+            [NSString stringWithFormat:@"TEST 17: no key or insert event for Command+C (got %lu events)", [collectedEvents count]]);
+
+        sp_region_close(region17);
+        CFRelease(testSurface17);
+    }
+
     [window close];
     [window release];
 
