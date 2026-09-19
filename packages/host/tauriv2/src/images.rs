@@ -369,6 +369,7 @@ pub enum Decision {
         nonce: [u8; 16],
         width: i32,
         height: i32,
+        scale: f64,
         name: String,
         sequence: i32,
     },
@@ -397,6 +398,7 @@ pub fn decide(body_str: &str, sender: &str, surface: &str, images: &Images) -> D
         token: TokenInfo,
         width: i32,
         height: i32,
+        scale: f64,
         format: String,
         sequence: i32,
     }
@@ -475,6 +477,7 @@ pub fn decide(body_str: &str, sender: &str, surface: &str, images: &Images) -> D
                 nonce,
                 width: envelope.width,
                 height: envelope.height,
+                scale: envelope.scale,
                 name: envelope.name,
                 sequence: envelope.sequence,
             }
@@ -548,6 +551,7 @@ where
             nonce,
             width,
             height,
+            scale,
             name,
             sequence,
         } => {
@@ -557,7 +561,7 @@ where
                     let ok = match on_main(Box::new(move || {
                         match platform::current() {
                             Ok(plat) => {
-                                plat.present_image(handle, id, nonce, width as f64, height as f64).map(|_| ())
+                                plat.present_image(handle, id, nonce, width as f64, height as f64, scale).map(|_| ())
                             }
                             Err(e) => Err(e),
                         }

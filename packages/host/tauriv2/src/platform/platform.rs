@@ -190,9 +190,10 @@ pub trait Platform: Send + Sync {
     /// 표면 뷰포트의 CSS 픽셀 여백으로 그림 영역을 정한다. 메인 스레드에서 호출한다.
     fn place_image(&self, image: Handle, insets: Insets, visible: bool) -> Result<(), String>;
     /// 외부 IOSurface 를 표시한다. token_id 는 IOSurface 의 전역 ID, nonce 는 논스 대조용
-    /// 16바이트 데이터, width·height 는 장치 픽셀 단위의 크기다. 성공하면 true,
-    /// 찾지 못했거나 크기가 맞지 않으면 false 를 반환한다. 메인 스레드에서 호출한다.
-    fn present_image(&self, image: Handle, token_id: u32, nonce: [u8; 16], width: f64, height: f64) -> Result<bool, String>;
+    /// 16바이트 데이터, width·height 는 장치 픽셀 단위의 크기, scale 은 이미지가 만들어진
+    /// 배율이다. 성공하면 true, 찾지 못했거나 크기가 맞지 않으면 false 를 반환한다.
+    /// 메인 스레드에서 호출한다.
+    fn present_image(&self, image: Handle, token_id: u32, nonce: [u8; 16], width: f64, height: f64, scale: f64) -> Result<bool, String>;
     /// 영역을 첫 응답자로 만들고 포커스 이벤트를 보낸다. 메인 스레드에서 호출한다.
     fn focus_image(&self, image: Handle) -> Result<(), String>;
     /// 캐럿(입력 커서) 위치를 받아 둔다. 메인 스레드에서 호출한다.

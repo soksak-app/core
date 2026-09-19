@@ -79,7 +79,7 @@ int main(void) { @autoreleasepool {
         check(region1 != NULL, @"TEST 1: region created");
 
         sp_region_place(region1, 10, 20, 30, 40, true);
-        BOOL presented = sp_region_present(region1, sid1, nonce1, 100, 100);
+        BOOL presented = sp_region_present(region1, sid1, nonce1, 100, 100, window.backingScaleFactor);
         check(presented, @"TEST 1: sp_region_present succeeded");
 
         // 레이어를 찾아서 속성을 확인한다
@@ -95,8 +95,11 @@ int main(void) { @autoreleasepool {
             check(layerSurfaceID == sid1,
                 [NSString stringWithFormat:@"TEST 1: layer surface ID matches (%u == %u)", layerSurfaceID, sid1]);
 
-            check(imageLayer.contentsScale == 1,
-                [NSString stringWithFormat:@"TEST 1: contentsScale is 1 (got %g)", imageLayer.contentsScale]);
+            // 레이어 한 단위가 덮는 장치 픽셀 수와 같아야 그림 한 픽셀이 장치 한 픽셀이 된다.
+            NSView *regionView1 = (NSView *)region1;
+            CGFloat perUnit = NSWidth([regionView1 convertRectToBacking:regionView1.bounds]) / NSWidth(regionView1.bounds);
+            check(imageLayer.contentsScale == perUnit,
+                [NSString stringWithFormat:@"TEST 1: contentsScale is backing pixels per unit %g (got %g)", perUnit, imageLayer.contentsScale]);
 
             check([imageLayer.contentsGravity isEqualToString:kCAGravityTopLeft],
                 [NSString stringWithFormat:@"TEST 1: contentsGravity is TopLeft (got %@)", imageLayer.contentsGravity]);
@@ -119,7 +122,7 @@ int main(void) { @autoreleasepool {
         arc4random_buf(wrongNonce, 16);
 
         void *region2 = sp_region_create(surface, "test2", testEvent, NULL);
-        BOOL presented = sp_region_present(region2, sid2, wrongNonce, 100, 100);
+        BOOL presented = sp_region_present(region2, sid2, wrongNonce, 100, 100, window.backingScaleFactor);
         check(!presented, @"TEST 2: sp_region_present returns false with wrong nonce");
 
         check([collectedEvents count] > 0, @"TEST 2: event received");
@@ -140,7 +143,7 @@ int main(void) { @autoreleasepool {
         arc4random_buf(nonce3, 16);
 
         void *region3 = sp_region_create(surface, "test3", testEvent, NULL);
-        BOOL presented = sp_region_present(region3, 0xdeadbeef, nonce3, 100, 100);
+        BOOL presented = sp_region_present(region3, 0xdeadbeef, nonce3, 100, 100, window.backingScaleFactor);
         check(!presented, @"TEST 3: sp_region_present returns false with non-existent ID");
 
         check([collectedEvents count] > 0, @"TEST 3: event received");
@@ -161,7 +164,7 @@ int main(void) { @autoreleasepool {
         IOSurfaceID sid4 = IOSurfaceGetID(testSurface4);
 
         void *region4 = sp_region_create(surface, "test4", testEvent, NULL);
-        BOOL presented = sp_region_present(region4, sid4, nonce4, 200, 200);  // 잘못된 크기
+        BOOL presented = sp_region_present(region4, sid4, nonce4, 200, 200, window.backingScaleFactor);  // 잘못된 크기
         check(!presented, @"TEST 4: sp_region_present returns false with wrong size");
 
         check([collectedEvents count] > 0, @"TEST 4: event received");
@@ -184,7 +187,7 @@ int main(void) { @autoreleasepool {
 
         void *region5 = sp_region_create(surface, "test5", testEvent, NULL);
         sp_region_place(region5, 50, 60, 70, 80, true);
-        sp_region_present(region5, sid5, nonce5, 100, 100);
+        sp_region_present(region5, sid5, nonce5, 100, 100, window.backingScaleFactor);
 
         double frame[6] = {0};
         sp_region_frame(region5, frame);
@@ -222,7 +225,7 @@ int main(void) { @autoreleasepool {
 
         void *region6 = sp_region_create(surface, "test6", testEvent, NULL);
         sp_region_place(region6, 10, 10, 10, 10, true);
-        sp_region_present(region6, sid6, nonce6, 100, 100);
+        sp_region_present(region6, sid6, nonce6, 100, 100, window.backingScaleFactor);
 
         NSView *regionView = (NSView *)region6;
         NSPoint testPoint = NSMakePoint(20, 20);  // 영역 내의 점
@@ -242,7 +245,7 @@ int main(void) { @autoreleasepool {
 
         void *region7 = sp_region_create(surface, "test7", testEvent, NULL);
         sp_region_place(region7, 10, 10, 10, 10, true);
-        sp_region_present(region7, sid7, nonce7, 100, 100);
+        sp_region_present(region7, sid7, nonce7, 100, 100, window.backingScaleFactor);
 
         sp_region_focus(region7);
 
@@ -274,7 +277,7 @@ int main(void) { @autoreleasepool {
 
         void *region8 = sp_region_create(surface, "test8", testEvent, NULL);
         sp_region_place(region8, 10, 10, 10, 10, true);
-        sp_region_present(region8, sid8, nonce8, 100, 100);
+        sp_region_present(region8, sid8, nonce8, 100, 100, window.backingScaleFactor);
         sp_region_focus(region8);
 
         [collectedEvents removeAllObjects];  // focus 이벤트 제거
@@ -317,7 +320,7 @@ int main(void) { @autoreleasepool {
 
         void *region9 = sp_region_create(surface, "test9", testEvent, NULL);
         sp_region_place(region9, 10, 10, 10, 10, true);
-        sp_region_present(region9, sid9, nonce9, 100, 100);
+        sp_region_present(region9, sid9, nonce9, 100, 100, window.backingScaleFactor);
 
         id regionView = (id)region9;
 
@@ -364,7 +367,7 @@ int main(void) { @autoreleasepool {
 
         void *region10 = sp_region_create(surface, "test10", testEvent, NULL);
         sp_region_place(region10, 10, 10, 10, 10, true);
-        sp_region_present(region10, sid10, nonce10, 100, 100);
+        sp_region_present(region10, sid10, nonce10, 100, 100, window.backingScaleFactor);
         sp_region_focus(region10);
 
         id regionView = (id)region10;
@@ -407,7 +410,7 @@ int main(void) { @autoreleasepool {
 
         void *region11 = sp_region_create(surface, "test11", testEvent, NULL);
         sp_region_place(region11, 10, 10, 10, 10, true);
-        sp_region_present(region11, sid11, nonce11, 100, 100);
+        sp_region_present(region11, sid11, nonce11, 100, 100, window.backingScaleFactor);
         sp_region_focus(region11);
 
         id regionView = (id)region11;
@@ -447,7 +450,7 @@ int main(void) { @autoreleasepool {
 
         void *region12 = sp_region_create(surface, "test12", testEvent, NULL);
         sp_region_place(region12, 10, 10, 10, 10, true);
-        sp_region_present(region12, sid12, nonce12, 100, 100);
+        sp_region_present(region12, sid12, nonce12, 100, 100, window.backingScaleFactor);
         sp_region_focus(region12);
 
         id regionView = (id)region12;
@@ -487,7 +490,7 @@ int main(void) { @autoreleasepool {
 
         void *region13 = sp_region_create(surface, "test13", testEvent, NULL);
         sp_region_place(region13, 10, 10, 10, 10, true);
-        sp_region_present(region13, sid13, nonce13, 100, 100);
+        sp_region_present(region13, sid13, nonce13, 100, 100, window.backingScaleFactor);
         sp_region_focus(region13);
 
         id regionView = (id)region13;
@@ -531,7 +534,7 @@ int main(void) { @autoreleasepool {
 
         void *region14 = sp_region_create(surface, "test14", testEvent, NULL);
         sp_region_place(region14, 10, 10, 10, 10, true);
-        sp_region_present(region14, sid14, nonce14, 100, 100);
+        sp_region_present(region14, sid14, nonce14, 100, 100, window.backingScaleFactor);
         sp_region_focus(region14);
 
         id regionView = (id)region14;
@@ -573,7 +576,7 @@ int main(void) { @autoreleasepool {
 
         void *region15 = sp_region_create(surface, "test15", testEvent, NULL);
         sp_region_place(region15, 10, 10, 10, 10, true);
-        sp_region_present(region15, sid15, nonce15, 100, 100);
+        sp_region_present(region15, sid15, nonce15, 100, 100, window.backingScaleFactor);
         sp_region_focus(region15);
 
         id regionView = (id)region15;
@@ -614,7 +617,7 @@ int main(void) { @autoreleasepool {
 
         void *region16 = sp_region_create(surface, "test16", testEvent, NULL);
         sp_region_place(region16, 10, 10, 10, 10, true);
-        sp_region_present(region16, sid16, nonce16, 100, 100);
+        sp_region_present(region16, sid16, nonce16, 100, 100, window.backingScaleFactor);
         sp_region_focus(region16);
 
         id regionView = (id)region16;
@@ -660,7 +663,7 @@ int main(void) { @autoreleasepool {
 
         void *region17 = sp_region_create(surface, "test17", testEvent, NULL);
         sp_region_place(region17, 10, 10, 10, 10, true);
-        sp_region_present(region17, sid17, nonce17, 100, 100);
+        sp_region_present(region17, sid17, nonce17, 100, 100, window.backingScaleFactor);
         sp_region_focus(region17);
 
         id regionView = (id)region17;
@@ -691,6 +694,130 @@ int main(void) { @autoreleasepool {
 
         sp_region_close(region17);
         CFRelease(testSurface17);
+    }
+
+
+    // TEST 19: 표시된 이미지의 scale이 제대로 설정되는지 확인 (scale 2)
+    {
+        [collectedEvents removeAllObjects];
+        unsigned char nonce19[16];
+        // scale 2 이므로 2W x 2H 픽셀 이미지를 만든다
+        IOSurfaceRef testSurface19 = createColoredGlobalSurface(200, 160, nonce19);
+        IOSurfaceID sid19 = IOSurfaceGetID(testSurface19);
+
+        void *region19 = sp_region_create(surface, "test19", testEvent, NULL);
+        // 인셋을 크게 설정해서 영역 크기 = 대략 100x80이 되도록
+        // 500 - 200 - 200 = 100, 400 - 160 - 160 = 80
+        sp_region_place(region19, 200, 160, 200, 160, true);
+        // 200x160 픽셀을 scale 2로 표시하면 100x80 pt
+        BOOL presented = sp_region_present(region19, sid19, nonce19, 200, 160, 2.0);
+        check(presented, @"TEST 19: image presented with scale 2");
+
+        NSView *regionView = (NSView *)region19;
+        NSView *clipView = regionView.superview;
+
+        // 클립 뷰 width는 pt 단위여야 한다 (최대 100x80)
+        double clipWidth = NSWidth(clipView.bounds);
+        double clipHeight = NSHeight(clipView.bounds);
+        check(clipWidth == 100 && clipHeight == 80,
+            [NSString stringWithFormat:@"TEST 19: clipView bounds are in points (expected 100x80, got %.0f x%.0f)",
+                clipWidth, clipHeight]);
+
+        // imageLayer의 bounds도 마찬가지
+        CALayer *imageLayer = [regionView.layer.sublayers firstObject];
+        double layerWidth = NSWidth(imageLayer.bounds);
+        double layerHeight = NSHeight(imageLayer.bounds);
+        check(layerWidth == 100 && layerHeight == 80,
+            [NSString stringWithFormat:@"TEST 19: imageLayer bounds are in points (expected 100x80, got %.0f x%.0f)",
+                layerWidth, layerHeight]);
+
+        // contentsScale은 2여야 한다
+        check(imageLayer.contentsScale == 2.0,
+            [NSString stringWithFormat:@"TEST 19: contentsScale is 2 (got %g)", imageLayer.contentsScale]);
+
+        sp_region_close(region19);
+        CFRelease(testSurface19);
+    }
+
+    // TEST 20: 영역의 wanted 플래그가 작동한다
+    {
+        [collectedEvents removeAllObjects];
+        unsigned char nonce20[16];
+        IOSurfaceRef testSurface20 = createColoredGlobalSurface(100, 100, nonce20);
+        IOSurfaceID sid20 = IOSurfaceGetID(testSurface20);
+
+        void *region20 = sp_region_create(surface, "test20", testEvent, NULL);
+        sp_region_place(region20, 10, 10, 10, 10, true);  // visible=true
+        sp_region_present(region20, sid20, nonce20, 100, 100, window.backingScaleFactor);
+
+        NSView *regionView = (NSView *)region20;
+        check(!regionView.isHidden, @"TEST 20: region is visible initially");
+
+        // 영역을 숨기기 위해 placement를 업데이트한다 (visible=false)
+        sp_region_place(region20, 10, 10, 10, 10, false);
+
+        check(regionView.isHidden,
+            @"TEST 20: region is hidden when placed with visible=false");
+
+        // 다시 표시한다
+        sp_region_place(region20, 10, 10, 10, 10, true);
+
+        check(!regionView.isHidden,
+            @"TEST 20: region is visible again when placed with visible=true");
+
+        sp_region_close(region20);
+        CFRelease(testSurface20);
+    }
+
+    // TEST 21: 표면을 담은 뷰의 bounds 배율이 달라도(한 단위가 0.5pt) 그림 한 픽셀은 장치 한 픽셀이다.
+    // Wails 의 웹뷰 컨테이너가 이렇다. 점 단위를 가정하면 그림이 절반 크기로 보인다.
+    {
+        NSView *container = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, 400, 300)] autorelease];
+        [container setBoundsSize:NSMakeSize(800, 600)];
+        WKWebView *scaled = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600)] autorelease];
+        [container addSubview:scaled];
+        NSView *previous = window.contentView;
+        [previous retain];
+        window.contentView = container;
+
+        CGFloat scale = window.backingScaleFactor;
+        size_t pixelWidth = (size_t)(400 * scale), pixelHeight = (size_t)(300 * scale);
+        unsigned char nonce21[16];
+        IOSurfaceRef testSurface21 = createColoredGlobalSurface(pixelWidth, pixelHeight, nonce21);
+        void *region21 = sp_region_create(scaled, "test21", testEvent, NULL);
+        sp_region_place(region21, 0, 0, 0, 0, true);
+        bool presented = sp_region_present(region21, IOSurfaceGetID(testSurface21), nonce21,
+            pixelWidth, pixelHeight, scale);
+        check(presented, @"TEST 21: image is presented in a container with scaled bounds");
+
+        NSView *regionView = (NSView *)region21;
+        CALayer *imageLayer = regionView.layer.sublayers.firstObject;
+        CGFloat shownPixels = NSWidth([regionView convertRectToBacking:regionView.bounds]);
+        CGFloat layerPixels = NSWidth(imageLayer.bounds) * imageLayer.contentsScale;
+        check(shownPixels == pixelWidth && layerPixels == pixelWidth,
+            [NSString stringWithFormat:@"TEST 21: region covers %zu device pixels and the layer maps them one to one (region %g, layer %g)",
+                pixelWidth, shownPixels, layerPixels]);
+
+        sp_region_close(region21);
+        CFRelease(testSurface21);
+        window.contentView = previous;
+        [previous release];
+    }
+
+    // TEST 22: 창 배율과 다른 배율로 그린 그림은 표시하지 않는다(글자 크기가 틀어진다).
+    {
+        [collectedEvents removeAllObjects];
+        unsigned char nonce22[16];
+        IOSurfaceRef testSurface22 = createColoredGlobalSurface(100, 100, nonce22);
+        void *region22 = sp_region_create(surface, "test22", testEvent, NULL);
+        sp_region_place(region22, 0, 0, 0, 0, true);
+        bool presented = sp_region_present(region22, IOSurfaceGetID(testSurface22), nonce22, 100, 100,
+            window.backingScaleFactor + 1);
+        BOOL reported = NO;
+        for (NSString *event in collectedEvents) if ([event containsString:@"\"reason\":\"scale\""]) reported = YES;
+        check(!presented && reported, @"TEST 22: an image drawn at another scale is refused with reason scale");
+        sp_region_close(region22);
+        CFRelease(testSurface22);
     }
 
     [window close];

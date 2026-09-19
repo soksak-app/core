@@ -9,7 +9,7 @@ type ImageEvent = extern "C" fn(*mut c_void, *const c_char);
 extern "C" {
     fn sp_region_create(surface: *mut c_void, name: *const c_char, event: ImageEvent, context: *mut c_void) -> *mut c_void;
     fn sp_region_place(region: *mut c_void, left: f64, top: f64, right: f64, bottom: f64, visible: bool);
-    fn sp_region_present(region: *mut c_void, token_id: u32, nonce: *const u8, width: f64, height: f64) -> bool;
+    fn sp_region_present(region: *mut c_void, token_id: u32, nonce: *const u8, width: f64, height: f64, scale: f64) -> bool;
     fn sp_region_focus(region: *mut c_void);
     fn sp_region_caret(region: *mut c_void, x: f64, y: f64, w: f64, h: f64);
     fn sp_region_text(region: *mut c_void, utf8: *const c_char);
@@ -50,8 +50,8 @@ pub fn place(image: Handle, left: f64, top: f64, right: f64, bottom: f64, visibl
 }
 
 /// 외부 IOSurface 를 표시한다. 성공하면 true, 찾지 못했거나 크기가 맞지 않으면 false 를 반환한다.
-pub fn present(image: Handle, token_id: u32, nonce: &[u8; 16], width: f64, height: f64) -> bool {
-    unsafe { sp_region_present(image as *mut c_void, token_id, nonce.as_ptr(), width, height) }
+pub fn present(image: Handle, token_id: u32, nonce: &[u8; 16], width: f64, height: f64, scale: f64) -> bool {
+    unsafe { sp_region_present(image as *mut c_void, token_id, nonce.as_ptr(), width, height, scale) }
 }
 
 /// 첫 응답자로 만들고 포커스 이벤트를 보낸다.

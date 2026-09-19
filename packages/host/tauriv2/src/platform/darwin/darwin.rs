@@ -174,8 +174,8 @@ impl Platform for Darwin {
         image::place(image, insets.left, insets.top, insets.right, insets.bottom, visible);
         Ok(())
     }
-    fn present_image(&self, image: Handle, token_id: u32, nonce: [u8; 16], width: f64, height: f64) -> Result<bool, String> {
-        Ok(image::present(image, token_id, &nonce, width, height))
+    fn present_image(&self, image: Handle, token_id: u32, nonce: [u8; 16], width: f64, height: f64, scale: f64) -> Result<bool, String> {
+        Ok(image::present(image, token_id, &nonce, width, height, scale))
     }
     fn focus_image(&self, image: Handle) -> Result<(), String> {
         image::focus(image);

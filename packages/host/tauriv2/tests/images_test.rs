@@ -17,6 +17,7 @@ fn unattached_image_is_refused() {
             },
             "width": 800,
             "height": 600,
+            "scale": 2.0,
             "format": "bgra8",
             "sequence": 1
         }
@@ -54,6 +55,7 @@ fn image_from_another_sidecar_is_refused() {
             },
             "width": 800,
             "height": 600,
+            "scale": 2.0,
             "format": "bgra8",
             "sequence": 1
         }
@@ -89,6 +91,7 @@ fn attached_image_is_presented() {
             },
             "width": 800,
             "height": 600,
+            "scale": 2.0,
             "format": "bgra8",
             "sequence": 1
         }
@@ -101,6 +104,7 @@ fn attached_image_is_presented() {
             nonce,
             width,
             height,
+            scale,
             name,
             sequence,
         } => {
@@ -108,6 +112,7 @@ fn attached_image_is_presented() {
             assert_eq!(nonce, [0; 16]);
             assert_eq!(width, 800);
             assert_eq!(height, 600);
+            assert_eq!(scale, 2.0);
             assert_eq!(name, "view");
             assert_eq!(sequence, 1);
         }
@@ -147,6 +152,7 @@ fn unsupported_image_is_refused() {
             },
             "width": 800,
             "height": 600,
+            "scale": 2.0,
             "format": "rgba8",  // 잘못된 포맷
             "sequence": 1
         }
@@ -171,6 +177,7 @@ fn unsupported_image_is_refused() {
             },
             "width": 800,
             "height": 600,
+            "scale": 2.0,
             "format": "bgra8",
             "sequence": 1
         }
@@ -195,6 +202,7 @@ fn unsupported_image_is_refused() {
             },
             "width": 800,
             "height": 600,
+            "scale": 2.0,
             "format": "bgra8",
             "sequence": 1
         }
@@ -251,6 +259,7 @@ fn reply_escapes_names() {
             },
             "width": 800,
             "height": 600,
+            "scale": 2.0,
             "format": "bgra8",
             "sequence": 1
         }
@@ -325,6 +334,7 @@ fn presentation_failure_is_reported() {
             },
             "width": 800,
             "height": 600,
+            "scale": 2.0,
             "format": "bgra8",
             "sequence": 1
         }

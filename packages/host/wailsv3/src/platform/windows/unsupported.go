@@ -231,7 +231,7 @@ func (implementation) PlaceImage(unsafe.Pointer, float64, float64, float64, floa
 	unreachable("image placement")
 }
 
-func (implementation) PresentImage(unsafe.Pointer, uint32, [16]byte, float64, float64) bool {
+func (implementation) PresentImage(unsafe.Pointer, uint32, [16]byte, float64, float64, float64) bool {
 	unreachable("image presentation")
 	return false
 }

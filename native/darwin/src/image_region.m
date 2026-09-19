@@ -1,7 +1,7 @@
 // 표면 위에 놓인 그림 영역.
 //
 // IOSurface 는 계층의 contents 에 직접 붙여진다. 레이어는 장치 픽셀 좌표를 쓰므로
-// contentsScale 을 1 로 고정한다. 포인터는 통과한다(hitTest → nil).
+// 레이어 배율은 한 단위가 덮는 장치 픽셀 수다. 포인터는 통과한다(hitTest → nil).
 
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
@@ -115,10 +115,23 @@
         name:NSViewFrameDidChangeNotification object:surface];
 }
 
+// 레이어 한 단위가 덮는 장치 픽셀 수. 표면을 담은 뷰 계층은 bounds 배율을 따로 가질 수 있으므로
+// (Wails 의 웹뷰 컨테이너는 한 단위가 0.5pt 다) 점 단위를 가정하지 않고 AppKit 에 묻는다.
+// 이 값을 contentsScale 로 두면 그림의 한 픽셀이 장치 한 픽셀로 표시된다.
+- (CGFloat)backingPixelsPerUnit {
+    NSRect bounds = self.bounds;
+    if (NSWidth(bounds) <= 0) return 0;
+    return NSWidth([self convertRectToBacking:bounds]) / NSWidth(bounds);
+}
+
+- (void)updateContentsScale {
+    CGFloat pixels = [self backingPixelsPerUnit];
+    if (pixels > 0) self.imageLayer.contentsScale = pixels;
+}
+
 - (void)viewDidChangeBackingProperties {
     [super viewDidChangeBackingProperties];
-    if (!self.placed) return;
-    self.imageLayer.contentsScale = 1;
+    [self updateContentsScale];
 }
 
 - (void)surfaceResized:(NSNotification *)notification {
@@ -410,7 +423,7 @@ void sp_region_place(void *handle, double left, double top, double right, double
     [view applyInsets];
 }
 
-bool sp_region_present(void *handle, unsigned int token_id, const unsigned char *nonce, double width, double height) {
+bool sp_region_present(void *handle, unsigned int token_id, const unsigned char *nonce, double width, double height, double scale) {
     NSCAssert(NSThread.isMainThread, @"image regions belong to the main thread");
     SPImageRegion *view = (SPImageRegion *)handle;
     if (!nonce) return false;
@@ -446,11 +459,26 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
         return false;
     }
 
+    // scale 은 양수여야 한다.
+    if (scale <= 0) {
+        [view report:"{\"type\":\"error\",\"reason\":\"scale\"}"];
+        CFRelease(surface);
+        return false;
+    }
+
     // 이전 표면이 있으면 해제한다.
     if (view.surface) CFRelease(view.surface);
 
-    // 새 표면을 레이어와 우리 저장소에 할당한다.
+    // 그림은 창의 배율로 그려져야 한다. 다르면 글자 크기가 틀어지므로 표시하지 않는다.
+    if (!view.window || fabs(scale - view.window.backingScaleFactor) > 0.001) {
+        [view report:"{\"type\":\"error\",\"reason\":\"scale\"}"];
+        CFRelease(surface);
+        return false;
+    }
+
+    // 새 표면을 레이어와 우리 저장소에 할당한다. 레이어 배율은 뷰 계층에서 구한다(backingPixelsPerUnit).
     view.imageLayer.contents = (id)surface;
+    [view updateContentsScale];
     view.surface = surface;  // IOSurfaceLookup 의 +1 을 손잡이가 이어받는다.
 
     return true;

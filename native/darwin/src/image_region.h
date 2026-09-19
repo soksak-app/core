@@ -15,9 +15,9 @@ void *sp_region_create(void *surface, const char *name, sp_region_event event, v
 void sp_region_place(void *region, double left, double top, double right, double bottom, bool visible);
 
 // 외부 IOSurface 를 표시한다. token_id 는 IOSurface 의 전역 ID, nonce 는 논스 대조용
-// 16바이트 데이터, width·height 는 장치 픽셀 단위의 크기다. 성공하면 true, 찾지 못했거나
-// 크기가 맞지 않으면 false 를 반환한다.
-bool sp_region_present(void *region, unsigned int token_id, const unsigned char *nonce, double width, double height);
+// 16바이트 데이터, width·height 는 장치 픽셀 단위의 크기고, scale 은 이미지가 만들어진
+// 배율이다 (contentsScale 로 사용). 성공하면 true, 찾지 못했거나 크기가 맞지 않으면 false 를 반환한다.
+bool sp_region_present(void *region, unsigned int token_id, const unsigned char *nonce, double width, double height, double scale);
 
 // 첫 응답자로 만들고 포커스 이벤트를 보낸다. 이전 응답자에서 벗어나면 포커스 해제 이벤트도
 // 보낸다.

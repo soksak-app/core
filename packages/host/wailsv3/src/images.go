@@ -196,6 +196,7 @@ type Present struct {
 	Nonce    [16]byte
 	Width    int
 	Height   int
+	Scale    float64
 	Name     string
 	Sequence int
 }
@@ -228,10 +229,11 @@ func Decide(bodyBytes []byte, sender, surface string, images *Images) Decision {
 			ID    uint32 `json:"id"`
 			Nonce string `json:"nonce"`
 		} `json:"token"`
-		Width    int    `json:"width"`
-		Height   int    `json:"height"`
-		Format   string `json:"format"`
-		Sequence int    `json:"sequence"`
+		Width    int     `json:"width"`
+		Height   int     `json:"height"`
+		Scale    float64 `json:"scale"`
+		Format   string  `json:"format"`
+		Sequence int     `json:"sequence"`
 	}
 
 	if err := json.Unmarshal(imageBytes, &envelope); err != nil {
@@ -295,6 +297,7 @@ func Decide(bodyBytes []byte, sender, surface string, images *Images) Decision {
 			Nonce:    nonce,
 			Width:    envelope.Width,
 			Height:   envelope.Height,
+			Scale:    envelope.Scale,
 			Name:     envelope.Name,
 			Sequence: envelope.Sequence,
 		}
@@ -363,7 +366,7 @@ func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, on
 
 		ok := onMain(func() bool {
 			// 플랫폼에 이미지를 표시한다
-			return system.PresentImage(handle, d.ID, d.Nonce, float64(d.Width), float64(d.Height))
+			return system.PresentImage(handle, d.ID, d.Nonce, float64(d.Width), float64(d.Height), d.Scale)
 		})
 
 		if !ok {

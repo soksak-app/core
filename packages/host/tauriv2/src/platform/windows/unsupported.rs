@@ -257,7 +257,7 @@ pub fn place_image(_image: Handle, _insets: Insets, _visible: bool) -> Result<()
     missing("image placement")
 }
 
-pub fn present_image(_image: Handle, _token_id: u32, _nonce: [u8; 16], _width: f64, _height: f64) -> Result<bool, String> {
+pub fn present_image(_image: Handle, _token_id: u32, _nonce: [u8; 16], _width: f64, _height: f64, _scale: f64) -> Result<bool, String> {
     missing("image presentation")
 }
 

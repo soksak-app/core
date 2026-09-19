@@ -54,8 +54,8 @@ func (implementation) PlaceImage(image unsafe.Pointer, left, top, right, bottom 
 	C.sp_region_place(image, C.double(left), C.double(top), C.double(right), C.double(bottom), C.bool(visible))
 }
 
-func (implementation) PresentImage(image unsafe.Pointer, tokenID uint32, nonce [16]byte, width, height float64) bool {
-	return bool(C.sp_region_present(image, C.uint(tokenID), (*C.uchar)(unsafe.Pointer(&nonce[0])), C.double(width), C.double(height)))
+func (implementation) PresentImage(image unsafe.Pointer, tokenID uint32, nonce [16]byte, width, height, scale float64) bool {
+	return bool(C.sp_region_present(image, C.uint(tokenID), (*C.uchar)(unsafe.Pointer(&nonce[0])), C.double(width), C.double(height), C.double(scale)))
 }
 
 func (implementation) FocusImage(image unsafe.Pointer) {
