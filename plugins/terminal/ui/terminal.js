@@ -94,18 +94,39 @@ export async function startTerminal({ view, attachImage, sidecar, expose, scale,
   region = attachImage(view, "view", "@soksak/sidecar-vt-alacritty");
   if (!region) throw new Error("Failed to attach image region");
 
-  // open이 전송되었는지 추적
-  let openSent = false;
+  // 세션이 생겼는지 추적. state 이벤트가 오기 전까지 크기 변화마다 open 을 다시 보낸다.
+  let sessionOpen = false;
 
-  // open 전 입력 queue (상한: 1024)
+  // 세션 열리기 전 입력 queue (상한: 1024)
   const inputQueue = [];
   const MAX_QUEUE_SIZE = 1024;
+
+  // queue에 저장된 입력을 순서대로 보낸다.
+  const flushInputQueue = () => {
+    for (const queuedInput of inputQueue) {
+      if (queuedInput.type === "insert") {
+        sendInput(queuedInput.text, terminal, id, encoder).catch(
+          (error) => console.error(`queued insert failed: ${error.message}`)
+        );
+      } else if (queuedInput.type === "key") {
+        const message = keyToMessage(queuedInput.key, "", {
+          shift: queuedInput.shift,
+          alt: queuedInput.alt,
+          ctrl: queuedInput.ctrl,
+        });
+        terminal.send(id, message).catch(
+          (error) => console.error(`queued key failed: ${error.message}`)
+        );
+      }
+    }
+    inputQueue.length = 0;
+  };
 
   // 영역 insert 이벤트: 평문 텍스트 입력
   region.on("insert", async (event) => {
     const { text } = event;
-    if (!openSent) {
-      // open 전이면 queue에 저장
+    if (!sessionOpen) {
+      // 세션이 생기기 전이면 queue에 저장
       if (inputQueue.length >= MAX_QUEUE_SIZE) {
         const errorMsg = `Input queue overflow (max ${MAX_QUEUE_SIZE})`;
         console.error(errorMsg);
@@ -131,8 +152,8 @@ export async function startTerminal({ view, attachImage, sidecar, expose, scale,
       changed("session");
       return;
     }
-    if (!openSent) {
-      // open 전이면 queue에 저장
+    if (!sessionOpen) {
+      // 세션이 생기기 전이면 queue에 저장
       if (inputQueue.length >= MAX_QUEUE_SIZE) {
         const errorMsg = `Input queue overflow (max ${MAX_QUEUE_SIZE})`;
         console.error(errorMsg);
@@ -165,9 +186,6 @@ export async function startTerminal({ view, attachImage, sidecar, expose, scale,
   // screen.read 응답을 기다리는 resolver
   let pendingScreenRead = null;
 
-  // 첫 번째 0보다 큰 크기로 open 전송 여부 추적
-  let openSentViaResize = false;
-
   // 뷰 크기 변경 감지
   const resizeObserver = new ResizeObserver(() => {
     if (region === null) return;
@@ -177,42 +195,21 @@ export async function startTerminal({ view, attachImage, sidecar, expose, scale,
     const width = Math.round(widthCss * devicePixelRatio);
     const height = Math.round(heightCss * devicePixelRatio);
 
-    // 첫 번째로 0보다 큰 크기를 받으면 open을 전송한다
-    if (!openSentViaResize && width > 0 && height > 0) {
-      openSentViaResize = true;
-      openSent = true;
+    // 0인 크기는 보내지 않는다
+    if (width === 0 || height === 0) return;
+
+    // 세션이 생기기 전에는 매 크기 변화마다 open을 다시 보낸다.
+    // 레이아웃 완료 전의 임시 크기로 open이 거부될 수 있어서다.
+    // 거부 응답은 오류로 보고되고, 다음 크기로 다시 시도한다.
+    if (!sessionOpen) {
       terminal.send(id, { op: "open", width, height, scale: devicePixelRatio, image: "view" })
         .catch((error) => console.error(`open failed: ${error.message}`));
-
-      // open 후 queue에 저장된 입력들을 순서대로 처리한다
-      for (const queuedInput of inputQueue) {
-        if (queuedInput.type === "insert") {
-          sendInput(queuedInput.text, terminal, id, encoder).catch(
-            (error) => console.error(`queued insert failed: ${error.message}`)
-          );
-        } else if (queuedInput.type === "key") {
-          const message = keyToMessage(queuedInput.key, "", {
-            shift: queuedInput.shift,
-            alt: queuedInput.alt,
-            ctrl: queuedInput.ctrl,
-          });
-          terminal.send(id, message).catch(
-            (error) => console.error(`queued key failed: ${error.message}`)
-          );
-        }
-      }
-      inputQueue.length = 0; // queue 비우기
       return;
     }
 
-    // 0인 크기는 resize로 보내지 않는다
-    if (width === 0 || height === 0) return;
-
-    // 그 뒤의 크기 변화는 resize로 보낸다
-    if (openSent) {
-      terminal.send(id, { op: "resize", width, height, scale: devicePixelRatio })
-        .catch((error) => console.error(`resize failed: ${error.message}`));
-    }
+    // 세션이 생긴 뒤의 크기 변화는 resize로 보낸다
+    terminal.send(id, { op: "resize", width, height, scale: devicePixelRatio })
+      .catch((error) => console.error(`resize failed: ${error.message}`));
   });
   resizeObserver.observe(view);
 
@@ -253,7 +250,11 @@ export async function startTerminal({ view, attachImage, sidecar, expose, scale,
         cellHeight: body.cellHeight,
         unsupported: session.unsupported,
       };
+      // 세션이 생겼다. 크기 변화는 이제 resize 로 가고, queue에 쌓인 입력을 보낸다.
+      const firstOpen = !sessionOpen;
+      sessionOpen = true;
       changed("session");
+      if (firstOpen) flushInputQueue();
     } else if (body.event === "screen") {
       // screen 이벤트를 처리한다. screen.read 응답이나 화면 변화 알림.
       if (pendingScreenRead) {
@@ -269,9 +270,10 @@ export async function startTerminal({ view, attachImage, sidecar, expose, scale,
       changed("session");
     } else if (body.error) {
       // 오류 응답 처리: {"error":"invalidParams","reason":"...",...}
+      // reason 을 버리지 않고 오류에 실어 보낸다.
       session = {
         ...session,
-        error: body.error,
+        error: typeof body.reason === "string" ? `${body.error}: ${body.reason}` : body.error,
       };
       changed("session");
     } else if (body.event) {
@@ -289,8 +291,8 @@ export async function startTerminal({ view, attachImage, sidecar, expose, scale,
     expose.status("terminal.session", read.session, watch("session")),
     expose.command("terminal.input", async ({ bytes }) => {
       if (typeof bytes !== "string") throw new Error("terminal.input requires bytes");
-      if (!openSent) {
-        throw new Error("Terminal not yet open");
+      if (!sessionOpen) {
+        throw new Error("Terminal session is not open yet");
       }
       await sendInput(bytes, terminal, id, encoder);
       return null;
