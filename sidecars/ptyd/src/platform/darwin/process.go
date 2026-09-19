@@ -66,9 +66,9 @@ func StartSession(cmd string, args []string, env map[string]string, cwd string, 
 	// Setctty: 제어 터미널 설정
 	// Ctty: 자식의 파일 기술자 번호 (0 = stdin)
 	command.SysProcAttr = &syscall.SysProcAttr{
-		Setsid:  true,  // 새 세션의 리더
-		Setctty: true,  // 제어 터미널 설정
-		Ctty:    0,     // 자식 쪽 기술자 번호 (stdin)
+		Setsid:  true, // 새 세션의 리더
+		Setctty: true, // 제어 터미널 설정
+		Ctty:    0,    // 자식 쪽 기술자 번호 (stdin)
 	}
 
 	// 프로세스 시작
@@ -78,7 +78,11 @@ func StartSession(cmd string, args []string, env map[string]string, cwd string, 
 
 	// 부모에서 슬레이브 fd 닫기 (자식이 유일한 열린 참조가 되도록)
 	// 이렇게 해야 자식 종료 시 마스터에서 EOF가 옴
-	pty.Slave.Close()
+	if err := pty.Slave.Close(); err != nil {
+		// 슬레이브 fd 닫기 실패: 로그하고 계속 진행 (이미 자식이 시작되었으므로)
+		// 부모 프로세스가 지속되므로 반환하지 않음
+		fmt.Fprintf(os.Stderr, "warning: slave pty close failed: %v\n", err)
+	}
 
 	// 자식의 프로세스 ID (세션 리더 = PGID 리더)
 	pgid := command.Process.Pid
@@ -122,12 +126,19 @@ func (h *SessionHandle) Kill(sig os.Signal) error {
 func (h *SessionHandle) Close() error {
 	// 프로세스가 아직 살아있으면 SIGTERM 전송
 	if h.Cmd.ProcessState == nil || !h.Cmd.ProcessState.Exited() {
-		syscall.Kill(-h.PGID, syscall.SIGTERM)
+		if err := syscall.Kill(-h.PGID, syscall.SIGTERM); err != nil {
+			// ESRCH: 프로세스 그룹이 이미 없음 (정상, 이미 종료됨). 다른 오류는 기록.
+			if err != syscall.ESRCH {
+				fmt.Fprintf(os.Stderr, "warning: kill SIGTERM pgid %d: %v\n", h.PGID, err)
+			}
+		}
 	}
 
 	// PTY 닫기
 	if h.PTY != nil {
-		h.PTY.Close()
+		if err := h.PTY.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: pty close failed: %v\n", err)
+		}
 	}
 
 	return nil

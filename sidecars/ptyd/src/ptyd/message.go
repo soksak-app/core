@@ -21,20 +21,40 @@ type Request struct {
 	From      int64             `json:"from,omitempty"`
 }
 
-// Response는 데몬이 보내는 JSON 응답이다.
+// Response는 데몬이 보내는 JSON 응답이다 (요청-응답용).
 type Response struct {
 	Command     string        `json:"command,omitempty"`
 	SessionID   string        `json:"sessionId,omitempty"`
 	DefaultCols int           `json:"defaultCols,omitempty"`
 	DefaultRows int           `json:"defaultRows,omitempty"`
-	Output      string        `json:"output,omitempty"`
-	Truncated   bool          `json:"truncated,omitempty"`
-	Sequence    int64         `json:"sequence,omitempty"`
-	ResizeCols  int           `json:"resizeCols,omitempty"`
-	ResizeRows  int           `json:"resizeRows,omitempty"`
-	Entries     []RingEntry   `json:"entries,omitempty"`
 	Sessions    []SessionInfo `json:"sessions,omitempty"`
 	Error       string        `json:"error,omitempty"`
+}
+
+// OutputMessage는 링의 output 항목을 소비자에게 보내는 메시지다.
+type OutputMessage struct {
+	Command   string `json:"command"`
+	SessionID string `json:"sessionId"`
+	Sequence  int64  `json:"sequence"`
+	Output    string `json:"output"`
+	Truncated bool   `json:"truncated"`
+}
+
+// ResizeMessage는 링의 resize 항목을 소비자에게 보내는 메시지다.
+type ResizeMessage struct {
+	Command   string `json:"command"`
+	SessionID string `json:"sessionId"`
+	Sequence  int64  `json:"sequence"`
+	Cols      int    `json:"cols"`
+	Rows      int    `json:"rows"`
+	Truncated bool   `json:"truncated"`
+}
+
+// ExitMessage는 세션 종료를 소비자에게 보내는 메시지다.
+type ExitMessage struct {
+	Command   string `json:"command"`
+	SessionID string `json:"sessionId"`
+	Code      int    `json:"code"`
 }
 
 // SessionInfo는 list 응답에서 세션 정보.

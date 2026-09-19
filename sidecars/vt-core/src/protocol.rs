@@ -144,11 +144,25 @@ struct InputKey {
     ctrl: bool,
 }
 
-const CELL_WIDTH: f32 = 8.0;
-const CELL_HEIGHT: f32 = 16.0;
-
 fn pixels_to_cells(pixels: u32, cell_size: f32, scale: f32) -> u16 {
     (pixels as f32 / (cell_size * scale)) as u16
+}
+
+/// Validate and calculate terminal size. Returns error if width/height invalid or result is 0.
+fn calculate_terminal_size(width: u32, height: u32, scale: f32) -> Result<(u16, u16), String> {
+    if width == 0 || height == 0 {
+        return Err("open requires a positive width and height".to_string());
+    }
+
+    let metrics = crate::platform::metrics(13.0, scale);
+    let cols = pixels_to_cells(width, metrics.cell_width, scale);
+    let rows = pixels_to_cells(height, metrics.cell_height, scale);
+
+    if cols == 0 || rows == 0 {
+        return Err("open requires a positive width and height".to_string());
+    }
+
+    Ok((cols, rows))
 }
 
 /// 키 입력을 바이트로 인코딩한다
@@ -252,42 +266,62 @@ async fn surface_task(
             Some(cmd) = cmd_rx.recv() => {
                 match cmd {
                     SurfaceCommand::Open { width, height, scale, image } => {
-                        let cols = pixels_to_cells(width, CELL_WIDTH, scale);
-                        let rows = pixels_to_cells(height, CELL_HEIGHT, scale);
-                        engine.resize(cols, rows);
+                        match calculate_terminal_size(width, height, scale) {
+                            Ok((cols, rows)) => {
+                                engine.resize(cols, rows);
 
-                        if let Some(ref image_name) = image {
-                            image_state = ImageState::new(image_name.clone(), width, height);
-                        }
-
-                        match session_port.open("/bin/sh", cols, rows, None).await {
-                            Ok(sid) => {
-                                session_id = Some(sid.clone());
-                                let mut state_body = json!({
-                                    "event": "state",
-                                    "sessionId": sid,
-                                    "cols": cols,
-                                    "rows": rows,
-                                    "cursor": {"col": 0, "row": 0}
-                                });
-
-                                if let Some(ref _img_state) = image_state {
-                                    state_body["cellWidth"] = json!(CELL_WIDTH);
-                                    state_body["cellHeight"] = json!(CELL_HEIGHT);
+                                if let Some(ref image_name) = image {
+                                    image_state = ImageState::new(image_name.clone(), width, height);
                                 }
 
-                                let response = json!({
-                                    "surface": surface_id,
-                                    "body": state_body
-                                });
-                                let _ = output_tx.send(response.to_string()).await;
+                                match session_port.open("/bin/sh", cols, rows, None).await {
+                                    Ok(sid) => {
+                                        session_id = Some(sid.clone());
+                                        let mut state_body = json!({
+                                            "event": "state",
+                                            "sessionId": sid,
+                                            "cols": cols,
+                                            "rows": rows,
+                                            "cursor": {"col": 0, "row": 0}
+                                        });
+
+                                        if let Some(ref _img_state) = image_state {
+                                            let metrics = crate::platform::metrics(13.0, scale);
+                                            // CSS pixels = device pixels / scale
+                                            state_body["cellWidth"] = json!(metrics.cell_width / scale);
+                                            state_body["cellHeight"] = json!(metrics.cell_height / scale);
+                                        }
+
+                                        let response = json!({
+                                            "surface": surface_id,
+                                            "body": state_body
+                                        });
+                                        if let Err(_) = output_tx.send(response.to_string()).await {
+                                            // Output channel closed; serve() will end with error
+                                            return;
+                                        }
+                                    }
+                                    Err(e) => {
+                                        let response = json!({
+                                            "surface": surface_id,
+                                            "body": {"error": format!("Failed to open: {}", e)}
+                                        });
+                                        if let Err(_) = output_tx.send(response.to_string()).await {
+                                            // Output channel closed; serve() will end with error
+                                            return;
+                                        }
+                                    }
+                                }
                             }
-                            Err(e) => {
+                            Err(reason) => {
                                 let response = json!({
                                     "surface": surface_id,
-                                    "body": {"error": format!("Failed to open: {}", e)}
+                                    "body": {"error": "invalidParams", "reason": reason}
                                 });
-                                let _ = output_tx.send(response.to_string()).await;
+                                if let Err(_) = output_tx.send(response.to_string()).await {
+                                    // Output channel closed; serve() will end with error
+                                    return;
+                                }
                             }
                         }
                     }
@@ -299,14 +333,18 @@ async fn surface_task(
                                         "surface": surface_id,
                                         "body": {"ack": true}
                                     });
-                                    let _ = output_tx.send(response.to_string()).await;
+                                    if let Err(_) = output_tx.send(response.to_string()).await {
+                                        return;
+                                    }
                                 }
                                 Err(e) => {
                                     let response = json!({
                                         "surface": surface_id,
                                         "body": {"error": format!("Write failed: {}", e)}
                                     });
-                                    let _ = output_tx.send(response.to_string()).await;
+                                    if let Err(_) = output_tx.send(response.to_string()).await {
+                                        return;
+                                    }
                                 }
                             }
                         } else {
@@ -314,7 +352,9 @@ async fn surface_task(
                                 "surface": surface_id,
                                 "body": {"error": "Session not open"}
                             });
-                            let _ = output_tx.send(response.to_string()).await;
+                            if let Err(_) = output_tx.send(response.to_string()).await {
+                                return;
+                            }
                         }
                     }
                     SurfaceCommand::InputKeys { keys } => {
@@ -329,14 +369,18 @@ async fn surface_task(
                                                     "surface": surface_id,
                                                     "body": {"ack": true}
                                                 });
-                                                let _ = output_tx.send(response.to_string()).await;
+                                                if let Err(_) = output_tx.send(response.to_string()).await {
+                                                    return;
+                                                }
                                             }
                                             Err(e) => {
                                                 let response = json!({
                                                     "surface": surface_id,
                                                     "body": {"error": format!("Write failed: {}", e)}
                                                 });
-                                                let _ = output_tx.send(response.to_string()).await;
+                                                if let Err(_) = output_tx.send(response.to_string()).await {
+                                                    return;
+                                                }
                                             }
                                         }
                                     } else {
@@ -344,7 +388,9 @@ async fn surface_task(
                                             "surface": surface_id,
                                             "body": {"ack": true}
                                         });
-                                        let _ = output_tx.send(response.to_string()).await;
+                                        if let Err(_) = output_tx.send(response.to_string()).await {
+                                            return;
+                                        }
                                     }
                                 }
                                 Err(e) => {
@@ -352,7 +398,9 @@ async fn surface_task(
                                         "surface": surface_id,
                                         "body": {"error": e}
                                     });
-                                    let _ = output_tx.send(response.to_string()).await;
+                                    if let Err(_) = output_tx.send(response.to_string()).await {
+                                        return;
+                                    }
                                 }
                             }
                         } else {
@@ -360,32 +408,49 @@ async fn surface_task(
                                 "surface": surface_id,
                                 "body": {"error": "Session not open"}
                             });
-                            let _ = output_tx.send(response.to_string()).await;
+                            if let Err(_) = output_tx.send(response.to_string()).await {
+                                return;
+                            }
                         }
                     }
                     SurfaceCommand::Resize { width, height, scale } => {
-                        let cols = pixels_to_cells(width, CELL_WIDTH, scale);
-                        let rows = pixels_to_cells(height, CELL_HEIGHT, scale);
-                        engine.resize(cols, rows);
+                        match calculate_terminal_size(width, height, scale) {
+                            Ok((cols, rows)) => {
+                                engine.resize(cols, rows);
 
-                        if let Some(ref sid) = session_id {
-                            if let Err(e) = session_port.resize(sid, cols, rows).await {
-                                let response = json!({
-                                    "surface": surface_id,
-                                    "body": {"error": format!("Resize failed: {}", e)}
-                                });
-                                let _ = output_tx.send(response.to_string()).await;
-                            } else {
-                                let response = json!({
-                                    "surface": surface_id,
-                                    "body": {
-                                        "event": "state",
-                                        "cols": cols,
-                                        "rows": rows,
-                                        "cursor": {"col": 0, "row": 0}
+                                if let Some(ref sid) = session_id {
+                                    if let Err(e) = session_port.resize(sid, cols, rows).await {
+                                        let response = json!({
+                                            "surface": surface_id,
+                                            "body": {"error": format!("Resize failed: {}", e)}
+                                        });
+                                        if let Err(_) = output_tx.send(response.to_string()).await {
+                                            return;
+                                        }
+                                    } else {
+                                        let response = json!({
+                                            "surface": surface_id,
+                                            "body": {
+                                                "event": "state",
+                                                "cols": cols,
+                                                "rows": rows,
+                                                "cursor": {"col": 0, "row": 0}
+                                            }
+                                        });
+                                        if let Err(_) = output_tx.send(response.to_string()).await {
+                                            return;
+                                        }
                                     }
+                                }
+                            }
+                            Err(reason) => {
+                                let response = json!({
+                                    "surface": surface_id,
+                                    "body": {"error": "invalidParams", "reason": reason}
                                 });
-                                let _ = output_tx.send(response.to_string()).await;
+                                if let Err(_) = output_tx.send(response.to_string()).await {
+                                    return;
+                                }
                             }
                         }
                     }
@@ -401,21 +466,27 @@ async fn surface_task(
                                 "lines": screen.lines
                             }
                         });
-                        let _ = output_tx.send(response.to_string()).await;
+                        if let Err(_) = output_tx.send(response.to_string()).await {
+                            return;
+                        }
                     }
                     SurfaceCommand::SessionClose => {
                         if let Some(ref sid) = session_id {
+                            // Closing session; intentionally ignore close errors during cleanup (already disconnecting)
                             let _ = session_port.close(sid).await;
                         }
                         let response = json!({
                             "surface": surface_id,
                             "body": {}
                         });
-                        let _ = output_tx.send(response.to_string()).await;
+                        if let Err(_) = output_tx.send(response.to_string()).await {
+                            // Output channel closed, exit anyway
+                        }
                         break;
                     }
                     SurfaceCommand::Close => {
                         if let Some(ref sid) = session_id {
+                            // Surface detaching; intentionally ignore detach errors during cleanup (already disconnecting)
                             let _ = session_port.detach(sid).await;
                         }
                         break;
@@ -450,7 +521,9 @@ async fn surface_task(
                                                     }
                                                 }
                                             });
-                                            let _ = output_tx.send(image_envelope.to_string()).await;
+                                            if let Err(_) = output_tx.send(image_envelope.to_string()).await {
+                                                return;
+                                            }
                                             img_state.pending_draw = false;
                                         }
                                     }
@@ -497,7 +570,9 @@ async fn surface_task(
                                                     }
                                                 }
                                             });
-                                            let _ = output_tx.send(image_envelope.to_string()).await;
+                                            if let Err(_) = output_tx.send(image_envelope.to_string()).await {
+                                                return;
+                                            }
                                         }
                                     }
                                 }
@@ -512,7 +587,9 @@ async fn surface_task(
                                         "lines": screen.lines
                                     }
                                 });
-                                let _ = output_tx.send(response.to_string()).await;
+                                if let Err(_) = output_tx.send(response.to_string()).await {
+                                    return;
+                                }
                             }
                         }
                     }
@@ -523,7 +600,9 @@ async fn surface_task(
                                     "surface": surface_id,
                                     "body": {"event": "exit"}
                                 });
-                                let _ = output_tx.send(response.to_string()).await;
+                                if let Err(_) = output_tx.send(response.to_string()).await {
+                                    // Output channel closed, exit anyway
+                                }
                                 break;
                             }
                         }
@@ -574,7 +653,7 @@ where
         let n = buf_reader.read_line(&mut line).await?;
 
         if n == 0 {
-            // stdin EOF
+            // stdin EOF - intentionally ignore send errors during cleanup
             for (_, tx) in surface_txs.iter() {
                 let _ = tx.send(SurfaceCommand::Close).await;
             }
@@ -592,10 +671,16 @@ where
 
                 if env.closed == Some(true) {
                     if let Some(tx) = surface_txs.remove(&surface_id) {
-                        let _ = tx.send(SurfaceCommand::Close).await;
+                        // Surface is closed; tell the task to close
+                        if let Err(_) = tx.send(SurfaceCommand::Close).await {
+                            // Command channel closed, surface task already exiting
+                        }
                     }
                     let response = json!({"surface": surface_id, "body": {}});
-                    let _ = output_tx.send(response.to_string()).await;
+                    if let Err(_) = output_tx.send(response.to_string()).await {
+                        // Output channel closed; end serve
+                        break;
+                    }
                 } else if let Some(body) = env.body {
                     let tx = if let Some(tx) = surface_txs.get(&surface_id) {
                         tx.clone()
@@ -606,9 +691,44 @@ where
                         let factory = engine_factory.clone();
                         let out_tx = output_tx.clone();
                         let sid = surface_id.clone();
-                        tasks.spawn(async move {
+                        let sid_for_monitor = sid.clone();
+
+                        // Spawn the actual surface task in a separate handle
+                        let surface_handle = tokio::spawn(async move {
                             surface_task(sid, factory, session_port, cmd_rx, out_tx).await;
                         });
+
+                        // Spawn a monitor task to watch for panics
+                        let out_tx_monitor = output_tx.clone();
+                        tasks.spawn(async move {
+                            match surface_handle.await {
+                                Ok(_) => {},
+                                Err(join_err) if join_err.is_panic() => {
+                                    // Task panicked; send error event
+                                    let panic_msg = if let Ok(panic_obj) = join_err.try_into_panic() {
+                                        if let Some(s) = panic_obj.downcast_ref::<String>() {
+                                            s.clone()
+                                        } else if let Some(&s) = panic_obj.downcast_ref::<&str>() {
+                                            s.to_string()
+                                        } else {
+                                            "unknown".to_string()
+                                        }
+                                    } else {
+                                        "unknown".to_string()
+                                    };
+                                    let response = json!({
+                                        "surface": sid_for_monitor,
+                                        "body": {"event": "error", "reason": format!("surface task ended: {}", panic_msg)}
+                                    });
+                                    // Intentionally ignore output send error; if output channel closed, serve() will detect it
+                                    let _ = out_tx_monitor.send(response.to_string()).await;
+                                }
+                                Err(_) => {
+                                    // Task cancelled
+                                }
+                            }
+                        });
+
                         surface_txs.insert(surface_id.clone(), cmd_tx.clone());
                         cmd_tx
                     };
@@ -617,75 +737,157 @@ where
                     if let Some(op) = body.get("op").and_then(|v| v.as_str()) {
                         match op {
                             "open" => {
-                                let width = body.get("width").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
-                                let height = body.get("height").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
-                                let scale = body.get("scale").and_then(|v| v.as_f64()).unwrap_or(1.0) as f32;
-                                let image = body.get("image").and_then(|v| v.as_str()).map(|s| s.to_string());
-                                let _ = tx.send(SurfaceCommand::Open { width, height, scale, image }).await;
-                            }
-                            "input" => {
-                                // bytes를 먼저 보냄 (둘 다 있으면 bytes 먼저)
-                                if let Some(bytes_b64) = body.get("bytes").and_then(|v| v.as_str()) {
-                                    match base64_decode(bytes_b64) {
-                                        Ok(bytes) => {
-                                            let _ = tx.send(SurfaceCommand::Input { bytes }).await;
-                                        }
-                                        Err(e) => {
-                                            let response = json!({
-                                                "surface": surface_id,
-                                                "body": {"error": format!("Base64 error: {}", e)}
-                                            });
-                                            let _ = output_tx.send(response.to_string()).await;
-                                        }
+                                // Validate required fields: width, height. scale and image are optional.
+                                let width_opt = body.get("width").and_then(|v| v.as_u64()).map(|v| v as u32);
+                                let height_opt = body.get("height").and_then(|v| v.as_u64()).map(|v| v as u32);
+
+                                if width_opt.is_none() || height_opt.is_none() {
+                                    let response = json!({
+                                        "surface": surface_id,
+                                        "body": {"error": "invalidParams", "reason": "open requires width and height fields (non-null, numbers)"}
+                                    });
+                                    if let Err(_) = output_tx.send(response.to_string()).await {
+                                        break;
+                                    }
+                                } else {
+                                    let width = width_opt.unwrap();
+                                    let height = height_opt.unwrap();
+                                    let scale = body.get("scale").and_then(|v| v.as_f64()).unwrap_or(1.0) as f32;
+                                    let image = body.get("image").and_then(|v| v.as_str()).map(|s| s.to_string());
+                                    if let Err(_) = tx.send(SurfaceCommand::Open { width, height, scale, image }).await {
+                                        break;
                                     }
                                 }
+                            }
+                            "input" => {
+                                // Either bytes or keys or both must be present
+                                let has_bytes = body.get("bytes").is_some();
+                                let has_keys = body.get("keys").is_some();
 
-                                // 그 다음 keys를 처리
-                                if let Some(keys_arr) = body.get("keys").and_then(|v| v.as_array()) {
-                                    match serde_json::from_value::<Vec<InputKey>>(Value::Array(keys_arr.clone())) {
-                                        Ok(keys) => {
-                                            let _ = tx.send(SurfaceCommand::InputKeys { keys }).await;
+                                if !has_bytes && !has_keys {
+                                    let response = json!({
+                                        "surface": surface_id,
+                                        "body": {"error": "invalidParams", "reason": "input requires bytes or keys field"}
+                                    });
+                                    if let Err(_) = output_tx.send(response.to_string()).await {
+                                        break;
+                                    }
+                                } else {
+                                    // Process bytes first (if present)
+                                    if let Some(bytes_b64) = body.get("bytes").and_then(|v| v.as_str()) {
+                                        match base64_decode(bytes_b64) {
+                                            Ok(bytes) => {
+                                                if let Err(_) = tx.send(SurfaceCommand::Input { bytes }).await {
+                                                    break;
+                                                }
+                                            }
+                                            Err(e) => {
+                                                let response = json!({
+                                                    "surface": surface_id,
+                                                    "body": {"error": format!("Base64 error: {}", e)}
+                                                });
+                                                if let Err(_) = output_tx.send(response.to_string()).await {
+                                                    break;
+                                                }
+                                            }
                                         }
-                                        Err(e) => {
-                                            let response = json!({
-                                                "surface": surface_id,
-                                                "body": {"error": format!("Keys parse error: {}", e)}
-                                            });
-                                            let _ = output_tx.send(response.to_string()).await;
+                                    } else if has_bytes {
+                                        // bytes field present but not a string
+                                        let response = json!({
+                                            "surface": surface_id,
+                                            "body": {"error": "invalidParams", "reason": "bytes must be a string"}
+                                        });
+                                        if let Err(_) = output_tx.send(response.to_string()).await {
+                                            break;
+                                        }
+                                    }
+
+                                    // Then process keys (if present)
+                                    if let Some(keys_arr) = body.get("keys").and_then(|v| v.as_array()) {
+                                        match serde_json::from_value::<Vec<InputKey>>(Value::Array(keys_arr.clone())) {
+                                            Ok(keys) => {
+                                                if let Err(_) = tx.send(SurfaceCommand::InputKeys { keys }).await {
+                                                    break;
+                                                }
+                                            }
+                                            Err(e) => {
+                                                let response = json!({
+                                                    "surface": surface_id,
+                                                    "body": {"error": format!("Keys parse error: {}", e)}
+                                                });
+                                                if let Err(_) = output_tx.send(response.to_string()).await {
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    } else if has_keys {
+                                        // keys field present but not an array
+                                        let response = json!({
+                                            "surface": surface_id,
+                                            "body": {"error": "invalidParams", "reason": "keys must be an array"}
+                                        });
+                                        if let Err(_) = output_tx.send(response.to_string()).await {
+                                            break;
                                         }
                                     }
                                 }
                             }
                             "resize" => {
-                                let width = body.get("width").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
-                                let height = body.get("height").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
-                                let scale = body.get("scale").and_then(|v| v.as_f64()).unwrap_or(1.0) as f32;
-                                let _ = tx.send(SurfaceCommand::Resize { width, height, scale }).await;
+                                // Validate required fields: width, height. scale is optional.
+                                let width_opt = body.get("width").and_then(|v| v.as_u64()).map(|v| v as u32);
+                                let height_opt = body.get("height").and_then(|v| v.as_u64()).map(|v| v as u32);
+
+                                if width_opt.is_none() || height_opt.is_none() {
+                                    let response = json!({
+                                        "surface": surface_id,
+                                        "body": {"error": "invalidParams", "reason": "resize requires width and height fields (non-null, numbers)"}
+                                    });
+                                    if let Err(_) = output_tx.send(response.to_string()).await {
+                                        break;
+                                    }
+                                } else {
+                                    let width = width_opt.unwrap();
+                                    let height = height_opt.unwrap();
+                                    let scale = body.get("scale").and_then(|v| v.as_f64()).unwrap_or(1.0) as f32;
+                                    if let Err(_) = tx.send(SurfaceCommand::Resize { width, height, scale }).await {
+                                        break;
+                                    }
+                                }
                             }
                             "screen.read" => {
-                                let _ = tx.send(SurfaceCommand::ScreenRead).await;
+                                if let Err(_) = tx.send(SurfaceCommand::ScreenRead).await {
+                                    break;
+                                }
                             }
                             "close" => {
-                                let _ = tx.send(SurfaceCommand::SessionClose).await;
+                                if let Err(_) = tx.send(SurfaceCommand::SessionClose).await {
+                                    break;
+                                }
                             }
                             _ => {
                                 let response = json!({
                                     "surface": surface_id,
                                     "body": {"error": format!("Unknown op: {}", op)}
                                 });
-                                let _ = output_tx.send(response.to_string()).await;
+                                if let Err(_) = output_tx.send(response.to_string()).await {
+                                    break;
+                                }
                             }
                         }
                     } else if body.get("image").and_then(|v| v.as_object()).is_some() {
                         // It's a host image response (image field is an object)
-                        let _ = tx.send(SurfaceCommand::ImageResponse { body: body.clone() }).await;
+                        if let Err(_) = tx.send(SurfaceCommand::ImageResponse { body: body.clone() }).await {
+                            break;
+                        }
                     } else {
                         // No op and no image object - unknown message
                         let response = json!({
                             "surface": surface_id,
                             "body": {"error": "unknown op"}
                         });
-                        let _ = output_tx.send(response.to_string()).await;
+                        if let Err(_) = output_tx.send(response.to_string()).await {
+                            break;
+                        }
                     }
                 }
             }
@@ -694,12 +896,21 @@ where
                     "surface": "",
                     "body": {"error": format!("Parse error: {}", e)}
                 });
-                let _ = output_tx.send(response.to_string()).await;
+                if let Err(_) = output_tx.send(response.to_string()).await {
+                    // Output channel closed; end serve
+                    break;
+                }
             }
         }
     }
 
-    // 모든 작업이 끝날 때까지 기다림
+    // Clean up all surfaces
+    for (_, tx) in surface_txs.iter() {
+        // Best effort close; intentionally ignore send errors (surface task may already be exiting)
+        let _ = tx.send(SurfaceCommand::Close).await;
+    }
+
+    // Wait for all monitor tasks to complete
     while tasks.join_next().await.is_some() {}
     Ok(())
 }
@@ -895,17 +1106,21 @@ impl DaemonSessionPort {
         client.send_request(&req).await?;
 
         // Read open response directly from this connection with 5 second timeout
-        let resp = tokio::time::timeout(Duration::from_secs(5), client.read_response())
+        let msg = tokio::time::timeout(Duration::from_secs(5), client.read_message())
             .await
             .map_err(|_| "Timeout waiting for open response".to_string())?
             .map_err(|e| format!("Failed to read response: {}", e))?
             .ok_or_else(|| "No response from daemon".to_string())?;
 
-        if let Some(error) = resp.error {
-            return Err(format!("Daemon error: {}", error));
-        }
-
-        let session_id = resp.session_id.ok_or_else(|| "No sessionId in response".to_string())?;
+        let session_id = match msg {
+            crate::daemon::DaemonMessage::Open(reply) => {
+                if let Some(error) = reply.error {
+                    return Err(format!("Daemon error: {}", error));
+                }
+                reply.session_id.ok_or_else(|| "No sessionId in response".to_string())?
+            }
+            _ => return Err("Expected open response, got different message".to_string()),
+        };
 
         // Split connection: writer for sending commands, reader for background reading
         let (writer, reader) = client.into_split();
@@ -919,37 +1134,45 @@ impl DaemonSessionPort {
         tokio::spawn(async move {
             let mut reader = reader;
             loop {
-                match reader.read_response().await {
-                    Ok(Some(resp)) => {
-                        if let Some(command) = resp.command {
-                            match command.as_str() {
-                                "output" => {
-                                    if let (Some(session_id), Some(output)) = (resp.session_id, resp.output) {
-                                        let data = match base64_decode(&output) {
-                                            Ok(d) => d,
-                                            Err(_) => output.into_bytes(),
-                                        };
-                                        let truncated = resp.truncated.unwrap_or(false);
-                                        let _ = events_tx.send(DaemonEvent::Output {
-                                            session_id,
-                                            data,
-                                            truncated,
-                                        });
-                                    }
-                                }
-                                "exit" => {
-                                    if let Some(session_id) = resp.session_id {
-                                        let _ = events_tx.send(DaemonEvent::Exit { session_id });
-                                    }
-                                    break;
-                                }
-                                // Discard responses for write, resize, detach
-                                "write" | "resize" | "detach" => {}
-                                _ => {}
+                match reader.read_message().await {
+                    Ok(Some(msg)) => {
+                        match msg {
+                            crate::daemon::DaemonMessage::Output { session_id, output, truncated, .. } => {
+                                let data = match base64_decode(&output) {
+                                    Ok(d) => d,
+                                    Err(_) => output.into_bytes(),
+                                };
+                                // Intentionally ignore send error; receiver dropped means serve() is shutting down
+                                let _ = events_tx.send(DaemonEvent::Output {
+                                    session_id,
+                                    data,
+                                    truncated,
+                                });
                             }
-                        }
-                        if let Some(error) = resp.error {
-                            eprintln!("Daemon error for session {}: {}", sid, error);
+                            crate::daemon::DaemonMessage::Resized { .. } => {
+                                // For now, just ignore resize messages from the daemon
+                                // Resize is typically a request from client to daemon, not the other way
+                            }
+                            crate::daemon::DaemonMessage::Exit { session_id, .. } => {
+                                // Intentionally ignore send error; receiver dropped means serve() is shutting down
+                                let _ = events_tx.send(DaemonEvent::Exit { session_id });
+                                break;
+                            }
+                            crate::daemon::DaemonMessage::Write(reply) | crate::daemon::DaemonMessage::Detach(reply) => {
+                                // Discard responses for write, detach
+                                if let Some(error) = reply.error {
+                                    eprintln!("Daemon error for session {}: {}", sid, error);
+                                }
+                            }
+                            crate::daemon::DaemonMessage::Open(reply) | crate::daemon::DaemonMessage::Attach(reply) |
+                            crate::daemon::DaemonMessage::Resize(reply) | crate::daemon::DaemonMessage::Signal(reply) |
+                            crate::daemon::DaemonMessage::Close(reply) | crate::daemon::DaemonMessage::List(reply) |
+                            crate::daemon::DaemonMessage::Purge(reply) => {
+                                // Discard other responses
+                                if let Some(error) = reply.error {
+                                    eprintln!("Daemon error for session {}: {}", sid, error);
+                                }
+                            }
                         }
                     }
                     Ok(None) => break,
@@ -1068,6 +1291,7 @@ impl SessionPort for DaemonSessionPort {
             // Forward events from unbounded to bounded channel
             tokio::spawn(async move {
                 while let Some(event) = unbounded_rx.recv().await {
+                    // Intentionally ignore send error; receiver dropped means consumer is disconnected
                     let _ = tx.send(event).await;
                 }
             });

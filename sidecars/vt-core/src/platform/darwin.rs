@@ -8,7 +8,8 @@ use std::os::unix::fs::{OpenOptionsExt, PermissionsExt, DirBuilderExt};
 use nix::fcntl::{flock, FlockArg};
 use std::os::unix::io::AsRawFd;
 use std::os::unix::net::UnixStream;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
+use std::io::Read;
 
 pub struct DarwinDaemonFinder {
     // 실행 파일의 디렉터리
@@ -152,15 +153,28 @@ fn start_daemon(exe_dir: &Path, identity: &DaemonIdentity, socket_dir: &Path) ->
         }
     };
 
-    // 잠금 해제
-    let _ = flock(fd, FlockArg::Unlock);
+    // 잠금 해제 - 오류는 결과에 병합
+    match flock(fd, FlockArg::Unlock) {
+        Ok(_) => {},
+        Err(unlock_err) => {
+            // 잠금 해제 실패는 반환 결과에 병합 (삼키지 않음)
+            match result {
+                Ok(socket_path) => {
+                    return Err(format!("Lock unlock failed (flock): {} (but daemon started at {})", unlock_err, socket_path));
+                }
+                Err(e) => {
+                    return Err(format!("Daemon startup failed and lock unlock also failed: {} (flock: {})", e, unlock_err));
+                }
+            }
+        }
+    }
 
     result
 }
 
 /// 실제로 데몬 프로세스를 시작한다.
-/// 분리(setsid + fd 0·1·2 를 /dev/null 로)는 데몬 자신이 한다. 여기서 먼저 setsid 를 부르면
-/// 자식이 이미 세션 리더라 데몬의 setsid 가 EPERM 으로 실패해 곧바로 죽는다.
+/// Daemon이 먼저 socket을 listen하고, stdout에 "ready <socket-path>"를 쓴 후,
+/// setsid와 detach를 해서 데몬이 된다.
 fn start_daemon_process(exe_dir: &Path, identity: &DaemonIdentity, socket_dir: &Path) -> Result<String, String> {
     let daemon_exe = exe_dir.join("soksak-ptyd");
 
@@ -168,31 +182,77 @@ fn start_daemon_process(exe_dir: &Path, identity: &DaemonIdentity, socket_dir: &
         return Err("Daemon executable not found".to_string());
     }
 
-    let child = Command::new(&daemon_exe)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
+    let mut child = Command::new(&daemon_exe)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
         .stdin(Stdio::null())
         .env("PTYD_PROTOCOL", identity.protocol.clone())
         .env("SOKSAK_PROFILE", identity.build_kind.clone())
         .env("PTYD_SOCKET_DIR", socket_dir.to_string_lossy().to_string())
-        .env("PTYD_NO_DAEMONIZE", "1")
         .spawn()
         .map_err(|e| format!("Failed to spawn daemon: {}", e))?;
 
-    // 프로세스를 detach
-    drop(child);
+    let stdout = child.stdout.take().ok_or("Failed to get stdout")?;
+    let stderr = child.stderr.take().ok_or("Failed to get stderr")?;
 
-    // 데몬 시작을 기다린다 (최대 5초)
-    let start = SystemTime::now();
-    loop {
-        if let Ok(socket_path) = find_connected_socket(socket_dir, identity) {
-            return Ok(socket_path);
+    // 채널을 통해 ready line을 받을 때까지 기다린다.
+    let (tx, rx) = std::sync::mpsc::channel::<Result<String, String>>();
+
+    let stdout_thread = std::thread::spawn(move || {
+        use std::io::{BufRead, BufReader};
+        let reader = BufReader::new(stdout);
+        let mut lines = reader.lines();
+        if let Some(Ok(line)) = lines.next() {
+            let _ = tx.send(Ok(line));
         }
+    });
 
-        if start.elapsed().unwrap_or(Duration::from_secs(10)) > Duration::from_secs(5) {
-            return Err("Daemon startup timeout".to_string());
+    // 최대 5초 대기
+    match rx.recv_timeout(Duration::from_secs(5)) {
+        Ok(Ok(line)) => {
+            if line.starts_with("ready ") {
+                let socket_path = line[6..].to_string();
+
+                // 자식 프로세스는 daemon이 되었으므로 wait하지 않는다.
+                // (daemon이 setsid를 호출했으므로 부모-자식 관계가 유지되지만,
+                //  daemon 프로세스가 부모 프로세스와 무관하게 동작한다.
+                //  PID 1이 아닌 경우 좀비가 될 수 있지만, 데몬은 직접 wait하지 않고
+                //  부모 프로세스가 종료되거나 SIGCHLD를 처리할 때까지 대기한다.)
+                drop(child);
+                let _ = stdout_thread.join();
+
+                return Ok(socket_path);
+            } else {
+                // 다른 줄이 반환됨 - stderr을 모두 읽어서 오류로 반환
+                let mut stderr_content = String::new();
+                if let Ok(_) = std::io::BufReader::new(stderr).read_to_string(&mut stderr_content) {
+                    if !stderr_content.is_empty() {
+                        return Err(format!("Daemon startup failed: {}", stderr_content));
+                    }
+                }
+                return Err(format!("Daemon startup failed: expected 'ready' but got '{}'", line));
+            }
         }
-
-        std::thread::sleep(Duration::from_millis(100));
+        Ok(Err(e)) => {
+            let _ = stdout_thread.join();
+            // EOF - stderr 읽기
+            let mut stderr_content = String::new();
+            if let Ok(_) = std::io::BufReader::new(stderr).read_to_string(&mut stderr_content) {
+                if !stderr_content.is_empty() {
+                    return Err(format!("Daemon startup failed: {}", stderr_content));
+                }
+            }
+            return Err(format!("Daemon startup failed: EOF - {}", e));
+        }
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+            // 타임아웃 - 자식 프로세스 kill
+            let _ = child.kill();
+            let _ = stdout_thread.join();
+            return Err("Daemon startup timeout (5s)".to_string());
+        }
+        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+            let _ = stdout_thread.join();
+            return Err("Daemon startup failed: channel disconnected".to_string());
+        }
     }
 }

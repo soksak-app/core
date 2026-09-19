@@ -15,15 +15,18 @@ type implementation struct{}
 
 func init() { platform.Register(implementation{}) }
 
-// Daemonize는 프로세스를 데몬으로 만든다.
-// setsid()를 호출하고 stdin/stdout/stderr를 /dev/null로 리다이렉트한다.
-// PTYD_LOG 환경변수가 설정되면 stderr을 그 파일로 리다이렉트한다.
-func (implementation) Daemonize() error {
+// Setsid는 새 세션과 프로세스 그룹을 생성한다.
+func (implementation) Setsid() error {
 	// setsid() 호출: 새 세션과 프로세스 그룹 생성
 	if _, err := syscall.Setsid(); err != nil {
 		return fmt.Errorf("setsid failed: %w", err)
 	}
+	return nil
+}
 
+// Detach는 stdin, stdout, stderr를 /dev/null로 리다이렉트한다.
+// PTYD_LOG 환경변수가 설정되면 stderr을 그 파일로 리다이렉트한다.
+func (implementation) Detach() error {
 	// /dev/null 열기
 	devNull, err := os.Open("/dev/null")
 	if err != nil {

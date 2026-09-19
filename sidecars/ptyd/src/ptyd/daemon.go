@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -18,12 +19,7 @@ type clientConnection struct {
 	writer    *bufio.Writer
 	writeMu   sync.Mutex // 쓰기 직렬화
 	consumers []*Consumer
-}
-
-// OutputMessage는 연결으로 전송할 출력 메시지다.
-type OutputMessage struct {
-	Entry     RingEntry
-	Truncated bool
+	started   []*Consumer // attach 응답 후 forwarder를 시작할 소비자 목록
 }
 
 // Daemon은 PTY 세션을 관리하는 데몬이다.
@@ -78,6 +74,13 @@ func (d *Daemon) Start() error {
 	}
 
 	return nil
+}
+
+// SocketPath는 데몬이 listen하는 소켓의 경로를 반환한다.
+func (d *Daemon) SocketPath() string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.address
 }
 
 // acceptLoop는 클라이언트 연결을 받는다.
@@ -136,8 +139,16 @@ func (d *Daemon) handleClient(conn net.Conn) {
 		}
 
 		resp := d.handleRequest(cc, req)
+		// 요청 응답은 요청의 command를 그대로 싣는다
+		resp.Command = req.Command
 
 		d.writeResponse(cc, resp)
+
+		// attach 응답 쓴 후, 이번 요청으로 생긴 소비자들의 forwarder를 시작한다
+		for _, consumer := range cc.started {
+			close(consumer.start)
+		}
+		cc.started = nil
 
 		d.updateLastActivity()
 	}
@@ -145,14 +156,42 @@ func (d *Daemon) handleClient(conn net.Conn) {
 
 // writeResponse는 응답을 클라이언트에 직렬화해 쓴다.
 func (d *Daemon) writeResponse(cc *clientConnection, resp Response) {
+	d.writeResponseChecked(cc, resp)
+}
+
+// writeResponseChecked는 응답을 클라이언트에 쓰고 성공 여부를 반환한다.
+func (d *Daemon) writeResponseChecked(cc *clientConnection, resp Response) bool {
+	return d.writeMessageChecked(cc, resp)
+}
+
+// writeMessageChecked는 임의의 메시지를 클라이언트에 쓰고 성공 여부를 반환한다.
+func (d *Daemon) writeMessageChecked(cc *clientConnection, msg any) bool {
 	cc.writeMu.Lock()
 	defer cc.writeMu.Unlock()
 
-	if b, err := EncodeResponse(resp); err == nil {
-		cc.writer.Write(b)
-		cc.writer.WriteByte('\n')
-		cc.writer.Flush()
+	b, err := json.Marshal(msg)
+	if err != nil {
+		// 메시지 인코딩 실패: 로그하고 반환
+		log.Printf("ptyd: encode message failed: %v", err)
+		return false
 	}
+
+	if _, err := cc.writer.Write(b); err != nil {
+		log.Printf("ptyd: write message failed: %v", err)
+		return false
+	}
+
+	if err := cc.writer.WriteByte('\n'); err != nil {
+		log.Printf("ptyd: write newline failed: %v", err)
+		return false
+	}
+
+	if err := cc.writer.Flush(); err != nil {
+		log.Printf("ptyd: flush failed: %v", err)
+		return false
+	}
+
+	return true
 }
 
 // cleanupConsumers는 연결의 모든 소비자를 정리한다.
@@ -176,29 +215,108 @@ func (d *Daemon) cleanupConsumers(cc *clientConnection) {
 }
 
 // forwardConsumerOutput는 소비자의 출력을 클라이언트에 전달한다.
+// forwarder만 consumer.from을 읽고 쓴다.
+// 링이 유일한 출처이고, 소비자는 wake 신호를 받으면 링 전체를 읽는다.
 func (d *Daemon) forwardConsumerOutput(cc *clientConnection, consumer *Consumer) {
-	// 실시간 출력을 기다림
+	// attach 응답이 나갈 때까지 대기
+	<-consumer.start
+
+	pendingTruncated := false
+
 	for {
 		select {
-		case entry, ok := <-consumer.Ch:
+		case <-consumer.wake:
+			// 새 출력 알림. 세션 락 아래에서 oldest를 확인
+			d.mu.Lock()
+			session, ok := d.sessions[consumer.SessionID]
+			d.mu.Unlock()
+
 			if !ok {
 				return
 			}
-			resp := Response{
-				Command:   "output",
-				SessionID: consumer.SessionID,
-				Output:    entry.Data,
-				Sequence:  entry.Sequence,
+
+			// 세션 락 아래에서 oldest를 확인하고 truncated 처리
+			session.mu.Lock()
+			var oldest int64
+			if len(session.ring) > 0 {
+				oldest = session.ring[0].Sequence
+			} else {
+				oldest = session.nextSeq
 			}
-			d.writeResponse(cc, resp)
+
+			// consumer.from < oldest이면 손실 발생
+			if consumer.from < oldest {
+				pendingTruncated = true
+				consumer.from = oldest
+			}
+
+			// consumer.from 이상의 항목들을 복사
+			var entriesToSend []RingEntry
+			for i, e := range session.ring {
+				if e.Sequence >= consumer.from {
+					entriesToSend = append(entriesToSend, session.ring[i:]...)
+					break
+				}
+			}
+			session.mu.Unlock()
+
+			// 각 항목을 전송
+			for i, entry := range entriesToSend {
+				// 첫 번째 항목에만 truncated 표시
+				truncated := (i == 0) && pendingTruncated
+
+				// entry.Type에 따라 메시지 선택
+				var msg any
+				switch entry.Type {
+				case "output":
+					msg = OutputMessage{
+						Command:   "output",
+						SessionID: consumer.SessionID,
+						Sequence:  entry.Sequence,
+						Output:    entry.Data,
+						Truncated: truncated,
+					}
+				case "resize":
+					msg = ResizeMessage{
+						Command:   "resized",
+						SessionID: consumer.SessionID,
+						Sequence:  entry.Sequence,
+						Cols:      entry.Cols,
+						Rows:      entry.Rows,
+						Truncated: truncated,
+					}
+				default:
+					// 알 수 없는 타입: 로그하고 연결 끊김
+					log.Printf("ptyd: unknown entry type in ring: %q (seq %d)", entry.Type, entry.Sequence)
+					return
+				}
+
+				if !d.writeMessageChecked(cc, msg) {
+					// 쓰기 실패: 연결이 끊긴 것
+					return
+				}
+
+				if i == 0 && pendingTruncated {
+					pendingTruncated = false
+				}
+				consumer.from = entry.Sequence + 1
+			}
 
 		case <-consumer.Done:
 			// 세션이 종료됨
-			resp := Response{
+			d.mu.Lock()
+			session, ok := d.sessions[consumer.SessionID]
+			d.mu.Unlock()
+			exitCode := 0
+			if ok {
+				exitCode = session.GetExitCode()
+			}
+			msg := ExitMessage{
 				Command:   "exit",
 				SessionID: consumer.SessionID,
+				Code:      exitCode,
 			}
-			d.writeResponse(cc, resp)
+			d.writeMessageChecked(cc, msg)
 			// 소비자는 아직 붙어있음. 연결이 끊길 때까지 대기하다가
 			// cleanupConsumers에서 detach될 것.
 			return
@@ -243,32 +361,24 @@ func (d *Daemon) handleOpen(cc *clientConnection, req Request) Response {
 				// 기존 세션을 찾음. 이 연결을 소비자로 등록
 				consumer := &Consumer{
 					SessionID: sessionID,
-					Ch:        make(chan RingEntry, 100),
 					Done:      make(chan struct{}),
 				}
 
-				truncated, entries := session.Attach(consumer, 0)
+				truncated, err := session.Attach(consumer, 0)
+				if err != nil {
+					return Response{Error: "invalidParams: " + err.Error()}
+				}
 
 				cc.consumers = append(cc.consumers, consumer)
+				cc.started = append(cc.started, consumer)
 
 				// 출력 전달 고루틴 시작
 				go d.forwardConsumerOutput(cc, consumer)
 
-				// 기존 항목들 전송 (truncated는 첫 번째 항목에만 표시)
-				for i, entry := range entries {
-					showTruncated := truncated && i == 0
-					resp := Response{
-						Command:   "output",
-						SessionID: sessionID,
-						Output:    entry.Data,
-						Sequence:  entry.Sequence,
-						Truncated: showTruncated,
-					}
-					d.writeResponse(cc, resp)
-				}
+				// truncated 정보는 첫 스트리밍 메시지에 담겨 전송됨
+				_ = truncated
 
 				return Response{
-					Command:     "open",
 					SessionID:   sessionID,
 					DefaultCols: 80,
 					DefaultRows: 24,
@@ -277,7 +387,15 @@ func (d *Daemon) handleOpen(cc *clientConnection, req Request) Response {
 		}
 	}
 
-	sessionID := generateSessionID()
+	// cols/rows 검증: 0 이하면 오류 반환
+	if req.Cols <= 0 || req.Rows <= 0 {
+		return Response{Error: "invalid size: cols and rows must be positive"}
+	}
+
+	sessionID, err := generateSessionID()
+	if err != nil {
+		return Response{Error: err.Error()}
+	}
 	session := NewSession(sessionID, 10000)
 
 	// 기본값
@@ -286,13 +404,7 @@ func (d *Daemon) handleOpen(cc *clientConnection, req Request) Response {
 		program = "/bin/sh"
 	}
 	cols := req.Cols
-	if cols <= 0 {
-		cols = 80
-	}
 	rows := req.Rows
-	if rows <= 0 {
-		rows = 24
-	}
 
 	// 세션이 자식 없이 종료되면 호출할 콜백 설정
 	session.SetOnExit(func() {
@@ -328,18 +440,24 @@ func (d *Daemon) handleOpen(cc *clientConnection, req Request) Response {
 	// 이 연결을 소비자로 등록
 	consumer := &Consumer{
 		SessionID: sessionID,
-		Ch:        make(chan RingEntry, 100),
 		Done:      make(chan struct{}),
 	}
 
-	session.Attach(consumer, 0)
+	truncated, err := session.Attach(consumer, 0)
+	if err != nil {
+		return Response{Error: "invalidParams: " + err.Error()}
+	}
+
 	cc.consumers = append(cc.consumers, consumer)
+	cc.started = append(cc.started, consumer)
 
 	// 출력 전달 고루틴 시작
 	go d.forwardConsumerOutput(cc, consumer)
 
+	// truncated 정보는 첫 스트리밍 메시지에 담겨 전송됨
+	_ = truncated
+
 	return Response{
-		Command:     "open",
 		SessionID:   sessionID,
 		DefaultCols: cols,
 		DefaultRows: rows,
@@ -369,11 +487,16 @@ func (d *Daemon) handleWrite(req Request) Response {
 		return Response{Error: err.Error()}
 	}
 
-	return Response{Command: "write"}
+	return Response{}
 }
 
 // handleResize는 세션을 리사이즈한다.
 func (d *Daemon) handleResize(req Request) Response {
+	// cols/rows 검증
+	if req.Cols <= 0 || req.Rows <= 0 {
+		return Response{Error: "invalid size: cols and rows must be positive"}
+	}
+
 	d.mu.Lock()
 	session, ok := d.sessions[req.SessionID]
 	d.mu.Unlock()
@@ -390,7 +513,7 @@ func (d *Daemon) handleResize(req Request) Response {
 		return Response{Error: err.Error()}
 	}
 
-	return Response{Command: "resize"}
+	return Response{}
 }
 
 func (d *Daemon) handleSignal(req Request) Response {
@@ -412,7 +535,7 @@ func (d *Daemon) handleSignal(req Request) Response {
 		return Response{Error: err.Error()}
 	}
 
-	return Response{Command: "signal"}
+	return Response{}
 }
 
 func (d *Daemon) handleAttach(cc *clientConnection, req Request) Response {
@@ -426,34 +549,24 @@ func (d *Daemon) handleAttach(cc *clientConnection, req Request) Response {
 
 	consumer := &Consumer{
 		SessionID: req.SessionID,
-		Ch:        make(chan RingEntry, 100),
 		Done:      make(chan struct{}),
 	}
 
-	truncated, entries := session.Attach(consumer, req.From)
+	truncated, err := session.Attach(consumer, req.From)
+	if err != nil {
+		return Response{Error: "invalidParams: " + err.Error()}
+	}
 
 	cc.consumers = append(cc.consumers, consumer)
+	cc.started = append(cc.started, consumer)
 
 	// 출력 전달 고루틴 시작
 	go d.forwardConsumerOutput(cc, consumer)
 
-	// 기존 항목들 전송 (truncated는 첫 번째 항목에만 표시)
-	for i, entry := range entries {
-		showTruncated := truncated && i == 0
-		resp := Response{
-			Command:   "output",
-			SessionID: req.SessionID,
-			Output:    entry.Data,
-			Sequence:  entry.Sequence,
-			Truncated: showTruncated,
-		}
-		d.writeResponse(cc, resp)
-	}
+	// truncated 정보는 첫 스트리밍 메시지에 담겨 전송됨
+	_ = truncated
 
-	return Response{
-		Command:   "attach",
-		Truncated: truncated,
-	}
+	return Response{}
 }
 
 func (d *Daemon) handleDetach(cc *clientConnection, req Request) Response {
@@ -482,7 +595,7 @@ func (d *Daemon) handleDetach(cc *clientConnection, req Request) Response {
 	}
 	d.mu.Unlock()
 
-	return Response{Command: "detach"}
+	return Response{}
 }
 
 func (d *Daemon) handleClose(req Request) Response {
@@ -507,7 +620,7 @@ func (d *Daemon) handleClose(req Request) Response {
 	}
 	d.mu.Unlock()
 
-	return Response{Command: "close"}
+	return Response{}
 }
 
 func (d *Daemon) handleList(req Request) Response {
@@ -524,7 +637,6 @@ func (d *Daemon) handleList(req Request) Response {
 	}
 
 	return Response{
-		Command:  "list",
 		Sessions: sessions,
 	}
 }
@@ -536,7 +648,7 @@ func (d *Daemon) handlePurge(req Request) Response {
 	}
 	d.mu.Unlock()
 
-	return Response{Command: "purge"}
+	return Response{}
 }
 
 // idleCheckLoop는 주기적으로 유휴 타임아웃을 확인한다.
@@ -571,11 +683,15 @@ func (d *Daemon) Stop() error {
 	defer d.mu.Unlock()
 
 	if d.listener != nil {
-		d.listener.Close()
+		if err := d.listener.Close(); err != nil {
+			log.Printf("ptyd: listener close failed: %v", err)
+		}
 	}
 
 	for _, session := range d.sessions {
-		session.Close()
+		if err := session.Close(); err != nil {
+			log.Printf("ptyd: session close failed: %v", err)
+		}
 	}
 
 	return nil
@@ -601,12 +717,6 @@ func (d *Daemon) resetIdleTimer() {
 // tryDeleteSession은 세션이 모두 정리되었으면 목록과 hint에서 삭제한다.
 // d.mu가 잠긴 상태에서 호출해야 한다.
 func (d *Daemon) tryDeleteSession(sessionID string) {
-	// 이 return을 주석 처리하면 세션 삭제가 비활성화된다 (거짓 통과 증명용)
-	_ = struct{}{}
-	if false {
-		return // 테스트용: 이 줄을 활성화하면 삭제가 막힘
-	}
-
 	session, ok := d.sessions[sessionID]
 	if !ok {
 		return
@@ -626,10 +736,12 @@ func (d *Daemon) tryDeleteSession(sessionID string) {
 
 // Helpers
 
-func generateSessionID() string {
+func generateSessionID() (string, error) {
 	b := make([]byte, 8)
-	rand.Read(b)
-	return hex.EncodeToString(b)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("cannot generate session id: %w", err)
+	}
+	return hex.EncodeToString(b), nil
 }
 
 func base64Decode(s string) ([]byte, error) {

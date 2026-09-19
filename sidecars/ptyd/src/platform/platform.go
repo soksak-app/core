@@ -8,9 +8,12 @@ import (
 
 // Platform 은 운영체제마다 다른 동작이다.
 type Platform interface {
-	// Daemonize는 프로세스를 데몬으로 만든다: setsid()를 호출하고
-	// stdin, stdout, stderr를 /dev/null로 리다이렉트한다.
-	Daemonize() error
+	// Setsid는 새 세션과 프로세스 그룹을 생성한다.
+	Setsid() error
+
+	// Detach는 stdin, stdout, stderr를 /dev/null로 리다이렉트한다.
+	// (PTYD_LOG 환경변수가 설정되면 stderr을 그 파일로 리다이렉트한다.)
+	Detach() error
 }
 
 var (

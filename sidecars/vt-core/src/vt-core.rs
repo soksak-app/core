@@ -5,5 +5,5 @@ pub mod platform;
 pub mod encoding;
 
 pub use protocol::{Engine, Screen, Modes, Cell, Cursor, serve, SessionPort, DaemonEvent, make_default_session_port_factory, DaemonSessionPort};
-pub use daemon::{DaemonIdentity, DaemonClient, DaemonRequest, DaemonResponse, DaemonFinder};
+pub use daemon::{DaemonIdentity, DaemonClient, DaemonRequest, DaemonFinder, DaemonMessage, Reply, SessionInfo};
 pub use platform::get_daemon_finder;

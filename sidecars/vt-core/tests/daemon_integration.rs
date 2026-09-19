@@ -31,7 +31,7 @@ impl TestDaemonHandle {
         // 임시 디렉터리 생성
         let temp_dir = tempfile::TempDir::new()?;
         let socket_dir = temp_dir.path().join("sockets");
-        
+
         create_socket_dir(&socket_dir)?;
 
         // ptyd 빌드 (저장소 루트에서)
@@ -48,7 +48,10 @@ impl TestDaemonHandle {
             return Err("ptyd source not found".into());
         }
 
-        let daemon_exe = temp_dir.path().join("soksak-ptyd");
+        let exe_dir = temp_dir.path().join("exes");
+        fs::create_dir(&exe_dir)?;
+
+        let daemon_exe = exe_dir.join("soksak-ptyd");
         let build_output = Command::new("go")
             .args(&["build", "-o", daemon_exe.to_str().unwrap()])
             .arg("./sidecars/ptyd/src")
@@ -64,68 +67,19 @@ impl TestDaemonHandle {
             ).into());
         }
 
-        // 데몬 시작 (stderr를 파일로 저장해서 디버깅)
-        // debug_log를 단순 경로로 - File::create만 나중에 호출
+        // DarwinDaemonFinder를 사용해 데몬 시작
+        let finder = DarwinDaemonFinder::with_dirs(exe_dir, socket_dir);
+        let identity = DaemonIdentity {
+            protocol: "ptyd".to_string(),
+            build_kind: "debug".to_string(),
+        };
 
-        let mut daemon = Command::new(&daemon_exe)
-            .env("PTYD_SOCKET_DIR", socket_dir.to_str().unwrap())
-            .env("PTYD_PROTOCOL", "ptyd")
-            .env("SOKSAK_PROFILE", "debug")
-            .env("PTYD_IDLE_TIMEOUT", "30s")
-            .env("PTYD_NO_DAEMONIZE", "1")
-            .stderr(std::process::Stdio::null())
-            .stdout(std::process::Stdio::null())
-            .spawn()?;
-
-        // 소켓 생성 대기 (최대 5초)
-        let start = Instant::now();
-        let mut socket_path = String::new();
-        loop {
-            if let Ok(entries) = fs::read_dir(&socket_dir) {
-                for entry in entries {
-                    if let Ok(entry) = entry {
-                        let path = entry.path();
-                        if let Some(name) = path.file_name() {
-                            let name_str = name.to_string_lossy();
-                            if name_str.starts_with("ptyd-ptyd-debug-") && name_str.ends_with(".sock") {
-                                socket_path = path.to_string_lossy().to_string();
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-
-            if !socket_path.is_empty() {
-                break;
-            }
-
-            if start.elapsed() > Duration::from_secs(5) {
-                let entries: Vec<_> = fs::read_dir(&socket_dir)
-                    .ok()
-                    .and_then(|e| {
-                        e.filter_map(|entry| entry.ok())
-                            .map(|e| e.path().to_string_lossy().to_string())
-                            .collect::<Vec<_>>()
-                            .into_iter()
-                            .next()
-                    })
-                    .map(|p| vec![p])
-                    .unwrap_or_default();
-
-                let _ = daemon.kill();
-                return Err(format!(
-                    "Daemon startup timeout after 5s. Socket dir entries: {:?}",
-                    entries
-                ).into());
-            }
-
-            thread::sleep(Duration::from_millis(100));
-        }
+        let socket_path = finder.find_or_start(&identity)
+            .map_err(|e| format!("Failed to start daemon: {}", e))?;
 
         Ok(TestDaemonHandle {
             temp_dir,
-            _daemon_process: Some(daemon),
+            _daemon_process: None,
             socket_path,
         })
     }
@@ -140,6 +94,47 @@ impl Drop for TestDaemonHandle {
         if let Some(mut daemon) = self._daemon_process.take() {
             let _ = daemon.kill();
             let _ = daemon.wait();
+        }
+    }
+}
+
+/// 데몬 리더에서 출력 메시지를 읽는 헬퍼 (다른 메시지는 건너뜀)
+async fn read_output_message(
+    reader: &mut soksak_sidecar_vt_core::daemon::DaemonReader,
+) -> Result<Option<String>, String> {
+    loop {
+        match reader.read_message().await {
+            Ok(Some(msg)) => {
+                match msg {
+                    soksak_sidecar_vt_core::daemon::DaemonMessage::Output { output, .. } => {
+                        return Ok(Some(output));
+                    }
+                    soksak_sidecar_vt_core::daemon::DaemonMessage::Resized { .. }
+                    | soksak_sidecar_vt_core::daemon::DaemonMessage::Open(_)
+                    | soksak_sidecar_vt_core::daemon::DaemonMessage::Attach(_)
+                    | soksak_sidecar_vt_core::daemon::DaemonMessage::Detach(_)
+                    | soksak_sidecar_vt_core::daemon::DaemonMessage::Write(_)
+                    | soksak_sidecar_vt_core::daemon::DaemonMessage::Resize(_)
+                    | soksak_sidecar_vt_core::daemon::DaemonMessage::Signal(_)
+                    | soksak_sidecar_vt_core::daemon::DaemonMessage::Close(_)
+                    | soksak_sidecar_vt_core::daemon::DaemonMessage::List(_)
+                    | soksak_sidecar_vt_core::daemon::DaemonMessage::Purge(_) => {
+                        // Skip these messages and read next
+                        continue;
+                    }
+                    soksak_sidecar_vt_core::daemon::DaemonMessage::Exit { .. } => {
+                        // End of stream
+                        return Ok(None);
+                    }
+                }
+            }
+            Ok(None) => {
+                // EOF
+                return Ok(None);
+            }
+            Err(e) => {
+                return Err(format!("Failed to read message: {}", e));
+            }
         }
     }
 }
@@ -174,33 +169,37 @@ async fn test_daemon_open_echo_output() {
         .expect("Failed to send open request");
 
     // open 응답에서 sessionId 추출
-    let resp = tokio::time::timeout(
+    let msg = tokio::time::timeout(
         Duration::from_secs(5),
-        client.read_response()
+        client.read_message()
     )
         .await
         .expect("Read timeout")
         .expect("Failed to read open response")
         .expect("Expected response");
 
-    let _session_id = resp.session_id
-        .expect("No sessionId in response");
+    let _session_id = match msg {
+        soksak_sidecar_vt_core::daemon::DaemonMessage::Open(reply) => {
+            reply.session_id.expect("No sessionId in response")
+        }
+        _ => panic!("Expected open response"),
+    };
 
-    // 출력 읽기 (최대 2초)
+    // Split for reading messages with different types
+    let (_writer, mut reader) = client.into_split();
+
+    // 출력 읽기 (최대 5초, 반복)
     let start = Instant::now();
     let mut found_hi = false;
 
     while start.elapsed() < Duration::from_secs(5) {
-        let resp = tokio::time::timeout(
-            Duration::from_secs(5),
-            client.read_response()
+        match tokio::time::timeout(
+            Duration::from_millis(500),
+            read_output_message(&mut reader)
         )
             .await
-            .expect("Read timeout")
-            .expect("Failed to read output response");
-
-        if let Some(resp) = resp {
-            if let Some(output) = resp.output {
+        {
+            Ok(Ok(Some(output))) => {
                 // base64 디코딩 시도
                 if let Ok(decoded) = STANDARD.decode(&output) {
                     let text = String::from_utf8_lossy(&decoded);
@@ -215,11 +214,18 @@ async fn test_daemon_open_echo_output() {
                     break;
                 }
             }
+            Ok(Ok(None)) => {
+                // EOF or no more output
+                break;
+            }
+            Ok(Err(e)) => {
+                panic!("Failed to read message: {}", e);
+            }
+            Err(_) => {
+                continue;
+            }
         }
-
-        tokio::time::sleep(Duration::from_millis(10)).await;
     }
-
     assert!(found_hi, "Did not find 'hi' output from daemon");
 }
 
@@ -253,17 +259,21 @@ async fn test_daemon_input_roundtrip() {
         .expect("Failed to send open request");
 
     // open 응답 읽기 (sessionId 얻기)
-    let resp = tokio::time::timeout(
+    let msg = tokio::time::timeout(
         Duration::from_secs(5),
-        client.read_response()
+        client.read_message()
     )
         .await
         .expect("Read timeout")
         .expect("Failed to read open response")
         .expect("Expected response");
 
-    let session_id = resp.session_id
-        .expect("No sessionId in response");
+    let session_id = match msg {
+        soksak_sidecar_vt_core::daemon::DaemonMessage::Open(reply) => {
+            reply.session_id.expect("No sessionId in response")
+        }
+        _ => panic!("Expected open response"),
+    };
 
     // input 보내기 (test in base64)
     let input_req = DaemonRequest {
@@ -284,6 +294,9 @@ async fn test_daemon_input_roundtrip() {
         .await
         .expect("Failed to send write request");
 
+    // Split for reading messages with different types
+    let (_writer, mut reader) = client.into_split();
+
     // 에코 응답 기다림 (최대 5초, 누적 바이트로 확인)
     let start = Instant::now();
     let mut found_echo = false;
@@ -295,37 +308,35 @@ async fn test_daemon_input_roundtrip() {
             break;
         }
 
-        let resp = tokio::time::timeout(
+        match tokio::time::timeout(
             remaining,
-            client.read_response()
+            read_output_message(&mut reader)
         )
-            .await;
-
-        match resp {
-            Ok(Ok(Some(resp))) => {
-                if let Some(output) = resp.output {
-                    // base64 디코딩 시도
-                    if let Ok(decoded) = STANDARD.decode(&output) {
-                        accumulated.extend_from_slice(&decoded);
-                        let accumulated_str = String::from_utf8_lossy(&accumulated);
-                        if accumulated_str.contains("test") {
-                            found_echo = true;
-                            break;
-                        }
+            .await
+        {
+            Ok(Ok(Some(output))) => {
+                // base64 디코딩 시도
+                if let Ok(decoded) = STANDARD.decode(&output) {
+                    accumulated.extend_from_slice(&decoded);
+                    let accumulated_str = String::from_utf8_lossy(&accumulated);
+                    if accumulated_str.contains("test") {
+                        found_echo = true;
+                        break;
                     }
                 }
             }
             Ok(Ok(None)) => {
-                // 연결 종료
-                break;
+                // 연결 종료 또는 no output message
+                continue;
             }
-            Ok(Err(_)) | Err(_) => {
-                // 읽기 실패 또는 타임아웃
+            Ok(Err(e)) => {
+                panic!("Failed to read message: {}", e);
+            }
+            Err(_) => {
+                // 타임아웃
                 break;
             }
         }
-
-        tokio::time::sleep(Duration::from_millis(10)).await;
     }
 
     assert!(found_echo, "input roundtrip failed - did not get echo containing 'test'");
@@ -346,7 +357,7 @@ async fn test_daemon_reconnect_restore_state() {
         let req = DaemonRequest {
             command: "open".to_string(),
             program: Some("/bin/sh".to_string()),
-            args: Some(vec!["-c".to_string(), "echo hi".to_string()]),
+            args: Some(vec!["-c".to_string(), "echo hi; exec cat".to_string()]),
             cols: Some(80),
             rows: Some(24),
             hint: None,
@@ -362,17 +373,24 @@ async fn test_daemon_reconnect_restore_state() {
             .expect("Failed to send open request");
 
         // open 응답에서 sessionId 확인
-        let resp = tokio::time::timeout(
+        let msg = tokio::time::timeout(
             Duration::from_secs(5),
-            client.read_response()
+            client.read_message()
         )
             .await
             .expect("Read timeout (open response)")
             .expect("Failed to read open response")
             .expect("Expected open response");
 
-        let session_id = resp.session_id
-            .expect("No sessionId in open response");
+        let session_id = match msg {
+            soksak_sidecar_vt_core::daemon::DaemonMessage::Open(reply) => {
+                reply.session_id.expect("No sessionId in open response")
+            }
+            _ => panic!("Expected open response"),
+        };
+
+        // Split for reading messages with different types
+        let (_writer, mut reader) = client.into_split();
 
         // 출력 읽기 및 저장 (누적 바이트)
         let start = Instant::now();
@@ -385,37 +403,34 @@ async fn test_daemon_reconnect_restore_state() {
                 break;
             }
 
-            let resp = tokio::time::timeout(
+            match tokio::time::timeout(
                 remaining,
-                client.read_response()
+                read_output_message(&mut reader)
             )
-                .await;
-
-            match resp {
-                Ok(Ok(Some(resp))) => {
-                    if let Some(output) = resp.output {
-                        // base64 디코딩
-                        if let Ok(decoded) = STANDARD.decode(&output) {
-                            accumulated.extend_from_slice(&decoded);
-                            let accumulated_str = String::from_utf8_lossy(&accumulated);
-                            if accumulated_str.contains("hi") {
-                                found_hi = true;
-                                break;
-                            }
+                .await
+            {
+                Ok(Ok(Some(output))) => {
+                    // base64 디코딩
+                    if let Ok(decoded) = STANDARD.decode(&output) {
+                        accumulated.extend_from_slice(&decoded);
+                        let accumulated_str = String::from_utf8_lossy(&accumulated);
+                        if accumulated_str.contains("hi") {
+                            found_hi = true;
+                            break;
                         }
                     }
                 }
                 Ok(Ok(None)) => {
-                    // 연결 종료
-                    break;
+                    // No output message this time
+                    continue;
                 }
-                Ok(Err(_)) | Err(_) => {
-                    // 읽기 실패 또는 타임아웃
-                    break;
+                Ok(Err(e)) => {
+                    panic!("Failed to read message: {}", e);
+                }
+                Err(_) => {
+                    continue;
                 }
             }
-
-            tokio::time::sleep(Duration::from_millis(10)).await;
         }
 
         assert!(found_hi, "Failed to get 'hi' from first output");
@@ -448,27 +463,25 @@ async fn test_daemon_reconnect_restore_state() {
             .expect("Failed to send attach request");
 
         // attach 응답 읽기
-        let attach_resp = tokio::time::timeout(
+        let attach_msg = tokio::time::timeout(
             Duration::from_secs(5),
-            client.read_response()
+            client.read_message()
         )
             .await
             .expect("Read timeout (attach response)")
             .expect("Failed to read attach response")
             .expect("Expected attach response");
 
-        assert!(attach_resp.session_id.is_some(), "No sessionId in attach response");
-
-        // attach 응답 자체에 output이 있는지 확인
-        if let Some(ref output) = attach_resp.output {
-            if let Ok(decoded) = STANDARD.decode(output) {
-                let output_str = String::from_utf8_lossy(&decoded);
-                if output_str.contains("hi") {
-                    // attach 응답에서 이미 "hi"를 찾았으므로 테스트 통과
-                    return;
-                }
+        // attach response should not have an error
+        match attach_msg {
+            soksak_sidecar_vt_core::daemon::DaemonMessage::Attach(reply) => {
+                assert!(reply.error.is_none(), "attach response has error: {:?}", reply.error);
             }
+            _ => panic!("Expected attach response"),
         }
+
+        // Split for reading messages with different types
+        let (_writer, mut reader) = client.into_split();
 
         // 이전 출력과 같은 내용이 나오는지 확인 (누적 바이트로 확인)
         let start = Instant::now();
@@ -481,37 +494,34 @@ async fn test_daemon_reconnect_restore_state() {
                 break;
             }
 
-            let resp = tokio::time::timeout(
+            match tokio::time::timeout(
                 remaining,
-                client.read_response()
+                read_output_message(&mut reader)
             )
-                .await;
-
-            match resp {
-                Ok(Ok(Some(resp))) => {
-                    if let Some(output) = resp.output {
-                        // base64 디코딩
-                        if let Ok(decoded) = STANDARD.decode(&output) {
-                            restored_accumulated.extend_from_slice(&decoded);
-                            let restored_str = String::from_utf8_lossy(&restored_accumulated);
-                            if restored_str.contains("hi") {
-                                found_restored = true;
-                                break;
-                            }
+                .await
+            {
+                Ok(Ok(Some(output))) => {
+                    // base64 디코딩
+                    if let Ok(decoded) = STANDARD.decode(&output) {
+                        restored_accumulated.extend_from_slice(&decoded);
+                        let restored_str = String::from_utf8_lossy(&restored_accumulated);
+                        if restored_str.contains("hi") {
+                            found_restored = true;
+                            break;
                         }
                     }
                 }
                 Ok(Ok(None)) => {
-                    // 연결 종료
-                    break;
+                    // No output message this time
+                    continue;
                 }
-                Ok(Err(_)) | Err(_) => {
-                    // 읽기 실패 또는 타임아웃
-                    break;
+                Ok(Err(e)) => {
+                    panic!("Failed to read message: {}", e);
+                }
+                Err(_) => {
+                    continue;
                 }
             }
-
-            tokio::time::sleep(Duration::from_millis(10)).await;
         }
 
         assert!(found_restored, "State not restored after reconnection - 'hi' not found");
@@ -598,15 +608,22 @@ async fn test_daemon_finder_start_and_connect() {
         .await
         .expect("Failed to send request to daemon");
 
-    let resp = tokio::time::timeout(
+    let msg = tokio::time::timeout(
         Duration::from_secs(5),
-        client.read_response()
+        client.read_message()
     )
         .await
         .expect("Read timeout")
         .expect("Failed to read response from daemon")
         .expect("Expected response from daemon");
 
-    assert!(resp.session_id.is_some(),
-        "No sessionId in response from finder-started daemon: {resp:?}");
+    let session_id = match msg {
+        soksak_sidecar_vt_core::daemon::DaemonMessage::Open(reply) => {
+            reply.session_id
+        }
+        _ => panic!("Expected open response"),
+    };
+
+    assert!(session_id.is_some(),
+        "No sessionId in response from finder-started daemon");
 }

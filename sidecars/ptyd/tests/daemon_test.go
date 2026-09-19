@@ -943,6 +943,8 @@ func TestIdle4LiveSessionPreventsExit(t *testing.T) {
 	openReq := map[string]interface{}{
 		"command": "open",
 		"program": "/bin/cat",
+		"cols":    80,
+		"rows":    24,
 	}
 	reqJSON, _ := json.Marshal(openReq)
 	conn1.Write(append(reqJSON, '\n'))

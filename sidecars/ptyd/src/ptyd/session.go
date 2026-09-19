@@ -16,6 +16,8 @@ type RingEntry struct {
 	Data string
 	// resize 타입일 때 열 수, 행 수.
 	Cols, Rows int
+	// 소비자가 링 범위를 벗어나 truncate된 경우 표시 (daemon에서 설정)
+	Truncated bool
 }
 
 // Session은 PTY와 자식 프로세스, 그리고 순번이 붙은 출력 링 버퍼를 갖는다.
@@ -50,9 +52,10 @@ type Session struct {
 // Consumer는 세션에 붙은 클라이언트다.
 type Consumer struct {
 	SessionID string
-	from      int64          // 다음 받을 순번
-	Ch        chan RingEntry // 소비자가 값을 받을 채널
-	Done      chan struct{}  // 종료 신호를 받을 채널
+	from      int64         // 다음 받을 순번
+	wake      chan struct{} // 출력 알림 (용량 1, merge 가능)
+	Done      chan struct{} // 종료 신호를 받을 채널
+	start     chan struct{} // forwarder 시작 신호 (attach 응답 후 열림)
 }
 
 // NewSession은 새 세션을 만든다.
@@ -114,7 +117,8 @@ func (s *Session) WriteInput(data []byte) error {
 	return err
 }
 
-// addToRing은 데이터를 링에 추가하고 소비자에게 전달한다.
+// addToRing은 데이터를 링에 추가하고 모든 소비자에게 알린다.
+// 링은 유일한 출처이고, 소비자는 wake 신호를 받으면 링 전체를 본다.
 func (s *Session) addToRing(entry RingEntry) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -130,57 +134,14 @@ func (s *Session) addToRing(entry RingEntry) {
 	}
 	s.ring = append(s.ring, entry)
 
-	// 모든 소비자에게 전달
+	// 모든 소비자에게 새 출력이 있음을 알림 (merge 가능: 용량 1)
 	for consumer := range s.consumers {
-		if consumer.from == entry.Sequence {
-			select {
-			case consumer.Ch <- entry:
-				consumer.from++
-			default:
-				// 채널이 가득 차면 무시 (소비자가 처리 못함)
-			}
+		select {
+		case consumer.wake <- struct{}{}:
+		default:
+			// 알림이 이미 큐됨 (용량 1이므로 merge됨)
 		}
 	}
-}
-
-// TestWrite는 테스트용 메서드로, 링에 데이터를 추가한다.
-func (s *Session) TestWrite(data []byte) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.closed {
-		return fmt.Errorf("session is closed")
-	}
-
-	encoded := base64.StdEncoding.EncodeToString(data)
-	seq := s.nextSeq
-	s.nextSeq++
-	s.totalSeq++
-
-	entry := RingEntry{
-		Sequence: seq,
-		Type:     "output",
-		Data:     encoded,
-	}
-
-	// 링 추가
-	if len(s.ring) >= s.ringSize {
-		s.ring = s.ring[1:]
-	}
-	s.ring = append(s.ring, entry)
-
-	// 소비자에게 전달
-	for consumer := range s.consumers {
-		if consumer.from == entry.Sequence {
-			select {
-			case consumer.Ch <- entry:
-				consumer.from++
-			default:
-			}
-		}
-	}
-
-	return nil
 }
 
 // readPump는 PTY 마스터에서 데이터를 읽고 링에 추가한다.
@@ -226,35 +187,42 @@ func (s *Session) readPump() {
 }
 
 // Attach는 새 소비자를 세션에 붙인다.
-// from: 시작할 순번. truncated는 그 순번이 링을 넘겨 이미 버려졌으면 true.
-func (s *Session) Attach(consumer *Consumer, from int64) (truncated bool, entries []RingEntry) {
+// from: 시작할 순번. from이 유효한 범위를 벗어나면 에러 반환.
+// truncated: from < oldest일 때 true (즉, from이 이미 버려진 범위에 있을 때).
+// forwarder가 from을 처리하므로 항목을 반환하지 않음.
+func (s *Session) Attach(consumer *Consumer, from int64) (truncated bool, err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.consumers[consumer] = true
-	consumer.from = from
-
-	// 링의 최초 순번
-	var minSeq int64
+	// 링의 가장 오래된 순번과 다음 순번
+	var oldest, next int64
 	if len(s.ring) > 0 {
-		minSeq = s.ring[0].Sequence
+		oldest = s.ring[0].Sequence
+		next = s.ring[len(s.ring)-1].Sequence + 1
 	} else {
-		minSeq = s.nextSeq
+		oldest = s.nextSeq
+		next = s.nextSeq
 	}
 
-	// from이 이미 버려진 순번이면 truncated 설정
-	if from < minSeq {
-		truncated = true
-		from = minSeq
-		consumer.from = from
+	// from이 유효한 범위를 벗어났으면 에러 반환
+	// from < 0 또는 from > next 이면 거부
+	if from < 0 || from > next {
+		return false, fmt.Errorf("from %d is beyond the next sequence %d", from, next)
 	}
 
-	// from 이상의 항목들을 반환
-	for i, e := range s.ring {
-		if e.Sequence >= from {
-			entries = append(entries, s.ring[i:]...)
-			break
-		}
+	// truncated = from < oldest (이미 버려진 범위)
+	truncated = from < oldest
+
+	// 소비자 등록
+	consumer.wake = make(chan struct{}, 1)
+	consumer.start = make(chan struct{})
+	consumer.from = from
+	s.consumers[consumer] = true
+
+	// 초기 알림
+	select {
+	case consumer.wake <- struct{}{}:
+	default:
 	}
 
 	return
@@ -323,9 +291,9 @@ func (s *Session) waitForExit() {
 // Resize는 창 크기를 변경하고 링에 기록한다.
 func (s *Session) Resize(cols, rows int) error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	if s.closed {
+		s.mu.Unlock()
 		return fmt.Errorf("session %s is closed", s.id)
 	}
 
@@ -340,11 +308,10 @@ func (s *Session) Resize(cols, rows int) error {
 		Rows:     rows,
 	}
 
-	// 링에 추가 (addToRing을 직접 인라인)
-	if len(s.ring) >= s.ringSize {
-		s.ring = s.ring[1:]
-	}
-	s.ring = append(s.ring, entry)
+	s.mu.Unlock()
+
+	// addToRing을 호출하여 락 순서를 확인하고 소비자를 깨운다
+	s.addToRing(entry)
 
 	return nil
 }

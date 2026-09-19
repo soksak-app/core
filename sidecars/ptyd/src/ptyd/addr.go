@@ -109,8 +109,14 @@ func PrepareListener(baseDir string, identity DaemonIdentity) (net.Listener, str
 		// 소켓이 존재하고 프로세스가 살아있으면 재사용
 		listener, tmpErr := net.Listen("unix", address+"_tmp")
 		if tmpErr == nil {
-			listener.Close()
-			os.Remove(address + "_tmp")
+			if err := listener.Close(); err != nil {
+				// 임시 리스너 닫기 실패: 로그하고 계속 진행
+				fmt.Fprintf(os.Stderr, "warning: close temp listener failed: %v\n", err)
+			}
+			if err := os.Remove(address + "_tmp"); err != nil && !os.IsNotExist(err) {
+				// 임시 소켓 파일 제거 실패: 로그하고 계속 진행
+				fmt.Fprintf(os.Stderr, "warning: remove temp socket failed: %v\n", err)
+			}
 			// 소켓 재사용
 			listener2, err := net.Listen("unix", address)
 			if err != nil {
@@ -123,7 +129,10 @@ func PrepareListener(baseDir string, identity DaemonIdentity) (net.Listener, str
 			return listener2, address, nil
 		}
 		// 프로세스가 죽었으면 지우고 계속
-		os.Remove(address)
+		if err := os.Remove(address); err != nil && !os.IsNotExist(err) {
+			// 죽은 소켓 파일 제거 실패: 로그하고 계속 진행
+			fmt.Fprintf(os.Stderr, "warning: remove dead socket failed: %v\n", err)
+		}
 	}
 
 	// 죽은 소켓 정리

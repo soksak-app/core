@@ -49,6 +49,7 @@ func TestDaemonSurvivesSighupAfterChildExit(t *testing.T) {
 	daemonCmd.Env = append(os.Environ(),
 		fmt.Sprintf("PTYD_SOCKET_DIR=%s", socketDir),
 		fmt.Sprintf("PTYD_LOG=%s", logPath),
+		"PTYD_PROTOCOL=ptyd",
 		"SOKSAK_PROFILE=debug",
 	)
 	if err := daemonCmd.Start(); err != nil {
@@ -194,6 +195,7 @@ func TestPtydLogEnvironmentVariable(t *testing.T) {
 	daemonCmd.Env = append(os.Environ(),
 		fmt.Sprintf("PTYD_SOCKET_DIR=%s", socketDir),
 		fmt.Sprintf("PTYD_LOG=%s", logPath),
+		"PTYD_PROTOCOL=ptyd",
 		"SOKSAK_PROFILE=debug",
 	)
 	if err := daemonCmd.Start(); err != nil {
