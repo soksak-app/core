@@ -138,7 +138,9 @@ void *nativeWebviewCreate(void *handle, unsigned long long identifier, const cha
     // 새 표면은 메인 웹뷰 위, 기존 모달 아래에 둔다. 모달은 여기서 숨긴 상태로 두고
     // 렌더링을 마치면 위로 올린다.
     [window.contentView addSubview:view positioned:NSWindowAbove relativeTo:root];
-    if (!transparent) webviewAttachSurface(view, root);
+    // fillParent 인 모달은 창에 직접 놓고, 모든 표면은 투명 여부와 관계없이
+    // SurfaceHost에 붙인다. 혼합 표면의 DOM 웹뷰 아래에 네이티브 평면이 있어야 한다.
+    if (!fillParent) webviewAttachSurface(view, root);
     nativeWebviewBounds(view, x, y, width, height);
     return view; // nativeWebviewClose 까지 Go 가 이 참조를 소유한다.
 }
@@ -151,7 +153,7 @@ bool nativeWebviewNavigate(void *handle, const char *url) {
     return true;
 }
 
-void nativeWebviewHidden(void *handle, bool hidden) { [(WKWebView *)handle setHidden:hidden]; }
+void nativeWebviewHidden(void *handle, bool hidden) { webviewSetSurfaceHidden(handle, hidden); }
 void nativeWebviewBackground(void *handle, bool enabled) {
     SPNativeWebview *view = handle;
     view.backgroundEnabled = enabled;
@@ -165,6 +167,7 @@ void nativeWebviewClose(void *handle) {
     webviewInputUnregister(view);
     [view stopLoading];
     [view.configuration.userContentController removeScriptMessageHandlerForName:@"soksak"];
+    webviewDetachSurface(view);
     [view removeFromSuperview];
     [view release];
 }
