@@ -431,6 +431,106 @@ func TestSurfaceCloseRemovesOnlyItsImages(t *testing.T) {
 	}
 }
 
+func TestReserveRejectsNilOwner(t *testing.T) {
+	images := host.NewImages()
+	key := host.ImageKey{Surface: "tab-1", Name: "view"}
+
+	// nil owner로 reserve 시도
+	err := images.Reserve(key, nil)
+	if err == nil {
+		t.Fatal("expected error for nil owner, got nil")
+	}
+	if !strings.Contains(err.Error(), "owner is required") {
+		t.Fatalf("expected 'owner is required' error, got %v", err)
+	}
+
+	// 이미지가 등록되지 않았는지 확인
+	if _, err := images.Get(key); err == nil {
+		t.Fatal("image should not be registered after failed reserve")
+	}
+}
+
+func TestEnvelopeFromTheAttachedSidecarIsPresented(t *testing.T) {
+	images := host.NewImages()
+	key := host.ImageKey{Surface: "tab-1", Name: "view"}
+
+	var a int
+	// 특정 사이드카가 attachment 한 이미지
+	owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: newFakeImageOwner("")}
+	if err := images.Reserve(key, owner); err != nil {
+		t.Fatalf("reserve failed: %v", err)
+	}
+	images.Set(key, unsafe.Pointer(&a))
+
+	nonce := "AAAAAAAAAAAAAAAAAAAAAA=="
+	body := map[string]any{
+		"image": map[string]any{
+			"name": "view",
+			"token": map[string]any{
+				"kind":  "iosurface-global",
+				"id":    uint32(12345),
+				"nonce": nonce,
+			},
+			"width":    800,
+			"height":   600,
+			"format":   "bgra8",
+			"sequence": 1,
+		},
+	}
+	bodyBytes, _ := json.Marshal(body)
+
+	// 같은 사이드카가 같은 이미지를 보내면 Present를 반환해야 함
+	decision := host.Decide(bodyBytes, "sidecar-a", "tab-1", images)
+	present, ok := decision.(*host.Present)
+	if !ok {
+		t.Fatalf("expected Present, got %T", decision)
+	}
+	if present.Name != "view" {
+		t.Fatalf("expected name view, got %s", present.Name)
+	}
+}
+
+func TestEnvelopeFromAnotherSidecarIsRefused(t *testing.T) {
+	images := host.NewImages()
+	key := host.ImageKey{Surface: "tab-1", Name: "view"}
+
+	var a int
+	// sidecar-a가 attachment 한 이미지
+	owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: newFakeImageOwner("")}
+	if err := images.Reserve(key, owner); err != nil {
+		t.Fatalf("reserve failed: %v", err)
+	}
+	images.Set(key, unsafe.Pointer(&a))
+
+	nonce := "AAAAAAAAAAAAAAAAAAAAAA=="
+	body := map[string]any{
+		"image": map[string]any{
+			"name": "view",
+			"token": map[string]any{
+				"kind":  "iosurface-global",
+				"id":    uint32(12345),
+				"nonce": nonce,
+			},
+			"width":    800,
+			"height":   600,
+			"format":   "bgra8",
+			"sequence": 1,
+		},
+	}
+	bodyBytes, _ := json.Marshal(body)
+
+	// 다른 사이드카(sidecar-b)가 같은 이미지를 보내면 notAttached 오류 반환
+	decision := host.Decide(bodyBytes, "sidecar-b", "tab-1", images)
+	reply, ok := decision.(*host.Reply)
+	if !ok {
+		t.Fatalf("expected Reply(notAttached), got %T", decision)
+	}
+	imageData := reply.JSON["image"].(map[string]interface{})
+	if !strings.Contains(imageData["error"].(string), "notAttached") {
+		t.Fatalf("expected notAttached error, got %v", imageData["error"])
+	}
+}
+
 func TestPresentationFailureIsReported(t *testing.T) {
 	images := host.NewImages()
 	key := host.ImageKey{Surface: "tab-1", Name: "view"}

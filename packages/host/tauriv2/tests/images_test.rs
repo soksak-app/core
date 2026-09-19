@@ -4,6 +4,23 @@ use serde_json::json;
 use soksak_host_tauriv2::images::{Images, Key, decide, Decision, after_present};
 
 #[test]
+fn reserve_rejects_empty_sidecar() {
+    let images = Images::default();
+    let key: Key = ("tab-1".to_string(), "view".to_string());
+
+    // 빈 sidecar로 reserve 시도
+    let result = images.reserve(&key, "owner", "");
+    assert!(result.is_err(), "expected error for empty sidecar");
+    assert!(
+        result.unwrap_err().contains("requires a sidecar"),
+        "expected 'requires a sidecar' error"
+    );
+
+    // 이미지가 등록되지 않았는지 확인
+    assert!(images.get(&key).is_err(), "image should not be registered after failed reserve");
+}
+
+#[test]
 fn unattached_image_is_refused() {
     let images = Images::default();
     let nonce_b64 = "AAAAAAAAAAAAAAAAAAAAAA=="; // 16 zero bytes

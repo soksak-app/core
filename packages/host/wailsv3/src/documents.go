@@ -287,14 +287,17 @@ func (s *Surfaces) closeSurfaceDocuments(surface string) {
 	}
 }
 
-// surfaceCommitted 는 표면 페이지가 새 문서를 표시하기 시작했을 때 이전 문서의 등록과 문서 영역을
-// 정리한다. 새 문서는 자기 항목과 문서 영역을 다시 만든다.
+// surfaceCommitted 는 표면 페이지가 새 문서를 표시하기 시작했을 때 이전 문서와 그림 영역의 등록과 정리를 한다.
+// 새 문서는 자기 항목과 문서 영역을 다시 만든다.
 func (s *Surfaces) surfaceCommitted(viewID uint64) {
 	surface := s.surfaceOf(viewID)
 	if surface == "" {
 		return
 	}
-	application.InvokeSync(func() { s.closeSurfaceDocuments(surface) })
+	application.InvokeSync(func() {
+		s.closeSurfaceDocuments(surface)
+		s.closeSurfaceImages(surface)
+	})
 	s.surfacesClosed([]string{surface})
 }
 
@@ -319,33 +322,133 @@ func (s *Surfaces) emitToSurface(surface, name string, data any) {
 	view.execJS("window.__soksakNative?.receive(" + string(payload) + ")")
 }
 
-// Image region methods - similar pattern to document regions
+// imageChanged 는 그림 영역 이벤트를 소유 표면에만 보내고 host.window 감시자에게 알린다. UI 스레드에서 호출된다.
+func (s *Surfaces) imageChanged(key ImageKey, event string) {
+	payload := map[string]any{"surface": key.Surface, "name": key.Name, "event": json.RawMessage(event)}
+	s.emitToSurface(key.Surface, "image-event", payload)
+	s.windowChanged()
+}
+
+// attachImage 는 표면 안에 숨긴 그림 영역을 만든다. 같은 이름이 이미 있으면 오류다.
 func (s *Surfaces) attachImage(viewID uint64, req ImageRequest) error {
-	// TODO: Implement image attach
-	return fmt.Errorf("image attach not yet implemented")
+	key, err := CheckImage(s.surfaceOf(viewID), req)
+	if err != nil {
+		return err
+	}
+	if req.Sidecar == "" {
+		return fmt.Errorf("image %q: attach requires a sidecar", req.Name)
+	}
+	if err := s.images.Reserve(key, &ImageOwner{SidecarName: req.Sidecar, SidecarOwner: s}); err != nil {
+		return err
+	}
+	var handle unsafe.Pointer
+	application.InvokeSync(func() {
+		view := s.views[key.Surface]
+		if view == nil || view.handle == nil {
+			err = fmt.Errorf("surface %q has no view", key.Surface)
+			return
+		}
+		handle, err = system.CreateImage(view.handle, key.Name, func(event string) {
+			s.imageChanged(key, event)
+		})
+	})
+	if err != nil {
+		s.images.Remove(key)
+		return err
+	}
+	// 만드는 동안 표면이 제거되었으면 만든 그림 영역을 닫는다. 등록과 닫기는 UI 스레드에서 한다.
+	var registered bool
+	application.InvokeSync(func() {
+		registered = s.images.Set(key, handle)
+		if !registered {
+			system.CloseImage(handle)
+		}
+	})
+	if !registered {
+		return fmt.Errorf("surface %q closed while its image was created", key.Surface)
+	}
+	s.windowChanged()
+	return nil
+}
+
+// withImage 는 열린 그림 영역에 대해 UI 스레드에서 run 을 실행한다.
+func (s *Surfaces) withImage(viewID uint64, req ImageRequest, run func(handle unsafe.Pointer) error) error {
+	key, err := CheckImage(s.surfaceOf(viewID), req)
+	if err != nil {
+		return err
+	}
+	// 조회와 사용을 UI 스레드의 한 작업에서 한다. 닫기도 UI 스레드에서 등록 해제와 함께 일어나므로,
+	// 조회한 핸들은 이 작업 동안 해제되지 않는다.
+	application.InvokeSync(func() {
+		var handle unsafe.Pointer
+		handle, err = s.images.Get(key)
+		if err == nil {
+			err = run(handle)
+		}
+	})
+	return err
 }
 
 func (s *Surfaces) placeImage(viewID uint64, req ImageRequest) error {
-	// TODO: Implement image place
-	return fmt.Errorf("image place not yet implemented")
+	err := s.withImage(viewID, req, func(handle unsafe.Pointer) error {
+		system.PlaceImage(handle, req.Left, req.Top, req.Right, req.Bottom, req.Visible)
+		return nil
+	})
+	if err == nil {
+		s.windowChanged()
+	}
+	return err
 }
 
 func (s *Surfaces) focusImage(viewID uint64, req ImageRequest) error {
-	// TODO: Implement image focus
-	return fmt.Errorf("image focus not yet implemented")
+	err := s.withImage(viewID, req, func(handle unsafe.Pointer) error {
+		system.FocusImage(handle)
+		return nil
+	})
+	if err == nil {
+		s.windowChanged()
+	}
+	return err
 }
 
 func (s *Surfaces) caretImage(viewID uint64, req ImageRequest, x, y, w, h float64) error {
-	// TODO: Implement image caret
-	return fmt.Errorf("image caret not yet implemented")
+	return s.withImage(viewID, req, func(handle unsafe.Pointer) error {
+		system.CaretImage(handle, x, y, w, h)
+		return nil
+	})
 }
 
 func (s *Surfaces) textImage(viewID uint64, req ImageRequest, text string) error {
-	// TODO: Implement image text
-	return fmt.Errorf("image text not yet implemented")
+	return s.withImage(viewID, req, func(handle unsafe.Pointer) error {
+		system.TextImage(handle, text)
+		return nil
+	})
+}
+
+// closeSurfaceImages 는 표면의 그림 영역을 모두 닫는다. UI 스레드에서 호출한다.
+func (s *Surfaces) closeSurfaceImages(surface string) {
+	s.images.CloseSurface(surface, func(handle unsafe.Pointer) {
+		system.CloseImage(handle)
+	})
+	// 영역 변경을 알린다.
 }
 
 func (s *Surfaces) detachImage(viewID uint64, req ImageRequest) error {
-	// TODO: Implement image detach
-	return fmt.Errorf("image detach not yet implemented")
+	key, err := CheckImage(s.surfaceOf(viewID), req)
+	if err != nil {
+		return err
+	}
+	// 등록 해제와 닫기를 UI 스레드의 한 작업에서 한다. 사이에 다른 작업이 핸들을 쓰지 않는다.
+	application.InvokeSync(func() {
+		var handle unsafe.Pointer
+		handle, err = s.images.Remove(key)
+		if err == nil && handle != nil {
+			system.CloseImage(handle)
+		}
+	})
+	if err != nil {
+		return err
+	}
+	s.windowChanged()
+	return nil
 }

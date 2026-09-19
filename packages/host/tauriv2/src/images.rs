@@ -25,6 +25,7 @@ use crate::windows::window_data;
 pub struct Request {
     pub surface: String,
     pub name: String,
+    pub sidecar: Option<String>,
     #[serde(default)]
     pub left: f64,
     #[serde(default)]
@@ -87,8 +88,11 @@ impl Images {
         self.inner.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
-    /// 이름을 차지한다.
+    /// 이름을 차지한다. sidecar 가 없거나 빈 문자열이면 오류를 반환한다.
     pub fn reserve(&self, key: &Key, owner: &str, sidecar: &str) -> Result<(), String> {
+        if sidecar.is_empty() {
+            return Err(format!("image {:?}: reserve requires a sidecar", key.1));
+        }
         let mut inner = self.lock();
         if inner.handles.contains_key(key) {
             return Err(format!("image {:?} is already attached", key.1));
@@ -238,6 +242,14 @@ fn with_image<T: Send + 'static>(
 
 /// 호출한 표면 페이지의 요소에 그림 영역을 붙인다.
 pub(crate) fn attach(webview: &Webview, request: Request) -> Result<(), String> {
+    let sidecar = request
+        .sidecar
+        .as_deref()
+        .ok_or_else(|| format!("image {:?}: attach requires a sidecar", request.name))?;
+    if sidecar.is_empty() {
+        return Err(format!("image {:?}: attach requires a sidecar", request.name));
+    }
+
     let (key, window) = owner(webview, &request)?;
     let platform = platform::current()?;
     let Ok(data) = window_data(&window) else {
@@ -245,7 +257,7 @@ pub(crate) fn attach(webview: &Webview, request: Request) -> Result<(), String> 
     };
 
     // 이름을 먼저 차지한다. 네이티브 작업을 기다리는 동안 잠금을 쥐지 않는다.
-    data.images.reserve(&key, "", "")?;
+    data.images.reserve(&key, "", sidecar)?;
     let handle = match create(webview, &window, &key, platform) {
         Ok(handle) => handle,
         Err(error) => {

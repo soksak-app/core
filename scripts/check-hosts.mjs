@@ -66,9 +66,70 @@ for (const pair of PAIRS) {
   }
 }
 
+// Check for stub implementations (anti-regression check)
+const { readFileSync } = await import("node:fs");
+const STUB_PATTERNS = [
+  /TODO:\s*Implement/,
+  /not yet implemented/,
+  /unimplemented!/,
+  /todo!\(/,
+];
+const PRODUCT_DIRS = [
+  "packages/host/wailsv3/src",
+  "packages/host/tauriv2/src",
+  "native/darwin/src",
+  "sidecars/vt-core/src",
+  "plugins",
+];
+const EXCLUDE = ["test", "tests", "windows"];
+
+function findStubs(dir) {
+  const stubs = [];
+  try {
+    const files = execFileSync("find", [dir, "-type", "f", "(", "-name", "*.go", "-o", "-name", "*.rs", "-o", "-name", "*.m", "-o", "-name", "*.mjs", ")", "-not", "-path", "*/target/*", "-not", "-path", "*/.git/*"],
+      { cwd: ROOT, encoding: "utf8" }).trim().split("\n").filter(f => f);
+
+    for (const file of files) {
+      // Skip test files and unsupported files
+      if (EXCLUDE.some(ex => file.includes(ex))) continue;
+
+      try {
+        const content = readFileSync(`${ROOT}${file}`, "utf8");
+        for (const pattern of STUB_PATTERNS) {
+          if (pattern.test(content)) {
+            const lines = content.split("\n");
+            for (let i = 0; i < lines.length; i++) {
+              if (pattern.test(lines[i])) {
+                stubs.push(`${file}:${i + 1}: ${pattern.source}`);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        // Ignore files we can't read
+      }
+    }
+  } catch (e) {
+    // Ignore find errors
+  }
+  return stubs;
+}
+
+const stubErrors = [];
+for (const dir of PRODUCT_DIRS) {
+  const stubs = findStubs(dir);
+  stubErrors.push(...stubs);
+}
+
+if (stubErrors.length) {
+  console.error("Stub implementations found (anti-regression check failed):");
+  console.error(stubErrors.join("\n"));
+  process.exitCode = 1;
+}
+
 if (errors.length) {
   console.error(errors.join("\n"));
   process.exitCode = 1;
-} else {
+} else if (stubErrors.length === 0) {
   console.log(`Host structure checks passed: ${PAIRS.length} pairs`);
 }

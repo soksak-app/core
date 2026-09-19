@@ -27,6 +27,7 @@ var imageName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,63}$`)
 type ImageRequest struct {
 	Surface string  `json:"surface"`
 	Name    string  `json:"name"`
+	Sidecar string  `json:"sidecar"`
 	Left    float64 `json:"left"`
 	Top     float64 `json:"top"`
 	Right   float64 `json:"right"`
@@ -70,10 +71,13 @@ func NewImages() *Images {
 	}
 }
 
-// Reserve 는 이름을 차지한다.
+// Reserve 는 이름을 차지한다. owner 가 nil 이면 오류를 반환한다.
 func (i *Images) Reserve(key ImageKey, owner *ImageOwner) error {
 	i.mu.Lock()
 	defer i.mu.Unlock()
+	if owner == nil {
+		return fmt.Errorf("image %q: owner is required", key.Name)
+	}
 	if _, ok := i.handles[key]; ok {
 		return fmt.Errorf("image %q is already attached", key.Name)
 	}
