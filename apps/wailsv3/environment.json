@@ -3,7 +3,8 @@
   "plugins": [
     "@soksak/plugin-shell",
     "@soksak/plugin-browser",
-    "@soksak/plugin-files"
+    "@soksak/plugin-files",
+    "@soksak/plugin-terminal"
   ],
   "workspace": {
     "focus": "shell",
@@ -43,6 +44,10 @@
             {
               "plugin": "shell",
               "title": ">_ 빌드"
+            },
+            {
+              "plugin": "terminal",
+              "title": "터미널"
             }
           ]
         },
