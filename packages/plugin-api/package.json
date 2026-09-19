@@ -13,6 +13,7 @@
     "index.js",
     "binder.js",
     "document-region.js",
+    "image-region.js",
     "page.js",
     "sidecar-port.js"
   ],
