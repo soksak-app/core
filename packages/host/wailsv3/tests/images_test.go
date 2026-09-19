@@ -19,8 +19,8 @@ const imageSidecar = "@fixture/sidecar-echo"
 // frontendForImages 는 플러그인 하나와 그 플러그인이 의존하는 사이드카 하나를 선언한 스테이징 결과다.
 func frontendForImages(sidecar string) fstest.MapFS {
 	return fstest.MapFS{
-		"environment.json":                         {Data: []byte(`{"plugins":["@fixture/plugin"]}`)},
-		"modules/@fixture/plugin/plugin.json":      {Data: []byte(`{"id":"plugin","sidecars":["` + imageSidecar + `"]}`)},
+		"environment.json":                          {Data: []byte(`{"plugins":["@fixture/plugin"]}`)},
+		"modules/@fixture/plugin/plugin.json":       {Data: []byte(`{"id":"plugin","sidecars":["` + imageSidecar + `"]}`)},
 		"modules/" + imageSidecar + "/sidecar.json": {Data: []byte(sidecar)},
 	}
 }
@@ -428,5 +428,91 @@ func TestSurfaceCloseRemovesOnlyItsImages(t *testing.T) {
 	// tab-2의 이미지는 여전히 접근 가능
 	if got, err := images.Get(key3); err != nil || got != unsafe.Pointer(&c) {
 		t.Fatalf("tab-2 image should still exist: %v", err)
+	}
+}
+
+func TestPresentationFailureIsReported(t *testing.T) {
+	images := host.NewImages()
+	key := host.ImageKey{Surface: "tab-1", Name: "view"}
+
+	var a int
+	owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: newFakeImageOwner("")}
+	if err := images.Reserve(key, owner); err != nil {
+		t.Fatalf("reserve failed: %v", err)
+	}
+	images.Set(key, unsafe.Pointer(&a))
+
+	nonce := "AAAAAAAAAAAAAAAAAAAAAA=="
+	body := map[string]any{
+		"image": map[string]any{
+			"name": "view",
+			"token": map[string]any{
+				"kind":  "iosurface-global",
+				"id":    uint32(12345),
+				"nonce": nonce,
+			},
+			"width":    800,
+			"height":   600,
+			"format":   "bgra8",
+			"sequence": 1,
+		},
+	}
+	bodyBytes, _ := json.Marshal(body)
+
+	// 가짜 onMain 이 false 를 반환하도록 설정
+	var receivedImageName string
+	var receivedResponse map[string]interface{}
+	handled := host.HandleEnvelope(bodyBytes, "sidecar-a", "tab-1", images,
+		func(work func() bool) bool {
+			// 표시 실패를 시뮬레이션 - work 호출 없이 false 반환
+			return false
+		},
+		func(imageName string, response map[string]interface{}) error {
+			receivedImageName = imageName
+			receivedResponse = response
+			return nil
+		},
+	)
+
+	if !handled {
+		t.Fatal("envelope should have been handled")
+	}
+
+	if receivedImageName != "view" {
+		t.Fatalf("expected image name 'view', got %q", receivedImageName)
+	}
+
+	if receivedResponse == nil {
+		t.Fatal("expected response, got nil")
+	}
+
+	imageObj, ok := receivedResponse["image"]
+	if !ok {
+		t.Fatal("expected image key in response")
+	}
+
+	imageData, ok := imageObj.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected image data to be map, got %T", imageObj)
+	}
+
+	if imageData["error"] != "presentFailed" {
+		t.Fatalf("expected error presentFailed, got %v", imageData["error"])
+	}
+	if imageData["name"] != "view" {
+		t.Fatalf("expected name view, got %v", imageData["name"])
+	}
+	seq := imageData["sequence"]
+	var seqVal int
+	switch v := seq.(type) {
+	case int:
+		seqVal = v
+	case float64:
+		seqVal = int(v)
+	default:
+		t.Fatalf("unexpected sequence type %T", seq)
+	}
+	if seqVal != 1 {
+		t.Fatalf("expected sequence 1, got %v", seqVal)
 	}
 }

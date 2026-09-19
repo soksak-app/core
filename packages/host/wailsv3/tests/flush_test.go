@@ -1,0 +1,196 @@
+package host_test
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"syscall"
+	"testing"
+	"time"
+
+	host "github.com/min-median-max/soksak/packages/host/wailsv3/src"
+)
+
+// TestEveryPendingReplyIsFlushedAfterTheQueueDrains verifies that when the write queue fills up,
+// all buffered replies and closes are written after the queue is drained, in the correct order.
+func TestEveryPendingReplyIsFlushedAfterTheQueueDrains(t *testing.T) {
+	directory := t.TempDir()
+	fifo := filepath.Join(directory, "go")
+	if err := syscall.Mkfifo(fifo, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	received := filepath.Join(directory, "received")
+	// 사이드카는 FIFO 를 읽기로 여는 순간 블록한다. 그동안 stdin 을 읽지 않는다. 폴링이 아니다.
+	script := "#!/bin/sh\nread _ < " + fifo + "\nexec cat > " + received + "\n"
+	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sidecars, err := host.NewSidecars(frontend(`{"executable":"build/echo","protocol":1}`), directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := newFakeOwner("/p")
+	// 닫을 표면을 먼저 등록한다(Close 는 등록된 표면만 알린다).
+	for _, s := range []string{"s1", "s2", "s3"} {
+		if err := sidecars.Send(owner, echoSidecar, s, json.RawMessage(`{}`)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// 큐와 파이프 버퍼를 가득 채운다.
+	big := json.RawMessage(`{"data":"` + strings.Repeat("x", 20*1024) + `"}`)
+	full := false
+	for i := 0; i < 4000 && !full; i++ {
+		if err := sidecars.Send(owner, echoSidecar, "s1", big); err != nil {
+			if !strings.Contains(err.Error(), "is not keeping up") {
+				t.Fatal(err)
+			}
+			full = true
+		}
+	}
+	if !full {
+		t.Fatal("the queue never filled")
+	}
+	// 가득 찬 상태에서 표면·이름이 다른 반납 셋과 닫힘 둘.
+	for i, name := range []string{"a", "b", "c"} {
+		bodyMap := host.AfterPresent(true, "", name, i+1)
+		bodyBytes, _ := json.Marshal(bodyMap)
+		if err := sidecars.SendResponse(echoSidecar, "s1", name, json.RawMessage(bodyBytes)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// 같은 그림 a 에 다른 sequence 로 다시 보낸다. 최신(seq 4)만 도착해야 한다.
+	bodyMap := host.AfterPresent(true, "", "a", 4)
+	bodyBytes, _ := json.Marshal(bodyMap)
+	if err := sidecars.SendResponse(echoSidecar, "s1", "a", json.RawMessage(bodyBytes)); err != nil {
+		t.Fatal(err)
+	}
+	sidecars.Close("s2")
+	sidecars.Close("s3")
+	// 사이드카를 풀어 준다. 그 뒤로 아무것도 더 보내지 않는다.
+	f, err := os.OpenFile(fifo, os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.Write([]byte("go\n"))
+	f.Close()
+	sidecars.Stop() // 큐와 보관분을 모두 쓴 뒤 stdin 을 닫는다. cat 이 끝난다.
+	data, err := os.ReadFile(received)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	for _, want := range []string{`"name":"a"`, `"name":"b"`, `"name":"c"`} {
+		if !strings.Contains(text, want) {
+			t.Errorf("reply %s never reached the sidecar", want)
+		}
+	}
+	for _, s := range []string{`"surface":"s2","closed":true`, `"surface":"s3","closed":true`} {
+		if !strings.Contains(text, s) {
+			t.Errorf("close %s never reached the sidecar", s)
+		}
+	}
+	// 같은 그림 a 의 seq 1, 2 두 번 보냈을 때 seq 2 하나만 도착해야 한다.
+	// 실제 JSON 필드 순서는 Marshal 결과를 기반으로 함.
+	aSeq1Pattern := `"name":"a","sequence":1` // seq 1 은 없어야 함
+	aSeq2Pattern := `"name":"a","sequence":2` // seq 2 는 있어야 함
+	aSeq4Pattern := `"name":"a","sequence":4` // seq 4 는 있어야 함 (최신)
+
+	if strings.Contains(text, aSeq1Pattern) {
+		t.Errorf("image a with sequence 1 should have been replaced, but found in output")
+	}
+	if strings.Contains(text, aSeq2Pattern) {
+		t.Errorf("image a with sequence 2 should have been replaced, but found in output")
+	}
+
+	// seq 4 는 정확히 한 번 나타나야 함 (최신 값)
+	count := strings.Count(text, aSeq4Pattern)
+	if count != 1 {
+		t.Errorf("image a with sequence 4 should appear exactly once, appeared %d times", count)
+	}
+
+	// 순서: 닫힘과 반납은 큐에 먼저 들어간 큰 본문들보다 뒤에 온다.
+	last := strings.LastIndex(text, `"data":"`)
+	for _, want := range []string{`"name":"a"`, `"surface":"s2","closed":true`} {
+		if i := strings.Index(text, want); i >= 0 && i < last {
+			t.Errorf("%s arrived before the queued bodies", want)
+		}
+	}
+}
+
+// TestOrderIsCorrectWhenStopFlushesBufferedMessages verifies that Stop() writes all
+// buffered messages before closing stdin, ensuring messages aren't lost.
+func TestOrderIsCorrectWhenStopFlushesBufferedMessages(t *testing.T) {
+	directory := t.TempDir()
+	fifo := filepath.Join(directory, "go")
+	if err := syscall.Mkfifo(fifo, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	received := filepath.Join(directory, "received")
+	script := "#!/bin/sh\nread _ < " + fifo + "\nexec cat > " + received + "\n"
+	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sidecars, err := host.NewSidecars(frontend(`{"executable":"build/echo","protocol":1}`), directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sidecars.StopTimeout = 10 * time.Second // Ensure Stop() waits long enough for cat to receive 5MB
+	owner := newFakeOwner("/p")
+
+	// 표면 등록
+	for _, s := range []string{"s1", "s2"} {
+		if err := sidecars.Send(owner, echoSidecar, s, json.RawMessage(`{}`)); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// 큐를 가득 채운다.
+	big := json.RawMessage(`{"data":"` + strings.Repeat("x", 20*1024) + `"}`)
+	full := false
+	for i := 0; i < 4000 && !full; i++ {
+		if err := sidecars.Send(owner, echoSidecar, "s1", big); err != nil {
+			if !strings.Contains(err.Error(), "is not keeping up") {
+				t.Fatal(err)
+			}
+			full = true
+		}
+	}
+	if !full {
+		t.Fatal("the queue never filled")
+	}
+
+	// 가득 찬 상태에서 보관할 메시지들
+	for i, name := range []string{"x", "y", "z"} {
+		bodyMap := host.AfterPresent(true, "", name, i+1)
+		bodyBytes, _ := json.Marshal(bodyMap)
+		if err := sidecars.SendResponse(echoSidecar, "s1", name, json.RawMessage(bodyBytes)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sidecars.Close("s2")
+
+	// 사이드카를 풀어 준다.
+	f, err := os.OpenFile(fifo, os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.Write([]byte("go\n"))
+	f.Close()
+
+	// Stop() 을 호출하면 보관분을 모두 쓴 뒤 stdin 을 닫아야 한다.
+	sidecars.Stop()
+
+	data, err := os.ReadFile(received)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+
+	// 모든 보관 메시지가 도착했는지 확인
+	for _, want := range []string{`"name":"x"`, `"name":"y"`, `"name":"z"`, `"surface":"s2","closed":true`} {
+		if !strings.Contains(text, want) {
+			t.Errorf("buffered message %s was lost", want)
+		}
+	}
+}

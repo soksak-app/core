@@ -18,6 +18,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -51,13 +52,16 @@ type sidecarEvent struct {
 }
 
 type sidecar struct {
-	name       string
-	cmd        *exec.Cmd
-	stdin      io.WriteCloser
-	outbox     chan []byte
-	exited     chan struct{}
-	muClosed   sync.Mutex
-	closedMsgs map[string][]byte // surface → 마지막 closed 메시지. 같은 표면의 것을 교체한다.
+	name          string
+	cmd           *exec.Cmd
+	stdin         io.WriteCloser
+	outbox        chan []byte
+	exited        chan struct{}
+	muClosed      sync.Mutex
+	pendingCloses map[string][]byte // surface → 마지막 closed 메시지. 같은 표면의 것을 교체한다.
+	// pendingReplies 는 채널이 가득 찬 경우 이미지 응답을 버퍼링한다.
+	// surface:name 이 key 로 최신 응답만 보관한다.
+	pendingReplies map[string][]byte // "surface:name" → 최신 응답 JSON
 }
 
 // SidecarOwner 는 표면을 소유한 창이다. 사이드카 메시지의 root 를 제공하고 이벤트를 받는다.
@@ -169,6 +173,45 @@ func (c *Sidecars) Send(owner SidecarOwner, name, surface string, body json.RawM
 	}
 }
 
+// SendResponse는 사이드카에 응답(이미지 반납 등)을 전달한다.
+// 채널이 가득 차면 응답을 surface:image 별로 버퍼링했다가 쓰기 스레드가 전송한다.
+func (c *Sidecars) SendResponse(name, surface, image string, body json.RawMessage) error {
+	// 먼저 뮤텍스 밖에서 JSON 직렬화한다.
+	type response struct {
+		Surface string          `json:"surface"`
+		Body    json.RawMessage `json:"body"`
+	}
+	line, err := json.Marshal(response{Surface: surface, Body: body})
+	if err != nil {
+		return fmt.Errorf("sidecar %s: response serialize: %w", name, err)
+	}
+	line = append(line, '\n')
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.stopped {
+		return fmt.Errorf("sidecars are stopped")
+	}
+	process, ok := c.running[name]
+	if !ok {
+		return fmt.Errorf("sidecar %s is not running", name)
+	}
+
+	// 논블로킹으로 채널에 전송한다. 채널이 가득 차면 버퍼링한다.
+	select {
+	case process.outbox <- line:
+		return nil
+	default:
+		// 채널이 가득 찼으므로 pendingReplies에 저장 (같은 표면:이미지의 것을 교체)
+		responseKey := surface + ":" + image
+		process.muClosed.Lock()
+		process.pendingReplies[responseKey] = line
+		process.muClosed.Unlock()
+		log.Printf("sidecar %s: response queue full, buffering %s", name, responseKey)
+		return nil
+	}
+}
+
 // Close 는 제거된 표면을 실행 중인 모든 사이드카에 알린다.
 func (c *Sidecars) Close(surface string) {
 	c.mu.Lock()
@@ -187,13 +230,13 @@ func (c *Sidecars) Close(surface string) {
 	line = append(line, '\n')
 
 	for _, process := range c.running {
-		// 논블로킹으로 채널에 전송한다. 채널이 가득 차면 closedMsgs에 저장한다.
+		// 논블로킹으로 채널에 전송한다. 채널이 가득 차면 pendingCloses에 저장한다.
 		select {
 		case process.outbox <- line:
 		default:
-			// 채널이 가득 찼으므로 closedMsgs에 저장 (같은 표면의 이전 것을 교체)
+			// 채널이 가득 찼으므로 pendingCloses에 저장 (같은 표면의 이전 것을 교체)
 			process.muClosed.Lock()
-			process.closedMsgs[surface] = line
+			process.pendingCloses[surface] = line
 			process.muClosed.Unlock()
 		}
 	}
@@ -231,7 +274,7 @@ func (c *Sidecars) Stop() {
 		close(process.outbox)
 	}
 
-	// 모든 프로세스를 병렬로 기다린다. 기한을 넘기면 kill하고 Wait()로 좀비를 수집한다.
+	// 모든 프로세스를 병렬로 기다린다. 기한을 넘기면 kill하고 exited 채널을 기다린다.
 	ctx, cancel := context.WithTimeout(context.Background(), c.StopTimeout)
 	defer cancel()
 
@@ -240,20 +283,17 @@ func (c *Sidecars) Stop() {
 		wg.Add(1)
 		go func(p *sidecar) {
 			defer wg.Done()
-			// 프로세스가 종료되기를 기다린다.
-			done := make(chan error, 1)
-			go func() {
-				done <- p.cmd.Wait()
-			}()
-
+			// read() 고루틴이 종료되면 process.exited 채널이 닫힌다.
 			select {
-			case <-done:
+			case <-p.exited:
 				// 프로세스가 정상 종료됨.
 			case <-ctx.Done():
 				// 기한 초과. 강제 종료.
-				_ = p.cmd.Process.Kill()
-				// Wait() 호출하여 좀비 수집.
-				_ = p.cmd.Wait()
+				if err := p.cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+					log.Printf("sidecar %s: kill: %v", p.name, err)
+				}
+				// read() 고루틴이 종료될 때까지 기다린다.
+				<-p.exited
 			}
 		}(process)
 	}
@@ -283,9 +323,10 @@ func (c *Sidecars) process(name string) (*sidecar, error) {
 	}
 	process := &sidecar{
 		name: name, cmd: cmd, stdin: stdin,
-		outbox:     make(chan []byte, 256),
-		exited:     make(chan struct{}),
-		closedMsgs: make(map[string][]byte),
+		outbox:         make(chan []byte, 256),
+		exited:         make(chan struct{}),
+		pendingCloses:  make(map[string][]byte),
+		pendingReplies: make(map[string][]byte),
 	}
 	c.running[name] = process
 	go c.write(process)        // 쓰기 고루틴: outbox 채널에서 읽어 stdin 에 쓴다.
@@ -293,15 +334,76 @@ func (c *Sidecars) process(name string) (*sidecar, error) {
 	return process, nil
 }
 
-// write 는 outbox 채널에서 바이트를 읽어 사이드카의 stdin 에 쓴다. 채널이 닫히면 stdin 을 닫고 종료한다.
+// write 는 큐를 먼저 비우고, 큐가 비면 보관분을 쓰고, 그다음 큐를 기다린다.
+// 보관분은 큐가 가득 찬 뒤에 생기므로 큐에 먼저 들어간 메시지보다 뒤에 나가야 한다.
+// 큐가 닫히면 보관분까지 쓴 뒤 stdin 을 닫는다.
 func (c *Sidecars) write(process *sidecar) {
-	for line := range process.outbox {
-		if _, err := process.stdin.Write(line); err != nil {
-			log.Printf("sidecar %s: write: %v", process.name, err)
-			break
+	defer func() {
+		if err := process.stdin.Close(); err != nil {
+			log.Printf("sidecar %s: close stdin: %v", process.name, err)
+		}
+	}()
+	for {
+		// ① 채널에 있는 모든 메시지를 비블로킹으로 쓴다 (default 가 있는 select).
+		for drained := false; !drained; {
+			select {
+			case line, ok := <-process.outbox:
+				if !ok {
+					// 채널이 닫혔다. 보관분을 모두 쓴 뒤 종료한다.
+					c.writePending(process)
+					return
+				}
+				if !c.writeLine(process, line) {
+					return
+				}
+			default:
+				drained = true
+			}
+		}
+
+		// ② 큐가 비었으면 보관분을 모두 쓴다.
+		if !c.writePending(process) {
+			return
+		}
+
+		// ③ 이제 채널에서 다음 건을 기다린다 (블로킹).
+		line, ok := <-process.outbox
+		if !ok {
+			// 채널이 닫혔다. 보관분을 모두 쓴 뒤 종료한다.
+			c.writePending(process)
+			return
+		}
+		if !c.writeLine(process, line) {
+			return
 		}
 	}
-	_ = process.stdin.Close()
+}
+
+func (c *Sidecars) writeLine(process *sidecar, line []byte) bool {
+	if _, err := process.stdin.Write(line); err != nil {
+		log.Printf("sidecar %s: write: %v", process.name, err)
+		return false
+	}
+	return true
+}
+
+// writePending 은 보관분을 한꺼번에 가져와 반납 먼저, 닫힘 나중으로 쓴다.
+func (c *Sidecars) writePending(process *sidecar) bool {
+	process.muClosed.Lock()
+	replies, closes := process.pendingReplies, process.pendingCloses
+	process.pendingReplies, process.pendingCloses = map[string][]byte{}, map[string][]byte{}
+	process.muClosed.Unlock()
+	for _, line := range replies {
+		if !c.writeLine(process, line) {
+			return false
+		}
+	}
+	for _, line := range closes {
+		if !c.writeLine(process, line) {
+			return false
+		}
+	}
+	return true
 }
 
 // read 는 사이드카의 출력을 표면 소유 창에 전달하고, 출력이 끝나면 프로세스를 정리한다.

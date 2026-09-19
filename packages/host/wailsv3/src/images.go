@@ -12,6 +12,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log"
 	"regexp"
 	"sync"
 	"unsafe"
@@ -185,6 +186,7 @@ type NotImage struct{}
 
 // Reply 는 사이드카에 보낼 오류 응답을 나타낸다.
 type Reply struct {
+	Name string
 	JSON map[string]interface{}
 }
 
@@ -220,16 +222,16 @@ func Decide(bodyBytes []byte, sender, surface string, images *Images) Decision {
 	}
 
 	var envelope struct {
-		Name     string `json:"name"`
-		Token    struct {
+		Name  string `json:"name"`
+		Token struct {
 			Kind  string `json:"kind"`
 			ID    uint32 `json:"id"`
 			Nonce string `json:"nonce"`
 		} `json:"token"`
-		Width    int `json:"width"`
-		Height   int `json:"height"`
+		Width    int    `json:"width"`
+		Height   int    `json:"height"`
 		Format   string `json:"format"`
-		Sequence int `json:"sequence"`
+		Sequence int    `json:"sequence"`
 	}
 
 	if err := json.Unmarshal(imageBytes, &envelope); err != nil {
@@ -239,6 +241,7 @@ func Decide(bodyBytes []byte, sender, surface string, images *Images) Decision {
 	// 포맷과 토큰 종류 검증
 	if envelope.Format != "bgra8" || envelope.Token.Kind != "iosurface-global" {
 		return &Reply{
+			Name: envelope.Name,
 			JSON: map[string]interface{}{
 				"image": map[string]interface{}{
 					"error":    "unsupported",
@@ -253,6 +256,7 @@ func Decide(bodyBytes []byte, sender, surface string, images *Images) Decision {
 	decodedNonce, err := base64.StdEncoding.DecodeString(envelope.Token.Nonce)
 	if err != nil {
 		return &Reply{
+			Name: envelope.Name,
 			JSON: map[string]interface{}{
 				"image": map[string]interface{}{
 					"error":    "unsupported",
@@ -266,6 +270,7 @@ func Decide(bodyBytes []byte, sender, surface string, images *Images) Decision {
 	// 디코딩된 nonce 가 정확히 16바이트여야 함
 	if len(decodedNonce) != 16 {
 		return &Reply{
+			Name: envelope.Name,
 			JSON: map[string]interface{}{
 				"image": map[string]interface{}{
 					"error":    "unsupported",
@@ -297,6 +302,7 @@ func Decide(bodyBytes []byte, sender, surface string, images *Images) Decision {
 
 	// 등록되지 않았거나 발신자가 다름
 	return &Reply{
+		Name: envelope.Name,
 		JSON: map[string]interface{}{
 			"image": map[string]interface{}{
 				"error":    "notAttached",
@@ -331,7 +337,7 @@ func AfterPresent(ok bool, reason, name string, sequence int) map[string]interfa
 
 // HandleEnvelope 는 이미지 봉투를 처리한다. 메인 스레드에서 실행할 작업과 응답 전송 방식을 인자로 받는다.
 // 봉투를 처리했으면 true, 아니면 false를 반환한다.
-func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, onMain func(func() error) error, sendResponse func(map[string]interface{}) error) bool {
+func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, onMain func(func() bool) bool, sendResponse func(string, map[string]interface{}) error) bool {
 	decision := Decide(bodyBytes, sender, surface, images)
 
 	switch d := decision.(type) {
@@ -339,7 +345,9 @@ func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, on
 		return false
 
 	case *Reply:
-		_ = sendResponse(d.JSON)
+		if err := sendResponse(d.Name, d.JSON); err != nil {
+			log.Printf("image reply %s: %v", d.Name, err)
+		}
 		return true
 
 	case *Present:
@@ -347,18 +355,28 @@ func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, on
 		handle, err := images.Get(key)
 		if err != nil {
 			response := AfterPresent(false, "notAttached", d.Name, d.Sequence)
-			_ = sendResponse(response)
+			if err := sendResponse(d.Name, response); err != nil {
+				log.Printf("image notAttached %s: %v", d.Name, err)
+			}
 			return true
 		}
 
-		_ = onMain(func() error {
+		ok := onMain(func() bool {
 			// 플랫폼에 이미지를 표시한다
-			_ = system.PresentImage(handle, d.ID, d.Nonce, float64(d.Width), float64(d.Height))
-			return nil
+			return system.PresentImage(handle, d.ID, d.Nonce, float64(d.Width), float64(d.Height))
 		})
 
-		response := AfterPresent(true, "", d.Name, d.Sequence)
-		_ = sendResponse(response)
+		if !ok {
+			response := AfterPresent(false, "presentFailed", d.Name, d.Sequence)
+			if err := sendResponse(d.Name, response); err != nil {
+				log.Printf("image presentFailed %s: %v", d.Name, err)
+			}
+		} else {
+			response := AfterPresent(true, "", d.Name, d.Sequence)
+			if err := sendResponse(d.Name, response); err != nil {
+				log.Printf("image released %s: %v", d.Name, err)
+			}
+		}
 		return true
 
 	default:

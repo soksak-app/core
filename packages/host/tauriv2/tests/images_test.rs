@@ -24,7 +24,8 @@ fn unattached_image_is_refused() {
 
     // 이미지가 등록되지 않았으므로 notAttached 오류를 반환해야 함
     match decide(&body, "sidecar-a", "tab-1", &images) {
-        Decision::Reply(json) => {
+        Decision::Reply { name, json } => {
+            assert_eq!(name, "view");
             assert!(json["image"]["error"].as_str().unwrap().contains("notAttached"));
             assert_eq!(json["image"]["name"], "view");
             assert_eq!(json["image"]["sequence"], 1);
@@ -39,7 +40,7 @@ fn image_from_another_sidecar_is_refused() {
     let key: Key = ("tab-1".to_string(), "view".to_string());
 
     // 첫 번째 사이드카가 이미지를 등록
-    images.reserve(&key, "owner-a", "sidecar-a").ok();
+    images.reserve(&key, "owner-a", "sidecar-a").expect("reserve");
     images.set(&key, 100);
 
     let nonce_b64 = "AAAAAAAAAAAAAAAAAAAAAA==";
@@ -60,7 +61,8 @@ fn image_from_another_sidecar_is_refused() {
 
     // 다른 사이드카가 같은 이미지를 보내면 notAttached 오류를 반환해야 함
     match decide(&body, "sidecar-b", "tab-1", &images) {
-        Decision::Reply(json) => {
+        Decision::Reply { name, json } => {
+            assert_eq!(name, "view");
             assert!(json["image"]["error"].as_str().unwrap().contains("notAttached"));
         }
         _ => panic!("expected Reply(notAttached) for different sidecar"),
@@ -73,7 +75,7 @@ fn attached_image_is_presented() {
     let key: Key = ("tab-1".to_string(), "view".to_string());
 
     // 사이드카가 이미지를 등록
-    images.reserve(&key, "owner-a", "sidecar-a").ok();
+    images.reserve(&key, "owner-a", "sidecar-a").expect("reserve");
     images.set(&key, 100);
 
     let nonce_b64 = "AAAAAAAAAAAAAAAAAAAAAA==";
@@ -151,7 +153,8 @@ fn unsupported_image_is_refused() {
     }).to_string();
 
     match decide(&body_wrong_format, "sidecar-a", "tab-1", &images) {
-        Decision::Reply(json) => {
+        Decision::Reply { name, json } => {
+            assert_eq!(name, "view");
             assert!(json["image"]["error"].as_str().unwrap().contains("unsupported"));
         }
         _ => panic!("expected Reply(unsupported) for wrong format"),
@@ -174,7 +177,8 @@ fn unsupported_image_is_refused() {
     }).to_string();
 
     match decide(&body_wrong_nonce, "sidecar-a", "tab-1", &images) {
-        Decision::Reply(json) => {
+        Decision::Reply { name, json } => {
+            assert_eq!(name, "view");
             assert!(json["image"]["error"].as_str().unwrap().contains("unsupported"));
         }
         _ => panic!("expected Reply(unsupported) for wrong nonce length"),
@@ -197,7 +201,8 @@ fn unsupported_image_is_refused() {
     }).to_string();
 
     match decide(&body_wrong_kind, "sidecar-a", "tab-1", &images) {
-        Decision::Reply(json) => {
+        Decision::Reply { name, json } => {
+            assert_eq!(name, "view");
             assert!(json["image"]["error"].as_str().unwrap().contains("unsupported"));
         }
         _ => panic!("expected Reply(unsupported) for wrong token kind"),
@@ -253,7 +258,8 @@ fn reply_escapes_names() {
 
     // 등록되지 않은 이미지이므로 Reply가 반환되어야 함
     match decide(&body, "sidecar-a", "tab-1", &images) {
-        Decision::Reply(json) => {
+        Decision::Reply { name, json } => {
+            assert_eq!(name, "a\"b");
             // 응답을 문자열로 변환하여 JSON 유효성 확인
             let response_str = serde_json::to_string(&json).unwrap();
             assert!(serde_json::from_str::<serde_json::Value>(&response_str).is_ok());
@@ -273,13 +279,13 @@ fn surface_close_removes_only_its_images() {
     let surface_2_img: Key = ("tab-2".to_string(), "view".to_string());
 
     // tab-1에 2개 이미지 등록
-    images.reserve(&surface_1_img_1, "owner", "sidecar").ok();
+    images.reserve(&surface_1_img_1, "owner", "sidecar").expect("reserve");
     images.set(&surface_1_img_1, 100);
-    images.reserve(&surface_1_img_2, "owner", "sidecar").ok();
+    images.reserve(&surface_1_img_2, "owner", "sidecar").expect("reserve");
     images.set(&surface_1_img_2, 200);
 
     // tab-2에 1개 이미지 등록
-    images.reserve(&surface_2_img, "owner", "sidecar").ok();
+    images.reserve(&surface_2_img, "owner", "sidecar").expect("reserve");
     images.set(&surface_2_img, 300);
 
     // tab-1 표면의 모든 이미지 제거
@@ -294,4 +300,66 @@ fn surface_close_removes_only_its_images() {
 
     // tab-2의 이미지는 여전히 접근 가능
     assert_eq!(images.get(&surface_2_img).unwrap(), 300);
+}
+
+#[test]
+fn presentation_failure_is_reported() {
+    use std::sync::{Arc, Mutex};
+    use soksak_host_tauriv2::images::handle_envelope;
+
+    let images = Images::default();
+    let key: Key = ("tab-1".to_string(), "view".to_string());
+
+    // 이미지 등록
+    images.reserve(&key, "owner", "sidecar-a").expect("reserve");
+    images.set(&key, 100);
+
+    let nonce = "AAAAAAAAAAAAAAAAAAAAAA==";
+    let body = json!({
+        "image": {
+            "name": "view",
+            "token": {
+                "kind": "iosurface-global",
+                "id": 12345u32,
+                "nonce": nonce
+            },
+            "width": 800,
+            "height": 600,
+            "format": "bgra8",
+            "sequence": 1
+        }
+    }).to_string();
+
+    let received_response = Arc::new(Mutex::new(None));
+    let response_clone = Arc::clone(&received_response);
+
+    // handle_envelope 호출, onMain이 false 반환 (표시 실패)
+    let handled = handle_envelope(
+        &body,
+        "sidecar-a",
+        "tab-1",
+        &images,
+        |_work| Err("simulated main thread failure".to_string()),
+        |_image, json| {
+            *response_clone.lock().unwrap() = Some(json);
+            Ok(())
+        },
+    );
+
+    assert!(handled, "envelope should have been handled");
+
+    let response_opt = received_response.lock().unwrap();
+    assert!(
+        response_opt.is_some(),
+        "response should have been sent"
+    );
+
+    let response = response_opt.as_ref().unwrap();
+    assert!(response["image"]["error"].is_string());
+    assert_eq!(
+        response["image"]["error"], "presentFailed",
+        "expected error presentFailed"
+    );
+    assert_eq!(response["image"]["name"], "view");
+    assert_eq!(response["image"]["sequence"], 1);
 }

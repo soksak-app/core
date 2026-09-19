@@ -169,18 +169,19 @@ func (s *Surfaces) SidecarSend(name, surface string, body json.RawMessage) error
 func (s *Surfaces) DecideImageEnvelope(sidecarName, surface string, body json.RawMessage) bool {
 	sidecars := s.sidecars
 	return HandleEnvelope(body, sidecarName, surface, s.images,
-		func(work func() error) error {
+		func(work func() bool) bool {
+			var result bool
 			application.InvokeSync(func() {
-				_ = work()
+				result = work()
 			})
-			return nil
+			return result
 		},
-		func(response map[string]interface{}) error {
+		func(image string, response map[string]interface{}) error {
 			responseBytes, err := json.Marshal(response)
 			if err != nil {
 				return err
 			}
-			return sidecars.Send(s, sidecarName, surface, json.RawMessage(responseBytes))
+			return sidecars.SendResponse(sidecarName, surface, image, json.RawMessage(responseBytes))
 		},
 	)
 }

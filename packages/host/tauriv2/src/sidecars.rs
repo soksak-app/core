@@ -12,8 +12,8 @@
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Component, Path, PathBuf};
-use std::process::{Child, Command, Stdio};
-use std::sync::mpsc::{sync_channel, SyncSender};
+use std::process::{Child, ChildStdin, Command, Stdio};
+use std::sync::mpsc::{sync_channel, RecvError, SyncSender, TryRecvError, TrySendError};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -46,8 +46,8 @@ enum Outgoing {
 
 /// 사이드카로 응답을 전송하는 인터페이스.
 pub trait ResponseSender: Send {
-    /// 응답 JSON 을 사이드카에 전송한다.
-    fn send(&self, surface: &str, body: &RawValue) -> Result<(), String>;
+    /// 응답 JSON 을 사이드카에 전송한다. 이미지 이름을 키로 사용한다.
+    fn send(&self, surface: &str, image: &str, body: &RawValue) -> Result<(), String>;
 }
 
 /// 표면을 소유한 창. 사이드카 메시지의 root 를 제공하고 이벤트를 받는다.
@@ -89,13 +89,15 @@ struct Event {
 }
 
 /// 읽기 스레드의 응답 전송기. 사이드카 outbox 채널로 응답을 전송한다.
-struct ReadThreadResponseSender {
+/// 채널이 가득 차면 응답을 State.pending_replies 에 버퍼링한다.
+struct ReadThreadResponseSender<O: Owner> {
     sidecar_name: String,
     tx: SyncSender<Outgoing>,
+    state: Arc<Mutex<State<O>>>,
 }
 
-impl ResponseSender for ReadThreadResponseSender {
-    fn send(&self, surface: &str, body: &RawValue) -> Result<(), String> {
+impl<O: Owner> ResponseSender for ReadThreadResponseSender<O> {
+    fn send(&self, surface: &str, image: &str, body: &RawValue) -> Result<(), String> {
         #[derive(Serialize)]
         struct Response<'a> {
             surface: &'a str,
@@ -107,9 +109,41 @@ impl ResponseSender for ReadThreadResponseSender {
             .map_err(|e| format!("response serialization: {e}"))?;
         line.push(b'\n');
 
-        self.tx.try_send(Outgoing::Line(line))
-            .map_err(|_| format!("sidecar {} response queue full", self.sidecar_name))
+        match self.tx.try_send(Outgoing::Line(line.clone())) {
+            Ok(()) => Ok(()),
+            Err(_) => {
+                // 채널이 가득 차면 State.pending_replies 에 버퍼링 (같은 surface:image의 것을 교체)
+                let mut state = self.state.lock().expect("sidecar state");
+                let key = format!("{}:{}", surface, image);
+                state.pending_replies
+                    .entry(self.sidecar_name.clone())
+                    .or_insert_with(HashMap::new)
+                    .insert(key.clone(), line);
+                eprintln!("sidecar {} response queue full: buffering {}", self.sidecar_name, key);
+                Ok(())
+            }
+        }
     }
+}
+
+fn write_line(stdin: &mut ChildStdin, name: &str, line: &[u8]) -> bool {
+    if let Err(e) = stdin.write_all(line) {
+        eprintln!("sidecar {name}: write: {e}");
+        return false;
+    }
+    true
+}
+
+/// 보관분을 한꺼번에 꺼내 반납 먼저, 닫힘 나중으로 쓴다. 보관분은 큐가 가득 찬 뒤에 생기므로 큐보다 뒤에 나간다.
+fn write_pending<O: Owner>(state: &Mutex<State<O>>, name: &str, stdin: &mut ChildStdin) -> bool {
+    let (replies, closes) = {
+        let mut state = state.lock().expect("sidecar state");
+        (
+            state.pending_replies.remove(name).unwrap_or_default(),
+            state.pending_closes.remove(name).unwrap_or_default(),
+        )
+    };
+    replies.values().chain(closes.values()).all(|line| write_line(stdin, name, line))
 }
 
 struct Process {
@@ -121,6 +155,10 @@ struct State<O> {
     running: HashMap<String, Process>,
     owners: HashMap<String, O>,
     stopped: bool,
+    // pending_replies: 각 사이드카별로 이미지 응답을 버퍼링한다 (surface:name → latest response)
+    // pending_closes: 각 사이드카별로 표면의 닫힘 메시지를 버퍼링한다 (surface → close message)
+    pending_replies: HashMap<String, HashMap<String, Vec<u8>>>,
+    pending_closes: HashMap<String, HashMap<String, Vec<u8>>>,
 }
 
 /// 애플리케이션 하나의 사이드카 프로세스와 표면 소유 창을 관리한다.
@@ -193,6 +231,8 @@ impl<O: Owner> Sidecars<O> {
                 running: HashMap::new(),
                 owners: HashMap::new(),
                 stopped: false,
+                pending_replies: HashMap::new(),
+                pending_closes: HashMap::new(),
             })),
             stop_timeout: Duration::from_secs(5),
         })
@@ -269,14 +309,70 @@ impl<O: Owner> Sidecars<O> {
             .map_err(|e| e.to_string())?;
             line.push(b'\n');
 
-            for (name, process) in state.running.iter() {
-                // 논블로킹으로 채널에 전송한다. 실패해도 로그만 한다.
-                if let Err(_) = process.outbox.try_send(Outgoing::Line(line.clone())) {
-                    eprintln!("sidecar {name}: close {surface}: outbox full");
+            // 채널 전송을 시도할 프로세스들을 먼저 수집한다 (borrow 충돌 방지).
+            let processes: Vec<(String, bool)> = state.running.iter().map(|(name, process)| {
+                let sent = process.outbox.try_send(Outgoing::Line(line.clone())).is_ok();
+                (name.clone(), sent)
+            }).collect();
+
+            // 전송 실패한 항목들을 버퍼링한다.
+            for (name, sent) in processes {
+                if !sent {
+                    state.pending_closes
+                        .entry(name.clone())
+                        .or_insert_with(HashMap::new)
+                        .insert(surface.clone(), line.clone());
+                    eprintln!("sidecar {name}: close {surface}: outbox full, buffered");
                 }
             }
         }
         Ok(())
+    }
+
+    /// 사이드카에 응답(이미지 반납 등)을 전달한다. ResponseSender와 동일한 역할을 한다.
+    /// 채널이 가득 차면 응답을 surface:image 별로 버퍼링했다가 쓰기 스레드가 전송한다.
+    pub fn send_response(
+        &self,
+        name: &str,
+        surface: &str,
+        image: &str,
+        body: &RawValue,
+    ) -> Result<(), String> {
+        #[derive(Serialize)]
+        struct Response<'a> {
+            surface: &'a str,
+            body: &'a RawValue,
+        }
+
+        let response = Response { surface, body };
+        let mut line = serde_json::to_vec(&response)
+            .map_err(|e| format!("sidecar {name}: response serialize: {e}"))?;
+        line.push(b'\n');
+
+        let mut state = self.state.lock().expect("sidecar state");
+        if state.stopped {
+            return Err("sidecars are stopped".into());
+        }
+        let process = state
+            .running
+            .get(name)
+            .ok_or_else(|| format!("sidecar {name} is not running"))?;
+
+        // 논블로킹으로 채널에 전송한다. 채널이 가득 차면 버퍼링한다.
+        match process.outbox.try_send(Outgoing::Line(line.clone())) {
+            Ok(()) => Ok(()),
+            Err(_) => {
+                // 채널이 가득 찼으므로 pending_replies 에 저장 (같은 surface:image 의 것을 교체)
+                let key = format!("{}:{}", surface, image);
+                state
+                    .pending_replies
+                    .entry(name.to_string())
+                    .or_insert_with(HashMap::new)
+                    .insert(key.clone(), line);
+                eprintln!("sidecar {name}: response queue full, buffering {key}");
+                Ok(())
+            }
+        }
     }
 
     /// 모든 사이드카를 종료한다. 채널에 Close 신호를 보내 쓰기 스레드를 종료하고 stdin을 닫은 후
@@ -294,13 +390,21 @@ impl<O: Owner> Sidecars<O> {
         for (_name, process) in processes {
             let handle = thread::spawn(move || {
                 // Close 신호를 보낸다. 쓰기 스레드가 이를 받으면 블로킹 루프를 빠져나가고 stdin을 close한다.
-                if let Err(_) = process.outbox.try_send(Outgoing::Close) {
-                    // 채널이 가득 참: 별도 스레드에서 블로킹 send를 시도한다.
-                    // 이 스레드는 stop()을 막지 않는다.
-                    let tx = process.outbox.clone();
-                    thread::spawn(move || {
-                        let _ = tx.send(Outgoing::Close);
-                    });
+                match process.outbox.try_send(Outgoing::Close) {
+                    Ok(()) => {}
+                    Err(TrySendError::Full(close)) => {
+                        // 채널이 가득 참: 별도 스레드에서 블로킹 send를 시도한다.
+                        // 이 스레드는 stop()을 막지 않는다.
+                        let tx = process.outbox.clone();
+                        thread::spawn(move || {
+                            if let Err(e) = tx.send(close) {
+                                eprintln!("sidecar: send close: {e}");
+                            }
+                        });
+                    }
+                    Err(TrySendError::Disconnected(_)) => {
+                        // 채널이 닫혔다. 쓰기 스레드가 이미 끝난 것이니 아무것도 보내지 않는다.
+                    }
                 }
 
                 let mut child = process.child;
@@ -313,11 +417,16 @@ impl<O: Owner> Sidecars<O> {
                     }
                     Ok(None) => {
                         // 기한 초과. 강제 종료.
-                        let _ = child.kill();
-                        let _ = child.wait();
+                        if let Err(e) = child.kill() {
+                            eprintln!("sidecar: kill: {e}");
+                        }
+                        if let Err(e) = child.wait() {
+                            eprintln!("sidecar: wait after kill: {e}");
+                        }
                     }
-                    Err(_) => {
+                    Err(e) => {
                         // wait() 오류. 이미 종료되었거나 이미 waited.
+                        eprintln!("sidecar: wait_timeout: {e}");
                     }
                 }
             });
@@ -326,7 +435,9 @@ impl<O: Owner> Sidecars<O> {
 
         // 모든 스레드가 완료될 때까지 기다린다.
         for handle in handles {
-            let _ = handle.join();
+            if let Err(e) = handle.join() {
+                eprintln!("sidecar: thread join: {:?}", e);
+            }
         }
     }
 
@@ -349,20 +460,35 @@ impl<O: Owner> Sidecars<O> {
         let (tx, rx) = sync_channel::<Outgoing>(256);
 
         // 쓰기 스레드: outbox 채널에서 읽어 stdin에 쓴다
+        // 순서는 ① 큐에 있는 모든 것을 비블로킹으로 쓴다 ② 큐가 비었으면 보관분을 모두 쓴다 ③ 그다음 채널에서 블록 수신한다.
+        // 이렇게 하면 보관분(큐가 가득 찼을 때만 생김)이 큐에 먼저 있던 메시지보다 뒤에 나가므로 순서가 맞다.
+        // 채널이 닫혀 종료할 때도 보관분을 전부 쓴 뒤 stdin을 닫는다.
         let write_name = name.to_string();
-        thread::spawn(move || {
-            for message in rx.iter() {
-                match message {
-                    Outgoing::Line(line) => {
-                        if let Err(e) = stdin.write_all(&line) {
-                            eprintln!("sidecar {write_name}: write: {e}");
-                            break;
-                        }
+        let state_clone = Arc::clone(&self.state);
+
+        thread::spawn(move || loop {
+            loop {
+                match rx.try_recv() {
+                    Ok(Outgoing::Line(line)) => {
+                        if !write_line(&mut stdin, &write_name, &line) { return; }
                     }
-                    Outgoing::Close => break,
+                    Ok(Outgoing::Close) | Err(TryRecvError::Disconnected) => {
+                        write_pending(&state_clone, &write_name, &mut stdin);
+                        return;
+                    }
+                    Err(TryRecvError::Empty) => break,
                 }
             }
-            // stdin이 여기서 drop 되어 닫힌다
+            if !write_pending(&state_clone, &write_name, &mut stdin) { return; }
+            match rx.recv() {
+                Ok(Outgoing::Line(line)) => {
+                    if !write_line(&mut stdin, &write_name, &line) { return; }
+                }
+                Ok(Outgoing::Close) | Err(RecvError) => {
+                    write_pending(&state_clone, &write_name, &mut stdin);
+                    return;
+                }
+            }
         });
 
         // 읽기 스레드: stdout에서 읽어 이벤트를 전달한다
@@ -389,14 +515,16 @@ impl<O: Owner> Sidecars<O> {
                         continue;
                     }
                 };
-                let owner = state
-                    .lock()
-                    .ok()
-                    .and_then(|state| state.owners.get(&event.surface).cloned());
+                // state lock은 절대 poison 되면 안 된다. 다른 스레드의 panic은 치명적.
+                let owner = {
+                    let state = state.lock().expect("sidecar state");
+                    state.owners.get(&event.surface).cloned()
+                };
                 if let Some(owner) = owner {
                     let response_sender = ReadThreadResponseSender {
                         sidecar_name: sidecar.clone(),
                         tx: tx_clone.clone(),
+                        state: Arc::clone(&state),
                     };
                     // 이미지 봉투 여부 확인 및 처리
                     if try_handle_image_envelope(&owner, &sidecar, &event.surface, &event.body, &response_sender) {
@@ -455,42 +583,24 @@ impl Owner for Window {
         response_sender: &dyn ResponseSender,
     ) -> bool {
         let data = match window_data(self) {
-            Ok(d) => d,
-            Err(_) => return false,
+            Ok(data) => data,
+            Err(e) => {
+                eprintln!("sidecar {sidecar_name}: image envelope for {surface}: {e}");
+                return false;
+            }
         };
-
         let window = self.clone();
-        let surface_copy = surface.to_string();
-        let sender_copy = Arc::new(Mutex::new(Vec::<serde_json::Value>::new()));
-        let sender_copy_clone = Arc::clone(&sender_copy);
-
-        let is_image = crate::images::handle_envelope(
+        crate::images::handle_envelope(
             body.get(),
             sidecar_name,
             surface,
             &data.images,
-            &|work: Box<dyn Fn() -> Result<(), String> + Send>| {
-                window.run_on_main_thread(move || { let _ = work(); }).map_err(|e| e.to_string())
+            |work: Box<dyn Fn() -> Result<(), String> + Send>| crate::exposure::on_main(&window, move || work()),
+            |image, response| {
+                let text = serde_json::to_string(&response).map_err(|e| e.to_string())?;
+                let body = RawValue::from_string(text).map_err(|e| e.to_string())?;
+                response_sender.send(surface, image, &body)
             },
-            &|response: serde_json::Value| {
-                if let Ok(mut queue) = sender_copy_clone.lock() {
-                    queue.push(response);
-                }
-                Ok(())
-            },
-        );
-
-        if is_image {
-            if let Ok(queue) = sender_copy.lock() {
-                for resp in queue.iter() {
-                    if let Ok(body_str) = serde_json::to_string(resp) {
-                        if let Ok(response_body) = RawValue::from_string(body_str) {
-                            let _ = response_sender.send(&surface_copy, &response_body);
-                        }
-                    }
-                }
-            }
-        }
-        is_image
+        )
     }
 }

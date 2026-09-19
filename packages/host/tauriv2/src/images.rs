@@ -249,16 +249,22 @@ pub(crate) fn attach(webview: &Webview, request: Request) -> Result<(), String> 
     let handle = match create(webview, &window, &key, platform) {
         Ok(handle) => handle,
         Err(error) => {
-            let _ = data.images.remove(&key);
+            if let Err(e) = data.images.remove(&key) {
+                eprintln!("failed to remove reserved image {}: {}", key.1, e);
+            }
             return Err(error);
         }
     };
     if !data.images.set(&key, handle) {
-        let _ = on_main(&window, move || {
+        if let Err(e) = on_main(&window, move || {
             let platform = platform::current()?;
             platform.close_image(handle)
-        });
-        let _ = data.images.remove(&key);
+        }) {
+            eprintln!("failed to close image on main thread: {}", e);
+        }
+        if let Err(e) = data.images.remove(&key) {
+            eprintln!("failed to remove image after failed set: {}", e);
+        }
         return Err(format!("surface {:?} closed while its image was created", key.0));
     }
     exposure::window_changed(&window);
@@ -353,7 +359,10 @@ pub enum Decision {
     /// 본문에 이미지 필드가 없음. 호출자가 페이지로 전달해야 함.
     NotImage,
     /// 응답을 사이드카에 보낼 오류.
-    Reply(serde_json::Value),
+    Reply {
+        name: String,
+        json: serde_json::Value,
+    },
     /// 표시할 이미지.
     Present {
         id: u32,
@@ -406,38 +415,50 @@ pub fn decide(body_str: &str, sender: &str, surface: &str, images: &Images) -> D
 
     // 포맷과 토큰 종류 검증
     if envelope.format != "bgra8" || envelope.token.kind != "iosurface-global" {
-        return Decision::Reply(serde_json::json!({
-            "image": {
-                "error": "unsupported",
-                "name": envelope.name,
-                "sequence": envelope.sequence
-            }
-        }));
+        let name = envelope.name;
+        return Decision::Reply {
+            name: name.clone(),
+            json: serde_json::json!({
+                "image": {
+                    "error": "unsupported",
+                    "name": name,
+                    "sequence": envelope.sequence
+                }
+            }),
+        };
     }
 
     // nonce 를 base64 에서 디코딩하여 [u8; 16] 배열로 변환
     let decoded_nonce = match base64::engine::general_purpose::STANDARD.decode(&envelope.token.nonce) {
         Ok(bytes) => bytes,
         Err(_) => {
-            return Decision::Reply(serde_json::json!({
-                "image": {
-                    "error": "unsupported",
-                    "name": envelope.name,
-                    "sequence": envelope.sequence
-                }
-            }));
+            let name = envelope.name;
+            return Decision::Reply {
+                name: name.clone(),
+                json: serde_json::json!({
+                    "image": {
+                        "error": "unsupported",
+                        "name": name,
+                        "sequence": envelope.sequence
+                    }
+                }),
+            };
         }
     };
 
     // 디코딩된 nonce 가 정확히 16바이트여야 함
     if decoded_nonce.len() != 16 {
-        return Decision::Reply(serde_json::json!({
-            "image": {
-                "error": "unsupported",
-                "name": envelope.name,
-                "sequence": envelope.sequence
-            }
-        }));
+        let name = envelope.name;
+        return Decision::Reply {
+            name: name.clone(),
+            json: serde_json::json!({
+                "image": {
+                    "error": "unsupported",
+                    "name": name,
+                    "sequence": envelope.sequence
+                }
+            }),
+        };
     }
 
     // nonce 를 [u8; 16] 배열로 변환
@@ -460,13 +481,17 @@ pub fn decide(body_str: &str, sender: &str, surface: &str, images: &Images) -> D
         }
         _ => {
             // 등록되지 않았거나 발신자가 다름
-            Decision::Reply(serde_json::json!({
-                "image": {
-                    "error": "notAttached",
-                    "name": envelope.name,
-                    "sequence": envelope.sequence
-                }
-            }))
+            let name = envelope.name;
+            Decision::Reply {
+                name: name.clone(),
+                json: serde_json::json!({
+                    "image": {
+                        "error": "notAttached",
+                        "name": name,
+                        "sequence": envelope.sequence
+                    }
+                }),
+            }
         }
     }
 }
@@ -506,14 +531,16 @@ pub fn handle_envelope<OnMain, SendResponse>(
 ) -> bool
 where
     OnMain: Fn(Box<dyn Fn() -> Result<(), String> + Send>) -> Result<(), String>,
-    SendResponse: Fn(serde_json::Value) -> Result<(), String>,
+    SendResponse: Fn(&str, serde_json::Value) -> Result<(), String>,
 {
     let decision = decide(body_str, sender, surface, images);
 
     match decision {
         Decision::NotImage => false,
-        Decision::Reply(json) => {
-            let _ = send_response(json);
+        Decision::Reply { name, json } => {
+            if let Err(e) = send_response(&name, json) {
+                eprintln!("image reply {}: {}", name, e);
+            }
             true
         }
         Decision::Present {
@@ -527,21 +554,35 @@ where
             let key = (surface.to_string(), name.clone());
             match images.get(&key) {
                 Ok(handle) => {
-                    let _ = on_main(Box::new(move || {
+                    let ok = match on_main(Box::new(move || {
                         match platform::current() {
                             Ok(plat) => {
-                                let _ = plat.present_image(handle, id, nonce, width as f64, height as f64);
-                                Ok(())
+                                plat.present_image(handle, id, nonce, width as f64, height as f64).map(|_| ())
                             }
                             Err(e) => Err(e),
                         }
-                    }));
-                    let response = after_present(true, None, &name, sequence);
-                    let _ = send_response(response);
+                    })) {
+                        Ok(()) => true,
+                        Err(e) => {
+                            eprintln!("image present on main thread error: {}", e);
+                            false
+                        }
+                    };
+
+                    let response = if ok {
+                        after_present(true, None, &name, sequence)
+                    } else {
+                        after_present(false, Some("presentFailed"), &name, sequence)
+                    };
+                    if let Err(e) = send_response(&name, response) {
+                        eprintln!("image response {}: {}", name, e);
+                    }
                 }
                 Err(_) => {
                     let response = after_present(false, Some("notAttached"), &name, sequence);
-                    let _ = send_response(response);
+                    if let Err(e) = send_response(&name, response) {
+                        eprintln!("image notAttached {}: {}", name, e);
+                    }
                 }
             }
             true
