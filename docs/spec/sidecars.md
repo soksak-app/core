@@ -76,7 +76,8 @@ The host validates the envelope and returns a response without an `op` field:
 | Region not attached or sender not authorized | `{"image": {"error": "notAttached", "name": "...", "sequence": ...}}` | Region does not exist or was registered for a different sidecar |
 | Format or token kind not supported, or nonce invalid | `{"image": {"error": "unsupported", "name": "...", "sequence": ...}}` | Format must be `bgra8` and token kind must be `iosurface-global`; nonce must be exactly 16 bytes when base64-decoded |
 | IOSurface not found or access denied | `{"image": {"error": "notFound", "name": "...", "sequence": ...}}` | IOSurface lookup failed or permission denied |
-| Image size does not match region size | `{"image": {"error": "size", "name": "...", "sequence": ...}}` | Width and height must match the region's size in device pixels |
+| Declared size does not match the IOSurface's actual size | `{"image": {"error": "size", "name": "...", "sequence": ...}}` | Width and height in the envelope must match the actual IOSurface dimensions in pixels |
+| Image scale differs from the window's backing scale factor | `{"image": {"error": "scale", "name": "...", "sequence": ...}}` | The image must be drawn at the window's current backing scale factor |
 | Success | `{"image": {"released": {"name": "...", "sequence": ...}}}` | The host has released the previous image (if any) and will present this one |
 
 The nonce is a 16-byte value attached to the IOSurface that the host uses to verify the surface's identity when looking it up by global identifier. The sequence number tracks images from the same region; the host includes it in the response to allow the sidecar to correlate responses with requests.
@@ -132,13 +133,13 @@ The terminal sidecar (`@soksak/sidecar-vt-core`) implements a terminal emulator 
 
 | Request | Body | Meaning |
 | --- | --- | --- |
-| `open` | `{width: pixels, height: pixels, scale: factor, image?: name}` | Create a terminal session with the given pixel size and optional image region name. <!-- size contract: pending code --> Scale is device pixels per CSS pixel. The sidecar opens a PTY session through the ptyd daemon and starts drawing to the image region if named. Multiple `open` calls for the same surface do nothing. |
+| `open` | `{width: pixels, height: pixels, scale: factor, image?: name}` | Create a terminal session with the given pixel size and optional image region name. Scale is device pixels per CSS pixel. The sidecar opens a PTY session through the ptyd daemon and starts drawing to the image region if named. Multiple `open` calls for the same surface do nothing. |
 | `input` | `{bytes?: base64-string \| keys?: [{key: name, text?: string, shift: bool, alt: bool, ctrl: bool}]}` | Send input to the terminal. Bytes are base64-encoded raw terminal input. Keys are decoded to terminal sequences based on the mode: function keys map to escape sequences, text input is sent as UTF-8, and modifier combinations are handled accordingly. Both `bytes` and `keys` can be present in one request. |
-| `resize` | `{width: pixels, height: pixels, scale: factor}` | Resize the terminal to the new pixel dimensions. <!-- size contract: pending code --> |
+| `resize` | `{width: pixels, height: pixels, scale: factor}` | Resize the terminal to the new pixel dimensions. The sidecar replaces the image with one of the new size and presents it without waiting for output, continuing the sequence. The reply is the same `state` event as `open`. |
 | `screen.read` | `{}` | Request the current screen state. The sidecar responds with `{event: "screen", cols, rows, cursor: {col, row}, lines: [[cell, ...]]}`, where each cell has `{ch?: string, width: number, fg?: color, bg?: color, bold: bool, italic: bool, underline: bool, inverse: bool}`. <!-- cell size: pending code --> |
 | `close` | `{}` | Close the terminal session and shut down the PTY. The sidecar sends `{closed: true}` in response to a host `{closed: true}` envelope, which ends the session but keeps the daemon alive (detach behavior). |
 
-The sidecar sends `{event: "screen", ...}` whenever the terminal screen changes, and sends image envelopes through the host's image relay when a new frame is drawn. The sequence number in the image envelope increments with each draw and allows correlation with the release response.
+The sidecar sends `{event: "screen", ...}` whenever the terminal screen changes, and sends image envelopes through the host's image relay when a new frame is drawn. The sequence number in the image envelope increments with each draw and allows correlation with the release response. While the host holds the current image (no release or error response yet), the sidecar sends no further image for that region: screen changes mark the image dirty, and the next image is drawn when the response arrives.
 
 ## Tests
 

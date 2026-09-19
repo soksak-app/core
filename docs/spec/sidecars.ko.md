@@ -76,7 +76,8 @@
 | 영역이 붙어 있지 않거나 발신자가 권한이 없음 | `{"image": {"error": "notAttached", "name": "...", "sequence": ...}}` | 영역이 없거나 다른 사이드카에 등록됨 |
 | 형식이나 토큰 종류가 지원되지 않거나 논스가 잘못됨 | `{"image": {"error": "unsupported", "name": "...", "sequence": ...}}` | 형식은 `bgra8`, 토큰 종류는 `iosurface-global`이어야 함. 논스는 base64 디코딩하면 정확히 16바이트여야 함 |
 | IOSurface를 찾지 못했거나 접근 거부됨 | `{"image": {"error": "notFound", "name": "...", "sequence": ...}}` | IOSurface 조회 실패 또는 권한 거부 |
-| 그림 크기가 영역 크기와 맞지 않음 | `{"image": {"error": "size", "name": "...", "sequence": ...}}` | 가로와 세로가 영역의 장치 픽셀 크기와 같아야 함 |
+| 선언한 크기가 IOSurface의 실제 크기와 맞지 않음 | `{"image": {"error": "size", "name": "...", "sequence": ...}}` | 봉투의 가로와 세로가 IOSurface의 실제 픽셀 크기와 같아야 함 |
+| 그림 배율이 창의 백킹 배율과 다름 | `{"image": {"error": "scale", "name": "...", "sequence": ...}}` | 그림은 창의 현재 백킹 배율로 그려져야 함 |
 | 성공 | `{"image": {"released": {"name": "...", "sequence": ...}}}` | 호스트가 이전 그림을 반납했고 이 그림을 표시함 |
 
 논스는 IOSurface에 붙은 16바이트 값이고, 호스트는 전역 식별자로 표면을 찾을 때 이를 이용해 표면의 정체성을 검증한다. 순서 번호는 같은 영역의 그림을 추적하며, 호스트는 응답에 순서 번호를 포함해 사이드카가 응답을 요청과 연결하게 한다.
@@ -132,13 +133,13 @@
 
 | 요청 | 본문 | 의미 |
 | --- | --- | --- |
-| `open` | `{width: 픽셀, height: 픽셀, scale: 배율, image?: 이름}` | 주어진 픽셀 크기로 터미널 세션을 만들고 선택적으로 그림 영역 이름을 지정한다. <!-- size contract: pending code --> 배율은 CSS 픽셀당 장치 픽셀. 사이드카는 ptyd 데몬을 통해 PTY 세션을 열고, 그림 영역이 지정되면 거기에 그리기를 시작한다. 같은 표면에 대한 `open` 호출이 여러 번이면 아무것도 하지 않는다. |
+| `open` | `{width: 픽셀, height: 픽셀, scale: 배율, image?: 이름}` | 주어진 픽셀 크기로 터미널 세션을 만들고 선택적으로 그림 영역 이름을 지정한다. 배율은 CSS 픽셀당 장치 픽셀. 사이드카는 ptyd 데몬을 통해 PTY 세션을 열고, 그림 영역이 지정되면 거기에 그리기를 시작한다. 같은 표면에 대한 `open` 호출이 여러 번이면 아무것도 하지 않는다. |
 | `input` | `{bytes?: base64-문자열 \| keys?: [{key: 이름, text?: 문자열, shift: bool, alt: bool, ctrl: bool}]}` | 터미널에 입력을 보낸다. 바이트는 base64 인코딩된 원시 터미널 입력이다. 키는 모드에 따라 터미널 수열로 디코드된다: 기능 키는 escape 수열로 매핑되고, 텍스트 입력은 UTF-8로 보내지고, 조합 키는 적절히 처리된다. `bytes`와 `keys` 모두 한 요청에 있을 수 있다. |
-| `resize` | `{width: 픽셀, height: 픽셀, scale: 배율}` | 터미널을 새 픽셀 크기로 조정한다. <!-- size contract: pending code --> |
+| `resize` | `{width: 픽셀, height: 픽셀, scale: 배율}` | 터미널을 새 픽셀 크기로 조정한다. 사이드카는 그림을 새 크기로 다시 만들어 출력을 기다리지 않고 제시하며, 순서 번호는 이어진다. 응답은 `open`과 같은 `state` 이벤트다. |
 | `screen.read` | `{}` | 현재 화면 상태를 요청한다. 사이드카가 `{event: "screen", cols, rows, cursor: {col, row}, lines: [[cell, ...]]}` 응답을 보낸다. 각 셀은 `{ch?: 문자열, width: 수, fg?: 색상, bg?: 색상, bold: bool, italic: bool, underline: bool, inverse: bool}`을 가진다. <!-- cell size: pending code --> |
 | `close` | `{}` | 터미널 세션을 종료하고 PTY를 종료한다. 사이드카는 호스트의 `{closed: true}` 봉투에 `{closed: true}`로 응답한다. 이는 세션을 끝내되 데몬을 살아 있게 한다(detach 동작). |
 
-사이드카는 터미널 화면이 바뀔 때마다 `{event: "screen", ...}`을 보내고, 새 프레임이 그려질 때마다 호스트의 그림 릴레이를 통해 그림 봉투를 보낸다. 그림 봉투의 순서 번호는 그리기마다 증가하며 release 응답과의 대응을 허용한다.
+사이드카는 터미널 화면이 바뀔 때마다 `{event: "screen", ...}`을 보내고, 새 프레임이 그려질 때마다 호스트의 그림 릴레이를 통해 그림 봉투를 보낸다. 그림 봉투의 순서 번호는 그리기마다 증가하며 release 응답과의 대응을 허용한다. 호스트가 현재 그림을 소유한 동안(release 나 오류 응답이 아직 없음) 사이드카는 그 영역에 추가 그림을 보내지 않는다. 화면 변화는 그림을 더럽힌 것으로 남고, 응답이 오면 다음 그림을 그린다.
 
 ## 테스트
 
