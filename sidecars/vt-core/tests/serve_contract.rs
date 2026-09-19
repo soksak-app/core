@@ -1724,3 +1724,287 @@ async fn test_panicking_surface_reports_error() {
     drop(to_serve);
     task.await.unwrap().unwrap();
 }
+
+/// 이미지 봉투가 나올 때까지 출력 줄을 읽는다. screen 이벤트 줄은 건너뛴다.
+async fn next_image_envelope(
+    lines: &mut tokio::io::Lines<tokio::io::BufReader<tokio::io::DuplexStream>>,
+) -> serde_json::Value {
+    for _ in 0..20 {
+        let line = tokio::time::timeout(std::time::Duration::from_millis(500), lines.next_line())
+            .await
+            .expect("timeout waiting for an image envelope")
+            .expect("failed to read an output line")
+            .expect("output ended");
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&line) {
+            if json["body"]["image"].is_object() {
+                return json;
+            }
+        }
+    }
+    panic!("no image envelope arrived");
+}
+
+/// Test: resize presents the image at the new size without waiting for output
+#[tokio::test]
+async fn test_resize_presents_image_at_new_size() {
+    let calls = Arc::new(Mutex::new(Calls::default()));
+    let fake_session_id = "test-session-resize-image".to_string();
+
+    let engine_factory = Arc::new(|| Box::new(MockEngine::new()) as Box<dyn Engine>);
+    let calls_for_factory = calls.clone();
+    let session_id_for_factory = fake_session_id.clone();
+
+    let port = Arc::new(FakeSessionPort::new(session_id_for_factory.clone(), calls_for_factory.clone()));
+    let port_for_factory = port.clone();
+    let factory = Arc::new(move || port_for_factory.clone() as Arc<dyn SessionPort>);
+
+    let (mut to_serve, serve_in) = tokio::io::duplex(64 * 1024);
+    let (serve_out, from_serve) = tokio::io::duplex(64 * 1024);
+
+    let task = tokio::spawn(serve(engine_factory, serve_in, serve_out, factory));
+    let mut lines = tokio::io::BufReader::new(from_serve).lines();
+
+    // Open with image at 800x384
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"op":"open","width":800,"height":384,"scale":1.0,"image":"view"}}
+"#).await.unwrap();
+
+    let _state_line = tokio::time::timeout(
+        std::time::Duration::from_secs(2),
+        lines.next_line()
+    ).await.unwrap().unwrap().unwrap();
+
+    // Output draws the first image
+    port.push_event(DaemonEvent::Output {
+        session_id: fake_session_id.clone(),
+        data: b"hi\r\n".to_vec(),
+        truncated: false,
+    });
+
+    let image1 = next_image_envelope(&mut lines).await;
+    let image1_obj = image1["body"]["image"].as_object().expect("first image envelope");
+    assert_eq!(image1_obj["width"].as_u64(), Some(800), "first image width should be 800");
+    assert_eq!(image1_obj["height"].as_u64(), Some(384), "first image height should be 384");
+
+    // Resize to 1600x768 must present a new image envelope at that size
+    to_serve.write_all(br#"{"surface":"s1","body":{"op":"resize","width":1600,"height":768,"scale":1.0}}
+"#).await.unwrap();
+
+    let image2 = next_image_envelope(&mut lines).await;
+    let image2_obj = image2["body"]["image"].as_object().expect("image envelope after resize");
+    assert_eq!(image2_obj["width"].as_u64(), Some(1600), "image width after resize should be 1600, got {}", image2_obj["width"]);
+    assert_eq!(image2_obj["height"].as_u64(), Some(768), "image height after resize should be 768, got {}", image2_obj["height"]);
+    assert_eq!(image2_obj["sequence"].as_u64(), Some(2), "sequence should continue after resize");
+
+    drop(to_serve);
+    task.await.unwrap().unwrap();
+}
+
+/// Test: after a release cycle, output while an image is outstanding does not present again
+#[tokio::test]
+async fn test_no_image_envelope_while_outstanding_after_release() {
+    let calls = Arc::new(Mutex::new(Calls::default()));
+    let fake_session_id = "test-session-outstanding".to_string();
+
+    let engine_factory = Arc::new(|| Box::new(MockEngine::new()) as Box<dyn Engine>);
+    let calls_for_factory = calls.clone();
+    let session_id_for_factory = fake_session_id.clone();
+
+    let port = Arc::new(FakeSessionPort::new(session_id_for_factory.clone(), calls_for_factory.clone()));
+    let port_for_factory = port.clone();
+    let factory = Arc::new(move || port_for_factory.clone() as Arc<dyn SessionPort>);
+
+    let (mut to_serve, serve_in) = tokio::io::duplex(64 * 1024);
+    let (serve_out, from_serve) = tokio::io::duplex(64 * 1024);
+
+    let task = tokio::spawn(serve(engine_factory, serve_in, serve_out, factory));
+    let mut lines = tokio::io::BufReader::new(from_serve).lines();
+
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"op":"open","width":800,"height":384,"scale":1.0,"image":"view"}}
+"#).await.unwrap();
+
+    let _state_line = tokio::time::timeout(
+        std::time::Duration::from_secs(2),
+        lines.next_line()
+    ).await.unwrap().unwrap().unwrap();
+
+    // First image
+    port.push_event(DaemonEvent::Output {
+        session_id: fake_session_id.clone(),
+        data: b"one\r\n".to_vec(),
+        truncated: false,
+    });
+    let first = next_image_envelope(&mut lines).await;
+    assert_eq!(first["body"]["image"]["sequence"].as_u64(), Some(1), "first image envelope sequence");
+
+    // Release sequence 1
+    to_serve.write_all(br#"{"surface":"s1","body":{"image":{"released":{"name":"view","sequence":1}}}}
+"#).await.unwrap();
+
+    // Second image after the release (frame was free again)
+    port.push_event(DaemonEvent::Output {
+        session_id: fake_session_id.clone(),
+        data: b"two\r\n".to_vec(),
+        truncated: false,
+    });
+    let second = next_image_envelope(&mut lines).await;
+    assert_eq!(second["body"]["image"]["sequence"].as_u64(), Some(2), "second image envelope sequence");
+
+    // Output while sequence 2 is outstanding must not present again before its release
+    port.push_event(DaemonEvent::Output {
+        session_id: fake_session_id.clone(),
+        data: b"three\r\n".to_vec(),
+        truncated: false,
+    });
+
+    let result = tokio::time::timeout(std::time::Duration::from_millis(300), lines.next_line()).await;
+    if let Ok(Ok(Some(line))) = result {
+        let json: serde_json::Value = serde_json::from_str(&line).unwrap();
+        assert!(json["body"]["image"].is_null(),
+            "must not present an image while the previous one is outstanding, got: {}", line);
+    }
+
+    // Releasing sequence 2 presents the content that arrived meanwhile
+    to_serve.write_all(br#"{"surface":"s1","body":{"image":{"released":{"name":"view","sequence":2}}}}
+"#).await.unwrap();
+
+    let mut caught_up = false;
+    for _ in 0..20 {
+        if let Ok(Ok(Some(line))) = tokio::time::timeout(std::time::Duration::from_millis(100), lines.next_line()).await {
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&line) {
+                if json["body"]["image"]["sequence"].as_u64() == Some(3) {
+                    caught_up = true;
+                    break;
+                }
+            }
+        }
+    }
+    assert!(caught_up, "release of sequence 2 should present the caught-up image");
+
+    drop(to_serve);
+    task.await.unwrap().unwrap();
+}
+
+/// Test: an error response re-enables drawing on the next output
+#[tokio::test]
+async fn test_image_error_response_reenables_drawing() {
+    let calls = Arc::new(Mutex::new(Calls::default()));
+    let fake_session_id = "test-session-image-error".to_string();
+
+    let engine_factory = Arc::new(|| Box::new(MockEngine::new()) as Box<dyn Engine>);
+    let calls_for_factory = calls.clone();
+    let session_id_for_factory = fake_session_id.clone();
+
+    let port = Arc::new(FakeSessionPort::new(session_id_for_factory.clone(), calls_for_factory.clone()));
+    let port_for_factory = port.clone();
+    let factory = Arc::new(move || port_for_factory.clone() as Arc<dyn SessionPort>);
+
+    let (mut to_serve, serve_in) = tokio::io::duplex(64 * 1024);
+    let (serve_out, from_serve) = tokio::io::duplex(64 * 1024);
+
+    let task = tokio::spawn(serve(engine_factory, serve_in, serve_out, factory));
+    let mut lines = tokio::io::BufReader::new(from_serve).lines();
+
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"op":"open","width":800,"height":384,"scale":1.0,"image":"view"}}
+"#).await.unwrap();
+
+    let _state_line = tokio::time::timeout(
+        std::time::Duration::from_secs(2),
+        lines.next_line()
+    ).await.unwrap().unwrap().unwrap();
+
+    port.push_event(DaemonEvent::Output {
+        session_id: fake_session_id.clone(),
+        data: b"one\r\n".to_vec(),
+        truncated: false,
+    });
+    let first = next_image_envelope(&mut lines).await;
+    assert_eq!(first["body"]["image"]["sequence"].as_u64(), Some(1), "first image envelope sequence");
+
+    // Host rejects the image
+    to_serve.write_all(br#"{"surface":"s1","body":{"image":{"error":"scale","name":"view","sequence":1}}}
+"#).await.unwrap();
+
+    // The next output must draw again
+    port.push_event(DaemonEvent::Output {
+        session_id: fake_session_id.clone(),
+        data: b"two\r\n".to_vec(),
+        truncated: false,
+    });
+
+    let mut drew_again = false;
+    for _ in 0..20 {
+        if let Ok(Ok(Some(line))) = tokio::time::timeout(std::time::Duration::from_millis(100), lines.next_line()).await {
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&line) {
+                if json["body"]["image"]["sequence"].as_u64() == Some(2) {
+                    drew_again = true;
+                    break;
+                }
+            }
+        }
+    }
+    assert!(drew_again, "output after an image error must present a new image envelope");
+
+    drop(to_serve);
+    task.await.unwrap().unwrap();
+}
+
+/// Test: the state event after resize carries the full session fields
+#[tokio::test]
+async fn test_resize_state_event_has_cell_dimensions() {
+    let calls = Arc::new(Mutex::new(Calls::default()));
+    let fake_session_id = "test-session-resize-state".to_string();
+
+    let engine_factory = Arc::new(|| Box::new(MockEngine::new()) as Box<dyn Engine>);
+    let calls_for_factory = calls.clone();
+    let session_id_for_factory = fake_session_id.clone();
+
+    let port = Arc::new(FakeSessionPort::new(session_id_for_factory.clone(), calls_for_factory.clone()));
+    let port_for_factory = port.clone();
+    let factory = Arc::new(move || port_for_factory.clone() as Arc<dyn SessionPort>);
+
+    let (mut to_serve, serve_in) = tokio::io::duplex(64 * 1024);
+    let (serve_out, from_serve) = tokio::io::duplex(64 * 1024);
+
+    let task = tokio::spawn(serve(engine_factory, serve_in, serve_out, factory));
+    let mut lines = tokio::io::BufReader::new(from_serve).lines();
+
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"op":"open","width":800,"height":384,"scale":1.0,"image":"view"}}
+"#).await.unwrap();
+
+    let _open_state = tokio::time::timeout(
+        std::time::Duration::from_secs(2),
+        lines.next_line()
+    ).await.unwrap().unwrap().unwrap();
+
+    to_serve.write_all(br#"{"surface":"s1","body":{"op":"resize","width":1600,"height":768,"scale":1.0}}
+"#).await.unwrap();
+
+    // Read until the state event for the resize arrives (image envelopes may come first)
+    let mut state_json: Option<serde_json::Value> = None;
+    for _ in 0..10 {
+        let line = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            lines.next_line()
+        ).await.expect("timeout waiting for resize response").unwrap().unwrap();
+
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&line) {
+            if json["body"]["event"].as_str() == Some("state") {
+                state_json = Some(json);
+                break;
+            }
+        }
+    }
+
+    let state = state_json.expect("resize should answer with a state event");
+    assert!(state["body"]["sessionId"].as_str().is_some_and(|s| !s.is_empty()),
+        "resize state event should carry sessionId");
+    let cell_width = state["body"]["cellWidth"].as_f64()
+        .expect("resize state event should carry cellWidth");
+    let cell_height = state["body"]["cellHeight"].as_f64()
+        .expect("resize state event should carry cellHeight");
+    assert!(cell_width > 0.0, "cellWidth should be positive, got {}", cell_width);
+    assert!(cell_height > 0.0, "cellHeight should be positive, got {}", cell_height);
+
+    drop(to_serve);
+    task.await.unwrap().unwrap();
+}

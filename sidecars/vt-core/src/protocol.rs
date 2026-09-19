@@ -151,10 +151,10 @@ fn pixels_to_cells(pixels: u32, cell_size: f32) -> u16 {
 /// Validate and calculate terminal size. Returns error if width/height invalid or result is 0.
 fn calculate_terminal_size(width: u32, height: u32, scale: f32) -> Result<(u16, u16), String> {
     if scale <= 0.0 {
-        return Err("open requires scale to be a positive number".to_string());
+        return Err("scale must be a positive number".to_string());
     }
     if width == 0 || height == 0 {
-        return Err("open requires a positive width and height".to_string());
+        return Err("width and height must be positive".to_string());
     }
 
     let metrics = crate::platform::metrics(13.0, scale);
@@ -162,7 +162,7 @@ fn calculate_terminal_size(width: u32, height: u32, scale: f32) -> Result<(u16, 
     let rows = pixels_to_cells(height, metrics.cell_height);
 
     if cols == 0 || rows == 0 {
-        return Err("open requires a positive width and height".to_string());
+        return Err("width and height must be positive".to_string());
     }
 
     Ok((cols, rows))
@@ -251,6 +251,47 @@ fn encode_keys(keys: &[InputKey], modes: &Modes) -> Result<Vec<u8>, String> {
 
 pub use crate::platform::ImageState;
 
+/// 화면을 그림에 그려 봉투를 보내고 그림을 호스트에 넘긴다.
+/// 그리기에 실패하면 오류 이벤트를 보내고 true 를 반환한다. 출력 통로가 닫혔으면 false 를 반환한다.
+async fn present_screen(
+    surface_id: &str,
+    screen: &Screen,
+    state: &mut ImageState,
+    output_tx: &mpsc::Sender<String>,
+) -> bool {
+    if let Err(reason) = state.frame.draw(screen, &state.metrics) {
+        let response = json!({
+            "surface": surface_id,
+            "body": {"event": "error", "reason": reason}
+        });
+        return output_tx.send(response.to_string()).await.is_ok();
+    }
+    state.sequence += 1;
+    state.pending_draw = true;
+    state.dirty = false;
+    let nonce = state.frame.nonce();
+    let nonce_b64 = base64_encode(&nonce);
+    let image_envelope = json!({
+        "surface": surface_id,
+        "body": {
+            "image": {
+                "name": state.name.clone(),
+                "token": {
+                    "kind": "iosurface-global",
+                    "id": state.frame.id(),
+                    "nonce": nonce_b64
+                },
+                "width": state.width_px,
+                "height": state.height_px,
+                "scale": state.scale,
+                "format": "bgra8",
+                "sequence": state.sequence
+            }
+        }
+    });
+    output_tx.send(image_envelope.to_string()).await.is_ok()
+}
+
 /// 표면별 비동기 작업. 엔진과 데몬 연결을 소유하며 명령을 처리한다.
 async fn surface_task(
     surface_id: String,
@@ -274,7 +315,21 @@ async fn surface_task(
                                 engine.resize(cols, rows);
 
                                 if let Some(ref image_name) = image {
-                                    image_state = ImageState::new(image_name.clone(), width, height, scale);
+                                    match ImageState::new(image_name.clone(), width, height, scale) {
+                                        Some(new_state) => image_state = Some(new_state),
+                                        None => {
+                                            let response = json!({
+                                                "surface": surface_id,
+                                                "body": {
+                                                    "error": "image creation failed",
+                                                    "reason": format!("IOSurface creation failed for {}x{}", width, height)
+                                                }
+                                            });
+                                            if let Err(_) = output_tx.send(response.to_string()).await {
+                                                return;
+                                            }
+                                        }
+                                    }
                                 }
 
                                 match session_port.open("/bin/sh", cols, rows, None).await {
@@ -421,6 +476,35 @@ async fn surface_task(
                             Ok((cols, rows)) => {
                                 engine.resize(cols, rows);
 
+                                // 그림 영역을 새 크기로 다시 만들어 즉시 그린다. 이전 그림을 버리므로 순번만 이어 받는다.
+                                let held = image_state.as_ref().map(|st| (st.name.clone(), st.sequence));
+                                if let Some((name, sequence)) = held {
+                                    match ImageState::new(name, width, height, scale) {
+                                        Some(mut new_state) => {
+                                            new_state.sequence = sequence;
+                                            image_state = Some(new_state);
+                                            let screen = engine.screen();
+                                            if let Some(ref mut img_state) = image_state {
+                                                if !present_screen(&surface_id, &screen, img_state, &output_tx).await {
+                                                    return;
+                                                }
+                                            }
+                                        }
+                                        None => {
+                                            let response = json!({
+                                                "surface": surface_id,
+                                                "body": {
+                                                    "error": "image creation failed",
+                                                    "reason": format!("IOSurface creation failed for {}x{}", width, height)
+                                                }
+                                            });
+                                            if let Err(_) = output_tx.send(response.to_string()).await {
+                                                return;
+                                            }
+                                        }
+                                    }
+                                }
+
                                 if let Some(ref sid) = session_id {
                                     if let Err(e) = session_port.resize(sid, cols, rows).await {
                                         let response = json!({
@@ -431,14 +515,22 @@ async fn surface_task(
                                             return;
                                         }
                                     } else {
+                                        let mut state_body = json!({
+                                            "event": "state",
+                                            "sessionId": sid,
+                                            "cols": cols,
+                                            "rows": rows,
+                                            "cursor": {"col": 0, "row": 0}
+                                        });
+                                        if image_state.is_some() {
+                                            let metrics = crate::platform::metrics(13.0, scale);
+                                            // CSS 픽셀 = 장치 픽셀 / scale
+                                            state_body["cellWidth"] = json!(metrics.cell_width / scale);
+                                            state_body["cellHeight"] = json!(metrics.cell_height / scale);
+                                        }
                                         let response = json!({
                                             "surface": surface_id,
-                                            "body": {
-                                                "event": "state",
-                                                "cols": cols,
-                                                "rows": rows,
-                                                "cursor": {"col": 0, "row": 0}
-                                            }
+                                            "body": state_body
                                         });
                                         if let Err(_) = output_tx.send(response.to_string()).await {
                                             return;
@@ -495,39 +587,29 @@ async fn surface_task(
                         break;
                     }
                     SurfaceCommand::ImageResponse { body } => {
+                        let image_obj = body.get("image").and_then(|v| v.as_object());
+                        let released = image_obj.and_then(|o| o.get("released")).and_then(|v| v.as_object());
+                        let is_error = image_obj.map_or(false, |o| o.get("error").is_some());
+                        // released 는 안쪽 객체에, 오류는 바깥에 이름과 순번을 실어 보낸다.
+                        let name = image_obj
+                            .and_then(|o| o.get("name"))
+                            .and_then(|v| v.as_str())
+                            .or_else(|| released.and_then(|r| r.get("name")).and_then(|v| v.as_str()));
+                        let response_sequence = released
+                            .and_then(|r| r.get("sequence"))
+                            .and_then(|v| v.as_u64())
+                            .or_else(|| image_obj.and_then(|o| o.get("sequence")).and_then(|v| v.as_u64()));
                         if let Some(ref mut img_state) = image_state {
-                            if let Some(image_obj) = body.get("image") {
-                                if image_obj.get("released").is_some() {
-                                    // Surface was released, can draw again
-                                    if img_state.pending_draw {
-                                        // Redraw immediately
+                            if Some(img_state.name.as_str()) == name
+                                && response_sequence == Some(img_state.sequence as u64)
+                            {
+                                if released.is_some() || is_error {
+                                    // 돌아온 그림과 표시에 실패한 그림은 호스트에 남지 않는다.
+                                    img_state.pending_draw = false;
+                                    if img_state.dirty {
                                         let screen = engine.screen();
-                                        if img_state.frame.draw(&screen, &img_state.metrics).is_ok() {
-                                            img_state.sequence += 1;
-                                            let nonce = img_state.frame.nonce();
-                                            let nonce_b64 = base64_encode(&nonce);
-                                            let image_envelope = json!({
-                                                "surface": surface_id,
-                                                "body": {
-                                                    "image": {
-                                                        "name": img_state.name,
-                                                        "token": {
-                                                            "kind": "iosurface-global",
-                                                            "id": img_state.frame.id(),
-                                                            "nonce": nonce_b64
-                                                        },
-                                                        "width": img_state.width_px,
-                                                        "height": img_state.height_px,
-                                                        "scale": img_state.scale,
-                                                        "format": "bgra8",
-                                                        "sequence": img_state.sequence
-                                                    }
-                                                }
-                                            });
-                                            if let Err(_) = output_tx.send(image_envelope.to_string()).await {
-                                                return;
-                                            }
-                                            img_state.pending_draw = false;
+                                        if !present_screen(&surface_id, &screen, img_state, &output_tx).await {
+                                            return;
                                         }
                                     }
                                 }
@@ -548,35 +630,11 @@ async fn surface_task(
                                 let screen = engine.screen();
 
                                 if let Some(ref mut img_state) = image_state {
-                                    // Draw to the frame if not pending a return
-                                    if !img_state.pending_draw {
-                                        if img_state.frame.draw(&screen, &img_state.metrics).is_ok() {
-                                            img_state.sequence += 1;
-                                            img_state.pending_draw = true;
-                                            let nonce = img_state.frame.nonce();
-                                            let nonce_b64 = base64_encode(&nonce);
-                                            let image_envelope = json!({
-                                                "surface": surface_id,
-                                                "body": {
-                                                    "image": {
-                                                        "name": img_state.name,
-                                                        "token": {
-                                                            "kind": "iosurface-global",
-                                                            "id": img_state.frame.id(),
-                                                            "nonce": nonce_b64
-                                                        },
-                                                        "width": img_state.width_px,
-                                                        "height": img_state.height_px,
-                                                        "scale": img_state.scale,
-                                                        "format": "bgra8",
-                                                        "sequence": img_state.sequence
-                                                    }
-                                                }
-                                            });
-                                            if let Err(_) = output_tx.send(image_envelope.to_string()).await {
-                                                return;
-                                            }
-                                        }
+                                    // 그림이 호스트에 있으면 돌려받을 때까지 그리지 않고 변경 사실만 남긴다.
+                                    if img_state.pending_draw {
+                                        img_state.dirty = true;
+                                    } else if !present_screen(&surface_id, &screen, img_state, &output_tx).await {
+                                        return;
                                     }
                                 }
 
