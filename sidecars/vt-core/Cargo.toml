@@ -3,6 +3,7 @@ name = "soksak-sidecar-vt-core"
 version = "0.0.1"
 edition = "2021"
 description = "Common VT layer: protocol, session lifetime, screen types, Engine trait."
+build = "build.rs"
 
 [lib]
 path = "src/vt-core.rs"
@@ -15,6 +16,9 @@ uuid = { version = "1", features = ["v4", "serde"] }
 base64 = "0.21"
 nix = { version = "0.27", features = ["process", "net", "fs"] }
 async-trait = "0.1"
+
+[build-dependencies]
+cc = "1"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }

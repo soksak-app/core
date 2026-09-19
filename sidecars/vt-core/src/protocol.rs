@@ -7,6 +7,7 @@ use tokio::sync::mpsc;
 use async_trait::async_trait;
 use crate::daemon::{DaemonClient, DaemonRequest, DaemonIdentity};
 use std::time::Duration;
+use crate::encoding::{self, Key};
 
 
 /// 엔진이 구현할 트레이트. VT 처리 엔진의 계약.
@@ -119,12 +120,28 @@ struct Envelope {
 /// 표면 작업으로 보낼 명령
 #[derive(Debug, Clone)]
 enum SurfaceCommand {
-    Open { width: u32, height: u32, scale: f32 },
+    Open { width: u32, height: u32, scale: f32, image: Option<String> },
     Input { bytes: Vec<u8> },
+    InputKeys { keys: Vec<InputKey> },
     Resize { width: u32, height: u32, scale: f32 },
     ScreenRead,
     Close,
     SessionClose,
+    ImageResponse { body: Value },
+}
+
+/// 입력 키 정보
+#[derive(Debug, Clone, Deserialize)]
+struct InputKey {
+    key: String,
+    #[serde(default)]
+    text: String,
+    #[serde(default)]
+    shift: bool,
+    #[serde(default)]
+    alt: bool,
+    #[serde(default)]
+    ctrl: bool,
 }
 
 const CELL_WIDTH: f32 = 8.0;
@@ -133,6 +150,89 @@ const CELL_HEIGHT: f32 = 16.0;
 fn pixels_to_cells(pixels: u32, cell_size: f32, scale: f32) -> u16 {
     (pixels as f32 / (cell_size * scale)) as u16
 }
+
+/// 키 입력을 바이트로 인코딩한다
+fn encode_keys(keys: &[InputKey], modes: &Modes) -> Result<Vec<u8>, String> {
+    let mut all_bytes = Vec::new();
+
+    for input_key in keys {
+        let key_name = &input_key.key;
+        let text = &input_key.text;
+
+        // 수식자 비트 계산: shift=1, alt=2, ctrl=4
+        let mut modifiers = 0u8;
+        if input_key.shift {
+            modifiers |= 1;
+        }
+        if input_key.alt {
+            modifiers |= 2;
+        }
+        if input_key.ctrl {
+            modifiers |= 4;
+        }
+
+        // key 이름을 Key 열거형으로 변환
+        let key = match key_name.as_str() {
+            "Up" => Key::Up,
+            "Down" => Key::Down,
+            "Left" => Key::Left,
+            "Right" => Key::Right,
+            "Home" => Key::Home,
+            "End" => Key::End,
+            "Insert" => Key::Insert,
+            "Delete" => Key::Delete,
+            "PageUp" => Key::PageUp,
+            "PageDown" => Key::PageDown,
+            "F1" => Key::F1,
+            "F2" => Key::F2,
+            "F3" => Key::F3,
+            "F4" => Key::F4,
+            "F5" => Key::F5,
+            "F6" => Key::F6,
+            "F7" => Key::F7,
+            "F8" => Key::F8,
+            "F9" => Key::F9,
+            "F10" => Key::F10,
+            "F11" => Key::F11,
+            "F12" => Key::F12,
+            "Enter" => Key::Enter,
+            "Tab" => Key::Tab,
+            "Backspace" => Key::Backspace,
+            "Escape" => Key::Escape,
+            "Char" => {
+                // "Char" 특수 처리
+                if text.is_empty() {
+                    return Err(format!("unknown key: Char with empty text"));
+                }
+                let ch = text.chars().next().unwrap();
+                let encoded_bytes = if modifiers & 4 != 0 {
+                    // ctrl 비트가 설정됨
+                    encoding::encode_ctrl_char(ch).map_err(|e| format!("unknown key: Char with ctrl: {:?}", e))?
+                } else if modifiers & 2 != 0 {
+                    // alt 비트가 설정됨
+                    encoding::encode_alt_char(ch)
+                } else {
+                    // 일반 텍스트
+                    encoding::encode_text(text)
+                };
+                all_bytes.extend_from_slice(&encoded_bytes);
+                continue;
+            }
+            _ => {
+                return Err(format!("unknown key: {}", key_name));
+            }
+        };
+
+        // 표준 키를 인코딩
+        let encoded_bytes = encoding::encode_key(key, modifiers, modes)
+            .map_err(|e| format!("unknown key: {} ({:?})", key_name, e))?;
+        all_bytes.extend_from_slice(&encoded_bytes);
+    }
+
+    Ok(all_bytes)
+}
+
+pub use crate::platform::ImageState;
 
 /// 표면별 비동기 작업. 엔진과 데몬 연결을 소유하며 명령을 처리한다.
 async fn surface_task(
@@ -145,28 +245,40 @@ async fn surface_task(
     let mut engine = engine_factory();
     let mut session_id: Option<String> = None;
     let mut daemon_events_rx = session_port.get_events().await;
+    let mut image_state: Option<ImageState> = None;
 
     loop {
         tokio::select! {
             Some(cmd) = cmd_rx.recv() => {
                 match cmd {
-                    SurfaceCommand::Open { width, height, scale } => {
+                    SurfaceCommand::Open { width, height, scale, image } => {
                         let cols = pixels_to_cells(width, CELL_WIDTH, scale);
                         let rows = pixels_to_cells(height, CELL_HEIGHT, scale);
                         engine.resize(cols, rows);
 
+                        if let Some(ref image_name) = image {
+                            image_state = ImageState::new(image_name.clone(), width, height);
+                        }
+
                         match session_port.open("/bin/sh", cols, rows, None).await {
                             Ok(sid) => {
                                 session_id = Some(sid.clone());
+                                let mut state_body = json!({
+                                    "event": "state",
+                                    "sessionId": sid,
+                                    "cols": cols,
+                                    "rows": rows,
+                                    "cursor": {"col": 0, "row": 0}
+                                });
+
+                                if let Some(ref _img_state) = image_state {
+                                    state_body["cellWidth"] = json!(CELL_WIDTH);
+                                    state_body["cellHeight"] = json!(CELL_HEIGHT);
+                                }
+
                                 let response = json!({
                                     "surface": surface_id,
-                                    "body": {
-                                        "event": "state",
-                                        "sessionId": sid,
-                                        "cols": cols,
-                                        "rows": rows,
-                                        "cursor": {"col": 0, "row": 0}
-                                    }
+                                    "body": state_body
                                 });
                                 let _ = output_tx.send(response.to_string()).await;
                             }
@@ -193,6 +305,52 @@ async fn surface_task(
                                     let response = json!({
                                         "surface": surface_id,
                                         "body": {"error": format!("Write failed: {}", e)}
+                                    });
+                                    let _ = output_tx.send(response.to_string()).await;
+                                }
+                            }
+                        } else {
+                            let response = json!({
+                                "surface": surface_id,
+                                "body": {"error": "Session not open"}
+                            });
+                            let _ = output_tx.send(response.to_string()).await;
+                        }
+                    }
+                    SurfaceCommand::InputKeys { keys } => {
+                        if let Some(ref sid) = session_id {
+                            let modes = engine.modes();
+                            match encode_keys(&keys, &modes) {
+                                Ok(bytes) => {
+                                    if !bytes.is_empty() {
+                                        match session_port.write(sid, &bytes).await {
+                                            Ok(()) => {
+                                                let response = json!({
+                                                    "surface": surface_id,
+                                                    "body": {"ack": true}
+                                                });
+                                                let _ = output_tx.send(response.to_string()).await;
+                                            }
+                                            Err(e) => {
+                                                let response = json!({
+                                                    "surface": surface_id,
+                                                    "body": {"error": format!("Write failed: {}", e)}
+                                                });
+                                                let _ = output_tx.send(response.to_string()).await;
+                                            }
+                                        }
+                                    } else {
+                                        let response = json!({
+                                            "surface": surface_id,
+                                            "body": {"ack": true}
+                                        });
+                                        let _ = output_tx.send(response.to_string()).await;
+                                    }
+                                }
+                                Err(e) => {
+                                    let response = json!({
+                                        "surface": surface_id,
+                                        "body": {"error": e}
                                     });
                                     let _ = output_tx.send(response.to_string()).await;
                                 }
@@ -262,6 +420,44 @@ async fn surface_task(
                         }
                         break;
                     }
+                    SurfaceCommand::ImageResponse { body } => {
+                        if let Some(ref mut img_state) = image_state {
+                            if let Some(image_obj) = body.get("image") {
+                                if image_obj.get("released").is_some() {
+                                    // Surface was released, can draw again
+                                    if img_state.pending_draw {
+                                        // Redraw immediately
+                                        let screen = engine.screen();
+                                        if img_state.frame.draw(&screen, &img_state.metrics).is_ok() {
+                                            img_state.sequence += 1;
+                                            let nonce = img_state.frame.nonce();
+                                            let nonce_b64 = base64_encode(&nonce);
+                                            let image_envelope = json!({
+                                                "surface": surface_id,
+                                                "body": {
+                                                    "image": {
+                                                        "name": img_state.name,
+                                                        "token": {
+                                                            "kind": "iosurface-global",
+                                                            "id": img_state.frame.id(),
+                                                            "nonce": nonce_b64
+                                                        },
+                                                        "width": img_state.width_px,
+                                                        "height": img_state.height_px,
+                                                        "scale": 1.0,
+                                                        "format": "bgra8",
+                                                        "sequence": img_state.sequence
+                                                    }
+                                                }
+                                            });
+                                            let _ = output_tx.send(image_envelope.to_string()).await;
+                                            img_state.pending_draw = false;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
             Some(event) = daemon_events_rx.recv() => {
@@ -274,6 +470,38 @@ async fn surface_task(
                                 }
                                 engine.feed(&data);
                                 let screen = engine.screen();
+
+                                if let Some(ref mut img_state) = image_state {
+                                    // Draw to the frame if not pending a return
+                                    if !img_state.pending_draw {
+                                        if img_state.frame.draw(&screen, &img_state.metrics).is_ok() {
+                                            img_state.sequence += 1;
+                                            img_state.pending_draw = true;
+                                            let nonce = img_state.frame.nonce();
+                                            let nonce_b64 = base64_encode(&nonce);
+                                            let image_envelope = json!({
+                                                "surface": surface_id,
+                                                "body": {
+                                                    "image": {
+                                                        "name": img_state.name,
+                                                        "token": {
+                                                            "kind": "iosurface-global",
+                                                            "id": img_state.frame.id(),
+                                                            "nonce": nonce_b64
+                                                        },
+                                                        "width": img_state.width_px,
+                                                        "height": img_state.height_px,
+                                                        "scale": 1.0,
+                                                        "format": "bgra8",
+                                                        "sequence": img_state.sequence
+                                                    }
+                                                }
+                                            });
+                                            let _ = output_tx.send(image_envelope.to_string()).await;
+                                        }
+                                    }
+                                }
+
                                 let response = json!({
                                     "surface": surface_id,
                                     "body": {
@@ -385,15 +613,18 @@ where
                         cmd_tx
                     };
 
+                    // Check for op field first (it's a request)
                     if let Some(op) = body.get("op").and_then(|v| v.as_str()) {
                         match op {
                             "open" => {
                                 let width = body.get("width").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
                                 let height = body.get("height").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
                                 let scale = body.get("scale").and_then(|v| v.as_f64()).unwrap_or(1.0) as f32;
-                                let _ = tx.send(SurfaceCommand::Open { width, height, scale }).await;
+                                let image = body.get("image").and_then(|v| v.as_str()).map(|s| s.to_string());
+                                let _ = tx.send(SurfaceCommand::Open { width, height, scale, image }).await;
                             }
                             "input" => {
+                                // bytes를 먼저 보냄 (둘 다 있으면 bytes 먼저)
                                 if let Some(bytes_b64) = body.get("bytes").and_then(|v| v.as_str()) {
                                     match base64_decode(bytes_b64) {
                                         Ok(bytes) => {
@@ -403,6 +634,22 @@ where
                                             let response = json!({
                                                 "surface": surface_id,
                                                 "body": {"error": format!("Base64 error: {}", e)}
+                                            });
+                                            let _ = output_tx.send(response.to_string()).await;
+                                        }
+                                    }
+                                }
+
+                                // 그 다음 keys를 처리
+                                if let Some(keys_arr) = body.get("keys").and_then(|v| v.as_array()) {
+                                    match serde_json::from_value::<Vec<InputKey>>(Value::Array(keys_arr.clone())) {
+                                        Ok(keys) => {
+                                            let _ = tx.send(SurfaceCommand::InputKeys { keys }).await;
+                                        }
+                                        Err(e) => {
+                                            let response = json!({
+                                                "surface": surface_id,
+                                                "body": {"error": format!("Keys parse error: {}", e)}
                                             });
                                             let _ = output_tx.send(response.to_string()).await;
                                         }
@@ -429,6 +676,16 @@ where
                                 let _ = output_tx.send(response.to_string()).await;
                             }
                         }
+                    } else if body.get("image").and_then(|v| v.as_object()).is_some() {
+                        // It's a host image response (image field is an object)
+                        let _ = tx.send(SurfaceCommand::ImageResponse { body: body.clone() }).await;
+                    } else {
+                        // No op and no image object - unknown message
+                        let response = json!({
+                            "surface": surface_id,
+                            "body": {"error": "unknown op"}
+                        });
+                        let _ = output_tx.send(response.to_string()).await;
                     }
                 }
             }

@@ -1,3 +1,5 @@
+pub mod frame;
+
 use crate::daemon::{DaemonFinder, DaemonIdentity};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
