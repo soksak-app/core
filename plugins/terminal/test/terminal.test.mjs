@@ -221,8 +221,8 @@ test("Boot: attachImage called once and sidecar receives open message", async ()
   const openMessage = messages.find((m) => m.body.op === "open");
   assert(openMessage, "open message sent to sidecar");
   assert.equal(openMessage.body.image, "view", "open message has image: 'view'");
-  assert.equal(openMessage.body.width, 800, "width matches view");
-  assert.equal(openMessage.body.height, 600, "height matches view");
+  assert.equal(openMessage.body.width, 1600, "width in device pixels: 800 * 2");
+  assert.equal(openMessage.body.height, 1200, "height in device pixels: 600 * 2");
   assert.equal(openMessage.body.scale, 2, "scale passed correctly");
 });
 

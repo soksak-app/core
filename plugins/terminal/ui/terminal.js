@@ -168,8 +168,11 @@ export async function startTerminal({ view, attachImage, sidecar, expose, scale,
   // 뷰 크기 변경 감지
   const resizeObserver = new ResizeObserver(() => {
     if (region === null) return;
-    const width = Math.round(view.clientWidth);
-    const height = Math.round(view.clientHeight);
+    const widthCss = Math.round(view.clientWidth);
+    const heightCss = Math.round(view.clientHeight);
+    // 계약: open/resize의 width/height는 장치 픽셀
+    const width = Math.round(widthCss * devicePixelRatio);
+    const height = Math.round(heightCss * devicePixelRatio);
 
     // 첫 번째로 0보다 큰 크기를 받으면 open을 전송한다
     if (!openSentViaResize && width > 0 && height > 0) {
