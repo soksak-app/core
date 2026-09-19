@@ -9,6 +9,25 @@ export const DOCUMENT_NAME = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 export const DOCUMENT_ACTIONS = Object.freeze(["back", "forward", "reload", "stop"]);
 
+/**
+ * 요소와 조상이 CSS visibility/display로 숨겨져 있는지 확인한다.
+ * getComputedStyle을 사용하여 표준 방법으로 판정한다.
+ * 모든 지원 범위(macOS 14.0+)에서 작동한다.
+ */
+function isElementVisible(element, view) {
+  // 요소부터 시작하여 조상 체인을 따라가며 visibility/display 확인
+  let el = element;
+  while (el && el !== view.document.body.parentElement) {
+    const style = view.getComputedStyle(el);
+    // visibility: hidden 또는 display: none 이면 보이지 않음
+    if (style.visibility === "hidden" || style.display === "none") {
+      return false;
+    }
+    el = el.parentElement;
+  }
+  return true;
+}
+
 /** 요소의 뷰포트 여백. 요소가 표시되지 않으면 visible 이 false 다. */
 export function regionInsets(element, view) {
   const rect = element.getBoundingClientRect();
@@ -19,7 +38,7 @@ export function regionInsets(element, view) {
     bottom: view.innerHeight - rect.bottom,
   };
   const shown = element.isConnected && rect.width > 0 && rect.height > 0
-    && (element.checkVisibility?.({ visibilityProperty: true }) ?? true);
+    && isElementVisible(element, view);
   return { insets, visible: shown };
 }
 
@@ -36,7 +55,10 @@ export function observeRegionInsets(element, view, onPlace) {
     const key = JSON.stringify(next);
     if (key === placed) return;
     placed = key;
-    onPlace(next).catch(() => {});
+    onPlace(next).catch((error) => {
+      // 배치 작업이 실패해도 관찰은 계속 진행한다. 실패를 기록한다.
+      console.error(`place operation failed: ${error?.message ?? error}`);
+    });
   };
   const observer = new view.ResizeObserver(place);
   for (let node = element; node; node = node.parentElement) observer.observe(node);
@@ -66,7 +88,10 @@ export function attachRegion(port, element, name, view = element.ownerDocument.d
   const queue = (work) => {
     if (detached) return Promise.reject(new Error(`document ${name} is detached`));
     const next = chain.then(work);
-    chain = next.catch(() => {});
+    // 내부 체인에서만 에러를 기록한다. 호출자는 next를 받으므로 실패 시 rejection이 전달된다.
+    chain = next.catch((error) => {
+      console.error(`document ${name} operation failed:`, error?.message ?? error);
+    });
     return next;
   };
 

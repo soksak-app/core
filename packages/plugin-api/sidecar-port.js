@@ -11,7 +11,10 @@ export function orderedSidecar(port) {
   return {
     send(surface, body) {
       const sent = chain.then(() => port.send(surface, body));
-      chain = sent.catch(() => {});
+      // 내부 체인에서만 에러를 기록한다. 호출자는 sent를 받으므로 실패 시 rejection이 전달된다.
+      chain = sent.catch((error) => {
+        console.error(`sidecar send failed: ${error?.message ?? error}`);
+      });
       return sent;
     },
     on: (surface, fn) => port.on(surface, fn),

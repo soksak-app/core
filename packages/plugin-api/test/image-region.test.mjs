@@ -170,3 +170,49 @@ test("invalid names are rejected", async () => {
   const p = port();
   assert.throws(() => attachImage(p, f.element, "Preview", "editor", f.window), /invalid image name/);
 });
+
+test("unknown event types are warned about", async () => {
+  const f = fixture();
+  const p = port();
+  const image = attachImage(p, f.element, "preview", "editor", f.window);
+  await settle();
+  p.calls.length = 0;
+
+  const warnings = [];
+  const originalWarn = console.warn;
+  console.warn = (...args) => warnings.push(args);
+
+  try {
+    p.send("preview", { type: "unknownType", data: "test" });
+    await settle();
+
+    assert(warnings.length > 0, "console.warn called for unknown event type");
+    const warnText = warnings[0][0];
+    assert(warnText.includes("no handlers"), "warning mentions no handlers");
+  } finally {
+    console.warn = originalWarn;
+  }
+});
+
+test("events without type field are warned about", async () => {
+  const f = fixture();
+  const p = port();
+  const image = attachImage(p, f.element, "preview", "editor", f.window);
+  await settle();
+  p.calls.length = 0;
+
+  const warnings = [];
+  const originalWarn = console.warn;
+  console.warn = (...args) => warnings.push(args);
+
+  try {
+    p.send("preview", { data: "test" }); // no type field
+    await settle();
+
+    assert(warnings.length > 0, "console.warn called for event without type");
+    const warnText = warnings[0][0];
+    assert(warnText.includes("no type"), "warning mentions no type");
+  } finally {
+    console.warn = originalWarn;
+  }
+});

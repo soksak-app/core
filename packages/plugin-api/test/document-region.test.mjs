@@ -131,3 +131,56 @@ test("invalid names and actions are rejected", async () => {
   const region = attachRegion(p, f.element, "page", f.window);
   await assert.rejects(region.go("home"), /unknown document action/);
 });
+
+test("visibility: display:none element is hidden", () => {
+  const f = fixture();
+  f.element.style.display = "none";
+  const insets = regionInsets(f.element, f.window);
+  assert.equal(insets.visible, false, "display:none element is not visible");
+});
+
+test("visibility: visibility:hidden element is hidden", () => {
+  const f = fixture();
+  f.element.style.visibility = "hidden";
+  const insets = regionInsets(f.element, f.window);
+  assert.equal(insets.visible, false, "visibility:hidden element is not visible");
+});
+
+test("visibility: ancestor with display:none hides element", () => {
+  const f = fixture();
+  const outer = f.window.document.getElementById("outer");
+  outer.style.display = "none";
+  const insets = regionInsets(f.element, f.window);
+  assert.equal(insets.visible, false, "element is hidden when ancestor has display:none");
+});
+
+test("visibility: normal element is visible", () => {
+  const f = fixture();
+  // element has width and height from mock getBoundingClientRect
+  const insets = regionInsets(f.element, f.window);
+  assert.equal(insets.visible, true, "normal element with size is visible");
+});
+
+test("visibility: propagates through attachRegion place", async () => {
+  const f = fixture();
+  const p = port();
+  p.release();
+
+  const region = attachRegion(p, f.element, "page", f.window);
+  await settle();
+
+  // Check initial place call has visible=true
+  const placeCallsBefore = p.calls.filter(([kind]) => kind === "place");
+  assert.equal(placeCallsBefore.length, 1, "initial place call");
+  assert.equal(placeCallsBefore[0][3], true, "initial visible is true");
+
+  // Hide the element
+  f.element.style.display = "none";
+  f.resize({ left: 10, top: 40, right: 510, bottom: 440, width: 500, height: 400 });
+  await settle();
+
+  // Check that new place call has visible=false
+  const placeCallsAfter = p.calls.filter(([kind]) => kind === "place");
+  assert.equal(placeCallsAfter.length, 2, "place called again on visibility change");
+  assert.equal(placeCallsAfter[1][3], false, "visible is false when display:none");
+});

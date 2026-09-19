@@ -20,17 +20,26 @@ export function attachImage(port, element, name, sidecar, view = element.ownerDo
   const queue = (work) => {
     if (detached) return Promise.reject(new Error(`image ${name} is detached`));
     const next = chain.then(work);
-    chain = next.catch(() => {});
+    // 내부 체인에서만 에러를 기록한다. 호출자는 next를 받으므로 실패 시 rejection이 전달된다.
+    chain = next.catch((error) => {
+      console.error(`image ${name} operation failed:`, error?.message ?? error);
+    });
     return next;
   };
 
   const unlisten = Promise.resolve(port.on((imageName, event) => {
     if (imageName !== name || detached) return;
-    const eventType = typeof event === "string" ? event : event.type;
-    const handlers = listeners.get(eventType);
-    if (handlers) {
-      for (const fn of handlers) fn(event);
+    const eventType = typeof event === "string" ? event : event?.type;
+    if (!eventType) {
+      console.warn(`image ${name}: event has no type`, event);
+      return;
     }
+    const handlers = listeners.get(eventType);
+    if (!handlers) {
+      console.warn(`image ${name}: no handlers for event type ${eventType}`);
+      return;
+    }
+    for (const fn of handlers) fn(event);
   }));
 
   const stopObserving = observeRegionInsets(element, view, ({ insets, visible }) =>
