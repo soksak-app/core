@@ -4,7 +4,7 @@
 // 보낸 테마 토큰을 자기 루트에 설정한다.
 import { page as runtimePage } from "@soksak/runtime";
 import {
-  EXPOSURE, MANIFEST, SURFACE_CORE, attachRegion, createExpose, declarationMap, modulePath, orderedSidecar, pagePackage,
+  EXPOSURE, MANIFEST, SURFACE_CORE, attachRegion, attachImage, createExpose, declarationMap, modulePath, orderedSidecar, pagePackage,
   validateExposureFile, validateManifest,
 } from "@soksak/plugin-api";
 
@@ -75,6 +75,12 @@ export const expose = page?.exposure ? createExpose(page.exposure, ownDeclaratio
  * 반환 값은 packages/plugin-api/document-region.js 의 attachRegion 결과다.
  */
 export const attachDocument = page?.document ? (element, name) => attachRegion(page.document, element, name) : null;
+
+/**
+ * 이 표면 페이지의 요소 element 에 그림 영역 name 을 붙인다. 네이티브 호스트가 없으면 null 이다.
+ * 반환 값은 packages/plugin-api/image-region.js 의 attachImage 결과다.
+ */
+export const attachImageRegion = page?.image ? (element, name, sidecar) => attachImage(page.image, element, name, sidecar) : null;
 
 /* 표면 문서의 입력 기록. docs/spec/exposure.md 의 core.surface.input 이다. */
 const INPUT_TYPES = ["pointerdown", "pointerup", "pointermove", "click", "wheel", "keydown"];

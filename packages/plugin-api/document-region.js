@@ -24,6 +24,34 @@ export function regionInsets(element, view) {
 }
 
 /**
+ * 요소의 뷰포트 여백을 관찰하고 변화를 onPlace 로 통보한다. 관찰을 멈길 수 있는 정리 함수를 반환한다.
+ * onPlace 는 비동기 작업을 되돌려주고, 반환이 이행되어야 다음 배치를 보낸다.
+ */
+export function observeRegionInsets(element, view, onPlace) {
+  let placed = null;
+  let detached = false;
+  const place = () => {
+    if (detached) return;
+    const next = regionInsets(element, view);
+    const key = JSON.stringify(next);
+    if (key === placed) return;
+    placed = key;
+    onPlace(next).catch(() => {});
+  };
+  const observer = new view.ResizeObserver(place);
+  for (let node = element; node; node = node.parentElement) observer.observe(node);
+  view.addEventListener("resize", place);
+  view.addEventListener("scroll", place, true);
+  place();
+  return () => {
+    detached = true;
+    observer.disconnect();
+    view.removeEventListener("resize", place);
+    view.removeEventListener("scroll", place, true);
+  };
+}
+
+/**
  * element 에 문서 영역 name 을 붙인다. port 는 런타임의 page.document 이고 view 는 요소의 창이다.
  *
  * 반환한 영역의 호출은 붙이기가 끝난 뒤 순서대로 실행된다. state 는 호스트가 마지막으로 알린
@@ -34,7 +62,6 @@ export function attachRegion(port, element, name, view = element.ownerDocument.d
   const listeners = new Set();
   let state = null;
   let detached = false;
-  let placed = null;
   let chain = port.attach(name);
   const queue = (work) => {
     if (detached) return Promise.reject(new Error(`document ${name} is detached`));
@@ -49,22 +76,9 @@ export function attachRegion(port, element, name, view = element.ownerDocument.d
     for (const fn of listeners) fn(value);
   }));
 
-  // 같은 배치를 거듭 보내지 않는다. 배치는 호출 순서대로 호스트에 도달한다.
-  const place = () => {
-    if (detached) return;
-    const next = regionInsets(element, view);
-    const key = JSON.stringify(next);
-    if (key === placed) return;
-    placed = key;
-    queue(() => port.place(name, next.insets, next.visible))
-      .catch((error) => console.error(`document ${name} place: ${error.message}`));
-  };
-
-  const observer = new view.ResizeObserver(place);
-  for (let node = element; node; node = node.parentElement) observer.observe(node);
-  view.addEventListener("resize", place);
-  view.addEventListener("scroll", place, true);
-  place();
+  const stopObserving = observeRegionInsets(element, view, ({ insets, visible }) =>
+    queue(() => port.place(name, insets, visible))
+      .catch((error) => console.error(`document ${name} place: ${error.message}`)));
 
   return {
     name,
@@ -74,7 +88,11 @@ export function attachRegion(port, element, name, view = element.ownerDocument.d
       return () => listeners.delete(fn);
     },
     /** 요소가 바뀐 배치를 알린다. 관찰로 드러나지 않는 이동에 쓴다. */
-    place,
+    place: () => {
+      const { insets, visible } = regionInsets(element, view);
+      return queue(() => port.place(name, insets, visible))
+        .catch((error) => console.error(`document ${name} place: ${error.message}`));
+    },
     load: (url) => queue(() => port.load(name, url)),
     go(action) {
       if (!DOCUMENT_ACTIONS.includes(action)) return Promise.reject(new Error(`unknown document action ${action}`));
@@ -87,9 +105,7 @@ export function attachRegion(port, element, name, view = element.ownerDocument.d
     detach() {
       const done = queue(() => port.detach(name));
       detached = true;
-      observer.disconnect();
-      view.removeEventListener("resize", place);
-      view.removeEventListener("scroll", place, true);
+      stopObserving();
       listeners.clear();
       unlisten.then((stop) => stop?.());
       return done;

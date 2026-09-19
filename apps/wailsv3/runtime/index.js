@@ -106,6 +106,18 @@ export const page = (() => {
         if (sent.surface === surface) fn(sent.document, sent.state);
       }),
     },
+    // 이 표면의 그림 영역. 호스트는 호출한 웹뷰가 surface 인지 확인하고 이벤트를 이 표면에만 보낸다.
+    image: {
+      attach: (name, sidecar) => call("ImageAttach", { surface, name, sidecar }),
+      place: (name, insets, visible) => call("ImagePlace", { surface, name, ...insets, visible }),
+      focus: (name) => call("ImageFocus", { surface, name }),
+      caret: (name, x, y, w, h) => call("ImageCaret", { surface, name }, x, y, w, h),
+      text: (name, text) => call("ImageText", { surface, name }, text),
+      detach: (name) => call("ImageDetach", { surface, name }),
+      on: (fn) => listen("image-event", (sent) => {
+        if (sent.surface === surface) fn(sent.name, sent.event);
+      }),
+    },
     modal: {
       content(id, instance, fn, place) {
         return Promise.all([listen("modal-content", (sent) => {

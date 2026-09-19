@@ -24,6 +24,12 @@ const COMMAND = {
   exposureReply: "exposure_reply",
   exposureChanged: "exposure_changed",
   exposureForward: "exposure_forward",
+  imageAttach: "image_attach",
+  imagePlace: "image_place",
+  imageFocus: "image_focus",
+  imageCaret: "image_caret",
+  imageText: "image_text",
+  imageDetach: "image_detach",
 };
 
 // 커맨드마다 인자의 이름이 다르다. 이름은 Rust 쪽 서명이 정한다.
@@ -46,6 +52,12 @@ const ARG = {
   exposureReply: (request) => ({ request }),
   exposureChanged: (request) => ({ request }),
   exposureForward: (request) => ({ request }),
+  imageAttach: (request) => ({ request }),
+  imagePlace: (request) => ({ request }),
+  imageFocus: (request) => ({ request }),
+  imageCaret: (request, x, y, w, h) => ({ request, x, y, w, h }),
+  imageText: (request, text) => ({ request, text }),
+  imageDetach: (request) => ({ request }),
 };
 
 export const host = (() => {
@@ -106,6 +118,19 @@ export const page = (() => {
       detach: (document) => invoke("document_detach", { request: { surface, document } }),
       onState: (fn) => listen("document-state", (e) => {
         if (e.payload.surface === surface) fn(e.payload.document, e.payload.state);
+      }),
+    },
+    // 이 표면의 그림 영역. 호스트는 호출한 웹뷰가 surface 인지 확인하고 이벤트를 이 표면에만 보낸다.
+    image: {
+      attach: (name, sidecar) => invoke("image_attach", { request: { surface, name, sidecar } }),
+      place: (name, insets, visible) =>
+        invoke("image_place", { request: { surface, name, ...insets, visible } }),
+      focus: (name) => invoke("image_focus", { request: { surface, name } }),
+      caret: (name, x, y, w, h) => invoke("image_caret", { request: { surface, name }, x, y, w, h }),
+      text: (name, text) => invoke("image_text", { request: { surface, name }, text }),
+      detach: (name) => invoke("image_detach", { request: { surface, name } }),
+      on: (fn) => listen("image-event", (e) => {
+        if (e.payload.surface === surface) fn(e.payload.name, e.payload.event);
       }),
     },
     modal: {

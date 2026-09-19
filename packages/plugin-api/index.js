@@ -12,7 +12,8 @@
 import { createBinder } from "./binder.js";
 
 export { INTERACTIVE, commandOf, createBinder, valueOf } from "./binder.js";
-export { DOCUMENT_ACTIONS, DOCUMENT_NAME, attachRegion, regionInsets } from "./document-region.js";
+export { DOCUMENT_ACTIONS, DOCUMENT_NAME, attachRegion, observeRegionInsets, regionInsets } from "./document-region.js";
+export { IMAGE_NAME, attachImage } from "./image-region.js";
 export { orderedSidecar } from "./sidecar-port.js";
 
 export const ENVIRONMENT = "environment.json";
