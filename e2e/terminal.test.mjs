@@ -1,4 +1,5 @@
 // 터미널 표면의 입력이 터미널 사이드카를 거쳐 같은 표면의 출력으로 돌아오는지 검사한다.
+// 창 크기가 바뀌어도 터미널 그림이 영역과 DOM 을 따라가는지 검사한다.
 import assert from "node:assert/strict";
 import { rmSync } from "node:fs";
 import test from "node:test";
@@ -12,19 +13,14 @@ for (const app of Object.values(APPS)) {
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
 
-    // 터미널 탭을 활성화한다.
-    const rect = await s.rect("core.grid");
-    const shellCard = rect.cards.find((card) => card.id === "shell");
-    const terminalTab = shellCard.tabs.find((tab) => tab.plugin === "terminal");
-    if (!terminalTab) return t.skip("terminal tab not found in shell card");
+    // 터미널 탭을 활성화한다. core.grid 는 상태이므로 상태 읽기로 카드와 탭을 얻는다.
+    const grid = await s.get("core.grid");
+    const card = grid.cards.find((c) => c.tabs.some((tab) => tab.plugin === "terminal"));
+    if (!card) return t.skip("terminal tab not found");
+    const terminalTab = card.tabs.find((tab) => tab.plugin === "terminal");
 
-    // 터미널 탭을 클릭하여 활성화한다.
-    await s.act("core.tab", "click", {
-      event: {
-        type: "click",
-      },
-      value: terminalTab.id,
-    });
+    // 터미널 탭을 선택하는 명령을 실행한다.
+    await s.run("core.tab.select", { tab: terminalTab.id });
 
     // 터미널 세션이 준비될 때까지 기다린다.
     let terminalSurface;
@@ -136,6 +132,139 @@ for (const app of Object.values(APPS)) {
     assert.ok(
       brightTextCount >= BRIGHT_TEXT_MIN,
       `terminal text not visible: ${brightTextCount} bright pixels (need >= ${BRIGHT_TEXT_MIN})`
+    );
+  });
+
+  test(`${app.name}: terminal image follows a window resize`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+
+    // 터미널 탭을 활성화한다. core.grid 는 상태이므로 상태 읽기로 카드와 탭을 얻는다.
+    const grid = await s.get("core.grid");
+    const card = grid.cards.find((c) => c.tabs.some((tab) => tab.plugin === "terminal"));
+    if (!card) return t.skip("terminal tab not found");
+    const terminalTab = card.tabs.find((tab) => tab.plugin === "terminal");
+
+    await s.run("core.tab.select", { tab: terminalTab.id });
+
+    let terminalSurface;
+    await s.until(
+      "core.surfaces",
+      (surfaces) => {
+        const terminal = surfaces.find(
+          (surf) => surf.visible && surf.plugin === "terminal"
+        );
+        if (!terminal) return false;
+        terminalSurface = terminal.surface;
+        return true;
+      },
+      "terminal surface did not become visible"
+    );
+
+    await s.until(
+      "terminal.session",
+      (session) => session && session.sessionId,
+      "terminal session did not report sessionId",
+      { surface: terminalSurface }
+    );
+
+    // 화면에 글자를 둔다.
+    await s.run("terminal.input", { bytes: "echo hi\r" }, terminalSurface);
+    await s.until(
+      "terminal.screen.read",
+      (screen) => {
+        if (!screen || !screen.lines) return false;
+        return screen.lines.some((line) => line.trim() === "hi");
+      },
+      "terminal did not print hi",
+      { surface: terminalSurface }
+    );
+
+    const before = await s.get("terminal.session", terminalSurface);
+
+    // 창을 키운다.
+    await s.run("host.window.resize", { width: 1500, height: 920 });
+    await s.until(
+      "host.window",
+      (w) => w.content.width === 1500 && w.content.height === 920,
+      "the window did not resize"
+    );
+
+    // 사이드카의 resize 응답 state 이벤트가 세션 상태에 도달해야 한다.
+    // 셀 크기가 빠진 state 이벤트는 플러그인이 오류로 내놓으므로 cols 가 그대로 남는다.
+    const after = await s.until(
+      "terminal.session",
+      (session) =>
+        session &&
+        !session.error &&
+        session.cols > before.cols &&
+        session.rows > before.rows,
+      `terminal session did not grow after the window resize: ${JSON.stringify(before)}`,
+      { surface: terminalSurface }
+    );
+    assert.equal(after.error, undefined, "resize state event must not set an error");
+
+    await s.presented();
+
+    // 커진 영역 안에서 그림이 영역을 덮는지 수치로 잰다.
+    const terminalRect = await s.rect("terminal.view", undefined, terminalSurface);
+    assert.ok(
+      terminalRect.width > 0 && terminalRect.height > 0,
+      "terminal view rect is empty"
+    );
+
+    const capture = await s.request("diagnostics.capture.start", {});
+    const { frames: frameDir } = await s.request("diagnostics.capture.stop", {
+      after: (await s.presented()).displayed,
+    });
+
+    t.after(async () => {
+      await s.run("terminal.close", {}, terminalSurface);
+      try {
+        rmSync(frameDir, { recursive: true, force: true });
+      } catch {
+        // ignore
+      }
+    });
+
+    const frameFiles = frames(frameDir);
+    assert.ok(frameFiles.length > 0, "no frames were captured");
+    const frame = readFrame(frameFiles[frameFiles.length - 1]);
+
+    const BG_COLOR = [30, 30, 30];
+    const COLOR_TOLERANCE = 10;
+    const BRIGHT_TEXT_THRESHOLD = 160;
+    const BG_SAMPLE_RATIO_MIN = 0.5;
+
+    const termX = Math.round(terminalRect.x);
+    const termY = Math.round(terminalRect.y);
+    const termWidth = Math.round(terminalRect.width);
+    const termHeight = Math.round(terminalRect.height);
+
+    let bgPixelCount = 0;
+    let totalSampleCount = 0;
+    let brightTextCount = 0;
+    for (let y = termY; y < termY + termHeight; y += 2) {
+      for (let x = termX; x < termX + termWidth; x += 2) {
+        if (y < 0 || y >= frame.height || x < 0 || x >= frame.width) continue;
+        const px = pixel(frame, x, y);
+        totalSampleCount++;
+        if (px.every((v, i) => Math.abs(v - BG_COLOR[i]) <= COLOR_TOLERANCE)) {
+          bgPixelCount++;
+        }
+        if ((px[0] + px[1] + px[2]) / 3 >= BRIGHT_TEXT_THRESHOLD) brightTextCount++;
+      }
+    }
+
+    const bgRatio = totalSampleCount > 0 ? bgPixelCount / totalSampleCount : 0;
+    assert.ok(
+      bgRatio >= BG_SAMPLE_RATIO_MIN,
+      `terminal image does not cover the resized region: ${(bgRatio * 100).toFixed(1)}% background over ${termWidth}x${termHeight} (need >= ${(BG_SAMPLE_RATIO_MIN * 100).toFixed(0)}%)`
+    );
+    assert.ok(
+      brightTextCount >= 20,
+      `terminal text not visible after resize: ${brightTextCount} bright pixels (need >= 20)`
     );
   });
 }
