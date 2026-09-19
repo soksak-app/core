@@ -20,10 +20,10 @@ use std::time::Duration;
 
 use wait_timeout::ChildExt;
 
+use crate::windows::{emit_window, window_data};
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use tauri::Window;
-use crate::windows::{emit_window, window_data};
 
 /// 사이드카가 보낸 메시지를 페이지에 전달하는 이벤트 값.
 #[derive(Clone, Serialize)]
@@ -105,8 +105,8 @@ impl<O: Owner> ResponseSender for ReadThreadResponseSender<O> {
         }
 
         let response = Response { surface, body };
-        let mut line = serde_json::to_vec(&response)
-            .map_err(|e| format!("response serialization: {e}"))?;
+        let mut line =
+            serde_json::to_vec(&response).map_err(|e| format!("response serialization: {e}"))?;
         line.push(b'\n');
 
         match self.tx.try_send(Outgoing::Line(line.clone())) {
@@ -115,11 +115,15 @@ impl<O: Owner> ResponseSender for ReadThreadResponseSender<O> {
                 // 채널이 가득 차면 State.pending_replies 에 버퍼링 (같은 surface:image의 것을 교체)
                 let mut state = self.state.lock().expect("sidecar state");
                 let key = format!("{}:{}", surface, image);
-                state.pending_replies
+                state
+                    .pending_replies
                     .entry(self.sidecar_name.clone())
                     .or_insert_with(HashMap::new)
                     .insert(key.clone(), line);
-                eprintln!("sidecar {} response queue full: buffering {}", self.sidecar_name, key);
+                eprintln!(
+                    "sidecar {} response queue full: buffering {}",
+                    self.sidecar_name, key
+                );
                 Ok(())
             }
         }
@@ -143,7 +147,10 @@ fn write_pending<O: Owner>(state: &Mutex<State<O>>, name: &str, stdin: &mut Chil
             state.pending_closes.remove(name).unwrap_or_default(),
         )
     };
-    replies.values().chain(closes.values()).all(|line| write_line(stdin, name, line))
+    replies
+        .values()
+        .chain(closes.values())
+        .all(|line| write_line(stdin, name, line))
 }
 
 struct Process {
@@ -310,15 +317,23 @@ impl<O: Owner> Sidecars<O> {
             line.push(b'\n');
 
             // 채널 전송을 시도할 프로세스들을 먼저 수집한다 (borrow 충돌 방지).
-            let processes: Vec<(String, bool)> = state.running.iter().map(|(name, process)| {
-                let sent = process.outbox.try_send(Outgoing::Line(line.clone())).is_ok();
-                (name.clone(), sent)
-            }).collect();
+            let processes: Vec<(String, bool)> = state
+                .running
+                .iter()
+                .map(|(name, process)| {
+                    let sent = process
+                        .outbox
+                        .try_send(Outgoing::Line(line.clone()))
+                        .is_ok();
+                    (name.clone(), sent)
+                })
+                .collect();
 
             // 전송 실패한 항목들을 버퍼링한다.
             for (name, sent) in processes {
                 if !sent {
-                    state.pending_closes
+                    state
+                        .pending_closes
                         .entry(name.clone())
                         .or_insert_with(HashMap::new)
                         .insert(surface.clone(), line.clone());
@@ -470,7 +485,9 @@ impl<O: Owner> Sidecars<O> {
             loop {
                 match rx.try_recv() {
                     Ok(Outgoing::Line(line)) => {
-                        if !write_line(&mut stdin, &write_name, &line) { return; }
+                        if !write_line(&mut stdin, &write_name, &line) {
+                            return;
+                        }
                     }
                     Ok(Outgoing::Close) | Err(TryRecvError::Disconnected) => {
                         write_pending(&state_clone, &write_name, &mut stdin);
@@ -479,10 +496,14 @@ impl<O: Owner> Sidecars<O> {
                     Err(TryRecvError::Empty) => break,
                 }
             }
-            if !write_pending(&state_clone, &write_name, &mut stdin) { return; }
+            if !write_pending(&state_clone, &write_name, &mut stdin) {
+                return;
+            }
             match rx.recv() {
                 Ok(Outgoing::Line(line)) => {
-                    if !write_line(&mut stdin, &write_name, &line) { return; }
+                    if !write_line(&mut stdin, &write_name, &line) {
+                        return;
+                    }
                 }
                 Ok(Outgoing::Close) | Err(RecvError) => {
                     write_pending(&state_clone, &write_name, &mut stdin);
@@ -527,7 +548,13 @@ impl<O: Owner> Sidecars<O> {
                         state: Arc::clone(&state),
                     };
                     // 이미지 봉투 여부 확인 및 처리
-                    if try_handle_image_envelope(&owner, &sidecar, &event.surface, &event.body, &response_sender) {
+                    if try_handle_image_envelope(
+                        &owner,
+                        &sidecar,
+                        &event.surface,
+                        &event.body,
+                        &response_sender,
+                    ) {
                         continue;
                     }
                     owner.deliver(Message {
@@ -553,7 +580,13 @@ impl<O: Owner> Sidecars<O> {
 }
 
 /// 이벤트가 이미지 봉투인지 확인하고 처리한다. 봉투면 true 를 반환한다.
-fn try_handle_image_envelope<O: Owner>(owner: &O, sidecar_name: &str, surface: &str, body: &RawValue, response_sender: &dyn ResponseSender) -> bool {
+fn try_handle_image_envelope<O: Owner>(
+    owner: &O,
+    sidecar_name: &str,
+    surface: &str,
+    body: &RawValue,
+    response_sender: &dyn ResponseSender,
+) -> bool {
     // 이미지 봉투 여부 확인 및 결정을 요청한다.
     owner.decide_image_envelope(sidecar_name, surface, body, response_sender)
 }
@@ -595,7 +628,9 @@ impl Owner for Window {
             sidecar_name,
             surface,
             &data.images,
-            |work: Box<dyn Fn() -> Result<(), String> + Send>| crate::exposure::on_main(&window, move || work()),
+            |work: Box<dyn Fn() -> Result<(), String> + Send>| {
+                crate::exposure::on_main(&window, move || work())
+            },
             |image, response| {
                 let text = serde_json::to_string(&response).map_err(|e| e.to_string())?;
                 let body = RawValue::from_string(text).map_err(|e| e.to_string())?;

@@ -9,13 +9,16 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Mutex, OnceLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
 use tauri::{AppHandle, Emitter, EventTarget, LogicalSize, Manager, Webview, Window};
 
-use crate::endpoint::{Endpoint, Failure, Service, INVALID_PARAMS, MISSING_DOCUMENT, NOT_ACTIVE, NO_INPUT, TIMED_OUT, UNKNOWN_NAME};
+use crate::endpoint::{
+    Endpoint, Failure, Service, INVALID_PARAMS, MISSING_DOCUMENT, NOT_ACTIVE, NO_INPUT, TIMED_OUT,
+    UNKNOWN_NAME,
+};
 use crate::platform;
 use crate::surfaces::label_for;
 use crate::windows::{self, native_owner, root_view, window_data};
@@ -111,7 +114,7 @@ fn host_declarations() -> Value {
             {"name": "host.window.move", "description": "Moves the window frame origin to a point in screen coordinates.",
              "params": {"type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "number"}}},
              "result": nothing},
-            {"name": "host.window.presented", "description": "Resolves after the main page and visible application documents have presented their current geometry, with the display time of that frame.",
+            {"name": "host.window.presented", "description": "Resolves after the main page, visible application documents, and visible image regions have presented their current geometry and raster, with the display time of that frame.",
              "params": empty, "result": {"type": "object", "properties": {"displayed": {"type": "number"}}}},
             {"name": "host.window.reload", "description": "Reloads the main page.",
              "params": empty, "result": nothing},
@@ -126,13 +129,23 @@ fn host_declarations() -> Value {
 /// 페이지의 `exposure.list` 결과에 호스트 항목을 등록된 항목으로 추가한다.
 pub fn with_host_entries(listed: Value) -> Result<Value, Failure> {
     let Value::Object(mut listed) = listed else {
-        return Err(Failure::new(-32603, "the page returned an exposure list that is not an object"));
+        return Err(Failure::new(
+            -32603,
+            "the page returned an exposure list that is not an object",
+        ));
     };
-    let Value::Object(declared) = host_declarations() else { unreachable!("host declarations are an object") };
+    let Value::Object(declared) = host_declarations() else {
+        unreachable!("host declarations are an object")
+    };
     for (kind, entries) in declared {
-        let target = listed.entry(kind.clone()).or_insert_with(|| Value::Array(Vec::new()));
+        let target = listed
+            .entry(kind.clone())
+            .or_insert_with(|| Value::Array(Vec::new()));
         let Value::Array(target) = target else {
-            return Err(Failure::new(-32603, format!("the page returned {kind} that is not an array")));
+            return Err(Failure::new(
+                -32603,
+                format!("the page returned {kind} that is not an array"),
+            ));
         };
         for mut entry in entries.as_array().cloned().unwrap_or_default() {
             entry["registered"] = Value::Bool(true);
@@ -143,7 +156,10 @@ pub fn with_host_entries(listed: Value) -> Result<Value, Failure> {
 }
 
 fn number(params: &Map<String, Value>, name: &str) -> Result<f64, Failure> {
-    params.get(name).and_then(Value::as_f64).ok_or_else(|| Failure::params(format!("{name} must be a number")))
+    params
+        .get(name)
+        .and_then(Value::as_f64)
+        .ok_or_else(|| Failure::params(format!("{name} must be a number")))
 }
 
 fn optional_number(params: &Map<String, Value>, name: &str) -> Result<f64, Failure> {
@@ -161,7 +177,11 @@ pub fn pointer(params: &Map<String, Value>) -> Result<Pointer, Failure> {
         Some("drag") => 2,
         Some("up") => 3,
         Some("scroll") => 4,
-        _ => return Err(Failure::params("phase must be move, down, drag, up, or scroll")),
+        _ => {
+            return Err(Failure::params(
+                "phase must be move, down, drag, up, or scroll",
+            ))
+        }
     };
     let button = match params.get("button") {
         None | Some(Value::Null) => 0,
@@ -213,14 +233,23 @@ pub fn key(params: &Map<String, Value>) -> Result<Key, Failure> {
                 };
             }
         }
-        Some(_) => return Err(Failure::params("modifiers must be an array of shift, control, option, command")),
+        Some(_) => {
+            return Err(Failure::params(
+                "modifiers must be an array of shift, control, option, command",
+            ))
+        }
     }
     let down = match params.get("phase").and_then(Value::as_str) {
         Some("down") => true,
         Some("up") => false,
         _ => return Err(Failure::params("phase must be down or up")),
     };
-    Ok(Key { key, text, modifiers, down })
+    Ok(Key {
+        key,
+        text,
+        modifiers,
+        down,
+    })
 }
 
 type Waiting = (String, Sender<Result<Value, Failure>>);
@@ -243,19 +272,27 @@ impl Relay {
     ) -> Result<Value, Failure> {
         let id = self.next.fetch_add(1, Ordering::Relaxed) + 1;
         let (tx, rx) = mpsc::channel();
-        self.pending.lock().map_err(|e| Failure::new(-32603, e.to_string()))?.insert(id, (target.to_string(), tx));
+        self.pending
+            .lock()
+            .map_err(|e| Failure::new(-32603, e.to_string()))?
+            .insert(id, (target.to_string(), tx));
         if let Err(error) = send(id) {
             self.forget(id);
             return Err(Failure::new(MISSING_DOCUMENT, error));
         }
         let Some(timeout) = timeout else {
-            return rx.recv().unwrap_or_else(|_| Err(Failure::new(MISSING_DOCUMENT, format!("{target} closed"))));
+            return rx.recv().unwrap_or_else(|_| {
+                Err(Failure::new(MISSING_DOCUMENT, format!("{target} closed")))
+            });
         };
         match rx.recv_timeout(timeout) {
             Ok(outcome) => outcome,
             Err(_) => {
                 self.forget(id);
-                Err(Failure::new(TIMED_OUT, format!("{target} did not reply within {} ms", timeout.as_millis())))
+                Err(Failure::new(
+                    TIMED_OUT,
+                    format!("{target} did not reply within {} ms", timeout.as_millis()),
+                ))
             }
         }
     }
@@ -263,9 +300,13 @@ impl Relay {
     /// 문서 from 의 응답 `{id, result}` 또는 `{id, error}` 를 기다리는 요청에 전달한다. 전달했으면
     /// true 이다. 다른 문서에 보낸 요청의 id 는 전달하지 않는다.
     pub fn reply(&self, from: &str, payload: &Value) -> bool {
-        let Some(id) = payload.get("id").and_then(Value::as_u64) else { return false };
+        let Some(id) = payload.get("id").and_then(Value::as_u64) else {
+            return false;
+        };
         let waiting = {
-            let Ok(mut pending) = self.pending.lock() else { return false };
+            let Ok(mut pending) = self.pending.lock() else {
+                return false;
+            };
             if !pending.get(&id).is_some_and(|(target, _)| target == from) {
                 return false;
             }
@@ -275,7 +316,10 @@ impl Relay {
         let outcome = match payload.get("error") {
             Some(error) if !error.is_null() => Err(Failure::new(
                 error.get("code").and_then(Value::as_i64).unwrap_or(-32603),
-                error.get("message").and_then(Value::as_str).unwrap_or("the document failed"),
+                error
+                    .get("message")
+                    .and_then(Value::as_str)
+                    .unwrap_or("the document failed"),
             )),
             _ => Ok(payload.get("result").cloned().unwrap_or(Value::Null)),
         };
@@ -290,13 +334,22 @@ impl Relay {
     fn abandon_matching(&self, closed: impl Fn(&str) -> bool) {
         let gone: Vec<Waiting> = match self.pending.lock() {
             Ok(mut pending) => {
-                let ids: Vec<u64> = pending.iter().filter(|(_, (target, _))| closed(target)).map(|(id, _)| *id).collect();
-                ids.into_iter().filter_map(|id| pending.remove(&id)).collect()
+                let ids: Vec<u64> = pending
+                    .iter()
+                    .filter(|(_, (target, _))| closed(target))
+                    .map(|(id, _)| *id)
+                    .collect();
+                ids.into_iter()
+                    .filter_map(|id| pending.remove(&id))
+                    .collect()
             }
             Err(_) => return,
         };
         for (target, tx) in gone {
-            let _ = tx.send(Err(Failure::new(MISSING_DOCUMENT, format!("{target} closed"))));
+            let _ = tx.send(Err(Failure::new(
+                MISSING_DOCUMENT,
+                format!("{target} closed"),
+            )));
         }
     }
 
@@ -317,8 +370,16 @@ pub(crate) struct Exposure {
 
 /// 엔드포인트를 열고 endpoint.json 을 쓴다.
 pub(crate) fn start(app: &AppHandle, directory: &std::path::Path) -> Result<(), String> {
-    let endpoint = Endpoint::start(&crate::endpoint::socket_directory(), directory, APPLICATION, Arc::new(Host(app.clone())))?;
-    app.state::<Exposure>().endpoint.set(endpoint).map_err(|_| "the endpoint is already started".to_string())
+    let endpoint = Endpoint::start(
+        &crate::endpoint::socket_directory(),
+        directory,
+        APPLICATION,
+        Arc::new(Host(app.clone())),
+    )?;
+    app.state::<Exposure>()
+        .endpoint
+        .set(endpoint)
+        .map_err(|_| "the endpoint is already started".to_string())
 }
 
 /// 엔드포인트를 닫고 소켓과 endpoint.json 을 제거한다.
@@ -349,12 +410,16 @@ fn main_page(webview: &Webview) -> Result<Window, String> {
 }
 
 fn emit_to(app: &AppHandle, label: &str, event: &str, payload: Value) -> Result<(), String> {
-    app.emit_to(EventTarget::webview(label), event, payload).map_err(|e| e.to_string())
+    app.emit_to(EventTarget::webview(label), event, payload)
+        .map_err(|e| e.to_string())
 }
 
 /// 호출한 문서의 응답을 기다리는 요청에 전달한다. 제한 시간이 지난 응답은 버린다.
 pub(crate) fn reply(webview: &Webview, request: Value) -> Result<(), String> {
-    webview.state::<Exposure>().relay.reply(webview.label(), &request);
+    webview
+        .state::<Exposure>()
+        .relay
+        .reply(webview.label(), &request);
     Ok(())
 }
 
@@ -370,7 +435,12 @@ pub(crate) struct Changed {
 pub(crate) fn changed(webview: &Webview, request: Changed) -> Result<(), String> {
     let window = main_page(webview)?;
     if let Some(endpoint) = window.state::<Exposure>().endpoint.get() {
-        endpoint.notifier().changed(window.label(), &request.name, request.surface.as_deref(), request.value);
+        endpoint.notifier().changed(
+            window.label(),
+            &request.name,
+            request.surface.as_deref(),
+            request.value,
+        );
     }
     Ok(())
 }
@@ -401,7 +471,11 @@ pub fn forward_timeout(method: &str, timeout: &Value) -> Result<Option<Duration>
     let ms = timeout
         .as_f64()
         .filter(|ms| ms.fract() == 0.0 && *ms >= 1.0 && *ms <= MAX_FORWARD_TIMEOUT as f64)
-        .ok_or_else(|| Failure::params(format!("timeout must be an integer from 1 to {MAX_FORWARD_TIMEOUT} milliseconds")))?;
+        .ok_or_else(|| {
+            Failure::params(format!(
+                "timeout must be an integer from 1 to {MAX_FORWARD_TIMEOUT} milliseconds"
+            ))
+        })?;
     Ok(Some(Duration::from_millis(ms as u64)))
 }
 
@@ -412,13 +486,22 @@ pub(crate) fn forward(webview: &Webview, request: Forward) -> Result<Value, Stri
     let app = window.app_handle().clone();
     let outcome = match forward_timeout(&request.method, &request.timeout) {
         Err(invalid) => Err(invalid),
-        Ok(_) if window.get_webview(&label).is_none() => {
-            Err(Failure::new(MISSING_DOCUMENT, format!("surface {} does not exist", request.surface)))
-        }
+        Ok(_) if window.get_webview(&label).is_none() => Err(Failure::new(
+            MISSING_DOCUMENT,
+            format!("surface {} does not exist", request.surface),
+        )),
         // status.next 는 제한 시간이 없다. 표면이 닫히면 1003 이다.
-        Ok(timeout) => window.state::<Exposure>().relay.request(&label, timeout, |id| {
-            emit_to(&app, &label, "exposure-request", json!({"id": id, "method": request.method, "params": request.params}))
-        }),
+        Ok(timeout) => window
+            .state::<Exposure>()
+            .relay
+            .request(&label, timeout, |id| {
+                emit_to(
+                    &app,
+                    &label,
+                    "exposure-request",
+                    json!({"id": id, "method": request.method, "params": request.params}),
+                )
+            }),
     };
     Ok(match outcome {
         Ok(result) => json!({"result": result}),
@@ -437,7 +520,11 @@ pub(crate) struct Register {
 pub(crate) fn register(webview: &Webview, request: Register) -> Result<(), String> {
     let window = webview.window();
     if webview.label() != label_for(&window, &request.surface) {
-        return Err(format!("{} cannot register for surface {}", webview.label(), request.surface));
+        return Err(format!(
+            "{} cannot register for surface {}",
+            webview.label(),
+            request.surface
+        ));
     }
     if !matches!(request.kind.as_str(), "status" | "command" | "dom") {
         return Err(format!("unknown exposure kind {}", request.kind));
@@ -448,7 +535,11 @@ pub(crate) fn register(webview: &Webview, request: Register) -> Result<(), Strin
     if !crate::endpoint::valid_name(name) || name.starts_with("host.") || core {
         return Err(format!("a surface cannot register {name:?}"));
     }
-    let entry = (request.surface.clone(), request.kind.clone(), request.name.clone());
+    let entry = (
+        request.surface.clone(),
+        request.kind.clone(),
+        request.name.clone(),
+    );
     {
         let data = window_data(&window)?;
         let mut registrations = data.registrations.lock().map_err(|e| e.to_string())?;
@@ -456,22 +547,31 @@ pub(crate) fn register(webview: &Webview, request: Register) -> Result<(), Strin
             registrations.push(entry);
         }
     }
-    emit_to(window.app_handle(), window.label(), "exposure-registered",
-        json!({"surface": request.surface, "kind": request.kind, "name": request.name}))
+    emit_to(
+        window.app_handle(),
+        window.label(),
+        "exposure-registered",
+        json!({"surface": request.surface, "kind": request.kind, "name": request.name}),
+    )
 }
 
 /// 표면 페이지의 등록을 다시 읽힌 메인 페이지에 다시 알린다. 표면은 메인 페이지가 다시 읽혀도
 /// 남으므로, 새 페이지는 이전 페이지가 받은 등록을 이 호출로 받는다.
 pub(crate) fn replay_registrations(window: &Window) {
-    let Ok(data) = window_data(window) else { return };
+    let Ok(data) = window_data(window) else {
+        return;
+    };
     let registrations = match data.registrations.lock() {
         Ok(list) => list.clone(),
         Err(_) => return,
     };
     for (surface, kind, name) in registrations {
-        if let Err(error) = emit_to(window.app_handle(), window.label(), "exposure-registered",
-            json!({"surface": surface, "kind": kind, "name": name}))
-        {
+        if let Err(error) = emit_to(
+            window.app_handle(),
+            window.label(),
+            "exposure-registered",
+            json!({"surface": surface, "kind": kind, "name": name}),
+        ) {
             eprintln!("{error}");
         }
     }
@@ -479,15 +579,21 @@ pub(crate) fn replay_registrations(window: &Window) {
 
 /// 표면 페이지가 닫히거나 다시 읽힐 때 그 등록과 대기 중인 요청을 제거한다.
 pub(crate) fn surface_closed(window: &Window, surface: &str) {
-    window.state::<Exposure>().relay.abandon(&label_for(window, surface));
+    window
+        .state::<Exposure>()
+        .relay
+        .abandon(&label_for(window, surface));
     if let Ok(data) = window_data(window) {
         if let Ok(mut registrations) = data.registrations.lock() {
             registrations.retain(|(owner, _, _)| owner != surface);
         }
     }
-    if let Err(error) = emit_to(window.app_handle(), window.label(), "exposure-registered",
-        json!({"surface": surface, "closed": true}))
-    {
+    if let Err(error) = emit_to(
+        window.app_handle(),
+        window.label(),
+        "exposure-registered",
+        json!({"surface": surface, "closed": true}),
+    ) {
         eprintln!("{error}");
     }
 }
@@ -500,7 +606,14 @@ pub(crate) fn page_reloaded(window: &Window) {
 
 /// 다시 읽힌 메인 페이지에 이 창의 감시와 진단 기록을 다시 요청한다. 페이지는 준비를 알린 뒤 호출한다.
 pub(crate) fn rewatch(window: &Window) {
-    let Some(notifier) = window.state::<Exposure>().endpoint.get().map(Endpoint::notifier) else { return };
+    let Some(notifier) = window
+        .state::<Exposure>()
+        .endpoint
+        .get()
+        .map(Endpoint::notifier)
+    else {
+        return;
+    };
     let window = window.clone();
     std::thread::spawn(move || {
         let host = Host(window.app_handle().clone());
@@ -509,7 +622,10 @@ pub(crate) fn rewatch(window: &Window) {
                 continue;
             }
             if let Err(error) = host.page(&window, "status.watch", watch.params(), TIMEOUT) {
-                log(&window, &format!("rewatch {}: {}", watch.name, error.message));
+                log(
+                    &window,
+                    &format!("rewatch {}: {}", watch.name, error.message),
+                );
             }
         }
         #[cfg(feature = "diagnostics")]
@@ -517,7 +633,10 @@ pub(crate) fn rewatch(window: &Window) {
             let mut params = Map::new();
             params.insert("on".into(), Value::Bool(true));
             if let Err(error) = host.page(&window, "diagnostics.transcript", params, TIMEOUT) {
-                log(&window, &format!("rewatch diagnostics.log: {}", error.message));
+                log(
+                    &window,
+                    &format!("rewatch diagnostics.log: {}", error.message),
+                );
             }
         }
     });
@@ -528,7 +647,9 @@ pub(crate) fn window_closed(window: &Window) {
     let state = window.state::<Exposure>();
     let main = window.label().to_string();
     let surfaces = format!("surface-{main}-");
-    state.relay.abandon_matching(|target| target == main || target.starts_with(&surfaces));
+    state
+        .relay
+        .abandon_matching(|target| target == main || target.starts_with(&surfaces));
     if let Ok(mut reported) = state.reported.lock() {
         reported.remove(&main);
     };
@@ -539,7 +660,14 @@ pub(crate) fn window_closed(window: &Window) {
 pub(crate) fn windows_changed(app: &AppHandle) {
     let app = app.clone();
     std::thread::spawn(move || {
-        let Some(notifier) = app.state::<Exposure>().endpoint.get().map(Endpoint::notifier) else { return };
+        let Some(notifier) = app
+            .state::<Exposure>()
+            .endpoint
+            .get()
+            .map(Endpoint::notifier)
+        else {
+            return;
+        };
         let list = match windows::list(&app) {
             Ok(list) => list,
             Err(error) => {
@@ -548,7 +676,9 @@ pub(crate) fn windows_changed(app: &AppHandle) {
             }
         };
         for entry in list.as_array().cloned().unwrap_or_default() {
-            let Some(window) = entry["window"].as_str() else { continue };
+            let Some(window) = entry["window"].as_str() else {
+                continue;
+            };
             if notifier.watched(window, "host.windows") {
                 notifier.changed(window, "host.windows", None, list.clone());
             }
@@ -578,14 +708,18 @@ pub(crate) fn window_changed(window: &Window) {
         };
         let state = window.state::<Exposure>();
         {
-            let Ok(mut reported) = state.reported.lock() else { return };
+            let Ok(mut reported) = state.reported.lock() else {
+                return;
+            };
             if reported.get(window.label()) == Some(&value) {
                 return;
             }
             reported.insert(window.label().to_string(), value.clone());
         }
         if let Some(endpoint) = state.endpoint.get() {
-            endpoint.notifier().changed(window.label(), "host.window", None, value);
+            endpoint
+                .notifier()
+                .changed(window.label(), "host.window", None, value);
         }
     });
 }
@@ -600,9 +734,11 @@ pub(crate) fn on_main<T: Send + 'static>(
     work: impl FnOnce() -> Result<T, String> + Send + 'static,
 ) -> Result<T, String> {
     let (tx, rx) = mpsc::channel();
-    window.run_on_main_thread(move || {
-        let _ = tx.send(work());
-    }).map_err(|e| e.to_string())?;
+    window
+        .run_on_main_thread(move || {
+            let _ = tx.send(work());
+        })
+        .map_err(|e| e.to_string())?;
     rx.recv().map_err(|e| e.to_string())?
 }
 
@@ -612,9 +748,11 @@ pub(crate) fn with_view<T: Send + 'static>(
     work: impl FnOnce(&tauri::webview::PlatformWebview) -> Result<T, String> + Send + 'static,
 ) -> Result<T, String> {
     let (tx, rx) = mpsc::channel();
-    webview.with_webview(move |view| {
-        let _ = tx.send(work(&view));
-    }).map_err(|e| e.to_string())?;
+    webview
+        .with_webview(move |view| {
+            let _ = tx.send(work(&view));
+        })
+        .map_err(|e| e.to_string())?;
     rx.recv().map_err(|e| e.to_string())?
 }
 
@@ -625,7 +763,9 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
     let prefix = format!("surface-{}-", window.label());
     let mut named = HashMap::new();
     for webview in window.webviews() {
-        let Some(surface) = webview.label().strip_prefix(&prefix).map(str::to_string) else { continue };
+        let Some(surface) = webview.label().strip_prefix(&prefix).map(str::to_string) else {
+            continue;
+        };
         let view = with_view(&webview, move |view| platform.view_id(view)).map_err(internal)?;
         named.insert(view, surface);
     }
@@ -650,24 +790,44 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
         None => Value::Null,
     };
     let rect = |view: &Value| json!({"x": view["x"], "y": view["y"], "width": view["width"], "height": view["height"]});
-    for (order, view) in facts["webviews"].as_array().cloned().unwrap_or_default().iter().enumerate() {
-        let Some(address) = view["view"].as_u64() else { continue };
+    for (order, view) in facts["webviews"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default()
+        .iter()
+        .enumerate()
+    {
+        let Some(address) = view["view"].as_u64() else {
+            continue;
+        };
         let address = address as platform::Handle;
         if let Some(surface) = named.get(&address) {
             surfaces.push(json!({"id": surface, "frame": rect(view),
                 "visible": !view["hidden"].as_bool().unwrap_or(false), "order": order}));
         } else if let Some((surface, document)) = documents.get(&address) {
-            attached.push(json!({"surface": surface, "document": document, "frame": rect(view),
-                "visible": !view["hidden"].as_bool().unwrap_or(false), "order": order}));
+            attached.push(
+                json!({"surface": surface, "document": document, "frame": rect(view),
+                "visible": !view["hidden"].as_bool().unwrap_or(false), "order": order}),
+            );
         } else if let Some((surface, name)) = images.get(&address) {
-            regions.push(json!({"surface": surface, "name": name, "frame": rect(view),
+            regions.push(
+                json!({"surface": surface, "name": name, "frame": rect(view),
                 "visible": !view["hidden"].as_bool().unwrap_or(false), "focused": false,
-                "presented": null, "error": null}));
+                "presented": null, "error": null}),
+            );
         } else if modal.is_object() && modal_view == Some(address) {
             modal["frame"] = rect(view);
             modal["order"] = json!(order);
             modal["background"] = json!({"draws": view["draws"], "alpha": view["alpha"]});
         }
+    }
+    for (handle, (surface, name)) in images {
+        let handle = handle as platform::Handle;
+        let text = on_main(window, move || platform.image_facts(handle)).map_err(internal)?;
+        let mut region: Value = serde_json::from_str(&text).map_err(internal)?;
+        region["surface"] = Value::String(surface);
+        region["name"] = Value::String(name);
+        regions.push(region);
     }
     Ok(json!({
         "frame": facts["frame"],
@@ -687,13 +847,22 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
 
 /// 메인 페이지를 다시 읽고, 새 페이지가 준비를 알릴 때까지 기다린다.
 fn reload(window: &Window) -> Result<Value, Failure> {
-    let main = root_view(window).ok_or_else(|| Failure::new(MISSING_DOCUMENT, "the main page is gone"))?;
+    let main =
+        root_view(window).ok_or_else(|| Failure::new(MISSING_DOCUMENT, "the main page is gone"))?;
     let (tx, rx) = mpsc::channel();
-    window_data(window).map_err(internal)?.readied.lock().map_err(internal)?.push(tx);
+    window_data(window)
+        .map_err(internal)?
+        .readied
+        .lock()
+        .map_err(internal)?
+        .push(tx);
     main.reload().map_err(internal)?;
     match rx.recv_timeout(TIMEOUT) {
         Ok(()) => Ok(Value::Null),
-        Err(_) => Err(Failure::new(TIMED_OUT, "the reloaded page did not report ready within the time limit")),
+        Err(_) => Err(Failure::new(
+            TIMED_OUT,
+            "the reloaded page did not report ready within the time limit",
+        )),
     }
 }
 
@@ -704,33 +873,83 @@ fn fullscreen(window: &Window, on: bool) -> Result<Value, Failure> {
     let platform = platform::current().map_err(internal)?;
     let handle = native_owner(window).map_err(internal)?;
     let (tx, rx) = mpsc::channel();
-    on_main(window, move || platform.fullscreen(handle, on, Box::new(move || { let _ = tx.send(()); })))
-        .map_err(internal)?;
+    on_main(window, move || {
+        platform.fullscreen(
+            handle,
+            on,
+            Box::new(move || {
+                let _ = tx.send(());
+            }),
+        )
+    })
+    .map_err(internal)?;
     match rx.recv_timeout(TIMEOUT) {
         Ok(()) => Ok(Value::Null),
-        Err(_) => Err(Failure::new(TIMED_OUT, "the window did not change full screen within the time limit")),
+        Err(_) => Err(Failure::new(
+            TIMED_OUT,
+            "the window did not change full screen within the time limit",
+        )),
     }
 }
 
-/// 창의 표면 배치 트랜잭션이 확정되고 메인 문서와 보이는 앱 문서가 현재 배치를 표시할 때까지 기다리고,
-/// 그 화면의 표시 시각(ms, mach 절대 시각)을 반환한다.
+/// 창의 표면 배치 트랜잭션과 현재 그림 래스터가 확정되고 메인 문서와 보이는 앱 문서가 그 배치를
+/// 표시할 때까지 기다리고, 그 화면의 표시 시각(ms, mach 절대 시각)을 반환한다.
 pub(crate) fn presented(window: &Window, timeout: Duration) -> Result<f64, Failure> {
-    let platform = platform::current().map_err(internal)?;
-    let main = root_view(window).ok_or_else(|| Failure::new(MISSING_DOCUMENT, "the main page is gone"))?;
-    let (tx, rx) = mpsc::channel();
-    let failed = tx.clone();
-    main.with_webview(move |view| {
-        let done = tx.clone();
-        if let Err(error) = platform.after_settled(&view, Box::new(move |displayed| {
-            let _ = done.send(Ok(displayed));
-        })) {
-            let _ = failed.send(Err(error));
+    let deadline = Instant::now() + timeout;
+    let data = window_data(window).map_err(internal)?;
+    let wait_frame = || -> Result<f64, Failure> {
+        let platform = platform::current().map_err(internal)?;
+        let main = root_view(window)
+            .ok_or_else(|| Failure::new(MISSING_DOCUMENT, "the main page is gone"))?;
+        let (tx, rx) = mpsc::channel();
+        let failed = tx.clone();
+        main.with_webview(move |view| {
+            let done = tx.clone();
+            if let Err(error) = platform.after_settled(
+                &view,
+                Box::new(move |displayed| {
+                    let _ = done.send(Ok(displayed));
+                }),
+            ) {
+                let _ = failed.send(Err(error));
+            }
+        })
+        .map_err(internal)?;
+        let remaining = deadline
+            .checked_duration_since(Instant::now())
+            .ok_or_else(|| {
+                Failure::new(
+                    TIMED_OUT,
+                    "the window did not present within the time limit",
+                )
+            })?;
+        match rx.recv_timeout(remaining) {
+            Ok(outcome) => outcome.map_err(internal),
+            Err(_) => Err(Failure::new(
+                TIMED_OUT,
+                "the window did not present within the time limit",
+            )),
         }
-    })
-    .map_err(internal)?;
-    match rx.recv_timeout(timeout) {
-        Ok(outcome) => outcome.map_err(internal),
-        Err(_) => Err(Failure::new(TIMED_OUT, "the window did not present within the time limit")),
+    };
+
+    wait_frame()?;
+    loop {
+        let Some(remaining) = deadline.checked_duration_since(Instant::now()) else {
+            return Err(Failure::new(
+                TIMED_OUT,
+                "the current image raster did not present within the time limit",
+            ));
+        };
+        if !data.images.wait_current(remaining) {
+            return Err(Failure::new(
+                TIMED_OUT,
+                "the current image raster did not present within the time limit",
+            ));
+        }
+        let displayed = wait_frame()?;
+        if data.images.current_presented() {
+            return Ok(displayed);
+        }
     }
 }
 
@@ -743,10 +962,17 @@ fn hit(window: &Window, x: f64, y: f64) -> Result<Value, Failure> {
     let documents = context.documents.names();
     let owner = {
         let views = context.views.0.lock().map_err(internal)?;
-        found.chain.iter().find_map(|view| match documents.get(view) {
-            Some((surface, document)) => Some(json!({"kind": "document", "surface": surface, "document": document})),
-            None => views.get(view).map(|surface| json!({"kind": "surface", "surface": surface})),
-        })
+        found
+            .chain
+            .iter()
+            .find_map(|view| match documents.get(view) {
+                Some((surface, document)) => {
+                    Some(json!({"kind": "document", "surface": surface, "document": document}))
+                }
+                None => views
+                    .get(view)
+                    .map(|surface| json!({"kind": "surface", "surface": surface})),
+            })
     };
     if let Some(owner) = owner {
         return Ok(owner);
@@ -758,7 +984,8 @@ fn hit(window: &Window, x: f64, y: f64) -> Result<Value, Failure> {
             return Ok(json!({"kind": "native", "identifier": format!("modal:{id}")}));
         }
     }
-    let main = root_view(window).ok_or_else(|| Failure::new(MISSING_DOCUMENT, "the main page is gone"))?;
+    let main =
+        root_view(window).ok_or_else(|| Failure::new(MISSING_DOCUMENT, "the main page is gone"))?;
     let page = with_view(&main, move |view| platform.view_id(view)).map_err(internal)?;
     if found.chain.contains(&page) {
         return Ok(json!({"kind": "page"}));
@@ -771,7 +998,13 @@ pub(crate) struct Host(pub AppHandle);
 
 impl Host {
     /// 창의 메인 페이지에 요청을 보내고 응답을 기다린다.
-    pub(crate) fn page(&self, window: &Window, method: &str, params: Map<String, Value>, timeout: Duration) -> Result<Value, Failure> {
+    pub(crate) fn page(
+        &self,
+        window: &Window,
+        method: &str,
+        params: Map<String, Value>,
+        timeout: Duration,
+    ) -> Result<Value, Failure> {
         self.page_then(window, method, params, Some(timeout), || {})
     }
 
@@ -791,18 +1024,32 @@ impl Host {
             return Err(Failure::new(MISSING_DOCUMENT, "the main page is gone"));
         }
         let data = window_data(window).map_err(|e| Failure::new(MISSING_DOCUMENT, e))?;
-        self.0.state::<Exposure>().relay.request(&label, timeout, |id| {
-            if !data.ready.load(Ordering::Relaxed) {
-                return Err("the main page is not ready".to_string());
-            }
-            emit_to(&self.0, &label, "exposure-request", json!({"id": id, "method": method, "params": params}))?;
-            sent();
-            Ok(())
-        })
+        self.0
+            .state::<Exposure>()
+            .relay
+            .request(&label, timeout, |id| {
+                if !data.ready.load(Ordering::Relaxed) {
+                    return Err("the main page is not ready".to_string());
+                }
+                emit_to(
+                    &self.0,
+                    &label,
+                    "exposure-request",
+                    json!({"id": id, "method": method, "params": params}),
+                )?;
+                sent();
+                Ok(())
+            })
     }
 
     /// 소유자가 host 인 이름의 요청을 실행한다.
-    fn host_entry(&self, window: &Window, method: &str, name: &str, params: &Map<String, Value>) -> Result<Value, Failure> {
+    fn host_entry(
+        &self,
+        window: &Window,
+        method: &str,
+        name: &str,
+        params: &Map<String, Value>,
+    ) -> Result<Value, Failure> {
         let unknown = || Failure::new(UNKNOWN_NAME, format!("{name} is not declared"));
         match (method, name) {
             ("status.get", "host.window") => window_status(window),
@@ -815,20 +1062,29 @@ impl Host {
                 let platform = platform::current().map_err(internal)?;
                 on_main(window, move || platform.dock_items()).map_err(internal)
             }
-            ("status.watch" | "status.unwatch", "host.window" | "host.windows" | "host.screens" | "host.dock") => Ok(Value::Null),
+            (
+                "status.watch" | "status.unwatch",
+                "host.window" | "host.windows" | "host.screens" | "host.dock",
+            ) => Ok(Value::Null),
             ("command.run", _) => {
                 let arguments = match params.get("params") {
                     None | Some(Value::Null) => Map::new(),
                     Some(Value::Object(arguments)) => arguments.clone(),
                     Some(_) => return Err(Failure::params("params must be an object")),
                 };
-                self.host_command(window, name, &arguments).ok_or_else(unknown)?
+                self.host_command(window, name, &arguments)
+                    .ok_or_else(unknown)?
             }
             _ => Err(unknown()),
         }
     }
 
-    fn host_command(&self, window: &Window, name: &str, arguments: &Map<String, Value>) -> Option<Result<Value, Failure>> {
+    fn host_command(
+        &self,
+        window: &Window,
+        name: &str,
+        arguments: &Map<String, Value>,
+    ) -> Option<Result<Value, Failure>> {
         let done = |result: tauri::Result<()>| result.map(|_| Value::Null).map_err(internal);
         Some(match name {
             "host.window.close" => done(window.close()),
@@ -851,7 +1107,9 @@ impl Host {
                 done(window.set_size(LogicalSize::new(width, height)))
             })(),
             "host.window.reload" => reload(window),
-            "host.window.presented" => presented(window, TIMEOUT).map(|displayed| json!({"displayed": displayed})),
+            "host.window.presented" => {
+                presented(window, TIMEOUT).map(|displayed| json!({"displayed": displayed}))
+            }
             "host.window.move" => (|| {
                 let x = number(arguments, "x")?;
                 let y = number(arguments, "y")?;
@@ -861,8 +1119,11 @@ impl Host {
                 Ok(Value::Null)
             })(),
             "host.dock.select" => (|| {
-                let title = arguments.get("title").and_then(Value::as_str)
-                    .ok_or_else(|| Failure::params("title must be a string"))?.to_string();
+                let title = arguments
+                    .get("title")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| Failure::params("title must be a string"))?
+                    .to_string();
                 let platform = platform::current().map_err(internal)?;
                 on_main(window, move || platform.dock_select(&title)).map_err(internal)?;
                 Ok(Value::Null)
@@ -883,9 +1144,13 @@ impl Host {
         if pointer.activate {
             let (tx, rx) = mpsc::channel();
             on_main(window, move || {
-                platform.input_activate(handle, ACTIVATION, Box::new(move |result| {
-                    let _ = tx.send(result);
-                }))
+                platform.input_activate(
+                    handle,
+                    ACTIVATION,
+                    Box::new(move |result| {
+                        let _ = tx.send(result);
+                    }),
+                )
             })
             .map_err(|e| Failure::new(NO_INPUT, e))?;
             // 라이브러리는 ACTIVATION 이 지나면 멈춘 단계로 done 을 호출하므로 결과는 항상 도착한다.
@@ -895,17 +1160,35 @@ impl Host {
                 .map_err(|e| Failure::new(NOT_ACTIVE, e))?;
         }
         let (tx, rx) = mpsc::channel();
-        on_main(window, move || platform.input_pointer(handle, pointer, RECEIPT, Box::new(move |delivery| {
-            let _ = tx.send(delivery);
-        })))
+        on_main(window, move || {
+            platform.input_pointer(
+                handle,
+                pointer,
+                RECEIPT,
+                Box::new(move |delivery| {
+                    let _ = tx.send(delivery);
+                }),
+            )
+        })
         .map_err(|e| Failure::new(NO_INPUT, e))?;
         // 라이브러리는 RECEIPT 가 지나면 Unreceived 로 done 을 호출하므로 결과는 항상 도착한다.
-        match rx.recv().map_err(|e| Failure::new(NO_INPUT, e.to_string()))? {
+        match rx
+            .recv()
+            .map_err(|e| Failure::new(NO_INPUT, e.to_string()))?
+        {
             Delivery::Delivered => Ok(Value::Null),
             Delivery::Inactive => Err(Failure::new(NOT_ACTIVE, "the window is not active")),
-            Delivery::Rejected => Err(Failure::new(INVALID_PARAMS, "the window did not accept the input")),
-            Delivery::Unreceived => Err(Failure::new(TIMED_OUT, format!(
-                "the document did not receive the input within {} ms", RECEIPT.as_millis()))),
+            Delivery::Rejected => Err(Failure::new(
+                INVALID_PARAMS,
+                "the window did not accept the input",
+            )),
+            Delivery::Unreceived => Err(Failure::new(
+                TIMED_OUT,
+                format!(
+                    "the document did not receive the input within {} ms",
+                    RECEIPT.as_millis()
+                ),
+            )),
         }
     }
 
@@ -915,7 +1198,10 @@ impl Host {
         let handle = native_owner(window).map_err(|e| Failure::new(NO_INPUT, e))?;
         match on_main(window, move || platform.input_key(handle, &key)) {
             Ok(true) => Ok(Value::Null),
-            Ok(false) => Err(Failure::new(INVALID_PARAMS, "the window did not accept the input")),
+            Ok(false) => Err(Failure::new(
+                INVALID_PARAMS,
+                "the window did not accept the input",
+            )),
             Err(error) => Err(Failure::new(NO_INPUT, error)),
         }
     }
@@ -930,22 +1216,38 @@ impl Service for Host {
         windows::find(&self.0, window).is_some()
     }
 
-    fn call(&self, window: &str, method: &str, params: Map<String, Value>) -> Result<Value, Failure> {
-        let window = windows::find(&self.0, window)
-            .ok_or_else(|| Failure::new(MISSING_DOCUMENT, format!("window {window} does not exist")))?;
+    fn call(
+        &self,
+        window: &str,
+        method: &str,
+        params: Map<String, Value>,
+    ) -> Result<Value, Failure> {
+        let window = windows::find(&self.0, window).ok_or_else(|| {
+            Failure::new(MISSING_DOCUMENT, format!("window {window} does not exist"))
+        })?;
         match method {
             "input.pointer" => self.input_pointer(&window, pointer(&params)?),
             "input.key" => self.input_key(&window, key(&params)?),
             "exposure.list" => with_host_entries(self.page(&window, method, params, TIMEOUT)?),
             #[cfg(feature = "diagnostics")]
-            _ if method.starts_with("diagnostics.") => crate::diagnostics::call(self, &window, method, params),
+            _ if method.starts_with("diagnostics.") => {
+                crate::diagnostics::call(self, &window, method, params)
+            }
             _ => {
-                let name = params.get("name").and_then(Value::as_str).unwrap_or_default().to_string();
+                let name = params
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_string();
                 if name == "host" || name.starts_with("host.") {
                     return self.host_entry(&window, method, &name, &params);
                 }
                 // 메인 페이지는 표면에 전달한 명령을 선언의 제한 시간 안에 끝내므로 command.run 에는 제한을 두지 않는다.
-                let timeout = if method == "command.run" { None } else { Some(TIMEOUT) };
+                let timeout = if method == "command.run" {
+                    None
+                } else {
+                    Some(TIMEOUT)
+                };
                 self.page_then(&window, method, params, timeout, || {})
             }
         }

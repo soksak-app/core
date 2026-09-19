@@ -8,7 +8,10 @@ fn main() {
             .expect("soksak-darwin must be built and listed in PKG_CONFIG_PATH");
         // cargo 는 링크하는 정적 라이브러리를 추적하지 않으므로 라이브러리가 바뀌면 다시 링크하게 한다.
         for directory in &library.link_paths {
-            println!("cargo:rerun-if-changed={}", directory.join("libsoksak-darwin.a").display());
+            println!(
+                "cargo:rerun-if-changed={}",
+                directory.join("libsoksak-darwin.a").display()
+            );
         }
     }
 }

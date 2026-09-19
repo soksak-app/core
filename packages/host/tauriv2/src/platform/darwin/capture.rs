@@ -17,7 +17,9 @@ pub fn open(window_number: isize, display: bool) {
 
 /// directory 에 프레임 기록을 시작한다. NUL 문자를 포함한 경로는 무시한다.
 pub fn start(directory: &str) {
-    let Ok(where_to) = CString::new(directory) else { return };
+    let Ok(where_to) = CString::new(directory) else {
+        return;
+    };
     unsafe { sp_capture_start(where_to.as_ptr()) }
 }
 

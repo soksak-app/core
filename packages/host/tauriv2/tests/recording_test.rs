@@ -18,12 +18,22 @@ struct Fake {
 impl Capture for Fake {
     fn open(&self, target: Target) -> Result<(), String> {
         let kind = if target.display { " display" } else { "" };
-        self.calls.borrow_mut().push(format!("open {}{kind}", target.window));
-        if self.fail_open { Err("open failed".into()) } else { Ok(()) }
+        self.calls
+            .borrow_mut()
+            .push(format!("open {}{kind}", target.window));
+        if self.fail_open {
+            Err("open failed".into())
+        } else {
+            Ok(())
+        }
     }
     fn start(&self, _directory: &Path) -> Result<(), String> {
         self.calls.borrow_mut().push("start".into());
-        if self.fail_start { Err("start failed".into()) } else { Ok(()) }
+        if self.fail_start {
+            Err("start failed".into())
+        } else {
+            Ok(())
+        }
     }
     fn wait(&self) -> Result<bool, String> {
         self.calls.borrow_mut().push("wait".into());
@@ -35,7 +45,10 @@ impl Capture for Fake {
     }
 }
 
-const WINDOW: Target = Target { window: 7, display: false };
+const WINDOW: Target = Target {
+    window: 7,
+    display: false,
+};
 
 fn make(path: &Path) -> Result<(), String> {
     std::fs::create_dir_all(path).map_err(|e| e.to_string())
@@ -65,8 +78,14 @@ fn a_failed_open_removes_the_folder() {
     let parent = tempfile::tempdir().unwrap();
     let folder = parent.path().join("frames");
     let recording = Recording::new();
-    let fake = Fake { fail_open: true, ..Fake::default() };
-    assert_eq!(recording.start(&fake, WINDOW, &folder, &make).unwrap_err(), "open failed");
+    let fake = Fake {
+        fail_open: true,
+        ..Fake::default()
+    };
+    assert_eq!(
+        recording.start(&fake, WINDOW, &folder, &make).unwrap_err(),
+        "open failed"
+    );
     assert!(!folder.exists());
     assert_eq!(recording.running(), None);
 }
@@ -76,8 +95,14 @@ fn a_failed_start_removes_the_folder() {
     let parent = tempfile::tempdir().unwrap();
     let folder = parent.path().join("frames");
     let recording = Recording::new();
-    let fake = Fake { fail_start: true, ..Fake::default() };
-    assert_eq!(recording.start(&fake, WINDOW, &folder, &make).unwrap_err(), "start failed");
+    let fake = Fake {
+        fail_start: true,
+        ..Fake::default()
+    };
+    assert_eq!(
+        recording.start(&fake, WINDOW, &folder, &make).unwrap_err(),
+        "start failed"
+    );
     assert!(!folder.exists());
     assert_eq!(recording.running(), None);
 }
@@ -87,7 +112,10 @@ fn a_recording_without_a_first_frame_is_stopped_and_removed() {
     let parent = tempfile::tempdir().unwrap();
     let folder = parent.path().join("frames");
     let recording = Recording::new();
-    let fake = Fake { no_frame: true, ..Fake::default() };
+    let fake = Fake {
+        no_frame: true,
+        ..Fake::default()
+    };
     assert!(recording.start(&fake, WINDOW, &folder, &make).is_err());
     assert!(!folder.exists());
     assert_eq!(calls(&fake), ["open 7", "start", "wait", "stop"]);
@@ -109,7 +137,10 @@ fn an_aborted_recording_is_stopped_and_removed_and_allows_the_next() {
     assert!(!first.exists());
     recording.start(&fake, WINDOW, &second, &make).unwrap();
     // 같은 창이면 녹화 대상을 다시 준비하지 않는다.
-    assert_eq!(calls(&fake), ["open 7", "start", "wait", "stop", "start", "wait"]);
+    assert_eq!(
+        calls(&fake),
+        ["open 7", "start", "wait", "stop", "start", "wait"]
+    );
 }
 
 #[test]
@@ -117,10 +148,29 @@ fn a_different_target_is_prepared_again() {
     let parent = tempfile::tempdir().unwrap();
     let recording = Recording::new();
     let fake = Fake::default();
-    recording.start(&fake, WINDOW, &parent.path().join("window"), &make).unwrap();
+    recording
+        .start(&fake, WINDOW, &parent.path().join("window"), &make)
+        .unwrap();
     recording.finish(&fake).unwrap();
-    let display = Target { window: 7, display: true };
-    recording.start(&fake, display, &parent.path().join("display"), &make).unwrap();
+    let display = Target {
+        window: 7,
+        display: true,
+    };
+    recording
+        .start(&fake, display, &parent.path().join("display"), &make)
+        .unwrap();
     recording.finish(&fake).unwrap();
-    assert_eq!(calls(&fake), ["open 7", "start", "wait", "stop", "open 7 display", "start", "wait", "stop"]);
+    assert_eq!(
+        calls(&fake),
+        [
+            "open 7",
+            "start",
+            "wait",
+            "stop",
+            "open 7 display",
+            "start",
+            "wait",
+            "stop"
+        ]
+    );
 }

@@ -106,16 +106,11 @@ fn every_pending_reply_is_flushed_after_the_queue_drains() {
 
     // Register surfaces first
     for s in &["s1", "s2", "s3"] {
-        sidecars
-            .send(&owner, ECHO, s, &raw(r#"{}"#))
-            .unwrap();
+        sidecars.send(&owner, ECHO, s, &raw(r#"{}"#)).unwrap();
     }
 
     // Queue large messages to fill the queue
-    let big = raw(&format!(
-        r#"{{"data":"{}"}}"#,
-        "x".repeat(20 * 1024)
-    ));
+    let big = raw(&format!(r#"{{"data":"{}"}}"#, "x".repeat(20 * 1024)));
     let mut full = false;
     for _i in 0..4000 {
         if sidecars.send(&owner, ECHO, "s1", &big).is_err() {
@@ -129,7 +124,7 @@ fn every_pending_reply_is_flushed_after_the_queue_drains() {
     for (i, name) in ["a", "b", "c"].iter().enumerate() {
         let response_json = serde_json::json!({
             "image": {
-                "released": {
+                "consumed": {
                     "name": name,
                     "sequence": i + 1
                 }
@@ -145,7 +140,7 @@ fn every_pending_reply_is_flushed_after_the_queue_drains() {
     // Send same image "a" again with sequence 4 (should replace seq 2)
     let response_json = serde_json::json!({
         "image": {
-            "released": {
+            "consumed": {
                 "name": "a",
                 "sequence": 4
             }
@@ -158,7 +153,9 @@ fn every_pending_reply_is_flushed_after_the_queue_drains() {
         .unwrap();
 
     // Close surfaces
-    sidecars.retain(&owner, &|s| !matches!(s, "s2" | "s3")).expect("retain");
+    sidecars
+        .retain(&owner, &|s| !matches!(s, "s2" | "s3"))
+        .expect("retain");
 
     // Release the sidecar from FIFO
     let fifo_file = std::fs::OpenOptions::new()
@@ -183,7 +180,10 @@ fn every_pending_reply_is_flushed_after_the_queue_drains() {
     }
 
     // Verify closes were sent
-    for s in &[r#""surface":"s2","closed":true"#, r#""surface":"s3","closed":true"#] {
+    for s in &[
+        r#""surface":"s2","closed":true"#,
+        r#""surface":"s3","closed":true"#,
+    ] {
         assert!(data.contains(s), "close {} never reached the sidecar", s);
     }
 
@@ -256,16 +256,11 @@ fn order_is_correct_when_stop_flushes_buffered_messages() {
 
     // Register surfaces
     for s in &["s1", "s2"] {
-        sidecars
-            .send(&owner, ECHO, s, &raw(r#"{}"#))
-            .unwrap();
+        sidecars.send(&owner, ECHO, s, &raw(r#"{}"#)).unwrap();
     }
 
     // Queue large messages to fill the queue
-    let big = raw(&format!(
-        r#"{{"data":"{}"}}"#,
-        "x".repeat(20 * 1024)
-    ));
+    let big = raw(&format!(r#"{{"data":"{}"}}"#, "x".repeat(20 * 1024)));
     let mut full = false;
     for _i in 0..4000 {
         if sidecars.send(&owner, ECHO, "s1", &big).is_err() {
@@ -279,7 +274,7 @@ fn order_is_correct_when_stop_flushes_buffered_messages() {
     for (i, name) in ["x", "y", "z"].iter().enumerate() {
         let response_json = serde_json::json!({
             "image": {
-                "released": {
+                "consumed": {
                     "name": name,
                     "sequence": i + 1
                 }
@@ -308,11 +303,12 @@ fn order_is_correct_when_stop_flushes_buffered_messages() {
     let data = std::fs::read_to_string(received).unwrap();
 
     // Verify all buffered messages were sent
-    for want in &[r#""name":"x""#, r#""name":"y""#, r#""name":"z""#, r#""surface":"s2","closed":true"#] {
-        assert!(
-            data.contains(want),
-            "buffered message {} was lost",
-            want
-        );
+    for want in &[
+        r#""name":"x""#,
+        r#""name":"y""#,
+        r#""name":"z""#,
+        r#""surface":"s2","closed":true"#,
+    ] {
+        assert!(data.contains(want), "buffered message {} was lost", want);
     }
 }

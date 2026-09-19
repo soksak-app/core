@@ -82,7 +82,10 @@ pub struct Failure {
 
 impl Failure {
     pub fn new(code: i64, message: impl Into<String>) -> Self {
-        Self { code, message: message.into() }
+        Self {
+            code,
+            message: message.into(),
+        }
     }
 
     /// 잘못된 매개변수 오류.
@@ -99,7 +102,12 @@ pub trait Service: Send + Sync + 'static {
     fn exists(&self, window: &str) -> bool;
     /// 창 window 에서 method 를 실행한다. params 에는 `window` 가 없다. 호출은 응답이 준비될
     /// 때까지 기다린다.
-    fn call(&self, window: &str, method: &str, params: Map<String, Value>) -> Result<Value, Failure>;
+    fn call(
+        &self,
+        window: &str,
+        method: &str,
+        params: Map<String, Value>,
+    ) -> Result<Value, Failure>;
 }
 
 /// 감시 하나. surface 는 감시가 지정한 표면이며, 지정한 감시와 지정하지 않은 감시는 서로 다르다.
@@ -152,7 +160,10 @@ impl Topic {
     /// 페이지에 보낼 시작 또는 종료 요청.
     fn request(&self, on: bool) -> (&'static str, Map<String, Value>) {
         match self {
-            Topic::Status(watch) => (if on { "status.watch" } else { "status.unwatch" }, watch.params()),
+            Topic::Status(watch) => (
+                if on { "status.watch" } else { "status.unwatch" },
+                watch.params(),
+            ),
             #[cfg(feature = "diagnostics")]
             Topic::Transcript(_) => {
                 let mut params = Map::new();
@@ -242,13 +253,21 @@ pub struct Notifier(Arc<Shared>);
 impl Notifier {
     /// 창 window 의 name 을 표면 지정 없이 감시하는 연결이 있는지 반환한다.
     pub fn watched(&self, window: &str, name: &str) -> bool {
-        watched(&self.0, &Watch { window: window.into(), name: name.into(), surface: None })
+        watched(
+            &self.0,
+            &Watch {
+                window: window.into(),
+                name: name.into(),
+                surface: None,
+            },
+        )
     }
 
     /// 창 window 의 감시를 반환한다.
     pub fn watches(&self, window: &str) -> Vec<Watch> {
         let mut watches: Vec<Watch> = match self.0.peers.lock() {
-            Ok(peers) => peers.values()
+            Ok(peers) => peers
+                .values()
                 .flat_map(|peer| peer.watches.iter())
                 .filter(|watch| watch.window == window)
                 .cloned()
@@ -268,7 +287,11 @@ impl Notifier {
 
     /// 창 window 의 name 을 감시하는 연결에 `status.changed` 를 보낸다. surface 는 감시가 지정한 표면이다.
     pub fn changed(&self, window: &str, name: &str, surface: Option<&str>, value: Value) {
-        let key = Watch { window: window.into(), name: name.into(), surface: surface.map(str::to_string) };
+        let key = Watch {
+            window: window.into(),
+            name: name.into(),
+            surface: surface.map(str::to_string),
+        };
         let mut params = json!({"window": window, "name": name, "value": value});
         if let Some(surface) = surface {
             params["surface"] = Value::String(surface.to_string());
@@ -287,7 +310,11 @@ impl Notifier {
 
     fn send(&self, wanted: impl Fn(&Peer) -> bool, message: &Value) {
         let writers: Vec<_> = match self.0.peers.lock() {
-            Ok(peers) => peers.values().filter(|peer| wanted(peer)).map(|peer| peer.writer.clone()).collect(),
+            Ok(peers) => peers
+                .values()
+                .filter(|peer| wanted(peer))
+                .map(|peer| peer.writer.clone())
+                .collect(),
             Err(_) => return,
         };
         for writer in writers {
@@ -309,8 +336,15 @@ pub struct Endpoint {
 
 impl Endpoint {
     /// sockets 디렉터리에 application 이름의 엔드포인트를 열고 `<directory>/endpoint.json` 을 쓴다.
-    pub fn start(sockets: &Path, directory: &Path, application: &str, service: Arc<dyn Service>) -> Result<Endpoint, String> {
-        let listener: Arc<dyn Listener> = platform::current()?.endpoint_listen(sockets, application)?.into();
+    pub fn start(
+        sockets: &Path,
+        directory: &Path,
+        application: &str,
+        service: Arc<dyn Service>,
+    ) -> Result<Endpoint, String> {
+        let listener: Arc<dyn Listener> = platform::current()?
+            .endpoint_listen(sockets, application)?
+            .into();
         let address = listener.address();
         let file = directory.join("endpoint.json");
         let shared = Arc::new(Shared {
@@ -320,7 +354,13 @@ impl Endpoint {
             next: AtomicU64::new(1),
             orders: AtomicU64::new(1),
         });
-        let endpoint = Endpoint { shared, listener, address, file, stopped: Arc::new(AtomicBool::new(false)) };
+        let endpoint = Endpoint {
+            shared,
+            listener,
+            address,
+            file,
+            stopped: Arc::new(AtomicBool::new(false)),
+        };
         let executable = std::env::current_exe()
             .and_then(std::fs::canonicalize)
             .map_err(|error| format!("executable path: {error}"))?;
@@ -408,7 +448,10 @@ pub fn connect(address: &str) -> Result<Box<dyn Connection>, String> {
 pub fn write_frame<W: Write + ?Sized>(writer: &mut W, message: &Value) -> Result<(), String> {
     let body = serde_json::to_vec(message).map_err(|e| e.to_string())?;
     if body.len() > MAX_FRAME {
-        return Err(format!("message of {} bytes exceeds {MAX_FRAME}", body.len()));
+        return Err(format!(
+            "message of {} bytes exceeds {MAX_FRAME}",
+            body.len()
+        ));
     }
     let mut frame = Vec::with_capacity(body.len() + 4);
     frame.extend_from_slice(&(body.len() as u32).to_be_bytes());
@@ -437,7 +480,9 @@ pub fn read_frame<R: Read + ?Sized>(reader: &mut R) -> Result<Option<Value>, Str
     }
     let mut body = vec![0u8; length];
     reader.read_exact(&mut body).map_err(|e| e.to_string())?;
-    serde_json::from_slice(&body).map(Some).map_err(|e| e.to_string())
+    serde_json::from_slice(&body)
+        .map(Some)
+        .map_err(|e| e.to_string())
 }
 
 /// 파일 이름을 바꿔 endpoint.json 을 한 번에 쓴다.
@@ -446,13 +491,18 @@ fn write_record(directory: &Path, file: &Path, record: &Value) -> Result<(), Str
     let mut temporary = tempfile::NamedTempFile::new_in(directory).map_err(|e| e.to_string())?;
     serde_json::to_writer_pretty(&mut temporary, record).map_err(|e| e.to_string())?;
     temporary.write_all(b"\n").map_err(|e| e.to_string())?;
-    temporary.persist(file).map_err(|e| format!("{}: {e}", file.display()))?;
+    temporary
+        .persist(file)
+        .map_err(|e| format!("{}: {e}", file.display()))?;
     Ok(())
 }
 
 /// 시각을 초 단위 UTC ISO 8601 문자열로 바꾼다.
 fn timestamp(time: SystemTime) -> String {
-    let seconds = time.duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0) as i64;
+    let seconds = time
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0) as i64;
     let (days, rest) = (seconds.div_euclid(86_400), seconds.rem_euclid(86_400));
     // 1970-01-01 기준 일 수를 그레고리력 날짜로 바꾼다(Howard Hinnant 의 civil_from_days).
     let z = days + 719_468;
@@ -464,7 +514,12 @@ fn timestamp(time: SystemTime) -> String {
     let day = doy - (153 * mp + 2) / 5 + 1;
     let month = if mp < 10 { mp + 3 } else { mp - 9 };
     let year = yoe + era * 400 + i64::from(month <= 2);
-    format!("{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}Z", rest / 3600, rest / 60 % 60, rest % 60)
+    format!(
+        "{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}Z",
+        rest / 3600,
+        rest / 60 % 60,
+        rest % 60
+    )
 }
 
 /// 검사를 통과한 요청.
@@ -476,16 +531,27 @@ struct Request {
 
 /// JSON-RPC 2.0 요청 객체이면 반환한다.
 fn parse(message: Value) -> Option<Request> {
-    let Value::Object(mut object) = message else { return None };
+    let Value::Object(mut object) = message else {
+        return None;
+    };
     if object.get("jsonrpc") != Some(&Value::String("2.0".into())) {
         return None;
     }
-    let Some(Value::String(method)) = object.remove("method") else { return None };
+    let Some(Value::String(method)) = object.remove("method") else {
+        return None;
+    };
     let id = object.remove("id");
-    if !matches!(id, None | Some(Value::String(_) | Value::Number(_) | Value::Null)) {
+    if !matches!(
+        id,
+        None | Some(Value::String(_) | Value::Number(_) | Value::Null)
+    ) {
         return None;
     }
-    Some(Request { id, method, params: object.remove("params") })
+    Some(Request {
+        id,
+        method,
+        params: object.remove("params"),
+    })
 }
 
 fn declared(method: &str) -> bool {
@@ -504,20 +570,26 @@ fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
     };
     let peer = shared.next.fetch_add(1, Ordering::Relaxed);
     if let Ok(mut peers) = shared.peers.lock() {
-        peers.insert(peer, Peer {
-            writer: writer.clone(),
-            watches: HashSet::new(),
-            #[cfg(feature = "diagnostics")]
-            transcript: HashSet::new(),
-            changes: HashMap::new(),
-        });
+        peers.insert(
+            peer,
+            Peer {
+                writer: writer.clone(),
+                watches: HashSet::new(),
+                #[cfg(feature = "diagnostics")]
+                transcript: HashSet::new(),
+                changes: HashMap::new(),
+            },
+        );
     }
     while let Ok(Some(message)) = read_frame(&mut connection) {
         let Some(request) = parse(message) else { break };
         if !declared(&request.method) {
             break;
         }
-        let answer = Answer { writer: writer.clone(), id: request.id };
+        let answer = Answer {
+            writer: writer.clone(),
+            id: request.id,
+        };
         if SUBSCRIPTIONS.contains(&request.method.as_str()) {
             match subscription(&shared, &request.method, request.params) {
                 Ok((topic, on)) => change(&shared, peer, topic, on, Some(answer)),
@@ -539,7 +611,11 @@ const SUBSCRIPTIONS: &[&str] = &["status.watch", "status.unwatch", TRANSCRIPT];
 const SUBSCRIPTIONS: &[&str] = &["status.watch", "status.unwatch"];
 
 /// params 를 검사하고 창의 이름을 꺼낸다.
-fn target(shared: &Shared, method: &str, params: Option<Value>) -> Result<(String, Map<String, Value>), Failure> {
+fn target(
+    shared: &Shared,
+    method: &str,
+    params: Option<Value>,
+) -> Result<(String, Map<String, Value>), Failure> {
     let mut params = match params {
         None | Some(Value::Null) => Map::new(),
         Some(Value::Object(params)) => params,
@@ -549,17 +625,27 @@ fn target(shared: &Shared, method: &str, params: Option<Value>) -> Result<(Strin
         Some(Value::String(window)) => window,
         _ => return Err(Failure::params("window must be a string")),
     };
-    if matches!(method, "status.get" | "status.watch" | "status.unwatch" | "command.run" | "dom.rect" | "dom.act") {
+    if matches!(
+        method,
+        "status.get" | "status.watch" | "status.unwatch" | "command.run" | "dom.rect" | "dom.act"
+    ) {
         name(&params)?;
     }
     if !shared.service.exists(&window) {
-        return Err(Failure::new(MISSING_DOCUMENT, format!("window {window} does not exist")));
+        return Err(Failure::new(
+            MISSING_DOCUMENT,
+            format!("window {window} does not exist"),
+        ));
     }
     Ok((window, params))
 }
 
 /// 구독 변경 요청의 대상과 시작 여부를 반환한다.
-fn subscription(shared: &Shared, method: &str, params: Option<Value>) -> Result<(Topic, bool), Failure> {
+fn subscription(
+    shared: &Shared,
+    method: &str,
+    params: Option<Value>,
+) -> Result<(Topic, bool), Failure> {
     let (window, params) = target(shared, method, params)?;
     match method {
         "status.watch" => Ok((Topic::Status(watch_key(&window, &params)?), true)),
@@ -569,7 +655,10 @@ fn subscription(shared: &Shared, method: &str, params: Option<Value>) -> Result<
             Some(Value::Bool(on)) => Ok((Topic::Transcript(window), *on)),
             _ => Err(Failure::params("on must be a boolean")),
         },
-        other => Err(Failure::new(-32601, format!("{other} is not a subscription"))),
+        other => Err(Failure::new(
+            -32601,
+            format!("{other} is not a subscription"),
+        )),
     }
 }
 
@@ -577,16 +666,26 @@ fn subscription(shared: &Shared, method: &str, params: Option<Value>) -> Result<
 /// 잠금 안에서 실행하므로 줄의 순서는 구독 변경을 적용한 순서와 같다.
 fn change(shared: &Arc<Shared>, peer: u64, topic: Topic, on: bool, answer: Option<Answer>) {
     let start = {
-        let Ok(mut peers) = shared.peers.lock() else { return };
+        let Ok(mut peers) = shared.peers.lock() else {
+            return;
+        };
         let order = shared.orders.fetch_add(1, Ordering::Relaxed);
         if let Some(state) = peers.get_mut(&peer) {
             topic.set(state, on);
             state.changes.insert(topic.clone(), order);
         }
         let last = !on && !peers.values().any(|other| topic.held(other));
-        let Ok(mut lines) = shared.lines.lock() else { return };
+        let Ok(mut lines) = shared.lines.lock() else {
+            return;
+        };
         let line = lines.entry(topic.clone()).or_default();
-        line.changes.push_back(Change { peer, order, on, last, answer });
+        line.changes.push_back(Change {
+            peer,
+            order,
+            on,
+            last,
+            answer,
+        });
         !std::mem::replace(&mut line.running, true)
     };
     if start {
@@ -599,8 +698,12 @@ fn change(shared: &Arc<Shared>, peer: u64, topic: Topic, on: bool, answer: Optio
 fn drain(shared: &Shared, topic: Topic) {
     loop {
         let (next, page) = {
-            let Ok(mut lines) = shared.lines.lock() else { return };
-            let Some(line) = lines.get_mut(&topic) else { return };
+            let Ok(mut lines) = shared.lines.lock() else {
+                return;
+            };
+            let Some(line) = lines.get_mut(&topic) else {
+                return;
+            };
             match line.changes.pop_front() {
                 Some(next) => (next, line.page),
                 None => {
@@ -658,7 +761,9 @@ fn run(shared: &Shared, method: &str, params: Option<Value>) -> Result<Value, Fa
 fn name(params: &Map<String, Value>) -> Result<String, Failure> {
     match params.get("name") {
         Some(Value::String(name)) if valid_name(name) => Ok(name.clone()),
-        _ => Err(Failure::params("name is required and must have the form <owner>.<name>")),
+        _ => Err(Failure::params(
+            "name is required and must have the form <owner>.<name>",
+        )),
     }
 }
 
@@ -666,7 +771,12 @@ fn name(params: &Map<String, Value>) -> Result<String, Failure> {
 pub fn valid_name(name: &str) -> bool {
     let parts: Vec<&str> = name.split('.').collect();
     parts.len() >= 2
-        && parts.iter().all(|part| !part.is_empty() && part.bytes().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'-'))
+        && parts.iter().all(|part| {
+            !part.is_empty()
+                && part
+                    .bytes()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'-')
+        })
 }
 
 /// params 의 name 과 surface 로 감시 키를 만든다.
@@ -676,18 +786,28 @@ fn watch_key(window: &str, params: &Map<String, Value>) -> Result<Watch, Failure
         Some(Value::String(surface)) if !surface.is_empty() => Some(surface.clone()),
         Some(_) => return Err(Failure::params("surface must be a non-empty string")),
     };
-    Ok(Watch { window: window.into(), name: name(params)?, surface })
+    Ok(Watch {
+        window: window.into(),
+        name: name(params)?,
+        surface,
+    })
 }
 
 /// 감시 key 를 가진 연결이 있는지 반환한다.
 fn watched(shared: &Shared, key: &Watch) -> bool {
-    shared.peers.lock().is_ok_and(|peers| peers.values().any(|peer| peer.watches.contains(key)))
+    shared
+        .peers
+        .lock()
+        .is_ok_and(|peers| peers.values().any(|peer| peer.watches.contains(key)))
 }
 
 /// 창 window 의 기록을 요청한 연결이 있는지 반환한다.
 #[cfg(feature = "diagnostics")]
 fn transcribed(shared: &Shared, window: &str) -> bool {
-    shared.peers.lock().is_ok_and(|peers| peers.values().any(|peer| peer.transcript.contains(window)))
+    shared
+        .peers
+        .lock()
+        .is_ok_and(|peers| peers.values().any(|peer| peer.transcript.contains(window)))
 }
 
 /// 닫힌 연결의 구독을 받은 순서의 마지막 변경으로 끝낸다. 남은 구독자가 없는 대상은 페이지에

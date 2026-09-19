@@ -6,7 +6,10 @@ use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
 use tauri::webview::Color;
-use tauri::{AppHandle, Emitter, EventTarget, LogicalSize, Manager, Webview, WebviewUrl, WebviewWindowBuilder, Window};
+use tauri::{
+    AppHandle, Emitter, EventTarget, LogicalSize, Manager, Webview, WebviewUrl,
+    WebviewWindowBuilder, Window,
+};
 
 use crate::log_error;
 use crate::modals::Overlay;
@@ -14,7 +17,7 @@ use crate::platform::{self, Handle};
 use crate::projects::project_folder;
 use crate::shapes::Shapes;
 use crate::sidecars::WindowSidecars;
-use crate::surfaces::{Rect, Resizing, Running, Views, Watching};
+use crate::surfaces::{Rect, Resizing, Running, SurfaceComposition, Views, Watching};
 use crate::theme::CurrentTheme;
 
 /// 창 하나의 상태.
@@ -37,6 +40,10 @@ pub(crate) struct WindowData {
     pub documents: crate::documents::Documents,
     /// 표면 페이지의 그림 영역.
     pub images: crate::images::Images,
+    /// 메인 페이지가 선언하고 호스트가 영역 호출 권한 검사에 쓰는 표면 합성.
+    pub compositions: Mutex<HashMap<String, SurfaceComposition>>,
+    /// 표면별로 마지막에 적용한 완전한 합성 리비전.
+    pub composition_revisions: Mutex<HashMap<String, u64>>,
 }
 
 /// 애플리케이션의 창 등록부와 프로젝트 소유 창.
@@ -51,8 +58,14 @@ pub(crate) struct Windows {
 
 /// 창의 상태를 반환한다.
 pub(crate) fn window_data(window: &Window) -> Result<Arc<WindowData>, String> {
-    window.state::<Windows>().windows.lock().map_err(|e| e.to_string())?
-        .get(window.label()).cloned().ok_or_else(|| "project window is closed".into())
+    window
+        .state::<Windows>()
+        .windows
+        .lock()
+        .map_err(|e| e.to_string())?
+        .get(window.label())
+        .cloned()
+        .ok_or_else(|| "project window is closed".into())
 }
 
 /// 창의 메인 웹뷰를 반환한다.
@@ -66,8 +79,16 @@ pub(crate) fn native_owner(window: &Window) -> Result<Handle, String> {
 }
 
 /// 창의 웹뷰에 이벤트를 보낸다. main 창이면 애플리케이션 수신기에도 보낸다.
-pub(crate) fn emit_window<S: Serialize + Clone>(window: &Window, event: &str, payload: S) -> tauri::Result<()> {
-    let labels: Vec<_> = window.webviews().iter().map(|v| v.label().to_string()).collect();
+pub(crate) fn emit_window<S: Serialize + Clone>(
+    window: &Window,
+    event: &str,
+    payload: S,
+) -> tauri::Result<()> {
+    let labels: Vec<_> = window
+        .webviews()
+        .iter()
+        .map(|v| v.label().to_string())
+        .collect();
     window.emit_filter(event, payload, |target| match target {
         EventTarget::Webview { label } => labels.contains(label),
         EventTarget::App => window.label() == "main",
@@ -86,7 +107,11 @@ pub(crate) fn notify_workspace(app: &AppHandle) {
 
 /// 등록된 창 중 label 의 창을 반환한다.
 pub(crate) fn find(app: &AppHandle, label: &str) -> Option<Window> {
-    let registered = app.state::<Windows>().windows.lock().is_ok_and(|windows| windows.contains_key(label));
+    let registered = app
+        .state::<Windows>()
+        .windows
+        .lock()
+        .is_ok_and(|windows| windows.contains_key(label));
     if !registered {
         return None;
     }
@@ -96,12 +121,24 @@ pub(crate) fn find(app: &AppHandle, label: &str) -> Option<Window> {
 /// 등록된 창의 식별자, 제목, 소유 프로젝트 id, 키 창 여부를 창 식별자 순서로 반환한다.
 pub(crate) fn list(app: &AppHandle) -> Result<serde_json::Value, String> {
     let registry = app.state::<Windows>();
-    let mut labels: Vec<String> = registry.windows.lock().map_err(|e| e.to_string())?.keys().cloned().collect();
+    let mut labels: Vec<String> = registry
+        .windows
+        .lock()
+        .map_err(|e| e.to_string())?
+        .keys()
+        .cloned()
+        .collect();
     labels.sort();
     let mut listed = Vec::new();
     for label in labels {
-        let Some(window) = app.get_window(&label) else { continue };
-        let root = window_data(&window)?.root.lock().map_err(|e| e.to_string())?.clone();
+        let Some(window) = app.get_window(&label) else {
+            continue;
+        };
+        let root = window_data(&window)?
+            .root
+            .lock()
+            .map_err(|e| e.to_string())?
+            .clone();
         let project = if root.is_empty() { None } else { Some(root) };
         let ready = window_data(&window)?.ready.load(Ordering::Relaxed);
         listed.push(serde_json::json!({
@@ -117,7 +154,14 @@ pub(crate) fn list(app: &AppHandle) -> Result<serde_json::Value, String> {
 
 /// 창에 열린 프로젝트 id 목록을 반환한다.
 pub(crate) fn opened(app: &AppHandle) -> Result<Vec<String>, String> {
-    Ok(app.state::<Windows>().owners.lock().map_err(|e| e.to_string())?.keys().cloned().collect())
+    Ok(app
+        .state::<Windows>()
+        .owners
+        .lock()
+        .map_err(|e| e.to_string())?
+        .keys()
+        .cloned()
+        .collect())
 }
 
 fn new_window(app: &AppHandle, label: &str, url: &str, title: &str) -> Result<Window, String> {
@@ -126,7 +170,11 @@ fn new_window(app: &AppHandle, label: &str, url: &str, title: &str) -> Result<Wi
         .inner_size(1200.0, 760.0)
         .background_color(Color(16, 17, 23, 255));
     let created = platform::current()?.prepare_window(created)?;
-    let window = created.build().map_err(|e| e.to_string())?.as_ref().window();
+    let window = created
+        .build()
+        .map_err(|e| e.to_string())?
+        .as_ref()
+        .window();
     register(window.clone())?;
     crate::exposure::windows_changed(app);
     Ok(window)
@@ -134,15 +182,27 @@ fn new_window(app: &AppHandle, label: &str, url: &str, title: &str) -> Result<Wi
 
 /// 새 프로젝트 창을 연다.
 pub(crate) fn window_new(app: AppHandle) -> Result<(), String> {
-    let id = app.state::<Windows>().next_window.fetch_add(1, Ordering::Relaxed);
-    new_window(&app, &format!("project-window-{id}"), "index.html", "soksak / Tauri v2")?;
+    let id = app
+        .state::<Windows>()
+        .next_window
+        .fetch_add(1, Ordering::Relaxed);
+    new_window(
+        &app,
+        &format!("project-window-{id}"),
+        "index.html",
+        "soksak / Tauri v2",
+    )?;
     Ok(())
 }
 
 /// 창을 등록부에 추가하고 창 이벤트를 처리한다. 창 버튼은 페이지가 준비될 때와 창 크기가 바뀔 때 배치한다.
 pub(crate) fn register(window: Window) -> Result<(), String> {
     let context = Arc::new(WindowData::default());
-    window.state::<Windows>().windows.lock().map_err(|e| e.to_string())?
+    window
+        .state::<Windows>()
+        .windows
+        .lock()
+        .map_err(|e| e.to_string())?
         .insert(window.label().into(), context.clone());
     let platform = platform::current()?;
     let owner = native_owner(&window)?;
@@ -219,18 +279,38 @@ pub(crate) struct OpenProject {
 
 /// 프로젝트를 연다. 이미 열린 프로젝트는 소유 창을 활성화하고, separate 이고 요청 창이 다른
 /// 프로젝트를 소유하면 새 창을 만든다.
-pub(crate) fn project_open(window: &Window, request: OpenProject) -> Result<serde_json::Value, String> {
-    if request.id.is_empty() || !request.id.bytes().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'-') {
+pub(crate) fn project_open(
+    window: &Window,
+    request: OpenProject,
+) -> Result<serde_json::Value, String> {
+    if request.id.is_empty()
+        || !request
+            .id
+            .bytes()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'-')
+    {
         return Err("invalid project id".into());
     }
     let folder = project_folder(window.app_handle(), request.root)?;
     let registry = window.state::<Windows>();
     let _opening = registry.opening.lock().map_err(|e| e.to_string())?;
-    let owner = registry.owners.lock().map_err(|e| e.to_string())?.get(&request.id).cloned();
+    let owner = registry
+        .owners
+        .lock()
+        .map_err(|e| e.to_string())?
+        .get(&request.id)
+        .cloned();
     if let Some(label) = owner {
-        let owner = window.get_window(&label).ok_or("project window is closed")?;
-        *window_data(&owner)?.root.lock().map_err(|e| e.to_string())? = folder.root;
-        owner.set_title(&format!("{} / Tauri v2", request.title)).map_err(|e| e.to_string())?;
+        let owner = window
+            .get_window(&label)
+            .ok_or("project window is closed")?;
+        *window_data(&owner)?
+            .root
+            .lock()
+            .map_err(|e| e.to_string())? = folder.root;
+        owner
+            .set_title(&format!("{} / Tauri v2", request.title))
+            .map_err(|e| e.to_string())?;
         crate::exposure::windows_changed(window.app_handle());
         if label != window.label() {
             emit_window(&owner, "project-activate", &request.id).map_err(|e| e.to_string())?;
@@ -239,20 +319,43 @@ pub(crate) fn project_open(window: &Window, request: OpenProject) -> Result<serd
         }
         return Ok(serde_json::json!({"local": label == window.label()}));
     }
-    let occupied = registry.owners.lock().map_err(|e| e.to_string())?.values().any(|label| label == window.label());
+    let occupied = registry
+        .owners
+        .lock()
+        .map_err(|e| e.to_string())?
+        .values()
+        .any(|label| label == window.label());
     let owner = if request.separate && occupied {
         let label = format!("project-{}", request.id);
-        new_window(window.app_handle(), &label, &format!("index.html?project={}", request.id), &request.title)?
+        new_window(
+            window.app_handle(),
+            &label,
+            &format!("index.html?project={}", request.id),
+            &request.title,
+        )?
     } else {
         window.clone()
     };
-    registry.owners.lock().map_err(|e| e.to_string())?.insert(request.id, owner.label().into());
-    *window_data(&owner)?.root.lock().map_err(|e| e.to_string())? = folder.root;
-    owner.set_title(&format!("{} / Tauri v2", request.title)).map_err(|e| e.to_string())?;
+    registry
+        .owners
+        .lock()
+        .map_err(|e| e.to_string())?
+        .insert(request.id, owner.label().into());
+    *window_data(&owner)?
+        .root
+        .lock()
+        .map_err(|e| e.to_string())? = folder.root;
+    owner
+        .set_title(&format!("{} / Tauri v2", request.title))
+        .map_err(|e| e.to_string())?;
     crate::exposure::windows_changed(window.app_handle());
     if let Some(g) = request.geometry.filter(|g| g.width > 0.0 && g.height > 0.0) {
-        owner.set_size(LogicalSize::new(g.width, g.height)).map_err(|e| e.to_string())?;
-        owner.set_position(tauri::LogicalPosition::new(g.x, g.y)).map_err(|e| e.to_string())?;
+        owner
+            .set_size(LogicalSize::new(g.width, g.height))
+            .map_err(|e| e.to_string())?;
+        owner
+            .set_position(tauri::LogicalPosition::new(g.x, g.y))
+            .map_err(|e| e.to_string())?;
     }
     notify_workspace(window.app_handle());
     Ok(serde_json::json!({"local": owner.label() == window.label()}))
@@ -260,7 +363,12 @@ pub(crate) fn project_open(window: &Window, request: OpenProject) -> Result<serd
 
 /// 프로젝트 id 와 창의 연결을 해제한다.
 pub(crate) fn project_release(window: &Window, id: String) -> Result<(), String> {
-    window.state::<Windows>().owners.lock().map_err(|e| e.to_string())?.remove(&id);
+    window
+        .state::<Windows>()
+        .owners
+        .lock()
+        .map_err(|e| e.to_string())?
+        .remove(&id);
     notify_workspace(window.app_handle());
     Ok(())
 }
@@ -276,9 +384,20 @@ pub(crate) fn window_state(window: &Window) -> Result<Option<Geometry>, String> 
     // 위치와 크기는 창 좌표로 저장한다. 물리 픽셀로 저장하면 배율이 2 인 화면에서 같은 수가 두 배
     // 떨어진 자리를 가리켜, 다시 열 때마다 창이 화면 밖으로 밀려난다.
     let scale = window.scale_factor().map_err(|e| e.to_string())?;
-    let at = window.outer_position().map_err(|e| e.to_string())?.to_logical::<i32>(scale);
-    let size = window.inner_size().map_err(|e| e.to_string())?.to_logical::<f64>(scale);
-    Ok(Some(Geometry { x: at.x, y: at.y, width: size.width, height: size.height }))
+    let at = window
+        .outer_position()
+        .map_err(|e| e.to_string())?
+        .to_logical::<i32>(scale);
+    let size = window
+        .inner_size()
+        .map_err(|e| e.to_string())?
+        .to_logical::<f64>(scale);
+    Ok(Some(Geometry {
+        x: at.x,
+        y: at.y,
+        width: size.width,
+        height: size.height,
+    }))
 }
 
 /// 페이지가 창 닫기 요청을 처리할 준비가 되었음을 기록한다.
@@ -306,7 +425,11 @@ pub(crate) fn window_close(window: &Window) -> Result<(), String> {
 /// 종료 요청을 처리한다. 준비된 창이 있으면 종료를 막고 각 창에 닫기 요청을 보낸다.
 pub(crate) fn quit(app: &AppHandle, api: tauri::ExitRequestApi) {
     let registry = app.state::<Windows>();
-    let waiting: Vec<_> = registry.windows.lock().expect("window registry").iter()
+    let waiting: Vec<_> = registry
+        .windows
+        .lock()
+        .expect("window registry")
+        .iter()
         .filter(|(_, context)| context.ready.load(Ordering::Relaxed))
         .map(|(label, _)| label.clone())
         .collect();
@@ -335,11 +458,15 @@ fn unified_titlebar(window: &Window) -> Result<(), String> {
     let handle = native_owner(window)?;
     // 창 등록은 메인 스레드 밖에서도 실행되고, 메인 스레드에서 답을 기다리면 그 자리에서 멈춘다.
     // 창을 만드는 즉시 메인 스레드에 예약하므로 페이지가 첫 행 높이를 읽기 전에 실행된다.
-    window.run_on_main_thread(move || {
-        if let Err(error) = platform::current().and_then(|platform| platform.unified_titlebar(handle)) {
-            eprintln!("{error}");
-        }
-    }).map_err(|e| e.to_string())
+    window
+        .run_on_main_thread(move || {
+            if let Err(error) =
+                platform::current().and_then(|platform| platform.unified_titlebar(handle))
+            {
+                eprintln!("{error}");
+            }
+        })
+        .map_err(|e| e.to_string())
 }
 
 /// 페이지가 첫 줄을 그리는 데 쓰는 창의 값. controls 는 창 단추 영역이고 row 는 제목줄 높이(pt)다.
@@ -354,7 +481,9 @@ pub(crate) struct Chrome {
 pub(crate) fn window_chrome(window: &Window) -> Result<Chrome, String> {
     let controls = window_controls(window)?;
     let handle = native_owner(window)?;
-    let row = crate::exposure::on_main(window, move || Ok(platform::current()?.unified_titlebar(handle).unwrap_or(0.0)))?;
+    let row = crate::exposure::on_main(window, move || {
+        Ok(platform::current()?.unified_titlebar(handle).unwrap_or(0.0))
+    })?;
     Ok(Chrome { controls, row })
 }
 

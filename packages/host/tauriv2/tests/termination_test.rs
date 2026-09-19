@@ -29,10 +29,19 @@ fn a_termination_signal_requests_quit_once_and_the_next_ends_the_process() {
         .unwrap();
     let stdin = child.stdin.take();
     let mut output = String::new();
-    child.stdout.take().unwrap().read_to_string(&mut output).unwrap();
+    child
+        .stdout
+        .take()
+        .unwrap()
+        .read_to_string(&mut output)
+        .unwrap();
     let status = child.wait().unwrap();
     drop(stdin);
-    assert_eq!(status.signal(), Some(SIGTERM), "status {status}, output {output:?}");
+    assert_eq!(
+        status.signal(),
+        Some(SIGTERM),
+        "status {status}, output {output:?}"
+    );
     assert!(output.contains("quit requested"), "output {output:?}");
     assert!(!output.contains("did not end"), "output {output:?}");
 }

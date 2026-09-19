@@ -35,9 +35,13 @@ fn remove_ended(directory: &Path, name: &str) -> Result<(), String> {
     for entry in entries {
         let entry = entry.map_err(|e| format!("{}: {e}", directory.display()))?;
         let file = entry.file_name();
-        let Some(pid) = file.to_str()
-            .and_then(|file| file.strip_prefix(name)?.strip_prefix('-')?.strip_suffix(".sock")?.parse::<i32>().ok())
-        else {
+        let Some(pid) = file.to_str().and_then(|file| {
+            file.strip_prefix(name)?
+                .strip_prefix('-')?
+                .strip_suffix(".sock")?
+                .parse::<i32>()
+                .ok()
+        }) else {
             continue;
         };
         if pid <= 0 || !ended(pid) {
@@ -70,7 +74,11 @@ pub fn private_directory(path: &Path) -> Result<(), String> {
         return Err(format!("{} belongs to another user", path.display()));
     }
     if metadata.mode() & 0o777 != 0o700 {
-        return Err(format!("{} has mode {:o}, want 700", path.display(), metadata.mode() & 0o777));
+        return Err(format!(
+            "{} has mode {:o}, want 700",
+            path.display(),
+            metadata.mode() & 0o777
+        ));
     }
     Ok(())
 }
@@ -123,7 +131,9 @@ impl Write for Stream {
 
 impl Connection for Stream {
     fn try_clone(&self) -> Result<Box<dyn Connection>, String> {
-        Ok(Box::new(Stream(self.0.try_clone().map_err(|e| e.to_string())?)))
+        Ok(Box::new(Stream(
+            self.0.try_clone().map_err(|e| e.to_string())?,
+        )))
     }
 
     fn set_read_timeout(&self, timeout: Option<Duration>) -> Result<(), String> {
@@ -147,7 +157,8 @@ pub fn listen(directory: &Path, name: &str) -> Result<Box<dyn Listener>, String>
         Err(e) => return Err(format!("{}: {e}", path.display())),
     }
     let listener = UnixListener::bind(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-    fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).map_err(|e| format!("{}: {e}", path.display()))?;
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o600))
+        .map_err(|e| format!("{}: {e}", path.display()))?;
     Ok(Box::new(Socket { listener, path }))
 }
 

@@ -10,7 +10,7 @@ use objc2::msg_send;
 use objc2::runtime::AnyObject;
 use tauri::webview::PlatformWebview;
 
-use super::super::Handle;
+use super::super::{DOMOverlay, Handle};
 
 /// radius 논리 픽셀의 모서리 반경을 적용한다.
 pub fn corners(webview: &PlatformWebview, radius: f64) {
@@ -31,13 +31,10 @@ pub fn corners(webview: &PlatformWebview, radius: f64) {
 
 /// 뷰의 불투명도를 설정한다. 포커스를 잃은 표면은 흐리게 그릴 수 있다.
 pub fn alpha(webview: &PlatformWebview, alpha: f64) {
-    unsafe {
-        let view = webview.inner() as *mut AnyObject;
-        if view.is_null() {
-            return;
-        }
-        let _: () = msg_send![view, setAlphaValue: alpha];
+    extern "C" {
+        fn webviewSetSurfaceAlpha(view: *mut c_void, alpha: f64);
     }
+    unsafe { webviewSetSurfaceAlpha(webview.inner().cast(), alpha) }
 }
 
 /// 창 좌표를 네이티브 뷰의 부모 좌표로 변환해 배치한다.
@@ -54,6 +51,37 @@ pub fn attach_surface(webview: &PlatformWebview, main: Handle) {
         fn webviewAttachSurface(view: *mut c_void, main: *mut c_void);
     }
     unsafe { webviewAttachSurface(webview.inner().cast(), main as *mut c_void) }
+}
+
+pub fn detach_surface(webview: &PlatformWebview) {
+    extern "C" {
+        fn webviewDetachSurface(view: *mut c_void);
+    }
+    unsafe { webviewDetachSurface(webview.inner().cast()) }
+}
+
+pub fn hidden(webview: &PlatformWebview, hidden: bool) {
+    extern "C" {
+        fn webviewSetSurfaceHidden(view: *mut c_void, hidden: bool);
+    }
+    unsafe { webviewSetSurfaceHidden(webview.inner().cast(), hidden) }
+}
+
+pub fn overlays(surface: Handle, overlays: &[DOMOverlay]) {
+    extern "C" {
+        fn webviewSetSurfaceOverlays(view: *mut c_void, values: *const f64, count: usize);
+    }
+    let mut values = Vec::with_capacity(overlays.len() * 5);
+    for overlay in overlays {
+        values.extend_from_slice(&[
+            overlay.insets.left,
+            overlay.insets.top,
+            overlay.insets.right,
+            overlay.insets.bottom,
+            if overlay.visible { 1.0 } else { 0.0 },
+        ]);
+    }
+    unsafe { webviewSetSurfaceOverlays(surface as *mut c_void, values.as_ptr(), overlays.len()) }
 }
 
 /// 웹뷰의 현재 위치와 크기를 페이지 좌표로 반환한다.
@@ -100,7 +128,11 @@ pub fn focus(webview: &PlatformWebview) -> Result<(), String> {
             return Err("the webview is not in a window".into());
         }
         let taken: bool = msg_send![window, makeFirstResponder: view];
-        if taken { Ok(()) } else { Err("the window did not give the webview keyboard focus".into()) }
+        if taken {
+            Ok(())
+        } else {
+            Err("the window did not give the webview keyboard focus".into())
+        }
     }
 }
 
@@ -108,4 +140,3 @@ pub fn focus(webview: &PlatformWebview) -> Result<(), String> {
 pub fn id(webview: &PlatformWebview) -> Handle {
     webview.inner() as Handle
 }
-

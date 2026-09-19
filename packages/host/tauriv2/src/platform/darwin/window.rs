@@ -24,7 +24,10 @@ pub fn prepare(builder: WindowBuilder<'_>) -> WindowBuilder<'_> {
 
 /// 창의 NSWindow 주소를 반환한다.
 pub fn handle(window: &Window) -> Result<Handle, String> {
-    window.ns_window().map(|h| h as Handle).map_err(|e| e.to_string())
+    window
+        .ns_window()
+        .map(|h| h as Handle)
+        .map_err(|e| e.to_string())
 }
 
 /// 창 버튼의 현재 영역을 배치를 바꾸지 않고 읽는다.
@@ -98,7 +101,8 @@ pub(super) fn facts_value(text: *mut c_char, what: &str) -> Result<Value, String
     if text.is_null() {
         return Err(format!("{what}: the window is gone"));
     }
-    let parsed = serde_json::from_slice(unsafe { CStr::from_ptr(text) }.to_bytes()).map_err(|e| format!("{what}: {e}"));
+    let parsed = serde_json::from_slice(unsafe { CStr::from_ptr(text) }.to_bytes())
+        .map_err(|e| format!("{what}: {e}"));
     unsafe { sp_facts_free(text) };
     parsed
 }
@@ -108,7 +112,10 @@ pub fn facts(window: Handle) -> Result<Value, String> {
     extern "C" {
         fn sp_window_facts(window: *mut c_void) -> *mut c_char;
     }
-    facts_value(unsafe { sp_window_facts(window as *mut c_void) }, "window state")
+    facts_value(
+        unsafe { sp_window_facts(window as *mut c_void) },
+        "window state",
+    )
 }
 
 /// 창 프레임의 왼쪽 위를 화면 좌표로 옮긴다.

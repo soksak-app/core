@@ -18,7 +18,13 @@ struct Fake {
 impl Fake {
     fn new() -> (Arc<Fake>, Receiver<(String, String, Value)>) {
         let (tx, rx) = mpsc::channel();
-        (Arc::new(Fake { calls: Mutex::new(Vec::new()), seen: Mutex::new(tx) }), rx)
+        (
+            Arc::new(Fake {
+                calls: Mutex::new(Vec::new()),
+                seen: Mutex::new(tx),
+            }),
+            rx,
+        )
     }
 
     fn calls(&self) -> Vec<(String, String, Value)> {
@@ -28,7 +34,10 @@ impl Fake {
 
 impl Service for Fake {
     fn windows(&self) -> Result<Value, Failure> {
-        self.calls.lock().unwrap().push((String::new(), "windows.list".into(), Value::Null));
+        self.calls
+            .lock()
+            .unwrap()
+            .push((String::new(), "windows.list".into(), Value::Null));
         Ok(json!([{"window": "w1", "title": "one", "project": null, "key": true}]))
     }
 
@@ -36,8 +45,17 @@ impl Service for Fake {
         window == "w1"
     }
 
-    fn call(&self, window: &str, method: &str, params: Map<String, Value>) -> Result<Value, Failure> {
-        let call = (window.to_string(), method.to_string(), Value::Object(params));
+    fn call(
+        &self,
+        window: &str,
+        method: &str,
+        params: Map<String, Value>,
+    ) -> Result<Value, Failure> {
+        let call = (
+            window.to_string(),
+            method.to_string(),
+            Value::Object(params),
+        );
         self.calls.lock().unwrap().push(call.clone());
         let _ = self.seen.lock().unwrap().send(call);
         match method {
@@ -59,7 +77,9 @@ fn mode(path: &Path) -> u32 {
 
 fn open(endpoint: &Endpoint) -> Box<dyn Connection> {
     let connection = endpoint::connect(endpoint.address()).unwrap();
-    connection.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+    connection
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .unwrap();
     connection
 }
 
@@ -72,7 +92,10 @@ fn receive(connection: &mut Box<dyn Connection>) -> Option<Value> {
 }
 
 fn request(connection: &mut Box<dyn Connection>, id: u64, method: &str, params: Value) -> Value {
-    send(connection, json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}));
+    send(
+        connection,
+        json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}),
+    );
     receive(connection).expect("the endpoint closed the connection")
 }
 
@@ -82,7 +105,9 @@ fn http_request_line_closes_connection_without_running_a_method() {
     let (fake, _) = Fake::new();
     let endpoint = start(config.path(), "test-http", fake.clone());
     let mut connection = open(&endpoint);
-    connection.write_all(b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n").unwrap();
+    connection
+        .write_all(b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n")
+        .unwrap();
     assert_eq!(receive(&mut connection), None);
     assert!(fake.calls().is_empty());
     endpoint.stop();
@@ -95,7 +120,9 @@ fn invalid_json_closes_connection() {
     let endpoint = start(config.path(), "test-json", fake.clone());
     let mut connection = open(&endpoint);
     let body = b"{\"jsonrpc\": \"2.0\", \"id\": 1,";
-    connection.write_all(&(body.len() as u32).to_be_bytes()).unwrap();
+    connection
+        .write_all(&(body.len() as u32).to_be_bytes())
+        .unwrap();
     connection.write_all(body).unwrap();
     assert_eq!(receive(&mut connection), None);
     assert!(fake.calls().is_empty());
@@ -120,7 +147,10 @@ fn undeclared_method_closes_connection() {
     let (fake, _) = Fake::new();
     let endpoint = start(config.path(), "test-undeclared", fake.clone());
     let mut connection = open(&endpoint);
-    send(&mut connection, json!({"jsonrpc": "2.0", "id": 1, "method": "page.eval", "params": {"window": "w1"}}));
+    send(
+        &mut connection,
+        json!({"jsonrpc": "2.0", "id": 1, "method": "page.eval", "params": {"window": "w1"}}),
+    );
     assert_eq!(receive(&mut connection), None);
     assert!(fake.calls().is_empty());
     endpoint.stop();
@@ -132,11 +162,17 @@ fn diagnostic_methods_exist_only_in_diagnostic_builds() {
     let (fake, _) = Fake::new();
     let endpoint = start(config.path(), "test-diagnostics", fake.clone());
     let mut connection = open(&endpoint);
-    send(&mut connection, json!({"jsonrpc": "2.0", "id": 1, "method": "diagnostics.knob",
-        "params": {"window": "w1", "name": "latency", "value": 0}}));
+    send(
+        &mut connection,
+        json!({"jsonrpc": "2.0", "id": 1, "method": "diagnostics.knob",
+        "params": {"window": "w1", "name": "latency", "value": 0}}),
+    );
     let reply = receive(&mut connection);
     if cfg!(feature = "diagnostics") {
-        assert_eq!(reply, Some(json!({"jsonrpc": "2.0", "id": 1, "result": null})));
+        assert_eq!(
+            reply,
+            Some(json!({"jsonrpc": "2.0", "id": 1, "result": null}))
+        );
         assert_eq!(fake.calls().len(), 1);
     } else {
         assert_eq!(reply, None);
@@ -151,10 +187,20 @@ fn declared_method_on_unknown_window_returns_1003() {
     let (fake, _) = Fake::new();
     let endpoint = start(config.path(), "test-window", fake.clone());
     let mut connection = open(&endpoint);
-    let reply = request(&mut connection, 4, "command.run", json!({"window": "gone", "name": "host.window.reload"}));
+    let reply = request(
+        &mut connection,
+        4,
+        "command.run",
+        json!({"window": "gone", "name": "host.window.reload"}),
+    );
     assert_eq!(reply["id"], 4);
     assert_eq!(reply["error"]["code"], 1003);
-    let reply = request(&mut connection, 5, "status.get", json!({"name": "host.window"}));
+    let reply = request(
+        &mut connection,
+        5,
+        "status.get",
+        json!({"name": "host.window"}),
+    );
     assert_eq!(reply["error"]["code"], -32602);
     assert!(fake.calls().is_empty());
     endpoint.stop();
@@ -167,11 +213,26 @@ fn framing_round_trip_answers_requests_by_id() {
     let endpoint = start(config.path(), "test-frame", fake.clone());
     let mut connection = open(&endpoint);
     let reply = request(&mut connection, 1, "windows.list", Value::Null);
-    assert_eq!(reply, json!({"jsonrpc": "2.0", "id": 1,
-        "result": [{"window": "w1", "title": "one", "project": null, "key": true}]}));
-    let reply = request(&mut connection, 2, "status.get", json!({"window": "w1", "name": "core.layout"}));
+    assert_eq!(
+        reply,
+        json!({"jsonrpc": "2.0", "id": 1,
+        "result": [{"window": "w1", "title": "one", "project": null, "key": true}]})
+    );
+    let reply = request(
+        &mut connection,
+        2,
+        "status.get",
+        json!({"window": "w1", "name": "core.layout"}),
+    );
     assert_eq!(reply, json!({"jsonrpc": "2.0", "id": 2, "result": 7}));
-    assert_eq!(fake.calls()[1], ("w1".into(), "status.get".into(), json!({"name": "core.layout"})));
+    assert_eq!(
+        fake.calls()[1],
+        (
+            "w1".into(),
+            "status.get".into(),
+            json!({"name": "core.layout"})
+        )
+    );
     endpoint.stop();
 }
 
@@ -221,9 +282,15 @@ fn sockets_of_ended_processes_are_removed() {
     use std::os::unix::fs::DirBuilderExt;
     let config = tempfile::tempdir().unwrap();
     let sockets = config.path().join("sockets");
-    std::fs::DirBuilder::new().mode(0o700).create(&sockets).unwrap();
+    std::fs::DirBuilder::new()
+        .mode(0o700)
+        .create(&sockets)
+        .unwrap();
     let ended = sockets.join(format!("test-sweep-{}.sock", ended_process()));
-    let running = sockets.join(format!("test-sweep-{}.sock", std::os::unix::process::parent_id()));
+    let running = sockets.join(format!(
+        "test-sweep-{}.sock",
+        std::os::unix::process::parent_id()
+    ));
     let other = sockets.join(format!("test-other-{}.sock", ended_process()));
     for path in [&ended, &running, &other] {
         std::fs::write(path, "").unwrap();
@@ -232,7 +299,11 @@ fn sockets_of_ended_processes_are_removed() {
     let endpoint = Endpoint::start(&sockets, config.path(), "test-sweep", fake).unwrap();
     let found = (ended.exists(), running.exists(), other.exists());
     endpoint.stop();
-    assert_eq!(found, (false, true, true), "ended, running, other application");
+    assert_eq!(
+        found,
+        (false, true, true),
+        "ended, running, other application"
+    );
 }
 
 #[test]
@@ -243,7 +314,9 @@ fn a_socket_directory_open_to_others_is_refused() {
     std::fs::create_dir(&sockets).unwrap();
     std::fs::set_permissions(&sockets, std::fs::Permissions::from_mode(0o755)).unwrap();
     let (fake, _) = Fake::new();
-    let refused = Endpoint::start(&sockets, config.path(), "test-open", fake).err().unwrap();
+    let refused = Endpoint::start(&sockets, config.path(), "test-open", fake)
+        .err()
+        .unwrap();
     assert!(refused.contains("mode 755"), "{refused}");
     assert!(!config.path().join("endpoint.json").exists());
 }
@@ -253,7 +326,9 @@ fn a_socket_directory_of_another_user_is_refused() {
     // /usr 는 root 소유다. 검사는 권한보다 소유자를 먼저 본다.
     let config = tempfile::tempdir().unwrap();
     let (fake, _) = Fake::new();
-    let refused = Endpoint::start(Path::new("/usr"), config.path(), "test-owner", fake).err().unwrap();
+    let refused = Endpoint::start(Path::new("/usr"), config.path(), "test-owner", fake)
+        .err()
+        .unwrap();
     assert!(refused.contains("belongs to another user"), "{refused}");
 }
 
@@ -265,7 +340,9 @@ fn a_socket_path_that_is_not_a_directory_is_refused() {
     let sockets = config.path().join("sockets");
     std::os::unix::fs::symlink(&target, &sockets).unwrap();
     let (fake, _) = Fake::new();
-    let refused = Endpoint::start(&sockets, config.path(), "test-link", fake).err().unwrap();
+    let refused = Endpoint::start(&sockets, config.path(), "test-link", fake)
+        .err()
+        .unwrap();
     assert!(refused.contains("is not a directory"), "{refused}");
 }
 
@@ -278,23 +355,62 @@ fn watchers_belong_to_their_connection() {
     let mut first = open(&endpoint);
     let mut second = open(&endpoint);
 
-    assert_eq!(request(&mut first, 1, "status.watch", json!({"window": "w1", "name": "core.layout"}))["result"], Value::Null);
+    assert_eq!(
+        request(
+            &mut first,
+            1,
+            "status.watch",
+            json!({"window": "w1", "name": "core.layout"})
+        )["result"],
+        Value::Null
+    );
     assert!(notifier.watched("w1", "core.layout"));
     assert!(!notifier.watched("w1", "core.other"));
-    assert_eq!(notifier.watches("w1"), [Watch { window: "w1".into(), name: "core.layout".into(), surface: None }]);
+    assert_eq!(
+        notifier.watches("w1"),
+        [Watch {
+            window: "w1".into(),
+            name: "core.layout".into(),
+            surface: None
+        }]
+    );
 
     // 두 번째 연결은 감시하지 않았으므로 알림 대신 자신의 응답을 먼저 받는다.
     notifier.changed("w1", "core.layout", None, json!(1));
-    assert_eq!(receive(&mut first), Some(json!({"jsonrpc": "2.0", "method": "status.changed",
-        "params": {"window": "w1", "name": "core.layout", "value": 1}})));
-    assert_eq!(request(&mut second, 2, "status.get", json!({"window": "w1", "name": "core.layout"}))["id"], 2);
+    assert_eq!(
+        receive(&mut first),
+        Some(json!({"jsonrpc": "2.0", "method": "status.changed",
+        "params": {"window": "w1", "name": "core.layout", "value": 1}}))
+    );
+    assert_eq!(
+        request(
+            &mut second,
+            2,
+            "status.get",
+            json!({"window": "w1", "name": "core.layout"})
+        )["id"],
+        2
+    );
 
     // 두 번째 연결의 감시 해제는 첫 번째 연결의 감시를 바꾸지 않는다.
-    request(&mut second, 3, "status.watch", json!({"window": "w1", "name": "core.layout"}));
-    request(&mut second, 4, "status.unwatch", json!({"window": "w1", "name": "core.layout"}));
+    request(
+        &mut second,
+        3,
+        "status.watch",
+        json!({"window": "w1", "name": "core.layout"}),
+    );
+    request(
+        &mut second,
+        4,
+        "status.unwatch",
+        json!({"window": "w1", "name": "core.layout"}),
+    );
     notifier.changed("w1", "core.layout", None, json!(2));
     assert_eq!(receive(&mut first).unwrap()["params"]["value"], 2);
-    assert!(!fake.calls().iter().any(|(_, method, _)| method == "status.unwatch"));
+    assert!(!fake
+        .calls()
+        .iter()
+        .any(|(_, method, _)| method == "status.unwatch"));
 
     // 마지막 감시자의 연결이 닫히면 페이지에 감시 해제를 요청한다.
     while seen.try_recv().is_ok() {}
@@ -315,27 +431,63 @@ fn surface_watches_are_separate() {
     let notifier = endpoint.notifier();
     let mut connection = open(&endpoint);
     let named = json!({"window": "w1", "name": "probe.lines", "surface": "tab-a"});
-    assert_eq!(request(&mut connection, 1, "status.watch", named.clone())["result"], Value::Null);
-    assert_eq!(request(&mut connection, 2, "status.watch", json!({"window": "w1", "name": "probe.lines"}))["result"], Value::Null);
-    let reply = request(&mut connection, 3, "status.watch", json!({"window": "w1", "name": "probe.lines", "surface": ""}));
+    assert_eq!(
+        request(&mut connection, 1, "status.watch", named.clone())["result"],
+        Value::Null
+    );
+    assert_eq!(
+        request(
+            &mut connection,
+            2,
+            "status.watch",
+            json!({"window": "w1", "name": "probe.lines"})
+        )["result"],
+        Value::Null
+    );
+    let reply = request(
+        &mut connection,
+        3,
+        "status.watch",
+        json!({"window": "w1", "name": "probe.lines", "surface": ""}),
+    );
     assert_eq!(reply["error"]["code"], -32602);
-    let watched: Vec<Value> = fake.calls().iter().filter(|(_, method, _)| method == "status.watch").map(|(_, _, params)| params.clone()).collect();
-    assert_eq!(watched, [json!({"name": "probe.lines", "surface": "tab-a"}), json!({"name": "probe.lines"})]);
+    let watched: Vec<Value> = fake
+        .calls()
+        .iter()
+        .filter(|(_, method, _)| method == "status.watch")
+        .map(|(_, _, params)| params.clone())
+        .collect();
+    assert_eq!(
+        watched,
+        [
+            json!({"name": "probe.lines", "surface": "tab-a"}),
+            json!({"name": "probe.lines"})
+        ]
+    );
     assert_eq!(notifier.watches("w1").len(), 2);
 
     notifier.changed("w1", "probe.lines", Some("tab-a"), json!(["a"]));
-    assert_eq!(receive(&mut connection), Some(json!({"jsonrpc": "2.0", "method": "status.changed",
-        "params": {"window": "w1", "name": "probe.lines", "surface": "tab-a", "value": ["a"]}})));
+    assert_eq!(
+        receive(&mut connection),
+        Some(json!({"jsonrpc": "2.0", "method": "status.changed",
+        "params": {"window": "w1", "name": "probe.lines", "surface": "tab-a", "value": ["a"]}}))
+    );
     notifier.changed("w1", "probe.lines", None, json!(["b"]));
-    assert_eq!(receive(&mut connection), Some(json!({"jsonrpc": "2.0", "method": "status.changed",
-        "params": {"window": "w1", "name": "probe.lines", "value": ["b"]}})));
+    assert_eq!(
+        receive(&mut connection),
+        Some(json!({"jsonrpc": "2.0", "method": "status.changed",
+        "params": {"window": "w1", "name": "probe.lines", "value": ["b"]}}))
+    );
 
     while seen.try_recv().is_ok() {}
     request(&mut connection, 4, "status.unwatch", named);
     let (_, method, params) = seen.recv_timeout(Duration::from_secs(5)).unwrap();
     assert_eq!(method, "status.unwatch");
     assert_eq!(params, json!({"name": "probe.lines", "surface": "tab-a"}));
-    assert!(notifier.watched("w1", "probe.lines"), "the watch without a surface remains");
+    assert!(
+        notifier.watched("w1", "probe.lines"),
+        "the watch without a surface remains"
+    );
     endpoint.stop();
 }
 
@@ -345,8 +497,18 @@ fn names_must_have_the_owner_form() {
     let (fake, _) = Fake::new();
     let endpoint = start(config.path(), "test-names", fake.clone());
     let mut connection = open(&endpoint);
-    for (id, name) in [(1, json!("layout")), (2, json!("Core.layout")), (3, json!("core.")), (4, json!(3))] {
-        let reply = request(&mut connection, id, "status.get", json!({"window": "w1", "name": name}));
+    for (id, name) in [
+        (1, json!("layout")),
+        (2, json!("Core.layout")),
+        (3, json!("core.")),
+        (4, json!(3)),
+    ] {
+        let reply = request(
+            &mut connection,
+            id,
+            "status.get",
+            json!({"window": "w1", "name": name}),
+        );
         assert_eq!(reply["error"]["code"], -32602, "{name}");
     }
     assert!(fake.calls().is_empty());
@@ -370,7 +532,12 @@ impl Service for GatedPage {
         window == "w1"
     }
 
-    fn call(&self, _window: &str, method: &str, _params: Map<String, Value>) -> Result<Value, Failure> {
+    fn call(
+        &self,
+        _window: &str,
+        method: &str,
+        _params: Map<String, Value>,
+    ) -> Result<Value, Failure> {
         let _ = self.entered.lock().unwrap().send(method.to_string());
         if method == "status.unwatch" {
             let gate = self.gate.lock().unwrap().take();
@@ -381,7 +548,11 @@ impl Service for GatedPage {
         if method.starts_with("status.") && method != "status.get" {
             self.order.lock().unwrap().push(method.to_string());
         }
-        Ok(if method == "status.get" { json!(0) } else { Value::Null })
+        Ok(if method == "status.get" {
+            json!(0)
+        } else {
+            Value::Null
+        })
     }
 }
 
@@ -390,19 +561,41 @@ fn subscription_changes_reach_the_page_in_arrival_order() {
     let config = tempfile::tempdir().unwrap();
     let (open_gate, gate) = mpsc::channel();
     let (entered, calls) = mpsc::channel();
-    let page = Arc::new(GatedPage { order: Mutex::new(Vec::new()), gate: Mutex::new(Some(gate)), entered: Mutex::new(entered) });
-    let endpoint = Endpoint::start(&config.path().join("sockets"), config.path(), "test-order", page.clone()).unwrap();
+    let page = Arc::new(GatedPage {
+        order: Mutex::new(Vec::new()),
+        gate: Mutex::new(Some(gate)),
+        entered: Mutex::new(entered),
+    });
+    let endpoint = Endpoint::start(
+        &config.path().join("sockets"),
+        config.path(),
+        "test-order",
+        page.clone(),
+    )
+    .unwrap();
     let notifier = endpoint.notifier();
     let mut connection = open(&endpoint);
     let topic = json!({"window": "w1", "name": "core.layout"});
-    assert_eq!(request(&mut connection, 1, "status.watch", topic.clone())["result"], Value::Null);
+    assert_eq!(
+        request(&mut connection, 1, "status.watch", topic.clone())["result"],
+        Value::Null
+    );
     assert_eq!(calls.recv().unwrap(), "status.watch");
 
     // 감시 해제와 감시를 연달아 보낸다. 페이지가 감시 해제를 끝내기 전에 다른 요청의 응답을 받는다.
-    send(&mut connection, json!({"jsonrpc": "2.0", "id": 2, "method": "status.unwatch", "params": topic}));
-    send(&mut connection, json!({"jsonrpc": "2.0", "id": 3, "method": "status.watch", "params": topic}));
+    send(
+        &mut connection,
+        json!({"jsonrpc": "2.0", "id": 2, "method": "status.unwatch", "params": topic}),
+    );
+    send(
+        &mut connection,
+        json!({"jsonrpc": "2.0", "id": 3, "method": "status.watch", "params": topic}),
+    );
     assert_eq!(calls.recv().unwrap(), "status.unwatch");
-    send(&mut connection, json!({"jsonrpc": "2.0", "id": 4, "method": "status.get", "params": topic}));
+    send(
+        &mut connection,
+        json!({"jsonrpc": "2.0", "id": 4, "method": "status.get", "params": topic}),
+    );
     let mut replies = Vec::new();
     let first = receive(&mut connection).unwrap();
     replies.push(first["id"].clone());
@@ -412,7 +605,10 @@ fn subscription_changes_reach_the_page_in_arrival_order() {
         replies.push(receive(&mut connection).unwrap()["id"].clone());
     }
     assert_eq!(replies, [json!(4), json!(2), json!(3)]);
-    assert_eq!(*page.order.lock().unwrap(), ["status.watch", "status.unwatch", "status.watch"]);
+    assert_eq!(
+        *page.order.lock().unwrap(),
+        ["status.watch", "status.unwatch", "status.watch"]
+    );
     assert!(notifier.watched("w1", "core.layout"));
     notifier.changed("w1", "core.layout", None, json!(5));
     assert_eq!(receive(&mut connection).unwrap()["params"]["value"], 5);

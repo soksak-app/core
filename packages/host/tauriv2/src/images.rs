@@ -9,15 +9,17 @@
 //! 시작한 정리는 기다리지 않는다.
 
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Condvar, Mutex};
+use std::time::{Duration, Instant};
 
 use base64::Engine;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tauri::Webview;
 
 use crate::exposure::{self, on_main, with_view};
 use crate::log_error;
-use crate::platform::{self, Handle, Insets};
+use crate::platform::{self, Handle};
+use crate::surfaces::require_region;
 use crate::windows::window_data;
 
 /// 표면 페이지의 그림 영역 호출.
@@ -26,16 +28,6 @@ pub struct Request {
     pub surface: String,
     pub name: String,
     pub sidecar: Option<String>,
-    #[serde(default)]
-    pub left: f64,
-    #[serde(default)]
-    pub top: f64,
-    #[serde(default)]
-    pub right: f64,
-    #[serde(default)]
-    pub bottom: f64,
-    #[serde(default)]
-    pub visible: bool,
 }
 
 /// 표면과 그림 이름의 쌍.
@@ -62,15 +54,50 @@ pub fn check(caller: Option<&str>, request: &Request) -> Result<Key, String> {
 }
 
 /// 창의 그림 영역.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct Images {
+    shared: Arc<Shared>,
+}
+
+#[derive(Default)]
+struct Shared {
     inner: Mutex<Inner>,
+    changed: Condvar,
 }
 
 struct Inner {
     handles: HashMap<Key, Handle>,
     owners: HashMap<Key, String>,
     sidecars: HashMap<Key, String>, // sidecar name for each image
+    states: HashMap<Key, RasterState>,
+    generations: HashMap<String, u64>,
+    surface_visibility: HashMap<String, bool>,
+    next_generation: u64,
+}
+
+#[derive(Clone, Debug, Default)]
+struct RasterState {
+    generation: u64,
+    raster: u64,
+    width: u32,
+    height: u32,
+    scale: f64,
+    last_sequence: i32,
+    configured: bool,
+    visible: bool,
+    presented_raster: u64,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct Configure {
+    pub name: String,
+    pub generation: u64,
+    pub raster: u64,
+    pub width: u32,
+    pub height: u32,
+    pub scale: f64,
+    #[serde(skip)]
+    pub sidecar: String,
 }
 
 impl Default for Inner {
@@ -79,13 +106,57 @@ impl Default for Inner {
             handles: HashMap::new(),
             owners: HashMap::new(),
             sidecars: HashMap::new(),
+            states: HashMap::new(),
+            generations: HashMap::new(),
+            surface_visibility: HashMap::new(),
+            next_generation: 0,
         }
     }
 }
 
 impl Images {
     fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
-        self.inner.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+        self.shared
+            .inner
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    fn changed(&self) {
+        self.shared.changed.notify_all();
+    }
+
+    /// 새 표면 문서가 시작될 때 이전 프레임과 구별할 세대를 만든다.
+    pub fn begin_generation(&self, surface: &str) -> u64 {
+        let mut inner = self.lock();
+        inner.next_generation += 1;
+        let generation = inner.next_generation;
+        inner.generations.insert(surface.to_string(), generation);
+        generation
+    }
+
+    /// 제거한 표면의 현재 세대를 끝낸다. 번호는 다시 쓰지 않는다.
+    pub fn end_generation(&self, surface: &str) {
+        let mut inner = self.lock();
+        inner.generations.remove(surface);
+        if inner.states.keys().any(|key| key.0 == surface) {
+            inner.surface_visibility.insert(surface.to_string(), false);
+        } else {
+            inner.surface_visibility.remove(surface);
+        }
+        self.changed();
+    }
+
+    /// 바깥 SurfaceHost의 표시 상태를 기록한다.
+    pub fn set_surface_visible(&self, surface: &str, visible: bool) {
+        let mut inner = self.lock();
+        if inner.surface_visibility.get(surface).copied() == Some(visible) {
+            return;
+        }
+        inner
+            .surface_visibility
+            .insert(surface.to_string(), visible);
+        self.changed();
     }
 
     /// 이름을 차지한다. sidecar 가 없거나 빈 문자열이면 오류를 반환한다.
@@ -100,6 +171,23 @@ impl Images {
         inner.handles.insert(key.clone(), 0);
         inner.owners.insert(key.clone(), owner.to_string());
         inner.sidecars.insert(key.clone(), sidecar.to_string());
+        let generation = match inner.generations.get(&key.0).copied() {
+            Some(generation) => generation,
+            None => {
+                inner.next_generation += 1;
+                let generation = inner.next_generation;
+                inner.generations.insert(key.0.clone(), generation);
+                generation
+            }
+        };
+        inner.states.insert(
+            key.clone(),
+            RasterState {
+                generation,
+                ..RasterState::default()
+            },
+        );
+        self.changed();
         Ok(())
     }
 
@@ -149,6 +237,8 @@ impl Images {
             Some(handle) => {
                 inner.owners.remove(key);
                 inner.sidecars.remove(key);
+                inner.states.remove(key);
+                self.changed();
                 Ok(handle)
             }
             None => Err(format!("image {:?} is not attached", key.1)),
@@ -159,15 +249,28 @@ impl Images {
     pub fn remove_surface(&self, surface: &str) -> Vec<Handle> {
         let mut removed = Vec::new();
         let mut inner = self.lock();
-        let keys: Vec<_> = inner.handles.keys().filter(|k| k.0 == surface).cloned().collect();
+        let keys: Vec<_> = inner
+            .handles
+            .keys()
+            .filter(|k| k.0 == surface)
+            .cloned()
+            .collect();
         for key in keys {
             if let Some(handle) = inner.handles.remove(&key) {
                 inner.owners.remove(&key);
                 inner.sidecars.remove(&key);
+                inner.states.remove(&key);
                 if handle != 0 {
                     removed.push(handle);
                 }
             }
+        }
+        let generation_active = inner.generations.contains_key(surface);
+        if !generation_active {
+            inner.surface_visibility.remove(surface);
+        }
+        if !removed.is_empty() || !generation_active {
+            self.changed();
         }
         removed
     }
@@ -185,7 +288,213 @@ impl Images {
 
     /// 만들어진 그림 영역의 주소.
     pub fn all(&self) -> Vec<Handle> {
-        self.lock().handles.values().copied().filter(|&handle| handle != 0).collect()
+        self.lock()
+            .handles
+            .values()
+            .copied()
+            .filter(|&handle| handle != 0)
+            .collect()
+    }
+
+    /// 적용된 네이티브 래스터가 달라졌을 때 리비전을 올리고 보낼 설정을 반환한다.
+    pub fn configure_raster(
+        &self,
+        key: &Key,
+        width: u32,
+        height: u32,
+        scale: f64,
+        visible: bool,
+    ) -> Result<Option<Configure>, String> {
+        let mut inner = self.lock();
+        if inner.handles.get(key).copied().unwrap_or_default() == 0 {
+            return Err(format!("image {:?} is not attached", key.1));
+        }
+        let sidecar = inner
+            .sidecars
+            .get(key)
+            .cloned()
+            .ok_or_else(|| format!("image {:?} is not attached", key.1))?;
+        let state = inner
+            .states
+            .get_mut(key)
+            .ok_or_else(|| format!("image {:?} is not attached", key.1))?;
+        if state.visible != visible {
+            state.visible = visible;
+            self.changed();
+        }
+        if width == 0 || height == 0 || !scale.is_finite() || scale <= 0.0 {
+            return Ok(None);
+        }
+        if state.width != width || state.height != height || (state.scale - scale).abs() > 0.000001
+        {
+            state.raster += 1;
+            state.width = width;
+            state.height = height;
+            state.scale = scale;
+            state.last_sequence = 0;
+            state.configured = false;
+            self.changed();
+        }
+        if !visible || state.configured {
+            return Ok(None);
+        }
+        state.configured = true;
+        Ok(Some(Configure {
+            name: key.1.clone(),
+            generation: state.generation,
+            raster: state.raster,
+            width,
+            height,
+            scale,
+            sidecar,
+        }))
+    }
+
+    /// 래스터가 없는 0 크기 배치에서도 영역의 표시 상태를 기록한다.
+    pub fn set_visible(&self, key: &Key, visible: bool) -> Result<(), String> {
+        let mut inner = self.lock();
+        if inner.handles.get(key).copied().unwrap_or_default() == 0 {
+            return Err(format!("image {:?} is not attached", key.1));
+        }
+        let state = inner
+            .states
+            .get_mut(key)
+            .ok_or_else(|| format!("image {:?} is not attached", key.1))?;
+        if state.visible != visible {
+            state.visible = visible;
+            self.changed();
+        }
+        Ok(())
+    }
+
+    pub fn retry_configure(&self, key: &Key, generation: u64, raster: u64) {
+        let mut inner = self.lock();
+        if let Some(state) = inner.states.get_mut(key) {
+            if state.generation == generation && state.raster == raster {
+                state.configured = false;
+            }
+        }
+    }
+
+    /// 현재 공급자와 정확한 래스터에 속하며 증가하는 프레임인지 확인한다.
+    fn authorize_frame(
+        &self,
+        key: &Key,
+        sender: &str,
+        generation: u64,
+        raster: u64,
+        width: u32,
+        height: u32,
+        scale: f64,
+        sequence: i32,
+    ) -> Result<(), &'static str> {
+        let mut inner = self.lock();
+        let attached = inner.handles.get(key).copied().unwrap_or_default() != 0;
+        let sender_matches = inner
+            .sidecars
+            .get(key)
+            .is_some_and(|sidecar| sidecar == sender);
+        let Some(state) = inner.states.get_mut(key) else {
+            return Err("notAttached");
+        };
+        if !attached || !sender_matches || state.generation != generation {
+            return Err("notAttached");
+        }
+        if !state.configured
+            || state.raster != raster
+            || state.width != width
+            || state.height != height
+            || (state.scale - scale).abs() > 0.000001
+            || sequence <= 0
+            || sequence <= state.last_sequence
+        {
+            return Err("stale");
+        }
+        state.last_sequence = sequence;
+        Ok(())
+    }
+
+    /// 프레임이 메인 스레드에서 표시되기 직전에도 현재 래스터인지 검사한다.
+    fn frame_status(
+        &self,
+        key: &Key,
+        generation: u64,
+        raster: u64,
+        sequence: i32,
+    ) -> Result<(), &'static str> {
+        let inner = self.lock();
+        let attached = inner.handles.get(key).copied().unwrap_or_default() != 0;
+        let Some(state) = inner.states.get(key) else {
+            return Err("notAttached");
+        };
+        if !attached || state.generation != generation {
+            return Err("notAttached");
+        }
+        if !state.configured || state.raster != raster || state.last_sequence != sequence {
+            return Err("stale");
+        }
+        Ok(())
+    }
+
+    /// 현재 래스터의 프레임이 네이티브 표시 저장소에 복사되었음을 기록한다.
+    fn mark_presented(&self, key: &Key, generation: u64, raster: u64, sequence: i32) {
+        let mut inner = self.lock();
+        let Some(state) = inner.states.get_mut(key) else {
+            return;
+        };
+        if state.generation != generation
+            || state.raster != raster
+            || state.last_sequence != sequence
+        {
+            return;
+        }
+        if state.presented_raster != raster {
+            state.presented_raster = raster;
+            self.changed();
+        }
+    }
+
+    fn current_presented_locked(inner: &Inner) -> bool {
+        inner.states.iter().all(|(key, state)| {
+            let surface_visible = inner
+                .surface_visibility
+                .get(&key.0)
+                .copied()
+                .unwrap_or(true);
+            inner.handles.get(key).copied().unwrap_or_default() == 0
+                || !state.visible
+                || !surface_visible
+                || state.raster == 0
+                || state.presented_raster == state.raster
+        })
+    }
+
+    /// 보이는 모든 그림 영역이 현재 래스터를 표시했는지 반환한다.
+    pub fn current_presented(&self) -> bool {
+        Self::current_presented_locked(&self.lock())
+    }
+
+    /// 보이는 모든 그림 영역이 현재 래스터를 표시하거나 제한 시간이 끝날 때까지 기다린다.
+    pub fn wait_current(&self, timeout: Duration) -> bool {
+        let deadline = Instant::now() + timeout;
+        let mut inner = self.lock();
+        loop {
+            if Self::current_presented_locked(&inner) {
+                return true;
+            }
+            let Some(remaining) = deadline.checked_duration_since(Instant::now()) else {
+                return false;
+            };
+            let (next, result) = self
+                .shared
+                .changed
+                .wait_timeout(inner, remaining)
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            inner = next;
+            if result.timed_out() && !Self::current_presented_locked(&inner) {
+                return false;
+            }
+        }
     }
 }
 
@@ -194,7 +503,9 @@ fn owner(webview: &Webview, request: &Request) -> Result<(Key, tauri::Window), S
     let window = webview.window();
     let label = webview.label();
     let prefix = format!("surface-{}-", window.label());
-    let surface_id = label.strip_prefix(&prefix).ok_or_else(|| "invalid surface webview label".to_string())?;
+    let surface_id = label
+        .strip_prefix(&prefix)
+        .ok_or_else(|| "invalid surface webview label".to_string())?;
     let key = check(Some(surface_id), request)?;
     Ok((key, window))
 }
@@ -227,12 +538,15 @@ fn with_image<T: Send + 'static>(
     let window = webview.window();
     let label = webview.label().to_string();
     let prefix = format!("surface-{}-", window.label());
-    let surface_id = label.strip_prefix(&prefix).ok_or_else(|| "invalid surface webview label".to_string())?;
+    let surface_id = label
+        .strip_prefix(&prefix)
+        .ok_or_else(|| "invalid surface webview label".to_string())?;
     let key = check(Some(surface_id), request)?;
 
     let Ok(data) = window_data(&window) else {
         return Err("cannot get window data".to_string());
     };
+    require_region(&data.compositions, &key.0, &key.1, "image", None)?;
 
     on_main(&window, move || {
         let handle = data.images.get(&key)?;
@@ -247,7 +561,10 @@ pub(crate) fn attach(webview: &Webview, request: Request) -> Result<(), String> 
         .as_deref()
         .ok_or_else(|| format!("image {:?}: attach requires a sidecar", request.name))?;
     if sidecar.is_empty() {
-        return Err(format!("image {:?}: attach requires a sidecar", request.name));
+        return Err(format!(
+            "image {:?}: attach requires a sidecar",
+            request.name
+        ));
     }
 
     let (key, window) = owner(webview, &request)?;
@@ -255,6 +572,7 @@ pub(crate) fn attach(webview: &Webview, request: Request) -> Result<(), String> 
     let Ok(data) = window_data(&window) else {
         return Err("cannot get window data".to_string());
     };
+    require_region(&data.compositions, &key.0, &key.1, "image", Some(sidecar))?;
 
     // 이름을 먼저 차지한다. 네이티브 작업을 기다리는 동안 잠금을 쥐지 않는다.
     data.images.reserve(&key, "", sidecar)?;
@@ -277,48 +595,47 @@ pub(crate) fn attach(webview: &Webview, request: Request) -> Result<(), String> 
         if let Err(e) = data.images.remove(&key) {
             eprintln!("failed to remove image after failed set: {}", e);
         }
-        return Err(format!("surface {:?} closed while its image was created", key.0));
+        return Err(format!(
+            "surface {:?} closed while its image was created",
+            key.0
+        ));
     }
     exposure::window_changed(&window);
-    Ok(())
-}
-
-/// 그림 영역을 표면 뷰포트 여백으로 배치한다.
-pub(crate) fn place(webview: &Webview, request: Request) -> Result<(), String> {
-    let platform = platform::current()?;
-    let insets = Insets {
-        left: request.left,
-        top: request.top,
-        right: request.right,
-        bottom: request.bottom,
-    };
-    let visible = request.visible;
-    with_image(webview, &request, move |handle| {
-        platform.place_image(handle, insets, visible)
-    })?;
-    exposure::window_changed(&webview.window());
     Ok(())
 }
 
 /// 그림 영역을 첫 응답자로 만들고 포커스 이벤트를 보낸다.
 pub(crate) fn focus(webview: &Webview, request: Request) -> Result<(), String> {
     let platform = platform::current()?;
-    with_image(webview, &request, move |handle| platform.focus_image(handle))?;
+    with_image(webview, &request, move |handle| {
+        platform.focus_image(handle)
+    })?;
     exposure::window_changed(&webview.window());
     Ok(())
 }
 
 /// 캐럿(입력 커서) 위치를 받아 둔다.
-pub(crate) fn caret(webview: &Webview, request: Request, x: f64, y: f64, w: f64, h: f64) -> Result<(), String> {
+pub(crate) fn caret(
+    webview: &Webview,
+    request: Request,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+) -> Result<(), String> {
     let platform = platform::current()?;
-    with_image(webview, &request, move |handle| platform.caret_image(handle, x, y, w, h))?;
+    with_image(webview, &request, move |handle| {
+        platform.caret_image(handle, x, y, w, h)
+    })?;
     Ok(())
 }
 
 /// 접근성 값으로 보일 문자열을 받아 둔다.
 pub(crate) fn text(webview: &Webview, request: Request, text: String) -> Result<(), String> {
     let platform = platform::current()?;
-    with_image(webview, &request, move |handle| platform.text_image(handle, &text))?;
+    with_image(webview, &request, move |handle| {
+        platform.text_image(handle, &text)
+    })?;
     Ok(())
 }
 
@@ -328,6 +645,7 @@ pub(crate) fn detach(webview: &Webview, request: Request) -> Result<(), String> 
     let Ok(data) = window_data(&window) else {
         return Err("cannot get window data".to_string());
     };
+    require_region(&data.compositions, &key.0, &key.1, "image", None)?;
     let platform = platform::current()?;
 
     // 등록 해제와 닫기를 메인 스레드의 한 작업에서 한다.
@@ -344,8 +662,12 @@ pub(crate) fn detach(webview: &Webview, request: Request) -> Result<(), String> 
 
 /// 표면의 그림 영역을 모두 닫는다. 메인 스레드 작업을 기다리지 않으므로 어느 스레드에서나 호출한다.
 pub(crate) fn close_surface(window: &tauri::Window, surface: &str) {
-    let Ok(data) = window_data(window) else { return };
-    let Ok(platform) = platform::current() else { return };
+    let Ok(data) = window_data(window) else {
+        return;
+    };
+    let Ok(platform) = platform::current() else {
+        return;
+    };
     let host = window.clone();
     let surface = surface.to_string();
 
@@ -379,12 +701,26 @@ pub enum Decision {
     Present {
         id: u32,
         nonce: [u8; 16],
-        width: i32,
-        height: i32,
+        width: u32,
+        height: u32,
         scale: f64,
         name: String,
+        generation: u64,
+        raster: u64,
         sequence: i32,
     },
+}
+
+fn image_reply(reason: &str, name: &str, generation: u64, raster: u64, sequence: i32) -> Decision {
+    Decision::Reply {
+        name: name.to_string(),
+        json: serde_json::json!({
+            "image": {
+                "error": reason, "name": name, "generation": generation,
+                "raster": raster, "sequence": sequence
+            }
+        }),
+    }
 }
 
 /// 이미지 봉투를 파싱하고 유효성을 검사하여 의사 결정을 반환한다.
@@ -408,10 +744,12 @@ pub fn decide(body_str: &str, sender: &str, surface: &str, images: &Images) -> D
     struct ImageEnvelope {
         name: String,
         token: TokenInfo,
-        width: i32,
-        height: i32,
+        width: u32,
+        height: u32,
         scale: f64,
         format: String,
+        generation: u64,
+        raster: u64,
         sequence: i32,
     }
 
@@ -429,106 +767,100 @@ pub fn decide(body_str: &str, sender: &str, surface: &str, images: &Images) -> D
 
     // 포맷과 토큰 종류 검증
     if envelope.format != "bgra8" || envelope.token.kind != "iosurface-global" {
-        let name = envelope.name;
-        return Decision::Reply {
-            name: name.clone(),
-            json: serde_json::json!({
-                "image": {
-                    "error": "unsupported",
-                    "name": name,
-                    "sequence": envelope.sequence
-                }
-            }),
-        };
+        return image_reply(
+            "unsupported",
+            &envelope.name,
+            envelope.generation,
+            envelope.raster,
+            envelope.sequence,
+        );
     }
 
     // nonce 를 base64 에서 디코딩하여 [u8; 16] 배열로 변환
-    let decoded_nonce = match base64::engine::general_purpose::STANDARD.decode(&envelope.token.nonce) {
-        Ok(bytes) => bytes,
-        Err(_) => {
-            let name = envelope.name;
-            return Decision::Reply {
-                name: name.clone(),
-                json: serde_json::json!({
-                    "image": {
-                        "error": "unsupported",
-                        "name": name,
-                        "sequence": envelope.sequence
-                    }
-                }),
-            };
-        }
-    };
+    let decoded_nonce =
+        match base64::engine::general_purpose::STANDARD.decode(&envelope.token.nonce) {
+            Ok(bytes) => bytes,
+            Err(_) => {
+                return image_reply(
+                    "unsupported",
+                    &envelope.name,
+                    envelope.generation,
+                    envelope.raster,
+                    envelope.sequence,
+                );
+            }
+        };
 
     // 디코딩된 nonce 가 정확히 16바이트여야 함
     if decoded_nonce.len() != 16 {
-        let name = envelope.name;
-        return Decision::Reply {
-            name: name.clone(),
-            json: serde_json::json!({
-                "image": {
-                    "error": "unsupported",
-                    "name": name,
-                    "sequence": envelope.sequence
-                }
-            }),
-        };
+        return image_reply(
+            "unsupported",
+            &envelope.name,
+            envelope.generation,
+            envelope.raster,
+            envelope.sequence,
+        );
     }
 
     // nonce 를 [u8; 16] 배열로 변환
     let mut nonce: [u8; 16] = [0; 16];
     nonce.copy_from_slice(&decoded_nonce[..16]);
 
-    // 이미지가 등록되어 있고 발신자가 일치하는지 확인
     let key = (surface.to_string(), envelope.name.clone());
-    match images.get_sidecar(&key) {
-        Ok(registered_sender) if registered_sender == sender => {
-            // 발신자가 일치함 - 표시 가능
-            Decision::Present {
-                id: envelope.token.id,
-                nonce,
-                width: envelope.width,
-                height: envelope.height,
-                scale: envelope.scale,
-                name: envelope.name,
-                sequence: envelope.sequence,
-            }
-        }
-        _ => {
-            // 등록되지 않았거나 발신자가 다름
-            let name = envelope.name;
-            Decision::Reply {
-                name: name.clone(),
-                json: serde_json::json!({
-                    "image": {
-                        "error": "notAttached",
-                        "name": name,
-                        "sequence": envelope.sequence
-                    }
-                }),
-            }
-        }
+    if let Err(reason) = images.authorize_frame(
+        &key,
+        sender,
+        envelope.generation,
+        envelope.raster,
+        envelope.width,
+        envelope.height,
+        envelope.scale,
+        envelope.sequence,
+    ) {
+        return image_reply(
+            reason,
+            &envelope.name,
+            envelope.generation,
+            envelope.raster,
+            envelope.sequence,
+        );
+    }
+    Decision::Present {
+        id: envelope.token.id,
+        nonce,
+        width: envelope.width,
+        height: envelope.height,
+        scale: envelope.scale,
+        name: envelope.name,
+        generation: envelope.generation,
+        raster: envelope.raster,
+        sequence: envelope.sequence,
     }
 }
 
 /// 이미지 표시 후 응답을 생성한다.
-/// ok 가 true 면 released 응답을 반환하고, false 면 reason 을 오류로 반환한다.
-pub fn after_present(ok: bool, reason: Option<&str>, name: &str, sequence: i32) -> serde_json::Value {
+/// ok 가 true 면 consumed 응답을 반환하고, false 면 reason 을 오류로 반환한다.
+pub fn after_present(
+    ok: bool,
+    reason: Option<&str>,
+    name: &str,
+    generation: u64,
+    raster: u64,
+    sequence: i32,
+) -> serde_json::Value {
     if ok {
         serde_json::json!({
             "image": {
-                "released": {
-                    "name": name,
-                    "sequence": sequence
+                "consumed": {
+                    "name": name, "generation": generation, "raster": raster, "sequence": sequence
                 }
             }
         })
     } else {
         serde_json::json!({
             "image": {
-                "error": reason.unwrap_or("unknown"),
-                "name": name,
-                "sequence": sequence
+                "error": reason.unwrap_or("unknown"), "name": name,
+                "generation": generation, "raster": raster, "sequence": sequence
             }
         })
     }
@@ -565,37 +897,59 @@ where
             height,
             scale,
             name,
+            generation,
+            raster,
             sequence,
         } => {
             let key = (surface.to_string(), name.clone());
             match images.get(&key) {
                 Ok(handle) => {
-                    let ok = match on_main(Box::new(move || {
-                        match platform::current() {
-                            Ok(plat) => {
-                                plat.present_image(handle, id, nonce, width as f64, height as f64, scale).map(|_| ())
-                            }
-                            Err(e) => Err(e),
-                        }
-                    })) {
-                        Ok(()) => true,
+                    let current_images = images.clone();
+                    let current_key = key.clone();
+                    let presentation = on_main(Box::new(move || {
+                        current_images
+                            .frame_status(&current_key, generation, raster, sequence)
+                            .map_err(str::to_string)?;
+                        platform::current()?
+                            .present_image(handle, id, nonce, width as f64, height as f64, scale)
+                            .and_then(|presented| {
+                                presented
+                                    .then_some(())
+                                    .ok_or_else(|| "presentFailed".to_string())
+                            })
+                    }));
+                    let (ok, reason) = match presentation {
+                        Ok(()) => (true, None),
                         Err(e) => {
                             eprintln!("image present on main thread error: {}", e);
-                            false
+                            let reason = match e.as_str() {
+                                "stale" => "stale",
+                                "notAttached" => "notAttached",
+                                _ => "presentFailed",
+                            };
+                            (false, Some(reason))
                         }
                     };
 
                     let response = if ok {
-                        after_present(true, None, &name, sequence)
+                        images.mark_presented(&key, generation, raster, sequence);
+                        after_present(true, None, &name, generation, raster, sequence)
                     } else {
-                        after_present(false, Some("presentFailed"), &name, sequence)
+                        after_present(false, reason, &name, generation, raster, sequence)
                     };
                     if let Err(e) = send_response(&name, response) {
                         eprintln!("image response {}: {}", name, e);
                     }
                 }
                 Err(_) => {
-                    let response = after_present(false, Some("notAttached"), &name, sequence);
+                    let response = after_present(
+                        false,
+                        Some("notAttached"),
+                        &name,
+                        generation,
+                        raster,
+                        sequence,
+                    );
                     if let Err(e) = send_response(&name, response) {
                         eprintln!("image notAttached {}: {}", name, e);
                     }

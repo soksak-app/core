@@ -7,16 +7,17 @@ use serde_json::value::RawValue;
 use tauri::ipc::Invoke;
 use tauri::{AppHandle, Manager, Webview, Window};
 
+use crate::composition;
 use crate::documents;
+use crate::exposure::{self, Changed, Forward, Register};
 use crate::images;
 use crate::modals::{self, OverlayRequest, PlaceRequest, RevisedContent, UpdateRequest};
 use crate::projects::{self, CreateProject, Folder};
 use crate::shapes::{self, ShapeRequest};
 use crate::sidecars::WindowSidecars;
-use crate::surfaces::{self, Placement, PresentRequest, PreparedSurfaces, Rect, SyncRequest};
+use crate::surfaces::{self, Placement, PreparedSurfaces, PresentRequest, Rect, SyncRequest};
 use crate::theme::{self, Theme};
 use crate::windows::{self, Geometry, OpenProject};
-use crate::exposure::{self, Changed, Forward, Register};
 use crate::workspace;
 
 /// 모든 명령을 등록하는 핸들러를 반환한다.
@@ -34,6 +35,7 @@ pub(crate) fn handler() -> impl Fn(Invoke) -> bool + Send + Sync + 'static {
         project_create,
         sync_surfaces,
         present_surfaces,
+        wait_presented,
         overlay_show,
         overlay_place,
         set_shape,
@@ -53,12 +55,11 @@ pub(crate) fn handler() -> impl Fn(Invoke) -> bool + Send + Sync + 'static {
         exposure_forward,
         exposure_register,
         document_attach,
-        document_place,
         document_load,
         document_go,
         document_detach,
         image_attach,
-        image_place,
+        composition_place,
         image_focus,
         image_caret,
         image_text,
@@ -134,8 +135,17 @@ fn sync_surfaces(window: Window, request: SyncRequest) -> Result<PreparedSurface
 
 /// DOM 이 그린 표면 준비의 표시를 확인한다.
 #[tauri::command]
-async fn present_surfaces(window: Window, request: PresentRequest) -> Result<Vec<Placement>, String> {
+async fn present_surfaces(
+    window: Window,
+    request: PresentRequest,
+) -> Result<Vec<Placement>, String> {
     surfaces::present(window, request).await
+}
+
+/// 마지막 안정 프레임의 DOM과 네이티브 래스터 표시를 기다린다.
+#[tauri::command]
+async fn wait_presented(window: Window) -> Result<f64, String> {
+    exposure::presented(&window, exposure::TIMEOUT).map_err(|error| error.message)
 }
 
 /// 모달 요소를 메인 창 안의 웹뷰에 그린다.
@@ -188,7 +198,13 @@ fn overlay_hide(window: Window, id: String) -> Result<(), String> {
 
 /// 모달 문서의 선택을 페이지에 전달한다.
 #[tauri::command]
-fn overlay_pick(window: Window, id: String, instance: u64, key: String, value: String) -> Result<(), String> {
+fn overlay_pick(
+    window: Window,
+    id: String,
+    instance: u64,
+    key: String,
+    value: String,
+) -> Result<(), String> {
     modals::pick(&window, id, instance, key, value)
 }
 
@@ -200,8 +216,15 @@ fn window_controls(window: Window) -> Result<windows::Chrome, String> {
 
 /// 표면 페이지가 보낸 메시지를 사이드카에 전달한다.
 #[tauri::command]
-fn sidecar_send(window: Window, sidecar: String, surface: String, body: Box<RawValue>) -> Result<(), String> {
-    window.state::<WindowSidecars>().send(&window, &sidecar, &surface, &body)
+fn sidecar_send(
+    window: Window,
+    sidecar: String,
+    surface: String,
+    body: Box<RawValue>,
+) -> Result<(), String> {
+    window
+        .state::<WindowSidecars>()
+        .send(&window, &sidecar, &surface, &body)
 }
 
 /// 현재 테마를 반환한다.
@@ -254,10 +277,13 @@ fn document_attach(webview: Webview, request: documents::Request) -> Result<(), 
     documents::attach(&webview, request)
 }
 
-/// 문서 영역을 표면 뷰포트 여백으로 배치한다.
+/// 호출한 표면 페이지의 완전한 합성 리비전을 배치한다.
 #[tauri::command(async)]
-fn document_place(webview: Webview, request: documents::Request) -> Result<(), String> {
-    documents::place(&webview, request)
+fn composition_place(
+    webview: Webview,
+    request: composition::CompositionPlaceRequest,
+) -> Result<(), String> {
+    composition::place(&webview, request)
 }
 
 /// 문서 영역에 http 또는 https 주소를 연다.
@@ -284,12 +310,6 @@ fn image_attach(webview: Webview, request: images::Request) -> Result<(), String
     images::attach(&webview, request)
 }
 
-/// 그림 영역을 표면 뷰포트 여백으로 배치한다.
-#[tauri::command(async)]
-fn image_place(webview: Webview, request: images::Request) -> Result<(), String> {
-    images::place(&webview, request)
-}
-
 /// 그림 영역을 첫 응답자로 만들고 포커스 이벤트를 보낸다.
 #[tauri::command(async)]
 fn image_focus(webview: Webview, request: images::Request) -> Result<(), String> {
@@ -298,7 +318,14 @@ fn image_focus(webview: Webview, request: images::Request) -> Result<(), String>
 
 /// 캐럿(입력 커서) 위치를 받아 둔다.
 #[tauri::command(async)]
-fn image_caret(webview: Webview, request: images::Request, x: f64, y: f64, w: f64, h: f64) -> Result<(), String> {
+fn image_caret(
+    webview: Webview,
+    request: images::Request,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+) -> Result<(), String> {
     images::caret(&webview, request, x, y, w, h)
 }
 

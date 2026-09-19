@@ -19,7 +19,8 @@ pub fn identity(path: &Path) -> Result<String, String> {
         .map_err(|e| e.to_string())?;
     let mut info = BY_HANDLE_FILE_INFORMATION::default();
     unsafe {
-        GetFileInformationByHandle(HANDLE(file.as_raw_handle()), &mut info).map_err(|e| e.to_string())?;
+        GetFileInformationByHandle(HANDLE(file.as_raw_handle()), &mut info)
+            .map_err(|e| e.to_string())?;
     }
     Ok(format!(
         "{}:{}",

@@ -6,11 +6,14 @@ use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
-use tauri::{LogicalPosition, LogicalSize, Manager, Runtime, Webview, WebviewBuilder, WebviewUrl, Window};
+use tauri::webview::Color;
+use tauri::{
+    LogicalPosition, LogicalSize, Manager, Runtime, Webview, WebviewBuilder, WebviewUrl, Window,
+};
 
 use crate::documents;
-use crate::images;
 use crate::exposure;
+use crate::images;
 use crate::log_error;
 use crate::platform::{self, Handle};
 use crate::sidecars::WindowSidecars;
@@ -32,6 +35,114 @@ pub(crate) struct Surface {
     visible: bool,
     /// 페이지가 이 표면을 흐리게 표시하도록 요청했는지 나타낸다.
     dim: bool,
+    composition: SurfaceComposition,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub(crate) struct SurfaceRegion {
+    pub(crate) name: String,
+    pub(crate) kind: String,
+    #[serde(default)]
+    pub(crate) sidecar: String,
+    pub(crate) input: String,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub(crate) struct SurfaceComposition {
+    pub(crate) kind: String,
+    #[serde(default)]
+    pub(crate) regions: Vec<SurfaceRegion>,
+    pub(crate) overlays: Option<Vec<String>>,
+}
+
+fn valid_composition_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 64
+        && name
+            .chars()
+            .enumerate()
+            .all(|(i, ch)| ch.is_ascii_lowercase() || ch.is_ascii_digit() || (i > 0 && ch == '-'))
+}
+
+fn validate_composition(composition: &SurfaceComposition) -> Result<(), String> {
+    if composition.kind == "dom" {
+        if !composition.regions.is_empty()
+            || composition.overlays.as_ref().is_some_and(|v| !v.is_empty())
+        {
+            return Err("dom composition cannot declare regions or overlays".into());
+        }
+        return Ok(());
+    }
+    if composition.kind != "hybrid"
+        || composition.regions.is_empty()
+        || composition.overlays.is_none()
+    {
+        return Err("surface composition must be dom or a complete hybrid composition".into());
+    }
+    let mut seen = HashSet::new();
+    for region in &composition.regions {
+        if !valid_composition_name(&region.name) || !seen.insert(region.name.clone()) {
+            return Err(format!(
+                "invalid or duplicate composition name {:?}",
+                region.name
+            ));
+        }
+        match region.kind.as_str() {
+            "document" if region.input == "native" && region.sidecar.is_empty() => {}
+            "document" => {
+                return Err(format!(
+                    "document region {:?} must own native input",
+                    region.name
+                ))
+            }
+            "image" if region.input == "dom" && !region.sidecar.is_empty() => {}
+            "image" => {
+                return Err(format!(
+                    "image region {:?} requires DOM input and a sidecar",
+                    region.name
+                ))
+            }
+            _ => return Err(format!("unknown region kind {:?}", region.kind)),
+        }
+    }
+    for overlay in composition.overlays.as_ref().expect("checked above") {
+        if !valid_composition_name(overlay) || !seen.insert(overlay.clone()) {
+            return Err(format!("invalid or duplicate composition name {overlay:?}"));
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn require_region(
+    compositions: &Mutex<HashMap<String, SurfaceComposition>>,
+    surface: &str,
+    name: &str,
+    kind: &str,
+    sidecar: Option<&str>,
+) -> Result<(), String> {
+    let all = compositions.lock().map_err(|e| e.to_string())?;
+    let composition = all
+        .get(surface)
+        .ok_or_else(|| format!("surface {surface:?} has no composition declaration"))?;
+    let region = composition
+        .regions
+        .iter()
+        .find(|region| region.name == name)
+        .ok_or_else(|| format!("region {name:?} is not declared by surface {surface:?}"))?;
+    if region.kind != kind {
+        return Err(format!(
+            "region {name:?} is declared as {}, not {kind}",
+            region.kind
+        ));
+    }
+    if let Some(sidecar) = sidecar {
+        if region.sidecar != sidecar {
+            return Err(format!(
+                "image {name:?} is not declared for sidecar {sidecar:?}"
+            ));
+        }
+    }
+    Ok(())
 }
 
 #[derive(Debug, Deserialize)]
@@ -135,7 +246,12 @@ pub(crate) fn aligned(x: f64, y: f64, w: f64, h: f64, scale: f64) -> (f64, f64, 
     let top = (y * scale).ceil() / scale;
     let right = ((x + w) * scale).floor() / scale;
     let bottom = ((y + h) * scale).floor() / scale;
-    (left, top, (right - left).max(step), (bottom - top).max(step))
+    (
+        left,
+        top,
+        (right - left).max(step),
+        (bottom - top).max(step),
+    )
 }
 
 /// 창의 누름 감시를 한 번 시작한다.
@@ -164,7 +280,9 @@ fn watch_presses(window: &Window, views: &Views, watching: &Watching) -> Result<
                 }
                 let pressed = Box::new(move |chain: Vec<Handle>| {
                     let Ok(map) = named.lock() else { return false };
-                    let Some(id) = chain.iter().find_map(|view| map.get(view)) else { return false };
+                    let Some(id) = chain.iter().find_map(|view| map.get(view)) else {
+                        return false;
+                    };
                     let _ = emit_window(&host, "surface-pressed", id.clone());
                     true
                 });
@@ -189,10 +307,12 @@ pub(crate) fn isolate_webview(view: &Webview, page_focus: PageFocus) -> Result<(
     let platform = platform::current()?;
     let (tx, rx) = mpsc::channel();
     view.with_webview(move |webview| {
-        let isolated = platform.register_input(&webview).and_then(|registered| match page_focus {
-            PageFocus::Allowed => Ok(registered),
-            PageFocus::Ignored => Ok(registered && platform.ignore_page_focus(&webview)?),
-        });
+        let isolated = platform
+            .register_input(&webview)
+            .and_then(|registered| match page_focus {
+                PageFocus::Allowed => Ok(registered),
+                PageFocus::Ignored => Ok(registered && platform.ignore_page_focus(&webview)?),
+            });
         let _ = tx.send(isolated);
     })
     .map_err(|e| e.to_string())?;
@@ -220,6 +340,27 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
     let resizing = &context.resizing;
     let running = &context.running;
 
+    let mut ids = HashSet::new();
+    {
+        let held = context.compositions.lock().map_err(|e| e.to_string())?;
+        for surface in &request.surfaces {
+            if surface.id.is_empty() || !ids.insert(surface.id.clone()) {
+                return Err(format!("invalid or duplicate surface {:?}", surface.id));
+            }
+            validate_composition(&surface.composition)
+                .map_err(|e| format!("surface {:?}: {e}", surface.id))?;
+            if held
+                .get(&surface.id)
+                .is_some_and(|value| value != &surface.composition)
+            {
+                return Err(format!(
+                    "surface {:?} changed its composition declaration",
+                    surface.id
+                ));
+            }
+        }
+    }
+
     if !request.settled {
         announce_run(window, running, true)?;
     }
@@ -243,9 +384,17 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
     main.with_webview(move |webview| {
         let failed = tx.clone();
         let begun = platform.view_id(&webview).and_then(|handle| {
-            platform.begin_layout(owner, ticket, Box::new(move |allowed| {
-                let _ = tx.send(if allowed { Ok(handle) } else { Err("window closed before layout".into()) });
-            }))
+            platform.begin_layout(
+                owner,
+                ticket,
+                Box::new(move |allowed| {
+                    let _ = tx.send(if allowed {
+                        Ok(handle)
+                    } else {
+                        Err("window closed before layout".into())
+                    });
+                }),
+            )
         });
         if let Err(error) = begun {
             let _ = failed.send(Err(error));
@@ -258,11 +407,17 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
         let mut wanted: HashSet<String> = HashSet::new();
 
         for s in &request.surfaces {
+            context
+                .compositions
+                .lock()
+                .map_err(|e| e.to_string())?
+                .insert(s.id.clone(), s.composition.clone());
             let label = label_for(window, &s.id);
             wanted.insert(label.clone());
 
             // 크기가 0 인 웹뷰는 보이지 않고 일부 플랫폼은 거부하므로 숨긴 표면으로 처리한다.
             let visible = s.visible && s.w >= 1.0 && s.h >= 1.0;
+            context.images.set_surface_visible(&s.id, visible);
             let (ax, ay, aw, ah) = aligned(s.x, s.y, s.w.max(1.0), s.h.max(1.0), scale);
             let position = LogicalPosition::new(ax, ay);
             let size = LogicalSize::new(aw, ah);
@@ -277,6 +432,7 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
                 }
                 webview
                     .with_webview(move |view| {
+                        log_error(platform.set_surface_hidden(&view, !visible));
                         log_error(platform.set_alpha(&view, solid));
                         log_error(platform.place_webview(&view, ax, ay, aw, ah));
                     })
@@ -287,8 +443,15 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
             let target = WebviewUrl::App(s.url.clone().into());
             // 표면은 만들어질 때 키보드 초점을 가져가지 않는다. Tauri 의 기본값은 가져가는 것이라
             // 늦게 만들어진 표면이 열린 메뉴나 사용자가 입력 중인 문서의 초점을 빼앗는다.
-            let builder = WebviewBuilder::new(&label, target).initialization_script(background).focused(false);
-            window.add_child(builder, position, size).map_err(|e| e.to_string())?;
+            let mut builder = WebviewBuilder::new(&label, target)
+                .initialization_script(background)
+                .focused(false);
+            if s.composition.kind == "hybrid" {
+                builder = builder.background_color(Color(0, 0, 0, 0));
+            }
+            window
+                .add_child(builder, position, size)
+                .map_err(|e| e.to_string())?;
             if let Some(webview) = window.get_webview(&label) {
                 // 자식 웹뷰는 생성 시 표시 여부를 받지 않으므로 표시된 상태로 만들어진다.
                 // 숨긴 표면은 첫 프레임에 나타나기 전에 여기서 숨긴다.
@@ -301,8 +464,9 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
                 webview
                     .with_webview(move |view| {
                         let attached = platform
-                            .set_alpha(&view, solid)
-                            .and_then(|_| platform.attach_surface(&view, main_handle))
+                            .attach_surface(&view, main_handle)
+                            .and_then(|_| platform.set_surface_hidden(&view, !visible))
+                            .and_then(|_| platform.set_alpha(&view, solid))
                             .and_then(|_| platform.place_webview(&view, ax, ay, aw, ah))
                             .and_then(|_| platform.view_id(&view));
                         match attached {
@@ -333,28 +497,51 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
                 resizing.0.lock().map_err(|e| e.to_string())?.remove(&label);
                 // 맵의 키는 뷰 주소이고 시스템은 해제된 뷰의 주소를 재사용한다. 남은 항목은
                 // 존재하지 않는 표면을 가리키므로 뷰와 함께 제거한다.
-                let id = label.trim_start_matches(&format!("surface-{}-", window.label())).to_string();
+                let id = label
+                    .trim_start_matches(&format!("surface-{}-", window.label()))
+                    .to_string();
                 if let Ok(mut named) = views.0.lock() {
                     named.retain(|_, held| *held != id);
                 }
-                webview.close().map_err(|e| e.to_string())?;
                 documents::close_surface(window, &id);
                 images::close_surface(window, &id);
+                context.images.end_generation(&id);
+                webview
+                    .with_webview(move |view| log_error(platform.detach_surface(&view)))
+                    .map_err(|e| e.to_string())?;
+                webview.close().map_err(|e| e.to_string())?;
+                context
+                    .compositions
+                    .lock()
+                    .map_err(|e| e.to_string())?
+                    .remove(&id);
+                context
+                    .composition_revisions
+                    .lock()
+                    .map_err(|e| e.to_string())?
+                    .remove(&id);
                 exposure::surface_closed(window, &id);
             }
         }
         // 제거된 표면을 사이드카에 알린다.
         let alive: Vec<String> = request.surfaces.iter().map(|s| s.id.clone()).collect();
-        window.state::<WindowSidecars>().retain(window, &|id: &str| alive.iter().any(|s| s == id))?;
+        window
+            .state::<WindowSidecars>()
+            .retain(window, &|id: &str| alive.iter().any(|s| s == id))?;
 
         // 각 표면의 실제 위치를 반환한다. 호스트는 페이지가 선언한 사각형을 디스플레이 픽셀에
         // 맞추므로 두 값의 차이를 페이지에 알린다.
         let mut placed = Vec::with_capacity(request.surfaces.len());
         for s in &request.surfaces {
-            let Some(webview) = window.get_webview(&label_for(window, &s.id)) else { continue };
+            let Some(webview) = window.get_webview(&label_for(window, &s.id)) else {
+                continue;
+            };
             placed.push(surface_placement(&webview, &s.id)?);
         }
-        Ok(PreparedSurfaces { ticket, placements: placed })
+        Ok(PreparedSurfaces {
+            ticket,
+            placements: placed,
+        })
     })();
     if result.is_err() {
         main.with_webview(move |_| log_error(platform.commit_layout(owner, ticket).map(|_| ())))
@@ -372,50 +559,72 @@ fn surface_placement(view: &Webview, id: &str) -> Result<Placement, String> {
     })
     .map_err(|e| e.to_string())?;
     let [x, y, w, h] = rx.recv().map_err(|e| e.to_string())??;
-    Ok(Placement { id: id.into(), x, y, w, h })
+    Ok(Placement {
+        id: id.into(),
+        x,
+        y,
+        w,
+        h,
+    })
 }
 
 /// DOM 이 그린 준비의 표시를 확인한다. 이후 준비와 AppKit 이벤트 루프를 막지 않는다.
-pub(crate) async fn present(window: Window, request: PresentRequest) -> Result<Vec<Placement>, String> {
+pub(crate) async fn present(
+    window: Window,
+    request: PresentRequest,
+) -> Result<Vec<Placement>, String> {
     let platform = platform::current()?;
     let main = root_view(&window).ok_or("the main webview is gone")?;
     let ticket = request.ticket;
     let finished = window.clone();
     let context = window_data(&window)?;
     let owner = native_owner(&window)?;
-    let settled = request.settled;
     let held: Vec<_> = request
         .placements
         .into_iter()
-        .filter_map(|p| window.get_webview(&label_for(&window, &p.id)).map(|view| (view, p)))
+        .filter_map(|p| {
+            window
+                .get_webview(&label_for(&window, &p.id))
+                .map(|view| (view, p))
+        })
         .collect();
     let (tx, mut rx) = tauri::async_runtime::channel(1);
     main.with_webview(move |webview| {
         let failed = tx.clone();
-        let waiting = platform.after_presentation(&webview, Box::new(move || {
-            let committed = platform.commit_layout(owner, ticket);
-            let result = (|| -> Result<Vec<Placement>, String> {
-                let committed = committed.clone()?;
-                let mut placed = Vec::new();
-                for (view, p) in &held {
-                    placed.push(surface_placement(view, &p.id)?);
-                }
-                // 준비 갱신과 종료 판정을 같은 UI 스레드에서 순서대로 실행한다.
-                let running = &context.running;
-                if committed && settled && running.prepared.load(Ordering::Relaxed) == ticket {
-                    announce_run(&finished, running, false)?;
-                }
-                exposure::window_changed(&finished);
-                Ok(placed)
-            })();
-            let _ = tx.try_send(result);
-        }));
+        let waiting = platform.after_presentation(
+            &webview,
+            Box::new(move || {
+                let committed = platform.commit_layout(owner, ticket);
+                let result = (|| -> Result<Vec<Placement>, String> {
+                    let committed = committed.clone()?;
+                    let mut placed = Vec::new();
+                    for (view, p) in &held {
+                        placed.push(surface_placement(view, &p.id)?);
+                    }
+                    // 준비 갱신과 종료 판정을 같은 UI 스레드에서 순서대로 실행한다.
+                    let running = &context.running;
+                    if committed
+                        && request.settled
+                        && running.prepared.load(Ordering::Relaxed) == ticket
+                    {
+                        announce_run(&finished, running, false)?;
+                    }
+                    exposure::window_changed(&finished);
+                    Ok(placed)
+                })();
+                let _ = tx.try_send(result);
+            }),
+        );
         if let Err(error) = waiting {
             let _ = failed.try_send(Err(error));
         }
     })
     .map_err(|e| e.to_string())?;
-    rx.recv().await.ok_or("the main webview closed before presenting")?
+    let placed = rx
+        .recv()
+        .await
+        .ok_or("the main webview closed before presenting")??;
+    Ok(placed)
 }
 
 /// run-began 과 run-ended 를 발생시킨다. 페이지는 후속 갱신이 있는지 보고하고, 이 함수는 그
@@ -439,7 +648,11 @@ fn announce_run(window: &Window, running: &Running, going: bool) -> Result<(), S
 
 /// 뷰의 연속 크기 변경 시작과 종료를 전달한다. 두 호출은 쌍을 이루므로 뷰별 상태를 여기에
 /// 기록하고 변경만 전달한다.
-fn set_resizing<R: Runtime>(resizing: &Resizing, webview: &tauri::Webview<R>, live: bool) -> Result<(), String> {
+fn set_resizing<R: Runtime>(
+    resizing: &Resizing,
+    webview: &tauri::Webview<R>,
+    live: bool,
+) -> Result<(), String> {
     {
         let mut held = resizing.0.lock().map_err(|e| e.to_string())?;
         let label = webview.label().to_string();

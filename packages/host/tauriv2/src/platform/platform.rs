@@ -112,6 +112,21 @@ pub struct Insets {
     pub bottom: f64,
 }
 
+/// 선언된 DOM 오버레이의 표면 뷰포트 기준 CSS 픽셀 여백과 표시 여부.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct DOMOverlay {
+    pub insets: Insets,
+    pub visible: bool,
+}
+
+/// 적용된 그림 영역의 장치 픽셀 크기와 CSS 픽셀당 장치 픽셀 배율.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Raster {
+    pub width: u32,
+    pub height: u32,
+    pub scale: f64,
+}
+
 pub trait Platform: Send + Sync {
     // 창
 
@@ -146,11 +161,24 @@ pub trait Platform: Send + Sync {
     // 웹뷰
 
     /// 창 좌표의 사각형을 웹뷰의 부모 좌표로 변환해 배치한다.
-    fn place_webview(&self, view: &PlatformWebview, x: f64, y: f64, w: f64, h: f64) -> Result<(), String>;
+    fn place_webview(
+        &self,
+        view: &PlatformWebview,
+        x: f64,
+        y: f64,
+        w: f64,
+        h: f64,
+    ) -> Result<(), String>;
     /// 웹뷰의 현재 위치와 크기를 페이지 좌표로 반환한다.
     fn webview_frame(&self, view: &PlatformWebview) -> Result<[f64; 4], String>;
     /// 표면 웹뷰를 main 웹뷰의 표면 컨테이너에 등록한다.
     fn attach_surface(&self, view: &PlatformWebview, main: Handle) -> Result<(), String>;
+    /// 표면 웹뷰와 그 SurfaceHost를 표면 컨테이너에서 제거한다.
+    fn detach_surface(&self, view: &PlatformWebview) -> Result<(), String>;
+    /// SurfaceHost와 그 두 평면의 표시 여부를 함께 설정한다.
+    fn set_surface_hidden(&self, view: &PlatformWebview, hidden: bool) -> Result<(), String>;
+    /// 네이티브 입력보다 먼저 처리할 선언된 DOM 오버레이를 설정한다.
+    fn set_surface_overlays(&self, surface: Handle, overlays: &[DOMOverlay]) -> Result<(), String>;
     /// 웹뷰의 불투명도를 설정한다.
     fn set_alpha(&self, view: &PlatformWebview, alpha: f64) -> Result<(), String>;
     /// 연속적인 크기 변경의 시작과 종료를 웹뷰에 전달한다.
@@ -167,13 +195,19 @@ pub trait Platform: Send + Sync {
     /// 표면 웹뷰 surface 안에 외부 문서 웹뷰를 숨긴 상태로 만든다. store 는 영구 데이터 저장소의
     /// 이름이다. changed 는 상태 JSON({url, title, loading, progress, canGoBack, canGoForward,
     /// error, scroll}) 을 메인 스레드에서 받는다. 메인 스레드에서 호출한다.
-    fn create_document(&self, surface: Handle, store: &str, changed: Box<dyn Fn(String)>) -> Result<Handle, String>;
+    fn create_document(
+        &self,
+        surface: Handle,
+        store: &str,
+        changed: Box<dyn Fn(String)>,
+    ) -> Result<Handle, String>;
     /// http 또는 https 주소를 연다. 그 밖의 주소이면 false 를 반환한다. 메인 스레드에서 호출한다.
     fn load_document(&self, document: Handle, url: &str) -> Result<bool, String>;
     /// 뒤로 0, 앞으로 1, 다시 읽기 2, 멈춤 3 을 실행하고 실행했는지 반환한다. 메인 스레드에서 호출한다.
     fn go_document(&self, document: Handle, action: i32) -> Result<bool, String>;
     /// 표면 뷰포트의 CSS 픽셀 여백으로 문서 영역을 정한다. 메인 스레드에서 호출한다.
-    fn place_document(&self, document: Handle, insets: Insets, visible: bool) -> Result<(), String>;
+    fn place_document(&self, document: Handle, insets: Insets, visible: bool)
+        -> Result<(), String>;
     /// 대화 상자가 열린 동안 문서를 흐리게 표시한다. 메인 스레드에서 호출한다.
     fn set_document_background(&self, document: Handle, enabled: bool) -> Result<(), String>;
     /// 문서 웹뷰를 제거한다. 이후 changed 는 호출되지 않는다. 메인 스레드에서 호출한다.
@@ -186,14 +220,31 @@ pub trait Platform: Send + Sync {
     /// 표면 웹뷰 surface 안에 외부 그림 표시 영역을 만든다. name 은 영역 이름이다.
     /// event 는 키보드·IME·입력 이벤트를 JSON 문자열({key, insert, compose, focus, size, error})으로
     /// 메인 스레드에서 받는다. 메인 스레드에서 호출한다.
-    fn create_image(&self, surface: Handle, name: &str, event: Box<dyn Fn(String)>) -> Result<Handle, String>;
+    fn create_image(
+        &self,
+        surface: Handle,
+        name: &str,
+        event: Box<dyn Fn(String)>,
+    ) -> Result<Handle, String>;
     /// 표면 뷰포트의 CSS 픽셀 여백으로 그림 영역을 정한다. 메인 스레드에서 호출한다.
     fn place_image(&self, image: Handle, insets: Insets, visible: bool) -> Result<(), String>;
+    /// 적용된 그림 영역의 래스터 기하를 반환한다. 아직 유효한 크기가 없으면 None 이다.
+    fn image_raster(&self, image: Handle) -> Result<Option<Raster>, String>;
+    /// 그림 영역의 현재 프레임, 표시 래스터와 오류를 JSON 으로 반환한다. 메인 스레드에서 호출한다.
+    fn image_facts(&self, image: Handle) -> Result<String, String>;
     /// 외부 IOSurface 를 표시한다. token_id 는 IOSurface 의 전역 ID, nonce 는 논스 대조용
     /// 16바이트 데이터, width·height 는 장치 픽셀 단위의 크기, scale 은 이미지가 만들어진
     /// 배율이다. 성공하면 true, 찾지 못했거나 크기가 맞지 않으면 false 를 반환한다.
     /// 메인 스레드에서 호출한다.
-    fn present_image(&self, image: Handle, token_id: u32, nonce: [u8; 16], width: f64, height: f64, scale: f64) -> Result<bool, String>;
+    fn present_image(
+        &self,
+        image: Handle,
+        token_id: u32,
+        nonce: [u8; 16],
+        width: f64,
+        height: f64,
+        scale: f64,
+    ) -> Result<bool, String>;
     /// 영역을 첫 응답자로 만들고 포커스 이벤트를 보낸다. 메인 스레드에서 호출한다.
     fn focus_image(&self, image: Handle) -> Result<(), String>;
     /// 캐럿(입력 커서) 위치를 받아 둔다. 메인 스레드에서 호출한다.
@@ -206,13 +257,19 @@ pub trait Platform: Send + Sync {
     // 표면 배치
 
     /// 창의 표면 배치 트랜잭션 ticket 을 시작하고 시작 허용 여부를 ready 에 전달한다.
-    fn begin_layout(&self, window: Handle, ticket: u64, ready: Box<dyn Fn(bool)>) -> Result<(), String>;
+    fn begin_layout(
+        &self,
+        window: Handle,
+        ticket: u64,
+        ready: Box<dyn Fn(bool)>,
+    ) -> Result<(), String>;
     /// 표면 배치 트랜잭션 ticket 을 확정하고 확정 여부를 반환한다.
     fn commit_layout(&self, window: Handle, ticket: u64) -> Result<bool, String>;
     /// 창의 진행 중인 표면 배치 트랜잭션을 취소한다.
     fn cancel_layout(&self, window: Handle) -> Result<(), String>;
     /// 메인 문서와 표시 중인 문서의 렌더링이 끝난 뒤 done 을 호출한다.
-    fn after_presentation(&self, view: &PlatformWebview, done: Box<dyn Fn()>) -> Result<(), String>;
+    fn after_presentation(&self, view: &PlatformWebview, done: Box<dyn Fn()>)
+        -> Result<(), String>;
     /// 창에 열린 표면 배치 트랜잭션이 없는 상태에서 메인 문서와 표시 중인 문서의 렌더링이 끝난 뒤 done 을
     /// 호출한다. 인자는 그 화면이 표시되는 시각(ms, mach 절대 시각)이다.
     fn after_settled(&self, view: &PlatformWebview, done: Box<dyn Fn(f64)>) -> Result<(), String>;
@@ -224,7 +281,14 @@ pub trait Platform: Send + Sync {
     /// 도형 뷰를 배치하고 형제 뷰 위로 올린다.
     fn place_shape(&self, shape: Handle, frame: Frame) -> Result<(), String>;
     /// 도형의 모서리 반경, 선 두께, 채움 색, 선 색을 설정한다. 색은 0-1 범위의 RGBA 이다.
-    fn style_shape(&self, shape: Handle, radius: f64, line_width: f64, fill: [f64; 4], line: [f64; 4]) -> Result<(), String>;
+    fn style_shape(
+        &self,
+        shape: Handle,
+        radius: f64,
+        line_width: f64,
+        fill: [f64; 4],
+        line: [f64; 4],
+    ) -> Result<(), String>;
     /// 도형 뷰를 제거한다.
     fn destroy_shape(&self, shape: Handle) -> Result<(), String>;
 

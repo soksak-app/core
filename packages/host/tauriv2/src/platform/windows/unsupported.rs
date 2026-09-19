@@ -2,11 +2,14 @@
 
 use std::path::Path;
 
-use tauri::webview::PlatformWebview;
 use serde_json::Value;
+use tauri::webview::PlatformWebview;
 use tauri::Window;
 
-use super::super::{Connection, Delivery, Frame, Handle, Hit, Insets, Key, Listener, Pointer, WindowBuilder};
+use super::super::{
+    Connection, DOMOverlay, Delivery, Frame, Handle, Hit, Insets, Key, Listener, Pointer, Raster,
+    WindowBuilder,
+};
 
 /// operation 을 이름에 포함한 오류를 반환한다.
 fn missing<T>(operation: &str) -> Result<T, String> {
@@ -42,7 +45,13 @@ pub fn hit(_window: Handle, _x: f64, _y: f64) -> Result<Hit, String> {
     missing("hit testing")
 }
 
-pub fn place_webview(_view: &PlatformWebview, _x: f64, _y: f64, _w: f64, _h: f64) -> Result<(), String> {
+pub fn place_webview(
+    _view: &PlatformWebview,
+    _x: f64,
+    _y: f64,
+    _w: f64,
+    _h: f64,
+) -> Result<(), String> {
     missing("webview placement")
 }
 
@@ -52,6 +61,18 @@ pub fn webview_frame(_view: &PlatformWebview) -> Result<[f64; 4], String> {
 
 pub fn attach_surface(_view: &PlatformWebview, _main: Handle) -> Result<(), String> {
     missing("surface attachment")
+}
+
+pub fn detach_surface(_view: &PlatformWebview) -> Result<(), String> {
+    missing("surface detachment")
+}
+
+pub fn set_surface_hidden(_view: &PlatformWebview, _hidden: bool) -> Result<(), String> {
+    missing("surface visibility")
+}
+
+pub fn set_surface_overlays(_surface: Handle, _overlays: &[DOMOverlay]) -> Result<(), String> {
+    missing("surface DOM overlays")
 }
 
 pub fn set_alpha(_view: &PlatformWebview, _alpha: f64) -> Result<(), String> {
@@ -74,7 +95,11 @@ pub fn focus_webview(_view: &PlatformWebview) -> Result<(), String> {
     missing("webview focus")
 }
 
-pub fn create_document(_surface: Handle, _store: &str, _changed: Box<dyn Fn(String)>) -> Result<Handle, String> {
+pub fn create_document(
+    _surface: Handle,
+    _store: &str,
+    _changed: Box<dyn Fn(String)>,
+) -> Result<Handle, String> {
     missing("document view")
 }
 
@@ -102,7 +127,11 @@ pub fn view_id(_view: &PlatformWebview) -> Result<Handle, String> {
     missing("webview identity")
 }
 
-pub fn begin_layout(_window: Handle, _ticket: u64, _ready: Box<dyn Fn(bool)>) -> Result<(), String> {
+pub fn begin_layout(
+    _window: Handle,
+    _ticket: u64,
+    _ready: Box<dyn Fn(bool)>,
+) -> Result<(), String> {
     missing("surface layout")
 }
 
@@ -130,7 +159,13 @@ pub fn place_shape(_shape: Handle, _frame: Frame) -> Result<(), String> {
     missing("shapes")
 }
 
-pub fn style_shape(_shape: Handle, _radius: f64, _line_width: f64, _fill: [f64; 4], _line: [f64; 4]) -> Result<(), String> {
+pub fn style_shape(
+    _shape: Handle,
+    _radius: f64,
+    _line_width: f64,
+    _fill: [f64; 4],
+    _line: [f64; 4],
+) -> Result<(), String> {
     missing("shapes")
 }
 
@@ -249,7 +284,11 @@ pub fn endpoint_connect(_address: &str) -> Result<Box<dyn Connection>, String> {
     missing("local endpoint")
 }
 
-pub fn create_image(_surface: Handle, _name: &str, _event: Box<dyn Fn(String)>) -> Result<Handle, String> {
+pub fn create_image(
+    _surface: Handle,
+    _name: &str,
+    _event: Box<dyn Fn(String)>,
+) -> Result<Handle, String> {
     missing("image view")
 }
 
@@ -257,7 +296,22 @@ pub fn place_image(_image: Handle, _insets: Insets, _visible: bool) -> Result<()
     missing("image placement")
 }
 
-pub fn present_image(_image: Handle, _token_id: u32, _nonce: [u8; 16], _width: f64, _height: f64, _scale: f64) -> Result<bool, String> {
+pub fn image_raster(_image: Handle) -> Result<Option<Raster>, String> {
+    missing("image raster geometry")
+}
+
+pub fn image_facts(_image: Handle) -> Result<String, String> {
+    missing("image facts")
+}
+
+pub fn present_image(
+    _image: Handle,
+    _token_id: u32,
+    _nonce: [u8; 16],
+    _width: f64,
+    _height: f64,
+    _scale: f64,
+) -> Result<bool, String> {
     missing("image presentation")
 }
 

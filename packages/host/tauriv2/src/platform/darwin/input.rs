@@ -35,7 +35,13 @@ extern "C" {
         done: extern "C" fn(*mut c_void, i32, *const c_char),
         context: *mut c_void,
     );
-    fn sp_input_key(window: *mut c_void, key: *const c_char, text: *const c_char, modifiers: u32, down: bool) -> bool;
+    fn sp_input_key(
+        window: *mut c_void,
+        key: *const c_char,
+        text: *const c_char,
+        modifiers: u32,
+        down: bool,
+    ) -> bool;
 }
 
 /// sp_input_pointer 의 결과 값.
@@ -96,9 +102,15 @@ extern "C" fn activated(context: *mut c_void, result: i32, frontmost: *const c_c
     let frontmost = if frontmost.is_null() {
         "unknown".to_string()
     } else {
-        unsafe { std::ffi::CStr::from_ptr(frontmost) }.to_string_lossy().into_owned()
+        unsafe { std::ffi::CStr::from_ptr(frontmost) }
+            .to_string_lossy()
+            .into_owned()
     };
-    (activation.done)(activation_result(result, activation.timeout.as_secs_f64(), &frontmost));
+    (activation.done)(activation_result(
+        result,
+        activation.timeout.as_secs_f64(),
+        &frontmost,
+    ));
 }
 
 /// 활성화 결과를 멈춘 단계와 최전면 애플리케이션을 적은 오류로 바꾼다.
@@ -122,16 +134,36 @@ fn activation_result(result: i32, timeout: f64, frontmost: &str) -> Result<(), S
 /// 애플리케이션을 활성화하고 창을 키 창으로 만든 뒤 done 을 호출한다. 메인 스레드에서 호출한다.
 pub fn activate(window: Handle, timeout: Duration, done: Activated) {
     let context = Box::into_raw(Box::new(Activation { timeout, done })) as *mut c_void;
-    unsafe { sp_input_activate(window as *mut c_void, timeout.as_secs_f64(), activated, context) }
+    unsafe {
+        sp_input_activate(
+            window as *mut c_void,
+            timeout.as_secs_f64(),
+            activated,
+            context,
+        )
+    }
 }
 
 /// 창에 키 입력을 전달하고 전달 여부를 반환한다. 메인 스레드에서 호출한다. NUL 문자를 포함한
 /// 키 이름과 문자열은 오류를 반환한다.
 pub fn key(window: Handle, key: &Key) -> Result<bool, String> {
     let name = CString::new(key.key.as_str()).map_err(|e| e.to_string())?;
-    let text = key.text.as_deref().map(CString::new).transpose().map_err(|e| e.to_string())?;
+    let text = key
+        .text
+        .as_deref()
+        .map(CString::new)
+        .transpose()
+        .map_err(|e| e.to_string())?;
     let text = text.as_ref().map_or(std::ptr::null(), |text| text.as_ptr());
-    Ok(unsafe { sp_input_key(window as *mut c_void, name.as_ptr(), text, key.modifiers, key.down) })
+    Ok(unsafe {
+        sp_input_key(
+            window as *mut c_void,
+            name.as_ptr(),
+            text,
+            key.modifiers,
+            key.down,
+        )
+    })
 }
 
 /// 콘텐츠 영역 왼쪽 위 기준 점 x, y 에 있는 뷰와 그 상위 뷰 목록을 반환한다. 메인 스레드에서 호출한다.
@@ -147,7 +179,10 @@ pub fn hit(window: Handle, x: f64, y: f64) -> Result<Hit, String> {
         }
         let bounds: NSRect = msg_send![content, bounds];
         // hitTest: 는 받는 뷰의 부모 좌표를 사용한다.
-        let local = NSPoint { x, y: bounds.size.y - y };
+        let local = NSPoint {
+            x,
+            y: bounds.size.y - y,
+        };
         let parent: *mut AnyObject = msg_send![content, superview];
         let point: NSPoint = msg_send![content, convertPoint: local, toView: parent];
         let found: *mut AnyObject = msg_send![content, hitTest: point];
@@ -157,7 +192,9 @@ pub fn hit(window: Handle, x: f64, y: f64) -> Result<Hit, String> {
             if !name.is_null() {
                 let text: *const c_char = msg_send![name, UTF8String];
                 if !text.is_null() {
-                    identifier = std::ffi::CStr::from_ptr(text).to_string_lossy().into_owned();
+                    identifier = std::ffi::CStr::from_ptr(text)
+                        .to_string_lossy()
+                        .into_owned();
                 }
             }
         }
@@ -239,7 +276,11 @@ pub fn watch(
             // 이동과 놓음은 뷰를 다시 판정하지 않는다. 누름이 이 앱이 전달할 드래그인지 정했다.
             if kind == NS_EVENT_TYPE_LEFT_MOUSE_DRAGGED || kind == NS_EVENT_TYPE_LEFT_MOUSE_UP {
                 if dragging.get() {
-                    let phase = if kind == NS_EVENT_TYPE_LEFT_MOUSE_DRAGGED { 1 } else { 2 };
+                    let phase = if kind == NS_EVENT_TYPE_LEFT_MOUSE_DRAGGED {
+                        1
+                    } else {
+                        2
+                    };
                     pointed(phase, point.x, bounds.size.y - point.y);
                     if kind == NS_EVENT_TYPE_LEFT_MOUSE_UP {
                         dragging.set(false);
@@ -253,7 +294,11 @@ pub fn watch(
                 let first: *mut AnyObject = msg_send![window, firstResponder];
                 let class = AnyClass::get(c"NSView").expect("NSView");
                 let is_view: bool = msg_send![first, isKindOfClass: class];
-                if is_view { first } else { std::ptr::null_mut() }
+                if is_view {
+                    first
+                } else {
+                    std::ptr::null_mut()
+                }
             };
             let mut chain = Vec::new();
             while !view.is_null() {

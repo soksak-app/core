@@ -12,6 +12,7 @@ const COMMAND = {
   windowState: "window_state", windowReady: "window_ready", windowClose: "window_close",
   syncSurfaces: "sync_surfaces",
   presentSurfaces: "present_surfaces",
+  waitPresented: "wait_presented",
   setTheme: "set_theme",
   report: "report",
   overlayShow: "overlay_show",
@@ -25,7 +26,7 @@ const COMMAND = {
   exposureChanged: "exposure_changed",
   exposureForward: "exposure_forward",
   imageAttach: "image_attach",
-  imagePlace: "image_place",
+  compositionPlace: "composition_place",
   imageFocus: "image_focus",
   imageCaret: "image_caret",
   imageText: "image_text",
@@ -53,7 +54,7 @@ const ARG = {
   exposureChanged: (request) => ({ request }),
   exposureForward: (request) => ({ request }),
   imageAttach: (request) => ({ request }),
-  imagePlace: (request) => ({ request }),
+  compositionPlace: (request) => ({ request }),
   imageFocus: (request) => ({ request }),
   imageCaret: (request, x, y, w, h) => ({ request, x, y, w, h }),
   imageText: (request, text) => ({ request, text }),
@@ -111,8 +112,6 @@ export const page = (() => {
     // 이 표면의 문서 영역. 호스트는 호출한 웹뷰가 surface 인지 확인하고 상태를 이 표면에만 보낸다.
     document: {
       attach: (document) => invoke("document_attach", { request: { surface, document } }),
-      place: (document, insets, visible) =>
-        invoke("document_place", { request: { surface, document, ...insets, visible } }),
       load: (document, url) => invoke("document_load", { request: { surface, document, url } }),
       go: (document, action) => invoke("document_go", { request: { surface, document, action } }),
       detach: (document) => invoke("document_detach", { request: { surface, document } }),
@@ -123,8 +122,6 @@ export const page = (() => {
     // 이 표면의 그림 영역. 호스트는 호출한 웹뷰가 surface 인지 확인하고 이벤트를 이 표면에만 보낸다.
     image: {
       attach: (name, sidecar) => invoke("image_attach", { request: { surface, name, sidecar } }),
-      place: (name, insets, visible) =>
-        invoke("image_place", { request: { surface, name, ...insets, visible } }),
       focus: (name) => invoke("image_focus", { request: { surface, name } }),
       caret: (name, x, y, w, h) => invoke("image_caret", { request: { surface, name }, x, y, w, h }),
       text: (name, text) => invoke("image_text", { request: { surface, name }, text }),
@@ -132,6 +129,10 @@ export const page = (() => {
       on: (fn) => listen("image-event", (e) => {
         if (e.payload.surface === surface) fn(e.payload.name, e.payload.event);
       }),
+    },
+    composition: {
+      place: (revision, regions, overlays) =>
+        invoke("composition_place", { request: { surface, revision, regions, overlays } }),
     },
     modal: {
       content(id, instance, fn, place) {

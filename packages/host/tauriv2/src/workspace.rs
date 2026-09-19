@@ -55,7 +55,10 @@ fn write(path: &Path, value: &impl serde::Serialize) -> Result<(), String> {
 impl Workspace {
     /// directory 를 설정 디렉터리로 사용하는 저장소를 만든다.
     pub fn new(directory: PathBuf) -> Self {
-        Self { directory, writing: Mutex::new(()) }
+        Self {
+            directory,
+            writing: Mutex::new(()),
+        }
     }
 
     /// 설정 디렉터리.
@@ -75,17 +78,25 @@ impl Workspace {
         let mut projects: Vec<Value> = read(&registry)?;
         for project in &projects {
             let id = project["id"].as_str().ok_or("invalid project id")?;
-            if id.is_empty() || !id.bytes().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'-')
-                || project["root"].as_str().is_none_or(str::is_empty) || project["identity"].as_str().is_none_or(str::is_empty) {
+            if id.is_empty()
+                || !id
+                    .bytes()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'-')
+                || project["root"].as_str().is_none_or(str::is_empty)
+                || project["identity"].as_str().is_none_or(str::is_empty)
+            {
                 return Err(format!("{}: invalid project record", registry.display()));
             }
         }
-        let at = projects.iter().position(|p| p["id"].as_str() == req.id.as_deref());
+        let at = projects
+            .iter()
+            .position(|p| p["id"].as_str() == req.id.as_deref());
         match req.kind.as_str() {
             "snapshot" => {
                 let common: Map<String, Value> = read(&self.directory.join("settings.json"))?;
                 for project in &mut projects {
-                    let path = Path::new(project["root"].as_str().ok_or("invalid project root")?).join(".soksak/settings.json");
+                    let path = Path::new(project["root"].as_str().ok_or("invalid project root")?)
+                        .join(".soksak/settings.json");
                     let settings: Map<String, Value> = read(&path)?;
                     if settings.contains_key("projectOpening") {
                         return Err(format!("{}: projectOpening is common-only", path.display()));
@@ -96,18 +107,37 @@ impl Workspace {
             }
             "add" => {
                 let mut project = req.project.ok_or("project is missing")?;
-                if let Some(found) = projects.iter().find(|p| p["root"] == project["root"] || p["identity"] == project["identity"]) {
+                if let Some(found) = projects
+                    .iter()
+                    .find(|p| p["root"] == project["root"] || p["identity"] == project["identity"])
+                {
                     return Ok(found.clone());
                 }
-                project.as_object_mut().ok_or("invalid project")?.remove("settings");
+                project
+                    .as_object_mut()
+                    .ok_or("invalid project")?
+                    .remove("settings");
                 projects.push(project.clone());
                 write(&registry, &projects)?;
                 return Ok(project);
             }
             "patch" => {
-                let Some(at) = at else { return Ok(false.into()) };
+                let Some(at) = at else {
+                    return Ok(false.into());
+                };
                 for (key, value) in req.patch.unwrap_or_default() {
-                    if !["title", "color", "spaces", "activeSpaceId", "named", "geometry", "pinned", "lastOpened"].contains(&key.as_str()) {
+                    if ![
+                        "title",
+                        "color",
+                        "spaces",
+                        "activeSpaceId",
+                        "named",
+                        "geometry",
+                        "pinned",
+                        "lastOpened",
+                    ]
+                    .contains(&key.as_str())
+                    {
                         return Err(format!("invalid project field: {key}"));
                     }
                     projects[at][key] = value;
@@ -134,7 +164,12 @@ impl Workspace {
                     if patch.contains_key("projectOpening") {
                         return Err("projectOpening is common-only".into());
                     }
-                    Path::new(projects[at]["root"].as_str().ok_or("invalid project root")?).join(".soksak/settings.json")
+                    Path::new(
+                        projects[at]["root"]
+                            .as_str()
+                            .ok_or("invalid project root")?,
+                    )
+                    .join(".soksak/settings.json")
                 } else {
                     self.directory.join("settings.json")
                 };
@@ -160,7 +195,13 @@ impl Workspace {
 pub(crate) fn handle(app: &AppHandle, mut request: Request) -> Result<Value, String> {
     if request.kind == "add" {
         let project = request.project.as_mut().ok_or("project is missing")?;
-        let folder = project_folder(app, project["root"].as_str().ok_or("project directory is missing")?.into())?;
+        let folder = project_folder(
+            app,
+            project["root"]
+                .as_str()
+                .ok_or("project directory is missing")?
+                .into(),
+        )?;
         let folder = serde_json::to_value(folder).map_err(|e| e.to_string())?;
         project["root"] = folder["root"].clone();
         project["identity"] = folder["identity"].clone();

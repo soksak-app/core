@@ -84,13 +84,16 @@ impl Overlay {
     /// 열린 모달의 요소 id, 모드, 표시 여부를 반환한다.
     pub fn open_state(&self) -> Option<(String, String, bool)> {
         self.open.lock().ok().and_then(|open| {
-            open.as_ref().map(|modal| (modal.id.clone(), modal.content.mode.clone(), modal.visible))
+            open.as_ref()
+                .map(|modal| (modal.id.clone(), modal.content.mode.clone(), modal.visible))
         })
     }
 
     /// 열린 모달이 dialog 모드인지 반환한다.
     pub fn dialog(&self) -> bool {
-        self.open.lock().is_ok_and(|open| open.as_ref().is_some_and(|m| m.content.mode == "dialog"))
+        self.open
+            .lock()
+            .is_ok_and(|open| open.as_ref().is_some_and(|m| m.content.mode == "dialog"))
     }
 
     /// 모달 기록과 모달 웹뷰를 제거한다.
@@ -169,8 +172,10 @@ pub(crate) fn set_background(window: &Window, enabled: bool) -> Result<(), Strin
 /// 모달 웹뷰를 콘텐츠 좌표에 소수 픽셀을 반올림하지 않고 배치한다.
 fn place_overlay(view: &Webview, at: Rect) -> Result<(), String> {
     let platform = platform::current()?;
-    view.with_webview(move |webview| log_error(platform.place_webview(&webview, at.x, at.y, at.w, at.h)))
-        .map_err(|e| e.to_string())
+    view.with_webview(move |webview| {
+        log_error(platform.place_webview(&webview, at.x, at.y, at.w, at.h))
+    })
+    .map_err(|e| e.to_string())
 }
 
 /// 모달 요소 하나를 메인 창 안의 웹뷰에 그린다. 뷰는 문서가 내용을 그렸다고 보고할 때까지 숨긴다.
@@ -183,12 +188,24 @@ pub(crate) fn show(window: &Window, request: OverlayRequest) -> Result<Rect, Str
     state.discard()?;
     let instance = state.next.fetch_add(1, Ordering::Relaxed) + 1;
     let scale = window.scale_factor().map_err(|e| e.to_string())?;
-    let (x, y, w, h) = aligned(request.rect.x, request.rect.y, request.rect.w.max(1.0), request.rect.h.max(1.0), scale);
+    let (x, y, w, h) = aligned(
+        request.rect.x,
+        request.rect.y,
+        request.rect.w.max(1.0),
+        request.rect.h.max(1.0),
+        scale,
+    );
     let at = Rect { x, y, w, h };
-    let mut target = root_view(window).ok_or("the main webview is gone")?.url().map_err(|e| e.to_string())?;
+    let mut target = root_view(window)
+        .ok_or("the main webview is gone")?
+        .url()
+        .map_err(|e| e.to_string())?;
     target.set_path("/overlay.html");
     target.set_query(None);
-    target.query_pairs_mut().append_pair("id", &request.id).append_pair("instance", &instance.to_string());
+    target
+        .query_pairs_mut()
+        .append_pair("id", &request.id)
+        .append_pair("instance", &instance.to_string());
     *state.open.lock().map_err(|e| e.to_string())? = Some(Modal {
         id: request.id.clone(),
         instance,
@@ -210,10 +227,13 @@ pub(crate) fn show(window: &Window, request: OverlayRequest) -> Result<Rect, Str
     // 그릴 영역이 없는 빈 문서로 만들고 숨긴 뒤, overlay_ready 를 호출하는 문서로 이동하기 전에
     // 뷰를 기록한다. 빈 프레임 표시와 생성/준비 경쟁을 막는다.
     let built = window.add_child(
-        WebviewBuilder::new(format!("modal-{}-{instance}", window.label()), WebviewUrl::External("about:blank".parse().unwrap()))
-            .background_color(Color(0, 0, 0, 0))
-            // 모달은 내용이 렌더링된 뒤 ready 에서 초점을 받는다.
-            .focused(false),
+        WebviewBuilder::new(
+            format!("modal-{}-{instance}", window.label()),
+            WebviewUrl::External("about:blank".parse().unwrap()),
+        )
+        .background_color(Color(0, 0, 0, 0))
+        // 모달은 내용이 렌더링된 뒤 ready 에서 초점을 받는다.
+        .focused(false),
         LogicalPosition::new(x, y),
         LogicalSize::new(0.0, 0.0),
     );
@@ -227,7 +247,8 @@ pub(crate) fn show(window: &Window, request: OverlayRequest) -> Result<Rect, Str
     isolate_webview(&view, PageFocus::Ignored)?;
     view.hide().map_err(|e| e.to_string())?;
     place_overlay(&view, at)?;
-    view.set_auto_resize(request.mode == "dialog").map_err(|e| e.to_string())?;
+    view.set_auto_resize(request.mode == "dialog")
+        .map_err(|e| e.to_string())?;
     *state.view.lock().map_err(|e| e.to_string())? = Some(view.clone());
     if let Err(error) = view.navigate(target) {
         let _ = view.close();
@@ -247,27 +268,58 @@ pub(crate) fn place(window: &Window, request: PlaceRequest) -> Result<Rect, Stri
     let state = &context.overlay;
 
     let scale = window.scale_factor().map_err(|e| e.to_string())?;
-    let current = state.open.lock().map_err(|e| e.to_string())?.as_ref().is_some_and(|m| m.id == request.id);
-    let Some(view) = state.view.lock().map_err(|e| e.to_string())?.clone().filter(|_| current) else {
+    let current = state
+        .open
+        .lock()
+        .map_err(|e| e.to_string())?
+        .as_ref()
+        .is_some_and(|m| m.id == request.id);
+    let Some(view) = state
+        .view
+        .lock()
+        .map_err(|e| e.to_string())?
+        .clone()
+        .filter(|_| current)
+    else {
         return Ok(Rect::default());
     };
-    let (x, y, w, h) = aligned(request.rect.x, request.rect.y, request.rect.w.max(1.0), request.rect.h.max(1.0), scale);
+    let (x, y, w, h) = aligned(
+        request.rect.x,
+        request.rect.y,
+        request.rect.w.max(1.0),
+        request.rect.h.max(1.0),
+        scale,
+    );
     let at = Rect { x, y, w, h };
     place_overlay(&view, at)?;
-    if let Some(modal) = state.open.lock().map_err(|e| e.to_string())?.as_mut().filter(|m| m.id == request.id) {
+    if let Some(modal) = state
+        .open
+        .lock()
+        .map_err(|e| e.to_string())?
+        .as_mut()
+        .filter(|m| m.id == request.id)
+    {
         modal.at = at;
         modal.content.card = request.card;
         modal.revision += 1;
-        let position = ModalPosition { id: modal.id.clone(), instance: modal.instance, revision: modal.revision, card: request.card };
-        emit_window(window, "modal-position", position)
-            .map_err(|e| e.to_string())?;
+        let position = ModalPosition {
+            id: modal.id.clone(),
+            instance: modal.instance,
+            revision: modal.revision,
+            card: request.card,
+        };
+        emit_window(window, "modal-position", position).map_err(|e| e.to_string())?;
     }
     Ok(at)
 }
 
 /// id 와 instance 가 현재 모달과 같으면 모달 내용을 반환한다. 다른 모달이면 번호 0 의 빈 내용을
 /// 반환하고, 모달 페이지는 그것을 버린다.
-pub(crate) fn content(window: &Window, id: String, instance: u64) -> Result<RevisedContent, String> {
+pub(crate) fn content(
+    window: &Window,
+    id: String,
+    instance: u64,
+) -> Result<RevisedContent, String> {
     let context = window_data(window)?;
     let state = &context.overlay;
 
@@ -277,7 +329,10 @@ pub(crate) fn content(window: &Window, id: String, instance: u64) -> Result<Revi
         .map_err(|e| e.to_string())?
         .as_ref()
         .filter(|modal| modal.id == id && modal.instance == instance)
-        .map(|modal| RevisedContent { revision: modal.revision, content: modal.content.clone() })
+        .map(|modal| RevisedContent {
+            revision: modal.revision,
+            content: modal.content.clone(),
+        })
         .unwrap_or_default();
     // 검사가 응답을 붙잡았으면 놓을 때까지 보내지 않는다.
     #[cfg(feature = "diagnostics")]
@@ -290,10 +345,17 @@ pub(crate) fn ready(window: &Window, id: String, instance: u64) -> Result<(), St
     let context = window_data(window)?;
     let state = &context.overlay;
 
-    let Some(view) = state.view.lock().map_err(|e| e.to_string())?.clone() else { return Ok(()) };
+    let Some(view) = state.view.lock().map_err(|e| e.to_string())?.clone() else {
+        return Ok(());
+    };
     let first = {
         let mut held = state.open.lock().map_err(|e| e.to_string())?;
-        let Some(modal) = held.as_mut().filter(|m| m.id == id && m.instance == instance) else { return Ok(()) };
+        let Some(modal) = held
+            .as_mut()
+            .filter(|m| m.id == id && m.instance == instance)
+        else {
+            return Ok(());
+        };
         if modal.shown {
             emit_window(window, "modal-rendered", &id).map_err(|e| e.to_string())?;
             exposure::log(window, &format!("observe: modal rendered {id}"));
@@ -318,13 +380,18 @@ pub(crate) fn ready(window: &Window, id: String, instance: u64) -> Result<(), St
             eprintln!("modal {id}: {error}");
             return;
         }
-        let marked = window_data(&host).map_err(|e| e.to_string()).and_then(|context| {
-            let mut open = context.overlay.open.lock().map_err(|e| e.to_string())?;
-            if let Some(modal) = open.as_mut().filter(|m| m.id == id && m.instance == instance) {
-                modal.visible = true;
-            }
-            Ok(())
-        });
+        let marked = window_data(&host)
+            .map_err(|e| e.to_string())
+            .and_then(|context| {
+                let mut open = context.overlay.open.lock().map_err(|e| e.to_string())?;
+                if let Some(modal) = open
+                    .as_mut()
+                    .filter(|m| m.id == id && m.instance == instance)
+                {
+                    modal.visible = true;
+                }
+                Ok(())
+            });
         log_error(marked);
         log_error(emit_window(&host, "modal-rendered", &id).map_err(|e| e.to_string()));
         exposure::log(&host, &format!("observe: modal rendered {id}"));
@@ -355,13 +422,25 @@ pub(crate) fn hide(window: &Window, id: String) -> Result<(), String> {
 
 /// 현재 모달 문서의 선택을 페이지에 전달한다. 이전 문서는 뷰가 제거된 뒤에도 답을 보낼 수
 /// 있으므로 id 와 instance 를 확인한다.
-pub(crate) fn pick(window: &Window, id: String, instance: u64, key: String, value: String) -> Result<(), String> {
+pub(crate) fn pick(
+    window: &Window,
+    id: String,
+    instance: u64,
+    key: String,
+    value: String,
+) -> Result<(), String> {
     let context = window_data(window)?;
     let state = &context.overlay;
 
-    let current = state.open.lock().map_err(|e| e.to_string())?.as_ref().is_some_and(|m| m.id == id && m.instance == instance);
+    let current = state
+        .open
+        .lock()
+        .map_err(|e| e.to_string())?
+        .as_ref()
+        .is_some_and(|m| m.id == id && m.instance == instance);
     if current && root_view(window).is_some() {
-        emit_window(window, "overlay-pick", Picked { id, key, value }).map_err(|e| e.to_string())?;
+        emit_window(window, "overlay-pick", Picked { id, key, value })
+            .map_err(|e| e.to_string())?;
     }
     Ok(())
 }
@@ -375,12 +454,23 @@ pub(crate) fn update(window: &Window, request: UpdateRequest) -> Result<(), Stri
     let content = request.content;
     let (instance, revision) = {
         let mut held = overlay.open.lock().map_err(|e| e.to_string())?;
-        let Some(modal) = held.as_mut().filter(|m| m.id == request.id) else { return Ok(()) };
+        let Some(modal) = held.as_mut().filter(|m| m.id == request.id) else {
+            return Ok(());
+        };
         modal.content = content.clone();
         modal.revision += 1;
         (modal.instance, modal.revision)
     };
     // 모든 페이지가 이벤트를 받으므로 id 를 포함하고, 각 모달 페이지는 자신의 이벤트만 사용한다.
-    emit_window(window, "modal-content", ModalContentEvent { instance, id: request.id, revision, content })
-        .map_err(|e| e.to_string())
+    emit_window(
+        window,
+        "modal-content",
+        ModalContentEvent {
+            instance,
+            id: request.id,
+            revision,
+            content,
+        },
+    )
+    .map_err(|e| e.to_string())
 }

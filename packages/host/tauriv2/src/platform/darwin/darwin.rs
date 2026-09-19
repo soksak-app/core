@@ -7,13 +7,16 @@
 use std::fs::Metadata;
 use std::path::Path;
 
-use tauri::webview::PlatformWebview;
 use serde_json::Value;
+use tauri::webview::PlatformWebview;
 use tauri::Window;
 
 use std::time::Duration;
 
-use super::{Connection, Delivery, Frame, Handle, Hit, Insets, Key, Listener, Platform, Pointer, WindowBuilder};
+use super::{
+    Connection, DOMOverlay, Delivery, Frame, Handle, Hit, Insets, Key, Listener, Platform, Pointer,
+    Raster, WindowBuilder,
+};
 
 #[cfg(feature = "diagnostics")]
 #[path = "capture.rs"]
@@ -22,12 +25,12 @@ mod capture;
 mod dock;
 #[path = "document.rs"]
 mod document;
-#[path = "image.rs"]
-mod image;
 #[path = "endpoint.rs"]
 mod endpoint;
 #[path = "identity.rs"]
 mod identity;
+#[path = "image.rs"]
+mod image;
 #[path = "input.rs"]
 mod input;
 #[path = "layout.rs"]
@@ -64,7 +67,10 @@ struct NSRect {
 
 impl From<Frame> for NSRect {
     fn from((x, y, w, h): Frame) -> Self {
-        NSRect { origin: NSPoint { x, y }, size: NSPoint { x: w, y: h } }
+        NSRect {
+            origin: NSPoint { x, y },
+            size: NSPoint { x: w, y: h },
+        }
     }
 }
 
@@ -112,7 +118,14 @@ impl Platform for Darwin {
         true
     }
 
-    fn place_webview(&self, view: &PlatformWebview, x: f64, y: f64, w: f64, h: f64) -> Result<(), String> {
+    fn place_webview(
+        &self,
+        view: &PlatformWebview,
+        x: f64,
+        y: f64,
+        w: f64,
+        h: f64,
+    ) -> Result<(), String> {
         webview::place(view, x, y, w, h);
         Ok(())
     }
@@ -121,6 +134,18 @@ impl Platform for Darwin {
     }
     fn attach_surface(&self, view: &PlatformWebview, main: Handle) -> Result<(), String> {
         webview::attach_surface(view, main);
+        Ok(())
+    }
+    fn detach_surface(&self, view: &PlatformWebview) -> Result<(), String> {
+        webview::detach_surface(view);
+        Ok(())
+    }
+    fn set_surface_hidden(&self, view: &PlatformWebview, hidden: bool) -> Result<(), String> {
+        webview::hidden(view, hidden);
+        Ok(())
+    }
+    fn set_surface_overlays(&self, surface: Handle, overlays: &[DOMOverlay]) -> Result<(), String> {
+        webview::overlays(surface, overlays);
         Ok(())
     }
     fn set_alpha(&self, view: &PlatformWebview, alpha: f64) -> Result<(), String> {
@@ -142,7 +167,12 @@ impl Platform for Darwin {
     fn focus_webview(&self, view: &PlatformWebview) -> Result<(), String> {
         webview::focus(view)
     }
-    fn create_document(&self, surface: Handle, store: &str, changed: Box<dyn Fn(String)>) -> Result<Handle, String> {
+    fn create_document(
+        &self,
+        surface: Handle,
+        store: &str,
+        changed: Box<dyn Fn(String)>,
+    ) -> Result<Handle, String> {
         document::create(surface, store, changed)
     }
     fn load_document(&self, document: Handle, url: &str) -> Result<bool, String> {
@@ -151,7 +181,12 @@ impl Platform for Darwin {
     fn go_document(&self, document: Handle, action: i32) -> Result<bool, String> {
         Ok(document::go(document, action))
     }
-    fn place_document(&self, document: Handle, insets: Insets, visible: bool) -> Result<(), String> {
+    fn place_document(
+        &self,
+        document: Handle,
+        insets: Insets,
+        visible: bool,
+    ) -> Result<(), String> {
         document::place(document, insets, visible);
         Ok(())
     }
@@ -167,15 +202,43 @@ impl Platform for Darwin {
         Ok(webview::id(view))
     }
 
-    fn create_image(&self, surface: Handle, name: &str, event: Box<dyn Fn(String)>) -> Result<Handle, String> {
+    fn create_image(
+        &self,
+        surface: Handle,
+        name: &str,
+        event: Box<dyn Fn(String)>,
+    ) -> Result<Handle, String> {
         image::create(surface, name, event)
     }
     fn place_image(&self, image: Handle, insets: Insets, visible: bool) -> Result<(), String> {
-        image::place(image, insets.left, insets.top, insets.right, insets.bottom, visible);
+        image::place(
+            image,
+            insets.left,
+            insets.top,
+            insets.right,
+            insets.bottom,
+            visible,
+        );
         Ok(())
     }
-    fn present_image(&self, image: Handle, token_id: u32, nonce: [u8; 16], width: f64, height: f64, scale: f64) -> Result<bool, String> {
-        Ok(image::present(image, token_id, &nonce, width, height, scale))
+    fn image_raster(&self, image: Handle) -> Result<Option<Raster>, String> {
+        Ok(image::raster(image))
+    }
+    fn image_facts(&self, image: Handle) -> Result<String, String> {
+        image::facts(image)
+    }
+    fn present_image(
+        &self,
+        image: Handle,
+        token_id: u32,
+        nonce: [u8; 16],
+        width: f64,
+        height: f64,
+        scale: f64,
+    ) -> Result<bool, String> {
+        Ok(image::present(
+            image, token_id, &nonce, width, height, scale,
+        ))
     }
     fn focus_image(&self, image: Handle) -> Result<(), String> {
         image::focus(image);
@@ -193,7 +256,12 @@ impl Platform for Darwin {
         Ok(())
     }
 
-    fn begin_layout(&self, window: Handle, ticket: u64, ready: Box<dyn Fn(bool)>) -> Result<(), String> {
+    fn begin_layout(
+        &self,
+        window: Handle,
+        ticket: u64,
+        ready: Box<dyn Fn(bool)>,
+    ) -> Result<(), String> {
         layout::begin(window, ticket, ready);
         Ok(())
     }
@@ -204,7 +272,11 @@ impl Platform for Darwin {
         layout::cancel(window);
         Ok(())
     }
-    fn after_presentation(&self, view: &PlatformWebview, done: Box<dyn Fn()>) -> Result<(), String> {
+    fn after_presentation(
+        &self,
+        view: &PlatformWebview,
+        done: Box<dyn Fn()>,
+    ) -> Result<(), String> {
         layout::after_presentation(view, done);
         Ok(())
     }
@@ -220,7 +292,14 @@ impl Platform for Darwin {
         shapes::place(shape, frame);
         Ok(())
     }
-    fn style_shape(&self, shape: Handle, radius: f64, line_width: f64, fill: [f64; 4], line: [f64; 4]) -> Result<(), String> {
+    fn style_shape(
+        &self,
+        shape: Handle,
+        radius: f64,
+        line_width: f64,
+        fill: [f64; 4],
+        line: [f64; 4],
+    ) -> Result<(), String> {
         shapes::style(shape, radius, line_width, fill, line);
         Ok(())
     }
@@ -247,11 +326,22 @@ impl Platform for Darwin {
         input::unwatch(monitor);
         Ok(())
     }
-    fn input_pointer(&self, window: Handle, pointer: Pointer, receive: Duration, done: Box<dyn FnOnce(Delivery) + Send>) -> Result<(), String> {
+    fn input_pointer(
+        &self,
+        window: Handle,
+        pointer: Pointer,
+        receive: Duration,
+        done: Box<dyn FnOnce(Delivery) + Send>,
+    ) -> Result<(), String> {
         input::pointer(window, pointer, receive, done);
         Ok(())
     }
-    fn input_activate(&self, window: Handle, timeout: Duration, done: Box<dyn FnOnce(Result<(), String>) + Send>) -> Result<(), String> {
+    fn input_activate(
+        &self,
+        window: Handle,
+        timeout: Duration,
+        done: Box<dyn FnOnce(Result<(), String>) + Send>,
+    ) -> Result<(), String> {
         input::activate(window, timeout, done);
         Ok(())
     }

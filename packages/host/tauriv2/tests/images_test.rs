@@ -1,7 +1,32 @@
 //! 그림 봉투의 의사결정 로직과 표현 확인을 검사한다.
 
 use serde_json::json;
-use soksak_host_tauriv2::images::{Images, Key, decide, Decision, after_present};
+use soksak_host_tauriv2::images::{
+    after_present, decide, handle_envelope, Configure, Decision, Images, Key,
+};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
+fn configured_envelope(configuration: &Configure, sequence: i32) -> String {
+    json!({
+        "image": {
+            "name": &configuration.name,
+            "token": {
+                "kind": "iosurface-global",
+                "id": 12345u32,
+                "nonce": "AAAAAAAAAAAAAAAAAAAAAA=="
+            },
+            "width": configuration.width,
+            "height": configuration.height,
+            "scale": configuration.scale,
+            "format": "bgra8",
+            "generation": configuration.generation,
+            "raster": configuration.raster,
+            "sequence": sequence
+        }
+    })
+    .to_string()
+}
 
 #[test]
 fn reserve_rejects_empty_sidecar() {
@@ -17,7 +42,10 @@ fn reserve_rejects_empty_sidecar() {
     );
 
     // 이미지가 등록되지 않았는지 확인
-    assert!(images.get(&key).is_err(), "image should not be registered after failed reserve");
+    assert!(
+        images.get(&key).is_err(),
+        "image should not be registered after failed reserve"
+    );
 }
 
 #[test]
@@ -36,15 +64,21 @@ fn unattached_image_is_refused() {
             "height": 600,
             "scale": 2.0,
             "format": "bgra8",
+            "generation": 1,
+            "raster": 1,
             "sequence": 1
         }
-    }).to_string();
+    })
+    .to_string();
 
     // 이미지가 등록되지 않았으므로 notAttached 오류를 반환해야 함
     match decide(&body, "sidecar-a", "tab-1", &images) {
         Decision::Reply { name, json } => {
             assert_eq!(name, "view");
-            assert!(json["image"]["error"].as_str().unwrap().contains("notAttached"));
+            assert!(json["image"]["error"]
+                .as_str()
+                .unwrap()
+                .contains("notAttached"));
             assert_eq!(json["image"]["name"], "view");
             assert_eq!(json["image"]["sequence"], 1);
         }
@@ -58,7 +92,9 @@ fn image_from_another_sidecar_is_refused() {
     let key: Key = ("tab-1".to_string(), "view".to_string());
 
     // 첫 번째 사이드카가 이미지를 등록
-    images.reserve(&key, "owner-a", "sidecar-a").expect("reserve");
+    images
+        .reserve(&key, "owner-a", "sidecar-a")
+        .expect("reserve");
     images.set(&key, 100);
 
     let nonce_b64 = "AAAAAAAAAAAAAAAAAAAAAA==";
@@ -74,15 +110,21 @@ fn image_from_another_sidecar_is_refused() {
             "height": 600,
             "scale": 2.0,
             "format": "bgra8",
+            "generation": 1,
+            "raster": 1,
             "sequence": 1
         }
-    }).to_string();
+    })
+    .to_string();
 
     // 다른 사이드카가 같은 이미지를 보내면 notAttached 오류를 반환해야 함
     match decide(&body, "sidecar-b", "tab-1", &images) {
         Decision::Reply { name, json } => {
             assert_eq!(name, "view");
-            assert!(json["image"]["error"].as_str().unwrap().contains("notAttached"));
+            assert!(json["image"]["error"]
+                .as_str()
+                .unwrap()
+                .contains("notAttached"));
         }
         _ => panic!("expected Reply(notAttached) for different sidecar"),
     }
@@ -94,8 +136,14 @@ fn attached_image_is_presented() {
     let key: Key = ("tab-1".to_string(), "view".to_string());
 
     // 사이드카가 이미지를 등록
-    images.reserve(&key, "owner-a", "sidecar-a").expect("reserve");
+    images
+        .reserve(&key, "owner-a", "sidecar-a")
+        .expect("reserve");
     images.set(&key, 100);
+    let configured = images
+        .configure_raster(&key, 800, 600, 2.0, true)
+        .unwrap()
+        .unwrap();
 
     let nonce_b64 = "AAAAAAAAAAAAAAAAAAAAAA==";
     let body = json!({
@@ -110,9 +158,12 @@ fn attached_image_is_presented() {
             "height": 600,
             "scale": 2.0,
             "format": "bgra8",
+            "generation": configured.generation,
+            "raster": configured.raster,
             "sequence": 1
         }
-    }).to_string();
+    })
+    .to_string();
 
     // 같은 사이드카가 같은 이미지를 보내면 Present를 반환해야 함
     match decide(&body, "sidecar-a", "tab-1", &images) {
@@ -123,6 +174,8 @@ fn attached_image_is_presented() {
             height,
             scale,
             name,
+            generation,
+            raster,
             sequence,
         } => {
             assert_eq!(id, 12345u32);
@@ -131,6 +184,8 @@ fn attached_image_is_presented() {
             assert_eq!(height, 600);
             assert_eq!(scale, 2.0);
             assert_eq!(name, "view");
+            assert_eq!(generation, configured.generation);
+            assert_eq!(raster, configured.raster);
             assert_eq!(sequence, 1);
         }
         _ => panic!("expected Present"),
@@ -138,19 +193,183 @@ fn attached_image_is_presented() {
 }
 
 #[test]
-fn successful_present_is_released() {
-    let response = after_present(true, None, "view", 1);
-    assert!(response["image"]["released"].is_object());
-    assert_eq!(response["image"]["released"]["name"], "view");
-    assert_eq!(response["image"]["released"]["sequence"], 1);
+fn successful_present_is_consumed() {
+    let response = after_present(true, None, "view", 7, 3, 1);
+    assert!(response["image"]["consumed"].is_object());
+    assert_eq!(response["image"]["consumed"]["name"], "view");
+    assert_eq!(response["image"]["consumed"]["generation"], 7);
+    assert_eq!(response["image"]["consumed"]["raster"], 3);
+    assert_eq!(response["image"]["consumed"]["sequence"], 1);
+}
+
+#[test]
+fn only_the_current_generation_raster_and_sequence_can_be_presented() {
+    let images = Images::default();
+    let key: Key = ("tab-1".to_string(), "view".to_string());
+
+    let first_generation = images.begin_generation(&key.0);
+    images.reserve(&key, "owner", "sidecar-a").unwrap();
+    assert!(images.set(&key, 100));
+    let first_raster = images
+        .configure_raster(&key, 800, 600, 2.0, true)
+        .unwrap()
+        .unwrap();
+    assert_eq!(first_raster.generation, first_generation);
+    assert!(matches!(
+        decide(
+            &configured_envelope(&first_raster, 1),
+            "sidecar-a",
+            &key.0,
+            &images
+        ),
+        Decision::Present { .. }
+    ));
+    match decide(
+        &configured_envelope(&first_raster, 1),
+        "sidecar-a",
+        &key.0,
+        &images,
+    ) {
+        Decision::Reply { json, .. } => assert_eq!(json["image"]["error"], "stale"),
+        other => panic!("duplicate sequence was not stale: {other:?}"),
+    }
+
+    let second_raster = images
+        .configure_raster(&key, 900, 600, 2.0, true)
+        .unwrap()
+        .unwrap();
+    assert!(second_raster.raster > first_raster.raster);
+    match decide(
+        &configured_envelope(&first_raster, 2),
+        "sidecar-a",
+        &key.0,
+        &images,
+    ) {
+        Decision::Reply { json, .. } => assert_eq!(json["image"]["error"], "stale"),
+        other => panic!("old raster was not stale: {other:?}"),
+    }
+    assert!(matches!(
+        decide(
+            &configured_envelope(&second_raster, 1),
+            "sidecar-a",
+            &key.0,
+            &images
+        ),
+        Decision::Present { .. }
+    ));
+
+    images.remove(&key).unwrap();
+    images.end_generation(&key.0);
+    let second_generation = images.begin_generation(&key.0);
+    assert!(second_generation > first_generation);
+    images.reserve(&key, "owner", "sidecar-a").unwrap();
+    assert!(images.set(&key, 101));
+    images
+        .configure_raster(&key, 800, 600, 2.0, true)
+        .unwrap()
+        .unwrap();
+    match decide(
+        &configured_envelope(&first_raster, 3),
+        "sidecar-a",
+        &key.0,
+        &images,
+    ) {
+        Decision::Reply { json, .. } => assert_eq!(json["image"]["error"], "notAttached"),
+        other => panic!("old generation was not rejected: {other:?}"),
+    }
+}
+
+#[test]
+fn presentation_wait_tracks_the_visible_current_raster() {
+    let images = Images::default();
+    let key: Key = ("tab-1".to_string(), "view".to_string());
+    images.reserve(&key, "owner", "sidecar-a").unwrap();
+    assert!(images.set(&key, 100));
+    let first = images
+        .configure_raster(&key, 800, 600, 2.0, true)
+        .unwrap()
+        .unwrap();
+    assert!(!images.wait_current(Duration::ZERO));
+
+    let response = Arc::new(Mutex::new(None));
+    let received = Arc::clone(&response);
+    assert!(handle_envelope(
+        &configured_envelope(&first, 1),
+        "sidecar-a",
+        &key.0,
+        &images,
+        |_work| Ok(()),
+        move |_image, value| {
+            *received.lock().unwrap() = Some(value);
+            Ok(())
+        },
+    ));
+    assert!(response.lock().unwrap().as_ref().unwrap()["image"]["consumed"].is_object());
+    assert!(images.wait_current(Duration::ZERO));
+
+    let second = images
+        .configure_raster(&key, 900, 600, 2.0, true)
+        .unwrap()
+        .unwrap();
+    assert!(second.raster > first.raster);
+    assert!(!images.current_presented());
+    images.set_visible(&key, false).unwrap();
+    assert!(images.wait_current(Duration::ZERO));
+    images.set_visible(&key, true).unwrap();
+    assert!(!images.wait_current(Duration::ZERO));
+    images.set_surface_visible(&key.0, false);
+    assert!(images.wait_current(Duration::ZERO));
+    images.set_surface_visible(&key.0, true);
+    assert!(!images.wait_current(Duration::ZERO));
+    images.end_generation(&key.0);
+    assert!(images.wait_current(Duration::ZERO));
+}
+
+#[test]
+fn frame_that_becomes_stale_before_main_thread_presentation_is_rejected() {
+    let images = Images::default();
+    let key: Key = ("tab-1".to_string(), "view".to_string());
+    images.reserve(&key, "owner", "sidecar-a").unwrap();
+    assert!(images.set(&key, 100));
+    let first = images
+        .configure_raster(&key, 800, 600, 2.0, true)
+        .unwrap()
+        .unwrap();
+    let response = Arc::new(Mutex::new(None));
+    let received = Arc::clone(&response);
+    let changed = images.clone();
+    let changed_key = key.clone();
+
+    assert!(handle_envelope(
+        &configured_envelope(&first, 1),
+        "sidecar-a",
+        &key.0,
+        &images,
+        move |work| {
+            changed.configure_raster(&changed_key, 900, 600, 2.0, true)?;
+            work()
+        },
+        move |_image, value| {
+            *received.lock().unwrap() = Some(value);
+            Ok(())
+        },
+    ));
+
+    assert_eq!(
+        response.lock().unwrap().as_ref().unwrap()["image"]["error"],
+        "stale"
+    );
+    assert!(!images.current_presented());
 }
 
 #[test]
 fn failed_present_is_reported() {
-    let response = after_present(false, Some("forbidden"), "view", 1);
+    let response = after_present(false, Some("forbidden"), "view", 7, 3, 1);
     assert!(response["image"]["error"].is_string());
     assert_eq!(response["image"]["error"], "forbidden");
     assert_eq!(response["image"]["name"], "view");
+    assert_eq!(response["image"]["generation"], 7);
+    assert_eq!(response["image"]["raster"], 3);
     assert_eq!(response["image"]["sequence"], 1);
 }
 
@@ -171,14 +390,20 @@ fn unsupported_image_is_refused() {
             "height": 600,
             "scale": 2.0,
             "format": "rgba8",  // 잘못된 포맷
+            "generation": 1,
+            "raster": 1,
             "sequence": 1
         }
-    }).to_string();
+    })
+    .to_string();
 
     match decide(&body_wrong_format, "sidecar-a", "tab-1", &images) {
         Decision::Reply { name, json } => {
             assert_eq!(name, "view");
-            assert!(json["image"]["error"].as_str().unwrap().contains("unsupported"));
+            assert!(json["image"]["error"]
+                .as_str()
+                .unwrap()
+                .contains("unsupported"));
         }
         _ => panic!("expected Reply(unsupported) for wrong format"),
     }
@@ -196,14 +421,20 @@ fn unsupported_image_is_refused() {
             "height": 600,
             "scale": 2.0,
             "format": "bgra8",
+            "generation": 1,
+            "raster": 1,
             "sequence": 1
         }
-    }).to_string();
+    })
+    .to_string();
 
     match decide(&body_wrong_nonce, "sidecar-a", "tab-1", &images) {
         Decision::Reply { name, json } => {
             assert_eq!(name, "view");
-            assert!(json["image"]["error"].as_str().unwrap().contains("unsupported"));
+            assert!(json["image"]["error"]
+                .as_str()
+                .unwrap()
+                .contains("unsupported"));
         }
         _ => panic!("expected Reply(unsupported) for wrong nonce length"),
     }
@@ -221,14 +452,20 @@ fn unsupported_image_is_refused() {
             "height": 600,
             "scale": 2.0,
             "format": "bgra8",
+            "generation": 1,
+            "raster": 1,
             "sequence": 1
         }
-    }).to_string();
+    })
+    .to_string();
 
     match decide(&body_wrong_kind, "sidecar-a", "tab-1", &images) {
         Decision::Reply { name, json } => {
             assert_eq!(name, "view");
-            assert!(json["image"]["error"].as_str().unwrap().contains("unsupported"));
+            assert!(json["image"]["error"]
+                .as_str()
+                .unwrap()
+                .contains("unsupported"));
         }
         _ => panic!("expected Reply(unsupported) for wrong token kind"),
     }
@@ -241,7 +478,8 @@ fn non_image_body_is_not_handled() {
     // 이미지 필드가 없는 경우
     let body_no_image = json!({
         "other": "data"
-    }).to_string();
+    })
+    .to_string();
 
     match decide(&body_no_image, "sidecar-a", "tab-1", &images) {
         Decision::NotImage => {
@@ -278,9 +516,12 @@ fn reply_escapes_names() {
             "height": 600,
             "scale": 2.0,
             "format": "bgra8",
+            "generation": 1,
+            "raster": 1,
             "sequence": 1
         }
-    }).to_string();
+    })
+    .to_string();
 
     // 등록되지 않은 이미지이므로 Reply가 반환되어야 함
     match decide(&body, "sidecar-a", "tab-1", &images) {
@@ -305,13 +546,19 @@ fn surface_close_removes_only_its_images() {
     let surface_2_img: Key = ("tab-2".to_string(), "view".to_string());
 
     // tab-1에 2개 이미지 등록
-    images.reserve(&surface_1_img_1, "owner", "sidecar").expect("reserve");
+    images
+        .reserve(&surface_1_img_1, "owner", "sidecar")
+        .expect("reserve");
     images.set(&surface_1_img_1, 100);
-    images.reserve(&surface_1_img_2, "owner", "sidecar").expect("reserve");
+    images
+        .reserve(&surface_1_img_2, "owner", "sidecar")
+        .expect("reserve");
     images.set(&surface_1_img_2, 200);
 
     // tab-2에 1개 이미지 등록
-    images.reserve(&surface_2_img, "owner", "sidecar").expect("reserve");
+    images
+        .reserve(&surface_2_img, "owner", "sidecar")
+        .expect("reserve");
     images.set(&surface_2_img, 300);
 
     // tab-1 표면의 모든 이미지 제거
@@ -330,15 +577,16 @@ fn surface_close_removes_only_its_images() {
 
 #[test]
 fn presentation_failure_is_reported() {
-    use std::sync::{Arc, Mutex};
-    use soksak_host_tauriv2::images::handle_envelope;
-
     let images = Images::default();
     let key: Key = ("tab-1".to_string(), "view".to_string());
 
     // 이미지 등록
     images.reserve(&key, "owner", "sidecar-a").expect("reserve");
     images.set(&key, 100);
+    let configured = images
+        .configure_raster(&key, 800, 600, 2.0, true)
+        .unwrap()
+        .unwrap();
 
     let nonce = "AAAAAAAAAAAAAAAAAAAAAA==";
     let body = json!({
@@ -353,9 +601,12 @@ fn presentation_failure_is_reported() {
             "height": 600,
             "scale": 2.0,
             "format": "bgra8",
+            "generation": configured.generation,
+            "raster": configured.raster,
             "sequence": 1
         }
-    }).to_string();
+    })
+    .to_string();
 
     let received_response = Arc::new(Mutex::new(None));
     let response_clone = Arc::clone(&received_response);
@@ -376,10 +627,7 @@ fn presentation_failure_is_reported() {
     assert!(handled, "envelope should have been handled");
 
     let response_opt = received_response.lock().unwrap();
-    assert!(
-        response_opt.is_some(),
-        "response should have been sent"
-    );
+    assert!(response_opt.is_some(), "response should have been sent");
 
     let response = response_opt.as_ref().unwrap();
     assert!(response["image"]["error"].is_string());

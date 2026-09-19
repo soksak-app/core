@@ -8,7 +8,9 @@ use soksak_host_tauriv2::projects::folder;
 use soksak_host_tauriv2::workspace::Workspace;
 
 fn apply(store: &Workspace, request: Value) -> Value {
-    store.apply(serde_json::from_value(request).unwrap()).unwrap()
+    store
+        .apply(serde_json::from_value(request).unwrap())
+        .unwrap()
 }
 
 fn read(path: &Path) -> Value {
@@ -20,20 +22,50 @@ fn settings_use_common_and_project_files_and_reset_removes_override() {
     let config = tempfile::tempdir().unwrap();
     let root = tempfile::tempdir().unwrap();
     let store = Workspace::new(config.path().into());
-    apply(&store, json!({"kind":"add", "project":{"id":"prj-test", "root":root.path(), "identity":"1:2"}}));
-    apply(&store, json!({"kind":"settings", "patch":{"mode":"light", "gap":6, "projectOpening":"windows"}}));
-    apply(&store, json!({"kind":"settings", "id":"prj-test", "patch":{"gap":12}}));
-    assert_eq!(read(&root.path().join(".soksak/settings.json")), json!({"gap":12}));
+    apply(
+        &store,
+        json!({"kind":"add", "project":{"id":"prj-test", "root":root.path(), "identity":"1:2"}}),
+    );
+    apply(
+        &store,
+        json!({"kind":"settings", "patch":{"mode":"light", "gap":6, "projectOpening":"windows"}}),
+    );
+    apply(
+        &store,
+        json!({"kind":"settings", "id":"prj-test", "patch":{"gap":12}}),
+    );
+    assert_eq!(
+        read(&root.path().join(".soksak/settings.json")),
+        json!({"gap":12})
+    );
     let reopened = Workspace::new(config.path().into());
     let snapshot = apply(&reopened, json!({"kind":"snapshot"}));
     assert_eq!(snapshot["common"]["mode"], "light");
     assert_eq!(snapshot["projects"][0]["settings"], json!({"gap":12}));
-    apply(&store, json!({"kind":"settings", "id":"prj-test", "remove":["gap"]}));
-    assert_eq!(read(&root.path().join(".soksak/settings.json")), json!({}));
-    assert!(store.apply(serde_json::from_value(json!({"kind":"settings", "id":"prj-test", "patch":{"projectOpening":"tabs"}})).unwrap()).is_err());
+    apply(
+        &store,
+        json!({"kind":"settings", "id":"prj-test", "remove":["gap"]}),
+    );
+    assert_eq!(
+        read(&root.path().join(".soksak/settings.json")),
+        json!({})
+    );
+    assert!(store
+        .apply(
+            serde_json::from_value(
+                json!({"kind":"settings", "id":"prj-test", "patch":{"projectOpening":"tabs"}})
+            )
+            .unwrap()
+        )
+        .is_err());
     fs::write(config.path().join("settings.json"), "{broken").unwrap();
-    assert!(store.apply(serde_json::from_value(json!({"kind":"settings", "patch":{"gap":2}})).unwrap()).is_err());
-    assert_eq!(fs::read_to_string(config.path().join("settings.json")).unwrap(), "{broken");
+    assert!(store
+        .apply(serde_json::from_value(json!({"kind":"settings", "patch":{"gap":2}})).unwrap())
+        .is_err());
+    assert_eq!(
+        fs::read_to_string(config.path().join("settings.json")).unwrap(),
+        "{broken"
+    );
 }
 
 #[test]
@@ -42,12 +74,23 @@ fn concurrent_updates_preserve_fields_and_saved_project_order() {
     let roots: Vec<_> = (0..3).map(|_| tempfile::tempdir().unwrap()).collect();
     let store = std::sync::Arc::new(Workspace::new(config.path().into()));
     for (i, root) in roots.iter().enumerate() {
-        apply(&store, json!({"kind":"add", "project":{"id":format!("p{i}"), "root":root.path(), "identity":i.to_string()}}));
+        apply(
+            &store,
+            json!({"kind":"add", "project":{"id":format!("p{i}"), "root":root.path(), "identity":i.to_string()}}),
+        );
     }
-    let jobs: Vec<_> = ["mode", "theme", "rail"].iter().map(|key| {
-        let store = store.clone();
-        std::thread::spawn(move || apply(&store, json!({"kind":"settings", "patch":{key.to_string():key}})))
-    }).collect();
+    let jobs: Vec<_> = ["mode", "theme", "rail"]
+        .iter()
+        .map(|key| {
+            let store = store.clone();
+            std::thread::spawn(move || {
+                apply(
+                    &store,
+                    json!({"kind":"settings", "patch":{key.to_string():key}}),
+                )
+            })
+        })
+        .collect();
     for job in jobs {
         job.join().unwrap();
     }
@@ -56,7 +99,10 @@ fn concurrent_updates_preserve_fields_and_saved_project_order() {
     assert_eq!(snapshot["common"].as_object().unwrap().len(), 3);
     assert_eq!(snapshot["projects"][0]["id"], "p2");
     apply(&store, json!({"kind":"remove", "id":"p2"}));
-    assert_eq!(apply(&store, json!({"kind":"snapshot"}))["projects"][0]["id"], "p0");
+    assert_eq!(
+        apply(&store, json!({"kind":"snapshot"}))["projects"][0]["id"],
+        "p0"
+    );
 }
 
 #[test]
@@ -65,8 +111,10 @@ fn directory_aliases_have_one_identity() {
     let parent = tempfile::tempdir().unwrap();
     let alias = parent.path().join("alias");
     std::os::unix::fs::symlink(root.path(), &alias).unwrap();
-    let first = serde_json::to_value(folder(root.path().to_str().unwrap(), root.path()).unwrap()).unwrap();
-    let second = serde_json::to_value(folder(alias.to_str().unwrap(), root.path()).unwrap()).unwrap();
+    let first =
+        serde_json::to_value(folder(root.path().to_str().unwrap(), root.path()).unwrap()).unwrap();
+    let second =
+        serde_json::to_value(folder(alias.to_str().unwrap(), root.path()).unwrap()).unwrap();
     assert_eq!(first, second);
     let file = root.path().join("file");
     fs::write(&file, "x").unwrap();

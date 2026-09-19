@@ -13,12 +13,13 @@ use std::sync::atomic::Ordering;
 use tauri::Manager;
 
 mod bindings;
+mod composition;
 #[cfg(feature = "diagnostics")]
 mod diagnostics;
 pub mod documents;
-pub mod images;
 pub mod endpoint;
 pub mod exposure;
+pub mod images;
 mod modals;
 #[path = "platform/platform.rs"]
 mod platform;
@@ -104,11 +105,17 @@ pub fn run(context: tauri::Context<tauri::Wry>, background: &'static str) {
                 return;
             }
             let window = view.window();
-            let Ok(context) = windows::window_data(&window) else { return };
+            let Ok(context) = windows::window_data(&window) else {
+                return;
+            };
             let surface = format!("surface-{}-", window.label());
             if let Some(id) = view.label().strip_prefix(&surface) {
                 documents::close_surface(&window, id);
                 images::close_surface(&window, id);
+                if let Ok(mut revisions) = context.composition_revisions.lock() {
+                    revisions.remove(id);
+                }
+                context.images.begin_generation(id);
                 exposure::surface_closed(&window, id);
             }
             if view.label().starts_with("surface-") {
@@ -139,15 +146,26 @@ pub fn run(context: tauri::Context<tauri::Wry>, background: &'static str) {
                 });
             }))?;
             let menu = tauri::menu::Menu::default(app.handle())?;
-            let Some(tauri::menu::MenuItemKind::Submenu(submenu)) = menu.get(tauri::menu::WINDOW_SUBMENU_ID) else {
+            let Some(tauri::menu::MenuItemKind::Submenu(submenu)) =
+                menu.get(tauri::menu::WINDOW_SUBMENU_ID)
+            else {
                 return Err("default window menu is missing".into());
             };
-            submenu.prepend(&tauri::menu::MenuItem::with_id(app, "new-window", "새 창", true, Some("CmdOrCtrl+Shift+N"))?)?;
+            submenu.prepend(&tauri::menu::MenuItem::with_id(
+                app,
+                "new-window",
+                "새 창",
+                true,
+                Some("CmdOrCtrl+Shift+N"),
+            )?)?;
             app.set_menu(menu)?;
             let directory = config_directory(app.handle())?;
             app.manage(workspace::Workspace::new(directory));
             let executable = std::env::current_exe()?;
-            let sidecar_directory = executable.parent().ok_or("executable has no directory")?.to_path_buf();
+            let sidecar_directory = executable
+                .parent()
+                .ok_or("executable has no directory")?
+                .to_path_buf();
             let resolver = app.asset_resolver();
             let read = |path: &str| resolver.get(path.into()).map(|asset| asset.bytes);
             let sidecars = WindowSidecars::new(&read, sidecar_directory)?;
@@ -171,8 +189,14 @@ pub fn run(context: tauri::Context<tauri::Wry>, background: &'static str) {
         .build(context)
         .expect("failed to build the tauri application")
         .run(|app, event| {
-            if let tauri::RunEvent::ExitRequested { code: None, ref api, .. } = event {
-                let stays = platform::current().is_ok_and(|platform| platform.stays_open_without_windows());
+            if let tauri::RunEvent::ExitRequested {
+                code: None,
+                ref api,
+                ..
+            } = event
+            {
+                let stays =
+                    platform::current().is_ok_and(|platform| platform.stays_open_without_windows());
                 if stays && app.windows().is_empty() {
                     api.prevent_exit();
                     return;

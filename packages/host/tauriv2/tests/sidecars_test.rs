@@ -367,7 +367,10 @@ fn stop_graceful_shutdown() {
     let event = events
         .recv_timeout(Duration::from_secs(5))
         .expect("no echo event within 5s");
-    assert_eq!((event.sidecar.as_str(), event.surface.as_str()), ("@fixture/sidecar-graceful", "s1"));
+    assert_eq!(
+        (event.sidecar.as_str(), event.surface.as_str()),
+        ("@fixture/sidecar-graceful", "s1")
+    );
 
     // 이제 stop() 호출을 시간 측정한다. stdin EOF에 정상 종료되어야 한다.
     let start = std::time::Instant::now();

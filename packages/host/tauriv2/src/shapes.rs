@@ -71,7 +71,13 @@ pub(crate) fn set(window: &Window, request: ShapeRequest) -> Result<(), String> 
             view
         }
     };
-    platform.style_shape(view, request.radius, request.line_width, srgba(request.fill), srgba(request.line))
+    platform.style_shape(
+        view,
+        request.radius,
+        request.line_width,
+        srgba(request.fill),
+        srgba(request.line),
+    )
 }
 
 /// id 의 도형을 제거한다.

@@ -45,7 +45,12 @@ impl Default for Recording {
 
 impl Recording {
     pub const fn new() -> Recording {
-        Recording { state: Mutex::new(State { directory: None, opened: None }) }
+        Recording {
+            state: Mutex::new(State {
+                directory: None,
+                opened: None,
+            }),
+        }
     }
 
     /// directory 를 make 로 만들고 target 을 그 폴더에 녹화하기 시작한다. 첫 프레임이
@@ -121,6 +126,9 @@ impl Recording {
 
     /// 진행 중인 녹화의 폴더.
     pub fn running(&self) -> Option<PathBuf> {
-        self.state.lock().ok().and_then(|state| state.directory.clone())
+        self.state
+            .lock()
+            .ok()
+            .and_then(|state| state.directory.clone())
     }
 }

@@ -2,14 +2,36 @@
 
 use std::ffi::{c_char, c_void, CStr, CString};
 
-use super::super::Handle;
+use super::super::{Handle, Raster};
 
 type ImageEvent = extern "C" fn(*mut c_void, *const c_char);
 
 extern "C" {
-    fn sp_region_create(surface: *mut c_void, name: *const c_char, event: ImageEvent, context: *mut c_void) -> *mut c_void;
-    fn sp_region_place(region: *mut c_void, left: f64, top: f64, right: f64, bottom: f64, visible: bool);
-    fn sp_region_present(region: *mut c_void, token_id: u32, nonce: *const u8, width: f64, height: f64, scale: f64) -> bool;
+    fn sp_region_create(
+        surface: *mut c_void,
+        name: *const c_char,
+        event: ImageEvent,
+        context: *mut c_void,
+    ) -> *mut c_void;
+    fn sp_region_place(
+        region: *mut c_void,
+        left: f64,
+        top: f64,
+        right: f64,
+        bottom: f64,
+        visible: bool,
+    );
+    fn sp_region_raster(region: *mut c_void, out: *mut f64) -> bool;
+    fn sp_region_facts(region: *mut c_void) -> *mut c_char;
+    fn free(pointer: *mut c_void);
+    fn sp_region_present(
+        region: *mut c_void,
+        token_id: u32,
+        nonce: *const u8,
+        width: f64,
+        height: f64,
+        scale: f64,
+    ) -> bool;
     fn sp_region_focus(region: *mut c_void);
     fn sp_region_caret(region: *mut c_void, x: f64, y: f64, w: f64, h: f64);
     fn sp_region_text(region: *mut c_void, utf8: *const c_char);
@@ -26,7 +48,9 @@ thread_local! {
 
 extern "C" fn event_callback(context: *mut c_void, json: *const c_char) {
     let receiver = unsafe { &*(context as *const Receiver) };
-    let json = unsafe { CStr::from_ptr(json) }.to_string_lossy().into_owned();
+    let json = unsafe { CStr::from_ptr(json) }
+        .to_string_lossy()
+        .into_owned();
     (receiver.0)(json);
 }
 
@@ -34,7 +58,14 @@ extern "C" fn event_callback(context: *mut c_void, json: *const c_char) {
 pub fn create(surface: Handle, name: &str, receive: Box<dyn Fn(String)>) -> Result<Handle, String> {
     let name = CString::new(name).map_err(|e| e.to_string())?;
     let receiver = Box::into_raw(Box::new(Receiver(receive)));
-    let image = unsafe { sp_region_create(surface as *mut c_void, name.as_ptr(), event_callback, receiver as *mut c_void) };
+    let image = unsafe {
+        sp_region_create(
+            surface as *mut c_void,
+            name.as_ptr(),
+            event_callback,
+            receiver as *mut c_void,
+        )
+    };
     if image.is_null() {
         drop(unsafe { Box::from_raw(receiver) });
         return Err("cannot create an image region in this surface".into());
@@ -49,9 +80,50 @@ pub fn place(image: Handle, left: f64, top: f64, right: f64, bottom: f64, visibl
     unsafe { sp_region_place(image as *mut c_void, left, top, right, bottom, visible) }
 }
 
+pub fn raster(image: Handle) -> Option<Raster> {
+    let mut out = [0.0; 3];
+    if !unsafe { sp_region_raster(image as *mut c_void, out.as_mut_ptr()) } {
+        return None;
+    }
+    Some(Raster {
+        width: out[0] as u32,
+        height: out[1] as u32,
+        scale: out[2],
+    })
+}
+
+pub fn facts(image: Handle) -> Result<String, String> {
+    let pointer = unsafe { sp_region_facts(image as *mut c_void) };
+    if pointer.is_null() {
+        return Err("image facts are unavailable".into());
+    }
+    let result = unsafe { CStr::from_ptr(pointer) }
+        .to_str()
+        .map_err(|error| error.to_string())
+        .map(str::to_owned);
+    unsafe { free(pointer as *mut c_void) };
+    result
+}
+
 /// 외부 IOSurface 를 표시한다. 성공하면 true, 찾지 못했거나 크기가 맞지 않으면 false 를 반환한다.
-pub fn present(image: Handle, token_id: u32, nonce: &[u8; 16], width: f64, height: f64, scale: f64) -> bool {
-    unsafe { sp_region_present(image as *mut c_void, token_id, nonce.as_ptr(), width, height, scale) }
+pub fn present(
+    image: Handle,
+    token_id: u32,
+    nonce: &[u8; 16],
+    width: f64,
+    height: f64,
+    scale: f64,
+) -> bool {
+    unsafe {
+        sp_region_present(
+            image as *mut c_void,
+            token_id,
+            nonce.as_ptr(),
+            width,
+            height,
+            scale,
+        )
+    }
 }
 
 /// 첫 응답자로 만들고 포커스 이벤트를 보낸다.

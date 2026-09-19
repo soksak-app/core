@@ -59,7 +59,12 @@ fn internal(error: impl ToString) -> Failure {
 }
 
 /// 진단 메서드를 실행한다.
-pub(crate) fn call(host: &Host, window: &Window, method: &str, params: Map<String, Value>) -> Result<Value, Failure> {
+pub(crate) fn call(
+    host: &Host,
+    window: &Window,
+    method: &str,
+    params: Map<String, Value>,
+) -> Result<Value, Failure> {
     match method {
         "diagnostics.fixture" => fixture(host, window),
         "diagnostics.drag" => drag(host, window, params),
@@ -75,14 +80,20 @@ pub(crate) fn call(host: &Host, window: &Window, method: &str, params: Map<Strin
         "diagnostics.capture.stop" => {
             let after = match params.get("after") {
                 None | Some(Value::Null) => 0.0,
-                Some(value) => value.as_f64().filter(|after| *after >= 0.0)
+                Some(value) => value
+                    .as_f64()
+                    .filter(|after| *after >= 0.0)
                     .ok_or_else(|| Failure::params("after must be a non-negative number"))?,
             };
             capture_stop(after)
         }
         "diagnostics.knob" => {
-            if !params.get("name").is_some_and(Value::is_string) || !params.get("value").is_some_and(Value::is_number) {
-                return Err(Failure::params("knob takes a name string and a number value"));
+            if !params.get("name").is_some_and(Value::is_string)
+                || !params.get("value").is_some_and(Value::is_number)
+            {
+                return Err(Failure::params(
+                    "knob takes a name string and a number value",
+                ));
             }
             host.page(window, method, params, TIMEOUT)
         }
@@ -95,7 +106,10 @@ pub(crate) fn call(host: &Host, window: &Window, method: &str, params: Map<Strin
             Ok(Value::Null)
         }
         "diagnostics.modal.held" => modal_held(window.label()),
-        _ => Err(Failure::new(-32601, format!("{method} is not a diagnostic method"))),
+        _ => Err(Failure::new(
+            -32601,
+            format!("{method} is not a diagnostic method"),
+        )),
     }
 }
 
@@ -107,7 +121,10 @@ fn fixture(host: &Host, window: &Window) -> Result<Value, Failure> {
     platform.private_directory(&settings).map_err(internal)?;
     std::fs::write(settings.join("settings.json"), "{}\n").map_err(internal)?;
     let mut params = Map::new();
-    params.insert("root".into(), Value::String(root.to_string_lossy().into_owned()));
+    params.insert(
+        "root".into(),
+        Value::String(root.to_string_lossy().into_owned()),
+    );
     host.page(window, "diagnostics.fixture", params, TIMEOUT)
 }
 
@@ -130,20 +147,40 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
     let ms = params["ms"].as_f64().unwrap_or_default();
     let times = params["times"].as_u64().unwrap_or_default();
     if ms <= 0.0 || times < 1 {
-        return Err(Failure::params("ms must be positive and times must be at least 1"));
+        return Err(Failure::params(
+            "ms must be positive and times must be at least 1",
+        ));
     }
     let per = ((ms / FRAME.as_millis() as f64).round() as u64).max(1);
     let steps = per * 2 * times;
 
-    let frames = if capture { Some(capture_start(window, false)?) } else { None };
+    let frames = if capture {
+        Some(capture_start(window, false)?)
+    } else {
+        None
+    };
 
-    exposure::log(window, &format!("diagnostics: drag {}:{} by {},{} in {per} steps, {times} times",
-        params["axis"].as_str().unwrap_or_default(), params["line"], params["dx"], params["dy"]));
+    exposure::log(
+        window,
+        &format!(
+            "diagnostics: drag {}:{} by {},{} in {per} steps, {times} times",
+            params["axis"].as_str().unwrap_or_default(),
+            params["line"],
+            params["dx"],
+            params["dy"]
+        ),
+    );
     let app = window.app_handle().clone();
     let label = window.label().to_string();
     let length = FRAME * steps as u32;
     // 페이지는 끌기를 시작할 때 이전 단계를 버리므로 단계는 요청 이벤트를 보낸 뒤 보낸다.
-    let result = host.page_then(window, "diagnostics.drag", params, Some(TIMEOUT + length), move || tick(app, label, steps));
+    let result = host.page_then(
+        window,
+        "diagnostics.drag",
+        params,
+        Some(TIMEOUT + length),
+        move || tick(app, label, steps),
+    );
     let finished = (|| -> Result<Value, Failure> {
         let result = result?;
         // 마지막 배치가 커밋되고 표시될 때까지 기다린다. 다음 표시 한 번만 기다리면 마지막 단계의
@@ -151,7 +188,10 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
         let context = crate::windows::window_data(window).map_err(internal)?;
         let settled = crate::surfaces::when_settled(&context.running).map_err(internal)?;
         if settled.recv_timeout(TIMEOUT).is_err() {
-            return Err(Failure::new(crate::endpoint::TIMED_OUT, "the drag was not presented within the time limit"));
+            return Err(Failure::new(
+                crate::endpoint::TIMED_OUT,
+                "the drag was not presented within the time limit",
+            ));
         }
         exposure::log(window, "diagnostics: drag presented");
         let mut merged = match result {
@@ -160,7 +200,10 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
             _ => return Err(internal("the page drag result is not an object")),
         };
         if let Some(frames) = &frames {
-            merged.insert("frames".into(), Value::String(frames.to_string_lossy().into_owned()));
+            merged.insert(
+                "frames".into(),
+                Value::String(frames.to_string_lossy().into_owned()),
+            );
         }
         Ok(Value::Object(merged))
     })();
@@ -194,16 +237,32 @@ fn capture_start(window: &Window, display: bool) -> Result<PathBuf, Failure> {
     let platform = platform::current().map_err(internal)?;
     let held = window.clone();
     let numbers = on_main(window, move || platform.window_numbers(&held)).map_err(internal)?;
-    let number = *numbers.first().ok_or_else(|| internal("the window has no window number"))?;
-    let stamp = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
+    let number = *numbers
+        .first()
+        .ok_or_else(|| internal("the window has no window number"))?;
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
     let directory = window
         .state::<Workspace>()
         .directory()
         .join("captures")
-        .join(format!("{stamp}-{}", CAPTURES.fetch_add(1, Ordering::Relaxed)));
+        .join(format!(
+            "{stamp}-{}",
+            CAPTURES.fetch_add(1, Ordering::Relaxed)
+        ));
     let recorder = recorder()?;
     RECORDING
-        .start(&recorder, Target { window: number, display }, &directory, &|path| recorder.0.private_directory(path))
+        .start(
+            &recorder,
+            Target {
+                window: number,
+                display,
+            },
+            &directory,
+            &|path| recorder.0.private_directory(path),
+        )
         .map_err(internal)?;
     Ok(directory)
 }
@@ -229,12 +288,19 @@ struct ModalHold {
 static MODAL_HOLDS: Mutex<Option<HashMap<String, Arc<ModalHold>>>> = Mutex::new(None);
 
 fn modal_hold_of(window: &str) -> Option<Arc<ModalHold>> {
-    MODAL_HOLDS.lock().expect("modal holds").as_ref()?.get(window).cloned()
+    MODAL_HOLDS
+        .lock()
+        .expect("modal holds")
+        .as_ref()?
+        .get(window)
+        .cloned()
 }
 
 /// 창 window 의 응답을 붙잡은 동안 반환하지 않는다.
 pub(crate) fn hold_modal_content(window: &str) {
-    let Some(hold) = modal_hold_of(window) else { return };
+    let Some(hold) = modal_hold_of(window) else {
+        return;
+    };
     let mut state = hold.state.lock().expect("modal hold");
     state.1 += 1;
     hold.changed.notify_all();
@@ -257,7 +323,8 @@ fn modal_hold(window: &str, on: bool) {
 
 /// 창에서 모달 내용 응답을 하나 붙잡으면 답한다.
 fn modal_held(window: &str) -> Result<Value, Failure> {
-    let hold = modal_hold_of(window).ok_or_else(|| internal("modal content answers are not held in this window"))?;
+    let hold = modal_hold_of(window)
+        .ok_or_else(|| internal("modal content answers are not held in this window"))?;
     let mut state = hold.state.lock().map_err(internal)?;
     while state.1 == 0 && !state.0 {
         state = hold.changed.wait(state).map_err(internal)?;

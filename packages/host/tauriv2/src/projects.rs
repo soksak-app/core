@@ -33,13 +33,18 @@ pub fn folder(root: &str, home: &Path) -> Result<Folder, String> {
     } else {
         PathBuf::from(root)
     };
-    let path = path.canonicalize().map_err(|e| format!("{}: {e}", path.display()))?;
+    let path = path
+        .canonicalize()
+        .map_err(|e| format!("{}: {e}", path.display()))?;
     let metadata = path.metadata().map_err(|e| e.to_string())?;
     if !metadata.is_dir() {
         return Err(format!("not a project directory: {}", path.display()));
     }
     let identity = platform::current()?.directory_identity(&path, &metadata)?;
-    Ok(Folder { root: path.to_str().ok_or("project path is not UTF-8")?.into(), identity })
+    Ok(Folder {
+        root: path.to_str().ok_or("project path is not UTF-8")?.into(),
+        identity,
+    })
 }
 
 /// 사용자 홈 디렉터리 기준으로 root 를 프로젝트 디렉터리로 확인한다.
@@ -49,7 +54,11 @@ pub(crate) fn project_folder(app: &AppHandle, root: String) -> Result<Folder, St
 
 /// 폴더 선택 대화상자를 열고 선택한 경로를 반환한다. 취소하면 None 이다.
 pub(crate) fn folder_choose(window: &Window) -> Result<Option<String>, String> {
-    window.dialog().file().set_parent(window).set_title("프로젝트 폴더 선택")
+    window
+        .dialog()
+        .file()
+        .set_parent(window)
+        .set_title("프로젝트 폴더 선택")
         .blocking_pick_folder()
         .map(|path| {
             path.into_path()
@@ -76,5 +85,11 @@ pub(crate) fn project_create(app: &AppHandle, request: CreateProject) -> Result<
     }
     let destination = Path::new(&parent.root).join(name);
     fs::create_dir(&destination).map_err(|e| e.to_string())?;
-    project_folder(app, destination.to_str().ok_or("project path is not UTF-8")?.into())
+    project_folder(
+        app,
+        destination
+            .to_str()
+            .ok_or("project path is not UTF-8")?
+            .into(),
+    )
 }

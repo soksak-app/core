@@ -15,9 +15,9 @@ use serde_json::Value;
 use tauri::{Emitter, EventTarget, Webview, Window};
 
 use crate::exposure::{self, on_main, with_view};
-use crate::platform::{self, Handle, Insets};
-use crate::surfaces::label_for;
 use crate::log_error;
+use crate::platform::{self, Handle};
+use crate::surfaces::{label_for, require_region};
 use crate::windows::window_data;
 
 /// 문서 영역의 영구 데이터 저장소 이름. 앱 문서의 저장소와 다르다.
@@ -32,10 +32,6 @@ pub struct Request {
     pub url: String,
     #[serde(default)]
     pub action: String,
-    #[serde(flatten)]
-    pub insets: Insets,
-    #[serde(default)]
-    pub visible: bool,
 }
 
 /// document-state 이벤트의 값.
@@ -53,7 +49,10 @@ pub type Key = (String, String);
 /// caller 가 None 이면 호출한 웹뷰는 이 창의 표면이 아니다.
 pub fn check(caller: Option<&str>, request: &Request) -> Result<Key, String> {
     if caller != Some(request.surface.as_str()) {
-        return Err(format!("this document is not surface {:?}", request.surface));
+        return Err(format!(
+            "this document is not surface {:?}",
+            request.surface
+        ));
     }
     let mut chars = request.document.chars();
     let valid = matches!(chars.next(), Some(c) if c.is_ascii_lowercase() || c.is_ascii_digit())
@@ -71,7 +70,9 @@ pub struct Documents(Mutex<HashMap<Key, Handle>>);
 
 impl Documents {
     fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<Key, Handle>> {
-        self.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+        self.0
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
     /// 이름을 차지한다. 같은 이름이 이미 있으면 오류다.
@@ -105,7 +106,9 @@ impl Documents {
 
     /// 이름을 제거하고 그 문서의 주소를 반환한다. 만드는 중이던 이름이면 주소는 0 이다.
     pub fn remove(&self, key: &Key) -> Result<Handle, String> {
-        self.lock().remove(key).ok_or_else(|| format!("document {:?} is not attached", key.1))
+        self.lock()
+            .remove(key)
+            .ok_or_else(|| format!("document {:?} is not attached", key.1))
     }
 
     /// 표면의 이름을 모두 제거하고 만들어진 문서의 주소를 반환한다.
@@ -125,12 +128,20 @@ impl Documents {
 
     /// 만들어진 문서의 주소별 키.
     pub fn names(&self) -> HashMap<Handle, Key> {
-        self.lock().iter().filter(|(_, &handle)| handle != 0).map(|(key, &handle)| (handle, key.clone())).collect()
+        self.lock()
+            .iter()
+            .filter(|(_, &handle)| handle != 0)
+            .map(|(key, &handle)| (handle, key.clone()))
+            .collect()
     }
 
     /// 만들어진 문서의 주소.
     pub fn all(&self) -> Vec<Handle> {
-        self.lock().values().copied().filter(|&handle| handle != 0).collect()
+        self.lock()
+            .values()
+            .copied()
+            .filter(|&handle| handle != 0)
+            .collect()
     }
 }
 
@@ -147,6 +158,7 @@ pub(crate) fn attach(webview: &Webview, request: Request) -> Result<(), String> 
     let (key, window) = owner(webview, &request)?;
     let platform = platform::current()?;
     let data = window_data(&window)?;
+    require_region(&data.compositions, &key.0, &key.1, "document", None)?;
     // 이름을 먼저 차지한다. 네이티브 작업을 기다리는 동안 잠금을 쥐지 않는다.
     data.documents.reserve(&key)?;
     let handle = match create(webview, &window, &key, platform, data.overlay.dialog()) {
@@ -167,7 +179,10 @@ pub(crate) fn attach(webview: &Webview, request: Request) -> Result<(), String> 
         Ok(false)
     })?;
     if !registered {
-        return Err(format!("surface {:?} closed while its document was created", key.0));
+        return Err(format!(
+            "surface {:?} closed while its document was created",
+            key.0
+        ));
     }
     Ok(())
 }
@@ -187,8 +202,15 @@ fn create(
         let changed = Box::new(move |state: String| {
             let state = serde_json::from_str(&state).unwrap_or(Value::Null);
             let label = label_for(&host, &surface_id);
-            let payload = State { surface: surface_id.clone(), document: name.clone(), state };
-            log_error(host.emit_to(EventTarget::webview(label), "document-state", payload).map_err(|e| e.to_string()));
+            let payload = State {
+                surface: surface_id.clone(),
+                document: name.clone(),
+                state,
+            };
+            log_error(
+                host.emit_to(EventTarget::webview(label), "document-state", payload)
+                    .map_err(|e| e.to_string()),
+            );
             exposure::window_changed(&host);
         });
         let handle = platform.create_document(surface, STORE, changed)?;
@@ -205,17 +227,10 @@ fn with_document<T: Send + 'static>(
 ) -> Result<T, String> {
     let (key, window) = owner(webview, request)?;
     let data = window_data(&window)?;
+    require_region(&data.compositions, &key.0, &key.1, "document", None)?;
     // 조회와 사용을 메인 스레드의 한 작업에서 한다. 닫기도 메인 스레드에서 등록 해제와 함께 일어나므로,
     // 조회한 주소는 이 작업 동안 해제되지 않는다.
     on_main(&window, move || work(data.documents.get(&key)?))
-}
-
-pub(crate) fn place(webview: &Webview, request: Request) -> Result<(), String> {
-    let platform = platform::current()?;
-    let (insets, visible) = (request.insets, request.visible);
-    with_document(webview, &request, move |handle| platform.place_document(handle, insets, visible))?;
-    exposure::window_changed(&webview.window());
-    Ok(())
 }
 
 pub(crate) fn load(webview: &Webview, request: Request) -> Result<(), String> {
@@ -225,7 +240,9 @@ pub(crate) fn load(webview: &Webview, request: Request) -> Result<(), String> {
         if platform.load_document(handle, &url)? {
             Ok(())
         } else {
-            Err(format!("only http and https addresses can be opened: {url:?}"))
+            Err(format!(
+                "only http and https addresses can be opened: {url:?}"
+            ))
         }
     })
 }
@@ -240,12 +257,15 @@ pub(crate) fn go(webview: &Webview, request: Request) -> Result<bool, String> {
         "stop" => 3,
         other => return Err(format!("unknown document action {other:?}")),
     };
-    with_document(webview, &request, move |handle| platform.go_document(handle, action))
+    with_document(webview, &request, move |handle| {
+        platform.go_document(handle, action)
+    })
 }
 
 pub(crate) fn detach(webview: &Webview, request: Request) -> Result<(), String> {
     let (key, window) = owner(webview, &request)?;
     let data = window_data(&window)?;
+    require_region(&data.compositions, &key.0, &key.1, "document", None)?;
     let platform = platform::current()?;
     // 등록 해제와 닫기를 메인 스레드의 한 작업에서 한다.
     on_main(&window, move || {
@@ -261,8 +281,12 @@ pub(crate) fn detach(webview: &Webview, request: Request) -> Result<(), String> 
 
 /// 표면의 문서 영역을 모두 닫는다. 메인 스레드 작업을 기다리지 않으므로 어느 스레드에서나 호출한다.
 pub(crate) fn close_surface(window: &Window, surface: &str) {
-    let Ok(data) = window_data(window) else { return };
-    let Ok(platform) = platform::current() else { return };
+    let Ok(data) = window_data(window) else {
+        return;
+    };
+    let Ok(platform) = platform::current() else {
+        return;
+    };
     let host = window.clone();
     let surface = surface.to_string();
     // 등록 해제와 닫기를 메인 스레드의 한 작업에서 한다. 문서를 쓰는 다른 작업도 메인 스레드에서
@@ -285,8 +309,12 @@ pub(crate) fn close_surface(window: &Window, surface: &str) {
 
 /// 대화 상자가 열린 동안 문서 영역을 흐리게 표시한다. 기다리지 않는다.
 pub(crate) fn set_background(window: &Window, enabled: bool) {
-    let Ok(data) = window_data(window) else { return };
-    let Ok(platform) = platform::current() else { return };
+    let Ok(data) = window_data(window) else {
+        return;
+    };
+    let Ok(platform) = platform::current() else {
+        return;
+    };
     // 문서 주소는 메인 스레드에서 조회한다. 닫기와 같은 스레드이므로 해제된 주소를 쓰지 않는다.
     log_error(
         window
