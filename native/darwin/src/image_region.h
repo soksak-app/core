@@ -34,5 +34,8 @@ void sp_region_text(void *region, const char *utf8);
 // out[0..5] 에 쓴다.
 void sp_region_frame(void *region, double *out);
 
+// 영역의 모든 정보를 JSON 으로 반환한다. 호출자가 malloc() 으로 할당된 문자열을 해제해야 한다.
+const char *sp_region_facts(void *region);
+
 // 영역을 제거하고 해제한다. 이후 event 는 호출되지 않는다.
 void sp_region_close(void *region);

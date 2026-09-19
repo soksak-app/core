@@ -79,3 +79,12 @@ func (implementation) CloseImage(image unsafe.Pointer) {
 		delete(images, image)
 	}
 }
+
+func (implementation) FactsImage(image unsafe.Pointer) (string, error) {
+	json := C.sp_region_facts(image)
+	if json == nil {
+		return "", errors.New("cannot get image region facts")
+	}
+	defer C.free(unsafe.Pointer(json))
+	return C.GoString(json), nil
+}

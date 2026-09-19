@@ -17,6 +17,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unsafe"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
@@ -47,7 +48,7 @@ var presentedSchema = map[string]any{"type": "object", "properties": map[string]
 
 var hostStatus = map[string]hostEntry{
 	"host.window": {
-		Description: "Window frame in screen coordinates, content size, backing scale, maximized, key and application active state, child window count, window buttons, native surfaces, document regions, and the open native modal.",
+		Description: "Window frame in screen coordinates, content size, backing scale, maximized, key and application active state, child window count, window buttons, native surfaces, document regions, image regions, and the open native modal.",
 		Schema: map[string]any{"type": "object", "properties": map[string]any{
 			"frame":     rectSchema,
 			"content":   rectSchema,
@@ -64,6 +65,15 @@ var hostStatus = map[string]hostEntry{
 			"documents": map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{
 				"surface": map[string]any{"type": "string"}, "document": map[string]any{"type": "string"},
 				"frame": rectSchema, "visible": map[string]any{"type": "boolean"}, "order": map[string]any{"type": "integer"},
+			}}},
+			"regions": map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{
+				"surface": map[string]any{"type": "string"}, "name": map[string]any{"type": "string"},
+				"frame": rectSchema, "visible": map[string]any{"type": "boolean"}, "focused": map[string]any{"type": "boolean"},
+				"presented": map[string]any{"type": []any{"object", "null"}, "properties": map[string]any{
+					"sequence": map[string]any{"type": "integer"},
+					"width":    map[string]any{"type": "integer"}, "height": map[string]any{"type": "integer"},
+				}},
+				"error": map[string]any{"type": []any{"string", "null"}},
 			}}},
 			"modal": map[string]any{"type": "object", "properties": map[string]any{
 				"id": map[string]any{"type": "string"}, "mode": map[string]any{"type": "string"},
@@ -804,6 +814,25 @@ type WindowControl struct {
 	Hidden bool `json:"hidden"`
 }
 
+// WindowRegion 는 host.window 의 이미지 영역 하나다.
+type WindowRegion struct {
+	Surface   string `json:"surface"`
+	Name      string `json:"name"`
+	Frame     frame  `json:"frame"`
+	Visible   bool   `json:"visible"`
+	Focused   bool   `json:"focused"`
+	Presented *struct {
+		Width  int     `json:"width"`
+		Height int     `json:"height"`
+		Scale  float64 `json:"scale"`
+	} `json:"presented"`
+	Layer struct {
+		Bounds        frame   `json:"bounds"`
+		ContentsScale float64 `json:"contentsScale"`
+	} `json:"layer"`
+	Error *string `json:"error"`
+}
+
 // WindowStatus 는 host.window 의 값이다.
 type WindowStatus struct {
 	Frame     frame            `json:"frame"`
@@ -816,6 +845,7 @@ type WindowStatus struct {
 	Controls  []WindowControl  `json:"controls"`
 	Surfaces  []WindowSurface  `json:"surfaces"`
 	Documents []WindowDocument `json:"documents"`
+	Regions   []WindowRegion   `json:"regions"`
 	Modal     *WindowModal     `json:"modal"`
 }
 
@@ -847,15 +877,27 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 	out := WindowStatus{
 		Frame: facts.Frame, Content: frame{Width: facts.Content.Width, Height: facts.Content.Height},
 		Scale: facts.Scale, Maximized: facts.Zoomed, Key: facts.Key, Active: facts.Active, Children: facts.Children,
-		Controls: facts.Controls, Surfaces: []WindowSurface{}, Documents: []WindowDocument{},
+		Controls: facts.Controls, Surfaces: []WindowSurface{}, Documents: []WindowDocument{}, Regions: []WindowRegion{},
 	}
 	if out.Controls == nil {
 		out.Controls = []WindowControl{}
 	}
 	var modal *WindowModal
+	var imageHandles map[uint64]unsafe.Pointer
 	s.mu.Lock()
 	if s.modal != nil {
 		modal = &WindowModal{ID: s.modal.id, Mode: s.modal.content.Mode, Shown: s.modal.visible}
+	}
+	imageNames := map[uint64]ImageKey{}
+	if s.images != nil {
+		imageNames = s.images.Names()
+		imageHandles = map[uint64]unsafe.Pointer{}
+		for addr, key := range imageNames {
+			handle, err := s.images.Get(key)
+			if err == nil {
+				imageHandles[addr] = handle
+			}
+		}
 	}
 	s.mu.Unlock()
 	for order, view := range facts.Webviews {
@@ -870,6 +912,31 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 			modal.Background = &ModalBackground{Draws: view.Draws, Alpha: view.Alpha}
 		}
 	}
+	// 그림 영역은 웹뷰가 아니므로 웹뷰 목록에 없다. 등록부의 핸들마다 네이티브에서 읽는다.
+	for addr, key := range imageNames {
+		handle, ok := imageHandles[addr]
+		if !ok {
+			continue // 예약만 되고 아직 만들어지지 않은 영역
+		}
+		var text string
+		var err error
+		// 네이티브 영역은 UI 스레드에서만 읽는다.
+		application.InvokeSync(func() { text, err = system.FactsImage(handle) })
+		if err != nil {
+			return WindowStatus{}, fmt.Errorf("image %s/%s: %w", key.Surface, key.Name, err)
+		}
+		region := WindowRegion{Surface: key.Surface, Name: key.Name}
+		if err := json.Unmarshal([]byte(text), &region); err != nil {
+			return WindowStatus{}, fmt.Errorf("image %s/%s facts: %w", key.Surface, key.Name, err)
+		}
+		out.Regions = append(out.Regions, region)
+	}
+	sort.Slice(out.Regions, func(a, b int) bool {
+		if out.Regions[a].Surface != out.Regions[b].Surface {
+			return out.Regions[a].Surface < out.Regions[b].Surface
+		}
+		return out.Regions[a].Name < out.Regions[b].Name
+	})
 	out.Modal = modal
 	return out, nil
 }

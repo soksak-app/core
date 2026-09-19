@@ -248,6 +248,10 @@ func (implementation) TextImage(unsafe.Pointer, string) {
 	unreachable("image text")
 }
 
+func (implementation) FactsImage(unsafe.Pointer) (string, error) {
+	return "", unreachableError("image facts")
+}
+
 func (implementation) CloseImage(unsafe.Pointer) {
 	unreachable("image removal")
 }

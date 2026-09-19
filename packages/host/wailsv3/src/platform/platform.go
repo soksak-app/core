@@ -146,6 +146,8 @@ type Platform interface {
 	CaretImage(image unsafe.Pointer, x, y, w, h float64)
 	// TextImage 는 접근성 값으로 보일 문자열을 받아 둔다.
 	TextImage(image unsafe.Pointer, utf8 string)
+	// FactsImage 는 영역의 모든 정보를 JSON 으로 반환한다.
+	FactsImage(image unsafe.Pointer) (string, error)
 	// CloseImage 는 그림 영역을 제거한다. 이후 event 는 호출되지 않는다.
 	CloseImage(image unsafe.Pointer)
 

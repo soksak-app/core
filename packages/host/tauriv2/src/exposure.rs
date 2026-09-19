@@ -56,7 +56,7 @@ fn host_declarations() -> Value {
                 "scale": {"type": "number"}}}},
         }, {
             "name": "host.window",
-            "description": "Window frame in screen coordinates, content size, backing scale, maximized, key and application active state, child window count, window buttons, native surfaces, and the open native modal.",
+            "description": "Window frame in screen coordinates, content size, backing scale, maximized, key and application active state, child window count, window buttons, native surfaces, image regions, and the open native modal.",
             "schema": {"type": "object", "properties": {
                 "frame": rect,
                 "content": rect,
@@ -72,6 +72,12 @@ fn host_declarations() -> Value {
                 "documents": {"type": "array", "items": {"type": "object", "properties": {
                     "surface": {"type": "string"}, "document": {"type": "string"}, "frame": rect,
                     "visible": {"type": "boolean"}, "order": {"type": "integer"}}}},
+                "regions": {"type": "array", "items": {"type": "object", "properties": {
+                    "surface": {"type": "string"}, "name": {"type": "string"}, "frame": rect,
+                    "visible": {"type": "boolean"}, "focused": {"type": "boolean"},
+                    "presented": {"type": ["object", "null"], "properties": {
+                        "sequence": {"type": "integer"}, "width": {"type": "integer"}, "height": {"type": "integer"}}},
+                    "error": {"type": ["string", "null"]}}}},
                 "modal": {"type": "object", "properties": {
                     "id": {"type": "string"}, "mode": {"type": "string"},
                     "shown": {"type": "boolean"}, "frame": rect, "order": {"type": "integer"},
@@ -625,6 +631,7 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
     }
     let context = window_data(window).map_err(internal)?;
     let documents = context.documents.names();
+    let images = context.images.names();
     let overlay = &context.overlay;
     // 잠금은 복사한 뒤 바로 놓는다. 메인 스레드 작업(with_view)을 기다리는 동안 잠금을 쥐면, 같은
     // 잠금을 기다리는 메인 스레드의 모달 배치와 서로 기다린다.
@@ -636,6 +643,7 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
     let facts = on_main(window, move || platform.window_facts(handle)).map_err(internal)?;
     let mut surfaces = Vec::new();
     let mut attached = Vec::new();
+    let mut regions = Vec::new();
     let mut modal = match overlay.open_state() {
         Some((id, mode, shown)) => json!({"id": id, "mode": mode, "shown": shown,
             "frame": null, "order": null, "background": null}),
@@ -651,6 +659,10 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
         } else if let Some((surface, document)) = documents.get(&address) {
             attached.push(json!({"surface": surface, "document": document, "frame": rect(view),
                 "visible": !view["hidden"].as_bool().unwrap_or(false), "order": order}));
+        } else if let Some((surface, name)) = images.get(&address) {
+            regions.push(json!({"surface": surface, "name": name, "frame": rect(view),
+                "visible": !view["hidden"].as_bool().unwrap_or(false), "focused": false,
+                "presented": null, "error": null}));
         } else if modal.is_object() && modal_view == Some(address) {
             modal["frame"] = rect(view);
             modal["order"] = json!(order);
@@ -668,6 +680,7 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
         "controls": facts["controls"],
         "surfaces": surfaces,
         "documents": attached,
+        "regions": regions,
         "modal": modal,
     }))
 }

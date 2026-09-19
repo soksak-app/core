@@ -550,3 +550,65 @@ void sp_region_close(void *handle) {
     [clipView removeFromSuperview];     // 빈 클립 뷰를 표면에 남기지 않는다.
     [view release];                     // 손잡이가 들고 있던 +1.
 }
+
+const char *sp_region_facts(void *handle) {
+    NSCAssert(NSThread.isMainThread, @"image regions belong to the main thread");
+    SPImageRegion *view = (SPImageRegion *)handle;
+    NSView *content = view.window.contentView;
+    if (!content) return NULL;
+
+    // 프레임 정보 읽기
+    NSRect frame = [view convertRect:view.bounds toView:content];
+    double x = frame.origin.x;
+    double y = content.isFlipped ? frame.origin.y : NSHeight(content.bounds) - NSMaxY(frame);
+    double width = frame.size.width;
+    double height = frame.size.height;
+    int visible = view.isHiddenOrHasHiddenAncestor ? 0 : 1;
+    int focused = view.hasFocus ? 1 : 0;
+
+    // 레이어 정보 읽기
+    CGRect layerBounds = view.imageLayer.bounds;
+    double layerWidth = layerBounds.size.width;
+    double layerHeight = layerBounds.size.height;
+    double contentsScale = view.imageLayer.contentsScale;
+
+    // IOSurface 정보 읽기 (현재 표시 중인 이미지)
+    int presentedWidth = 0;
+    int presentedHeight = 0;
+    double presentedScale = 0;
+    BOOL hasPresented = NO;
+
+    if (view.surface != NULL) {
+        presentedWidth = (int)IOSurfaceGetWidth(view.surface);
+        presentedHeight = (int)IOSurfaceGetHeight(view.surface);
+        // 표시 시퀀스 번호는 현재 추적하지 않음 (0으로 설정)
+        presentedScale = contentsScale;
+        hasPresented = YES;
+    }
+
+    // JSON 생성 (cJSON 없이 직접 문자열 구성)
+    NSMutableString *json = [NSMutableString string];
+    [json appendString:@"{"];
+    [json appendFormat:@"\"frame\":{\"x\":%.1f,\"y\":%.1f,\"width\":%.1f,\"height\":%.1f},", x, y, width, height];
+    [json appendFormat:@"\"visible\":%@,", visible ? @"true" : @"false"];
+    [json appendFormat:@"\"focused\":%@,", focused ? @"true" : @"false"];
+    [json appendFormat:@"\"layer\":{\"bounds\":{\"x\":0,\"y\":0,\"width\":%.1f,\"height\":%.1f},\"contentsScale\":%.2f},",
+          layerWidth, layerHeight, contentsScale];
+
+    if (hasPresented) {
+        [json appendFormat:@"\"presented\":{\"width\":%d,\"height\":%d,\"scale\":%.1f},",
+              presentedWidth, presentedHeight, presentedScale];
+    }
+
+    [json appendString:@"\"error\":null"];
+    [json appendString:@"}"];
+
+    // 정적 버퍼에 결과를 반환 (호출자가 사용 후 해제해야 함)
+    const char *result = [json UTF8String];
+    // 메모리를 malloc으로 할당하여 반환
+    char *output = malloc(strlen(result) + 1);
+    if (output) {
+        strcpy(output, result);
+    }
+    return output;
+}
