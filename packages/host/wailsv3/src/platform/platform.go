@@ -19,6 +19,12 @@ type Rect struct {
 	X, Y, W, H float64
 }
 
+// DOMOverlay 는 표면 뷰포트 기준 CSS 픽셀 여백과 표시 여부다.
+type DOMOverlay struct {
+	Left, Top, Right, Bottom float64
+	Visible                  bool
+}
+
 // WebviewOptions 는 앱이 만드는 네이티브 웹뷰의 생성 값이다.
 type WebviewOptions struct {
 	// Identifier 는 웹뷰가 보낸 메시지에 붙는 번호다.
@@ -105,6 +111,8 @@ type Platform interface {
 	WebviewFrame(view unsafe.Pointer) Rect
 	// SetWebviewAlpha 는 뷰의 불투명도를 정한다.
 	SetWebviewAlpha(view unsafe.Pointer, alpha float64)
+	// SetSurfaceOverlays 는 네이티브 입력보다 먼저 처리할 선언된 DOM 오버레이를 설정한다.
+	SetSurfaceOverlays(view unsafe.Pointer, overlays []DOMOverlay)
 	// SetWebviewResizing 은 연속 크기 변경의 시작과 종료를 뷰에 전달한다.
 	SetWebviewResizing(view unsafe.Pointer, live bool)
 	// ConfigureModal 은 모달 웹뷰의 접근성 이름과 모서리 반경을 정한다.
@@ -135,6 +143,8 @@ type Platform interface {
 	CreateImage(surface unsafe.Pointer, name string, event func(json string)) (unsafe.Pointer, error)
 	// PlaceImage 는 표면 뷰포트의 CSS 픽셀 여백으로 그림 영역을 정한다.
 	PlaceImage(image unsafe.Pointer, left, top, right, bottom float64, visible bool)
+	// RasterImage 는 적용된 그림 영역의 장치 픽셀 크기와 CSS 픽셀당 장치 픽셀 배율을 반환한다.
+	RasterImage(image unsafe.Pointer) (width, height int, scale float64, ok bool)
 	// PresentImage 는 외부 IOSurface 를 표시한다. token_id 는 IOSurface 의 전역 ID,
 	// nonce 는 논스 대조용 16바이트 데이터, width·height 는 장치 픽셀 단위의 크기이고,
 	// scale 은 이미지가 만들어진 배율이다 (contentsScale 로 사용).

@@ -138,6 +138,10 @@ func (implementation) SetWebviewAlpha(unsafe.Pointer, float64) {
 	unreachable("native webview alpha")
 }
 
+func (implementation) SetSurfaceOverlays(unsafe.Pointer, []platform.DOMOverlay) {
+	unreachable("surface DOM overlays")
+}
+
 func (implementation) SetWebviewResizing(unsafe.Pointer, bool) {
 	unreachable("native webview live resize")
 }
@@ -229,6 +233,11 @@ func (implementation) CreateImage(unsafe.Pointer, string, func(string)) (unsafe.
 
 func (implementation) PlaceImage(unsafe.Pointer, float64, float64, float64, float64, bool) {
 	unreachable("image placement")
+}
+
+func (implementation) RasterImage(unsafe.Pointer) (int, int, float64, bool) {
+	unreachable("image raster geometry")
+	return 0, 0, 0, false
 }
 
 func (implementation) PresentImage(unsafe.Pointer, uint32, [16]byte, float64, float64, float64) bool {

@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"reflect"
 	"sync"
 	"unsafe"
 
@@ -35,8 +36,95 @@ type Surface struct {
 	URL     string `json:"url"`
 	Visible bool   `json:"visible"`
 	// 페이지가 초점을 잃은 표면을 흐리게 표시하도록 요청했는지 나타낸다.
-	Dim bool `json:"dim"`
+	Dim         bool               `json:"dim"`
+	Composition SurfaceComposition `json:"composition"`
 	Rect
+}
+
+type SurfaceRegion struct {
+	Name    string `json:"name"`
+	Kind    string `json:"kind"`
+	Sidecar string `json:"sidecar,omitempty"`
+	Input   string `json:"input"`
+}
+
+type SurfaceComposition struct {
+	Kind     string          `json:"kind"`
+	Regions  []SurfaceRegion `json:"regions,omitempty"`
+	Overlays []string        `json:"overlays,omitempty"`
+}
+
+func validCompositionName(name string) bool {
+	if len(name) < 1 || len(name) > 64 {
+		return false
+	}
+	for i, ch := range name {
+		if (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || (i > 0 && ch == '-') {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func validateComposition(composition SurfaceComposition) error {
+	if composition.Kind == "dom" {
+		if len(composition.Regions) != 0 || len(composition.Overlays) != 0 {
+			return fmt.Errorf("dom composition cannot declare regions or overlays")
+		}
+		return nil
+	}
+	if composition.Kind != "hybrid" || len(composition.Regions) == 0 || composition.Overlays == nil {
+		return fmt.Errorf("surface composition must be dom or a complete hybrid composition")
+	}
+	seen := map[string]bool{}
+	for _, region := range composition.Regions {
+		if !validCompositionName(region.Name) || seen[region.Name] {
+			return fmt.Errorf("invalid or duplicate composition name %q", region.Name)
+		}
+		seen[region.Name] = true
+		switch region.Kind {
+		case "document":
+			if region.Input != "native" || region.Sidecar != "" {
+				return fmt.Errorf("document region %q must own native input", region.Name)
+			}
+		case "image":
+			if region.Input != "dom" || region.Sidecar == "" {
+				return fmt.Errorf("image region %q requires DOM input and a sidecar", region.Name)
+			}
+		default:
+			return fmt.Errorf("unknown region kind %q", region.Kind)
+		}
+	}
+	for _, overlay := range composition.Overlays {
+		if !validCompositionName(overlay) || seen[overlay] {
+			return fmt.Errorf("invalid or duplicate composition name %q", overlay)
+		}
+		seen[overlay] = true
+	}
+	return nil
+}
+
+func (s *Surfaces) requireRegion(surface, name, kind, sidecar string) error {
+	s.mu.Lock()
+	composition, ok := s.compositions[surface]
+	s.mu.Unlock()
+	if !ok {
+		return fmt.Errorf("surface %q has no composition declaration", surface)
+	}
+	for _, region := range composition.Regions {
+		if region.Name != name {
+			continue
+		}
+		if region.Kind != kind {
+			return fmt.Errorf("region %q is declared as %s, not %s", name, region.Kind, kind)
+		}
+		if kind == "image" && sidecar != "" && region.Sidecar != sidecar {
+			return fmt.Errorf("image %q is not declared for sidecar %q", name, sidecar)
+		}
+		return nil
+	}
+	return fmt.Errorf("region %q is not declared by surface %q", name, surface)
 }
 
 type SyncRequest struct {
@@ -79,8 +167,10 @@ type Surfaces struct {
 	// 호스트 호출 사이의 모달 상태와 테마를 보호한다.
 	// 뷰는 주 스레드에서만 다루므로 잠금이 필요 없고, 이 잠금을 잡은 경로는 주 스레드를
 	// 기다리지 않는다.
-	mu    sync.Mutex
-	views map[string]*nativeWebview
+	mu                   sync.Mutex
+	views                map[string]*nativeWebview
+	compositions         map[string]SurfaceComposition
+	compositionRevisions map[string]uint64
 	// 표면은 네이티브 뷰이므로 표면을 누른 입력은 페이지에 도달하지 않는다. 이 맵은 누른
 	// 뷰를 페이지가 사용하는 표면 id 로 바꾼다.
 	named map[uintptr]string
@@ -117,12 +207,14 @@ type Surfaces struct {
 func NewSurfaces(win *application.WebviewWindow, sidecars *Sidecars) *Surfaces {
 	s := &Surfaces{
 		window: win, projects: map[string]bool{}, sidecars: sidecars,
-		views:     map[string]*nativeWebview{},
-		named:     map[uintptr]string{},
-		live:      map[string]bool{},
-		shapes:    map[string]*nativeShape{},
-		documents: NewDocuments(),
-		images:    NewImages(),
+		views:                map[string]*nativeWebview{},
+		compositions:         map[string]SurfaceComposition{},
+		compositionRevisions: map[string]uint64{},
+		named:                map[uintptr]string{},
+		live:                 map[string]bool{},
+		shapes:               map[string]*nativeShape{},
+		documents:            NewDocuments(),
+		images:               NewImages(),
 		// 아직 테마를 받지 않았을 때의 값. 빈 맵이 아니면 JSON 에 null 이 실리고,
 		// 이 값을 받는 페이지는 토큰을 순회하다 멈춘다.
 		theme: Theme{Tokens: map[string]string{}},
@@ -290,6 +382,24 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 	if !ok {
 		return PreparedSurfaces{}, errNoWindow
 	}
+	seen := map[string]bool{}
+	s.mu.Lock()
+	for _, surface := range req.Surfaces {
+		if surface.ID == "" || seen[surface.ID] {
+			s.mu.Unlock()
+			return PreparedSurfaces{}, fmt.Errorf("invalid or duplicate surface %q", surface.ID)
+		}
+		seen[surface.ID] = true
+		if err := validateComposition(surface.Composition); err != nil {
+			s.mu.Unlock()
+			return PreparedSurfaces{}, fmt.Errorf("surface %q: %w", surface.ID, err)
+		}
+		if held, exists := s.compositions[surface.ID]; exists && !reflect.DeepEqual(held, surface.Composition) {
+			s.mu.Unlock()
+			return PreparedSurfaces{}, fmt.Errorf("surface %q changed its composition declaration", surface.ID)
+		}
+	}
+	s.mu.Unlock()
 	// 페이지가 커밋했으므로 창이 화면에 있고 표면이 있다. 애플리케이션이 그려진 뒤에
 	// 한 번 실행할 작업은 여기서 시작한다.
 	s.first.Do(func() { s.Emit("page-ready") })
@@ -396,10 +506,14 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]str
 		placed = append(placed, Placement{ID: id, Rect: Rect(system.WebviewFrame(view.NativeView()))})
 	}
 	for _, surface := range req.Surfaces {
+		s.mu.Lock()
+		s.compositions[surface.ID] = surface.Composition
+		s.mu.Unlock()
 		wanted[surface.ID] = true
 		w, h := max1(surface.W), max1(surface.H)
 		// 면적이 없는 웹뷰는 보이지 않으므로 1 픽셀 뷰로 두지 않고 숨긴다.
 		visible := surface.Visible && surface.W >= 1 && surface.H >= 1
+		s.images.SetSurfaceVisible(surface.ID, visible)
 
 		alpha := alphaFor(surface.Dim)
 		want := Rect{X: surface.X, Y: surface.Y, W: w, H: h}
@@ -417,7 +531,7 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]str
 			Width:  w,
 			Height: h,
 
-			Hidden: !visible,
+			Hidden: !visible, Transparent: surface.Composition.Kind == "hybrid",
 		})
 		if err != nil {
 			log.Printf("surface %s: %v", surface.ID, err)
@@ -442,9 +556,14 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]str
 			system.CloseImage(handle)
 			s.windowChanged()
 		})
+		s.images.EndGeneration(id)
 		delete(s.named, uintptr(view.NativeView()))
 		view.Close()
 		delete(s.views, id)
+		s.mu.Lock()
+		delete(s.compositions, id)
+		s.mu.Unlock()
+		delete(s.compositionRevisions, id)
 		gone = append(gone, id)
 	}
 	return gone, placed

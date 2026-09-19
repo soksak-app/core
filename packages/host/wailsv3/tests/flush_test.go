@@ -53,14 +53,14 @@ func TestEveryPendingReplyIsFlushedAfterTheQueueDrains(t *testing.T) {
 	}
 	// 가득 찬 상태에서 표면·이름이 다른 반납 셋과 닫힘 둘.
 	for i, name := range []string{"a", "b", "c"} {
-		bodyMap := host.AfterPresent(true, "", name, i+1)
+		bodyMap := host.AfterPresent(true, "", name, 1, 1, i+1)
 		bodyBytes, _ := json.Marshal(bodyMap)
 		if err := sidecars.SendResponse(echoSidecar, "s1", name, json.RawMessage(bodyBytes)); err != nil {
 			t.Fatal(err)
 		}
 	}
 	// 같은 그림 a 에 다른 sequence 로 다시 보낸다. 최신(seq 4)만 도착해야 한다.
-	bodyMap := host.AfterPresent(true, "", "a", 4)
+	bodyMap := host.AfterPresent(true, "", "a", 1, 1, 4)
 	bodyBytes, _ := json.Marshal(bodyMap)
 	if err := sidecars.SendResponse(echoSidecar, "s1", "a", json.RawMessage(bodyBytes)); err != nil {
 		t.Fatal(err)
@@ -92,9 +92,9 @@ func TestEveryPendingReplyIsFlushedAfterTheQueueDrains(t *testing.T) {
 	}
 	// 같은 그림 a 의 seq 1, 2 두 번 보냈을 때 seq 2 하나만 도착해야 한다.
 	// 실제 JSON 필드 순서는 Marshal 결과를 기반으로 함.
-	aSeq1Pattern := `"name":"a","sequence":1` // seq 1 은 없어야 함
-	aSeq2Pattern := `"name":"a","sequence":2` // seq 2 는 있어야 함
-	aSeq4Pattern := `"name":"a","sequence":4` // seq 4 는 있어야 함 (최신)
+	aSeq1Pattern := `"name":"a","raster":1,"sequence":1` // seq 1 은 없어야 함
+	aSeq2Pattern := `"name":"a","raster":1,"sequence":2` // seq 2 는 있어야 함
+	aSeq4Pattern := `"name":"a","raster":1,"sequence":4` // seq 4 는 있어야 함 (최신)
 
 	if strings.Contains(text, aSeq1Pattern) {
 		t.Errorf("image a with sequence 1 should have been replaced, but found in output")
@@ -162,7 +162,7 @@ func TestOrderIsCorrectWhenStopFlushesBufferedMessages(t *testing.T) {
 
 	// 가득 찬 상태에서 보관할 메시지들
 	for i, name := range []string{"x", "y", "z"} {
-		bodyMap := host.AfterPresent(true, "", name, i+1)
+		bodyMap := host.AfterPresent(true, "", name, 1, 1, i+1)
 		bodyBytes, _ := json.Marshal(bodyMap)
 		if err := sidecars.SendResponse(echoSidecar, "s1", name, json.RawMessage(bodyBytes)); err != nil {
 			t.Fatal(err)

@@ -13,8 +13,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"regexp"
 	"sync"
+	"time"
 	"unsafe"
 )
 
@@ -25,14 +27,9 @@ var imageName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,63}$`)
 
 // ImageRequest 는 표면 페이지의 그림 영역 호출이다.
 type ImageRequest struct {
-	Surface string  `json:"surface"`
-	Name    string  `json:"name"`
-	Sidecar string  `json:"sidecar"`
-	Left    float64 `json:"left"`
-	Top     float64 `json:"top"`
-	Right   float64 `json:"right"`
-	Bottom  float64 `json:"bottom"`
-	Visible bool    `json:"visible"`
+	Surface string `json:"surface"`
+	Name    string `json:"name"`
+	Sidecar string `json:"sidecar"`
 }
 
 // ImageKey 는 표면과 그림 이름의 쌍이다.
@@ -59,16 +56,94 @@ type ImageOwner struct {
 
 // Images 는 창의 그림 영역이다.
 type Images struct {
-	mu      sync.Mutex
-	handles map[ImageKey]unsafe.Pointer
-	owners  map[ImageKey]*ImageOwner
+	mu             sync.Mutex
+	handles        map[ImageKey]unsafe.Pointer
+	owners         map[ImageKey]*ImageOwner
+	states         map[ImageKey]*ImageRasterState
+	generations    map[string]uint64
+	surfaceVisible map[string]bool
+	nextGeneration uint64
+	changed        chan struct{}
+}
+
+// ImageRasterState 는 호스트가 허용한 현재 전송 세대와 정확한 네이티브 래스터다.
+type ImageRasterState struct {
+	Generation, Raster uint64
+	Width, Height      int
+	Scale              float64
+	LastSequence       int
+	Configured         bool
+	Visible            bool
+	PresentedRaster    uint64
+}
+
+// ImageConfigure 는 권한 있는 사이드카에 보낼 새 래스터 설정이다.
+type ImageConfigure struct {
+	Name       string       `json:"name"`
+	Generation uint64       `json:"generation"`
+	Raster     uint64       `json:"raster"`
+	Width      int          `json:"width"`
+	Height     int          `json:"height"`
+	Scale      float64      `json:"scale"`
+	Sidecar    string       `json:"-"`
+	Owner      SidecarOwner `json:"-"`
 }
 
 func NewImages() *Images {
 	return &Images{
-		handles: map[ImageKey]unsafe.Pointer{},
-		owners:  map[ImageKey]*ImageOwner{},
+		handles:        map[ImageKey]unsafe.Pointer{},
+		owners:         map[ImageKey]*ImageOwner{},
+		states:         map[ImageKey]*ImageRasterState{},
+		generations:    map[string]uint64{},
+		surfaceVisible: map[string]bool{},
+		changed:        make(chan struct{}),
 	}
+}
+
+// changedLocked 는 이미지 표시 대기자에게 상태 변경을 알린다. i.mu 를 잡은 상태에서 호출한다.
+func (i *Images) changedLocked() {
+	close(i.changed)
+	i.changed = make(chan struct{})
+}
+
+// BeginGeneration 은 새 표면 문서가 시작될 때 이전 프레임과 구별할 세대를 만든다.
+func (i *Images) BeginGeneration(surface string) uint64 {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	i.nextGeneration++
+	i.generations[surface] = i.nextGeneration
+	return i.nextGeneration
+}
+
+// EndGeneration 은 제거한 표면의 현재 세대를 끝낸다. 번호는 다시 쓰지 않는다.
+func (i *Images) EndGeneration(surface string) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	delete(i.generations, surface)
+	hasState := false
+	for key := range i.states {
+		if key.Surface == surface {
+			hasState = true
+			break
+		}
+	}
+	if hasState {
+		i.surfaceVisible[surface] = false
+	} else {
+		delete(i.surfaceVisible, surface)
+	}
+	i.changedLocked()
+}
+
+// SetSurfaceVisible 은 바깥 SurfaceHost의 표시 상태를 기록한다.
+func (i *Images) SetSurfaceVisible(surface string, visible bool) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	if held, ok := i.surfaceVisible[surface]; ok && held == visible {
+		return
+	}
+	i.surfaceVisible[surface] = visible
+	i.changedLocked()
 }
 
 // Reserve 는 이름을 차지한다. owner 가 nil 이면 오류를 반환한다.
@@ -83,6 +158,14 @@ func (i *Images) Reserve(key ImageKey, owner *ImageOwner) error {
 	}
 	i.handles[key] = nil
 	i.owners[key] = owner
+	generation := i.generations[key.Surface]
+	if generation == 0 {
+		i.nextGeneration++
+		generation = i.nextGeneration
+		i.generations[key.Surface] = generation
+	}
+	i.states[key] = &ImageRasterState{Generation: generation}
+	i.changedLocked()
 	return nil
 }
 
@@ -127,6 +210,8 @@ func (i *Images) Remove(key ImageKey) (unsafe.Pointer, error) {
 	}
 	delete(i.handles, key)
 	delete(i.owners, key)
+	delete(i.states, key)
+	i.changedLocked()
 	return handle, nil
 }
 
@@ -141,11 +226,169 @@ func (i *Images) RemoveSurface(surface string) []unsafe.Pointer {
 		}
 		delete(i.handles, key)
 		delete(i.owners, key)
+		delete(i.states, key)
 		if handle != nil {
 			removed = append(removed, handle)
 		}
 	}
+	_, generationActive := i.generations[surface]
+	if !generationActive {
+		delete(i.surfaceVisible, surface)
+	}
+	if len(removed) > 0 || !generationActive {
+		i.changedLocked()
+	}
 	return removed
+}
+
+// ConfigureRaster 는 적용된 네이티브 래스터가 달라졌을 때 리비전을 올리고 보낼 설정을 반환한다.
+func (i *Images) ConfigureRaster(key ImageKey, width, height int, scale float64, visible bool) (*ImageConfigure, error) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	state, ok := i.states[key]
+	owner := i.owners[key]
+	if !ok || owner == nil || i.handles[key] == nil {
+		return nil, fmt.Errorf("image %q is not attached", key.Name)
+	}
+	if state.Visible != visible {
+		state.Visible = visible
+		i.changedLocked()
+	}
+	if width < 1 || height < 1 || scale <= 0 || math.IsNaN(scale) || math.IsInf(scale, 0) {
+		return nil, nil
+	}
+	if state.Width != width || state.Height != height || math.Abs(state.Scale-scale) > 0.000001 {
+		state.Raster++
+		state.Width, state.Height, state.Scale = width, height, scale
+		state.LastSequence = 0
+		state.Configured = false
+		i.changedLocked()
+	}
+	if !visible || state.Configured {
+		return nil, nil
+	}
+	state.Configured = true
+	return &ImageConfigure{Name: key.Name, Generation: state.Generation, Raster: state.Raster,
+		Width: width, Height: height, Scale: scale, Sidecar: owner.SidecarName, Owner: owner.SidecarOwner}, nil
+}
+
+// SetVisible 은 래스터가 없는 0 크기 배치에서도 영역의 표시 상태를 기록한다.
+func (i *Images) SetVisible(key ImageKey, visible bool) error {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	state, ok := i.states[key]
+	if !ok || i.handles[key] == nil {
+		return fmt.Errorf("image %q is not attached", key.Name)
+	}
+	if state.Visible != visible {
+		state.Visible = visible
+		i.changedLocked()
+	}
+	return nil
+}
+
+// FrameStatus 는 프레임이 메인 스레드에서 표시되기 직전에도 현재 래스터인지 검사한다.
+func (i *Images) FrameStatus(key ImageKey, generation, raster uint64, sequence int) string {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	state := i.states[key]
+	if state == nil || i.handles[key] == nil || state.Generation != generation {
+		return "notAttached"
+	}
+	if !state.Configured || state.Raster != raster || state.LastSequence != sequence {
+		return "stale"
+	}
+	return ""
+}
+
+// MarkPresented 는 현재 래스터의 프레임이 네이티브 표시 저장소에 복사되었음을 기록한다.
+func (i *Images) MarkPresented(key ImageKey, generation, raster uint64, sequence int) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	state := i.states[key]
+	if state == nil || state.Generation != generation || state.Raster != raster || state.LastSequence != sequence {
+		return
+	}
+	if state.PresentedRaster != raster {
+		state.PresentedRaster = raster
+		i.changedLocked()
+	}
+}
+
+// currentPresentedLocked 는 보이는 모든 유효한 그림 영역이 현재 래스터를 표시했는지 반환한다.
+func (i *Images) currentPresentedLocked() bool {
+	for key, state := range i.states {
+		surfaceVisible, known := i.surfaceVisible[key.Surface]
+		if i.handles[key] != nil && state.Visible && (!known || surfaceVisible) && state.Raster > 0 && state.PresentedRaster != state.Raster {
+			return false
+		}
+	}
+	return true
+}
+
+// CurrentPresented 는 보이는 모든 그림 영역이 현재 래스터를 표시했는지 반환한다.
+func (i *Images) CurrentPresented() bool {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	return i.currentPresentedLocked()
+}
+
+// WaitCurrent 는 보이는 모든 그림 영역이 현재 래스터를 표시하거나 제한 시간이 끝날 때까지 기다린다.
+func (i *Images) WaitCurrent(timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for {
+		i.mu.Lock()
+		if i.currentPresentedLocked() {
+			i.mu.Unlock()
+			return true
+		}
+		changed := i.changed
+		i.mu.Unlock()
+
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return false
+		}
+		timer := time.NewTimer(remaining)
+		select {
+		case <-changed:
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+		case <-timer.C:
+			return false
+		}
+	}
+}
+
+// RetryConfigure 는 설정 전송 실패 시 같은 래스터를 다음 완전한 배치에서 다시 보내게 한다.
+func (i *Images) RetryConfigure(key ImageKey, generation, raster uint64) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	if state := i.states[key]; state != nil && state.Generation == generation && state.Raster == raster {
+		state.Configured = false
+	}
+}
+
+// AuthorizeFrame 은 봉투가 현재 공급자와 정확한 래스터에 속하고 순번이 증가하는지 확인한다.
+func (i *Images) AuthorizeFrame(key ImageKey, sender string, generation, raster uint64,
+	width, height int, scale float64, sequence int) string {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	state, ok := i.states[key]
+	owner := i.owners[key]
+	if !ok || owner == nil || i.handles[key] == nil || owner.SidecarName != sender || state.Generation != generation {
+		return "notAttached"
+	}
+	if !state.Configured || state.Raster != raster || state.Width != width || state.Height != height ||
+		math.Abs(state.Scale-scale) > 0.000001 || sequence <= 0 || sequence <= state.LastSequence {
+		return "stale"
+	}
+	state.LastSequence = sequence
+	return ""
 }
 
 // Names 는 만들어진 그림 영역의 주소별 키다.
@@ -196,13 +439,23 @@ type Reply struct {
 
 // Present 는 표시할 이미지를 나타낸다.
 type Present struct {
-	ID       uint32
-	Nonce    [16]byte
-	Width    int
-	Height   int
-	Scale    float64
-	Name     string
-	Sequence int
+	ID         uint32
+	Nonce      [16]byte
+	Width      int
+	Height     int
+	Scale      float64
+	Name       string
+	Generation uint64
+	Raster     uint64
+	Sequence   int
+}
+
+func imageReply(reason, name string, generation, raster uint64, sequence int) *Reply {
+	return &Reply{Name: name, JSON: map[string]interface{}{
+		"image": map[string]interface{}{
+			"error": reason, "name": name, "generation": generation, "raster": raster, "sequence": sequence,
+		},
+	}}
 }
 
 // Decide 는 이미지 봉투를 파싱하고 유효성을 검사하여 의사 결정을 반환한다.
@@ -233,11 +486,13 @@ func Decide(bodyBytes []byte, sender, surface string, images *Images) Decision {
 			ID    uint32 `json:"id"`
 			Nonce string `json:"nonce"`
 		} `json:"token"`
-		Width    int     `json:"width"`
-		Height   int     `json:"height"`
-		Scale    float64 `json:"scale"`
-		Format   string  `json:"format"`
-		Sequence int     `json:"sequence"`
+		Width      int     `json:"width"`
+		Height     int     `json:"height"`
+		Scale      float64 `json:"scale"`
+		Format     string  `json:"format"`
+		Generation uint64  `json:"generation"`
+		Raster     uint64  `json:"raster"`
+		Sequence   int     `json:"sequence"`
 	}
 
 	if err := json.Unmarshal(imageBytes, &envelope); err != nil {
@@ -246,98 +501,51 @@ func Decide(bodyBytes []byte, sender, surface string, images *Images) Decision {
 
 	// 포맷과 토큰 종류 검증
 	if envelope.Format != "bgra8" || envelope.Token.Kind != "iosurface-global" {
-		return &Reply{
-			Name: envelope.Name,
-			JSON: map[string]interface{}{
-				"image": map[string]interface{}{
-					"error":    "unsupported",
-					"name":     envelope.Name,
-					"sequence": envelope.Sequence,
-				},
-			},
-		}
+		return imageReply("unsupported", envelope.Name, envelope.Generation, envelope.Raster, envelope.Sequence)
 	}
 
 	// nonce 를 base64 에서 디코딩하여 [16]byte 배열로 변환
 	decodedNonce, err := base64.StdEncoding.DecodeString(envelope.Token.Nonce)
 	if err != nil {
-		return &Reply{
-			Name: envelope.Name,
-			JSON: map[string]interface{}{
-				"image": map[string]interface{}{
-					"error":    "unsupported",
-					"name":     envelope.Name,
-					"sequence": envelope.Sequence,
-				},
-			},
-		}
+		return imageReply("unsupported", envelope.Name, envelope.Generation, envelope.Raster, envelope.Sequence)
 	}
 
 	// 디코딩된 nonce 가 정확히 16바이트여야 함
 	if len(decodedNonce) != 16 {
-		return &Reply{
-			Name: envelope.Name,
-			JSON: map[string]interface{}{
-				"image": map[string]interface{}{
-					"error":    "unsupported",
-					"name":     envelope.Name,
-					"sequence": envelope.Sequence,
-				},
-			},
-		}
+		return imageReply("unsupported", envelope.Name, envelope.Generation, envelope.Raster, envelope.Sequence)
 	}
 
 	// nonce 를 [16]byte 배열로 변환
 	var nonce [16]byte
 	copy(nonce[:], decodedNonce)
 
-	// 이미지가 등록되어 있고 발신자가 일치하는지 확인
 	key := ImageKey{Surface: surface, Name: envelope.Name}
-	owner, err := images.GetOwner(key) // err is already declared above but Go allows reassignment
-	if err == nil && owner.SidecarName == sender {
-		// 발신자가 일치함 - 표시 가능
-		return &Present{
-			ID:       envelope.Token.ID,
-			Nonce:    nonce,
-			Width:    envelope.Width,
-			Height:   envelope.Height,
-			Scale:    envelope.Scale,
-			Name:     envelope.Name,
-			Sequence: envelope.Sequence,
-		}
+	if reason := images.AuthorizeFrame(key, sender, envelope.Generation, envelope.Raster,
+		envelope.Width, envelope.Height, envelope.Scale, envelope.Sequence); reason != "" {
+		return imageReply(reason, envelope.Name, envelope.Generation, envelope.Raster, envelope.Sequence)
 	}
-
-	// 등록되지 않았거나 발신자가 다름
-	return &Reply{
-		Name: envelope.Name,
-		JSON: map[string]interface{}{
-			"image": map[string]interface{}{
-				"error":    "notAttached",
-				"name":     envelope.Name,
-				"sequence": envelope.Sequence,
-			},
-		},
+	return &Present{
+		ID: envelope.Token.ID, Nonce: nonce, Width: envelope.Width, Height: envelope.Height,
+		Scale: envelope.Scale, Name: envelope.Name, Generation: envelope.Generation,
+		Raster: envelope.Raster, Sequence: envelope.Sequence,
 	}
 }
 
 // AfterPresent 는 이미지 표시 후 응답을 생성한다.
-// ok 가 true 면 released 응답을 반환하고, false 면 reason 을 오류로 반환한다.
-func AfterPresent(ok bool, reason, name string, sequence int) map[string]interface{} {
+// ok 가 true 면 consumed 응답을 반환하고, false 면 reason 을 오류로 반환한다.
+func AfterPresent(ok bool, reason, name string, generation, raster uint64, sequence int) map[string]interface{} {
 	if ok {
 		return map[string]interface{}{
 			"image": map[string]interface{}{
-				"released": map[string]interface{}{
-					"name":     name,
-					"sequence": sequence,
+				"consumed": map[string]interface{}{
+					"name": name, "generation": generation, "raster": raster, "sequence": sequence,
 				},
 			},
 		}
 	}
 	return map[string]interface{}{
 		"image": map[string]interface{}{
-			"error":    reason,
-			"name":     name,
-			"sequence": sequence,
+			"error": reason, "name": name, "generation": generation, "raster": raster, "sequence": sequence,
 		},
 	}
 }
@@ -361,27 +569,38 @@ func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, on
 		key := ImageKey{Surface: surface, Name: d.Name}
 		handle, err := images.Get(key)
 		if err != nil {
-			response := AfterPresent(false, "notAttached", d.Name, d.Sequence)
+			response := AfterPresent(false, "notAttached", d.Name, d.Generation, d.Raster, d.Sequence)
 			if err := sendResponse(d.Name, response); err != nil {
 				log.Printf("image notAttached %s: %v", d.Name, err)
 			}
 			return true
 		}
 
+		attempted := false
+		staleReason := ""
 		ok := onMain(func() bool {
+			attempted = true
+			if staleReason = images.FrameStatus(key, d.Generation, d.Raster, d.Sequence); staleReason != "" {
+				return false
+			}
 			// 플랫폼에 이미지를 표시한다
 			return system.PresentImage(handle, d.ID, d.Nonce, float64(d.Width), float64(d.Height), d.Scale)
 		})
 
 		if !ok {
-			response := AfterPresent(false, "presentFailed", d.Name, d.Sequence)
+			reason := "presentFailed"
+			if attempted && staleReason != "" {
+				reason = staleReason
+			}
+			response := AfterPresent(false, reason, d.Name, d.Generation, d.Raster, d.Sequence)
 			if err := sendResponse(d.Name, response); err != nil {
-				log.Printf("image presentFailed %s: %v", d.Name, err)
+				log.Printf("image %s %s: %v", reason, d.Name, err)
 			}
 		} else {
-			response := AfterPresent(true, "", d.Name, d.Sequence)
+			images.MarkPresented(key, d.Generation, d.Raster, d.Sequence)
+			response := AfterPresent(true, "", d.Name, d.Generation, d.Raster, d.Sequence)
 			if err := sendResponse(d.Name, response); err != nil {
-				log.Printf("image released %s: %v", d.Name, err)
+				log.Printf("image consumed %s: %v", d.Name, err)
 			}
 		}
 		return true

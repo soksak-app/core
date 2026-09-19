@@ -72,10 +72,6 @@ static void modalAligned(void* parentWindow, double x, double y, double w, doubl
 }
 
 // 뷰의 불투명도를 정한다. 페이지는 초점을 잃은 표면을 흐리게 표시한다.
-static void surfaceSetAlpha(void* handle, double alpha) {
-    WKWebView* view = (WKWebView*)handle;
-    [view setAlphaValue:alpha];
-}
 */
 import "C"
 
@@ -160,7 +156,24 @@ func (implementation) WebviewFrame(view unsafe.Pointer) platform.Rect {
 }
 
 func (implementation) SetWebviewAlpha(view unsafe.Pointer, alpha float64) {
-	C.surfaceSetAlpha(view, C.double(alpha))
+	C.webviewSetSurfaceAlpha(view, C.double(alpha))
+}
+
+func (implementation) SetSurfaceOverlays(view unsafe.Pointer, overlays []platform.DOMOverlay) {
+	values := make([]C.double, 0, len(overlays)*5)
+	for _, overlay := range overlays {
+		visible := C.double(0)
+		if overlay.Visible {
+			visible = 1
+		}
+		values = append(values, C.double(overlay.Left), C.double(overlay.Top), C.double(overlay.Right),
+			C.double(overlay.Bottom), visible)
+	}
+	var data *C.double
+	if len(values) > 0 {
+		data = &values[0]
+	}
+	C.webviewSetSurfaceOverlays(view, data, C.size_t(len(overlays)))
 }
 
 // SetWebviewResizing 은 표면의 연속 크기 변경을 시작하거나 끝낸다. 페이지는 방금 보낸

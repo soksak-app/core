@@ -38,6 +38,7 @@ const METHOD = {
   windowClose: "WindowClose",
   syncSurfaces: "SyncSurfaces",
   presentSurfaces: "PresentSurfaces",
+  waitPresented: "WaitPresented",
   setTheme: "SetTheme",
   report: "Report",
   overlayShow: "OverlayShow",
@@ -98,7 +99,6 @@ export const page = (() => {
     // 이 표면의 문서 영역. 호스트는 호출한 웹뷰가 surface 인지 확인하고 상태를 이 표면에만 보낸다.
     document: {
       attach: (document) => call("DocumentAttach", { surface, document }),
-      place: (document, insets, visible) => call("DocumentPlace", { surface, document, ...insets, visible }),
       load: (document, url) => call("DocumentLoad", { surface, document, url }),
       go: (document, action) => call("DocumentGo", { surface, document, action }),
       detach: (document) => call("DocumentDetach", { surface, document }),
@@ -109,7 +109,6 @@ export const page = (() => {
     // 이 표면의 그림 영역. 호스트는 호출한 웹뷰가 surface 인지 확인하고 이벤트를 이 표면에만 보낸다.
     image: {
       attach: (name, sidecar) => call("ImageAttach", { surface, name, sidecar }),
-      place: (name, insets, visible) => call("ImagePlace", { surface, name, ...insets, visible }),
       focus: (name) => call("ImageFocus", { surface, name }),
       caret: (name, x, y, w, h) => call("ImageCaret", { surface, name }, x, y, w, h),
       text: (name, text) => call("ImageText", { surface, name }, text),
@@ -117,6 +116,10 @@ export const page = (() => {
       on: (fn) => listen("image-event", (sent) => {
         if (sent.surface === surface) fn(sent.name, sent.event);
       }),
+    },
+    composition: {
+      place: (revision, regions, overlays) =>
+        call("CompositionPlace", { surface, revision, regions, overlays }),
     },
     modal: {
       content(id, instance, fn, place) {

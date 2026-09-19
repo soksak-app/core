@@ -122,7 +122,7 @@ var hostCommands = map[string]hostEntry{
 	"host.dock.select": {Description: "Performs the Dock menu item with the title.", Result: nullSchema,
 		Params: map[string]any{"type": "object", "properties": map[string]any{"title": map[string]any{"type": "string"}}}},
 	"host.window.reload":    {Description: "Reloads the main page.", Params: emptyObject, Result: nullSchema},
-	"host.window.presented": {Description: "Resolves after the main page and visible application documents have presented their current geometry, with the display time of that frame.", Params: emptyObject, Result: presentedSchema},
+	"host.window.presented": {Description: "Resolves after the main page, visible application documents, and visible image regions have presented their current geometry and raster, with the display time of that frame.", Params: emptyObject, Result: presentedSchema},
 	"host.hit": {Description: "Returns the owner of a point in window coordinates.",
 		Params: map[string]any{"type": "object", "properties": map[string]any{
 			"x": map[string]any{"type": "number"}, "y": map[string]any{"type": "number"}}},
@@ -1016,22 +1016,46 @@ func (s *Surfaces) fullscreen(on bool) error {
 	}
 }
 
-// presented 는 창의 표면 배치 트랜잭션이 확정되고 메인 페이지와 보이는 앱 문서가 현재 배치를 표시할
-// 때까지 기다리고, 그 화면이 표시되는 시각(ms, mach 절대 시각)을 반환한다.
+// presented 는 창의 표면 배치 트랜잭션과 현재 그림 래스터가 확정되고 메인 페이지와 보이는 앱 문서가
+// 그 배치를 표시할 때까지 기다리고, 그 화면이 표시되는 시각(ms, mach 절대 시각)을 반환한다.
 func (s *Surfaces) presented() (float64, error) {
-	done := make(chan float64, 1)
-	var err error
-	application.InvokeSync(func() {
-		err = system.AfterSettled(s.window.NativeWindow(), func(displayed float64) { done <- displayed })
-	})
-	if err != nil {
+	deadline := time.Now().Add(pageTimeout)
+	waitFrame := func() (float64, error) {
+		done := make(chan float64, 1)
+		var err error
+		application.InvokeSync(func() {
+			err = system.AfterSettled(s.window.NativeWindow(), func(displayed float64) { done <- displayed })
+		})
+		if err != nil {
+			return 0, err
+		}
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return 0, rpcError(codeTimeout, "the window did not present within %s", pageTimeout)
+		}
+		select {
+		case displayed := <-done:
+			return displayed, nil
+		case <-time.After(remaining):
+			return 0, rpcError(codeTimeout, "the window did not present within %s", pageTimeout)
+		}
+	}
+
+	if _, err := waitFrame(); err != nil {
 		return 0, err
 	}
-	select {
-	case displayed := <-done:
-		return displayed, nil
-	case <-time.After(pageTimeout):
-		return 0, rpcError(codeTimeout, "the window did not present within %s", pageTimeout)
+	for {
+		remaining := time.Until(deadline)
+		if remaining <= 0 || !s.images.WaitCurrent(remaining) {
+			return 0, rpcError(codeTimeout, "the current image raster did not present within %s", pageTimeout)
+		}
+		displayed, err := waitFrame()
+		if err != nil {
+			return 0, err
+		}
+		if s.images.CurrentPresented() {
+			return displayed, nil
+		}
 	}
 }
 

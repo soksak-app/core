@@ -24,15 +24,10 @@ var documentName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,63}$`)
 
 // DocumentRequest 는 표면 페이지의 문서 영역 호출이다. 필드는 호출마다 필요한 것만 쓴다.
 type DocumentRequest struct {
-	Surface  string  `json:"surface"`
-	Document string  `json:"document"`
-	URL      string  `json:"url"`
-	Action   string  `json:"action"`
-	Left     float64 `json:"left"`
-	Top      float64 `json:"top"`
-	Right    float64 `json:"right"`
-	Bottom   float64 `json:"bottom"`
-	Visible  bool    `json:"visible"`
+	Surface  string `json:"surface"`
+	Document string `json:"document"`
+	URL      string `json:"url"`
+	Action   string `json:"action"`
 }
 
 // DocumentState 는 document-state 이벤트의 값이다.
@@ -162,6 +157,9 @@ func (s *Surfaces) attachDocument(viewID uint64, req DocumentRequest) error {
 	if err != nil {
 		return err
 	}
+	if err := s.requireRegion(key.Surface, key.Name, "document", ""); err != nil {
+		return err
+	}
 	if err := s.documents.Reserve(key); err != nil {
 		return err
 	}
@@ -210,6 +208,9 @@ func (s *Surfaces) withDocument(viewID uint64, req DocumentRequest, run func(han
 	if err != nil {
 		return err
 	}
+	if err := s.requireRegion(key.Surface, key.Name, "document", ""); err != nil {
+		return err
+	}
 	// 조회와 사용을 UI 스레드의 한 작업에서 한다. 닫기도 UI 스레드에서 등록 해제와 함께 일어나므로,
 	// 조회한 핸들은 이 작업 동안 해제되지 않는다.
 	application.InvokeSync(func() {
@@ -219,17 +220,6 @@ func (s *Surfaces) withDocument(viewID uint64, req DocumentRequest, run func(han
 			err = run(handle)
 		}
 	})
-	return err
-}
-
-func (s *Surfaces) placeDocument(viewID uint64, req DocumentRequest) error {
-	err := s.withDocument(viewID, req, func(handle unsafe.Pointer) error {
-		system.PlaceDocument(handle, req.Left, req.Top, req.Right, req.Bottom, req.Visible)
-		return nil
-	})
-	if err == nil {
-		s.windowChanged()
-	}
 	return err
 }
 
@@ -297,6 +287,8 @@ func (s *Surfaces) surfaceCommitted(viewID uint64) {
 	application.InvokeSync(func() {
 		s.closeSurfaceDocuments(surface)
 		s.closeSurfaceImages(surface)
+		delete(s.compositionRevisions, surface)
+		s.images.BeginGeneration(surface)
 	})
 	s.surfacesClosed([]string{surface})
 }
@@ -338,6 +330,9 @@ func (s *Surfaces) attachImage(viewID uint64, req ImageRequest) error {
 	if req.Sidecar == "" {
 		return fmt.Errorf("image %q: attach requires a sidecar", req.Name)
 	}
+	if err := s.requireRegion(key.Surface, key.Name, "image", req.Sidecar); err != nil {
+		return err
+	}
 	if err := s.images.Reserve(key, &ImageOwner{SidecarName: req.Sidecar, SidecarOwner: s}); err != nil {
 		return err
 	}
@@ -377,6 +372,9 @@ func (s *Surfaces) withImage(viewID uint64, req ImageRequest, run func(handle un
 	if err != nil {
 		return err
 	}
+	if err := s.requireRegion(key.Surface, key.Name, "image", ""); err != nil {
+		return err
+	}
 	// 조회와 사용을 UI 스레드의 한 작업에서 한다. 닫기도 UI 스레드에서 등록 해제와 함께 일어나므로,
 	// 조회한 핸들은 이 작업 동안 해제되지 않는다.
 	application.InvokeSync(func() {
@@ -386,17 +384,6 @@ func (s *Surfaces) withImage(viewID uint64, req ImageRequest, run func(handle un
 			err = run(handle)
 		}
 	})
-	return err
-}
-
-func (s *Surfaces) placeImage(viewID uint64, req ImageRequest) error {
-	err := s.withImage(viewID, req, func(handle unsafe.Pointer) error {
-		system.PlaceImage(handle, req.Left, req.Top, req.Right, req.Bottom, req.Visible)
-		return nil
-	})
-	if err == nil {
-		s.windowChanged()
-	}
 	return err
 }
 

@@ -1,8 +1,8 @@
-// Wails runtime contract: page.image methods send arguments in the shape the host expects.
+// Wails 런타임은 개별 영역 배치를 노출하지 않고 완전한 합성만 보낸다.
 import assert from "node:assert/strict";
 import test from "node:test";
 
-test("Wails page.image methods send correct argument shapes to host", async () => {
+test("Wails page regions expose operations but only composition places geometry", async () => {
   // Record all calls made through the mocked native interface
   const recorded = [];
 
@@ -56,25 +56,18 @@ test("Wails page.image methods send correct argument shapes to host", async () =
     "image.attach: sends ImageAttach with [request]"
   );
 
-  // Test: image.place should call ImagePlace with [request]
-  await page.image.place("v", { left: 1, top: 2, right: 3, bottom: 4 }, true);
+  assert.equal(page.image.place, undefined);
+  assert.equal(page.document.place, undefined);
+  const regions = [{ name: "v", left: 1, top: 2, right: 3, bottom: 4, visible: true }];
+  const overlays = [{ name: "toolbar", left: 5, top: 6, right: 7, bottom: 8, visible: true }];
+  await page.composition.place(9, regions, overlays);
   assert.deepEqual(
     recorded[recorded.length - 1],
     [
-      "ImagePlace",
-      [
-        {
-          surface: "s1",
-          name: "v",
-          left: 1,
-          top: 2,
-          right: 3,
-          bottom: 4,
-          visible: true,
-        },
-      ],
+      "CompositionPlace",
+      [{ surface: "s1", revision: 9, regions, overlays }],
     ],
-    "image.place: sends ImagePlace with [request]"
+    "composition.place: sends one complete request"
   );
 
   // Test: image.focus should call ImageFocus with [request]

@@ -107,6 +107,14 @@ func (h *Host) PresentSurfaces(ctx context.Context, req PresentRequest) ([]Place
 	return s.PresentSurfaces(req)
 }
 
+func (h *Host) WaitPresented(ctx context.Context) (float64, error) {
+	s, err := h.surface(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return s.presented()
+}
+
 func (h *Host) OverlayUpdate(ctx context.Context, req UpdateRequest) error {
 	s, err := h.surface(ctx)
 	if err != nil {
@@ -165,6 +173,12 @@ func invokeNative(s *Surfaces, viewID uint64, call nativeCall) (any, error) {
 			return nil, err
 		}
 		return nil, s.SidecarSend(key, id, body)
+	case "CompositionPlace":
+		var req CompositionPlaceRequest
+		if err := nativeArgs(call, &req); err != nil {
+			return nil, err
+		}
+		return nil, s.placeComposition(viewID, req)
 	case "ModalContent", "ModalReady":
 		if err := nativeArgs(call, &id, &instance); err != nil {
 			return nil, err
@@ -174,7 +188,7 @@ func invokeNative(s *Surfaces, viewID uint64, call nativeCall) (any, error) {
 		}
 		s.ModalReady(id, instance)
 		return nil, nil
-	case "DocumentAttach", "DocumentPlace", "DocumentLoad", "DocumentGo", "DocumentDetach":
+	case "DocumentAttach", "DocumentLoad", "DocumentGo", "DocumentDetach":
 		var req DocumentRequest
 		if err := nativeArgs(call, &req); err != nil {
 			return nil, err
@@ -182,8 +196,6 @@ func invokeNative(s *Surfaces, viewID uint64, call nativeCall) (any, error) {
 		switch call.Method {
 		case "DocumentAttach":
 			return nil, s.attachDocument(viewID, req)
-		case "DocumentPlace":
-			return nil, s.placeDocument(viewID, req)
 		case "DocumentLoad":
 			return nil, s.loadDocument(viewID, req)
 		case "DocumentGo":
@@ -191,7 +203,7 @@ func invokeNative(s *Surfaces, viewID uint64, call nativeCall) (any, error) {
 		default:
 			return nil, s.detachDocument(viewID, req)
 		}
-	case "ImageAttach", "ImagePlace", "ImageFocus", "ImageCaret", "ImageText", "ImageDetach":
+	case "ImageAttach", "ImageFocus", "ImageCaret", "ImageText", "ImageDetach":
 		var req ImageRequest
 		if err := nativeArgs(call, &req); err != nil {
 			return nil, err
@@ -199,8 +211,6 @@ func invokeNative(s *Surfaces, viewID uint64, call nativeCall) (any, error) {
 		switch call.Method {
 		case "ImageAttach":
 			return nil, s.attachImage(viewID, req)
-		case "ImagePlace":
-			return nil, s.placeImage(viewID, req)
 		case "ImageFocus":
 			return nil, s.focusImage(viewID, req)
 		case "ImageCaret":

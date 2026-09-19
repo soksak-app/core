@@ -27,13 +27,13 @@ func TestDocumentRequestsBelongToTheCallingSurface(t *testing.T) {
 	}
 }
 
-func TestDocumentRequestDecodesInsets(t *testing.T) {
+func TestDocumentRequestDoesNotExposeIndividualPlacement(t *testing.T) {
 	var req host.DocumentRequest
 	body := `{"surface":"tab-1","document":"page","left":1.5,"top":2,"right":3,"bottom":4,"visible":true}`
 	if err := json.Unmarshal([]byte(body), &req); err != nil {
 		t.Fatal(err)
 	}
-	want := host.DocumentRequest{Surface: "tab-1", Document: "page", Left: 1.5, Top: 2, Right: 3, Bottom: 4, Visible: true}
+	want := host.DocumentRequest{Surface: "tab-1", Document: "page"}
 	if req != want {
 		t.Fatalf("got %+v", req)
 	}
