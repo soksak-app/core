@@ -2,6 +2,7 @@
 #import <WebKit/WebKit.h>
 #import <IOSurface/IOSurface.h>
 #import "image_region.h"
+#import "webview_geometry.h"
 
 static int failures = 0;
 
@@ -23,6 +24,7 @@ static IOSurfaceRef createColoredGlobalSurface(size_t width, size_t height, unsi
     IOSurfaceRef surface = IOSurfaceCreate((CFDictionaryRef)@{
         (id)kIOSurfaceWidth: @(width),
         (id)kIOSurfaceHeight: @(height),
+        (id)kIOSurfaceBytesPerElement: @4,
         (id)kIOSurfacePixelFormat: @(kCVPixelFormatType_32BGRA),
     });
 
@@ -61,25 +63,31 @@ int main(void) { @autoreleasepool {
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(100, 100, 500, 400)
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
     [window setReleasedWhenClosed:NO];
+    window.contentView = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, 500, 400)] autorelease];
+    WKWebView *main = [[[WKWebView alloc] initWithFrame:window.contentView.bounds] autorelease];
+    main.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+    [window.contentView addSubview:main];
     WKWebView *surface = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 500, 400)] autorelease];
-    surface.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
-    window.contentView = surface;
+    [window.contentView addSubview:surface];
     [window orderBack:nil];
+    webviewAttachSurface(surface, main);
+    webviewSetFrame(surface, 0, 0, 500, 400);
+    NSView *nativePlane = (NSView *)webviewSurfaceNativePlane(surface);
 
     // TEST 1: 방향·크기 - 레이어 속성과 표면 ID 확인
     {
         [collectedEvents removeAllObjects];
-        unsigned char nonce1[16];
-        IOSurfaceRef testSurface1 = createColoredGlobalSurface(100, 100, nonce1);
-        check(testSurface1 != NULL, @"TEST 1: IOSurface created with global flag");
-
-        IOSurfaceID sid1 = IOSurfaceGetID(testSurface1);
-
         void *region1 = sp_region_create(surface, "test1", testEvent, NULL);
         check(region1 != NULL, @"TEST 1: region created");
 
         sp_region_place(region1, 10, 20, 30, 40, true);
-        BOOL presented = sp_region_present(region1, sid1, nonce1, 100, 100, window.backingScaleFactor);
+        double raster1[3] = {0};
+        check(sp_region_raster(region1, raster1), @"TEST 1: placed region reports its native raster");
+        unsigned char nonce1[16];
+        IOSurfaceRef testSurface1 = createColoredGlobalSurface((size_t)raster1[0], (size_t)raster1[1], nonce1);
+        check(testSurface1 != NULL, @"TEST 1: IOSurface created with global flag");
+        BOOL presented = sp_region_present(region1, IOSurfaceGetID(testSurface1), nonce1,
+            raster1[0], raster1[1], raster1[2]);
         check(presented, @"TEST 1: sp_region_present succeeded");
 
         // 레이어를 찾아서 속성을 확인한다
@@ -90,10 +98,20 @@ int main(void) { @autoreleasepool {
         check(imageLayer != NULL, @"TEST 1: image layer found");
 
         if (imageLayer) {
-            IOSurfaceRef layerSurface = (IOSurfaceRef)imageLayer.contents;
-            IOSurfaceID layerSurfaceID = IOSurfaceGetID(layerSurface);
-            check(layerSurfaceID == sid1,
-                [NSString stringWithFormat:@"TEST 1: layer surface ID matches (%u == %u)", layerSurfaceID, sid1]);
+            CGImageRef snapshot = (CGImageRef)imageLayer.contents;
+            check(snapshot != NULL && CGImageGetWidth(snapshot) == (size_t)raster1[0]
+                && CGImageGetHeight(snapshot) == (size_t)raster1[1],
+                @"TEST 1: layer owns a copied snapshot at the exact native raster");
+            check((CFTypeRef)snapshot != (CFTypeRef)testSurface1,
+                @"TEST 1: layer does not point at the supplier IOSurface");
+            IOSurfaceLock(testSurface1, 0, NULL);
+            *(uint32_t *)IOSurfaceGetBaseAddress(testSurface1) = 0;
+            IOSurfaceUnlock(testSurface1, 0, NULL);
+            CFDataRef copied = CGDataProviderCopyData(CGImageGetDataProvider(snapshot));
+            uint32_t firstPixel = *(const uint32_t *)CFDataGetBytePtr(copied);
+            check(firstPixel == 0xFFFF0000,
+                @"TEST 1: mutating the transfer IOSurface does not change the presented snapshot");
+            CFRelease(copied);
 
             // 레이어 한 단위가 덮는 장치 픽셀 수와 같아야 그림 한 픽셀이 장치 한 픽셀이 된다.
             NSView *regionView1 = (NSView *)region1;
@@ -101,8 +119,8 @@ int main(void) { @autoreleasepool {
             check(imageLayer.contentsScale == perUnit,
                 [NSString stringWithFormat:@"TEST 1: contentsScale is backing pixels per unit %g (got %g)", perUnit, imageLayer.contentsScale]);
 
-            check([imageLayer.contentsGravity isEqualToString:kCAGravityTopLeft],
-                [NSString stringWithFormat:@"TEST 1: contentsGravity is TopLeft (got %@)", imageLayer.contentsGravity]);
+            check([imageLayer.contentsGravity isEqualToString:kCAGravityResizeAspectFill],
+                [NSString stringWithFormat:@"TEST 1: contentsGravity is ResizeAspectFill (got %@)", imageLayer.contentsGravity]);
 
             check([imageLayer.magnificationFilter isEqualToString:kCAFilterNearest],
                 [NSString stringWithFormat:@"TEST 1: magnificationFilter is Nearest (got %@)", imageLayer.magnificationFilter]);
@@ -181,13 +199,9 @@ int main(void) { @autoreleasepool {
     // TEST 5: 배치 - 여백 유지
     {
         [collectedEvents removeAllObjects];
-        unsigned char nonce5[16];
-        IOSurfaceRef testSurface5 = createColoredGlobalSurface(100, 100, nonce5);
-        IOSurfaceID sid5 = IOSurfaceGetID(testSurface5);
 
         void *region5 = sp_region_create(surface, "test5", testEvent, NULL);
         sp_region_place(region5, 50, 60, 70, 80, true);
-        sp_region_present(region5, sid5, nonce5, 100, 100, window.backingScaleFactor);
 
         double frame[6] = {0};
         sp_region_frame(region5, frame);
@@ -199,7 +213,7 @@ int main(void) { @autoreleasepool {
         // 창 크기를 바꾼다
         [window setContentSize:NSMakeSize(600, 500)];
         // 위도우의 contentView가 자동으로 크기 조정되지 않을 수 있으므로 명시적으로 설정한다
-        [surface setFrame:NSMakeRect(0, 0, 600, 500)];
+        webviewSetFrame(surface, 0, 0, 600, 500);
         // 런루프를 처리해서 프레임 변경 알림이 전달되도록 한다
         [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
         [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
@@ -211,21 +225,17 @@ int main(void) { @autoreleasepool {
 
         // 창을 다시 원래 크기로
         [window setContentSize:NSMakeSize(500, 400)];
+        webviewSetFrame(surface, 0, 0, 500, 400);
 
         sp_region_close(region5);
-        CFRelease(testSurface5);
     }
 
     // TEST 6: 포인터 통과 - hitTest이 nil 반환
     {
         [collectedEvents removeAllObjects];
-        unsigned char nonce6[16];
-        IOSurfaceRef testSurface6 = createColoredGlobalSurface(100, 100, nonce6);
-        IOSurfaceID sid6 = IOSurfaceGetID(testSurface6);
 
         void *region6 = sp_region_create(surface, "test6", testEvent, NULL);
         sp_region_place(region6, 10, 10, 10, 10, true);
-        sp_region_present(region6, sid6, nonce6, 100, 100, window.backingScaleFactor);
 
         NSView *regionView = (NSView *)region6;
         NSPoint testPoint = NSMakePoint(20, 20);  // 영역 내의 점
@@ -233,19 +243,14 @@ int main(void) { @autoreleasepool {
         check(hitView == nil, @"TEST 6: hitTest returns nil for point inside region");
 
         sp_region_close(region6);
-        CFRelease(testSurface6);
     }
 
     // TEST 7: 초점 - focus 이벤트 및 hasFocus 상태
     {
         [collectedEvents removeAllObjects];
-        unsigned char nonce7[16];
-        IOSurfaceRef testSurface7 = createColoredGlobalSurface(100, 100, nonce7);
-        IOSurfaceID sid7 = IOSurfaceGetID(testSurface7);
 
         void *region7 = sp_region_create(surface, "test7", testEvent, NULL);
         sp_region_place(region7, 10, 10, 10, 10, true);
-        sp_region_present(region7, sid7, nonce7, 100, 100, window.backingScaleFactor);
 
         sp_region_focus(region7);
 
@@ -265,19 +270,14 @@ int main(void) { @autoreleasepool {
         check(foundFocusEvent, @"TEST 7: focus event has correct format");
 
         sp_region_close(region7);
-        CFRelease(testSurface7);
     }
 
     // TEST 8: IME 순서 및 markedText 상태
     {
         [collectedEvents removeAllObjects];
-        unsigned char nonce8[16];
-        IOSurfaceRef testSurface8 = createColoredGlobalSurface(100, 100, nonce8);
-        IOSurfaceID sid8 = IOSurfaceGetID(testSurface8);
 
         void *region8 = sp_region_create(surface, "test8", testEvent, NULL);
         sp_region_place(region8, 10, 10, 10, 10, true);
-        sp_region_present(region8, sid8, nonce8, 100, 100, window.backingScaleFactor);
         sp_region_focus(region8);
 
         [collectedEvents removeAllObjects];  // focus 이벤트 제거
@@ -308,19 +308,14 @@ int main(void) { @autoreleasepool {
                 eventCountBefore, eventCountAfter]);
 
         sp_region_close(region8);
-        CFRelease(testSurface8);
     }
 
     // TEST 9: 접근성 및 캐럿
     {
         [collectedEvents removeAllObjects];
-        unsigned char nonce9[16];
-        IOSurfaceRef testSurface9 = createColoredGlobalSurface(100, 100, nonce9);
-        IOSurfaceID sid9 = IOSurfaceGetID(testSurface9);
 
         void *region9 = sp_region_create(surface, "test9", testEvent, NULL);
         sp_region_place(region9, 10, 10, 10, 10, true);
-        sp_region_present(region9, sid9, nonce9, 100, 100, window.backingScaleFactor);
 
         id regionView = (id)region9;
 
@@ -355,19 +350,14 @@ int main(void) { @autoreleasepool {
             @"TEST 9: a new caret replaces the reported rect");
 
         sp_region_close(region9);
-        CFRelease(testSurface9);
     }
 
     // TEST 10: 키 이벤트 - 위 화살표
     {
         [collectedEvents removeAllObjects];
-        unsigned char nonce10[16];
-        IOSurfaceRef testSurface10 = createColoredGlobalSurface(100, 100, nonce10);
-        IOSurfaceID sid10 = IOSurfaceGetID(testSurface10);
 
         void *region10 = sp_region_create(surface, "test10", testEvent, NULL);
         sp_region_place(region10, 10, 10, 10, 10, true);
-        sp_region_present(region10, sid10, nonce10, 100, 100, window.backingScaleFactor);
         sp_region_focus(region10);
 
         id regionView = (id)region10;
@@ -398,19 +388,14 @@ int main(void) { @autoreleasepool {
         }
 
         sp_region_close(region10);
-        CFRelease(testSurface10);
     }
 
     // TEST 11: 키 이벤트 - Return
     {
         [collectedEvents removeAllObjects];
-        unsigned char nonce11[16];
-        IOSurfaceRef testSurface11 = createColoredGlobalSurface(100, 100, nonce11);
-        IOSurfaceID sid11 = IOSurfaceGetID(testSurface11);
 
         void *region11 = sp_region_create(surface, "test11", testEvent, NULL);
         sp_region_place(region11, 10, 10, 10, 10, true);
-        sp_region_present(region11, sid11, nonce11, 100, 100, window.backingScaleFactor);
         sp_region_focus(region11);
 
         id regionView = (id)region11;
@@ -438,19 +423,14 @@ int main(void) { @autoreleasepool {
         }
 
         sp_region_close(region11);
-        CFRelease(testSurface11);
     }
 
     // TEST 12: 키 이벤트 - Backspace
     {
         [collectedEvents removeAllObjects];
-        unsigned char nonce12[16];
-        IOSurfaceRef testSurface12 = createColoredGlobalSurface(100, 100, nonce12);
-        IOSurfaceID sid12 = IOSurfaceGetID(testSurface12);
 
         void *region12 = sp_region_create(surface, "test12", testEvent, NULL);
         sp_region_place(region12, 10, 10, 10, 10, true);
-        sp_region_present(region12, sid12, nonce12, 100, 100, window.backingScaleFactor);
         sp_region_focus(region12);
 
         id regionView = (id)region12;
@@ -478,19 +458,14 @@ int main(void) { @autoreleasepool {
         }
 
         sp_region_close(region12);
-        CFRelease(testSurface12);
     }
 
     // TEST 13: 키 이벤트 - Ctrl+C
     {
         [collectedEvents removeAllObjects];
-        unsigned char nonce13[16];
-        IOSurfaceRef testSurface13 = createColoredGlobalSurface(100, 100, nonce13);
-        IOSurfaceID sid13 = IOSurfaceGetID(testSurface13);
 
         void *region13 = sp_region_create(surface, "test13", testEvent, NULL);
         sp_region_place(region13, 10, 10, 10, 10, true);
-        sp_region_present(region13, sid13, nonce13, 100, 100, window.backingScaleFactor);
         sp_region_focus(region13);
 
         id regionView = (id)region13;
@@ -522,19 +497,14 @@ int main(void) { @autoreleasepool {
         }
 
         sp_region_close(region13);
-        CFRelease(testSurface13);
     }
 
     // TEST 14: 키 이벤트 - 일반 문자 'a'
     {
         [collectedEvents removeAllObjects];
-        unsigned char nonce14[16];
-        IOSurfaceRef testSurface14 = createColoredGlobalSurface(100, 100, nonce14);
-        IOSurfaceID sid14 = IOSurfaceGetID(testSurface14);
 
         void *region14 = sp_region_create(surface, "test14", testEvent, NULL);
         sp_region_place(region14, 10, 10, 10, 10, true);
-        sp_region_present(region14, sid14, nonce14, 100, 100, window.backingScaleFactor);
         sp_region_focus(region14);
 
         id regionView = (id)region14;
@@ -564,19 +534,14 @@ int main(void) { @autoreleasepool {
         }
 
         sp_region_close(region14);
-        CFRelease(testSurface14);
     }
 
     // TEST 15: 키 이벤트 - Shift+Tab
     {
         [collectedEvents removeAllObjects];
-        unsigned char nonce15[16];
-        IOSurfaceRef testSurface15 = createColoredGlobalSurface(100, 100, nonce15);
-        IOSurfaceID sid15 = IOSurfaceGetID(testSurface15);
 
         void *region15 = sp_region_create(surface, "test15", testEvent, NULL);
         sp_region_place(region15, 10, 10, 10, 10, true);
-        sp_region_present(region15, sid15, nonce15, 100, 100, window.backingScaleFactor);
         sp_region_focus(region15);
 
         id regionView = (id)region15;
@@ -605,19 +570,14 @@ int main(void) { @autoreleasepool {
         }
 
         sp_region_close(region15);
-        CFRelease(testSurface15);
     }
 
     // TEST 16: 조합 중 Return - key 이벤트 없음
     {
         [collectedEvents removeAllObjects];
-        unsigned char nonce16[16];
-        IOSurfaceRef testSurface16 = createColoredGlobalSurface(100, 100, nonce16);
-        IOSurfaceID sid16 = IOSurfaceGetID(testSurface16);
 
         void *region16 = sp_region_create(surface, "test16", testEvent, NULL);
         sp_region_place(region16, 10, 10, 10, 10, true);
-        sp_region_present(region16, sid16, nonce16, 100, 100, window.backingScaleFactor);
         sp_region_focus(region16);
 
         id regionView = (id)region16;
@@ -651,19 +611,14 @@ int main(void) { @autoreleasepool {
             [NSString stringWithFormat:@"TEST 16: no key event during composition (got %lu events)", [collectedEvents count]]);
 
         sp_region_close(region16);
-        CFRelease(testSurface16);
     }
 
     // TEST 17: Command+C - key/insert 이벤트 없음
     {
         [collectedEvents removeAllObjects];
-        unsigned char nonce17[16];
-        IOSurfaceRef testSurface17 = createColoredGlobalSurface(100, 100, nonce17);
-        IOSurfaceID sid17 = IOSurfaceGetID(testSurface17);
 
         void *region17 = sp_region_create(surface, "test17", testEvent, NULL);
         sp_region_place(region17, 10, 10, 10, 10, true);
-        sp_region_present(region17, sid17, nonce17, 100, 100, window.backingScaleFactor);
         sp_region_focus(region17);
 
         id regionView = (id)region17;
@@ -693,21 +648,16 @@ int main(void) { @autoreleasepool {
             [NSString stringWithFormat:@"TEST 17: no key or insert event for Command+C (got %lu events)", [collectedEvents count]]);
 
         sp_region_close(region17);
-        CFRelease(testSurface17);
     }
 
-    // TEST 18: 클립 뷰가 표면의 형제이고 표면 위에 있는지 확인
+    // TEST 18: 클립 뷰가 SurfaceHost의 네이티브 평면 안에서 DOM 평면 아래에 있는지 확인
     {
         [collectedEvents removeAllObjects];
-        unsigned char nonce18[16];
-        IOSurfaceRef testSurface18 = createColoredGlobalSurface(100, 100, nonce18);
-        IOSurfaceID sid18 = IOSurfaceGetID(testSurface18);
 
         void *region18 = sp_region_create(surface, "test18", testEvent, NULL);
         check(region18 != NULL, @"TEST 18: region created");
 
         sp_region_place(region18, 10, 10, 10, 10, true);
-        sp_region_present(region18, sid18, nonce18, 100, 100, window.backingScaleFactor);
 
         NSView *regionView = (NSView *)region18;
         NSView *clipView = regionView.superview;
@@ -715,58 +665,56 @@ int main(void) { @autoreleasepool {
             @"TEST 18: region has a non-WebView superview (clipView)");
 
         NSView *surfaceSuperSuperview = clipView.superview;
-        check(surfaceSuperSuperview == surface.superview,
-            @"TEST 18: clipView's superview is surface's superview");
+        check(surfaceSuperSuperview == nativePlane && nativePlane.superview == surface.superview,
+            @"TEST 18: clipView is inside the surface host native plane");
 
-        // clipView가 surface 위에 있는지 확인 (z-order)
+        // 네이티브 평면은 DOM 웹뷰 아래에 있고 둘 다 같은 SurfaceHost 안에 있다.
         NSArray *subviews = surface.superview.subviews;
         NSUInteger surfaceIndex = [subviews indexOfObject:surface];
-        NSUInteger clipViewIndex = [subviews indexOfObject:clipView];
-        check(clipViewIndex != NSNotFound && surfaceIndex != NSNotFound && clipViewIndex > surfaceIndex,
-            [NSString stringWithFormat:@"TEST 18: clipView is above surface in z-order (clip:%lu, surface:%lu)",
-                (unsigned long)clipViewIndex, (unsigned long)surfaceIndex]);
+        NSUInteger nativeIndex = [subviews indexOfObject:nativePlane];
+        check(nativeIndex != NSNotFound && surfaceIndex != NSNotFound && nativeIndex < surfaceIndex,
+            [NSString stringWithFormat:@"TEST 18: native plane is below DOM plane (native:%lu, DOM:%lu)",
+                (unsigned long)nativeIndex, (unsigned long)surfaceIndex]);
 
         sp_region_close(region18);
-        CFRelease(testSurface18);
     }
 
     // TEST 19: 표시된 이미지의 scale이 제대로 설정되는지 확인 (scale 2)
     {
         [collectedEvents removeAllObjects];
-        unsigned char nonce19[16];
-        // scale 2 이므로 2W x 2H 픽셀 이미지를 만든다
-        IOSurfaceRef testSurface19 = createColoredGlobalSurface(200, 160, nonce19);
-        IOSurfaceID sid19 = IOSurfaceGetID(testSurface19);
-
         void *region19 = sp_region_create(surface, "test19", testEvent, NULL);
         // 인셋을 크게 설정해서 영역 크기 = 대략 100x80이 되도록
         // 500 - 200 - 200 = 100, 400 - 160 - 160 = 80
         sp_region_place(region19, 200, 160, 200, 160, true);
-        // 200x160 픽셀을 scale 2로 표시하면 100x80 pt
-        BOOL presented = sp_region_present(region19, sid19, nonce19, 200, 160, 2.0);
+        double raster19[3] = {0};
+        check(sp_region_raster(region19, raster19), @"TEST 19: region reports its scale-2 raster");
+        unsigned char nonce19[16];
+        IOSurfaceRef testSurface19 = createColoredGlobalSurface((size_t)raster19[0], (size_t)raster19[1], nonce19);
+        BOOL presented = sp_region_present(region19, IOSurfaceGetID(testSurface19), nonce19,
+            raster19[0], raster19[1], raster19[2]);
         check(presented, @"TEST 19: image presented with scale 2");
 
         NSView *regionView = (NSView *)region19;
         NSView *clipView = regionView.superview;
 
-        // 클립 뷰 width는 pt 단위여야 한다 (최대 100x80)
+        // SurfaceHost의 로컬 단위는 장치 픽셀이므로 100x80 CSS px은 200x160 단위다.
         double clipWidth = NSWidth(clipView.bounds);
         double clipHeight = NSHeight(clipView.bounds);
-        check(clipWidth == 100 && clipHeight == 80,
-            [NSString stringWithFormat:@"TEST 19: clipView bounds are in points (expected 100x80, got %.0f x%.0f)",
+        check(clipWidth == 200 && clipHeight == 160,
+            [NSString stringWithFormat:@"TEST 19: clipView bounds are device-pixel units (expected 200x160, got %.0f x%.0f)",
                 clipWidth, clipHeight]);
 
         // imageLayer의 bounds도 마찬가지
         CALayer *imageLayer = [regionView.layer.sublayers firstObject];
         double layerWidth = NSWidth(imageLayer.bounds);
         double layerHeight = NSHeight(imageLayer.bounds);
-        check(layerWidth == 100 && layerHeight == 80,
-            [NSString stringWithFormat:@"TEST 19: imageLayer bounds are in points (expected 100x80, got %.0f x%.0f)",
+        check(layerWidth == 200 && layerHeight == 160,
+            [NSString stringWithFormat:@"TEST 19: imageLayer bounds are device-pixel units (expected 200x160, got %.0f x%.0f)",
                 layerWidth, layerHeight]);
 
-        // contentsScale은 2여야 한다
-        check(imageLayer.contentsScale == 2.0,
-            [NSString stringWithFormat:@"TEST 19: contentsScale is 2 (got %g)", imageLayer.contentsScale]);
+        // 로컬 한 단위가 장치 픽셀 하나이므로 contentsScale은 1이다.
+        check(imageLayer.contentsScale == 1.0,
+            [NSString stringWithFormat:@"TEST 19: contentsScale is 1 (got %g)", imageLayer.contentsScale]);
 
         sp_region_close(region19);
         CFRelease(testSurface19);
@@ -775,13 +723,9 @@ int main(void) { @autoreleasepool {
     // TEST 20: 영역의 wanted 플래그가 작동한다
     {
         [collectedEvents removeAllObjects];
-        unsigned char nonce20[16];
-        IOSurfaceRef testSurface20 = createColoredGlobalSurface(100, 100, nonce20);
-        IOSurfaceID sid20 = IOSurfaceGetID(testSurface20);
 
         void *region20 = sp_region_create(surface, "test20", testEvent, NULL);
         sp_region_place(region20, 10, 10, 10, 10, true);  // visible=true
-        sp_region_present(region20, sid20, nonce20, 100, 100, window.backingScaleFactor);
 
         NSView *regionView = (NSView *)region20;
         check(!regionView.isHidden, @"TEST 20: region is visible initially");
@@ -799,29 +743,20 @@ int main(void) { @autoreleasepool {
             @"TEST 20: region is visible again when placed with visible=true");
 
         sp_region_close(region20);
-        CFRelease(testSurface20);
     }
 
-    // TEST 21: 표면을 담은 뷰의 bounds 배율이 달라도(한 단위가 0.5pt) 그림 한 픽셀은 장치 한 픽셀이다.
-    // Wails 의 웹뷰 컨테이너가 이렇다. 점 단위를 가정하면 그림이 절반 크기로 보인다.
+    // TEST 21: SurfaceHost의 장치 픽셀 좌표에서 그림 한 픽셀은 장치 한 픽셀이다.
     {
-        NSView *container = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, 400, 300)] autorelease];
-        [container setBoundsSize:NSMakeSize(800, 600)];
-        WKWebView *scaled = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600)] autorelease];
-        [container addSubview:scaled];
-        NSView *previous = window.contentView;
-        [previous retain];
-        window.contentView = container;
-
-        CGFloat scale = window.backingScaleFactor;
-        size_t pixelWidth = (size_t)(400 * scale), pixelHeight = (size_t)(300 * scale);
+        void *region21 = sp_region_create(surface, "test21", testEvent, NULL);
+        sp_region_place(region21, 0, 0, 0, 0, true);
+        double raster21[3] = {0};
+        check(sp_region_raster(region21, raster21), @"TEST 21: full region reports its native raster");
+        size_t pixelWidth = (size_t)raster21[0], pixelHeight = (size_t)raster21[1];
         unsigned char nonce21[16];
         IOSurfaceRef testSurface21 = createColoredGlobalSurface(pixelWidth, pixelHeight, nonce21);
-        void *region21 = sp_region_create(scaled, "test21", testEvent, NULL);
-        sp_region_place(region21, 0, 0, 0, 0, true);
         bool presented = sp_region_present(region21, IOSurfaceGetID(testSurface21), nonce21,
-            pixelWidth, pixelHeight, scale);
-        check(presented, @"TEST 21: image is presented in a container with scaled bounds");
+            pixelWidth, pixelHeight, raster21[2]);
+        check(presented, @"TEST 21: image is presented in SurfaceHost coordinates");
 
         NSView *regionView = (NSView *)region21;
         CALayer *imageLayer = regionView.layer.sublayers.firstObject;
@@ -833,19 +768,32 @@ int main(void) { @autoreleasepool {
 
         sp_region_close(region21);
         CFRelease(testSurface21);
-        window.contentView = previous;
-        [previous release];
+    }
+
+    // TEST 22: 숨겨진 표면에서 배치한 영역은 표면을 다시 표시하면 함께 표시된다.
+    {
+        void *region22 = sp_region_create(surface, "test22", testEvent, NULL);
+        [surface setHidden:YES];
+        sp_region_place(region22, 10, 10, 10, 10, true);
+        NSView *regionView = (NSView *)region22;
+        check(!regionView.hidden, @"TEST 22: region keeps its wanted visibility while its surface is hidden");
+        [surface setHidden:NO];
+        check(!regionView.isHiddenOrHasHiddenAncestor,
+            @"TEST 22: region becomes visible when its surface is shown again");
+        sp_region_close(region22);
     }
 
     // TEST 22: 창 배율과 다른 배율로 그린 그림은 표시하지 않는다(글자 크기가 틀어진다).
     {
         [collectedEvents removeAllObjects];
-        unsigned char nonce22[16];
-        IOSurfaceRef testSurface22 = createColoredGlobalSurface(100, 100, nonce22);
         void *region22 = sp_region_create(surface, "test22", testEvent, NULL);
         sp_region_place(region22, 0, 0, 0, 0, true);
-        bool presented = sp_region_present(region22, IOSurfaceGetID(testSurface22), nonce22, 100, 100,
-            window.backingScaleFactor + 1);
+        double raster22[3] = {0};
+        check(sp_region_raster(region22, raster22), @"TEST 22: full region reports its native raster");
+        unsigned char nonce22[16];
+        IOSurfaceRef testSurface22 = createColoredGlobalSurface((size_t)raster22[0], (size_t)raster22[1], nonce22);
+        bool presented = sp_region_present(region22, IOSurfaceGetID(testSurface22), nonce22,
+            raster22[0], raster22[1], raster22[2] + 1);
         BOOL reported = NO;
         for (NSString *event in collectedEvents) if ([event containsString:@"\"reason\":\"scale\""]) reported = YES;
         check(!presented && reported, @"TEST 22: an image drawn at another scale is refused with reason scale");

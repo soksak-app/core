@@ -7,6 +7,7 @@
 #import "document_view.h"
 #import "input_inject.h"
 #import "private/webkit.h"
+#import "webview_geometry.h"
 
 static int failures = 0;
 
@@ -109,7 +110,10 @@ static id evaluate(WKWebView *view, NSString *script) {
 // 표면 안의 WKWebView 수. 표면 자신의 내부 뷰는 WKWebView 가 아니다.
 static NSUInteger documents(NSView *surface) {
     NSUInteger count = 0;
-    for (NSView *child in surface.subviews) count += [child isKindOfClass:WKWebView.class];
+    for (NSView *child in surface.subviews) {
+        count += [child isKindOfClass:WKWebView.class];
+        count += documents(child);
+    }
     return count;
 }
 
@@ -129,14 +133,22 @@ int main(void) { @autoreleasepool {
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(100, 100, 500, 400)
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
     [window setReleasedWhenClosed:NO];
+    window.contentView = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, 500, 400)] autorelease];
+    WKWebView *main = [[[WKWebView alloc] initWithFrame:window.contentView.bounds] autorelease];
+    main.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+    [window.contentView addSubview:main];
     WKWebView *surface = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 500, 400)] autorelease];
-    window.contentView = surface;
+    [window.contentView addSubview:surface];
     [window orderBack:nil];
+    webviewAttachSurface(surface, main);
+    webviewSetFrame(surface, 0, 0, 500, 400);
+    NSView *nativePlane = (NSView *)webviewSurfaceNativePlane(surface);
 
     void *document = sp_document_create(surface, "soksak-test/documents", changed, NULL);
     check(document != NULL, @"a document view is created inside the surface");
     WKWebView *view = (WKWebView *)document;
-    check(view.superview == surface, @"the document view is a subview of the surface");
+    check(nativePlane != nil && view.superview == nativePlane && nativePlane.superview == surface.superview,
+        @"the document view is in the surface host native plane");
     check(view.configuration.websiteDataStore != WKWebsiteDataStore.defaultDataStore
         && view.configuration.websiteDataStore.persistent, @"the document uses its own persistent data store");
 
@@ -145,13 +157,13 @@ int main(void) { @autoreleasepool {
     sp_document_frame(document, frame);
     check(frame[0] == 10 && frame[1] == 20 && frame[2] == 460 && frame[3] == 340 && frame[4] == 1,
         [NSString stringWithFormat:@"the region keeps its insets in window coordinates: %g %g %g %g %g", frame[0], frame[1], frame[2], frame[3], frame[4]]);
-    [window setContentSize:NSMakeSize(600, 450)];
+    webviewSetFrame(surface, 0, 0, 600, 450);
     sp_document_frame(document, frame);
     check(frame[0] == 10 && frame[1] == 20 && frame[2] == 560 && frame[3] == 390,
         [NSString stringWithFormat:@"the region follows the surface size: %g %g %g %g", frame[0], frame[1], frame[2], frame[3]]);
     // 여백보다 작아졌던 표면이 다시 커져도 영역은 여백으로 정해진다.
-    [window setContentSize:NSMakeSize(30, 50)];
-    [window setContentSize:NSMakeSize(500, 400)];
+    webviewSetFrame(surface, 0, 0, 30, 50);
+    webviewSetFrame(surface, 0, 0, 500, 400);
     sp_document_frame(document, frame);
     check(frame[0] == 10 && frame[1] == 20 && frame[2] == 460 && frame[3] == 340 && frame[4] == 1,
         [NSString stringWithFormat:@"the region keeps its insets after the surface was smaller than them: %g %g %g %g %g",
@@ -224,7 +236,7 @@ int main(void) { @autoreleasepool {
     settle(@"a new-window link did not open in the same region", ^BOOL(NSDictionary *state) {
         return [state[@"title"] isEqual:@"Blank"];
     });
-    check(documents(surface) == 1, @"a new-window link does not create another view");
+    check(documents(nativePlane) == 1, @"a new-window link does not create another view");
 
     // 읽는 중인 문서를 새 이동이 대신하면, 이전 문서의 읽기가 끝났다고 보고하지 않는다. 제목은 읽기가
     // 끝난 뒤의 보고에 올 수 있으므로 이 조건에 넣지 않는다.
@@ -255,7 +267,7 @@ int main(void) { @autoreleasepool {
     CFRunLoopPerformBlock(CFRunLoopGetMain(), kCFRunLoopCommonModes, ^{ passed = YES; });
     until(@"the run loop did not continue", ^BOOL { return passed; });
     check(reports == after, @"a closed document reports nothing");
-    check(documents(surface) == 0, @"closing removes the document view");
+    check(documents(nativePlane) == 0, @"closing removes the document view");
 
     for (id connection in held) nw_connection_cancel((nw_connection_t)connection);
     nw_listener_cancel(listener);

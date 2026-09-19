@@ -8,15 +8,29 @@
 #import <IOSurface/IOSurface.h>
 #import <QuartzCore/QuartzCore.h>
 #import "image_region.h"
+#import "webview_geometry.h"
 
 @class SPImageRegion;
+
+@interface SPImageClipView : NSClipView
+@end
+
+@implementation SPImageClipView
+- (NSView *)hitTest:(NSPoint)point {
+    NSPoint childPoint = [self.documentView convertPoint:point fromView:self];
+    return [self.documentView hitTest:childPoint];
+}
+@end
 
 // 그림 영역 구현.
 @interface SPImageRegion : NSView <NSTextInputClient>
 @property sp_region_event event;
 @property void *context;
 @property(retain) CALayer *imageLayer;
-@property(assign) IOSurfaceRef surface;  // 레이어가 참조하는 IOSurface. 우리가 ref를 소유.
+@property(assign) CGImageRef snapshot;   // 호스트가 복사해 소유하는 불변 표시 스냅샷.
+@property size_t presentedWidth;
+@property size_t presentedHeight;
+@property double presentedScale;
 @property(assign) WKWebView *webSurface;  // 영역이 놓인 표면 웹뷰. 우리가 소유하지 않음.
 @property NSEdgeInsets insets;
 @property NSPoint caretPos;
@@ -46,19 +60,22 @@
     self.imageLayer = [[[CALayer alloc] init] autorelease];
     [self.layer addSublayer:self.imageLayer];
     self.imageLayer.contentsScale = 1;
-    self.imageLayer.contentsGravity = kCAGravityTopLeft;
+    // 기하가 바뀌어 정확한 대체 래스터가 도착할 때까지 이전 불변 래스터가
+    // 네이티브 영역 전체를 덮어야 한다. 비율 채우기는 이전 화면을 자르며
+    // DOM 평면을 노출하지 않는다.
+    self.imageLayer.contentsGravity = kCAGravityResizeAspectFill;
     self.imageLayer.magnificationFilter = kCAFilterNearest;
     self.markedText = @"";
     self.selectedRange = NSMakeRange(NSNotFound, 0);
     self.markedRange = NSMakeRange(NSNotFound, 0);
-    self.surface = NULL;
+    self.snapshot = NULL;
     return self;
 }
 
 - (void)dealloc {
-    // 레이어의 contents 를 정리한 후 표면을 해제한다.
+    // 레이어의 contents 를 정리한 후 불변 스냅샷을 해제한다.
     self.imageLayer.contents = nil;
-    if (_surface) CFRelease(_surface);
+    if (_snapshot) CGImageRelease(_snapshot);
     [_imageLayer release];
     [_accessibilityText release];
     [_markedText release];
@@ -79,20 +96,20 @@
     WKWebView *surface = self.webSurface;
     if (!surface) return;
 
-    // 표면의 frame을 superview 좌표계에서 읽는다.
-    NSRect surfaceFrame = surface.frame;
+    NSView *nativePlane = clipView.superview;
+    if (!nativePlane) return;
+    NSRect surfaceBounds = nativePlane.bounds;
     CGFloat zoom = surface.pageZoom;
     NSEdgeInsets insets = self.insets;
 
     // 클립 뷰 크기: 표면 프레임에서 인셋 뺀 것 (CSS 픽셀 단위 인셋에 zoom 적용)
-    CGFloat width = NSWidth(surfaceFrame) - (insets.left + insets.right) * zoom;
-    CGFloat height = NSHeight(surfaceFrame) - (insets.top + insets.bottom) * zoom;
+    CGFloat width = NSWidth(surfaceBounds) - (insets.left + insets.right) * zoom;
+    CGFloat height = NSHeight(surfaceBounds) - (insets.top + insets.bottom) * zoom;
 
     // 클립 뷰 위치: 표면의 superview 좌표계에서 계산
-    CGFloat clipX = NSMinX(surfaceFrame) + insets.left * zoom;
+    CGFloat clipX = NSMinX(surfaceBounds) + insets.left * zoom;
     CGFloat clipTop = insets.top * zoom;
-    // 클립 뷰는 표면의 superview 좌표계에 놓이므로 그 좌표계의 방향을 따른다.
-    CGFloat clipY = surface.superview.isFlipped ? NSMinY(surfaceFrame) + clipTop : NSMaxY(surfaceFrame) - clipTop - height;
+    CGFloat clipY = nativePlane.isFlipped ? NSMinY(surfaceBounds) + clipTop : NSMaxY(surfaceBounds) - clipTop - height;
 
     NSRect clipFrame = NSMakeRect(clipX, clipY, MAX(width, 0), MAX(height, 0));
     clipView.frame = clipFrame;
@@ -102,8 +119,10 @@
     self.imageLayer.frame = self.bounds;
     [self updateContentsScale];
 
-    // 표면이 숨겨지면 영역도 숨긴다.
-    self.hidden = !self.wanted || width < 1 || height < 1 || surface.isHiddenOrHasHiddenAncestor;
+    // 표면의 숨김은 부모 뷰 계층이 처리한다. 자식 영역까지 그 상태를 자체 hidden
+    // 플래그에 저장하면, 표면을 다시 표시해도 applyInsets가 다시 호출되지 않는
+    // 전환에서 영역이 영구히 숨겨진다.
+    self.hidden = !self.wanted || width < 1 || height < 1;
 }
 
 
@@ -351,7 +370,9 @@
     NSWindow *window = self.window;
     if (!window) return NSZeroRect;
 
-    NSRect caretRect = NSMakeRect(self.caretPos.x, self.caretPos.y, self.caretWidth, self.caretHeight);
+    CGFloat zoom = self.webSurface.pageZoom > 0 ? self.webSurface.pageZoom : 1;
+    NSRect caretRect = NSMakeRect(self.caretPos.x * zoom, self.caretPos.y * zoom,
+        self.caretWidth * zoom, self.caretHeight * zoom);
     NSRect converted = [self convertRect:caretRect toView:window.contentView];
     return [window convertRectToScreen:converted];
 }
@@ -399,6 +420,26 @@ static IOSurfaceRef lookupSurface(unsigned int surface_id) {
     return IOSurfaceLookup(surface_id);
 }
 
+static CGImageRef copySurfaceImage(IOSurfaceRef surface) {
+    if (IOSurfaceLock(surface, kIOSurfaceLockReadOnly, NULL) != kIOReturnSuccess) return NULL;
+    size_t width = IOSurfaceGetWidth(surface);
+    size_t height = IOSurfaceGetHeight(surface);
+    size_t bytesPerRow = IOSurfaceGetBytesPerRow(surface);
+    void *base = IOSurfaceGetBaseAddress(surface);
+    CFDataRef data = base ? CFDataCreate(NULL, base, bytesPerRow * height) : NULL;
+    IOSurfaceUnlock(surface, kIOSurfaceLockReadOnly, NULL);
+    if (!data) return NULL;
+    CGDataProviderRef provider = CGDataProviderCreateWithCFData(data);
+    CGColorSpaceRef colors = CGColorSpaceCreateDeviceRGB();
+    CGImageRef image = provider && colors ? CGImageCreate(width, height, 8, 32, bytesPerRow, colors,
+        kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst,
+        provider, NULL, false, kCGRenderingIntentDefault) : NULL;
+    if (colors) CGColorSpaceRelease(colors);
+    if (provider) CGDataProviderRelease(provider);
+    CFRelease(data);
+    return image;
+}
+
 void *sp_region_create(void *surfaceHandle, const char *name, sp_region_event event, void *context) {
     NSCAssert(NSThread.isMainThread, @"image regions belong to the main thread");
     WKWebView *surface = (WKWebView *)surfaceHandle;
@@ -410,11 +451,13 @@ void *sp_region_create(void *surfaceHandle, const char *name, sp_region_event ev
     view.webSurface = surface;
     view.hidden = YES;
 
-    NSClipView *clipView = [[NSClipView alloc] initWithFrame:NSZeroRect];
+    NSView *nativePlane = (NSView *)webviewSurfaceNativePlane(surface);
+    if (!nativePlane) { [view release]; return NULL; }
+    NSClipView *clipView = [[SPImageClipView alloc] initWithFrame:NSZeroRect];
+    clipView.drawsBackground = NO;
     [clipView addSubview:view];
-    // 클립 뷰를 표면의 형제 뷰로 추가: 표면의 superview에서 표면 바로 위에 배치
-    [surface.superview addSubview:clipView positioned:NSWindowAbove relativeTo:surface];
-    [clipView release];  // 표면의 superview가 클립 뷰를 붙든다.
+    [nativePlane addSubview:clipView];
+    [clipView release];
 
     return view;
 }
@@ -437,6 +480,19 @@ void sp_region_place(void *handle, double left, double top, double right, double
     }
 
     [view applyInsets];
+}
+
+bool sp_region_raster(void *handle, double *out) {
+    NSCAssert(NSThread.isMainThread, @"image regions belong to the main thread");
+    SPImageRegion *view = (SPImageRegion *)handle;
+    if (!view || !out || !view.placed) return false;
+    NSRect backing = [view convertRectToBacking:view.bounds];
+    CGFloat scale = view.webSurface.pageZoom;
+    if (NSWidth(backing) < 1 || NSHeight(backing) < 1 || scale <= 0) return false;
+    out[0] = round(NSWidth(backing));
+    out[1] = round(NSHeight(backing));
+    out[2] = scale;
+    return true;
 }
 
 bool sp_region_present(void *handle, unsigned int token_id, const unsigned char *nonce, double width, double height, double scale) {
@@ -475,6 +531,14 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
         return false;
     }
 
+    if (IOSurfaceGetBytesPerElement(surface) != 4 ||
+        IOSurfaceGetPixelFormat(surface) != kCVPixelFormatType_32BGRA ||
+        IOSurfaceGetBytesPerRow(surface) < surfaceWidth * 4) {
+        [view report:"{\"type\":\"error\",\"reason\":\"unsupported\"}"];
+        CFRelease(surface);
+        return false;
+    }
+
     // scale 은 양수여야 한다.
     if (scale <= 0) {
         [view report:"{\"type\":\"error\",\"reason\":\"scale\"}"];
@@ -482,8 +546,18 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
         return false;
     }
 
-    // 이전 표면이 있으면 해제한다.
-    if (view.surface) CFRelease(view.surface);
+    double expected[3] = {0};
+    if (!sp_region_raster(view, expected) || (int)width != (int)expected[0] ||
+        (int)height != (int)expected[1]) {
+        [view report:"{\"type\":\"error\",\"reason\":\"size\"}"];
+        CFRelease(surface);
+        return false;
+    }
+    if (fabs(scale - expected[2]) > 0.000001) {
+        [view report:"{\"type\":\"error\",\"reason\":\"scale\"}"];
+        CFRelease(surface);
+        return false;
+    }
 
     // 그림은 창의 배율로 그려져야 한다. 다르면 글자 크기가 틀어지므로 표시하지 않는다.
     if (!view.window || fabs(scale - view.window.backingScaleFactor) > 0.001) {
@@ -492,10 +566,23 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
         return false;
     }
 
-    // 새 표면을 레이어와 우리 저장소에 할당한다. 레이어 배율은 뷰 계층에서 구한다(backingPixelsPerUnit).
-    view.imageLayer.contents = (id)surface;
+    CGImageRef snapshot = copySurfaceImage(surface);
+    CFRelease(surface);
+    if (!snapshot) {
+        [view report:"{\"type\":\"error\",\"reason\":\"presentFailed\"}"];
+        return false;
+    }
+
+    // 모든 검증과 복사가 끝난 뒤에만 이전 스냅샷을 교체한다. 레이어는 공급자가 다시 쓸
+    // IOSurface를 직접 가리키지 않는다.
+    CGImageRef previous = view.snapshot;
+    view.imageLayer.contents = (id)snapshot;
     [view updateContentsScale];
-    view.surface = surface;  // IOSurfaceLookup 의 +1 을 손잡이가 이어받는다.
+    view.snapshot = snapshot;
+    view.presentedWidth = surfaceWidth;
+    view.presentedHeight = surfaceHeight;
+    view.presentedScale = scale;
+    if (previous) CGImageRelease(previous);
 
     return true;
 }
@@ -578,11 +665,10 @@ const char *sp_region_facts(void *handle) {
     double presentedScale = 0;
     BOOL hasPresented = NO;
 
-    if (view.surface != NULL) {
-        presentedWidth = (int)IOSurfaceGetWidth(view.surface);
-        presentedHeight = (int)IOSurfaceGetHeight(view.surface);
-        // 표시 시퀀스 번호는 현재 추적하지 않음 (0으로 설정)
-        presentedScale = contentsScale;
+    if (view.snapshot != NULL) {
+        presentedWidth = (int)view.presentedWidth;
+        presentedHeight = (int)view.presentedHeight;
+        presentedScale = view.presentedScale;
         hasPresented = YES;
     }
 

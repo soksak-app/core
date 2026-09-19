@@ -40,6 +40,7 @@ static NSArray<NSString *> *observedKeys(void) {
 // 진행 중인 주 프레임 이동. 요청하거나 시작한 때부터 끝나거나 실패할 때까지 읽는 중으로 보고한다.
 // 대체된 이전 이동이 취소되면 새 이동이 시작되기 전에 WKWebView.loading 이 NO 가 되기 때문이다.
 @property(retain) WKNavigation *navigation;
+@property(assign) WKWebView *webSurface;
 @property NSPoint offset;
 @property NSEdgeInsets insets;
 @property BOOL wanted;
@@ -181,10 +182,10 @@ static BOOL webAddress(NSURL *url) {
 
 // 여백을 표면 뷰의 좌표로 바꾼다. 표면 뷰의 한 단위는 CSS 픽셀에 pageZoom 을 곱한 값이다.
 - (void)applyInsets {
-    WKWebView *surface = (WKWebView *)self.superview;
+    WKWebView *surface = self.webSurface;
     if (!surface) return;
     CGFloat zoom = surface.pageZoom;
-    NSRect bounds = surface.bounds;
+    NSRect bounds = self.superview.bounds;
     NSEdgeInsets insets = self.insets;
     CGFloat width = NSWidth(bounds) - (insets.left + insets.right) * zoom;
     CGFloat height = NSHeight(bounds) - (insets.top + insets.bottom) * zoom;
@@ -192,7 +193,7 @@ static BOOL webAddress(NSURL *url) {
     CGFloat y = surface.isFlipped ? top : NSHeight(bounds) - top - height;
     self.frame = NSMakeRect(insets.left * zoom, y, MAX(width, 0), MAX(height, 0));
     self.pageZoom = zoom;
-    self.hidden = !self.wanted || width < 1 || height < 1;
+    self.hidden = !self.wanted || width < 1 || height < 1 || surface.isHiddenOrHasHiddenAncestor;
 }
 
 - (void)surfaceScaleChanged {
@@ -251,12 +252,19 @@ void *sp_document_create(void *surfaceHandle, const char *store, sp_document_cha
     view.context = context;
     view.navigationDelegate = view;
     view.UIDelegate = view;
+    view.webSurface = surface;
     view.hidden = YES;
     if (!webviewInputRegister(view) || !webviewIgnorePageFocus(view)) {
         [view release];
         return NULL;
     }
-    [surface addSubview:view];
+    NSView *nativePlane = (NSView *)webviewSurfaceNativePlane(surface);
+    if (!nativePlane) {
+        webviewInputUnregister(view);
+        [view release];
+        return NULL;
+    }
+    [nativePlane addSubview:view];
     webviewMatchSurface(view, surface);
     for (NSString *key in observedKeys()) [view addObserver:view forKeyPath:key options:0 context:NULL];
     return view; // sp_document_close 까지 호출자가 이 참조를 소유한다.

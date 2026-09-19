@@ -14,6 +14,10 @@ void *sp_region_create(void *surface, const char *name, sp_region_event event, v
 // 여백을 유지한다.
 void sp_region_place(void *region, double left, double top, double right, double bottom, bool visible);
 
+// 적용된 영역의 장치 픽셀 너비·높이와 CSS 픽셀당 장치 픽셀 배율을 out[0..2]에 쓴다.
+// 아직 배치되지 않았거나 크기와 배율을 얻을 수 없으면 false 다.
+bool sp_region_raster(void *region, double *out);
+
 // 외부 IOSurface 를 표시한다. token_id 는 IOSurface 의 전역 ID, nonce 는 논스 대조용
 // 16바이트 데이터, width·height 는 장치 픽셀 단위의 크기고, scale 은 이미지가 만들어진
 // 배율이다 (contentsScale 로 사용). 성공하면 true, 찾지 못했거나 크기가 맞지 않으면 false 를 반환한다.

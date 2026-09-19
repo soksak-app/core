@@ -117,6 +117,14 @@ static NSDictionary *pressLastPixel(NSWindow *window, WKWebView *surface, CGFloa
     double frame[4] = {0, 0, 0, 0};
     webviewGetFrame(surface, frame);
     double x = frame[0] + frame[2] / 2, y = frame[1] + frame[3] - 0.5 / scale;
+    NSView *content = window.contentView;
+    NSPoint local = NSMakePoint(x, content.bounds.size.height - y);
+    NSPoint inWindow = [content convertPoint:local toView:nil];
+    NSView *hit = [content hitTest:[content convertPoint:inWindow fromView:nil]];
+    BOOL surfaceHit = NO;
+    for (NSView *view = hit; view; view = view.superview) if (view == surface) surfaceHit = YES;
+    check(surfaceHit, [NSString stringWithFormat:@"the last surface pixel resolves to the DOM plane (hit %@)",
+        NSStringFromClass(hit.class)]);
     evaluate(surface, @"window.pressed = null; null");
     check(sp_input_pointer(window, x, y, 1, 0, 0, 0) == SP_INPUT_DELIVERED
         && sp_input_pointer(window, x, y, 3, 0, 0, 0) == SP_INPUT_DELIVERED,
@@ -131,6 +139,15 @@ static NSDictionary *pressLastPixel(NSWindow *window, WKWebView *surface, CGFloa
 }
 
 static void scrollDone(void *context, sp_input_result result) { *(sp_input_result *)context = result; }
+
+static WKWebView *webViewAtTopPoint(NSWindow *window, double x, double y) {
+    NSView *content = window.contentView;
+    NSPoint local = NSMakePoint(x, content.bounds.size.height - y);
+    NSPoint inWindow = [content convertPoint:local toView:nil];
+    NSView *target = [content hitTest:[content convertPoint:inWindow fromView:nil]];
+    while (target && ![target isKindOfClass:WKWebView.class]) target = target.superview;
+    return (WKWebView *)target;
+}
 
 // 앱 이벤트 대기열의 이벤트를 꺼내 처리하며 기다린다. 이벤트 모니터는 꺼낼 때 실행된다.
 static void pumpUntil(BOOL (^done)(void)) {
@@ -166,6 +183,18 @@ static double scrollBy(NSWindow *window, WKWebView *surface, BOOL posted) {
     webviewGetFrame(surface, frame);
     // 문서 영역(위 여백 20)이 생긴 뒤에도 표면이 받도록 위 여백 안의 점을 쓴다.
     double x = frame[0] + frame[2] / 2, y = frame[1] + 10;
+    NSView *contentForHit = window.contentView;
+    NSPoint localForHit = NSMakePoint(x, contentForHit.bounds.size.height - y);
+    NSPoint windowPointForHit = [contentForHit convertPoint:localForHit toView:nil];
+    NSView *target = [contentForHit hitTest:[contentForHit convertPoint:windowPointForHit fromView:nil]];
+    while (target && ![target isKindOfClass:WKWebView.class]) target = target.superview;
+    NSView *hostForHit = surface.superview;
+    BOOL insideHost = NO;
+    for (NSView *view = target; view; view = view.superview) if (view == hostForHit) insideHost = YES;
+    NSRect targetInHost = target ? [target convertRect:target.bounds toView:hostForHit] : NSZeroRect;
+    check(target == surface, [NSString stringWithFormat:
+        @"scroll target is the surface DOM plane (got %@ inside host %d, target frame %@, host frame %@)",
+        target, insideHost, NSStringFromRect(targetInHost), NSStringFromRect(hostForHit.frame)]);
     __block BOOL shown = NO;
     [surface _doAfterNextPresentationUpdate:^{ shown = YES; }];
     until(^BOOL { return shown; });
@@ -255,6 +284,13 @@ int main(void) { @autoreleasepool {
     check(region != NULL, @"a document region is created in the surface");
     sp_document_place(region, 10, 20, 30, 40, true);
     verifyRegion(region, 2, 260, 140.5, @"at 2x");
+    double overlay[5] = {50, 50, 50, 50, 1};
+    webviewSetSurfaceOverlays(surface, overlay, 1);
+    check(webViewAtTopPoint(window, 190, 130) == surface,
+        @"a declared DOM overlay receives input above a native document region");
+    check(webViewAtTopPoint(window, 60, 60) == region,
+        @"the native document receives input outside the declared DOM overlay");
+    webviewSetSurfaceOverlays(surface, NULL, 0);
 
     setScale(window, 1);
     webviewSetFrame(surface, 40, 30, 300, 200.5);
