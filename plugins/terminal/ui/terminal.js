@@ -162,6 +162,9 @@ export async function startTerminal({ view, attachImage, sidecar, expose, scale,
     region.focus().catch((error) => console.error(`focus failed: ${error.message}`));
   });
 
+  // screen.read 응답을 기다리는 resolver
+  let pendingScreenRead = null;
+
   // 첫 번째 0보다 큰 크기로 open 전송 여부 추적
   let openSentViaResize = false;
 
@@ -251,6 +254,12 @@ export async function startTerminal({ view, attachImage, sidecar, expose, scale,
         unsupported: session.unsupported,
       };
       changed("session");
+    } else if (body.event === "screen") {
+      // screen 이벤트를 처리한다. screen.read 응답이나 화면 변화 알림.
+      if (pendingScreenRead) {
+        pendingScreenRead(body);
+        pendingScreenRead = null;
+      }
     } else if (body.event === "error") {
       // error 이벤트를 session 상태에 저장한다
       session = {
@@ -259,8 +268,7 @@ export async function startTerminal({ view, attachImage, sidecar, expose, scale,
       };
       changed("session");
     } else if (body.error) {
-      // 호환성을 위해 legacy error 필드도 처리한다
-      // 새로운 규약: {"error":"invalidParams",...} 형식
+      // 오류 응답 처리: {"error":"invalidParams","reason":"...",...}
       session = {
         ...session,
         error: body.error,
@@ -291,24 +299,30 @@ export async function startTerminal({ view, attachImage, sidecar, expose, scale,
       if (region === null) throw new Error("Terminal not initialized");
       return new Promise((resolve, reject) => {
         let resolved = false;
-        const unsubscribe = region.on("screen", (event) => {
-          if (event && event.lines) {
-            resolved = true;
-            unsubscribe();
-            resolve(event.lines);
-          }
-        });
-        terminal.send(id, { op: "screen.read" }).catch((error) => {
-          unsubscribe();
-          reject(error);
-        });
-        // Timeout after 5 seconds
-        setTimeout(() => {
+        const timeout = setTimeout(() => {
           if (!resolved) {
-            unsubscribe();
+            resolved = true;
+            pendingScreenRead = null;
             reject(new Error("screen.read timeout"));
           }
         }, 5000);
+
+        pendingScreenRead = (event) => {
+          if (!resolved) {
+            resolved = true;
+            clearTimeout(timeout);
+            resolve(event.lines);
+          }
+        };
+
+        terminal.send(id, { op: "screen.read" }).catch((error) => {
+          if (!resolved) {
+            resolved = true;
+            clearTimeout(timeout);
+            pendingScreenRead = null;
+            reject(error);
+          }
+        });
       });
     }),
     expose.command("terminal.close", async () => {

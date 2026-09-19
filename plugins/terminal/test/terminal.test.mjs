@@ -509,13 +509,13 @@ test("terminal.screen.read sends request and returns lines on screen event", asy
   const screenReadCommand = fakeExpose.getCommand("terminal.screen.read");
   assert(screenReadCommand, "terminal.screen.read command registered");
 
-  // 비동기로 screen event를 trigger하자
+  // 비동기로 sidecar screen event를 trigger하자 (지금은 region이 아니라 sidecar에서 온다)
   setTimeout(() => {
-    regionReference._trigger("screen", { lines: ["line1", "line2", "line3"] });
+    fakeSidecar.triggerEvent("test-session", { event: "screen", lines: ["line1", "line2", "line3"] });
   }, 10);
 
   const lines = await screenReadCommand();
-  assert.deepEqual(lines, ["line1", "line2", "line3"], "screen.read returns lines from screen event");
+  assert.deepEqual(lines, ["line1", "line2", "line3"], "screen.read returns lines from sidecar screen event");
 
   // sidecar에 screen.read가 갔는가?
   const messages = fakeSidecar.getMessages();
