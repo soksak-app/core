@@ -240,7 +240,10 @@ onLayout((made, draw, seated) => {
 
 /* 스페이스가 바뀌면 현재 판을 저장하고 다른 상태를 적용한다. 프로젝트 전환도 같은
    동작이다. */
-projects.onSwitch({ save: capture, load: adopt, update: settle, async empty() {
+projects.onSwitch({ save: capture, load: adopt, update: settle, async presented() {
+  await drawing;
+  await host.waitPresented();
+}, async empty() {
   revision++;
   drawing = drawing.then(async () => {
     clear();

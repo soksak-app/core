@@ -20,7 +20,7 @@ async function readJson(path) {
 /** 표면 선언을 탭 id 로 표면 대상을 반환하는 함수로 바꾼다. */
 function surfaceOf(name, surface) {
   const page = modulePath(name, surface.page);
-  return (tabId) => ({ page: `${page}?id=${encodeURIComponent(tabId)}` });
+  return (tabId) => ({ page: `${page}?id=${encodeURIComponent(tabId)}`, composition: surface.composition });
 }
 
 /** environment.json 을 불러와 검사하고 플러그인, 섹션, 사이드바 기본값을 등록한다. */

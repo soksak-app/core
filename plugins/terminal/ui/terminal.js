@@ -44,21 +44,13 @@ function sendInput(text, terminal, id, encoder) {
  * @param {Function} options.attachImage - 이미지 영역 붙이기 함수
  * @param {Object} options.sidecar - 사이드카 포트
  * @param {Object} options.expose - 공개 항목 등록 함수 모음
- * @param {number} options.scale - 장치 픽셀 비율 (devicePixelRatio)
  * @param {Object} options.window - window 객체 (기본값: 글로벌 window)
  * @returns {Promise<void>}
  */
-export async function startTerminal({ view, attachImage, sidecar, expose, scale, window: globalWindow = globalThis.window }) {
-  // 호출자가 반드시 scale을 제공해야 한다. 없거나 양수가 아니면 계약 위반이다.
-  if (typeof scale !== "number" || scale <= 0) {
-    throw new Error(`startTerminal requires scale to be a positive number, got: ${typeof scale === "number" ? scale : typeof scale}`);
-  }
-
+export async function startTerminal({ view, attachImage, sidecar, expose, window: globalWindow = globalThis.window }) {
   // 브라우저 환경에서 필요한 객체들
   const window = globalWindow;
-  const ResizeObserver = globalWindow.ResizeObserver;
   const TextEncoder = globalWindow.TextEncoder;
-  const devicePixelRatio = scale;
 
   const id = new URLSearchParams(view.ownerDocument?.location?.search || "").get("id");
   if (!id) {
@@ -94,7 +86,7 @@ export async function startTerminal({ view, attachImage, sidecar, expose, scale,
   region = attachImage(view, "view", "@soksak/sidecar-vt-alacritty");
   if (!region) throw new Error("Failed to attach image region");
 
-  // 세션이 생겼는지 추적. state 이벤트가 오기 전까지 크기 변화마다 open 을 다시 보낸다.
+  // 세션이 생겼는지 추적한다. 래스터 크기는 페이지가 아니라 호스트 configure가 정한다.
   let sessionOpen = false;
 
   // 세션 열리기 전 입력 queue (상한: 1024)
@@ -186,33 +178,6 @@ export async function startTerminal({ view, attachImage, sidecar, expose, scale,
   // screen.read 응답을 기다리는 resolver
   let pendingScreenRead = null;
 
-  // 뷰 크기 변경 감지
-  const resizeObserver = new ResizeObserver(() => {
-    if (region === null) return;
-    const widthCss = Math.round(view.clientWidth);
-    const heightCss = Math.round(view.clientHeight);
-    // 계약: open/resize의 width/height는 장치 픽셀
-    const width = Math.round(widthCss * devicePixelRatio);
-    const height = Math.round(heightCss * devicePixelRatio);
-
-    // 0인 크기는 보내지 않는다
-    if (width === 0 || height === 0) return;
-
-    // 세션이 생기기 전에는 매 크기 변화마다 open을 다시 보낸다.
-    // 레이아웃 완료 전의 임시 크기로 open이 거부될 수 있어서다.
-    // 거부 응답은 오류로 보고되고, 다음 크기로 다시 시도한다.
-    if (!sessionOpen) {
-      terminal.send(id, { op: "open", width, height, scale: devicePixelRatio, image: "view" })
-        .catch((error) => console.error(`open failed: ${error.message}`));
-      return;
-    }
-
-    // 세션이 생긴 뒤의 크기 변화는 resize로 보낸다
-    terminal.send(id, { op: "resize", width, height, scale: devicePixelRatio })
-      .catch((error) => console.error(`resize failed: ${error.message}`));
-  });
-  resizeObserver.observe(view);
-
   // 사이드카 메시지 수신
   await terminal.on(id, (body) => {
     if (body.event === "state") {
@@ -285,6 +250,10 @@ export async function startTerminal({ view, attachImage, sidecar, expose, scale,
       }
     }
   });
+
+  // 세션 열기는 크기를 보내지 않는다. 호스트가 네이티브 영역을 적용하며 보낸 configure만
+  // 이미지와 PTY 크기의 권위 있는 입력이다.
+  await terminal.send(id, { op: "open", image: "view" });
 
   // 공개 항목 등록
   await Promise.all([

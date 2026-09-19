@@ -35,11 +35,10 @@ function createFakeResizeObserverClass() {
 const FakeResizeObserver = createFakeResizeObserverClass();
 
 /**
- * ResizeObserver 로 open 을 보낸 뒤 사이드카 state 이벤트로 세션을 연다.
+ * 사이드카 state 이벤트로 세션을 연다.
  * 세션이 생기기 전에는 플러그인이 입력을 보내지 않으므로 입력 테스트는 이 함수로 시작한다.
  */
 const openSession = (fakeSidecar) => {
-  FakeResizeObserver.triggerAll();
   fakeSidecar.triggerEvent("test-session", { event: "state", sessionId: "s1", cols: 100, rows: 50, cellWidth: 8, cellHeight: 16 });
 };
 
@@ -216,9 +215,6 @@ test("Boot: attachImage called once and sidecar receives open message", async ()
     window: fakeWindow,
   });
 
-  // ResizeObserver 콜백을 호출하여 open을 전송한다
-  FakeResizeObserver.triggerAll();
-
   // attachImage가 정확히 한 번 호출되었는가?
   assert.equal(fakeAttachImage.getCalls().length, 1, "attachImage called once");
   const attachCall = fakeAttachImage.getCalls()[0];
@@ -230,9 +226,9 @@ test("Boot: attachImage called once and sidecar receives open message", async ()
   const openMessage = messages.find((m) => m.body.op === "open");
   assert(openMessage, "open message sent to sidecar");
   assert.equal(openMessage.body.image, "view", "open message has image: 'view'");
-  assert.equal(openMessage.body.width, 1600, "width in device pixels: 800 * 2");
-  assert.equal(openMessage.body.height, 1200, "height in device pixels: 600 * 2");
-  assert.equal(openMessage.body.scale, 2, "scale passed correctly");
+  assert.equal("width" in openMessage.body, false, "DOM width is not sent");
+  assert.equal("height" in openMessage.body, false, "DOM height is not sent");
+  assert.equal("scale" in openMessage.body, false, "DOM scale is not sent");
 });
 
 // 테스트 2: 영역 insert{text:"ls\r"} → sidecar {op:"input", bytes: base64("ls\r")}
@@ -674,8 +670,7 @@ test("terminal.close sends close message to sidecar", async () => {
   assert(closeMessage, "close message sent to sidecar");
 });
 
-// 새로운 테스트 1: open_waits_for_a_size
-test("open_waits_for_a_size: open not sent when initial size is 0", async () => {
+test("open is independent of DOM element size", async () => {
   FakeResizeObserver.reset();
   const fakeAttachImage = createFakeAttachImage();
   const fakeSidecar = createFakeSidecar();
@@ -715,11 +710,11 @@ test("open_waits_for_a_size: open not sent when initial size is 0", async () => 
     window: fakeWindow,
   });
 
-  // 크기가 0인 상태에서 ResizeObserver 콜백을 호출하면 open이 가지 않는다
-  FakeResizeObserver.triggerAll();
+  // DOM 크기가 0이어도 세션 요청은 즉시 전송된다. 실제 래스터는 호스트가 구성한다.
   let messages = fakeSidecar.getMessages();
   let openMessage = messages.find((m) => m.body.op === "open");
-  assert(!openMessage, "open message not sent when size is 0x0");
+  assert(openMessage, "open message is sent at DOM size 0x0");
+  assert.deepEqual(openMessage.body, { op: "open", image: "view" });
 
   // 이제 크기를 800x400으로 변경한다
   fakeView.clientWidth = 800;
@@ -728,17 +723,13 @@ test("open_waits_for_a_size: open not sent when initial size is 0", async () => 
 
   messages = fakeSidecar.getMessages();
   openMessage = messages.find((m) => m.body.op === "open");
-  assert(openMessage, "open message sent after size becomes non-zero");
-  assert.equal(openMessage.body.width, 800, "width is 800");
-  assert.equal(openMessage.body.height, 400, "height is 400");
-
-  // open이 한 번만 전송되었는가?
+  assert(openMessage, "the original open remains the only session request");
   const openMessages = messages.filter((m) => m.body.op === "open");
   assert.equal(openMessages.length, 1, "open sent exactly once");
+  assert.equal(messages.length, 1, "DOM resize sends no protocol message");
 });
 
-// 새로운 테스트 2: zero_size_is_not_sent_as_resize
-test("zero_size_is_not_sent_as_resize: resize not sent for zero dimensions", async () => {
+test("DOM resize never sends terminal raster messages", async () => {
   FakeResizeObserver.reset();
   const fakeAttachImage = createFakeAttachImage();
   const fakeSidecar = createFakeSidecar();
@@ -759,13 +750,11 @@ test("zero_size_is_not_sent_as_resize: resize not sent for zero dimensions", asy
     window: fakeWindow,
   });
 
-  // open을 전송한다 (크기 800x600)
-  FakeResizeObserver.triggerAll();
   let messages = fakeSidecar.getMessages();
   let openMessage = messages.find((m) => m.body.op === "open");
   assert(openMessage, "open message sent");
 
-  // 세션을 연다. 이후의 크기 변화는 resize 로 간다
+  // 세션 상태가 생겨도 페이지는 래스터를 관리하지 않는다.
   fakeSidecar.triggerEvent("test-session", { event: "state", sessionId: "s1", cols: 100, rows: 50, cellWidth: 8, cellHeight: 16 });
 
   // 크기를 0x0으로 변경한다
@@ -775,8 +764,7 @@ test("zero_size_is_not_sent_as_resize: resize not sent for zero dimensions", asy
   FakeResizeObserver.triggerAll();
 
   messages = fakeSidecar.getMessages();
-  const resizeMessage = messages.find((m) => m.body.op === "resize");
-  assert(!resizeMessage, "resize not sent for 0x0 size");
+  assert.equal(messages.length, 0, "zero DOM size sends nothing");
 
   // 크기를 다시 400x300으로 변경한다
   fakeView.clientWidth = 400;
@@ -784,10 +772,7 @@ test("zero_size_is_not_sent_as_resize: resize not sent for zero dimensions", asy
   FakeResizeObserver.triggerAll();
 
   messages = fakeSidecar.getMessages();
-  const resizeMessage2 = messages.find((m) => m.body.op === "resize");
-  assert(resizeMessage2, "resize sent for non-zero size");
-  assert.equal(resizeMessage2.body.width, 400, "width is 400");
-  assert.equal(resizeMessage2.body.height, 300, "height is 300");
+  assert.equal(messages.length, 0, "non-zero DOM resize also sends nothing");
 });
 
 // 새로운 테스트 3: input_before_open
@@ -1032,8 +1017,7 @@ test("invalid_key_event_modifiers: non-boolean modifiers trigger error", async (
   assert(session.error.includes("invalid key event"), "error indicates key event issue");
 });
 
-// 새로운 테스트 5e: invalid_scale_throws
-test("invalid_scale_throws: startTerminal throws on invalid scale", async () => {
+test("a caller scale option cannot enter the terminal protocol", async () => {
   FakeResizeObserver.reset();
   const fakeAttachImage = createFakeAttachImage();
   const fakeSidecar = createFakeSidecar();
@@ -1045,20 +1029,18 @@ test("invalid_scale_throws: startTerminal throws on invalid scale", async () => 
     devicePixelRatio: 1,
   };
 
-  // scale = 0 (invalid)
-  try {
-    await startTerminal({
-      view: fakeView,
-      attachImage: fakeAttachImage.function,
-      sidecar: fakeSidecar,
-      expose: fakeExpose,
-      scale: 0,
-      window: fakeWindow,
-    });
-    assert.fail("startTerminal should throw on invalid scale");
-  } catch (error) {
-    assert(error.message.includes("scale"), "error mentions scale");
-  }
+  await startTerminal({
+    view: fakeView,
+    attachImage: fakeAttachImage.function,
+    sidecar: fakeSidecar,
+    expose: fakeExpose,
+    scale: 0,
+    window: fakeWindow,
+  });
+  assert.deepEqual(fakeSidecar.getMessages(), [{
+    id: "test-session",
+    body: { op: "open", image: "view" },
+  }]);
 });
 
 // 새로운 테스트 5f: missing_surface_id_throws
@@ -1103,8 +1085,7 @@ test("missing_surface_id_throws: startTerminal throws when surface id missing", 
   }
 });
 
-// 새로운 테스트 5: region_input_before_open_is_sent_after_open
-test("region_input_before_open_is_sent_after_open: queued region input sent after open", async () => {
+test("region input waits for sidecar state after open", async () => {
   FakeResizeObserver.reset();
   const fakeAttachImage = createFakeAttachImage();
   const fakeSidecar = createFakeSidecar();
@@ -1155,21 +1136,11 @@ test("region_input_before_open_is_sent_after_open: queued region input sent afte
   regionReference._trigger("insert", { text: "a" });
   regionReference._trigger("key", { key: "Enter", shift: false, alt: false, ctrl: false });
 
-  // 아직 아무것도 보내지 않아야 한다
+  // open만 전송되고 입력은 아직 queue에 있어야 한다.
   let messages = fakeSidecar.getMessages();
-  assert.equal(messages.length, 0, "no messages sent while size is 0");
-
-  // 이제 크기를 800x400으로 변경한다
-  fakeView.clientWidth = 800;
-  fakeView.clientHeight = 400;
-  FakeResizeObserver.triggerAll();
-
-  // open 은 나갔지만 세션이 생기기 전까지 queue를 보내지 않는다
-  messages = fakeSidecar.getMessages();
   assert.equal(messages.length, 1, "only open is sent before the session exists");
   assert.equal(messages[0].body.op, "open", "first message is open");
-  assert.equal(messages[0].body.width, 800, "open has correct width");
-  assert.equal(messages[0].body.height, 400, "open has correct height");
+  assert.deepEqual(messages[0].body, { op: "open", image: "view" });
 
   // 사이드카가 state 이벤트로 세션을 연다
   fakeSidecar.triggerEvent("test-session", { event: "state", sessionId: "s1", cols: 100, rows: 50, cellWidth: 8, cellHeight: 16 });
@@ -1189,10 +1160,8 @@ test("region_input_before_open_is_sent_after_open: queued region input sent afte
   assert.deepEqual(messages[2].body.keys[0].key, "Enter", "key is Enter");
 });
 
-// 테스트 6: open_retries_after_rejection
-// 레이아웃 전 임시 크기로 open 이 거부되면 다음 크기 변화가 다시 open 을 보내야 한다.
-// 세션이 생긴 뒤의 크기 변화만 resize 이다. 오류 응답의 reason 은 상태에서 버리지 않는다.
-test("open_retries_after_rejection: rejected open is retried on the next size change", async () => {
+// 호스트 configure 오류를 페이지의 DOM 크기로 복구하려 해서는 안 된다.
+test("a sidecar rejection is reported without DOM-driven retry", async () => {
   FakeResizeObserver.reset();
   const fakeAttachImage = createFakeAttachImage();
   const fakeSidecar = createFakeSidecar();
@@ -1217,12 +1186,11 @@ test("open_retries_after_rejection: rejected open is retried on the next size ch
     window: fakeWindow,
   });
 
-  // 임시 크기로 open 이 나간다.
-  FakeResizeObserver.triggerAll();
+  // open은 페이지 크기와 무관하게 한 번만 나간다.
   let messages = fakeSidecar.getMessages();
-  assert.equal(messages.length, 1, "one message for the first size");
+  assert.equal(messages.length, 1, "one open message");
   assert.equal(messages[0].body.op, "open", "first message is open");
-  assert.equal(messages[0].body.width, 2, "transient size reaches the sidecar");
+  assert.equal("width" in messages[0].body, false, "transient DOM width is not sent");
 
   // 사이드카가 거부한다.
   fakeSidecar.triggerEvent("test-session", { error: "invalidParams", reason: "width and height must be positive" });
@@ -1234,16 +1202,13 @@ test("open_retries_after_rejection: rejected open is retried on the next size ch
     `error keeps the rejection reason: ${sessionAfterError.error}`
   );
 
-  // 실제 크기로 바뀐다.
+  // DOM 크기 변화는 host configure를 대신하지 않는다.
   fakeView.clientWidth = 494;
   fakeView.clientHeight = 287;
   FakeResizeObserver.triggerAll();
   messages = fakeSidecar.getMessages();
 
-  // 다시 open 이 나가야 한다. 세션이 없으므로 resize 가 아니라 open 이다.
-  assert.equal(messages.length, 2, "second size change sends another message");
-  assert.equal(messages[1].body.op, "open", "second size change retries open");
-  assert.equal(messages[1].body.width, 988, "retried open carries the real width");
+  assert.equal(messages.length, 1, "DOM size change does not retry open");
 
   // 세션이 생긴다.
   fakeSidecar.triggerEvent("test-session", { event: "state", sessionId: "s1", cols: 61, rows: 18, cellWidth: 8, cellHeight: 15.5 });
@@ -1251,11 +1216,10 @@ test("open_retries_after_rejection: rejected open is retried on the next size ch
   assert.equal(session.sessionId, "s1", "state event opens the session");
   assert.equal(session.error, undefined, "a valid state clears the error");
 
-  // 세션이 생긴 뒤의 크기 변화는 resize 이다.
+  // 세션이 생긴 뒤에도 DOM 크기는 프로토콜 입력이 아니다.
   fakeView.clientWidth = 600;
   fakeView.clientHeight = 300;
   FakeResizeObserver.triggerAll();
   messages = fakeSidecar.getMessages();
-  assert.equal(messages.length, 3, "third size change sends another message");
-  assert.equal(messages[2].body.op, "resize", "size change after the session is a resize");
+  assert.equal(messages.length, 1, "DOM resize sends no sidecar message");
 });

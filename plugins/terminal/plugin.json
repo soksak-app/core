@@ -4,7 +4,19 @@
   "mark": "◊",
   "icon": "<rect x=\"2\" y=\"3\" width=\"12\" height=\"10\" rx=\"2\"/><circle cx=\"5\" cy=\"7\" r=\"1.5\"/><path d=\"M8 9l2-2m-2 0l2 2\"/>",
   "surface": {
-    "page": "ui/terminal.html"
+    "page": "ui/terminal.html",
+    "composition": {
+      "kind": "hybrid",
+      "regions": [
+        {
+          "name": "view",
+          "kind": "image",
+          "sidecar": "@soksak/sidecar-vt-alacritty",
+          "input": "dom"
+        }
+      ],
+      "overlays": []
+    }
   },
   "preview": {
     "ink": "--surface-fg"

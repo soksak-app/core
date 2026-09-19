@@ -17,7 +17,10 @@ const exposes = () => ({
   ],
 });
 
-const page = { id: "probe", name: "Probe", mark: "p", icon: "<path/>", surface: { page: "ui/probe.html" } };
+const page = {
+  id: "probe", name: "Probe", mark: "p", icon: "<path/>",
+  surface: { page: "ui/probe.html", composition: { kind: "dom" } },
+};
 
 test("exposes with the three kinds are accepted in a manifest and in a core file", () => {
   assert.equal(validateManifest({ ...page, exposes: exposes() }).exposes.dom[1].many, true);

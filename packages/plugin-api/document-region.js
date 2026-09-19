@@ -79,7 +79,7 @@ export function observeRegionInsets(element, view, onPlace) {
  * 반환한 영역의 호출은 붙이기가 끝난 뒤 순서대로 실행된다. state 는 호스트가 마지막으로 알린
  * 문서 상태이고 onState 는 상태가 바뀔 때마다 호출된다. detach 뒤에는 호출할 수 없다.
  */
-export function attachRegion(port, element, name, view = element.ownerDocument.defaultView) {
+export function attachRegion(port, element, name, view = element.ownerDocument.defaultView, options = {}) {
   if (!DOCUMENT_NAME.test(name)) throw new Error(`invalid document name ${JSON.stringify(name)}`);
   const listeners = new Set();
   let state = null;
@@ -101,12 +101,13 @@ export function attachRegion(port, element, name, view = element.ownerDocument.d
     for (const fn of listeners) fn(value);
   }));
 
-  const stopObserving = observeRegionInsets(element, view, ({ insets, visible }) =>
-    queue(() => port.place(name, insets, visible))
-      .catch((error) => console.error(`document ${name} place: ${error.message}`)));
+  const placeAt = ({ insets, visible }) => queue(() => port.place(name, insets, visible));
+  const stopObserving = options.observe === false ? () => {} : observeRegionInsets(element, view, (placement) =>
+    placeAt(placement).catch((error) => console.error(`document ${name} place: ${error.message}`)));
 
   return {
     name,
+    _ready: chain,
     get state() { return state; },
     onState(fn) {
       listeners.add(fn);
@@ -115,9 +116,10 @@ export function attachRegion(port, element, name, view = element.ownerDocument.d
     /** 요소가 바뀐 배치를 알린다. 관찰로 드러나지 않는 이동에 쓴다. */
     place: () => {
       const { insets, visible } = regionInsets(element, view);
-      return queue(() => port.place(name, insets, visible))
+      return placeAt({ insets, visible })
         .catch((error) => console.error(`document ${name} place: ${error.message}`));
     },
+    _place: placeAt,
     load: (url) => queue(() => port.load(name, url)),
     go(action) {
       if (!DOCUMENT_ACTIONS.includes(action)) return Promise.reject(new Error(`unknown document action ${action}`));

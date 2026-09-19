@@ -12,7 +12,7 @@ export const IMAGE_NAME = /^[a-z0-9][a-z0-9-]{0,63}$/;
  * element 에 그림 영역 name 을 붙인다. port 는 런타임의 page.image 이고 view 는 요소의 창이다.
  * 반환한 영역의 호출은 붙이기가 끝난 뒤 순서대로 실행된다. detach 뒤에는 호출할 수 없다.
  */
-export function attachImage(port, element, name, sidecar, view = element.ownerDocument.defaultView) {
+export function attachImage(port, element, name, sidecar, view = element.ownerDocument.defaultView, options = {}) {
   if (!IMAGE_NAME.test(name)) throw new Error(`invalid image name ${JSON.stringify(name)}`);
   const listeners = new Map();
   let detached = false;
@@ -42,12 +42,13 @@ export function attachImage(port, element, name, sidecar, view = element.ownerDo
     for (const fn of handlers) fn(event);
   }));
 
-  const stopObserving = observeRegionInsets(element, view, ({ insets, visible }) =>
-    queue(() => port.place(name, insets, visible))
-      .catch((error) => console.error(`image ${name} place: ${error.message}`)));
+  const placeAt = ({ insets, visible }) => queue(() => port.place(name, insets, visible));
+  const stopObserving = options.observe === false ? () => {} : observeRegionInsets(element, view, (placement) =>
+    placeAt(placement).catch((error) => console.error(`image ${name} place: ${error.message}`)));
 
   return {
     name,
+    _ready: chain,
     on(type, fn) {
       if (!listeners.has(type)) listeners.set(type, new Set());
       listeners.get(type).add(fn);
@@ -64,8 +65,9 @@ export function attachImage(port, element, name, sidecar, view = element.ownerDo
     },
     visible(v) {
       const { insets } = regionInsets(element, view);
-      return queue(() => port.place(name, insets, v));
+      return placeAt({ insets, visible: v });
     },
+    _place: placeAt,
     detach() {
       const done = queue(() => port.detach(name));
       detached = true;

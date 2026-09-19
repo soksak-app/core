@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { attachRegion, regionInsets } from "@soksak/plugin-api";
+import { attachRegion, regionInsets } from "../document-region.js";
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 

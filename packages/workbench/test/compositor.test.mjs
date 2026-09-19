@@ -14,7 +14,7 @@ test("a layout published before drawing waits for the host's placement answer", 
   card.getBoundingClientRect = () => ({ left: 0, top: 0, width: 200, height: 150 });
   slot.getBoundingClientRect = () => ({ left: 2, top: 30, width: 196, height: 100 });
   const { registerPlugin } = await import("../registry.js");
-  registerPlugin({ id: "probe", surface: () => ({ page: "probe.html" }) });
+  registerPlugin({ id: "probe", surface: () => ({ page: "probe.html", composition: { kind: "dom" } }) });
   const { onCommit, publishAhead } = await import("../compositor.js");
   let answer, prepared;
   onCommit((record) => new Promise((resolve) => {

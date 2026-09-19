@@ -5,7 +5,8 @@ import {
 } from "../index.js";
 
 const card = {
-  id: "probe", name: "Probe", mark: "p", icon: "<path/>", surface: { page: "ui/probe.html" }, sidecars: ["@scope/sidecar-worker"],
+  id: "probe", name: "Probe", mark: "p", icon: "<path/>",
+  surface: { page: "ui/probe.html", composition: { kind: "dom" } }, sidecars: ["@scope/sidecar-worker"],
 };
 const side = { id: "side", name: "Side", sections: [{ id: "side.list", name: "List" }] };
 const environment = () => ({
@@ -40,13 +41,14 @@ test("a manifest is rejected for each invalid field", () => {
     [{ ...card, name: "" }, /name is required/],
     [{ ...card, extra: 1 }, /unknown field extra/],
     [{ ...card, surface: { url: "https://a" } }, /unknown field url/],
-    [{ ...card, surface: { url: "https://a", page: "b" } }, /unknown field url/],
+    [{ ...card, surface: { url: "https://a", page: "b", composition: { kind: "dom" } } }, /unknown field url/],
     [{ ...card, surface: {} }, /surface requires a page/],
+    [{ ...card, surface: { page: "ui/probe.html" } }, /surface requires a composition/],
     [{ ...card, home: "file:///etc" }, /home must be an http or https address/],
     [{ ...card, home: "https:///" }, /home must be an http or https address/],
     [{ ...side, home: "https://example.com" }, /home requires a surface/],
-    [{ ...card, surface: { page: "../x.html" } }, /inside the package/],
-    [{ ...card, surface: { page: "/x.html" } }, /inside the package/],
+    [{ ...card, surface: { page: "../x.html", composition: { kind: "dom" } } }, /inside the package/],
+    [{ ...card, surface: { page: "/x.html", composition: { kind: "dom" } } }, /inside the package/],
     [{ ...card, mark: undefined }, /mark is required/],
     [{ ...card, icon: undefined }, /icon is required/],
     [{ ...side, sections: [{ id: "other.list", name: "x" }] }, /must be side.<name>/],
@@ -58,6 +60,34 @@ test("a manifest is rejected for each invalid field", () => {
     [{ ...card, preview: { ink: "--rail", fill: "--bg" } }, /unknown field fill/],
     [{ ...side, preview: { ink: "--rail" } }, /preview requires a surface/],
     [{ ...card, sidecars: ["@scope/sidecar-worker", "@scope/sidecar-worker"] }, /duplicate sidecar/],
+  ];
+  for (const [manifest, message] of cases) assert.throws(() => validateManifest(manifest), message);
+});
+
+test("surface composition declarations are complete and fail closed", () => {
+  const documentRegion = { name: "page", kind: "document", input: "native" };
+  const imageRegion = {
+    name: "view", kind: "image", sidecar: "@scope/sidecar-worker", input: "dom",
+  };
+  const hybrid = (regions = [documentRegion], overlays = []) => ({
+    ...card, surface: { page: "ui/probe.html", composition: { kind: "hybrid", regions, overlays } },
+  });
+  assert.equal(validateManifest(hybrid()).surface.composition.kind, "hybrid");
+  assert.equal(validateManifest(hybrid([imageRegion])).surface.composition.regions[0].sidecar, "@scope/sidecar-worker");
+
+  const cases = [
+    [{ ...card, surface: { ...card.surface, composition: { kind: "other" } } }, /kind must be dom or hybrid/],
+    [{ ...card, surface: { ...card.surface, composition: { kind: "dom", regions: [] } } }, /unknown field regions/],
+    [hybrid([]), /requires regions/],
+    [{ ...hybrid(), surface: { ...hybrid().surface, composition: { kind: "hybrid", regions: [documentRegion] } } }, /requires overlays/],
+    [hybrid([{ ...documentRegion, input: "dom" }]), /document input must be native/],
+    [hybrid([{ ...imageRegion, input: "native" }]), /image input must be dom/],
+    [hybrid([{ ...imageRegion, sidecar: "@scope/sidecar-other" }]), /sidecar must be declared/],
+    [hybrid([{ ...imageRegion, fallback: "--surface" }]), /unknown field fallback/],
+    [hybrid([{ ...documentRegion, extra: true }]), /unknown field extra/],
+    [hybrid([documentRegion, { ...documentRegion }]), /duplicate name page/],
+    [hybrid([documentRegion], ["page"]), /duplicate name page/],
+    [hybrid([documentRegion], ["Bad Name"]), /invalid overlay name/],
   ];
   for (const [manifest, message] of cases) assert.throws(() => validateManifest(manifest), message);
 });

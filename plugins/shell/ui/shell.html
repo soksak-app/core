@@ -43,9 +43,10 @@
 }}
 </script>
 <script type="module">
-  import { expose, followTheme, page } from "@soksak/plugin-api/page";
+  import { createSurfaceComposition, expose, followTheme, page } from "@soksak/plugin-api/page";
 
   const themed = followTheme();
+  await createSurfaceComposition();
 
   const id = new URLSearchParams(location.search).get("id");
   const out = document.getElementById("out");

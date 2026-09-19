@@ -4,7 +4,10 @@
   "mark": ">_",
   "icon": "<rect x=\"2\" y=\"3\" width=\"12\" height=\"10\" rx=\"2\"/><path d=\"M5 6.5l2 1.75L5 10M8.5 10.25H11\"/>",
   "surface": {
-    "page": "ui/shell.html"
+    "page": "ui/shell.html",
+    "composition": {
+      "kind": "dom"
+    }
   },
   "preview": {
     "ink": "--surface-fg"

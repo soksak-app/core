@@ -169,6 +169,7 @@ export const surfaces = native ? {
         id: s.id,
         dim: s.dim,
         url: bridge.page(s.surface.page),
+        composition: s.surface.composition,
         visible: s.visible,
         ...toPage(s.applied),
       }));
@@ -196,11 +197,14 @@ export const surfaces = native ? {
       return placed.then((placed) =>
         (placed ?? []).map((p) => ({ id: p.id, ...toPlane(p) })));
     },
+    // 표면 배치 RPC가 끝난 뒤에 호출해야 페이지가 네이티브 래스터 이벤트를 계속 처리할 수 있다.
+    waitPresented: () => tell("waitPresented"),
 } : {
   kinds: [],
   report: () => {},
   theme: () => {},
   place: () => {},
+  waitPresented: async () => null,
 };
 
 let pick = null;

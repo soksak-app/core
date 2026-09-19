@@ -2,7 +2,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { attachImage, regionInsets } from "@soksak/plugin-api";
+import { regionInsets } from "../document-region.js";
+import { attachImage } from "../image-region.js";
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 

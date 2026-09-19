@@ -12,8 +12,8 @@
 import { createBinder } from "./binder.js";
 
 export { INTERACTIVE, commandOf, createBinder, valueOf } from "./binder.js";
-export { DOCUMENT_ACTIONS, DOCUMENT_NAME, attachRegion, observeRegionInsets, regionInsets } from "./document-region.js";
-export { IMAGE_NAME, attachImage } from "./image-region.js";
+export { DOCUMENT_ACTIONS, DOCUMENT_NAME, observeRegionInsets, regionInsets } from "./document-region.js";
+export { IMAGE_NAME } from "./image-region.js";
 export { orderedSidecar } from "./sidecar-port.js";
 
 export const ENVIRONMENT = "environment.json";
@@ -47,6 +47,8 @@ export function pageImports(html) {
 
 const ID = /^[a-z][a-z0-9-]*$/;
 const PACKAGE = /^(@[a-z0-9-]+\/)?[a-z0-9-]+$/;
+const REGION = /^[a-z0-9][a-z0-9-]{0,63}$/;
+const TOKEN = /^--[a-z][a-z0-9-]*$/;
 
 const isObject = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 const isText = (value) => typeof value === "string" && value.length > 0;
@@ -65,6 +67,53 @@ function only(where, value, keys) {
   }
 }
 
+/** 표면 합성 선언을 검사한다. 이 선언이 호스트의 영역 권한 목록이다. */
+function checkComposition(where, composition, sidecars) {
+  if (!isObject(composition)) throw new Error(`${where}: composition must be an object`);
+  if (composition.kind === "dom") {
+    only(`${where} composition`, composition, ["kind"]);
+    return;
+  }
+  if (composition.kind !== "hybrid") throw new Error(`${where}: composition kind must be dom or hybrid`);
+  only(`${where} composition`, composition, ["kind", "regions", "overlays"]);
+  if (!Array.isArray(composition.regions) || composition.regions.length === 0) {
+    throw new Error(`${where}: hybrid composition requires regions`);
+  }
+  if (!Array.isArray(composition.overlays)) throw new Error(`${where}: hybrid composition requires overlays`);
+
+  const names = new Set();
+  for (const region of composition.regions) {
+    if (!isObject(region)) throw new Error(`${where} composition region: expected an object`);
+    if (typeof region.name !== "string" || !REGION.test(region.name)) {
+      throw new Error(`${where} composition: invalid region name ${region.name}`);
+    }
+    if (names.has(region.name)) throw new Error(`${where} composition: duplicate name ${region.name}`);
+    names.add(region.name);
+    const regionWhere = `${where} composition region ${region.name}`;
+    if (region.kind === "document") {
+      only(regionWhere, region, ["name", "kind", "input"]);
+      if (region.input !== "native") throw new Error(`${regionWhere}: document input must be native`);
+      continue;
+    }
+    if (region.kind === "image") {
+      only(regionWhere, region, ["name", "kind", "sidecar", "input"]);
+      if (region.input !== "dom") throw new Error(`${regionWhere}: image input must be dom`);
+      if (typeof region.sidecar !== "string" || !sidecars.includes(region.sidecar)) {
+        throw new Error(`${regionWhere}: sidecar must be declared by the plugin`);
+      }
+      continue;
+    }
+    throw new Error(`${regionWhere}: kind must be document or image`);
+  }
+  for (const overlay of composition.overlays) {
+    if (typeof overlay !== "string" || !REGION.test(overlay)) {
+      throw new Error(`${where} composition: invalid overlay name ${overlay}`);
+    }
+    if (names.has(overlay)) throw new Error(`${where} composition: duplicate name ${overlay}`);
+    names.add(overlay);
+  }
+}
+
 /**
  * plugin.json 하나를 검사한다. 형식이 틀리면 예외를 던지고, 맞으면 받은 값을 반환한다.
  *
@@ -72,7 +121,7 @@ function only(where, value, keys) {
  *   name      화면에 표시할 이름
  *   mark      `+` 메뉴와 탭 제목에 표시할 짧은 표식. surface 가 있으면 필수
  *   icon      16×16 뷰박스 SVG 요소. surface 가 있으면 필수
- *   surface   카드 표면. `{ page }` 는 패키지 안의 문서 경로다. 외부 문서는 그 페이지의 문서 영역에 연다
+ *   surface   카드 표면. `{ page, composition }` 은 패키지 안 문서와 합성 권한 선언이다
  *   home      표면 페이지가 처음 여는 http 또는 https 주소. page 표면이 있어야 한다
  *   sections  사이드바에 표시할 수 있는 섹션. id 는 `<플러그인 id>.<이름>` 형식
  *   preview   라이브러리 미리보기의 색. `ink` 는 테마 토큰 이름(`--rail` 등). surface 가 있어야 한다
@@ -86,14 +135,20 @@ export function validateManifest(manifest) {
   if (typeof id !== "string" || !ID.test(id)) throw new Error(`plugin.json: invalid id ${id}`);
   const where = `plugin ${id}`;
   if (!isText(manifest.name)) throw new Error(`${where}: name is required`);
+  if (manifest.sidecars !== undefined) {
+    if (manifest.surface === undefined) throw new Error(`${where}: sidecars require a surface`);
+    checkSidecars(`${where} sidecars`, manifest.sidecars);
+  }
   if (manifest.surface !== undefined) {
     const surface = manifest.surface;
     if (!isObject(surface)) throw new Error(`${where}: surface must be an object`);
-    only(`${where} surface`, surface, ["page"]);
+    only(`${where} surface`, surface, ["page", "composition"]);
     if (!isText(surface.page)) throw new Error(`${where}: surface requires a page`);
     if (surface.page.startsWith("/") || surface.page.split("/").includes("..")) {
       throw new Error(`${where}: surface page must be a path inside the package`);
     }
+    if (surface.composition === undefined) throw new Error(`${where}: surface requires a composition`);
+    checkComposition(`${where} surface`, surface.composition, manifest.sidecars ?? []);
     if (!isText(manifest.mark)) throw new Error(`${where}: mark is required with a surface`);
     if (!isText(manifest.icon)) throw new Error(`${where}: icon is required with a surface`);
   }
@@ -115,7 +170,7 @@ export function validateManifest(manifest) {
     if (manifest.surface === undefined) throw new Error(`${where}: preview requires a surface`);
     if (!isObject(manifest.preview)) throw new Error(`${where}: preview must be an object`);
     only(`${where} preview`, manifest.preview, ["ink"]);
-    if (typeof manifest.preview.ink !== "string" || !/^--[a-z][a-z0-9-]*$/.test(manifest.preview.ink)) {
+    if (typeof manifest.preview.ink !== "string" || !TOKEN.test(manifest.preview.ink)) {
       throw new Error(`${where}: preview.ink must be a theme token name`);
     }
   }
@@ -124,10 +179,6 @@ export function validateManifest(manifest) {
     if (!isText(manifest.home) || !/^https?:\/\/[^/]/.test(manifest.home)) {
       throw new Error(`${where}: home must be an http or https address`);
     }
-  }
-  if (manifest.sidecars !== undefined) {
-    if (manifest.surface === undefined) throw new Error(`${where}: sidecars require a surface`);
-    checkSidecars(`${where} sidecars`, manifest.sidecars);
   }
   if (manifest.exposes !== undefined) {
     if (manifest.surface === undefined) throw new Error(`${where}: exposes require a surface`);

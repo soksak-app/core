@@ -4,16 +4,21 @@
 // 보낸 테마 토큰을 자기 루트에 설정한다.
 import { page as runtimePage } from "@soksak/runtime";
 import {
-  EXPOSURE, MANIFEST, SURFACE_CORE, attachRegion, attachImage, createExpose, declarationMap, modulePath, orderedSidecar, pagePackage,
+  EXPOSURE, MANIFEST, SURFACE_CORE, createExpose, declarationMap, modulePath, orderedSidecar, pagePackage,
   validateExposureFile, validateManifest,
 } from "@soksak/plugin-api";
+import { createSurfaceCompositionController } from "./surface-composition.js";
 
 /* 사이드카 이름마다 하나의 포트. 같은 사이드카로 보내는 모든 전송이 한 순서를 따른다. */
 const sidecars = new Map();
 
 /** 런타임의 page. 사이드카 전송은 호출한 순서대로 전달된다. 네이티브 호스트가 없으면 null 이다. */
+const publicRuntimePage = runtimePage ? Object.fromEntries(
+  Object.entries(runtimePage).filter(([name]) => name !== "document" && name !== "image"),
+) : null;
+
 export const page = runtimePage ? Object.freeze({
-  ...runtimePage,
+  ...publicRuntimePage,
   sidecar(name) {
     if (!sidecars.has(name)) sidecars.set(name, orderedSidecar(runtimePage.sidecar(name)));
     return sidecars.get(name);
@@ -70,17 +75,12 @@ async function ownDeclarations() {
 /** 표면 페이지의 공개 항목 등록 함수. 네이티브 호스트가 없으면 null 이다. */
 export const expose = page?.exposure ? createExpose(page.exposure, ownDeclarations) : null;
 
-/**
- * 이 표면 페이지의 요소 element 에 문서 영역 name 을 붙인다. 네이티브 호스트가 없으면 null 이다.
- * 반환 값은 packages/plugin-api/document-region.js 의 attachRegion 결과다.
- */
-export const attachDocument = page?.document ? (element, name) => attachRegion(page.document, element, name) : null;
-
-/**
- * 이 표면 페이지의 요소 element 에 그림 영역 name 을 붙인다. 네이티브 호스트가 없으면 null 이다.
- * 반환 값은 packages/plugin-api/image-region.js 의 attachImage 결과다.
- */
-export const attachImageRegion = page?.image ? (element, name, sidecar) => attachImage(page.image, element, name, sidecar) : null;
+/** 선언한 모든 네이티브 앵커를 한 번에 붙이고 한 측정에서 함께 배치한다. */
+export async function createSurfaceComposition({ regions = {}, overlays = {} } = {}) {
+  if (!runtimePage) return null;
+  const declaration = (await ownManifest()).surface?.composition;
+  return createSurfaceCompositionController(runtimePage, declaration, { regions, overlays }, window);
+}
 
 /* 표면 문서의 입력 기록. docs/spec/exposure.md 의 core.surface.input 이다. */
 const INPUT_TYPES = ["pointerdown", "pointerup", "pointermove", "click", "wheel", "keydown"];

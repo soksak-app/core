@@ -8,7 +8,7 @@
   키와 포인터 이벤트로 처리한다.
 -->
 <style>
-  html, body { margin: 0; height: 100%; background: var(--surface) }
+  html, body { margin: 0; height: 100%; background: transparent }
   body {
     display: flex; flex-direction: column;
     font: inherit;
@@ -27,12 +27,13 @@
 }}
 </script>
 <script type="module">
-  import { expose, followTheme, attachImageRegion, page } from "@soksak/plugin-api/page";
+  import { createSurfaceComposition, expose, followTheme, page } from "@soksak/plugin-api/page";
   import { startTerminal } from "./terminal.js";
 
   const themed = followTheme();
 
   const view = document.getElementById("view");
+  const composition = await createSurfaceComposition({ regions: { view } });
 
   // 터미널 사이드카가 이 표면의 VT 세션을 실행한다.
   const terminal = page.sidecar("@soksak/sidecar-vt-alacritty");
@@ -41,10 +42,9 @@
   await themed;
   await startTerminal({
     view,
-    attachImage: attachImageRegion,
+    attachImage: () => composition.region("view"),
     sidecar: terminal,
     expose,
-    scale: devicePixelRatio,
     window,
   });
 </script>

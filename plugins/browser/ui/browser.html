@@ -11,13 +11,14 @@
 -->
 <style>
   /* 주소창은 카드 머리와 같은 창 요소이므로 카드 토큰으로 그린다. 표면 토큰은 셸 같은 콘텐츠 표면의 색이다. */
-  html, body { margin: 0; height: 100%; background: var(--card) }
+  html, body { margin: 0; height: 100%; background: transparent }
   body {
     display: flex; flex-direction: column;
     font: 12px/1.4 var(--font);
     color: var(--fg);
   }
   #bar { position: relative; display: flex; align-items: center; gap: 2px; padding: 4px 6px;
+         background: var(--card);
          border-bottom: 1px solid var(--rule) }
   #buttons { display: flex; gap: 2px }
   #bar button { width: 24px; height: 22px; border: 0; border-radius: 4px; padding: 0;
@@ -32,6 +33,7 @@
               background: var(--rail); transition: width .15s }
   #document { position: relative; flex: 1 1 auto; min-height: 0 }
   #error { margin: 0; padding: 4px 9px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+           background: var(--card);
            border-bottom: 1px solid var(--rule); color: var(--no) }
 </style>
 <div id="bar">
@@ -54,7 +56,7 @@
 }}
 </script>
 <script type="module">
-  import { attachDocument, expose, followTheme, ownManifest } from "@soksak/plugin-api/page";
+  import { createSurfaceComposition, expose, followTheme, ownManifest } from "@soksak/plugin-api/page";
 
   const themed = followTheme();
 
@@ -109,7 +111,8 @@
     selecting = false;
   });
 
-  const region = attachDocument(area, "page");
+  const composition = await createSurfaceComposition({ regions: { page: area } });
+  const region = composition.region("page");
   region.onState(show);
 
   await themed;

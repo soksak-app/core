@@ -15,7 +15,8 @@
     "document-region.js",
     "image-region.js",
     "page.js",
-    "sidecar-port.js"
+    "sidecar-port.js",
+    "surface-composition.js"
   ],
   "scripts": {
     "test": "node --test test/"
