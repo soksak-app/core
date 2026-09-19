@@ -152,9 +152,11 @@ int frame_draw(Frame *frame, Screen *screen, Metrics *metrics) {
     for (uint32_t i = 0; i < screen->cell_count; i++) {
         Cell *cell = &screen->cells[i];
 
-        // Calculate cell position (note: CoreGraphics origin is bottom-left, but we want top-left)
+        // Calculate cell position (CoreGraphics origin is bottom-left, convert to top-left coordinates)
+        // In a bottom-origin system: y = frame_height - (row+1) * cell_height places row 0 at top
         CGFloat x = cell->col * metrics->cell_width;
-        CGFloat y = (screen->height - 1 - cell->row) * metrics->cell_height;
+        CGFloat content_height = screen->height * metrics->cell_height;
+        CGFloat y = (CGFloat)frame->height - content_height + cell->row * metrics->cell_height;
 
         // Get colors
         CGColorRef bg_color = NULL;
