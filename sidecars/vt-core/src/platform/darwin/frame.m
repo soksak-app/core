@@ -155,8 +155,7 @@ int frame_draw(Frame *frame, Screen *screen, Metrics *metrics) {
         // Calculate cell position (CoreGraphics origin is bottom-left, convert to top-left coordinates)
         // In a bottom-origin system: y = frame_height - (row+1) * cell_height places row 0 at top
         CGFloat x = cell->col * metrics->cell_width;
-        CGFloat content_height = screen->height * metrics->cell_height;
-        CGFloat y = (CGFloat)frame->height - content_height + cell->row * metrics->cell_height;
+        CGFloat y = (CGFloat)frame->height - ((CGFloat)cell->row + 1.0) * metrics->cell_height;
 
         // Get colors
         CGColorRef bg_color = NULL;
