@@ -696,6 +696,39 @@ int main(void) { @autoreleasepool {
         CFRelease(testSurface17);
     }
 
+    // TEST 18: 클립 뷰가 표면의 형제이고 표면 위에 있는지 확인
+    {
+        [collectedEvents removeAllObjects];
+        unsigned char nonce18[16];
+        IOSurfaceRef testSurface18 = createColoredGlobalSurface(100, 100, nonce18);
+        IOSurfaceID sid18 = IOSurfaceGetID(testSurface18);
+
+        void *region18 = sp_region_create(surface, "test18", testEvent, NULL);
+        check(region18 != NULL, @"TEST 18: region created");
+
+        sp_region_place(region18, 10, 10, 10, 10, true);
+        sp_region_present(region18, sid18, nonce18, 100, 100, window.backingScaleFactor);
+
+        NSView *regionView = (NSView *)region18;
+        NSView *clipView = regionView.superview;
+        check(clipView != nil && ![clipView isKindOfClass:[WKWebView class]],
+            @"TEST 18: region has a non-WebView superview (clipView)");
+
+        NSView *surfaceSuperSuperview = clipView.superview;
+        check(surfaceSuperSuperview == surface.superview,
+            @"TEST 18: clipView's superview is surface's superview");
+
+        // clipView가 surface 위에 있는지 확인 (z-order)
+        NSArray *subviews = surface.superview.subviews;
+        NSUInteger surfaceIndex = [subviews indexOfObject:surface];
+        NSUInteger clipViewIndex = [subviews indexOfObject:clipView];
+        check(clipViewIndex != NSNotFound && surfaceIndex != NSNotFound && clipViewIndex > surfaceIndex,
+            [NSString stringWithFormat:@"TEST 18: clipView is above surface in z-order (clip:%lu, surface:%lu)",
+                (unsigned long)clipViewIndex, (unsigned long)surfaceIndex]);
+
+        sp_region_close(region18);
+        CFRelease(testSurface18);
+    }
 
     // TEST 19: 표시된 이미지의 scale이 제대로 설정되는지 확인 (scale 2)
     {

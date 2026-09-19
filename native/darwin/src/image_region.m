@@ -17,6 +17,7 @@
 @property void *context;
 @property(retain) CALayer *imageLayer;
 @property(assign) IOSurfaceRef surface;  // 레이어가 참조하는 IOSurface. 우리가 ref를 소유.
+@property(assign) WKWebView *webSurface;  // 영역이 놓인 표면 웹뷰. 우리가 소유하지 않음.
 @property NSEdgeInsets insets;
 @property NSPoint caretPos;
 @property double caretWidth;
@@ -75,21 +76,34 @@
 - (void)applyInsets {
     NSView *clipView = self.superview;
     if (!clipView) return;
-    WKWebView *surface = (WKWebView *)clipView.superview;
-    if (!surface || ![surface isKindOfClass:[WKWebView class]]) return;
+    WKWebView *surface = self.webSurface;
+    if (!surface) return;
+
+    // 표면의 frame을 superview 좌표계에서 읽는다.
+    NSRect surfaceFrame = surface.frame;
     CGFloat zoom = surface.pageZoom;
-    NSRect bounds = surface.bounds;
     NSEdgeInsets insets = self.insets;
-    CGFloat width = NSWidth(bounds) - (insets.left + insets.right) * zoom;
-    CGFloat height = NSHeight(bounds) - (insets.top + insets.bottom) * zoom;
-    CGFloat top = insets.top * zoom;
-    CGFloat y = surface.isFlipped ? top : NSHeight(bounds) - top - height;
-    NSRect clipFrame = NSMakeRect(insets.left * zoom, y, MAX(width, 0), MAX(height, 0));
-    
+
+    // 클립 뷰 크기: 표면 프레임에서 인셋 뺀 것 (CSS 픽셀 단위 인셋에 zoom 적용)
+    CGFloat width = NSWidth(surfaceFrame) - (insets.left + insets.right) * zoom;
+    CGFloat height = NSHeight(surfaceFrame) - (insets.top + insets.bottom) * zoom;
+
+    // 클립 뷰 위치: 표면의 superview 좌표계에서 계산
+    CGFloat clipX = NSMinX(surfaceFrame) + insets.left * zoom;
+    CGFloat clipTop = insets.top * zoom;
+    // 클립 뷰는 표면의 superview 좌표계에 놓이므로 그 좌표계의 방향을 따른다.
+    CGFloat clipY = surface.superview.isFlipped ? NSMinY(surfaceFrame) + clipTop : NSMaxY(surfaceFrame) - clipTop - height;
+
+    NSRect clipFrame = NSMakeRect(clipX, clipY, MAX(width, 0), MAX(height, 0));
     clipView.frame = clipFrame;
+
+    // 영역 뷰는 클립 뷰 안에서 bounds를 차지한다.
     self.frame = NSMakeRect(0, 0, MAX(width, 0), MAX(height, 0));
     self.imageLayer.frame = self.bounds;
-    self.hidden = !self.wanted || width < 1 || height < 1;
+    [self updateContentsScale];
+
+    // 표면이 숨겨지면 영역도 숨긴다.
+    self.hidden = !self.wanted || width < 1 || height < 1 || surface.isHiddenOrHasHiddenAncestor;
 }
 
 
@@ -393,12 +407,14 @@ void *sp_region_create(void *surfaceHandle, const char *name, sp_region_event ev
     SPImageRegion *view = [[SPImageRegion alloc] initWithFrame:NSZeroRect];
     view.event = event;
     view.context = context;
+    view.webSurface = surface;
     view.hidden = YES;
 
     NSClipView *clipView = [[NSClipView alloc] initWithFrame:NSZeroRect];
     [clipView addSubview:view];
-    [surface addSubview:clipView];
-    [clipView release];  // 표면이 클립 뷰를 붙든다.
+    // 클립 뷰를 표면의 형제 뷰로 추가: 표면의 superview에서 표면 바로 위에 배치
+    [surface.superview addSubview:clipView positioned:NSWindowAbove relativeTo:surface];
+    [clipView release];  // 표면의 superview가 클립 뷰를 붙든다.
 
     return view;
 }
