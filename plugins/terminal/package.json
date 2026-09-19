@@ -1,0 +1,21 @@
+{
+  "name": "@soksak/plugin-terminal",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Terminal plugin: a full-screen terminal surface connected to a VT engine session.",
+  "files": [
+    "plugin.json",
+    "ui/terminal.html",
+    "ui/terminal.js"
+  ],
+  "scripts": {
+    "test": "node --test test/"
+  },
+  "devDependencies": {
+    "@soksak/plugin-api": "workspace:*"
+  },
+  "dependencies": {
+    "@soksak/sidecar-vt-alacritty": "workspace:*"
+  }
+}

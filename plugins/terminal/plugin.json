@@ -1,0 +1,91 @@
+{
+  "id": "terminal",
+  "name": "터미널",
+  "mark": "◊",
+  "icon": "<rect x=\"2\" y=\"3\" width=\"12\" height=\"10\" rx=\"2\"/><circle cx=\"5\" cy=\"7\" r=\"1.5\"/><path d=\"M8 9l2-2m-2 0l2 2\"/>",
+  "surface": {
+    "page": "ui/terminal.html"
+  },
+  "preview": {
+    "ink": "--surface-fg"
+  },
+  "sidecars": [
+    "@soksak/sidecar-vt-alacritty"
+  ],
+  "exposes": {
+    "status": [
+      {
+        "name": "terminal.session",
+        "description": "The session state: identifier, dimensions, and cell size.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string"
+            },
+            "cols": {
+              "type": "integer"
+            },
+            "rows": {
+              "type": "integer"
+            },
+            "cellWidth": {
+              "type": "number"
+            },
+            "cellHeight": {
+              "type": "number"
+            }
+          }
+        }
+      }
+    ],
+    "commands": [
+      {
+        "name": "terminal.input",
+        "description": "Sends text input to the terminal session as UTF-8 bytes.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "bytes": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "terminal.screen.read",
+        "description": "Reads the current terminal screen content and returns an array of line strings.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      {
+        "name": "terminal.close",
+        "description": "Closes the terminal session.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      }
+    ],
+    "dom": [
+      {
+        "name": "terminal.view",
+        "description": "The terminal view area."
+      }
+    ]
+  }
+}
