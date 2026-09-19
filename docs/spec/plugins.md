@@ -64,6 +64,8 @@ The workbench loads `environment.json` and every listed `plugin.json` before it 
 | `/diagnostics.js` | With `--diagnostics`, the workbench's `observe.js` (the page diagnostic methods); otherwise an empty module |
 | `/transcript.js` | With `--diagnostics`, the workbench's `transcript.js` (the call recorder of the diagnostic module); otherwise absent |
 
+Every file imported by published files must be listed in the package's `files` array; this is validated by `packages/workbench/test/published-imports.test.mjs`.
+
 With `--executables <dir>`, the tool also copies each sidecar's built `executable` file into `<dir>` under its file name and fails when the file is not built. The debug staging targets `frontend-wailsv3` and `frontend-tauriv2` run `sidecars-debug` and the release build targets run `sidecars-release`; those targets build the sidecar packages the applications declare and the helpers those sidecars declare, in that profile. They then stage into `apps/<app>/src/frontend` with `--executables` set to the directory of the application executable (`target/debug` or `target/release`). The debug targets add `--diagnostics`; release builds contain no page diagnostic code.
 
 Every page declares one import map equal to `PAGE_IMPORTS`: `soksak`, `@soksak/plugin-api`, `@soksak/plugin-api/page`, `@soksak/runtime`, and `@soksak/workbench/`.
@@ -98,7 +100,7 @@ Every page declares one import map equal to `PAGE_IMPORTS`: `soksak`, `@soksak/p
 
 The workbench uses only these exports and does not branch on the runtime.
 
-Plugin pages import from `@soksak/plugin-api/page` and do not import workbench files: `followTheme`, `page`, `expose` ([exposure](exposure.md)), `ownManifest()` (the page's validated `plugin.json`), and `attachDocument(element, name)` (a [document region](native-surfaces.md#document-regions) on the element, or `null` without a native host).
+Plugin pages import from `@soksak/plugin-api/page` and do not import workbench files: `followTheme`, `page`, `expose` ([exposure](exposure.md)), `ownManifest()` (the page's validated `plugin.json`), `attachDocument(element, name)` (a [document region](native-surfaces.md#document-regions) on the element, or `null` without a native host), and `attachImageRegion(element, name, sidecar)` (an [image region](native-surfaces.md#image-regions) supplied by the named sidecar, or `null` without a native host).
 
 ## Tests
 

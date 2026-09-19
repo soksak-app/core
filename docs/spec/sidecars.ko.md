@@ -44,6 +44,45 @@
 
 `page.sidecar(name)`은 사이드카 패키지 이름을 받아 `send(surface, body)`와 `on(surface, fn)`을 반환한다. `on`은 구독 등록 후 완료되는 promise를 반환한다. 페이지는 첫 요청 전에 구독한다.
 
+## 그림 봉투
+
+[영역](native-surfaces.ko.md#그림-영역)에 그림을 제공하는 사이드카는 호스트에 그림 봉투를 보낸다.
+
+```json
+{
+  "surface": "surface-id",
+  "body": {
+    "image": {
+      "name": "region-name",
+      "token": {
+        "kind": "iosurface-global",
+        "id": 12345,
+        "nonce": "base64-encoded-16-bytes"
+      },
+      "width": 800,
+      "height": 600,
+      "scale": 1.0,
+      "format": "bgra8",
+      "sequence": 1
+    }
+  }
+}
+```
+
+호스트는 봉투를 검증하고 `op` 필드가 없는 응답을 반환한다.
+
+| 상황 | 응답 | 의미 |
+| --- | --- | --- |
+| 영역이 붙어 있지 않거나 발신자가 권한이 없음 | `{"image": {"error": "notAttached", "name": "...", "sequence": ...}}` | 영역이 없거나 다른 사이드카에 등록됨 |
+| 형식이나 토큰 종류가 지원되지 않거나 논스가 잘못됨 | `{"image": {"error": "unsupported", "name": "...", "sequence": ...}}` | 형식은 `bgra8`, 토큰 종류는 `iosurface-global`이어야 함. 논스는 base64 디코딩하면 정확히 16바이트여야 함 |
+| IOSurface를 찾지 못했거나 접근 거부됨 | `{"image": {"error": "notFound", "name": "...", "sequence": ...}}` | IOSurface 조회 실패 또는 권한 거부 |
+| 그림 크기가 영역 크기와 맞지 않음 | `{"image": {"error": "size", "name": "...", "sequence": ...}}` | 가로와 세로가 영역의 장치 픽셀 크기와 같아야 함 |
+| 성공 | `{"image": {"released": {"name": "...", "sequence": ...}}}` | 호스트가 이전 그림을 반납했고 이 그림을 표시함 |
+
+논스는 IOSurface에 붙은 16바이트 값이고, 호스트는 전역 식별자로 표면을 찾을 때 이를 이용해 표면의 정체성을 검증한다. 순서 번호는 같은 영역의 그림을 추적하며, 호스트는 응답에 순서 번호를 포함해 사이드카가 응답을 요청과 연결하게 한다.
+
+지금은 호스트가 영역마다 한 장의 그림을 소유하고 다음 그림을 표시한 뒤에 반납한다. 호스트는 이전 그림을 반납(하거나 표시 실패)한 직후에 응답하므로 사이드카는 다음 그림을 그릴 수 있다. 이후 단계에서는 여러 장을 버퍼링하거나 요청 시 사이드카에 반환할 수 있다.
+
 ## shell
 
 `sidecars/shell`(`@soksak/sidecar-shell`)은 `pnpm run build`로 `build/soksak-shell`을 빌드하고, 표면마다 셸 세션 하나를 표면의 프로젝트 디렉터리에서 실행한다. 터미널 에뮬레이터가 아닌 줄 단위 콘솔이다. 코드는 `src/`에 있다: 진입점 `src/main.go`, 패키지 `src/shell`의 프로토콜, `src/platform/platform.go`를 통해 등록되는 `src/platform/{darwin,linux,windows}/`의 운영체제별 동작([플랫폼 선택](hosts.ko.md#플랫폼-선택)). 테스트는 `tests/`에 있다.
@@ -78,6 +117,28 @@
 닫힌 표면의 세션과 그 `run` 명령은 프로세스 그룹째 종료한다. 표준 입력이 닫히면 모든 세션을 종료하고 끝난다. Windows에서는 모든 동작이 `shell sessions are not implemented on windows`로 실패한다.
 
 사이드카와 그 헬퍼의 진단 용도 공개 심볼은 모두 `sp_diag_`로 시작한다. 릴리스 산출물 검사는 이 표지를 사용해 진단 코드를 담은 바이너리를 거부한다. 사이드카가 릴리스 빌드에 진단 심볼을 포함하면 검사가 심볼 이름을 가리키는 오류로 실패한다.
+
+## ptyd
+
+`sidecars/ptyd`는 사이드카의 PTY 세션을 관리하는 공유 헬퍼다. 데몬으로 실행되고 세션 생성, 입출력 라우팅, 세션 생명주기를 담당한다. 데몬은 Unix 소켓에서 대기하며 여러 클라이언트를 동시에 처리한다.
+
+**세션 생명주기**: 소비자(보통 사이드카를 소유한 호스트)가 세션에 붙으면 데몬이 세션의 자식 프로세스를 실행한다. 세션은 소비자가 분리되어도(`detach` 동작) 계속 살아 있지만, 모든 소비자가 나가고 세션이 종료 요청을 받으면 끝난다(`close` 동작). 소비자가 0이고 클라이언트도 0인 세션(활성 연결 수 0)은 유휴 기한이 시작된다. 기한 동안 활동이 없으면 데몬이 자신을 종료한다. 디버그 빌드는 유휴 기한이 60초이고, 릴리스 빌드는 5분이다. 기한은 `PTYD_IDLE_TIMEOUT` 환경 변수로 재정의할 수 있으며, Go duration 형식으로 파싱된다(예: `"30s"`, `"2m"`).
+
+**로깅**: 데몬은 기본적으로 터미널에 붙어 있으면 stderr에 로그를 남긴다. 로그를 파일로 리다이렉트하려면 `PTYD_LOG`를 파일 경로로 설정한다. 이는 데몬의 생명주기와 요청 처리를 디버그하는 데 유용하다.
+
+## 터미널 사이드카 (vt-core)
+
+터미널 사이드카(`@soksak/sidecar-vt-core`)는 그림 영역으로 렌더링하는 터미널 에뮬레이터를 구현한다. 터미널을 제어하는 요청을 받고 화면 그림을 영역에 공급한다. 사이드카는 Rust 프로세스이며 터미널 에뮬레이션을 위해 Alacritty 엔진을 사용하고 IOSurface 기반 그리기를 한다.
+
+| 요청 | 본문 | 의미 |
+| --- | --- | --- |
+| `open` | `{width: 픽셀, height: 픽셀, scale: 배율, image?: 이름}` | 주어진 픽셀 크기로 터미널 세션을 만들고 선택적으로 그림 영역 이름을 지정한다. <!-- size contract: pending code --> 배율은 CSS 픽셀당 장치 픽셀. 사이드카는 ptyd 데몬을 통해 PTY 세션을 열고, 그림 영역이 지정되면 거기에 그리기를 시작한다. 같은 표면에 대한 `open` 호출이 여러 번이면 아무것도 하지 않는다. |
+| `input` | `{bytes?: base64-문자열 \| keys?: [{key: 이름, text?: 문자열, shift: bool, alt: bool, ctrl: bool}]}` | 터미널에 입력을 보낸다. 바이트는 base64 인코딩된 원시 터미널 입력이다. 키는 모드에 따라 터미널 수열로 디코드된다: 기능 키는 escape 수열로 매핑되고, 텍스트 입력은 UTF-8로 보내지고, 조합 키는 적절히 처리된다. `bytes`와 `keys` 모두 한 요청에 있을 수 있다. |
+| `resize` | `{width: 픽셀, height: 픽셀, scale: 배율}` | 터미널을 새 픽셀 크기로 조정한다. <!-- size contract: pending code --> |
+| `screen.read` | `{}` | 현재 화면 상태를 요청한다. 사이드카가 `{event: "screen", cols, rows, cursor: {col, row}, lines: [[cell, ...]]}` 응답을 보낸다. 각 셀은 `{ch?: 문자열, width: 수, fg?: 색상, bg?: 색상, bold: bool, italic: bool, underline: bool, inverse: bool}`을 가진다. <!-- cell size: pending code --> |
+| `close` | `{}` | 터미널 세션을 종료하고 PTY를 종료한다. 사이드카는 호스트의 `{closed: true}` 봉투에 `{closed: true}`로 응답한다. 이는 세션을 끝내되 데몬을 살아 있게 한다(detach 동작). |
+
+사이드카는 터미널 화면이 바뀔 때마다 `{event: "screen", ...}`을 보내고, 새 프레임이 그려질 때마다 호스트의 그림 릴레이를 통해 그림 봉투를 보낸다. 그림 봉투의 순서 번호는 그리기마다 증가하며 release 응답과의 대응을 허용한다.
 
 ## 테스트
 

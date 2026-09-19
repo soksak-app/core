@@ -44,6 +44,45 @@ The host records the window that first sends for a surface and delivers each sid
 
 `page.sidecar(name)` takes a sidecar package name and returns `send(surface, body)` and `on(surface, fn)`. `on` returns a promise that resolves after the subscription is registered; a page subscribes before its first request.
 
+## Image envelope
+
+A sidecar that supplies images to a [region](native-surfaces.md#image-regions) sends an image envelope to the host:
+
+```json
+{
+  "surface": "surface-id",
+  "body": {
+    "image": {
+      "name": "region-name",
+      "token": {
+        "kind": "iosurface-global",
+        "id": 12345,
+        "nonce": "base64-encoded-16-bytes"
+      },
+      "width": 800,
+      "height": 600,
+      "scale": 1.0,
+      "format": "bgra8",
+      "sequence": 1
+    }
+  }
+}
+```
+
+The host validates the envelope and returns a response without an `op` field:
+
+| Condition | Response | Meaning |
+| --- | --- | --- |
+| Region not attached or sender not authorized | `{"image": {"error": "notAttached", "name": "...", "sequence": ...}}` | Region does not exist or was registered for a different sidecar |
+| Format or token kind not supported, or nonce invalid | `{"image": {"error": "unsupported", "name": "...", "sequence": ...}}` | Format must be `bgra8` and token kind must be `iosurface-global`; nonce must be exactly 16 bytes when base64-decoded |
+| IOSurface not found or access denied | `{"image": {"error": "notFound", "name": "...", "sequence": ...}}` | IOSurface lookup failed or permission denied |
+| Image size does not match region size | `{"image": {"error": "size", "name": "...", "sequence": ...}}` | Width and height must match the region's size in device pixels |
+| Success | `{"image": {"released": {"name": "...", "sequence": ...}}}` | The host has released the previous image (if any) and will present this one |
+
+The nonce is a 16-byte value attached to the IOSurface that the host uses to verify the surface's identity when looking it up by global identifier. The sequence number tracks images from the same region; the host includes it in the response to allow the sidecar to correlate responses with requests.
+
+Currently the host holds one image per region and releases it after presenting the next one. The host responds immediately after releasing (or failing to present) the previous image, so the sidecar may draw the next one. Future stages may buffer multiple images or return images to the sidecar on request.
+
 ## shell
 
 `sidecars/shell` (`@soksak/sidecar-shell`) builds `build/soksak-shell` with `pnpm run build` and runs one shell session per surface in the surface's project directory. It is a line console, not a terminal emulator. Its code is in `src/`: the entry point `src/main.go`, the protocol in the package `src/shell`, and the OS operations in `src/platform/{darwin,linux,windows}/`, which register through `src/platform/platform.go` ([platform selection](hosts.md#platform-selection)). Its tests are in `tests/`.
@@ -78,6 +117,28 @@ The sidecar sends these event bodies:
 A closed surface ends its session and its `run` commands by terminating their process groups. When standard input closes, the sidecar ends every session and exits. On Windows every operation fails with `shell sessions are not implemented on windows`.
 
 Public symbols in sidecars and their helpers that are diagnostic-only start with `sp_diag_`. The release build check uses this marker to reject binaries that contain diagnostic code. When a sidecar includes diagnostic symbols in a release build, the release check fails with an error message pointing to the symbol name.
+
+## ptyd
+
+`sidecars/ptyd` is a shared helper that manages PTY sessions for sidecars. It runs as a daemon and handles session creation, input/output routing, and session lifecycle. The daemon listens on a Unix socket and serves multiple clients concurrently.
+
+**Session lifecycle**: When a consumer (typically from a host that owns a sidecar) attaches to a session, the daemon runs the session's child process. Sessions remain alive after a consumer detaches (`detach` operation), but terminate when all consumers disconnect and the session receives a close request (`close` operation). A session with no consumers and no clients (total of 0 active connections) starts an idle timeout; if no activity occurs within the timeout period, the daemon shuts itself down. In debug builds the idle timeout is 60 seconds; in release builds it is 5 minutes. The timeout can be overridden with the `PTYD_IDLE_TIMEOUT` environment variable, parsed as a Go duration (e.g., `"30s"`, `"2m"`).
+
+**Logging**: The daemon logs to stderr by default when the application is attached to a terminal. To redirect logs to a file, set `PTYD_LOG` to the file path. This is useful for debugging daemon lifecycle and request handling.
+
+## Terminal sidecar (vt-core)
+
+The terminal sidecar (`@soksak/sidecar-vt-core`) implements a terminal emulator that renders to an image region. It accepts requests to control the terminal and supplies screen images to a region. The sidecar is a Rust process that uses an Alacritty engine for terminal emulation and IOSurface-backed drawing.
+
+| Request | Body | Meaning |
+| --- | --- | --- |
+| `open` | `{width: pixels, height: pixels, scale: factor, image?: name}` | Create a terminal session with the given pixel size and optional image region name. <!-- size contract: pending code --> Scale is device pixels per CSS pixel. The sidecar opens a PTY session through the ptyd daemon and starts drawing to the image region if named. Multiple `open` calls for the same surface do nothing. |
+| `input` | `{bytes?: base64-string \| keys?: [{key: name, text?: string, shift: bool, alt: bool, ctrl: bool}]}` | Send input to the terminal. Bytes are base64-encoded raw terminal input. Keys are decoded to terminal sequences based on the mode: function keys map to escape sequences, text input is sent as UTF-8, and modifier combinations are handled accordingly. Both `bytes` and `keys` can be present in one request. |
+| `resize` | `{width: pixels, height: pixels, scale: factor}` | Resize the terminal to the new pixel dimensions. <!-- size contract: pending code --> |
+| `screen.read` | `{}` | Request the current screen state. The sidecar responds with `{event: "screen", cols, rows, cursor: {col, row}, lines: [[cell, ...]]}`, where each cell has `{ch?: string, width: number, fg?: color, bg?: color, bold: bool, italic: bool, underline: bool, inverse: bool}`. <!-- cell size: pending code --> |
+| `close` | `{}` | Close the terminal session and shut down the PTY. The sidecar sends `{closed: true}` in response to a host `{closed: true}` envelope, which ends the session but keeps the daemon alive (detach behavior). |
+
+The sidecar sends `{event: "screen", ...}` whenever the terminal screen changes, and sends image envelopes through the host's image relay when a new frame is drawn. The sequence number in the image envelope increments with each draw and allows correlation with the release response.
 
 ## Tests
 

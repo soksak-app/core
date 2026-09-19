@@ -73,10 +73,11 @@ Images are created by sidecars and supplied to the core through a region. The co
 
 - **Image supply and size validation**: The host creates a region by name under a surface and assigns it a supplier sidecar. The sidecar presents an image with a token and dimensions. Dimensions must match the region's size; if dimensions differ, the presentation is rejected with an error.
 - **Device pixel reporting**: The region reports its size in device pixels, not CSS pixels.
-- **Input handling**: Pointer events pass through to the surface document below. Keyboard, input composition, and accessibility belong to the region. The region receives key events; keys are delivered to the owning page as events. Focus changes only on host request, and the current position is observed only through `host.window`.
-- **Accessibility**: The region is an accessibility element. Its value is the screen text provided by the owner.
+- **Input handling**: Pointer events pass through to the surface document below. Keyboard input, input composition, and accessibility belong to the region. The region receives keyboard and composition events: `{type: "key", key: name, text?, shift, alt, ctrl}`, `{type: "insert", text}`, `{type: "compose", text?, caret?}`, and `{type: "focus", focused: boolean}`. Keys are delivered to the page. Command-key sequences are intercepted by the application menu. Focus changes on host request, and the current position is observed through `host.window`.
+- **Accessibility**: The region is an accessibility element. Its value is the screen text provided by the owner through `setAccessibleText`.
 - **Image release**: The core releases an image to its supplier when the transaction that presents the next image completes. The supplier must not draw over an image the core has not released. How many images a supplier keeps and what it does when none is free is the supplier's own policy.
 - **Authorization**: The region specifies which sidecar is authorized to supply images. The host rejects images from unregistered sidecars with an error.
+- **Error reporting**: If the host cannot present an image, the region sends an error event: `{type: "error", reason}`. Reasons include `notFound` (IOSurface not found), `forbidden` (access denied), `size` (dimensions do not match), `scale` (the image was drawn at a scale other than the window's), and `presentFailed` (platform presentation failed).
 
 ## Acceptance criteria
 
