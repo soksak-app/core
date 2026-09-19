@@ -144,19 +144,22 @@ struct InputKey {
     ctrl: bool,
 }
 
-fn pixels_to_cells(pixels: u32, cell_size: f32, scale: f32) -> u16 {
-    (pixels as f32 / (cell_size * scale)) as u16
+fn pixels_to_cells(pixels: u32, cell_size: f32) -> u16 {
+    (pixels as f32 / cell_size) as u16
 }
 
 /// Validate and calculate terminal size. Returns error if width/height invalid or result is 0.
 fn calculate_terminal_size(width: u32, height: u32, scale: f32) -> Result<(u16, u16), String> {
+    if scale <= 0.0 {
+        return Err("open requires scale to be a positive number".to_string());
+    }
     if width == 0 || height == 0 {
         return Err("open requires a positive width and height".to_string());
     }
 
     let metrics = crate::platform::metrics(13.0, scale);
-    let cols = pixels_to_cells(width, metrics.cell_width, scale);
-    let rows = pixels_to_cells(height, metrics.cell_height, scale);
+    let cols = pixels_to_cells(width, metrics.cell_width);
+    let rows = pixels_to_cells(height, metrics.cell_height);
 
     if cols == 0 || rows == 0 {
         return Err("open requires a positive width and height".to_string());
@@ -271,7 +274,7 @@ async fn surface_task(
                                 engine.resize(cols, rows);
 
                                 if let Some(ref image_name) = image {
-                                    image_state = ImageState::new(image_name.clone(), width, height);
+                                    image_state = ImageState::new(image_name.clone(), width, height, scale);
                                 }
 
                                 match session_port.open("/bin/sh", cols, rows, None).await {
@@ -515,7 +518,7 @@ async fn surface_task(
                                                         },
                                                         "width": img_state.width_px,
                                                         "height": img_state.height_px,
-                                                        "scale": 1.0,
+                                                        "scale": img_state.scale,
                                                         "format": "bgra8",
                                                         "sequence": img_state.sequence
                                                     }
@@ -564,7 +567,7 @@ async fn surface_task(
                                                         },
                                                         "width": img_state.width_px,
                                                         "height": img_state.height_px,
-                                                        "scale": 1.0,
+                                                        "scale": img_state.scale,
                                                         "format": "bgra8",
                                                         "sequence": img_state.sequence
                                                     }
@@ -737,14 +740,15 @@ where
                     if let Some(op) = body.get("op").and_then(|v| v.as_str()) {
                         match op {
                             "open" => {
-                                // Validate required fields: width, height. scale and image are optional.
+                                // Validate required fields: width, height, scale. image is optional.
                                 let width_opt = body.get("width").and_then(|v| v.as_u64()).map(|v| v as u32);
                                 let height_opt = body.get("height").and_then(|v| v.as_u64()).map(|v| v as u32);
+                                let scale_opt = body.get("scale").and_then(|v| v.as_f64()).map(|v| v as f32);
 
-                                if width_opt.is_none() || height_opt.is_none() {
+                                if width_opt.is_none() || height_opt.is_none() || scale_opt.is_none() {
                                     let response = json!({
                                         "surface": surface_id,
-                                        "body": {"error": "invalidParams", "reason": "open requires width and height fields (non-null, numbers)"}
+                                        "body": {"error": "invalidParams", "reason": "open requires width, height, and scale fields (non-null, numbers)"}
                                     });
                                     if let Err(_) = output_tx.send(response.to_string()).await {
                                         break;
@@ -752,7 +756,7 @@ where
                                 } else {
                                     let width = width_opt.unwrap();
                                     let height = height_opt.unwrap();
-                                    let scale = body.get("scale").and_then(|v| v.as_f64()).unwrap_or(1.0) as f32;
+                                    let scale = scale_opt.unwrap();
                                     let image = body.get("image").and_then(|v| v.as_str()).map(|s| s.to_string());
                                     if let Err(_) = tx.send(SurfaceCommand::Open { width, height, scale, image }).await {
                                         break;
@@ -833,14 +837,15 @@ where
                                 }
                             }
                             "resize" => {
-                                // Validate required fields: width, height. scale is optional.
+                                // Validate required fields: width, height, scale.
                                 let width_opt = body.get("width").and_then(|v| v.as_u64()).map(|v| v as u32);
                                 let height_opt = body.get("height").and_then(|v| v.as_u64()).map(|v| v as u32);
+                                let scale_opt = body.get("scale").and_then(|v| v.as_f64()).map(|v| v as f32);
 
-                                if width_opt.is_none() || height_opt.is_none() {
+                                if width_opt.is_none() || height_opt.is_none() || scale_opt.is_none() {
                                     let response = json!({
                                         "surface": surface_id,
-                                        "body": {"error": "invalidParams", "reason": "resize requires width and height fields (non-null, numbers)"}
+                                        "body": {"error": "invalidParams", "reason": "resize requires width, height, and scale fields (non-null, numbers)"}
                                     });
                                     if let Err(_) = output_tx.send(response.to_string()).await {
                                         break;
@@ -848,7 +853,7 @@ where
                                 } else {
                                     let width = width_opt.unwrap();
                                     let height = height_opt.unwrap();
-                                    let scale = body.get("scale").and_then(|v| v.as_f64()).unwrap_or(1.0) as f32;
+                                    let scale = scale_opt.unwrap();
                                     if let Err(_) = tx.send(SurfaceCommand::Resize { width, height, scale }).await {
                                         break;
                                     }

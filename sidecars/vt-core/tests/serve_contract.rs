@@ -1351,12 +1351,13 @@ async fn test_cell_dimensions_from_metrics() {
     assert!((cell_height - expected_cell_height).abs() < 0.1,
         "cellHeight at scale 2.0: expected {}, got {}", expected_cell_height, cell_height);
 
-    // Verify cols/rows calculation: cols = width_px / (cell_width * scale)
+    // Verify cols/rows calculation: cols = width_px / cell_width
+    // (both width_px and cell_width are in device pixels, scale already accounted for in metrics)
     let cols = state_json["body"]["cols"].as_u64().expect("cols should be present") as u16;
     let rows = state_json["body"]["rows"].as_u64().expect("rows should be present") as u16;
 
-    let expected_cols = (width_px as f32 / (m.cell_width * scale)) as u16;
-    let expected_rows = (height_px as f32 / (m.cell_height * scale)) as u16;
+    let expected_cols = (width_px as f32 / m.cell_width) as u16;
+    let expected_rows = (height_px as f32 / m.cell_height) as u16;
 
     assert_eq!(cols, expected_cols, "cols should match metrics at scale 2.0: expected {}, got {}", expected_cols, cols);
     assert_eq!(rows, expected_rows, "rows should match metrics at scale 2.0: expected {}, got {}", expected_rows, rows);

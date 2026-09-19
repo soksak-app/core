@@ -12,13 +12,14 @@ pub struct ImageState {
     pub pending_draw: bool,
     pub width_px: u32,
     pub height_px: u32,
+    pub scale: f32,
 }
 
 #[cfg(target_os = "macos")]
 impl ImageState {
-    pub fn new(name: String, width_px: u32, height_px: u32) -> Option<ImageState> {
+    pub fn new(name: String, width_px: u32, height_px: u32, scale: f32) -> Option<ImageState> {
         let frame = Frame::new(width_px, height_px)?;
-        let device_metrics = metrics(13.0, 1.0);
+        let device_metrics = metrics(13.0, scale);
         Some(ImageState {
             name,
             frame,
@@ -27,6 +28,7 @@ impl ImageState {
             pending_draw: false,
             width_px,
             height_px,
+            scale,
         })
     }
 }
@@ -36,7 +38,7 @@ pub struct ImageState;
 
 #[cfg(not(target_os = "macos"))]
 impl ImageState {
-    pub fn new(_name: String, _width_px: u32, _height_px: u32) -> Option<ImageState> {
+    pub fn new(_name: String, _width_px: u32, _height_px: u32, _scale: f32) -> Option<ImageState> {
         None
     }
 }
