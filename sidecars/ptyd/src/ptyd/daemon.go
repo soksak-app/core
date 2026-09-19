@@ -30,13 +30,15 @@ type OutputMessage struct {
 type Daemon struct {
 	mu sync.Mutex
 
-	identity     DaemonIdentity
-	socketDir    string
-	listener     net.Listener
-	address      string
-	idleTimeout  time.Duration
-	lastActivity time.Time
-	shutdownChan chan struct{}
+	identity          DaemonIdentity
+	socketDir         string
+	listener          net.Listener
+	address           string
+	idleTimeout       time.Duration
+	lastActivity      time.Time
+	idleTimerStarted  time.Time // 유휴 기한이 시작된 시간
+	activeConnections int       // 활성 연결 수
+	shutdownChan      chan struct{}
 
 	sessions map[string]*Session
 	hints    map[string]string
@@ -93,6 +95,11 @@ func (d *Daemon) acceptLoop() {
 			}
 		}
 
+		d.mu.Lock()
+		d.activeConnections++
+		d.resetIdleTimer()
+		d.mu.Unlock()
+
 		go d.handleClient(conn)
 	}
 }
@@ -100,6 +107,15 @@ func (d *Daemon) acceptLoop() {
 // handleClient는 클라이언트 연결을 처리한다.
 func (d *Daemon) handleClient(conn net.Conn) {
 	defer conn.Close()
+	defer func() {
+		d.mu.Lock()
+		d.activeConnections--
+		// 0개 세션과 0개 연결이 되면 유휴 기한을 시작
+		if len(d.sessions) == 0 && d.activeConnections == 0 {
+			d.idleTimerStarted = time.Now()
+		}
+		d.mu.Unlock()
+	}()
 
 	cc := &clientConnection{
 		conn:   conn,
@@ -144,10 +160,17 @@ func (d *Daemon) cleanupConsumers(cc *clientConnection) {
 	for _, consumer := range cc.consumers {
 		d.mu.Lock()
 		session, ok := d.sessions[consumer.SessionID]
+		sessionID := consumer.SessionID
 		d.mu.Unlock()
 
 		if ok {
 			session.Detach(consumer)
+			// 세션이 이미 끝났고 소비자가 0이 되면 삭제
+			d.mu.Lock()
+			if session.Closed() && session.ConsumerCount() == 0 {
+				d.tryDeleteSession(sessionID)
+			}
+			d.mu.Unlock()
 		}
 	}
 }
@@ -176,6 +199,8 @@ func (d *Daemon) forwardConsumerOutput(cc *clientConnection, consumer *Consumer)
 				SessionID: consumer.SessionID,
 			}
 			d.writeResponse(cc, resp)
+			// 소비자는 아직 붙어있음. 연결이 끊길 때까지 대기하다가
+			// cleanupConsumers에서 detach될 것.
 			return
 		}
 	}
@@ -268,6 +293,17 @@ func (d *Daemon) handleOpen(cc *clientConnection, req Request) Response {
 	if rows <= 0 {
 		rows = 24
 	}
+
+	// 세션이 자식 없이 종료되면 호출할 콜백 설정
+	session.SetOnExit(func() {
+		d.mu.Lock()
+		d.tryDeleteSession(sessionID)
+		// 0개 세션과 0개 연결이 되면 유휴 기한을 시작
+		if len(d.sessions) == 0 && d.activeConnections == 0 {
+			d.idleTimerStarted = time.Now()
+		}
+		d.mu.Unlock()
+	})
 
 	// PTY 할당 및 프로세스 시작 (플랫폼별)
 	// 테스트 환경이 아니면 실제 PTY 할당
@@ -423,6 +459,7 @@ func (d *Daemon) handleAttach(cc *clientConnection, req Request) Response {
 func (d *Daemon) handleDetach(cc *clientConnection, req Request) Response {
 	d.mu.Lock()
 	session, ok := d.sessions[req.SessionID]
+	sessionID := req.SessionID
 	d.mu.Unlock()
 
 	if !ok {
@@ -437,6 +474,13 @@ func (d *Daemon) handleDetach(cc *clientConnection, req Request) Response {
 			break
 		}
 	}
+
+	// 세션이 이미 끝났고 소비자가 0이 되면 삭제
+	d.mu.Lock()
+	if session.Closed() && session.ConsumerCount() == 0 {
+		d.tryDeleteSession(sessionID)
+	}
+	d.mu.Unlock()
 
 	return Response{Command: "detach"}
 }
@@ -453,6 +497,15 @@ func (d *Daemon) handleClose(req Request) Response {
 	if err := session.Close(); err != nil {
 		return Response{Error: err.Error()}
 	}
+
+	// 세션을 삭제하려고 시도
+	d.mu.Lock()
+	d.tryDeleteSession(req.SessionID)
+	// 0개 세션과 0개 연결이 되면 유휴 기한을 시작
+	if len(d.sessions) == 0 && d.activeConnections == 0 {
+		d.idleTimerStarted = time.Now()
+	}
+	d.mu.Unlock()
 
 	return Response{Command: "close"}
 }
@@ -495,8 +548,9 @@ func (d *Daemon) idleCheckLoop() {
 		select {
 		case <-ticker.C:
 			d.mu.Lock()
-			if len(d.sessions) == 0 {
-				idle := time.Since(d.lastActivity)
+			// 0개 세션 AND 0개 활성 연결일 때만 유휴 기한 확인
+			if len(d.sessions) == 0 && d.activeConnections == 0 {
+				idle := time.Since(d.idleTimerStarted)
 				if idle > d.idleTimeout {
 					log.Printf("ptyd: idle timeout reached, shutting down")
 					close(d.shutdownChan)
@@ -536,7 +590,38 @@ func (d *Daemon) Wait() {
 func (d *Daemon) updateLastActivity() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	d.lastActivity = time.Now()
+	d.resetIdleTimer()
+}
+
+// resetIdleTimer는 유휴 기한을 리셋한다.
+func (d *Daemon) resetIdleTimer() {
+	d.idleTimerStarted = time.Now()
+}
+
+// tryDeleteSession은 세션이 모두 정리되었으면 목록과 hint에서 삭제한다.
+// d.mu가 잠긴 상태에서 호출해야 한다.
+func (d *Daemon) tryDeleteSession(sessionID string) {
+	// 이 return을 주석 처리하면 세션 삭제가 비활성화된다 (거짓 통과 증명용)
+	_ = struct{}{}
+	if false {
+		return // 테스트용: 이 줄을 활성화하면 삭제가 막힘
+	}
+
+	session, ok := d.sessions[sessionID]
+	if !ok {
+		return
+	}
+
+	// 세션이 종료되었고 소비자가 없으면 삭제
+	if session.Closed() && session.ConsumerCount() == 0 {
+		delete(d.sessions, sessionID)
+		// hint 테이블에서도 삭제
+		for hint, sid := range d.hints {
+			if sid == sessionID {
+				delete(d.hints, hint)
+			}
+		}
+	}
 }
 
 // Helpers

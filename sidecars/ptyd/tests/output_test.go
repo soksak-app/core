@@ -383,7 +383,7 @@ func TestOutputReconnectionReplay(t *testing.T) {
 	openReq := map[string]interface{}{
 		"command": "open",
 		"program": "/bin/sh",
-		"args":    []string{"-c", "echo hi"},
+		"args":    []string{"-c", "echo hi; sleep 5"},
 		"cols":    80,
 		"rows":    24,
 	}
@@ -493,6 +493,15 @@ func TestOutputReconnectionReplay(t *testing.T) {
 	if !receivedOnB {
 		t.Error("connection B did not receive replayed output")
 	}
+
+	// 살아있는 세션 정리
+	closeReq := map[string]interface{}{
+		"command":   "close",
+		"sessionId": sessionID,
+	}
+	closeJSON, _ := json.Marshal(closeReq)
+	connB.Write(append(closeJSON, '\n'))
+	readerB.ReadBytes('\n')
 }
 
 // TestOutputExit tests that exit message arrives when process exits.

@@ -42,6 +42,9 @@ type Session struct {
 
 	// 소비자 추적
 	consumers map[*Consumer]bool
+
+	// 종료 콜백: 자식이 끝나고 소비자가 0이면 호출
+	onExit func()
 }
 
 // Consumer는 세션에 붙은 클라이언트다.
@@ -65,6 +68,13 @@ func NewSession(id string, ringSize int) *Session {
 		exitCode:  -1,
 		closeChan: make(chan struct{}),
 	}
+}
+
+// SetOnExit은 자식이 끝났을 때 소비자가 0이면 호출할 콜백을 설정한다.
+func (s *Session) SetOnExit(callback func()) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onExit = callback
 }
 
 // SetSessionHandle은 플랫폼별 세션 핸들을 설정한다.
@@ -384,9 +394,9 @@ func (s *Session) GetNextSeq() int64 {
 }
 
 // NotifyConsumersOfExit은 모든 소비자에게 세션 종료를 알린다.
+// 소비자가 0이고 onExit이 설정되어 있으면 호출한다.
 func (s *Session) NotifyConsumersOfExit() {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	for consumer := range s.consumers {
 		select {
@@ -395,5 +405,16 @@ func (s *Session) NotifyConsumersOfExit() {
 		default:
 			close(consumer.Done)
 		}
+	}
+
+	// 소비자가 0이고 콜백이 있으면 호출 (락을 풀고 호출하여 교착을 피함)
+	var callback func()
+	if len(s.consumers) == 0 && s.onExit != nil {
+		callback = s.onExit
+	}
+	s.mu.Unlock()
+
+	if callback != nil {
+		callback()
 	}
 }
