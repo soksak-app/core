@@ -27,7 +27,7 @@
 | --- | --- | --- |
 | `id` | 예 | 소문자 식별자. 탭과 설정이 참조한다 |
 | `name` | 예 | 표시 이름 |
-| `surface` | 아니오 | `{ "page": "ui/page.html" }`: 패키지 안의 문서. 페이지는 [문서 영역](native-surfaces.ko.md#문서-영역)에 웹 문서를 표시하며, 웹 주소는 표면이 아니다 |
+| `surface` | 아니오 | `{ "page": "ui/page.html", "composition": ... }`: 패키지 안의 문서와 필수 [표면 합성](surface-composition.ko.md). 페이지는 문서 영역에 웹 문서를 표시하며, 웹 주소는 표면이 아니다 |
 | `home` | 아니오 | 표면 페이지가 처음 여는 `http` 또는 `https` 주소. `surface`가 필요하다 |
 | `mark` | `surface`가 있으면 | 추가 메뉴와 새 탭 제목에 표시하는 짧은 텍스트 |
 | `icon` | `surface`가 있으면 | 16×16 뷰박스용 SVG 요소 |
@@ -36,6 +36,8 @@
 | `sidecars` | 아니오 | 표면 페이지가 사용하는 [사이드카](sidecars.ko.md)의 패키지 이름. `surface`가 필요하다. 각각 플러그인 `package.json`의 의존성이어야 한다 |
 
 플러그인은 `surface`와 `sections` 중 하나 이상이 필요하다. 표면이 있는 플러그인만 추가 메뉴에 표시되고 레일을 갖는다. 워크벤치는 `page` 표면을 `modules/<패키지 이름>/<page>?id=<탭 id>`로 연다. 정의되지 않은 필드는 거부한다.
+
+`surface.composition`은 `{ "kind": "dom" }`이거나 `kind: "hybrid"`, 완전한 `regions`, 완전한 `overlays`를 가진 혼합 선언이다. 그림 영역은 `sidecars`에 이미 나열한 사이드카를 지정한다. manifest 선언은 호스트에 전달하는 권한 데이터다. 페이지 코드는 선언에 없는 영역, 공급자, 입력 소유자, 쌓임 항목을 추가할 수 없다.
 
 ## environment.json
 
@@ -100,7 +102,7 @@
 
 워크벤치는 이 내보내는 값만 사용하고 런타임에 따라 분기하지 않는다.
 
-플러그인 페이지는 `@soksak/plugin-api/page`에서 다음을 가져오고 워크벤치 파일을 가져오지 않는다: `followTheme`, `page`, `expose`([공개 항목](exposure.ko.md)), `ownManifest()`(검사한 페이지의 `plugin.json`), `attachDocument(element, name)`(요소의 [문서 영역](native-surfaces.ko.md#문서-영역). 네이티브 호스트가 없으면 `null`), `attachImageRegion(element, name, sidecar)`(이름 있는 사이드카가 공급하는 [그림 영역](native-surfaces.ko.md#그림-영역). 네이티브 호스트가 없으면 `null`).
+플러그인 페이지는 `@soksak/plugin-api/page`에서 다음을 가져오고 워크벤치 파일을 가져오지 않는다: `followTheme`, `page`, `expose`([공개 항목](exposure.ko.md)), `ownManifest()`(검사한 페이지의 `plugin.json`), `createSurfaceComposition(...)`([표면 합성](surface-composition.ko.md)). 내보낸 `page` 객체는 원시 문서·그림 attach/place 포트를 노출하지 않는다. 영역 손잡이는 검증된 합성에서만 얻는다.
 
 ## 테스트
 

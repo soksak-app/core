@@ -93,6 +93,7 @@ The shell sidecar uses the same Go mechanism in `sidecars/shell/src/platform/`.
 | Window | Window preparation, the unified title bar, full screen, the window button area, window server numbers, native inspection requests |
 | Webview | Creation, placement, frame, visibility, background, opacity, live resize, close (Wails also navigation, script evaluation, modal configuration and focus, pixel alignment; Tauri also ordering, corner radius, view identity) |
 | Surface layout | Transaction begin, commit, cancel, and completion after presentation |
+| Surface composition | `SurfaceHost` creation and closure; complete composition application; native-plane clipping, stacking, visibility, and hit routing; image configuration and immutable snapshot presentation |
 | Shapes | Outline views above surfaces: creation, frame, style, removal |
 | Input | Input monitoring and its removal; Tauri also registers webviews for pointer routing |
 | Capture | Window capture: open, start, wait for the first frame, stop |
@@ -102,6 +103,8 @@ The shell sidecar uses the same Go mechanism in `sidecars/shell/src/platform/`.
 | Dock | Dock menu installation |
 | Identity | Directory identity |
 | Endpoint | [Local endpoint](endpoint.md) transport: Unix socket on macOS; not implemented on Windows |
+
+The webview operation attaches the DOM plane to a `SurfaceHost`, not directly to the window's shared surface container. Document and image operations create descendants of that host's native plane. The platform interface does not expose an operation that can place a region as a sibling of its `SurfaceHost`. Both language hosts validate the [surface composition](surface-composition.md) before calling platform code.
 
 ### Window buttons
 

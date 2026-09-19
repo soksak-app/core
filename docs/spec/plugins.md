@@ -27,7 +27,7 @@ Common functionality belongs to the workbench or the native host so plugins do n
 | --- | --- | --- |
 | `id` | yes | Lowercase identifier. Tabs and settings reference it |
 | `name` | yes | Display name |
-| `surface` | no | `{ "page": "ui/page.html" }`: a document inside the package. A page shows web documents in [document regions](native-surfaces.md#document-regions); a web address is not a surface |
+| `surface` | no | `{ "page": "ui/page.html", "composition": ... }`: a document inside the package and its required [surface composition](surface-composition.md). A page shows web documents in document regions; a web address is not a surface |
 | `home` | no | The `http` or `https` address the surface page opens first; requires `surface` |
 | `mark` | with `surface` | Short text shown in the add menu and new tab titles |
 | `icon` | with `surface` | SVG elements for a 16×16 view box |
@@ -36,6 +36,8 @@ Common functionality belongs to the workbench or the native host so plugins do n
 | `sidecars` | no | Package names of the [sidecars](sidecars.md) the page surface uses; requires `surface`. Each must be a dependency in the plugin's `package.json` |
 
 A plugin requires `surface`, `sections`, or both. Only plugins with a surface appear in the add menu and own a rail. The workbench opens a `page` surface at `modules/<package name>/<page>?id=<tab id>`. Unknown fields are rejected.
+
+`surface.composition` is either `{ "kind": "dom" }` or a hybrid declaration with `kind: "hybrid"`, complete `regions`, and complete `overlays`. An image region names a sidecar already listed in `sidecars`. The manifest declaration is authority data sent to the host; page code cannot add a region, supplier, input owner, or stacking entry that is absent from it.
 
 ## environment.json
 
@@ -100,7 +102,7 @@ Every page declares one import map equal to `PAGE_IMPORTS`: `soksak`, `@soksak/p
 
 The workbench uses only these exports and does not branch on the runtime.
 
-Plugin pages import from `@soksak/plugin-api/page` and do not import workbench files: `followTheme`, `page`, `expose` ([exposure](exposure.md)), `ownManifest()` (the page's validated `plugin.json`), `attachDocument(element, name)` (a [document region](native-surfaces.md#document-regions) on the element, or `null` without a native host), and `attachImageRegion(element, name, sidecar)` (an [image region](native-surfaces.md#image-regions) supplied by the named sidecar, or `null` without a native host).
+Plugin pages import from `@soksak/plugin-api/page` and do not import workbench files: `followTheme`, `page`, `expose` ([exposure](exposure.md)), `ownManifest()` (the page's validated `plugin.json`), and `createSurfaceComposition(...)` ([surface composition](surface-composition.md)). The exported `page` object does not expose raw document or image attach/place ports. Region handles come only from the validated composition.
 
 ## Tests
 

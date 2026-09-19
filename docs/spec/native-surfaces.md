@@ -43,7 +43,9 @@ The [private native API inventory](../operations/private-native-apis.md) records
 
 ## Regions
 
-A region is a place on a surface where native content is displayed. The page specifies the region's element, and native content appears in that place. The position is set by insets (`left/top/right/bottom`) from the edges of the surface viewport. The region moves, hides, and closes with its surface.
+A region is a place on a surface where native content is displayed. Its ownership, hierarchy, complete-snapshot geometry, stacking, input, generation, and raster rules are defined by [surface composition](surface-composition.md). This document defines behavior specific to document and image suppliers.
+
+Every native region is a descendant of its surface's `SurfaceHost.NativePlane`. It is never a sibling of the host or DOM plane. The host derives region frames from the applied complete composition and clips them to the host. A region moves, hides, dims, and closes synchronously with its surface.
 
 Regions are below modal dialogs and excluded from the presentation-wait. Each region has a unique name within its surface. The host reports the region's name, rectangle, visibility, and focused state through `host.window`.
 
@@ -56,9 +58,9 @@ There are two kinds of region suppliers:
 
 A surface page shows a web document in one of its elements through a document region. Surfaces themselves always show a page of their plugin package ([plugins](plugins.md)); a web address is never a surface.
 
-- The page attaches a region under a name that is unique within the surface and matches `^[a-z0-9][a-z0-9-]{0,63}$`. Attaching a name that is already attached fails. Plugin pages call `attachDocument(element, name)` from `@soksak/plugin-api/page`; the runtime interface is `page.document` (`attach`, `place`, `load`, `go`, `detach`, `onState`).
+- The manifest declares a unique name that matches `^[a-z0-9][a-z0-9-]{0,63}$`. The page obtains the document handle from `createSurfaceComposition`; individual attach, place, and detach operations are not public.
 - The host creates a web view as a subview of the calling surface's web view and verifies on every call that the calling web view is the surface named in the request. A surface cannot operate another surface's regions.
-- The page reports the element's position as insets in CSS pixels from the edges of its viewport, and whether the element is shown. It sends a new placement when the element or an ancestor changes size, and when the viewport resizes or scrolls; it does not poll. The host applies the insets in the surface's coordinates. The region is a subview of the surface, so it moves and hides with the surface in the same native transaction; when the surface changes size, the region takes its frame from its insets again in that frame change, including after the surface was smaller than the insets.
+- The complete composition reports the element's position as insets in CSS pixels from the edges of its viewport and whether it is shown. The host stores the insets and reapplies them when the outer surface changes in the same native transaction.
 - Regions load only `http` and `https` addresses. Other schemes, including the application's own scheme and `file`, are rejected, both when requested and when the document navigates. Region documents use a persistent website data store named `soksak-documents`, separate from the application documents, and receive no application bridge.
 - `go` performs `back`, `forward`, `reload`, or `stop` and returns whether it ran.
 - The host sends `document-state {surface, document, state}` only to the owning surface. `state` is `{url, title, loading, progress, canGoBack, canGoForward, error, scroll: {x, y}}`; `error` is the last load failure or null, and `scroll` is the document scroll position in CSS pixels. Changes within one run-loop turn are reported once.
@@ -71,11 +73,11 @@ A surface page shows a web document in one of its elements through a document re
 
 Images are created by sidecars and supplied to the core through a region. The core receives only an opaque token and pixel size; it knows neither the image buffer nor the supplier's identity beyond the token.
 
-- **Image supply and size validation**: The host creates a region by name under a surface and assigns it a supplier sidecar. The sidecar presents an image with a token and dimensions. The declared dimensions must match the IOSurface's actual dimensions, and the drawing scale must equal the window's backing scale factor; a mismatch is rejected with an error. The host does not compare the image size with the region's current size: the region takes its frame from the page's placement and the image takes its size from the resize the page sends, so both follow the same element and converge, while a present that races a placement change would have no recovery if rejected.
+- **Image supply and size validation**: The manifest assigns a supplier sidecar. The host computes the raster revision and exact dimensions from the applied native frame and sends them to the supplier. A frame must match its attachment generation, raster revision, monotonic sequence, actual token dimensions, expected dimensions, and window scale. A mismatch is rejected and never replaces the previous valid snapshot.
 - **Device pixel reporting**: The region reports its size in device pixels, not CSS pixels.
 - **Input handling**: Pointer events pass through to the surface document below. Keyboard input, input composition, and accessibility belong to the region. The region receives keyboard and composition events: `{type: "key", key: name, text?, shift, alt, ctrl}`, `{type: "insert", text}`, `{type: "compose", text?, caret?}`, and `{type: "focus", focused: boolean}`. Keys are delivered to the page. Command-key sequences are intercepted by the application menu. Focus changes on host request, and the current position is observed through `host.window`.
 - **Accessibility**: The region is an accessibility element. Its value is the screen text provided by the owner through `setAccessibleText`.
-- **Image release**: The core releases an image to its supplier when the transaction that presents the next image completes. The supplier must not draw over an image the core has not released. How many images a supplier keeps and what it does when none is free is the supplier's own policy.
+- **Image consumption**: The host copies an accepted transfer image into host-owned immutable presentation storage before replying `consumed`. The supplier must not modify or reuse the transfer image before that reply. The native layer never points at supplier-mutable storage.
 - **Authorization**: The region specifies which sidecar is authorized to supply images. The host rejects images from unregistered sidecars with an error.
 - **Error reporting**: If the host cannot present an image, the region sends an error event: `{type: "error", reason}`. Reasons include `notFound` (IOSurface not found), `forbidden` (access denied), `size` (declared dimensions do not match the IOSurface's actual dimensions), `scale` (the image was drawn at a scale other than the window's), and `presentFailed` (platform presentation failed).
 

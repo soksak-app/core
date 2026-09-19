@@ -15,8 +15,8 @@
 | 문서 웹뷰의 `WKWebView._setOverrideDeviceScaleFactor:` | 두 호스트의 [`webview_geometry.m`](../../native/darwin/src/webview_geometry.m), `webviewMatchSurface`. [`document_view.m`](../../native/darwin/src/document_view.m)의 `sp_document_create`가 호출 | 장치 픽셀 표면 안의 문서 영역을 표면과 같은 밀도로 렌더링 |
 | `WKWebView._doAfterNextPresentationUpdate:` | 두 호스트의 [`surface_layout.m`](../../native/darwin/src/surface_layout.m), `surfaceLayoutAfterPresentation`과 `surfaceLayoutAfterSettled`; [`input_inject.m`](../../native/darwin/src/input_inject.m), `sp_input_pointer_then`; 프로브와 독립 입력 검사에서도 사용 | 네이티브 좌표 커밋, 새 문서로의 네이티브 스크롤 전달, 렌더링 결과 측정 전에 웹뷰 표시 완료 확인 |
 | `WKWebView._setIgnoresMouseMoveEvents:` | 두 호스트의 [`webview_input.m`](../../native/darwin/src/webview_input.m), 등록·포인터 처리·제거. 표면, 모달, 문서 영역 웹뷰 | 겹친 웹뷰의 포인터 추적을 AppKit 히트테스트 결과로 제한 |
-| `WKWebView` KVC `drawsBackground` (`_drawsBackground` / `_setDrawsBackground:`) | Wails [`webview.m`](../../packages/host/wailsv3/src/platform/darwin/webview.m)의 모달 생성; 두 호스트 [`window_facts.m`](../../native/darwin/src/window_facts.m)의 `host.window` 조회 | 모달 웹뷰의 불투명 배경 비활성화 및 상태 보고 |
-| `WKWebViewConfiguration` KVC `drawsBackground` (`_setDrawsBackground:`) | Tauri → Wry 웹뷰 생성; [`modals.rs`](../../packages/host/tauriv2/src/modals.rs) `show`가 `background_color(Color(0, 0, 0, 0))` 요청; 메인도 배경색 설정 | 웹뷰 초기화 전에 배경 그리기 설정 |
+| `WKWebView` KVC `drawsBackground` (`_drawsBackground` / `_setDrawsBackground:`) | Wails [`webview.m`](../../packages/host/wailsv3/src/platform/darwin/webview.m)의 혼합 표면·모달 생성; 두 호스트 [`window_facts.m`](../../native/darwin/src/window_facts.m)의 `host.window` 조회 | 위에 놓인 DOM 평면의 불투명 배경 비활성화 및 상태 보고 |
+| `WKWebViewConfiguration` KVC `drawsBackground` (`_setDrawsBackground:`) | Tauri → Wry 혼합 표면·모달 생성; [`modals.rs`](../../packages/host/tauriv2/src/modals.rs) `show`가 `background_color(Color(0, 0, 0, 0))` 요청; 메인도 배경색 설정 | 위에 놓인 DOM 평면의 웹뷰 초기화 전에 배경 그리기 설정 |
 | `WKWebView._setShouldSuppressFirstResponderChanges:` | 두 호스트; [`webview_input.m`](../../native/darwin/src/webview_input.m)의 `webviewIgnorePageFocus`, 표면, 모달, 문서 영역 웹뷰 | 페이지가 요소에 초점을 줄 때 창의 키보드 초점을 옮기지 않게 함 |
 | `NSWindow._setWindowResolution:`, `NSWindow._adjustWindowResolution` 재정의 | [`webview_geometry_test.m`](../../native/darwin/tests/webview_geometry_test.m) 전용. WebKitTestRunner가 쓰는 메서드 | 해당 디스플레이 없이 검사 창의 백킹 배율을 2나 1로 정해 어느 기기에서나 배율 동작을 검사 |
 | `WKWebView._doAfterActivityStateUpdate:` | 두 호스트; [`input_inject.m`](../../native/darwin/src/input_inject.m), `sp_input_activate` | 창의 모든 웹뷰가 활성 창 상태를 웹 프로세스에 보낸 뒤에만 호버 이동을 전달 |
@@ -56,11 +56,11 @@
 
 ### 투명 배경
 
-모달 투명도를 위해 이 수정을 유지한다. 투명한 DOM 콘텐츠만으로 불투명 웹뷰 아래의 네이티브 콘텐츠를 표시할 수 없다. 공개 `underPageBackgroundColor`는 페이지 콘텐츠 뒤의 색상을 설정하며, CSS 투명도와 해당 색상 설정만으로 네이티브 배경 그리기를 비활성화하지 않는다. 비공개 `drawsBackground` 상태가 이 별도 요구사항을 처리한다. 50% 반투명 배경과 블러는 [네이티브 모달](../spec/native-modals.ko.md)에 정의한 CSS 동작이다.
+혼합 표면과 모달 투명도를 위해 이 수정을 유지한다. 투명한 DOM 콘텐츠만으로 불투명 웹뷰 아래의 네이티브 콘텐츠를 표시할 수 없다. 공개 `underPageBackgroundColor`는 페이지 콘텐츠 뒤의 색상을 설정하며, CSS 투명도와 해당 색상 설정만으로 네이티브 배경 그리기를 비활성화하지 않는다. 비공개 `drawsBackground` 상태가 이 별도 요구사항을 처리한다. 혼합 쌓임은 [표면 합성](../spec/surface-composition.ko.md)이 정의하고, 50% 반투명 배경과 블러는 [네이티브 모달](../spec/native-modals.ko.md)에 정의한 CSS 동작이다. DOM 전용 표면은 불투명하게 유지한다.
 
 정확한 KVC 키, 대상 클래스, 생성 전 구성과 생성 후 뷰 설정의 효과를 검토한다. Wails는 대입 결과를 확인하며 KVC 예외가 발생하거나 불투명 상태가 유지되면 뷰 생성이 실패한다. 진단 조회 자체에는 같은 예외 처리가 없다. 좌표와 표시 선택자도 직접 호출한다. 모든 비공개 API 누락이 처리된 오류로 반환된다고 가정하면 안 된다.
 
-[`modal.test.mjs`](../../e2e/modal.test.mjs)와 [수동 인수](examples.ko.md#수동-인수)로 초기 투명도, 캡처된 반투명 배경·블러, 설정 탐색 후 선명한 콘텐츠, 배경 효과 없는 메뉴, 닫기·다시 로드 후 정리를 검증한다. 투명도는 소수점 좌표를 수정하지 않는다. 표면 크기는 푸터 검사를 별도로 통과해야 한다.
+합성 검사, [`modal.test.mjs`](../../e2e/modal.test.mjs), [수동 인수](examples.ko.md#수동-인수)로 DOM 평면 아래의 혼합 네이티브 콘텐츠, 앵커 투명도, 오버레이 쌓임, 모달 초기 투명도, 캡처된 반투명 배경·블러, 설정 탐색 후 선명한 콘텐츠, 배경 효과 없는 메뉴, 닫기·다시 로드 후 정리를 검증한다. 투명도는 소수점 좌표를 수정하지 않는다. 표면 크기는 푸터 검사를 별도로 통과해야 한다.
 
 뷰와 구성의 선언은 [`WKWebViewPrivate.h`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/WKWebViewPrivate.h)와 [`WKWebViewConfigurationPrivate.h`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/WKWebViewConfigurationPrivate.h)에 있다. 현재 프레임워크 생성 경로는 [Wry 0.56.1 `wkwebview/mod.rs`](https://github.com/tauri-apps/wry/blob/wry-v0.56.1/src/wkwebview/mod.rs)에 있다.
 
@@ -105,7 +105,7 @@
 - 포인터 누름·끌기·뗌: `hitTest:`가 반환한 뷰의 이벤트 메서드(`mouseDown:`, `mouseDragged:`, `mouseUp:`, 오른쪽 버튼 메서드). AppKit은 비활성 창의 누름을 첫 클릭으로 처리해 뷰에 전달하지 않으므로 `-[NSWindow sendEvent:]`를 사용하지 않는다.
 - 포인터 이동: 히트 뷰부터 상위로 올라가며 좌표를 포함하는 첫 추적 영역 소유자의 `mouseMoved:`. WebKit은 활성 페이지에서만 호버를 갱신한다. `WebFrame::handleMouseEvent`는 `FocusController::isActive()`가 아니면 버튼 없는 이동을 `passMouseMovedEventToScrollbars`로 넘기며, 이 상태는 `PageClientImpl::isViewWindowActive`(창의 `isKeyWindow`)에서만 온다. 이 값을 설정하는 WebKit 인터페이스는 없다. 따라서 `sp_input_pointer`는 키 창이 아닌 창의 이동에 `SP_INPUT_INACTIVE`를 반환하며 키 상태를 흉내 내지 않는다.
 - 활성화: `sp_input_activate`는 `-[NSWindow makeKeyAndOrderFront:]`와 `-[NSApplication activate]`를 호출하고, 키 창 알림과 앱 활성 알림을 모두 확인한 뒤, 다음 메인 큐 차례에 창의 모든 웹뷰에 `_doAfterActivityStateUpdate:`를 호출한다. 이 콜백은 WebKit이 예약된 활성 상태를 보낸 뒤(`WebPageProxy::dispatchActivityStateChange`) 실행되므로, 이후 마우스 이벤트는 같은 연결에서 그 상태 다음에 웹 프로세스에 도착한다. 시스템은 활성화를 거절할 수 있고, 다른 애플리케이션이나 창이 포커스를 가져갈 수 있다. 함수는 멈춘 단계(`sp_activate_result`)와 최전면 애플리케이션을 보고하며, `tests/input_activate_test.m`이 각 조건을 만들어 검사한다.
-- 스크롤: **비공개 CoreGraphics 사용.** 창 정보를 가진 스크롤 `NSEvent`를 만드는 공개 API가 없다. 코드는 `CGEventCreateScrollWheelEvent2`로 이벤트를 만들고 문서화되지 않은 창 번호 필드(`CGEventField` 51)와 비공개 함수 `CGEventSetWindowLocation`을 설정한 뒤 `+[NSEvent eventWithCGEvent:]`로 변환한다. 변환 결과는 `window`와 `locationInWindow`를 가지며 `-[NSWindow sendEvent:]`가 좌표의 뷰에 전달한다. 변환한 이벤트에 창이 없으면 입력을 거부한다. 필드 51만 설정하면 좌표가 틀리고, `CGEventSetWindowLocation`만 호출하면 창이 없다. `CGEventPostToPid`는 비활성 애플리케이션에 스크롤을 전달하지 못했다(2026-09-17 검토).
+- 스크롤: **비공개 CoreGraphics 사용.** 창 정보를 가진 스크롤 `NSEvent`를 만드는 공개 API가 없다. 코드는 `CGEventCreateScrollWheelEvent2`로 이벤트를 만들고 문서화되지 않은 창 번호 필드(`CGEventField` 51)와 비공개 함수 `CGEventSetWindowLocation`을 설정한 뒤 `+[NSEvent eventWithCGEvent:]`로 변환한다. 변환 결과는 `window`와 `locationInWindow`를 가지며 `-[NSWindow sendEvent:]`가 좌표의 뷰에 전달한다. 변환한 이벤트에 창이 없으면 입력을 거부한다. 필드 51만 설정하면 좌표가 틀리고, `CGEventSetWindowLocation`만 호출하면 창이 없다. `CGEventPostToPid`는 비활성 애플리케이션에 스크롤을 전달하지 못했다.
 
 실패 증상: `tests/input_inject_test.m`이 포인터 이벤트 누락·비신뢰·위치 오류, 휠 이벤트 없음, 요청한 120픽셀과 다른 스크롤 거리, 클릭 후 포커스 상실을 보고한다. OS나 WebKit 업데이트 후 `make -C native/darwin test`와 `make -C native/darwin test-activation`(키보드 포커스를 가져감)을 실행한다. 공개 방법으로 창 정보를 가진 스크롤 이벤트를 만들 수 있게 되면 비공개 스크롤 호출을 교체한다.
 
