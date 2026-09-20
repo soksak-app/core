@@ -143,10 +143,6 @@ pub fn cancel_layout(_window: Handle) -> Result<(), String> {
     missing("surface layout")
 }
 
-pub fn after_presentation(_view: &PlatformWebview, _done: Box<dyn Fn()>) -> Result<(), String> {
-    missing("presentation tracking")
-}
-
 pub fn after_settled(_view: &PlatformWebview, _done: Box<dyn Fn(f64)>) -> Result<(), String> {
     missing("presentation tracking")
 }

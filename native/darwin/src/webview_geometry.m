@@ -1,4 +1,5 @@
 #import <Cocoa/Cocoa.h>
+#import <QuartzCore/QuartzCore.h>
 #import <objc/runtime.h>
 #import "webview_geometry.h"
 #import "private/webkit.h"
@@ -82,6 +83,8 @@ static void notifyScale(NSView *view) {
     return nil;
 }
 - (void)setFrameSize:(NSSize)size {
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
     [super setFrameSize:size];
     self.nativePlane.frame = self.bounds;
     if (self.webview && self.webview.superview == self) {
@@ -89,6 +92,7 @@ static void notifyScale(NSView *view) {
         self.webview.frame = self.bounds;
     }
     notifyScale(self.nativePlane);
+    [CATransaction commit];
 }
 @end
 
@@ -112,8 +116,11 @@ static void notifyScale(NSView *view) {
     return nil;
 }
 - (void)setFrameSize:(NSSize)size {
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
     [super setFrameSize:size];
     if (self.scale > 0) self.bounds = NSMakeRect(0, 0, size.width * self.scale, size.height * self.scale);
+    [CATransaction commit];
 }
 - (void)updateScale {
     if (!self.window) return;
@@ -259,7 +266,10 @@ void webviewMatchSurface(void *handle, void *surfaceHandle) {
 }
 - (void)frameChanged:(NSNotification *)notification {
     if (NSEqualRects(self.view.frame, self.frame)) return;
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
     self.view.frame = self.frame;
+    [CATransaction commit];
 }
 @end
 
@@ -288,7 +298,18 @@ void webviewSetFrame(void *handle, double x, double y, double width, double heig
         holdFrame(host, placed);
         holdFrame(view, NSMakeRect(0, 0, placed.size.width, placed.size.height));
     }
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
     placedView.frame = placed;
+    // Setting the host frame directly does not reliably invoke setFrameSize:
+    // keep the native plane and the surface webview in the same coordinate
+    // space before any child image region measures its raster.
+    if (host) {
+        host.bounds = NSMakeRect(0, 0, placed.size.width, placed.size.height);
+        host.nativePlane.frame = host.bounds;
+        view.frame = host.bounds;
+    }
+    [CATransaction commit];
 }
 
 void webviewGetFrame(void *handle, double *out) {

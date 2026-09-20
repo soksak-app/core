@@ -167,8 +167,6 @@ type Platform interface {
 	CommitLayout(window unsafe.Pointer, ticket uint64) bool
 	// CancelLayout 은 진행 중인 배치를 취소한다.
 	CancelLayout(window unsafe.Pointer) error
-	// AfterPresentation 은 메인 웹뷰와 보이는 앱 문서가 다음 화면을 표시한 뒤 done 을 UI 스레드에서 호출한다.
-	AfterPresentation(window unsafe.Pointer, done func()) error
 	// AfterSettled 는 창에 열린 표면 배치 트랜잭션이 없는 상태에서 메인 웹뷰와 보이는 앱 문서가 화면을
 	// 표시한 뒤 done 을 UI 스레드에서 호출한다. displayed 는 그 화면이 표시되는 시각(ms, mach 절대 시각)이다.
 	AfterSettled(window unsafe.Pointer, done func(displayed float64)) error

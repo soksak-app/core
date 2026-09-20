@@ -123,12 +123,9 @@ static void afterNextFrame(NSScreen *screen, void (^done)(double)) {
     [link addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
 }
 
-void surfaceLayoutAfterPresentation(void *handle, void (^done)(void)) {
-    NSCAssert(NSThread.isMainThread, @"surface presentation requires the UI thread");
-    WKWebView *main = (WKWebView *)handle;
+static void afterNextPresentation(WKWebView *main, void (^done)(void)) {
     NSMutableArray<WKWebView *> *views = [NSMutableArray arrayWithObject:main];
     applicationViews(main.window.contentView, main, views);
-    // 앱 문서의 새 크기 표시를 확인한다. 외부 문서의 렌더링은 기다리지 않는다.
     __block NSUInteger pending = views.count;
     for (WKWebView *view in views) {
         [view _doAfterNextPresentationUpdate:^{ if (--pending == 0) done(); }];
@@ -157,7 +154,7 @@ static void settle(WKWebView *main, void (^done)(double)) {
     }
     void (^finish)(double) = [[done copy] autorelease];
     [main retain];
-    surfaceLayoutAfterPresentation(main, ^{
+    afterNextPresentation(main, ^{
         // 표시를 기다리는 사이 새 트랜잭션이 열렸으면 그 트랜잭션의 확정부터 다시 기다린다.
         if (layoutOpen(main.window)) settle(main, finish);
         else afterNextFrame(main.window.screen, finish);

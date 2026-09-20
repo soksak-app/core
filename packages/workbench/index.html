@@ -215,8 +215,6 @@ onRender(() => {
   const done = publish();
   presented = Promise.resolve(done);
   const record = latest();
-  check();
-  coreChanged();
   Promise.resolve(done).then(() => {
     if (latest() !== record) return;
     check();
@@ -288,9 +286,9 @@ function askControls() {
     // 창은 제목줄 높이의 세로 가운데에 단추를 둔다. 전체 화면처럼 제목줄이 없으면 0 이고,
     // 그때는 쓰던 높이를 지킨다.
     if (answer.row > 0) document.documentElement.style.setProperty("--chrome-h", `${answer.row}px`);
-    // 답이 도착해도 렌더는 발생하지 않는다. 검증이 이 값을 읽으므로 여기서 한 번
-    // 더 실행한다.
-    check();
+    // 답이 도착해도 렌더는 발생하지 않는다. 네이티브 배치와 DOM을 함께 표시한 뒤
+    // 검증해야 이전 프레임을 새 선언과 비교하지 않는다.
+    Promise.resolve(presented).then(check);
   });
 }
 

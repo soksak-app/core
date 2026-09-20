@@ -465,10 +465,27 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 	if !ok {
 		return nil, errNoWindow
 	}
-	done := make(chan []Placement, 1)
-	var waiting error
-	application.InvokeSync(func() {
-		waiting = system.AfterPresentation(win.NativeWindow(), func() {
+	type result struct {
+		placed []Placement
+		err    error
+	}
+	done := make(chan result, 1)
+	// Raster production and consumption must not block the AppKit thread. The
+	// layout transaction stays open until every visible image region has the
+	// raster that belongs to the prepared geometry. Waiting on the next WebKit
+	// presentation here would deadlock: that presentation is released by the
+	// same layout transaction we commit below.
+	go func() {
+		if !s.images.WaitCurrent(pageTimeout) {
+			application.InvokeSync(func() {
+				if err := system.CancelLayout(win.NativeWindow()); err != nil {
+					log.Printf("surface layout cancel: %v", err)
+				}
+			})
+			done <- result{err: fmt.Errorf("the current image raster did not present within %s", pageTimeout)}
+			return
+		}
+		application.InvokeSync(func() {
 			out := make([]Placement, 0, len(req.Placements))
 			for _, p := range req.Placements {
 				view := s.views[p.ID]
@@ -481,13 +498,14 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 			if committed && req.Settled {
 				s.run(false)
 			}
-			done <- out
+			done <- result{placed: out}
 		})
-	})
-	if waiting != nil {
-		return nil, waiting
+	}()
+	outcome := <-done
+	if outcome.err != nil {
+		return nil, outcome.err
 	}
-	placed := <-done
+	placed := outcome.placed
 	s.windowChanged()
 	return placed, nil
 }

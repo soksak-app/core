@@ -46,6 +46,8 @@
 @property(nonatomic) NSRange markedRange;
 
 - (void)applyInsets;
+- (void)applyInsetsInTransaction;
+- (void)applyInsetsNow;
 - (void)report:(const char *)json;
 - (void)surfaceScaleChanged;
 @end
@@ -90,7 +92,7 @@
     return nil;
 }
 
-- (void)applyInsets {
+- (void)applyInsetsInTransaction {
     NSView *clipView = self.superview;
     if (!clipView) return;
     WKWebView *surface = self.webSurface;
@@ -114,7 +116,8 @@
     NSRect clipFrame = NSMakeRect(clipX, clipY, MAX(width, 0), MAX(height, 0));
     clipView.frame = clipFrame;
 
-    // 영역 뷰는 클립 뷰 안에서 bounds를 차지한다.
+    // 영역 뷰는 클립 뷰 안에서 bounds를 차지한다. 기하 변경은 드래그 중 매 프레임
+    // 발생하므로 Core Animation이 이전 위치와 새 위치를 보간해서는 안 된다.
     self.frame = NSMakeRect(0, 0, MAX(width, 0), MAX(height, 0));
     self.imageLayer.frame = self.bounds;
     [self updateContentsScale];
@@ -123,6 +126,21 @@
     // 플래그에 저장하면, 표면을 다시 표시해도 applyInsets가 다시 호출되지 않는
     // 전환에서 영역이 영구히 숨겨진다.
     self.hidden = !self.wanted || width < 1 || height < 1;
+}
+
+- (void)applyInsetsNow {
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    [self applyInsetsInTransaction];
+    [CATransaction commit];
+}
+
+// Keep the last complete image geometry visible while a new raster is being
+// produced. The requested insets are measured by sp_region_raster, and this
+// geometry is committed only after sp_region_present validates that raster.
+- (void)applyInsets {
+    if (self.snapshot) return;
+    [self applyInsetsNow];
 }
 
 
@@ -486,7 +504,24 @@ bool sp_region_raster(void *handle, double *out) {
     NSCAssert(NSThread.isMainThread, @"image regions belong to the main thread");
     SPImageRegion *view = (SPImageRegion *)handle;
     if (!view || !out || !view.placed) return false;
+    NSClipView *clipView = (NSClipView *)view.superview;
+    NSRect oldClipFrame = clipView.frame;
+    NSRect oldFrame = view.frame;
+    NSRect oldLayerFrame = view.imageLayer.frame;
+    CGFloat oldContentsScale = view.imageLayer.contentsScale;
+    BOOL oldHidden = view.hidden;
+    if (view.snapshot) [view applyInsetsNow];
     NSRect backing = [view convertRectToBacking:view.bounds];
+    if (view.snapshot) {
+        [CATransaction begin];
+        [CATransaction setDisableActions:YES];
+        clipView.frame = oldClipFrame;
+        view.frame = oldFrame;
+        view.imageLayer.frame = oldLayerFrame;
+        view.imageLayer.contentsScale = oldContentsScale;
+        view.hidden = oldHidden;
+        [CATransaction commit];
+    }
     CGFloat scale = view.webSurface.pageZoom;
     if (NSWidth(backing) < 1 || NSHeight(backing) < 1 || scale <= 0) return false;
     out[0] = round(NSWidth(backing));
@@ -553,6 +588,7 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
         CFRelease(surface);
         return false;
     }
+
     if (fabs(scale - expected[2]) > 0.000001) {
         [view report:"{\"type\":\"error\",\"reason\":\"scale\"}"];
         CFRelease(surface);
@@ -573,11 +609,16 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
         return false;
     }
 
+    // The new raster and its geometry become visible in one native commit.
     // 모든 검증과 복사가 끝난 뒤에만 이전 스냅샷을 교체한다. 레이어는 공급자가 다시 쓸
     // IOSurface를 직접 가리키지 않는다.
     CGImageRef previous = view.snapshot;
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    [view applyInsetsInTransaction];
     view.imageLayer.contents = (id)snapshot;
     [view updateContentsScale];
+    [CATransaction commit];
     view.snapshot = snapshot;
     view.presentedWidth = surfaceWidth;
     view.presentedHeight = surfaceHeight;

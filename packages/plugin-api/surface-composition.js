@@ -139,6 +139,12 @@ export async function createSurfaceCompositionController(
   let observer = null;
   let changed = null;
   let frame = null;
+  let resizeFrame = null;
+  const reportFailure = (error) => {
+    const message = `surface composition failed: ${error?.message ?? error}`;
+    runtimePage.surfaces.report(message);
+    console.error(message);
+  };
 
   const detachAll = async () => {
     active = false;
@@ -148,6 +154,7 @@ export async function createSurfaceCompositionController(
       view.removeEventListener("scroll", changed, true);
     }
     if (frame !== null) view.cancelAnimationFrame(frame);
+    if (resizeFrame !== null) view.cancelAnimationFrame(resizeFrame);
     await Promise.allSettled([...internal.values()].map(({ handle }) => handle.detach()));
     paintBoundary?.restore();
     restoreDataset(root, previousComposition);
@@ -191,7 +198,9 @@ export async function createSurfaceCompositionController(
       if (!force && (geometry === acceptedGeometry || geometry === pendingGeometry)) return pending;
       const current = ++revision;
       pendingGeometry = geometry;
-      const work = pending.catch(() => {}).then(() => {
+      const work = pending.catch((error) => {
+        reportFailure(error);
+      }).then(() => {
         if (!active) throw new Error("surface composition is inactive");
         return runtimePage.composition.place(current, regionSnapshot, overlaySnapshot);
       }).then((result) => {
@@ -202,13 +211,13 @@ export async function createSurfaceCompositionController(
         if (pendingGeometry === geometry) pendingGeometry = null;
         throw error;
       });
-      pending = work.catch((error) => {
-        console.error(`surface composition ${current}: ${error?.message ?? error}`);
-      });
+      pending = work.catch(reportFailure);
       return work;
     };
 
-    observer = new view.ResizeObserver(() => { place().catch(() => {}); });
+    // A full-surface region can keep identical insets while its raster size changes.
+    // The host must receive a new composition snapshot for that size change.
+    observer = new view.ResizeObserver(() => { place(true).catch(reportFailure); });
     const observed = new Set();
     for (const element of [...Object.values(regions), ...Object.values(overlays)]) {
       for (let node = element; node; node = node.parentElement) {
@@ -218,13 +227,19 @@ export async function createSurfaceCompositionController(
         }
       }
     }
-    changed = () => { place().catch(() => {}); };
+    changed = () => {
+      if (resizeFrame !== null) return;
+      resizeFrame = view.requestAnimationFrame(() => {
+        resizeFrame = null;
+        place(true).catch(reportFailure);
+      });
+    };
     view.addEventListener("resize", changed);
     view.addEventListener("scroll", changed, true);
     await place(true);
     const compareGeometry = () => {
       if (!active) return;
-      place().catch(() => {});
+      place().catch(reportFailure);
       frame = view.requestAnimationFrame(compareGeometry);
     };
     frame = view.requestAnimationFrame(compareGeometry);

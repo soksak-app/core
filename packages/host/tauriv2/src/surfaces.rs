@@ -573,7 +573,6 @@ pub(crate) async fn present(
     window: Window,
     request: PresentRequest,
 ) -> Result<Vec<Placement>, String> {
-    let platform = platform::current()?;
     let main = root_view(&window).ok_or("the main webview is gone")?;
     let ticket = request.ticket;
     let finished = window.clone();
@@ -588,43 +587,51 @@ pub(crate) async fn present(
                 .map(|view| (view, p))
         })
         .collect();
-    let (tx, mut rx) = tauri::async_runtime::channel(1);
-    main.with_webview(move |webview| {
-        let failed = tx.clone();
-        let waiting = platform.after_presentation(
-            &webview,
-            Box::new(move || {
-                let committed = platform.commit_layout(owner, ticket);
-                let result = (|| -> Result<Vec<Placement>, String> {
-                    let committed = committed.clone()?;
-                    let mut placed = Vec::new();
-                    for (view, p) in &held {
-                        placed.push(surface_placement(view, &p.id)?);
-                    }
-                    // 준비 갱신과 종료 판정을 같은 UI 스레드에서 순서대로 실행한다.
-                    let running = &context.running;
-                    if committed
-                        && request.settled
-                        && running.prepared.load(Ordering::Relaxed) == ticket
-                    {
-                        announce_run(&finished, running, false)?;
-                    }
-                    exposure::window_changed(&finished);
-                    Ok(placed)
-                })();
-                let _ = tx.try_send(result);
-            }),
-        );
-        if let Err(error) = waiting {
-            let _ = failed.try_send(Err(error));
-        }
-    })
-    .map_err(|e| e.to_string())?;
-    let placed = rx
+    let images = context.images.clone();
+    let presentation_main = main.clone();
+    let presentation_window = finished.clone();
+    let presentation_held = held.clone();
+    let presentation_settled = request.settled;
+    // Do not wait for the next WebKit presentation here. The presentation is
+    // released by the same layout transaction that is committed below, so
+    // waiting for it while the transaction is open deadlocks the frame.
+    let ready =
+        tauri::async_runtime::spawn_blocking(move || images.wait_current(exposure::TIMEOUT))
+            .await
+            .map_err(|error| error.to_string())?;
+    let (ui_tx, mut ui_rx) = tauri::async_runtime::channel(1);
+    let dispatch = presentation_main.with_webview(move |_| {
+        let result = (|| -> Result<Vec<Placement>, String> {
+            let platform = platform::current()?;
+            if !ready {
+                platform.cancel_layout(owner)?;
+                return Err(format!(
+                    "the current image raster did not present within {:?}",
+                    exposure::TIMEOUT
+                ));
+            }
+            let committed = platform.commit_layout(owner, ticket)?;
+            let mut placed = Vec::new();
+            for (view, p) in &presentation_held {
+                placed.push(surface_placement(view, &p.id)?);
+            }
+            // 준비 갱신과 종료 판정을 같은 UI 스레드에서 순서대로 실행한다.
+            if committed
+                && presentation_settled
+                && context.running.prepared.load(Ordering::Relaxed) == ticket
+            {
+                announce_run(&presentation_window, &context.running, false)?;
+            }
+            exposure::window_changed(&presentation_window);
+            Ok(placed)
+        })();
+        let _ = ui_tx.try_send(result);
+    });
+    dispatch.map_err(|error| error.to_string())?;
+    ui_rx
         .recv()
         .await
-        .ok_or("the main webview closed before presenting")??;
-    Ok(placed)
+        .ok_or("the main webview closed before presenting")?
 }
 
 /// run-began 과 run-ended 를 발생시킨다. 페이지는 후속 갱신이 있는지 보고하고, 이 함수는 그

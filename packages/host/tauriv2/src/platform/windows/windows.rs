@@ -189,13 +189,6 @@ impl Platform for Windows {
     fn cancel_layout(&self, window: Handle) -> Result<(), String> {
         unsupported::cancel_layout(window)
     }
-    fn after_presentation(
-        &self,
-        view: &PlatformWebview,
-        done: Box<dyn Fn()>,
-    ) -> Result<(), String> {
-        unsupported::after_presentation(view, done)
-    }
     fn after_settled(&self, view: &PlatformWebview, done: Box<dyn Fn(f64)>) -> Result<(), String> {
         unsupported::after_settled(view, done)
     }
