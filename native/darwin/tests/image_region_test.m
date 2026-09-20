@@ -230,6 +230,32 @@ int main(void) { @autoreleasepool {
         sp_region_close(region5);
     }
 
+    // TEST 5A: 표시된 스냅샷도 새 배치 프레임을 즉시 덮어야 한다.
+    {
+        [collectedEvents removeAllObjects];
+
+        void *region5a = sp_region_create(surface, "test5a", testEvent, NULL);
+        sp_region_place(region5a, 50, 60, 70, 80, true);
+        double raster5a[3] = {0};
+        check(sp_region_raster(region5a, raster5a), @"TEST 5A: initial raster exists");
+        unsigned char nonce5a[16];
+        IOSurfaceRef testSurface5a = createColoredGlobalSurface((size_t)raster5a[0], (size_t)raster5a[1], nonce5a);
+        check(sp_region_present(region5a, IOSurfaceGetID(testSurface5a), nonce5a,
+            raster5a[0], raster5a[1], raster5a[2]), @"TEST 5A: initial snapshot is presented");
+
+        // 이전 스냅샷은 계속 보여도 네이티브 프레임은 새 여백을 즉시 따라야
+        // 호스트 프레임 이동 중 흰색 웹뷰가 노출되지 않는다.
+        sp_region_place(region5a, 100, 40, 20, 30, true);
+        double frame5a[6] = {0};
+        sp_region_frame(region5a, frame5a);
+        check(frame5a[0] == 100 && frame5a[1] == 40 && frame5a[2] == 380 && frame5a[3] == 330,
+            [NSString stringWithFormat:@"TEST 5A: presented region follows new insets (%.0f, %.0f, %.0f, %.0f)",
+                frame5a[0], frame5a[1], frame5a[2], frame5a[3]]);
+
+        sp_region_close(region5a);
+        CFRelease(testSurface5a);
+    }
+
     // TEST 6: 포인터 통과 - hitTest이 nil 반환
     {
         [collectedEvents removeAllObjects];

@@ -139,7 +139,6 @@
 // produced. The requested insets are measured by sp_region_raster, and this
 // geometry is committed only after sp_region_present validates that raster.
 - (void)applyInsets {
-    if (self.snapshot) return;
     [self applyInsetsNow];
 }
 
