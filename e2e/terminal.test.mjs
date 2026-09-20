@@ -30,12 +30,19 @@ async function ensureTerminals(session, count) {
       item.active && item.tabs.some((tab) => tab.plugin === "terminal"));
     assert.ok(card, "a visible terminal card was not found for splitting");
     await session.run("core.card.split", { card: card.id, axis: "x", plugin: "terminal" });
-    terminals = await session.until(
+    await session.until(
       "core.surfaces",
       (surfaces) => surfaces.filter((item) => item.visible && item.plugin === "terminal").length,
       `terminal count did not reach ${terminals + 1}`
     );
+    terminals = (await session.get("core.surfaces"))
+      .filter((item) => item.visible && item.plugin === "terminal").length;
   }
+  await session.until(
+    "core.surfaces",
+    (surfaces) => surfaces.filter((item) => item.visible && item.plugin === "terminal").length >= count,
+    `terminal native surfaces did not reach ${count}`
+  );
   return session.surfaces("terminal");
 }
 
@@ -361,12 +368,22 @@ for (const app of Object.values(APPS)) {
     await fresh(s);
     s.cleanup(() => closeTerminalTabs(s));
     const terminals = await ensureTerminals(s, 3);
+    assert.ok(terminals.length >= 3, `expected at least three visible terminals, got ${terminals.length}`);
     await s.presented();
 
     const before = new Map();
-    for (const surface of terminals) {
+    for (const [index, surface] of terminals.entries()) {
       const session = await s.get("terminal.session", surface.surface);
       before.set(surface.surface, { cellWidth: session.cellWidth, cellHeight: session.cellHeight });
+      const marker = `DRAG-TEXT-${index}`;
+      await s.run("terminal.input", { bytes: `printf '${marker}\\n'\\r` }, surface.surface);
+      await readScreenUntil(
+        s,
+        surface.surface,
+        (screen) => screen.join("").includes(marker),
+        `${surface.surface} did not render its marker before the divider drag`
+      );
+      before.get(surface.surface).marker = marker;
     }
     const beforeGrid = await s.get("core.grid");
     const result = await drag(t, s, { axis: "x", line: 1, dx: 80, dy: 0, ms: 320, times: 1 }, { capture: true });
@@ -382,6 +399,12 @@ for (const app of Object.values(APPS)) {
     for (const surface of await s.surfaces("terminal")) {
       const session = await s.get("terminal.session", surface.surface);
       const original = before.get(surface.surface);
+      await readScreenUntil(
+        s,
+        surface.surface,
+        (screen) => screen.join("").includes(original.marker),
+        `${surface.surface} lost terminal text during the divider drag`
+      );
       assert.equal(session.cellWidth, original.cellWidth, `${surface.surface} changed terminal cell width`);
       assert.equal(session.cellHeight, original.cellHeight, `${surface.surface} changed terminal cell height`);
       const region = host.regions.find((item) => item.surface === surface.surface);
