@@ -640,13 +640,13 @@ func TestConsumerBeyondRingIsTruncated(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dial A: %v", err)
 	}
-	defer connA.Close()
 
-	// Ring size is 10000 (from daemon.NewSession), so generate > 10000 lines
+	// Ring entries are PTY read chunks, not lines. Drain the first consumer so the
+	// child cannot block on its socket, and generate more than 10000 read chunks.
 	openReq := map[string]interface{}{
 		"command": "open",
 		"program": "/bin/sh",
-		"args":    []string{"-c", "for i in $(seq 1 15000); do echo line$i; done; sleep 1"},
+		"args":    []string{"-c", "yes x | head -c 50000000"},
 		"cols":    80,
 		"rows":    24,
 	}
@@ -662,19 +662,22 @@ func TestConsumerBeyondRingIsTruncated(t *testing.T) {
 	if !ok || sessionID == "" {
 		t.Fatalf("no sessionId")
 	}
+	drainDone := make(chan struct{})
+	go func() {
+		defer close(drainDone)
+		for {
+			if _, err := readerA.ReadBytes('\n'); err != nil {
+				return
+			}
+		}
+	}()
+	defer func() {
+		connA.Close()
+		<-drainDone
+	}()
 
 	// Wait for output to exceed ring capacity
 	time.Sleep(3 * time.Second)
-
-	// Read from A to get an idea of what nextSeq is
-	connA.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
-	for {
-		_, err := readerA.ReadBytes('\n')
-		if err != nil {
-			break
-		}
-	}
-	connA.SetReadDeadline(time.Time{})
 
 	// Connection B: attach at sequence 0 (oldest was discarded, so this should be truncated)
 	connB, err := net.Dial("unix", sockPath)
