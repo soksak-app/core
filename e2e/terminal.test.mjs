@@ -13,6 +13,32 @@ function textLines(screen) {
   return screen.lines.map((row) => row.map((cell) => cell.ch ?? "").join(""));
 }
 
+function assertNoWhiteNativeStripe(frameFiles, regions) {
+  for (const file of frameFiles) {
+    const frame = readFrame(file);
+    for (const region of regions) {
+      const x0 = Math.max(0, Math.floor(region.x));
+      const x1 = Math.min(frame.width, Math.ceil(region.x + region.width));
+      const y0 = Math.max(0, Math.floor(region.y + 36));
+      const y1 = Math.min(frame.height, Math.ceil(region.y + region.height - 24));
+      if (x1 <= x0 || y1 <= y0) continue;
+      for (let x = x0; x < x1; x++) {
+        let bright = 0;
+        let samples = 0;
+        for (let y = y0; y < y1; y += 2) {
+          const [r, g, b] = pixel(frame, x, y);
+          samples++;
+          if (r >= 245 && g >= 245 && b >= 245) bright++;
+        }
+        assert.ok(
+          samples === 0 || bright / samples < 0.7,
+          `white native stripe in ${file} at x=${x}: ${(bright / samples * 100).toFixed(1)}%`
+        );
+      }
+    }
+  }
+}
+
 async function readScreenUntil(session, surface, predicate, message) {
   for (let attempt = 0; attempt < 20; attempt++) {
     const screen = await session.run("terminal.screen.read", {}, surface);
@@ -386,8 +412,11 @@ for (const app of Object.values(APPS)) {
       before.get(surface.surface).marker = marker;
     }
     const beforeGrid = await s.get("core.grid");
-    const result = await drag(t, s, { axis: "x", line: 1, dx: 80, dy: 0, ms: 320, times: 1 }, { capture: true });
-    assert.ok(result.count > 10, `divider recording contained too few frames: ${result.count}`);
+    const beforeHost = await s.get("host.window");
+    // 여러 터미널이 있는 상태에서 짧은 드래그를 연속으로 수행한다. 한 번의 느린
+    // 드래그가 통과해도 빠른 반복 중 합성이 끊기면 안 된다.
+    const result = await drag(t, s, { axis: "x", line: 1, dx: 80, dy: 0, ms: 96, times: 5 }, { capture: true });
+    assert.ok(result.count > 20, `divider recording contained too few frames: ${result.count}`);
     assert.ok(result.longestGap <= 100, `divider recording dropped a gesture interval: ${result.longestGap}ms`);
     assert.equal(result.late, 0, `divider input arrived late: ${result.late} steps`);
     assert.equal(result.deepest, 0, `divider input queue accumulated ${result.deepest} steps`);
@@ -396,6 +425,10 @@ for (const app of Object.values(APPS)) {
     assert.notDeepEqual(afterGrid.lines.x, beforeGrid.lines.x, "divider drag did not change a vertical boundary");
     await s.presented();
     const host = await s.get("host.window");
+    const terminalRegions = [...beforeHost.regions, ...host.regions]
+      .filter((region) => terminals.some((surface) => surface.surface === region.surface))
+      .map((region) => region.frame);
+    assertNoWhiteNativeStripe(frames(result.frameDir), terminalRegions);
     for (const surface of await s.surfaces("terminal")) {
       const session = await s.get("terminal.session", surface.surface);
       const original = before.get(surface.surface);

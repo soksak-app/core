@@ -382,5 +382,5 @@ async function dragOnce(t, s, plan, capture) {
     throw new Error(`the recording has a ${stopped.longestGap.toFixed(0)}ms gap between frames; ` +
       `frames longer than ${GAP}ms apart were not recorded, so this run did not measure the whole gesture`);
   }
-  return { ...result, count: stopped.count, longestGap: stopped.longestGap };
+  return { ...result, count: stopped.count, longestGap: stopped.longestGap, frameDir: stopped.frames };
 }
