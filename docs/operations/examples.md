@@ -61,6 +61,8 @@ Record at the window’s backing-pixel resolution. Point-sized downsampling blen
 
 ## Manual acceptance
 
+The terminal keyboard check uses native clicks and keys in three visible terminals per host. It verifies characters, Backspace, Ctrl+U, Enter, exactly-once command output, and unchanged screens in the other terminals. It reads the current screen once and waits for `terminal.screen` notifications; `terminal.input` is not used to validate keyboard delivery. Run this check separately from composition recordings so an input pass cannot substitute for a drag result.
+
 - Add two existing project folders, reorder the projects, close the application, and restart it. The library lists the saved projects without starting their surfaces or shells. Select a project and confirm that its layout and settings restore in the same OS window.
 - In New Project, cancel the parent-folder chooser once, then select a directory. Creation failure must preserve existing directories. Open the Dock menu and select New Window, including after closing all windows. Return from the workspace to the project list and back; layout and shells must remain available.
 - Select Global and Project from the General pane tabs, change a value in each scope, and reset a project override. Confirm inheritance in both windows and scope preservation after changing categories. The opening mode must appear only in Global. Every library screen, including one opened from a workspace, must apply common settings and show only the Global tab. Library edits and the title-bar mode button must leave project overrides unchanged. Returning to the workspace must restore its overrides and both scope tabs.

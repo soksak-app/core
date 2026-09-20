@@ -27,6 +27,20 @@
   "exposes": {
     "status": [
       {
+        "name": "terminal.screen",
+        "description": "The latest terminal screen cell rows, updated on sidecar screen events.",
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": { "ch": { "type": "string" } }
+            }
+          }
+        }
+      },
+      {
         "name": "terminal.session",
         "description": "The session state: identifier, dimensions, and cell size.",
         "schema": {
@@ -69,7 +83,7 @@
       },
       {
         "name": "terminal.screen.read",
-        "description": "Reads the current terminal screen content and returns an array of line strings.",
+        "description": "Requests the current terminal screen and returns its cell rows.",
         "params": {
           "type": "object",
           "properties": {}
@@ -77,7 +91,11 @@
         "result": {
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": { "ch": { "type": "string" } }
+            }
           }
         }
       },

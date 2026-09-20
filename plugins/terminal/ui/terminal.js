@@ -59,7 +59,7 @@ export async function startTerminal({ view, attachImage, sidecar, expose, window
   const encoder = new TextEncoder();
 
   // 공개 status 마다 값이 바뀔 때 호출할 함수
-  const watchers = { session: new Set() };
+  const watchers = { session: new Set(), screen: new Set() };
   const changed = (name) => {
     for (const fn of watchers[name]) fn(read[name]());
   };
@@ -70,10 +70,12 @@ export async function startTerminal({ view, attachImage, sidecar, expose, window
 
   // 현재 세션 상태
   let session = { sessionId: "", cols: 80, rows: 24, cellWidth: 8, cellHeight: 16, unsupported: [] };
+  let screen = [];
 
   const read = {
     // 세션 상태
     session: () => session,
+    screen: () => screen,
   };
 
   // 터미널 사이드카가 이 표면의 VT 세션을 실행한다
@@ -101,7 +103,7 @@ export async function startTerminal({ view, attachImage, sidecar, expose, window
           (error) => console.error(`queued insert failed: ${error.message}`)
         );
       } else if (queuedInput.type === "key") {
-        const message = keyToMessage(queuedInput.key, "", {
+        const message = keyToMessage(queuedInput.key, queuedInput.text, {
           shift: queuedInput.shift,
           alt: queuedInput.alt,
           ctrl: queuedInput.ctrl,
@@ -135,7 +137,7 @@ export async function startTerminal({ view, attachImage, sidecar, expose, window
   // 영역 key 이벤트: 특수 키와 수정자
   // 사이드카는 키 이름만 받고 이스케이프 시퀀스를 생성한다
   region.on("key", async (event) => {
-    const { key, shift, alt, ctrl } = event;
+    const { key, text, shift, alt, ctrl } = event;
     // 네이티브 영역은 항상 불린으로 수정자를 보낸다. 아니면 계약 위반이다.
     if (typeof shift !== "boolean" || typeof alt !== "boolean" || typeof ctrl !== "boolean") {
       const errorMsg = `invalid key event from region: modifiers must be boolean, got shift:${typeof shift} alt:${typeof alt} ctrl:${typeof ctrl}`;
@@ -153,11 +155,11 @@ export async function startTerminal({ view, attachImage, sidecar, expose, window
         changed("session");
         return;
       }
-      inputQueue.push({ type: "key", key, shift, alt, ctrl });
+      inputQueue.push({ type: "key", key, text, shift, alt, ctrl });
       return;
     }
     // 키 이름을 sidecar 메시지 형식으로 변환
-    const message = keyToMessage(key, "", { shift, alt, ctrl });
+    const message = keyToMessage(key, text, { shift, alt, ctrl });
     await terminal.send(id, message);
   });
 
@@ -222,6 +224,8 @@ export async function startTerminal({ view, attachImage, sidecar, expose, window
       if (firstOpen) flushInputQueue();
     } else if (body.event === "screen") {
       // screen 이벤트를 처리한다. screen.read 응답이나 화면 변화 알림.
+      screen = body.lines;
+      changed("screen");
       if (pendingScreenRead) {
         pendingScreenRead(body);
         pendingScreenRead = null;
@@ -258,6 +262,7 @@ export async function startTerminal({ view, attachImage, sidecar, expose, window
   // 공개 항목 등록
   await Promise.all([
     expose.status("terminal.session", read.session, watch("session")),
+    expose.status("terminal.screen", read.screen, watch("screen")),
     expose.command("terminal.input", async ({ bytes }) => {
       if (typeof bytes !== "string") throw new Error("terminal.input requires bytes");
       if (!sessionOpen) {

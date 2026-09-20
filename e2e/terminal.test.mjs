@@ -10,7 +10,10 @@ import { frames, pixel, readFrame } from "./frame.mjs";
 
 function textLines(screen) {
   assert.ok(screen && Array.isArray(screen.lines), `invalid terminal screen: ${JSON.stringify(screen)}`);
-  return screen.lines.map((row) => row.map((cell) => cell.ch ?? "").join(""));
+  return screen.lines.map((row) => row.map((cell) => {
+    assert.ok(Number.isInteger(cell.width) && cell.width >= 0, "cell width is required");
+    return cell.ch === undefined ? " ".repeat(cell.width) : cell.ch;
+  }).join("").trimEnd());
 }
 
 function assertNoWhiteNativeStripe(frameFiles, regions) {
@@ -40,12 +43,11 @@ function assertNoWhiteNativeStripe(frameFiles, regions) {
 }
 
 async function readScreenUntil(session, surface, predicate, message) {
-  for (let attempt = 0; attempt < 20; attempt++) {
-    const screen = await session.run("terminal.screen.read", {}, surface);
-    const lines = textLines({ lines: screen });
-    if (predicate(lines)) return lines;
-  }
-  throw new Error(`${message}; the screen never reached the required content`);
+  // 현재 화면을 한 번 읽고 이후 출력은 알림으로 기다린다. 리사이즈도 이 읽기에 반영된다.
+  await session.run("terminal.screen.read", {}, surface);
+  const screen = await session.until("terminal.screen",
+    (lines) => predicate(textLines({ lines })), message, { surface });
+  return textLines({ lines: screen });
 }
 
 async function ensureTerminals(session, count) {
@@ -58,7 +60,7 @@ async function ensureTerminals(session, count) {
     await session.run("core.card.split", { card: card.id, axis: "x", plugin: "terminal" });
     await session.until(
       "core.surfaces",
-      (surfaces) => surfaces.filter((item) => item.visible && item.plugin === "terminal").length,
+      (surfaces) => surfaces.filter((item) => item.visible && item.plugin === "terminal").length >= terminals + 1,
       `terminal count did not reach ${terminals + 1}`
     );
     terminals = (await session.get("core.surfaces"))
@@ -89,6 +91,45 @@ async function assertGridFillsPlane(session, message) {
 }
 
 for (const app of Object.values(APPS)) {
+  test(`${app.name}: native keyboard edits and executes independently in three terminals`, async (t) => {
+    const s = await open(t, app);
+    assert.ok(s, `${app.binary} is not built`);
+    await fresh(s);
+    const tab = (await s.get("core.grid")).cards.flatMap((card) => card.tabs).find((tab) => tab.plugin === "terminal");
+    assert.ok(tab, "the fixture has no terminal tab");
+    await s.run("core.tab.select", { tab: tab.id });
+    const terminals = await ensureTerminals(s, 3);
+    assert.equal(terminals.length, 3);
+    await s.presented();
+    for (const [index, terminal] of terminals.entries()) {
+      await t.test(`terminal ${index + 1}`, async () => {
+        const surface = terminal.surface;
+        await readScreenUntil(s, surface, (lines) => lines.some((line) => line.includes("$")), "shell prompt missing");
+        const others = await Promise.all(terminals.filter((item) => item.surface !== surface)
+          .map(async (item) => [item.surface, await s.get("terminal.screen", item.surface)]));
+        const view = await s.rect("terminal.view", undefined, surface);
+        await s.click(view.document.x + view.x + view.width / 2, view.document.y + view.y + view.height / 2);
+        await s.until("host.window", (host) => host.regions.some((region) => region.surface === surface && region.focused),
+          `terminal ${index + 1} did not receive keyboard focus`);
+        const marker = `typed${index}`;
+        const line = `echo ${marker}`;
+        for (const ch of `${line}x`) await s.press(ch === " " ? "Space" : ch);
+        await readScreenUntil(s, surface, (lines) => lines.some((row) => row.endsWith(`${line}x`)), "native characters were not delivered");
+        await s.press("Backspace");
+        await readScreenUntil(s, surface, (lines) => lines.some((row) => row.endsWith(line)), "native Backspace was not delivered");
+        await s.press("u", { modifiers: ["control"] });
+        await readScreenUntil(s, surface, (lines) => lines.some((row) => row.endsWith("$")) && !lines.some((row) => row.includes(marker)),
+          "native Ctrl+U did not clear the input line");
+        for (const ch of line) await s.press(ch === " " ? "Space" : ch);
+        await s.press("Enter");
+        const output = await readScreenUntil(s, surface, (lines) => lines.includes(marker), "native Enter did not execute the command");
+        assert.equal(output.filter((row) => row === marker).length, 1, "command output must occur once");
+        for (const [other, before] of others) assert.deepEqual(await s.get("terminal.screen", other), before,
+          `typing in ${surface} changed ${other}`);
+      });
+    }
+  });
+
   test(`${app.name}: terminal input returns terminal output through the terminal sidecar`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);

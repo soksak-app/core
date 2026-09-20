@@ -81,6 +81,10 @@ Images are created by sidecars and supplied to the core through a region. The co
 - **Authorization**: The region specifies which sidecar is authorized to supply images. The host rejects images from unregistered sidecars with an error.
 - **Error reporting**: If the host cannot present an image, the region sends an error event: `{type: "error", reason}`. Reasons include `notFound` (IOSurface not found), `forbidden` (access denied), `size` (declared dimensions do not match the IOSurface's actual dimensions), `scale` (the image was drawn at a scale other than the window's), and `presentFailed` (platform presentation failed).
 
+Both hosts forward each native image event as `image-event {surface, name, event}` only to its owning surface webview. An empty callback, broadcast delivery, or substituting a direct sidecar command for keyboard delivery violates this contract. Invalid event JSON and delivery failures are reported, never replaced with a null event.
+
+The terminal exposes its latest cell rows as `terminal.screen` and notifies subscribers on sidecar screen events. Input checks use native clicks and keys, wait for these notifications, and verify editing, command output, and isolation across at least three visible terminals. `terminal.input` checks only direct sidecar input, not native keyboard delivery.
+
 ## Acceptance criteria
 
 - Recorded native content stays within its card on every measurable frame. Native content, card chrome, the rail sidebar, and its outer rail must preserve their relative geometry in the same frame; temporary inset growth does not satisfy this requirement.

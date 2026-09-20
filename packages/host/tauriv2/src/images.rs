@@ -14,12 +14,12 @@ use std::time::{Duration, Instant};
 
 use base64::Engine;
 use serde::{Deserialize, Serialize};
-use tauri::Webview;
+use tauri::{Emitter, EventTarget, Webview};
 
 use crate::exposure::{self, on_main, with_view};
 use crate::log_error;
 use crate::platform::{self, Handle};
-use crate::surfaces::require_region;
+use crate::surfaces::{label_for, require_region};
 use crate::windows::window_data;
 
 /// 표면 페이지의 그림 영역 호출.
@@ -518,11 +518,28 @@ fn create(
     platform: &'static dyn platform::Platform,
 ) -> Result<Handle, String> {
     let surface = with_view(webview, move |view| platform.view_id(view))?;
-    let (_surface_id, name) = key.clone();
+    let (surface_id, name) = key.clone();
+    let host = window.clone();
+    let event_name = name.clone();
 
     on_main(window, move || {
-        let event = Box::new(move |_json: String| {
-            // 그림 영역 이벤트는 나중에 구현
+        let event = Box::new(move |json: String| {
+            // 네이티브 입력은 소유 표면에만 보낸다. 파싱·전송 실패는 숨기지 않는다.
+            let result = (|| {
+                let event: serde_json::Value = serde_json::from_str(&json)
+                    .map_err(|error| format!("image event {surface_id}/{event_name}: {error}"))?;
+                let payload = serde_json::json!({
+                    "surface": surface_id, "name": event_name, "event": event,
+                });
+                host.emit_to(
+                    EventTarget::webview(label_for(&host, &surface_id)),
+                    "image-event",
+                    payload,
+                )
+                .map_err(|error| format!("image event {surface_id}/{event_name}: {error}"))
+            })();
+            log_error(result);
+            exposure::window_changed(&host);
         });
         let handle = platform.create_image(surface, &name, event)?;
         Ok(handle)

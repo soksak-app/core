@@ -193,6 +193,46 @@ function createFakeExpose() {
   };
 }
 
+test("modified native character keys preserve their text before and after session open", async () => {
+  const attach = createFakeAttachImage();
+  const sidecar = createFakeSidecar();
+  let region;
+  await startTerminal({
+    view: createFakeView(), attachImage: (...args) => (region = attach.function(...args)),
+    sidecar, expose: createFakeExpose(),
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  const event = { key: "Char", text: "c", shift: false, alt: false, ctrl: true };
+  region._trigger("key", event);
+  openSession(sidecar);
+  region._trigger("key", event);
+  assert.deepEqual(sidecar.getMessages().filter(({ body }) => body.op === "input").map(({ body }) => body.keys[0]),
+    [event, event]);
+});
+
+test("terminal.screen publishes sidecar output without polling or input commands", async () => {
+  const sidecar = createFakeSidecar();
+  const expose = createFakeExpose();
+  await startTerminal({
+    view: createFakeView(), attachImage: createFakeAttachImage().function, sidecar, expose,
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  const status = expose.getStatus("terminal.screen");
+  assert.ok(status);
+  assert.deepEqual(status.readFn(), []);
+  const received = [];
+  const stop = status.watchFn((value) => received.push(value));
+  const lines = [[{ ch: "x", width: 1 }]];
+  sidecar.triggerEvent("test-session", { event: "screen", lines });
+  assert.deepEqual(status.readFn(), lines);
+  assert.deepEqual(received, [lines]);
+  stop();
+  sidecar.triggerEvent("test-session", { event: "screen", lines: [] });
+  assert.deepEqual(status.readFn(), []);
+  assert.deepEqual(received, [lines]);
+  assert.deepEqual(sidecar.getMessages().map(({ body }) => body.op), ["open"]);
+});
+
 // 테스트 1: 부팅 → attachImage가 한 번 호출되고 sidecar에 open이 간다
 test("Boot: attachImage called once and sidecar receives open message", async () => {
   FakeResizeObserver.reset();
