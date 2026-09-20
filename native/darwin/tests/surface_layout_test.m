@@ -76,9 +76,6 @@ static void checkSettledWaitsForLayout(NSWindow *window, WKWebView *main) {
     surfaceLayoutBegin(window, 101, ^(int allowed) {});
     surfaceLayoutAfterSettled(main, ^(double displayed) { settledAt = ++order; });
     surfaceLayoutBegin(window, 102, ^(int allowed) {});
-    __block BOOL presented = NO;
-    surfaceLayoutAfterPresentation(main, ^{ presented = YES; });
-    until(^BOOL { return presented; });
     check(!surfaceLayoutCommit(window, 101), @"an older request does not commit an extended layout transaction");
     waitFrames(window.screen, 5);
     check(surfaceLayoutCommit(window, 102), @"the newest request commits the layout transaction");

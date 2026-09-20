@@ -88,6 +88,7 @@ function runtime({ documentAttach, imageAttach, place } = {}) {
           if (place) return place(revision, regions, overlays);
         },
       },
+      surfaces: { report: () => {} },
     },
     documentCalls,
     imageCalls,
@@ -203,6 +204,26 @@ test("the frame comparison catches a same-size move and still submits a complete
   assert.equal(r.placements[0].regions[0].left, 40);
   assert.deepEqual(r.placements[0].regions.map(({ name }) => name), ["page", "image"]);
   assert.deepEqual(r.placements[0].overlays.map(({ name }) => name), ["toolbar", "badge"]);
+});
+
+test("a size change with unchanged insets still submits a new full snapshot", async () => {
+  const f = fixture();
+  const r = runtime();
+  await createSurfaceCompositionController(r.page, declaration, {
+    regions: { page: f.page, image: f.image },
+    overlays: { toolbar: f.toolbar, badge: f.badge },
+  }, f.window);
+  r.placements.length = 0;
+  Object.defineProperty(f.window, "innerWidth", { value: 1000, configurable: true });
+  Object.defineProperty(f.window, "innerHeight", { value: 800, configurable: true });
+  f.setRect("page", { left: 10, top: 20, right: 510, bottom: 420, width: 500, height: 400 });
+  f.resize();
+  await settle();
+
+  assert.equal(r.placements.length, 1);
+  assert.deepEqual(r.placements[0].regions[0], {
+    name: "page", left: 10, top: 20, right: 490, bottom: 380, visible: true,
+  });
 });
 
 test("a failed placement does not poison the next higher complete revision", async () => {

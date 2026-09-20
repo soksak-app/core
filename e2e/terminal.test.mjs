@@ -4,8 +4,47 @@ import assert from "node:assert/strict";
 import { rmSync } from "node:fs";
 import test from "node:test";
 
-import { APPS, fresh, open } from "./app.mjs";
+import { APPS, drag, fresh, open } from "./app.mjs";
 import { frames, pixel, readFrame } from "./frame.mjs";
+
+
+function textLines(screen) {
+  assert.ok(screen && Array.isArray(screen.lines), `invalid terminal screen: ${JSON.stringify(screen)}`);
+  return screen.lines.map((row) => row.map((cell) => cell.ch ?? "").join(""));
+}
+
+async function readScreenUntil(session, surface, predicate, message) {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const screen = await session.run("terminal.screen.read", {}, surface);
+    const lines = textLines({ lines: screen });
+    if (predicate(lines)) return lines;
+  }
+  throw new Error(`${message}; the screen never reached the required content`);
+}
+
+async function ensureTerminals(session, count) {
+  let terminals = (await session.surfaces("terminal")).length;
+  while (terminals < count) {
+    const grid = await session.get("core.grid");
+    const card = grid.cards.find((item) =>
+      item.active && item.tabs.some((tab) => tab.plugin === "terminal"));
+    assert.ok(card, "a visible terminal card was not found for splitting");
+    await session.run("core.card.split", { card: card.id, axis: "x", plugin: "terminal" });
+    terminals = await session.until(
+      "core.surfaces",
+      (surfaces) => surfaces.filter((item) => item.visible && item.plugin === "terminal").length,
+      `terminal count did not reach ${terminals + 1}`
+    );
+  }
+  return session.surfaces("terminal");
+}
+
+async function closeTerminalTabs(session) {
+  const grid = await session.get("core.grid");
+  for (const tab of grid.cards.flatMap((card) => card.tabs).filter((tab) => tab.plugin === "terminal")) {
+    await session.run("core.tab.close", { tab: tab.id });
+  }
+}
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: terminal input returns terminal output through the terminal sidecar`, async (t) => {
@@ -49,21 +88,12 @@ for (const app of Object.values(APPS)) {
     await s.run("terminal.input", { bytes: "echo hi\r" }, terminalSurface);
 
     // 출력 줄을 읽을 때까지 기다린다.
-    const lines = await s.until(
-      "terminal.screen.read",
-      (screen) => {
-        if (!screen || !screen.lines) return false;
-        return screen.lines.some((line) => line.trim() === "hi");
-      },
-      "terminal did not print hi",
-      { surface: terminalSurface }
-    );
-
     // 화면이 읽혔는지 확인한다.
-    const screen = await s.get("terminal.screen.read", terminalSurface);
-    assert.ok(
-      screen.lines.some((line) => line.trim() === "hi"),
-      `terminal output does not contain "hi": ${JSON.stringify(screen.lines)}`
+    const screenLines = await readScreenUntil(
+      s,
+      terminalSurface,
+      (screen) => screen.some((line) => line.trim() === "hi"),
+      'terminal output does not contain "hi"'
     );
 
     // 창 캡처로 터미널 영역에 글자가 나왔는지 확인한다.
@@ -75,8 +105,8 @@ for (const app of Object.values(APPS)) {
       after: (await s.presented()).displayed,
     });
 
-    t.after(async () => {
-      await s.run("terminal.close", {}, terminalSurface);
+    s.cleanup(async () => {
+      await closeTerminalTabs(s);
       try {
         rmSync(frameDir, { recursive: true, force: true });
       } catch {
@@ -171,24 +201,52 @@ for (const app of Object.values(APPS)) {
 
     // 화면에 글자를 둔다.
     await s.run("terminal.input", { bytes: "echo hi\r" }, terminalSurface);
-    await s.until(
-      "terminal.screen.read",
-      (screen) => {
-        if (!screen || !screen.lines) return false;
-        return screen.lines.some((line) => line.trim() === "hi");
-      },
-      "terminal did not print hi",
-      { surface: terminalSurface }
+    await readScreenUntil(
+      s,
+      terminalSurface,
+      (screen) => screen.some((line) => line.trim() === "hi"),
+      "terminal did not print hi"
     );
 
     const before = await s.get("terminal.session", terminalSurface);
 
-    // 창을 키운다.
+    const marker = "AAAA-BBBB-CCCC-DDDD-EEEE-FFFF-GGGG-HHHH-IIII-JJJJ-KKKK-LLLL-MMMM-NNNN-OOOO-PPPP";
+
+    // 먼저 좁은 터미널에 긴 논리 행을 출력한다. 화면에 보이는 줄을 보존하는 것만으로는
+    // 충분하지 않으므로, 모든 셀의 문자열을 합쳐 잘림이 없는지 확인한다.
+    await s.run("host.window.resize", { width: 800, height: 920 });
+    await s.until(
+      "host.window",
+      (w) => w.content.width === 800 && w.content.height > 0,
+      "the window did not become narrow"
+    );
+
+    const narrow = await s.until(
+      "terminal.session",
+      (session) => session && !session.error && session.cols < before.cols,
+      `terminal session did not become narrow after the window resize: ${JSON.stringify(before)}`,
+      { surface: terminalSurface }
+    );
+    await s.run("terminal.input", { bytes: `printf '${marker}\\n'\r` }, terminalSurface);
+    const narrowLines = await readScreenUntil(
+      s,
+      terminalSurface,
+      (screen) => screen.join("").includes(marker),
+      "narrow terminal lost characters from the long logical row"
+    );
+    const narrowMarkerLines = narrowLines.filter((line) => line === marker);
+    assert.equal(narrowMarkerLines.length, 0,
+      `narrow terminal must wrap the logical row instead of keeping it on one line: ${JSON.stringify(narrowLines)}`);
+    assert.ok(narrowLines.some((line, index) =>
+      index > 0 && (narrowLines.slice(0, index).join("") + line).includes(marker)),
+    "narrow terminal did not preserve the marker across wrapped rows");
+
+    // 다시 넓히면 sidecar의 열 수와 화면의 논리 행이 함께 복원되어야 한다.
     await s.run("host.window.resize", { width: 1500, height: 920 });
     await s.until(
       "host.window",
-      (w) => w.content.width === 1500 && w.content.height === 920,
-      "the window did not resize"
+      (w) => w.content.width === 1500 && w.content.height > 0,
+      "the window did not become wide"
     );
 
     // 사이드카의 resize 응답 state 이벤트가 세션 상태에 도달해야 한다.
@@ -198,12 +256,22 @@ for (const app of Object.values(APPS)) {
       (session) =>
         session &&
         !session.error &&
-        session.cols > before.cols &&
+        session.cols > narrow.cols &&
         session.rows > before.rows,
-      `terminal session did not grow after the window resize: ${JSON.stringify(before)}`,
+      `terminal session did not grow after the narrow resize: ${JSON.stringify(narrow)}`,
       { surface: terminalSurface }
     );
     assert.equal(after.error, undefined, "resize state event must not set an error");
+
+    const wideLines = await readScreenUntil(
+      s,
+      terminalSurface,
+      (screen) => screen.join("").includes(marker)
+      && screen.filter((line) => line === marker).length === 1,
+      "wide terminal did not reflow the logical row back to one line"
+    );
+    assert.ok(wideLines.some((line) => line.includes(marker)),
+      "wide terminal does not contain the complete logical row");
 
     await s.presented();
 
@@ -219,8 +287,8 @@ for (const app of Object.values(APPS)) {
       after: (await s.presented()).displayed,
     });
 
-    t.after(async () => {
-      await s.run("terminal.close", {}, terminalSurface);
+    s.cleanup(async () => {
+      await closeTerminalTabs(s);
       try {
         rmSync(frameDir, { recursive: true, force: true });
       } catch {
@@ -266,5 +334,43 @@ for (const app of Object.values(APPS)) {
       brightTextCount >= 20,
       `terminal text not visible after resize: ${brightTextCount} bright pixels (need >= 20)`
     );
+  });
+
+  test(`${app.name}: multiple terminals keep fixed cells during a divider drag`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    s.cleanup(() => closeTerminalTabs(s));
+    const terminals = await ensureTerminals(s, 3);
+    await s.presented();
+
+    const before = new Map();
+    for (const surface of terminals) {
+      const session = await s.get("terminal.session", surface.surface);
+      before.set(surface.surface, { cellWidth: session.cellWidth, cellHeight: session.cellHeight });
+    }
+    const beforeGrid = await s.get("core.grid");
+    const result = await drag(t, s, { axis: "x", line: 1, dx: 80, dy: 0, ms: 320, times: 1 }, { capture: true });
+    assert.ok(result.count > 10, `divider recording contained too few frames: ${result.count}`);
+    assert.ok(result.longestGap <= 100, `divider recording dropped a gesture interval: ${result.longestGap}ms`);
+    assert.equal(result.late, 0, `divider input arrived late: ${result.late} steps`);
+    assert.equal(result.deepest, 0, `divider input queue accumulated ${result.deepest} steps`);
+
+    const afterGrid = await s.get("core.grid");
+    assert.notDeepEqual(afterGrid.lines.x, beforeGrid.lines.x, "divider drag did not change a vertical boundary");
+    await s.presented();
+    const host = await s.get("host.window");
+    for (const surface of await s.surfaces("terminal")) {
+      const session = await s.get("terminal.session", surface.surface);
+      const original = before.get(surface.surface);
+      assert.equal(session.cellWidth, original.cellWidth, `${surface.surface} changed terminal cell width`);
+      assert.equal(session.cellHeight, original.cellHeight, `${surface.surface} changed terminal cell height`);
+      const region = host.regions.find((item) => item.surface === surface.surface);
+      assert.ok(region, `${surface.surface} has no native region after divider drag`);
+      assert.equal(region.presented.width, Math.round(region.frame.width * region.presented.scale),
+        `${surface.surface} raster width does not match its frame after divider drag`);
+      assert.equal(region.presented.height, Math.round(region.frame.height * region.presented.scale),
+        `${surface.surface} raster height does not match its frame after divider drag`);
+    }
   });
 }

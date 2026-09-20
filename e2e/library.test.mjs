@@ -47,7 +47,16 @@ async function assertVisibleTerminalRasters(s, minimum, message) {
     assert.ok(region.presented, `${message}: ${surface.surface} has no presented raster`);
     assert.ok(region.frame.width > 0 && region.frame.height > 0,
       `${message}: ${surface.surface} has an empty native frame`);
+    assert.equal(region.presented.width, Math.round(region.frame.width * region.presented.scale),
+      `${message}: ${surface.surface} raster width does not match its native frame`);
+    assert.equal(region.presented.height, Math.round(region.frame.height * region.presented.scale),
+      `${message}: ${surface.surface} raster height does not match its native frame`);
   }
+  const visibleTerminalIds = new Set(surfaces.map((surface) => surface.surface));
+  const visibleTerminalRegions = window.regions.filter((region) =>
+    region.visible && visibleTerminalIds.has(region.surface));
+  assert.equal(visibleTerminalRegions.length, surfaces.length,
+    `${message}: visible terminal surfaces and visible native image regions are not one-to-one`);
 }
 
 /** 호스트 native surface 목록에 grid가 소유하지 않는 웹뷰가 남지 않았는지 검사한다. */
@@ -171,13 +180,20 @@ for (const app of Object.values(APPS)) {
       `creating three terminal surfaces started too many ptyd processes: before=${ptydBefore}, after=${ptydAtThree}`);
     await s.presented();
     await assertVisibleTerminalRasters(s, 3, "before leaving the project");
-    await s.request("diagnostics.capture.start", {});
+    const capture = await s.request("diagnostics.capture.start", {});
+    let captureActive = true;
+    s.cleanup(async () => {
+      if (captureActive) await s.request("diagnostics.capture.stop", { after: 0 });
+      rmSync(capture.frames, { recursive: true, force: true });
+      captureActive = false;
+    });
     await s.run("core.projects.browse");
     await s.until("core.screen", (screen) => screen.screen === "library", "the project did not enter the library");
     await s.run("core.library.open", { id: first.id });
     await s.until("core.screen", (screen) => screen.screen === "workspace", "the project did not return from the library");
     await assertNoLibraryError(s, "the measured project return");
     const stopped = await s.request("diagnostics.capture.stop", { after: 0 });
+    captureActive = false;
     const returned = await s.get("host.window");
     const expectedTerminals = (await s.surfaces("terminal")).filter((surface) => surface.visible);
     const returnedTerminals = expectedTerminals.map((surface) => {
@@ -188,6 +204,7 @@ for (const app of Object.values(APPS)) {
       return region;
     });
     assertNoWhiteTerminalBleed(frames(stopped.frames), returnedTerminals, "project return pixel composition");
+    rmSync(stopped.frames, { recursive: true, force: true });
     await assertVisibleTerminalRasters(s, 3, "immediately after returning to the project");
     await assertNoOrphanNativeSurfaces(s, "immediately after returning to the project");
     assert.equal(ptydCount(), ptydAtThree,

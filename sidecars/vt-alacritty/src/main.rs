@@ -280,6 +280,35 @@ mod tests {
     }
 
     #[test]
+    fn primary_screen_reflows_without_losing_text_when_width_changes() {
+        let mut engine = AlacrittyEngine::new();
+        let text = "AAAA-BBBB-CCCC-DDDD-EEEE-FFFF-GGGG-HHHH";
+
+        engine.resize(20, 10);
+        engine.feed(text.as_bytes());
+        let narrow = engine.screen();
+        let narrow_text: String = narrow
+            .lines
+            .iter()
+            .flat_map(|line| line.iter().filter_map(|cell| cell.ch.as_deref()))
+            .collect();
+        assert_eq!(narrow.cols, 20);
+        assert_eq!(narrow_text, text);
+        assert!(narrow.lines.iter().filter(|line| !line.is_empty()).count() > 1);
+
+        engine.resize(80, 10);
+        let wide = engine.screen();
+        let wide_text: String = wide
+            .lines
+            .iter()
+            .flat_map(|line| line.iter().filter_map(|cell| cell.ch.as_deref()))
+            .collect();
+        assert_eq!(wide.cols, 80);
+        assert_eq!(wide_text, text);
+        assert_eq!(wide.lines.iter().filter(|line| !line.is_empty()).count(), 1);
+    }
+
+    #[test]
     fn test_reset() {
         let mut engine = AlacrittyEngine::new();
         engine.feed(b"hello");
