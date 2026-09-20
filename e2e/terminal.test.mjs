@@ -46,11 +46,21 @@ async function closeTerminalTabs(session) {
   }
 }
 
+async function assertGridFillsPlane(session, message) {
+  const grid = await session.get("core.grid");
+  assert.ok(grid?.plane, `${message}: grid has no plane measurement`);
+  assert.equal(Math.round(grid.width), Math.round(grid.plane.w),
+    `${message}: grid width ${grid.width} does not fill plane width ${grid.plane.w}`);
+  assert.equal(Math.round(grid.height), Math.round(grid.plane.h),
+    `${message}: grid height ${grid.height} does not fill plane height ${grid.plane.h}`);
+}
+
 for (const app of Object.values(APPS)) {
   test(`${app.name}: terminal input returns terminal output through the terminal sidecar`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
+    await assertGridFillsPlane(s, "initial terminal layout");
 
     // 터미널 탭을 활성화한다. core.grid 는 상태이므로 상태 읽기로 카드와 탭을 얻는다.
     const grid = await s.get("core.grid");
@@ -169,6 +179,7 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
+    await assertGridFillsPlane(s, "initial terminal resize layout");
 
     // 터미널 탭을 활성화한다. core.grid 는 상태이므로 상태 읽기로 카드와 탭을 얻는다.
     const grid = await s.get("core.grid");
@@ -220,6 +231,10 @@ for (const app of Object.values(APPS)) {
       (w) => w.content.width === 800 && w.content.height > 0,
       "the window did not become narrow"
     );
+    await s.until("core.grid", (grid) =>
+      grid && Math.round(grid.width) === Math.round(grid.plane.w)
+      && Math.round(grid.height) === Math.round(grid.plane.h),
+      "the narrow window did not resize the DOM plane");
 
     const narrow = await s.until(
       "terminal.session",
@@ -248,6 +263,10 @@ for (const app of Object.values(APPS)) {
       (w) => w.content.width === 1500 && w.content.height > 0,
       "the window did not become wide"
     );
+    await s.until("core.grid", (grid) =>
+      grid && Math.round(grid.width) === Math.round(grid.plane.w)
+      && Math.round(grid.height) === Math.round(grid.plane.h),
+      "the wide window did not resize the DOM plane");
 
     // 사이드카의 resize 응답 state 이벤트가 세션 상태에 도달해야 한다.
     // 셀 크기가 빠진 state 이벤트는 플러그인이 오류로 내놓으므로 cols 가 그대로 남는다.
