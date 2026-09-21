@@ -10,11 +10,11 @@ test("plugin.json satisfies the manifest format", () => {
   assert.equal(validateManifest(manifest), manifest);
 });
 
-test("the package publishes the manifest and the surface page", () => {
+test("the package publishes the manifest and surface module", () => {
   assert.ok(pkg.files.includes("plugin.json"));
-  if (manifest.surface?.page === undefined) return;
-  assert.ok(existsSync(new URL(`../${manifest.surface.page}`, import.meta.url)), manifest.surface.page);
-  assert.ok(pkg.files.some((entry) => manifest.surface.page === entry || manifest.surface.page.startsWith(`${entry}/`)));
+  if (manifest.surface?.module === undefined) return;
+  assert.ok(existsSync(new URL(`../${manifest.surface.module}`, import.meta.url)), manifest.surface.module);
+  assert.ok(pkg.files.some((entry) => manifest.surface.module === entry || manifest.surface.module.startsWith(`${entry}/`)));
 });
 
 test("every sidecar the plugin uses is a declared package dependency", () => {

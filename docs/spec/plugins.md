@@ -106,6 +106,10 @@ Plugin pages import from `@soksak/plugin-api/page` and do not import workbench f
 
 ## Tests
 
+### Browser address input
+
+The browser address field selects its full value when it gains focus through the declared `browser.address.select` command. The initial pointer release preserves that selection, so typing replaces the previous address. Later clicks in an already focused field allow caret placement instead of selecting everything again. The plugin uses its owning Shadow Root to determine focus, keeps in-progress input across navigation status updates, and releases all handlers when disposed. Native keyboard checks type the replacement directly; they do not manually select text to compensate for missing behavior.
+
 Each directory runs its own tests with `pnpm test`. A package checks its boundary with fixtures and does not read another package's source or real names. The plugin API tests the formats. The workbench tests loading with fixture files. Each plugin tests its `plugin.json` and pages. Each application tests that its `environment.json` resolves against its real plugin dependencies. The workbench colors library previews from each plugin's `preview.ink` and contains no plugin-specific CSS.
 
 `node scripts/check-boundaries.mjs` checks the boundary rules in source files: core packages do not name plugin or sidecar packages or plugin ids, and plugins and sidecars name only packages declared in their `package.json`. It does not check `apps/`, `e2e/`, declaration files (`package.json`, `plugin.json`, `sidecar.json`), or `.md` files.
