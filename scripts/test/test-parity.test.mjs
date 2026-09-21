@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { auditCommittedEvidenceWording, auditCompletedFeatureLinks, auditFeatureLinks, auditHistoricalScopeWording, auditInventory, auditModalParitySnapshotWording, auditOwnership, auditRecordedInventoryCounts, discoverInventory, repositoryFiles } from "../check-test-parity.mjs";
+import { auditCommittedEvidenceWording, auditCompletedFeatureLinks, auditFeatureLinks, auditHistoricalScopeWording, auditInventory, auditJsFailurePropagation, auditModalParitySnapshotWording, auditOwnership, auditRecordedInventoryCounts, discoverInventory, repositoryFiles } from "../check-test-parity.mjs";
 
 const files = repositoryFiles();
 
@@ -152,4 +152,20 @@ test("ownership audit does not authorize private access through a declared depen
     ? 'import "@soksak/sidecar-example/src/private.js";\n'
     : "package main\n");
   assert.ok(errors.some((error) => error.includes("private")));
+});
+
+test("JS failure audit rejects promise handlers that hide rejection", { timeout: 1000 }, () => {
+  const errors = auditJsFailurePropagation([
+    "packages/example/empty.js",
+    "packages/example/undefined.js",
+    "packages/example/visible.js",
+    "packages/example/test/example.test.mjs",
+  ], (file) => ({
+    "packages/example/empty.js": "work().catch(() => {});",
+    "packages/example/undefined.js": "work().catch(() => undefined);",
+    "packages/example/visible.js": "work().catch((error) => report(error));",
+    "packages/example/test/example.test.mjs": "work().catch(() => {});",
+  }[file] ?? ""));
+  assert.equal(errors.length, 2);
+  assert.ok(errors.every((error) => error.includes("hides a rejected operation")));
 });

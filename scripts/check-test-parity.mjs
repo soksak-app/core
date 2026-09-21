@@ -313,6 +313,23 @@ const FEATURE_LINKS = [
     levels: ["unit", "native", "application"],
   },
   {
+    id: "F0.4-1.2",
+    implementation: [
+      { file: "scripts/check-test-parity.mjs", symbol: "auditJsFailurePropagation" },
+      { file: "packages/client/client.js", symbol: "status.unwatch" },
+      { file: "packages/workbench/exposure.js", symbol: "release" },
+      { file: "packages/workbench/host.js", symbol: "continueAfterLayoutFailure" },
+      { file: "packages/workbench/projects.js", symbol: "inTurn" },
+      { file: "packages/workbench/transcript.js", symbol: "createTranscript" },
+    ],
+    tests: [
+      { file: "scripts/test/test-parity.test.mjs", id: "JS failure audit rejects promise handlers that hide rejection" },
+      { file: "packages/workbench/test/transcript.test.mjs", id: "a failed send does not stop later lines" },
+    ],
+    expected: "Promise rejection handlers in the audited JS/TS implementation cannot silently turn failures into successful completion; visible reporting preserves the failure while allowing independent queued work to proceed.",
+    levels: ["unit"],
+  },
+  {
     id: "F2.1",
     implementation: [{ file: "sidecars/vt-core/src/pty.rs", symbol: "pub fn close" }],
     tests: [{ file: "sidecars/vt-core/tests/pty_lifecycle.rs", id: "real_sessions_are_independent_and_close_removes_session" }],
@@ -665,6 +682,31 @@ export function auditOwnership(files, readSource = (file) => readFileSync(`${ROO
   return errors;
 }
 
+/** Reject promise handlers that turn a rejected operation into an unobservable success. */
+export function auditJsFailurePropagation(files, readSource = (file) => readFileSync(`${ROOT}${file}`, "utf8")) {
+  const errors = [];
+  for (const file of [...new Set(files)].sort()) {
+    if (!/\.(?:js|mjs|ts|tsx)$/.test(file) || /(^|\/)(test|tests|e2e)\//.test(file)) continue;
+    let source;
+    try { source = readSource(file); }
+    catch (error) {
+      errors.push(`${file}: failure-propagation source cannot be read: ${error?.message ?? error}`);
+      continue;
+    }
+    const patterns = [
+      { expression: /\.catch\(\s*\(\s*\)\s*=>\s*\{\s*\}\s*\)/g, name: "empty catch handler" },
+      { expression: /\.catch\(\s*\(\s*\)\s*=>\s*undefined\s*\)/g, name: "undefined catch handler" },
+    ];
+    for (const { expression, name } of patterns) {
+      for (const match of source.matchAll(expression)) {
+        const line = source.slice(0, match.index).split("\n").length;
+        errors.push(`${file}:${line}: ${name} hides a rejected operation`);
+      }
+    }
+  }
+  return errors;
+}
+
 // 언어별 고정 루트를 두지 않는다. 한 패키지의 다른 언어도 모두 발견한다.
 export function discoverInventory(files) {
   const implementations = [], tests = [], manifests = [], generated = [];
@@ -789,6 +831,8 @@ export function auditInventory(files, matrix = MATRIX, readSource = (file) => re
   errors.push(...featureErrors);
   const ownershipErrors = auditOwnership(files, readSource);
   errors.push(...ownershipErrors);
+  const jsFailureErrors = auditJsFailurePropagation(files, readSource);
+  errors.push(...jsFailureErrors);
 
   return {
     errors,
@@ -798,6 +842,7 @@ export function auditInventory(files, matrix = MATRIX, readSource = (file) => re
     uncoveredTests,
     featureErrors,
     ownershipErrors,
+    jsFailureErrors,
     featureLinks: FEATURE_LINKS,
     trackCount: matrix.length,
     implementationCount: implementationOwners.size,

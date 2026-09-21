@@ -237,8 +237,11 @@ class Client {
     this.#watches.delete(key);
     if (this.#closed) return;
     // 구독은 이 차례보다 앞에 있으므로 여기서는 결과가 정해져 있다. 실패한 구독은 해제하지 않는다.
-    this.#subscribe(key, () => entry.ready.then(() => this.request("status.unwatch", target), () => {}))
-      .catch(() => {});
+    this.#subscribe(key, () => entry.ready.then(() => this.request("status.unwatch", target), (error) => {
+      throw new Error(`status.unwatch skipped because status.watch failed: ${error.message}`);
+    })).then(undefined, (error) => {
+      this.#fail(new Error(`status.unwatch failed: ${error.message}`));
+    });
   }
 
   #receive(message) {

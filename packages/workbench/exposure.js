@@ -113,7 +113,7 @@ export function createRegistry({ call = null } = {}) {
   /** 같은 표면을 따라가는 다른 감시가 없으면 표면의 감시를 끝낸다. */
   async function release(watch, name) {
     const shared = [...following.values()].some((other) => other.surface === watch.surface && other.name === name);
-    if (!shared) await forward(watch.surface, "status.unwatch", { name }).catch(() => {});
+    if (!shared) await forward(watch.surface, "status.unwatch", { name });
   }
 
   async function answer(method, params) {

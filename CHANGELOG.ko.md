@@ -2,7 +2,9 @@
 
 ## 미배포
 
-- Wails 표면 생성 오류 전달을 수정했다. 네이티브 생성 오류와 nil handle이 귀속 가능한 오류로 반환되고, layout 준비 실패는 취소되며, 새로 만든 표면은 되돌려지고, 모달 정렬 오류 뒤 0 사각형으로 대체하지 않는다. JS/TS·Rust·Objective-C 감사 lane은 F0.4-1.2부터 F0.4-1.5에 남아 있다.
+- F0.4-1.2 JS/TS 실패 전달 감사를 완료했다. 기계적 Red inventory에서 client unwatch·exposure release·layout queue·project switching·transcript 경로의 빈/undefined promise rejection handler 6개를 찾았다. 각 경로가 이제 오류를 전달하거나 보고한다. 감사 자기 테스트, 패키지 검사와 저장소 게이트가 통과했으며 Rust·Objective-C lane은 F0.4-1.3·F0.4-1.4에 남아 있다.
+
+- Wails 표면 생성 오류 전달을 수정했다. 네이티브 생성 오류와 nil handle이 귀속 가능한 오류로 반환되고, layout 준비 실패는 취소되며, 새로 만든 표면은 되돌려지고, 모달 정렬 오류 뒤 0 사각형으로 대체하지 않는다. Rust·Objective-C 감사 lane은 F0.4-1.3부터 F0.4-1.5에 남아 있다.
 
 - workspace inventory·소유권 강제·기능 증거 연결과 기계 검사가 완료되어 G1을 닫았다. 동작 검증은 각 연결된 기능의 증거 범위에 귀속되며 구조적 완료가 동작 완료를 뜻하지 않는다.
 

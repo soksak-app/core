@@ -6,7 +6,7 @@
  *
  * send(line) 은 줄 하나를 애플리케이션에 보내고 그 완료를 promise 로 반환한다.
  */
-export function createTranscript(send) {
+export function createTranscript(send, reportError = (error) => console.error("transcript send failed:", error?.message ?? error)) {
   let recording = false;
   let sent = Promise.resolve();
 
@@ -31,8 +31,8 @@ export function createTranscript(send) {
       if (!recording) return;
       Promise.resolve(answered).then((answer) => {
         const line = `host ${name} ${say(payload)} -> ${say(answer)}`;
-        sent = sent.then(() => send(line)).catch(() => {});
-      }, () => {});
+        sent = sent.then(() => send(line)).then(undefined, reportError);
+      }, (error) => reportError(new Error(`host ${name} failed before transcript: ${error?.message ?? error}`)));
     },
   };
 }

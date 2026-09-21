@@ -2,7 +2,9 @@
 
 ## Unreleased
 
-- Corrected Wails surface creation failure propagation: native creation errors and nil handles now return attributable errors, failed layout preparation is cancelled, newly created views are rolled back, and modal alignment no longer substitutes a zero rectangle after an alignment error. The remaining JS/TS, Rust, and Objective-C audit lanes remain open under F0.4-1.2 through F0.4-1.5.
+- Completed the JS/TS failure-propagation audit for F0.4-1.2. The machine Red inventory found six empty or undefined promise rejection handlers in client unwatch, exposure release, layout queue, project switching, and transcript paths. Each path now propagates or reports the failure; the audit self-test, package tests, and repository gates pass. Rust and Objective-C lanes remain open under F0.4-1.3 and F0.4-1.4.
+
+- Corrected Wails surface creation failure propagation: native creation errors and nil handles now return attributable errors, failed layout preparation is cancelled, newly created views are rolled back, and modal alignment no longer substitutes a zero rectangle after an alignment error. The remaining Rust and Objective-C audit lanes remain open under F0.4-1.3 through F0.4-1.5.
 
 - Closed G1 after completing the workspace inventory, ownership enforcement, feature-evidence links, and their machine checks. Behavioral verification remains attributable to each linked feature and is not implied by the structural closure.
 

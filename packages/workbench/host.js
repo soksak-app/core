@@ -234,6 +234,14 @@ let last = "";
 let layoutTurn = Promise.resolve();
 let layoutFrame = layoutTurn;
 let layoutResult = layoutTurn;
+
+function continueAfterLayoutFailure(phase, error) {
+  const message = `host ${phase} failed while advancing the layout queue: ${error?.message ?? error}`;
+  bridge.call("report", message).then(undefined, (reportError) => {
+    console.error(`${message}; reporting failed: ${reportError?.message ?? reportError}`);
+  });
+  return undefined;
+}
 let layoutPresented = false;
 
 /**
@@ -290,7 +298,7 @@ export const surfaces = native ? {
         layoutResult = scheduled.then((frame) => frame.placements);
         layoutPresented = false;
         // 실패한 트랜잭션이 다음 독립 레이아웃을 막지 않게 한다.
-        layoutTurn = scheduled.catch(() => undefined);
+        layoutTurn = scheduled.then(() => undefined, (error) => continueAfterLayoutFailure("syncSurfaces", error));
       }
       if (record.drawn && !layoutPresented) {
         const preparedLayout = layoutFrame;
@@ -298,7 +306,7 @@ export const surfaces = native ? {
           tellInTurn("presentSurfaces", { ...frame, settled: request.settled }));
         layoutResult = presentedLayout;
         layoutPresented = true;
-        layoutTurn = presentedLayout.catch(() => undefined);
+        layoutTurn = presentedLayout.then(() => undefined, (error) => continueAfterLayoutFailure("presentSurfaces", error));
       }
       // 이전 ticket이 커밋되기 전에 새 동기화가 네이티브 ticket을 교체하지 않도록
       // 동기화와 표시 호출을 함께 처리한다.

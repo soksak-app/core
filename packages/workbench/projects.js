@@ -29,7 +29,10 @@ export const isOpen = (id) => openProjects.has(id) || owned.has(id);
 let switching = Promise.resolve();
 function inTurn(run) {
   const done = switching.then(run);
-  switching = done.catch(() => {});
+  switching = done.then(undefined, (error) => {
+    failed(error);
+    return undefined;
+  });
   return done;
 }
 
