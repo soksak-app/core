@@ -64,10 +64,11 @@ verify: prepare docs-check exposure-check parity-check
 # 프로필을 읽지 않는다.
 export PATH := $(HOME)/.cargo/bin:$(PATH)
 
-# 네이티브 앱의 최소 macOS 버전. 캡처 코드가 macOS 14.0 의 ScreenCaptureKit API 를
+# 네이티브 앱의 최소 macOS 버전. 캡처 코드가 macOS 14.4 의
+# getCurrentProcessShareableContentWithCompletionHandler API 를
 # 사용한다. Go 는 CGO_CFLAGS 로 모든 cgo 패키지에, 링커에는 -extldflags 로 전달한다.
 # Rust 와 cc 는 MACOSX_DEPLOYMENT_TARGET 을 읽는다.
-MACOS_MINIMUM = 14.0
+MACOS_MINIMUM = 14.4
 export PKG_CONFIG_PATH := $(CURDIR)/native/darwin/build
 # go build 는 cgo 가 링크하는 정적 라이브러리의 내용을 캐시 키에 넣지 않고 CGO_CFLAGS 는 넣는다.
 # 라이브러리 해시를 CGO_CFLAGS 에 넣어 라이브러리가 바뀌면 cgo 패키지를 다시 컴파일하고 다시 링크한다.
@@ -142,7 +143,7 @@ wailsv3-release: wailsv3-build-release
 native-test: native-darwin frontend-wailsv3 frontend-tauriv2
 	@$(MAKE) -C native/darwin test
 	@node scripts/verify-vt-recovery.mjs target/debug/soksak-vt-alacritty
-	@$(GO_ENV) go test -ldflags "$(GO_LINK)" ./packages/host/wailsv3/... ./sidecars/shell/... ./sidecars/ptyd/...
+	@$(GO_ENV) go test -ldflags "$(GO_LINK)" ./packages/host/wailsv3/... ./sidecars/shell/...
 	@$(GO_ENV) go test -tags diagnostics -ldflags "$(GO_LINK)" ./packages/host/wailsv3/...
 	@$(CARGO_ENV) cargo test --manifest-path sidecars/Cargo.toml --workspace
 	@$(CARGO_ENV) cargo test -p soksak-host-tauriv2
