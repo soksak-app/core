@@ -147,6 +147,10 @@ pub fn after_settled(_view: &PlatformWebview, _done: Box<dyn Fn(f64)>) -> Result
     missing("presentation tracking")
 }
 
+pub fn after_presentation(_view: &PlatformWebview, _done: Box<dyn Fn()>) -> Result<(), String> {
+    missing("presentation tracking")
+}
+
 pub fn create_shape(_window: Handle, _frame: Frame) -> Result<Handle, String> {
     missing("shapes")
 }

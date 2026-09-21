@@ -192,6 +192,13 @@ impl Platform for Windows {
     fn after_settled(&self, view: &PlatformWebview, done: Box<dyn Fn(f64)>) -> Result<(), String> {
         unsupported::after_settled(view, done)
     }
+    fn after_presentation(
+        &self,
+        view: &PlatformWebview,
+        done: Box<dyn Fn()>,
+    ) -> Result<(), String> {
+        unsupported::after_presentation(view, done)
+    }
 
     fn create_shape(&self, window: Handle, frame: Frame) -> Result<Handle, String> {
         unsupported::create_shape(window, frame)

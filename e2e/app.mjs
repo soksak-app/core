@@ -373,10 +373,15 @@ async function dragOnce(t, s, plan, capture) {
   const ms = Math.max(1, Math.round(plan.ms / 16)) * 16 * 2 * plan.times;
   const result = await s.request("diagnostics.drag", { ...plan, capture }, { timeout: REQUEST + ms * 4 });
   if (!capture) return result;
-  t.after(() => rmSync(result.frames, { recursive: true, force: true }));
+  if (!process.env.SOKSAK_KEEP_FAILURE_CAPTURE) {
+    t.after(() => rmSync(result.frames, { recursive: true, force: true }));
+  }
   // 끌기의 마지막 화면이 표시되는 시각까지 녹화한다.
   const { displayed } = await s.presented();
   const stopped = await s.request("diagnostics.capture.stop", { after: displayed });
+  if (stopped.limited) {
+    throw new Error("the recording reached its finite frame limit before the gesture completed");
+  }
   // 녹화가 한 번에 이만큼 넘게 끊겼다면 그 사이 화면은 기록되지 않았다. 측정되지 않은 구간은 통과가 아니다.
   if (stopped.longestGap > GAP) {
     throw new Error(`the recording has a ${stopped.longestGap.toFixed(0)}ms gap between frames; ` +

@@ -276,6 +276,14 @@ impl Platform for Darwin {
         layout::after_settled(view, done);
         Ok(())
     }
+    fn after_presentation(
+        &self,
+        view: &PlatformWebview,
+        done: Box<dyn Fn()>,
+    ) -> Result<(), String> {
+        layout::after_presentation(view, done);
+        Ok(())
+    }
 
     fn create_shape(&self, window: Handle, frame: Frame) -> Result<Handle, String> {
         Ok(shapes::create(window, frame))

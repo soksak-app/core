@@ -22,6 +22,15 @@ static int captureBefore;
 static dispatch_queue_t captureWriter;
 static dispatch_semaphore_t capturePending;
 static const long kCapturePending = 64;
+// A diagnostic recording is a bounded burst, not an unbounded video sink.
+// Reaching the bound is reported as an incomplete recording; frames are never
+// silently discarded and accepted as a pass.
+static const int kCaptureMaxFrames = 600;
+static bool captureLimitReached;
+// Frames displayed before the capture request are not part of the measured
+// gesture. ScreenCaptureKit may deliver one cached frame when a stream starts;
+// retain only frames whose display time is at or after this boundary.
+static uint64_t captureStartedAt;
 
 // 프레임을 받아 파일로 적는다. 프레임이 메시지로 전달되므로 수신 객체가 필요하다.
 @interface SPCapture : NSObject <SCStreamOutput, SCStreamDelegate>
@@ -110,8 +119,16 @@ static SCFrameStatus frameStatus(CMSampleBufferRef sample) {
     }
     CVImageBufferRef buffer = CMSampleBufferGetImageBuffer(sample);
     if (buffer == NULL) return;
-    self.complete++;
     uint64_t shown = displayTime(sample);
+    if (captureStartedAt != 0 && shown != 0 && shown < captureStartedAt) return;
+    if (self.queued - captureBefore >= kCaptureMaxFrames) {
+        if (!captureLimitReached) {
+            captureLimitReached = true;
+            fprintf(stderr, "observe: capture frame limit reached (%d)\n", kCaptureMaxFrames);
+        }
+        return;
+    }
+    self.complete++;
     if (self.lastShown != 0 && shown > self.lastShown && shown - self.lastShown > self.longestGap) {
         self.longestGap = shown - self.lastShown;
     }
@@ -198,10 +215,15 @@ void sp_capture_open(long windowNumber, bool display) {
     // 이전 대상을 지운다. 조회에 실패하면 이전 대상을 녹화하지 않고 녹화가 시작되지 않는다.
     captureFilter = nil;
     dispatch_semaphore_t answered = dispatch_semaphore_create(0);
-    [SCShareableContent getShareableContentWithCompletionHandler:
+    // The diagnostic target is owned by this process. Asking for all shareable
+    // content unnecessarily enters the Screen Recording permission path and
+    // makes an app-owned capture depend on TCC. The current-process query is
+    // the compositor capture API for this exact case and still includes the
+    // window's child webviews in the resulting composite.
+    [SCShareableContent getCurrentProcessShareableContentWithCompletionHandler:
         ^(SCShareableContent* content, NSError* error) {
         if (error != nil) {
-            fprintf(stderr, "observe: no screen recording permission, %s\n",
+            fprintf(stderr, "observe: current-process capture unavailable, %s\n",
                 error.localizedDescription.UTF8String);
             dispatch_semaphore_signal(answered);
             return;
@@ -238,6 +260,13 @@ void sp_capture_open(long windowNumber, bool display) {
             config.showsCursor = NO;
             config.captureResolution = SCCaptureResolutionBest;
             // 화면이 갱신되는 만큼 받는다. 변경이 없으면 프레임도 오지 않는다.
+            // The acceptance gesture is measured at the compositor's 120 Hz
+            // cadence. Keep every frame, but use nominal (point-sized) capture
+            // so the recorder can persist the complete gesture without
+            // changing the pointer event rate or silently dropping frames.
+            config.captureResolution = SCCaptureResolutionNominal;
+            config.width = (size_t)filter.contentRect.size.width;
+            config.height = (size_t)filter.contentRect.size.height;
             config.minimumFrameInterval = CMTimeMake(1, 120);
             config.queueDepth = 8;
             captureConfig = config;
@@ -260,6 +289,8 @@ void sp_capture_start(const char* directory) {
         return;
     }
     if (captureStream != nil) return;
+    captureStartedAt = mach_absolute_time();
+    captureLimitReached = false;
     // 수신 객체는 한 번만 만든다. 녹화마다 새로 만들면 프레임 번호가 1 부터 다시
     // 시작해 앞선 녹화가 적은 파일을 덮어쓴다.
     if (captureSink == nil) captureSink = [[SPCapture alloc] init];
@@ -372,6 +403,10 @@ int sp_capture_stop(double after) {
             "the display is off or the window is not on screen\n", captureSink.idle);
     }
     return captureSink.written - captureBefore;
+}
+
+bool sp_capture_limited(void) {
+    return captureLimitReached;
 }
 
 double sp_capture_longest_gap(void) {
