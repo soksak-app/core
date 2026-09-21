@@ -10,11 +10,11 @@ test("plugin.json satisfies the manifest format", () => {
   assert.equal(validateManifest(manifest), manifest);
 });
 
-test("the package publishes the manifest and the surface page", () => {
+test("the package publishes the manifest and surface module", () => {
   assert.ok(pkg.files.includes("plugin.json"));
-  if (manifest.surface?.page === undefined) return;
-  assert.ok(existsSync(new URL(`../${manifest.surface.page}`, import.meta.url)), manifest.surface.page);
-  assert.ok(pkg.files.some((entry) => manifest.surface.page === entry || manifest.surface.page.startsWith(`${entry}/`)));
+  if (manifest.surface?.module === undefined) return;
+  assert.ok(existsSync(new URL(`../${manifest.surface.module}`, import.meta.url)), manifest.surface.module);
+  assert.ok(pkg.files.some((entry) => manifest.surface.module === entry || manifest.surface.module.startsWith(`${entry}/`)));
 });
 
 test("every sidecar the plugin uses is a declared package dependency", () => {
@@ -23,13 +23,14 @@ test("every sidecar the plugin uses is a declared package dependency", () => {
   }
 });
 
-test("the surface page registers every declared exposure", () => {
-  const html = readFileSync(new URL(`../${manifest.surface.page}`, import.meta.url), "utf8");
+test("the surface module is published", () => {
+  const source = readFileSync(new URL(`../${manifest.surface.module}`, import.meta.url), "utf8");
   const kinds = { status: "status", commands: "command", dom: "dom" };
   const declared = Object.entries(manifest.exposes ?? {})
     .flatMap(([key, entries]) => entries.map((entry) => `${kinds[key]} ${entry.name}`)).sort();
-  const registered = [...html.matchAll(/expose\.(status|command|dom)\("([^"]+)"/g)]
+  const registered = [...source.matchAll(/context\.exposure\.(status|command|dom)\("([^"]+)"/g)]
     .map(([, kind, name]) => `${kind} ${name}`).sort();
+  assert.match(source, /export (?:async )?function mount/);
   assert.deepEqual(registered, declared);
 });
 
@@ -45,13 +46,13 @@ test("a command that waits for a shell command declares a longer timeout", () =>
   assert.equal(run.timeout, 600000);
 });
 
-test("every control on the page names a declared command and a declared element", () => {
-  const html = readFileSync(new URL(`../${manifest.surface.page}`, import.meta.url), "utf8");
+test("every declared control is represented by the surface module", () => {
+  const source = readFileSync(new URL(`../${manifest.surface.module}`, import.meta.url), "utf8");
   const commands = new Set(manifest.exposes.commands.map((entry) => entry.name));
   const dom = new Set(manifest.exposes.dom.map((entry) => entry.name));
-  for (const [, command] of html.matchAll(/data-command="([^"]+)"/g)) assert.ok(commands.has(command), command);
-  for (const [, name] of html.matchAll(/data-expose="([^"]+)"/g)) assert.ok(dom.has(name), name);
-  for (const [control] of html.matchAll(/<(button|input)\b[^>]*>/g)) {
-    assert.match(control, /data-expose="/, `${control} has no data-expose`);
+  for (const [, command] of source.matchAll(/data-command="([^"]+)"/g)) assert.ok(commands.has(command), command);
+  for (const [, name] of source.matchAll(/data-expose="([^"]+)"/g)) assert.ok(dom.has(name), name);
+  for (const [control] of source.matchAll(/<(button|input)\b[^>]*>/g)) {
+    assert.match(control, /data-expose="[^"]+"/, `${control} has no data-expose`);
   }
 });
