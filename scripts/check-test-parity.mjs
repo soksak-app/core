@@ -365,6 +365,19 @@ const FEATURE_LINKS = [
     expected: "Supervised commands emit attributable start/progress/final events, visible output, bounded failure, and cleanup results.",
     levels: ["unit"],
   },
+  {
+    id: "F1.1",
+    implementation: [
+      { file: "packages/host/tauriv2/src/surfaces.rs", symbol: "pub(crate) fn aligned" },
+      { file: "e2e/drag-measurement.mjs", symbol: "assertRoundTrips" },
+    ],
+    tests: [
+      { file: "e2e/outside.test.mjs", id: "native content, cards, and the sidebar rail stay aligned" },
+      { file: "e2e/outside.test.mjs", id: "shell divider drag does not leave a white surface frame" },
+    ],
+    expected: "A complete divider recording keeps native content inside its card, keeps card and rail geometry aligned, contains no white surface frame, and returns to its initial position.",
+    levels: ["native", "application"],
+  },
 ];
 
 // 생성 산출물은 원본과의 일치 검사 대상이며 독립 구현으로 세지 않는다.
