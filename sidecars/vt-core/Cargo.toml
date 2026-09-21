@@ -14,8 +14,11 @@ serde_json = { version = "1", features = ["raw_value"] }
 tokio = { version = "1", features = ["io-util", "rt", "time", "net", "process", "sync", "macros"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 base64 = "0.21"
-nix = { version = "0.27", features = ["process", "net", "fs"] }
+nix = { version = "0.27", features = ["process", "net", "fs", "signal"] }
 async-trait = "0.1"
+portable-pty = "0.8"
+unicode-segmentation = "1.12"
+unicode-width = "0.2"
 
 [build-dependencies]
 cc = "1"

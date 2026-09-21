@@ -1,0 +1,546 @@
+//! In-process PTY sessions used by the terminal service.
+//!
+//! The service owns one PTY and one VT stream per session.  Attachments are
+//! deliberately not represented by PTY handles: dropping an attachment only
+//! stops delivery to that client, while an explicit close owns session exit.
+
+use crate::protocol::DaemonEvent;
+#[cfg(unix)]
+use nix::sys::signal::{kill, Signal};
+#[cfg(unix)]
+use nix::unistd::Pid;
+use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
+use std::collections::{HashMap, VecDeque};
+use std::io::{Read, Write};
+use std::sync::{Arc, Mutex};
+use std::thread;
+use uuid::Uuid;
+
+const RETAINED_OUTPUT: usize = 10_000;
+
+struct Session {
+    id: String,
+    owner: String,
+    master: Mutex<Option<Box<dyn MasterPty + Send>>>,
+    #[cfg(unix)]
+    process_group: Option<i32>,
+    writer: Mutex<Option<Box<dyn Write + Send>>>,
+    child: Mutex<Box<dyn Child + Send>>,
+    next_sequence: Mutex<i64>,
+    output: Mutex<VecDeque<(i64, Vec<u8>)>>,
+    attachments: Mutex<HashMap<String, tokio::sync::mpsc::UnboundedSender<DaemonEvent>>>,
+    closed: Mutex<bool>,
+    reader: Mutex<Option<thread::JoinHandle<()>>>,
+    reaper: Mutex<Option<thread::JoinHandle<()>>>,
+}
+
+#[derive(Clone)]
+pub struct PtyService {
+    sessions: Arc<Mutex<HashMap<String, Arc<Session>>>>,
+}
+
+impl PtyService {
+    pub fn new() -> Self {
+        Self {
+            sessions: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    pub fn open(
+        &self,
+        program: &str,
+        args: &[String],
+        cwd: Option<&str>,
+        cols: u16,
+        rows: u16,
+        events: tokio::sync::mpsc::UnboundedSender<DaemonEvent>,
+    ) -> Result<(String, String), String> {
+        self.open_owned("", program, args, cwd, cols, rows, events)
+    }
+
+    pub fn open_owned(
+        &self,
+        owner: &str,
+        program: &str,
+        args: &[String],
+        cwd: Option<&str>,
+        cols: u16,
+        rows: u16,
+        events: tokio::sync::mpsc::UnboundedSender<DaemonEvent>,
+    ) -> Result<(String, String), String> {
+        let pty_system = native_pty_system();
+        let pair = pty_system
+            .openpty(PtySize {
+                rows,
+                cols,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .map_err(|error| format!("open PTY: {error}"))?;
+
+        let mut command = CommandBuilder::new(program);
+        command.args(args);
+        if let Some(directory) = cwd {
+            command.cwd(directory);
+        }
+        command.env("TERM", "xterm-256color");
+        command.env("COLORTERM", "truecolor");
+
+        let child = pair
+            .slave
+            .spawn_command(command)
+            .map_err(|error| format!("spawn PTY session: {error}"))?;
+        #[cfg(unix)]
+        let process_group = pair.master.process_group_leader();
+        let reader = pair
+            .master
+            .try_clone_reader()
+            .map_err(|error| format!("clone PTY reader: {error}"))?;
+        let writer = pair
+            .master
+            .take_writer()
+            .map_err(|error| format!("take PTY writer: {error}"))?;
+
+        let session_id = Uuid::new_v4().to_string();
+        let attachment_id = Uuid::new_v4().to_string();
+        let session = Arc::new(Session {
+            id: session_id.clone(),
+            owner: owner.to_string(),
+            master: Mutex::new(Some(pair.master)),
+            #[cfg(unix)]
+            process_group,
+            writer: Mutex::new(Some(writer)),
+            child: Mutex::new(child),
+            next_sequence: Mutex::new(0),
+            output: Mutex::new(VecDeque::with_capacity(RETAINED_OUTPUT)),
+            attachments: Mutex::new(HashMap::new()),
+            closed: Mutex::new(false),
+            reader: Mutex::new(None),
+            reaper: Mutex::new(None),
+        });
+        session
+            .attachments
+            .lock()
+            .unwrap()
+            .insert(attachment_id.clone(), events);
+
+        self.sessions
+            .lock()
+            .unwrap()
+            .insert(session_id.clone(), session.clone());
+        let reader_handle = thread::spawn(move || read_output(session, reader));
+        // The handles are installed after the session is published; close() takes
+        // and joins both so the child and its output reader are fully reclaimed.
+        let session = self
+            .sessions
+            .lock()
+            .unwrap()
+            .get(&session_id)
+            .cloned()
+            .unwrap();
+        *session.reader.lock().unwrap() = Some(reader_handle);
+        let session_for_reaper = session.clone();
+        let reaper_handle = thread::spawn(move || reap_child(session_for_reaper));
+        *session.reaper.lock().unwrap() = Some(reaper_handle);
+
+        Ok((session_id, attachment_id))
+    }
+
+    pub fn attach(
+        &self,
+        session_id: &str,
+        from: i64,
+        events: tokio::sync::mpsc::UnboundedSender<DaemonEvent>,
+    ) -> Result<String, String> {
+        let session = self.session(session_id)?;
+        let attachment_id = Uuid::new_v4().to_string();
+        let replay = {
+            let output = session.output.lock().unwrap();
+            let oldest = output
+                .front()
+                .map(|(sequence, _)| *sequence)
+                .unwrap_or(from);
+            let truncated = from < oldest;
+            output
+                .iter()
+                .filter(|(sequence, _)| *sequence >= from.max(oldest))
+                .map(|(sequence, data)| {
+                    (
+                        *sequence,
+                        data.clone(),
+                        truncated && *sequence == from.max(oldest),
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+        session
+            .attachments
+            .lock()
+            .unwrap()
+            .insert(attachment_id.clone(), events.clone());
+        for (sequence, data, truncated) in replay {
+            events
+                .send(DaemonEvent::Output {
+                    session_id: session_id.to_string(),
+                    data,
+                    sequence,
+                    truncated,
+                })
+                .map_err(|_| {
+                    session.attachments.lock().unwrap().remove(&attachment_id);
+                    "PTY attachment closed during replay".to_string()
+                })?;
+        }
+        Ok(attachment_id)
+    }
+
+    pub fn detach(&self, session_id: &str, attachment_id: &str) -> Result<(), String> {
+        let session = self.session(session_id)?;
+        session.attachments.lock().unwrap().remove(attachment_id);
+        Ok(())
+    }
+
+    pub fn write(&self, session_id: &str, data: &[u8]) -> Result<(), String> {
+        let session = self.session(session_id)?;
+        if *session.closed.lock().unwrap() {
+            return Err("session is closed".into());
+        }
+        let result = session
+            .writer
+            .lock()
+            .unwrap()
+            .as_mut()
+            .ok_or_else(|| "session writer is closed".to_string())?
+            .write_all(data)
+            .map_err(|error| format!("write PTY: {error}"));
+        result
+    }
+
+    pub fn resize(&self, session_id: &str, cols: u16, rows: u16) -> Result<(), String> {
+        let session = self.session(session_id)?;
+        let result = session
+            .master
+            .lock()
+            .unwrap()
+            .as_ref()
+            .ok_or_else(|| "session master is closed".to_string())?
+            .resize(PtySize {
+                rows,
+                cols,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .map_err(|error| format!("resize PTY: {error}"));
+        result
+    }
+
+    pub fn close(&self, session_id: &str) -> Result<(), String> {
+        let session = self.session(session_id)?;
+        {
+            let mut closed = session.closed.lock().unwrap();
+            if *closed {
+                return Ok(());
+            }
+            *closed = true;
+        }
+        session.writer.lock().unwrap().take();
+        session.master.lock().unwrap().take();
+        let kill_result = {
+            #[cfg(unix)]
+            let process_group_result = kill_process_group(session.process_group);
+            let mut child = session.child.lock().unwrap();
+            let child_result = match child.try_wait() {
+                Ok(Some(_status)) => Ok(()),
+                Ok(None) => match child.kill() {
+                    Ok(()) => Ok(()),
+                    Err(kill_error) => match child.try_wait() {
+                        Ok(Some(_status)) => Ok(()),
+                        Ok(None) => Err(format!("close PTY: {kill_error}")),
+                        Err(wait_error) => {
+                            Err(format!("close PTY: {kill_error}; wait PTY: {wait_error}"))
+                        }
+                    },
+                },
+                Err(wait_error) => Err(format!("check PTY child: {wait_error}")),
+            };
+            #[cfg(unix)]
+            {
+                match (process_group_result, child_result) {
+                    (Err(group_error), _) => Err(group_error),
+                    (_, Err(child_error)) => Err(child_error),
+                    (Ok(()), Ok(())) => Ok(()),
+                }
+            }
+            #[cfg(not(unix))]
+            child_result
+        };
+        if let Some(reader) = session.reader.lock().unwrap().take() {
+            reader
+                .join()
+                .map_err(|_| "PTY reader thread panicked".to_string())?;
+        }
+        if let Some(reaper) = session.reaper.lock().unwrap().take() {
+            reaper
+                .join()
+                .map_err(|_| "PTY reaper thread panicked".to_string())?;
+        }
+        self.sessions.lock().unwrap().remove(session_id);
+        kill_result
+    }
+
+    pub fn close_owner(&self, owner: &str) -> Result<(), String> {
+        let ids = self
+            .sessions
+            .lock()
+            .unwrap()
+            .values()
+            .filter(|session| session.owner == owner)
+            .map(|session| session.id.clone())
+            .collect::<Vec<_>>();
+        for session_id in ids {
+            self.close(&session_id)?;
+        }
+        Ok(())
+    }
+
+    pub fn session_count(&self) -> usize {
+        self.sessions.lock().unwrap().len()
+    }
+
+    pub fn process_id(&self, session_id: &str) -> Result<u32, String> {
+        let session = self.session(session_id)?;
+        let process_id = session.child.lock().unwrap().process_id();
+        process_id.ok_or_else(|| "PTY child has no process id".to_string())
+    }
+
+    fn session(&self, session_id: &str) -> Result<Arc<Session>, String> {
+        self.sessions
+            .lock()
+            .unwrap()
+            .get(session_id)
+            .cloned()
+            .ok_or_else(|| format!("session {session_id} not found"))
+    }
+}
+
+#[cfg(unix)]
+fn kill_process_group(group: Option<i32>) -> Result<(), String> {
+    let group = group.ok_or("PTY process group is unavailable")?;
+    match kill(Pid::from_raw(-group), Signal::SIGKILL) {
+        Ok(()) => Ok(()),
+        Err(nix::errno::Errno::ESRCH) => Ok(()),
+        Err(error) => Err(format!("kill PTY process group {group}: {error}")),
+    }
+}
+
+fn read_output(session: Arc<Session>, mut reader: Box<dyn Read + Send>) {
+    let mut buffer = [0u8; 8192];
+    loop {
+        match reader.read(&mut buffer) {
+            Ok(0) => break,
+            Ok(size) => {
+                let data = buffer[..size].to_vec();
+                let sequence = {
+                    let mut next = session.next_sequence.lock().unwrap();
+                    let sequence = *next;
+                    *next += 1;
+                    sequence
+                };
+                {
+                    let mut output = session.output.lock().unwrap();
+                    output.push_back((sequence, data.clone()));
+                    while output.len() > RETAINED_OUTPUT {
+                        output.pop_front();
+                    }
+                }
+                broadcast(
+                    &session,
+                    DaemonEvent::Output {
+                        session_id: session.id.clone(),
+                        data,
+                        sequence,
+                        truncated: false,
+                    },
+                );
+            }
+            Err(error) => {
+                broadcast(
+                    &session,
+                    DaemonEvent::Error {
+                        session_id: session.id.clone(),
+                        error: format!("read PTY: {error}"),
+                    },
+                );
+                break;
+            }
+        }
+    }
+}
+
+fn reap_child(session: Arc<Session>) {
+    if let Err(error) = session.child.lock().unwrap().wait() {
+        // An explicit close may have reaped the child with try_wait before this
+        // thread acquired the child lock. That is an intentional close result,
+        // not a failure to reap the child.
+        if !*session.closed.lock().unwrap() {
+            broadcast(
+                &session,
+                DaemonEvent::Error {
+                    session_id: session.id.clone(),
+                    error: format!("wait PTY: {error}"),
+                },
+            );
+        }
+    }
+    broadcast(
+        &session,
+        DaemonEvent::Exit {
+            session_id: session.id.clone(),
+        },
+    );
+}
+
+fn broadcast(session: &Session, event: DaemonEvent) {
+    session
+        .attachments
+        .lock()
+        .unwrap()
+        .retain(|_, sender| sender.send(event.clone()).is_ok());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::time::{timeout, Duration};
+
+    #[tokio::test]
+    async fn independent_sessions_have_independent_output() {
+        let service = PtyService::new();
+        let (tx_a, mut rx_a) = tokio::sync::mpsc::unbounded_channel();
+        let (tx_b, mut rx_b) = tokio::sync::mpsc::unbounded_channel();
+        let (session_a, _) = service
+            .open(
+                "/bin/sh",
+                &["-c".into(), "printf A".into()],
+                None,
+                80,
+                24,
+                tx_a,
+            )
+            .expect("PTY setup failed; environmental PTY errors must fail this test");
+        let (session_b, _) = service
+            .open(
+                "/bin/sh",
+                &["-c".into(), "printf B".into()],
+                None,
+                80,
+                24,
+                tx_b,
+            )
+            .expect("PTY setup failed; environmental PTY errors must fail this test");
+        assert_ne!(session_a, session_b);
+
+        let output_a = timeout(Duration::from_secs(2), async {
+            loop {
+                if let Some(DaemonEvent::Output { data, .. }) = rx_a.recv().await {
+                    break data;
+                }
+            }
+        })
+        .await
+        .unwrap();
+        let output_b = timeout(Duration::from_secs(2), async {
+            loop {
+                if let Some(DaemonEvent::Output { data, .. }) = rx_b.recv().await {
+                    break data;
+                }
+            }
+        })
+        .await
+        .unwrap();
+        assert!(String::from_utf8_lossy(&output_a).contains('A'));
+        assert!(String::from_utf8_lossy(&output_b).contains('B'));
+    }
+
+    #[tokio::test]
+    async fn explicit_close_kills_the_child_and_drains_exit() {
+        let service = PtyService::new();
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let (session_id, _) = service
+            .open(
+                "/bin/sh",
+                &["-c".into(), "sleep 30".into()],
+                None,
+                80,
+                24,
+                tx,
+            )
+            .expect("PTY setup failed; environmental PTY errors must fail this test");
+        let started = std::time::Instant::now();
+        let close_service = service.clone();
+        let close_session = session_id.clone();
+        timeout(
+            Duration::from_secs(2),
+            tokio::task::spawn_blocking(move || close_service.close(&close_session)),
+        )
+        .await
+        .expect("close exceeded its two-second operation limit")
+        .expect("close worker panicked")
+        .expect("explicit close failed");
+        assert!(
+            started.elapsed() < Duration::from_secs(2),
+            "close operation exceeded its two-second limit: {:?}",
+            started.elapsed()
+        );
+        let exit = timeout(Duration::from_secs(2), async {
+            loop {
+                if let Some(event @ DaemonEvent::Exit { .. }) = rx.recv().await {
+                    break event;
+                }
+            }
+        })
+        .await;
+        assert!(exit.is_ok(), "close did not produce a drained exit event");
+    }
+
+    #[tokio::test]
+    async fn attach_replays_retained_output_with_stable_session_id() {
+        let service = PtyService::new();
+        let (tx_a, mut rx_a) = tokio::sync::mpsc::unbounded_channel();
+        let (session_id, _) = service
+            .open(
+                "/bin/sh",
+                &["-c".into(), "printf retained".into()],
+                None,
+                80,
+                24,
+                tx_a,
+            )
+            .expect("PTY setup failed; environmental PTY errors must fail this test");
+        while let Some(event) = timeout(Duration::from_secs(2), rx_a.recv()).await.unwrap() {
+            if matches!(event, DaemonEvent::Exit { .. }) {
+                break;
+            }
+        }
+        let (tx_b, mut rx_b) = tokio::sync::mpsc::unbounded_channel();
+        let attachment_id = service.attach(&session_id, 0, tx_b).unwrap();
+        assert!(!attachment_id.is_empty());
+        let event = timeout(Duration::from_secs(2), rx_b.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        match event {
+            DaemonEvent::Output {
+                session_id: replayed,
+                data,
+                sequence,
+                ..
+            } => {
+                assert_eq!(replayed, session_id);
+                assert_eq!(sequence, 0);
+                assert!(String::from_utf8_lossy(&data).contains("retained"));
+            }
+            other => panic!("expected replayed output, got {other:?}"),
+        }
+    }
+}
