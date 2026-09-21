@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::sync::mpsc::{channel, Receiver, Sender};
+use std::thread;
 use std::time::Duration;
 
 use std::io::{BufRead, BufReader, Write};
@@ -313,6 +314,123 @@ fn concurrent_hosts_share_an_authenticated_service_endpoint() {
             .surface,
         "s2"
     );
+    service.join().unwrap();
+}
+
+#[test]
+fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
+    let executable_directory = tempfile::tempdir().unwrap();
+    let config_directory = tempfile::tempdir().unwrap();
+    let service_directory = config_directory.path().join("services/echo");
+    std::fs::create_dir_all(&service_directory).unwrap();
+    let socket_path = service_directory.join("reconnect.sock");
+    let listener = UnixListener::bind(&socket_path).unwrap();
+    let endpoint = serde_json::json!({
+        "protocol": 1,
+        "pid": std::process::id(),
+        "socket": socket_path,
+        "token": "reconnect-token"
+    });
+    std::fs::write(
+        service_directory.join("endpoint.json"),
+        serde_json::to_vec(&endpoint).unwrap(),
+    )
+    .unwrap();
+    let (disconnected_tx, disconnected_rx) = channel();
+
+    let service = thread::spawn(move || {
+        let mut workers = Vec::new();
+        for connection_index in 0..4 {
+            let (mut stream, _) = listener.accept().unwrap();
+            let disconnected_tx = disconnected_tx.clone();
+            workers.push(thread::spawn(move || {
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(2)))
+                    .unwrap();
+                let mut reader = BufReader::new(stream.try_clone().unwrap());
+                let mut line = String::new();
+                reader.read_line(&mut line).unwrap();
+                let hello: serde_json::Value = serde_json::from_str(&line).unwrap();
+                assert_eq!(hello["op"], "hello");
+                assert_eq!(hello["protocol"], 1);
+                assert_eq!(hello["token"], "reconnect-token");
+                stream
+                    .write_all(br#"{"op":"hello","protocol":1,"ok":true}
+"#)
+                    .unwrap();
+
+                line.clear();
+                reader.read_line(&mut line).unwrap();
+                let mut request: serde_json::Value = serde_json::from_str(&line).unwrap();
+                if connection_index < 2 {
+                    stream.write_all(line.as_bytes()).unwrap();
+                    disconnected_tx.send(connection_index).unwrap();
+                    return;
+                }
+                loop {
+                    if request["op"] == "close-owner" {
+                        let reply = serde_json::json!({
+                            "op": "closed-owner",
+                            "request": request["request"],
+                            "ok": false,
+                            "error": "test close"
+                        });
+                        writeln!(stream, "{reply}").unwrap();
+                        return;
+                    }
+                    stream.write_all(line.as_bytes()).unwrap();
+                    line.clear();
+                    if reader.read_line(&mut line).unwrap() == 0 {
+                        return;
+                    }
+                    request = serde_json::from_str(&line).unwrap();
+                }
+            }));
+        }
+        for worker in workers {
+            worker.join().unwrap();
+        }
+    });
+
+    let fixture = files(r#"{"executable":"build/echo","protocol":1,"transport":"persistent"}"#);
+    let read = |path: &str| fixture.get(path).map(|value| value.as_bytes().to_vec());
+    let first = Sidecars::new(
+        &read,
+        executable_directory.path().to_path_buf(),
+        config_directory.path().to_path_buf(),
+    )
+    .unwrap();
+    let second = Sidecars::new(
+        &read,
+        executable_directory.path().to_path_buf(),
+        config_directory.path().to_path_buf(),
+    )
+    .unwrap();
+    let (first_owner, first_events) = owner("first", "/projects/first");
+    let (second_owner, second_events) = owner("second", "/projects/second");
+
+    first
+        .send(&first_owner, ECHO, "s1", &raw(r#"{"op":"open"}"#))
+        .unwrap();
+    second
+        .send(&second_owner, ECHO, "s2", &raw(r#"{"op":"open"}"#))
+        .unwrap();
+    assert_eq!(first_events.recv_timeout(Duration::from_secs(1)).unwrap().surface, "s1");
+    assert_eq!(second_events.recv_timeout(Duration::from_secs(1)).unwrap().surface, "s2");
+    disconnected_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+    disconnected_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+
+    first
+        .send(&first_owner, ECHO, "s1", &raw(r#"{"op":"reconnect"}"#))
+        .unwrap();
+    second
+        .send(&second_owner, ECHO, "s2", &raw(r#"{"op":"reconnect"}"#))
+        .unwrap();
+    assert_eq!(first_events.recv_timeout(Duration::from_secs(1)).unwrap().surface, "s1");
+    assert_eq!(second_events.recv_timeout(Duration::from_secs(1)).unwrap().surface, "s2");
+
+    first.stop();
+    second.stop();
     service.join().unwrap();
 }
 
