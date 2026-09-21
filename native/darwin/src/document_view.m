@@ -8,6 +8,7 @@
 #import <CoreImage/CoreImage.h>
 #import <WebKit/WebKit.h>
 #import "document_view.h"
+#import "private/webkit.h"
 #import "webview_geometry.h"
 #import "webview_input.h"
 
@@ -27,6 +28,12 @@ static NSArray<NSString *> *observedKeys(void) {
 
 @class SPDocumentView;
 
+extern double sp_surface_scale(void *surface);
+
+static CGFloat documentSurfaceScale(NSView *surface) {
+    return sp_surface_scale(surface);
+}
+
 // 메시지 처리기. 사용자 콘텐츠 컨트롤러가 처리기를 보유하므로 뷰를 약하게 가리킨다.
 @interface SPDocumentScroll : NSObject <WKScriptMessageHandler>
 @property(assign) SPDocumentView *view;
@@ -35,12 +42,15 @@ static NSArray<NSString *> *observedKeys(void) {
 @interface SPDocumentView : WKWebView <WKNavigationDelegate, WKUIDelegate>
 @property sp_document_changed changed;
 @property void *context;
+@property sp_document_event event;
+@property void *eventContext;
+@property(retain) id eventMonitor;
 @property(retain) SPDocumentScroll *scroll;
 @property(copy) NSString *failure;
 // 진행 중인 주 프레임 이동. 요청하거나 시작한 때부터 끝나거나 실패할 때까지 읽는 중으로 보고한다.
 // 대체된 이전 이동이 취소되면 새 이동이 시작되기 전에 WKWebView.loading 이 NO 가 되기 때문이다.
 @property(retain) WKNavigation *navigation;
-@property(assign) WKWebView *webSurface;
+@property(assign) NSView *webSurface;
 @property NSPoint offset;
 @property NSEdgeInsets insets;
 @property BOOL wanted;
@@ -52,6 +62,8 @@ static NSArray<NSString *> *observedKeys(void) {
 - (BOOL)requestIfStarted:(WKNavigation *)navigation;
 - (void)applyInsets;
 - (void)surfaceScaleChanged;
+- (void)surfaceAppearanceChanged:(NSNotification *)notification;
+- (void)reportEvent:(const char *)json;
 @end
 
 @implementation SPDocumentScroll
@@ -73,7 +85,29 @@ static NSArray<NSString *> *observedKeys(void) {
     [_scroll release];
     [_failure release];
     [_navigation release];
+    [_eventMonitor release];
     [super dealloc];
+}
+
+- (void)reportEvent:(const char *)json {
+    if (!self.closed && self.event) self.event(self.eventContext, json);
+}
+
+- (void)installEventMonitor {
+    SPDocumentView *document = self;
+    self.eventMonitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskLeftMouseDown
+        handler:^NSEvent *(NSEvent *event) {
+            NSWindow *window = event.window;
+            NSView *content = window.contentView;
+            NSView *hit = content ? [content hitTest:[content convertPoint:event.locationInWindow fromView:nil]] : nil;
+            if (hit == document || [hit isDescendantOf:document]) [document reportEvent:"{\"type\":\"click\"}"];
+            return event;
+        }];
+}
+
+- (void)surfaceAppearanceChanged:(NSNotification *)notification {
+    NSAppearance *appearance = self.webSurface.effectiveAppearance;
+    if (appearance) self.appearance = appearance;
 }
 
 // 같은 실행 루프 차례의 여러 변경을 한 번의 보고로 묶는다.
@@ -108,6 +142,8 @@ static NSArray<NSString *> *observedKeys(void) {
 
 - (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context {
     if (object == self) [self report];
+    else if (object == self.webSurface && [keyPath isEqualToString:@"effectiveAppearance"])
+        [self surfaceAppearanceChanged:nil];
 }
 
 - (void)request:(WKNavigation *)navigation {
@@ -180,23 +216,26 @@ static BOOL webAddress(NSURL *url) {
     return nil;
 }
 
-// 여백을 표면 뷰의 좌표로 바꾼다. 표면 뷰의 한 단위는 CSS 픽셀에 pageZoom 을 곱한 값이다.
+// 여백을 표면 뷰의 AppKit point 좌표로 바꾼다. 표면 웹뷰와 문서 웹뷰는
+// CSS pixel과 point를 1:1로 유지하고 backing 배율은 WebKit raster에만 적용한다.
 - (void)applyInsets {
-    WKWebView *surface = self.webSurface;
+    NSView *surface = self.webSurface;
     if (!surface) return;
-    CGFloat zoom = surface.pageZoom;
     NSRect bounds = self.superview.bounds;
     NSEdgeInsets insets = self.insets;
-    CGFloat width = NSWidth(bounds) - (insets.left + insets.right) * zoom;
-    CGFloat height = NSHeight(bounds) - (insets.top + insets.bottom) * zoom;
-    CGFloat top = insets.top * zoom;
+    CGFloat width = NSWidth(bounds) - (insets.left + insets.right);
+    CGFloat height = NSHeight(bounds) - (insets.top + insets.bottom);
+    CGFloat top = insets.top;
     CGFloat y = surface.isFlipped ? top : NSHeight(bounds) - top - height;
-    self.frame = NSMakeRect(insets.left * zoom, y, MAX(width, 0), MAX(height, 0));
-    self.pageZoom = zoom;
+    self.frame = NSMakeRect(insets.left, y, MAX(width, 0), MAX(height, 0));
+    self.pageZoom = 1;
     self.hidden = !self.wanted || width < 1 || height < 1 || surface.isHiddenOrHasHiddenAncestor;
 }
 
 - (void)surfaceScaleChanged {
+    WKWebView *view = (WKWebView *)self;
+    view.pageZoom = 1;
+    [view _setOverrideDeviceScaleFactor:documentSurfaceScale(self.webSurface)];
     if (self.placed) [self applyInsets];
 }
 
@@ -234,7 +273,7 @@ static NSUUID *storeIdentifier(const char *name) {
 
 void *sp_document_create(void *surfaceHandle, const char *store, sp_document_changed changed, void *context) {
     NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
-    WKWebView *surface = (WKWebView *)surfaceHandle;
+    NSView *surface = (NSView *)surfaceHandle;
     if (!surface || !store || !changed || !surface.window) return NULL;
     WKWebViewConfiguration *configuration = [[[WKWebViewConfiguration alloc] init] autorelease];
     configuration.websiteDataStore = [WKWebsiteDataStore dataStoreForIdentifier:storeIdentifier(store)];
@@ -253,21 +292,33 @@ void *sp_document_create(void *surfaceHandle, const char *store, sp_document_cha
     view.navigationDelegate = view;
     view.UIDelegate = view;
     view.webSurface = surface;
+    view.appearance = surface.effectiveAppearance;
     view.hidden = YES;
     if (!webviewInputRegister(view) || !webviewIgnorePageFocus(view)) {
         [view release];
         return NULL;
     }
-    NSView *nativePlane = (NSView *)webviewSurfaceNativePlane(surface);
+    NSView *nativePlane = (NSView *)sp_surface_native_plane(surface);
     if (!nativePlane) {
         webviewInputUnregister(view);
         [view release];
         return NULL;
     }
     [nativePlane addSubview:view];
-    webviewMatchSurface(view, surface);
+    [view installEventMonitor];
+    [surface addObserver:view forKeyPath:@"effectiveAppearance" options:0 context:NULL];
+    view.pageZoom = 1;
+    [view _setOverrideDeviceScaleFactor:sp_surface_scale(surface)];
     for (NSString *key in observedKeys()) [view addObserver:view forKeyPath:key options:0 context:NULL];
     return view; // sp_document_close 까지 호출자가 이 참조를 소유한다.
+}
+
+void sp_document_set_event(void *handle, sp_document_event event, void *context) {
+    NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
+    SPDocumentView *view = (SPDocumentView *)handle;
+    if (!view || view.closed) return;
+    view.event = event;
+    view.eventContext = context;
 }
 
 bool sp_document_load(void *handle, const char *address) {
@@ -332,6 +383,13 @@ void sp_document_close(void *handle) {
     NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
     SPDocumentView *view = (SPDocumentView *)handle;
     view.closed = YES;
+    if (view.eventMonitor) {
+        [NSEvent removeMonitor:view.eventMonitor];
+        view.eventMonitor = nil;
+    }
+    [view.webSurface removeObserver:view forKeyPath:@"effectiveAppearance"];
+    view.event = NULL;
+    view.eventContext = NULL;
     for (NSString *key in observedKeys()) [view removeObserver:view forKeyPath:key];
     view.scroll.view = nil;
     [view.configuration.userContentController removeAllScriptMessageHandlers];

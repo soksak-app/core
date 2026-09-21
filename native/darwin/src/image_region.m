@@ -31,7 +31,8 @@
 @property size_t presentedWidth;
 @property size_t presentedHeight;
 @property double presentedScale;
-@property(assign) WKWebView *webSurface;  // 영역이 놓인 표면 웹뷰. 우리가 소유하지 않음.
+@property(copy) NSString *presentationError;
+@property(assign) NSView *webSurface;  // 논리 표면 뷰. 우리가 소유하지 않음.
 @property NSEdgeInsets insets;
 @property NSPoint caretPos;
 @property double caretWidth;
@@ -49,8 +50,39 @@
 - (void)applyInsetsInTransaction;
 - (void)applyInsetsNow;
 - (void)report:(const char *)json;
+- (void)reject:(NSString *)reason;
+- (NSString *)jsonRange:(NSRange)range;
 - (void)surfaceScaleChanged;
 @end
+
+// Logical-surface geometry is owned by the surface host. Weak imports keep
+// legacy WKWebView test surfaces usable while that owner is linked in.
+extern double sp_surface_scale(void *surface) __attribute__((weak_import));
+extern void *sp_surface_main_webview(void *surface) __attribute__((weak_import));
+extern void *sp_surface_native_plane(void *surface) __attribute__((weak_import));
+
+static WKWebView *surfaceWebView(NSView *surface) {
+    if (sp_surface_main_webview) return (WKWebView *)sp_surface_main_webview(surface);
+    if ([surface isKindOfClass:WKWebView.class]) return (WKWebView *)surface;
+    for (NSView *view = surface; view; view = view.superview) {
+        if ([view isKindOfClass:WKWebView.class]) return (WKWebView *)view;
+    }
+    return nil;
+}
+
+static double surfaceScale(NSView *surface) {
+    if (sp_surface_scale) {
+        double scale = sp_surface_scale(surface);
+        if (scale > 0) return scale;
+    }
+    WKWebView *webView = surfaceWebView(surface);
+    return webView.pageZoom > 0 ? webView.pageZoom : 1;
+}
+
+static NSView *surfaceNativePlane(NSView *surface) {
+    if (sp_surface_native_plane) return (NSView *)sp_surface_native_plane(surface);
+    return (NSView *)webviewSurfaceNativePlane(surface);
+}
 
 @implementation SPImageRegion
 
@@ -62,10 +94,9 @@
     self.imageLayer = [[[CALayer alloc] init] autorelease];
     [self.layer addSublayer:self.imageLayer];
     self.imageLayer.contentsScale = 1;
-    // 기하가 바뀌어 정확한 대체 래스터가 도착할 때까지 이전 불변 래스터가
-    // 네이티브 영역 전체를 덮어야 한다. 비율 채우기는 이전 화면을 자르며
-    // DOM 평면을 노출하지 않는다.
-    self.imageLayer.contentsGravity = kCAGravityResizeAspectFill;
+    // 래스터 픽셀은 늘리거나 줄이지 않는다. 새 기하와 일치하는 래스터가 준비된 뒤
+    // 바깥 표면 트랜잭션이 DOM과 함께 화면에 반영한다.
+    self.imageLayer.contentsGravity = kCAGravityTopLeft;
     self.imageLayer.magnificationFilter = kCAFilterNearest;
     self.markedText = @"";
     self.selectedRange = NSMakeRange(NSNotFound, 0);
@@ -79,6 +110,7 @@
     self.imageLayer.contents = nil;
     if (_snapshot) CGImageRelease(_snapshot);
     [_imageLayer release];
+    [_presentationError release];
     [_accessibilityText release];
     [_markedText release];
     [super dealloc];
@@ -95,22 +127,27 @@
 - (void)applyInsetsInTransaction {
     NSView *clipView = self.superview;
     if (!clipView) return;
-    WKWebView *surface = self.webSurface;
+    NSView *surface = self.webSurface;
     if (!surface) return;
 
     NSView *nativePlane = clipView.superview;
     if (!nativePlane) return;
+    NSSize planeFrameSize = nativePlane.frame.size;
+    if (planeFrameSize.width > 0 && planeFrameSize.height > 0) {
+        nativePlane.bounds = NSMakeRect(0, 0, planeFrameSize.width, planeFrameSize.height);
+    }
     NSRect surfaceBounds = nativePlane.bounds;
-    CGFloat zoom = surface.pageZoom;
     NSEdgeInsets insets = self.insets;
 
-    // 클립 뷰 크기: 표면 프레임에서 인셋 뺀 것 (CSS 픽셀 단위 인셋에 zoom 적용)
-    CGFloat width = NSWidth(surfaceBounds) - (insets.left + insets.right) * zoom;
-    CGFloat height = NSHeight(surfaceBounds) - (insets.top + insets.bottom) * zoom;
+    // Surface geometry is expressed in AppKit points. Backing scale belongs
+    // to the image layer and raster dimensions, not to region frame or inset
+    // coordinates.
+    CGFloat width = NSWidth(surfaceBounds) - (insets.left + insets.right);
+    CGFloat height = NSHeight(surfaceBounds) - (insets.top + insets.bottom);
 
     // 클립 뷰 위치: 표면의 superview 좌표계에서 계산
-    CGFloat clipX = NSMinX(surfaceBounds) + insets.left * zoom;
-    CGFloat clipTop = insets.top * zoom;
+    CGFloat clipX = NSMinX(surfaceBounds) + insets.left;
+    CGFloat clipTop = insets.top;
     CGFloat clipY = nativePlane.isFlipped ? NSMinY(surfaceBounds) + clipTop : NSMaxY(surfaceBounds) - clipTop - height;
 
     NSRect clipFrame = NSMakeRect(clipX, clipY, MAX(width, 0), MAX(height, 0));
@@ -135,9 +172,7 @@
     [CATransaction commit];
 }
 
-// Keep the last complete image geometry visible while a new raster is being
-// produced. The requested insets are measured by sp_region_raster, and this
-// geometry is committed only after sp_region_present validates that raster.
+// 준비 기하를 적용한다. 이 변경의 표시는 바깥 표면 트랜잭션이 소유한다.
 - (void)applyInsets {
     [self applyInsetsNow];
 }
@@ -191,6 +226,13 @@
 - (void)report:(const char *)json {
     if (self.closed || !self.event) return;
     self.event(self.context, json);
+}
+
+- (void)reject:(NSString *)reason {
+    self.presentationError = reason;
+    NSData *data = [NSJSONSerialization dataWithJSONObject:@{ @"type": @"error", @"reason": reason } options:0 error:NULL];
+    NSString *json = [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease];
+    [self report:json.UTF8String];
 }
 
 - (BOOL)becomeFirstResponder {
@@ -330,36 +372,51 @@
 }
 
 - (void)doCommandBySelector:(SEL)selector {
-    // 아무것도 하지 않는다. keyDown: 에서 특수 키를 이미 처리했으므로
-    // 이 경로로 오는 키가 없다.
+    // NSTextInputClient commands are part of the input stream. Dropping them
+    // loses IME actions such as cancel, delete, and accept.
+    NSString *name = NSStringFromSelector(selector);
+    NSString *json = [NSString stringWithFormat:@"{\"type\":\"command\",\"selector\":\"%@\"}",
+        [self jsonEscapedString:name]];
+    [self report:json.UTF8String];
 }
 
 - (void)insertText:(id)string replacementRange:(NSRange)range {
-    if (![string isKindOfClass:NSString.class]) return;
-    NSString *text = (NSString *)string;
+    NSString *text = [string isKindOfClass:NSAttributedString.class]
+        ? [(NSAttributedString *)string string]
+        : ([string isKindOfClass:NSString.class] ? (NSString *)string : nil);
+    if (!text) return;
 
     self.markedText = @"";
     self.markedRange = NSMakeRange(NSNotFound, 0);
+    self.selectedRange = NSMakeRange(NSNotFound, 0);
 
-    NSString *json = [NSString stringWithFormat:@"{\"type\":\"insert\",\"text\":\"%@\"}",
-        [self jsonEscapedString:text]];
+    NSString *json = [NSString stringWithFormat:@"{\"type\":\"insert\",\"text\":\"%@\",\"replacementRange\":%@,\"attributed\":%@}",
+        [self jsonEscapedString:text], [self jsonRange:range],
+        [string isKindOfClass:NSAttributedString.class] ? @"true" : @"false"];
     [self report:json.UTF8String];
 }
 
 - (void)setMarkedText:(id)string selectedRange:(NSRange)selectedRange replacementRange:(NSRange)replacementRange {
-    if (![string isKindOfClass:NSString.class]) return;
-    NSString *text = (NSString *)string;
+    NSString *text = [string isKindOfClass:NSAttributedString.class]
+        ? [(NSAttributedString *)string string]
+        : ([string isKindOfClass:NSString.class] ? (NSString *)string : nil);
+    if (!text) return;
 
     if (text.length == 0) {
         self.markedText = @"";
         self.markedRange = NSMakeRange(NSNotFound, 0);
-        [self report:"{\"type\":\"compose\",\"text\":\"\"}"];
+        self.selectedRange = selectedRange;
+        NSString *json = [NSString stringWithFormat:@"{\"type\":\"compose\",\"text\":\"\",\"selectedRange\":%@,\"replacementRange\":%@,\"attributed\":%@}",
+            [self jsonRange:selectedRange], [self jsonRange:replacementRange],
+            [string isKindOfClass:NSAttributedString.class] ? @"true" : @"false"];
+        [self report:json.UTF8String];
     } else {
         self.markedText = text;
         self.markedRange = NSMakeRange(0, text.length);
         self.selectedRange = selectedRange;
-        NSString *json = [NSString stringWithFormat:@"{\"type\":\"compose\",\"text\":\"%@\",\"caret\":%lu}",
-            [self jsonEscapedString:text], (unsigned long)selectedRange.location];
+        NSString *json = [NSString stringWithFormat:@"{\"type\":\"compose\",\"text\":\"%@\",\"selectedRange\":%@,\"replacementRange\":%@,\"attributed\":%@}",
+            [self jsonEscapedString:text], [self jsonRange:selectedRange], [self jsonRange:replacementRange],
+            [string isKindOfClass:NSAttributedString.class] ? @"true" : @"false"];
         [self report:json.UTF8String];
     }
 }
@@ -377,8 +434,16 @@
 }
 
 - (NSAttributedString *)attributedSubstringForProposedRange:(NSRange)range actualRange:(NSRangePointer)actualRange {
-    if (actualRange) *actualRange = NSMakeRange(NSNotFound, 0);
-    return nil;
+    NSRange available = self.markedRange;
+    if (available.location == NSNotFound || NSMaxRange(available) < NSMaxRange(range)) {
+        if (actualRange) *actualRange = NSMakeRange(NSNotFound, 0);
+        return nil;
+    }
+    NSRange intersection = NSIntersectionRange(available, range);
+    if (actualRange) *actualRange = intersection;
+    NSString *text = [self.markedText substringWithRange:NSMakeRange(
+        intersection.location - available.location, intersection.length)];
+    return [[[NSAttributedString alloc] initWithString:text] autorelease];
 }
 
 - (NSRect)firstRectForCharacterRange:(NSRange)range actualRange:(NSRangePointer)actualRange {
@@ -387,9 +452,8 @@
     NSWindow *window = self.window;
     if (!window) return NSZeroRect;
 
-    CGFloat zoom = self.webSurface.pageZoom > 0 ? self.webSurface.pageZoom : 1;
-    NSRect caretRect = NSMakeRect(self.caretPos.x * zoom, self.caretPos.y * zoom,
-        self.caretWidth * zoom, self.caretHeight * zoom);
+    NSRect caretRect = NSMakeRect(self.caretPos.x, self.caretPos.y,
+        self.caretWidth, self.caretHeight);
     NSRect converted = [self convertRect:caretRect toView:window.contentView];
     return [window convertRectToScreen:converted];
 }
@@ -400,6 +464,12 @@
 
 - (NSArray<NSString *> *)validAttributesForMarkedText {
     return @[];
+}
+
+- (NSString *)jsonRange:(NSRange)range {
+    if (range.location == NSNotFound) return @"null";
+    return [NSString stringWithFormat:@"{\"location\":%lu,\"length\":%lu}",
+        (unsigned long)range.location, (unsigned long)range.length];
 }
 
 - (NSString *)jsonEscapedString:(NSString *)string {
@@ -459,7 +529,7 @@ static CGImageRef copySurfaceImage(IOSurfaceRef surface) {
 
 void *sp_region_create(void *surfaceHandle, const char *name, sp_region_event event, void *context) {
     NSCAssert(NSThread.isMainThread, @"image regions belong to the main thread");
-    WKWebView *surface = (WKWebView *)surfaceHandle;
+    NSView *surface = (NSView *)surfaceHandle;
     if (!surface || !name || !event || !surface.window) return NULL;
 
     SPImageRegion *view = [[SPImageRegion alloc] initWithFrame:NSZeroRect];
@@ -468,7 +538,7 @@ void *sp_region_create(void *surfaceHandle, const char *name, sp_region_event ev
     view.webSurface = surface;
     view.hidden = YES;
 
-    NSView *nativePlane = (NSView *)webviewSurfaceNativePlane(surface);
+    NSView *nativePlane = surfaceNativePlane(surface);
     if (!nativePlane) { [view release]; return NULL; }
     NSClipView *clipView = [[SPImageClipView alloc] initWithFrame:NSZeroRect];
     clipView.drawsBackground = NO;
@@ -503,25 +573,8 @@ bool sp_region_raster(void *handle, double *out) {
     NSCAssert(NSThread.isMainThread, @"image regions belong to the main thread");
     SPImageRegion *view = (SPImageRegion *)handle;
     if (!view || !out || !view.placed) return false;
-    NSClipView *clipView = (NSClipView *)view.superview;
-    NSRect oldClipFrame = clipView.frame;
-    NSRect oldFrame = view.frame;
-    NSRect oldLayerFrame = view.imageLayer.frame;
-    CGFloat oldContentsScale = view.imageLayer.contentsScale;
-    BOOL oldHidden = view.hidden;
-    if (view.snapshot) [view applyInsetsNow];
     NSRect backing = [view convertRectToBacking:view.bounds];
-    if (view.snapshot) {
-        [CATransaction begin];
-        [CATransaction setDisableActions:YES];
-        clipView.frame = oldClipFrame;
-        view.frame = oldFrame;
-        view.imageLayer.frame = oldLayerFrame;
-        view.imageLayer.contentsScale = oldContentsScale;
-        view.hidden = oldHidden;
-        [CATransaction commit];
-    }
-    CGFloat scale = view.webSurface.pageZoom;
+    CGFloat scale = surfaceScale(view.webSurface);
     if (NSWidth(backing) < 1 || NSHeight(backing) < 1 || scale <= 0) return false;
     out[0] = round(NSWidth(backing));
     out[1] = round(NSHeight(backing));
@@ -536,7 +589,7 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
 
     IOSurfaceRef surface = lookupSurface(token_id);
     if (!surface) {
-        [view report:"{\"type\":\"error\",\"reason\":\"notFound\"}"];
+        [view reject:@"notFound"];
         return false;
     }
 
@@ -552,7 +605,7 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
     }
 
     if (!nonceMatches) {
-        [view report:"{\"type\":\"error\",\"reason\":\"forbidden\"}"];
+        [view reject:@"forbidden"];
         CFRelease(surface);
         return false;
     }
@@ -560,7 +613,7 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
     size_t surfaceWidth = IOSurfaceGetWidth(surface);
     size_t surfaceHeight = IOSurfaceGetHeight(surface);
     if ((int)width != (int)surfaceWidth || (int)height != (int)surfaceHeight) {
-        [view report:"{\"type\":\"error\",\"reason\":\"size\"}"];
+        [view reject:@"size"];
         CFRelease(surface);
         return false;
     }
@@ -568,14 +621,14 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
     if (IOSurfaceGetBytesPerElement(surface) != 4 ||
         IOSurfaceGetPixelFormat(surface) != kCVPixelFormatType_32BGRA ||
         IOSurfaceGetBytesPerRow(surface) < surfaceWidth * 4) {
-        [view report:"{\"type\":\"error\",\"reason\":\"unsupported\"}"];
+        [view reject:@"unsupported"];
         CFRelease(surface);
         return false;
     }
 
     // scale 은 양수여야 한다.
     if (scale <= 0) {
-        [view report:"{\"type\":\"error\",\"reason\":\"scale\"}"];
+        [view reject:@"scale"];
         CFRelease(surface);
         return false;
     }
@@ -583,20 +636,20 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
     double expected[3] = {0};
     if (!sp_region_raster(view, expected) || (int)width != (int)expected[0] ||
         (int)height != (int)expected[1]) {
-        [view report:"{\"type\":\"error\",\"reason\":\"size\"}"];
+        [view reject:@"size"];
         CFRelease(surface);
         return false;
     }
 
     if (fabs(scale - expected[2]) > 0.000001) {
-        [view report:"{\"type\":\"error\",\"reason\":\"scale\"}"];
+        [view reject:@"scale"];
         CFRelease(surface);
         return false;
     }
 
     // 그림은 창의 배율로 그려져야 한다. 다르면 글자 크기가 틀어지므로 표시하지 않는다.
     if (!view.window || fabs(scale - view.window.backingScaleFactor) > 0.001) {
-        [view report:"{\"type\":\"error\",\"reason\":\"scale\"}"];
+        [view reject:@"scale"];
         CFRelease(surface);
         return false;
     }
@@ -604,11 +657,10 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
     CGImageRef snapshot = copySurfaceImage(surface);
     CFRelease(surface);
     if (!snapshot) {
-        [view report:"{\"type\":\"error\",\"reason\":\"presentFailed\"}"];
+        [view reject:@"presentFailed"];
         return false;
     }
 
-    // The new raster and its geometry become visible in one native commit.
     // 모든 검증과 복사가 끝난 뒤에만 이전 스냅샷을 교체한다. 레이어는 공급자가 다시 쓸
     // IOSurface를 직접 가리키지 않는다.
     CGImageRef previous = view.snapshot;
@@ -622,9 +674,18 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
     view.presentedWidth = surfaceWidth;
     view.presentedHeight = surfaceHeight;
     view.presentedScale = scale;
+    view.presentationError = nil;
     if (previous) CGImageRelease(previous);
 
     return true;
+}
+
+char *sp_region_last_error(void *handle) {
+    NSCAssert(NSThread.isMainThread, @"image regions belong to the main thread");
+    SPImageRegion *view = (SPImageRegion *)handle;
+    if (!view.presentationError) return NULL;
+    const char *text = view.presentationError.UTF8String;
+    return strdup(text);
 }
 
 void sp_region_focus(void *handle) {
@@ -726,7 +787,8 @@ const char *sp_region_facts(void *handle) {
               presentedWidth, presentedHeight, presentedScale];
     }
 
-    [json appendString:@"\"error\":null"];
+    [json appendFormat:@"\"error\":%@", view.presentationError
+        ? [NSString stringWithFormat:@"\"%@\"", view.presentationError] : @"null"];
     [json appendString:@"}"];
 
     // 정적 버퍼에 결과를 반환 (호출자가 사용 후 해제해야 함)

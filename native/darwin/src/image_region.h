@@ -23,6 +23,9 @@ bool sp_region_raster(void *region, double *out);
 // 배율이다 (contentsScale 로 사용). 성공하면 true, 찾지 못했거나 크기가 맞지 않으면 false 를 반환한다.
 bool sp_region_present(void *region, unsigned int token_id, const unsigned char *nonce, double width, double height, double scale);
 
+// 마지막 표시 거절 사유를 malloc() 문자열로 반환한다. 오류가 없으면 NULL 이다.
+char *sp_region_last_error(void *region);
+
 // 첫 응답자로 만들고 포커스 이벤트를 보낸다. 이전 응답자에서 벗어나면 포커스 해제 이벤트도
 // 보낸다.
 void sp_region_focus(void *region);

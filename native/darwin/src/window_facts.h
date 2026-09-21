@@ -4,14 +4,22 @@
 // 모든 함수는 메인 스레드에서 호출한다. 화면 좌표는 주 디스플레이 왼쪽 위 기준이고 y 가
 // 아래로 증가하는 포인트 값이며, 창 좌표는 콘텐츠 영역 왼쪽 위 기준이다.
 
-// {frame, content, scale, key, active, children, controls, webviews}
+// 창의 앱 DOM 웹뷰를 명시적으로 등록한다. 그리기 순서로 메인 뷰를 추측하지 않는다.
+// 웹뷰가 창에 부착되지 않았거나 다른 메인이 이미 등록되었으면 false다.
+bool sp_window_set_main_webview(void *window, void *main);
+
+// 등록된 앱 DOM 웹뷰만 반환한다. 등록되지 않은 창은 NULL 이다.
+void *sp_window_main_webview(void *window);
+
+// {frame, content, scale, key, active, children, controls, webviews, nativeSurfaces, appDomWebviews, documentWebviews}
 //   frame     창 프레임 {x, y, width, height}, 화면 좌표
 //   content   콘텐츠 영역 {width, height}
 //   controls  창 단추 [{x, y, width, height, hidden}], 창 좌표
-//   webviews  창 안의 WKWebView 를 그리기 순서로 나열한다(0 이 메인 페이지)
+//   webviews  창 안의 WKWebView 를 그리기 순서로 나열한다(메인 위치를 가정하지 않는다)
 //             [{view, x, y, width, height, hidden, draws, alpha}], 창 좌표.
 //             view 는 뷰 주소, draws 는 자기 배경을 칠하는지, alpha 는 페이지 아래 배경색의 알파다
-// 창이 없으면 NULL 을 반환한다.
+//   nativeSurfaces 논리 표면 컨테이너 [{view, x, y, width, height, hidden}], 창 좌표.
+// 창이나 등록된 메인 웹뷰가 없으면 NULL 을 반환한다.
 char *sp_window_facts(void *window);
 
 // 창 좌표 (x, y) 의 히트 테스트 결과 {view, main, identifier}. view 는 점을 포함한 WKWebView 의

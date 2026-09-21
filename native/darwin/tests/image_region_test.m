@@ -70,6 +70,8 @@ int main(void) { @autoreleasepool {
     WKWebView *surface = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 500, 400)] autorelease];
     [window.contentView addSubview:surface];
     [window orderBack:nil];
+    check(sp_surface_create(main) != NULL,
+        @"the main webview creates the composition before a surface webview is attached");
     webviewAttachSurface(surface, main);
     webviewSetFrame(surface, 0, 0, 500, 400);
     NSView *nativePlane = (NSView *)webviewSurfaceNativePlane(surface);
@@ -98,6 +100,8 @@ int main(void) { @autoreleasepool {
         check(imageLayer != NULL, @"TEST 1: image layer found");
 
         if (imageLayer) {
+            check([imageLayer.contentsGravity isEqualToString:kCAGravityTopLeft],
+                @"TEST 1: terminal pixels are never scaled to fill a pending geometry");
             CGImageRef snapshot = (CGImageRef)imageLayer.contents;
             check(snapshot != NULL && CGImageGetWidth(snapshot) == (size_t)raster1[0]
                 && CGImageGetHeight(snapshot) == (size_t)raster1[1],
@@ -118,9 +122,6 @@ int main(void) { @autoreleasepool {
             CGFloat perUnit = NSWidth([regionView1 convertRectToBacking:regionView1.bounds]) / NSWidth(regionView1.bounds);
             check(imageLayer.contentsScale == perUnit,
                 [NSString stringWithFormat:@"TEST 1: contentsScale is backing pixels per unit %g (got %g)", perUnit, imageLayer.contentsScale]);
-
-            check([imageLayer.contentsGravity isEqualToString:kCAGravityResizeAspectFill],
-                [NSString stringWithFormat:@"TEST 1: contentsGravity is ResizeAspectFill (got %@)", imageLayer.contentsGravity]);
 
             check([imageLayer.magnificationFilter isEqualToString:kCAFilterNearest],
                 [NSString stringWithFormat:@"TEST 1: magnificationFilter is Nearest (got %@)", imageLayer.magnificationFilter]);
@@ -230,7 +231,7 @@ int main(void) { @autoreleasepool {
         sp_region_close(region5);
     }
 
-    // TEST 5A: 표시된 스냅샷도 새 배치 프레임을 즉시 덮어야 한다.
+    // TEST 5A: 준비 프레임은 새 래스터의 정확한 크기를 사용한다.
     {
         [collectedEvents removeAllObjects];
 
@@ -243,20 +244,34 @@ int main(void) { @autoreleasepool {
         check(sp_region_present(region5a, IOSurfaceGetID(testSurface5a), nonce5a,
             raster5a[0], raster5a[1], raster5a[2]), @"TEST 5A: initial snapshot is presented");
 
-        // 이전 스냅샷은 계속 보여도 네이티브 프레임은 새 여백을 즉시 따라야
-        // 호스트 프레임 이동 중 흰색 웹뷰가 노출되지 않는다.
+        // 실제 표시 중에는 SurfaceHost의 열린 CATransaction이 이 준비 기하를
+        // 가리며, 호스트가 일치하는 래스터와 함께 한 번에 커밋한다.
         sp_region_place(region5a, 100, 40, 20, 30, true);
         double frame5a[6] = {0};
         sp_region_frame(region5a, frame5a);
         check(frame5a[0] == 100 && frame5a[1] == 40 && frame5a[2] == 380 && frame5a[3] == 330,
-            [NSString stringWithFormat:@"TEST 5A: presented region follows new insets (%.0f, %.0f, %.0f, %.0f)",
+            [NSString stringWithFormat:@"TEST 5A: prepared frame follows new insets (%.0f, %.0f, %.0f, %.0f)",
+                frame5a[0], frame5a[1], frame5a[2], frame5a[3]]);
+
+        double raster5aNew[3] = {0};
+        check(sp_region_raster(region5a, raster5aNew), @"TEST 5A: new raster dimensions are measured");
+        unsigned char nonce5aNew[16];
+        IOSurfaceRef testSurface5aNew = createColoredGlobalSurface(
+            (size_t)raster5aNew[0], (size_t)raster5aNew[1], nonce5aNew);
+        check(sp_region_present(region5a, IOSurfaceGetID(testSurface5aNew), nonce5aNew,
+            raster5aNew[0], raster5aNew[1], raster5aNew[2]),
+            @"TEST 5A: matching raster commits new frame");
+        sp_region_frame(region5a, frame5a);
+        check(frame5a[0] == 100 && frame5a[1] == 40 && frame5a[2] == 380 && frame5a[3] == 330,
+            [NSString stringWithFormat:@"TEST 5A: matching raster commits new insets (%.0f, %.0f, %.0f, %.0f)",
                 frame5a[0], frame5a[1], frame5a[2], frame5a[3]]);
 
         sp_region_close(region5a);
         CFRelease(testSurface5a);
+        CFRelease(testSurface5aNew);
     }
 
-    // TEST 6: 포인터 통과 - hitTest이 nil 반환
+    // TEST 6: pointer input remains owned by the DOM anchor.
     {
         [collectedEvents removeAllObjects];
 
@@ -266,7 +281,7 @@ int main(void) { @autoreleasepool {
         NSView *regionView = (NSView *)region6;
         NSPoint testPoint = NSMakePoint(20, 20);  // 영역 내의 점
         NSView *hitView = [regionView hitTest:testPoint];
-        check(hitView == nil, @"TEST 6: hitTest returns nil for point inside region");
+        check(hitView == nil, @"TEST 6: hitTest returns nil so the DOM receives pointer input");
 
         sp_region_close(region6);
     }
@@ -298,7 +313,9 @@ int main(void) { @autoreleasepool {
         sp_region_close(region7);
     }
 
-    // TEST 8: IME 순서 및 markedText 상태
+    // TEST 8: synthetic NSTextInputClient IME ordering and markedText state.
+    // This does not exercise the active Korean input source. replacementRange
+    // is a range in the existing document, not a range in the new preedit.
     {
         [collectedEvents removeAllObjects];
 
@@ -325,13 +342,22 @@ int main(void) { @autoreleasepool {
             check(hasCompose1 && hasCompose2 && hasInsert, @"TEST 8: events are compose, compose, insert");
         }
 
-        // doCommandBySelector 호출 (이벤트 증가 없음)
-        int eventCountBefore = [collectedEvents count];
+        // doCommandBySelector is an observable input command, not a silently
+        // ignored IME path.
         [(id<NSTextInputClient>)regionView doCommandBySelector:@selector(deleteForward:)];
-        int eventCountAfter = [collectedEvents count];
-        check(eventCountBefore == eventCountAfter,
-            [NSString stringWithFormat:@"TEST 8: doCommandBySelector doesn't create event (%d -> %d)",
-                eventCountBefore, eventCountAfter]);
+        check([collectedEvents count] >= 4 &&
+            [[collectedEvents lastObject] rangeOfString:@"\"type\":\"command\""].location != NSNotFound &&
+            [[collectedEvents lastObject] rangeOfString:@"deleteForward:"].location != NSNotFound,
+            @"TEST 8: doCommandBySelector reports its selector");
+
+        NSAttributedString *attributed = [[[NSAttributedString alloc] initWithString:@"한글"] autorelease];
+        [(id<NSTextInputClient>)regionView setMarkedText:attributed selectedRange:NSMakeRange(1, 0)
+            replacementRange:NSMakeRange(3, 2)];
+        NSString *attributedEvent = [collectedEvents lastObject];
+        check([attributedEvent rangeOfString:@"\"attributed\":true"].location != NSNotFound &&
+            [attributedEvent rangeOfString:@"\"location\":1"].location != NSNotFound &&
+            [attributedEvent rangeOfString:@"\"location\":3"].location != NSNotFound,
+            @"TEST 8: attributed composition preserves selected and replacement ranges");
 
         sp_region_close(region8);
     }
@@ -694,12 +720,13 @@ int main(void) { @autoreleasepool {
         check(surfaceSuperSuperview == nativePlane && nativePlane.superview == surface.superview,
             @"TEST 18: clipView is inside the surface host native plane");
 
-        // 네이티브 평면은 DOM 웹뷰 아래에 있고 둘 다 같은 SurfaceHost 안에 있다.
+        // SurfaceHost 내부에서는 DOM 웹뷰가 native plane 위에 있고,
+        // 바깥 compositor에서 SurfaceHost 전체가 앱 DOM backing 위에 있다.
         NSArray *subviews = surface.superview.subviews;
         NSUInteger surfaceIndex = [subviews indexOfObject:surface];
         NSUInteger nativeIndex = [subviews indexOfObject:nativePlane];
         check(nativeIndex != NSNotFound && surfaceIndex != NSNotFound && nativeIndex < surfaceIndex,
-            [NSString stringWithFormat:@"TEST 18: native plane is below DOM plane (native:%lu, DOM:%lu)",
+            [NSString stringWithFormat:@"TEST 18: native plane is below DOM plane inside SurfaceHost (native:%lu, DOM:%lu)",
                 (unsigned long)nativeIndex, (unsigned long)surfaceIndex]);
 
         sp_region_close(region18);
@@ -723,24 +750,24 @@ int main(void) { @autoreleasepool {
         NSView *regionView = (NSView *)region19;
         NSView *clipView = regionView.superview;
 
-        // SurfaceHost의 로컬 단위는 장치 픽셀이므로 100x80 CSS px은 200x160 단위다.
+        // SurfaceHost의 로컬 단위는 AppKit point이고 backing scale은 레이어에만
+        // 적용한다. 100x80 point 영역은 raster에서 200x160 device pixel이다.
         double clipWidth = NSWidth(clipView.bounds);
         double clipHeight = NSHeight(clipView.bounds);
-        check(clipWidth == 200 && clipHeight == 160,
-            [NSString stringWithFormat:@"TEST 19: clipView bounds are device-pixel units (expected 200x160, got %.0f x%.0f)",
+        check(clipWidth == 100 && clipHeight == 80,
+            [NSString stringWithFormat:@"TEST 19: clipView bounds are point units (expected 100x80, got %.0f x%.0f)",
                 clipWidth, clipHeight]);
 
         // imageLayer의 bounds도 마찬가지
         CALayer *imageLayer = [regionView.layer.sublayers firstObject];
         double layerWidth = NSWidth(imageLayer.bounds);
         double layerHeight = NSHeight(imageLayer.bounds);
-        check(layerWidth == 200 && layerHeight == 160,
-            [NSString stringWithFormat:@"TEST 19: imageLayer bounds are device-pixel units (expected 200x160, got %.0f x%.0f)",
+        check(layerWidth == 100 && layerHeight == 80,
+            [NSString stringWithFormat:@"TEST 19: imageLayer bounds are point units (expected 100x80, got %.0f x%.0f)",
                 layerWidth, layerHeight]);
 
-        // 로컬 한 단위가 장치 픽셀 하나이므로 contentsScale은 1이다.
-        check(imageLayer.contentsScale == 1.0,
-            [NSString stringWithFormat:@"TEST 19: contentsScale is 1 (got %g)", imageLayer.contentsScale]);
+        check(imageLayer.contentsScale == 2.0,
+            [NSString stringWithFormat:@"TEST 19: contentsScale is 2 (got %g)", imageLayer.contentsScale]);
 
         sp_region_close(region19);
         CFRelease(testSurface19);
@@ -823,8 +850,37 @@ int main(void) { @autoreleasepool {
         BOOL reported = NO;
         for (NSString *event in collectedEvents) if ([event containsString:@"\"reason\":\"scale\""]) reported = YES;
         check(!presented && reported, @"TEST 22: an image drawn at another scale is refused with reason scale");
+        const char *failedFacts = sp_region_facts(region22);
+        check(failedFacts && strstr(failedFacts, "\"error\":\"scale\""),
+            @"TEST 22: host facts retain the actual presentation error");
+        free((void *)failedFacts);
+        check(sp_region_present(region22, IOSurfaceGetID(testSurface22), nonce22,
+            raster22[0], raster22[1], raster22[2]), @"TEST 22: a valid frame presents after an error");
+        const char *recoveredFacts = sp_region_facts(region22);
+        check(recoveredFacts && strstr(recoveredFacts, "\"error\":null"),
+            @"TEST 22: only successful presentation clears the error");
+        free((void *)recoveredFacts);
         sp_region_close(region22);
         CFRelease(testSurface22);
+    }
+
+    // 바깥 표면을 바꾼 직후, 페이지 배치 통보 없이 영역과 래스터가 같은 크기여야 한다.
+    {
+        void *region = sp_region_create(surface, "fractional-resize", testEvent, NULL);
+        sp_region_place(region, 0, 0, 0, 0, true);
+        const double widths[] = { 597.5, 96, 751.5, 598, 96.5, 800 };
+        for (size_t n = 0; n < sizeof(widths)/sizeof(widths[0]); n++) {
+            webviewSetFrame(surface, 7.5, 33, widths[n], 286.5);
+            double outer[4] = {0}, inner[6] = {0}, raster[3] = {0};
+            webviewGetFrame(surface, outer);
+            sp_region_frame(region, inner);
+            check(inner[2] == outer[2] && inner[3] == outer[3],
+                @"fractional resize: native region follows the prepared outer surface synchronously");
+            check(sp_region_raster(region, raster) && raster[0] == round(outer[2]*raster[2])
+                && raster[1] == round(outer[3]*raster[2]),
+                @"fractional resize: raster dimensions match the actual native frame");
+        }
+        sp_region_close(region);
     }
 
     [window close];

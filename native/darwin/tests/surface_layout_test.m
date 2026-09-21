@@ -1,5 +1,5 @@
-// 표시 대기가 메인 문서와 같은 출처의 보이는 문서만 기다리고, 외부 문서와 숨긴 문서는 기다리지
-// 않는지 검사한다. 각 웹뷰의 웹 프로세스를 스크립트로 붙잡은 동안 대기가 그 스크립트보다 먼저 끝나는지 본다.
+// 표시 대기가 단일 앱 DOM만 기다리는지 검사한다. 다른 웹뷰는 출처와 표시 여부에 관계없이
+// 독립적으로 렌더링하며, 바쁜 문서가 앱 DOM의 네이티브 배치를 막지 않아야 한다.
 // 애플리케이션을 활성화하지 않는다.
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
@@ -152,7 +152,7 @@ int main(void) { @autoreleasepool {
     [configuration.userContentController addScriptMessageHandler:signal name:@"busy"];
     // 웹뷰마다 웹 프로세스를 따로 쓰도록 출처가 같은 문서도 별도 구성으로 만든다.
     WKWebView *main = page(window, configuration, NSMakeRect(0, 0, 200, 300), @"sptest://app/main");
-    WKWebView *application = page(window, [[configuration copy] autorelease], NSMakeRect(200, 0, 200, 300), @"sptest://app/surface");
+    WKWebView *sameOrigin = page(window, [[configuration copy] autorelease], NSMakeRect(200, 0, 200, 300), @"sptest://app/document");
     WKWebView *external = page(window, [[configuration copy] autorelease], NSMakeRect(400, 0, 200, 300), @"sptest://external/page");
     [window orderBack:nil];
     __block BOOL painted = NO;
@@ -161,13 +161,26 @@ int main(void) { @autoreleasepool {
 
     checkSettledWaitsForLayout(window, main);
 
+    // 열린 트랜잭션에서도 웹 프로세스의 새 배치 확인이 완료되어야 커밋 전에 기다릴 수 있다.
+    __block BOOL prepared = NO;
+    __block BOOL mainReady = NO;
+    surfaceLayoutBegin(window, 103, ^(int allowed) { prepared = allowed; });
+    check(prepared, @"a presentation preparation starts");
+    sameOrigin.frame = NSMakeRect(180, 0, 220, 300);
+    [main evaluateJavaScript:@"document.body.style.width='180px'" completionHandler:^(id value, NSError *error) {
+        check(error == nil, @"the main DOM changes during preparation");
+        surfaceLayoutAfterPresentation(main, ^{ mainReady = YES; });
+    }];
+    until(^BOOL { return mainReady; });
+    check(surfaceLayoutCommit(window, 103), @"the app DOM confirms its new layout before native commit");
+
     SPWait externalWait = waitWhileBusy(main, external, signal);
     check(externalWait.beforeRelease,
         [NSString stringWithFormat:@"a busy external document does not delay the presentation wait (%.3fs)", externalWait.took]);
 
-    SPWait visibleWait = waitWhileBusy(main, application, signal);
-    check(!visibleWait.beforeRelease,
-        [NSString stringWithFormat:@"the wait includes a visible document of the main origin (%.3fs)", visibleWait.took]);
+    SPWait visibleWait = waitWhileBusy(main, sameOrigin, signal);
+    check(visibleWait.beforeRelease,
+        [NSString stringWithFormat:@"a same-origin document does not own the app DOM presentation wait (%.3fs)", visibleWait.took]);
     // 표시 시각은 요청보다 늦고, 대기를 마친 시점에서 한 번의 화면 갱신 안이다.
     // 표시 시각은 디스플레이 링크 틱의 목표 시각이다. 메인 스레드가 늦으면 틱이 목표 시각을 지나서
     // 도착하므로 표시 시각이 완료 시각보다 앞설 수 있다. 완료보다 늦다는 것은 약속이 아니다.
@@ -175,10 +188,13 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"the wait reports the display time of the presented frame (requested %.1fms, finished %.1fms, displayed %.1fms)",
             visibleWait.requested, visibleWait.finished, visibleWait.displayed]);
 
-    application.hidden = YES;
-    SPWait hiddenWait = waitWhileBusy(main, application, signal);
+    sameOrigin.hidden = YES;
+    SPWait hiddenWait = waitWhileBusy(main, sameOrigin, signal);
     check(hiddenWait.beforeRelease,
         [NSString stringWithFormat:@"a hidden document of the main origin does not delay the wait (%.3fs)", hiddenWait.took]);
+
+    SPWait mainWait = waitWhileBusy(main, main, signal);
+    check(!mainWait.beforeRelease, @"the app DOM must still confirm its own presentation");
 
     [window close];
     [window release];

@@ -1,4 +1,14 @@
 #include <stddef.h>
+#include <stdbool.h>
+
+// 앱 DOM은 창에 하나만 두며 논리 표면은 웹뷰 없는 클리핑 컨테이너다.
+void *sp_surface_create(void *mainWebview);
+void sp_surface_close(void *surface);
+void *sp_surface_native_plane(void *surface);
+void *sp_surface_main_webview(void *surface);
+double sp_surface_scale(void *surface);
+// 앱 DOM 모달/메뉴가 네이티브 입력보다 우선하는 창 좌표 사각형(x,y,w,h).
+void sp_surface_set_window_overlays(void *mainWebview, const double *rects, size_t count);
 
 void webviewAttachSurface(void *webview, void *mainWebview);
 void webviewDetachSurface(void *webview);

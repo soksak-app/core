@@ -1,7 +1,30 @@
 // 호스트가 공개하는 창 상태(host.window, host.screens, host.dock)의 네이티브 값을 읽는다.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
+#import <objc/runtime.h>
 #import "window_facts.h"
+#import "webview_geometry.h"
+
+static const char mainWebviewKey;
+
+bool sp_window_set_main_webview(void *handle, void *mainHandle) {
+    NSCAssert(NSThread.isMainThread, @"window registration requires the UI thread");
+    NSWindow *window = (NSWindow *)handle;
+    WKWebView *main = (WKWebView *)mainHandle;
+    if (!window || ![main isKindOfClass:WKWebView.class] || main.window != window) return false;
+    NSValue *registered = objc_getAssociatedObject(window, &mainWebviewKey);
+    if (registered && registered.nonretainedObjectValue != main) return false;
+    objc_setAssociatedObject(window, &mainWebviewKey, [NSValue valueWithNonretainedObject:main], OBJC_ASSOCIATION_RETAIN);
+    return true;
+}
+
+void *sp_window_main_webview(void *handle) {
+    NSWindow *window = (NSWindow *)handle;
+    NSValue *registered = objc_getAssociatedObject(window, &mainWebviewKey);
+    return registered.nonretainedObjectValue;
+}
+
+static WKWebView *mainWebview(NSWindow *window) { return sp_window_main_webview(window); }
 
 static char *copyJSON(id value) {
     NSData *data = [NSJSONSerialization dataWithJSONObject:value options:0 error:nil];
@@ -35,9 +58,21 @@ static void collectWebViews(NSView *view, NSMutableArray<WKWebView *> *found) {
     for (NSView *child in view.subviews) collectWebViews(child, found);
 }
 
+static void collectSurfaces(NSWindow *window, NSView *view, NSMutableArray *found) {
+    NSView *plane = sp_surface_native_plane(view);
+    if (plane && plane.superview == view) {
+        NSMutableDictionary *row = [windowRect(window, [view convertRect:view.bounds toView:nil]) mutableCopy];
+        row[@"view"] = @((unsigned long long)(uintptr_t)view);
+        row[@"hidden"] = @(view.isHiddenOrHasHiddenAncestor);
+        [found addObject:row];
+        [row release];
+    }
+    for (NSView *child in view.subviews) collectSurfaces(window, child, found);
+}
+
 char *sp_window_facts(void *handle) {
     NSWindow *window = (NSWindow *)handle;
-    if (!window || !window.contentView) return NULL;
+    if (!window || !window.contentView || !mainWebview(window)) return NULL;
     NSView *content = window.contentView;
     NSMutableArray *controls = [NSMutableArray array];
     for (NSUInteger kind = NSWindowCloseButton; kind <= NSWindowZoomButton; kind++) {
@@ -51,7 +86,10 @@ char *sp_window_facts(void *handle) {
     }
     NSMutableArray<WKWebView *> *views = [NSMutableArray array];
     collectWebViews(content, views);
+    NSMutableArray *surfaces = [NSMutableArray array];
+    collectSurfaces(window, content, surfaces);
     NSMutableArray *webviews = [NSMutableArray array];
+    NSUInteger documents = 0;
     for (WKWebView *view in views) {
         NSRect rect = [view convertRect:view.bounds toView:nil];
         NSMutableDictionary *row = [windowRect(window, rect) mutableCopy];
@@ -60,6 +98,11 @@ char *sp_window_facts(void *handle) {
         // drawsBackground 는 비공개 KVC 키다. docs/operations/private-native-apis.md 참고.
         row[@"draws"] = [view valueForKey:@"drawsBackground"];
         row[@"alpha"] = @(view.underPageBackgroundColor.alphaComponent);
+        row[@"main"] = @(view == mainWebview(window));
+        NSView *nativePlane = (NSView *)sp_surface_native_plane(view);
+        BOOL document = view != mainWebview(window) && nativePlane && [view isDescendantOf:nativePlane];
+        row[@"document"] = @(document);
+        if (document) documents++;
         [webviews addObject:row];
         [row release];
     }
@@ -73,20 +116,21 @@ char *sp_window_facts(void *handle) {
         @"children": @(window.childWindows.count),
         @"controls": controls,
         @"webviews": webviews,
+        @"nativeSurfaces": surfaces,
+        @"appDomWebviews": @(views.count - documents),
+        @"documentWebviews": @(documents),
     });
 }
 
 char *sp_window_hit(void *handle, double x, double y) {
     NSWindow *window = (NSWindow *)handle;
     NSView *content = window.contentView;
-    if (!window || !content) return NULL;
+    if (!window || !content || !mainWebview(window)) return NULL;
     NSPoint base = NSMakePoint(x, content.frame.size.height - y);
     NSView *hit = [content hitTest:[content.superview convertPoint:base fromView:nil]];
     NSView *owner = hit;
     while (owner && ![owner isKindOfClass:WKWebView.class]) owner = owner.superview;
-    NSMutableArray<WKWebView *> *views = [NSMutableArray array];
-    collectWebViews(content, views);
-    return copyJSON(@{ @"view": @((unsigned long long)(uintptr_t)owner), @"main": owner && owner == views.firstObject ? @YES : @NO,
+    return copyJSON(@{ @"view": @((unsigned long long)(uintptr_t)owner), @"main": owner && owner == mainWebview(window) ? @YES : @NO,
         @"identifier": hit.identifier ?: @"" });
 }
 

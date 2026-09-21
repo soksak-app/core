@@ -11,6 +11,12 @@ static void holdFrame(NSView *view, NSRect frame);
 @property(nonatomic, assign) WKWebView *mainView;
 @end
 
+static void normalizeCoordinateBounds(SPSurfaceCoordinates *coordinates) {
+    NSSize size = coordinates.frame.size;
+    NSRect expected = NSMakeRect(0, 0, size.width, size.height);
+    if (!NSEqualRects(coordinates.bounds, expected)) coordinates.bounds = expected;
+}
+
 // 표면마다 하나인 네이티브 소유 경계. 이 뷰만 바깥 표면 프레임을 가지며 모든 네이티브
 // 영역과 DOM 웹뷰를 함께 자르고 이동한다.
 @interface SPSurfaceNativePlane : NSView
@@ -26,8 +32,58 @@ static void holdFrame(NSView *view, NSRect frame);
 
 @interface SPSurfaceHost : NSView
 @property(nonatomic, assign) WKWebView *webview;
+@property(nonatomic, assign) WKWebView *mainWebview;
 @property(retain) SPSurfaceNativePlane *nativePlane;
 @property(retain) NSArray<NSValue *> *domOverlays;
+@end
+
+// Hybrid surfaces place native regions below a WebView. CSS transparency does
+// not disable WebKit's native opaque backing, so every WebView above a native
+// plane must use the same transparent backing rule.
+static void configureWebViewTransparency(WKWebView *view) {
+    view.underPageBackgroundColor = NSColor.clearColor;
+    [view setValue:@NO forKey:@"drawsBackground"];
+    view.wantsLayer = YES;
+    view.layer.opaque = NO;
+    view.layer.backgroundColor = NSColor.clearColor.CGColor;
+}
+
+static void reconfigureSurfaceWebviews(NSView *root) {
+    if ([root isKindOfClass:SPSurfaceHost.class]) {
+        SPSurfaceHost *host = (SPSurfaceHost *)root;
+        if (host.webview) configureWebViewTransparency(host.webview);
+    }
+    for (NSView *child in root.subviews) reconfigureSurfaceWebviews(child);
+}
+
+// 하나의 앱 DOM과 그 아래 네이티브 평면의 입력 소유권을 선택한다.
+@interface SPWindowComposition : NSView
+@property(nonatomic, assign) WKWebView *mainWebview;
+@property(nonatomic, assign) SPSurfaceCoordinates *coordinates;
+@property(nonatomic, retain) NSArray<NSValue *> *overlays;
+@end
+
+@implementation SPWindowComposition
+- (id)initWithFrame:(NSRect)frame {
+    if (!(self = [super initWithFrame:frame])) return nil;
+    self.wantsLayer = YES;
+    self.layer.opaque = NO;
+    self.layer.backgroundColor = NSColor.clearColor.CGColor;
+    return self;
+}
+- (void)dealloc { [_overlays release]; [super dealloc]; }
+- (NSView *)hitTest:(NSPoint)point {
+    if (self.hidden || self.alphaValue <= 0) return nil;
+    NSPoint local = [self convertPoint:point fromView:self.superview];
+    if (!NSPointInRect(local, self.bounds)) return nil;
+    NSPoint domPoint = [self.mainWebview convertPoint:local fromView:self];
+    for (NSValue *overlay in self.overlays) {
+        if (NSPointInRect(domPoint, overlay.rectValue)) return [self.mainWebview hitTest:local];
+    }
+    NSView *native = [self.coordinates hitTest:local];
+    if (native) return native;
+    return [super hitTest:point];
+}
 @end
 
 typedef struct {
@@ -57,7 +113,20 @@ static void notifyScale(NSView *view) {
     [super dealloc];
 }
 - (BOOL)isFlipped { return YES; }
+- (void)setBounds:(NSRect)bounds {
+    NSSize frameSize = self.frame.size;
+    if (frameSize.width > 0 && frameSize.height > 0) {
+        bounds.size = frameSize;
+    }
+    [super setBounds:bounds];
+    self.nativePlane.frame = self.bounds;
+    if (self.webview && self.webview.superview == self) self.webview.frame = self.bounds;
+}
 - (NSView *)hitTest:(NSPoint)point {
+    if (self.hidden || self.alphaValue <= 0 || !NSPointInRect(point, self.bounds)) return nil;
+    // Surface DOM coordinates are CSS/AppKit points. A document region may
+    // use a different pageZoom, but it is a child of the same point-space
+    // native plane and must not scale the surface overlay rectangles.
     CGFloat zoom = self.webview.pageZoom > 0 ? self.webview.pageZoom : 1;
     for (NSValue *value in [self.domOverlays reverseObjectEnumerator]) {
         SPDOMOverlay overlay;
@@ -66,6 +135,7 @@ static void notifyScale(NSView *view) {
         NSRect rect = NSMakeRect(overlay.left * zoom, overlay.top * zoom,
             MAX(NSWidth(self.bounds) - (overlay.left + overlay.right) * zoom, 0),
             MAX(NSHeight(self.bounds) - (overlay.top + overlay.bottom) * zoom, 0));
+        if (NSPointInRect(point, rect) && self.mainWebview) return nil;
         if (NSPointInRect(point, rect) && self.webview && !self.webview.hidden) {
             NSPoint domPoint = [self.webview convertPoint:point fromView:self];
             NSView *dom = [self.webview hitTest:domPoint];
@@ -97,7 +167,24 @@ static void notifyScale(NSView *view) {
 @end
 
 @implementation SPSurfaceCoordinates
+- (id)initWithFrame:(NSRect)frame {
+    if (!(self = [super initWithFrame:frame])) return nil;
+    self.wantsLayer = YES;
+    self.layer.opaque = NO;
+    self.layer.backgroundColor = NSColor.clearColor.CGColor;
+    return self;
+}
 - (BOOL)isFlipped { return YES; }
+- (void)setBounds:(NSRect)bounds {
+    // AppKit may resize a flipped container in backing-pixel coordinates when
+    // a hidden surface returns. The container's frame and bounds are both
+    // AppKit points; allowing them to diverge scales every child placement.
+    NSSize frameSize = self.frame.size;
+    if (frameSize.width > 0 && frameSize.height > 0) {
+        bounds.size = frameSize;
+    }
+    [super setBounds:bounds];
+}
 - (NSView *)hitTest:(NSPoint)point {
     if (self.hidden || self.alphaValue <= 0 || NSWidth(self.frame) <= 0 || NSHeight(self.frame) <= 0) return nil;
     // AppKit 은 부모의 hitTest: 에서 자식에게 frame 단위 좌표를 넘긴다. 이 컨테이너는
@@ -119,29 +206,28 @@ static void notifyScale(NSView *view) {
     [CATransaction begin];
     [CATransaction setDisableActions:YES];
     [super setFrameSize:size];
-    if (self.scale > 0) self.bounds = NSMakeRect(0, 0, size.width * self.scale, size.height * self.scale);
+    // NSView geometry is expressed in AppKit points. The backing scale belongs
+    // to raster dimensions, not to frame or bounds coordinates.
+    self.bounds = NSMakeRect(0, 0, size.width, size.height);
     [CATransaction commit];
 }
 - (void)updateScale {
     if (!self.window) return;
-    if (self.mainView.superview == self.superview) {
+    if (self.mainView.superview == self.superview && ![self.superview isKindOfClass:SPWindowComposition.class]) {
         [self.superview addSubview:self positioned:NSWindowAbove relativeTo:self.mainView];
     }
     CGFloat scale = self.window.backingScaleFactor;
     // bounds 변경이 backing 속성 알림을 다시 발생시키므로 같은 배율은 갱신하지 않는다.
     if (scale == self.scale) return;
-    CGFloat ratio = self.scale > 0 ? scale / self.scale : 1;
     self.scale = scale;
-    self.bounds = NSMakeRect(0, 0, self.frame.size.width * scale, self.frame.size.height * scale);
+    self.bounds = NSMakeRect(0, 0, self.frame.size.width, self.frame.size.height);
     for (SPSurfaceHost *host in self.subviews) {
         if (![host isKindOfClass:SPSurfaceHost.class]) continue;
-        NSRect frame = host.frame;
-        NSRect next = NSMakeRect(frame.origin.x * ratio, frame.origin.y * ratio,
-            frame.size.width * ratio, frame.size.height * ratio);
-        holdFrame(host, next);
-        host.frame = next;
-        WKWebView *view = host.webview;
-        view.pageZoom = scale;
+        // AppKit frames and CSS dimensions are both points. The backing scale
+        // changes raster density only; zooming the document would halve its
+        // CSS viewport on a 2x display.
+        host.webview.pageZoom = 1;
+        [host.webview _setOverrideDeviceScaleFactor:scale];
         notifyScale(host.nativePlane);
     }
 }
@@ -157,6 +243,11 @@ NSEvent *webviewScrollInViewUnits(NSEvent *event, NSView *view) {
             break;
         }
     }
+    // Surface pages use AppKit points and CSS pixels 1:1. Document regions
+    // retain pageZoom == scale because their native frame is expressed in the
+    // surface's device-pixel coordinate space. Only that latter path needs
+    // event-distance conversion.
+    if ([view isKindOfClass:WKWebView.class] && ((WKWebView *)view).pageZoom <= 1.0) return event;
     if (scale <= 0 || scale == 1) return event;
     CGEventRef copy = CGEventCreateCopy(event.CGEvent);
     if (!copy) return event;
@@ -182,17 +273,14 @@ void webviewAttachSurface(void *handle, void *mainHandle) {
     NSCAssert(NSThread.isMainThread, @"webview geometry requires the UI thread");
     WKWebView *view = (WKWebView *)handle;
     WKWebView *main = (WKWebView *)mainHandle;
-    NSView *content = main.window.contentView;
-    SPSurfaceCoordinates *container = nil;
-    for (NSView *child in content.subviews) {
-        if ([child isKindOfClass:SPSurfaceCoordinates.class]) { container = (SPSurfaceCoordinates *)child; break; }
-    }
-    if (!container) {
-        container = [[[SPSurfaceCoordinates alloc] initWithFrame:content.bounds] autorelease];
-        container.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
-        container.autoresizesSubviews = NO;
-        [content addSubview:container positioned:NSWindowAbove relativeTo:main];
-    }
+    NSCAssert([main.superview isKindOfClass:SPWindowComposition.class],
+        @"the main webview must be installed in the surface composition before attaching a surface webview");
+    SPWindowComposition *composition = (SPWindowComposition *)main.superview;
+    NSCAssert(composition.coordinates != nil,
+        @"the surface composition must own its canonical native coordinate container");
+    configureWebViewTransparency(view);
+    SPSurfaceCoordinates *container = composition.coordinates;
+    normalizeCoordinateBounds(container);
     container.mainView = main;
     NSRect frame = [view convertRect:view.bounds toView:container];
     [view retain];
@@ -204,16 +292,96 @@ void webviewAttachSurface(void *handle, void *mainHandle) {
     [host addSubview:view positioned:NSWindowAbove relativeTo:host.nativePlane];
     view.frame = host.bounds;
     // 로컬 좌표 한 단위를 실제 장치 픽셀 하나로 렌더링한다. CSS 크기는 유지한다.
-    view.pageZoom = container.scale;
-    [view _setOverrideDeviceScaleFactor:1];
+    view.pageZoom = 1;
+    [view _setOverrideDeviceScaleFactor:container.scale];
     [view release];
 }
 
 static SPSurfaceHost *surfaceHost(NSView *view) {
+    if ([view isKindOfClass:SPSurfaceHost.class]) return (SPSurfaceHost *)view;
     for (NSView *parent = view.superview; parent; parent = parent.superview) {
         if ([parent isKindOfClass:SPSurfaceHost.class]) return (SPSurfaceHost *)parent;
     }
     return nil;
+}
+
+void *sp_surface_create(void *mainHandle) {
+    NSCAssert(NSThread.isMainThread, @"surface creation requires the UI thread");
+    WKWebView *main = (WKWebView *)mainHandle;
+    if (![main isKindOfClass:WKWebView.class] || !main.window || !main.superview) return NULL;
+    configureWebViewTransparency(main);
+    SPWindowComposition *composition;
+    if ([main.superview isKindOfClass:SPWindowComposition.class]) {
+        composition = (SPWindowComposition *)main.superview;
+    } else {
+        NSView *parent = main.superview;
+        composition = [[[SPWindowComposition alloc] initWithFrame:main.frame] autorelease];
+        composition.autoresizingMask = main.autoresizingMask;
+        composition.mainWebview = main;
+        [main retain];
+        [parent replaceSubview:main with:composition];
+        main.frame = composition.bounds;
+        main.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+        [composition addSubview:main];
+        [main release];
+        SPSurfaceCoordinates *coordinates = [[[SPSurfaceCoordinates alloc] initWithFrame:composition.bounds] autorelease];
+        coordinates.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+        coordinates.autoresizesSubviews = NO;
+        coordinates.mainView = main;
+        composition.coordinates = coordinates;
+        [composition addSubview:coordinates positioned:NSWindowAbove relativeTo:main];
+    }
+    SPSurfaceHost *surface = [[SPSurfaceHost alloc] initWithFrame:NSZeroRect];
+    surface.mainWebview = main;
+    surface.hidden = YES;
+    [composition.coordinates addSubview:surface];
+    return surface;
+}
+
+void sp_surface_close(void *handle) {
+    NSCAssert(NSThread.isMainThread, @"surface closure requires the UI thread");
+    SPSurfaceHost *surface = (SPSurfaceHost *)handle;
+    [surface removeFromSuperview];
+    [surface release];
+}
+
+void *sp_surface_native_plane(void *handle) {
+    return surfaceHost((NSView *)handle).nativePlane;
+}
+
+void *sp_surface_main_webview(void *handle) {
+    SPSurfaceHost *host = surfaceHost((NSView *)handle);
+    return host.mainWebview ?: host.webview;
+}
+
+double sp_surface_scale(void *handle) {
+    for (NSView *view = (NSView *)handle; view; view = view.superview) {
+        if ([view isKindOfClass:SPSurfaceCoordinates.class]) {
+            // The window is the source of truth. A hidden surface can move
+            // between backing-scale contexts without receiving a view backing
+            // notification; using the cached coordinate scale then multiplies
+            // every native region by the old display scale on restore.
+            NSWindow *window = view.window;
+            CGFloat current = window ? window.backingScaleFactor : 0;
+            if (current > 0) return current;
+            return ((SPSurfaceCoordinates *)view).scale > 0
+                ? ((SPSurfaceCoordinates *)view).scale : 1;
+        }
+    }
+    return 1;
+}
+
+void sp_surface_set_window_overlays(void *mainHandle, const double *rects, size_t count) {
+    NSCAssert(NSThread.isMainThread, @"surface input belongs to the UI thread");
+    WKWebView *main = (WKWebView *)mainHandle;
+    if (![main.superview isKindOfClass:SPWindowComposition.class]) return;
+    SPWindowComposition *composition = (SPWindowComposition *)main.superview;
+    NSMutableArray<NSValue *> *overlays = [NSMutableArray arrayWithCapacity:count];
+    for (size_t index = 0; index < count; index++) {
+        const double *rect = rects + index * 4;
+        [overlays addObject:[NSValue valueWithRect:NSMakeRect(rect[0], rect[1], rect[2], rect[3])]];
+    }
+    composition.overlays = overlays;
 }
 
 void webviewDetachSurface(void *handle) {
@@ -236,8 +404,8 @@ void *webviewSurfaceNativePlane(void *handle) {
 void webviewMatchSurface(void *handle, void *surfaceHandle) {
     NSCAssert(NSThread.isMainThread, @"webview geometry requires the UI thread");
     WKWebView *view = (WKWebView *)handle;
-    WKWebView *surface = (WKWebView *)surfaceHandle;
-    view.pageZoom = surface.pageZoom;
+    NSView *surface = (NSView *)surfaceHandle;
+    view.pageZoom = sp_surface_scale(surface);
     // 장치 픽셀 좌표계의 표면 안에서는 표면과 같이 로컬 좌표 한 단위를 장치 픽셀 하나로 렌더링한다.
     if (surfaceHost(surface)) [view _setOverrideDeviceScaleFactor:1];
 }
@@ -289,14 +457,22 @@ void webviewSetFrame(void *handle, double x, double y, double width, double heig
     NSWindow *window = view.window;
     if (!window) return;
     NSRect frame = NSMakeRect(x, window.contentView.bounds.size.height - y - height, width, height);
-    frame = [window backingAlignedRect:frame options:NSAlignAllEdgesInward];
+    // Surface frames are logical AppKit points. Aligning every edge inward to
+    // backing pixels shrinks a surface by one device pixel at fractional
+    // divider positions, leaving a stale DOM edge visible beside the native
+    // region. The native plane clips the region, so preserving the declared
+    // logical frame is the safe boundary; its image layer performs the raster
+    // conversion from that frame.
     SPSurfaceHost *host = surfaceHost(view);
     NSView *placedView = host ?: view;
+    if ([placedView.superview isKindOfClass:SPSurfaceCoordinates.class]) {
+        normalizeCoordinateBounds((SPSurfaceCoordinates *)placedView.superview);
+    }
     NSRect placed = [placedView.superview convertRect:frame fromView:window.contentView];
     // 표면만 프레임을 지킨다. 창 크기를 따라가는 모달은 창이 그 크기를 바꾼다.
     if (host) {
         holdFrame(host, placed);
-        holdFrame(view, NSMakeRect(0, 0, placed.size.width, placed.size.height));
+        if (view != host) holdFrame(view, NSMakeRect(0, 0, placed.size.width, placed.size.height));
     }
     [CATransaction begin];
     [CATransaction setDisableActions:YES];
@@ -307,7 +483,12 @@ void webviewSetFrame(void *handle, double x, double y, double width, double heig
     if (host) {
         host.bounds = NSMakeRect(0, 0, placed.size.width, placed.size.height);
         host.nativePlane.frame = host.bounds;
-        view.frame = host.bounds;
+        if (view != host) view.frame = host.bounds;
+        // Composition placement may have run before the host received its
+        // restored logical frame. Re-apply native regions after the host and
+        // plane are authoritative, otherwise an old scale/size remains on
+        // the image region until the next resize.
+        notifyScale(host.nativePlane);
     }
     [CATransaction commit];
 }
@@ -329,6 +510,17 @@ void webviewSetSurfaceHidden(void *handle, bool hidden) {
     NSCAssert(NSThread.isMainThread, @"webview geometry requires the UI thread");
     NSView *view = (NSView *)handle;
     SPSurfaceHost *host = surfaceHost(view);
+    if (!hidden) {
+        NSView *coordinates = host.superview;
+        if ([coordinates isKindOfClass:SPSurfaceCoordinates.class]) {
+            reconfigureSurfaceWebviews(coordinates);
+        }
+        // A hidden surface can miss frame/backing notifications while the
+        // window is restored. Re-apply every native region's logical geometry
+        // before exposing the surface so stale scale-dependent frames never
+        // become visible.
+        notifyScale(host.nativePlane);
+    }
     (host ?: view).hidden = hidden;
     view.hidden = hidden;
 }
@@ -338,7 +530,7 @@ void webviewSetSurfaceAlpha(void *handle, double alpha) {
     NSView *view = (NSView *)handle;
     SPSurfaceHost *host = surfaceHost(view);
     (host ?: view).alphaValue = alpha;
-    view.alphaValue = 1;
+    if (view != host) view.alphaValue = 1;
 }
 
 void webviewSetSurfaceOverlays(void *handle, const double *values, size_t count) {

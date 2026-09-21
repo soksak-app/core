@@ -68,6 +68,8 @@ int main(void) { @autoreleasepool {
     [surface loadHTMLString:@"<body style='margin:0'>surface</body>" baseURL:nil];
     [window makeKeyAndOrderFront:nil];
     until(^BOOL { return !main.loading && !surface.loading; });
+    check(sp_surface_create(main) != NULL,
+        @"the main webview creates the composition before a surface webview is attached");
     webviewAttachSurface(surface, main);
     webviewSetFrame(surface, 100, 50, 400, 300);
     NSRect placed = frameOf(surface);

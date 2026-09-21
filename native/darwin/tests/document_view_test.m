@@ -28,6 +28,9 @@ static void until(NSString *what, BOOL (^done)(void)) {
 static NSString *pageFor(NSString *path) {
     if ([path isEqualToString:@"/one"]) {
         return @"<!doctype html><title>One</title><body style='height:3000px;margin:0'>"
+            "<input id='field' style='position:absolute;left:10px;top:10px'>"
+            "<button id='click' style='position:absolute;left:10px;top:50px'>click</button>"
+            "<script>window.nativeClicks=0;click.addEventListener('click',()=>nativeClicks++);</script>"
             "<a id='two' href='/two'>two</a> <a id='blank' target='_blank' href='/blank'>blank</a> "
             "<a id='app' href='wails://wails/index.html'>app</a></body>";
     }
@@ -80,10 +83,18 @@ static nw_listener_t serve(void) {
 
 static NSDictionary *latest;
 static int reports;
+static int nativeEvents;
+static NSDictionary *latestNativeEvent;
 // 설정되어 있으면 모든 보고를 이 조건으로 검사하고, 어긋난 보고를 남긴다.
 static BOOL (^expected)(NSDictionary *state);
 static NSDictionary *mismatch;
 
+static void event(void *context, const char *text) {
+    NSData *data = [NSData dataWithBytes:text length:strlen(text)];
+    [latestNativeEvent release];
+    latestNativeEvent = [[NSJSONSerialization JSONObjectWithData:data options:0 error:nil] retain];
+    nativeEvents++;
+}
 static void scrollDone(void *context, sp_input_result result) {
     *(sp_input_result *)context = result;
 }
@@ -121,6 +132,16 @@ static void settle(NSString *what, BOOL (^condition)(NSDictionary *state)) {
     until(what, ^BOOL { return latest && condition(latest); });
 }
 
+static void pumpEvents(NSString *what, BOOL (^done)(void)) {
+    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
+    while (!done() && deadline.timeIntervalSinceNow > 0) {
+        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny
+            untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01] inMode:NSDefaultRunLoopMode dequeue:YES];
+        if (event) [NSApp sendEvent:event];
+    }
+    if (!done()) { fprintf(stderr, "FAIL: %s within 10 seconds\n", what.UTF8String); exit(1); }
+}
+
 int main(void) { @autoreleasepool {
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
@@ -137,17 +158,21 @@ int main(void) { @autoreleasepool {
     WKWebView *main = [[[WKWebView alloc] initWithFrame:window.contentView.bounds] autorelease];
     main.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     [window.contentView addSubview:main];
-    WKWebView *surface = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 500, 400)] autorelease];
-    [window.contentView addSubview:surface];
     [window orderBack:nil];
-    webviewAttachSurface(surface, main);
+    void *surface = sp_surface_create(main);
+    check(surface != NULL, @"a logical surface is created for the document");
     webviewSetFrame(surface, 0, 0, 500, 400);
-    NSView *nativePlane = (NSView *)webviewSurfaceNativePlane(surface);
+    webviewSetSurfaceHidden(surface, false);
+    NSView *nativePlane = (NSView *)sp_surface_native_plane(surface);
 
+    window.appearance = [NSAppearance appearanceNamed:NSAppearanceNameDarkAqua];
     void *document = sp_document_create(surface, "soksak-test/documents", changed, NULL);
     check(document != NULL, @"a document view is created inside the surface");
     WKWebView *view = (WKWebView *)document;
-    check(nativePlane != nil && view.superview == nativePlane && nativePlane.superview == surface.superview,
+    check([view.appearance.name isEqual:NSAppearanceNameDarkAqua],
+        @"a document inherits the owner's resolved dark appearance");
+    NSView *surfaceView = (NSView *)surface;
+    check(nativePlane != nil && view.superview == nativePlane && nativePlane.superview == surfaceView,
         @"the document view is in the surface host native plane");
     check(view.configuration.websiteDataStore != WKWebsiteDataStore.defaultDataStore
         && view.configuration.websiteDataStore.persistent, @"the document uses its own persistent data store");
@@ -180,6 +205,60 @@ int main(void) { @autoreleasepool {
     settle(@"the first document did not load", ^BOOL(NSDictionary *state) {
         return [state[@"title"] isEqual:@"One"] && ![state[@"loading"] boolValue];
     });
+    check([evaluate(view, @"matchMedia('(prefers-color-scheme: dark)').matches") boolValue],
+        @"the document renderer matches the owner's dark appearance");
+    window.appearance = [NSAppearance appearanceNamed:NSAppearanceNameAqua];
+    until(@"the document renderer did not receive the light appearance", ^BOOL {
+        return ![evaluate(view, @"matchMedia('(prefers-color-scheme: dark)').matches") boolValue];
+    });
+    check(![evaluate(view, @"matchMedia('(prefers-color-scheme: dark)').matches") boolValue],
+        @"the document renderer follows the owner's light appearance change");
+    window.appearance = [NSAppearance appearanceNamed:NSAppearanceNameDarkAqua];
+    until(@"the document renderer did not receive the dark appearance again", ^BOOL {
+        return [evaluate(view, @"matchMedia('(prefers-color-scheme: dark)').matches") boolValue];
+    });
+    check([evaluate(view, @"matchMedia('(prefers-color-scheme: dark)').matches") boolValue],
+        @"the document renderer follows the owner's dark appearance again");
+    evaluate(view, @"window.nativeClicks=0; document.getElementById('field').value=''; null");
+    sp_document_set_event(document, event, NULL);
+    nativeEvents = 0;
+    [NSApp activateIgnoringOtherApps:YES];
+    [window makeKeyAndOrderFront:nil];
+    NSPoint windowPoint = NSMakePoint(25, NSHeight(window.contentView.bounds) - 35);
+    NSEvent *down = [NSEvent mouseEventWithType:NSEventTypeLeftMouseDown location:windowPoint
+        modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
+        context:nil eventNumber:1 clickCount:1 pressure:1];
+    NSEvent *up = [NSEvent mouseEventWithType:NSEventTypeLeftMouseUp location:windowPoint
+        modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
+        context:nil eventNumber:1 clickCount:1 pressure:0];
+    [NSApp postEvent:down atStart:NO];
+    [NSApp postEvent:up atStart:NO];
+    pumpEvents(@"the OS click was not delivered", ^BOOL {
+        return nativeEvents >= 1 && [evaluate(view, @"document.activeElement && document.activeElement.id") isEqual:@"field"];
+    });
+    check(nativeEvents == 1 && [latestNativeEvent[@"type"] isEqual:@"click"],
+        @"the OS event queue reports one document click to the owner callback");
+    NSView *firstResponder = [window.firstResponder isKindOfClass:NSView.class] ? (NSView *)window.firstResponder : nil;
+    check(firstResponder == view || [firstResponder isDescendantOf:view],
+        @"the OS click makes the document webview the window first responder");
+    check(view.superview == nativePlane && view.window == window,
+        @"the owner callback does not replace the document's WebKit target");
+    check([evaluate(view, @"document.activeElement && document.activeElement.id") isEqual:@"field"],
+        @"the OS click focuses the page field");
+    NSEvent *keyDown = [NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint
+        modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
+        context:nil characters:@"x" charactersIgnoringModifiers:@"x" isARepeat:NO keyCode:7];
+    NSEvent *keyUp = [NSEvent keyEventWithType:NSEventTypeKeyUp location:NSZeroPoint
+        modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
+        context:nil characters:@"x" charactersIgnoringModifiers:@"x" isARepeat:NO keyCode:7];
+    [NSApp postEvent:keyDown atStart:NO];
+    [NSApp postEvent:keyUp atStart:NO];
+    pumpEvents(@"the OS key was not delivered", ^BOOL {
+        return [evaluate(view, @"document.getElementById('field').value") isEqual:@"x"];
+    });
+    check([evaluate(view, @"document.getElementById('field').value") isEqual:@"x"],
+        @"the page receives the OS key after the document click");
+    check(nativeEvents == 1, @"keyboard input does not duplicate the document click callback");
     check([latest[@"url"] hasSuffix:@"/one"] && ![latest[@"canGoBack"] boolValue] && latest[@"error"] == NSNull.null,
         [NSString stringWithFormat:@"the state reports the loaded document: %@", latest]);
 
@@ -271,6 +350,7 @@ int main(void) { @autoreleasepool {
 
     for (id connection in held) nw_connection_cancel((nw_connection_t)connection);
     nw_listener_cancel(listener);
+    sp_surface_close(surface);
     [window close];
     [window release];
     return failures ? 1 : 0;

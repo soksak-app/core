@@ -81,19 +81,24 @@ static void load(WKWebView *view, NSString *html) {
 
 // 문서가 새 크기와 배율로 다시 배치될 때까지 기다린다. 끝내 맞지 않으면 마지막 값을 보고한다.
 static NSDictionary *documentState(WKWebView *view, CGFloat scale, double width, double height) {
+    // WebKit exposes the CSS viewport on whole CSS pixels. A 200.5pt AppKit
+    // frame therefore reports 200 CSS px even though its native backing is
+    // 401px at 2x. Native geometry and the final backing row are checked
+    // separately and remain exact.
+    double cssHeight = floor(height);
     NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
     NSDictionary *state = nil;
     for (;;) {
         state = evaluate(view, @"({ratio: devicePixelRatio, width: visualViewport.width,"
             " height: visualViewport.height, body: document.body?.getBoundingClientRect().height})");
         BOOL placed = [state[@"ratio"] doubleValue] == scale && [state[@"width"] doubleValue] == width
-            && [state[@"height"] doubleValue] == height;
+            && [state[@"height"] doubleValue] == cssHeight;
         if (placed) return state;
         if (deadline.timeIntervalSinceNow <= 0) break;
         [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
     }
-    fprintf(stderr, "FAIL: the document did not take scale %g and size %g x %g within 10 seconds: %s\n",
-        scale, width, height, state.description.UTF8String);
+    fprintf(stderr, "FAIL: the document did not take scale %g and CSS size %g x %g within 10 seconds: %s\n",
+        scale, width, cssHeight, state.description.UTF8String);
     exit(1);
 }
 
@@ -226,8 +231,9 @@ static void verify(SPScaledWindow *window, WKWebView *surface, CGFloat scale, do
     check(frame[3] == height,
         [NSString stringWithFormat:@"%@: the native surface keeps the fractional height %g (got %g)", when, height, frame[3]]);
     NSDictionary *state = documentState(surface, scale, frame[2], frame[3]);
-    check([state[@"body"] doubleValue] == frame[3],
-        [NSString stringWithFormat:@"%@: the document covers the complete native surface (%@)", when, state]);
+    double cssHeight = floor(frame[3]);
+    check([state[@"body"] doubleValue] == cssHeight,
+        [NSString stringWithFormat:@"%@: the document covers the CSS viewport quantized from native height %g (%@)", when, frame[3], state]);
     check(lastRowIsDocument(surface, scale),
         [NSString stringWithFormat:@"%@: the last device pixel row shows the document", when]);
     double injected = scrollBy(window, surface, NO);
@@ -267,7 +273,14 @@ int main(void) { @autoreleasepool {
     WKWebView *surface = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 10, 10)] autorelease];
     [window.contentView addSubview:surface positioned:NSWindowAbove relativeTo:main];
     [window orderBack:nil];
+    check(sp_surface_create(main) != NULL,
+        @"the main webview creates the composition before a surface webview is attached");
     webviewAttachSurface(surface, main);
+    check(main.superview == surface.superview.superview.superview,
+        @"the attached surface webview uses the main webview's canonical composition");
+    check(surface.underPageBackgroundColor.alphaComponent == 0
+        && ![[surface valueForKey:@"drawsBackground"] boolValue],
+        @"an attached surface webview does not paint an opaque backing over native regions");
     // 앱의 이벤트 모니터(휠 단위 변환)는 웹뷰를 입력에 등록할 때 설치된다.
     webviewInputRegister(surface);
     load(surface, @"<!doctype html><html style='height:100%'><body style='margin:0;height:100%;background:#0d1a14'>"
@@ -294,8 +307,8 @@ int main(void) { @autoreleasepool {
 
     setScale(window, 1);
     webviewSetFrame(surface, 40, 30, 300, 200.5);
-    verify(window, surface, 1, 200, @"after changing to 1x");
-    verifyRegion(region, 1, 260, 140, @"after changing to 1x");
+    verify(window, surface, 1, 200.5, @"after changing to 1x");
+    verifyRegion(region, 1, 260, 140.5, @"after changing to 1x");
 
     setScale(window, 2);
     webviewSetFrame(surface, 40, 30, 300, 200.5);

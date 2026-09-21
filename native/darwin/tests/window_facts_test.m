@@ -29,7 +29,9 @@ int main(void) { @autoreleasepool {
     WKWebView *main = [[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 300)];
     WKWebView *top = [[WKWebView alloc] initWithFrame:NSMakeRect(100, 50, 200, 100)];
     window.contentView = main;
+    check(sp_window_set_main_webview(window, main), @"the app DOM is explicitly registered");
     [main addSubview:top];
+    check(!sp_window_set_main_webview(window, top), @"another webview cannot replace the registered app DOM");
     [top setValue:@NO forKey:@"drawsBackground"];
     top.underPageBackgroundColor = NSColor.clearColor;
 
@@ -45,6 +47,8 @@ int main(void) { @autoreleasepool {
     check([facts[@"controls"] count] == 3, @"three window buttons are reported");
     NSArray *views = facts[@"webviews"];
     check(views.count == 2, @"both webviews are reported");
+    check([facts[@"appDomWebviews"] integerValue] == 2 && [facts[@"documentWebviews"] integerValue] == 0,
+        @"an extra non-document webview is counted instead of reporting a constant app DOM count");
     check([views[0][@"view"] unsignedLongLongValue] == (uintptr_t)main && [views[1][@"view"] unsignedLongLongValue] == (uintptr_t)top,
         @"webviews are listed in drawing order with the main page first");
     NSDictionary *upper = views[1];

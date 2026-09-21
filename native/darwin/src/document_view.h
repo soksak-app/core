@@ -10,9 +10,17 @@
 // 이며 호출이 끝나면 해제된다. 메인 스레드에서 호출된다.
 typedef void (*sp_document_changed)(void *context, const char *state);
 
+// 네이티브 문서 입력 이벤트가 발생하면 호출된다. json 은 JSON 객체를 나타내며 호출이 끝나면
+// 해제된다. 메인 스레드에서 호출된다.
+typedef void (*sp_document_event)(void *context, const char *json);
+
 // surface 웹뷰 안에 숨긴 문서 웹뷰를 만든다. store 는 영구 데이터 저장소의 이름으로, 같은 이름은
 // 같은 저장소를 쓴다. 만들 수 없으면 NULL 을 반환한다.
 void *sp_document_create(void *surface, const char *store, sp_document_changed changed, void *context);
+
+// 문서의 네이티브 이벤트 수신기를 설정한다. event 가 NULL 이면 이벤트를 보고하지 않는다.
+// 호출자는 문서가 살아 있는 동안 context 를 유지해야 한다.
+void sp_document_set_event(void *document, sp_document_event event, void *context);
 
 // http 또는 https 주소를 연다. 그 밖의 주소는 거부하고 false 를 반환한다.
 bool sp_document_load(void *document, const char *url);

@@ -80,22 +80,6 @@ void surfaceLayoutCancel(void *owner) {
     releaseSettled();
 }
 
-static void applicationViews(NSView *parent, WKWebView *main, NSMutableArray<WKWebView *> *views) {
-    NSURL *origin = main.URL;
-    for (NSView *candidate in parent.subviews) {
-        if (candidate == main || candidate.isHiddenOrHasHiddenAncestor) continue;
-        if (![candidate isKindOfClass:WKWebView.class]) {
-            applicationViews(candidate, main, views);
-            continue;
-        }
-        WKWebView *view = (WKWebView *)candidate;
-        NSURL *url = view.URL;
-        if (![url.scheme isEqualToString:origin.scheme] || ![url.host isEqualToString:origin.host]
-            || !(url.port == origin.port || [url.port isEqual:origin.port])) continue;
-        [views addObject:view];
-    }
-}
-
 // SPDisplayedFrame 은 화면의 다음 갱신 목표 시각을 한 번 읽는다. 표시 갱신이 끝난 뒤 커밋된 내용은
 // 늦어도 그 갱신에 화면에 나온다. 창이 가려져도 화면의 갱신은 계속되므로 화면의 링크를 쓴다.
 @interface SPDisplayedFrame : NSObject
@@ -123,13 +107,11 @@ static void afterNextFrame(NSScreen *screen, void (^done)(double)) {
     [link addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
 }
 
-static void afterNextPresentation(WKWebView *main, void (^done)(void)) {
-    NSMutableArray<WKWebView *> *views = [NSMutableArray arrayWithObject:main];
-    applicationViews(main.window.contentView, main, views);
-    __block NSUInteger pending = views.count;
-    for (WKWebView *view in views) {
-        [view _doAfterNextPresentationUpdate:^{ if (--pending == 0) done(); }];
-    }
+void surfaceLayoutAfterPresentation(void *handle, void (^done)(void)) {
+    NSCAssert(NSThread.isMainThread, @"surface presentation requires the UI thread");
+    WKWebView *main = (WKWebView *)handle;
+    // 모든 플러그인 DOM은 이 웹뷰에 있다. 다른 웹뷰는 독립적인 문서 콘텐츠다.
+    [main _doAfterNextPresentationUpdate:done];
 }
 
 // 창 owner 에 열렸거나 열릴 차례인 배치 트랜잭션이 있는지 반환한다. 트랜잭션이 열린 동안에는 창의
@@ -154,7 +136,7 @@ static void settle(WKWebView *main, void (^done)(double)) {
     }
     void (^finish)(double) = [[done copy] autorelease];
     [main retain];
-    afterNextPresentation(main, ^{
+    surfaceLayoutAfterPresentation(main, ^{
         // 표시를 기다리는 사이 새 트랜잭션이 열렸으면 그 트랜잭션의 확정부터 다시 기다린다.
         if (layoutOpen(main.window)) settle(main, finish);
         else afterNextFrame(main.window.screen, finish);
