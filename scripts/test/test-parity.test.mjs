@@ -65,14 +65,18 @@ test("feature links reject missing evidence fields and workspace files", { timeo
   const errors = auditFeatureLinks([
     {
       id: "broken",
-      implementation: [{ file: "missing.js", symbol: "run" }],
+      implementation: [
+        { file: "missing.js", symbol: "run" },
+        { file: "known.js", symbol: "absent" },
+      ],
       tests: [{ file: "missing.test.mjs", id: "runs" }],
       expected: "",
       levels: ["unknown"],
     },
-  ], ["known.js"]);
+  ], ["known.js"], () => "function run() {}\n");
   assert.ok(errors.some((error) => error.includes("no expected result")));
   assert.ok(errors.some((error) => error.includes("invalid verification level")));
   assert.ok(errors.some((error) => error.includes("missing.js")));
   assert.ok(errors.some((error) => error.includes("missing.test.mjs")));
+  assert.ok(errors.some((error) => error.includes("implementation symbol is not present")));
 });

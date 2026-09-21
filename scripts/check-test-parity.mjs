@@ -1,6 +1,6 @@
 // 구현·테스트 파일 소유를 검사한다. 이 구조 검사는 동작 검증을 대신하지 않는다.
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { extname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -137,7 +137,7 @@ const FEATURE_LINKS = [
     id: "F0.3",
     implementation: [
       { file: "sidecars/shell/src/shell/shell.go", symbol: "handle" },
-      { file: "sidecars/shell/src/platform/darwin/shell.go", symbol: "DirectoryMarker" },
+      { file: "sidecars/shell/src/platform/platform.go", symbol: "DirectoryMarker" },
     ],
     tests: [
       { file: "sidecars/shell/tests/serve_test.go", id: "reopen-replays-cwd" },
@@ -314,7 +314,7 @@ export function auditInventory(files, matrix = MATRIX) {
   };
 }
 
-export function auditFeatureLinks(features, files) {
+export function auditFeatureLinks(features, files, readSource = (file) => readFileSync(`${ROOT}${file}`, "utf8")) {
   const knownFiles = new Set(files);
   const errors = [];
   const ids = new Set();
@@ -331,6 +331,13 @@ export function auditFeatureLinks(features, files) {
     for (const implementation of feature.implementation ?? []) {
       if (!implementation.file || !implementation.symbol) errors.push(`${feature.id}: implementation link must name a file and symbol`);
       else if (!knownFiles.has(implementation.file)) errors.push(`${feature.id}: implementation file is not in the workspace: ${implementation.file}`);
+      else {
+        let source;
+        try { source = readSource(implementation.file); }
+        catch { source = null; }
+        if (source === null) errors.push(`${feature.id}: implementation source cannot be read: ${implementation.file}`);
+        else if (!source.includes(implementation.symbol)) errors.push(`${feature.id}: implementation symbol is not present in ${implementation.file}: ${implementation.symbol}`);
+      }
     }
     for (const test of feature.tests ?? []) {
       if (!test.file || !test.id) errors.push(`${feature.id}: behavior test link must name a file and test id`);
