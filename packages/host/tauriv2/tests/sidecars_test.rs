@@ -9,6 +9,7 @@ use std::time::Duration;
 
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixListener;
+use std::process::Command;
 
 use serde_json::value::RawValue;
 use soksak_host_tauriv2::sidecars::{Message, Owner, Sidecars};
@@ -431,6 +432,93 @@ fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
 
     first.stop();
     second.stop();
+    service.join().unwrap();
+}
+
+#[test]
+fn persistent_transport_replaces_endpoint_left_by_a_dead_service() {
+    let executable_directory = tempfile::tempdir().unwrap();
+    let config_directory = tempfile::tempdir().unwrap();
+    let service_directory = config_directory.path().join("services/echo");
+    std::fs::create_dir_all(&service_directory).unwrap();
+    let socket_path = service_directory.join("replacement.sock");
+    let listener = UnixListener::bind(&socket_path).unwrap();
+    let token = "replacement-token";
+    let replacement_endpoint = serde_json::json!({
+        "protocol": 1,
+        "pid": 1,
+        "socket": socket_path,
+        "token": token
+    });
+    let stale_child = Command::new("/bin/sh").arg("-c").arg("exit 0").spawn().unwrap();
+    let stale_pid = stale_child.id();
+    let _ = stale_child.wait_with_output().unwrap();
+    std::fs::write(
+        service_directory.join("endpoint.json"),
+        serde_json::to_vec(&serde_json::json!({
+            "protocol": 1,
+            "pid": stale_pid,
+            "socket": socket_path,
+            "token": "stale-token"
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+
+    let program = executable_directory.path().join("echo");
+    std::fs::write(
+        &program,
+        format!(
+            "#!/bin/sh\nprintf '%s\\n' '{}'\n",
+            replacement_endpoint
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let fixture = files(r#"{"executable":"build/echo","protocol":1,"transport":"persistent"}"#);
+    let read = |path: &str| fixture.get(path).map(|value| value.as_bytes().to_vec());
+    let sidecars = Sidecars::new(
+        &read,
+        executable_directory.path().to_path_buf(),
+        config_directory.path().to_path_buf(),
+    )
+    .unwrap();
+    let (owner, events) = owner("replacement", "/projects/replacement");
+    let service = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+        let mut line = String::new();
+        reader.read_line(&mut line).unwrap();
+        let hello: serde_json::Value = serde_json::from_str(&line).unwrap();
+        assert_eq!(hello["token"], token);
+        stream
+            .write_all(br#"{"op":"hello","protocol":1,"ok":true}
+"#)
+            .unwrap();
+        line.clear();
+        reader.read_line(&mut line).unwrap();
+        stream.write_all(line.as_bytes()).unwrap();
+        line.clear();
+        reader.read_line(&mut line).unwrap();
+        let close: serde_json::Value = serde_json::from_str(&line).unwrap();
+        let reply = serde_json::json!({
+            "op": "closed-owner",
+            "request": close["request"],
+            "ok": false,
+            "error": "test close"
+        });
+        writeln!(stream, "{reply}").unwrap();
+    });
+
+    sidecars
+        .send(&owner, ECHO, "surface", &raw(r#"{"op":"open"}"#))
+        .unwrap();
+    assert_eq!(events.recv_timeout(Duration::from_secs(1)).unwrap().surface, "surface");
+    assert!(
+        !service_directory.join("endpoint.json").exists(),
+        "stale endpoint was not removed before the replacement path"
+    );
+    sidecars.stop();
     service.join().unwrap();
 }
 
