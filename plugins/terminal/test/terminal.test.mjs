@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
+import { createBinder } from "@soksak/plugin-api";
 import { startTerminal } from "../ui/terminal.js";
+
+const terminalManifest = JSON.parse(readFileSync(new URL("../plugin.json", import.meta.url), "utf8"));
 
 /**
  * 가짜 ResizeObserver 구현.
@@ -60,23 +64,32 @@ class FakeTextEncoder {
  * 가짜 view 구현.
  */
 function createFakeView() {
-  return {
+  const listeners = new Map();
+  const parent = {
+    bubbleCount: 0,
+    addEventListener() {},
+    removeEventListener() {},
+    dispatchEvent() { this.bubbleCount++; return true; },
+  };
+  const view = {
     ownerDocument: {
       location: { search: "?id=test-session" },
     },
     clientWidth: 800,
     clientHeight: 600,
-    addEventListener: function(event, handler) {
-      if (event === "pointerdown" && !this._pointerdown) {
-        this._pointerdown = handler;
-      }
-    },
+    dataset: {},
+    parentElement: parent,
+    addEventListener(event, handler) { if (!listeners.has(event)) listeners.set(event, []); listeners.get(event).push(handler); },
+    removeEventListener(event, handler) { listeners.set(event, (listeners.get(event) ?? []).filter((item) => item !== handler)); },
     _trigger: function(event) {
-      if (event === "pointerdown" && this._pointerdown) {
-        this._pointerdown();
-      }
+      const nativeEvent = event instanceof Event ? event : new Event(event, { bubbles: true, cancelable: true });
+      for (const handler of [...(listeners.get(nativeEvent.type) ?? [])]) handler(nativeEvent);
+      if (nativeEvent.bubbles && !nativeEvent.cancelBubble) parent.dispatchEvent(nativeEvent);
+      return nativeEvent;
     },
+    _parent: parent,
   };
+  return view;
 }
 
 /**
@@ -166,6 +179,15 @@ function createFakeExpose() {
   const commands = new Map();
   const doms = new Map();
 
+  const declared = new Set(terminalManifest.exposes.commands.map(({ name }) => name));
+  const binder = createBinder((name, params) => {
+    const command = commands.get(name);
+    assert.ok(command, `command ${name} must be registered before binding`);
+    return command(params);
+  }, {
+    check: (name) => { if (!declared.has(name)) throw new Error(`command ${name} is not declared`); },
+  });
+
   return {
     status: async function(name, readFn, watchFn) {
       statuses.set(name, { readFn, watchFn });
@@ -179,6 +201,8 @@ function createFakeExpose() {
       doms.set(name, element);
       return Promise.resolve();
     },
+    bind: async function(...args) { return binder.bind(...args); },
+    dispose: async function() { binder.dispose(); },
     getStatus: (name) => statuses.get(name),
     getCommand: (name) => commands.get(name),
     getDom: (name) => doms.get(name),
@@ -517,6 +541,50 @@ test("View pointerdown triggers region focus", async () => {
   fakeView._trigger("pointerdown");
 
   assert(focusCalled, "region.focus() called on pointerdown");
+});
+
+test("pointerdown prevents DOM focus, bubbles, and invokes terminal.focus once", { timeout: 10000 }, async () => {
+  FakeResizeObserver.reset();
+  const attach = createFakeAttachImage();
+  const expose = createFakeExpose();
+  const view = createFakeView();
+  let focusCalls = 0;
+  let region;
+  await startTerminal({
+    view, attachImage: (...args) => {
+      region = attach.function(...args);
+      region.focus = async () => { focusCalls++; };
+      return region;
+    },
+    sidecar: createFakeSidecar(), expose, window: { TextEncoder: FakeTextEncoder },
+  });
+
+  const event = view._trigger("pointerdown");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(expose.getCommand("terminal.focus") !== undefined, true);
+  assert.equal(focusCalls, 1);
+  assert.equal(event.defaultPrevented, true);
+  assert.equal(view._parent.bubbleCount, 1);
+});
+
+test("terminal.focus binding reports focus rejection through terminal.session", { timeout: 10000 }, async () => {
+  FakeResizeObserver.reset();
+  const attach = createFakeAttachImage();
+  const expose = createFakeExpose();
+  const view = createFakeView();
+  let region;
+  await startTerminal({
+    view, attachImage: (...args) => {
+      region = attach.function(...args);
+      region.focus = async () => { throw new Error("focus rejected"); };
+      return region;
+    },
+    sidecar: createFakeSidecar(), expose, window: { TextEncoder: FakeTextEncoder },
+  });
+
+  view._trigger("pointerdown");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.match(expose.getStatus("terminal.session").readFn().error, /terminal input failed: focus rejected/);
 });
 
 // 테스트 6: terminal.screen.read → sidecar에 screen.read가 가고, 가짜가 screen 이벤트로 답하면 줄 텍스트 배열이 돌아온다

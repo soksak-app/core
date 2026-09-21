@@ -67,6 +67,17 @@
     ],
     "commands": [
       {
+        "name": "terminal.focus",
+        "description": "Transfers keyboard ownership to the terminal native image region.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
         "name": "terminal.input",
         "description": "Sends text input to the terminal session as UTF-8 bytes.",
         "params": {

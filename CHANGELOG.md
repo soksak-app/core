@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- Keep native terminal focus through pointer release by cancelling the DOM anchor's default focus action, without stopping card-selection propagation. Declare and bind `terminal.focus`, and expose failures in session status. Two unit regressions reproduced Red; rebuilt macOS Tauri passes three-terminal native editing and consecutive commands without a second click. Wails focus integration and cursor rendering are not validated by this result.
+
 - Remove the obsolete surface-document offset from exposed DOM rectangles. Mounted plugin modules share application coordinates; independent document origins remain intact. Two coordinate regressions failed before correction; all 16 registry tests and package tests pass, and both hosts build. Rebuilt Tauri confirms the corrected coordinates and first-terminal native typing; remaining terminal focus and browser address-selection failures are recorded separately, not reported as an application pass.
 
 - Add bounded command-group supervision with start/progress/final events, elapsed time, raw output forwarding, timeout/cancellation, and cleanup evidence. Reject permission-denied probes as proof of process absence. Sixteen supervisor assertions pass, including the Red case for incorrect EPERM success. Per-language case adapters and full process ownership checks remain pending.

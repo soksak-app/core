@@ -91,7 +91,7 @@ async function assertGridFillsPlane(session, message) {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: native keyboard edits and executes independently in three terminals`, async (t) => {
+  test(`${app.name}: native keyboard edits and executes independently in three terminals`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
@@ -102,7 +102,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(terminals.length, 3);
     await s.presented();
     for (const [index, terminal] of terminals.entries()) {
-      await t.test(`terminal ${index + 1}`, async () => {
+      await t.test(`terminal ${index + 1}`, { timeout: 15000 }, async () => {
         const surface = terminal.surface;
         await readScreenUntil(s, surface, (lines) => lines.some((line) => line.includes("$")), "shell prompt missing");
         const others = await Promise.all(terminals.filter((item) => item.surface !== surface)
@@ -124,6 +124,12 @@ for (const app of Object.values(APPS)) {
         await s.press("Enter");
         const output = await readScreenUntil(s, surface, (lines) => lines.includes(marker), "native Enter did not execute the command");
         assert.equal(output.filter((row) => row === marker).length, 1, "command output must occur once");
+        const continued = `continued${index}`;
+        for (const ch of `echo ${continued}`) await s.press(ch === " " ? "Space" : ch);
+        await s.press("Enter");
+        const next = await readScreenUntil(s, surface, (lines) => lines.includes(continued),
+          "typing after output required another click");
+        assert.equal(next.filter((row) => row === continued).length, 1, "continued input must execute once without refocusing");
         for (const [other, before] of others) assert.deepEqual(await s.get("terminal.screen", other), before,
           `typing in ${surface} changed ${other}`);
       });

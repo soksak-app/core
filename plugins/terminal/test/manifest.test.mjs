@@ -38,6 +38,6 @@ test("the surface page registers every declared exposure", () => {
 test("the terminal exposes its session, input command, screen.read command, close command, and view", () => {
   const names = (kind) => manifest.exposes[kind].map((entry) => entry.name).sort();
   assert.deepEqual(names("status"), ["terminal.screen", "terminal.session"]);
-  assert.deepEqual(names("commands"), ["terminal.close", "terminal.input", "terminal.screen.read"]);
+  assert.deepEqual(names("commands"), ["terminal.close", "terminal.focus", "terminal.input", "terminal.screen.read"]);
   assert.deepEqual(names("dom"), ["terminal.view"]);
 });

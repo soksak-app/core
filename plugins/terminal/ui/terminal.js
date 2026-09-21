@@ -95,6 +95,13 @@ export async function startTerminal({ view, attachImage, sidecar, expose, window
   const inputQueue = [];
   const MAX_QUEUE_SIZE = 1024;
 
+  const reportInputError = (error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`terminal input failed: ${message}`);
+    session = { ...session, error: `terminal input failed: ${message}` };
+    changed("session");
+  };
+
   // queue에 저장된 입력을 순서대로 보낸다.
   const flushInputQueue = () => {
     for (const queuedInput of inputQueue) {
@@ -172,10 +179,9 @@ export async function startTerminal({ view, attachImage, sidecar, expose, window
     }
   });
 
-  // 포인터 다운 시 focus 호출
-  view.addEventListener("pointerdown", () => {
-    region.focus().catch((error) => console.error(`focus failed: ${error.message}`));
-  });
+  // 네이티브 포커스를 받은 뒤 DOM 기본 동작이 키보드 소유권을 되찾지 않게 한다.
+  const preventDefaultFocus = (event) => event.preventDefault();
+  view.addEventListener("pointerdown", preventDefaultFocus);
 
   // screen.read 응답을 기다리는 resolver
   let pendingScreenRead = null;
@@ -307,4 +313,9 @@ export async function startTerminal({ view, attachImage, sidecar, expose, window
     }),
     expose.dom("terminal.view", view),
   ]);
+  await expose.command("terminal.focus", async () => {
+    await region.focus();
+    return null;
+  });
+  await expose.bind(view, "terminal.focus", {}, { event: "pointerdown", failed: reportInputError });
 }
