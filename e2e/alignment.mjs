@@ -1,8 +1,8 @@
 import { pixel } from "./frame.mjs";
 
-// 셸 입력 구분선의 색. midnight 테마의 --surface-fg(#7fe3b0) 22% 를 --surface(#0d1a14)
-// 위에 합성한 sRGB 값이다(plugins/shell/ui/shell.html).
-const LINE = [38, 70, 54];
+// 셸 입력 구분선의 실측 색. CSS의 22% color-mix가 1px 경계의 반 픽셀
+// 래스터화와 함께 --surface(#0d1a14)에 합성된 결과다(plugins/shell/ui/shell.js).
+const LINE = [26, 49, 37];
 
 // 셸 입력 구분선은 웹뷰 배경과 별도로 문서의 실제 표시 폭을 확인한다.
 function shellLine(frame, at) {
