@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { auditCompletedFeatureLinks, auditFeatureLinks, auditHistoricalScopeWording, auditInventory, auditRecordedInventoryCounts, discoverInventory, repositoryFiles } from "../check-test-parity.mjs";
+import { auditCompletedFeatureLinks, auditFeatureLinks, auditHistoricalScopeWording, auditInventory, auditModalParitySnapshotWording, auditRecordedInventoryCounts, discoverInventory, repositoryFiles } from "../check-test-parity.mjs";
 
 const files = repositoryFiles();
 
@@ -105,5 +105,13 @@ test("completed F3 scope is not reported as currently open", { timeout: 1000 }, 
   assert.match(
     auditHistoricalScopeWording("Controlled-site pixels and restored/new-document validation remain open under F3." )[0],
     /currently open/,
+  );
+});
+
+test("modal parity Red is dated and followed by current F10.2 evidence", { timeout: 1000 }, () => {
+  assert.deepEqual(auditModalParitySnapshotWording(), []);
+  assert.match(
+    auditModalParitySnapshotWording("The modal implementation has a larger confirmed gap." )[0],
+    /historical snapshot/,
   );
 });

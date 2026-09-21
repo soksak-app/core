@@ -138,6 +138,13 @@ const MATRIX = [
 // The inventory remains structural; behavior is proved by the referenced tests.
 const FEATURE_LINKS = [
   {
+    id: "G1.3-4",
+    implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "auditModalParitySnapshotWording" }],
+    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "modal parity Red is dated and followed by current F10.2 evidence" }],
+    expected: "The original Wails modal Red remains as a dated observation and the current F10.2 correction is stated without conflating the two states.",
+    levels: ["unit"],
+  },
+  {
     id: "G1.3-3",
     implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "auditHistoricalScopeWording" }],
     tests: [{ file: "scripts/test/test-parity.test.mjs", id: "completed F3 scope is not reported as currently open" }],
@@ -755,6 +762,15 @@ export function auditHistoricalScopeWording(checklistSource = readFileSync(`${RO
   return forbidden.filter((phrase) => checklistSource.includes(phrase)).map((phrase) => `F3 scope is reported as currently open: ${phrase}`);
 }
 
+export function auditModalParitySnapshotWording(checklistSource = readFileSync(`${ROOT}docs/features.md`, "utf8")) {
+  const line = checklistSource.split("\n").find((entry) => entry.includes("At the 2026-09-21 audit snapshot"));
+  if (!line) return ["modal parity observation is not explicitly dated as a historical snapshot"];
+  if (!line.includes("The later F10.2 correction creates the Wails child-WebView contract")) {
+    return ["modal parity observation does not state the current F10.2 correction"];
+  }
+  return [];
+}
+
 export { MATRIX, repositoryFiles };
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
@@ -762,6 +778,7 @@ if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) 
   errors.push(...auditCompletedFeatureLinks(featureLinks));
   errors.push(...auditRecordedInventoryCounts({ trackCount, implementationCount, testCount }));
   errors.push(...auditHistoricalScopeWording());
+  errors.push(...auditModalParitySnapshotWording());
   if (errors.length) {
     console.error(`Test inventory checks failed: ${errors.length} issue(s); ` +
       `${uncoveredImplementations.length} uncovered implementation(s), ${uncoveredTests.length} uncovered test(s), ` +
