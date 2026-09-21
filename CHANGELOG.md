@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- Remove the obsolete surface-document offset from exposed DOM rectangles. Mounted plugin modules share application coordinates; independent document origins remain intact. Two coordinate regressions failed before correction; all 16 registry tests and package tests pass, and both hosts build. Rebuilt Tauri confirms the corrected coordinates and first-terminal native typing; remaining terminal focus and browser address-selection failures are recorded separately, not reported as an application pass.
+
 - Add bounded command-group supervision with start/progress/final events, elapsed time, raw output forwarding, timeout/cancellation, and cleanup evidence. Reject permission-denied probes as proof of process absence. Sixteen supervisor assertions pass, including the Red case for incorrect EPERM success. Per-language case adapters and full process ownership checks remain pending.
 
 - Discover source and test languages outside fixed audit roots and expose unmapped files as structural failures, without claiming behavior parity. Add regression cases for six omitted-file categories and duplicate ownership. Run actual Rust terminal package tests instead of an empty successful command, and include audit self-tests in the root test command. The 22 inventory/checklist/package-command assertions and package suite pass; the repository inventory and Tauri native-keyboard acceptance remain red.

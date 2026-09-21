@@ -131,6 +131,8 @@ Clients call these JSON-RPC 2.0 methods.
 | `input.pointer` | `{window, x, y, phase, button?, deltaX?, deltaY?, activate?}` | `null`. Window coordinates. `phase` is `move`, `down`, `drag`, `up`, or `scroll`. `button` is `left` (default) or `right`. `deltaX` and `deltaY` are scroll distances in points. `activate` applies to `move` |
 | `input.key` | `{window, key, text?, modifiers?, phase}` | `null`. `key` is a key name (`Enter`, `Tab`, `Escape`, `Backspace`, `Delete`, `Space`, `ArrowLeft`, `ArrowRight`, `ArrowUp`, `ArrowDown`, `Home`, `End`, `PageUp`, `PageDown`) or one character. `modifiers` is an array of `shift`, `control`, `option`, `command`. `phase` is `down` or `up` |
 
+All mounted plugin modules, including hybrid compositions with native regions, share the application DOM document. Their `dom.rect` rectangles already use application-document coordinates and their `document` origin is `{x: 0, y: 0}`. Surface placement must not be added to this origin. A native modal has its own document: its rectangles remain modal-local and its `document` origin is the actual modal frame origin. Clients add the reported document origin exactly once; they must not compensate for surface kind or card placement.
+
 The host delivers `input.pointer` and `input.key` as native events, and the page receives trusted events. The application is not activated, except for `move` with `activate: true`. On macOS:
 
 - Keys and scroll go through `-[NSWindow sendEvent:]`. Presses, drags, and releases go to the view under the point, because AppKit does not deliver a press in an inactive window to the view.

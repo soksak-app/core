@@ -90,14 +90,6 @@ function preferred() {
   return [first, ...visible].filter(Boolean);
 }
 
-/** 표면 문서의 원점. 호스트가 실제로 앉힌 자리를 창 좌표로 바꾼다. */
-function origin(surface) {
-  const placed = seated()?.surfaces.find((s) => s.id === surface);
-  if (!placed) return null;
-  const at = planeOrigin();
-  return { x: placed.applied.x + at.x, y: placed.applied.y + at.y };
-}
-
 function gridState() {
   const grid = currentGrid();
   if (!grid) return null;
@@ -315,5 +307,5 @@ export async function installCoreExposure({ library, renames, resetLayout, chrom
   onModalState(coreChanged);
   onSaved(coreChanged);
 
-  await connectExposure({ surfacePlugin, preferred, origin, registrationChanged: coreChanged, settled: drawn });
+  await connectExposure({ surfacePlugin, preferred, registrationChanged: coreChanged, settled: drawn });
 }

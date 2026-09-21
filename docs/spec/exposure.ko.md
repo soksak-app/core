@@ -131,6 +131,8 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 | `input.pointer` | `{window, x, y, phase, button?, deltaX?, deltaY?, activate?}` | `null`. 창 좌표를 쓴다. `phase`는 `move`, `down`, `drag`, `up`, `scroll` 중 하나다. `button`은 `left`(기본값) 또는 `right`다. `deltaX`, `deltaY`는 포인트 단위 스크롤 거리다. `activate`는 `move`에 적용한다 |
 | `input.key` | `{window, key, text?, modifiers?, phase}` | `null`. `key`는 키 이름(`Enter`, `Tab`, `Escape`, `Backspace`, `Delete`, `Space`, `ArrowLeft`, `ArrowRight`, `ArrowUp`, `ArrowDown`, `Home`, `End`, `PageUp`, `PageDown`) 또는 문자 하나다. `modifiers`는 `shift`, `control`, `option`, `command`의 배열이다. `phase`는 `down` 또는 `up`이다 |
 
+네이티브 영역을 포함하는 hybrid 합성도 마운트된 플러그인 모듈은 모두 앱 DOM 문서를 공유한다. `dom.rect` 사각형은 이미 앱 문서 좌표를 사용하며 `document` 원점은 `{x: 0, y: 0}`이다. 이 원점에 표면 위치를 더하지 않는다. 네이티브 모달은 별도 문서이므로 사각형은 모달 내부 좌표를 유지하고 `document` 원점은 실제 모달 프레임 원점이다. 클라이언트는 보고된 문서 원점을 정확히 한 번 더하며 표면 종류나 카드 위치에 따라 보정하지 않는다.
+
 호스트는 `input.pointer`와 `input.key`를 네이티브 이벤트로 전달하며 페이지는 신뢰 이벤트를 받는다. `activate: true`인 `move`를 제외하면 애플리케이션을 활성화하지 않는다. macOS에서는 다음과 같다.
 
 - 키와 스크롤은 `-[NSWindow sendEvent:]`로 보낸다. AppKit은 비활성 창의 누름을 뷰에 전달하지 않으므로 누름·끌기·뗌은 좌표의 뷰에 보낸다.

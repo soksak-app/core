@@ -188,7 +188,40 @@ test("surface registrations are checked against the declarations and the surface
   assert.equal(made.list().status.find((entry) => entry.name === "probe.lines").registered, false);
 });
 
-test("requests for surface names are forwarded to the preferred surface with its document origin", async () => {
+test("mounted surface rectangles retain application coordinates after layout changes", { timeout: 10000 }, async () => {
+  const rectangles = new Map([
+    ["tab-a", { x: 210, y: 116, width: 233.5, height: 286.5 }],
+    ["tab-b", { x: 705, y: 116, width: 487, height: 286.5 }],
+    ["tab-c", { x: 457.5, y: 116, width: 233.5, height: 286.5 }],
+  ]);
+  const host = fakeHost(({ surface, method }) => {
+    assert.equal(method, "dom.rect");
+    return { result: rectangles.get(surface) };
+  });
+  const made = coreRegistry(host);
+  made.configure({ surfacePlugin: () => "probe" });
+  for (const surface of rectangles.keys()) made.registered({ surface, kind: "dom", name: "probe.lines" });
+  for (const offset of [0, -200, 0]) {
+    for (const [surface, before] of rectangles) {
+      const expected = { ...before, x: before.x + offset };
+      rectangles.set(surface, expected);
+      const { result } = await made.handle({ method: "dom.rect", params: { name: "probe.lines", surface } });
+      assert.deepEqual(result, { ...expected, document: { x: 0, y: 0 } });
+      assert.equal(result.document.x + result.x + result.width / 2, expected.x + expected.width / 2);
+      assert.equal(result.document.y + result.y + result.height / 2, expected.y + expected.height / 2);
+      rectangles.set(surface, before);
+    }
+  }
+});
+
+test("an independent document retains its explicit origin", { timeout: 10000 }, async () => {
+  const made = coreRegistry(null);
+  const modal = { x: 12, y: 24, width: 30, height: 20, document: { x: 300, y: 180 } };
+  made.method("dom.rect", () => modal);
+  assert.deepEqual(await made.handle({ method: "dom.rect", params: { name: "core.fixture.button" } }), { result: modal });
+});
+
+test("requests for surface names are forwarded to the preferred surface in the application document", { timeout: 10000 }, async () => {
   const host = fakeHost(({ surface, method }) => (method === "dom.rect"
     ? { result: { x: 1, y: 2, width: 3, height: 4 } }
     : method === "command.run" ? { result: surface } : { error: { code: 1003, message: "gone" } }));
@@ -197,7 +230,6 @@ test("requests for surface names are forwarded to the preferred surface with its
   made.configure({
     surfacePlugin: () => "probe",
     preferred: () => preferred,
-    origin: (surface) => (surface === "tab-a" ? { x: 100, y: 50 } : null),
   });
   assert.equal((await made.handle({ method: "command.run", params: { name: "probe.send", params: {} } })).error.code,
     EXPOSURE_ERRORS.unregistered);
@@ -209,7 +241,7 @@ test("requests for surface names are forwarded to the preferred surface with its
   preferred = ["tab-c", "tab-a"];
   assert.deepEqual(await made.handle({ method: "command.run", params: { name: "probe.send", params: {} } }), { result: "tab-a" });
   assert.deepEqual(await made.handle({ method: "dom.rect", params: { name: "probe.lines" } }),
-    { result: { x: 1, y: 2, width: 3, height: 4, document: { x: 100, y: 50 } } });
+    { result: { x: 1, y: 2, width: 3, height: 4, document: { x: 0, y: 0 } } });
   const forwarded = host.calls.filter(([name]) => name === "exposureForward").map(([, arg]) => arg);
   assert.deepEqual(forwarded.at(-1).params, { name: "probe.lines" });
   assert.equal(forwarded.at(-1).surface, "tab-a");

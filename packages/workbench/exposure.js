@@ -34,7 +34,6 @@ const watchKey = (name, surface) => JSON.stringify([name, surface ?? null]);
  *
  *   surfacePlugin(surface)  표면을 소유한 플러그인 id. 모르는 표면이면 null
  *   preferred()             이름을 등록한 표면이 여럿일 때 고를 순서. 표면 id 배열
- *   origin(surface)         표면 문서의 원점 {x, y}. 창 좌표이고, 모르면 null
  *   registrationChanged()   표면의 등록이 바뀐 뒤 호출된다
  */
 export function createRegistry({ call = null } = {}) {
@@ -49,7 +48,7 @@ export function createRegistry({ call = null } = {}) {
   /* 감시 중인 표면 status. 감시 키마다 따라가는 표면, 요청한 표면, 마지막 버전. */
   const following = new Map();
   let options = {
-    surfacePlugin: () => null, preferred: () => [], origin: () => null, registrationChanged: () => {},
+    surfacePlugin: () => null, preferred: () => [], registrationChanged: () => {},
     // 코어 명령이 실행된 뒤 기다릴 작업. 문서는 판의 그리기를 넘겨, 배치를 바꾼 명령이 그려진 뒤 답하게 한다.
     settled: () => undefined,
   };
@@ -138,7 +137,6 @@ export function createRegistry({ call = null } = {}) {
       following.set(key, watch);
       follow(key, name, watch);
     }
-    if (method === "dom.rect") return { ...result, document: options.origin(surface) };
     return result;
   }
 
@@ -262,7 +260,7 @@ export function createRegistry({ call = null } = {}) {
     /** 요청 하나에 답한다. 결과는 {result} 또는 {error: {code, message}} 다. */
     handle: ({ method, params }) => replyPayload(async () => {
       const result = await answer(method, params);
-      // 코어 dom 요소의 문서는 메인 문서이고 그 원점은 창의 원점이다.
+      // 코어와 마운트된 플러그인은 앱 문서를 공유한다. 별도 문서가 지정한 원점은 유지한다.
       if (method === "dom.rect" && result && result.document === undefined) return { ...result, document: { x: 0, y: 0 } };
       return result;
     }),
