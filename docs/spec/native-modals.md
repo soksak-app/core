@@ -13,7 +13,7 @@ The application owns the existing settings and picker DOM. `overlay.show()` rend
 
 The main document measures the card rectangle. Moving the card updates its DOM position without moving the full-viewport dialog webview. The dialog webview resizes with the main window, blocks background input, and remains above newly created surfaces.
 
-The dialog document draws the translucent backdrop with CSS. Each background webview applies the same CSS blur to its own content. A CSS filter in the dialog cannot blur a separate native webview. The dialog content remains clear. Hosts assign the boolean `window.__soksakBackground` through webview APIs. The background script applies state assigned before its initialization and handles later assignments through the same property.
+The dialog document draws the translucent backdrop with its `body::before` pseudo-element. The copied workbench `body::before` background and native paint mask must be disabled in the dialog document; otherwise the copied application background hides the native surfaces. The card is above the pseudo-element and remains clear. Each background webview applies the same CSS blur to its own content. A CSS filter in the dialog cannot blur a separate native webview. Hosts assign the boolean `window.__soksakBackground` through webview APIs. The background script applies state assigned before its initialization and handles later assignments through the same property.
 
 Opening, closing, surface creation, and surface navigation must apply the current background state. Closing removes the applied stylesheet without changing the page's existing styles. Reloading main removes its modal and background effect. Modal webviews and their initial documents are transparent; the card paints its own background. No additional OS window or platform visual-effect view is required.
 
@@ -33,7 +33,9 @@ view; its owner remains responsible for cleaning up the previous DOM.
 
 The following markup uses the example's `app.css` classes. The scrim remains in
 the main document to block its DOM input; only the card is copied into the
-native webview.
+native webview. In a native `dialog`, the copied card document draws the visual
+scrim itself. The main document's background paint must not be copied into that
+document.
 
 ```html
 <div class="set-scrim" id="preferences-scrim">

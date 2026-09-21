@@ -4,6 +4,8 @@
 
 A sidecar is a native process that holds functionality for one domain, such as shell sessions. Plugins use it through the native host; the host relays messages and does not interpret their bodies. One sidecar implementation serves both Wails and Tauri.
 
+The approved persistent terminal service is defined by [terminal runtime](terminal-runtime.md). Its process ownership, transport, close, and recovery rules apply to the terminal sidecar. Other stdio sidecar domains retain their own lifecycle. [Features](../features.md) records implementation and application verification separately.
+
 ## Declaration and startup
 
 A sidecar is a package in `sidecars/<name>` with a `sidecar.json` file. The sidecar identity is its package name, for example `@soksak/sidecar-shell`. [`validateSidecar`](../../packages/plugin-api/index.js) checks the file:
@@ -39,6 +41,8 @@ Each message is one JSON object on one line.
 | Sidecar → host | `{"surface": id, "body": value}` |
 
 The host records the window that first sends for a surface and delivers each sidecar message only to that window, as the `sidecar-message` event `{sidecar, surface, body}`, where `sidecar` is the package name. A request from another window for the same surface fails. When the application exits, the host closes each sidecar's standard input and waits for the process to end.
+
+The operation selector in a sidecar request body is an existing transport detail. A plugin manifest does not copy that wire spelling: it declares the readable `background.operation` name, and the workbench sends the corresponding sidecar request at one transport boundary. Missing operations and sidecar errors are failures; they are not replaced or discarded.
 
 ## Page interface
 
@@ -122,25 +126,16 @@ A closed surface ends its session and its `run` commands by terminating their pr
 
 Public symbols in sidecars and their helpers that are diagnostic-only start with `sp_diag_`. The release build check uses this marker to reject binaries that contain diagnostic code. When a sidecar includes diagnostic symbols in a release build, the release check fails with an error message pointing to the symbol name.
 
-## ptyd
-
-`sidecars/ptyd` is a shared helper that manages PTY sessions for sidecars. It runs as a daemon and handles session creation, input/output routing, and session lifecycle. The daemon listens on a Unix socket and serves multiple clients concurrently.
-
-**Session lifecycle**: When a consumer (typically from a host that owns a sidecar) attaches to a session, the daemon runs the session's child process. Sessions remain alive after a consumer detaches (`detach` operation), but terminate when all consumers disconnect and the session receives a close request (`close` operation). A session with no consumers and no clients (total of 0 active connections) starts an idle timeout; if no activity occurs within the timeout period, the daemon shuts itself down. In debug builds the idle timeout is 60 seconds; in release builds it is 5 minutes. The timeout can be overridden with the `PTYD_IDLE_TIMEOUT` environment variable, parsed as a Go duration (e.g., `"30s"`, `"2m"`).
-The daemon belongs to the sidecar that started it. If that parent sidecar exits, the daemon closes its listener and PTY sessions and exits; it must not remain as an orphan adopted by the system process.
-
-**Logging**: The daemon logs to stderr by default when the application is attached to a terminal. To redirect logs to a file, set `PTYD_LOG` to the file path. This is useful for debugging daemon lifecycle and request handling.
-
 ## Terminal sidecar (vt-core)
 
-The terminal sidecar (`@soksak/sidecar-vt-core`) implements a terminal emulator that renders to an image region. It accepts requests to control the terminal and supplies screen images to a region. The sidecar is a Rust process that uses an Alacritty engine for terminal emulation and IOSurface-backed drawing.
+The terminal sidecar (`@soksak/sidecar-vt-core`) is the client module for the persistent terminal service defined by [terminal runtime](terminal-runtime.md). The service is one process per application configuration directory and owns the independent PTYs, shell processes, VT state, scrollback, and IOSurface-backed rendering. The sidecar accepts requests to control a terminal session and supplies screen images to a region.
 
 | Request | Body | Meaning |
 | --- | --- | --- |
-| `open` | `{image?: name}` | Create a terminal session. The sidecar opens a PTY session through the ptyd daemon and waits for the host's image `configure` before allocating and drawing the image region. Multiple `open` calls for the same surface do nothing. |
+| `open` | `{image?: name}` | Create or attach to a terminal session in the persistent service and wait for the host's image `configure` before allocating and drawing the image region. Multiple `open` calls for the same creation identifier do nothing. |
 | `input` | `{bytes?: base64-string \| keys?: [{key: name, text?: string, shift: bool, alt: bool, ctrl: bool}]}` | Send input to the terminal. Bytes are base64-encoded raw terminal input. Keys are decoded to terminal sequences based on the mode: function keys map to escape sequences, text input is sent as UTF-8, and modifier combinations are handled accordingly. Both `bytes` and `keys` can be present in one request. |
 | `screen.read` | `{}` | Request the current screen state. The sidecar responds with `{event: "screen", cols, rows, cursor: {col, row}, lines: [[cell, ...]]}`, where each cell has `{ch?: string, width: number, fg?: color, bg?: color, bold: bool, italic: bool, underline: bool, inverse: bool}`. <!-- cell size: pending code --> |
-| `close` | `{}` | Close the terminal session and shut down the PTY. The sidecar sends `{closed: true}` in response to a host `{closed: true}` envelope, which ends the session but keeps the daemon alive (detach behavior). |
+| `close` | `{}` | Close the terminal session and shut down the PTY. A host `{closed: true}` envelope uses the same close operation, so removing a surface cannot leave its PTY session alive. |
 
 The sidecar sends `{event: "screen", ...}` whenever the terminal screen changes, and sends image envelopes through the host's image relay when a new frame is drawn. Host `configure` replaces the page-driven `resize` request and is coalesced to its latest raster revision. While a transfer image awaits `consumed` or an error, the sidecar does not modify it. Screen and configuration changes remain pending, and the next frame uses the latest configuration after the response.
 

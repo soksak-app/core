@@ -81,7 +81,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 
 ### 모달 문서
 
-네이티브 모달 문서는 렌더, 배치, 테마 변경마다 모달 응답 경로로 키 `document`를 사용해 자기 상태를 메인 페이지에 보고한다. 메인 페이지는 이를 status `core.modal`로 공개한다. 열린 모달이 없으면 `null`이고, 있으면 `{id, mode, document}`다. `document`는 첫 보고 전에는 `null`이며 이후 `{mode, filter, htmlBackground, bodyBackground, loaded, rect}`다: 렌더한 요소의 `data-native-modal`, 루트의 계산된 `filter`, 루트와 body의 계산된 배경색, 문서가 첫 내용 요청의 응답을 처리했는지(적용한 변경보다 오래되어 버린 경우도 포함), CSS 픽셀 단위 요소 사각형.
+네이티브 모달 문서는 렌더, 배치, 테마 변경마다 모달 응답 경로로 키 `document`를 사용해 자기 상태를 메인 페이지에 보고한다. 메인 페이지는 이를 status `core.modal`로 공개한다. 열린 모달이 없으면 `null`이고, 있으면 `{id, mode, document}`다. `document`는 첫 보고 전에는 `null`이며 이후 `{mode, filter, htmlBackground, bodyBackground, scrimBackground, loaded, rect}`다: 렌더한 요소의 `data-native-modal`, 루트의 계산된 `filter`, 루트와 body의 계산된 배경색, 대화상자 scrim에 사용하는 `body::before`의 계산된 배경색, 문서가 첫 내용 요청의 응답을 처리했는지(적용한 변경보다 오래되어 버린 경우도 포함), CSS 픽셀 단위 요소 사각형.
 
 ### 표면 선택
 

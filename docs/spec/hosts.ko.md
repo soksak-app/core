@@ -76,6 +76,8 @@ packages/host/wailsv3/                     packages/host/tauriv2/
 - 대체(stub) 파일은 없다. 플랫폼이 구현하지 않은 연산은 `src/platform/<os>/unsupported.*`에서 오류를 반환한다.
 - `native/darwin`이 내보내는 C 이름이 프레임워크의 이름과 겹치면 `sp_`로 시작한다. Wails는 자기 `windowFullscreen`을 컴파일하고, 링커가 둘 중 하나를 골라 호출이 프레임워크 함수로 갔으며 호스트는 그 반환값을 실패로 읽었다.
 
+두 호스트의 `platform/darwin/ui_queue.go`와 `ui_queue.rs`는 프레임워크 이벤트 잠금 밖의 네이티브 메인 큐 실행을 제공한다. 표면 커밋과 취소는 이 경계에서 실행한다.
+
 ## 플랫폼 선택
 
 Go: 각 `src/platform/<os>/` 디렉터리는 Go 패키지다. 대표 파일(`darwin.go`, `windows.go`)은 빌드 태그가 없고 패키지 문서만 가진다. 나머지 파일은 `//go:build <os>` 태그를 가지며, 그중 한 파일이 `init`에서 `platform.Register`를 호출한다. `host.go`는 모든 운영체제 패키지를 빈 식별자로 가져오므로 빌드는 대상 운영체제의 구현만 등록한다. `host.Run`은 `platform.Current()`로 구현을 얻고, 등록된 구현이 없으면 실패한다.
@@ -155,7 +157,7 @@ Wails 바인딩 서비스 이름은 `github.com/min-median-max/soksak/packages/h
 
 | 파일 | 내용 |
 | --- | --- |
-| `go.work` | `apps/wailsv3`, `packages/host/wailsv3`, `sidecars/shell`, `sidecars/ptyd`를 사용하고, 호스트 모듈 `v0.0.0`을 `./packages/host/wailsv3`로 대체한다 |
+| `go.work` | `apps/wailsv3`, `packages/host/wailsv3`, `sidecars/shell`을 사용하고, 호스트 모듈 `v0.0.0`을 `./packages/host/wailsv3`로 대체한다 |
 | `Cargo.toml` | 멤버 `apps/tauriv2`와 `packages/host/tauriv2`, Tauri 크레이트에 대한 공용 `[patch.crates-io]`, `dev` 프로필을 가진 워크스페이스 |
 | `Cargo.lock` | 두 크레이트가 공유하는 하나의 잠금 파일 |
 | `target/` | Cargo 출력과 두 애플리케이션 실행 파일. `.gitignore`가 제외한다 |

@@ -27,17 +27,28 @@ Common functionality belongs to the workbench or the native host so plugins do n
 | --- | --- | --- |
 | `id` | yes | Lowercase identifier. Tabs and settings reference it |
 | `name` | yes | Display name |
-| `surface` | no | `{ "page": "ui/page.html", "composition": ... }`: a document inside the package and its required [surface composition](surface-composition.md). A page shows web documents in document regions; a web address is not a surface |
+| `surface` | no | `{ "module": "ui/page.js", "composition": ... }`: a module inside the package and its required [surface composition](surface-composition.md). The module mounts into the app DOM; external web documents use document regions. A web address is not a surface |
 | `home` | no | The `http` or `https` address the surface page opens first; requires `surface` |
 | `mark` | with `surface` | Short text shown in the add menu and new tab titles |
 | `icon` | with `surface` | SVG elements for a 16×16 view box |
 | `sections` | no | Sidebar sections `{ "id": "<plugin id>.<name>", "name" }` |
 | `preview` | no | `{ "ink": "--<token>" }`: the theme token name that colors the plugin's cards in library previews; requires `surface` |
 | `sidecars` | no | Package names of the [sidecars](sidecars.md) the page surface uses; requires `surface`. Each must be a dependency in the plugin's `package.json` |
+| `background` | no | `{ "sidecar": "<declared sidecar>", "operation": "<operation name>" }`: keeps one declared sidecar session for each non-active tab without creating a native surface; requires `surface` and `sidecars` |
 
-A plugin requires `surface`, `sections`, or both. Only plugins with a surface appear in the add menu and own a rail. The workbench opens a `page` surface at `modules/<package name>/<page>?id=<tab id>`. Unknown fields are rejected.
+A plugin requires `surface`, `sections`, or both. Only plugins with a surface appear in the add menu and own a rail. The workbench imports `modules/<package name>/<module>` and calls its `mount(root, context)` export. The surface identifier is an explicit context member, not a URL query. The old `page` declaration is rejected; it does not select an alternate implementation. Unknown fields are rejected.
 
 `surface.composition` is either `{ "kind": "dom" }` or a hybrid declaration with `kind: "hybrid"`, complete `regions`, and complete `overlays`. An image region names a sidecar already listed in `sidecars`. The manifest declaration is authority data sent to the host; page code cannot add a region, supplier, input owner, or stacking entry that is absent from it.
+
+## Surface module ownership
+
+Each OS window has one app DOM WebView. The workbench owns the surface element and its Shadow Root; a plugin owns the DOM it mounts inside that root. Shadow DOM isolates styles, not security privileges. The context exposes surface-scoped commands, statuses, DOM bindings, sidecar messages, and the declared composition controller. The host validates the window, surface, and declaration again. Plugins do not create internal WebViews or iframes.
+
+`mount(root, context)` may be asynchronous and returns `{ dispose() }`. Native surface registration completes before mounting can attach a region. Mounting failure is a visible error; it cannot become a successful empty surface. Native readiness requires the first presented region, not merely a completed module import. The workbench distinguishes loading, ready, and error.
+
+Hiding a tab or visiting the library hides its DOM and native regions without disposing its module or closing its session. Explicit removal disposes the module and releases its bindings, event subscriptions, and regions; disposal failures are reported. Every operation remains subject to the shared binder and [exposure](exposure.md) contract. Menus and settings are DOM overlays in the same app WebView, with declared input ownership above native regions.
+
+A `background` declaration is an explicit session-lifetime contract, not a second page or a hidden WebView. The workbench sends the declared `operation` through the declared sidecar using the sidecar message protocol. The manifest uses the full field name `operation`; the sidecar request body retains its existing operation selector. The workbench does not invent a request, substitute a missing operation, or hide an error. When the tab becomes visible, its surface sends the same operation with its image region and reattaches to the existing session. Removing the tab removes the background session.
 
 ## environment.json
 

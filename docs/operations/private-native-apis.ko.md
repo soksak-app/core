@@ -13,9 +13,9 @@
 | `NSWindowResizeTime` 사용자 기본값 | 두 호스트의 [`window_motion.m`](../../native/darwin/src/window_motion.m), `windowResizeInstant`. 첫 창을 만들기 전에 등록 | 창 프레임과 웹 내용이 따로 표시되므로 창 확대·크기 변경 애니메이션을 화면 갱신 한 번으로 줄임 |
 | `WKWebView._setOverrideDeviceScaleFactor:` | 두 호스트의 [`webview_geometry.m`](../../native/darwin/src/webview_geometry.m), `webviewAttachSurface` | 장치 픽셀 컨테이너의 로컬 한 단위를 backing 픽셀 하나로 렌더링 |
 | 문서 웹뷰의 `WKWebView._setOverrideDeviceScaleFactor:` | 두 호스트의 [`webview_geometry.m`](../../native/darwin/src/webview_geometry.m), `webviewMatchSurface`. [`document_view.m`](../../native/darwin/src/document_view.m)의 `sp_document_create`가 호출 | 장치 픽셀 표면 안의 문서 영역을 표면과 같은 밀도로 렌더링 |
-| `WKWebView._doAfterNextPresentationUpdate:` | 두 호스트의 [`surface_layout.m`](../../native/darwin/src/surface_layout.m), `surfaceLayoutAfterSettled`가 사용하는 내부 `afterNextPresentation` 대기; [`input_inject.m`](../../native/darwin/src/input_inject.m), `sp_input_pointer_then`; 프로브와 독립 입력 검사에서도 사용 | 네이티브 좌표 커밋, 새 문서로의 네이티브 스크롤 전달, 렌더링 결과 측정 전에 웹뷰 표시 완료 확인 |
+| `WKWebView._doAfterNextPresentationUpdate:` | 두 호스트의 [`surface_layout.m`](../../native/darwin/src/surface_layout.m), 배치 커밋 전 및 `surfaceLayoutAfterSettled`에서 호출하는 `surfaceLayoutAfterPresentation`; [`input_inject.m`](../../native/darwin/src/input_inject.m), `sp_input_pointer_then`; 프로브와 독립 입력 검사에서도 사용 | 네이티브 좌표 커밋, 새 문서로의 네이티브 스크롤 전달, 렌더링 결과 측정 전에 웹뷰 표시 완료 확인 |
 | `WKWebView._setIgnoresMouseMoveEvents:` | 두 호스트의 [`webview_input.m`](../../native/darwin/src/webview_input.m), 등록·포인터 처리·제거. 표면, 모달, 문서 영역 웹뷰 | 겹친 웹뷰의 포인터 추적을 AppKit 히트테스트 결과로 제한 |
-| `WKWebView` KVC `drawsBackground` (`_drawsBackground` / `_setDrawsBackground:`) | Wails [`webview.m`](../../packages/host/wailsv3/src/platform/darwin/webview.m)의 혼합 표면·모달 생성; 두 호스트 [`window_facts.m`](../../native/darwin/src/window_facts.m)의 `host.window` 조회 | 위에 놓인 DOM 평면의 불투명 배경 비활성화 및 상태 보고 |
+| `WKWebView` KVC `drawsBackground` (`_drawsBackground` / `_setDrawsBackground:`) | Tauri 앱 DOM 표면 생성의 [`webview_geometry.m`](../../native/darwin/src/webview_geometry.m), Wails [`webview.m`](../../packages/host/wailsv3/src/platform/darwin/webview.m)의 혼합 표면·모달 생성; 두 호스트 [`window_facts.m`](../../native/darwin/src/window_facts.m)의 `host.window` 조회 | 위에 놓인 DOM 평면의 불투명 배경 비활성화 및 상태 보고 |
 | `WKWebViewConfiguration` KVC `drawsBackground` (`_setDrawsBackground:`) | Tauri → Wry 혼합 표면·모달 생성; [`modals.rs`](../../packages/host/tauriv2/src/modals.rs) `show`가 `background_color(Color(0, 0, 0, 0))` 요청; 메인도 배경색 설정 | 위에 놓인 DOM 평면의 웹뷰 초기화 전에 배경 그리기 설정 |
 | `WKWebView._setShouldSuppressFirstResponderChanges:` | 두 호스트; [`webview_input.m`](../../native/darwin/src/webview_input.m)의 `webviewIgnorePageFocus`, 표면, 모달, 문서 영역 웹뷰 | 페이지가 요소에 초점을 줄 때 창의 키보드 초점을 옮기지 않게 함 |
 | `NSWindow._setWindowResolution:`, `NSWindow._adjustWindowResolution` 재정의 | [`webview_geometry_test.m`](../../native/darwin/tests/webview_geometry_test.m) 전용. WebKitTestRunner가 쓰는 메서드 | 해당 디스플레이 없이 검사 창의 백킹 배율을 2나 1로 정해 어느 기기에서나 배율 동작을 검사 |
@@ -40,11 +40,15 @@
 
 ### 표시 완료
 
-이 수정을 유지한다. JavaScript 실행이나 DOM 애니메이션 프레임 콜백의 완료는 각 웹뷰가 새 문서 좌표를 표시했다는 확인이 아니다. 호스트는 해당 프로젝트 창의 메인과 표시 중인 앱 문서를 기다린 뒤 네이티브 트랜잭션을 커밋한다. `CATransaction`은 UI 스레드에 속하므로 서로 다른 창의 준비를 직렬화하며, 탐색과 닫기는 해당 창의 준비만 취소한다. 문서 영역은 참여하지 않으므로 웹 문서 렌더러의 긴 작업이 메인 창 배치를 중단시키지 않는다.
+이 수정을 유지한다. JavaScript 실행이나 DOM 애니메이션 프레임 콜백의 완료는 앱 DOM이 새 좌표를 표시했다는 확인이 아니다. 호스트는 해당 프로젝트 창의 단일 앱 DOM을 기다린 뒤 네이티브 트랜잭션을 커밋한다. `CATransaction`은 UI 스레드에 속하므로 서로 다른 창의 준비를 직렬화하며, 탐색과 닫기는 해당 창의 준비만 취소한다. 다른 웹뷰는 URL 출처와 무관하게 참여하지 않으므로 웹 문서 렌더러의 긴 작업이 메인 창 배치를 중단시키지 않는다. 네이티브 그림 래스터 준비는 별도의 필수 검사로 유지한다.
 
 콜백 시점, 그리기 완료, 탐색·프로세스 종료 중 동작을 검토한다. 구현은 실행 중인 프로세스나 그리기 영역이 없으면 즉시 완료할 수 있으므로 콜백만으로 캡처된 픽셀을 확인한 것으로 처리하지 않는다. 문서 준비 확인과 전체 녹화가 계속 필요하다. 대기 대상 문서를 검사하는 [`surface_layout_test.m`](../../native/darwin/tests/surface_layout_test.m)을 실행하고, 다시 로드 후 정리를 포함해 [`outside.test.mjs`](../../e2e/outside.test.mjs), [`paint.test.mjs`](../../e2e/paint.test.mjs), [`hosts.test.mjs`](../../e2e/hosts.test.mjs)를 검증한다. [`projects.test.mjs`](../../e2e/projects.test.mjs)는 독립 프로젝트 창, 모달 전달, 닫기·다시 열기 정리도 검증한다.
 
 [`WKWebView.mm`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/WKWebView.mm)의 `_doAfterNextPresentationUpdate:`와 [`WebPageProxy.cpp`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/WebPageProxy.cpp)의 `WebPageProxy::callAfterNextPresentationUpdate`를 검토한다.
+
+네이티브 `surface_layout_test`는 바깥 배치 트랜잭션이 열린 동안에도 앱 문서 콜백이 완료되는지 확인한다. 해당 구현에서 트랜잭션 교착을 가정해 대기를 제거할 근거는 없다. 두 호스트는 DOM 문서와 현재 표시 중인 그림 래스터를 차례로 기다린 뒤 커밋하며, 오래된 티켓을 성공으로 반환하지 않고 준비 거절을 보고한다.
+
+Tauri 이벤트 전달 콜백은 Tao의 이벤트 처리 잠금을 가진다. 이 콜백에서 트랜잭션을 확정하면 창을 동기적으로 다시 그리면서 같은 잠금에 재진입할 수 있다. macOS 스레드 샘플로 프로젝트 라이브러리 검사 중 이 교착을 재현했다. 두 호스트는 문서·래스터 대기를 유지하고 공개 네이티브 메인 큐(`ui_queue.m`)로 표시 완료를 전달한다. 다시 읽기와 닫기 취소도 같은 큐를 사용한다. 이 실행 경계는 비공개 API를 추가하거나 프레임워크 상태를 수정하지 않는다. `ui_queue_test`는 호출자의 잠금 해제 후 실행을 검증하고, 다시 빌드한 호스트의 라이브러리·드래그 검사가 통합 동작을 검증한다.
 
 ### 포인터 추적
 

@@ -2,6 +2,8 @@
 
 [한국어](native-surfaces.ko.md)
 
+The approved single-DOM model is defined by [surface composition](surface-composition.md) and [plugin modules](plugins.md#surface-module-ownership). A logical surface is not a WebView. Native window facts identify the app DOM by its registered native view, not by its drawing order; document WebViews are below the app DOM. `appDomWebviews` and `documentWebviews` are measured from the native hierarchy. Counting a constant or inferring the main view from the first child is invalid. [Features](../features.md) tracks integration and verification separately.
+
 This specification defines surface placement in the example applications. Implementation and validation status are recorded in [features](../features.md).
 
 ## Ownership
@@ -9,7 +11,7 @@ This specification defines surface placement in the example applications. Implem
 - The layout library computes card rectangles and updates their DOM elements.
 - The example compositor derives surface rectangles from card rectangles and DOM insets.
 - The host creates native views, applies surface rectangles, and reports actual geometry.
-- The macOS presentation code commits native geometry after the main document and visible application documents confirm presentation.
+- The macOS presentation code commits native geometry after the window's single app DOM confirms presentation and every visible image region has its exact current raster.
 
 The host must not assume that DOM and native rendering differ by at most one frame.
 
@@ -18,10 +20,18 @@ The host must not assume that DOM and native rendering differ by at most one fra
 1. Before updating card DOM, the page submits the next surface rectangles.
 2. The host acquires the UI thread's layer transaction for the owning window and applies the full native rectangles. The response contains actual geometry and one identifier for the complete preparation.
 3. After preparation completes, the page updates card DOM and requests presentation for that identifier.
-4. After the main webview and visible webviews from the same application origin confirm presentation, the host commits the transaction and returns actual geometry. Hidden webviews and [document regions](#document-regions) do not delay this commit.
+4. After the window's app DOM confirms presentation and the required image rasters are ready, the host commits the transaction and returns actual geometry. [Document regions](#document-regions) render independently and never join the DOM presentation wait, regardless of their URL origin.
 5. The page starts the next preparation after that response, using the latest pending layout. Outdated draw callbacks do not draw.
 
 A native surface is never temporarily reduced to the intersection of pending rectangles. A surface without a matching future slot is hidden before the DOM changes. Measurement after drawing supplies the new rectangles.
+
+Hiding an existing surface preserves its applied native frame and image snapshot. An invisible request's empty rectangle is not a 1×1 replacement viewport. Hidden outer surfaces do not send raster configurations to suppliers; showing one applies its visible rectangle and configures the exact resulting raster if needed. A newly attached hidden surface must not start image rendering before it has a visible placement.
+
+The outer surface owns visibility independently of the document generation. Removing image regions for a document's first load or navigation must not remove that surface state. Only closing the outer surface ends its visibility ownership.
+
+Before waiting for image presentation, the host reads every visible image region's actual native raster and sends any required configuration. This check does not depend on a new DOM resize notification: a region can become visible without changing its element size or insets. A failed configuration batch reports the error and releases every unsent configuration so a later explicit operation can configure it; it does not silently mark unsent work as completed.
+
+Applying an outer-surface rectangle starts required image configurations before returning the preparation to the page. Image rendering can proceed alongside DOM drawing and presentation. The final presentation check rereads native raster geometry after DOM presentation, because the document may have changed its anchor insets; parallel preparation never permits a stale raster to commit.
 
 An older confirmation must not commit a newer preparation. Main-document navigation cancels that window's active and queued preparations. Native calls execute on the UI thread without blocking it while waiting for WebKit.
 
@@ -33,7 +43,7 @@ Native layer transactions are shared by the UI thread. Preparations from differe
 
 The host controls native view geometry. Each content webview renders its document independently; a delayed web document renderer must not stop the main window's layout updates.
 
-The main document's presentation callback does not confirm another webview's document size. Application documents participate in the same presentation completion check. Document regions retain independent content rendering; as subviews of their surface, their native frames still follow the card geometry in the transaction.
+The app DOM contains every mounted plugin DOM. Its presentation callback confirms that DOM plane, not another webview's content. Document regions retain independent content rendering; as subviews of their surface, their native frames still follow the card geometry in the transaction. URL-origin matching must not determine presentation ownership.
 
 The example preserves device-pixel placement, including 0.5 CSS pixel dimensions on a display with a scale factor of two. Card edges, rules, dividers, and prepared surface rectangles use that same grid. Rendered content must cover its native surface without a gap at the footer. Reducing placement precision or recoloring native backgrounds does not satisfy this requirement. Settings and menu transparency is configured separately.
 
@@ -47,7 +57,7 @@ A region is a place on a surface where native content is displayed. Its ownershi
 
 Every native region is a descendant of its surface's `SurfaceHost.NativePlane`. It is never a sibling of the host or DOM plane. The host derives region frames from the applied complete composition and clips them to the host. A region moves, hides, dims, and closes synchronously with its surface.
 
-Regions are below modal dialogs and excluded from the presentation-wait. Each region has a unique name within its surface. The host reports the region's name, rectangle, visibility, and focused state through `host.window`.
+Regions are below modal dialogs. Document-region renderers are excluded from the presentation wait; visible image regions must have the exact current raster before the prepared layout commits. Each region has a unique name within its surface. The host reports the region's name, rectangle, visibility, and focused state through `host.window`.
 
 There are two kinds of region suppliers:
 
@@ -59,7 +69,7 @@ There are two kinds of region suppliers:
 A surface page shows a web document in one of its elements through a document region. Surfaces themselves always show a page of their plugin package ([plugins](plugins.md)); a web address is never a surface.
 
 - The manifest declares a unique name that matches `^[a-z0-9][a-z0-9-]{0,63}$`. The page obtains the document handle from `createSurfaceComposition`; individual attach, place, and detach operations are not public.
-- The host creates a web view as a subview of the calling surface's web view and verifies on every call that the calling web view is the surface named in the request. A surface cannot operate another surface's regions.
+- The host creates a web view under the calling surface's `SurfaceHost.NativePlane` and verifies on every call that the calling DOM webview is the surface named in the request. A surface cannot operate another surface's regions.
 - The complete composition reports the element's position as insets in CSS pixels from the edges of its viewport and whether it is shown. The host stores the insets and reapplies them when the outer surface changes in the same native transaction.
 - Regions load only `http` and `https` addresses. Other schemes, including the application's own scheme and `file`, are rejected, both when requested and when the document navigates. Region documents use a persistent website data store named `soksak-documents`, separate from the application documents, and receive no application bridge.
 - `go` performs `back`, `forward`, `reload`, or `stop` and returns whether it ran.
@@ -80,6 +90,8 @@ Images are created by sidecars and supplied to the core through a region. The co
 - **Image consumption**: The host copies an accepted transfer image into host-owned immutable presentation storage before replying `consumed`. The supplier must not modify or reuse the transfer image before that reply. The native layer never points at supplier-mutable storage.
 - **Authorization**: The region specifies which sidecar is authorized to supply images. The host rejects images from unregistered sidecars with an error.
 - **Error reporting**: If the host cannot present an image, the region sends an error event: `{type: "error", reason}`. Reasons include `notFound` (IOSurface not found), `forbidden` (access denied), `size` (declared dimensions do not match the IOSurface's actual dimensions), `scale` (the image was drawn at a scale other than the window's), and `presentFailed` (platform presentation failed).
+
+`host.window.regions[].error` retains the last native presentation rejection until a valid frame is presented. A valid older snapshot does not make a later rejection disappear. Image pixels retain their size at the native backing scale; resizing a layer must not scale text to fill the new geometry.
 
 Both hosts forward each native image event as `image-event {surface, name, event}` only to its owning surface webview. An empty callback, broadcast delivery, or substituting a direct sidecar command for keyboard delivery violates this contract. Invalid event JSON and delivery failures are reported, never replaced with a null event.
 

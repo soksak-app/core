@@ -2,7 +2,7 @@
 
 [한국어](examples.ko.md)
 
-Run commands from the repository root. Use the package-manager version in `package.json`, a Go toolchain compatible with `go.work` and `packages/host/wailsv3/go.mod`, and a Rust toolchain compatible with the root `Cargo.toml` workspace. The [native host specification](../spec/hosts.md) describes the host packages, applications, and workspace files. Native validation currently runs on macOS with the Command Line Tools SDK and screen-recording permission for capture.
+Run commands from the repository root. Use the package-manager version in `package.json`, a Go toolchain compatible with `go.work` and `packages/host/wailsv3/go.mod`, and a Rust toolchain compatible with the root `Cargo.toml` workspace. The [native host specification](../spec/hosts.md) describes the host packages, applications, and workspace files. Native validation currently runs on macOS with the Command Line Tools SDK. Tauri diagnostic capture uses the current-process ScreenCaptureKit query and does not require Screen Recording permission.
 
 ## Native updates
 
@@ -74,6 +74,18 @@ Recordings are temporary. Each check deletes its frame directory when it ends, w
 Record at the window’s backing-pixel resolution. Point-sized downsampling blends half-point lines with adjacent pixels and prevents exact color measurement. Raw frames contain three 32-bit values (width, height, row stride), followed by BGRA pixel data. Do not treat a missing or partial recording as a pass.
 
 `geometry.test.mjs` compares native frames (`host.window`), DOM slots (`core.surfaces`), and surface document and viewport sizes (`core.surface.document`) after window resizing. It checks the owner of the final device pixel with `host.hit`, presses and releases there with `input.pointer`, and checks the trusted event coordinates in `core.surface.input`. Scale factors and scale changes do not depend on the connected displays: `native/darwin/tests/webview_geometry_test.m` sets the window's backing scale to 2, 1, and 2 again and checks half-point surface heights, document coverage of the last device-pixel row, and native input in that row. No window check requires a particular display.
+
+The fast shell check requires four complete round trips and zero white pixels in the shell's dark content. The three-terminal check requires five uninterrupted complete round trips, three measurable terminal regions in every frame, no DOM-border intrusion, and unchanged first-glyph dimensions and pixel count. A stationary screen or a recording missing any requested round trip fails. Each diagnostic recording is a bounded burst of at most 600 frames; reaching that bound is an explicit incomplete-recording error, not silent frame loss. The terminal project-return check repeats five-trip gestures and library returns three times and checks all three native rasters immediately after each return. The library workflow also rejects a presentation error that was reported and later cleared. These composition gestures use the page-driven diagnostic route described in the [endpoint contract](../spec/endpoint.md#diagnostic-builds); they do not validate OS button state.
+
+When preserving a failed application while inspecting a new build, use separate disposable configuration directories. ScreenCaptureKit can identify Tauri capture clients by executable path: simultaneous processes at that same path caused replayd to cancel their capture connections. Run a byte-identical copy and its sidecars from a separate inspection directory, verify its hash, and explicitly set `APPS.tauriv2.binary` to that path before opening the harness connection. Do not disable the executable check or restart the preserved application. Remove inspection recordings when each check ends.
+
+Copy and compare hashes for the application and every sidecar declared by its staged environment after each build. Replacing only the application leaves adjacent sidecar executables stale. A live persistent service must also match the implementation being tested; preserve it only for an explicit reconnect/update test. Record a mixed-build run as invalid for validating the current implementation, not as a current-code pass or failure.
+
+The three-terminal hide check first waits for all three native snapshots, then compares each native frame and snapshot after entering the library. Hidden surfaces must retain both. Project-return checks inspect all three current rasters immediately after the return command; an extra presentation wait must not hide an incomplete return.
+
+The fixture must present before the harness reloads its main document. A timeout fails setup and preserves that state instead of letting a reload clear the open transaction. The harness also collects presentation-error log notifications, because the latest verification status alone may no longer contain an earlier error.
+
+The project-return process check reads the tested configuration's terminal service endpoint and the OS process table. It requires exactly one service for that configuration, one direct shell child per open terminal (including hidden tabs), no PTY helper child, and no zombie child. Returning from the library must preserve the exact service and shell PIDs, not merely their count. Other running applications are excluded by configuration identity. Parser unit checks do not validate service lifecycle; the rebuilt-host run remains required.
 
 ## Manual acceptance
 
