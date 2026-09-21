@@ -140,3 +140,15 @@ pub fn focus(webview: &PlatformWebview) -> Result<(), String> {
 pub fn id(webview: &PlatformWebview) -> Handle {
     webview.inner() as Handle
 }
+
+extern "C" {
+    fn sp_webview_set_appearance(view: *mut c_void, dark: bool) -> bool;
+}
+
+pub fn set_main_appearance(view: &PlatformWebview, dark: bool) -> Result<(), String> {
+    let view = view.inner() as *mut c_void;
+    if !unsafe { sp_webview_set_appearance(view, dark) } {
+        return Err("requested app appearance is unavailable".into());
+    }
+    Ok(())
+}

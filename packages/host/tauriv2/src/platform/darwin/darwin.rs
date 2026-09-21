@@ -129,6 +129,9 @@ impl Platform for Darwin {
         webview::place(view, x, y, w, h);
         Ok(())
     }
+    fn set_main_appearance(&self, view: &PlatformWebview, dark: bool) -> Result<(), String> {
+        webview::set_main_appearance(view, dark)
+    }
     fn webview_frame(&self, view: &PlatformWebview) -> Result<[f64; 4], String> {
         Ok(webview::frame(view))
     }

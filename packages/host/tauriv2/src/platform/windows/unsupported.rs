@@ -330,3 +330,7 @@ pub fn text_image(_image: Handle, _utf8: &str) -> Result<(), String> {
 pub fn close_image(_image: Handle) -> Result<(), String> {
     missing("image removal")
 }
+
+pub fn set_main_appearance(_view: &PlatformWebview, _dark: bool) -> Result<(), String> {
+    missing("main webview appearance")
+}

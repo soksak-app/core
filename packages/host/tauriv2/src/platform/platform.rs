@@ -169,6 +169,8 @@ pub trait Platform: Send + Sync {
         w: f64,
         h: f64,
     ) -> Result<(), String>;
+    /// Apply the requested system appearance to the application webview.
+    fn set_main_appearance(&self, view: &PlatformWebview, dark: bool) -> Result<(), String>;
     /// 웹뷰의 현재 위치와 크기를 페이지 좌표로 반환한다.
     fn webview_frame(&self, view: &PlatformWebview) -> Result<[f64; 4], String>;
     /// 표면 웹뷰를 main 웹뷰의 표면 컨테이너에 등록한다.

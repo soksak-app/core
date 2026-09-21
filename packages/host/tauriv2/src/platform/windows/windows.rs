@@ -72,6 +72,9 @@ impl Platform for Windows {
     ) -> Result<(), String> {
         unsupported::place_webview(view, x, y, w, h)
     }
+    fn set_main_appearance(&self, view: &PlatformWebview, dark: bool) -> Result<(), String> {
+        unsupported::set_main_appearance(view, dark)
+    }
     fn webview_frame(&self, view: &PlatformWebview) -> Result<[f64; 4], String> {
         unsupported::webview_frame(view)
     }
