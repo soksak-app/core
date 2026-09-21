@@ -253,6 +253,62 @@ func TestPersistentTransportHarnessAuthFailure(t *testing.T) {
 	}
 }
 
+func TestPersistentTransportRejectsUnsupportedHelloProtocolWithoutReplacingEndpoint(t *testing.T) {
+	root := t.TempDir()
+	socketDirectory, err := os.MkdirTemp("", "sp-h-protocol-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(socketDirectory)
+	socket := filepath.Join(socketDirectory, "s.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	writeHarnessEndpoint(t, root, socket)
+	endpointPath := filepath.Join(root, "services", "service", "endpoint.json")
+	endpointBefore, err := os.ReadFile(endpointPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	serverDone := make(chan error, 1)
+	go func() {
+		connection, acceptErr := listener.Accept()
+		if acceptErr != nil {
+			serverDone <- acceptErr
+			return
+		}
+		defer connection.Close()
+		if _, readErr := bufio.NewReader(connection).ReadBytes('\n'); readErr != nil {
+			serverDone <- readErr
+			return
+		}
+		_, writeErr := io.WriteString(connection, `{"op":"hello","protocol":2,"ok":true}`+"\n")
+		serverDone <- writeErr
+	}()
+
+	sidecars, err := NewSidecars(harnessFrontend(), t.TempDir(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := &harnessOwner{root: "/protocol", seen: make(chan SidecarMessage, 1)}
+	err = sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"op":"open"}`))
+	if err == nil || !strings.Contains(err.Error(), "protocol mismatch in hello response") {
+		t.Fatalf("protocol mismatch error = %v", err)
+	}
+	endpointAfter, err := os.ReadFile(endpointPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(endpointAfter) != string(endpointBefore) {
+		t.Fatalf("endpoint was replaced after protocol mismatch: before=%s after=%s", endpointBefore, endpointAfter)
+	}
+	if err := <-serverDone; err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestPersistentTransportReplacesEndpointLeftByDeadService(t *testing.T) {
 	executableDir := t.TempDir()
 	configDir := t.TempDir()

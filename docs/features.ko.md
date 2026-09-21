@@ -50,6 +50,7 @@
   - [o] F2.8 — 재빌드한 `vt-alacritty` 서비스가 애플리케이션 transport 단절 뒤에도 살아 있고 같은 surface/session에 재연결하며 명령 출력을 보존한다. 격리 protocol 검사가 5.1초에 `service_alive_after_client_loss`, 동일 session ID, `retained_screen_contains_RECOVERY`를 출력하며 통과했고, 테스트가 마지막에 서비스를 명시적으로 정리했다. 서비스 프로세스 충돌/업데이트와 복원 게이트는 아직 남아 있다.
   - [o] F2.9 — 재빌드한 sidecar 단절/재연결 검사를 단계별 제한시간·PASS/FAIL 출력·실행 시간·명시적 서비스 정리를 포함한 `make native-test` 게이트로 고정했다. 최종 실행은 `NATIVE_TEST_EXIT=0`을 보고했고, 직접 게이트도 서비스 생존·동일 session ID·출력 보존·`recovery_check_duration_ms=40`을 보고했다. 서비스 프로세스 충돌/업데이트 게이트는 아직 열려 있다.
   - [o] F2.10 — 이제 별도 client 프로세스가 `close-owner` 없이 종료한 뒤 새 client 프로세스를 시작하고, 동일 session ID·보존된 셸 출력·서비스 생존을 검증한다. 최종 `make native-test`는 `NATIVE_TEST_EXIT=0`, `service_alive_after_application_process_exit`, `application_process_restarted`, `retained_screen_contains_RECOVERY`, `recovery_check_duration_ms=599`를 보고했다. 명시적인 protocol/version 불일치와 서비스 프로세스 실패 게이트는 별도로 남긴다.
+  - [o] F2.11 — Tauri·Wails 전송 검사가 살아 있는 endpoint가 hello에 지원하지 않는 protocol 2를 응답할 때 명시적인 protocol 불일치 오류로 거부하고 endpoint byte를 그대로 보존하는지 확인한다. 최종 `make native-test`는 `NATIVE_TEST_EXIT=0`을 보고했고 양쪽 host test binary에서 새 케이스가 통과했다.
 - [ ] F3 — 신규·복원 브라우저 문서의 dark/light/dark 전파를 통제 사이트의 계산 스타일·실제 픽셀로 검사한다. Google은 사이트 자체 설정과 호스트 동작을 구분한다.
 - [ ] F4 — 브라우저 본문 한 번 클릭으로 카드 선택과 실제 네이티브 포커스. 타이핑·스크롤·다른 브라우저/터미널과 격리를 검증한다.
 - [ ] F5 — 터미널 포커스와 설정 가능한 커서.

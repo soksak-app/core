@@ -439,6 +439,50 @@ fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
 }
 
 #[test]
+fn persistent_transport_rejects_unsupported_hello_protocol_without_replacing_endpoint() {
+    let executable_directory = tempfile::tempdir().unwrap();
+    let config_directory = tempfile::tempdir().unwrap();
+    let service_directory = config_directory.path().join("services/echo");
+    std::fs::create_dir_all(&service_directory).unwrap();
+    let socket_path = service_directory.join("protocol-mismatch.sock");
+    let listener = UnixListener::bind(&socket_path).unwrap();
+    let endpoint = serde_json::json!({
+        "protocol": 1,
+        "pid": std::process::id(),
+        "socket": socket_path,
+        "token": "protocol-mismatch-token"
+    });
+    let endpoint_bytes = serde_json::to_vec(&endpoint).unwrap();
+    let endpoint_path = service_directory.join("endpoint.json");
+    std::fs::write(&endpoint_path, &endpoint_bytes).unwrap();
+    let server = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+        let mut hello = String::new();
+        reader.read_line(&mut hello).unwrap();
+        let hello: serde_json::Value = serde_json::from_str(&hello).unwrap();
+        assert_eq!(hello["op"], "hello");
+        writeln!(stream, "{}", r#"{"op":"hello","protocol":2,"ok":true}"#).unwrap();
+    });
+
+    let fixture = files(r#"{"executable":"build/echo","protocol":1,"transport":"persistent"}"#);
+    let read = |path: &str| fixture.get(path).map(|value| value.as_bytes().to_vec());
+    let sidecars = Sidecars::new(
+        &read,
+        executable_directory.path().to_path_buf(),
+        config_directory.path().to_path_buf(),
+    )
+    .unwrap();
+    let (window, _events) = owner("protocol", "/projects/protocol");
+    let error = sidecars
+        .send(&window, ECHO, "surface", &raw(r#"{"op":"open"}"#))
+        .unwrap_err();
+    assert!(error.contains("protocol mismatch in hello response"), "{error}");
+    assert_eq!(std::fs::read(&endpoint_path).unwrap(), endpoint_bytes);
+    server.join().unwrap();
+}
+
+#[test]
 fn persistent_transport_replaces_endpoint_left_by_a_dead_service() {
     let executable_directory = tempfile::tempdir().unwrap();
     let config_directory = tempfile::tempdir().unwrap();
