@@ -47,6 +47,12 @@ const MATRIX = [
   lane("build environment audit", "shell", ["scripts/check-build-environment.sh"], ["scripts/test/soksak-scripts.test.mjs"], {
     testLanguage: "js-ts", sharedTests: true,
   }),
+  lane("break and mutation inventory", "js-ts", [
+    "packages/soksak/scripts/check-breaks.mjs",
+    "packages/soksak/scripts/mutate.mjs",
+  ], ["scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
+  lane("host structure audit", "js-ts", ["scripts/check-hosts.mjs"], ["scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
+  lane("release diagnostic audit", "js-ts", ["scripts/check-release.mjs"], ["scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
   lane("plugin API", "js-ts", ["packages/plugin-api/*.js"], ["packages/plugin-api/test/**/*.mjs"]),
   lane("workbench", "js-ts", ["packages/workbench/*.js", "packages/workbench/*.mjs"], ["packages/workbench/test/**/*.js", "packages/workbench/test/**/*.mjs"], { sharedTests: true }),
   lane("client", "js-ts", [

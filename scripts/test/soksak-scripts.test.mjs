@@ -12,6 +12,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { BREAKS } from "../../packages/soksak/scripts/breaks.mjs";
+import { find as findReleaseMarkers } from "../check-release.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const packageRoot = join(root, "packages/soksak");
@@ -125,4 +126,42 @@ test("build environment audit reports the measured toolchain", { timeout: 5000 }
   const result = await run("sh", [join(root, "scripts/check-build-environment.sh")]);
   assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);
   assert.match(result.stdout, /BUILD_ENVIRONMENT_READY node=v\S+ pnpm=\S+ runtime=\S+\/\S+ lockSHA256=[a-f0-9]{64}/);
+});
+
+test("break inventory lists only requested, known entries", { timeout: 5000 }, async () => {
+  const result = await run(node, [
+    join(packageRoot, "scripts/check-breaks.mjs"),
+    "state",
+    "--list",
+  ]);
+  assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);
+  assert.match(result.stdout, /^state\tdist\/soksak\.js\t/m);
+  assert.doesNotMatch(result.stdout, /^frozen\t/m);
+
+  const invalid = await run(node, [
+    join(packageRoot, "scripts/check-breaks.mjs"),
+    "not-a-break",
+    "--list",
+  ]);
+  assert.equal(invalid.code, 2);
+  assert.match(invalid.stderr, /Unknown break id/);
+});
+
+test("mutation inventory lists candidates without running the mutation suite", { timeout: 5000 }, async () => {
+  const result = await run(node, [join(packageRoot, "scripts/mutate.mjs"), "--list"]);
+  assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);
+  assert.match(result.stdout, /mutation candidates/);
+  assert.match(result.stdout, /\.js:/);
+  assert.doesNotMatch(result.stdout, /score /);
+});
+
+test("release marker scanner reports diagnostics and ignores clean content", { timeout: 2000 }, () => {
+  const errors = [];
+  findReleaseMarkers(errors, "fixture.js", "const x = diagnostics.fixture();");
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /diagnostic method/);
+
+  const clean = [];
+  findReleaseMarkers(clean, "clean.js", "export const ready = true;");
+  assert.deepEqual(clean, []);
 });

@@ -1,7 +1,7 @@
 /**
  * Apply each deliberate defect and require the suite to fail.
  *
- *   node scripts/check-breaks.mjs [id,id,...]
+ *   node scripts/check-breaks.mjs [id,id,...] [--list]
  *
  * Exits non-zero if any break survives or no longer applies.
  */
@@ -36,7 +36,23 @@ const drop = () => rmSync(TOP, { recursive: true, force: true });
 const TESTS = readdirSync(`${HERE}test`)
   .filter((f) => f.endsWith(".test.mjs"))
   .map((f) => `test/${f}`);
-const only = process.argv[2] ? new Set(process.argv[2].split(",")) : null;
+const arguments_ = process.argv.slice(2);
+const listOnly = arguments_.includes("--list");
+const ids = arguments_.filter((argument) => argument !== "--list");
+const only = ids[0] ? new Set(ids[0].split(",")) : null;
+const knownIds = new Set(BREAKS.map(({ id }) => id));
+const unknownIds = only ? [...only].filter((id) => !knownIds.has(id)) : [];
+if (unknownIds.length) {
+  console.error(`Unknown break id(s): ${unknownIds.join(", ")}`);
+  process.exit(2);
+}
+
+if (listOnly) {
+  for (const entry of BREAKS) {
+    if (!only || only.has(entry.id)) console.log(`${entry.id}\t${entry.file}\t${entry.what}`);
+  }
+  process.exit(0);
+}
 
 /** The test files to run for a break, the one named after its file first. */
 const order = (file) => {

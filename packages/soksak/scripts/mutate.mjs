@@ -87,9 +87,20 @@ for (const f of FILES) {
 }
 sites.sort((a, b) => (a.f === b.f ? a.at - b.at : a.f < b.f ? -1 : 1));
 
-const want = Number(process.argv[2] ?? 140);
+const listOnly = process.argv.includes("--list");
+const countArgument = process.argv.slice(2).find((argument) => /^\d+$/.test(argument));
+const want = Number(countArgument ?? 140);
 const step = Math.max(1, Math.floor(sites.length / want));
 const picked = sites.filter((_, i) => i % step === 0).slice(0, want);
+
+if (listOnly) {
+  console.log(`${sites.length} mutation candidates`);
+  for (const site of sites) {
+    const line = originals[site.f].slice(0, site.at).split("\n").length;
+    console.log(`${site.f}:${line} ${JSON.stringify(site.from)} -> ${JSON.stringify(site.to)}`);
+  }
+  process.exit(0);
+}
 
 // Awaited rather than run synchronously. A signal is delivered to the handlers
 // above only when the loop turns, and a run that never turns it cannot be
