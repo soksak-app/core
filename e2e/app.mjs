@@ -306,7 +306,7 @@ function compact(object) {
   return Object.fromEntries(Object.entries(object).filter(([, value]) => value !== undefined));
 }
 
-function within(promise, ms, what) {
+export function within(promise, ms, what) {
   let timer;
   const limit = new Promise((_, reject) => {
     timer = setTimeout(() => reject(new Error(`${what} did not answer within ${ms} ms`)), ms);
