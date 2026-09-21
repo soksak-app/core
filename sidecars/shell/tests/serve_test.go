@@ -278,6 +278,24 @@ func TestInterruptStopsTheRunningCommandAndKeepsTheShell(t *testing.T) {
 	}
 }
 
+func TestWriteAfterInterruptIsDeliveredToTheShell(t *testing.T) {
+	t.Setenv("SHELL", "/bin/sh")
+	signal.Ignore(os.Interrupt)
+	t.Cleanup(func() { signal.Reset(os.Interrupt) })
+	s := start(t)
+	s.open("queued")
+	s.send(`{"surface":"queued","body":{"op":"write","data":"sh -c 'echo started; exec sleep 30'\n"}}`)
+	s.until(func(e shell.Event) bool { return e.Body.Text == "started\n" })
+	s.send(`{"surface":"queued","body":{"op":"interrupt"}}`)
+	s.send(`{"surface":"queued","body":{"op":"write","data":"echo queued\n"}}`)
+	if event, _ := s.until(func(e shell.Event) bool { return strings.TrimSpace(e.Body.Text) == "queued" }); event.Surface != "queued" {
+		t.Fatalf("event = %+v", event)
+	}
+	if err := s.finish(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestRequestFailuresReturnErrorEvents(t *testing.T) {
 	s := start(t)
 	s.send(`{"surface":"t2","body":{"op":"open"}}`)

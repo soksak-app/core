@@ -43,6 +43,8 @@ type session struct {
 	dir string
 	// 실행 중인 Run 명령. 중단과 종료 대상이다.
 	runs map[*exec.Cmd]bool
+	// 중단 신호를 보낸 뒤 셸이 다음 명령을 읽기 전까지의 입력은 셸에 보관한다.
+	interrupting bool
 }
 
 type Shells struct {
@@ -145,6 +147,7 @@ func (s *Shells) read(id string, live *session, stream io.ReadCloser) {
 			dir = strings.TrimSuffix(dir, "\n")
 			s.mu.Lock()
 			live.dir = dir
+			live.interrupting = false
 			s.mu.Unlock()
 			s.output.Directory(id, dir)
 		} else if line != "" {
@@ -173,7 +176,7 @@ func (s *Shells) Write(id string, data string) error {
 		return err
 	}
 	target := live.commands
-	if busy > 0 {
+	if busy > 0 && !live.interrupting {
 		target = live.stdin
 	}
 	_, err = io.WriteString(target, data)
@@ -242,6 +245,7 @@ func (s *Shells) Interrupt(id string) error {
 			return err
 		}
 	}
+	live.interrupting = true
 	return nil
 }
 
