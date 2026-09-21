@@ -335,6 +335,13 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F1.3",
+    implementation: [{ file: "e2e/terminal.test.mjs", symbol: "roundTripsPerSet" }],
+    tests: [{ file: "e2e/terminal.test.mjs", id: "three terminals survive repeated divider drags and project returns" }],
+    expected: "Three visible terminals complete six narrow-to-wide-and-back divider round trips in each of three project-return sets, with complete captures, no border intrusion, no white pixels, and no composition failure.",
+    levels: ["application"],
+  },
+  {
     id: "G1.1",
     implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "discoverInventory" }],
     tests: [{ file: "scripts/test/test-parity.test.mjs", id: "discovery includes nested languages" }],

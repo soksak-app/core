@@ -69,7 +69,7 @@ function check({ owner, exposes, sources, registrations }) {
         ...[...line.matchAll(/data-expose=["']([^"']+)["']/g)].map((m) => m[1]),
         ...[...line.matchAll(/[Ee]xpose\s*[:=]\s*["']([^"']+)["']/g)].map((m) => m[1]),
         ...(line.includes("dataset.expose") ? [...line.matchAll(quoted)].map((m) => m[1]) : []),
-        ...[...line.matchAll(/expose\.dom\(\s*["']([^"']+)["']/g)].map((m) => m[1]),
+        ...[...line.matchAll(/(?:expose|context\.exposure)\.dom\(\s*["']([^"']+)["']/g)].map((m) => m[1]),
       ];
       // 이름을 인자로 받아 요소에 붙이는 함수(act, field 등)도 있으므로, 선언된 dom
       // 이름이 따옴표로 적힌 곳은 표시한 곳으로 센다.
@@ -86,11 +86,11 @@ function check({ owner, exposes, sources, registrations }) {
   const all = texts.join("\n") + registrations.map((path) => readFileSync(path, "utf8")).join("\n");
   const where = owner === "core" ? "packages/workbench" : `plugins (${owner})`;
   for (const name of declared.status) {
-    const pattern = owner === "core" ? `status\\(\\s*"${name}"` : `expose\\.status\\(\\s*["']${name}["']`;
+    const pattern = owner === "core" ? `status\\(\\s*"${name}"` : `(?:expose|context\\.exposure)\\.status\\(\\s*["']${name}["']`;
     if (!new RegExp(pattern).test(all)) errors.push(`${where}: status ${name} is declared but not registered`);
   }
   for (const name of declared.command) {
-    const pattern = owner === "core" ? `(?:registry|expose)\\.command\\(\\s*"${name}"` : `expose\\.command\\(\\s*["']${name}["']`;
+    const pattern = owner === "core" ? `(?:registry|expose)\\.command\\(\\s*"${name}"` : `(?:expose|context\\.exposure)\\.command\\(\\s*["']${name}["']`;
     if (!new RegExp(pattern).test(all)) errors.push(`${where}: command ${name} is declared but not registered`);
   }
   for (const name of declared.dom) {
