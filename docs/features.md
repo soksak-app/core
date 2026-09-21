@@ -22,11 +22,20 @@ Validation applies to the stated implementation only. Passing tests does not mea
 - [ ] Implement and verify configurable cursor rendering.
 - [ ] Implement selection, clipboard, file/image input, inline images, and the sequence support inventory.
 - [o] Bounded diagnostic capture returns the actual frame count and an explicit `limited` state; full-gesture measurement rejects only evidence that ended at the bound, not the recording result.
+- [ ] Add the Wails side of the bounded-capture contract: `diagnostics.capture.stop` must return the actual frame count, `limited`, and `longestGap` just as Tauri does.
 - [~] Enumerate and test every pinned-reference OSC selector and selected vendor extension: effect, response, or explicit policy/platform rejection.
 - [~] Enumerate and test every pinned-reference CSI final byte, parameter form, private mode, and device response. Scroll is tracked as CSI (`S`, `T`, `r`, `J`, `K`) with separate visible-grid, scrollback, cursor, alternate-screen, and selection assertions.
 - [~] Implement native marked-text handling and ordered committed input; real Korean IME validation remains pending.
 - [ ] Measure restoration phases and display loading/ready/error through actual first presentation.
 - [~] Build and verify both hosts, normal resource cleanup, crash reconnect, and update restart. Current-HEAD Tauri and Wails checks pass for three project returns with stable service/shell/session/document identities and normal terminal-tab close with all PTY children reaped; crash reconnect and update restart remain pending.
+
+## Tauri/Wails parity audit (2026-09-21)
+
+The mechanical host check is currently red: `make hosts-check` reports `apps/tauriv2/test/runtime.test.mjs: no counterpart in apps/wailsv3`. The missing Wails test is a validation gap for the Tauri runtime contract; it is not evidence that the Wails runtime implementation is absent.
+
+The bounded diagnostic capture contract is also asymmetric. Tauri's `diagnostics.capture.stop` returns `frames`, `count`, `limited`, and `longestGap`; Wails currently returns only `frames`, `count`, and `longestGap`, and its `platform.Capturer` has no `CaptureLimited` operation. The shared macOS capture implementation and the recording state tests exist on both hosts, so the confirmed gap is the Wails limit-state contract and its validation, not the entire Wails capture implementation.
+
+The host test file sets otherwise have matching names, including `recording_test`, and the current structure checker reports no other missing counterpart before stopping at the app runtime test. This audit does not mark any other Tauri-only feature without evidence.
 
 The real-session PTY close test failed with `No such process` when closing an already-exited child. After checking and reaping that child explicitly, the same two-session test passes without skipping. Full service reconnect, descendant cleanup, and repeated-close resource measurements remain pending.
 
