@@ -2,6 +2,8 @@
 
 ## 미배포
 
+- Wails 표면 생성 오류 전달을 수정했다. 네이티브 생성 오류와 nil handle이 귀속 가능한 오류로 반환되고, layout 준비 실패는 취소되며, 새로 만든 표면은 되돌려지고, 모달 정렬 오류 뒤 0 사각형으로 대체하지 않는다. JS/TS·Rust·Objective-C 감사 lane은 F0.4-1.2부터 F0.4-1.5에 남아 있다.
+
 - workspace inventory·소유권 강제·기능 증거 연결과 기계 검사가 완료되어 G1을 닫았다. 동작 검증은 각 연결된 기능의 증거 범위에 귀속되며 구조적 완료가 동작 완료를 뜻하지 않는다.
 
 - core·plugin·sidecar·native·애플리케이션·계약 테스트의 구현 소유권 독립을 강제했다. 기계 감사가 plugin→sidecar 구현·테스트 참조 4개를 찾아 제거했고, host-scoped runtime이 플러그인의 선언된 단일 sidecar를 해석하며 package-name·모호한 sidecar fallback을 거부한다. 소유권·집중 runtime 검사가 Green이고 구조 검사가 ownership 오류 0개를 보고한다.

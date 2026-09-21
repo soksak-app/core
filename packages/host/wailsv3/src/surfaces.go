@@ -375,12 +375,12 @@ func max1(v float64) float64 {
 }
 
 // aligned 는 페이지 좌표의 영역을 디스플레이 픽셀에 맞춘다. UI 스레드에서 호출한다.
-func aligned(win *application.WebviewWindow, at Rect) Rect {
+func aligned(win *application.WebviewWindow, at Rect) (Rect, error) {
 	got, err := system.AlignRect(win.NativeWindow(), platformRect{X: at.X, Y: at.Y, W: max1(at.W), H: max1(at.H)})
 	if err != nil {
-		log.Printf("surface alignment: %v", err)
+		return Rect{}, fmt.Errorf("surface alignment: %w", err)
 	}
-	return Rect(got)
+	return Rect(got), nil
 }
 
 // SyncSurfaces 는 표면 뷰를 페이지가 선언한 영역에 맞춘다.
@@ -425,8 +425,12 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 	// 한 번 실행할 작업은 여기서 시작한다.
 	s.first.Do(func() { s.Emit("page-ready") })
 	var prepared PreparedSurfaces
-	var gone []string
-	done := make(chan bool, 1)
+	type applyResult struct {
+		gone       []string
+		placements []Placement
+		err        error
+	}
+	done := make(chan applyResult, 1)
 	var began error
 	application.InvokeSync(func() {
 		main, err := system.MainWebview(win.NativeWindow())
@@ -441,19 +445,33 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 		s.lastPreparation++
 		prepared.Ticket = s.lastPreparation
 		began = system.BeginLayout(win.NativeWindow(), prepared.Ticket, func(allowed bool) {
-			if allowed {
-				gone, prepared.Placements = s.apply(win, req)
-				s.watch.Do(func() { s.watchInput(win) })
+			if !allowed {
+				done <- applyResult{err: errNoWindow}
+				return
 			}
-			done <- allowed
+			gone, placements, err := s.apply(win, req)
+			if err == nil {
+				s.watch.Do(func() { s.watchInput(win) })
+			} else {
+				if cancelErr := system.CancelLayout(win.NativeWindow()); cancelErr != nil {
+					err = fmt.Errorf("%w; cancelling layout: %v", err, cancelErr)
+				}
+				if !req.Settled {
+					s.run(false)
+				}
+			}
+			done <- applyResult{gone: gone, placements: placements, err: err}
 		})
 	})
 	if began != nil {
 		return prepared, began
 	}
-	if !<-done {
-		return prepared, errNoWindow
+	outcome := <-done
+	if outcome.err != nil {
+		return prepared, outcome.err
 	}
+	gone := outcome.gone
+	prepared.Placements = outcome.placements
 	// 제거된 표면을 사이드카와 메인 페이지의 노출 등록에 알린다. 주 스레드 밖에서 호출한다.
 	for _, id := range gone {
 		s.sidecars.Close(id)
@@ -579,55 +597,99 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 	return placed, nil
 }
 
+// CreateLogicalSurfaceHandle preserves native creation failures and rejects a nil handle.
+// The callback is isolated so the failure contract can be tested without creating a window.
+func CreateLogicalSurfaceHandle(create func() (unsafe.Pointer, error), id string) (unsafe.Pointer, error) {
+	handle, err := create()
+	if err != nil {
+		return nil, fmt.Errorf("surface %s: create: %w", id, err)
+	}
+	if handle == nil {
+		return nil, fmt.Errorf("surface %s: create returned a nil handle", id)
+	}
+	return handle, nil
+}
+
+func createLogicalSurface(create func() (unsafe.Pointer, error), owner *Surfaces, id string) (*nativeWebview, error) {
+	handle, err := CreateLogicalSurfaceHandle(create, id)
+	if err != nil {
+		return nil, err
+	}
+	return &nativeWebview{owner: owner, handle: handle, logical: true}, nil
+}
+
 // apply 는 표면 뷰를 만들고 옮기고 제거하며, 뷰가 제거된 id 를 반환한다. 그 뒤의 셸은
 // 호출자가 이 스레드 밖에서 종료한다.
-func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]string, []Placement) {
+func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]string, []Placement, error) {
 	if !req.Settled {
 		s.run(true)
 	}
 	wanted := map[string]bool{}
-	placed := make([]Placement, 0, len(req.Surfaces))
-	place := func(id string, view *nativeWebview, want Rect, visible bool) {
-		want = aligned(win, want)
-		view.SetBounds(want.X, want.Y, want.W, want.H)
-		placed = append(placed, Placement{ID: id, Rect: Rect(system.SurfaceFrame(view.NativeView())), Visible: visible})
+	type desiredSurface struct {
+		id      string
+		decl    Surface
+		view    *nativeWebview
+		aligned Rect
+		visible bool
+	}
+	desired := make([]desiredSurface, 0, len(req.Surfaces))
+	created := make([]string, 0)
+	rollback := func() {
+		for _, id := range created {
+			if view := s.views[id]; view != nil {
+				nativeHandle := uintptr(view.NativeView())
+				view.Close()
+				delete(s.named, nativeHandle)
+				delete(s.views, id)
+			}
+		}
 	}
 	for _, surface := range req.Surfaces {
-		s.mu.Lock()
-		s.compositions[surface.ID] = surface.Composition
-		s.mu.Unlock()
 		wanted[surface.ID] = true
 		w, h := max1(surface.W), max1(surface.H)
-		// 면적이 없는 웹뷰는 보이지 않으므로 1 픽셀 뷰로 두지 않고 숨긴다.
 		visible := surface.Visible && surface.W >= 1 && surface.H >= 1
-		s.images.SetSurfaceVisible(surface.ID, visible)
-
-		alpha := alphaFor(surface.Dim)
-		want := Rect{X: surface.X, Y: surface.Y, W: w, H: h}
-		if view, live := s.views[surface.ID]; live {
-			if visible {
-				place(surface.ID, view, want, visible)
-			} else {
-				placed = append(placed, Placement{ID: surface.ID, Rect: Rect(system.SurfaceFrame(view.NativeView())), Visible: visible})
+		view := s.views[surface.ID]
+		if view == nil {
+			var err error
+			application.InvokeSync(func() {
+				view, err = createLogicalSurface(func() (unsafe.Pointer, error) {
+					return system.CreateSurface(win.NativeWindow())
+				}, s, surface.ID)
+			})
+			if err != nil {
+				rollback()
+				return nil, nil, err
 			}
-			// Keep the native view hidden until PresentSurfaces confirms that the
-			// corresponding application DOM frame has been displayed.
-			view.SetHidden(true)
-			system.SetSurfaceAlphaHandle(view.NativeView(), alpha)
-			continue
+			s.views[surface.ID] = view
+			s.named[uintptr(view.NativeView())] = surface.ID
+			created = append(created, surface.ID)
 		}
-		var handle unsafe.Pointer
-		var err error
-		application.InvokeSync(func() { handle, err = system.CreateSurface(win.NativeWindow()) })
-		if err != nil {
-			log.Printf("surface %s: %v", surface.ID, err)
-			continue
+		alignedWant := Rect{}
+		if visible {
+			var err error
+			alignedWant, err = aligned(win, Rect{X: surface.X, Y: surface.Y, W: w, H: h})
+			if err != nil {
+				rollback()
+				return nil, nil, err
+			}
 		}
-		view := &nativeWebview{owner: s, handle: handle, logical: true}
-		system.SetSurfaceAlphaHandle(view.NativeView(), alpha)
-		s.views[surface.ID] = view
-		s.named[uintptr(view.NativeView())] = surface.ID
-		place(surface.ID, view, want, visible)
+		desired = append(desired, desiredSurface{id: surface.ID, decl: surface, view: view, aligned: alignedWant, visible: visible})
+	}
+
+	placed := make([]Placement, 0, len(desired))
+	for _, item := range desired {
+		s.mu.Lock()
+		s.compositions[item.id] = item.decl.Composition
+		s.mu.Unlock()
+		s.images.SetSurfaceVisible(item.id, item.visible)
+		// Keep the native view hidden until PresentSurfaces confirms that the
+		// corresponding application DOM frame has been displayed.
+		item.view.SetHidden(true)
+		system.SetSurfaceAlphaHandle(item.view.NativeView(), alphaFor(item.decl.Dim))
+		if item.visible {
+			item.view.SetBounds(item.aligned.X, item.aligned.Y, item.aligned.W, item.aligned.H)
+		}
+		placed = append(placed, Placement{ID: item.id, Rect: Rect(system.SurfaceFrame(item.view.NativeView())), Visible: item.visible})
 	}
 
 	// 이 목록은 페이지만 작성하므로 목록에 없는 표면은 제거된 표면이다.
@@ -652,7 +714,7 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]str
 		delete(s.compositionRevisions, id)
 		gone = append(gone, id)
 	}
-	return gone, placed
+	return gone, placed, nil
 }
 
 func newNativeWebview(owner *Surfaces, options nativeWebviewOptions) (*nativeWebview, error) {

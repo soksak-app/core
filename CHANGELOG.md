@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Corrected Wails surface creation failure propagation: native creation errors and nil handles now return attributable errors, failed layout preparation is cancelled, newly created views are rolled back, and modal alignment no longer substitutes a zero rectangle after an alignment error. The remaining JS/TS, Rust, and Objective-C audit lanes remain open under F0.4-1.2 through F0.4-1.5.
+
 - Closed G1 after completing the workspace inventory, ownership enforcement, feature-evidence links, and their machine checks. Behavioral verification remains attributable to each linked feature and is not implied by the structural closure.
 
 - Enforced independent implementation ownership for core, plugins, sidecars, native code, applications, and contract tests. The machine audit found and removed four plugin-to-sidecar implementation/test references, resolves a plugin's single declared sidecar in the host-scoped runtime, and rejects package-name or ambiguous-sidecar fallback. Ownership and focused runtime tests are Green; structural checks report zero ownership errors.

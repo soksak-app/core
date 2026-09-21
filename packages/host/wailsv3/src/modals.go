@@ -94,7 +94,11 @@ func (s *Surfaces) OverlayShow(req OverlayRequest) (Rect, error) {
 		_ = s.OverlayHide(previous.id)
 	}
 	var at Rect
-	application.InvokeSync(func() { at = aligned(win, req.Rect) })
+	var alignErr error
+	application.InvokeSync(func() { at, alignErr = aligned(win, req.Rect) })
+	if alignErr != nil {
+		return Rect{}, alignErr
+	}
 	s.mu.Lock()
 	s.nextModal++
 	instance := s.nextModal
@@ -163,9 +167,13 @@ func (s *Surfaces) OverlayPlace(req PlaceRequest) (Rect, error) {
 		return Rect{}, fmt.Errorf("modal webview is not ready for placement")
 	}
 	var at Rect
+	var alignErr error
 	application.InvokeSync(func() {
-		at = aligned(win, req.Rect)
+		at, alignErr = aligned(win, req.Rect)
 	})
+	if alignErr != nil {
+		return Rect{}, alignErr
+	}
 	view.SetBounds(at.X, at.Y, at.W, at.H)
 	s.mu.Lock()
 	if s.modal == nil || s.modal.id != req.ID || s.modal.instance != instance {

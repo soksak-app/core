@@ -138,6 +138,16 @@ const MATRIX = [
 // The inventory remains structural; behavior is proved by the referenced tests.
 const FEATURE_LINKS = [
   {
+    id: "F0.4-1.1",
+    implementation: [
+      { file: "packages/host/wailsv3/src/surfaces.go", symbol: "CreateLogicalSurfaceHandle" },
+      { file: "packages/host/wailsv3/src/modals.go", symbol: "alignErr" },
+    ],
+    tests: [{ file: "packages/host/wailsv3/tests/surface_activation_test.go", id: "TestLogicalSurfaceCreationPropagatesNativeFailure" }],
+    expected: "Wails surface creation and alignment failures return attributable errors, reject nil native handles, cancel the pending layout, and do not continue as a successful partial surface update.",
+    levels: ["native"],
+  },
+  {
     id: "G1",
     implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "auditInventory" }],
     tests: [{ file: "scripts/test/test-parity.test.mjs", id: "inventory reports uncovered implementations and tests as separate results" }],
