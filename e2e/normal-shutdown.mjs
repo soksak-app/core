@@ -1,7 +1,8 @@
 // 이미 실행 중인 호스트에서 선언된 command.run -> host.quit 생명주기를 검증한다.
 // 이 검사는 애플리케이션을 시작하거나 활성화하지 않는다. 실행 전에
 // SOKSAK_APP이 선택한 설정 디렉터리로 호스트를 시작한다.
-import { existsSync } from "node:fs";
+import { existsSync, watch } from "node:fs";
+import { dirname } from "node:path";
 import { connect } from "@soksak/client";
 import { APPS } from "./app.mjs";
 
@@ -10,10 +11,6 @@ const endpointFile = `${app.configDir}/endpoint.json`;
 const STARTUP_LIMIT = 15_000;
 const SHUTDOWN_LIMIT = 5_000;
 const REQUEST_LIMIT = 2_000;
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 function processAlive(pid) {
   try {
@@ -37,27 +34,76 @@ async function request(client, method, params) {
   }
 }
 
-async function waitFor(label, predicate, limit) {
+function waitForFilesystem(label, predicate, limit) {
   const started = Date.now();
-  while (Date.now() - started < limit) {
-    if (predicate()) return Date.now() - started;
-    await sleep(100);
-  }
-  throw new Error(`${label} did not reach the expected state within ${limit}ms`);
+  return new Promise((resolve, reject) => {
+    let timer;
+    let watcher;
+    const finish = (error, value) => {
+      clearTimeout(timer);
+      watcher?.close();
+      if (error) reject(error);
+      else resolve(value);
+    };
+    const check = () => {
+      if (predicate()) finish(null, Date.now() - started);
+    };
+    timer = setTimeout(() => {
+      watcher?.close();
+      reject(new Error(`${label} did not reach the expected state within ${limit}ms`));
+    }, limit);
+    try {
+      watcher = watch(dirname(endpointFile), { persistent: false }, check);
+      watcher.once("error", (error) => finish(error));
+    } catch (error) {
+      finish(error);
+      return;
+    }
+    check();
+  });
 }
 
 async function waitForReady(client) {
   const started = Date.now();
-  while (Date.now() - started < STARTUP_LIMIT) {
-    const windows = await request(client, "status.get", { window: "main", name: "host.windows" });
-    if (windows.length === 1 && windows[0].ready) return Date.now() - started;
-    await sleep(100);
-  }
-  throw new Error(`ready window did not reach the expected state within ${STARTUP_LIMIT}ms`);
+  await client.watch("main", "host.windows",
+    (windows) => windows.length === 1 && windows[0].ready,
+    { timeout: STARTUP_LIMIT });
+  return Date.now() - started;
+}
+
+function waitForShutdown(pid, limit) {
+  const started = Date.now();
+  return new Promise((resolve, reject) => {
+    let timer;
+    let watcher;
+    const finish = (error, value) => {
+      clearTimeout(timer);
+      watcher?.close();
+      if (error) reject(error);
+      else resolve(value);
+    };
+    const check = () => {
+      if (!processAlive(pid) && !existsSync(endpointFile)) {
+        finish(null, Date.now() - started);
+      }
+    };
+    timer = setTimeout(() => {
+      watcher?.close();
+      reject(new Error(`application exit and endpoint removal did not complete within ${limit}ms`));
+    }, limit);
+    try {
+      watcher = watch(dirname(endpointFile), { persistent: false }, check);
+      watcher.once("error", (error) => finish(error));
+    } catch (error) {
+      finish(error);
+      return;
+    }
+    check();
+  });
 }
 
 console.log(`START normal-shutdown app=${app.name} case_timeout_ms=${SHUTDOWN_LIMIT}`);
-await waitFor("endpoint", () => existsSync(endpointFile), STARTUP_LIMIT);
+await waitForFilesystem("endpoint", () => existsSync(endpointFile), STARTUP_LIMIT);
 const client = await connect({ configDir: app.configDir });
 const pid = client.endpoint.pid;
 await waitForReady(client);
@@ -69,7 +115,6 @@ const result = await request(client, "command.run", {
   params: {},
 });
 if (result !== null) throw new Error(`host.quit returned ${JSON.stringify(result)}, expected null`);
+const elapsed = await waitForShutdown(pid, SHUTDOWN_LIMIT);
 client.close();
-const elapsed = await waitFor("application exit and endpoint removal", () =>
-  !processAlive(pid) && !existsSync(endpointFile), SHUTDOWN_LIMIT);
 console.log(`PASS normal-shutdown app=${app.name} pid=${pid} elapsed_ms=${elapsed}`);

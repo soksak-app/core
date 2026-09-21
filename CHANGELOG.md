@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- Replace fixed sleeps in the normal-shutdown window check with endpoint filesystem events and status notifications. The check now has rejecting case timers, reports elapsed time, and requires both application PID and endpoint disappearance. Current rebuilt Wails and Tauri checks pass in 14ms and 25ms; the full script suite is Green.
+
 - Strengthen the three-terminal divider check to five uninterrupted narrow-to-wide-and-back round trips in each of three project-return sets, require observed range movement and a card beside the divider to reach the default 96pt minimum card edge plus 12pt gap, and link the check as feature `F1.3`. Preserve each prepared DOM/native layout snapshot and process draw transactions in arrival order so fast input is not silently replaced. Current rebuilt Wails and Tauri checks pass all three `ms:96` sets with 11 endpoint transitions per set and direct composition assertions; the previous Wails 7/11 Red is fixed.
 
 - Keep native surfaces hidden during layout preparation and reveal each surface only in the matching presentation ticket after the application DOM has presented. Tauri and Wails host contracts carry the declared visibility through preparation and presentation; host compile and focused tests pass, while rebuilt-application capture evidence remains pending.
