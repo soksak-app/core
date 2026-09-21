@@ -796,6 +796,9 @@
                 "bodyBackground": {
                   "type": "string"
                 },
+                "scrimBackground": {
+                  "type": "string"
+                },
                 "loaded": {
                   "type": "boolean"
                 },

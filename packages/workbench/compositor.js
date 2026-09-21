@@ -94,6 +94,8 @@ function surfaceEl(id) {
   if (el) return el;
   el = document.createElement("div");
   el.className = "surface";
+  el.style.position = "absolute";
+  el.style.overflow = "hidden";
   el.dataset.nativeSurfaceId = id;
   plane.appendChild(el);
   drawn.set(id, el);
@@ -121,6 +123,24 @@ const settled = () => plane.querySelector(".sp-divider[data-dragging]") === null
 const slots = () =>
   plane.querySelectorAll("[data-native-surface][data-native-surface-id]");
 
+/** 앱 배경에서 표시 중인 네이티브 표면 사각형만 실제 픽셀 구멍으로 제외한다. */
+function syncNativePaintMask() {
+  if (!native) {
+    document.body.style.removeProperty("--native-paint-mask");
+    return;
+  }
+  const width = Math.max(1, window.innerWidth);
+  const height = Math.max(1, window.innerHeight);
+  const holes = [...slots()]
+    .filter((slot) => effectiveVisible(slot) && app.kinds.includes(slot.dataset.nativePlugin))
+    .map((slot) => {
+      const rect = slot.getBoundingClientRect();
+      return `<rect x="${rect.left}" y="${rect.top}" width="${rect.width}" height="${rect.height}" fill="black"/>`;
+    });
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="${width}" height="${height}" fill="white"/>${holes.join("")}</svg>`;
+  document.body.style.setProperty("--native-paint-mask", `url("data:image/svg+xml,${encodeURIComponent(svg)}")`);
+}
+
 /**
  * 현재 슬롯을 측정해 커밋한다. 지연이 설정되어 있으면 그만큼 늦게 적용한다.
  *
@@ -143,6 +163,7 @@ export function publish() {
       frame,
     });
   }
+  syncNativePaintMask();
   return deliver(mine, snapshot);
 }
 
@@ -187,7 +208,10 @@ export function publishAhead(rects, seated) {
       title: slot.dataset.nativeTitle,
       plugin: slot.dataset.nativePlugin,
       dim: seat?.dim === true,
-      visible: !!measurable && effectiveVisible(slot),
+      // 준비 단계는 DOM이 대응하는 카드를 그리기 전에 네이티브 뷰를 옮길 수 있다.
+      // 그려진 커밋이 같은 ticket을 표시할 때까지 숨겨 네이티브 평면이 DOM보다
+      // 한 프레임 앞서지 않게 한다.
+      visible: false,
       frame: measurable ? {
         x: card.x + inset.left,
         y: card.y + inset.top,
@@ -225,8 +249,6 @@ function commit(mine, snapshot, final) {
     // 호스트가 네이티브로 그리는 표면에는 모사 요소를 만들지 않는다. 둘 다 만들면
     // DOM 사본이 네이티브 뷰 아래에 남는다.
     if (kinds.includes(s.plugin)) {
-      drawn.get(s.id)?.remove();
-      drawn.delete(s.id);
       record.surfaces.push(declared);
       continue;
     }
@@ -243,7 +265,9 @@ function commit(mine, snapshot, final) {
     record.surfaces.push(declared);
   }
   for (const [id, el] of drawn) {
-    if (!record.surfaces.some((x) => x.id === id)) { el.remove(); drawn.delete(id); }
+    if (!record.surfaces.some((x) => x.id === id)) {
+      el.remove(); drawn.delete(id);
+    }
   }
   latestRecord = record;
   // 예측이 그 번호 그대로 커밋되었을 때만 예측 레코드다. 지연이 걸려 있으면 뒤이은
@@ -316,7 +340,6 @@ export function standIn(on, over) {
     // 사용자가 보던 화면이 정지 이미지로 바뀌므로 숨기지 않는다.
     if (kinds.includes(slot.dataset.nativePlugin)) {
       delete slot.dataset.nativeCaptureHidden;
-      slot.innerHTML = "";
       continue;
     }
     let hide = on;

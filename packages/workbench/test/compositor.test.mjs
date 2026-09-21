@@ -14,7 +14,7 @@ test("a layout published before drawing waits for the host's placement answer", 
   card.getBoundingClientRect = () => ({ left: 0, top: 0, width: 200, height: 150 });
   slot.getBoundingClientRect = () => ({ left: 2, top: 30, width: 196, height: 100 });
   const { registerPlugin } = await import("../registry.js");
-  registerPlugin({ id: "probe", surface: () => ({ page: "probe.html", composition: { kind: "dom" } }) });
+  registerPlugin({ id: "probe", surface: () => ({ module: "probe.js", composition: { kind: "dom" } }) });
   const { onCommit, publishAhead } = await import("../compositor.js");
   let answer, prepared;
   onCommit((record) => new Promise((resolve) => {
@@ -29,6 +29,8 @@ test("a layout published before drawing waits for the host's placement answer", 
   pending.then(() => { drawn = true; });
   await Promise.resolve();
   assert.equal(drawn, false, "the DOM must wait while the native placement is outstanding");
+  assert.equal(prepared.surfaces[0].visible, false,
+    "native preparation must keep the surface hidden until the DOM is drawn");
   answer();
   assert.deepEqual(await pending, [{ id: "surface", x: 22, y: 30, w: 176, h: 100 }]);
   assert.equal(drawn, true);

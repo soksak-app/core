@@ -17,10 +17,11 @@ async function readJson(path) {
   return response.json();
 }
 
-/** 표면 선언을 탭 id 로 표면 대상을 반환하는 함수로 바꾼다. */
-function surfaceOf(name, surface) {
-  const page = modulePath(name, surface.page);
-  return (tabId) => ({ page: `${page}?id=${encodeURIComponent(tabId)}`, composition: surface.composition });
+/** 표면 선언을 탭 id 로 표면 모듈 대상을 반환하는 함수로 바꾼다. */
+function surfaceOf(name, pluginId, surface) {
+  const module = `/${modulePath(name, surface.module)}`;
+  return (tabId) => ({ module, composition: surface.composition, surfaceId: tabId,
+    pluginId, home: surface.home ?? null, declarations: surface.declarations ?? {} });
 }
 
 /** environment.json 을 불러와 검사하고 플러그인, 섹션, 사이드바 기본값을 등록한다. */
@@ -35,7 +36,8 @@ export async function loadEnvironment() {
       registerPlugin({
         id: manifest.id, name: manifest.name, mark: manifest.mark, svg: manifest.icon,
         ink: manifest.preview?.ink ?? null,
-        surface: surfaceOf(name, manifest.surface),
+        background: manifest.background ?? null,
+        surface: surfaceOf(name, manifest.id, { ...manifest.surface, declarations: manifest.exposes ?? {} }),
       });
     }
     for (const section of manifest.sections ?? []) registerSection(section);

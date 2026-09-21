@@ -70,6 +70,7 @@ import {
 /* 표면을 모사하고 보고한다. 판은 슬롯 요소에 값을 기록만 하고 측정과 보고는 이쪽이
    담당한다. */
 import { latest, onCommit, onKnobChange, onRun, publish, publishAhead } from "./compositor.js";
+import { authorizeSurface, disposeSurfacesExcept } from "./surface-modules.js";
 
 /* 판 하나. 이 문서는 판의 렌더링 방식을 알지 않고 렌더 완료만 수신한다. */
 import {
@@ -79,6 +80,7 @@ import {
 /* 판과 컴포지터를 읽어 검증한다. 아무것도 변경하지 않으므로 그 둘은 이 모듈을
    알지 않는다. */
 import { verify } from "./verify.js";
+import { createLayoutQueue } from "./layout-queue.js";
 
 /* 애플리케이션 인터페이스. 없으면 아무 일도 하지 않는 구현이 온다. */
 import { chrome, surfaces as host } from "./host.js";
@@ -141,6 +143,7 @@ function showError(reason) {
  * 일생에 걸쳐 따지면 두 번째 실행부터는 결과가 어디에도 남지 않는다.
  */
 let lastSaid = "";
+let layoutFailure = null;
 
 onRun((going) => {
   if (going) lastSaid = "";
@@ -149,6 +152,7 @@ onRun((going) => {
 function check() {
   if (!currentGrid() || projects.inLibrary()) return;
   const rows = verify(controlsAt);
+  if (layoutFailure) rows.push({ name: "Surface presentation", ok: false, note: layoutFailure.message });
   setVerify(rows);
   const failed = rows.filter((r) => !r.ok);
   const line = failed.length === 0
@@ -202,11 +206,17 @@ function dormant(shown) {
 
 /* 커밋이 끝나면 호스트에 표면을 알린다. 컴포지터는 이 판의 표면만 알고, 무엇이
    살아 있어야 하는지는 이 문서가 안다. 호스트의 답을 그대로 돌려준다. */
-onCommit((record) =>
-  host.place({
-    ...record,
-    surfaces: [...record.surfaces, ...dormant(record.surfaces)],
-  }));
+onCommit((record) => {
+  const all = [...record.surfaces, ...dormant(record.surfaces)];
+  const ids = new Set(all.map((surface) => surface.id));
+  return disposeSurfacesExcept(ids).then(() => {
+    const placed = host.place({ ...record, surfaces: all });
+    return Promise.resolve(placed).then((answer) => {
+      for (const surface of record.surfaces) authorizeSurface(surface.id);
+      return answer;
+    });
+  });
+});
 
 /* 판이 다시 그려지면 검증하고 표면을 보고한다. 판은 둘을 알지 않고 둘은 판을 읽기만
    하므로 이 문서에서 연결한다. */
@@ -215,8 +225,9 @@ onRender(() => {
   const done = publish();
   presented = Promise.resolve(done);
   const record = latest();
-  Promise.resolve(done).then(() => {
+  presented = presented.then(() => {
     if (latest() !== record) return;
+    layoutFailure = null;
     check();
     coreChanged();
     if (record?.settled !== false) projects.keep();
@@ -225,14 +236,29 @@ onRender(() => {
 
 /* 네이티브 표면 준비가 완료된 뒤 카드 DOM을 갱신한다. */
 let drawing = Promise.resolve();
-let revision = 0;
+let supersededLayouts = 0;
+const layouts = createLayoutQueue({
+  failed(error) {
+    layoutFailure = error;
+    console.error(`surface presentation failed: ${error.message}`);
+    showError(`surface presentation failed: ${error.message}`);
+    setVerify([{ name: "Surface presentation", ok: false, note: error.message }]);
+  },
+  superseded() {
+    // 연속 디바이더 이동에서는 의도적으로 가장 최신의 대기 레이아웃만 유지한다.
+    // SoksakView는 교체된 콜백을 그릴 수 없으므로 이 이벤트로 해당 결정을
+    // 조용히 버리지 않고 관측 가능하게 만든다.
+    supersededLayouts++;
+  },
+});
+let layoutEpoch = 0;
 onLayout((made, draw, seated) => {
-  const mine = ++revision;
-  drawing = drawing.then(async () => {
-    if (mine !== revision) return;
+  const epoch = layoutEpoch;
+  drawing = layouts.run(async () => {
+    if (epoch !== layoutEpoch) return;
     await publishAhead(made, seated);
+    if (epoch !== layoutEpoch) return;
     draw();
-    await presented;
   });
 });
 
@@ -240,10 +266,13 @@ onLayout((made, draw, seated) => {
    동작이다. */
 projects.onSwitch({ save: capture, load: adopt, update: settle, async presented() {
   await drawing;
+  // `draw()`는 onRender 커밋이 끝나기 전에 반환한다. 최신 네이티브 배치가
+  // 대기 중이면 프로젝트 명령은 완료되지 않은 상태다.
+  await presented;
   await host.waitPresented();
 }, async empty() {
-  revision++;
-  drawing = drawing.then(async () => {
+  layoutEpoch++;
+  drawing = layouts.run(async () => {
     clear();
     await publish();
   });

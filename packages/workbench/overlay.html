@@ -60,6 +60,7 @@
       filter: getComputedStyle(document.documentElement).filter,
       htmlBackground: getComputedStyle(document.documentElement).backgroundColor,
       bodyBackground: getComputedStyle(document.body).backgroundColor,
+      scrimBackground: getComputedStyle(document.body, "::before").backgroundColor,
       rect: { x: r.left, y: r.top, width: r.width, height: r.height },
       loaded,
     }));
@@ -73,10 +74,20 @@
       // 페이지의 스타일시트는 body 규칙까지 통째로 온다. 이 블록을 그 뒤에 넣어
       // 우선하게 한다.
       document.head.insertAdjacentHTML("beforeend", `<style>
-        html, body { margin: 0; padding: 0; height: 100%; background: transparent }
-        body[data-mode="dialog"] { background: rgb(0 0 0 / .5) }
+        html, body { margin: 0; padding: 0; height: 100%; background: transparent !important }
+        /* 복사한 workbench 시트의 body::before 배경은 메인 문서 전용이다. 네이티브
+           모달 문서에서는 backing을 가리지 않도록 제거한다. */
+        body::before {
+          background: transparent !important;
+          -webkit-mask-image: none !important;
+          mask-image: none !important
+        }
+        body[data-mode="dialog"]::before {
+          content: ""; position: fixed; inset: 0; z-index: 0;
+          background: rgb(0 0 0 / .5) !important; pointer-events: auto
+        }
         body > [data-native-modal] { position: absolute; transform: none !important;
-          margin: 0 !important; max-height: none !important }
+          z-index: 1; margin: 0 !important; max-height: none !important }
       </style>`);
       root = document.createElement("div");
       document.body.appendChild(root);

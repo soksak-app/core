@@ -23,7 +23,7 @@ const files = {
   },
   "/modules/@fixture/card/plugin.json": {
     id: "card", name: "Card", mark: "c", icon: "<path/>",
-    surface: { page: "ui/card.html", composition: { kind: "dom" } }, sections: [{ id: "card.info", name: "Info" }],
+    surface: { module: "ui/card.js", composition: { kind: "dom" } }, sections: [{ id: "card.info", name: "Info" }],
     preview: { ink: "--fixture-ink" },
   },
   "/modules/@fixture/side/plugin.json": { id: "side", name: "Side", sections: [{ id: "side.list", name: "List" }] },
@@ -47,7 +47,7 @@ test("the environment registers card plugins, sections, and sidebar defaults", a
   ]);
   assert.deepEqual(registry.plugins().map((p) => p.id), ["card"], "a plugin without a surface is not a card plugin");
   assert.deepEqual(registry.plugin("card").surface("tab 1"),
-    { page: "modules/@fixture/card/ui/card.html?id=tab%201", composition: { kind: "dom" } });
+    { module: "/modules/@fixture/card/ui/card.js", composition: { kind: "dom" }, surfaceId: "tab 1", pluginId: "card", home: null, declarations: {} });
   assert.equal(registry.plugin("card").ink, "--fixture-ink");
   assert.equal(registry.section("side.list").name, "List");
   assert.equal(registry.section("card.info").name, "Info");

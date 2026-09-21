@@ -10,6 +10,8 @@
 // 런타임 모듈(@soksak/runtime)이 담당한다.
 import { host as bridge } from "@soksak/runtime";
 import { plugins } from "./registry.js";
+import { createClipboardBridge, createExpose } from "@soksak/plugin-api";
+import { registerSurfacePort, registry, unregisterSurfacePort } from "./exposure.js";
 
 /**
  * 계산된 CSS 색을 [r, g, b, a] 로 반환한다. 알파가 없으면 1 이다.
@@ -84,6 +86,18 @@ function overlayFrame(el, rect) {
     : toPage(rect);
 }
 
+/** 앱 DOM 모달을 통과한 네이티브 입력이 네이티브 표면에 전달되지 않게 한다. */
+function windowOverlays() {
+  if (!shown) return [];
+  const el = document.getElementById(shown);
+  if (!el || el.hidden) return [];
+  if (el.dataset.nativeModal === "dialog") {
+    return [{ x: 0, y: 0, w: innerWidth, h: innerHeight }];
+  }
+  const rect = el.getBoundingClientRect();
+  return [{ x: rect.left, y: rect.top, w: rect.width, h: rect.height }];
+}
+
 /**
  * 이 페이지를 애플리케이션이 실행하는가.
  *
@@ -92,6 +106,82 @@ function overlayFrame(el, rect) {
  * 갈림 자체는 남고, 갈리는 자리는 이 값 하나다.
  */
 export const native = Boolean(bridge);
+
+/**
+ * 네이티브 표면을 만들지 않고 선언된 background 세션 명령을 보낸다.
+ * 탭 id를 사이드카 표면 키로 유지해 나중에 표시되는 표면이 같은 영속 actor에
+ * 다시 연결되게 한다.
+ */
+export function windowSidecar(name) {
+  if (!bridge) return null;
+  return {
+    send: (surface, body) => bridge.call("sidecarSend", { sidecar: name, surface, body }),
+    on: (surface, listener) => Promise.resolve(bridge.on("sidecar-message", (event) => {
+      if (event?.sidecar === name && event?.surface === surface) listener(event.body);
+    })),
+  };
+}
+
+/* 이 문서에 표면 모듈이 마운트되므로 모든 네이티브 연산은 호스트 경계를 넘기
+   전에 명시적인 표면 범위로 제한한다. */
+export function surfaceContextRuntime(surface, declarations = {}) {
+  const surfaceId = surface.surfaceId ?? surface.id;
+  const invoke = (name, payload) => name === "report"
+    ? bridge.call(name, payload)
+    : bridge.call(name, { ...(payload ?? {}), surface: surfaceId });
+  const listeners = new Map();
+  const on = (name, fn) => {
+    let set = listeners.get(name);
+    if (!set) listeners.set(name, set = new Set());
+    set.add(fn);
+    const registered = bridge.on(name, (event) => {
+      if (event?.surface === surfaceId) fn(event);
+    });
+    return Promise.resolve(registered).then((off) => () => {
+      set.delete(fn);
+      off?.();
+    });
+  };
+  const port = {
+    register: (kind, name) => registry.registered({ surface: surfaceId, kind, name }),
+    onRequest: (fn) => registerSurfacePort(surfaceId, fn),
+    reply: (id, payload) => bridge.call("exposureReply", { id, ...payload, surface: surfaceId }),
+    unregister: () => {
+      registry.unregisterSurface(surfaceId);
+      unregisterSurfacePort(surfaceId, port);
+    },
+  };
+  return {
+    native: {
+      call: invoke,
+      on,
+    },
+    call(name, payload) {
+      if (name.includes(".")) {
+        return registry.handle({ method: "command.run", params: { name, params: payload ?? {}, surface: surfaceId } })
+          .then((reply) => reply.error ? Promise.reject(new Error(reply.error.message)) : reply.result);
+      }
+      return invoke(name, payload);
+    },
+    sidecar(name) {
+      return {
+        send: (id, body) => invoke("sidecarSend", { sidecar: name, surface: id, body }),
+        on: (id, fn) => on("sidecar-message", (event) => {
+          if (event.sidecar === name && event.surface === id) fn(event.body);
+        }),
+      };
+    },
+    exposure: createExpose(port, async () => {
+      const core = registry.surfaceDeclarations();
+      return {
+        status: [...core.status, ...(declarations.status ?? [])],
+        commands: [...core.commands, ...(declarations.commands ?? [])],
+        dom: [...core.dom, ...(declarations.dom ?? [])],
+      };
+    }),
+    clipboard: createClipboardBridge((name, payload) => invoke(name, payload), { allowPersist: true }),
+  };
+}
 
 /* 호출과 그 답을 받는 함수. 진단 빌드의 진단 모듈만 설치한다. */
 let watcher = null;
@@ -135,7 +225,12 @@ const tellInTurn = (name, payload) => {
 };
 
 let last = "";
-let prepared = null;
+// 레이아웃 준비와 표시는 하나의 트랜잭션이다. 네이티브 합성기는 창마다 활성
+// ticket 하나만 가지므로 두 호출 사이에 다음 준비 작업을 호스트로 보내지 않는다.
+let layoutTurn = Promise.resolve();
+let layoutFrame = layoutTurn;
+let layoutResult = layoutTurn;
+let layoutPresented = false;
 
 /**
  * 창 자체를 다루는 인터페이스. 애플리케이션이 없으면 null.
@@ -168,7 +263,7 @@ export const surfaces = native ? {
       const surfaces = record.surfaces.map((s) => ({
         id: s.id,
         dim: s.dim,
-        url: bridge.page(s.surface.page),
+        module: s.surface.module,
         composition: s.surface.composition,
         visible: s.visible,
         ...toPage(s.applied),
@@ -180,22 +275,35 @@ export const surfaces = native ? {
         // 마지막 갱신인지, 갱신이 이어지는 중인지. 이어지는 동안 뷰가 커지면
         // 아직 렌더링되지 않은 영역이 흰색으로 보인다.
         settled: record.settled !== false,
+        overlays: windowOverlays(),
         surfaces,
       };
       const key = JSON.stringify(request);
       if (key !== last) {
         last = key;
-        prepared = tellInTurn("syncSurfaces", request);
+        const scheduled = layoutTurn.then(() => tellInTurn("syncSurfaces", request));
+        layoutFrame = scheduled;
+        layoutResult = scheduled.then((frame) => frame.placements);
+        layoutPresented = false;
+        // 실패한 트랜잭션이 다음 독립 레이아웃을 막지 않게 한다.
+        layoutTurn = scheduled.catch(() => undefined);
       }
-      // 차례대로 보낸다. 애플리케이션에 따라 호출마다 다른 스레드에서 처리되므로,
-      // 기다리지 않으면 한 프레임 전의 자리가 나중에 적용된다.
-      // 애플리케이션이 실제로 앉힌 자리를 판 기준으로 되돌려 답한다. 렌더링 전에
-      // 배치를 보낸 쪽이 이 결과를 기다린다.
-      const placed = record.drawn
-        ? prepared.then((frame) => tell("presentSurfaces", { ...frame, settled: request.settled }))
-        : prepared.then((frame) => frame.placements);
-      return placed.then((placed) =>
-        (placed ?? []).map((p) => ({ id: p.id, ...toPlane(p) })));
+      if (record.drawn && !layoutPresented) {
+        const preparedLayout = layoutFrame;
+        const presentedLayout = preparedLayout.then((frame) =>
+          tellInTurn("presentSurfaces", { ...frame, settled: request.settled }));
+        layoutResult = presentedLayout;
+        layoutPresented = true;
+        layoutTurn = presentedLayout.catch(() => undefined);
+      }
+      // 이전 ticket이 커밋되기 전에 새 동기화가 네이티브 ticket을 교체하지 않도록
+      // 동기화와 표시 호출을 함께 처리한다.
+      const result = layoutResult;
+      return result.then((placed) =>
+        placed.map((p) => ({ id: p.id, ...toPlane(p) }))).catch((error) => {
+          if (result === layoutResult) { last = ""; layoutPresented = false; }
+          throw error;
+        });
     },
     // 표면 배치 RPC가 끝난 뒤에 호출해야 페이지가 네이티브 래스터 이벤트를 계속 처리할 수 있다.
     waitPresented: () => tell("waitPresented"),

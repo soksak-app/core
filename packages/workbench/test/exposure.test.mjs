@@ -12,7 +12,23 @@ const dom = new JSDOM(`<body>
 globalThis.window = dom.window;
 globalThis.document = dom.window.document;
 
-const { createRegistry, loadExposure, registry } = await import("../exposure.js");
+const { createRegistry, loadExposure, registry, registerSurfacePort, unregisterSurfacePort, dispatchSurfaceRequest } = await import("../exposure.js");
+
+test("mounted surface exposure routes through its registered module and releases ownership", async () => {
+  const received = [];
+  const port = async (request) => { received.push(request); };
+  const remove = registerSurfacePort("fixture-surface", port);
+  const request = { surface: "fixture-surface", id: 1, method: "status.get" };
+  try {
+    assert.equal(await dispatchSurfaceRequest(request), true);
+    assert.deepEqual(received, [request]);
+    assert.throws(() => registerSurfacePort("fixture-surface", port), /already has/);
+    unregisterSurfacePort("fixture-surface", port);
+    assert.equal(await dispatchSurfaceRequest(request), false);
+  } finally {
+    remove();
+  }
+});
 
 const coreExposes = () => ({
   status: [

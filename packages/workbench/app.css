@@ -57,9 +57,19 @@
    이동하고 네이티브 표면이 그 변화를 받지 못한다. 여기서는 위치가 아니라 크기만
    바뀐다. */
 html,body{height:100%}
-body{margin:0;background:var(--bg);color:var(--fg);
+body{margin:0;background:transparent;color:var(--fg);
   font:var(--size)/var(--line-height) var(--font);letter-spacing:var(--letter-spacing);
-  box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden}
+  box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden;isolation:isolate;
+  -webkit-mask-image:var(--native-paint-mask,linear-gradient(#000,#000));
+  mask-image:var(--native-paint-mask,linear-gradient(#000,#000));
+  -webkit-mask-size:100% 100%;mask-size:100% 100%;
+  -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat}
+/* 창 배경은 하나의 페인트 소유자다. compositor.js가 네이티브 표면 사각형만
+   마스크하므로 합성 조상은 네이티브 픽셀을 드러내고 전체 앱 배경은 유지한다. */
+body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:var(--bg);-webkit-mask-image:var(--native-paint-mask,linear-gradient(#000,#000));
+  mask-image:var(--native-paint-mask,linear-gradient(#000,#000));
+  -webkit-mask-size:100% 100%;mask-size:100% 100%;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat}
 
 button,input,select,textarea{font:inherit;letter-spacing:inherit}
 button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
@@ -156,6 +166,9 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
    overflow:hidden 은 표시만 자를 뿐 rect 를 줄이지 않는다. 그러면 네이티브 표면이
    카드 밖에 그려진다. 선언 rect 는 클립 영역보다 클 수 없다. */
 .card > *{min-width:0}
+/* 네이티브 합성은 카드 본문을 정확한 구멍으로 연다. 크롬과 상태 행은
+   각 행이 배경을 소유하므로 카드 배경으로 다시 덮지 않는다. */
+.card > .chrome,.card > .status{background:var(--card)}
 /* 사이드바도 카드와 같은 조용한 테두리를 갖는다. 레일과 같은 색을 주면 레일 획과
    테두리가 통로 하나를 사이에 두고 두 겹이 된다. 묶는 일은 획이 한다. */
 /* 포커스는 테두리를 추가하지 않고 기존 테두리의 색으로 표시한다. 링을 덧대면 선이
@@ -256,6 +269,14 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .status{display:flex;align-items:center;padding:0 var(--space-2);font-size:var(--text-caption);
   border-top:var(--bw) solid var(--edge);color:var(--muted);
   overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.status__text{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.surface-status{display:inline-flex;align-items:center;gap:4px;flex:0 0 auto;margin-right:6px;color:var(--muted)}
+.surface-status::before{content:"";width:8px;height:8px;border:1px solid currentColor;border-top-color:transparent;
+  border-radius:50%;animation:surface-status-spin .8s linear infinite}
+.surface-status[data-surface-status=error]{color:var(--no)}
+.surface-status[data-surface-status=error]::before{border:0;background:currentColor;animation:none}
+.surface-status[hidden]{display:none}
+@keyframes surface-status-spin{to{transform:rotate(360deg)}}
 .set{padding:var(--space-2) var(--space-3);font-size:var(--text-small);color:var(--muted);overflow:hidden}
 .set b{color:var(--fg);display:block;margin-bottom:4px}
 .card[data-role=fixed] .set b{color:var(--rail)}

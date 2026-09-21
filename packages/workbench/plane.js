@@ -9,9 +9,11 @@ import { cardRadius, halfGap, linkedSet, stagePad, value } from "./settings.js";
 import { hasPlugin, isPlace, isRailId, plugin, plugins, railId, railKind, sectionNames } from "./registry.js";
 import { environment } from "./environment.js";
 import { standIn } from "./compositor.js";
-import { native, onSurfaceInput, overlay, shapes } from "./host.js";
+import { native, onSurfaceInput, overlay, report, shapes, windowSidecar } from "./host.js";
 import { issueId } from "./ids.js";
 import { bind, delegate, mark, run } from "./commands.js";
+import { disposeSurface, mountSurface } from "./surface-modules.js";
+import { setSurfaceStatus } from "./surface-status.js";
 
 const NEEDS = ["cards", "card", "insertAt", "moveTo", "standings", "moveBoundary", "zoneAt",
   "splitToward", "replace"];
@@ -197,6 +199,12 @@ function updateCard(el, card) {
   el.dataset.focused = String(card.id === focusedId);
   const chrome = el.querySelector(".chrome");
   const status = el.querySelector(".status");
+  let statusText = status.querySelector(".status__text");
+  if (!statusText) {
+    statusText = document.createElement("span");
+    statusText.className = "status__text";
+    status.appendChild(statusText);
+  }
 
   if (place) {
     const kind = railKind(place);
@@ -326,7 +334,16 @@ function updateCard(el, card) {
   slot.dataset.nativePlugin = shown.plugin;
   slot.dataset.nativeTitle = shown.title;
   slot.dataset.nativeDim = String(dimmed(card.id));
-  setText(status, `열 ${card.c0}–${card.c1} · 행 ${card.r0}–${card.r1} · 탭 ${tabs.length}`);
+  const surface = plugin(shown.plugin).surface(shown.id);
+  mountSurface(slot, surface, {
+    onState: (state) => {
+      slot.dataset.surfaceStatus = state.phase;
+      setSurfaceStatus(status, state);
+    },
+  }).catch((error) => {
+    report(`surface ${shown.id} mount failed: ${error.message}`);
+  });
+  setText(statusText, `열 ${card.c0}–${card.c1} · 행 ${card.r0}–${card.r1} · 탭 ${tabs.length}`);
 }
 
 /* ── T5 — 마지막 탭이 이동하면 카드를 닫는다 ─────────────────────────── */
@@ -335,6 +352,7 @@ function closeTab(cardId, tabId) {
   const card = grid.card(cardId);
   if (!card) return;
   if (!tabsOf(card).some((t) => t.id === tabId)) return;
+  disposeSurface(tabId);
   card.data.tabs = tabsOf(card).filter((t) => t.id !== tabId);
   if (card.data.tabs.length === 0) {
     // 닫을 수 없는 카드는 남으므로 탭 하나를 다시 넣는다. 종류는 포커스가 보던
@@ -858,10 +876,49 @@ function settle() {
   for (const p of plugins()) standRail(p.id);
   if (!grid.card(focusedId)) focusedId = grid.cards.find((c) => !isPlace(c.id))?.id ?? null;
   view.render();
+  syncBackgroundSessions();
 }
 
 /* 진행 중인 scrollend 대기. 다음 요청이 이전 대기를 취소한다. */
 const landing = new WeakMap();
+
+// 영속 터미널 actor는 네이티브 이미지 표면이 아니라 창 사이드카가 소유한다.
+// 따라서 숨겨진 탭은 WebView나 이미지 영역을 만들지 않고 PTY를 유지한다.
+const backgroundSessions = new Map();
+
+function syncBackgroundSessions() {
+  if (!native || !grid) return;
+  const tabs = new Map();
+  for (const card of grid.cards) for (const tab of tabsOf(card)) tabs.set(tab.id, tab);
+  for (const tab of tabs.values()) {
+    const descriptor = plugin(tab.plugin).background;
+    if (!descriptor || tabs.get(tab.id) !== tab) continue;
+    const owner = grid.cards.find((card) => tabsOf(card).some((item) => item.id === tab.id));
+    if (owner?.data?.activeId === tab.id || backgroundSessions.has(tab.id)) continue;
+    const port = windowSidecar(descriptor.sidecar);
+    if (!port) throw new Error(`background sidecar unavailable: ${descriptor.sidecar}`);
+    const state = { stop: null };
+    backgroundSessions.set(tab.id, state);
+    Promise.resolve(port.on(tab.id, (body) => {
+      if (body?.error || body?.body?.error) {
+        report(`background session ${tab.id}: ${body.error ?? body.body.error}`);
+      }
+    })).then((stop) => { state.stop = stop; }, (error) => {
+      report(`background session ${tab.id} listener failed: ${error.message}`);
+    });
+    // manifest가 연산을 명시한다. 사이드카 전송은 기존 wire 필드 `op`를 유지하며
+    // 이 위치가 유일한 프로토콜 변환 지점이다.
+    port.send(tab.id, { op: descriptor.operation }).catch((error) => {
+      backgroundSessions.delete(tab.id);
+      report(`background session ${tab.id} open failed: ${error.message}`);
+    });
+  }
+  for (const [tabId, state] of backgroundSessions) {
+    if (tabs.has(tabId)) continue;
+    state.stop?.();
+    backgroundSessions.delete(tabId);
+  }
+}
 
 /**
  * 활성 탭을 탭 목록의 가운데로 스크롤한다.

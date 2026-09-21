@@ -24,6 +24,9 @@ const surfaceName = (name) => ownerOf(name) !== "core" || name.startsWith(SURFAC
 /** 감시 하나의 키. 표면을 지정한 감시와 지정하지 않은 감시는 서로 다르다. */
 const watchKey = (name, surface) => JSON.stringify([name, surface ?? null]);
 
+// 이 문서에 마운트된 표면 모듈의 요청 수신자를 보관한다.
+const surfacePorts = new Map();
+
 /**
  * 등록소 하나를 만든다.
  *
@@ -254,6 +257,19 @@ export function createRegistry({ call = null } = {}) {
     /** 이 항목을 등록한 표면 id. 등록 순서다. */
     registrants: (kind, name) => [...(surfaces.get(declarationKey(kind, name))?.keys() ?? [])],
 
+    /** 표면을 닫을 때 등록·보류·감시를 모두 제거한다. */
+    unregisterSurface(surface) {
+      for (const [key, owners] of surfaces) {
+        if (!owners.delete(surface)) continue;
+        if (owners.size === 0) surfaces.delete(key);
+      }
+      pending.delete(surface);
+      for (const [key, watch] of following) {
+        if (watch.surface === surface) following.delete(key);
+      }
+      options.registrationChanged();
+    },
+
     /** 표면이 등록한 항목. `<kind> <name>` 형식이다. */
     namesOf: (surface) => [...surfaces].filter(([, owners]) => owners.has(surface)).map(([key]) => key),
 
@@ -266,11 +282,37 @@ export function createRegistry({ call = null } = {}) {
     }),
 
     list,
+    surfaceDeclarations() {
+      const listed = list();
+      const onlySurface = (entry) => entry.name.startsWith(SURFACE_CORE);
+      return {
+        status: listed.status.filter(onlySurface),
+        commands: listed.commands.filter(onlySurface),
+        dom: listed.dom.filter(onlySurface),
+      };
+    },
   };
 }
 
 /** 이 문서의 등록소. */
 export const registry = createRegistry({ call: host ? (name, arg) => host.call(name, arg) : null });
+
+export function registerSurfacePort(surface, port) {
+  if (surfacePorts.has(surface)) throw new Error(`surface ${surface} already has an exposure port`);
+  surfacePorts.set(surface, port);
+  return () => { if (surfacePorts.get(surface) === port) surfacePorts.delete(surface); };
+}
+
+export function unregisterSurfacePort(surface, port) {
+  if (surfacePorts.get(surface) === port) surfacePorts.delete(surface);
+}
+
+export async function dispatchSurfaceRequest(request) {
+  const port = surfacePorts.get(request.surface);
+  if (!port) return false;
+  await port(request);
+  return true;
+}
 
 /** 보류된 표면 등록을 반영한다. 선언과 맞지 않는 등록은 호스트 로그로 보고한다. */
 export function revisitRegistrations() {
@@ -298,7 +340,10 @@ export async function connectExposure(values) {
   registry.configure(values);
   if (!host) return;
   await host.on("exposure-request", (request) => {
-    registry.handle(request).then((payload) => host.call("exposureReply", { id: request.id, ...payload }));
+    dispatchSurfaceRequest(request).then((handled) => {
+      if (handled) return;
+      return registry.handle(request).then((payload) => host.call("exposureReply", { id: request.id, ...payload }));
+    });
   });
   await host.on("exposure-registered", (event) => {
     try {

@@ -19,7 +19,8 @@ const registeredSections = [];
  * @param {string} plugin.mark  메뉴 오른쪽 표시이자 탭 제목의 접두사
  * @param {string} plugin.svg   16×16 뷰박스 기준 아이콘 경로
  * @param {string|null} plugin.ink 라이브러리 미리보기 색의 테마 토큰 이름. 없으면 기본 색
- * @param {(tabId: string) => {page: string, composition: object}} plugin.surface
+ * @param {object|null} plugin.background 영속 background 세션 선언
+ * @param {(tabId: string) => {module: string, composition: object}} plugin.surface
  *        표면이 표시할 문서와 검증된 합성 권한 선언. 표면 하나는 탭 하나이므로
  *        인자는 탭의 id 다
  */

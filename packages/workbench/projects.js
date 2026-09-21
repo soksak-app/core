@@ -122,6 +122,10 @@ async function showProject(id) {
   savedLayout = "";
   listener.load(project.spaces.find((s) => s.id === project.activeSpaceId).layout);
   changed();
+  // 불러온 레이아웃이 네이티브 합성기에 도달한 뒤에만 프로젝트 명령이 완료된다.
+  // 먼저 반환하면 이전 프레임이 호출자에게 노출되고 영역이 비어 있는 상태를
+  // 프로젝트 복원 성공으로 보고하게 된다.
+  await listener.presented();
 }
 
 export async function activate(id) {

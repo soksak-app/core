@@ -47,6 +47,7 @@ projects.onSwitch({
   },
   load: (layout) => { plane.layout = layout; plane.events.push("load"); },
   update: () => {},
+  presented: async () => {},
   empty: async () => {
     plane.events.push("empty started");
     await plane.gate;
