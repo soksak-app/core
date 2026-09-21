@@ -165,3 +165,9 @@ test("release marker scanner reports diagnostics and ignores clean content", { t
   findReleaseMarkers(clean, "clean.js", "export const ready = true;");
   assert.deepEqual(clean, []);
 });
+
+test("platform audit accepts only declared platform boundaries", { timeout: 5000 }, async () => {
+  const result = await run(node, [join(root, "scripts/check-platforms.mjs")]);
+  assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);
+  assert.match(result.stdout, /Platform checks passed: \d+ files/);
+});

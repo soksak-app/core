@@ -21,26 +21,13 @@ use std::time::Duration;
 use wait_timeout::ChildExt;
 
 use crate::platform::{current, PersistentStream};
+#[path = "platform/process.rs"]
+mod process;
+use process::service_process_exists;
 use crate::windows::{emit_window, window_data};
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use tauri::Window;
-
-#[cfg(unix)]
-fn service_process_exists(pid: u32) -> bool {
-    if pid == 0 {
-        return false;
-    }
-    // kill(pid, 0) probes existence without sending a signal. EPERM still
-    // means the process exists; only ESRCH makes the persisted endpoint stale.
-    let result = unsafe { libc::kill(pid as libc::pid_t, 0) };
-    result == 0 || std::io::Error::last_os_error().raw_os_error() != Some(libc::ESRCH)
-}
-
-#[cfg(not(unix))]
-fn service_process_exists(_pid: u32) -> bool {
-    true
-}
 
 /// 사이드카가 보낸 메시지를 페이지에 전달하는 이벤트 값.
 #[derive(Clone, Serialize)]

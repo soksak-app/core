@@ -19,6 +19,9 @@ const SOURCE = /\.(js|mjs|go|rs|m|h|sh)$/;
 const SKIPPED = [
   /^native\/[^/]+\//,
   /^scripts\/check-build-environment\.sh$/,
+  // This file checks whether the command supervisor supports the current host;
+  // it is an execution-environment contract, not an OS implementation.
+  /^scripts\/test-command\.mjs$/,
   /(^|\/)platform\/platform\.(go|rs|js)$/,
   /^scripts\/check-platforms\.mjs$/,
 ];
@@ -29,7 +32,9 @@ const RULES = [
   { what: "Node process.platform", pattern: /\bprocess\.platform\b/ },
 ];
 
-const inPlatform = (path) => /(^|\/)platform\/(darwin|linux|windows)\//.test(path);
+// Platform adapters may also be grouped below a domain directory (for example
+// platform/pty.rs); the owning platform root is still explicit.
+const inPlatform = (path) => /(^|\/)platform\//.test(path);
 const files = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
   { cwd: ROOT, encoding: "utf8" }).split("\0").filter((path) => path && existsSync(`${ROOT}${path}`));
 const errors = [];

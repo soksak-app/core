@@ -1,5 +1,6 @@
 pub mod platform;
 pub mod darwin;
+pub mod pty;
 
 pub use platform::get_daemon_finder;
 pub use platform::ImageState;

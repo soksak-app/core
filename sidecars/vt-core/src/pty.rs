@@ -4,11 +4,8 @@
 //! deliberately not represented by PTY handles: dropping an attachment only
 //! stops delivery to that client, while an explicit close owns session exit.
 
+use crate::platform::pty::{kill_process_group, process_group_leader};
 use crate::protocol::DaemonEvent;
-#[cfg(unix)]
-use nix::sys::signal::{kill, Signal};
-#[cfg(unix)]
-use nix::unistd::Pid;
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use std::collections::{HashMap, VecDeque};
 use std::io::{Read, Write};
@@ -22,7 +19,6 @@ struct Session {
     id: String,
     owner: String,
     master: Mutex<Option<Box<dyn MasterPty + Send>>>,
-    #[cfg(unix)]
     process_group: Option<i32>,
     writer: Mutex<Option<Box<dyn Write + Send>>>,
     child: Mutex<Box<dyn Child + Send>>,
@@ -90,8 +86,7 @@ impl PtyService {
             .slave
             .spawn_command(command)
             .map_err(|error| format!("spawn PTY session: {error}"))?;
-        #[cfg(unix)]
-        let process_group = pair.master.process_group_leader();
+        let process_group = process_group_leader(pair.master.as_ref());
         let reader = pair
             .master
             .try_clone_reader()
@@ -107,7 +102,6 @@ impl PtyService {
             id: session_id.clone(),
             owner: owner.to_string(),
             master: Mutex::new(Some(pair.master)),
-            #[cfg(unix)]
             process_group,
             writer: Mutex::new(Some(writer)),
             child: Mutex::new(child),
@@ -246,7 +240,6 @@ impl PtyService {
         session.writer.lock().unwrap().take();
         session.master.lock().unwrap().take();
         let kill_result = {
-            #[cfg(unix)]
             let process_group_result = kill_process_group(session.process_group);
             let mut child = session.child.lock().unwrap();
             let child_result = match child.try_wait() {
@@ -263,16 +256,11 @@ impl PtyService {
                 },
                 Err(wait_error) => Err(format!("check PTY child: {wait_error}")),
             };
-            #[cfg(unix)]
-            {
-                match (process_group_result, child_result) {
-                    (Err(group_error), _) => Err(group_error),
-                    (_, Err(child_error)) => Err(child_error),
-                    (Ok(()), Ok(())) => Ok(()),
-                }
+            match (process_group_result, child_result) {
+                (Err(group_error), _) => Err(group_error),
+                (_, Err(child_error)) => Err(child_error),
+                (Ok(()), Ok(())) => Ok(()),
             }
-            #[cfg(not(unix))]
-            child_result
         };
         if let Some(reader) = session.reader.lock().unwrap().take() {
             reader
@@ -320,16 +308,6 @@ impl PtyService {
             .get(session_id)
             .cloned()
             .ok_or_else(|| format!("session {session_id} not found"))
-    }
-}
-
-#[cfg(unix)]
-fn kill_process_group(group: Option<i32>) -> Result<(), String> {
-    let group = group.ok_or("PTY process group is unavailable")?;
-    match kill(Pid::from_raw(-group), Signal::SIGKILL) {
-        Ok(()) => Ok(()),
-        Err(nix::errno::Errno::ESRCH) => Ok(()),
-        Err(error) => Err(format!("kill PTY process group {group}: {error}")),
     }
 }
 
