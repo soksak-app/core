@@ -222,7 +222,7 @@ func (s *Surfaces) discardOverlay() {
 
 // OverlayUpdate 는 뷰를 다시 만들지 않고 열린 모달의 내용을 바꾼다. 컨트롤이 페이지 상태를
 // 바꾸는 모달은 열린 동안 다시 그려진다.
-func (s *Surfaces) OverlayUpdate(req UpdateRequest) {
+func (s *Surfaces) OverlayUpdate(req UpdateRequest) error {
 	content := req.OverlayContent
 	s.mu.Lock()
 	ok := s.modal != nil && s.modal.id == req.ID
@@ -237,32 +237,38 @@ func (s *Surfaces) OverlayUpdate(req UpdateRequest) {
 	}
 	s.mu.Unlock()
 	if !ok {
-		return
+		return nil
 	}
 	if view == nil {
-		s.log("modal content update without a native webview: " + req.ID)
-		return
+		return fmt.Errorf("modal content update without a native webview: %s", req.ID)
 	}
 	event := ModalContentEvent{ID: req.ID, Instance: instance, Revision: revision, Content: content}
 	s.Emit("modal-content", event)
 	if err := emitModalEvent(view, "modal-content", event); err != nil {
-		s.log(fmt.Sprintf("modal content event %s: %v", req.ID, err))
+		return err
 	}
+	return nil
 }
 
 // emitModalEvent delivers an update through the child WebView bridge. Wails window events are
 // scoped to the application WebView, so they cannot update a native child document reliably.
 func emitModalEvent(view *nativeWebview, event string, data any) error {
+	if view == nil {
+		return fmt.Errorf("modal event %s has no native webview", event)
+	}
 	payload, err := json.Marshal(map[string]any{"event": event, "data": data})
 	if err != nil {
 		return fmt.Errorf("encode modal event %s: %w", event, err)
 	}
+	var dispatchErr error
 	application.InvokeSync(func() {
 		if view.handle != nil {
 			view.execJS("window.__soksakNative?.receive(" + string(payload) + ")")
+			return
 		}
+		dispatchErr = fmt.Errorf("modal event %s targets a closed native webview", event)
 	})
-	return nil
+	return dispatchErr
 }
 
 // ModalContentEvent 는 모달 페이지가 받는 모달 하나의 새 내용이다.
@@ -300,7 +306,7 @@ func (s *Surfaces) ModalContent(id string, instance uint64) RevisedContent {
 
 // ModalReady 는 이번 표시를 한 번만 드러낸다. 제거된 문서가 늦게 보낸 알림은 같은
 // 모달의 새 표시를 드러내거나 초점을 옮기지 않는다.
-func (s *Surfaces) ModalReady(id string, instance uint64) {
+func (s *Surfaces) ModalReady(id string, instance uint64) error {
 	s.mu.Lock()
 	live := s.modal
 	first := live != nil && live.id == id && live.instance == instance && !live.shown
@@ -318,11 +324,10 @@ func (s *Surfaces) ModalReady(id string, instance uint64) {
 		if current {
 			s.rendered(id)
 		}
-		return
+		return nil
 	}
 	if view == nil {
-		s.log("modal ready without a native webview: " + id)
-		return
+		return fmt.Errorf("modal ready without a native webview: %s", id)
 	}
 	s.setBackground(dialog)
 	application.InvokeSync(func() {
@@ -336,6 +341,7 @@ func (s *Surfaces) ModalReady(id string, instance uint64) {
 	}
 	s.mu.Unlock()
 	s.rendered(id)
+	return nil
 }
 
 // rendered 는 모달 문서가 렌더링을 마쳤음을 알린다. 갱신된 내용이 그 문서에 도달했는지는

@@ -120,8 +120,7 @@ func (h *Host) OverlayUpdate(ctx context.Context, req UpdateRequest) error {
 	if err != nil {
 		return err
 	}
-	s.OverlayUpdate(req)
-	return nil
+	return s.OverlayUpdate(req)
 }
 
 // nativeCall 은 bridge.js 가 보낸 호출 하나다.
@@ -186,8 +185,7 @@ func invokeNative(s *Surfaces, viewID uint64, call nativeCall) (any, error) {
 		if call.Method == "ModalContent" {
 			return s.ModalContent(id, instance), nil
 		}
-		s.ModalReady(id, instance)
-		return nil, nil
+		return nil, s.ModalReady(id, instance)
 	case "DocumentAttach", "DocumentLoad", "DocumentGo", "DocumentDetach":
 		var req DocumentRequest
 		if err := nativeArgs(call, &req); err != nil {
