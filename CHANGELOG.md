@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- Return the Wails diagnostic capture cap state as `limited` alongside the actual frame count and longest gap. Reaching the cap remains a normal bounded result; Wails payload tests cover capped and uncapped responses, and the rebuilt diagnostics host passes its focused tests.
+
 - Complete asynchronous shell command validation on both macOS hosts. Serialize injected pointer requests, drain pending WebKit mouse work before registering the current receipt, wait for the release-generated click, and keep explicit unreceived errors. The focused shell e2e passes all three cases on Wails and Tauri; native, workspace, boundary, exposure, and documentation checks pass.
 
 - Restore first-focus address selection and first-release selection retention in the mounted browser module, preserving caret editing on later clicks and disposing handlers. Bind the selection command through the registry. The module replaces the old page entry. Two new regressions failed before correction; nine browser package checks and rebuilt macOS Tauri navigation, native replacement input, scroll, placement, and isolation pass. Terminal, shell, settings, and add/split menu basics also pass on this dirty implementation; Wails integration remains pending.
