@@ -95,6 +95,19 @@ const MATRIX = [
 // The inventory remains structural; behavior is proved by the referenced tests.
 const FEATURE_LINKS = [
   {
+    id: "F0.1",
+    implementation: [
+      { file: "native/darwin/src/input_inject.m", symbol: "sp_input_pointer" },
+      { file: "packages/host/tauriv2/src/platform/darwin/input.rs", symbol: "pointer" },
+    ],
+    tests: [
+      { file: "e2e/terminal.test.mjs", id: "three terminal" },
+      { file: "native/darwin/tests/input_inject_test.m", id: "keys reach the focused field" },
+    ],
+    expected: "Native input reaches each of three terminal surfaces with exact focus, text, Enter, and isolation behavior.",
+    levels: ["native", "application"],
+  },
+  {
     id: "F0.1.2",
     implementation: [
       { file: "plugins/terminal/ui/terminal.js", symbol: "terminal.focus" },
