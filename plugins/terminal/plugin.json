@@ -4,7 +4,7 @@
   "mark": "◊",
   "icon": "<rect x=\"2\" y=\"3\" width=\"12\" height=\"10\" rx=\"2\"/><circle cx=\"5\" cy=\"7\" r=\"1.5\"/><path d=\"M8 9l2-2m-2 0l2 2\"/>",
   "surface": {
-    "page": "ui/terminal.html",
+    "module": "ui/terminal-module.js",
     "composition": {
       "kind": "hybrid",
       "regions": [
@@ -24,6 +24,10 @@
   "sidecars": [
     "@soksak/sidecar-vt-alacritty"
   ],
+  "background": {
+    "sidecar": "@soksak/sidecar-vt-alacritty",
+    "operation": "open"
+  },
   "exposes": {
     "status": [
       {
@@ -63,20 +67,42 @@
             }
           }
         }
+      },
+      {
+        "name": "terminal.cursor",
+        "description": "The terminal cursor position and rendering policy.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "row": { "type": "integer" },
+            "col": { "type": "integer" },
+            "shape": { "type": "string", "enum": ["block", "underline", "beam"] },
+            "visible": { "type": "boolean" },
+            "blinking": { "type": "boolean" },
+            "focused": { "type": "boolean" },
+            "blink": { "type": "string", "enum": ["Never", "Off", "On", "Always"] },
+            "interval": { "type": "number" },
+            "idleTimeout": { "type": "number" },
+            "unfocused": { "type": "string", "enum": ["hollow", "solid"] },
+            "hollow": { "type": "boolean" }
+          }
+        }
+      },
+      {
+        "name": "terminal.compose",
+        "description": "The current terminal composition state.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "text": { "type": "string" },
+            "selectedRange": { "type": ["object", "null"] },
+            "replacementRange": { "type": ["object", "null"] },
+            "attributed": { "type": "boolean" }
+          }
+        }
       }
     ],
     "commands": [
-      {
-        "name": "terminal.focus",
-        "description": "Transfers keyboard ownership to the terminal native image region.",
-        "params": {
-          "type": "object",
-          "properties": {}
-        },
-        "result": {
-          "type": "null"
-        }
-      },
       {
         "name": "terminal.input",
         "description": "Sends text input to the terminal session as UTF-8 bytes.",
@@ -87,6 +113,17 @@
               "type": "string"
             }
           }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "terminal.focus",
+        "description": "Transfers keyboard ownership to the terminal native image region.",
+        "params": {
+          "type": "object",
+          "properties": {}
         },
         "result": {
           "type": "null"

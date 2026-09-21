@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { PAGE_IMPORTS, pageImports } from "@soksak/plugin-api";
+import { existsSync } from "node:fs";
 
-test("terminal.html declares the page import map", () => {
-  const html = readFileSync(new URL("../ui/terminal.html", import.meta.url), "utf8");
-  assert.deepEqual(pageImports(html), { ...PAGE_IMPORTS });
+test("terminal module is an app-DOM entry", () => {
+  const source = readFileSync(new URL("../ui/terminal-module.js", import.meta.url), "utf8");
+  assert.ok(existsSync(new URL("../ui/terminal-module.js", import.meta.url)));
+  assert.match(source, /export async function mount/);
 });

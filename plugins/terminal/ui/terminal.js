@@ -36,6 +36,68 @@ function sendInput(text, terminal, id, encoder) {
   return terminal.send(id, { op: "input", bytes: base64 });
 }
 
+const CURSOR_SHAPES = new Set(["block", "underline", "beam"]);
+const CURSOR_BLINK_MODES = new Set(["Never", "Off", "On", "Always"]);
+const DEFAULT_CURSOR = Object.freeze({
+  row: 0, col: 0, shape: "block", visible: true, blinking: false, focused: false,
+  blink: "Never", interval: 500, idleTimeout: 0, unfocused: "hollow", hollow: false,
+});
+
+function normalizeRange(range) {
+  if (range === null || range === undefined) return null;
+  if (!Number.isInteger(range.location) || !Number.isInteger(range.length) ||
+      range.location < 0 || range.length < 0) return null;
+  return { location: range.location, length: range.length };
+}
+
+function normalizeCursor(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("cursor must be an object");
+  }
+  const cursor = value;
+  const rawShape = cursor.shape ?? DEFAULT_CURSOR.shape;
+  const shapes = { block: "block", Block: "block", underline: "underline", Underline: "underline", beam: "beam", Beam: "beam", HollowBlock: "block", Hidden: "block" };
+  if (typeof rawShape !== "string" || !Object.hasOwn(shapes, rawShape)) {
+    throw new Error(`cursor.shape is invalid: ${String(rawShape)}`);
+  }
+  const shape = shapes[rawShape];
+  const blink = cursor.blink ?? (cursor.blinking === true ? "On" : DEFAULT_CURSOR.blink);
+  if (!CURSOR_BLINK_MODES.has(blink)) throw new Error(`cursor.blink is invalid: ${String(blink)}`);
+  const integer = (field, fallback) => {
+    if (cursor[field] === undefined) return fallback;
+    if (!Number.isInteger(cursor[field]) || cursor[field] < 0) throw new Error(`cursor.${field} is invalid`);
+    return cursor[field];
+  };
+  const number = (field, fallback) => {
+    if (cursor[field] === undefined) return fallback;
+    if (typeof cursor[field] !== "number" || !Number.isFinite(cursor[field]) || cursor[field] < 0) {
+      throw new Error(`cursor.${field} is invalid`);
+    }
+    return cursor[field];
+  };
+  const boolean = (field, fallback) => {
+    if (cursor[field] === undefined) return fallback;
+    if (typeof cursor[field] !== "boolean") throw new Error(`cursor.${field} is invalid`);
+    return cursor[field];
+  };
+  if (cursor.unfocused !== undefined && cursor.unfocused !== "hollow" && cursor.unfocused !== "solid") {
+    throw new Error(`cursor.unfocused is invalid: ${String(cursor.unfocused)}`);
+  }
+  return {
+    row: integer("row", DEFAULT_CURSOR.row),
+    col: integer("col", DEFAULT_CURSOR.col),
+    shape,
+    visible: boolean("visible", rawShape === "Hidden" ? false : DEFAULT_CURSOR.visible),
+    blinking: boolean("blinking", blink === "On" || blink === "Always"),
+    focused: boolean("focused", DEFAULT_CURSOR.focused),
+    blink,
+    interval: number("interval", DEFAULT_CURSOR.interval),
+    idleTimeout: number("idleTimeout", DEFAULT_CURSOR.idleTimeout),
+    unfocused: cursor.unfocused ?? DEFAULT_CURSOR.unfocused,
+    hollow: boolean("hollow", rawShape === "HollowBlock" || DEFAULT_CURSOR.hollow),
+  };
+}
+
 /**
  * 터미널 표면을 초기화하고 사이드카와 연결한다.
  *
@@ -47,19 +109,19 @@ function sendInput(text, terminal, id, encoder) {
  * @param {Object} options.window - window 객체 (기본값: 글로벌 window)
  * @returns {Promise<void>}
  */
-export async function startTerminal({ view, attachImage, sidecar, expose, window: globalWindow = globalThis.window }) {
+export async function startTerminal({ id, view, attachImage, sidecar, expose,
+  window: globalWindow = globalThis.window }) {
   // 브라우저 환경에서 필요한 객체들
   const window = globalWindow;
   const TextEncoder = globalWindow.TextEncoder;
 
-  const id = new URLSearchParams(view.ownerDocument?.location?.search || "").get("id");
   if (!id) {
-    throw new Error("startTerminal requires surface id in URL search params");
+    throw new Error("startTerminal requires explicit surface id");
   }
   const encoder = new TextEncoder();
 
   // 공개 status 마다 값이 바뀔 때 호출할 함수
-  const watchers = { session: new Set(), screen: new Set() };
+  const watchers = { session: new Set(), screen: new Set(), compose: new Set(), cursor: new Set() };
   const changed = (name) => {
     for (const fn of watchers[name]) fn(read[name]());
   };
@@ -69,13 +131,20 @@ export async function startTerminal({ view, attachImage, sidecar, expose, window
   };
 
   // 현재 세션 상태
-  let session = { sessionId: "", cols: 80, rows: 24, cellWidth: 8, cellHeight: 16, unsupported: [] };
+  let session = {
+    sessionId: "", cols: 80, rows: 24, cellWidth: 8, cellHeight: 16, unsupported: [],
+    compose: { text: "", selectedRange: null, replacementRange: null, attributed: false },
+  };
   let screen = [];
+  let compose = session.compose;
+  let cursor = { ...DEFAULT_CURSOR };
 
   const read = {
     // 세션 상태
     session: () => session,
     screen: () => screen,
+    compose: () => compose,
+    cursor: () => cursor,
   };
 
   // 터미널 사이드카가 이 표면의 VT 세션을 실행한다
@@ -83,15 +152,14 @@ export async function startTerminal({ view, attachImage, sidecar, expose, window
 
   // 이미지 영역 생성 및 사이드카 메시지 핸들링
   let region = null;
-
-  // 이미지 영역 붙이기
   region = attachImage(view, "view", "@soksak/sidecar-vt-alacritty");
   if (!region) throw new Error("Failed to attach image region");
+  const onRegion = (type, handler) => region.on(type, handler);
 
   // 세션이 생겼는지 추적한다. 래스터 크기는 페이지가 아니라 호스트 configure가 정한다.
   let sessionOpen = false;
 
-  // 세션 열리기 전 입력 queue (상한: 1024)
+  let inputChain = Promise.resolve();
   const inputQueue = [];
   const MAX_QUEUE_SIZE = 1024;
 
@@ -102,48 +170,70 @@ export async function startTerminal({ view, attachImage, sidecar, expose, window
     changed("session");
   };
 
-  // queue에 저장된 입력을 순서대로 보낸다.
-  const flushInputQueue = () => {
-    for (const queuedInput of inputQueue) {
-      if (queuedInput.type === "insert") {
-        sendInput(queuedInput.text, terminal, id, encoder).catch(
-          (error) => console.error(`queued insert failed: ${error.message}`)
-        );
-      } else if (queuedInput.type === "key") {
-        const message = keyToMessage(queuedInput.key, queuedInput.text, {
-          shift: queuedInput.shift,
-          alt: queuedInput.alt,
-          ctrl: queuedInput.ctrl,
-        });
-        terminal.send(id, message).catch(
-          (error) => console.error(`queued key failed: ${error.message}`)
-        );
-      }
+  const observeInput = (promise) => promise.then(undefined, (error) => {
+    reportInputError(error);
+  });
+  const recoverInputTail = () => undefined;
+
+  const sendEntry = async (entry) => {
+    if (entry.type === "insert") {
+      await sendInput(entry.text, terminal, id, encoder);
+    } else if (entry.type === "key") {
+      await terminal.send(id, keyToMessage(entry.key, entry.text, {
+        shift: entry.shift, alt: entry.alt, ctrl: entry.ctrl,
+      }));
+    } else if (entry.type === "compose") {
+      await terminal.send(id, { op: "compose",
+        text: entry.text,
+        selectedRange: entry.selectedRange ?? null,
+        replacementRange: entry.replacementRange ?? null,
+        attributed: entry.attributed === true,
+      });
+    } else if (entry.type === "command") {
+      await terminal.send(id, { op: "input", command: { selector: entry.selector } });
+    } else if (entry.type === "focus") {
+      await terminal.send(id, { op: "focus", focused: entry.focused });
+    } else {
+      throw new Error(`unknown terminal input type: ${entry.type}`);
     }
-    inputQueue.length = 0;
+  };
+
+  const scheduleInput = (entry) => {
+    const request = inputChain.then(() => sendEntry(entry));
+    // The recovered tail only permits the next request to run. The original
+    // request remains rejected for its caller; native callbacks observe that
+    // rejection through observeInput and publish the error in session status.
+    inputChain = request.catch(recoverInputTail);
+    return request;
+  };
+
+  const enqueueInput = (entry) => {
+    if (!sessionOpen) {
+      if (inputQueue.length >= MAX_QUEUE_SIZE) {
+        const error = new Error(`Input queue overflow (max ${MAX_QUEUE_SIZE})`);
+        return Promise.reject(error);
+      }
+      return new Promise((resolve, reject) => inputQueue.push({ entry, resolve, reject }));
+    }
+    return scheduleInput(entry);
+  };
+
+  const flushInputQueue = () => {
+    const pending = inputQueue.splice(0);
+    for (const { entry, resolve, reject } of pending) {
+      scheduleInput(entry).then(resolve, reject);
+    }
   };
 
   // 영역 insert 이벤트: 평문 텍스트 입력
-  region.on("insert", async (event) => {
+  onRegion("insert", async (event) => {
     const { text } = event;
-    if (!sessionOpen) {
-      // 세션이 생기기 전이면 queue에 저장
-      if (inputQueue.length >= MAX_QUEUE_SIZE) {
-        const errorMsg = `Input queue overflow (max ${MAX_QUEUE_SIZE})`;
-        console.error(errorMsg);
-        session = { ...session, error: errorMsg };
-        changed("session");
-        return;
-      }
-      inputQueue.push({ type: "insert", text });
-      return;
-    }
-    await sendInput(text, terminal, id, encoder);
+    await observeInput(enqueueInput({ type: "insert", text }));
   });
 
   // 영역 key 이벤트: 특수 키와 수정자
   // 사이드카는 키 이름만 받고 이스케이프 시퀀스를 생성한다
-  region.on("key", async (event) => {
+  onRegion("key", async (event) => {
     const { key, text, shift, alt, ctrl } = event;
     // 네이티브 영역은 항상 불린으로 수정자를 보낸다. 아니면 계약 위반이다.
     if (typeof shift !== "boolean" || typeof alt !== "boolean" || typeof ctrl !== "boolean") {
@@ -153,31 +243,45 @@ export async function startTerminal({ view, attachImage, sidecar, expose, window
       changed("session");
       return;
     }
-    if (!sessionOpen) {
-      // 세션이 생기기 전이면 queue에 저장
-      if (inputQueue.length >= MAX_QUEUE_SIZE) {
-        const errorMsg = `Input queue overflow (max ${MAX_QUEUE_SIZE})`;
-        console.error(errorMsg);
-        session = { ...session, error: errorMsg };
-        changed("session");
-        return;
-      }
-      inputQueue.push({ type: "key", key, text, shift, alt, ctrl });
-      return;
-    }
-    // 키 이름을 sidecar 메시지 형식으로 변환
-    const message = keyToMessage(key, text, { shift, alt, ctrl });
-    await terminal.send(id, message);
+    await observeInput(enqueueInput({ type: "key", key, text, shift, alt, ctrl }));
   });
 
-  // 영역 compose 이벤트: 현재 미구현이므로 추적만 한다
-  region.on("compose", (event) => {
-    if (!session.unsupported.includes("compose")) {
-      console.warn("compose event not yet supported");
-      session = { ...session, unsupported: [...session.unsupported, "compose"] };
-      changed("session");
-    }
+  onRegion("error", (event) => {
+    const message = `native image: ${event.reason}`;
+    console.error(message);
+    session = { ...session, error: message };
+    changed("session");
   });
+
+  onRegion("compose", async (event) => {
+    compose = {
+      text: typeof event.text === "string" ? event.text : "",
+      selectedRange: normalizeRange(event.selectedRange),
+      replacementRange: normalizeRange(event.replacementRange),
+      attributed: event.attributed === true,
+    };
+    session = { ...session, compose };
+    changed("session");
+    changed("compose");
+    await observeInput(enqueueInput({ type: "compose", ...compose }));
+  });
+
+  onRegion("command", async (event) => {
+    if (typeof event.selector !== "string" || event.selector.length === 0) {
+      reportInputError("native command event requires selector");
+      return;
+    }
+    await observeInput(enqueueInput({ type: "command", selector: event.selector }));
+  });
+
+  onRegion("focus", async (event) => {
+    if (typeof event.focused !== "boolean") {
+      reportInputError("native focus event requires boolean focused");
+      return;
+    }
+    await observeInput(enqueueInput({ type: "focus", focused: event.focused }));
+  });
+
 
   // 네이티브 포커스를 받은 뒤 DOM 기본 동작이 키보드 소유권을 되찾지 않게 한다.
   const preventDefaultFocus = (event) => event.preventDefault();
@@ -187,7 +291,7 @@ export async function startTerminal({ view, attachImage, sidecar, expose, window
   let pendingScreenRead = null;
 
   // 사이드카 메시지 수신
-  await terminal.on(id, (body) => {
+  const stopSidecar = await terminal.on(id, (body) => {
     if (body.event === "state") {
       // 숫자 필드의 유효성을 확인한다. 계약 위반이면 오류로 보고한다.
       const errorDetails = [];
@@ -216,18 +320,44 @@ export async function startTerminal({ view, attachImage, sidecar, expose, window
       }
 
       session = {
+        ...session,
         sessionId: typeof body.sessionId === "string" ? body.sessionId : "",
         cols: body.cols,
         rows: body.rows,
         cellWidth: body.cellWidth,
         cellHeight: body.cellHeight,
         unsupported: session.unsupported,
+        error: session.error?.startsWith("native image:") ? session.error : undefined,
       };
-      // 세션이 생겼다. 크기 변화는 이제 resize 로 가고, queue에 쌓인 입력을 보낸다.
-      const firstOpen = !sessionOpen;
+      if (body.cursor !== undefined) {
+        try {
+          cursor = normalizeCursor(body.cursor);
+          changed("cursor");
+          if (typeof region.setCaret === "function") {
+            Promise.resolve(region.setCaret({
+              x: cursor.col * body.cellWidth,
+              y: cursor.row * body.cellHeight,
+              width: body.cellWidth,
+              height: body.cellHeight,
+            })).catch(reportInputError);
+          }
+        } catch (error) {
+          const message = `invalid cursor from sidecar: ${error.message}`;
+          console.error(message);
+          session = { ...session, error: message };
+        }
+      }
       sessionOpen = true;
       changed("session");
-      if (firstOpen) flushInputQueue();
+      flushInputQueue();
+    } else if (body.event === "session") {
+      if (typeof body.sessionId !== "string" || body.sessionId.length === 0) {
+        reportInputError("invalid persistent session event");
+        return;
+      }
+      session = { ...session, sessionId: body.sessionId, error: undefined };
+      sessionOpen = true;
+      changed("session");
     } else if (body.event === "screen") {
       // screen 이벤트를 처리한다. screen.read 응답이나 화면 변화 알림.
       screen = body.lines;
@@ -269,12 +399,16 @@ export async function startTerminal({ view, attachImage, sidecar, expose, window
   await Promise.all([
     expose.status("terminal.session", read.session, watch("session")),
     expose.status("terminal.screen", read.screen, watch("screen")),
+    expose.status("terminal.compose", read.compose, watch("compose")),
+    expose.status("terminal.cursor", read.cursor, watch("cursor")),
     expose.command("terminal.input", async ({ bytes }) => {
       if (typeof bytes !== "string") throw new Error("terminal.input requires bytes");
-      if (!sessionOpen) {
-        throw new Error("Terminal session is not open yet");
+      try {
+        await enqueueInput({ type: "insert", text: bytes });
+      } catch (error) {
+        reportInputError(error);
+        throw error;
       }
-      await sendInput(bytes, terminal, id, encoder);
       return null;
     }),
     expose.command("terminal.screen.read", async () => {
@@ -318,4 +452,11 @@ export async function startTerminal({ view, attachImage, sidecar, expose, window
     return null;
   });
   await expose.bind(view, "terminal.focus", {}, { event: "pointerdown", failed: reportInputError });
+  return {
+    async dispose() {
+      stopSidecar?.();
+      view.removeEventListener("pointerdown", preventDefaultFocus);
+      await terminal.send(id, { op: "close" });
+    },
+  };
 }

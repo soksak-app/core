@@ -6,7 +6,7 @@
   "description": "Terminal plugin: a full-screen terminal surface connected to a VT engine session.",
   "files": [
     "plugin.json",
-    "ui/terminal.html",
+    "ui/terminal-module.js",
     "ui/terminal.js"
   ],
   "scripts": {

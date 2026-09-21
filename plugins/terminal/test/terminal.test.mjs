@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { createBinder } from "@soksak/plugin-api";
-import { startTerminal } from "../ui/terminal.js";
+import { startTerminal as realStartTerminal } from "../ui/terminal.js";
 
+const startTerminal = (options) => realStartTerminal({ id: "test-session", ...options });
 const terminalManifest = JSON.parse(readFileSync(new URL("../plugin.json", import.meta.url), "utf8"));
 
 /**
@@ -75,6 +76,7 @@ function createFakeView() {
     ownerDocument: {
       location: { search: "?id=test-session" },
     },
+    surfaceId: "test-session",
     clientWidth: 800,
     clientHeight: 600,
     dataset: {},
@@ -115,6 +117,10 @@ function createFakeAttachImage() {
           };
         },
         focus: async function() {
+          return Promise.resolve();
+        },
+        setCaret: async function(rect) {
+          this._caret = rect;
           return Promise.resolve();
         },
         _trigger: function(eventType, event) {
@@ -230,8 +236,25 @@ test("modified native character keys preserve their text before and after sessio
   region._trigger("key", event);
   openSession(sidecar);
   region._trigger("key", event);
+  await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(sidecar.getMessages().filter(({ body }) => body.op === "input").map(({ body }) => body.keys[0]),
     [event, event]);
+});
+
+test("native image errors remain visible after later session state updates", async () => {
+  const attach = createFakeAttachImage();
+  const sidecar = createFakeSidecar();
+  const expose = createFakeExpose();
+  let region;
+  await startTerminal({
+    view: createFakeView(), attachImage: (...args) => (region = attach.function(...args)), sidecar, expose,
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  openSession(sidecar);
+  region._trigger("error", { reason: "size" });
+  assert.equal(expose.getStatus("terminal.session").readFn().error, "native image: size");
+  openSession(sidecar);
+  assert.equal(expose.getStatus("terminal.session").readFn().error, "native image: size");
 });
 
 test("terminal.screen publishes sidecar output without polling or input commands", async () => {
@@ -351,6 +374,7 @@ test("Region insert event sends base64-encoded bytes to sidecar", async () => {
 
   // 이제 region에 insert 이벤트를 trigger한다
   regionReference._trigger("insert", { text: "ls\r" });
+  await new Promise((resolve) => setImmediate(resolve));
 
   // sidecar 메시지를 확인한다
   const messages = fakeSidecar.getMessages();
@@ -437,6 +461,7 @@ test("Region key event for Enter sends correct message format", async () => {
 
   fakeSidecar.reset();
   regionReference._trigger("key", { key: "Enter", shift: false, alt: false, ctrl: false });
+  await new Promise((resolve) => setImmediate(resolve));
 
   const messages = fakeSidecar.getMessages();
   const keyMessage = messages.find((m) => m.body.op === "input" && m.body.keys);
@@ -484,6 +509,7 @@ test("Region key event for ArrowUp sends Up key (no escape sequences)", async ()
 
   fakeSidecar.reset();
   regionReference._trigger("key", { key: "Up", shift: false, alt: false, ctrl: false });
+  await new Promise((resolve) => setImmediate(resolve));
 
   const messages = fakeSidecar.getMessages();
   const keyMessage = messages.find((m) => m.body.op === "input" && m.body.keys);
@@ -536,6 +562,7 @@ test("View pointerdown triggers region focus", async () => {
 
   // ResizeObserver 콜백을 호출하여 open을 전송한다
   FakeResizeObserver.triggerAll();
+  openSession(fakeSidecar);
 
   focusCalled = false;
   fakeView._trigger("pointerdown");
@@ -785,23 +812,7 @@ test("open is independent of DOM element size", async () => {
   const fakeExpose = createFakeExpose();
 
   // 초기 크기가 0인 view를 만든다
-  const fakeView = {
-    ownerDocument: {
-      location: { search: "?id=test-session" },
-    },
-    clientWidth: 0,
-    clientHeight: 0,
-    addEventListener: function(event, handler) {
-      if (event === "pointerdown" && !this._pointerdown) {
-        this._pointerdown = handler;
-      }
-    },
-    _trigger: function(event) {
-      if (event === "pointerdown" && this._pointerdown) {
-        this._pointerdown();
-      }
-    },
-  };
+  const fakeView = Object.assign(createFakeView(), { clientWidth: 0, clientHeight: 0 });
 
   const fakeWindow = {
     ResizeObserver: FakeResizeObserver,
@@ -864,6 +875,7 @@ test("DOM resize never sends terminal raster messages", async () => {
 
   // 세션 상태가 생겨도 페이지는 래스터를 관리하지 않는다.
   fakeSidecar.triggerEvent("test-session", { event: "state", sessionId: "s1", cols: 100, rows: 50, cellWidth: 8, cellHeight: 16 });
+  await new Promise((resolve) => setImmediate(resolve));
 
   // 크기를 0x0으로 변경한다
   fakeView.clientWidth = 0;
@@ -884,7 +896,7 @@ test("DOM resize never sends terminal raster messages", async () => {
 });
 
 // 새로운 테스트 3: input_before_open
-test("input_before_open: terminal.input throws error before open", async () => {
+test("input_before_open: terminal.input is buffered until open", async () => {
   FakeResizeObserver.reset();
   const fakeAttachImage = createFakeAttachImage();
   const fakeSidecar = createFakeSidecar();
@@ -909,13 +921,15 @@ test("input_before_open: terminal.input throws error before open", async () => {
   const inputCommand = fakeExpose.getCommand("terminal.input");
   assert(inputCommand, "terminal.input command registered");
 
-  // open 전에 terminal.input을 호출하면 오류가 발생한다
-  try {
-    await inputCommand({ bytes: "test" });
-    assert.fail("terminal.input should throw error before open");
-  } catch (error) {
-    assert.match(error.message, /session is not open/i, "error message indicates session not open");
-  }
+  const pending = inputCommand({ bytes: "test" });
+  let settled = false;
+  pending.finally(() => { settled = true; });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(settled, false, "pre-open command remains pending");
+  openSession(fakeSidecar);
+  await pending;
+  const input = fakeSidecar.getMessages().find(({ body }) => body.op === "input" && body.bytes);
+  assert.equal(Buffer.from(input.body.bytes, "base64").toString(), "test");
 });
 
 // 새로운 테스트 4: sidecar_error_reaches_session_status
@@ -961,8 +975,7 @@ test("sidecar_error_reaches_session_status: sidecar error event updates session"
   assert.equal(session.error, "Engine panic: minimum width is 1", "error message is stored");
 });
 
-// 새로운 테스트 5a: compose_event_tracking
-test("compose_event_tracking: compose events are tracked in unsupported", async () => {
+test("compose events are sent with ranges and published as preedit state", async () => {
   FakeResizeObserver.reset();
   const fakeAttachImage = createFakeAttachImage();
   const fakeSidecar = createFakeSidecar();
@@ -991,16 +1004,143 @@ test("compose_event_tracking: compose events are tracked in unsupported", async 
   });
 
   FakeResizeObserver.triggerAll();
+  openSession(fakeSidecar);
 
   const sessionStatus = fakeExpose.getStatus("terminal.session");
-  const initialSession = sessionStatus.readFn();
-  assert(!initialSession.unsupported.includes("compose"), "compose not in unsupported initially");
+  const composeStatus = fakeExpose.getStatus("terminal.compose");
+  assert.deepEqual(composeStatus.readFn(), {
+    text: "", selectedRange: null, replacementRange: null, attributed: false,
+  });
 
-  // Compose 이벤트를 trigger한다
-  regionReference._trigger("compose", { text: "test", caret: 0 });
+  regionReference._trigger("compose", {
+    text: "한글", selectedRange: { location: 2, length: 0 },
+    replacementRange: { location: 0, length: 1 }, attributed: true,
+  });
+  await new Promise((resolve) => setImmediate(resolve));
 
-  const updatedSession = sessionStatus.readFn();
-  assert(updatedSession.unsupported.includes("compose"), "compose added to unsupported after event");
+  assert.deepEqual(composeStatus.readFn(), {
+    text: "한글", selectedRange: { location: 2, length: 0 },
+    replacementRange: { location: 0, length: 1 }, attributed: true,
+  });
+  const message = fakeSidecar.getMessages().at(-1).body;
+  assert.deepEqual(message, {
+    op: "compose", text: "한글",
+    selectedRange: { location: 2, length: 0 },
+    replacementRange: { location: 0, length: 1 }, attributed: true,
+  });
+});
+
+test("native focus and cursor state route to sidecar and caret", async () => {
+  FakeResizeObserver.reset();
+  const fakeAttachImage = createFakeAttachImage();
+  const fakeSidecar = createFakeSidecar();
+  const fakeExpose = createFakeExpose();
+  const fakeView = createFakeView();
+  let regionReference;
+  await startTerminal({
+    view: fakeView,
+    attachImage: (view, name, sidecar) => {
+      regionReference = fakeAttachImage.function(view, name, sidecar);
+      return regionReference;
+    },
+    sidecar: fakeSidecar, expose: fakeExpose,
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  openSession(fakeSidecar);
+  fakeSidecar.triggerEvent("test-session", {
+    event: "state", sessionId: "s1", cols: 10, rows: 4, cellWidth: 9, cellHeight: 18,
+    cursor: { row: 2, col: 3 },
+  });
+  regionReference._trigger("focus", { focused: true });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(regionReference._caret, { x: 27, y: 36, width: 9, height: 18 });
+  assert.deepEqual(fakeSidecar.getMessages().at(-1).body, {
+    op: "focus", focused: true,
+  });
+});
+
+test("cursor state exposes typed shape and blink policy while routing the caret", async () => {
+  FakeResizeObserver.reset();
+  const fakeAttachImage = createFakeAttachImage();
+  const fakeSidecar = createFakeSidecar();
+  const fakeExpose = createFakeExpose();
+  let regionReference;
+  await startTerminal({
+    view: createFakeView(),
+    attachImage: (view, name, sidecar) => (regionReference = fakeAttachImage.function(view, name, sidecar)),
+    sidecar: fakeSidecar, expose: fakeExpose,
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  openSession(fakeSidecar);
+
+  fakeSidecar.triggerEvent("test-session", {
+    event: "state", sessionId: "s1", cols: 10, rows: 4, cellWidth: 9, cellHeight: 18,
+    cursor: {
+      row: 1, col: 2, shape: "Beam", visible: true, blinking: true, focused: true,
+      blink: "Always", interval: 700, idleTimeout: 1200, unfocused: "hollow", hollow: true,
+    },
+  });
+
+  assert.deepEqual(fakeExpose.getStatus("terminal.cursor").readFn(), {
+    row: 1, col: 2, shape: "beam", visible: true, blinking: true, focused: true,
+    blink: "Always", interval: 700, idleTimeout: 1200, unfocused: "hollow", hollow: true,
+  });
+  assert.deepEqual(regionReference._caret, { x: 18, y: 18, width: 9, height: 18 });
+});
+
+test("invalid cursor fields are observable errors and never fall back to the previous cursor", async () => {
+  FakeResizeObserver.reset();
+  const fakeAttachImage = createFakeAttachImage();
+  const fakeSidecar = createFakeSidecar();
+  const fakeExpose = createFakeExpose();
+  await startTerminal({
+    view: createFakeView(), attachImage: fakeAttachImage.function,
+    sidecar: fakeSidecar, expose: fakeExpose,
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  openSession(fakeSidecar);
+  fakeSidecar.triggerEvent("test-session", {
+    event: "state", sessionId: "s1", cols: 10, rows: 4, cellWidth: 9, cellHeight: 18,
+    cursor: { row: 1, col: 2, shape: "Beam", blink: "Always" },
+  });
+  const previous = fakeExpose.getStatus("terminal.cursor").readFn();
+  fakeSidecar.triggerEvent("test-session", {
+    event: "state", sessionId: "s1", cols: 10, rows: 4, cellWidth: 9, cellHeight: 18,
+    cursor: { row: 3, col: 4, shape: "diagonal", blink: "Sometimes" },
+  });
+
+  assert.deepEqual(fakeExpose.getStatus("terminal.cursor").readFn(), previous);
+  assert.match(fakeExpose.getStatus("terminal.session").readFn().error, /invalid cursor/);
+  assert.match(fakeExpose.getStatus("terminal.session").readFn().error, /shape|blink/);
+});
+
+test("input send failures remain observable and later queued input still sends", async () => {
+  FakeResizeObserver.reset();
+  const fakeAttachImage = createFakeAttachImage();
+  const fakeSidecar = createFakeSidecar();
+  const fakeExpose = createFakeExpose();
+  let fail = true;
+  const send = fakeSidecar.send;
+  fakeSidecar.send = async function(id, body) {
+    if (fail && body.op === "input") {
+      fail = false;
+      throw new Error("input unavailable");
+    }
+    return send.call(this, id, body);
+  };
+  let regionReference;
+  await startTerminal({
+    view: createFakeView(),
+    attachImage: (view, name, sidecar) => (regionReference = fakeAttachImage.function(view, name, sidecar)),
+    sidecar: fakeSidecar, expose: fakeExpose,
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  openSession(fakeSidecar);
+  regionReference._trigger("insert", { text: "a" });
+  regionReference._trigger("insert", { text: "b" });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.match(fakeExpose.getStatus("terminal.session").readFn().error, /input unavailable/);
+  assert.equal(Buffer.from(fakeSidecar.getMessages().at(-1).body.bytes, "base64").toString(), "b");
 });
 
 // 새로운 테스트 5b: unknown_sidecar_event_tracking
@@ -1179,7 +1319,7 @@ test("missing_surface_id_throws: startTerminal throws when surface id missing", 
   };
 
   try {
-    await startTerminal({
+    await realStartTerminal({
       view: fakeView,
       attachImage: fakeAttachImage.function,
       sidecar: fakeSidecar,
@@ -1193,30 +1333,14 @@ test("missing_surface_id_throws: startTerminal throws when surface id missing", 
   }
 });
 
-test("region input waits for sidecar state after open", async () => {
+test("region input is buffered in order until sidecar state opens the session", async () => {
   FakeResizeObserver.reset();
   const fakeAttachImage = createFakeAttachImage();
   const fakeSidecar = createFakeSidecar();
   const fakeExpose = createFakeExpose();
   
   // 초기 크기가 0인 view를 만든다
-  const fakeView = {
-    ownerDocument: {
-      location: { search: "?id=test-session" },
-    },
-    clientWidth: 0,
-    clientHeight: 0,
-    addEventListener: function(event, handler) {
-      if (event === "pointerdown" && !this._pointerdown) {
-        this._pointerdown = handler;
-      }
-    },
-    _trigger: function(event) {
-      if (event === "pointerdown" && this._pointerdown) {
-        this._pointerdown();
-      }
-    },
-  };
+  const fakeView = Object.assign(createFakeView(), { clientWidth: 0, clientHeight: 0 });
 
   const fakeWindow = {
     ResizeObserver: FakeResizeObserver,
@@ -1244,7 +1368,7 @@ test("region input waits for sidecar state after open", async () => {
   regionReference._trigger("insert", { text: "a" });
   regionReference._trigger("key", { key: "Enter", shift: false, alt: false, ctrl: false });
 
-  // open만 전송되고 입력은 아직 queue에 있어야 한다.
+  // open만 전송되고 입력은 bounded startup queue에 남는다.
   let messages = fakeSidecar.getMessages();
   assert.equal(messages.length, 1, "only open is sent before the session exists");
   assert.equal(messages[0].body.op, "open", "first message is open");
@@ -1252,20 +1376,32 @@ test("region input waits for sidecar state after open", async () => {
 
   // 사이드카가 state 이벤트로 세션을 연다
   fakeSidecar.triggerEvent("test-session", { event: "state", sessionId: "s1", cols: 100, rows: 50, cellWidth: 8, cellHeight: 16 });
+  await new Promise((resolve) => setImmediate(resolve));
 
   messages = fakeSidecar.getMessages();
-  assert.equal(messages.length, 3, "three messages sent: open, input(a), input(Enter)");
+  assert.equal(messages.length, 3, "open and two inputs are sent after state");
+  assert.equal(Buffer.from(messages[1].body.bytes, "base64").toString(), "a");
+  assert.equal(messages[2].body.keys[0].key, "Enter");
+});
 
-  // 두 번째: input(a)
-  assert.equal(messages[1].body.op, "input", "second message is input");
-  assert(messages[1].body.bytes, "input has bytes");
-  const decodedInsert = Buffer.from(messages[1].body.bytes, "base64").toString("utf8");
-  assert.equal(decodedInsert, "a", "input bytes is 'a'");
-
-  // 세 번째: input(Enter key)
-  assert.equal(messages[2].body.op, "input", "third message is input");
-  assert(messages[2].body.keys, "input has keys");
-  assert.deepEqual(messages[2].body.keys[0].key, "Enter", "key is Enter");
+test("startup input overflow is visible and does not report success", async () => {
+  FakeResizeObserver.reset();
+  const fakeAttachImage = createFakeAttachImage();
+  const fakeSidecar = createFakeSidecar();
+  const fakeExpose = createFakeExpose();
+  let regionReference;
+  await startTerminal({
+    view: createFakeView(),
+    attachImage: (view, name, sidecar) => (regionReference = fakeAttachImage.function(view, name, sidecar)),
+    sidecar: fakeSidecar, expose: fakeExpose,
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  for (let index = 0; index <= 1024; index += 1) {
+    regionReference._trigger("insert", { text: String(index) });
+  }
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.match(fakeExpose.getStatus("terminal.session").readFn().error, /queue overflow/);
+  assert.equal(fakeSidecar.getMessages().filter(({ body }) => body.op === "input").length, 0);
 });
 
 // 호스트 configure 오류를 페이지의 DOM 크기로 복구하려 해서는 안 된다.
@@ -1330,4 +1466,22 @@ test("a sidecar rejection is reported without DOM-driven retry", async () => {
   FakeResizeObserver.triggerAll();
   messages = fakeSidecar.getMessages();
   assert.equal(messages.length, 1, "DOM resize sends no sidecar message");
+});
+
+test("persistent reconnect restores the session identity before a new raster is configured", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  const fakeExpose = createFakeExpose();
+  await startTerminal({
+    view: createFakeView(),
+    attachImage: createFakeAttachImage().function,
+    sidecar: fakeSidecar,
+    expose: fakeExpose,
+    window: { TextEncoder: FakeTextEncoder },
+  });
+
+  fakeSidecar.triggerEvent("test-session", { event: "session", sessionId: "retained-session" });
+  const session = fakeExpose.getStatus("terminal.session").readFn();
+  assert.equal(session.sessionId, "retained-session");
+  assert.equal(session.error, undefined);
 });
