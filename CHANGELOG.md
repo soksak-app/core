@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- Verify repeated project/library returns on current rebuilt macOS hosts. The Tauri case passes in 0.98s and Wails in 2.99s while retaining one app DOM, two browser documents, one terminal service PID, three shell PIDs, and all terminal session IDs across three returns. This does not claim normal service shutdown; that remains a separate gate.
+
 - Return the Wails diagnostic capture cap state as `limited` alongside the actual frame count and longest gap. Reaching the cap remains a normal bounded result; Wails payload tests cover capped and uncapped responses, and the rebuilt diagnostics host passes its focused tests.
 
 - Complete asynchronous shell command validation on both macOS hosts. Serialize injected pointer requests, drain pending WebKit mouse work before registering the current receipt, wait for the release-generated click, and keep explicit unreceived errors. The focused shell e2e passes all three cases on Wails and Tauri; native, workspace, boundary, exposure, and documentation checks pass.
