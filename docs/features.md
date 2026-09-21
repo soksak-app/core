@@ -23,6 +23,7 @@ Validation applies to the stated implementation only. Passing tests does not mea
 - [ ] Implement selection, clipboard, file/image input, inline images, and the sequence support inventory.
 - [o] Bounded diagnostic capture returns the actual frame count and an explicit `limited` state; full-gesture measurement rejects only evidence that ended at the bound, not the recording result.
 - [ ] Add the Wails side of the bounded-capture contract: `diagnostics.capture.stop` must return the actual frame count, `limited`, and `longestGap` just as Tauri does.
+- [ ] Implement the Wails native modal WebView lifecycle. `OverlayShow` must create, hide, load, place, reveal, focus, update, and close the modal document; verify both the transparent split modal (`mode=menu`) and the semi-transparent settings modal (`mode=dialog`).
 - [~] Enumerate and test every pinned-reference OSC selector and selected vendor extension: effect, response, or explicit policy/platform rejection.
 - [~] Enumerate and test every pinned-reference CSI final byte, parameter form, private mode, and device response. Scroll is tracked as CSI (`S`, `T`, `r`, `J`, `K`) with separate visible-grid, scrollback, cursor, alternate-screen, and selection assertions.
 - [~] Implement native marked-text handling and ordered committed input; real Korean IME validation remains pending.
@@ -34,6 +35,8 @@ Validation applies to the stated implementation only. Passing tests does not mea
 The mechanical host check is currently red: `make hosts-check` reports `apps/tauriv2/test/runtime.test.mjs: no counterpart in apps/wailsv3`. The missing Wails test is a validation gap for the Tauri runtime contract; it is not evidence that the Wails runtime implementation is absent.
 
 The bounded diagnostic capture contract is also asymmetric. Tauri's `diagnostics.capture.stop` returns `frames`, `count`, `limited`, and `longestGap`; Wails currently returns only `frames`, `count`, and `longestGap`, and its `platform.Capturer` has no `CaptureLimited` operation. The shared macOS capture implementation and the recording state tests exist on both hosts, so the confirmed gap is the Wails limit-state contract and its validation, not the entire Wails capture implementation.
+
+The modal implementation has a larger confirmed gap. Tauri's `modals::show` creates a child native WebView, loads `/overlay.html`, keeps it hidden until `ready`, then applies the mode-specific background, raises it, and focuses it. Wails `OverlayShow` only stores modal state and emits `modal-content`; it does not create or load a modal WebView. Wails' `ConfigureModal` and `FocusModal` methods are declared but have no call site. Consequently both the transparent split modal and the semi-transparent settings modal are currently absent in Wails after the DOM/native restructuring. This is an implementation gap, not an appearance-only test failure.
 
 The host test file sets otherwise have matching names, including `recording_test`, and the current structure checker reports no other missing counterpart before stopping at the app runtime test. This audit does not mark any other Tauri-only feature without evidence.
 

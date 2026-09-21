@@ -23,6 +23,7 @@
 - [ ] 선택, 클립보드, 파일·이미지 입력, 인라인 이미지, 시퀀스 지원 목록 구현.
 - [o] 진단 녹화 상한 도달은 실제 프레임 수와 명시적 `limited` 상태를 반환한다. 전체 제스처 검증은 상한에서 끝난 증거만 거부하며 녹화 결과 자체는 실패로 바꾸지 않는다.
 - [ ] Wails도 Tauri와 같은 상한 녹화 계약을 제공하도록 구현한다. `diagnostics.capture.stop`은 실제 프레임 수, `limited`, `longestGap`을 모두 반환해야 한다.
+- [ ] Wails의 네이티브 모달 WebView 수명주기를 구현한다. `OverlayShow`가 모달 문서를 생성·숨김·로드·배치·표시·포커스하고 갱신·종료해야 한다. 투명 분할 모달(`mode=menu`)과 반투명 설정 모달(`mode=dialog`)을 모두 검증한다.
 - [~] 고정한 기준 문서의 OSC 표준 선택자와 선택한 벤더 확장을 전부 목록화하고 효과·응답 또는 정책·플랫폼 거부를 검사한다.
 - [~] 고정한 기준 문서의 CSI final byte·매개변수 형식·private mode·장치 응답을 전부 목록화하고 검사한다. 스크롤은 CSI(`S`, `T`, `r`, `J`, `K`)로 분리해 보이는 그리드·스크롤백·커서·alternate screen·선택을 각각 검사한다.
 - [~] 네이티브 조합 문자 처리와 확정 입력 순서 구현. 실제 한글 IME 검증은 대기 중.
@@ -34,6 +35,8 @@
 기계적 호스트 검사가 현재 실패한다. `make hosts-check`가 `apps/tauriv2/test/runtime.test.mjs: no counterpart in apps/wailsv3`를 보고한다. Wails에 없는 것은 Tauri 런타임 계약을 검증하는 테스트이며, 이 결과만으로 Wails 런타임 구현 자체가 없다고 판단하지 않는다.
 
 진단 녹화 상한 계약도 비대칭이다. Tauri의 `diagnostics.capture.stop`은 `frames`, `count`, `limited`, `longestGap`을 반환하지만, 현재 Wails는 `frames`, `count`, `longestGap`만 반환하고 `platform.Capturer`에도 `CaptureLimited` 연산이 없다. 공용 macOS 캡처 구현과 녹화 상태 검사는 양쪽 호스트에 있으므로, 확인된 차이는 Wails의 상한 상태 계약과 그 검증이며 Wails 캡처 구현 전체가 없는 것은 아니다.
+
+모달 구현에는 더 큰 차이가 확인됐다. Tauri의 `modals::show`는 자식 네이티브 WebView를 만들고 `/overlay.html`을 로드한 뒤 `ready` 전까지 숨기며, 모드별 배경을 적용하고 위로 올린 후 포커스를 준다. Wails의 `OverlayShow`는 모달 상태를 저장하고 `modal-content`만 발행하며 모달 WebView를 생성하거나 로드하지 않는다. Wails의 `ConfigureModal`과 `FocusModal`도 선언만 있고 호출 지점이 없다. 따라서 DOM/네이티브 구조 정리 후 Wails에서는 투명 분할 모달과 반투명 설정 모달이 모두 실제로 존재하지 않는다. 이것은 외관 테스트만의 실패가 아니라 구현 경로 누락이다.
 
 호스트 테스트 파일 이름은 `recording_test`를 포함해 현재 서로 일치한다. 구조 검사는 앱 런타임 테스트에서 멈추기 전 다른 누락된 대응 파일을 보고하지 않았다. 근거 없는 다른 Tauri 전용 기능은 이 감사에서 추가하지 않았다.
 
