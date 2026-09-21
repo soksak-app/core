@@ -75,10 +75,24 @@ test("Tauri page regions expose operations but only composition places geometry"
   };
 
   // Import the runtime module (this is the IIFE that captures the globals)
-  const { page } = await import("../runtime/index.js");
+  const { host, page } = await import("../runtime/index.js");
 
   // Clear recorded calls before testing (module import might have made some calls)
   recorded.length = 0;
+
+  await page.document.attach("doc");
+  assert.deepEqual(recorded.at(-1), ["document_attach", { request: { surface: "s1", document: "doc" } }]);
+  await page.document.load("doc", "https://example.test");
+  assert.deepEqual(recorded.at(-1), ["document_load", { request: { surface: "s1", document: "doc", url: "https://example.test" } }]);
+  await host.call("report", "ready");
+  assert.deepEqual(recorded.at(-1), ["report", { line: "ready" }]);
+  assert.throws(() => host.call("report", { line: "ready" }), /report requires a string/);
+  await host.call("sidecarSend", { sidecar: "x", surface: "s1", body: { value: 1 } });
+  assert.deepEqual(recorded.at(-1), ["sidecar_send", { sidecar: "x", surface: "s1", body: { value: 1 } }]);
+  await host.call("imageCaret", { surface: "s1", name: "img", x: 1, y: 2, width: 3, height: 4 });
+  assert.deepEqual(recorded.at(-1), ["image_caret", { request: { surface: "s1", name: "img" }, x: 1, y: 2, w: 3, h: 4 }]);
+  await host.call("imageText", { surface: "s1", name: "img", text: "accessible" });
+  assert.deepEqual(recorded.at(-1), ["image_text", { request: { surface: "s1", name: "img" }, text: "accessible" }]);
 
   // Test: image.attach should invoke image_attach with { request: { surface, name, sidecar } }
   await page.image.attach("v", "@x/side");

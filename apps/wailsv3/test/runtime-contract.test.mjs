@@ -43,10 +43,30 @@ test("Wails page regions expose operations but only composition places geometry"
   };
 
   // Import the runtime module (this is the IIFE that captures the globals)
-  const { page } = await import("../runtime/index.js");
+  const { host, page } = await import("../runtime/index.js");
 
   // Clear recorded calls before testing (module import might have made some calls)
   recorded.length = 0;
+
+  await page.document.attach("doc");
+  assert.deepEqual(recorded.at(-1), ["DocumentAttach", [{ surface: "s1", document: "doc" }]]);
+  await page.document.load("doc", "https://example.test");
+  assert.deepEqual(recorded.at(-1), ["DocumentLoad", [{ surface: "s1", document: "doc", url: "https://example.test" }]]);
+  await host.call("compositionPlace", { revision: 1, regions: [], overlays: [] });
+  assert.deepEqual(recorded.at(-1), ["CompositionPlace", [{ revision: 1, regions: [], overlays: [] }]]);
+  await host.call("waitPresented");
+  assert.deepEqual(recorded.at(-1), ["WaitPresented", []]);
+  await host.call("report", "ready");
+  assert.deepEqual(recorded.at(-1), ["Report", ["ready"]]);
+  await assert.rejects(host.call("report", { line: "ready" }), /report requires a string/);
+  await host.call("sidecarSend", { sidecar: "x", surface: "s1", body: { value: 1 } });
+  assert.deepEqual(recorded.at(-1), ["SidecarSend", ["x", "s1", { value: 1 }]]);
+  await host.call("imageAttach", { surface: "s1", name: "img", sidecar: "x" });
+  assert.deepEqual(recorded.at(-1), ["ImageAttach", [{ surface: "s1", name: "img", sidecar: "x" }]]);
+  await host.call("imageCaret", { surface: "s1", name: "img", x: 1, y: 2, width: 3, height: 4 });
+  assert.deepEqual(recorded.at(-1), ["ImageCaret", [{ surface: "s1", name: "img" }, 1, 2, 3, 4]]);
+  await host.call("imageText", { surface: "s1", name: "img", text: "accessible" });
+  assert.deepEqual(recorded.at(-1), ["ImageText", [{ surface: "s1", name: "img" }, "accessible"]]);
 
   // Test: image.attach should call ImageAttach with [request]
   await page.image.attach("v", "@x/side");

@@ -10,6 +10,7 @@
 // 로드한다. import 는 비동기이므로 아래 두 인터페이스는 완료를 기다린 뒤 호출한다.
 import { HostWorkspaceStore } from "@soksak/workbench/host-store.js";
 import { hostWindows } from "@soksak/workbench/host-windows.js";
+import { createClipboardBridge } from "@soksak/plugin-api";
 
 const SERVICE = "github.com/min-median-max/soksak/packages/host/wailsv3/src.Host";
 
@@ -18,7 +19,9 @@ const runtime = () => import("/wails/runtime.js");
 
 /** 바인딩된 메서드 호출. */
 const call = (method, ...args) =>
-  runtime().then((r) => r.Call.ByName(`${SERVICE}.${method}`, ...args));
+  window.__soksakNative?.call
+    ? Promise.resolve(window.__soksakNative.call(method, args))
+    : runtime().then((r) => r.Call.ByName(`${SERVICE}.${method}`, ...args));
 
 /** 이벤트 수신. payload 는 `data` 필드에 담긴다. */
 const listen = (event, fn) =>
@@ -51,6 +54,21 @@ const METHOD = {
   exposureReply: "ExposureReply",
   exposureChanged: "ExposureChanged",
   exposureForward: "ExposureForward",
+  compositionDeclare: "CompositionDeclare",
+  compositionPlace: "CompositionPlace",
+  imageAttach: "ImageAttach",
+  imageFocus: "ImageFocus",
+  imageCaret: "ImageCaret",
+  imageText: "ImageText",
+  imageDetach: "ImageDetach",
+  documentAttach: "DocumentAttach",
+  documentLoad: "DocumentLoad",
+  documentGo: "DocumentGo",
+  documentDetach: "DocumentDetach",
+  sidecarSend: "SidecarSend",
+  clipboardRead: "ClipboardRead",
+  clipboardWriteText: "ClipboardWriteText",
+  clipboardPersistPNG: "ClipboardPersistPNG",
 };
 
 export const host = {
@@ -59,17 +77,24 @@ export const host = {
     if (!method) return Promise.reject(new Error(`unknown host call: ${name}`));
     // 인자가 없는 호출은 인자를 보내지 않는다. undefined 를 하나 보내면 바인딩이
     // 인자 수가 맞지 않는다고 거절한다.
+    if (name === "sidecarSend") return call(method, arg.sidecar, arg.surface, arg.body);
+    if (name === "report") {
+      if (typeof arg !== "string") return Promise.reject(new TypeError("report requires a string"));
+      return call(method, arg);
+    }
+    if (name === "imageCaret") return call(method, { surface: arg.surface, name: arg.name }, arg.x, arg.y, arg.width, arg.height);
+    if (name === "imageText") return call(method, { surface: arg.surface, name: arg.name }, arg.text);
     return arg === undefined ? call(method) : call(method, arg);
   },
   on: listen,
-  // 이 애플리케이션이 서비스하는 문서의 경로. 표면도 같은 자산 서버에서 로드된다.
-  page: (path) => `/${path}`,
   // 제목 표시줄이 투명하고 콘텐츠가 그 아래까지 차지하므로, 끄는 자리를 이 문서가
   // 지정한다.
   draggable(el) {
     el.style.setProperty("--wails-draggable", "drag");
   },
 };
+
+export const clipboard = createClipboardBridge((name, payload) => host.call(name, payload), { allowPersist: true });
 
 export const page = (() => {
   const call = (method, ...args) => window.__soksakNative.call(method, args);

@@ -4,6 +4,7 @@
 // 주입하므로 대기가 필요 없다. 표면과 모달 페이지도 같은 인터페이스를 사용한다.
 import { HostWorkspaceStore } from "@soksak/workbench/host-store.js";
 import { hostWindows } from "@soksak/workbench/host-windows.js";
+import { createClipboardBridge } from "@soksak/plugin-api";
 
 const COMMAND = {
   workspace: "workspace",
@@ -26,11 +27,20 @@ const COMMAND = {
   exposureChanged: "exposure_changed",
   exposureForward: "exposure_forward",
   imageAttach: "image_attach",
+  compositionDeclare: "composition_declare",
   compositionPlace: "composition_place",
   imageFocus: "image_focus",
   imageCaret: "image_caret",
   imageText: "image_text",
   imageDetach: "image_detach",
+  documentAttach: "document_attach",
+  documentLoad: "document_load",
+  documentGo: "document_go",
+  documentDetach: "document_detach",
+  sidecarSend: "sidecar_send",
+  clipboardRead: "clipboard_read",
+  clipboardWriteText: "clipboard_write_text",
+  clipboardPersistPNG: "clipboard_persist_png",
 };
 
 // 커맨드마다 인자의 이름이 다르다. 이름은 Rust 쪽 서명이 정한다.
@@ -41,8 +51,12 @@ const ARG = {
   windowState: () => ({}), windowReady: () => ({}), windowClose: () => ({}),
   syncSurfaces: (v) => ({ request: v }),
   presentSurfaces: (v) => ({ request: v }),
+  waitPresented: () => ({}),
   setTheme: (v) => ({ theme: v }),
-  report: (v) => ({ line: v }),
+  report: (v) => {
+    if (typeof v !== "string") throw new TypeError("report requires a string");
+    return { line: v };
+  },
   overlayShow: (v) => ({ request: v }),
   overlayPlace: (v) => ({ request: v }),
   setShape: (v) => ({ request: v }),
@@ -54,11 +68,20 @@ const ARG = {
   exposureChanged: (request) => ({ request }),
   exposureForward: (request) => ({ request }),
   imageAttach: (request) => ({ request }),
+  compositionDeclare: (request) => ({ request }),
   compositionPlace: (request) => ({ request }),
   imageFocus: (request) => ({ request }),
-  imageCaret: (request, x, y, w, h) => ({ request, x, y, w, h }),
-  imageText: (request, text) => ({ request, text }),
+  imageCaret: ({ surface, name, x, y, width, height }) => ({ request: { surface, name }, x, y, w: width, h: height }),
+  imageText: ({ surface, name, text }) => ({ request: { surface, name }, text }),
   imageDetach: (request) => ({ request }),
+  documentAttach: (request) => ({ request }),
+  documentLoad: (request) => ({ request }),
+  documentGo: (request) => ({ request }),
+  documentDetach: (request) => ({ request }),
+  sidecarSend: ({ sidecar, surface, body }) => ({ sidecar, surface, body }),
+  clipboardRead: (request) => ({ request }),
+  clipboardWriteText: (text) => ({ text }),
+  clipboardPersistPNG: (request) => ({ request }),
 };
 
 export const host = (() => {
@@ -73,8 +96,6 @@ export const host = (() => {
     },
     // Tauri 이벤트는 값을 `payload` 필드에 담는다.
     on: (event, fn) => listen(event, (e) => fn(e.payload)),
-    // 이 애플리케이션이 서비스하는 문서의 경로. 두 네이티브 런타임이 같은 형식을 사용한다.
-    page: (path) => `/${path}`,
     // 제목 표시줄이 투명하고 콘텐츠가 그 아래까지 차지하므로, 끄는 자리를 이
     // 문서가 지정한다.
     draggable(el) {
@@ -82,6 +103,8 @@ export const host = (() => {
     },
   };
 })();
+
+export const clipboard = createClipboardBridge((name, payload) => host.call(name, payload), { allowPersist: true });
 
 export const page = (() => {
   const { invoke } = window.__TAURI__.core;
@@ -107,7 +130,7 @@ export const page = (() => {
       onRequest: (fn) => listen("exposure-request", (e) => {
         if (e.payload.surface === undefined || e.payload.surface === surface) fn(e.payload);
       }),
-      reply: (id, payload) => invoke("exposure_reply", { request: { id, ...payload } }),
+      reply: (id, payload) => invoke("exposure_reply", { request: { id, ...payload, ...(surface ? { surface } : {}) } }),
     },
     // 이 표면의 문서 영역. 호스트는 호출한 웹뷰가 surface 인지 확인하고 상태를 이 표면에만 보낸다.
     document: {
