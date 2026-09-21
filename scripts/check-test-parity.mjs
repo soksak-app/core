@@ -138,6 +138,13 @@ const MATRIX = [
 // The inventory remains structural; behavior is proved by the referenced tests.
 const FEATURE_LINKS = [
   {
+    id: "G1",
+    implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "auditInventory" }],
+    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "inventory reports uncovered implementations and tests as separate results" }],
+    expected: "The workspace inventory reports implementation and test ownership separately, rejects uncovered files, and preserves structural evidence without claiming behavior coverage.",
+    levels: ["unit"],
+  },
+  {
     id: "G1.3-5",
     implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "auditCommittedEvidenceWording" }],
     tests: [{ file: "scripts/test/test-parity.test.mjs", id: "F0.1 evidence identifies its committed build" }],
