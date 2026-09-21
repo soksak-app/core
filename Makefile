@@ -141,6 +141,7 @@ wailsv3-release: wailsv3-build-release
 # 네이티브 코드의 단위 검사. 공용 입력 검사, Wails 와 Tauri 호스트 검사를 실행한다.
 native-test: native-darwin frontend-wailsv3 frontend-tauriv2
 	@$(MAKE) -C native/darwin test
+	@node scripts/verify-vt-recovery.mjs target/debug/soksak-vt-alacritty
 	@$(GO_ENV) go test -ldflags "$(GO_LINK)" ./packages/host/wailsv3/... ./sidecars/shell/... ./sidecars/ptyd/...
 	@$(GO_ENV) go test -tags diagnostics -ldflags "$(GO_LINK)" ./packages/host/wailsv3/...
 	@$(CARGO_ENV) cargo test --manifest-path sidecars/Cargo.toml --workspace

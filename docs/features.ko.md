@@ -48,6 +48,7 @@
   - [o] F2.6 — 죽은 service endpoint를 양쪽 호스트가 제거하고 정상 인증 bootstrap 경로로 교체한다. 현재 Tauri 검사는 0.41초, Wails 검사는 0.56초에 stale PID 확인·교체 handshake·요청 전달·close를 포함해 통과했다. 살아 있지만 접근할 수 없는 endpoint, 실행 중 서비스 프로세스 충돌, 세션 복원은 별도 게이트로 남긴다.
   - [o] F2.7 — 살아 있다고 보고된 endpoint에 접근할 수 없으면 양쪽 호스트가 명시적인 연결 오류를 반환하고 endpoint 기록을 보존한다. 현재 Tauri·Wails 테스트가 실패 전후 endpoint byte를 비교했으며 어느 쪽도 교체하거나 transport를 낮추지 않는다. 실행 중 서비스 충돌과 세션 복원은 별도 게이트로 남긴다.
   - [o] F2.8 — 재빌드한 `vt-alacritty` 서비스가 애플리케이션 transport 단절 뒤에도 살아 있고 같은 surface/session에 재연결하며 명령 출력을 보존한다. 격리 protocol 검사가 5.1초에 `service_alive_after_client_loss`, 동일 session ID, `retained_screen_contains_RECOVERY`를 출력하며 통과했고, 테스트가 마지막에 서비스를 명시적으로 정리했다. 서비스 프로세스 충돌/업데이트와 복원 게이트는 아직 남아 있다.
+  - [o] F2.9 — 재빌드한 sidecar 단절/재연결 검사를 단계별 제한시간·PASS/FAIL 출력·실행 시간·명시적 서비스 정리를 포함한 `make native-test` 게이트로 고정했다. 최종 실행은 `NATIVE_TEST_EXIT=0`을 보고했고, 직접 게이트도 서비스 생존·동일 session ID·출력 보존·`recovery_check_duration_ms=40`을 보고했다. 서비스 프로세스 충돌/업데이트 게이트는 아직 열려 있다.
 - [ ] F3 — 신규·복원 브라우저 문서의 dark/light/dark 전파를 통제 사이트의 계산 스타일·실제 픽셀로 검사한다. Google은 사이트 자체 설정과 호스트 동작을 구분한다.
 - [ ] F4 — 브라우저 본문 한 번 클릭으로 카드 선택과 실제 네이티브 포커스. 타이핑·스크롤·다른 브라우저/터미널과 격리를 검증한다.
 - [ ] F5 — 터미널 포커스와 설정 가능한 커서.
