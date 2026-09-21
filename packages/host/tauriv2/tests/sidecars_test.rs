@@ -523,6 +523,43 @@ fn persistent_transport_replaces_endpoint_left_by_a_dead_service() {
 }
 
 #[test]
+fn persistent_transport_reports_live_but_unreachable_endpoint_without_replacement() {
+    let executable_directory = tempfile::tempdir().unwrap();
+    let config_directory = tempfile::tempdir().unwrap();
+    let service_directory = config_directory.path().join("services/echo");
+    std::fs::create_dir_all(&service_directory).unwrap();
+    let endpoint_path = service_directory.join("endpoint.json");
+    let missing_socket = service_directory.join("missing.sock");
+    std::fs::write(
+        &endpoint_path,
+        serde_json::to_vec(&serde_json::json!({
+            "protocol": 1,
+            "pid": std::process::id(),
+            "socket": missing_socket,
+            "token": "live-token"
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let original = std::fs::read(&endpoint_path).unwrap();
+    let fixture = files(r#"{"executable":"build/echo","protocol":1,"transport":"persistent"}"#);
+    let read = |path: &str| fixture.get(path).map(|value| value.as_bytes().to_vec());
+    let sidecars = Sidecars::new(
+        &read,
+        executable_directory.path().to_path_buf(),
+        config_directory.path().to_path_buf(),
+    )
+    .unwrap();
+    let (owner, _events) = owner("unreachable", "/projects/unreachable");
+    let error = sidecars
+        .send(&owner, ECHO, "surface", &raw(r#"{"op":"open"}"#))
+        .unwrap_err();
+    assert!(error.contains("connect authenticated service"), "{error}");
+    assert_eq!(std::fs::read(&endpoint_path).unwrap(), original);
+    sidecars.stop();
+}
+
+#[test]
 fn persistent_stop_closes_owner_then_requests_service_shutdown() {
     let executable_directory = tempfile::tempdir().unwrap();
     let config_directory = tempfile::tempdir().unwrap();

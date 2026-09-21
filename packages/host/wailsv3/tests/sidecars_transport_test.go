@@ -376,3 +376,49 @@ func TestPersistentTransportReplacesEndpointLeftByDeadService(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestPersistentTransportReportsLiveButUnreachableEndpointWithoutReplacement(t *testing.T) {
+	root := t.TempDir()
+	socketDir, err := os.MkdirTemp("", "sp-u")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(socketDir)
+	missingSocket := filepath.Join(socketDir, "missing.sock")
+	serviceDir := filepath.Join(root, "services", "service")
+	if err := os.MkdirAll(serviceDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	endpointPath := filepath.Join(serviceDir, "endpoint.json")
+	endpoint := map[string]any{
+		"protocol": 1, "pid": os.Getpid(), "socket": missingSocket, "token": "live-token",
+	}
+	encoded, err := json.Marshal(endpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(endpointPath, encoded, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	original, err := os.ReadFile(endpointPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sidecars, err := NewSidecars(harnessFrontend(), t.TempDir(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := &harnessOwner{root: "/unreachable", seen: make(chan SidecarMessage, 1)}
+	err = sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"op":"open"}`))
+	if err == nil || !strings.Contains(err.Error(), "connect authenticated service") {
+		t.Fatalf("connection error = %v", err)
+	}
+	current, err := os.ReadFile(endpointPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(current) != string(original) {
+		t.Fatalf("unreachable endpoint was replaced: %s", current)
+	}
+	sidecars.Stop()
+}
