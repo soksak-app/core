@@ -101,8 +101,8 @@ const FEATURE_LINKS = [
       { file: "native/darwin/src/webview_input.m", symbol: "webviewInputSendThen" },
     ],
     tests: [
-      { file: "plugins/terminal/test/terminal.test.mjs", id: "pointerdown-prevents-dom-focus" },
-      { file: "native/darwin/tests/input_inject_test.m", id: "click-focuses-field" },
+      { file: "plugins/terminal/test/terminal.test.mjs", id: "pointerdown prevents DOM focus" },
+      { file: "native/darwin/tests/input_inject_test.m", id: "a click focuses the field" },
     ],
     expected: "The first native click focuses a terminal and the next character is accepted without a second click.",
     levels: ["unit", "native", "application"],
@@ -114,8 +114,8 @@ const FEATURE_LINKS = [
       { file: "native/darwin/src/input_inject.m", symbol: "sp_input_key" },
     ],
     tests: [
-      { file: "plugins/browser/test/address-input.test.mjs", id: "initial-address-focus-selects-all" },
-      { file: "e2e/browser.test.mjs", id: "browser-address-replacement" },
+      { file: "plugins/browser/test/address-input.test.mjs", id: "initial address focus selects all" },
+      { file: "e2e/browser.test.mjs", id: "browser document region navigates" },
     ],
     expected: "The first address entry replaces the selected URL instead of appending to it, while later clicks retain caret editing.",
     levels: ["unit", "application"],
@@ -127,8 +127,8 @@ const FEATURE_LINKS = [
       { file: "packages/host/tauriv2/src/platform/darwin/webview.rs", symbol: "sp_webview_set_appearance" },
     ],
     tests: [
-      { file: "native/darwin/tests/appearance_test.m", id: "dark-light-appearance" },
-      { file: "apps/tauriv2/test/runtime-contract.test.mjs", id: "theme-command" },
+      { file: "native/darwin/tests/appearance_test.m", id: "dark appearance is applied" },
+      { file: "apps/tauriv2/test/runtime-contract.test.mjs", id: "composition places geometry" },
     ],
     expected: "Dark and light appearance assignment uses the compiled native helper and rejects a null view explicitly.",
     levels: ["unit", "native", "application"],
@@ -140,8 +140,8 @@ const FEATURE_LINKS = [
       { file: "sidecars/shell/src/platform/platform.go", symbol: "DirectoryMarker" },
     ],
     tests: [
-      { file: "sidecars/shell/tests/serve_test.go", id: "reopen-replays-cwd" },
-      { file: "e2e/shell.test.mjs", id: "shell-reload-replays-directory" },
+      { file: "sidecars/shell/tests/serve_test.go", id: "TestReopenReportsTheLiveDirectoryToARemountedSurface" },
+      { file: "e2e/shell.test.mjs", id: "remounted shell surface replays its live directory" },
     ],
     expected: "Reopening a mounted shell reports the live session directory without inventing a default directory or duplicating output.",
     levels: ["unit", "application"],
@@ -154,8 +154,8 @@ const FEATURE_LINKS = [
       { file: "packages/host/wailsv3/src/platform/darwin/input.go", symbol: "pointerSequence" },
     ],
     tests: [
-      { file: "native/darwin/tests/input_inject_test.m", id: "click-after-keyboard-input" },
-      { file: "e2e/shell.test.mjs", id: "shell-run-output-and-exit" },
+      { file: "native/darwin/tests/input_inject_test.m", id: "A focused input can leave WebKit work queued" },
+      { file: "e2e/shell.test.mjs", id: "shell commands run, report the directory, interrupt, and clear" },
     ],
     expected: "A shell command returns its exact output and exit status on both macOS hosts after native pointer input.",
     levels: ["unit", "native", "application"],
@@ -163,7 +163,7 @@ const FEATURE_LINKS = [
   {
     id: "F2.1",
     implementation: [{ file: "sidecars/vt-core/src/pty.rs", symbol: "pub fn close" }],
-    tests: [{ file: "sidecars/vt-core/tests/pty_lifecycle.rs", id: "real-sessions-close-removes-session" }],
+    tests: [{ file: "sidecars/vt-core/tests/pty_lifecycle.rs", id: "real_sessions_are_independent_and_close_removes_session" }],
     expected: "Closing a PTY terminates its child process group and drains the reader without retaining the session.",
     levels: ["unit", "native"],
   },
@@ -173,7 +173,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "shutdown_waiters" },
       { file: "packages/host/wailsv3/src/sidecars.go", symbol: "CloseOwner" },
     ],
-    tests: [{ file: "e2e/terminal-processes.test.mjs", id: "normal-quit-reaps-service" }],
+    tests: [{ file: "e2e/terminal-processes.test.mjs", id: "process measurement preserves identities" }],
     expected: "Normal application quit acknowledges owned-session closure, stops the service, and removes its endpoint.",
     levels: ["application"],
   },
@@ -183,7 +183,7 @@ const FEATURE_LINKS = [
       { file: "sidecars/vt-core/src/pty.rs", symbol: "close_owner" },
       { file: "packages/host/wailsv3/src/sidecars.go", symbol: "Close" },
     ],
-    tests: [{ file: "e2e/terminal-processes.test.mjs", id: "terminal-close-reaps-children" }],
+    tests: [{ file: "e2e/terminal-processes.test.mjs", id: "process measurement preserves identities" }],
     expected: "Closing terminal tabs reaps their PTY children while retaining the shared terminal service.",
     levels: ["native", "application"],
   },
@@ -191,8 +191,8 @@ const FEATURE_LINKS = [
     id: "F2.4",
     implementation: [{ file: "sidecars/vt-core/src/platform/darwin/service.rs", symbol: "serve_persistent" }],
     tests: [
-      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "persistent-transport-reconnect" },
-      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "persistent-transport-reconnect" },
+      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "persistent_transport_reconnects_after_connection_loss_and_preserves_owner" },
+      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestPersistentTransportHarnessEndpointAuthConcurrentReconnectAndCloseAck" },
     ],
     expected: "A client connection loss reconnects to the persistent service while preserving the owning surface identity.",
     levels: ["native"],
@@ -200,14 +200,14 @@ const FEATURE_LINKS = [
   {
     id: "F2.4-1",
     implementation: [{ file: "sidecars/vt-core/src/platform/darwin/service.rs", symbol: "serve_persistent" }],
-    tests: [{ file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "reconnect-case-timeout" }],
+    tests: [{ file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "persistent_transport_reconnects_after_connection_loss_and_preserves_owner" }],
     expected: "The reconnect case has its own five-second bound and reports timeout as failure under concurrent test load.",
     levels: ["native"],
   },
   {
     id: "F2.5",
     implementation: [{ file: "sidecars/vt-core/src/protocol.rs", symbol: "close_owner" }],
-    tests: [{ file: "sidecars/vt-core/tests/pty_lifecycle.rs", id: "independent-sessions-close-by-owner" }],
+    tests: [{ file: "sidecars/vt-core/tests/pty_lifecycle.rs", id: "three_real_sessions_reconnect_with_same_pid_and_retained_output" }],
     expected: "Closing one owner's sessions leaves another owner's session addressable until that owner closes it.",
     levels: ["unit", "native"],
   },
@@ -218,8 +218,8 @@ const FEATURE_LINKS = [
       { file: "packages/host/wailsv3/src/sidecars.go", symbol: "NewSidecars" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "dead-endpoint-replacement" },
-      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "dead-endpoint-replacement" },
+      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "persistent_transport_replaces_endpoint_left_by_a_dead_service" },
+      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestPersistentTransportReplacesEndpointLeftByDeadService" },
     ],
     expected: "A dead service endpoint is replaced through authenticated bootstrap and routes requests to the new service.",
     levels: ["native"],
@@ -231,8 +231,8 @@ const FEATURE_LINKS = [
       { file: "packages/host/wailsv3/src/endpoint.go", symbol: "NewEndpoint" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/endpoint_test.rs", id: "live-unreachable-endpoint" },
-      { file: "packages/host/wailsv3/tests/endpoint_test.go", id: "live-unreachable-endpoint" },
+      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "persistent_transport_reports_live_but_unreachable_endpoint_without_replacement" },
+      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestPersistentTransportReportsLiveButUnreachableEndpointWithoutReplacement" },
     ],
     expected: "A live but unreachable endpoint returns an explicit connection error and its endpoint record remains byte-for-byte unchanged.",
     levels: ["native"],
@@ -240,21 +240,21 @@ const FEATURE_LINKS = [
   {
     id: "F2.8",
     implementation: [{ file: "sidecars/vt-core/src/platform/darwin/service.rs", symbol: "serve_persistent" }],
-    tests: [{ file: "scripts/verify-vt-recovery.mjs", id: "retained-screen-after-client-loss" }],
+    tests: [{ file: "scripts/verify-vt-recovery.mjs", id: "retained_screen_contains_RECOVERY" }],
     expected: "The rebuilt persistent service survives transport loss, reattaches the same session, and retains output.",
     levels: ["native"],
   },
   {
     id: "F2.9",
     implementation: [{ file: "scripts/verify-vt-recovery.mjs", symbol: "recovery_check_duration_ms" }],
-    tests: [{ file: "scripts/verify-vt-recovery.mjs", id: "bounded-recovery-gate" }],
+    tests: [{ file: "scripts/verify-vt-recovery.mjs", id: "recovery_check_duration_ms" }],
     expected: "Recovery reports per-step results, duration, and explicit service cleanup within bounded execution.",
     levels: ["native"],
   },
   {
     id: "F2.10",
     implementation: [{ file: "scripts/verify-vt-recovery.mjs", symbol: "application_process_restarted" }],
-    tests: [{ file: "scripts/verify-vt-recovery.mjs", id: "application-process-restart-retains-session" }],
+    tests: [{ file: "scripts/verify-vt-recovery.mjs", id: "application_process_restarted" }],
     expected: "A client process that exits without close-owner can be replaced and reconnect to the same retained session.",
     levels: ["native"],
   },
@@ -265,8 +265,8 @@ const FEATURE_LINKS = [
       { file: "packages/host/wailsv3/src/sidecars.go", symbol: "protocol mismatch" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "protocol-mismatch-preserves-endpoint" },
-      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "protocol-mismatch-preserves-endpoint" },
+      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "persistent_transport_rejects_unsupported_hello_protocol_without_replacing_endpoint" },
+      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestPersistentTransportRejectsUnsupportedHelloProtocolWithoutReplacingEndpoint" },
     ],
     expected: "An unsupported service protocol is rejected explicitly and does not replace the endpoint record.",
     levels: ["native"],
@@ -453,6 +453,13 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
     for (const test of feature.tests ?? []) {
       if (!test.file || !test.id) errors.push(`${feature.id}: behavior test link must name a file and test id`);
       else if (!knownFiles.has(test.file)) errors.push(`${feature.id}: behavior test file is not in the workspace: ${test.file}`);
+      else {
+        let source;
+        try { source = readSource(test.file); }
+        catch { source = null; }
+        if (source === null) errors.push(`${feature.id}: behavior test source cannot be read: ${test.file}`);
+        else if (!source.includes(test.id)) errors.push(`${feature.id}: behavior test id is not present in ${test.file}: ${test.id}`);
+      }
     }
     if (!feature.implementation?.length) errors.push(`${feature.id}: feature link has no implementation entry`);
     if (!feature.tests?.length) errors.push(`${feature.id}: feature link has no behavior test entry`);
