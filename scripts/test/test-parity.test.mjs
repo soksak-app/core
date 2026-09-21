@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { auditCommittedEvidenceWording, auditCompletedFeatureLinks, auditFeatureLinks, auditHistoricalScopeWording, auditInventory, auditModalParitySnapshotWording, auditRecordedInventoryCounts, discoverInventory, repositoryFiles } from "../check-test-parity.mjs";
+import { auditCommittedEvidenceWording, auditCompletedFeatureLinks, auditFeatureLinks, auditHistoricalScopeWording, auditInventory, auditModalParitySnapshotWording, auditOwnership, auditRecordedInventoryCounts, discoverInventory, repositoryFiles } from "../check-test-parity.mjs";
 
 const files = repositoryFiles();
 
@@ -122,4 +122,34 @@ test("F0.1 evidence identifies its committed build", { timeout: 1000 }, () => {
     auditCommittedEvidenceWording("- [o] F0.1 — Unblock native input measurement. Package and structural checks pass on the current dirty implementation.")[0],
     /current dirty implementation/,
   );
+});
+
+test("ownership audit rejects cross-owner implementation names and private paths", { timeout: 1000 }, () => {
+  const result = auditOwnership([
+    "plugins/example/ui/module.js",
+    "plugins/example/plugin.json",
+    "sidecars/example/src/main.go",
+    "packages/example/src/index.js",
+    "plugins/example/test/module.test.mjs",
+  ], (file) => ({
+    "plugins/example/ui/module.js": 'import "@soksak/sidecar-example";\nimport "sidecars/example/src/main.go";\n',
+    "plugins/example/plugin.json": '{"sidecars":["@soksak/sidecar-example"]}',
+    "sidecars/example/src/main.go": "package main\n",
+    "packages/example/src/index.js": 'import "plugins/example/ui/module.js";\n',
+    "plugins/example/test/module.test.mjs": 'import "sidecars/example/src/main.go";\n',
+  }[file] ?? ""));
+  assert.ok(result.some((error) => error.includes("plugins/example/ui/module.js") && error.includes("sidecar")));
+  assert.ok(result.some((error) => error.includes("packages/example/src/index.js") && error.includes("plugin")));
+  assert.ok(result.some((error) => error.includes("plugins/example/test/module.test.mjs") && error.includes("private")));
+  assert.ok(!result.some((error) => error.includes("plugin.json")), "declaration files must connect owners");
+});
+
+test("ownership audit does not authorize private access through a declared dependency", { timeout: 1000 }, () => {
+  const errors = auditOwnership([
+    "plugins/example/ui/module.js",
+    "sidecars/example/src/main.go",
+  ], (file) => file.endsWith("module.js")
+    ? 'import "@soksak/sidecar-example/src/private.js";\n'
+    : "package main\n");
+  assert.ok(errors.some((error) => error.includes("private")));
 });

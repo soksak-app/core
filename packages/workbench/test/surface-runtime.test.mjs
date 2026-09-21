@@ -33,6 +33,24 @@ test("surface event subscription resolves only after the native listener is inst
   dom.window.close();
 });
 
+test("surface sidecar access is resolved from the declared surface and rejects package names", async () => {
+  const { surfaceContextRuntime } = await import("../host.js");
+  calls.length = 0;
+  const runtime = surfaceContextRuntime({ surfaceId: "declared-sidecar-surface", sidecars: ["@fixture/sidecar"] });
+  const port = runtime.sidecar();
+  await port.send("declared-sidecar-surface", { op: "open" });
+  assert.deepEqual(calls.at(-1), ["sidecarSend", {
+    sidecar: "@fixture/sidecar", surface: "declared-sidecar-surface", body: { op: "open" },
+  }]);
+  assert.throws(() => runtime.sidecar("@fixture/sidecar"), /does not accept a package name/);
+});
+
+test("surface sidecar access rejects an ambiguous declaration instead of selecting a fallback", async () => {
+  const { surfaceContextRuntime } = await import("../host.js");
+  const runtime = surfaceContextRuntime({ surfaceId: "ambiguous-sidecar-surface", sidecars: [] });
+  assert.throws(() => runtime.sidecar(), /exactly one declared sidecar/);
+});
+
 test("surface exposure replies retain the logical surface scope", async () => {
   const dom = new JSDOM("<body></body>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;

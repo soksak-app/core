@@ -7,7 +7,7 @@ export async function mount(root, context) {
   const view = root.querySelector("#view");
   const composition = await context.composition.create({ regions: { view }, overlays: {} });
   const image = composition.region("view");
-  const sidecar = context.runtime.sidecar?.("@soksak/sidecar-vt-alacritty");
+  const sidecar = context.runtime.sidecar();
   const controller = await startTerminal({ id: context.surfaceId, view, attachImage: () => image, sidecar,
     expose: context.exposure, window });
   if (!controller || typeof controller.dispose !== "function") {

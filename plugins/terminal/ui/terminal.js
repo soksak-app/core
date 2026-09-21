@@ -152,7 +152,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose,
 
   // 이미지 영역 생성 및 사이드카 메시지 핸들링
   let region = null;
-  region = attachImage(view, "view", "@soksak/sidecar-vt-alacritty");
+  region = attachImage(view, "view");
   if (!region) throw new Error("Failed to attach image region");
   const onRegion = (type, handler) => region.on(type, handler);
 

@@ -7,7 +7,7 @@ export async function mount(root, context) {
   const input = root.querySelector("#in");
   let open = false;
   let cwd = null;
-  const shell = context.runtime.sidecar("@soksak/sidecar-shell");
+  const shell = context.runtime.sidecar();
   const runs = new Map();
   let nextRun = 0;
   const listeners = new Map(["output", "screen", "cwd", "runs"].map((name) => [name, new Set()]));

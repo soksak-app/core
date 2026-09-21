@@ -21,7 +21,7 @@ async function readJson(path) {
 function surfaceOf(name, pluginId, surface) {
   const module = `/${modulePath(name, surface.module)}`;
   return (tabId) => ({ module, composition: surface.composition, surfaceId: tabId,
-    pluginId, home: surface.home ?? null, declarations: surface.declarations ?? {} });
+    pluginId, home: surface.home ?? null, declarations: surface.declarations ?? {}, sidecars: surface.sidecars ?? [] });
 }
 
 /** environment.json 을 불러와 검사하고 플러그인, 섹션, 사이드바 기본값을 등록한다. */
@@ -37,7 +37,11 @@ export async function loadEnvironment() {
         id: manifest.id, name: manifest.name, mark: manifest.mark, svg: manifest.icon,
         ink: manifest.preview?.ink ?? null,
         background: manifest.background ?? null,
-        surface: surfaceOf(name, manifest.id, { ...manifest.surface, declarations: manifest.exposes ?? {} }),
+        surface: surfaceOf(name, manifest.id, {
+          ...manifest.surface,
+          declarations: manifest.exposes ?? {},
+          sidecars: manifest.sidecars ?? [],
+        }),
       });
     }
     for (const section of manifest.sections ?? []) registerSection(section);

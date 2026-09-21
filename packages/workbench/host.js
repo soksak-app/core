@@ -164,10 +164,14 @@ export function surfaceContextRuntime(surface, declarations = {}) {
       return invoke(name, payload);
     },
     sidecar(name) {
+      const declared = surface.sidecars ?? [];
+      if (name !== undefined) throw new Error("surface runtime sidecar() does not accept a package name; use the declared sidecar");
+      if (declared.length !== 1) throw new Error(`surface runtime requires exactly one declared sidecar, got ${declared.length}`);
+      const sidecarName = declared[0];
       return {
-        send: (id, body) => invoke("sidecarSend", { sidecar: name, surface: id, body }),
+        send: (id, body) => invoke("sidecarSend", { sidecar: sidecarName, surface: id, body }),
         on: (id, fn) => on("sidecar-message", (event) => {
-          if (event.sidecar === name && event.surface === id) fn(event.body);
+          if (event.sidecar === sidecarName && event.surface === id) fn(event.body);
         }),
       };
     },

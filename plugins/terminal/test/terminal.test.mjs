@@ -306,7 +306,7 @@ test("Boot: attachImage called once and sidecar receives open message", async ()
   assert.equal(fakeAttachImage.getCalls().length, 1, "attachImage called once");
   const attachCall = fakeAttachImage.getCalls()[0];
   assert.equal(attachCall.name, "view", "attachImage called with name 'view'");
-  assert.equal(attachCall.sidecar, "@soksak/sidecar-vt-alacritty", "correct sidecar");
+  assert.equal(attachCall.sidecar, undefined, "sidecar is resolved by the host composition");
 
   // sidecar에 open이 갔는가?
   const messages = fakeSidecar.getMessages();
@@ -338,7 +338,7 @@ test("Region insert event sends base64-encoded bytes to sidecar", async () => {
     expose: fakeExpose,
     scale: 1,
     window: fakeWindow,
-  }).then(() => fakeAttachImage.function(fakeView, "view", "@soksak/sidecar-vt-alacritty"));
+  }).then(() => fakeAttachImage.function(fakeView, "view", "terminal-port"));
 
   // 실제 region 객체는 startTerminal이 내부에서 생성하므로, 여기서는
   // 이미 attach된 region으로부터 trigger한다

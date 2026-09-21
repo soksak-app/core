@@ -145,6 +145,20 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "G1.4-1",
+    implementation: [
+      { file: "scripts/check-test-parity.mjs", symbol: "auditOwnership" },
+      { file: "packages/workbench/host.js", symbol: "does not accept a package name" },
+      { file: "packages/workbench/environment.js", symbol: "sidecars: surface.sidecars" },
+    ],
+    tests: [
+      { file: "scripts/test/test-parity.test.mjs", id: "ownership audit rejects cross-owner implementation names and private paths" },
+      { file: "packages/workbench/test/surface-runtime.test.mjs", id: "surface sidecar access is resolved from the declared surface and rejects package names" },
+    ],
+    expected: "Implementation and test sources cannot cross owner boundaries or read private paths; plugin sidecar access is resolved from the declaration and never by a package-name fallback.",
+    levels: ["unit"],
+  },
+  {
     id: "G1.3-4",
     implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "auditModalParitySnapshotWording" }],
     tests: [{ file: "scripts/test/test-parity.test.mjs", id: "modal parity Red is dated and followed by current F10.2 evidence" }],
@@ -558,6 +572,82 @@ const sourceLanguages = new Map([
 const manifestNames = new Set(["package.json", "Cargo.toml", "go.mod", "Makefile"]);
 const declarationNames = new Set(["plugin.json", "sidecar.json", "environment.json", "exposure.json"]);
 
+const OWNER_ROOTS = [
+  ["packages/", "core"],
+  ["plugins/", "plugin"],
+  ["sidecars/", "sidecar"],
+  ["native/", "native"],
+  ["apps/", "application"],
+  ["e2e/", "contract"],
+];
+const DECLARATION_FILE = /(^|\/)(package|plugin|sidecar|environment|exposure)\.json$/;
+const PRIVATE_SEGMENT = /(^|\/)(src|tests?|internal|private)(\/|$)/;
+const IMPORT_SPECIFIER = /(?:from\s*|import\s*\(|require\s*\(|import\s+)["'`]([^"'`]+)["'`]/g;
+const PACKAGE_REFERENCE = /@soksak\/(?:plugin|sidecar)-[a-z0-9-]+(?:\/(?:src|tests?|internal|private)(?:\/[a-z0-9_./-]+)?)?/g;
+
+function ownerFor(file) {
+  return OWNER_ROOTS.find(([root]) => file.startsWith(root))?.[1] ?? null;
+}
+
+function isDeclaration(file) {
+  return DECLARATION_FILE.test(file);
+}
+
+function packageOwner(name) {
+  const base = name.split("/").slice(0, 2).join("/");
+  if (base === "@soksak/plugin-api" || base === "@soksak/runtime" || base === "@soksak/workbench") return "core";
+  if (base.startsWith("@soksak/plugin-") && (base.endsWith("-example") || [
+    "@soksak/plugin-browser", "@soksak/plugin-files", "@soksak/plugin-shell", "@soksak/plugin-terminal",
+  ].includes(base))) return "plugin";
+  if (base.startsWith("@soksak/sidecar-") && (base.endsWith("-example") || [
+    "@soksak/sidecar-shell", "@soksak/sidecar-vt-alacritty", "@soksak/sidecar-vt-core",
+  ].includes(base))) return "sidecar";
+  return null;
+}
+
+function ownerReferences(source) {
+  const references = [];
+  for (const match of source.matchAll(IMPORT_SPECIFIER)) references.push({ value: match[1], private: PRIVATE_SEGMENT.test(match[1]) });
+  for (const match of source.matchAll(PACKAGE_REFERENCE)) {
+    if (!references.some(({ value }) => value === match[0])) references.push({ value: match[0], private: PRIVATE_SEGMENT.test(match[0]) });
+  }
+  return references;
+}
+
+/**
+ * 소유자 경계를 검사한다. 선언 파일만 플러그인과 사이드카를 연결할 수 있다.
+ * 이 함수는 동작 테스트가 아니라 구현·테스트 소스의 금지된 참조를 기계적으로
+ * 판정한다. 앱과 e2e는 공개 계약의 소비자이므로 다른 공개 패키지를 사용할 수 있지만
+ * private/src/tests 경로는 모든 소유자에서 금지한다.
+ */
+export function auditOwnership(files, readSource = (file) => readFileSync(`${ROOT}${file}`, "utf8")) {
+  const errors = [];
+  for (const file of [...new Set(files)].sort()) {
+    const owner = ownerFor(file);
+    if (!owner || isDeclaration(file)) continue;
+    let source;
+    try { source = readSource(file); }
+    catch (error) {
+      errors.push(`${file}: ownership source cannot be read: ${error?.message ?? error}`);
+      continue;
+    }
+    const testFile = /(^|\/)(test|tests|e2e)\//.test(file) || /[._]test\./.test(file);
+    for (const reference of ownerReferences(source)) {
+      const value = reference.value;
+      const pathOwner = OWNER_ROOTS.find(([root]) => value.includes(root))?.[1] ?? null;
+      const referencedOwner = pathOwner ?? (value.startsWith("@soksak/") ? packageOwner(value) : null);
+      if (reference.private && referencedOwner && referencedOwner !== owner) {
+        errors.push(`${file}: ${owner}${testFile ? " test" : " implementation"} reads private path ${value}`);
+        continue;
+      }
+      if (!referencedOwner || referencedOwner === owner || referencedOwner === "core") continue;
+      if (owner === "application" || owner === "contract") continue;
+      errors.push(`${file}: ${owner}${testFile ? " test" : " implementation"} names ${referencedOwner} implementation ${value}`);
+    }
+  }
+  return errors;
+}
+
 // 언어별 고정 루트를 두지 않는다. 한 패키지의 다른 언어도 모두 발견한다.
 export function discoverInventory(files) {
   const implementations = [], tests = [], manifests = [], generated = [];
@@ -608,7 +698,7 @@ function globRegex(glob) {
   return new RegExp(`${source}$`);
 }
 
-export function auditInventory(files, matrix = MATRIX) {
+export function auditInventory(files, matrix = MATRIX, readSource = (file) => readFileSync(`${ROOT}${file}`, "utf8")) {
   const matches = new Map();
   const expand = (pattern) => {
     if (!matches.has(pattern)) {
@@ -680,6 +770,8 @@ export function auditInventory(files, matrix = MATRIX) {
 
   const featureErrors = auditFeatureLinks(FEATURE_LINKS, files);
   errors.push(...featureErrors);
+  const ownershipErrors = auditOwnership(files, readSource);
+  errors.push(...ownershipErrors);
 
   return {
     errors,
@@ -688,6 +780,7 @@ export function auditInventory(files, matrix = MATRIX) {
     uncoveredImplementations,
     uncoveredTests,
     featureErrors,
+    ownershipErrors,
     featureLinks: FEATURE_LINKS,
     trackCount: matrix.length,
     implementationCount: implementationOwners.size,
