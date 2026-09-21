@@ -6,6 +6,10 @@
 
 The canonical work status is [features](../features.md). A source-file inventory is structural evidence only. It must not report feature parity or application correctness.
 
+Documentation checks require unique task identifiers, only waiting/in-progress/complete states, and identical checklist identifiers, ordering, indentation, and states in both translations. The text may be translated; the task state must not differ.
+
+Additional work must receive a priority and acceptance criteria in that same checklist before implementation. A completed task retains its status and the scope of its evidence. A subsequent issue uses a linked identifier with a numeric suffix, such as `G1.1-1`, instead of reopening the completed task or starting another checklist.
+
 Discover workspace packages, build manifests, implementation languages, public commands, statuses, settings, and host operations. Every supported feature maps to explicit implementation entry points, behavior test identifiers, expected outcomes, and required verification levels. JS/TS, Rust, Go, and Objective-C have the same evidence obligations. A shared native test does not replace integration through each host. Host comparisons use the same expected outcomes; identical incorrect results fail.
 
 Missing implementations, missing tests, unregistered build targets, unresolved references, excluded required tests, zero tests, mandatory skips, stale evidence, crashes, and timeouts fail the applicable gate. Audit self-tests must demonstrate those failures. Behavioral mutation checks replace an implementation with a no-op or remove a required effect or response and require the corresponding test to fail. File names and source patterns do not establish behavior.

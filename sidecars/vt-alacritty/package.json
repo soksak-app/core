@@ -9,7 +9,7 @@
   ],
   "scripts": {
     "build": "sh -c 'PROFILE=\"${SOKSAK_PROFILE:-debug}\"; cargo build $SOKSAK_CARGO_FLAGS --manifest-path ../Cargo.toml -p soksak-sidecar-vt-alacritty && mkdir -p build && cp ../target/\"$PROFILE\"/soksak-vt-alacritty build/soksak-vt-alacritty'",
-    "test": "echo no tests"
+    "test": "cargo test --manifest-path ../Cargo.toml -p soksak-sidecar-vt-alacritty"
   },
   "dependencies": {
     "@soksak/sidecar-vt-core": "workspace:*",

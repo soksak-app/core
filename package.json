@@ -9,7 +9,7 @@
   "packageManager": "pnpm@11.24.0",
   "scripts": {
     "build": "pnpm -F soksak build",
-    "test": "pnpm -r test",
+    "test": "node --test scripts/test/*.test.mjs && pnpm -r test",
     "fuzz": "pnpm -F soksak fuzz",
     "mutate": "pnpm -F soksak mutate",
     "breaks": "pnpm -F soksak breaks",

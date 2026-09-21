@@ -24,6 +24,22 @@ The build targets build `native/darwin`, the workbench, and the sidecars, then r
 
 Debug executables are `target/debug/soksak-wailsv3` and `target/debug/soksak-tauriv2`. Release builds use `make wailsv3-build-release tauriv2-build-release` and write `target/release/soksak-wailsv3` and `target/release/soksak-tauriv2`. `make examples-size` builds both profiles and reports their sizes.
 
+## Test parity
+
+Run the structural inventory gate with `make parity-check`. It discovers Git-visible JS/TS, Rust, Go, Objective-C, native headers, HTML/CSS, shell scripts, contract declarations, and build manifests without fixed language roots. Generated library output and Tauri schemas have explicit exclusions; source/output equality remains a separate build check. Unclaimed implementation or test files, empty patterns, and duplicate ownership fail. Shared tests do not permit duplicate implementation ownership.
+
+The current mapping is incomplete. A structural pass would not establish behavior parity: named behavior mappings, actual per-language execution, and matching-build evidence remain required by the [verification contract](../spec/verification.md). Do not expand unrelated globs or exclude discovered files to obtain a pass.
+
+`pnpm test` runs the audit/checklist/command-supervision self-tests before package tests. The two Rust terminal packages invoke their actual Cargo tests; package-command tests replace Cargo with a failing fixture to verify invocation and failure propagation, not engine behavior.
+
+A bounded command can be run with:
+
+```sh
+node scripts/test-command.mjs --id inventory --timeout-ms 10000 -- node scripts/check-test-parity.mjs
+```
+
+The supervisor streams stdout/stderr and emits JSON start/progress/final events with elapsed milliseconds. It reports nonzero exits, missing executables, timeout, cancellation, and cleanup errors. A permission-denied cleanup probe is not proof of process absence. This supervises one command process group; language adapters still need case discovery, per-case execution, zero-test/skip rejection, and source/binary evidence. It does not close independently running inspection applications.
+
 ## Window checks
 
 Start each application once, from separate terminals, with the configuration directories the harness reads (`os.tmpdir()` of Node.js, `$TMPDIR` on macOS):

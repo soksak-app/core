@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: preflight prepare build verify docs-check boundaries platforms hosts-check e2e-check exposure-check release-check
+.PHONY: preflight prepare build verify docs-check boundaries platforms hosts-check e2e-check exposure-check parity-check release-check
 
 docs-check:
 	@node scripts/check-docs.mjs
@@ -21,6 +21,10 @@ e2e-check:
 exposure-check:
 	@node scripts/check-exposure.mjs
 
+# 전체 소스·테스트 목록의 연결을 검사한다. 동작 검증 결과와 구분한다.
+parity-check:
+	@node scripts/check-test-parity.mjs
+
 # 운영체제별 코드가 platform/<os>/ 아래에만 있는지 검사한다.
 platforms:
 	@node scripts/check-platforms.mjs
@@ -38,7 +42,7 @@ prepare: preflight
 build: prepare
 	@pnpm build
 
-verify: prepare docs-check exposure-check
+verify: prepare docs-check exposure-check parity-check
 	@pnpm test
 	@pnpm breaks
 	@pnpm build
