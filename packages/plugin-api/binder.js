@@ -34,6 +34,7 @@ export function createBinder(run, { check, changed = () => {} }) {
   if (typeof check !== "function") throw new Error("createBinder requires check");
   const bound = new WeakSet();
   const roots = new WeakSet();
+  const cleanup = new Set();
 
   /** 요소에 명령 표시를 붙인다. 입력은 delegate 한 루트나 부르는 쪽이 전달한다. */
   function mark(el, name, params, valueName) {
@@ -54,12 +55,14 @@ export function createBinder(run, { check, changed = () => {} }) {
    */
   function bind(el, name, params = {}, { event = "click", stop = false, when, failed } = {}) {
     mark(el, name, typeof params === "function" ? null : params);
-    el.addEventListener(event, (e) => {
+    const listener = (e) => {
       if (when && !when(e)) return;
       if (stop) e.stopPropagation();
       const done = run(name, typeof params === "function" ? params(e) : params);
       return failed ? Promise.resolve(done).catch(failed) : done;
-    });
+    };
+    el.addEventListener(event, listener);
+    cleanup.add(() => el.removeEventListener(event, listener));
     bound.add(el);
     changed();
     return el;
@@ -74,18 +77,22 @@ export function createBinder(run, { check, changed = () => {} }) {
       const done = run(found.name, found.params);
       return failed ? Promise.resolve(done).catch(failed) : done;
     };
-    root.addEventListener("click", (e) => {
+    const click = (e) => {
       const el = e.target.closest?.("[data-command]");
       if (!el || !root.contains(el) || el.matches("input, select, textarea")) return;
       return go(commandOf(el));
-    });
+    };
+    root.addEventListener("click", click);
+    cleanup.add(() => root.removeEventListener("click", click));
     for (const type of ["change", "input"]) {
-      root.addEventListener(type, (e) => {
+      const listener = (e) => {
         const el = e.target.closest?.("[data-command]");
         if (!el || !root.contains(el) || !el.matches("input, select, textarea")) return;
         if (type === "input" && !("live" in el.dataset)) return;
         return go(commandOf(el, valueOf(el)));
-      });
+      };
+      root.addEventListener(type, listener);
+      cleanup.add(() => root.removeEventListener(type, listener));
     }
     roots.add(root);
     changed();
@@ -115,5 +122,8 @@ export function createBinder(run, { check, changed = () => {} }) {
       }));
   }
 
-  return { mark, bind, delegate, audit, run };
+  return { mark, bind, delegate, audit, run, dispose() {
+    cleanup.forEach((dispose) => dispose());
+    cleanup.clear();
+  } };
 }

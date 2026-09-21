@@ -16,7 +16,9 @@
     "image-region.js",
     "page.js",
     "sidecar-port.js",
-    "surface-composition.js"
+    "surface-composition.js",
+    "surface.js",
+    "clipboard.js"
   ],
   "scripts": {
     "test": "node --test test/"

@@ -18,6 +18,7 @@ function fixture() {
   };
   Object.defineProperty(window, "innerWidth", { value: 800, configurable: true });
   Object.defineProperty(window, "innerHeight", { value: 600, configurable: true });
+  window.visualViewport = { get width() { return window.innerWidth; }, get height() { return window.innerHeight; } };
   const element = window.document.getElementById("region");
   let rect = { left: 10, top: 40, right: 510, bottom: 440, width: 500, height: 400 };
   element.getBoundingClientRect = () => rect;
@@ -53,6 +54,16 @@ test("regionInsets measures the element against the viewport", () => {
     { insets: { left: 10, top: 40, right: 290, bottom: 160 }, visible: true });
   f.element.getBoundingClientRect = () => ({ left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 });
   assert.equal(regionInsets(f.element, f.window).visible, false);
+});
+
+test("fractional viewport sizes do not create native region insets", () => {
+  const f = fixture();
+  f.window.visualViewport = { width: 597.5, height: 286.5 };
+  Object.defineProperty(f.window, "innerWidth", { value: 597 });
+  Object.defineProperty(f.window, "innerHeight", { value: 286 });
+  f.resize({ left: 0, top: 0, right: 597.5, bottom: 286.5, width: 597.5, height: 286.5 });
+  assert.deepEqual(regionInsets(f.element, f.window).insets,
+    { left: 0, top: 0, right: 0, bottom: 0 });
 });
 
 test("calls wait for attach and run in order", async () => {

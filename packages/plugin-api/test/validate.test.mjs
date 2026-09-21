@@ -6,7 +6,7 @@ import {
 
 const card = {
   id: "probe", name: "Probe", mark: "p", icon: "<path/>",
-  surface: { page: "ui/probe.html", composition: { kind: "dom" } }, sidecars: ["@scope/sidecar-worker"],
+  surface: { module: "ui/probe.js", composition: { kind: "dom" } }, sidecars: ["@scope/sidecar-worker"],
 };
 const side = { id: "side", name: "Side", sections: [{ id: "side.list", name: "List" }] };
 const environment = () => ({
@@ -33,6 +33,8 @@ test("a manifest with a page surface or with sections only is accepted", () => {
   assert.equal(validateManifest(side), side);
   assert.equal(validateManifest({ ...card, preview: { ink: "--surface-fg" } }).preview.ink, "--surface-fg");
   assert.equal(validateManifest({ ...card, home: "https://example.com/start" }).home, "https://example.com/start");
+  const background = { sidecar: "@scope/sidecar-worker", operation: "open" };
+  assert.equal(validateManifest({ ...card, background }).background.operation, "open");
 });
 
 test("a manifest is rejected for each invalid field", () => {
@@ -41,14 +43,14 @@ test("a manifest is rejected for each invalid field", () => {
     [{ ...card, name: "" }, /name is required/],
     [{ ...card, extra: 1 }, /unknown field extra/],
     [{ ...card, surface: { url: "https://a" } }, /unknown field url/],
-    [{ ...card, surface: { url: "https://a", page: "b", composition: { kind: "dom" } } }, /unknown field url/],
-    [{ ...card, surface: {} }, /surface requires a page/],
-    [{ ...card, surface: { page: "ui/probe.html" } }, /surface requires a composition/],
+    [{ ...card, surface: { url: "https://a", module: "b.js", composition: { kind: "dom" } } }, /unknown field url/],
+    [{ ...card, surface: {} }, /surface requires a module/],
+    [{ ...card, surface: { module: "ui/probe.js" } }, /surface requires a composition/],
     [{ ...card, home: "file:///etc" }, /home must be an http or https address/],
     [{ ...card, home: "https:///" }, /home must be an http or https address/],
     [{ ...side, home: "https://example.com" }, /home requires a surface/],
-    [{ ...card, surface: { page: "../x.html", composition: { kind: "dom" } } }, /inside the package/],
-    [{ ...card, surface: { page: "/x.html", composition: { kind: "dom" } } }, /inside the package/],
+    [{ ...card, surface: { module: "../x.js", composition: { kind: "dom" } } }, /inside the package/],
+    [{ ...card, surface: { module: "/x.js", composition: { kind: "dom" } } }, /inside the package/],
     [{ ...card, mark: undefined }, /mark is required/],
     [{ ...card, icon: undefined }, /icon is required/],
     [{ ...side, sections: [{ id: "other.list", name: "x" }] }, /must be side.<name>/],
@@ -60,6 +62,10 @@ test("a manifest is rejected for each invalid field", () => {
     [{ ...card, preview: { ink: "--rail", fill: "--bg" } }, /unknown field fill/],
     [{ ...side, preview: { ink: "--rail" } }, /preview requires a surface/],
     [{ ...card, sidecars: ["@scope/sidecar-worker", "@scope/sidecar-worker"] }, /duplicate sidecar/],
+    [{ ...card, background: { sidecar: "@scope/sidecar-worker", open: { op: "open" } } }, /unknown field open/],
+    [{ ...card, background: { sidecar: "@scope/sidecar-worker" } }, /operation must be a non-empty string/],
+    [{ ...card, background: { sidecar: "@scope/sidecar-worker", operation: "" } }, /operation must be a non-empty string/],
+    [{ ...card, background: { sidecar: "@scope/sidecar-other", operation: "open" } }, /sidecar must be declared/],
   ];
   for (const [manifest, message] of cases) assert.throws(() => validateManifest(manifest), message);
 });
@@ -70,7 +76,7 @@ test("surface composition declarations are complete and fail closed", () => {
     name: "view", kind: "image", sidecar: "@scope/sidecar-worker", input: "dom",
   };
   const hybrid = (regions = [documentRegion], overlays = []) => ({
-    ...card, surface: { page: "ui/probe.html", composition: { kind: "hybrid", regions, overlays } },
+    ...card, surface: { module: "ui/probe.js", composition: { kind: "hybrid", regions, overlays } },
   });
   assert.equal(validateManifest(hybrid()).surface.composition.kind, "hybrid");
   assert.equal(validateManifest(hybrid([imageRegion])).surface.composition.regions[0].sidecar, "@scope/sidecar-worker");
@@ -145,6 +151,14 @@ test("a sidecar manifest names an executable inside its package and a protocol v
     [[], /expected an object/],
   ];
   for (const [value, message] of cases) assert.throws(() => validateSidecar(value), message);
+});
+
+test("a persistent sidecar declares its transport explicitly", () => {
+  const declaration = { executable: "build/worker", protocol: 1, transport: "persistent" };
+  assert.equal(validateSidecar(declaration), declaration);
+  for (const transport of [null, "tcp", "stdio", 1]) {
+    assert.throws(() => validateSidecar({ ...declaration, transport }), /transport must be persistent/);
+  }
 });
 
 test("a sidecar manifest may include optional helpers field with package and executable", () => {

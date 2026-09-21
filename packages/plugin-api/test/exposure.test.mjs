@@ -19,7 +19,7 @@ const exposes = () => ({
 
 const page = {
   id: "probe", name: "Probe", mark: "p", icon: "<path/>",
-  surface: { page: "ui/probe.html", composition: { kind: "dom" } },
+  surface: { module: "ui/probe.js", composition: { kind: "dom" } },
 };
 
 test("exposes with the three kinds are accepted in a manifest and in a core file", () => {
@@ -201,7 +201,7 @@ test("a surface page registers declared names once through its port and answers 
   let loads = 0;
   const declared = exposes();
   declared.dom[0].name = "probe.lines";
-  const expose = createExpose(port, async () => { loads++; return declarationMap(declared); });
+  const expose = createExpose(port, async () => { loads++; return declared; });
   await expose.command("probe.send", ({ data }) => data.length);
   const rows = [element(), element()];
   await expose.dom("probe.row", rows[0]);

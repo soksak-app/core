@@ -34,8 +34,8 @@ export function regionInsets(element, view) {
   const insets = {
     left: rect.left,
     top: rect.top,
-    right: view.innerWidth - rect.right,
-    bottom: view.innerHeight - rect.bottom,
+    right: view.visualViewport.width - rect.right,
+    bottom: view.visualViewport.height - rect.bottom,
   };
   const shown = element.isConnected && rect.width > 0 && rect.height > 0
     && isElementVisible(element, view);

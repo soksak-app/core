@@ -28,6 +28,7 @@ function fixture() {
   window.cancelAnimationFrame = () => { frameCallback = null; };
   Object.defineProperty(window, "innerWidth", { value: 800, configurable: true });
   Object.defineProperty(window, "innerHeight", { value: 600, configurable: true });
+  window.visualViewport = { get width() { return window.innerWidth; }, get height() { return window.innerHeight; } };
   const rects = new Map();
   const element = (id, rect) => {
     const node = window.document.getElementById(id);
@@ -95,6 +96,28 @@ function runtime({ documentAttach, imageAttach, place } = {}) {
     placements,
   };
 }
+
+test("DOM composition does not declare or place a native surface", async () => {
+  const { window } = new JSDOM("<body><main></main></body>", { url: "https://example.test/" });
+  const calls = [];
+  const composition = await createSurfaceCompositionController(
+    {
+      composition: {
+        declare: () => { calls.push("declare"); return Promise.resolve(); },
+        place: () => { calls.push("place"); return Promise.resolve(); },
+      },
+      surfaces: { report: () => {} },
+    },
+    { kind: "dom" },
+    { regions: {}, overlays: {} },
+    window,
+    window.document.querySelector("main"),
+  );
+  await composition.update(() => {});
+  await composition.dispose();
+  assert.deepEqual(calls, []);
+  window.close();
+});
 
 const declaration = {
   kind: "hybrid",
@@ -312,4 +335,55 @@ test("declaration keys and document ownership are validated before attachment", 
   }, f.window), /overlays and native anchors cannot contain each other/);
   assert.deepEqual(r.documentCalls, []);
   assert.deepEqual(r.imageCalls, []);
+});
+
+test("a shadow-root composition scopes the marker and measures from its viewport host", async () => {
+  const { window } = new JSDOM("<body><main id=outside></main></body>", { url: "https://example.test/" });
+  const plane = window.document.createElement("main");
+  plane.className = "plane";
+  const card = window.document.createElement("article");
+  const slot = window.document.createElement("div");
+  const host = window.document.createElement("section");
+  host.id = "surface-host";
+  window.document.body.append(plane);
+  plane.append(card);
+  card.append(slot);
+  slot.append(host);
+  const shadow = host.attachShadow({ mode: "open" });
+  const page = window.document.createElement("div");
+  const overlay = window.document.createElement("button");
+  shadow.append(page, overlay);
+  const observed = [];
+  window.ResizeObserver = class {
+    constructor() {}
+    observe(element) { observed.push(element); }
+    disconnect() {}
+  };
+  window.requestAnimationFrame = () => 1;
+  window.cancelAnimationFrame = () => {};
+  Object.defineProperty(window, "innerWidth", { value: 800, configurable: true });
+  Object.defineProperty(window, "innerHeight", { value: 600, configurable: true });
+  window.visualViewport = { get width() { return window.innerWidth; }, get height() { return window.innerHeight; } };
+  slot.getBoundingClientRect = () => ({ left: 100, top: 50, right: 500, bottom: 350, width: 400, height: 300 });
+  host.getBoundingClientRect = () => slot.getBoundingClientRect();
+  page.getBoundingClientRect = () => ({ left: 110, top: 70, right: 410, bottom: 170, width: 300, height: 100 });
+  overlay.getBoundingClientRect = () => ({ left: 120, top: 80, right: 180, bottom: 100, width: 60, height: 20 });
+  const r = runtime();
+  const composition = await createSurfaceCompositionController(r.page, {
+    kind: "hybrid",
+    regions: [{ name: "page", kind: "document", input: "native" }],
+    overlays: ["overlay"],
+  }, { regions: { page }, overlays: { overlay } }, window, slot);
+
+  assert.equal(window.document.documentElement.dataset.surfaceComposition, undefined);
+  assert.equal(slot.dataset.surfaceComposition, "hybrid");
+  assert.equal(window.document.body.style.getPropertyValue("background-color"), "");
+  assert.deepEqual(r.placements[0].regions, [{ name: "page", left: 10, top: 20, right: 90, bottom: 180, visible: true }]);
+  assert.deepEqual(r.placements[0].overlays, [{ name: "overlay", left: 20, top: 30, right: 320, bottom: 250, visible: true }]);
+  assert(observed.includes(slot), "the surface slot is observed for size changes");
+  assert.equal(host.style.getPropertyValue("background-color"), "transparent");
+  assert.equal(host.style.getPropertyPriority("background-color"), "important");
+  assert.equal(card.style.getPropertyValue("background-color"), "transparent");
+  assert.equal(plane.style.getPropertyValue("background-color"), "transparent");
+  await composition.update(() => {});
 });

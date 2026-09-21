@@ -24,7 +24,7 @@ function restoreDataset(root, previous) {
 
 let paintBoundaryId = 0;
 
-function installHybridPaintBoundary(regionElements, overlayElements, view) {
+function installHybridPaintBoundary(regionElements, overlayElements, view, viewport = null) {
   for (const region of regionElements) {
     for (const overlay of overlayElements) {
       if (region.contains(overlay) || overlay.contains(region)) {
@@ -64,6 +64,16 @@ function installHybridPaintBoundary(regionElements, overlayElements, view) {
   const ancestors = new Set();
   for (const region of regionElements) {
     for (let node = region.parentElement; node; node = node.parentElement) ancestors.add(node);
+    const root = region.getRootNode?.();
+    if (root?.host) ancestors.add(root.host);
+  }
+  if (viewport) {
+    for (let node = viewport; node; node = node.parentElement) {
+      ancestors.add(node);
+      // The plane is the explicit app-DOM paint boundary. Its ancestors paint
+      // the window background and must not be made transparent globally.
+      if (node.classList?.contains("plane")) break;
+    }
   }
   const enforce = () => {
     for (const region of regionElements) {
@@ -83,18 +93,25 @@ function installHybridPaintBoundary(regionElements, overlayElements, view) {
     }
   };
   enforce();
-  const observer = new view.MutationObserver(enforce);
-  observer.observe(view.document.documentElement, {
+  const observers = [];
+  const observe = (target) => {
+    if (!target) return;
+    const observer = new view.MutationObserver(enforce);
+    observer.observe(target, {
     attributes: true,
     attributeFilter: [
       "style", "data-soksak-native-anchor", "data-soksak-native-ancestor",
     ],
     subtree: true,
-  });
+    });
+    observers.push(observer);
+  };
+  observe(regionElements[0]?.getRootNode?.() ?? view.document.documentElement);
+  if (viewport) observe(viewport);
   return {
     enforce,
     restore() {
-      observer.disconnect();
+      for (const observer of observers) observer.disconnect();
       for (const [element, saved] of properties) {
         for (const [name, previous] of saved) {
           if (previous.value === "") element.style.removeProperty(name);
@@ -120,6 +137,7 @@ export async function createSurfaceCompositionController(
   declaration,
   { regions = {}, overlays = {} } = {},
   view = window,
+  viewport = null,
 ) {
   if (!declaration) throw new Error("this page has no surface composition declaration");
   const declaredRegions = declaration.kind === "hybrid" ? declaration.regions : [];
@@ -130,7 +148,28 @@ export async function createSurfaceCompositionController(
     inThisDocument(element, name, view);
   }
 
-  const root = view.document.documentElement;
+  // A DOM surface has no native plane to declare or place. Calling the host
+  // composition API here creates a lifecycle race: the DOM module can be
+  // mounted before the first native surface sync and can continue publishing
+  // frames after its surface is removed. Hybrid surfaces use the controller
+  // below; DOM surfaces only need a lifecycle handle for their module.
+  if (declaration.kind === "dom") {
+    let active = true;
+    return Object.freeze({
+      kind: "dom",
+      update(change) {
+        if (typeof change !== "function") return Promise.reject(new Error("composition.update requires a function"));
+        if (!active) return Promise.reject(new Error("surface composition is inactive"));
+        change();
+        return Promise.resolve();
+      },
+      dispose() { active = false; return Promise.resolve(); },
+    });
+  }
+
+  const viewportOf = () => typeof viewport === "function" ? viewport() : viewport;
+  const compositionRoot = viewportOf() ?? view.document.documentElement;
+  const root = compositionRoot;
   const previousComposition = root.dataset.surfaceComposition;
   root.dataset.surfaceComposition = declaration.kind;
   let paintBoundary = null;
@@ -146,7 +185,8 @@ export async function createSurfaceCompositionController(
     console.error(message);
   };
 
-  const detachAll = async () => {
+  let cleanupPromise = null;
+  const detachAll = () => cleanupPromise ??= (async () => {
     active = false;
     observer?.disconnect();
     if (changed) {
@@ -155,14 +195,17 @@ export async function createSurfaceCompositionController(
     }
     if (frame !== null) view.cancelAnimationFrame(frame);
     if (resizeFrame !== null) view.cancelAnimationFrame(resizeFrame);
-    await Promise.allSettled([...internal.values()].map(({ handle }) => handle.detach()));
+    const results = await Promise.allSettled([...internal.values()].map(({ handle }) => handle.detach()));
     paintBoundary?.restore();
     restoreDataset(root, previousComposition);
-  };
+    const failures = results.filter((result) => result.status === "rejected");
+    for (const failure of failures) runtimePage.surfaces.report(`surface composition cleanup failed: ${failure.reason?.message ?? failure.reason}`);
+    if (failures.length) throw new AggregateError(failures.map(({ reason }) => reason), "surface composition cleanup failed");
+  })();
 
   try {
     if (declaration.kind === "hybrid") {
-      paintBoundary = installHybridPaintBoundary(Object.values(regions), Object.values(overlays), view);
+      paintBoundary = installHybridPaintBoundary(Object.values(regions), Object.values(overlays), view, viewportOf());
     }
     for (const declared of declaredRegions) {
       const element = regions[declared.name];
@@ -181,7 +224,20 @@ export async function createSurfaceCompositionController(
     let acceptedGeometry = null;
     let pendingGeometry = null;
     const measured = (name, element) => {
-      const { insets, visible } = regionInsets(element, view);
+      const { insets: viewportInsets, visible } = regionInsets(element, view);
+      const currentViewport = viewportOf();
+      const insets = currentViewport
+        ? (() => {
+            const region = element.getBoundingClientRect();
+            const rootRect = currentViewport.getBoundingClientRect();
+            return {
+            left: region.left - rootRect.left,
+            top: region.top - rootRect.top,
+            right: rootRect.right - region.right,
+            bottom: rootRect.bottom - region.bottom,
+          };
+        })()
+        : viewportInsets;
       return { name, ...insets, visible };
     };
     const snapshot = () => {
@@ -226,6 +282,11 @@ export async function createSurfaceCompositionController(
           observer.observe(node);
         }
       }
+    }
+    const initialViewport = viewportOf();
+    if (initialViewport && !observed.has(initialViewport)) {
+      observed.add(initialViewport);
+      observer.observe(initialViewport);
     }
     changed = () => {
       if (resizeFrame !== null) return;
@@ -275,9 +336,14 @@ export async function createSurfaceCompositionController(
         }
         return place(true);
       },
+      dispose: detachAll,
     });
   } catch (error) {
-    await detachAll();
+    try {
+      await detachAll();
+    } catch (cleanupError) {
+      runtimePage.surfaces.report(`surface composition cleanup failed: ${cleanupError.message}`);
+    }
     throw error;
   }
 }

@@ -14,7 +14,10 @@ import { createBinder } from "./binder.js";
 export { INTERACTIVE, commandOf, createBinder, valueOf } from "./binder.js";
 export { DOCUMENT_ACTIONS, DOCUMENT_NAME, observeRegionInsets, regionInsets } from "./document-region.js";
 export { IMAGE_NAME } from "./image-region.js";
+export { createSurfaceContext, mountSurfaceModule, releaseSurfaceReady } from "./surface.js";
+export { createSurfaceCompositionController } from "./surface-composition.js";
 export { orderedSidecar } from "./sidecar-port.js";
+export { CLIPBOARD_TYPES, ClipboardError, createClipboardBridge, shellQuotePath } from "./clipboard.js";
 
 export const ENVIRONMENT = "environment.json";
 export const MANIFEST = "plugin.json";
@@ -114,6 +117,17 @@ function checkComposition(where, composition, sidecars) {
   }
 }
 
+function checkBackground(where, background, sidecars) {
+  if (!isObject(background)) throw new Error(`${where}: background must be an object`);
+  only(`${where} background`, background, ["sidecar", "operation"]);
+  if (typeof background.sidecar !== "string" || !sidecars.includes(background.sidecar)) {
+    throw new Error(`${where} background: sidecar must be declared by the plugin`);
+  }
+  if (typeof background.operation !== "string" || background.operation.length === 0) {
+    throw new Error(`${where} background: operation must be a non-empty string`);
+  }
+}
+
 /**
  * plugin.json 하나를 검사한다. 형식이 틀리면 예외를 던지고, 맞으면 받은 값을 반환한다.
  *
@@ -130,7 +144,7 @@ function checkComposition(where, composition, sidecars) {
  */
 export function validateManifest(manifest) {
   if (!isObject(manifest)) throw new Error("plugin.json: expected an object");
-  only("plugin.json", manifest, ["id", "name", "mark", "icon", "surface", "home", "sections", "preview", "sidecars", "exposes"]);
+  only("plugin.json", manifest, ["id", "name", "mark", "icon", "surface", "home", "sections", "preview", "sidecars", "background", "exposes"]);
   const { id } = manifest;
   if (typeof id !== "string" || !ID.test(id)) throw new Error(`plugin.json: invalid id ${id}`);
   const where = `plugin ${id}`;
@@ -139,13 +153,17 @@ export function validateManifest(manifest) {
     if (manifest.surface === undefined) throw new Error(`${where}: sidecars require a surface`);
     checkSidecars(`${where} sidecars`, manifest.sidecars);
   }
+  if (manifest.background !== undefined) {
+    if (manifest.surface === undefined) throw new Error(`${where}: background requires a surface`);
+    checkBackground(`${where}`, manifest.background, manifest.sidecars ?? []);
+  }
   if (manifest.surface !== undefined) {
     const surface = manifest.surface;
     if (!isObject(surface)) throw new Error(`${where}: surface must be an object`);
-    only(`${where} surface`, surface, ["page", "composition"]);
-    if (!isText(surface.page)) throw new Error(`${where}: surface requires a page`);
-    if (surface.page.startsWith("/") || surface.page.split("/").includes("..")) {
-      throw new Error(`${where}: surface page must be a path inside the package`);
+    only(`${where} surface`, surface, ["module", "composition"]);
+    if (!isText(surface.module)) throw new Error(`${where}: surface requires a module`);
+    if (surface.module.startsWith("/") || surface.module.split("/").includes("..") || !surface.module.endsWith(".js")) {
+      throw new Error(`${where}: surface module must be a JavaScript path inside the package`);
     }
     if (surface.composition === undefined) throw new Error(`${where}: surface requires a composition`);
     checkComposition(`${where} surface`, surface.composition, manifest.sidecars ?? []);
@@ -200,12 +218,15 @@ export function validateManifest(manifest) {
  */
 export function validateSidecar(sidecar) {
   if (!isObject(sidecar)) throw new Error("sidecar.json: expected an object");
-  only("sidecar.json", sidecar, ["executable", "protocol", "helpers"]);
+  only("sidecar.json", sidecar, ["executable", "protocol", "helpers", "transport"]);
   const { executable } = sidecar;
   if (!isText(executable) || executable.startsWith("/") || executable.split("/").includes("..")) {
     throw new Error("sidecar.json: executable must be a path inside the package");
   }
   if (sidecar.protocol !== 1) throw new Error("sidecar.json: protocol must be 1");
+  if (sidecar.transport !== undefined && sidecar.transport !== "persistent") {
+    throw new Error("sidecar.json: transport must be persistent");
+  }
   if (sidecar.helpers !== undefined) {
     if (!Array.isArray(sidecar.helpers)) throw new Error("sidecar.json: helpers must be an array");
     // 호스트는 실행 파일을 파일 이름으로 찾으므로 한 사이드카가 같은 이름을 두 번 요구할 수 없다.
@@ -697,8 +718,8 @@ export async function replyPayload(work) {
 /**
  * 표면 페이지의 공개 항목 등록.
  *
- * port 는 런타임의 page.exposure 이고 load 는 선언 Map 을 반환하는 함수다. 선언은 첫
- * 등록에서 한 번 읽는다. 등록은 선언을 읽은 뒤 이루어지고,
+ * port 는 런타임의 page.exposure 이고 load 는 manifest 형식의 선언 묶음 또는 선언 Map 을
+ * 반환하는 함수다. 선언은 첫 등록에서 한 번 읽는다. 등록은 선언을 읽은 뒤 이루어지고,
  * 선언되지 않은 이름이면 반환한 promise 가 거절된다. 메인 페이지가 전달한 요청에는
  * 이 문서에 등록된 항목으로 답한다.
  *
@@ -710,7 +731,10 @@ export function createExpose(port, load) {
   let entries = null;
   let loaded = null;
   const ready = () => {
-    entries ??= Promise.resolve().then(load).then(async (declared) => {
+    entries ??= Promise.resolve().then(load).then(async (declarations) => {
+      // Manifest files carry grouped arrays; the request path needs the canonical
+      // declaration map used by the registry and exposureEntries.
+      const declared = declarations instanceof Map ? declarations : declarationMap(declarations);
       const made = exposureEntries(declared);
       loaded = made;
       await port.onRequest(({ id, method, params }) => {
@@ -758,5 +782,11 @@ export function createExpose(port, load) {
       e.dom(name, () => [element]);
       element.dataset.expose = name;
     }),
+    dispose: async () => {
+      binder.dispose();
+      loaded?.clear();
+      registered.clear();
+      await port.unregister?.();
+    },
   };
 }

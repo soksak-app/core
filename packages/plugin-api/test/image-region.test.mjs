@@ -19,6 +19,7 @@ function fixture() {
   };
   Object.defineProperty(window, "innerWidth", { value: 800, configurable: true });
   Object.defineProperty(window, "innerHeight", { value: 600, configurable: true });
+  window.visualViewport = { get width() { return window.innerWidth; }, get height() { return window.innerHeight; } };
   const element = window.document.getElementById("region");
   let rect = { left: 10, top: 40, right: 510, bottom: 440, width: 500, height: 400 };
   element.getBoundingClientRect = () => rect;
