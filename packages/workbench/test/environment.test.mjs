@@ -47,7 +47,7 @@ test("the environment registers card plugins, sections, and sidebar defaults", a
   ]);
   assert.deepEqual(registry.plugins().map((p) => p.id), ["card"], "a plugin without a surface is not a card plugin");
   assert.deepEqual(registry.plugin("card").surface("tab 1"),
-    { module: "/modules/@fixture/card/ui/card.js", composition: { kind: "dom" }, surfaceId: "tab 1", pluginId: "card", home: null, declarations: {} });
+    { module: "/modules/@fixture/card/ui/card.js", composition: { kind: "dom" }, surfaceId: "tab 1", pluginId: "card", home: null, declarations: {}, sidecars: [] });
   assert.equal(registry.plugin("card").ink, "--fixture-ink");
   assert.equal(registry.section("side.list").name, "List");
   assert.equal(registry.section("card.info").name, "Info");
