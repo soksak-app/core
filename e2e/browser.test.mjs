@@ -228,4 +228,32 @@ for (const app of Object.values(APPS)) {
     assert.ok(nearColour(restoredPixel, DARK_DOCUMENT),
       `reloaded document did not retain the dark host theme: ${JSON.stringify(restoredPixel)}`);
   });
+
+  test(`${app.name}: Google site appearance remains independent of host theme`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const [browser] = await browsers(s);
+    const surface = browser.surface;
+    const google = "https://www.google.com/";
+    await s.run("browser.navigate", { url: google }, surface);
+    const location = await s.until("browser.location", (value) =>
+      /^https:\/\/(www\.)?google\.[^/]+\//i.test(value.url) && !value.loading && value.error === null && value.title !== "",
+    "Google did not load a successful document", { surface });
+    assert.match(location.url, /^https:\/\/(www\.)?google\.[^/]+\//i);
+    await placed(s, surface, "Google document");
+    await s.run("core.settings.set", { patch: { mode: "light" } });
+    await s.until("core.settings", (value) => value.values.mode === "light" && !value.saving,
+      "host did not settle light theme for Google");
+    const light = await documentPixel(t, s, surface);
+    await s.run("core.settings.set", { patch: { mode: "dark" } });
+    await s.until("core.settings", (value) => value.values.mode === "dark" && !value.saving,
+      "host did not settle dark theme for Google");
+    const dark = await documentPixel(t, s, surface);
+    assert.deepEqual(light, [255, 255, 255], `Google site preference was not light in the disposable profile: ${JSON.stringify(light)}`);
+    assert.deepEqual(dark, light,
+      `Google's site preference was overwritten by the host theme: ${JSON.stringify({ light, dark })}`);
+    assert.equal((await s.get("browser.location", surface)).url, location.url,
+      "host theme change must not change Google's site location");
+  });
 }
