@@ -328,6 +328,13 @@ const FEATURE_LINKS = [
     levels: ["native"],
   },
   {
+    id: "F2.2-1",
+    implementation: [{ file: "e2e/normal-shutdown.mjs", symbol: "command.run" }],
+    tests: [{ file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" }],
+    expected: "A declared command.run host.quit request returns null and removes the application PID and endpoint within the bounded case limit.",
+    levels: ["application"],
+  },
+  {
     id: "G1.1",
     implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "discoverInventory" }],
     tests: [{ file: "scripts/test/test-parity.test.mjs", id: "discovery includes nested languages" }],
