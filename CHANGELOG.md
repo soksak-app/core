@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Complete the feature-evidence audit for every completed capability. The parity checker now rejects a completed checklist capability without an implementation entry point, named behavior test, expected result, and verification level; the aggregate review record is explicitly excluded. The 39-link audit, 14 audit self-tests, workspace tests, boundary, exposure, and documentation checks pass.
 - Browser document webviews now receive explicit host dark/light appearance updates in both native hosts. The F3 application pixel and restore/new-document checks remain open.
 - Fix native document visibility after restoring a surface: the host is made visible before document geometry is reapplied. The current Tauri browser E2E previously observed the correct frame with `visible:false`; the native regression and rebuilt browser navigation/input/scroll/placement/isolation check now pass. F3 controlled-site pixel and restore/new-document checks remain open.
 - Apply the current host theme when creating a native document and persist each browser surface's explicit HTTP(S) location. Rebuilt Tauri and Wails browser E2E pass controlled-site light/dark pixel checks for existing, new, and reloaded documents; invalid stored locations fail explicitly.

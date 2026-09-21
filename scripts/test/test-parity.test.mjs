@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { auditFeatureLinks, auditInventory, discoverInventory, repositoryFiles } from "../check-test-parity.mjs";
+import { auditCompletedFeatureLinks, auditFeatureLinks, auditInventory, discoverInventory, repositoryFiles } from "../check-test-parity.mjs";
 
 const files = repositoryFiles();
 
@@ -83,4 +83,10 @@ test("feature links reject missing evidence fields and workspace files", { timeo
   assert.ok(errors.some((error) => error.includes("missing.test.mjs")));
   assert.ok(errors.some((error) => error.includes("implementation symbol is not present")));
   assert.ok(errors.some((error) => error.includes("behavior test id is not present")));
+});
+
+test("completed capability entries all have feature evidence links", { timeout: 1000 }, () => {
+  const inventory = auditInventory(files);
+  assert.deepEqual(auditCompletedFeatureLinks(inventory.featureLinks), []);
+  assert.ok(!inventory.featureLinks.some((feature) => feature.id === "G1.4-2"));
 });

@@ -138,6 +138,36 @@ const MATRIX = [
 // The inventory remains structural; behavior is proved by the referenced tests.
 const FEATURE_LINKS = [
   {
+    id: "F2",
+    implementation: [{ file: "sidecars/vt-core/src/platform/darwin/service.rs", symbol: "serve_persistent" }],
+    tests: [{ file: "e2e/terminal-processes.test.mjs", id: "process measurement preserves identities" }],
+    expected: "The shared terminal service, per-session PTYs, normal shutdown, and application-process recovery preserve declared ownership and session identity.",
+    levels: ["native", "application"],
+  },
+  {
+    id: "F2.12",
+    implementation: [
+      { file: "sidecars/vt-core/src/platform/darwin/service.rs", symbol: "serve_persistent" },
+      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "service_process_exists" },
+    ],
+    tests: [
+      { file: "scripts/verify-vt-recovery.mjs", id: "application_process_restarted" },
+      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "persistent_transport_replaces_endpoint_left_by_a_dead_service" },
+    ],
+    expected: "Application-process loss reconnects to a surviving service, while service failure remains an explicit failure or declared replacement and never becomes a new shell.",
+    levels: ["native", "application"],
+  },
+  {
+    id: "F3",
+    implementation: [{ file: "plugins/browser/ui/browser.js", symbol: "mount" }],
+    tests: [
+      { file: "e2e/browser.test.mjs", id: "browser documents follow host theme pixels for existing, new, and reloaded documents" },
+      { file: "e2e/browser.test.mjs", id: "Google site appearance remains independent of host theme" },
+    ],
+    expected: "Restored and new browser documents follow the host appearance contract while explicit Google site preferences remain isolated from host theme changes.",
+    levels: ["native", "application"],
+  },
+  {
     id: "F0.1",
     implementation: [
       { file: "native/darwin/src/input_inject.m", symbol: "sp_input_pointer" },
@@ -672,10 +702,23 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
   return errors;
 }
 
+// Aggregate review records are not capabilities and therefore do not need a
+// behavior link. Every completed capability must have one otherwise.
+const NON_CAPABILITY_COMPLETIONS = new Set(["G1.4-2"]);
+
+export function auditCompletedFeatureLinks(features, checklistSource = readFileSync(`${ROOT}docs/features.md`, "utf8")) {
+  const linked = new Set(features.map((feature) => feature.id));
+  const completed = [...checklistSource.matchAll(/^- \[o\] ([A-Z][A-Z0-9.-]*) —/gm)].map((match) => match[1]);
+  return completed
+    .filter((id) => !NON_CAPABILITY_COMPLETIONS.has(id) && !linked.has(id))
+    .map((id) => `${id}: completed capability has no feature link`);
+}
+
 export { MATRIX, repositoryFiles };
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
   const { errors, warnings, uncoveredImplementations, uncoveredTests, featureErrors, featureLinks, trackCount, implementationCount, testCount } = auditInventory(repositoryFiles());
+  errors.push(...auditCompletedFeatureLinks(featureLinks));
   if (errors.length) {
     console.error(`Test inventory checks failed: ${errors.length} issue(s); ` +
       `${uncoveredImplementations.length} uncovered implementation(s), ${uncoveredTests.length} uncovered test(s), ` +
