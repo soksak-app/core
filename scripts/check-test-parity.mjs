@@ -413,6 +413,69 @@ const FEATURE_LINKS = [
     expected: "Google's explicit light site preference remains unchanged when the host switches light to dark, and its URL remains unchanged.",
     levels: ["application"],
   },
+  {
+    id: "F3.1",
+    implementation: [
+      { file: "native/darwin/src/document_view.m", symbol: "sp_document_appearance" },
+      { file: "packages/host/tauriv2/src/theme.rs", symbol: "set" },
+      { file: "packages/host/wailsv3/src/theme.go", symbol: "SetTheme" },
+    ],
+    tests: [{ file: "native/darwin/tests/document_view_test.m", id: "the document renderer follows the owner's light appearance change" }],
+    expected: "Existing native browser documents follow explicit host dark/light appearance changes on both hosts.",
+    levels: ["native", "application"],
+  },
+  {
+    id: "F3.2",
+    implementation: [
+      { file: "packages/host/tauriv2/src/windows.rs", symbol: "reload_surface_documents" },
+      { file: "packages/host/wailsv3/src/windows.go", symbol: "reloadSurfaceDocuments" },
+    ],
+    tests: [{ file: "packages/host/tauriv2/tests/documents_test.rs", id: "documents_reserve_names_and_close_with_their_surface" }],
+    expected: "Restoring a native surface makes its document visible only after the authoritative surface host is ready.",
+    levels: ["unit", "native", "application"],
+  },
+  {
+    id: "F1.2",
+    implementation: [{ file: "e2e/terminal.test.mjs", symbol: "ensureTerminals" }],
+    tests: [{ file: "e2e/terminal.test.mjs", id: "three terminals survive repeated divider drags and project returns" }],
+    expected: "Three terminals retain sessions and presented native regions through repeated divider moves and project returns.",
+    levels: ["application"],
+  },
+  {
+    id: "F1.3-1",
+    implementation: [{ file: "e2e/terminal.test.mjs", symbol: "roundTripsPerSet" }],
+    tests: [{ file: "e2e/terminal.test.mjs", id: "three terminals survive repeated divider drags and project returns" }],
+    expected: "Rapid divider acceptance preserves complete draw transactions, native containment, text, and the declared return matrix.",
+    levels: ["application"],
+  },
+  {
+    id: "G4.1-1",
+    implementation: [{ file: "e2e/normal-shutdown.mjs", symbol: "normal-shutdown" }],
+    tests: [{ file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" }],
+    expected: "Normal shutdown reports bounded process and endpoint disappearance with event-driven progress and no fixed sleep success path.",
+    levels: ["application"],
+  },
+  {
+    id: "G1.4",
+    implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "implementationOwners" }],
+    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "inventory reports uncovered implementations and tests as separate results" }],
+    expected: "Every discovered implementation and test file has one explicit ownership lane, with duplicate and uncovered ownership rejected.",
+    levels: ["unit"],
+  },
+  {
+    id: "F10.1",
+    implementation: [{ file: "packages/host/tauriv2/src/modals.rs", symbol: "pub(crate) fn show" }],
+    tests: [{ file: "e2e/modal.test.mjs", id: "settings blocks background input and closes only through its close button" }],
+    expected: "Tauri picker and settings modals preserve transparent picker paint, semi-transparent settings coverage, input blocking, focus, resize, and cleanup.",
+    levels: ["application"],
+  },
+  {
+    id: "F10.2",
+    implementation: [{ file: "packages/host/wailsv3/src/modals.go", symbol: "OverlayShow" }],
+    tests: [{ file: "e2e/modal.test.mjs", id: "add and split menus are transparent and have no backdrop" }],
+    expected: "Wails uses the same hidden transparent child-webview modal contract and reports ready, focus, coverage, resize, and cleanup.",
+    levels: ["application"],
+  },
 ];
 
 // 생성 산출물은 원본과의 일치 검사 대상이며 독립 구현으로 세지 않는다.
