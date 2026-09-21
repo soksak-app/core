@@ -13,6 +13,7 @@ use std::sync::atomic::Ordering;
 use tauri::Manager;
 
 mod bindings;
+pub mod clipboard;
 mod composition;
 #[cfg(feature = "diagnostics")]
 mod diagnostics;
@@ -22,13 +23,14 @@ pub mod exposure;
 pub mod images;
 mod modals;
 #[path = "platform/platform.rs"]
-mod platform;
+pub mod platform;
 pub mod projects;
 #[cfg(feature = "diagnostics")]
 pub mod recording;
 mod shapes;
 pub mod sidecars;
 mod surfaces;
+pub use surfaces::surface_owner_id;
 pub mod termination;
 mod theme;
 mod windows;
@@ -64,7 +66,7 @@ fn flag(name: &str) -> Option<String> {
 }
 
 /// 설정 디렉터리. `--config-dir` 가 없으면 애플리케이션 설정 디렉터리이다.
-fn config_directory(app: &tauri::AppHandle) -> tauri::Result<std::path::PathBuf> {
+pub(crate) fn config_directory(app: &tauri::AppHandle) -> tauri::Result<std::path::PathBuf> {
     match flag("config-dir") {
         Some(directory) => Ok(directory.into()),
         None => app.path().app_config_dir(),
@@ -76,7 +78,7 @@ fn config_directory(app: &tauri::AppHandle) -> tauri::Result<std::path::PathBuf>
 /// context 는 애플리케이션의 `tauri::generate_context!()` 이다. background 는 표면 웹뷰가
 /// 문서보다 먼저 실행하는 스크립트이며, 애플리케이션이 프론트엔드의 `background.js` 를
 /// 포함해 전달한다.
-pub fn run(context: tauri::Context<tauri::Wry>, background: &'static str) {
+pub fn run(context: tauri::Context<tauri::Wry>, _background: &'static str) {
     // 창 확대 애니메이션은 창 프레임만 움직이고 웹 문서는 그 뒤에 따라온다. AppKit 이 기본값을
     // 읽기 전에 그 길이를 줄인다.
     if let Ok(platform) = platform::current() {
@@ -99,7 +101,7 @@ pub fn run(context: tauri::Context<tauri::Wry>, background: &'static str) {
         .manage(windows::Windows::default())
         .manage(exposure::Exposure::default())
         .plugin(endpoint)
-        .manage(surfaces::Background(background))
+        .manage(surfaces::Background)
         .on_page_load(|view, payload| {
             if payload.event() != tauri::webview::PageLoadEvent::Started {
                 return;
@@ -108,30 +110,10 @@ pub fn run(context: tauri::Context<tauri::Wry>, background: &'static str) {
             let Ok(context) = windows::window_data(&window) else {
                 return;
             };
-            let surface = format!("surface-{}-", window.label());
-            if let Some(id) = view.label().strip_prefix(&surface) {
-                documents::close_surface(&window, id);
-                images::close_surface(&window, id);
-                if let Ok(mut revisions) = context.composition_revisions.lock() {
-                    revisions.remove(id);
-                }
-                context.images.begin_generation(id);
-                exposure::surface_closed(&window, id);
-            }
-            if view.label().starts_with("surface-") {
-                let enabled = context.overlay.dialog();
-                if let Err(error) = view.eval(format!("window.__soksakBackground = {enabled}")) {
-                    eprintln!("{error}");
-                }
-            }
             if view.label() == window.label() {
                 context.ready.store(false, Ordering::Relaxed);
                 exposure::page_reloaded(&window);
-                if let Ok(owner) = windows::native_owner(&window) {
-                    if let Ok(platform) = platform::current() {
-                        log_error(platform.cancel_layout(owner));
-                    }
-                }
+                log_error(windows::reload_surface_documents(&window));
                 log_error(context.overlay.discard());
             }
         })
@@ -160,7 +142,7 @@ pub fn run(context: tauri::Context<tauri::Wry>, background: &'static str) {
             )?)?;
             app.set_menu(menu)?;
             let directory = config_directory(app.handle())?;
-            app.manage(workspace::Workspace::new(directory));
+            app.manage(workspace::Workspace::new(directory.clone()));
             let executable = std::env::current_exe()?;
             let sidecar_directory = executable
                 .parent()
@@ -168,7 +150,7 @@ pub fn run(context: tauri::Context<tauri::Wry>, background: &'static str) {
                 .to_path_buf();
             let resolver = app.asset_resolver();
             let read = |path: &str| resolver.get(path.into()).map(|asset| asset.bytes);
-            let sidecars = WindowSidecars::new(&read, sidecar_directory)?;
+            let sidecars = WindowSidecars::new(&read, sidecar_directory, directory)?;
             app.manage(sidecars);
             if let Some(window) = app.get_webview_window("main") {
                 windows::register(window.as_ref().window())?;

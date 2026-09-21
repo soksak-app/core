@@ -32,6 +32,7 @@ extern "C" {
         height: f64,
         scale: f64,
     ) -> bool;
+    fn sp_region_last_error(region: *mut c_void) -> *mut c_char;
     fn sp_region_focus(region: *mut c_void);
     fn sp_region_caret(region: *mut c_void, x: f64, y: f64, w: f64, h: f64);
     fn sp_region_text(region: *mut c_void, utf8: *const c_char);
@@ -113,8 +114,8 @@ pub fn present(
     width: f64,
     height: f64,
     scale: f64,
-) -> bool {
-    unsafe {
+) -> Result<bool, String> {
+    let accepted = unsafe {
         sp_region_present(
             image as *mut c_void,
             token_id,
@@ -123,6 +124,22 @@ pub fn present(
             height,
             scale,
         )
+    };
+    if accepted {
+        return Ok(true);
+    }
+    let pointer = unsafe { sp_region_last_error(image as *mut c_void) };
+    if pointer.is_null() {
+        return Err("image presentation rejected without a native reason".into());
+    }
+    let reason = unsafe { CStr::from_ptr(pointer) }
+        .to_str()
+        .map_err(|error| error.to_string())
+        .map(str::to_owned);
+    unsafe { free(pointer as *mut c_void) };
+    match reason {
+        Ok(value) => Err(value),
+        Err(error) => Err(error),
     }
 }
 

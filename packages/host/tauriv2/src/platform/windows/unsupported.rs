@@ -8,7 +8,7 @@ use tauri::Window;
 
 use super::super::{
     Connection, DOMOverlay, Delivery, Frame, Handle, Hit, Insets, Key, Listener, Pointer, Raster,
-    WindowBuilder,
+    WindowBuilder, WindowOverlay,
 };
 
 /// operation 을 이름에 포함한 오류를 반환한다.
@@ -23,6 +23,12 @@ pub fn prepare_window<'a>(_builder: WindowBuilder<'a>) -> Result<WindowBuilder<'
 pub fn window_handle(_window: &Window) -> Result<Handle, String> {
     missing("native window handle")
 }
+pub fn set_main_webview(_window: Handle, _main: Handle) -> Result<(), String> {
+    missing("main webview identity")
+}
+pub fn set_main_appearance(_view: &PlatformWebview, _dark: bool) -> Result<(), String> {
+    missing("main webview appearance")
+}
 
 pub fn fullscreen(_window: Handle, _on: bool, _done: Box<dyn Fn()>) -> Result<(), String> {
     missing("full screen")
@@ -34,6 +40,16 @@ pub fn unified_titlebar(_window: Handle) -> Result<f64, String> {
 
 pub fn window_controls(_window: Handle) -> Result<Frame, String> {
     missing("window button area")
+}
+
+pub fn clipboard_read(_kind: &str) -> Result<super::ClipboardValue, String> {
+    missing("clipboard read")
+}
+pub fn clipboard_write_text(_text: &str) -> Result<(), String> {
+    missing("clipboard text write")
+}
+pub fn clipboard_write_png(_bytes: &[u8]) -> Result<(), String> {
+    missing("clipboard PNG write")
 }
 
 #[cfg(feature = "diagnostics")]
@@ -57,6 +73,27 @@ pub fn place_webview(
 
 pub fn webview_frame(_view: &PlatformWebview) -> Result<[f64; 4], String> {
     missing("webview frame")
+}
+pub fn create_surface(_main: Handle) -> Result<Handle, String> {
+    Err("surface hosts are not implemented on windows".into())
+}
+pub fn close_surface(_surface: Handle) -> Result<(), String> {
+    Err("surface hosts are not implemented on windows".into())
+}
+pub fn place_surface(_surface: Handle, _x: f64, _y: f64, _w: f64, _h: f64) -> Result<(), String> {
+    Err("surface hosts are not implemented on windows".into())
+}
+pub fn surface_frame(_surface: Handle) -> Result<[f64; 4], String> {
+    Err("surface hosts are not implemented on windows".into())
+}
+pub fn set_surface_hidden_handle(_surface: Handle, _hidden: bool) -> Result<(), String> {
+    missing("surface visibility")
+}
+pub fn set_surface_alpha_handle(_surface: Handle, _alpha: f64) -> Result<(), String> {
+    missing("surface opacity")
+}
+pub fn set_window_overlays(_main: Handle, _overlays: &[WindowOverlay]) -> Result<(), String> {
+    missing("window DOM overlays")
 }
 
 pub fn attach_surface(_view: &PlatformWebview, _main: Handle) -> Result<(), String> {
@@ -103,6 +140,13 @@ pub fn create_document(
     missing("document view")
 }
 
+pub fn set_document_event(
+    _document: Handle,
+    _event: Box<dyn Fn(String) + Send>,
+) -> Result<(), String> {
+    missing("document events")
+}
+
 pub fn load_document(_document: Handle, _url: &str) -> Result<bool, String> {
     missing("document navigation")
 }
@@ -137,6 +181,10 @@ pub fn begin_layout(
 
 pub fn commit_layout(_window: Handle, _ticket: u64) -> Result<bool, String> {
     missing("surface layout")
+}
+
+pub fn enqueue_ui(_work: Box<dyn FnOnce() + Send>) -> Result<(), String> {
+    missing("UI queue")
 }
 
 pub fn cancel_layout(_window: Handle) -> Result<(), String> {
@@ -235,6 +283,11 @@ pub fn capture_stop(_after: f64) -> Result<i32, String> {
 }
 
 #[cfg(feature = "diagnostics")]
+pub fn capture_limited() -> Result<bool, String> {
+    missing("window capture")
+}
+
+#[cfg(feature = "diagnostics")]
 pub fn capture_longest_gap() -> Result<f64, String> {
     missing("window capture")
 }
@@ -284,6 +337,14 @@ pub fn endpoint_connect(_address: &str) -> Result<Box<dyn Connection>, String> {
     missing("local endpoint")
 }
 
+pub fn connect_service(_address: &str) -> Result<Box<dyn super::super::PersistentStream>, String> {
+    missing("persistent sidecar transport")
+}
+
+pub fn secure_service_directory(_path: &Path) -> Result<(), String> {
+    missing("persistent sidecar service directory")
+}
+
 pub fn create_image(
     _surface: Handle,
     _name: &str,
@@ -329,8 +390,4 @@ pub fn text_image(_image: Handle, _utf8: &str) -> Result<(), String> {
 
 pub fn close_image(_image: Handle) -> Result<(), String> {
     missing("image removal")
-}
-
-pub fn set_main_appearance(_view: &PlatformWebview, _dark: bool) -> Result<(), String> {
-    missing("main webview appearance")
 }

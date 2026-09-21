@@ -8,6 +8,7 @@ use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 
 use serde_json::value::RawValue;
+use serde_json::Value;
 use soksak_host_tauriv2::sidecars::{Message, Owner, Sidecars};
 
 #[derive(Clone)]
@@ -66,7 +67,7 @@ fn files(sidecar: &str) -> Files {
 
 fn create(files: &Files, directory: &std::path::Path) -> Result<Sidecars<FakeOwner>, String> {
     let read = |path: &str| files.get(path).map(|text| text.as_bytes().to_vec());
-    Sidecars::new(&read, directory.to_path_buf())
+    Sidecars::new(&read, directory.to_path_buf(), directory.to_path_buf())
 }
 
 const ECHO: &str = "@fixture/sidecar-echo";
@@ -124,8 +125,10 @@ fn every_pending_reply_is_flushed_after_the_queue_drains() {
     for (i, name) in ["a", "b", "c"].iter().enumerate() {
         let response_json = serde_json::json!({
             "image": {
-                "consumed": {
+                    "consumed": {
+                    "generation": 1,
                     "name": name,
+                    "raster": 1,
                     "sequence": i + 1
                 }
             }
@@ -137,11 +140,13 @@ fn every_pending_reply_is_flushed_after_the_queue_drains() {
             .unwrap();
     }
 
-    // Send same image "a" again with sequence 4 (should replace seq 2)
+    // Send same image "a" again with a new immutable sequence.
     let response_json = serde_json::json!({
         "image": {
             "consumed": {
+                "generation": 1,
                 "name": "a",
+                "raster": 1,
                 "sequence": 4
             }
         }
@@ -187,26 +192,29 @@ fn every_pending_reply_is_flushed_after_the_queue_drains() {
         assert!(data.contains(s), "close {} never reached the sidecar", s);
     }
 
-    // Verify same image a with seq 1, 2 were replaced, only seq 4 reached
-    let a_seq1_pattern = r#""name":"a","sequence":1"#;
-    let a_seq2_pattern = r#""name":"a","sequence":2"#;
-    let a_seq4_pattern = r#""name":"a","sequence":4"#;
-
-    assert!(
-        !data.contains(a_seq1_pattern),
-        "image a with sequence 1 should have been replaced"
-    );
-    assert!(
-        !data.contains(a_seq2_pattern),
-        "image a with sequence 2 should have been replaced"
-    );
-
-    let count = data.matches(a_seq4_pattern).count();
-    assert!(
-        count == 1,
-        "image a with sequence 4 should appear exactly once, appeared {} times",
-        count
-    );
+    // Every immutable consumed ack must arrive exactly once. In particular, a newer
+    // sequence for image a must not replace its earlier frame.
+    let consumed: Vec<Value> = data
+        .lines()
+        .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+        .filter_map(|line| line.get("body")?.get("image")?.get("consumed").cloned())
+        .collect();
+    for expected in [
+        serde_json::json!({"generation": 1, "name": "a", "raster": 1, "sequence": 1}),
+        serde_json::json!({"generation": 1, "name": "b", "raster": 1, "sequence": 2}),
+        serde_json::json!({"generation": 1, "name": "c", "raster": 1, "sequence": 3}),
+        serde_json::json!({"generation": 1, "name": "a", "raster": 1, "sequence": 4}),
+    ] {
+        assert_eq!(
+            consumed
+                .iter()
+                .filter(|actual| **actual == expected)
+                .count(),
+            1,
+            "immutable consumed ack {:?} was not preserved exactly once",
+            expected
+        );
+    }
 
     // Verify order: closes and replies came after the queued bodies
     let last_body = data.rfind(r#""data":""#);
@@ -275,7 +283,9 @@ fn order_is_correct_when_stop_flushes_buffered_messages() {
         let response_json = serde_json::json!({
             "image": {
                 "consumed": {
+                    "generation": 1,
                     "name": name,
+                    "raster": 1,
                     "sequence": i + 1
                 }
             }

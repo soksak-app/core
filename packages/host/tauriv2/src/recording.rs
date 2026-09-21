@@ -120,7 +120,13 @@ impl Recording {
             .directory
             .take()
             .ok_or_else(|| "no capture is running".to_string())?;
-        let count = capture.stop()?;
+        let count = match capture.stop() {
+            Ok(count) => count,
+            Err(error) => {
+                let _ = std::fs::remove_dir_all(&directory);
+                return Err(error);
+            }
+        };
         Ok((directory, count))
     }
 

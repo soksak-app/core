@@ -326,6 +326,52 @@ fn presentation_wait_tracks_the_visible_current_raster() {
 }
 
 #[test]
+fn surface_visibility_survives_first_document_navigation() {
+    let images = Images::default();
+    let key: Key = ("hidden".into(), "view".into());
+    images.set_surface_visible(&key.0, false);
+    images.remove_surface(&key.0);
+    images.begin_generation(&key.0);
+    images.reserve(&key, "owner", "sidecar-a").unwrap();
+    assert!(images.set(&key, 100));
+    assert!(
+        images
+            .configure_raster(&key, 1, 1, 2.0, true)
+            .unwrap()
+            .is_none(),
+        "navigation lost outer surface visibility"
+    );
+    assert!(images.visible().is_empty());
+    assert!(images.current_presented());
+}
+
+#[test]
+fn hidden_surface_defers_raster_configuration() {
+    let images = Images::default();
+    let key: Key = ("hidden".into(), "view".into());
+    images.reserve(&key, "owner", "sidecar-a").unwrap();
+    assert!(images.set(&key, 100));
+    images.set_surface_visible(&key.0, false);
+    assert!(
+        images
+            .configure_raster(&key, 1, 1, 2.0, true)
+            .unwrap()
+            .is_none(),
+        "hidden surface sent raster configuration"
+    );
+    assert!(images.visible().is_empty());
+    images.set_surface_visible(&key.0, true);
+    assert_eq!(images.visible(), vec![(key.clone(), 100)]);
+    let shown = images
+        .configure_raster(&key, 800, 600, 2.0, true)
+        .unwrap()
+        .unwrap();
+    assert_eq!((shown.width, shown.height), (800, 600));
+    images.set_visible(&key, false).unwrap();
+    assert!(images.visible().is_empty());
+}
+
+#[test]
 fn frame_that_becomes_stale_before_main_thread_presentation_is_rejected() {
     let images = Images::default();
     let key: Key = ("tab-1".to_string(), "view".to_string());

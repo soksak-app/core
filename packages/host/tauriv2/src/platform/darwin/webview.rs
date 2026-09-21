@@ -10,7 +10,70 @@ use objc2::msg_send;
 use objc2::runtime::AnyObject;
 use tauri::webview::PlatformWebview;
 
-use super::super::{DOMOverlay, Handle};
+use super::super::{visible_window_overlay_rects, DOMOverlay, Handle, WindowOverlay};
+
+extern "C" {
+    fn sp_webview_set_appearance(view: *mut c_void, dark: bool) -> bool;
+    fn sp_surface_create(main_webview: *mut c_void) -> *mut c_void;
+    fn sp_surface_close(surface: *mut c_void);
+    fn webviewSetFrame(view: *mut c_void, x: f64, y: f64, width: f64, height: f64);
+    fn sp_surface_set_window_overlays(main: *mut c_void, rects: *const f64, count: usize);
+}
+
+pub fn create_surface(main: Handle) -> Result<Handle, String> {
+    let surface = unsafe { sp_surface_create(main as *mut c_void) } as Handle;
+    if surface == 0 {
+        Err("cannot create SurfaceHost".into())
+    } else {
+        Ok(surface)
+    }
+}
+
+pub fn close_surface(surface: Handle) {
+    unsafe { sp_surface_close(surface as *mut c_void) }
+}
+
+pub fn place_surface(surface: Handle, x: f64, y: f64, w: f64, h: f64) {
+    unsafe { webviewSetFrame(surface as *mut c_void, x, y, w, h) }
+}
+
+pub fn surface_frame(surface: Handle) -> [f64; 4] {
+    extern "C" {
+        fn webviewGetFrame(view: *mut c_void, rect: *mut f64);
+    }
+    let mut rect = [0.0; 4];
+    unsafe { webviewGetFrame(surface as *mut c_void, rect.as_mut_ptr()) };
+    rect
+}
+
+pub fn set_surface_hidden_handle(surface: Handle, hidden: bool) {
+    extern "C" {
+        fn webviewSetSurfaceHidden(view: *mut c_void, hidden: bool);
+    }
+    unsafe { webviewSetSurfaceHidden(surface as *mut c_void, hidden) }
+}
+
+pub fn set_surface_alpha_handle(surface: Handle, alpha: f64) {
+    extern "C" {
+        fn webviewSetSurfaceAlpha(view: *mut c_void, alpha: f64);
+    }
+    unsafe { webviewSetSurfaceAlpha(surface as *mut c_void, alpha) }
+}
+
+pub fn set_main_appearance(view: &PlatformWebview, dark: bool) -> Result<(), String> {
+    let view = view.inner() as *mut c_void;
+    if !unsafe { sp_webview_set_appearance(view, dark) } {
+        return Err("requested app appearance is unavailable".into());
+    }
+    Ok(())
+}
+
+pub fn set_window_overlays(main: Handle, overlays: &[WindowOverlay]) {
+    let values = visible_window_overlay_rects(overlays);
+    unsafe {
+        sp_surface_set_window_overlays(main as *mut c_void, values.as_ptr(), values.len() / 4)
+    }
+}
 
 /// radius 논리 픽셀의 모서리 반경을 적용한다.
 pub fn corners(webview: &PlatformWebview, radius: f64) {
@@ -139,16 +202,4 @@ pub fn focus(webview: &PlatformWebview) -> Result<(), String> {
 /// 웹뷰가 그리는 뷰의 주소를 반환한다. 입력 체인의 뷰 주소와 비교해 웹뷰를 식별한다.
 pub fn id(webview: &PlatformWebview) -> Handle {
     webview.inner() as Handle
-}
-
-extern "C" {
-    fn sp_webview_set_appearance(view: *mut c_void, dark: bool) -> bool;
-}
-
-pub fn set_main_appearance(view: &PlatformWebview, dark: bool) -> Result<(), String> {
-    let view = view.inner() as *mut c_void;
-    if !unsafe { sp_webview_set_appearance(view, dark) } {
-        return Err("requested app appearance is unavailable".into());
-    }
-    Ok(())
 }

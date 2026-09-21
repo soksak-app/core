@@ -14,7 +14,7 @@ use std::time::Duration;
 
 use super::{
     Connection, DOMOverlay, Delivery, Frame, Handle, Hit, Insets, Key, Listener, Platform, Pointer,
-    Raster, WindowBuilder,
+    Raster, WindowBuilder, WindowOverlay,
 };
 
 #[path = "identity.rs"]
@@ -26,11 +26,20 @@ mod unsupported;
 pub struct Windows;
 
 impl Platform for Windows {
+    fn enqueue_ui(&self, work: Box<dyn FnOnce() + Send>) -> Result<(), String> {
+        unsupported::enqueue_ui(work)
+    }
     fn prepare_window<'a>(&self, builder: WindowBuilder<'a>) -> Result<WindowBuilder<'a>, String> {
         unsupported::prepare_window(builder)
     }
     fn window_handle(&self, window: &Window) -> Result<Handle, String> {
         unsupported::window_handle(window)
+    }
+    fn set_main_webview(&self, window: Handle, main: Handle) -> Result<(), String> {
+        unsupported::set_main_webview(window, main)
+    }
+    fn set_main_appearance(&self, view: &PlatformWebview, dark: bool) -> Result<(), String> {
+        unsupported::set_main_appearance(view, dark)
     }
     fn fullscreen(&self, window: Handle, on: bool, done: Box<dyn Fn()>) -> Result<(), String> {
         unsupported::fullscreen(window, on, done)
@@ -72,11 +81,29 @@ impl Platform for Windows {
     ) -> Result<(), String> {
         unsupported::place_webview(view, x, y, w, h)
     }
-    fn set_main_appearance(&self, view: &PlatformWebview, dark: bool) -> Result<(), String> {
-        unsupported::set_main_appearance(view, dark)
-    }
     fn webview_frame(&self, view: &PlatformWebview) -> Result<[f64; 4], String> {
         unsupported::webview_frame(view)
+    }
+    fn create_surface(&self, main: Handle) -> Result<Handle, String> {
+        unsupported::create_surface(main)
+    }
+    fn close_surface(&self, surface: Handle) -> Result<(), String> {
+        unsupported::close_surface(surface)
+    }
+    fn place_surface(&self, surface: Handle, x: f64, y: f64, w: f64, h: f64) -> Result<(), String> {
+        unsupported::place_surface(surface, x, y, w, h)
+    }
+    fn surface_frame(&self, surface: Handle) -> Result<[f64; 4], String> {
+        unsupported::surface_frame(surface)
+    }
+    fn set_surface_hidden_handle(&self, surface: Handle, hidden: bool) -> Result<(), String> {
+        unsupported::set_surface_hidden_handle(surface, hidden)
+    }
+    fn set_surface_alpha_handle(&self, surface: Handle, alpha: f64) -> Result<(), String> {
+        unsupported::set_surface_alpha_handle(surface, alpha)
+    }
+    fn set_window_overlays(&self, main: Handle, overlays: &[WindowOverlay]) -> Result<(), String> {
+        unsupported::set_window_overlays(main, overlays)
     }
     fn attach_surface(&self, view: &PlatformWebview, main: Handle) -> Result<(), String> {
         unsupported::attach_surface(view, main)
@@ -93,6 +120,7 @@ impl Platform for Windows {
     fn set_alpha(&self, view: &PlatformWebview, alpha: f64) -> Result<(), String> {
         unsupported::set_alpha(view, alpha)
     }
+
     fn set_live_resize(&self, view: &PlatformWebview, live: bool) -> Result<(), String> {
         unsupported::set_live_resize(view, live)
     }
@@ -112,6 +140,13 @@ impl Platform for Windows {
         changed: Box<dyn Fn(String)>,
     ) -> Result<Handle, String> {
         unsupported::create_document(surface, store, changed)
+    }
+    fn set_document_event(
+        &self,
+        document: Handle,
+        event: Box<dyn Fn(String) + Send>,
+    ) -> Result<(), String> {
+        unsupported::set_document_event(document, event)
     }
     fn load_document(&self, document: Handle, url: &str) -> Result<bool, String> {
         unsupported::load_document(document, url)
@@ -278,6 +313,10 @@ impl Platform for Windows {
         unsupported::capture_stop(after)
     }
     #[cfg(feature = "diagnostics")]
+    fn capture_limited(&self) -> Result<bool, String> {
+        unsupported::capture_limited()
+    }
+    #[cfg(feature = "diagnostics")]
     fn capture_longest_gap(&self) -> Result<f64, String> {
         unsupported::capture_longest_gap()
     }
@@ -298,6 +337,16 @@ impl Platform for Windows {
         unsupported::dock_select(title)
     }
 
+    fn clipboard_read(&self, kind: &str) -> Result<super::ClipboardValue, String> {
+        unsupported::clipboard_read(kind)
+    }
+    fn clipboard_write_text(&self, text: &str) -> Result<(), String> {
+        unsupported::clipboard_write_text(text)
+    }
+    fn clipboard_write_png(&self, bytes: &[u8]) -> Result<(), String> {
+        unsupported::clipboard_write_png(bytes)
+    }
+
     fn directory_identity(&self, path: &Path, _metadata: &Metadata) -> Result<String, String> {
         identity::identity(path)
     }
@@ -311,5 +360,11 @@ impl Platform for Windows {
     }
     fn endpoint_connect(&self, address: &str) -> Result<Box<dyn Connection>, String> {
         unsupported::endpoint_connect(address)
+    }
+    fn connect_service(&self, address: &str) -> Result<Box<dyn PersistentStream>, String> {
+        unsupported::connect_service(address)
+    }
+    fn secure_service_directory(&self, path: &Path) -> Result<(), String> {
+        unsupported::secure_service_directory(path)
     }
 }

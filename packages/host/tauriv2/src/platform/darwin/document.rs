@@ -5,6 +5,7 @@ use std::ffi::{c_char, c_void, CStr, CString};
 use super::super::{Handle, Insets};
 
 type Changed = extern "C" fn(*mut c_void, *const c_char);
+type Event = extern "C" fn(*mut c_void, *const c_char);
 
 extern "C" {
     fn sp_document_create(
@@ -13,6 +14,7 @@ extern "C" {
         changed: Changed,
         context: *mut c_void,
     ) -> *mut c_void;
+    fn sp_document_set_event(document: *mut c_void, event: Event, context: *mut c_void);
     fn sp_document_load(document: *mut c_void, url: *const c_char) -> bool;
     fn sp_document_go(document: *mut c_void, action: i32) -> bool;
     fn sp_document_place(
@@ -29,9 +31,12 @@ extern "C" {
 
 /// 문서 핸들별 상태 수신 함수. 메인 스레드에서만 쓴다.
 struct Receiver(Box<dyn Fn(String)>);
+struct EventReceiver(Box<dyn Fn(String) + Send>);
 
 thread_local! {
     static RECEIVERS: std::cell::RefCell<std::collections::HashMap<Handle, *mut Receiver>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+    static EVENTS: std::cell::RefCell<std::collections::HashMap<Handle, *mut EventReceiver>> =
         std::cell::RefCell::new(std::collections::HashMap::new());
 }
 
@@ -41,6 +46,14 @@ extern "C" fn changed(context: *mut c_void, state: *const c_char) {
         .to_string_lossy()
         .into_owned();
     (receiver.0)(state);
+}
+
+extern "C" fn event(context: *mut c_void, value: *const c_char) {
+    let receiver = unsafe { &*(context as *const EventReceiver) };
+    let value = unsafe { CStr::from_ptr(value) }
+        .to_string_lossy()
+        .into_owned();
+    (receiver.0)(value);
 }
 
 /// 표면 웹뷰 안에 문서 웹뷰를 숨긴 상태로 만든다. 메인 스레드에서 호출한다.
@@ -74,6 +87,13 @@ pub fn load(document: Handle, url: &str) -> Result<bool, String> {
     Ok(unsafe { sp_document_load(document as *mut c_void, url.as_ptr()) })
 }
 
+pub fn set_event(document: Handle, receive: Box<dyn Fn(String) + Send>) -> Result<(), String> {
+    let receiver = Box::into_raw(Box::new(EventReceiver(receive)));
+    unsafe { sp_document_set_event(document as *mut c_void, event, receiver as *mut c_void) };
+    EVENTS.with(|all| all.borrow_mut().insert(document, receiver));
+    Ok(())
+}
+
 /// 뒤로 0, 앞으로 1, 다시 읽기 2, 멈춤 3 을 실행하고 실행했는지 반환한다.
 pub fn go(document: Handle, action: i32) -> bool {
     unsafe { sp_document_go(document as *mut c_void, action) }
@@ -102,6 +122,9 @@ pub fn background(document: Handle, enabled: bool) {
 pub fn close(document: Handle) {
     unsafe { sp_document_close(document as *mut c_void) };
     if let Some(receiver) = RECEIVERS.with(|all| all.borrow_mut().remove(&document)) {
+        drop(unsafe { Box::from_raw(receiver) });
+    }
+    if let Some(receiver) = EVENTS.with(|all| all.borrow_mut().remove(&document)) {
         drop(unsafe { Box::from_raw(receiver) });
     }
 }

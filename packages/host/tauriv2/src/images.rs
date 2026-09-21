@@ -14,13 +14,13 @@ use std::time::{Duration, Instant};
 
 use base64::Engine;
 use serde::{Deserialize, Serialize};
-use tauri::{Emitter, EventTarget, Webview};
+use tauri::Webview;
 
-use crate::exposure::{self, on_main, with_view};
+use crate::exposure::{self, on_main};
 use crate::log_error;
 use crate::platform::{self, Handle};
-use crate::surfaces::{label_for, require_region};
-use crate::windows::window_data;
+use crate::surfaces::{require_region, surface_handle};
+use crate::windows::{emit_window, window_data};
 
 /// 표면 페이지의 그림 영역 호출.
 #[derive(Clone, Debug, Deserialize)]
@@ -156,6 +156,19 @@ impl Images {
         inner
             .surface_visibility
             .insert(surface.to_string(), visible);
+        if visible {
+            for (key, state) in inner.states.iter_mut() {
+                if key.0 == surface {
+                    // Hiding a surface releases its native pixels. The same
+                    // raster must be configured again when the surface returns.
+                    // Advance the revision so frames from the hidden generation
+                    // cannot be accepted after the surface is shown.
+                    state.raster += 1;
+                    state.configured = false;
+                    state.last_sequence = 0;
+                }
+            }
+        }
         self.changed();
     }
 
@@ -265,13 +278,9 @@ impl Images {
                 }
             }
         }
-        let generation_active = inner.generations.contains_key(surface);
-        if !generation_active {
-            inner.surface_visibility.remove(surface);
-        }
-        if !removed.is_empty() || !generation_active {
-            self.changed();
-        }
+        // 문서 영역의 정리는 바깥 SurfaceHost의 표시 상태를 바꾸지 않는다.
+        // 표면 자체가 닫힐 때 end_generation이 그 상태를 제거한다.
+        self.changed();
         removed
     }
 
@@ -296,6 +305,24 @@ impl Images {
             .collect()
     }
 
+    /// 영역 자체와 바깥 표면이 모두 표시된 그림의 핸들을 반환한다.
+    pub fn visible(&self) -> Vec<(Key, Handle)> {
+        let inner = self.lock();
+        inner
+            .states
+            .iter()
+            .filter_map(|(key, state)| {
+                let outer = inner
+                    .surface_visibility
+                    .get(&key.0)
+                    .copied()
+                    .unwrap_or(true);
+                let handle = inner.handles.get(key).copied().unwrap_or_default();
+                (state.visible && outer && handle != 0).then(|| (key.clone(), handle))
+            })
+            .collect()
+    }
+
     /// 적용된 네이티브 래스터가 달라졌을 때 리비전을 올리고 보낼 설정을 반환한다.
     pub fn configure_raster(
         &self,
@@ -306,6 +333,11 @@ impl Images {
         visible: bool,
     ) -> Result<Option<Configure>, String> {
         let mut inner = self.lock();
+        let surface_visible = inner
+            .surface_visibility
+            .get(&key.0)
+            .copied()
+            .unwrap_or(true);
         if inner.handles.get(key).copied().unwrap_or_default() == 0 {
             return Err(format!("image {:?} is not attached", key.1));
         }
@@ -335,7 +367,7 @@ impl Images {
             state.configured = false;
             self.changed();
         }
-        if !visible || state.configured {
+        if !visible || !surface_visible || state.configured {
             return Ok(None);
         }
         state.configured = true;
@@ -501,23 +533,21 @@ impl Images {
 /// 호출한 표면 caller 의 웹뷰와 요청된 표면을 확인하고 window 를 반환한다.
 fn owner(webview: &Webview, request: &Request) -> Result<(Key, tauri::Window), String> {
     let window = webview.window();
-    let label = webview.label();
-    let prefix = format!("surface-{}-", window.label());
-    let surface_id = label
-        .strip_prefix(&prefix)
-        .ok_or_else(|| "invalid surface webview label".to_string())?;
-    let key = check(Some(surface_id), request)?;
+    if webview.label() != window.label() {
+        return Err("surface operations must come from the main webview".into());
+    }
+    let key = check(Some(request.surface.as_str()), request)?;
     Ok((key, window))
 }
 
 /// 만든 그림 영역을 창에 등록하고 핸들을 반환한다. 만드는 동안 표면이 제거되면 닫는다.
 fn create(
-    webview: &Webview,
+    _webview: &Webview,
     window: &tauri::Window,
     key: &Key,
     platform: &'static dyn platform::Platform,
 ) -> Result<Handle, String> {
-    let surface = with_view(webview, move |view| platform.view_id(view))?;
+    let surface = surface_handle(window, &key.0)?;
     let (surface_id, name) = key.clone();
     let host = window.clone();
     let event_name = name.clone();
@@ -531,12 +561,9 @@ fn create(
                 let payload = serde_json::json!({
                     "surface": surface_id, "name": event_name, "event": event,
                 });
-                host.emit_to(
-                    EventTarget::webview(label_for(&host, &surface_id)),
-                    "image-event",
-                    payload,
-                )
-                .map_err(|error| format!("image event {surface_id}/{event_name}: {error}"))
+                emit_window(&host, "image-event", payload)
+                    .map_err(|error| error.to_string())
+                    .map_err(|error| format!("image event {surface_id}/{event_name}: {error}"))
             })();
             log_error(result);
             exposure::window_changed(&host);
@@ -553,12 +580,10 @@ fn with_image<T: Send + 'static>(
     run: impl Fn(Handle) -> Result<T, String> + Send + 'static,
 ) -> Result<T, String> {
     let window = webview.window();
-    let label = webview.label().to_string();
-    let prefix = format!("surface-{}-", window.label());
-    let surface_id = label
-        .strip_prefix(&prefix)
-        .ok_or_else(|| "invalid surface webview label".to_string())?;
-    let key = check(Some(surface_id), request)?;
+    if webview.label() != window.label() {
+        return Err("surface operations must come from the main webview".into());
+    }
+    let key = check(Some(request.surface.as_str()), request)?;
 
     let Ok(data) = window_data(&window) else {
         return Err("cannot get window data".to_string());
@@ -927,7 +952,17 @@ where
                         current_images
                             .frame_status(&current_key, generation, raster, sequence)
                             .map_err(str::to_string)?;
-                        platform::current()?
+                        let platform = platform::current()?;
+                        let actual = platform
+                            .image_raster(handle)?
+                            .ok_or_else(|| "stale".to_string())?;
+                        if actual.width != width
+                            || actual.height != height
+                            || (actual.scale - scale).abs() > 0.000001
+                        {
+                            return Err("stale".to_string());
+                        }
+                        platform
                             .present_image(handle, id, nonce, width as f64, height as f64, scale)
                             .and_then(|presented| {
                                 presented
@@ -942,6 +977,12 @@ where
                             let reason = match e.as_str() {
                                 "stale" => "stale",
                                 "notAttached" => "notAttached",
+                                "notFound" => "notFound",
+                                "forbidden" => "forbidden",
+                                "size" => "size",
+                                "scale" => "scale",
+                                "unsupported" => "unsupported",
+                                "presentFailed" => "presentFailed",
                                 _ => "presentFailed",
                             };
                             (false, Some(reason))

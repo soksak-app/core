@@ -5,6 +5,10 @@
 //! 사용한다.
 
 use std::fs::Metadata;
+use std::io::{Read, Write};
+use std::os::unix::net::UnixStream;
+#[path = "ui_queue.rs"]
+mod ui_queue;
 use std::path::Path;
 
 use serde_json::Value;
@@ -14,8 +18,8 @@ use tauri::Window;
 use std::time::Duration;
 
 use super::{
-    Connection, DOMOverlay, Delivery, Frame, Handle, Hit, Insets, Key, Listener, Platform, Pointer,
-    Raster, WindowBuilder,
+    Connection, DOMOverlay, Delivery, Frame, Handle, Hit, Insets, Key, Listener, PersistentStream,
+    Platform, Pointer, Raster, WindowBuilder, WindowOverlay,
 };
 
 #[cfg(feature = "diagnostics")]
@@ -23,6 +27,8 @@ use super::{
 mod capture;
 #[path = "dock.rs"]
 mod dock;
+#[path = "clipboard.rs"]
+mod clipboard;
 #[path = "document.rs"]
 mod document;
 #[path = "endpoint.rs"]
@@ -83,11 +89,21 @@ unsafe impl objc2::Encode for NSRect {
 pub struct Darwin;
 
 impl Platform for Darwin {
+    fn enqueue_ui(&self, work: Box<dyn FnOnce() + Send>) -> Result<(), String> {
+        ui_queue::enqueue(work);
+        Ok(())
+    }
     fn prepare_window<'a>(&self, builder: WindowBuilder<'a>) -> Result<WindowBuilder<'a>, String> {
         Ok(window::prepare(builder))
     }
     fn window_handle(&self, window: &Window) -> Result<Handle, String> {
         window::handle(window)
+    }
+    fn set_main_webview(&self, window: Handle, main: Handle) -> Result<(), String> {
+        window::set_main_webview(window, main)
+    }
+    fn set_main_appearance(&self, view: &PlatformWebview, dark: bool) -> Result<(), String> {
+        webview::set_main_appearance(view, dark)
     }
     fn fullscreen(&self, window: Handle, on: bool, done: Box<dyn Fn()>) -> Result<(), String> {
         window::fullscreen(window, on, done)
@@ -129,11 +145,34 @@ impl Platform for Darwin {
         webview::place(view, x, y, w, h);
         Ok(())
     }
-    fn set_main_appearance(&self, view: &PlatformWebview, dark: bool) -> Result<(), String> {
-        webview::set_main_appearance(view, dark)
-    }
     fn webview_frame(&self, view: &PlatformWebview) -> Result<[f64; 4], String> {
         Ok(webview::frame(view))
+    }
+    fn create_surface(&self, main: Handle) -> Result<Handle, String> {
+        webview::create_surface(main)
+    }
+    fn close_surface(&self, surface: Handle) -> Result<(), String> {
+        webview::close_surface(surface);
+        Ok(())
+    }
+    fn place_surface(&self, surface: Handle, x: f64, y: f64, w: f64, h: f64) -> Result<(), String> {
+        webview::place_surface(surface, x, y, w, h);
+        Ok(())
+    }
+    fn surface_frame(&self, surface: Handle) -> Result<[f64; 4], String> {
+        Ok(webview::surface_frame(surface))
+    }
+    fn set_surface_hidden_handle(&self, surface: Handle, hidden: bool) -> Result<(), String> {
+        webview::set_surface_hidden_handle(surface, hidden);
+        Ok(())
+    }
+    fn set_surface_alpha_handle(&self, surface: Handle, alpha: f64) -> Result<(), String> {
+        webview::set_surface_alpha_handle(surface, alpha);
+        Ok(())
+    }
+    fn set_window_overlays(&self, main: Handle, overlays: &[WindowOverlay]) -> Result<(), String> {
+        webview::set_window_overlays(main, overlays);
+        Ok(())
     }
     fn attach_surface(&self, view: &PlatformWebview, main: Handle) -> Result<(), String> {
         webview::attach_surface(view, main);
@@ -155,6 +194,7 @@ impl Platform for Darwin {
         webview::alpha(view, alpha);
         Ok(())
     }
+
     fn set_live_resize(&self, view: &PlatformWebview, live: bool) -> Result<(), String> {
         webview::live_resize(view, live);
         Ok(())
@@ -177,6 +217,13 @@ impl Platform for Darwin {
         changed: Box<dyn Fn(String)>,
     ) -> Result<Handle, String> {
         document::create(surface, store, changed)
+    }
+    fn set_document_event(
+        &self,
+        document: Handle,
+        event: Box<dyn Fn(String) + Send>,
+    ) -> Result<(), String> {
+        document::set_event(document, event)
     }
     fn load_document(&self, document: Handle, url: &str) -> Result<bool, String> {
         document::load(document, url)
@@ -239,9 +286,7 @@ impl Platform for Darwin {
         height: f64,
         scale: f64,
     ) -> Result<bool, String> {
-        Ok(image::present(
-            image, token_id, &nonce, width, height, scale,
-        ))
+        image::present(image, token_id, &nonce, width, height, scale)
     }
     fn focus_image(&self, image: Handle) -> Result<(), String> {
         image::focus(image);
@@ -371,6 +416,10 @@ impl Platform for Darwin {
         Ok(capture::stop(after))
     }
     #[cfg(feature = "diagnostics")]
+    fn capture_limited(&self) -> Result<bool, String> {
+        Ok(capture::limited())
+    }
+    #[cfg(feature = "diagnostics")]
     fn capture_longest_gap(&self) -> Result<f64, String> {
         Ok(capture::longest_gap())
     }
@@ -392,6 +441,16 @@ impl Platform for Darwin {
         dock::select(title)
     }
 
+    fn clipboard_read(&self, kind: &str) -> Result<super::ClipboardValue, String> {
+        clipboard::read(kind)
+    }
+    fn clipboard_write_text(&self, text: &str) -> Result<(), String> {
+        clipboard::write_text(text)
+    }
+    fn clipboard_write_png(&self, bytes: &[u8]) -> Result<(), String> {
+        clipboard::write_png(bytes)
+    }
+
     fn directory_identity(&self, _path: &Path, metadata: &Metadata) -> Result<String, String> {
         Ok(identity::identity(metadata))
     }
@@ -406,4 +465,54 @@ impl Platform for Darwin {
     fn endpoint_connect(&self, address: &str) -> Result<Box<dyn Connection>, String> {
         endpoint::connect(address)
     }
+    fn connect_service(&self, address: &str) -> Result<Box<dyn PersistentStream>, String> {
+        connect_service(address)
+    }
+    fn secure_service_directory(&self, path: &Path) -> Result<(), String> {
+        secure_service_directory(path)
+    }
+}
+
+struct PersistentUnixStream(UnixStream);
+
+impl Read for PersistentUnixStream {
+    fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+        self.0.read(buffer)
+    }
+}
+
+impl Write for PersistentUnixStream {
+    fn write(&mut self, buffer: &[u8]) -> std::io::Result<usize> {
+        self.0.write(buffer)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.0.flush()
+    }
+}
+
+impl PersistentStream for PersistentUnixStream {
+    fn try_clone(&self) -> Result<Box<dyn PersistentStream>, String> {
+        self.0
+            .try_clone()
+            .map(|stream| Box::new(Self(stream)) as Box<dyn PersistentStream>)
+            .map_err(|error| error.to_string())
+    }
+
+    fn shutdown(&self) -> Result<(), String> {
+        self.0
+            .shutdown(std::net::Shutdown::Both)
+            .map_err(|error| error.to_string())
+    }
+}
+
+fn connect_service(address: &str) -> Result<Box<dyn PersistentStream>, String> {
+    UnixStream::connect(address)
+        .map(|stream| Box::new(PersistentUnixStream(stream)) as Box<dyn PersistentStream>)
+        .map_err(|error| error.to_string())
+}
+
+fn secure_service_directory(path: &Path) -> Result<(), String> {
+    std::fs::set_permissions(path, std::os::unix::fs::PermissionsExt::from_mode(0o700))
+        .map_err(|error| error.to_string())
 }

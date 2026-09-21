@@ -346,7 +346,7 @@ fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
             let disconnected_tx = disconnected_tx.clone();
             workers.push(thread::spawn(move || {
                 stream
-                    .set_read_timeout(Some(Duration::from_secs(2)))
+                    .set_read_timeout(Some(Duration::from_secs(10)))
                     .unwrap();
                 let mut reader = BufReader::new(stream.try_clone().unwrap());
                 let mut line = String::new();
@@ -429,7 +429,7 @@ fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
         .unwrap();
     // The package suite runs multiple test binaries concurrently. Keep a bounded case timeout,
     // but do not make the reconnect contract depend on a one-second scheduler slice.
-    let reconnect_timeout = Duration::from_secs(5);
+    let reconnect_timeout = Duration::from_secs(10);
     assert_eq!(first_events.recv_timeout(reconnect_timeout).unwrap().surface, "s1");
     assert_eq!(second_events.recv_timeout(reconnect_timeout).unwrap().surface, "s2");
 

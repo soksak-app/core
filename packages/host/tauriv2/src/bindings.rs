@@ -8,6 +8,7 @@ use tauri::ipc::Invoke;
 use tauri::{AppHandle, Manager, Webview, Window};
 
 use crate::composition;
+use crate::clipboard;
 use crate::documents;
 use crate::exposure::{self, Changed, Forward, Register};
 use crate::images;
@@ -55,6 +56,7 @@ pub(crate) fn handler() -> impl Fn(Invoke) -> bool + Send + Sync + 'static {
         exposure_forward,
         exposure_register,
         document_attach,
+        composition_declare,
         document_load,
         document_go,
         document_detach,
@@ -63,7 +65,10 @@ pub(crate) fn handler() -> impl Fn(Invoke) -> bool + Send + Sync + 'static {
         image_focus,
         image_caret,
         image_text,
-        image_detach
+        image_detach,
+        clipboard_read,
+        clipboard_write_text,
+        clipboard_persist_png
     ]
 }
 
@@ -277,6 +282,15 @@ fn document_attach(webview: Webview, request: documents::Request) -> Result<(), 
     documents::attach(&webview, request)
 }
 
+/// Registers a surface's immutable composition declaration before native placement.
+#[tauri::command(async)]
+fn composition_declare(
+    webview: Webview,
+    request: surfaces::CompositionDeclareRequest,
+) -> Result<(), String> {
+    surfaces::declare(&webview, request)
+}
+
 /// 호출한 표면 페이지의 완전한 합성 리비전을 배치한다.
 #[tauri::command(async)]
 fn composition_place(
@@ -339,4 +353,19 @@ fn image_text(webview: Webview, request: images::Request, text: String) -> Resul
 #[tauri::command(async)]
 fn image_detach(webview: Webview, request: images::Request) -> Result<(), String> {
     images::detach(&webview, request)
+}
+
+#[tauri::command(async)]
+fn clipboard_read(window: Window, request: clipboard::ReadRequest) -> Result<clipboard::ReadResponse, String> {
+    clipboard::read(&window, request)
+}
+
+#[tauri::command(async)]
+fn clipboard_write_text(window: Window, text: String) -> Result<(), String> {
+    clipboard::write_text(&window, text)
+}
+
+#[tauri::command(async)]
+fn clipboard_persist_png(app: AppHandle, request: clipboard::PersistRequest) -> Result<serde_json::Value, String> {
+    Ok(serde_json::json!({ "path": clipboard::persist_png(&app, request.data)? }))
 }

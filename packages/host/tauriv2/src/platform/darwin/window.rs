@@ -30,6 +30,17 @@ pub fn handle(window: &Window) -> Result<Handle, String> {
         .map_err(|e| e.to_string())
 }
 
+pub fn set_main_webview(window: Handle, main: Handle) -> Result<(), String> {
+    extern "C" {
+        fn sp_window_set_main_webview(window: *mut c_void, main: *mut c_void) -> bool;
+    }
+    if unsafe { sp_window_set_main_webview(window as *mut c_void, main as *mut c_void) } {
+        Ok(())
+    } else {
+        Err("the main webview is not in the window hierarchy".into())
+    }
+}
+
 /// 창 버튼의 현재 영역을 배치를 바꾸지 않고 읽는다.
 pub fn controls(window: Handle) -> Frame {
     let mut rect = [0.0; 4];

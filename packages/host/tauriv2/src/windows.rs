@@ -17,7 +17,7 @@ use crate::platform::{self, Handle};
 use crate::projects::project_folder;
 use crate::shapes::Shapes;
 use crate::sidecars::WindowSidecars;
-use crate::surfaces::{Rect, Resizing, Running, SurfaceComposition, Views, Watching};
+use crate::surfaces::{Rect, Running, SurfaceComposition, Views, Watching};
 use crate::theme::CurrentTheme;
 
 /// 창 하나의 상태.
@@ -27,8 +27,9 @@ pub(crate) struct WindowData {
     pub shapes: Shapes,
     pub theme: CurrentTheme,
     pub views: Views,
+    /// 논리 SurfaceHost의 핸들. DOM WebView가 아니라 main WebView 아래 native host다.
+    pub surface_hosts: Mutex<HashMap<String, Handle>>,
     pub watching: Watching,
-    pub resizing: Resizing,
     pub running: Running,
     pub root: Mutex<String>,
     pub ready: AtomicBool,
@@ -44,6 +45,43 @@ pub(crate) struct WindowData {
     pub compositions: Mutex<HashMap<String, SurfaceComposition>>,
     /// 표면별로 마지막에 적용한 완전한 합성 리비전.
     pub composition_revisions: Mutex<HashMap<String, u64>>,
+}
+
+/// 앱 DOM 재로드는 모든 플러그인 문서를 교체하지만 터미널 세션은 종료하지 않는다.
+pub(crate) fn reload_surface_documents(window: &Window) -> Result<(), String> {
+    let data = window_data(window)?;
+    let owner = native_owner(window)?;
+    let platform = platform::current()?;
+    let window = window.clone();
+    platform.enqueue_ui(Box::new(move || {
+        log_error((|| -> Result<(), String> {
+            platform.cancel_layout(owner)?;
+            let surfaces: Vec<_> = data
+                .surface_hosts
+                .lock()
+                .map_err(|e| e.to_string())?
+                .iter()
+                .map(|(id, handle)| (id.clone(), *handle))
+                .collect();
+            for (surface, handle) in surfaces {
+                platform.set_surface_hidden_handle(handle, true)?;
+                for document in data.documents.remove_surface(&surface) {
+                    platform.close_document(document)?;
+                }
+                for image in data.images.remove_surface(&surface) {
+                    platform.close_image(image)?;
+                }
+                data.images.begin_generation(&surface);
+                crate::exposure::surface_closed(&window, &surface);
+            }
+            data.composition_revisions
+                .lock()
+                .map_err(|e| e.to_string())?
+                .clear();
+            crate::exposure::window_changed(&window);
+            Ok(())
+        })());
+    }))
 }
 
 /// 애플리케이션의 창 등록부와 프로젝트 소유 창.
@@ -206,6 +244,9 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
         .insert(window.label().into(), context.clone());
     let platform = platform::current()?;
     let owner = native_owner(&window)?;
+    let main = root_view(&window).ok_or("the main webview is gone")?;
+    let main = crate::exposure::with_view(&main, move |view| platform.view_id(view))?;
+    platform.set_main_webview(owner, main)?;
     // 페이지가 첫 행의 높이를 제목줄에서 읽으므로 문서를 열기 전에 만든다.
     unified_titlebar(&window)?;
     let host = window.clone();
@@ -218,7 +259,9 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
         }
         tauri::WindowEvent::Destroyed => {
             crate::exposure::window_closed(&host);
-            log_error(platform.cancel_layout(owner));
+            log_error(platform.enqueue_ui(Box::new(move || {
+                log_error(platform.cancel_layout(owner));
+            })));
             if let Ok(mut monitor) = context.watching.0.lock() {
                 if let Some(monitor) = monitor.take() {
                     log_error(platform.unwatch_input(monitor));

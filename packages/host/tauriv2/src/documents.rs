@@ -12,13 +12,13 @@ use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tauri::{Emitter, EventTarget, Webview, Window};
+use tauri::{Webview, Window};
 
 use crate::exposure::{self, on_main, with_view};
 use crate::log_error;
 use crate::platform::{self, Handle};
-use crate::surfaces::{label_for, require_region};
-use crate::windows::window_data;
+use crate::surfaces::{require_region, surface_handle};
+use crate::windows::{emit_window, window_data};
 
 /// 문서 영역의 영구 데이터 저장소 이름. 앱 문서의 저장소와 다르다.
 const STORE: &str = "soksak-documents";
@@ -40,6 +40,13 @@ struct State {
     surface: String,
     document: String,
     state: Value,
+}
+
+#[derive(Clone, Serialize)]
+struct Event {
+    surface: String,
+    document: String,
+    event: Value,
 }
 
 /// 표면과 문서 이름의 쌍.
@@ -148,8 +155,10 @@ impl Documents {
 /// 호출한 웹뷰의 표면 id 를 확인하고 요청의 키와 창을 반환한다.
 fn owner(webview: &Webview, request: &Request) -> Result<(Key, Window), String> {
     let window = webview.window();
-    let prefix = format!("surface-{}-", window.label());
-    let key = check(webview.label().strip_prefix(&prefix), request)?;
+    if webview.label() != window.label() {
+        return Err("surface operations must come from the main webview".into());
+    }
+    let key = check(Some(request.surface.as_str()), request)?;
     Ok((key, window))
 }
 
@@ -195,26 +204,50 @@ fn create(
     platform: &'static dyn platform::Platform,
     dialog: bool,
 ) -> Result<Handle, String> {
-    let surface = with_view(webview, move |view| platform.view_id(view))?;
+    let _ = with_view(webview, move |view| platform.view_id(view))?;
     let host = window.clone();
     let (surface_id, name) = key.clone();
+    let state_host = host.clone();
+    let state_surface = surface_id.clone();
+    let state_document = name.clone();
     on_main(window, move || {
         let changed = Box::new(move |state: String| {
             let state = serde_json::from_str(&state).unwrap_or(Value::Null);
-            let label = label_for(&host, &surface_id);
             let payload = State {
-                surface: surface_id.clone(),
-                document: name.clone(),
+                surface: state_surface.clone(),
+                document: state_document.clone(),
                 state,
             };
             log_error(
-                host.emit_to(EventTarget::webview(label), "document-state", payload)
-                    .map_err(|e| e.to_string()),
+                emit_window(&state_host, "document-state", payload).map_err(|e| e.to_string()),
             );
-            exposure::window_changed(&host);
+            exposure::window_changed(&state_host);
         });
+        let surface = surface_handle(&host, &surface_id)?;
         let handle = platform.create_document(surface, STORE, changed)?;
         platform.set_document_background(handle, dialog)?;
+        let event_host = host.clone();
+        let event_surface = surface_id.clone();
+        let event_document = name.clone();
+        platform.set_document_event(
+            handle,
+            Box::new(move |value| {
+                let event = serde_json::from_str(&value).unwrap_or(Value::Null);
+                log_error(
+                    emit_window(
+                        &event_host,
+                        "document-event",
+                        Event {
+                            surface: event_surface.clone(),
+                            document: event_document.clone(),
+                            event,
+                        },
+                    )
+                    .map_err(|e| e.to_string()),
+                );
+                exposure::window_changed(&event_host);
+            }),
+        )?;
         Ok(handle)
     })
 }

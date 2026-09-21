@@ -16,7 +16,7 @@ use crate::platform;
 use crate::surfaces::{aligned, isolate_webview, PageFocus, Rect};
 use crate::windows::{emit_window, root_view, window_data};
 
-/// [data-native-modal] 요소를 다른 웹뷰에 그리는 데 필요한 값.
+/// [data-native-modal] 요소를 main DOM에 표시하는 데 필요한 값.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct OverlayRequest {
@@ -32,7 +32,7 @@ pub(crate) struct OverlayRequest {
     css: String,
     /// 배경 위에 합성한 요소의 테두리 색. 아래 표면의 밝기와 관계없이 같은 색으로 보인다.
     border: String,
-    /// 요소의 모서리 반경. 요소를 그리는 뷰에 적용한다.
+    /// 요소를 그리는 네이티브 뷰의 모서리 반경.
     radius: f64,
 }
 
@@ -56,8 +56,7 @@ pub(crate) struct OverlayContent {
 #[derive(Debug, Clone, Default)]
 struct Modal {
     instance: u64,
-    /// 요소의 id. 모달 페이지는 모든 호출에 이 값을 보내고, 다른 id 의 호출은 닫힌 모달이
-    /// 마지막으로 보낸 호출이다.
+    /// 요소의 id. main DOM callback은 모든 호출에 이 값을 보낸다.
     id: String,
     content: OverlayContent,
     /// 내용이나 위치를 바꿀 때마다 오른다. 모달 페이지는 이보다 오래된 값을 버린다.
@@ -169,7 +168,7 @@ pub(crate) fn set_background(window: &Window, enabled: bool) -> Result<(), Strin
     Ok(())
 }
 
-/// 모달 웹뷰를 콘텐츠 좌표에 소수 픽셀을 반올림하지 않고 배치한다.
+/// 모달 웹뷰를 콘텐츠 좌표에 배치한다.
 fn place_overlay(view: &Webview, at: Rect) -> Result<(), String> {
     let platform = platform::current()?;
     view.with_webview(move |webview| {
@@ -202,8 +201,7 @@ pub(crate) fn show(window: &Window, request: OverlayRequest) -> Result<Rect, Str
         .map_err(|e| e.to_string())?;
     target.set_path("/overlay.html");
     target.set_query(None);
-    target
-        .query_pairs_mut()
+    target.query_pairs_mut()
         .append_pair("id", &request.id)
         .append_pair("instance", &instance.to_string());
     *state.open.lock().map_err(|e| e.to_string())? = Some(Modal {
@@ -224,15 +222,12 @@ pub(crate) fn show(window: &Window, request: OverlayRequest) -> Result<Rect, Str
         shown: false,
         visible: false,
     });
-    // 그릴 영역이 없는 빈 문서로 만들고 숨긴 뒤, overlay_ready 를 호출하는 문서로 이동하기 전에
-    // 뷰를 기록한다. 빈 프레임 표시와 생성/준비 경쟁을 막는다.
     let built = window.add_child(
         WebviewBuilder::new(
             format!("modal-{}-{instance}", window.label()),
             WebviewUrl::External("about:blank".parse().unwrap()),
         )
         .background_color(Color(0, 0, 0, 0))
-        // 모달은 내용이 렌더링된 뒤 ready 에서 초점을 받는다.
         .focused(false),
         LogicalPosition::new(x, y),
         LogicalSize::new(0.0, 0.0),
@@ -247,8 +242,7 @@ pub(crate) fn show(window: &Window, request: OverlayRequest) -> Result<Rect, Str
     isolate_webview(&view, PageFocus::Ignored)?;
     view.hide().map_err(|e| e.to_string())?;
     place_overlay(&view, at)?;
-    view.set_auto_resize(request.mode == "dialog")
-        .map_err(|e| e.to_string())?;
+    view.set_auto_resize(request.mode == "dialog").map_err(|e| e.to_string())?;
     *state.view.lock().map_err(|e| e.to_string())? = Some(view.clone());
     if let Err(error) = view.navigate(target) {
         let _ = view.close();
@@ -274,13 +268,7 @@ pub(crate) fn place(window: &Window, request: PlaceRequest) -> Result<Rect, Stri
         .map_err(|e| e.to_string())?
         .as_ref()
         .is_some_and(|m| m.id == request.id);
-    let Some(view) = state
-        .view
-        .lock()
-        .map_err(|e| e.to_string())?
-        .clone()
-        .filter(|_| current)
-    else {
+    let Some(view) = state.view.lock().map_err(|e| e.to_string())?.clone().filter(|_| current) else {
         return Ok(Rect::default());
     };
     let (x, y, w, h) = aligned(
@@ -345,9 +333,7 @@ pub(crate) fn ready(window: &Window, id: String, instance: u64) -> Result<(), St
     let context = window_data(window)?;
     let state = &context.overlay;
 
-    let Some(view) = state.view.lock().map_err(|e| e.to_string())?.clone() else {
-        return Ok(());
-    };
+    let view = state.view.lock().map_err(|e| e.to_string())?.clone().ok_or("modal webview is gone")?;
     let first = {
         let mut held = state.open.lock().map_err(|e| e.to_string())?;
         let Some(modal) = held
@@ -369,35 +355,26 @@ pub(crate) fn ready(window: &Window, id: String, instance: u64) -> Result<(), St
     view.with_webview(move |webview| {
         log_error(platform.round_corners(&webview, first.radius));
         log_error(platform.raise_webview(&webview));
-    })
-    .map_err(|e| e.to_string())?;
+    }).map_err(|e| e.to_string())?;
     view.show().map_err(|e| e.to_string())?;
-    // 초점은 메인 스레드에서 옮긴 뒤에 표시 완료로 기록하고 알린다. host.window 의 shown 은 그 뒤에
-    // 참이다. 이 작업은 표시 요청 뒤에 같은 순서로 메인 스레드에서 실행된다.
     let host = window.clone();
     view.with_webview(move |webview| {
         if let Err(error) = platform.focus_webview(&webview) {
             eprintln!("modal {id}: {error}");
             return;
         }
-        let marked = window_data(&host)
-            .map_err(|e| e.to_string())
-            .and_then(|context| {
-                let mut open = context.overlay.open.lock().map_err(|e| e.to_string())?;
-                if let Some(modal) = open
-                    .as_mut()
-                    .filter(|m| m.id == id && m.instance == instance)
-                {
-                    modal.visible = true;
-                }
-                Ok(())
-            });
+        let marked = window_data(&host).and_then(|context| {
+            let mut open = context.overlay.open.lock().map_err(|e| e.to_string())?;
+            if let Some(modal) = open.as_mut().filter(|m| m.id == id && m.instance == instance) {
+                modal.visible = true;
+            }
+            Ok(())
+        });
         log_error(marked);
         log_error(emit_window(&host, "modal-rendered", &id).map_err(|e| e.to_string()));
         exposure::log(&host, &format!("observe: modal rendered {id}"));
         exposure::window_changed(&host);
-    })
-    .map_err(|e| e.to_string())
+    }).map_err(|e| e.to_string())
 }
 
 /// id 의 모달이 열려 있으면 닫고 메인 웹뷰에 포커스를 돌려준다.

@@ -415,11 +415,25 @@ fn emit_to(app: &AppHandle, label: &str, event: &str, payload: Value) -> Result<
 }
 
 /// 호출한 문서의 응답을 기다리는 요청에 전달한다. 제한 시간이 지난 응답은 버린다.
+pub fn reply_target(window: &str, request: &Value) -> Result<String, String> {
+    match request.get("surface") {
+        None => Ok(window.to_string()),
+        Some(Value::String(surface)) if !surface.is_empty() => {
+            Ok(format!("surface-{window}-{surface}"))
+        }
+        Some(_) => Err("exposure reply surface must be a nonempty string".into()),
+    }
+}
+
 pub(crate) fn reply(webview: &Webview, request: Value) -> Result<(), String> {
-    webview
-        .state::<Exposure>()
-        .relay
-        .reply(webview.label(), &request);
+    let window = main_page(webview)?;
+    let target = reply_target(window.label(), &request)?;
+    if let Some(surface) = request.get("surface").and_then(Value::as_str) {
+        crate::surfaces::surface_handle(&window, surface)?;
+    }
+    if !webview.state::<Exposure>().relay.reply(&target, &request) {
+        return Err("exposure reply does not match a pending request".into());
+    }
     Ok(())
 }
 
@@ -484,24 +498,25 @@ pub(crate) fn forward(webview: &Webview, request: Forward) -> Result<Value, Stri
     let window = main_page(webview)?;
     let label = label_for(&window, &request.surface);
     let app = window.app_handle().clone();
+    let surface_exists = crate::surfaces::surface_handle(&window, &request.surface).is_ok();
     let outcome = match forward_timeout(&request.method, &request.timeout) {
-        Err(invalid) => Err(invalid),
-        Ok(_) if window.get_webview(&label).is_none() => Err(Failure::new(
-            MISSING_DOCUMENT,
-            format!("surface {} does not exist", request.surface),
-        )),
+		Err(invalid) => Err(invalid),
+		Ok(_) if !surface_exists => Err(Failure::new(
+			MISSING_DOCUMENT,
+			format!("surface {} does not exist", request.surface),
+		)),
         // status.next 는 제한 시간이 없다. 표면이 닫히면 1003 이다.
         Ok(timeout) => window
             .state::<Exposure>()
-            .relay
-            .request(&label, timeout, |id| {
-                emit_to(
-                    &app,
-                    &label,
-                    "exposure-request",
-                    json!({"id": id, "method": request.method, "params": request.params}),
-                )
-            }),
+			.relay
+			.request(&label, timeout, |id| {
+				emit_to(
+					&app,
+					window.label(),
+					"exposure-request",
+					json!({"id": id, "surface": request.surface, "method": request.method, "params": request.params}),
+				)
+			}),
     };
     Ok(match outcome {
         Ok(result) => json!({"result": result}),
@@ -760,74 +775,92 @@ pub(crate) fn with_view<T: Send + 'static>(
 fn window_status(window: &Window) -> Result<Value, Failure> {
     let platform = platform::current().map_err(internal)?;
     let handle = native_owner(window).map_err(internal)?;
-    let prefix = format!("surface-{}-", window.label());
-    let mut named = HashMap::new();
-    for webview in window.webviews() {
-        let Some(surface) = webview.label().strip_prefix(&prefix).map(str::to_string) else {
-            continue;
-        };
-        let view = with_view(&webview, move |view| platform.view_id(view)).map_err(internal)?;
-        named.insert(view, surface);
-    }
     let context = window_data(window).map_err(internal)?;
-    let documents = context.documents.names();
-    let images = context.images.names();
+    let snapshot = context.clone();
+    let (facts, named, documents, regions) = on_main(window, move || {
+        let facts = platform.window_facts(handle)?;
+        let named: HashMap<_, _> = snapshot
+            .surface_hosts
+            .lock()
+            .map_err(|e| e.to_string())?
+            .iter()
+            .map(|(id, handle)| (*handle, id.clone()))
+            .collect();
+        let documents = snapshot.documents.names();
+        let mut regions = Vec::new();
+        for (handle, (surface, name)) in snapshot.images.names() {
+            let text = platform.image_facts(handle)?;
+            let mut region: Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
+            region["surface"] = Value::String(surface);
+            region["name"] = Value::String(name);
+            regions.push(region);
+        }
+        Ok((facts, named, documents, regions))
+    })
+    .map_err(internal)?;
+    let webviews = facts["webviews"]
+        .as_array()
+        .ok_or_else(|| internal("window facts missing webviews"))?;
+    let document_webviews = facts["documentWebviews"]
+        .as_u64()
+        .ok_or_else(|| internal("window facts missing documentWebviews"))?;
+    let app_dom_webviews = facts["appDomWebviews"]
+        .as_u64()
+        .ok_or_else(|| internal("window facts missing appDomWebviews"))?;
     let overlay = &context.overlay;
-    // 잠금은 복사한 뒤 바로 놓는다. 메인 스레드 작업(with_view)을 기다리는 동안 잠금을 쥐면, 같은
-    // 잠금을 기다리는 메인 스레드의 모달 배치와 서로 기다린다.
-    let modal = overlay.view.lock().map_err(internal)?.clone();
-    let modal_view = match modal {
-        Some(view) => Some(with_view(&view, move |view| platform.view_id(view)).map_err(internal)?),
-        None => None,
-    };
-    let facts = on_main(window, move || platform.window_facts(handle)).map_err(internal)?;
     let mut surfaces = Vec::new();
     let mut attached = Vec::new();
-    let mut regions = Vec::new();
+    let modal_view = overlay
+        .view
+        .lock()
+        .map_err(internal)?
+        .clone()
+        .map(|view| with_view(&view, move |view| platform.view_id(view)).map_err(internal))
+        .transpose()?;
     let mut modal = match overlay.open_state() {
         Some((id, mode, shown)) => json!({"id": id, "mode": mode, "shown": shown,
             "frame": null, "order": null, "background": null}),
         None => Value::Null,
     };
     let rect = |view: &Value| json!({"x": view["x"], "y": view["y"], "width": view["width"], "height": view["height"]});
-    for (order, view) in facts["webviews"]
+    let native_surfaces = facts["nativeSurfaces"]
         .as_array()
-        .cloned()
-        .unwrap_or_default()
-        .iter()
-        .enumerate()
-    {
-        let Some(address) = view["view"].as_u64() else {
-            continue;
-        };
+        .ok_or_else(|| internal("window facts missing nativeSurfaces"))?;
+    for (order, view) in native_surfaces.iter().enumerate() {
+        let address = view["view"]
+            .as_u64()
+            .ok_or_else(|| internal("surface facts missing view"))?
+            as platform::Handle;
+        let surface = named
+            .get(&address)
+            .ok_or_else(|| internal("unregistered native surface"))?;
+        let hidden = view["hidden"]
+            .as_bool()
+            .ok_or_else(|| internal("surface facts missing hidden"))?;
+        surfaces
+            .push(json!({"id": surface, "frame": rect(view), "visible": !hidden, "order": order}));
+    }
+    for (order, view) in webviews.iter().enumerate() {
+        let address = view["view"]
+            .as_u64()
+            .ok_or_else(|| internal("webview facts missing view"))?;
         let address = address as platform::Handle;
-        if let Some(surface) = named.get(&address) {
-            surfaces.push(json!({"id": surface, "frame": rect(view),
-                "visible": !view["hidden"].as_bool().unwrap_or(false), "order": order}));
-        } else if let Some((surface, document)) = documents.get(&address) {
+        if let Some((surface, document)) = documents.get(&address) {
+            let hidden = view["hidden"]
+                .as_bool()
+                .ok_or_else(|| internal("webview facts missing hidden"))?;
             attached.push(
                 json!({"surface": surface, "document": document, "frame": rect(view),
-                "visible": !view["hidden"].as_bool().unwrap_or(false), "order": order}),
-            );
-        } else if let Some((surface, name)) = images.get(&address) {
-            regions.push(
-                json!({"surface": surface, "name": name, "frame": rect(view),
-                "visible": !view["hidden"].as_bool().unwrap_or(false), "focused": false,
-                "presented": null, "error": null}),
+                "visible": !hidden, "order": order}),
             );
         } else if modal.is_object() && modal_view == Some(address) {
             modal["frame"] = rect(view);
-            modal["order"] = json!(order);
+            // Native surface order is reported from a separate compositor plane, so its
+            // indices are not comparable with the webview subtree indices. A modal is
+            // attached above that entire plane and therefore owns the next order.
+            modal["order"] = json!(native_surfaces.len());
             modal["background"] = json!({"draws": view["draws"], "alpha": view["alpha"]});
         }
-    }
-    for (handle, (surface, name)) in images {
-        let handle = handle as platform::Handle;
-        let text = on_main(window, move || platform.image_facts(handle)).map_err(internal)?;
-        let mut region: Value = serde_json::from_str(&text).map_err(internal)?;
-        region["surface"] = Value::String(surface);
-        region["name"] = Value::String(name);
-        regions.push(region);
     }
     Ok(json!({
         "frame": facts["frame"],
@@ -837,6 +870,8 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
         "key": facts["key"],
         "active": facts["active"],
         "children": facts["children"],
+        "appDomWebviews": app_dom_webviews,
+        "documentWebviews": document_webviews,
         "controls": facts["controls"],
         "surfaces": surfaces,
         "documents": attached,

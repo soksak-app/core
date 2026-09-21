@@ -13,6 +13,13 @@ use serde_json::Value;
 use tauri::webview::PlatformWebview;
 use tauri::{AppHandle, WebviewWindowBuilder, Window, Wry};
 
+
+/// Authenticated persistent sidecar stream supplied by the active platform.
+pub trait PersistentStream: Read + Write + Send {
+    fn try_clone(&self) -> Result<Box<dyn PersistentStream>, String>;
+    fn shutdown(&self) -> Result<(), String>;
+}
+
 #[cfg(target_os = "macos")]
 #[path = "darwin/darwin.rs"]
 mod darwin;
@@ -119,6 +126,33 @@ pub struct DOMOverlay {
     pub visible: bool,
 }
 
+/// 메인 DOM 평면의 전역 overlay와 그 CSS 좌표.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct WindowOverlay {
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
+    pub visible: bool,
+}
+
+/// A value read from the user's system clipboard. `Absent` is not an error.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ClipboardValue {
+    Absent,
+    Text(String),
+    Png(Vec<u8>),
+    FileUrls(Vec<String>),
+}
+
+pub fn visible_window_overlay_rects(overlays: &[WindowOverlay]) -> Vec<f64> {
+    overlays
+        .iter()
+        .filter(|overlay| overlay.visible)
+        .flat_map(|overlay| [overlay.x, overlay.y, overlay.w, overlay.h])
+        .collect()
+}
+
 /// 적용된 그림 영역의 장치 픽셀 크기와 CSS 픽셀당 장치 픽셀 배율.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Raster {
@@ -128,12 +162,17 @@ pub struct Raster {
 }
 
 pub trait Platform: Send + Sync {
+    /// 현재 프레임워크 이벤트 콜백이 끝난 뒤 메인 큐에서 work 를 한 번 실행한다.
+    fn enqueue_ui(&self, work: Box<dyn FnOnce() + Send>) -> Result<(), String>;
+
     // 창
 
     /// 프로젝트 창 생성기에 운영체제별 창 설정을 적용한다.
     fn prepare_window<'a>(&self, builder: WindowBuilder<'a>) -> Result<WindowBuilder<'a>, String>;
     /// 창의 네이티브 주소를 반환한다.
     fn window_handle(&self, window: &Window) -> Result<Handle, String>;
+    fn set_main_webview(&self, window: Handle, main: Handle) -> Result<(), String>;
+    fn set_main_appearance(&self, view: &PlatformWebview, dark: bool) -> Result<(), String>;
     /// 창을 전체 화면으로 바꾸거나 되돌리고, 전환이 끝나면 done 을 호출한다. 전환 중에 온 요청은
     /// 그 전환이 끝난 뒤에 처리한다.
     fn fullscreen(&self, window: Handle, on: bool, done: Box<dyn Fn()>) -> Result<(), String>;
@@ -169,10 +208,16 @@ pub trait Platform: Send + Sync {
         w: f64,
         h: f64,
     ) -> Result<(), String>;
-    /// Apply the requested system appearance to the application webview.
-    fn set_main_appearance(&self, view: &PlatformWebview, dark: bool) -> Result<(), String>;
     /// 웹뷰의 현재 위치와 크기를 페이지 좌표로 반환한다.
     fn webview_frame(&self, view: &PlatformWebview) -> Result<[f64; 4], String>;
+    /// 메인 DOM 웹뷰 아래에 논리 SurfaceHost를 만든다. 이 호출은 DOM 웹뷰를 만들지 않는다.
+    fn create_surface(&self, main: Handle) -> Result<Handle, String>;
+    fn close_surface(&self, surface: Handle) -> Result<(), String>;
+    fn place_surface(&self, surface: Handle, x: f64, y: f64, w: f64, h: f64) -> Result<(), String>;
+    fn surface_frame(&self, surface: Handle) -> Result<[f64; 4], String>;
+    fn set_surface_hidden_handle(&self, surface: Handle, hidden: bool) -> Result<(), String>;
+    fn set_surface_alpha_handle(&self, surface: Handle, alpha: f64) -> Result<(), String>;
+    fn set_window_overlays(&self, main: Handle, overlays: &[WindowOverlay]) -> Result<(), String>;
     /// 표면 웹뷰를 main 웹뷰의 표면 컨테이너에 등록한다.
     fn attach_surface(&self, view: &PlatformWebview, main: Handle) -> Result<(), String>;
     /// 표면 웹뷰와 그 SurfaceHost를 표면 컨테이너에서 제거한다.
@@ -203,6 +248,11 @@ pub trait Platform: Send + Sync {
         store: &str,
         changed: Box<dyn Fn(String)>,
     ) -> Result<Handle, String>;
+    fn set_document_event(
+        &self,
+        document: Handle,
+        event: Box<dyn Fn(String) + Send>,
+    ) -> Result<(), String>;
     /// http 또는 https 주소를 연다. 그 밖의 주소이면 false 를 반환한다. 메인 스레드에서 호출한다.
     fn load_document(&self, document: Handle, url: &str) -> Result<bool, String>;
     /// 뒤로 0, 앞으로 1, 다시 읽기 2, 멈춤 3 을 실행하고 실행했는지 반환한다. 메인 스레드에서 호출한다.
@@ -350,6 +400,9 @@ pub trait Platform: Send + Sync {
     /// after 의 표시 시각(ms, 0 이면 호출 시각)까지 기록한 뒤 기록을 끝내고 기록한 프레임 수를 반환한다.
     fn capture_stop(&self, after: f64) -> Result<i32, String>;
     #[cfg(feature = "diagnostics")]
+    /// 마지막 녹화가 유한한 프레임 상한에 도달해 자동으로 멈췄는지 반환한다.
+    fn capture_limited(&self) -> Result<bool, String>;
+    #[cfg(feature = "diagnostics")]
     /// 마지막으로 멈춘 기록에서 연속한 프레임 사이의 가장 긴 표시 간격(ms).
     fn capture_longest_gap(&self) -> Result<f64, String>;
 
@@ -368,6 +421,11 @@ pub trait Platform: Send + Sync {
 
     /// Dock 메뉴에 새 창 항목을 설치한다. 항목을 선택하면 new_window 를 호출한다.
     fn install_dock_menu(&self, new_window: Box<dyn Fn()>) -> Result<(), String>;
+
+    // 클립보드. 구현은 호출자가 메인 스레드에서 호출한다는 계약을 따른다.
+    fn clipboard_read(&self, kind: &str) -> Result<ClipboardValue, String>;
+    fn clipboard_write_text(&self, text: &str) -> Result<(), String>;
+    fn clipboard_write_png(&self, bytes: &[u8]) -> Result<(), String>;
     /// Dock 메뉴 항목의 제목 목록을 반환한다. 메인 스레드에서 호출한다.
     fn dock_items(&self) -> Result<Value, String>;
     /// 제목이 title 인 Dock 메뉴 항목을 실행한다. 메인 스레드에서 호출한다.
@@ -387,6 +445,10 @@ pub trait Platform: Send + Sync {
     fn endpoint_listen(&self, directory: &Path, name: &str) -> Result<Box<dyn Listener>, String>;
     /// 로컬 엔드포인트 주소에 연결한다.
     fn endpoint_connect(&self, address: &str) -> Result<Box<dyn Connection>, String>;
+    /// persistent sidecar service socket에 연결한다.
+    fn connect_service(&self, address: &str) -> Result<Box<dyn PersistentStream>, String>;
+    /// service directory를 현재 사용자 전용으로 만든다.
+    fn secure_service_directory(&self, path: &Path) -> Result<(), String>;
 }
 
 /// 현재 운영체제의 구현을 반환한다.
