@@ -6,6 +6,7 @@
 - Fix native document visibility after restoring a surface: the host is made visible before document geometry is reapplied. The current Tauri browser E2E previously observed the correct frame with `visible:false`; the native regression and rebuilt browser navigation/input/scroll/placement/isolation check now pass. F3 controlled-site pixel and restore/new-document checks remain open.
 - Apply the current host theme when creating a native document and persist each browser surface's explicit HTTP(S) location. Rebuilt Tauri and Wails browser E2E pass controlled-site light/dark pixel checks for existing, new, and reloaded documents; invalid stored locations fail explicitly.
 - Verify Google Search site-preference isolation: the disposable profile's explicit light preference stays at `[255,255,255]` while the host changes light→dark, and the Google URL is unchanged on both rebuilt hosts.
+- Close the terminal resource/recovery gate with an explicit failure-domain boundary: application loss/update reconnects to the surviving shared service, while a service crash is reported as service failure and never replaced by an unclaimed new session.
 
 [한국어](CHANGELOG.ko.md)
 
