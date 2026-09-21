@@ -76,7 +76,7 @@
   - [ ] Wails 생성/숨김/로드/배치/ready/표시/포커스/갱신/종료 및 이벤트 전달. 양쪽의 실제 픽셀·배경 입력 차단·닫기 규칙·포커스 복원·이동/크기/재열기/리로드·오래된 응답 거부 검사.
 - [ ] F11 — 노출과 진단 동등성 완료.
   - [ ] 선언된 명령·상태·DOM 항목이 실제 동작으로 이어지고 binder 감사가 모든 표시된 조작 상태를 검사한다.
-  - [ ] 양쪽 호스트의 상한 녹화는 실제 count·limited·longestGap 반환. 상한 도달은 정상이고 제스처 누락은 측정만 실패한다. release에서 진단 제외, 녹화 정리.
+  - [o] 양쪽 호스트의 상한 녹화는 실제 count·limited·longestGap을 반환한다. Red는 Wails 응답에 `limited`가 빠진 것이었고, 플랫폼 계약이 공용 macOS 상한 상태를 읽어 반환하도록 고쳤다. 상한 도달은 정상이고 제스처 누락은 측정만 실패한다. release에서 진단 제외, 녹화 정리. Wails payload 검사가 상한·비상한 결과를 모두 통과한다.
 - [ ] V1 — 과거 증거의 실제 범위를 보존하고 근거 없는 완료 주장을 제거하며 정본·번역 상태를 동기화한다.
 - [ ] V2 — 감사 기반과 기본 동작을 완료하고 Tauri 안정화 후 같은 계약으로 Wails를 완료한다. 시작하지 않은 작업을 명목상 진행 중으로 두지 않는다.
 - [ ] V3 — 의미 단위마다 관측된 Red → 구현 → 기준을 유지한 Green → 문서/메모리 → 해당 커밋. 커밋 전체를 마지막으로 미루지 않는다.
@@ -89,7 +89,7 @@
 
 기계적 호스트 검사는 `apps/tauriv2/test/runtime.test.mjs: no counterpart in apps/wailsv3`를 보고한다. 이것은 파일 구조 차이다. Wails의 `runtime-contract.test.mjs`에 이미 `waitPresented` 전달 검사가 있으므로 같은 파일명 부재만으로 동작 검사 누락을 단정하지 않는다. 반환값 전달에는 양쪽 어댑터를 거친 동일 단언이 여전히 필요하다.
 
-진단 녹화 상한 계약도 비대칭이다. Tauri의 `diagnostics.capture.stop`은 `frames`, `count`, `limited`, `longestGap`을 반환하지만, 현재 Wails는 `frames`, `count`, `longestGap`만 반환하고 `platform.Capturer`에도 `CaptureLimited` 연산이 없다. 공용 macOS 캡처 구현과 녹화 상태 검사는 양쪽 호스트에 있으므로, 확인된 차이는 Wails의 상한 상태 계약과 그 검증이며 Wails 캡처 구현 전체가 없는 것은 아니다.
+현재 macOS 호스트의 진단 녹화 상한 계약은 대칭이다. 양쪽 `diagnostics.capture.stop` 구현이 `frames`, `count`, `limited`, `longestGap`을 반환하며, Wails 플랫폼 어댑터는 공용 macOS 상한 상태를 읽는다. Wails payload 검사는 상한·비상한 결과를 모두 다룬다. `limited: true`는 정상 결과이고, 제스처 끝을 기록하지 못한 경우에만 측정을 실패시킨다.
 
 모달 구현에는 더 큰 차이가 확인됐다. Tauri의 `modals::show`는 자식 네이티브 WebView를 만들고 `/overlay.html`을 로드한 뒤 `ready` 전까지 숨기며, 모드별 배경을 적용하고 위로 올린 후 포커스를 준다. Wails의 `OverlayShow`는 모달 상태를 저장하고 `modal-content`만 발행하며 모달 WebView를 생성하거나 로드하지 않는다. Wails의 `ConfigureModal`과 `FocusModal`도 선언만 있고 호출 지점이 없다. 따라서 DOM/네이티브 구조 정리 후 Wails에서는 투명 분할 모달과 반투명 설정 모달이 모두 실제로 존재하지 않는다. 이것은 외관 테스트만의 실패가 아니라 구현 경로 누락이다.
 

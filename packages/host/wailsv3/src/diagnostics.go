@@ -118,6 +118,22 @@ func (c platformCapture) Start(directory string) error { return c.CaptureStart(d
 func (c platformCapture) Wait() (bool, error)          { return c.CaptureWait() }
 func (c platformCapture) Stop() (int, error)           { return c.CaptureStop(c.after) }
 
+func (c platformCapture) Limited() bool { return c.CaptureLimited() }
+
+type captureStatus interface {
+	Limited() bool
+	LongestGap() float64
+}
+
+func captureStopPayload(c captureStatus, directory string, count int) map[string]any {
+	return map[string]any{
+		"frames":     directory,
+		"count":      count,
+		"limited":    c.Limited(),
+		"longestGap": c.LongestGap(),
+	}
+}
+
 // recorder 는 이 플랫폼의 녹화 장치를 반환한다.
 func recorder() (platformCapture, error) {
 	capturer, ok := system.(platform.Capturer)
@@ -281,8 +297,13 @@ func diagnosticCaptureStop(e *Endpoint, _ *endpointConn, params json.RawMessage)
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"frames": directory, "count": count, "longestGap": capture.CaptureLongestGap()}, nil
+	return captureStopPayload(captureStatusAdapter{capture}, directory, count), nil
 }
+
+type captureStatusAdapter struct{ platformCapture }
+
+func (c captureStatusAdapter) Limited() bool       { return c.CaptureLimited() }
+func (c captureStatusAdapter) LongestGap() float64 { return c.CaptureLongestGap() }
 
 // diagnosticKnob 은 합성기의 검사 값을 페이지에 전달한다.
 func diagnosticKnob(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {

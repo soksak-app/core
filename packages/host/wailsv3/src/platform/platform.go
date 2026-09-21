@@ -66,6 +66,8 @@ type Capturer interface {
 	// CaptureStop 은 녹화를 끝내고 기록한 프레임 수를 반환한다.
 	// after 는 녹화에 포함할 마지막 표시 시각(ms, 표시 시각과 같은 시계)이고, 0 이면 호출 시각이다.
 	CaptureStop(after float64) (int, error)
+	// CaptureLimited reports whether the last recording reached the frame cap.
+	CaptureLimited() bool
 	// CaptureLongestGap 은 마지막으로 멈춘 녹화에서 연속한 프레임 사이의 가장 긴 표시 간격(ms)이다.
 	CaptureLongestGap() float64
 }

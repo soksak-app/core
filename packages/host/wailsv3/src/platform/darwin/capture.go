@@ -59,4 +59,6 @@ func (implementation) CaptureStop(after float64) (int, error) {
 
 func (implementation) CaptureWait() (bool, error) { return C.sp_capture_wait() != 0, nil }
 
+func (implementation) CaptureLimited() bool { return bool(C.sp_capture_limited()) }
+
 func (implementation) CaptureLongestGap() float64 { return float64(C.sp_capture_longest_gap()) }
