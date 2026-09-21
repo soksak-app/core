@@ -6,39 +6,63 @@ Validation applies to the stated implementation only. Passing tests does not mea
 
 ## Active implementation checklist
 
-`[ ]` means not implemented or not tested, `[~]` means work or verification is in progress, and `[o]` means the stated item has evidence. An inspection result does not complete a behavior check. The approved [terminal runtime](spec/terminal-runtime.md) replaces the per-surface session lifetime and separate PTY helper design; these changes are not yet validated in rebuilt applications.
+This is the only task checklist. The Korean file is its translation, not another work queue. `[ ]` means waiting, `[~]` means active work, and `[o]` means the stated acceptance criteria have current evidence. Historical passes below do not validate later changes. Independent work may run in parallel, but finish active work, its verification, documentation, and meaningful commit before accumulating more active work. The [verification contract](spec/verification.md) defines the gates.
 
-- [o] Inspect PTY close, consumer cleanup, ignored terminal engine events, and unsupported composition input.
-- [o] Implement one persistent terminal service with independent sessions and explicit normal close; current-HEAD Tauri and Wails checks confirm one service, three independent PTY children, and PTY reaping without killing the service.
-- [o] Replace internal surface webviews with one app DOM per window and logical native containers; rebuilt Tauri and Wails checks confirm one app DOM and independent document WebViews.
-- [~] Correct observed startup and first-surface integration failures: invalid AppKit appearance selector, surface-port registry scope, first-run configuration path, main-view registration timing, Tauri surface-map self-lock, and Wails window/view handle mismatch. Startup screenshots and process stacks establish failures; complete three-terminal application verification remains required.
-- [o] Verify the macOS native container component with three logical surfaces, two external document views, measured app DOM count, clipping, and explicit main-view input identity. This is not a rebuilt-host result.
-- [o] Reproduce and correct missing logical surfaces in native window facts. The new three-container count assertion failed against the WebView-only measurement and passed after adding native-container facts. Both host readers now use those measured containers; rebuilt-host verification is pending.
-- [o] Remove URL-origin inference from the native presentation wait. The new same-origin-document assertion failed before correction (3.007s) and passed afterward (0.009s); the app DOM's own presentation and open-transaction assertions remain required. All 11 component assertions passed; rebuilt-host behavior is pending.
-- [o] Reject malformed base64 input as a complete request instead of accepting its prefix. Two encoding tests pass after the malformed-input assertion failed on the old decoder.
-- [o] Replace the project-return process-count assertion with configuration-scoped service and shell PID identity checks; rebuilt Tauri and Wails checks pass with one terminal service, three PTY children, stable service and session identities across three project returns, and no zombie children.
-- [o] Verify terminal boundary intrusion and shell white pixels separately with three terminals and complete rapid gestures. Rebuilt Tauri and Wails project-return and fixed-cell drag captures pass; `make -C native/darwin test` passes the fractional WebView checks.
-- [~] Correct external-document appearance and native click ownership; application integration remains pending.
-- [ ] Implement and verify configurable cursor rendering.
-- [ ] Implement selection, clipboard, file/image input, inline images, and the sequence support inventory.
-- [o] Bounded diagnostic capture returns the actual frame count and an explicit `limited` state; full-gesture measurement rejects only evidence that ended at the bound, not the recording result.
-- [ ] Add the Wails side of the bounded-capture contract: `diagnostics.capture.stop` must return the actual frame count, `limited`, and `longestGap` just as Tauri does.
-- [ ] Implement the Wails native modal WebView lifecycle. `OverlayShow` must create, hide, load, place, reveal, focus, update, and close the modal document; verify both the transparent split modal (`mode=menu`) and the semi-transparent settings modal (`mode=dialog`).
-- [~] Enumerate and test every pinned-reference OSC selector and selected vendor extension: effect, response, or explicit policy/platform rejection.
-- [~] Enumerate and test every pinned-reference CSI final byte, parameter form, private mode, and device response. Scroll is tracked as CSI (`S`, `T`, `r`, `J`, `K`) with separate visible-grid, scrollback, cursor, alternate-screen, and selection assertions.
-- [~] Implement native marked-text handling and ordered committed input; real Korean IME validation remains pending.
-- [ ] Measure restoration phases and display loading/ready/error through actual first presentation.
-- [~] Build and verify both hosts, normal resource cleanup, crash reconnect, and update restart. Current-HEAD Tauri and Wails checks pass for three project returns with stable service/shell/session/document identities and normal terminal-tab close with all PTY children reaped; crash reconnect and update restart remain pending.
+- [~] G1 — Mechanically discover the entire workspace and enforce feature coverage, not matching file counts.
+  - [ ] Discover packages, build manifests, JS/TS, Rust, Go, Objective-C, declarations, scripts, and each public command/status/setting/host operation. Report uncovered implementation and uncovered tests separately.
+  - [ ] Link every feature to explicit implementation entry points, named behavior tests, expected results, and required verification levels. Reject unknown, duplicate, missing, or unresolved links. Shared native tests cannot substitute for either host integration.
+- [ ] G2 — Execute the same expected-state scenarios through Tauri and Wails adapters. Cover the full public contract, not only modal/capture examples; differences require explicit platform scope, not silent exclusion.
+- [ ] G3 — Prove audit failures with missing implementation/test, excluded execution, bad links, zero tests, mandatory skips, stale evidence, and a missing host. Prove behavior assertions reject no-op implementations and omitted effects/responses.
+- [~] G4 — Provide bounded, observable execution and attributable results across languages.
+  - [ ] Command supervision: explicit case identity, start/progress/final result, elapsed time, visible stdout/stderr, scoped timeout/cancellation cleanup.
+  - [ ] Language adapters: per-case discovery and results, expected/actual outcomes, 10s unit/30s native/60s application default limits with explicit exceptions, five-second progress, zero-test/skip/crash rejection.
+  - [ ] Evidence: source/test/dependency content including dirty changes, build flags, running host and sidecar hashes; retain initial failures on retry and reject old evidence.
+- [ ] F0 — Restore and validate startup and existing basic operation before calling the applications stable.
+  - [ ] Reproduce startup crashes/hangs, empty terminals, absent prompts, failed buttons, and lost input without resetting the reported window. Check appearance selector, registry scope, first-run paths, view identity/timing, self-locks, and aborted composition transactions.
+  - [ ] Project/library/window/tab creation, activation, split, close, settings, save/restore, and errors must produce expected observable state. During stabilization, run terminal/shell/browser/modal basics with each change-local check.
+- [ ] F1 — Verify DOM/native composition and reflow in actual project windows.
+  - [ ] Three or more terminals; rapid divider minimum-to-maximum and back six times in each of three project-return sets. Separately assert zero native intrusion into the left border and zero shell white remnants; require complete captures, real movement, no stopped drag, no blank unused region.
+  - [ ] Font and cell size stay fixed with no animation. Narrowing soft-wraps; widening joins soft wraps without losing text or changing hard newlines. Check Korean/wide cells, grid/PTY/raster/DOM sizes, scrollback, and distinct alternate-screen behavior.
+- [ ] F2 — Validate resource ownership, sharing, shutdown, and recovery under the [terminal runtime](spec/terminal-runtime.md).
+  - [ ] One app DOM per window, one persistent terminal service per configuration, independent PTY+shell per session; remove separate PTY helper. Measure three terminals and two browser documents, distinguishing owned processes from OS-managed WebKit helpers.
+  - [ ] Normal tab/window/app close reaps owned children and descendants. Crash/update reconnect preserves session, shell PID, parser state, and scrollback. Concurrent Tauri/Wails instances must not remove each other's endpoints or sessions.
+- [ ] F3 — Browser dark/light/dark propagation for restored and new documents: controlled site computed style and actual pixels, then Google with its own site preferences distinguished from host behavior.
+- [ ] F4 — One click inside a browser document selects the card and gives actual native focus. Verify typing, scrolling, and isolation from another browser/terminal.
+- [ ] F5 — Terminal focus and configurable cursor.
+  - [ ] One click accepts the first character and continued typing after output and Enter, across three terminals, tab/window switching, resize, browser use, modal close, and project return. A second click must never be required.
+  - [ ] Focused block/underline/beam; unfocused hollow/block/underline/beam/unchanged. Blink Never/Off/On/Always, positive millisecond interval (default 750), idle timeout (default 5s, zero disables timeout). Default block/Off/hollow; unfocused cursor steady; respect program visibility. Never/Always override program blink; Off/On allow it. Program shape overrides the configured default. No fade or size animation.
+  - [ ] Typed defaults in plugin.json, application values in environment.json, then user/project overrides. Shared settings UI, persistence, validation, transport, and effective status; invalid values fail explicitly. Verify state and pixels, not just a configuration object.
+- [ ] F6 — Terminal selection, copy/paste, bracketed paste, file drag, image paste/drag, and inline image display/delete. Define file ownership/lifetime; never silently drop input or autoexecute pasted text. Distinguish explicit user paste from program clipboard permission.
+- [ ] F7 — Complete pinned XTerm patch 411 (2026-08-23) OSC/CSI inventory and executable cases.
+  - [ ] OSC: title/icon, indexed/special/dynamic colors set/query/reset, pointer, font, clipboard, and permission queries; enumerate X11/log/Tektronix and nonnumeric entries rather than omitting them. OSC 7/8/133 and image extensions are separate vendor contracts.
+  - [ ] CSI: movement/save/restore, DECSCUSR 0–7, visibility, insert/delete/erase/repeat, tabs, scrolling/margins, SGR, modes set/reset/query, device/status/window replies, alternate screen, mouse/focus/keyboard, rectangle/protected cells, palette/attribute stacks. Scroll also checks visible grid, history, cursor, selection, and alternate screen.
+  - [ ] Test prefixes/intermediates/finals/parameters, fragmented bytes, BEL/ST, missing parameters, malformed input, response ordering, effect and query. Reuse the engine; do not create a second competing parser. Report unsupported/policy-denied entries separately: rejection is not implementation of an effect. Do not invent wire errors for protocols without a reply.
+  - [ ] Resolve physical X11/Tektronix-specific requirements explicitly before claiming complete support; no implicit platform exclusion or unapproved expansion into another display system.
+- [ ] F8 — Real macOS Korean IME: preedit, editing, cancellation, ranges and candidate placement; commit exactly once in order, never send uncommitted text to the PTY. Validate through both hosts.
+- [ ] F9 — Measure restoration connection/document/raster/first-presentation phases. Show loading until actual presentation, persistent actionable error on failure, and measured restoration improvement under the same fixture.
+- [ ] F10 — Restore both hosts' existing native modal contract, without redesigning the UI.
+  - [ ] Transparent split picker and settings with 50% black background plus 3px blur; retain the dedicated child-WebView contract and correct the conflicting main-DOM-only statement.
+  - [ ] Wails create/hide/load/place/ready/show/focus/update/close lifecycle and event routing. Both hosts: actual pixels, background input blocking, dismissal rules, focus return, move/resize/reopen/reload, and stale-response rejection.
+- [ ] F11 — Complete exposure and diagnostic parity.
+  - [ ] Declared commands/status/DOM entries must reach actual behavior; binder audit covers every visible interactive state.
+  - [ ] Bounded capture returns actual count, limited, and longestGap on both hosts. Reaching the cap is normal; missing gesture coverage fails only measurement. Release excludes diagnostics; recordings are cleaned up.
+- [ ] V1 — Preserve previous evidence with its actual scope; remove unsupported completion claims and keep this checklist and its translation synchronized.
+- [ ] V2 — Finish audit infrastructure and basic operation, then stabilize Tauri before completing Wails under identical contracts. Unimplemented work stays waiting rather than nominally active.
+- [ ] V3 — For each meaningful unit: observed Red, implementation, unchanged Green criteria, documentation/memory updates, and a scoped commit. Do not postpone all commits until the end.
+- [ ] V4 — Repeat from two independent initial states and repeat create/use/close/recreate in the same instance without manual state compensation.
+- [ ] V5 — Final required package/native/application/structure/documentation checks on matching builds with no mandatory skips, stale evidence, or unreported failures. No release or Windows/Linux execution claim without evidence.
+
+Previous completed component work remains evidence, not completion of these wider criteria: PTY cleanup and ordered-input inspection; one-service and one-app-DOM component checks; logical-container facts; removal of URL-origin inference from presentation waits (11 component assertions); strict base64 decoding (two assertions); configuration-scoped process identity; historical three-terminal drag/project-return checks; and Tauri bounded capture. Their recorded host/build scopes appear below.
 
 ## Tauri/Wails parity audit (2026-09-21)
 
-The mechanical host check is currently red: `make hosts-check` reports `apps/tauriv2/test/runtime.test.mjs: no counterpart in apps/wailsv3`. The missing Wails test is a validation gap for the Tauri runtime contract; it is not evidence that the Wails runtime implementation is absent.
+The mechanical host check reports `apps/tauriv2/test/runtime.test.mjs: no counterpart in apps/wailsv3`. This is a file-structure mismatch. Wails already tests `waitPresented` dispatch in `runtime-contract.test.mjs`; the missing filename alone does not establish missing behavior coverage. Returned-value propagation still needs the same assertion through both adapters.
 
 The bounded diagnostic capture contract is also asymmetric. Tauri's `diagnostics.capture.stop` returns `frames`, `count`, `limited`, and `longestGap`; Wails currently returns only `frames`, `count`, and `longestGap`, and its `platform.Capturer` has no `CaptureLimited` operation. The shared macOS capture implementation and the recording state tests exist on both hosts, so the confirmed gap is the Wails limit-state contract and its validation, not the entire Wails capture implementation.
 
 The modal implementation has a larger confirmed gap. Tauri's `modals::show` creates a child native WebView, loads `/overlay.html`, keeps it hidden until `ready`, then applies the mode-specific background, raises it, and focuses it. Wails `OverlayShow` only stores modal state and emits `modal-content`; it does not create or load a modal WebView. Wails' `ConfigureModal` and `FocusModal` methods are declared but have no call site. Consequently both the transparent split modal and the semi-transparent settings modal are currently absent in Wails after the DOM/native restructuring. This is an implementation gap, not an appearance-only test failure.
 
-The host test file sets otherwise have matching names, including `recording_test`, and the current structure checker reports no other missing counterpart before stopping at the app runtime test. This audit does not mark any other Tauri-only feature without evidence.
+The host test file sets otherwise have matching names, including `recording_test`. The structure checker accumulates differences; it does not stop at that runtime file. Matching names do not establish matching behavior. The previous 27-track source-glob audit omits native bridge languages outside its fixed roots and does not execute behavior checks; its pass is not feature-parity evidence.
 
 The real-session PTY close test failed with `No such process` when closing an already-exited child. After checking and reaping that child explicitly, the same two-session test passes without skipping. Full service reconnect, descendant cleanup, and repeated-close resource measurements remain pending.
 
