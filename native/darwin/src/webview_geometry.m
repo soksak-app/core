@@ -510,6 +510,11 @@ void webviewSetSurfaceHidden(void *handle, bool hidden) {
     NSCAssert(NSThread.isMainThread, @"webview geometry requires the UI thread");
     NSView *view = (NSView *)handle;
     SPSurfaceHost *host = surfaceHost(view);
+    // Native regions inspect the surface ancestry while applying geometry. Make
+    // the ancestry authoritative before reapplying it; otherwise restoring a
+    // surface leaves its documents hidden after the host becomes visible.
+    (host ?: view).hidden = hidden;
+    view.hidden = hidden;
     if (!hidden) {
         NSView *coordinates = host.superview;
         if ([coordinates isKindOfClass:SPSurfaceCoordinates.class]) {
@@ -521,8 +526,6 @@ void webviewSetSurfaceHidden(void *handle, bool hidden) {
         // become visible.
         notifyScale(host.nativePlane);
     }
-    (host ?: view).hidden = hidden;
-    view.hidden = hidden;
 }
 
 void webviewSetSurfaceAlpha(void *handle, double alpha) {

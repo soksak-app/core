@@ -197,6 +197,11 @@ int main(void) { @autoreleasepool {
     sp_document_frame(document, frame);
     check(frame[4] == 0, @"a region placed as not visible is hidden");
     sp_document_place(document, 10, 20, 30, 40, true);
+    webviewSetSurfaceHidden(surface, true);
+    sp_document_place(document, 10, 20, 30, 40, true);
+    webviewSetSurfaceHidden(surface, false);
+    sp_document_frame(document, frame);
+    check(frame[4] == 1, @"restoring a visible surface restores a document placed while the surface was hidden");
 
     check(!sp_document_load(document, "file:///etc/hosts"), @"a file address is rejected");
     check(!sp_document_load(document, "not a url"), @"an invalid address is rejected");
