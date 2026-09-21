@@ -10,14 +10,12 @@ package host
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math"
 	"sort"
 	"strings"
 	"sync"
 	"time"
-	"unsafe"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
@@ -268,9 +266,10 @@ func (h *Host) ask(s *Surfaces, method string, params any, timeout time.Duration
 
 // ExposureReplyRequest 는 문서가 요청 하나에 보낸 답이다.
 type ExposureReplyRequest struct {
-	ID     uint64          `json:"id"`
-	Result json.RawMessage `json:"result"`
-	Error  *RPCError       `json:"error"`
+	ID      uint64          `json:"id"`
+	Surface string          `json:"surface,omitempty"`
+	Result  json.RawMessage `json:"result"`
+	Error   *RPCError       `json:"error"`
 }
 
 // ExposureReply 는 메인 페이지가 exposure-request 에 보낸 답을 받는다.
@@ -279,7 +278,19 @@ func (h *Host) ExposureReply(ctx context.Context, req ExposureReplyRequest) erro
 	if err != nil {
 		return err
 	}
-	return h.relay.resolve(req.ID, s, "", ExposureResult{Result: req.Result, Error: req.Error})
+	if req.Surface == "" {
+		return h.relay.resolve(req.ID, s, "", ExposureResult{Result: req.Result, Error: req.Error})
+	}
+	if err := s.authorizeSurface(uint64(s.window.ID()), req.Surface); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	_, attached := s.compositions[req.Surface]
+	s.mu.Unlock()
+	if !attached {
+		return fmt.Errorf("surface %q is not attached", req.Surface)
+	}
+	return h.relay.resolve(req.ID, s, req.Surface, ExposureResult{Result: req.Result, Error: req.Error})
 }
 
 // ExposureChange 는 감시 중인 상태의 새 값이다.
@@ -346,15 +357,12 @@ func (h *Host) ExposureForward(ctx context.Context, req ExposureForwardRequest) 
 		return ExposureResult{Error: invalid}, nil
 	}
 	id, w := h.relay.open(s, req.Surface)
-	payload, err := json.Marshal(map[string]any{"event": "exposure-request",
-		"data": map[string]any{"id": id, "method": req.Method, "params": req.Params}})
-	if err != nil {
-		return ExposureResult{}, err
-	}
 	var sent bool
 	application.InvokeSync(func() {
-		if view := s.views[req.Surface]; view != nil {
-			view.execJS("window.__soksakNative?.receive(" + string(payload) + ")")
+		if s.views[req.Surface] != nil {
+			s.window.EmitEvent("exposure-request", map[string]any{
+				"id": id, "surface": req.Surface, "method": req.Method, "params": req.Params,
+			})
 			sent = true
 		}
 	})
@@ -385,6 +393,29 @@ func (s *Surfaces) surfaceOf(viewID uint64) string {
 		}
 	})
 	return id
+}
+
+// AuthorizeSurfaceCaller accepts either the owning surface view or the one explicit
+// main-page identity. An unknown view must not be treated as the main page.
+// AuthorizeSurfaceCaller validates a surface request against its explicit caller identity.
+func AuthorizeSurfaceCaller(caller, requested string, callerID, mainID uint64) error {
+	if caller != "" {
+		if caller != requested {
+			return fmt.Errorf("surface caller %q cannot access %q", caller, requested)
+		}
+		return nil
+	}
+	if mainID == 0 || callerID != mainID {
+		return fmt.Errorf("unknown view cannot access surface %q", requested)
+	}
+	return nil
+}
+
+func (s *Surfaces) authorizeSurface(viewID uint64, requested string) error {
+	if s.window == nil {
+		return fmt.Errorf("window is not available")
+	}
+	return AuthorizeSurfaceCaller(s.surfaceOf(viewID), requested, viewID, uint64(s.window.ID()))
 }
 
 // exposureRegister 는 표면 페이지의 등록을 메인 페이지에 전달한다.
@@ -446,14 +477,6 @@ func (s *Surfaces) reloadPage() error {
 }
 
 // exposureReply 는 표면 페이지가 전달받은 요청에 보낸 답을 받는다.
-func (s *Surfaces) exposureReply(viewID uint64, req ExposureReplyRequest) error {
-	surface := s.surfaceOf(viewID)
-	if surface == "" {
-		return errors.New("only surface documents reply to forwarded requests")
-	}
-	return s.host.relay.resolve(req.ID, s, surface, ExposureResult{Result: req.Result, Error: req.Error})
-}
-
 // surfacesClosed 는 제거된 표면의 등록 해제를 메인 페이지에 알리고 그 표면에 보낸 요청을 끝낸다.
 func (s *Surfaces) surfacesClosed(ids []string) {
 	if len(ids) == 0 {
@@ -755,7 +778,8 @@ type frame struct {
 
 // windowFacts 는 native/darwin 의 sp_window_facts 결과다.
 type windowFacts struct {
-	Frame   frame `json:"frame"`
+	Main    uint64 `json:"main"`
+	Frame   frame  `json:"frame"`
 	Content struct {
 		Width  float64 `json:"width"`
 		Height float64 `json:"height"`
@@ -773,6 +797,13 @@ type windowFacts struct {
 		Draws  bool    `json:"draws"`
 		Alpha  float64 `json:"alpha"`
 	} `json:"webviews"`
+	NativeSurfaces []struct {
+		frame
+		View   uint64 `json:"view"`
+		Hidden bool   `json:"hidden"`
+	} `json:"nativeSurfaces"`
+	AppDomWebviews   int `json:"appDomWebviews"`
+	DocumentWebviews int `json:"documentWebviews"`
 }
 
 // WindowSurface 는 host.window 의 표면 하나다.
@@ -835,32 +866,29 @@ type WindowRegion struct {
 
 // WindowStatus 는 host.window 의 값이다.
 type WindowStatus struct {
-	Frame     frame            `json:"frame"`
-	Content   frame            `json:"content"`
-	Scale     float64          `json:"scale"`
-	Maximized bool             `json:"maximized"`
-	Key       bool             `json:"key"`
-	Active    bool             `json:"active"`
-	Children  int              `json:"children"`
-	Controls  []WindowControl  `json:"controls"`
-	Surfaces  []WindowSurface  `json:"surfaces"`
-	Documents []WindowDocument `json:"documents"`
-	Regions   []WindowRegion   `json:"regions"`
-	Modal     *WindowModal     `json:"modal"`
+	Frame            frame            `json:"frame"`
+	Content          frame            `json:"content"`
+	Scale            float64          `json:"scale"`
+	Maximized        bool             `json:"maximized"`
+	Key              bool             `json:"key"`
+	Active           bool             `json:"active"`
+	Children         int              `json:"children"`
+	AppDomWebviews   int              `json:"appDomWebviews"`
+	DocumentWebviews int              `json:"documentWebviews"`
+	Controls         []WindowControl  `json:"controls"`
+	Surfaces         []WindowSurface  `json:"surfaces"`
+	Documents        []WindowDocument `json:"documents"`
+	Regions          []WindowRegion   `json:"regions"`
+	Modal            *WindowModal     `json:"modal"`
 }
 
 // viewNames 는 UI 스레드에서 표면 웹뷰의 id 와 모달 웹뷰의 주소를 읽는다.
-func (s *Surfaces) viewNames() (named map[uint64]string, modalHandle uint64) {
+func (s *Surfaces) viewNames() (named map[uint64]string) {
 	named = map[uint64]string{}
 	for view, id := range s.named {
 		named[uint64(view)] = id
 	}
-	s.mu.Lock()
-	if s.modalView != nil {
-		modalHandle = uint64(uintptr(s.modalView.handle))
-	}
-	s.mu.Unlock()
-	return named, modalHandle
+	return named
 }
 
 // windowState 는 host.window 의 현재 값을 읽는다.
@@ -868,68 +896,81 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 	var facts windowFacts
 	var named map[uint64]string
 	var documents map[uint64]DocumentKey
-	var modalHandle uint64
-	err := native(func() (string, error) { return system.WindowFacts(s.window.NativeWindow()) }, &facts,
-		func() { named, modalHandle = s.viewNames(); documents = s.documents.Names() })
+	regions := []WindowRegion{}
+	err := native(func() (string, error) {
+		named = s.viewNames()
+		documents = s.documents.Names()
+		for _, key := range s.images.Names() {
+			handle, err := s.images.Get(key)
+			if err != nil {
+				return "", err
+			}
+			text, err := system.FactsImage(handle)
+			if err != nil {
+				return "", fmt.Errorf("image %s/%s: %w", key.Surface, key.Name, err)
+			}
+			region := WindowRegion{Surface: key.Surface, Name: key.Name}
+			if err := json.Unmarshal([]byte(text), &region); err != nil {
+				return "", fmt.Errorf("image %s/%s facts: %w", key.Surface, key.Name, err)
+			}
+			regions = append(regions, region)
+		}
+		return system.WindowFacts(s.window.NativeWindow())
+	}, &facts, nil)
 	if err != nil {
 		return WindowStatus{}, err
 	}
 	out := WindowStatus{
 		Frame: facts.Frame, Content: frame{Width: facts.Content.Width, Height: facts.Content.Height},
 		Scale: facts.Scale, Maximized: facts.Zoomed, Key: facts.Key, Active: facts.Active, Children: facts.Children,
-		Controls: facts.Controls, Surfaces: []WindowSurface{}, Documents: []WindowDocument{}, Regions: []WindowRegion{},
+		Controls: facts.Controls, Surfaces: []WindowSurface{}, Documents: []WindowDocument{}, Regions: regions,
 	}
+	out.DocumentWebviews = facts.DocumentWebviews
+	out.AppDomWebviews = facts.AppDomWebviews
 	if out.Controls == nil {
 		out.Controls = []WindowControl{}
 	}
 	var modal *WindowModal
-	var imageHandles map[uint64]unsafe.Pointer
 	s.mu.Lock()
 	if s.modal != nil {
 		modal = &WindowModal{ID: s.modal.id, Mode: s.modal.content.Mode, Shown: s.modal.visible}
-	}
-	imageNames := map[uint64]ImageKey{}
-	if s.images != nil {
-		imageNames = s.images.Names()
-		imageHandles = map[uint64]unsafe.Pointer{}
-		for addr, key := range imageNames {
-			handle, err := s.images.Get(key)
-			if err == nil {
-				imageHandles[addr] = handle
+		if s.modal.view != nil && s.modal.visible {
+			modalView := uint64(uintptr(s.modal.view.handle))
+			found := false
+			for _, view := range facts.Webviews {
+				if view.View != modalView {
+					continue
+				}
+				frame := view.frame
+				modal.Frame = &frame
+				modalOrder := len(facts.NativeSurfaces) + len(facts.Webviews)
+				modal.Order = &modalOrder
+				modal.Background = &ModalBackground{Draws: view.Draws, Alpha: view.Alpha}
+				found = true
+				break
+			}
+			if !found {
+				s.mu.Unlock()
+				return WindowStatus{}, fmt.Errorf("visible modal webview %d is absent from window facts", modalView)
 			}
 		}
 	}
 	s.mu.Unlock()
+	if facts.NativeSurfaces == nil {
+		return WindowStatus{}, fmt.Errorf("window facts missing nativeSurfaces")
+	}
+	for order, view := range facts.NativeSurfaces {
+		id, ok := named[view.View]
+		if !ok {
+			return WindowStatus{}, fmt.Errorf("unregistered native surface %d", view.View)
+		}
+		out.Surfaces = append(out.Surfaces, WindowSurface{ID: id, Frame: view.frame, Visible: !view.Hidden, Order: order})
+	}
 	for order, view := range facts.Webviews {
-		if id, ok := named[view.View]; ok {
-			out.Surfaces = append(out.Surfaces, WindowSurface{ID: id, Frame: view.frame, Visible: !view.Hidden, Order: order})
-		} else if key, ok := documents[view.View]; ok {
+		if key, ok := documents[view.View]; ok {
 			out.Documents = append(out.Documents, WindowDocument{Surface: key.Surface, Document: key.Name,
 				Frame: view.frame, Visible: !view.Hidden, Order: order})
-		} else if modal != nil && modalHandle != 0 && view.View == modalHandle {
-			at, index := view.frame, order
-			modal.Frame, modal.Order = &at, &index
-			modal.Background = &ModalBackground{Draws: view.Draws, Alpha: view.Alpha}
 		}
-	}
-	// 그림 영역은 웹뷰가 아니므로 웹뷰 목록에 없다. 등록부의 핸들마다 네이티브에서 읽는다.
-	for addr, key := range imageNames {
-		handle, ok := imageHandles[addr]
-		if !ok {
-			continue // 예약만 되고 아직 만들어지지 않은 영역
-		}
-		var text string
-		var err error
-		// 네이티브 영역은 UI 스레드에서만 읽는다.
-		application.InvokeSync(func() { text, err = system.FactsImage(handle) })
-		if err != nil {
-			return WindowStatus{}, fmt.Errorf("image %s/%s: %w", key.Surface, key.Name, err)
-		}
-		region := WindowRegion{Surface: key.Surface, Name: key.Name}
-		if err := json.Unmarshal([]byte(text), &region); err != nil {
-			return WindowStatus{}, fmt.Errorf("image %s/%s facts: %w", key.Surface, key.Name, err)
-		}
-		out.Regions = append(out.Regions, region)
 	}
 	sort.Slice(out.Regions, func(a, b int) bool {
 		if out.Regions[a].Surface != out.Regions[b].Surface {
@@ -968,16 +1009,9 @@ func (s *Surfaces) hit(x, y float64) (map[string]any, error) {
 	}
 	var named map[uint64]string
 	var documents map[uint64]DocumentKey
-	var modalHandle uint64
-	var modalID string
 	err := native(func() (string, error) { return system.WindowHit(s.window.NativeWindow(), x, y) }, &got, func() {
-		named, modalHandle = s.viewNames()
+		named = s.viewNames()
 		documents = s.documents.Names()
-		s.mu.Lock()
-		if s.modal != nil {
-			modalID = s.modal.id
-		}
-		s.mu.Unlock()
 	})
 	if err != nil {
 		return nil, err
@@ -988,8 +1022,6 @@ func (s *Surfaces) hit(x, y float64) (map[string]any, error) {
 		return map[string]any{"kind": "document", "surface": key.Surface, "document": key.Name}, nil
 	case got.View != 0 && named[got.View] != "":
 		return map[string]any{"kind": "surface", "surface": named[got.View]}, nil
-	case got.View != 0 && got.View == modalHandle && modalID != "":
-		return map[string]any{"kind": "native", "identifier": "modal:" + modalID}, nil
 	case got.Main:
 		return map[string]any{"kind": "page"}, nil
 	default:

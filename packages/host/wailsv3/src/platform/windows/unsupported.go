@@ -30,6 +30,10 @@ func (implementation) PrepareWindow(unsafe.Pointer) error {
 	return unsupported("window preparation")
 }
 
+func (implementation) EnqueueUI(func()) error {
+	return unsupported("UI queue")
+}
+
 func (implementation) Fullscreen(unsafe.Pointer, bool, func()) error {
 	return unsupported("full screen")
 }
@@ -45,6 +49,19 @@ func (implementation) WindowControls(unsafe.Pointer) (platform.Rect, error) {
 func (implementation) WindowFacts(unsafe.Pointer) (string, error) {
 	return "", unsupported("window state")
 }
+func (implementation) ConfigureMainWindow(unsafe.Pointer, bool) {}
+func (implementation) SetMainWebview(unsafe.Pointer) error {
+	return unsupported("main webview identity")
+}
+func (implementation) MainWebview(unsafe.Pointer) (unsafe.Pointer, error) {
+	return nil, unsupported("main webview identity")
+}
+
+func (implementation) ClipboardRead(string) (platform.ClipboardValue, error) {
+	return platform.ClipboardValue{}, unsupported("clipboard read")
+}
+func (implementation) ClipboardWriteText(string) error { return unsupported("clipboard text write") }
+func (implementation) ClipboardWritePNG([]byte) error  { return unsupported("clipboard PNG write") }
 
 func (implementation) WindowHit(unsafe.Pointer, float64, float64) (string, error) {
 	return "", unsupported("window hit testing")
@@ -103,6 +120,10 @@ func (implementation) CreateDocument(unsafe.Pointer, string, func(string)) (unsa
 	return nil, unsupported("document view")
 }
 
+func (implementation) SetDocumentEvent(unsafe.Pointer, func(string)) error {
+	return unsupported("document events")
+}
+
 func (implementation) LoadDocument(unsafe.Pointer, string) bool {
 	unreachable("document navigation")
 	return false
@@ -132,6 +153,17 @@ func (implementation) CloseWebview(unsafe.Pointer) {
 func (implementation) WebviewFrame(unsafe.Pointer) platform.Rect {
 	unreachable("native webview frame")
 	return platform.Rect{}
+}
+func (implementation) CreateSurface(unsafe.Pointer) (unsafe.Pointer, error) {
+	return nil, missing("surface hosts")
+}
+func (implementation) CloseSurface(unsafe.Pointer)                                         {}
+func (implementation) SetSurfaceBounds(unsafe.Pointer, float64, float64, float64, float64) {}
+func (implementation) SurfaceFrame(unsafe.Pointer) platform.Rect                           { return platform.Rect{} }
+func (implementation) SetSurfaceHiddenHandle(unsafe.Pointer, bool)                         {}
+func (implementation) SetSurfaceAlphaHandle(unsafe.Pointer, float64)                       {}
+func (implementation) SetWindowOverlays(unsafe.Pointer, []platform.WindowOverlay) error {
+	return unsupported("window DOM overlays")
 }
 
 func (implementation) SetWebviewAlpha(unsafe.Pointer, float64) {
@@ -172,6 +204,10 @@ func (implementation) CancelLayout(unsafe.Pointer) error {
 }
 
 func (implementation) AfterSettled(unsafe.Pointer, func(float64)) error {
+	return unsupported("native presentation")
+}
+
+func (implementation) AfterPresentation(unsafe.Pointer, func()) error {
 	return unsupported("native presentation")
 }
 
@@ -217,6 +253,10 @@ func (implementation) InjectKey(unsafe.Pointer, string, string, uint, bool) (boo
 
 func (implementation) Listen(string, string) (net.Listener, platform.Endpoint, error) {
 	return nil, platform.Endpoint{}, unsupported("local endpoint")
+}
+
+func (implementation) ServiceProcessExists(pid int) bool {
+	return pid > 0
 }
 
 func (implementation) InstallDock(func()) error {

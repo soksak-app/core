@@ -164,6 +164,7 @@ type Endpoint struct {
 	mu       sync.Mutex
 	listener net.Listener
 	file     string
+	owner    EndpointInfo
 	conns    map[*endpointConn]bool
 	// counts 는 topic 마다 구독한 연결의 수다.
 	counts map[topic]int
@@ -193,7 +194,7 @@ func (e *Endpoint) Serve(listener net.Listener, info EndpointInfo, configDir str
 		return err
 	}
 	e.mu.Lock()
-	e.listener, e.file = listener, file
+	e.listener, e.file, e.owner = listener, file, info
 	e.mu.Unlock()
 	go e.accept(listener)
 	return nil
@@ -202,8 +203,8 @@ func (e *Endpoint) Serve(listener net.Listener, info EndpointInfo, configDir str
 // Close 는 연결을 받지 않고, 열린 연결을 닫고, endpoint.json 을 제거한다.
 func (e *Endpoint) Close() error {
 	e.mu.Lock()
-	listener, file := e.listener, e.file
-	e.listener, e.file = nil, ""
+	listener, file, owner := e.listener, e.file, e.owner
+	e.listener, e.file, e.owner = nil, "", EndpointInfo{}
 	conns := make([]*endpointConn, 0, len(e.conns))
 	for c := range e.conns {
 		conns = append(conns, c)
@@ -217,8 +218,20 @@ func (e *Endpoint) Close() error {
 		c.close()
 	}
 	if file != "" {
-		if err := os.Remove(file); err != nil && !os.IsNotExist(err) {
+		var current EndpointInfo
+		data, err := os.ReadFile(file)
+		switch {
+		case errors.Is(err, os.ErrNotExist):
+		case err != nil:
 			errs = append(errs, err)
+		case json.Unmarshal(data, &current) != nil:
+			errs = append(errs, fmt.Errorf("endpoint file %s is not valid JSON", file))
+		case current.PID == owner.PID && current.Address == owner.Address &&
+			current.Application == owner.Application && current.Started.Equal(owner.Started) &&
+			current.Executable == owner.Executable:
+			if err := os.Remove(file); err != nil && !os.IsNotExist(err) {
+				errs = append(errs, err)
+			}
 		}
 	}
 	return errors.Join(errs...)

@@ -89,3 +89,11 @@ func (implementation) Listen(directory, application string) (net.Listener, platf
 	}
 	return listener, platform.Endpoint{Transport: "unix", Address: address}, nil
 }
+
+func (implementation) ServiceProcessExists(pid int) bool {
+	if pid <= 0 {
+		return false
+	}
+	err := syscall.Kill(pid, 0)
+	return err == nil || err != syscall.ESRCH
+}

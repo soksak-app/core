@@ -10,6 +10,33 @@ import (
 	host "github.com/min-median-max/soksak/packages/host/wailsv3/src"
 )
 
+func TestNewConfigDirectoryPreservesRequestedPath(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "new", "configuration")
+	got, err := host.PrepareConfigDirectory(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := filepath.EvalSymlinks(path)
+	if err != nil || got != want {
+		t.Fatalf("canonical directory = %q, want %q: %v", got, want, err)
+	}
+	info, err := os.Stat(got)
+	if err != nil || !info.IsDir() {
+		t.Fatalf("configuration directory was not created: %v", err)
+	}
+	if _, err := host.PrepareConfigDirectory(""); err == nil {
+		t.Fatal("empty configuration path was accepted")
+	}
+	file := filepath.Join(root, "file")
+	if err := os.WriteFile(file, []byte("unchanged"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := host.PrepareConfigDirectory(filepath.Join(file, "config")); err == nil {
+		t.Fatal("a file was treated as a configuration directory")
+	}
+}
+
 func TestSettingsFilesAndInheritance(t *testing.T) {
 	root := t.TempDir()
 	config := t.TempDir()

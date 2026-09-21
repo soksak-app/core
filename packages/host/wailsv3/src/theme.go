@@ -2,6 +2,10 @@
 
 package host
 
+import (
+	"github.com/wailsapp/wails/v3/pkg/application"
+)
+
 // Theme 은 메인 페이지의 테마다. 호스트가 제공하는 페이지에 전달한다.
 type Theme struct {
 	Scheme string            `json:"scheme"`
@@ -27,6 +31,7 @@ func (s *Surfaces) SetTheme(theme Theme) error {
 	s.mu.Lock()
 	s.theme = theme
 	s.mu.Unlock()
+	application.InvokeSync(func() { system.ConfigureMainWindow(s.window.NativeWindow(), theme.Scheme == "dark") })
 	s.Emit("theme", theme)
 	return nil
 }

@@ -42,8 +42,7 @@ type DocumentKey struct {
 	Surface, Name string
 }
 
-// CheckDocument 는 호출한 표면 caller 가 req.Surface 이고 문서 이름이 올바른지 확인하고 키를 반환한다.
-// caller 가 빈 문자열이면 호출한 웹뷰는 이 창의 표면이 아니다.
+// CheckDocument 는 표면 호출자의 surface 소유권을 확인하고 키를 반환한다.
 func CheckDocument(caller string, req DocumentRequest) (DocumentKey, error) {
 	if caller == "" || caller != req.Surface {
 		return DocumentKey{}, fmt.Errorf("this document is not surface %q", req.Surface)
@@ -52,6 +51,17 @@ func CheckDocument(caller string, req DocumentRequest) (DocumentKey, error) {
 		return DocumentKey{}, fmt.Errorf("invalid document name %q", req.Document)
 	}
 	return DocumentKey{req.Surface, req.Document}, nil
+}
+
+func (s *Surfaces) checkDocument(viewID uint64, req DocumentRequest) (DocumentKey, error) {
+	if err := s.authorizeSurface(viewID, req.Surface); err != nil {
+		return DocumentKey{}, err
+	}
+	caller := s.surfaceOf(viewID)
+	if caller == "" {
+		caller = req.Surface
+	}
+	return CheckDocument(caller, req)
 }
 
 // Documents 는 창의 문서 영역이다. 값은 문서 웹뷰이고, 만드는 중인 영역은 nil 이다.
@@ -153,7 +163,7 @@ var documentActions = map[string]int{"back": 0, "forward": 1, "reload": 2, "stop
 
 // attachDocument 는 표면 안에 숨긴 문서 영역을 만든다. 같은 이름이 이미 있으면 오류다.
 func (s *Surfaces) attachDocument(viewID uint64, req DocumentRequest) error {
-	key, err := CheckDocument(s.surfaceOf(viewID), req)
+	key, err := s.checkDocument(viewID, req)
 	if err != nil {
 		return err
 	}
@@ -175,6 +185,7 @@ func (s *Surfaces) attachDocument(viewID uint64, req DocumentRequest) error {
 		})
 		if err == nil {
 			system.SetDocumentBackground(handle, s.dialog())
+			err = system.SetDocumentEvent(handle, func(event string) { s.documentEvent(key, event) })
 		}
 	})
 	if err != nil {
@@ -202,9 +213,15 @@ func (s *Surfaces) documentChanged(key DocumentKey, state string) {
 	s.windowChanged()
 }
 
+func (s *Surfaces) documentEvent(key DocumentKey, event string) {
+	payload := map[string]any{"surface": key.Surface, "document": key.Name, "event": json.RawMessage(event)}
+	s.emitToSurface(key.Surface, "document-event", payload)
+	s.windowChanged()
+}
+
 // withDocument 는 열린 문서 영역에 대해 UI 스레드에서 run 을 실행한다.
 func (s *Surfaces) withDocument(viewID uint64, req DocumentRequest, run func(handle unsafe.Pointer) error) error {
-	key, err := CheckDocument(s.surfaceOf(viewID), req)
+	key, err := s.checkDocument(viewID, req)
 	if err != nil {
 		return err
 	}
@@ -247,7 +264,7 @@ func (s *Surfaces) goDocument(viewID uint64, req DocumentRequest) (bool, error) 
 }
 
 func (s *Surfaces) detachDocument(viewID uint64, req DocumentRequest) error {
-	key, err := CheckDocument(s.surfaceOf(viewID), req)
+	key, err := s.checkDocument(viewID, req)
 	if err != nil {
 		return err
 	}
@@ -300,18 +317,13 @@ func (s *Surfaces) setDocumentsBackground(enabled bool) {
 	}
 }
 
-// emitToSurface 는 이벤트를 표면 id 의 웹뷰에만 보낸다. UI 스레드에서 호출한다.
+// 이벤트는 앱 DOM으로 보내며 모듈의 수신기가 payload의 surface 소유자를 확인한다.
 func (s *Surfaces) emitToSurface(surface, name string, data any) {
-	view := s.views[surface]
-	if view == nil {
+	if s.views[surface] == nil {
+		log.Printf("native event %s: surface %q is closed", name, surface)
 		return
 	}
-	payload, err := json.Marshal(map[string]any{"event": name, "data": data})
-	if err != nil {
-		log.Printf("native event: %v", err)
-		return
-	}
-	view.execJS("window.__soksakNative?.receive(" + string(payload) + ")")
+	s.window.EmitEvent(name, data)
 }
 
 // imageChanged 는 그림 영역 이벤트를 소유 표면에만 보내고 host.window 감시자에게 알린다. UI 스레드에서 호출된다.
@@ -323,7 +335,7 @@ func (s *Surfaces) imageChanged(key ImageKey, event string) {
 
 // attachImage 는 표면 안에 숨긴 그림 영역을 만든다. 같은 이름이 이미 있으면 오류다.
 func (s *Surfaces) attachImage(viewID uint64, req ImageRequest) error {
-	key, err := CheckImage(s.surfaceOf(viewID), req)
+	key, err := s.checkImage(viewID, req)
 	if err != nil {
 		return err
 	}
@@ -368,7 +380,7 @@ func (s *Surfaces) attachImage(viewID uint64, req ImageRequest) error {
 
 // withImage 는 열린 그림 영역에 대해 UI 스레드에서 run 을 실행한다.
 func (s *Surfaces) withImage(viewID uint64, req ImageRequest, run func(handle unsafe.Pointer) error) error {
-	key, err := CheckImage(s.surfaceOf(viewID), req)
+	key, err := s.checkImage(viewID, req)
 	if err != nil {
 		return err
 	}
@@ -421,7 +433,7 @@ func (s *Surfaces) closeSurfaceImages(surface string) {
 }
 
 func (s *Surfaces) detachImage(viewID uint64, req ImageRequest) error {
-	key, err := CheckImage(s.surfaceOf(viewID), req)
+	key, err := s.checkImage(viewID, req)
 	if err != nil {
 		return err
 	}

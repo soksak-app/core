@@ -25,6 +25,32 @@ type DOMOverlay struct {
 	Visible                  bool
 }
 
+// WindowOverlay is a main-DOM region that must participate in native hit ownership.
+type WindowOverlay struct {
+	X, Y, W, H float64
+	Visible    bool
+}
+
+// ClipboardValue distinguishes an empty clipboard from an operation error.
+type ClipboardValue struct {
+	Present bool
+	Type    string
+	Text    string
+	PNG     []byte
+	URLs    []string
+}
+
+func VisibleWindowOverlayRects(overlays []WindowOverlay) []float64 {
+	values := make([]float64, 0, len(overlays)*4)
+	for _, overlay := range overlays {
+		if !overlay.Visible {
+			continue
+		}
+		values = append(values, overlay.X, overlay.Y, overlay.W, overlay.H)
+	}
+	return values
+}
+
 // WebviewOptions 는 앱이 만드는 네이티브 웹뷰의 생성 값이다.
 type WebviewOptions struct {
 	// Identifier 는 웹뷰가 보낸 메시지에 붙는 번호다.
@@ -76,6 +102,8 @@ type Capturer interface {
 //
 // 오류를 반환하지 않는 함수는 오류를 반환하는 생성 함수가 만든 핸들만 받는다.
 type Platform interface {
+	// EnqueueUI 는 현재 프레임워크 이벤트 콜백이 끝난 뒤 메인 큐에서 work 를 한 번 실행한다.
+	EnqueueUI(work func()) error
 	// PrepareWindow 는 창의 콘텐츠 뷰와 메인 웹뷰의 크기를 맞춘다.
 	PrepareWindow(window unsafe.Pointer) error
 	// Fullscreen 은 창을 전체 화면으로 바꾸거나 되돌리고, 전환이 끝나면 done 을 UI 스레드에서
@@ -91,6 +119,12 @@ type Platform interface {
 	// WindowFacts 는 창의 프레임, 활성 상태, 창 단추와 웹뷰를 JSON 으로 반환한다. 형식은
 	// native/darwin/src/window_facts.h 의 sp_window_facts 와 같다. UI 스레드에서 호출한다.
 	WindowFacts(window unsafe.Pointer) (string, error)
+	SetMainWebview(window unsafe.Pointer) error
+	MainWebview(window unsafe.Pointer) (unsafe.Pointer, error)
+	ConfigureMainWindow(window unsafe.Pointer, dark bool)
+	ClipboardRead(kind string) (ClipboardValue, error)
+	ClipboardWriteText(text string) error
+	ClipboardWritePNG(bytes []byte) error
 	// WindowHit 는 창 좌표 (x, y) 의 히트 테스트 결과 {view, main, identifier} 를 JSON 으로 반환한다.
 	// UI 스레드에서 호출한다.
 	WindowHit(window unsafe.Pointer, x, y float64) (string, error)
@@ -113,6 +147,14 @@ type Platform interface {
 	CloseWebview(view unsafe.Pointer)
 	// WebviewFrame 은 뷰의 현재 영역을 페이지 좌표로 반환한다.
 	WebviewFrame(view unsafe.Pointer) Rect
+	// CreateSurface creates a logical SurfaceHost below the main DOM webview.
+	CreateSurface(main unsafe.Pointer) (unsafe.Pointer, error)
+	CloseSurface(surface unsafe.Pointer)
+	SetSurfaceBounds(surface unsafe.Pointer, x, y, width, height float64)
+	SurfaceFrame(surface unsafe.Pointer) Rect
+	SetSurfaceHiddenHandle(surface unsafe.Pointer, hidden bool)
+	SetSurfaceAlphaHandle(surface unsafe.Pointer, alpha float64)
+	SetWindowOverlays(main unsafe.Pointer, overlays []WindowOverlay) error
 	// SetWebviewAlpha 는 뷰의 불투명도를 정한다.
 	SetWebviewAlpha(view unsafe.Pointer, alpha float64)
 	// SetSurfaceOverlays 는 네이티브 입력보다 먼저 처리할 선언된 DOM 오버레이를 설정한다.
@@ -130,6 +172,7 @@ type Platform interface {
 	// 저장소의 이름이다. changed 는 상태 JSON({url, title, loading, progress, canGoBack, canGoForward,
 	// error, scroll}) 을 UI 스레드에서 받는다.
 	CreateDocument(surface unsafe.Pointer, store string, changed func(state string)) (unsafe.Pointer, error)
+	SetDocumentEvent(document unsafe.Pointer, event func(value string)) error
 	// LoadDocument 는 http 또는 https 주소를 연다. 그 밖의 주소이면 false 를 반환한다.
 	LoadDocument(document unsafe.Pointer, url string) bool
 	// GoDocument 는 뒤로 0, 앞으로 1, 다시 읽기 2, 멈춤 3 을 실행하고 실행했는지 반환한다.
@@ -171,6 +214,8 @@ type Platform interface {
 	CommitLayout(window unsafe.Pointer, ticket uint64) bool
 	// CancelLayout 은 진행 중인 배치를 취소한다.
 	CancelLayout(window unsafe.Pointer) error
+	// AfterPresentation 은 열린 배치를 커밋하기 전에 앱 문서의 표시 준비를 확인한다.
+	AfterPresentation(window unsafe.Pointer, done func()) error
 	// AfterSettled 는 창에 열린 표면 배치 트랜잭션이 없는 상태에서 메인 웹뷰와 보이는 앱 문서가 화면을
 	// 표시한 뒤 done 을 UI 스레드에서 호출한다. displayed 는 그 화면이 표시되는 시각(ms, mach 절대 시각)이다.
 	AfterSettled(window unsafe.Pointer, done func(displayed float64)) error
@@ -206,6 +251,9 @@ type Platform interface {
 	// 한다. application 은 주소 이름에 들어간다.
 	// 리스너를 닫으면 주소도 제거된다.
 	Listen(directory, application string) (net.Listener, Endpoint, error)
+	// ServiceProcessExists checks whether a persisted sidecar service process is
+	// still alive before its endpoint is reused after an application restart.
+	ServiceProcessExists(pid int) bool
 
 	// OnTermination 은 종료 신호(SIGTERM, SIGINT, SIGHUP)를 처음 받으면 quit 를 호출하게 한다. 그
 	// 뒤의 종료 신호는 기본 동작으로 프로세스를 끝낸다.

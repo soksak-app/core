@@ -421,6 +421,29 @@ func TestEndpointFileIsWrittenAndRemoved(t *testing.T) {
 	}
 }
 
+func TestEndpointCloseDoesNotRemoveReplacement(t *testing.T) {
+	endpoint, _, config := serve(t, newFakeBackend())
+	path := filepath.Join(config, "endpoint.json")
+	replacement := map[string]any{
+		"transport": "unix", "address": "replacement.sock", "pid": os.Getpid() + 1,
+		"application": "wailsv3", "version": "0.0.1", "executable": "/replacement",
+		"started": time.Now().UTC().Format(time.RFC3339),
+	}
+	data, err := json.Marshal(replacement)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := endpoint.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("replacement endpoint was removed: %v", err)
+	}
+}
+
 func TestWatchersBelongToTheirConnection(t *testing.T) {
 	backend := newFakeBackend()
 	endpoint, address, _ := serve(t, backend)

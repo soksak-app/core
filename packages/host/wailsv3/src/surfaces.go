@@ -10,8 +10,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"reflect"
 	"sync"
+	"time"
 	"unsafe"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -129,8 +131,17 @@ func (s *Surfaces) requireRegion(surface, name, kind, sidecar string) error {
 
 type SyncRequest struct {
 	// 연속적인 배치 갱신이 종료되었는지 나타낸다.
-	Settled  bool      `json:"settled"`
-	Surfaces []Surface `json:"surfaces"`
+	Settled  bool                   `json:"settled"`
+	Surfaces []Surface              `json:"surfaces"`
+	Overlays []WindowOverlayRequest `json:"overlays"`
+}
+
+type WindowOverlayRequest struct {
+	X       float64 `json:"x"`
+	Y       float64 `json:"y"`
+	W       float64 `json:"w"`
+	H       float64 `json:"h"`
+	Visible *bool   `json:"visible"`
 }
 
 // nativeWebviewOptions 는 표면과 모달 웹뷰의 생성 값이다.
@@ -144,9 +155,10 @@ type nativeWebviewOptions struct {
 
 // nativeWebview 는 앱이 만든 웹뷰다. 핸들과 레지스트리는 AppKit 주 스레드에서 읽고 바꾼다.
 type nativeWebview struct {
-	owner  *Surfaces
-	id     uint64
-	handle unsafe.Pointer
+	owner   *Surfaces
+	id      uint64
+	handle  unsafe.Pointer
+	logical bool
 }
 
 var nativeViews = map[uint64]*nativeWebview{}
@@ -190,7 +202,6 @@ type Surfaces struct {
 	first sync.Once
 	// 모달은 메인 창 안의 웹뷰이고, 표시할 때마다 만들고 닫을 때 제거한다. 인스턴스 번호로
 	// 이전 표시의 응답을 거부한다.
-	modalView *nativeWebview
 	nextModal uint64
 	modal     *modal
 	shapes    map[string]*nativeShape
@@ -223,27 +234,9 @@ func NewSurfaces(win *application.WebviewWindow, sidecars *Sidecars) *Surfaces {
 	return s
 }
 
-// Emit 은 이벤트를 이 창의 문서와 이 창에 속한 네이티브 웹뷰에만 전달한다.
+// Emit 은 이벤트를 이 창의 단일 앱 DOM에 전달한다.
 func (s *Surfaces) Emit(name string, data ...any) {
 	s.window.EmitEvent(name, data...)
-	var value any
-	if len(data) == 1 {
-		value = data[0]
-	} else if len(data) > 1 {
-		value = data
-	}
-	payload, err := json.Marshal(map[string]any{"event": name, "data": value})
-	if err != nil {
-		log.Printf("native event: %v", err)
-		return
-	}
-	application.InvokeSync(func() {
-		for _, view := range nativeViews {
-			if view.owner == s {
-				view.execJS("window.__soksakNative?.receive(" + string(payload) + ")")
-			}
-		}
-	})
 }
 
 // ProjectRoot 는 이 창의 프로젝트 디렉터리를 반환한다.
@@ -256,6 +249,13 @@ func (s *Surfaces) ProjectRoot() string {
 // SidecarSend 는 이 창의 표면 페이지가 보낸 메시지를 사이드카에 전달한다.
 func (s *Surfaces) SidecarSend(name, surface string, body json.RawMessage) error {
 	return s.sidecars.Send(s, name, surface, body)
+}
+
+func (s *Surfaces) sidecarSendFrom(viewID uint64, name, surface string, body json.RawMessage) error {
+	if err := s.authorizeSurface(viewID, surface); err != nil {
+		return err
+	}
+	return s.SidecarSend(name, surface, body)
 }
 
 // DecideImageEnvelope 은 사이드카가 보낸 이미지 봉투를 결정하고 처리한다.
@@ -327,12 +327,20 @@ func (s *Surfaces) resizing(id string, view *nativeWebview, live bool) {
 
 // press 는 뷰가 표면인지 반환하고, 표면이면 그 id 를 발행한다. 누름의 의미는 페이지가 결정한다.
 func (s *Surfaces) press(view uintptr) bool {
-	id, ok := s.named[view]
+	id, ok := SurfaceOwnerID(s.named, view)
 	if !ok {
 		return false
 	}
 	s.Emit("surface-pressed", id)
 	return true
+}
+
+// SurfaceOwnerID resolves the logical surface whose native view received input.
+// The map is populated when a logical surface is created and removed with it;
+// an unknown native view must never activate a card.
+func SurfaceOwnerID(named map[uintptr]string, view uintptr) (string, bool) {
+	id, ok := named[view]
+	return id, ok && id != ""
 }
 
 // point 는 왼쪽 단추 끌기의 한 단계를 페이지 좌표로 발행한다. phase 는 누름 0, 이동 1,
@@ -401,6 +409,18 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 		}
 	}
 	s.mu.Unlock()
+	windowOverlays := make([]platform.WindowOverlay, 0, len(req.Overlays))
+	for _, overlay := range req.Overlays {
+		if math.IsNaN(overlay.X) || math.IsNaN(overlay.Y) || math.IsNaN(overlay.W) || math.IsNaN(overlay.H) ||
+			math.IsInf(overlay.X, 0) || math.IsInf(overlay.Y, 0) || math.IsInf(overlay.W, 0) || math.IsInf(overlay.H, 0) {
+			return PreparedSurfaces{}, fmt.Errorf("invalid window overlay")
+		}
+		visible := true
+		if overlay.Visible != nil {
+			visible = *overlay.Visible
+		}
+		windowOverlays = append(windowOverlays, platform.WindowOverlay{X: overlay.X, Y: overlay.Y, W: overlay.W, H: overlay.H, Visible: visible})
+	}
 	// 페이지가 커밋했으므로 창이 화면에 있고 표면이 있다. 애플리케이션이 그려진 뒤에
 	// 한 번 실행할 작업은 여기서 시작한다.
 	s.first.Do(func() { s.Emit("page-ready") })
@@ -409,6 +429,15 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 	done := make(chan bool, 1)
 	var began error
 	application.InvokeSync(func() {
+		main, err := system.MainWebview(win.NativeWindow())
+		if err != nil {
+			began = err
+			return
+		}
+		if err := system.SetWindowOverlays(main, windowOverlays); err != nil {
+			began = err
+			return
+		}
 		s.lastPreparation++
 		prepared.Ticket = s.lastPreparation
 		began = system.BeginLayout(win.NativeWindow(), prepared.Ticket, func(allowed bool) {
@@ -430,6 +459,17 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 		s.sidecars.Close(id)
 	}
 	s.surfacesClosed(gone)
+	// DOM 표시를 기다리기 전에 적용한 크기의 이미지 준비를 시작한다.
+	if err := s.refreshImageRasters(); err != nil {
+		if cancel := system.EnqueueUI(func() {
+			if failure := system.CancelLayout(win.NativeWindow()); failure != nil {
+				log.Printf("cancel surface preparation: %v", failure)
+			}
+		}); cancel != nil {
+			return prepared, fmt.Errorf("%w; scheduling layout cancellation: %v", err, cancel)
+		}
+		return prepared, err
+	}
 	return prepared, nil
 }
 
@@ -448,6 +488,7 @@ func (s *Surfaces) watchInput(win *application.WebviewWindow) {
 type Placement struct {
 	ID string `json:"id"`
 	Rect
+	Visible bool `json:"visible"`
 }
 
 type PreparedSurfaces struct {
@@ -471,36 +512,63 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 		err    error
 	}
 	done := make(chan result, 1)
-	// Raster production and consumption must not block the AppKit thread. The
-	// layout transaction stays open until every visible image region has the
-	// raster that belongs to the prepared geometry. Waiting on the next WebKit
-	// presentation here would deadlock: that presentation is released by the
-	// same layout transaction we commit below.
+	// DOM 문서와 이미지 래스터를 모두 확인한다. 두 대기는 AppKit 스레드를 막지 않는다.
 	go func() {
-		if !s.images.WaitCurrent(pageTimeout) {
-			application.InvokeSync(func() {
-				if err := system.CancelLayout(win.NativeWindow()); err != nil {
-					log.Printf("surface layout cancel: %v", err)
-				}
-			})
-			done <- result{err: fmt.Errorf("the current image raster did not present within %s", pageTimeout)}
-			return
-		}
+		domReady := make(chan struct{})
+		var waiting error
 		application.InvokeSync(func() {
+			waiting = system.AfterPresentation(win.NativeWindow(), func() { close(domReady) })
+		})
+		if waiting == nil {
+			timer := time.NewTimer(pageTimeout)
+			select {
+			case <-domReady:
+			case <-timer.C:
+				waiting = fmt.Errorf("application documents did not present within %s", pageTimeout)
+			}
+			timer.Stop()
+		}
+		if waiting == nil {
+			waiting = s.refreshImageRasters()
+		}
+		if waiting == nil && !s.images.WaitCurrent(pageTimeout) {
+			waiting = fmt.Errorf("the current image raster did not present within %s", pageTimeout)
+		}
+		// 커밋과 취소는 프레임워크 이벤트 잠금 밖에서 실행한다.
+		if err := system.EnqueueUI(func() {
+			if waiting != nil {
+				if err := system.CancelLayout(win.NativeWindow()); err != nil {
+					waiting = fmt.Errorf("%w; cancelling layout: %v", waiting, err)
+				}
+				done <- result{err: waiting}
+				return
+			}
 			out := make([]Placement, 0, len(req.Placements))
 			for _, p := range req.Placements {
 				view := s.views[p.ID]
 				if view == nil {
-					continue
+					failure := fmt.Errorf("surface %q closed before presentation", p.ID)
+					if err := system.CancelLayout(win.NativeWindow()); err != nil {
+						failure = fmt.Errorf("%w; cancelling layout: %v", failure, err)
+					}
+					done <- result{err: failure}
+					return
 				}
-				out = append(out, Placement{ID: p.ID, Rect: Rect(system.WebviewFrame(view.NativeView()))})
+				view.SetHidden(!p.Visible)
+				out = append(out, Placement{ID: p.ID, Rect: Rect(system.SurfaceFrame(view.NativeView())), Visible: p.Visible})
 			}
 			committed := system.CommitLayout(win.NativeWindow(), req.Ticket)
-			if committed && req.Settled {
+			if !committed {
+				done <- result{err: fmt.Errorf("surface preparation %d is no longer current", req.Ticket)}
+				return
+			}
+			if req.Settled {
 				s.run(false)
 			}
 			done <- result{placed: out}
-		})
+		}); err != nil {
+			done <- result{err: err}
+		}
 	}()
 	outcome := <-done
 	if outcome.err != nil {
@@ -519,10 +587,10 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]str
 	}
 	wanted := map[string]bool{}
 	placed := make([]Placement, 0, len(req.Surfaces))
-	place := func(id string, view *nativeWebview, want Rect) {
+	place := func(id string, view *nativeWebview, want Rect, visible bool) {
 		want = aligned(win, want)
 		view.SetBounds(want.X, want.Y, want.W, want.H)
-		placed = append(placed, Placement{ID: id, Rect: Rect(system.WebviewFrame(view.NativeView()))})
+		placed = append(placed, Placement{ID: id, Rect: Rect(system.SurfaceFrame(view.NativeView())), Visible: visible})
 	}
 	for _, surface := range req.Surfaces {
 		s.mu.Lock()
@@ -537,30 +605,29 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]str
 		alpha := alphaFor(surface.Dim)
 		want := Rect{X: surface.X, Y: surface.Y, W: w, H: h}
 		if view, live := s.views[surface.ID]; live {
-			s.resizing(surface.ID, view, !req.Settled)
-			place(surface.ID, view, want)
-			view.SetHidden(!visible)
-			system.SetWebviewAlpha(view.NativeView(), alpha)
+			if visible {
+				place(surface.ID, view, want, visible)
+			} else {
+				placed = append(placed, Placement{ID: surface.ID, Rect: Rect(system.SurfaceFrame(view.NativeView())), Visible: visible})
+			}
+			// Keep the native view hidden until PresentSurfaces confirms that the
+			// corresponding application DOM frame has been displayed.
+			view.SetHidden(true)
+			system.SetSurfaceAlphaHandle(view.NativeView(), alpha)
 			continue
 		}
-		view, err := newNativeWebview(s, nativeWebviewOptions{
-			URL:    surface.URL,
-			X:      surface.X,
-			Y:      surface.Y,
-			Width:  w,
-			Height: h,
-
-			Hidden: !visible, Transparent: surface.Composition.Kind == "hybrid",
-		})
+		var handle unsafe.Pointer
+		var err error
+		application.InvokeSync(func() { handle, err = system.CreateSurface(win.NativeWindow()) })
 		if err != nil {
 			log.Printf("surface %s: %v", surface.ID, err)
 			continue
 		}
-		system.SetWebviewAlpha(view.NativeView(), alpha)
-		view.setBackground(s.dialog())
+		view := &nativeWebview{owner: s, handle: handle, logical: true}
+		system.SetSurfaceAlphaHandle(view.NativeView(), alpha)
 		s.views[surface.ID] = view
 		s.named[uintptr(view.NativeView())] = surface.ID
-		place(surface.ID, view, want)
+		place(surface.ID, view, want, visible)
 	}
 
 	// 이 목록은 페이지만 작성하므로 목록에 없는 표면은 제거된 표면이다.
@@ -569,15 +636,15 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]str
 		if wanted[id] {
 			continue
 		}
-		s.resizing(id, view, false)
 		s.closeSurfaceDocuments(id)
 		s.images.CloseSurface(id, func(handle unsafe.Pointer) {
 			system.CloseImage(handle)
 			s.windowChanged()
 		})
 		s.images.EndGeneration(id)
-		delete(s.named, uintptr(view.NativeView()))
+		nativeHandle := uintptr(view.NativeView())
 		view.Close()
+		delete(s.named, nativeHandle)
 		delete(s.views, id)
 		s.mu.Lock()
 		delete(s.compositions, id)
@@ -643,7 +710,11 @@ func (v *nativeWebview) SetURL(url string) error {
 func (v *nativeWebview) SetBounds(x, y, width, height float64) {
 	application.InvokeSync(func() {
 		if v.handle != nil {
-			system.SetWebviewBounds(v.handle, x, y, width, height)
+			if v.logical {
+				system.SetSurfaceBounds(v.handle, x, y, width, height)
+			} else {
+				system.SetWebviewBounds(v.handle, x, y, width, height)
+			}
 		}
 	})
 }
@@ -651,7 +722,11 @@ func (v *nativeWebview) SetBounds(x, y, width, height float64) {
 func (v *nativeWebview) SetHidden(hidden bool) {
 	application.InvokeSync(func() {
 		if v.handle != nil {
-			system.SetWebviewHidden(v.handle, hidden)
+			if v.logical {
+				system.SetSurfaceHiddenHandle(v.handle, hidden)
+			} else {
+				system.SetWebviewHidden(v.handle, hidden)
+			}
 		}
 	})
 }
@@ -678,7 +753,11 @@ func (v *nativeWebview) Close() {
 			return
 		}
 		delete(nativeViews, v.id)
-		system.CloseWebview(v.handle)
+		if v.logical {
+			system.CloseSurface(v.handle)
+		} else {
+			system.CloseWebview(v.handle)
+		}
 		v.handle = nil
 	})
 }

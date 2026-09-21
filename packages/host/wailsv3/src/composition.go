@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"reflect"
 	"unsafe"
 
 	"github.com/min-median-max/soksak/packages/host/wailsv3/src/platform"
@@ -26,6 +27,66 @@ type CompositionPlaceRequest struct {
 	Revision uint64                 `json:"revision"`
 	Regions  []CompositionPlacement `json:"regions"`
 	Overlays []CompositionPlacement `json:"overlays"`
+}
+
+type CompositionDeclareRequest struct {
+	Surface     string             `json:"surface"`
+	Composition SurfaceComposition `json:"composition"`
+}
+
+type pendingConfigure struct {
+	key           ImageKey
+	configuration *ImageConfigure
+}
+
+func (s *Surfaces) releaseImageConfigurations(configurations []pendingConfigure) {
+	for _, pending := range configurations {
+		s.images.RetryConfigure(pending.key, pending.configuration.Generation, pending.configuration.Raster)
+	}
+}
+
+func (s *Surfaces) sendImageConfigurations(configurations []pendingConfigure) error {
+	for index, pending := range configurations {
+		configuration := pending.configuration
+		body, err := json.Marshal(map[string]any{"image": map[string]any{"configure": configuration}})
+		if err != nil {
+			s.releaseImageConfigurations(configurations[index:])
+			return err
+		}
+		if err := s.sidecars.Send(configuration.Owner, configuration.Sidecar, pending.key.Surface, body); err != nil {
+			s.releaseImageConfigurations(configurations[index:])
+			return err
+		}
+	}
+	return nil
+}
+
+// 표면 복귀나 바깥 크기 변경은 DOM 여백이 같아도 실제 네이티브 래스터를 갱신해야 한다.
+func (s *Surfaces) refreshImageRasters() error {
+	var configurations []pendingConfigure
+	var failure error
+	application.InvokeSync(func() {
+		for key, handle := range s.images.Visible() {
+			width, height, scale, ok := system.RasterImage(handle)
+			if !ok {
+				failure = fmt.Errorf("image %q has no raster geometry", key.Name)
+				return
+			}
+			configuration, err := s.images.ConfigureRaster(key, width, height, scale, true)
+			if err != nil {
+				failure = err
+				return
+			}
+			if configuration != nil {
+				configurations = append(configurations, pendingConfigure{key, configuration})
+			}
+		}
+	})
+	if failure != nil {
+		s.releaseImageConfigurations(configurations)
+		return failure
+	}
+	return s.sendImageConfigurations(configurations)
 }
 
 func validPlacement(value CompositionPlacement) bool {
@@ -56,10 +117,34 @@ func exactPlacements(values []CompositionPlacement, names []string, what string)
 	return got, nil
 }
 
+// declareComposition registers the immutable composition contract before a
+// surface places its first frame.
+func (s *Surfaces) declareComposition(viewID uint64, request CompositionDeclareRequest) error {
+	if request.Surface == "" {
+		return fmt.Errorf("composition declaration requires a surface")
+	}
+	if err := s.authorizeSurface(viewID, request.Surface); err != nil {
+		return err
+	}
+	if err := validateComposition(request.Composition); err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if previous, exists := s.compositions[request.Surface]; exists {
+		if !reflect.DeepEqual(previous, request.Composition) {
+			return fmt.Errorf("surface %q changed its composition declaration", request.Surface)
+		}
+		return nil
+	}
+	s.compositions[request.Surface] = request.Composition
+	return nil
+}
+
 func (s *Surfaces) placeComposition(viewID uint64, request CompositionPlaceRequest) error {
-	caller := s.surfaceOf(viewID)
-	if caller == "" || caller != request.Surface {
-		return fmt.Errorf("this composition is not surface %q", request.Surface)
+	if err := s.authorizeSurface(viewID, request.Surface); err != nil {
+		return err
 	}
 	if request.Revision == 0 {
 		return fmt.Errorf("composition revision must be positive")
@@ -78,10 +163,6 @@ func (s *Surfaces) placeComposition(viewID uint64, request CompositionPlaceReque
 	regions, err := exactPlacements(request.Regions, regionNames, "regions")
 	if err != nil {
 		return err
-	}
-	type pendingConfigure struct {
-		key           ImageKey
-		configuration *ImageConfigure
 	}
 	var configurations []pendingConfigure
 	overlays, err := exactPlacements(request.Overlays, declaration.Overlays, "overlays")
@@ -162,18 +243,11 @@ func (s *Surfaces) placeComposition(viewID uint64, request CompositionPlaceReque
 		s.compositionRevisions[request.Surface] = request.Revision
 	})
 	if err != nil {
+		s.releaseImageConfigurations(configurations)
 		return err
 	}
-	for _, pending := range configurations {
-		body, marshalErr := json.Marshal(map[string]any{"image": map[string]any{"configure": pending.configuration}})
-		if marshalErr != nil {
-			return marshalErr
-		}
-		configuration := pending.configuration
-		if sendErr := s.sidecars.Send(configuration.Owner, configuration.Sidecar, request.Surface, body); sendErr != nil {
-			s.images.RetryConfigure(pending.key, configuration.Generation, configuration.Raster)
-			return sendErr
-		}
+	if err := s.sendImageConfigurations(configurations); err != nil {
+		return err
 	}
 	s.windowChanged()
 	return nil

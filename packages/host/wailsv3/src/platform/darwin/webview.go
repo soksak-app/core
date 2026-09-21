@@ -6,6 +6,10 @@ package darwin
 #include <stdbool.h>
 #include <stdlib.h>
 #include "webview_geometry.h"
+#include "window_facts.h"
+extern void *sp_surface_create(void *mainWebview);
+extern void sp_surface_close(void *surface);
+extern void sp_surface_set_window_overlays(void *mainWebview, const double *rects, size_t count);
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 
@@ -17,6 +21,8 @@ void nativeWebviewHidden(void *view, bool hidden);
 void nativeWebviewBackground(void *view, bool enabled);
 void nativeWebviewEval(void *view, const char *script);
 void nativeWebviewClose(void *view);
+void nativeWindowConfigureMain(void *window, bool dark);
+bool nativeWindowSetMainWebview(void *window);
 
 // 연속적인 표면 크기 변경의 시작과 종료를 웹뷰에 전달한다.
 static void surfaceBeginLiveResize(void* handle) {
@@ -149,12 +155,72 @@ func (implementation) EvaluateScript(view unsafe.Pointer, script string) {
 
 func (implementation) CloseWebview(view unsafe.Pointer) { C.nativeWebviewClose(view) }
 
+func (implementation) ConfigureMainWindow(window unsafe.Pointer, dark bool) {
+	C.nativeWindowConfigureMain(window, C.bool(dark))
+}
+func (implementation) SetMainWebview(window unsafe.Pointer) error {
+	if bool(C.nativeWindowSetMainWebview(window)) {
+		return nil
+	}
+	return fmt.Errorf("the main webview is not in the window hierarchy")
+}
+
+func (implementation) MainWebview(window unsafe.Pointer) (unsafe.Pointer, error) {
+	main := C.sp_window_main_webview(window)
+	if main == nil {
+		return nil, fmt.Errorf("the window has no registered app DOM webview")
+	}
+	return main, nil
+}
+
 // WebviewFrame 은 표면의 현재 영역을 반환한다. 호스트가 선언된 영역을 픽셀에 맞추므로
 // 페이지가 보낸 영역과 다를 수 있고, 페이지는 그 차이를 전달받는다.
 func (implementation) WebviewFrame(view unsafe.Pointer) platform.Rect {
 	var out [4]C.double
 	C.webviewGetFrame(view, &out[0])
 	return platform.Rect{X: float64(out[0]), Y: float64(out[1]), W: float64(out[2]), H: float64(out[3])}
+}
+
+func (implementation) CreateSurface(window unsafe.Pointer) (unsafe.Pointer, error) {
+	main := C.sp_window_main_webview(window)
+	if main == nil {
+		return nil, fmt.Errorf("the window has no registered app DOM webview")
+	}
+	handle := C.sp_surface_create(main)
+	if handle == nil {
+		return nil, fmt.Errorf("cannot create SurfaceHost")
+	}
+	return handle, nil
+}
+
+func (implementation) CloseSurface(surface unsafe.Pointer) { C.sp_surface_close(surface) }
+func (implementation) SetSurfaceBounds(surface unsafe.Pointer, x, y, width, height float64) {
+	C.webviewSetFrame(surface, C.double(x), C.double(y), C.double(width), C.double(height))
+}
+func (implementation) SurfaceFrame(surface unsafe.Pointer) platform.Rect {
+	return implementation{}.WebviewFrame(surface)
+}
+func (implementation) SetSurfaceHiddenHandle(surface unsafe.Pointer, hidden bool) {
+	C.webviewSetSurfaceHidden(surface, C.bool(hidden))
+}
+func (implementation) SetSurfaceAlphaHandle(surface unsafe.Pointer, alpha float64) {
+	C.webviewSetSurfaceAlpha(surface, C.double(alpha))
+}
+func (implementation) SetWindowOverlays(main unsafe.Pointer, overlays []platform.WindowOverlay) error {
+	if main == nil {
+		return fmt.Errorf("cannot set window overlays without the registered main webview")
+	}
+	packed := platform.VisibleWindowOverlayRects(overlays)
+	values := make([]C.double, len(packed))
+	for i, value := range packed {
+		values[i] = C.double(value)
+	}
+	var data *C.double
+	if len(values) > 0 {
+		data = &values[0]
+	}
+	C.sp_surface_set_window_overlays(main, data, C.size_t(len(values)/4))
+	return nil
 }
 
 func (implementation) SetWebviewAlpha(view unsafe.Pointer, alpha float64) {

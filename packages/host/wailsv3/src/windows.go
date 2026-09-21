@@ -49,6 +49,7 @@ type Host struct {
 	windows    map[uint]*Surfaces
 	owners     map[string]*Surfaces
 	sidecars   *Sidecars
+	configDir  string
 	// endpoint 는 로컬 엔드포인트이고 relay 는 페이지에 보낸 노출 요청이다.
 	endpoint *Endpoint
 	relay    relay
@@ -67,7 +68,7 @@ func newHost(sidecars *Sidecars, configDir string) (*Host, error) {
 		}
 		directory = filepath.Join(config, "com.soksak.wailsv3")
 	}
-	return &Host{workspace: NewWorkspace(directory), windows: map[uint]*Surfaces{}, owners: map[string]*Surfaces{}, sidecars: sidecars,
+	return &Host{workspace: NewWorkspace(directory), configDir: directory, windows: map[uint]*Surfaces{}, owners: map[string]*Surfaces{}, sidecars: sidecars,
 		relay: relay{waiting: map[uint64]*waiter{}}}, nil
 }
 
@@ -171,9 +172,35 @@ func prepareWindow(win *application.WebviewWindow) {
 
 // cancelLayout 은 창에서 진행 중인 표면 배치를 취소한다. UI 스레드에서 호출한다.
 func cancelLayout(win *application.WebviewWindow) {
-	if err := system.CancelLayout(win.NativeWindow()); err != nil {
+	owner := win.NativeWindow()
+	if err := system.EnqueueUI(func() {
+		if err := system.CancelLayout(owner); err != nil {
+			log.Printf("surface layout: %v", err)
+		}
+	}); err != nil {
 		log.Printf("surface layout: %v", err)
 	}
+}
+
+// 앱 DOM 재로드는 모든 플러그인 문서를 교체하지만 터미널 세션은 종료하지 않는다.
+func (s *Surfaces) reloadSurfaceDocuments() {
+	if err := system.CancelLayout(s.window.NativeWindow()); err != nil {
+		log.Printf("surface reload: %v", err)
+		return
+	}
+	ids := make([]string, 0, len(s.views))
+	for id, view := range s.views {
+		system.SetSurfaceHiddenHandle(view.handle, true)
+		s.closeSurfaceDocuments(id)
+		s.closeSurfaceImages(id)
+		s.images.BeginGeneration(id)
+		ids = append(ids, id)
+	}
+	s.mu.Lock()
+	clear(s.compositionRevisions)
+	s.mu.Unlock()
+	s.surfacesClosed(ids)
+	s.windowChanged()
 }
 
 // newWindow 는 창 레지스트리 잠금을 해제한 상태에서 UI 스레드의 창 생성을 실행한다.
@@ -193,6 +220,10 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 	// 실행되기 전에는 메인 스레드 호출을 할 수 없으므로 창 이벤트에서 한다.
 	place := func(*application.WindowEvent) {
 		application.InvokeSync(func() {
+			if err := system.SetMainWebview(win.NativeWindow()); err != nil {
+				log.Fatalf("main webview identity: %v", err)
+			}
+			system.ConfigureMainWindow(win.NativeWindow(), s.Theme().Scheme == "dark")
 			prepareWindow(win)
 			if _, err := system.UnifiedTitlebar(win.NativeWindow()); err != nil {
 				log.Printf("window: %v", err)
@@ -217,7 +248,9 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 		// 이전 페이지에 보낸 요청은 답을 받지 못한다.
 		h.relay.abandon(s, map[string]bool{"": true})
 		go h.windowsChanged()
-		application.InvokeSync(func() { cancelLayout(win) })
+		if err := system.EnqueueUI(s.reloadSurfaceDocuments); err != nil {
+			log.Printf("surface reload: %v", err)
+		}
 		s.discardOverlay()
 	})
 	win.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {

@@ -73,11 +73,23 @@ func Run(assets fs.FS, options Options) error {
 	if err != nil {
 		return err
 	}
-	sidecars, err := NewSidecars(frontend, filepath.Dir(executable))
+	configDirectory := options.ConfigDir
+	if configDirectory == "" {
+		config, err := os.UserConfigDir()
+		if err != nil {
+			return err
+		}
+		configDirectory = filepath.Join(config, "com.soksak.wailsv3")
+	}
+	configDirectory, err = PrepareConfigDirectory(configDirectory)
+	if err != nil {
+		return fmt.Errorf("config directory: %w", err)
+	}
+	sidecars, err := NewSidecars(frontend, filepath.Dir(executable), configDirectory)
 	if err != nil {
 		return err
 	}
-	host, err := newHost(sidecars, options.ConfigDir)
+	host, err := newHost(sidecars, configDirectory)
 	if err != nil {
 		return err
 	}

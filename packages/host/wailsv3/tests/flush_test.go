@@ -26,7 +26,7 @@ func TestEveryPendingReplyIsFlushedAfterTheQueueDrains(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	sidecars, err := host.NewSidecars(frontend(`{"executable":"build/echo","protocol":1}`), directory)
+	sidecars, err := host.NewSidecars(frontend(`{"executable":"build/echo","protocol":1}`), directory, directory)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +59,7 @@ func TestEveryPendingReplyIsFlushedAfterTheQueueDrains(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	// 같은 그림 a 에 다른 sequence 로 다시 보낸다. 최신(seq 4)만 도착해야 한다.
+	// 같은 그림 a 에 다른 sequence 로 다시 보낸다. immutable frame ack는 모두 도착해야 한다.
 	bodyMap := host.AfterPresent(true, "", "a", 1, 1, 4)
 	bodyBytes, _ := json.Marshal(bodyMap)
 	if err := sidecars.SendResponse(echoSidecar, "s1", "a", json.RawMessage(bodyBytes)); err != nil {
@@ -90,23 +90,17 @@ func TestEveryPendingReplyIsFlushedAfterTheQueueDrains(t *testing.T) {
 			t.Errorf("close %s never reached the sidecar", s)
 		}
 	}
-	// 같은 그림 a 의 seq 1, 2 두 번 보냈을 때 seq 2 하나만 도착해야 한다.
-	// 실제 JSON 필드 순서는 Marshal 결과를 기반으로 함.
-	aSeq1Pattern := `"name":"a","raster":1,"sequence":1` // seq 1 은 없어야 함
-	aSeq2Pattern := `"name":"a","raster":1,"sequence":2` // seq 2 는 있어야 함
-	aSeq4Pattern := `"name":"a","raster":1,"sequence":4` // seq 4 는 있어야 함 (최신)
-
-	if strings.Contains(text, aSeq1Pattern) {
-		t.Errorf("image a with sequence 1 should have been replaced, but found in output")
-	}
-	if strings.Contains(text, aSeq2Pattern) {
-		t.Errorf("image a with sequence 2 should have been replaced, but found in output")
-	}
-
-	// seq 4 는 정확히 한 번 나타나야 함 (최신 값)
-	count := strings.Count(text, aSeq4Pattern)
-	if count != 1 {
-		t.Errorf("image a with sequence 4 should appear exactly once, appeared %d times", count)
+	// 실제 JSON 필드 순서는 Marshal 결과를 기반으로 함. 각 immutable frame ack가
+	// 정확히 한 번씩 도착해야 하며, 같은 image의 새 sequence가 이전 frame을 덮어쓰지 않는다.
+	for _, pattern := range []string{
+		`"name":"a","raster":1,"sequence":1`,
+		`"name":"b","raster":1,"sequence":2`,
+		`"name":"c","raster":1,"sequence":3`,
+		`"name":"a","raster":1,"sequence":4`,
+	} {
+		if count := strings.Count(text, pattern); count != 1 {
+			t.Errorf("image frame %s should appear exactly once, appeared %d times", pattern, count)
+		}
 	}
 
 	// 순서: 닫힘과 반납은 큐에 먼저 들어간 큰 본문들보다 뒤에 온다.
@@ -131,7 +125,7 @@ func TestOrderIsCorrectWhenStopFlushesBufferedMessages(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	sidecars, err := host.NewSidecars(frontend(`{"executable":"build/echo","protocol":1}`), directory)
+	sidecars, err := host.NewSidecars(frontend(`{"executable":"build/echo","protocol":1}`), directory, directory)
 	if err != nil {
 		t.Fatal(err)
 	}

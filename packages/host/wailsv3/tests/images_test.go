@@ -96,7 +96,7 @@ func echoSidecarsForImages(t *testing.T) (*host.Sidecars, string) {
 	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	sidecars, err := host.NewSidecars(frontendForImages(`{"executable":"build/echo","protocol":1}`), directory)
+	sidecars, err := host.NewSidecars(frontendForImages(`{"executable":"build/echo","protocol":1}`), directory, directory)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -347,6 +347,55 @@ func TestPresentationWaitTracksTheVisibleCurrentRaster(t *testing.T) {
 	images.EndGeneration(key.Surface)
 	if !images.WaitCurrent(0) {
 		t.Fatal("an ended surface generation blocked presentation")
+	}
+}
+
+func TestSurfaceVisibilitySurvivesFirstDocumentNavigation(t *testing.T) {
+	images := host.NewImages()
+	key := host.ImageKey{Surface: "hidden", Name: "view"}
+	images.SetSurfaceVisible(key.Surface, false)
+	images.RemoveSurface(key.Surface)
+	images.BeginGeneration(key.Surface)
+	var handle int
+	owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: newFakeImageOwner("")}
+	if err := images.Reserve(key, owner); err != nil || !images.Set(key, unsafe.Pointer(&handle)) {
+		t.Fatalf("attach image: %v", err)
+	}
+	configuration, err := images.ConfigureRaster(key, 1, 1, 2, true)
+	if err != nil || configuration != nil || len(images.Visible()) != 0 || !images.CurrentPresented() {
+		t.Fatalf("navigation lost outer surface visibility: configuration=%+v error=%v", configuration, err)
+	}
+}
+
+func TestHiddenSurfaceDefersRasterConfiguration(t *testing.T) {
+	images := host.NewImages()
+	key := host.ImageKey{Surface: "hidden", Name: "view"}
+	owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: newFakeImageOwner("")}
+	var handle int
+	if err := images.Reserve(key, owner); err != nil || !images.Set(key, unsafe.Pointer(&handle)) {
+		t.Fatalf("attach image: %v", err)
+	}
+	images.SetSurfaceVisible(key.Surface, false)
+	configured, err := images.ConfigureRaster(key, 1, 1, 2, true)
+	if err != nil || configured != nil {
+		t.Fatalf("hidden surface sent raster configuration: %+v %v", configured, err)
+	}
+	if len(images.Visible()) != 0 {
+		t.Fatal("hidden surface was included in raster refresh")
+	}
+	images.SetSurfaceVisible(key.Surface, true)
+	if images.Visible()[key] != unsafe.Pointer(&handle) {
+		t.Fatal("shown surface was omitted from raster refresh")
+	}
+	shown := configureImage(t, images, key, 800, 600, 2)
+	if shown.Width != 800 || shown.Height != 600 {
+		t.Fatalf("shown surface did not configure its visible raster: %+v", shown)
+	}
+	if err := images.SetVisible(key, false); err != nil {
+		t.Fatal(err)
+	}
+	if len(images.Visible()) != 0 {
+		t.Fatal("hidden region was included in raster refresh")
 	}
 }
 

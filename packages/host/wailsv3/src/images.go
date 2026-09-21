@@ -37,7 +37,7 @@ type ImageKey struct {
 	Surface, Name string
 }
 
-// CheckImage 는 호출한 표면 caller 가 req.Surface 이고 그림 이름이 올바른지 확인하고 키를 반환한다.
+// CheckImage 는 표면 호출자의 surface 소유권을 확인하고 키를 반환한다.
 func CheckImage(caller string, req ImageRequest) (ImageKey, error) {
 	if caller == "" || caller != req.Surface {
 		return ImageKey{}, fmt.Errorf("this image is not surface %q", req.Surface)
@@ -46,6 +46,17 @@ func CheckImage(caller string, req ImageRequest) (ImageKey, error) {
 		return ImageKey{}, fmt.Errorf("invalid image name %q", req.Name)
 	}
 	return ImageKey{req.Surface, req.Name}, nil
+}
+
+func (s *Surfaces) checkImage(viewID uint64, req ImageRequest) (ImageKey, error) {
+	if err := s.authorizeSurface(viewID, req.Surface); err != nil {
+		return ImageKey{}, err
+	}
+	caller := s.surfaceOf(viewID)
+	if caller == "" {
+		caller = req.Surface
+	}
+	return CheckImage(caller, req)
 }
 
 // ImageOwner 는 그림 영역을 등록한 사이드카와 소유자를 기록한다.
@@ -231,14 +242,24 @@ func (i *Images) RemoveSurface(surface string) []unsafe.Pointer {
 			removed = append(removed, handle)
 		}
 	}
-	_, generationActive := i.generations[surface]
-	if !generationActive {
-		delete(i.surfaceVisible, surface)
-	}
-	if len(removed) > 0 || !generationActive {
-		i.changedLocked()
-	}
+	// 문서 영역의 정리는 바깥 SurfaceHost의 표시 상태를 바꾸지 않는다.
+	// 표면 자체가 닫힐 때 EndGeneration이 그 상태를 제거한다.
+	i.changedLocked()
 	return removed
+}
+
+// Visible 은 영역 자체와 바깥 표면이 모두 표시된 그림의 핸들을 반환한다.
+func (i *Images) Visible() map[ImageKey]unsafe.Pointer {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	visible := map[ImageKey]unsafe.Pointer{}
+	for key, state := range i.states {
+		outer, known := i.surfaceVisible[key.Surface]
+		if state.Visible && (!known || outer) && i.handles[key] != nil {
+			visible[key] = i.handles[key]
+		}
+	}
+	return visible
 }
 
 // ConfigureRaster 는 적용된 네이티브 래스터가 달라졌을 때 리비전을 올리고 보낼 설정을 반환한다.
@@ -264,7 +285,8 @@ func (i *Images) ConfigureRaster(key ImageKey, width, height int, scale float64,
 		state.Configured = false
 		i.changedLocked()
 	}
-	if !visible || state.Configured {
+	surfaceVisible, known := i.surfaceVisible[key.Surface]
+	if !visible || (known && !surfaceVisible) || state.Configured {
 		return nil, nil
 	}
 	state.Configured = true
@@ -581,6 +603,11 @@ func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, on
 		ok := onMain(func() bool {
 			attempted = true
 			if staleReason = images.FrameStatus(key, d.Generation, d.Raster, d.Sequence); staleReason != "" {
+				return false
+			}
+			width, height, scale, presentable := system.RasterImage(handle)
+			if !presentable || width != d.Width || height != d.Height || math.Abs(scale-d.Scale) > 0.000001 {
+				staleReason = "stale"
 				return false
 			}
 			// 플랫폼에 이미지를 표시한다

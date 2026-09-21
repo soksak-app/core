@@ -123,6 +123,97 @@ func (h *Host) OverlayUpdate(ctx context.Context, req UpdateRequest) error {
 	return s.OverlayUpdate(req)
 }
 
+// Main-page document, image, and composition calls use the registered window ID
+// as the only authenticated main caller identity.
+func (h *Host) CompositionDeclare(ctx context.Context, req CompositionDeclareRequest) error {
+	s, err := h.surface(ctx)
+	if err != nil {
+		return err
+	}
+	return s.declareComposition(uint64(s.window.ID()), req)
+}
+
+func (h *Host) CompositionPlace(ctx context.Context, req CompositionPlaceRequest) error {
+	s, err := h.surface(ctx)
+	if err != nil {
+		return err
+	}
+	return s.placeComposition(uint64(s.window.ID()), req)
+}
+
+func (h *Host) DocumentAttach(ctx context.Context, req DocumentRequest) error {
+	s, err := h.surface(ctx)
+	if err != nil {
+		return err
+	}
+	return s.attachDocument(uint64(s.window.ID()), req)
+}
+func (h *Host) DocumentLoad(ctx context.Context, req DocumentRequest) error {
+	s, err := h.surface(ctx)
+	if err != nil {
+		return err
+	}
+	return s.loadDocument(uint64(s.window.ID()), req)
+}
+func (h *Host) DocumentGo(ctx context.Context, req DocumentRequest) (bool, error) {
+	s, err := h.surface(ctx)
+	if err != nil {
+		return false, err
+	}
+	return s.goDocument(uint64(s.window.ID()), req)
+}
+func (h *Host) DocumentDetach(ctx context.Context, req DocumentRequest) error {
+	s, err := h.surface(ctx)
+	if err != nil {
+		return err
+	}
+	return s.detachDocument(uint64(s.window.ID()), req)
+}
+
+func (h *Host) ImageAttach(ctx context.Context, req ImageRequest) error {
+	s, err := h.surface(ctx)
+	if err != nil {
+		return err
+	}
+	return s.attachImage(uint64(s.window.ID()), req)
+}
+func (h *Host) ImageFocus(ctx context.Context, req ImageRequest) error {
+	s, err := h.surface(ctx)
+	if err != nil {
+		return err
+	}
+	return s.focusImage(uint64(s.window.ID()), req)
+}
+func (h *Host) ImageCaret(ctx context.Context, req ImageRequest, x, y, w, hgt float64) error {
+	s, err := h.surface(ctx)
+	if err != nil {
+		return err
+	}
+	return s.caretImage(uint64(s.window.ID()), req, x, y, w, hgt)
+}
+func (h *Host) ImageText(ctx context.Context, req ImageRequest, text string) error {
+	s, err := h.surface(ctx)
+	if err != nil {
+		return err
+	}
+	return s.textImage(uint64(s.window.ID()), req, text)
+}
+func (h *Host) ImageDetach(ctx context.Context, req ImageRequest) error {
+	s, err := h.surface(ctx)
+	if err != nil {
+		return err
+	}
+	return s.detachImage(uint64(s.window.ID()), req)
+}
+
+func (h *Host) SidecarSend(ctx context.Context, name, surface string, body json.RawMessage) error {
+	s, err := h.surface(ctx)
+	if err != nil {
+		return err
+	}
+	return s.sidecarSendFrom(uint64(s.window.ID()), name, surface, body)
+}
+
 // nativeCall 은 bridge.js 가 보낸 호출 하나다.
 type nativeCall struct {
 	Epoch  string            `json:"epoch"`
@@ -155,12 +246,6 @@ func invokeNative(s *Surfaces, viewID uint64, call nativeCall) (any, error) {
 			return nil, err
 		}
 		return nil, s.exposureRegister(viewID, req)
-	case "ExposureReply":
-		var req ExposureReplyRequest
-		if err := nativeArgs(call, &req); err != nil {
-			return nil, err
-		}
-		return nil, s.exposureReply(viewID, req)
 	case "Theme":
 		if err := nativeArgs(call); err != nil {
 			return nil, err
@@ -171,7 +256,13 @@ func invokeNative(s *Surfaces, viewID uint64, call nativeCall) (any, error) {
 		if err := nativeArgs(call, &key, &id, &body); err != nil {
 			return nil, err
 		}
-		return nil, s.SidecarSend(key, id, body)
+		return nil, s.sidecarSendFrom(viewID, key, id, body)
+	case "CompositionDeclare":
+		var req CompositionDeclareRequest
+		if err := nativeArgs(call, &req); err != nil {
+			return nil, err
+		}
+		return nil, s.declareComposition(viewID, req)
 	case "CompositionPlace":
 		var req CompositionPlaceRequest
 		if err := nativeArgs(call, &req); err != nil {

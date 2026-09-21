@@ -8,6 +8,7 @@ package darwin
 #include "surface_layout.h"
 
 void nativeWindowLayoutBegin(void *window, uint64_t ticket, uintptr_t callback);
+bool nativeWindowAfterPresentation(void *window, uintptr_t callback);
 bool nativeWindowAfterSettled(void *window, uintptr_t callback);
 */
 import "C"
@@ -39,6 +40,23 @@ func nativeLayoutReady(value C.uintptr_t, allowed C.bool) {
 	ready := handle.Value().(func(bool))
 	handle.Delete()
 	ready(bool(allowed))
+}
+
+func (implementation) AfterPresentation(window unsafe.Pointer, done func()) error {
+	handle := cgo.NewHandle(done)
+	if !bool(C.nativeWindowAfterPresentation(window, C.uintptr_t(handle))) {
+		handle.Delete()
+		return errors.New("native presentation is unavailable")
+	}
+	return nil
+}
+
+//export nativePresentationDone
+func nativePresentationDone(value C.uintptr_t) {
+	handle := cgo.Handle(value)
+	done := handle.Value().(func())
+	handle.Delete()
+	done()
 }
 
 func (implementation) AfterSettled(window unsafe.Pointer, done func(displayed float64)) error {

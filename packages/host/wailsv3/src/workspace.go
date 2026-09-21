@@ -18,6 +18,21 @@ type Workspace struct {
 	directory string
 }
 
+// PrepareConfigDirectory 는 저장소와 서비스가 함께 사용하는 설정 디렉터리를 생성하고 정규화한다.
+func PrepareConfigDirectory(path string) (string, error) {
+	if path == "" {
+		return "", fmt.Errorf("config directory is required")
+	}
+	absolute, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(absolute, 0o700); err != nil {
+		return "", err
+	}
+	return filepath.EvalSymlinks(absolute)
+}
+
 // NewWorkspace 는 설정 디렉터리 directory 의 저장소를 반환한다.
 func NewWorkspace(directory string) *Workspace {
 	return &Workspace{directory: directory}

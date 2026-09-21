@@ -6,6 +6,7 @@
 #import "surface_layout.h"
 #import "webview_geometry.h"
 #import "window_fullscreen.h"
+#import "window_facts.h"
 
 extern void nativeMessage(unsigned long long identifier, char *message);
 extern void nativeCommitted(unsigned long long identifier);
@@ -61,9 +62,17 @@ static WKWebView *mainWebview(NSView *parent) {
     return nil;
 }
 
+extern void nativePresentationDone(uintptr_t callback);
+bool nativeWindowAfterPresentation(void *handle, uintptr_t callback) {
+    WKWebView *view = sp_window_main_webview(handle);
+    if (!view) return false;
+    surfaceLayoutAfterPresentation(view, ^{ nativePresentationDone(callback); });
+    return true;
+}
+
 extern void nativeSettledDone(uintptr_t callback, double displayed);
 bool nativeWindowAfterSettled(void *handle, uintptr_t callback) {
-    WKWebView *view = mainWebview([(NSWindow *)handle contentView]);
+    WKWebView *view = sp_window_main_webview(handle);
     if (!view) return false;
     surfaceLayoutAfterSettled(view, ^(double displayed) { nativeSettledDone(callback, displayed); });
     return true;
@@ -71,7 +80,7 @@ bool nativeWindowAfterSettled(void *handle, uintptr_t callback) {
 
 void nativeWindowPrepare(void *handle) {
     NSWindow *window = (NSWindow *)handle;
-    WKWebView *root = mainWebview(window.contentView);
+    WKWebView *root = sp_window_main_webview(handle);
     if (!root) return;
     // Wails beta.16 은 콘텐츠 뷰를 WKWebView 보다 1pt 작게 만든다.
     // 공개 배치 API 로 자동 크기 조정 여백을 0 으로 만들고 요청된 페이지 크기를 유지한다.
@@ -83,6 +92,22 @@ void nativeWindowPrepare(void *handle) {
     }
 }
 
+void nativeWindowConfigureMain(void *handle, bool dark) {
+    NSWindow *window = (NSWindow *)handle;
+    WKWebView *root = sp_window_main_webview(handle);
+    if (!root) return;
+    root.underPageBackgroundColor = NSColor.clearColor;
+    [root setValue:@NO forKey:@"drawsBackground"];
+    window.appearance = [NSAppearance appearanceNamed:(dark ? NSAppearanceNameDarkAqua : NSAppearanceNameAqua)];
+}
+
+bool nativeWindowSetMainWebview(void *handle) {
+    NSWindow *window = (NSWindow *)handle;
+    if (sp_window_main_webview(handle)) return true;
+    WKWebView *root = mainWebview(window.contentView);
+    return root && sp_window_set_main_webview(window, root);
+}
+
 void nativeWebviewBounds(void *handle, double x, double y, double width, double height) {
     webviewSetFrame(handle, x, y, width, height);
 }
@@ -90,7 +115,7 @@ void nativeWebviewBounds(void *handle, double x, double y, double width, double 
 void *nativeWebviewCreate(void *handle, unsigned long long identifier, const char *name, const char *script,
     double x, double y, double width, double height, bool hidden, bool transparent, bool fillParent) {
     NSWindow *window = (NSWindow *)handle;
-    WKWebView *root = mainWebview(window.contentView);
+    WKWebView *root = sp_window_main_webview(handle);
     if (!root || !root.URL || !webviewInputRegister(root)) return NULL;
 
     // 복사한 설정은 프레임워크의 공개 WKURLSchemeHandler, 프로세스 풀과 데이터 저장소를 유지한다.
@@ -111,8 +136,8 @@ void *nativeWebviewCreate(void *handle, unsigned long long identifier, const cha
     configuration.userContentController = controller;
     [controller release];
     SPNativeWebview *view = [[SPNativeWebview alloc] initWithFrame:NSZeroRect configuration:configuration];
-    view.messageIdentifier = identifier;
-    if (name != NULL && name[0] != '\\0') view.identifier = [NSString stringWithUTF8String:name];
+	view.messageIdentifier = identifier;
+	if (name != NULL && name[0] != '\0') view.identifier = [NSString stringWithUTF8String:name];
     [configuration release];
     view.baseURL = root.URL;
     view.UIDelegate = root.UIDelegate;
