@@ -225,6 +225,8 @@ fn create(
         });
         let surface = surface_handle(&host, &surface_id)?;
         let handle = platform.create_document(surface, STORE, changed)?;
+        let dark = crate::theme::is_dark(&host)?;
+        platform.set_document_appearance(handle, dark)?;
         platform.set_document_background(handle, dialog)?;
         let event_host = host.clone();
         let event_surface = surface_id.clone();

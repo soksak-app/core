@@ -42,6 +42,7 @@ test("browser mount publishes document state, respects shadow focus, and dispose
     dispose: async () => { composition.disposed = true; },
   };
   const context = {
+    surfaceId: "browser-page-test",
     metadata: { home: "https://home.test/" },
     composition: { create: async () => composition },
     exposure: {

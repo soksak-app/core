@@ -8,7 +8,7 @@ import { mount } from "../ui/browser.js";
 const manifest = JSON.parse(readFileSync(new URL("../plugin.json", import.meta.url), "utf8"));
 
 async function setup(t) {
-  const dom = new JSDOM("<button id='outside'>outside</button><div id='mount'></div>");
+  const dom = new JSDOM("<button id='outside'>outside</button><div id='mount'></div>", { url: "https://app.test/" });
   const root = dom.window.document.querySelector("#mount").attachShadow({ mode: "open" });
   const commands = new Map(), requests = [], states = new Set();
   const binder = createBinder((name, params) => {
@@ -23,6 +23,7 @@ async function setup(t) {
     async back() {}, async forward() {}, async reload() {}, async stop() {},
   };
   const controller = await mount(root, {
+    surfaceId: "browser-address-test",
     metadata: { home: "https://example.test/old" },
     composition: { async create() { return { region: () => region, async dispose() {} }; } },
     exposure: {

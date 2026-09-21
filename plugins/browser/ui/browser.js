@@ -1,9 +1,18 @@
 const css = `:host{display:flex;height:100%;flex-direction:column;background:var(--card);color:var(--fg);font:12px/1.4 var(--font)}#bar{display:flex;gap:4px;padding:4px 6px;border-bottom:1px solid var(--rule)}button{border:0;background:transparent;color:inherit}input{flex:1;min-width:0;background:transparent;color:inherit;border:1px solid var(--edge);border-radius:5px;padding:3px 8px}#document{flex:1;min-height:0}`;
 
 export async function mount(root, context) {
+  if (typeof context.surfaceId !== "string" || context.surfaceId === "") {
+    throw new TypeError("browser surface requires a surfaceId for location persistence");
+  }
   root.innerHTML = `<style>${css}</style><div id="bar"><button data-command="browser.back">‹</button><button data-command="browser.forward">›</button><button data-command="browser.reload">↻</button><input id="address" data-expose="browser.address" aria-label="주소"></div><div id="document" data-expose="browser.document"></div>`;
   const address = root.querySelector("#address");
   const area = root.querySelector("#document");
+  const storageKey = `soksak.browser.location.${context.surfaceId}`;
+  const storage = root.ownerDocument.defaultView.localStorage;
+  const restored = storage.getItem(storageKey);
+  if (restored !== null && !/^https?:\/\/[^/]/i.test(restored)) {
+    throw new Error(`stored browser location for ${context.surfaceId} is not an http or https address`);
+  }
   // 첫 클릭으로 얻은 전체 선택은 뗄 때까지 유지하고 이후 클릭은 캐럿 이동을 허용한다.
   let selecting = false;
   const beginSelection = () => { selecting = root.activeElement !== address; };
@@ -16,9 +25,10 @@ export async function mount(root, context) {
   const composition = await context.composition.create({ regions: { page: area }, overlays: {} });
   const region = composition.region("page");
   const locationListeners = new Set();
-  let current = { url: "", title: "", loading: false, progress: 0, canGoBack: false, canGoForward: false, error: null, scroll: { x: 0, y: 0 } };
+  let current = { url: restored ?? "", title: "", loading: false, progress: 0, canGoBack: false, canGoForward: false, error: null, scroll: { x: 0, y: 0 } };
   const show = (state) => {
     current = state;
+    if (state.url !== "") storage.setItem(storageKey, state.url);
     if (root.getRootNode().activeElement !== address) address.value = state.url;
     for (const listener of locationListeners) listener(current);
   };
@@ -45,7 +55,7 @@ export async function mount(root, context) {
     const value = address.value.trim();
     return { url: /^[a-z][a-z0-9+.-]*:/i.test(value) ? value : `https://${value}` };
   }, { event: "keydown", when: (event) => event.key === "Enter" });
-  if (context.metadata.home) await region.load(context.metadata.home);
+  if (restored ?? context.metadata.home) await region.load(restored ?? context.metadata.home);
   context.status.report("ready");
   return { async dispose() {
     address.removeEventListener("pointerdown", beginSelection);

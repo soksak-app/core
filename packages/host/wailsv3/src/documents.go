@@ -184,6 +184,10 @@ func (s *Surfaces) attachDocument(viewID uint64, req DocumentRequest) error {
 			s.documentChanged(key, state)
 		})
 		if err == nil {
+			s.mu.Lock()
+			dark := s.theme.Scheme == "dark"
+			s.mu.Unlock()
+			system.SetDocumentAppearance(handle, dark)
 			system.SetDocumentBackground(handle, s.dialog())
 			err = system.SetDocumentEvent(handle, func(event string) { s.documentEvent(key, event) })
 		}

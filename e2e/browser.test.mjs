@@ -2,16 +2,24 @@
 // 입력을 받고, 표면을 따라 배치되고, 표면과 함께 닫히는지 검사한다.
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
+import { rmSync } from "node:fs";
 import test from "node:test";
 
 import { APPS, fresh, open } from "./app.mjs";
+import { frames, pixel, readFrame } from "./frame.mjs";
 
 /** 경로 이름을 제목으로 갖는 긴 문서를 주는 루프백 서버. 검사가 끝나면 닫는다. */
 async function serve(t) {
   const server = createServer((request, response) => {
     const name = new URL(request.url, "http://127.0.0.1").pathname.slice(1) || "index";
     response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
-    response.end(`<!doctype html><title>${name}</title><body style="margin:0"><div style="height:6000px">${name}</div>`);
+    response.end(`<!doctype html><title>${name}</title><style>
+      :root, body { width:100%; height:100%; margin:0; }
+      body { background:rgb(231,233,238); color:rgb(20,24,32); }
+      @media (prefers-color-scheme: dark) {
+        body { background:rgb(21,28,42); color:rgb(235,238,245); }
+      }
+    </style><body><div style="height:6000px">${name}</div>`);
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   t.after(() => new Promise((resolve) => {
@@ -21,12 +29,51 @@ async function serve(t) {
   return `http://127.0.0.1:${server.address().port}`;
 }
 
+const LIGHT_DOCUMENT = [231, 233, 238];
+const DARK_DOCUMENT = [21, 28, 42];
+
+/** 현재 문서 영역 중앙의 실제 창 픽셀을 캡처해 읽는다. */
+async function documentPixel(t, s, surface) {
+  const rect = await regionRect(s, surface);
+  const capture = await s.request("diagnostics.capture.start", {});
+  let stopped = false;
+  t.after(async () => {
+    if (!stopped) await s.request("diagnostics.capture.stop", { after: 0 });
+    rmSync(capture.frames, { recursive: true, force: true });
+  });
+  const { displayed } = await s.presented();
+  const result = await s.request("diagnostics.capture.stop", { after: displayed });
+  stopped = true;
+  const files = frames(result.frames);
+  assert.ok(files.length > 0, "document pixel capture produced no frames");
+  const frame = readFrame(files.at(-1));
+  const x = Math.floor(rect.x + rect.width / 2);
+  const y = Math.floor(rect.y + rect.height / 2);
+  assert.ok(x >= 0 && y >= 0 && x < frame.width && y < frame.height,
+    `document sample ${x},${y} is outside ${frame.width}×${frame.height}`);
+  const value = pixel(frame, x, y);
+  rmSync(result.frames, { recursive: true, force: true });
+  return value;
+}
+
+const nearColour = (actual, expected) => actual.every((value, index) => Math.abs(value - expected[index]) <= 3);
+
 /** 보이는 브라우저 표면이 browser.location 을 등록할 때까지 기다리고 그 표면들을 반환한다. */
 async function browsers(s) {
-  const all = await s.until("core.surfaces",
+  await s.until("core.surfaces",
     (list) => list.some((x) => x.visible && x.plugin === "browser" && x.exposes.includes("status browser.location")),
     "no visible browser surface registered browser.location");
-  return all.filter((x) => x.visible && x.plugin === "browser");
+  const active = new Set((await s.get("core.grid")).cards.map((card) => card.active).filter(Boolean));
+  const current = await s.get("core.surfaces");
+  const selected = current.filter((x) => x.visible && x.plugin === "browser" && active.has(x.surface));
+  assert.ok(selected.length > 0, "current grid has no active visible browser surface");
+  const ids = new Set(selected.map((x) => x.surface));
+  await s.until("host.window", (window) => window.documents.some((document) =>
+    ids.has(document.surface) && document.document === "page" && document.visible &&
+    document.frame.width > 0 && document.frame.height > 0),
+  "active browser surface has no visible native document");
+  const settled = await s.get("core.surfaces");
+  return settled.filter((x) => x.visible && x.plugin === "browser" && ids.has(x.surface));
 }
 
 /** 문서 영역이 url 을 다 읽고 제목을 알릴 때까지 기다린다. 제목은 읽기가 끝난 뒤에 올 수 있다. */
@@ -124,5 +171,61 @@ for (const app of Object.values(APPS)) {
       "the document region stayed after its surface closed");
     await s.until("host.window", (w) => w.documents.some((d) => d.surface === tab),
       "closing one surface closed another surface's document region");
+  });
+
+  test(`${app.name}: browser documents follow host theme pixels for existing, new, and reloaded documents`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const base = await serve(t);
+    const [browser] = await browsers(s);
+    const surface = browser.surface;
+    const at = (path) => `${base}/${path}`;
+
+    await s.run("browser.navigate", { url: at("theme-existing") }, surface);
+    await loaded(s, surface, at("theme-existing"));
+    await placed(s, surface, "initial themed document");
+    await s.run("core.settings.set", { patch: { mode: "light" } });
+    await s.until("core.settings", (value) => value.values.mode === "light" && !value.saving,
+      "host did not settle light theme");
+    assert.ok(nearColour(await documentPixel(t, s, surface), LIGHT_DOCUMENT),
+      "existing document did not render the light host theme");
+
+    await s.run("core.settings.set", { patch: { mode: "dark" } });
+    await s.until("core.settings", (value) => value.values.mode === "dark" && !value.saving,
+      "host did not settle dark theme");
+    assert.ok(nearColour(await documentPixel(t, s, surface), DARK_DOCUMENT),
+      "existing document did not render the dark host theme");
+
+    await s.run("core.settings.set", { patch: { mode: "light" } });
+    await s.until("core.settings", (value) => value.values.mode === "light" && !value.saving,
+      "host did not settle light theme again");
+    assert.ok(nearColour(await documentPixel(t, s, surface), LIGHT_DOCUMENT),
+      "existing document did not return to the light host theme");
+
+    const grid = await s.get("core.grid");
+    const card = grid.cards.find((item) => item.tabs.some((tab) => tab.id === surface));
+    const { tab: added } = await s.run("core.card.split", { card: card.id, axis: "x", plugin: "browser" });
+    await s.until("core.surfaces", (list) => list.some((item) => item.surface === added && item.visible &&
+      item.exposes.includes("status browser.location")), "new browser document did not register");
+    await s.run("browser.navigate", { url: at("theme-new") }, added);
+    await loaded(s, added, at("theme-new"));
+    await placed(s, added, "new themed document");
+    assert.ok(nearColour(await documentPixel(t, s, added), LIGHT_DOCUMENT),
+      "new document did not inherit the light host theme");
+
+    await s.run("core.settings.set", { patch: { mode: "dark" } });
+    await s.until("core.settings", (value) => value.values.mode === "dark" && !value.saving,
+      "host did not settle dark theme before reload");
+    await s.run("host.window.reload");
+    await s.until("core.window.document", (doc) => doc.readyState === "complete", "main document did not reload");
+    const restored = await browsers(s);
+    const restoredSurface = restored.find((item) => item.surface === surface)?.surface ?? restored[0]?.surface;
+    assert.ok(restoredSurface, "reloaded browser document did not restore");
+    await loaded(s, restoredSurface, at("theme-existing"));
+    await placed(s, restoredSurface, "reloaded themed document");
+    const restoredPixel = await documentPixel(t, s, restoredSurface);
+    assert.ok(nearColour(restoredPixel, DARK_DOCUMENT),
+      `reloaded document did not retain the dark host theme: ${JSON.stringify(restoredPixel)}`);
   });
 }
