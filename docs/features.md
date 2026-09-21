@@ -9,7 +9,7 @@ Validation applies to the stated implementation only. Passing tests does not mea
 `[ ]` means not implemented or not tested, `[~]` means work or verification is in progress, and `[o]` means the stated item has evidence. An inspection result does not complete a behavior check. The approved [terminal runtime](spec/terminal-runtime.md) replaces the per-surface session lifetime and separate PTY helper design; these changes are not yet validated in rebuilt applications.
 
 - [o] Inspect PTY close, consumer cleanup, ignored terminal engine events, and unsupported composition input.
-- [~] Implement one persistent terminal service with independent sessions and explicit close/reconnect.
+- [o] Implement one persistent terminal service with independent sessions and explicit normal close; current-HEAD Tauri and Wails checks confirm one service, three independent PTY children, and PTY reaping without killing the service.
 - [o] Replace internal surface webviews with one app DOM per window and logical native containers; rebuilt Tauri and Wails checks confirm one app DOM and independent document WebViews.
 - [~] Correct observed startup and first-surface integration failures: invalid AppKit appearance selector, surface-port registry scope, first-run configuration path, main-view registration timing, Tauri surface-map self-lock, and Wails window/view handle mismatch. Startup screenshots and process stacks establish failures; complete three-terminal application verification remains required.
 - [o] Verify the macOS native container component with three logical surfaces, two external document views, measured app DOM count, clipping, and explicit main-view input identity. This is not a rebuilt-host result.
@@ -26,7 +26,7 @@ Validation applies to the stated implementation only. Passing tests does not mea
 - [~] Enumerate and test every pinned-reference CSI final byte, parameter form, private mode, and device response. Scroll is tracked as CSI (`S`, `T`, `r`, `J`, `K`) with separate visible-grid, scrollback, cursor, alternate-screen, and selection assertions.
 - [~] Implement native marked-text handling and ordered committed input; real Korean IME validation remains pending.
 - [ ] Measure restoration phases and display loading/ready/error through actual first presentation.
-- [~] Build and verify both hosts, normal resource cleanup, crash reconnect, and update restart. Normal terminal-tab close now passes on rebuilt Tauri and Wails: the shared terminal service remains and all PTY children are reaped; crash reconnect and update restart remain pending.
+- [~] Build and verify both hosts, normal resource cleanup, crash reconnect, and update restart. Current-HEAD Tauri and Wails checks pass for three project returns with stable service/shell/session/document identities and normal terminal-tab close with all PTY children reaped; crash reconnect and update restart remain pending.
 
 The real-session PTY close test failed with `No such process` when closing an already-exited child. After checking and reaping that child explicitly, the same two-session test passes without skipping. Full service reconnect, descendant cleanup, and repeated-close resource measurements remain pending.
 
