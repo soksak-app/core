@@ -32,6 +32,12 @@ const MATRIX = [
   lane("documentation and checklist checks", "js-ts", ["scripts/check-docs.mjs", "scripts/checklist.mjs"], ["scripts/test/checklist.test.mjs"]),
   lane("Rust package test commands", "declaration", ["sidecars/vt-core/package.json", "sidecars/vt-alacritty/package.json"], ["scripts/test/package-test-command.test.mjs"], { testLanguage: "js-ts" }),
   lane("soksak layout", "js-ts", ["packages/soksak/src/**/*.ts"], ["packages/soksak/test/**/*.mjs"]),
+  lane("soksak utility scripts", "js-ts", [
+    "packages/soksak/scripts/bounded.mjs",
+    "packages/soksak/scripts/breaks.mjs",
+    "packages/soksak/scripts/emit-dom-reference.mjs",
+    "packages/soksak/scripts/fuzz.mjs",
+  ], ["scripts/test/soksak-scripts.test.mjs"]),
   lane("plugin API", "js-ts", ["packages/plugin-api/*.js"], ["packages/plugin-api/test/**/*.mjs"]),
   lane("workbench", "js-ts", ["packages/workbench/*.js", "packages/workbench/*.mjs"], ["packages/workbench/test/**/*.js", "packages/workbench/test/**/*.mjs"], { sharedTests: true }),
   lane("client", "js-ts", [
