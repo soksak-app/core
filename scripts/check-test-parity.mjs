@@ -271,6 +271,44 @@ const FEATURE_LINKS = [
     expected: "An unsupported service protocol is rejected explicitly and does not replace the endpoint record.",
     levels: ["native"],
   },
+  {
+    id: "G1.1",
+    implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "discoverInventory" }],
+    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "discovery includes nested languages" }],
+    expected: "The inventory discovers nested implementation and test languages without fixed package roots and reports omissions.",
+    levels: ["unit"],
+  },
+  {
+    id: "G1.2",
+    implementation: [
+      { file: "sidecars/vt-core/package.json", symbol: "cargo test" },
+      { file: "sidecars/vt-alacritty/package.json", symbol: "cargo test" },
+    ],
+    tests: [{ file: "scripts/test/package-test-command.test.mjs", id: "package test executes Rust tests" }],
+    expected: "Each terminal sidecar invokes its Rust test command and propagates a failing command result.",
+    levels: ["unit", "native"],
+  },
+  {
+    id: "G1.2-1",
+    implementation: [{ file: "scripts/test-command.mjs", symbol: "timeoutMs" }],
+    tests: [{ file: "scripts/test/test-command.test.mjs", id: "rejects invalid arguments" }],
+    expected: "Invalid supervisor limits fail explicitly and no compatibility timeout path is used.",
+    levels: ["unit"],
+  },
+  {
+    id: "G1.3",
+    implementation: [{ file: "scripts/checklist.mjs", symbol: "checkCompletedItems" }],
+    tests: [{ file: "scripts/test/checklist.test.mjs", id: "checklist preserves completed scope" }],
+    expected: "Checklist translations and completed identifiers remain structurally synchronized and cannot be silently reopened.",
+    levels: ["unit"],
+  },
+  {
+    id: "G4.1",
+    implementation: [{ file: "scripts/test-command.mjs", symbol: "runCommand" }],
+    tests: [{ file: "scripts/test/test-command.test.mjs", id: "emits ordered start and terminal events" }],
+    expected: "Supervised commands emit attributable start/progress/final events, visible output, bounded failure, and cleanup results.",
+    levels: ["unit"],
+  },
 ];
 
 // 생성 산출물은 원본과의 일치 검사 대상이며 독립 구현으로 세지 않는다.
