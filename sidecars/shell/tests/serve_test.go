@@ -122,6 +122,20 @@ func TestOpenWriteReturnsShellOutputForTheSurface(t *testing.T) {
 	}
 }
 
+func TestReopenReportsTheLiveDirectoryToARemountedSurface(t *testing.T) {
+	t.Setenv("SHELL", "/bin/sh")
+	s := start(t)
+	root := s.open("reattach")
+	s.send(`{"surface":"reattach","root":"` + root + `","body":{"op":"open"}}`)
+	event, _ := s.until(func(e shell.Event) bool { return e.Surface == "reattach" && e.Body.Cwd != "" })
+	if !sameDir(event.Body.Cwd, root) {
+		t.Fatalf("reopened directory = %q, want %q", event.Body.Cwd, root)
+	}
+	if err := s.finish(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestStandardErrorKeepsItsOrderWithStandardOutput(t *testing.T) {
 	t.Setenv("SHELL", "/bin/sh")
 	s := start(t)

@@ -77,23 +77,31 @@ func NewShells(output Output) (*Shells, error) {
 // 함께 받는 파이프.
 func (s *Shells) Open(id, root string) (bool, error) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if _, live := s.running[id]; live {
+	if live, running := s.running[id]; running {
+		// 세션이 살아 있는 동안 표면이 다시 마운트될 수 있다. 이전 표면에
+		// 전달된 최초 open 이벤트를 새 표면에 다시 보내 현재 디렉터리 상태를
+		// 조용히 잃지 않도록 한다.
+		dir := live.dir
+		s.mu.Unlock()
+		s.output.Directory(id, dir)
 		return false, nil
 	}
 
 	cmd, err := s.platform.Session()
 	if err != nil {
+		s.mu.Unlock()
 		return false, err
 	}
 	cmd.Dir = root
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
+		s.mu.Unlock()
 		return false, err
 	}
 	commandsRead, commands, err := os.Pipe()
 	if err != nil {
 		stdin.Close()
+		s.mu.Unlock()
 		return false, err
 	}
 	reader, writer, err := os.Pipe()
@@ -101,6 +109,7 @@ func (s *Shells) Open(id, root string) (bool, error) {
 		stdin.Close()
 		commandsRead.Close()
 		commands.Close()
+		s.mu.Unlock()
 		return false, err
 	}
 	cmd.ExtraFiles = []*os.File{commandsRead}
@@ -114,11 +123,13 @@ func (s *Shells) Open(id, root string) (bool, error) {
 		stdin.Close()
 		commands.Close()
 		reader.Close()
+		s.mu.Unlock()
 		return false, err
 	}
 
 	live := &session{cmd: cmd, stdin: stdin, commands: commands, dir: root, runs: map[*exec.Cmd]bool{}}
 	s.running[id] = live
+	s.mu.Unlock()
 	go s.read(id, live, reader)
 	return true, nil
 }

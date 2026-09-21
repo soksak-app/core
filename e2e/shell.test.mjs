@@ -47,6 +47,21 @@ for (const app of Object.values(APPS)) {
     assert.ok(screen.rows > 0 && screen.lines.includes(root), `shell.screen = ${JSON.stringify(screen)}`);
   });
 
+  test(`${app.name}: remounted shell surface replays its live directory and accepts input`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    const shell = await fresh(s);
+    const root = realpathSync((await s.get("core.project")).root);
+    const at = { surface: shell.surface };
+
+    await s.until("shell.cwd", (dir) => dir !== null && realpathSync(dir) === root,
+      "the remounted session did not replay its project directory", at);
+    const marker = `reattach-${process.pid}-${Date.now()}`;
+    const lines = await typeLine(s, shell.surface, `echo ${marker}`, marker);
+    assert.equal(lines.filter((line) => line === marker).length, 1,
+      "the remounted session did not return input output exactly once");
+  });
+
   test(`${app.name}: shell commands run, report the directory, interrupt, and clear`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
