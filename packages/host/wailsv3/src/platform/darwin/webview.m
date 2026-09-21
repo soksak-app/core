@@ -87,7 +87,7 @@ void nativeWebviewBounds(void *handle, double x, double y, double width, double 
     webviewSetFrame(handle, x, y, width, height);
 }
 
-void *nativeWebviewCreate(void *handle, unsigned long long identifier, const char *script,
+void *nativeWebviewCreate(void *handle, unsigned long long identifier, const char *name, const char *script,
     double x, double y, double width, double height, bool hidden, bool transparent, bool fillParent) {
     NSWindow *window = (NSWindow *)handle;
     WKWebView *root = mainWebview(window.contentView);
@@ -112,6 +112,7 @@ void *nativeWebviewCreate(void *handle, unsigned long long identifier, const cha
     [controller release];
     SPNativeWebview *view = [[SPNativeWebview alloc] initWithFrame:NSZeroRect configuration:configuration];
     view.messageIdentifier = identifier;
+    if (name != NULL && name[0] != '\\0') view.identifier = [NSString stringWithUTF8String:name];
     [configuration release];
     view.baseURL = root.URL;
     view.UIDelegate = root.UIDelegate;

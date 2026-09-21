@@ -6,6 +6,7 @@
 package host
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 
@@ -60,6 +61,10 @@ type modal struct {
 	shown bool
 	// 웹뷰를 표시하고 키보드 초점을 넘겼는지 나타낸다. host.window 가 이 값을 보고한다.
 	visible bool
+	radius  float64
+	// view is the child WebView for this instance. It is created hidden and is
+	// closed when this instance is replaced or dismissed.
+	view *nativeWebview
 }
 
 // OverlayPick 은 모달 페이지가 바꾼 키와 값을 발행한다. 의미는 메인 페이지가 결정한다.
@@ -95,30 +100,39 @@ func (s *Surfaces) OverlayShow(req OverlayRequest) (Rect, error) {
 	instance := s.nextModal
 	s.modal = &modal{
 		id: req.ID, instance: instance, revision: 1,
+		radius:  req.Radius,
 		content: OverlayContent{Mode: req.Mode, Card: req.Card, Title: req.Title, CSS: req.CSS, ClassName: req.ClassName, HTML: req.HTML, Border: req.Border},
 	}
 	s.mu.Unlock()
+	modalURL := "/overlay.html?id=" + url.QueryEscape(req.ID) + "&instance=" + fmt.Sprint(instance)
 	view, err := newNativeWebview(s, nativeWebviewOptions{
-		URL: "about:blank", Hidden: true, Transparent: true,
-		FillParent: req.Mode == "dialog",
-		X:          at.X, Y: at.Y, Width: at.W, Height: at.H,
+		URL: modalURL, X: at.X, Y: at.Y, Width: at.W, Height: at.H,
+		Hidden: true, Transparent: true, FillParent: true,
+		Name: "modal:" + req.ID,
 	})
 	if err != nil {
 		s.mu.Lock()
-		s.modal = nil
+		if s.modal != nil && s.modal.id == req.ID && s.modal.instance == instance {
+			s.modal = nil
+		}
 		s.mu.Unlock()
-		return Rect{}, err
+		s.setBackground(false)
+		return Rect{}, fmt.Errorf("create modal webview: %w", err)
 	}
-	application.InvokeSync(func() { system.ConfigureModal(view.NativeView(), req.Title, req.Radius) })
+	application.InvokeSync(func() {
+		system.ConfigureModal(view.handle, req.Title, req.Radius)
+	})
 	s.mu.Lock()
-	s.modalView = view
-	s.mu.Unlock()
-	// ModalReady 를 호출할 수 있는 문서를 시작하기 전에 뷰를 기록한다.
-	err = view.SetURL(fmt.Sprintf("overlay.html?id=%s&instance=%d", url.QueryEscape(req.ID), instance))
-	if err != nil {
-		_ = s.OverlayHide(req.ID)
-		return Rect{}, err
+	if s.modal == nil || s.modal.id != req.ID || s.modal.instance != instance {
+		s.mu.Unlock()
+		view.Close()
+		return Rect{}, fmt.Errorf("modal instance was replaced while loading")
 	}
+	s.modal.view = view
+	s.mu.Unlock()
+	s.Emit("modal-content", ModalContentEvent{ID: req.ID, Instance: instance, Revision: 1,
+		Content: OverlayContent{Mode: req.Mode, Card: req.Card, Title: req.Title,
+			CSS: req.CSS, ClassName: req.ClassName, HTML: req.HTML, Border: req.Border}})
 	return at, nil
 }
 
@@ -137,23 +151,36 @@ func (s *Surfaces) OverlayPlace(req PlaceRequest) (Rect, error) {
 		return Rect{}, errNoWindow
 	}
 	s.mu.Lock()
-	live, view := s.modal, s.modalView
-	held := live != nil && live.id == req.ID && view != nil
-	s.mu.Unlock()
-	if !held {
+	live := s.modal
+	if live == nil || live.id != req.ID {
+		s.mu.Unlock()
 		return Rect{}, nil
+	}
+	view := live.view
+	instance := live.instance
+	s.mu.Unlock()
+	if view == nil {
+		return Rect{}, fmt.Errorf("modal webview is not ready for placement")
 	}
 	var at Rect
 	application.InvokeSync(func() {
 		at = aligned(win, req.Rect)
-		view.SetBounds(at.X, at.Y, at.W, at.H)
 	})
+	view.SetBounds(at.X, at.Y, at.W, at.H)
 	s.mu.Lock()
-	live.content.Card = req.Card
-	live.revision++
-	revision := live.revision
+	if s.modal == nil || s.modal.id != req.ID || s.modal.instance != instance {
+		s.mu.Unlock()
+		return Rect{}, nil
+	}
+	s.modal.content.Card = req.Card
+	s.modal.revision++
+	revision := s.modal.revision
 	s.mu.Unlock()
-	s.Emit("modal-position", map[string]any{"id": req.ID, "instance": live.instance, "revision": revision, "card": req.Card})
+	event := map[string]any{"id": req.ID, "instance": instance, "revision": revision, "card": req.Card}
+	s.Emit("modal-position", event)
+	if err := emitModalEvent(view, "modal-position", event); err != nil {
+		return Rect{}, err
+	}
 	s.windowChanged()
 	return at, nil
 }
@@ -165,14 +192,14 @@ func (s *Surfaces) OverlayHide(id string) error {
 		s.mu.Unlock()
 		return nil
 	}
-	view := s.modalView
-	s.modal, s.modalView = nil, nil
+	view := s.modal.view
+	s.modal = nil
 	s.mu.Unlock()
-	s.setBackground(false)
 	if view != nil {
-		application.InvokeSync(func() { system.FocusModal(view.NativeView(), false) })
+		application.InvokeSync(func() { system.FocusModal(view.handle, false) })
 		view.Close()
 	}
+	s.setBackground(false)
 	s.windowChanged()
 	return nil
 }
@@ -181,13 +208,16 @@ func (s *Surfaces) OverlayHide(id string) error {
 // 콜백이 사라졌으므로 네이티브 뷰의 소유자가 없다.
 func (s *Surfaces) discardOverlay() {
 	s.mu.Lock()
-	view := s.modalView
-	s.modal, s.modalView = nil, nil
+	var view *nativeWebview
+	if s.modal != nil {
+		view = s.modal.view
+	}
+	s.modal = nil
 	s.mu.Unlock()
-	s.setBackground(false)
 	if view != nil {
 		view.Close()
 	}
+	s.setBackground(false)
 }
 
 // OverlayUpdate 는 뷰를 다시 만들지 않고 열린 모달의 내용을 바꾼다. 컨트롤이 페이지 상태를
@@ -197,8 +227,10 @@ func (s *Surfaces) OverlayUpdate(req UpdateRequest) {
 	s.mu.Lock()
 	ok := s.modal != nil && s.modal.id == req.ID
 	var instance, revision uint64
+	var view *nativeWebview
 	if ok {
 		instance = s.modal.instance
+		view = s.modal.view
 		s.modal.content = content
 		s.modal.revision++
 		revision = s.modal.revision
@@ -207,7 +239,30 @@ func (s *Surfaces) OverlayUpdate(req UpdateRequest) {
 	if !ok {
 		return
 	}
-	s.Emit("modal-content", ModalContentEvent{ID: req.ID, Instance: instance, Revision: revision, Content: content})
+	if view == nil {
+		s.log("modal content update without a native webview: " + req.ID)
+		return
+	}
+	event := ModalContentEvent{ID: req.ID, Instance: instance, Revision: revision, Content: content}
+	s.Emit("modal-content", event)
+	if err := emitModalEvent(view, "modal-content", event); err != nil {
+		s.log(fmt.Sprintf("modal content event %s: %v", req.ID, err))
+	}
+}
+
+// emitModalEvent delivers an update through the child WebView bridge. Wails window events are
+// scoped to the application WebView, so they cannot update a native child document reliably.
+func emitModalEvent(view *nativeWebview, event string, data any) error {
+	payload, err := json.Marshal(map[string]any{"event": event, "data": data})
+	if err != nil {
+		return fmt.Errorf("encode modal event %s: %w", event, err)
+	}
+	application.InvokeSync(func() {
+		if view.handle != nil {
+			view.execJS("window.__soksakNative?.receive(" + string(payload) + ")")
+		}
+	})
+	return nil
 }
 
 // ModalContentEvent 는 모달 페이지가 받는 모달 하나의 새 내용이다.
@@ -247,10 +302,14 @@ func (s *Surfaces) ModalContent(id string, instance uint64) RevisedContent {
 // 모달의 새 표시를 드러내거나 초점을 옮기지 않는다.
 func (s *Surfaces) ModalReady(id string, instance uint64) {
 	s.mu.Lock()
-	live, view := s.modal, s.modalView
-	first := live != nil && live.id == id && live.instance == instance && !live.shown && view != nil
+	live := s.modal
+	first := live != nil && live.id == id && live.instance == instance && !live.shown
 	current := live != nil && live.id == id && live.instance == instance
 	dialog := first && live.content.Mode == "dialog"
+	view := (*nativeWebview)(nil)
+	if first {
+		view = live.view
+	}
 	if first {
 		live.shown = true
 	}
@@ -261,10 +320,15 @@ func (s *Surfaces) ModalReady(id string, instance uint64) {
 		}
 		return
 	}
+	if view == nil {
+		s.log("modal ready without a native webview: " + id)
+		return
+	}
+	s.setBackground(dialog)
 	application.InvokeSync(func() {
-		s.setBackground(dialog)
-		view.SetHidden(false)
-		system.FocusModal(view.NativeView(), true)
+		system.ConfigureModal(view.handle, live.content.Title, live.radius)
+		system.SetWebviewHidden(view.handle, false)
+		system.FocusModal(view.handle, true)
 	})
 	s.mu.Lock()
 	if s.modal == live {
@@ -294,9 +358,6 @@ func (s *Surfaces) setBackground(enabled bool) {
 		win.ExecJS(fmt.Sprintf("window.__soksakBackground = %t", enabled))
 	}
 	application.InvokeSync(func() {
-		for _, view := range s.views {
-			view.setBackground(enabled)
-		}
 		s.setDocumentsBackground(enabled)
 	})
 }

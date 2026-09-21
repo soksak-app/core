@@ -9,7 +9,7 @@ package darwin
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 
-void *nativeWebviewCreate(void *window, unsigned long long identifier, const char *script,
+void *nativeWebviewCreate(void *window, unsigned long long identifier, const char *name, const char *script,
     double x, double y, double width, double height, bool hidden, bool transparent, bool fillParent);
 bool nativeWebviewNavigate(void *view, const char *url);
 void nativeWebviewBounds(void *view, double x, double y, double width, double height);
@@ -112,7 +112,9 @@ func (implementation) CreateWebview(window unsafe.Pointer, options platform.Webv
 	committed = options.Committed
 	script := C.CString(options.Script)
 	defer C.free(unsafe.Pointer(script))
-	handle := C.nativeWebviewCreate(window, C.ulonglong(options.Identifier), script,
+	name := C.CString(options.Name)
+	defer C.free(unsafe.Pointer(name))
+	handle := C.nativeWebviewCreate(window, C.ulonglong(options.Identifier), name, script,
 		C.double(options.X), C.double(options.Y), C.double(options.Width), C.double(options.Height),
 		C.bool(options.Hidden), C.bool(options.Transparent), C.bool(options.FillParent))
 	if handle == nil {

@@ -136,6 +136,7 @@ type SyncRequest struct {
 // nativeWebviewOptions 는 표면과 모달 웹뷰의 생성 값이다.
 type nativeWebviewOptions struct {
 	URL                 string
+	Name                string
 	X, Y, Width, Height float64
 	Hidden, Transparent bool
 	FillParent          bool
@@ -595,6 +596,7 @@ func newNativeWebview(owner *Surfaces, options nativeWebviewOptions) (*nativeWeb
 		var handle unsafe.Pointer
 		handle, err = system.CreateWebview(owner.window.NativeWindow(), platform.WebviewOptions{
 			Identifier: nativeSerial,
+			Name:       options.Name,
 			Script:     webviewBootstrap + "\n" + backgroundScript,
 			X:          options.X, Y: options.Y, Width: options.Width, Height: options.Height,
 			Hidden: options.Hidden, Transparent: options.Transparent,

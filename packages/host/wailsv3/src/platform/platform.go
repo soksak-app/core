@@ -29,6 +29,8 @@ type DOMOverlay struct {
 type WebviewOptions struct {
 	// Identifier 는 웹뷰가 보낸 메시지에 붙는 번호다.
 	Identifier uint64
+	// Name 은 창 히트 테스트가 반환하는 네이티브 뷰 식별자다. 비어 있으면 식별자를 설정하지 않는다.
+	Name string
 	// Script 는 각 문서가 시작할 때 실행하는 스크립트다.
 	Script              string
 	X, Y, Width, Height float64
