@@ -1569,3 +1569,100 @@ mod tests {
         assert_eq!(base64_decode("aGVsbG8=").unwrap(), b"hello");
     }
 }
+
+    #[tokio::test]
+    async fn persistent_registry_rejects_stale_owner_and_awaits_actor_close() {
+        let registry = PersistentRegistry::new();
+        let (tx, mut rx) = mpsc::channel(4);
+        let actor = tokio::spawn(async move {
+            while let Some(command) = rx.recv().await {
+                if matches!(command, SurfaceCommand::SessionClose) {
+                    break;
+                }
+            }
+        });
+        let (output_sender, _output_receiver) = mpsc::channel(4);
+        registry.entries.lock().await.insert(
+            "root\0surface".to_string(),
+            PersistentEntry {
+                tx,
+                output: OutputSink::direct(output_sender),
+                actor,
+                epoch: 1,
+                owner: "client-a".to_string(),
+            },
+        );
+        let (new_sender, _new_receiver) = mpsc::channel(4);
+        let attached = registry
+            .attach("root\0surface", "client-a", &OutputSink::direct(new_sender))
+            .await
+            .unwrap();
+        assert!(attached.1 > 1);
+        assert!(registry
+            .attach(
+                "root\0surface",
+                "client-b",
+                &OutputSink::direct(mpsc::channel(1).0)
+            )
+            .await
+            .is_err());
+        registry.close_owner("client-a").await.unwrap();
+        assert!(!registry.contains("root\0surface").await);
+    }
+
+    #[tokio::test]
+    async fn persistent_registry_close_owner_keeps_other_client_sessions() {
+        let registry = PersistentRegistry::new();
+        let (a_tx, mut a_rx) = mpsc::channel(1);
+        let a_actor = tokio::spawn(async move {
+            while let Some(command) = a_rx.recv().await {
+                if matches!(command, SurfaceCommand::SessionClose) {
+                    break;
+                }
+            }
+        });
+        let (b_tx, mut b_rx) = mpsc::channel(1);
+        let b_actor = tokio::spawn(async move {
+            while let Some(command) = b_rx.recv().await {
+                if matches!(command, SurfaceCommand::SessionClose) {
+                    break;
+                }
+            }
+        });
+        let (a_output, _a_events) = mpsc::channel(1);
+        let (b_output, _b_events) = mpsc::channel(1);
+        registry
+            .entries
+            .lock()
+            .await
+            .insert(
+                "root\0a".to_string(),
+                PersistentEntry {
+                    tx: a_tx,
+                    output: OutputSink::direct(a_output),
+                    actor: a_actor,
+                    epoch: 1,
+                    owner: "client-a".to_string(),
+                },
+            );
+        registry
+            .entries
+            .lock()
+            .await
+            .insert(
+                "root\0b".to_string(),
+                PersistentEntry {
+                    tx: b_tx,
+                    output: OutputSink::direct(b_output),
+                    actor: b_actor,
+                    epoch: 1,
+                    owner: "client-b".to_string(),
+                },
+            );
+
+        registry.close_owner("client-a").await.unwrap();
+        assert!(!registry.contains("root\0a").await);
+        assert!(registry.contains("root\0b").await);
+        registry.close_owner("client-b").await.unwrap();
+        assert!(!registry.contains("root\0b").await);
+    }
