@@ -107,8 +107,79 @@ const assertServiceAlive = (pid) => {
   try {
     process.kill(pid, 0);
   } catch (error) {
-    fail(`service ${pid} is not alive after client disconnect: ${error.message}`);
+    fail(`service ${pid} is not alive after application process exit: ${error.message}`);
   }
+};
+
+const closeSocket = async (socket, label) => {
+  socket.destroy();
+  await withTimeout(new Promise((resolve) => socket.once("close", resolve)), label);
+};
+
+const worker = async () => {
+  if (process.argv.length !== 7) {
+    fail("usage: node scripts/verify-vt-recovery.mjs --worker <endpoint> <service-dir> <initial|restore> [session]");
+  }
+  const endpointPath = process.argv[3];
+  const serviceDirectory = process.argv[4];
+  const mode = process.argv[5];
+  const expectedSession = process.argv[6];
+  if (mode !== "initial" && mode !== "restore") fail(`unknown worker mode: ${mode}`);
+  if (mode === "restore" && !expectedSession) fail("restore worker requires a session ID");
+
+  const endpoint = JSON.parse(await readFile(endpointPath, "utf8"));
+  const surface = "recovery-surface";
+  const project = "/recovery/project";
+  const client = await lineClient(endpoint, serviceDirectory);
+  try {
+    sendSurface(client, surface, project, { op: "open", image: "terminal" });
+    if (mode === "initial") {
+      sendSurface(client, surface, project, { image: { configure: {
+        name: "terminal", generation: 1, raster: 1, width: 640, height: 384, scale: 1,
+      } } });
+      const state = await waitFor(client, (value) => value.surface === surface && value.body?.event === "state", "worker initial state");
+      const sessionId = state.body.sessionId;
+      if (!sessionId) fail("worker initial state did not contain a session ID");
+      sendSurface(client, surface, project, {
+        op: "input",
+        bytes: Buffer.from("echo RECOVERY\n").toString("base64"),
+      });
+      await waitFor(client, (value) => value.surface === surface && value.body?.event === "screen" && screenText(value).includes("RECOVERY"), "worker initial output");
+      console.log(`WORKER_SESSION_ID=${sessionId}`);
+      return;
+    }
+
+    sendSurface(client, surface, project, { op: "screen.read" });
+    const reconnected = await waitFor(client, (value) => value.surface === surface && value.body?.event === "session", "worker session reattach");
+    if (reconnected.body.sessionId !== expectedSession) {
+      fail(`worker session changed from ${expectedSession} to ${reconnected.body.sessionId}`);
+    }
+    await waitFor(client, (value) => value.surface === surface && value.body?.event === "screen" && screenText(value).includes("RECOVERY"), "worker retained output");
+    console.log(`WORKER_RESTORED_SESSION_ID=${expectedSession}`);
+    sendSurface(client, surface, project, { op: "close" });
+  } finally {
+    await closeSocket(client.socket, `worker ${mode} socket close`);
+  }
+};
+
+const runWorker = async (endpointPath, serviceDirectory, mode, sessionId = "-") => {
+  const child = spawn(process.execPath, [process.argv[1], "--worker", endpointPath, serviceDirectory, mode, sessionId], {
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let stdout = "";
+  let stderr = "";
+  child.stdout.setEncoding("utf8");
+  child.stderr.setEncoding("utf8");
+  child.stdout.on("data", (chunk) => { stdout += chunk; });
+  child.stderr.on("data", (chunk) => { stderr += chunk; });
+  const result = await withTimeout(new Promise((resolve, reject) => {
+    child.once("error", reject);
+    child.once("exit", (code, signal) => resolve({ code, signal }));
+  }), `worker ${mode} process`);
+  if (result.code !== 0) {
+    fail(`worker ${mode} exited with code=${result.code} signal=${result.signal}: ${stderr.trim()}`);
+  }
+  return stdout;
 };
 
 const main = async () => {
@@ -129,51 +200,27 @@ const main = async () => {
   service.stderr.on("data", (chunk) => { serviceStderr += chunk; });
 
   const endpointPath = join(serviceDirectory, "endpoint.json");
-  let first;
-  let second;
   try {
     const endpoint = JSON.parse(await waitForFile(endpointPath));
     if (endpoint.protocol !== 1 || !endpoint.socket || !endpoint.token || endpoint.pid !== service.pid) {
       fail(`invalid endpoint: ${JSON.stringify(endpoint)}`);
     }
-    const surface = "recovery-surface";
-    const project = "/recovery/project";
-    const clientName = serviceDirectory;
-    first = await lineClient(endpoint, clientName);
-    sendSurface(first, surface, project, { op: "open", image: "terminal" });
-    sendSurface(first, surface, project, { image: { configure: {
-      name: "terminal", generation: 1, raster: 1, width: 640, height: 384, scale: 1,
-    } } });
-    const state = await waitFor(first, (value) => value.surface === surface && value.body?.event === "state", "initial state");
-    const sessionId = state.body.sessionId;
-    if (!sessionId) fail("initial state did not contain a session ID");
-    sendSurface(first, surface, project, {
-      op: "input",
-      bytes: Buffer.from("echo RECOVERY\n").toString("base64"),
-    });
-    await waitFor(first, (value) => value.surface === surface && value.body?.event === "screen" && screenText(value).includes("RECOVERY"), "initial output");
-    first.socket.destroy();
-    await withTimeout(new Promise((resolve) => first.socket.once("close", resolve)), "first socket close");
+    const initial = await runWorker(endpointPath, serviceDirectory, "initial");
+    const sessionMatch = initial.match(/^WORKER_SESSION_ID=([^\n]+)$/m);
+    if (!sessionMatch) fail(`initial worker did not report a session ID: ${initial.trim()}`);
+    const sessionId = sessionMatch[1];
     assertServiceAlive(service.pid);
-    console.log(`PASS service_alive_after_client_loss pid=${service.pid}`);
-
-    second = await lineClient(endpoint, clientName);
-    sendSurface(second, surface, project, { op: "open", image: "terminal" });
-    sendSurface(second, surface, project, { op: "screen.read" });
-    const reconnected = await waitFor(second, (value) => value.surface === surface && value.body?.event === "session", "session reattach");
-    if (reconnected.body.sessionId !== sessionId) {
-      fail(`session changed from ${sessionId} to ${reconnected.body.sessionId}`);
+    console.log(`PASS service_alive_after_application_process_exit pid=${service.pid}`);
+    const restored = await runWorker(endpointPath, serviceDirectory, "restore", sessionId);
+    if (!restored.match(new RegExp(`^WORKER_RESTORED_SESSION_ID=${sessionId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "m"))) {
+      fail(`restore worker did not report the expected session: ${restored.trim()}`);
     }
-    await waitFor(second, (value) => value.surface === surface && value.body?.event === "screen" && screenText(value).includes("RECOVERY"), "retained output");
-    console.log(`PASS session_id_preserved session=${sessionId}`);
+    console.log(`PASS application_process_restarted session=${sessionId}`);
     console.log("PASS retained_screen_contains_RECOVERY");
-    sendSurface(second, surface, project, { op: "close" });
   } catch (error) {
     const detail = serviceStderr.trim();
     throw new Error(detail ? `${error.message}; service stderr: ${detail}` : error.message);
   } finally {
-    first?.socket.destroy();
-    second?.socket.destroy();
     if (!service.killed) service.kill("SIGTERM");
     await withTimeout(new Promise((resolve) => {
       if (service.exitCode !== null) resolve();
@@ -185,7 +232,8 @@ const main = async () => {
 };
 
 try {
-  await main();
+  if (process.argv[2] === "--worker") await worker();
+  else await main();
 } catch (error) {
   console.error(`FAIL ${error.message}`);
   process.exitCode = 1;
