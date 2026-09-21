@@ -2,6 +2,8 @@
 
 ## 미배포
 
+- workspace inventory·소유권 강제·기능 증거 연결과 기계 검사가 완료되어 G1을 닫았다. 동작 검증은 각 연결된 기능의 증거 범위에 귀속되며 구조적 완료가 동작 완료를 뜻하지 않는다.
+
 - core·plugin·sidecar·native·애플리케이션·계약 테스트의 구현 소유권 독립을 강제했다. 기계 감사가 plugin→sidecar 구현·테스트 참조 4개를 찾아 제거했고, host-scoped runtime이 플러그인의 선언된 단일 sidecar를 해석하며 package-name·모호한 sidecar fallback을 거부한다. 소유권·집중 runtime 검사가 Green이고 구조 검사가 ownership 오류 0개를 보고한다.
 
 - 완료 항목을 현재 증거와 대조하는 감사를 수행했다. 오래되거나 오해를 일으키는 기록 4개를 찾아 G1.3-2부터 G1.3-5까지 후속 ID로 보존했다: parity 테스트 파일 수, F3 범위 문구, Wails 모달 parity 스냅샷, F0.1의 미커밋 작업 트리 표현이다. 각 수정이 자체 Red/Green 증거와 커밋을 남기기 전까지 원래 주장은 변경하지 않는다.

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Closed G1 after completing the workspace inventory, ownership enforcement, feature-evidence links, and their machine checks. Behavioral verification remains attributable to each linked feature and is not implied by the structural closure.
+
 - Enforced independent implementation ownership for core, plugins, sidecars, native code, applications, and contract tests. The machine audit found and removed four plugin-to-sidecar implementation/test references, resolves a plugin's single declared sidecar in the host-scoped runtime, and rejects package-name or ambiguous-sidecar fallback. Ownership and focused runtime tests are Green; structural checks report zero ownership errors.
 
 - Audit completed checklist claims against current evidence. Four stale or misleading records were found and preserved with explicit follow-up IDs G1.3-2 through G1.3-5: a parity test-file count, F3 scope wording, the Wails modal parity snapshot, and F0.1's dirty-worktree wording. The original claims remain unchanged until each correction has its own Red/Green evidence and commit.
