@@ -39,8 +39,8 @@ export interface ViewOptions {
     onChange?(reason: ChangeReason): void;
     /**
      * Prepare the supplied rectangles before calling `draw`.
-     * Only the latest pending callback can draw, and it runs once. Without this
-     * hook, changes draw immediately. Native presentation is the host's responsibility.
+     * The callback receives one immutable draw request. Without this hook, changes draw
+     * immediately. Native presentation is the host's responsibility.
      */
     commit?(rects: ReadonlyMap<string, Rect>, draw: () => void): void;
     /** Keep the plane size in sync with the host element. Default true. */
@@ -122,7 +122,6 @@ export declare class SoksakView {
      * be measured against them.
      */
     private drawing;
-    private drawRevision;
     /**
      * Whether a change of the view's own that the host has not drawn dropped a
      * line.

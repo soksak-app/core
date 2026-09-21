@@ -1429,17 +1429,17 @@ test("a drag that passes a line no card reads keeps the divider it holds", () =>
   view.destroy();
 });
 
-test("an older commit callback cannot draw a layout prepared by a newer commit", () => {
+test("each commit callback draws its own prepared layout exactly once", () => {
   const pending = [];
   const { grid, view } = mount({ commit: (rects, draw) => pending.push({ rects, draw }) });
   pending.shift().draw();
-  const before = view.element("card").style.width;
   grid.moveBoundary("x", 1, 400);
   view.render();
   grid.moveBoundary("x", 1, 300);
   view.render();
   pending[0].draw();
-  assert.equal(view.element("card").style.width, before, "the newer rectangle is not prepared yet");
+  assert.equal(parseFloat(view.element("card").style.width), pending[0].rects.get("card").w,
+    "the older rectangle is drawn before the newer rectangle");
   pending[1].draw();
   assert.equal(parseFloat(view.element("card").style.width), pending[1].rects.get("card").w);
   grid.moveBoundary("x", 1, 500);

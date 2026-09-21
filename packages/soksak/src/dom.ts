@@ -42,8 +42,8 @@ export interface ViewOptions {
   onChange?(reason: ChangeReason): void;
   /**
    * Prepare the supplied rectangles before calling `draw`.
-   * Only the latest pending callback can draw, and it runs once. Without this
-   * hook, changes draw immediately. Native presentation is the host's responsibility.
+   * The callback receives one immutable draw request. Without this hook, changes draw
+   * immediately. Native presentation is the host's responsibility.
    */
   commit?(rects: ReadonlyMap<string, Rect>, draw: () => void): void;
   /** Keep the plane size in sync with the host element. Default true. */
@@ -65,15 +65,15 @@ export interface ViewOptions {
  * Only the ends that reach the plane edge are extended. A rule ending against a
  * card is left unchanged.
  */
-function reach(rule: Rule, grid: Soksak, bleed: number): Rect {
+function reach(rule: Rule, width: number, height: number, bleed: number): Rect {
   if (bleed <= 0) return rule;
   if (rule.axis === 'x') {
     const head = rule.y <= EDGE ? bleed : 0;
-    const tail = rule.y + rule.h >= grid.height - EDGE ? bleed : 0;
+    const tail = rule.y + rule.h >= height - EDGE ? bleed : 0;
     return { x: rule.x, y: rule.y - head, w: rule.w, h: rule.h + head + tail };
   }
   const head = rule.x <= EDGE ? bleed : 0;
-  const tail = rule.x + rule.w >= grid.width - EDGE ? bleed : 0;
+  const tail = rule.x + rule.w >= width - EDGE ? bleed : 0;
   return { x: rule.x - head, y: rule.y, w: rule.w + head + tail, h: rule.h };
 }
 
@@ -95,6 +95,15 @@ interface DragState {
    */
   stood: number;
   moved: boolean;
+}
+
+interface PaintSnapshot {
+  cards: readonly Card[];
+  rects: ReadonlyMap<string, Rect>;
+  rules: readonly Rule[];
+  dividers: readonly Divider[];
+  width: number;
+  height: number;
 }
 
 const DOUBLE_TAP_MS = 350;
@@ -187,7 +196,6 @@ export class SoksakView {
    * be measured against them.
    */
   private drawing = false;
-  private drawRevision = 0;
   /**
    * Whether a change of the view's own that the host has not drawn dropped a
    * line.
@@ -257,14 +265,23 @@ export class SoksakView {
     // views it draws itself. Calling it would move them onto the rects of a
     // plane that is gone.
     if (this.disposed) return;
-    const revision = ++this.drawRevision;
+    const snapshot: PaintSnapshot = {
+      cards: [...this.grid.cards],
+      rects: new Map(this.grid.rects()),
+      rules: [...this.grid.rules()],
+      dividers: [...this.grid.dividers()],
+      width: this.grid.width,
+      height: this.grid.height,
+    };
+    let consumed = false;
     const drawn = (): void => {
-      if (revision !== this.drawRevision) return;
-      this.drawRevision++;
-      // The paint reads the grid as it stands, so after it the elements are
-      // behind by nothing at all.
+      if (consumed) return;
+      consumed = true;
+      if (this.disposed) return;
+      // The snapshot is the transaction prepared by the host, so a later input
+      // cannot replace this frame before it paints.
       this.drawing = false;
-      this.paint(reason, host);
+      this.paint(reason, host, snapshot);
     };
     if (!this.options.commit) {
       drawn();
@@ -274,7 +291,7 @@ export class SoksakView {
     // render will write, not the ones the grid computed.
     const step = this.step;
     const on = new Map<string, Rect>();
-    for (const [id, rect] of this.grid.rects()) on.set(id, onGrid(rect, step));
+    for (const [id, rect] of snapshot.rects) on.set(id, onGrid(rect, step));
     // A draw `render()` hands over carries a change the host made, so the
     // elements it leaves behind are behind by that change as well as by any of
     // the view's own, and a gesture was carried through only the view's. The
@@ -294,7 +311,7 @@ export class SoksakView {
     this.draw(reason, true);
   }
 
-  private paint(reason: ChangeReason, host = false): void {
+  private paint(reason: ChangeReason, host: boolean, snapshot: PaintSnapshot): void {
     if (this.disposed) return;
 
     // `render` is the one call the view never makes, so this paint follows a
@@ -309,9 +326,9 @@ export class SoksakView {
     // One measurement for every card. Requesting each card's rect separately
     // rebuilt the whole coordinate system once per card, on every pointer move
     // of a drag.
-    const box = this.grid.rects();
+    const box = snapshot.rects;
     const live = new Set<string>();
-    for (const card of this.grid.cards) {
+    for (const card of snapshot.cards) {
       live.add(card.id);
       let held = this.cardEls.get(card.id);
       if (!held) {
@@ -341,7 +358,7 @@ export class SoksakView {
 
     if (this.options.rules !== false) {
       const keep = new Set<string>();
-      for (const rule of this.grid.rules()) {
+      for (const rule of snapshot.rules) {
         keep.add(rule.key);
         let el = this.ruleEls.get(rule.key);
         if (!el) {
@@ -356,12 +373,12 @@ export class SoksakView {
           this.host.appendChild(el);
           this.ruleEls.set(rule.key, el);
         }
-        place(el, onGrid(reach(rule, this.grid, this.options.bleed ?? 0), step));
+        place(el, onGrid(reach(rule, snapshot.width, snapshot.height, this.options.bleed ?? 0), step));
       }
       this.sweep(this.ruleEls, keep);
     }
 
-    const dividers = this.grid.dividers();
+    const dividers = snapshot.dividers;
     // A drag that has passed a line no card reads holds a boundary that has been
     // renumbered, and its element is filed under a key no divider has any more.
     // File it under the one it has now, before the sweep takes it away.

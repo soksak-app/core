@@ -4,7 +4,7 @@ import { createLayoutQueue } from "../layout-queue.js";
 
 test("a failed presentation rejects its request, reports failure, and permits the next drag", async () => {
   const reported = [];
-  const queue = createLayoutQueue({ failed: (error) => reported.push(error), superseded: assert.fail });
+  const queue = createLayoutQueue({ failed: (error) => reported.push(error) });
   const failure = new Error("current image raster did not present");
   const first = queue.run(() => { throw failure; });
   await assert.rejects(first, (error) => error === failure);
@@ -17,7 +17,7 @@ test("a failed presentation rejects its request, reports failure, and permits th
 });
 
 test("a new layout cannot run before the active presentation finishes", async () => {
-  const queue = createLayoutQueue({ failed: assert.fail, superseded: assert.fail });
+  const queue = createLayoutQueue({ failed: assert.fail });
   let finish;
   const gate = new Promise((resolve) => { finish = resolve; });
   const calls = [];
@@ -30,9 +30,8 @@ test("a new layout cannot run before the active presentation finishes", async ()
   assert.deepEqual(calls, [1, 2, 3]);
 });
 
-test("a newer pending layout explicitly supersedes the older pending layout", async () => {
-  const superseded = [];
-  const queue = createLayoutQueue({ failed: assert.fail, superseded: (work) => superseded.push(work) });
+test("pending layouts run in order without dropping a user-visible state", async () => {
+  const queue = createLayoutQueue({ failed: assert.fail });
   let release;
   const gate = new Promise((resolve) => { release = resolve; });
   const first = queue.run(async () => { await gate; });
@@ -41,7 +40,6 @@ test("a newer pending layout explicitly supersedes the older pending layout", as
   const newest = queue.run(() => "new");
   release();
   await first;
-  assert.deepEqual(await replacement, { status: "superseded" });
+  assert.equal(await replacement, "old");
   assert.equal(await newest, "new");
-  assert.deepEqual(superseded, [old]);
 });

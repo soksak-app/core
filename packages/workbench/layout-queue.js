@@ -1,10 +1,8 @@
-// Run one presentation and keep only the newest presentation waiting behind it.
-// SoksakView guarantees that an older pending draw cannot draw a newer layout.
-// Replacing that pending work is therefore part of the contract, but it must be
-// observable instead of becoming an unreported promise or a silent return.
-export function createLayoutQueue({ failed, superseded }) {
+// Run every presentation in arrival order. A layout is a user-visible state and
+// must not be replaced by a newer state before its DOM/native transaction runs.
+export function createLayoutQueue({ failed }) {
   let active = null;
-  let pending = null;
+  const pending = [];
   let latest = Promise.resolve();
 
   function start(item) {
@@ -17,9 +15,8 @@ export function createLayoutQueue({ failed, superseded }) {
       })
       .finally(() => {
         active = null;
-        if (pending) {
-          const next = pending;
-          pending = null;
+        if (pending.length > 0) {
+          const next = pending.shift();
           start(next);
         }
       });
@@ -29,14 +26,9 @@ export function createLayoutQueue({ failed, superseded }) {
     run(work) {
       const result = new Promise((resolve, reject) => {
         const item = { work, resolve, reject };
-        if (pending) {
-          superseded(pending.work);
-          pending.resolve({ status: "superseded" });
-        }
-        pending = item;
+        pending.push(item);
         if (!active) {
-          const next = pending;
-          pending = null;
+          const next = pending.shift();
           start(next);
         }
       });
