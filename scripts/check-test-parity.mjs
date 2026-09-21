@@ -95,6 +95,58 @@ const MATRIX = [
 // The inventory remains structural; behavior is proved by the referenced tests.
 const FEATURE_LINKS = [
   {
+    id: "F0.1.2",
+    implementation: [
+      { file: "plugins/terminal/ui/terminal.js", symbol: "terminal.focus" },
+      { file: "native/darwin/src/webview_input.m", symbol: "webviewInputSendThen" },
+    ],
+    tests: [
+      { file: "plugins/terminal/test/terminal.test.mjs", id: "pointerdown-prevents-dom-focus" },
+      { file: "native/darwin/tests/input_inject_test.m", id: "click-focuses-field" },
+    ],
+    expected: "The first native click focuses a terminal and the next character is accepted without a second click.",
+    levels: ["unit", "native", "application"],
+  },
+  {
+    id: "F0.1.3",
+    implementation: [
+      { file: "plugins/browser/ui/browser.js", symbol: "browser.address.select" },
+      { file: "native/darwin/src/input_inject.m", symbol: "sp_input_key" },
+    ],
+    tests: [
+      { file: "plugins/browser/test/address-input.test.mjs", id: "initial-address-focus-selects-all" },
+      { file: "e2e/browser.test.mjs", id: "browser-address-replacement" },
+    ],
+    expected: "The first address entry replaces the selected URL instead of appending to it, while later clicks retain caret editing.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F0.2",
+    implementation: [
+      { file: "native/darwin/src/appearance.m", symbol: "sp_webview_set_appearance" },
+      { file: "packages/host/tauriv2/src/platform/darwin/webview.rs", symbol: "sp_webview_set_appearance" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/appearance_test.m", id: "dark-light-appearance" },
+      { file: "apps/tauriv2/test/runtime-contract.test.mjs", id: "theme-command" },
+    ],
+    expected: "Dark and light appearance assignment uses the compiled native helper and rejects a null view explicitly.",
+    levels: ["unit", "native", "application"],
+  },
+  {
+    id: "F0.3",
+    implementation: [
+      { file: "sidecars/shell/src/shell/shell.go", symbol: "handle" },
+      { file: "sidecars/shell/src/platform/darwin/shell.go", symbol: "DirectoryMarker" },
+    ],
+    tests: [
+      { file: "sidecars/shell/tests/serve_test.go", id: "reopen-replays-cwd" },
+      { file: "e2e/shell.test.mjs", id: "shell-reload-replays-directory" },
+    ],
+    expected: "Reopening a mounted shell reports the live session directory without inventing a default directory or duplicating output.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F0.4",
     implementation: [
       { file: "native/darwin/src/input_inject.m", symbol: "webviewInputSendThen" },
