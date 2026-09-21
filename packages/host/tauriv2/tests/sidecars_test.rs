@@ -427,8 +427,11 @@ fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
     second
         .send(&second_owner, ECHO, "s2", &raw(r#"{"op":"reconnect"}"#))
         .unwrap();
-    assert_eq!(first_events.recv_timeout(Duration::from_secs(1)).unwrap().surface, "s1");
-    assert_eq!(second_events.recv_timeout(Duration::from_secs(1)).unwrap().surface, "s2");
+    // The package suite runs multiple test binaries concurrently. Keep a bounded case timeout,
+    // but do not make the reconnect contract depend on a one-second scheduler slice.
+    let reconnect_timeout = Duration::from_secs(5);
+    assert_eq!(first_events.recv_timeout(reconnect_timeout).unwrap().surface, "s1");
+    assert_eq!(second_events.recv_timeout(reconnect_timeout).unwrap().surface, "s2");
 
     first.stop();
     second.stop();
