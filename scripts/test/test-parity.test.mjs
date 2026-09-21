@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { auditCompletedFeatureLinks, auditFeatureLinks, auditHistoricalScopeWording, auditInventory, auditModalParitySnapshotWording, auditRecordedInventoryCounts, discoverInventory, repositoryFiles } from "../check-test-parity.mjs";
+import { auditCommittedEvidenceWording, auditCompletedFeatureLinks, auditFeatureLinks, auditHistoricalScopeWording, auditInventory, auditModalParitySnapshotWording, auditRecordedInventoryCounts, discoverInventory, repositoryFiles } from "../check-test-parity.mjs";
 
 const files = repositoryFiles();
 
@@ -113,5 +113,13 @@ test("modal parity Red is dated and followed by current F10.2 evidence", { timeo
   assert.match(
     auditModalParitySnapshotWording("The modal implementation has a larger confirmed gap." )[0],
     /historical snapshot/,
+  );
+});
+
+test("F0.1 evidence identifies its committed build", { timeout: 1000 }, () => {
+  assert.deepEqual(auditCommittedEvidenceWording(), []);
+  assert.match(
+    auditCommittedEvidenceWording("- [o] F0.1 — Unblock native input measurement. Package and structural checks pass on the current dirty implementation.")[0],
+    /current dirty implementation/,
   );
 });

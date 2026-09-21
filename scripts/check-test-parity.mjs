@@ -138,6 +138,13 @@ const MATRIX = [
 // The inventory remains structural; behavior is proved by the referenced tests.
 const FEATURE_LINKS = [
   {
+    id: "G1.3-5",
+    implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "auditCommittedEvidenceWording" }],
+    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "F0.1 evidence identifies its committed build" }],
+    expected: "F0.1 evidence identifies the committed build used for its host result and does not claim that the current worktree is dirty.",
+    levels: ["unit"],
+  },
+  {
     id: "G1.3-4",
     implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "auditModalParitySnapshotWording" }],
     tests: [{ file: "scripts/test/test-parity.test.mjs", id: "modal parity Red is dated and followed by current F10.2 evidence" }],
@@ -771,6 +778,14 @@ export function auditModalParitySnapshotWording(checklistSource = readFileSync(`
   return [];
 }
 
+export function auditCommittedEvidenceWording(checklistSource = readFileSync(`${ROOT}docs/features.md`, "utf8")) {
+  const line = checklistSource.split("\n").find((entry) => entry.includes("F0.1 — Unblock native input measurement"));
+  if (!line) return ["F0.1 evidence line is missing"];
+  if (line.includes("current dirty implementation")) return ["F0.1 evidence still claims a current dirty implementation"];
+  if (!line.includes("commit `7a3cee6`")) return ["F0.1 evidence does not identify its committed build"];
+  return [];
+}
+
 export { MATRIX, repositoryFiles };
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
@@ -779,6 +794,7 @@ if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) 
   errors.push(...auditRecordedInventoryCounts({ trackCount, implementationCount, testCount }));
   errors.push(...auditHistoricalScopeWording());
   errors.push(...auditModalParitySnapshotWording());
+  errors.push(...auditCommittedEvidenceWording());
   if (errors.length) {
     console.error(`Test inventory checks failed: ${errors.length} issue(s); ` +
       `${uncoveredImplementations.length} uncovered implementation(s), ${uncoveredTests.length} uncovered test(s), ` +
