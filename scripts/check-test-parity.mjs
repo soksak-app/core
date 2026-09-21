@@ -361,6 +361,19 @@ const FEATURE_LINKS = [
     levels: ["unit", "native"],
   },
   {
+    id: "F0.4-1.3.3",
+    implementation: [
+      { file: "scripts/check-test-parity.mjs", symbol: "auditRustFailurePropagation" },
+      { file: "packages/host/tauriv2/src/platform/windows/unsupported.rs", symbol: "missing" },
+    ],
+    tests: [
+      { file: "scripts/test/test-parity.test.mjs", id: "Rust failure audit covers every production lane" },
+      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "persistent_transport_rejects_unsupported_hello_protocol_without_replacing_endpoint" },
+    ],
+    expected: "Every Rust production lane is included in the ignored-outcome audit, and unsupported host operations return explicit errors instead of successful no-op results.",
+    levels: ["unit", "native"],
+  },
+  {
     id: "F2.1",
     implementation: [{ file: "sidecars/vt-core/src/pty.rs", symbol: "pub fn close" }],
     tests: [{ file: "sidecars/vt-core/tests/pty_lifecycle.rs", id: "real_sessions_are_independent_and_close_removes_session" }],
@@ -884,10 +897,14 @@ export function auditInventory(files, matrix = MATRIX, readSource = (file) => re
   errors.push(...ownershipErrors);
   const jsFailureErrors = auditJsFailurePropagation(files, readSource);
   errors.push(...jsFailureErrors);
-  const rustFailureErrors = [
-    ...auditRustFailurePropagation(files, readSource, "sidecars/vt-core/src/"),
-    ...auditRustFailurePropagation(files, readSource, "packages/host/tauriv2/src/"),
+  const rustFailureScopes = [
+    "sidecars/vt-core/src/",
+    "sidecars/vt-alacritty/src/",
+    "packages/host/tauriv2/src/",
+    "apps/tauriv2/src/",
   ];
+  const rustFailureErrors = rustFailureScopes.flatMap((scope) =>
+    auditRustFailurePropagation(files, readSource, scope));
   errors.push(...rustFailureErrors);
 
   return {

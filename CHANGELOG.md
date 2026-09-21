@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Completed F0.4-1.3.3. The Rust failure audit now covers VT core, VT Alacritty, the Tauri host, and the Tauri application production lanes instead of leaving the remaining bridge paths implicit. The declared native build environment produced no ignored production `Result` outcomes, Windows unsupported operations return explicit errors, and the 23 parity self-tests and native workspace suite pass. Objective-C and cross-language failure-matrix work remain open under F0.4-1.4 and F0.4-1.5.
+
 - Completed F0.4-1.3.2 for the Tauri host. The scoped Rust audit found ignored callback sends, transport reads, cleanup, capture-stop, and close-owner serialization outcomes. The production lane now returns or explicitly reports each outcome, recording abort preserves simultaneous stop and cleanup failures, and the Tauri Rust suite and parity audit pass. Remaining Rust host/bridge and Objective-C lanes stay open under F0.4-1.3.3 through F0.4-1.5.
 
 - Completed the JS/TS failure-propagation audit for F0.4-1.2. The machine Red inventory found six empty or undefined promise rejection handlers in client unwatch, exposure release, layout queue, project switching, and transcript paths. Each path now propagates or reports the failure; the audit self-test, package tests, and repository gates pass. Rust and Objective-C lanes remain open under F0.4-1.3 and F0.4-1.4.

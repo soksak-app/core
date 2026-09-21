@@ -190,3 +190,21 @@ test("Rust failure audit rejects ignored outcomes in the scoped production lane"
     "packages/host/tauriv2/src/ignored.rs:1: ignored Rust result or task outcome",
   ]);
 });
+
+test("Rust failure audit covers every production lane", { timeout: 1000 }, () => {
+  const files = [
+    "sidecars/vt-core/src/protocol.rs",
+    "sidecars/vt-alacritty/src/engine.rs",
+    "packages/host/tauriv2/src/host.rs",
+    "apps/tauriv2/src/main.rs",
+  ];
+  const source = (file) => file.endsWith("engine.rs")
+    ? "let result = work();"
+    : file.endsWith("main.rs")
+      ? "let _ = host();"
+      : "";
+  assert.deepEqual(auditRustFailurePropagation(files, source, "sidecars/vt-alacritty/src/"), []);
+  assert.deepEqual(auditRustFailurePropagation(files, source, "apps/tauriv2/src/"), [
+    "apps/tauriv2/src/main.rs:1: ignored Rust result or task outcome",
+  ]);
+});
