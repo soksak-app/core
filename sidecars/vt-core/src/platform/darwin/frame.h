@@ -16,8 +16,8 @@ typedef struct {
     uint32_t col;
     uint32_t row;
     uint32_t width;
-    uint8_t ch_len;
-    char ch[4];
+    const uint8_t *ch;
+    uint32_t ch_len;
     uint8_t fg[3];
     uint8_t bg[3];
     uint8_t has_fg;
@@ -32,6 +32,13 @@ typedef struct {
     uint32_t cursor_row;
     Cell *cells;
     uint32_t cell_count;
+    uint8_t cursor_visible;
+    uint8_t cursor_focused;
+    uint8_t cursor_blink_visible;
+    uint8_t cursor_shape; // 0 블록, 1 밑줄, 2 빔
+    uint8_t default_foreground[3];
+    uint8_t default_background[3];
+    uint8_t default_cursor[3];
 } Screen;
 
 // Opaque Frame type - defined in implementation

@@ -4,6 +4,8 @@ fn main() {
     let os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
 
     if os == "macos" {
+        println!("cargo:rerun-if-changed=src/platform/darwin/frame.m");
+        println!("cargo:rerun-if-changed=src/platform/darwin/frame.h");
         cc::Build::new()
             .file("src/platform/darwin/frame.m")
             .flag("-fobjc-arc")

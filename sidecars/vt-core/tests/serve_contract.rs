@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 /// Integration tests for serve contract with fake daemon
 use soksak_sidecar_vt_core::protocol::{
-    serve, Cell, Cursor, DaemonEvent, Engine, Modes, Screen, SessionPort,
+    serve, Cell, Cursor, CursorShape, DaemonEvent, Engine, EngineEvent, Modes, Screen, SessionPort,
 };
 use std::sync::{Arc, Mutex};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
@@ -40,8 +40,35 @@ impl Engine for MockEngine {
         self.rows = rows;
     }
 
+    fn set_cell_metrics(&mut self, width: u16, height: u16) -> Result<(), String> {
+        if width == 0 || height == 0 {
+            return Err("terminal cell metrics must be positive".to_string());
+        }
+        Ok(())
+    }
+
     fn feed(&mut self, bytes: &[u8]) {
         self.feed_history.push(bytes.to_vec());
+    }
+
+    fn drain_events(&mut self) -> Vec<EngineEvent> {
+        Vec::new()
+    }
+
+    fn resolve_clipboard(&mut self, request_id: u64, _text: &str) -> Result<(), String> {
+        Err(format!("unknown clipboard request {request_id}"))
+    }
+
+    fn cursor(&self) -> Cursor {
+        Cursor {
+            col: 0,
+            row: 0,
+            shape: CursorShape::Block,
+            visible: true,
+            blinking: false,
+            focused: false,
+            preedit: None,
+        }
     }
 
     fn screen(&mut self) -> Screen {
@@ -66,7 +93,15 @@ impl Engine for MockEngine {
         Screen {
             cols: self.cols,
             rows: self.rows,
-            cursor: Cursor { col: 0, row: 0 },
+            cursor: Cursor {
+                col: 0,
+                row: 0,
+                shape: CursorShape::Block,
+                visible: true,
+                blinking: false,
+                focused: false,
+                preedit: None,
+            },
             lines,
         }
     }
@@ -209,6 +244,59 @@ async fn test_a3_input_calls_write() {
     assert_eq!(calls_lock.writes[0].1, b"hi", "write data mismatch");
 }
 
+#[tokio::test]
+async fn test_paste_writes_ordered_text_using_bracketed_mode() {
+    let calls = Arc::new(Mutex::new(Calls::default()));
+    let fake_session_id = "test-paste-session".to_string();
+    let input = r#"{"surface":"s1","root":"/tmp","body":{"op":"open","image":"view"}}
+{"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
+{"surface":"s1","body":{"op":"paste","text":"one\ntwo"}}
+"#;
+    let reader = std::io::Cursor::new(input.as_bytes());
+    let mut writer = Vec::new();
+    let calls_for_factory = calls.clone();
+    let session_id_for_factory = fake_session_id.clone();
+    let engine_factory = Arc::new(|| {
+        Box::new(MockEngine::with_modes(Modes {
+            bracketed_paste: true,
+            ..Modes::default()
+        })) as Box<dyn Engine>
+    });
+    let session_port_factory = Arc::new(move || {
+        Arc::new(FakeSessionPort::new(
+            session_id_for_factory.clone(),
+            calls_for_factory.clone(),
+        )) as Arc<dyn SessionPort>
+    });
+
+    let _ = serve(engine_factory, reader, &mut writer, session_port_factory).await;
+
+    let calls_lock = calls.lock().unwrap();
+    assert_eq!(calls_lock.writes[0].1, b"\x1b[200~one\rtwo\x1b[201~");
+}
+
+#[tokio::test]
+async fn test_paste_rejects_non_text_payload() {
+    let calls = Arc::new(Mutex::new(Calls::default()));
+    let input = r#"{"surface":"s1","root":"/tmp","body":{"op":"paste","kind":"png","data":"iVBORw=="}}
+"#;
+    let reader = std::io::Cursor::new(input.as_bytes());
+    let mut writer = Vec::new();
+    let engine_factory = Arc::new(|| Box::new(MockEngine::new()) as Box<dyn Engine>);
+    let calls_for_factory = calls.clone();
+    let session_port_factory = Arc::new(move || {
+        Arc::new(FakeSessionPort::new(
+            "unused".to_string(),
+            calls_for_factory.clone(),
+        )) as Arc<dyn SessionPort>
+    });
+    let _ = serve(engine_factory, reader, &mut writer, session_port_factory).await;
+    assert!(String::from_utf8(writer)
+        .unwrap()
+        .contains("paste requires text string"));
+    assert!(calls.lock().unwrap().writes.is_empty());
+}
+
 /// Test A-7: close op ends the session (calls close, not detach)
 #[tokio::test]
 async fn test_a7_close_op_ends_the_session() {
@@ -247,9 +335,9 @@ async fn test_a7_close_op_ends_the_session() {
     );
 }
 
-/// Test A-8: closed:true flag detaches (does not call close)
+/// Test A-8: closed:true flag closes the terminal session
 #[tokio::test]
-async fn test_a8_closed_surface_only_detaches() {
+async fn test_a8_closed_surface_closes_session() {
     let calls = Arc::new(Mutex::new(Calls::default()));
     let fake_session_id = "test-session".to_string();
 
@@ -272,20 +360,16 @@ async fn test_a8_closed_surface_only_detaches() {
 
     let _ = serve(engine_factory, reader, &mut writer, session_port_factory).await;
 
-    // Verify that detach was called and close was NOT called
+    // Verify that close was called and detach was NOT called
     let calls_lock = calls.lock().unwrap();
+    assert_eq!(calls_lock.closes.len(), 1, "close not called exactly once");
     assert_eq!(
-        calls_lock.detaches.len(),
-        1,
-        "detach not called exactly once"
-    );
-    assert_eq!(
-        calls_lock.detaches[0], fake_session_id,
-        "detach session_id mismatch"
+        calls_lock.closes[0], fake_session_id,
+        "close session_id mismatch"
     );
     assert!(
-        calls_lock.closes.is_empty(),
-        "close should not be called for closed:true flag"
+        calls_lock.detaches.is_empty(),
+        "detach should not be called for closed:true flag"
     );
 }
 
@@ -363,6 +447,7 @@ async fn test_open_and_close_session() {
 
     let _ = serve(engine_factory, reader, &mut writer, session_port_factory).await;
 }
+
 
 #[tokio::test]
 async fn test_resize() {
@@ -464,6 +549,7 @@ async fn test_a2_pushed_output_reaches_screen() {
     port.push_event(DaemonEvent::Output {
         session_id: fake_session_id.clone(),
         data: b"hi\r\n".to_vec(),
+        sequence: 0,
         truncated: false,
     });
 
@@ -837,6 +923,28 @@ async fn test_open_waits_for_host_raster_configuration() {
     task.await.unwrap().unwrap();
 }
 
+#[tokio::test]
+async fn test_headless_open_creates_one_session_before_configuration() {
+    let calls = Arc::new(Mutex::new(Calls::default()));
+    let port = Arc::new(FakeSessionPort::new("headless".into(), calls.clone()));
+    let factory_port = port.clone();
+    let factory = Arc::new(move || factory_port.clone() as Arc<dyn SessionPort>);
+    let engine_factory = Arc::new(|| Box::new(MockEngine::new()) as Box<dyn Engine>);
+    let (mut input, serve_input) = tokio::io::duplex(64 * 1024);
+    let (serve_output, output) = tokio::io::duplex(64 * 1024);
+    let task = tokio::spawn(serve(engine_factory, serve_input, serve_output, factory));
+    let mut lines = tokio::io::BufReader::new(output).lines();
+    input.write_all(b"{\"surface\":\"hidden\",\"root\":\"/tmp\",\"body\":{\"op\":\"open\"}}\n").await.unwrap();
+    assert!(tokio::time::timeout(std::time::Duration::from_millis(100), lines.next_line()).await.is_err());
+    assert_eq!(calls.lock().unwrap().opens, vec![(80, 24)]);
+    input.write_all(b"{\"surface\":\"hidden\",\"body\":{\"image\":{\"configure\":{\"name\":\"view\",\"generation\":1,\"raster\":1,\"width\":800,\"height\":384,\"scale\":1.0}}}}\n").await.unwrap();
+    let state = tokio::time::timeout(std::time::Duration::from_secs(2), lines.next_line()).await.unwrap().unwrap().unwrap();
+    assert_eq!(serde_json::from_str::<serde_json::Value>(&state).unwrap()["body"]["event"], "state");
+    assert_eq!(calls.lock().unwrap().opens.len(), 1);
+    drop(input);
+    task.await.unwrap().unwrap();
+}
+
 /// Test I1: Image envelope sent after output when open has image field
 #[tokio::test]
 async fn test_i1_image_envelope_on_output() {
@@ -880,6 +988,7 @@ async fn test_i1_image_envelope_on_output() {
     port.push_event(DaemonEvent::Output {
         session_id: fake_session_id.clone(),
         data: b"hi\r\n".to_vec(),
+        sequence: 0,
         truncated: false,
     });
 
@@ -965,6 +1074,7 @@ async fn test_i2_no_image_envelope_until_consumed() {
     port.push_event(DaemonEvent::Output {
         session_id: fake_session_id.clone(),
         data: b"test1\r\n".to_vec(),
+        sequence: 0,
         truncated: false,
     });
 
@@ -980,6 +1090,7 @@ async fn test_i2_no_image_envelope_until_consumed() {
     port.push_event(DaemonEvent::Output {
         session_id: fake_session_id.clone(),
         data: b"test2\r\n".to_vec(),
+        sequence: 1,
         truncated: false,
     });
 
@@ -1066,6 +1177,7 @@ async fn test_i3_image_response_no_error() {
     port.push_event(DaemonEvent::Output {
         session_id: fake_session_id.clone(),
         data: b"test\r\n".to_vec(),
+        sequence: 0,
         truncated: false,
     });
 
@@ -1944,13 +2056,48 @@ async fn test_panicking_surface_reports_error() {
             self.rows = rows;
         }
 
+        fn set_cell_metrics(&mut self, width: u16, height: u16) -> Result<(), String> {
+            if width == 0 || height == 0 {
+                return Err("terminal cell metrics must be positive".to_string());
+            }
+            Ok(())
+        }
+
         fn feed(&mut self, _bytes: &[u8]) {}
+
+        fn drain_events(&mut self) -> Vec<EngineEvent> {
+            Vec::new()
+        }
+
+        fn resolve_clipboard(&mut self, request_id: u64, _text: &str) -> Result<(), String> {
+            Err(format!("unknown clipboard request {request_id}"))
+        }
+
+        fn cursor(&self) -> Cursor {
+            Cursor {
+                col: 0,
+                row: 0,
+                shape: CursorShape::Block,
+                visible: true,
+                blinking: false,
+                focused: false,
+                preedit: None,
+            }
+        }
 
         fn screen(&mut self) -> Screen {
             Screen {
                 cols: self.cols,
                 rows: self.rows,
-                cursor: Cursor { col: 0, row: 0 },
+                cursor: Cursor {
+                    col: 0,
+                    row: 0,
+                    shape: CursorShape::Block,
+                    visible: true,
+                    blinking: false,
+                    focused: false,
+                    preedit: None,
+                },
                 lines: Vec::new(),
             }
         }
@@ -2172,6 +2319,7 @@ async fn test_no_image_envelope_while_outstanding_after_release() {
     port.push_event(DaemonEvent::Output {
         session_id: fake_session_id.clone(),
         data: b"one\r\n".to_vec(),
+        sequence: 0,
         truncated: false,
     });
     let first = next_image_envelope(&mut lines).await;
@@ -2189,6 +2337,7 @@ async fn test_no_image_envelope_while_outstanding_after_release() {
     port.push_event(DaemonEvent::Output {
         session_id: fake_session_id.clone(),
         data: b"two\r\n".to_vec(),
+        sequence: 1,
         truncated: false,
     });
     let second = next_image_envelope(&mut lines).await;
@@ -2202,6 +2351,7 @@ async fn test_no_image_envelope_while_outstanding_after_release() {
     port.push_event(DaemonEvent::Output {
         session_id: fake_session_id.clone(),
         data: b"three\r\n".to_vec(),
+        sequence: 2,
         truncated: false,
     });
 
@@ -2278,6 +2428,7 @@ async fn test_image_error_response_reenables_drawing() {
     port.push_event(DaemonEvent::Output {
         session_id: fake_session_id.clone(),
         data: b"one\r\n".to_vec(),
+        sequence: 0,
         truncated: false,
     });
     let first = next_image_envelope(&mut lines).await;
@@ -2295,6 +2446,7 @@ async fn test_image_error_response_reenables_drawing() {
     port.push_event(DaemonEvent::Output {
         session_id: fake_session_id.clone(),
         data: b"two\r\n".to_vec(),
+        sequence: 1,
         truncated: false,
     });
 

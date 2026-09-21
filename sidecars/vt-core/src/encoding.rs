@@ -55,10 +55,10 @@ pub enum MouseButton {
 #[derive(Debug, Clone, Copy)]
 pub struct MouseEvent {
     pub button: MouseButton,
-    pub col: u16,  // 1-based cell column
-    pub row: u16,  // 1-based cell row
-    pub pressed: bool,  // true if button pressed, false if released
-    pub is_motion: bool,  // true if mouse is moving
+    pub col: u16,        // 1-based cell column
+    pub row: u16,        // 1-based cell row
+    pub pressed: bool,   // true if button pressed, false if released
+    pub is_motion: bool, // true if mouse is moving
 }
 
 /// 키 인코딩 오류.
@@ -326,7 +326,7 @@ pub fn encode_text(text: &str) -> Vec<u8> {
 /// Alt + 문자 조합. 문자 앞에 ESC 를 붙인다.
 /// 예: `alt+a` → `ESC` + `a` 의 UTF-8 바이트.
 pub fn encode_alt_char(ch: char) -> Vec<u8> {
-    let mut result = vec![0x1b];  // ESC
+    let mut result = vec![0x1b]; // ESC
     let mut buf = [0u8; 4];
     let encoded = ch.encode_utf8(&mut buf);
     result.extend_from_slice(encoded.as_bytes());
@@ -406,7 +406,10 @@ pub fn encode_mouse(event: MouseEvent, modes: &Modes) -> Option<Vec<u8>> {
         MouseButton::WheelDown => 65,
     };
 
-    if event.is_motion && event.button != MouseButton::WheelUp && event.button != MouseButton::WheelDown {
+    if event.is_motion
+        && event.button != MouseButton::WheelUp
+        && event.button != MouseButton::WheelDown
+    {
         button_code += 32;
     }
 
@@ -414,8 +417,7 @@ pub fn encode_mouse(event: MouseEvent, modes: &Modes) -> Option<Vec<u8>> {
 
     let result = format!(
         "\x1b[<{};{};{}{}",
-        button_code, event.col, event.row,
-        action_char as char
+        button_code, event.col, event.row, action_char as char
     );
 
     Some(result.into_bytes())
@@ -437,11 +439,11 @@ pub fn encode_scroll(lines: i32, modes: &Modes) -> Option<Vec<u8>> {
         let mut result = Vec::new();
         if lines > 0 {
             for _ in 0..lines {
-                result.extend_from_slice(b"\x1b[<65;1;1M");  // WheelDown at (1,1)
+                result.extend_from_slice(b"\x1b[<65;1;1M"); // WheelDown at (1,1)
             }
         } else if lines < 0 {
             for _ in 0..(-lines) {
-                result.extend_from_slice(b"\x1b[<64;1;1M");  // WheelUp at (1,1)
+                result.extend_from_slice(b"\x1b[<64;1;1M"); // WheelUp at (1,1)
             }
         }
         Some(result)
@@ -450,11 +452,11 @@ pub fn encode_scroll(lines: i32, modes: &Modes) -> Option<Vec<u8>> {
         let mut result = Vec::new();
         if lines > 0 {
             for _ in 0..lines {
-                result.extend_from_slice(b"\x1b[B");  // Down arrow
+                result.extend_from_slice(b"\x1b[B"); // Down arrow
             }
         } else if lines < 0 {
             for _ in 0..(-lines) {
-                result.extend_from_slice(b"\x1b[A");  // Up arrow
+                result.extend_from_slice(b"\x1b[A"); // Up arrow
             }
         }
         Some(result)
@@ -496,7 +498,7 @@ impl CompositionState {
     /// `None` 을 반환 (바이트 없음).
     pub fn add_char(&mut self, ch: char) -> Option<Vec<u8>> {
         self.buffer.push(ch);
-        None  // 조합 중에는 바이트 반환 안 함
+        None // 조합 중에는 바이트 반환 안 함
     }
 
     /// 조합을 취소한다.
@@ -549,16 +551,40 @@ mod tests {
         };
 
         // 일반 모드
-        assert_eq!(encode_key(Key::Up, 0, &modes_normal).unwrap(), b"\x1b[A".to_vec());
-        assert_eq!(encode_key(Key::Down, 0, &modes_normal).unwrap(), b"\x1b[B".to_vec());
-        assert_eq!(encode_key(Key::Right, 0, &modes_normal).unwrap(), b"\x1b[C".to_vec());
-        assert_eq!(encode_key(Key::Left, 0, &modes_normal).unwrap(), b"\x1b[D".to_vec());
+        assert_eq!(
+            encode_key(Key::Up, 0, &modes_normal).unwrap(),
+            b"\x1b[A".to_vec()
+        );
+        assert_eq!(
+            encode_key(Key::Down, 0, &modes_normal).unwrap(),
+            b"\x1b[B".to_vec()
+        );
+        assert_eq!(
+            encode_key(Key::Right, 0, &modes_normal).unwrap(),
+            b"\x1b[C".to_vec()
+        );
+        assert_eq!(
+            encode_key(Key::Left, 0, &modes_normal).unwrap(),
+            b"\x1b[D".to_vec()
+        );
 
         // App cursor 모드
-        assert_eq!(encode_key(Key::Up, 0, &modes_app).unwrap(), b"\x1bOA".to_vec());
-        assert_eq!(encode_key(Key::Down, 0, &modes_app).unwrap(), b"\x1bOB".to_vec());
-        assert_eq!(encode_key(Key::Right, 0, &modes_app).unwrap(), b"\x1bOC".to_vec());
-        assert_eq!(encode_key(Key::Left, 0, &modes_app).unwrap(), b"\x1bOD".to_vec());
+        assert_eq!(
+            encode_key(Key::Up, 0, &modes_app).unwrap(),
+            b"\x1bOA".to_vec()
+        );
+        assert_eq!(
+            encode_key(Key::Down, 0, &modes_app).unwrap(),
+            b"\x1bOB".to_vec()
+        );
+        assert_eq!(
+            encode_key(Key::Right, 0, &modes_app).unwrap(),
+            b"\x1bOC".to_vec()
+        );
+        assert_eq!(
+            encode_key(Key::Left, 0, &modes_app).unwrap(),
+            b"\x1bOD".to_vec()
+        );
     }
 
     #[test]
@@ -568,8 +594,14 @@ mod tests {
         assert_eq!(encode_key(Key::F1, 0, &modes).unwrap(), b"\x1bOP".to_vec());
         assert_eq!(encode_key(Key::F4, 0, &modes).unwrap(), b"\x1bOS".to_vec());
         // shift(1) 이면 인자는 2, ctrl(4) 이면 5.
-        assert_eq!(encode_key(Key::F1, 1, &modes).unwrap(), b"\x1b[1;2P".to_vec());
-        assert_eq!(encode_key(Key::F3, 4, &modes).unwrap(), b"\x1b[1;5R".to_vec());
+        assert_eq!(
+            encode_key(Key::F1, 1, &modes).unwrap(),
+            b"\x1b[1;2P".to_vec()
+        );
+        assert_eq!(
+            encode_key(Key::F3, 4, &modes).unwrap(),
+            b"\x1b[1;5R".to_vec()
+        );
     }
 
     #[test]
@@ -604,12 +636,24 @@ mod tests {
         };
 
         // 일반 모드
-        assert_eq!(encode_key(Key::Home, 0, &modes_normal).unwrap(), b"\x1b[H".to_vec());
-        assert_eq!(encode_key(Key::End, 0, &modes_normal).unwrap(), b"\x1b[F".to_vec());
+        assert_eq!(
+            encode_key(Key::Home, 0, &modes_normal).unwrap(),
+            b"\x1b[H".to_vec()
+        );
+        assert_eq!(
+            encode_key(Key::End, 0, &modes_normal).unwrap(),
+            b"\x1b[F".to_vec()
+        );
 
         // App cursor 모드
-        assert_eq!(encode_key(Key::Home, 0, &modes_app).unwrap(), b"\x1bOH".to_vec());
-        assert_eq!(encode_key(Key::End, 0, &modes_app).unwrap(), b"\x1bOF".to_vec());
+        assert_eq!(
+            encode_key(Key::Home, 0, &modes_app).unwrap(),
+            b"\x1bOH".to_vec()
+        );
+        assert_eq!(
+            encode_key(Key::End, 0, &modes_app).unwrap(),
+            b"\x1bOF".to_vec()
+        );
     }
 
     #[test]
@@ -617,15 +661,27 @@ mod tests {
         let modes = Modes::default();
 
         // Insert/Delete/PageUp/PageDown
-        assert_eq!(encode_key(Key::Insert, 0, &modes).unwrap(), b"\x1b[2~".to_vec());
-        assert_eq!(encode_key(Key::Delete, 0, &modes).unwrap(), b"\x1b[3~".to_vec());
-        assert_eq!(encode_key(Key::PageUp, 0, &modes).unwrap(), b"\x1b[5~".to_vec());
-        assert_eq!(encode_key(Key::PageDown, 0, &modes).unwrap(), b"\x1b[6~".to_vec());
+        assert_eq!(
+            encode_key(Key::Insert, 0, &modes).unwrap(),
+            b"\x1b[2~".to_vec()
+        );
+        assert_eq!(
+            encode_key(Key::Delete, 0, &modes).unwrap(),
+            b"\x1b[3~".to_vec()
+        );
+        assert_eq!(
+            encode_key(Key::PageUp, 0, &modes).unwrap(),
+            b"\x1b[5~".to_vec()
+        );
+        assert_eq!(
+            encode_key(Key::PageDown, 0, &modes).unwrap(),
+            b"\x1b[6~".to_vec()
+        );
 
         // With modifiers
         assert_eq!(
             encode_key(Key::Delete, 2, &modes).unwrap(),
-            b"\x1b[3;3~".to_vec()  // alt (2+1=3)
+            b"\x1b[3;3~".to_vec() // alt (2+1=3)
         );
     }
 
@@ -640,14 +696,38 @@ mod tests {
         assert_eq!(encode_key(Key::F4, 0, &modes).unwrap(), b"\x1bOS".to_vec());
 
         // F5-F12: ESC [ num ~
-        assert_eq!(encode_key(Key::F5, 0, &modes).unwrap(), b"\x1b[15~".to_vec());
-        assert_eq!(encode_key(Key::F6, 0, &modes).unwrap(), b"\x1b[17~".to_vec());
-        assert_eq!(encode_key(Key::F7, 0, &modes).unwrap(), b"\x1b[18~".to_vec());
-        assert_eq!(encode_key(Key::F8, 0, &modes).unwrap(), b"\x1b[19~".to_vec());
-        assert_eq!(encode_key(Key::F9, 0, &modes).unwrap(), b"\x1b[20~".to_vec());
-        assert_eq!(encode_key(Key::F10, 0, &modes).unwrap(), b"\x1b[21~".to_vec());
-        assert_eq!(encode_key(Key::F11, 0, &modes).unwrap(), b"\x1b[23~".to_vec());
-        assert_eq!(encode_key(Key::F12, 0, &modes).unwrap(), b"\x1b[24~".to_vec());
+        assert_eq!(
+            encode_key(Key::F5, 0, &modes).unwrap(),
+            b"\x1b[15~".to_vec()
+        );
+        assert_eq!(
+            encode_key(Key::F6, 0, &modes).unwrap(),
+            b"\x1b[17~".to_vec()
+        );
+        assert_eq!(
+            encode_key(Key::F7, 0, &modes).unwrap(),
+            b"\x1b[18~".to_vec()
+        );
+        assert_eq!(
+            encode_key(Key::F8, 0, &modes).unwrap(),
+            b"\x1b[19~".to_vec()
+        );
+        assert_eq!(
+            encode_key(Key::F9, 0, &modes).unwrap(),
+            b"\x1b[20~".to_vec()
+        );
+        assert_eq!(
+            encode_key(Key::F10, 0, &modes).unwrap(),
+            b"\x1b[21~".to_vec()
+        );
+        assert_eq!(
+            encode_key(Key::F11, 0, &modes).unwrap(),
+            b"\x1b[23~".to_vec()
+        );
+        assert_eq!(
+            encode_key(Key::F12, 0, &modes).unwrap(),
+            b"\x1b[24~".to_vec()
+        );
 
         // F5 with Shift (modifier 1)
         assert_eq!(
@@ -662,8 +742,14 @@ mod tests {
 
         assert_eq!(encode_key(Key::Enter, 0, &modes).unwrap(), b"\r".to_vec());
         assert_eq!(encode_key(Key::Tab, 0, &modes).unwrap(), b"\t".to_vec());
-        assert_eq!(encode_key(Key::Backspace, 0, &modes).unwrap(), b"\x7f".to_vec());
-        assert_eq!(encode_key(Key::Escape, 0, &modes).unwrap(), b"\x1b".to_vec());
+        assert_eq!(
+            encode_key(Key::Backspace, 0, &modes).unwrap(),
+            b"\x7f".to_vec()
+        );
+        assert_eq!(
+            encode_key(Key::Escape, 0, &modes).unwrap(),
+            b"\x1b".to_vec()
+        );
     }
 
     #[test]
@@ -885,10 +971,7 @@ mod tests {
 
         // Scroll down (positive)
         let result = encode_scroll(3, &modes).unwrap();
-        assert_eq!(
-            result,
-            b"\x1b[<65;1;1M\x1b[<65;1;1M\x1b[<65;1;1M".to_vec()
-        );
+        assert_eq!(result, b"\x1b[<65;1;1M\x1b[<65;1;1M\x1b[<65;1;1M".to_vec());
 
         // Scroll up (negative)
         let result = encode_scroll(-2, &modes).unwrap();

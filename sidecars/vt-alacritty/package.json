@@ -12,7 +12,6 @@
     "test": "cargo test --manifest-path ../Cargo.toml -p soksak-sidecar-vt-alacritty"
   },
   "dependencies": {
-    "@soksak/sidecar-vt-core": "workspace:*",
-    "@soksak/sidecar-ptyd": "workspace:*"
+    "@soksak/sidecar-vt-core": "workspace:*"
   }
 }

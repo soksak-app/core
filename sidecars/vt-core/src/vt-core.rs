@@ -1,9 +1,16 @@
 // 공통 VT 계층: 프로토콜, 세션 수명, 화면 타입, Engine 트레이트
-pub mod protocol;
-pub mod daemon;
-pub mod platform;
 pub mod encoding;
+pub mod palette;
+pub mod platform;
+pub mod protocol;
+pub mod pty;
+pub mod service;
 
-pub use protocol::{Engine, Screen, Modes, Cell, Cursor, serve, SessionPort, DaemonEvent, make_default_session_port_factory, DaemonSessionPort};
-pub use daemon::{DaemonIdentity, DaemonClient, DaemonRequest, DaemonFinder, DaemonMessage, Reply, SessionInfo};
-pub use platform::get_daemon_finder;
+pub use palette::{
+    default_terminal_color, DEFAULT_BACKGROUND_HEX, DEFAULT_BACKGROUND_RGB, DEFAULT_CURSOR_RGB,
+    DEFAULT_FOREGROUND_HEX, DEFAULT_FOREGROUND_RGB, DEFAULT_PALETTE,
+};
+pub use protocol::{
+    make_default_session_port_factory, serve, Cell, ClipboardSelection, Cursor, CursorShape,
+    DaemonEvent, Engine, EngineEvent, LocalSessionPort, Modes, Preedit, Screen, SessionPort,
+};

@@ -1,21 +1,244 @@
-use crate::daemon::{DaemonClient, DaemonIdentity, DaemonRequest};
 use crate::encoding::{self, Key};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::sync::mpsc;
+
+#[derive(Clone)]
+struct OutputSink {
+    sender: Arc<tokio::sync::Mutex<Option<mpsc::Sender<String>>>>,
+}
+
+impl OutputSink {
+    fn direct(sender: mpsc::Sender<String>) -> Self {
+        Self {
+            sender: Arc::new(tokio::sync::Mutex::new(Some(sender))),
+        }
+    }
+
+    async fn send(&self, message: String) -> Result<(), ()> {
+        let sender = self.sender.lock().await.clone();
+        match sender {
+            Some(sender) => sender.send(message).await.map_err(|_| ()),
+            None => Ok(()),
+        }
+    }
+
+    async fn sender(&self) -> Option<mpsc::Sender<String>> {
+        self.sender.lock().await.clone()
+    }
+
+    async fn replace_sender(&self, sender: Option<mpsc::Sender<String>>) {
+        *self.sender.lock().await = sender;
+    }
+}
+
+struct PersistentEntry {
+    tx: mpsc::Sender<SurfaceCommand>,
+    output: OutputSink,
+    actor: tokio::task::JoinHandle<()>,
+    epoch: u64,
+    owner: String,
+}
+
+pub struct PersistentRegistry {
+    entries: tokio::sync::Mutex<HashMap<String, PersistentEntry>>,
+    next_epoch: std::sync::atomic::AtomicU64,
+    shutdown: AtomicBool,
+}
+
+impl PersistentRegistry {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self {
+            entries: tokio::sync::Mutex::new(HashMap::new()),
+            next_epoch: std::sync::atomic::AtomicU64::new(1),
+            shutdown: AtomicBool::new(false),
+        })
+    }
+
+    fn request_shutdown(&self) {
+        self.shutdown.store(true, Ordering::Release);
+    }
+
+    pub(crate) fn shutdown_requested(&self) -> bool {
+        self.shutdown.load(Ordering::Acquire)
+    }
+
+    async fn close_surface(&self, key: &str, owner: &str) -> Result<(), String> {
+        let entry = {
+            let mut entries = self.entries.lock().await;
+            let Some(entry) = entries.get(key) else {
+                return Ok(());
+            };
+            if entry.owner != owner {
+                return Err("stale attachment".to_string());
+            }
+            entries.remove(key).expect("registry entry disappeared")
+        };
+        entry
+            .tx
+            .send(SurfaceCommand::SessionClose)
+            .await
+            .map_err(|_| "surface actor closed before close".to_string())?;
+        entry
+            .actor
+            .await
+            .map_err(|error| format!("surface actor join failed: {error}"))?;
+        Ok(())
+    }
+
+    async fn close_owner(&self, owner: &str) -> Result<(), String> {
+        let entries = {
+            let mut registry = self.entries.lock().await;
+            let keys = registry
+                .iter()
+                .filter_map(|(key, entry)| (entry.owner == owner).then_some(key.clone()))
+                .collect::<Vec<_>>();
+            keys.into_iter()
+                .filter_map(|key| registry.remove(&key))
+                .collect::<Vec<_>>()
+        };
+        for entry in entries {
+            entry
+                .tx
+                .send(SurfaceCommand::SessionClose)
+                .await
+                .map_err(|_| "surface actor closed before owner close".to_string())?;
+            entry
+                .actor
+                .await
+                .map_err(|error| format!("surface actor join failed: {error}"))?;
+        }
+        Ok(())
+    }
+
+    async fn current_epoch(&self, key: &str, owner: &str) -> Option<u64> {
+        let entries = self.entries.lock().await;
+        entries
+            .get(key)
+            .filter(|entry| entry.owner == owner)
+            .map(|entry| entry.epoch)
+    }
+
+    async fn contains(&self, key: &str) -> bool {
+        self.entries.lock().await.contains_key(key)
+    }
+
+    async fn attach(
+        &self,
+        key: &str,
+        owner: &str,
+        output: &OutputSink,
+    ) -> Result<(mpsc::Sender<SurfaceCommand>, u64), String> {
+        let mut entries = self.entries.lock().await;
+        let entry = entries
+            .get_mut(key)
+            .ok_or_else(|| "session surface not found".to_string())?;
+        if entry.owner != owner {
+            return Err("stale attachment".to_string());
+        }
+        entry.epoch = self
+            .next_epoch
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            + 1;
+        entry.output.replace_sender(output.sender().await).await;
+        Ok((entry.tx.clone(), entry.epoch))
+    }
+
+    async fn insert(
+        &self,
+        key: String,
+        owner: String,
+        tx: mpsc::Sender<SurfaceCommand>,
+        output: OutputSink,
+        actor: tokio::task::JoinHandle<()>,
+    ) -> Result<u64, String> {
+        let mut entries = self.entries.lock().await;
+        if entries.contains_key(&key) {
+            let _ = tx.send(SurfaceCommand::SessionClose).await;
+            let _ = actor.await;
+            return Err("session surface already exists".to_string());
+        }
+        let epoch = self
+            .next_epoch
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            + 1;
+        entries.insert(
+            key,
+            PersistentEntry {
+                tx,
+                output,
+                actor,
+                epoch,
+                owner,
+            },
+        );
+        Ok(epoch)
+    }
+}
 
 /// 엔진이 구현할 트레이트. VT 처리 엔진의 계약.
 pub trait Engine: Send + 'static {
     fn resize(&mut self, cols: u16, rows: u16);
+    fn set_cell_metrics(&mut self, width: u16, height: u16) -> Result<(), String>;
     fn feed(&mut self, bytes: &[u8]);
+    fn drain_events(&mut self) -> Vec<EngineEvent>;
+    fn resolve_clipboard(&mut self, request_id: u64, text: &str) -> Result<(), String>;
+    fn cursor(&self) -> Cursor;
     fn screen(&mut self) -> Screen;
     fn modes(&self) -> Modes;
     fn reset(&mut self);
+}
+
+/// 엔진과 서비스 사이에서 전달하는 중립 이벤트.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EngineEvent {
+    Title(String),
+    ResetTitle,
+    ClipboardStore {
+        selection: ClipboardSelection,
+        text: String,
+    },
+    ClipboardQuery {
+        request_id: u64,
+        selection: ClipboardSelection,
+    },
+    PtyWrite(Vec<u8>),
+    CursorBlinkingChange,
+    Wakeup,
+    Bell,
+    Exit,
+    ChildExit {
+        success: bool,
+        code: Option<i32>,
+    },
+    MouseCursorDirty,
+    Error(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClipboardSelection {
+    Clipboard,
+    Selection,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CursorShape {
+    Block,
+    Underline,
+    Beam,
+    HollowBlock,
+    Hidden,
+}
+
+impl Default for CursorShape {
+    fn default() -> Self {
+        Self::Block
+    }
 }
 
 /// 셀 하나의 속성
@@ -57,6 +280,45 @@ impl Default for Cell {
 pub struct Cursor {
     pub col: u16,
     pub row: u16,
+    #[serde(default)]
+    pub shape: CursorShape,
+    #[serde(default = "default_visible")]
+    pub visible: bool,
+    #[serde(default)]
+    pub blinking: bool,
+    #[serde(default)]
+    pub focused: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preedit: Option<Preedit>,
+}
+
+fn default_visible() -> bool {
+    true
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub struct JsonRange {
+    pub location: usize,
+    pub length: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Preedit {
+    pub text: String,
+    #[serde(
+        rename = "selectedRange",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub selected_range: Option<JsonRange>,
+    #[serde(
+        rename = "replacementRange",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub replacement_range: Option<JsonRange>,
+    #[serde(default)]
+    pub attributed: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -88,10 +350,15 @@ pub enum DaemonEvent {
     Output {
         session_id: String,
         data: Vec<u8>,
+        sequence: i64,
         truncated: bool,
     },
     Exit {
         session_id: String,
+    },
+    Error {
+        session_id: String,
+        error: String,
     },
 }
 
@@ -109,6 +376,10 @@ pub trait SessionPort: Send + Sync {
     async fn resize(&self, session_id: &str, cols: u16, rows: u16) -> Result<(), String>;
     async fn detach(&self, session_id: &str) -> Result<(), String>;
     async fn close(&self, session_id: &str) -> Result<(), String>;
+    /// Attach a new view to an existing session and replay retained output.
+    async fn attach(&self, _session_id: &str, _from: i64) -> Result<String, String> {
+        Err("session attach is not supported".to_string())
+    }
     async fn get_events(&self) -> mpsc::Receiver<DaemonEvent>;
 }
 
@@ -126,13 +397,19 @@ struct Envelope {
 #[derive(Debug, Clone)]
 enum SurfaceCommand {
     Open { image: Option<String> },
+    Reconnect,
     Configure(ImageConfiguration),
     Input { bytes: Vec<u8> },
     InputKeys { keys: Vec<InputKey> },
+    Paste { text: String },
+    Compose { preedit: Option<Preedit> },
+    Focus { focused: bool },
+    Command { selector: String },
     ScreenRead,
-    Close,
     SessionClose,
+    SessionDetach,
     ImageResponse { body: Value },
+    ClipboardResolve { request_id: u64, text: String },
 }
 
 #[derive(Debug, Clone)]
@@ -159,8 +436,20 @@ struct InputKey {
     ctrl: bool,
 }
 
+fn decorate_screen(mut screen: Screen, focused: bool, preedit: &Option<Preedit>) -> Screen {
+    screen.cursor.focused = focused;
+    screen.cursor.preedit = preedit.clone();
+    screen
+}
+
 fn pixels_to_cells(pixels: u32, cell_size: f32) -> u16 {
     (pixels as f32 / cell_size) as u16
+}
+
+fn set_engine_metrics(engine: &mut Box<dyn Engine>, state: &ImageState) -> Result<(), String> {
+    let width = (state.metrics.cell_width / state.scale).round() as u16;
+    let height = (state.metrics.cell_height / state.scale).round() as u16;
+    engine.set_cell_metrics(width, height)
 }
 
 /// Validate and calculate terminal size. Returns error if width/height invalid or result is 0.
@@ -273,7 +562,7 @@ async fn present_screen(
     surface_id: &str,
     screen: &Screen,
     state: &mut ImageState,
-    output_tx: &mpsc::Sender<String>,
+    output_tx: &OutputSink,
 ) -> bool {
     if let Err(reason) = state.frame.draw(screen, &state.metrics) {
         let response = json!({
@@ -316,7 +605,7 @@ async fn send_state(
     cols: u16,
     rows: u16,
     state: &ImageState,
-    output_tx: &mpsc::Sender<String>,
+    output_tx: &OutputSink,
 ) -> bool {
     let response = json!({
         "surface": surface_id,
@@ -330,6 +619,138 @@ async fn send_state(
     output_tx.send(response.to_string()).await.is_ok()
 }
 
+fn clipboard_selection_name(selection: ClipboardSelection) -> &'static str {
+    match selection {
+        ClipboardSelection::Clipboard => "clipboard",
+        ClipboardSelection::Selection => "selection",
+    }
+}
+
+async fn send_engine_events(
+    surface_id: &str,
+    session_id: Option<&str>,
+    engine: &mut Box<dyn Engine>,
+    session_port: &Arc<dyn SessionPort>,
+    output_tx: &OutputSink,
+    emit_surface_events: bool,
+) -> bool {
+    for event in engine.drain_events() {
+        match event {
+            EngineEvent::PtyWrite(bytes) => {
+                let Some(session_id) = session_id else {
+                    let response = json!({"surface": surface_id, "body": {"error": "engine response without session"}});
+                    return output_tx.send(response.to_string()).await.is_ok();
+                };
+                if let Err(error) = session_port.write(session_id, &bytes).await {
+                    let response = json!({"surface": surface_id, "body": {"error": "engine response write failed", "reason": error}});
+                    return output_tx.send(response.to_string()).await.is_ok();
+                }
+            }
+            EngineEvent::Title(title) => {
+                if !emit_surface_events { continue; }
+                let response =
+                    json!({"surface": surface_id, "body": {"event": "title", "title": title}});
+                if output_tx.send(response.to_string()).await.is_err() {
+                    return false;
+                }
+            }
+            EngineEvent::ResetTitle => {
+                if !emit_surface_events { continue; }
+                let response = json!({"surface": surface_id, "body": {"event": "title.reset"}});
+                if output_tx.send(response.to_string()).await.is_err() {
+                    return false;
+                }
+            }
+            EngineEvent::ClipboardStore { selection, text } => {
+                if !emit_surface_events { continue; }
+                let response = json!({"surface": surface_id, "body": {"event": "clipboard.store", "selection": clipboard_selection_name(selection), "text": text}});
+                if output_tx.send(response.to_string()).await.is_err() {
+                    return false;
+                }
+            }
+            EngineEvent::ClipboardQuery {
+                request_id,
+                selection,
+            } => {
+                if !emit_surface_events { continue; }
+                let response = json!({"surface": surface_id, "body": {"event": "clipboard.query", "requestId": request_id, "selection": clipboard_selection_name(selection)}});
+                if output_tx.send(response.to_string()).await.is_err() {
+                    return false;
+                }
+            }
+            EngineEvent::CursorBlinkingChange => {
+                if !emit_surface_events { continue; }
+                let response = json!({"surface": surface_id, "body": {"event": "cursor.blinking"}});
+                if output_tx.send(response.to_string()).await.is_err() {
+                    return false;
+                }
+            }
+            EngineEvent::Wakeup => {
+                if !emit_surface_events { continue; }
+                let response = json!({"surface": surface_id, "body": {"event": "wakeup"}});
+                if output_tx.send(response.to_string()).await.is_err() {
+                    return false;
+                }
+            }
+            EngineEvent::Bell => {
+                if !emit_surface_events { continue; }
+                let response = json!({"surface": surface_id, "body": {"event": "bell"}});
+                if output_tx.send(response.to_string()).await.is_err() {
+                    return false;
+                }
+            }
+            EngineEvent::Exit => {
+                if !emit_surface_events { continue; }
+                let response = json!({"surface": surface_id, "body": {"event": "exit"}});
+                if output_tx.send(response.to_string()).await.is_err() {
+                    return false;
+                }
+            }
+            EngineEvent::ChildExit { success, code } => {
+                if !emit_surface_events { continue; }
+                let response = json!({"surface": surface_id, "body": {"event": "child.exit", "success": success, "code": code}});
+                if output_tx.send(response.to_string()).await.is_err() {
+                    return false;
+                }
+            }
+            EngineEvent::MouseCursorDirty => {
+                if !emit_surface_events { continue; }
+                let response =
+                    json!({"surface": surface_id, "body": {"event": "mouse.cursor.dirty"}});
+                if output_tx.send(response.to_string()).await.is_err() {
+                    return false;
+                }
+            }
+            EngineEvent::Error(reason) => {
+                if !emit_surface_events { continue; }
+                let response =
+                    json!({"surface": surface_id, "body": {"event": "error", "reason": reason}});
+                if output_tx.send(response.to_string()).await.is_err() {
+                    return false;
+                }
+            }
+        }
+    }
+    true
+}
+
+async fn open_headless(
+    session_id: &mut Option<String>,
+    engine: &mut Box<dyn Engine>,
+    session_port: &Arc<dyn SessionPort>,
+    output_tx: &OutputSink,
+) -> bool {
+    if session_id.is_some() { return true; }
+    engine.resize(80, 24);
+    match session_port.open("/bin/sh", 80, 24, None).await {
+        Ok(id) => { *session_id = Some(id); true }
+        Err(error) => {
+            let response = json!({"body": {"error": format!("Failed to open headless session: {error}")}});
+            output_tx.send(response.to_string()).await.is_ok()
+        }
+    }
+}
+
 async fn open_if_configured(
     surface_id: &str,
     requested: bool,
@@ -338,7 +759,7 @@ async fn open_if_configured(
     engine: &mut Box<dyn Engine>,
     image_state: &mut Option<ImageState>,
     session_port: &Arc<dyn SessionPort>,
-    output_tx: &mpsc::Sender<String>,
+    output_tx: &OutputSink,
 ) -> bool {
     if !requested || session_id.is_some() {
         return true;
@@ -360,6 +781,10 @@ async fn open_if_configured(
         }
     };
     engine.resize(cols, rows);
+    if let Err(error) = set_engine_metrics(engine, state) {
+        let response = json!({"surface": surface_id, "body": {"error": "invalid renderer metrics", "reason": error}});
+        return output_tx.send(response.to_string()).await.is_ok();
+    }
     match session_port.open("/bin/sh", cols, rows, None).await {
         Ok(sid) => {
             *session_id = Some(sid.clone());
@@ -380,13 +805,28 @@ fn newer_configuration(configuration: &ImageConfiguration, state: &ImageState) -
     (configuration.generation, configuration.raster) > (state.generation, state.raster)
 }
 
+fn local_surface_key(
+    surface_txs: &HashMap<String, mpsc::Sender<SurfaceCommand>>,
+    root: Option<&str>,
+    surface: &str,
+) -> String {
+    if let Some(root) = root {
+        return format!("{root}\0{surface}");
+    }
+    surface_txs
+        .keys()
+        .find(|key| key.ends_with(&format!("\0{surface}")))
+        .cloned()
+        .unwrap_or_else(|| format!("\0{surface}"))
+}
+
 /// 표면별 비동기 작업. 엔진과 데몬 연결을 소유하며 명령을 처리한다.
 async fn surface_task(
     surface_id: String,
     engine_factory: Arc<dyn Fn() -> Box<dyn Engine> + Send + Sync>,
     session_port: Arc<dyn SessionPort>,
     mut cmd_rx: mpsc::Receiver<SurfaceCommand>,
-    output_tx: mpsc::Sender<String>,
+    output_tx: OutputSink,
 ) {
     let mut engine = engine_factory();
     let mut session_id: Option<String> = None;
@@ -394,7 +834,10 @@ async fn surface_task(
     let mut image_state: Option<ImageState> = None;
     let mut open_requested = false;
     let mut requested_image: Option<String> = None;
+    let mut headless = false;
     let mut pending_configuration: Option<ImageConfiguration> = None;
+    let mut focused = false;
+    let mut preedit: Option<Preedit> = None;
 
     loop {
         tokio::select! {
@@ -403,9 +846,30 @@ async fn surface_task(
                     SurfaceCommand::Open { image } => {
                         open_requested = true;
                         requested_image = image;
+                        headless = requested_image.is_none();
+                        if headless && !open_headless(&mut session_id, &mut engine, &session_port, &output_tx).await { return; }
                         if !open_if_configured(&surface_id, open_requested, &requested_image, &mut session_id,
                             &mut engine, &mut image_state, &session_port, &output_tx).await {
                             return;
+                        }
+                    }
+                    SurfaceCommand::Reconnect => {
+                        // PTY and VT state belong to the persistent session;
+                        // the IOSurface belongs to the application instance.
+                        // Discard only the old native image so the reconnecting
+                        // client must provide a fresh Configure message.
+                        image_state = None;
+                        pending_configuration = None;
+                        if !headless {
+                            if let Some(session_id) = session_id.as_deref() {
+                            let response = json!({
+                                "surface": surface_id,
+                                "body": {"event": "session", "sessionId": session_id}
+                            });
+                            if output_tx.send(response.to_string()).await.is_err() {
+                                return;
+                            }
+                            }
                         }
                     }
                     SurfaceCommand::Configure(configuration) => {
@@ -441,6 +905,11 @@ async fn surface_task(
                             }
                         };
                         engine.resize(cols, rows);
+                        if let Err(error) = set_engine_metrics(&mut engine, &new_state) {
+                            let response = json!({"surface": surface_id, "body": {"error": "invalid renderer metrics", "reason": error}});
+                            if output_tx.send(response.to_string()).await.is_err() { return; }
+                            continue;
+                        }
                         image_state = Some(new_state);
                         if let Some(sid) = session_id.as_ref() {
                             if let Err(error) = session_port.resize(sid, cols, rows).await {
@@ -450,7 +919,7 @@ async fn surface_task(
                             } else if !send_state(&surface_id, sid, cols, rows, image_state.as_ref().unwrap(), &output_tx).await {
                                 return;
                             }
-                            let screen = engine.screen();
+                            let screen = decorate_screen(engine.screen(), focused, &preedit);
                             if !present_screen(&surface_id, &screen, image_state.as_mut().unwrap(), &output_tx).await {
                                 return;
                             }
@@ -487,6 +956,39 @@ async fn surface_task(
                                 "body": {"error": "Session not open"}
                             });
                             if let Err(_) = output_tx.send(response.to_string()).await {
+                                return;
+                            }
+                        }
+                    }
+                    SurfaceCommand::Paste { text } => {
+                        if let Some(ref sid) = session_id {
+                            let bytes = encoding::encode_paste(&text, &engine.modes());
+                            match session_port.write(sid, &bytes).await {
+                                Ok(()) => {
+                                    let response = json!({
+                                        "surface": surface_id,
+                                        "body": {"ack": true, "event": "paste"}
+                                    });
+                                    if output_tx.send(response.to_string()).await.is_err() {
+                                        return;
+                                    }
+                                }
+                                Err(error) => {
+                                    let response = json!({
+                                        "surface": surface_id,
+                                        "body": {"error": format!("Paste failed: {error}")}
+                                    });
+                                    if output_tx.send(response.to_string()).await.is_err() {
+                                        return;
+                                    }
+                                }
+                            }
+                        } else {
+                            let response = json!({
+                                "surface": surface_id,
+                                "body": {"error": "Session not open"}
+                            });
+                            if output_tx.send(response.to_string()).await.is_err() {
                                 return;
                             }
                         }
@@ -547,8 +1049,34 @@ async fn surface_task(
                             }
                         }
                     }
+                    SurfaceCommand::Compose { preedit: next } => {
+                        preedit = next;
+                        let response = json!({"surface": surface_id, "body": {"ack": true, "event": "compose"}});
+                        if output_tx.send(response.to_string()).await.is_err() { return; }
+                    }
+                    SurfaceCommand::Focus { focused: next } => {
+                        focused = next;
+                        let screen = decorate_screen(engine.screen(), focused, &preedit);
+                        if let Some(ref mut state) = image_state {
+                            if !present_screen(&surface_id, &screen, state, &output_tx).await { return; }
+                        }
+                        let response = json!({"surface": surface_id, "body": {"ack": true, "event": "focus", "focused": focused}});
+                        if output_tx.send(response.to_string()).await.is_err() { return; }
+                    }
+                    SurfaceCommand::Command { selector } => {
+                        let response = json!({"surface": surface_id, "body": {"ack": true, "event": "command", "selector": selector}});
+                        if output_tx.send(response.to_string()).await.is_err() { return; }
+                    }
+                    SurfaceCommand::ClipboardResolve { request_id, text } => {
+                        if let Err(error) = engine.resolve_clipboard(request_id, &text) {
+                            let response = json!({"surface": surface_id, "body": {"error": error}});
+                            if output_tx.send(response.to_string()).await.is_err() { return; }
+                        } else if !send_engine_events(&surface_id, session_id.as_deref(), &mut engine, &session_port, &output_tx, true).await {
+                            return;
+                        }
+                    }
                     SurfaceCommand::ScreenRead => {
-                        let screen = engine.screen();
+                        let screen = decorate_screen(engine.screen(), focused, &preedit);
                         let response = json!({
                             "surface": surface_id,
                             "body": {
@@ -577,9 +1105,8 @@ async fn surface_task(
                         }
                         break;
                     }
-                    SurfaceCommand::Close => {
+                    SurfaceCommand::SessionDetach => {
                         if let Some(ref sid) = session_id {
-                            // Surface detaching; intentionally ignore detach errors during cleanup (already disconnecting)
                             let _ = session_port.detach(sid).await;
                         }
                         break;
@@ -628,6 +1155,11 @@ async fn surface_task(
                                     }
                                 };
                                 engine.resize(cols, rows);
+                                if let Err(error) = set_engine_metrics(&mut engine, &new_state) {
+                                    let response = json!({"surface": surface_id, "body": {"error": "invalid renderer metrics", "reason": error}});
+                                    if output_tx.send(response.to_string()).await.is_err() { return; }
+                                    continue;
+                                }
                                 image_state = Some(new_state);
                                 if let Some(sid) = session_id.as_ref() {
                                     if let Err(error) = session_port.resize(sid, cols, rows).await {
@@ -637,13 +1169,13 @@ async fn surface_task(
                                     } else if !send_state(&surface_id, sid, cols, rows, image_state.as_ref().unwrap(), &output_tx).await {
                                         return;
                                     }
-                                    let screen = engine.screen();
+                                    let screen = decorate_screen(engine.screen(), focused, &preedit);
                                     if !present_screen(&surface_id, &screen, image_state.as_mut().unwrap(), &output_tx).await {
                                         return;
                                     }
                                 }
                             } else if image_state.as_ref().unwrap().dirty {
-                                let screen = engine.screen();
+                                let screen = decorate_screen(engine.screen(), focused, &preedit);
                                 if !present_screen(&surface_id, &screen, image_state.as_mut().unwrap(), &output_tx).await {
                                     return;
                                 }
@@ -654,24 +1186,26 @@ async fn surface_task(
             }
             Some(event) = daemon_events_rx.recv() => {
                 match event {
-                    DaemonEvent::Output { session_id: ref recv_sid, data, truncated } => {
+                    DaemonEvent::Output { session_id: ref recv_sid, data, sequence: _, truncated } => {
                         if let Some(ref sid) = session_id {
                             if recv_sid == sid {
                                 if truncated {
                                     engine.reset();
                                 }
                                 engine.feed(&data);
-                                let screen = engine.screen();
+                                if !send_engine_events(&surface_id, session_id.as_deref(), &mut engine, &session_port, &output_tx, !headless).await { return; }
+                                let screen = decorate_screen(engine.screen(), focused, &preedit);
 
-                                if let Some(ref mut img_state) = image_state {
-                                    // 그림이 호스트에 있으면 돌려받을 때까지 그리지 않고 변경 사실만 남긴다.
-                                    if img_state.pending_draw {
-                                        img_state.dirty = true;
-                                    } else if !present_screen(&surface_id, &screen, img_state, &output_tx).await {
-                                        return;
-                                    }
-                                }
+                                if !headless { if let Some(ref mut img_state) = image_state {
+                                        // 그림이 호스트에 있으면 돌려받을 때까지 그리지 않고 변경 사실만 남긴다.
+                                        if img_state.pending_draw {
+                                            img_state.dirty = true;
+                                        } else if !present_screen(&surface_id, &screen, img_state, &output_tx).await {
+                                            return;
+                                        }
+                                } }
 
+                                if headless { continue; }
                                 let response = json!({
                                     "surface": surface_id,
                                     "body": {
@@ -702,6 +1236,12 @@ async fn surface_task(
                             }
                         }
                     }
+                    DaemonEvent::Error { session_id: ref recv_sid, error } => {
+                        if session_id.as_deref() == Some(recv_sid) {
+                            let response = json!({"surface": surface_id, "body": {"event": "error", "reason": error}});
+                            if output_tx.send(response.to_string()).await.is_err() { return; }
+                        }
+                    }
                 }
             }
             else => break,
@@ -720,10 +1260,92 @@ where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
 {
-    let buf_reader = BufReader::new(reader);
-    let (output_tx, output_rx) = mpsc::channel::<String>(100);
+    serve_with_options(
+        engine_factory,
+        reader,
+        writer,
+        session_port_factory,
+        None,
+        None,
+        String::new(),
+    )
+    .await
+}
 
-    let input_task = run_input_loop(buf_reader, engine_factory, session_port_factory, output_tx);
+pub async fn serve_with_owner_close<R, W>(
+    engine_factory: Arc<dyn Fn() -> Box<dyn Engine> + Send + Sync>,
+    reader: R,
+    writer: W,
+    session_port_factory: Arc<dyn Fn() -> Arc<dyn SessionPort> + Send + Sync>,
+    owner_close: Option<Arc<dyn Fn() -> Result<(), String> + Send + Sync>>,
+) -> std::io::Result<()>
+where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+{
+    serve_with_options(
+        engine_factory,
+        reader,
+        writer,
+        session_port_factory,
+        owner_close,
+        None,
+        String::new(),
+    )
+    .await
+}
+
+pub async fn serve_with_registry<R, W>(
+    engine_factory: Arc<dyn Fn() -> Box<dyn Engine> + Send + Sync>,
+    reader: R,
+    writer: W,
+    session_port_factory: Arc<dyn Fn() -> Arc<dyn SessionPort> + Send + Sync>,
+    owner_close: Arc<dyn Fn() -> Result<(), String> + Send + Sync>,
+    registry: Arc<PersistentRegistry>,
+    owner: String,
+) -> std::io::Result<()>
+where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+{
+    serve_with_options(
+        engine_factory,
+        reader,
+        writer,
+        session_port_factory,
+        Some(owner_close),
+        Some(registry),
+        owner,
+    )
+    .await
+}
+
+async fn serve_with_options<R, W>(
+    engine_factory: Arc<dyn Fn() -> Box<dyn Engine> + Send + Sync>,
+    reader: R,
+    writer: W,
+    session_port_factory: Arc<dyn Fn() -> Arc<dyn SessionPort> + Send + Sync>,
+    owner_close: Option<Arc<dyn Fn() -> Result<(), String> + Send + Sync>>,
+    registry: Option<Arc<PersistentRegistry>>,
+    owner: String,
+) -> std::io::Result<()>
+where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+{
+    let buf_reader = BufReader::new(reader);
+    let (output_sender, output_rx) = mpsc::channel::<String>(100);
+    let output_tx = OutputSink::direct(output_sender);
+
+    let input_task = run_input_loop(
+        buf_reader,
+        engine_factory,
+        session_port_factory,
+        output_tx,
+        owner_close,
+        registry,
+        owner,
+    );
     let output_task = run_output_loop(writer, output_rx);
 
     tokio::try_join!(input_task, output_task)?;
@@ -734,12 +1356,16 @@ async fn run_input_loop<R>(
     mut buf_reader: BufReader<R>,
     engine_factory: Arc<dyn Fn() -> Box<dyn Engine> + Send + Sync>,
     session_port_factory: Arc<dyn Fn() -> Arc<dyn SessionPort> + Send + Sync>,
-    output_tx: mpsc::Sender<String>,
+    output_tx: OutputSink,
+    owner_close: Option<Arc<dyn Fn() -> Result<(), String> + Send + Sync>>,
+    registry: Option<Arc<PersistentRegistry>>,
+    owner: String,
 ) -> std::io::Result<()>
 where
     R: AsyncRead + Unpin,
 {
     let mut surface_txs: HashMap<String, mpsc::Sender<SurfaceCommand>> = HashMap::new();
+    let mut surface_epochs: HashMap<String, u64> = HashMap::new();
     let mut tasks = tokio::task::JoinSet::new();
     let mut line = String::new();
 
@@ -748,9 +1374,15 @@ where
         let n = buf_reader.read_line(&mut line).await?;
 
         if n == 0 {
-            // stdin EOF - intentionally ignore send errors during cleanup
-            for (_, tx) in surface_txs.iter() {
-                let _ = tx.send(SurfaceCommand::Close).await;
+            if registry.is_none() {
+                for (_, tx) in surface_txs.iter() {
+                    if tx.send(SurfaceCommand::SessionDetach).await.is_err() {
+                        // The actor already terminated; its monitor has emitted the actor error.
+                        continue;
+                    }
+                }
+            } else {
+                output_tx.replace_sender(None).await;
             }
             break;
         }
@@ -760,16 +1392,72 @@ where
             continue;
         }
 
+        if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
+            if value.get("op").and_then(Value::as_str) == Some("close-owner") {
+                let request = value.get("request").and_then(Value::as_str).unwrap_or("");
+                let mut result = owner_close
+                    .as_ref()
+                    .map(|close| close())
+                    .unwrap_or_else(|| Err("owner close is unavailable".to_string()));
+                if result.is_ok() {
+                    if let Some(registry) = registry.as_ref() {
+                        result = registry.close_owner(&owner).await;
+                    }
+                }
+                let reply = match result {
+                    Ok(()) => json!({"op": "closed-owner", "request": request, "ok": true}),
+                    Err(error) => {
+                        json!({"op": "closed-owner", "request": request, "ok": false, "error": error})
+                    }
+                };
+                if output_tx.send(reply.to_string()).await.is_err() {
+                    break;
+                }
+                continue;
+            }
+            if value.get("op").and_then(Value::as_str) == Some("shutdown") {
+                let request = value.get("request").and_then(Value::as_str).unwrap_or("");
+                let result = if let Some(registry) = registry.as_ref() {
+                    registry.request_shutdown();
+                    Ok(())
+                } else {
+                    Err("shutdown is unavailable".to_string())
+                };
+                let reply = match result {
+                    Ok(()) => json!({"op": "shutdown", "request": request, "ok": true}),
+                    Err(error) => {
+                        json!({"op": "shutdown", "request": request, "ok": false, "error": error})
+                    }
+                };
+                if output_tx.send(reply.to_string()).await.is_err() {
+                    break;
+                }
+                break;
+            }
+        }
+
         match serde_json::from_str::<Envelope>(trimmed) {
             Ok(env) => {
                 let surface_id = env.surface.clone();
 
                 if env.closed == Some(true) {
-                    if let Some(tx) = surface_txs.remove(&surface_id) {
-                        // Surface is closed; tell the task to close
-                        if let Err(_) = tx.send(SurfaceCommand::Close).await {
-                            // Command channel closed, surface task already exiting
+                    let registry_key =
+                        local_surface_key(&surface_txs, env.root.as_deref(), &surface_id);
+                    let close_result = if let Some(registry) = registry.as_ref() {
+                        registry.close_surface(&registry_key, &owner).await
+                    } else if let Some(tx) = surface_txs.remove(&registry_key) {
+                        tx.send(SurfaceCommand::SessionClose)
+                            .await
+                            .map_err(|_| "surface actor closed before close".to_string())
+                    } else {
+                        Ok(())
+                    };
+                    if let Err(error) = close_result {
+                        let response = json!({"surface": surface_id, "body": {"error": error}});
+                        if output_tx.send(response.to_string()).await.is_err() {
+                            break;
                         }
+                        continue;
                     }
                     let response = json!({"surface": surface_id, "body": {}});
                     if let Err(_) = output_tx.send(response.to_string()).await {
@@ -777,8 +1465,85 @@ where
                         break;
                     }
                 } else if let Some(body) = env.body {
-                    let tx = if let Some(tx) = surface_txs.get(&surface_id) {
+                    let registry_key =
+                        local_surface_key(&surface_txs, env.root.as_deref(), &surface_id);
+                    let tx = if let Some(tx) = surface_txs.get(&registry_key) {
+                        if let Some(registry) = registry.as_ref() {
+                            let epoch = surface_epochs.get(&registry_key).copied().unwrap_or(0);
+                            if registry.current_epoch(&registry_key, &owner).await != Some(epoch) {
+                                let response = json!({"surface": surface_id, "body": {"error": "stale attachment"}});
+                                if output_tx.send(response.to_string()).await.is_err() {
+                                    break;
+                                }
+                                continue;
+                            }
+                        }
                         tx.clone()
+                    } else if let Some(registry) = registry.as_ref() {
+                        match registry.attach(&registry_key, &owner, &output_tx).await {
+                            Ok((tx, epoch)) => {
+                                surface_epochs.insert(registry_key.clone(), epoch);
+                                if tx.send(SurfaceCommand::Reconnect).await.is_err() {
+                                    let response = json!({"surface": surface_id, "body": {"error": "persistent surface actor closed before reconnect"}});
+                                    if output_tx.send(response.to_string()).await.is_err() {
+                                        break;
+                                    }
+                                    continue;
+                                }
+                                tx
+                            }
+                            Err(error) if registry.contains(&registry_key).await => {
+                                let response = json!({"surface": surface_id, "body": {"error": "persistent attach failed", "reason": error}});
+                                if output_tx.send(response.to_string()).await.is_err() {
+                                    break;
+                                }
+                                continue;
+                            }
+                            Err(error) => {
+                                if error != "session surface not found" {
+                                    let response = json!({"surface": surface_id, "body": {"error": "persistent attach failed", "reason": error}});
+                                    if output_tx.send(response.to_string()).await.is_err() {
+                                        break;
+                                    }
+                                    continue;
+                                }
+
+                                // A persistent service must create a new actor for a
+                                // genuinely new surface. Only an existing registry
+                                // entry may be reattached; no error is converted into
+                                // an implicit replacement of an existing session.
+                                let (cmd_tx, cmd_rx) = mpsc::channel(10);
+                                let session_port = session_port_factory();
+                                let factory = engine_factory.clone();
+                                let out_tx = output_tx.clone();
+                                let sid = surface_id.clone();
+                                let actor = tokio::spawn(async move {
+                                    surface_task(sid, factory, session_port, cmd_rx, out_tx).await;
+                                });
+                                match registry
+                                    .insert(
+                                        registry_key.clone(),
+                                        owner.clone(),
+                                        cmd_tx.clone(),
+                                        output_tx.clone(),
+                                        actor,
+                                    )
+                                    .await
+                                {
+                                    Ok(epoch) => {
+                                        surface_epochs.insert(registry_key.clone(), epoch);
+                                        cmd_tx
+                                    }
+                                    Err(insert_error) => {
+                                        let response = json!({"surface": surface_id, "body": {"error": "persistent surface creation failed", "reason": insert_error}});
+                                        if output_tx.send(response.to_string()).await.is_err() {
+                                            break;
+                                        }
+                                        continue;
+                                    }
+                                }
+                            }
+                        }
                     } else {
                         // 새 표면: 작업 생성
                         let (cmd_tx, cmd_rx) = mpsc::channel(10);
@@ -824,9 +1589,10 @@ where
                             }
                         });
 
-                        surface_txs.insert(surface_id.clone(), cmd_tx.clone());
+                        surface_txs.insert(registry_key.clone(), cmd_tx.clone());
                         cmd_tx
                     };
+                    surface_txs.insert(registry_key.clone(), tx.clone());
 
                     // Check for op field first (it's a request)
                     if let Some(op) = body.get("op").and_then(|v| v.as_str()) {
@@ -841,11 +1607,73 @@ where
                                 }
                             }
                             "input" => {
-                                // Either bytes or keys or both must be present
+                                if let Some(value) = body.get("compose") {
+                                    let parsed = if value.is_null() {
+                                        Ok(None)
+                                    } else {
+                                        serde_json::from_value::<Preedit>(value.clone()).map(Some)
+                                    };
+                                    match parsed {
+                                        Ok(preedit) => {
+                                            if tx
+                                                .send(SurfaceCommand::Compose { preedit })
+                                                .await
+                                                .is_err()
+                                            {
+                                                break;
+                                            }
+                                        }
+                                        Err(error) => {
+                                            let response = json!({"surface": surface_id, "body": {"error": "invalidParams", "reason": format!("compose: {error}")}});
+                                            if output_tx.send(response.to_string()).await.is_err() {
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                                if let Some(value) = body.get("focus") {
+                                    if let Some(focused) =
+                                        value.get("focused").and_then(Value::as_bool)
+                                    {
+                                        if tx.send(SurfaceCommand::Focus { focused }).await.is_err()
+                                        {
+                                            break;
+                                        }
+                                    } else {
+                                        let response = json!({"surface": surface_id, "body": {"error": "invalidParams", "reason": "focus.focused must be boolean"}});
+                                        if output_tx.send(response.to_string()).await.is_err() {
+                                            break;
+                                        }
+                                    }
+                                }
+                                if let Some(value) = body.get("command") {
+                                    if let Some(selector) =
+                                        value.get("selector").and_then(Value::as_str)
+                                    {
+                                        if tx
+                                            .send(SurfaceCommand::Command {
+                                                selector: selector.to_string(),
+                                            })
+                                            .await
+                                            .is_err()
+                                        {
+                                            break;
+                                        }
+                                    } else {
+                                        let response = json!({"surface": surface_id, "body": {"error": "invalidParams", "reason": "command.selector must be string"}});
+                                        if output_tx.send(response.to_string()).await.is_err() {
+                                            break;
+                                        }
+                                    }
+                                }
+                                // Bytes and keys remain optional when compose/focus/command is present.
                                 let has_bytes = body.get("bytes").is_some();
                                 let has_keys = body.get("keys").is_some();
+                                let has_native_input = body.get("compose").is_some()
+                                    || body.get("focus").is_some()
+                                    || body.get("command").is_some();
 
-                                if !has_bytes && !has_keys {
+                                if !has_bytes && !has_keys && !has_native_input {
                                     let response = json!({
                                         "surface": surface_id,
                                         "body": {"error": "invalidParams", "reason": "input requires bytes or keys field"}
@@ -928,9 +1756,56 @@ where
                                     }
                                 }
                             }
+                            "paste" => match body.get("text").and_then(Value::as_str) {
+                                Some(text) => {
+                                    if tx
+                                        .send(SurfaceCommand::Paste {
+                                            text: text.to_string(),
+                                        })
+                                        .await
+                                        .is_err()
+                                    {
+                                        break;
+                                    }
+                                }
+                                None => {
+                                    let response = json!({
+                                        "surface": surface_id,
+                                        "body": {"error": "invalidParams", "reason": "paste requires text string"}
+                                    });
+                                    if output_tx.send(response.to_string()).await.is_err() {
+                                        break;
+                                    }
+                                }
+                            },
                             "screen.read" => {
                                 if let Err(_) = tx.send(SurfaceCommand::ScreenRead).await {
                                     break;
+                                }
+                            }
+                            "clipboard.resolve" => {
+                                let request_id = body.get("requestId").and_then(Value::as_u64);
+                                let text =
+                                    body.get("text").and_then(Value::as_str).map(str::to_string);
+                                match (request_id, text) {
+                                    (Some(request_id), Some(text)) => {
+                                        if tx
+                                            .send(SurfaceCommand::ClipboardResolve {
+                                                request_id,
+                                                text,
+                                            })
+                                            .await
+                                            .is_err()
+                                        {
+                                            break;
+                                        }
+                                    }
+                                    _ => {
+                                        let response = json!({"surface": surface_id, "body": {"error": "invalidParams", "reason": "clipboard.resolve requires requestId and text"}});
+                                        if output_tx.send(response.to_string()).await.is_err() {
+                                            break;
+                                        }
+                                    }
                                 }
                             }
                             "close" => {
@@ -1022,10 +1897,14 @@ where
         }
     }
 
-    // Clean up all surfaces
-    for (_, tx) in surface_txs.iter() {
-        // Best effort close; intentionally ignore send errors (surface task may already be exiting)
-        let _ = tx.send(SurfaceCommand::Close).await;
+    // A persistent transport keeps its surface actors and PTY sessions across
+    // an unexpected client disconnect. Normal application shutdown sends the
+    // explicit close-owner operation and closes them there. Non-persistent
+    // transports have no recovery owner, so their surfaces must be closed now.
+    if registry.is_none() {
+        for (_, tx) in surface_txs.iter() {
+            let _ = tx.send(SurfaceCommand::SessionClose).await;
+        }
     }
 
     // Wait for all monitor tasks to complete
@@ -1049,61 +1928,10 @@ where
 }
 
 pub fn base64_decode(s: &str) -> Result<Vec<u8>, String> {
-    const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut result = Vec::new();
-    let bytes = s.as_bytes();
-    let mut i = 0;
-
-    while i < bytes.len() {
-        let b1 = bytes[i];
-        if b1 == b'=' {
-            break;
-        }
-
-        let idx1 = ALPHABET
-            .iter()
-            .position(|&x| x == b1)
-            .ok_or_else(|| "Invalid Base64".to_string())?;
-
-        if i + 1 >= bytes.len() {
-            return Err("Incomplete Base64".to_string());
-        }
-
-        let b2 = bytes[i + 1];
-        let idx2 = ALPHABET
-            .iter()
-            .position(|&x| x == b2)
-            .ok_or_else(|| "Invalid Base64".to_string())?;
-
-        result.push((((idx1 << 2) | (idx2 >> 4)) & 0xFF) as u8);
-
-        if i + 2 < bytes.len() && bytes[i + 2] != b'=' {
-            let b3 = bytes[i + 2];
-            let idx3 = ALPHABET
-                .iter()
-                .position(|&x| x == b3)
-                .ok_or_else(|| "Invalid Base64".to_string())?;
-
-            result.push((((idx2 << 4) | (idx3 >> 2)) & 0xFF) as u8);
-
-            if i + 3 < bytes.len() && bytes[i + 3] != b'=' {
-                let b4 = bytes[i + 3];
-                let idx4 = ALPHABET
-                    .iter()
-                    .position(|&x| x == b4)
-                    .ok_or_else(|| "Invalid Base64".to_string())?;
-
-                result.push((((idx3 << 6) | idx4) & 0xFF) as u8);
-                i += 4;
-            } else {
-                i += 3;
-            }
-        } else {
-            i += 2;
-        }
-    }
-
-    Ok(result)
+    use base64::Engine as _;
+    base64::engine::general_purpose::STANDARD
+        .decode(s)
+        .map_err(|error| format!("invalid base64 input: {error}"))
 }
 
 #[cfg(test)]
@@ -1126,9 +1954,33 @@ impl FakeEngine {
 
 #[cfg(test)]
 impl Engine for FakeEngine {
+    fn drain_events(&mut self) -> Vec<EngineEvent> {
+        Vec::new()
+    }
+
+    fn resolve_clipboard(&mut self, _request_id: u64, _text: &str) -> Result<(), String> {
+        Ok(())
+    }
+
+    fn cursor(&self) -> Cursor {
+        Cursor {
+            col: 0,
+            row: 0,
+            shape: CursorShape::Block,
+            visible: true,
+            blinking: false,
+            focused: false,
+            preedit: None,
+        }
+    }
+
     fn resize(&mut self, cols: u16, rows: u16) {
         self.cols = cols;
         self.rows = rows;
+    }
+
+    fn set_cell_metrics(&mut self, _width: u16, _height: u16) -> Result<(), String> {
+        Ok(())
     }
 
     fn feed(&mut self, bytes: &[u8]) {
@@ -1155,7 +2007,15 @@ impl Engine for FakeEngine {
         Screen {
             cols: self.cols,
             rows: self.rows,
-            cursor: Cursor { col: 0, row: 0 },
+            cursor: Cursor {
+                col: 0,
+                row: 0,
+                shape: CursorShape::Block,
+                visible: true,
+                blinking: false,
+                focused: false,
+                preedit: None,
+            },
             lines,
         }
     }
@@ -1171,279 +2031,102 @@ impl Engine for FakeEngine {
 
 /// 기본 SessionPort 팩토리를 만든다 (DaemonFinder를 사용)
 pub fn make_default_session_port_factory() -> Arc<dyn Fn() -> Arc<dyn SessionPort> + Send + Sync> {
-    Arc::new(|| Arc::new(DaemonSessionPort::new()) as Arc<dyn SessionPort>)
+    let service = Arc::new(crate::pty::PtyService::new());
+    Arc::new(move || Arc::new(LocalSessionPort::new(service.clone())) as Arc<dyn SessionPort>)
 }
 
-/// 실제 데몬 연결을 관리하는 SessionPort 구현
-pub struct DaemonSessionPort {
-    writers: Arc<tokio::sync::Mutex<HashMap<String, crate::daemon::DaemonWriter>>>,
+/// In-process PTY session port.  The service is shared by all surface ports;
+/// each call to `open` still creates one independent PTY session.
+pub struct LocalSessionPort {
+    service: Arc<crate::pty::PtyService>,
+    owner: String,
     events_tx: mpsc::UnboundedSender<DaemonEvent>,
     events_rx: Arc<tokio::sync::Mutex<Option<mpsc::UnboundedReceiver<DaemonEvent>>>>,
-    finder: Box<dyn crate::daemon::DaemonFinder>,
+    attachments: Arc<tokio::sync::Mutex<HashMap<String, String>>>,
 }
 
-impl DaemonSessionPort {
-    fn new() -> Self {
-        let (events_tx, events_rx) = mpsc::unbounded_channel();
-        Self {
-            writers: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
-            events_tx,
-            events_rx: Arc::new(tokio::sync::Mutex::new(Some(events_rx))),
-            finder: crate::platform::get_daemon_finder(),
-        }
+impl LocalSessionPort {
+    fn new(service: Arc<crate::pty::PtyService>) -> Self {
+        Self::new_with_owner(service, String::new())
     }
 
-    pub fn with_finder(finder: Box<dyn crate::daemon::DaemonFinder>) -> Self {
+    pub fn new_with_owner(service: Arc<crate::pty::PtyService>, owner: String) -> Self {
         let (events_tx, events_rx) = mpsc::unbounded_channel();
         Self {
-            writers: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+            service,
+            owner,
             events_tx,
             events_rx: Arc::new(tokio::sync::Mutex::new(Some(events_rx))),
-            finder,
+            attachments: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
         }
-    }
-
-    async fn connect_and_open(
-        &self,
-        program: &str,
-        cols: u16,
-        rows: u16,
-        hint: Option<&str>,
-    ) -> Result<String, String> {
-        let build_kind =
-            std::env::var("SOKSAK_PROFILE").unwrap_or_else(|_| "debug".to_string());
-        let identity = DaemonIdentity {
-            protocol: "ptyd".to_string(),
-            build_kind,
-        };
-        let socket_path = self.finder.find_or_start(&identity)?;
-        let mut client = DaemonClient::connect(&socket_path).await?;
-
-        let req = DaemonRequest {
-            command: "open".to_string(),
-            program: Some(program.to_string()),
-            cols: Some(cols as i32),
-            rows: Some(rows as i32),
-            hint: hint.map(|h| h.to_string()),
-            args: None,
-            env: None,
-            cwd: None,
-            session_id: None,
-            data: None,
-            from: None,
-        };
-
-        client.send_request(&req).await?;
-
-        // Read open response directly from this connection with 5 second timeout
-        let msg = tokio::time::timeout(Duration::from_secs(5), client.read_message())
-            .await
-            .map_err(|_| "Timeout waiting for open response".to_string())?
-            .map_err(|e| format!("Failed to read response: {}", e))?
-            .ok_or_else(|| "No response from daemon".to_string())?;
-
-        let session_id = match msg {
-            crate::daemon::DaemonMessage::Open(reply) => {
-                if let Some(error) = reply.error {
-                    return Err(format!("Daemon error: {}", error));
-                }
-                reply
-                    .session_id
-                    .ok_or_else(|| "No sessionId in response".to_string())?
-            }
-            _ => return Err("Expected open response, got different message".to_string()),
-        };
-
-        // Split connection: writer for sending commands, reader for background reading
-        let (writer, reader) = client.into_split();
-
-        // Store writer for this session
-        self.writers.lock().await.insert(session_id.clone(), writer);
-
-        // Start background reader task for this session
-        let events_tx = self.events_tx.clone();
-        let sid = session_id.clone();
-        tokio::spawn(async move {
-            let mut reader = reader;
-            loop {
-                match reader.read_message().await {
-                    Ok(Some(msg)) => {
-                        match msg {
-                            crate::daemon::DaemonMessage::Output {
-                                session_id,
-                                output,
-                                truncated,
-                                ..
-                            } => {
-                                let data = match base64_decode(&output) {
-                                    Ok(d) => d,
-                                    Err(_) => output.into_bytes(),
-                                };
-                                // Intentionally ignore send error; receiver dropped means serve() is shutting down
-                                let _ = events_tx.send(DaemonEvent::Output {
-                                    session_id,
-                                    data,
-                                    truncated,
-                                });
-                            }
-                            crate::daemon::DaemonMessage::Resized { .. } => {
-                                // For now, just ignore resize messages from the daemon
-                                // Resize is typically a request from client to daemon, not the other way
-                            }
-                            crate::daemon::DaemonMessage::Exit { session_id, .. } => {
-                                // Intentionally ignore send error; receiver dropped means serve() is shutting down
-                                let _ = events_tx.send(DaemonEvent::Exit { session_id });
-                                break;
-                            }
-                            crate::daemon::DaemonMessage::Write(reply)
-                            | crate::daemon::DaemonMessage::Detach(reply) => {
-                                // Discard responses for write, detach
-                                if let Some(error) = reply.error {
-                                    eprintln!("Daemon error for session {}: {}", sid, error);
-                                }
-                            }
-                            crate::daemon::DaemonMessage::Open(reply)
-                            | crate::daemon::DaemonMessage::Attach(reply)
-                            | crate::daemon::DaemonMessage::Resize(reply)
-                            | crate::daemon::DaemonMessage::Signal(reply)
-                            | crate::daemon::DaemonMessage::Close(reply)
-                            | crate::daemon::DaemonMessage::List(reply)
-                            | crate::daemon::DaemonMessage::Purge(reply) => {
-                                // Discard other responses
-                                if let Some(error) = reply.error {
-                                    eprintln!("Daemon error for session {}: {}", sid, error);
-                                }
-                            }
-                        }
-                    }
-                    Ok(None) => break,
-                    Err(_) => break,
-                }
-            }
-        });
-
-        Ok(session_id)
     }
 }
 
 #[async_trait]
-impl SessionPort for DaemonSessionPort {
+impl SessionPort for LocalSessionPort {
     async fn open(
         &self,
         program: &str,
         cols: u16,
         rows: u16,
-        hint: Option<&str>,
+        _hint: Option<&str>,
     ) -> Result<String, String> {
-        self.connect_and_open(program, cols, rows, hint).await
+        let (session_id, attachment_id) = self.service.open_owned(
+            &self.owner,
+            program,
+            &[],
+            None,
+            cols,
+            rows,
+            self.events_tx.clone(),
+        )?;
+        self.attachments
+            .lock()
+            .await
+            .insert(session_id.clone(), attachment_id);
+        Ok(session_id)
     }
 
     async fn write(&self, session_id: &str, data: &[u8]) -> Result<(), String> {
-        let mut writers = self.writers.lock().await;
-        let writer = writers
-            .get_mut(session_id)
-            .ok_or_else(|| format!("Session {} not found", session_id))?;
-
-        let data_b64 = base64_encode(data);
-        let req = DaemonRequest {
-            command: "write".to_string(),
-            session_id: Some(session_id.to_string()),
-            data: Some(data_b64),
-            hint: None,
-            program: None,
-            args: None,
-            env: None,
-            cwd: None,
-            cols: None,
-            rows: None,
-            from: None,
-        };
-
-        writer.send_request(&req).await?;
-        Ok(())
+        self.service.write(session_id, data)
     }
 
     async fn resize(&self, session_id: &str, cols: u16, rows: u16) -> Result<(), String> {
-        let mut writers = self.writers.lock().await;
-        let writer = writers
-            .get_mut(session_id)
-            .ok_or_else(|| format!("Session {} not found", session_id))?;
-
-        let req = DaemonRequest {
-            command: "resize".to_string(),
-            session_id: Some(session_id.to_string()),
-            cols: Some(cols as i32),
-            rows: Some(rows as i32),
-            hint: None,
-            program: None,
-            args: None,
-            env: None,
-            cwd: None,
-            data: None,
-            from: None,
-        };
-
-        writer.send_request(&req).await?;
-        Ok(())
+        self.service.resize(session_id, cols, rows)
     }
 
     async fn detach(&self, session_id: &str) -> Result<(), String> {
-        let mut writers = self.writers.lock().await;
-        let mut writer = writers
-            .remove(session_id)
-            .ok_or_else(|| format!("Session {} not found", session_id))?;
-
-        let req = DaemonRequest {
-            command: "detach".to_string(),
-            session_id: Some(session_id.to_string()),
-            hint: None,
-            program: None,
-            args: None,
-            env: None,
-            cwd: None,
-            cols: None,
-            rows: None,
-            data: None,
-            from: None,
-        };
-
-        writer.send_request(&req).await?;
+        if let Some(attachment_id) = self.attachments.lock().await.remove(session_id) {
+            self.service.detach(session_id, &attachment_id)?;
+        }
         Ok(())
     }
 
     async fn close(&self, session_id: &str) -> Result<(), String> {
-        let mut writers = self.writers.lock().await;
-        let mut writer = writers
-            .remove(session_id)
-            .ok_or_else(|| format!("Session {} not found", session_id))?;
+        self.attachments.lock().await.remove(session_id);
+        self.service.close(session_id)
+    }
 
-        let req = DaemonRequest {
-            command: "close".to_string(),
-            session_id: Some(session_id.to_string()),
-            hint: None,
-            program: None,
-            args: None,
-            env: None,
-            cwd: None,
-            cols: None,
-            rows: None,
-            data: None,
-            from: None,
-        };
-
-        writer.send_request(&req).await?;
-        Ok(())
+    async fn attach(&self, session_id: &str, from: i64) -> Result<String, String> {
+        let attachment_id = self
+            .service
+            .attach(session_id, from, self.events_tx.clone())?;
+        self.attachments
+            .lock()
+            .await
+            .insert(session_id.to_string(), attachment_id.clone());
+        Ok(attachment_id)
     }
 
     async fn get_events(&self) -> mpsc::Receiver<DaemonEvent> {
-        let (tx, rx) = mpsc::channel(10);
-        let mut rx_guard = self.events_rx.lock().await;
-        if let Some(mut unbounded_rx) = rx_guard.take() {
-            // Forward events from unbounded to bounded channel
+        let (tx, rx) = mpsc::channel(128);
+        let mut events_rx = self.events_rx.lock().await;
+        if let Some(mut source) = events_rx.take() {
             tokio::spawn(async move {
-                while let Some(event) = unbounded_rx.recv().await {
-                    // Intentionally ignore send error; receiver dropped means consumer is disconnected
-                    let _ = tx.send(event).await;
+                while let Some(event) = source.recv().await {
+                    if tx.send(event).await.is_err() {
+                        break;
+                    }
                 }
             });
         }
@@ -1453,39 +2136,8 @@ impl SessionPort for DaemonSessionPort {
 
 /// Base64 encode
 fn base64_encode(data: &[u8]) -> String {
-    const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut result = String::new();
-    let mut i = 0;
-
-    while i < data.len() {
-        let b1 = data[i];
-        let b2 = if i + 1 < data.len() { data[i + 1] } else { 0 };
-        let b3 = if i + 2 < data.len() { data[i + 2] } else { 0 };
-
-        let idx1 = ((b1 >> 2) & 0x3F) as usize;
-        let idx2 = (((b1 & 0x03) << 4) | ((b2 >> 4) & 0x0F)) as usize;
-        let idx3 = (((b2 & 0x0F) << 2) | ((b3 >> 6) & 0x03)) as usize;
-        let idx4 = (b3 & 0x3F) as usize;
-
-        result.push(ALPHABET[idx1] as char);
-        result.push(ALPHABET[idx2] as char);
-
-        if i + 1 < data.len() {
-            result.push(ALPHABET[idx3] as char);
-        } else {
-            result.push('=');
-        }
-
-        if i + 2 < data.len() {
-            result.push(ALPHABET[idx4] as char);
-        } else {
-            result.push('=');
-        }
-
-        i += 3;
-    }
-
-    result
+    use base64::Engine as _;
+    base64::engine::general_purpose::STANDARD.encode(data)
 }
 
 pub struct FakeSessionPort {
@@ -1568,7 +2220,6 @@ mod tests {
         assert_eq!(base64_decode("aGk=").unwrap(), b"hi");
         assert_eq!(base64_decode("aGVsbG8=").unwrap(), b"hello");
     }
-}
 
     #[tokio::test]
     async fn persistent_registry_rejects_stale_owner_and_awaits_actor_close() {
@@ -1666,3 +2317,4 @@ mod tests {
         registry.close_owner("client-b").await.unwrap();
         assert!(!registry.contains("root\0b").await);
     }
+}

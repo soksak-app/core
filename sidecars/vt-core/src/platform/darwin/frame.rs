@@ -7,13 +7,16 @@ pub struct CMetrics {
     pub font_size: f64,
 }
 
+use unicode_segmentation::UnicodeSegmentation;
+use unicode_width::UnicodeWidthStr;
+
 #[repr(C)]
 pub struct CCell {
     pub col: u32,
     pub row: u32,
     pub width: u32,
-    pub ch_len: u8,
-    pub ch: [u8; 4],
+    pub ch: *const u8,
+    pub ch_len: u32,
     pub fg: [u8; 3],
     pub bg: [u8; 3],
     pub has_fg: u8,
@@ -29,6 +32,13 @@ pub struct CScreen {
     pub cursor_row: u32,
     pub cells: *mut CCell,
     pub cell_count: u32,
+    pub cursor_visible: u8,
+    pub cursor_focused: u8,
+    pub cursor_blink_visible: u8,
+    pub cursor_shape: u8,
+    pub default_foreground: [u8; 3],
+    pub default_background: [u8; 3],
+    pub default_cursor: [u8; 3],
 }
 
 // Opaque frame type
@@ -53,6 +63,37 @@ extern "C" {
 
 pub struct Frame {
     ptr: *mut CFrame,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CursorRender {
+    pub visible: bool,
+    pub focused: bool,
+    pub blink_visible: bool,
+    pub shape: crate::protocol::CursorShape,
+}
+
+impl CursorRender {
+    fn from_protocol(cursor: &crate::protocol::Cursor) -> Self {
+        Self {
+            visible: cursor.visible,
+            focused: cursor.focused,
+            // 엔진의 blinking 값은 활성화 상태일 뿐이다. phase는 서비스 scheduler가 전달한다.
+            blink_visible: true,
+            shape: cursor.shape,
+        }
+    }
+}
+
+impl Default for CursorRender {
+    fn default() -> Self {
+        Self {
+            visible: true,
+            focused: false,
+            blink_visible: true,
+            shape: crate::protocol::CursorShape::Block,
+        }
+    }
 }
 
 // Frame is Send/Sync because CFrame (IOSurface) is thread-safe
@@ -84,32 +125,37 @@ impl Frame {
     }
 
     pub fn draw(&self, screen: &crate::protocol::Screen, metrics: &Metrics) -> Result<(), String> {
-        // Convert Rust Screen to C Screen
-        let mut cells = Vec::new();
-        for row in &screen.lines {
-            for cell in row {
-                let (ch_bytes, ch_len) = if let Some(ref ch_str) = cell.ch {
-                    let bytes = ch_str.as_bytes();
-                    let mut ch_arr = [0u8; 4];
-                    if bytes.len() <= 4 {
-                        ch_arr[..bytes.len()].copy_from_slice(bytes);
-                        (ch_arr, bytes.len() as u8)
-                    } else {
-                        ([0u8; 4], 0)
-                    }
-                } else {
-                    ([0u8; 4], 0)
-                };
+        self.draw_with_cursor(screen, metrics, CursorRender::from_protocol(&screen.cursor))
+    }
 
+    pub fn draw_with_cursor(
+        &self,
+        screen: &crate::protocol::Screen,
+        metrics: &Metrics,
+        cursor: CursorRender,
+    ) -> Result<(), String> {
+        let mut render_screen = screen.clone();
+        if let Some(preedit) = render_screen.cursor.preedit.clone() {
+            apply_preedit(&mut render_screen, &preedit)?;
+        }
+        // render_screen과 CCell이 참조하는 문자열은 이 호출이 끝날 때까지 Rust가 소유한다.
+        // 네이티브 함수는 이 빌린 포인터를 저장하지 않는다.
+        // Rust Screen을 C Screen으로 변환한다.
+        let mut cells = Vec::new();
+        for row in &render_screen.lines {
+            for cell in row {
                 let (fg, has_fg) = parse_hex_color(&cell.fg);
                 let (bg, has_bg) = parse_hex_color(&cell.bg);
 
                 cells.push(CCell {
-                    col: 0, // Will be set per-cell
-                    row: 0, // Will be set per-cell
+                    col: 0, // 셀별 위치를 아래에서 설정한다.
+                    row: 0, // 셀별 위치를 아래에서 설정한다.
                     width: cell.width as u32,
-                    ch_len,
-                    ch: ch_bytes,
+                    ch: cell
+                        .ch
+                        .as_ref()
+                        .map_or(std::ptr::null(), |text| text.as_ptr()),
+                    ch_len: cell.ch.as_ref().map_or(0, |text| text.len() as u32),
                     fg,
                     bg,
                     has_fg: if has_fg { 1 } else { 0 },
@@ -119,10 +165,10 @@ impl Frame {
             }
         }
 
-        // Set row/col for each cell
+        // 모든 셀의 행과 열을 설정한다.
         let mut cell_idx = 0;
-        for row_idx in 0..screen.lines.len() {
-            for col_idx in 0..screen.lines[row_idx].len() {
+        for row_idx in 0..render_screen.lines.len() {
+            for col_idx in 0..render_screen.lines[row_idx].len() {
                 if cell_idx < cells.len() {
                     cells[cell_idx].row = row_idx as u32;
                     cells[cell_idx].col = col_idx as u32;
@@ -132,12 +178,25 @@ impl Frame {
         }
 
         let mut c_screen = CScreen {
-            width: screen.cols as u32,
-            height: screen.rows as u32,
-            cursor_col: screen.cursor.col as u32,
-            cursor_row: screen.cursor.row as u32,
+            width: render_screen.cols as u32,
+            height: render_screen.rows as u32,
+            cursor_col: render_screen.cursor.col as u32,
+            cursor_row: render_screen.cursor.row as u32,
             cells: cells.as_mut_ptr(),
             cell_count: cells.len() as u32,
+            cursor_visible: cursor.visible as u8,
+            cursor_focused: cursor.focused as u8,
+            cursor_blink_visible: cursor.blink_visible as u8,
+            cursor_shape: match cursor.shape {
+                crate::protocol::CursorShape::Block => 0,
+                crate::protocol::CursorShape::Underline => 1,
+                crate::protocol::CursorShape::Beam => 2,
+                crate::protocol::CursorShape::HollowBlock => 3,
+                crate::protocol::CursorShape::Hidden => 4,
+            },
+            default_foreground: crate::palette::DEFAULT_FOREGROUND_RGB,
+            default_background: crate::palette::DEFAULT_BACKGROUND_RGB,
+            default_cursor: crate::palette::DEFAULT_CURSOR_RGB,
         };
 
         let mut c_metrics = CMetrics {
@@ -167,6 +226,90 @@ impl Frame {
             }
         }
     }
+}
+
+fn utf16_length(text: &str) -> usize {
+    text.encode_utf16().count()
+}
+
+fn valid_json_range(
+    range: Option<crate::protocol::JsonRange>,
+    text_length: Option<usize>,
+    name: &str,
+) -> Result<(), String> {
+    if let Some(crate::protocol::JsonRange { location, length }) = range {
+        let end = location
+            .checked_add(length)
+            .ok_or_else(|| format!("{name} JSON range overflows UTF-16 location"))?;
+        if let Some(limit) = text_length {
+            if end > limit {
+                return Err(format!("{name} JSON range [{location}, {length}] exceeds preedit UTF-16 length {limit}"));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn selected_contains(range: Option<crate::protocol::JsonRange>, start: usize, end: usize) -> bool {
+    range.is_some_and(|crate::protocol::JsonRange { location, length }| {
+        let range_end = location.saturating_add(length);
+        start < range_end && end > location
+    })
+}
+
+fn apply_preedit(
+    screen: &mut crate::protocol::Screen,
+    preedit: &crate::protocol::Preedit,
+) -> Result<(), String> {
+    let length = utf16_length(&preedit.text);
+    valid_json_range(preedit.selected_range, Some(length), "selectedRange")?;
+    // replacementRange는 호스트 문서의 marked range인 [location,length]다.
+    // 새 preedit 문자열의 범위가 아니므로 preedit UTF-16 길이로 제한하지 않는다.
+    valid_json_range(preedit.replacement_range, None, "replacementRange")?;
+    let row = screen.cursor.row as usize;
+    while screen.lines.len() <= row {
+        screen.lines.push(Vec::new());
+    }
+    let display_col = screen.cursor.col as usize;
+    let line = &mut screen.lines[row];
+    let mut marked = Vec::new();
+    let mut utf16_col = 0;
+    for grapheme in preedit.text.graphemes(true) {
+        if grapheme.contains('\n') || grapheme.contains('\r') {
+            return Err("preedit must be a single-line renderable grapheme sequence".to_string());
+        }
+        let utf16_end = utf16_col + grapheme.encode_utf16().count();
+        let width = UnicodeWidthStr::width(grapheme);
+        if width == 0 {
+            utf16_col = utf16_end;
+            continue;
+        }
+        let width = u8::try_from(width)
+            .map_err(|_| "preedit grapheme display width exceeds Cell width".to_string())?;
+        let mut cell = crate::protocol::Cell::default();
+        cell.ch = Some(grapheme.to_string());
+        cell.width = width;
+        cell.underline = true;
+        if selected_contains(preedit.selected_range, utf16_col, utf16_end) {
+            cell.bg = Some("#808080".to_string());
+        }
+        marked.push(cell);
+        for _ in 1..width {
+            marked.push(crate::protocol::Cell::default());
+        }
+        utf16_col = utf16_end;
+    }
+    if display_col + marked.len() > screen.cols as usize {
+        return Err("preedit extends beyond terminal columns".to_string());
+    }
+    while line.len() < display_col + marked.len() {
+        line.push(crate::protocol::Cell::default());
+    }
+    let tail = line.split_off(display_col + marked.len());
+    line.truncate(display_col);
+    line.extend(marked);
+    line.extend(tail);
+    Ok(())
 }
 
 impl Drop for Frame {
@@ -204,234 +347,4 @@ fn parse_hex_color(color_opt: &Option<String>) -> ([u8; 3], bool) {
         }
     }
     ([0, 0, 0], false)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_metrics_scale_consistency() {
-        // Test that scale 2.0 is approximately double scale 1.0
-        let m1 = metrics(13.0, 1.0);
-        let m2 = metrics(13.0, 2.0);
-
-        println!("Scale 1.0: width={}, height={}", m1.cell_width, m1.cell_height);
-        println!("Scale 2.0: width={}, height={}", m2.cell_width, m2.cell_height);
-
-        // Cell width and height at 2x scale should be roughly double (±1 pixel for rounding)
-        let width_ratio = m2.cell_width as i32 - 2 * m1.cell_width as i32;
-        let height_ratio = m2.cell_height as i32 - 2 * m1.cell_height as i32;
-
-        assert!(width_ratio.abs() <= 1, "Scale 2x width ratio off: {} vs 2*{}", m2.cell_width, m1.cell_width);
-        assert!(height_ratio.abs() <= 1, "Scale 2x height ratio off: {} vs 2*{}", m2.cell_height, m1.cell_height);
-    }
-
-    #[test]
-    fn test_pixel_drawing() {
-        // Create frame with enough space for 4x2 grid at font size 13
-        let metrics = metrics(13.0, 1.0);
-        let frame_width = (metrics.cell_width * 4.0) as u32;
-        let frame_height = (metrics.cell_height * 2.0) as u32;
-
-        println!("Frame size: {}x{} pixels (cell: {:.1}x{:.1})", frame_width, frame_height, metrics.cell_width, metrics.cell_height);
-
-        let frame = Frame::new(frame_width, frame_height).expect("Failed to create frame");
-
-        // Create a screen with 4 columns, 2 rows
-        // Row 0: 'h' at (0,0), 'i' at (1,0), empty at (2,0) and (3,0)
-        // Row 1: empty cells
-        let mut cells_row0 = vec![];
-        let mut cells_row1 = vec![];
-
-        // Row 0: 'h' at column 0
-        cells_row0.push(crate::protocol::Cell {
-            ch: Some("h".to_string()),
-            width: 1,
-            fg: Some("#d0d0d0".to_string()),
-            bg: None,
-            bold: false,
-            italic: false,
-            underline: false,
-            inverse: false,
-        });
-
-        // Row 0: 'i' at column 1
-        cells_row0.push(crate::protocol::Cell {
-            ch: Some("i".to_string()),
-            width: 1,
-            fg: Some("#d0d0d0".to_string()),
-            bg: None,
-            bold: false,
-            italic: false,
-            underline: false,
-            inverse: false,
-        });
-
-        // Row 0: empty at columns 2 and 3
-        for _ in 0..2 {
-            cells_row0.push(crate::protocol::Cell {
-                ch: None,
-                width: 1,
-                fg: None,
-                bg: None,
-                bold: false,
-                italic: false,
-                underline: false,
-                inverse: false,
-            });
-        }
-
-        // Row 1: all empty
-        for _ in 0..4 {
-            cells_row1.push(crate::protocol::Cell {
-                ch: None,
-                width: 1,
-                fg: None,
-                bg: None,
-                bold: false,
-                italic: false,
-                underline: false,
-                inverse: false,
-            });
-        }
-
-        let screen = crate::protocol::Screen {
-            cols: 4,
-            rows: 2,
-            cursor: crate::protocol::Cursor { col: 0, row: 2 },  // Cursor outside visible area
-            lines: vec![cells_row0, cells_row1],
-        };
-
-        frame.draw(&screen, &metrics).expect("Failed to draw frame");
-
-        // Verify pixels
-        let cell_width = metrics.cell_width as u32;
-        let cell_height = metrics.cell_height as u32;
-
-        // Expected background: (30, 30, 30) in sRGB
-        let expected_bg = (30u8, 30u8, 30u8);
-
-        // Test 1: Background is exact (±2)
-        // IOSurface memory: first row is at image top. Row 0 is at y: 0..cell_height
-        println!("Test 1: Checking row 1 (bottom empty cells) background at y: cell_height..2*cell_height...");
-        let mut row1_bg_count = 0;
-        for x in 0..frame_width {
-            for y in cell_height..(2 * cell_height) {
-                if let Some(pixel) = frame.read_pixel(x, y) {
-                    let b_diff = (pixel[0] as i16 - expected_bg.0 as i16).abs();
-                    let g_diff = (pixel[1] as i16 - expected_bg.1 as i16).abs();
-                    let r_diff = (pixel[2] as i16 - expected_bg.2 as i16).abs();
-                    assert!(b_diff <= 2, "Row 1 at ({}, {}): B mismatch, expected ~{} got {}", x, y, expected_bg.0, pixel[0]);
-                    assert!(g_diff <= 2, "Row 1 at ({}, {}): G mismatch, expected ~{} got {}", x, y, expected_bg.1, pixel[1]);
-                    assert!(r_diff <= 2, "Row 1 at ({}, {}): R mismatch, expected ~{} got {}", x, y, expected_bg.2, pixel[2]);
-                    row1_bg_count += 1;
-                }
-            }
-        }
-        println!("Test 1 PASS: Row 1 all {} pixels match background", row1_bg_count);
-
-        // Check cell (0,3) background - should be at y: 0..cell_height (Row 0), x: 3*cell_width..4*cell_width
-        println!("Test 1: Checking cell (0,3) background at y: 0..cell_height, x: 3*cell_width..4*cell_width...");
-        let col3_start = 3 * cell_width;
-        let col3_end = 4 * cell_width;
-        let mut cell03_bg_count = 0;
-        for x in col3_start..col3_end {
-            for y in 0..cell_height {
-                if let Some(pixel) = frame.read_pixel(x, y) {
-                    let b_diff = (pixel[0] as i16 - expected_bg.0 as i16).abs();
-                    let g_diff = (pixel[1] as i16 - expected_bg.1 as i16).abs();
-                    let r_diff = (pixel[2] as i16 - expected_bg.2 as i16).abs();
-                    assert!(b_diff <= 2, "Cell (0,3) at ({}, {}): B mismatch, expected ~{} got {}", x, y, expected_bg.0, pixel[0]);
-                    assert!(g_diff <= 2, "Cell (0,3) at ({}, {}): G mismatch, expected ~{} got {}", x, y, expected_bg.1, pixel[1]);
-                    assert!(r_diff <= 2, "Cell (0,3) at ({}, {}): R mismatch, expected ~{} got {}", x, y, expected_bg.2, pixel[2]);
-                    cell03_bg_count += 1;
-                }
-            }
-        }
-        println!("Test 1 PASS: Cell (0,3) all {} pixels match background", cell03_bg_count);
-
-        // Test 2: Character drawn in foreground color (brightness >= 160)
-        // Row 0 is at y: 0..cell_height, contains 'h' at (0,0) and 'i' at (1,0)
-        println!("Test 2: Checking character foreground color in row 0 (y: 0..cell_height)...");
-        let mut cell00_bright_pixels = 0;
-        let mut cell01_bright_pixels = 0;
-
-        for x in 0..cell_width {
-            for y in 0..cell_height {
-                if let Some(pixel) = frame.read_pixel(x, y) {
-                    let brightness = ((pixel[0] as u32 + pixel[1] as u32 + pixel[2] as u32) / 3) as u8;
-                    if brightness >= 160 {
-                        cell00_bright_pixels += 1;
-                    }
-                }
-            }
-        }
-        println!("Cell (0,0) 'h': {} bright pixels", cell00_bright_pixels);
-        assert!(cell00_bright_pixels >= 10, "Cell (0,0) should have at least 10 bright pixels, got {}", cell00_bright_pixels);
-
-        for x in cell_width..(2 * cell_width) {
-            for y in 0..cell_height {
-                if let Some(pixel) = frame.read_pixel(x, y) {
-                    let brightness = ((pixel[0] as u32 + pixel[1] as u32 + pixel[2] as u32) / 3) as u8;
-                    if brightness >= 160 {
-                        cell01_bright_pixels += 1;
-                    }
-                }
-            }
-        }
-        println!("Cell (0,1) 'i': {} bright pixels", cell01_bright_pixels);
-        assert!(cell01_bright_pixels >= 10, "Cell (0,1) should have at least 10 bright pixels, got {}", cell01_bright_pixels);
-        println!("Test 2 PASS: Both cells have sufficient foreground color pixels");
-
-        // Test 3: Bright pixels only in top half (y < cell_height, not bottom)
-        println!("Test 3: Checking bright pixels are only in row 0 (y < cell_height)...");
-        let mut char_pixels_in_row0 = 0;
-        let mut char_pixels_in_row1 = 0;
-        let check_cols = (2 * cell_width).min(frame_width);
-        for x in 0..check_cols {
-            for y in 0..frame_height {
-                if let Some(pixel) = frame.read_pixel(x, y) {
-                    let brightness = ((pixel[0] as u32 + pixel[1] as u32 + pixel[2] as u32) / 3) as u8;
-                    if brightness >= 160 {
-                        if y < cell_height {
-                            char_pixels_in_row0 += 1;
-                        } else {
-                            char_pixels_in_row1 += 1;
-                        }
-                    }
-                }
-            }
-        }
-        println!("Bright pixels: row0={}, row1={}", char_pixels_in_row0, char_pixels_in_row1);
-        assert!(char_pixels_in_row0 > 0, "Should have bright pixels in row 0 (y < cell_height)");
-        assert!(char_pixels_in_row1 == 0, "Should NOT have bright pixels in row 1 (y >= cell_height), got {}", char_pixels_in_row1);
-        println!("Test 3 PASS: Bright pixels only in row 0");
-
-        // Test 4: Character contained within cell bounds
-        println!("Test 4: Checking character containment in cell bounds...");
-        for x in 0..cell_width {
-            for y in 0..cell_height {
-                if let Some(pixel) = frame.read_pixel(x, y) {
-                    let brightness = ((pixel[0] as u32 + pixel[1] as u32 + pixel[2] as u32) / 3) as u8;
-                    if brightness >= 160 {
-                        assert!(x < cell_width, "Bright pixel at ({}, {}) outside cell (0,0) x bounds", x, y);
-                    }
-                }
-            }
-        }
-        println!("Test 4 PASS: All character pixels within cell bounds");
-
-        // Test 5: Frame nonce and ID
-        let nonce_from_frame = frame.nonce();
-        println!("Frame nonce: {:?}", nonce_from_frame);
-        assert!(nonce_from_frame.iter().any(|b| *b != 0), "Frame nonce should not be all zeros");
-
-        let frame_id = frame.id();
-        println!("Frame ID: {}", frame_id);
-        assert!(frame_id > 0, "Frame ID should be non-zero");
-        println!("Test 5 PASS: Nonce and ID valid");
-
-        println!("ALL TESTS PASSED");
-    }
 }

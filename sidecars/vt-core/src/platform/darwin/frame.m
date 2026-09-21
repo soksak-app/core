@@ -140,9 +140,17 @@ int frame_draw(Frame *frame, Screen *screen, Metrics *metrics) {
         return -1;
     }
 
-    // Default colors - use sRGB
-    CGColorRef default_fg_color = CGColorCreateSRGB(208/255.0, 208/255.0, 208/255.0, 1.0); // #d0d0d0
-    CGColorRef default_bg_color = CGColorCreateSRGB(30/255.0, 30/255.0, 30/255.0, 1.0);   // #1e1e1e
+    // 기본 색상은 Rust 엔진과 동일한 팔레트를 호출 단위로 전달받는다.
+    CGColorRef default_fg_color = CGColorCreateSRGB(
+        screen->default_foreground[0] / 255.0,
+        screen->default_foreground[1] / 255.0,
+        screen->default_foreground[2] / 255.0,
+        1.0);
+    CGColorRef default_bg_color = CGColorCreateSRGB(
+        screen->default_background[0] / 255.0,
+        screen->default_background[1] / 255.0,
+        screen->default_background[2] / 255.0,
+        1.0);
 
     // Fill entire background with CGContextFillRect
     CGContextSetFillColorWithColor(ctx, default_bg_color);
@@ -152,8 +160,7 @@ int frame_draw(Frame *frame, Screen *screen, Metrics *metrics) {
     for (uint32_t i = 0; i < screen->cell_count; i++) {
         Cell *cell = &screen->cells[i];
 
-        // Calculate cell position (CoreGraphics origin is bottom-left, convert to top-left coordinates)
-        // In a bottom-origin system: y = frame_height - (row+1) * cell_height places row 0 at top
+        // Core Graphics의 하단 원점을 터미널 행 좌표로 변환한다.
         CGFloat x = cell->col * metrics->cell_width;
         CGFloat y = (CGFloat)frame->height - ((CGFloat)cell->row + 1.0) * metrics->cell_height;
 
@@ -192,8 +199,24 @@ int frame_draw(Frame *frame, Screen *screen, Metrics *metrics) {
 
         // Draw character if present
         if (cell->ch_len > 0 && cell->width > 0) {
+            if (!cell->ch) {
+                CFRelease(font);
+                CGContextRelease(ctx);
+                CGColorRelease(default_fg_color);
+                CGColorRelease(default_bg_color);
+                IOSurfaceUnlock(frame->surface, 0, NULL);
+                return -1;
+            }
             NSString *ch = [[NSString alloc] initWithBytes:cell->ch length:cell->ch_len encoding:NSUTF8StringEncoding];
-            if (ch) {
+            if (!ch) {
+                CFRelease(font);
+                CGContextRelease(ctx);
+                CGColorRelease(default_fg_color);
+                CGColorRelease(default_bg_color);
+                IOSurfaceUnlock(frame->surface, 0, NULL);
+                return -1;
+            }
+            {
                 CFStringRef cf_str = (__bridge CFStringRef)ch;
 
                 // Create attributes dictionary with font and foreground color
@@ -218,6 +241,45 @@ int frame_draw(Frame *frame, Screen *screen, Metrics *metrics) {
 
         if (parsed_bg) CGColorRelease(bg_color);
         if (parsed_fg) CGColorRelease(fg_color);
+    }
+
+    // 커서 깜박임과 모양은 상위 서비스가 계산한 한 프레임 상태만 그린다.
+    // 이 함수는 타이머나 애니메이션을 만들지 않으며, 화면 경계를 벗어난 커서는 버리지 않고 그리지 않는다.
+    if (screen->cursor_visible && screen->cursor_blink_visible && screen->cursor_shape != 4 &&
+        screen->cursor_col < screen->width && screen->cursor_row < screen->height) {
+        CGFloat cursor_x = screen->cursor_col * metrics->cell_width;
+        CGFloat cursor_y = (CGFloat)frame->height - ((CGFloat)screen->cursor_row + 1.0) * metrics->cell_height;
+        CGFloat cursor_width = metrics->cell_width;
+        CGFloat cursor_height = metrics->cell_height;
+        CGColorRef cursor_color = CGColorCreateSRGB(
+            screen->default_cursor[0] / 255.0,
+            screen->default_cursor[1] / 255.0,
+            screen->default_cursor[2] / 255.0,
+            1.0);
+        CGContextSetFillColorWithColor(ctx, cursor_color);
+        if (screen->cursor_shape == 1) {
+            // IOSurface 픽셀 행은 CoreGraphics 좌표계와 반대이므로 메모리 하단에 밑줄을 둔다.
+            CGContextFillRect(ctx, CGRectMake(cursor_x, cursor_y,
+                                              cursor_width, 2.0));
+        } else if (screen->cursor_shape == 2) {
+            CGContextFillRect(ctx, CGRectMake(cursor_x, cursor_y, 2.0, cursor_height));
+        } else if (screen->cursor_focused && screen->cursor_shape != 3) {
+            CGContextSaveGState(ctx);
+            CGContextSetBlendMode(ctx, kCGBlendModeDifference);
+            CGContextSetRGBFillColor(ctx, 1.0, 1.0, 1.0, 1.0);
+            CGContextFillRect(ctx, CGRectMake(cursor_x, cursor_y, cursor_width, cursor_height));
+            CGContextRestoreGState(ctx);
+        } else {
+            CGFloat edge = 2.0;
+            CGContextFillRect(ctx, CGRectMake(cursor_x, cursor_y, cursor_width, edge));
+            CGContextFillRect(ctx, CGRectMake(cursor_x, cursor_y + cursor_height - edge,
+                                              cursor_width, edge));
+            CGContextFillRect(ctx, CGRectMake(cursor_x, cursor_y + edge, edge,
+                                              cursor_height - 2.0 * edge));
+            CGContextFillRect(ctx, CGRectMake(cursor_x + cursor_width - edge, cursor_y + edge,
+                                              edge, cursor_height - 2.0 * edge));
+        }
+        CGColorRelease(cursor_color);
     }
 
     CFRelease(font);
