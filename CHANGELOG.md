@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- Add `e2e/normal-shutdown.mjs`, a bounded check for the declared `command.run` → `host.quit` path. It waits for one ready window, requires a null reply, and verifies that the rebuilt Wails and Tauri application PID and endpoint disappear within the five-second case limit. An undeclared direct `host.quit` endpoint call is not treated as lifecycle evidence.
+
 - Verify repeated project/library returns on current rebuilt macOS hosts. The Tauri case passes in 0.98s and Wails in 2.99s while retaining one app DOM, two browser documents, one terminal service PID, three shell PIDs, and all terminal session IDs across three returns. This does not claim normal service shutdown; that remains a separate gate.
 
 - Return the Wails diagnostic capture cap state as `limited` alongside the actual frame count and longest gap. Reaching the cap remains a normal bounded result; Wails payload tests cover capped and uncapped responses, and the rebuilt diagnostics host passes its focused tests.
