@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { auditCompletedFeatureLinks, auditFeatureLinks, auditInventory, auditRecordedInventoryCounts, discoverInventory, repositoryFiles } from "../check-test-parity.mjs";
+import { auditCompletedFeatureLinks, auditFeatureLinks, auditHistoricalScopeWording, auditInventory, auditRecordedInventoryCounts, discoverInventory, repositoryFiles } from "../check-test-parity.mjs";
 
 const files = repositoryFiles();
 
@@ -97,5 +97,13 @@ test("recorded parity counts cannot drift from the current inventory", { timeout
   assert.match(
     auditRecordedInventoryCounts({ ...inventory, testCount: inventory.testCount + 1 })[0],
     /do not match current output/,
+  );
+});
+
+test("completed F3 scope is not reported as currently open", { timeout: 1000 }, () => {
+  assert.deepEqual(auditHistoricalScopeWording(), []);
+  assert.match(
+    auditHistoricalScopeWording("Controlled-site pixels and restored/new-document validation remain open under F3." )[0],
+    /currently open/,
   );
 });

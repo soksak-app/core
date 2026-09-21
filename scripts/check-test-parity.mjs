@@ -138,6 +138,13 @@ const MATRIX = [
 // The inventory remains structural; behavior is proved by the referenced tests.
 const FEATURE_LINKS = [
   {
+    id: "G1.3-3",
+    implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "auditHistoricalScopeWording" }],
+    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "completed F3 scope is not reported as currently open" }],
+    expected: "Completed F3 records preserve their historical sequence without reporting already-closed controlled-site and restored/new-document checks as currently open.",
+    levels: ["unit"],
+  },
+  {
     id: "G1.3-2",
     implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "auditRecordedInventoryCounts" }],
     tests: [{ file: "scripts/test/test-parity.test.mjs", id: "recorded parity counts cannot drift from the current inventory" }],
@@ -740,12 +747,21 @@ export function auditRecordedInventoryCounts(inventory, checklistSource = readFi
     : [`G1.4: recorded parity counts ${actual.join(", ")} do not match current output ${expected.join(", ")}`];
 }
 
+export function auditHistoricalScopeWording(checklistSource = readFileSync(`${ROOT}docs/features.md`, "utf8")) {
+  const forbidden = [
+    "Controlled-site pixel and restored/new-document application checks remain open under F3.",
+    "Controlled-site pixels and restored/new-document validation remain open under F3.",
+  ];
+  return forbidden.filter((phrase) => checklistSource.includes(phrase)).map((phrase) => `F3 scope is reported as currently open: ${phrase}`);
+}
+
 export { MATRIX, repositoryFiles };
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
   const { errors, warnings, uncoveredImplementations, uncoveredTests, featureErrors, featureLinks, trackCount, implementationCount, testCount } = auditInventory(repositoryFiles());
   errors.push(...auditCompletedFeatureLinks(featureLinks));
   errors.push(...auditRecordedInventoryCounts({ trackCount, implementationCount, testCount }));
+  errors.push(...auditHistoricalScopeWording());
   if (errors.length) {
     console.error(`Test inventory checks failed: ${errors.length} issue(s); ` +
       `${uncoveredImplementations.length} uncovered implementation(s), ${uncoveredTests.length} uncovered test(s), ` +
