@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- Complete asynchronous shell command validation on both macOS hosts. Serialize injected pointer requests, drain pending WebKit mouse work before registering the current receipt, wait for the release-generated click, and keep explicit unreceived errors. The focused shell e2e passes all three cases on Wails and Tauri; native, workspace, boundary, exposure, and documentation checks pass.
+
 - Restore first-focus address selection and first-release selection retention in the mounted browser module, preserving caret editing on later clicks and disposing handlers. Bind the selection command through the registry. The module replaces the old page entry. Two new regressions failed before correction; nine browser package checks and rebuilt macOS Tauri navigation, native replacement input, scroll, placement, and isolation pass. Terminal, shell, settings, and add/split menu basics also pass on this dirty implementation; Wails integration remains pending.
 
 - Keep native terminal focus through pointer release by cancelling the DOM anchor's default focus action, without stopping card-selection propagation. Declare and bind `terminal.focus`, and expose failures in session status. Two unit regressions reproduced Red; rebuilt macOS Tauri passes three-terminal native editing and consecutive commands without a second click. Wails focus integration and cursor rendering are not validated by this result.

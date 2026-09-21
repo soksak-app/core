@@ -13,7 +13,12 @@ import { connect, EndpointError } from "@soksak/client";
 const built = (name) => fileURLToPath(new URL(`../target/debug/${name}`, import.meta.url));
 
 /** 검사 대상 앱. 실행 파일과 설정 폴더. */
-export const APPS = Object.fromEntries(["wailsv3", "tauriv2"].map((name) => [name, {
+const appNames = process.env.SOKSAK_APP ? [process.env.SOKSAK_APP] : ["wailsv3", "tauriv2"];
+if (!appNames.every((name) => ["wailsv3", "tauriv2"].includes(name))) {
+  throw new Error(`unknown SOKSAK_APP: ${process.env.SOKSAK_APP}`);
+}
+
+export const APPS = Object.fromEntries(appNames.map((name) => [name, {
   name,
   binary: built(`soksak-${name}`),
   configDir: join(tmpdir(), `soksak-check-${name}`),
@@ -166,8 +171,8 @@ export class Session {
     return this.request("status.get", surface === undefined ? { name } : { name, surface });
   }
 
-  run(name, params = {}, surface) {
-    return this.request("command.run", surface === undefined ? { name, params } : { name, params, surface });
+  run(name, params = {}, surface, options = {}) {
+    return this.request("command.run", surface === undefined ? { name, params } : { name, params, surface }, options);
   }
 
   rect(name, index, surface) {
@@ -318,24 +323,66 @@ export async function fresh(s) {
   await s.run("host.window.resize", START);
   await s.until("host.window", (w) => w.content.width === START.width && w.content.height === START.height,
     "the window did not return to its start size");
-  await s.request("diagnostics.fixture");
-  const before = (await s.get("core.window.document")).timeOrigin;
-  await s.run("host.window.reload");
-  await s.until("core.window.document", (doc) => doc.timeOrigin !== before && doc.readyState === "complete",
-    "the main document did not reload");
+  // 픽스처 교체 중의 표시 실패를 다음 문서의 정상 상태로 덮어 통과시키지 않는다.
+  const verification = await s.collect("core.verify");
+  const presentationErrors = [];
+  const offErrors = s.client.on("diagnostics.log", (params) => {
+    if (params?.window === s.window && /^host (syncSurfaces|presentSurfaces) failed:/.test(params.line)) {
+      presentationErrors.push(params.line);
+    }
+  });
+  const initial = verification.values.length;
+  let records;
+  try {
+    await s.request("diagnostics.fixture");
+    await s.presented();
+    if (presentationErrors.length) {
+      throw new Error(`test preparation reported presentation errors before reload: ${JSON.stringify(presentationErrors)}; ` +
+        `native state: ${JSON.stringify(await s.get("host.window"))}`);
+    }
+    const before = (await s.get("core.window.document")).timeOrigin;
+    await s.run("host.window.reload");
+    await s.until("core.window.document", (doc) => doc.timeOrigin !== before && doc.readyState === "complete",
+      "the main document did not reload");
+  } finally {
+    offErrors();
+    records = await verification.stop();
+  }
+  const failed = records.slice(initial).flatMap((value) => value?.rows ?? [])
+    .filter((row) => row.name === "Surface presentation" && !row.ok);
+  if (failed.length) throw new Error(`test preparation reported presentation errors: ${JSON.stringify(failed)}`);
+  if (presentationErrors.length) throw new Error(`test preparation reported presentation errors: ${JSON.stringify(presentationErrors)}`);
   const [shell] = await shellReady(s);
   await s.presented();
+  try {
+    await s.get("shell.output", shell.surface);
+  } catch (error) {
+    throw new Error(`shell readiness returned stale surface ${shell.surface}: ${error.message}; ` +
+      `current surfaces: ${JSON.stringify(await s.get("core.surfaces"))}`);
+  }
   return shell;
 }
 
 /** 보이는 셸 표면들이 등록되고 테마를 적용할 때까지 기다린 뒤 그 표면들을 반환한다. */
 export async function shellReady(s) {
-  const surfaces = await s.until("core.surfaces",
-    (all) => all.some((x) => x.visible && x.plugin === "shell" && x.exposes.includes("status core.surface.document")),
-    "no visible shell surface registered its document");
-  const shells = surfaces.filter((x) => x.visible && x.plugin === "shell");
+  await s.until("core.surfaces",
+    (all) => all.some((x) => x.visible && x.plugin === "shell" &&
+      x.exposes.includes("status core.surface.document") &&
+      x.exposes.includes("status shell.output") &&
+      x.exposes.includes("dom shell.input")),
+    "no visible shell surface registered its document, output, and input");
+  // The notification that satisfies the predicate can describe the surface
+  // immediately before a reload replaces it. Read the current registry before
+  // returning an id; never continue with a stale surface id.
+  const active = new Set((await s.get("core.grid")).cards
+    .map((card) => card.active)
+    .filter(Boolean));
+  const shells = (await s.surfaces("shell")).filter((x) => active.has(x.surface) &&
+    x.exposes.includes("status core.surface.document") &&
+    x.exposes.includes("status shell.output") &&
+    x.exposes.includes("dom shell.input"));
   for (const shell of shells) {
-    await s.until("core.surface.document", (doc) => doc.readyState === "complete" && doc.themed,
+    await s.until("core.surface.document", (doc) => doc !== null && doc.readyState === "complete" && doc.themed,
       `shell ${shell.surface} did not apply its theme`, { surface: shell.surface });
   }
   return shells;

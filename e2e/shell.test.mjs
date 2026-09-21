@@ -4,7 +4,7 @@ import { mkdirSync, realpathSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
-import { APPS, fresh, open, shellReady } from "./app.mjs";
+import { APPS, fresh, open } from "./app.mjs";
 
 /**
  * 셸 입력 칸을 네이티브 입력으로 누르고 한 줄을 입력한다. 출력에 expected 줄이 나타날 때까지
@@ -12,7 +12,18 @@ import { APPS, fresh, open, shellReady } from "./app.mjs";
  */
 async function typeLine(s, shell, line, expected) {
   const field = await s.rect("shell.input", undefined, shell);
-  await s.click(field.document.x + field.x + field.width / 2, field.document.y + field.y + field.height / 2);
+  const x = field.document.x + field.x + field.width / 2;
+  const y = field.document.y + field.y + field.height / 2;
+  const before = (await s.get("core.surface.input", shell) ?? []).at(-1)?.sequence ?? 0;
+  const fresh = (events) => Array.isArray(events) ? events.filter((event) => event.sequence > before) : [];
+  const down = s.until("core.surface.input", (events) => fresh(events).some((event) =>
+    event.type === "pointerdown"), `shell ${shell} did not receive the input press`, { surface: shell });
+  await s.pointer(x, y, "down");
+  await down;
+  const click = s.until("core.surface.input", (events) => fresh(events).some((event) =>
+    event.type === "click"), `shell ${shell} did not receive the input click`, { surface: shell });
+  await s.pointer(x, y, "up");
+  await click;
   await s.press("a", { text: line });
   await s.press("Enter");
   return s.until("shell.output", (lines) => lines.includes(expected),
@@ -23,9 +34,8 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: shell input returns shell output through the shell sidecar`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
-    await fresh(s);
+    const shell = await fresh(s);
     const root = realpathSync((await s.get("core.project")).root);
-    const [shell] = await shellReady(s);
     // 활성 탭이 아닌 셸은 보이지 않으므로 core.surfaces 에 없고, 배치의 탭으로 찾는다.
     const tabs = (await s.get("core.grid")).cards.flatMap((card) => card.tabs).filter((tab) => tab.plugin === "shell");
     assert.ok(tabs.length >= 2, `expected two shell tabs: ${JSON.stringify(tabs)}`);
@@ -38,9 +48,13 @@ for (const app of Object.values(APPS)) {
 
     // 다른 셸 표면은 이 표면의 출력을 받지 않는다.
     for (const other of tabs.filter((tab) => tab.id !== shell.surface)) {
-      const lines = await s.get("shell.output", other.id);
+      await s.run("core.tab.select", { tab: other.id });
+      const mounted = await freshSurface(s, other.id);
+      const lines = await s.get("shell.output", mounted);
       assert.ok(!lines.includes(marker), `surface ${other.id} received this surface's output`);
     }
+    await s.run("core.tab.select", { tab: shell.surface });
+    await freshSurface(s, shell.surface);
 
     // 보이는 줄에 마지막 출력이 있다.
     const screen = await s.get("shell.screen", shell.surface);
@@ -65,9 +79,8 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: shell commands run, report the directory, interrupt, and clear`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
-    await fresh(s);
+    const shell = await fresh(s);
     const root = realpathSync((await s.get("core.project")).root);
-    const [shell] = await shellReady(s);
     const at = { surface: shell.surface };
     const inner = join(root, `shell-${process.pid}`);
     mkdirSync(inner);
@@ -88,12 +101,26 @@ for (const app of Object.values(APPS)) {
 
     // 중단 단추는 실행 중인 세션 명령과 shell.run 명령을 끝낸다.
     await typeLine(s, shell.surface, "sh -c 'echo started; exec sleep 30'", "started");
-    const long = s.run("shell.run", { command: "sleep 30" }, shell.surface);
+    const long = s.run("shell.run", { command: "sleep 30" }, shell.surface, { timeout: 40_000 });
     // 실행 요청이 사이드카에 전달된 뒤에 누른 중단은 그 명령에 도달한다.
     await s.until("shell.runs", (count) => count === 1, "the run was not delivered", at);
     const button = await s.rect("shell.interrupt", undefined, shell.surface);
     const began = Date.now();
-    await s.click(button.document.x + button.x + button.width / 2, button.document.y + button.y + button.height / 2);
+    const clickX = button.document.x + button.x + button.width / 2;
+    const clickY = button.document.y + button.y + button.height / 2;
+    const inputBefore = (await s.get("core.surface.input", shell.surface) ?? []).at(-1)?.sequence ?? 0;
+    const freshInput = (events) => Array.isArray(events) ?
+      events.filter((event) => event.sequence > inputBefore) : [];
+    const down = s.until("core.surface.input", (events) => freshInput(events).some((event) =>
+      event.type === "pointerdown"), "the interrupt press was not dispatched", at);
+    await s.pointer(clickX, clickY, "down");
+    await down;
+    const clickEvent = s.until("core.surface.input", (events) => freshInput(events).some((event) =>
+      event.type === "click"), "the interrupt click was not dispatched", at);
+    await s.pointer(clickX, clickY, "up");
+    await clickEvent;
+    await s.until("shell.runs", (count) => count === 0,
+      "the interrupt click did not clear the running shell command", at);
     const stopped = await long;
     assert.notEqual(stopped.exit, 0, "the interrupted run reports a failure");
     assert.ok(Date.now() - began < 10_000, "the interrupt ended the run");
@@ -105,4 +132,14 @@ for (const app of Object.values(APPS)) {
     const cleared = await s.get("shell.screen", shell.surface);
     assert.deepEqual(cleared.lines, []);
   });
+}
+
+async function freshSurface(s, expected) {
+  await s.until("core.surfaces", (all) => all.some((x) =>
+    x.surface === expected && x.visible && x.exposes.includes("status shell.output") &&
+    x.exposes.includes("dom shell.input")), `shell ${expected} did not mount its output and input`);
+  const current = (await s.surfaces("shell")).find((x) => x.surface === expected && x.visible &&
+    x.exposes.includes("status shell.output") && x.exposes.includes("dom shell.input"));
+  assert.ok(current, `shell ${expected} was not visible after selection`);
+  return current.surface;
 }

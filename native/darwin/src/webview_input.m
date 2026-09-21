@@ -11,7 +11,7 @@ static NSHashTable *inputViews;
 static NSString *const kReceiptWorld = @"soksak-input";
 static NSString *const kReceiptMessage = @"soksakInputReceipt";
 static NSString *const kReceiptScript =
-    @"for (const type of ['pointerdown', 'pointerup']) addEventListener(type, (event) => {"
+    @"for (const type of ['pointerdown', 'pointerup', 'click']) addEventListener(type, (event) => {"
     " if (event.isTrusted) webkit.messageHandlers.soksakInputReceipt.postMessage(type); }, true);";
 
 @interface SPInputWait : NSObject
@@ -71,6 +71,44 @@ void webviewInputReceive(WKWebView *view, NSString *type, NSTimeInterval timeout
         [handler.waits removeObject:wait];
         wait.done(NO);
     });
+}
+
+void webviewInputSendThen(WKWebView *view, NSString *type, NSTimeInterval timeout,
+    BOOL (^send)(void), void (^done)(BOOL received)) {
+    NSCAssert(NSThread.isMainThread, @"Webview input receipts require the main thread");
+    SPInputReceipts *handler = [receipts objectForKey:view];
+    if (!handler) {
+        done(send());
+        return;
+    }
+    SPInputWait *wait = [[SPInputWait new] autorelease];
+    wait.type = type;
+    wait.done = ^(BOOL received) {
+        if (!received || ![view respondsToSelector:@selector(_doAfterProcessingAllPendingMouseEvents:)]) {
+            done(received);
+            return;
+        }
+        [view _doAfterProcessingAllPendingMouseEvents:^{ done(YES); }];
+    };
+    [handler.waits addObject:wait];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(timeout * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        if (![handler.waits containsObject:wait]) return;
+        [[wait retain] autorelease];
+        [handler.waits removeObject:wait];
+        wait.done(NO);
+    });
+    void (^sendAfterDrain)(void) = ^{
+        BOOL sent = send();
+        if (!sent) {
+            [handler.waits removeObject:wait];
+            wait.done(NO);
+        }
+    };
+    if ([view respondsToSelector:@selector(_doAfterProcessingAllPendingMouseEvents:)]) {
+        [view _doAfterProcessingAllPendingMouseEvents:sendAfterDrain];
+    } else {
+        sendAfterDrain();
+    }
 }
 
 static NSEvent *routePointer(NSEvent *event) {

@@ -142,12 +142,23 @@ void sp_input_pointer_then(void *handle, double x, double y, int phase, int butt
         });
         return;
     }
-    sp_input_result result = sp_input_pointer(handle, x, y, phase, button, deltaX, deltaY);
-    if (result != SP_INPUT_DELIVERED || (phase != 1 && phase != 3)) { done(context, result); return; }
-    // 누름과 뗌을 받은 뷰는 좌표의 가장 안쪽 웹뷰다. 이벤트를 전달한 같은 차례에 수신을 기다린다.
-    if (!target) { done(context, result); return; }
-    webviewInputReceive(target, phase == 1 ? @"pointerdown" : @"pointerup", timeoutSeconds, ^(BOOL received) {
-        done(context, received ? SP_INPUT_DELIVERED : SP_INPUT_UNRECEIVED);
+    if (phase != 1 && phase != 3) {
+        done(context, sp_input_pointer(handle, x, y, phase, button, deltaX, deltaY));
+        return;
+    }
+    if (!target) {
+        done(context, sp_input_pointer(handle, x, y, phase, button, deltaX, deltaY));
+        return;
+    }
+    // 뗌은 브라우저가 click을 합성한 뒤에만 완료한다. 다음 요청이 click 처리보다
+    // 앞서지 않게 한다.
+    __block sp_input_result result = SP_INPUT_REJECTED;
+    webviewInputSendThen(target, phase == 3 ? @"click" : @"pointerdown", timeoutSeconds, ^BOOL {
+        result = sp_input_pointer(handle, x, y, phase, button, deltaX, deltaY);
+        return result == SP_INPUT_DELIVERED;
+    }, ^(BOOL received) {
+        done(context, result == SP_INPUT_DELIVERED && received ? SP_INPUT_DELIVERED :
+            result == SP_INPUT_DELIVERED ? SP_INPUT_UNRECEIVED : result);
     });
 }
 

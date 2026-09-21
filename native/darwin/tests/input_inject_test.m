@@ -154,9 +154,10 @@ int main(void) { @autoreleasepool {
     window.contentView = view;
     NSString *html = @"<!doctype html><style>html,body{margin:0;width:100%;height:100%}</style>"
         "<input id='field' style='position:absolute;left:10px;top:10px;width:200px'>"
+        "<button id='button' style='position:absolute;left:10px;top:40px'>button</button>"
         "<div id='pad' style='position:absolute;left:0;top:60px;width:400px;height:240px;overflow:auto'>"
         "<div style='height:2000px'></div></div><script>"
-        "window.probe={events:[]};"
+        "window.probe={events:[]}; window.buttonClicks=0; button.addEventListener('click',()=>buttonClicks++);"
         "for (const type of ['pointerdown','pointerup','pointermove','click','wheel','keydown','input'])"
         " addEventListener(type,e=>probe.events.push({type,trusted:e.isTrusted,x:e.clientX,y:e.clientY,key:e.key}),true);"
         "</script>";
@@ -209,6 +210,16 @@ int main(void) { @autoreleasepool {
     check([keysSeen isEqual:@[@"a", @"Enter"]],
         [NSString stringWithFormat:@"keys reach the focused field in a window that is not key: %@", keysSeen]);
     check([evaluate(view, @"document.getElementById('field').value") isEqual:@"a"], @"text input reaches the field");
+
+    // A focused input can leave WebKit work queued. The next native click must
+    // still deliver down before up and synthesize exactly one DOM click.
+    SPReceipt buttonDown = pointerThen(window, view, 50, 50, 1, 5);
+    SPReceipt buttonUp = pointerThen(window, view, 50, 50, 3, 5);
+    check(buttonDown.result == SP_INPUT_DELIVERED && buttonUp.result == SP_INPUT_DELIVERED,
+        @"a click after keyboard input receives both pointer phases");
+    drain(view);
+    check([evaluate(view, @"window.buttonClicks") unsignedIntegerValue] == 1,
+        @"a click after keyboard input synthesizes one DOM click");
 
     // 창 안의 다른 웹뷰를 누르면 AppKit 과 같이 그 웹뷰가 키 입력을 받는다.
     WKWebView *child = [[WKWebView alloc] initWithFrame:NSMakeRect(220, 0, 180, 50)];

@@ -100,6 +100,7 @@ import (
 	"errors"
 	"fmt"
 	"runtime/cgo"
+	"sync"
 	"unsafe"
 
 	"github.com/min-median-max/soksak/packages/host/wailsv3/src/platform"
@@ -107,6 +108,7 @@ import (
 
 // watchers 는 모니터 번호별 입력 수신 핸들이다. 주 스레드에서만 읽고 바꾼다.
 var watchers = map[uintptr]cgo.Handle{}
+var pointerSequence sync.Mutex
 
 //export surfaceHit
 func surfaceHit(owner C.uintptr_t, view unsafe.Pointer) C.int {
@@ -130,8 +132,16 @@ func (implementation) WatchInput(window unsafe.Pointer, input platform.Input) (u
 
 // InjectPointer 는 native/darwin 의 sp_input_pointer_then 으로 입력을 전달한다. 앱을 활성화하지 않는다.
 func (implementation) InjectPointer(window unsafe.Pointer, x, y float64, phase, button int, deltaX, deltaY, receive float64, done func(platform.PointerResult)) error {
+	pointerSequence.Lock()
+	var once sync.Once
+	serialized := func(result platform.PointerResult) {
+		once.Do(func() {
+			pointerSequence.Unlock()
+			done(result)
+		})
+	}
 	C.injectPointer(window, C.double(x), C.double(y), C.int(phase), C.int(button), C.double(deltaX), C.double(deltaY),
-		C.double(receive), C.uintptr_t(cgo.NewHandle(done)))
+		C.double(receive), C.uintptr_t(cgo.NewHandle(serialized)))
 	return nil
 }
 
