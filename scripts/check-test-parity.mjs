@@ -392,6 +392,27 @@ const FEATURE_LINKS = [
     expected: "A complete divider recording keeps native content inside its card, keeps card and rail geometry aligned, contains no white surface frame, and returns to its initial position.",
     levels: ["native", "application"],
   },
+  {
+    id: "F3.3",
+    implementation: [
+      { file: "plugins/browser/ui/browser.js", symbol: "surfaceId" },
+      { file: "packages/host/tauriv2/src/documents.rs", symbol: "set_document_appearance" },
+      { file: "packages/host/wailsv3/src/documents.go", symbol: "SetDocumentAppearance" },
+    ],
+    tests: [{ file: "e2e/browser.test.mjs", id: "browser documents follow host theme pixels for existing, new, and reloaded documents" }],
+    expected: "Existing, newly split, and reloaded browser documents apply the current host theme before presentation and retain their explicit HTTP(S) location.",
+    levels: ["unit", "native", "application"],
+  },
+  {
+    id: "F3.4",
+    implementation: [
+      { file: "packages/host/tauriv2/src/theme.rs", symbol: "set" },
+      { file: "packages/host/wailsv3/src/theme.go", symbol: "SetTheme" },
+    ],
+    tests: [{ file: "e2e/browser.test.mjs", id: "Google site appearance remains independent of host theme" }],
+    expected: "Google's explicit light site preference remains unchanged when the host switches light to dark, and its URL remains unchanged.",
+    levels: ["application"],
+  },
 ];
 
 // 생성 산출물은 원본과의 일치 검사 대상이며 독립 구현으로 세지 않는다.
