@@ -111,6 +111,9 @@ func handle(shells *Shells, request Request) error {
 		}
 		_, err := shells.Open(request.Surface, request.Root)
 		return err
+	case "close":
+		shells.Close(request.Surface)
+		return nil
 	case "write":
 		return shells.Write(request.Surface, request.Body.Data)
 	case "run":

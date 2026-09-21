@@ -122,6 +122,21 @@ func TestOpenWriteReturnsShellOutputForTheSurface(t *testing.T) {
 	}
 }
 
+func TestCloseOperationStopsTheShellForTheSurface(t *testing.T) {
+	t.Setenv("SHELL", "/bin/sh")
+	s := start(t)
+	s.open("explicit-close")
+	s.send(`{"surface":"explicit-close","body":{"op":"close"}}`)
+	s.send(`{"surface":"explicit-close","body":{"op":"write","data":"pwd\n"}}`)
+	event, _ := s.until(func(e shell.Event) bool { return e.Body.Error != "" })
+	if event.Surface != "explicit-close" || event.Body.Error != "shell explicit-close is not running" {
+		t.Fatalf("event after explicit close = %+v", event)
+	}
+	if err := s.finish(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestReopenReportsTheLiveDirectoryToARemountedSurface(t *testing.T) {
 	t.Setenv("SHELL", "/bin/sh")
 	s := start(t)
