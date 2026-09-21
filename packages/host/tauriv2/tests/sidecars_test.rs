@@ -6,6 +6,9 @@ use std::path::Path;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::time::Duration;
 
+use std::io::{BufRead, BufReader, Write};
+use std::os::unix::net::UnixListener;
+
 use serde_json::value::RawValue;
 use soksak_host_tauriv2::sidecars::{Message, Owner, Sidecars};
 
@@ -65,7 +68,7 @@ fn files(sidecar: &str) -> Files {
 
 fn create(files: &Files, directory: &Path) -> Result<Sidecars<FakeOwner>, String> {
     let read = |path: &str| files.get(path).map(|text| text.as_bytes().to_vec());
-    Sidecars::new(&read, directory.to_path_buf())
+    Sidecars::new(&read, directory.to_path_buf(), directory.to_path_buf())
 }
 
 const ECHO: &str = "@fixture/sidecar-echo";
@@ -201,6 +204,196 @@ fn an_unsupported_protocol_fails() {
         error.contains("modules/@fixture/sidecar-echo/sidecar.json"),
         "{error}"
     );
+}
+
+#[test]
+fn persistent_transport_rejects_unknown_transport() {
+    let directory = tempfile::tempdir().unwrap();
+    let error = create(
+        &files(r#"{"executable":"build/echo","protocol":1,"transport":"ptyd"}"#),
+        directory.path(),
+    )
+    .err()
+    .unwrap();
+    assert!(error.contains("transport ptyd is not supported"), "{error}");
+}
+
+#[test]
+fn persistent_transport_canonicalizes_the_config_directory() {
+    let executable_directory = tempfile::tempdir().unwrap();
+    let config_directory = tempfile::tempdir().unwrap();
+    let fixture = files(r#"{"executable":"build/echo","protocol":1,"transport":"persistent"}"#);
+    let sidecars = Sidecars::new(
+        &|path| fixture.get(path).map(|value| value.as_bytes().to_vec()),
+        executable_directory.path().to_path_buf(),
+        config_directory.path().join("."),
+    )
+    .unwrap();
+    let (window, _events) = owner("a", "/projects/test");
+    let error = sidecars.send(&window, ECHO, "s1", &raw("{}"));
+    assert!(error.unwrap_err().contains("sidecar"));
+}
+
+#[test]
+fn concurrent_hosts_share_an_authenticated_service_endpoint() {
+    let executable_directory = tempfile::tempdir().unwrap();
+    let config_directory = tempfile::tempdir().unwrap();
+    let service_directory = config_directory.path().join("services/echo");
+    std::fs::create_dir_all(&service_directory).unwrap();
+    let socket_path = service_directory.join("s.sock");
+    let listener = UnixListener::bind(&socket_path).unwrap();
+    let endpoint = serde_json::json!({
+        "protocol": 1,
+        "pid": std::process::id(),
+        "socket": socket_path,
+        "token": "test-token"
+    });
+    std::fs::write(
+        service_directory.join("endpoint.json"),
+        serde_json::to_vec(&endpoint).unwrap(),
+    )
+    .unwrap();
+
+    let service = std::thread::spawn(move || {
+        for stream in listener.incoming().take(2) {
+            let mut stream = stream.unwrap();
+            let reader_stream = stream.try_clone().unwrap();
+            let mut reader = BufReader::new(reader_stream);
+            let mut line = String::new();
+            reader.read_line(&mut line).unwrap();
+            let hello: serde_json::Value = serde_json::from_str(&line).unwrap();
+            assert_eq!(hello["op"], "hello");
+            assert_eq!(hello["protocol"], 1);
+            assert_eq!(hello["token"], "test-token");
+            stream
+                .write_all(
+                    br#"{"op":"hello","protocol":1,"ok":true}
+"#,
+                )
+                .unwrap();
+            line.clear();
+            reader.read_line(&mut line).unwrap();
+            stream.write_all(line.as_bytes()).unwrap();
+        }
+    });
+
+    let fixture = files(r#"{"executable":"build/echo","protocol":1,"transport":"persistent"}"#);
+    let read = |path: &str| fixture.get(path).map(|value| value.as_bytes().to_vec());
+    let first = Sidecars::new(
+        &read,
+        executable_directory.path().to_path_buf(),
+        config_directory.path().to_path_buf(),
+    )
+    .unwrap();
+    let second = Sidecars::new(
+        &read,
+        executable_directory.path().to_path_buf(),
+        config_directory.path().to_path_buf(),
+    )
+    .unwrap();
+    let (first_owner, first_events) = owner("first", "/projects/first");
+    let (second_owner, second_events) = owner("second", "/projects/second");
+    first
+        .send(&first_owner, ECHO, "s1", &raw(r#"{"op":"open"}"#))
+        .unwrap();
+    second
+        .send(&second_owner, ECHO, "s2", &raw(r#"{"op":"open"}"#))
+        .unwrap();
+    assert_eq!(
+        first_events
+            .recv_timeout(Duration::from_secs(1))
+            .unwrap()
+            .surface,
+        "s1"
+    );
+    assert_eq!(
+        second_events
+            .recv_timeout(Duration::from_secs(1))
+            .unwrap()
+            .surface,
+        "s2"
+    );
+    service.join().unwrap();
+}
+
+#[test]
+fn persistent_stop_closes_owner_then_requests_service_shutdown() {
+    let executable_directory = tempfile::tempdir().unwrap();
+    let config_directory = tempfile::tempdir().unwrap();
+    let service_directory = config_directory.path().join("services/echo");
+    std::fs::create_dir_all(&service_directory).unwrap();
+    let socket_path = service_directory.join("shutdown.sock");
+    let listener = UnixListener::bind(&socket_path).unwrap();
+    let endpoint = serde_json::json!({
+        "protocol": 1,
+        "pid": std::process::id(),
+        "socket": socket_path,
+        "token": "shutdown-token"
+    });
+    std::fs::write(
+        service_directory.join("endpoint.json"),
+        serde_json::to_vec(&endpoint).unwrap(),
+    )
+    .unwrap();
+
+    let service = std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        stream
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .unwrap();
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+        let mut line = String::new();
+        reader.read_line(&mut line).unwrap();
+        let hello: serde_json::Value = serde_json::from_str(&line).unwrap();
+        assert_eq!(hello["op"], "hello");
+        assert_eq!(hello["token"], "shutdown-token");
+        stream
+            .write_all(br#"{"op":"hello","protocol":1,"ok":true}
+"#)
+            .unwrap();
+
+        line.clear();
+        reader.read_line(&mut line).unwrap();
+        let request: serde_json::Value = serde_json::from_str(&line).unwrap();
+        assert_eq!(request["body"]["op"], "open");
+
+        line.clear();
+        reader.read_line(&mut line).unwrap();
+        let close: serde_json::Value = serde_json::from_str(&line).unwrap();
+        assert_eq!(close["op"], "close-owner");
+        let close_reply = serde_json::json!({
+            "op": "closed-owner",
+            "request": close["request"],
+            "ok": true
+        });
+        writeln!(stream, "{}", close_reply).unwrap();
+
+        line.clear();
+        reader.read_line(&mut line).unwrap();
+        let shutdown: serde_json::Value = serde_json::from_str(&line).unwrap();
+        assert_eq!(shutdown["op"], "shutdown");
+        let shutdown_reply = serde_json::json!({
+            "op": "shutdown",
+            "request": shutdown["request"],
+            "ok": true
+        });
+        writeln!(stream, "{}", shutdown_reply).unwrap();
+    });
+
+    let fixture = files(r#"{"executable":"build/echo","protocol":1,"transport":"persistent"}"#);
+    let read = |path: &str| fixture.get(path).map(|value| value.as_bytes().to_vec());
+    let sidecars = Sidecars::new(
+        &read,
+        executable_directory.path().to_path_buf(),
+        config_directory.path().to_path_buf(),
+    )
+    .unwrap();
+    let (owner, _events) = owner("shutdown", "/projects/shutdown");
+    sidecars
+        .send(&owner, ECHO, "surface", &raw(r#"{"op":"open"}"#))
+        .unwrap();
+    sidecars.stop();
+    service.join().unwrap();
 }
 
 #[test]

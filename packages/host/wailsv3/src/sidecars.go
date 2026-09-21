@@ -23,13 +23,18 @@ import (
 	"io"
 	"io/fs"
 	"log"
+	"net"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"syscall"
 	"time"
+
+	"github.com/min-median-max/soksak/packages/host/wailsv3/src/platform"
 )
 
 // SidecarMessage 는 사이드카가 보낸 메시지를 페이지에 전달하는 이벤트 값이다.
@@ -55,13 +60,16 @@ type sidecar struct {
 	name          string
 	cmd           *exec.Cmd
 	stdin         io.WriteCloser
+	conn          net.Conn
+	persistent    bool
 	outbox        chan []byte
 	exited        chan struct{}
 	muClosed      sync.Mutex
-	pendingCloses map[string][]byte // surface → 마지막 closed 메시지. 같은 표면의 것을 교체한다.
-	// pendingReplies 는 채널이 가득 찬 경우 이미지 응답을 버퍼링한다.
-	// surface:name 이 key 로 최신 응답만 보관한다.
-	pendingReplies map[string][]byte // "surface:name" → 최신 응답 JSON
+	pendingCloses [][]byte // queued closed messages, in send order
+	// pendingReplies 는 채널이 가득 찬 경우 immutable image ack를 버퍼링한다.
+	// 각 항목을 보존하여 sequence가 다른 응답을 덮어쓰지 않는다.
+	pendingReplies [][]byte
+	closeWaiters   map[string]chan error
 }
 
 // SidecarOwner 는 표면을 소유한 창이다. 사이드카 메시지의 root 를 제공하고 이벤트를 받는다.
@@ -74,15 +82,18 @@ type SidecarOwner interface {
 type Sidecars struct {
 	mu          sync.Mutex
 	declared    map[string]string
+	persistent  map[string]bool
 	running     map[string]*sidecar
 	owners      map[string]SidecarOwner
 	stopped     bool
 	StopTimeout time.Duration // 테스트에서 주입 가능한 Stop() 기한. 기본값 5초.
+	configDir   string
+	nextRequest uint64
 }
 
 // NewSidecars 는 스테이징된 프런트엔드 frontend 의 설정 파일로 사이드카를 찾아 채널을 생성한다.
 // 실행 파일은 directory 에서 찾는다. 설정 파일이 없거나 형식이 틀리면 실패한다.
-func NewSidecars(frontend fs.FS, directory string) (*Sidecars, error) {
+func NewSidecars(frontend fs.FS, directory, configDirectory string) (*Sidecars, error) {
 	read := func(name string, into any) error {
 		data, err := fs.ReadFile(frontend, name)
 		if err != nil {
@@ -101,10 +112,24 @@ func NewSidecars(frontend fs.FS, directory string) (*Sidecars, error) {
 	}
 	c := &Sidecars{
 		declared:    map[string]string{},
+		persistent:  map[string]bool{},
 		running:     map[string]*sidecar{},
 		owners:      map[string]SidecarOwner{},
 		StopTimeout: 5 * time.Second,
 	}
+	configDirectoryProvided := strings.TrimSpace(configDirectory) != ""
+	if configDirectoryProvided {
+		config, err := filepath.Abs(configDirectory)
+		if err != nil {
+			return nil, fmt.Errorf("config directory: %w", err)
+		}
+		config, err = filepath.EvalSymlinks(config)
+		if err != nil {
+			return nil, fmt.Errorf("config directory: %w", err)
+		}
+		c.configDir = config
+	}
+	basenames := map[string]string{}
 	for _, plugin := range environment.Plugins {
 		var manifest struct {
 			Sidecars []string `json:"sidecars"`
@@ -120,6 +145,7 @@ func NewSidecars(frontend fs.FS, directory string) (*Sidecars, error) {
 			var declared struct {
 				Executable string `json:"executable"`
 				Protocol   int    `json:"protocol"`
+				Transport  string `json:"transport"`
 			}
 			if err := read(file, &declared); err != nil {
 				return nil, err
@@ -131,7 +157,23 @@ func NewSidecars(frontend fs.FS, directory string) (*Sidecars, error) {
 			if declared.Protocol != 1 {
 				return nil, fmt.Errorf("%s: protocol must be 1", file)
 			}
+			if declared.Transport != "" && declared.Transport != "persistent" {
+				return nil, fmt.Errorf("%s: transport %s is not supported", file, declared.Transport)
+			}
+			if declared.Transport == "persistent" && !configDirectoryProvided {
+				return nil, fmt.Errorf("%s: persistent transport requires a config directory", file)
+			}
+			if declared.Transport == "persistent" {
+				base := path.Base(declared.Executable)
+				if other, exists := basenames[base]; exists {
+					return nil, fmt.Errorf("%s: executable basename %s is already used by %s", file, base, other)
+				}
+				basenames[base] = name
+			}
 			c.declared[name] = filepath.Join(directory, path.Base(declared.Executable))
+			if declared.Transport == "persistent" {
+				c.persistent[name] = true
+			}
 		}
 	}
 	return c, nil
@@ -174,7 +216,7 @@ func (c *Sidecars) Send(owner SidecarOwner, name, surface string, body json.RawM
 }
 
 // SendResponse는 사이드카에 응답(이미지 반납 등)을 전달한다.
-// 채널이 가득 차면 응답을 surface:image 별로 버퍼링했다가 쓰기 스레드가 전송한다.
+// 채널이 가득 차면 immutable 응답을 순서대로 버퍼링했다가 쓰기 스레드가 전송한다.
 func (c *Sidecars) SendResponse(name, surface, image string, body json.RawMessage) error {
 	// 먼저 뮤텍스 밖에서 JSON 직렬화한다.
 	type response struct {
@@ -196,16 +238,21 @@ func (c *Sidecars) SendResponse(name, surface, image string, body json.RawMessag
 	if !ok {
 		return fmt.Errorf("sidecar %s is not running", name)
 	}
+	select {
+	case <-process.exited:
+		return fmt.Errorf("sidecar %s response channel is disconnected", name)
+	default:
+	}
 
 	// 논블로킹으로 채널에 전송한다. 채널이 가득 차면 버퍼링한다.
 	select {
 	case process.outbox <- line:
 		return nil
 	default:
-		// 채널이 가득 찼으므로 pendingReplies에 저장 (같은 표면:이미지의 것을 교체)
-		responseKey := surface + ":" + image
+		// 채널이 가득 찼으므로 immutable 응답을 순서대로 보관한다.
+		responseKey := surface + ":" + image + ":" + string(body)
 		process.muClosed.Lock()
-		process.pendingReplies[responseKey] = line
+		process.pendingReplies = append(process.pendingReplies, line)
 		process.muClosed.Unlock()
 		log.Printf("sidecar %s: response queue full, buffering %s", name, responseKey)
 		return nil
@@ -234,9 +281,9 @@ func (c *Sidecars) Close(surface string) {
 		select {
 		case process.outbox <- line:
 		default:
-			// 채널이 가득 찼으므로 pendingCloses에 저장 (같은 표면의 이전 것을 교체)
+			// 채널이 가득 찼으므로 닫힘 메시지를 전송 순서대로 보관한다.
 			process.muClosed.Lock()
-			process.pendingCloses[surface] = line
+			process.pendingCloses = append(process.pendingCloses, line)
 			process.muClosed.Unlock()
 		}
 	}
@@ -271,7 +318,9 @@ func (c *Sidecars) Stop() {
 	// 모든 사이드카에 대해 채널을 닫아 EOF 신호를 보낸다.
 	// 쓰기 고루틴이 채널 닫힘을 감지하고 stdin을 닫는다.
 	for _, process := range processes {
-		close(process.outbox)
+		if !process.persistent {
+			close(process.outbox)
+		}
 	}
 
 	// 모든 프로세스를 병렬로 기다린다. 기한을 넘기면 kill하고 exited 채널을 기다린다.
@@ -283,6 +332,12 @@ func (c *Sidecars) Stop() {
 		wg.Add(1)
 		go func(p *sidecar) {
 			defer wg.Done()
+			if p.persistent {
+				if err := c.closePersistentOwner(p, ctx); err != nil {
+					log.Printf("sidecar %s: close owner: %v", p.name, err)
+				}
+				return
+			}
 			// read() 고루틴이 종료되면 process.exited 채널이 닫힌다.
 			select {
 			case <-p.exited:
@@ -300,10 +355,73 @@ func (c *Sidecars) Stop() {
 	wg.Wait()
 }
 
+func (c *Sidecars) closePersistentOwner(process *sidecar, ctx context.Context) error {
+	request := fmt.Sprintf("%d", atomic.AddUint64(&c.nextRequest, 1))
+	waiter := make(chan error, 1)
+	defer func() {
+		c.mu.Lock()
+		delete(process.closeWaiters, request)
+		c.mu.Unlock()
+	}()
+	c.mu.Lock()
+	process.closeWaiters[request] = waiter
+	c.mu.Unlock()
+	line, err := json.Marshal(map[string]string{"op": "close-owner", "request": request})
+	if err != nil {
+		return err
+	}
+	line = append(line, '\n')
+	select {
+	case process.outbox <- line:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	select {
+	case err := <-waiter:
+		if err != nil {
+			process.conn.Close()
+			close(process.outbox)
+			return err
+		}
+		shutdown := fmt.Sprintf("%d", atomic.AddUint64(&c.nextRequest, 1))
+		shutdownWaiter := make(chan error, 1)
+		c.mu.Lock()
+		process.closeWaiters[shutdown] = shutdownWaiter
+		c.mu.Unlock()
+		shutdownLine, marshalErr := json.Marshal(map[string]string{"op": "shutdown", "request": shutdown})
+		if marshalErr != nil {
+			return marshalErr
+		}
+		shutdownLine = append(shutdownLine, '\n')
+		select {
+		case process.outbox <- shutdownLine:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		select {
+		case shutdownErr := <-shutdownWaiter:
+			process.conn.Close()
+			close(process.outbox)
+			return shutdownErr
+		case <-ctx.Done():
+			process.conn.Close()
+			close(process.outbox)
+			return ctx.Err()
+		}
+	case <-ctx.Done():
+		process.conn.Close()
+		close(process.outbox)
+		return ctx.Err()
+	}
+}
+
 // process 는 실행 중인 사이드카를 반환하고, 없으면 실행한다. c.mu 를 잡은 상태로 호출한다.
 func (c *Sidecars) process(name string) (*sidecar, error) {
 	if process, ok := c.running[name]; ok {
 		return process, nil
+	}
+	if c.persistent[name] {
+		return c.processPersistent(name)
 	}
 	cmd := exec.Command(c.declared[name])
 	cmd.Stderr = os.Stderr
@@ -325,12 +443,139 @@ func (c *Sidecars) process(name string) (*sidecar, error) {
 		name: name, cmd: cmd, stdin: stdin,
 		outbox:         make(chan []byte, 256),
 		exited:         make(chan struct{}),
-		pendingCloses:  make(map[string][]byte),
-		pendingReplies: make(map[string][]byte),
+		pendingCloses:  make([][]byte, 0),
+		pendingReplies: make([][]byte, 0),
+		closeWaiters:   make(map[string]chan error),
 	}
 	c.running[name] = process
 	go c.write(process)        // 쓰기 고루틴: outbox 채널에서 읽어 stdin 에 쓴다.
 	go c.read(process, stdout) // 읽기 고루틴: stdout 에서 읽어 이벤트를 전달한다.
+	return process, nil
+}
+
+type persistentEndpoint struct {
+	Protocol uint64 `json:"protocol"`
+	PID      int    `json:"pid"`
+	Socket   string `json:"socket"`
+	Token    string `json:"token"`
+}
+
+func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
+	program := c.declared[name]
+	serviceDir := filepath.Join(c.configDir, "services", filepath.Base(program))
+	if err := os.MkdirAll(serviceDir, 0o700); err != nil {
+		return nil, fmt.Errorf("sidecar %s: create service directory: %w", name, err)
+	}
+	if err := os.Chmod(serviceDir, 0o700); err != nil {
+		return nil, fmt.Errorf("sidecar %s: secure service directory: %w", name, err)
+	}
+	endpointPath := filepath.Join(serviceDir, "endpoint.json")
+	var endpoint persistentEndpoint
+	var cmd *exec.Cmd
+	if data, err := os.ReadFile(endpointPath); err == nil {
+		if err := json.Unmarshal(data, &endpoint); err != nil {
+			return nil, fmt.Errorf("sidecar %s: invalid endpoint: %w", name, err)
+		}
+	} else if errors.Is(err, os.ErrNotExist) {
+		cmd = exec.Command(program, "--service-dir", serviceDir)
+		// A persistent service belongs to the configuration directory, not to
+		// the lifetime of this application process. Start a new session so an
+		// application crash cannot take the recovery service down with it.
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+		cmd.Stdin = nil
+		cmd.Stderr = os.Stderr
+		stdout, err := cmd.StdoutPipe()
+		if err != nil {
+			return nil, fmt.Errorf("sidecar %s: service stdout: %w", name, err)
+		}
+		if err := cmd.Start(); err != nil {
+			return nil, fmt.Errorf("sidecar %s: %w", name, err)
+		}
+		line, err := bufio.NewReader(stdout).ReadBytes('\n')
+		if err != nil {
+			return nil, fmt.Errorf("sidecar %s: service startup: %w", name, err)
+		}
+		if err := json.Unmarshal(line, &endpoint); err != nil || endpoint.Protocol == 0 {
+			var failure struct {
+				Error    string              `json:"error"`
+				Endpoint *persistentEndpoint `json:"endpoint"`
+			}
+			if json.Unmarshal(line, &failure) == nil && failure.Error != "" && failure.Endpoint != nil {
+				endpoint = *failure.Endpoint
+			} else {
+				if err == nil {
+					err = errors.New("endpoint is incomplete")
+				}
+				return nil, fmt.Errorf("sidecar %s: service endpoint: %w", name, err)
+			}
+		}
+	} else {
+		return nil, fmt.Errorf("sidecar %s: read endpoint: %w", name, err)
+	}
+	current, err := platform.Current()
+	if err != nil {
+		return nil, err
+	}
+	if !current.ServiceProcessExists(endpoint.PID) {
+		if err := os.Remove(endpointPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("sidecar %s: remove stale endpoint: %w", name, err)
+		}
+		// The endpoint was left by a crashed service. Remove only this proven
+		// stale record, then enter the normal single creation path.
+		return c.processPersistent(name)
+	}
+	if endpoint.Protocol != 1 {
+		return nil, fmt.Errorf("sidecar %s: service protocol %d is not supported", name, endpoint.Protocol)
+	}
+	if endpoint.PID == 0 || endpoint.Socket == "" || endpoint.Token == "" {
+		return nil, fmt.Errorf("sidecar %s: service endpoint is incomplete", name)
+	}
+	conn, err := net.Dial("unix", endpoint.Socket)
+	if err != nil {
+		return nil, fmt.Errorf("sidecar %s: connect authenticated service: %w", name, err)
+	}
+	reader := bufio.NewReader(conn)
+	hello, _ := json.Marshal(map[string]any{"op": "hello", "protocol": 1, "token": endpoint.Token, "client": c.configDir})
+	hello = append(hello, '\n')
+	if _, err := conn.Write(hello); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("sidecar %s: hello: %w", name, err)
+	}
+	responseLine, err := reader.ReadBytes('\n')
+	if err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("sidecar %s: hello response: %w", name, err)
+	}
+	var response struct {
+		Op       string  `json:"op"`
+		Protocol *uint64 `json:"protocol"`
+		OK       bool    `json:"ok"`
+		Error    string  `json:"error"`
+	}
+	if err := json.Unmarshal(responseLine, &response); err != nil || response.Op != "hello" {
+		conn.Close()
+		return nil, fmt.Errorf("sidecar %s: authentication handshake failed: invalid hello response", name)
+	}
+	if !response.OK {
+		conn.Close()
+		if response.Error == "" {
+			response.Error = "authentication failed"
+		}
+		return nil, fmt.Errorf("sidecar %s: authentication handshake failed: %s", name, response.Error)
+	}
+	if response.Protocol == nil || *response.Protocol != 1 {
+		conn.Close()
+		return nil, fmt.Errorf("sidecar %s: service protocol mismatch in hello response", name)
+	}
+	process := &sidecar{
+		name: name, cmd: cmd, conn: conn, persistent: true,
+		outbox: make(chan []byte, 256), exited: make(chan struct{}),
+		pendingCloses: make([][]byte, 0), pendingReplies: make([][]byte, 0),
+		closeWaiters: make(map[string]chan error),
+	}
+	c.running[name] = process
+	go c.writePersistent(process)
+	go c.readPersistent(process, reader)
 	return process, nil
 }
 
@@ -379,6 +624,62 @@ func (c *Sidecars) write(process *sidecar) {
 	}
 }
 
+func (c *Sidecars) writePersistent(process *sidecar) {
+	for {
+		for drained := false; !drained; {
+			select {
+			case line, ok := <-process.outbox:
+				if !ok {
+					c.writePersistentPending(process)
+					return
+				}
+				if !c.writePersistentLine(process, line) {
+					return
+				}
+			default:
+				drained = true
+			}
+		}
+		if !c.writePersistentPending(process) {
+			return
+		}
+		line, ok := <-process.outbox
+		if !ok {
+			c.writePersistentPending(process)
+			return
+		}
+		if !c.writePersistentLine(process, line) {
+			return
+		}
+	}
+}
+
+func (c *Sidecars) writePersistentLine(process *sidecar, line []byte) bool {
+	if _, err := process.conn.Write(line); err != nil {
+		log.Printf("sidecar %s: write: %v", process.name, err)
+		return false
+	}
+	return true
+}
+
+func (c *Sidecars) writePersistentPending(process *sidecar) bool {
+	process.muClosed.Lock()
+	replies, closes := process.pendingReplies, process.pendingCloses
+	process.pendingReplies, process.pendingCloses = nil, nil
+	process.muClosed.Unlock()
+	for _, line := range replies {
+		if !c.writePersistentLine(process, line) {
+			return false
+		}
+	}
+	for _, line := range closes {
+		if !c.writePersistentLine(process, line) {
+			return false
+		}
+	}
+	return true
+}
+
 func (c *Sidecars) writeLine(process *sidecar, line []byte) bool {
 	if _, err := process.stdin.Write(line); err != nil {
 		log.Printf("sidecar %s: write: %v", process.name, err)
@@ -391,7 +692,7 @@ func (c *Sidecars) writeLine(process *sidecar, line []byte) bool {
 func (c *Sidecars) writePending(process *sidecar) bool {
 	process.muClosed.Lock()
 	replies, closes := process.pendingReplies, process.pendingCloses
-	process.pendingReplies, process.pendingCloses = map[string][]byte{}, map[string][]byte{}
+	process.pendingReplies, process.pendingCloses = nil, nil
 	process.muClosed.Unlock()
 	for _, line := range replies {
 		if !c.writeLine(process, line) {
@@ -436,6 +737,73 @@ func (c *Sidecars) read(process *sidecar, stdout io.Reader) {
 	c.mu.Unlock()
 	if !stopped {
 		log.Printf("sidecar %s exited: %v", process.name, err)
+	}
+	close(process.exited)
+}
+
+func (c *Sidecars) readPersistent(process *sidecar, reader *bufio.Reader) {
+	for {
+		line, err := reader.ReadBytes('\n')
+		if err != nil {
+			break
+		}
+		var value map[string]json.RawMessage
+		if err := json.Unmarshal(line, &value); err != nil {
+			log.Printf("sidecar %s: invalid persistent event: %v", process.name, err)
+			continue
+		}
+		var op string
+		_ = json.Unmarshal(value["op"], &op)
+		if op == "closed-owner" || op == "shutdown" {
+			var request string
+			_ = json.Unmarshal(value["request"], &request)
+			var ok bool
+			_ = json.Unmarshal(value["ok"], &ok)
+			var reason string
+			_ = json.Unmarshal(value["error"], &reason)
+			c.mu.Lock()
+			waiter := process.closeWaiters[request]
+			delete(process.closeWaiters, request)
+			c.mu.Unlock()
+			if waiter != nil {
+				if ok {
+					waiter <- nil
+				} else if reason == "" {
+					waiter <- errors.New("close-owner failed")
+				} else {
+					waiter <- errors.New(reason)
+				}
+			}
+			continue
+		}
+		var event sidecarEvent
+		if err := json.Unmarshal(line, &event); err != nil {
+			log.Printf("sidecar %s: invalid persistent event: %v", process.name, err)
+			continue
+		}
+		c.mu.Lock()
+		owner := c.owners[event.Surface]
+		c.mu.Unlock()
+		if owner != nil {
+			if c.tryHandleImageEnvelope(owner, process.name, event.Surface, event.Body) {
+				continue
+			}
+			owner.Emit("sidecar-message", SidecarMessage{Sidecar: process.name, Surface: event.Surface, Body: event.Body})
+		}
+	}
+	process.conn.Close()
+	c.mu.Lock()
+	waiters := make([]chan error, 0, len(process.closeWaiters))
+	for request, waiter := range process.closeWaiters {
+		delete(process.closeWaiters, request)
+		waiters = append(waiters, waiter)
+	}
+	if c.running[process.name] == process {
+		delete(c.running, process.name)
+	}
+	c.mu.Unlock()
+	for _, waiter := range waiters {
+		waiter <- errors.New("persistent service disconnected before close-owner ack")
 	}
 	close(process.exited)
 }

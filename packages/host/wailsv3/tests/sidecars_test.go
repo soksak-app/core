@@ -70,7 +70,7 @@ func echoSidecars(t *testing.T) (*host.Sidecars, string) {
 	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	sidecars, err := host.NewSidecars(frontend(`{"executable":"build/echo","protocol":1}`), directory)
+	sidecars, err := host.NewSidecars(frontend(`{"executable":"build/echo","protocol":1}`), directory, directory)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,8 @@ func TestUndeclaredAndStoppedSidecarsAreRejected(t *testing.T) {
 }
 
 func TestMissingSidecarExecutableFails(t *testing.T) {
-	sidecars, err := host.NewSidecars(frontend(`{"executable":"build/absent","protocol":1}`), t.TempDir())
+	directory := t.TempDir()
+	sidecars, err := host.NewSidecars(frontend(`{"executable":"build/absent","protocol":1}`), directory, directory)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,15 +142,28 @@ func TestInvalidSidecarDeclarationsFail(t *testing.T) {
 			"environment.json":                    {Data: []byte(`{"plugins":["@fixture/plugin"]}`)},
 			"modules/@fixture/plugin/plugin.json": {Data: []byte(`{"sidecars":["@fixture/sidecar-missing"]}`)},
 		}, "modules/@fixture/sidecar-missing/sidecar.json"},
-		"escaping executable": {frontend(`{"executable":"../escape","protocol":1}`), "inside the package"},
-		"absolute executable": {frontend(`{"executable":"/bin/sh","protocol":1}`), "inside the package"},
-		"unknown protocol":    {frontend(`{"executable":"build/echo","protocol":2}`), "protocol"},
-		"missing environment": {fstest.MapFS{}, "environment.json"},
+		"escaping executable":       {frontend(`{"executable":"../escape","protocol":1}`), "inside the package"},
+		"absolute executable":       {frontend(`{"executable":"/bin/sh","protocol":1}`), "inside the package"},
+		"unknown protocol":          {frontend(`{"executable":"build/echo","protocol":2}`), "protocol"},
+		"persistent without config": {frontend(`{"executable":"build/echo","protocol":1,"transport":"persistent"}`), "persistent transport requires a config directory"},
+		"unknown transport":         {frontend(`{"executable":"build/echo","protocol":1,"transport":"ptyd"}`), "transport ptyd is not supported"},
+		"missing environment":       {fstest.MapFS{}, "environment.json"},
 	}
 	for name, c := range cases {
-		if _, err := host.NewSidecars(c.files, t.TempDir()); err == nil || !strings.Contains(err.Error(), c.want) {
+		directory := t.TempDir()
+		configDirectory := directory
+		if name == "persistent without config" {
+			configDirectory = ""
+		}
+		if _, err := host.NewSidecars(c.files, directory, configDirectory); err == nil || !strings.Contains(err.Error(), c.want) {
 			t.Errorf("%s: error = %v, want %q", name, err, c.want)
 		}
+	}
+}
+
+func TestPersistentTransportRequiresConfigDirectory(t *testing.T) {
+	if _, err := host.NewSidecars(frontend(`{"executable":"build/echo","protocol":1,"transport":"persistent"}`), t.TempDir(), ""); err == nil || !strings.Contains(err.Error(), "persistent transport requires a config directory") {
+		t.Fatalf("persistent transport without config = %v", err)
 	}
 }
 
@@ -158,7 +172,8 @@ func TestApplicationWithoutSidecarsRejectsSends(t *testing.T) {
 		"environment.json":                    {Data: []byte(`{"plugins":["@fixture/plugin"]}`)},
 		"modules/@fixture/plugin/plugin.json": {Data: []byte(`{"id":"plugin"}`)},
 	}
-	sidecars, err := host.NewSidecars(files, t.TempDir())
+	directory := t.TempDir()
+	sidecars, err := host.NewSidecars(files, directory, directory)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +213,7 @@ func TestSlowSidecarDoesNotBlockOtherSends(t *testing.T) {
 		"modules/@fixture/sidecar-slow/sidecar.json": {Data: []byte(`{"executable":"build/slow","protocol":1}`)},
 		"modules/@fixture/sidecar-fast/sidecar.json": {Data: []byte(`{"executable":"build/fast","protocol":1}`)},
 	}
-	sidecars, err := host.NewSidecars(frontend, directory)
+	sidecars, err := host.NewSidecars(frontend, directory, directory)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -276,7 +291,7 @@ func TestStopGracefulShutdown(t *testing.T) {
 
 	// 사이드카를 선언한 프런트엔드를 설정한다.
 	fe := frontend(`{"executable":"build/graceful","protocol":1}`)
-	sidecars, err := host.NewSidecars(fe, directory)
+	sidecars, err := host.NewSidecars(fe, directory, directory)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -319,7 +334,7 @@ func TestStopForcedKill(t *testing.T) {
 
 	// 사이드카를 선언한 프런트엔드를 설정한다.
 	fe := frontend(`{"executable":"build/stubborn","protocol":1}`)
-	sidecars, err := host.NewSidecars(fe, directory)
+	sidecars, err := host.NewSidecars(fe, directory, directory)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -20,10 +20,27 @@ use std::time::Duration;
 
 use wait_timeout::ChildExt;
 
+use crate::platform::{current, PersistentStream};
 use crate::windows::{emit_window, window_data};
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use tauri::Window;
+
+#[cfg(unix)]
+fn service_process_exists(pid: u32) -> bool {
+    if pid == 0 {
+        return false;
+    }
+    // kill(pid, 0) probes existence without sending a signal. EPERM still
+    // means the process exists; only ESRCH makes the persisted endpoint stale.
+    let result = unsafe { libc::kill(pid as libc::pid_t, 0) };
+    result == 0 || std::io::Error::last_os_error().raw_os_error() != Some(libc::ESRCH)
+}
+
+#[cfg(not(unix))]
+fn service_process_exists(_pid: u32) -> bool {
+    true
+}
 
 /// 사이드카가 보낸 메시지를 페이지에 전달하는 이벤트 값.
 #[derive(Clone, Serialize)]
@@ -111,21 +128,25 @@ impl<O: Owner> ResponseSender for ReadThreadResponseSender<O> {
 
         match self.tx.try_send(Outgoing::Line(line.clone())) {
             Ok(()) => Ok(()),
-            Err(_) => {
-                // 채널이 가득 차면 State.pending_replies 에 버퍼링 (같은 surface:image의 것을 교체)
+            Err(TrySendError::Full(_)) => {
+                // 채널이 가득 차면 immutable 응답을 전송 순서대로 보관한다.
                 let mut state = self.state.lock().expect("sidecar state");
-                let key = format!("{}:{}", surface, image);
+                let key = format!("{}:{}:{}", surface, image, body.get());
                 state
                     .pending_replies
                     .entry(self.sidecar_name.clone())
-                    .or_insert_with(HashMap::new)
-                    .insert(key.clone(), line);
+                    .or_insert_with(Vec::new)
+                    .push(line);
                 eprintln!(
                     "sidecar {} response queue full: buffering {}",
                     self.sidecar_name, key
                 );
                 Ok(())
             }
+            Err(TrySendError::Disconnected(_)) => Err(format!(
+                "sidecar {} response channel is disconnected",
+                self.sidecar_name
+            )),
         }
     }
 }
@@ -133,6 +154,32 @@ impl<O: Owner> ResponseSender for ReadThreadResponseSender<O> {
 fn write_line(stdin: &mut ChildStdin, name: &str, line: &[u8]) -> bool {
     if let Err(e) = stdin.write_all(line) {
         eprintln!("sidecar {name}: write: {e}");
+        return false;
+    }
+    true
+}
+
+fn write_pending_socket<O>(
+    state: &Mutex<State<O>>,
+    name: &str,
+    stream: &mut dyn PersistentStream,
+) -> bool {
+    let (replies, closes) = {
+        let mut state = state.lock().expect("sidecar state");
+        (
+            state.pending_replies.remove(name).unwrap_or_default(),
+            state.pending_closes.remove(name).unwrap_or_default(),
+        )
+    };
+    replies
+        .iter()
+        .chain(closes.iter())
+        .all(|line| write_socket_line(stream, name, line))
+}
+
+fn write_socket_line(stream: &mut dyn PersistentStream, name: &str, line: &[u8]) -> bool {
+    if let Err(error) = stream.write_all(line).and_then(|_| stream.flush()) {
+        eprintln!("sidecar {name}: write: {error}");
         return false;
     }
     true
@@ -148,30 +195,38 @@ fn write_pending<O: Owner>(state: &Mutex<State<O>>, name: &str, stdin: &mut Chil
         )
     };
     replies
-        .values()
-        .chain(closes.values())
+        .iter()
+        .chain(closes.iter())
         .all(|line| write_line(stdin, name, line))
 }
 
 struct Process {
-    child: Child,
+    child: Option<Child>,
     outbox: SyncSender<Outgoing>, // 용량 256인 채널
+    persistent: Option<PersistentConnection>,
+}
+
+struct PersistentConnection {
+    close_waiters: Arc<Mutex<HashMap<String, SyncSender<Result<(), String>>>>>,
+    shutdown_waiters: Arc<Mutex<HashMap<String, SyncSender<Result<(), String>>>>>,
 }
 
 struct State<O> {
     running: HashMap<String, Process>,
     owners: HashMap<String, O>,
     stopped: bool,
-    // pending_replies: 각 사이드카별로 이미지 응답을 버퍼링한다 (surface:name → latest response)
+    // pending_replies: 각 사이드카별로 immutable 이미지 응답을 전송 순서대로 버퍼링한다.
     // pending_closes: 각 사이드카별로 표면의 닫힘 메시지를 버퍼링한다 (surface → close message)
-    pending_replies: HashMap<String, HashMap<String, Vec<u8>>>,
-    pending_closes: HashMap<String, HashMap<String, Vec<u8>>>,
+    pending_replies: HashMap<String, Vec<Vec<u8>>>,
+    pending_closes: HashMap<String, Vec<Vec<u8>>>,
 }
 
 /// 애플리케이션 하나의 사이드카 프로세스와 표면 소유 창을 관리한다.
 pub struct Sidecars<O: Owner> {
     /// 사이드카 패키지 이름과 실행 파일 경로.
     declared: HashMap<String, PathBuf>,
+    persistent: HashMap<String, bool>,
+    config_directory: PathBuf,
     state: Arc<Mutex<State<O>>>,
     /// 테스트에서 주입 가능한 Stop() 기한. 기본값 5초.
     pub stop_timeout: Duration,
@@ -180,7 +235,15 @@ pub struct Sidecars<O: Owner> {
 impl<O: Owner> Sidecars<O> {
     /// 플러그인이 선언한 사이드카로 채널을 생성한다. read 는 프론트엔드 경로의 파일 내용을
     /// 반환한다. 실행 파일은 directory 에서 basename(executable) 으로 찾는다.
-    pub fn new(read: &dyn Fn(&str) -> Option<Vec<u8>>, directory: PathBuf) -> Result<Self, String> {
+    /// Creates a sidecar channel with the canonical application configuration directory.
+    pub fn new(
+        read: &dyn Fn(&str) -> Option<Vec<u8>>,
+        directory: PathBuf,
+        config_directory: PathBuf,
+    ) -> Result<Self, String> {
+        let config_directory = config_directory
+            .canonicalize()
+            .map_err(|e| format!("config directory: {e}"))?;
         #[derive(Deserialize)]
         struct Environment {
             #[serde(default)]
@@ -195,6 +258,8 @@ impl<O: Owner> Sidecars<O> {
         struct Sidecar {
             executable: String,
             protocol: u64,
+            #[serde(default)]
+            transport: Option<String>,
         }
         fn load<T: serde::de::DeserializeOwned>(
             read: &dyn Fn(&str) -> Option<Vec<u8>>,
@@ -205,6 +270,8 @@ impl<O: Owner> Sidecars<O> {
         }
         let environment: Environment = load(read, "environment.json")?;
         let mut declared = HashMap::new();
+        let mut persistent = HashMap::new();
+        let mut persistent_basenames: HashMap<String, String> = HashMap::new();
         for plugin in &environment.plugins {
             let plugin: Plugin = load(read, &format!("modules/{plugin}/plugin.json"))?;
             for name in plugin.sidecars {
@@ -219,6 +286,13 @@ impl<O: Owner> Sidecars<O> {
                         sidecar.protocol
                     ));
                 }
+                let is_persistent = match sidecar.transport.as_deref() {
+                    None => false,
+                    Some("persistent") => true,
+                    Some(value) => {
+                        return Err(format!("{path}: transport {value} is not supported"))
+                    }
+                };
                 let executable = Path::new(&sidecar.executable);
                 let inside = executable
                     .components()
@@ -229,11 +303,23 @@ impl<O: Owner> Sidecars<O> {
                         sidecar.executable
                     )
                 })?;
-                declared.insert(name, directory.join(file));
+                if is_persistent {
+                    let basename = file.to_string_lossy().into_owned();
+                    if let Some(other) = persistent_basenames.insert(basename.clone(), name.clone())
+                    {
+                        return Err(format!(
+                            "{path}: executable basename {basename} is already used by {other}"
+                        ));
+                    }
+                }
+                declared.insert(name.clone(), directory.join(file));
+                persistent.insert(name, is_persistent);
             }
         }
         Ok(Self {
             declared,
+            persistent,
+            config_directory,
             state: Arc::new(Mutex::new(State {
                 running: HashMap::new(),
                 owners: HashMap::new(),
@@ -317,27 +403,28 @@ impl<O: Owner> Sidecars<O> {
             line.push(b'\n');
 
             // 채널 전송을 시도할 프로세스들을 먼저 수집한다 (borrow 충돌 방지).
-            let processes: Vec<(String, bool)> = state
+            let processes: Vec<(String, Result<(), TrySendError<Outgoing>>)> = state
                 .running
                 .iter()
                 .map(|(name, process)| {
-                    let sent = process
-                        .outbox
-                        .try_send(Outgoing::Line(line.clone()))
-                        .is_ok();
-                    (name.clone(), sent)
+                    let result = process.outbox.try_send(Outgoing::Line(line.clone()));
+                    (name.clone(), result)
                 })
                 .collect();
 
-            // 전송 실패한 항목들을 버퍼링한다.
-            for (name, sent) in processes {
-                if !sent {
-                    state
-                        .pending_closes
-                        .entry(name.clone())
-                        .or_insert_with(HashMap::new)
-                        .insert(surface.clone(), line.clone());
-                    eprintln!("sidecar {name}: close {surface}: outbox full, buffered");
+            // 큐가 가득 찬 항목만 순서대로 버퍼링한다. 연결이 끊긴 항목은 실패를 보고한다.
+            for (name, result) in processes {
+                if let Err(error) = result {
+                    if matches!(error, TrySendError::Full(_)) {
+                        state
+                            .pending_closes
+                            .entry(name.clone())
+                            .or_insert_with(Vec::new)
+                            .push(line.clone());
+                        eprintln!("sidecar {name}: close {surface}: outbox full, buffered");
+                    } else {
+                        eprintln!("sidecar {name}: close {surface}: outbox disconnected");
+                    }
                 }
             }
         }
@@ -376,16 +463,19 @@ impl<O: Owner> Sidecars<O> {
         // 논블로킹으로 채널에 전송한다. 채널이 가득 차면 버퍼링한다.
         match process.outbox.try_send(Outgoing::Line(line.clone())) {
             Ok(()) => Ok(()),
-            Err(_) => {
-                // 채널이 가득 찼으므로 pending_replies 에 저장 (같은 surface:image 의 것을 교체)
-                let key = format!("{}:{}", surface, image);
+            Err(TrySendError::Full(_)) => {
+                // 채널이 가득 찼으므로 immutable 응답을 전송 순서대로 보관한다.
+                let key = format!("{}:{}:{}", surface, image, body.get());
                 state
                     .pending_replies
                     .entry(name.to_string())
-                    .or_insert_with(HashMap::new)
-                    .insert(key.clone(), line);
+                    .or_insert_with(Vec::new)
+                    .push(line);
                 eprintln!("sidecar {name}: response queue full, buffering {key}");
                 Ok(())
+            }
+            Err(TrySendError::Disconnected(_)) => {
+                Err(format!("sidecar {name} response channel is disconnected"))
             }
         }
     }
@@ -404,6 +494,67 @@ impl<O: Owner> Sidecars<O> {
         let mut handles = Vec::new();
         for (_name, process) in processes {
             let handle = thread::spawn(move || {
+                let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+                if process.child.is_none() {
+                    if let Some(persistent) = process.persistent {
+                        let request = format!("{}-close", std::process::id());
+                        let line = serde_json::json!({
+                            "op": "close-owner",
+                            "request": request,
+                        });
+                        let mut bytes = serde_json::to_vec(&line).unwrap_or_default();
+                        bytes.push(b'\n');
+                        let (tx, rx) = sync_channel(1);
+                        persistent
+                            .close_waiters
+                            .lock()
+                            .expect("close waiters")
+                            .insert(request, tx);
+                        let _ = process.outbox.send(Outgoing::Line(bytes));
+                        let result = rx.recv_timeout(remaining);
+                        match result {
+                            Ok(Ok(())) => {
+                                let shutdown_request = format!("{}-shutdown", std::process::id());
+                                let shutdown_line = serde_json::json!({
+                                    "op": "shutdown",
+                                    "request": shutdown_request,
+                                });
+                                let mut shutdown_bytes = serde_json::to_vec(&shutdown_line)
+                                    .expect("shutdown request serialization cannot fail");
+                                shutdown_bytes.push(b'\n');
+                                let (shutdown_tx, shutdown_rx) = sync_channel(1);
+                                persistent
+                                    .shutdown_waiters
+                                    .lock()
+                                    .expect("shutdown waiters")
+                                    .insert(shutdown_request, shutdown_tx);
+                                if let Err(error) =
+                                    process.outbox.send(Outgoing::Line(shutdown_bytes))
+                                {
+                                    eprintln!("sidecar: send shutdown: {error}");
+                                } else {
+                                    let shutdown_remaining = deadline
+                                        .saturating_duration_since(std::time::Instant::now());
+                                    match shutdown_rx.recv_timeout(shutdown_remaining) {
+                                        Ok(Ok(())) => {}
+                                        Ok(Err(error)) => {
+                                            eprintln!("sidecar: shutdown: {error}");
+                                        }
+                                        Err(error) => {
+                                            eprintln!("sidecar: shutdown wait: {error}");
+                                        }
+                                    }
+                                }
+                            }
+                            Ok(Err(error)) => eprintln!("sidecar: close owner: {error}"),
+                            Err(error) => eprintln!("sidecar: close owner wait: {error}"),
+                        }
+                        if let Err(error) = process.outbox.send(Outgoing::Close) {
+                            eprintln!("sidecar: close persistent transport: {error}");
+                        }
+                    }
+                    return;
+                }
                 // Close 신호를 보낸다. 쓰기 스레드가 이를 받으면 블로킹 루프를 빠져나가고 stdin을 close한다.
                 match process.outbox.try_send(Outgoing::Close) {
                     Ok(()) => {}
@@ -422,8 +573,9 @@ impl<O: Owner> Sidecars<O> {
                     }
                 }
 
-                let mut child = process.child;
-                let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+                let Some(mut child) = process.child else {
+                    return;
+                };
 
                 // wait-timeout 크레이트를 사용하여 SIGCHLD 기반 대기 (폴링 없음)
                 match child.wait_timeout(remaining) {
@@ -462,6 +614,9 @@ impl<O: Owner> Sidecars<O> {
             .declared
             .get(name)
             .ok_or_else(|| format!("sidecar {name} is not declared by any plugin"))?;
+        if *self.persistent.get(name).unwrap_or(&false) {
+            return self.start_persistent(name, program);
+        }
         let mut child = Command::new(program)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -575,7 +730,306 @@ impl<O: Owner> Sidecars<O> {
             }
         });
 
-        Ok(Process { child, outbox: tx })
+        Ok(Process {
+            child: Some(child),
+            outbox: tx,
+            persistent: None,
+        })
+    }
+
+    fn start_persistent(&self, name: &str, program: &Path) -> Result<Process, String> {
+        #[derive(Deserialize)]
+        struct Endpoint {
+            protocol: u64,
+            pid: u32,
+            socket: String,
+            token: String,
+        }
+
+        let config = &self.config_directory;
+        let basename = program
+            .file_name()
+            .and_then(|value| value.to_str())
+            .filter(|value| !value.is_empty() && *value != "." && *value != "..")
+            .ok_or_else(|| format!("sidecar {name}: executable has no valid basename"))?;
+        let service_dir = config.join("services").join(basename);
+        std::fs::create_dir_all(&service_dir)
+            .map_err(|e| format!("sidecar {name}: create service directory: {e}"))?;
+        current()?
+            .secure_service_directory(&service_dir)
+            .map_err(|e| format!("sidecar {name}: service directory permissions: {e}"))?;
+        let endpoint_path = service_dir.join("endpoint.json");
+
+        let mut child = None;
+        let endpoint: Endpoint = match std::fs::read(&endpoint_path) {
+            Ok(bytes) => {
+                let endpoint: Endpoint = serde_json::from_slice(&bytes)
+                    .map_err(|e| format!("sidecar {name}: invalid endpoint: {e}"))?;
+                if !service_process_exists(endpoint.pid) {
+                    std::fs::remove_file(&endpoint_path)
+                        .map_err(|e| format!("sidecar {name}: remove stale endpoint: {e}"))?;
+                    // Re-enter the one creation path. A stale endpoint is an
+                    // explicit crash-recovery case, not a fallback transport.
+                    return self.start_persistent(name, program);
+                }
+                endpoint
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                let mut command = Command::new(program);
+                command
+                    .arg("--service-dir")
+                    .arg(&service_dir)
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::inherit());
+                let mut spawned = command
+                    .spawn()
+                    .map_err(|e| format!("sidecar {name}: {}: {e}", program.display()))?;
+                let stdout = spawned
+                    .stdout
+                    .take()
+                    .ok_or("persistent service stdout is missing")?;
+                let mut reader = BufReader::new(stdout);
+                let mut line = String::new();
+                reader
+                    .read_line(&mut line)
+                    .map_err(|e| format!("sidecar {name}: service startup: {e}"))?;
+                if line.is_empty() {
+                    return Err(format!("sidecar {name}: service exited before endpoint"));
+                }
+                let endpoint: Endpoint = serde_json::from_str(&line)
+                    .map_err(|e| format!("sidecar {name}: service endpoint: {e}"))?;
+                child = Some(spawned);
+                endpoint
+            }
+            Err(error) => {
+                return Err(format!("sidecar {name}: read endpoint: {error}"));
+            }
+        };
+        if endpoint.protocol != 1 {
+            return Err(format!(
+                "sidecar {name}: service protocol {} is not supported",
+                endpoint.protocol
+            ));
+        }
+        if endpoint.socket.is_empty() || endpoint.token.is_empty() || endpoint.pid == 0 {
+            return Err(format!("sidecar {name}: service endpoint is incomplete"));
+        }
+        let mut stream = current()?
+            .connect_service(&endpoint.socket)
+            .map_err(|e| format!("sidecar {name}: connect authenticated service: {e}"))?;
+        let hello = serde_json::json!({
+            "op": "hello",
+            "protocol": 1,
+            "token": endpoint.token.clone(),
+            "client": service_dir.to_string_lossy(),
+        });
+        let mut line = serde_json::to_vec(&hello).map_err(|e| e.to_string())?;
+        line.push(b'\n');
+        stream
+            .write_all(&line)
+            .map_err(|e| format!("sidecar {name}: hello: {e}"))?;
+        stream
+            .flush()
+            .map_err(|e| format!("sidecar {name}: hello flush: {e}"))?;
+        let mut response = String::new();
+        let response_stream = stream.try_clone().map_err(|e| e.to_string())?;
+        let mut response_reader = BufReader::new(response_stream);
+        response_reader
+            .read_line(&mut response)
+            .map_err(|e| format!("sidecar {name}: hello response: {e}"))?;
+        let response: serde_json::Value = serde_json::from_str(&response)
+            .map_err(|e| format!("sidecar {name}: hello response: {e}"))?;
+        if response.get("op").and_then(|v| v.as_str()) != Some("hello") {
+            return Err(format!(
+                "sidecar {name}: authentication handshake failed: invalid hello response"
+            ));
+        }
+        if response.get("ok").and_then(|v| v.as_bool()) != Some(true) {
+            let reason = response
+                .get("error")
+                .and_then(|v| v.as_str())
+                .unwrap_or("invalid hello response");
+            return Err(format!(
+                "sidecar {name}: authentication handshake failed: {reason}"
+            ));
+        }
+        if response.get("protocol").and_then(|v| v.as_u64()) != Some(1) {
+            return Err(format!(
+                "sidecar {name}: service protocol mismatch in hello response"
+            ));
+        }
+
+        let reader_stream = response_reader.into_inner();
+        let (tx, rx) = sync_channel::<Outgoing>(256);
+        let close_waiters: Arc<Mutex<HashMap<String, SyncSender<Result<(), String>>>>> =
+            Arc::new(Mutex::new(HashMap::new()));
+        let shutdown_waiters: Arc<Mutex<HashMap<String, SyncSender<Result<(), String>>>>> =
+            Arc::new(Mutex::new(HashMap::new()));
+        let write_name = name.to_string();
+        let write_state = Arc::clone(&self.state);
+        let writer = stream;
+        thread::spawn(move || {
+            let mut writer = writer;
+            loop {
+                loop {
+                    match rx.try_recv() {
+                        Ok(Outgoing::Line(line)) => {
+                            if !write_socket_line(&mut *writer, &write_name, &line) {
+                                return;
+                            }
+                        }
+                        Ok(Outgoing::Close) | Err(TryRecvError::Disconnected) => {
+                            let _ = write_pending_socket(&write_state, &write_name, &mut *writer);
+                            let _ = writer.shutdown();
+                            return;
+                        }
+                        Err(TryRecvError::Empty) => break,
+                    }
+                }
+                if !write_pending_socket(&write_state, &write_name, &mut *writer) {
+                    return;
+                }
+                match rx.recv() {
+                    Ok(Outgoing::Line(line)) => {
+                        if !write_socket_line(&mut *writer, &write_name, &line) {
+                            return;
+                        }
+                    }
+                    Ok(Outgoing::Close) | Err(RecvError) => {
+                        let _ = write_pending_socket(&write_state, &write_name, &mut *writer);
+                        let _ = writer.shutdown();
+                        return;
+                    }
+                }
+            }
+        });
+
+        let state = Arc::clone(&self.state);
+        let sidecar = name.to_string();
+        let waiters = Arc::clone(&close_waiters);
+        let shutdown_waiters_for_reader = Arc::clone(&shutdown_waiters);
+        let tx_clone = tx.clone();
+        thread::spawn(move || {
+            let mut reader = BufReader::new(reader_stream);
+            let mut line = String::new();
+            while reader.read_line(&mut line).unwrap_or(0) != 0 {
+                let value: serde_json::Value = match serde_json::from_str(&line) {
+                    Ok(v) => v,
+                    Err(_) => {
+                        line.clear();
+                        continue;
+                    }
+                };
+                if value.get("op").and_then(|v| v.as_str()) == Some("closed-owner") {
+                    if let Some(request) = value.get("request").and_then(|v| v.as_str()) {
+                        if let Some(sender) = waiters.lock().expect("close waiters").remove(request)
+                        {
+                            let result = if value.get("ok").and_then(|v| v.as_bool()) == Some(true)
+                            {
+                                Ok(())
+                            } else {
+                                Err(value
+                                    .get("error")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("close-owner failed")
+                                    .to_string())
+                            };
+                            let _ = sender.send(result);
+                        }
+                    }
+                    line.clear();
+                    continue;
+                }
+                if value.get("op").and_then(|v| v.as_str()) == Some("shutdown") {
+                    if let Some(request) = value.get("request").and_then(|v| v.as_str()) {
+                        if let Some(sender) = shutdown_waiters_for_reader
+                            .lock()
+                            .expect("shutdown waiters")
+                            .remove(request)
+                        {
+                            let result = if value.get("ok").and_then(|v| v.as_bool()) == Some(true)
+                            {
+                                Ok(())
+                            } else {
+                                Err(value
+                                    .get("error")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("shutdown failed")
+                                    .to_string())
+                            };
+                            let _ = sender.send(result);
+                        }
+                    }
+                    line.clear();
+                    continue;
+                }
+                let event: Event = match serde_json::from_value(value) {
+                    Ok(event) => event,
+                    Err(_) => {
+                        line.clear();
+                        continue;
+                    }
+                };
+                let owner = state
+                    .lock()
+                    .ok()
+                    .and_then(|state| state.owners.get(&event.surface).cloned());
+                if let Some(owner) = owner {
+                    let response_sender = ReadThreadResponseSender {
+                        sidecar_name: sidecar.clone(),
+                        tx: tx_clone.clone(),
+                        state: Arc::clone(&state),
+                    };
+                    if try_handle_image_envelope(
+                        &owner,
+                        &sidecar,
+                        &event.surface,
+                        &event.body,
+                        &response_sender,
+                    ) {
+                        line.clear();
+                        continue;
+                    }
+                    owner.deliver(Message {
+                        sidecar: sidecar.clone(),
+                        surface: event.surface,
+                        body: event.body,
+                    });
+                }
+                line.clear();
+            }
+            if let Ok(mut state) = state.lock() {
+                state.running.remove(&sidecar);
+            }
+            let close_error =
+                Err("persistent service disconnected before close-owner ack".to_string());
+            for (_, sender) in waiters.lock().expect("close waiters").drain() {
+                if sender.send(close_error.clone()).is_err() {
+                    eprintln!("sidecar {sidecar}: close waiter disconnected");
+                }
+            }
+            let error = Err("persistent service disconnected before shutdown ack".to_string());
+            for (_, sender) in shutdown_waiters_for_reader
+                .lock()
+                .expect("shutdown waiters")
+                .drain()
+            {
+                if sender.send(error.clone()).is_err() {
+                    eprintln!("sidecar {sidecar}: shutdown waiter disconnected");
+                }
+            }
+        });
+        // The bootstrap child must not be waited on or killed by application shutdown.
+        drop(child);
+        Ok(Process {
+            child: None,
+            outbox: tx,
+            persistent: Some(PersistentConnection {
+                close_waiters,
+                shutdown_waiters,
+            }),
+        })
     }
 }
 
