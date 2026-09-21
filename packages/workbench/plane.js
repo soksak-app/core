@@ -587,8 +587,13 @@ function openLayer(anchor, ask, items, pick, align = "right") {
   }
   document.addEventListener("pointerdown", onPickerOutside, true);
   document.addEventListener("keydown", onPickerKey, true);
-  (pickerEl.querySelector('.picker__item[data-active=true]') ??
-   pickerEl.querySelector(".picker__item"))?.focus();
+  // A native picker has its own WebView and receives focus when it reports ready.
+  // Focusing the now-hidden DOM item here would return the first responder to the
+  // main WebView and drop Escape before the native picker can close.
+  if (!native) {
+    (pickerEl.querySelector('.picker__item[data-active=true]') ??
+     pickerEl.querySelector(".picker__item"))?.focus();
+  }
 }
 
 function closePicker() {
