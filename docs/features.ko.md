@@ -25,6 +25,7 @@
   - [o] macOS native library: DOM/native 경계·입력·포커스·스크롤·모달 overlay·문서 이동·클립보드·캡처·IME·픽셀 배율 표면 동작을 검증했다. `make -C native/darwin test` 통과; 커밋 `98b58e5`.
   - [o] 사용하지 않는 pty daemon 제거: VT 영속 service 검증 후 폐기된 `sidecars/ptyd` 구현과 workspace/package 참조를 삭제했다. shell·Wails Go 모듈 검사가 통과했고 `go list -m all`에 ptyd 모듈이 없음을 확인했다. 생성 build 산출물은 workspace 밖으로 이동했다; 커밋 `a180184`.
   - [o] Files plugin manifest 계약: 삭제된 page 항목 대신 surface module 발행을 검사하도록 갱신했다. `pnpm test` 3개 통과; 커밋 `38acaf7`.
+  - [o] Exposure/parity 감사 진입점: 모듈 노출 탐색을 갱신하고 F1.3 parity track을 등록했다. exposure·parity script가 통과했으며 구조적 근거만 제공한다; 커밋 `f0a02a2`.
 - [ ] F1.3-1 — P0: 약화한 드래그 기준과 과장한 F1.3 근거를 바로잡는다. 누른 채 연속 왕복 5회를 복원한다. 최초 Wails Red는 끝점 전환 11개 대신 7개를 관측했다. 독립된 1왕복 녹화 18회는 그 실패를 해결하지 않는다. 셸 흰 잔상·터미널 세션 식별자·미사용 공간·양쪽 폭 한계·네이티브 보더 경계·연속 입력/표시/캡처를 각각 직접 단언한 뒤 해당 결과를 보고한다.
 - [ ] G1.3-1 — P0: 체크리스트의 모든 완료 주장을 실제 단언과 현재 근거에 대조한다. 누락·부족·과장 근거는 후속 ID로 등록하고 기존 항목은 보존하되 무효 주장의 범위를 명시한다. 발견 위치·규칙·영향·담당 역할·수정·Red/Green 근거를 이 체크리스트에 기록한다.
 - [ ] G1.4-1 — P0: 코어·플러그인·사이드카·킷·스펙·계약·애플리케이션의 독립 소유권을 강제한다. 전체 파일을 기계적으로 목록화하고 다른 소유자의 구현 import·private 소스 열람·내부 경로·잘못된 테스트 귀속을 거부한다. 공개 계약 앱 인수 검사는 각 구성요소 구현 테스트와 구분하며 의존성 선언이 private 접근을 허용하지 않는다.
