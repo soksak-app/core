@@ -52,3 +52,11 @@ test("generated exclusions are explicit and do not exclude another package's dis
   assert.equal(result.generated.length, 1);
   assert.match(result.generated[0].reason, /make verify/);
 });
+
+test("inventory reports uncovered implementations and tests as separate results", { timeout: 1000 }, () => {
+  const result = auditInventory(["orphan.js", "orphan.test.mjs"], []);
+  assert.deepEqual(result.uncoveredImplementations, [{ file: "orphan.js", language: "js-ts" }]);
+  assert.deepEqual(result.uncoveredTests, [{ file: "orphan.test.mjs", language: "js-ts" }]);
+  assert.ok(result.errors.some((error) => error.includes("orphan.js")));
+  assert.ok(result.errors.some((error) => error.includes("orphan.test.mjs")));
+});

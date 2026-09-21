@@ -216,22 +216,47 @@ export function auditInventory(files, matrix = MATRIX) {
   }
 
   const inventory = discoverInventory(files);
-  for (const { file, language } of inventory.implementations) {
-    if (!implementationOwners.has(file)) errors.push(`${file} [${language}]: implementation is not claimed by the test inventory`);
+  const uncoveredImplementations = inventory.implementations.filter(({ file }) => !implementationOwners.has(file));
+  const uncoveredTests = inventory.tests.filter(({ file }) => !testOwners.has(file));
+  for (const { file, language } of uncoveredImplementations) {
+    errors.push(`${file} [${language}]: implementation is not claimed by the test inventory`);
   }
-  for (const { file, language } of inventory.tests) {
-    if (!testOwners.has(file)) errors.push(`${file} [${language}]: test is not claimed by the test inventory`);
+  for (const { file, language } of uncoveredTests) {
+    errors.push(`${file} [${language}]: test is not claimed by the test inventory`);
   }
 
-  return { errors, warnings, inventory, trackCount: matrix.length, implementationCount: implementationOwners.size, testCount: testOwners.size };
+  return {
+    errors,
+    warnings,
+    inventory,
+    uncoveredImplementations,
+    uncoveredTests,
+    trackCount: matrix.length,
+    implementationCount: implementationOwners.size,
+    testCount: testOwners.size,
+  };
 }
 
 export { MATRIX, repositoryFiles };
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
-  const { errors, warnings, trackCount, implementationCount, testCount } = auditInventory(repositoryFiles());
+  const { errors, warnings, uncoveredImplementations, uncoveredTests, trackCount, implementationCount, testCount } = auditInventory(repositoryFiles());
   if (errors.length) {
-    console.error(`Test inventory checks failed: ${errors.length} issue(s)`);
+    console.error(`Test inventory checks failed: ${errors.length} issue(s); ` +
+      `${uncoveredImplementations.length} uncovered implementation(s), ${uncoveredTests.length} uncovered test(s)`);
+    if (uncoveredImplementations.length) {
+      console.error('Uncovered implementations:');
+      for (const { file, language } of uncoveredImplementations.sort((a, b) => a.file.localeCompare(b.file))) {
+        console.error(`- ${file} [${language}]`);
+      }
+    }
+    if (uncoveredTests.length) {
+      console.error('Uncovered tests:');
+      for (const { file, language } of uncoveredTests.sort((a, b) => a.file.localeCompare(b.file))) {
+        console.error(`- ${file} [${language}]`);
+      }
+    }
+    console.error('All audit errors:');
     for (const error of [...new Set(errors)].sort()) console.error(`- ${error}`);
     process.exitCode = 1;
   } else console.log(`Test inventory checks passed: ${trackCount} tracks, ${implementationCount} implementation files, ${testCount} test files. Structural evidence only; behavior was not executed.`);
