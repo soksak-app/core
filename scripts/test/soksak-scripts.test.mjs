@@ -95,3 +95,34 @@ test("DOM declaration emitter is idempotent and preserves the declaration", { ti
   assert.equal(second.code, 0, second.stderr);
   assert.equal(await readFile(join(dist, "dom.d.ts"), "utf8"), expected);
 });
+
+test("boundary audit reports a clean component graph", { timeout: 5000 }, async () => {
+  const result = await run(node, [join(root, "scripts/check-boundaries.mjs")]);
+  assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);
+  assert.match(result.stdout, /Boundary checks passed:/);
+});
+
+test("window-source audit rejects forbidden control paths", { timeout: 5000 }, async () => {
+  const result = await run(node, [join(root, "scripts/check-e2e.mjs")]);
+  assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);
+  assert.match(result.stdout, /Window check sources use only the endpoint/);
+});
+
+test("exposure audit verifies every declared core and plugin entry", { timeout: 5000 }, async () => {
+  const result = await run(node, [join(root, "scripts/check-exposure.mjs")]);
+  assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);
+  assert.match(result.stdout, /Exposure checks passed: core and \d+ plugins/);
+});
+
+test("sidecar package discovery follows declared helper edges", { timeout: 5000 }, async () => {
+  const result = await run(node, [join(root, "scripts/sidecar-packages.mjs")]);
+  assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);
+  assert.match(result.stdout, /-F @soksak\/sidecar-vt-alacritty/);
+  assert.match(result.stdout, /-F @soksak\/sidecar-shell/);
+});
+
+test("build environment audit reports the measured toolchain", { timeout: 5000 }, async () => {
+  const result = await run("sh", [join(root, "scripts/check-build-environment.sh")]);
+  assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);
+  assert.match(result.stdout, /BUILD_ENVIRONMENT_READY node=v\S+ pnpm=\S+ runtime=\S+\/\S+ lockSHA256=[a-f0-9]{64}/);
+});

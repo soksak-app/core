@@ -37,7 +37,16 @@ const MATRIX = [
     "packages/soksak/scripts/breaks.mjs",
     "packages/soksak/scripts/emit-dom-reference.mjs",
     "packages/soksak/scripts/fuzz.mjs",
-  ], ["scripts/test/soksak-scripts.test.mjs"]),
+  ], ["scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
+  lane("workspace audit scripts", "js-ts", [
+    "scripts/check-boundaries.mjs",
+    "scripts/check-e2e.mjs",
+    "scripts/check-exposure.mjs",
+    "scripts/sidecar-packages.mjs",
+  ], ["scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
+  lane("build environment audit", "shell", ["scripts/check-build-environment.sh"], ["scripts/test/soksak-scripts.test.mjs"], {
+    testLanguage: "js-ts", sharedTests: true,
+  }),
   lane("plugin API", "js-ts", ["packages/plugin-api/*.js"], ["packages/plugin-api/test/**/*.mjs"]),
   lane("workbench", "js-ts", ["packages/workbench/*.js", "packages/workbench/*.mjs"], ["packages/workbench/test/**/*.js", "packages/workbench/test/**/*.mjs"], { sharedTests: true }),
   lane("client", "js-ts", [
