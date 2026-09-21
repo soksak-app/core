@@ -75,7 +75,8 @@ for (const app of Object.values(APPS)) {
     await openCompositing(s);
     const { document } = await s.get("core.modal");
     assert.equal(document.filter, "none", "settings navigation must not copy the background blur into the dialog");
-    assert.equal(document.bodyBackground, "rgba(0, 0, 0, 0.5)", "settings navigation must preserve one 50% backdrop");
+    assert.equal(document.bodyBackground, "rgba(0, 0, 0, 0)", "the modal body must remain transparent");
+    assert.equal(document.scrimBackground, "rgba(0, 0, 0, 0.5)", "settings must draw one 50% scrim");
   });
 
   test(`${app.name}: a first modal answer that arrives after later changes keeps the moved position`, async (t) => {
@@ -164,8 +165,8 @@ for (const app of Object.values(APPS)) {
     assert.equal((await s.get("core.settings-modal")).open, true, "background clicks and Escape must not dismiss settings");
     settingsAboveSurfaces(await s.get("host.window"));
     const { document } = await s.get("core.modal");
-    assert.deepEqual([document.mode, document.htmlBackground, document.bodyBackground],
-      ["dialog", "rgba(0, 0, 0, 0)", "rgba(0, 0, 0, 0.5)"]);
+    assert.deepEqual([document.mode, document.htmlBackground, document.bodyBackground, document.scrimBackground],
+      ["dialog", "rgba(0, 0, 0, 0)", "rgba(0, 0, 0, 0)", "rgba(0, 0, 0, 0.5)"]);
 
     await s.act("core.settings-modal.close", "click");
     await s.until("host.window", (state) => state.modal === null, "settings did not close");

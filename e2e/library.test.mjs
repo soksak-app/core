@@ -1,6 +1,5 @@
 // 라이브러리 시작, 기존 OS 창 재사용, 폴더 생성과 작업 화면 복원을 검사한다.
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -8,6 +7,7 @@ import test from "node:test";
 
 import { APPS, failure, fresh, open } from "./app.mjs";
 import { frames, pixel, readFrame } from "./frame.mjs";
+import { terminalProcessSnapshot } from "./terminal-processes.mjs";
 
 /** 창 목록에서 known 에 없는 창 하나. */
 const added = (list, known) => list.find((w) => !known.includes(w.window)).window;
@@ -18,17 +18,20 @@ const shown = (s, count, message) => s.until("core.library", (library) => librar
 /** 프로젝트 저장이 끝날 때까지 기다린 뒤 이름이 id 인 프로젝트를 반환한다. */
 const project = async (s, id) => (await s.get("core.projects")).find((p) => p.id === id);
 
-/** 여러 terminal session이 공유하는 PTY daemon 수를 센다. */
-function ptydCount() {
-  return execFileSync("ps", ["-axo", "command"], { encoding: "utf8" })
-    .split("\n")
-    .filter((line) => /(?:^|\/)soksak-ptyd(?:\s|$)/.test(line)).length;
-}
-
 /** 라이브러리 명령이 내부에서 오류를 삼키고 화면만 전환한 상태를 통과시키지 않는다. */
 async function assertNoLibraryError(s, message) {
   const library = await s.get("core.library");
   assert.equal(library.error, null, `${message}: library reported ${library.error}`);
+}
+
+/** 실패 시 복귀 직후의 네이티브 상태를 정리 전에 보존한다. */
+async function returnProject(s, id, phase) {
+  try {
+    await s.run("core.library.open", { id });
+  } catch (error) {
+    const window = await s.get("host.window");
+    throw new Error(`${phase}: ${error.message}; native state: ${JSON.stringify(window)}`, { cause: error });
+  }
 }
 
 /** 프로젝트 복귀가 DOM 슬롯뿐 아니라 보이는 네이티브 그림 래스터까지 복원했는지 검사한다. */
@@ -101,6 +104,12 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
+    const verification = await s.collect("core.verify");
+    s.cleanup(async () => {
+      const failed = (await verification.stop()).filter((value) => value?.rows?.some((row) =>
+        row.name === "Surface presentation" && !row.ok));
+      assert.deepEqual(failed, [], "the library workflow reported a presentation error before recovering");
+    });
     const temporary = realpathSync(mkdtempSync(join(tmpdir(), "soksak-library-")));
     // 폴더 삭제는 앱 정리와 별개로 가장 마지막에 실행한다(정리는 등록의 역순).
     s.cleanup(() => rmSync(temporary, { recursive: true, force: true }));
@@ -120,7 +129,6 @@ for (const app of Object.values(APPS)) {
     const grid = await s.until("core.grid", (value) => value?.cards?.length > 0, "the project grid did not render");
     const geometry = grid.cards.map(({ id, x, y, w, h }) => ({ id, x, y, w, h }));
     const first = await s.get("core.project");
-    const ptydBefore = ptydCount();
     await s.run("core.settings.set", { patch: { projectOpening: "windows" }, scope: "common" });
     await s.run("core.projects.browse");
     assert.equal((await s.get("core.screen")).screen, "library");
@@ -147,7 +155,7 @@ for (const app of Object.values(APPS)) {
     const space = saved.spaces.find((x) => x.id === saved.activeSpaceId);
     assert.equal("preview" in space.layout, false, "screen state must not store renderer coordinates for previews");
 
-    await s.run("core.library.open", { id: first.id });
+    await returnProject(s, first.id, "preview project return");
     await s.until("core.screen", (screen) => screen.screen === "workspace", "the project did not reopen after the preview check");
     await assertNoLibraryError(s, "the preview project return");
     // 세 개의 보이는 터미널을 만든 뒤 라이브러리로 나갔다가 같은 프로젝트로 돌아온다.
@@ -175,11 +183,13 @@ for (const app of Object.values(APPS)) {
     }
     await s.until("core.surfaces", (surfaces) => surfaces.filter((item) => item.visible && item.plugin === "terminal").length >= 3,
       "three visible terminal surfaces did not render");
-    const ptydAtThree = ptydCount();
-    assert.ok(ptydAtThree <= ptydBefore + 1,
-      `creating three terminal surfaces started too many ptyd processes: before=${ptydBefore}, after=${ptydAtThree}`);
     await s.presented();
     await assertVisibleTerminalRasters(s, 3, "before leaving the project");
+    const processesAtThree = terminalProcessSnapshot(app.configDir);
+    const terminalTabs = (await s.get("core.grid")).cards.flatMap((card) => card.tabs)
+      .filter((tab) => tab.plugin === "terminal");
+    assert.equal(processesAtThree.shells.length, terminalTabs.length,
+      "every open terminal owns one shell in the shared service, including hidden tabs");
     const capture = await s.request("diagnostics.capture.start", {});
     let captureActive = true;
     s.cleanup(async () => {
@@ -189,7 +199,7 @@ for (const app of Object.values(APPS)) {
     });
     await s.run("core.projects.browse");
     await s.until("core.screen", (screen) => screen.screen === "library", "the project did not enter the library");
-    await s.run("core.library.open", { id: first.id });
+    await returnProject(s, first.id, "three-terminal project return");
     await s.until("core.screen", (screen) => screen.screen === "workspace", "the project did not return from the library");
     await assertNoLibraryError(s, "the measured project return");
     const stopped = await s.request("diagnostics.capture.stop", { after: 0 });
@@ -207,8 +217,8 @@ for (const app of Object.values(APPS)) {
     rmSync(stopped.frames, { recursive: true, force: true });
     await assertVisibleTerminalRasters(s, 3, "immediately after returning to the project");
     await assertNoOrphanNativeSurfaces(s, "immediately after returning to the project");
-    assert.equal(ptydCount(), ptydAtThree,
-      `project return created additional ptyd processes: before return=${ptydAtThree}, after return=${ptydCount()}`);
+    assert.deepEqual(terminalProcessSnapshot(app.configDir), processesAtThree,
+      "project return must retain the same service and shell PIDs without creating sessions");
 
     await s.run("core.window.new");
     const two = await s.windows(2, "new OS window was not created");

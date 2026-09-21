@@ -4,8 +4,11 @@ import assert from "node:assert/strict";
 import { rmSync } from "node:fs";
 import test from "node:test";
 
-import { APPS, drag, fresh, open } from "./app.mjs";
+import { APPS, drag, fresh, open, within } from "./app.mjs";
 import { frames, pixel, readFrame } from "./frame.mjs";
+import { glyphShape, surfaceBoxes, whitePixels } from "./outside.mjs";
+import { assertRoundTrips } from "./drag-measurement.mjs";
+import { terminalProcessSnapshot } from "./terminal-processes.mjs";
 
 
 function textLines(screen) {
@@ -14,32 +17,6 @@ function textLines(screen) {
     assert.ok(Number.isInteger(cell.width) && cell.width >= 0, "cell width is required");
     return cell.ch === undefined ? " ".repeat(cell.width) : cell.ch;
   }).join("").trimEnd());
-}
-
-function assertNoWhiteNativeStripe(frameFiles, regions) {
-  for (const file of frameFiles) {
-    const frame = readFrame(file);
-    for (const region of regions) {
-      const x0 = Math.max(0, Math.floor(region.x));
-      const x1 = Math.min(frame.width, Math.ceil(region.x + region.width));
-      const y0 = Math.max(0, Math.floor(region.y + 36));
-      const y1 = Math.min(frame.height, Math.ceil(region.y + region.height - 24));
-      if (x1 <= x0 || y1 <= y0) continue;
-      for (let x = x0; x < x1; x++) {
-        let bright = 0;
-        let samples = 0;
-        for (let y = y0; y < y1; y += 2) {
-          const [r, g, b] = pixel(frame, x, y);
-          samples++;
-          if (r >= 245 && g >= 245 && b >= 245) bright++;
-        }
-        assert.ok(
-          samples === 0 || bright / samples < 0.7,
-          `white native stripe in ${file} at x=${x}: ${(bright / samples * 100).toFixed(1)}%`
-        );
-      }
-    }
-  }
 }
 
 async function readScreenUntil(session, surface, predicate, message) {
@@ -51,6 +28,20 @@ async function readScreenUntil(session, surface, predicate, message) {
 }
 
 async function ensureTerminals(session, count) {
+  // The fixture starts with the shell tab active. Select the declared terminal
+  // before measuring visible native terminal surfaces; waiting for an inactive
+  // tab would turn a test setup mistake into a false runtime failure.
+  const initialGrid = await session.get("core.grid");
+  const terminalTab = initialGrid.cards.flatMap((card) => card.tabs)
+    .find((tab) => tab.plugin === "terminal");
+  assert.ok(terminalTab, "the fixture has no terminal tab");
+  const owner = initialGrid.cards.find((card) => card.tabs.some((tab) => tab.id === terminalTab.id));
+  if (owner?.active !== terminalTab.id) await session.run("core.tab.select", { tab: terminalTab.id });
+  await session.until(
+    "core.surfaces",
+    (surfaces) => surfaces.some((item) => item.visible && item.plugin === "terminal"),
+    "the fixture terminal did not register before splitting",
+  );
   let terminals = (await session.surfaces("terminal")).length;
   while (terminals < count) {
     const grid = await session.get("core.grid");
@@ -91,6 +82,79 @@ async function assertGridFillsPlane(session, message) {
 }
 
 for (const app of Object.values(APPS)) {
+  test(`${app.name}: three terminals and two browsers share one app DOM and one terminal service`, async (t) => {
+    const s = await open(t, app);
+    assert.ok(s, `${app.binary} is not built`);
+    await fresh(s);
+    const initial = await s.get("core.grid");
+    const tab = initial.cards.flatMap((card) => card.tabs).find((tab) => tab.plugin === "terminal");
+    assert.ok(tab, "the fixture must contain a terminal tab");
+    await s.run("core.tab.select", { tab: tab.id });
+    const terminals = await ensureTerminals(s, 3);
+    const browser = (await s.get("core.grid")).cards.find((card) =>
+      card.tabs.find((tab) => tab.id === card.active)?.plugin === "browser");
+    assert.ok(browser, "the fixture must contain a visible browser card");
+    await s.run("core.card.split", { card: browser.id, axis: "x", plugin: "browser" });
+    await s.until("core.surfaces", (surfaces) => surfaces.filter((item) =>
+      item.visible && item.plugin === "browser").length === 2, "two browsers did not become visible");
+    for (const terminal of terminals) {
+      await s.until("terminal.session", (state) => Boolean(state.sessionId),
+        `session ${terminal.surface} did not open`, { surface: terminal.surface });
+    }
+    await s.presented();
+    const window = await s.get("host.window");
+    assert.equal(window.appDomWebviews, 1, "all plugin DOM must share the window's single app WebView");
+    assert.equal(window.documentWebviews, 2, "external browser documents must have independent native WebViews");
+    const processes = terminalProcessSnapshot(app.configDir);
+    assert.equal(processes.shells.length, 3, "three independent terminals must own three shells, not three daemons");
+    const sessions = await Promise.all(terminals.map(async ({ surface }) =>
+      [surface, (await s.get("terminal.session", surface)).sessionId]));
+    assert.equal(new Set(sessions.map(([, id]) => id)).size, 3, "terminals must not share a PTY session");
+    const project = await s.get("core.project");
+    for (let round = 0; round < 3; round++) {
+      await s.run("core.projects.browse");
+      await s.run("core.library.open", { id: project.id });
+      const returned = await s.get("host.window");
+      assert.equal(returned.appDomWebviews, 1, `return ${round} created an extra app WebView`);
+      assert.equal(returned.documentWebviews, 2, `return ${round} duplicated or lost a browser document`);
+      assert.deepEqual(terminalProcessSnapshot(app.configDir), processes,
+        `return ${round} changed the service or shell processes`);
+      for (const [surface, sessionId] of sessions) {
+        assert.equal((await s.get("terminal.session", surface)).sessionId, sessionId,
+          `return ${round} replaced terminal session ${surface}`);
+        const region = returned.regions.find((region) => region.surface === surface);
+        assert.ok(region?.visible && region.presented,
+          `return ${round} failed to immediately restore terminal ${surface}`);
+      }
+    }
+  });
+
+  test(`${app.name}: closing terminal tabs reaps every PTY child without killing the shared service`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const grid = await s.get("core.grid");
+    const tab = grid.cards.flatMap((card) => card.tabs).find((item) => item.plugin === "terminal");
+    assert.ok(tab, "the fixture must contain a terminal tab");
+    await s.run("core.tab.select", { tab: tab.id });
+    const terminals = await ensureTerminals(s, 3);
+    assert.equal(terminals.length, 3, "the close test requires three terminal sessions");
+    await s.presented();
+
+    const before = terminalProcessSnapshot(app.configDir);
+    assert.equal(before.shells.length, 3, "three open terminal sessions must own three PTY children");
+
+    await closeTerminalTabs(s);
+    await s.until(
+      "core.surfaces",
+      (surfaces) => surfaces.every((surface) => surface.plugin !== "terminal"),
+      "terminal surfaces did not close",
+    );
+    const after = terminalProcessSnapshot(app.configDir);
+    assert.equal(after.service, before.service, "closing tabs must not recreate the shared terminal service");
+    assert.deepEqual(after.shells, [], "normal terminal close must reap every PTY child");
+  });
+
   test(`${app.name}: native keyboard edits and executes independently in three terminals`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);
@@ -136,6 +200,140 @@ for (const app of Object.values(APPS)) {
     }
   });
 
+  test(`${app.name}: hiding three terminals retains native geometry and rasters`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const tab = (await s.get("core.grid")).cards.flatMap((card) => card.tabs).find((tab) => tab.plugin === "terminal");
+    assert.ok(tab, "the fixture has no terminal tab");
+    await s.run("core.tab.select", { tab: tab.id });
+    const terminals = await ensureTerminals(s, 3);
+    await s.presented();
+    const before = await s.get("host.window");
+    for (const terminal of terminals) {
+      const image = before.regions.find((region) => region.surface === terminal.surface);
+      assert.ok(image?.visible && image.presented && image.frame.width > 0 && image.frame.height > 0,
+        `${terminal.surface} must be displayed before hiding`);
+    }
+    await s.run("core.projects.browse");
+    const after = await s.get("host.window");
+    for (const terminal of terminals) {
+      const shown = before.regions.find((region) => region.surface === terminal.surface);
+      const hidden = after.regions.find((region) => region.surface === terminal.surface);
+      assert.ok(hidden && !hidden.visible, `${terminal.surface} did not hide`);
+      assert.deepEqual(hidden.frame, shown.frame, `hiding ${terminal.surface} changed its native frame`);
+      assert.deepEqual(hidden.presented, shown.presented, `hiding ${terminal.surface} changed its raster`);
+    }
+  });
+
+  test(`${app.name}: three terminals survive repeated divider drags and project returns`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const grid = await s.get("core.grid");
+    const tab = grid.cards.flatMap((card) => card.tabs).find((tab) => tab.plugin === "terminal");
+    assert.ok(tab, "the fixture has no terminal tab");
+    await s.run("core.tab.select", { tab: tab.id });
+    const terminals = await ensureTerminals(s, 3);
+    const project = await s.get("core.project");
+    const cards = (await s.get("core.grid")).cards.filter((card) =>
+      terminals.some((terminal) => terminal.surface === card.active)).sort((a, b) => a.x - b.x);
+    assert.equal(cards.length, 3, "the test requires three visible terminal cards");
+    for (const terminal of terminals) {
+      await readScreenUntil(s, terminal.surface,
+        (lines) => lines.some((line) => line.includes("$")),
+        `${terminal.surface} must show a shell prompt before divider capture`);
+    }
+    await s.presented();
+    const terminalY = (await s.rect("terminal.view", undefined, terminals[0].surface)).y;
+    const checks = await s.collect("core.verify");
+    s.cleanup(() => checks.stop());
+    const returnSets = 3;
+    const roundTripsPerSet = 5;
+    const roundTimeout = 60000;
+    for (let set = 0; set < returnSets; set++) {
+      const roundLabel = `set ${set + 1}/${returnSets}, ${roundTripsPerSet} uninterrupted round trips`;
+      const started = Date.now();
+      t.diagnostic(`${app.name}: START ${roundLabel}`);
+      await within((async () => {
+      const result = await drag(t, s, {
+        axis: "x", line: cards[0].c1, dx: 500, dy: 0, ms: 96, times: roundTripsPerSet,
+      }, { capture: true });
+      const edgeWidths = [];
+      const positions = frames(result.frameDir).map((file, index) => {
+        const frame = readFrame(file);
+        let boxes;
+        try {
+          boxes = surfaceBoxes(frame, [30, 30, 30], { expectedRow: terminalY }).sort((a, b) => a.card.l - b.card.l);
+        } catch (error) {
+          throw new Error(`set ${set}, frame ${index} could not measure terminal boxes: ${file}`, { cause: error });
+        }
+        const terminalBoxes = boxes.filter((box) =>
+          Math.abs(box.row / frame.scale - terminalY) <= 5);
+        assert.equal(terminalBoxes.length, 3,
+          `set ${set}, frame ${index}: every terminal must remain visible; ` +
+          `terminalY=${terminalY}, rows=${boxes.map((box) => box.row / frame.scale).join(",")}, file=${file}`);
+        for (const box of terminalBoxes) {
+          assert.ok(box.l > box.card.l && box.r - 1 < box.card.r,
+            `set ${set}, frame ${index}: terminal crosses its DOM border`);
+          assert.equal(whitePixels(frame, box), 0, `set ${set}, frame ${index}: terminal has white pixels`);
+        }
+        const ordered = [...terminalBoxes].sort((a, b) => a.card.l - b.card.l);
+        edgeWidths.push({
+          left: (ordered[1].card.l - ordered[0].card.l) / frame.scale,
+          right: (ordered[2].card.l - ordered[1].card.l) / frame.scale,
+        });
+        return ordered[1].card.l / frame.scale;
+      });
+      assertRoundTrips(positions, roundTripsPerSet);
+      const span = Math.max(...positions) - Math.min(...positions);
+      assert.ok(span >= 50,
+        `set ${set}: divider moved only ${span.toFixed(1)}pt; the drag did not move the layout`);
+      assert.ok(edgeWidths.some(({ left, right }) => Math.min(left, right) <= 110),
+        `set ${set}: no card beside the dragged divider reached the 96pt minimum card edge plus 12pt gap; ` +
+        `edges=${JSON.stringify(edgeWidths)}`);
+      if (!process.env.SOKSAK_KEEP_FAILURE_CAPTURE) rmSync(result.frameDir, { recursive: true, force: true });
+      const beforeHide = await s.get("host.window");
+      for (const terminal of terminals) {
+        const state = await s.get("terminal.session", terminal.surface);
+        assert.equal(state.error, undefined, `set ${set}, ${terminal.surface}: ${state.error}`);
+      }
+      await s.run("core.projects.browse");
+      const hidden = await s.get("host.window");
+      assert.equal(hidden.regions.some((region) => region.visible), false,
+        "the library must hide every native region");
+      for (const terminal of terminals) {
+        const before = beforeHide.regions.find((region) => region.surface === terminal.surface);
+        const after = hidden.regions.find((region) => region.surface === terminal.surface);
+        assert.ok(after, `hiding ${terminal.surface} must retain its native region`);
+        assert.deepEqual(after.frame, before.frame, `hiding ${terminal.surface} must not resize or move its native frame`);
+        assert.deepEqual(after.presented, before.presented, `hiding ${terminal.surface} must retain its raster`);
+      }
+      try {
+        await s.run("core.library.open", { id: project.id });
+      } catch (error) {
+        throw new Error(`project return set ${set}: ${error.message}; ${JSON.stringify(await s.get("host.window"))}`,
+          { cause: error });
+      }
+      // Surface modules release ready only after the host has presented the current
+      // transaction. Preserve that lifecycle boundary before reading native facts.
+      const displayed = await s.presented();
+      assert.equal(typeof displayed.displayed, "number", `project return set ${set} did not report a displayed frame`);
+      const state = await s.get("host.window");
+      for (const terminal of terminals) {
+        const image = state.regions.find((region) => region.surface === terminal.surface);
+        assert.ok(image?.visible && image.presented, `terminal ${terminal.surface} did not return in set ${set}`);
+        assert.equal(image.error, null, `terminal ${terminal.surface} reported a native error`);
+        assert.equal(image.presented.width, Math.round(image.frame.width * image.presented.scale));
+        assert.equal(image.presented.height, Math.round(image.frame.height * image.presented.scale));
+      }
+      const failures = checks.values.filter((value) => value?.failed > 0);
+      assert.deepEqual(failures, [], `project return set ${set} reported a composition failure`);
+      })(), roundTimeout, `${app.name}: ${roundLabel}`);
+      t.diagnostic(`${app.name}: PASS ${roundLabel} (${Date.now() - started}ms)`);
+    }
+  });
+
   test(`${app.name}: terminal input returns terminal output through the terminal sidecar`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
@@ -157,7 +355,8 @@ for (const app of Object.values(APPS)) {
       "core.surfaces",
       (surfaces) => {
         const terminal = surfaces.find(
-          (surf) => surf.visible && surf.plugin === "terminal"
+          (surf) => surf.visible && surf.plugin === "terminal" &&
+            surf.exposes.includes("status terminal.session")
         );
         if (!terminal) return false;
         terminalSurface = terminal.surface;
@@ -274,13 +473,14 @@ for (const app of Object.values(APPS)) {
       "core.surfaces",
       (surfaces) => {
         const terminal = surfaces.find(
-          (surf) => surf.visible && surf.plugin === "terminal"
+          (surf) => surf.visible && surf.plugin === "terminal" &&
+            surf.exposes.includes("status terminal.session")
         );
         if (!terminal) return false;
         terminalSurface = terminal.surface;
         return true;
       },
-      "terminal surface did not become visible"
+      "terminal surface did not become visible with terminal.session registered"
     );
 
     await s.until(
@@ -449,33 +649,69 @@ for (const app of Object.values(APPS)) {
       const session = await s.get("terminal.session", surface.surface);
       before.set(surface.surface, { cellWidth: session.cellWidth, cellHeight: session.cellHeight });
       const marker = `DRAG-TEXT-${index}`;
-      await s.run("terminal.input", { bytes: `printf '${marker}\\n'\\r` }, surface.surface);
+      await s.run("terminal.input", { bytes: `printf '\\033[2J\\033[H${marker}\\n'\r` }, surface.surface);
       await readScreenUntil(
         s,
         surface.surface,
-        (screen) => screen.join("").includes(marker),
+        (screen) => screen[0].trim() === marker,
         `${surface.surface} did not render its marker before the divider drag`
       );
       before.get(surface.surface).marker = marker;
     }
     const beforeGrid = await s.get("core.grid");
-    const beforeHost = await s.get("host.window");
-    // 여러 터미널이 있는 상태에서 짧은 드래그를 연속으로 수행한다. 한 번의 느린
-    // 드래그가 통과해도 빠른 반복 중 합성이 끊기면 안 된다.
-    const result = await drag(t, s, { axis: "x", line: 1, dx: 80, dy: 0, ms: 96, times: 5 }, { capture: true });
+    const terminalY = (await s.rect("terminal.view", undefined, terminals[0].surface)).y;
+    // 여러 터미널이 있는 상태에서 한 번의 빠른 드래그를 수행한다. 반복 왕복과
+    // 프로젝트 복귀는 F1.3에서 별도의 전체 캡처 행렬로 검사한다.
+    const terminalCard = beforeGrid.cards.filter((card) => terminals.some((surface) => card.active === surface.surface))
+      .sort((a, b) => a.x - b.x)[0];
+    assert.ok(terminalCard, "terminal card is missing");
+    const result = await drag(t, s, { axis: "x", line: terminalCard.c1, dx: 500, dy: 0, ms: 96, times: 1 }, { capture: true });
     assert.ok(result.count > 20, `divider recording contained too few frames: ${result.count}`);
     assert.ok(result.longestGap <= 100, `divider recording dropped a gesture interval: ${result.longestGap}ms`);
     assert.equal(result.late, 0, `divider input arrived late: ${result.late} steps`);
     assert.equal(result.deepest, 0, `divider input queue accumulated ${result.deepest} steps`);
 
-    const afterGrid = await s.get("core.grid");
-    assert.notDeepEqual(afterGrid.lines.x, beforeGrid.lines.x, "divider drag did not change a vertical boundary");
+    // 왕복의 끝은 시작 좌표와 같아야 한다. 실제 이동은 각 캡처의 카드 좌표로 검사한다.
     await s.presented();
     const host = await s.get("host.window");
-    const terminalRegions = [...beforeHost.regions, ...host.regions]
-      .filter((region) => terminals.some((surface) => surface.surface === region.surface))
-      .map((region) => region.frame);
-    assertNoWhiteNativeStripe(frames(result.frameDir), terminalRegions);
+    const positions = [];
+    let firstGlyph = null;
+    for (const [index, file] of frames(result.frameDir).entries()) {
+      const frame = readFrame(file);
+      const boxes = surfaceBoxes(frame, [30, 30, 30]);
+      const terminalBoxes = boxes.filter((box) =>
+        Math.abs(box.row / frame.scale - terminalY) <= 5);
+      assert.equal(terminalBoxes.length, terminals.length, `frame ${index}: every terminal must be measurable`);
+      positions.push([...terminalBoxes].sort((a, b) => a.card.l - b.card.l)[1].card.l / frame.scale);
+      for (const box of terminalBoxes) {
+        assert.ok(box.l > box.card.l && box.r - 1 < box.card.r,
+          `frame ${index}: terminal ${box.l}..${box.r - 1} invades DOM card ${box.card.l}..${box.card.r}`);
+        const scale = frame.scale;
+        const leftGap = box.l - box.card.l;
+        const rightGap = box.card.r - box.r;
+        assert.ok(leftGap >= scale && leftGap <= 2 * scale,
+          `frame ${index}: terminal left gap is ${leftGap}px; ` +
+          `(surface=${box.l}..${box.r}, card=${box.card.l}..${box.card.r}, scale=${scale})`);
+        // surfaceBoxes.r는 배타적 좌표이고 span().card.r는 카드의 마지막 픽셀이다.
+        // 네이티브 영역은 오른쪽 보더의 안쪽 경계 바로 앞에서 끝나야 한다.
+        assert.ok(rightGap >= 0 && rightGap <= 2 * scale,
+          `frame ${index}: terminal right gap is ${rightGap}px; ` +
+          `(surface=${box.l}..${box.r}, card=${box.card.l}..${box.card.r}, scale=${scale})`);
+        assert.ok(box.r - box.l >= box.card.r - box.card.l - 4 * scale,
+          `frame ${index}: terminal native area is narrower than its card`);
+        assert.equal(whitePixels(frame, { l: box.l, r: box.r, t: box.t, b: box.b }), 0,
+          `frame ${index}: terminal contains white pixels`);
+        const metrics = before.values().next().value;
+        const shape = glyphShape(frame, { l: box.l, r: box.l + Math.round(metrics.cellWidth * scale),
+          t: box.t, b: box.t + Math.round(metrics.cellHeight * scale) });
+        firstGlyph ??= shape;
+        assert.equal(shape.height, firstGlyph.height,
+          `frame ${index}: terminal glyph height changed during drag`);
+        assert.ok(Math.abs(shape.width - firstGlyph.width) <= 1,
+          `frame ${index}: terminal glyph raster width changed beyond subpixel rounding`);
+      }
+    }
+    assertRoundTrips(positions, 1);
     for (const surface of await s.surfaces("terminal")) {
       const session = await s.get("terminal.session", surface.surface);
       const original = before.get(surface.surface);

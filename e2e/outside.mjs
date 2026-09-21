@@ -153,3 +153,69 @@ export function outside(f) {
     row: y,
   };
 }
+
+// 같은 배경의 각 표면을 개별적으로 찾는다. 폭이 일정한 12개 이상의 행이 있는 구간을
+// 선택하므로 텍스트의 작은 구멍은 사각형으로 취급하지 않는다.
+export function surfaceBoxes(f, colour, { expectedRow, rowTolerance = 40 } = {}) {
+  const runs = new Map();
+  for (let y = 0; y < f.height; y++) {
+    for (let x = 0; x < f.width; x++) {
+      if (!near(pixel(f, x, y), colour)) continue;
+      const l = x;
+      while (x < f.width && near(pixel(f, x, y), colour)) x++;
+      if (x - l < 20) continue;
+      const key = `${l}:${x}`;
+      const held = runs.get(key);
+      if (held) { held.b = y + 1; held.rows++; }
+      else runs.set(key, { l, r: x, t: y, b: y + 1, rows: 1 });
+    }
+  }
+  const candidates = [...runs.values()].filter((r) => r.rows >= 12)
+    .sort((a, b) => (b.r - b.l) * b.rows - (a.r - a.l) * a.rows);
+  const boxes = [];
+  for (const r of candidates) {
+    // 브라우저 문서처럼 같은 배경색을 쓰는 다른 행은 호출자가 선언한
+    // 터미널 행 측정 범위 밖이다. 범위 안의 후보는 계속 검증하고 실패를 숨기지 않는다.
+    if (expectedRow !== undefined && Math.abs(r.t / f.scale - expectedRow) > rowTolerance) continue;
+    if (boxes.some((b) => r.l < b.r && r.r > b.l && r.t < b.b && r.b > b.t)) continue;
+    const row = headRow(f, { ...r, y: r.t });
+    if (row === null) throw new Error(`content at ${r.l},${r.t} has no DOM header`);
+    const card = span(f, row, Math.floor((r.l + r.r) / 2));
+    if (!card) throw new Error(`content at ${r.l},${r.t} has no DOM card`);
+    const sameCard = boxes.find((b) => b.card.l === card.l && b.card.r === card.r && b.row === row);
+    if (sameCard) {
+      sameCard.l = Math.min(sameCard.l, r.l);
+      sameCard.r = Math.max(sameCard.r, r.r);
+      sameCard.t = Math.min(sameCard.t, r.t);
+      sameCard.b = Math.max(sameCard.b, r.b);
+    } else boxes.push({ ...r, card, row });
+  }
+  return boxes.sort((a, b) => a.t - b.t || a.l - b.l);
+}
+
+// 지정 영역의 흰 픽셀을 전부 센다. 면적 비율로 작은 결함을 허용하지 않는다.
+export function whitePixels(frame, { l, r, t, b }) {
+  if (!(l >= 0 && t >= 0 && r <= frame.width && b <= frame.height && r > l && b > t)) {
+    throw new Error("invalid pixel measurement rectangle");
+  }
+  let count = 0;
+  for (let y = t; y < b; y++) {
+    for (let x = l; x < r; x++) {
+      if (pixel(frame, x, y).every((v) => v >= 245)) count++;
+    }
+  }
+  return count;
+}
+
+// 글리프 하나의 밝은 픽셀 경계와 면적을 읽는다. 위치 이동과 글자 크기 변경을 구별한다.
+export function glyphShape(frame, { l, r, t, b }) {
+  let left = r, right = l, top = b, bottom = t, count = 0;
+  for (let y = t; y < b; y++) for (let x = l; x < r; x++) {
+    if (!pixel(frame, x, y).every((v) => v > 100)) continue;
+    count++;
+    left = Math.min(left, x); right = Math.max(right, x);
+    top = Math.min(top, y); bottom = Math.max(bottom, y);
+  }
+  if (!count) throw new Error(`no glyph pixels in ${l},${t}..${r},${b}`);
+  return { width: right-left+1, height: bottom-top+1, count };
+}

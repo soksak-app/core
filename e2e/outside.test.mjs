@@ -3,9 +3,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { APPS, drag, fresh, open } from "./app.mjs";
-import { frames, readFrame } from "./frame.mjs";
-import { outside } from "./outside.mjs";
+import { frames, pixel, readFrame } from "./frame.mjs";
+import { outside, whitePixels } from "./outside.mjs";
 import { alignment } from "./alignment.mjs";
+import { assertRoundTrips } from "./drag-measurement.mjs";
 
 const PLAN = { axis: "x", line: 2, dx: -250, dy: 0, ms: 400, times: 2 };
 
@@ -65,11 +66,64 @@ function assertAligned(run) {
         `on row ${at.row}, at ${at.scale} pixels to the point` : ""));
 }
 
+function assertNoWhiteSurfaceBleed(run, message) {
+  const files = frames(run.frames);
+  assert.ok(files.length > 0, `${message}: no frames were recorded`);
+  const positions = [];
+  let worst = { ratio: 0, frame: -1 };
+  for (const [frameIndex, path] of files.entries()) {
+    const frame = readFrame(path);
+    const measured = outside(frame);
+    assert.ok(measured, `${message}: shell/card geometry could not be measured in frame ${frameIndex}`);
+    const { l, r } = measured.card;
+    positions.push(l / measured.scale);
+    const y0 = measured.row + 5;
+    const center = Math.floor((l + r) / 2);
+    // 카드 푸터로 검사 영역을 한정한다. 아래 브라우저 문서의 흰 배경은 셸 영역이 아니다.
+    let y1 = frame.height;
+    let cardRows = 0;
+    for (let y = y0; y < frame.height; y += 2) {
+      const [red, green, blue] = pixel(frame, center, y);
+      if (Math.abs(red - 25) <= 5 && Math.abs(green - 27) <= 5 && Math.abs(blue - 36) <= 5) {
+        cardRows++;
+      } else {
+        cardRows = 0;
+      }
+      if (cardRows >= 5) {
+        y1 = y - 8;
+        break;
+      }
+    }
+    assert.ok(y1 < frame.height, `${message}: shell footer missing in frame ${frameIndex}`);
+    const left = l + measured.scale, right = r - measured.scale + 1;
+    const white = whitePixels(frame, { l: left, r: right, t: y0, b: y1 });
+    const ratio = white / ((right - left) * (y1 - y0));
+    if (ratio > worst.ratio) worst = { ratio, frame: frameIndex, measured, y0, y1 };
+  }
+  assert.equal(worst.ratio, 0,
+    `${message}: white pixels ${(worst.ratio * 100).toFixed(2)}% in frame ${worst.frame} ` +
+      `within card ${worst.measured?.card?.l}..${worst.measured?.card?.r}, ` +
+      `rows ${worst.y0}..${worst.y1}`);
+  assertRoundTrips(positions, 4);
+}
+
 for (const app of Object.values(APPS)) {
   test(`${app.name}: native content, cards, and the sidebar rail stay aligned`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     assertAligned(await drag(t, s, PLAN, { capture: true }));
+  });
+
+  test(`${app.name}: shell divider drag does not leave a white surface frame`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const narrow = await drag(t, s,
+      { axis: "x", line: 2, dx: -500, dy: 0, ms: 96, times: 4 }, { capture: true });
+    assertNoWhiteSurfaceBleed(narrow, "shell divider drag to narrow");
+    const wide = await drag(t, s,
+      { axis: "x", line: 2, dx: 500, dy: 0, ms: 96, times: 4 }, { capture: true });
+    assertNoWhiteSurfaceBleed(wide, "shell divider drag back to wide");
   });
 }
