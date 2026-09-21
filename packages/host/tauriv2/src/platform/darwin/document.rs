@@ -26,6 +26,7 @@ extern "C" {
         visible: bool,
     );
     fn sp_document_background(document: *mut c_void, enabled: bool);
+    fn sp_document_appearance(document: *mut c_void, dark: bool);
     fn sp_document_close(document: *mut c_void);
 }
 
@@ -116,6 +117,10 @@ pub fn place(document: Handle, insets: Insets, visible: bool) {
 /// 대화 상자가 열린 동안 문서를 흐리게 표시한다.
 pub fn background(document: Handle, enabled: bool) {
     unsafe { sp_document_background(document as *mut c_void, enabled) }
+}
+
+pub fn appearance(document: Handle, dark: bool) {
+    unsafe { sp_document_appearance(document as *mut c_void, dark) }
 }
 
 /// 문서 웹뷰를 제거하고 상태 수신 함수를 해제한다.

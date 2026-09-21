@@ -165,6 +165,9 @@ impl Platform for Windows {
     fn set_document_background(&self, document: Handle, enabled: bool) -> Result<(), String> {
         unsupported::set_document_background(document, enabled)
     }
+    fn set_document_appearance(&self, document: Handle, dark: bool) -> Result<(), String> {
+        unsupported::set_document_appearance(document, dark)
+    }
     fn close_document(&self, document: Handle) -> Result<(), String> {
         unsupported::close_document(document)
     }

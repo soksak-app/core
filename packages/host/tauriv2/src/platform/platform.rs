@@ -13,7 +13,6 @@ use serde_json::Value;
 use tauri::webview::PlatformWebview;
 use tauri::{AppHandle, WebviewWindowBuilder, Window, Wry};
 
-
 /// Authenticated persistent sidecar stream supplied by the active platform.
 pub trait PersistentStream: Read + Write + Send {
     fn try_clone(&self) -> Result<Box<dyn PersistentStream>, String>;
@@ -262,6 +261,8 @@ pub trait Platform: Send + Sync {
         -> Result<(), String>;
     /// 대화 상자가 열린 동안 문서를 흐리게 표시한다. 메인 스레드에서 호출한다.
     fn set_document_background(&self, document: Handle, enabled: bool) -> Result<(), String>;
+    /// Sets the native document webview appearance to the current host scheme.
+    fn set_document_appearance(&self, document: Handle, dark: bool) -> Result<(), String>;
     /// 문서 웹뷰를 제거한다. 이후 changed 는 호출되지 않는다. 메인 스레드에서 호출한다.
     fn close_document(&self, document: Handle) -> Result<(), String>;
     /// 입력 체인에서 웹뷰를 식별하는 뷰 주소를 반환한다.

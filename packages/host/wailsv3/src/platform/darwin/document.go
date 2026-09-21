@@ -88,6 +88,10 @@ func (implementation) SetDocumentBackground(document unsafe.Pointer, enabled boo
 	C.sp_document_background(document, C.bool(enabled))
 }
 
+func (implementation) SetDocumentAppearance(document unsafe.Pointer, dark bool) {
+	C.sp_document_appearance(document, C.bool(dark))
+}
+
 func (implementation) CloseDocument(document unsafe.Pointer) {
 	C.sp_document_close(document)
 	if receiver, ok := documents[document]; ok {

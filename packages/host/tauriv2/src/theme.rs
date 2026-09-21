@@ -34,14 +34,19 @@ pub(crate) fn get(window: &Window) -> Result<Theme, String> {
 pub(crate) fn set(window: &Window, theme: Theme) -> Result<(), String> {
     let context = window_data(window)?;
     *context.theme.0.lock().map_err(|e| e.to_string())? = theme.clone();
+    let documents = context.documents.all();
+    let dark = theme.scheme == "dark";
     if let Some(main) = crate::windows::root_view(window) {
-        let dark = theme.scheme == "dark";
         main.with_webview(move |view| {
             if let Ok(platform) = crate::platform::current() {
                 crate::log_error(platform.set_main_appearance(&view, dark));
             }
         })
         .map_err(|e| e.to_string())?;
+    }
+    let platform = crate::platform::current()?;
+    for document in documents {
+        platform.set_document_appearance(document, dark)?;
     }
     emit_window(window, "theme", theme).map_err(|e| e.to_string())
 }

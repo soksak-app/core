@@ -38,5 +38,8 @@ void sp_document_frame(void *document, double *out);
 // 대화 상자가 열린 동안 문서를 흐리게 표시한다.
 void sp_document_background(void *document, bool enabled);
 
+// Sets the native appearance used by the document webview and its web content.
+void sp_document_appearance(void *document, bool dark);
+
 // 웹뷰를 제거하고 해제한다. 이후 changed 는 호출되지 않는다.
 void sp_document_close(void *document);

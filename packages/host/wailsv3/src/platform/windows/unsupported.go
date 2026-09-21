@@ -142,6 +142,10 @@ func (implementation) SetDocumentBackground(unsafe.Pointer, bool) {
 	unreachable("document background")
 }
 
+func (implementation) SetDocumentAppearance(unsafe.Pointer, bool) {
+	unreachable("document appearance")
+}
+
 func (implementation) CloseDocument(unsafe.Pointer) {
 	unreachable("document removal")
 }

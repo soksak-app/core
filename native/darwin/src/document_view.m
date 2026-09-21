@@ -379,6 +379,13 @@ void sp_document_background(void *handle, bool enabled) {
     view.contentFilters = @[ blur ];
 }
 
+void sp_document_appearance(void *handle, bool dark) {
+    NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
+    SPDocumentView *view = (SPDocumentView *)handle;
+    if (!view || view.closed) return;
+    view.appearance = [NSAppearance appearanceNamed:(dark ? NSAppearanceNameDarkAqua : NSAppearanceNameAqua)];
+}
+
 void sp_document_close(void *handle) {
     NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
     SPDocumentView *view = (SPDocumentView *)handle;

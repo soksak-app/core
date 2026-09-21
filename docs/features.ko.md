@@ -84,7 +84,8 @@
   - [o] F2.9 — 재빌드한 sidecar 단절/재연결 검사를 단계별 제한시간·PASS/FAIL 출력·실행 시간·명시적 서비스 정리를 포함한 `make native-test` 게이트로 고정했다. 최종 실행은 `NATIVE_TEST_EXIT=0`을 보고했고, 직접 게이트도 서비스 생존·동일 session ID·출력 보존·`recovery_check_duration_ms=40`을 보고했다. 서비스 프로세스 충돌/업데이트 게이트는 아직 열려 있다.
   - [o] F2.10 — 이제 별도 client 프로세스가 `close-owner` 없이 종료한 뒤 새 client 프로세스를 시작하고, 동일 session ID·보존된 셸 출력·서비스 생존을 검증한다. 최종 `make native-test`는 `NATIVE_TEST_EXIT=0`, `service_alive_after_application_process_exit`, `application_process_restarted`, `retained_screen_contains_RECOVERY`, `recovery_check_duration_ms=599`를 보고했다. 명시적인 protocol/version 불일치와 서비스 프로세스 실패 게이트는 별도로 남긴다.
   - [o] F2.11 — Tauri·Wails 전송 검사가 살아 있는 endpoint가 hello에 지원하지 않는 protocol 2를 응답할 때 명시적인 protocol 불일치 오류로 거부하고 endpoint byte를 그대로 보존하는지 확인한다. 최종 `make native-test`는 `NATIVE_TEST_EXIT=0`을 보고했고 양쪽 host test binary에서 새 케이스가 통과했다.
-- [ ] F3 — 신규·복원 브라우저 문서의 dark/light/dark 전파를 통제 사이트의 계산 스타일·실제 픽셀로 검사한다. Google은 사이트 자체 설정과 호스트 동작을 구분한다.
+- [~] F3 — 신규·복원 브라우저 문서의 dark/light/dark 전파를 통제 사이트의 계산 스타일·실제 픽셀로 검사한다. Google은 사이트 자체 설정과 호스트 동작을 구분한다.
+  - [o] F3.1 — 호스트 테마가 바뀔 때 현재 연결된 모든 네이티브 문서 웹뷰에 dark/light appearance를 Tauri·Wails 양쪽에서 명시적으로 전달한다. 재빌드한 macOS host의 `make native-test`에서 문서 appearance·renderer·포커스·탐색·스크롤 케이스가 통과했다. 통제 사이트 픽셀과 복원/신규 문서 애플리케이션 검증은 F3에 남아 있다.
 - [ ] F4 — 브라우저 본문 한 번 클릭으로 카드 선택과 실제 네이티브 포커스. 타이핑·스크롤·다른 브라우저/터미널과 격리를 검증한다.
 - [ ] F5 — 터미널 포커스와 설정 가능한 커서.
   - [ ] 한 번 클릭으로 첫 문자부터 출력·Enter 이후 연속 입력. 터미널 3개·탭/창 전환·리사이즈·브라우저 사용·모달 종료·프로젝트 복귀를 검사하며 두 번째 클릭을 요구하지 않는다.

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Browser document webviews now receive explicit host dark/light appearance updates in both native hosts. The F3 application pixel and restore/new-document checks remain open.
+
 [한국어](CHANGELOG.ko.md)
 
 ## Unreleased

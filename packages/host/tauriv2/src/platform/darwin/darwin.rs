@@ -25,10 +25,10 @@ use super::{
 #[cfg(feature = "diagnostics")]
 #[path = "capture.rs"]
 mod capture;
-#[path = "dock.rs"]
-mod dock;
 #[path = "clipboard.rs"]
 mod clipboard;
+#[path = "dock.rs"]
+mod dock;
 #[path = "document.rs"]
 mod document;
 #[path = "endpoint.rs"]
@@ -242,6 +242,10 @@ impl Platform for Darwin {
     }
     fn set_document_background(&self, document: Handle, enabled: bool) -> Result<(), String> {
         document::background(document, enabled);
+        Ok(())
+    }
+    fn set_document_appearance(&self, document: Handle, dark: bool) -> Result<(), String> {
+        document::appearance(document, dark);
         Ok(())
     }
     fn close_document(&self, document: Handle) -> Result<(), String> {

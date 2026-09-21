@@ -163,6 +163,10 @@ pub fn set_document_background(_document: Handle, _enabled: bool) -> Result<(), 
     missing("document background")
 }
 
+pub fn set_document_appearance(_document: Handle, _dark: bool) -> Result<(), String> {
+    missing("document appearance")
+}
+
 pub fn close_document(_document: Handle) -> Result<(), String> {
     missing("document removal")
 }

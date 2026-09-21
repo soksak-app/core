@@ -32,6 +32,11 @@ func (s *Surfaces) SetTheme(theme Theme) error {
 	s.theme = theme
 	s.mu.Unlock()
 	application.InvokeSync(func() { system.ConfigureMainWindow(s.window.NativeWindow(), theme.Scheme == "dark") })
+	application.InvokeSync(func() {
+		for _, document := range s.documents.All() {
+			system.SetDocumentAppearance(document, theme.Scheme == "dark")
+		}
+	})
 	s.Emit("theme", theme)
 	return nil
 }

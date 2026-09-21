@@ -181,6 +181,8 @@ type Platform interface {
 	PlaceDocument(document unsafe.Pointer, left, top, right, bottom float64, visible bool)
 	// SetDocumentBackground 는 대화 상자가 열린 동안 문서를 흐리게 표시한다.
 	SetDocumentBackground(document unsafe.Pointer, enabled bool)
+	// SetDocumentAppearance 는 문서 웹뷰와 그 웹 콘텐츠의 명시적인 테마를 설정한다.
+	SetDocumentAppearance(document unsafe.Pointer, dark bool)
 	// CloseDocument 는 문서 웹뷰를 제거한다. 이후 changed 는 호출되지 않는다.
 	CloseDocument(document unsafe.Pointer)
 
