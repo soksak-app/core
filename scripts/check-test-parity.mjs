@@ -160,6 +160,117 @@ const FEATURE_LINKS = [
     expected: "A shell command returns its exact output and exit status on both macOS hosts after native pointer input.",
     levels: ["unit", "native", "application"],
   },
+  {
+    id: "F2.1",
+    implementation: [{ file: "sidecars/vt-core/src/pty.rs", symbol: "pub fn close" }],
+    tests: [{ file: "sidecars/vt-core/tests/pty_lifecycle.rs", id: "real-sessions-close-removes-session" }],
+    expected: "Closing a PTY terminates its child process group and drains the reader without retaining the session.",
+    levels: ["unit", "native"],
+  },
+  {
+    id: "F2.2",
+    implementation: [
+      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "shutdown_waiters" },
+      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "CloseOwner" },
+    ],
+    tests: [{ file: "e2e/terminal-processes.test.mjs", id: "normal-quit-reaps-service" }],
+    expected: "Normal application quit acknowledges owned-session closure, stops the service, and removes its endpoint.",
+    levels: ["application"],
+  },
+  {
+    id: "F2.3",
+    implementation: [
+      { file: "sidecars/vt-core/src/pty.rs", symbol: "close_owner" },
+      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "Close" },
+    ],
+    tests: [{ file: "e2e/terminal-processes.test.mjs", id: "terminal-close-reaps-children" }],
+    expected: "Closing terminal tabs reaps their PTY children while retaining the shared terminal service.",
+    levels: ["native", "application"],
+  },
+  {
+    id: "F2.4",
+    implementation: [{ file: "sidecars/vt-core/src/platform/darwin/service.rs", symbol: "serve_persistent" }],
+    tests: [
+      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "persistent-transport-reconnect" },
+      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "persistent-transport-reconnect" },
+    ],
+    expected: "A client connection loss reconnects to the persistent service while preserving the owning surface identity.",
+    levels: ["native"],
+  },
+  {
+    id: "F2.4-1",
+    implementation: [{ file: "sidecars/vt-core/src/platform/darwin/service.rs", symbol: "serve_persistent" }],
+    tests: [{ file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "reconnect-case-timeout" }],
+    expected: "The reconnect case has its own five-second bound and reports timeout as failure under concurrent test load.",
+    levels: ["native"],
+  },
+  {
+    id: "F2.5",
+    implementation: [{ file: "sidecars/vt-core/src/protocol.rs", symbol: "close_owner" }],
+    tests: [{ file: "sidecars/vt-core/tests/pty_lifecycle.rs", id: "independent-sessions-close-by-owner" }],
+    expected: "Closing one owner's sessions leaves another owner's session addressable until that owner closes it.",
+    levels: ["unit", "native"],
+  },
+  {
+    id: "F2.6",
+    implementation: [
+      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "service_process_exists" },
+      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "NewSidecars" },
+    ],
+    tests: [
+      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "dead-endpoint-replacement" },
+      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "dead-endpoint-replacement" },
+    ],
+    expected: "A dead service endpoint is replaced through authenticated bootstrap and routes requests to the new service.",
+    levels: ["native"],
+  },
+  {
+    id: "F2.7",
+    implementation: [
+      { file: "packages/host/tauriv2/src/endpoint.rs", symbol: "pub fn connect" },
+      { file: "packages/host/wailsv3/src/endpoint.go", symbol: "NewEndpoint" },
+    ],
+    tests: [
+      { file: "packages/host/tauriv2/tests/endpoint_test.rs", id: "live-unreachable-endpoint" },
+      { file: "packages/host/wailsv3/tests/endpoint_test.go", id: "live-unreachable-endpoint" },
+    ],
+    expected: "A live but unreachable endpoint returns an explicit connection error and its endpoint record remains byte-for-byte unchanged.",
+    levels: ["native"],
+  },
+  {
+    id: "F2.8",
+    implementation: [{ file: "sidecars/vt-core/src/platform/darwin/service.rs", symbol: "serve_persistent" }],
+    tests: [{ file: "scripts/verify-vt-recovery.mjs", id: "retained-screen-after-client-loss" }],
+    expected: "The rebuilt persistent service survives transport loss, reattaches the same session, and retains output.",
+    levels: ["native"],
+  },
+  {
+    id: "F2.9",
+    implementation: [{ file: "scripts/verify-vt-recovery.mjs", symbol: "recovery_check_duration_ms" }],
+    tests: [{ file: "scripts/verify-vt-recovery.mjs", id: "bounded-recovery-gate" }],
+    expected: "Recovery reports per-step results, duration, and explicit service cleanup within bounded execution.",
+    levels: ["native"],
+  },
+  {
+    id: "F2.10",
+    implementation: [{ file: "scripts/verify-vt-recovery.mjs", symbol: "application_process_restarted" }],
+    tests: [{ file: "scripts/verify-vt-recovery.mjs", id: "application-process-restart-retains-session" }],
+    expected: "A client process that exits without close-owner can be replaced and reconnect to the same retained session.",
+    levels: ["native"],
+  },
+  {
+    id: "F2.11",
+    implementation: [
+      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "protocol mismatch" },
+      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "protocol mismatch" },
+    ],
+    tests: [
+      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "protocol-mismatch-preserves-endpoint" },
+      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "protocol-mismatch-preserves-endpoint" },
+    ],
+    expected: "An unsupported service protocol is rejected explicitly and does not replace the endpoint record.",
+    levels: ["native"],
+  },
 ];
 
 // 생성 산출물은 원본과의 일치 검사 대상이며 독립 구현으로 세지 않는다.
