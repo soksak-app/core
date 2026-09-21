@@ -3,7 +3,7 @@
 // 검사는 앱을 실행하지 않는다. 앱은 `--config-dir <tmpdir>/soksak-check-<app>` 로 실행되어
 // 있어야 하고, 하네스는 그 폴더의 endpoint.json 으로 연결한다. 명세는 docs/spec/endpoint.md 와
 // docs/spec/exposure.md 에 있다.
-import { closeSync, existsSync, openSync, readFileSync, realpathSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, openSync, readFileSync, realpathSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -23,6 +23,26 @@ export const APPS = Object.fromEntries(appNames.map((name) => [name, {
   binary: built(`soksak-${name}`),
   configDir: join(tmpdir(), `soksak-check-${name}`),
 }]));
+
+/** 실행 중인 엔드포인트가 현재 빌드보다 오래되지 않았는지 검증한다. */
+export function assertEndpointUsesCurrentBuild(endpoint, resolvedBinary, binaryMtimeMs) {
+  if (endpoint.executable !== resolvedBinary) {
+    throw new Error(`process ${endpoint.pid} runs ${endpoint.executable}, not ${resolvedBinary}; restart the application from this checkout`);
+  }
+  const startedMs = Date.parse(endpoint.started);
+  if (!Number.isFinite(startedMs)) {
+    throw new Error(`process ${endpoint.pid} has invalid endpoint start time ${endpoint.started}`);
+  }
+  if (!Number.isFinite(binaryMtimeMs)) {
+    throw new Error(`current build has invalid modification time ${binaryMtimeMs}`);
+  }
+  if (binaryMtimeMs > startedMs + 1000) {
+    throw new Error(
+      `process ${endpoint.pid} started at ${endpoint.started} before the current build ` +
+      `mtime ${new Date(binaryMtimeMs).toISOString()}; restart the application from this checkout`,
+    );
+  }
+}
 
 /** 한 요청의 기본 대기 시간. 호스트의 문서 응답 시간보다 길다. */
 const REQUEST = 20_000;
@@ -120,9 +140,7 @@ export async function open(t, app) {
   if (endpoint.application !== app.name) {
     throw new Error(`${app.configDir}/endpoint.json belongs to ${endpoint.application}, not ${app.name}`);
   }
-  if (endpoint.executable !== realpathSync(app.binary)) {
-    throw new Error(`process ${endpoint.pid} runs ${endpoint.executable}, not ${app.binary}; restart the application from this checkout`);
-  }
+  assertEndpointUsesCurrentBuild(endpoint, realpathSync(app.binary), statSync(app.binary).mtimeMs);
   return session;
 }
 
