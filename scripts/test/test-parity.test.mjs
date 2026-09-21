@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { auditInventory, discoverInventory, repositoryFiles } from "../check-test-parity.mjs";
+import { auditFeatureLinks, auditInventory, discoverInventory, repositoryFiles } from "../check-test-parity.mjs";
 
 const files = repositoryFiles();
 
@@ -59,4 +59,20 @@ test("inventory reports uncovered implementations and tests as separate results"
   assert.deepEqual(result.uncoveredTests, [{ file: "orphan.test.mjs", language: "js-ts" }]);
   assert.ok(result.errors.some((error) => error.includes("orphan.js")));
   assert.ok(result.errors.some((error) => error.includes("orphan.test.mjs")));
+});
+
+test("feature links reject missing evidence fields and workspace files", { timeout: 1000 }, () => {
+  const errors = auditFeatureLinks([
+    {
+      id: "broken",
+      implementation: [{ file: "missing.js", symbol: "run" }],
+      tests: [{ file: "missing.test.mjs", id: "runs" }],
+      expected: "",
+      levels: ["unknown"],
+    },
+  ], ["known.js"]);
+  assert.ok(errors.some((error) => error.includes("no expected result")));
+  assert.ok(errors.some((error) => error.includes("invalid verification level")));
+  assert.ok(errors.some((error) => error.includes("missing.js")));
+  assert.ok(errors.some((error) => error.includes("missing.test.mjs")));
 });

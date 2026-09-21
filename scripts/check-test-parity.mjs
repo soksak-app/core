@@ -90,6 +90,26 @@ const MATRIX = [
   lane("Darwin dock menu", "objective-c", ["native/darwin/src/dock_menu.m"], ["native/darwin/tests/dock_menu_test.m"]),
 ];
 
+// A feature link is stronger than a file owner: it names the implementation,
+// behavior test, expected result, and verification levels for one capability.
+// The inventory remains structural; behavior is proved by the referenced tests.
+const FEATURE_LINKS = [
+  {
+    id: "F0.4",
+    implementation: [
+      { file: "native/darwin/src/input_inject.m", symbol: "webviewInputSendThen" },
+      { file: "native/darwin/src/webview_input.m", symbol: "webviewInputSendThen" },
+      { file: "packages/host/wailsv3/src/platform/darwin/input.go", symbol: "pointerSequence" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/input_inject_test.m", id: "click-after-keyboard-input" },
+      { file: "e2e/shell.test.mjs", id: "shell-run-output-and-exit" },
+    ],
+    expected: "A shell command returns its exact output and exit status on both macOS hosts after native pointer input.",
+    levels: ["unit", "native", "application"],
+  },
+];
+
 // 생성 산출물은 원본과의 일치 검사 대상이며 독립 구현으로 세지 않는다.
 const GENERATED_ROOTS = new Map([
   ["packages/soksak/dist/", "generated library output; verified by make verify"],
@@ -225,25 +245,59 @@ export function auditInventory(files, matrix = MATRIX) {
     errors.push(`${file} [${language}]: test is not claimed by the test inventory`);
   }
 
+  const featureErrors = auditFeatureLinks(FEATURE_LINKS, files);
+  errors.push(...featureErrors);
+
   return {
     errors,
     warnings,
     inventory,
     uncoveredImplementations,
     uncoveredTests,
+    featureErrors,
+    featureLinks: FEATURE_LINKS,
     trackCount: matrix.length,
     implementationCount: implementationOwners.size,
     testCount: testOwners.size,
   };
 }
 
+export function auditFeatureLinks(features, files) {
+  const knownFiles = new Set(files);
+  const errors = [];
+  const ids = new Set();
+  const levels = new Set(["unit", "native", "application", "release"]);
+  for (const feature of features) {
+    if (!feature.id || ids.has(feature.id)) {
+      errors.push(`${feature.id || "<missing>"}: feature link id is missing or duplicated`);
+    }
+    ids.add(feature.id);
+    if (!feature.expected?.trim()) errors.push(`${feature.id}: feature link has no expected result`);
+    if (!Array.isArray(feature.levels) || feature.levels.length === 0 || feature.levels.some((level) => !levels.has(level))) {
+      errors.push(`${feature.id}: feature link has an invalid verification level`);
+    }
+    for (const implementation of feature.implementation ?? []) {
+      if (!implementation.file || !implementation.symbol) errors.push(`${feature.id}: implementation link must name a file and symbol`);
+      else if (!knownFiles.has(implementation.file)) errors.push(`${feature.id}: implementation file is not in the workspace: ${implementation.file}`);
+    }
+    for (const test of feature.tests ?? []) {
+      if (!test.file || !test.id) errors.push(`${feature.id}: behavior test link must name a file and test id`);
+      else if (!knownFiles.has(test.file)) errors.push(`${feature.id}: behavior test file is not in the workspace: ${test.file}`);
+    }
+    if (!feature.implementation?.length) errors.push(`${feature.id}: feature link has no implementation entry`);
+    if (!feature.tests?.length) errors.push(`${feature.id}: feature link has no behavior test entry`);
+  }
+  return errors;
+}
+
 export { MATRIX, repositoryFiles };
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
-  const { errors, warnings, uncoveredImplementations, uncoveredTests, trackCount, implementationCount, testCount } = auditInventory(repositoryFiles());
+  const { errors, warnings, uncoveredImplementations, uncoveredTests, featureErrors, featureLinks, trackCount, implementationCount, testCount } = auditInventory(repositoryFiles());
   if (errors.length) {
     console.error(`Test inventory checks failed: ${errors.length} issue(s); ` +
-      `${uncoveredImplementations.length} uncovered implementation(s), ${uncoveredTests.length} uncovered test(s)`);
+      `${uncoveredImplementations.length} uncovered implementation(s), ${uncoveredTests.length} uncovered test(s), ` +
+      `${featureErrors.length} feature-link issue(s); ${featureLinks.length} feature link(s) inspected`);
     if (uncoveredImplementations.length) {
       console.error('Uncovered implementations:');
       for (const { file, language } of uncoveredImplementations.sort((a, b) => a.file.localeCompare(b.file))) {
@@ -255,6 +309,10 @@ if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) 
       for (const { file, language } of uncoveredTests.sort((a, b) => a.file.localeCompare(b.file))) {
         console.error(`- ${file} [${language}]`);
       }
+    }
+    if (featureErrors.length) {
+      console.error('Feature-link errors:');
+      for (const error of featureErrors.sort()) console.error(`- ${error}`);
     }
     console.error('All audit errors:');
     for (const error of [...new Set(errors)].sort()) console.error(`- ${error}`);
