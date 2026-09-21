@@ -7,8 +7,8 @@ use serde_json::value::RawValue;
 use tauri::ipc::Invoke;
 use tauri::{AppHandle, Manager, Webview, Window};
 
-use crate::composition;
 use crate::clipboard;
+use crate::composition;
 use crate::documents;
 use crate::exposure::{self, Changed, Forward, Register};
 use crate::images;
@@ -356,7 +356,10 @@ fn image_detach(webview: Webview, request: images::Request) -> Result<(), String
 }
 
 #[tauri::command(async)]
-fn clipboard_read(window: Window, request: clipboard::ReadRequest) -> Result<clipboard::ReadResponse, String> {
+fn clipboard_read(
+    window: Window,
+    request: clipboard::ReadRequest,
+) -> Result<clipboard::ReadResponse, String> {
     clipboard::read(&window, request)
 }
 
@@ -366,6 +369,9 @@ fn clipboard_write_text(window: Window, text: String) -> Result<(), String> {
 }
 
 #[tauri::command(async)]
-fn clipboard_persist_png(app: AppHandle, request: clipboard::PersistRequest) -> Result<serde_json::Value, String> {
+fn clipboard_persist_png(
+    app: AppHandle,
+    request: clipboard::PersistRequest,
+) -> Result<serde_json::Value, String> {
     Ok(serde_json::json!({ "path": clipboard::persist_png(&app, request.data)? }))
 }

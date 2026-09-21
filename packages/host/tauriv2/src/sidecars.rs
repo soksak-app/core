@@ -23,8 +23,8 @@ use wait_timeout::ChildExt;
 use crate::platform::{current, PersistentStream};
 #[path = "platform/process.rs"]
 mod process;
-use process::service_process_exists;
 use crate::windows::{emit_window, window_data};
+use process::service_process_exists;
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use tauri::Window;

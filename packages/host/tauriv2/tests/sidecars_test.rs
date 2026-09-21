@@ -356,8 +356,10 @@ fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
                 assert_eq!(hello["protocol"], 1);
                 assert_eq!(hello["token"], "reconnect-token");
                 stream
-                    .write_all(br#"{"op":"hello","protocol":1,"ok":true}
-"#)
+                    .write_all(
+                        br#"{"op":"hello","protocol":1,"ok":true}
+"#,
+                    )
                     .unwrap();
 
                 line.clear();
@@ -416,10 +418,26 @@ fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
     second
         .send(&second_owner, ECHO, "s2", &raw(r#"{"op":"open"}"#))
         .unwrap();
-    assert_eq!(first_events.recv_timeout(Duration::from_secs(1)).unwrap().surface, "s1");
-    assert_eq!(second_events.recv_timeout(Duration::from_secs(1)).unwrap().surface, "s2");
-    disconnected_rx.recv_timeout(Duration::from_secs(1)).unwrap();
-    disconnected_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+    assert_eq!(
+        first_events
+            .recv_timeout(Duration::from_secs(1))
+            .unwrap()
+            .surface,
+        "s1"
+    );
+    assert_eq!(
+        second_events
+            .recv_timeout(Duration::from_secs(1))
+            .unwrap()
+            .surface,
+        "s2"
+    );
+    disconnected_rx
+        .recv_timeout(Duration::from_secs(1))
+        .unwrap();
+    disconnected_rx
+        .recv_timeout(Duration::from_secs(1))
+        .unwrap();
 
     first
         .send(&first_owner, ECHO, "s1", &raw(r#"{"op":"reconnect"}"#))
@@ -430,8 +448,20 @@ fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
     // The package suite runs multiple test binaries concurrently. Keep a bounded case timeout,
     // but do not make the reconnect contract depend on a one-second scheduler slice.
     let reconnect_timeout = Duration::from_secs(10);
-    assert_eq!(first_events.recv_timeout(reconnect_timeout).unwrap().surface, "s1");
-    assert_eq!(second_events.recv_timeout(reconnect_timeout).unwrap().surface, "s2");
+    assert_eq!(
+        first_events
+            .recv_timeout(reconnect_timeout)
+            .unwrap()
+            .surface,
+        "s1"
+    );
+    assert_eq!(
+        second_events
+            .recv_timeout(reconnect_timeout)
+            .unwrap()
+            .surface,
+        "s2"
+    );
 
     first.stop();
     second.stop();
@@ -477,7 +507,10 @@ fn persistent_transport_rejects_unsupported_hello_protocol_without_replacing_end
     let error = sidecars
         .send(&window, ECHO, "surface", &raw(r#"{"op":"open"}"#))
         .unwrap_err();
-    assert!(error.contains("protocol mismatch in hello response"), "{error}");
+    assert!(
+        error.contains("protocol mismatch in hello response"),
+        "{error}"
+    );
     assert_eq!(std::fs::read(&endpoint_path).unwrap(), endpoint_bytes);
     server.join().unwrap();
 }
@@ -497,7 +530,11 @@ fn persistent_transport_replaces_endpoint_left_by_a_dead_service() {
         "socket": socket_path,
         "token": token
     });
-    let stale_child = Command::new("/bin/sh").arg("-c").arg("exit 0").spawn().unwrap();
+    let stale_child = Command::new("/bin/sh")
+        .arg("-c")
+        .arg("exit 0")
+        .spawn()
+        .unwrap();
     let stale_pid = stale_child.id();
     let _ = stale_child.wait_with_output().unwrap();
     std::fs::write(
@@ -515,10 +552,7 @@ fn persistent_transport_replaces_endpoint_left_by_a_dead_service() {
     let program = executable_directory.path().join("echo");
     std::fs::write(
         &program,
-        format!(
-            "#!/bin/sh\nprintf '%s\\n' '{}'\n",
-            replacement_endpoint
-        ),
+        format!("#!/bin/sh\nprintf '%s\\n' '{}'\n", replacement_endpoint),
     )
     .unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -539,8 +573,10 @@ fn persistent_transport_replaces_endpoint_left_by_a_dead_service() {
         let hello: serde_json::Value = serde_json::from_str(&line).unwrap();
         assert_eq!(hello["token"], token);
         stream
-            .write_all(br#"{"op":"hello","protocol":1,"ok":true}
-"#)
+            .write_all(
+                br#"{"op":"hello","protocol":1,"ok":true}
+"#,
+            )
             .unwrap();
         line.clear();
         reader.read_line(&mut line).unwrap();
@@ -560,7 +596,10 @@ fn persistent_transport_replaces_endpoint_left_by_a_dead_service() {
     sidecars
         .send(&owner, ECHO, "surface", &raw(r#"{"op":"open"}"#))
         .unwrap();
-    assert_eq!(events.recv_timeout(Duration::from_secs(1)).unwrap().surface, "surface");
+    assert_eq!(
+        events.recv_timeout(Duration::from_secs(1)).unwrap().surface,
+        "surface"
+    );
     assert!(
         !service_directory.join("endpoint.json").exists(),
         "stale endpoint was not removed before the replacement path"
@@ -638,8 +677,10 @@ fn persistent_stop_closes_owner_then_requests_service_shutdown() {
         assert_eq!(hello["op"], "hello");
         assert_eq!(hello["token"], "shutdown-token");
         stream
-            .write_all(br#"{"op":"hello","protocol":1,"ok":true}
-"#)
+            .write_all(
+                br#"{"op":"hello","protocol":1,"ok":true}
+"#,
+            )
             .unwrap();
 
         line.clear();

@@ -150,10 +150,7 @@ pub(crate) fn require_region(
 }
 
 /// Registers the immutable composition contract before a surface places its first frame.
-pub(crate) fn declare(
-    webview: &Webview,
-    request: CompositionDeclareRequest,
-) -> Result<(), String> {
+pub(crate) fn declare(webview: &Webview, request: CompositionDeclareRequest) -> Result<(), String> {
     if request.surface.is_empty() {
         return Err("composition declaration requires a surface".into());
     }
@@ -186,7 +183,10 @@ pub(crate) fn surface_handle(window: &Window, surface: &str) -> Result<Handle, S
 /// Resolves the logical surface for a native view that received a press.
 /// Unknown views never activate a workbench card.
 pub fn surface_owner_id(named: &HashMap<Handle, String>, view: Handle) -> Option<&str> {
-    named.get(&view).filter(|id| !id.is_empty()).map(String::as_str)
+    named
+        .get(&view)
+        .filter(|id| !id.is_empty())
+        .map(String::as_str)
 }
 
 #[derive(Debug, Deserialize)]
@@ -371,11 +371,11 @@ pub(crate) fn isolate_webview(view: &Webview, page_focus: PageFocus) -> Result<(
     let (tx, rx) = mpsc::channel();
     view.with_webview(move |webview| {
         let isolated = platform
-        .register_input(&webview)
-        .and_then(|registered| match page_focus {
-            PageFocus::Allowed => Ok(registered),
-            PageFocus::Ignored => Ok(registered && platform.ignore_page_focus(&webview)?),
-        });
+            .register_input(&webview)
+            .and_then(|registered| match page_focus {
+                PageFocus::Allowed => Ok(registered),
+                PageFocus::Ignored => Ok(registered && platform.ignore_page_focus(&webview)?),
+            });
         let _ = tx.send(isolated);
     })
     .map_err(|e| e.to_string())?;

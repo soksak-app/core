@@ -201,7 +201,8 @@ pub(crate) fn show(window: &Window, request: OverlayRequest) -> Result<Rect, Str
         .map_err(|e| e.to_string())?;
     target.set_path("/overlay.html");
     target.set_query(None);
-    target.query_pairs_mut()
+    target
+        .query_pairs_mut()
         .append_pair("id", &request.id)
         .append_pair("instance", &instance.to_string());
     *state.open.lock().map_err(|e| e.to_string())? = Some(Modal {
@@ -242,7 +243,8 @@ pub(crate) fn show(window: &Window, request: OverlayRequest) -> Result<Rect, Str
     isolate_webview(&view, PageFocus::Ignored)?;
     view.hide().map_err(|e| e.to_string())?;
     place_overlay(&view, at)?;
-    view.set_auto_resize(request.mode == "dialog").map_err(|e| e.to_string())?;
+    view.set_auto_resize(request.mode == "dialog")
+        .map_err(|e| e.to_string())?;
     *state.view.lock().map_err(|e| e.to_string())? = Some(view.clone());
     if let Err(error) = view.navigate(target) {
         let _ = view.close();
@@ -268,7 +270,13 @@ pub(crate) fn place(window: &Window, request: PlaceRequest) -> Result<Rect, Stri
         .map_err(|e| e.to_string())?
         .as_ref()
         .is_some_and(|m| m.id == request.id);
-    let Some(view) = state.view.lock().map_err(|e| e.to_string())?.clone().filter(|_| current) else {
+    let Some(view) = state
+        .view
+        .lock()
+        .map_err(|e| e.to_string())?
+        .clone()
+        .filter(|_| current)
+    else {
         return Ok(Rect::default());
     };
     let (x, y, w, h) = aligned(
@@ -333,7 +341,12 @@ pub(crate) fn ready(window: &Window, id: String, instance: u64) -> Result<(), St
     let context = window_data(window)?;
     let state = &context.overlay;
 
-    let view = state.view.lock().map_err(|e| e.to_string())?.clone().ok_or("modal webview is gone")?;
+    let view = state
+        .view
+        .lock()
+        .map_err(|e| e.to_string())?
+        .clone()
+        .ok_or("modal webview is gone")?;
     let first = {
         let mut held = state.open.lock().map_err(|e| e.to_string())?;
         let Some(modal) = held
@@ -355,7 +368,8 @@ pub(crate) fn ready(window: &Window, id: String, instance: u64) -> Result<(), St
     view.with_webview(move |webview| {
         log_error(platform.round_corners(&webview, first.radius));
         log_error(platform.raise_webview(&webview));
-    }).map_err(|e| e.to_string())?;
+    })
+    .map_err(|e| e.to_string())?;
     view.show().map_err(|e| e.to_string())?;
     let host = window.clone();
     view.with_webview(move |webview| {
@@ -365,7 +379,10 @@ pub(crate) fn ready(window: &Window, id: String, instance: u64) -> Result<(), St
         }
         let marked = window_data(&host).and_then(|context| {
             let mut open = context.overlay.open.lock().map_err(|e| e.to_string())?;
-            if let Some(modal) = open.as_mut().filter(|m| m.id == id && m.instance == instance) {
+            if let Some(modal) = open
+                .as_mut()
+                .filter(|m| m.id == id && m.instance == instance)
+            {
                 modal.visible = true;
             }
             Ok(())
@@ -374,7 +391,8 @@ pub(crate) fn ready(window: &Window, id: String, instance: u64) -> Result<(), St
         log_error(emit_window(&host, "modal-rendered", &id).map_err(|e| e.to_string()));
         exposure::log(&host, &format!("observe: modal rendered {id}"));
         exposure::window_changed(&host);
-    }).map_err(|e| e.to_string())
+    })
+    .map_err(|e| e.to_string())
 }
 
 /// id 의 모달이 열려 있으면 닫고 메인 웹뷰에 포커스를 돌려준다.

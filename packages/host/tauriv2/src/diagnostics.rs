@@ -273,7 +273,9 @@ fn capture_stop(after: f64) -> Result<Value, Failure> {
     let (directory, count) = RECORDING.finish(&recorder).map_err(internal)?;
     let limited = recorder.0.capture_limited().map_err(internal)?;
     let gap = recorder.0.capture_longest_gap().map_err(internal)?;
-    Ok(json!({"frames": directory.to_string_lossy(), "count": count, "limited": limited, "longestGap": gap}))
+    Ok(
+        json!({"frames": directory.to_string_lossy(), "count": count, "limited": limited, "longestGap": gap}),
+    )
 }
 
 /// 한 창에서 붙잡은 모달 내용 응답.
