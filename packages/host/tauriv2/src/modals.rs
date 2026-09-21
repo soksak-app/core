@@ -247,10 +247,13 @@ pub(crate) fn show(window: &Window, request: OverlayRequest) -> Result<Rect, Str
         .map_err(|e| e.to_string())?;
     *state.view.lock().map_err(|e| e.to_string())? = Some(view.clone());
     if let Err(error) = view.navigate(target) {
-        let _ = view.close();
+        let close_error = view.close().err();
         *state.view.lock().map_err(|e| e.to_string())? = None;
         *state.open.lock().map_err(|e| e.to_string())? = None;
-        return Err(error.to_string());
+        return Err(match close_error {
+            Some(close_error) => format!("{error}; modal close failed: {close_error}"),
+            None => error.to_string(),
+        });
     }
     Ok(at)
 }

@@ -77,14 +77,16 @@ impl Recording {
             capture.start(directory)?;
             match capture.wait() {
                 Ok(true) => Ok(()),
-                Ok(false) => {
-                    let _ = capture.stop();
-                    Err("capture did not produce an initial frame".into())
-                }
-                Err(error) => {
-                    let _ = capture.stop();
-                    Err(error)
-                }
+                Ok(false) => match capture.stop() {
+                    Ok(_) => Err("capture did not produce an initial frame".into()),
+                    Err(stop_error) => Err(format!(
+                        "capture did not produce an initial frame; stop failed: {stop_error}"
+                    )),
+                },
+                Err(error) => match capture.stop() {
+                    Ok(_) => Err(error),
+                    Err(stop_error) => Err(format!("{error}; capture stop failed: {stop_error}")),
+                },
             }
         })();
         match started {
@@ -92,23 +94,37 @@ impl Recording {
                 state.directory = Some(directory.to_path_buf());
                 Ok(())
             }
-            Err(error) => {
-                let _ = std::fs::remove_dir_all(directory);
-                Err(error)
-            }
+            Err(error) => match std::fs::remove_dir_all(directory) {
+                Ok(()) => Err(error),
+                Err(cleanup_error) => Err(format!(
+                    "{error}; capture directory cleanup failed: {cleanup_error}"
+                )),
+            },
         }
     }
 
     /// 진행 중인 녹화를 멈추고 폴더를 지운다. 녹화가 없으면 아무 일도 하지 않는다.
-    pub fn abort(&self, capture: &dyn Capture) {
+    pub fn abort(&self, capture: &dyn Capture) -> Result<(), String> {
         let directory = match self.state.lock() {
             Ok(mut state) => state.directory.take(),
-            Err(_) => return,
+            Err(error) => return Err(error.to_string()),
         };
         if let Some(directory) = directory {
-            let _ = capture.stop();
-            let _ = std::fs::remove_dir_all(directory);
+            let stop_error = capture.stop().err();
+            let cleanup_error = std::fs::remove_dir_all(directory)
+                .err()
+                .map(|error| error.to_string());
+            match (stop_error, cleanup_error) {
+                (None, None) => {}
+                (Some(error), None) | (None, Some(error)) => return Err(error),
+                (Some(stop_error), Some(cleanup_error)) => {
+                    return Err(format!(
+                        "capture stop failed: {stop_error}; capture directory cleanup failed: {cleanup_error}"
+                    ));
+                }
+            }
         }
+        Ok(())
     }
 
     /// 진행 중인 녹화를 끝내고 폴더와 프레임 수를 반환한다. 폴더는 요청자가 지운다.
@@ -123,8 +139,12 @@ impl Recording {
         let count = match capture.stop() {
             Ok(count) => count,
             Err(error) => {
-                let _ = std::fs::remove_dir_all(&directory);
-                return Err(error);
+                return match std::fs::remove_dir_all(&directory) {
+                    Ok(()) => Err(error),
+                    Err(cleanup_error) => Err(format!(
+                        "{error}; capture directory cleanup failed: {cleanup_error}"
+                    )),
+                };
             }
         };
         Ok((directory, count))

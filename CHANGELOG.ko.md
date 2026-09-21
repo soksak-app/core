@@ -2,6 +2,8 @@
 
 ## 미배포
 
+- F0.4-1.3.2 Tauri host 작업을 완료했다. 범위 Rust 감사에서 callback send·transport read·정리·capture stop·close-owner 직렬화 결과 무시를 찾았다. production lane이 이제 각 결과를 반환하거나 명시적으로 보고하고, recording abort가 stop과 정리의 동시 오류를 보존하며, Tauri Rust 검사와 parity 감사가 통과한다. 남은 Rust host/bridge와 Objective-C lane은 F0.4-1.3.3부터 F0.4-1.5에 남아 있다.
+
 - F0.4-1.2 JS/TS 실패 전달 감사를 완료했다. 기계적 Red inventory에서 client unwatch·exposure release·layout queue·project switching·transcript 경로의 빈/undefined promise rejection handler 6개를 찾았다. 각 경로가 이제 오류를 전달하거나 보고한다. 감사 자기 테스트, 패키지 검사와 저장소 게이트가 통과했으며 Rust·Objective-C lane은 F0.4-1.3·F0.4-1.4에 남아 있다.
 
 - F0.4-1.3.1 VT sidecar 작업을 완료했다. Red clippy 감사에서 actor·session·monitor·shutdown 결과를 무시한 경로를 찾았고, production lane이 이제 각 결과를 반환하거나 명시적으로 보고한다. panic/shutdown 계약 검사는 오류가 관측 가능하게 남는지 요구하며 sidecar 검사와 Rust 실패 감사가 통과했다. Tauri host Rust는 F0.4-1.3.2에 남아 있다.

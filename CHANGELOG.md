@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Completed F0.4-1.3.2 for the Tauri host. The scoped Rust audit found ignored callback sends, transport reads, cleanup, capture-stop, and close-owner serialization outcomes. The production lane now returns or explicitly reports each outcome, recording abort preserves simultaneous stop and cleanup failures, and the Tauri Rust suite and parity audit pass. Remaining Rust host/bridge and Objective-C lanes stay open under F0.4-1.3.3 through F0.4-1.5.
+
 - Completed the JS/TS failure-propagation audit for F0.4-1.2. The machine Red inventory found six empty or undefined promise rejection handlers in client unwatch, exposure release, layout queue, project switching, and transcript paths. Each path now propagates or reports the failure; the audit self-test, package tests, and repository gates pass. Rust and Objective-C lanes remain open under F0.4-1.3 and F0.4-1.4.
 
 - Completed F0.4-1.3.1 for the VT sidecar. The Red clippy audit found ignored actor, session, monitor, and shutdown outcomes; the production lane now returns or explicitly reports each outcome, and the panic/shutdown contract test requires the failure to remain observable. The sidecar test suite and Rust failure audit pass; Tauri host Rust remains open under F0.4-1.3.2.

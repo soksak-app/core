@@ -216,7 +216,9 @@ impl Answer {
                 "error": {"code": failure.code, "message": failure.message}}),
         };
         if let Ok(mut writer) = self.writer.lock() {
-            let _ = write_frame(&mut *writer, &reply);
+            if let Err(error) = write_frame(&mut *writer, &reply) {
+                eprintln!("endpoint answer failed: {error}");
+            }
         }
     }
 }
@@ -319,7 +321,9 @@ impl Notifier {
         };
         for writer in writers {
             if let Ok(mut writer) = writer.lock() {
-                let _ = write_frame(&mut *writer, message);
+                if let Err(error) = write_frame(&mut *writer, message) {
+                    eprintln!("endpoint notification failed: {error}");
+                }
             }
         }
     }

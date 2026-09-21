@@ -346,10 +346,15 @@ impl Relay {
             Err(_) => return,
         };
         for (target, tx) in gone {
-            let _ = tx.send(Err(Failure::new(
-                MISSING_DOCUMENT,
-                format!("{target} closed"),
-            )));
+            if tx
+                .send(Err(Failure::new(
+                    MISSING_DOCUMENT,
+                    format!("{target} closed"),
+                )))
+                .is_err()
+            {
+                eprintln!("closed-document failure had no pending receiver: {target}");
+            }
         }
     }
 
@@ -751,7 +756,9 @@ pub(crate) fn on_main<T: Send + 'static>(
     let (tx, rx) = mpsc::channel();
     window
         .run_on_main_thread(move || {
-            let _ = tx.send(work());
+            if tx.send(work()).is_err() {
+                eprintln!("main-thread result had no pending receiver");
+            }
         })
         .map_err(|e| e.to_string())?;
     rx.recv().map_err(|e| e.to_string())?
@@ -765,7 +772,9 @@ pub(crate) fn with_view<T: Send + 'static>(
     let (tx, rx) = mpsc::channel();
     webview
         .with_webview(move |view| {
-            let _ = tx.send(work(&view));
+            if tx.send(work(&view)).is_err() {
+                eprintln!("webview result had no pending receiver");
+            }
         })
         .map_err(|e| e.to_string())?;
     rx.recv().map_err(|e| e.to_string())?
@@ -913,7 +922,9 @@ fn fullscreen(window: &Window, on: bool) -> Result<Value, Failure> {
             handle,
             on,
             Box::new(move || {
-                let _ = tx.send(());
+                if tx.send(()).is_err() {
+                    eprintln!("fullscreen completion had no pending receiver");
+                }
             }),
         )
     })
@@ -943,10 +954,14 @@ pub(crate) fn presented(window: &Window, timeout: Duration) -> Result<f64, Failu
             if let Err(error) = platform.after_settled(
                 &view,
                 Box::new(move |displayed| {
-                    let _ = done.send(Ok(displayed));
+                    if done.send(Ok(displayed)).is_err() {
+                        eprintln!("presentation completion had no pending receiver");
+                    }
                 }),
             ) {
-                let _ = failed.send(Err(error));
+                if failed.send(Err(error)).is_err() {
+                    eprintln!("presentation failure had no pending receiver");
+                }
             }
         })
         .map_err(internal)?;
@@ -1183,7 +1198,9 @@ impl Host {
                     handle,
                     ACTIVATION,
                     Box::new(move |result| {
-                        let _ = tx.send(result);
+                        if tx.send(result).is_err() {
+                            eprintln!("activation result had no pending receiver");
+                        }
                     }),
                 )
             })
@@ -1201,7 +1218,9 @@ impl Host {
                 pointer,
                 RECEIPT,
                 Box::new(move |delivery| {
-                    let _ = tx.send(delivery);
+                    if tx.send(delivery).is_err() {
+                        eprintln!("pointer delivery had no pending receiver");
+                    }
                 }),
             )
         })

@@ -147,9 +147,16 @@ mod tests {
     fn persists_owned_png_without_overwriting() {
         let root =
             std::env::temp_dir().join(format!("soksak-clipboard-test-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
+        if let Err(error) = std::fs::remove_dir_all(&root) {
+            assert_eq!(
+                error.kind(),
+                std::io::ErrorKind::NotFound,
+                "failed to clear clipboard test directory: {error}"
+            );
+        }
         let path = persist_png_at(&root, b"png").unwrap();
         assert_eq!(std::fs::read(&path).unwrap(), b"png");
-        let _ = std::fs::remove_dir_all(root);
+        std::fs::remove_dir_all(root)
+            .unwrap_or_else(|error| panic!("failed to clean clipboard test directory: {error}"));
     }
 }

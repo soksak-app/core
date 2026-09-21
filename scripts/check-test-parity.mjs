@@ -345,6 +345,22 @@ const FEATURE_LINKS = [
     levels: ["unit", "native"],
   },
   {
+    id: "F0.4-1.3.2",
+    implementation: [
+      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "PersistentConnection" },
+      { file: "packages/host/tauriv2/src/recording.rs", symbol: "abort" },
+      { file: "packages/host/tauriv2/src/exposure.rs", symbol: "on_main" },
+      { file: "scripts/check-test-parity.mjs", symbol: "auditRustFailurePropagation" },
+    ],
+    tests: [
+      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "persistent_transport_reconnects_after_connection_loss_and_preserves_owner" },
+      { file: "packages/host/tauriv2/tests/recording_test.rs", id: "an_aborted_recording_is_stopped_and_removed_and_allows_the_next" },
+      { file: "scripts/test/test-parity.test.mjs", id: "Rust failure audit rejects ignored outcomes in the scoped production lane" },
+    ],
+    expected: "The Tauri host does not discard production Result or callback and cleanup outcomes; transport, delivery, recording, and shutdown failures remain observable through returned errors or explicit reports.",
+    levels: ["unit", "native"],
+  },
+  {
     id: "F2.1",
     implementation: [{ file: "sidecars/vt-core/src/pty.rs", symbol: "pub fn close" }],
     tests: [{ file: "sidecars/vt-core/tests/pty_lifecycle.rs", id: "real_sessions_are_independent_and_close_removes_session" }],
@@ -868,7 +884,10 @@ export function auditInventory(files, matrix = MATRIX, readSource = (file) => re
   errors.push(...ownershipErrors);
   const jsFailureErrors = auditJsFailurePropagation(files, readSource);
   errors.push(...jsFailureErrors);
-  const rustFailureErrors = auditRustFailurePropagation(files, readSource);
+  const rustFailureErrors = [
+    ...auditRustFailurePropagation(files, readSource, "sidecars/vt-core/src/"),
+    ...auditRustFailurePropagation(files, readSource, "packages/host/tauriv2/src/"),
+  ];
   errors.push(...rustFailureErrors);
 
   return {

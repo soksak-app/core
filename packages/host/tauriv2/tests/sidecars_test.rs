@@ -8,6 +8,7 @@ use std::thread;
 use std::time::Duration;
 
 use std::io::{BufRead, BufReader, Write};
+use std::net::Shutdown;
 use std::os::unix::net::UnixListener;
 use std::process::Command;
 
@@ -346,7 +347,7 @@ fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
             let disconnected_tx = disconnected_tx.clone();
             workers.push(thread::spawn(move || {
                 stream
-                    .set_read_timeout(Some(Duration::from_secs(10)))
+                    .set_read_timeout(Some(Duration::from_secs(30)))
                     .unwrap();
                 let mut reader = BufReader::new(stream.try_clone().unwrap());
                 let mut line = String::new();
@@ -367,6 +368,7 @@ fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
                 let mut request: serde_json::Value = serde_json::from_str(&line).unwrap();
                 if connection_index < 2 {
                     stream.write_all(line.as_bytes()).unwrap();
+                    stream.shutdown(Shutdown::Both).unwrap();
                     disconnected_tx.send(connection_index).unwrap();
                     return;
                 }

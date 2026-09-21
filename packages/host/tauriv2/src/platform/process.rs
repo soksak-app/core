@@ -10,7 +10,6 @@ pub fn service_process_exists(pid: u32) -> bool {
     }
     #[cfg(not(unix))]
     {
-        let _ = pid;
         true
     }
 }

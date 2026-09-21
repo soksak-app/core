@@ -181,6 +181,12 @@ test("Rust failure audit rejects ignored outcomes in the scoped production lane"
     "sidecars/vt-core/src/platform/pty.rs": "let result = work();",
     "sidecars/vt-core/tests/serve_contract.rs": "let _ = serve(...);",
     "packages/host/tauriv2/src/ignored.rs": "let _ = host();",
-  }[file] ?? ""));
+  }[file] ?? ""), "sidecars/vt-core/src/");
   assert.deepEqual(errors, ["sidecars/vt-core/src/protocol.rs:1: ignored Rust result or task outcome"]);
+  assert.deepEqual(auditRustFailurePropagation([
+    "packages/host/tauriv2/src/ignored.rs",
+    "packages/host/tauriv2/tests/ignored.rs",
+  ], (file) => file.endsWith("ignored.rs") ? "let _ = host();" : "", "packages/host/tauriv2/src/"), [
+    "packages/host/tauriv2/src/ignored.rs:1: ignored Rust result or task outcome",
+  ]);
 });

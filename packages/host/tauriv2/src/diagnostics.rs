@@ -209,7 +209,7 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
     })();
     // 요청자가 프레임 폴더를 받지 못하면 녹화를 멈추고 폴더를 지운다.
     if finished.is_err() && frames.is_some() {
-        RECORDING.abort(&recorder()?);
+        RECORDING.abort(&recorder()?).map_err(internal)?;
     }
     finished
 }

@@ -173,7 +173,7 @@ pub(crate) fn attach(webview: &Webview, request: Request) -> Result<(), String> 
     let handle = match create(webview, &window, &key, platform, data.overlay.dialog()) {
         Ok(handle) => handle,
         Err(error) => {
-            let _ = data.documents.remove(&key);
+            drop(data.documents.remove(&key));
             return Err(error);
         }
     };
@@ -204,7 +204,7 @@ fn create(
     platform: &'static dyn platform::Platform,
     dialog: bool,
 ) -> Result<Handle, String> {
-    let _ = with_view(webview, move |view| platform.view_id(view))?;
+    with_view(webview, move |view| platform.view_id(view))?;
     let host = window.clone();
     let (surface_id, name) = key.clone();
     let state_host = host.clone();

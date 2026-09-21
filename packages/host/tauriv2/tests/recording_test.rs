@@ -133,7 +133,7 @@ fn an_aborted_recording_is_stopped_and_removed_and_allows_the_next() {
     let refused = recording.start(&fake, WINDOW, &second, &make).unwrap_err();
     assert!(refused.contains("is running"), "{refused}");
     assert!(!second.exists());
-    recording.abort(&fake);
+    recording.abort(&fake).unwrap();
     assert!(!first.exists());
     recording.start(&fake, WINDOW, &second, &make).unwrap();
     // 같은 창이면 녹화 대상을 다시 준비하지 않는다.

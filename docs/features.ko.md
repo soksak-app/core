@@ -42,7 +42,7 @@
   - [o] F0.4-1.2 — core·plugin·애플리케이션·스크립트의 JS/TS 예외·잘못된 입력·명령/이벤트 출력 전달을 감사한다. Red에서 client·exposure·host·project·transcript 경로의 빈/undefined promise rejection handler 6개를 기계적으로 찾았다. Green에서 6개 경로가 모두 오류를 보고하거나 전달하고 JS 실패 감사와 workbench/client 패키지 검사가 통과했으며, 다른 언어 lane은 이 작업 단위에 섞지 않았다.
   - [~] F0.4-1.3 — host·sidecar·native bridge의 Rust 오류 전달을 감사하고 삼킨 `Result`와 성공 처리된 미지원 연산을 거부한다.
     - [o] F0.4-1.3.1 — VT sidecar production 경로에서 무시한 `Result`를 제거하고 session-close·detach·actor·monitor·transport 오류를 관측 가능하게 한다. Red에서 `clippy::let_underscore_must_use`가 actor/session/monitor/shutdown 결과 무시를 찾았다. Green에서 VT production lane에 무시한 `let _ =` 결과가 없고 panic/shutdown 계약 검사가 반환 오류를 요구하며 sidecar 전체 검사가 통과했다.
-    - [ ] F0.4-1.3.2 — Tauri host production 경로에서 무시한 `Result`를 제거하고 callback 전달·정리 오류를 관측 가능하게 한다.
+    - [o] F0.4-1.3.2 — Tauri host production 경로에서 무시한 `Result`를 제거하고 callback 전달·정리 오류를 관측 가능하게 한다. Red에서 범위 감사가 callback send·transport read·정리·capture stop·close-owner 직렬화 결과 무시를 찾았다. Green에서 Tauri production lane에 무시한 `let _ =` 결과가 없고, recording abort가 stop과 정리의 동시 오류를 모두 보존하며, parity 자기 테스트와 Tauri 전체 Rust 검사가 통과했다. 다른 Rust lane은 이 작업 단위에 섞지 않았다.
     - [ ] F0.4-1.3.3 — 남은 Rust host/bridge lane을 감사해 무시한 `Result`와 성공 처리된 미지원 연산이 없음을 입증한다.
   - [ ] F0.4-1.4 — Objective-C/native 오류 전달과 모든 host 호출부를 감사하고 로그만 남기는 실패 경로와 잘못된 상태 대체를 거부한다.
   - [ ] F0.4-1.5 — 언어별 실패 matrix를 실행하고 모든 언어 lane의 귀속 가능한 Red/Green 증거가 있을 때만 F0.4-1을 닫는다.
@@ -55,7 +55,7 @@
   - [o] G1.2-1 — 불필요한 루트 CLI 시간 제한 플래그를 제거하고 호환 폴백 없이 명시적 케이스 제한을 유지했다. 조정한 명령에서 목록/체크리스트/패키지 명령 단언 22개가 통과했다.
   - [o] G1.3 — docs-check가 작업 ID 중복·잘못된 상태·번역의 순서/깊이/상태 차이와 HEAD 대비 완료 ID 재개·삭제를 거부한다. 번역 결함 6개와 완료 항목 변이 2개의 Red를 재현했고 체크리스트 단언 9개가 모두 통과했다. 기존 기능 표 검사도 유지한다.
   - [o] 패키지·빌드 매니페스트·JS/TS·Rust·Go·Objective-C·선언·스크립트와 공개 명령·상태·설정·호스트 연산을 발견한다. 감사 도구가 미검증 구현과 연결되지 않은 테스트의 목록과 수를 별도로 보고하며, 현재 저장소가 각각 0개와 0개인 Green임을 명시한다. 발견된 모든 구현과 테스트에 명시적인 소유 연결을 추가했으며, 동작 Green은 별도 요구사항으로 남긴다.
-  - [o] 모든 기능을 명시적 구현 진입점·이름 있는 동작 테스트·기대 결과·필수 검증 수준에 연결했다. 감사 스키마와 Red 자기 테스트를 추가했고 완료된 기능 항목 G1·F0.1–F3.4·F10.1–F10.2·G1.1–G1.4·G1.3-1–G1.3-5·G1.4-1·F0.4-1.1·F0.4-1.2·F0.4-1.3.1·G4.1을 모두 등록했다(49개 링크). 집계형 검토 기록인 G1.4-2는 기능이 아니므로 명시적으로 제외한다. 감사는 완료된 기능이 연결 집합에서 빠지면 실패하며, 미등록·중복·누락·해석 불가 참조도 실패한다. `node scripts/check-test-parity.mjs`, 자기 테스트 22개, `pnpm test`, `make boundaries`, `make exposure-check`, `make docs-check`가 통과했다. 공용 네이티브 검사는 각 호스트 통합을 대체하지 않는다.
+  - [o] 모든 기능을 명시적 구현 진입점·이름 있는 동작 테스트·기대 결과·필수 검증 수준에 연결했다. 감사 스키마와 Red 자기 테스트를 추가했고 완료된 기능 항목 G1·F0.1–F3.4·F10.1–F10.2·G1.1–G1.4·G1.3-1–G1.3-5·G1.4-1·F0.4-1.1·F0.4-1.2·F0.4-1.3.1·F0.4-1.3.2·G4.1을 모두 등록했다(50개 링크). 집계형 검토 기록인 G1.4-2는 기능이 아니므로 명시적으로 제외한다. 감사는 완료된 기능이 연결 집합에서 빠지면 실패하며, 미등록·중복·누락·해석 불가 참조도 실패한다. `node scripts/check-test-parity.mjs`, 자기 테스트 22개, `pnpm test`, `make boundaries`, `make exposure-check`, `make docs-check`가 통과했다. 공용 네이티브 검사는 각 호스트 통합을 대체하지 않는다.
   - [o] G1.4 — 발견된 모든 테스트 파일은 Wails 구현 옆의 진단 태그 Go 테스트를 포함해 명시적인 감사 lane이 소유한다. Red 감사에서 소유자 없음으로 드러난 `packages/host/wailsv3/src/diagnostics_test.go`를 Wails host lane이 명시적으로 소유하도록 등록했다. `node scripts/check-test-parity.mjs`가 53개 lane·구현 파일 247개·테스트 파일 166개로 통과하고, parity 자기 검사 15개와 `make docs-check`가 통과했다. 기록된 수는 기계 출력과 대조한다.
 - [ ] G2 — Tauri·Wails 어댑터에 같은 기대 상태 시나리오를 실행한다. 모달·캡처 예시만이 아닌 전체 공개 계약을 검사하며 차이는 명시적 플랫폼 범위로 설명하고 몰래 제외하지 않는다.
 - [ ] G3 — 구현·테스트 누락, 실행 제외, 잘못된 연결, 테스트 0개, 필수 생략, 오래된 증거, 한쪽 호스트 누락으로 감사 자체 실패를 입증한다. 무동작 구현·효과·응답 제거를 동작 단언이 잡는지 검증한다.

@@ -13,6 +13,7 @@ use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Component, Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{sync_channel, RecvError, SyncSender, TryRecvError, TrySendError};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -196,6 +197,7 @@ struct Process {
 struct PersistentConnection {
     close_waiters: Arc<Mutex<HashMap<String, SyncSender<Result<(), String>>>>>,
     shutdown_waiters: Arc<Mutex<HashMap<String, SyncSender<Result<(), String>>>>>,
+    connected: Arc<AtomicBool>,
 }
 
 struct State<O> {
@@ -351,6 +353,15 @@ impl<O: Owner> Sidecars<O> {
                 return Err(format!("surface {surface} belongs to another window"));
             }
         }
+        let disconnected = state
+            .running
+            .get(name)
+            .and_then(|process| process.persistent.as_ref())
+            .is_some_and(|connection| !connection.connected.load(Ordering::Acquire));
+        if disconnected {
+            state.running.remove(name);
+            eprintln!("sidecar {name}: discarding disconnected persistent connection");
+        }
         if !state.running.contains_key(name) {
             let process = self.start(name)?;
             state.running.insert(name.to_string(), process);
@@ -489,7 +500,13 @@ impl<O: Owner> Sidecars<O> {
                             "op": "close-owner",
                             "request": request,
                         });
-                        let mut bytes = serde_json::to_vec(&line).unwrap_or_default();
+                        let mut bytes = match serde_json::to_vec(&line) {
+                            Ok(bytes) => bytes,
+                            Err(error) => {
+                                eprintln!("sidecar: close-owner serialization failed: {error}");
+                                return;
+                            }
+                        };
                         bytes.push(b'\n');
                         let (tx, rx) = sync_channel(1);
                         persistent
@@ -497,7 +514,10 @@ impl<O: Owner> Sidecars<O> {
                             .lock()
                             .expect("close waiters")
                             .insert(request, tx);
-                        let _ = process.outbox.send(Outgoing::Line(bytes));
+                        if let Err(error) = process.outbox.send(Outgoing::Line(bytes)) {
+                            eprintln!("sidecar: send close-owner: {error}");
+                            return;
+                        }
                         let result = rx.recv_timeout(remaining);
                         match result {
                             Ok(Ok(())) => {
@@ -853,10 +873,19 @@ impl<O: Owner> Sidecars<O> {
             Arc::new(Mutex::new(HashMap::new()));
         let shutdown_waiters: Arc<Mutex<HashMap<String, SyncSender<Result<(), String>>>>> =
             Arc::new(Mutex::new(HashMap::new()));
+        let connected = Arc::new(AtomicBool::new(true));
         let write_name = name.to_string();
         let write_state = Arc::clone(&self.state);
         let writer = stream;
+        let writer_connected = Arc::clone(&connected);
         thread::spawn(move || {
+            struct ConnectionGuard(Arc<AtomicBool>);
+            impl Drop for ConnectionGuard {
+                fn drop(&mut self) {
+                    self.0.store(false, Ordering::Release);
+                }
+            }
+            let _connection_guard = ConnectionGuard(writer_connected);
             let mut writer = writer;
             loop {
                 loop {
@@ -867,8 +896,12 @@ impl<O: Owner> Sidecars<O> {
                             }
                         }
                         Ok(Outgoing::Close) | Err(TryRecvError::Disconnected) => {
-                            let _ = write_pending_socket(&write_state, &write_name, &mut *writer);
-                            let _ = writer.shutdown();
+                            if !write_pending_socket(&write_state, &write_name, &mut *writer) {
+                                eprintln!("sidecar: flush pending socket failed during close");
+                            }
+                            if let Err(error) = writer.shutdown() {
+                                eprintln!("sidecar: writer shutdown failed: {error}");
+                            }
                             return;
                         }
                         Err(TryRecvError::Empty) => break,
@@ -884,8 +917,12 @@ impl<O: Owner> Sidecars<O> {
                         }
                     }
                     Ok(Outgoing::Close) | Err(RecvError) => {
-                        let _ = write_pending_socket(&write_state, &write_name, &mut *writer);
-                        let _ = writer.shutdown();
+                        if !write_pending_socket(&write_state, &write_name, &mut *writer) {
+                            eprintln!("sidecar: flush pending socket failed during disconnect");
+                        }
+                        if let Err(error) = writer.shutdown() {
+                            eprintln!("sidecar: writer shutdown failed: {error}");
+                        }
                         return;
                     }
                 }
@@ -897,15 +934,38 @@ impl<O: Owner> Sidecars<O> {
         let waiters = Arc::clone(&close_waiters);
         let shutdown_waiters_for_reader = Arc::clone(&shutdown_waiters);
         let tx_clone = tx.clone();
+        let reader_connected = Arc::clone(&connected);
         thread::spawn(move || {
+            struct ConnectionGuard(Arc<AtomicBool>);
+            impl Drop for ConnectionGuard {
+                fn drop(&mut self) {
+                    self.0.store(false, Ordering::Release);
+                }
+            }
+            let _connection_guard = ConnectionGuard(Arc::clone(&reader_connected));
             let mut reader = BufReader::new(reader_stream);
             let mut line = String::new();
-            while reader.read_line(&mut line).unwrap_or(0) != 0 {
+            loop {
+                let read = match reader.read_line(&mut line) {
+                    Ok(read) => read,
+                    Err(error) => {
+                        if error.kind() == std::io::ErrorKind::WouldBlock {
+                            eprintln!("sidecar: response read would block; retrying");
+                            line.clear();
+                            continue;
+                        }
+                        eprintln!("sidecar: read response failed: {error}");
+                        break;
+                    }
+                };
+                if read == 0 {
+                    break;
+                }
                 let value: serde_json::Value = match serde_json::from_str(&line) {
                     Ok(v) => v,
-                    Err(_) => {
-                        line.clear();
-                        continue;
+                    Err(error) => {
+                        eprintln!("sidecar: invalid response JSON: {error}");
+                        break;
                     }
                 };
                 if value.get("op").and_then(|v| v.as_str()) == Some("closed-owner") {
@@ -922,7 +982,9 @@ impl<O: Owner> Sidecars<O> {
                                     .unwrap_or("close-owner failed")
                                     .to_string())
                             };
-                            let _ = sender.send(result);
+                            if sender.send(result).is_err() {
+                                eprintln!("sidecar: close-owner response had no waiter");
+                            }
                         }
                     }
                     line.clear();
@@ -945,7 +1007,9 @@ impl<O: Owner> Sidecars<O> {
                                     .unwrap_or("shutdown failed")
                                     .to_string())
                             };
-                            let _ = sender.send(result);
+                            if sender.send(result).is_err() {
+                                eprintln!("sidecar: shutdown response had no waiter");
+                            }
                         }
                     }
                     line.clear();
@@ -953,9 +1017,9 @@ impl<O: Owner> Sidecars<O> {
                 }
                 let event: Event = match serde_json::from_value(value) {
                     Ok(event) => event,
-                    Err(_) => {
-                        line.clear();
-                        continue;
+                    Err(error) => {
+                        eprintln!("sidecar: invalid event response: {error}");
+                        break;
                     }
                 };
                 let owner = state
@@ -987,7 +1051,16 @@ impl<O: Owner> Sidecars<O> {
                 line.clear();
             }
             if let Ok(mut state) = state.lock() {
-                state.running.remove(&sidecar);
+                let is_current = state
+                    .running
+                    .get(&sidecar)
+                    .and_then(|process| process.persistent.as_ref())
+                    .is_some_and(|connection| {
+                        Arc::ptr_eq(&connection.connected, &reader_connected)
+                    });
+                if is_current {
+                    state.running.remove(&sidecar);
+                }
             }
             let close_error =
                 Err("persistent service disconnected before close-owner ack".to_string());
@@ -1015,6 +1088,7 @@ impl<O: Owner> Sidecars<O> {
             persistent: Some(PersistentConnection {
                 close_waiters,
                 shutdown_waiters,
+                connected,
             }),
         })
     }

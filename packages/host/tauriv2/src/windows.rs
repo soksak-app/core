@@ -453,7 +453,9 @@ pub(crate) fn window_ready(window: &Window) -> Result<(), String> {
     crate::exposure::replay_registrations(window);
     crate::exposure::windows_changed(window.app_handle());
     for ready in data.readied.lock().map_err(|e| e.to_string())?.drain(..) {
-        let _ = ready.send(());
+        if ready.send(()).is_err() {
+            eprintln!("window readiness had no pending receiver");
+        }
     }
     crate::exposure::rewatch(window);
     emit_window(window, "page-ready", ()).map_err(|e| e.to_string())

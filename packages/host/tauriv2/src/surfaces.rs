@@ -284,7 +284,8 @@ pub(crate) fn when_settled(running: &Running) -> Result<std::sync::mpsc::Receive
     if *going {
         running.settled.lock().map_err(|e| e.to_string())?.push(tx);
     } else {
-        let _ = tx.send(());
+        tx.send(())
+            .map_err(|error| format!("settled notification had no receiver: {error}"))?;
     }
     Ok(rx)
 }
@@ -346,16 +347,24 @@ fn watch_presses(window: &Window, views: &Views, watching: &Watching) -> Result<
                     else {
                         return false;
                     };
-                    let _ = emit_window(&host, "surface-pressed", id.clone());
+                    if let Err(error) = emit_window(&host, "surface-pressed", id.clone()) {
+                        eprintln!("surface-pressed event failed: {error}");
+                    }
                     true
                 });
                 let pointed = Box::new(move |phase, x, y| {
-                    let _ = emit_window(&pointing, "surface-input", InputStep { phase, x, y });
+                    if let Err(error) =
+                        emit_window(&pointing, "surface-input", InputStep { phase, x, y })
+                    {
+                        eprintln!("surface-input event failed: {error}");
+                    }
                 });
                 *started = Some(platform.watch_input(handle, pressed, pointed)?);
                 Ok(())
             })();
-            let _ = tx.send(result);
+            if tx.send(result).is_err() {
+                eprintln!("surface input setup had no pending receiver");
+            }
         })
         .map_err(|e| e.to_string())?;
     rx.recv().map_err(|e| e.to_string())??;
@@ -376,7 +385,9 @@ pub(crate) fn isolate_webview(view: &Webview, page_focus: PageFocus) -> Result<(
                 PageFocus::Allowed => Ok(registered),
                 PageFocus::Ignored => Ok(registered && platform.ignore_page_focus(&webview)?),
             });
-        let _ = tx.send(isolated);
+        if tx.send(isolated).is_err() {
+            eprintln!("surface focus result had no pending receiver");
+        }
     })
     .map_err(|e| e.to_string())?;
     if rx.recv().map_err(|e| e.to_string())?? {
@@ -449,16 +460,23 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
                 owner,
                 ticket,
                 Box::new(move |allowed| {
-                    let _ = tx.send(if allowed {
-                        Ok(handle)
-                    } else {
-                        Err("window closed before layout".into())
-                    });
+                    if tx
+                        .send(if allowed {
+                            Ok(handle)
+                        } else {
+                            Err("window closed before layout".into())
+                        })
+                        .is_err()
+                    {
+                        eprintln!("surface preparation result had no pending receiver");
+                    }
                 }),
             )
         });
         if let Err(error) = begun {
-            let _ = failed.send(Err(error));
+            if failed.send(Err(error)).is_err() {
+                eprintln!("surface preparation failure had no pending receiver");
+            }
         }
     })
     .map_err(|e| e.to_string())?;
@@ -630,12 +648,16 @@ pub(crate) async fn present(
             platform.after_presentation(
                 &view,
                 Box::new(move || {
-                    let _ = ready.send(Ok(()));
+                    if ready.send(Ok(())).is_err() {
+                        eprintln!("surface readiness had no pending receiver");
+                    }
                 }),
             )
         });
         if let Err(error) = outcome {
-            let _ = dom_tx.send(Err(error));
+            if dom_tx.send(Err(error)).is_err() {
+                eprintln!("DOM presentation failure had no pending receiver");
+            }
         }
     })
     .map_err(|error| error.to_string())?;
@@ -716,7 +738,9 @@ pub(crate) async fn present(
             exposure::window_changed(&presentation_window);
             Ok(placed)
         })();
-        let _ = ui_tx.try_send(result);
+        if let Err(error) = ui_tx.try_send(result) {
+            eprintln!("surface placement result had no pending receiver: {error}");
+        }
     }))?;
     ui_rx
         .recv()
@@ -735,7 +759,9 @@ fn announce_run(window: &Window, running: &Running, going: bool) -> Result<(), S
         *held = going;
         if !going {
             for done in running.settled.lock().map_err(|e| e.to_string())?.drain(..) {
-                let _ = done.send(());
+                if done.send(()).is_err() {
+                    eprintln!("surface settled notification had no pending receiver");
+                }
             }
         }
     }

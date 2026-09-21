@@ -141,7 +141,9 @@ impl Connection for Stream {
     }
 
     fn close(&self) {
-        let _ = self.0.shutdown(Shutdown::Both);
+        if let Err(error) = self.0.shutdown(Shutdown::Both) {
+            eprintln!("endpoint shutdown failed: {error}");
+        }
     }
 }
 
