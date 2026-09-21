@@ -69,6 +69,8 @@ Record the priority and acceptance criteria of incidental work here before start
 - [ ] F8 — Real macOS Korean IME: preedit, editing, cancellation, ranges and candidate placement; commit exactly once in order, never send uncommitted text to the PTY. Validate through both hosts.
 - [ ] F9 — Measure restoration connection/document/raster/first-presentation phases. Show loading until actual presentation, persistent actionable error on failure, and measured restoration improvement under the same fixture.
 - [ ] F10 — Restore both hosts' existing native modal contract, without redesigning the UI.
+  - [o] F10.1 — The current macOS Tauri build passes all seven modal cases: transparent picker menus, semi-transparent settings scrim, native focus, stale-answer ordering, reload cleanup, parent resize, and modal coverage. The native picker keeps Escape focus in its child WebView.
+  - [ ] F10.2 — Wails still lacks the native modal WebView path. Its `OverlayShow` stores state and emits content but does not create or load a modal WebView, so the same menu case times out with `host.window.modal === null`. Implement and run the same seven cases before closing F10.
   - [ ] Transparent split picker and settings with 50% black background plus 3px blur; retain the dedicated child-WebView contract and correct the conflicting main-DOM-only statement.
   - [ ] Wails create/hide/load/place/ready/show/focus/update/close lifecycle and event routing. Both hosts: actual pixels, background input blocking, dismissal rules, focus return, move/resize/reopen/reload, and stale-response rejection.
 - [ ] F11 — Complete exposure and diagnostic parity.
