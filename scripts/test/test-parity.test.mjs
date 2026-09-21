@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { auditCompletedFeatureLinks, auditFeatureLinks, auditInventory, discoverInventory, repositoryFiles } from "../check-test-parity.mjs";
+import { auditCompletedFeatureLinks, auditFeatureLinks, auditInventory, auditRecordedInventoryCounts, discoverInventory, repositoryFiles } from "../check-test-parity.mjs";
 
 const files = repositoryFiles();
 
@@ -89,4 +89,13 @@ test("completed capability entries all have feature evidence links", { timeout: 
   const inventory = auditInventory(files);
   assert.deepEqual(auditCompletedFeatureLinks(inventory.featureLinks), []);
   assert.ok(!inventory.featureLinks.some((feature) => feature.id === "G1.4-2"));
+});
+
+test("recorded parity counts cannot drift from the current inventory", { timeout: 1000 }, () => {
+  const inventory = auditInventory(files);
+  assert.deepEqual(auditRecordedInventoryCounts(inventory), []);
+  assert.match(
+    auditRecordedInventoryCounts({ ...inventory, testCount: inventory.testCount + 1 })[0],
+    /do not match current output/,
+  );
 });

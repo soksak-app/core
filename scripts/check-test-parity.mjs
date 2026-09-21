@@ -138,6 +138,20 @@ const MATRIX = [
 // The inventory remains structural; behavior is proved by the referenced tests.
 const FEATURE_LINKS = [
   {
+    id: "G1.3-2",
+    implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "auditRecordedInventoryCounts" }],
+    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "recorded parity counts cannot drift from the current inventory" }],
+    expected: "The G1.4 lane, implementation, and test counts recorded in the checklist match current inventory output and a count drift fails explicitly.",
+    levels: ["unit"],
+  },
+  {
+    id: "G1.3-1",
+    implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "auditCompletedFeatureLinks" }],
+    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "completed capability entries all have feature evidence links" }],
+    expected: "Every completed capability checklist entry has a linked implementation, named behavior test, expected result, and verification level, while aggregate review records are explicitly excluded.",
+    levels: ["unit"],
+  },
+  {
     id: "F2",
     implementation: [{ file: "sidecars/vt-core/src/platform/darwin/service.rs", symbol: "serve_persistent" }],
     tests: [{ file: "e2e/terminal-processes.test.mjs", id: "process measurement preserves identities" }],
@@ -714,11 +728,24 @@ export function auditCompletedFeatureLinks(features, checklistSource = readFileS
     .map((id) => `${id}: completed capability has no feature link`);
 }
 
+export function auditRecordedInventoryCounts(inventory, checklistSource = readFileSync(`${ROOT}docs/features.md`, "utf8")) {
+  const line = checklistSource.split("\n").find((entry) => entry.includes("G1.4 — Every discovered test file"));
+  if (!line) return ["G1.4: recorded parity evidence line is missing"];
+  const match = line.match(/passes with (\d+) lanes, (\d+) implementation files, and (\d+) test files/);
+  if (!match) return ["G1.4: recorded parity evidence counts are not declared in the expected form"];
+  const expected = [inventory.trackCount, inventory.implementationCount, inventory.testCount].map(String);
+  const actual = match.slice(1);
+  return actual.every((value, index) => value === expected[index])
+    ? []
+    : [`G1.4: recorded parity counts ${actual.join(", ")} do not match current output ${expected.join(", ")}`];
+}
+
 export { MATRIX, repositoryFiles };
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
   const { errors, warnings, uncoveredImplementations, uncoveredTests, featureErrors, featureLinks, trackCount, implementationCount, testCount } = auditInventory(repositoryFiles());
   errors.push(...auditCompletedFeatureLinks(featureLinks));
+  errors.push(...auditRecordedInventoryCounts({ trackCount, implementationCount, testCount }));
   if (errors.length) {
     console.error(`Test inventory checks failed: ${errors.length} issue(s); ` +
       `${uncoveredImplementations.length} uncovered implementation(s), ${uncoveredTests.length} uncovered test(s), ` +
