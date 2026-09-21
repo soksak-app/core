@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { auditCommittedEvidenceWording, auditCompletedFeatureLinks, auditFeatureLinks, auditHistoricalScopeWording, auditInventory, auditJsFailurePropagation, auditModalParitySnapshotWording, auditOwnership, auditRecordedInventoryCounts, discoverInventory, repositoryFiles } from "../check-test-parity.mjs";
+import { auditCommittedEvidenceWording, auditCompletedFeatureLinks, auditFeatureLinks, auditHistoricalScopeWording, auditInventory, auditJsFailurePropagation, auditModalParitySnapshotWording, auditOwnership, auditRecordedInventoryCounts, auditRustFailurePropagation, discoverInventory, repositoryFiles } from "../check-test-parity.mjs";
 
 const files = repositoryFiles();
 
@@ -168,4 +168,19 @@ test("JS failure audit rejects promise handlers that hide rejection", { timeout:
   }[file] ?? ""));
   assert.equal(errors.length, 2);
   assert.ok(errors.every((error) => error.includes("hides a rejected operation")));
+});
+
+test("Rust failure audit rejects ignored outcomes in the scoped production lane", { timeout: 1000 }, () => {
+  const errors = auditRustFailurePropagation([
+    "sidecars/vt-core/src/protocol.rs",
+    "sidecars/vt-core/src/platform/pty.rs",
+    "sidecars/vt-core/tests/serve_contract.rs",
+    "packages/host/tauriv2/src/ignored.rs",
+  ], (file) => ({
+    "sidecars/vt-core/src/protocol.rs": "let _ = actor.await;",
+    "sidecars/vt-core/src/platform/pty.rs": "let result = work();",
+    "sidecars/vt-core/tests/serve_contract.rs": "let _ = serve(...);",
+    "packages/host/tauriv2/src/ignored.rs": "let _ = host();",
+  }[file] ?? ""));
+  assert.deepEqual(errors, ["sidecars/vt-core/src/protocol.rs:1: ignored Rust result or task outcome"]);
 });

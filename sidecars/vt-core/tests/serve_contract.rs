@@ -2178,7 +2178,8 @@ async fn test_panicking_surface_reports_error() {
     );
 
     drop(to_serve);
-    task.await.unwrap().unwrap();
+    let shutdown = task.await.unwrap();
+    assert!(shutdown.is_err(), "surface shutdown failure must remain observable");
 }
 
 /// 이미지 봉투가 나올 때까지 출력 줄을 읽는다. screen 이벤트 줄은 건너뛴다.

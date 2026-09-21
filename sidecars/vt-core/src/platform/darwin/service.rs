@@ -260,7 +260,7 @@ pub async fn serve_persistent(
                     let close_service = Arc::clone(&service);
                     let close_client = client.clone();
                     let close_owner = Arc::new(move || close_service.close_owner(&close_client));
-                    let _ = serve_with_registry(
+                    if let Err(error) = serve_with_registry(
                         engine_factory,
                         reader,
                         writer,
@@ -269,7 +269,10 @@ pub async fn serve_persistent(
                         registry,
                         client,
                     )
-                    .await;
+                    .await
+                    {
+                        eprintln!("sidecar client session failed: {error}");
+                    }
                 }
                 Err(_) => {}
             }

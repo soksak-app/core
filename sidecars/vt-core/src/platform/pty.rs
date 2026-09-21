@@ -6,15 +6,21 @@ use nix::sys::signal::{kill, Signal};
 use nix::unistd::Pid;
 
 /// Returns the process-group leader supplied by the active PTY platform.
-pub fn process_group_leader(master: &dyn MasterPty) -> Option<i32> {
+pub fn process_group_leader(
+    #[cfg(unix)] master: &dyn MasterPty,
+    #[cfg(not(unix))] _master: &dyn MasterPty,
+) -> Option<i32> {
     #[cfg(unix)]
     { master.process_group_leader() }
     #[cfg(not(unix))]
-    { let _ = master; None }
+    { None }
 }
 
 /// Terminates the PTY process group when the platform exposes one.
-pub fn kill_process_group(group: Option<i32>) -> Result<(), String> {
+pub fn kill_process_group(
+    #[cfg(unix)] group: Option<i32>,
+    #[cfg(not(unix))] _group: Option<i32>,
+) -> Result<(), String> {
     #[cfg(unix)]
     {
         let group = group.ok_or("PTY process group is unavailable")?;
@@ -26,7 +32,6 @@ pub fn kill_process_group(group: Option<i32>) -> Result<(), String> {
     }
     #[cfg(not(unix))]
     {
-        let _ = group;
         Ok(())
     }
 }

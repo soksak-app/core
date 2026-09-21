@@ -330,6 +330,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F0.4-1.3.1",
+    implementation: [
+      { file: "sidecars/vt-core/src/protocol.rs", symbol: "serve_with_options" },
+      { file: "sidecars/vt-core/src/platform/pty.rs", symbol: "kill_process_group" },
+      { file: "sidecars/vt-core/src/platform/darwin/service.rs", symbol: "serve_with_registry" },
+      { file: "scripts/check-test-parity.mjs", symbol: "auditRustFailurePropagation" },
+    ],
+    tests: [
+      { file: "sidecars/vt-core/tests/serve_contract.rs", id: "test_panicking_surface_reports_error" },
+      { file: "scripts/test/test-parity.test.mjs", id: "Rust failure audit rejects ignored outcomes in the scoped production lane" },
+    ],
+    expected: "The VT sidecar does not discard production Result or task outcomes; actor, session, monitor, and shutdown failures remain observable through returned errors or explicit reports.",
+    levels: ["unit", "native"],
+  },
+  {
     id: "F2.1",
     implementation: [{ file: "sidecars/vt-core/src/pty.rs", symbol: "pub fn close" }],
     tests: [{ file: "sidecars/vt-core/tests/pty_lifecycle.rs", id: "real_sessions_are_independent_and_close_removes_session" }],
@@ -707,6 +722,26 @@ export function auditJsFailurePropagation(files, readSource = (file) => readFile
   return errors;
 }
 
+/** Reject explicit Result/JoinHandle discards in the scoped Rust production lane. */
+export function auditRustFailurePropagation(files, readSource = (file) => readFileSync(`${ROOT}${file}`, "utf8"), scope = "sidecars/vt-core/src/") {
+  const errors = [];
+  for (const file of [...new Set(files)].sort()) {
+    if (!file.startsWith(scope) || !file.endsWith(".rs") || /(^|\/)(test|tests)\//.test(file)) continue;
+    let source;
+    try { source = readSource(file); }
+    catch (error) {
+      errors.push(`${file}: Rust failure-propagation source cannot be read: ${error?.message ?? error}`);
+      continue;
+    }
+    for (const [index, line] of source.split("\n").entries()) {
+      if (/\blet\s+_\s*=/.test(line)) {
+        errors.push(`${file}:${index + 1}: ignored Rust result or task outcome`);
+      }
+    }
+  }
+  return errors;
+}
+
 // 언어별 고정 루트를 두지 않는다. 한 패키지의 다른 언어도 모두 발견한다.
 export function discoverInventory(files) {
   const implementations = [], tests = [], manifests = [], generated = [];
@@ -833,6 +868,8 @@ export function auditInventory(files, matrix = MATRIX, readSource = (file) => re
   errors.push(...ownershipErrors);
   const jsFailureErrors = auditJsFailurePropagation(files, readSource);
   errors.push(...jsFailureErrors);
+  const rustFailureErrors = auditRustFailurePropagation(files, readSource);
+  errors.push(...rustFailureErrors);
 
   return {
     errors,
@@ -843,6 +880,7 @@ export function auditInventory(files, matrix = MATRIX, readSource = (file) => re
     featureErrors,
     ownershipErrors,
     jsFailureErrors,
+    rustFailureErrors,
     featureLinks: FEATURE_LINKS,
     trackCount: matrix.length,
     implementationCount: implementationOwners.size,

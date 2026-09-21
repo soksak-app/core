@@ -159,8 +159,12 @@ impl PersistentRegistry {
     ) -> Result<u64, String> {
         let mut entries = self.entries.lock().await;
         if entries.contains_key(&key) {
-            let _ = tx.send(SurfaceCommand::SessionClose).await;
-            let _ = actor.await;
+            tx.send(SurfaceCommand::SessionClose)
+                .await
+                .map_err(|error| format!("close duplicate surface: {error}"))?;
+            actor
+                .await
+                .map_err(|error| format!("join duplicate surface actor: {error}"))?;
             return Err("session surface already exists".to_string());
         }
         let epoch = self
@@ -1092,22 +1096,31 @@ async fn surface_task(
                         }
                     }
                     SurfaceCommand::SessionClose => {
-                        if let Some(ref sid) = session_id {
-                            // Closing session; intentionally ignore close errors during cleanup (already disconnecting)
-                            let _ = session_port.close(sid).await;
-                        }
-                        let response = json!({
-                            "surface": surface_id,
-                            "body": {}
-                        });
-                        if let Err(_) = output_tx.send(response.to_string()).await {
-                            // Output channel closed, exit anyway
+                        let close_error = if let Some(ref sid) = session_id {
+                            session_port.close(sid).await.err()
+                        } else {
+                            None
+                        };
+                        let body = close_error
+                            .map(|error| json!({"error": format!("Close failed: {error}")}))
+                            .unwrap_or_else(|| json!({}));
+                        let response = json!({"surface": surface_id, "body": body});
+                        if output_tx.send(response.to_string()).await.is_err() {
+                            return;
                         }
                         break;
                     }
                     SurfaceCommand::SessionDetach => {
                         if let Some(ref sid) = session_id {
-                            let _ = session_port.detach(sid).await;
+                            if let Err(error) = session_port.detach(sid).await {
+                                let response = json!({
+                                    "surface": surface_id,
+                                    "body": {"error": format!("Detach failed: {error}")}
+                                });
+                                if output_tx.send(response.to_string()).await.is_err() {
+                                    return;
+                                }
+                            }
                         }
                         break;
                     }
@@ -1580,11 +1593,12 @@ where
                                         "surface": sid_for_monitor,
                                         "body": {"event": "error", "reason": format!("surface task ended: {}", panic_msg)}
                                     });
-                                    // Intentionally ignore output send error; if output channel closed, serve() will detect it
-                                    let _ = out_tx_monitor.send(response.to_string()).await;
+                                    if let Err(error) = out_tx_monitor.send(response.to_string()).await {
+                                        eprintln!("surface panic report was not delivered: {error:?}");
+                                    }
                                 }
-                                Err(_) => {
-                                    // Task cancelled
+                                Err(error) => {
+                                    eprintln!("surface task was cancelled: {error}");
                                 }
                             }
                         });
@@ -1903,7 +1917,12 @@ where
     // transports have no recovery owner, so their surfaces must be closed now.
     if registry.is_none() {
         for (_, tx) in surface_txs.iter() {
-            let _ = tx.send(SurfaceCommand::SessionClose).await;
+            tx.send(SurfaceCommand::SessionClose).await.map_err(|error| {
+                std::io::Error::new(
+                    std::io::ErrorKind::BrokenPipe,
+                    format!("close surface during serve shutdown: {error}"),
+                )
+            })?;
         }
     }
 
