@@ -507,11 +507,14 @@ for (const app of Object.values(APPS)) {
     await s.click(view.document.x + view.x + view.width / 2, view.document.y + view.y + view.height / 2);
     await s.until("host.window", (host) => host.regions.some((region) => region.surface === surface && region.focused),
       "Korean IME test terminal did not receive native focus");
-    await s.run("terminal.input", { bytes: "\u0015" }, surface);
-
-    // The native IME event sequence is covered by the terminal plugin unit test;
-    // this host test verifies the resulting committed UTF-8 text at the PTY.
-    await s.run("terminal.input", { bytes: "나" }, surface);
+    // 한글 2벌식 입력 소스에서 실제 ANSI 물리 키와 조합 상태를 검증한다.
+    await s.press("s");
+    await s.press("k");
+    await s.until("terminal.compose", (compose) => compose.text === "나",
+      "native Korean IME did not expose the 나 preedit", { surface });
+    await s.press("Space");
+    await s.until("terminal.compose", (compose) => compose.text === "",
+      "native Korean IME did not clear the committed preedit", { surface });
     const committed = await readScreenUntil(s, surface, (lines) => lines.some((line) => line.endsWith("나")),
       "the first Korean syllable did not reach the PTY screen");
     const syllableRows = committed.filter((line) => line.endsWith("나"));
@@ -520,7 +523,7 @@ for (const app of Object.values(APPS)) {
       `uncommitted Korean jamo leaked to the PTY: ${JSON.stringify(syllableRows)}`);
     t.diagnostic(`${app.name}: PASS first Korean syllable exactly-once commit`);
 
-    await s.run("terminal.input", { bytes: "\u0015" }, surface);
+    await s.press("u", { modifiers: ["control"] });
     await readScreenUntil(s, surface, (lines) => lines.some((line) => line.endsWith("$")) &&
       !lines.some((line) => line.endsWith("나")), "Korean IME cleanup did not remove the committed input");
   });

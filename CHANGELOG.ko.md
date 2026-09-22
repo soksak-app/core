@@ -1,6 +1,8 @@
 # 변경 기록
 
 - F8-1 Red를 터미널 오류 스크린샷 기준으로 기록했다. 네이티브 영역이 Ctrl `Char`에 `charactersIgnoringModifiers`를 직렬화하고 VT encoder는 지원하는 ASCII 제어 문자 범위 밖의 문자를 거부했다. 한글 `ㅕ` payload와 물리 ANSI U를 넣은 native 회귀 검사는 수정 전 실패했고, 수정 뒤 `u`를 내보낸다. sidecar 계약은 Ctrl+U가 `0x15`를 기록하는지 검증한다. 집중 검사·`pnpm test`·경계·노출·전체 vt-core 검사는 통과했다. `make native-test`는 별도 `input_inject_test`에서 예상하지 못한 pointer sequence와 WebKit 평가 timeout으로 두 번 중단됐고 원인은 미확정이라 F8-2에 기록했다. 스크린샷의 실제 키 payload는 알 수 없다.
+- F8-3 Red: “terminal commits the first Korean syllable exactly once” 검사는 완성된 `나`를 `terminal.input`으로 기록한다. 따라서 네이티브 IME를 우회해 조합을 검증할 수 없다. 호스트 증거로 세기 전에 native 키 입력과 관측 가능한 preedit 검사로 교체한다.
+- F8-3 진행: 호스트 검사가 ANSI `s`, `k`를 누르고 `나` preedit을 관측한 뒤 Space로 확정하며, 정확히 한 번 PTY 전달을 확인하고 native Ctrl+U로 정리하도록 바꿨다. 문법·패키지·경계·노출·문서 검사가 통과했다. 실행 중인 호스트가 없어 재빌드 Tauri/Wails 실행은 아직 검증하지 않았다.
 - F8을 진행했다. WebKit 비표준 한글 IME 경로가 조합 중 compatibility-jamo `insertText` echo를 보류하고 조합 해제 때 마지막 preedit을 정확히 한 번 확정한다. terminal plugin 집중 Red/Green 검사가 통과했고 재빌드 Wails가 직접 전달한 최초 `나`를 정확히 한 번 받아들였다. native 활성화는 브라우저 좌표의 대상 WebView만 기다리고 native 표면에서는 관련 없는 WebView를 기다리지 않는다. endpoint 키 주입은 사람이 직접 입력한 최초 `나`를 결정론적으로 재현하지 못하므로 실제 macOS IME와 후보 픽셀 증거는 아직 열려 있다.
 - F8를 진행했다. named character 입력이 물리 macOS ANSI 키 이벤트를 만들도록 하여 활성 키보드 입력 소스가 한글을 조합하게 했다. terminal plugin은 이제 sidecar 계약 `{operation: "input", compose: {...}}`으로 조합을 보내며, 이전 `{operation: "compose"}`가 확인된 `Unknown operation: compose` 원인이었다. `com.apple.inputmethod.Korean.2SetKorean`을 사용한 재빌드 Tauri·Wails probe가 각각 `terminal.compose` 전환 `ㅏ → ㄴ → 나`를 만들었고 session 오류는 0건이었다. 후보창 픽셀과 확정 입력의 정확히 한 번 전달은 아직 열려 있다.
 - V5 최종 감사를 시작했다. 필수 검사를 독립적인 제한시간과 START/PASS/FAIL 출력이 있는 lane으로 실행하며, 전체 타임아웃이나 mandatory skip을 완료 근거로 세지 않는다.
