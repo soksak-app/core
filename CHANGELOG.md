@@ -1,5 +1,7 @@
 # Changelog
 
+- Completed F9. Rebuilt Tauri and Wails library-return checks now report separate connection, document-ready, raster-presented, and first-window-presentation phases. Tauri passes 1/1 in 1.90s with 3/3/3/20ms phases; Wails passes 1/1 in 1.72s with 3/2/1/14ms phases. Invalid folder operations retain explicit `-32000` errors. Forced SIGINT teardown socket warnings remain identified as fixture shutdown logs, not successful test results.
+
 - Completed V3. The commit-discipline audit at `0f70b5d` found no uncommitted changes; the latest geometry and CSI units have scoped commits `70983e5` and `0f70b5d` after focused Green checks and bilingual documentation updates.
 
 - Completed F7.13. The CSI inventory now records unsupported `CSI Ps t` window reports separately from implemented `14t`; fragmented unsupported input emits exactly one explicit error. The focused test passes 1/1 under a 15s supervisor in 5s total, with a 0.00s test body.

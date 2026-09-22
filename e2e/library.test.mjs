@@ -202,6 +202,38 @@ for (const app of Object.values(APPS)) {
     await returnProject(s, first.id, "three-terminal project return");
     await s.until("core.screen", (screen) => screen.screen === "workspace", "the project did not return from the library");
     await assertNoLibraryError(s, "the measured project return");
+    const phaseStarted = performance.now();
+    let phasePrevious = phaseStarted;
+    const phase = (name) => {
+      const now = performance.now();
+      const duration = now - phasePrevious;
+      const total = now - phaseStarted;
+      phasePrevious = now;
+      t.diagnostic(`${app.name}: PASS restoration ${name} (${duration.toFixed(0)}ms, total ${total.toFixed(0)}ms)`);
+      return duration;
+    };
+    t.diagnostic(`${app.name}: START restoration connection`);
+    const restoredShells = await s.until("core.surfaces", (surfaces) => surfaces.filter((surface) =>
+      surface.visible && surface.plugin === "shell" && surface.exposes.includes("shell.output") &&
+      surface.exposes.includes("core.surface.document")),
+    "restoration connection did not register shell surfaces");
+    for (const shell of restoredShells.filter((surface) => surface.visible && surface.plugin === "shell")) {
+      await s.until("shell.output", (output) => Array.isArray(output),
+        "restored shell output did not connect", { surface: shell.surface });
+    }
+    phase("connection");
+    t.diagnostic(`${app.name}: START restoration document`);
+    for (const shell of restoredShells.filter((surface) => surface.visible && surface.plugin === "shell")) {
+      await s.until("core.surface.document", (document) => document?.readyState === "complete" && document.themed,
+        "restored shell document did not become ready", { surface: shell.surface });
+    }
+    phase("document");
+    t.diagnostic(`${app.name}: START restoration raster`);
+    await assertVisibleTerminalRasters(s, 3, "restored terminal raster phase");
+    phase("raster");
+    t.diagnostic(`${app.name}: START restoration first presentation`);
+    await s.presented();
+    phase("first-presentation");
     const stopped = await s.request("diagnostics.capture.stop", { after: 0 });
     captureActive = false;
     const returned = await s.get("host.window");
