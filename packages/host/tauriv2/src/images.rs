@@ -1033,6 +1033,34 @@ where
     OnMain: Fn(Box<dyn Fn() -> Result<(), String> + Send>) -> Result<(), String>,
     SendResponse: Fn(&str, serde_json::Value) -> Result<(), String>,
 {
+    handle_envelope_with_recovery(
+        body_str,
+        sender,
+        surface,
+        images,
+        on_main,
+        send_response,
+        |_| Ok(()),
+    )
+}
+
+/// Handle an image envelope and optionally request a fresh raster after a transient native
+/// presentation failure. The recovery callback is deliberately separate from the response so the
+/// caller can reconfigure the sidecar through its own transport without hiding the original error.
+pub fn handle_envelope_with_recovery<OnMain, SendResponse, Recover>(
+    body_str: &str,
+    sender: &str,
+    surface: &str,
+    images: &Images,
+    on_main: OnMain,
+    send_response: SendResponse,
+    recover: Recover,
+) -> bool
+where
+    OnMain: Fn(Box<dyn Fn() -> Result<(), String> + Send>) -> Result<(), String>,
+    SendResponse: Fn(&str, serde_json::Value) -> Result<(), String>,
+    Recover: Fn(&str) -> Result<(), String>,
+{
     let decision = decide(body_str, sender, surface, images);
 
     match decision {
@@ -1084,13 +1112,23 @@ where
                     let (ok, reason) = match presentation {
                         Ok(()) => (true, None),
                         Err(e) => {
-                            eprintln!(
-                                "image present on main thread error: surface={} name={} generation={} raster={} sequence={} token={} reason={}",
-                                key.0, name, generation, raster, sequence, id, e
-                            );
+                            if e == "notAttached" {
+                                eprintln!(
+                                    "image frame invalidated before native presentation: surface={} name={} generation={} raster={} sequence={} token={} reason=stale",
+                                    key.0, name, generation, raster, sequence, id
+                                );
+                            } else {
+                                eprintln!(
+                                    "image present on main thread error: surface={} name={} generation={} raster={} sequence={} token={} reason={}",
+                                    key.0, name, generation, raster, sequence, id, e
+                                );
+                            }
                             let reason = match e.as_str() {
                                 "stale" => "stale",
-                                "notAttached" => "notAttached",
+                                // The image registry can be detached after decide() but before
+                                // this main-thread closure runs. That is an invalidated frame,
+                                // not a failed presentation of the current surface.
+                                "notAttached" => "stale",
                                 "notFound" => "notFound",
                                 "forbidden" => "forbidden",
                                 "size" => "size",
@@ -1105,6 +1143,14 @@ where
 
                     if let Some(reason) = reason.as_deref().filter(|reason| *reason != "stale") {
                         images.mark_presentation_failed(&key, generation, raster, sequence, reason);
+                        if reason == "notFound" {
+                            if let Err(error) = recover(reason) {
+                                eprintln!(
+                                    "image recovery failed: surface={} name={} reason={} error={}",
+                                    key.0, name, reason, error
+                                );
+                            }
+                        }
                     }
 
                     let response = if ok {

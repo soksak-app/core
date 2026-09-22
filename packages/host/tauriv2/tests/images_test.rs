@@ -2,7 +2,8 @@
 
 use serde_json::json;
 use soksak_host_tauriv2::images::{
-    after_present, decide, handle_envelope, Configure, Decision, Images, Key,
+    after_present, decide, handle_envelope, handle_envelope_with_recovery, Configure, Decision,
+    Images, Key,
 };
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -458,6 +459,40 @@ fn frame_that_becomes_stale_before_main_thread_presentation_is_rejected() {
 }
 
 #[test]
+fn frame_detached_before_main_thread_presentation_is_reported_as_stale() {
+    let images = Images::default();
+    let key: Key = ("tab-1".to_string(), "view".to_string());
+    images.reserve(&key, "owner", "sidecar-a").unwrap();
+    images.set(&key, 100);
+    let configured = images
+        .configure_raster(&key, 800, 600, 2.0, true)
+        .unwrap()
+        .unwrap();
+    let detached = images.clone();
+    let response = Arc::new(Mutex::new(None));
+    let received = Arc::clone(&response);
+
+    assert!(handle_envelope(
+        &configured_envelope(&configured, 1),
+        "sidecar-a",
+        "tab-1",
+        &images,
+        move |work| {
+            detached.remove_surface("tab-1");
+            work()
+        },
+        move |_image, value| {
+            *received.lock().unwrap() = Some(value);
+            Ok(())
+        },
+    ));
+    assert_eq!(
+        response.lock().unwrap().as_ref().unwrap()["image"]["error"],
+        "stale"
+    );
+}
+
+#[test]
 fn failed_present_is_reported() {
     let response = after_present(false, Some("forbidden"), "view", 7, 3, 1);
     assert!(response["image"]["error"].is_string());
@@ -737,4 +772,56 @@ fn presentation_failure_is_reported() {
         Err("presentFailed".to_string()),
         "native presentation failure must unblock the current-raster wait"
     );
+}
+
+#[test]
+fn missing_native_surface_requests_a_fresh_raster_configuration() {
+    let images = Images::default();
+    let key: Key = ("tab-1".to_string(), "view".to_string());
+    images.reserve(&key, "owner", "sidecar-a").expect("reserve");
+    images.set(&key, 100);
+    let configured = images
+        .configure_raster(&key, 800, 600, 2.0, true)
+        .unwrap()
+        .unwrap();
+    let body = json!({
+        "image": {
+            "name": "view",
+            "token": {
+                "kind": "iosurface-global",
+                "id": 12345u32,
+                "nonce": "AAAAAAAAAAAAAAAAAAAAAA=="
+            },
+            "width": 800,
+            "height": 600,
+            "scale": 2.0,
+            "format": "bgra8",
+            "generation": configured.generation,
+            "raster": configured.raster,
+            "sequence": 1
+        }
+    })
+    .to_string();
+    let recovered = Arc::new(Mutex::new(None));
+    let recovered_value = Arc::clone(&recovered);
+
+    assert!(handle_envelope_with_recovery(
+        &body,
+        "sidecar-a",
+        "tab-1",
+        &images,
+        |_work| Err("notFound".to_string()),
+        |_image, _response| Ok(()),
+        |reason| {
+            assert_eq!(reason, "notFound");
+            let next = images
+                .configure_raster(&key, 800, 600, 2.0, true)
+                .unwrap();
+            *recovered_value.lock().unwrap() = next;
+            Ok(())
+        },
+    ));
+    let next = recovered.lock().unwrap().take().expect("recovery was not requested");
+    assert_eq!(next.raster, configured.raster);
+    assert!(!images.current_presented());
 }

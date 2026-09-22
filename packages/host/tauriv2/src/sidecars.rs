@@ -1157,7 +1157,7 @@ impl Owner for Window {
             }
         };
         let window = self.clone();
-        crate::images::handle_envelope(
+        crate::images::handle_envelope_with_recovery(
             body.get(),
             sidecar_name,
             surface,
@@ -1169,6 +1169,12 @@ impl Owner for Window {
                 let text = serde_json::to_string(&response).map_err(|e| e.to_string())?;
                 let body = RawValue::from_string(text).map_err(|e| e.to_string())?;
                 response_sender.send(surface, image, &body)
+            },
+            |reason| {
+                if reason != "notFound" {
+                    return Ok(());
+                }
+                crate::composition::refresh_image_rasters(&window)
             },
         )
     }

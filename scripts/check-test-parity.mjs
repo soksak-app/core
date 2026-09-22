@@ -1158,6 +1158,23 @@ const FEATURE_LINKS = [
     levels: ["native", "application"],
   },
   {
+    id: "F6.3-8",
+    implementation: [
+      { file: "packages/host/tauriv2/src/images.rs", symbol: "pub fn handle_envelope_with_recovery" },
+      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "fn decide_image_envelope" },
+    ],
+    tests: [
+      { file: "packages/host/tauriv2/tests/images_test.rs", id: "missing_native_surface_requests_a_fresh_raster_configuration" },
+      { file: "packages/host/tauriv2/tests/images_test.rs", id: "frame_detached_before_main_thread_presentation_is_reported_as_stale" },
+      { file: "e2e/terminal.test.mjs", id: "newly split terminal presents its first native raster" },
+      { file: "e2e/terminal.test.mjs", id: "four split terminals complete native presentation without a host crash" },
+      { file: "e2e/terminal.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
+      { file: "e2e/terminal.test.mjs", id: "native presentation failure is explicit and the next split remains usable" },
+    ],
+    expected: "A missing IOSurface requests a fresh raster configuration, a detached frame is reported as explicit stale invalidation, and a rebuilt single-process Tauri host passes new, four, repeated, and failure-recovery split cases without a presentation error.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F7",
     implementation: [
       { file: "sidecars/vt-alacritty/src/engine.rs", symbol: "OSC_SELECTOR_INVENTORY" },
