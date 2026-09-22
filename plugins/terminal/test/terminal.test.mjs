@@ -429,6 +429,51 @@ test("terminal.input command sends same body as region insert", async () => {
   assert.equal(decodedBytes, "ls\r", "command sends same encoding as region insert");
 });
 
+test("terminal.paste reads explicit user text once and sends one paste operation", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  const fakeExpose = createFakeExpose();
+  const clipboardCalls = [];
+  const clipboard = {
+    read: async (type) => {
+      clipboardCalls.push(type);
+      return "printf 'user paste'\n";
+    },
+  };
+  await startTerminal({
+    view: createFakeView(), attachImage: createFakeAttachImage().function,
+    sidecar: fakeSidecar, expose: fakeExpose, clipboard,
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  openSession(fakeSidecar);
+  fakeSidecar.reset();
+
+  const paste = fakeExpose.getCommand("terminal.paste");
+  assert.ok(paste, "terminal.paste command registered");
+  await paste();
+
+  assert.deepEqual(clipboardCalls, ["text"]);
+  assert.deepEqual(fakeSidecar.getMessages().map(({ body }) => body.operation), ["paste"]);
+  assert.equal(fakeSidecar.getMessages()[0].body.text, "printf 'user paste'\n");
+});
+
+test("terminal.paste rejects an absent clipboard without sending input", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  const fakeExpose = createFakeExpose();
+  const clipboard = { read: async () => null };
+  await startTerminal({
+    view: createFakeView(), attachImage: createFakeAttachImage().function,
+    sidecar: fakeSidecar, expose: fakeExpose, clipboard,
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  openSession(fakeSidecar);
+  fakeSidecar.reset();
+
+  await assert.rejects(fakeExpose.getCommand("terminal.paste")(), /text clipboard is empty/);
+  assert.deepEqual(fakeSidecar.getMessages(), []);
+});
+
 // 테스트 4: 영역 key(Enter) → {operation:"input", keys:[{key:"Enter"}]}
 test("Region key event for Enter sends correct message format", async () => {
   FakeResizeObserver.reset();

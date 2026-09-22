@@ -1,5 +1,7 @@
 # Changelog
 
+- Completed F6.1. Explicit terminal text paste now uses the scoped user-initiated clipboard capability, rejects absent or non-text data, sends one sidecar paste operation, preserves UTF-8 payload bytes, and rejects an embedded bracketed-paste terminator instead of deleting it. Focused terminal and sidecar tests pass; selection, file, image, and terminal-output-image work remains open under F6.
+
 - Terminal cursor settings now have typed plugin/environment declarations, strict common/project persistence validation, shared settings-modal controls, and live delivery to each terminal sidecar. Package, native frame, and structural gates pass. Rebuilt-host settings-to-pixel E2E remains a separate checklist item because no current application endpoint was available.
 
 - Completed F0.4-1.5 and closed F0.4-1. The cross-language failure matrix now runs attributable JS/TS, Rust, Go, and Objective-C audits. Wails Darwin capture status, recording cleanup, shell close, and persistent protocol decoding no longer discard failures; Wails and shell tests plus 27 parity self-tests pass.

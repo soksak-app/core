@@ -346,36 +346,23 @@ fn compute_modifier_param(modifiers: Modifiers) -> u8 {
 /// - `bracketed_paste` 모드가 켜져 있으면 `ESC [ 200 ~` 로 시작해 `ESC [ 201 ~` 로 끝남.
 /// - 텍스트 내의 `ESC [ 201 ~` 시퀀스는 제거함 (감싸기를 빠져나가지 못하게).
 /// - 개행 문자는 `\r` 로 정규화함 (`\n` → `\r`, `\r\n` → `\r`).
-pub fn encode_paste(text: &str, modes: &Modes) -> Vec<u8> {
-    // 개행 정규화
-    let normalized = normalize_newlines(text);
-
-    // ESC [ 201 ~ 시퀀스 제거
-    let cleaned = remove_paste_end_marker(&normalized);
-
+pub fn encode_paste(text: &str, modes: &Modes) -> Result<Vec<u8>, String> {
+    if modes.bracketed_paste && text.contains("\x1b[201~") {
+        return Err("paste text contains the bracketed-paste terminator".to_string());
+    }
     let mut result = Vec::new();
 
     if modes.bracketed_paste {
         result.extend_from_slice(b"\x1b[200~");
     }
 
-    result.extend_from_slice(cleaned.as_bytes());
+    result.extend_from_slice(text.as_bytes());
 
     if modes.bracketed_paste {
         result.extend_from_slice(b"\x1b[201~");
     }
 
-    result
-}
-
-/// 개행 정규화: `\r\n` → `\r`, `\n` → `\r`.
-fn normalize_newlines(text: &str) -> String {
-    text.replace("\r\n", "\r").replace("\n", "\r")
-}
-
-/// 붙여넣기 종료 마커 `ESC [ 201 ~` 를 텍스트에서 제거.
-fn remove_paste_end_marker(text: &str) -> String {
-    text.replace("\x1b[201~", "")
+    Ok(result)
 }
 
 /// 마우스 이벤트를 PTY 에 쓸 바이트로 인코딩한다. SGR(1006) 형식 사용.
@@ -793,43 +780,37 @@ mod tests {
         let modes_normal = Modes::default();
 
         // Bracketed paste mode ON
-        let result = encode_paste("hello", &modes_bracketed);
+        let result = encode_paste("hello", &modes_bracketed).unwrap();
         assert_eq!(result, b"\x1b[200~hello\x1b[201~".to_vec());
 
         // Bracketed paste mode OFF
-        let result = encode_paste("hello", &modes_normal);
+        let result = encode_paste("hello", &modes_normal).unwrap();
         assert_eq!(result, b"hello".to_vec());
     }
 
     #[test]
-    fn test_encode_paste_removes_end_marker() {
+fn test_encode_paste_rejects_end_marker_without_dropping_it() {
         let modes = Modes {
             bracketed_paste: true,
             ..Default::default()
         };
 
-        // Text containing the end marker should have it removed
-        let result = encode_paste("hello\x1b[201~world", &modes);
-        assert_eq!(result, b"\x1b[200~helloworld\x1b[201~".to_vec());
+        let error = encode_paste("hello\x1b[201~world", &modes).unwrap_err();
+        assert_eq!(error, "paste text contains the bracketed-paste terminator");
     }
 
     #[test]
-    fn test_encode_paste_normalizes_newlines() {
+    fn test_encode_paste_preserves_line_endings() {
         let modes = Modes {
             bracketed_paste: true,
             ..Default::default()
         };
 
-        // LF → CR
-        let result = encode_paste("hello\nworld", &modes);
-        assert_eq!(result, b"\x1b[200~hello\rworld\x1b[201~".to_vec());
-
-        // CRLF → CR
-        let result = encode_paste("hello\r\nworld", &modes);
-        assert_eq!(result, b"\x1b[200~hello\rworld\x1b[201~".to_vec());
-
-        // CR stays as CR
-        let result = encode_paste("hello\rworld", &modes);
+        let result = encode_paste("hello\nworld", &modes).unwrap();
+        assert_eq!(result, b"\x1b[200~hello\nworld\x1b[201~".to_vec());
+        let result = encode_paste("hello\r\nworld", &modes).unwrap();
+        assert_eq!(result, b"\x1b[200~hello\r\nworld\x1b[201~".to_vec());
+        let result = encode_paste("hello\rworld", &modes).unwrap();
         assert_eq!(result, b"\x1b[200~hello\rworld\x1b[201~".to_vec());
     }
 

@@ -1,5 +1,7 @@
 # 변경 기록
 
+- F6.1을 완료했다. 명시적 터미널 텍스트 붙여넣기가 범위가 지정된 사용자 시작 클립보드 capability를 사용하고, 부재/비텍스트 값을 거부하며, 사이드카 paste 동작을 한 번만 보내고 UTF-8 payload 바이트를 보존한다. 입력 안의 bracketed-paste 종료 시퀀스는 삭제하지 않고 거부한다. 터미널·사이드카 집중 검사가 통과했으며 선택·파일·이미지·터미널 출력 이미지 범위는 F6에 남아 있다.
+
 - 터미널 커서 설정에 타입 있는 플러그인/environment 선언, 공통/프로젝트 저장값의 엄격한 검증, 공용 설정 모달 컨트롤, 터미널 사이드카에 대한 실시간 전달을 추가했다. 패키지·native frame·구조 게이트는 통과했다. 최신 애플리케이션 endpoint가 없어 재빌드 호스트의 설정→픽셀 E2E는 별도 체크리스트 항목으로 남겼다.
 
 - F0.4-1.5를 완료하고 F0.4-1을 닫았다. 교차 언어 실패 matrix가 귀속 가능한 JS/TS·Rust·Go·Objective-C 감사를 실행한다. Wails Darwin capture 상태, recording 정리, shell close, persistent protocol decoding이 더 이상 오류를 버리지 않으며 Wails·shell 테스트와 parity 자기 테스트 27개가 통과한다.

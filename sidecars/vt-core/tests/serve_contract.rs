@@ -282,7 +282,7 @@ async fn test_paste_writes_ordered_text_using_bracketed_mode() {
     let _ = serve(engine_factory, reader, &mut writer, session_port_factory).await;
 
     let calls_lock = calls.lock().unwrap();
-    assert_eq!(calls_lock.writes[0].1, b"\x1b[200~one\rtwo\x1b[201~");
+    assert_eq!(calls_lock.writes[0].1, b"\x1b[200~one\ntwo\x1b[201~");
 }
 
 #[tokio::test]
@@ -304,6 +304,31 @@ async fn test_paste_rejects_non_text_payload() {
     assert!(String::from_utf8(writer)
         .unwrap()
         .contains("paste requires text string"));
+    assert!(calls.lock().unwrap().writes.is_empty());
+}
+
+#[tokio::test]
+async fn test_bracketed_paste_rejects_embedded_terminator_without_writing() {
+    let calls = Arc::new(Mutex::new(Calls::default()));
+    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open"}}
+{"surface":"s1","body":{"operation":"paste","text":"before\u001b[201~after"}}
+"#;
+    let reader = std::io::Cursor::new(input.as_bytes());
+    let mut writer = Vec::new();
+    let engine_factory = Arc::new(|| {
+        Box::new(MockEngine::with_modes(Modes {
+            bracketed_paste: true,
+            ..Modes::default()
+        })) as Box<dyn Engine>
+    });
+    let calls_for_factory = calls.clone();
+    let session_port_factory = Arc::new(move || {
+        Arc::new(FakeSessionPort::new("unused".to_string(), calls_for_factory.clone()))
+            as Arc<dyn SessionPort>
+    });
+    let _ = serve(engine_factory, reader, &mut writer, session_port_factory).await;
+    let output = String::from_utf8(writer).unwrap();
+    assert!(output.contains("bracketed-paste terminator"));
     assert!(calls.lock().unwrap().writes.is_empty());
 }
 

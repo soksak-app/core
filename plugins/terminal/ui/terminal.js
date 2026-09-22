@@ -135,7 +135,7 @@ function normalizeCursorPolicy(value) {
  * @returns {Promise<void>}
  */
 export async function startTerminal({ id, view, attachImage, sidecar, expose, theme,
-  settings,
+  settings, clipboard,
   window: globalWindow = globalThis.window }) {
   // 브라우저 환경에서 필요한 객체들
   const window = globalWindow;
@@ -207,6 +207,16 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     const policy = normalizeCursorPolicy(value);
     await terminal.send(id, { operation: "cursor", ...policy });
     return policy;
+  };
+  const pasteText = async () => {
+    if (!clipboard || typeof clipboard.read !== "function") {
+      throw new Error("terminal.paste requires a clipboard capability");
+    }
+    const text = await clipboard.read("text");
+    if (text === null) throw new Error("text clipboard is empty");
+    if (typeof text !== "string") throw new Error("text clipboard returned a non-text value");
+    await terminal.send(id, { operation: "paste", text });
+    return null;
   };
 
   const observeInput = (promise) => promise.then(undefined, (error) => {
@@ -566,9 +576,11 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     }
   });
   await expose.command("terminal.cursor.set", async (policy) => setCursorPolicy(policy));
+  await expose.command("terminal.paste", pasteText);
   return {
     setTheme,
     setCursorPolicy,
+    pasteText,
     async focus() {
       if (nativeFocused) return;
       let resolveFocus;

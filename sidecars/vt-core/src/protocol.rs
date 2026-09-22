@@ -1201,7 +1201,19 @@ async fn surface_task(
                         cursor_activity = Instant::now();
                         last_cursor_frame = None;
                         if let Some(ref sid) = session_id {
-                            let bytes = encoding::encode_paste(&text, &engine.modes());
+                            let bytes = match encoding::encode_paste(&text, &engine.modes()) {
+                                Ok(bytes) => bytes,
+                                Err(error) => {
+                                    let response = json!({
+                                        "surface": surface_id,
+                                        "body": {"error": "invalidParams", "reason": error}
+                                    });
+                                    if output_tx.send(response.to_string()).await.is_err() {
+                                        return;
+                                    }
+                                    continue;
+                                }
+                            };
                             match session_port.write(sid, &bytes).await {
                                 Ok(()) => {
                                     let response = json!({
