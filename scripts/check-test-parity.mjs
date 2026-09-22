@@ -600,6 +600,16 @@ const FEATURE_LINKS = [
     levels: ["unit", "native"],
   },
   {
+    id: "F2.1-1",
+    implementation: [{ file: "sidecars/vt-core/tests/pty_lifecycle.rs", symbol: "lifecycle_test_lock" }],
+    tests: [
+      { file: "sidecars/vt-core/tests/pty_lifecycle.rs", id: "real_sessions_are_independent_and_close_removes_session" },
+      { file: "sidecars/vt-core/tests/pty_lifecycle.rs", id: "three_real_sessions_reconnect_with_same_pid_and_retained_output" },
+    ],
+    expected: "Real PTY lifecycle cases do not run their macOS process-group cleanup concurrently; the default vt-core package test command passes without changing production PTY behavior.",
+    levels: ["native"],
+  },
+  {
     id: "F2.1",
     implementation: [{ file: "sidecars/vt-core/src/pty.rs", symbol: "pub fn close" }],
     tests: [{ file: "sidecars/vt-core/tests/pty_lifecycle.rs", id: "real_sessions_are_independent_and_close_removes_session" }],

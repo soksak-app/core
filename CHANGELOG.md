@@ -2,6 +2,7 @@
 
 - Recorded F0.5.9-3 as a new Red after the current rebuilt Tauri reproduced a first-split pass followed by four-terminal and repeated-endpoint raster presentation timeouts. The failure is not attributed to multiple application processes; the next correction must identify the exact surface, generation, raster, sequence, and native reason and unblock the current presentation wait.
 - Completed F0.5.9-3. Same-application E2E sessions are now serialized within one Node test process. The Red was test-session interference: concurrent `fresh()` calls removed each other's native image generations. The session-slot contract passes 4/4; rebuilt Tauri split regressions pass 4/4 in 1.54s and rebuilt Wails pass 4/4 in 2.01s. Wails' two post-client-close `request has been stopped` framework logs remain explicitly recorded as a separate follow-up.
+- Completed F2.1-1. The real PTY lifecycle tests now serialize their macOS process-group cleanup without changing the production PTY service. The default lifecycle binary passes 2/2 and the full `pnpm test` passes with exit code 0.
 
 - Fix Tauri endpoint and asynchronous split paths to read native window handles on the AppKit main thread, preventing a second foreign-exception crash path during surface synchronization. Rebuilt repeated split presentation passed 3/3; package, native, documentation, boundary, exposure, and parity checks passed.
 

@@ -1,9 +1,17 @@
+use std::sync::{Mutex, OnceLock};
+
 use soksak_sidecar_vt_core::pty::PtyService;
 use soksak_sidecar_vt_core::DaemonEvent;
 use tokio::time::{timeout, Duration};
 
+fn lifecycle_test_lock() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(())).lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 #[tokio::test]
 async fn real_sessions_are_independent_and_close_removes_session() {
+    let _test_lock = lifecycle_test_lock();
     let service = PtyService::new();
     let (tx_a, mut rx_a) = tokio::sync::mpsc::unbounded_channel();
     let (tx_b, mut rx_b) = tokio::sync::mpsc::unbounded_channel();
@@ -57,6 +65,7 @@ async fn real_sessions_are_independent_and_close_removes_session() {
 
 #[tokio::test]
 async fn three_real_sessions_reconnect_with_same_pid_and_retained_output() {
+    let _test_lock = lifecycle_test_lock();
     let service = PtyService::new();
     let mut sessions = Vec::new();
     for label in ["A", "B", "C"] {
