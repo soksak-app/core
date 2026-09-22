@@ -20,8 +20,8 @@ OSC 1337 image transfer uses an OSC extension. The APC graphics protocol uses AP
 | Indexed and dynamic colors | Palette set/query/reset, foreground/background/cursor effects and exact replies | Indexed-color cell export tested; complete OSC validation pending |
 | Hyperlinks | Preserve link identity across wrapped cells and selection; open only through a user command | Pending |
 | Clipboard selection | Preserve complete text; associate query replies; distinguish user paste from program requests | Engine events added; native and permission integration pending |
-| Directory and shell metadata | Validate syntax without executing payload; update the owning session | Pending |
-| Notifications | Attribute the message to its session; do not execute payload | Pending |
+| Directory and shell metadata | Validate syntax without executing payload; update the owning session | Typed `directory` and `shell.state` events; parser and surface-owner tests pass |
+| Notifications | Attribute the message to its session; do not execute payload | Typed `notification` event; parser, malformed-input, and surface-owner tests pass |
 | Font, logging, window and resource operations | Implement documented semantics or explicitly report unsupported/policy-denied operations; no successful no-op | Pending |
 | In-band graphics | Validate size, encoding, limits and lifetime; preserve grid placement and deletion semantics | Pending |
 | Unknown or malformed sequences | Report bounded diagnostic metadata without copying secret payloads into logs; never claim support | Pending |
@@ -46,16 +46,32 @@ The following is the current selector-level audit against the pinned XTerm refer
 | `46` | Log file | `unsupported`: terminal processes cannot select a host log file | `osc_selector_inventory_records_unsupported_operations` |
 | `50` | Cursor font/shape operation | `implemented`: supported cursor-shape subform only; other font forms are rejected by the parser contract | `osc50_cursor_shape_changes_program_cursor` |
 | `51` | Emacs shell reservation | `unsupported`: no effect | `osc_selector_inventory_records_unsupported_operations` |
-| `52` | Clipboard selection store/query | `implemented`: policy-gated typed event and query reply | `clipboard_query_uses_a_token_and_resolves_to_pty_bytes`, `clipboard_rejection_clears_a_pending_query_token` |
+| `52` | Clipboard selection store/query | `implemented`: policy-gated typed event and query reply | `clipboard_query_uses_a_token_and_resolves_to_pty_bytes`, `clipboard_query_survives_a_fragmented_st_terminator`, `clipboard_rejection_clears_a_pending_query_token` |
 | `60`–`62` | Permission feature queries | `unsupported`: capability status is owned by the sidecar contract, not an XTerm wire reply | `osc_selector_inventory_records_unsupported_operations` |
 | `104` | Indexed color reset | `implemented`: palette reset | `osc104_resets_indexed_colors`, `osc104_without_parameters_resets_all_indexed_colors` |
 | `105`, `106` | Special color reset/mode | `unsupported`: no special-color contract | `osc_selector_inventory_records_unsupported_operations` |
 | `110`–`112` | Dynamic color reset | `implemented`: foreground/background/cursor reset | `osc_dynamic_color_resets_restore_defaults` |
 | `I`, `l`, `L` | Sun/CDE icon and title forms | `unsupported`: no icon-label or nonnumeric selector contract | `osc_selector_inventory_records_unsupported_operations` |
-| `7`, `8`, `9`, `133` | Directory, hyperlink, notification, shell metadata | `vendor`: separate contracts; not counted as standard OSC completion | `vendor_osc_contracts_are_separate` |
-| `1337` | OSC 1337 inline image | `vendor`: bounded image contract | `osc1337_inline_image_is_typed_and_survives_input_chunk_boundaries` |
+| `7` | Current working directory URI | `vendor implemented`: typed `directory` event; empty URI is rejected | `vendor_osc_effects_are_typed_and_survive_bel_st_and_fragmentation`, `malformed_vendor_osc_is_rejected_without_silent_drop`, `vendor_event_is_emitted_only_with_the_owning_surface_id` |
+| `8` | Hyperlink parameters and URI | `vendor implemented`: typed open/close event; unknown or duplicate parameters are rejected | `vendor_osc_effects_are_typed_and_survive_bel_st_and_fragmentation`, `malformed_vendor_osc_is_rejected_without_silent_drop` |
+| `9` | Notification message | `vendor implemented`: typed notification event; empty message is rejected | `vendor_osc_effects_are_typed_and_survive_bel_st_and_fragmentation`, `malformed_vendor_osc_is_rejected_without_silent_drop` |
+| `133` | Shell integration prompt/command markers | `vendor implemented`: typed marker and parameters; unknown marker is rejected | `vendor_osc_effects_are_typed_and_survive_bel_st_and_fragmentation`, `malformed_vendor_osc_is_rejected_without_silent_drop` |
+| `1337` | OSC 1337 inline image | `vendor implemented`: bounded typed image and multipart ownership contract | `osc1337_inline_image_is_typed_and_survives_input_chunk_boundaries`, `test_inline_image_event_is_explicit_and_base64_encoded`, `test_inline_image_delete_is_explicit_for_unowned_names` |
 
 The unsupported rows are an explicit scope result, not successful no-ops. The engine emits an observable rejection event for each unsupported selector, including selectors split across input chunks and terminated by BEL or ST. The inventory test fails on duplicate or unclassified selectors and on a named test mismatch; it does not infer support from parser acceptance.
+
+## Vendor contracts
+
+The selected vendor scope is explicit and separate from the standard OSC inventory:
+
+- OSC 7 emits a directory URI event owned by the current surface. An empty URI is rejected.
+- OSC 8 parses `id=` parameters and emits a typed hyperlink open/close event. Unsupported or duplicate parameters are rejected; an empty URI closes the current link.
+- OSC 9 emits a notification event. Empty notifications are rejected and the payload is never executed.
+- OSC 133 emits one of four typed shell markers (`prompt.start`, `prompt.end`, `command.start`, `command.finished`) with string parameters. Unknown markers are rejected.
+- OSC 52 remains policy-gated clipboard ownership. Query tokens are single-use, rejection clears ownership, and BEL/ST fragmentation is tested.
+- OSC 1337 remains a bounded image transfer. Invalid payloads reject explicitly, multipart state cannot cross surfaces, and deletion rejects names not owned by that surface.
+
+All six contracts preserve BEL/ST fragmentation. Relay responses include the source surface identifier; no vendor event is broadcast to another surface. The terminal page consumes the typed directory, hyperlink, notification, and shell-state events and stores them in its session status. Unknown future events remain visible in `unsupported` instead of being discarded.
 
 ## Complete OSC and CSI requirement
 

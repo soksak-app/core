@@ -7,7 +7,8 @@ use alacritty_terminal::term::{Config, Osc52, Term, TermMode};
 use alacritty_terminal::vte::ansi::{Color, CursorShape, Processor, Rgb};
 use soksak_sidecar_vt_core::{
     default_terminal_color, inline_image::parse as parse_inline_image, Cell, ClipboardSelection,
-    Cursor, CursorShape as ProtocolCursorShape, Engine, EngineEvent, Modes, Screen, TerminalTheme,
+    Cursor, CursorShape as ProtocolCursorShape, Engine, EngineEvent, Modes, Screen, ShellMarker,
+    TerminalTheme,
 };
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
@@ -125,6 +126,74 @@ pub const OSC_SELECTOR_INVENTORY: &[OscSelectorEvidence] = &[
         test: "osc1337_inline_image_is_typed_and_survives_input_chunk_boundaries",
     },
 ];
+
+fn parse_vendor_osc(selector: &[u8], payload: &[u8]) -> Result<Option<EngineEvent>, String> {
+    let selector = std::str::from_utf8(selector)
+        .map_err(|_| "vendor OSC selector is not UTF-8".to_string())?;
+    let payload = std::str::from_utf8(payload)
+        .map_err(|_| format!("OSC {selector} payload is not UTF-8"))?;
+    match selector {
+        "7" => {
+            if payload.is_empty() {
+                return Err("OSC 7 directory URI is empty".to_string());
+            }
+            Ok(Some(EngineEvent::Directory {
+                uri: payload.to_string(),
+            }))
+        }
+        "8" => {
+            let Some((params, uri)) = payload.split_once(';') else {
+                return Err("OSC 8 hyperlink payload must contain params and URI".to_string());
+            };
+            let id = if params.is_empty() {
+                String::new()
+            } else {
+                let mut id = None;
+                for parameter in params.split(':') {
+                    let Some(value) = parameter.strip_prefix("id=") else {
+                        return Err(format!("OSC 8 hyperlink parameter is unsupported: {parameter}"));
+                    };
+                    if id.replace(value).is_some() {
+                        return Err("OSC 8 hyperlink id is duplicated".to_string());
+                    }
+                }
+                id.unwrap_or_default().to_string()
+            };
+            Ok(Some(EngineEvent::Hyperlink {
+                id,
+                uri: (!uri.is_empty()).then_some(uri.to_string()),
+            }))
+        }
+        "9" => {
+            if payload.is_empty() {
+                return Err("OSC 9 notification is empty".to_string());
+            }
+            Ok(Some(EngineEvent::Notification {
+                message: payload.to_string(),
+            }))
+        }
+        "133" => {
+            let (marker, params) = payload.split_once(';').unwrap_or((payload, ""));
+            let marker = match marker {
+                "A" => ShellMarker::PromptStart,
+                "B" => ShellMarker::PromptEnd,
+                "C" => ShellMarker::CommandStart,
+                "D" => ShellMarker::CommandFinished,
+                value => return Err(format!("OSC 133 shell marker is unsupported: {value}")),
+            };
+            Ok(Some(EngineEvent::ShellState {
+                marker,
+                params: if params.is_empty() {
+                    Vec::new()
+                } else {
+                    params.split(';').map(str::to_string).collect()
+                },
+            }))
+        }
+        "1337" => Ok(None),
+        _ => Err(format!("unsupported vendor OSC selector {selector}")),
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CsiOutcome {
@@ -316,25 +385,36 @@ impl AlacrittyEngine {
                 continue;
             }
 
-            let body_end = self
-                .pending_osc
+            let terminator = if self.pending_osc.last() == Some(&b'\x07') {
+                self.pending_osc.len() - 1
+            } else {
+                self.pending_osc.len() - 2
+            };
+            let body = &self.pending_osc[2..terminator];
+            let (selector, payload) = body
                 .iter()
-                .enumerate()
-                .skip(2)
-                .find_map(|(position, byte)|
-                    (*byte == b';' || *byte == b'\x07' || *byte == b'\x1b').then_some(position)
-                )
-                .unwrap_or(2);
-            let selector = &self.pending_osc[2..body_end];
-            if osc_outcome(selector) == OscOutcome::Unsupported {
+                .position(|byte| *byte == b';')
+                .map(|position| (&body[..position], &body[position + 1..]))
+                .unwrap_or((body, &[]));
+            let outcome = osc_outcome(selector);
+            let event = if outcome == OscOutcome::Vendor {
+                match parse_vendor_osc(selector, payload) {
+                    Ok(Some(event)) => Some(event),
+                    Ok(None) => None,
+                    Err(error) => Some(EngineEvent::Error(error)),
+                }
+            } else if outcome == OscOutcome::Unsupported {
                 let selector = String::from_utf8_lossy(selector);
+                Some(EngineEvent::Error(format!("unsupported OSC selector {selector}")))
+            } else {
+                None
+            };
+            if let Some(event) = event {
                 self.events
                     .events
                     .lock()
                     .expect("engine event queue poisoned")
-                    .push_back(QueuedEvent::Neutral(EngineEvent::Error(format!(
-                        "unsupported OSC selector {selector}"
-                    ))));
+                    .push_back(QueuedEvent::Neutral(event));
             }
             self.pending_osc.clear();
         }

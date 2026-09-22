@@ -184,6 +184,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   let session = {
     sessionId: "", cols: 80, rows: 24, cellWidth: 8, cellHeight: 16, unsupported: [],
     inlineImages: [],
+    vendor: { directory: null, hyperlink: null, notification: null, shell: null },
     compose: { text: "", selectedRange: null, replacementRange: null, attributed: false },
     theme: "dark",
   };
@@ -615,6 +616,35 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       reportInputError(new Error(typeof body.reason === "string" ? body.reason : "program clipboard query rejected"));
     } else if (body.event === "selection.copy") {
       handleSelectionCopy(body).catch(reportInputError);
+    } else if (body.event === "directory") {
+      if (typeof body.uri !== "string" || body.uri.length === 0) {
+        reportInputError(new Error("invalid directory event from sidecar"));
+        return;
+      }
+      session = { ...session, vendor: { ...session.vendor, directory: body.uri } };
+      changed("session");
+    } else if (body.event === "hyperlink") {
+      if (typeof body.id !== "string" || (body.uri !== null && typeof body.uri !== "string")) {
+        reportInputError(new Error("invalid hyperlink event from sidecar"));
+        return;
+      }
+      session = { ...session, vendor: { ...session.vendor, hyperlink: { id: body.id, uri: body.uri } } };
+      changed("session");
+    } else if (body.event === "notification") {
+      if (typeof body.message !== "string" || body.message.length === 0) {
+        reportInputError(new Error("invalid notification event from sidecar"));
+        return;
+      }
+      session = { ...session, vendor: { ...session.vendor, notification: body.message } };
+      changed("session");
+    } else if (body.event === "shell.state") {
+      const markers = new Set(["prompt.start", "prompt.end", "command.start", "command.finished"]);
+      if (!markers.has(body.marker) || !Array.isArray(body.params) || body.params.some((value) => typeof value !== "string")) {
+        reportInputError(new Error("invalid shell state event from sidecar"));
+        return;
+      }
+      session = { ...session, vendor: { ...session.vendor, shell: { marker: body.marker, params: body.params } } };
+      changed("session");
     } else if (body.event === "image.inline" && body.command === "display" && typeof body.name === "string") {
       if (!session.inlineImages.includes(body.name)) {
         session = { ...session, inlineImages: [...session.inlineImages, body.name] };

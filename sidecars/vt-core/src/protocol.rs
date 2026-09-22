@@ -228,6 +228,20 @@ pub enum EngineEvent {
     InlineImage(InlineImageCommand),
     Title(String),
     ResetTitle,
+    Directory {
+        uri: String,
+    },
+    Hyperlink {
+        id: String,
+        uri: Option<String>,
+    },
+    Notification {
+        message: String,
+    },
+    ShellState {
+        marker: ShellMarker,
+        params: Vec<String>,
+    },
     ClipboardStore {
         selection: ClipboardSelection,
         text: String,
@@ -247,6 +261,14 @@ pub enum EngineEvent {
     },
     MouseCursorDirty,
     Error(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShellMarker {
+    PromptStart,
+    PromptEnd,
+    CommandStart,
+    CommandFinished,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1082,6 +1104,48 @@ async fn send_engine_events(
                     continue;
                 }
                 let response = json!({"surface": surface_id, "body": {"event": "title.reset"}});
+                if output_tx.send(response.to_string()).await.is_err() {
+                    return false;
+                }
+            }
+            EngineEvent::Directory { uri } => {
+                if !emit_surface_events {
+                    continue;
+                }
+                let response = json!({"surface": surface_id, "body": {"event": "directory", "uri": uri}});
+                if output_tx.send(response.to_string()).await.is_err() {
+                    return false;
+                }
+            }
+            EngineEvent::Hyperlink { id, uri } => {
+                if !emit_surface_events {
+                    continue;
+                }
+                let response = json!({"surface": surface_id, "body": {"event": "hyperlink", "id": id, "uri": uri}});
+                if output_tx.send(response.to_string()).await.is_err() {
+                    return false;
+                }
+            }
+            EngineEvent::Notification { message } => {
+                if !emit_surface_events {
+                    continue;
+                }
+                let response = json!({"surface": surface_id, "body": {"event": "notification", "message": message}});
+                if output_tx.send(response.to_string()).await.is_err() {
+                    return false;
+                }
+            }
+            EngineEvent::ShellState { marker, params } => {
+                if !emit_surface_events {
+                    continue;
+                }
+                let marker = match marker {
+                    ShellMarker::PromptStart => "prompt.start",
+                    ShellMarker::PromptEnd => "prompt.end",
+                    ShellMarker::CommandStart => "command.start",
+                    ShellMarker::CommandFinished => "command.finished",
+                };
+                let response = json!({"surface": surface_id, "body": {"event": "shell.state", "marker": marker, "params": params}});
                 if output_tx.send(response.to_string()).await.is_err() {
                     return false;
                 }

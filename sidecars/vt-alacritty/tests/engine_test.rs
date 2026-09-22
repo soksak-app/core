@@ -4,7 +4,7 @@ mod engine;
 use engine::{AlacrittyEngine, OscOutcome, CSI_SELECTOR_INVENTORY, OSC_SELECTOR_INVENTORY};
 use soksak_sidecar_vt_core::{
     default_terminal_color, inline_image::Dimension, inline_image::InlineImageCommand, CursorShape,
-    Engine, EngineEvent, TerminalTheme, DEFAULT_PALETTE,
+    Engine, EngineEvent, ShellMarker, TerminalTheme, DEFAULT_PALETTE,
 };
 
 fn text(screen: &soksak_sidecar_vt_core::Screen) -> String {
@@ -228,6 +228,56 @@ fn vendor_osc_contracts_are_separate() {
         ["7,8,9,133", "1337"]
     );
     assert!(vendor.iter().all(|entry| !entry.test.is_empty()));
+}
+
+#[test]
+fn vendor_osc_effects_are_typed_and_survive_bel_st_and_fragmentation() {
+    let mut engine = AlacrittyEngine::new();
+    engine.feed(b"\x1b]7;file:///tmp/project\x1b\\\x1b]8;id=docs;https://example.test\x07");
+    engine.feed(b"\x1b]9;build complete");
+    engine.feed(b"\x07\x1b]133;A\x1b\\\x1b]133;D;0\x07");
+
+    assert_eq!(
+        engine.drain_events(),
+        vec![
+            EngineEvent::Directory {
+                uri: "file:///tmp/project".to_string(),
+            },
+            EngineEvent::Hyperlink {
+                id: "docs".to_string(),
+                uri: Some("https://example.test".to_string()),
+            },
+            EngineEvent::Notification {
+                message: "build complete".to_string(),
+            },
+            EngineEvent::ShellState {
+                marker: ShellMarker::PromptStart,
+                params: Vec::new(),
+            },
+            EngineEvent::ShellState {
+                marker: ShellMarker::CommandFinished,
+                params: vec!["0".to_string()],
+            },
+        ]
+    );
+}
+
+#[test]
+fn malformed_vendor_osc_is_rejected_without_silent_drop() {
+    for (sequence, expected) in [
+        (b"\x1b]7;\x07".as_slice(), "OSC 7 directory URI is empty"),
+        (b"\x1b]8;missing-separator\x07".as_slice(), "OSC 8 hyperlink payload must contain params and URI"),
+        (b"\x1b]9;\x07".as_slice(), "OSC 9 notification is empty"),
+        (b"\x1b]133;Z\x07".as_slice(), "OSC 133 shell marker is unsupported: Z"),
+    ] {
+        let mut engine = AlacrittyEngine::new();
+        engine.feed(sequence);
+        assert_eq!(
+            engine.drain_events(),
+            vec![EngineEvent::Error(expected.to_string())],
+            "vendor sequence must have an explicit rejection"
+        );
+    }
 }
 
 #[test]
@@ -576,6 +626,23 @@ fn clipboard_rejection_clears_a_pending_query_token() {
         .expect("known clipboard token");
     assert!(engine.resolve_clipboard(request_id, "secret").is_err());
     assert!(engine.reject_clipboard(request_id, "again").is_err());
+}
+
+#[test]
+fn clipboard_query_survives_a_fragmented_st_terminator() {
+    let mut engine = AlacrittyEngine::new();
+    engine.feed(b"\x1b]52;c;");
+    assert!(engine.drain_events().is_empty());
+    engine.feed(b"?\x1b");
+    assert!(engine.drain_events().is_empty());
+    engine.feed(b"\\");
+    assert!(engine.drain_events().iter().any(|event| matches!(
+        event,
+        EngineEvent::ClipboardQuery {
+            selection: soksak_sidecar_vt_core::ClipboardSelection::Clipboard,
+            ..
+        }
+    )));
 }
 
 #[test]

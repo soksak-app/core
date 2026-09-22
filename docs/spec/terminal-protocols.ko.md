@@ -20,8 +20,8 @@ OSC 1337 이미지 전송은 OSC 확장을 사용한다. APC 그래픽 프로토
 | 인덱스·동적 색상 | 팔레트 설정·조회·초기화, 전경·배경·커서 효과와 정확한 응답 | 인덱스 색상 셀 변환 검사. 전체 OSC 검증 대기 |
 | 하이퍼링크 | 줄바꿈 셀과 선택에서 링크 식별 유지. 사용자 명령으로만 열기 | 대기 |
 | 클립보드 선택 | 텍스트 전체 보존, 조회 응답 연결, 사용자 붙여넣기와 프로그램 요청 구분 | 엔진 이벤트 추가. 네이티브·권한 통합 대기 |
-| 디렉터리·셸 메타데이터 | 내용을 실행하지 않고 문법 검증. 소유 세션 갱신 | 대기 |
-| 알림 | 소유 세션을 표시하고 내용을 실행하지 않기 | 대기 |
+| 디렉터리·셸 메타데이터 | 내용을 실행하지 않고 문법 검증. 소유 세션 갱신 | typed `directory`·`shell.state` event와 parser·소유 표면 검사가 통과함 |
+| 알림 | 소유 세션을 표시하고 내용을 실행하지 않기 | typed `notification` event와 parser·잘못된 입력·소유 표면 검사가 통과함 |
 | 폰트·로깅·창·리소스 동작 | 명세 의미 구현 또는 미지원·정책 거부를 명시. 성공하는 무동작 금지 | 대기 |
 | 터미널 내 그래픽 | 크기·인코딩·한계·수명 검증, 격자 배치·삭제 의미 보존 | 대기 |
 | 알 수 없거나 잘못된 시퀀스 | 비밀 내용을 로그에 복사하지 않는 제한된 진단 메타데이터 보고. 지원 주장 금지 | 대기 |
@@ -46,16 +46,32 @@ OSC 1337 이미지 전송은 OSC 확장을 사용한다. APC 그래픽 프로토
 | `46` | 로그 파일 | `unsupported`: 터미널 process가 호스트 로그 파일을 선택하지 않음 | `osc_selector_inventory_records_unsupported_operations` |
 | `50` | 커서 글꼴·모양 동작 | `implemented`: 지원하는 커서 모양 하위 형식만. 다른 글꼴 형식은 parser 계약에서 거부 | `osc50_cursor_shape_changes_program_cursor` |
 | `51` | Emacs shell 예약 | `unsupported`: 효과 없음 | `osc_selector_inventory_records_unsupported_operations` |
-| `52` | clipboard selection 저장·조회 | `implemented`: 정책 제한 typed event와 조회 응답 | `clipboard_query_uses_a_token_and_resolves_to_pty_bytes`, `clipboard_rejection_clears_a_pending_query_token` |
+| `52` | clipboard selection 저장·조회 | `implemented`: 정책 제한 typed event와 조회 응답 | `clipboard_query_uses_a_token_and_resolves_to_pty_bytes`, `clipboard_query_survives_a_fragmented_st_terminator`, `clipboard_rejection_clears_a_pending_query_token` |
 | `60`–`62` | 권한 기능 조회 | `unsupported`: capability 상태는 XTerm wire 응답이 아닌 sidecar 계약이 소유 | `osc_selector_inventory_records_unsupported_operations` |
 | `104` | 인덱스 색상 초기화 | `implemented`: 팔레트 초기화 | `osc104_resets_indexed_colors`, `osc104_without_parameters_resets_all_indexed_colors` |
 | `105`, `106` | 특수 색상 초기화·모드 | `unsupported`: 특수 색상 계약 없음 | `osc_selector_inventory_records_unsupported_operations` |
 | `110`–`112` | 동적 색상 초기화 | `implemented`: 전경·배경·커서 초기화 | `osc_dynamic_color_resets_restore_defaults` |
 | `I`, `l`, `L` | Sun/CDE 아이콘·제목 형식 | `unsupported`: icon-label·비숫자 선택자 계약 없음 | `osc_selector_inventory_records_unsupported_operations` |
-| `7`, `8`, `9`, `133` | directory·hyperlink·notification·shell metadata | `vendor`: 별도 계약이며 표준 OSC 완료에 포함하지 않음 | `vendor_osc_contracts_are_separate` |
-| `1337` | OSC 1337 inline image | `vendor`: 제한된 image 계약 | `osc1337_inline_image_is_typed_and_survives_input_chunk_boundaries` |
+| `7` | 현재 작업 디렉터리 URI | `vendor implemented`: typed `directory` event. 빈 URI는 거부 | `vendor_osc_effects_are_typed_and_survive_bel_st_and_fragmentation`, `malformed_vendor_osc_is_rejected_without_silent_drop`, `vendor_event_is_emitted_only_with_the_owning_surface_id` |
+| `8` | hyperlink parameter·URI | `vendor implemented`: typed open/close event. 알 수 없거나 중복된 parameter는 거부 | `vendor_osc_effects_are_typed_and_survive_bel_st_and_fragmentation`, `malformed_vendor_osc_is_rejected_without_silent_drop` |
+| `9` | notification message | `vendor implemented`: typed notification event. 빈 message는 거부 | `vendor_osc_effects_are_typed_and_survive_bel_st_and_fragmentation`, `malformed_vendor_osc_is_rejected_without_silent_drop` |
+| `133` | shell integration prompt·command marker | `vendor implemented`: typed marker·parameter. 알 수 없는 marker는 거부 | `vendor_osc_effects_are_typed_and_survive_bel_st_and_fragmentation`, `malformed_vendor_osc_is_rejected_without_silent_drop` |
+| `1337` | OSC 1337 inline image | `vendor implemented`: 제한된 typed image·multipart 소유권 계약 | `osc1337_inline_image_is_typed_and_survives_input_chunk_boundaries`, `test_inline_image_event_is_explicit_and_base64_encoded`, `test_inline_image_delete_is_explicit_for_unowned_names` |
 
 unsupported 행은 성공한 무동작 결과가 아니라 명시된 범위 결과다. 엔진은 입력 청크가 나뉘고 BEL 또는 ST로 끝나는 경우를 포함해 모든 unsupported 선택자에 관측 가능한 거부 event를 낸다. inventory 검사는 중복·미분류 선택자와 이름이 맞지 않는 테스트를 실패시키며 parser가 받아들였다는 사실로 지원을 추론하지 않는다.
+
+## Vendor 계약
+
+선택한 vendor 범위는 표준 OSC inventory와 분리해 명시한다.
+
+- OSC 7은 현재 표면이 소유하는 directory URI event를 낸다. 빈 URI는 거부한다.
+- OSC 8은 `id=` parameter를 파싱해 typed hyperlink open/close event를 낸다. 지원하지 않는 parameter나 중복 parameter는 거부하며 빈 URI는 현재 link를 닫는다.
+- OSC 9는 notification event를 낸다. 빈 notification은 거부하며 payload를 실행하지 않는다.
+- OSC 133은 네 가지 typed shell marker(`prompt.start`, `prompt.end`, `command.start`, `command.finished`)와 문자열 parameter를 낸다. 알 수 없는 marker는 거부한다.
+- OSC 52는 계속 policy-gated clipboard 소유권을 사용한다. 조회 token은 한 번만 사용할 수 있고 거부하면 소유권을 지우며 BEL/ST 분할 입력을 검사한다.
+- OSC 1337은 제한된 image 전송으로 유지한다. 잘못된 payload는 명시적으로 거부하고 multipart 상태는 표면을 넘지 않으며, 해당 표면이 소유하지 않은 이름의 삭제는 거부한다.
+
+여섯 계약 모두 BEL/ST 분할 입력을 보존한다. relay 응답은 원본 표면 식별자를 포함하며 vendor event를 다른 표면에 방송하지 않는다. 터미널 페이지는 typed directory·hyperlink·notification·shell-state event를 소비해 session status에 기록한다. 미래의 알 수 없는 event는 버리지 않고 `unsupported`에 남긴다.
 
 ## OSC·CSI 전체 요구사항
 

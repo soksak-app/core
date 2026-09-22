@@ -1531,8 +1531,8 @@ test("input send failures remain observable and later queued input still sends",
   assert.equal(Buffer.from(fakeSidecar.getMessages().at(-1).body.bytes, "base64").toString(), "b");
 });
 
-// 새로운 테스트 5b: unknown_sidecar_event_tracking
-test("unknown_sidecar_event_tracking: unknown sidecar events are tracked", async () => {
+// Vendor events have typed consumers; unrelated events remain observable as unsupported.
+test("vendor_events_update_the_session_and_unrelated_events_remain_unsupported", async () => {
   FakeResizeObserver.reset();
   const fakeAttachImage = createFakeAttachImage();
   const fakeSidecar = createFakeSidecar();
@@ -1557,13 +1557,23 @@ test("unknown_sidecar_event_tracking: unknown sidecar events are tracked", async
 
   const sessionStatus = fakeExpose.getStatus("terminal.session");
   const initialSession = sessionStatus.readFn();
-  assert(!initialSession.unsupported.includes("notification"), "notification not in unsupported initially");
+  assert(!initialSession.unsupported.includes("unclassified"), "unclassified not in unsupported initially");
 
-  // 알 수 없는 이벤트를 보낸다
-  fakeSidecar.triggerEvent("test-session", { event: "notification", message: "test" });
+  fakeSidecar.triggerEvent("test-session", { event: "directory", uri: "file:///tmp/project" });
+  fakeSidecar.triggerEvent("test-session", { event: "hyperlink", id: "docs", uri: "https://example.test" });
+  fakeSidecar.triggerEvent("test-session", { event: "notification", message: "build complete" });
+  fakeSidecar.triggerEvent("test-session", { event: "shell.state", marker: "command.finished", params: ["0"] });
 
   const updatedSession = sessionStatus.readFn();
-  assert(updatedSession.unsupported.includes("notification"), "unknown event added to unsupported");
+  assert.deepEqual(updatedSession.vendor, {
+    directory: "file:///tmp/project",
+    hyperlink: { id: "docs", uri: "https://example.test" },
+    notification: "build complete",
+    shell: { marker: "command.finished", params: ["0"] },
+  });
+
+  fakeSidecar.triggerEvent("test-session", { event: "unclassified", value: "kept" });
+  assert(sessionStatus.readFn().unsupported.includes("unclassified"), "unknown event was not tracked");
 });
 
 // 새로운 테스트 5c: invalid_state_is_reported_not_replaced

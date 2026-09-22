@@ -39,6 +39,7 @@ impl MockEngine {
             pending_events: Vec::new(),
         }
     }
+
 }
 
 impl Engine for MockEngine {
@@ -70,6 +71,11 @@ impl Engine for MockEngine {
                     preserve_aspect_ratio: true,
                 },
             ));
+        }
+        if bytes == b"\x1b]7;file:///tmp/project\x07" {
+            self.pending_events.push(EngineEvent::Directory {
+                uri: "file:///tmp/project".to_string(),
+            });
         }
     }
 
@@ -148,6 +154,45 @@ impl Engine for MockEngine {
     }
 }
 
+#[tokio::test]
+async fn vendor_event_is_emitted_only_with_the_owning_surface_id() {
+    let calls = Arc::new(Mutex::new(Calls::default()));
+    let input = br#"{"surface":"owned-surface","root":"/tmp","body":{"operation":"open","image":"view"}}
+{"surface":"owned-surface","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
+{"surface":"owned-surface","body":{"operation":"input","bytes":"G103O2ZpbGU6Ly8vdG1wL3Byb2plY3QH"}}
+"#;
+    let (mut to_serve, serve_in) = tokio::io::duplex(16 * 1024);
+    let (serve_out, from_serve) = tokio::io::duplex(16 * 1024);
+    let engine_factory = Arc::new(|| Box::new(MockEngine::new()) as Box<dyn Engine>);
+    let calls_for_factory = calls.clone();
+    let session_port_factory = Arc::new(move || {
+        Arc::new(FakeSessionPort::new("owned-session".to_string(), calls_for_factory.clone()))
+            as Arc<dyn SessionPort>
+    });
+
+    let task = tokio::spawn(serve(engine_factory, serve_in, serve_out, session_port_factory));
+    to_serve.write_all(input).await.unwrap();
+    let mut lines = tokio::io::BufReader::new(from_serve).lines();
+    let mut found = false;
+    for _ in 0..8 {
+        let line = tokio::time::timeout(std::time::Duration::from_secs(2), lines.next_line())
+            .await
+            .expect("timeout waiting for owned vendor event")
+            .unwrap()
+            .unwrap();
+        let value: serde_json::Value = serde_json::from_str(&line).unwrap();
+        if value["body"]["event"] == "directory" {
+            assert_eq!(value["surface"], "owned-surface");
+            assert_eq!(value["body"]["uri"], "file:///tmp/project");
+            found = true;
+            break;
+        }
+    }
+    assert!(found, "owned vendor event was not emitted");
+    drop(to_serve);
+    task.await.unwrap().unwrap();
+}
+
 #[derive(Debug, Default, Clone)]
 struct Calls {
     opens: Vec<(u16, u16)>,
@@ -199,6 +244,14 @@ impl SessionPort for FakeSessionPort {
             .unwrap()
             .writes
             .push((session_id.to_string(), data.to_vec()));
+        if data == b"\x1b]7;file:///tmp/project\x07" {
+            let _ = self.event_tx.send(DaemonEvent::Output {
+                session_id: self.session_id.clone(),
+                data: data.to_vec(),
+                sequence: 0,
+                truncated: false,
+            });
+        }
         Ok(())
     }
 
