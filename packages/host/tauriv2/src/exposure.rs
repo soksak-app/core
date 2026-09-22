@@ -21,7 +21,7 @@ use crate::endpoint::{
 };
 use crate::platform;
 use crate::surfaces::label_for;
-use crate::windows::{self, native_owner, window_data};
+use crate::windows::{self, native_owner_on_main, window_data};
 
 pub use crate::platform::{Delivery, Key, Pointer};
 
@@ -795,7 +795,7 @@ pub(crate) fn with_view<T: Send + 'static>(
 /// 창의 host.window 값을 계산한다. 메인 스레드가 아닌 스레드에서 호출한다.
 fn window_status(window: &Window) -> Result<Value, Failure> {
     let platform = platform::current().map_err(internal)?;
-    let handle = native_owner(window).map_err(internal)?;
+    let handle = native_owner_on_main(window).map_err(internal)?;
     let context = window_data(window).map_err(internal)?;
     let snapshot = context.clone();
     let (facts, named, documents, regions) = on_main(window, move || {
@@ -935,7 +935,7 @@ fn reload(window: &Window) -> Result<Value, Failure> {
 /// 무시하므로 네이티브 코드가 그 전환이 끝난 뒤에 이어서 처리한다.
 fn fullscreen(window: &Window, on: bool) -> Result<Value, Failure> {
     let platform = platform::current().map_err(internal)?;
-    let handle = native_owner(window).map_err(internal)?;
+    let handle = native_owner_on_main(window).map_err(internal)?;
     let (tx, rx) = mpsc::channel();
     on_main(window, move || {
         platform.fullscreen(
@@ -1037,7 +1037,7 @@ pub(crate) fn inject_presentation_failure(window: &Window) -> Result<(), Failure
 /// 창 좌표의 점을 소유한 문서나 뷰를 반환한다.
 fn hit(window: &Window, x: f64, y: f64) -> Result<Value, Failure> {
     let platform = platform::current().map_err(internal)?;
-    let handle = native_owner(window).map_err(internal)?;
+    let handle = native_owner_on_main(window).map_err(internal)?;
     let found = on_main(window, move || platform.hit(handle, x, y)).map_err(internal)?;
     let context = window_data(window).map_err(internal)?;
     let documents = context.documents.names();
@@ -1192,7 +1192,7 @@ impl Host {
                 let x = number(arguments, "x")?;
                 let y = number(arguments, "y")?;
                 let platform = platform::current().map_err(internal)?;
-                let handle = native_owner(window).map_err(internal)?;
+                let handle = native_owner_on_main(window).map_err(internal)?;
                 on_main(window, move || platform.move_window(handle, x, y)).map_err(internal)?;
                 Ok(Value::Null)
             })(),
@@ -1218,7 +1218,7 @@ impl Host {
     /// 포인터 입력을 메인 스레드에서 전달한다. activate 이면 먼저 창을 활성화한다.
     fn input_pointer(&self, window: &Window, pointer: Pointer) -> Result<Value, Failure> {
         let platform = platform::current().map_err(|e| Failure::new(NO_INPUT, e))?;
-        let handle = native_owner(window).map_err(|e| Failure::new(NO_INPUT, e))?;
+        let handle = native_owner_on_main(window).map_err(|e| Failure::new(NO_INPUT, e))?;
         if pointer.activate {
             let (tx, rx) = mpsc::channel();
             on_main(window, move || {
@@ -1283,7 +1283,7 @@ impl Host {
     /// 키 입력을 메인 스레드에서 전달한다.
     fn input_key(&self, window: &Window, key: Key) -> Result<Value, Failure> {
         let platform = platform::current().map_err(|e| Failure::new(NO_INPUT, e))?;
-        let handle = native_owner(window).map_err(|e| Failure::new(NO_INPUT, e))?;
+        let handle = native_owner_on_main(window).map_err(|e| Failure::new(NO_INPUT, e))?;
         match on_main(window, move || platform.input_key(handle, &key)) {
             Ok(true) => Ok(Value::Null),
             Ok(false) => Err(Failure::new(

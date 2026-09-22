@@ -1,5 +1,7 @@
 # Changelog
 
+- Fix Tauri endpoint and asynchronous split paths to read native window handles on the AppKit main thread, preventing a second foreign-exception crash path during surface synchronization. Rebuilt repeated split presentation passed 3/3; package, native, documentation, boundary, exposure, and parity checks passed.
+
 - Completed F2.14. Native surface preparation now notifies and authorizes every prepared surface, replays the current preparation to late module registration, retains the last completed preparation until a newer preparation replaces it, and removes authorization when a surface is disposed. The workbench surface-presentation test passes 1/1; rebuilt Tauri split-terminal presentation passes the new, four-surface, and repeated endpoint cases 3/3 with START/PASS output in 0.37s, 0.41s, and 0.38s, and rebuilt Wails passes the same cases 3/3 in 0.42s, 0.38s, and 0.33s. Each host used one current-build process and a disposable configuration.
 
 - Completed F6.3-3. Tauri now queues native layout cancellation on any DOM or raster presentation failure and returns immediately instead of queueing a second failing commit operation. The rebuilt Tauri failure-injection split regression passes 1/1 in 0.93s with START/PASS output; the next split presents both terminal regions and the host exits cleanly.

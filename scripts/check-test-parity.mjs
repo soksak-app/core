@@ -334,6 +334,7 @@ const FEATURE_LINKS = [
     id: "F0.5.9",
     implementation: [
       { file: "packages/host/tauriv2/src/exposure.rs", symbol: "root_view_on_main" },
+      { file: "packages/host/tauriv2/src/windows.rs", symbol: "native_owner_on_main" },
       { file: "packages/host/tauriv2/src/surfaces.rs", symbol: "sync" },
     ],
     tests: [
@@ -341,7 +342,7 @@ const FEATURE_LINKS = [
       { file: "e2e/terminal.test.mjs", id: "four split terminals complete native presentation without a host crash" },
       { file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" },
     ],
-    expected: "Endpoint and asynchronous split-path WebView lookups run through the AppKit main-thread executor; repeated split requests preserve native presentation and process survival on rebuilt Tauri.",
+    expected: "Endpoint and asynchronous split-path WebView and native window-handle lookups run through the AppKit main-thread executor; repeated split requests preserve native presentation and process survival on rebuilt Tauri.",
     levels: ["native", "application"],
   },
   {

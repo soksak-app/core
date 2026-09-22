@@ -14,7 +14,7 @@ use crate::images;
 use crate::log_error;
 use crate::platform::{self, Handle};
 use crate::sidecars::WindowSidecars;
-use crate::windows::{emit_window, native_owner, window_data};
+use crate::windows::{emit_window, native_owner_on_main, window_data};
 
 /// 표면 웹뷰가 문서보다 먼저 실행하는 스크립트.
 pub(crate) struct Background;
@@ -193,7 +193,7 @@ pub fn surface_owner_id(named: &HashMap<Handle, String>, view: Handle) -> Option
 /// 직접 주입은 AppKit 로컬 이벤트 감시기를 거치지 않으므로 감시기와 별도로 호출한다.
 pub(crate) fn press_at(window: &Window, x: f64, y: f64) -> Result<(), String> {
     let data = window_data(window)?;
-    let handle = native_owner(window)?;
+    let handle = native_owner_on_main(window)?;
     let hit = platform::current()?.hit(handle, x, y)?;
     let named = data.views.0.lock().map_err(|e| e.to_string())?;
     let documents = data.documents.names();
@@ -349,7 +349,7 @@ fn watch_presses(window: &Window, views: &Views, watching: &Watching) -> Result<
     let watched = watching.0.clone();
     let host = window.clone();
     let pointing = window.clone();
-    let handle = native_owner(window)?;
+    let handle = native_owner_on_main(window)?;
     let (tx, rx) = mpsc::channel();
     window
         .run_on_main_thread(move || {
@@ -479,7 +479,7 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
 
     let main = exposure::root_view_on_main(window)?;
     let ticket = running.prepared.fetch_add(1, Ordering::Relaxed) + 1;
-    let owner = native_owner(window)?;
+    let owner = native_owner_on_main(window)?;
     let (tx, rx) = mpsc::channel::<Result<Handle, String>>();
     main.with_webview(move |webview| {
         let failed = tx.clone();
@@ -663,7 +663,7 @@ pub(crate) async fn present(
     let ticket = request.ticket;
     let finished = window.clone();
     let context = window_data(&window)?;
-    let owner = native_owner(&window)?;
+    let owner = native_owner_on_main(&window)?;
     let images = context.images.clone();
     let presentation_window = finished.clone();
     let placements = request.placements;

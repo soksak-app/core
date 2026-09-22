@@ -116,6 +116,12 @@ pub(crate) fn native_owner(window: &Window) -> Result<Handle, String> {
     platform::current()?.window_handle(window)
 }
 
+/// Returns the native window handle from the AppKit main thread.
+pub(crate) fn native_owner_on_main(window: &Window) -> Result<Handle, String> {
+    let target = window.clone();
+    crate::exposure::on_main(window, move || native_owner(&target))
+}
+
 /// 창의 웹뷰에 이벤트를 보낸다. main 창이면 애플리케이션 수신기에도 보낸다.
 pub(crate) fn emit_window<S: Serialize + Clone>(
     window: &Window,
