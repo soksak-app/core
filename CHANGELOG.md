@@ -1,6 +1,6 @@
 # Changelog
 
-- Terminal cursor settings now have typed plugin/environment declarations, strict common/project persistence validation, shared settings-modal controls, and live delivery to each terminal sidecar. Package and structural gates pass; rebuilt-host cursor pixel E2E remains pending until a current application endpoint is available.
+- Terminal cursor settings now have typed plugin/environment declarations, strict common/project persistence validation, shared settings-modal controls, and live delivery to each terminal sidecar. Package, native frame, and structural gates pass. Rebuilt-host settings-to-pixel E2E remains a separate checklist item because no current application endpoint was available.
 
 - Completed F0.4-1.5 and closed F0.4-1. The cross-language failure matrix now runs attributable JS/TS, Rust, Go, and Objective-C audits. Wails Darwin capture status, recording cleanup, shell close, and persistent protocol decoding no longer discard failures; Wails and shell tests plus 27 parity self-tests pass.
 
