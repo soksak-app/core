@@ -993,6 +993,18 @@ const FEATURE_LINKS = [
     levels: ["native", "application"],
   },
   {
+    id: "F6.3-3",
+    implementation: [
+      { file: "packages/host/tauriv2/src/surfaces.rs", symbol: "pub(crate) async fn present" },
+      { file: "native/darwin/src/surface_layout.m", symbol: "surfaceLayoutCancel" },
+    ],
+    tests: [
+      { file: "e2e/terminal.test.mjs", id: "native presentation failure is explicit and the next split remains usable" },
+    ],
+    expected: "A Tauri presentation failure cancels the open native layout transaction and the next split remains usable; the bounded regression reports START/PASS and exits cleanly.",
+    levels: ["native", "application"],
+  },
+  {
     id: "F6.5",
     implementation: [
       { file: "plugins/terminal/ui/terminal.js", symbol: "dropFilesFromEvent" },

@@ -716,6 +716,20 @@ pub(crate) async fn present(
     })
     .await
     .map_err(|error| error.to_string())?;
+    if let Err(error) = ready {
+        // A presentation failure occurs after sync has opened the native
+        // transaction. Release that transaction before returning so the
+        // next split cannot wait forever behind a failed owner.
+        let cancel_error = platform::current()?.enqueue_ui(Box::new(move || {
+            if let Err(cancel) = platform::current().and_then(|p| p.cancel_layout(owner)) {
+                eprintln!("surface presentation failure could not cancel layout: {cancel}");
+            }
+        }));
+        if let Err(cancel) = cancel_error {
+            return Err(format!("{error}; cancelling layout: {cancel}"));
+        }
+        return Err(error);
+    }
     let (ui_tx, mut ui_rx) = tauri::async_runtime::channel(1);
     // 커밋은 AppKit 다시 그리기를 호출할 수 있으므로 Tao 이벤트 잠금 밖에서 실행한다.
     platform::current()?.enqueue_ui(Box::new(move || {
