@@ -1,3 +1,5 @@
+import { shellQuotePath } from "@soksak/plugin-api";
+
 // 터미널 표면의 부팅과 동작을 처리한다.
 //
 // startTerminal 함수는 인자로 받은 의존성을 사용하므로 브라우저와 Node 환경에서 모두 부를 수 있다.
@@ -8,6 +10,27 @@
 function encodeBytes(text, encoder) {
   const bytes = encoder.encode(text);
   return btoa(String.fromCharCode(...bytes));
+}
+
+function fileURLPath(value) {
+  if (typeof value !== "string") throw new Error("clipboard file URL is not a string");
+  let url;
+  try {
+    url = new URL(value);
+  } catch (error) {
+    throw new Error(`clipboard file URL is invalid: ${error.message}`);
+  }
+  if (url.protocol !== "file:" || (url.hostname && url.hostname !== "localhost")) {
+    throw new Error(`clipboard file URL is not local: ${value}`);
+  }
+  let path;
+  try {
+    path = decodeURIComponent(url.pathname);
+  } catch (error) {
+    throw new Error(`clipboard file URL path is invalid: ${error.message}`);
+  }
+  if (!path.startsWith("/") || path.length === 1) throw new Error("clipboard file URL path is empty");
+  return path;
 }
 
 /**
@@ -223,15 +246,37 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     changed("cursor");
     return policy;
   };
+  const sendPaste = async (text) => {
+    if (typeof text !== "string" || text.length === 0) throw new Error("terminal paste text is empty");
+    await terminal.send(id, { operation: "paste", text });
+    return null;
+  };
   const pasteText = async () => {
     if (!clipboard || typeof clipboard.read !== "function") {
       throw new Error("terminal.paste requires a clipboard capability");
     }
     const text = await clipboard.read("text");
-    if (text === null) throw new Error("text clipboard is empty");
-    if (typeof text !== "string") throw new Error("text clipboard returned a non-text value");
-    await terminal.send(id, { operation: "paste", text });
-    return null;
+    if (text !== null) {
+      if (typeof text !== "string") throw new Error("text clipboard returned a non-text value");
+      return sendPaste(text);
+    }
+    const urls = await clipboard.read("fileURLs");
+    if (urls !== null) {
+      if (!Array.isArray(urls) || urls.length === 0) throw new Error("file clipboard is empty");
+      return sendPaste(urls.map((url) => shellQuotePath(fileURLPath(url))).join(" "));
+    }
+    const png = await clipboard.read("png");
+    if (png !== null) {
+      if (!clipboard || typeof clipboard.persistPNG !== "function") {
+        throw new Error("PNG clipboard persistence is unavailable");
+      }
+      const persisted = await clipboard.persistPNG(png);
+      if (!persisted || typeof persisted.shellQuotedPath !== "string" || persisted.shellQuotedPath.length === 0) {
+        throw new Error("PNG clipboard persistence returned no shell path");
+      }
+      return sendPaste(persisted.shellQuotedPath);
+    }
+    throw new Error("clipboard has no text, file, or PNG payload");
   };
   const rejectClipboardQuery = async (requestId, reason) => {
     if (!Number.isInteger(requestId) || requestId < 0) throw new Error("clipboard query requestId is invalid");

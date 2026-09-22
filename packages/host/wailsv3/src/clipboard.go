@@ -58,7 +58,7 @@ func (h *Host) ClipboardRead(ctx context.Context, request ClipboardReadRequest) 
 		return ClipboardReadResponse{}, callErr
 	}
 	if !value.Present {
-		return ClipboardReadResponse{Present: false}, nil
+		return ClipboardReadResponse{Present: false, Type: request.Type}, nil
 	}
 	response := ClipboardReadResponse{Present: true, Type: value.Type, Text: value.Text, URLs: value.URLs}
 	if len(value.PNG) > clipboardMaxBytes {

@@ -902,6 +902,21 @@ const FEATURE_LINKS = [
     levels: ["unit", "native", "application"],
   },
   {
+    id: "F6.4",
+    implementation: [
+      { file: "plugins/terminal/ui/terminal.js", symbol: "pasteText" },
+      { file: "packages/host/tauriv2/src/clipboard.rs", symbol: "pub(crate) fn read" },
+      { file: "packages/host/wailsv3/src/clipboard.go", symbol: "func (h *Host) ClipboardRead" },
+    ],
+    tests: [
+      { file: "plugins/terminal/test/terminal.test.mjs", id: "terminal.paste quotes file URLs without adding an executable newline" },
+      { file: "plugins/terminal/test/terminal.test.mjs", id: "terminal.paste persists a PNG and sends its owned shell path once" },
+      { file: "e2e/terminal.test.mjs", id: "native terminal selection renders and copies through one explicit paste" },
+    ],
+    expected: "Explicit terminal paste preserves text, inserts validated quoted file paths and owned PNG paths exactly once without a newline or automatic execution, and both native hosts preserve typed absent clipboard responses.",
+    levels: ["unit", "native", "application"],
+  },
+  {
     id: "F10.1",
     implementation: [{ file: "packages/host/tauriv2/src/modals.rs", symbol: "pub(crate) fn show" }],
     tests: [{ file: "e2e/modal.test.mjs", id: "settings blocks background input and closes only through its close button" }],

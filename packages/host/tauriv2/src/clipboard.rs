@@ -57,11 +57,16 @@ pub(crate) struct ReadResponse {
     pub urls: Option<Vec<String>>,
 }
 
-fn response(value: ClipboardValue) -> ReadResponse {
+fn response(value: ClipboardValue, kind: &str) -> ReadResponse {
     match value {
         ClipboardValue::Absent => ReadResponse {
             present: false,
-            kind: None,
+            kind: Some(match kind {
+                "text" => "text",
+                "png" => "png",
+                "fileURLs" => "fileURLs",
+                _ => unreachable!("clipboard read kind was validated before response"),
+            }),
             text: None,
             data: None,
             urls: None,
@@ -93,8 +98,9 @@ fn response(value: ClipboardValue) -> ReadResponse {
 pub(crate) fn read(window: &Window, request: ReadRequest) -> Result<ReadResponse, String> {
     validate_read_request(&request.kind, request.user_initiated)?;
     let kind = request.kind;
-    let value = exposure::on_main(window, move || platform::current()?.clipboard_read(&kind))?;
-    Ok(response(value))
+    let read_kind = kind.clone();
+    let value = exposure::on_main(window, move || platform::current()?.clipboard_read(&read_kind))?;
+    Ok(response(value, &kind))
 }
 
 pub(crate) fn write_text(window: &Window, text: String) -> Result<(), String> {

@@ -212,7 +212,7 @@
       },
       {
         "name": "terminal.paste",
-        "description": "Reads the user-selected text clipboard and pastes it once without executing it.",
+        "description": "Reads one user-selected text, file, or PNG clipboard payload and pastes it once without executing it.",
         "params": {
           "type": "object",
           "properties": {}

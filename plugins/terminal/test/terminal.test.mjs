@@ -474,8 +474,90 @@ test("terminal.paste rejects an absent clipboard without sending input", async (
   openSession(fakeSidecar);
   fakeSidecar.reset();
 
-  await assert.rejects(fakeExpose.getCommand("terminal.paste")(), /text clipboard is empty/);
+  await assert.rejects(fakeExpose.getCommand("terminal.paste")(), /clipboard has no text, file, or PNG payload/);
   assert.deepEqual(fakeSidecar.getMessages(), []);
+});
+
+test("terminal.paste quotes file URLs without adding an executable newline", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  const fakeExpose = createFakeExpose();
+  const clipboardCalls = [];
+  const clipboard = {
+    read: async (type) => {
+      clipboardCalls.push(type);
+      if (type === "text") return null;
+      if (type === "fileURLs") return ["file:///tmp/a%20b.txt", "file:///tmp/quote%27name.txt"];
+      return null;
+    },
+  };
+  await startTerminal({
+    view: createFakeView(), attachImage: createFakeAttachImage().function,
+    sidecar: fakeSidecar, expose: fakeExpose, clipboard,
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  openSession(fakeSidecar);
+  fakeSidecar.reset();
+
+  await fakeExpose.getCommand("terminal.paste")();
+
+  assert.deepEqual(clipboardCalls, ["text", "fileURLs"]);
+  assert.deepEqual(fakeSidecar.getMessages().map(({ body }) => body), [
+    { operation: "paste", text: "'/tmp/a b.txt' '/tmp/quote'\\''name.txt'" },
+  ]);
+});
+
+test("terminal.paste persists a PNG and sends its owned shell path once", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  const fakeExpose = createFakeExpose();
+  const clipboardCalls = [];
+  const persisted = [];
+  const clipboard = {
+    read: async (type) => {
+      clipboardCalls.push(type);
+      return type === "png" ? new Uint8Array([0, 255, 1]) : null;
+    },
+    persistPNG: async (bytes) => {
+      persisted.push([...bytes]);
+      return { path: "/config/clipboard/pasted-image.png", shellQuotedPath: "'/config/clipboard/pasted-image.png'" };
+    },
+  };
+  await startTerminal({
+    view: createFakeView(), attachImage: createFakeAttachImage().function,
+    sidecar: fakeSidecar, expose: fakeExpose, clipboard,
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  openSession(fakeSidecar);
+  fakeSidecar.reset();
+
+  await fakeExpose.getCommand("terminal.paste")();
+
+  assert.deepEqual(clipboardCalls, ["text", "fileURLs", "png"]);
+  assert.deepEqual(persisted, [[0, 255, 1]]);
+  assert.deepEqual(fakeSidecar.getMessages().map(({ body }) => body), [
+    { operation: "paste", text: "'/config/clipboard/pasted-image.png'" },
+  ]);
+});
+
+test("terminal.paste rejects malformed file URLs and unavailable PNG persistence", async () => {
+  for (const [kind, clipboard] of [
+    ["file", { read: async (type) => type === "text" ? null : type === "fileURLs" ? ["https://example.invalid/file"] : null }],
+    ["PNG", { read: async (type) => type === "png" ? new Uint8Array([1]) : null }],
+  ]) {
+    FakeResizeObserver.reset();
+    const fakeSidecar = createFakeSidecar();
+    const fakeExpose = createFakeExpose();
+    await startTerminal({
+      view: createFakeView(), attachImage: createFakeAttachImage().function,
+      sidecar: fakeSidecar, expose: fakeExpose, clipboard,
+      window: { TextEncoder: FakeTextEncoder },
+    });
+    openSession(fakeSidecar);
+    fakeSidecar.reset();
+    await assert.rejects(fakeExpose.getCommand("terminal.paste")(), kind === "file" ? /not local/ : /persistence is unavailable/);
+    assert.deepEqual(fakeSidecar.getMessages(), []);
+  }
 });
 
 test("program clipboard queries are explicitly denied and do not remain pending", async () => {
