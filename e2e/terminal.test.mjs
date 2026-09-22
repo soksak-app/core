@@ -72,6 +72,20 @@ async function closeTerminalTabs(session) {
   }
 }
 
+async function terminalBackgroundSample(session, rect) {
+  await session.request("diagnostics.capture.start", {});
+  const displayed = await session.presented();
+  const { frames: frameDir } = await session.request("diagnostics.capture.stop", { after: displayed.displayed });
+  const files = frames(frameDir);
+  assert.ok(files.length > 0, "terminal theme capture produced no frames");
+  const frame = readFrame(files.at(-1));
+  const x = Math.round(rect.x + rect.width * 0.75);
+  const y = Math.round(rect.y + rect.height * 0.75);
+  const sample = pixel(frame, x, y);
+  rmSync(frameDir, { recursive: true, force: true });
+  return sample;
+}
+
 async function assertGridFillsPlane(session, message) {
   const grid = await session.get("core.grid");
   assert.ok(grid?.plane, `${message}: grid has no plane measurement`);
@@ -467,6 +481,46 @@ for (const app of Object.values(APPS)) {
       brightTextCount >= BRIGHT_TEXT_MIN,
       `terminal text not visible: ${brightTextCount} bright pixels (need >= ${BRIGHT_TEXT_MIN})`
     );
+  });
+
+  test(`${app.name}: terminal raster follows application light and dark theme`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const [terminal] = await ensureTerminals(s, 1);
+    await s.until("core.surfaces", (surfaces) => surfaces.some((item) =>
+      item.surface === terminal.surface && item.exposes.includes("status terminal.session")),
+    "terminal session status did not register");
+    await s.until("terminal.session", (state) => Boolean(state?.sessionId && state.theme),
+      "terminal session did not report its effective theme", { surface: terminal.surface });
+    const original = (await s.get("core.settings")).values.mode;
+    const other = original === "dark" ? "light" : "dark";
+    const rect = await s.rect("terminal.view", undefined, terminal.surface);
+    const darkSample = original === "dark" ? await terminalBackgroundSample(s, rect) : null;
+    const lightSample = original === "light" ? await terminalBackgroundSample(s, rect) : null;
+    const sessionBefore = await s.get("terminal.session", terminal.surface);
+    s.cleanup(async () => {
+      await s.run("core.settings.theme", { name: "midnight", mode: original, scope: "common" });
+      await closeTerminalTabs(s);
+    });
+
+    await s.run("core.settings.theme", { name: "midnight", mode: other, scope: "common" });
+    await s.until("core.settings", (settings) => settings.values.mode === other && !settings.saving,
+      `application theme did not switch to ${other}`);
+    const switched = await s.until("terminal.session", (state) => state?.theme === other,
+      `terminal did not acknowledge ${other} theme`, { surface: terminal.surface });
+    const switchedSample = await terminalBackgroundSample(s, rect);
+    if (other === "light") assert.ok(switchedSample[0] > 200 && switchedSample[1] > 200 && switchedSample[2] > 200,
+      `light terminal background pixel was not light: ${switchedSample}`);
+    else assert.ok(switchedSample[0] < 80 && switchedSample[1] < 80 && switchedSample[2] < 80,
+      `dark terminal background pixel was not dark: ${switchedSample}`);
+    assert.equal(switched.sessionId, sessionBefore.sessionId, "theme switch recreated the terminal session");
+    assert.equal(switched.cellWidth, sessionBefore.cellWidth, "theme switch changed cell width");
+    assert.equal(switched.cellHeight, sessionBefore.cellHeight, "theme switch changed cell height");
+    if (other === "light") assert.ok(darkSample === null || switchedSample.some((value, index) => Math.abs(value - darkSample[index]) > 100),
+      `light and dark background pixels did not differ: ${darkSample} -> ${switchedSample}`);
+    else assert.ok(lightSample === null || switchedSample.some((value, index) => Math.abs(value - lightSample[index]) > 100),
+      `dark and light background pixels did not differ: ${lightSample} -> ${switchedSample}`);
   });
 
   test(`${app.name}: terminal image follows a window resize`, async (t) => {

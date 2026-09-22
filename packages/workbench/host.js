@@ -142,6 +142,15 @@ export function surfaceContextRuntime(surface, declarations = {}) {
       off?.();
     });
   };
+  const theme = (fn) => {
+    if (typeof fn !== "function") throw new TypeError("surface theme requires a listener");
+    const initial = bridge.call("theme").then(fn);
+    const registration = bridge.on("theme", fn);
+    return {
+      ready: initial,
+      dispose: Promise.resolve(registration),
+    };
+  };
   const port = {
     register: (kind, name) => registry.registered({ surface: surfaceId, kind, name }),
     onRequest: (fn) => registerSurfacePort(surfaceId, fn),
@@ -156,6 +165,7 @@ export function surfaceContextRuntime(surface, declarations = {}) {
       call: invoke,
       on,
     },
+    theme,
     call(name, payload) {
       if (name.includes(".")) {
         return registry.handle({ method: "command.run", params: { name, params: payload ?? {}, surface: surfaceId } })

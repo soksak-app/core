@@ -5,7 +5,7 @@ use alacritty_terminal::term::{Config, Osc52, Term, TermMode};
 use alacritty_terminal::vte::ansi::{Color, CursorShape, Processor, Rgb};
 use soksak_sidecar_vt_core::{
     default_terminal_color, Cell, ClipboardSelection, Cursor, CursorShape as ProtocolCursorShape,
-    Engine, EngineEvent, Modes, Screen, DEFAULT_BACKGROUND_HEX, DEFAULT_FOREGROUND_HEX,
+    Engine, EngineEvent, Modes, Screen, TerminalTheme,
 };
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
@@ -78,6 +78,7 @@ pub struct AlacrittyEngine {
     pending_clipboard: HashMap<u64, Arc<dyn Fn(&str) -> String + Sync + Send + 'static>>,
     next_clipboard_request: u64,
     cell_metrics: Option<(u16, u16)>,
+    theme: TerminalTheme,
 }
 
 impl AlacrittyEngine {
@@ -93,6 +94,7 @@ impl AlacrittyEngine {
             pending_clipboard: HashMap::new(),
             next_clipboard_request: 1,
             cell_metrics: None,
+            theme: TerminalTheme::dark(),
         }
     }
 
@@ -209,11 +211,14 @@ impl AlacrittyEngine {
         }
         self.term.colors()[index]
             .or_else(|| {
-                default_terminal_color(index).map(|rgb| Rgb {
-                    r: rgb[0],
-                    g: rgb[1],
-                    b: rgb[2],
-                })
+                self.theme
+                    .color(index)
+                    .or_else(|| default_terminal_color(index))
+                    .map(|rgb| Rgb {
+                        r: rgb[0],
+                        g: rgb[1],
+                        b: rgb[2],
+                    })
             })
             .ok_or_else(|| format!("unsupported terminal color index {index}"))
     }
@@ -244,19 +249,25 @@ impl AlacrittyEngine {
     ) -> Option<String> {
         let rgb = match color {
             Color::Named(name) => colors[name].or_else(|| {
-                default_terminal_color(name as usize).map(|rgb| Rgb {
-                    r: rgb[0],
-                    g: rgb[1],
-                    b: rgb[2],
-                })
+                self.theme
+                    .color(name as usize)
+                    .or_else(|| default_terminal_color(name as usize))
+                    .map(|rgb| Rgb {
+                        r: rgb[0],
+                        g: rgb[1],
+                        b: rgb[2],
+                    })
             }),
             Color::Spec(rgb) => Some(rgb),
             Color::Indexed(index) => colors[index as usize].or_else(|| {
-                default_terminal_color(index as usize).map(|rgb| Rgb {
-                    r: rgb[0],
-                    g: rgb[1],
-                    b: rgb[2],
-                })
+                self.theme
+                    .color(index as usize)
+                    .or_else(|| default_terminal_color(index as usize))
+                    .map(|rgb| Rgb {
+                        r: rgb[0],
+                        g: rgb[1],
+                        b: rgb[2],
+                    })
             }),
         }?;
         Some(format!("#{:02x}{:02x}{:02x}", rgb.r, rgb.g, rgb.b))
@@ -292,7 +303,7 @@ impl AlacrittyEngine {
         }
     }
 
-    fn is_trimmable_default_cell(cell: &Cell) -> bool {
+    fn is_trimmable_default_cell(&self, cell: &Cell) -> bool {
         cell.ch.is_none()
             && cell.width == 1
             && !cell.bold
@@ -302,15 +313,23 @@ impl AlacrittyEngine {
             && cell
                 .fg
                 .as_deref()
-                .is_none_or(|color| color == DEFAULT_FOREGROUND_HEX)
+                .is_none_or(|color| color == self.theme_hex(self.theme.foreground).as_str())
             && cell
                 .bg
                 .as_deref()
-                .is_none_or(|color| color == DEFAULT_BACKGROUND_HEX)
+                .is_none_or(|color| color == self.theme_hex(self.theme.background).as_str())
+    }
+
+    fn theme_hex(&self, rgb: [u8; 3]) -> String {
+        format!("#{:02x}{:02x}{:02x}", rgb[0], rgb[1], rgb[2])
     }
 }
 
 impl Engine for AlacrittyEngine {
+    fn set_theme(&mut self, theme: TerminalTheme) {
+        self.theme = theme;
+    }
+
     fn resize(&mut self, cols: u16, rows: u16) {
         self.term
             .resize(TermSize::new(cols as usize, rows as usize));
@@ -358,7 +377,10 @@ impl Engine for AlacrittyEngine {
         }
 
         for line in &mut lines {
-            while line.last().is_some_and(Self::is_trimmable_default_cell) {
+            while line
+                .last()
+                .is_some_and(|cell| self.is_trimmable_default_cell(cell))
+            {
                 line.pop();
             }
         }

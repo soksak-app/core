@@ -43,6 +43,7 @@ const METHOD = {
   presentSurfaces: "PresentSurfaces",
   waitPresented: "WaitPresented",
   setTheme: "SetTheme",
+  theme: "Theme",
   report: "Report",
   overlayShow: "OverlayShow",
   overlayPlace: "OverlayPlace",

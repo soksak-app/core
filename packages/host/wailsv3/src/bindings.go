@@ -91,6 +91,15 @@ func (h *Host) SetTheme(ctx context.Context, theme Theme) error {
 	return s.SetTheme(theme)
 }
 
+// Theme returns the effective appearance for a page that is subscribing to surface theme updates.
+func (h *Host) Theme(ctx context.Context) (Theme, error) {
+	s, err := h.surface(ctx)
+	if err != nil {
+		return Theme{}, err
+	}
+	return s.Theme(), nil
+}
+
 func (h *Host) SyncSurfaces(ctx context.Context, req SyncRequest) (PreparedSurfaces, error) {
 	s, err := h.surface(ctx)
 	if err != nil {

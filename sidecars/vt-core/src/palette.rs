@@ -8,6 +8,14 @@ pub const DEFAULT_CURSOR_RGB: [u8; 3] = DEFAULT_FOREGROUND_RGB;
 pub const DEFAULT_FOREGROUND_HEX: &str = "#d0d0d0";
 pub const DEFAULT_BACKGROUND_HEX: &str = "#1e1e1e";
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TerminalTheme {
+    pub foreground: [u8; 3],
+    pub background: [u8; 3],
+    pub cursor: [u8; 3],
+    pub palette: [[u8; 3]; 256],
+}
+
 const ANSI: [[u8; 3]; 16] = [
     [0x00, 0x00, 0x00],
     [0xcd, 0x00, 0x00],
@@ -25,6 +33,25 @@ const ANSI: [[u8; 3]; 16] = [
     [0xff, 0x00, 0xff],
     [0x00, 0xff, 0xff],
     [0xff, 0xff, 0xff],
+];
+
+const LIGHT_ANSI: [[u8; 3]; 16] = [
+    [0x3b, 0x3b, 0x3b],
+    [0xa4, 0x00, 0x00],
+    [0x00, 0x6a, 0x00],
+    [0x8f, 0x5b, 0x00],
+    [0x00, 0x3d, 0xa5],
+    [0x7a, 0x00, 0x7a],
+    [0x00, 0x66, 0x66],
+    [0xd0, 0xd0, 0xd0],
+    [0x70, 0x70, 0x70],
+    [0xcc, 0x00, 0x00],
+    [0x00, 0x80, 0x00],
+    [0x9a, 0x6b, 0x00],
+    [0x00, 0x4e, 0xcc],
+    [0x8f, 0x00, 0x8f],
+    [0x00, 0x80, 0x80],
+    [0x20, 0x20, 0x20],
 ];
 
 const CUBE: [u8; 6] = [0, 95, 135, 175, 215, 255];
@@ -55,7 +82,75 @@ const fn build_default_palette() -> [[u8; 3]; 256] {
     palette
 }
 
+const fn build_palette(ansi: [[u8; 3]; 16]) -> [[u8; 3]; 256] {
+    let mut palette = [[0; 3]; 256];
+    let mut index = 0;
+    while index < 16 {
+        palette[index] = ansi[index];
+        index += 1;
+    }
+    let mut cube = 0;
+    while cube < 216 {
+        let red = cube / 36;
+        let green = (cube / 6) % 6;
+        let blue = cube % 6;
+        palette[16 + cube] = [CUBE[red], CUBE[green], CUBE[blue]];
+        cube += 1;
+    }
+    let mut gray = 0;
+    while gray < 24 {
+        let value = 8 + gray * 10;
+        palette[232 + gray] = [value as u8, value as u8, value as u8];
+        gray += 1;
+    }
+    palette
+}
+
 pub const DEFAULT_PALETTE: [[u8; 3]; 256] = build_default_palette();
+pub const LIGHT_PALETTE: [[u8; 3]; 256] = build_palette(LIGHT_ANSI);
+
+impl TerminalTheme {
+    pub const fn dark() -> Self {
+        Self {
+            foreground: DEFAULT_FOREGROUND_RGB,
+            background: DEFAULT_BACKGROUND_RGB,
+            cursor: DEFAULT_CURSOR_RGB,
+            palette: DEFAULT_PALETTE,
+        }
+    }
+
+    pub const fn light() -> Self {
+        Self {
+            foreground: [0x24, 0x24, 0x24],
+            background: [0xf7, 0xf7, 0xf5],
+            cursor: [0x24, 0x24, 0x24],
+            palette: LIGHT_PALETTE,
+        }
+    }
+
+    pub fn from_mode(mode: &str) -> Option<Self> {
+        match mode {
+            "dark" => Some(Self::dark()),
+            "light" => Some(Self::light()),
+            _ => None,
+        }
+    }
+
+    pub const fn color(&self, index: usize) -> Option<[u8; 3]> {
+        if index < 256 {
+            return Some(self.palette[index]);
+        }
+        match index {
+            256 => Some(self.foreground),
+            257 => Some(self.background),
+            258 => Some(self.cursor),
+            259..=266 => Some(dim(self.palette[index - 259])),
+            267 => Some(self.foreground),
+            268 => Some(dim(self.foreground)),
+            _ => None,
+        }
+    }
+}
 
 const fn dim(color: [u8; 3]) -> [u8; 3] {
     [color[0] / 2, color[1] / 2, color[2] / 2]

@@ -39,6 +39,7 @@ export function createSurfaceContext({ root, surfaceId, pluginId, metadata = {},
       sidecar: callable(runtime.sidecar, "runtime.sidecar").bind(runtime),
       native: runtime.native,
       clipboard: runtime.clipboard,
+      theme: runtime.theme,
     }),
     exposure: Object.freeze(runtime.exposure),
     events: Object.freeze({

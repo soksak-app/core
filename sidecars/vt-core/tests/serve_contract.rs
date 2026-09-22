@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use soksak_sidecar_vt_core::protocol::{
     serve, Cell, Cursor, CursorShape, DaemonEvent, Engine, EngineEvent, Modes, Screen, SessionPort,
 };
+use soksak_sidecar_vt_core::TerminalTheme;
 use std::sync::{Arc, Mutex};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 use tokio::sync::mpsc;
@@ -12,6 +13,7 @@ struct MockEngine {
     rows: u16,
     feed_history: Vec<Vec<u8>>,
     custom_modes: Option<Modes>,
+    themes: Vec<TerminalTheme>,
 }
 
 impl MockEngine {
@@ -21,6 +23,7 @@ impl MockEngine {
             rows: 24,
             feed_history: Vec::new(),
             custom_modes: None,
+            themes: Vec::new(),
         }
     }
 
@@ -30,11 +33,16 @@ impl MockEngine {
             rows: 24,
             feed_history: Vec::new(),
             custom_modes: Some(modes),
+            themes: Vec::new(),
         }
     }
 }
 
 impl Engine for MockEngine {
+    fn set_theme(&mut self, theme: TerminalTheme) {
+        self.themes.push(theme);
+    }
+
     fn resize(&mut self, cols: u16, rows: u16) {
         self.cols = cols;
         self.rows = rows;
@@ -673,6 +681,37 @@ async fn test_a6_unknown_op_returns_error() {
         .as_str()
         .unwrap()
         .contains("Unknown operation"));
+}
+
+#[tokio::test]
+async fn test_theme_rejects_unknown_mode_without_fallback() {
+    let input = r#"
+{"surface":"s1","body":{"operation":"theme","mode":"light"}}
+{"surface":"s1","body":{"operation":"theme","mode":"sepia"}}
+"#;
+    let reader = std::io::Cursor::new(input.as_bytes());
+    let mut writer = Vec::new();
+    let engine_factory = Arc::new(|| Box::new(MockEngine::new()) as Box<dyn Engine>);
+    let session_port: Arc<dyn SessionPort> =
+        Arc::new(soksak_sidecar_vt_core::protocol::FakeSessionPort::new());
+    let session_port_for_factory = session_port.clone();
+    let factory = Arc::new(move || session_port_for_factory.clone());
+
+    serve(engine_factory, reader, &mut writer, factory)
+        .await
+        .expect("theme contract");
+    let output = String::from_utf8(writer).expect("utf8 output");
+    let outputs = output
+        .lines()
+        .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+        .collect::<Vec<_>>();
+    assert!(outputs
+        .iter()
+        .any(|value| value["body"]["event"] == "theme"));
+    assert!(outputs.iter().any(|value| {
+        value["body"]["error"] == "invalidParams"
+            && value["body"]["reason"] == "theme.mode must be dark or light"
+    }));
 }
 
 /// Test K1: Keys encoded without app_cursor mode
@@ -2095,6 +2134,8 @@ async fn test_panicking_surface_reports_error() {
     }
 
     impl Engine for PanicEngine {
+        fn set_theme(&mut self, _theme: soksak_sidecar_vt_core::TerminalTheme) {}
+
         fn resize(&mut self, cols: u16, rows: u16) {
             if self.panic_on_resize {
                 panic!(

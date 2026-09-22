@@ -9,7 +9,7 @@ export async function mount(root, context) {
   const image = composition.region("view");
   const sidecar = context.runtime.sidecar();
   const controller = await startTerminal({ id: context.surfaceId, view, attachImage: () => image, sidecar,
-    expose: context.exposure, window });
+    expose: context.exposure, window, theme: context.runtime.theme });
   if (!controller || typeof controller.dispose !== "function") {
     throw new TypeError("startTerminal must return { dispose() }");
   }

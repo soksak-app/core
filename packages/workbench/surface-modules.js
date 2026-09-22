@@ -110,7 +110,8 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
       root: shadow, surfaceId: surface.surfaceId, pluginId: surface.pluginId,
       metadata: { home: surface.home },
       declarations: surface.declarations ?? {}, composition,
-      runtime: { sidecar: scoped.sidecar, native: scoped.native, exposure: scoped.exposure, emit, on },
+      runtime: { sidecar: scoped.sidecar, native: scoped.native, exposure: scoped.exposure, emit, on,
+        theme: scoped.theme },
     });
     const exposure = registerSurfaceExposure({ root: shadow, expose: context.exposure, view,
       declarations: registry.surfaceDeclarations() });

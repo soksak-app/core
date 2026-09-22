@@ -74,7 +74,7 @@ pub struct CursorRender {
 }
 
 impl CursorRender {
-    fn from_protocol(cursor: &crate::protocol::Cursor) -> Self {
+    pub(crate) fn from_protocol(cursor: &crate::protocol::Cursor) -> Self {
         Self {
             visible: cursor.visible,
             focused: cursor.focused,
@@ -125,7 +125,12 @@ impl Frame {
     }
 
     pub fn draw(&self, screen: &crate::protocol::Screen, metrics: &Metrics) -> Result<(), String> {
-        self.draw_with_cursor(screen, metrics, CursorRender::from_protocol(&screen.cursor))
+        self.draw_with_theme(
+            screen,
+            metrics,
+            CursorRender::from_protocol(&screen.cursor),
+            &crate::palette::TerminalTheme::dark(),
+        )
     }
 
     pub fn draw_with_cursor(
@@ -133,6 +138,21 @@ impl Frame {
         screen: &crate::protocol::Screen,
         metrics: &Metrics,
         cursor: CursorRender,
+    ) -> Result<(), String> {
+        self.draw_with_theme(
+            screen,
+            metrics,
+            cursor,
+            &crate::palette::TerminalTheme::dark(),
+        )
+    }
+
+    pub fn draw_with_theme(
+        &self,
+        screen: &crate::protocol::Screen,
+        metrics: &Metrics,
+        cursor: CursorRender,
+        theme: &crate::palette::TerminalTheme,
     ) -> Result<(), String> {
         let mut render_screen = screen.clone();
         if let Some(preedit) = render_screen.cursor.preedit.clone() {
@@ -194,9 +214,9 @@ impl Frame {
                 crate::protocol::CursorShape::HollowBlock => 3,
                 crate::protocol::CursorShape::Hidden => 4,
             },
-            default_foreground: crate::palette::DEFAULT_FOREGROUND_RGB,
-            default_background: crate::palette::DEFAULT_BACKGROUND_RGB,
-            default_cursor: crate::palette::DEFAULT_CURSOR_RGB,
+            default_foreground: theme.foreground,
+            default_background: theme.background,
+            default_cursor: theme.cursor,
         };
 
         let mut c_metrics = CMetrics {

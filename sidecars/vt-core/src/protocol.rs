@@ -188,6 +188,7 @@ impl PersistentRegistry {
 /// 엔진이 구현할 트레이트. VT 처리 엔진의 계약.
 pub trait Engine: Send + 'static {
     fn resize(&mut self, cols: u16, rows: u16);
+    fn set_theme(&mut self, theme: crate::palette::TerminalTheme);
     fn set_cell_metrics(&mut self, width: u16, height: u16) -> Result<(), String>;
     fn feed(&mut self, bytes: &[u8]);
     fn drain_events(&mut self) -> Vec<EngineEvent>;
@@ -400,20 +401,42 @@ struct Envelope {
 /// 표면 작업으로 보낼 명령
 #[derive(Debug, Clone)]
 enum SurfaceCommand {
-    Open { image: Option<String> },
+    Open {
+        image: Option<String>,
+    },
     Reconnect,
     Configure(ImageConfiguration),
-    Input { bytes: Vec<u8> },
-    InputKeys { keys: Vec<InputKey> },
-    Paste { text: String },
-    Compose { preedit: Option<Preedit> },
-    Focus { focused: bool },
-    Command { selector: String },
+    Input {
+        bytes: Vec<u8>,
+    },
+    InputKeys {
+        keys: Vec<InputKey>,
+    },
+    Paste {
+        text: String,
+    },
+    Compose {
+        preedit: Option<Preedit>,
+    },
+    Focus {
+        focused: bool,
+    },
+    Theme {
+        theme: crate::palette::TerminalTheme,
+    },
+    Command {
+        selector: String,
+    },
     ScreenRead,
     SessionClose,
     SessionDetach,
-    ImageResponse { body: Value },
-    ClipboardResolve { request_id: u64, text: String },
+    ImageResponse {
+        body: Value,
+    },
+    ClipboardResolve {
+        request_id: u64,
+        text: String,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -568,7 +591,12 @@ async fn present_screen(
     state: &mut ImageState,
     output_tx: &OutputSink,
 ) -> bool {
-    if let Err(reason) = state.frame.draw(screen, &state.metrics) {
+    if let Err(reason) = state.frame.draw_with_theme(
+        screen,
+        &state.metrics,
+        crate::platform::darwin::frame::CursorRender::from_protocol(&screen.cursor),
+        &state.theme,
+    ) {
         let response = json!({
             "surface": surface_id,
             "body": {"event": "error", "reason": reason}
@@ -870,6 +898,7 @@ async fn surface_task(
     let mut pending_configuration: Option<ImageConfiguration> = None;
     let mut focused = false;
     let mut preedit: Option<Preedit> = None;
+    let mut current_theme = crate::palette::TerminalTheme::dark();
 
     loop {
         tokio::select! {
@@ -926,6 +955,8 @@ async fn surface_task(
                             if output_tx.send(response.to_string()).await.is_err() { return; }
                             continue;
                         };
+                        let mut new_state = new_state;
+                        new_state.theme = current_theme;
                         let (cols, rows) = match calculate_terminal_size(
                             configuration.width, configuration.height, configuration.scale) {
                             Ok(size) => size,
@@ -1095,6 +1126,22 @@ async fn surface_task(
                         let response = json!({"surface": surface_id, "body": {"ack": true, "event": "focus", "focused": focused}});
                         if output_tx.send(response.to_string()).await.is_err() { return; }
                     }
+                    SurfaceCommand::Theme { theme } => {
+                        current_theme = theme;
+                        engine.set_theme(theme);
+                        if let Some(state) = image_state.as_mut() {
+                            state.theme = theme;
+                            if state.pending_draw {
+                                state.dirty = true;
+                            } else {
+                                let screen = decorate_screen(engine.screen(), focused, &preedit);
+                                if !present_screen(&surface_id, &screen, state, &output_tx).await { return; }
+                            }
+                        }
+                        let mode = if theme == crate::palette::TerminalTheme::light() { "light" } else { "dark" };
+                        let response = json!({"surface": surface_id, "body": {"ack": true, "event": "theme", "mode": mode}});
+                        if output_tx.send(response.to_string()).await.is_err() { return; }
+                    }
                     SurfaceCommand::Command { selector } => {
                         let response = json!({"surface": surface_id, "body": {"ack": true, "event": "command", "selector": selector}});
                         if output_tx.send(response.to_string()).await.is_err() { return; }
@@ -1185,6 +1232,8 @@ async fn surface_task(
                                     if output_tx.send(response.to_string()).await.is_err() { return; }
                                     continue;
                                 };
+                                let mut new_state = new_state;
+                                new_state.theme = current_theme;
                                 let (cols, rows) = match calculate_terminal_size(
                                     configuration.width, configuration.height, configuration.scale) {
                                     Ok(size) => size,
@@ -1798,6 +1847,22 @@ where
                                     }
                                 }
                             }
+                            "theme" => {
+                                let mode = body.get("mode").and_then(Value::as_str);
+                                match mode.and_then(crate::palette::TerminalTheme::from_mode) {
+                                    Some(theme) => {
+                                        if tx.send(SurfaceCommand::Theme { theme }).await.is_err() {
+                                            break;
+                                        }
+                                    }
+                                    None => {
+                                        let response = json!({"surface": surface_id, "body": {"error": "invalidParams", "reason": "theme.mode must be dark or light"}});
+                                        if output_tx.send(response.to_string()).await.is_err() {
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
                             "paste" => match body.get("text").and_then(Value::as_str) {
                                 Some(text) => {
                                     if tx
@@ -2003,6 +2068,8 @@ impl FakeEngine {
 
 #[cfg(test)]
 impl Engine for FakeEngine {
+    fn set_theme(&mut self, _theme: crate::palette::TerminalTheme) {}
+
     fn drain_events(&mut self) -> Vec<EngineEvent> {
         Vec::new()
     }

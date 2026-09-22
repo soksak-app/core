@@ -17,6 +17,7 @@ pub struct ImageState {
     pub width_px: u32,
     pub height_px: u32,
     pub scale: f32,
+    pub theme: crate::palette::TerminalTheme,
 }
 
 #[cfg(target_os = "macos")]
@@ -43,6 +44,7 @@ impl ImageState {
             width_px,
             height_px,
             scale,
+            theme: crate::palette::TerminalTheme::dark(),
         })
     }
 }

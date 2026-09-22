@@ -109,7 +109,7 @@ function normalizeCursor(value) {
  * @param {Object} options.window - window 객체 (기본값: 글로벌 window)
  * @returns {Promise<void>}
  */
-export async function startTerminal({ id, view, attachImage, sidecar, expose,
+export async function startTerminal({ id, view, attachImage, sidecar, expose, theme,
   window: globalWindow = globalThis.window }) {
   // 브라우저 환경에서 필요한 객체들
   const window = globalWindow;
@@ -134,6 +134,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose,
   let session = {
     sessionId: "", cols: 80, rows: 24, cellWidth: 8, cellHeight: 16, unsupported: [],
     compose: { text: "", selectedRange: null, replacementRange: null, attributed: false },
+    theme: "dark",
   };
   let screen = [];
   let compose = session.compose;
@@ -170,6 +171,11 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose,
     console.error(`terminal input failed: ${message}`);
     session = { ...session, error: `terminal input failed: ${message}` };
     changed("session");
+  };
+
+  const setTheme = async (mode) => {
+    if (mode !== "dark" && mode !== "light") throw new Error(`terminal theme mode is invalid: ${String(mode)}`);
+    await terminal.send(id, { operation: "theme", mode });
   };
 
   const observeInput = (promise) => promise.then(undefined, (error) => {
@@ -373,6 +379,13 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose,
         pendingScreenRead(body);
         pendingScreenRead = null;
       }
+    } else if (body.event === "theme") {
+      if (body.mode !== "dark" && body.mode !== "light") {
+        reportInputError(new Error("invalid theme acknowledgement from sidecar"));
+        return;
+      }
+      session = { ...session, theme: body.mode, error: undefined };
+      changed("session");
     } else if (body.event === "error") {
       // error 이벤트를 session 상태에 저장한다
       session = {
@@ -401,6 +414,31 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose,
   // 세션 열기는 크기를 보내지 않는다. 호스트가 네이티브 영역을 적용하며 보낸 configure만
   // 이미지와 PTY 크기의 권위 있는 입력이다.
   await terminal.send(id, { operation: "open", image: "view" });
+
+  let themeReady = Promise.resolve();
+  let themeSubscription = null;
+  if (typeof theme === "function") {
+    let first = true;
+    themeSubscription = theme((value) => {
+      if (!value || (value.scheme !== "dark" && value.scheme !== "light")) {
+        const error = new Error("theme callback must provide scheme dark or light");
+        reportInputError(error);
+        if (first) { first = false; return Promise.reject(error); }
+        return Promise.resolve();
+      }
+      const request = setTheme(value.scheme);
+      if (first) {
+        first = false;
+        return request.then(undefined, (error) => { reportInputError(error); throw error; });
+      }
+      return request.catch(reportInputError);
+    });
+    themeReady = Promise.resolve(themeSubscription?.ready ?? themeSubscription).catch((error) => {
+      reportInputError(error);
+      throw error;
+    });
+  }
+  await themeReady;
 
   // 공개 항목 등록
   await Promise.all([
@@ -464,6 +502,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose,
     }
   });
   return {
+    setTheme,
     async focus() {
       if (nativeFocused) return;
       let resolveFocus;
@@ -480,6 +519,8 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose,
       }
     },
     async dispose() {
+      const offTheme = await themeSubscription?.dispose;
+      offTheme?.();
       stopSidecar?.();
       view.removeEventListener("pointerdown", preventDefaultFocus);
       await terminal.send(id, { operation: "close" });

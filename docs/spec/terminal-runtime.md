@@ -34,6 +34,8 @@ A single pointer click on a terminal transfers keyboard ownership to its native 
 
 The engine, PTY, and displayed raster agree on the applied dimensions. Narrowing reflows soft-wrapped primary-screen lines; widening joins those same logical lines. Explicit newlines remain. Alternate-screen applications retain their terminal-controlled layout semantics. Divider movement never changes font metrics or animates raster geometry.
 
+The terminal raster follows the effective application appearance. The surface page sends `theme` with `{ "mode": "dark" }` or `{ "mode": "light" }` to the terminal sidecar whenever the application appearance changes. The sidecar rejects any other mode explicitly. The selected mode changes the default foreground, background, cursor, and indexed ANSI colors for subsequent and existing screen cells; it does not recreate the PTY, session, text, cursor position, or cell metrics. The mode is an image-surface property and is applied to the next complete frame; an in-flight transfer remains immutable.
+
 Cursor state includes position, visibility, shape, blink policy, and colors. Settings offer block, underline, and beam, blink Never/Off/On/Always, interval, idle timeout, and unfocused hollow. Defaults are a filled block while focused and a nonblinking hollow block while unfocused. Application cursor controls change defaults subject to Never/Always policy.
 
 Native IME owns marked text. Preedit is displayed without writing partial syllables to the PTY. Committed text is delivered exactly once in the same ordered queue as ordinary input. Caret coordinates anchor the candidate window. Unsupported native text values and failed input operations are explicit errors.

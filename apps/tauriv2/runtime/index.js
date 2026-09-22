@@ -15,6 +15,7 @@ const COMMAND = {
   presentSurfaces: "present_surfaces",
   waitPresented: "wait_presented",
   setTheme: "set_theme",
+  theme: "theme",
   report: "report",
   overlayShow: "overlay_show",
   overlayPlace: "overlay_place",
@@ -53,6 +54,7 @@ const ARG = {
   presentSurfaces: (v) => ({ request: v }),
   waitPresented: () => ({}),
   setTheme: (v) => ({ theme: v }),
+  theme: () => ({}),
   report: (v) => {
     if (typeof v !== "string") throw new TypeError("report requires a string");
     return { line: v };

@@ -3,7 +3,7 @@ mod engine;
 
 use engine::AlacrittyEngine;
 use soksak_sidecar_vt_core::{
-    default_terminal_color, CursorShape, Engine, EngineEvent, DEFAULT_PALETTE,
+    default_terminal_color, CursorShape, Engine, EngineEvent, TerminalTheme, DEFAULT_PALETTE,
 };
 
 fn text(screen: &soksak_sidecar_vt_core::Screen) -> String {
@@ -285,6 +285,23 @@ fn default_palette_styled_cells_use_the_same_rgb_as_queries() {
 }
 
 #[test]
+fn application_theme_changes_default_and_ansi_raster_colors_without_changing_text() {
+    let mut engine = AlacrittyEngine::new();
+    engine.feed(b"A\x1b[38;5;1mR");
+    let dark = engine.screen();
+    let dark_text = text(&dark);
+    let dark_default = dark.lines[0][0].fg.clone();
+    let dark_ansi = dark.lines[0][1].fg.clone();
+
+    engine.set_theme(TerminalTheme::light());
+    let light = engine.screen();
+    assert_eq!(text(&light), dark_text);
+    assert_ne!(light.lines[0][0].fg, dark_default);
+    assert_ne!(light.lines[0][1].fg, dark_ansi);
+    assert_eq!(engine.cursor().col, 2);
+}
+
+#[test]
 fn display_points_are_used_as_cell_indices() {
     let mut engine = AlacrittyEngine::new();
     engine.feed(b"\r\x1b[3CZ");
@@ -368,7 +385,9 @@ fn wide_cells_keep_their_width_and_text_through_reflow() {
 #[test]
 fn cell_metrics_are_fixed_renderer_values_across_grid_resize() {
     let mut engine = AlacrittyEngine::new();
-    engine.set_cell_metrics(9, 17).expect("positive renderer metrics");
+    engine
+        .set_cell_metrics(9, 17)
+        .expect("positive renderer metrics");
     engine.feed(b"\x1b[14t");
     let before = engine.drain_events();
     engine.resize(40, 10);
@@ -380,8 +399,14 @@ fn cell_metrics_are_fixed_renderer_values_across_grid_resize() {
             _ => None,
         })
     };
-    assert_eq!(reply(&before).as_deref(), Some(b"\x1b[4;408;720t".as_slice()));
-    assert_eq!(reply(&after).as_deref(), Some(b"\x1b[4;170;360t".as_slice()));
+    assert_eq!(
+        reply(&before).as_deref(),
+        Some(b"\x1b[4;408;720t".as_slice())
+    );
+    assert_eq!(
+        reply(&after).as_deref(),
+        Some(b"\x1b[4;170;360t".as_slice())
+    );
 }
 
 #[test]

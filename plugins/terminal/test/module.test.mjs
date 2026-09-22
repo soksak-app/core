@@ -27,7 +27,7 @@ test("terminal module waits for composition presentation, publishes state, and d
   const statuses = new Map();
   const context = {
     surfaceId: "terminal-test",
-    runtime: { sidecar: () => sidecar },
+    runtime: { sidecar: () => sidecar, theme: (listener) => listener({ scheme: "light" }) },
     composition: {
       async create() {
         await presentation;
@@ -55,6 +55,7 @@ test("terminal module waits for composition presentation, publishes state, and d
   assert.deepEqual(phases, ["ready"]);
   sidecarListeners.get("terminal-test")({ event: "state", sessionId: "s1", cols: 80, rows: 24, cellWidth: 8, cellHeight: 16 });
   assert.equal(statuses.get("terminal.session").read().sessionId, "s1");
+  assert.ok(messages.some(({ body }) => body.operation === "theme" && body.mode === "light"));
   await mounted.dispose();
   assert.equal(compositionDisposed, true);
   assert.equal(exposureDisposed, true);

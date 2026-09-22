@@ -1,5 +1,6 @@
 use soksak_sidecar_vt_core::platform::darwin::frame::{metrics, CursorRender, Frame};
 use soksak_sidecar_vt_core::protocol::{Cell, Cursor, CursorShape, JsonRange, Preedit, Screen};
+use soksak_sidecar_vt_core::TerminalTheme;
 
 fn screen(cols: u16, rows: u16) -> Screen {
     Screen {
@@ -285,4 +286,44 @@ fn cell_raster_is_stable_when_cursor_phase_changes_outside_the_cell() {
         first, hidden_cursor,
         "cursor phase changed unrelated cell pixels"
     );
+}
+
+#[test]
+fn terminal_theme_changes_background_foreground_and_cursor_pixels_without_metrics_change() {
+    let initial_metrics = metrics(13.0, 1.0);
+    let cursor = CursorRender {
+        visible: true,
+        focused: true,
+        blink_visible: true,
+        shape: CursorShape::Block,
+    };
+    let width = initial_metrics.cell_width as u32;
+    let height = initial_metrics.cell_height as u32;
+    let mut state = screen(1, 1);
+    state.lines[0][0].ch = Some("X".to_string());
+    state.cursor.focused = true;
+    let frame = Frame::new(width, height).expect("theme frame");
+
+    frame
+        .draw_with_theme(&state, &initial_metrics, cursor, &TerminalTheme::dark())
+        .expect("dark theme");
+    let dark_background = frame.read_pixel(0, 0).expect("dark background");
+    let dark_cursor = frame
+        .read_pixel(width / 2, height / 2)
+        .expect("dark cursor");
+
+    frame
+        .draw_with_theme(&state, &initial_metrics, cursor, &TerminalTheme::light())
+        .expect("light theme");
+    let light_background = frame.read_pixel(0, 0).expect("light background");
+    let light_cursor = frame
+        .read_pixel(width / 2, height / 2)
+        .expect("light cursor");
+
+    assert_ne!(dark_background, light_background);
+    assert_ne!(dark_cursor, light_cursor);
+    let unchanged = metrics(13.0, 1.0);
+    assert_eq!(initial_metrics.cell_width, unchanged.cell_width);
+    assert_eq!(initial_metrics.cell_height, unchanged.cell_height);
+    assert_eq!(initial_metrics.font_size, unchanged.font_size);
 }
