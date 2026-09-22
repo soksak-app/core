@@ -412,6 +412,17 @@ pub struct Screen {
     pub lines: Vec<Vec<Cell>>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InlineImagePlacement {
+    pub name: String,
+    pub data: Vec<u8>,
+    pub x: u32,
+    pub y: u32,
+    pub width: u32,
+    pub height: u32,
+    pub preserve_aspect_ratio: bool,
+}
+
 /// 데몬에서 받는 이벤트
 #[derive(Debug, Clone)]
 pub enum DaemonEvent {
@@ -745,11 +756,12 @@ async fn present_screen(
     state: &mut ImageState,
     output_tx: &OutputSink,
 ) -> bool {
-    if let Err(reason) = state.frame.draw_with_theme(
+    if let Err(reason) = state.frame.draw_with_theme_and_inline_images(
         screen,
         &state.metrics,
         crate::platform::darwin::frame::CursorRender::from_protocol(&screen.cursor),
         &state.theme,
+        &state.inline_images,
     ) {
         let response = json!({
             "surface": surface_id,
@@ -812,6 +824,111 @@ fn clipboard_selection_name(selection: ClipboardSelection) -> &'static str {
     }
 }
 
+struct MultipartAssembly {
+    name: String,
+    data: Vec<u8>,
+}
+
+fn resolve_inline_dimension(
+    dimension: &Dimension,
+    cell_size: u32,
+    frame_size: u32,
+) -> u32 {
+    match dimension {
+        Dimension::Auto => 0,
+        Dimension::Cells(value) => cell_size.saturating_mul(*value),
+        Dimension::Pixels(value) => *value,
+        Dimension::Percent(value) => frame_size.saturating_mul(u32::from(*value)) / 100,
+    }
+}
+
+fn store_inline_display(
+    command: InlineImageCommand,
+    engine: &mut Box<dyn Engine>,
+    image_state: &mut Option<ImageState>,
+) -> Result<(), String> {
+    let InlineImageCommand::Display {
+        name,
+        data,
+        width,
+        height,
+        preserve_aspect_ratio,
+    } = command
+    else {
+        return Err("inline image command is not a display record".to_string());
+    };
+    let Some(state) = image_state.as_mut() else {
+        return Err("inline image received before the image region was configured".to_string());
+    };
+    let cursor = engine.screen().cursor;
+    let placement = InlineImagePlacement {
+        name: name.clone(),
+        data,
+        x: u32::from(cursor.col).saturating_mul(state.metrics.cell_width.round() as u32),
+        y: u32::from(cursor.row).saturating_mul(state.metrics.cell_height.round() as u32),
+        width: resolve_inline_dimension(&width, state.metrics.cell_width.round() as u32, state.width_px),
+        height: resolve_inline_dimension(&height, state.metrics.cell_height.round() as u32, state.height_px),
+        preserve_aspect_ratio,
+    };
+    if let Some(existing) = state.inline_images.iter_mut().find(|image| image.name == name) {
+        *existing = placement;
+    } else {
+        state.inline_images.push(placement);
+    }
+    Ok(())
+}
+
+fn apply_inline_image_command(
+    command: InlineImageCommand,
+    engine: &mut Box<dyn Engine>,
+    image_state: &mut Option<ImageState>,
+    multipart: &mut Option<MultipartAssembly>,
+) -> Result<(), String> {
+    match command {
+        InlineImageCommand::Display { .. } => store_inline_display(command, engine, image_state),
+        InlineImageCommand::Transfer { .. } => Ok(()),
+        InlineImageCommand::MultipartStart { name } => {
+            if multipart.is_some() {
+                return Err("inline image multipart transfer is already active".to_string());
+            }
+            *multipart = Some(MultipartAssembly { name, data: Vec::new() });
+            Ok(())
+        }
+        InlineImageCommand::MultipartPart(data) => {
+            let Some(assembly) = multipart.as_mut() else {
+                return Err("inline image multipart part has no active transfer".to_string());
+            };
+            if assembly.data.len().saturating_add(data.len()) > crate::inline_image::MAX_IMAGE_BYTES {
+                return Err(format!(
+                    "inline image multipart payload exceeds {} bytes",
+                    crate::inline_image::MAX_IMAGE_BYTES
+                ));
+            }
+            assembly.data.extend_from_slice(&data);
+            Ok(())
+        }
+        InlineImageCommand::MultipartEnd => {
+            let Some(assembly) = multipart.take() else {
+                return Err("inline image multipart end has no active transfer".to_string());
+            };
+            if assembly.data.is_empty() {
+                return Err("inline image multipart transfer has no data".to_string());
+            }
+            store_inline_display(
+                InlineImageCommand::Display {
+                    name: assembly.name,
+                    data: assembly.data,
+                    width: Dimension::Auto,
+                    height: Dimension::Auto,
+                    preserve_aspect_ratio: true,
+                },
+                engine,
+                image_state,
+            )
+        }
+    }
+}
+
 async fn send_engine_events(
     surface_id: &str,
     session_id: Option<&str>,
@@ -819,14 +936,30 @@ async fn send_engine_events(
     session_port: &Arc<dyn SessionPort>,
     output_tx: &OutputSink,
     emit_surface_events: bool,
+    image_state: &mut Option<ImageState>,
+    multipart: &mut Option<MultipartAssembly>,
 ) -> bool {
     for event in engine.drain_events() {
         match event {
             EngineEvent::InlineImage(command) => {
+                let command_for_event = command.clone();
+                if let Err(error) = apply_inline_image_command(command, engine, image_state, multipart) {
+                    if !emit_surface_events {
+                        continue;
+                    }
+                    let response = json!({
+                        "surface": surface_id,
+                        "body": {"event": "error", "reason": error}
+                    });
+                    if output_tx.send(response.to_string()).await.is_err() {
+                        return false;
+                    }
+                    continue;
+                }
                 if !emit_surface_events {
                     continue;
                 }
-                let body = match command {
+                let body = match command_for_event {
                     InlineImageCommand::Display {
                         name,
                         data,
@@ -1104,6 +1237,7 @@ async fn surface_task(
     let mut session_id: Option<String> = None;
     let mut daemon_events_rx = session_port.get_events().await;
     let mut image_state: Option<ImageState> = None;
+    let mut multipart: Option<MultipartAssembly> = None;
     let mut open_requested = false;
     let mut requested_image: Option<String> = None;
     let mut headless = false;
@@ -1517,7 +1651,7 @@ async fn surface_task(
                         if let Err(error) = engine.resolve_clipboard(request_id, &text) {
                             let response = json!({"surface": surface_id, "body": {"error": error}});
                             if output_tx.send(response.to_string()).await.is_err() { return; }
-                        } else if !send_engine_events(&surface_id, session_id.as_deref(), &mut engine, &session_port, &output_tx, true).await {
+                        } else if !send_engine_events(&surface_id, session_id.as_deref(), &mut engine, &session_port, &output_tx, true, &mut image_state, &mut multipart).await {
                             return;
                         }
                     }
@@ -1663,7 +1797,7 @@ async fn surface_task(
                                     engine.reset();
                                 }
                                 engine.feed(&data);
-                                if !send_engine_events(&surface_id, session_id.as_deref(), &mut engine, &session_port, &output_tx, !headless).await { return; }
+                                if !send_engine_events(&surface_id, session_id.as_deref(), &mut engine, &session_port, &output_tx, !headless, &mut image_state, &mut multipart).await { return; }
                                 let screen = decorate_screen(engine.screen(), focused, &preedit, &cursor_policy, cursor_activity.elapsed().as_millis() as u64);
 
                                 if !headless { if let Some(ref mut img_state) = image_state {

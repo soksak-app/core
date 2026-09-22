@@ -1,6 +1,8 @@
 # 변경 기록
 
-- F6.6-2는 진행 중이다. VT 입력이 PTY 출력 청크 중간의 OSC 1337 record를 보존하고, 타입 있는 inline-image event를 내보내며, 잘못된 record를 명시적 오류로 보고하고, 제한된 이미지 바이트를 base64 sidecar event로 전달한다. native raster 합성, 이름 있는 이미지 교체·삭제, 수명 관리는 아직 구현하지 않았으며 완료로 보고하지 않는다.
+- F6.6-2는 계속 진행 중이다. macOS native frame이 이제 검증된 inline image 바이트를 ImageIO로 디코드해 terminal raster 위에 소유 placement를 합성한다. 같은 이름을 다시 받으면 해당 placement만 교체하고 terminal drawing은 유지한다. native 픽셀 집중 검사 1/1(1.74초), native frame·Alacritty·sidecar 계약 검사가 통과했다. 삭제·수명 의미와 재빌드 Tauri/Wails 픽셀 검증은 남아 있다.
+
+- 앞선 F6.6-2 진행 단계에서 VT→sidecar 경계를 만들었다. OSC 1337 record가 PTY 출력 청크 중간에서도 보존되고, 타입 있는 inline-image event가 되며, 잘못된 record는 명시적 오류로 보고되고, 제한된 이미지 바이트는 base64로 전달된다. 위의 후속 진행 기록에서 native 합성을 추가했으며, 삭제·수명 의미와 재빌드 호스트 검증은 남아 있다.
 
 - F6.6-1을 완료했다. `File`, `MultipartFile`, `FilePart`, `FileEnd`에 대한 엄격한 OSC 1337 이미지 전송 parser를 추가했다. 타입 있는 표시·전송·multipart 결과가 payload 상한, 선언 크기와 실제 크기 일치, 엄격한 base64, 크기 단위, 이름 있는 소유권, 명시적 inline 의미를 검증한다. Rust 집중 검사 5개가 0.02초에 통과했고 parity·문서 검사도 통과했다. VT engine과 native raster 통합은 F6.6-2에 남아 있다.
 

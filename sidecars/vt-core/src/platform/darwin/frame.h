@@ -41,6 +41,16 @@ typedef struct {
     uint8_t default_cursor[3];
 } Screen;
 
+typedef struct {
+    const uint8_t *data;
+    uint32_t data_len;
+    uint32_t x;
+    uint32_t y;
+    uint32_t width;
+    uint32_t height;
+    uint8_t preserve_aspect_ratio;
+} InlineImageRaster;
+
 // Opaque Frame type - defined in implementation
 struct Frame;
 typedef struct Frame Frame;
@@ -59,6 +69,8 @@ void frame_nonce(Frame *frame, uint8_t *buf);
 // Draw the screen to the frame's IOSurface
 // Returns 0 on success, -1 on failure
 int frame_draw(Frame *frame, Screen *screen, Metrics *metrics);
+int frame_draw_with_inline_images(Frame *frame, Screen *screen, Metrics *metrics,
+                                  InlineImageRaster *images, uint32_t image_count);
 
 // Free the frame and release IOSurface
 void frame_drop(Frame *frame);

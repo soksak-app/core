@@ -41,6 +41,17 @@ pub struct CScreen {
     pub default_cursor: [u8; 3],
 }
 
+#[repr(C)]
+pub struct CInlineImageRaster {
+    pub data: *const u8,
+    pub data_len: u32,
+    pub x: u32,
+    pub y: u32,
+    pub width: u32,
+    pub height: u32,
+    pub preserve_aspect_ratio: u8,
+}
+
 // Opaque frame type
 #[repr(C)]
 pub struct CFrame {
@@ -55,7 +66,13 @@ extern "C" {
     fn frame_new(width_px: u32, height_px: u32) -> *mut CFrame;
     fn frame_id(frame: *mut CFrame) -> u32;
     fn frame_nonce(frame: *mut CFrame, buf: *mut u8);
-    fn frame_draw(frame: *mut CFrame, screen: *mut CScreen, metrics: *mut CMetrics) -> i32;
+    fn frame_draw_with_inline_images(
+        frame: *mut CFrame,
+        screen: *mut CScreen,
+        metrics: *mut CMetrics,
+        images: *mut CInlineImageRaster,
+        image_count: u32,
+    ) -> i32;
     fn frame_drop(frame: *mut CFrame);
     fn frame_metrics(font_size: f64, scale: f64) -> CMetrics;
     fn frame_pixel(frame: *mut CFrame, x: u32, y: u32, out: *mut u8) -> i32;
@@ -202,6 +219,17 @@ impl Frame {
         cursor: CursorRender,
         theme: &crate::palette::TerminalTheme,
     ) -> Result<(), String> {
+        self.draw_with_theme_and_inline_images(screen, metrics, cursor, theme, &[])
+    }
+
+    pub fn draw_with_theme_and_inline_images(
+        &self,
+        screen: &crate::protocol::Screen,
+        metrics: &Metrics,
+        cursor: CursorRender,
+        theme: &crate::palette::TerminalTheme,
+        images: &[crate::protocol::InlineImagePlacement],
+    ) -> Result<(), String> {
         let mut render_screen = screen.clone();
         if let Some(preedit) = render_screen.cursor.preedit.clone() {
             apply_preedit(&mut render_screen, &preedit)?;
@@ -277,7 +305,27 @@ impl Frame {
             font_size: metrics.font_size as f64,
         };
 
-        let result = unsafe { frame_draw(self.ptr, &mut c_screen, &mut c_metrics) };
+        let mut c_images = images
+            .iter()
+            .map(|image| CInlineImageRaster {
+                data: image.data.as_ptr(),
+                data_len: image.data.len() as u32,
+                x: image.x,
+                y: image.y,
+                width: image.width,
+                height: image.height,
+                preserve_aspect_ratio: image.preserve_aspect_ratio as u8,
+            })
+            .collect::<Vec<_>>();
+        let result = unsafe {
+            frame_draw_with_inline_images(
+                self.ptr,
+                &mut c_screen,
+                &mut c_metrics,
+                c_images.as_mut_ptr(),
+                c_images.len() as u32,
+            )
+        };
 
         if result == 0 {
             Ok(())

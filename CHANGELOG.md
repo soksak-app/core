@@ -1,6 +1,8 @@
 # Changelog
 
-- F6.6-2 is in progress. VT input now preserves OSC 1337 records across PTY output chunks, emits typed inline-image events, reports malformed records explicitly, and forwards bounded image bytes as base64 sidecar events. Native raster composition, named-image replacement/deletion, and lifetime handling remain unimplemented and are not reported as complete.
+- F6.6-2 remains in progress. The native macOS frame now decodes validated inline image bytes through ImageIO and composites owned placements over the terminal raster; replacing an owned name updates that placement while preserving terminal drawing. The focused native pixel test passes 1/1 in 1.74s, and native frame, Alacritty, and sidecar contract suites pass. Deletion/lifetime semantics and rebuilt Tauri/Wails pixel verification remain open.
+
+- Earlier F6.6-2 progress established the VT-to-sidecar boundary: OSC 1337 records survive PTY output chunks, become typed inline-image events, report malformed records explicitly, and forward bounded image bytes as base64. Native composition was added in the later progress entry above; deletion/lifetime semantics and rebuilt-host verification remain open.
 
 - Completed F6.6-1. Added strict OSC 1337 image-transfer parsing for `File`, `MultipartFile`, `FilePart`, and `FileEnd`. Typed display, transfer, and multipart outcomes enforce bounded payloads, exact declared size, strict base64, dimensions, named ownership, and explicit inline semantics. Five focused Rust tests pass in 0.02s; parity and documentation checks pass. VT-engine and native raster integration remain open under F6.6-2.
 

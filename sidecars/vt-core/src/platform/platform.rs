@@ -18,6 +18,7 @@ pub struct ImageState {
     pub height_px: u32,
     pub scale: f32,
     pub theme: crate::palette::TerminalTheme,
+    pub inline_images: Vec<crate::protocol::InlineImagePlacement>,
 }
 
 #[cfg(target_os = "macos")]
@@ -45,6 +46,7 @@ impl ImageState {
             height_px,
             scale,
             theme: crate::palette::TerminalTheme::dark(),
+            inline_images: Vec::new(),
         })
     }
 

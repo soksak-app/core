@@ -2,7 +2,9 @@ use soksak_sidecar_vt_core::platform::darwin::frame::{
     cursor_blink_visible, effective_cursor_shape, metrics, CursorBlinkPolicy, CursorRender, Frame,
     UnfocusedCursor,
 };
-use soksak_sidecar_vt_core::protocol::{Cell, Cursor, CursorShape, JsonRange, Preedit, Screen};
+use soksak_sidecar_vt_core::protocol::{
+    Cell, Cursor, CursorShape, InlineImagePlacement, JsonRange, Preedit, Screen,
+};
 use soksak_sidecar_vt_core::TerminalTheme;
 
 fn screen(cols: u16, rows: u16) -> Screen {
@@ -23,6 +25,50 @@ fn screen(cols: u16, rows: u16) -> Screen {
             .map(|_| (0..cols).map(|_| Cell::default()).collect())
             .collect(),
     }
+}
+
+#[test]
+fn inline_image_raster_is_composited_without_erasing_terminal_background() {
+    let metrics = metrics(13.0, 1.0);
+    let width = metrics.cell_width as u32 * 4;
+    let height = metrics.cell_height as u32;
+    let png = [
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48,
+        0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00,
+        0x00, 0x1f, 0x15, 0xc4, 0x89, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x44, 0x41, 0x54, 0x78,
+        0x9c, 0x63, 0xf8, 0xcf, 0xc0, 0xf0, 0x1f, 0x00, 0x05, 0x00, 0x01, 0xff, 0x89, 0x99,
+        0x3d, 0x1d, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+    ];
+    let placement = InlineImagePlacement {
+        name: "red.png".into(),
+        data: png.to_vec(),
+        x: metrics.cell_width as u32,
+        y: 0,
+        width: metrics.cell_width as u32,
+        height: metrics.cell_height as u32,
+        preserve_aspect_ratio: true,
+    };
+    let frame = Frame::new(width, height).expect("frame");
+    frame
+        .draw_with_theme_and_inline_images(
+            &screen(4, 1),
+            &metrics,
+            CursorRender {
+                visible: false,
+                ..CursorRender::default()
+            },
+            &TerminalTheme::dark(),
+            &[placement],
+        )
+        .expect("inline image composite");
+    let image_pixel = frame
+        .read_pixel(metrics.cell_width as u32 + metrics.cell_width as u32 / 2, height / 2)
+        .expect("image pixel");
+    assert!(image_pixel[2] > image_pixel[0], "expected red image pixel: {image_pixel:?}");
+    let background = frame
+        .read_pixel(metrics.cell_width as u32 / 2, height / 2)
+        .expect("background");
+    assert!(background[0] < 80 && background[1] < 80 && background[2] < 80);
 }
 
 fn bright(frame: &Frame, width: u32, height: u32) -> usize {

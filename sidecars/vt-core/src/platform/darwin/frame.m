@@ -2,6 +2,7 @@
 #import <IOSurface/IOSurface.h>
 #import <CoreGraphics/CoreGraphics.h>
 #import <CoreText/CoreText.h>
+#import <ImageIO/ImageIO.h>
 #include "frame.h"
 #include <stdio.h>
 #include <string.h>
@@ -93,6 +94,11 @@ void frame_nonce(Frame *frame, uint8_t *buf) {
 }
 
 int frame_draw(Frame *frame, Screen *screen, Metrics *metrics) {
+    return frame_draw_with_inline_images(frame, screen, metrics, NULL, 0);
+}
+
+int frame_draw_with_inline_images(Frame *frame, Screen *screen, Metrics *metrics,
+                                  InlineImageRaster *images, uint32_t image_count) {
     if (!frame || !screen || !metrics) return -1;
 
     // Lock the surface
@@ -241,6 +247,54 @@ int frame_draw(Frame *frame, Screen *screen, Metrics *metrics) {
 
         if (parsed_bg) CGColorRelease(bg_color);
         if (parsed_fg) CGColorRelease(fg_color);
+    }
+
+    for (uint32_t i = 0; i < image_count; i++) {
+        InlineImageRaster *raster = &images[i];
+        if (!raster->data || raster->data_len == 0) {
+            CFRelease(font);
+            CGContextRelease(ctx);
+            CGColorRelease(default_fg_color);
+            CGColorRelease(default_bg_color);
+            IOSurfaceUnlock(frame->surface, 0, NULL);
+            return -1;
+        }
+        CFDataRef image_data = CFDataCreate(NULL, raster->data, raster->data_len);
+        CGImageSourceRef source = image_data ? CGImageSourceCreateWithData(image_data, NULL) : NULL;
+        CGImageRef image = source ? CGImageSourceCreateImageAtIndex(source, 0, NULL) : NULL;
+        if (image_data) CFRelease(image_data);
+        if (source) CFRelease(source);
+        if (!image) {
+            CFRelease(font);
+            CGContextRelease(ctx);
+            CGColorRelease(default_fg_color);
+            CGColorRelease(default_bg_color);
+            IOSurfaceUnlock(frame->surface, 0, NULL);
+            return -1;
+        }
+        CGFloat width = raster->width ? raster->width : (CGFloat)CGImageGetWidth(image);
+        CGFloat height = raster->height ? raster->height : (CGFloat)CGImageGetHeight(image);
+        if (raster->preserve_aspect_ratio) {
+            CGFloat natural_width = (CGFloat)CGImageGetWidth(image);
+            CGFloat natural_height = (CGFloat)CGImageGetHeight(image);
+            if (raster->width && !raster->height) {
+                height = width * natural_height / natural_width;
+            } else if (!raster->width && raster->height) {
+                width = height * natural_width / natural_height;
+            }
+        }
+        if (width <= 0 || height <= 0 || raster->x >= frame->width || raster->y >= frame->height ||
+            width > frame->width - raster->x || height > frame->height - raster->y) {
+            CGImageRelease(image);
+            CFRelease(font);
+            CGContextRelease(ctx);
+            CGColorRelease(default_fg_color);
+            CGColorRelease(default_bg_color);
+            IOSurfaceUnlock(frame->surface, 0, NULL);
+            return -1;
+        }
+        CGContextDrawImage(ctx, CGRectMake(raster->x, frame->height - raster->y - height, width, height), image);
+        CGImageRelease(image);
     }
 
     // 커서 깜박임과 모양은 상위 서비스가 계산한 한 프레임 상태만 그린다.
