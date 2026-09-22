@@ -648,7 +648,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       }
       session = { ...session, vendor: { ...session.vendor, notification: body.message } };
       changed("session");
-    } else if (body.event === "shell.state") {
+    } else if (body.event === "vendor.shell.state") {
       const markers = new Set(["prompt.start", "prompt.end", "command.start", "command.finished"]);
       if (!markers.has(body.marker) || !Array.isArray(body.params) || body.params.some((value) => typeof value !== "string")) {
         reportInputError(new Error("invalid shell state event from sidecar"));

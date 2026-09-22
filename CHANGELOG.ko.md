@@ -1,5 +1,8 @@
 # 변경 기록
 
+- V5 최종 감사를 시작했다. 필수 검사를 독립적인 제한시간과 START/PASS/FAIL 출력이 있는 lane으로 실행하며, 전체 타임아웃이나 mandatory skip을 완료 근거로 세지 않는다.
+- V5 Red에서 두 구조 실패를 확인했다. OSC 133이 shell plugin ID와 충돌하는 무접두사 `shell.state` namespace를 사용했고 Wails geometry 검사에 Tauri 대응 파일이 없었다. vendor event를 `vendor.shell.state`로 바꾸고 Tauri geometry 검사를 대응하는 `surfaces_geometry_test.rs` lane으로 옮겼다.
+- 대응하는 geometry lane을 추가한 뒤 V5 parity inventory를 보정했다. 현재 출력은 lane 56개·구현 파일 252개·테스트 파일 173개이며, 이전 171/172개 테스트 수는 날짜가 있는 증거로 남긴다.
 - F6.3-11을 완료했다. 일반 터미널 클릭은 더 이상 빈 selection을 열지 않으며, 포인터 이동 뒤에만 selection을 시작하고 완전한 drag start/update/end 계약은 보존한다. 터미널 모듈 drag/click 집중 검사 2/2, 재빌드 Tauri·Wails keyboard E2E 각각 4/4가 통과했고 `terminal.session.error`가 없으며 검증 뒤 양쪽 앱을 종료했다.
 - F8을 진행했다. custom image region의 명령 외 키 입력을 `interpretKeyEvents:`가 아니라 `NSTextInputContext handleEvent:`로 전달한다. 제한된 native image-region 회귀 검사가 일반 insert·조합·취소/키 라우팅·범위·후보 기하를 통과했다. 활성 한글 입력 소스와 재빌드 Tauri/Wails 증거는 아직 열려 있다.
 - F7.1–F7.18가 완료된 뒤 CSI 체크리스트 집계 상태를 바로잡았다. 부모 행은 F7.14–F7.17을 낡은 미완료 범위로 남기지 않고 selector 단위와 기계적 감사 근거를 기록한다.
@@ -265,3 +268,5 @@
 - F6.3-9를 완료했다. 현재 Tauri 바이너리 하나와 설정 디렉터리 하나에서 신규·4분할·반복 endpoint 케이스를 3회 실행해 9/9 통과했고, 각 케이스의 START/PASS 경과 시간과 `1005`, `notFound`, `notAttached`, native 표시 오류 부재를 확인했다. 동일 빌드에서 보고된 멈춤은 재현되지 않아 추측성 코드는 수정하지 않았으며 강제 endpoint 정리 진단은 별도로 기록했다.
 - V4를 시작했다. 기존 프로젝트 수명주기 케이스는 많은 persistence 동작을 다루지만 동일 앱 인스턴스에서 독립된 초기 상태 두 번의 생성·사용·종료·재생성을 명시적으로 증명하지 않는다. 양쪽 host에 별도 제한 케이스를 추가한다.
 - V4를 완료했다. 새 두 상태 수명주기 케이스가 재빌드 Tauri 1/1(1.75초), Wails 1/1(1.45초)로 통과했다. 하나의 앱 인스턴스에서 독립된 임시 프로젝트 두 개를 각각 생성·사용·종료·제거·재생성하고 30초 개별 제한을 적용했다.
+- V5 Red 근거: `pnpm test`는 1.2초, `make native-test`는 167초에 통과했다. `pnpm breaks`는 142개 주입 결함마다 전체 library suite를 반복하는 기존 러너 때문에 180초 lane을 넘겼으므로 통과로 기록하지 않는다. 일치하는 Tauri 분할 matrix는 2.1초에 4/4 통과했지만 정리 중 `notFound`와 endpoint broken-pipe 진단이 명시적으로 발생했으며 분류가 필요하다.
+- V5 Green: break 감사기는 격리 복사본·8개 lane·테스트 파일별 20초 제한·진행 출력을 사용하도록 수정했고 주입 결함 142개를 모두 검출했다. 일치하는 Tauri 분할 matrix는 2.1초에 4/4 통과했다. 정리 진단은 숨기지 않고 기존 stale-frame/recovery 계약으로 분류한다.

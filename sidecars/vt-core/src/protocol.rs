@@ -1145,7 +1145,7 @@ async fn send_engine_events(
                     ShellMarker::CommandStart => "command.start",
                     ShellMarker::CommandFinished => "command.finished",
                 };
-                let response = json!({"surface": surface_id, "body": {"event": "shell.state", "marker": marker, "params": params}});
+                let response = json!({"surface": surface_id, "body": {"event": "vendor.shell.state", "marker": marker, "params": params}});
                 if output_tx.send(response.to_string()).await.is_err() {
                     return false;
                 }

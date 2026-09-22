@@ -20,7 +20,7 @@ OSC 1337 image transfer uses an OSC extension. The APC graphics protocol uses AP
 | Indexed and dynamic colors | Palette set/query/reset, foreground/background/cursor effects and exact replies | Indexed-color cell export tested; complete OSC validation pending |
 | Hyperlinks | Preserve link identity across wrapped cells and selection; open only through a user command | Pending |
 | Clipboard selection | Preserve complete text; associate query replies; distinguish user paste from program requests | Engine events added; native and permission integration pending |
-| Directory and shell metadata | Validate syntax without executing payload; update the owning session | Typed `directory` and `shell.state` events; parser and surface-owner tests pass |
+| Directory and shell metadata | Validate syntax without executing payload; update the owning session | Typed `directory` and vendor-namespaced `vendor.shell.state` events; parser and surface-owner tests pass |
 | Notifications | Attribute the message to its session; do not execute payload | Typed `notification` event; parser, malformed-input, and surface-owner tests pass |
 | Font, logging, window and resource operations | Implement documented semantics or explicitly report unsupported/policy-denied operations; no successful no-op | Pending |
 | In-band graphics | Validate size, encoding, limits and lifetime; preserve grid placement and deletion semantics | Pending |

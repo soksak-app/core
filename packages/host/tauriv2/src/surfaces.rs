@@ -36,7 +36,7 @@ pub(crate) struct Surface {
     composition: SurfaceComposition,
 }
 
-fn validate_rect(name: &str, x: f64, y: f64, w: f64, h: f64) -> Result<(), String> {
+pub fn validate_rect(name: &str, x: f64, y: f64, w: f64, h: f64) -> Result<(), String> {
     if !x.is_finite() || !y.is_finite() || !w.is_finite() || !h.is_finite() {
         return Err(format!("{name} geometry must contain finite numbers"));
     }
@@ -341,22 +341,6 @@ pub(crate) fn aligned(x: f64, y: f64, w: f64, h: f64, scale: f64) -> (f64, f64, 
         (right - left).max(step),
         (bottom - top).max(step),
     )
-}
-
-#[cfg(test)]
-mod tests {
-    use super::validate_rect;
-
-    #[test]
-    fn rejects_non_finite_and_negative_surface_geometry_without_fallback() {
-        assert!(validate_rect("surface", 0.0, 0.0, 0.0, 10.0).is_ok());
-        assert!(validate_rect("surface", 0.0, 0.0, -0.1, 10.0)
-            .unwrap_err()
-            .contains("negative size"));
-        assert!(validate_rect("surface", 0.0, 0.0, f64::NAN, 10.0)
-            .unwrap_err()
-            .contains("finite"));
-    }
 }
 
 /// 창의 누름 감시를 한 번 시작한다.

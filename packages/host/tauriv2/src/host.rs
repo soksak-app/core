@@ -29,7 +29,7 @@ pub mod projects;
 pub mod recording;
 mod shapes;
 pub mod sidecars;
-mod surfaces;
+pub mod surfaces;
 pub use surfaces::surface_owner_id;
 pub mod termination;
 mod theme;

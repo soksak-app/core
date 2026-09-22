@@ -76,13 +76,15 @@ process.on("uncaughtException", (e) => {
   process.exit(1);
 });
 
-/** Whether this test file fails in the copy. Bounded, so a hang cannot outlive it. */
-const fails = (file) =>
+const TEST_TIMEOUT = 20_000;
+
+/** Whether this test file fails in a copy. Bounded, so a hang cannot outlive it. */
+const fails = (root, file) =>
   new Promise((done) => {
     const child = spawn(
       "node",
-      [`${HERE}scripts/bounded.mjs`, "300000", "node", "--test", file],
-      { cwd: HERE, stdio: "ignore" },
+      [`${root}scripts/bounded.mjs`, String(TEST_TIMEOUT), "node", "--test", file],
+      { cwd: root, stdio: "ignore" },
     );
     child.on("exit", (code) => done(code !== 0));
   });
@@ -91,7 +93,11 @@ const fails = (file) =>
 // below stops at the first file that fails, and that file would be the same one
 // every time.
 const broken = [];
-for (const file of TESTS) if (await fails(file)) broken.push(file);
+for (const file of TESTS) {
+  console.log(`START baseline test=${file} timeout_ms=${TEST_TIMEOUT}`);
+  if (await fails(HERE, file)) broken.push(file);
+  console.log(`${broken.includes(file) ? "FAIL" : "PASS"} baseline test=${file}`);
+}
 if (broken.length) {
   console.error(
     `The copy does not pass before a break is applied: ${broken.join(", ")}. Nothing to measure.`,
@@ -103,6 +109,7 @@ let caught = 0;
 const missed = [];
 const many = [];
 const survived = [];
+const applicable = [];
 for (const b of BREAKS) {
   if (only && !only.has(b.id)) continue;
   const src = originals[b.file];
@@ -121,29 +128,51 @@ for (const b of BREAKS) {
     console.log(`${b.id.padEnd(14)} ${String(sites)} SITES   ${b.what}`);
     continue;
   }
-  writeFileSync(`${HERE}${b.file}`, src.split(b.find).join(b.to));
-  // One file at a time, stopping at the first that fails. What this run needs is
-  // whether the suite fails at all, and running every file for a break the first
-  // one already catches costs one process per file for nothing.
-  //
-  // The file named after the one the break patches goes first. It is a guess, and
-  // a wrong guess costs the run that reaches the file that does fail.
-  let passed = true;
-  for (const file of order(b.file)) {
-    if (await fails(file)) {
-      passed = false;
-      break;
-    }
-  }
-  writeFileSync(`${HERE}${b.file}`, src);
-  if (passed) {
-    survived.push(b);
-    console.log(`${b.id.padEnd(14)} SURVIVED  ${b.what}`);
-  } else {
-    caught++;
-    console.log(`${b.id.padEnd(14)} caught    ${b.what}`);
-  }
+  applicable.push(b);
 }
+
+const copy = () => {
+  const top = `${mkdtempSync(join(tmpdir(), "soksak-break-"))}/`;
+  const root = `${top}packages/soksak/`;
+  for (const part of ["dist", "test", "scripts", "src", "docs", "package.json", "tsconfig.json"])
+    cpSync(`${REPO}${part}`, `${root}${part}`, { recursive: true });
+  for (const part of ["package.json", "Makefile", ".node-version"])
+    cpSync(`${ROOT}${part}`, `${top}${part}`, { recursive: true });
+  symlinkSync(`${REPO}node_modules`, `${root}node_modules`);
+  return { top, root };
+};
+
+const run = async (b) => {
+  const { top, root } = copy();
+  try {
+    const src = originals[b.file];
+    writeFileSync(`${root}${b.file}`, src.split(b.find).join(b.to));
+    for (const file of order(b.file)) {
+      console.log(`START break=${b.id} test=${file} timeout_ms=${TEST_TIMEOUT}`);
+      if (await fails(root, file)) {
+        console.log(`PASS break=${b.id} result=caught test=${file}`);
+        return { b, caught: true };
+      }
+      console.log(`PASS break=${b.id} test=${file}`);
+    }
+    console.log(`FAIL break=${b.id} result=survived`);
+    return { b, caught: false };
+  } finally {
+    rmSync(top, { recursive: true, force: true });
+  }
+};
+
+const queue = [...applicable];
+const workers = Array.from({ length: Math.min(8, queue.length) }, async () => {
+  while (queue.length) {
+    const b = queue.shift();
+    if (!b) return;
+    const result = await run(b);
+    if (result.caught) caught++;
+    else survived.push(result.b);
+  }
+});
+await Promise.all(workers);
 
 console.log(
   `\ncaught ${caught} · survived ${survived.length} · stale ${missed.length} · ambiguous ${many.length}`,

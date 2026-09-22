@@ -1367,6 +1367,13 @@ const FEATURE_LINKS = [
     expected: "The rebuilt Wails host completes the full modal lifecycle and the verifier explicitly defers V7/V10/R geometry decisions until the native placement answer is seated.",
     levels: ["native", "application"],
   },
+  {
+    id: "V5",
+    implementation: [{ file: "packages/soksak/scripts/check-breaks.mjs", symbol: "run" }],
+    tests: [{ file: "scripts/test/soksak-scripts.test.mjs", id: "break inventory lists only requested, known entries" }],
+    expected: "The break audit runs each test file with a 20-second deadline in isolated parallel copies, reports progress, and catches all 142 declared breaks without an aggregate timeout or silent result.",
+    levels: ["unit"],
+  },
 ];
 
 // 생성 산출물은 원본과의 일치 검사 대상이며 독립 구현으로 세지 않는다.

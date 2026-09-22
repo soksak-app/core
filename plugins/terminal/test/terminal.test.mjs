@@ -1582,7 +1582,7 @@ test("vendor_events_update_the_session_and_unrelated_events_remain_unsupported",
   fakeSidecar.triggerEvent("test-session", { event: "directory", uri: "file:///tmp/project" });
   fakeSidecar.triggerEvent("test-session", { event: "hyperlink", id: "docs", uri: "https://example.test" });
   fakeSidecar.triggerEvent("test-session", { event: "notification", message: "build complete" });
-  fakeSidecar.triggerEvent("test-session", { event: "shell.state", marker: "command.finished", params: ["0"] });
+  fakeSidecar.triggerEvent("test-session", { event: "vendor.shell.state", marker: "command.finished", params: ["0"] });
 
   const updatedSession = sessionStatus.readFn();
   assert.deepEqual(updatedSession.vendor, {
