@@ -914,3 +914,14 @@ fn csi_tabulation_forward_and_backward_use_tab_stops() {
     engine.feed(b"\x1b[1Z");
     assert_eq!(engine.cursor().col, 0, "CSI Z must move to the previous tab stop");
 }
+
+#[test]
+fn csi_repeat_repeats_the_last_printed_character() {
+    let mut engine = AlacrittyEngine::new();
+    engine.resize(8, 2);
+    engine.feed(b"A\x1b[2b");
+    let screen = engine.screen();
+    assert_eq!(screen.lines[0][0].ch.as_deref(), Some("A"));
+    assert_eq!(screen.lines[0][1].ch.as_deref(), Some("A"));
+    assert_eq!(screen.lines[0][2].ch.as_deref(), Some("A"));
+}

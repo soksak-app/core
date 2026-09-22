@@ -295,3 +295,4 @@ Library validation on 2026-09-08: `make verify` passed, including 310/310 tests,
 - Completed F7.8. X11/Tektronix OSC 13–19 now have a named explicit-rejection case. The macOS sidecar records them as unsupported platform operations rather than silently claiming an effect.
 - Completed F11. The current exposure, runtime binder, bounded-capture, language-lane, boundary, documentation, and parity audits pass; F11-1 and F11-2 provide the behavior evidence without claiming unsupported host behavior.
 - Completed F7.9. The CSI inventory now links `6n/c` to the existing ordered cursor-position and device-attribute response case; the full Alacritty engine suite passes 54/54.
+- Completed F7.10. The CSI inventory now links `b` to an executable repeat-character case; the focused Alacritty test passes 1/1.
