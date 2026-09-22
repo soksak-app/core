@@ -1134,10 +1134,11 @@ async fn test_k3_char_key_encoding() {
     let calls = Arc::new(Mutex::new(Calls::default()));
     let fake_session_id = "test-session".to_string();
 
-    // Test ctrl+c → 0x03
+    // native 물리 키 매핑 뒤 Ctrl+C는 0x03, Ctrl+U는 0x15를 기록한다.
     let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 {"surface":"s1","body":{"operation":"input","keys":[{"key":"Char","text":"c","ctrl":true}]}}
+{"surface":"s1","body":{"operation":"input","keys":[{"key":"Char","text":"u","ctrl":true}]}}
 "#;
     let reader = std::io::Cursor::new(input.as_bytes());
     let mut writer = Vec::new();
@@ -1155,8 +1156,9 @@ async fn test_k3_char_key_encoding() {
     let _ = serve(engine_factory, reader, &mut writer, session_port_factory).await;
 
     let calls_lock = calls.lock().unwrap();
-    assert_eq!(calls_lock.writes.len(), 1);
+    assert_eq!(calls_lock.writes.len(), 2);
     assert_eq!(calls_lock.writes[0].1, vec![0x03], "ctrl+c should be 0x03");
+    assert_eq!(calls_lock.writes[1].1, vec![0x15], "ctrl+u should be 0x15");
 
     // Test UTF-8 encoding (한)
     drop(calls_lock);

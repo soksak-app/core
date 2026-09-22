@@ -745,6 +745,7 @@ mod tests {
     fn test_encode_ctrl_char() {
         // Ctrl+A through Ctrl+Z
         assert_eq!(encode_ctrl_char('a').unwrap(), vec![0x01]);
+        assert_eq!(encode_ctrl_char('u').unwrap(), vec![0x15]);
         assert_eq!(encode_ctrl_char('z').unwrap(), vec![0x1a]);
         assert_eq!(encode_ctrl_char('A').unwrap(), vec![0x01]);
         assert_eq!(encode_ctrl_char('Z').unwrap(), vec![0x1a]);
