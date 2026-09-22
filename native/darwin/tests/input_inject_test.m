@@ -141,6 +141,47 @@ static void checkReceipts(void) {
     [window close];
 }
 
+static void checkIndependentWindowKeys(void) {
+    NSWindow *first = [[NSWindow alloc] initWithContentRect:awayFromPointer(NSMakeSize(240, 120))
+        styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+    NSWindow *second = [[NSWindow alloc] initWithContentRect:awayFromPointer(NSMakeSize(240, 120))
+        styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+    WKWebView *firstView = [[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 240, 120)];
+    WKWebView *secondView = [[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 240, 120)];
+    first.contentView = firstView;
+    second.contentView = secondView;
+    NSString *html = @"<input id='field'><script>window.keys=[];"
+        "addEventListener('keydown',e=>keys.push(e.key),true);</script>";
+    [firstView loadHTMLString:html baseURL:nil];
+    [secondView loadHTMLString:html baseURL:nil];
+    [first orderBack:nil];
+    [second orderBack:nil];
+    until(^BOOL { return [evaluate(firstView, @"Boolean(window.keys)") boolValue] &&
+        [evaluate(secondView, @"Boolean(window.keys)") boolValue]; });
+
+    check(sp_input_pointer(first, 20, 20, 1, 0, 0, 0) == SP_INPUT_DELIVERED &&
+        sp_input_pointer(first, 20, 20, 3, 0, 0, 0) == SP_INPUT_DELIVERED,
+        @"first window receives its focus click");
+    check(sp_input_pointer(second, 20, 20, 1, 0, 0, 0) == SP_INPUT_DELIVERED &&
+        sp_input_pointer(second, 20, 20, 3, 0, 0, 0) == SP_INPUT_DELIVERED,
+        @"second window receives its focus click");
+    drain(firstView);
+    drain(secondView);
+    check(sp_input_key(first, "a", NULL, 0, true) && sp_input_key(first, "a", NULL, 0, false),
+        @"a key is delivered to the first window target");
+    check(sp_input_key(second, "Escape", NULL, 0, true) && sp_input_key(second, "Escape", NULL, 0, false),
+        @"Escape is delivered to the second window target");
+    until(^BOOL { return [[evaluate(firstView, @"document.getElementById('field').value") description] isEqual:@"a"]; });
+    check([evaluate(firstView, @"document.getElementById('field').value") isEqual:@"a"],
+        @"the first window keeps its input");
+    check([evaluate(secondView, @"keys") isEqual:@[@"Escape"]],
+        @"the second window receives only its own Escape");
+    check([evaluate(firstView, @"keys") isEqual:@[@"a"]],
+        @"the first window does not receive the second window's Escape");
+    [first close];
+    [second close];
+}
+
 int main(void) { @autoreleasepool {
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
@@ -241,6 +282,7 @@ int main(void) { @autoreleasepool {
     check(!NSApp.isActive, @"application stays inactive");
     check(NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier != getpid(), @"this process did not become the frontmost application");
     [window close];
+    checkIndependentWindowKeys();
     checkReceipts();
     return failures ? 1 : 0;
 }}
