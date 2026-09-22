@@ -415,9 +415,20 @@ pub(crate) fn hide(window: &Window, id: String) -> Result<(), String> {
     // every endpoint request.
     state.discard()?;
     exposure::window_changed(window);
-    if let Some(main) = root_view(window) {
-        main.set_focus().map_err(|e| e.to_string())?;
-    }
+    // The terminal image region reports `resignFirstResponder` synchronously. Calling
+    // `set_focus` here would re-enter the main WebView while the current Tauri invoke
+    // still owns its WebKit dispatch lock, so the focus callback can deadlock the event
+    // loop. Return from the hide command first, then restore focus in the next AppKit turn.
+    let host = window.clone();
+    platform::current()?
+        .enqueue_ui(Box::new(move || {
+            if let Some(main) = root_view(&host) {
+                if let Err(error) = main.set_focus() {
+                    eprintln!("modal focus restoration failed: {error}");
+                }
+            }
+        }))
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 

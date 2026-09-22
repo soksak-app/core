@@ -6,6 +6,8 @@
 
 ## Unreleased
 
+- Completed F5.2. A single terminal click now restores the target WebView before the next synthetic pointer after native image focus, and native image focus notifications plus modal focus restoration cannot synchronously re-enter the WebKit event path. Red reproduced terminal 2/3 pointer receipt timeouts and a modal-close deadlock; rebuilt Tauri and Wails focus matrices passed 4/4 bounded subtests each, covering three terminals, browser/tab switching, resize, settings modal close, project return, and a separate project window.
+
 - Completed F5.1. Terminal surfaces now receive the effective application light/dark appearance through the declared theme subscription and `operation: "theme"` sidecar request. The sidecar changes default, cursor, and indexed ANSI raster colors without recreating the PTY, session, text, or cell metrics; invalid modes are rejected explicitly. Rust frame/engine/protocol tests, terminal module tests, and rebuilt Tauri/Wails pixel checks pass; the Wails surface theme binding is exposed through the host contract.
 
 - Completed F4. Browser document facts now expose actual native first-responder focus, and direct `input.pointer` presses notify the owning surface for both Tauri and Wails instead of relying only on the native event monitor. Rebuilt Tauri and Wails focus-isolation checks pass 1/1 each; browser basic-operation checks pass navigation, address typing, and document scrolling on both hosts; the rebuilt native facts test reports document focus.

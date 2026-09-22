@@ -1,7 +1,9 @@
 // 터미널 표면의 입력이 터미널 사이드카를 거쳐 같은 표면의 출력으로 돌아오는지 검사한다.
 // 창 크기가 바뀌어도 터미널 그림이 영역과 DOM 을 따라가는지 검사한다.
 import assert from "node:assert/strict";
-import { rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import test from "node:test";
 
 import { APPS, drag, fresh, open, within } from "./app.mjs";
@@ -63,6 +65,17 @@ async function ensureTerminals(session, count) {
     `terminal native surfaces did not reach ${count}`
   );
   return session.surfaces("terminal");
+}
+
+async function clickAndExecute(session, surface, marker) {
+  const view = await session.rect("terminal.view", undefined, surface);
+  await session.click(view.document.x + view.x + view.width / 2, view.document.y + view.y + view.height / 2);
+  await session.until("host.window", (host) => host.regions.some((region) =>
+    region.surface === surface && region.focused), `${surface} did not receive native focus`);
+  for (const ch of `echo ${marker}`) await session.press(ch === " " ? "Space" : ch);
+  await session.press("Enter");
+  await readScreenUntil(session, surface, (lines) => lines.includes(marker),
+    `${surface} did not execute its first post-context command`);
 }
 
 async function closeTerminalTabs(session) {
@@ -189,7 +202,13 @@ for (const app of Object.values(APPS)) {
           .map(async (item) => [item.surface, await s.get("terminal.screen", item.surface)]));
         const view = await s.rect("terminal.view", undefined, surface);
         t.diagnostic(`${app.name}: START terminal ${index + 1} pointer focus`);
-        await s.click(view.document.x + view.x + view.width / 2, view.document.y + view.y + view.height / 2);
+        try {
+          await s.click(view.document.x + view.x + view.width / 2, view.document.y + view.y + view.height / 2);
+        } catch (error) {
+          t.diagnostic(`${app.name}: terminal ${index + 1} click failure host=${JSON.stringify(await s.get("host.window"))}`);
+          t.diagnostic(`${app.name}: terminal ${index + 1} click failure input=${JSON.stringify(await s.get("core.surface.input", surface))}`);
+          throw error;
+        }
         t.diagnostic(`${app.name}: PASS terminal ${index + 1} pointer focus`);
         await s.until("host.window", (host) => host.regions.some((region) => region.surface === surface && region.focused),
           `terminal ${index + 1} did not receive keyboard focus`);
@@ -205,6 +224,9 @@ for (const app of Object.values(APPS)) {
         t.diagnostic(`${app.name}: terminal ${index + 1} screen after typing ` +
           `${JSON.stringify(textLines({ lines: screenAfterTyping }).filter(Boolean))}`);
         await readScreenUntil(s, surface, (lines) => lines.some((row) => row.endsWith(`${line}x`)), "native characters were not delivered");
+        const focusedAfterFirstInput = await s.get("host.window");
+        assert.ok(focusedAfterFirstInput.regions.some((region) => region.surface === surface && region.focused),
+          `terminal ${index + 1} lost native focus before its first command completed`);
         await s.press("Backspace");
         await readScreenUntil(s, surface, (lines) => lines.some((row) => row.endsWith(line)), "native Backspace was not delivered");
         await s.press("u", { modifiers: ["control"] });
@@ -227,6 +249,80 @@ for (const app of Object.values(APPS)) {
           `typing in ${surface} changed ${other}`);
       });
     }
+
+    const terminalTab = (await s.get("core.grid")).cards.flatMap((card) => card.tabs)
+      .find((tab) => tab.plugin === "terminal");
+    const browserTab = (await s.get("core.grid")).cards.flatMap((card) => card.tabs)
+      .find((tab) => tab.plugin === "browser");
+    assert.ok(terminalTab && browserTab, "the focus context test requires terminal and browser tabs");
+    t.diagnostic(`${app.name}: START focus after browser tab`);
+    await s.run("core.tab.select", { tab: browserTab.id });
+    await s.until("core.surfaces", (surfaces) => surfaces.some((item) => item.visible && item.plugin === "browser"),
+      "browser tab did not become visible before returning to the terminal");
+    await s.run("core.tab.select", { tab: terminalTab.id });
+    await s.until("core.surfaces", (surfaces) => surfaces.some((item) =>
+      item.visible && item.plugin === "terminal" && item.exposes.includes("status terminal.session")),
+    "terminal did not return after browser tab switching");
+    await s.presented();
+    const returnedTerminal = (await s.get("core.surfaces")).find((item) =>
+      item.visible && item.plugin === "terminal" && item.exposes.includes("status terminal.session"));
+    await clickAndExecute(s, returnedTerminal.surface, "afterbrowser");
+    t.diagnostic(`${app.name}: PASS focus after browser tab`);
+
+    t.diagnostic(`${app.name}: START focus after resize`);
+    const beforeResize = await s.get("terminal.session", returnedTerminal.surface);
+    await s.run("host.window.resize", { width: 800, height: 920 });
+    await s.until("host.window", (host) => host.content.width === 800, "window did not resize for focus test");
+    await s.until("terminal.session", (state) => state.cols < beforeResize.cols,
+      "terminal did not resize before focus was tested again", { surface: returnedTerminal.surface });
+    await clickAndExecute(s, returnedTerminal.surface, "afterresize");
+    t.diagnostic(`${app.name}: PASS focus after resize`);
+
+    t.diagnostic(`${app.name}: START focus after modal close`);
+    await s.run("core.settings.open");
+    await s.until("core.settings-modal", (modal) => modal.open, "settings modal did not open for focus test");
+    await s.run("core.settings.close");
+    await s.until("core.settings-modal", (modal) => !modal.open, "settings modal did not close for focus test");
+    await s.presented();
+    await clickAndExecute(s, returnedTerminal.surface, "aftermodal");
+    t.diagnostic(`${app.name}: PASS focus after modal close`);
+
+    t.diagnostic(`${app.name}: START focus after project return`);
+    const project = await s.get("core.project");
+    await s.run("core.projects.browse");
+    await s.until("core.screen", (screen) => screen.screen === "library", "project library did not open for focus test");
+    await s.run("core.library.open", { id: project.id });
+    await s.until("core.surfaces", (surfaces) => surfaces.some((item) =>
+      item.visible && item.plugin === "terminal" && item.exposes.includes("status terminal.session")),
+    "terminal did not return after project navigation");
+    await s.presented();
+    const restoredTerminal = (await s.get("core.surfaces")).find((item) =>
+      item.visible && item.plugin === "terminal" && item.exposes.includes("status terminal.session"));
+    await clickAndExecute(s, restoredTerminal.surface, "afterproject");
+    t.diagnostic(`${app.name}: PASS focus after project return`);
+
+    t.diagnostic(`${app.name}: START focus after window switch`);
+    const temporaryProject = mkdtempSync(join(tmpdir(), "soksak-terminal-focus-"));
+    s.cleanup(() => rmSync(temporaryProject, { recursive: true, force: true }));
+    await s.run("core.settings.set", { patch: { projectOpening: "windows" }, scope: "common" });
+    const opened = await s.run("core.project.open", { root: temporaryProject, color: "#7fe3b0" });
+    const child = s.on((await s.windows(2, "focus test project window did not open"))
+      .find((window) => window.window !== s.window).window);
+    await child.until("core.grid", (grid) => grid.cards.length > 0, "focus test project window did not render");
+    const childTerminalTab = (await child.get("core.grid")).cards.flatMap((card) => card.tabs)
+      .find((tab) => tab.plugin === "terminal");
+    assert.ok(childTerminalTab, `opened project ${opened.id} has no terminal tab`);
+    await child.run("core.tab.select", { tab: childTerminalTab.id });
+    await child.until("core.surfaces", (surfaces) => surfaces.some((item) =>
+      item.visible && item.plugin === "terminal" && item.exposes.includes("status terminal.session")),
+    "focus test child window terminal did not become visible");
+    await child.presented();
+    const childTerminal = (await child.get("core.surfaces")).find((item) =>
+      item.visible && item.plugin === "terminal" && item.exposes.includes("status terminal.session"));
+    await clickAndExecute(child, childTerminal.surface, "afterwindow");
+    await child.close();
+    await s.windows(1, "focus test child window did not close");
+    t.diagnostic(`${app.name}: PASS focus after window switch`);
   });
 
   test(`${app.name}: hiding three terminals retains native geometry and rasters`, async (t) => {

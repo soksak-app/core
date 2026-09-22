@@ -555,18 +555,37 @@ fn create(
     on_main(window, move || {
         let event = Box::new(move |json: String| {
             // 네이티브 입력은 소유 표면에만 보낸다. 파싱·전송 실패는 숨기지 않는다.
+            let event_surface = surface_id.clone();
+            let event_name = event_name.clone();
             let result = (|| {
-                let event: serde_json::Value = serde_json::from_str(&json)
-                    .map_err(|error| format!("image event {surface_id}/{event_name}: {error}"))?;
+                let event: serde_json::Value = serde_json::from_str(&json).map_err(|error| {
+                    format!("image event {event_surface}/{event_name}: {error}")
+                })?;
+                let report_surface = event_surface.clone();
+                let report_name = event_name.clone();
                 let payload = serde_json::json!({
-                    "surface": surface_id, "name": event_name, "event": event,
+                    "surface": event_surface, "name": event_name, "event": event,
                 });
-                emit_window(&host, "image-event", payload)
-                    .map_err(|error| error.to_string())
-                    .map_err(|error| format!("image event {surface_id}/{event_name}: {error}"))
+                let deferred_surface = report_surface.clone();
+                let deferred_name = report_name.clone();
+                let deferred_host = host.clone();
+                platform
+                    .enqueue_ui(Box::new(move || {
+                        let sent = emit_window(&deferred_host, "image-event", payload)
+                            .map_err(|error| error.to_string())
+                            .map_err(|error| {
+                                format!("image event {deferred_surface}/{deferred_name}: {error}")
+                            });
+                        log_error(sent);
+                        exposure::window_changed(&deferred_host);
+                    }))
+                    .map_err(|error| {
+                        format!(
+                            "image event {report_surface}/{report_name} scheduling failed: {error}"
+                        )
+                    })
             })();
             log_error(result);
-            exposure::window_changed(&host);
         });
         let handle = platform.create_image(surface, &name, event)?;
         Ok(handle)

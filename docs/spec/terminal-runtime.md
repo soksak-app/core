@@ -30,7 +30,7 @@ An application update may reconnect to the live service only when their protocol
 
 ## Terminal input and display
 
-A single pointer click on a terminal transfers keyboard ownership to its native image region through the declared `terminal.focus` command. The DOM anchor prevents the pointer's default DOM-focus action so WebKit cannot take ownership back during the same click. Card selection still receives the event. No second click, delayed refocus, or test-only focus command is required. Focus-request errors remain observable.
+A single pointer click on a terminal transfers keyboard ownership to its native image region through the declared `terminal.focus` command. The host restores the target document WebView as the responder before delivering a later synthetic pointer after native terminal input, so a native image responder cannot strand the next click. The DOM anchor prevents the pointer's default DOM-focus action so WebKit cannot take ownership back during the same click. Card selection still receives the event. No second click, delayed refocus, or test-only focus command is required. Focus-request errors remain observable. Modal focus restoration and image focus notifications are deferred past the active AppKit/Tauri callback; they must not synchronously re-enter the WebView event path.
 
 The engine, PTY, and displayed raster agree on the applied dimensions. Narrowing reflows soft-wrapped primary-screen lines; widening joins those same logical lines. Explicit newlines remain. Alternate-screen applications retain their terminal-controlled layout semantics. Divider movement never changes font metrics or animates raster geometry.
 

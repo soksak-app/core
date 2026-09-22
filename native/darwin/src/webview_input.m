@@ -97,6 +97,16 @@ void webviewInputSendThen(WKWebView *view, NSString *type, NSTimeInterval timeou
         [handler.waits removeObject:wait];
         wait.done(NO);
     });
+    // 터미널 입력 뒤에는 네이티브 그림 영역이 첫 응답자일 수 있다. 이 상태에서 창이
+    // 비활성화되어 있으면 WebKit이 대상 페이지를 마우스 처리 경로에서 제외할 수 있어
+    // drain 콜백이 다음 합성 포인터까지 도달하지 않는다. WebKit의 대기 중인 마우스
+    // 작업을 기다리기 전에 대상 웹뷰를 응답자로 복원한다. 페이지에는 아래에서 보내는
+    // 포인터 하나만 전달하며, 네이티브 그림 영역 포커스는 호출자가 다시 소유한다.
+    NSWindow *window = view.window;
+    NSResponder *first = window.firstResponder;
+    BOOL targetOwnsResponder = first == view ||
+        ([first isKindOfClass:NSView.class] && [(NSView *)first isDescendantOf:view]);
+    if (window && !targetOwnsResponder) [window makeFirstResponder:view];
     void (^sendAfterDrain)(void) = ^{
         BOOL sent = send();
         if (!sent) {
