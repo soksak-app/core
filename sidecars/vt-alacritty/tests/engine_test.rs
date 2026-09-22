@@ -175,6 +175,18 @@ fn every_unsupported_osc_inventory_selector_emits_an_explicit_error() {
 }
 
 #[test]
+fn x11_and_tektronix_osc_selectors_are_explicitly_rejected() {
+    for selector in ["13", "14", "15", "16", "17", "18", "19"] {
+        let mut engine = AlacrittyEngine::new();
+        engine.feed(format!("\x1b]{selector};ignored\x07").as_bytes());
+        assert!(matches!(
+            engine.drain_events().as_slice(),
+            [EngineEvent::Error(reason)] if reason == &format!("unsupported OSC selector {selector}")
+        ), "physical selector {selector} did not produce an explicit rejection");
+    }
+}
+
+#[test]
 fn implemented_and_vendor_osc_selectors_do_not_emit_unsupported_errors() {
     let mut engine = AlacrittyEngine::new();
     engine.feed(b"\x1b]2;title\x07\x1b]7;file:///tmp\x07");
