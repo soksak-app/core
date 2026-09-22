@@ -7,6 +7,7 @@
 //! `platform/<os>/endpoint.*` 가 제공한다. 형식은 docs/spec/endpoint.md 에 정의한다.
 
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::fs::{File, OpenOptions};
 use std::io::{ErrorKind, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -333,9 +334,78 @@ impl Notifier {
 pub struct Endpoint {
     shared: Arc<Shared>,
     listener: Arc<dyn Listener>,
+    _process_lock: ProcessLock,
     address: String,
     file: PathBuf,
     stopped: Arc<AtomicBool>,
+}
+
+/// One application process owns one configuration directory. The file handle
+/// remains open for the lifetime of the endpoint; the file itself also records
+/// the owner PID so a force-terminated process can be replaced explicitly.
+struct ProcessLock {
+    path: PathBuf,
+    _file: File,
+}
+
+impl ProcessLock {
+    fn acquire(directory: &Path) -> Result<Self, String> {
+        std::fs::create_dir_all(directory)
+            .map_err(|error| format!("{}: {error}", directory.display()))?;
+        let path = directory.join("process.lock");
+        for attempt in 0..2 {
+            match OpenOptions::new().write(true).create_new(true).open(&path) {
+                Ok(mut file) => {
+                    file.write_all(std::process::id().to_string().as_bytes())
+                        .map_err(|error| format!("{}: {error}", path.display()))?;
+                    file.sync_all()
+                        .map_err(|error| format!("{}: {error}", path.display()))?;
+                    return Ok(Self { path, _file: file });
+                }
+                Err(error) if error.kind() == ErrorKind::AlreadyExists && attempt == 0 => {
+                    let contents = std::fs::read_to_string(&path)
+                        .map_err(|read| format!("{}: {read}", path.display()))?;
+                    let pid = contents.trim().parse::<u32>().map_err(|parse| {
+                        format!(
+                            "{}: invalid process lock `{contents}`: {parse}",
+                            path.display()
+                        )
+                    })?;
+                    if pid == 0 {
+                        return Err(format!("{}: process lock contains PID 0", path.display()));
+                    }
+                    if platform::current()?.service_process_exists(pid)? {
+                        return Err(format!(
+                            "configuration directory {} is already owned by process {pid}",
+                            directory.display()
+                        ));
+                    }
+                    std::fs::remove_file(&path)
+                        .map_err(|remove| format!("{}: {remove}", path.display()))?;
+                }
+                Err(error) => return Err(format!("{}: {error}", path.display())),
+            }
+        }
+        unreachable!("process lock acquisition has at most two attempts")
+    }
+
+    fn release(&self) -> Result<(), String> {
+        match std::fs::remove_file(&self.path) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(format!("{}: {error}", self.path.display())),
+        }
+    }
+}
+
+impl Drop for ProcessLock {
+    fn drop(&mut self) {
+        if let Err(error) = std::fs::remove_file(&self.path) {
+            if error.kind() != ErrorKind::NotFound {
+                eprintln!("{}: {error}", self.path.display());
+            }
+        }
+    }
 }
 
 impl Endpoint {
@@ -346,6 +416,7 @@ impl Endpoint {
         application: &str,
         service: Arc<dyn Service>,
     ) -> Result<Endpoint, String> {
+        let process_lock = ProcessLock::acquire(directory)?;
         let listener: Arc<dyn Listener> = platform::current()?
             .endpoint_listen(sockets, application)?
             .into();
@@ -361,6 +432,7 @@ impl Endpoint {
         let endpoint = Endpoint {
             shared,
             listener,
+            _process_lock: process_lock,
             address,
             file,
             stopped: Arc::new(AtomicBool::new(false)),
@@ -428,6 +500,9 @@ impl Endpoint {
                     writer.close();
                 }
             }
+        }
+        if let Err(error) = self._process_lock.release() {
+            eprintln!("process lock release failed: {error}");
         }
     }
 }

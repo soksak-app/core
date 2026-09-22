@@ -22,6 +22,8 @@ Implementation: `src/platform/<os>/endpoint.*` in each [native host](hosts.md).
 
 When the endpoint is ready, the host writes `<config-dir>/endpoint.json`.
 
+The host also atomically creates `<config-dir>/process.lock` before listening. Its contents are the owning host PID. A configuration directory has exactly one owning application process; that process may own multiple windows. A second process using the same configuration directory exits with an explicit ownership error before writing or replacing `endpoint.json`. A process using a different configuration directory has independent settings, endpoint, lock, and sidecar state and may run at the same time. Normal shutdown removes the lock. After an unclean termination, the next host may remove the lock only when its recorded PID is no longer running; malformed or live locks are errors.
+
 ```json
 {
   "transport": "unix",
@@ -108,3 +110,4 @@ Each platform runs these checks against the endpoint:
 - the host removes `endpoint.json` on normal exit;
 - a termination signal requests the normal exit once, and the next one ends the process;
 - sockets of ended processes of the same application are removed before listening.
+- a second process using the same configuration directory is refused, and normal close removes `process.lock`.

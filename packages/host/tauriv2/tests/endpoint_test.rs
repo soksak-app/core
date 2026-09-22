@@ -70,6 +70,26 @@ fn start(config: &Path, application: &str, service: Arc<Fake>) -> Endpoint {
     Endpoint::start(&config.join("sockets"), config, application, service).unwrap()
 }
 
+#[test]
+fn a_configuration_directory_has_one_process_owner() {
+    let config = tempfile::tempdir().unwrap();
+    let (first, _) = Fake::new();
+    let endpoint = start(config.path(), "test-owner", first);
+    let (second, _) = Fake::new();
+    let refused = Endpoint::start(
+        &config.path().join("sockets"),
+        config.path(),
+        "test-owner",
+        second,
+    )
+    .err()
+    .unwrap();
+    assert!(refused.contains("already owned by process"), "{refused}");
+    assert!(config.path().join("process.lock").exists());
+    endpoint.stop();
+    assert!(!config.path().join("process.lock").exists());
+}
+
 fn mode(path: &Path) -> u32 {
     use std::os::unix::fs::PermissionsExt;
     std::fs::metadata(path).unwrap().permissions().mode() & 0o777

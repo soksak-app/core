@@ -118,6 +118,31 @@ func serve(t *testing.T, backend host.Backend) (*host.Endpoint, string, string) 
 	return endpoint, listener.Addr().String(), config
 }
 
+func TestEndpointAllowsOneProcessPerConfigurationDirectory(t *testing.T) {
+	first, _, config := serve(t, newFakeBackend())
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second := host.NewEndpoint(newFakeBackend())
+	info := host.EndpointInfo{Transport: "tcp", Address: listener.Addr().String(), PID: os.Getpid(),
+		Application: "wailsv3", Version: "0.0.1", Started: time.Now()}
+	err = second.Serve(listener, info, config)
+	_ = listener.Close()
+	if err == nil || !strings.Contains(err.Error(), "already owned by process") {
+		t.Fatalf("second process was not refused: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(config, "process.lock")); err != nil {
+		t.Fatalf("first process lock was lost: %v", err)
+	}
+	if err := first.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(config, "process.lock")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("process lock remained after normal close: %v", err)
+	}
+}
+
 func dial(t *testing.T, address string) net.Conn {
 	t.Helper()
 	conn, err := net.Dial("tcp", address)

@@ -410,6 +410,9 @@ pub(crate) fn hide(window: &Window, id: String) -> Result<(), String> {
         }
         *held = None;
     }
+    // `discard` also clears the open record. Do not call it while holding the
+    // same mutex: the main thread would wait for its own lock and stop serving
+    // every endpoint request.
     state.discard()?;
     exposure::window_changed(window);
     if let Some(main) = root_view(window) {

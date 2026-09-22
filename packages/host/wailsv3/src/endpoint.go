@@ -20,6 +20,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/min-median-max/soksak/packages/host/wailsv3/src/platform"
 )
 
 // 프레임 본문의 최대 길이.
@@ -161,17 +163,81 @@ var transcribe func(e *Endpoint, window, line string)
 type Endpoint struct {
 	backend Backend
 
-	mu       sync.Mutex
-	listener net.Listener
-	file     string
-	owner    EndpointInfo
-	conns    map[*endpointConn]bool
+	mu          sync.Mutex
+	listener    net.Listener
+	processLock *processLock
+	file        string
+	owner       EndpointInfo
+	conns       map[*endpointConn]bool
 	// counts 는 topic 마다 구독한 연결의 수다.
 	counts map[topic]int
 	// queues 는 topic 마다 받은 순서대로 실행할 구독 변경이다. 목록이 있으면 그 topic 의 실행
 	// 고루틴이 있다. queueMu 로 보호한다.
 	queueMu sync.Mutex
 	queues  map[topic][]func()
+}
+
+// processLock gives one application process exclusive ownership of a
+// configuration directory while retaining the PID needed to replace a stale
+// lock after an unclean termination.
+type processLock struct {
+	path string
+	file *os.File
+}
+
+func acquireProcessLock(directory string) (*processLock, error) {
+	if err := os.MkdirAll(directory, 0700); err != nil {
+		return nil, err
+	}
+	path := filepath.Join(directory, "process.lock")
+	for attempt := 0; attempt < 2; attempt++ {
+		file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+		if err == nil {
+			if _, err := fmt.Fprintf(file, "%d", os.Getpid()); err != nil {
+				return nil, errors.Join(err, file.Close(), os.Remove(path))
+			}
+			if err := file.Sync(); err != nil {
+				return nil, errors.Join(err, file.Close(), os.Remove(path))
+			}
+			return &processLock{path: path, file: file}, nil
+		}
+		if !errors.Is(err, os.ErrExist) || attempt != 0 {
+			return nil, err
+		}
+		contents, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return nil, readErr
+		}
+		var pid int
+		if _, scanErr := fmt.Sscanf(string(contents), "%d", &pid); scanErr != nil || pid <= 0 {
+			return nil, fmt.Errorf("invalid process lock %s", path)
+		}
+		implementation, currentErr := platform.Current()
+		if currentErr != nil {
+			return nil, currentErr
+		}
+		if implementation.ServiceProcessExists(pid) {
+			return nil, fmt.Errorf("configuration directory %s is already owned by process %d", directory, pid)
+		}
+		if err := os.Remove(path); err != nil {
+			return nil, err
+		}
+	}
+	return nil, fmt.Errorf("could not acquire process lock %s", path)
+}
+
+func (lock *processLock) close() error {
+	if lock == nil {
+		return nil
+	}
+	var errs []error
+	if err := lock.file.Close(); err != nil {
+		errs = append(errs, err)
+	}
+	if err := os.Remove(lock.path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		errs = append(errs, err)
+	}
+	return errors.Join(errs...)
 }
 
 // NewEndpoint 는 backend 를 사용하는 엔드포인트를 만든다.
@@ -181,20 +247,24 @@ func NewEndpoint(backend Backend) *Endpoint {
 
 // Serve 는 configDir 에 endpoint.json 을 쓰고 listener 의 연결을 받기 시작한다.
 func (e *Endpoint) Serve(listener net.Listener, info EndpointInfo, configDir string) error {
+	lock, err := acquireProcessLock(configDir)
+	if err != nil {
+		return err
+	}
 	file := filepath.Join(configDir, "endpoint.json")
 	info.Started = info.Started.UTC().Truncate(time.Second)
 	executable, err := os.Executable()
 	if err != nil {
-		return err
+		return errors.Join(err, lock.close())
 	}
 	if info.Executable, err = filepath.EvalSymlinks(executable); err != nil {
-		return err
+		return errors.Join(err, lock.close())
 	}
 	if err := writeJSON(file, info); err != nil {
-		return err
+		return errors.Join(err, lock.close())
 	}
 	e.mu.Lock()
-	e.listener, e.file, e.owner = listener, file, info
+	e.listener, e.processLock, e.file, e.owner = listener, lock, file, info
 	e.mu.Unlock()
 	go e.accept(listener)
 	return nil
@@ -203,8 +273,8 @@ func (e *Endpoint) Serve(listener net.Listener, info EndpointInfo, configDir str
 // Close 는 연결을 받지 않고, 열린 연결을 닫고, endpoint.json 을 제거한다.
 func (e *Endpoint) Close() error {
 	e.mu.Lock()
-	listener, file, owner := e.listener, e.file, e.owner
-	e.listener, e.file, e.owner = nil, "", EndpointInfo{}
+	listener, processLock, file, owner := e.listener, e.processLock, e.file, e.owner
+	e.listener, e.processLock, e.file, e.owner = nil, nil, "", EndpointInfo{}
 	conns := make([]*endpointConn, 0, len(e.conns))
 	for c := range e.conns {
 		conns = append(conns, c)
@@ -233,6 +303,9 @@ func (e *Endpoint) Close() error {
 				errs = append(errs, err)
 			}
 		}
+	}
+	if err := processLock.close(); err != nil {
+		errs = append(errs, err)
 	}
 	return errors.Join(errs...)
 }
