@@ -1213,12 +1213,14 @@ test("sidecar_error_reaches_session_status: sidecar error event updates session"
     TextEncoder: FakeTextEncoder,
     devicePixelRatio: 1,
   };
+  const surfaceErrors = [];
 
   await startTerminal({
     view: fakeView,
     attachImage: fakeAttachImage.function,
     sidecar: fakeSidecar,
     expose: fakeExpose,
+    reportSurfaceError: (error) => surfaceErrors.push(error),
     scale: 1,
     window: fakeWindow,
   });
@@ -1242,6 +1244,8 @@ test("sidecar_error_reaches_session_status: sidecar error event updates session"
   session = sessionStatus.readFn();
   assert(session.error, "session has error field");
   assert.equal(session.error, "Engine panic: minimum width is 1", "error message is stored");
+  assert.equal(surfaceErrors.length, 1, "sidecar failure reaches the surface status");
+  assert.equal(surfaceErrors[0].message, "Engine panic: minimum width is 1");
 });
 
 test("compose events are sent with ranges and published as preedit state", async () => {

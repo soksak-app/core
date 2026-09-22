@@ -1,5 +1,7 @@
 # Changelog
 
+- F2.13 is in progress. A rebuilt split terminal currently exposes the persistent-sidecar connection or attach failure but can leave the surface unusable; the correction will make that failure a bounded, actionable surface status without creating a replacement PTY or silently changing the endpoint.
+
 - F6.6-3 is in progress. Inline-image placements now retain their terminal-row anchor and follow primary-grid scroll generation instead of remaining at a stale absolute row; off-screen placements are hidden without deleting ownership. The scroll-generation focused test passes; rebuilt Tauri/Wails pixel verification remains.
 
 - Completed F6.6-2. Validated OSC 1337 events now reach the macOS native raster through a bounded sidecar contract. ImageIO composites owned images at declared placement, same-name replacement is isolated, `image.inline.delete` removes only an owned name and reports unowned names explicitly, and surface closure bounds image lifetime. Alacritty 32/32, native frame 11/11, sidecar contract 45/45, and `make native-test` pass. Rebuilt Tauri/Wails pixel and lifecycle verification remains F6.6-3.

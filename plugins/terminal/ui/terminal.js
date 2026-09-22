@@ -159,7 +159,7 @@ function normalizeCursorPolicy(value) {
  * @returns {Promise<void>}
  */
 export async function startTerminal({ id, view, attachImage, sidecar, expose, theme,
-  settings, clipboard,
+  settings, clipboard, reportSurfaceError = () => {},
   window: globalWindow = globalThis.window }) {
   // 브라우저 환경에서 필요한 객체들
   const window = globalWindow;
@@ -405,8 +405,10 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   onRegion("error", (event) => {
     const message = `native image: ${event.reason}`;
     console.error(message);
+    const error = new Error(message);
     session = { ...session, error: message };
     changed("session");
+    reportSurfaceError(error);
   });
 
   onRegion("compose", async (event) => {
@@ -614,19 +616,24 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       handleSelectionCopy(body).catch(reportInputError);
     } else if (body.event === "error") {
       // error 이벤트를 session 상태에 저장한다
+      const error = new Error(typeof body.reason === "string" ? body.reason : (typeof body.error === "string" ? body.error : "Unknown sidecar error"));
       session = {
         ...session,
-        error: typeof body.error === "string" ? body.error : (typeof body.message === "string" ? body.message : "Unknown error"),
+        error: error.message,
       };
       changed("session");
+      reportSurfaceError(error);
     } else if (body.error) {
       // 오류 응답 처리: {"error":"invalidParams","reason":"...",...}
       // reason 을 버리지 않고 오류에 실어 보낸다.
+      const message = typeof body.reason === "string" ? `${body.error}: ${body.reason}` : body.error;
+      const error = new Error(message);
       session = {
         ...session,
-        error: typeof body.reason === "string" ? `${body.error}: ${body.reason}` : body.error,
+        error: message,
       };
       changed("session");
+      reportSurfaceError(error);
     } else if (body.event) {
       // 알 수 없는 이벤트 타입을 보고한다
       console.warn(`sidecar sent unknown event type: ${body.event}`);

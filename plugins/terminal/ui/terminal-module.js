@@ -10,6 +10,7 @@ export async function mount(root, context) {
   const sidecar = context.runtime.sidecar();
   const controller = await startTerminal({ id: context.surfaceId, view, attachImage: () => image, sidecar,
     expose: context.exposure, window, theme: context.runtime.theme, settings: context.runtime.settings,
+    reportSurfaceError: (error) => context.status.report("error", error),
     clipboard: context.runtime.clipboard });
   if (!controller || typeof controller.dispose !== "function") {
     throw new TypeError("startTerminal must return { dispose() }");
