@@ -856,3 +856,39 @@ fn csi_erase_display_and_line_change_only_the_requested_cells() {
     assert!(after_line_erase.lines[0].get(3).is_none_or(|cell| cell.ch.is_none()));
     assert!(after_line_erase.lines[0].get(4).is_none_or(|cell| cell.ch.is_none()));
 }
+
+#[test]
+fn csi_insert_delete_characters_and_lines_preserve_requested_cells() {
+    let mut engine = AlacrittyEngine::new();
+    engine.resize(8, 4);
+    engine.feed(b"abcd");
+    engine.feed(b"\x1b[1;3H\x1b[2@");
+    let after_insert = engine.screen();
+    assert_eq!(after_insert.lines[0][0].ch.as_deref(), Some("a"));
+    assert_eq!(after_insert.lines[0][1].ch.as_deref(), Some("b"));
+    assert!(after_insert.lines[0].get(2).is_none_or(|cell| cell.ch.is_none()));
+    assert!(after_insert.lines[0].get(3).is_none_or(|cell| cell.ch.is_none()));
+    assert_eq!(after_insert.lines[0][4].ch.as_deref(), Some("c"));
+    assert_eq!(after_insert.lines[0][5].ch.as_deref(), Some("d"));
+
+    engine.reset();
+    engine.resize(8, 4);
+    engine.feed(b"abcd\x1b[1;3H\x1b[1P");
+    let after_delete = engine.screen();
+    assert_eq!(after_delete.lines[0][0].ch.as_deref(), Some("a"));
+    assert_eq!(after_delete.lines[0][1].ch.as_deref(), Some("b"));
+    assert_eq!(after_delete.lines[0][2].ch.as_deref(), Some("d"));
+    assert!(after_delete.lines[0].get(3).is_none_or(|cell| cell.ch.is_none()));
+
+    engine.reset();
+    engine.resize(8, 4);
+    engine.feed(b"A\r\nB\r\nC");
+    engine.feed(b"\x1b[2;1H\x1b[1L");
+    let after_line_insert = engine.screen();
+    assert!(after_line_insert.lines[1].is_empty());
+    assert_eq!(after_line_insert.lines[2][0].ch.as_deref(), Some("B"));
+    engine.feed(b"\x1b[2;1H\x1b[1M");
+    let after_line_delete = engine.screen();
+    assert_eq!(after_line_delete.lines[1][0].ch.as_deref(), Some("B"));
+    assert_eq!(after_line_delete.lines[2][0].ch.as_deref(), Some("C"));
+}

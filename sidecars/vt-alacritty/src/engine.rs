@@ -153,6 +153,8 @@ pub const CSI_SELECTOR_INVENTORY: &[CsiSelectorEvidence] = &[
     CsiSelectorEvidence { selector: "?1049h/l", outcome: CsiOutcome::Implemented, test: "alternate_screen_is_separate_from_primary_scrollback" },
     CsiSelectorEvidence { selector: "S/T;r", outcome: CsiOutcome::Implemented, test: "csi_scroll_moves_the_visible_grid_and_respects_a_scroll_region" },
     CsiSelectorEvidence { selector: "J/K", outcome: CsiOutcome::Implemented, test: "csi_erase_display_and_line_change_only_the_requested_cells" },
+    CsiSelectorEvidence { selector: "@/P", outcome: CsiOutcome::Implemented, test: "csi_insert_delete_characters_and_lines_preserve_requested_cells" },
+    CsiSelectorEvidence { selector: "L/M", outcome: CsiOutcome::Implemented, test: "csi_insert_delete_characters_and_lines_preserve_requested_cells" },
     CsiSelectorEvidence { selector: "14t", outcome: CsiOutcome::Implemented, test: "text_area_callback_is_not_discarded" },
 ];
 
