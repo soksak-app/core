@@ -55,7 +55,7 @@ The following is the current selector-level audit against the pinned XTerm refer
 | `7`, `8`, `9`, `133` | Directory, hyperlink, notification, shell metadata | `vendor`: separate contracts; not counted as standard OSC completion | `vendor_osc_contracts_are_separate` |
 | `1337` | OSC 1337 inline image | `vendor`: bounded image contract | `osc1337_inline_image_is_typed_and_survives_input_chunk_boundaries` |
 
-The unsupported rows are an explicit scope result, not successful no-ops. They remain incomplete until the runtime exposes a rejection event or an approved contract removes them from the supported target. The inventory test fails on duplicate or unclassified selectors and on a named test mismatch; it does not infer support from parser acceptance.
+The unsupported rows are an explicit scope result, not successful no-ops. The engine emits an observable rejection event for each unsupported selector, including selectors split across input chunks and terminated by BEL or ST. The inventory test fails on duplicate or unclassified selectors and on a named test mismatch; it does not infer support from parser acceptance.
 
 ## Complete OSC and CSI requirement
 

@@ -55,7 +55,7 @@ OSC 1337 이미지 전송은 OSC 확장을 사용한다. APC 그래픽 프로토
 | `7`, `8`, `9`, `133` | directory·hyperlink·notification·shell metadata | `vendor`: 별도 계약이며 표준 OSC 완료에 포함하지 않음 | `vendor_osc_contracts_are_separate` |
 | `1337` | OSC 1337 inline image | `vendor`: 제한된 image 계약 | `osc1337_inline_image_is_typed_and_survives_input_chunk_boundaries` |
 
-unsupported 행은 성공한 무동작 결과가 아니라 명시된 범위 결과다. 런타임이 거부 event를 노출하거나 승인된 계약이 대상에서 제거하기 전까지는 미완료로 남긴다. inventory 검사는 중복·미분류 선택자와 이름이 맞지 않는 테스트를 실패시키며 parser가 받아들였다는 사실로 지원을 추론하지 않는다.
+unsupported 행은 성공한 무동작 결과가 아니라 명시된 범위 결과다. 엔진은 입력 청크가 나뉘고 BEL 또는 ST로 끝나는 경우를 포함해 모든 unsupported 선택자에 관측 가능한 거부 event를 낸다. inventory 검사는 중복·미분류 선택자와 이름이 맞지 않는 테스트를 실패시키며 parser가 받아들였다는 사실로 지원을 추론하지 않는다.
 
 ## OSC·CSI 전체 요구사항
 

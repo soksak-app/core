@@ -111,6 +111,49 @@ fn osc_selector_inventory_records_unsupported_operations() {
 }
 
 #[test]
+fn unsupported_osc_selector_is_an_explicit_error_after_fragmented_bel() {
+    let mut engine = AlacrittyEngine::new();
+    engine.feed(b"\x1b]6;ignored");
+    assert!(engine.drain_events().is_empty());
+    engine.feed(b"\x07");
+    assert!(matches!(
+        engine.drain_events().as_slice(),
+        [EngineEvent::Error(reason)] if reason == "unsupported OSC selector 6"
+    ));
+}
+
+#[test]
+fn unsupported_osc_selector_is_an_explicit_error_after_st() {
+    let mut engine = AlacrittyEngine::new();
+    engine.feed(b"\x1b]I;ignored\x1b\\");
+    assert!(matches!(
+        engine.drain_events().as_slice(),
+        [EngineEvent::Error(reason)] if reason == "unsupported OSC selector I"
+    ));
+}
+
+#[test]
+fn every_unsupported_osc_inventory_selector_emits_an_explicit_error() {
+    for selector in ["1", "3", "5", "6", "13", "19", "21", "22", "46", "51", "60", "62", "105", "106", "I", "l", "L"] {
+        let mut engine = AlacrittyEngine::new();
+        engine.feed(format!("\x1b]{selector};ignored\x07").as_bytes());
+        assert!(matches!(
+            engine.drain_events().as_slice(),
+            [EngineEvent::Error(reason)] if reason == &format!("unsupported OSC selector {selector}")
+        ), "selector {selector} did not produce an explicit rejection");
+    }
+}
+
+#[test]
+fn implemented_and_vendor_osc_selectors_do_not_emit_unsupported_errors() {
+    let mut engine = AlacrittyEngine::new();
+    engine.feed(b"\x1b]2;title\x07\x1b]7;file:///tmp\x07");
+    let events = engine.drain_events();
+    assert!(events.iter().any(|event| event == &EngineEvent::Title("title".to_string())));
+    assert!(!events.iter().any(|event| matches!(event, EngineEvent::Error(_))));
+}
+
+#[test]
 fn vendor_osc_contracts_are_separate() {
     let vendor: Vec<_> = OSC_SELECTOR_INVENTORY
         .iter()

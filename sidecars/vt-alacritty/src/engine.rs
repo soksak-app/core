@@ -19,6 +19,20 @@ pub enum OscOutcome {
     Vendor,
 }
 
+fn osc_outcome(selector: &[u8]) -> OscOutcome {
+    let Ok(selector) = std::str::from_utf8(selector) else {
+        return OscOutcome::Unsupported;
+    };
+    let Ok(number) = selector.parse::<u16>() else {
+        return OscOutcome::Unsupported;
+    };
+    match number {
+        0 | 2 | 4 | 10..=12 | 50 | 52 | 104 | 110..=112 => OscOutcome::Implemented,
+        7 | 8 | 9 | 133 | 1337 => OscOutcome::Vendor,
+        _ => OscOutcome::Unsupported,
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct OscSelectorEvidence {
     pub selector: &'static str,
@@ -182,6 +196,7 @@ pub struct AlacrittyEngine {
     cell_metrics: Option<(u16, u16)>,
     theme: TerminalTheme,
     pending_input: Vec<u8>,
+    pending_osc: Vec<u8>,
 }
 
 impl AlacrittyEngine {
@@ -199,11 +214,59 @@ impl AlacrittyEngine {
             cell_metrics: None,
             theme: TerminalTheme::dark(),
             pending_input: Vec::new(),
+            pending_osc: Vec::new(),
+        }
+    }
+
+    fn audit_osc(&mut self, bytes: &[u8]) {
+        let mut index = 0;
+        while index < bytes.len() {
+            if self.pending_osc.is_empty() {
+                if bytes[index..].starts_with(b"\x1b]") {
+                    self.pending_osc.extend_from_slice(b"\x1b]");
+                    index += 2;
+                } else {
+                    index += 1;
+                }
+                continue;
+            }
+
+            self.pending_osc.push(bytes[index]);
+            let terminated = bytes[index] == b'\x07'
+                || (self.pending_osc.len() >= 2
+                    && self.pending_osc[self.pending_osc.len() - 2..] == *b"\x1b\\");
+            index += 1;
+            if !terminated {
+                continue;
+            }
+
+            let body_end = self
+                .pending_osc
+                .iter()
+                .enumerate()
+                .skip(2)
+                .find_map(|(position, byte)|
+                    (*byte == b';' || *byte == b'\x07' || *byte == b'\x1b').then_some(position)
+                )
+                .unwrap_or(2);
+            let selector = &self.pending_osc[2..body_end];
+            if osc_outcome(selector) == OscOutcome::Unsupported {
+                let selector = String::from_utf8_lossy(selector);
+                self.events
+                    .events
+                    .lock()
+                    .expect("engine event queue poisoned")
+                    .push_back(QueuedEvent::Neutral(EngineEvent::Error(format!(
+                        "unsupported OSC selector {selector}"
+                    ))));
+            }
+            self.pending_osc.clear();
         }
     }
 
     fn feed_plain(&mut self, bytes: &[u8]) {
         if !bytes.is_empty() {
+            self.audit_osc(bytes);
             self.processor.advance(&mut self.term, bytes);
         }
     }

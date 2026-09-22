@@ -1049,9 +1049,13 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "sidecars/vt-alacritty/src/engine.rs", symbol: "OSC_SELECTOR_INVENTORY" },
       { file: "sidecars/vt-alacritty/src/engine.rs", symbol: "impl AlacrittyEngine" },
+      { file: "sidecars/vt-alacritty/src/engine.rs", symbol: "fn osc_outcome" },
     ],
     tests: [
       { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "osc_selector_inventory_records_unsupported_operations" },
+      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "every_unsupported_osc_inventory_selector_emits_an_explicit_error" },
+      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "unsupported_osc_selector_is_an_explicit_error_after_fragmented_bel" },
+      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "unsupported_osc_selector_is_an_explicit_error_after_st" },
       { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "vendor_osc_contracts_are_separate" },
       { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "osc50_cursor_shape_changes_program_cursor" },
       { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "osc104_resets_indexed_colors" },
@@ -1060,7 +1064,7 @@ const FEATURE_LINKS = [
       { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "osc_title_supports_bel_st_and_fragmentation" },
       { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "osc104_without_parameters_resets_all_indexed_colors" },
     ],
-    expected: "The pinned OSC selector inventory records implemented, unsupported, and separate vendor selectors with named engine evidence; supported title, color, cursor, and clipboard behaviors have executable cases.",
+    expected: "The pinned OSC selector inventory records implemented, unsupported, and separate vendor selectors with named engine evidence; supported behaviors have executable cases and every unsupported selector emits an explicit rejection event, including fragmented BEL/ST input.",
     levels: ["unit"],
   },
   {
