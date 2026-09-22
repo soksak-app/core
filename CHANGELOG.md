@@ -4,6 +4,7 @@
 - Completed F0.5.9-3. Same-application E2E sessions are now serialized within one Node test process. The Red was test-session interference: concurrent `fresh()` calls removed each other's native image generations. The session-slot contract passes 4/4; rebuilt Tauri split regressions pass 4/4 in 1.54s and rebuilt Wails pass 4/4 in 2.01s. Wails' two post-client-close `request has been stopped` framework logs remain explicitly recorded as a separate follow-up.
 - Completed F2.1-1. The real PTY lifecycle tests now serialize their macOS process-group cleanup without changing the production PTY service. The default lifecycle binary passes 2/2 and the full `pnpm test` passes with exit code 0.
 - Added waiting item F0.5.9-4 for the two Wails framework response-write errors observed after the E2E client closes; the messages remain visible and are not treated as a successful cleanup.
+- Started F0.5.9-4 investigation. The Wails transport source confirms the message is emitted when a Darwin WebKit URL-scheme response is written after its request task has stopped; the owning runtime call and lifecycle boundary are still being traced.
 
 - Fix Tauri endpoint and asynchronous split paths to read native window handles on the AppKit main thread, preventing a second foreign-exception crash path during surface synchronization. Rebuilt repeated split presentation passed 3/3; package, native, documentation, boundary, exposure, and parity checks passed.
 
