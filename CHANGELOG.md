@@ -6,6 +6,8 @@
 
 ## Unreleased
 
+- Completed G3. The host-pair audit is now injectable and rejects a missing host or counterpart in a fixture. Combined with the parity, language, evidence, and mutation injections, the tooling suite reports 80/80 passing tests with no skips or todos; package, documentation, boundary, and exposure gates pass.
+
 - Completed G3-1. The audit self-suite now injects duplicate ownership, wrong behavior-test attribution, no-op and omitted-response implementations, mandatory skipped language results, and stale executable digests. The focused suite reports 36/36 assertions with structural inventory, language outcomes, mutation behavior, and content-hash evidence kept as separate results; the full package and repository gates pass.
 
 - Completed F0.5.4 and F0.5.5. Tauri picker dismissal no longer deadlocks by recursively locking the modal state during discard. Tauri and Wails now enforce one application process per configuration directory with an explicit second-owner error, stale-PID replacement only after process absence, and normal lock cleanup. Bounded rebuilt Tauri modal, command, three-terminal input, same-directory refusal, and different-directory coexistence checks pass; the endpoint unit tests pass in both hosts.

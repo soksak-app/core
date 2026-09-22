@@ -6,6 +6,7 @@
 //   node scripts/check-hosts.mjs
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 
 const ROOT = new URL("../", import.meta.url).pathname;
 
@@ -40,9 +41,6 @@ const PAIRS = [
   },
 ];
 
-const tracked = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
-  { cwd: ROOT, encoding: "utf8" }).split("\0").filter((path) => path && existsSync(`${ROOT}${path}`));
-
 /** 디렉터리 아래 파일을 비교용 경로로 바꾼다. */
 function tree(dir) {
   const prefix = `${dir}/`;
@@ -53,18 +51,25 @@ function tree(dir) {
 
 const allowed = (path, table) => Object.keys(table).some((key) => key.endsWith("/") ? path.startsWith(key) : path === key);
 
-const errors = [];
-for (const pair of PAIRS) {
-  const left = tree(pair.left);
-  const right = tree(pair.right);
-  if (left.size === 0) errors.push(`${pair.left}: no files`);
-  if (right.size === 0) errors.push(`${pair.right}: no files`);
-  for (const path of left) {
-    if (!right.has(path) && !allowed(path, pair.only.left)) errors.push(`${pair.left}/${path}: no counterpart in ${pair.right}`);
+export function auditHostPairs(tracked, pairs = PAIRS) {
+  const errors = [];
+  for (const pair of pairs) {
+    const left = new Set(tracked
+      .filter((path) => path.startsWith(`${pair.left}/`))
+      .map((path) => path.slice(pair.left.length + 1).replace(/\.(go|rs)$/, "")));
+    const right = new Set(tracked
+      .filter((path) => path.startsWith(`${pair.right}/`))
+      .map((path) => path.slice(pair.right.length + 1).replace(/\.(go|rs)$/, "")));
+    if (left.size === 0) errors.push(`${pair.left}: no files`);
+    if (right.size === 0) errors.push(`${pair.right}: no files`);
+    for (const path of left) {
+      if (!right.has(path) && !allowed(path, pair.only.left)) errors.push(`${pair.left}/${path}: no counterpart in ${pair.right}`);
+    }
+    for (const path of right) {
+      if (!left.has(path) && !allowed(path, pair.only.right)) errors.push(`${pair.right}/${path}: no counterpart in ${pair.left}`);
+    }
   }
-  for (const path of right) {
-    if (!left.has(path) && !allowed(path, pair.only.right)) errors.push(`${pair.right}/${path}: no counterpart in ${pair.left}`);
-  }
+  return errors;
 }
 
 // Check for stub implementations (anti-regression check)
@@ -116,21 +121,20 @@ function findStubs(dir) {
   return stubs;
 }
 
-const stubErrors = [];
-for (const dir of PRODUCT_DIRS) {
-  const stubs = findStubs(dir);
-  stubErrors.push(...stubs);
-}
-
-if (stubErrors.length) {
-  console.error("Stub implementations found (anti-regression check failed):");
-  console.error(stubErrors.join("\n"));
-  process.exitCode = 1;
-}
-
-if (errors.length) {
-  console.error(errors.join("\n"));
-  process.exitCode = 1;
-} else if (stubErrors.length === 0) {
-  console.log(`Host structure checks passed: ${PAIRS.length} pairs`);
+if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
+  const tracked = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+    { cwd: ROOT, encoding: "utf8" }).split("\0").filter((path) => path && existsSync(`${ROOT}${path}`));
+  const errors = auditHostPairs(tracked);
+  const stubErrors = PAIRS.length === 0 ? [] : PRODUCT_DIRS.flatMap((dir) => findStubs(dir));
+  if (stubErrors.length) {
+    console.error("Stub implementations found (anti-regression check failed):");
+    console.error(stubErrors.join("\n"));
+    process.exitCode = 1;
+  }
+  if (errors.length) {
+    console.error(errors.join("\n"));
+    process.exitCode = 1;
+  } else if (stubErrors.length === 0) {
+    console.log(`Host structure checks passed: ${PAIRS.length} pairs`);
+  }
 }

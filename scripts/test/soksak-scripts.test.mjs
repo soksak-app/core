@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { BREAKS } from "../../packages/soksak/scripts/breaks.mjs";
 import { find as findReleaseMarkers } from "../check-release.mjs";
+import { auditHostPairs } from "../check-hosts.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const packageRoot = join(root, "packages/soksak");
@@ -107,6 +108,12 @@ test("host structure audit reports a clean paired-host graph", { timeout: 5000 }
   const result = await run(node, [join(root, "scripts/check-hosts.mjs")]);
   assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);
   assert.match(result.stdout, /Host structure checks passed:/);
+});
+
+test("host structure audit rejects a missing host and a missing counterpart", { timeout: 1000 }, () => {
+  const pairs = [{ left: "hosts/wails", right: "hosts/tauri", only: { left: {}, right: {} } }];
+  assert.deepEqual(auditHostPairs(["hosts/wails/src/host.go"], pairs), ["hosts/tauri: no files", "hosts/wails/src/host: no counterpart in hosts/tauri"]);
+  assert.deepEqual(auditHostPairs(["hosts/wails/src/host.go", "hosts/tauri/src/host.rs", "hosts/tauri/src/extra.rs"], pairs), ["hosts/tauri/src/extra: no counterpart in hosts/wails"]);
 });
 
 test("window-source audit rejects forbidden control paths", { timeout: 5000 }, async () => {

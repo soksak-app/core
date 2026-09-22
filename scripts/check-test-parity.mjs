@@ -197,6 +197,23 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "G3",
+    implementation: [
+      { file: "scripts/check-test-parity.mjs", symbol: "auditInventory" },
+      { file: "scripts/check-hosts.mjs", symbol: "auditHostPairs" },
+      { file: "scripts/language-test-adapters.mjs", symbol: "runLanguageCases" },
+      { file: "scripts/test-evidence.mjs", symbol: "evidenceDrift" },
+    ],
+    tests: [
+      { file: "scripts/test/test-parity.test.mjs", id: "inventory reports uncovered implementations and tests as separate results" },
+      { file: "scripts/test/test-language-test-adapters.test.mjs", id: "parses each language result and rejects zero, skipped, and crashed outcomes" },
+      { file: "scripts/test/test-evidence.test.mjs", id: "evidence records content hashes, dirty state, expected/actual result, and retry history" },
+      { file: "scripts/test/soksak-scripts.test.mjs", id: "host structure audit rejects a missing host and a missing counterpart" },
+    ],
+    expected: "Structural and behavioral audits reject missing implementation or test files, excluded or skipped execution, invalid evidence links, stale evidence, and missing host counterparts; no-op effects and responses fail their behavior assertions.",
+    levels: ["unit"],
+  },
+  {
     id: "G1.3-5",
     implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "auditCommittedEvidenceWording" }],
     tests: [{ file: "scripts/test/test-parity.test.mjs", id: "F0.1 evidence identifies its committed build" }],
