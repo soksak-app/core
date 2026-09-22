@@ -369,6 +369,20 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F0.5.9-4",
+    implementation: [{ file: "packages/host/wailsv3/src/windows.go", symbol: "reloadSurfaceDocuments" }],
+    tests: [
+      { file: "e2e/terminal.test.mjs", id: "newly split terminal presents its first native raster" },
+      { file: "e2e/terminal.test.mjs", id: "four split terminals complete native presentation without a host crash" },
+      { file: "e2e/terminal.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
+      { file: "e2e/terminal.test.mjs", id: "native presentation failure is explicit and the next split remains usable" },
+      { file: "e2e/terminal.test.mjs", id: "three terminals and two browsers share one app DOM and one terminal service" },
+      { file: "e2e/terminal.test.mjs", id: "closing terminal tabs reaps every PTY child without killing the shared service" },
+    ],
+    expected: "The Wails stale-page runtime response race is closed at WebViewDidCommitNavigation; the isolated sequential cases pass and the preserved app log contains no stopped runtime response.",
+    levels: ["native", "application"],
+  },
+  {
     id: "F0.5.9-5",
     implementation: [{ file: "packages/host/wailsv3/src/windows.go", symbol: "reloadSurfaceDocuments" }],
     tests: [

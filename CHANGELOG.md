@@ -8,6 +8,7 @@
 - Closed parent checklist G2 after verifying that all of G2.3 through G2.9 are complete and provide the parent contract evidence.
 - Added active F0.5.9-5 after reproducing a Wails-only reload race: the first sequential terminal case passed, then replacement-page image attachment raced queued old-image cleanup and six later cases timed out with `current image raster did not present within 10s`.
 - Completed F0.5.9-5. Wails now completes `reloadSurfaceDocuments` synchronously in the navigation callback before replacement-page image attachment; rebuilt sequential split and cleanup cases pass 6/6 in 3.05s with no raster presentation timeout. The two Wails framework response-write errors remain explicitly open under F0.5.9-4.
+- Completed F0.5.9-4. The same synchronous Wails navigation cleanup closes the stale-page `WKURLSchemeTask` response boundary without suppressing framework responses; an isolated rebuilt Wails run passes 6/6 in 2.63s and its preserved log contains zero `request has been stopped` or `Unable to write json payload` messages.
 
 - Fix Tauri endpoint and asynchronous split paths to read native window handles on the AppKit main thread, preventing a second foreign-exception crash path during surface synchronization. Rebuilt repeated split presentation passed 3/3; package, native, documentation, boundary, exposure, and parity checks passed.
 
