@@ -2,6 +2,7 @@
 
 - Completed G2.8 by reconciling the dated Tauri/Wails parity-audit narrative with the completed G2.5 returned-value evidence; the filename mismatch remains explicitly historical.
 - Completed G2.9 by waiting for in-flight surface composition placement before native region detach. Rebuilt Tauri and Wails split-terminal checks pass, and both lifecycle logs are free of composition-declaration errors.
+- Started F7 OSC/CSI audit. The Red record confirms that selected title/color/OSC52/OSC1337 and CSI-scroll tests do not constitute selector-level XTerm patch 411 coverage; the missing inventory and explicit unsupported/policy-denied cases remain open.
 
 - Completed G2.5–G2.7. Tauri and Wails runtime contract tests now assert the same `waitPresented` result; a mechanical E2E audit requires 15 application suites to iterate both adapters and records three explicit host-independent suites. The parity inventory is synchronized at 56 lanes, 251 implementation files, and 171 test files.
 
