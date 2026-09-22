@@ -79,16 +79,19 @@ pub(crate) fn reload_surface_documents(window: &Window) -> Result<(), String> {
         platform.set_surface_hidden_handle(handle, true)?;
         data.images.begin_generation(&surface);
         crate::exposure::surface_closed(&window, &surface);
-        for sidecar in sidecars {
-            window
-                .state::<WindowSidecars>()
-                .send(&window, &sidecar, &surface, reconnect.as_ref())?;
-        }
         for document in data.documents.remove_surface(&surface) {
             platform.close_document(document)?;
         }
         for image in data.images.remove_surface(&surface) {
             platform.close_image(image)?;
+        }
+        // persistent sidecar는 reconnect를 받는 즉시 새 래스터를 보낼 수 있다.
+        // 새 프레임이 이전 IOSurface 종료와 경합하거나 그 token을 재사용하지 않도록
+        // 모든 이전 native image를 먼저 제거한다.
+        for sidecar in sidecars {
+            window
+                .state::<WindowSidecars>()
+                .send(&window, &sidecar, &surface, reconnect.as_ref())?;
         }
     }
     data.composition_revisions

@@ -780,7 +780,7 @@ pub(crate) fn detach(webview: &Webview, request: Request) -> Result<(), String> 
     Ok(())
 }
 
-/// 표면의 그림 영역을 모두 닫는다. 메인 스레드 작업을 기다리지 않으므로 어느 스레드에서나 호출한다.
+/// 표면의 그림 영역을 모두 닫는다. 등록부 제거는 즉시 하고 native close만 메인 스레드에서 실행한다.
 pub(crate) fn close_surface(window: &tauri::Window, surface: &str) {
     let Ok(data) = window_data(window) else {
         return;
@@ -791,11 +791,11 @@ pub(crate) fn close_surface(window: &tauri::Window, surface: &str) {
     let host = window.clone();
     let surface = surface.to_string();
     data.images.begin_generation(&surface);
+    let handles = data.images.remove_surface(&surface);
 
     log_error(
         window
             .run_on_main_thread(move || {
-                let handles = data.images.remove_surface(&surface);
                 if handles.is_empty() {
                     return;
                 }
