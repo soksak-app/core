@@ -1,5 +1,7 @@
 # 변경 기록
 
+- `encode_paste` 소스 계약 주석을 실제 구현과 일치시켰다. UTF-8 바이트와 개행은 보존하고, 입력 안의 bracketed-paste 종료 시퀀스는 삭제하지 않고 거부한다고 명시한다. 대응하는 F6.1-1 체크리스트 항목은 VT core 집중 검사와 문서 검사로 검증했다.
+
 - F6.2를 완료했다. 터미널 프로그램의 클립보드 저장/조회가 선언된 `clipboard.program` deny/allow 정책을 따른다. 거부는 명시적 `clipboard.rejected` event를 내고 engine의 대기 callback을 정리하며, 허용 경로도 텍스트 클립보드 동작으로 제한한다. 사용자 시작 `terminal.paste`는 별도 경로다. 터미널·Alacritty·VT protocol 집중 검사가 통과했다.
 
 - F6.1을 완료했다. 명시적 터미널 텍스트 붙여넣기가 범위가 지정된 사용자 시작 클립보드 capability를 사용하고, 부재/비텍스트 값을 거부하며, 사이드카 paste 동작을 한 번만 보내고 UTF-8 payload 바이트를 보존한다. 입력 안의 bracketed-paste 종료 시퀀스는 삭제하지 않고 거부한다. 터미널·사이드카 집중 검사가 통과했으며 선택·파일·이미지·터미널 출력 이미지 범위는 F6에 남아 있다.

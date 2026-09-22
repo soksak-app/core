@@ -1,5 +1,7 @@
 # Changelog
 
+- Corrected the `encode_paste` source contract comment to state the implemented behavior: preserve UTF-8 bytes and line endings, and reject rather than remove an embedded bracketed-paste terminator. The paired F6.1-1 checklist item is verified by the focused VT core test and documentation checks.
+
 - Completed F6.2. Terminal-program clipboard store/query requests now follow the declared `clipboard.program` deny/allow policy. Denials emit an explicit `clipboard.rejected` event and clear pending engine callbacks; allowed access is limited to text clipboard operations. User-initiated `terminal.paste` remains separate. Focused terminal, Alacritty, and VT protocol tests pass.
 
 - Completed F6.1. Explicit terminal text paste now uses the scoped user-initiated clipboard capability, rejects absent or non-text data, sends one sidecar paste operation, preserves UTF-8 payload bytes, and rejects an embedded bracketed-paste terminator instead of deleting it. Focused terminal and sidecar tests pass; selection, file, image, and terminal-output-image work remains open under F6.

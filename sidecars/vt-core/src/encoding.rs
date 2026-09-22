@@ -344,8 +344,8 @@ fn compute_modifier_param(modifiers: Modifiers) -> u8 {
 ///
 /// # 처리
 /// - `bracketed_paste` 모드가 켜져 있으면 `ESC [ 200 ~` 로 시작해 `ESC [ 201 ~` 로 끝남.
-/// - 텍스트 내의 `ESC [ 201 ~` 시퀀스는 제거함 (감싸기를 빠져나가지 못하게).
-/// - 개행 문자는 `\r` 로 정규화함 (`\n` → `\r`, `\r\n` → `\r`).
+/// - 텍스트 내의 `ESC [ 201 ~` 시퀀스는 감싸기를 빠져나가지 못하도록 거부함.
+/// - 텍스트의 UTF-8 바이트와 개행을 그대로 보존함.
 pub fn encode_paste(text: &str, modes: &Modes) -> Result<Vec<u8>, String> {
     if modes.bracketed_paste && text.contains("\x1b[201~") {
         return Err("paste text contains the bracketed-paste terminator".to_string());
