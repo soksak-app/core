@@ -626,6 +626,26 @@ fn decscusr_cursor_style_ids_are_observable() {
 }
 
 #[test]
+fn decscusr_initial_cursor_resources_are_observable() {
+    let mut engine = AlacrittyEngine::new();
+    engine.feed(b"\x1b[5 q");
+    assert_eq!(engine.cursor().shape, CursorShape::Beam);
+    assert!(engine.cursor().blinking);
+
+    engine.feed(b"\x1b[");
+    engine.feed(b"7");
+    engine.feed(b" q");
+    assert_eq!(engine.cursor().shape, CursorShape::Block);
+    assert!(!engine.cursor().blinking);
+
+    engine.feed(b"\x1b[3 q");
+    assert_eq!(engine.cursor().shape, CursorShape::Underline);
+    engine.feed(b"\x1b[0 q");
+    assert_eq!(engine.cursor().shape, CursorShape::Block);
+    assert!(!engine.cursor().blinking);
+}
+
+#[test]
 fn primary_screen_reflows_without_losing_text_when_width_changes() {
     let mut engine = AlacrittyEngine::new();
     let value = "AAAA-BBBB-CCCC-DDDD-EEEE-FFFF-GGGG-HHHH";

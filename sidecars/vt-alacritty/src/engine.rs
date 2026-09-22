@@ -146,6 +146,7 @@ pub const CSI_SELECTOR_INVENTORY: &[CsiSelectorEvidence] = &[
     CsiSelectorEvidence { selector: "3C", outcome: CsiOutcome::Implemented, test: "display_points_are_used_as_cell_indices" },
     CsiSelectorEvidence { selector: "?12h/l", outcome: CsiOutcome::Implemented, test: "cursor_visibility_and_application_shape_are_exported" },
     CsiSelectorEvidence { selector: "?25h/l", outcome: CsiOutcome::Implemented, test: "cursor_visibility_and_application_shape_are_exported" },
+    CsiSelectorEvidence { selector: "0,7 SP q", outcome: CsiOutcome::Implemented, test: "decscusr_initial_cursor_resources_are_observable" },
     CsiSelectorEvidence { selector: "1-6 SP q", outcome: CsiOutcome::Implemented, test: "decscusr_cursor_style_ids_are_observable" },
     CsiSelectorEvidence { selector: "m", outcome: CsiOutcome::Implemented, test: "sgr_color_does_not_drop_the_character" },
     CsiSelectorEvidence { selector: "?1049h/l", outcome: CsiOutcome::Implemented, test: "alternate_screen_is_separate_from_primary_scrollback" },
@@ -224,6 +225,7 @@ pub struct AlacrittyEngine {
     theme: TerminalTheme,
     pending_input: Vec<u8>,
     pending_osc: Vec<u8>,
+    pending_cursor_reset: Vec<u8>,
 }
 
 impl AlacrittyEngine {
@@ -242,7 +244,36 @@ impl AlacrittyEngine {
             theme: TerminalTheme::dark(),
             pending_input: Vec::new(),
             pending_osc: Vec::new(),
+            pending_cursor_reset: Vec::new(),
         }
+    }
+
+    fn normalize_initial_cursor_resource(&mut self, bytes: &[u8]) -> Vec<u8> {
+        const DECSCUSR_INITIAL: &[u8] = b"\x1b[7 q";
+        let mut input = std::mem::take(&mut self.pending_cursor_reset);
+        input.extend_from_slice(bytes);
+        let mut normalized = Vec::with_capacity(input.len());
+        let mut index = 0;
+        while index < input.len() {
+            let remaining = &input[index..];
+            if remaining[0] == 0x1b {
+                let prefix_len = remaining.len().min(DECSCUSR_INITIAL.len());
+                if remaining[..prefix_len] == DECSCUSR_INITIAL[..prefix_len]
+                    && remaining.len() < DECSCUSR_INITIAL.len()
+                {
+                    self.pending_cursor_reset.extend_from_slice(remaining);
+                    break;
+                }
+                if remaining.starts_with(DECSCUSR_INITIAL) {
+                    normalized.extend_from_slice(b"\x1b[0 q");
+                    index += DECSCUSR_INITIAL.len();
+                    continue;
+                }
+            }
+            normalized.push(input[index]);
+            index += 1;
+        }
+        normalized
     }
 
     fn audit_osc(&mut self, bytes: &[u8]) {
@@ -292,9 +323,10 @@ impl AlacrittyEngine {
     }
 
     fn feed_plain(&mut self, bytes: &[u8]) {
+        let bytes = self.normalize_initial_cursor_resource(bytes);
         if !bytes.is_empty() {
-            self.audit_osc(bytes);
-            self.processor.advance(&mut self.term, bytes);
+            self.audit_osc(&bytes);
+            self.processor.advance(&mut self.term, &bytes);
         }
     }
 
