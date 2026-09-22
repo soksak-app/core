@@ -450,6 +450,8 @@ pub trait Platform: Send + Sync {
     fn connect_service(&self, address: &str) -> Result<Box<dyn PersistentStream>, String>;
     /// service directory를 현재 사용자 전용으로 만든다.
     fn secure_service_directory(&self, path: &Path) -> Result<(), String>;
+    /// persistent service endpoint의 프로세스가 아직 존재하는지 확인한다.
+    fn service_process_exists(&self, pid: u32) -> Result<bool, String>;
 }
 
 /// 현재 운영체제의 구현을 반환한다.

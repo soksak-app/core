@@ -122,6 +122,7 @@ On Windows both hosts implement only directory identity (`platform/windows/ident
 | H1 | none | `build.rs` | Rust locates `native/darwin` through pkg-config (`soksak-darwin`) in a build script on macOS targets; Go uses the `#cgo pkg-config` directive |
 | H3 | `src/bridge.js` | none | Wails provides no call channel to webviews that the application creates |
 | H4 | `src/platform/darwin/webview.m` | none | Wails has no child-webview API, so the host creates the webview in Objective-C; Tauri uses `add_child` |
+| H5 | `src/diagnostics_test.go` | none | The diagnostic-only Go unit test is colocated with the implementation to test the unexported capture payload helper without widening the host API; Rust diagnostic coverage is in the host's integration tests |
 | A1 | content differs | content differs | `runtime/index.js` uses each framework's call mechanism |
 | A2 | none | `build.rs` | Tauri requires `tauri_build::build()` |
 | A3 | none | `tauri.conf.json`, `capabilities/`, `icons/`, `gen/` | Tauri configuration |

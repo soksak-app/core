@@ -22,6 +22,22 @@ extern "C" {
 /// `kill` 이 번호의 프로세스가 없을 때 알리는 오류 번호.
 const ESRCH: i32 = 3;
 
+/// persistent service endpoint의 프로세스가 아직 존재하는지 확인한다.
+pub fn service_process_exists(pid: u32) -> Result<bool, String> {
+    if pid == 0 {
+        return Ok(false);
+    }
+    let result = unsafe { kill(pid as i32, 0) };
+    if result == 0 {
+        return Ok(true);
+    }
+    let error = std::io::Error::last_os_error();
+    if error.raw_os_error() == Some(ESRCH) {
+        return Ok(false);
+    }
+    Err(format!("cannot inspect service process {pid}: {error}"))
+}
+
 /// 번호 pid 의 프로세스가 끝났는지 반환한다.
 fn ended(pid: i32) -> bool {
     let result = unsafe { kill(pid, 0) };

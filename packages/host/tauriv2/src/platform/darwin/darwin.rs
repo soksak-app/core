@@ -473,6 +473,9 @@ impl Platform for Darwin {
     fn secure_service_directory(&self, path: &Path) -> Result<(), String> {
         secure_service_directory(path)
     }
+    fn service_process_exists(&self, pid: u32) -> Result<bool, String> {
+        endpoint::service_process_exists(pid)
+    }
 }
 
 struct PersistentUnixStream(UnixStream);

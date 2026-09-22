@@ -6,6 +6,8 @@
 
 ## Unreleased
 
+- Closed G2-1. The Tauri persistent-service process probe now belongs to the platform endpoint contract and returns an explicit Windows unsupported error; the diagnostic-only Wails unit test is recorded as the H5 language-boundary exception because it tests an unexported helper without widening the host API. `make hosts-check` and the declared-environment Tauri host library test pass.
+
 - Completed F0.6. Replaced the cross-language sidecar wire field `op` with `operation` across JavaScript/TypeScript, Rust, Go, Objective-C, Tauri, Wails, tests, fixtures, errors, and specifications. The legacy field is explicitly rejected without fallback. Full package, language, documentation, boundary, exposure, and native gates pass; committed as `e70a6e6`.
 
 - Closed the G4 command-supervision item. The focused supervisor suite reports 16/16 passing assertions in 1.58s with no failures, skips, or todos, and retains explicit failures for nonzero exits, missing executables, timeout, cancellation, observer errors, output-drain failures, and denied cleanup verification. Language adapters and content-hash evidence remain open under G4.

@@ -370,4 +370,7 @@ impl Platform for Windows {
     fn secure_service_directory(&self, path: &Path) -> Result<(), String> {
         unsupported::secure_service_directory(path)
     }
+    fn service_process_exists(&self, pid: u32) -> Result<bool, String> {
+        unsupported::service_process_exists(pid)
+    }
 }

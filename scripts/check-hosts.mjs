@@ -18,6 +18,7 @@ const PAIRS = [
         "go.mod": "A4", "go.sum": "A4",
         "src/bridge.js": "H3",
         "src/platform/darwin/webview.m": "H4",
+        "src/diagnostics_test": "H5",
       },
       right: {
         "Cargo.toml": "A4", "Cargo.lock": "A4",

@@ -123,6 +123,7 @@ Windows에서 두 호스트는 디렉터리 식별(`platform/windows/identity.*`
 | H1 | 없음 | `build.rs` | Rust는 macOS 대상에서 빌드 스크립트로 pkg-config(`soksak-darwin`)를 통해 `native/darwin`을 찾고, Go는 `#cgo pkg-config` 지시문을 사용한다 |
 | H3 | `src/bridge.js` | 없음 | Wails는 애플리케이션이 생성한 웹뷰에 호출 통로를 제공하지 않는다 |
 | H4 | `src/platform/darwin/webview.m` | 없음 | Wails에 자식 웹뷰 API가 없어 호스트가 Objective-C로 웹뷰를 생성하며, Tauri는 `add_child`를 사용한다 |
+| H5 | `src/diagnostics_test.go` | 없음 | 진단 전용 Go 단위 검사는 호스트 API를 넓히지 않고 비공개 capture payload helper를 검사하기 위해 구현 옆에 둔다. Rust 진단 범위는 호스트 통합 테스트에 있다 |
 | A1 | 내용만 다름 | 내용만 다름 | `runtime/index.js`가 각 프레임워크의 호출 방식을 사용한다 |
 | A2 | 없음 | `build.rs` | Tauri는 `tauri_build::build()`를 요구한다 |
 | A3 | 없음 | `tauri.conf.json`, `capabilities/`, `icons/`, `gen/` | Tauri 설정 |

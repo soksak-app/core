@@ -22,10 +22,7 @@ use std::time::Duration;
 use wait_timeout::ChildExt;
 
 use crate::platform::{current, PersistentStream};
-#[path = "platform/process.rs"]
-mod process;
 use crate::windows::{emit_window, window_data};
-use process::service_process_exists;
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use tauri::Window;
@@ -772,7 +769,7 @@ impl<O: Owner> Sidecars<O> {
             Ok(bytes) => {
                 let endpoint: Endpoint = serde_json::from_slice(&bytes)
                     .map_err(|e| format!("sidecar {name}: invalid endpoint: {e}"))?;
-                if !service_process_exists(endpoint.pid) {
+                if !current()?.service_process_exists(endpoint.pid)? {
                     std::fs::remove_file(&endpoint_path)
                         .map_err(|e| format!("sidecar {name}: remove stale endpoint: {e}"))?;
                     // Re-enter the one creation path. A stale endpoint is an
