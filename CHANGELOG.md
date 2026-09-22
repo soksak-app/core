@@ -1,5 +1,7 @@
 # Changelog
 
+- Completed F6. The terminal selection, clipboard, bracketed-paste, file-drop, image-paste, and inline-image contracts are now complete with explicit ownership, error, and native-host evidence.
+
 - Completed F6.6-3 and F6.6. Rebuilt Tauri and Wails terminal inline-image lifecycle E2E now reports per-test duration and verifies native pixels before scroll, zero pixels after scroll and deletion, replacement, resize, ownership, and bounded cleanup. The Red cases exposed direct OSC shell-input misuse, same-raster presentation waits that ignored frame sequence, and inline-image state loss during raster replacement. Green adds explicit `terminal.image.inline.delete` and `terminal.session.inlineImages`, preserves ownership across sidecar raster replacement, and requires a positive current frame sequence in both hosts. Tauri passes 1/1 in 1.79s, Wails 1/1 in 1.45s, terminal module tests pass 57/57, Tauri image tests pass 16/16, Wails image tests pass, and structural/parity checks pass.
 
 - Completed F2.13. Tauri and Wails now record non-stale native image presentation failures in the current raster state, return the exact reason instead of waiting for a generic raster timeout, and keep stale-frame replacement discardable. Tauri image tests pass 16/16, Wails image tests and `make native-test` pass, and rebuilt split-terminal presentation plus injected-failure E2E pass on both hosts with per-case START/PASS, durations, disposable configuration, and explicit application cleanup.

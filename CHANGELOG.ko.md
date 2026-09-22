@@ -1,5 +1,7 @@
 # 변경 기록
 
+- F6을 완료했다. 터미널 선택·클립보드·bracketed paste·파일 드롭·이미지 붙여넣기·inline image 계약을 명시적 소유권·오류·네이티브 호스트 검증과 함께 완료했다.
+
 - F6.6-3과 F6.6을 완료했다. 재빌드 Tauri·Wails 터미널 inline-image 수명 E2E가 테스트별 실행 시간과 스크롤 전 native 픽셀, 스크롤·삭제 후 0 픽셀, 교체·리사이즈·소유권·제한된 정리를 검증한다. Red에서 OSC 셸 입력 오용, frame sequence를 무시한 같은 raster 표시 대기, raster 교체 중 inline-image 상태 소실을 확인했다. Green에서 `terminal.image.inline.delete`와 `terminal.session.inlineImages`를 명시적으로 추가하고 사이드카 raster 교체에서 소유권을 보존하며 양쪽 호스트가 양수인 최신 frame sequence를 요구한다. Tauri 1/1(1.79초), Wails 1/1(1.45초), 터미널 모듈 57/57, Tauri 이미지 16/16, Wails 이미지 검사와 구조/parity 검사가 통과했다.
 
 - F2.13을 완료했다. Tauri와 Wails가 stale이 아닌 native image 표시 실패를 현재 raster 상태에 기록하고 일반 raster timeout 대신 정확한 원인을 반환하며, stale 프레임 교체는 폐기 가능한 상태로 유지한다. Tauri 이미지 검사 16/16, Wails 이미지 검사와 `make native-test`가 통과했고 재빌드 분할 터미널 표시·주입 실패 E2E가 양쪽 호스트에서 case별 START/PASS, 실행 시간, 폐기 가능한 config, 명시적 애플리케이션 정리를 포함해 통과했다.
