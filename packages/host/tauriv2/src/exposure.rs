@@ -957,7 +957,7 @@ pub(crate) fn presented(window: &Window, timeout: Duration) -> Result<f64, Failu
             if let Err(error) = platform.after_settled(
                 &view,
                 Box::new(move |displayed| {
-                    if done.send(Ok(displayed)).is_err() {
+                    if done.send(displayed).is_err() {
                         eprintln!("presentation completion had no pending receiver");
                     }
                 }),

@@ -917,6 +917,20 @@ const FEATURE_LINKS = [
     levels: ["unit", "native", "application"],
   },
   {
+    id: "F6.3-2",
+    implementation: [
+      { file: "native/darwin/src/surface_layout.m", symbol: "surfaceLayoutAfterSettled" },
+      { file: "packages/host/tauriv2/src/exposure.rs", symbol: "pub(crate) fn presented" },
+      { file: "packages/host/wailsv3/src/exposure.go", symbol: "func (s *Surfaces) presented" },
+    ],
+    tests: [
+      { file: "e2e/terminal.test.mjs", id: "newly split terminal presents its first native raster" },
+      { file: "e2e/terminal.test.mjs", id: "three terminals and two browsers share one app DOM and one terminal service" },
+    ],
+    expected: "A native settle failure is returned as an explicit callback error instead of being converted into a generic 1005 timeout, and fresh Tauri/Wails split regressions remain usable afterward.",
+    levels: ["native", "application"],
+  },
+  {
     id: "F6.5",
     implementation: [
       { file: "plugins/terminal/ui/terminal.js", symbol: "dropFilesFromEvent" },

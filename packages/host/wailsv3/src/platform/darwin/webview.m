@@ -70,11 +70,13 @@ bool nativeWindowAfterPresentation(void *handle, uintptr_t callback) {
     return true;
 }
 
-extern void nativeSettledDone(uintptr_t callback, double displayed);
+extern void nativeSettledDone(uintptr_t callback, double displayed, char *error);
 bool nativeWindowAfterSettled(void *handle, uintptr_t callback) {
     WKWebView *view = sp_window_main_webview(handle);
     if (!view) return false;
-    surfaceLayoutAfterSettled(view, ^(double displayed) { nativeSettledDone(callback, displayed); });
+    surfaceLayoutAfterSettled(view, ^(double displayed, const char *error) {
+        nativeSettledDone(callback, displayed, error ? strdup(error) : NULL);
+    });
     return true;
 }
 

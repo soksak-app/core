@@ -1,6 +1,6 @@
 //! 표면 배치 트랜잭션.
 
-use std::ffi::c_void;
+use std::ffi::{c_char, c_void, CStr};
 
 use block2::{Block, RcBlock};
 use tauri::webview::PlatformWebview;
@@ -43,10 +43,19 @@ pub fn after_presentation(view: &PlatformWebview, done: Box<dyn Fn()>) {
 
 /// 창에 열린 표면 배치 트랜잭션이 없는 상태에서 메인 문서와 표시 중인 앱 문서의 렌더링 완료를 확인한
 /// 뒤 그 화면의 표시 시각(ms)으로 done 을 호출한다.
-pub fn after_settled(view: &PlatformWebview, done: Box<dyn Fn(f64)>) {
+pub fn after_settled(view: &PlatformWebview, done: Box<dyn Fn(Result<f64, String>)>) {
     extern "C" {
-        fn surfaceLayoutAfterSettled(view: *mut c_void, done: &Block<dyn Fn(f64)>);
+        fn surfaceLayoutAfterSettled(view: *mut c_void, done: &Block<dyn Fn(f64, *const c_char)>);
     }
-    let done = RcBlock::new(done);
+    let done = RcBlock::new(move |displayed: f64, error: *const c_char| {
+        if error.is_null() {
+            done(Ok(displayed));
+        } else {
+            let message = unsafe { CStr::from_ptr(error) }
+                .to_string_lossy()
+                .into_owned();
+            done(Err(message));
+        }
+    });
     unsafe { surfaceLayoutAfterSettled(view.inner().cast(), &done) }
 }

@@ -1060,10 +1060,18 @@ func (s *Surfaces) fullscreen(on bool) error {
 func (s *Surfaces) presented() (float64, error) {
 	deadline := time.Now().Add(pageTimeout)
 	waitFrame := func() (float64, error) {
-		done := make(chan float64, 1)
+		done := make(chan struct {
+			displayed float64
+			err       error
+		}, 1)
 		var err error
 		application.InvokeSync(func() {
-			err = system.AfterSettled(s.window.NativeWindow(), func(displayed float64) { done <- displayed })
+			err = system.AfterSettled(s.window.NativeWindow(), func(displayed float64, callbackErr error) {
+				done <- struct {
+					displayed float64
+					err       error
+				}{displayed: displayed, err: callbackErr}
+			})
 		})
 		if err != nil {
 			return 0, err
@@ -1073,8 +1081,11 @@ func (s *Surfaces) presented() (float64, error) {
 			return 0, rpcError(codeTimeout, "the window did not present within %s", pageTimeout)
 		}
 		select {
-		case displayed := <-done:
-			return displayed, nil
+		case result := <-done:
+			if result.err != nil {
+				return 0, result.err
+			}
+			return result.displayed, nil
 		case <-time.After(remaining):
 			return 0, rpcError(codeTimeout, "the window did not present within %s", pageTimeout)
 		}

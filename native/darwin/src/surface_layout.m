@@ -16,7 +16,7 @@
 // SPSettleRequest 는 창의 배치 트랜잭션이 모두 확정되기를 기다리는 표시 대기다.
 @interface SPSettleRequest : NSObject
 @property(nonatomic, retain) WKWebView *main;
-@property(nonatomic, copy) void (^done)(double);
+@property(nonatomic, copy) void (^done)(double, const char *);
 @end
 @implementation SPSettleRequest
 - (void)dealloc { [_main release]; [_done release]; [super dealloc]; }
@@ -86,7 +86,7 @@ void surfaceLayoutCancel(void *owner) {
 // SPDisplayedFrame 은 화면의 다음 갱신 목표 시각을 한 번 읽는다. 표시 갱신이 끝난 뒤 커밋된 내용은
 // 늦어도 그 갱신에 화면에 나온다. 창이 가려져도 화면의 갱신은 계속되므로 화면의 링크를 쓴다.
 @interface SPDisplayedFrame : NSObject
-@property(nonatomic, copy) void (^done)(double);
+@property(nonatomic, copy) void (^done)(double, const char *);
 - (void)tick:(CADisplayLink *)link;
 @end
 @implementation SPDisplayedFrame
@@ -94,13 +94,13 @@ void surfaceLayoutCancel(void *owner) {
 - (void)tick:(CADisplayLink *)link {
     double displayed = link.targetTimestamp * 1000;
     [link invalidate];
-    self.done(displayed);
+    self.done(displayed, NULL);
 }
 @end
 
-static void afterNextFrame(NSScreen *screen, void (^done)(double)) {
+static void afterNextFrame(NSScreen *screen, void (^done)(double, const char *)) {
     if (screen == nil) {
-        done(CACurrentMediaTime() * 1000);
+        done(CACurrentMediaTime() * 1000, NULL);
         return;
     }
     SPDisplayedFrame *frame = [[SPDisplayedFrame new] autorelease];
@@ -127,7 +127,7 @@ static bool layoutOpen(void *owner) {
     return false;
 }
 
-static void settle(WKWebView *main, void (^done)(double)) {
+static void settle(WKWebView *main, void (^done)(double, const char *)) {
     void *owner = main.window;
     if (layoutOpen(owner)) {
         SPSettleRequest *request = [[SPSettleRequest new] autorelease];
@@ -137,11 +137,12 @@ static void settle(WKWebView *main, void (^done)(double)) {
         [settling addObject:request];
         return;
     }
-    void (^finish)(double) = [[done copy] autorelease];
+        void (^finish)(double, const char *) = [[done copy] autorelease];
     [main retain];
     [main evaluateJavaScript:@"void document.documentElement.offsetWidth" completionHandler:^(id value, NSError *error) {
         if (error) {
             fprintf(stderr, "surface settle DOM completion failed: %s\\n", error.localizedDescription.UTF8String);
+            done(0, error.localizedDescription.UTF8String);
             [main release];
             return;
         }
@@ -161,7 +162,7 @@ static void releaseSettled(void) {
     }
 }
 
-void surfaceLayoutAfterSettled(void *handle, void (^done)(double)) {
+void surfaceLayoutAfterSettled(void *handle, void (^done)(double, const char *)) {
     NSCAssert(NSThread.isMainThread, @"surface presentation requires the UI thread");
     settle((WKWebView *)handle, done);
 }

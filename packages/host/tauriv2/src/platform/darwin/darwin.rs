@@ -324,7 +324,11 @@ impl Platform for Darwin {
         layout::cancel(window);
         Ok(())
     }
-    fn after_settled(&self, view: &PlatformWebview, done: Box<dyn Fn(f64)>) -> Result<(), String> {
+    fn after_settled(
+        &self,
+        view: &PlatformWebview,
+        done: Box<dyn Fn(Result<f64, String>)>,
+    ) -> Result<(), String> {
         layout::after_settled(view, done);
         Ok(())
     }

@@ -325,7 +325,11 @@ pub trait Platform: Send + Sync {
         -> Result<(), String>;
     /// 창에 열린 표면 배치 트랜잭션이 없는 상태에서 메인 문서와 표시 중인 문서의 렌더링이 끝난 뒤 done 을
     /// 호출한다. 인자는 그 화면이 표시되는 시각(ms, mach 절대 시각)이다.
-    fn after_settled(&self, view: &PlatformWebview, done: Box<dyn Fn(f64)>) -> Result<(), String>;
+    fn after_settled(
+        &self,
+        view: &PlatformWebview,
+        done: Box<dyn Fn(Result<f64, String>)>,
+    ) -> Result<(), String>;
 
     // 도형
 

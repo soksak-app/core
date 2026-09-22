@@ -1,5 +1,7 @@
 # Changelog
 
+- F6.3-2 is in progress. Native settled-presentation failures now cross the Darwin callback boundary as explicit errors instead of being dropped and reported later as a generic 1005 timeout. Rebuilt Tauri and Wails first-split checks pass 1/1 in 0.96s and 0.44s; the repeated three-terminal checks pass Tauri 1/1 in 1.01s and Wails 1/1 in 0.89s after removing a separately verified stale sidecar process. Failure-injection coverage remains open.
+
 - Completed F6.5. Terminal file drops now have a declared `terminal.drop` command and a terminal-view drop handler. Only `text/uri-list` is accepted; local URLs are validated, shell-quoted, and sent once without a newline or execution. Unsupported, malformed, remote, empty, and transport failures remain observable. Red had no listener or command and sent no sidecar input. Green passes focused drop 2/2, terminal module 53/53, manifest 6/6, and rebuilt Tauri/Wails E2E 1/1 in 0.95s and 0.47s.
 
 - Completed F6.4. Explicit terminal paste now handles text, validated local file URLs, and PNG clipboard data. File paths are shell-quoted and PNG data is persisted below the configuration directory; each payload is sent once without a newline or automatic execution. Absent, malformed, unsupported, persistence, and transport failures remain explicit. Red focused coverage passed 1/4; Green passed the focused suite 5/5 in 0.07s, terminal module 53/53, plugin API 74/74, Wails host tests, and `make native-test`. Rebuilt Tauri and Wails selection-to-copy-to-paste E2E passed 1/1 in 0.77s and 0.91s.

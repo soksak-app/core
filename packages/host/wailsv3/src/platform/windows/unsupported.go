@@ -207,7 +207,7 @@ func (implementation) CancelLayout(unsafe.Pointer) error {
 	return unsupported("surface layout cancel")
 }
 
-func (implementation) AfterSettled(unsafe.Pointer, func(float64)) error {
+func (implementation) AfterSettled(unsafe.Pointer, func(float64, error)) error {
 	return unsupported("native presentation")
 }
 

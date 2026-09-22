@@ -74,7 +74,10 @@ static void checkSettledWaitsForLayout(NSWindow *window, WKWebView *main) {
     __block int order = 0;
     __block int settledAt = 0;
     surfaceLayoutBegin(window, 101, ^(int allowed) {});
-    surfaceLayoutAfterSettled(main, ^(double displayed) { settledAt = ++order; });
+    surfaceLayoutAfterSettled(main, ^(double displayed, const char *error) {
+        check(error == NULL, @"a settled layout has no DOM error");
+        settledAt = ++order;
+    });
     surfaceLayoutBegin(window, 102, ^(int allowed) {});
     check(!surfaceLayoutCommit(window, 101), @"an older request does not commit an extended layout transaction");
     waitFrames(window.screen, 5);
@@ -127,7 +130,8 @@ static SPWait waitWhileBusy(WKWebView *main, WKWebView *busy, SPBusySignal *sign
     __block double finished = 0;
     // 요청·완료·표시 시각은 모두 같은 시계(CACurrentMediaTime)로 잰다.
     double requested = CACurrentMediaTime() * 1000;
-    surfaceLayoutAfterSettled(main, ^(double at) {
+    surfaceLayoutAfterSettled(main, ^(double at, const char *error) {
+        check(error == NULL, @"a displayed frame has no DOM error");
         took = -start.timeIntervalSinceNow;
         finished = CACurrentMediaTime() * 1000;
         displayed = at;

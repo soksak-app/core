@@ -5,6 +5,8 @@ package darwin
 /*
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
 #include "surface_layout.h"
 
 void nativeWindowLayoutBegin(void *window, uint64_t ticket, uintptr_t callback);
@@ -59,7 +61,7 @@ func nativePresentationDone(value C.uintptr_t) {
 	done()
 }
 
-func (implementation) AfterSettled(window unsafe.Pointer, done func(displayed float64)) error {
+func (implementation) AfterSettled(window unsafe.Pointer, done func(displayed float64, err error)) error {
 	handle := cgo.NewHandle(done)
 	if !bool(C.nativeWindowAfterSettled(window, C.uintptr_t(handle))) {
 		handle.Delete()
@@ -69,9 +71,14 @@ func (implementation) AfterSettled(window unsafe.Pointer, done func(displayed fl
 }
 
 //export nativeSettledDone
-func nativeSettledDone(value C.uintptr_t, displayed C.double) {
+func nativeSettledDone(value C.uintptr_t, displayed C.double, message *C.char) {
 	handle := cgo.Handle(value)
-	done := handle.Value().(func(float64))
+	done := handle.Value().(func(float64, error))
 	handle.Delete()
-	done(float64(displayed))
+	if message == nil {
+		done(float64(displayed), nil)
+		return
+	}
+	done(0, errors.New(C.GoString(message)))
+	C.free(unsafe.Pointer(message))
 }
