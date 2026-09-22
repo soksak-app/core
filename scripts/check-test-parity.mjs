@@ -346,6 +346,16 @@ const FEATURE_LINKS = [
     levels: ["native", "application"],
   },
   {
+    id: "F0.5.9-2",
+    implementation: [{ file: "packages/host/tauriv2/src/windows.rs", symbol: "reload_surface_documents" }],
+    tests: [
+      { file: "e2e/terminal.test.mjs", id: "four split terminals complete native presentation without a host crash" },
+      { file: "e2e/terminal.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
+    ],
+    expected: "Main-document reload cleanup finishes before replacement surface images attach; repeated split tests do not leave a new image generation loading after old native image teardown.",
+    levels: ["native", "application"],
+  },
+  {
     id: "F4",
     implementation: [
       { file: "native/darwin/src/window_facts.m", symbol: "focused" },

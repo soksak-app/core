@@ -48,40 +48,40 @@ pub(crate) struct WindowData {
 }
 
 /// 앱 DOM 재로드는 모든 플러그인 문서를 교체하지만 터미널 세션은 종료하지 않는다.
+///
+/// Tauri invokes this from the main-webview `PageLoadEvent::Started` callback. Cleanup is
+/// intentionally synchronous here: the replacement page must not attach a new native image
+/// while the previous image handles are still queued for removal on the same AppKit run loop.
 pub(crate) fn reload_surface_documents(window: &Window) -> Result<(), String> {
     let data = window_data(window)?;
     let owner = native_owner(window)?;
     let platform = platform::current()?;
     let window = window.clone();
-    platform.enqueue_ui(Box::new(move || {
-        log_error((|| -> Result<(), String> {
-            platform.cancel_layout(owner)?;
-            let surfaces: Vec<_> = data
-                .surface_hosts
-                .lock()
-                .map_err(|e| e.to_string())?
-                .iter()
-                .map(|(id, handle)| (id.clone(), *handle))
-                .collect();
-            for (surface, handle) in surfaces {
-                platform.set_surface_hidden_handle(handle, true)?;
-                for document in data.documents.remove_surface(&surface) {
-                    platform.close_document(document)?;
-                }
-                for image in data.images.remove_surface(&surface) {
-                    platform.close_image(image)?;
-                }
-                data.images.begin_generation(&surface);
-                crate::exposure::surface_closed(&window, &surface);
-            }
-            data.composition_revisions
-                .lock()
-                .map_err(|e| e.to_string())?
-                .clear();
-            crate::exposure::window_changed(&window);
-            Ok(())
-        })());
-    }))
+    platform.cancel_layout(owner)?;
+    let surfaces: Vec<_> = data
+        .surface_hosts
+        .lock()
+        .map_err(|e| e.to_string())?
+        .iter()
+        .map(|(id, handle)| (id.clone(), *handle))
+        .collect();
+    for (surface, handle) in surfaces {
+        platform.set_surface_hidden_handle(handle, true)?;
+        for document in data.documents.remove_surface(&surface) {
+            platform.close_document(document)?;
+        }
+        for image in data.images.remove_surface(&surface) {
+            platform.close_image(image)?;
+        }
+        data.images.begin_generation(&surface);
+        crate::exposure::surface_closed(&window, &surface);
+    }
+    data.composition_revisions
+        .lock()
+        .map_err(|e| e.to_string())?
+        .clear();
+    crate::exposure::window_changed(&window);
+    Ok(())
 }
 
 /// 애플리케이션의 창 등록부와 프로젝트 소유 창.

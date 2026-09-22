@@ -257,3 +257,6 @@
 The main-only presentation check allowed a Tauri view to commit at 562pt while its document clipping layer remained 558pt. Shared presentation now includes visible application documents. After this correction, `make examples-verify` passed 29/29 on macOS 26.6.2, including background initialization, modal behavior, window controls, alignment, and main-layout progress during external work. Four additional alignment runs passed 16/16. The earlier Wails background initialization failure is fixed. Manual settings blur was confirmed in both hosts on 2026-09-07. Windows and Linux execution is unverified. These changes have not been released.
 
 Library validation on 2026-09-08: `make verify` passed, including 310/310 tests, all 142 mutations detected, documentation checks, build, and comparison of generated artifacts with committed files.
+## 2026-09-22
+
+- Tauri now completes native surface-document and image cleanup synchronously when the main document starts reloading. This prevents replacement surface image attachment from racing teardown of the previous native image handles; repeated split and raster recovery checks pass on a rebuilt process.
