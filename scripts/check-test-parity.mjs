@@ -766,6 +766,16 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F11-1",
+    implementation: [
+      { file: "packages/workbench/core-exposure.js", symbol: "core.page.audit" },
+      { file: "packages/workbench/surface-exposure.js", symbol: "unbound" },
+    ],
+    tests: [{ file: "e2e/audit.test.mjs", id: "every control on every screen runs a declared command and has a dom name" }],
+    expected: "Rebuilt Tauri and Wails audit every visible control on workspace, menus, renames, settings scopes and sections, library forms/search, and the return path; every control has a declared command and DOM name.",
+    levels: ["application"],
+  },
+  {
     id: "F1",
     implementation: [
       { file: "e2e/terminal.test.mjs", symbol: "three terminals survive repeated divider drags and project returns" },
