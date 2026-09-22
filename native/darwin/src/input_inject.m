@@ -252,6 +252,29 @@ static const SPKey keys[] = {
     {"PageUp", 116, NSPageUpFunctionKey}, {"PageDown", 121, NSPageDownFunctionKey},
 };
 
+// 문자만 담은 NSEvent에는 물리 키 정체성이 없다. NSTextInputContext가 현재
+// 키보드 입력 소스를 적용하려면 키 코드가 필요하며, 한글 조합도 여기에
+// 포함된다. 아래 코드는 endpoint가 지정한 문자를 macOS ANSI 키보드 위치로
+// 변환하며, 알 수 없는 문자는 추측한 코드로 바꾸지 않고 거부한다.
+static unsigned short characterKeyCode(unichar character) {
+    static const char *letters = "abcdefghijklmnopqrstuvwxyz";
+    static const unsigned short letterCodes[] = {0, 11, 8, 2, 14, 3, 5, 4, 34, 38, 40, 37, 46, 45, 31, 35, 12, 15, 1, 17, 32, 9, 13, 7, 16, 6};
+    for (NSUInteger i = 0; i < 26; i++) if (character == letters[i]) return letterCodes[i];
+    static const char digits[] = "1234567890";
+    static const unsigned short digitCodes[] = {18, 19, 20, 21, 23, 22, 26, 28, 25, 29};
+    for (NSUInteger i = 0; i < 10; i++) if (character == digits[i]) return digitCodes[i];
+    return USHRT_MAX;
+}
+
+static CGEventFlags cgFlags(unsigned modifiers) {
+    CGEventFlags result = 0;
+    if (modifiers & 1) result |= kCGEventFlagMaskShift;
+    if (modifiers & 2) result |= kCGEventFlagMaskControl;
+    if (modifiers & 4) result |= kCGEventFlagMaskAlternate;
+    if (modifiers & 8) result |= kCGEventFlagMaskCommand;
+    return result;
+}
+
 bool sp_input_key(void *handle, const char *key, const char *text, unsigned modifiers, bool down) {
     NSWindow *window = (__bridge NSWindow *)handle;
     if (!window || !key || !NSThread.isMainThread) return false;
@@ -268,13 +291,27 @@ bool sp_input_key(void *handle, const char *key, const char *text, unsigned modi
     if (!characters) {
         if (name.length != 1) return false;
         characters = name;
+        code = characterKeyCode([name characterAtIndex:0]);
+        if (code == USHRT_MAX) return false;
     }
     if (text) characters = [NSString stringWithUTF8String:text];
-    NSEvent *event = [NSEvent keyEventWithType:down ? NSEventTypeKeyDown : NSEventTypeKeyUp
-        location:NSZeroPoint modifierFlags:flags(modifiers)
-        timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
-        context:nil characters:characters charactersIgnoringModifiers:characters
-        isARepeat:NO keyCode:code];
+    NSEvent *event = nil;
+    if (!text && name.length == 1) {
+        // AppKit이 물리 키와 현재 입력 소스로부터 문자를 계산하게 한다.
+        // 호출자의 문자를 직접 넣으면 NSTextInputContext 조합을 우회한다.
+        CGEventRef raw = CGEventCreateKeyboardEvent(NULL, code, down);
+        if (raw) {
+            CGEventSetFlags(raw, cgFlags(modifiers));
+            event = [NSEvent eventWithCGEvent:raw];
+            CFRelease(raw);
+        }
+    } else {
+        event = [NSEvent keyEventWithType:down ? NSEventTypeKeyDown : NSEventTypeKeyUp
+            location:NSZeroPoint modifierFlags:flags(modifiers)
+            timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
+            context:nil characters:characters charactersIgnoringModifiers:characters
+            isARepeat:NO keyCode:code];
+    }
     if (!event) return false;
     [window sendEvent:event];
     return true;

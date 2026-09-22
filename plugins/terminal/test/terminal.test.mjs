@@ -1364,9 +1364,11 @@ test("compose events are sent with ranges and published as preedit state", async
   });
   const message = fakeSidecar.getMessages().at(-1).body;
   assert.deepEqual(message, {
-    operation: "compose", text: "한글",
-    selectedRange: { location: 2, length: 0 },
-    replacementRange: { location: 0, length: 1 }, attributed: true,
+    operation: "input", compose: {
+      text: "한글",
+      selectedRange: { location: 2, length: 0 },
+      replacementRange: { location: 0, length: 1 }, attributed: true,
+    },
   });
 });
 

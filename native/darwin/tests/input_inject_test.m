@@ -243,7 +243,7 @@ int main(void) { @autoreleasepool {
     drain(view);
     check([evaluate(view, @"document.activeElement && document.activeElement.id") isEqual:@"field"], @"a click focuses the field in an inactive window");
     evaluate(view, @"probe.events.length=0; null");
-    check(sp_input_key(window, "a", NULL, 0, true) && sp_input_key(window, "a", NULL, 0, false), @"key accepted");
+    check(sp_input_key(window, "a", "a", 0, true) && sp_input_key(window, "a", "a", 0, false), @"explicit text key accepted");
     check(sp_input_key(window, "Enter", NULL, 0, true) && sp_input_key(window, "Enter", NULL, 0, false), @"named key accepted");
     check(!sp_input_key(window, "NoSuchKey", NULL, 0, true), @"unknown key name rejected");
     until(^BOOL { return [evaluate(view, @"probe.events.filter(e=>e.type==='keydown').length") intValue] >= 2; });

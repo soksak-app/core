@@ -341,12 +341,12 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
         shift: entry.shift, alt: entry.alt, ctrl: entry.ctrl,
       }));
     } else if (entry.type === "compose") {
-      await terminal.send(id, { operation: "compose",
+      await terminal.send(id, { operation: "input", compose: {
         text: entry.text,
         selectedRange: entry.selectedRange ?? null,
         replacementRange: entry.replacementRange ?? null,
         attributed: entry.attributed === true,
-      });
+      }});
     } else if (entry.type === "command") {
       await terminal.send(id, { operation: "input", command: { selector: entry.selector } });
     } else if (entry.type === "focus") {

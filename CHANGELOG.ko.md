@@ -1,10 +1,11 @@
 # 변경 기록
 
+- F8를 진행했다. named character 입력이 물리 macOS ANSI 키 이벤트를 만들도록 하여 활성 키보드 입력 소스가 한글을 조합하게 했다. terminal plugin은 이제 sidecar 계약 `{operation: "input", compose: {...}}`으로 조합을 보내며, 이전 `{operation: "compose"}`가 확인된 `Unknown operation: compose` 원인이었다. `com.apple.inputmethod.Korean.2SetKorean`을 사용한 재빌드 Tauri·Wails probe가 각각 `terminal.compose` 전환 `ㅏ → ㄴ → 나`를 만들었고 session 오류는 0건이었다. 후보창 픽셀과 확정 입력의 정확히 한 번 전달은 아직 열려 있다.
 - V5 최종 감사를 시작했다. 필수 검사를 독립적인 제한시간과 START/PASS/FAIL 출력이 있는 lane으로 실행하며, 전체 타임아웃이나 mandatory skip을 완료 근거로 세지 않는다.
 - V5 Red에서 두 구조 실패를 확인했다. OSC 133이 shell plugin ID와 충돌하는 무접두사 `shell.state` namespace를 사용했고 Wails geometry 검사에 Tauri 대응 파일이 없었다. vendor event를 `vendor.shell.state`로 바꾸고 Tauri geometry 검사를 대응하는 `surfaces_geometry_test.rs` lane으로 옮겼다.
 - 대응하는 geometry lane을 추가한 뒤 V5 parity inventory를 보정했다. 현재 출력은 lane 56개·구현 파일 252개·테스트 파일 173개이며, 이전 171/172개 테스트 수는 날짜가 있는 증거로 남긴다.
 - F6.3-11을 완료했다. 일반 터미널 클릭은 더 이상 빈 selection을 열지 않으며, 포인터 이동 뒤에만 selection을 시작하고 완전한 drag start/update/end 계약은 보존한다. 터미널 모듈 drag/click 집중 검사 2/2, 재빌드 Tauri·Wails keyboard E2E 각각 4/4가 통과했고 `terminal.session.error`가 없으며 검증 뒤 양쪽 앱을 종료했다.
-- F8을 진행했다. custom image region의 명령 외 키 입력을 `interpretKeyEvents:`가 아니라 `NSTextInputContext handleEvent:`로 전달한다. 제한된 native image-region 회귀 검사가 일반 insert·조합·취소/키 라우팅·범위·후보 기하를 통과했다. 활성 한글 입력 소스와 재빌드 Tauri/Wails 증거는 아직 열려 있다.
+- F8을 진행했다. custom image region의 명령 외 키 입력을 `interpretKeyEvents:`가 아니라 `NSTextInputContext handleEvent:`로 전달한다. 제한된 native image-region 회귀 검사가 일반 insert·조합·취소/키 라우팅·범위·후보 기하를 통과했다. 재빌드 Tauri·Wails 활성 입력 소스 probe가 이제 한글 조합 상태를 관측하며 후보 픽셀과 확정 정확히 한 번 전달 증거는 아직 열려 있다.
 - F7.1–F7.18가 완료된 뒤 CSI 체크리스트 집계 상태를 바로잡았다. 부모 행은 F7.14–F7.17을 낡은 미완료 범위로 남기지 않고 selector 단위와 기계적 감사 근거를 기록한다.
 - F7.17을 완료했다. `scripts/check-terminal-protocol-inventory.mjs`가 고정 patch-411 reference, 필수 CSI 25행, selector 중복, 이름 있는 Rust 테스트와 complete-CSI 계약을 기계적으로 검사한다. 정상·주입 Red 실행이 통과했으며 vendor 계약은 F7.18에 남겼다.
 - F7.16을 완료했다. CSI inventory가 `5n/6n`, primary/secondary `c/>c`, `14t`, 분할 unsupported window, rectangle/protected-cell/palette intermediate와 framing/잘못된 입력 근거를 이름 있는 검사에 연결한다. 순서가 있는 device/status 응답이 15초 감독 아래 1/1 통과했다.
