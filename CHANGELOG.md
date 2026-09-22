@@ -297,3 +297,4 @@ Library validation on 2026-09-08: `make verify` passed, including 310/310 tests,
 - Completed F7.9. The CSI inventory now links `6n/c` to the existing ordered cursor-position and device-attribute response case; the full Alacritty engine suite passes 54/54.
 - Completed F7.10. The CSI inventory now links `b` to an executable repeat-character case; the focused Alacritty test passes 1/1.
 - Completed V1. The canonical checklist and its Korean translation are mechanically synchronized, completed scope cannot be reopened, and the current documentation audit passes.
+- Completed V2. Paired-host structure, rebuilt Tauri/Wails first-raster presentation, exposure/parity, and language-lane evidence now have a named feature link; restoration, IME, and final repeat/release scopes remain open.

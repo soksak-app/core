@@ -866,6 +866,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "V2",
+    implementation: [
+      { file: "scripts/check-hosts.mjs", symbol: "auditHostPairs" },
+      { file: "packages/workbench/host.js", symbol: "waitPresented" },
+    ],
+    tests: [
+      { file: "scripts/test/soksak-scripts.test.mjs", id: "host structure audit reports a clean paired-host graph" },
+      { file: "e2e/terminal.test.mjs", id: "a newly split terminal presents its first native raster" },
+    ],
+    expected: "Audit infrastructure and bounded basic surface presentation are complete for both adapters, while uncovered restoration and IME scopes remain open rather than nominally active.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F1",
     implementation: [
       { file: "e2e/terminal.test.mjs", symbol: "three terminals survive repeated divider drags and project returns" },
