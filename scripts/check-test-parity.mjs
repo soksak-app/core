@@ -356,6 +356,19 @@ const FEATURE_LINKS = [
     levels: ["native", "application"],
   },
   {
+    id: "F0.5.9-3",
+    implementation: [{ file: "e2e/app.mjs", symbol: "acquireWindowCheckSlot" }],
+    tests: [
+      { file: "e2e/app-contract.test.mjs", id: "window checks reject overlapping sessions that target the same application" },
+      { file: "e2e/terminal.test.mjs", id: "newly split terminal presents its first native raster" },
+      { file: "e2e/terminal.test.mjs", id: "four split terminals complete native presentation without a host crash" },
+      { file: "e2e/terminal.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
+      { file: "e2e/terminal.test.mjs", id: "native presentation failure is explicit and the next split remains usable" },
+    ],
+    expected: "Same-application window checks cannot concurrently reset one app's native image generations; rebuilt Tauri and Wails split presentation cases pass with bounded output and no raster timeout.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F4",
     implementation: [
       { file: "native/darwin/src/window_facts.m", symbol: "focused" },
@@ -1122,6 +1135,21 @@ const FEATURE_LINKS = [
     ],
     expected: "Complete OSC 1337 records, including records split across PTY output chunks, become ordered typed sidecar events with base64 image bytes; malformed records remain explicit engine errors and do not get silently dropped.",
     levels: ["unit", "native"],
+  },
+  {
+    id: "F10",
+    implementation: [
+      { file: "packages/host/tauriv2/src/modals.rs", symbol: "pub(crate) fn show" },
+      { file: "packages/host/wailsv3/src/modals.go", symbol: "OverlayShow" },
+      { file: "packages/workbench/compositor.js", symbol: "placementPending" },
+    ],
+    tests: [
+      { file: "e2e/modal.test.mjs", id: "add and split menus are transparent and have no backdrop" },
+      { file: "e2e/modal.test.mjs", id: "settings blocks background input and closes only through its close button" },
+      { file: "e2e/modal.test.mjs", id: "moving settings and resizing the parent preserves its native coverage" },
+    ],
+    expected: "Both rebuilt hosts preserve the existing transparent picker and semi-transparent settings modal contract through focus, dismissal, movement, resize, reload, and deferred geometry verification.",
+    levels: ["native", "application"],
   },
   {
     id: "F10.1",

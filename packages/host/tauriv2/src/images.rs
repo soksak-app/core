@@ -1031,7 +1031,10 @@ where
                     let (ok, reason) = match presentation {
                         Ok(()) => (true, None),
                         Err(e) => {
-                            eprintln!("image present on main thread error: {}", e);
+                            eprintln!(
+                                "image present on main thread error: surface={} name={} generation={} raster={} sequence={} token={} reason={}",
+                                key.0, name, generation, raster, sequence, id, e
+                            );
                             let reason = match e.as_str() {
                                 "stale" => "stale",
                                 "notAttached" => "notAttached",

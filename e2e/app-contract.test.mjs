@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assertEndpointUsesCurrentBuild } from "./app.mjs";
+import { acquireWindowCheckSlot, assertEndpointUsesCurrentBuild } from "./app.mjs";
 
 const endpoint = {
   pid: 123,
@@ -26,4 +26,15 @@ test("window checks reject an endpoint without an ISO start time", () => {
     () => assertEndpointUsesCurrentBuild({ ...endpoint, started: "not-a-time" }, endpoint.executable, started),
     /invalid endpoint start time/,
   );
+});
+
+test("window checks reject overlapping sessions that target the same application", async () => {
+  const releaseFirst = await acquireWindowCheckSlot("tauriv2");
+  await assert.rejects(
+    () => acquireWindowCheckSlot("tauriv2"),
+    /already active.*test-concurrency=1/,
+  );
+  releaseFirst();
+  const releaseSecond = await acquireWindowCheckSlot("tauriv2");
+  releaseSecond();
 });

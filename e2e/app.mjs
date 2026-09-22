@@ -63,6 +63,25 @@ function running(pid) {
 }
 
 let locked = false;
+const sessionTails = new Map();
+
+/** 같은 앱 창을 조작하는 Node 테스트의 중복 세션을 즉시 거부한다. */
+export async function acquireWindowCheckSlot(appName) {
+  if (sessionTails.has(appName)) {
+    throw new Error(
+      `an application window check is already active for ${appName}; ` +
+      "run the e2e package with its declared --test-concurrency=1 entry point",
+    );
+  }
+  const current = {};
+  sessionTails.set(appName, current);
+  let released = false;
+  return () => {
+    if (released) throw new Error(`window check slot for ${appName} was released twice`);
+    released = true;
+    if (sessionTails.get(appName) === current) sessionTails.delete(appName);
+  };
+}
 
 function lock() {
   if (locked) return;
@@ -106,10 +125,12 @@ function lock() {
 export async function open(t, app) {
   if (!existsSync(app.binary)) return null;
   lock();
+  const releaseSlot = await acquireWindowCheckSlot(app.name);
   let client;
   try {
     client = await connect({ configDir: app.configDir });
   } catch (error) {
+    releaseSlot();
     throw new Error(
       `${app.name} is not running, so nothing was measured (${error.message}). These checks drive an ` +
         "application that is already open and never open one themselves: a window that opens takes " +
@@ -132,6 +153,7 @@ export async function open(t, app) {
       }
     } finally {
       client.close();
+      releaseSlot();
     }
     if (failures.length === 1) throw failures[0];
     if (failures.length) throw new AggregateError(failures, `${failures.length} cleanup steps failed`);
