@@ -25,7 +25,7 @@ exposure-check:
 parity-check:
 	@node scripts/check-test-parity.mjs
 
-# 고정한 XTerm reference와 CSI selector inventory의 중복·누락·검사 연결을 기계적으로 감사한다.
+# 고정한 XTerm reference와 CSI/OSC selector inventory의 중복·누락·검사 연결을 기계적으로 감사한다.
 terminal-protocols-check:
 	@node scripts/check-terminal-protocol-inventory.mjs
 

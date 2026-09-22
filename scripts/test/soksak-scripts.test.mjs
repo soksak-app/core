@@ -126,7 +126,7 @@ test("window-source audit rejects forbidden control paths", { timeout: 5000 }, a
 test("terminal protocol inventory rejects missing, duplicate, or unlinked CSI rows", { timeout: 5000 }, async () => {
   const result = await run(node, [join(root, "scripts/check-terminal-protocol-inventory.mjs")]);
   assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);
-  assert.match(result.stdout, /PASS terminal protocol inventory: \d+ unique CSI rows with named tests/);
+  assert.match(result.stdout, /PASS terminal protocol inventory: \d+ unique CSI rows and \d+ unique OSC rows with named tests/);
 });
 
 test("terminal protocol inventory reproduces missing and duplicate CSI rows as Red", { timeout: 1000 }, async () => {
@@ -138,6 +138,12 @@ test("terminal protocol inventory reproduces missing and duplicate CSI rows as R
   });
   assert.ok(broken.errors.some((error) => error.includes("duplicate CSI selector row: A/B/C/D/G/H/f/s/u")));
   assert.ok(broken.errors.some((error) => error.includes("required CSI inventory row is missing: E/F")));
+  const brokenOsc = auditTerminalProtocolInventory({
+    engineSource: source.replace('selector: "0,2"', 'selector: "4"'),
+    testSource: tests,
+  });
+  assert.ok(brokenOsc.errors.some((error) => error.includes("duplicate OSC selector row: 4")));
+  assert.ok(brokenOsc.errors.some((error) => error.includes("required OSC inventory row is missing: 0,2")));
 });
 
 test("exposure audit verifies every declared core and plugin entry", { timeout: 5000 }, async () => {

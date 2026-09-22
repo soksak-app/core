@@ -33,6 +33,11 @@ const REQUIRED_ROWS = [
   "ESC =/>",
 ];
 
+const REQUIRED_OSC_ROWS = [
+  "0,2", "1,3", "4", "5,6", "10-12", "13-19,21,22,46", "50", "51", "52",
+  "60-62", "104", "105,106", "110-112", "I,l,L", "7,8,9,133", "1337",
+];
+
 export function auditTerminalProtocolInventory({ engineSource = engine, testSource = tests, specSource = specification } = {}) {
   const errors = [];
   if (!specSource.includes("XTerm control sequences, patch 411, 2026-08-23")) {
@@ -44,6 +49,8 @@ export function auditTerminalProtocolInventory({ engineSource = engine, testSour
 
   const rows = [...engineSource.matchAll(/CsiSelectorEvidence \{ selector: "([^"]+)", outcome: CsiOutcome::(Implemented|Unsupported), test: "([^"]+)" \}/g)]
     .map(([, selector, outcome, test]) => ({ selector, outcome, test }));
+  const oscRows = [...engineSource.matchAll(/OscSelectorEvidence \{\s*selector: "([^"]+)",\s*outcome: OscOutcome::(Implemented|Unsupported|Vendor),\s*test: "([^"]+)",?\s*\}/g)]
+    .map(([, selector, outcome, test]) => ({ selector, outcome, test }));
   const seen = new Set();
   for (const row of rows) {
     if (seen.has(row.selector)) errors.push(`duplicate CSI selector row: ${row.selector}`);
@@ -53,7 +60,16 @@ export function auditTerminalProtocolInventory({ engineSource = engine, testSour
   for (const selector of REQUIRED_ROWS) {
     if (!seen.has(selector)) errors.push(`required CSI inventory row is missing: ${selector}`);
   }
-  return { errors, rowCount: rows.length };
+  const seenOsc = new Set();
+  for (const row of oscRows) {
+    if (seenOsc.has(row.selector)) errors.push(`duplicate OSC selector row: ${row.selector}`);
+    seenOsc.add(row.selector);
+    if (!testSource.includes(`fn ${row.test}(`)) errors.push(`${row.selector}: named OSC test is missing: ${row.test}`);
+  }
+  for (const selector of REQUIRED_OSC_ROWS) {
+    if (!seenOsc.has(selector)) errors.push(`required OSC inventory row is missing: ${selector}`);
+  }
+  return { errors, rowCount: rows.length, oscRowCount: oscRows.length };
 }
 
 const result = auditTerminalProtocolInventory();
@@ -61,5 +77,5 @@ if (result.errors.length > 0) {
   for (const error of result.errors) console.error(`FAIL terminal protocol inventory: ${error}`);
   process.exitCode = 1;
 } else {
-  console.log(`PASS terminal protocol inventory: ${result.rowCount} unique CSI rows with named tests`);
+  console.log(`PASS terminal protocol inventory: ${result.rowCount} unique CSI rows and ${result.oscRowCount} unique OSC rows with named tests`);
 }
