@@ -39,6 +39,36 @@ fn vt_events_are_retained_and_exposed_in_order() {
 }
 
 #[test]
+fn bel_and_st_terminated_effects_and_queries_preserve_response_order() {
+    let mut engine = AlacrittyEngine::new();
+    engine.resize(10, 4);
+    engine.feed(
+        b"\x1b]2;st-title\x1b\\\x1b]4;1;rgb:0000/ffff/ffff\x07\x1b[38;5;1mA\x1b]4;1;?\x1b\\\x1b[6n",
+    );
+
+    let events = engine.drain_events();
+    assert!(matches!(events.first(), Some(EngineEvent::Title(title)) if title == "st-title"));
+    let replies: Vec<&[u8]> = events
+        .iter()
+        .filter_map(|event| match event {
+            EngineEvent::PtyWrite(bytes) => Some(bytes.as_slice()),
+            _ => None,
+        })
+        .collect();
+    let color_reply = replies
+        .iter()
+        .position(|reply| reply.windows(18).any(|part| part == b"rgb:0000/ffff/ffff"))
+        .expect("OSC 4 query must return the changed indexed color");
+    let cursor_reply = replies
+        .iter()
+        .position(|reply| *reply == b"\x1b[1;2R")
+        .expect("CSI 6n must return the cursor position");
+    assert!(color_reply < cursor_reply, "responses must retain input order");
+    assert_eq!(engine.screen().lines[0][0].ch.as_deref(), Some("A"));
+    assert_eq!(engine.screen().lines[0][0].fg.as_deref(), Some("#00ffff"));
+}
+
+#[test]
 fn osc1337_inline_image_is_typed_and_survives_input_chunk_boundaries() {
     let mut engine = AlacrittyEngine::new();
     engine.feed(b"before\x1b]1337;File=name=ZmlsZS5wbmc=;size=5;inline=1;width=2px:aGVsbG8=");
