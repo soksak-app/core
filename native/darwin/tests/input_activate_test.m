@@ -110,6 +110,15 @@ static void checkFailures(void) {
     check(state.result == SP_ACTIVATE_PENDING,
         [NSString stringWithFormat:@"a webview that does not apply the active state reports pending (%d)", state.result]);
 
+    // Hidden document views are not input targets. They must not hold an explicit
+    // activation request while a visible window is becoming active.
+    SPStalledWebView *hiddenStalled = [[[SPStalledWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 300)] autorelease];
+    hiddenStalled.hidden = YES;
+    NSWindow *hiddenWindow = makeWindow(NSWindow.class, hiddenStalled);
+    state = activate(hiddenWindow, 1);
+    check(state.result == SP_ACTIVATE_DONE,
+        [NSString stringWithFormat:@"a hidden webview does not block activation (%d)", state.result]);
+
     NSWindow *other = makeWindow(NSWindow.class, nil);
     [other orderFront:nil];
     SPYieldingWebView *yielding = [[[SPYieldingWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 300)] autorelease];
@@ -131,7 +140,7 @@ static void checkFailures(void) {
     check(state.result == SP_ACTIVATE_NOT_KEY && NSApp.isActive,
         [NSString stringWithFormat:@"an active application whose window cannot become key reports not key (%d)", state.result]);
 
-    for (NSWindow *window in @[pending, other, lost, unkeyable]) [window close];
+    for (NSWindow *window in @[pending, hiddenWindow, other, lost, unkeyable]) [window close];
 }
 
 int main(void) { @autoreleasepool {

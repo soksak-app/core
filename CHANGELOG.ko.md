@@ -272,3 +272,4 @@
 - V5 Red 근거: `pnpm test`는 1.2초, `make native-test`는 167초에 통과했다. `pnpm breaks`는 142개 주입 결함마다 전체 library suite를 반복하는 기존 러너 때문에 180초 lane을 넘겼으므로 통과로 기록하지 않는다. 일치하는 Tauri 분할 matrix는 2.1초에 4/4 통과했지만 정리 중 `notFound`와 endpoint broken-pipe 진단이 명시적으로 발생했으며 분류가 필요하다.
 - V5 Green: break 감사기는 격리 복사본·8개 lane·테스트 파일별 20초 제한·진행 출력을 사용하도록 수정했고 주입 결함 142개를 모두 검출했다. 일치하는 Tauri 분할 matrix는 2.1초에 4/4 통과했다. 정리 진단은 숨기지 않고 기존 stale-frame/recovery 계약으로 분류한다.
 - F8은 계속 미완료다. 재빌드 Tauri probe에서 한글 2-set 입력 소스는 확인했지만 필요한 System Events 실제 키 주입이 macOS 권한 오류 1002로 거부됐고, 실제 `terminal.compose` 이벤트는 관측되지 않았다. 합성 이벤트는 IME 근거로 세지 않았다.
+- F8 native 활성화 Green: 명시적 활성화가 입력을 받을 수 없는 숨겨진 WebView를 더 이상 기다리지 않는다. 집중 실행한 `native/darwin/build/input_activate_test`가 새 숨김 WebView 케이스와 기존 활성화 케이스를 모두 통과했다. 전체 `make test-activation` lane은 기존 inspector 부착 실패를 별도로 보고하므로 전체 통과로 기록하지 않았다. host IME 확정 기준은 아직 열려 있으며, 재빌드 Wails probe에서 보이는 `나` preedit 뒤 PTY에 원시 `ㄱㅏ`가 남았다.

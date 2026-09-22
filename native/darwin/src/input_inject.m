@@ -162,9 +162,10 @@ void sp_input_pointer_then(void *handle, double x, double y, int phase, int butt
     });
 }
 
-static void collectWebViews(NSView *view, NSMutableArray<WKWebView *> *found) {
-    if ([view isKindOfClass:WKWebView.class]) [found addObject:(WKWebView *)view];
-    for (NSView *child in view.subviews) collectWebViews(child, found);
+static void collectVisibleWebViews(NSView *view, NSMutableArray<WKWebView *> *found, BOOL ancestorVisible) {
+    BOOL visible = ancestorVisible && !view.hidden && view.alphaValue > 0 && view.window != nil;
+    if (visible && [view isKindOfClass:WKWebView.class]) [found addObject:(WKWebView *)view];
+    for (NSView *child in view.subviews) collectVisibleWebViews(child, found, visible);
 }
 
 // 창 안의 모든 웹뷰가 활성 상태를 웹 프로세스에 보낸 뒤 done 을 호출한다. WebKit 은 키 창 알림을
@@ -173,7 +174,7 @@ static void collectWebViews(NSView *view, NSMutableArray<WKWebView *> *found) {
 static void afterWebViewsActive(NSWindow *window, void (^done)(void)) {
     dispatch_async(dispatch_get_main_queue(), ^{
         NSMutableArray<WKWebView *> *views = [NSMutableArray array];
-        collectWebViews(window.contentView.superview ?: window.contentView, views);
+        collectVisibleWebViews(window.contentView.superview ?: window.contentView, views, YES);
         __block NSUInteger pending = views.count;
         if (pending == 0) { done(); return; }
         for (WKWebView *view in views) {
