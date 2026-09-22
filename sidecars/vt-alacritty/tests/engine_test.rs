@@ -330,6 +330,93 @@ fn primary_screen_reflows_without_losing_text_when_width_changes() {
 }
 
 #[test]
+fn soft_wraps_rejoin_but_explicit_newlines_remain_after_resize() {
+    let mut engine = AlacrittyEngine::new();
+    let first = "AAAA-BBBB-CCCC-DDDD";
+    let second = "hard-line";
+    engine.resize(6, 8);
+    engine.feed(format!("{first}\r\n{second}").as_bytes());
+    let narrow = engine.screen();
+    assert_eq!(text(&narrow), format!("{first}{second}"));
+    assert!(narrow.lines.iter().filter(|line| !line.is_empty()).count() >= 4);
+
+    engine.resize(40, 8);
+    let wide = engine.screen();
+    assert_eq!(text(&wide), format!("{first}{second}"));
+    assert_eq!(
+        wide.lines.iter().filter(|line| !line.is_empty()).count(),
+        2,
+        "the explicit newline must remain after soft wraps rejoin"
+    );
+}
+
+#[test]
+fn wide_cells_keep_their_width_and_text_through_reflow() {
+    let mut engine = AlacrittyEngine::new();
+    let value = "한글한글-終";
+    engine.resize(5, 8);
+    engine.feed(value.as_bytes());
+    assert_eq!(text(&engine.screen()), value);
+    assert!(engine.screen().lines[0].iter().any(|cell| cell.width == 2));
+
+    engine.resize(20, 8);
+    let wide = engine.screen();
+    assert_eq!(text(&wide), value);
+    assert!(wide.lines[0].iter().any(|cell| cell.width == 2));
+}
+
+#[test]
+fn cell_metrics_are_fixed_renderer_values_across_grid_resize() {
+    let mut engine = AlacrittyEngine::new();
+    engine.set_cell_metrics(9, 17).expect("positive renderer metrics");
+    engine.feed(b"\x1b[14t");
+    let before = engine.drain_events();
+    engine.resize(40, 10);
+    engine.feed(b"\x1b[14t");
+    let after = engine.drain_events();
+    let reply = |events: &[EngineEvent]| {
+        events.iter().find_map(|event| match event {
+            EngineEvent::PtyWrite(bytes) => Some(bytes.clone()),
+            _ => None,
+        })
+    };
+    assert_eq!(reply(&before).as_deref(), Some(b"\x1b[4;408;720t".as_slice()));
+    assert_eq!(reply(&after).as_deref(), Some(b"\x1b[4;170;360t".as_slice()));
+}
+
+#[test]
+fn scrollback_keeps_recent_visible_lines_after_overflow_and_resize() {
+    let mut engine = AlacrittyEngine::new();
+    engine.resize(20, 4);
+    engine.feed(b"one\r\ntwo\r\nthree\r\nfour\r\nfive\r\nsix");
+    let narrow = engine.screen();
+    assert!(text(&narrow).contains("six"));
+    assert!(!text(&narrow).contains("one"));
+
+    engine.resize(40, 4);
+    let wide = engine.screen();
+    assert!(text(&wide).contains("six"));
+    assert!(!text(&wide).contains("one"));
+}
+
+#[test]
+fn alternate_screen_is_separate_from_primary_scrollback() {
+    let mut engine = AlacrittyEngine::new();
+    engine.resize(20, 4);
+    engine.feed(b"primary\r\ntext");
+    let primary = text(&engine.screen());
+    engine.feed(b"\x1b[?1049h");
+    engine.feed(b"alternate");
+    assert!(engine.modes().alt_screen);
+    assert!(text(&engine.screen()).contains("alternate"));
+    assert!(!text(&engine.screen()).contains("primary"));
+    engine.feed(b"\x1b[?1049l");
+    assert!(!engine.modes().alt_screen);
+    assert!(text(&engine.screen()).contains(&primary));
+    assert!(!text(&engine.screen()).contains("alternate"));
+}
+
+#[test]
 fn csi_scroll_moves_the_visible_grid_and_respects_a_scroll_region() {
     let mut engine = AlacrittyEngine::new();
     engine.resize(10, 4);

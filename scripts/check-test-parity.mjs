@@ -649,6 +649,23 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F1.4",
+    implementation: [
+      { file: "sidecars/vt-alacritty/src/engine.rs", symbol: "resize" },
+      { file: "plugins/terminal/ui/terminal.js", symbol: "terminal.session" },
+    ],
+    tests: [
+      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "soft_wraps_rejoin_but_explicit_newlines_remain_after_resize" },
+      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "wide_cells_keep_their_width_and_text_through_reflow" },
+      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "cell_metrics_are_fixed_renderer_values_across_grid_resize" },
+      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "scrollback_keeps_recent_visible_lines_after_overflow_and_resize" },
+      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "alternate_screen_is_separate_from_primary_scrollback" },
+      { file: "e2e/terminal.test.mjs", id: "terminal image follows a window resize" },
+    ],
+    expected: "A narrow-to-wide resize preserves the complete logical text and explicit newlines, keeps wide-cell widths and renderer metrics fixed, retains scrollback semantics and primary/alternate isolation, and keeps the PTY, DOM plane, and native raster dimensions consistent in both hosts.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "G1.1",
     implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "discoverInventory" }],
     tests: [{ file: "scripts/test/test-parity.test.mjs", id: "discovery includes nested languages" }],

@@ -6,6 +6,8 @@
 
 ## 미배포
 
+- F1.4를 완료했다. 고정 renderer metric, hard/soft newline, 한글·전각 셀, overflow/scrollback, primary와 alternate screen 격리를 검사하는 터미널 줄바꿈 단언을 추가했다. Alacritty 엔진 검사가 27/27 통과했고 최신 재빌드 Tauri·Wails 창 크기 변경 검사가 각각 1/1 통과하며 PTY·DOM plane·네이티브 래스터 기하를 확인했다.
+
 - F0을 완료했다. 명시한 범위의 시작·기존 기본 동작 게이트를 닫았다. 재빌드 Tauri·Wails 하위 검사가 입력, 셸, 브라우저, appearance, 프로젝트/창 수명주기, 소유권, 프로토콜 명칭, 표시를 포함하며, 더 넓은 Wails 동등성과 합성/줄바꿈은 별도 항목으로 남겼다.
 
 - F0.5를 완료했다. 완료한 하위 검사와 최신 재빌드 단일 인스턴스 Tauri matrix가 startup·prompt/output·control·첫 클릭 네이티브 입력·appearance와 surface scope·first-run 프로젝트 열기·view timing·프로세스 소유권·stale composition 거부를 모두 포함한다. 제한된 모든 케이스가 통과했고 정상 종료가 endpoint와 lock을 제거했다.

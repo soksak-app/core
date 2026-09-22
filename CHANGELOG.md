@@ -6,6 +6,8 @@
 
 ## Unreleased
 
+- Completed F1.4. Added executable terminal reflow assertions for fixed renderer metrics, hard and soft newlines, Korean and wide cells, overflow/scrollback, and primary versus alternate screen isolation. The Alacritty engine suite passes 27/27, and current rebuilt Tauri and Wails window-resize checks pass 1/1 each with PTY, DOM plane, and native raster geometry verification.
+
 - Completed F0. The startup and existing-basic-operation gate is closed for its stated scope: rebuilt Tauri and Wails child checks cover input, shell, browser, appearance, project/window lifecycle, ownership, protocol naming, and presentation, while broader Wails parity and composition/reflow remain separate.
 
 - Completed F0.5. The completed child checks and the current rebuilt single-instance Tauri matrix now cover startup, prompt/output, controls, first-click native input, appearance and surface scope, first-run project opening, view timing, process ownership, and stale composition rejection. All bounded cases passed and normal shutdown removed the endpoint and lock.
