@@ -1703,7 +1703,7 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 
 // Aggregate review records are not capabilities and therefore do not need a
 // behavior link. Every completed capability must have one otherwise.
-const NON_CAPABILITY_COMPLETIONS = new Set(["G1.4-2"]);
+const NON_CAPABILITY_COMPLETIONS = new Set(["G1.4-2", "V3"]);
 
 export function auditCompletedFeatureLinks(features, checklistSource = readFileSync(`${ROOT}docs/features.md`, "utf8")) {
   const linked = new Set(features.map((feature) => feature.id));

@@ -1,5 +1,7 @@
 # Changelog
 
+- Completed V3. The commit-discipline audit at `0f70b5d` found no uncommitted changes; the latest geometry and CSI units have scoped commits `70983e5` and `0f70b5d` after focused Green checks and bilingual documentation updates.
+
 - Completed F7.13. The CSI inventory now records unsupported `CSI Ps t` window reports separately from implemented `14t`; fragmented unsupported input emits exactly one explicit error. The focused test passes 1/1 under a 15s supervisor in 5s total, with a 0.00s test body.
 
 - Completed F0.5.9-6. The 2026-09-21 crash evidence showed AppKit receiving negative surface geometry immediately before the Tauri endpoint worker aborted. Both hosts now reject non-finite and negative surface/overlay geometry before native placement while preserving zero-sized hidden surfaces. The focused Rust test passes 1/1 after a 6s source compile under a 10s test supervisor (test body 0.00s), the focused Go test passes 1/1 in 0.428s, and parity records 56 lanes, 251 implementation files, and 172 test files.

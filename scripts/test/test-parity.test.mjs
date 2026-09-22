@@ -123,6 +123,7 @@ test("completed capability entries all have feature evidence links", { timeout: 
   const inventory = auditInventory(files);
   assert.deepEqual(auditCompletedFeatureLinks(inventory.featureLinks), []);
   assert.ok(!inventory.featureLinks.some((feature) => feature.id === "G1.4-2"));
+  assert.ok(!inventory.featureLinks.some((feature) => feature.id === "V3"));
 });
 
 test("recorded parity counts cannot drift from the current inventory", { timeout: 1000 }, () => {
