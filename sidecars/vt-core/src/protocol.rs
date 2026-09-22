@@ -771,8 +771,12 @@ fn encode_keys(keys: &[InputKey], modes: &Modes) -> Result<Vec<u8>, String> {
                 let ch = text.chars().next().unwrap();
                 let encoded_bytes = if modifiers & 4 != 0 {
                     // ctrl 비트가 설정됨
-                    encoding::encode_ctrl_char(ch)
-                        .map_err(|e| format!("unknown key: Char with ctrl: {:?}", e))?
+                    encoding::encode_ctrl_char(ch).map_err(|error| {
+                        format!(
+                            "unknown key: Char with ctrl: {:?} (text {:?}, U+{:04X})",
+                            error, ch, ch as u32
+                        )
+                    })?
                 } else if modifiers & 2 != 0 {
                     // alt 비트가 설정됨
                     encoding::encode_alt_char(ch)
@@ -3093,6 +3097,26 @@ impl SessionPort for FakeSessionPort {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unsupported_ctrl_character_error_identifies_the_received_scalar() {
+        let error = encode_keys(
+            &[InputKey {
+                key: "Char".to_string(),
+                text: "ㅕ".to_string(),
+                shift: false,
+                alt: false,
+                ctrl: true,
+            }],
+            &Modes::default(),
+        )
+        .unwrap_err();
+
+        assert_eq!(
+            error,
+            "unknown key: Char with ctrl: Unsupported (text 'ㅕ', U+3155)"
+        );
+    }
 
     #[test]
     fn test_base64_decode() {

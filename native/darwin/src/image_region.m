@@ -378,6 +378,16 @@ static NSString *controlCharacterForANSIKeyCode(unsigned short keyCode) {
             NSString *keyCharacter = (flags & NSEventModifierFlagControl)
                 ? controlCharacterForANSIKeyCode(event.keyCode)
                 : nil;
+            if ((flags & NSEventModifierFlagControl) && keyCharacter.length == 0) {
+                NSString *reason = [NSString stringWithFormat:
+                    @"unsupported Ctrl character: native keyCode=%hu, character=U+%04X",
+                    event.keyCode, ch];
+                NSString *escapedReason = [reason stringByReplacingOccurrencesOfString:@"\\" withString:@"\\\\"];
+                escapedReason = [escapedReason stringByReplacingOccurrencesOfString:@"\"" withString:@"\\\""];
+                NSString *errorJSON = [NSString stringWithFormat:@"{\"type\":\"error\",\"reason\":\"%@\"}", escapedReason];
+                [self report:errorJSON.UTF8String];
+                return;
+            }
             unichar reportedCharacter = keyCharacter.length > 0 ? [keyCharacter characterAtIndex:0] : ch;
             NSString *textChar = [[NSString stringWithCharacters:&reportedCharacter length:1] stringByReplacingOccurrencesOfString:@"\\" withString:@"\\\\"];
             textChar = [textChar stringByReplacingOccurrencesOfString:@"\"" withString:@"\\\""];

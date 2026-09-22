@@ -588,6 +588,44 @@ int main(void) { @autoreleasepool {
         sp_region_close(region13a);
     }
 
+    // TEST 13b: unsupported physical Ctrl key reports the native key and received scalar
+    {
+        [collectedEvents removeAllObjects];
+
+        void *region13b = sp_region_create(surface, "test13b", testEvent, NULL);
+        sp_region_place(region13b, 10, 10, 10, 10, true);
+        sp_region_focus(region13b);
+        [collectedEvents removeAllObjects];
+
+        id regionView = (id)region13b;
+        NSEvent *unsupportedCtrlEvent = [NSEvent keyEventWithType:NSEventTypeKeyDown
+            location:NSZeroPoint
+            modifierFlags:NSEventModifierFlagControl
+            timestamp:0
+            windowNumber:0
+            context:nil
+            characters:@"ㅕ"
+            charactersIgnoringModifiers:@"ㅕ"
+            isARepeat:NO
+            keyCode:104];
+
+        [regionView keyDown:unsupportedCtrlEvent];
+
+        check([collectedEvents count] == 1,
+            [NSString stringWithFormat:@"TEST 13b: exactly 1 explicit error for unsupported Ctrl key (got %lu)", [collectedEvents count]]);
+        if ([collectedEvents count] > 0) {
+            NSString *eventStr = [collectedEvents objectAtIndex:0];
+            BOOL isError = [eventStr rangeOfString:@"\"type\":\"error\""].location != NSNotFound;
+            BOOL hasKeyCode = [eventStr rangeOfString:@"native keyCode=104"].location != NSNotFound;
+            BOOL hasScalar = [eventStr rangeOfString:@"character=U+3155"].location != NSNotFound;
+            BOOL noKeyFallback = [eventStr rangeOfString:@"\"type\":\"key\""].location == NSNotFound;
+            check(isError && hasKeyCode && hasScalar && noKeyFallback,
+                [NSString stringWithFormat:@"TEST 13b: unsupported Ctrl input reports its physical key and character without forwarding a substitute (got: %@)", eventStr]);
+        }
+
+        sp_region_close(region13b);
+    }
+
     // TEST 14: 키 이벤트 - 일반 문자 'a'
     {
         [collectedEvents removeAllObjects];
