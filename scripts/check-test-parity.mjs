@@ -879,6 +879,13 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F9",
+    implementation: [{ file: "e2e/library.test.mjs", symbol: "restoration connection" }],
+    tests: [{ file: "e2e/library.test.mjs", id: "library windows create and open projects in place" }],
+    expected: "Rebuilt Tauri and Wails library returns report connection, document, raster, and first-presentation phases with explicit failure preservation.",
+    levels: ["application"],
+  },
+  {
     id: "F1",
     implementation: [
       { file: "e2e/terminal.test.mjs", symbol: "three terminals survive repeated divider drags and project returns" },
