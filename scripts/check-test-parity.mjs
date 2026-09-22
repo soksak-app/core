@@ -888,6 +888,20 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F5",
+    implementation: [
+      { file: "plugins/terminal/ui/terminal.js", symbol: "startTerminal" },
+      { file: "sidecars/vt-core/src/protocol.rs", symbol: "send_state" },
+      { file: "packages/workbench/core-exposure.js", symbol: "registry.command" },
+    ],
+    tests: [
+      { file: "e2e/terminal.test.mjs", id: "terminal cursor policy uses declared settings, persistence, and pixels" },
+      { file: "e2e/terminal.test.mjs", id: "newly split terminal presents its first native raster" },
+    ],
+    expected: "Both rebuilt macOS hosts persist declared terminal cursor settings, reject invalid updates, render the effective policy in native pixels, and complete the first raster after a split without a presentation timeout.",
+    levels: ["unit", "native", "application"],
+  },
+  {
     id: "F10.1",
     implementation: [{ file: "packages/host/tauriv2/src/modals.rs", symbol: "pub(crate) fn show" }],
     tests: [{ file: "e2e/modal.test.mjs", id: "settings blocks background input and closes only through its close button" }],

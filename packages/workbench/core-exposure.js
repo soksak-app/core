@@ -6,6 +6,7 @@
 // 변경, 모달과 라이브러리의 그리기 뒤에 호출하고, 등록소는 감시 중인 값 중 달라진
 // 것만 호스트에 보낸다.
 import { registry, connectExposure, revisitRegistrations } from "./exposure.js";
+import { EXPOSURE_ERRORS, ExposureError } from "@soksak/plugin-api";
 import * as projects from "./projects.js";
 import {
   activeTab, addTabTo, capture, cardActs, closeCard, closePicker, closeTabById, currentGrid, dragState, focusCard,
@@ -212,7 +213,13 @@ export async function installCoreExposure({ library, renames, resetLayout, chrom
   status("core.chrome", chrome);
   status("core.rail", () => (currentGrid() ? railState() : null));
 
-  registry.command("core.settings.set", async ({ patch, scope }) => { await set(patch, scope); });
+  registry.command("core.settings.set", async ({ patch, scope }) => {
+    try {
+      await set(patch, scope);
+    } catch (error) {
+      throw new ExposureError(EXPOSURE_ERRORS.invalidParams, error.message);
+    }
+  });
   registry.command("core.settings.reset", async ({ key }) => { await reset(key); });
   registry.command("core.settings.change", async ({ key, value: input, scope }) => {
     await changeSetting(key, input, scope);

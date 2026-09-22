@@ -1253,6 +1253,7 @@ test("cursor policy sends explicit shape, blink, interval, idle timeout, and unf
 test("declared settings are sent at startup and on effective setting changes", async () => {
   FakeResizeObserver.reset();
   const fakeSidecar = createFakeSidecar();
+  const fakeExpose = createFakeExpose();
   let notify;
   const settings = {
     read: () => ({
@@ -1263,13 +1264,15 @@ test("declared settings are sent at startup and on effective setting changes", a
   };
   const terminal = await startTerminal({
     view: createFakeView(), attachImage: createFakeAttachImage().function,
-    sidecar: fakeSidecar, expose: createFakeExpose(), settings,
+    sidecar: fakeSidecar, expose: fakeExpose, settings,
     window: { TextEncoder: FakeTextEncoder },
   });
   assert.deepEqual(fakeSidecar.getMessages().at(-1).body, {
     operation: "cursor", shape: "underline", blink: "On", interval: 900,
     idleTimeout: 0, unfocused: "beam",
   });
+  assert.equal(fakeExpose.getStatus("terminal.cursor").readFn().shape, "underline");
+  assert.equal(fakeExpose.getStatus("terminal.cursor").readFn().blink, "On");
   notify({
     "cursor.shape": "beam", "cursor.blink": "Never", "cursor.interval": 1000,
     "cursor.idleTimeout": 5000, "cursor.unfocused": "solid", "clipboard.program": "deny",
@@ -1279,6 +1282,14 @@ test("declared settings are sent at startup and on effective setting changes", a
     operation: "cursor", shape: "beam", blink: "Never", interval: 1000,
     idleTimeout: 5000, unfocused: "solid",
   });
+  assert.equal(fakeExpose.getStatus("terminal.cursor").readFn().shape, "beam");
+  assert.equal(fakeExpose.getStatus("terminal.cursor").readFn().blink, "Never");
+  fakeSidecar.triggerEvent("test-session", {
+    event: "state", sessionId: "s1", cols: 80, rows: 24, cellWidth: 8, cellHeight: 16,
+    cursor: { col: 3, row: 2 },
+  });
+  assert.equal(fakeExpose.getStatus("terminal.cursor").readFn().shape, "beam");
+  assert.equal(fakeExpose.getStatus("terminal.cursor").readFn().blink, "Never");
   await terminal.dispose();
   assert.equal(notify, null);
 });

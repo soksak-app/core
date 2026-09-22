@@ -212,6 +212,15 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   const setCursorPolicy = async (value) => {
     const policy = normalizeCursorPolicy(value);
     await terminal.send(id, { operation: "cursor", ...policy });
+    cursor = {
+      ...cursor,
+      shape: policy.shape,
+      blink: policy.blink,
+      interval: policy.interval,
+      idleTimeout: policy.idleTimeout,
+      unfocused: policy.unfocused,
+    };
+    changed("cursor");
     return policy;
   };
   const pasteText = async () => {
@@ -476,7 +485,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       };
       if (body.cursor !== undefined) {
         try {
-          cursor = normalizeCursor(body.cursor);
+          cursor = normalizeCursor({ ...cursor, ...body.cursor });
           changed("cursor");
           if (typeof region.setCaret === "function") {
             Promise.resolve(region.setCaret({

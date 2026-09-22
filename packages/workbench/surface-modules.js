@@ -115,7 +115,8 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
         clipboard: scoped.clipboard,
         theme: scoped.theme,
         settings: { read: () => pluginSettings(surface.pluginId), on: (listener) =>
-          onSettingsChange(() => listener(pluginSettings(surface.pluginId))) }, },
+          onSettingsChange(() => listener(pluginSettings(surface.pluginId))) },
+      },
     });
     const exposure = registerSurfaceExposure({ root: shadow, expose: context.exposure, view,
       declarations: registry.surfaceDeclarations() });

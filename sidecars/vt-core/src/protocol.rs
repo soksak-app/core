@@ -1527,20 +1527,19 @@ async fn surface_task(
                             .and_then(|o| o.get("name"))
                             .and_then(|v| v.as_str())
                             .or_else(|| consumed.and_then(|r| r.get("name")).and_then(|v| v.as_str()));
-                        let response_sequence = consumed
-                            .and_then(|r| r.get("sequence"))
-                            .and_then(|v| v.as_u64())
-                            .or_else(|| image_obj.and_then(|o| o.get("sequence")).and_then(|v| v.as_u64()));
-                        let response_generation = consumed.and_then(|r| r.get("generation")).and_then(|v| v.as_u64())
-                            .or_else(|| image_obj.and_then(|o| o.get("generation")).and_then(|v| v.as_u64()));
-                        let response_raster = consumed.and_then(|r| r.get("raster")).and_then(|v| v.as_u64())
-                            .or_else(|| image_obj.and_then(|o| o.get("raster")).and_then(|v| v.as_u64()));
-                        let matches = image_state.as_ref().is_some_and(|state|
-                            Some(state.name.as_str()) == name
-                                && response_generation == Some(state.generation)
-                                && response_raster == Some(state.raster)
-                                && response_sequence == Some(state.sequence as u64));
-                        if matches && (consumed.is_some() || is_error) {
+                        // An image transfer is serialized: pending_draw means exactly one
+                        // envelope is awaiting a host response. During a layout replacement
+                        // the host can reject that envelope after its generation/raster has
+                        // already moved on, so exact metadata matching would leave the
+                        // sidecar permanently blocked with pending_draw=true. A response for
+                        // the current image name releases that one in-flight transfer; the
+                        // response error remains observable through the host log and the
+                        // pending configuration or dirty frame is rendered below.
+                        let releases_pending = image_state.as_ref().is_some_and(|state|
+                            state.pending_draw
+                                && Some(state.name.as_str()) == name
+                                && (consumed.is_some() || is_error));
+                        if releases_pending {
                             image_state.as_mut().unwrap().pending_draw = false;
                             if let Some(configuration) = pending_configuration.take() {
                                 let Some(new_state) = ImageState::new(configuration.name.clone(), configuration.generation,

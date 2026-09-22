@@ -1238,7 +1238,7 @@ async fn test_i1_image_envelope_on_output() {
     task.await.unwrap().unwrap();
 }
 
-/// Test I2: No second image envelope until transfer is consumed
+/// Test I2: No second image envelope until the host responds, including a stale response
 #[tokio::test]
 async fn test_i2_no_image_envelope_until_consumed() {
     let calls = Arc::new(Mutex::new(Calls::default()));
@@ -1311,8 +1311,9 @@ async fn test_i2_no_image_envelope_until_consumed() {
         );
     }
 
-    // Now send release response with sequence 1
-    to_serve.write_all(br#"{"surface":"s1","body":{"image":{"consumed":{"name":"view","generation":1,"raster":1,"sequence":1}}}}
+    // A layout replacement can make the in-flight response stale before the sidecar sees it.
+    // It must still release the serialized transfer so the dirty screen can be sent.
+    to_serve.write_all(br#"{"surface":"s1","body":{"image":{"error":"stale","name":"view","generation":2,"raster":9,"sequence":7}}}
 "#).await.unwrap();
 
     // Wait for second image envelope (sequence 2) within 2 seconds
