@@ -6,6 +6,8 @@
 
 ## Unreleased
 
+- Closed F1. The current rebuilt Tauri and Wails composition/reflow evidence is now recorded as one parent gate: divider and project-return captures pass without native border intrusion or shell white remnants, the Alacritty engine suite passes 27/27, and both host resize checks pass 1/1. Browser focus, terminal interaction, OSC/CSI, IME, restoration, and modal follow-ups remain separate.
+
 - Completed F1.4. Added executable terminal reflow assertions for fixed renderer metrics, hard and soft newlines, Korean and wide cells, overflow/scrollback, and primary versus alternate screen isolation. The Alacritty engine suite passes 27/27, and current rebuilt Tauri and Wails window-resize checks pass 1/1 each with PTY, DOM plane, and native raster geometry verification.
 
 - Completed F0. The startup and existing-basic-operation gate is closed for its stated scope: rebuilt Tauri and Wails child checks cover input, shell, browser, appearance, project/window lifecycle, ownership, protocol naming, and presentation, while broader Wails parity and composition/reflow remain separate.

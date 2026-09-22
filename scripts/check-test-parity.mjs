@@ -642,6 +642,20 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F1",
+    implementation: [
+      { file: "e2e/terminal.test.mjs", symbol: "three terminals survive repeated divider drags and project returns" },
+      { file: "sidecars/vt-alacritty/src/engine.rs", symbol: "resize" },
+    ],
+    tests: [
+      { file: "e2e/terminal.test.mjs", id: "three terminals survive repeated divider drags and project returns" },
+      { file: "e2e/terminal.test.mjs", id: "terminal image follows a window resize" },
+      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "soft_wraps_rejoin_but_explicit_newlines_remain_after_resize" },
+    ],
+    expected: "Current rebuilt Tauri and Wails windows preserve DOM/native containment and shell pixels through divider drags, while terminal resize preserves text, fixed cell metrics, and raster geometry.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F1.3",
     implementation: [{ file: "e2e/terminal.test.mjs", symbol: "roundTripsPerSet" }],
     tests: [{ file: "e2e/terminal.test.mjs", id: "three terminals survive repeated divider drags and project returns" }],
