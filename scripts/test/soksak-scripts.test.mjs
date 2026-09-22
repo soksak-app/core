@@ -14,6 +14,7 @@ import test from "node:test";
 import { BREAKS } from "../../packages/soksak/scripts/breaks.mjs";
 import { find as findReleaseMarkers } from "../check-release.mjs";
 import { auditHostPairs } from "../check-hosts.mjs";
+import { auditE2ESource } from "../check-e2e.mjs";
 import { auditTerminalProtocolInventory } from "../check-terminal-protocol-inventory.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
@@ -121,6 +122,17 @@ test("window-source audit rejects forbidden control paths", { timeout: 5000 }, a
   const result = await run(node, [join(root, "scripts/check-e2e.mjs")]);
   assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);
   assert.match(result.stdout, /Window check sources use only the endpoint/);
+});
+
+test("window-source audit rejects native input that activates the application", { timeout: 1000 }, () => {
+  const errors = auditE2ESource(
+    'await session.pointer(x, y, "move", { activate: true });',
+    "e2e/fixture.mjs",
+  );
+  assert.deepEqual(errors, [
+    "e2e/fixture.mjs:1: uses application activation that takes user focus",
+  ]);
+  assert.deepEqual(auditE2ESource('await session.pointer(x, y, "move");', "e2e/clean.mjs"), []);
 });
 
 test("terminal protocol inventory rejects missing, duplicate, or unlinked CSI rows", { timeout: 5000 }, async () => {

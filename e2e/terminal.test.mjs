@@ -501,7 +501,7 @@ for (const app of Object.values(APPS)) {
 
     const view = await s.rect("terminal.view", undefined, surface);
     await s.pointer(view.document.x + view.x + view.width / 2, view.document.y + view.y + view.height / 2,
-      "move", { activate: true });
+      "move");
     await s.until("host.window", (host) => host.active === true,
       "Korean IME test application window did not become active");
     await s.click(view.document.x + view.x + view.width / 2, view.document.y + view.y + view.height / 2);
