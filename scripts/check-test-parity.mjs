@@ -46,6 +46,7 @@ lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/tes
     "scripts/check-e2e.mjs",
     "scripts/check-e2e-host-parity.mjs",
     "scripts/check-exposure.mjs",
+    "scripts/check-terminal-protocol-inventory.mjs",
     "scripts/sidecar-packages.mjs",
   ], ["scripts/test/soksak-scripts.test.mjs", "scripts/test/e2e-host-parity.test.mjs"], { sharedTests: true }),
   lane("build environment audit", "shell", ["scripts/check-build-environment.sh"], ["scripts/test/soksak-scripts.test.mjs"], {
@@ -917,6 +918,16 @@ const FEATURE_LINKS = [
     ],
     expected: "CSI status, device-attribute, text-area, unsupported-window, intermediate, fragmented, and malformed-input paths have named observable response or rejection evidence.",
     levels: ["unit", "native"],
+  },
+  {
+    id: "F7.17",
+    implementation: [{ file: "scripts/check-terminal-protocol-inventory.mjs", symbol: "auditTerminalProtocolInventory" }],
+    tests: [
+      { file: "scripts/test/soksak-scripts.test.mjs", id: "terminal protocol inventory rejects missing, duplicate, or unlinked CSI rows" },
+      { file: "scripts/test/soksak-scripts.test.mjs", id: "terminal protocol inventory reproduces missing and duplicate CSI rows as Red" },
+    ],
+    expected: "The pinned XTerm patch-411 CSI audit mechanically rejects missing required rows, duplicate selectors, missing named tests, and incomplete specification anchors.",
+    levels: ["unit"],
   },
   {
     id: "F9",

@@ -152,7 +152,7 @@ pub const CSI_SELECTOR_INVENTORY: &[CsiSelectorEvidence] = &[
     CsiSelectorEvidence { selector: "1-6 SP q", outcome: CsiOutcome::Implemented, test: "decscusr_cursor_style_ids_are_observable" },
     CsiSelectorEvidence { selector: "CSI framing", outcome: CsiOutcome::Implemented, test: "csi_fragmentation_and_malformed_input_preserve_engine_state" },
     CsiSelectorEvidence { selector: "m", outcome: CsiOutcome::Implemented, test: "sgr_color_does_not_drop_the_character" },
-    CsiSelectorEvidence { selector: "?1049h/l", outcome: CsiOutcome::Implemented, test: "alternate_screen_1049_preserves_primary_and_cursor_state" },
+    CsiSelectorEvidence { selector: "?1049h/l", outcome: CsiOutcome::Implemented, test: "alternate_screen_is_separate_from_primary_scrollback" },
     CsiSelectorEvidence { selector: "?47/?1047/?1048h/l", outcome: CsiOutcome::Unsupported, test: "unsupported_csi_alternate_modes_are_explicit_errors" },
     CsiSelectorEvidence { selector: "S/T;r", outcome: CsiOutcome::Implemented, test: "csi_scroll_moves_the_visible_grid_and_respects_a_scroll_region" },
     CsiSelectorEvidence { selector: "J/K", outcome: CsiOutcome::Implemented, test: "csi_erase_display_and_line_change_only_the_requested_cells" },

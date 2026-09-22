@@ -1,5 +1,6 @@
 # 변경 기록
 
+- F7.17을 완료했다. `scripts/check-terminal-protocol-inventory.mjs`가 고정 patch-411 reference, 필수 CSI 25행, selector 중복, 이름 있는 Rust 테스트와 complete-CSI 계약을 기계적으로 검사한다. 정상·주입 Red 실행이 통과했으며 vendor 계약은 F7.18에 남겼다.
 - F7.16을 완료했다. CSI inventory가 `5n/6n`, primary/secondary `c/>c`, `14t`, 분할 unsupported window, rectangle/protected-cell/palette intermediate와 framing/잘못된 입력 근거를 이름 있는 검사에 연결한다. 순서가 있는 device/status 응답이 15초 감독 아래 1/1 통과했다.
 - F7.16을 시작했다. device/status/window 응답과 XTerm intermediate 형식을 구현된 응답과 명시적 거부 케이스로 분리하고, 제한된 순서·잘못된 입력 검사를 추가한다.
 - F7.15를 완료했다. 공개 `Modes` 계약이 focus-in/out, UTF-8 mouse, SGR mouse, alternate-scroll 상태를 노출한다. engine 검사가 설정/초기화 전환, 상호 배타적인 UTF-8/SGR 전환, 기존 keyboard/mouse/bracketed-paste mode와 명시적 inventory 연결을 검증하며 15초 감독 아래 1/1 통과했다.

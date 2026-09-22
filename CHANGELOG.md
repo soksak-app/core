@@ -1,5 +1,6 @@
 # Changelog
 
+- Completed F7.17. `scripts/check-terminal-protocol-inventory.mjs` now mechanically checks the pinned patch-411 reference, 25 required CSI rows, duplicate selectors, named Rust tests, and the complete-CSI contract. Clean and injected Red runs pass; F7.18 remains open for vendor contracts.
 - Completed F7.16. The CSI inventory now links `5n/6n`, primary/secondary `c/>c`, `14t`, fragmented unsupported window reports, rectangle/protected-cell/palette intermediates, and framing/malformed-input evidence. Ordered device/status replies pass 1/1 under a 15s supervisor.
 - Started F7.16. Device/status/window replies and XTerm intermediate forms are being separated into implemented responses and explicit rejection cases with bounded ordering and malformed-input tests.
 - Completed F7.15. The public `Modes` contract now exposes focus-in/out, UTF-8 mouse, SGR mouse, and alternate-scroll state. The engine test verifies set/reset transitions, the mutually exclusive UTF-8/SGR switch, existing keyboard/mouse/bracketed-paste modes, and explicit mode inventory links; the focused case passes 1/1 under a 15s supervisor.

@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: preflight prepare build verify docs-check boundaries platforms hosts-check e2e-check exposure-check parity-check language-test release-check
+.PHONY: preflight prepare build verify docs-check boundaries platforms hosts-check e2e-check exposure-check parity-check terminal-protocols-check language-test release-check
 
 docs-check:
 	@node scripts/check-docs.mjs
@@ -25,6 +25,10 @@ exposure-check:
 parity-check:
 	@node scripts/check-test-parity.mjs
 
+# 고정한 XTerm reference와 CSI selector inventory의 중복·누락·검사 연결을 기계적으로 감사한다.
+terminal-protocols-check:
+	@node scripts/check-terminal-protocol-inventory.mjs
+
 # JS/TS, Rust, Go, and Objective-C test cases use the same observable case contract.
 language-test: native-darwin
 	@$(MAKE) -C native/darwin $(CURDIR)/native/darwin/build/appearance_test
@@ -47,7 +51,7 @@ prepare: preflight
 build: prepare
 	@pnpm build
 
-verify: prepare docs-check exposure-check parity-check
+verify: prepare docs-check exposure-check parity-check terminal-protocols-check
 	@pnpm test
 	@$(MAKE) language-test
 	@pnpm breaks

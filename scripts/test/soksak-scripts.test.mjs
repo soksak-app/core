@@ -14,6 +14,7 @@ import test from "node:test";
 import { BREAKS } from "../../packages/soksak/scripts/breaks.mjs";
 import { find as findReleaseMarkers } from "../check-release.mjs";
 import { auditHostPairs } from "../check-hosts.mjs";
+import { auditTerminalProtocolInventory } from "../check-terminal-protocol-inventory.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const packageRoot = join(root, "packages/soksak");
@@ -120,6 +121,23 @@ test("window-source audit rejects forbidden control paths", { timeout: 5000 }, a
   const result = await run(node, [join(root, "scripts/check-e2e.mjs")]);
   assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);
   assert.match(result.stdout, /Window check sources use only the endpoint/);
+});
+
+test("terminal protocol inventory rejects missing, duplicate, or unlinked CSI rows", { timeout: 5000 }, async () => {
+  const result = await run(node, [join(root, "scripts/check-terminal-protocol-inventory.mjs")]);
+  assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);
+  assert.match(result.stdout, /PASS terminal protocol inventory: \d+ unique CSI rows with named tests/);
+});
+
+test("terminal protocol inventory reproduces missing and duplicate CSI rows as Red", { timeout: 1000 }, async () => {
+  const source = await readFile(join(root, "sidecars/vt-alacritty/src/engine.rs"), "utf8");
+  const tests = await readFile(join(root, "sidecars/vt-alacritty/tests/engine_test.rs"), "utf8");
+  const broken = auditTerminalProtocolInventory({
+    engineSource: source.replace('selector: "E/F"', 'selector: "A/B/C/D/G/H/f/s/u"'),
+    testSource: tests,
+  });
+  assert.ok(broken.errors.some((error) => error.includes("duplicate CSI selector row: A/B/C/D/G/H/f/s/u")));
+  assert.ok(broken.errors.some((error) => error.includes("required CSI inventory row is missing: E/F")));
 });
 
 test("exposure audit verifies every declared core and plugin entry", { timeout: 5000 }, async () => {
