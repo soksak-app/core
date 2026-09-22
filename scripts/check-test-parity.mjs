@@ -340,6 +340,22 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F0",
+    implementation: [
+      { file: "apps/tauriv2/src/main.rs", symbol: "run" },
+      { file: "packages/workbench/core-exposure.js", symbol: "installCoreExposure" },
+    ],
+    tests: [
+      { file: "e2e/commands.test.mjs", id: "card, tab, and menu commands change the grid" },
+      { file: "e2e/terminal.test.mjs", id: "native keyboard edits and executes independently in three terminals" },
+      { file: "e2e/browser.test.mjs", id: "browser documents follow host theme pixels for existing, new, and reloaded documents" },
+      { file: "e2e/library.test.mjs", id: "library windows create and open projects in place" },
+      { file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" },
+    ],
+    expected: "The rebuilt application starts, performs the existing basic operations through declared commands and native input, and shuts down without leaving its endpoint or owned lock; broader Wails parity and composition/reflow are checked by separate feature entries.",
+    levels: ["application"],
+  },
+  {
     id: "F0.1",
     implementation: [
       { file: "native/darwin/src/input_inject.m", symbol: "sp_input_pointer" },

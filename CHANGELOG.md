@@ -6,6 +6,8 @@
 
 ## Unreleased
 
+- Completed F0. The startup and existing-basic-operation gate is closed for its stated scope: rebuilt Tauri and Wails child checks cover input, shell, browser, appearance, project/window lifecycle, ownership, protocol naming, and presentation, while broader Wails parity and composition/reflow remain separate.
+
 - Completed F0.5. The completed child checks and the current rebuilt single-instance Tauri matrix now cover startup, prompt/output, controls, first-click native input, appearance and surface scope, first-run project opening, view timing, process ownership, and stale composition rejection. All bounded cases passed and normal shutdown removed the endpoint and lock.
 
 - Completed F0.5.7. A rebuilt Tauri command matrix reproduced a surface-readiness race where `core.card.add-tab` answered before composition declaration and an immediate `core.tab.move` caused native presentation failure and endpoint timeouts. Workbench command settling now waits for every mounted surface module to complete startup; the focused readiness test and the bounded Tauri command, control, modal, shell, browser, terminal, library, and normal-shutdown checks pass.
