@@ -12,6 +12,8 @@
 #import "capture.h"
 #import <ScreenCaptureKit/ScreenCaptureKit.h>
 
+static void setCaptureError(NSString* message);
+
 static dispatch_semaphore_t captureFirstFrame;
 // 종료 요청 시각(mach 절대 시각)과, 그 이후에 표시된 프레임이 도착했음을 알리는 신호.
 static uint64_t captureStopAfter;
@@ -146,6 +148,7 @@ static SCFrameStatus frameStatus(CMSampleBufferRef sample) {
     size_t stride = CVPixelBufferGetBytesPerRow(buffer);
     const uint8_t* base = (const uint8_t*)CVPixelBufferGetBaseAddress(buffer);
     if (base == NULL) {
+        setCaptureError([NSString stringWithFormat:@"frame %d has no pixel buffer", self.queued + 1]);
         CVPixelBufferUnlockBaseAddress(buffer, kCVPixelBufferLock_ReadOnly);
         dispatch_semaphore_signal(capturePending);
         return;
@@ -167,6 +170,7 @@ static SCFrameStatus frameStatus(CMSampleBufferRef sample) {
     }
     CVPixelBufferUnlockBaseAddress(buffer, kCVPixelBufferLock_ReadOnly);
     if (copy == NULL) {
+        setCaptureError([NSString stringWithFormat:@"frame %d could not be copied: %s", self.queued + 1, strerror(errno)]);
         fprintf(stderr, "observe: frame %d was not copied, %s\n", self.queued + 1, strerror(errno));
         dispatch_semaphore_signal(capturePending);
         return;
@@ -182,11 +186,15 @@ static SCFrameStatus frameStatus(CMSampleBufferRef sample) {
         bool whole = file != NULL && fwrite(copy, size, 1, file) == 1;
         bool closed = file != NULL && fclose(file) == 0;
         if (!whole || !closed) {
+            setCaptureError([NSString stringWithFormat:@"frame %d was not written: %s", number, strerror(errno)]);
             fprintf(stderr, "observe: frame %d was not written, %s\n", number, strerror(errno));
             unlink(pending.UTF8String);
         } else if (rename(pending.UTF8String, path.UTF8String) == 0) {
             self.written++;
             if (self.written == captureBefore + 1) dispatch_semaphore_signal(captureFirstFrame);
+        } else {
+            setCaptureError([NSString stringWithFormat:@"frame %d could not be committed: %s", number, strerror(errno)]);
+            unlink(pending.UTF8String);
         }
         free(copy);
         self.slowestWrite = MAX(self.slowestWrite, CACurrentMediaTime() - began);
@@ -195,6 +203,9 @@ static SCFrameStatus frameStatus(CMSampleBufferRef sample) {
 }
 
 - (void)stream:(SCStream*)stream didStopWithError:(NSError*)error {
+    if (error != nil) {
+        setCaptureError([NSString stringWithFormat:@"capture stopped with error: %@", error.localizedDescription]);
+    }
     fprintf(stderr, "observe: capture stopped, %s\n", error.localizedDescription.UTF8String);
 }
 
@@ -206,12 +217,34 @@ static SCContentFilter* captureFilter = nil;
 static SCStreamConfiguration* captureConfig = nil;
 static SCStream* captureStream = nil;
 static SPCapture* captureSink = nil;
+static NSString* captureError = nil;
+
+static void clearCaptureError(void) {
+    @synchronized([SPCapture class]) {
+        [captureError release];
+        captureError = nil;
+    }
+}
+
+static void setCaptureError(NSString* message) {
+    @synchronized([SPCapture class]) {
+        [captureError release];
+        captureError = [message copy];
+    }
+}
+
+const char *sp_capture_error(void) {
+    @synchronized([SPCapture class]) {
+        return captureError == nil ? "" : captureError.UTF8String;
+    }
+}
 
 // sp_capture_open 은 창을 조회해 캡처에 필요한 값을 보관한다.
 //
 // 조회는 비동기이므로 답을 기다린다. 기다리지 않으면 그 사이에 시작한 캡처가 조용히
 // 아무 일도 하지 않고, 프레임이 0 장인 이유가 어디에도 남지 않는다.
-void sp_capture_open(long windowNumber, bool display) {
+bool sp_capture_open(long windowNumber, bool display) {
+    clearCaptureError();
     // 이전 대상을 지운다. 조회에 실패하면 이전 대상을 녹화하지 않고 녹화가 시작되지 않는다.
     captureFilter = nil;
     dispatch_semaphore_t answered = dispatch_semaphore_create(0);
@@ -223,6 +256,7 @@ void sp_capture_open(long windowNumber, bool display) {
     [SCShareableContent getCurrentProcessShareableContentWithCompletionHandler:
         ^(SCShareableContent* content, NSError* error) {
         if (error != nil) {
+            setCaptureError([NSString stringWithFormat:@"current-process capture unavailable: %@", error.localizedDescription]);
             fprintf(stderr, "observe: current-process capture unavailable, %s\n",
                 error.localizedDescription.UTF8String);
             dispatch_semaphore_signal(answered);
@@ -242,6 +276,7 @@ void sp_capture_open(long windowNumber, bool display) {
                     break;
                 }
                 if (filter == nil) {
+                    setCaptureError([NSString stringWithFormat:@"window %ld is on no display", windowNumber]);
                     fprintf(stderr, "observe: window %ld is on no display\n", windowNumber);
                     dispatch_semaphore_signal(answered);
                     return;
@@ -276,19 +311,34 @@ void sp_capture_open(long windowNumber, bool display) {
             dispatch_semaphore_signal(answered);
             return;
         }
+        setCaptureError([NSString stringWithFormat:@"window %ld not found", windowNumber]);
         fprintf(stderr, "observe: window %ld not found\n", windowNumber);
         dispatch_semaphore_signal(answered);
     }];
-    dispatch_semaphore_wait(answered, dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC));
+    long wait = dispatch_semaphore_wait(answered, dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC));
     dispatch_release(answered);
+    if (wait != 0) {
+        setCaptureError(@"shareable content query timed out after 10000ms");
+        return false;
+    }
+    return captureFilter != nil;
 }
 
-void sp_capture_start(const char* directory) {
+bool sp_capture_start(const char* directory) {
+    clearCaptureError();
     if (captureFilter == nil) {
+        setCaptureError(@"capture has no prepared window");
         fprintf(stderr, "observe: capture has no window to record\n");
-        return;
+        return false;
     }
-    if (captureStream != nil) return;
+    if (captureStream != nil) {
+        setCaptureError(@"capture is already running");
+        return false;
+    }
+    if (directory == NULL) {
+        setCaptureError(@"capture directory is null");
+        return false;
+    }
     captureStartedAt = mach_absolute_time();
     captureLimitReached = false;
     // 수신 객체는 한 번만 만든다. 녹화마다 새로 만들면 프레임 번호가 1 부터 다시
@@ -312,6 +362,10 @@ void sp_capture_start(const char* directory) {
     if (captureFirstFrame) dispatch_release(captureFirstFrame);
     captureFirstFrame = dispatch_semaphore_create(0);
     captureSink.directory = [NSString stringWithUTF8String:directory];
+    if (captureSink.directory == nil) {
+        setCaptureError(@"capture directory is not valid UTF-8");
+        return false;
+    }
     captureStream = [[SCStream alloc] initWithFilter:captureFilter
                                        configuration:captureConfig
                                             delegate:captureSink];
@@ -322,23 +376,34 @@ void sp_capture_start(const char* directory) {
                 sampleHandlerQueue:captureQueue
                              error:&error];
     if (error != nil) {
+        setCaptureError([NSString stringWithFormat:@"capture output was not added: %@", error.localizedDescription]);
         fprintf(stderr, "observe: capture output not added, %s\n",
             error.localizedDescription.UTF8String);
         [captureStream release];
         captureStream = nil;
-        return;
+        return false;
     }
     [captureStream startCaptureWithCompletionHandler:^(NSError* failed) {
         if (failed != nil) {
+            setCaptureError([NSString stringWithFormat:@"capture did not start: %@", failed.localizedDescription]);
             fprintf(stderr, "observe: capture not started, %s\n",
                 failed.localizedDescription.UTF8String);
         }
     }];
+    return true;
 }
 
 int sp_capture_wait(void) {
-    return captureStream != nil && dispatch_semaphore_wait(captureFirstFrame,
-        dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC)) == 0;
+    if (captureStream == nil) {
+        setCaptureError(@"capture is not running");
+        return 0;
+    }
+    if (dispatch_semaphore_wait(captureFirstFrame,
+        dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC)) != 0) {
+        setCaptureError(@"no capture frame arrived within 10000ms");
+        return 0;
+    }
+    return 1;
 }
 
 // Stops the stream and reports how many frames reached disk.
@@ -347,7 +412,11 @@ int sp_capture_wait(void) {
 // written while it runs. Reading the count before that would under-report, and
 // the process exiting then would leave the last file short.
 int sp_capture_stop(double after) {
-    if (captureStream == nil) return 0;
+    clearCaptureError();
+    if (captureStream == nil) {
+        setCaptureError(@"capture is not running");
+        return 0;
+    }
     SCStream* stream = captureStream;
     // 호출 시점과 after 중 늦은 시각까지 표시된 화면이 스트림에 모두 전달된 뒤 멈춘다. 앱이 커밋한
     // 내용은 호출보다 늦게 표시될 수 있으므로 호출자가 그 표시 시각을 넘긴다. 스트림은 화면이 바뀌지
@@ -363,6 +432,7 @@ int sp_capture_stop(double after) {
         captureStopAfter = until;
     });
     if (dispatch_semaphore_wait(caughtUp, dispatch_time(until, NSEC_PER_SEC)) != 0) {
+        setCaptureError(@"no frame arrived within 1000ms after the requested display time");
         fprintf(stderr, "observe: no frame displayed within 1 second after the requested display time\n");
     }
     dispatch_sync(captureQueue, ^{
@@ -378,7 +448,9 @@ int sp_capture_stop(double after) {
         }
         dispatch_semaphore_signal(stopped);
     }];
-    dispatch_semaphore_wait(stopped, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
+    if (dispatch_semaphore_wait(stopped, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) != 0) {
+        setCaptureError(@"capture stop did not complete within 5000ms");
+    }
     dispatch_sync(captureQueue, ^{});
     // 복사해 둔 프레임을 모두 쓴 뒤 센다.
     dispatch_sync(captureWriter, ^{});

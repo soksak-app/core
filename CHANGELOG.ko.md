@@ -1,5 +1,7 @@
 # 변경 기록
 
+- F0.4-1.4를 완료했다. Darwin capture 실패가 이제 로그만 남기는 `void` 호출이나 조용히 버려지는 잘못된 경로가 아니라 명시적 상태와 오류 문자열로 Objective-C/Rust 경계를 통과한다. native capture 테스트와 기계 실패 감사가 수정된 계약을 검증하고 parity 자기 테스트 25개가 통과한다. 교차 언어 실패 매트릭스는 F0.4-1.5에 남아 있다.
+
 ## 미배포
 
 - F0.4-1.3.3을 완료했다. Rust 실패 감사가 이제 VT core·VT Alacritty·Tauri host·Tauri application production lane을 모두 포함해 남은 bridge 경로를 암묵적으로 남기지 않는다. 선언된 native build 환경에서 production `Result` 무시가 없고, Windows 미지원 연산은 명시적 오류를 반환하며, parity 자기 테스트와 native workspace 검사가 통과했다. Objective-C와 교차 언어 실패 매트릭스는 F0.4-1.4와 F0.4-1.5에 남아 있다.

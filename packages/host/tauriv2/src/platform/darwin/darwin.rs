@@ -403,21 +403,19 @@ impl Platform for Darwin {
 
     #[cfg(feature = "diagnostics")]
     fn capture_open(&self, window_number: isize, display: bool) -> Result<(), String> {
-        capture::open(window_number, display);
-        Ok(())
+        capture::open(window_number, display)
     }
     #[cfg(feature = "diagnostics")]
     fn capture_start(&self, directory: &str) -> Result<(), String> {
-        capture::start(directory);
-        Ok(())
+        capture::start(directory)
     }
     #[cfg(feature = "diagnostics")]
     fn capture_wait(&self) -> Result<bool, String> {
-        Ok(capture::wait())
+        capture::wait()
     }
     #[cfg(feature = "diagnostics")]
     fn capture_stop(&self, after: f64) -> Result<i32, String> {
-        Ok(capture::stop(after))
+        capture::stop(after)
     }
     #[cfg(feature = "diagnostics")]
     fn capture_limited(&self) -> Result<bool, String> {

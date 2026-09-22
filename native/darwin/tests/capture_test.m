@@ -13,8 +13,10 @@ int main(void) { @autoreleasepool {
     [NSApp finishLaunching];
     char directory[] = "/tmp/soksak-capture-test-XXXXXX";
     check(mkdtemp(directory) != NULL, @"a private capture directory is created");
-    sp_capture_open(-1, false);
-    sp_capture_start(directory);
+    check(!sp_capture_open(-1, false), @"an invalid window is rejected by the native capture boundary");
+    check(sp_capture_error() != NULL && strlen(sp_capture_error()) > 0, @"open failure is observable to the caller");
+    check(!sp_capture_start(directory), @"starting without a capture target is rejected");
+    check(sp_capture_error() != NULL && strlen(sp_capture_error()) > 0, @"start failure is observable to the caller");
     check(sp_capture_wait() == 0, @"an invalid window cannot produce a capture frame");
     check(sp_capture_stop(0) == 0, @"stopping an invalid capture reports no written frames");
     NSArray *files = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:

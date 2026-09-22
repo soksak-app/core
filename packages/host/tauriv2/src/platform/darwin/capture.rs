@@ -1,10 +1,11 @@
 //! native/darwin 의 창 캡처 호출.
 
-use std::ffi::{c_char, c_int, CString};
+use std::ffi::{c_char, c_int, CStr, CString};
 
 extern "C" {
-    fn sp_capture_open(window_number: isize, display: bool);
-    fn sp_capture_start(directory: *const c_char);
+    fn sp_capture_open(window_number: isize, display: bool) -> bool;
+    fn sp_capture_start(directory: *const c_char) -> bool;
+    fn sp_capture_error() -> *const c_char;
     fn sp_capture_wait() -> c_int;
     fn sp_capture_stop(after: f64) -> c_int;
     fn sp_capture_limited() -> bool;
@@ -12,21 +13,39 @@ extern "C" {
 }
 
 /// 창 번호의 창을 캡처 대상으로 준비한다. display 이면 창이 있는 디스플레이에서 이 앱의 창을 캡처한다.
-pub fn open(window_number: isize, display: bool) {
-    unsafe { sp_capture_open(window_number, display) }
+fn last_error(operation: &str) -> String {
+    let message = unsafe { CStr::from_ptr(sp_capture_error()) };
+    format!("{operation}: {}", message.to_string_lossy())
+}
+
+pub fn open(window_number: isize, display: bool) -> Result<(), String> {
+    if unsafe { sp_capture_open(window_number, display) } {
+        Ok(())
+    } else {
+        Err(last_error("capture open failed"))
+    }
 }
 
 /// directory 에 프레임 기록을 시작한다. NUL 문자를 포함한 경로는 무시한다.
-pub fn start(directory: &str) {
-    let Ok(where_to) = CString::new(directory) else {
-        return;
-    };
-    unsafe { sp_capture_start(where_to.as_ptr()) }
+pub fn start(directory: &str) -> Result<(), String> {
+    let where_to = CString::new(directory)
+        .map_err(|_| "capture start failed: directory contains NUL".to_owned())?;
+    if unsafe { sp_capture_start(where_to.as_ptr()) } {
+        Ok(())
+    } else {
+        Err(last_error("capture start failed"))
+    }
 }
 
 /// after 의 표시 시각(ms, 0 이면 호출 시각)까지 기록한 뒤 기록을 끝내고 기록한 프레임 수를 반환한다.
-pub fn stop(after: f64) -> i32 {
-    unsafe { sp_capture_stop(after) }
+pub fn stop(after: f64) -> Result<i32, String> {
+    let frames = unsafe { sp_capture_stop(after) };
+    let error = unsafe { CStr::from_ptr(sp_capture_error()) };
+    if error.to_bytes().is_empty() {
+        Ok(frames)
+    } else {
+        Err(format!("capture stop failed: {}", error.to_string_lossy()))
+    }
 }
 
 /// 마지막 녹화가 유한한 프레임 상한에 도달해 자동으로 멈췄는지 반환한다.
@@ -40,6 +59,10 @@ pub fn longest_gap() -> f64 {
 }
 
 /// 첫 프레임을 기다리고 기록 여부를 반환한다.
-pub fn wait() -> bool {
-    unsafe { sp_capture_wait() != 0 }
+pub fn wait() -> Result<bool, String> {
+    if unsafe { sp_capture_wait() != 0 } {
+        Ok(true)
+    } else {
+        Err(last_error("capture wait failed"))
+    }
 }

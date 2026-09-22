@@ -374,6 +374,20 @@ const FEATURE_LINKS = [
     levels: ["unit", "native"],
   },
   {
+    id: "F0.4-1.4",
+    implementation: [
+      { file: "native/darwin/src/capture.m", symbol: "sp_capture_error" },
+      { file: "packages/host/tauriv2/src/platform/darwin/capture.rs", symbol: "last_error" },
+      { file: "scripts/check-test-parity.mjs", symbol: "auditNativeFailurePropagation" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/capture_test.m", id: "open failure is observable to the caller" },
+      { file: "scripts/test/test-parity.test.mjs", id: "Darwin native failure audit rejects log-only capture boundaries" },
+    ],
+    expected: "Darwin capture open, start, wait, and stop failures cross the native boundary as explicit errors; invalid directory input and frame-write failures are not silently discarded.",
+    levels: ["unit", "native"],
+  },
+  {
     id: "F2.1",
     implementation: [{ file: "sidecars/vt-core/src/pty.rs", symbol: "pub fn close" }],
     tests: [{ file: "sidecars/vt-core/tests/pty_lifecycle.rs", id: "real_sessions_are_independent_and_close_removes_session" }],
@@ -771,6 +785,40 @@ export function auditRustFailurePropagation(files, readSource = (file) => readFi
   return errors;
 }
 
+/** Require the Darwin capture FFI to return native failures instead of logging and succeeding. */
+export function auditNativeFailurePropagation(files, readSource = (file) => readFileSync(`${ROOT}${file}`, "utf8")) {
+  const errors = [];
+  const header = "native/darwin/src/capture.h";
+  const bridge = "packages/host/tauriv2/src/platform/darwin/capture.rs";
+  const implementation = "native/darwin/src/capture.m";
+  if (!files.includes(header) || !files.includes(bridge) || !files.includes(implementation)) return errors;
+  let headerSource, bridgeSource, implementationSource;
+  try {
+    headerSource = readSource(header);
+    bridgeSource = readSource(bridge);
+    implementationSource = readSource(implementation);
+  } catch (error) {
+    errors.push(`Darwin capture failure audit cannot read its sources: ${error?.message ?? error}`);
+    return errors;
+  }
+  for (const name of ["sp_capture_open", "sp_capture_start"]) {
+    const declaration = new RegExp(`\\bvoid\\s+${name}\\s*\\(`);
+    if (declaration.test(headerSource) || declaration.test(implementationSource)) {
+      errors.push(`${name}: native capture failure cannot be represented by a void return`);
+    }
+    if (!new RegExp(`fn\\s+${name}\\([^)]*\\)\\s*->\\s*bool`).test(bridgeSource)) {
+      errors.push(`${name}: Rust FFI declaration must return bool`);
+    }
+  }
+  if (!/sp_capture_error/.test(headerSource) || !/sp_capture_error/.test(bridgeSource)) {
+    errors.push("Darwin capture: native failure text is not exposed across the FFI boundary");
+  }
+  if (/let\s+Ok\([^)]*\)\s*=\s*CString::new[\s\S]{0,120}\breturn\s*;/.test(bridgeSource)) {
+    errors.push("Darwin capture: invalid directory input is silently discarded");
+  }
+  return errors;
+}
+
 // 언어별 고정 루트를 두지 않는다. 한 패키지의 다른 언어도 모두 발견한다.
 export function discoverInventory(files) {
   const implementations = [], tests = [], manifests = [], generated = [];
@@ -906,6 +954,8 @@ export function auditInventory(files, matrix = MATRIX, readSource = (file) => re
   const rustFailureErrors = rustFailureScopes.flatMap((scope) =>
     auditRustFailurePropagation(files, readSource, scope));
   errors.push(...rustFailureErrors);
+  const nativeFailureErrors = auditNativeFailurePropagation(files, readSource);
+  errors.push(...nativeFailureErrors);
 
   return {
     errors,
@@ -917,6 +967,7 @@ export function auditInventory(files, matrix = MATRIX, readSource = (file) => re
     ownershipErrors,
     jsFailureErrors,
     rustFailureErrors,
+    nativeFailureErrors,
     featureLinks: FEATURE_LINKS,
     trackCount: matrix.length,
     implementationCount: implementationOwners.size,

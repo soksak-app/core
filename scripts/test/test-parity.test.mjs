@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { auditCommittedEvidenceWording, auditCompletedFeatureLinks, auditFeatureLinks, auditHistoricalScopeWording, auditInventory, auditJsFailurePropagation, auditModalParitySnapshotWording, auditOwnership, auditRecordedInventoryCounts, auditRustFailurePropagation, discoverInventory, repositoryFiles } from "../check-test-parity.mjs";
+import { auditCommittedEvidenceWording, auditCompletedFeatureLinks, auditFeatureLinks, auditHistoricalScopeWording, auditInventory, auditJsFailurePropagation, auditModalParitySnapshotWording, auditNativeFailurePropagation, auditOwnership, auditRecordedInventoryCounts, auditRustFailurePropagation, discoverInventory, repositoryFiles } from "../check-test-parity.mjs";
 
 const files = repositoryFiles();
 
@@ -207,4 +207,32 @@ test("Rust failure audit covers every production lane", { timeout: 1000 }, () =>
   assert.deepEqual(auditRustFailurePropagation(files, source, "apps/tauriv2/src/"), [
     "apps/tauriv2/src/main.rs:1: ignored Rust result or task outcome",
   ]);
+});
+
+test("Darwin native failure audit rejects log-only capture boundaries", { timeout: 1000 }, () => {
+  const files = [
+    "native/darwin/src/capture.h",
+    "native/darwin/src/capture.m",
+    "packages/host/tauriv2/src/platform/darwin/capture.rs",
+  ];
+  const sources = new Map([
+    [files[0], "void sp_capture_open(long windowNumber, bool display);"],
+    [files[1], "void sp_capture_start(const char *directory);"],
+    [files[2], "let Ok(value) = CString::new(input) else { return; };"],
+  ]);
+  assert.equal(auditNativeFailurePropagation(files, (file) => sources.get(file)).length, 6);
+});
+
+test("Darwin native failure audit accepts explicit capture results", { timeout: 1000 }, () => {
+  const files = [
+    "native/darwin/src/capture.h",
+    "native/darwin/src/capture.m",
+    "packages/host/tauriv2/src/platform/darwin/capture.rs",
+  ];
+  const sources = new Map([
+    [files[0], "bool sp_capture_open(long windowNumber, bool display); const char *sp_capture_error(void);"],
+    [files[1], "bool sp_capture_open(long windowNumber, bool display); bool sp_capture_start(const char *directory);"],
+    [files[2], "fn sp_capture_open(value: isize, display: bool) -> bool { true } fn sp_capture_start(value: *const c_char) -> bool { true } extern { fn sp_capture_error(); }"],
+  ]);
+  assert.deepEqual(auditNativeFailurePropagation(files, (file) => sources.get(file)), []);
 });

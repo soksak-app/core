@@ -4,8 +4,9 @@
 #include <stdbool.h>
 // display 이면 창이 있는 디스플레이에서 이 앱의 창을 녹화한다. 창이 다른 Space(전체 화면)로
 // 옮겨지면 창 녹화는 멈추지만 디스플레이 녹화는 그 Space 를 계속 녹화한다.
-void sp_capture_open(long windowNumber, bool display);
-void sp_capture_start(const char *directory);
+bool sp_capture_open(long windowNumber, bool display);
+bool sp_capture_start(const char *directory);
+const char *sp_capture_error(void);
 int sp_capture_wait(void);
 // 표시 시각 after(ms, mach 절대 시각)와 호출 시각 중 늦은 시각 이후의 화면이 스트림에 전달된 뒤
 // 녹화를 멈추고 기록한 프레임 수를 반환한다. 상한에 도달해 자동으로 멈춘 경우에도 기록된 수를

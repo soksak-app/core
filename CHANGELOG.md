@@ -1,5 +1,7 @@
 # Changelog
 
+- Completed F0.4-1.4. Darwin capture failures now cross the Objective-C/Rust boundary as explicit status and error text instead of log-only `void` calls or silently discarded invalid paths. Native capture tests and the machine failure audit cover the corrected contract; 25 parity self-tests pass. Cross-language failure-matrix work remains open under F0.4-1.5.
+
 ## Unreleased
 
 - Completed F0.4-1.3.3. The Rust failure audit now covers VT core, VT Alacritty, the Tauri host, and the Tauri application production lanes instead of leaving the remaining bridge paths implicit. The declared native build environment produced no ignored production `Result` outcomes, Windows unsupported operations return explicit errors, and the 23 parity self-tests and native workspace suite pass. Objective-C and cross-language failure-matrix work remain open under F0.4-1.4 and F0.4-1.5.
