@@ -144,6 +144,7 @@ pub struct CsiSelectorEvidence {
 /// have executable behavior and rejection contracts.
 pub const CSI_SELECTOR_INVENTORY: &[CsiSelectorEvidence] = &[
     CsiSelectorEvidence { selector: "A/B/C/D/G/H/f/s/u", outcome: CsiOutcome::Implemented, test: "csi_cursor_movement_and_save_restore_are_observable" },
+    CsiSelectorEvidence { selector: "E/F", outcome: CsiOutcome::Implemented, test: "csi_cursor_next_and_previous_line_are_observable" },
     CsiSelectorEvidence { selector: "3C", outcome: CsiOutcome::Implemented, test: "display_points_are_used_as_cell_indices" },
     CsiSelectorEvidence { selector: "?12h/l", outcome: CsiOutcome::Implemented, test: "cursor_visibility_and_application_shape_are_exported" },
     CsiSelectorEvidence { selector: "?25h/l", outcome: CsiOutcome::Implemented, test: "cursor_visibility_and_application_shape_are_exported" },
@@ -151,7 +152,8 @@ pub const CSI_SELECTOR_INVENTORY: &[CsiSelectorEvidence] = &[
     CsiSelectorEvidence { selector: "1-6 SP q", outcome: CsiOutcome::Implemented, test: "decscusr_cursor_style_ids_are_observable" },
     CsiSelectorEvidence { selector: "CSI framing", outcome: CsiOutcome::Implemented, test: "csi_fragmentation_and_malformed_input_preserve_engine_state" },
     CsiSelectorEvidence { selector: "m", outcome: CsiOutcome::Implemented, test: "sgr_color_does_not_drop_the_character" },
-    CsiSelectorEvidence { selector: "?1049h/l", outcome: CsiOutcome::Implemented, test: "alternate_screen_is_separate_from_primary_scrollback" },
+    CsiSelectorEvidence { selector: "?1049h/l", outcome: CsiOutcome::Implemented, test: "alternate_screen_1049_preserves_primary_and_cursor_state" },
+    CsiSelectorEvidence { selector: "?47/?1047/?1048h/l", outcome: CsiOutcome::Unsupported, test: "unsupported_csi_alternate_modes_are_explicit_errors" },
     CsiSelectorEvidence { selector: "S/T;r", outcome: CsiOutcome::Implemented, test: "csi_scroll_moves_the_visible_grid_and_respects_a_scroll_region" },
     CsiSelectorEvidence { selector: "J/K", outcome: CsiOutcome::Implemented, test: "csi_erase_display_and_line_change_only_the_requested_cells" },
     CsiSelectorEvidence { selector: "@/P", outcome: CsiOutcome::Implemented, test: "csi_insert_delete_characters_and_lines_preserve_requested_cells" },
@@ -362,6 +364,10 @@ impl AlacrittyEngine {
             let body = &input[start + 2..final_index];
             let unsupported = if input[final_index] == b't' && body != b"14" {
                 Some(format!("window report {}t", String::from_utf8_lossy(body)))
+            } else if (input[final_index] == b'h' || input[final_index] == b'l')
+                && matches!(body, b"?47" | b"?1047" | b"?1048")
+            {
+                Some(format!("alternate screen mode {}{}", String::from_utf8_lossy(body), input[final_index] as char))
             } else if input[final_index] == b'x' && body.contains(&b'$') {
                 Some(format!("rectangle report {}x", String::from_utf8_lossy(body)))
             } else if input[final_index] == b'q' && body.contains(&b'"') {

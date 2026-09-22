@@ -276,6 +276,18 @@ fn csi_cursor_movement_and_save_restore_are_observable() {
 }
 
 #[test]
+fn csi_cursor_next_and_previous_line_are_observable() {
+    let mut engine = AlacrittyEngine::new();
+    engine.resize(20, 6);
+    engine.feed(b"abc\x1b[2E");
+    assert_eq!(engine.cursor().row, 2);
+    assert_eq!(engine.cursor().col, 0);
+    engine.feed(b"x\x1b[1F");
+    assert_eq!(engine.cursor().row, 1);
+    assert_eq!(engine.cursor().col, 0);
+}
+
+#[test]
 fn osc50_cursor_shape_changes_program_cursor() {
     let mut engine = AlacrittyEngine::new();
     engine.feed(b"\x1b]50;CursorShape=2\x07");
@@ -859,6 +871,18 @@ fn alternate_screen_is_separate_from_primary_scrollback() {
     assert!(!engine.modes().alt_screen);
     assert!(text(&engine.screen()).contains(&primary));
     assert!(!text(&engine.screen()).contains("alternate"));
+}
+
+#[test]
+fn unsupported_csi_alternate_modes_are_explicit_errors() {
+    for selector in ["?47", "?1047", "?1048"] {
+        let mut engine = AlacrittyEngine::new();
+        engine.feed(format!("\x1b[{selector}h").as_bytes());
+        assert!(matches!(
+            engine.drain_events().as_slice(),
+            [EngineEvent::Error(reason)] if reason == &format!("unsupported CSI alternate screen mode {selector}h")
+        ), "selector {selector}h did not produce an explicit rejection");
+    }
 }
 
 #[test]

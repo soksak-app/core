@@ -1,5 +1,6 @@
 # Changelog
 
+- Completed F7.14. The CSI inventory now links `E/F` to observable cursor-row behavior, tests `?1049` primary/alternate isolation, and explicitly rejects unsupported `?47`, `?1047`, and `?1048` modes instead of treating them as successful no-ops. The three focused engine cases pass with individual 15s supervisors.
 - Added F7.14–F7.17 as explicit CSI completion units: remaining standard forms, private modes, device/status/window replies, and the mechanical pinned-reference audit must be implemented and verified before F7 can close.
 - Progressed F7 CSI audit. The Alacritty boundary now classifies unsupported window, rectangle, protected-cell, and palette reports and emits one explicit error for each fragmented input case. The focused window and grouped unsupported-report tests pass 1/1 each under 15s supervisors; the remaining CSI categories stay open.
 - Completed F9-1. The parity inventory now links F9 to the restoration implementation and application test in `e2e/library.test.mjs`; `node scripts/check-test-parity.mjs` and `make docs-check` pass without reopening F9.

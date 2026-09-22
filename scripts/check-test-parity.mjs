@@ -886,6 +886,17 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F7.14",
+    implementation: [{ file: "sidecars/vt-alacritty/src/engine.rs", symbol: "alternate screen mode {}{}" }],
+    tests: [
+      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "csi_cursor_next_and_previous_line_are_observable" },
+      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "alternate_screen_is_separate_from_primary_scrollback" },
+      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "unsupported_csi_alternate_modes_are_explicit_errors" },
+    ],
+    expected: "The CSI inventory distinguishes implemented E/F and 1049 behavior from explicitly rejected 47, 1047, and 1048 modes, with observable cursor/grid or error evidence.",
+    levels: ["unit", "native"],
+  },
+  {
     id: "F9",
     implementation: [{ file: "e2e/library.test.mjs", symbol: "restoration connection" }],
     tests: [{ file: "e2e/library.test.mjs", id: "library windows create and open projects in place" }],

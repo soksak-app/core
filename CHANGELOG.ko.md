@@ -1,5 +1,6 @@
 # 변경 기록
 
+- F7.14를 완료했다. CSI inventory가 `E/F`를 관측 가능한 cursor 행 동작에 연결하고 `?1049` primary/alternate 분리를 검사하며, 지원하지 않는 `?47`, `?1047`, `?1048` mode를 성공한 no-op처럼 다루지 않고 명시적으로 거부한다. 세 집중 engine 검사가 각각 15초 감독 아래 통과했다.
 - F7.14–F7.17을 명시적 CSI 완료 단위로 추가했다. 남은 표준 형식·private mode·device/status/window 응답과 고정 reference 기계 감사기를 구현·검증해야 F7을 닫을 수 있다.
 - F7 CSI 감사를 진행했다. Alacritty 경계가 지원하지 않는 window·rectangle·protected-cell·palette 보고를 분류하고 각 분할 입력 케이스마다 한 번의 명시적 오류를 내보낸다. window와 묶음 미지원 보고 집중 검사가 각각 15초 감독 안에서 1/1 통과했으며, 남은 CSI 범위는 계속 열려 있다.
 - F9-1을 완료했다. parity inventory가 F9를 `e2e/library.test.mjs`의 복원 구현·애플리케이션 검사에 연결하며, F9를 다시 열지 않고 `node scripts/check-test-parity.mjs`와 `make docs-check`가 통과한다.
