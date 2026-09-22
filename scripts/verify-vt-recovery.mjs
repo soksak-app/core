@@ -78,9 +78,9 @@ const lineClient = async (endpoint, clientName) => {
     return new Promise((resolve, reject) => waiters.push({ resolve, reject }));
   };
   const write = (value) => socket.write(`${JSON.stringify(value)}\n`);
-  write({ op: "hello", protocol: 1, token: endpoint.token, client: clientName });
+  write({ operation: "hello", protocol: 1, token: endpoint.token, client: clientName });
   const hello = await withTimeout(next(), "hello response");
-  if (hello.op !== "hello" || hello.ok !== true || hello.protocol !== 1) {
+  if (hello.operation !== "hello" || hello.ok !== true || hello.protocol !== 1) {
     fail(`invalid hello response: ${JSON.stringify(hello)}`);
   }
   return { socket, next, write };
@@ -132,7 +132,7 @@ const worker = async () => {
   const project = "/recovery/project";
   const client = await lineClient(endpoint, serviceDirectory);
   try {
-    sendSurface(client, surface, project, { op: "open", image: "terminal" });
+    sendSurface(client, surface, project, { operation: "open", image: "terminal" });
     if (mode === "initial") {
       sendSurface(client, surface, project, { image: { configure: {
         name: "terminal", generation: 1, raster: 1, width: 640, height: 384, scale: 1,
@@ -141,7 +141,7 @@ const worker = async () => {
       const sessionId = state.body.sessionId;
       if (!sessionId) fail("worker initial state did not contain a session ID");
       sendSurface(client, surface, project, {
-        op: "input",
+        operation: "input",
         bytes: Buffer.from("echo RECOVERY\n").toString("base64"),
       });
       await waitFor(client, (value) => value.surface === surface && value.body?.event === "screen" && screenText(value).includes("RECOVERY"), "worker initial output");
@@ -149,14 +149,14 @@ const worker = async () => {
       return;
     }
 
-    sendSurface(client, surface, project, { op: "screen.read" });
+    sendSurface(client, surface, project, { operation: "screen.read" });
     const reconnected = await waitFor(client, (value) => value.surface === surface && value.body?.event === "session", "worker session reattach");
     if (reconnected.body.sessionId !== expectedSession) {
       fail(`worker session changed from ${expectedSession} to ${reconnected.body.sessionId}`);
     }
     await waitFor(client, (value) => value.surface === surface && value.body?.event === "screen" && screenText(value).includes("RECOVERY"), "worker retained output");
     console.log(`WORKER_RESTORED_SESSION_ID=${expectedSession}`);
-    sendSurface(client, surface, project, { op: "close" });
+    sendSurface(client, surface, project, { operation: "close" });
   } finally {
     await closeSocket(client.socket, `worker ${mode} socket close`);
   }

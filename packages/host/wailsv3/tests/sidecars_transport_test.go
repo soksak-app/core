@@ -85,11 +85,11 @@ func serveHarnessConnections(t *testing.T, listener net.Listener, connections in
 					return
 				}
 				var hello map[string]any
-				if err := json.Unmarshal(line, &hello); err != nil || hello["op"] != "hello" || hello["token"] != "harness-token" {
-					_, _ = io.WriteString(connection, `{"op":"hello","ok":false,"error":"authentication failed"}`+"\n")
+				if err := json.Unmarshal(line, &hello); err != nil || hello["operation"] != "hello" || hello["token"] != "harness-token" {
+					_, _ = io.WriteString(connection, `{"operation":"hello","ok":false,"error":"authentication failed"}`+"\n")
 					return
 				}
-				_, _ = io.WriteString(connection, `{"op":"hello","protocol":1,"ok":true}`+"\n")
+				_, _ = io.WriteString(connection, `{"operation":"hello","protocol":1,"ok":true}`+"\n")
 				line, err = reader.ReadBytes('\n')
 				if err != nil {
 					return
@@ -98,9 +98,9 @@ func serveHarnessConnections(t *testing.T, listener net.Listener, connections in
 				if json.Unmarshal(line, &request) != nil {
 					return
 				}
-				if request["op"] == "close-owner" {
+				if request["operation"] == "close-owner" {
 					if rejectClose {
-						_, _ = io.WriteString(connection, `{"op":"closed-owner","request":"1","ok":false,"error":"close failed"}`+"\n")
+						_, _ = io.WriteString(connection, `{"operation":"closed-owner","request":"1","ok":false,"error":"close failed"}`+"\n")
 					}
 					return
 				}
@@ -119,9 +119,9 @@ func serveHarnessConnections(t *testing.T, listener net.Listener, connections in
 					if json.Unmarshal(line, &next) != nil {
 						return
 					}
-					if next["op"] == "close-owner" {
+					if next["operation"] == "close-owner" {
 						requestID, _ := next["request"].(string)
-						response, _ := json.Marshal(map[string]any{"op": "closed-owner", "request": requestID, "ok": false, "error": "close failed"})
+						response, _ := json.Marshal(map[string]any{"operation": "closed-owner", "request": requestID, "ok": false, "error": "close failed"})
 						_, _ = connection.Write(append(response, '\n'))
 						return
 					}
@@ -167,11 +167,11 @@ func TestPersistentTransportHarnessEndpointAuthConcurrentReconnectAndCloseAck(t 
 	for _, send := range []func() error{
 		func() error {
 			<-start
-			return first.Send(firstOwner, "fixture-service", "surface-1", json.RawMessage(`{"op":"open"}`))
+			return first.Send(firstOwner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`))
 		},
 		func() error {
 			<-start
-			return second.Send(secondOwner, "fixture-service", "surface-2", json.RawMessage(`{"op":"open"}`))
+			return second.Send(secondOwner, "fixture-service", "surface-2", json.RawMessage(`{"operation":"open"}`))
 		},
 	} {
 		group.Add(1)
@@ -194,10 +194,10 @@ func TestPersistentTransportHarnessEndpointAuthConcurrentReconnectAndCloseAck(t 
 	time.Sleep(20 * time.Millisecond)
 
 	// Both initial sockets disconnect. The next send exercises endpoint reuse and reconnect.
-	if err := first.Send(firstOwner, "fixture-service", "surface-1", json.RawMessage(`{"op":"reconnect"}`)); err != nil {
+	if err := first.Send(firstOwner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"reconnect"}`)); err != nil {
 		t.Fatal(err)
 	}
-	if err := second.Send(secondOwner, "fixture-service", "surface-2", json.RawMessage(`{"op":"reconnect"}`)); err != nil {
+	if err := second.Send(secondOwner, "fixture-service", "surface-2", json.RawMessage(`{"operation":"reconnect"}`)); err != nil {
 		t.Fatal(err)
 	}
 	for _, owner := range []*harnessOwner{firstOwner, secondOwner} {
@@ -240,14 +240,14 @@ func TestPersistentTransportHarnessAuthFailure(t *testing.T) {
 		}
 		defer connection.Close()
 		_, _ = bufio.NewReader(connection).ReadBytes('\n')
-		_, _ = io.WriteString(connection, `{"op":"hello","ok":false,"error":"authentication or protocol mismatch"}`+"\n")
+		_, _ = io.WriteString(connection, `{"operation":"hello","ok":false,"error":"authentication or protocol mismatch"}`+"\n")
 	}()
 	sidecars, err := NewSidecars(harnessFrontend(), t.TempDir(), root)
 	if err != nil {
 		t.Fatal(err)
 	}
 	owner := &harnessOwner{root: "/auth", seen: make(chan SidecarMessage, 1)}
-	err = sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"op":"open"}`))
+	err = sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`))
 	if err == nil || !strings.Contains(err.Error(), "authentication handshake failed") {
 		t.Fatalf("auth error = %v", err)
 	}
@@ -284,7 +284,7 @@ func TestPersistentTransportRejectsUnsupportedHelloProtocolWithoutReplacingEndpo
 			serverDone <- readErr
 			return
 		}
-		_, writeErr := io.WriteString(connection, `{"op":"hello","protocol":2,"ok":true}`+"\n")
+		_, writeErr := io.WriteString(connection, `{"operation":"hello","protocol":2,"ok":true}`+"\n")
 		serverDone <- writeErr
 	}()
 
@@ -293,7 +293,7 @@ func TestPersistentTransportRejectsUnsupportedHelloProtocolWithoutReplacingEndpo
 		t.Fatal(err)
 	}
 	owner := &harnessOwner{root: "/protocol", seen: make(chan SidecarMessage, 1)}
-	err = sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"op":"open"}`))
+	err = sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`))
 	if err == nil || !strings.Contains(err.Error(), "protocol mismatch in hello response") {
 		t.Fatalf("protocol mismatch error = %v", err)
 	}
@@ -378,7 +378,7 @@ func TestPersistentTransportReplacesEndpointLeftByDeadService(t *testing.T) {
 			serverDone <- fmt.Errorf("unexpected replacement hello: %s", line)
 			return
 		}
-		if _, err := io.WriteString(connection, `{"op":"hello","protocol":1,"ok":true}`+"\n"); err != nil {
+		if _, err := io.WriteString(connection, `{"operation":"hello","protocol":1,"ok":true}`+"\n"); err != nil {
 			serverDone <- err
 			return
 		}
@@ -402,7 +402,7 @@ func TestPersistentTransportReplacesEndpointLeftByDeadService(t *testing.T) {
 			return
 		}
 		response, _ := json.Marshal(map[string]any{
-			"op": "closed-owner", "request": closeRequest["request"], "ok": false, "error": "test close",
+			"operation": "closed-owner", "request": closeRequest["request"], "ok": false, "error": "test close",
 		})
 		_, err = connection.Write(append(response, '\n'))
 		serverDone <- err
@@ -413,7 +413,7 @@ func TestPersistentTransportReplacesEndpointLeftByDeadService(t *testing.T) {
 		t.Fatal(err)
 	}
 	owner := &harnessOwner{root: "/replacement", seen: make(chan SidecarMessage, 1)}
-	if err := sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"op":"open"}`)); err != nil {
+	if err := sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -465,7 +465,7 @@ func TestPersistentTransportReportsLiveButUnreachableEndpointWithoutReplacement(
 		t.Fatal(err)
 	}
 	owner := &harnessOwner{root: "/unreachable", seen: make(chan SidecarMessage, 1)}
-	err = sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"op":"open"}`))
+	err = sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`))
 	if err == nil || !strings.Contains(err.Error(), "connect authenticated service") {
 		t.Fatalf("connection error = %v", err)
 	}

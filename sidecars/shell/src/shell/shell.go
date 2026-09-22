@@ -2,10 +2,10 @@
 //
 // 한 줄에 JSON 메시지 하나를 사용한다. 형식은 docs/spec/sidecars.md 에 정의한다.
 //
-//	입력  {"surface": id, "root": 경로, "body": {"op": "open"}}
-//	      {"surface": id, "body": {"op": "write", "data": 텍스트}}
-//	      {"surface": id, "body": {"op": "run", "id": 요청, "command": 명령}}
-//	      {"surface": id, "body": {"op": "interrupt"}}
+//	입력  {"surface": id, "root": 경로, "body": {"operation": "open"}}
+//	      {"surface": id, "body": {"operation": "write", "data": 텍스트}}
+//	      {"surface": id, "body": {"operation": "run", "id": 요청, "command": 명령}}
+//	      {"surface": id, "body": {"operation": "interrupt"}}
 //	      {"surface": id, "closed": true}
 //	출력  {"surface": id, "body": {"text": 텍스트}}
 //	      {"surface": id, "body": {"cwd": 경로}}
@@ -32,10 +32,10 @@ type Request struct {
 	Root    string `json:"root,omitempty"`
 	Closed  bool   `json:"closed,omitempty"`
 	Body    struct {
-		Op      string `json:"op"`
-		Data    string `json:"data,omitempty"`
-		ID      string `json:"id,omitempty"`
-		Command string `json:"command,omitempty"`
+		Operation string `json:"operation"`
+		Data      string `json:"data,omitempty"`
+		ID        string `json:"id,omitempty"`
+		Command   string `json:"command,omitempty"`
 	} `json:"body"`
 }
 
@@ -108,7 +108,7 @@ func handle(shells *Shells, request Request) error {
 	if request.Closed {
 		return shells.Close(request.Surface)
 	}
-	switch request.Body.Op {
+	switch request.Body.Operation {
 	case "open":
 		if request.Root == "" {
 			return fmt.Errorf("open requires a root")
@@ -127,6 +127,6 @@ func handle(shells *Shells, request Request) error {
 	case "interrupt":
 		return shells.Interrupt(request.Surface)
 	default:
-		return fmt.Errorf("unknown op: %q", request.Body.Op)
+		return fmt.Errorf("unknown operation: %q", request.Body.Operation)
 	}
 }

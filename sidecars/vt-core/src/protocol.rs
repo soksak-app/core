@@ -651,7 +651,9 @@ async fn send_engine_events(
                 }
             }
             EngineEvent::Title(title) => {
-                if !emit_surface_events { continue; }
+                if !emit_surface_events {
+                    continue;
+                }
                 let response =
                     json!({"surface": surface_id, "body": {"event": "title", "title": title}});
                 if output_tx.send(response.to_string()).await.is_err() {
@@ -659,14 +661,18 @@ async fn send_engine_events(
                 }
             }
             EngineEvent::ResetTitle => {
-                if !emit_surface_events { continue; }
+                if !emit_surface_events {
+                    continue;
+                }
                 let response = json!({"surface": surface_id, "body": {"event": "title.reset"}});
                 if output_tx.send(response.to_string()).await.is_err() {
                     return false;
                 }
             }
             EngineEvent::ClipboardStore { selection, text } => {
-                if !emit_surface_events { continue; }
+                if !emit_surface_events {
+                    continue;
+                }
                 let response = json!({"surface": surface_id, "body": {"event": "clipboard.store", "selection": clipboard_selection_name(selection), "text": text}});
                 if output_tx.send(response.to_string()).await.is_err() {
                     return false;
@@ -676,49 +682,63 @@ async fn send_engine_events(
                 request_id,
                 selection,
             } => {
-                if !emit_surface_events { continue; }
+                if !emit_surface_events {
+                    continue;
+                }
                 let response = json!({"surface": surface_id, "body": {"event": "clipboard.query", "requestId": request_id, "selection": clipboard_selection_name(selection)}});
                 if output_tx.send(response.to_string()).await.is_err() {
                     return false;
                 }
             }
             EngineEvent::CursorBlinkingChange => {
-                if !emit_surface_events { continue; }
+                if !emit_surface_events {
+                    continue;
+                }
                 let response = json!({"surface": surface_id, "body": {"event": "cursor.blinking"}});
                 if output_tx.send(response.to_string()).await.is_err() {
                     return false;
                 }
             }
             EngineEvent::Wakeup => {
-                if !emit_surface_events { continue; }
+                if !emit_surface_events {
+                    continue;
+                }
                 let response = json!({"surface": surface_id, "body": {"event": "wakeup"}});
                 if output_tx.send(response.to_string()).await.is_err() {
                     return false;
                 }
             }
             EngineEvent::Bell => {
-                if !emit_surface_events { continue; }
+                if !emit_surface_events {
+                    continue;
+                }
                 let response = json!({"surface": surface_id, "body": {"event": "bell"}});
                 if output_tx.send(response.to_string()).await.is_err() {
                     return false;
                 }
             }
             EngineEvent::Exit => {
-                if !emit_surface_events { continue; }
+                if !emit_surface_events {
+                    continue;
+                }
                 let response = json!({"surface": surface_id, "body": {"event": "exit"}});
                 if output_tx.send(response.to_string()).await.is_err() {
                     return false;
                 }
             }
             EngineEvent::ChildExit { success, code } => {
-                if !emit_surface_events { continue; }
+                if !emit_surface_events {
+                    continue;
+                }
                 let response = json!({"surface": surface_id, "body": {"event": "child.exit", "success": success, "code": code}});
                 if output_tx.send(response.to_string()).await.is_err() {
                     return false;
                 }
             }
             EngineEvent::MouseCursorDirty => {
-                if !emit_surface_events { continue; }
+                if !emit_surface_events {
+                    continue;
+                }
                 let response =
                     json!({"surface": surface_id, "body": {"event": "mouse.cursor.dirty"}});
                 if output_tx.send(response.to_string()).await.is_err() {
@@ -726,7 +746,9 @@ async fn send_engine_events(
                 }
             }
             EngineEvent::Error(reason) => {
-                if !emit_surface_events { continue; }
+                if !emit_surface_events {
+                    continue;
+                }
                 let response =
                     json!({"surface": surface_id, "body": {"event": "error", "reason": reason}});
                 if output_tx.send(response.to_string()).await.is_err() {
@@ -744,12 +766,18 @@ async fn open_headless(
     session_port: &Arc<dyn SessionPort>,
     output_tx: &OutputSink,
 ) -> bool {
-    if session_id.is_some() { return true; }
+    if session_id.is_some() {
+        return true;
+    }
     engine.resize(80, 24);
     match session_port.open("/bin/sh", 80, 24, None).await {
-        Ok(id) => { *session_id = Some(id); true }
+        Ok(id) => {
+            *session_id = Some(id);
+            true
+        }
         Err(error) => {
-            let response = json!({"body": {"error": format!("Failed to open headless session: {error}")}});
+            let response =
+                json!({"body": {"error": format!("Failed to open headless session: {error}")}});
             output_tx.send(response.to_string()).await.is_ok()
         }
     }
@@ -1406,7 +1434,7 @@ where
         }
 
         if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
-            if value.get("op").and_then(Value::as_str) == Some("close-owner") {
+            if value.get("operation").and_then(Value::as_str) == Some("close-owner") {
                 let request = value.get("request").and_then(Value::as_str).unwrap_or("");
                 let mut result = owner_close
                     .as_ref()
@@ -1418,9 +1446,9 @@ where
                     }
                 }
                 let reply = match result {
-                    Ok(()) => json!({"op": "closed-owner", "request": request, "ok": true}),
+                    Ok(()) => json!({"operation": "closed-owner", "request": request, "ok": true}),
                     Err(error) => {
-                        json!({"op": "closed-owner", "request": request, "ok": false, "error": error})
+                        json!({"operation": "closed-owner", "request": request, "ok": false, "error": error})
                     }
                 };
                 if output_tx.send(reply.to_string()).await.is_err() {
@@ -1428,7 +1456,7 @@ where
                 }
                 continue;
             }
-            if value.get("op").and_then(Value::as_str) == Some("shutdown") {
+            if value.get("operation").and_then(Value::as_str) == Some("shutdown") {
                 let request = value.get("request").and_then(Value::as_str).unwrap_or("");
                 let result = if let Some(registry) = registry.as_ref() {
                     registry.request_shutdown();
@@ -1437,9 +1465,9 @@ where
                     Err("shutdown is unavailable".to_string())
                 };
                 let reply = match result {
-                    Ok(()) => json!({"op": "shutdown", "request": request, "ok": true}),
+                    Ok(()) => json!({"operation": "shutdown", "request": request, "ok": true}),
                     Err(error) => {
-                        json!({"op": "shutdown", "request": request, "ok": false, "error": error})
+                        json!({"operation": "shutdown", "request": request, "ok": false, "error": error})
                     }
                 };
                 if output_tx.send(reply.to_string()).await.is_err() {
@@ -1608,9 +1636,9 @@ where
                     };
                     surface_txs.insert(registry_key.clone(), tx.clone());
 
-                    // Check for op field first (it's a request)
-                    if let Some(op) = body.get("op").and_then(|v| v.as_str()) {
-                        match op {
+                    // Check for operation field first (it is a request).
+                    if let Some(operation) = body.get("operation").and_then(|v| v.as_str()) {
+                        match operation {
                             "open" => {
                                 let image = body
                                     .get("image")
@@ -1830,7 +1858,7 @@ where
                             _ => {
                                 let response = json!({
                                     "surface": surface_id,
-                                    "body": {"error": format!("Unknown op: {}", op)}
+                                    "body": {"error": format!("Unknown operation: {}", operation)}
                                 });
                                 if let Err(_) = output_tx.send(response.to_string()).await {
                                     break;
@@ -1887,10 +1915,10 @@ where
                             break;
                         }
                     } else {
-                        // No op and no image object - unknown message
+                        // No operation and no image object means an unknown message.
                         let response = json!({
                             "surface": surface_id,
-                            "body": {"error": "unknown op"}
+                            "body": {"error": "unknown operation"}
                         });
                         if let Err(_) = output_tx.send(response.to_string()).await {
                             break;
@@ -1917,12 +1945,14 @@ where
     // transports have no recovery owner, so their surfaces must be closed now.
     if registry.is_none() {
         for (_, tx) in surface_txs.iter() {
-            tx.send(SurfaceCommand::SessionClose).await.map_err(|error| {
-                std::io::Error::new(
-                    std::io::ErrorKind::BrokenPipe,
-                    format!("close surface during serve shutdown: {error}"),
-                )
-            })?;
+            tx.send(SurfaceCommand::SessionClose)
+                .await
+                .map_err(|error| {
+                    std::io::Error::new(
+                        std::io::ErrorKind::BrokenPipe,
+                        format!("close surface during serve shutdown: {error}"),
+                    )
+                })?;
         }
     }
 
@@ -2301,34 +2331,26 @@ mod tests {
         });
         let (a_output, _a_events) = mpsc::channel(1);
         let (b_output, _b_events) = mpsc::channel(1);
-        registry
-            .entries
-            .lock()
-            .await
-            .insert(
-                "root\0a".to_string(),
-                PersistentEntry {
-                    tx: a_tx,
-                    output: OutputSink::direct(a_output),
-                    actor: a_actor,
-                    epoch: 1,
-                    owner: "client-a".to_string(),
-                },
-            );
-        registry
-            .entries
-            .lock()
-            .await
-            .insert(
-                "root\0b".to_string(),
-                PersistentEntry {
-                    tx: b_tx,
-                    output: OutputSink::direct(b_output),
-                    actor: b_actor,
-                    epoch: 1,
-                    owner: "client-b".to_string(),
-                },
-            );
+        registry.entries.lock().await.insert(
+            "root\0a".to_string(),
+            PersistentEntry {
+                tx: a_tx,
+                output: OutputSink::direct(a_output),
+                actor: a_actor,
+                epoch: 1,
+                owner: "client-a".to_string(),
+            },
+        );
+        registry.entries.lock().await.insert(
+            "root\0b".to_string(),
+            PersistentEntry {
+                tx: b_tx,
+                output: OutputSink::direct(b_output),
+                actor: b_actor,
+                epoch: 1,
+                owner: "client-b".to_string(),
+            },
+        );
 
         registry.close_owner("client-a").await.unwrap();
         assert!(!registry.contains("root\0a").await);

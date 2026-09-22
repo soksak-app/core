@@ -97,10 +97,10 @@ fn messages_reach_the_owning_window_only() {
     let (first, first_events) = owner("a", "/projects/a");
     let (second, second_events) = owner("b", "/projects/b");
     sidecars
-        .send(&first, ECHO, "s1", &raw(r#"{"op":"open"}"#))
+        .send(&first, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     sidecars
-        .send(&second, ECHO, "s2", &raw(r#"{"op":"open"}"#))
+        .send(&second, ECHO, "s2", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     let event = first_events.recv_timeout(Duration::from_secs(10)).unwrap();
     assert_eq!(
@@ -109,7 +109,7 @@ fn messages_reach_the_owning_window_only() {
             event.surface.as_str(),
             event.body.get()
         ),
-        (ECHO, "s1", r#"{"op":"open"}"#)
+        (ECHO, "s1", r#"{"operation":"open"}"#)
     );
     assert_eq!(
         second_events
@@ -126,9 +126,9 @@ fn messages_reach_the_owning_window_only() {
     assert_eq!(
         requests,
         concat!(
-            r#"{"surface":"s1","root":"/projects/a","body":{"op":"open"}}"#,
+            r#"{"surface":"s1","root":"/projects/a","body":{"operation":"open"}}"#,
             "\n",
-            r#"{"surface":"s2","root":"/projects/b","body":{"op":"open"}}"#,
+            r#"{"surface":"s2","root":"/projects/b","body":{"operation":"open"}}"#,
             "\n",
             r#"{"surface":"s1","closed":true}"#,
             "\n",
@@ -265,12 +265,12 @@ fn concurrent_hosts_share_an_authenticated_service_endpoint() {
             let mut line = String::new();
             reader.read_line(&mut line).unwrap();
             let hello: serde_json::Value = serde_json::from_str(&line).unwrap();
-            assert_eq!(hello["op"], "hello");
+            assert_eq!(hello["operation"], "hello");
             assert_eq!(hello["protocol"], 1);
             assert_eq!(hello["token"], "test-token");
             stream
                 .write_all(
-                    br#"{"op":"hello","protocol":1,"ok":true}
+                    br#"{"operation":"hello","protocol":1,"ok":true}
 "#,
                 )
                 .unwrap();
@@ -297,10 +297,10 @@ fn concurrent_hosts_share_an_authenticated_service_endpoint() {
     let (first_owner, first_events) = owner("first", "/projects/first");
     let (second_owner, second_events) = owner("second", "/projects/second");
     first
-        .send(&first_owner, ECHO, "s1", &raw(r#"{"op":"open"}"#))
+        .send(&first_owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     second
-        .send(&second_owner, ECHO, "s2", &raw(r#"{"op":"open"}"#))
+        .send(&second_owner, ECHO, "s2", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     assert_eq!(
         first_events
@@ -353,12 +353,12 @@ fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
                 let mut line = String::new();
                 reader.read_line(&mut line).unwrap();
                 let hello: serde_json::Value = serde_json::from_str(&line).unwrap();
-                assert_eq!(hello["op"], "hello");
+                assert_eq!(hello["operation"], "hello");
                 assert_eq!(hello["protocol"], 1);
                 assert_eq!(hello["token"], "reconnect-token");
                 stream
                     .write_all(
-                        br#"{"op":"hello","protocol":1,"ok":true}
+                        br#"{"operation":"hello","protocol":1,"ok":true}
 "#,
                     )
                     .unwrap();
@@ -373,9 +373,9 @@ fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
                     return;
                 }
                 loop {
-                    if request["op"] == "close-owner" {
+                    if request["operation"] == "close-owner" {
                         let reply = serde_json::json!({
-                            "op": "closed-owner",
+                            "operation": "closed-owner",
                             "request": request["request"],
                             "ok": false,
                             "error": "test close"
@@ -415,10 +415,10 @@ fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
     let (second_owner, second_events) = owner("second", "/projects/second");
 
     first
-        .send(&first_owner, ECHO, "s1", &raw(r#"{"op":"open"}"#))
+        .send(&first_owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     second
-        .send(&second_owner, ECHO, "s2", &raw(r#"{"op":"open"}"#))
+        .send(&second_owner, ECHO, "s2", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     assert_eq!(
         first_events
@@ -442,10 +442,10 @@ fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
         .unwrap();
 
     first
-        .send(&first_owner, ECHO, "s1", &raw(r#"{"op":"reconnect"}"#))
+        .send(&first_owner, ECHO, "s1", &raw(r#"{"operation":"reconnect"}"#))
         .unwrap();
     second
-        .send(&second_owner, ECHO, "s2", &raw(r#"{"op":"reconnect"}"#))
+        .send(&second_owner, ECHO, "s2", &raw(r#"{"operation":"reconnect"}"#))
         .unwrap();
     // The package suite runs multiple test binaries concurrently. Keep a bounded case timeout,
     // but do not make the reconnect contract depend on a one-second scheduler slice.
@@ -493,8 +493,8 @@ fn persistent_transport_rejects_unsupported_hello_protocol_without_replacing_end
         let mut hello = String::new();
         reader.read_line(&mut hello).unwrap();
         let hello: serde_json::Value = serde_json::from_str(&hello).unwrap();
-        assert_eq!(hello["op"], "hello");
-        writeln!(stream, "{}", r#"{"op":"hello","protocol":2,"ok":true}"#).unwrap();
+        assert_eq!(hello["operation"], "hello");
+        writeln!(stream, "{}", r#"{"operation":"hello","protocol":2,"ok":true}"#).unwrap();
     });
 
     let fixture = files(r#"{"executable":"build/echo","protocol":1,"transport":"persistent"}"#);
@@ -507,7 +507,7 @@ fn persistent_transport_rejects_unsupported_hello_protocol_without_replacing_end
     .unwrap();
     let (window, _events) = owner("protocol", "/projects/protocol");
     let error = sidecars
-        .send(&window, ECHO, "surface", &raw(r#"{"op":"open"}"#))
+        .send(&window, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
         .unwrap_err();
     assert!(
         error.contains("protocol mismatch in hello response"),
@@ -576,7 +576,7 @@ fn persistent_transport_replaces_endpoint_left_by_a_dead_service() {
         assert_eq!(hello["token"], token);
         stream
             .write_all(
-                br#"{"op":"hello","protocol":1,"ok":true}
+                br#"{"operation":"hello","protocol":1,"ok":true}
 "#,
             )
             .unwrap();
@@ -587,7 +587,7 @@ fn persistent_transport_replaces_endpoint_left_by_a_dead_service() {
         reader.read_line(&mut line).unwrap();
         let close: serde_json::Value = serde_json::from_str(&line).unwrap();
         let reply = serde_json::json!({
-            "op": "closed-owner",
+            "operation": "closed-owner",
             "request": close["request"],
             "ok": false,
             "error": "test close"
@@ -596,7 +596,7 @@ fn persistent_transport_replaces_endpoint_left_by_a_dead_service() {
     });
 
     sidecars
-        .send(&owner, ECHO, "surface", &raw(r#"{"op":"open"}"#))
+        .send(&owner, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     assert_eq!(
         events.recv_timeout(Duration::from_secs(1)).unwrap().surface,
@@ -640,7 +640,7 @@ fn persistent_transport_reports_live_but_unreachable_endpoint_without_replacemen
     .unwrap();
     let (owner, _events) = owner("unreachable", "/projects/unreachable");
     let error = sidecars
-        .send(&owner, ECHO, "surface", &raw(r#"{"op":"open"}"#))
+        .send(&owner, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
         .unwrap_err();
     assert!(error.contains("connect authenticated service"), "{error}");
     assert_eq!(std::fs::read(&endpoint_path).unwrap(), original);
@@ -676,11 +676,11 @@ fn persistent_stop_closes_owner_then_requests_service_shutdown() {
         let mut line = String::new();
         reader.read_line(&mut line).unwrap();
         let hello: serde_json::Value = serde_json::from_str(&line).unwrap();
-        assert_eq!(hello["op"], "hello");
+        assert_eq!(hello["operation"], "hello");
         assert_eq!(hello["token"], "shutdown-token");
         stream
             .write_all(
-                br#"{"op":"hello","protocol":1,"ok":true}
+                br#"{"operation":"hello","protocol":1,"ok":true}
 "#,
             )
             .unwrap();
@@ -688,14 +688,14 @@ fn persistent_stop_closes_owner_then_requests_service_shutdown() {
         line.clear();
         reader.read_line(&mut line).unwrap();
         let request: serde_json::Value = serde_json::from_str(&line).unwrap();
-        assert_eq!(request["body"]["op"], "open");
+        assert_eq!(request["body"]["operation"], "open");
 
         line.clear();
         reader.read_line(&mut line).unwrap();
         let close: serde_json::Value = serde_json::from_str(&line).unwrap();
-        assert_eq!(close["op"], "close-owner");
+        assert_eq!(close["operation"], "close-owner");
         let close_reply = serde_json::json!({
-            "op": "closed-owner",
+            "operation": "closed-owner",
             "request": close["request"],
             "ok": true
         });
@@ -704,9 +704,9 @@ fn persistent_stop_closes_owner_then_requests_service_shutdown() {
         line.clear();
         reader.read_line(&mut line).unwrap();
         let shutdown: serde_json::Value = serde_json::from_str(&line).unwrap();
-        assert_eq!(shutdown["op"], "shutdown");
+        assert_eq!(shutdown["operation"], "shutdown");
         let shutdown_reply = serde_json::json!({
-            "op": "shutdown",
+            "operation": "shutdown",
             "request": shutdown["request"],
             "ok": true
         });
@@ -723,7 +723,7 @@ fn persistent_stop_closes_owner_then_requests_service_shutdown() {
     .unwrap();
     let (owner, _events) = owner("shutdown", "/projects/shutdown");
     sidecars
-        .send(&owner, ECHO, "surface", &raw(r#"{"op":"open"}"#))
+        .send(&owner, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     sidecars.stop();
     service.join().unwrap();

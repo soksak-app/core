@@ -237,7 +237,7 @@ test("modified native character keys preserve their text before and after sessio
   openSession(sidecar);
   region._trigger("key", event);
   await new Promise((resolve) => setImmediate(resolve));
-  assert.deepEqual(sidecar.getMessages().filter(({ body }) => body.op === "input").map(({ body }) => body.keys[0]),
+  assert.deepEqual(sidecar.getMessages().filter(({ body }) => body.operation === "input").map(({ body }) => body.keys[0]),
     [event, event]);
 });
 
@@ -277,7 +277,7 @@ test("terminal.screen publishes sidecar output without polling or input commands
   sidecar.triggerEvent("test-session", { event: "screen", lines: [] });
   assert.deepEqual(status.readFn(), []);
   assert.deepEqual(received, [lines]);
-  assert.deepEqual(sidecar.getMessages().map(({ body }) => body.op), ["open"]);
+  assert.deepEqual(sidecar.getMessages().map(({ body }) => body.operation), ["open"]);
 });
 
 // 테스트 1: 부팅 → attachImage가 한 번 호출되고 sidecar에 open이 간다
@@ -310,7 +310,7 @@ test("Boot: attachImage called once and sidecar receives open message", async ()
 
   // sidecar에 open이 갔는가?
   const messages = fakeSidecar.getMessages();
-  const openMessage = messages.find((m) => m.body.op === "open");
+  const openMessage = messages.find((m) => m.body.operation === "open");
   assert(openMessage, "open message sent to sidecar");
   assert.equal(openMessage.body.image, "view", "open message has image: 'view'");
   assert.equal("width" in openMessage.body, false, "DOM width is not sent");
@@ -318,7 +318,7 @@ test("Boot: attachImage called once and sidecar receives open message", async ()
   assert.equal("scale" in openMessage.body, false, "DOM scale is not sent");
 });
 
-// 테스트 2: 영역 insert{text:"ls\r"} → sidecar {op:"input", bytes: base64("ls\r")}
+// 테스트 2: 영역 insert{text:"ls\r"} → sidecar {operation:"input", bytes: base64("ls\r")}
 test("Region insert event sends base64-encoded bytes to sidecar", async () => {
   FakeResizeObserver.reset();
   const fakeAttachImage = createFakeAttachImage();
@@ -378,7 +378,7 @@ test("Region insert event sends base64-encoded bytes to sidecar", async () => {
 
   // sidecar 메시지를 확인한다
   const messages = fakeSidecar.getMessages();
-  const inputMessage = messages.find((m) => m.body.op === "input" && m.body.bytes);
+  const inputMessage = messages.find((m) => m.body.operation === "input" && m.body.bytes);
   assert(inputMessage, "input message with bytes sent");
 
   // base64 디코딩하여 확인한다
@@ -420,14 +420,14 @@ test("terminal.input command sends same body as region insert", async () => {
 
   // sidecar 메시지를 확인한다
   const messages = fakeSidecar.getMessages();
-  const inputMessage = messages.find((m) => m.body.op === "input" && m.body.bytes);
+  const inputMessage = messages.find((m) => m.body.operation === "input" && m.body.bytes);
   assert(inputMessage, "input message with bytes sent");
 
   const decodedBytes = Buffer.from(inputMessage.body.bytes, "base64").toString("utf8");
   assert.equal(decodedBytes, "ls\r", "command sends same encoding as region insert");
 });
 
-// 테스트 4: 영역 key(Enter) → {op:"input", keys:[{key:"Enter"}]}
+// 테스트 4: 영역 key(Enter) → {operation:"input", keys:[{key:"Enter"}]}
 test("Region key event for Enter sends correct message format", async () => {
   FakeResizeObserver.reset();
   const fakeAttachImage = createFakeAttachImage();
@@ -464,7 +464,7 @@ test("Region key event for Enter sends correct message format", async () => {
   await new Promise((resolve) => setImmediate(resolve));
 
   const messages = fakeSidecar.getMessages();
-  const keyMessage = messages.find((m) => m.body.op === "input" && m.body.keys);
+  const keyMessage = messages.find((m) => m.body.operation === "input" && m.body.keys);
   assert(keyMessage, "key message sent");
   assert.deepEqual(keyMessage.body.keys[0], {
     key: "Enter",
@@ -475,7 +475,7 @@ test("Region key event for Enter sends correct message format", async () => {
   }, "Enter key formatted correctly");
 });
 
-// 테스트 4b: 영역 key(ArrowUp) → {op:"input", keys:[{key:"Up"}]}
+// 테스트 4b: 영역 key(ArrowUp) → {operation:"input", keys:[{key:"Up"}]}
 test("Region key event for ArrowUp sends Up key (no escape sequences)", async () => {
   FakeResizeObserver.reset();
   const fakeAttachImage = createFakeAttachImage();
@@ -512,7 +512,7 @@ test("Region key event for ArrowUp sends Up key (no escape sequences)", async ()
   await new Promise((resolve) => setImmediate(resolve));
 
   const messages = fakeSidecar.getMessages();
-  const keyMessage = messages.find((m) => m.body.op === "input" && m.body.keys);
+  const keyMessage = messages.find((m) => m.body.operation === "input" && m.body.keys);
   assert(keyMessage, "key message sent");
   assert.deepEqual(keyMessage.body.keys[0].key, "Up", "Up key sent");
   // 중요: 이스케이프 시퀀스가 없어야 한다
@@ -659,7 +659,7 @@ test("terminal.screen.read sends request and returns lines on screen event", asy
 
   // sidecar에 screen.read가 갔는가?
   const messages = fakeSidecar.getMessages();
-  const screenReadMessage = messages.find((m) => m.body.op === "screen.read");
+  const screenReadMessage = messages.find((m) => m.body.operation === "screen.read");
   assert(screenReadMessage, "screen.read message sent to sidecar");
 });
 
@@ -769,7 +769,7 @@ test("Resize state event with cell dimensions updates session without error", as
   );
 });
 
-// 테스트 8: terminal.close → sidecar {op:"close"} 한 번
+// 테스트 8: terminal.close → sidecar {operation:"close"} 한 번
 test("terminal.close sends close message to sidecar", async () => {
   FakeResizeObserver.reset();
   const fakeAttachImage = createFakeAttachImage();
@@ -801,7 +801,7 @@ test("terminal.close sends close message to sidecar", async () => {
   await closeCommand();
 
   const messages = fakeSidecar.getMessages();
-  const closeMessage = messages.find((m) => m.body.op === "close");
+  const closeMessage = messages.find((m) => m.body.operation === "close");
   assert(closeMessage, "close message sent to sidecar");
 });
 
@@ -831,9 +831,9 @@ test("open is independent of DOM element size", async () => {
 
   // DOM 크기가 0이어도 세션 요청은 즉시 전송된다. 실제 래스터는 호스트가 구성한다.
   let messages = fakeSidecar.getMessages();
-  let openMessage = messages.find((m) => m.body.op === "open");
+  let openMessage = messages.find((m) => m.body.operation === "open");
   assert(openMessage, "open message is sent at DOM size 0x0");
-  assert.deepEqual(openMessage.body, { op: "open", image: "view" });
+  assert.deepEqual(openMessage.body, { operation: "open", image: "view" });
 
   // 이제 크기를 800x400으로 변경한다
   fakeView.clientWidth = 800;
@@ -841,9 +841,9 @@ test("open is independent of DOM element size", async () => {
   FakeResizeObserver.triggerAll();
 
   messages = fakeSidecar.getMessages();
-  openMessage = messages.find((m) => m.body.op === "open");
+  openMessage = messages.find((m) => m.body.operation === "open");
   assert(openMessage, "the original open remains the only session request");
-  const openMessages = messages.filter((m) => m.body.op === "open");
+  const openMessages = messages.filter((m) => m.body.operation === "open");
   assert.equal(openMessages.length, 1, "open sent exactly once");
   assert.equal(messages.length, 1, "DOM resize sends no protocol message");
 });
@@ -870,7 +870,7 @@ test("DOM resize never sends terminal raster messages", async () => {
   });
 
   let messages = fakeSidecar.getMessages();
-  let openMessage = messages.find((m) => m.body.op === "open");
+  let openMessage = messages.find((m) => m.body.operation === "open");
   assert(openMessage, "open message sent");
 
   // 세션 상태가 생겨도 페이지는 래스터를 관리하지 않는다.
@@ -928,7 +928,7 @@ test("input_before_open: terminal.input is buffered until open", async () => {
   assert.equal(settled, false, "pre-open command remains pending");
   openSession(fakeSidecar);
   await pending;
-  const input = fakeSidecar.getMessages().find(({ body }) => body.op === "input" && body.bytes);
+  const input = fakeSidecar.getMessages().find(({ body }) => body.operation === "input" && body.bytes);
   assert.equal(Buffer.from(input.body.bytes, "base64").toString(), "test");
 });
 
@@ -1024,7 +1024,7 @@ test("compose events are sent with ranges and published as preedit state", async
   });
   const message = fakeSidecar.getMessages().at(-1).body;
   assert.deepEqual(message, {
-    op: "compose", text: "한글",
+    operation: "compose", text: "한글",
     selectedRange: { location: 2, length: 0 },
     replacementRange: { location: 0, length: 1 }, attributed: true,
   });
@@ -1055,7 +1055,7 @@ test("native focus and cursor state route to sidecar and caret", async () => {
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(regionReference._caret, { x: 27, y: 36, width: 9, height: 18 });
   assert.deepEqual(fakeSidecar.getMessages().at(-1).body, {
-    op: "input", focus: { focused: true },
+    operation: "input", focus: { focused: true },
   });
 });
 
@@ -1122,7 +1122,7 @@ test("input send failures remain observable and later queued input still sends",
   let fail = true;
   const send = fakeSidecar.send;
   fakeSidecar.send = async function(id, body) {
-    if (fail && body.op === "input") {
+    if (fail && body.operation === "input") {
       fail = false;
       throw new Error("input unavailable");
     }
@@ -1287,7 +1287,7 @@ test("a caller scale option cannot enter the terminal protocol", async () => {
   });
   assert.deepEqual(fakeSidecar.getMessages(), [{
     id: "test-session",
-    body: { op: "open", image: "view" },
+    body: { operation: "open", image: "view" },
   }]);
 });
 
@@ -1371,8 +1371,8 @@ test("region input is buffered in order until sidecar state opens the session", 
   // open만 전송되고 입력은 bounded startup queue에 남는다.
   let messages = fakeSidecar.getMessages();
   assert.equal(messages.length, 1, "only open is sent before the session exists");
-  assert.equal(messages[0].body.op, "open", "first message is open");
-  assert.deepEqual(messages[0].body, { op: "open", image: "view" });
+  assert.equal(messages[0].body.operation, "open", "first message is open");
+  assert.deepEqual(messages[0].body, { operation: "open", image: "view" });
 
   // 사이드카가 state 이벤트로 세션을 연다
   fakeSidecar.triggerEvent("test-session", { event: "state", sessionId: "s1", cols: 100, rows: 50, cellWidth: 8, cellHeight: 16 });
@@ -1401,7 +1401,7 @@ test("startup input overflow is visible and does not report success", async () =
   }
   await new Promise((resolve) => setImmediate(resolve));
   assert.match(fakeExpose.getStatus("terminal.session").readFn().error, /queue overflow/);
-  assert.equal(fakeSidecar.getMessages().filter(({ body }) => body.op === "input").length, 0);
+  assert.equal(fakeSidecar.getMessages().filter(({ body }) => body.operation === "input").length, 0);
 });
 
 // 호스트 configure 오류를 페이지의 DOM 크기로 복구하려 해서는 안 된다.
@@ -1433,7 +1433,7 @@ test("a sidecar rejection is reported without DOM-driven retry", async () => {
   // open은 페이지 크기와 무관하게 한 번만 나간다.
   let messages = fakeSidecar.getMessages();
   assert.equal(messages.length, 1, "one open message");
-  assert.equal(messages[0].body.op, "open", "first message is open");
+  assert.equal(messages[0].body.operation, "open", "first message is open");
   assert.equal("width" in messages[0].body, false, "transient DOM width is not sent");
 
   // 사이드카가 거부한다.

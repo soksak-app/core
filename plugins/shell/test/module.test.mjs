@@ -20,7 +20,7 @@ test("shell module disposes its composition controller before removing the surfa
     surfaceId: "shell-test",
     composition: { create: async () => ({ dispose: async () => { compositionDisposed += 1; } }) },
     runtime: { sidecar: () => ({
-      send: async (_surface, body) => { sent.push(body.op); },
+      send: async (_surface, body) => { sent.push(body.operation); },
       on: async () => () => {},
     }) },
     exposure: {

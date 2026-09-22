@@ -38,9 +38,9 @@ test("surface sidecar access is resolved from the declared surface and rejects p
   calls.length = 0;
   const runtime = surfaceContextRuntime({ surfaceId: "declared-sidecar-surface", sidecars: ["@fixture/sidecar"] });
   const port = runtime.sidecar();
-  await port.send("declared-sidecar-surface", { op: "open" });
+  await port.send("declared-sidecar-surface", { operation: "open" });
   assert.deepEqual(calls.at(-1), ["sidecarSend", {
-    sidecar: "@fixture/sidecar", surface: "declared-sidecar-surface", body: { op: "open" },
+    sidecar: "@fixture/sidecar", surface: "declared-sidecar-surface", body: { operation: "open" },
   }]);
   assert.throws(() => runtime.sidecar("@fixture/sidecar"), /does not accept a package name/);
 });

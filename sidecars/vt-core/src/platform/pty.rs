@@ -11,9 +11,13 @@ pub fn process_group_leader(
     #[cfg(not(unix))] _master: &dyn MasterPty,
 ) -> Option<i32> {
     #[cfg(unix)]
-    { master.process_group_leader() }
+    {
+        master.process_group_leader()
+    }
     #[cfg(not(unix))]
-    { None }
+    {
+        None
+    }
 }
 
 /// Terminates the PTY process group when the platform exposes one.

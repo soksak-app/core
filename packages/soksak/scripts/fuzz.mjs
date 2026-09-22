@@ -181,7 +181,7 @@ function run(seed, steps) {
     log.push(desc);
     const errs = check(grid, `step ${s} after ${desc}`);
     if (errs.length) {
-      if (process.env.DUMP) console.error(`DUMP ${JSON.stringify({ before, w: grid.width, h: grid.height, gap: grid.gap, min: grid.minSize, op: desc })}`);
+      if (process.env.DUMP) console.error(`DUMP ${JSON.stringify({ before, w: grid.width, h: grid.height, gap: grid.gap, min: grid.minSize, operation: desc })}`);
       return { seed, log, errs };
     }
   }

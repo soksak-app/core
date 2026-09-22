@@ -366,7 +366,7 @@ func (c *Sidecars) closePersistentOwner(process *sidecar, ctx context.Context) e
 	c.mu.Lock()
 	process.closeWaiters[request] = waiter
 	c.mu.Unlock()
-	line, err := json.Marshal(map[string]string{"op": "close-owner", "request": request})
+	line, err := json.Marshal(map[string]string{"operation": "close-owner", "request": request})
 	if err != nil {
 		return err
 	}
@@ -388,7 +388,7 @@ func (c *Sidecars) closePersistentOwner(process *sidecar, ctx context.Context) e
 		c.mu.Lock()
 		process.closeWaiters[shutdown] = shutdownWaiter
 		c.mu.Unlock()
-		shutdownLine, marshalErr := json.Marshal(map[string]string{"op": "shutdown", "request": shutdown})
+		shutdownLine, marshalErr := json.Marshal(map[string]string{"operation": "shutdown", "request": shutdown})
 		if marshalErr != nil {
 			return marshalErr
 		}
@@ -535,7 +535,7 @@ func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 		return nil, fmt.Errorf("sidecar %s: connect authenticated service: %w", name, err)
 	}
 	reader := bufio.NewReader(conn)
-	hello, err := json.Marshal(map[string]any{"op": "hello", "protocol": 1, "token": endpoint.Token, "client": c.configDir})
+	hello, err := json.Marshal(map[string]any{"operation": "hello", "protocol": 1, "token": endpoint.Token, "client": c.configDir})
 	if err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("sidecar %s: encode hello: %w", name, err)
@@ -551,12 +551,12 @@ func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 		return nil, fmt.Errorf("sidecar %s: hello response: %w", name, err)
 	}
 	var response struct {
-		Op       string  `json:"op"`
-		Protocol *uint64 `json:"protocol"`
-		OK       bool    `json:"ok"`
-		Error    string  `json:"error"`
+		Operation string  `json:"operation"`
+		Protocol  *uint64 `json:"protocol"`
+		OK        bool    `json:"ok"`
+		Error     string  `json:"error"`
 	}
-	if err := json.Unmarshal(responseLine, &response); err != nil || response.Op != "hello" {
+	if err := json.Unmarshal(responseLine, &response); err != nil || response.Operation != "hello" {
 		conn.Close()
 		return nil, fmt.Errorf("sidecar %s: authentication handshake failed: invalid hello response", name)
 	}
@@ -756,14 +756,14 @@ func (c *Sidecars) readPersistent(process *sidecar, reader *bufio.Reader) {
 			log.Printf("sidecar %s: invalid persistent event: %v", process.name, err)
 			break
 		}
-		var op string
-		if raw, present := value["op"]; present {
-			if err := json.Unmarshal(raw, &op); err != nil {
+		var operation string
+		if raw, present := value["operation"]; present {
+			if err := json.Unmarshal(raw, &operation); err != nil {
 				log.Printf("sidecar %s: invalid persistent operation: %v", process.name, err)
 				break
 			}
 		}
-		if op == "closed-owner" || op == "shutdown" {
+		if operation == "closed-owner" || operation == "shutdown" {
 			var request string
 			if err := json.Unmarshal(value["request"], &request); err != nil || request == "" {
 				log.Printf("sidecar %s: invalid close-owner request: %v", process.name, err)

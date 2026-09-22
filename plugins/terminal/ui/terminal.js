@@ -16,7 +16,7 @@ function encodeBytes(text, encoder) {
  */
 function keyToMessage(keyName, text = "", modifiers = {}) {
   const message = {
-    op: "input",
+    operation: "input",
     keys: [{
       key: keyName,
       text: text || "",
@@ -33,7 +33,7 @@ function keyToMessage(keyName, text = "", modifiers = {}) {
  */
 function sendInput(text, terminal, id, encoder) {
   const base64 = encodeBytes(text, encoder);
-  return terminal.send(id, { op: "input", bytes: base64 });
+  return terminal.send(id, { operation: "input", bytes: base64 });
 }
 
 const CURSOR_SHAPES = new Set(["block", "underline", "beam"]);
@@ -183,16 +183,16 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose,
         shift: entry.shift, alt: entry.alt, ctrl: entry.ctrl,
       }));
     } else if (entry.type === "compose") {
-      await terminal.send(id, { op: "compose",
+      await terminal.send(id, { operation: "compose",
         text: entry.text,
         selectedRange: entry.selectedRange ?? null,
         replacementRange: entry.replacementRange ?? null,
         attributed: entry.attributed === true,
       });
     } else if (entry.type === "command") {
-      await terminal.send(id, { op: "input", command: { selector: entry.selector } });
+      await terminal.send(id, { operation: "input", command: { selector: entry.selector } });
     } else if (entry.type === "focus") {
-      await terminal.send(id, { op: "input", focus: { focused: entry.focused } });
+      await terminal.send(id, { operation: "input", focus: { focused: entry.focused } });
     } else {
       throw new Error(`unknown terminal input type: ${entry.type}`);
     }
@@ -393,7 +393,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose,
 
   // 세션 열기는 크기를 보내지 않는다. 호스트가 네이티브 영역을 적용하며 보낸 configure만
   // 이미지와 PTY 크기의 권위 있는 입력이다.
-  await terminal.send(id, { op: "open", image: "view" });
+  await terminal.send(id, { operation: "open", image: "view" });
 
   // 공개 항목 등록
   await Promise.all([
@@ -431,7 +431,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose,
           }
         };
 
-        terminal.send(id, { op: "screen.read" }).catch((error) => {
+        terminal.send(id, { operation: "screen.read" }).catch((error) => {
           if (!resolved) {
             resolved = true;
             clearTimeout(timeout);
@@ -442,7 +442,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose,
       });
     }),
     expose.command("terminal.close", async () => {
-      await terminal.send(id, { op: "close" });
+      await terminal.send(id, { operation: "close" });
       return null;
     }),
     expose.dom("terminal.view", view),
@@ -456,7 +456,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose,
     async dispose() {
       stopSidecar?.();
       view.removeEventListener("pointerdown", preventDefaultFocus);
-      await terminal.send(id, { op: "close" });
+      await terminal.send(id, { operation: "close" });
     },
   };
 }

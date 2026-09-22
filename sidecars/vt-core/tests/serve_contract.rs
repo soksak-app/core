@@ -215,9 +215,9 @@ async fn test_a3_input_calls_write() {
     let calls = Arc::new(Mutex::new(Calls::default()));
     let fake_session_id = "test-session".to_string();
 
-    let input = r#"{"surface":"s1","root":"/tmp","body":{"op":"open","image":"view"}}
+    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
-{"surface":"s1","body":{"op":"input","bytes":"aGk="}}
+{"surface":"s1","body":{"operation":"input","bytes":"aGk="}}
 "#;
     let reader = std::io::Cursor::new(input.as_bytes());
     let mut writer = Vec::new();
@@ -248,9 +248,9 @@ async fn test_a3_input_calls_write() {
 async fn test_paste_writes_ordered_text_using_bracketed_mode() {
     let calls = Arc::new(Mutex::new(Calls::default()));
     let fake_session_id = "test-paste-session".to_string();
-    let input = r#"{"surface":"s1","root":"/tmp","body":{"op":"open","image":"view"}}
+    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
-{"surface":"s1","body":{"op":"paste","text":"one\ntwo"}}
+{"surface":"s1","body":{"operation":"paste","text":"one\ntwo"}}
 "#;
     let reader = std::io::Cursor::new(input.as_bytes());
     let mut writer = Vec::new();
@@ -278,7 +278,7 @@ async fn test_paste_writes_ordered_text_using_bracketed_mode() {
 #[tokio::test]
 async fn test_paste_rejects_non_text_payload() {
     let calls = Arc::new(Mutex::new(Calls::default()));
-    let input = r#"{"surface":"s1","root":"/tmp","body":{"op":"paste","kind":"png","data":"iVBORw=="}}
+    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"paste","kind":"png","data":"iVBORw=="}}
 "#;
     let reader = std::io::Cursor::new(input.as_bytes());
     let mut writer = Vec::new();
@@ -303,9 +303,9 @@ async fn test_a7_close_op_ends_the_session() {
     let calls = Arc::new(Mutex::new(Calls::default()));
     let fake_session_id = "test-session".to_string();
 
-    let input = r#"{"surface":"s1","root":"/tmp","body":{"op":"open","image":"view"}}
+    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
-{"surface":"s1","body":{"op":"close"}}
+{"surface":"s1","body":{"operation":"close"}}
 "#;
     let reader = std::io::Cursor::new(input.as_bytes());
     let mut writer = Vec::new();
@@ -341,7 +341,7 @@ async fn test_a8_closed_surface_closes_session() {
     let calls = Arc::new(Mutex::new(Calls::default()));
     let fake_session_id = "test-session".to_string();
 
-    let input = r#"{"surface":"s1","root":"/tmp","body":{"op":"open","image":"view"}}
+    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 {"surface":"s1","closed":true}
 "#;
@@ -376,9 +376,9 @@ async fn test_a8_closed_surface_closes_session() {
 #[tokio::test]
 async fn test_input_not_fed_to_engine() {
     let calls = Arc::new(Mutex::new(Calls::default()));
-    let input = r#"{"surface":"s1","root":"/tmp","body":{"op":"open","image":"view"}}
+    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
-{"surface":"s1","body":{"op":"input","bytes":"aGVsbG8="}}
+{"surface":"s1","body":{"operation":"input","bytes":"aGVsbG8="}}
 "#;
     let reader = std::io::Cursor::new(input.as_bytes());
     let mut writer = Vec::new();
@@ -399,7 +399,7 @@ async fn test_input_not_fed_to_engine() {
 #[tokio::test]
 async fn test_stdin_eof_terminates_quickly() {
     let calls = Arc::new(Mutex::new(Calls::default()));
-    let input = r#"{"surface":"s1","root":"/tmp","body":{"op":"open","image":"view"}}
+    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#;
     let reader = std::io::Cursor::new(input.as_bytes());
@@ -429,7 +429,7 @@ async fn test_stdin_eof_terminates_quickly() {
 #[tokio::test]
 async fn test_open_and_close_session() {
     let calls = Arc::new(Mutex::new(Calls::default()));
-    let input = r#"{"surface":"s1","root":"/tmp","body":{"op":"open","image":"view"}}
+    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 {"surface":"s1","closed":true}
 "#;
@@ -448,11 +448,10 @@ async fn test_open_and_close_session() {
     let _ = serve(engine_factory, reader, &mut writer, session_port_factory).await;
 }
 
-
 #[tokio::test]
 async fn test_resize() {
     let calls = Arc::new(Mutex::new(Calls::default()));
-    let input = r#"{"surface":"s1","root":"/tmp","body":{"op":"open","image":"view"}}
+    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 {"surface":"s1","body":{"image":{"consumed":{"name":"view","generation":1,"raster":1,"sequence":1}}}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":2,"width":1600,"height":768,"scale":1.0}}}}
@@ -475,10 +474,10 @@ async fn test_resize() {
 #[tokio::test]
 async fn test_close_session() {
     let calls = Arc::new(Mutex::new(Calls::default()));
-    let input = r#"{"surface":"s1","root":"/tmp","body":{"op":"open","image":"view"}}
+    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 {"surface":"s1","closed":true}
-{"surface":"s1","body":{"op":"input","bytes":"aGk="}}
+{"surface":"s1","body":{"operation":"input","bytes":"aGk="}}
 "#;
     let reader = std::io::Cursor::new(input.as_bytes());
     let mut writer = Vec::new();
@@ -530,7 +529,7 @@ async fn test_a2_pushed_output_reaches_screen() {
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
     // Send open command
-    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"op":"open","image":"view"}}
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
 
@@ -603,10 +602,10 @@ async fn test_a2_pushed_output_reaches_screen() {
 #[tokio::test]
 async fn test_a5_screen_read_returns_current_screen() {
     let input = r#"
-{"surface":"s1","root":"/tmp","body":{"op":"open","image":"view"}}
+{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
-{"surface":"s1","body":{"op":"input","bytes":"aGk="}}
-{"surface":"s1","body":{"op":"screen.read"}}
+{"surface":"s1","body":{"operation":"input","bytes":"aGk="}}
+{"surface":"s1","body":{"operation":"screen.read"}}
 "#;
 
     let reader = std::io::Cursor::new(input.as_bytes());
@@ -650,7 +649,7 @@ async fn test_a5_screen_read_returns_current_screen() {
 #[tokio::test]
 async fn test_a6_unknown_op_returns_error() {
     let input = r#"
-{"surface":"s1","body":{"op":"unknown_operation"}}
+{"surface":"s1","body":{"operation":"unknown_operation"}}
 "#;
 
     let reader = std::io::Cursor::new(input.as_bytes());
@@ -673,7 +672,7 @@ async fn test_a6_unknown_op_returns_error() {
     assert!(json["body"]["error"]
         .as_str()
         .unwrap()
-        .contains("Unknown op"));
+        .contains("Unknown operation"));
 }
 
 /// Test K1: Keys encoded without app_cursor mode
@@ -682,9 +681,9 @@ async fn test_k1_keys_up_without_app_cursor() {
     let calls = Arc::new(Mutex::new(Calls::default()));
     let fake_session_id = "test-session".to_string();
 
-    let input = r#"{"surface":"s1","root":"/tmp","body":{"op":"open","image":"view"}}
+    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
-{"surface":"s1","body":{"op":"input","keys":[{"key":"Up"}]}}
+{"surface":"s1","body":{"operation":"input","keys":[{"key":"Up"}]}}
 "#;
     let reader = std::io::Cursor::new(input.as_bytes());
     let mut writer = Vec::new();
@@ -715,9 +714,9 @@ async fn test_k2_keys_up_with_app_cursor() {
     let calls = Arc::new(Mutex::new(Calls::default()));
     let fake_session_id = "test-session".to_string();
 
-    let input = r#"{"surface":"s1","root":"/tmp","body":{"op":"open","image":"view"}}
+    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
-{"surface":"s1","body":{"op":"input","keys":[{"key":"Up"}]}}
+{"surface":"s1","body":{"operation":"input","keys":[{"key":"Up"}]}}
 "#;
     let reader = std::io::Cursor::new(input.as_bytes());
     let mut writer = Vec::new();
@@ -754,9 +753,9 @@ async fn test_k3_char_key_encoding() {
     let fake_session_id = "test-session".to_string();
 
     // Test ctrl+c → 0x03
-    let input = r#"{"surface":"s1","root":"/tmp","body":{"op":"open","image":"view"}}
+    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
-{"surface":"s1","body":{"op":"input","keys":[{"key":"Char","text":"c","ctrl":true}]}}
+{"surface":"s1","body":{"operation":"input","keys":[{"key":"Char","text":"c","ctrl":true}]}}
 "#;
     let reader = std::io::Cursor::new(input.as_bytes());
     let mut writer = Vec::new();
@@ -783,9 +782,9 @@ async fn test_k3_char_key_encoding() {
     let calls2 = Arc::new(Mutex::new(Calls::default()));
     let fake_session_id2 = "test-session-2".to_string();
 
-    let input2 = r#"{"surface":"s1","root":"/tmp","body":{"op":"open","image":"view"}}
+    let input2 = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
-{"surface":"s1","body":{"op":"input","keys":[{"key":"Char","text":"한"}]}}
+{"surface":"s1","body":{"operation":"input","keys":[{"key":"Char","text":"한"}]}}
 "#;
     let reader2 = std::io::Cursor::new(input2.as_bytes());
     let mut writer2 = Vec::new();
@@ -823,9 +822,9 @@ async fn test_k4_unknown_key_returns_error() {
     let calls = Arc::new(Mutex::new(Calls::default()));
     let fake_session_id = "test-session".to_string();
 
-    let input = r#"{"surface":"s1","root":"/tmp","body":{"op":"open","image":"view"}}
+    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
-{"surface":"s1","body":{"op":"input","keys":[{"key":"Nope"}]}}
+{"surface":"s1","body":{"operation":"input","keys":[{"key":"Nope"}]}}
 "#;
     let reader = std::io::Cursor::new(input.as_bytes());
     let mut writer = Vec::new();
@@ -891,7 +890,7 @@ async fn test_open_waits_for_host_raster_configuration() {
 
     to_serve
         .write_all(
-            br#"{"surface":"s1","root":"/tmp","body":{"op":"open","image":"view"}}
+            br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
 "#,
         )
         .await
@@ -934,13 +933,64 @@ async fn test_headless_open_creates_one_session_before_configuration() {
     let (serve_output, output) = tokio::io::duplex(64 * 1024);
     let task = tokio::spawn(serve(engine_factory, serve_input, serve_output, factory));
     let mut lines = tokio::io::BufReader::new(output).lines();
-    input.write_all(b"{\"surface\":\"hidden\",\"root\":\"/tmp\",\"body\":{\"op\":\"open\"}}\n").await.unwrap();
-    assert!(tokio::time::timeout(std::time::Duration::from_millis(100), lines.next_line()).await.is_err());
+    input
+        .write_all(
+            b"{\"surface\":\"hidden\",\"root\":\"/tmp\",\"body\":{\"operation\":\"open\"}}\n",
+        )
+        .await
+        .unwrap();
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(100), lines.next_line())
+            .await
+            .is_err()
+    );
     assert_eq!(calls.lock().unwrap().opens, vec![(80, 24)]);
     input.write_all(b"{\"surface\":\"hidden\",\"body\":{\"image\":{\"configure\":{\"name\":\"view\",\"generation\":1,\"raster\":1,\"width\":800,\"height\":384,\"scale\":1.0}}}}\n").await.unwrap();
-    let state = tokio::time::timeout(std::time::Duration::from_secs(2), lines.next_line()).await.unwrap().unwrap().unwrap();
-    assert_eq!(serde_json::from_str::<serde_json::Value>(&state).unwrap()["body"]["event"], "state");
+    let state = tokio::time::timeout(std::time::Duration::from_secs(2), lines.next_line())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&state).unwrap()["body"]["event"],
+        "state"
+    );
     assert_eq!(calls.lock().unwrap().opens.len(), 1);
+    drop(input);
+    task.await.unwrap().unwrap();
+}
+
+#[tokio::test]
+async fn test_legacy_op_field_is_rejected_without_fallback() {
+    let calls = Arc::new(Mutex::new(Calls::default()));
+    let port = Arc::new(FakeSessionPort::new("legacy-op".into(), calls.clone()));
+    let factory_port = port.clone();
+    let factory = Arc::new(move || factory_port.clone() as Arc<dyn SessionPort>);
+    let engine_factory = Arc::new(|| Box::new(MockEngine::new()) as Box<dyn Engine>);
+    let (mut input, serve_input) = tokio::io::duplex(64 * 1024);
+    let (serve_output, output) = tokio::io::duplex(64 * 1024);
+    let task = tokio::spawn(serve(engine_factory, serve_input, serve_output, factory));
+    let mut lines = tokio::io::BufReader::new(output).lines();
+
+    input
+        .write_all(
+            br#"{"surface":"legacy","root":"/tmp","body":{"op":"open"}}
+"#,
+        )
+        .await
+        .unwrap();
+    let response = tokio::time::timeout(std::time::Duration::from_secs(2), lines.next_line())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    let json: serde_json::Value = serde_json::from_str(&response).unwrap();
+    assert_eq!(json["body"]["error"], "unknown operation");
+    assert!(
+        calls.lock().unwrap().opens.is_empty(),
+        "legacy op must not open a session"
+    );
+
     drop(input);
     task.await.unwrap().unwrap();
 }
@@ -969,7 +1019,7 @@ async fn test_i1_image_envelope_on_output() {
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
     // Open WITH image field
-    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"op":"open","image":"view"}}
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
 
@@ -1059,7 +1109,7 @@ async fn test_i2_no_image_envelope_until_consumed() {
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
     // Open WITH image field
-    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"op":"open","image":"view"}}
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
 
@@ -1162,7 +1212,7 @@ async fn test_i3_image_response_no_error() {
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
     // Open WITH image field
-    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"op":"open","image":"view"}}
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
 
@@ -1203,7 +1253,7 @@ async fn test_i3_image_response_no_error() {
                 if let Some(error) = json.get("body").and_then(|b| b.get("error")) {
                     if error
                         .as_str()
-                        .map(|e| e.contains("unknown op"))
+                        .map(|e| e.contains("unknown operation"))
                         .unwrap_or(false)
                     {
                         found_error_response = true;
@@ -1215,14 +1265,14 @@ async fn test_i3_image_response_no_error() {
     }
     assert!(
         !found_error_response,
-        "should NOT return 'unknown op' error for consumed response"
+        "should NOT return 'unknown operation' error for consumed response"
     );
 
     // Test 2: Send error response
     to_serve.write_all(br#"{"surface":"s1","body":{"image":{"error":"forbidden","name":"view","generation":1,"raster":1,"sequence":1}}}
 "#).await.unwrap();
 
-    // Should NOT get error response about unknown op
+    // Should NOT get error response about unknown operation
     found_error_response = false;
     for _ in 0..10 {
         if let Ok(Ok(Some(line))) =
@@ -1232,7 +1282,7 @@ async fn test_i3_image_response_no_error() {
                 if let Some(error) = json.get("body").and_then(|b| b.get("error")) {
                     if error
                         .as_str()
-                        .map(|e| e.contains("unknown op"))
+                        .map(|e| e.contains("unknown operation"))
                         .unwrap_or(false)
                     {
                         found_error_response = true;
@@ -1244,7 +1294,7 @@ async fn test_i3_image_response_no_error() {
     }
     assert!(
         !found_error_response,
-        "should NOT return 'unknown op' error for error response"
+        "should NOT return 'unknown operation' error for error response"
     );
 
     drop(to_serve);
@@ -1257,7 +1307,7 @@ async fn test_open_with_image_is_a_request() {
     let calls = Arc::new(Mutex::new(Calls::default()));
     let fake_session_id = "test-session-open-image".to_string();
 
-    let input = r#"{"surface":"s1","root":"/tmp","body":{"op":"open","image":"view"}}
+    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#;
     let reader = std::io::Cursor::new(input.as_bytes());
@@ -1323,7 +1373,7 @@ async fn test_configure_with_invalid_width_type() {
     let task = tokio::spawn(serve(engine_factory, serve_in, serve_out, factory));
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
-    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"op":"open","image":"view"}}
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":"800","height":384,"scale":1.0}}}}
 "#).await.unwrap();
 
@@ -1380,7 +1430,7 @@ async fn test_input_without_bytes_or_keys_rejected() {
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
     // Open first
-    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"op":"open","image":"view"}}
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
 
@@ -1395,7 +1445,7 @@ async fn test_input_without_bytes_or_keys_rejected() {
     // Send input with neither bytes nor keys
     to_serve
         .write_all(
-            br#"{"surface":"s1","body":{"op":"input"}}
+            br#"{"surface":"s1","body":{"operation":"input"}}
 "#,
         )
         .await
@@ -1448,7 +1498,7 @@ async fn test_input_with_non_string_bytes_rejected() {
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
     // Open first
-    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"op":"open","image":"view"}}
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
 
@@ -1463,7 +1513,7 @@ async fn test_input_with_non_string_bytes_rejected() {
     // Send input with bytes as number instead of string
     to_serve
         .write_all(
-            br#"{"surface":"s1","body":{"op":"input","bytes":123}}
+            br#"{"surface":"s1","body":{"operation":"input","bytes":123}}
 "#,
         )
         .await
@@ -1516,7 +1566,7 @@ async fn test_input_with_non_array_keys_rejected() {
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
     // Open first
-    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"op":"open","image":"view"}}
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
 
@@ -1531,7 +1581,7 @@ async fn test_input_with_non_array_keys_rejected() {
     // Send input with keys as object instead of array
     to_serve
         .write_all(
-            br#"{"surface":"s1","body":{"op":"input","keys":{"key":"Up"}}}
+            br#"{"surface":"s1","body":{"operation":"input","keys":{"key":"Up"}}}
 "#,
         )
         .await
@@ -1584,7 +1634,7 @@ async fn test_replacement_raster_with_missing_height_is_rejected() {
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
     // Open first
-    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"op":"open","image":"view"}}
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
 
@@ -1659,7 +1709,7 @@ async fn test_cell_dimensions_from_metrics() {
     let width_px = 800u32;
     let height_px = 384u32;
 
-    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"op":"open","image":"view"}}
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":2.0}}}}
 "#).await.unwrap();
 
@@ -1749,7 +1799,7 @@ async fn test_cell_dimensions_from_metrics() {
 
     let scale2 = 1.0f32;
 
-    to_serve2.write_all(br#"{"surface":"s1","root":"/tmp","body":{"op":"open","image":"view"}}
+    to_serve2.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
 
@@ -1813,7 +1863,7 @@ async fn test_zero_sized_configuration_is_rejected() {
     let task = tokio::spawn(serve(engine_factory, serve_in, serve_out, factory));
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
-    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"op":"open","image":"view"}}
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":0,"height":0,"scale":1.0}}}}
 "#).await.unwrap();
 
@@ -1896,7 +1946,7 @@ async fn test_replacement_raster_with_zero_size_is_rejected() {
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
     // Send open with normal size
-    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"op":"open","image":"view"}}
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
 
@@ -1938,7 +1988,7 @@ async fn test_replacement_raster_with_zero_size_is_rejected() {
     // Send screen.read to verify task is still alive
     to_serve
         .write_all(
-            br#"{"surface":"s1","body":{"op":"screen.read"}}
+            br#"{"surface":"s1","body":{"operation":"screen.read"}}
 "#,
         )
         .await
@@ -1986,7 +2036,7 @@ async fn test_too_small_size_is_rejected() {
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
     // This raster is positive but too small to contain one terminal cell.
-    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"op":"open","image":"view"}}
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":3,"height":3,"scale":1.0}}}}
 "#).await.unwrap();
 
@@ -2143,7 +2193,7 @@ async fn test_panicking_surface_reports_error() {
     panic_engine_flag.store(true, std::sync::atomic::Ordering::Relaxed);
 
     // Send open - this should trigger panic in resize
-    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"op":"open","image":"view"}}
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
 
@@ -2179,7 +2229,10 @@ async fn test_panicking_surface_reports_error() {
 
     drop(to_serve);
     let shutdown = task.await.unwrap();
-    assert!(shutdown.is_err(), "surface shutdown failure must remain observable");
+    assert!(
+        shutdown.is_err(),
+        "surface shutdown failure must remain observable"
+    );
 }
 
 /// 이미지 봉투가 나올 때까지 출력 줄을 읽는다. screen 이벤트 줄은 건너뛴다.
@@ -2225,7 +2278,7 @@ async fn test_replacement_raster_waits_for_prior_transfer() {
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
     // Open with image at 800x384
-    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"op":"open","image":"view"}}
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
 
@@ -2306,7 +2359,7 @@ async fn test_no_image_envelope_while_outstanding_after_release() {
     let task = tokio::spawn(serve(engine_factory, serve_in, serve_out, factory));
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
-    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"op":"open","image":"view"}}
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
 
@@ -2416,7 +2469,7 @@ async fn test_image_error_response_reenables_drawing() {
     let task = tokio::spawn(serve(engine_factory, serve_in, serve_out, factory));
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
-    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"op":"open","image":"view"}}
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
 
@@ -2496,7 +2549,7 @@ async fn test_replacement_raster_state_has_cell_dimensions() {
     let task = tokio::spawn(serve(engine_factory, serve_in, serve_out, factory));
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
-    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"op":"open","image":"view"}}
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
 

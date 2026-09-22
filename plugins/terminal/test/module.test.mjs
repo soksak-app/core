@@ -58,7 +58,7 @@ test("terminal module waits for composition presentation, publishes state, and d
   await mounted.dispose();
   assert.equal(compositionDisposed, true);
   assert.equal(exposureDisposed, true);
-  assert.equal(messages.at(-1).body.op, "close");
+  assert.equal(messages.at(-1).body.operation, "close");
   assert.equal(root.childNodes.length, 0);
   delete globalThis.window;
 });

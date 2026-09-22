@@ -28,7 +28,7 @@ pub struct Endpoint {
 
 #[derive(Debug, Deserialize)]
 struct Hello {
-    op: String,
+    operation: String,
     protocol: u64,
     token: String,
     client: String,
@@ -36,7 +36,7 @@ struct Hello {
 
 #[derive(Debug, Serialize)]
 struct HelloReply<'a> {
-    op: &'static str,
+    operation: &'static str,
     protocol: Option<u64>,
     ok: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -152,20 +152,20 @@ async fn authenticate(
         .map_err(|e| format!("read hello: {e}"))?;
     let hello =
         serde_json::from_str::<Hello>(line.trim()).map_err(|_| "invalid hello".to_string())?;
-    let valid = hello.op == "hello"
+    let valid = hello.operation == "hello"
         && hello.protocol == PROTOCOL
         && hello.token == expected_token
         && !hello.client.is_empty();
     let reply = if valid {
         HelloReply {
-            op: "hello",
+            operation: "hello",
             protocol: Some(PROTOCOL),
             ok: true,
             error: None,
         }
     } else {
         HelloReply {
-            op: "hello",
+            operation: "hello",
             protocol: None,
             ok: false,
             error: Some("authentication or protocol mismatch"),
@@ -344,7 +344,7 @@ mod tests {
         let task = tokio::spawn(async move { authenticate(server, "token").await });
         client
             .write_all(
-                br#"{"op":"hello","protocol":1,"token":"token","client":"config-a"}
+                br#"{"operation":"hello","protocol":1,"token":"token","client":"config-a"}
 "#,
             )
             .await
@@ -365,7 +365,7 @@ mod tests {
         let task = tokio::spawn(async move { authenticate(server, "token").await });
         client
             .write_all(
-                br#"{"op":"hello","protocol":1,"token":"wrong","client":"config-a"}
+                br#"{"operation":"hello","protocol":1,"token":"wrong","client":"config-a"}
 "#,
             )
             .await

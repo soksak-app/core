@@ -908,7 +908,7 @@ function syncBackgroundSessions() {
     });
     // manifest가 연산을 명시한다. 사이드카 전송은 기존 wire 필드 `op`를 유지하며
     // 이 위치가 유일한 프로토콜 변환 지점이다.
-    port.send(tab.id, { op: descriptor.operation }).catch((error) => {
+    port.send(tab.id, { operation: descriptor.operation }).catch((error) => {
       backgroundSessions.delete(tab.id);
       report(`background session ${tab.id} open failed: ${error.message}`);
     });

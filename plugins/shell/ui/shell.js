@@ -16,8 +16,8 @@ export async function mount(root, context) {
   const changed = (name) => listeners.get(name)?.forEach((fn) => fn(read[name]()));
   const write = (text) => { for (const [i, part] of text.split("\n").entries()) { if (i || !open) out.append(document.createElement("div")); if (part) out.lastElementChild.append(part); } open = !text.endsWith("\n"); changed("output"); changed("screen"); };
   const registrations = [
-    context.exposure.command("shell.write", ({ data }) => shell.send(context.surfaceId, { op: "write", data })),
-    context.exposure.command("shell.interrupt", () => shell.send(context.surfaceId, { op: "interrupt" })),
+    context.exposure.command("shell.write", ({ data }) => shell.send(context.surfaceId, { operation: "write", data })),
+    context.exposure.command("shell.interrupt", () => shell.send(context.surfaceId, { operation: "interrupt" })),
     context.exposure.command("shell.clear", async () => {
       out.replaceChildren(); open = false; changed("output"); changed("screen"); return null;
     }),
@@ -25,7 +25,7 @@ export async function mount(root, context) {
     const id = `run-${++nextRun}`;
     const result = new Promise((resolve, reject) => runs.set(id, { resolve, reject }));
     changed("runs");
-    shell.send(context.surfaceId, { op: "run", id, command }).catch((error) => {
+    shell.send(context.surfaceId, { operation: "run", id, command }).catch((error) => {
       const pending = runs.get(id);
       if (!pending) return;
       runs.delete(id);
@@ -63,10 +63,10 @@ export async function mount(root, context) {
     if (body.text !== undefined) write(body.text);
     else if (body.error !== undefined) write(`error: ${body.error}\n`);
   });
-  await shell.send(context.surfaceId, { op: "open" });
+  await shell.send(context.surfaceId, { operation: "open" });
   context.status.report("ready");
   return { async dispose() {
-    await shell.send(context.surfaceId, { op: "close" });
+    await shell.send(context.surfaceId, { operation: "close" });
     await composition.dispose();
     root.replaceChildren();
   } };

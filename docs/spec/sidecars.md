@@ -107,10 +107,10 @@ A `write` goes to the command pipe while the shell has no child process, and to 
 
 | Body | Effect |
 | --- | --- |
-| `{"op": "open"}` | Starts the surface's session; an open request for a running session does nothing |
-| `{"op": "write", "data": text}` | Writes `text` to the command pipe or to the running command, as described above |
-| `{"op": "run", "id": request, "command": text}` | Runs `text` once with `-c` in the last reported directory, in its own process group, and replies when it ends. The session's variables and directory do not change |
-| `{"op": "interrupt"}` | Sends the interrupt signal to the session's process group and to every running `run` command |
+| `{"operation": "open"}` | Starts the surface's session; an open request for a running session does nothing |
+| `{"operation": "write", "data": text}` | Writes `text` to the command pipe or to the running command, as described above |
+| `{"operation": "run", "id": request, "command": text}` | Runs `text` once with `-c` in the last reported directory, in its own process group, and replies when it ends. The session's variables and directory do not change |
+| `{"operation": "interrupt"}` | Sends the interrupt signal to the session's process group and to every running `run` command |
 
 The sidecar sends these event bodies:
 

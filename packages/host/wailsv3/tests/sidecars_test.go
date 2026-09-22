@@ -80,13 +80,13 @@ func echoSidecars(t *testing.T) (*host.Sidecars, string) {
 func TestSidecarMessagesReachTheOwningWindowOnly(t *testing.T) {
 	sidecars, record := echoSidecars(t)
 	first, second := newFakeOwner("/projects/a"), newFakeOwner("/projects/b")
-	if err := sidecars.Send(first, echoSidecar, "s1", json.RawMessage(`{"op":"open"}`)); err != nil {
+	if err := sidecars.Send(first, echoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	if err := sidecars.Send(second, echoSidecar, "s2", json.RawMessage(`{"op":"open"}`)); err != nil {
+	if err := sidecars.Send(second, echoSidecar, "s2", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	if event := first.next(t); event.Sidecar != echoSidecar || event.Surface != "s1" || string(event.Body) != `{"op":"open"}` {
+	if event := first.next(t); event.Sidecar != echoSidecar || event.Surface != "s1" || string(event.Body) != `{"operation":"open"}` {
 		t.Fatalf("first window event = %+v", event)
 	}
 	if event := second.next(t); event.Surface != "s2" {
@@ -101,8 +101,8 @@ func TestSidecarMessagesReachTheOwningWindowOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `{"surface":"s1","root":"/projects/a","body":{"op":"open"}}
-{"surface":"s2","root":"/projects/b","body":{"op":"open"}}
+	want := `{"surface":"s1","root":"/projects/a","body":{"operation":"open"}}
+{"surface":"s2","root":"/projects/b","body":{"operation":"open"}}
 {"surface":"s1","closed":true}
 `
 	if string(requests) != want {

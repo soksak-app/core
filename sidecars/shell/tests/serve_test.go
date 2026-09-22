@@ -90,7 +90,7 @@ func (s *harness) until(match func(shell.Event) bool) (shell.Event, []shell.Even
 func (s *harness) open(surface string) string {
 	s.t.Helper()
 	root := s.t.TempDir()
-	s.send(`{"surface":"` + surface + `","root":"` + root + `","body":{"op":"open"}}`)
+	s.send(`{"surface":"` + surface + `","root":"` + root + `","body":{"operation":"open"}}`)
 	event, _ := s.until(func(e shell.Event) bool { return e.Surface == surface && e.Body.Cwd != "" })
 	if !sameDir(event.Body.Cwd, root) {
 		s.t.Fatalf("first directory report = %q, want %q", event.Body.Cwd, root)
@@ -107,13 +107,13 @@ func TestOpenWriteReturnsShellOutputForTheSurface(t *testing.T) {
 	t.Setenv("SHELL", "/bin/sh")
 	s := start(t)
 	root := s.open("t1")
-	s.send(`{"surface":"t1","body":{"op":"write","data":"pwd\n"}}`)
+	s.send(`{"surface":"t1","body":{"operation":"write","data":"pwd\n"}}`)
 	event := s.next()
 	if event.Surface != "t1" || !sameDir(strings.TrimSpace(event.Body.Text), root) {
 		t.Fatalf("event = %+v, want pwd output for %s", event, root)
 	}
 	s.send(`{"surface":"t1","closed":true}`)
-	s.send(`{"surface":"t1","body":{"op":"write","data":"pwd\n"}}`)
+	s.send(`{"surface":"t1","body":{"operation":"write","data":"pwd\n"}}`)
 	if event, _ := s.until(func(e shell.Event) bool { return e.Body.Error != "" }); event.Surface != "t1" || event.Body.Error != "shell t1 is not running" {
 		t.Fatalf("event after close = %+v", event)
 	}
@@ -126,8 +126,8 @@ func TestCloseOperationStopsTheShellForTheSurface(t *testing.T) {
 	t.Setenv("SHELL", "/bin/sh")
 	s := start(t)
 	s.open("explicit-close")
-	s.send(`{"surface":"explicit-close","body":{"op":"close"}}`)
-	s.send(`{"surface":"explicit-close","body":{"op":"write","data":"pwd\n"}}`)
+	s.send(`{"surface":"explicit-close","body":{"operation":"close"}}`)
+	s.send(`{"surface":"explicit-close","body":{"operation":"write","data":"pwd\n"}}`)
 	event, _ := s.until(func(e shell.Event) bool { return e.Body.Error != "" })
 	if event.Surface != "explicit-close" || event.Body.Error != "shell explicit-close is not running" {
 		t.Fatalf("event after explicit close = %+v", event)
@@ -141,7 +141,7 @@ func TestReopenReportsTheLiveDirectoryToARemountedSurface(t *testing.T) {
 	t.Setenv("SHELL", "/bin/sh")
 	s := start(t)
 	root := s.open("reattach")
-	s.send(`{"surface":"reattach","root":"` + root + `","body":{"op":"open"}}`)
+	s.send(`{"surface":"reattach","root":"` + root + `","body":{"operation":"open"}}`)
 	event, _ := s.until(func(e shell.Event) bool { return e.Surface == "reattach" && e.Body.Cwd != "" })
 	if !sameDir(event.Body.Cwd, root) {
 		t.Fatalf("reopened directory = %q, want %q", event.Body.Cwd, root)
@@ -155,7 +155,7 @@ func TestStandardErrorKeepsItsOrderWithStandardOutput(t *testing.T) {
 	t.Setenv("SHELL", "/bin/sh")
 	s := start(t)
 	s.open("order")
-	s.send(`{"surface":"order","body":{"op":"write","data":"echo one; echo two >&2; echo three\n"}}`)
+	s.send(`{"surface":"order","body":{"operation":"write","data":"echo one; echo two >&2; echo three\n"}}`)
 	var lines []string
 	for len(lines) < 3 {
 		event := s.next()
@@ -178,7 +178,7 @@ func TestADirectoryChangeIsReportedAndNotShownAsOutput(t *testing.T) {
 	if err := os.Mkdir(filepath.Join(root, "inner"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	s.send(`{"surface":"cd","body":{"op":"write","data":"cd inner\n"}}`)
+	s.send(`{"surface":"cd","body":{"operation":"write","data":"cd inner\n"}}`)
 	event, seen := s.until(func(e shell.Event) bool { return e.Body.Cwd != "" })
 	if !sameDir(event.Body.Cwd, filepath.Join(root, "inner")) {
 		t.Fatalf("directory = %q, want %s/inner", event.Body.Cwd, root)
@@ -198,16 +198,16 @@ func TestALineReadByARunningCommandIsPassedUnchanged(t *testing.T) {
 	s := start(t)
 	s.open("read")
 	// 자식 셸이 표시 줄을 출력한 뒤 head 가 되므로, 표시 줄을 받은 때에는 명령이 실행 중이다.
-	s.send(`{"surface":"read","body":{"op":"write","data":"sh -c 'echo started; exec head -n 1'\n"}}`)
+	s.send(`{"surface":"read","body":{"operation":"write","data":"sh -c 'echo started; exec head -n 1'\n"}}`)
 	s.until(func(e shell.Event) bool { return e.Body.Text == "started\n" })
-	s.send(`{"surface":"read","body":{"op":"write","data":"typed\n"}}`)
+	s.send(`{"surface":"read","body":{"operation":"write","data":"typed\n"}}`)
 	event, _ := s.until(func(e shell.Event) bool { return e.Body.Text != "" })
 	if event.Body.Text != "typed\n" {
 		t.Fatalf("head printed %q, want the typed line only", event.Body.Text)
 	}
 	// head 가 끝나면 셸이 디렉터리를 보고하고, 그 뒤에 쓴 줄은 다시 명령이다.
 	s.until(func(e shell.Event) bool { return e.Body.Cwd != "" })
-	s.send(`{"surface":"read","body":{"op":"write","data":"echo next\n"}}`)
+	s.send(`{"surface":"read","body":{"operation":"write","data":"echo next\n"}}`)
 	if event, _ := s.until(func(e shell.Event) bool { return e.Body.Text != "" }); event.Body.Text != "next\n" {
 		t.Fatalf("after head the shell printed %q", event.Body.Text)
 	}
@@ -220,7 +220,7 @@ func TestRunReturnsOutputAndExitCodeInTheReportedDirectory(t *testing.T) {
 	t.Setenv("SHELL", "/bin/sh")
 	s := start(t)
 	root := s.open("run")
-	s.send(`{"surface":"run","body":{"op":"run","id":"r1","command":"pwd; echo err >&2; exit 3"}}`)
+	s.send(`{"surface":"run","body":{"operation":"run","id":"r1","command":"pwd; echo err >&2; exit 3"}}`)
 	event, _ := s.until(func(e shell.Event) bool { return e.Body.ID == "r1" })
 	if event.Body.Exit == nil || *event.Body.Exit != 3 || event.Body.Output == nil {
 		t.Fatalf("run result = %+v, want exit 3 with output", event.Body)
@@ -229,7 +229,7 @@ func TestRunReturnsOutputAndExitCodeInTheReportedDirectory(t *testing.T) {
 	if len(lines) != 2 || !sameDir(lines[0], root) || lines[1] != "err" {
 		t.Fatalf("run output = %q", *event.Body.Output)
 	}
-	s.send(`{"surface":"run","body":{"op":"run","id":"r2","command":"true"}}`)
+	s.send(`{"surface":"run","body":{"operation":"run","id":"r2","command":"true"}}`)
 	if event, _ := s.until(func(e shell.Event) bool { return e.Body.ID == "r2" }); event.Body.Exit == nil || *event.Body.Exit != 0 {
 		t.Fatalf("run true = %+v", event.Body)
 	}
@@ -237,16 +237,16 @@ func TestRunReturnsOutputAndExitCodeInTheReportedDirectory(t *testing.T) {
 	if err := os.Mkdir(gone, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	s.send(`{"surface":"run","body":{"op":"write","data":"cd gone\n"}}`)
+	s.send(`{"surface":"run","body":{"operation":"write","data":"cd gone\n"}}`)
 	s.until(func(e shell.Event) bool { return e.Body.Cwd != "" })
 	if err := os.Remove(gone); err != nil {
 		t.Fatal(err)
 	}
-	s.send(`{"surface":"run","body":{"op":"run","id":"r3","command":"true"}}`)
+	s.send(`{"surface":"run","body":{"operation":"run","id":"r3","command":"true"}}`)
 	if event, _ := s.until(func(e shell.Event) bool { return e.Body.ID == "r3" }); !strings.Contains(event.Body.Error, "does not exist") {
 		t.Fatalf("run in a removed directory = %+v", event.Body)
 	}
-	s.send(`{"surface":"run","body":{"op":"run","command":"true"}}`)
+	s.send(`{"surface":"run","body":{"operation":"run","command":"true"}}`)
 	if event, _ := s.until(func(e shell.Event) bool { return e.Body.Error != "" }); event.Body.Error != "run requires an id and a command" {
 		t.Fatalf("run without id = %+v", event.Body)
 	}
@@ -262,11 +262,11 @@ func TestInterruptStopsTheRunningCommandAndKeepsTheShell(t *testing.T) {
 	t.Cleanup(func() { signal.Reset(os.Interrupt) })
 	s := start(t)
 	s.open("int")
-	s.send(`{"surface":"int","body":{"op":"write","data":"sh -c 'echo started; exec sleep 30'\n"}}`)
+	s.send(`{"surface":"int","body":{"operation":"write","data":"sh -c 'echo started; exec sleep 30'\n"}}`)
 	s.until(func(e shell.Event) bool { return e.Body.Text == "started\n" })
-	s.send(`{"surface":"int","body":{"op":"run","id":"long","command":"sleep 30"}}`)
+	s.send(`{"surface":"int","body":{"operation":"run","id":"long","command":"sleep 30"}}`)
 	started := time.Now()
-	s.send(`{"surface":"int","body":{"op":"interrupt"}}`)
+	s.send(`{"surface":"int","body":{"operation":"interrupt"}}`)
 	// 중단된 Run 의 결과와, 중단된 세션 명령이 끝난 뒤의 디렉터리 보고는 순서 없이 도착한다.
 	var result *shell.Event
 	reported := false
@@ -284,7 +284,7 @@ func TestInterruptStopsTheRunningCommandAndKeepsTheShell(t *testing.T) {
 		t.Fatalf("the interrupt took %s", time.Since(started))
 	}
 	// 셸이 살아 있으면 다음 명령을 실행한다.
-	s.send(`{"surface":"int","body":{"op":"write","data":"echo alive\n"}}`)
+	s.send(`{"surface":"int","body":{"operation":"write","data":"echo alive\n"}}`)
 	if event, _ := s.until(func(e shell.Event) bool { return strings.TrimSpace(e.Body.Text) == "alive" }); event.Surface != "int" {
 		t.Fatalf("event = %+v", event)
 	}
@@ -299,10 +299,10 @@ func TestWriteAfterInterruptIsDeliveredToTheShell(t *testing.T) {
 	t.Cleanup(func() { signal.Reset(os.Interrupt) })
 	s := start(t)
 	s.open("queued")
-	s.send(`{"surface":"queued","body":{"op":"write","data":"sh -c 'echo started; exec sleep 30'\n"}}`)
+	s.send(`{"surface":"queued","body":{"operation":"write","data":"sh -c 'echo started; exec sleep 30'\n"}}`)
 	s.until(func(e shell.Event) bool { return e.Body.Text == "started\n" })
-	s.send(`{"surface":"queued","body":{"op":"interrupt"}}`)
-	s.send(`{"surface":"queued","body":{"op":"write","data":"echo queued\n"}}`)
+	s.send(`{"surface":"queued","body":{"operation":"interrupt"}}`)
+	s.send(`{"surface":"queued","body":{"operation":"write","data":"echo queued\n"}}`)
 	if event, _ := s.until(func(e shell.Event) bool { return strings.TrimSpace(e.Body.Text) == "queued" }); event.Surface != "queued" {
 		t.Fatalf("event = %+v", event)
 	}
@@ -313,13 +313,13 @@ func TestWriteAfterInterruptIsDeliveredToTheShell(t *testing.T) {
 
 func TestRequestFailuresReturnErrorEvents(t *testing.T) {
 	s := start(t)
-	s.send(`{"surface":"t2","body":{"op":"open"}}`)
+	s.send(`{"surface":"t2","body":{"operation":"open"}}`)
 	if event := s.next(); event.Body.Error != "open requires a root" {
 		t.Fatalf("open without root = %+v", event)
 	}
-	s.send(`{"surface":"t2","body":{"op":"resize"}}`)
-	if event := s.next(); event.Body.Error != `unknown op: "resize"` {
-		t.Fatalf("unknown op = %+v", event)
+	s.send(`{"surface":"t2","body":{"operation":"resize"}}`)
+	if event := s.next(); event.Body.Error != `unknown operation: "resize"` {
+		t.Fatalf("unknown operation = %+v", event)
 	}
 	if err := s.finish(); err != nil {
 		t.Fatal(err)
@@ -328,7 +328,7 @@ func TestRequestFailuresReturnErrorEvents(t *testing.T) {
 
 func TestMalformedInputStopsTheSidecar(t *testing.T) {
 	s := start(t)
-	s.send(`{"body":{"op":"open"}}`)
+	s.send(`{"body":{"operation":"open"}}`)
 	if err := <-s.done; err == nil || !strings.Contains(err.Error(), "request without surface") {
 		t.Fatalf("error = %v", err)
 	}

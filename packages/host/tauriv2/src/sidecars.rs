@@ -497,7 +497,7 @@ impl<O: Owner> Sidecars<O> {
                     if let Some(persistent) = process.persistent {
                         let request = format!("{}-close", std::process::id());
                         let line = serde_json::json!({
-                            "op": "close-owner",
+                            "operation": "close-owner",
                             "request": request,
                         });
                         let mut bytes = match serde_json::to_vec(&line) {
@@ -523,7 +523,7 @@ impl<O: Owner> Sidecars<O> {
                             Ok(Ok(())) => {
                                 let shutdown_request = format!("{}-shutdown", std::process::id());
                                 let shutdown_line = serde_json::json!({
-                                    "op": "shutdown",
+                                    "operation": "shutdown",
                                     "request": shutdown_request,
                                 });
                                 let mut shutdown_bytes = serde_json::to_vec(&shutdown_line)
@@ -826,7 +826,7 @@ impl<O: Owner> Sidecars<O> {
             .connect_service(&endpoint.socket)
             .map_err(|e| format!("sidecar {name}: connect authenticated service: {e}"))?;
         let hello = serde_json::json!({
-            "op": "hello",
+            "operation": "hello",
             "protocol": 1,
             "token": endpoint.token.clone(),
             "client": service_dir.to_string_lossy(),
@@ -847,7 +847,7 @@ impl<O: Owner> Sidecars<O> {
             .map_err(|e| format!("sidecar {name}: hello response: {e}"))?;
         let response: serde_json::Value = serde_json::from_str(&response)
             .map_err(|e| format!("sidecar {name}: hello response: {e}"))?;
-        if response.get("op").and_then(|v| v.as_str()) != Some("hello") {
+        if response.get("operation").and_then(|v| v.as_str()) != Some("hello") {
             return Err(format!(
                 "sidecar {name}: authentication handshake failed: invalid hello response"
             ));
@@ -968,7 +968,7 @@ impl<O: Owner> Sidecars<O> {
                         break;
                     }
                 };
-                if value.get("op").and_then(|v| v.as_str()) == Some("closed-owner") {
+                if value.get("operation").and_then(|v| v.as_str()) == Some("closed-owner") {
                     if let Some(request) = value.get("request").and_then(|v| v.as_str()) {
                         if let Some(sender) = waiters.lock().expect("close waiters").remove(request)
                         {
@@ -990,7 +990,7 @@ impl<O: Owner> Sidecars<O> {
                     line.clear();
                     continue;
                 }
-                if value.get("op").and_then(|v| v.as_str()) == Some("shutdown") {
+                if value.get("operation").and_then(|v| v.as_str()) == Some("shutdown") {
                     if let Some(request) = value.get("request").and_then(|v| v.as_str()) {
                         if let Some(sender) = shutdown_waiters_for_reader
                             .lock()

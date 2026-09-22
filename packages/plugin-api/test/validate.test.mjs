@@ -62,7 +62,7 @@ test("a manifest is rejected for each invalid field", () => {
     [{ ...card, preview: { ink: "--rail", fill: "--bg" } }, /unknown field fill/],
     [{ ...side, preview: { ink: "--rail" } }, /preview requires a surface/],
     [{ ...card, sidecars: ["@scope/sidecar-worker", "@scope/sidecar-worker"] }, /duplicate sidecar/],
-    [{ ...card, background: { sidecar: "@scope/sidecar-worker", open: { op: "open" } } }, /unknown field open/],
+    [{ ...card, background: { sidecar: "@scope/sidecar-worker", open: { operation: "open" } } }, /unknown field open/],
     [{ ...card, background: { sidecar: "@scope/sidecar-worker" } }, /operation must be a non-empty string/],
     [{ ...card, background: { sidecar: "@scope/sidecar-worker", operation: "" } }, /operation must be a non-empty string/],
     [{ ...card, background: { sidecar: "@scope/sidecar-other", operation: "open" } }, /sidecar must be declared/],
