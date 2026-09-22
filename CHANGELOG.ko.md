@@ -6,6 +6,8 @@
 
 ## 미배포
 
+- F0.5.3을 완료했다. 터미널 표면의 중복 pointerdown 포커스 바인더를 제거하고 카드가 단일 포커스 제스처를 소유하게 했다. `terminal.focus`는 명시적 명령으로 남기고 오류 전달도 관측 가능하게 유지한다. 터미널·워크벤치 테스트와 재빌드 Tauri 3터미널 네이티브 키보드 검사가 제한된 3회 실행에서 두 번째 클릭 없이 통과했다. 앞선 전체 실행의 capture 실패는 환경 디스크 부족 오류이며 제품 통과로 세지 않았다.
+
 - G2-1을 닫았다. Tauri persistent-service process probe를 platform endpoint 계약으로 옮기고 Windows에서는 명시적 미지원 오류를 반환하게 했다. 비공개 helper를 호스트 API 확장 없이 검사하는 진단 전용 Wails 단위 검사는 H5 언어 경계 예외로 기록했다. `make hosts-check`와 선언된 환경의 Tauri host library 검사가 통과했다.
 
 - F0.6을 완료했다. JavaScript/TypeScript, Rust, Go, Objective-C, Tauri, Wails와 테스트·fixture·오류·사양 전체의 사이드카 wire 필드 `op`를 `operation`으로 바꿨다. 이전 필드는 폴백 없이 명시적으로 거부된다. 전체 패키지·언어·문서·경계·노출·네이티브 게이트가 통과했으며 `e70a6e6`으로 커밋했다.

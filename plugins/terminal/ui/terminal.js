@@ -455,10 +455,14 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose,
     expose.dom("terminal.view", view),
   ]);
   await expose.command("terminal.focus", async () => {
-    await region.focus();
-    return null;
+    try {
+      await region.focus();
+      return null;
+    } catch (error) {
+      reportInputError(error);
+      throw error;
+    }
   });
-  await expose.bind(view, "terminal.focus", {}, { event: "pointerdown", failed: reportInputError });
   return {
     async focus() {
       if (nativeFocused) return;

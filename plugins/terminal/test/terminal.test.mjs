@@ -184,6 +184,7 @@ function createFakeExpose() {
   const statuses = new Map();
   const commands = new Map();
   const doms = new Map();
+  const binds = [];
 
   const declared = new Set(terminalManifest.exposes.commands.map(({ name }) => name));
   const binder = createBinder((name, params) => {
@@ -207,7 +208,7 @@ function createFakeExpose() {
       doms.set(name, element);
       return Promise.resolve();
     },
-    bind: async function(...args) { return binder.bind(...args); },
+    bind: async function(...args) { binds.push(args); return binder.bind(...args); },
     dispose: async function() { binder.dispose(); },
     getStatus: (name) => statuses.get(name),
     getCommand: (name) => commands.get(name),
@@ -215,6 +216,7 @@ function createFakeExpose() {
     getStatuses: () => statuses,
     getCommands: () => commands,
     getDoms: () => doms,
+    getBinds: () => binds,
     reset: () => {
       statuses.clear();
       commands.clear();
@@ -525,8 +527,7 @@ test("Region key event for ArrowUp sends Up key (no escape sequences)", async ()
   }
 });
 
-// 테스트 5: view의 pointerdown → 영역 focus() 한 번
-test("View pointerdown triggers region focus", async () => {
+test("terminal focus remains a command owned by the card, not a second pointerdown binder", async () => {
   FakeResizeObserver.reset();
   const fakeAttachImage = createFakeAttachImage();
   const fakeSidecar = createFakeSidecar();
@@ -538,17 +539,8 @@ test("View pointerdown triggers region focus", async () => {
     devicePixelRatio: 1,
   };
 
-  let regionReference = null;
-  let focusCalled = false;
   const patchedAttachImage = function(view, name, sidecar) {
     const result = fakeAttachImage.function(view, name, sidecar);
-    const originalFocus = result.focus.bind(result);
-    result.focus = async function() {
-      focusCalled = true;
-      queueMicrotask(() => result._trigger("focus", { focused: true }));
-      return originalFocus();
-    };
-    regionReference = result;
     return result;
   };
 
@@ -561,44 +553,31 @@ test("View pointerdown triggers region focus", async () => {
     window: fakeWindow,
   });
 
-  // ResizeObserver 콜백을 호출하여 open을 전송한다
-  FakeResizeObserver.triggerAll();
-  openSession(fakeSidecar);
-
-  focusCalled = false;
-  fakeView._trigger("pointerdown");
-
-  assert(focusCalled, "region.focus() called on pointerdown");
+  assert.equal(fakeExpose.getBinds().length, 0,
+    "terminal must not bind pointerdown to focus because the card owns that gesture");
+  assert.equal(typeof fakeExpose.getCommand("terminal.focus"), "function",
+    "terminal.focus remains available for the card focus command");
 });
 
-test("pointerdown prevents DOM focus, bubbles, and invokes terminal.focus once", { timeout: 10000 }, async () => {
+test("terminal pointerdown prevents DOM focus and still bubbles to the card", async () => {
   FakeResizeObserver.reset();
   const attach = createFakeAttachImage();
   const expose = createFakeExpose();
   const view = createFakeView();
-  let focusCalls = 0;
-  let region;
   await startTerminal({
     view, attachImage: (...args) => {
-      region = attach.function(...args);
-      region.focus = async () => {
-        focusCalls++;
-        queueMicrotask(() => region._trigger("focus", { focused: true }));
-      };
-      return region;
+      return attach.function(...args);
     },
     sidecar: createFakeSidecar(), expose, window: { TextEncoder: FakeTextEncoder },
   });
 
   const event = view._trigger("pointerdown");
-  await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(expose.getCommand("terminal.focus") !== undefined, true);
-  assert.equal(focusCalls, 1);
   assert.equal(event.defaultPrevented, true);
   assert.equal(view._parent.bubbleCount, 1);
+  assert.equal(expose.getBinds().length, 0);
 });
 
-test("terminal.focus binding reports focus rejection through terminal.session", { timeout: 10000 }, async () => {
+test("terminal.focus command reports focus rejection through terminal.session", { timeout: 10000 }, async () => {
   FakeResizeObserver.reset();
   const attach = createFakeAttachImage();
   const expose = createFakeExpose();
@@ -613,8 +592,7 @@ test("terminal.focus binding reports focus rejection through terminal.session", 
     sidecar: createFakeSidecar(), expose, window: { TextEncoder: FakeTextEncoder },
   });
 
-  view._trigger("pointerdown");
-  await new Promise((resolve) => setImmediate(resolve));
+  await assert.rejects(expose.getCommand("terminal.focus")(), /focus rejected/);
   assert.match(expose.getStatus("terminal.session").readFn().error, /terminal input failed: focus rejected/);
 });
 

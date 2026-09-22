@@ -6,6 +6,8 @@
 
 ## Unreleased
 
+- Completed F0.5.3. Removed the terminal surface's duplicate pointerdown focus binder; the card now owns the single focus gesture while `terminal.focus` remains an explicit command with observable error propagation. Terminal package and workbench tests pass, and the rebuilt Tauri three-terminal native keyboard check passes in three bounded runs without a second click. The previous full-run capture failure was an environment disk-full error and is not counted as a product pass.
+
 - Closed G2-1. The Tauri persistent-service process probe now belongs to the platform endpoint contract and returns an explicit Windows unsupported error; the diagnostic-only Wails unit test is recorded as the H5 language-boundary exception because it tests an unexported helper without widening the host API. `make hosts-check` and the declared-environment Tauri host library test pass.
 
 - Completed F0.6. Replaced the cross-language sidecar wire field `op` with `operation` across JavaScript/TypeScript, Rust, Go, Objective-C, Tauri, Wails, tests, fixtures, errors, and specifications. The legacy field is explicitly rejected without fallback. Full package, language, documentation, boundary, exposure, and native gates pass; committed as `e70a6e6`.
