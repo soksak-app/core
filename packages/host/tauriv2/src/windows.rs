@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
+use serde_json::value::RawValue;
 use tauri::webview::Color;
 use tauri::{
     AppHandle, Emitter, EventTarget, LogicalSize, Manager, Webview, WebviewUrl,
@@ -65,16 +66,30 @@ pub(crate) fn reload_surface_documents(window: &Window) -> Result<(), String> {
         .iter()
         .map(|(id, handle)| (id.clone(), *handle))
         .collect();
+    let reconnect = RawValue::from_string(r#"{"operation":"reconnect"}"#.to_string())
+        .map_err(|error| error.to_string())?;
+    let running_persistent = window
+        .state::<WindowSidecars>()
+        .running_persistent_names()?;
     for (surface, handle) in surfaces {
+        let mut sidecars = data.images.sidecars_for_surface(&surface);
+        sidecars.extend(running_persistent.iter().cloned());
+        sidecars.sort();
+        sidecars.dedup();
         platform.set_surface_hidden_handle(handle, true)?;
+        data.images.begin_generation(&surface);
+        crate::exposure::surface_closed(&window, &surface);
+        for sidecar in sidecars {
+            window
+                .state::<WindowSidecars>()
+                .send(&window, &sidecar, &surface, reconnect.as_ref())?;
+        }
         for document in data.documents.remove_surface(&surface) {
             platform.close_document(document)?;
         }
         for image in data.images.remove_surface(&surface) {
             platform.close_image(image)?;
         }
-        data.images.begin_generation(&surface);
-        crate::exposure::surface_closed(&window, &surface);
     }
     data.composition_revisions
         .lock()

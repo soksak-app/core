@@ -373,6 +373,28 @@ impl<O: Owner> Sidecars<O> {
             .map_err(|_| format!("sidecar {name} is not keeping up"))
     }
 
+    /// 이미 실행 중인 영속 사이드카를 반환한다.
+    ///
+    /// 페이지가 호스트에서 그림 등록을 먼저 제거한 경우에도 다시 읽기 복구는
+    /// 영속 표면 작업을 초기화해야 한다.
+    pub fn running_persistent_names(&self) -> Result<Vec<String>, String> {
+        let state = self.state.lock().map_err(|e| e.to_string())?;
+        let mut names: Vec<_> = state
+            .running
+            .iter()
+            .filter(|(name, process)| {
+                self.persistent.get(*name).copied().unwrap_or(false)
+                    && process
+                        .persistent
+                        .as_ref()
+                        .is_some_and(|connection| connection.connected.load(Ordering::Acquire))
+            })
+            .map(|(name, _)| name.clone())
+            .collect();
+        names.sort();
+        Ok(names)
+    }
+
     /// owner 창의 표면 중 alive 에 없는 것을 실행 중인 모든 사이드카에 알린다.
     pub fn retain(&self, owner: &O, alive: &dyn Fn(&str) -> bool) -> Result<(), String> {
         let mut state = self.state.lock().map_err(|e| e.to_string())?;

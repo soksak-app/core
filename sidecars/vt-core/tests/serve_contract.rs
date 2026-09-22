@@ -552,6 +552,40 @@ async fn test_open_and_close_session() {
 }
 
 #[tokio::test]
+async fn test_repeated_image_open_resets_native_frame_without_closing_session() {
+    let calls = Arc::new(Mutex::new(Calls::default()));
+    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+{"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
+{"surface":"s1","body":{"operation":"reconnect"}}
+{"surface":"s1","body":{"operation":"open","image":"view"}}
+{"surface":"s1","body":{"image":{"configure":{"name":"view","generation":2,"raster":1,"width":800,"height":384,"scale":1.0}}}}
+{"surface":"s1","body":{"operation":"input","bytes":"Yg=="}}
+"#;
+    let reader = std::io::Cursor::new(input.as_bytes());
+    let mut writer = Vec::new();
+
+    let engine_factory = Arc::new(|| Box::new(MockEngine::new()) as Box<dyn Engine>);
+    let calls_for_factory = calls.clone();
+    let session_port_factory = Arc::new(move || {
+        Arc::new(FakeSessionPort::new(
+            "test-session".to_string(),
+            calls_for_factory.clone(),
+        )) as Arc<dyn SessionPort>
+    });
+
+    let _ = serve(engine_factory, reader, &mut writer, session_port_factory).await;
+
+    let calls = calls.lock().unwrap();
+    assert_eq!(calls.opens.len(), 1, "repeated image open must preserve the PTY session");
+    assert_eq!(calls.writes.len(), 1, "input must still reach the preserved session");
+    let output = String::from_utf8(writer).unwrap();
+    assert_eq!(output.matches("\"event\":\"session\"").count(), 1,
+        "the replacement page must receive the preserved session identity exactly once");
+    assert_eq!(output.matches("\"image\"").count(), 2,
+        "each image open must wait for a fresh configured raster: {output}");
+}
+
+#[tokio::test]
 async fn test_resize() {
     let calls = Arc::new(Mutex::new(Calls::default()));
     let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}

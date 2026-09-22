@@ -280,6 +280,41 @@ fn only_the_current_generation_raster_and_sequence_can_be_presented() {
 }
 
 #[test]
+fn beginning_a_new_generation_invalidates_a_queued_old_frame_before_image_close() {
+    let images = Images::default();
+    let key: Key = ("tab-queued".to_string(), "view".to_string());
+    let first_generation = images.begin_generation(&key.0);
+    images.reserve(&key, "owner", "sidecar-a").unwrap();
+    assert!(images.set(&key, 100));
+    let first_raster = images
+        .configure_raster(&key, 800, 600, 2.0, true)
+        .unwrap()
+        .unwrap();
+    assert_eq!(first_raster.generation, first_generation);
+    assert!(matches!(
+        decide(
+            &configured_envelope(&first_raster, 1),
+            "sidecar-a",
+            &key.0,
+            &images
+        ),
+        Decision::Present { .. }
+    ));
+
+    let next_generation = images.begin_generation(&key.0);
+    assert!(next_generation > first_generation);
+    match decide(
+        &configured_envelope(&first_raster, 2),
+        "sidecar-a",
+        &key.0,
+        &images,
+    ) {
+        Decision::Reply { json, .. } => assert_eq!(json["image"]["error"], "notAttached"),
+        other => panic!("queued old frame was not invalidated: {other:?}"),
+    }
+}
+
+#[test]
 fn presentation_wait_tracks_the_visible_current_raster() {
     let images = Images::default();
     let key: Key = ("tab-1".to_string(), "view".to_string());

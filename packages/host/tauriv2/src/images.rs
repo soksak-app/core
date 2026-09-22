@@ -8,7 +8,7 @@
 //! 명령은 메인 스레드 밖에서 실행되고 네이티브 작업은 메인 스레드에서 실행한다. 메인 스레드에서
 //! 시작한 정리는 기다리지 않는다.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
@@ -134,6 +134,14 @@ impl Images {
         inner.next_generation += 1;
         let generation = inner.next_generation;
         inner.generations.insert(surface.to_string(), generation);
+        for (key, state) in &mut inner.states {
+            if key.0 == surface {
+                state.generation = generation;
+                state.configured = false;
+                state.presentation_error = None;
+                state.last_sequence = 0;
+            }
+        }
         generation
     }
 
@@ -295,6 +303,18 @@ impl Images {
             .filter(|(_, &handle)| handle != 0)
             .map(|(key, &handle)| (handle, key.clone()))
             .collect()
+    }
+
+    /// 재로드 전에 표면이 사용하는 사이드카를 반환한다.
+    pub fn sidecars_for_surface(&self, surface: &str) -> Vec<String> {
+        let inner = self.lock();
+        let mut sidecars = HashSet::new();
+        for key in inner.handles.keys().filter(|key| key.0 == surface) {
+            if let Some(sidecar) = inner.sidecars.get(key) {
+                sidecars.insert(sidecar.clone());
+            }
+        }
+        sidecars.into_iter().collect()
     }
 
     /// 만들어진 그림 영역의 주소.
@@ -770,6 +790,7 @@ pub(crate) fn close_surface(window: &tauri::Window, surface: &str) {
     };
     let host = window.clone();
     let surface = surface.to_string();
+    data.images.begin_generation(&surface);
 
     log_error(
         window

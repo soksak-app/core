@@ -2271,6 +2271,11 @@ where
                     // Check for operation field first (it is a request).
                     if let Some(operation) = body.get("operation").and_then(|v| v.as_str()) {
                         match operation {
+                            "reconnect" => {
+                                if tx.send(SurfaceCommand::Reconnect).await.is_err() {
+                                    break;
+                                }
+                            }
                             "open" => {
                                 let image = body
                                     .get("image")
