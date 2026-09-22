@@ -6,6 +6,8 @@
 
 ## Unreleased
 
+- Completed F0.6. Replaced the cross-language sidecar wire field `op` with `operation` across JavaScript/TypeScript, Rust, Go, Objective-C, Tauri, Wails, tests, fixtures, errors, and specifications. The legacy field is explicitly rejected without fallback. Full package, language, documentation, boundary, exposure, and native gates pass; committed as `e70a6e6`.
+
 - Closed the G4 command-supervision item. The focused supervisor suite reports 16/16 passing assertions in 1.58s with no failures, skips, or todos, and retains explicit failures for nonzero exits, missing executables, timeout, cancellation, observer errors, output-drain failures, and denied cleanup verification. Language adapters and content-hash evidence remain open under G4.
 
 - Closed G4.2 language adapters. `make language-test` now discovers and executes one explicit JS/TS, Rust, Go, and Objective-C case with 10s/30s/30s/30s limits, visible start/progress/final events, expected-versus-actual counts, and zero/skip/crash rejection. Current rebuilt output is JS/TS 16, Rust 2, Go 13, and Objective-C 5 tests, all passing with no skips or todos. The remaining G4 content-hash evidence item stays open.
