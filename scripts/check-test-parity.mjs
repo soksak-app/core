@@ -309,6 +309,13 @@ const FEATURE_LINKS = [
     levels: ["native", "application"],
   },
   {
+    id: "F0.5.8",
+    implementation: [{ file: "packages/host/tauriv2/src/surfaces.rs", symbol: "sync" }],
+    tests: [{ file: "e2e/terminal.test.mjs", id: "four split terminals complete native presentation without a host crash" }],
+    expected: "Split-surface synchronization reads the AppKit scale factor on the main thread; a rebuilt Tauri host presents four split terminals without a foreign-exception crash.",
+    levels: ["native", "application"],
+  },
+  {
     id: "F4",
     implementation: [
       { file: "native/darwin/src/window_facts.m", symbol: "focused" },

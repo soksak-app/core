@@ -210,6 +210,25 @@ for (const app of Object.values(APPS)) {
     t.diagnostic(`${app.name}: PASS split-terminal presentation`);
   });
 
+  test(`${app.name}: four split terminals complete native presentation without a host crash`, { timeout: 30000 }, async (t) => {
+    const s = await open(t, app);
+    assert.ok(s, `${app.binary} is not built`);
+    await fresh(s);
+    t.diagnostic(`${app.name}: START four-terminal presentation`);
+    const terminals = await ensureTerminals(s, 4);
+    for (const terminal of terminals) {
+      await s.until("terminal.session", (state) => Boolean(state.sessionId),
+        `${terminal.surface} did not open a sidecar session`, { surface: terminal.surface, timeout: 10000 });
+    }
+    const host = await s.get("host.window");
+    const regions = host.regions.filter((region) => terminals.some((terminal) =>
+      terminal.surface === region.surface && region.name === "view"));
+    assert.equal(regions.length, 4, `four terminal native regions were not reported: ${JSON.stringify(regions)}`);
+    assert.ok(regions.every((region) => region.visible && region.presented),
+      `a four-terminal native region was not presented: ${JSON.stringify(regions)}`);
+    t.diagnostic(`${app.name}: PASS four-terminal presentation`);
+  });
+
   test(`${app.name}: native presentation failure is explicit and the next split remains usable`, { timeout: 30000 }, async (t) => {
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);

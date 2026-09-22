@@ -471,7 +471,10 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
         }
     }
     watch_presses(window, views, watching)?;
-    let scale = window.scale_factor().map_err(|e| e.to_string())?;
+    let scale_window = window.clone();
+    let scale = exposure::on_main(window, move || {
+        scale_window.scale_factor().map_err(|e| e.to_string())
+    })?;
     let platform = platform::current()?;
 
     let main = root_view(window).ok_or("the main webview is gone")?;
