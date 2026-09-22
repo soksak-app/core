@@ -846,6 +846,19 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F11",
+    implementation: [
+      { file: "packages/workbench/core-exposure.js", symbol: "core.page.audit" },
+      { file: "scripts/language-test-adapters.mjs", symbol: "runLanguageCases" },
+    ],
+    tests: [
+      { file: "e2e/audit.test.mjs", id: "every control on every screen runs a declared command and has a dom name" },
+      { file: "scripts/test/test-language-test-adapters.test.mjs", id: "parses each language result and rejects zero, skipped, and crashed outcomes" },
+    ],
+    expected: "Exposure declarations, runtime binder coverage, and every declared JS/TS, Rust, Go, and Objective-C language lane provide attributable behavior results without hidden skips or fallback success.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F1",
     implementation: [
       { file: "e2e/terminal.test.mjs", symbol: "three terminals survive repeated divider drags and project returns" },
