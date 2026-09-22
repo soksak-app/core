@@ -1233,6 +1233,18 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F6.3-10",
+    implementation: [
+      { file: "plugins/terminal/ui/terminal-module.js", symbol: "mount" },
+      { file: "packages/workbench/surface-modules.js", symbol: "mountSurface" },
+    ],
+    tests: [
+      { file: "plugins/terminal/test/module.test.mjs", id: "terminal module disposes its native composition when sidecar open fails" },
+    ],
+    expected: "A terminal sidecar startup failure releases its declared native composition so the failed surface reports its error without blocking the window presentation wait.",
+    levels: ["unit"],
+  },
+  {
     id: "F7",
     implementation: [
       { file: "sidecars/vt-alacritty/src/engine.rs", symbol: "OSC_SELECTOR_INVENTORY" },

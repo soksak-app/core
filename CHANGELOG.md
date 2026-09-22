@@ -1,5 +1,6 @@
 # Changelog
 
+- Completed F6.3-10. A terminal sidecar `open` failure previously left the declared native image composition active, so the window waited for a first raster and reported a secondary `1005` timeout. Terminal mount now disposes that composition and propagates the exact sidecar error; the bounded module case passes 2/2, Tauri sidecar contracts pass 18/18, and rebuilt Tauri split/recovery checks pass 2/2 with explicit START/PASS timing.
 - Completed F7.17. `scripts/check-terminal-protocol-inventory.mjs` now mechanically checks the pinned patch-411 reference, 25 required CSI rows, duplicate selectors, named Rust tests, and the complete-CSI contract. Clean and injected Red runs pass; F7.18 remains open for vendor contracts.
 - Completed F7.16. The CSI inventory now links `5n/6n`, primary/secondary `c/>c`, `14t`, fragmented unsupported window reports, rectangle/protected-cell/palette intermediates, and framing/malformed-input evidence. Ordered device/status replies pass 1/1 under a 15s supervisor.
 - Started F7.16. Device/status/window replies and XTerm intermediate forms are being separated into implemented responses and explicit rejection cases with bounded ordering and malformed-input tests.

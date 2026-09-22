@@ -63,3 +63,39 @@ test("terminal module waits for composition presentation, publishes state, and d
   assert.equal(root.childNodes.length, 0);
   delete globalThis.window;
 });
+
+test("terminal module disposes its native composition when sidecar open fails", async () => {
+  const view = { addEventListener() {}, removeEventListener() {} };
+  const root = {
+    set innerHTML(value) { this.childNodes = value ? [view] : []; },
+    querySelector() { return view; },
+    replaceChildren() { this.childNodes = []; },
+  };
+  globalThis.window = { TextEncoder };
+  let compositionDisposed = false;
+  const phases = [];
+  const context = {
+    surfaceId: "terminal-open-failure",
+    runtime: { sidecar: () => ({
+      async on() { return () => {}; },
+      async send(_id, body) {
+        if (body.operation === "open") throw new Error("connect authenticated service: socket missing");
+      },
+    }), theme: () => {} },
+    composition: {
+      async create() {
+        return {
+          region: () => ({ on: () => () => {}, focus: async () => {}, setCaret: async () => {} }),
+          dispose: async () => { compositionDisposed = true; },
+        };
+      },
+    },
+    exposure: { status: async () => {}, command: async () => {}, dom: async () => {}, bind: async () => {}, delegate: async () => {}, dispose: async () => {} },
+    status: { report: (phase, error) => { phases.push({ phase, error }); } },
+  };
+  const { mount } = await import(`../ui/terminal-module.js?open-failure=${Date.now()}`);
+  await assert.rejects(mount(root, context), /connect authenticated service: socket missing/);
+  assert.equal(compositionDisposed, true, "failed sidecar startup releases the native image composition");
+  assert.equal(phases.length, 0, "a mount failure is propagated instead of being reported as ready");
+  delete globalThis.window;
+});

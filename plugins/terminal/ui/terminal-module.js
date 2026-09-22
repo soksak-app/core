@@ -8,12 +8,22 @@ export async function mount(root, context) {
   const composition = await context.composition.create({ regions: { view }, overlays: {} });
   const image = composition.region("view");
   const sidecar = context.runtime.sidecar();
-  const controller = await startTerminal({ id: context.surfaceId, view, attachImage: () => image, sidecar,
-    expose: context.exposure, window, theme: context.runtime.theme, settings: context.runtime.settings,
-    reportSurfaceError: (error) => context.status.report("error", error),
-    clipboard: context.runtime.clipboard });
-  if (!controller || typeof controller.dispose !== "function") {
-    throw new TypeError("startTerminal must return { dispose() }");
+  let controller;
+  try {
+    controller = await startTerminal({ id: context.surfaceId, view, attachImage: () => image, sidecar,
+      expose: context.exposure, window, theme: context.runtime.theme, settings: context.runtime.settings,
+      reportSurfaceError: (error) => context.status.report("error", error),
+      clipboard: context.runtime.clipboard });
+    if (!controller || typeof controller.dispose !== "function") {
+      throw new TypeError("startTerminal must return { dispose() }");
+    }
+  } catch (error) {
+    try {
+      await composition.dispose();
+    } catch (cleanupError) {
+      throw new AggregateError([error, cleanupError], "terminal mount and composition cleanup failed");
+    }
+    throw error;
   }
   context.status.report("ready");
   return { focus: controller.focus, async dispose() {
