@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: preflight prepare build verify docs-check boundaries platforms hosts-check e2e-check exposure-check parity-check release-check
+.PHONY: preflight prepare build verify docs-check boundaries platforms hosts-check e2e-check exposure-check parity-check language-test release-check
 
 docs-check:
 	@node scripts/check-docs.mjs
@@ -25,6 +25,11 @@ exposure-check:
 parity-check:
 	@node scripts/check-test-parity.mjs
 
+# JS/TS, Rust, Go, and Objective-C test cases use the same observable case contract.
+language-test: native-darwin
+	@$(MAKE) -C native/darwin $(CURDIR)/native/darwin/build/appearance_test
+	@node scripts/language-test-adapters.mjs scripts/language-test-cases.json
+
 # 운영체제별 코드가 platform/<os>/ 아래에만 있는지 검사한다.
 platforms:
 	@node scripts/check-platforms.mjs
@@ -44,6 +49,7 @@ build: prepare
 
 verify: prepare docs-check exposure-check parity-check
 	@pnpm test
+	@$(MAKE) language-test
 	@pnpm breaks
 	@pnpm build
 	@git diff --exit-code -- packages/soksak/dist

@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "js-command-supervisor",
+      "language": "js-ts",
+      "command": "node",
+      "args": ["--test", "scripts/test/test-command.test.mjs"],
+      "expectedTests": 16
+    },
+    {
+      "id": "rust-vt-encoding",
+      "language": "rust",
+      "command": "cargo",
+      "args": ["test", "--manifest-path", "sidecars/Cargo.toml", "-p", "soksak-sidecar-vt-core", "--test", "encoding_validation_test"],
+      "expectedTests": 2
+    },
+    {
+      "id": "go-shell-tests",
+      "language": "go",
+      "command": "go",
+      "args": ["test", "-json", "./sidecars/shell/tests"],
+      "expectedTests": 13
+    },
+    {
+      "id": "objc-appearance",
+      "language": "objective-c",
+      "command": "./native/darwin/build/appearance_test",
+      "args": [],
+      "expectedTests": 5
+    }
+  ]
+}

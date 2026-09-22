@@ -28,7 +28,9 @@ const lane = (capability, language, implementation, tests, options = {}) => ({
 // 기존 구성요소 연결도 파일 목록으로 유지한다. 동작 증거로 해석하지 않는다.
 const MATRIX = [
   lane("test inventory", "js-ts", ["scripts/check-test-parity.mjs"], ["scripts/test/test-parity.test.mjs"]),
-  lane("command supervision", "js-ts", ["scripts/test-command.mjs"], ["scripts/test/test-command.test.mjs"]),
+lane("command supervision", "js-ts", ["scripts/test-command.mjs"], ["scripts/test/test-command.test.mjs"]),
+  lane("language test adapters", "js-ts", ["scripts/language-test-adapters.mjs"], ["scripts/test/test-language-test-adapters.test.mjs"]),
+  lane("language test adapter manifest", "declaration", ["scripts/language-test-cases.json"], ["scripts/test/test-language-test-manifest.test.mjs"], { testLanguage: "js-ts" }),
   lane("documentation and checklist checks", "js-ts", ["scripts/check-docs.mjs", "scripts/checklist.mjs"], ["scripts/test/checklist.test.mjs"]),
   lane("Rust package test commands", "declaration", ["sidecars/vt-core/package.json", "sidecars/vt-alacritty/package.json"], ["scripts/test/package-test-command.test.mjs"], { testLanguage: "js-ts" }),
   lane("soksak layout", "js-ts", ["packages/soksak/src/**/*.ts"], ["packages/soksak/test/**/*.mjs"]),
@@ -565,11 +567,31 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "G1.3-6",
+    implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "auditRecordedInventoryCounts" }],
+    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "recorded parity counts cannot drift from the current inventory" }],
+    expected: "The inventory record remains synchronized after adding language adapter implementation and test files, while the earlier count remains historical evidence.",
+    levels: ["unit"],
+  },
+  {
     id: "G4.1",
     implementation: [{ file: "scripts/test-command.mjs", symbol: "runCommand" }],
     tests: [{ file: "scripts/test/test-command.test.mjs", id: "emits ordered start and terminal events" }],
     expected: "Supervised commands emit attributable start/progress/final events, visible output, bounded failure, and cleanup results.",
     levels: ["unit"],
+  },
+  {
+    id: "G4.2",
+    implementation: [
+      { file: "scripts/language-test-adapters.mjs", symbol: "runLanguageCases" },
+      { file: "scripts/language-test-cases.json", symbol: "version" },
+    ],
+    tests: [
+      { file: "scripts/test/test-language-test-adapters.test.mjs", id: "discovers all supported language cases" },
+      { file: "scripts/test/test-language-test-manifest.test.mjs", id: "committed language manifest declares one non-empty case" },
+    ],
+    expected: "Each supported language has an attributable bounded case with expected and actual test counts; zero, skipped, failed, crashed, timed-out, or cancelled execution cannot pass.",
+    levels: ["unit", "native"],
   },
   {
     id: "F1.1",
