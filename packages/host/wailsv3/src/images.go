@@ -87,6 +87,7 @@ type ImageRasterState struct {
 	Configured         bool
 	Visible            bool
 	PresentedRaster    uint64
+	PresentedSequence  int
 	PresentationError  string
 }
 
@@ -285,6 +286,7 @@ func (i *Images) ConfigureRaster(key ImageKey, width, height int, scale float64,
 		state.Width, state.Height, state.Scale = width, height, scale
 		state.LastSequence = 0
 		state.Configured = false
+		state.PresentedSequence = 0
 		state.PresentationError = ""
 		i.changedLocked()
 	}
@@ -334,8 +336,9 @@ func (i *Images) MarkPresented(key ImageKey, generation, raster uint64, sequence
 	if state == nil || state.Generation != generation || state.Raster != raster || state.LastSequence != sequence {
 		return
 	}
-	if state.PresentedRaster != raster {
+	if state.PresentedRaster != raster || state.PresentedSequence != sequence {
 		state.PresentedRaster = raster
+		state.PresentedSequence = sequence
 		state.PresentationError = ""
 		i.changedLocked()
 	}
@@ -358,7 +361,8 @@ func (i *Images) MarkPresentationFailed(key ImageKey, generation, raster uint64,
 func (i *Images) currentPresentedLocked() bool {
 	for key, state := range i.states {
 		surfaceVisible, known := i.surfaceVisible[key.Surface]
-		if i.handles[key] != nil && state.Visible && (!known || surfaceVisible) && state.Raster > 0 && state.PresentedRaster != state.Raster {
+		if i.handles[key] != nil && state.Visible && (!known || surfaceVisible) && state.Raster > 0 &&
+			(state.LastSequence <= 0 || state.PresentedRaster != state.Raster || state.PresentedSequence != state.LastSequence) {
 			return false
 		}
 	}

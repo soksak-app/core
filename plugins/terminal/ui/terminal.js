@@ -183,6 +183,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   // 현재 세션 상태
   let session = {
     sessionId: "", cols: 80, rows: 24, cellWidth: 8, cellHeight: 16, unsupported: [],
+    inlineImages: [],
     compose: { text: "", selectedRange: null, replacementRange: null, attributed: false },
     theme: "dark",
   };
@@ -614,6 +615,16 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       reportInputError(new Error(typeof body.reason === "string" ? body.reason : "program clipboard query rejected"));
     } else if (body.event === "selection.copy") {
       handleSelectionCopy(body).catch(reportInputError);
+    } else if (body.event === "image.inline" && body.command === "display" && typeof body.name === "string") {
+      if (!session.inlineImages.includes(body.name)) {
+        session = { ...session, inlineImages: [...session.inlineImages, body.name] };
+        changed("session");
+      }
+    } else if (body.event === "image.inline.deleted" && typeof body.name === "string") {
+      if (session.inlineImages.includes(body.name)) {
+        session = { ...session, inlineImages: session.inlineImages.filter((name) => name !== body.name) };
+        changed("session");
+      }
     } else if (body.event === "error") {
       // error 이벤트를 session 상태에 저장한다
       const error = new Error(typeof body.reason === "string" ? body.reason : (typeof body.error === "string" ? body.error : "Unknown sidecar error"));
@@ -752,6 +763,13 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     }),
     expose.command("terminal.close", async () => {
       await terminal.send(id, { operation: "close" });
+      return null;
+    }),
+    expose.command("terminal.image.inline.delete", async ({ name }) => {
+      if (typeof name !== "string" || name.length === 0) {
+        throw new Error("terminal.image.inline.delete requires a non-empty name");
+      }
+      await terminal.send(id, { operation: "image.inline.delete", name });
       return null;
     }),
     expose.dom("terminal.view", view),

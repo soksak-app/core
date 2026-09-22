@@ -307,6 +307,20 @@ fn presentation_wait_tracks_the_visible_current_raster() {
     assert!(response.lock().unwrap().as_ref().unwrap()["image"]["consumed"].is_object());
     assert!(images.wait_current(Duration::ZERO).is_ok());
 
+    assert!(matches!(
+        decide(
+            &configured_envelope(&first, 2),
+            "sidecar-a",
+            &key.0,
+            &images,
+        ),
+        Decision::Present { .. }
+    ));
+    assert!(
+        images.wait_current(Duration::ZERO).is_err(),
+        "a newer sequence on the same raster must be awaited"
+    );
+
     let second = images
         .configure_raster(&key, 900, 600, 2.0, true)
         .unwrap()

@@ -98,6 +98,10 @@
             },
             "cellHeight": {
               "type": "number"
+            },
+            "inlineImages": {
+              "type": "array",
+              "items": { "type": "string" }
             }
           }
         }
@@ -188,6 +192,19 @@
         "params": {
           "type": "object",
           "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "terminal.image.inline.delete",
+        "description": "Deletes one named inline image owned by this terminal session.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" }
+          }
         },
         "result": {
           "type": "null"

@@ -1074,6 +1074,34 @@ test("terminal.close sends close message to sidecar", async () => {
   assert(closeMessage, "close message sent to sidecar");
 });
 
+test("terminal.image.inline.delete sends one explicit owned-image deletion", async () => {
+  FakeResizeObserver.reset();
+  const fakeAttachImage = createFakeAttachImage();
+  const sidecar = createFakeSidecar();
+  const fakeExpose = createFakeExpose();
+  const fakeView = createFakeView();
+  const fakeWindow = {
+    ResizeObserver: FakeResizeObserver,
+    TextEncoder: FakeTextEncoder,
+    devicePixelRatio: 1,
+  };
+  await startTerminal({
+    view: fakeView,
+    attachImage: fakeAttachImage.function,
+    sidecar,
+    expose: fakeExpose,
+    scale: 1,
+    window: fakeWindow,
+  });
+  const command = fakeExpose.getCommand("terminal.image.inline.delete");
+  assert(command, "inline image deletion command registered");
+
+  await command({ name: "plot" });
+  const messages = sidecar.getMessages();
+  assert.deepEqual(messages.at(-1)?.body, { operation: "image.inline.delete", name: "plot" });
+  await assert.rejects(command({ name: "" }), /non-empty name/);
+});
+
 test("open is independent of DOM element size", async () => {
   FakeResizeObserver.reset();
   const fakeAttachImage = createFakeAttachImage();
@@ -1246,6 +1274,25 @@ test("sidecar_error_reaches_session_status: sidecar error event updates session"
   assert.equal(session.error, "Engine panic: minimum width is 1", "error message is stored");
   assert.equal(surfaceErrors.length, 1, "sidecar failure reaches the surface status");
   assert.equal(surfaceErrors[0].message, "Engine panic: minimum width is 1");
+});
+
+test("inline image display and deletion are observable through terminal.session", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  const fakeExpose = createFakeExpose();
+  await startTerminal({
+    view: createFakeView(),
+    attachImage: createFakeAttachImage().function,
+    sidecar: fakeSidecar,
+    expose: fakeExpose,
+    scale: 1,
+    window: { ResizeObserver: FakeResizeObserver, TextEncoder: FakeTextEncoder, devicePixelRatio: 1 },
+  });
+  const status = fakeExpose.getStatus("terminal.session");
+  fakeSidecar.triggerEvent("test-session", { event: "image.inline", command: "display", name: "plot" });
+  assert.deepEqual(status.readFn().inlineImages, ["plot"]);
+  fakeSidecar.triggerEvent("test-session", { event: "image.inline.deleted", name: "plot" });
+  assert.deepEqual(status.readFn().inlineImages, []);
 });
 
 test("compose events are sent with ranges and published as preedit state", async () => {

@@ -86,6 +86,7 @@ struct RasterState {
     configured: bool,
     visible: bool,
     presented_raster: u64,
+    presented_sequence: i32,
     presentation_error: Option<String>,
 }
 
@@ -366,6 +367,7 @@ impl Images {
             state.scale = scale;
             state.last_sequence = 0;
             state.configured = false;
+            state.presented_sequence = 0;
             state.presentation_error = None;
             self.changed();
         }
@@ -483,8 +485,9 @@ impl Images {
         {
             return;
         }
-        if state.presented_raster != raster {
+        if state.presented_raster != raster || state.presented_sequence != sequence {
             state.presented_raster = raster;
+            state.presented_sequence = sequence;
             state.presentation_error = None;
             self.changed();
         }
@@ -524,7 +527,9 @@ impl Images {
                 || !state.visible
                 || !surface_visible
                 || state.raster == 0
-                || state.presented_raster == state.raster
+                || (state.last_sequence > 0
+                    && state.presented_raster == state.raster
+                    && state.presented_sequence == state.last_sequence)
         })
     }
 

@@ -147,6 +147,35 @@ async function terminalFrame(session) {
   }
 }
 
+async function terminalColorBounds(session, surface, color) {
+  const frame = await terminalFrame(session);
+  const host = await session.get("host.window");
+  const region = host.regions.find((item) => item.surface === surface && item.name === "view");
+  assert.ok(region?.frame, `native terminal region ${surface} has no frame`);
+  const scale = frame.scale;
+  const x0 = Math.max(0, Math.round(region.frame.x * scale));
+  const y0 = Math.max(0, Math.round(region.frame.y * scale));
+  const x1 = Math.min(frame.width, Math.ceil((region.frame.x + region.frame.width) * scale));
+  const y1 = Math.min(frame.height, Math.ceil((region.frame.y + region.frame.height) * scale));
+  let count = 0;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (let y = y0; y < y1; y++) {
+    for (let x = x0; x < x1; x++) {
+      const px = pixel(frame, x, y);
+      const matches = color === "red"
+        ? px[0] >= 180 && px[1] <= 80 && px[2] <= 80
+        : px[0] <= 80 && px[1] <= 80 && px[2] >= 180;
+      if (matches) {
+        count++;
+        minY = Math.min(minY, y);
+        maxY = Math.max(maxY, y);
+      }
+    }
+  }
+  return { count, minY, maxY };
+}
+
 function differentPixels(before, after) {
   return before.reduce((count, value, index) => count +
     (value.some((channel, channelIndex) => channel !== after[index]?.[channelIndex]) ? 1 : 0), 0);
@@ -671,6 +700,62 @@ for (const app of Object.values(APPS)) {
       brightTextCount >= BRIGHT_TEXT_MIN,
       `terminal text not visible: ${brightTextCount} bright pixels (need >= ${BRIGHT_TEXT_MIN})`
     );
+  });
+
+  test(`${app.name}: inline image pixels follow scroll, resize, replacement, deletion, and cleanup`, { timeout: 30000 }, async (t) => {
+    const s = await open(t, app);
+    assert.ok(s, `${app.binary} is not built`);
+    await fresh(s);
+    const [terminal] = await ensureTerminals(s, 1);
+    const surface = terminal.surface;
+    s.cleanup(() => closeTerminalTabs(s));
+    await s.until("terminal.session", (state) => Boolean(state?.sessionId && state.rows > 8),
+      "inline-image terminal session did not open", { surface });
+
+    const red = "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAADklEQVR4nGP4z8DwH4QBEfcD/ePF9e8AAAAASUVORK5CYII=";
+    const blue = "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAADklEQVR4nGNgYPj/H4QBDfsD/Yde1YcAAAAASUVORK5CYII=";
+    const name = "cGxvdA==";
+    const image = (data) => `printf '\\033[6;1H\\033]1337;File=name=${name};inline=1;width=4px;height=4px:${data}\\a'`;
+    const redInput = `${image(red)}\r`;
+    await s.run("terminal.input", { bytes: redInput }, surface);
+    await s.until("terminal.session", (state) => state.inlineImages?.includes("plot"),
+      "inline image display event was not observed", { surface });
+    const beforeScroll = await terminalColorBounds(s, surface, "red");
+    assert.ok(beforeScroll.count >= 2, `red inline image did not reach native pixels: ${beforeScroll.count}`);
+    t.diagnostic(`${app.name}: inline image displayed ${beforeScroll.count} red pixels`);
+
+    await s.run("terminal.input", { bytes: "i=0; while [ $i -lt 100 ]; do printf '\\n'; i=$((i+1)); done; printf '\\nSCROLL_DONE\\n'\r" }, surface);
+    await readScreenUntil(s, surface, (lines) => lines.includes("SCROLL_DONE"),
+      "terminal did not finish the scroll fixture");
+    const afterScroll = await terminalColorBounds(s, surface, "red");
+    t.diagnostic(`${app.name}: after scroll red pixels ${afterScroll.count} y=${afterScroll.minY}-${afterScroll.maxY}`);
+    assert.equal(afterScroll.count, 0, "scrolled-off inline image remained visible at a stale absolute position");
+    assert.ok((await s.get("terminal.session", surface)).inlineImages.includes("plot"),
+      "scrolling deleted inline-image ownership instead of hiding its placement");
+
+    await s.run("terminal.input", { bytes: `${image(blue)}; printf '\\nREPLACE_DONE\\n'\r` }, surface);
+    await readScreenUntil(s, surface, (lines) => lines.includes("REPLACE_DONE"),
+      "terminal did not finish the replacement fixture");
+    const replaced = await terminalColorBounds(s, surface, "blue");
+    assert.ok(replaced.count >= 1, `same-name replacement did not reach native pixels: ${replaced.count}`);
+    const redAfterReplacement = await terminalColorBounds(s, surface, "red");
+    assert.ok(redAfterReplacement.count < beforeScroll.count / 2,
+      `same-name replacement retained the old image: ${redAfterReplacement.count}`);
+
+    await s.run("terminal.image.inline.delete", { name: "plot" }, surface);
+    await s.until("terminal.session", (state) => !state.inlineImages?.includes("plot"),
+      "inline image deletion event was not observed", { surface });
+    const deleted = await terminalColorBounds(s, surface, "blue");
+    t.diagnostic(`${app.name}: after delete blue pixels ${deleted.count} y=${deleted.minY}-${deleted.maxY}`);
+    assert.equal(deleted.count, 0, "inline image deletion left blue pixels in the native raster");
+    const screen = await readScreenUntil(s, surface, (lines) => lines.length > 0,
+      "terminal screen disappeared after inline image deletion");
+    assert.ok(Array.isArray(screen), "terminal text state was not retained after image deletion");
+    await s.run("host.window.resize", { width: 800, height: 920 });
+    const resizedScreen = await readScreenUntil(s, surface, (lines) => lines.length > 0,
+      "terminal screen disappeared after resize");
+    assert.ok(Array.isArray(resizedScreen), "terminal text state was not retained after resize");
+    t.diagnostic(`${app.name}: PASS inline image lifecycle (scroll/resize/replace/delete)`);
   });
 
   test(`${app.name}: terminal raster follows application light and dark theme`, async (t) => {

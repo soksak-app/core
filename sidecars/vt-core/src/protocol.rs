@@ -1269,6 +1269,7 @@ async fn surface_task(
     let mut session_id: Option<String> = None;
     let mut daemon_events_rx = session_port.get_events().await;
     let mut image_state: Option<ImageState> = None;
+    let mut preserved_inline_images = Vec::new();
     let mut multipart: Option<MultipartAssembly> = None;
     let mut open_requested = false;
     let mut requested_image: Option<String> = None;
@@ -1328,7 +1329,9 @@ async fn surface_task(
                         // the IOSurface belongs to the application instance.
                         // Discard only the old native image so the reconnecting
                         // client must provide a fresh Configure message.
-                        image_state = None;
+                        if let Some(previous_state) = image_state.take() {
+                            preserved_inline_images = previous_state.inline_images;
+                        }
                         pending_configuration = None;
                         if !headless {
                             if let Some(session_id) = session_id.as_deref() {
@@ -1366,6 +1369,9 @@ async fn surface_task(
                         };
                         let mut new_state = new_state;
                         new_state.theme = current_theme;
+                        new_state.inline_images = image_state.as_ref()
+                            .map(|previous_state| previous_state.inline_images.clone())
+                            .unwrap_or_else(|| std::mem::take(&mut preserved_inline_images));
                         let (cols, rows) = match calculate_terminal_size(
                             configuration.width, configuration.height, configuration.scale) {
                             Ok(size) => size,
@@ -1383,6 +1389,7 @@ async fn surface_task(
                             continue;
                         }
                         image_state = Some(new_state);
+                        refresh_inline_image_positions(&mut engine, &mut image_state);
                         if let Some(sid) = session_id.as_ref() {
                             if let Err(error) = session_port.resize(sid, cols, rows).await {
                                 let response = json!({"surface": surface_id,

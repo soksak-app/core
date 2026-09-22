@@ -47,6 +47,6 @@ test("registered terminal exposures match manifest declarations", () => {
 test("the terminal exposes its session, input, paste, file drop, screen.read, close commands, and view", () => {
   const names = (kind) => manifest.exposes[kind].map((entry) => entry.name).sort();
   assert.deepEqual(names("status"), ["terminal.compose", "terminal.cursor", "terminal.screen", "terminal.session"]);
-  assert.deepEqual(names("commands"), ["terminal.close", "terminal.cursor.set", "terminal.drop", "terminal.focus", "terminal.input", "terminal.paste", "terminal.screen.read"]);
+  assert.deepEqual(names("commands"), ["terminal.close", "terminal.cursor.set", "terminal.drop", "terminal.focus", "terminal.image.inline.delete", "terminal.input", "terminal.paste", "terminal.screen.read"]);
   assert.deepEqual(names("dom"), ["terminal.view"]);
 });
