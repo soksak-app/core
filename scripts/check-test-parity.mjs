@@ -946,6 +946,18 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F6.6-1",
+    implementation: [{ file: "sidecars/vt-core/src/inline_image.rs", symbol: "pub fn parse" }],
+    tests: [
+      { file: "sidecars/vt-core/tests/inline_image_test.rs", id: "file_payload_becomes_a_bounded_inline_image_with_typed_dimensions" },
+      { file: "sidecars/vt-core/tests/inline_image_test.rs", id: "malformed_size_base64_and_dimensions_are_rejected" },
+      { file: "sidecars/vt-core/tests/inline_image_test.rs", id: "multipart_records_are_typed_and_do_not_become_a_display_by_fallback" },
+      { file: "sidecars/vt-core/tests/inline_image_test.rs", id: "oversized_encoded_payload_is_rejected_before_decoding" },
+    ],
+    expected: "OSC 1337 image records produce bounded typed outcomes, reject malformed or oversized values, and preserve explicit transfer and multipart states without fallback or silent discard.",
+    levels: ["unit", "native"],
+  },
+  {
     id: "F10.1",
     implementation: [{ file: "packages/host/tauriv2/src/modals.rs", symbol: "pub(crate) fn show" }],
     tests: [{ file: "e2e/modal.test.mjs", id: "settings blocks background input and closes only through its close button" }],

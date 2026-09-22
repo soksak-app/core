@@ -1,5 +1,7 @@
 # Changelog
 
+- Completed F6.6-1. Added strict OSC 1337 image-transfer parsing for `File`, `MultipartFile`, `FilePart`, and `FileEnd`. Typed display, transfer, and multipart outcomes enforce bounded payloads, exact declared size, strict base64, dimensions, named ownership, and explicit inline semantics. Five focused Rust tests pass in 0.02s; parity and documentation checks pass. VT-engine and native raster integration remain open under F6.6-2.
+
 - Completed F6.3-2. Native settled-presentation failures now cross the Darwin callback boundary as explicit errors instead of being dropped and reported later as a generic 1005 timeout. Red also exposed an AppKit UI-thread violation in the new diagnostic injector; both hosts now dispatch the injection through their UI queues. Rebuilt Tauri and Wails failure-injection E2E passes 1/1 in 0.76s and 0.47s, each reporting the injected error and completing a later split with a presented raster. Repeated three-terminal checks pass Tauri 1/1 in 1.01s and Wails 1/1 in 0.89s after removing a separately verified stale sidecar process.
 
 - Completed F6.5. Terminal file drops now have a declared `terminal.drop` command and a terminal-view drop handler. Only `text/uri-list` is accepted; local URLs are validated, shell-quoted, and sent once without a newline or execution. Unsupported, malformed, remote, empty, and transport failures remain observable. Red had no listener or command and sent no sidecar input. Green passes focused drop 2/2, terminal module 53/53, manifest 6/6, and rebuilt Tauri/Wails E2E 1/1 in 0.95s and 0.47s.

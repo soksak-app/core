@@ -1,5 +1,6 @@
 // 공통 VT 계층: 프로토콜, 세션 수명, 화면 타입, Engine 트레이트
 pub mod encoding;
+pub mod inline_image;
 pub mod palette;
 pub mod platform;
 pub mod protocol;
