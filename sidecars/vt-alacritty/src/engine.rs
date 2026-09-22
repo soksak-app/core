@@ -205,6 +205,16 @@ impl AlacrittyEngine {
         Ok(())
     }
 
+    pub fn reject_clipboard(&mut self, request_id: u64, reason: &str) -> Result<(), String> {
+        self.pending_clipboard
+            .remove(&request_id)
+            .ok_or_else(|| format!("unknown clipboard request {request_id}"))?;
+        if reason.is_empty() {
+            return Err("clipboard rejection reason is empty".to_string());
+        }
+        Ok(())
+    }
+
     fn color_request(&self, index: usize) -> Result<Rgb, String> {
         if index >= 269 {
             return Err(format!("unsupported terminal color index {index}"));
@@ -354,6 +364,10 @@ impl Engine for AlacrittyEngine {
 
     fn resolve_clipboard(&mut self, request_id: u64, text: &str) -> Result<(), String> {
         AlacrittyEngine::resolve_clipboard(self, request_id, text)
+    }
+
+    fn reject_clipboard(&mut self, request_id: u64, reason: &str) -> Result<(), String> {
+        AlacrittyEngine::reject_clipboard(self, request_id, reason)
     }
 
     fn cursor(&self) -> Cursor {

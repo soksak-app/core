@@ -39,6 +39,7 @@ function sendInput(text, terminal, id, encoder) {
 const CURSOR_SHAPES = new Set(["block", "underline", "beam"]);
 const CURSOR_BLINK_MODES = new Set(["Never", "Off", "On", "Always"]);
 const CURSOR_UNFOCUSED = new Set(["hollow", "solid", "underline", "beam", "unchanged"]);
+const PROGRAM_CLIPBOARD_POLICIES = new Set(["deny", "allow"]);
 const DEFAULT_CURSOR = Object.freeze({
   row: 0, col: 0, shape: "block", visible: true, blinking: false, focused: false,
   blink: "Off", interval: 750, idleTimeout: 5000, unfocused: "hollow", hollow: false,
@@ -165,6 +166,11 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   let screen = [];
   let compose = session.compose;
   let cursor = { ...DEFAULT_CURSOR };
+  const initialSettings = settings?.read?.() ?? {};
+  let programClipboardPolicy = initialSettings["clipboard.program"] ?? "deny";
+  if (!PROGRAM_CLIPBOARD_POLICIES.has(programClipboardPolicy)) {
+    throw new Error(`clipboard.program setting is invalid: ${String(programClipboardPolicy)}`);
+  }
 
   const read = {
     // 세션 상태
@@ -217,6 +223,42 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     if (typeof text !== "string") throw new Error("text clipboard returned a non-text value");
     await terminal.send(id, { operation: "paste", text });
     return null;
+  };
+  const rejectClipboardQuery = async (requestId, reason) => {
+    if (!Number.isInteger(requestId) || requestId < 0) throw new Error("clipboard query requestId is invalid");
+    await terminal.send(id, { operation: "clipboard.reject", requestId, reason });
+  };
+  const handleClipboardStore = async (body) => {
+    if (programClipboardPolicy !== "allow") throw new Error("program clipboard store denied by policy");
+    if (body.selection !== "clipboard") throw new Error(`unsupported program clipboard target: ${String(body.selection)}`);
+    if (typeof body.text !== "string") throw new Error("program clipboard store requires text");
+    if (!clipboard || typeof clipboard.writeText !== "function") throw new Error("program clipboard store requires a clipboard capability");
+    await clipboard.writeText(body.text);
+  };
+  const handleClipboardQuery = async (body) => {
+    if (!Number.isInteger(body.requestId) || body.requestId < 0) throw new Error("clipboard query requestId is invalid");
+    if (programClipboardPolicy !== "allow") {
+      await rejectClipboardQuery(body.requestId, "program clipboard query denied by policy");
+      return;
+    }
+    if (body.selection !== "clipboard") {
+      await rejectClipboardQuery(body.requestId, `unsupported program clipboard target: ${String(body.selection)}`);
+      return;
+    }
+    if (!clipboard || typeof clipboard.read !== "function") {
+      await rejectClipboardQuery(body.requestId, "program clipboard query requires a clipboard capability");
+      return;
+    }
+    const text = await clipboard.read("text");
+    if (text === null) {
+      await rejectClipboardQuery(body.requestId, "text clipboard is empty");
+      return;
+    }
+    if (typeof text !== "string") {
+      await rejectClipboardQuery(body.requestId, "program clipboard query returned a non-text value");
+      return;
+    }
+    await terminal.send(id, { operation: "clipboard.resolve", requestId: body.requestId, text });
   };
 
   const observeInput = (promise) => promise.then(undefined, (error) => {
@@ -435,6 +477,12 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       }
       session = { ...session, theme: body.mode, error: undefined };
       changed("session");
+    } else if (body.event === "clipboard.store") {
+      handleClipboardStore(body).catch(reportInputError);
+    } else if (body.event === "clipboard.query") {
+      handleClipboardQuery(body).catch(reportInputError);
+    } else if (body.event === "clipboard.rejected") {
+      reportInputError(new Error(typeof body.reason === "string" ? body.reason : "program clipboard query rejected"));
     } else if (body.event === "error") {
       // error 이벤트를 session 상태에 저장한다
       session = {
@@ -503,6 +551,12 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   if (settings) {
     await setCursorPolicy(settingsPolicy());
     settingsSubscription = settings.on((values) => {
+      const nextClipboardPolicy = values["clipboard.program"];
+      if (!PROGRAM_CLIPBOARD_POLICIES.has(nextClipboardPolicy)) {
+        reportInputError(new Error(`clipboard.program setting is invalid: ${String(nextClipboardPolicy)}`));
+        return;
+      }
+      programClipboardPolicy = nextClipboardPolicy;
       const policy = {
         shape: values["cursor.shape"],
         blink: values["cursor.blink"],

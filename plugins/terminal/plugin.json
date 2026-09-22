@@ -48,6 +48,11 @@
       "type": "enum",
       "default": "hollow",
       "values": ["hollow", "solid", "underline", "beam", "unchanged"]
+    },
+    "clipboard.program": {
+      "type": "enum",
+      "default": "deny",
+      "values": ["deny", "allow"]
     }
   },
   "sidecars": [

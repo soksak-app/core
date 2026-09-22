@@ -474,6 +474,50 @@ test("terminal.paste rejects an absent clipboard without sending input", async (
   assert.deepEqual(fakeSidecar.getMessages(), []);
 });
 
+test("program clipboard queries are explicitly denied and do not remain pending", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  const fakeExpose = createFakeExpose();
+  await startTerminal({
+    view: createFakeView(), attachImage: createFakeAttachImage().function,
+    sidecar: fakeSidecar, expose: fakeExpose, clipboard: { read: async () => "secret" },
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  openSession(fakeSidecar);
+
+  fakeSidecar.triggerEvent("test-session", { event: "clipboard.query", requestId: 7, selection: "clipboard" });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(fakeSidecar.getMessages().filter(({ body }) => body.operation === "clipboard.reject").map(({ body }) => body), [
+    { operation: "clipboard.reject", requestId: 7, reason: "program clipboard query denied by policy" },
+  ]);
+});
+
+test("allowed program clipboard handles only text through the host capability", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  const fakeExpose = createFakeExpose();
+  const writes = [];
+  const settings = { read: () => ({ "clipboard.program": "allow" }), on: () => () => {} };
+  const clipboard = {
+    read: async (type) => { assert.equal(type, "text"); return "from host"; },
+    writeText: async (text) => { writes.push(text); },
+  };
+  await startTerminal({
+    view: createFakeView(), attachImage: createFakeAttachImage().function,
+    sidecar: fakeSidecar, expose: fakeExpose, settings, clipboard,
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  openSession(fakeSidecar);
+  fakeSidecar.triggerEvent("test-session", { event: "clipboard.store", selection: "clipboard", text: "program copy" });
+  fakeSidecar.triggerEvent("test-session", { event: "clipboard.query", requestId: 8, selection: "clipboard" });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(writes, ["program copy"]);
+  assert.deepEqual(fakeSidecar.getMessages().filter(({ body }) => body.operation === "clipboard.resolve").map(({ body }) => body), [
+    { operation: "clipboard.resolve", requestId: 8, text: "from host" },
+  ]);
+});
+
 // 테스트 4: 영역 key(Enter) → {operation:"input", keys:[{key:"Enter"}]}
 test("Region key event for Enter sends correct message format", async () => {
   FakeResizeObserver.reset();
@@ -1146,7 +1190,7 @@ test("declared settings are sent at startup and on effective setting changes", a
   const settings = {
     read: () => ({
       "cursor.shape": "underline", "cursor.blink": "On", "cursor.interval": 900,
-      "cursor.idleTimeout": 0, "cursor.unfocused": "beam",
+      "cursor.idleTimeout": 0, "cursor.unfocused": "beam", "clipboard.program": "deny",
     }),
     on: (listener) => { notify = listener; return () => { notify = null; }; },
   };
@@ -1161,7 +1205,7 @@ test("declared settings are sent at startup and on effective setting changes", a
   });
   notify({
     "cursor.shape": "beam", "cursor.blink": "Never", "cursor.interval": 1000,
-    "cursor.idleTimeout": 5000, "cursor.unfocused": "solid",
+    "cursor.idleTimeout": 5000, "cursor.unfocused": "solid", "clipboard.program": "deny",
   });
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(fakeSidecar.getMessages().at(-1).body, {

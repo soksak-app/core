@@ -1,5 +1,7 @@
 # Changelog
 
+- Completed F6.2. Terminal-program clipboard store/query requests now follow the declared `clipboard.program` deny/allow policy. Denials emit an explicit `clipboard.rejected` event and clear pending engine callbacks; allowed access is limited to text clipboard operations. User-initiated `terminal.paste` remains separate. Focused terminal, Alacritty, and VT protocol tests pass.
+
 - Completed F6.1. Explicit terminal text paste now uses the scoped user-initiated clipboard capability, rejects absent or non-text data, sends one sidecar paste operation, preserves UTF-8 payload bytes, and rejects an embedded bracketed-paste terminator instead of deleting it. Focused terminal and sidecar tests pass; selection, file, image, and terminal-output-image work remains open under F6.
 
 - Terminal cursor settings now have typed plugin/environment declarations, strict common/project persistence validation, shared settings-modal controls, and live delivery to each terminal sidecar. Package, native frame, and structural gates pass. Rebuilt-host settings-to-pixel E2E remains a separate checklist item because no current application endpoint was available.

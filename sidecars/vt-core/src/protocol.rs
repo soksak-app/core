@@ -194,6 +194,7 @@ pub trait Engine: Send + 'static {
     fn feed(&mut self, bytes: &[u8]);
     fn drain_events(&mut self) -> Vec<EngineEvent>;
     fn resolve_clipboard(&mut self, request_id: u64, text: &str) -> Result<(), String>;
+    fn reject_clipboard(&mut self, request_id: u64, reason: &str) -> Result<(), String>;
     fn cursor(&self) -> Cursor;
     fn screen(&mut self) -> Screen;
     fn modes(&self) -> Modes;
@@ -496,6 +497,10 @@ enum SurfaceCommand {
     ClipboardResolve {
         request_id: u64,
         text: String,
+    },
+    ClipboardReject {
+        request_id: u64,
+        reason: String,
     },
 }
 
@@ -1395,6 +1400,18 @@ async fn surface_task(
                             return;
                         }
                     }
+                    SurfaceCommand::ClipboardReject { request_id, reason } => {
+                        if let Err(error) = engine.reject_clipboard(request_id, &reason) {
+                            let response = json!({"surface": surface_id, "body": {"error": error}});
+                            if output_tx.send(response.to_string()).await.is_err() { return; }
+                        } else {
+                            let response = json!({
+                                "surface": surface_id,
+                                "body": {"event": "clipboard.rejected", "requestId": request_id, "reason": reason}
+                            });
+                            if output_tx.send(response.to_string()).await.is_err() { return; }
+                        }
+                    }
                     SurfaceCommand::ScreenRead => {
                         let screen = decorate_screen(engine.screen(), focused, &preedit, &cursor_policy, cursor_activity.elapsed().as_millis() as u64);
                         let response = json!({
@@ -2174,6 +2191,21 @@ where
                                     }
                                 }
                             }
+                            "clipboard.reject" => {
+                                let request_id = body.get("requestId").and_then(Value::as_u64);
+                                let reason = body.get("reason").and_then(Value::as_str).map(str::to_string);
+                                match (request_id, reason) {
+                                    (Some(request_id), Some(reason)) if !reason.is_empty() => {
+                                        if tx.send(SurfaceCommand::ClipboardReject { request_id, reason }).await.is_err() {
+                                            break;
+                                        }
+                                    }
+                                    _ => {
+                                        let response = json!({"surface": surface_id, "body": {"error": "invalidParams", "reason": "clipboard.reject requires requestId and non-empty reason"}});
+                                        if output_tx.send(response.to_string()).await.is_err() { break; }
+                                    }
+                                }
+                            }
                             "close" => {
                                 if let Err(_) = tx.send(SurfaceCommand::SessionClose).await {
                                     break;
@@ -2334,6 +2366,10 @@ impl Engine for FakeEngine {
     }
 
     fn resolve_clipboard(&mut self, _request_id: u64, _text: &str) -> Result<(), String> {
+        Ok(())
+    }
+
+    fn reject_clipboard(&mut self, _request_id: u64, _reason: &str) -> Result<(), String> {
         Ok(())
     }
 

@@ -67,6 +67,11 @@ impl Engine for MockEngine {
         Err(format!("unknown clipboard request {request_id}"))
     }
 
+    fn reject_clipboard(&mut self, request_id: u64, _reason: &str) -> Result<(), String> {
+        let _ = request_id;
+        Ok(())
+    }
+
     fn cursor(&self) -> Cursor {
         Cursor {
             col: 0,
@@ -330,6 +335,26 @@ async fn test_bracketed_paste_rejects_embedded_terminator_without_writing() {
     let output = String::from_utf8(writer).unwrap();
     assert!(output.contains("bracketed-paste terminator"));
     assert!(calls.lock().unwrap().writes.is_empty());
+}
+
+#[tokio::test]
+async fn test_clipboard_reject_is_an_explicit_protocol_event() {
+    let calls = Arc::new(Mutex::new(Calls::default()));
+    let input = r#"{"surface":"s1","body":{"operation":"clipboard.reject","requestId":7,"reason":"denied"}}
+"#;
+    let reader = std::io::Cursor::new(input.as_bytes());
+    let mut writer = Vec::new();
+    let engine_factory = Arc::new(|| Box::new(MockEngine::new()) as Box<dyn Engine>);
+    let calls_for_factory = calls.clone();
+    let session_port_factory = Arc::new(move || {
+        Arc::new(FakeSessionPort::new("unused".to_string(), calls_for_factory.clone()))
+            as Arc<dyn SessionPort>
+    });
+    let _ = serve(engine_factory, reader, &mut writer, session_port_factory).await;
+    let output = String::from_utf8(writer).unwrap();
+    assert!(output.contains("clipboard.rejected"));
+    assert!(output.contains("\"requestId\":7"));
+    assert!(output.contains("\"reason\":\"denied\""));
 }
 
 /// Test A-7: close op ends the session (calls close, not detach)
@@ -2221,6 +2246,10 @@ async fn test_panicking_surface_reports_error() {
         }
 
         fn resolve_clipboard(&mut self, request_id: u64, _text: &str) -> Result<(), String> {
+            Err(format!("unknown clipboard request {request_id}"))
+        }
+
+        fn reject_clipboard(&mut self, request_id: u64, _reason: &str) -> Result<(), String> {
             Err(format!("unknown clipboard request {request_id}"))
         }
 

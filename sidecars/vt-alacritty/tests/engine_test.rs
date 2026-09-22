@@ -207,6 +207,25 @@ fn clipboard_query_uses_a_token_and_resolves_to_pty_bytes() {
 }
 
 #[test]
+fn clipboard_rejection_clears_a_pending_query_token() {
+    let mut engine = AlacrittyEngine::new();
+    engine.feed(b"\x1b]52;c;?\x07");
+    let request_id = engine
+        .drain_events()
+        .into_iter()
+        .find_map(|event| match event {
+            EngineEvent::ClipboardQuery { request_id, .. } => Some(request_id),
+            _ => None,
+        })
+        .expect("clipboard query must expose a request token");
+    engine
+        .reject_clipboard(request_id, "denied")
+        .expect("known clipboard token");
+    assert!(engine.resolve_clipboard(request_id, "secret").is_err());
+    assert!(engine.reject_clipboard(request_id, "again").is_err());
+}
+
+#[test]
 fn text_area_callback_is_not_discarded() {
     let mut engine = AlacrittyEngine::new();
     engine.set_cell_metrics(8, 16).expect("renderer metrics");

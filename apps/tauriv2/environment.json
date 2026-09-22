@@ -12,7 +12,8 @@
       "cursor.blink": "Off",
       "cursor.interval": 750,
       "cursor.idleTimeout": 5000,
-      "cursor.unfocused": "hollow"
+      "cursor.unfocused": "hollow",
+      "clipboard.program": "deny"
     }
   },
   "workspace": {
