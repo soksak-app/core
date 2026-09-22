@@ -74,7 +74,7 @@ fn host_declarations() -> Value {
                     "visible": {"type": "boolean"}, "order": {"type": "integer"}}}},
                 "documents": {"type": "array", "items": {"type": "object", "properties": {
                     "surface": {"type": "string"}, "document": {"type": "string"}, "frame": rect,
-                    "visible": {"type": "boolean"}, "order": {"type": "integer"}}}},
+                    "visible": {"type": "boolean"}, "focused": {"type": "boolean"}, "order": {"type": "integer"}}}},
                 "regions": {"type": "array", "items": {"type": "object", "properties": {
                     "surface": {"type": "string"}, "name": {"type": "string"}, "frame": rect,
                     "visible": {"type": "boolean"}, "focused": {"type": "boolean"},
@@ -858,9 +858,12 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
             let hidden = view["hidden"]
                 .as_bool()
                 .ok_or_else(|| internal("webview facts missing hidden"))?;
+            let focused = view["focused"]
+                .as_bool()
+                .ok_or_else(|| internal("webview facts missing focused"))?;
             attached.push(
                 json!({"surface": surface, "document": document, "frame": rect(view),
-                "visible": !hidden, "order": order}),
+                "visible": !hidden, "focused": focused, "order": order}),
             );
         } else if modal.is_object() && modal_view == Some(address) {
             modal["frame"] = rect(view);
@@ -1230,7 +1233,13 @@ impl Host {
             .recv()
             .map_err(|e| Failure::new(NO_INPUT, e.to_string()))?
         {
-            Delivery::Delivered => Ok(Value::Null),
+            Delivery::Delivered => {
+                if pointer.phase == 1 {
+                    crate::surfaces::press_at(window, pointer.x, pointer.y)
+                        .map_err(|e| Failure::new(NO_INPUT, e))?;
+                }
+                Ok(Value::Null)
+            }
             Delivery::Inactive => Err(Failure::new(NOT_ACTIVE, "the window is not active")),
             Delivery::Rejected => Err(Failure::new(
                 INVALID_PARAMS,

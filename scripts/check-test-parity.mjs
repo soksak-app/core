@@ -308,6 +308,20 @@ const FEATURE_LINKS = [
     levels: ["native", "application"],
   },
   {
+    id: "F4",
+    implementation: [
+      { file: "native/darwin/src/window_facts.m", symbol: "focused" },
+      { file: "packages/host/tauriv2/src/exposure.rs", symbol: "documents" },
+      { file: "packages/host/wailsv3/src/exposure.go", symbol: "WindowDocument" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/window_facts_test.m", id: "document webview focus is reported" },
+      { file: "e2e/browser.test.mjs", id: "browser document focus and isolation" },
+    ],
+    expected: "A single click inside a browser document makes that document the native first responder, and a later click in another document transfers focus without leaving the first document focused.",
+    levels: ["native", "application"],
+  },
+  {
     id: "F0.5.7-1",
     implementation: [
       { file: "packages/workbench/index.html", symbol: "waitSurfaceCompositionDeclared" },

@@ -26,6 +26,12 @@ void *sp_window_main_webview(void *handle) {
 
 static WKWebView *mainWebview(NSWindow *window) { return sp_window_main_webview(window); }
 
+static BOOL webviewFocused(NSView *view) {
+    NSResponder *responder = view.window.firstResponder;
+    if (responder == view) return YES;
+    return [responder isKindOfClass:NSView.class] && [(NSView *)responder isDescendantOf:view];
+}
+
 static char *copyJSON(id value) {
     NSData *data = [NSJSONSerialization dataWithJSONObject:value options:0 error:nil];
     if (!data) return NULL;
@@ -95,6 +101,7 @@ char *sp_window_facts(void *handle) {
         NSMutableDictionary *row = [windowRect(window, rect) mutableCopy];
         row[@"view"] = @((unsigned long long)(uintptr_t)view);
         row[@"hidden"] = @(view.isHiddenOrHasHiddenAncestor);
+        row[@"focused"] = @(webviewFocused(view));
         // drawsBackground 는 비공개 KVC 키다. docs/operations/private-native-apis.md 참고.
         row[@"draws"] = [view valueForKey:@"drawsBackground"];
         row[@"alpha"] = @(view.underPageBackgroundColor.alphaComponent);

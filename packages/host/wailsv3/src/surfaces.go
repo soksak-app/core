@@ -325,14 +325,39 @@ func (s *Surfaces) resizing(id string, view *nativeWebview, live bool) {
 	system.SetWebviewResizing(view.NativeView(), live)
 }
 
-// press 는 뷰가 표면인지 반환하고, 표면이면 그 id 를 발행한다. 누름의 의미는 페이지가 결정한다.
+// press 는 표면 또는 표면이 소유한 문서 웹뷰의 id 를 발행한다. 누름의 의미는 페이지가 결정한다.
 func (s *Surfaces) press(view uintptr) bool {
 	id, ok := SurfaceOwnerID(s.named, view)
+	if !ok {
+		for handle, key := range s.documents.Names() {
+			if handle == uint64(view) {
+				id, ok = key.Surface, true
+				break
+			}
+		}
+	}
 	if !ok {
 		return false
 	}
 	s.Emit("surface-pressed", id)
 	return true
+}
+
+// pressAt 은 직접 주입한 누름의 좌표가 표면 또는 그 문서에 있는 경우 표면 누름을 발행한다.
+// 직접 주입은 AppKit 로컬 이벤트 감시기를 거치지 않으므로 감시기와 별도로 호출한다.
+func (s *Surfaces) pressAt(x, y float64) error {
+	var got struct {
+		View uint64 `json:"view"`
+	}
+	if err := native(func() (string, error) {
+		return system.WindowHit(s.window.NativeWindow(), x, y)
+	}, &got, nil); err != nil {
+		return err
+	}
+	if got.View != 0 {
+		s.press(uintptr(got.View))
+	}
+	return nil
 }
 
 // SurfaceOwnerID resolves the logical surface whose native view received input.

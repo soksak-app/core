@@ -6,6 +6,8 @@
 
 ## Unreleased
 
+- Completed F4. Browser document facts now expose actual native first-responder focus, and direct `input.pointer` presses notify the owning surface for both Tauri and Wails instead of relying only on the native event monitor. Rebuilt Tauri and Wails focus-isolation checks pass 1/1 each; browser basic-operation checks pass navigation, address typing, and document scrolling on both hosts; the rebuilt native facts test reports document focus.
+
 - Completed F0.5.7-1 and G2.4. Removed the surface presentation cycle from command settling, made hybrid controllers share one document paint-boundary token to prevent a MutationObserver loop, moved Tauri project/window work onto the AppKit event loop, and stopped Wails window preparation from reapplying stale webview dimensions. Rebuilt isolated project/window checks pass on Tauri (1/1, 3.12s) and Wails (1/1, 2.31s); normal shutdown passes in 65ms and 14ms.
 
 - Corrected the F0.5.7 record: its command-settling surface-readiness wait created a presentation cycle (`command settling → surface ready → native presentation → command settling`) and was removed. F0.5.7-1 remains open for a non-cyclic contract and independent Tauri/Wails evidence.

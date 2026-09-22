@@ -76,7 +76,7 @@ A surface page shows a web document in one of its elements through a document re
 - The host sends `document-state {surface, document, state}` only to the owning surface. `state` is `{url, title, loading, progress, canGoBack, canGoForward, error, scroll: {x, y}}`; `error` is the last load failure or null, and `scroll` is the document scroll position in CSS pixels. Changes within one run-loop turn are reported once.
 - The host closes a surface's regions when the surface is removed and when the surface page begins to show a new document, before that document can attach again. The new document attaches its regions itself.
 - While a dialog is open, the host blurs regions with the same radius as the surface document blur.
-- Regions participate in native input like surfaces: pointer input reaches the region under the point without activating the application, and page focus changes do not move the application's keyboard focus. `host.window` lists regions as `documents` and `host.hit` reports `{kind: "document", surface, document}` ([exposure](exposure.md)).
+- Regions participate in native input like surfaces: pointer input reaches the region under the point without activating the application, and page focus changes do not move the application's keyboard focus. `host.window` lists regions as `documents` with `focused` set only when the document WebView or one of its descendants is the window's native first responder, and `host.hit` reports `{kind: "document", surface, document}` ([exposure](exposure.md)).
 - The presentation wait excludes regions. Their content renders independently.
 
 ## Image regions

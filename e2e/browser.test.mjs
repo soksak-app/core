@@ -173,6 +173,51 @@ for (const app of Object.values(APPS)) {
       "closing one surface closed another surface's document region");
   });
 
+  test(`${app.name}: browser document focus and isolation`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const base = await serve(t);
+    const [browser] = await browsers(s);
+    const surface = browser.surface;
+    const at = (path) => `${base}/${path}`;
+
+    await s.run("browser.navigate", { url: at("focus") }, surface);
+    await loaded(s, surface, at("focus"));
+    const first = await placed(s, surface, "focus document");
+    const firstPoint = { x: first.rect.x + first.rect.width / 2, y: first.rect.y + first.rect.height / 2 };
+    await s.pointer(firstPoint.x, firstPoint.y, "down");
+    await s.pointer(firstPoint.x, firstPoint.y, "up");
+    await s.until("host.window", (window) => window.documents.some((document) =>
+      document.surface === surface && document.document === "page" && document.focused),
+    "one click did not give the browser document native focus");
+    await s.until("core.grid", (grid) => grid.cards.some((card) =>
+      card.focused && card.tabs.some((tab) => tab.id === surface)), "one click did not select the browser card");
+    await s.until("host.window", (window) => window.documents.some((document) =>
+      document.surface === surface && document.document === "page" && document.visible &&
+      document.frame.width > 0 && document.frame.height > 0),
+    "the focused browser document did not settle after card selection");
+    assert.deepEqual(await s.run("host.hit", firstPoint), { kind: "document", surface, document: "page" },
+      "the click coordinate stopped hitting the focused browser document");
+    await s.pointer(firstPoint.x, firstPoint.y, "scroll", { deltaY: 120 });
+    await s.until("browser.location", (value) => value.scroll.y >= 120,
+      "scroll did not reach the focused browser document", { surface });
+    const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.id === surface));
+    const { tab: other } = await s.run("core.card.split", { card: card.id, axis: "x", plugin: "browser" });
+    await s.until("core.surfaces", (list) => list.some((item) => item.surface === other &&
+      item.exposes.includes("status browser.location")), "the second browser surface did not register");
+    await s.run("browser.navigate", { url: at("other") }, other);
+    await loaded(s, other, at("other"));
+    const second = await placed(s, other, "second focus document");
+    const secondPoint = { x: second.rect.x + second.rect.width / 2, y: second.rect.y + second.rect.height / 2 };
+    await s.pointer(secondPoint.x, secondPoint.y, "down");
+    await s.pointer(secondPoint.x, secondPoint.y, "up");
+    await s.until("host.window", (window) => {
+      const documents = new Map(window.documents.map((document) => [document.surface, document]));
+      return documents.get(other)?.focused === true && documents.get(surface)?.focused === false;
+    }, "focus did not move exclusively to the second browser document");
+  });
+
   test(`${app.name}: browser documents follow host theme pixels for existing, new, and reloaded documents`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);

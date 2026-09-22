@@ -62,7 +62,7 @@ var hostStatus = map[string]hostEntry{
 			}}},
 			"documents": map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{
 				"surface": map[string]any{"type": "string"}, "document": map[string]any{"type": "string"},
-				"frame": rectSchema, "visible": map[string]any{"type": "boolean"}, "order": map[string]any{"type": "integer"},
+				"frame": rectSchema, "visible": map[string]any{"type": "boolean"}, "focused": map[string]any{"type": "boolean"}, "order": map[string]any{"type": "integer"},
 			}}},
 			"regions": map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{
 				"surface": map[string]any{"type": "string"}, "name": map[string]any{"type": "string"},
@@ -719,6 +719,11 @@ func (b hostBackend) Pointer(window string, input PointerInput) error {
 	case platform.PointerUnreceived:
 		return rpcError(codeTimeout, "the document did not receive the input within %s", receiveTimeout)
 	}
+	if input.Phase == "down" {
+		if err := s.pressAt(input.X, input.Y); err != nil {
+			return rpcError(codeNoInput, "%v", err)
+		}
+	}
 	return nil
 }
 
@@ -792,10 +797,11 @@ type windowFacts struct {
 	Controls []WindowControl `json:"controls"`
 	Webviews []struct {
 		frame
-		View   uint64  `json:"view"`
-		Hidden bool    `json:"hidden"`
-		Draws  bool    `json:"draws"`
-		Alpha  float64 `json:"alpha"`
+		View    uint64  `json:"view"`
+		Hidden  bool    `json:"hidden"`
+		Focused bool    `json:"focused"`
+		Draws   bool    `json:"draws"`
+		Alpha   float64 `json:"alpha"`
 	} `json:"webviews"`
 	NativeSurfaces []struct {
 		frame
@@ -820,6 +826,7 @@ type WindowDocument struct {
 	Document string `json:"document"`
 	Frame    frame  `json:"frame"`
 	Visible  bool   `json:"visible"`
+	Focused  bool   `json:"focused"`
 	Order    int    `json:"order"`
 }
 
@@ -969,7 +976,7 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 	for order, view := range facts.Webviews {
 		if key, ok := documents[view.View]; ok {
 			out.Documents = append(out.Documents, WindowDocument{Surface: key.Surface, Document: key.Name,
-				Frame: view.frame, Visible: !view.Hidden, Order: order})
+				Frame: view.frame, Visible: !view.Hidden, Focused: view.Focused, Order: order})
 		}
 	}
 	sort.Slice(out.Regions, func(a, b int) bool {

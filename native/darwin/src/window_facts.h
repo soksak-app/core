@@ -16,7 +16,7 @@ void *sp_window_main_webview(void *window);
 //   content   콘텐츠 영역 {width, height}
 //   controls  창 단추 [{x, y, width, height, hidden}], 창 좌표
 //   webviews  창 안의 WKWebView 를 그리기 순서로 나열한다(메인 위치를 가정하지 않는다)
-//             [{view, x, y, width, height, hidden, draws, alpha}], 창 좌표.
+//             [{view, x, y, width, height, hidden, focused, draws, alpha}], 창 좌표.
 //             view 는 뷰 주소, draws 는 자기 배경을 칠하는지, alpha 는 페이지 아래 배경색의 알파다
 //   nativeSurfaces 논리 표면 컨테이너 [{view, x, y, width, height, hidden}], 창 좌표.
 // 창이나 등록된 메인 웹뷰가 없으면 NULL 을 반환한다.

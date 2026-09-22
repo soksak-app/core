@@ -99,7 +99,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 
 | 종류 | 이름 | 의미 |
 | --- | --- | --- |
-| status | `host.window` | `{frame, content, scale, maximized, key, active, children, controls, surfaces, documents, modal}`: 창 프레임, 콘텐츠 크기, 백킹 배율, 프레임이 최대화 프레임인지, 키 창 여부, 애플리케이션 활성 여부, 자식 OS 창 수, `hidden`을 포함한 창 단추 프레임, 네이티브 표면 `{id, frame, visible, order}`, [문서 영역](native-surfaces.ko.md#문서-영역) `{surface, document, frame, visible, order}`, 열린 네이티브 모달 `{id, mode, shown, frame, order, background}` 또는 `null` |
+| status | `host.window` | `{frame, content, scale, maximized, key, active, children, controls, surfaces, documents, modal}`: 창 프레임, 콘텐츠 크기, 백킹 배율, 프레임이 최대화 프레임인지, 키 창 여부, 애플리케이션 활성 여부, 자식 OS 창 수, `hidden`을 포함한 창 단추 프레임, 네이티브 표면 `{id, frame, visible, order}`, [문서 영역](native-surfaces.ko.md#문서-영역) `{surface, document, frame, visible, focused, order}`, 열린 네이티브 모달 `{id, mode, shown, frame, order, background}` 또는 `null` |
 | status | `host.windows` | `windows.list` 결과. 창이 열리거나 닫힐 때와 창의 제목, 프로젝트, 키 상태, 페이지 준비 상태가 바뀔 때 바뀐다 |
 | status | `host.screens` | `[{x, y, width, height, scale, visible}]`: 화면 좌표의 디스플레이와 백킹 배율, 그리고 메뉴 막대와 Dock 을 뺀 영역 `visible`(최대화한 창의 프레임) |
 | status | `host.dock` | 애플리케이션 Dock 메뉴 항목 제목의 순서 목록 |

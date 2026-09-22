@@ -58,6 +58,7 @@ int main(void) { @autoreleasepool {
         && [upper[@"height"] doubleValue] == 100, [NSString stringWithFormat:@"child webview frame in window coordinates: %@", upper]);
     check(![upper[@"draws"] boolValue] && [upper[@"alpha"] doubleValue] == 0 && [views[0][@"draws"] boolValue],
         @"background drawing and under-page alpha are reported per webview");
+    check(upper[@"focused"] != nil, @"document webview focus is reported");
 
     char *raw = sp_window_hit(window, 10, 10);
     check(strstr(raw, "\"main\":true") != NULL, [NSString stringWithFormat:@"main is a JSON boolean: %s", raw]);

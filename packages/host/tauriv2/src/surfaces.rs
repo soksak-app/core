@@ -189,6 +189,25 @@ pub fn surface_owner_id(named: &HashMap<Handle, String>, view: Handle) -> Option
         .map(String::as_str)
 }
 
+/// 직접 주입한 누름의 좌표가 표면 또는 그 문서에 있는 경우 페이지에 표면 누름을 전달한다.
+/// 직접 주입은 AppKit 로컬 이벤트 감시기를 거치지 않으므로 감시기와 별도로 호출한다.
+pub(crate) fn press_at(window: &Window, x: f64, y: f64) -> Result<(), String> {
+    let data = window_data(window)?;
+    let handle = native_owner(window)?;
+    let hit = platform::current()?.hit(handle, x, y)?;
+    let named = data.views.0.lock().map_err(|e| e.to_string())?;
+    let documents = data.documents.names();
+    let id = hit.chain.iter().find_map(|view| {
+        surface_owner_id(&named, *view)
+            .map(str::to_owned)
+            .or_else(|| documents.get(view).map(|(surface, _)| surface.clone()))
+    });
+    if let Some(id) = id {
+        emit_window(window, "surface-pressed", id).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 #[derive(Debug, Deserialize)]
 pub(crate) struct SyncRequest {
     /// 연속적인 배치 갱신이 종료되었는지 나타낸다.
@@ -326,6 +345,7 @@ fn watch_presses(window: &Window, views: &Views, watching: &Watching) -> Result<
     isolate_webview(&main, PageFocus::Allowed)?;
     let platform = platform::current()?;
     let named = views.0.clone();
+    let data = window_data(window)?;
     let watched = watching.0.clone();
     let host = window.clone();
     let pointing = window.clone();
@@ -340,11 +360,16 @@ fn watch_presses(window: &Window, views: &Views, watching: &Watching) -> Result<
                 }
                 let pressed = Box::new(move |chain: Vec<Handle>| {
                     let Ok(map) = named.lock() else { return false };
-                    let Some(id) = chain
-                        .iter()
-                        .find_map(|view| surface_owner_id(&map, *view))
-                        .map(str::to_owned)
-                    else {
+                    let Some(id) = chain.iter().find_map(|view| {
+                        surface_owner_id(&map, *view)
+                            .map(str::to_owned)
+                            .or_else(|| {
+                                data.documents
+                                    .names()
+                                    .get(view)
+                                    .map(|(surface, _)| surface.clone())
+                            })
+                    }) else {
                         return false;
                     };
                     if let Err(error) = emit_window(&host, "surface-pressed", id.clone()) {

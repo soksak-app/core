@@ -99,7 +99,7 @@ Screen coordinates are points with the origin at the top-left corner of the prim
 
 | Kind | Name | Meaning |
 | --- | --- | --- |
-| status | `host.window` | `{frame, content, scale, maximized, key, active, children, controls, surfaces, documents, modal}`: window frame, content size, backing scale, whether the frame is the maximized frame, key-window state, whether the application is active, the number of child OS windows, window button frames with `hidden`, native surfaces `{id, frame, visible, order}`, [document regions](native-surfaces.md#document-regions) `{surface, document, frame, visible, order}`, and the open native modal `{id, mode, shown, frame, order, background}` or `null` |
+| status | `host.window` | `{frame, content, scale, maximized, key, active, children, controls, surfaces, documents, modal}`: window frame, content size, backing scale, whether the frame is the maximized frame, key-window state, whether the application is active, the number of child OS windows, window button frames with `hidden`, native surfaces `{id, frame, visible, order}`, [document regions](native-surfaces.md#document-regions) `{surface, document, frame, visible, focused, order}`, and the open native modal `{id, mode, shown, frame, order, background}` or `null` |
 | status | `host.windows` | The `windows.list` result. It changes when a window opens or closes and when a window title, project, key state, or page readiness changes |
 | status | `host.screens` | `[{x, y, width, height, scale, visible}]`: the displays in screen coordinates with their backing scale, and `visible`, the area not covered by the menu bar and Dock, which is the maximized window frame |
 | status | `host.dock` | The titles of the application's Dock menu items in order |

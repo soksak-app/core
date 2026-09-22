@@ -76,7 +76,7 @@ macOS 콘텐츠 웹뷰는 장치 픽셀을 좌표 단위로 사용하는 공통 
 - 호스트는 `document-state {surface, document, state}`를 소유 표면에만 보낸다. `state`는 `{url, title, loading, progress, canGoBack, canGoForward, error, scroll: {x, y}}`이다. `error`는 마지막 로드 실패 또는 null이고, `scroll`은 CSS 픽셀 단위의 문서 스크롤 위치다. 한 실행 루프 차례의 변경은 한 번 보고한다.
 - 호스트는 표면이 제거될 때, 그리고 표면 페이지가 새 문서를 표시하기 시작할 때 그 문서가 다시 붙이기 전에 표면의 영역을 닫는다. 새 문서는 자기 영역을 직접 붙인다.
 - 대화 상자가 열려 있는 동안 호스트는 표면 문서 블러와 같은 반경으로 영역을 흐리게 한다.
-- 영역은 표면과 같이 네이티브 입력에 참여한다. 포인터 입력은 앱을 활성화하지 않고 좌표의 영역에 도달하며, 페이지 초점 변경은 앱의 키보드 초점을 옮기지 않는다. `host.window`는 영역을 `documents`로 나열하고 `host.hit`은 `{kind: "document", surface, document}`를 보고한다([공개 항목](exposure.ko.md)).
+- 영역은 표면과 같이 네이티브 입력에 참여한다. 포인터 입력은 앱을 활성화하지 않고 좌표의 영역에 도달하며, 페이지 초점 변경은 앱의 키보드 초점을 옮기지 않는다. `host.window`는 영역을 `documents`로 나열하고, 문서 웹뷰 또는 그 자손이 창의 네이티브 first responder일 때만 `focused`를 참으로 보고한다. `host.hit`은 `{kind: "document", surface, document}`를 보고한다([공개 항목](exposure.ko.md)).
 - 표시 완료 대기에는 영역이 포함되지 않는다. 영역의 콘텐츠는 독립적으로 렌더링된다.
 
 ## 그림 영역
