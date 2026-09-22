@@ -148,6 +148,7 @@ pub const CSI_SELECTOR_INVENTORY: &[CsiSelectorEvidence] = &[
     CsiSelectorEvidence { selector: "?25h/l", outcome: CsiOutcome::Implemented, test: "cursor_visibility_and_application_shape_are_exported" },
     CsiSelectorEvidence { selector: "0,7 SP q", outcome: CsiOutcome::Implemented, test: "decscusr_initial_cursor_resources_are_observable" },
     CsiSelectorEvidence { selector: "1-6 SP q", outcome: CsiOutcome::Implemented, test: "decscusr_cursor_style_ids_are_observable" },
+    CsiSelectorEvidence { selector: "CSI framing", outcome: CsiOutcome::Implemented, test: "csi_fragmentation_and_malformed_input_preserve_engine_state" },
     CsiSelectorEvidence { selector: "m", outcome: CsiOutcome::Implemented, test: "sgr_color_does_not_drop_the_character" },
     CsiSelectorEvidence { selector: "?1049h/l", outcome: CsiOutcome::Implemented, test: "alternate_screen_is_separate_from_primary_scrollback" },
     CsiSelectorEvidence { selector: "S/T;r", outcome: CsiOutcome::Implemented, test: "csi_scroll_moves_the_visible_grid_and_respects_a_scroll_region" },

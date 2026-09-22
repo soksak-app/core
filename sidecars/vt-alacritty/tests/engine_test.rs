@@ -646,6 +646,32 @@ fn decscusr_initial_cursor_resources_are_observable() {
 }
 
 #[test]
+fn csi_fragmentation_and_malformed_input_preserve_engine_state() {
+    let mut complete = AlacrittyEngine::new();
+    complete.feed(b"\x1b[2;3H\x1b[2CX");
+
+    let mut fragmented = AlacrittyEngine::new();
+    for chunk in [b"\x1b".as_slice(), b"[2".as_slice(), b";3".as_slice(), b"H".as_slice(), b"\x1b[".as_slice(), b"2C".as_slice(), b"X".as_slice()] {
+        fragmented.feed(chunk);
+    }
+    assert_eq!(text(&fragmented.screen()), text(&complete.screen()));
+    assert_eq!(fragmented.cursor().row, complete.cursor().row);
+    assert_eq!(fragmented.cursor().col, complete.cursor().col);
+
+    let mut cancelled = AlacrittyEngine::new();
+    cancelled.feed(b"\x1b[12;");
+    cancelled.feed(b"\x18X");
+    let mut clean = {
+        let mut engine = AlacrittyEngine::new();
+        engine.feed(b"X");
+        engine
+    };
+    assert_eq!(text(&cancelled.screen()), text(&clean.screen()));
+    assert_eq!(cancelled.cursor().row, clean.cursor().row);
+    assert_eq!(cancelled.cursor().col, clean.cursor().col);
+}
+
+#[test]
 fn primary_screen_reflows_without_losing_text_when_width_changes() {
     let mut engine = AlacrittyEngine::new();
     let value = "AAAA-BBBB-CCCC-DDDD-EEEE-FFFF-GGGG-HHHH";
