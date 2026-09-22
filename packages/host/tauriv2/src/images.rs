@@ -583,6 +583,38 @@ impl Images {
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             inner = next;
             if result.timed_out() && !Self::current_presented_locked(&inner) {
+                let pending: Vec<_> = inner
+                    .states
+                    .iter()
+                    .filter_map(|(key, state)| {
+                        let surface_visible = inner
+                            .surface_visibility
+                            .get(&key.0)
+                            .copied()
+                            .unwrap_or(true);
+                        let handle = inner.handles.get(key).copied().unwrap_or_default();
+                        let waiting = handle != 0
+                            && state.visible
+                            && surface_visible
+                            && state.raster != 0
+                            && !(state.last_sequence > 0
+                                && state.presented_raster == state.raster
+                                && state.presented_sequence == state.last_sequence);
+                        waiting.then(|| format!(
+                            "surface={} name={} generation={} raster={} sequence={} configured={} presentedRaster={} presentedSequence={} handle={}",
+                            key.0,
+                            key.1,
+                            state.generation,
+                            state.raster,
+                            state.last_sequence,
+                            state.configured,
+                            state.presented_raster,
+                            state.presented_sequence,
+                            handle,
+                        ))
+                    })
+                    .collect();
+                eprintln!("image presentation timeout pending: {}", pending.join("; "));
                 return Err("presentationTimeout".to_string());
             }
         }

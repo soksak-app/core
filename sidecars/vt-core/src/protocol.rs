@@ -53,6 +53,21 @@ pub struct PersistentRegistry {
     shutdown: AtomicBool,
 }
 
+const SURFACE_ACTOR_CLOSE_TIMEOUT: Duration = Duration::from_secs(2);
+
+async fn await_surface_actor(
+    actor: tokio::task::JoinHandle<()>,
+) -> Result<(), String> {
+    match tokio::time::timeout(SURFACE_ACTOR_CLOSE_TIMEOUT, actor).await {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(error)) => Err(format!("surface actor join failed: {error}")),
+        Err(_) => Err(format!(
+            "surface actor close exceeded {:?}",
+            SURFACE_ACTOR_CLOSE_TIMEOUT
+        )),
+    }
+}
+
 impl PersistentRegistry {
     pub fn new() -> Arc<Self> {
         Arc::new(Self {
@@ -86,10 +101,12 @@ impl PersistentRegistry {
             .send(SurfaceCommand::SessionClose)
             .await
             .map_err(|_| "surface actor closed before close".to_string())?;
-        entry
-            .actor
-            .await
-            .map_err(|error| format!("surface actor join failed: {error}"))?;
+        let key = key.to_string();
+        tokio::spawn(async move {
+            if let Err(error) = await_surface_actor(entry.actor).await {
+                eprintln!("persistent surface actor close failed for {key}: {error}");
+            }
+        });
         Ok(())
     }
 
@@ -110,10 +127,7 @@ impl PersistentRegistry {
                 .send(SurfaceCommand::SessionClose)
                 .await
                 .map_err(|_| "surface actor closed before owner close".to_string())?;
-            entry
-                .actor
-                .await
-                .map_err(|error| format!("surface actor join failed: {error}"))?;
+            await_surface_actor(entry.actor).await?;
         }
         Ok(())
     }
@@ -164,7 +178,7 @@ impl PersistentRegistry {
             tx.send(SurfaceCommand::SessionClose)
                 .await
                 .map_err(|error| format!("close duplicate surface: {error}"))?;
-            actor
+            await_surface_actor(actor)
                 .await
                 .map_err(|error| format!("join duplicate surface actor: {error}"))?;
             return Err("session surface already exists".to_string());
@@ -2881,7 +2895,11 @@ impl SessionPort for LocalSessionPort {
 
     async fn close(&self, session_id: &str) -> Result<(), String> {
         self.attachments.lock().await.remove(session_id);
-        self.service.close(session_id)
+        let service = Arc::clone(&self.service);
+        let session_id = session_id.to_string();
+        tokio::task::spawn_blocking(move || service.close(&session_id))
+            .await
+            .map_err(|error| format!("close PTY task failed: {error}"))?
     }
 
     async fn attach(&self, session_id: &str, from: i64) -> Result<String, String> {
@@ -3085,5 +3103,36 @@ mod tests {
         assert!(registry.contains("root\0b").await);
         registry.close_owner("client-b").await.unwrap();
         assert!(!registry.contains("root\0b").await);
+    }
+
+    #[tokio::test]
+    async fn persistent_surface_close_does_not_wait_forever_for_actor_exit() {
+        let registry = PersistentRegistry::new();
+        let (tx, mut rx) = mpsc::channel(1);
+        let actor = tokio::spawn(async move {
+            while let Some(_command) = rx.recv().await {
+                std::future::pending::<()>().await;
+            }
+        });
+        let (output, _events) = mpsc::channel(1);
+        registry.entries.lock().await.insert(
+            "root\0surface".to_string(),
+            PersistentEntry {
+                tx,
+                output: OutputSink::direct(output),
+                actor,
+                epoch: 1,
+                owner: "client".to_string(),
+            },
+        );
+
+        let result = tokio::time::timeout(
+            Duration::from_millis(200),
+            registry.close_surface("root\0surface", "client"),
+        )
+        .await;
+        result
+            .expect("surface close blocked the persistent input loop")
+            .expect("surface close could not queue actor cleanup");
     }
 }

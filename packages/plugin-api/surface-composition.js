@@ -190,6 +190,10 @@ export async function createSurfaceCompositionController(
   let frame = null;
   let resizeFrame = null;
   let pending = Promise.resolve();
+  const inactiveError = () => Object.assign(
+    new Error("surface composition is inactive"),
+    { code: "SURFACE_COMPOSITION_INACTIVE" },
+  );
   const reportFailure = (error) => {
     const message = `surface composition failed: ${error?.message ?? error}`;
     runtimePage.surfaces.report(message);
@@ -266,9 +270,9 @@ export async function createSurfaceCompositionController(
       const current = ++revision;
       pendingGeometry = geometry;
       const work = pending.catch((error) => {
-        reportFailure(error);
+        if (error?.code !== "SURFACE_COMPOSITION_INACTIVE") reportFailure(error);
       }).then(() => {
-        if (!active) throw new Error("surface composition is inactive");
+        if (!active) throw inactiveError();
         return runtimePage.composition.place(current, regionSnapshot, overlaySnapshot);
       }).then((result) => {
         acceptedGeometry = geometry;
@@ -278,7 +282,9 @@ export async function createSurfaceCompositionController(
         if (pendingGeometry === geometry) pendingGeometry = null;
         throw error;
       });
-      pending = work.catch(reportFailure);
+      pending = work.catch((error) => {
+        if (error?.code !== "SURFACE_COMPOSITION_INACTIVE") reportFailure(error);
+      });
       return work;
     };
 

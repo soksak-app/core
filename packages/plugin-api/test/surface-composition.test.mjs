@@ -308,11 +308,18 @@ test("disposal waits for an in-flight placement before detaching regions", async
     overlays: { toolbar: f.toolbar, badge: f.badge },
   }, f.window);
 
+  const errors = [];
+  const originalError = console.error;
+  console.error = (...args) => errors.push(args.join(" "));
   const update = composition.update(() => {
     f.setRect("page", { left: 20, top: 20, right: 320, bottom: 220, width: 300, height: 200 });
   });
   await settle();
   assert.equal(r.placements.at(-1).revision, 2);
+
+  const queued = composition.update(() => {
+    f.setRect("page", { left: 30, top: 20, right: 330, bottom: 220, width: 300, height: 200 });
+  });
 
   let disposed = false;
   const closing = composition.dispose().then(() => { disposed = true; });
@@ -323,9 +330,12 @@ test("disposal waits for an in-flight placement before detaching regions", async
 
   release();
   await update;
+  await assert.rejects(queued, /surface composition is inactive/);
   await closing;
+  console.error = originalError;
   assert.equal(disposed, true);
   assert.equal(r.imageCalls.some(([operation]) => operation === "detach"), true);
+  assert.deepEqual(errors, [], "disposing an in-flight placement must not report an expected inactive-surface cancellation");
 });
 
 test("an attachment failure rolls back successful attachments and the DOM mode marker", async () => {
