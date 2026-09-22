@@ -165,6 +165,20 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "G2-1",
+    implementation: [{ file: "scripts/check-hosts.mjs", symbol: "PAIRS" }],
+    tests: [{ file: "scripts/test/soksak-scripts.test.mjs", id: "host structure audit reports a clean paired-host graph" }],
+    expected: "The paired Tauri/Wails host and application structure contains only declared differences and no missing counterpart or obsolete process path.",
+    levels: ["unit"],
+  },
+  {
+    id: "G2-2",
+    implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "auditCompletedFeatureLinks" }, { file: "scripts/check-test-parity.mjs", symbol: "auditRecordedInventoryCounts" }],
+    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "completed capability entries all have feature evidence links" }, { file: "scripts/test/test-parity.test.mjs", id: "recorded parity counts cannot drift from the current inventory" }],
+    expected: "Completed host-structure and parity-correction entries remain linked to named evidence, and the current inventory count cannot drift from the checklist record.",
+    levels: ["unit"],
+  },
+  {
     id: "G1.3-5",
     implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "auditCommittedEvidenceWording" }],
     tests: [{ file: "scripts/test/test-parity.test.mjs", id: "F0.1 evidence identifies its committed build" }],

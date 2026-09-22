@@ -103,6 +103,12 @@ test("boundary audit reports a clean component graph", { timeout: 5000 }, async 
   assert.match(result.stdout, /Boundary checks passed:/);
 });
 
+test("host structure audit reports a clean paired-host graph", { timeout: 5000 }, async () => {
+  const result = await run(node, [join(root, "scripts/check-hosts.mjs")]);
+  assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);
+  assert.match(result.stdout, /Host structure checks passed:/);
+});
+
 test("window-source audit rejects forbidden control paths", { timeout: 5000 }, async () => {
   const result = await run(node, [join(root, "scripts/check-e2e.mjs")]);
   assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);

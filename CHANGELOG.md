@@ -6,6 +6,8 @@
 
 ## Unreleased
 
+- Completed G2-2. Added a named host-structure behavior test, linked G2-1 and G2-2 in the parity feature audit, and corrected the current G1.4 inventory record to 56 lanes, 249 implementation files, and 169 test files while preserving the earlier 56/250/169 result as historical evidence. The parity self-tests and full `pnpm test` pass.
+
 - Completed F0.5.3. Removed the terminal surface's duplicate pointerdown focus binder; the card now owns the single focus gesture while `terminal.focus` remains an explicit command with observable error propagation. Terminal package and workbench tests pass, and the rebuilt Tauri three-terminal native keyboard check passes in three bounded runs without a second click. The previous full-run capture failure was an environment disk-full error and is not counted as a product pass.
 
 - Closed G2-1. The Tauri persistent-service process probe now belongs to the platform endpoint contract and returns an explicit Windows unsupported error; the diagnostic-only Wails unit test is recorded as the H5 language-boundary exception because it tests an unexported helper without widening the host API. `make hosts-check` and the declared-environment Tauri host library test pass.
