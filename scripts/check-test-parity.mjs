@@ -915,6 +915,16 @@ const FEATURE_LINKS = [
     expected: "Wails uses the same hidden transparent child-webview modal contract and reports ready, focus, coverage, resize, and cleanup.",
     levels: ["application"],
   },
+  {
+    id: "F10.3",
+    implementation: [{ file: "packages/host/tauriv2/src/modals.rs", symbol: "pub(crate) fn hide" }],
+    tests: [
+      { file: "e2e/modal.test.mjs", id: "add and split menus are transparent and have no backdrop" },
+      { file: "e2e/modal.test.mjs", id: "settings blocks background input and closes only through its close button" },
+    ],
+    expected: "A replacement native modal retains child-WebView focus; both rebuilt hosts preserve transparent picker paint, the settings scrim and blur, input blocking, dismissal, focus return, stale ordering, reload, movement, and resize.",
+    levels: ["native", "application"],
+  },
 ];
 
 // 생성 산출물은 원본과의 일치 검사 대상이며 독립 구현으로 세지 않는다.

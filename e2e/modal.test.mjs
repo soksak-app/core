@@ -68,7 +68,7 @@ async function modalAt(s, card) {
 const rectOf = ({ x, y, width, height }) => ({ x, y, width, height });
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: an open modal's document receives the content the page updates`, async (t) => {
+  test(`${app.name}: an open modal's document receives the content the page updates`, { timeout: 30000 }, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
@@ -79,7 +79,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(document.scrimBackground, "rgba(0, 0, 0, 0.5)", "settings must draw one 50% scrim");
   });
 
-  test(`${app.name}: a first modal answer that arrives after later changes keeps the moved position`, async (t) => {
+  test(`${app.name}: a first modal answer that arrives after later changes keeps the moved position`, { timeout: 30000 }, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
@@ -104,7 +104,7 @@ for (const app of Object.values(APPS)) {
     await s.run("core.settings.close");
   });
 
-  test(`${app.name}: rebuilding the layout from settings keeps settings above new surfaces`, async (t) => {
+  test(`${app.name}: rebuilding the layout from settings keeps settings above new surfaces`, { timeout: 30000 }, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
@@ -123,7 +123,7 @@ for (const app of Object.values(APPS)) {
     settingsAboveSurfaces(await s.get("host.window"));
   });
 
-  test(`${app.name}: reloading the main document removes its settings webview`, async (t) => {
+  test(`${app.name}: reloading the main document removes its settings webview`, { timeout: 30000 }, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
@@ -139,7 +139,7 @@ for (const app of Object.values(APPS)) {
     await background(s, false);
   });
 
-  test(`${app.name}: settings blocks background input and closes only through its close button`, async (t) => {
+  test(`${app.name}: settings blocks background input and closes only through its close button`, { timeout: 30000 }, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
@@ -176,7 +176,7 @@ for (const app of Object.values(APPS)) {
       "closing settings must restore native input to the browser document");
   });
 
-  test(`${app.name}: add and split menus are transparent and have no backdrop`, async (t) => {
+  test(`${app.name}: add and split menus are transparent and have no backdrop`, { timeout: 30000 }, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
@@ -197,7 +197,7 @@ for (const app of Object.values(APPS)) {
     }
   });
 
-  test(`${app.name}: moving settings and resizing the parent preserves its native coverage`, async (t) => {
+  test(`${app.name}: moving settings and resizing the parent preserves its native coverage`, { timeout: 30000 }, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);

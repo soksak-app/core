@@ -419,9 +419,18 @@ pub(crate) fn hide(window: &Window, id: String) -> Result<(), String> {
     // `set_focus` here would re-enter the main WebView while the current Tauri invoke
     // still owns its WebKit dispatch lock, so the focus callback can deadlock the event
     // loop. Return from the hide command first, then restore focus in the next AppKit turn.
+    // A replacement modal may have opened before that turn. In that case the old
+    // restoration must not steal focus from the replacement child WebView.
     let host = window.clone();
     platform::current()?
         .enqueue_ui(Box::new(move || {
+            let has_modal = window_data(&host)
+                .ok()
+                .and_then(|context| context.overlay.open_state())
+                .is_some();
+            if has_modal {
+                return;
+            }
             if let Some(main) = root_view(&host) {
                 if let Err(error) = main.set_focus() {
                     eprintln!("modal focus restoration failed: {error}");
