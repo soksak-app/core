@@ -892,3 +892,13 @@ fn csi_insert_delete_characters_and_lines_preserve_requested_cells() {
     assert_eq!(after_line_delete.lines[1][0].ch.as_deref(), Some("B"));
     assert_eq!(after_line_delete.lines[2][0].ch.as_deref(), Some("C"));
 }
+
+#[test]
+fn csi_tabulation_forward_and_backward_use_tab_stops() {
+    let mut engine = AlacrittyEngine::new();
+    engine.resize(20, 2);
+    engine.feed(b"\x1b[1I");
+    assert_eq!(engine.cursor().col, 8, "CSI I must move to the next tab stop");
+    engine.feed(b"\x1b[1Z");
+    assert_eq!(engine.cursor().col, 0, "CSI Z must move to the previous tab stop");
+}

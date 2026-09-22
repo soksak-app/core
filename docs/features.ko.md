@@ -168,6 +168,7 @@
   - [o] BEL/ST, 응답 순서, 효과/조회를 검사한다. 기존 Alacritty 엔진의 단일 parser를 그대로 사용하며 `bel_and_st_terminated_effects_and_queries_preserve_response_order` bounded case가 OSC BEL·ST 종료, indexed color 효과·조회, CSI cursor-position 조회, 입력 순서에 따른 응답 순서를 함께 검증한다. 집중 검사는 통과했고 unsupported·policy-denied 항목은 효과가 아닌 명시적 결과로 남긴다.
   - [o] F7.5 — CSI `J/K` 지우기 동작을 관측 가능한 grid 변화로 검증한다. Red: 최소 `J/K` 지우기 계약을 연결한 이름 있는 증거가 없어 parser 수용을 동작으로 오인할 수 있었다. Green: `csi_erase_display_and_line_change_only_the_requested_cells`가 `CSI Ps J`와 `CSI Ps K`가 요청된 표시/행 범위만 지우는지 검증하며, 집중 검사 1/1 통과와 inventory의 두 선택자 연결을 기록한다.
   - [o] F7.6 — CSI 문자·행 삽입/삭제 동작을 검증한다. Red: `@/P`와 `L/M`을 연결한 이름 있는 증거가 없어 parser 수용을 편집 동작으로 오인할 수 있었다. Green: `csi_insert_delete_characters_and_lines_preserve_requested_cells`가 문자 공백/삭제와 행 삽입/삭제가 주변 셀을 변경하지 않는지 검증하며, 집중 검사 1/1 통과와 네 선택자 inventory 연결을 기록한다.
+  - [o] F7.7 — CSI 앞/뒤 탭 이동을 검증한다. Red: `I/Z`를 연결한 이름 있는 증거가 없어 parser 수용을 탭 이동 동작으로 오인할 수 있었다. Green: `csi_tabulation_forward_and_backward_use_tab_stops`가 다음·이전 탭 정류점으로 이동하는지 검증하며, 집중 검사 1/1 통과와 두 선택자 inventory 연결을 기록한다.
   - [ ] 전체 지원 선언 전에 물리적 X11/Tektronix 요구를 명시적으로 해소한다. 플랫폼 항목을 암묵적으로 제외하거나 승인 없이 다른 디스플레이 시스템 구현으로 확대하지 않는다.
 - [ ] F8 — 실제 macOS 한글 IME: 조합·편집·취소·범위·후보 위치, 확정 입력 순서/정확히 한 번 전달, 미확정 문자는 PTY로 전달하지 않음. 양쪽 호스트에서 검증한다.
 - [ ] F9 — 복원의 연결·문서·래스터·최초 표시 단계 측정. 실제 표시까지 loading, 실패 시 사라지지 않는 조치 가능한 오류, 같은 fixture에서 복원 속도 개선 측정.
