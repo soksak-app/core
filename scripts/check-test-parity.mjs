@@ -369,6 +369,20 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F0.5.9-5",
+    implementation: [{ file: "packages/host/wailsv3/src/windows.go", symbol: "reloadSurfaceDocuments" }],
+    tests: [
+      { file: "e2e/terminal.test.mjs", id: "newly split terminal presents its first native raster" },
+      { file: "e2e/terminal.test.mjs", id: "four split terminals complete native presentation without a host crash" },
+      { file: "e2e/terminal.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
+      { file: "e2e/terminal.test.mjs", id: "native presentation failure is explicit and the next split remains usable" },
+      { file: "e2e/terminal.test.mjs", id: "three terminals and two browsers share one app DOM and one terminal service" },
+      { file: "e2e/terminal.test.mjs", id: "closing terminal tabs reaps every PTY child without killing the shared service" },
+    ],
+    expected: "Wails main-document reload cleanup finishes before replacement surface images attach; the sequential split and cleanup cases pass without a raster presentation timeout.",
+    levels: ["native", "application"],
+  },
+  {
     id: "F4",
     implementation: [
       { file: "native/darwin/src/window_facts.m", symbol: "focused" },
@@ -726,6 +740,25 @@ const FEATURE_LINKS = [
     tests: [{ file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" }],
     expected: "A declared command.run host.quit request returns null and removes the application PID and endpoint within the bounded case limit.",
     levels: ["application"],
+  },
+  {
+    id: "G2",
+    implementation: [
+      { file: "scripts/check-e2e-host-parity.mjs", symbol: "auditE2EHostParity" },
+      { file: "packages/plugin-api/binder.js", symbol: "parentNode" },
+      { file: "packages/plugin-api/surface-composition.js", symbol: "detachAll" },
+      { file: "apps/tauriv2/runtime/index.js", symbol: "waitPresented" },
+      { file: "apps/wailsv3/runtime/index.js", symbol: "waitPresented" },
+    ],
+    tests: [
+      { file: "scripts/test/e2e-host-parity.test.mjs", id: "every application E2E suite runs the same scenario through both adapters" },
+      { file: "packages/plugin-api/test/binder.test.mjs", id: "audit recognizes delegated controls inside a shadow root" },
+      { file: "packages/plugin-api/test/surface-composition.test.mjs", id: "disposal waits for an in-flight placement before detaching regions" },
+      { file: "apps/tauriv2/test/runtime-contract.test.mjs", id: "Tauri page regions expose operations but only composition places geometry" },
+      { file: "apps/wailsv3/test/runtime-contract.test.mjs", id: "Wails page regions expose operations but only composition places geometry" },
+    ],
+    expected: "The completed adapter-parity parent contract is mechanically represented by its child implementation and scenario links; no child evidence is omitted from the audit.",
+    levels: ["unit", "application"],
   },
   {
     id: "G2.4",

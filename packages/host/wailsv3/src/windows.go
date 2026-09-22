@@ -248,9 +248,10 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 		// 이전 페이지에 보낸 요청은 답을 받지 못한다.
 		h.relay.abandon(s, map[string]bool{"": true})
 		go h.windowsChanged()
-		if err := system.EnqueueUI(s.reloadSurfaceDocuments); err != nil {
-			log.Printf("surface reload: %v", err)
-		}
+		// Finish the old surface cleanup before the replacement document can attach
+		// its images. Queueing this after the framework callback lets the new page
+		// publish a composition while the old generation is still being removed.
+		application.InvokeSync(s.reloadSurfaceDocuments)
 		s.discardOverlay()
 	})
 	win.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
