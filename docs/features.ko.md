@@ -175,7 +175,7 @@
   - [o] F7.10 — CSI repeat `b`를 검증한다. Red: 마지막 출력 문자를 반복하는 동작을 연결한 이름 있는 증거가 CSI inventory에 없었다. Green: `csi_repeat_repeats_the_last_printed_character`가 `CSI Ps b`가 다음 셀에 요청한 반복을 출력하는지 검증하며, 집중 검사 1/1 통과를 기록한다.
   - [o] F7.11 — CSI application cursor·mouse report·bracketed paste private mode 설정/초기화를 검증한다. Red: `?1`, `?1000`, `?1002`, `?1003`, `?1006`, `?2004`의 상태 근거가 inventory에 없었다. Green: `csi_private_modes_export_keyboard_paste_and_mouse_state`가 각 지원 모드의 설정 상태와 초기화 상태를 관측하며, 집중 검사 1/1 통과를 기록한다.
   - [o] F7.12 — VT application keypad 제어를 검증한다. Red: CSI `?66h/l`이라는 가정은 지원하지 않는 입력을 동작하는 키패드 계약으로 잘못 분류할 수 있다. Green: `csi_application_keypad_mode_uses_the_private_equals_prefix`가 엔진의 실제 `ESC =`와 `ESC >` 설정/초기화 전환을 검증하고 selector inventory에 경계를 명시하며, 집중 Rust 검사가 1/1 통과한다.
-- [ ] F8 — 실제 macOS 한글 IME: 조합·편집·취소·범위·후보 위치, 확정 입력 순서/정확히 한 번 전달, 미확정 문자는 PTY로 전달하지 않음. 양쪽 호스트에서 검증한다.
+- [~] F8 — 실제 macOS 한글 IME: 조합·편집·취소·범위·후보 위치, 확정 입력 순서/정확히 한 번 전달, 미확정 문자는 PTY로 전달하지 않음. 양쪽 호스트에서 검증한다. Red 감사: 현재 native 검사는 NSTextInputClient 메서드를 합성 호출하며 실제 한글 입력 소스를 활성화하지 않는다고 명시하고 있다. 제한 시간이 있는 macOS 탐침에서 `com.apple.inputmethod.Korean.2SetKorean`을 선택하고 `gksrmf` AppKit 키 이벤트를 보냈을 때, 표준 NSTextField는 `한글`을 만들었지만 현재 SPImageRegion은 자모를 일반 insert로 내보내고 커밋 순서도 잘못됐다. 제품 수정이나 실제 IME 검사 커밋은 아직 없으며, 양쪽 호스트를 통한 후보 위치도 검증하지 않았다.
 - [ ] F9 — 복원의 연결·문서·래스터·최초 표시 단계 측정. 실제 표시까지 loading, 실패 시 사라지지 않는 조치 가능한 오류, 같은 fixture에서 복원 속도 개선 측정.
 - [o] F10 — UI를 재창조하지 않고 양쪽 호스트의 기존 네이티브 모달 계약 복구. F10.1–F10.4가 재빌드 Tauri·Wails 자식 WebView 수명주기, 투명 분할 메뉴, 반투명 설정 스크림, 포커스·닫기, 오래된 응답 순서, 리로드 정리, 이동·리사이즈와 명시적 geometry 검증 대기 상태를 모두 다룬다.
   - [o] F10.1 — 현재 macOS Tauri 빌드가 7개 모달 케이스를 모두 통과했다. 투명 picker 메뉴, 반투명 설정 스크림, 네이티브 포커스, 오래된 응답 순서, 재로드 정리, 부모 리사이즈, 모달 영역을 포함하며 네이티브 picker의 Escape 포커스는 자식 WebView에 유지된다.
