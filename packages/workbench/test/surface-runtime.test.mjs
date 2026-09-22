@@ -51,6 +51,14 @@ test("surface sidecar access rejects an ambiguous declaration instead of selecti
   assert.throws(() => runtime.sidecar(), /exactly one declared sidecar/);
 });
 
+test("surface clipboard preserves typed payloads instead of adding surface fields", async () => {
+  const { surfaceContextRuntime } = await import("../host.js");
+  calls.length = 0;
+  const runtime = surfaceContextRuntime({ surfaceId: "clipboard-surface" });
+  await runtime.clipboard.writeText("copied");
+  assert.deepEqual(calls, [["clipboardWriteText", "copied"]]);
+});
+
 test("surface exposure replies retain the logical surface scope", async () => {
   const dom = new JSDOM("<body></body>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;

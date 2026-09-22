@@ -1,6 +1,6 @@
 # 변경 기록
 
-- F6.3 구현을 진행 중이다. 터미널 포인터 드래그에 명시적 `selection.start`, `selection.update`, `selection.end` 동작을 추가했고, Alacritty engine이 선택 셀을 렌더링하며 비어 있지 않은 선택 복사 payload를 한 번 반환한다. 터미널 모듈은 `userInitiated`가 확인된 선택 event만 기록한다. 잘못된 좌표와 복사 데이터 부재/공백은 명시적 오류다. 터미널 모듈 50/50, Alacritty 30/30, VT core 44/44, `pnpm test`, 구조 게이트, `make native-test`가 통과했다. 최신 endpoint가 없어 재빌드 호스트 드래그/픽셀/클립보드 증거는 남아 있다.
+- F6.3을 완료했다. 터미널 포인터 드래그에 명시적 `selection.start`, `selection.update`, `selection.end` 동작을 추가했고, Alacritty engine이 선택 셀을 렌더링하며 비어 있지 않은 선택 복사 payload를 한 번 반환한다. 터미널 모듈은 `userInitiated`가 확인된 선택 event만 기록한다. 워크벤치는 타입 있는 클립보드 capability를 표면 범위 객체로 바꾸지 않고 전달하며, 표면 테스트가 브리지 누락을 거부한다. 잘못된 좌표와 복사 데이터 부재/공백은 명시적 오류다. 터미널 모듈 50/50, Alacritty 30/30, VT core 44/44, `pnpm test`, 구조 게이트, `make native-test`가 통과했다. 재빌드 Tauri 선택 드래그·래스터·클립보드 E2E는 1/1(0.99초), Wails는 1/1(0.63초)로 통과했다.
 
 - `encode_paste` 소스 계약 주석을 실제 구현과 일치시켰다. UTF-8 바이트와 개행은 보존하고, 입력 안의 bracketed-paste 종료 시퀀스는 삭제하지 않고 거부한다고 명시한다. 대응하는 F6.1-1 체크리스트 항목은 VT core 집중 검사와 문서 검사로 검증했다.
 

@@ -712,6 +712,9 @@ for (const app of Object.values(APPS)) {
     const [terminal] = await ensureTerminals(s, 1);
     const surface = terminal.surface;
     s.cleanup(() => closeTerminalTabs(s));
+    await s.until("core.surfaces", (surfaces) => surfaces.some((item) =>
+      item.surface === surface && item.exposes.includes("status terminal.session")),
+    "terminal selection status did not register");
     await s.until("terminal.session", (state) => Boolean(state?.sessionId),
       "terminal selection session did not open", { surface });
 

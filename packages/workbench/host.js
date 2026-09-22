@@ -193,7 +193,9 @@ export function surfaceContextRuntime(surface, declarations = {}) {
         dom: [...core.dom, ...(declarations.dom ?? [])],
       };
     }),
-    clipboard: createClipboardBridge((name, payload) => invoke(name, payload), { allowPersist: true }),
+    // Clipboard bridge payloads already follow the typed host contract. In particular,
+    // writeText carries a string rather than a surface-scoped object.
+    clipboard: createClipboardBridge((name, payload) => bridge.call(name, payload), { allowPersist: true }),
   };
 }
 

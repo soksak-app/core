@@ -112,6 +112,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
       metadata: { home: surface.home },
       declarations: surface.declarations ?? {}, composition,
       runtime: { sidecar: scoped.sidecar, native: scoped.native, exposure: scoped.exposure, emit, on,
+        clipboard: scoped.clipboard,
         theme: scoped.theme,
         settings: { read: () => pluginSettings(surface.pluginId), on: (listener) =>
           onSettingsChange(() => listener(pluginSettings(surface.pluginId))) }, },

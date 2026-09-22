@@ -68,6 +68,7 @@ test("a mounted module registers and releases its declared exposure through the 
   registry.declare(pluginId, declarations);
   registry.configure({ surfacePlugin: (id) => id === surfaceId ? pluginId : null });
   const moduleUrl = `data:text/javascript,${encodeURIComponent(`export async function mount(root, context) {
+    if (!context.runtime.clipboard || typeof context.runtime.clipboard.writeText !== 'function') throw new Error('clipboard capability is missing');
     await context.exposure.command('${pluginId}.ping', () => null);
     return { dispose() { context.exposure.dispose(); } };
   }`)}`;
