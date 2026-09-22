@@ -15,7 +15,7 @@ test("a layout published before drawing waits for the host's placement answer", 
   slot.getBoundingClientRect = () => ({ left: 2, top: 30, width: 196, height: 100 });
   const { registerPlugin } = await import("../registry.js");
   registerPlugin({ id: "probe", surface: () => ({ module: "probe.js", composition: { kind: "dom" } }) });
-  const { onCommit, publishAhead } = await import("../compositor.js");
+  const { onCommit, placementPending, publishAhead } = await import("../compositor.js");
   let answer, prepared;
   onCommit((record) => new Promise((resolve) => {
     prepared = record;
@@ -25,6 +25,7 @@ test("a layout published before drawing waits for the host's placement answer", 
   const pending = publishAhead(new Map([["card", { x: 20, y: 0, w: 180, h: 150 }]]),
     new Map([["card", { id: "surface", dim: false }]]));
   assert.equal(typeof pending?.then, "function", "the caller needs the host's promise before it draws");
+  assert.equal(placementPending(), true, "the current DOM commit is waiting for the host placement answer");
   let drawn = false;
   pending.then(() => { drawn = true; });
   await Promise.resolve();
@@ -34,6 +35,7 @@ test("a layout published before drawing waits for the host's placement answer", 
   answer();
   assert.deepEqual(await pending, [{ id: "surface", x: 22, y: 30, w: 176, h: 100 }]);
   assert.equal(drawn, true);
+  assert.equal(placementPending(), false, "the host answer seats the current commit");
 
   const replacement = publishAhead(new Map([["card", { x: 20, y: 0, w: 180, h: 150 }]]),
     new Map([["card", { id: "replacement", dim: false }]]));

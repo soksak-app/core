@@ -1131,6 +1131,20 @@ const FEATURE_LINKS = [
     expected: "A replacement native modal retains child-WebView focus; both rebuilt hosts preserve transparent picker paint, the settings scrim and blur, input blocking, dismissal, focus return, stale ordering, reload, movement, and resize.",
     levels: ["native", "application"],
   },
+  {
+    id: "F10.4",
+    implementation: [
+      { file: "packages/host/wailsv3/src/modals.go", symbol: "OverlayShow" },
+      { file: "packages/workbench/compositor.js", symbol: "placementPending" },
+      { file: "packages/workbench/verify.js", symbol: "placementPending" },
+    ],
+    tests: [
+      { file: "e2e/modal.test.mjs", id: "moving settings and resizing the parent preserves its native coverage" },
+      { file: "packages/workbench/test/compositor.test.mjs", id: "a layout published before drawing waits for the host's placement answer" },
+    ],
+    expected: "The rebuilt Wails host completes the full modal lifecycle and the verifier explicitly defers V7/V10/R geometry decisions until the native placement answer is seated.",
+    levels: ["native", "application"],
+  },
 ];
 
 // 생성 산출물은 원본과의 일치 검사 대상이며 독립 구현으로 세지 않는다.

@@ -6,7 +6,7 @@
 // 화면을 보고 판단하지 않고 수치로 판정한다.
 import { Soksak } from "soksak";
 
-import { ahead, latest, seated } from "./compositor.js";
+import { ahead, latest, placementPending, seated } from "./compositor.js";
 import { currentGrid, dropBands, plane, railOutline, tabsOf } from "./plane.js";
 import { isPlace, railKind } from "./registry.js";
 import { cardRadius } from "./settings.js";
@@ -169,18 +169,22 @@ export function verify(controls = null) {
   };
 
   const record = latest();
+  const pendingPlacement = placementPending();
   if (!record) add("V7a element − declared == 0", true, "아직 커밋 없음");
+  else if (pendingPlacement) add("V7a element − declared == 0", true, "host placement pending");
   else {
     const { worst, dim, gone, missed } = compare(record.surfaces);
     add("V7a element − declared == 0", gone === 0 && missed === 0 && worst < 0.5 && dim === 0,
         `최대 ${worst.toFixed(2)}px · 커밋에 없는 표면 ${missed} · 사라진 표면 ${gone} · ` +
-        `흐림이 다른 표면 ${dim} · 0이 아니면 커밋이 뒤처진 것 (seq ${record.seq})`);
+        `흐림이 다른 표면 ${dim} · 0이 아니면 커밋이 뒤처진 것 (seq ${record.seq}, ` +
+        `seated ${seated()?.seq ?? "none"}, pending ${pendingPlacement})`);
   }
 
   // V7c — 그리기 전에 미리 게시한 자리가 그려진 자리와 같은가. 여백은 그려질
   // 사각형에 대해 재므로 오차가 남을 자리가 없다.
   const guess = ahead();
   if (!guess) add("V7c 미리 게시한 자리 == 그려진 자리", true, "이번 렌더는 미리 게시하지 않았다");
+  else if (pendingPlacement) add("V7c 미리 게시한 자리 == 그려진 자리", true, "host placement pending");
   else {
     const { worst, dim, gone, missed } = compare(guess.surfaces);
     add("V7c 미리 게시한 자리 == 그려진 자리",
@@ -241,7 +245,8 @@ export function verify(controls = null) {
     escape = Math.max(escape, box.x - s.applied.x, (s.applied.x + s.applied.w) - (box.x + box.w),
                               box.y - s.applied.y, (s.applied.y + s.applied.h) - (box.y + box.h));
   }
-  add("V10 표면이 카드를 안 뚫는다", escape <= 0, `최대 ${Math.max(0, escape).toFixed(2)}px`);
+  add("V10 표면이 카드를 안 뚫는다", pendingPlacement || escape <= 0,
+      pendingPlacement ? "host placement pending" : `최대 ${Math.max(0, escape).toFixed(2)}px`);
 
   // R — 선은 판의 끝에서 그 바깥의 테두리까지 이어진다. 그 거리는 stage 의 안쪽
   // 여백이고 뷰의 bleed 가 그 값이다. 더 나가면 선이 판 밖, 테두리 위에 그려진다.
@@ -264,8 +269,8 @@ export function verify(controls = null) {
     past = Math.max(past, host.left - r.left, r.right - host.right,
                           host.top - r.top, r.bottom - host.bottom);
   }
-  add("R 선은 판 밖으로 여백까지만 나간다", !laid || past <= pad + 0.01,
-      laid ? `최대 ${past.toFixed(2)}px · 여백 ${pad.toFixed(2)}px`
+  add("R 선은 판 밖으로 여백까지만 나간다", pendingPlacement || !laid || past <= pad + 0.01,
+      pendingPlacement ? "host placement pending" : laid ? `최대 ${past.toFixed(2)}px · 여백 ${pad.toFixed(2)}px`
            : "판이 아직 새 크기로 그려지지 않았다");
 
   // D — 드롭 구획의 머리와 발은 그려진 머리와 발이 끝나는 자리에서 끝나야 한다.

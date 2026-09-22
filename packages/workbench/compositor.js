@@ -89,6 +89,11 @@ let seatedRecord = null;
 /** 실제 위치까지 채워진 마지막 레코드. 없으면 null. */
 export const seated = () => seatedRecord;
 
+/** Whether the latest DOM commit is waiting for the host's native placement answer. */
+export const placementPending = () => Boolean(
+  latestRecord && (!seatedRecord || latestRecord.seq > seatedRecord.seq),
+);
+
 function surfaceEl(id) {
   let el = drawn.get(id);
   if (el) return el;
