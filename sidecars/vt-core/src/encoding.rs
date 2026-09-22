@@ -528,6 +528,7 @@ mod tests {
             bracketed_paste: false,
             mouse_report: false,
             alt_screen: false,
+            ..Default::default()
         };
         let modes_app = Modes {
             app_cursor: true,
@@ -535,6 +536,7 @@ mod tests {
             bracketed_paste: false,
             mouse_report: false,
             alt_screen: false,
+            ..Default::default()
         };
 
         // 일반 모드

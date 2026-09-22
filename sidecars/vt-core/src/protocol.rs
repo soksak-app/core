@@ -417,6 +417,14 @@ pub struct Modes {
     #[serde(default)]
     pub mouse_report: bool,
     #[serde(default)]
+    pub focus_in_out: bool,
+    #[serde(default)]
+    pub utf8_mouse: bool,
+    #[serde(default)]
+    pub sgr_mouse: bool,
+    #[serde(default)]
+    pub alternate_scroll: bool,
+    #[serde(default)]
     pub alt_screen: bool,
 }
 

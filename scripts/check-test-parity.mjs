@@ -897,6 +897,16 @@ const FEATURE_LINKS = [
     levels: ["unit", "native"],
   },
   {
+    id: "F7.15",
+    implementation: [
+      { file: "sidecars/vt-core/src/protocol.rs", symbol: "pub focus_in_out: bool" },
+      { file: "sidecars/vt-alacritty/src/engine.rs", symbol: "TermMode::FOCUS_IN_OUT" },
+    ],
+    tests: [{ file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "csi_private_modes_export_keyboard_paste_and_mouse_state" }],
+    expected: "The public terminal mode contract exposes and resets focus, UTF-8 mouse, SGR mouse, alternate-scroll, keyboard, mouse, and bracketed-paste states with mutually exclusive mouse encoding transitions.",
+    levels: ["unit", "native"],
+  },
+  {
     id: "F9",
     implementation: [{ file: "e2e/library.test.mjs", symbol: "restoration connection" }],
     tests: [{ file: "e2e/library.test.mjs", id: "library windows create and open projects in place" }],

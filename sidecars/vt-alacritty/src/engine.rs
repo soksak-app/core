@@ -161,7 +161,7 @@ pub const CSI_SELECTOR_INVENTORY: &[CsiSelectorEvidence] = &[
     CsiSelectorEvidence { selector: "I/Z", outcome: CsiOutcome::Implemented, test: "csi_tabulation_forward_and_backward_use_tab_stops" },
     CsiSelectorEvidence { selector: "6n/c", outcome: CsiOutcome::Implemented, test: "bel_and_st_terminated_effects_and_queries_preserve_response_order" },
     CsiSelectorEvidence { selector: "b", outcome: CsiOutcome::Implemented, test: "csi_repeat_repeats_the_last_printed_character" },
-    CsiSelectorEvidence { selector: "?1,?1000,?1002,?1003,?1006,?2004 h/l", outcome: CsiOutcome::Implemented, test: "csi_private_modes_export_keyboard_paste_and_mouse_state" },
+    CsiSelectorEvidence { selector: "?1,?1000,?1002,?1003,?1004,?1005,?1006,?1007,?2004 h/l", outcome: CsiOutcome::Implemented, test: "csi_private_modes_export_keyboard_paste_and_mouse_state" },
     CsiSelectorEvidence { selector: "ESC =/>", outcome: CsiOutcome::Implemented, test: "csi_application_keypad_mode_uses_the_private_equals_prefix" },
     CsiSelectorEvidence { selector: "14t", outcome: CsiOutcome::Implemented, test: "text_area_callback_is_not_discarded" },
     CsiSelectorEvidence { selector: "other t", outcome: CsiOutcome::Unsupported, test: "unsupported_csi_window_report_is_an_explicit_error" },
@@ -845,6 +845,10 @@ impl Engine for AlacrittyEngine {
             bracketed_paste: mode.contains(TermMode::BRACKETED_PASTE),
             mouse_report: mode.contains(TermMode::MOUSE_REPORT_CLICK)
                 || mode.contains(TermMode::MOUSE_MOTION),
+            focus_in_out: mode.contains(TermMode::FOCUS_IN_OUT),
+            utf8_mouse: mode.contains(TermMode::UTF8_MOUSE),
+            sgr_mouse: mode.contains(TermMode::SGR_MOUSE),
+            alternate_scroll: mode.contains(TermMode::ALTERNATE_SCROLL),
             alt_screen: mode.contains(TermMode::ALT_SCREEN),
         }
     }

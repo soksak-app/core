@@ -996,11 +996,27 @@ fn csi_private_modes_export_keyboard_paste_and_mouse_state() {
     assert!(enabled.mouse_report);
     assert!(enabled.bracketed_paste);
 
-    engine.feed(b"\x1b[?1l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?2004l");
+    engine.feed(b"\x1b[?1004h\x1b[?1007h");
+    let extended = engine.modes();
+    assert!(extended.focus_in_out);
+    assert!(extended.alternate_scroll);
+
+    engine.feed(b"\x1b[?1005h");
+    assert!(engine.modes().utf8_mouse);
+    assert!(!engine.modes().sgr_mouse);
+    engine.feed(b"\x1b[?1006h");
+    assert!(engine.modes().sgr_mouse);
+    assert!(!engine.modes().utf8_mouse);
+
+    engine.feed(b"\x1b[?1l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1004l\x1b[?1005l\x1b[?1006l\x1b[?1007l\x1b[?2004l");
     let disabled = engine.modes();
     assert!(!disabled.app_cursor);
     assert!(!disabled.mouse_report);
     assert!(!disabled.bracketed_paste);
+    assert!(!disabled.focus_in_out);
+    assert!(!disabled.utf8_mouse);
+    assert!(!disabled.sgr_mouse);
+    assert!(!disabled.alternate_scroll);
 }
 
 #[test]
