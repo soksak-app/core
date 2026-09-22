@@ -7,6 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::sync::mpsc;
+use tokio::time::{Duration, Instant, MissedTickBehavior};
 
 #[derive(Clone)]
 struct OutputSink {
@@ -246,6 +247,56 @@ impl Default for CursorShape {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CursorBlinkPolicy {
+    Never,
+    Off,
+    On,
+    Always,
+}
+
+impl Default for CursorBlinkPolicy {
+    fn default() -> Self {
+        Self::Off
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum UnfocusedCursor {
+    Hollow,
+    Solid,
+    Underline,
+    Beam,
+    Unchanged,
+}
+
+impl Default for UnfocusedCursor {
+    fn default() -> Self {
+        Self::Hollow
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CursorPolicy {
+    pub shape: CursorShape,
+    pub blink: CursorBlinkPolicy,
+    pub interval_ms: u64,
+    pub idle_timeout_ms: u64,
+    pub unfocused: UnfocusedCursor,
+}
+
+impl Default for CursorPolicy {
+    fn default() -> Self {
+        Self {
+            shape: CursorShape::Block,
+            blink: CursorBlinkPolicy::Off,
+            interval_ms: 750,
+            idle_timeout_ms: 5000,
+            unfocused: UnfocusedCursor::Hollow,
+        }
+    }
+}
+
 /// 셀 하나의 속성
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Cell {
@@ -291,6 +342,8 @@ pub struct Cursor {
     pub visible: bool,
     #[serde(default)]
     pub blinking: bool,
+    #[serde(rename = "blinkVisible", default = "default_blink_visible")]
+    pub blink_visible: bool,
     #[serde(default)]
     pub focused: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -298,6 +351,10 @@ pub struct Cursor {
 }
 
 fn default_visible() -> bool {
+    true
+}
+
+fn default_blink_visible() -> bool {
     true
 }
 
@@ -424,6 +481,9 @@ enum SurfaceCommand {
     Theme {
         theme: crate::palette::TerminalTheme,
     },
+    Cursor {
+        policy: CursorPolicy,
+    },
     Command {
         selector: String,
     },
@@ -463,10 +523,91 @@ struct InputKey {
     ctrl: bool,
 }
 
-fn decorate_screen(mut screen: Screen, focused: bool, preedit: &Option<Preedit>) -> Screen {
+fn decorate_screen(
+    mut screen: Screen,
+    focused: bool,
+    preedit: &Option<Preedit>,
+    policy: &CursorPolicy,
+    elapsed_ms: u64,
+) -> Screen {
+    let program_shape = screen.cursor.shape;
+    if program_shape == CursorShape::Block {
+        screen.cursor.shape = policy.shape;
+    }
     screen.cursor.focused = focused;
+    screen.cursor.blink_visible = crate::platform::darwin::frame::cursor_blink_visible(
+        policy.blink,
+        screen.cursor.blinking,
+        focused,
+        elapsed_ms,
+        policy.interval_ms,
+        policy.idle_timeout_ms,
+    );
+    if !focused {
+        screen.cursor.shape = crate::platform::darwin::frame::effective_cursor_shape(
+            screen.cursor.shape,
+            false,
+            policy.unfocused,
+        );
+    }
     screen.cursor.preedit = preedit.clone();
     screen
+}
+
+fn parse_cursor_policy(body: &Value) -> Result<CursorPolicy, String> {
+    let defaults = CursorPolicy::default();
+    let shape = match body.get("shape").and_then(Value::as_str) {
+        None => defaults.shape,
+        Some("block") => CursorShape::Block,
+        Some("underline") => CursorShape::Underline,
+        Some("beam") => CursorShape::Beam,
+        Some(value) => {
+            return Err(format!(
+                "cursor.shape must be block, underline, or beam: {value}"
+            ))
+        }
+    };
+    let blink = match body.get("blink").and_then(Value::as_str) {
+        None => defaults.blink,
+        Some("Never") => CursorBlinkPolicy::Never,
+        Some("Off") => CursorBlinkPolicy::Off,
+        Some("On") => CursorBlinkPolicy::On,
+        Some("Always") => CursorBlinkPolicy::Always,
+        Some(value) => {
+            return Err(format!(
+                "cursor.blink must be Never, Off, On, or Always: {value}"
+            ))
+        }
+    };
+    let interval_ms = match body.get("interval") {
+        None => defaults.interval_ms,
+        Some(value) => value
+            .as_u64()
+            .filter(|value| *value > 0)
+            .ok_or_else(|| "cursor.interval must be a positive integer".to_string())?,
+    };
+    let idle_timeout_ms = match body.get("idleTimeout") {
+        None => defaults.idle_timeout_ms,
+        Some(value) => value
+            .as_u64()
+            .ok_or_else(|| "cursor.idleTimeout must be a nonnegative integer".to_string())?,
+    };
+    let unfocused = match body.get("unfocused").and_then(Value::as_str) {
+        None => defaults.unfocused,
+        Some("hollow") => UnfocusedCursor::Hollow,
+        Some("solid") => UnfocusedCursor::Solid,
+        Some("underline") => UnfocusedCursor::Underline,
+        Some("beam") => UnfocusedCursor::Beam,
+        Some("unchanged") => UnfocusedCursor::Unchanged,
+        Some(value) => return Err(format!("cursor.unfocused is invalid: {value}")),
+    };
+    Ok(CursorPolicy {
+        shape,
+        blink,
+        interval_ms,
+        idle_timeout_ms,
+        unfocused,
+    })
 }
 
 fn pixels_to_cells(pixels: u32, cell_size: f32) -> u16 {
@@ -899,9 +1040,40 @@ async fn surface_task(
     let mut focused = false;
     let mut preedit: Option<Preedit> = None;
     let mut current_theme = crate::palette::TerminalTheme::dark();
+    let mut cursor_policy = CursorPolicy::default();
+    let mut cursor_activity = Instant::now();
+    let mut cursor_tick = tokio::time::interval(Duration::from_millis(50));
+    cursor_tick.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    let mut last_cursor_frame: Option<(CursorShape, bool, bool, bool)> = None;
 
     loop {
         tokio::select! {
+            _ = cursor_tick.tick(), if image_state.is_some() && !headless => {
+                let screen = decorate_screen(
+                    engine.screen(),
+                    focused,
+                    &preedit,
+                    &cursor_policy,
+                    cursor_activity.elapsed().as_millis() as u64,
+                );
+                let signature = (
+                    screen.cursor.shape,
+                    screen.cursor.blink_visible,
+                    screen.cursor.focused,
+                    screen.cursor.visible,
+                );
+                if last_cursor_frame != Some(signature) {
+                    if let Some(state) = image_state.as_mut() {
+                        if state.pending_draw {
+                            state.dirty = true;
+                        } else if !present_screen(&surface_id, &screen, state, &output_tx).await {
+                            return;
+                        } else {
+                            last_cursor_frame = Some(signature);
+                        }
+                    }
+                }
+            }
             Some(cmd) = cmd_rx.recv() => {
                 match cmd {
                     SurfaceCommand::Open { image } => {
@@ -982,7 +1154,7 @@ async fn surface_task(
                             } else if !send_state(&surface_id, sid, cols, rows, image_state.as_ref().unwrap(), &output_tx).await {
                                 return;
                             }
-                            let screen = decorate_screen(engine.screen(), focused, &preedit);
+                            let screen = decorate_screen(engine.screen(), focused, &preedit, &cursor_policy, cursor_activity.elapsed().as_millis() as u64);
                             if !present_screen(&surface_id, &screen, image_state.as_mut().unwrap(), &output_tx).await {
                                 return;
                             }
@@ -992,6 +1164,8 @@ async fn surface_task(
                         }
                     }
                     SurfaceCommand::Input { bytes } => {
+                        cursor_activity = Instant::now();
+                        last_cursor_frame = None;
                         if let Some(ref sid) = session_id {
                             match session_port.write(sid, &bytes).await {
                                 Ok(()) => {
@@ -1024,6 +1198,8 @@ async fn surface_task(
                         }
                     }
                     SurfaceCommand::Paste { text } => {
+                        cursor_activity = Instant::now();
+                        last_cursor_frame = None;
                         if let Some(ref sid) = session_id {
                             let bytes = encoding::encode_paste(&text, &engine.modes());
                             match session_port.write(sid, &bytes).await {
@@ -1057,6 +1233,8 @@ async fn surface_task(
                         }
                     }
                     SurfaceCommand::InputKeys { keys } => {
+                        cursor_activity = Instant::now();
+                        last_cursor_frame = None;
                         if let Some(ref sid) = session_id {
                             let modes = engine.modes();
                             match encode_keys(&keys, &modes) {
@@ -1118,8 +1296,10 @@ async fn surface_task(
                         if output_tx.send(response.to_string()).await.is_err() { return; }
                     }
                     SurfaceCommand::Focus { focused: next } => {
+                        cursor_activity = Instant::now();
+                        last_cursor_frame = None;
                         focused = next;
-                        let screen = decorate_screen(engine.screen(), focused, &preedit);
+                        let screen = decorate_screen(engine.screen(), focused, &preedit, &cursor_policy, cursor_activity.elapsed().as_millis() as u64);
                         if let Some(ref mut state) = image_state {
                             if !present_screen(&surface_id, &screen, state, &output_tx).await { return; }
                         }
@@ -1134,12 +1314,61 @@ async fn surface_task(
                             if state.pending_draw {
                                 state.dirty = true;
                             } else {
-                                let screen = decorate_screen(engine.screen(), focused, &preedit);
+                                let screen = decorate_screen(engine.screen(), focused, &preedit, &cursor_policy, cursor_activity.elapsed().as_millis() as u64);
                                 if !present_screen(&surface_id, &screen, state, &output_tx).await { return; }
                             }
                         }
                         let mode = if theme == crate::palette::TerminalTheme::light() { "light" } else { "dark" };
                         let response = json!({"surface": surface_id, "body": {"ack": true, "event": "theme", "mode": mode}});
+                        if output_tx.send(response.to_string()).await.is_err() { return; }
+                    }
+                    SurfaceCommand::Cursor { policy } => {
+                        cursor_policy = policy;
+                        cursor_activity = Instant::now();
+                        last_cursor_frame = None;
+                        let screen = decorate_screen(
+                            engine.screen(),
+                            focused,
+                            &preedit,
+                            &cursor_policy,
+                            0,
+                        );
+                        if let Some(state) = image_state.as_mut() {
+                            if state.pending_draw {
+                                state.dirty = true;
+                            } else if !present_screen(&surface_id, &screen, state, &output_tx).await {
+                                return;
+                            }
+                        }
+                        let response = json!({
+                            "surface": surface_id,
+                            "body": {
+                                "ack": true,
+                                "event": "cursor",
+                                "shape": match policy.shape {
+                                    CursorShape::Block => "block",
+                                    CursorShape::Underline => "underline",
+                                    CursorShape::Beam => "beam",
+                                    CursorShape::HollowBlock => "block",
+                                    CursorShape::Hidden => "block",
+                                },
+                                "blink": match policy.blink {
+                                    CursorBlinkPolicy::Never => "Never",
+                                    CursorBlinkPolicy::Off => "Off",
+                                    CursorBlinkPolicy::On => "On",
+                                    CursorBlinkPolicy::Always => "Always",
+                                },
+                                "interval": policy.interval_ms,
+                                "idleTimeout": policy.idle_timeout_ms,
+                                "unfocused": match policy.unfocused {
+                                    UnfocusedCursor::Hollow => "hollow",
+                                    UnfocusedCursor::Solid => "solid",
+                                    UnfocusedCursor::Underline => "underline",
+                                    UnfocusedCursor::Beam => "beam",
+                                    UnfocusedCursor::Unchanged => "unchanged",
+                                },
+                            }
+                        });
                         if output_tx.send(response.to_string()).await.is_err() { return; }
                     }
                     SurfaceCommand::Command { selector } => {
@@ -1155,7 +1384,7 @@ async fn surface_task(
                         }
                     }
                     SurfaceCommand::ScreenRead => {
-                        let screen = decorate_screen(engine.screen(), focused, &preedit);
+                        let screen = decorate_screen(engine.screen(), focused, &preedit, &cursor_policy, cursor_activity.elapsed().as_millis() as u64);
                         let response = json!({
                             "surface": surface_id,
                             "body": {
@@ -1259,13 +1488,13 @@ async fn surface_task(
                                     } else if !send_state(&surface_id, sid, cols, rows, image_state.as_ref().unwrap(), &output_tx).await {
                                         return;
                                     }
-                                    let screen = decorate_screen(engine.screen(), focused, &preedit);
+                                    let screen = decorate_screen(engine.screen(), focused, &preedit, &cursor_policy, cursor_activity.elapsed().as_millis() as u64);
                                     if !present_screen(&surface_id, &screen, image_state.as_mut().unwrap(), &output_tx).await {
                                         return;
                                     }
                                 }
                             } else if image_state.as_ref().unwrap().dirty {
-                                let screen = decorate_screen(engine.screen(), focused, &preedit);
+                                let screen = decorate_screen(engine.screen(), focused, &preedit, &cursor_policy, cursor_activity.elapsed().as_millis() as u64);
                                 if !present_screen(&surface_id, &screen, image_state.as_mut().unwrap(), &output_tx).await {
                                     return;
                                 }
@@ -1279,12 +1508,14 @@ async fn surface_task(
                     DaemonEvent::Output { session_id: ref recv_sid, data, sequence: _, truncated } => {
                         if let Some(ref sid) = session_id {
                             if recv_sid == sid {
+                                cursor_activity = Instant::now();
+                                last_cursor_frame = None;
                                 if truncated {
                                     engine.reset();
                                 }
                                 engine.feed(&data);
                                 if !send_engine_events(&surface_id, session_id.as_deref(), &mut engine, &session_port, &output_tx, !headless).await { return; }
-                                let screen = decorate_screen(engine.screen(), focused, &preedit);
+                                let screen = decorate_screen(engine.screen(), focused, &preedit, &cursor_policy, cursor_activity.elapsed().as_millis() as u64);
 
                                 if !headless { if let Some(ref mut img_state) = image_state {
                                         // 그림이 호스트에 있으면 돌려받을 때까지 그리지 않고 변경 사실만 남긴다.
@@ -1863,6 +2094,22 @@ where
                                     }
                                 }
                             }
+                            "cursor" => match parse_cursor_policy(&body) {
+                                Ok(policy) => {
+                                    if tx.send(SurfaceCommand::Cursor { policy }).await.is_err() {
+                                        break;
+                                    }
+                                }
+                                Err(reason) => {
+                                    let response = json!({
+                                        "surface": surface_id,
+                                        "body": {"error": "invalidParams", "reason": reason}
+                                    });
+                                    if output_tx.send(response.to_string()).await.is_err() {
+                                        break;
+                                    }
+                                }
+                            },
                             "paste" => match body.get("text").and_then(Value::as_str) {
                                 Some(text) => {
                                     if tx
@@ -2085,6 +2332,7 @@ impl Engine for FakeEngine {
             shape: CursorShape::Block,
             visible: true,
             blinking: false,
+            blink_visible: true,
             focused: false,
             preedit: None,
         }
@@ -2129,6 +2377,7 @@ impl Engine for FakeEngine {
                 shape: CursorShape::Block,
                 visible: true,
                 blinking: false,
+                blink_visible: true,
                 focused: false,
                 preedit: None,
             },

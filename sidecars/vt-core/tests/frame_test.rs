@@ -1,4 +1,7 @@
-use soksak_sidecar_vt_core::platform::darwin::frame::{metrics, CursorRender, Frame};
+use soksak_sidecar_vt_core::platform::darwin::frame::{
+    cursor_blink_visible, effective_cursor_shape, metrics, CursorBlinkPolicy, CursorRender, Frame,
+    UnfocusedCursor,
+};
 use soksak_sidecar_vt_core::protocol::{Cell, Cursor, CursorShape, JsonRange, Preedit, Screen};
 use soksak_sidecar_vt_core::TerminalTheme;
 
@@ -12,6 +15,7 @@ fn screen(cols: u16, rows: u16) -> Screen {
             shape: CursorShape::Block,
             visible: true,
             blinking: false,
+            blink_visible: true,
             focused: false,
             preedit: None,
         },
@@ -198,6 +202,160 @@ fn cursor_metrics_are_stable_across_style_changes() {
 }
 
 #[test]
+fn unfocused_cursor_policy_selects_the_requested_shape_without_changing_program_shape() {
+    assert_eq!(
+        effective_cursor_shape(CursorShape::Block, false, UnfocusedCursor::Hollow),
+        CursorShape::HollowBlock
+    );
+    assert_eq!(
+        effective_cursor_shape(CursorShape::Block, false, UnfocusedCursor::Solid),
+        CursorShape::Block
+    );
+    assert_eq!(
+        effective_cursor_shape(CursorShape::Block, false, UnfocusedCursor::Underline),
+        CursorShape::Underline
+    );
+    assert_eq!(
+        effective_cursor_shape(CursorShape::Block, false, UnfocusedCursor::Beam),
+        CursorShape::Beam
+    );
+    assert_eq!(
+        effective_cursor_shape(CursorShape::Underline, false, UnfocusedCursor::Unchanged),
+        CursorShape::Underline
+    );
+    assert_eq!(
+        effective_cursor_shape(CursorShape::Beam, true, UnfocusedCursor::Hollow),
+        CursorShape::Beam
+    );
+}
+
+#[test]
+fn cursor_blink_policy_observes_program_visibility_and_idle_timeout() {
+    assert!(cursor_blink_visible(
+        CursorBlinkPolicy::Never,
+        true,
+        true,
+        751,
+        750,
+        0
+    ));
+    assert!(cursor_blink_visible(
+        CursorBlinkPolicy::Off,
+        false,
+        true,
+        751,
+        750,
+        0
+    ));
+    assert!(cursor_blink_visible(
+        CursorBlinkPolicy::Off,
+        true,
+        true,
+        0,
+        750,
+        0
+    ));
+    assert!(!cursor_blink_visible(
+        CursorBlinkPolicy::Off,
+        true,
+        true,
+        750,
+        750,
+        0
+    ));
+    assert!(!cursor_blink_visible(
+        CursorBlinkPolicy::On,
+        false,
+        true,
+        750,
+        750,
+        0
+    ));
+    assert!(cursor_blink_visible(
+        CursorBlinkPolicy::Always,
+        false,
+        true,
+        0,
+        750,
+        5000
+    ));
+    assert!(cursor_blink_visible(
+        CursorBlinkPolicy::Always,
+        false,
+        true,
+        5000,
+        750,
+        5000
+    ));
+    assert!(cursor_blink_visible(
+        CursorBlinkPolicy::Always,
+        false,
+        false,
+        750,
+        750,
+        0
+    ));
+}
+
+#[test]
+fn unfocused_cursor_policy_changes_only_cursor_pixels() {
+    let metrics = metrics(13.0, 1.0);
+    let width = metrics.cell_width as u32;
+    let height = metrics.cell_height as u32;
+    let mut state = screen(1, 1);
+    state.cursor.focused = false;
+    let frame = Frame::new(width, height).expect("unfocused cursor frame");
+
+    frame
+        .draw_with_cursor(
+            &state,
+            &metrics,
+            CursorRender {
+                unfocused: UnfocusedCursor::Underline,
+                ..CursorRender::default()
+            },
+        )
+        .expect("unfocused underline");
+    let underline_middle = frame.read_pixel(width / 2, height / 2).expect("middle");
+    let underline_bottom = frame.read_pixel(width / 2, height - 1).expect("bottom");
+    assert!(underline_middle[0] < 100 && underline_middle[1] < 100 && underline_middle[2] < 100);
+    assert!(underline_bottom[0] > 100 || underline_bottom[1] > 100 || underline_bottom[2] > 100);
+
+    frame
+        .draw_with_cursor(
+            &state,
+            &metrics,
+            CursorRender {
+                unfocused: UnfocusedCursor::Beam,
+                ..CursorRender::default()
+            },
+        )
+        .expect("unfocused beam");
+    let beam_left = frame.read_pixel(0, height / 2).expect("left");
+    let beam_middle = frame
+        .read_pixel(width / 2, height / 2)
+        .expect("middle beam");
+    assert!(beam_left[0] > 100 || beam_left[1] > 100 || beam_left[2] > 100);
+    assert!(beam_middle[0] < 100 && beam_middle[1] < 100 && beam_middle[2] < 100);
+
+    frame
+        .draw_with_cursor(
+            &state,
+            &metrics,
+            CursorRender {
+                unfocused: UnfocusedCursor::Unchanged,
+                shape: CursorShape::Underline,
+                ..CursorRender::default()
+            },
+        )
+        .expect("unchanged program shape");
+    let unchanged_bottom = frame
+        .read_pixel(width / 2, height - 1)
+        .expect("unchanged bottom");
+    assert!(unchanged_bottom[0] > 100 || unchanged_bottom[1] > 100 || unchanged_bottom[2] > 100);
+}
+
+#[test]
 fn engine_blink_enablement_does_not_hide_visible_phase() {
     let metrics = metrics(13.0, 1.0);
     let mut state = screen(1, 1);
@@ -296,6 +454,7 @@ fn terminal_theme_changes_background_foreground_and_cursor_pixels_without_metric
         focused: true,
         blink_visible: true,
         shape: CursorShape::Block,
+        unfocused: UnfocusedCursor::Hollow,
     };
     let width = initial_metrics.cell_width as u32;
     let height = initial_metrics.cell_height as u32;

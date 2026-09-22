@@ -1066,8 +1066,32 @@ test("cursor state exposes typed shape and blink policy while routing the caret"
   assert.deepEqual(fakeExpose.getStatus("terminal.cursor").readFn(), {
     row: 1, col: 2, shape: "beam", visible: true, blinking: true, focused: true,
     blink: "Always", interval: 700, idleTimeout: 1200, unfocused: "hollow", hollow: true,
+    blinkVisible: true,
   });
   assert.deepEqual(regionReference._caret, { x: 18, y: 18, width: 9, height: 18 });
+});
+
+test("cursor policy sends explicit shape, blink, interval, idle timeout, and unfocused rendering", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  const terminal = await startTerminal({
+    view: createFakeView(), attachImage: createFakeAttachImage().function,
+    sidecar: fakeSidecar, expose: createFakeExpose(), window: { TextEncoder: FakeTextEncoder },
+  });
+  const policy = await terminal.setCursorPolicy({
+    shape: "beam", blink: "Always", interval: 750, idleTimeout: 5000, unfocused: "unchanged",
+  });
+  assert.deepEqual(policy, {
+    shape: "beam", blink: "Always", interval: 750, idleTimeout: 5000, unfocused: "unchanged",
+  });
+  assert.deepEqual(fakeSidecar.getMessages().at(-1).body, {
+    operation: "cursor", shape: "beam", blink: "Always", interval: 750, idleTimeout: 5000,
+    unfocused: "unchanged",
+  });
+  await assert.rejects(
+    terminal.setCursorPolicy({ blink: "Sometimes" }),
+    /cursor policy blink is invalid/
+  );
 });
 
 test("invalid cursor fields are observable errors and never fall back to the previous cursor", async () => {

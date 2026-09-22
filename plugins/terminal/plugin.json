@@ -83,8 +83,9 @@
             "blink": { "type": "string", "enum": ["Never", "Off", "On", "Always"] },
             "interval": { "type": "number" },
             "idleTimeout": { "type": "number" },
-            "unfocused": { "type": "string", "enum": ["hollow", "solid"] },
-            "hollow": { "type": "boolean" }
+            "unfocused": { "type": "string", "enum": ["hollow", "solid", "underline", "beam", "unchanged"] },
+            "hollow": { "type": "boolean" },
+            "blinkVisible": { "type": "boolean" }
           }
         }
       },
@@ -156,6 +157,23 @@
         },
         "result": {
           "type": "null"
+        }
+      },
+      {
+        "name": "terminal.cursor.set",
+        "description": "Sets the terminal cursor rendering policy.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "shape": { "type": "string", "enum": ["block", "underline", "beam"] },
+            "blink": { "type": "string", "enum": ["Never", "Off", "On", "Always"] },
+            "interval": { "type": "integer" },
+            "idleTimeout": { "type": "integer" },
+            "unfocused": { "type": "string", "enum": ["hollow", "solid", "underline", "beam", "unchanged"] }
+          }
+        },
+        "result": {
+          "type": "object"
         }
       }
     ],

@@ -135,7 +135,8 @@
 | `open` | `{image?: 이름}` | 영속 서비스에서 터미널 세션을 만들거나 연결하고 호스트의 그림 `configure`를 받은 뒤 영역용 그림을 할당하고 그린다. 같은 생성 식별자에 대한 `open` 호출이 여러 번이면 아무것도 하지 않는다. |
 | `input` | `{bytes?: base64-문자열 \| keys?: [{key: 이름, text?: 문자열, shift: bool, alt: bool, ctrl: bool}]}` | 터미널에 입력을 보낸다. 바이트는 base64 인코딩된 원시 터미널 입력이다. 키는 모드에 따라 터미널 수열로 디코드된다: 기능 키는 escape 수열로 매핑되고, 텍스트 입력은 UTF-8로 보내지고, 조합 키는 적절히 처리된다. `bytes`와 `keys` 모두 한 요청에 있을 수 있다. |
 | `theme` | `{mode: "dark" \| "light"}` | 연결된 이미지 표면에 유효한 애플리케이션 외관을 적용한다. 세션과 셀 메트릭은 바꾸지 않고 기본·커서·인덱스 ANSI 래스터 색상을 바꾼다. 다른 모드는 거부한다. |
-| `screen.read` | `{}` | 현재 화면 상태를 요청한다. 사이드카가 `{event: "screen", cols, rows, cursor: {col, row}, lines: [[cell, ...]]}` 응답을 보낸다. 각 셀은 `{ch?: 문자열, width: 수, fg?: 색상, bg?: 색상, bold: bool, italic: bool, underline: bool, inverse: bool}`을 가진다. <!-- cell size: pending code --> |
+| `cursor` | `{shape, blink, interval, idleTimeout, unfocused}` | 터미널 커서 정책을 적용한다. `shape`는 `block`·`underline`·`beam`, `blink`는 `Never`·`Off`·`On`·`Always`, `interval`은 양의 밀리초 정수, `idleTimeout`은 0 이상 밀리초 정수, `unfocused`는 `hollow`·`solid`·`underline`·`beam`·`unchanged`다. 잘못된 값은 `invalidParams`로 명시적으로 실패하며 대체하지 않는다. |
+| `screen.read` | `{}` | 현재 화면 상태를 요청한다. 사이드카가 `{event: "screen", cols, rows, cursor: {col, row, shape, visible, blinking, blinkVisible, focused}, lines: [[cell, ...]]}`로 응답한다. 각 셀은 `{ch?: 문자열, width: 수, fg?: 색상, bg?: 색상, bold: bool, italic: bool, underline: bool, inverse: bool}`을 가진다. <!-- cell size: pending code --> |
 | `close` | `{}` | 터미널 세션을 종료하고 PTY를 종료한다. 호스트의 `{closed: true}` 봉투도 같은 close 동작을 사용하므로 표면을 제거해 PTY 세션을 남길 수 없다. |
 
 사이드카는 터미널 화면이 바뀔 때마다 `{event: "screen", ...}`을 보내고, 새 프레임이 그려질 때마다 호스트의 그림 릴레이를 통해 그림 봉투를 보낸다. 호스트 `configure`가 페이지 주도 `resize` 요청을 대체하며 최신 래스터 리비전으로 합쳐진다. 전송 그림이 `consumed`나 오류를 기다리는 동안 사이드카는 그 그림을 수정하지 않는다. 화면과 설정 변경은 대기 상태로 남고, 응답 뒤 다음 프레임이 최신 설정을 사용한다.

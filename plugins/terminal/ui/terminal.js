@@ -38,9 +38,11 @@ function sendInput(text, terminal, id, encoder) {
 
 const CURSOR_SHAPES = new Set(["block", "underline", "beam"]);
 const CURSOR_BLINK_MODES = new Set(["Never", "Off", "On", "Always"]);
+const CURSOR_UNFOCUSED = new Set(["hollow", "solid", "underline", "beam", "unchanged"]);
 const DEFAULT_CURSOR = Object.freeze({
   row: 0, col: 0, shape: "block", visible: true, blinking: false, focused: false,
-  blink: "Never", interval: 500, idleTimeout: 0, unfocused: "hollow", hollow: false,
+  blink: "Off", interval: 750, idleTimeout: 5000, unfocused: "hollow", hollow: false,
+  blinkVisible: true,
 });
 
 function normalizeRange(range) {
@@ -80,7 +82,7 @@ function normalizeCursor(value) {
     if (typeof cursor[field] !== "boolean") throw new Error(`cursor.${field} is invalid`);
     return cursor[field];
   };
-  if (cursor.unfocused !== undefined && cursor.unfocused !== "hollow" && cursor.unfocused !== "solid") {
+  if (cursor.unfocused !== undefined && !CURSOR_UNFOCUSED.has(cursor.unfocused)) {
     throw new Error(`cursor.unfocused is invalid: ${String(cursor.unfocused)}`);
   }
   return {
@@ -95,6 +97,29 @@ function normalizeCursor(value) {
     idleTimeout: number("idleTimeout", DEFAULT_CURSOR.idleTimeout),
     unfocused: cursor.unfocused ?? DEFAULT_CURSOR.unfocused,
     hollow: boolean("hollow", rawShape === "HollowBlock" || DEFAULT_CURSOR.hollow),
+    blinkVisible: boolean("blinkVisible", DEFAULT_CURSOR.blinkVisible),
+  };
+}
+
+function normalizeCursorPolicy(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("cursor policy must be an object");
+  const shape = value.shape ?? DEFAULT_CURSOR.shape;
+  if (!CURSOR_SHAPES.has(shape)) throw new Error(`cursor policy shape is invalid: ${String(shape)}`);
+  const blink = value.blink ?? DEFAULT_CURSOR.blink;
+  if (!CURSOR_BLINK_MODES.has(blink)) throw new Error(`cursor policy blink is invalid: ${String(blink)}`);
+  const unfocused = value.unfocused ?? DEFAULT_CURSOR.unfocused;
+  if (!CURSOR_UNFOCUSED.has(unfocused)) throw new Error(`cursor policy unfocused is invalid: ${String(unfocused)}`);
+  const integer = (name, fallback, minimum) => {
+    if (value[name] === undefined) return fallback;
+    if (!Number.isInteger(value[name]) || value[name] < minimum) throw new Error(`cursor policy ${name} is invalid`);
+    return value[name];
+  };
+  return {
+    shape,
+    blink,
+    interval: integer("interval", DEFAULT_CURSOR.interval, 1),
+    idleTimeout: integer("idleTimeout", DEFAULT_CURSOR.idleTimeout, 0),
+    unfocused,
   };
 }
 
@@ -176,6 +201,11 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   const setTheme = async (mode) => {
     if (mode !== "dark" && mode !== "light") throw new Error(`terminal theme mode is invalid: ${String(mode)}`);
     await terminal.send(id, { operation: "theme", mode });
+  };
+  const setCursorPolicy = async (value) => {
+    const policy = normalizeCursorPolicy(value);
+    await terminal.send(id, { operation: "cursor", ...policy });
+    return policy;
   };
 
   const observeInput = (promise) => promise.then(undefined, (error) => {
@@ -379,6 +409,14 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
         pendingScreenRead(body);
         pendingScreenRead = null;
       }
+    } else if (body.event === "cursor") {
+      try {
+        const policy = normalizeCursorPolicy(body);
+        cursor = { ...cursor, ...policy };
+        changed("cursor");
+      } catch (error) {
+        reportInputError(new Error(`invalid cursor policy from sidecar: ${error.message}`));
+      }
     } else if (body.event === "theme") {
       if (body.mode !== "dark" && body.mode !== "light") {
         reportInputError(new Error("invalid theme acknowledgement from sidecar"));
@@ -501,8 +539,10 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       throw error;
     }
   });
+  await expose.command("terminal.cursor.set", async (policy) => setCursorPolicy(policy));
   return {
     setTheme,
+    setCursorPolicy,
     async focus() {
       if (nativeFocused) return;
       let resolveFocus;

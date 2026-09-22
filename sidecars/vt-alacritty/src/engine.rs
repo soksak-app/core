@@ -237,6 +237,7 @@ impl AlacrittyEngine {
             },
             visible: renderable.cursor.shape != CursorShape::Hidden,
             blinking: self.term.cursor_style().blinking,
+            blink_visible: true,
             focused: false,
             preedit: None,
         }
@@ -394,6 +395,7 @@ impl Engine for AlacrittyEngine {
                 shape: self.cursor().shape,
                 visible: self.cursor().visible,
                 blinking: self.cursor().blinking,
+                blink_visible: true,
                 focused: false,
                 preedit: None,
             },

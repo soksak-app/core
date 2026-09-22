@@ -6,6 +6,8 @@
 
 ## Unreleased
 
+- Completed the F5 cursor-rendering item. Terminal cursor policy now has explicit focused/unfocused shapes, Never/Off/On/Always blink policy, 750ms default interval, 5s idle timeout, program visibility handling, and no fade/size animation. Red reproduced the missing policy and invalid-value boundary; Green passed 10 native frame pixel tests, 41 sidecar contract tests, 28 Alacritty engine tests, and 42 terminal module tests. The `operation: "cursor"` contract rejects invalid values and reports `blinkVisible` without recreating the PTY or changing cell metrics.
+
 - Completed F5.2. A single terminal click now restores the target WebView before the next synthetic pointer after native image focus, and native image focus notifications plus modal focus restoration cannot synchronously re-enter the WebKit event path. Red reproduced terminal 2/3 pointer receipt timeouts and a modal-close deadlock; rebuilt Tauri and Wails focus matrices passed 4/4 bounded subtests each, covering three terminals, browser/tab switching, resize, settings modal close, project return, and a separate project window.
 
 - Completed F5.1. Terminal surfaces now receive the effective application light/dark appearance through the declared theme subscription and `operation: "theme"` sidecar request. The sidecar changes default, cursor, and indexed ANSI raster colors without recreating the PTY, session, text, or cell metrics; invalid modes are rejected explicitly. Rust frame/engine/protocol tests, terminal module tests, and rebuilt Tauri/Wails pixel checks pass; the Wails surface theme binding is exposed through the host contract.

@@ -74,6 +74,7 @@ impl Engine for MockEngine {
             shape: CursorShape::Block,
             visible: true,
             blinking: false,
+            blink_visible: true,
             focused: false,
             preedit: None,
         }
@@ -107,6 +108,7 @@ impl Engine for MockEngine {
                 shape: CursorShape::Block,
                 visible: true,
                 blinking: false,
+                blink_visible: true,
                 focused: false,
                 preedit: None,
             },
@@ -711,6 +713,39 @@ async fn test_theme_rejects_unknown_mode_without_fallback() {
     assert!(outputs.iter().any(|value| {
         value["body"]["error"] == "invalidParams"
             && value["body"]["reason"] == "theme.mode must be dark or light"
+    }));
+}
+
+#[tokio::test]
+async fn test_cursor_policy_rejects_invalid_values_without_fallback() {
+    let input = r#"
+{"surface":"s1","body":{"operation":"cursor","shape":"beam","blink":"Always","interval":750,"idleTimeout":5000,"unfocused":"hollow"}}
+{"surface":"s1","body":{"operation":"cursor","blink":"Sometimes"}}
+"#;
+    let reader = std::io::Cursor::new(input.as_bytes());
+    let mut writer = Vec::new();
+    let engine_factory = Arc::new(|| Box::new(MockEngine::new()) as Box<dyn Engine>);
+    let session_port: Arc<dyn SessionPort> =
+        Arc::new(soksak_sidecar_vt_core::protocol::FakeSessionPort::new());
+    let session_port_for_factory = session_port.clone();
+    let factory = Arc::new(move || session_port_for_factory.clone());
+
+    serve(engine_factory, reader, &mut writer, factory)
+        .await
+        .expect("cursor policy contract");
+    let outputs = String::from_utf8(writer)
+        .expect("utf8 output")
+        .lines()
+        .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+        .collect::<Vec<_>>();
+    assert!(outputs
+        .iter()
+        .any(|value| { value["body"]["event"] == "cursor" && value["body"]["blink"] == "Always" }));
+    assert!(outputs.iter().any(|value| {
+        value["body"]["error"] == "invalidParams"
+            && value["body"]["reason"]
+                .as_str()
+                .is_some_and(|reason| reason.contains("cursor.blink"))
     }));
 }
 
@@ -2171,6 +2206,7 @@ async fn test_panicking_surface_reports_error() {
                 shape: CursorShape::Block,
                 visible: true,
                 blinking: false,
+                blink_visible: true,
                 focused: false,
                 preedit: None,
             }
@@ -2186,6 +2222,7 @@ async fn test_panicking_surface_reports_error() {
                     shape: CursorShape::Block,
                     visible: true,
                     blinking: false,
+                    blink_visible: true,
                     focused: false,
                     preedit: None,
                 },

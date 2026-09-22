@@ -65,12 +65,58 @@ pub struct Frame {
     ptr: *mut CFrame,
 }
 
+pub use crate::protocol::{CursorBlinkPolicy, UnfocusedCursor};
+
+pub fn cursor_blink_visible(
+    policy: CursorBlinkPolicy,
+    program_blinking: bool,
+    focused: bool,
+    elapsed_ms: u64,
+    interval_ms: u64,
+    idle_timeout_ms: u64,
+) -> bool {
+    if !focused || matches!(policy, CursorBlinkPolicy::Never) {
+        return true;
+    }
+    if idle_timeout_ms != 0 && elapsed_ms >= idle_timeout_ms {
+        return true;
+    }
+    let enabled = match policy {
+        CursorBlinkPolicy::Never => false,
+        CursorBlinkPolicy::Always | CursorBlinkPolicy::On => true,
+        CursorBlinkPolicy::Off => program_blinking,
+    };
+    if !enabled {
+        return true;
+    }
+    let interval = interval_ms.max(1);
+    (elapsed_ms / interval) % 2 == 0
+}
+
+pub fn effective_cursor_shape(
+    program_shape: crate::protocol::CursorShape,
+    focused: bool,
+    unfocused: UnfocusedCursor,
+) -> crate::protocol::CursorShape {
+    if focused {
+        return program_shape;
+    }
+    match unfocused {
+        UnfocusedCursor::Hollow => crate::protocol::CursorShape::HollowBlock,
+        UnfocusedCursor::Solid => crate::protocol::CursorShape::Block,
+        UnfocusedCursor::Underline => crate::protocol::CursorShape::Underline,
+        UnfocusedCursor::Beam => crate::protocol::CursorShape::Beam,
+        UnfocusedCursor::Unchanged => program_shape,
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CursorRender {
     pub visible: bool,
     pub focused: bool,
     pub blink_visible: bool,
     pub shape: crate::protocol::CursorShape,
+    pub unfocused: UnfocusedCursor,
 }
 
 impl CursorRender {
@@ -79,8 +125,9 @@ impl CursorRender {
             visible: cursor.visible,
             focused: cursor.focused,
             // 엔진의 blinking 값은 활성화 상태일 뿐이다. phase는 서비스 scheduler가 전달한다.
-            blink_visible: true,
+            blink_visible: cursor.blink_visible,
             shape: cursor.shape,
+            unfocused: UnfocusedCursor::Hollow,
         }
     }
 }
@@ -92,6 +139,7 @@ impl Default for CursorRender {
             focused: false,
             blink_visible: true,
             shape: crate::protocol::CursorShape::Block,
+            unfocused: UnfocusedCursor::Hollow,
         }
     }
 }
@@ -197,6 +245,8 @@ impl Frame {
             }
         }
 
+        let effective_shape =
+            effective_cursor_shape(cursor.shape, cursor.focused, cursor.unfocused);
         let mut c_screen = CScreen {
             width: render_screen.cols as u32,
             height: render_screen.rows as u32,
@@ -207,7 +257,7 @@ impl Frame {
             cursor_visible: cursor.visible as u8,
             cursor_focused: cursor.focused as u8,
             cursor_blink_visible: cursor.blink_visible as u8,
-            cursor_shape: match cursor.shape {
+            cursor_shape: match effective_shape {
                 crate::protocol::CursorShape::Block => 0,
                 crate::protocol::CursorShape::Underline => 1,
                 crate::protocol::CursorShape::Beam => 2,
