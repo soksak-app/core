@@ -642,6 +642,16 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "G2.3",
+    implementation: [{ file: "packages/plugin-api/binder.js", symbol: "parentNode" }],
+    tests: [
+      { file: "packages/plugin-api/test/binder.test.mjs", id: "audit recognizes delegated controls inside a shadow root" },
+      { file: "e2e/audit.test.mjs", id: "every control on every screen runs a declared command and has a dom name" },
+    ],
+    expected: "Delegated controls inside plugin ShadowRoots are recognized by the runtime audit in both rebuilt hosts.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F1",
     implementation: [
       { file: "e2e/terminal.test.mjs", symbol: "three terminals survive repeated divider drags and project returns" },

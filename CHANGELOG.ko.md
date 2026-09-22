@@ -6,6 +6,8 @@
 
 ## 미배포
 
+- G2.3을 완료했다. 표면 binder 감사가 이제 ShadowRoot를 `parentNode`로 통과하므로 위임된 shell 컨트롤을 명령 없음으로 잘못 보고하지 않는다. plugin-api 72/72, 재빌드 Tauri·Wails 감사 검사 각각 1/1, 정상 종료 66ms·64ms가 통과했다. 전체 matrix의 다른 실패는 명시적으로 열어 두었다.
+
 - F1을 닫았다. 최신 재빌드 Tauri·Wails 합성/줄바꿈 증거를 하나의 부모 게이트로 기록했다. 디바이더·프로젝트 복귀 캡처가 네이티브 보더 침범과 셸 흰 잔상 없이 통과했고, Alacritty 엔진 검사는 27/27, 양쪽 호스트 창 크기 변경 검사는 각각 1/1 통과했다. 브라우저 포커스, 터미널 상호작용, OSC/CSI, IME, 복원, 모달 후속 항목은 별도로 남아 있다.
 
 - F1.4를 완료했다. 고정 renderer metric, hard/soft newline, 한글·전각 셀, overflow/scrollback, primary와 alternate screen 격리를 검사하는 터미널 줄바꿈 단언을 추가했다. Alacritty 엔진 검사가 27/27 통과했고 최신 재빌드 Tauri·Wails 창 크기 변경 검사가 각각 1/1 통과하며 PTY·DOM plane·네이티브 래스터 기하를 확인했다.

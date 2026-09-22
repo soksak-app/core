@@ -86,6 +86,19 @@ test("delegate runs clicks, changes, and live inputs of marked descendants", asy
   ], "an input without data-live runs on change only, and a click on an input runs nothing");
 });
 
+test("audit recognizes delegated controls inside a shadow root", async () => {
+  const b = binder();
+  const host = document.createElement("div");
+  const shadow = host.attachShadow({ mode: "open" });
+  const button = b.mark(element("button", "fixture.press"), "fixture.press");
+  shadow.append(button);
+  b.delegate(shadow);
+  assert.deepEqual(b.audit(shadow), []);
+  button.click();
+  await settle();
+  assert.deepEqual(b.calls, [["fixture.press", {}]]);
+});
+
 test("commandOf reads the element's command and adds the value under its parameter name", () => {
   const b = binder();
   const box = b.mark(element("input"), "fixture.put", { key: "k" });

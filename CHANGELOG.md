@@ -6,6 +6,8 @@
 
 ## Unreleased
 
+- Completed G2.3. Surface binder audits now follow `parentNode` through ShadowRoots, so delegated shell controls are not falsely reported as commandless. The plugin-api suite passes 72/72, rebuilt Tauri and Wails audit checks pass 1/1 each, and normal shutdown passes in 66ms and 64ms. Other full-matrix failures remain explicitly open.
+
 - Closed F1. The current rebuilt Tauri and Wails composition/reflow evidence is now recorded as one parent gate: divider and project-return captures pass without native border intrusion or shell white remnants, the Alacritty engine suite passes 27/27, and both host resize checks pass 1/1. Browser focus, terminal interaction, OSC/CSI, IME, restoration, and modal follow-ups remain separate.
 
 - Completed F1.4. Added executable terminal reflow assertions for fixed renderer metrics, hard and soft newlines, Korean and wide cells, overflow/scrollback, and primary versus alternate screen isolation. The Alacritty engine suite passes 27/27, and current rebuilt Tauri and Wails window-resize checks pass 1/1 each with PTY, DOM plane, and native raster geometry verification.
