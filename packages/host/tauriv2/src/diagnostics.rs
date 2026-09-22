@@ -106,6 +106,10 @@ pub(crate) fn call(
             Ok(Value::Null)
         }
         "diagnostics.modal.held" => modal_held(window.label()),
+        "diagnostics.presentation.failure" => {
+            exposure::inject_presentation_failure(window)?;
+            Ok(Value::Null)
+        }
         _ => Err(Failure::new(
             -32601,
             format!("{method} is not a diagnostic method"),

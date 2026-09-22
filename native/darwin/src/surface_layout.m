@@ -26,6 +26,7 @@ static uint64_t preparation;
 static void *activeOwner;
 static NSMutableArray<SPLayoutRequest *> *waiting;
 static NSMutableArray<SPSettleRequest *> *settling;
+static bool injectSettledFailure;
 
 static void releaseSettled(void);
 
@@ -164,5 +165,15 @@ static void releaseSettled(void) {
 
 void surfaceLayoutAfterSettled(void *handle, void (^done)(double, const char *)) {
     NSCAssert(NSThread.isMainThread, @"surface presentation requires the UI thread");
+    if (injectSettledFailure) {
+        injectSettledFailure = false;
+        done(0, "injected native presentation failure");
+        return;
+    }
     settle((WKWebView *)handle, done);
+}
+
+void surfaceLayoutInjectSettledFailure(void) {
+    NSCAssert(NSThread.isMainThread, @"surface presentation failure injection requires the UI thread");
+    injectSettledFailure = true;
 }

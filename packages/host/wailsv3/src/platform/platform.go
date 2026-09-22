@@ -221,6 +221,8 @@ type Platform interface {
 	// AfterSettled 는 창에 열린 표면 배치 트랜잭션이 없는 상태에서 메인 웹뷰와 보이는 앱 문서가 화면을
 	// 표시한 뒤 done 을 UI 스레드에서 호출한다. displayed 는 그 화면이 표시되는 시각(ms, mach 절대 시각)이다.
 	AfterSettled(window unsafe.Pointer, done func(displayed float64, err error)) error
+	// InjectSettledFailure makes the next settled wait fail in a diagnostics build.
+	InjectSettledFailure(window unsafe.Pointer) error
 
 	// CreateShape 는 표면 위에 그리는 도형 뷰를 만든다. 창에 콘텐츠 뷰가 없으면 nil 핸들을 반환한다.
 	CreateShape(window unsafe.Pointer, x, y, w, h float64) (unsafe.Pointer, error)

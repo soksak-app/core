@@ -12,6 +12,7 @@ package darwin
 void nativeWindowLayoutBegin(void *window, uint64_t ticket, uintptr_t callback);
 bool nativeWindowAfterPresentation(void *window, uintptr_t callback);
 bool nativeWindowAfterSettled(void *window, uintptr_t callback);
+void surfaceLayoutInjectSettledFailure(void);
 */
 import "C"
 
@@ -67,6 +68,11 @@ func (implementation) AfterSettled(window unsafe.Pointer, done func(displayed fl
 		handle.Delete()
 		return errors.New("native presentation is unavailable")
 	}
+	return nil
+}
+
+func (implementation) InjectSettledFailure(_ unsafe.Pointer) error {
+	C.surfaceLayoutInjectSettledFailure()
 	return nil
 }
 

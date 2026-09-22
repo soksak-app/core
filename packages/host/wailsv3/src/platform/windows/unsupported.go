@@ -211,6 +211,10 @@ func (implementation) AfterSettled(unsafe.Pointer, func(float64, error)) error {
 	return unsupported("native presentation")
 }
 
+func (implementation) InjectSettledFailure(unsafe.Pointer) error {
+	return unsupported("native presentation")
+}
+
 func (implementation) AfterPresentation(unsafe.Pointer, func()) error {
 	return unsupported("native presentation")
 }

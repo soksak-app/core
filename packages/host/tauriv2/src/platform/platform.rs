@@ -330,6 +330,8 @@ pub trait Platform: Send + Sync {
         view: &PlatformWebview,
         done: Box<dyn Fn(Result<f64, String>)>,
     ) -> Result<(), String>;
+    /// 다음 settled 표시 대기를 진단 목적으로 한 번 실패시킨다.
+    fn inject_settled_failure(&self) -> Result<(), String>;
 
     // 도형
 

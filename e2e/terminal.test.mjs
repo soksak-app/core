@@ -181,6 +181,28 @@ for (const app of Object.values(APPS)) {
     t.diagnostic(`${app.name}: PASS split-terminal presentation`);
   });
 
+  test(`${app.name}: native presentation failure is explicit and the next split remains usable`, { timeout: 30000 }, async (t) => {
+    const s = await open(t, app);
+    assert.ok(s, `${app.binary} is not built`);
+    await fresh(s);
+    t.diagnostic(`${app.name}: START injected presentation failure`);
+    await ensureTerminals(s, 1);
+    await s.request("diagnostics.presentation.failure", {});
+    await assert.rejects(
+      () => s.presented(),
+      (error) => /injected native presentation failure/.test(error.message),
+      "an injected native presentation failure must not become a generic timeout",
+    );
+    const terminals = await ensureTerminals(s, 2);
+    for (const terminal of terminals) {
+      const region = (await s.get("host.window")).regions.find((item) =>
+        item.surface === terminal.surface && item.name === "view");
+      assert.ok(region?.visible && region.presented,
+        `${terminal.surface} did not recover after the injected failure: ${JSON.stringify(region)}`);
+    }
+    t.diagnostic(`${app.name}: PASS injected presentation failure`);
+  });
+
   test(`${app.name}: three terminals and two browsers share one app DOM and one terminal service`, async (t) => {
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);

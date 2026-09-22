@@ -59,3 +59,10 @@ pub fn after_settled(view: &PlatformWebview, done: Box<dyn Fn(Result<f64, String
     });
     unsafe { surfaceLayoutAfterSettled(view.inner().cast(), &done) }
 }
+
+pub fn inject_settled_failure() {
+    extern "C" {
+        fn surfaceLayoutInjectSettledFailure();
+    }
+    unsafe { surfaceLayoutInjectSettledFailure() }
+}

@@ -925,6 +925,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "e2e/terminal.test.mjs", id: "newly split terminal presents its first native raster" },
+      { file: "e2e/terminal.test.mjs", id: "native presentation failure is explicit and the next split remains usable" },
       { file: "e2e/terminal.test.mjs", id: "three terminals and two browsers share one app DOM and one terminal service" },
     ],
     expected: "A native settle failure is returned as an explicit callback error instead of being converted into a generic 1005 timeout, and fresh Tauri/Wails split regressions remain usable afterward.",

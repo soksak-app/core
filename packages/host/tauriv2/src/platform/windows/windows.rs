@@ -237,6 +237,9 @@ impl Platform for Windows {
     ) -> Result<(), String> {
         unsupported::after_settled(view, done)
     }
+    fn inject_settled_failure(&self) -> Result<(), String> {
+        unsupported::inject_settled_failure()
+    }
     fn after_presentation(
         &self,
         view: &PlatformWebview,

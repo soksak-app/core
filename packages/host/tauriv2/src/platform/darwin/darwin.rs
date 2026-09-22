@@ -332,6 +332,10 @@ impl Platform for Darwin {
         layout::after_settled(view, done);
         Ok(())
     }
+    fn inject_settled_failure(&self) -> Result<(), String> {
+        layout::inject_settled_failure();
+        Ok(())
+    }
     fn after_presentation(
         &self,
         view: &PlatformWebview,

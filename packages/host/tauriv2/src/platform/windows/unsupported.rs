@@ -202,6 +202,10 @@ pub fn after_settled(
     missing("presentation tracking")
 }
 
+pub fn inject_settled_failure() -> Result<(), String> {
+    missing("presentation tracking")
+}
+
 pub fn after_presentation(_view: &PlatformWebview, _done: Box<dyn Fn()>) -> Result<(), String> {
     missing("presentation tracking")
 }

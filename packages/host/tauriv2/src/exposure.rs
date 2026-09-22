@@ -1006,6 +1006,12 @@ pub(crate) fn presented(window: &Window, timeout: Duration) -> Result<f64, Failu
     }
 }
 
+#[cfg(feature = "diagnostics")]
+pub(crate) fn inject_presentation_failure(window: &Window) -> Result<(), Failure> {
+    let platform = platform::current().map_err(internal)?;
+    on_main(window, move || platform.inject_settled_failure()).map_err(internal)
+}
+
 /// 창 좌표의 점을 소유한 문서나 뷰를 반환한다.
 fn hit(window: &Window, x: f64, y: f64) -> Result<Value, Failure> {
     let platform = platform::current().map_err(internal)?;

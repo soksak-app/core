@@ -33,6 +33,7 @@ func init() {
 	diagnosticMethods["diagnostics.knob"] = diagnosticKnob
 	diagnosticMethods["diagnostics.modal.hold"] = diagnosticModalHold
 	diagnosticMethods["diagnostics.modal.held"] = diagnosticModalHeld
+	diagnosticMethods["diagnostics.presentation.failure"] = diagnosticPresentationFailure
 	holdModalContent = modalHolds.wait
 	diagnosticSubscriptions["diagnostics.transcript"] = transcriptTopic
 	diagnosticTopics[logTopic] = func(on bool) (string, any) {
@@ -65,6 +66,19 @@ func diagnosticHost(e *Endpoint, params json.RawMessage) (*Host, *Surfaces, erro
 		return nil, nil, errMissingWindow(window)
 	}
 	return backend.h, s, nil
+}
+
+func diagnosticPresentationFailure(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+	_, s, err := diagnosticHost(e, params)
+	if err != nil {
+		return nil, err
+	}
+	var injectErr error
+	application.InvokeSync(func() { injectErr = system.InjectSettledFailure(s.window.NativeWindow()) })
+	if injectErr != nil {
+		return nil, injectErr
+	}
+	return nil, nil
 }
 
 // diagnosticFixture 는 <config-dir>/test-project 를 빈 폴더 설정으로 만들고, 페이지가 다른
