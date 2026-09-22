@@ -6,6 +6,7 @@
 - Added waiting item F0.5.9-4 for the two Wails framework response-write errors observed after the E2E client closes; the messages remain visible and are not treated as a successful cleanup.
 - Started F0.5.9-4 investigation. The Wails transport source confirms the message is emitted when a Darwin WebKit URL-scheme response is written after its request task has stopped; the owning runtime call and lifecycle boundary are still being traced.
 - Closed parent checklist G2 after verifying that all of G2.3 through G2.9 are complete and provide the parent contract evidence.
+- Added active F0.5.9-5 after reproducing a Wails-only reload race: the first sequential terminal case passed, then replacement-page image attachment raced queued old-image cleanup and six later cases timed out with `current image raster did not present within 10s`.
 
 - Fix Tauri endpoint and asynchronous split paths to read native window handles on the AppKit main thread, preventing a second foreign-exception crash path during surface synchronization. Rebuilt repeated split presentation passed 3/3; package, native, documentation, boundary, exposure, and parity checks passed.
 
