@@ -55,6 +55,65 @@ async function scopeTabs(s) {
 const hasKey = async (s, prefix) => (await s.get("core.settings-modal")).controls.some((c) => c.key?.startsWith(prefix));
 
 for (const app of Object.values(APPS)) {
+  test(`${app.name}: two independent project states repeat create-use-close-recreate in one instance`, { timeout: 30000 }, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "soksak-v4-")));
+    const firstRoot = join(root, "first");
+    const secondRoot = join(root, "second");
+    mkdirSync(firstRoot);
+    mkdirSync(secondRoot);
+    s.cleanup(() => rmSync(root, { recursive: true, force: true }));
+    s.cleanup(async () => {
+      for (const window of await s.get("host.windows")) {
+        if (window.window !== s.window) await s.on(window.window).close();
+      }
+      await s.windows(1, "V4 cleanup left an extra window");
+      for (const project of await s.get("core.projects")) {
+        if (project.root.startsWith(root)) await s.run("core.project.close", { id: project.id });
+      }
+      await s.run("core.projects.flush");
+    });
+
+    await settings(s, { projectOpening: "windows" }, "common");
+    const openAndUse = async (projectRoot, color, label) => {
+      const opened = await s.run("core.project.open", { root: projectRoot, color });
+      const child = s.on(added(await s.windows(2, `${label}: project window did not open`), [s.window]));
+      await child.until("core.project", (project) => project?.id === opened.id,
+        `${label}: project did not become active`);
+      await child.until("core.grid", (grid) => grid?.cards?.length > 0,
+        `${label}: project grid did not render`);
+      const shellSurfaces = await child.until("core.surfaces", (surfaces) =>
+        surfaces.filter((surface) => surface.visible && surface.plugin === "shell" &&
+          surface.exposes.includes("status shell.output")),
+        `${label}: shell surface did not become usable`);
+      assert.ok(shellSurfaces.length > 0);
+      await child.get("shell.output", shellSurfaces[0].surface);
+      await child.run("core.space.add");
+      await child.run("core.projects.flush");
+      return { id: opened.id, child };
+    };
+    const closeAndRemove = async ({ id, child }, label) => {
+      await child.close();
+      await s.windows(1, `${label}: project window did not close`);
+      await s.run("core.project.close", { id });
+      await s.until("core.projects", (projects) => !projects.some((project) => project.id === id),
+        `${label}: project did not leave the registry`);
+    };
+
+    const first = await openAndUse(firstRoot, "#7fe3b0", "first state");
+    await closeAndRemove(first, "first state");
+    const firstRecreated = await openAndUse(firstRoot, "#7fe3b0", "first recreated state");
+    await closeAndRemove(firstRecreated, "first recreated state");
+
+    const second = await openAndUse(secondRoot, "#7db4ff", "second state");
+    await closeAndRemove(second, "second state");
+    const secondRecreated = await openAndUse(secondRoot, "#7db4ff", "second recreated state");
+    await closeAndRemove(secondRecreated, "second recreated state");
+    t.diagnostic(`${app.name}: PASS V4 two independent states; each create/use/close/recreate cycle completed`);
+  });
+
   test(`${app.name}: project windows persist files, inherit settings, and isolate native state`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);

@@ -879,6 +879,13 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "V4",
+    implementation: [{ file: "e2e/projects.test.mjs", symbol: "two independent project states" }],
+    tests: [{ file: "e2e/projects.test.mjs", id: "two independent project states repeat create-use-close-recreate in one instance" }],
+    expected: "Rebuilt Tauri and Wails repeat independent project creation, visible-surface use, close, registry removal, and recreation in one application instance without manual state compensation.",
+    levels: ["application"],
+  },
+  {
     id: "F9",
     implementation: [{ file: "e2e/library.test.mjs", symbol: "restoration connection" }],
     tests: [{ file: "e2e/library.test.mjs", id: "library windows create and open projects in place" }],
