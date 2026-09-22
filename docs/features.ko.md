@@ -166,6 +166,7 @@
   - [~] CSI: 이동/저장/복원·DECSCUSR 0–7·가시성·삽입/삭제/지우기/반복·탭·스크롤/마진·SGR·모드 설정/초기화/조회·장치/상태/창 응답·alternate screen·마우스/포커스/키보드·직사각형/보호 셀·팔레트/속성 스택. CSI 이동/저장/복원은 이제 실행 가능한 `A/B/C/D/G/H/f/s/u` inventory 행과 동작 테스트를 가지며 나머지 범주는 명시적으로 미완료로 둔다.
   - [o] F7.4 — 두 번째 parser를 만들거나 잘못된 바이트를 효과로 조용히 바꾸지 않고 CSI prefix/intermediate/final/parameter를 분할 입력·매개변수 누락·잘못된 입력에서 검사한다. Red: inventory에 CSI 청크 경계와 malformed parameter 처리를 검증하는 이름 있는 경계 케이스가 없었다. Green: engine processor만 유일한 parser로 사용하고, focused 경계 테스트가 분할 입력과 완전한 입력 뒤 관측 가능한 cursor/text 상태를 비교하며 1/1 통과했고 전체 Alacritty engine suite가 49/49 통과했다.
   - [o] BEL/ST, 응답 순서, 효과/조회를 검사한다. 기존 Alacritty 엔진의 단일 parser를 그대로 사용하며 `bel_and_st_terminated_effects_and_queries_preserve_response_order` bounded case가 OSC BEL·ST 종료, indexed color 효과·조회, CSI cursor-position 조회, 입력 순서에 따른 응답 순서를 함께 검증한다. 집중 검사는 통과했고 unsupported·policy-denied 항목은 효과가 아닌 명시적 결과로 남긴다.
+  - [o] F7.5 — CSI `J/K` 지우기 동작을 관측 가능한 grid 변화로 검증한다. Red: 최소 `J/K` 지우기 계약을 연결한 이름 있는 증거가 없어 parser 수용을 동작으로 오인할 수 있었다. Green: `csi_erase_display_and_line_change_only_the_requested_cells`가 `CSI Ps J`와 `CSI Ps K`가 요청된 표시/행 범위만 지우는지 검증하며, 집중 검사 1/1 통과와 inventory의 두 선택자 연결을 기록한다.
   - [ ] 전체 지원 선언 전에 물리적 X11/Tektronix 요구를 명시적으로 해소한다. 플랫폼 항목을 암묵적으로 제외하거나 승인 없이 다른 디스플레이 시스템 구현으로 확대하지 않는다.
 - [ ] F8 — 실제 macOS 한글 IME: 조합·편집·취소·범위·후보 위치, 확정 입력 순서/정확히 한 번 전달, 미확정 문자는 PTY로 전달하지 않음. 양쪽 호스트에서 검증한다.
 - [ ] F9 — 복원의 연결·문서·래스터·최초 표시 단계 측정. 실제 표시까지 loading, 실패 시 사라지지 않는 조치 가능한 오류, 같은 fixture에서 복원 속도 개선 측정.

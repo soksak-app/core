@@ -833,3 +833,26 @@ fn csi_scroll_moves_the_visible_grid_and_respects_a_scroll_region() {
     assert!(after_region_scroll.lines[2].is_empty());
     assert_eq!(after_region_scroll.lines[3][0].ch.as_deref(), Some("D"));
 }
+
+#[test]
+fn csi_erase_display_and_line_change_only_the_requested_cells() {
+    let mut engine = AlacrittyEngine::new();
+    engine.resize(8, 3);
+    engine.feed(b"top\r\nmid\r\nbottom");
+    engine.feed(b"\x1b[2;2H\x1b[0J");
+    let after_display_erase = engine.screen();
+    assert_eq!(after_display_erase.lines[0][0].ch.as_deref(), Some("t"));
+    assert_eq!(after_display_erase.lines[1][0].ch.as_deref(), Some("m"));
+    assert!(after_display_erase.lines[1].get(1).is_none_or(|cell| cell.ch.is_none()));
+    assert!(after_display_erase.lines[2].is_empty());
+
+    engine.reset();
+    engine.resize(8, 3);
+    engine.feed(b"abcdef");
+    engine.feed(b"\x1b[1;4H\x1b[0K");
+    let after_line_erase = engine.screen();
+    assert_eq!(after_line_erase.lines[0][0].ch.as_deref(), Some("a"));
+    assert_eq!(after_line_erase.lines[0][2].ch.as_deref(), Some("c"));
+    assert!(after_line_erase.lines[0].get(3).is_none_or(|cell| cell.ch.is_none()));
+    assert!(after_line_erase.lines[0].get(4).is_none_or(|cell| cell.ch.is_none()));
+}
