@@ -11,7 +11,7 @@ test("Wails page regions expose operations but only composition places geometry"
     __soksakNative: {
       call(method, args) {
         recorded.push([method, args]);
-        return Promise.resolve();
+        return Promise.resolve(method === "WaitPresented" ? { displayed: 42 } : undefined);
       },
       on(event, fn) {
         // Simulate event delivery: send image-event twice, once for s1 and once for s2
@@ -54,7 +54,7 @@ test("Wails page regions expose operations but only composition places geometry"
   assert.deepEqual(recorded.at(-1), ["DocumentLoad", [{ surface: "s1", document: "doc", url: "https://example.test" }]]);
   await host.call("compositionPlace", { revision: 1, regions: [], overlays: [] });
   assert.deepEqual(recorded.at(-1), ["CompositionPlace", [{ revision: 1, regions: [], overlays: [] }]]);
-  await host.call("waitPresented");
+  assert.deepEqual(await host.call("waitPresented"), { displayed: 42 });
   assert.deepEqual(recorded.at(-1), ["WaitPresented", []]);
   await host.call("report", "ready");
   assert.deepEqual(recorded.at(-1), ["Report", ["ready"]]);

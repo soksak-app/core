@@ -671,6 +671,19 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "G2.5",
+    implementation: [
+      { file: "apps/tauriv2/runtime/index.js", symbol: "waitPresented" },
+      { file: "apps/wailsv3/runtime/index.js", symbol: "waitPresented" },
+    ],
+    tests: [
+      { file: "apps/tauriv2/test/runtime-contract.test.mjs", id: "Tauri page regions expose operations but only composition places geometry" },
+      { file: "apps/wailsv3/test/runtime-contract.test.mjs", id: "Wails page regions expose operations but only composition places geometry" },
+    ],
+    expected: "Tauri and Wails runtime adapters return the same displayed-state payload from waitPresented and their contract tests assert that returned value.",
+    levels: ["unit"],
+  },
+  {
     id: "G2.3",
     implementation: [{ file: "packages/plugin-api/binder.js", symbol: "parentNode" }],
     tests: [
@@ -899,6 +912,22 @@ const FEATURE_LINKS = [
       { file: "e2e/terminal.test.mjs", id: "newly split terminal presents its first native raster" },
     ],
     expected: "Both rebuilt macOS hosts persist declared terminal cursor settings, reject invalid updates, render the effective policy in native pixels, and complete the first raster after a split without a presentation timeout.",
+    levels: ["unit", "native", "application"],
+  },
+  {
+    id: "F6",
+    implementation: [
+      { file: "plugins/terminal/ui/terminal.js", symbol: "startTerminal" },
+      { file: "sidecars/vt-alacritty/src/engine.rs", symbol: "fn feed_with_inline_images" },
+      { file: "e2e/terminal.test.mjs", symbol: "terminal file drop pastes quoted paths without executing" },
+    ],
+    tests: [
+      { file: "plugins/terminal/test/module.test.mjs", id: "terminal module waits for composition presentation, publishes state, and disposes the controller" },
+      { file: "e2e/terminal.test.mjs", id: "native terminal selection renders and copies through one explicit paste" },
+      { file: "e2e/terminal.test.mjs", id: "terminal file drop pastes quoted paths without executing" },
+      { file: "e2e/terminal.test.mjs", id: "inline image pixels follow scroll, resize, replacement, deletion, and cleanup" },
+    ],
+    expected: "The terminal selection, paste, file-drop, and inline-image contracts are implemented and verified through their unit and rebuilt native-host scenarios without input loss or unintended execution.",
     levels: ["unit", "native", "application"],
   },
   {

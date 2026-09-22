@@ -13,7 +13,7 @@ test("Tauri page regions expose operations but only composition places geometry"
       core: {
         invoke(command, args) {
           recorded.push([command, args]);
-          return Promise.resolve();
+          return Promise.resolve(command === "wait_presented" ? { displayed: 42 } : undefined);
         },
       },
       event: {
@@ -86,6 +86,8 @@ test("Tauri page regions expose operations but only composition places geometry"
   assert.deepEqual(recorded.at(-1), ["document_load", { request: { surface: "s1", document: "doc", url: "https://example.test" } }]);
   await host.call("report", "ready");
   assert.deepEqual(recorded.at(-1), ["report", { line: "ready" }]);
+  assert.deepEqual(await host.call("waitPresented"), { displayed: 42 });
+  assert.deepEqual(recorded.at(-1), ["wait_presented", {}]);
   assert.throws(() => host.call("report", { line: "ready" }), /report requires a string/);
   await host.call("sidecarSend", { sidecar: "x", surface: "s1", body: { value: 1 } });
   assert.deepEqual(recorded.at(-1), ["sidecar_send", { sidecar: "x", surface: "s1", body: { value: 1 } }]);
