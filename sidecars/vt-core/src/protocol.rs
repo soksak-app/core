@@ -1689,7 +1689,7 @@ async fn surface_task(
                     }
                     SurfaceCommand::Compose { preedit: next } => {
                         preedit = next;
-                        let response = json!({"surface": surface_id, "body": {"ack": true, "event": "compose"}});
+                        let response = json!({"surface": surface_id, "body": {"ack": true}});
                         if output_tx.send(response.to_string()).await.is_err() { return; }
                     }
                     SurfaceCommand::Focus { focused: next } => {
@@ -1700,7 +1700,7 @@ async fn surface_task(
                         if let Some(ref mut state) = image_state {
                             if !present_screen(&surface_id, &screen, state, &output_tx).await { return; }
                         }
-                        let response = json!({"surface": surface_id, "body": {"ack": true, "event": "focus", "focused": focused}});
+                        let response = json!({"surface": surface_id, "body": {"ack": true}});
                         if output_tx.send(response.to_string()).await.is_err() { return; }
                     }
                     SurfaceCommand::Theme { theme } => {

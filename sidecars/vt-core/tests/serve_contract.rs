@@ -331,6 +331,38 @@ async fn test_a3_input_calls_write() {
 }
 
 #[tokio::test]
+async fn native_input_ack_is_not_reported_as_an_unsolicited_event() {
+    let calls = Arc::new(Mutex::new(Calls::default()));
+    let factory_calls = calls.clone();
+    let factory = Arc::new(move || {
+        Arc::new(FakeSessionPort::new("input-ack".to_string(), factory_calls.clone()))
+            as Arc<dyn SessionPort>
+    });
+    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+{"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
+{"surface":"s1","body":{"operation":"input","focus":{"focused":true}}}
+{"surface":"s1","body":{"operation":"input","compose":{"text":"한","selectedRange":{"location":1,"length":0},"replacementRange":null,"attributed":true}}}
+"#;
+    let reader = std::io::Cursor::new(input.as_bytes());
+    let mut writer = Vec::new();
+    let engine_factory = Arc::new(|| Box::new(MockEngine::new()) as Box<dyn Engine>);
+
+    serve(engine_factory, reader, &mut writer, factory).await.unwrap();
+
+    let acknowledgements: Vec<serde_json::Value> = String::from_utf8(writer)
+        .unwrap()
+        .lines()
+        .filter_map(|line| serde_json::from_str(line).ok())
+        .filter(|value: &serde_json::Value| value["body"]["ack"] == true)
+        .collect();
+    assert_eq!(acknowledgements.len(), 2, "focus and compose must each acknowledge once");
+    for acknowledgement in acknowledgements {
+        assert!(acknowledgement["body"]["event"].is_null(),
+            "native input ACK must not become an unsolicited event: {acknowledgement}");
+    }
+}
+
+#[tokio::test]
 async fn test_paste_writes_ordered_text_using_bracketed_mode() {
     let calls = Arc::new(Mutex::new(Calls::default()));
     let fake_session_id = "test-paste-session".to_string();
