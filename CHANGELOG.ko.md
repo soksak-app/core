@@ -6,6 +6,8 @@
 
 ## 미배포
 
+- F0.5.6을 완료했다. 제한된 재빌드 Tauri matrix에서 실제 SIGABRT가 드러났다. `project_open`과 `window_new`가 비동기 명령이어서 AppKit 창 생성·활성화가 Tokio 워커에서 실행되었고 Rust foreign exception이 IPC 작업 경계를 넘어갔다. 두 명령과 메뉴 콜백이 이제 이벤트 루프 스레드에서 AppKit 작업을 실행한다. 현재 Tauri 터미널·셸·모달/제어·브라우저 탐색/theme·라이브러리/프로젝트·정상 종료 검사가 케이스별 출력을 유지하며 통과했고, 정상 종료가 endpoint와 process lock을 제거한다.
+
 - G3을 완료했다. host pair 감사가 이제 fixture에 주입된 호스트 또는 counterpart 누락을 거부한다. parity·언어·증거·mutation 주입 검사와 합쳐 도구 테스트 80/80을 생략·todo 없이 통과했고 패키지·문서·경계·노출 게이트도 통과했다.
 
 - G3-1을 완료했다. 감사 자기 검사에 중복 소유권, 잘못된 동작 테스트 귀속, 무동작·응답 누락 구현, 필수 생략 언어 결과, 오래된 실행 파일 digest를 주입한다. 전용 검사는 구조 inventory·언어 결과·mutation 동작·내용 해시 증거를 서로 다른 결과로 유지하며 36/36 단언을 통과했고, 전체 패키지 및 저장소 게이트도 통과했다.

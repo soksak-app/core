@@ -293,6 +293,21 @@ const FEATURE_LINKS = [
     levels: ["native", "application"],
   },
   {
+    id: "F0.5.6",
+    implementation: [
+      { file: "packages/host/tauriv2/src/bindings.rs", symbol: "project_open" },
+      { file: "packages/host/tauriv2/src/bindings.rs", symbol: "window_new" },
+      { file: "packages/host/tauriv2/src/host.rs", symbol: "on_menu_event" },
+    ],
+    tests: [
+      { file: "e2e/library.test.mjs", id: "library windows create and open projects in place" },
+      { file: "e2e/terminal.test.mjs", id: "native keyboard edits and executes independently in three terminals" },
+      { file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" },
+    ],
+    expected: "AppKit window creation and activation run on the event-loop thread, the bounded Tauri basic-operation matrix remains observable, and normal shutdown removes the owned endpoint and lock.",
+    levels: ["native", "application"],
+  },
+  {
     id: "F0.1",
     implementation: [
       { file: "native/darwin/src/input_inject.m", symbol: "sp_input_pointer" },

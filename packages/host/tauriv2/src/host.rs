@@ -120,12 +120,9 @@ pub fn run(context: tauri::Context<tauri::Wry>, _background: &'static str) {
         .setup(|app| {
             let dock = app.handle().clone();
             platform::current()?.install_dock_menu(Box::new(move || {
-                let app = dock.clone();
-                tauri::async_runtime::spawn_blocking(move || {
-                    if let Err(error) = windows::window_new(app) {
-                        eprintln!("{error}");
-                    }
-                });
+                if let Err(error) = windows::window_new(dock.clone()) {
+                    eprintln!("{error}");
+                }
             }))?;
             let menu = tauri::menu::Menu::default(app.handle())?;
             let Some(tauri::menu::MenuItemKind::Submenu(submenu)) =
@@ -159,12 +156,9 @@ pub fn run(context: tauri::Context<tauri::Wry>, _background: &'static str) {
         })
         .on_menu_event(|app, event| {
             if event.id().as_ref() == "new-window" {
-                let app = app.clone();
-                tauri::async_runtime::spawn_blocking(move || {
-                    if let Err(error) = windows::window_new(app) {
-                        eprintln!("{error}");
-                    }
-                });
+                if let Err(error) = windows::window_new(app.clone()) {
+                    eprintln!("{error}");
+                }
             }
         })
         .invoke_handler(bindings::handler())
