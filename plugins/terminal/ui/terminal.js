@@ -192,7 +192,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose,
     } else if (entry.type === "command") {
       await terminal.send(id, { op: "input", command: { selector: entry.selector } });
     } else if (entry.type === "focus") {
-      await terminal.send(id, { op: "focus", focused: entry.focused });
+      await terminal.send(id, { op: "input", focus: { focused: entry.focused } });
     } else {
       throw new Error(`unknown terminal input type: ${entry.type}`);
     }

@@ -1055,7 +1055,7 @@ test("native focus and cursor state route to sidecar and caret", async () => {
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(regionReference._caret, { x: 27, y: 36, width: 9, height: 18 });
   assert.deepEqual(fakeSidecar.getMessages().at(-1).body, {
-    op: "focus", focused: true,
+    op: "input", focus: { focused: true },
   });
 });
 
