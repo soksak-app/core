@@ -20,11 +20,13 @@ const files = {
       sets: [{ id: "set-a", title: "A", sections: ["side.list", "card.info"] }],
       links: [{ place: "left", plugin: null, set: "set-a" }],
     },
+    settings: { card: { "cursor.shape": "beam" } },
   },
   "/modules/@fixture/card/plugin.json": {
     id: "card", name: "Card", mark: "c", icon: "<path/>",
     surface: { module: "ui/card.js", composition: { kind: "dom" } }, sections: [{ id: "card.info", name: "Info" }],
     preview: { ink: "--fixture-ink" },
+    settings: { "cursor.shape": { type: "enum", default: "block", values: ["block", "beam"] } },
   },
   "/modules/@fixture/side/plugin.json": { id: "side", name: "Side", sections: [{ id: "side.list", name: "List" }] },
 };
@@ -53,6 +55,8 @@ test("the environment registers card plugins, sections, and sidebar defaults", a
   assert.equal(registry.section("card.info").name, "Info");
   assert.deepEqual(settings.defaults.sets, files["/environment.json"].sidebars.sets);
   assert.deepEqual(settings.defaults.links, files["/environment.json"].sidebars.links);
+  assert.equal(settings.value("card.cursor.shape"), "beam");
+  assert.equal(settings.settingDefinitions()["card.cursor.shape"].default, "block");
   assert.equal(environment().workspace.focus, "main");
   await assert.rejects(loadEnvironment(), /already loaded/);
 });

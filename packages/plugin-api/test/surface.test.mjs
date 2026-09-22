@@ -30,8 +30,10 @@ test("surface context exposes only scoped runtime capabilities", () => {
   const root = { appendChild() {} };
   const context = createSurfaceContext({ root, surfaceId: "tab-1", pluginId: "fixture", runtime: {
     sidecar: () => "port", native: { composition: {} }, exposure: { command() {} }, emit() {},
+    settings: { read: () => ({ "cursor.shape": "block" }), on: () => () => {} },
   } });
   assert.equal(context.runtime.sidecar(), "port");
   assert.deepEqual(context.runtime.native, { composition: {} });
+  assert.equal(context.runtime.settings.read()["cursor.shape"], "block");
   assert.equal("call" in context.runtime, false);
 });

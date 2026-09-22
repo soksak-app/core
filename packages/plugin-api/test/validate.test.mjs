@@ -7,6 +7,7 @@ import {
 const card = {
   id: "probe", name: "Probe", mark: "p", icon: "<path/>",
   surface: { module: "ui/probe.js", composition: { kind: "dom" } }, sidecars: ["@scope/sidecar-worker"],
+  settings: { "cursor.shape": { type: "enum", default: "block", values: ["block", "beam"] } },
 };
 const side = { id: "side", name: "Side", sections: [{ id: "side.list", name: "List" }] };
 const environment = () => ({
@@ -26,6 +27,7 @@ const environment = () => ({
     sets: [{ id: "set-side", title: "Side", sections: ["side.list"] }],
     links: [{ place: "left", plugin: null, set: "set-side" }, { place: "right", plugin: "probe", set: "set-side" }],
   },
+  settings: { probe: { "cursor.shape": "block" } },
 });
 
 test("a manifest with a page surface or with sections only is accepted", () => {
@@ -33,6 +35,7 @@ test("a manifest with a page surface or with sections only is accepted", () => {
   assert.equal(validateManifest(side), side);
   assert.equal(validateManifest({ ...card, preview: { ink: "--surface-fg" } }).preview.ink, "--surface-fg");
   assert.equal(validateManifest({ ...card, home: "https://example.com/start" }).home, "https://example.com/start");
+  assert.deepEqual(validateManifest(card).settings["cursor.shape"].values, ["block", "beam"]);
   const background = { sidecar: "@scope/sidecar-worker", operation: "open" };
   assert.equal(validateManifest({ ...card, background }).background.operation, "open");
 });
@@ -66,6 +69,8 @@ test("a manifest is rejected for each invalid field", () => {
     [{ ...card, background: { sidecar: "@scope/sidecar-worker" } }, /operation must be a non-empty string/],
     [{ ...card, background: { sidecar: "@scope/sidecar-worker", operation: "" } }, /operation must be a non-empty string/],
     [{ ...card, background: { sidecar: "@scope/sidecar-other", operation: "open" } }, /sidecar must be declared/],
+    [{ ...card, settings: { "cursor.shape": { type: "enum", default: "block", values: ["block", "block"] } } }, /distinct/],
+    [{ ...card, settings: { "cursor.shape": { type: "integer", default: 1, minimum: 2, maximum: 3 } } }, /default and bounds/],
   ];
   for (const [manifest, message] of cases) assert.throws(() => validateManifest(manifest), message);
 });
@@ -122,6 +127,12 @@ test("an environment is rejected for each invalid field", () => {
   }
 });
 
+test("environment setting values are checked against the owning manifest", () => {
+  const value = environment();
+  value.settings.probe["cursor.shape"] = "underline";
+  assert.throws(() => checkReferences(value, [card, side]), /not declared/);
+});
+
 test("references to missing plugins and sections are rejected", () => {
   const cases = [
     [(e) => { e.workspace.grid.cards[1].tabs[0].plugin = "side"; }, /tab plugin side has no surface/],
@@ -134,6 +145,7 @@ test("references to missing plugins and sections are rejected", () => {
     assert.throws(() => checkReferences(value, [card, side]), message);
   }
   assert.throws(() => checkReferences(environment(), [card, side, { ...side }]), /same id/);
+  assert.throws(() => checkReferences({ ...environment(), settings: { missing: {} } }, [card, side]), /unknown plugin/);
 });
 
 test("an environment has no sidecar field", () => {

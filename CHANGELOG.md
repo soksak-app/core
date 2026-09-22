@@ -1,5 +1,7 @@
 # Changelog
 
+- Terminal cursor settings now have typed plugin/environment declarations, strict common/project persistence validation, shared settings-modal controls, and live delivery to each terminal sidecar. Package and structural gates pass; rebuilt-host cursor pixel E2E remains pending until a current application endpoint is available.
+
 - Completed F0.4-1.5 and closed F0.4-1. The cross-language failure matrix now runs attributable JS/TS, Rust, Go, and Objective-C audits. Wails Darwin capture status, recording cleanup, shell close, and persistent protocol decoding no longer discard failures; Wails and shell tests plus 27 parity self-tests pass.
 
 - Completed F0.4-1.4. Darwin capture failures now cross the Objective-C/Rust boundary as explicit status and error text instead of log-only `void` calls or silently discarded invalid paths. Native capture tests and the machine failure audit cover the corrected contract; 25 parity self-tests pass. Cross-language failure-matrix work remains open under F0.4-1.5.

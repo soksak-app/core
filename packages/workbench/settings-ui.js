@@ -21,6 +21,7 @@ import { commandOf, delegate, mark, run } from "./commands.js";
 import { plugins, sectionNames } from "./registry.js";
 import {
   FONTS, MODES, THEMES, scopedValue, settingProject, overridden,
+  settingDefinitions,
 } from "./settings.js";
 
 /* 열려 있는 동안에만 존재한다. 숨겨 두면 표시 여부를 CSS 가 결정하게 되고,
@@ -243,6 +244,18 @@ function drawGeneral() {
     row("경계선", segment("fullRule", [["under", "가림"], ["over", "보임"], ["none", "숨김"]], value("fullRule"))),
     row("포커스 밖 흐리게", toggle("dim", value("dim"))),
   ]));
+
+  const declared = Object.entries(settingDefinitions()).sort(([a], [b]) => a.localeCompare(b));
+  if (declared.length) {
+    const controls = declared.map(([key, definition]) => {
+      const now = value(key);
+      const control = definition.type === "enum"
+        ? segment(key, definition.values.map((item) => [item, item]), now)
+        : slide(key, definition.minimum, definition.maximum, now, "");
+      return row(key, control);
+    });
+    body.append(group("플러그인", "플러그인이 선언한 설정은 같은 공통/프로젝트 범위와 저장 규칙을 사용한다.", controls));
+  }
 }
 
 function drawSidebars() {

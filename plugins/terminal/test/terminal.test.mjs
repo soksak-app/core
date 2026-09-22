@@ -1094,6 +1094,39 @@ test("cursor policy sends explicit shape, blink, interval, idle timeout, and unf
   );
 });
 
+test("declared settings are sent at startup and on effective setting changes", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  let notify;
+  const settings = {
+    read: () => ({
+      "cursor.shape": "underline", "cursor.blink": "On", "cursor.interval": 900,
+      "cursor.idleTimeout": 0, "cursor.unfocused": "beam",
+    }),
+    on: (listener) => { notify = listener; return () => { notify = null; }; },
+  };
+  const terminal = await startTerminal({
+    view: createFakeView(), attachImage: createFakeAttachImage().function,
+    sidecar: fakeSidecar, expose: createFakeExpose(), settings,
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  assert.deepEqual(fakeSidecar.getMessages().at(-1).body, {
+    operation: "cursor", shape: "underline", blink: "On", interval: 900,
+    idleTimeout: 0, unfocused: "beam",
+  });
+  notify({
+    "cursor.shape": "beam", "cursor.blink": "Never", "cursor.interval": 1000,
+    "cursor.idleTimeout": 5000, "cursor.unfocused": "solid",
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(fakeSidecar.getMessages().at(-1).body, {
+    operation: "cursor", shape: "beam", blink: "Never", interval: 1000,
+    idleTimeout: 5000, unfocused: "solid",
+  });
+  await terminal.dispose();
+  assert.equal(notify, null);
+});
+
 test("invalid cursor fields are observable errors and never fall back to the previous cursor", async () => {
   FakeResizeObserver.reset();
   const fakeAttachImage = createFakeAttachImage();

@@ -135,6 +135,7 @@ function normalizeCursorPolicy(value) {
  * @returns {Promise<void>}
  */
 export async function startTerminal({ id, view, attachImage, sidecar, expose, theme,
+  settings,
   window: globalWindow = globalThis.window }) {
   // 브라우저 환경에서 필요한 객체들
   const window = globalWindow;
@@ -478,6 +479,31 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   }
   await themeReady;
 
+  let settingsSubscription = null;
+  const settingsPolicy = () => {
+    const values = settings?.read?.() ?? {};
+    return {
+      shape: values["cursor.shape"],
+      blink: values["cursor.blink"],
+      interval: values["cursor.interval"],
+      idleTimeout: values["cursor.idleTimeout"],
+      unfocused: values["cursor.unfocused"],
+    };
+  };
+  if (settings) {
+    await setCursorPolicy(settingsPolicy());
+    settingsSubscription = settings.on((values) => {
+      const policy = {
+        shape: values["cursor.shape"],
+        blink: values["cursor.blink"],
+        interval: values["cursor.interval"],
+        idleTimeout: values["cursor.idleTimeout"],
+        unfocused: values["cursor.unfocused"],
+      };
+      setCursorPolicy(policy).catch(reportInputError);
+    });
+  }
+
   // 공개 항목 등록
   await Promise.all([
     expose.status("terminal.session", read.session, watch("session")),
@@ -561,6 +587,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     async dispose() {
       const offTheme = await themeSubscription?.dispose;
       offTheme?.();
+      settingsSubscription?.();
       stopSidecar?.();
       view.removeEventListener("pointerdown", preventDefaultFocus);
       await terminal.send(id, { operation: "close" });

@@ -40,6 +40,7 @@ export function createSurfaceContext({ root, surfaceId, pluginId, metadata = {},
       native: runtime.native,
       clipboard: runtime.clipboard,
       theme: runtime.theme,
+      settings: runtime.settings,
     }),
     exposure: Object.freeze(runtime.exposure),
     events: Object.freeze({

@@ -4,7 +4,7 @@
 // 사이드바 기본값은 모두 이 파일이 불러온 값에서 온다.
 import { registry as exposure } from "./exposure.js";
 import { registerPlugin, registerSection } from "./registry.js";
-import { setSidebarDefaults } from "./settings.js";
+import { setPluginSettings, setSidebarDefaults } from "./settings.js";
 import {
   ENVIRONMENT, MANIFEST, checkReferences, modulePath, validateEnvironment, validateManifest,
 } from "@soksak/plugin-api";
@@ -31,6 +31,7 @@ export async function loadEnvironment() {
   const manifests = await Promise.all(environment.plugins.map(async (name) =>
     ({ name, manifest: validateManifest(await readJson(modulePath(name, MANIFEST))) })));
   checkReferences(environment, manifests.map((m) => m.manifest));
+  setPluginSettings(manifests.map((m) => m.manifest), environment.settings ?? {});
   for (const { name, manifest } of manifests) {
     if (manifest.surface) {
       registerPlugin({

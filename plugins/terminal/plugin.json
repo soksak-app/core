@@ -21,6 +21,35 @@
   "preview": {
     "ink": "--surface-fg"
   },
+  "settings": {
+    "cursor.shape": {
+      "type": "enum",
+      "default": "block",
+      "values": ["block", "underline", "beam"]
+    },
+    "cursor.blink": {
+      "type": "enum",
+      "default": "Off",
+      "values": ["Never", "Off", "On", "Always"]
+    },
+    "cursor.interval": {
+      "type": "integer",
+      "default": 750,
+      "minimum": 50,
+      "maximum": 5000
+    },
+    "cursor.idleTimeout": {
+      "type": "integer",
+      "default": 5000,
+      "minimum": 0,
+      "maximum": 60000
+    },
+    "cursor.unfocused": {
+      "type": "enum",
+      "default": "hollow",
+      "values": ["hollow", "solid", "underline", "beam", "unchanged"]
+    }
+  },
   "sidecars": [
     "@soksak/sidecar-vt-alacritty"
   ],

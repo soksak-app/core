@@ -52,6 +52,7 @@ const ID = /^[a-z][a-z0-9-]*$/;
 const PACKAGE = /^(@[a-z0-9-]+\/)?[a-z0-9-]+$/;
 const REGION = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const TOKEN = /^--[a-z][a-z0-9-]*$/;
+const SETTING = /^[a-z][A-Za-z0-9-]*(?:\.[a-z][A-Za-z0-9-]*)*$/;
 
 const isObject = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 const isText = (value) => typeof value === "string" && value.length > 0;
@@ -68,6 +69,57 @@ function only(where, value, keys) {
   for (const key of Object.keys(value)) {
     if (!keys.includes(key)) throw new Error(`${where}: unknown field ${key}`);
   }
+}
+
+function checkSettingDeclaration(where, declaration) {
+  if (!isObject(declaration)) throw new Error(`${where}: setting must be an object`);
+  if (declaration.type === "enum") {
+    only(where, declaration, ["type", "default", "values"]);
+    if (!Array.isArray(declaration.values) || declaration.values.length === 0 ||
+        declaration.values.some((value) => typeof value !== "string" || value.length === 0) ||
+        new Set(declaration.values).size !== declaration.values.length) {
+      throw new Error(`${where}: enum values must be distinct non-empty strings`);
+    }
+    if (!declaration.values.includes(declaration.default)) {
+      throw new Error(`${where}: default must be one of values`);
+    }
+    return;
+  }
+  if (declaration.type === "integer") {
+    only(where, declaration, ["type", "default", "minimum", "maximum"]);
+    if (!Number.isInteger(declaration.default) || !Number.isInteger(declaration.minimum) ||
+        !Number.isInteger(declaration.maximum) || declaration.minimum > declaration.maximum ||
+        declaration.default < declaration.minimum || declaration.default > declaration.maximum) {
+      throw new Error(`${where}: integer default and bounds are invalid`);
+    }
+    return;
+  }
+  throw new Error(`${where}: setting type must be enum or integer`);
+}
+
+function checkSettings(where, settings) {
+  if (settings === undefined) return;
+  if (!isObject(settings)) throw new Error(`${where}: settings must be an object`);
+  for (const [key, declaration] of Object.entries(settings)) {
+    if (!SETTING.test(key)) throw new Error(`${where}: invalid setting name ${key}`);
+    checkSettingDeclaration(`${where}.${key}`, declaration);
+  }
+}
+
+function checkSettingValue(where, declaration, value) {
+  if (declaration.type === "enum" && !declaration.values.includes(value)) {
+    throw new Error(`${where}: value is not declared`);
+  }
+  if (declaration.type === "integer" &&
+      (!Number.isInteger(value) || value < declaration.minimum || value > declaration.maximum)) {
+    throw new Error(`${where}: integer value is outside its declared range`);
+  }
+}
+
+export function settingDeclarations(manifest) {
+  return Object.fromEntries(Object.entries(manifest.settings ?? {}).map(([key, declaration]) => [
+    `${manifest.id}.${key}`, { ...declaration, plugin: manifest.id, key },
+  ]));
 }
 
 /** 표면 합성 선언을 검사한다. 이 선언이 호스트의 영역 권한 목록이다. */
@@ -144,7 +196,7 @@ function checkBackground(where, background, sidecars) {
  */
 export function validateManifest(manifest) {
   if (!isObject(manifest)) throw new Error("plugin.json: expected an object");
-  only("plugin.json", manifest, ["id", "name", "mark", "icon", "surface", "home", "sections", "preview", "sidecars", "background", "exposes"]);
+  only("plugin.json", manifest, ["id", "name", "mark", "icon", "surface", "home", "sections", "preview", "sidecars", "background", "exposes", "settings"]);
   const { id } = manifest;
   if (typeof id !== "string" || !ID.test(id)) throw new Error(`plugin.json: invalid id ${id}`);
   const where = `plugin ${id}`;
@@ -202,6 +254,7 @@ export function validateManifest(manifest) {
     if (manifest.surface === undefined) throw new Error(`${where}: exposes require a surface`);
     validateExposes(id, manifest.exposes);
   }
+  checkSettings(`${where}`, manifest.settings);
   if (manifest.surface === undefined && manifest.sections === undefined) {
     throw new Error(`${where}: a plugin requires a surface or sections`);
   }
@@ -261,7 +314,7 @@ export function validateSidecar(sidecar) {
  */
 export function validateEnvironment(environment) {
   if (!isObject(environment)) throw new Error("environment.json: expected an object");
-  only("environment.json", environment, ["runtime", "plugins", "workspace", "sidebars"]);
+  only("environment.json", environment, ["runtime", "plugins", "workspace", "sidebars", "settings"]);
   if (!isText(environment.runtime) || environment.runtime.startsWith("/") || environment.runtime.split("/").includes("..")) {
     throw new Error("environment.json: runtime must be a directory inside the application");
   }
@@ -270,6 +323,9 @@ export function validateEnvironment(environment) {
   }
   if (new Set(environment.plugins).size !== environment.plugins.length) {
     throw new Error("environment.json: duplicate plugin package");
+  }
+  if (environment.settings !== undefined && !isObject(environment.settings)) {
+    throw new Error("environment.json: settings must be an object");
   }
   const { workspace } = environment;
   if (!isObject(workspace)) throw new Error("environment.json: workspace is required");
@@ -332,6 +388,18 @@ export function checkReferences(environment, manifests) {
   const sections = new Set(manifests.flatMap((m) => (m.sections ?? []).map((s) => s.id)));
   const ids = manifests.map((m) => m.id);
   if (new Set(ids).size !== ids.length) throw new Error("environment.json: two plugins declare the same id");
+  const byId = new Map(manifests.map((manifest) => [manifest.id, manifest]));
+  for (const [pluginId, values] of Object.entries(environment.settings ?? {})) {
+    const manifest = byId.get(pluginId);
+    if (!manifest) throw new Error(`environment.json: settings names unknown plugin ${pluginId}`);
+    if (!isObject(values)) throw new Error(`environment.json: settings for ${pluginId} must be an object`);
+    const declarations = manifest.settings ?? {};
+    for (const [key, value] of Object.entries(values)) {
+      const declaration = declarations[key];
+      if (!declaration) throw new Error(`environment.json: settings names unknown key ${pluginId}.${key}`);
+      checkSettingValue(`environment.json: settings ${pluginId}.${key}`, declaration, value);
+    }
+  }
   for (const card of environment.workspace.grid.cards) {
     for (const tab of card.tabs ?? []) {
       if (!cards.has(tab.plugin)) throw new Error(`environment.json: tab plugin ${tab.plugin} has no surface`);

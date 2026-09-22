@@ -2,6 +2,7 @@ import { createSurfaceCompositionController, createSurfaceContext, mountSurfaceM
 import { native, surfaces as hostSurfaces, surfaceContextRuntime } from "./host.js";
 import { registry } from "./exposure.js";
 import { registerSurfaceExposure } from "./surface-exposure.js";
+import { onSettingsChange, pluginSettings } from "./settings.js";
 const mounted = new Map();
 const parking = document.createDocumentFragment();
 const authorization = new Map();
@@ -111,7 +112,9 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
       metadata: { home: surface.home },
       declarations: surface.declarations ?? {}, composition,
       runtime: { sidecar: scoped.sidecar, native: scoped.native, exposure: scoped.exposure, emit, on,
-        theme: scoped.theme },
+        theme: scoped.theme,
+        settings: { read: () => pluginSettings(surface.pluginId), on: (listener) =>
+          onSettingsChange(() => listener(pluginSettings(surface.pluginId))) }, },
     });
     const exposure = registerSurfaceExposure({ root: shadow, expose: context.exposure, view,
       declarations: registry.surfaceDeclarations() });

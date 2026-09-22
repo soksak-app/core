@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
 
-import { APPS, drag, fresh, open, within } from "./app.mjs";
+import { APPS, drag, failure, fresh, open, within } from "./app.mjs";
 import { frames, pixel, readFrame } from "./frame.mjs";
 import { glyphShape, surfaceBoxes, whitePixels } from "./outside.mjs";
 import { assertRoundTrips } from "./drag-measurement.mjs";
@@ -97,6 +97,31 @@ async function terminalBackgroundSample(session, rect) {
   const sample = pixel(frame, x, y);
   rmSync(frameDir, { recursive: true, force: true });
   return sample;
+}
+
+async function terminalCursorCell(session, surface) {
+  await session.request("diagnostics.capture.start", {});
+  const displayed = await session.presented();
+  const { frames: frameDir } = await session.request("diagnostics.capture.stop", { after: displayed.displayed });
+  const files = frames(frameDir);
+  assert.ok(files.length > 0, "cursor policy capture produced no frames");
+  const frame = readFrame(files.at(-1));
+  const rect = await session.rect("terminal.view", undefined, surface);
+  const cursor = await session.get("terminal.cursor", surface);
+  const state = await session.get("terminal.session", surface);
+  const x0 = Math.max(0, Math.round(rect.x + cursor.col * state.cellWidth));
+  const y0 = Math.max(0, Math.round(rect.y + cursor.row * state.cellHeight));
+  const x1 = Math.min(frame.width, x0 + Math.ceil(state.cellWidth));
+  const y1 = Math.min(frame.height, y0 + Math.ceil(state.cellHeight));
+  const pixels = [];
+  for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) pixels.push(pixel(frame, x, y));
+  rmSync(frameDir, { recursive: true, force: true });
+  return pixels;
+}
+
+function differentPixels(before, after) {
+  return before.reduce((count, value, index) => count +
+    (value.some((channel, channelIndex) => channel !== after[index]?.[channelIndex]) ? 1 : 0), 0);
 }
 
 async function assertGridFillsPlane(session, message) {
@@ -617,6 +642,54 @@ for (const app of Object.values(APPS)) {
       `light and dark background pixels did not differ: ${darkSample} -> ${switchedSample}`);
     else assert.ok(lightSample === null || switchedSample.some((value, index) => Math.abs(value - lightSample[index]) > 100),
       `dark and light background pixels did not differ: ${lightSample} -> ${switchedSample}`);
+  });
+
+  test(`${app.name}: terminal cursor policy uses declared settings, persistence, and pixels`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const [terminal] = await ensureTerminals(s, 1);
+    await s.until("terminal.session", (state) => Boolean(state?.sessionId),
+      "terminal session did not open", { surface: terminal.surface });
+    await s.run("core.settings.open");
+    await s.until("core.settings-modal", (modal) => modal.controls.some((control) =>
+      control.key === "terminal.cursor.shape"), "terminal cursor settings did not appear");
+    await s.run("core.settings.close");
+
+    const before = await terminalCursorCell(s, terminal.surface);
+    await s.run("core.settings.set", {
+      patch: {
+        "terminal.cursor.shape": "block",
+        "terminal.cursor.blink": "Never",
+        "terminal.cursor.interval": 900,
+        "terminal.cursor.idleTimeout": 0,
+        "terminal.cursor.unfocused": "beam",
+      },
+      scope: "common",
+    });
+    await s.until("core.settings", (state) => state.values["terminal.cursor.unfocused"] === "beam" && !state.saving,
+      "cursor settings were not saved");
+    await s.until("terminal.cursor", (state) => state.unfocused === "beam" && state.blink === "Never",
+      "terminal did not receive the effective cursor settings", { surface: terminal.surface });
+    const after = await terminalCursorCell(s, terminal.surface);
+    assert.ok(differentPixels(before, after) > 0, "cursor policy did not change actual cursor-cell pixels");
+    assert.equal(await failure(s.run("core.settings.set", {
+      patch: { "terminal.cursor.interval": 0 }, scope: "common",
+    })), -32602, "invalid cursor setting must fail explicitly");
+    assert.equal((await s.get("core.settings")).values["terminal.cursor.interval"], 900,
+      "invalid cursor setting must not replace the effective value");
+    s.cleanup(async () => {
+      await s.run("core.settings.set", {
+        patch: {
+          "terminal.cursor.shape": undefined,
+          "terminal.cursor.blink": undefined,
+          "terminal.cursor.interval": undefined,
+          "terminal.cursor.idleTimeout": undefined,
+          "terminal.cursor.unfocused": undefined,
+        }, scope: "common",
+      });
+      await closeTerminalTabs(s);
+    });
   });
 
   test(`${app.name}: terminal image follows a window resize`, async (t) => {

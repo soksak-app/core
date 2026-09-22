@@ -174,6 +174,7 @@ export const defaults = {
 };
 
 let settings = structuredClone(defaults);
+const pluginDefinitions = new Map();
 
 let common = {};
 let overrides = {};
@@ -182,6 +183,57 @@ let store;
 let writing = Promise.resolve();
 let changes = 0;
 let revision = 0;
+
+function validatePluginValue(key, value) {
+  const definition = pluginDefinitions.get(key);
+  if (!definition) return;
+  if (definition.type === "enum" && !definition.values.includes(value)) {
+    throw new Error(`Invalid setting ${key}: value is not declared`);
+  }
+  if (definition.type === "integer" &&
+      (!Number.isInteger(value) || value < definition.minimum || value > definition.maximum)) {
+    throw new Error(`Invalid setting ${key}: integer value is outside its declared range`);
+  }
+}
+
+function validateValues(values, where) {
+  for (const [key, value] of Object.entries(values ?? {})) {
+    if (!Object.hasOwn(defaults, key)) throw new Error(`${where}: unknown setting ${key}`);
+    validatePluginValue(key, value);
+  }
+}
+
+/** Register validated plugin settings before persistent settings are loaded. */
+export function setPluginSettings(manifests, applicationValues = {}) {
+  if (store) throw new Error("plugin settings must be set before settings are connected");
+  for (const manifest of manifests) {
+    for (const [local, definition] of Object.entries(manifest.settings ?? {})) {
+      const key = `${manifest.id}.${local}`;
+      if (pluginDefinitions.has(key) || Object.hasOwn(defaults, key)) {
+        throw new Error(`duplicate setting: ${key}`);
+      }
+      pluginDefinitions.set(key, Object.freeze({ ...definition, plugin: manifest.id, local }));
+      defaults[key] = definition.default;
+      if (Object.hasOwn(applicationValues[manifest.id] ?? {}, local)) {
+        validatePluginValue(key, applicationValues[manifest.id][local]);
+        defaults[key] = applicationValues[manifest.id][local];
+      }
+    }
+  }
+  settings = structuredClone(defaults);
+}
+
+export const settingDefinitions = () => Object.fromEntries(
+  [...pluginDefinitions.entries()].map(([key, definition]) => [key, structuredClone(definition)]),
+);
+
+export function pluginSettings(pluginId) {
+  const values = {};
+  for (const [key, definition] of pluginDefinitions) {
+    if (definition.plugin === pluginId) values[definition.local] = settings[key];
+  }
+  return values;
+}
 
 /** environment.json 의 사이드바 기본값을 등록한다. 설정 저장소를 연결하기 전에 호출한다. */
 export function setSidebarDefaults(sidebars) {
@@ -202,6 +254,8 @@ async function refresh() {
   const snapshot = await store.snapshot();
   if (changes || mine !== revision) return;
   const nextOverrides = snapshot.projects.find((p) => p.id === projectId)?.settings ?? {};
+  validateValues(snapshot.common, "common settings");
+  validateValues(nextOverrides, "project settings");
   if (JSON.stringify(common) === JSON.stringify(snapshot.common) && JSON.stringify(overrides) === JSON.stringify(nextOverrides)) return;
   common = snapshot.common;
   overrides = nextOverrides;
@@ -300,6 +354,9 @@ export function set(patch, scope = projectId ? "project" : "common") {
   if (id && Object.hasOwn(patch, "projectOpening")) throw new Error("Project opening mode is common-only");
   for (const [key, val] of Object.entries(patch)) {
     if (!Object.hasOwn(defaults, key)) throw new Error(`Unknown setting: ${key}`);
+    if (val !== undefined) validatePluginValue(key, val);
+  }
+  for (const [key, val] of Object.entries(patch)) {
     const target = id ? overrides : common;
     if (val === undefined) delete target[key];
     else target[key] = val;
@@ -346,14 +403,16 @@ export function install() {
 export const cardRadius = () => (seam() === "line" ? 0 : settings.radius);
 
 /* 설정 변경 수신자. 판 하나가 연결된다. */
-let listener = null;
+const listeners = new Set();
 
 /** 설정이 바뀔 때 호출할 함수를 등록한다. */
 export function onSettingsChange(fn) {
-  listener = fn;
+  if (typeof fn !== "function") throw new TypeError("settings listener must be a function");
+  listeners.add(fn);
+  return () => listeners.delete(fn);
 }
 
-const announce = () => listener?.();
+const announce = () => { for (const fn of listeners) fn(); };
 
 /** 세트 전부를 반환한다. 사이드바 편집 시 선택 목록으로 사용한다. */
 export const sets = () => settings.sets;
@@ -414,4 +473,3 @@ export const stagePad = () => (seam() === "line" ? 0 : halfGap());
 
 /** 설정에 들어 있는 통로 값(px). 슬라이더가 표시하는 값이다. */
 export const gapSetting = () => settings.gap;
-
