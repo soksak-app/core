@@ -6,6 +6,8 @@
 
 ## Unreleased
 
+- Closed the G4 command-supervision item. The focused supervisor suite reports 16/16 passing assertions in 1.58s with no failures, skips, or todos, and retains explicit failures for nonzero exits, missing executables, timeout, cancellation, observer errors, output-drain failures, and denied cleanup verification. Language adapters and content-hash evidence remain open under G4.
+
 - Completed F0.4-1.3.3. The Rust failure audit now covers VT core, VT Alacritty, the Tauri host, and the Tauri application production lanes instead of leaving the remaining bridge paths implicit. The declared native build environment produced no ignored production `Result` outcomes, Windows unsupported operations return explicit errors, and the 23 parity self-tests and native workspace suite pass. Objective-C and cross-language failure-matrix work remain open under F0.4-1.4 and F0.4-1.5.
 
 - Completed F0.4-1.3.2 for the Tauri host. The scoped Rust audit found ignored callback sends, transport reads, cleanup, capture-stop, and close-owner serialization outcomes. The production lane now returns or explicitly reports each outcome, recording abort preserves simultaneous stop and cleanup failures, and the Tauri Rust suite and parity audit pass. Remaining Rust host/bridge and Objective-C lanes stay open under F0.4-1.3.3 through F0.4-1.5.

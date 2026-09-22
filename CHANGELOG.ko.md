@@ -6,6 +6,8 @@
 
 ## 미배포
 
+- G4 명령 감독 항목을 닫았다. 전용 감독기 스위트가 1.58초에 16/16 단언을 통과했고 실패·생략·todo가 0개이며, 비정상 종료·실행 파일 없음·타임아웃·취소·관측기 오류·출력 drain 오류·정리 검증 거부를 명시적 실패로 유지한다. 언어 어댑터와 내용 해시 증거는 G4에 남아 있다.
+
 - F0.4-1.3.3을 완료했다. Rust 실패 감사가 이제 VT core·VT Alacritty·Tauri host·Tauri application production lane을 모두 포함해 남은 bridge 경로를 암묵적으로 남기지 않는다. 선언된 native build 환경에서 production `Result` 무시가 없고, Windows 미지원 연산은 명시적 오류를 반환하며, parity 자기 테스트와 native workspace 검사가 통과했다. Objective-C와 교차 언어 실패 매트릭스는 F0.4-1.4와 F0.4-1.5에 남아 있다.
 
 - F0.4-1.3.2 Tauri host 작업을 완료했다. 범위 Rust 감사에서 callback send·transport read·정리·capture stop·close-owner 직렬화 결과 무시를 찾았다. production lane이 이제 각 결과를 반환하거나 명시적으로 보고하고, recording abort가 stop과 정리의 동시 오류를 보존하며, Tauri Rust 검사와 parity 감사가 통과한다. 남은 Rust host/bridge와 Objective-C lane은 F0.4-1.3.3부터 F0.4-1.5에 남아 있다.
