@@ -7,6 +7,7 @@
 #import "webview_input.h"
 
 static int failures = 0;
+static NSString *lastEvaluationScript = nil;
 
 // 실제 포인터가 창 위에 있으면 AppKit 과 WebKit 이 그 이동도 처리하므로 검사 이벤트에 섞인다.
 // 창을 포인터에서 떨어진 곳에 두고, 측정 동안 포인터가 창에 들어오면 측정을 무효로 보고한다.
@@ -39,10 +40,16 @@ static void until(BOOL (^done)(void)) {
         [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
                                beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
     }
-    if (!done()) { fprintf(stderr, "FAIL: WebKit did not answer within 10 seconds\n"); exit(1); }
+    if (!done()) {
+        fprintf(stderr, "FAIL: WebKit did not answer within 10 seconds; last JavaScript: %s\n",
+            lastEvaluationScript.UTF8String ?: "none");
+        exit(1);
+    }
 }
 
 static id evaluate(WKWebView *view, NSString *script) {
+    [lastEvaluationScript release];
+    lastEvaluationScript = [script copy];
     __block BOOL done = NO;
     __block id result = nil;
     [view evaluateJavaScript:script completionHandler:^(id value, NSError *error) {
@@ -167,7 +174,7 @@ static void checkIndependentWindowKeys(void) {
         @"second window receives its focus click");
     drain(firstView);
     drain(secondView);
-    check(sp_input_key(first, "a", NULL, 0, true) && sp_input_key(first, "a", NULL, 0, false),
+    check(sp_input_key(first, "a", "a", 0, true) && sp_input_key(first, "a", "a", 0, false),
         @"a key is delivered to the first window target");
     check(sp_input_key(second, "Escape", NULL, 0, true) && sp_input_key(second, "Escape", NULL, 0, false),
         @"Escape is delivered to the second window target");
@@ -273,7 +280,11 @@ int main(void) { @autoreleasepool {
     drain(child);
     check(window.firstResponder == child || [(NSView *)window.firstResponder isDescendantOf:child],
         @"pressing a webview makes it the first responder");
-    check(sp_input_key(window, "b", NULL, 0, true) && sp_input_key(window, "b", NULL, 0, false), @"key after child click accepted");
+    NSString *childActiveElement = [evaluate(child, @"document.activeElement && document.activeElement.id") description];
+    check([childActiveElement isEqual:@"other"],
+        [NSString stringWithFormat:@"child page remains responsive and focuses its input after click (got %@)", childActiveElement]);
+    // 자식 웹뷰의 포커스 라우팅 검사에서는 입력 소스 변환 없이 영문 b를 명시한다.
+    check(sp_input_key(window, "b", "b", 0, true) && sp_input_key(window, "b", "b", 0, false), @"key after child click accepted");
     until(^BOOL { return [[evaluate(child, @"document.getElementById('other').value") description] isEqual:@"b"]; });
     check([evaluate(child, @"document.getElementById('other').value") isEqual:@"b"], @"keys reach the pressed webview");
     check([evaluate(view, @"document.getElementById('field').value") isEqual:@"a"], @"the previous webview keeps its text");
