@@ -163,6 +163,7 @@ pub const CSI_SELECTOR_INVENTORY: &[CsiSelectorEvidence] = &[
     CsiSelectorEvidence { selector: "ESC =/>", outcome: CsiOutcome::Implemented, test: "csi_application_keypad_mode_uses_the_private_equals_prefix" },
     CsiSelectorEvidence { selector: "14t", outcome: CsiOutcome::Implemented, test: "text_area_callback_is_not_discarded" },
     CsiSelectorEvidence { selector: "other t", outcome: CsiOutcome::Unsupported, test: "unsupported_csi_window_report_is_an_explicit_error" },
+    CsiSelectorEvidence { selector: "rectangle/protected/palette", outcome: CsiOutcome::Unsupported, test: "unsupported_csi_rectangle_protected_and_palette_reports_are_explicit_errors" },
 ];
 
 #[derive(Clone, Copy)]
@@ -358,19 +359,26 @@ impl AlacrittyEngine {
                 return;
             };
             let final_index = start + 2 + final_offset;
-            if input[final_index] == b't' {
-                let params = &input[start + 2..final_index];
-                let supported = params == b"14";
-                if !supported {
-                    let selector = String::from_utf8_lossy(params);
+            let body = &input[start + 2..final_index];
+            let unsupported = if input[final_index] == b't' && body != b"14" {
+                Some(format!("window report {}t", String::from_utf8_lossy(body)))
+            } else if input[final_index] == b'x' && body.contains(&b'$') {
+                Some(format!("rectangle report {}x", String::from_utf8_lossy(body)))
+            } else if input[final_index] == b'q' && body.contains(&b'"') {
+                Some(format!("protected-cell report {}q", String::from_utf8_lossy(body)))
+            } else if input[final_index] == b'p' && body.starts_with(b"#") {
+                Some(format!("palette report {}p", String::from_utf8_lossy(body)))
+            } else {
+                None
+            };
+            if let Some(selector) = unsupported {
                     self.events
                         .events
                         .lock()
                         .expect("engine event queue poisoned")
                         .push_back(QueuedEvent::Neutral(EngineEvent::Error(format!(
-                            "unsupported CSI window report {selector}t"
+                            "unsupported CSI {selector}"
                         ))));
-                }
             }
             index = final_index + 1;
         }

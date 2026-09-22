@@ -1,5 +1,6 @@
 # Changelog
 
+- Progressed F7 CSI audit. The Alacritty boundary now classifies unsupported window, rectangle, protected-cell, and palette reports and emits one explicit error for each fragmented input case. The focused window and grouped unsupported-report tests pass 1/1 each under 15s supervisors; the remaining CSI categories stay open.
 - Completed F9-1. The parity inventory now links F9 to the restoration implementation and application test in `e2e/library.test.mjs`; `node scripts/check-test-parity.mjs` and `make docs-check` pass without reopening F9.
 
 - Completed F9. Rebuilt Tauri and Wails library-return checks now report separate connection, document-ready, raster-presented, and first-window-presentation phases. Tauri passes 1/1 in 1.90s with 3/3/3/20ms phases; Wails passes 1/1 in 1.72s with 3/2/1/14ms phases. Invalid folder operations retain explicit `-32000` errors. Forced SIGINT teardown socket warnings remain identified as fixture shutdown logs, not successful test results.

@@ -237,6 +237,28 @@ fn unsupported_csi_window_report_is_an_explicit_error() {
 }
 
 #[test]
+fn unsupported_csi_rectangle_protected_and_palette_reports_are_explicit_errors() {
+    for (prefix, suffix, expected) in [
+        (b"\x1b[1$".as_slice(), b"x".as_slice(), "unsupported CSI rectangle report 1$x"),
+        (b"\x1b[1\"".as_slice(), b"q".as_slice(), "unsupported CSI protected-cell report 1\"q"),
+        (b"\x1b[#".as_slice(), b"p".as_slice(), "unsupported CSI palette report #p"),
+    ] {
+        let mut engine = AlacrittyEngine::new();
+        engine.feed(prefix);
+        engine.feed(suffix);
+        let errors: Vec<_> = engine
+            .drain_events()
+            .into_iter()
+            .filter_map(|event| match event {
+                EngineEvent::Error(reason) => Some(reason),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(errors, [expected]);
+    }
+}
+
+#[test]
 fn csi_cursor_movement_and_save_restore_are_observable() {
     let mut engine = AlacrittyEngine::new();
     engine.resize(20, 6);

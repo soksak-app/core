@@ -1,5 +1,6 @@
 # 변경 기록
 
+- F7 CSI 감사를 진행했다. Alacritty 경계가 지원하지 않는 window·rectangle·protected-cell·palette 보고를 분류하고 각 분할 입력 케이스마다 한 번의 명시적 오류를 내보낸다. window와 묶음 미지원 보고 집중 검사가 각각 15초 감독 안에서 1/1 통과했으며, 남은 CSI 범위는 계속 열려 있다.
 - F9-1을 완료했다. parity inventory가 F9를 `e2e/library.test.mjs`의 복원 구현·애플리케이션 검사에 연결하며, F9를 다시 열지 않고 `node scripts/check-test-parity.mjs`와 `make docs-check`가 통과한다.
 
 - F9를 완료했다. 재빌드 Tauri·Wails library 복귀 검사가 연결·문서 ready·래스터 표시·창 최초 표시 단계를 분리해 출력한다. Tauri는 1/1·1.90초와 3/3/3/20ms, Wails는 1/1·1.72초와 3/2/1/14ms를 기록했다. 잘못된 폴더 연산은 명시적 `-32000` 오류를 유지한다. 강제 SIGINT 종료의 socket 경고는 성공 결과가 아닌 fixture 종료 로그로 구분했다.
