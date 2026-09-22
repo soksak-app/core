@@ -148,6 +148,46 @@ fn osc104_resets_indexed_colors() {
 }
 
 #[test]
+fn osc_title_supports_bel_st_and_fragmentation() {
+    let mut engine = AlacrittyEngine::new();
+    engine.feed(b"\x1b]2;st");
+    assert!(engine.drain_events().is_empty());
+    engine.feed(b"\x1b\\\x1b]0;bel\x07");
+    assert_eq!(
+        engine.drain_events(),
+        vec![
+            EngineEvent::Title("st".to_string()),
+            EngineEvent::Title("bel".to_string()),
+        ]
+    );
+}
+
+#[test]
+fn osc104_without_parameters_resets_all_indexed_colors() {
+    let mut engine = AlacrittyEngine::new();
+    engine.feed(b"\x1b]4;1;rgb:0000/ffff/ffff\x07\x1b]4;2;rgb:ffff/0000/ffff\x07\x1b]104\x07\x1b[38;5;1mA\x1b[38;5;2mB");
+    let expected_one = default_terminal_color(1).expect("default color 1");
+    let expected_two = default_terminal_color(2).expect("default color 2");
+    let expected_one = format!(
+        "#{:02x}{:02x}{:02x}",
+        expected_one[0], expected_one[1], expected_one[2]
+    );
+    let expected_two = format!(
+        "#{:02x}{:02x}{:02x}",
+        expected_two[0], expected_two[1], expected_two[2]
+    );
+    let screen = engine.screen();
+    assert_eq!(
+        screen.lines[0][0].fg.as_deref(),
+        Some(expected_one.as_str())
+    );
+    assert_eq!(
+        screen.lines[0][1].fg.as_deref(),
+        Some(expected_two.as_str())
+    );
+}
+
+#[test]
 fn osc_dynamic_color_resets_restore_defaults() {
     let mut engine = AlacrittyEngine::new();
     engine.feed(b"\x1b]10;rgb:0000/ffff/ffff\x07\x1b]11;rgb:ffff/0000/ffff\x07\x1b]12;rgb:ffff/ffff/0000\x07");

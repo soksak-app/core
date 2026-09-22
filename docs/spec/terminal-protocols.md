@@ -36,7 +36,7 @@ The following is the current selector-level audit against the pinned XTerm refer
 
 | Selector | XTerm operation | Current outcome | Named evidence |
 | --- | --- | --- | --- |
-| `0`, `2` | Set icon name and/or window title | `implemented`: title event; icon ownership is not exposed | `vt_events_are_retained_and_exposed_in_order` |
+| `0`, `2` | Set icon name and/or window title | `implemented`: title event; icon ownership is not exposed | `vt_events_are_retained_and_exposed_in_order`, `osc_title_supports_bel_st_and_fragmentation` |
 | `1`, `3` | Icon-only title / X property | `unsupported`: no icon or X property host contract | `osc_selector_inventory_records_unsupported_operations` |
 | `4` | Indexed color set/query | `implemented`: palette effect and exact RGB reply | `indexed_colors_and_combining_characters_survive_export`, `every_default_indexed_color_query_returns_the_default_palette` |
 | `5`, `6` | Special color set / enable state | `unsupported`: no special-color or mode contract | `osc_selector_inventory_records_unsupported_operations` |
@@ -48,7 +48,7 @@ The following is the current selector-level audit against the pinned XTerm refer
 | `51` | Emacs shell reservation | `unsupported`: no effect | `osc_selector_inventory_records_unsupported_operations` |
 | `52` | Clipboard selection store/query | `implemented`: policy-gated typed event and query reply | `clipboard_query_uses_a_token_and_resolves_to_pty_bytes`, `clipboard_rejection_clears_a_pending_query_token` |
 | `60`–`62` | Permission feature queries | `unsupported`: capability status is owned by the sidecar contract, not an XTerm wire reply | `osc_selector_inventory_records_unsupported_operations` |
-| `104` | Indexed color reset | `implemented`: palette reset | `osc104_resets_indexed_colors` |
+| `104` | Indexed color reset | `implemented`: palette reset | `osc104_resets_indexed_colors`, `osc104_without_parameters_resets_all_indexed_colors` |
 | `105`, `106` | Special color reset/mode | `unsupported`: no special-color contract | `osc_selector_inventory_records_unsupported_operations` |
 | `110`–`112` | Dynamic color reset | `implemented`: foreground/background/cursor reset | `osc_dynamic_color_resets_restore_defaults` |
 | `I`, `l`, `L` | Sun/CDE icon and title forms | `unsupported`: no icon-label or nonnumeric selector contract | `osc_selector_inventory_records_unsupported_operations` |

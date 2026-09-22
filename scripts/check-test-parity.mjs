@@ -1017,6 +1017,8 @@ const FEATURE_LINKS = [
       { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "osc104_resets_indexed_colors" },
       { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "osc_dynamic_color_resets_restore_defaults" },
       { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "osc_default_color_queries_match_renderer_defaults" },
+      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "osc_title_supports_bel_st_and_fragmentation" },
+      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "osc104_without_parameters_resets_all_indexed_colors" },
     ],
     expected: "The pinned OSC selector inventory records implemented, unsupported, and separate vendor selectors with named engine evidence; supported title, color, cursor, and clipboard behaviors have executable cases.",
     levels: ["unit"],
