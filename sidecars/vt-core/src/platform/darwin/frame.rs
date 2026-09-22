@@ -50,6 +50,7 @@ pub struct CInlineImageRaster {
     pub width: u32,
     pub height: u32,
     pub preserve_aspect_ratio: u8,
+    pub visible: u8,
 }
 
 // Opaque frame type
@@ -315,6 +316,7 @@ impl Frame {
                 width: image.width,
                 height: image.height,
                 preserve_aspect_ratio: image.preserve_aspect_ratio as u8,
+                visible: image.visible as u8,
             })
             .collect::<Vec<_>>();
         let result = unsafe {

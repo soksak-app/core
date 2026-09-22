@@ -1,5 +1,7 @@
 # Changelog
 
+- F6.6-3 is in progress. Inline-image placements now retain their terminal-row anchor and follow primary-grid scroll generation instead of remaining at a stale absolute row; off-screen placements are hidden without deleting ownership. The scroll-generation focused test passes; rebuilt Tauri/Wails pixel verification remains.
+
 - Completed F6.6-2. Validated OSC 1337 events now reach the macOS native raster through a bounded sidecar contract. ImageIO composites owned images at declared placement, same-name replacement is isolated, `image.inline.delete` removes only an owned name and reports unowned names explicitly, and surface closure bounds image lifetime. Alacritty 32/32, native frame 11/11, sidecar contract 45/45, and `make native-test` pass. Rebuilt Tauri/Wails pixel and lifecycle verification remains F6.6-3.
 
 - Earlier F6.6-2 progress added the native macOS ImageIO composite and same-name replacement path. The later completion entry above records the deletion/lifetime contract; rebuilt Tauri/Wails pixel verification remains F6.6-3.

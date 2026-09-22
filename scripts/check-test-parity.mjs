@@ -966,6 +966,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "osc1337_inline_image_is_typed_and_survives_input_chunk_boundaries" },
+      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "scroll_generation_advances_when_output_scrolls_the_primary_grid" },
       { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "malformed_osc1337_is_an_explicit_engine_error" },
       { file: "sidecars/vt-core/tests/serve_contract.rs", id: "test_inline_image_event_is_explicit_and_base64_encoded" },
       { file: "sidecars/vt-core/tests/serve_contract.rs", id: "test_inline_image_delete_is_explicit_for_unowned_names" },

@@ -49,6 +49,7 @@ typedef struct {
     uint32_t width;
     uint32_t height;
     uint8_t preserve_aspect_ratio;
+    uint8_t visible;
 } InlineImageRaster;
 
 // Opaque Frame type - defined in implementation

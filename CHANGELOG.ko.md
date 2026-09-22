@@ -1,5 +1,7 @@
 # 변경 기록
 
+- F6.6-3은 진행 중이다. inline-image placement가 terminal 행 anchor를 유지하고 primary grid의 scroll generation을 따라가므로 오래된 절대 행에 고정되지 않는다. 화면 밖 placement는 소유 상태를 삭제하지 않고 숨긴다. scroll-generation 집중 검사가 통과했으며 재빌드 Tauri/Wails 픽셀 검증은 남아 있다.
+
 - F6.6-2를 완료했다. 검증된 OSC 1337 event가 제한된 sidecar 계약을 통해 macOS native raster까지 전달된다. ImageIO가 선언된 위치에 소유 이미지를 합성하고, 같은 이름 교체는 해당 이미지만 바꾸며, `image.inline.delete`는 소유된 이름만 제거하고 소유하지 않은 이름은 명시적으로 보고한다. surface 종료가 이미지 수명을 제한한다. Alacritty 32/32, native frame 11/11, sidecar 계약 45/45와 `make native-test`가 통과했다. 재빌드 Tauri/Wails 픽셀·수명 검증은 F6.6-3에 남아 있다.
 
 - 앞선 F6.6-2 진행 단계에서 macOS native ImageIO 합성과 같은 이름 교체 경로를 추가했다. 위의 완료 기록에 삭제·수명 계약을 기록했으며, 재빌드 Tauri/Wails 픽셀 검증은 F6.6-3에 남아 있다.

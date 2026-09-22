@@ -251,6 +251,7 @@ int frame_draw_with_inline_images(Frame *frame, Screen *screen, Metrics *metrics
 
     for (uint32_t i = 0; i < image_count; i++) {
         InlineImageRaster *raster = &images[i];
+        if (!raster->visible) continue;
         if (!raster->data || raster->data_len == 0) {
             CFRelease(font);
             CGContextRelease(ctx);

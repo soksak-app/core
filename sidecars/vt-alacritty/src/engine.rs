@@ -527,6 +527,10 @@ impl Engine for AlacrittyEngine {
         }
     }
 
+    fn scroll_generation(&self) -> i64 {
+        self.term.grid().history_size() as i64
+    }
+
     fn modes(&self) -> Modes {
         let mode = self.term.mode();
         Modes {

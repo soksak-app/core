@@ -201,6 +201,9 @@ pub trait Engine: Send + 'static {
     fn selection_end(&mut self) -> Result<String, String>;
     fn cursor(&self) -> Cursor;
     fn screen(&mut self) -> Screen;
+    fn scroll_generation(&self) -> i64 {
+        0
+    }
     fn modes(&self) -> Modes;
     fn reset(&mut self);
 }
@@ -421,6 +424,9 @@ pub struct InlineImagePlacement {
     pub width: u32,
     pub height: u32,
     pub preserve_aspect_ratio: bool,
+    pub anchor_row: i32,
+    pub anchor_scroll: i64,
+    pub visible: bool,
 }
 
 /// 데몬에서 받는 이벤트
@@ -862,6 +868,7 @@ fn store_inline_display(
         return Err("inline image received before the image region was configured".to_string());
     };
     let cursor = engine.screen().cursor;
+    let scroll = engine.scroll_generation();
     let placement = InlineImagePlacement {
         name: name.clone(),
         data,
@@ -870,6 +877,9 @@ fn store_inline_display(
         width: resolve_inline_dimension(&width, state.metrics.cell_width.round() as u32, state.width_px),
         height: resolve_inline_dimension(&height, state.metrics.cell_height.round() as u32, state.height_px),
         preserve_aspect_ratio,
+        anchor_row: i32::from(cursor.row),
+        anchor_scroll: scroll,
+        visible: true,
     };
     if let Some(existing) = state.inline_images.iter_mut().find(|image| image.name == name) {
         *existing = placement;
@@ -877,6 +887,26 @@ fn store_inline_display(
         state.inline_images.push(placement);
     }
     Ok(())
+}
+
+fn refresh_inline_image_positions(
+    engine: &mut Box<dyn Engine>,
+    image_state: &mut Option<ImageState>,
+) {
+    let Some(state) = image_state.as_mut() else {
+        return;
+    };
+    let current_scroll = engine.scroll_generation();
+    let cell_height = state.metrics.cell_height.round() as u32;
+    for image in &mut state.inline_images {
+        let row = image.anchor_row - (current_scroll - image.anchor_scroll) as i32;
+        image.visible = row >= 0;
+        image.y = if row >= 0 {
+            (row as u32).saturating_mul(cell_height)
+        } else {
+            state.height_px
+        };
+    }
 }
 
 fn apply_inline_image_command(
@@ -1122,6 +1152,7 @@ async fn send_engine_events(
             }
         }
     }
+    refresh_inline_image_positions(engine, image_state);
     true
 }
 

@@ -66,6 +66,15 @@ fn osc1337_inline_image_is_typed_and_survives_input_chunk_boundaries() {
 }
 
 #[test]
+fn scroll_generation_advances_when_output_scrolls_the_primary_grid() {
+    let mut engine = AlacrittyEngine::new();
+    engine.resize(8, 2);
+    let before = engine.scroll_generation();
+    engine.feed(b"one\ntwo\nthree");
+    assert!(engine.scroll_generation() > before);
+}
+
+#[test]
 fn malformed_osc1337_is_an_explicit_engine_error() {
     let mut engine = AlacrittyEngine::new();
     engine.feed(b"\x1b]1337;File=inline=1:%%%\x07");
