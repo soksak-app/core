@@ -129,6 +129,7 @@ pub const OSC_SELECTOR_INVENTORY: &[OscSelectorEvidence] = &[
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CsiOutcome {
     Implemented,
+    Unsupported,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -161,6 +162,7 @@ pub const CSI_SELECTOR_INVENTORY: &[CsiSelectorEvidence] = &[
     CsiSelectorEvidence { selector: "?1,?1000,?1002,?1003,?1006,?2004 h/l", outcome: CsiOutcome::Implemented, test: "csi_private_modes_export_keyboard_paste_and_mouse_state" },
     CsiSelectorEvidence { selector: "ESC =/>", outcome: CsiOutcome::Implemented, test: "csi_application_keypad_mode_uses_the_private_equals_prefix" },
     CsiSelectorEvidence { selector: "14t", outcome: CsiOutcome::Implemented, test: "text_area_callback_is_not_discarded" },
+    CsiSelectorEvidence { selector: "other t", outcome: CsiOutcome::Unsupported, test: "unsupported_csi_window_report_is_an_explicit_error" },
 ];
 
 #[derive(Clone, Copy)]
@@ -234,6 +236,7 @@ pub struct AlacrittyEngine {
     theme: TerminalTheme,
     pending_input: Vec<u8>,
     pending_osc: Vec<u8>,
+    pending_csi: Vec<u8>,
     pending_cursor_reset: Vec<u8>,
 }
 
@@ -253,6 +256,7 @@ impl AlacrittyEngine {
             theme: TerminalTheme::dark(),
             pending_input: Vec::new(),
             pending_osc: Vec::new(),
+            pending_csi: Vec::new(),
             pending_cursor_reset: Vec::new(),
         }
     }
@@ -331,10 +335,52 @@ impl AlacrittyEngine {
         }
     }
 
+    fn audit_csi(&mut self, bytes: &[u8]) {
+        let mut input = std::mem::take(&mut self.pending_csi);
+        input.extend_from_slice(bytes);
+        let mut index = 0;
+        while index < input.len() {
+            let Some(relative) = input[index..]
+                .windows(2)
+                .position(|pair| pair == b"\x1b[")
+            else {
+                if input.last() == Some(&0x1b) {
+                    self.pending_csi.push(0x1b);
+                }
+                return;
+            };
+            let start = index + relative;
+            let Some(final_offset) = input[start + 2..]
+                .iter()
+                .position(|byte| (0x40..=0x7e).contains(byte))
+            else {
+                self.pending_csi.extend_from_slice(&input[start..]);
+                return;
+            };
+            let final_index = start + 2 + final_offset;
+            if input[final_index] == b't' {
+                let params = &input[start + 2..final_index];
+                let supported = params == b"14";
+                if !supported {
+                    let selector = String::from_utf8_lossy(params);
+                    self.events
+                        .events
+                        .lock()
+                        .expect("engine event queue poisoned")
+                        .push_back(QueuedEvent::Neutral(EngineEvent::Error(format!(
+                            "unsupported CSI window report {selector}t"
+                        ))));
+                }
+            }
+            index = final_index + 1;
+        }
+    }
+
     fn feed_plain(&mut self, bytes: &[u8]) {
         let bytes = self.normalize_initial_cursor_resource(bytes);
         if !bytes.is_empty() {
             self.audit_osc(&bytes);
+            self.audit_csi(&bytes);
             self.processor.advance(&mut self.term, &bytes);
         }
     }

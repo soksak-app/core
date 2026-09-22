@@ -1,7 +1,7 @@
 #[path = "../src/engine.rs"]
 mod engine;
 
-use engine::{AlacrittyEngine, CsiOutcome, OscOutcome, CSI_SELECTOR_INVENTORY, OSC_SELECTOR_INVENTORY};
+use engine::{AlacrittyEngine, OscOutcome, CSI_SELECTOR_INVENTORY, OSC_SELECTOR_INVENTORY};
 use soksak_sidecar_vt_core::{
     default_terminal_color, inline_image::Dimension, inline_image::InlineImageCommand, CursorShape,
     Engine, EngineEvent, TerminalTheme, DEFAULT_PALETTE,
@@ -215,10 +215,25 @@ fn vendor_osc_contracts_are_separate() {
 fn csi_inventory_links_only_executed_behavior_cases() {
     assert!(!CSI_SELECTOR_INVENTORY.is_empty());
     for entry in CSI_SELECTOR_INVENTORY {
-        assert_eq!(entry.outcome, CsiOutcome::Implemented);
         assert!(!entry.selector.is_empty());
         assert!(!entry.test.is_empty());
     }
+}
+
+#[test]
+fn unsupported_csi_window_report_is_an_explicit_error() {
+    let mut engine = AlacrittyEngine::new();
+    engine.feed(b"\x1b[1");
+    engine.feed(b"8t");
+    let errors: Vec<_> = engine
+        .drain_events()
+        .into_iter()
+        .filter_map(|event| match event {
+            EngineEvent::Error(reason) => Some(reason),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(errors, ["unsupported CSI window report 18t"]);
 }
 
 #[test]
