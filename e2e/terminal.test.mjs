@@ -119,6 +119,19 @@ async function terminalCursorCell(session, surface) {
   return pixels;
 }
 
+async function terminalFrame(session) {
+  await session.request("diagnostics.capture.start", {});
+  const displayed = await session.presented();
+  const { frames: frameDir } = await session.request("diagnostics.capture.stop", { after: displayed.displayed });
+  try {
+    const files = frames(frameDir);
+    assert.ok(files.length > 0, "terminal selection capture produced no frames");
+    return readFrame(files.at(-1));
+  } finally {
+    rmSync(frameDir, { recursive: true, force: true });
+  }
+}
+
 function differentPixels(before, after) {
   return before.reduce((count, value, index) => count +
     (value.some((channel, channelIndex) => channel !== after[index]?.[channelIndex]) ? 1 : 0), 0);
@@ -690,6 +703,70 @@ for (const app of Object.values(APPS)) {
       });
       await closeTerminalTabs(s);
     });
+  });
+
+  test(`${app.name}: native terminal selection renders and copies through one explicit paste`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const [terminal] = await ensureTerminals(s, 1);
+    const surface = terminal.surface;
+    s.cleanup(() => closeTerminalTabs(s));
+    await s.until("terminal.session", (state) => Boolean(state?.sessionId),
+      "terminal selection session did not open", { surface });
+
+    const marker = "SELECTION-CLIP-123";
+    await s.run("terminal.input", { bytes: `printf '\\033[2J\\033[H${marker}\\n'\r` }, surface);
+    const lines = await readScreenUntil(s, surface,
+      (screen) => screen.some((line) => line.trim() === marker),
+      "terminal selection marker did not render");
+    const row = lines.findIndex((line) => line.trim() === marker);
+    assert.ok(row >= 0, "terminal selection marker row was not found");
+    const col = lines[row].indexOf(marker);
+    assert.ok(col >= 0, "terminal selection marker column was not found");
+
+    const view = await s.rect("terminal.view", undefined, surface);
+    const metrics = await s.get("terminal.session", surface);
+    assert.ok(metrics.cellWidth > 0 && metrics.cellHeight > 0, "terminal cell metrics are unavailable");
+    const before = await terminalFrame(s);
+    const viewX = view.document.x + view.x;
+    const viewY = view.document.y + view.y;
+    const start = {
+      x: viewX + (col + 0.5) * metrics.cellWidth,
+      y: viewY + (row + 0.5) * metrics.cellHeight,
+    };
+    const end = {
+      x: viewX + (col + marker.length - 0.5) * metrics.cellWidth,
+      y: start.y,
+    };
+    await s.pointer(start.x, start.y, "down", { button: "left" });
+    await s.pointer(end.x, end.y, "drag", { button: "left" });
+    await s.pointer(end.x, end.y, "up", { button: "left" });
+    await s.presented();
+    assert.equal((await s.get("terminal.session", surface)).error, undefined,
+      "native selection reported an input or clipboard error");
+
+    const after = await terminalFrame(s);
+    let changed = 0;
+    const x0 = Math.max(0, Math.round(viewX + col * metrics.cellWidth));
+    const x1 = Math.min(after.width, Math.round(viewX + (col + marker.length) * metrics.cellWidth));
+    const y0 = Math.max(0, Math.round(viewY + row * metrics.cellHeight));
+    const y1 = Math.min(after.height, Math.round(viewY + (row + 1) * metrics.cellHeight));
+    for (let y = y0; y < y1; y++) {
+      for (let x = x0; x < x1; x++) {
+        const oldPixel = pixel(before, x, y);
+        const newPixel = pixel(after, x, y);
+        if (oldPixel.some((value, index) => value !== newPixel[index])) changed++;
+      }
+    }
+    assert.ok(changed > 0, "native selection did not change the selected raster pixels");
+
+    await s.run("terminal.paste", {}, surface);
+    const pasted = await readScreenUntil(s, surface,
+      (screen) => screen.filter((line) => line.includes(marker)).length >= 2,
+      "explicit paste did not return the selected text to the terminal");
+    assert.ok(pasted.filter((line) => line.includes(marker)).length >= 2,
+      "selection clipboard text was not pasted exactly as selected");
   });
 
   test(`${app.name}: terminal image follows a window resize`, async (t) => {
