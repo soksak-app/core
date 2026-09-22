@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use soksak_sidecar_vt_core::protocol::{
     serve, Cell, Cursor, CursorShape, DaemonEvent, Engine, EngineEvent, Modes, Screen, SessionPort,
 };
-use soksak_sidecar_vt_core::TerminalTheme;
+use soksak_sidecar_vt_core::{inline_image::{Dimension, InlineImageCommand}, TerminalTheme};
 use std::sync::{Arc, Mutex};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 use tokio::sync::mpsc;
@@ -14,6 +14,7 @@ struct MockEngine {
     feed_history: Vec<Vec<u8>>,
     custom_modes: Option<Modes>,
     themes: Vec<TerminalTheme>,
+    pending_events: Vec<EngineEvent>,
 }
 
 impl MockEngine {
@@ -24,6 +25,7 @@ impl MockEngine {
             feed_history: Vec::new(),
             custom_modes: None,
             themes: Vec::new(),
+            pending_events: Vec::new(),
         }
     }
 
@@ -34,6 +36,7 @@ impl MockEngine {
             feed_history: Vec::new(),
             custom_modes: Some(modes),
             themes: Vec::new(),
+            pending_events: Vec::new(),
         }
     }
 }
@@ -57,10 +60,21 @@ impl Engine for MockEngine {
 
     fn feed(&mut self, bytes: &[u8]) {
         self.feed_history.push(bytes.to_vec());
+        if bytes == b"\x1b]1337;File=name=ZmlsZS5wbmc=;size=5;inline=1;width=2px:aGVsbG8=\x07" {
+            self.pending_events.push(EngineEvent::InlineImage(
+                InlineImageCommand::Display {
+                    name: "file.png".to_string(),
+                    data: b"hello".to_vec(),
+                    width: Dimension::Pixels(2),
+                    height: Dimension::Auto,
+                    preserve_aspect_ratio: true,
+                },
+            ));
+        }
     }
 
     fn drain_events(&mut self) -> Vec<EngineEvent> {
-        Vec::new()
+        std::mem::take(&mut self.pending_events)
     }
 
     fn resolve_clipboard(&mut self, request_id: u64, _text: &str) -> Result<(), String> {
@@ -684,6 +698,55 @@ async fn test_a2_pushed_output_reaches_screen() {
     assert!(found_hi, "Output 'hi' did not appear in screen event");
 
     // Close stdin to terminate serve
+    drop(to_serve);
+    task.await.unwrap().unwrap();
+}
+
+#[tokio::test]
+async fn test_inline_image_event_is_explicit_and_base64_encoded() {
+    let calls = Arc::new(Mutex::new(Calls::default()));
+    let fake_session_id = "test-session-inline-image".to_string();
+    let engine_factory = Arc::new(|| Box::new(MockEngine::new()) as Box<dyn Engine>);
+    let port = Arc::new(FakeSessionPort::new(fake_session_id.clone(), calls.clone()));
+    let port_for_factory = port.clone();
+    let factory = Arc::new(move || port_for_factory.clone() as Arc<dyn SessionPort>);
+    let (mut to_serve, serve_in) = tokio::io::duplex(64 * 1024);
+    let (serve_out, from_serve) = tokio::io::duplex(64 * 1024);
+    let task = tokio::spawn(serve(engine_factory, serve_in, serve_out, factory));
+    let mut lines = tokio::io::BufReader::new(from_serve).lines();
+
+    to_serve
+        .write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+{"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
+"#)
+        .await
+        .unwrap();
+    let _state = lines.next_line().await.unwrap().unwrap();
+    port.push_event(DaemonEvent::Output {
+        session_id: fake_session_id,
+        data: b"\x1b]1337;File=name=ZmlsZS5wbmc=;size=5;inline=1;width=2px:aGVsbG8=\x07".to_vec(),
+        sequence: 0,
+        truncated: false,
+    });
+
+    let mut found = false;
+    for _ in 0..4 {
+        let line = tokio::time::timeout(std::time::Duration::from_secs(2), lines.next_line())
+            .await
+            .expect("timeout waiting for inline image event")
+            .unwrap()
+            .unwrap();
+        let value: serde_json::Value = serde_json::from_str(&line).unwrap();
+        if value["body"]["event"] == "image.inline" {
+            assert_eq!(value["body"]["command"], "display");
+            assert_eq!(value["body"]["name"], "file.png");
+            assert_eq!(value["body"]["data"], "aGVsbG8=");
+            assert_eq!(value["body"]["width"], "2px");
+            found = true;
+            break;
+        }
+    }
+    assert!(found, "inline image event was not emitted");
     drop(to_serve);
     task.await.unwrap().unwrap();
 }

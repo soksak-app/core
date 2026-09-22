@@ -3,7 +3,8 @@ mod engine;
 
 use engine::AlacrittyEngine;
 use soksak_sidecar_vt_core::{
-    default_terminal_color, CursorShape, Engine, EngineEvent, TerminalTheme, DEFAULT_PALETTE,
+    default_terminal_color, inline_image::Dimension, inline_image::InlineImageCommand,
+    CursorShape, Engine, EngineEvent, TerminalTheme, DEFAULT_PALETTE,
 };
 
 fn text(screen: &soksak_sidecar_vt_core::Screen) -> String {
@@ -35,6 +36,44 @@ fn vt_events_are_retained_and_exposed_in_order() {
     assert!(replies.contains(&b"\x1b[1;1R".as_slice()));
     assert!(replies.contains(&b"\x1b[?6c".as_slice()));
     assert!(engine.drain_events().is_empty());
+}
+
+#[test]
+fn osc1337_inline_image_is_typed_and_survives_input_chunk_boundaries() {
+    let mut engine = AlacrittyEngine::new();
+    engine.feed(b"before\x1b]1337;File=name=ZmlsZS5wbmc=;size=5;inline=1;width=2px:aGVsbG8=");
+    assert!(engine.drain_events().is_empty(), "incomplete OSC must remain pending");
+
+    engine.feed(b"\x07after");
+    let events = engine.drain_events();
+    assert!(matches!(
+        events.as_slice(),
+        [EngineEvent::InlineImage(InlineImageCommand::Display {
+            name,
+            data,
+            width: Dimension::Pixels(2),
+            ..
+        })] if name == "file.png" && data == b"hello"
+    ));
+    let screen = engine.screen();
+    let text = screen
+        .lines
+        .iter()
+        .flat_map(|line| line.iter().filter_map(|cell| cell.ch.as_deref()))
+        .collect::<String>();
+    assert!(text.contains("before"), "text before image was lost: {text:?}");
+    assert!(text.contains("after"), "text after image was lost: {text:?}");
+}
+
+#[test]
+fn malformed_osc1337_is_an_explicit_engine_error() {
+    let mut engine = AlacrittyEngine::new();
+    engine.feed(b"\x1b]1337;File=inline=1:%%%\x07");
+    let events = engine.drain_events();
+    assert!(matches!(
+        events.as_slice(),
+        [EngineEvent::Error(reason)] if reason.contains("invalid base64")
+    ));
 }
 
 #[test]

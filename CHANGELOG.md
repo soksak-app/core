@@ -1,5 +1,7 @@
 # Changelog
 
+- F6.6-2 is in progress. VT input now preserves OSC 1337 records across PTY output chunks, emits typed inline-image events, reports malformed records explicitly, and forwards bounded image bytes as base64 sidecar events. Native raster composition, named-image replacement/deletion, and lifetime handling remain unimplemented and are not reported as complete.
+
 - Completed F6.6-1. Added strict OSC 1337 image-transfer parsing for `File`, `MultipartFile`, `FilePart`, and `FileEnd`. Typed display, transfer, and multipart outcomes enforce bounded payloads, exact declared size, strict base64, dimensions, named ownership, and explicit inline semantics. Five focused Rust tests pass in 0.02s; parity and documentation checks pass. VT-engine and native raster integration remain open under F6.6-2.
 
 - Completed F6.3-2. Native settled-presentation failures now cross the Darwin callback boundary as explicit errors instead of being dropped and reported later as a generic 1005 timeout. Red also exposed an AppKit UI-thread violation in the new diagnostic injector; both hosts now dispatch the injection through their UI queues. Rebuilt Tauri and Wails failure-injection E2E passes 1/1 in 0.76s and 0.47s, each reporting the injected error and completing a later split with a presented raster. Repeated three-terminal checks pass Tauri 1/1 in 1.01s and Wails 1/1 in 0.89s after removing a separately verified stale sidecar process.

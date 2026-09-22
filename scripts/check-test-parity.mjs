@@ -958,6 +958,20 @@ const FEATURE_LINKS = [
     levels: ["unit", "native"],
   },
   {
+    id: "F6.6-2",
+    implementation: [
+      { file: "sidecars/vt-alacritty/src/engine.rs", symbol: "fn feed_with_inline_images" },
+      { file: "sidecars/vt-core/src/protocol.rs", symbol: "EngineEvent::InlineImage" },
+    ],
+    tests: [
+      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "osc1337_inline_image_is_typed_and_survives_input_chunk_boundaries" },
+      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "malformed_osc1337_is_an_explicit_engine_error" },
+      { file: "sidecars/vt-core/tests/serve_contract.rs", id: "test_inline_image_event_is_explicit_and_base64_encoded" },
+    ],
+    expected: "Complete OSC 1337 records, including records split across PTY output chunks, become ordered typed sidecar events with base64 image bytes; malformed records remain explicit engine errors and do not get silently dropped.",
+    levels: ["unit", "native"],
+  },
+  {
     id: "F10.1",
     implementation: [{ file: "packages/host/tauriv2/src/modals.rs", symbol: "pub(crate) fn show" }],
     tests: [{ file: "e2e/modal.test.mjs", id: "settings blocks background input and closes only through its close button" }],

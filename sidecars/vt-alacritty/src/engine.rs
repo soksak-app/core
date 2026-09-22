@@ -7,7 +7,7 @@ use alacritty_terminal::term::{Config, Osc52, Term, TermMode};
 use alacritty_terminal::vte::ansi::{Color, CursorShape, Processor, Rgb};
 use soksak_sidecar_vt_core::{
     default_terminal_color, Cell, ClipboardSelection, Cursor, CursorShape as ProtocolCursorShape,
-    Engine, EngineEvent, Modes, Screen, TerminalTheme,
+    inline_image::parse as parse_inline_image, Engine, EngineEvent, Modes, Screen, TerminalTheme,
 };
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
@@ -81,6 +81,7 @@ pub struct AlacrittyEngine {
     next_clipboard_request: u64,
     cell_metrics: Option<(u16, u16)>,
     theme: TerminalTheme,
+    pending_input: Vec<u8>,
 }
 
 impl AlacrittyEngine {
@@ -97,6 +98,72 @@ impl AlacrittyEngine {
             next_clipboard_request: 1,
             cell_metrics: None,
             theme: TerminalTheme::dark(),
+            pending_input: Vec::new(),
+        }
+    }
+
+    fn feed_plain(&mut self, bytes: &[u8]) {
+        if !bytes.is_empty() {
+            self.processor.advance(&mut self.term, bytes);
+        }
+    }
+
+    fn feed_with_inline_images(&mut self, bytes: &[u8]) {
+        const PREFIX: &[u8] = b"\x1b]1337;";
+        self.pending_input.extend_from_slice(bytes);
+        loop {
+            let Some(start) = self
+                .pending_input
+                .windows(PREFIX.len())
+                .position(|candidate| candidate == PREFIX)
+            else {
+                let keep = (1..PREFIX.len())
+                    .rev()
+                    .find(|length| self.pending_input.ends_with(&PREFIX[..*length]))
+                    .unwrap_or(0);
+                let split = self.pending_input.len().saturating_sub(keep);
+                let plain = self.pending_input[..split].to_vec();
+                self.pending_input.drain(..split);
+                self.feed_plain(&plain);
+                return;
+            };
+
+            let before = self.pending_input[..start].to_vec();
+            self.pending_input.drain(..start);
+            self.feed_plain(&before);
+
+            let body_start = PREFIX.len();
+            let terminator = self.pending_input[body_start..]
+                .iter()
+                .enumerate()
+                .find_map(|(offset, byte)| {
+                    (*byte == b'\x07').then_some((body_start + offset, 1))
+                })
+                .or_else(|| {
+                    self.pending_input[body_start..]
+                        .windows(2)
+                        .position(|pair| pair == b"\x1b\\")
+                        .map(|offset| (body_start + offset, 2))
+                });
+            let Some((end, terminator_len)) = terminator else {
+                return;
+            };
+            let payload = self.pending_input[body_start..end].to_vec();
+            self.pending_input.drain(..end + terminator_len);
+            match parse_inline_image(&payload) {
+                Ok(command) => self
+                    .events
+                    .events
+                    .lock()
+                    .expect("engine event queue poisoned")
+                    .push_back(QueuedEvent::Neutral(EngineEvent::InlineImage(command))),
+                Err(error) => self
+                    .events
+                    .events
+                    .lock()
+                    .expect("engine event queue poisoned")
+                    .push_back(QueuedEvent::Neutral(EngineEvent::Error(error))),
+            }
         }
     }
 
@@ -380,7 +447,7 @@ impl Engine for AlacrittyEngine {
     }
 
     fn feed(&mut self, bytes: &[u8]) {
-        self.processor.advance(&mut self.term, bytes);
+        self.feed_with_inline_images(bytes);
     }
 
     fn drain_events(&mut self) -> Vec<EngineEvent> {

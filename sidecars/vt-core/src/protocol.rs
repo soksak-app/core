@@ -1,4 +1,5 @@
 use crate::encoding::{self, Key};
+use crate::inline_image::{Dimension, InlineImageCommand};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -207,6 +208,7 @@ pub trait Engine: Send + 'static {
 /// 엔진과 서비스 사이에서 전달하는 중립 이벤트.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EngineEvent {
+    InlineImage(InlineImageCommand),
     Title(String),
     ResetTitle,
     ClipboardStore {
@@ -820,6 +822,55 @@ async fn send_engine_events(
 ) -> bool {
     for event in engine.drain_events() {
         match event {
+            EngineEvent::InlineImage(command) => {
+                if !emit_surface_events {
+                    continue;
+                }
+                let body = match command {
+                    InlineImageCommand::Display {
+                        name,
+                        data,
+                        width,
+                        height,
+                        preserve_aspect_ratio,
+                    } => json!({
+                        "event": "image.inline",
+                        "command": "display",
+                        "name": name,
+                        "data": base64_encode(&data),
+                        "width": inline_dimension(&width),
+                        "height": inline_dimension(&height),
+                        "preserveAspectRatio": preserve_aspect_ratio,
+                    }),
+                    InlineImageCommand::Transfer { name, data } => json!({
+                        "event": "image.inline",
+                        "command": "transfer",
+                        "name": name,
+                        "data": base64_encode(&data),
+                    }),
+                    InlineImageCommand::MultipartStart { name } => json!({
+                        "event": "image.inline",
+                        "command": "multipart.start",
+                        "name": name,
+                    }),
+                    InlineImageCommand::MultipartPart(data) => json!({
+                        "event": "image.inline",
+                        "command": "multipart.part",
+                        "data": base64_encode(&data),
+                    }),
+                    InlineImageCommand::MultipartEnd => json!({
+                        "event": "image.inline",
+                        "command": "multipart.end",
+                    }),
+                };
+                if output_tx
+                    .send(json!({"surface": surface_id, "body": body}).to_string())
+                    .await
+                    .is_err()
+                {
+                    return false;
+                }
+            }
             EngineEvent::PtyWrite(bytes) => {
                 let Some(session_id) = session_id else {
                     let response = json!({"surface": surface_id, "body": {"error": "engine response without session"}});
@@ -938,6 +989,15 @@ async fn send_engine_events(
         }
     }
     true
+}
+
+fn inline_dimension(dimension: &Dimension) -> Value {
+    match dimension {
+        Dimension::Auto => Value::String("auto".to_string()),
+        Dimension::Cells(value) => json!(value),
+        Dimension::Pixels(value) => Value::String(format!("{value}px")),
+        Dimension::Percent(value) => Value::String(format!("{value}%")),
+    }
 }
 
 async fn open_headless(
