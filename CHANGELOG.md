@@ -1,5 +1,7 @@
 # Changelog
 
+- Completed F7.16. The CSI inventory now links `5n/6n`, primary/secondary `c/>c`, `14t`, fragmented unsupported window reports, rectangle/protected-cell/palette intermediates, and framing/malformed-input evidence. Ordered device/status replies pass 1/1 under a 15s supervisor.
+- Started F7.16. Device/status/window replies and XTerm intermediate forms are being separated into implemented responses and explicit rejection cases with bounded ordering and malformed-input tests.
 - Completed F7.15. The public `Modes` contract now exposes focus-in/out, UTF-8 mouse, SGR mouse, and alternate-scroll state. The engine test verifies set/reset transitions, the mutually exclusive UTF-8/SGR switch, existing keyboard/mouse/bracketed-paste modes, and explicit mode inventory links; the focused case passes 1/1 under a 15s supervisor.
 - Started F7.15. The terminal mode contract must expose and test focus reporting, UTF-8/SGR mouse variants, alternate scroll, keyboard modes, bracketed paste, and cursor policy without treating parser acceptance as evidence.
 - Completed F7.14. The CSI inventory now links `E/F` to observable cursor-row behavior, tests `?1049` primary/alternate isolation, and explicitly rejects unsupported `?47`, `?1047`, and `?1048` modes instead of treating them as successful no-ops. The three focused engine cases pass with individual 15s supervisors.

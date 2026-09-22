@@ -69,6 +69,25 @@ fn bel_and_st_terminated_effects_and_queries_preserve_response_order() {
 }
 
 #[test]
+fn csi_device_status_reports_are_observable() {
+    let mut engine = AlacrittyEngine::new();
+    engine.feed(b"\x1b[5n\x1b[6n\x1b[c\x1b[>c");
+    let replies: Vec<Vec<u8>> = engine
+        .drain_events()
+        .into_iter()
+        .filter_map(|event| match event {
+            EngineEvent::PtyWrite(bytes) => Some(bytes),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(replies[0], b"\x1b[0n");
+    assert_eq!(replies[1], b"\x1b[1;1R");
+    assert_eq!(replies[2], b"\x1b[?6c");
+    assert!(replies[3].starts_with(b"\x1b[>0;"));
+    assert!(replies[3].ends_with(b";1c"));
+}
+
+#[test]
 fn osc1337_inline_image_is_typed_and_survives_input_chunk_boundaries() {
     let mut engine = AlacrittyEngine::new();
     engine.feed(b"before\x1b]1337;File=name=ZmlsZS5wbmc=;size=5;inline=1;width=2px:aGVsbG8=");

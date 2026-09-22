@@ -907,6 +907,18 @@ const FEATURE_LINKS = [
     levels: ["unit", "native"],
   },
   {
+    id: "F7.16",
+    implementation: [{ file: "sidecars/vt-alacritty/src/engine.rs", symbol: "device_status" }],
+    tests: [
+      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "csi_device_status_reports_are_observable" },
+      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "unsupported_csi_window_report_is_an_explicit_error" },
+      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "unsupported_csi_rectangle_protected_and_palette_reports_are_explicit_errors" },
+      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "csi_fragmentation_and_malformed_input_preserve_engine_state" },
+    ],
+    expected: "CSI status, device-attribute, text-area, unsupported-window, intermediate, fragmented, and malformed-input paths have named observable response or rejection evidence.",
+    levels: ["unit", "native"],
+  },
+  {
     id: "F9",
     implementation: [{ file: "e2e/library.test.mjs", symbol: "restoration connection" }],
     tests: [{ file: "e2e/library.test.mjs", id: "library windows create and open projects in place" }],

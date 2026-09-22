@@ -1,5 +1,7 @@
 # 변경 기록
 
+- F7.16을 완료했다. CSI inventory가 `5n/6n`, primary/secondary `c/>c`, `14t`, 분할 unsupported window, rectangle/protected-cell/palette intermediate와 framing/잘못된 입력 근거를 이름 있는 검사에 연결한다. 순서가 있는 device/status 응답이 15초 감독 아래 1/1 통과했다.
+- F7.16을 시작했다. device/status/window 응답과 XTerm intermediate 형식을 구현된 응답과 명시적 거부 케이스로 분리하고, 제한된 순서·잘못된 입력 검사를 추가한다.
 - F7.15를 완료했다. 공개 `Modes` 계약이 focus-in/out, UTF-8 mouse, SGR mouse, alternate-scroll 상태를 노출한다. engine 검사가 설정/초기화 전환, 상호 배타적인 UTF-8/SGR 전환, 기존 keyboard/mouse/bracketed-paste mode와 명시적 inventory 연결을 검증하며 15초 감독 아래 1/1 통과했다.
 - F7.15를 시작했다. terminal mode 계약이 focus 보고, UTF-8/SGR mouse 변형, alternate scroll, keyboard mode, bracketed paste와 cursor policy를 노출하고 검사해야 하며 parser 수용을 근거로 삼지 않는다.
 - F7.14를 완료했다. CSI inventory가 `E/F`를 관측 가능한 cursor 행 동작에 연결하고 `?1049` primary/alternate 분리를 검사하며, 지원하지 않는 `?47`, `?1047`, `?1048` mode를 성공한 no-op처럼 다루지 않고 명시적으로 거부한다. 세 집중 engine 검사가 각각 15초 감독 아래 통과했다.

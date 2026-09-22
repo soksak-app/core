@@ -160,6 +160,8 @@ pub const CSI_SELECTOR_INVENTORY: &[CsiSelectorEvidence] = &[
     CsiSelectorEvidence { selector: "L/M", outcome: CsiOutcome::Implemented, test: "csi_insert_delete_characters_and_lines_preserve_requested_cells" },
     CsiSelectorEvidence { selector: "I/Z", outcome: CsiOutcome::Implemented, test: "csi_tabulation_forward_and_backward_use_tab_stops" },
     CsiSelectorEvidence { selector: "6n/c", outcome: CsiOutcome::Implemented, test: "bel_and_st_terminated_effects_and_queries_preserve_response_order" },
+    CsiSelectorEvidence { selector: "5n/6n", outcome: CsiOutcome::Implemented, test: "csi_device_status_reports_are_observable" },
+    CsiSelectorEvidence { selector: "c/>c", outcome: CsiOutcome::Implemented, test: "csi_device_status_reports_are_observable" },
     CsiSelectorEvidence { selector: "b", outcome: CsiOutcome::Implemented, test: "csi_repeat_repeats_the_last_printed_character" },
     CsiSelectorEvidence { selector: "?1,?1000,?1002,?1003,?1004,?1005,?1006,?1007,?2004 h/l", outcome: CsiOutcome::Implemented, test: "csi_private_modes_export_keyboard_paste_and_mouse_state" },
     CsiSelectorEvidence { selector: "ESC =/>", outcome: CsiOutcome::Implemented, test: "csi_application_keypad_mode_uses_the_private_equals_prefix" },
