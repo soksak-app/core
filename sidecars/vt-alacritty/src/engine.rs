@@ -159,6 +159,7 @@ pub const CSI_SELECTOR_INVENTORY: &[CsiSelectorEvidence] = &[
     CsiSelectorEvidence { selector: "6n/c", outcome: CsiOutcome::Implemented, test: "bel_and_st_terminated_effects_and_queries_preserve_response_order" },
     CsiSelectorEvidence { selector: "b", outcome: CsiOutcome::Implemented, test: "csi_repeat_repeats_the_last_printed_character" },
     CsiSelectorEvidence { selector: "?1,?1000,?1002,?1003,?1006,?2004 h/l", outcome: CsiOutcome::Implemented, test: "csi_private_modes_export_keyboard_paste_and_mouse_state" },
+    CsiSelectorEvidence { selector: "ESC =/>", outcome: CsiOutcome::Implemented, test: "csi_application_keypad_mode_uses_the_private_equals_prefix" },
     CsiSelectorEvidence { selector: "14t", outcome: CsiOutcome::Implemented, test: "text_area_callback_is_not_discarded" },
 ];
 

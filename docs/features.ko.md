@@ -173,6 +173,7 @@
   - [o] F7.9 — CSI device/status 보고 `6n`과 `c`를 실행 가능한 응답 근거에 연결한다. Red: engine이 cursor-position과 device-attribute 응답을 이미 내보냈지만 CSI inventory에서 두 선택자가 빠져 있었다. Green: `bel_and_st_terminated_effects_and_queries_preserve_response_order`가 OSC 응답과 함께 `6n`·`c` 응답의 입력 순서를 검증하며, 전체 Alacritty suite가 54/54 통과한다.
   - [o] F7.10 — CSI repeat `b`를 검증한다. Red: 마지막 출력 문자를 반복하는 동작을 연결한 이름 있는 증거가 CSI inventory에 없었다. Green: `csi_repeat_repeats_the_last_printed_character`가 `CSI Ps b`가 다음 셀에 요청한 반복을 출력하는지 검증하며, 집중 검사 1/1 통과를 기록한다.
   - [o] F7.11 — CSI application cursor·mouse report·bracketed paste private mode 설정/초기화를 검증한다. Red: `?1`, `?1000`, `?1002`, `?1003`, `?1006`, `?2004`의 상태 근거가 inventory에 없었다. Green: `csi_private_modes_export_keyboard_paste_and_mouse_state`가 각 지원 모드의 설정 상태와 초기화 상태를 관측하며, 집중 검사 1/1 통과를 기록한다.
+  - [o] F7.12 — VT application keypad 제어를 검증한다. Red: CSI `?66h/l`이라는 가정은 지원하지 않는 입력을 동작하는 키패드 계약으로 잘못 분류할 수 있다. Green: `csi_application_keypad_mode_uses_the_private_equals_prefix`가 엔진의 실제 `ESC =`와 `ESC >` 설정/초기화 전환을 검증하고 selector inventory에 경계를 명시하며, 집중 Rust 검사가 1/1 통과한다.
 - [ ] F8 — 실제 macOS 한글 IME: 조합·편집·취소·범위·후보 위치, 확정 입력 순서/정확히 한 번 전달, 미확정 문자는 PTY로 전달하지 않음. 양쪽 호스트에서 검증한다.
 - [ ] F9 — 복원의 연결·문서·래스터·최초 표시 단계 측정. 실제 표시까지 loading, 실패 시 사라지지 않는 조치 가능한 오류, 같은 fixture에서 복원 속도 개선 측정.
 - [o] F10 — UI를 재창조하지 않고 양쪽 호스트의 기존 네이티브 모달 계약 복구. F10.1–F10.4가 재빌드 Tauri·Wails 자식 WebView 수명주기, 투명 분할 메뉴, 반투명 설정 스크림, 포커스·닫기, 오래된 응답 순서, 리로드 정리, 이동·리사이즈와 명시적 geometry 검증 대기 상태를 모두 다룬다.

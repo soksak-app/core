@@ -941,3 +941,12 @@ fn csi_private_modes_export_keyboard_paste_and_mouse_state() {
     assert!(!disabled.mouse_report);
     assert!(!disabled.bracketed_paste);
 }
+
+#[test]
+fn csi_application_keypad_mode_uses_the_private_equals_prefix() {
+    let mut engine = AlacrittyEngine::new();
+    engine.feed(b"\x1b=");
+    assert!(engine.modes().app_keypad);
+    engine.feed(b"\x1b>");
+    assert!(!engine.modes().app_keypad);
+}
