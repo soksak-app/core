@@ -1,5 +1,7 @@
 # 변경 기록
 
+- G2.5–G2.7을 완료했다. Tauri·Wails runtime contract test가 같은 `waitPresented` 결과를 단언하고, 기계적 E2E 감사가 앱 suite 15개에 양쪽 adapter 순회를 강제하며 호스트 독립 suite 3개를 명시적으로 기록한다. parity inventory는 lane 56개·구현 파일 251개·테스트 파일 171개로 동기화했다.
+
 - F6을 완료했다. 터미널 선택·클립보드·bracketed paste·파일 드롭·이미지 붙여넣기·inline image 계약을 명시적 소유권·오류·네이티브 호스트 검증과 함께 완료했다.
 
 - F6.6-3과 F6.6을 완료했다. 재빌드 Tauri·Wails 터미널 inline-image 수명 E2E가 테스트별 실행 시간과 스크롤 전 native 픽셀, 스크롤·삭제 후 0 픽셀, 교체·리사이즈·소유권·제한된 정리를 검증한다. Red에서 OSC 셸 입력 오용, frame sequence를 무시한 같은 raster 표시 대기, raster 교체 중 inline-image 상태 소실을 확인했다. Green에서 `terminal.image.inline.delete`와 `terminal.session.inlineImages`를 명시적으로 추가하고 사이드카 raster 교체에서 소유권을 보존하며 양쪽 호스트가 양수인 최신 frame sequence를 요구한다. Tauri 1/1(1.79초), Wails 1/1(1.45초), 터미널 모듈 57/57, Tauri 이미지 16/16, Wails 이미지 검사와 구조/parity 검사가 통과했다.

@@ -44,9 +44,10 @@ lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/tes
   lane("workspace audit scripts", "js-ts", [
     "scripts/check-boundaries.mjs",
     "scripts/check-e2e.mjs",
+    "scripts/check-e2e-host-parity.mjs",
     "scripts/check-exposure.mjs",
     "scripts/sidecar-packages.mjs",
-  ], ["scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
+  ], ["scripts/test/soksak-scripts.test.mjs", "scripts/test/e2e-host-parity.test.mjs"], { sharedTests: true }),
   lane("build environment audit", "shell", ["scripts/check-build-environment.sh"], ["scripts/test/soksak-scripts.test.mjs"], {
     testLanguage: "js-ts", sharedTests: true,
   }),
@@ -681,6 +682,20 @@ const FEATURE_LINKS = [
       { file: "apps/wailsv3/test/runtime-contract.test.mjs", id: "Wails page regions expose operations but only composition places geometry" },
     ],
     expected: "Tauri and Wails runtime adapters return the same displayed-state payload from waitPresented and their contract tests assert that returned value.",
+    levels: ["unit"],
+  },
+  {
+    id: "G2.7",
+    implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "auditRecordedInventoryCounts" }],
+    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "recorded parity counts cannot drift from the current inventory" }],
+    expected: "The parity inventory records the current 56 lanes, 251 implementation files, and 171 test files after adding the mechanical E2E host audit.",
+    levels: ["unit"],
+  },
+  {
+    id: "G2.6",
+    implementation: [{ file: "scripts/check-e2e-host-parity.mjs", symbol: "auditE2EHostParity" }],
+    tests: [{ file: "scripts/test/e2e-host-parity.test.mjs", id: "every application E2E suite runs the same scenario through both adapters" }],
+    expected: "Every application E2E suite is mechanically required to iterate both Tauri and Wails adapters, while only explicitly documented host-independent suites may be unit-only.",
     levels: ["unit"],
   },
   {

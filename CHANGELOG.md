@@ -1,5 +1,7 @@
 # Changelog
 
+- Completed G2.5–G2.7. Tauri and Wails runtime contract tests now assert the same `waitPresented` result; a mechanical E2E audit requires 15 application suites to iterate both adapters and records three explicit host-independent suites. The parity inventory is synchronized at 56 lanes, 251 implementation files, and 171 test files.
+
 - Completed F6. The terminal selection, clipboard, bracketed-paste, file-drop, image-paste, and inline-image contracts are now complete with explicit ownership, error, and native-host evidence.
 
 - Completed F6.6-3 and F6.6. Rebuilt Tauri and Wails terminal inline-image lifecycle E2E now reports per-test duration and verifies native pixels before scroll, zero pixels after scroll and deletion, replacement, resize, ownership, and bounded cleanup. The Red cases exposed direct OSC shell-input misuse, same-raster presentation waits that ignored frame sequence, and inline-image state loss during raster replacement. Green adds explicit `terminal.image.inline.delete` and `terminal.session.inlineImages`, preserves ownership across sidecar raster replacement, and requires a positive current frame sequence in both hosts. Tauri passes 1/1 in 1.79s, Wails 1/1 in 1.45s, terminal module tests pass 57/57, Tauri image tests pass 16/16, Wails image tests pass, and structural/parity checks pass.
