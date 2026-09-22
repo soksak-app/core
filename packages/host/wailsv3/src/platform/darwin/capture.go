@@ -29,7 +29,20 @@ static int windowNumbers(void* nsWindow, long* out, int max) {
 */
 import "C"
 
-import "unsafe"
+import (
+	"errors"
+	"fmt"
+	"strings"
+	"unsafe"
+)
+
+func captureError(operation string) error {
+	message := C.GoString(C.sp_capture_error())
+	if message == "" {
+		return fmt.Errorf("capture %s failed without a native reason", operation)
+	}
+	return fmt.Errorf("capture %s: %s", operation, message)
+}
 
 func (implementation) WindowNumbers(window unsafe.Pointer) ([]int, error) {
 	var buf [32]C.long
@@ -42,22 +55,46 @@ func (implementation) WindowNumbers(window unsafe.Pointer) ([]int, error) {
 }
 
 func (implementation) CaptureOpen(windowNumber int, display bool) error {
-	C.sp_capture_open(C.long(windowNumber), C.bool(display))
+	if !bool(C.sp_capture_open(C.long(windowNumber), C.bool(display))) {
+		return captureError("open")
+	}
 	return nil
 }
 
 func (implementation) CaptureStart(directory string) error {
+	if strings.IndexByte(directory, 0) >= 0 {
+		return errors.New("capture start: directory contains NUL")
+	}
 	where := C.CString(directory)
 	defer C.free(unsafe.Pointer(where))
-	C.sp_capture_start(where)
+	if !bool(C.sp_capture_start(where)) {
+		return captureError("start")
+	}
 	return nil
 }
 
 func (implementation) CaptureStop(after float64) (int, error) {
-	return int(C.sp_capture_stop(C.double(after))), nil
+	frames := int(C.sp_capture_stop(C.double(after)))
+	if err := captureErrorIfPresent("stop"); err != nil {
+		return frames, err
+	}
+	return frames, nil
 }
 
-func (implementation) CaptureWait() (bool, error) { return C.sp_capture_wait() != 0, nil }
+func captureErrorIfPresent(operation string) error {
+	message := C.GoString(C.sp_capture_error())
+	if message == "" {
+		return nil
+	}
+	return fmt.Errorf("capture %s: %s", operation, message)
+}
+
+func (implementation) CaptureWait() (bool, error) {
+	if C.sp_capture_wait() != 0 {
+		return true, nil
+	}
+	return false, captureError("wait")
+}
 
 func (implementation) CaptureLimited() bool { return bool(C.sp_capture_limited()) }
 

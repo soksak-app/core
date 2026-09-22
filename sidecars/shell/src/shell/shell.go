@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
 	"sync"
 )
 
@@ -80,7 +81,11 @@ func Serve(in io.Reader, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	defer shells.CloseAll()
+	defer func() {
+		if err := shells.CloseAll(); err != nil {
+			fmt.Fprintf(os.Stderr, "shell cleanup failed: %v\n", err)
+		}
+	}()
 
 	scanner := bufio.NewScanner(in)
 	scanner.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
@@ -101,8 +106,7 @@ func Serve(in io.Reader, out io.Writer) error {
 
 func handle(shells *Shells, request Request) error {
 	if request.Closed {
-		shells.Close(request.Surface)
-		return nil
+		return shells.Close(request.Surface)
 	}
 	switch request.Body.Op {
 	case "open":
@@ -112,8 +116,7 @@ func handle(shells *Shells, request Request) error {
 		_, err := shells.Open(request.Surface, request.Root)
 		return err
 	case "close":
-		shells.Close(request.Surface)
-		return nil
+		return shells.Close(request.Surface)
 	case "write":
 		return shells.Write(request.Surface, request.Body.Data)
 	case "run":

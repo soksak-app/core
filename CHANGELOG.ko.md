@@ -1,5 +1,7 @@
 # 변경 기록
 
+- F0.4-1.5를 완료하고 F0.4-1을 닫았다. 교차 언어 실패 matrix가 귀속 가능한 JS/TS·Rust·Go·Objective-C 감사를 실행한다. Wails Darwin capture 상태, recording 정리, shell close, persistent protocol decoding이 더 이상 오류를 버리지 않으며 Wails·shell 테스트와 parity 자기 테스트 27개가 통과한다.
+
 - F0.4-1.4를 완료했다. Darwin capture 실패가 이제 로그만 남기는 `void` 호출이나 조용히 버려지는 잘못된 경로가 아니라 명시적 상태와 오류 문자열로 Objective-C/Rust 경계를 통과한다. native capture 테스트와 기계 실패 감사가 수정된 계약을 검증하고 parity 자기 테스트 25개가 통과한다. 교차 언어 실패 매트릭스는 F0.4-1.5에 남아 있다.
 
 ## 미배포

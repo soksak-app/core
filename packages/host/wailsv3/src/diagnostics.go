@@ -198,7 +198,9 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, 
 		// 요청자가 프레임 폴더를 받지 못하면 녹화를 멈추고 폴더를 지운다.
 		if p.Capture {
 			if capture, captureErr := recorder(); captureErr == nil {
-				recording.Abort(capture)
+				if abortErr := recording.Abort(capture); abortErr != nil {
+					err = fmt.Errorf("%w; abort capture: %v", err, abortErr)
+				}
 			}
 		}
 		return nil, err

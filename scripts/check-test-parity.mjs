@@ -138,6 +138,13 @@ const MATRIX = [
 // The inventory remains structural; behavior is proved by the referenced tests.
 const FEATURE_LINKS = [
   {
+    id: "F0.4-1",
+    implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "auditFailureMatrix" }],
+    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "failure matrix preserves JS/TS, Rust, Go, and Objective-C lane attribution" }],
+    expected: "The complete failure-propagation audit covers every declared JS/TS, Rust, Go, and Objective-C production lane with attributable errors and no ignored outcomes.",
+    levels: ["unit", "native"],
+  },
+  {
     id: "F0.4-1.1",
     implementation: [
       { file: "packages/host/wailsv3/src/surfaces.go", symbol: "CreateLogicalSurfaceHandle" },
@@ -385,6 +392,20 @@ const FEATURE_LINKS = [
       { file: "scripts/test/test-parity.test.mjs", id: "Darwin native failure audit rejects log-only capture boundaries" },
     ],
     expected: "Darwin capture open, start, wait, and stop failures cross the native boundary as explicit errors; invalid directory input and frame-write failures are not silently discarded.",
+    levels: ["unit", "native"],
+  },
+  {
+    id: "F0.4-1.5",
+    implementation: [
+      { file: "scripts/check-test-parity.mjs", symbol: "auditFailureMatrix" },
+      { file: "packages/host/wailsv3/src/recording.go", symbol: "func (r *Recording) Abort" },
+      { file: "sidecars/shell/src/shell/shells.go", symbol: "func (s *Shells) Close" },
+    ],
+    tests: [
+      { file: "scripts/test/test-parity.test.mjs", id: "Go failure audit rejects ignored results in every Go production lane" },
+      { file: "packages/host/wailsv3/tests/recording_test.go", id: "TestAbortReportsStopFailureAndStillRemovesFolder" },
+    ],
+    expected: "The JS/TS, Rust, Go, and Objective-C failure lanes run as one machine-audited matrix; each lane rejects ignored outcomes, and Wails capture, recording cleanup, and shell close failures remain attributable.",
     levels: ["unit", "native"],
   },
   {
@@ -819,6 +840,45 @@ export function auditNativeFailurePropagation(files, readSource = (file) => read
   return errors;
 }
 
+/** Reject ignored Go outcomes in host and shell production lanes. */
+export function auditGoFailurePropagation(files, readSource = (file) => readFileSync(`${ROOT}${file}`, "utf8")) {
+  const errors = [];
+  for (const file of [...new Set(files)].sort()) {
+    if (!file.endsWith(".go") || /(^|\/)(test|tests)\//.test(file)) continue;
+    let source;
+    try { source = readSource(file); }
+    catch (error) {
+      errors.push(`${file}: Go failure-propagation source cannot be read: ${error?.message ?? error}`);
+      continue;
+    }
+    for (const [index, line] of source.split("\n").entries()) {
+      if (/\b_\s*=/.test(line)) {
+        errors.push(`${file}:${index + 1}: ignored Go result or fallback encoding`);
+      }
+    }
+  }
+  return errors;
+}
+
+/** Run every language-specific failure audit and preserve attribution by lane. */
+export function auditFailureMatrix(files, readSource = (file) => readFileSync(`${ROOT}${file}`, "utf8")) {
+  const lanes = [
+    ["js-ts", auditJsFailurePropagation(files, readSource)],
+    ["rust", [
+      "sidecars/vt-core/src/",
+      "sidecars/vt-alacritty/src/",
+      "packages/host/tauriv2/src/",
+      "apps/tauriv2/src/",
+    ].flatMap((scope) => auditRustFailurePropagation(files, readSource, scope))],
+    ["go", auditGoFailurePropagation(files, readSource)],
+    ["objective-c", auditNativeFailurePropagation(files, readSource)],
+  ];
+  return {
+    lanes: lanes.map(([language, errors]) => ({ language, errors })),
+    errors: lanes.flatMap(([language, errors]) => errors.map((error) => `${language}: ${error}`)),
+  };
+}
+
 // 언어별 고정 루트를 두지 않는다. 한 패키지의 다른 언어도 모두 발견한다.
 export function discoverInventory(files) {
   const implementations = [], tests = [], manifests = [], generated = [];
@@ -943,19 +1003,12 @@ export function auditInventory(files, matrix = MATRIX, readSource = (file) => re
   errors.push(...featureErrors);
   const ownershipErrors = auditOwnership(files, readSource);
   errors.push(...ownershipErrors);
-  const jsFailureErrors = auditJsFailurePropagation(files, readSource);
-  errors.push(...jsFailureErrors);
-  const rustFailureScopes = [
-    "sidecars/vt-core/src/",
-    "sidecars/vt-alacritty/src/",
-    "packages/host/tauriv2/src/",
-    "apps/tauriv2/src/",
-  ];
-  const rustFailureErrors = rustFailureScopes.flatMap((scope) =>
-    auditRustFailurePropagation(files, readSource, scope));
-  errors.push(...rustFailureErrors);
-  const nativeFailureErrors = auditNativeFailurePropagation(files, readSource);
-  errors.push(...nativeFailureErrors);
+  const failureMatrix = auditFailureMatrix(files, readSource);
+  const jsFailureErrors = failureMatrix.lanes.find(({ language }) => language === "js-ts").errors;
+  errors.push(...failureMatrix.errors);
+  const rustFailureErrors = failureMatrix.lanes.find(({ language }) => language === "rust").errors;
+  const nativeFailureErrors = failureMatrix.lanes.find(({ language }) => language === "objective-c").errors;
+  const goFailureErrors = failureMatrix.lanes.find(({ language }) => language === "go").errors;
 
   return {
     errors,
@@ -968,6 +1021,8 @@ export function auditInventory(files, matrix = MATRIX, readSource = (file) => re
     jsFailureErrors,
     rustFailureErrors,
     nativeFailureErrors,
+    goFailureErrors,
+    failureMatrix,
     featureLinks: FEATURE_LINKS,
     trackCount: matrix.length,
     implementationCount: implementationOwners.size,

@@ -325,7 +325,11 @@ func (s *Surfaces) WindowChrome() (Chrome, error) {
 		return Chrome{}, errNoWindow
 	}
 	var row float64
-	application.InvokeSync(func() { row, _ = system.UnifiedTitlebar(win.NativeWindow()) })
+	var rowErr error
+	application.InvokeSync(func() { row, rowErr = system.UnifiedTitlebar(win.NativeWindow()) })
+	if rowErr != nil {
+		return Chrome{}, rowErr
+	}
 	return Chrome{Controls: controls, Row: row}, nil
 }
 

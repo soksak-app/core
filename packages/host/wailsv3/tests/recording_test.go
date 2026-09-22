@@ -21,6 +21,7 @@ type fakeCapture struct {
 	failOpen  bool
 	failStart bool
 	noFrame   bool
+	stopErr   bool
 }
 
 func (f *fakeCapture) Open(target host.CaptureTarget) error {
@@ -50,6 +51,9 @@ func (f *fakeCapture) Wait() (bool, error) {
 
 func (f *fakeCapture) Stop() (int, error) {
 	f.calls = append(f.calls, "stop")
+	if f.stopErr {
+		return 0, errors.New("stop failed")
+	}
 	return 3, nil
 }
 
@@ -135,6 +139,22 @@ func TestAbortedRecordingIsStoppedAndRemovedAndAllowsTheNext(t *testing.T) {
 	}
 	// 같은 창이면 녹화 대상을 다시 준비하지 않는다.
 	expectCalls(t, fake, "open 7", "start", "wait", "stop", "start", "wait")
+}
+
+func TestAbortReportsStopFailureAndStillRemovesFolder(t *testing.T) {
+	folder := filepath.Join(t.TempDir(), "frames")
+	var recording host.Recording
+	fake := &fakeCapture{stopErr: true}
+	if err := recording.Start(fake, window, folder); err != nil {
+		t.Fatal(err)
+	}
+	err := recording.Abort(fake)
+	if err == nil || !strings.Contains(err.Error(), "stop capture: stop failed") {
+		t.Fatalf("abort error %v", err)
+	}
+	if exists(folder) {
+		t.Fatal("the aborted folder remains")
+	}
 }
 
 func TestDifferentTargetIsPreparedAgain(t *testing.T) {

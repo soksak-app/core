@@ -54,7 +54,9 @@ func (r *Recording) Start(capture Capture, target CaptureTarget, directory strin
 		return err
 	}
 	if err := r.begin(capture, target, directory); err != nil {
-		_ = os.RemoveAll(directory)
+		if removeErr := os.RemoveAll(directory); removeErr != nil {
+			return fmt.Errorf("%w; remove failed capture directory: %v", err, removeErr)
+		}
 		return err
 	}
 	r.directory = directory
@@ -78,23 +80,31 @@ func (r *Recording) begin(capture Capture, target CaptureTarget, directory strin
 		err = errors.New("capture did not produce an initial frame")
 	}
 	if err != nil {
-		_, _ = capture.Stop()
+		if _, stopErr := capture.Stop(); stopErr != nil {
+			return fmt.Errorf("%w; stop failed recording: %v", err, stopErr)
+		}
 		return err
 	}
 	return nil
 }
 
 // Abort 는 진행 중인 녹화를 멈추고 폴더를 지운다. 녹화가 없으면 아무 일도 하지 않는다.
-func (r *Recording) Abort(capture Capture) {
+func (r *Recording) Abort(capture Capture) error {
 	r.mu.Lock()
 	directory := r.directory
 	r.directory = ""
 	r.mu.Unlock()
 	if directory == "" {
-		return
+		return nil
 	}
-	_, _ = capture.Stop()
-	_ = os.RemoveAll(directory)
+	var errs []error
+	if _, err := capture.Stop(); err != nil {
+		errs = append(errs, fmt.Errorf("stop capture: %w", err))
+	}
+	if err := os.RemoveAll(directory); err != nil {
+		errs = append(errs, fmt.Errorf("remove capture directory: %w", err))
+	}
+	return errors.Join(errs...)
 }
 
 // Finish 는 진행 중인 녹화를 끝내고 폴더와 프레임 수를 반환한다. 폴더는 요청자가 지운다.

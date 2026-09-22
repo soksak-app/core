@@ -91,7 +91,9 @@ func (s *Surfaces) OverlayShow(req OverlayRequest) (Rect, error) {
 	previous := s.modal
 	s.mu.Unlock()
 	if previous != nil {
-		_ = s.OverlayHide(previous.id)
+		if err := s.OverlayHide(previous.id); err != nil {
+			return Rect{}, fmt.Errorf("close previous modal: %w", err)
+		}
 	}
 	var at Rect
 	var alignErr error

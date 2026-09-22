@@ -253,7 +253,7 @@ func (s *Shells) Interrupt(id string) error {
 //
 // 종료는 프로세스를 기다리는 작업이므로 잠금을 해제한 뒤 수행한다. 잠금을 유지한 채
 // 기다리면 다른 호출이 대기한다.
-func (s *Shells) Close(id string) {
+func (s *Shells) Close(id string) error {
 	s.mu.Lock()
 	live, ok := s.running[id]
 	if ok {
@@ -267,27 +267,46 @@ func (s *Shells) Close(id string) {
 	}
 	s.mu.Unlock()
 	if !ok {
-		return
+		return nil
 	}
 
+	var errs []error
 	for _, cmd := range runs {
-		_ = s.platform.Terminate(cmd.Process.Pid)
+		if err := s.platform.Terminate(cmd.Process.Pid); err != nil {
+			errs = append(errs, fmt.Errorf("terminate command %d: %w", cmd.Process.Pid, err))
+		}
 	}
-	_ = live.stdin.Close()
-	_ = live.commands.Close()
-	_ = s.platform.Terminate(live.cmd.Process.Pid)
-	_ = live.cmd.Wait()
+	if err := live.stdin.Close(); err != nil {
+		errs = append(errs, fmt.Errorf("close shell stdin: %w", err))
+	}
+	if err := live.commands.Close(); err != nil {
+		errs = append(errs, fmt.Errorf("close shell command pipe: %w", err))
+	}
+	if err := s.platform.Terminate(live.cmd.Process.Pid); err != nil {
+		errs = append(errs, fmt.Errorf("terminate shell %d: %w", live.cmd.Process.Pid, err))
+	}
+	if err := live.cmd.Wait(); err != nil {
+		var exitError *exec.ExitError
+		if !errors.As(err, &exitError) {
+			errs = append(errs, fmt.Errorf("wait for shell %d: %w", live.cmd.Process.Pid, err))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // CloseAll 은 실행 중인 모든 셸을 종료한다.
-func (s *Shells) CloseAll() {
+func (s *Shells) CloseAll() error {
 	s.mu.Lock()
 	ids := make([]string, 0, len(s.running))
 	for id := range s.running {
 		ids = append(ids, id)
 	}
 	s.mu.Unlock()
+	var errs []error
 	for _, id := range ids {
-		s.Close(id)
+		if err := s.Close(id); err != nil {
+			errs = append(errs, fmt.Errorf("close shell %s: %w", id, err))
+		}
 	}
+	return errors.Join(errs...)
 }

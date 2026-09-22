@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { auditCommittedEvidenceWording, auditCompletedFeatureLinks, auditFeatureLinks, auditHistoricalScopeWording, auditInventory, auditJsFailurePropagation, auditModalParitySnapshotWording, auditNativeFailurePropagation, auditOwnership, auditRecordedInventoryCounts, auditRustFailurePropagation, discoverInventory, repositoryFiles } from "../check-test-parity.mjs";
+import { auditCommittedEvidenceWording, auditCompletedFeatureLinks, auditFailureMatrix, auditFeatureLinks, auditGoFailurePropagation, auditHistoricalScopeWording, auditInventory, auditJsFailurePropagation, auditModalParitySnapshotWording, auditNativeFailurePropagation, auditOwnership, auditRecordedInventoryCounts, auditRustFailurePropagation, discoverInventory, repositoryFiles } from "../check-test-parity.mjs";
 
 const files = repositoryFiles();
 
@@ -235,4 +235,26 @@ test("Darwin native failure audit accepts explicit capture results", { timeout: 
     [files[2], "fn sp_capture_open(value: isize, display: bool) -> bool { true } fn sp_capture_start(value: *const c_char) -> bool { true } extern { fn sp_capture_error(); }"],
   ]);
   assert.deepEqual(auditNativeFailurePropagation(files, (file) => sources.get(file)), []);
+});
+
+test("Go failure audit rejects ignored results in every Go production lane", { timeout: 1000 }, () => {
+  const files = [
+    "packages/host/wailsv3/src/host.go",
+    "sidecars/shell/src/shell/shells.go",
+    "packages/host/wailsv3/tests/ignored_test.go",
+  ];
+  const sources = new Map([
+    [files[0], "data, _ = json.Marshal(value)"],
+    [files[1], "if err := command.Close(); err != nil { report(err) }"],
+    [files[2], "_ = ignored()"],
+  ]);
+  assert.deepEqual(auditGoFailurePropagation(files, (file) => sources.get(file)), [
+    "packages/host/wailsv3/src/host.go:1: ignored Go result or fallback encoding",
+  ]);
+});
+
+test("failure matrix preserves JS/TS, Rust, Go, and Objective-C lane attribution", { timeout: 1000 }, () => {
+  const matrix = auditFailureMatrix(repositoryFiles());
+  assert.deepEqual(matrix.lanes.map(({ language }) => language), ["js-ts", "rust", "go", "objective-c"]);
+  assert.deepEqual(matrix.errors, []);
 });

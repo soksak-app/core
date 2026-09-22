@@ -335,7 +335,9 @@ type endpointConn struct {
 func (c *endpointConn) close() {
 	c.once.Do(func() {
 		close(c.done)
-		_ = c.conn.Close()
+		if err := c.conn.Close(); err != nil {
+			log.Printf("endpoint: close connection: %v", err)
+		}
 	})
 }
 
@@ -525,7 +527,9 @@ func (e *Endpoint) reply(c *endpointConn, req request, result any, err error) {
 	}
 	data, marshalErr := json.Marshal(reply)
 	if marshalErr != nil {
-		data, _ = json.Marshal(map[string]any{"jsonrpc": "2.0", "id": req.ID, "error": rpcError(codeInternal, "%v", marshalErr)})
+		log.Printf("endpoint: cannot encode reply for %s: %v", req.ID, marshalErr)
+		c.close()
+		return
 	}
 	c.send(data)
 }

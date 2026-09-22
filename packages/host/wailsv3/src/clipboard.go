@@ -35,8 +35,7 @@ type ClipboardPersistRequest struct {
 }
 
 func (h *Host) ClipboardRead(ctx context.Context, request ClipboardReadRequest) (ClipboardReadResponse, error) {
-	s, err := h.surface(ctx)
-	if err != nil {
+	if _, err := h.surface(ctx); err != nil {
 		return ClipboardReadResponse{}, err
 	}
 	if !request.UserInitiated {
@@ -68,7 +67,6 @@ func (h *Host) ClipboardRead(ctx context.Context, request ClipboardReadRequest) 
 	if len(value.PNG) > 0 {
 		response.Data = base64.StdEncoding.EncodeToString(value.PNG)
 	}
-	_ = s
 	return response, nil
 }
 

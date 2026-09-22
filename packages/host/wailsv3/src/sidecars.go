@@ -535,7 +535,11 @@ func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 		return nil, fmt.Errorf("sidecar %s: connect authenticated service: %w", name, err)
 	}
 	reader := bufio.NewReader(conn)
-	hello, _ := json.Marshal(map[string]any{"op": "hello", "protocol": 1, "token": endpoint.Token, "client": c.configDir})
+	hello, err := json.Marshal(map[string]any{"op": "hello", "protocol": 1, "token": endpoint.Token, "client": c.configDir})
+	if err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("sidecar %s: encode hello: %w", name, err)
+	}
 	hello = append(hello, '\n')
 	if _, err := conn.Write(hello); err != nil {
 		conn.Close()
@@ -750,17 +754,33 @@ func (c *Sidecars) readPersistent(process *sidecar, reader *bufio.Reader) {
 		var value map[string]json.RawMessage
 		if err := json.Unmarshal(line, &value); err != nil {
 			log.Printf("sidecar %s: invalid persistent event: %v", process.name, err)
-			continue
+			break
 		}
 		var op string
-		_ = json.Unmarshal(value["op"], &op)
+		if raw, present := value["op"]; present {
+			if err := json.Unmarshal(raw, &op); err != nil {
+				log.Printf("sidecar %s: invalid persistent operation: %v", process.name, err)
+				break
+			}
+		}
 		if op == "closed-owner" || op == "shutdown" {
 			var request string
-			_ = json.Unmarshal(value["request"], &request)
+			if err := json.Unmarshal(value["request"], &request); err != nil || request == "" {
+				log.Printf("sidecar %s: invalid close-owner request: %v", process.name, err)
+				break
+			}
 			var ok bool
-			_ = json.Unmarshal(value["ok"], &ok)
+			if err := json.Unmarshal(value["ok"], &ok); err != nil {
+				log.Printf("sidecar %s: invalid close-owner status: %v", process.name, err)
+				break
+			}
 			var reason string
-			_ = json.Unmarshal(value["error"], &reason)
+			if raw, present := value["error"]; present {
+				if err := json.Unmarshal(raw, &reason); err != nil {
+					log.Printf("sidecar %s: invalid close-owner error: %v", process.name, err)
+					break
+				}
+			}
 			c.mu.Lock()
 			waiter := process.closeWaiters[request]
 			delete(process.closeWaiters, request)
