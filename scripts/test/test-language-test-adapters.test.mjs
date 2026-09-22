@@ -35,6 +35,12 @@ test('parses each language result and rejects zero, skipped, and crashed outcome
   assert.equal(result.cases.find((item) => item.id === 'pass').status, 'pass');
   assert.match(result.cases.find((item) => item.id === 'zero').errors.join(' '), /zero tests/);
   assert.match(result.cases.find((item) => item.id === 'crash').errors.join(' '), /crashed/);
+
+  const skipped = await runLanguageCases(discoverLanguageCases({ cases: [
+    { id: 'mandatory-skip', language: 'rust', ...command("console.log('test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out;')") },
+  ] }));
+  assert.equal(skipped.status, 'fail');
+  assert.match(skipped.cases[0].errors.join(' '), /skipped/);
 });
 
 test('reports expected and actual test counts without hiding mismatch', async () => {

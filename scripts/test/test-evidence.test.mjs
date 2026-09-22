@@ -26,6 +26,7 @@ test('evidence records content hashes, dirty state, expected/actual result, and 
   assert.equal(retried.processes.length, 1);
   assert.match(retried.processes[0].sha256, /^[0-9a-f]{64}$/);
   assert.deepEqual(evidenceDrift(retried, { ...retried, buildFlags: ['different'] }), ['evidence snapshot is stale: source, test, dependency, build, process, or dirty-worktree content changed']);
+  assert.deepEqual(evidenceDrift(retried, { ...retried, processes: [{ ...retried.processes[0], sha256: '0'.repeat(64) }] }), ['evidence snapshot is stale: source, test, dependency, build, process, or dirty-worktree content changed']);
   const evidenceFile = join(await mkdtemp(join(tmpdir(), 'soksak-evidence-file-')), 'evidence.json');
   await persistEvidence(evidenceFile, [record]);
   await persistEvidence(evidenceFile, [retried]);

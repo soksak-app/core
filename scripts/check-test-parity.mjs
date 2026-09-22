@@ -179,6 +179,24 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "G3-1",
+    implementation: [
+      { file: "scripts/check-test-parity.mjs", symbol: "auditInventory" },
+      { file: "scripts/check-test-parity.mjs", symbol: "auditFeatureLinks" },
+      { file: "scripts/language-test-adapters.mjs", symbol: "runLanguageCases" },
+      { file: "scripts/test-evidence.mjs", symbol: "evidenceDrift" },
+    ],
+    tests: [
+      { file: "scripts/test/test-parity.test.mjs", id: "boundary audit rejects a duplicate implementation and test owner" },
+      { file: "scripts/test/test-parity.test.mjs", id: "evidence audit rejects attribution to the wrong behavior-test file" },
+      { file: "scripts/test/test-parity.test.mjs", id: "behavior mutation audit rejects a no-op implementation and an omitted response" },
+      { file: "scripts/test/test-language-test-adapters.test.mjs", id: "parses each language result and rejects zero, skipped, and crashed outcomes" },
+      { file: "scripts/test/test-evidence.test.mjs", id: "evidence records content hashes, dirty state, expected/actual result, and retry history" },
+    ],
+    expected: "The audit rejects injected structural and behavioral defects, mandatory skips, wrong evidence attribution, and stale executable evidence while reporting structural and behavior evidence separately.",
+    levels: ["unit"],
+  },
+  {
     id: "G1.3-5",
     implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "auditCommittedEvidenceWording" }],
     tests: [{ file: "scripts/test/test-parity.test.mjs", id: "F0.1 evidence identifies its committed build" }],

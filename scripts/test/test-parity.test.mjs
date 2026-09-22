@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import test from "node:test";
 import { auditCommittedEvidenceWording, auditCompletedFeatureLinks, auditFailureMatrix, auditFeatureLinks, auditGoFailurePropagation, auditHistoricalScopeWording, auditInventory, auditJsFailurePropagation, auditModalParitySnapshotWording, auditNativeFailurePropagation, auditOwnership, auditRecordedInventoryCounts, auditRustFailurePropagation, discoverInventory, repositoryFiles } from "../check-test-parity.mjs";
 
@@ -21,6 +22,15 @@ for (const file of [
 test("inventory rejects an empty test lane", { timeout: 1000 }, () => {
   const result = auditInventory(["unit.js"], [{ capability: "unit", language: "js-ts", implementation: ["unit.js"], tests: [] }]);
   assert.ok(result.errors.some((error) => error.includes("no test files")));
+});
+
+test("boundary audit rejects a duplicate implementation and test owner", { timeout: 1000 }, () => {
+  const result = auditInventory(["unit.js", "unit.test.mjs"], [
+    { capability: "first", language: "js-ts", implementation: ["unit.js"], tests: ["unit.test.mjs"] },
+    { capability: "duplicate", language: "js-ts", implementation: ["unit.js"], tests: ["unit.test.mjs"] },
+  ]);
+  assert.ok(result.errors.some((error) => error.includes("implementation is claimed by multiple")));
+  assert.ok(result.errors.some((error) => error.includes("test is claimed by multiple")));
 });
 
 test("inventory rejects duplicated ownership", { timeout: 1000 }, () => {
@@ -83,6 +93,30 @@ test("feature links reject missing evidence fields and workspace files", { timeo
   assert.ok(errors.some((error) => error.includes("missing.test.mjs")));
   assert.ok(errors.some((error) => error.includes("implementation symbol is not present")));
   assert.ok(errors.some((error) => error.includes("behavior test id is not present")));
+});
+
+test("evidence audit rejects attribution to the wrong behavior-test file", { timeout: 1000 }, () => {
+  const errors = auditFeatureLinks([
+    {
+      id: "wrong-attribution",
+      implementation: [{ file: "known.js", symbol: "run" }],
+      tests: [{ file: "other.test.mjs", id: "runs the known behavior" }],
+      expected: "The named behavior is executed and observed.",
+      levels: ["unit"],
+    },
+  ], ["known.js", "other.test.mjs"], (file) => file === "known.js" ? "export function run() {}\n" : "test('different behavior', () => {});\n");
+  assert.ok(errors.some((error) => error.includes("behavior test id is not present in other.test.mjs")));
+});
+
+test("behavior mutation audit rejects a no-op implementation and an omitted response", { timeout: 1000 }, () => {
+  const behavior = (implementationSource) => spawnSync(process.execPath, ["-e", [
+    `const implementation = ${implementationSource};`,
+    "const result = implementation('input');",
+    "if (result !== 'INPUT') process.exit(1);",
+  ].join("\n")], { encoding: "utf8" });
+  assert.equal(behavior("(value) => value.toUpperCase()").status, 0);
+  assert.notEqual(behavior("() => undefined").status, 0);
+  assert.notEqual(behavior("(value) => value").status, 0);
 });
 
 test("completed capability entries all have feature evidence links", { timeout: 1000 }, () => {
