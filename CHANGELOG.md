@@ -1,5 +1,7 @@
 # Changelog
 
+- Completed F6.3-1. A newly split terminal no longer waits for native presentation before its module declares and places the image raster, removing the `1005` presentation cycle. The bounded regression check reports START/PASS and passes on rebuilt Wails 1/1 in 0.79s and Tauri 1/1 in 0.37s; it verifies sidecar session identity and visible/presented native regions.
+
 - Completed F6.3. Terminal pointer drags now have explicit `selection.start`, `selection.update`, and `selection.end` operations; the Alacritty engine renders selected cells and returns one non-empty selection-copy payload; the terminal module writes only a verified `userInitiated` selection event. The workbench forwards the typed clipboard capability without converting string payloads into surface objects, and its surface test rejects a missing bridge. Invalid coordinates and missing or empty copy data remain explicit errors. Terminal module 50/50, Alacritty 30/30, VT core 44/44, `pnpm test`, structural gates, and `make native-test` pass. Rebuilt Tauri selection drag/raster/clipboard E2E passes 1/1 in 0.99s and Wails passes 1/1 in 0.63s.
 
 - Corrected the `encode_paste` source contract comment to state the implemented behavior: preserve UTF-8 bytes and line endings, and reject rather than remove an embedded bracketed-paste terminator. The paired F6.1-1 checklist item is verified by the focused VT core test and documentation checks.

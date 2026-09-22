@@ -136,7 +136,10 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
     entry.ready = entry.mounted.then(async (mountedModule) => {
         if (!mountedModule) return null;
         entry.module = mountedModule;
-        if (native) await hostSurfaces.waitPresented();
+        // A newly created native surface must declare and place its image before
+        // the first presentation can wait for that image raster. Waiting here
+        // creates a cycle: presentation waits for the module, while the module's
+        // composition is the operation that configures the raster.
         releaseSurfaceReady(context);
         return mountedModule;
       }).catch((error) => {

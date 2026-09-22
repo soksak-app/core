@@ -147,6 +147,25 @@ async function assertGridFillsPlane(session, message) {
 }
 
 for (const app of Object.values(APPS)) {
+  test(`${app.name}: a newly split terminal presents its first native raster`, { timeout: 30000 }, async (t) => {
+    const s = await open(t, app);
+    assert.ok(s, `${app.binary} is not built`);
+    await fresh(s);
+    t.diagnostic(`${app.name}: START split-terminal presentation`);
+    const terminals = await ensureTerminals(s, 2);
+    for (const terminal of terminals) {
+      await s.until("terminal.session", (state) => Boolean(state.sessionId),
+        `${terminal.surface} did not open a sidecar session`, { surface: terminal.surface });
+    }
+    const host = await s.get("host.window");
+    for (const terminal of terminals) {
+      const region = host.regions.find((item) => item.surface === terminal.surface && item.name === "view");
+      assert.ok(region?.visible && region.presented,
+        `${terminal.surface} was not visible and presented after splitting: ${JSON.stringify(region)}`);
+    }
+    t.diagnostic(`${app.name}: PASS split-terminal presentation`);
+  });
+
   test(`${app.name}: three terminals and two browsers share one app DOM and one terminal service`, async (t) => {
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);
