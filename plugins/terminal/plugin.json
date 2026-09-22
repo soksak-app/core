@@ -220,6 +220,22 @@
         "result": {
           "type": "null"
         }
+      },
+      {
+        "name": "terminal.drop",
+        "description": "Pastes user-dropped local file URLs once without executing them.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "urls": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
       }
     ],
     "dom": [

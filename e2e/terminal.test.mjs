@@ -837,6 +837,23 @@ for (const app of Object.values(APPS)) {
       "selection clipboard text was not pasted exactly as selected");
   });
 
+  test(`${app.name}: terminal file drop pastes quoted paths without executing`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const [terminal] = await ensureTerminals(s, 1);
+    const surface = terminal.surface;
+    const dropped = "'/tmp/dropped file.txt' '/tmp/quote'\\''name.txt'";
+    await s.run("terminal.drop", {
+      urls: ["file:///tmp/dropped%20file.txt", "file:///tmp/quote%27name.txt"],
+    }, surface);
+    const lines = await readScreenUntil(s, surface,
+      (screen) => screen.some((line) => line.includes(dropped)),
+      "terminal file drop did not paste its quoted paths");
+    assert.ok(lines.some((line) => line.includes(dropped)), "file drop payload was not visible in the terminal");
+    assert.ok(!lines.some((line) => line.includes("command not found")), "file drop must not execute a command");
+  });
+
   test(`${app.name}: terminal image follows a window resize`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);

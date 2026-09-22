@@ -251,6 +251,11 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     await terminal.send(id, { operation: "paste", text });
     return null;
   };
+  const dropFileURLs = (value) => {
+    if (!Array.isArray(value) || value.length === 0) throw new Error("terminal file drop has no file URLs");
+    return value.map((url) => shellQuotePath(fileURLPath(url))).join(" ");
+  };
+  const dropFiles = async ({ urls } = {}) => sendPaste(dropFileURLs(urls));
   const pasteText = async () => {
     if (!clipboard || typeof clipboard.read !== "function") {
       throw new Error("terminal.paste requires a clipboard capability");
@@ -485,6 +490,25 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   view.addEventListener("pointermove", updateSelection);
   view.addEventListener("pointerup", endSelection);
   view.addEventListener("pointercancel", endSelection);
+  const dragOverFiles = (event) => {
+    const types = [...(event.dataTransfer?.types ?? [])];
+    if (types.includes("text/uri-list") || types.includes("Files")) event.preventDefault();
+  };
+  const dropFilesFromEvent = (event) => {
+    event.preventDefault();
+    try {
+      const raw = event.dataTransfer?.getData?.("text/uri-list");
+      if (typeof raw !== "string" || raw.trim().length === 0) {
+        throw new Error("terminal file drop requires a text/uri-list payload");
+      }
+      const urls = raw.split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !line.startsWith("#"));
+      observeInput(dropFiles({ urls }));
+    } catch (error) {
+      reportInputError(error);
+    }
+  };
+  view.addEventListener("dragover", dragOverFiles);
+  view.addEventListener("drop", dropFilesFromEvent);
 
   // screen.read 응답을 기다리는 resolver
   let pendingScreenRead = null;
@@ -736,6 +760,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   });
   await expose.command("terminal.cursor.set", async (policy) => setCursorPolicy(policy));
   await expose.command("terminal.paste", pasteText);
+  await expose.command("terminal.drop", dropFiles);
   return {
     setTheme,
     setCursorPolicy,
@@ -765,6 +790,8 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       view.removeEventListener("pointermove", updateSelection);
       view.removeEventListener("pointerup", endSelection);
       view.removeEventListener("pointercancel", endSelection);
+      view.removeEventListener("dragover", dragOverFiles);
+      view.removeEventListener("drop", dropFilesFromEvent);
       await terminal.send(id, { operation: "close" });
     },
   };

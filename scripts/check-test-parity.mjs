@@ -917,6 +917,20 @@ const FEATURE_LINKS = [
     levels: ["unit", "native", "application"],
   },
   {
+    id: "F6.5",
+    implementation: [
+      { file: "plugins/terminal/ui/terminal.js", symbol: "dropFilesFromEvent" },
+      { file: "plugins/terminal/plugin.json", symbol: "terminal.drop" },
+    ],
+    tests: [
+      { file: "plugins/terminal/test/terminal.test.mjs", id: "terminal file drop quotes local URLs and sends one non-executing paste" },
+      { file: "plugins/terminal/test/terminal.test.mjs", id: "terminal file drop rejects unsupported or malformed payloads without input" },
+      { file: "e2e/terminal.test.mjs", id: "terminal file drop pastes quoted paths without executing" },
+    ],
+    expected: "A user file drop accepts only a declared text/uri-list, validates local URLs, shell-quotes all paths, and sends one non-executing paste; unsupported and malformed drops remain explicit errors on both rebuilt hosts.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F10.1",
     implementation: [{ file: "packages/host/tauriv2/src/modals.rs", symbol: "pub(crate) fn show" }],
     tests: [{ file: "e2e/modal.test.mjs", id: "settings blocks background input and closes only through its close button" }],

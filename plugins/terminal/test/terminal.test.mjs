@@ -560,6 +560,55 @@ test("terminal.paste rejects malformed file URLs and unavailable PNG persistence
   }
 });
 
+test("terminal file drop quotes local URLs and sends one non-executing paste", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  const fakeExpose = createFakeExpose();
+  const fakeView = createFakeView();
+  await startTerminal({
+    view: fakeView, attachImage: createFakeAttachImage().function,
+    sidecar: fakeSidecar, expose: fakeExpose, clipboard: { read: async () => null },
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  openSession(fakeSidecar);
+  fakeSidecar.reset();
+
+  fakeView._trigger("drop", {
+    dataTransfer: {
+      types: ["text/uri-list"],
+      getData: (type) => type === "text/uri-list"
+        ? "file:///tmp/dropped%20file.txt\r\nfile:///tmp/quote%27name.txt\r\n"
+        : "",
+    },
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(fakeSidecar.getMessages().map(({ body }) => body), [
+    { operation: "paste", text: "'/tmp/dropped file.txt' '/tmp/quote'\\''name.txt'" },
+  ]);
+});
+
+test("terminal file drop rejects unsupported or malformed payloads without input", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  const fakeExpose = createFakeExpose();
+  const fakeView = createFakeView();
+  await startTerminal({
+    view: fakeView, attachImage: createFakeAttachImage().function,
+    sidecar: fakeSidecar, expose: fakeExpose, clipboard: { read: async () => null },
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  openSession(fakeSidecar);
+  fakeSidecar.reset();
+
+  await assert.rejects(fakeExpose.getCommand("terminal.drop")({ urls: ["https://example.invalid/file"] }), /not local/);
+  fakeView._trigger("drop", { dataTransfer: { types: ["Files"], getData: () => "" } });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(fakeSidecar.getMessages(), []);
+  assert.match(fakeExpose.getStatus("terminal.session").readFn().error, /text\/uri-list/);
+});
+
 test("program clipboard queries are explicitly denied and do not remain pending", async () => {
   FakeResizeObserver.reset();
   const fakeSidecar = createFakeSidecar();
