@@ -23,6 +23,16 @@ function restoreDataset(root, previous) {
 }
 
 let paintBoundaryId = 0;
+const documentBoundaryTokens = new WeakMap();
+
+function boundaryToken(document) {
+  let token = documentBoundaryTokens.get(document);
+  if (!token) {
+    token = `composition-${++paintBoundaryId}`;
+    documentBoundaryTokens.set(document, token);
+  }
+  return token;
+}
 
 function installHybridPaintBoundary(regionElements, overlayElements, view, viewport = null) {
   for (const region of regionElements) {
@@ -33,7 +43,7 @@ function installHybridPaintBoundary(regionElements, overlayElements, view, viewp
     }
   }
 
-  const token = `composition-${++paintBoundaryId}`;
+  const token = boundaryToken(view.document);
   const attributes = new Map();
   const properties = new Map();
   const rememberAttribute = (element, name) => {

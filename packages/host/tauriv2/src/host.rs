@@ -120,7 +120,7 @@ pub fn run(context: tauri::Context<tauri::Wry>, _background: &'static str) {
         .setup(|app| {
             let dock = app.handle().clone();
             platform::current()?.install_dock_menu(Box::new(move || {
-                if let Err(error) = windows::window_new(dock.clone()) {
+                if let Err(error) = windows::window_new_on_main(dock.clone()) {
                     eprintln!("{error}");
                 }
             }))?;
@@ -156,7 +156,7 @@ pub fn run(context: tauri::Context<tauri::Wry>, _background: &'static str) {
         })
         .on_menu_event(|app, event| {
             if event.id().as_ref() == "new-window" {
-                if let Err(error) = windows::window_new(app.clone()) {
+                if let Err(error) = windows::window_new_on_main(app.clone()) {
                     eprintln!("{error}");
                 }
             }

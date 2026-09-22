@@ -308,6 +308,21 @@ const FEATURE_LINKS = [
     levels: ["native", "application"],
   },
   {
+    id: "F0.5.7-1",
+    implementation: [
+      { file: "packages/workbench/index.html", symbol: "waitSurfaceCompositionDeclared" },
+      { file: "packages/workbench/surface-modules.js", symbol: "waitSurfaceCompositionDeclared" },
+      { file: "packages/plugin-api/surface-composition.js", symbol: "boundaryToken" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/surface-modules.test.mjs", id: "surface mount readiness separates module mount from native presentation" },
+      { file: "e2e/projects.test.mjs", id: "project windows persist files, inherit settings, and isolate native state" },
+      { file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" },
+    ],
+    expected: "Command settling waits for module mount and composition declaration without waiting on native presentation, so surface startup cannot form a presentation cycle; project-window and normal-shutdown evidence must pass independently.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F0.5",
     implementation: [
       { file: "packages/workbench/core-exposure.js", symbol: "installCoreExposure" },
@@ -630,8 +645,9 @@ const FEATURE_LINKS = [
   {
     id: "G2.4",
     implementation: [
-      { file: "e2e/projects.test.mjs", symbol: "core.project.open" },
-      { file: "e2e/normal-shutdown.mjs", symbol: "normal-shutdown" },
+      { file: "packages/host/tauriv2/src/bindings.rs", symbol: "project_open" },
+      { file: "packages/host/wailsv3/src/projects.go", symbol: "ProjectOpen" },
+      { file: "packages/host/wailsv3/src/platform/darwin/webview.m", symbol: "nativeWindowPrepare" },
     ],
     tests: [
       { file: "e2e/projects.test.mjs", id: "project windows persist files, inherit settings, and isolate native state" },

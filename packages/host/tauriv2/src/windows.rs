@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{mpsc, Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
 use tauri::webview::Color;
@@ -219,7 +219,7 @@ fn new_window(app: &AppHandle, label: &str, url: &str, title: &str) -> Result<Wi
 }
 
 /// 새 프로젝트 창을 연다.
-pub(crate) fn window_new(app: AppHandle) -> Result<(), String> {
+pub(crate) fn window_new_on_main(app: AppHandle) -> Result<(), String> {
     let id = app
         .state::<Windows>()
         .next_window
@@ -231,6 +231,19 @@ pub(crate) fn window_new(app: AppHandle) -> Result<(), String> {
         "soksak / Tauri v2",
     )?;
     Ok(())
+}
+
+/// Schedule creation on the AppKit event-loop thread without blocking that thread.
+pub(crate) fn window_new(app: AppHandle) -> Result<(), String> {
+    let task = app.clone();
+    let (tx, rx) = mpsc::channel();
+    app.run_on_main_thread(move || {
+        if tx.send(window_new_on_main(task)).is_err() {
+            eprintln!("window creation result had no pending receiver");
+        }
+    })
+    .map_err(|e| e.to_string())?;
+    rx.recv().map_err(|e| e.to_string())?
 }
 
 /// 창을 등록부에 추가하고 창 이벤트를 처리한다. 창 버튼은 페이지가 준비될 때와 창 크기가 바뀔 때 배치한다.
@@ -323,6 +336,14 @@ pub(crate) struct OpenProject {
 /// 프로젝트를 연다. 이미 열린 프로젝트는 소유 창을 활성화하고, separate 이고 요청 창이 다른
 /// 프로젝트를 소유하면 새 창을 만든다.
 pub(crate) fn project_open(
+    window: &Window,
+    request: OpenProject,
+) -> Result<serde_json::Value, String> {
+    let host = window.clone();
+    crate::exposure::on_main(window, move || project_open_on_main(&host, request))
+}
+
+fn project_open_on_main(
     window: &Window,
     request: OpenProject,
 ) -> Result<serde_json::Value, String> {

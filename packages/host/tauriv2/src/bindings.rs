@@ -79,7 +79,7 @@ fn project_folder(app: AppHandle, root: String) -> Result<Folder, String> {
 }
 
 /// 프로젝트를 창에 연다.
-#[tauri::command]
+#[tauri::command(async)]
 fn project_open(window: Window, request: OpenProject) -> Result<serde_json::Value, String> {
     windows::project_open(&window, request)
 }
@@ -109,7 +109,7 @@ fn window_close(window: Window) -> Result<(), String> {
 }
 
 /// 새 프로젝트 창을 연다.
-#[tauri::command]
+#[tauri::command(async)]
 fn window_new(app: AppHandle) -> Result<(), String> {
     windows::window_new(app)
 }

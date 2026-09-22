@@ -84,3 +84,18 @@ test("a mounted module registers and releases its declared exposure through the 
   assert.deepEqual(registry.registrants("command", `${pluginId}.ping`), []);
   dom.window.close();
 });
+
+test("surface mount readiness separates module mount from native presentation", async () => {
+  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  const { mountSurface, waitSurfaceCompositionDeclared } = await import("../surface-modules.js");
+  const moduleUrl = `data:text/javascript,${encodeURIComponent(`export async function mount() {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    return { dispose() {} };
+  }`)}`;
+  const surface = { module: moduleUrl, surfaceId: "tab-mounted", pluginId: "fixture", composition: { kind: "dom" } };
+  const mounting = mountSurface(document.querySelector("#slot"), surface);
+  await waitSurfaceCompositionDeclared(surface.surfaceId);
+  await mounting;
+  dom.window.close();
+});

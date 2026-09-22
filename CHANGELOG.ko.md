@@ -6,6 +6,8 @@
 
 ## 미배포
 
+- F0.5.7-1과 G2.4를 완료했다. 명령 정착의 표면 표시 순환을 제거하고, hybrid controller가 문서별 paint-boundary token 하나를 공유해 MutationObserver 루프를 만들지 않도록 했으며, Tauri 프로젝트/창 작업을 AppKit 이벤트 루프로 옮기고 Wails 창 준비가 오래된 웹뷰 크기를 다시 적용하지 않도록 했다. 재빌드 단독 프로젝트/창 검사는 Tauri 1/1(3.12초)·Wails 1/1(2.31초), 정상 종료는 65ms·14ms로 통과했다.
+
 - F0.5.7 기록을 정정했다. 명령 정착의 표면 준비 대기가 `명령 정착 → 표면 준비 → 네이티브 표시 → 명령 정착` 순환을 만들어 로딩과 endpoint 무응답을 일으켜 제거했다. 순환하지 않는 계약과 Tauri·Wails 독립 증거는 F0.5.7-1에 남아 있다.
 
 - G2.3을 완료했다. 표면 binder 감사가 이제 ShadowRoot를 `parentNode`로 통과하므로 위임된 shell 컨트롤을 명령 없음으로 잘못 보고하지 않는다. plugin-api 72/72, 재빌드 Tauri·Wails 감사 검사 각각 1/1, 정상 종료 66ms·64ms가 통과했다. 전체 matrix의 다른 실패는 명시적으로 열어 두었다.

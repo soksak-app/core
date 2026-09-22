@@ -22,7 +22,7 @@ export function authorizeSurface(id) {
   else authorization.set(id, { promise: Promise.resolve(), resolve() {} });
 }
 
-function pageRuntime(surface, scoped) {
+function pageRuntime(surface, scoped, compositionReady) {
   const invoke = (name, payload) => scoped.native.call(name, payload);
   return {
     surfaces: { report: (message) => invoke("report", message) },
@@ -43,7 +43,16 @@ function pageRuntime(surface, scoped) {
       on: (listener) => scoped.native.on("image-event", (event) => listener(event.name, event.event)),
     },
     composition: {
-      declare: (declaration) => invoke("compositionDeclare", { composition: declaration }),
+      declare: async (declaration) => {
+        try {
+          const result = await invoke("compositionDeclare", { composition: declaration });
+          compositionReady.resolve();
+          return result;
+        } catch (error) {
+          compositionReady.reject(error);
+          throw error;
+        }
+      },
       place: (revision, regions, overlays) => invoke("compositionPlace", { revision, regions, overlays }),
     },
     sidecar: scoped.sidecar,
@@ -72,7 +81,15 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
     slot.append(host);
     const shadow = host.attachShadow({ mode: "open" });
     const scoped = surfaceContextRuntime(surface, surface.declarations ?? {});
-    const page = pageRuntime(surface, scoped);
+    let resolveComposition;
+    let rejectComposition;
+    const compositionReady = {
+      promise: new Promise((resolve, reject) => { resolveComposition = resolve; rejectComposition = reject; }),
+      resolve: resolveComposition,
+      reject: rejectComposition,
+    };
+    if (!native) compositionReady.resolve();
+    const page = pageRuntime(surface, scoped, compositionReady);
     let viewport = slot;
     const eventListeners = new Map();
     const emit = (type, detail) => {
@@ -99,24 +116,25 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
       declarations: registry.surfaceDeclarations() });
     const state = context.status.subscribe(onState);
     onState(context.status.read());
-    entry = { slot, host, shadow, context, state, exposure, ready: null, disposed: false, surfaceId: surface.surfaceId,
+    entry = { slot, host, shadow, context, state, exposure, composition: compositionReady.promise,
+      mounted: null, ready: null, disposed: false, surfaceId: surface.surfaceId,
       setViewport: (next) => { viewport = next; } };
     mounted.set(surface.surfaceId, entry);
-    entry.ready = Promise.all([exposure.ready, native ? authorizationFor(surface.surfaceId) : Promise.resolve()])
+    entry.mounted = Promise.all([exposure.ready, native ? authorizationFor(surface.surfaceId) : Promise.resolve()])
       .then(() => {
         // A tab can be removed while its first native authorization is pending. Do not
         // start a module for a surface that the current page no longer owns.
         if (entry.disposed) return null;
         return import(surface.module);
       }).then((module) => module && mountSurfaceModule(module, shadow, context))
-      .then(async (mountedModule) => {
+      ;
+    entry.ready = entry.mounted.then(async (mountedModule) => {
         if (!mountedModule) return null;
         entry.module = mountedModule;
         if (native) await hostSurfaces.waitPresented();
         releaseSurfaceReady(context);
         return mountedModule;
-      })
-      .catch((error) => {
+      }).catch((error) => {
         if (entry.disposed) return null;
         context.status.report("error", error);
         throw error;
@@ -134,6 +152,13 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
     entry.host.removeAttribute("data-surface-suspended");
   }
   return entry.ready;
+}
+
+/** Wait until a native surface has declared its composition. */
+export async function waitSurfaceCompositionDeclared(surfaceId) {
+  const entry = mounted.get(surfaceId);
+  if (!entry) throw new Error(`surface ${surfaceId} is not mounted`);
+  await entry.composition;
 }
 
 /** Give a mounted surface's native input owner focus after its card has settled. */

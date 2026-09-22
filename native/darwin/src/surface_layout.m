@@ -1,5 +1,6 @@
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
+#import <stdio.h>
 #import "surface_layout.h"
 #import "private/webkit.h"
 
@@ -61,7 +62,9 @@ void surfaceLayoutBegin(void *owner, uint64_t ticket, void (^ready)(int)) {
 
 bool surfaceLayoutCommit(void *owner, uint64_t ticket) {
     NSCAssert(NSThread.isMainThread, @"surface layout requires the UI thread");
-    if (activeOwner != owner || ticket != preparation) return false;
+    if (activeOwner != owner || ticket != preparation) {
+        return false;
+    }
     activeOwner = NULL;
     [CATransaction commit];
     nextLayout();
@@ -136,12 +139,17 @@ static void settle(WKWebView *main, void (^done)(double)) {
     }
     void (^finish)(double) = [[done copy] autorelease];
     [main retain];
-    surfaceLayoutAfterPresentation(main, ^{
+    [main evaluateJavaScript:@"void document.documentElement.offsetWidth" completionHandler:^(id value, NSError *error) {
+        if (error) {
+            fprintf(stderr, "surface settle DOM completion failed: %s\\n", error.localizedDescription.UTF8String);
+            [main release];
+            return;
+        }
         // 표시를 기다리는 사이 새 트랜잭션이 열렸으면 그 트랜잭션의 확정부터 다시 기다린다.
         if (layoutOpen(main.window)) settle(main, finish);
         else afterNextFrame(main.window.screen, finish);
         [main release];
-    });
+    }];
 }
 
 static void releaseSettled(void) {

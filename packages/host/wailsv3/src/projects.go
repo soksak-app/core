@@ -116,9 +116,11 @@ func (h *Host) ProjectOpen(ctx context.Context, req ProjectOpen) (ProjectOpened,
 	h.mu.Unlock()
 	owner.setTitle(req.Title + titleSuffix)
 	if req.Geometry != nil && req.Geometry.Width > 0 && req.Geometry.Height > 0 {
-		application.InvokeSync(func() { prepareWindow(owner.window) })
-		owner.window.SetSize(req.Geometry.Width, req.Geometry.Height)
-		owner.window.SetPosition(req.Geometry.X, req.Geometry.Y)
+		application.InvokeSync(func() {
+			owner.window.SetSize(req.Geometry.Width, req.Geometry.Height)
+			owner.window.SetPosition(req.Geometry.X, req.Geometry.Y)
+			prepareWindow(owner.window)
+		})
 	}
 	h.notifyWorkspace()
 	return ProjectOpened{Local: owner == current}, nil

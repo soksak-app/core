@@ -131,7 +131,11 @@ async function showProject(id) {
   await listener.presented();
 }
 
-export async function activate(id) {
+export function activate(id) {
+  return inTurn(() => activateInTurn(id));
+}
+
+async function activateInTurn(id) {
   const project = projects.find((p) => p.id === id);
   if (!project) throw new Error(`Unknown project: ${id}`);
   await keep();
@@ -143,8 +147,8 @@ export async function activate(id) {
     separate: value("projectOpening") === "windows", current: active() && !owned.has(id) ? activeProjectId : null,
   });
   await store.patch(id, { lastOpened: Date.now() });
-  if (!result.local) { if (active()) await activateHere(activeProjectId); return; }
-  await activateHere(id);
+  if (!result.local) { if (active()) await showProject(activeProjectId); return; }
+  await showProject(id);
 }
 
 export async function open({ root, color, layout }) {

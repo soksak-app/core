@@ -6,6 +6,8 @@
 
 ## Unreleased
 
+- Completed F0.5.7-1 and G2.4. Removed the surface presentation cycle from command settling, made hybrid controllers share one document paint-boundary token to prevent a MutationObserver loop, moved Tauri project/window work onto the AppKit event loop, and stopped Wails window preparation from reapplying stale webview dimensions. Rebuilt isolated project/window checks pass on Tauri (1/1, 3.12s) and Wails (1/1, 2.31s); normal shutdown passes in 65ms and 14ms.
+
 - Corrected the F0.5.7 record: its command-settling surface-readiness wait created a presentation cycle (`command settling → surface ready → native presentation → command settling`) and was removed. F0.5.7-1 remains open for a non-cyclic contract and independent Tauri/Wails evidence.
 
 - Completed G2.3. Surface binder audits now follow `parentNode` through ShadowRoots, so delegated shell controls are not falsely reported as commandless. The plugin-api suite passes 72/72, rebuilt Tauri and Wails audit checks pass 1/1 each, and normal shutdown passes in 66ms and 64ms. Other full-matrix failures remain explicitly open.

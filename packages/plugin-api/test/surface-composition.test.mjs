@@ -185,6 +185,30 @@ test("the hybrid paint boundary restores native-anchor and ancestor transparency
   assert.match(f.window.document.documentElement.getAttribute("data-soksak-native-ancestor"), /^composition-/);
 });
 
+test("multiple hybrid surfaces share one document paint-boundary token without an observer loop", async () => {
+  const f = fixture();
+  const r = runtime();
+  const first = await createSurfaceCompositionController(r.page, declaration, {
+    regions: { page: f.page, image: f.image },
+    overlays: { toolbar: f.toolbar, badge: f.badge },
+  }, f.window);
+  const second = await createSurfaceCompositionController(r.page, declaration, {
+    regions: { page: f.page, image: f.image },
+    overlays: { toolbar: f.toolbar, badge: f.badge },
+  }, f.window);
+  f.page.style.setProperty("opacity", "1", "important");
+  await Promise.race([
+    settle(),
+    new Promise((_, reject) => setTimeout(() => reject(new Error("paint-boundary observer loop")), 200)),
+  ]);
+  assert.equal(f.page.style.getPropertyValue("opacity"), "0");
+  await second.dispose();
+  assert.match(f.page.getAttribute("data-soksak-native-anchor"), /^composition-/);
+  assert.equal(f.page.style.getPropertyValue("opacity"), "0");
+  await first.dispose();
+  assert.equal(f.page.hasAttribute("data-soksak-native-anchor"), false);
+});
+
 test("an observed overlay change submits every region and overlay through composition.place", async () => {
   const f = fixture();
   const r = runtime();
