@@ -30,6 +30,33 @@ OSC 1337 이미지 전송은 OSC 확장을 사용한다. APC 그래픽 프로토
 
 이 표는 요구사항 목록이며 선택자별 적합성 검증 완료 보고가 아니다. 전체 OSC 지원 주장의 근거가 될 수 없다. 해당하는 각 행을 선택자 단위 검사로 확장해야 완료로 표시할 수 있다.
 
+## OSC 선택자 inventory
+
+다음은 고정한 XTerm 기준과 현재 Alacritty handler를 selector 단위로 대조한 결과다. `implemented`는 엔진이 관측 가능한 효과나 응답을 낸다는 뜻이다. `unsupported`는 이 런타임이 효과·응답을 의도적으로 제공하지 않는다는 뜻이며 지원한다고 설명해서는 안 된다. `vendor`는 별도 계약으로 추적하며 표준 OSC 완료 범위에 넣지 않는다.
+
+| 선택자 | XTerm 동작 | 현재 결과 | 이름 있는 근거 |
+| --- | --- | --- | --- |
+| `0`, `2` | 아이콘 이름 및 창 제목 설정 | `implemented`: 제목 event. 아이콘 소유권은 노출하지 않음 | `vt_events_are_retained_and_exposed_in_order` |
+| `1`, `3` | 아이콘 전용 제목 / X property | `unsupported`: 아이콘·X property 호스트 계약 없음 | `osc_selector_inventory_records_unsupported_operations` |
+| `4` | 인덱스 색상 설정·조회 | `implemented`: 팔레트 효과와 정확한 RGB 응답 | `indexed_colors_and_combining_characters_survive_export`, `every_default_indexed_color_query_returns_the_default_palette` |
+| `5`, `6` | 특수 색상 설정 / 활성 상태 | `unsupported`: 특수 색상·모드 계약 없음 | `osc_selector_inventory_records_unsupported_operations` |
+| `10`–`12` | VT 전경·배경·커서 색상 | `implemented`: 효과와 조회 응답 | `dynamic_color_replies_and_screen_colors_use_the_same_palette`, `osc_default_color_queries_match_renderer_defaults` |
+| `13`–`19`, `21` | 포인터·Tektronix·강조 색상, 창 제목 | `unsupported`: 대응하는 exported state 없음 | `osc_selector_inventory_records_unsupported_operations` |
+| `22` | 포인터 모양 | `unsupported`: native pointer 모양은 터미널 protocol output이 아님 | `osc_selector_inventory_records_unsupported_operations` |
+| `46` | 로그 파일 | `unsupported`: 터미널 process가 호스트 로그 파일을 선택하지 않음 | `osc_selector_inventory_records_unsupported_operations` |
+| `50` | 커서 글꼴·모양 동작 | `implemented`: 지원하는 커서 모양 하위 형식만. 다른 글꼴 형식은 parser 계약에서 거부 | `osc50_cursor_shape_changes_program_cursor` |
+| `51` | Emacs shell 예약 | `unsupported`: 효과 없음 | `osc_selector_inventory_records_unsupported_operations` |
+| `52` | clipboard selection 저장·조회 | `implemented`: 정책 제한 typed event와 조회 응답 | `clipboard_query_uses_a_token_and_resolves_to_pty_bytes`, `clipboard_rejection_clears_a_pending_query_token` |
+| `60`–`62` | 권한 기능 조회 | `unsupported`: capability 상태는 XTerm wire 응답이 아닌 sidecar 계약이 소유 | `osc_selector_inventory_records_unsupported_operations` |
+| `104` | 인덱스 색상 초기화 | `implemented`: 팔레트 초기화 | `osc104_resets_indexed_colors` |
+| `105`, `106` | 특수 색상 초기화·모드 | `unsupported`: 특수 색상 계약 없음 | `osc_selector_inventory_records_unsupported_operations` |
+| `110`–`112` | 동적 색상 초기화 | `implemented`: 전경·배경·커서 초기화 | `osc_dynamic_color_resets_restore_defaults` |
+| `I`, `l`, `L` | Sun/CDE 아이콘·제목 형식 | `unsupported`: icon-label·비숫자 선택자 계약 없음 | `osc_selector_inventory_records_unsupported_operations` |
+| `7`, `8`, `9`, `133` | directory·hyperlink·notification·shell metadata | `vendor`: 별도 계약이며 표준 OSC 완료에 포함하지 않음 | `vendor_osc_contracts_are_separate` |
+| `1337` | OSC 1337 inline image | `vendor`: 제한된 image 계약 | `osc1337_inline_image_is_typed_and_survives_input_chunk_boundaries` |
+
+unsupported 행은 성공한 무동작 결과가 아니라 명시된 범위 결과다. 런타임이 거부 event를 노출하거나 승인된 계약이 대상에서 제거하기 전까지는 미완료로 남긴다. inventory 검사는 중복·미분류 선택자와 이름이 맞지 않는 테스트를 실패시키며 parser가 받아들였다는 사실로 지원을 추론하지 않는다.
+
 ## OSC·CSI 전체 요구사항
 
 고정한 XTerm 기준 문서에 대해 OSC와 CSI를 서로 분리한 두 목록으로 관리한다.

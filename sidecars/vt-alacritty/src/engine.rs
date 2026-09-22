@@ -1,16 +1,116 @@
 use alacritty_terminal::event::{Event, EventListener, WindowSize};
-use alacritty_terminal::index::{Column, Line, Point, Side};
 use alacritty_terminal::grid::Dimensions;
+use alacritty_terminal::index::{Column, Line, Point, Side};
 use alacritty_terminal::selection::{Selection, SelectionType};
 use alacritty_terminal::term::cell::Flags;
 use alacritty_terminal::term::{Config, Osc52, Term, TermMode};
 use alacritty_terminal::vte::ansi::{Color, CursorShape, Processor, Rgb};
 use soksak_sidecar_vt_core::{
-    default_terminal_color, Cell, ClipboardSelection, Cursor, CursorShape as ProtocolCursorShape,
-    inline_image::parse as parse_inline_image, Engine, EngineEvent, Modes, Screen, TerminalTheme,
+    default_terminal_color, inline_image::parse as parse_inline_image, Cell, ClipboardSelection,
+    Cursor, CursorShape as ProtocolCursorShape, Engine, EngineEvent, Modes, Screen, TerminalTheme,
 };
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OscOutcome {
+    Implemented,
+    Unsupported,
+    Vendor,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OscSelectorEvidence {
+    pub selector: &'static str,
+    pub outcome: OscOutcome,
+    pub test: &'static str,
+}
+
+/// Selector-level scope used by the protocol audit. Parser acceptance is not
+/// used to derive this inventory; every row names an observable test or an
+/// explicit separate vendor contract.
+pub const OSC_SELECTOR_INVENTORY: &[OscSelectorEvidence] = &[
+    OscSelectorEvidence {
+        selector: "0,2",
+        outcome: OscOutcome::Implemented,
+        test: "vt_events_are_retained_and_exposed_in_order",
+    },
+    OscSelectorEvidence {
+        selector: "1,3",
+        outcome: OscOutcome::Unsupported,
+        test: "osc_selector_inventory_records_unsupported_operations",
+    },
+    OscSelectorEvidence {
+        selector: "4",
+        outcome: OscOutcome::Implemented,
+        test: "indexed_colors_and_combining_characters_survive_export",
+    },
+    OscSelectorEvidence {
+        selector: "5,6",
+        outcome: OscOutcome::Unsupported,
+        test: "osc_selector_inventory_records_unsupported_operations",
+    },
+    OscSelectorEvidence {
+        selector: "10-12",
+        outcome: OscOutcome::Implemented,
+        test: "dynamic_color_replies_and_screen_colors_use_the_same_palette",
+    },
+    OscSelectorEvidence {
+        selector: "13-19,21,22,46",
+        outcome: OscOutcome::Unsupported,
+        test: "osc_selector_inventory_records_unsupported_operations",
+    },
+    OscSelectorEvidence {
+        selector: "50",
+        outcome: OscOutcome::Implemented,
+        test: "osc50_cursor_shape_changes_program_cursor",
+    },
+    OscSelectorEvidence {
+        selector: "51",
+        outcome: OscOutcome::Unsupported,
+        test: "osc_selector_inventory_records_unsupported_operations",
+    },
+    OscSelectorEvidence {
+        selector: "52",
+        outcome: OscOutcome::Implemented,
+        test: "clipboard_query_uses_a_token_and_resolves_to_pty_bytes",
+    },
+    OscSelectorEvidence {
+        selector: "60-62",
+        outcome: OscOutcome::Unsupported,
+        test: "osc_selector_inventory_records_unsupported_operations",
+    },
+    OscSelectorEvidence {
+        selector: "104",
+        outcome: OscOutcome::Implemented,
+        test: "osc104_resets_indexed_colors",
+    },
+    OscSelectorEvidence {
+        selector: "105,106",
+        outcome: OscOutcome::Unsupported,
+        test: "osc_selector_inventory_records_unsupported_operations",
+    },
+    OscSelectorEvidence {
+        selector: "110-112",
+        outcome: OscOutcome::Implemented,
+        test: "osc_dynamic_color_resets_restore_defaults",
+    },
+    OscSelectorEvidence {
+        selector: "I,l,L",
+        outcome: OscOutcome::Unsupported,
+        test: "osc_selector_inventory_records_unsupported_operations",
+    },
+    OscSelectorEvidence {
+        selector: "7,8,9,133",
+        outcome: OscOutcome::Vendor,
+        test: "vendor_osc_contracts_are_separate",
+    },
+    OscSelectorEvidence {
+        selector: "1337",
+        outcome: OscOutcome::Vendor,
+        test: "osc1337_inline_image_is_typed_and_survives_input_chunk_boundaries",
+    },
+];
 
 #[derive(Clone, Copy)]
 struct TermSize {
@@ -136,9 +236,7 @@ impl AlacrittyEngine {
             let terminator = self.pending_input[body_start..]
                 .iter()
                 .enumerate()
-                .find_map(|(offset, byte)| {
-                    (*byte == b'\x07').then_some((body_start + offset, 1))
-                })
+                .find_map(|(offset, byte)| (*byte == b'\x07').then_some((body_start + offset, 1)))
                 .or_else(|| {
                     self.pending_input[body_start..]
                         .windows(2)
@@ -286,8 +384,13 @@ impl AlacrittyEngine {
 
     pub fn selection_start(&mut self, col: u16, row: u16) -> Result<(), String> {
         let point = Point::new(Line(i32::from(row)), Column(usize::from(col)));
-        if point.column >= self.term.grid().columns() || point.line.0 < 0 || point.line.0 >= self.term.grid().screen_lines() as i32 {
-            return Err(format!("selection cell is outside the terminal grid: {col},{row}"));
+        if point.column >= self.term.grid().columns()
+            || point.line.0 < 0
+            || point.line.0 >= self.term.grid().screen_lines() as i32
+        {
+            return Err(format!(
+                "selection cell is outside the terminal grid: {col},{row}"
+            ));
         }
         self.term.selection = Some(Selection::new(SelectionType::Simple, point, Side::Left));
         Ok(())
@@ -295,16 +398,28 @@ impl AlacrittyEngine {
 
     pub fn selection_update(&mut self, col: u16, row: u16) -> Result<(), String> {
         let point = Point::new(Line(i32::from(row)), Column(usize::from(col)));
-        if point.column >= self.term.grid().columns() || point.line.0 < 0 || point.line.0 >= self.term.grid().screen_lines() as i32 {
-            return Err(format!("selection cell is outside the terminal grid: {col},{row}"));
+        if point.column >= self.term.grid().columns()
+            || point.line.0 < 0
+            || point.line.0 >= self.term.grid().screen_lines() as i32
+        {
+            return Err(format!(
+                "selection cell is outside the terminal grid: {col},{row}"
+            ));
         }
-        let selection = self.term.selection.as_mut().ok_or_else(|| "selection update without selection start".to_string())?;
+        let selection = self
+            .term
+            .selection
+            .as_mut()
+            .ok_or_else(|| "selection update without selection start".to_string())?;
         selection.update(point, Side::Right);
         Ok(())
     }
 
     pub fn selection_end(&mut self) -> Result<String, String> {
-        self.term.selection_to_string().filter(|text| !text.is_empty()).ok_or_else(|| "selection is empty".to_string())
+        self.term
+            .selection_to_string()
+            .filter(|text| !text.is_empty())
+            .ok_or_else(|| "selection is empty".to_string())
     }
 
     fn color_request(&self, index: usize) -> Result<Rgb, String> {

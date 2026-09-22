@@ -1,10 +1,10 @@
 #[path = "../src/engine.rs"]
 mod engine;
 
-use engine::AlacrittyEngine;
+use engine::{AlacrittyEngine, OscOutcome, OSC_SELECTOR_INVENTORY};
 use soksak_sidecar_vt_core::{
-    default_terminal_color, inline_image::Dimension, inline_image::InlineImageCommand,
-    CursorShape, Engine, EngineEvent, TerminalTheme, DEFAULT_PALETTE,
+    default_terminal_color, inline_image::Dimension, inline_image::InlineImageCommand, CursorShape,
+    Engine, EngineEvent, TerminalTheme, DEFAULT_PALETTE,
 };
 
 fn text(screen: &soksak_sidecar_vt_core::Screen) -> String {
@@ -42,7 +42,10 @@ fn vt_events_are_retained_and_exposed_in_order() {
 fn osc1337_inline_image_is_typed_and_survives_input_chunk_boundaries() {
     let mut engine = AlacrittyEngine::new();
     engine.feed(b"before\x1b]1337;File=name=ZmlsZS5wbmc=;size=5;inline=1;width=2px:aGVsbG8=");
-    assert!(engine.drain_events().is_empty(), "incomplete OSC must remain pending");
+    assert!(
+        engine.drain_events().is_empty(),
+        "incomplete OSC must remain pending"
+    );
 
     engine.feed(b"\x07after");
     let events = engine.drain_events();
@@ -61,8 +64,14 @@ fn osc1337_inline_image_is_typed_and_survives_input_chunk_boundaries() {
         .iter()
         .flat_map(|line| line.iter().filter_map(|cell| cell.ch.as_deref()))
         .collect::<String>();
-    assert!(text.contains("before"), "text before image was lost: {text:?}");
-    assert!(text.contains("after"), "text after image was lost: {text:?}");
+    assert!(
+        text.contains("before"),
+        "text before image was lost: {text:?}"
+    );
+    assert!(
+        text.contains("after"),
+        "text after image was lost: {text:?}"
+    );
 }
 
 #[test]
@@ -83,6 +92,82 @@ fn malformed_osc1337_is_an_explicit_engine_error() {
         events.as_slice(),
         [EngineEvent::Error(reason)] if reason.contains("invalid base64")
     ));
+}
+
+#[test]
+fn osc_selector_inventory_records_unsupported_operations() {
+    let unsupported: Vec<_> = OSC_SELECTOR_INVENTORY
+        .iter()
+        .filter(|entry| entry.outcome == OscOutcome::Unsupported)
+        .collect();
+    assert!(!unsupported.is_empty());
+    for entry in unsupported {
+        assert!(!entry.selector.is_empty());
+        assert_eq!(
+            entry.test,
+            "osc_selector_inventory_records_unsupported_operations"
+        );
+    }
+}
+
+#[test]
+fn vendor_osc_contracts_are_separate() {
+    let vendor: Vec<_> = OSC_SELECTOR_INVENTORY
+        .iter()
+        .filter(|entry| entry.outcome == OscOutcome::Vendor)
+        .collect();
+    assert_eq!(
+        vendor
+            .iter()
+            .map(|entry| entry.selector)
+            .collect::<Vec<_>>(),
+        ["7,8,9,133", "1337"]
+    );
+    assert!(vendor.iter().all(|entry| !entry.test.is_empty()));
+}
+
+#[test]
+fn osc50_cursor_shape_changes_program_cursor() {
+    let mut engine = AlacrittyEngine::new();
+    engine.feed(b"\x1b]50;CursorShape=2\x07");
+    assert_eq!(engine.cursor().shape, CursorShape::Underline);
+}
+
+#[test]
+fn osc104_resets_indexed_colors() {
+    let mut engine = AlacrittyEngine::new();
+    engine.feed(b"\x1b]4;1;rgb:0000/ffff/ffff\x07\x1b[38;5;1mX");
+    assert_eq!(engine.screen().lines[0][0].fg.as_deref(), Some("#00ffff"));
+    engine.feed(b"\x1b]104;1\x07\x1b[39mY\x1b[38;5;1mZ");
+    let expected = default_terminal_color(1).expect("default color 1");
+    let expected = format!("#{:02x}{:02x}{:02x}", expected[0], expected[1], expected[2]);
+    assert_eq!(
+        engine.screen().lines[0][2].fg.as_deref(),
+        Some(expected.as_str())
+    );
+}
+
+#[test]
+fn osc_dynamic_color_resets_restore_defaults() {
+    let mut engine = AlacrittyEngine::new();
+    engine.feed(b"\x1b]10;rgb:0000/ffff/ffff\x07\x1b]11;rgb:ffff/0000/ffff\x07\x1b]12;rgb:ffff/ffff/0000\x07");
+    engine.drain_events();
+    engine.feed(b"\x1b]110\x07\x1b]111\x07\x1b]112\x07\x1b]10;?\x07\x1b]11;?\x07\x1b]12;?\x07");
+    let replies = engine
+        .drain_events()
+        .into_iter()
+        .filter_map(|event| match event {
+            EngineEvent::PtyWrite(bytes) => Some(bytes),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(replies.len(), 3);
+    assert!(replies
+        .iter()
+        .any(|reply| reply.windows(18).any(|part| part == b"rgb:d0d0/d0d0/d0d0")));
+    assert!(replies
+        .iter()
+        .any(|reply| reply.windows(18).any(|part| part == b"rgb:1e1e/1e1e/1e1e")));
 }
 
 #[test]

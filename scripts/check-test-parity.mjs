@@ -1005,6 +1005,23 @@ const FEATURE_LINKS = [
     levels: ["native", "application"],
   },
   {
+    id: "F7",
+    implementation: [
+      { file: "sidecars/vt-alacritty/src/engine.rs", symbol: "OSC_SELECTOR_INVENTORY" },
+      { file: "sidecars/vt-alacritty/src/engine.rs", symbol: "impl AlacrittyEngine" },
+    ],
+    tests: [
+      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "osc_selector_inventory_records_unsupported_operations" },
+      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "vendor_osc_contracts_are_separate" },
+      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "osc50_cursor_shape_changes_program_cursor" },
+      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "osc104_resets_indexed_colors" },
+      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "osc_dynamic_color_resets_restore_defaults" },
+      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "osc_default_color_queries_match_renderer_defaults" },
+    ],
+    expected: "The pinned OSC selector inventory records implemented, unsupported, and separate vendor selectors with named engine evidence; supported title, color, cursor, and clipboard behaviors have executable cases.",
+    levels: ["unit"],
+  },
+  {
     id: "F6.5",
     implementation: [
       { file: "plugins/terminal/ui/terminal.js", symbol: "dropFilesFromEvent" },

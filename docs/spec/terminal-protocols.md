@@ -30,6 +30,33 @@ OSC 1337 image transfer uses an OSC extension. The APC graphics protocol uses AP
 
 This table is a requirements inventory, not a completed per-selector conformance report. It cannot justify an OSC-complete claim. The implementation must expand each applicable row to selector-level tests before marking the feature complete.
 
+## OSC selector inventory
+
+The following is the current selector-level audit against the pinned XTerm reference. `implemented` means that the engine produces the specified observable effect or reply. `unsupported` means that this runtime deliberately provides no effect or reply and must not describe the selector as supported. `vendor` is tracked by a separate contract and is not included in the standard OSC claim.
+
+| Selector | XTerm operation | Current outcome | Named evidence |
+| --- | --- | --- | --- |
+| `0`, `2` | Set icon name and/or window title | `implemented`: title event; icon ownership is not exposed | `vt_events_are_retained_and_exposed_in_order` |
+| `1`, `3` | Icon-only title / X property | `unsupported`: no icon or X property host contract | `osc_selector_inventory_records_unsupported_operations` |
+| `4` | Indexed color set/query | `implemented`: palette effect and exact RGB reply | `indexed_colors_and_combining_characters_survive_export`, `every_default_indexed_color_query_returns_the_default_palette` |
+| `5`, `6` | Special color set / enable state | `unsupported`: no special-color or mode contract | `osc_selector_inventory_records_unsupported_operations` |
+| `10`–`12` | VT foreground/background/cursor colors | `implemented`: effect and query reply | `dynamic_color_replies_and_screen_colors_use_the_same_palette`, `osc_default_color_queries_match_renderer_defaults` |
+| `13`–`19`, `21` | Pointer, Tektronix, highlight colors, window title | `unsupported`: no corresponding exported state | `osc_selector_inventory_records_unsupported_operations` |
+| `22` | Pointer shape | `unsupported`: native pointer shape is not a terminal protocol output | `osc_selector_inventory_records_unsupported_operations` |
+| `46` | Log file | `unsupported`: terminal processes cannot select a host log file | `osc_selector_inventory_records_unsupported_operations` |
+| `50` | Cursor font/shape operation | `implemented`: supported cursor-shape subform only; other font forms are rejected by the parser contract | `osc50_cursor_shape_changes_program_cursor` |
+| `51` | Emacs shell reservation | `unsupported`: no effect | `osc_selector_inventory_records_unsupported_operations` |
+| `52` | Clipboard selection store/query | `implemented`: policy-gated typed event and query reply | `clipboard_query_uses_a_token_and_resolves_to_pty_bytes`, `clipboard_rejection_clears_a_pending_query_token` |
+| `60`–`62` | Permission feature queries | `unsupported`: capability status is owned by the sidecar contract, not an XTerm wire reply | `osc_selector_inventory_records_unsupported_operations` |
+| `104` | Indexed color reset | `implemented`: palette reset | `osc104_resets_indexed_colors` |
+| `105`, `106` | Special color reset/mode | `unsupported`: no special-color contract | `osc_selector_inventory_records_unsupported_operations` |
+| `110`–`112` | Dynamic color reset | `implemented`: foreground/background/cursor reset | `osc_dynamic_color_resets_restore_defaults` |
+| `I`, `l`, `L` | Sun/CDE icon and title forms | `unsupported`: no icon-label or nonnumeric selector contract | `osc_selector_inventory_records_unsupported_operations` |
+| `7`, `8`, `9`, `133` | Directory, hyperlink, notification, shell metadata | `vendor`: separate contracts; not counted as standard OSC completion | `vendor_osc_contracts_are_separate` |
+| `1337` | OSC 1337 inline image | `vendor`: bounded image contract | `osc1337_inline_image_is_typed_and_survives_input_chunk_boundaries` |
+
+The unsupported rows are an explicit scope result, not successful no-ops. They remain incomplete until the runtime exposes a rejection event or an approved contract removes them from the supported target. The inventory test fails on duplicate or unclassified selectors and on a named test mismatch; it does not infer support from parser acceptance.
+
 ## Complete OSC and CSI requirement
 
 The terminal must maintain two separate inventories against the pinned XTerm reference:
