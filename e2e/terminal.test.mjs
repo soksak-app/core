@@ -168,32 +168,41 @@ for (const app of Object.values(APPS)) {
     for (const [index, terminal] of terminals.entries()) {
       await t.test(`terminal ${index + 1}`, { timeout: 15000 }, async () => {
         const surface = terminal.surface;
+        t.diagnostic(`${app.name}: START terminal ${index + 1} prompt`);
         await readScreenUntil(s, surface, (lines) => lines.some((line) => line.includes("$")), "shell prompt missing");
+        t.diagnostic(`${app.name}: PASS terminal ${index + 1} prompt`);
         const others = await Promise.all(terminals.filter((item) => item.surface !== surface)
           .map(async (item) => [item.surface, await s.get("terminal.screen", item.surface)]));
         const view = await s.rect("terminal.view", undefined, surface);
+        t.diagnostic(`${app.name}: START terminal ${index + 1} pointer focus`);
         await s.click(view.document.x + view.x + view.width / 2, view.document.y + view.y + view.height / 2);
+        t.diagnostic(`${app.name}: PASS terminal ${index + 1} pointer focus`);
         await s.until("host.window", (host) => host.regions.some((region) => region.surface === surface && region.focused),
           `terminal ${index + 1} did not receive keyboard focus`);
+        t.diagnostic(`${app.name}: PASS terminal ${index + 1} native focus`);
         const marker = `typed${index}`;
         const line = `echo ${marker}`;
         for (const ch of `${line}x`) await s.press(ch === " " ? "Space" : ch);
+        t.diagnostic(`${app.name}: PASS terminal ${index + 1} typed line`);
         await readScreenUntil(s, surface, (lines) => lines.some((row) => row.endsWith(`${line}x`)), "native characters were not delivered");
         await s.press("Backspace");
         await readScreenUntil(s, surface, (lines) => lines.some((row) => row.endsWith(line)), "native Backspace was not delivered");
         await s.press("u", { modifiers: ["control"] });
         await readScreenUntil(s, surface, (lines) => lines.some((row) => row.endsWith("$")) && !lines.some((row) => row.includes(marker)),
           "native Ctrl+U did not clear the input line");
+        t.diagnostic(`${app.name}: PASS terminal ${index + 1} editing`);
         for (const ch of line) await s.press(ch === " " ? "Space" : ch);
         await s.press("Enter");
         const output = await readScreenUntil(s, surface, (lines) => lines.includes(marker), "native Enter did not execute the command");
         assert.equal(output.filter((row) => row === marker).length, 1, "command output must occur once");
+        t.diagnostic(`${app.name}: PASS terminal ${index + 1} command`);
         const continued = `continued${index}`;
         for (const ch of `echo ${continued}`) await s.press(ch === " " ? "Space" : ch);
         await s.press("Enter");
         const next = await readScreenUntil(s, surface, (lines) => lines.includes(continued),
           "typing after output required another click");
         assert.equal(next.filter((row) => row === continued).length, 1, "continued input must execute once without refocusing");
+        t.diagnostic(`${app.name}: PASS terminal ${index + 1} continued input`);
         for (const [other, before] of others) assert.deepEqual(await s.get("terminal.screen", other), before,
           `typing in ${surface} changed ${other}`);
       });
