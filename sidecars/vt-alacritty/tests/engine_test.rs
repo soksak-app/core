@@ -604,6 +604,28 @@ fn cursor_visibility_and_application_shape_are_exported() {
 }
 
 #[test]
+fn decscusr_cursor_style_ids_are_observable() {
+    let mut engine = AlacrittyEngine::new();
+    let expected = [
+        (1, CursorShape::Block, true),
+        (2, CursorShape::Block, false),
+        (3, CursorShape::Underline, true),
+        (4, CursorShape::Underline, false),
+        (5, CursorShape::Beam, true),
+        (6, CursorShape::Beam, false),
+    ];
+
+    for (id, shape, blinking) in expected {
+        engine.feed(b"\x1b[");
+        engine.feed(id.to_string().as_bytes());
+        engine.feed(b" q");
+        let cursor = engine.cursor();
+        assert_eq!(cursor.shape, shape, "DECSCUSR {id} shape");
+        assert_eq!(cursor.blinking, blinking, "DECSCUSR {id} blink");
+    }
+}
+
+#[test]
 fn primary_screen_reflows_without_losing_text_when_width_changes() {
     let mut engine = AlacrittyEngine::new();
     let value = "AAAA-BBBB-CCCC-DDDD-EEEE-FFFF-GGGG-HHHH";
