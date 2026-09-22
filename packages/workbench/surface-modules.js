@@ -132,19 +132,26 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
     const state = context.status.subscribe(onState);
     onState(context.status.read());
     entry = { slot, host, shadow, context, state, exposure, composition: compositionReady.promise,
-      mounted: null, ready: null, disposed: false, surfaceId: surface.surfaceId,
+      mounted: null, ready: null, authorized: false, disposed: false, surfaceId: surface.surfaceId,
       setViewport: (next) => { viewport = next; } };
     mounted.set(surface.surfaceId, entry);
     entry.mounted = Promise.all([exposure.ready, native ? authorizationFor(surface.surfaceId) : Promise.resolve()])
       .then(() => {
+        entry.authorized = true;
         // A tab can be removed while its first native authorization is pending. Do not
         // start a module for a surface that the current page no longer owns.
         if (entry.disposed) return null;
         return import(surface.module);
-      }).then((module) => module && mountSurfaceModule(module, shadow, context))
+      }).then((module) => {
+        return module && mountSurfaceModule(module, shadow, context);
+      })
       ;
     entry.ready = entry.mounted.then(async (mountedModule) => {
         if (!mountedModule) return null;
+        if (entry.disposed) {
+          await mountedModule.dispose();
+          return null;
+        }
         entry.module = mountedModule;
         // A newly created native surface must declare and place its image before
         // the first presentation can wait for that image raster. Waiting here
@@ -204,6 +211,7 @@ export async function disposeSurface(surfaceId) {
     // Do not wait for authorization here. A removed tab must not keep a layout
     // commit alive merely because its module has never been allowed to mount.
     if (entry.module) await entry.module.dispose();
+    else if (entry.authorized) await entry.ready;
     entry.exposure.dispose();
     await entry.context.exposure.dispose();
     entry.state();

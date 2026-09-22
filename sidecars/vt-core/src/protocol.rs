@@ -2581,8 +2581,20 @@ where
                                 }
                             }
                             "close" => {
-                                if let Err(_) = tx.send(SurfaceCommand::SessionClose).await {
-                                    break;
+                                let close_result = if let Some(registry) = registry.as_ref() {
+                                    registry.close_surface(&registry_key, &owner).await
+                                } else if let Some(tx) = surface_txs.remove(&registry_key) {
+                                    tx.send(SurfaceCommand::SessionClose)
+                                        .await
+                                        .map_err(|_| "surface actor closed before close".to_string())
+                                } else {
+                                    Ok(())
+                                };
+                                if let Err(error) = close_result {
+                                    let response = json!({"surface": surface_id, "body": {"error": error}});
+                                    if output_tx.send(response.to_string()).await.is_err() {
+                                        break;
+                                    }
                                 }
                             }
                             _ => {
@@ -2862,15 +2874,15 @@ impl SessionPort for LocalSessionPort {
         rows: u16,
         _hint: Option<&str>,
     ) -> Result<String, String> {
-        let (session_id, attachment_id) = self.service.open_owned(
-            &self.owner,
-            program,
-            &[],
-            None,
-            cols,
-            rows,
-            self.events_tx.clone(),
-        )?;
+        let service = Arc::clone(&self.service);
+        let owner = self.owner.clone();
+        let program = program.to_string();
+        let events = self.events_tx.clone();
+        let (session_id, attachment_id) = tokio::task::spawn_blocking(move || {
+            service.open_owned(&owner, &program, &[], None, cols, rows, events)
+        })
+        .await
+        .map_err(|error| format!("open PTY task failed: {error}"))??;
         self.attachments
             .lock()
             .await

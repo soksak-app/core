@@ -123,8 +123,9 @@ impl PtyService {
             .unwrap()
             .insert(session_id.clone(), session.clone());
         let reader_handle = thread::spawn(move || read_output(session, reader));
-        // The handles are installed after the session is published; close() takes
-        // and joins both so the child and its output reader are fully reclaimed.
+        // The handles are installed after the session is published. Close detaches
+        // their joins from the request path so a stuck PTY reader cannot block a
+        // later session open.
         let session = self
             .sessions
             .lock()
@@ -262,16 +263,20 @@ impl PtyService {
                 (Ok(()), Ok(())) => Ok(()),
             }
         };
-        if let Some(reader) = session.reader.lock().unwrap().take() {
-            reader
-                .join()
-                .map_err(|_| "PTY reader thread panicked".to_string())?;
-        }
-        if let Some(reaper) = session.reaper.lock().unwrap().take() {
-            reaper
-                .join()
-                .map_err(|_| "PTY reaper thread panicked".to_string())?;
-        }
+        let reader = session.reader.lock().unwrap().take();
+        let reaper = session.reaper.lock().unwrap().take();
+        thread::spawn(move || {
+            if let Some(reader) = reader {
+                if reader.join().is_err() {
+                    eprintln!("PTY reader thread panicked during close");
+                }
+            }
+            if let Some(reaper) = reaper {
+                if reaper.join().is_err() {
+                    eprintln!("PTY reaper thread panicked during close");
+                }
+            }
+        });
         self.sessions.lock().unwrap().remove(session_id);
         kill_result
     }
