@@ -1,6 +1,8 @@
 # 변경 기록
 
-- F6.6-2는 계속 진행 중이다. macOS native frame이 이제 검증된 inline image 바이트를 ImageIO로 디코드해 terminal raster 위에 소유 placement를 합성한다. 같은 이름을 다시 받으면 해당 placement만 교체하고 terminal drawing은 유지한다. native 픽셀 집중 검사 1/1(1.74초), native frame·Alacritty·sidecar 계약 검사가 통과했다. 삭제·수명 의미와 재빌드 Tauri/Wails 픽셀 검증은 남아 있다.
+- F6.6-2를 완료했다. 검증된 OSC 1337 event가 제한된 sidecar 계약을 통해 macOS native raster까지 전달된다. ImageIO가 선언된 위치에 소유 이미지를 합성하고, 같은 이름 교체는 해당 이미지만 바꾸며, `image.inline.delete`는 소유된 이름만 제거하고 소유하지 않은 이름은 명시적으로 보고한다. surface 종료가 이미지 수명을 제한한다. Alacritty 32/32, native frame 11/11, sidecar 계약 45/45와 `make native-test`가 통과했다. 재빌드 Tauri/Wails 픽셀·수명 검증은 F6.6-3에 남아 있다.
+
+- 앞선 F6.6-2 진행 단계에서 macOS native ImageIO 합성과 같은 이름 교체 경로를 추가했다. 위의 완료 기록에 삭제·수명 계약을 기록했으며, 재빌드 Tauri/Wails 픽셀 검증은 F6.6-3에 남아 있다.
 
 - 앞선 F6.6-2 진행 단계에서 VT→sidecar 경계를 만들었다. OSC 1337 record가 PTY 출력 청크 중간에서도 보존되고, 타입 있는 inline-image event가 되며, 잘못된 record는 명시적 오류로 보고되고, 제한된 이미지 바이트는 base64로 전달된다. 위의 후속 진행 기록에서 native 합성을 추가했으며, 삭제·수명 의미와 재빌드 호스트 검증은 남아 있다.
 

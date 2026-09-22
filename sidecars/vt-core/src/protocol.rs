@@ -518,6 +518,7 @@ enum SurfaceCommand {
         request_id: u64,
         reason: String,
     },
+    InlineImageDelete { name: String },
     SelectionStart { x: f64, y: f64 },
     SelectionUpdate { x: f64, y: f64 },
     SelectionEnd,
@@ -1683,6 +1684,36 @@ async fn surface_task(
                             return;
                         }
                     }
+                    SurfaceCommand::InlineImageDelete { name } => {
+                        let Some(state) = image_state.as_mut() else {
+                            let response = json!({
+                                "surface": surface_id,
+                                "body": {"error": "imageNotConfigured", "reason": "inline image region is not configured"}
+                            });
+                            if output_tx.send(response.to_string()).await.is_err() { return; }
+                            continue;
+                        };
+                        let Some(index) = state.inline_images.iter().position(|image| image.name == name) else {
+                            let response = json!({
+                                "surface": surface_id,
+                                "body": {"error": "imageNotFound", "reason": format!("inline image {name:?} is not owned by this surface")}
+                            });
+                            if output_tx.send(response.to_string()).await.is_err() { return; }
+                            continue;
+                        };
+                        state.inline_images.remove(index);
+                        if state.pending_draw {
+                            state.dirty = true;
+                        } else {
+                            let screen = decorate_screen(engine.screen(), focused, &preedit, &cursor_policy, cursor_activity.elapsed().as_millis() as u64);
+                            if !present_screen(&surface_id, &screen, state, &output_tx).await { return; }
+                        }
+                        let response = json!({
+                            "surface": surface_id,
+                            "body": {"event": "image.inline.deleted", "name": name}
+                        });
+                        if output_tx.send(response.to_string()).await.is_err() { return; }
+                    }
                     SurfaceCommand::SessionClose => {
                         let close_error = if let Some(ref sid) = session_id {
                             session_port.close(sid).await.err()
@@ -2477,6 +2508,17 @@ where
                                     }
                                     _ => {
                                         let response = json!({"surface": surface_id, "body": {"error": "invalidParams", "reason": "clipboard.reject requires requestId and non-empty reason"}});
+                                        if output_tx.send(response.to_string()).await.is_err() { break; }
+                                    }
+                                }
+                            }
+                            "image.inline.delete" => {
+                                match body.get("name").and_then(Value::as_str).filter(|name| !name.is_empty()) {
+                                    Some(name) => {
+                                        if tx.send(SurfaceCommand::InlineImageDelete { name: name.to_string() }).await.is_err() { break; }
+                                    }
+                                    None => {
+                                        let response = json!({"surface": surface_id, "body": {"error": "invalidParams", "reason": "image.inline.delete requires a non-empty name"}});
                                         if output_tx.send(response.to_string()).await.is_err() { break; }
                                     }
                                 }

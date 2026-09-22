@@ -968,6 +968,7 @@ const FEATURE_LINKS = [
       { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "osc1337_inline_image_is_typed_and_survives_input_chunk_boundaries" },
       { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "malformed_osc1337_is_an_explicit_engine_error" },
       { file: "sidecars/vt-core/tests/serve_contract.rs", id: "test_inline_image_event_is_explicit_and_base64_encoded" },
+      { file: "sidecars/vt-core/tests/serve_contract.rs", id: "test_inline_image_delete_is_explicit_for_unowned_names" },
       { file: "sidecars/vt-core/tests/frame_test.rs", id: "inline_image_raster_is_composited_without_erasing_terminal_background" },
     ],
     expected: "Complete OSC 1337 records, including records split across PTY output chunks, become ordered typed sidecar events with base64 image bytes; malformed records remain explicit engine errors and do not get silently dropped.",

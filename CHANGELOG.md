@@ -1,6 +1,8 @@
 # Changelog
 
-- F6.6-2 remains in progress. The native macOS frame now decodes validated inline image bytes through ImageIO and composites owned placements over the terminal raster; replacing an owned name updates that placement while preserving terminal drawing. The focused native pixel test passes 1/1 in 1.74s, and native frame, Alacritty, and sidecar contract suites pass. Deletion/lifetime semantics and rebuilt Tauri/Wails pixel verification remain open.
+- Completed F6.6-2. Validated OSC 1337 events now reach the macOS native raster through a bounded sidecar contract. ImageIO composites owned images at declared placement, same-name replacement is isolated, `image.inline.delete` removes only an owned name and reports unowned names explicitly, and surface closure bounds image lifetime. Alacritty 32/32, native frame 11/11, sidecar contract 45/45, and `make native-test` pass. Rebuilt Tauri/Wails pixel and lifecycle verification remains F6.6-3.
+
+- Earlier F6.6-2 progress added the native macOS ImageIO composite and same-name replacement path. The later completion entry above records the deletion/lifetime contract; rebuilt Tauri/Wails pixel verification remains F6.6-3.
 
 - Earlier F6.6-2 progress established the VT-to-sidecar boundary: OSC 1337 records survive PTY output chunks, become typed inline-image events, report malformed records explicitly, and forward bounded image bytes as base64. Native composition was added in the later progress entry above; deletion/lifetime semantics and rebuilt-host verification remain open.
 

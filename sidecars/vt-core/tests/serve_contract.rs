@@ -747,6 +747,53 @@ async fn test_inline_image_event_is_explicit_and_base64_encoded() {
         }
     }
     assert!(found, "inline image event was not emitted");
+    to_serve
+        .write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"image.inline.delete","name":"file.png"}}
+"#)
+        .await
+        .unwrap();
+    let mut deleted = false;
+    for _ in 0..4 {
+        let line = tokio::time::timeout(std::time::Duration::from_secs(2), lines.next_line())
+            .await
+            .expect("timeout waiting for inline image deletion")
+            .unwrap()
+            .unwrap();
+        let value: serde_json::Value = serde_json::from_str(&line).unwrap();
+        if value["body"]["event"] == "image.inline.deleted" {
+            assert_eq!(value["body"]["name"], "file.png");
+            deleted = true;
+            break;
+        }
+    }
+    assert!(deleted, "owned inline image was not deleted");
+    drop(to_serve);
+    task.await.unwrap().unwrap();
+}
+
+#[tokio::test]
+async fn test_inline_image_delete_is_explicit_for_unowned_names() {
+    let calls = Arc::new(Mutex::new(Calls::default()));
+    let engine_factory = Arc::new(|| Box::new(MockEngine::new()) as Box<dyn Engine>);
+    let port = Arc::new(FakeSessionPort::new("delete-session".into(), calls));
+    let port_for_factory = port.clone();
+    let factory = Arc::new(move || port_for_factory.clone() as Arc<dyn SessionPort>);
+    let (mut to_serve, serve_in) = tokio::io::duplex(16 * 1024);
+    let (serve_out, from_serve) = tokio::io::duplex(16 * 1024);
+    let task = tokio::spawn(serve(engine_factory, serve_in, serve_out, factory));
+    let mut lines = tokio::io::BufReader::new(from_serve).lines();
+    to_serve
+        .write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"image.inline.delete","name":"missing.png"}}
+"#)
+        .await
+        .unwrap();
+    let line = tokio::time::timeout(std::time::Duration::from_secs(2), lines.next_line())
+        .await
+        .expect("timeout waiting for explicit delete error")
+        .unwrap()
+        .unwrap();
+    let value: serde_json::Value = serde_json::from_str(&line).unwrap();
+    assert_eq!(value["body"]["error"], "imageNotConfigured");
     drop(to_serve);
     task.await.unwrap().unwrap();
 }
