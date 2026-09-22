@@ -14,7 +14,7 @@ use crate::images;
 use crate::log_error;
 use crate::platform::{self, Handle};
 use crate::sidecars::WindowSidecars;
-use crate::windows::{emit_window, native_owner, root_view, window_data};
+use crate::windows::{emit_window, native_owner, window_data};
 
 /// 표면 웹뷰가 문서보다 먼저 실행하는 스크립트.
 pub(crate) struct Background;
@@ -341,7 +341,7 @@ fn watch_presses(window: &Window, views: &Views, watching: &Watching) -> Result<
     if watching.0.lock().map_err(|e| e.to_string())?.is_some() {
         return Ok(());
     }
-    let main = root_view(window).ok_or("the main webview is gone")?;
+    let main = exposure::root_view_on_main(window)?;
     isolate_webview(&main, PageFocus::Allowed)?;
     let platform = platform::current()?;
     let named = views.0.clone();
@@ -477,7 +477,7 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
     })?;
     let platform = platform::current()?;
 
-    let main = root_view(window).ok_or("the main webview is gone")?;
+    let main = exposure::root_view_on_main(window)?;
     let ticket = running.prepared.fetch_add(1, Ordering::Relaxed) + 1;
     let owner = native_owner(window)?;
     let (tx, rx) = mpsc::channel::<Result<Handle, String>>();
@@ -659,7 +659,7 @@ pub(crate) async fn present(
     window: Window,
     request: PresentRequest,
 ) -> Result<Vec<Placement>, String> {
-    let main = root_view(&window).ok_or("the main webview is gone")?;
+    let main = exposure::root_view_on_main(&window)?;
     let ticket = request.ticket;
     let finished = window.clone();
     let context = window_data(&window)?;

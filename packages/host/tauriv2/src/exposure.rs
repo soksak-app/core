@@ -21,7 +21,7 @@ use crate::endpoint::{
 };
 use crate::platform;
 use crate::surfaces::label_for;
-use crate::windows::{self, native_owner, root_view, window_data};
+use crate::windows::{self, native_owner, window_data};
 
 pub use crate::platform::{Delivery, Key, Pointer};
 
@@ -764,6 +764,18 @@ pub(crate) fn on_main<T: Send + 'static>(
     rx.recv().map_err(|e| e.to_string())?
 }
 
+/// AppKit 메인 스레드 실행기를 통해 메인 WebView를 반환한다.
+///
+/// Tauri endpoint worker와 비동기 명령은 창의 WebView registry를 직접 조회할 수 없다.
+/// macOS에서 registry는 네이티브 WebKit 객체를 가지므로 읽기 전용 조회도 메인 스레드에서
+/// 실행한다.
+pub(crate) fn root_view_on_main(window: &Window) -> Result<Webview, String> {
+    let target = window.clone();
+    on_main(window, move || {
+        crate::windows::root_view(&target).ok_or_else(|| "the main webview is gone".into())
+    })
+}
+
 /// 웹뷰의 네이티브 뷰로 work 를 실행하고 결과를 기다린다.
 pub(crate) fn with_view<T: Send + 'static>(
     webview: &Webview,
@@ -894,8 +906,6 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
 
 /// 메인 페이지를 다시 읽고, 새 페이지가 준비를 알릴 때까지 기다린다.
 fn reload(window: &Window) -> Result<Value, Failure> {
-    let main =
-        root_view(window).ok_or_else(|| Failure::new(MISSING_DOCUMENT, "the main page is gone"))?;
     let (tx, rx) = mpsc::channel();
     window_data(window)
         .map_err(internal)?
@@ -903,7 +913,14 @@ fn reload(window: &Window) -> Result<Value, Failure> {
         .lock()
         .map_err(internal)?
         .push(tx);
-    main.reload().map_err(internal)?;
+    let target = window.clone();
+    on_main(window, move || {
+        crate::windows::root_view(&target)
+            .ok_or_else(|| "the main page is gone".to_string())?
+            .reload()
+            .map_err(|error| error.to_string())
+    })
+    .map_err(internal)?;
     match rx.recv_timeout(TIMEOUT) {
         Ok(()) => Ok(Value::Null),
         Err(_) => Err(Failure::new(
@@ -948,8 +965,7 @@ pub(crate) fn presented(window: &Window, timeout: Duration) -> Result<f64, Failu
     let data = window_data(window).map_err(internal)?;
     let wait_frame = || -> Result<f64, Failure> {
         let platform = platform::current().map_err(internal)?;
-        let main = root_view(window)
-            .ok_or_else(|| Failure::new(MISSING_DOCUMENT, "the main page is gone"))?;
+        let main = root_view_on_main(window).map_err(internal)?;
         let (tx, rx) = mpsc::channel();
         let failed = tx.clone();
         main.with_webview(move |view| {
@@ -1049,8 +1065,7 @@ fn hit(window: &Window, x: f64, y: f64) -> Result<Value, Failure> {
             return Ok(json!({"kind": "native", "identifier": format!("modal:{id}")}));
         }
     }
-    let main =
-        root_view(window).ok_or_else(|| Failure::new(MISSING_DOCUMENT, "the main page is gone"))?;
+    let main = root_view_on_main(window).map_err(internal)?;
     let page = with_view(&main, move |view| platform.view_id(view)).map_err(internal)?;
     if found.chain.contains(&page) {
         return Ok(json!({"kind": "page"}));
@@ -1085,9 +1100,7 @@ impl Host {
         sent: impl FnOnce(),
     ) -> Result<Value, Failure> {
         let label = window.label().to_string();
-        if root_view(window).is_none() {
-            return Err(Failure::new(MISSING_DOCUMENT, "the main page is gone"));
-        }
+        root_view_on_main(window).map_err(|error| Failure::new(MISSING_DOCUMENT, error))?;
         let data = window_data(window).map_err(|e| Failure::new(MISSING_DOCUMENT, e))?;
         self.0
             .state::<Exposure>()

@@ -53,6 +53,8 @@
 
 ## Unreleased
 
+- Completed F0.5.9. Endpoint requests and asynchronous Tauri split synchronization no longer query the main WebView from worker threads. The latest 19:59 foreign-exception crash path was reproduced in the source audit and closed by routing root-WebView lookup through the main-thread executor. Rebuilt Tauri repeated endpoint splitting passes 1/1 in 0.925s, four-terminal presentation passes 1/1 in 0.473s, and normal shutdown passes in 66ms; the focused Tauri host suite passes 50/50 in 32.6s.
+
 - Completed the F5 cursor-rendering item. Terminal cursor policy now has explicit focused/unfocused shapes, Never/Off/On/Always blink policy, 750ms default interval, 5s idle timeout, program visibility handling, and no fade/size animation. Red reproduced the missing policy and invalid-value boundary; Green passed 10 native frame pixel tests, 41 sidecar contract tests, 28 Alacritty engine tests, and 42 terminal module tests. The `operation: "cursor"` contract rejects invalid values and reports `blinkVisible` without recreating the PTY or changing cell metrics.
 
 - Completed F5.2. A single terminal click now restores the target WebView before the next synthetic pointer after native image focus, and native image focus notifications plus modal focus restoration cannot synchronously re-enter the WebKit event path. Red reproduced terminal 2/3 pointer receipt timeouts and a modal-close deadlock; rebuilt Tauri and Wails focus matrices passed 4/4 bounded subtests each, covering three terminals, browser/tab switching, resize, settings modal close, project return, and a separate project window.

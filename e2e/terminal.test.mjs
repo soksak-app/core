@@ -229,6 +229,27 @@ for (const app of Object.values(APPS)) {
     t.diagnostic(`${app.name}: PASS four-terminal presentation`);
   });
 
+  test(`${app.name}: endpoint split requests survive repeated native WebView presentation`, { timeout: 30000 }, async (t) => {
+    const s = await open(t, app);
+    assert.ok(s, `${app.binary} is not built`);
+    await fresh(s);
+    t.diagnostic(`${app.name}: START endpoint repeated split`);
+    const terminals = await ensureTerminals(s, 3);
+    assert.equal(terminals.length, 3, "the endpoint must report all three split terminals");
+    for (const terminal of terminals) {
+      const session = await s.until("terminal.session", (state) => state.sessionId,
+        `${terminal.surface} did not retain its session after repeated split`, { surface: terminal.surface });
+      assert.ok(session.sessionId, `${terminal.surface} lost its session after split`);
+    }
+    const host = await s.get("host.window");
+    const regions = host.regions.filter((region) => terminals.some((terminal) =>
+      terminal.surface === region.surface && region.name === "view"));
+    assert.equal(regions.length, 3, `endpoint split lost a native region: ${JSON.stringify(host)}`);
+    assert.ok(regions.every((region) => region.visible && region.presented),
+      `endpoint split left an unpresented region: ${JSON.stringify(regions)}`);
+    t.diagnostic(`${app.name}: PASS endpoint repeated split`);
+  });
+
   test(`${app.name}: native presentation failure is explicit and the next split remains usable`, { timeout: 30000 }, async (t) => {
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);
