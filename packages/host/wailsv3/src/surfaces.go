@@ -399,6 +399,18 @@ func max1(v float64) float64 {
 	return v
 }
 
+// ValidateRect rejects geometry that must never reach a native view.
+func ValidateRect(name string, x, y, width, height float64) error {
+	if math.IsNaN(x) || math.IsNaN(y) || math.IsNaN(width) || math.IsNaN(height) ||
+		math.IsInf(x, 0) || math.IsInf(y, 0) || math.IsInf(width, 0) || math.IsInf(height, 0) {
+		return fmt.Errorf("%s geometry must contain finite numbers", name)
+	}
+	if width < 0 || height < 0 {
+		return fmt.Errorf("%s geometry must not have a negative size", name)
+	}
+	return nil
+}
+
 // aligned 는 페이지 좌표의 영역을 디스플레이 픽셀에 맞춘다. UI 스레드에서 호출한다.
 func aligned(win *application.WebviewWindow, at Rect) (Rect, error) {
 	got, err := system.AlignRect(win.NativeWindow(), platformRect{X: at.X, Y: at.Y, W: max1(at.W), H: max1(at.H)})
@@ -436,9 +448,8 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 	s.mu.Unlock()
 	windowOverlays := make([]platform.WindowOverlay, 0, len(req.Overlays))
 	for _, overlay := range req.Overlays {
-		if math.IsNaN(overlay.X) || math.IsNaN(overlay.Y) || math.IsNaN(overlay.W) || math.IsNaN(overlay.H) ||
-			math.IsInf(overlay.X, 0) || math.IsInf(overlay.Y, 0) || math.IsInf(overlay.W, 0) || math.IsInf(overlay.H, 0) {
-			return PreparedSurfaces{}, fmt.Errorf("invalid window overlay")
+		if err := ValidateRect("window overlay", overlay.X, overlay.Y, overlay.W, overlay.H); err != nil {
+			return PreparedSurfaces{}, err
 		}
 		visible := true
 		if overlay.Visible != nil {
@@ -676,6 +687,10 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]str
 		}
 	}
 	for _, surface := range req.Surfaces {
+		if err := ValidateRect(fmt.Sprintf("surface %q", surface.ID), surface.X, surface.Y, surface.W, surface.H); err != nil {
+			s.mu.Unlock()
+			return nil, nil, err
+		}
 		wanted[surface.ID] = true
 		w, h := max1(surface.W), max1(surface.H)
 		visible := surface.Visible && surface.W >= 1 && surface.H >= 1

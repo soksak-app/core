@@ -1,5 +1,7 @@
 # 변경 기록
 
+- F0.5.9-6을 완료했다. 2026-09-21 크래시 증거에서 Tauri endpoint worker가 중단되기 직전에 AppKit으로 음수 표면 기하가 전달된 사실을 확인했다. 양쪽 host가 네이티브 배치 전에 유한·음수가 아닌 표면·오버레이 기하를 거부하고 0 크기 숨김 표면은 보존한다. Rust 집중 검사는 10초 테스트 감독 아래 소스 컴파일 6초 후 1/1·테스트 본체 0.00초, Go 집중 검사는 1/1·0.428초에 통과했으며 parity는 lane 56개·구현 파일 251개·테스트 파일 172개를 기록한다.
+
 - G2.8을 완료하여 날짜가 기록된 Tauri/Wails parity 감사 서술을 완료된 G2.5 반환값 증거와 일치시켰다. 파일명 불일치는 역사적 관찰로 명시해 유지한다.
 - G2.9를 완료하여 native region을 분리하기 전에 진행 중인 surface composition placement를 기다리도록 했다. 재빌드 Tauri·Wails 분할 터미널 검사가 통과했고 양쪽 수명주기 로그에서 composition declaration 오류가 사라졌다.
 - F7 OSC/CSI 감사를 시작했다. Red 기록에서 일부 title/color/OSC52/OSC1337·CSI scroll 검사만으로는 XTerm patch 411 selector 단위 범위를 충족하지 못함을 확인했다. 누락된 목록과 명시적 unsupported/policy-denied 케이스는 미완료로 남긴다.

@@ -36,6 +36,16 @@ pub(crate) struct Surface {
     composition: SurfaceComposition,
 }
 
+fn validate_rect(name: &str, x: f64, y: f64, w: f64, h: f64) -> Result<(), String> {
+    if !x.is_finite() || !y.is_finite() || !w.is_finite() || !h.is_finite() {
+        return Err(format!("{name} geometry must contain finite numbers"));
+    }
+    if w < 0.0 || h < 0.0 {
+        return Err(format!("{name} geometry must not have a negative size"));
+    }
+    Ok(())
+}
+
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub(crate) struct SurfaceRegion {
     pub(crate) name: String,
@@ -333,6 +343,22 @@ pub(crate) fn aligned(x: f64, y: f64, w: f64, h: f64, scale: f64) -> (f64, f64, 
     )
 }
 
+#[cfg(test)]
+mod tests {
+    use super::validate_rect;
+
+    #[test]
+    fn rejects_non_finite_and_negative_surface_geometry_without_fallback() {
+        assert!(validate_rect("surface", 0.0, 0.0, 0.0, 10.0).is_ok());
+        assert!(validate_rect("surface", 0.0, 0.0, -0.1, 10.0)
+            .unwrap_err()
+            .contains("negative size"));
+        assert!(validate_rect("surface", 0.0, 0.0, f64::NAN, 10.0)
+            .unwrap_err()
+            .contains("finite"));
+    }
+}
+
 /// 창의 누름 감시를 한 번 시작한다.
 ///
 /// 표면에 대한 누름은 표면 뷰가 받고 페이지는 받지 못하므로, 창을 감시하고 표면 id 를
@@ -445,6 +471,13 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
             if surface.id.is_empty() || !ids.insert(surface.id.clone()) {
                 return Err(format!("invalid or duplicate surface {:?}", surface.id));
             }
+            validate_rect(
+                &format!("surface {:?}", surface.id),
+                surface.x,
+                surface.y,
+                surface.w,
+                surface.h,
+            )?;
             validate_composition(&surface.composition)
                 .map_err(|e| format!("surface {:?}: {e}", surface.id))?;
             if held
@@ -512,14 +545,17 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
     let overlays = request
         .overlays
         .iter()
-        .map(|overlay| platform::WindowOverlay {
-            x: overlay.x,
-            y: overlay.y,
-            w: overlay.w,
-            h: overlay.h,
-            visible: overlay.visible,
+        .map(|overlay| {
+            validate_rect("window overlay", overlay.x, overlay.y, overlay.w, overlay.h)?;
+            Ok(platform::WindowOverlay {
+                x: overlay.x,
+                y: overlay.y,
+                w: overlay.w,
+                h: overlay.h,
+                visible: overlay.visible,
+            })
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>, String>>()?;
     exposure::on_main(window, move || {
         platform.set_window_overlays(main_handle, &overlays)
     })?;
