@@ -255,6 +255,21 @@ function continueAfterLayoutFailure(phase, error) {
   return undefined;
 }
 let layoutPresented = false;
+const surfacePreparedListeners = new Set();
+let lastPreparedSurfaces = [];
+
+/** Registers a workbench lifecycle listener for prepared native surfaces. */
+export function onSurfacePrepared(listener) {
+  if (typeof listener !== "function") throw new TypeError("surface preparation listener must be a function");
+  surfacePreparedListeners.add(listener);
+  if (lastPreparedSurfaces.length) listener(lastPreparedSurfaces);
+  return () => surfacePreparedListeners.delete(listener);
+}
+
+function notifySurfacePrepared(placements) {
+  lastPreparedSurfaces = placements;
+  for (const listener of surfacePreparedListeners) listener(placements);
+}
 
 /**
  * 창 자체를 다루는 인터페이스. 애플리케이션이 없으면 null.
@@ -307,7 +322,10 @@ export const surfaces = native ? {
         last = key;
         const scheduled = layoutTurn.then(() => tellInTurn("syncSurfaces", request));
         layoutFrame = scheduled;
-        layoutResult = scheduled.then((frame) => frame.placements);
+        layoutResult = scheduled.then((frame) => {
+          notifySurfacePrepared(frame.placements);
+          return frame.placements;
+        });
         layoutPresented = false;
         // 실패한 트랜잭션이 다음 독립 레이아웃을 막지 않게 한다.
         layoutTurn = scheduled.then(() => undefined, (error) => continueAfterLayoutFailure("syncSurfaces", error));

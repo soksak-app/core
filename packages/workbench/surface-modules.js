@@ -1,5 +1,5 @@
 import { createSurfaceCompositionController, createSurfaceContext, mountSurfaceModule, releaseSurfaceReady } from "@soksak/plugin-api";
-import { native, surfaces as hostSurfaces, surfaceContextRuntime } from "./host.js";
+import { native, onSurfacePrepared, surfaces as hostSurfaces, surfaceContextRuntime } from "./host.js";
 import { registry } from "./exposure.js";
 import { registerSurfaceExposure } from "./surface-exposure.js";
 import { onSettingsChange, pluginSettings } from "./settings.js";
@@ -21,6 +21,15 @@ export function authorizeSurface(id) {
   const gate = authorization.get(id);
   if (gate) gate.resolve();
   else authorization.set(id, { promise: Promise.resolve(), resolve() {} });
+}
+
+// Start a native surface module only after the host creates its native handle.
+// This preparation callback is the production authorization path; without it,
+// native mounting waits indefinitely before it can report an attributable error.
+if (native) {
+  onSurfacePrepared((placements) => {
+    for (const placement of placements) authorizeSurface(placement.id);
+  });
 }
 
 function pageRuntime(surface, scoped, compositionReady) {
@@ -200,6 +209,7 @@ export async function disposeSurface(surfaceId) {
     entry.state();
     entry.host.removeAttribute("data-surface-suspended");
     entry.host.remove();
+    authorization.delete(surfaceId);
     if (mounted.get(surfaceId) === entry) mounted.delete(surfaceId);
   })();
   return entry.disposing;

@@ -25,10 +25,18 @@ test("native preparation cannot present before DOM drawing and presents each tic
       throw new Error(`unexpected host call ${name}`);
     },
   } } });
-  const { surfaces } = await import("../host.js");
+  const { onSurfacePrepared, surfaces } = await import("../host.js");
+  const prepared = [];
+  const removePrepared = onSurfacePrepared((placements) => prepared.push(placements.map(({ id }) => id)));
   const record = { surfaces: [], settled: false, drawn: false };
   await surfaces.place(record);
   assert.deepEqual(calls.map((c) => c.name), ["syncSurfaces"]);
+  assert.deepEqual(prepared, [["surface", "hidden"]],
+    "native surface authorization must follow completed preparation");
+  const latePrepared = [];
+  const removeLatePrepared = onSurfacePrepared((placements) => latePrepared.push(placements.map(({ id }) => id)));
+  assert.deepEqual(latePrepared, [["surface", "hidden"]],
+    "a module that starts after preparation must receive the current authorization state");
   await surfaces.place({ ...record, drawn: true });
   await surfaces.place({ ...record, drawn: true });
   assert.deepEqual(calls.map((c) => c.name), ["syncSurfaces", "presentSurfaces"]);
@@ -53,5 +61,7 @@ test("native preparation cannot present before DOM drawing and presents each tic
     assert.deepEqual(calls.map((call) => call.name), ["syncSurfaces", "presentSurfaces"],
       `${stage} rejection must not be reused for the next request at the same geometry`);
   }
+  removeLatePrepared();
+  removePrepared();
   dom.window.close();
 });

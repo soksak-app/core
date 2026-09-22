@@ -284,6 +284,21 @@ const FEATURE_LINKS = [
     levels: ["native", "application"],
   },
   {
+    id: "F2.14",
+    implementation: [
+      { file: "packages/workbench/host.js", symbol: "onSurfacePrepared" },
+      { file: "packages/workbench/surface-modules.js", symbol: "authorizeSurface" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/surface-presentation.test.mjs", id: "native preparation cannot present before DOM drawing and presents each ticket once" },
+      { file: "e2e/terminal.test.mjs", id: "newly split terminal presents its first native raster" },
+      { file: "e2e/terminal.test.mjs", id: "four split terminals complete native presentation without a host crash" },
+      { file: "e2e/terminal.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
+    ],
+    expected: "Prepared native surfaces authorize their modules after host creation, including late registration replay, and rebuilt Tauri/Wails split-terminal checks reach a presented raster without an authorization or presentation timeout.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F3",
     implementation: [{ file: "plugins/browser/ui/browser.js", symbol: "mount" }],
     tests: [
