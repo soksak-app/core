@@ -189,6 +189,7 @@ export async function createSurfaceCompositionController(
   let changed = null;
   let frame = null;
   let resizeFrame = null;
+  let pending = Promise.resolve();
   const reportFailure = (error) => {
     const message = `surface composition failed: ${error?.message ?? error}`;
     runtimePage.surfaces.report(message);
@@ -205,6 +206,7 @@ export async function createSurfaceCompositionController(
     }
     if (frame !== null) view.cancelAnimationFrame(frame);
     if (resizeFrame !== null) view.cancelAnimationFrame(resizeFrame);
+    await pending;
     const results = await Promise.allSettled([...internal.values()].map(({ handle }) => handle.detach()));
     paintBoundary?.restore();
     restoreDataset(root, previousComposition);
@@ -230,7 +232,6 @@ export async function createSurfaceCompositionController(
     if (failed) throw failed.reason;
 
     let revision = 0;
-    let pending = Promise.resolve();
     let acceptedGeometry = null;
     let pendingGeometry = null;
     const measured = (name, element) => {

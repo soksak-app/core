@@ -685,6 +685,16 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "G2.9",
+    implementation: [{ file: "packages/plugin-api/surface-composition.js", symbol: "detachAll" }],
+    tests: [
+      { file: "packages/plugin-api/test/surface-composition.test.mjs", id: "disposal waits for an in-flight placement before detaching regions" },
+      { file: "e2e/terminal.test.mjs", id: "a newly split terminal presents its first native raster" },
+    ],
+    expected: "Closing a surface waits for its in-flight composition placement before detaching native regions; rebuilt Tauri and Wails split-terminal checks pass without composition-declaration errors.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "G2.7",
     implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "auditRecordedInventoryCounts" }],
     tests: [{ file: "scripts/test/test-parity.test.mjs", id: "recorded parity counts cannot drift from the current inventory" }],

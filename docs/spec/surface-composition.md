@@ -88,6 +88,8 @@ Insets use the element's CSS rectangle and the current mounted viewport. Native 
 
 The returned region handle contains only operations for its declared kind. Document handles load and navigate. Image handles control focus, caret, accessibility text, and receive supplier events. Detaching an individual region is not permitted; closing or navigating the surface destroys the complete composition.
 
+Closing a surface waits for its last in-flight complete composition placement to settle before detaching regions or removing the native composition declaration. A close may cancel future placements, but it must not let a placement race after the declaration or its native region has been removed.
+
 ## Revisions and atomicity
 
 Composition and raster progress are separate.

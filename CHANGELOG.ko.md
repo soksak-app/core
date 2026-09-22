@@ -1,6 +1,7 @@
 # 변경 기록
 
 - G2.8을 완료하여 날짜가 기록된 Tauri/Wails parity 감사 서술을 완료된 G2.5 반환값 증거와 일치시켰다. 파일명 불일치는 역사적 관찰로 명시해 유지한다.
+- G2.9를 완료하여 native region을 분리하기 전에 진행 중인 surface composition placement를 기다리도록 했다. 재빌드 Tauri·Wails 분할 터미널 검사가 통과했고 양쪽 수명주기 로그에서 composition declaration 오류가 사라졌다.
 
 - G2.5–G2.7을 완료했다. Tauri·Wails runtime contract test가 같은 `waitPresented` 결과를 단언하고, 기계적 E2E 감사가 앱 suite 15개에 양쪽 adapter 순회를 강제하며 호스트 독립 suite 3개를 명시적으로 기록한다. parity inventory는 lane 56개·구현 파일 251개·테스트 파일 171개로 동기화했다.
 

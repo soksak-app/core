@@ -298,6 +298,36 @@ test("a failed placement does not poison the next higher complete revision", asy
   assert.equal(r.placements[2].regions[0].left, 30);
 });
 
+test("disposal waits for an in-flight placement before detaching regions", async () => {
+  const f = fixture();
+  let release;
+  const blocked = new Promise((resolve) => { release = resolve; });
+  const r = runtime({ place: (revision) => revision === 2 ? blocked : undefined });
+  const composition = await createSurfaceCompositionController(r.page, declaration, {
+    regions: { page: f.page, image: f.image },
+    overlays: { toolbar: f.toolbar, badge: f.badge },
+  }, f.window);
+
+  const update = composition.update(() => {
+    f.setRect("page", { left: 20, top: 20, right: 320, bottom: 220, width: 300, height: 200 });
+  });
+  await settle();
+  assert.equal(r.placements.at(-1).revision, 2);
+
+  let disposed = false;
+  const closing = composition.dispose().then(() => { disposed = true; });
+  await settle();
+  assert.equal(disposed, false, "disposal must wait for the placement already in flight");
+  assert.equal(r.imageCalls.some(([operation]) => operation === "detach"), false,
+    "native regions must stay attached until placement settles");
+
+  release();
+  await update;
+  await closing;
+  assert.equal(disposed, true);
+  assert.equal(r.imageCalls.some(([operation]) => operation === "detach"), true);
+});
+
 test("an attachment failure rolls back successful attachments and the DOM mode marker", async () => {
   const f = fixture();
   f.window.document.documentElement.dataset.surfaceComposition = "previous";
