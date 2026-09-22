@@ -70,7 +70,7 @@ import {
 /* 표면을 모사하고 보고한다. 판은 슬롯 요소에 값을 기록만 하고 측정과 보고는 이쪽이
    담당한다. */
 import { latest, onCommit, onKnobChange, onRun, publish, publishAhead } from "./compositor.js";
-import { authorizeSurface, disposeSurfacesExcept, focusSurface, waitSurfaceReady } from "./surface-modules.js";
+import { authorizeSurface, disposeSurfacesExcept, focusSurface } from "./surface-modules.js";
 
 /* 판 하나. 이 문서는 판의 렌더링 방식을 알지 않고 렌더 완료만 수신한다. */
 import {
@@ -524,12 +524,7 @@ function resetLayout() {
 await installCoreExposure({
   library, renames, resetLayout,
   // 판의 그리기 순서. 배치를 바꾼 코어 명령은 이것을 기다린 뒤 답한다.
-  drawn: async () => {
-    await drawing;
-    const ids = [...document.querySelectorAll("[data-native-surface-id]")]
-      .map((slot) => slot.dataset.nativeSurfaceId);
-    await Promise.all(ids.map((id) => waitSurfaceReady(id)));
-  },
+  drawn: () => drawing,
   chrome: () => ({
     controlsWidth: controlsAt ? controlsAt.x + controlsAt.w : 0,
     projectTabs: workarea.querySelector(".rail-projects") ? "left" : "top",

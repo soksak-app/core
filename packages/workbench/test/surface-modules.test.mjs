@@ -42,25 +42,6 @@ test("selecting a parked tab reattaches its existing module host", async () => {
   dom.window.close();
 });
 
-test("surface readiness waits for module startup before a following layout command", async () => {
-  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
-  globalThis.document = dom.window.document;
-  const { mountSurface, waitSurfaceReady } = await import("../surface-modules.js");
-  const moduleUrl = `data:text/javascript,${encodeURIComponent(`export async function mount() {
-    await new Promise((resolve) => setTimeout(resolve, 5));
-    return { dispose() {} };
-  }`)}`;
-  const surface = { module: moduleUrl, surfaceId: "tab-readiness", pluginId: "fixture", composition: { kind: "dom" } };
-  const mounting = mountSurface(document.querySelector("#slot"), surface);
-  let ready = false;
-  const waiting = waitSurfaceReady(surface.surfaceId).then(() => { ready = true; });
-  await new Promise((resolve) => setTimeout(resolve, 1));
-  assert.equal(ready, false, "readiness must not resolve before module startup");
-  await Promise.all([mounting, waiting]);
-  assert.equal(ready, true);
-  dom.window.close();
-});
-
 test("a mounted module registers and releases its declared exposure through the real registry", async () => {
   const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;

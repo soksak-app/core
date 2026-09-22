@@ -308,20 +308,6 @@ const FEATURE_LINKS = [
     levels: ["native", "application"],
   },
   {
-    id: "F0.5.7",
-    implementation: [
-      { file: "packages/workbench/index.html", symbol: "waitSurfaceReady" },
-      { file: "packages/workbench/surface-modules.js", symbol: "waitSurfaceReady" },
-    ],
-    tests: [
-      { file: "packages/workbench/test/surface-modules.test.mjs", id: "surface readiness waits for module startup before a following layout command" },
-      { file: "e2e/commands.test.mjs", id: "card, tab, and menu commands change the grid" },
-      { file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" },
-    ],
-    expected: "A command that changes the visible layout replies only after each mounted surface module has completed startup and composition declaration, so an immediate following layout command cannot place an undeclared surface; normal shutdown still removes the owned endpoint and lock.",
-    levels: ["unit", "application"],
-  },
-  {
     id: "F0.5",
     implementation: [
       { file: "packages/workbench/core-exposure.js", symbol: "installCoreExposure" },
@@ -639,6 +625,19 @@ const FEATURE_LINKS = [
     implementation: [{ file: "e2e/normal-shutdown.mjs", symbol: "command.run" }],
     tests: [{ file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" }],
     expected: "A declared command.run host.quit request returns null and removes the application PID and endpoint within the bounded case limit.",
+    levels: ["application"],
+  },
+  {
+    id: "G2.4",
+    implementation: [
+      { file: "e2e/projects.test.mjs", symbol: "core.project.open" },
+      { file: "e2e/normal-shutdown.mjs", symbol: "normal-shutdown" },
+    ],
+    tests: [
+      { file: "e2e/projects.test.mjs", id: "project windows persist files, inherit settings, and isolate native state" },
+      { file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" },
+    ],
+    expected: "An isolated public project/window case reports its first failure and the host remains explicitly stoppable within its case limit.",
     levels: ["application"],
   },
   {

@@ -147,13 +147,6 @@ export async function focusSurface(surfaceId) {
   return true;
 }
 
-/** Wait until a mounted surface has completed its module startup. */
-export async function waitSurfaceReady(surfaceId) {
-  const entry = mounted.get(surfaceId);
-  if (!entry) throw new Error(`surface ${surfaceId} is not mounted`);
-  await entry.ready;
-}
-
 export function suspendSurface(surfaceId) {
   const entry = mounted.get(surfaceId);
   if (entry) entry.host.dataset.surfaceSuspended = "true";
