@@ -1,5 +1,6 @@
 # 변경 기록
 
+- F8을 진행했다. custom image region의 명령 외 키 입력을 `interpretKeyEvents:`가 아니라 `NSTextInputContext handleEvent:`로 전달한다. 제한된 native image-region 회귀 검사가 일반 insert·조합·취소/키 라우팅·범위·후보 기하를 통과했다. 활성 한글 입력 소스와 재빌드 Tauri/Wails 증거는 아직 열려 있다.
 - F7.1–F7.18가 완료된 뒤 CSI 체크리스트 집계 상태를 바로잡았다. 부모 행은 F7.14–F7.17을 낡은 미완료 범위로 남기지 않고 selector 단위와 기계적 감사 근거를 기록한다.
 - F7.17을 완료했다. `scripts/check-terminal-protocol-inventory.mjs`가 고정 patch-411 reference, 필수 CSI 25행, selector 중복, 이름 있는 Rust 테스트와 complete-CSI 계약을 기계적으로 검사한다. 정상·주입 Red 실행이 통과했으며 vendor 계약은 F7.18에 남겼다.
 - F7.16을 완료했다. CSI inventory가 `5n/6n`, primary/secondary `c/>c`, `14t`, 분할 unsupported window, rectangle/protected-cell/palette intermediate와 framing/잘못된 입력 근거를 이름 있는 검사에 연결한다. 순서가 있는 device/status 응답이 15초 감독 아래 1/1 통과했다.

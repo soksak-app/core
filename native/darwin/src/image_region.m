@@ -262,14 +262,14 @@ static NSView *surfaceNativePlane(NSView *surface) {
 
     // 조합 중이면 입력기로 넘긴다.
     if ([self hasMarkedText]) {
-        [self interpretKeyEvents:@[ event ]];
+        [self.inputContext handleEvent:event];
         return;
     }
 
     // 특수 키 또는 Ctrl/Option 조합인지 확인한다.
     NSString *characters = event.charactersIgnoringModifiers;
     if (characters.length == 0) {
-        [self interpretKeyEvents:@[ event ]];
+        [self.inputContext handleEvent:event];
         return;
     }
 
@@ -368,7 +368,7 @@ static NSView *surfaceNativePlane(NSView *surface) {
     }
 
     // 일반 문자는 입력기로 넘긴다.
-    [self interpretKeyEvents:@[ event ]];
+    [self.inputContext handleEvent:event];
 }
 
 - (void)doCommandBySelector:(SEL)selector {
