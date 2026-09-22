@@ -1,3 +1,5 @@
+use std::fs::OpenOptions;
+use std::os::fd::AsRawFd;
 use std::sync::{Mutex, OnceLock};
 
 use soksak_sidecar_vt_core::pty::PtyService;
@@ -9,9 +11,23 @@ fn lifecycle_test_lock() -> std::sync::MutexGuard<'static, ()> {
     LOCK.get_or_init(|| Mutex::new(())).lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
+fn native_pty_test_lock() -> std::fs::File {
+    let path = std::env::temp_dir().join("soksak-vt-core-pty-tests.lock");
+    let file = OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .open(path)
+        .expect("PTY test lock file must open");
+    nix::fcntl::flock(file.as_raw_fd(), nix::fcntl::FlockArg::LockExclusive)
+        .expect("PTY test lock must acquire");
+    file
+}
+
 #[tokio::test]
 async fn real_sessions_are_independent_and_close_removes_session() {
     let _test_lock = lifecycle_test_lock();
+    let _native_test_lock = native_pty_test_lock();
     let service = PtyService::new();
     let (tx_a, mut rx_a) = tokio::sync::mpsc::unbounded_channel();
     let (tx_b, mut rx_b) = tokio::sync::mpsc::unbounded_channel();
@@ -64,8 +80,36 @@ async fn real_sessions_are_independent_and_close_removes_session() {
 }
 
 #[tokio::test]
+async fn repeated_short_lived_sessions_close_without_process_group_races() {
+    let _test_lock = lifecycle_test_lock();
+    let _native_test_lock = native_pty_test_lock();
+    let started = std::time::Instant::now();
+    let service = PtyService::new();
+    for index in 0..20 {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let (session, _) = service
+            .open(
+                "/bin/sh",
+                &["-c".into(), format!("printf short-{index}")],
+                None,
+                80,
+                24,
+                tx,
+            )
+            .expect("short-lived PTY setup failed");
+        service.close(&session).expect("short-lived PTY close failed");
+    }
+    assert!(
+        started.elapsed() < Duration::from_secs(3),
+        "short-lived PTY setup loop exceeded its three-second bound: {:?}",
+        started.elapsed()
+    );
+}
+
+#[tokio::test]
 async fn three_real_sessions_reconnect_with_same_pid_and_retained_output() {
     let _test_lock = lifecycle_test_lock();
+    let _native_test_lock = native_pty_test_lock();
     let service = PtyService::new();
     let mut sessions = Vec::new();
     for label in ["A", "B", "C"] {

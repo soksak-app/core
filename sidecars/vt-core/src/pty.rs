@@ -393,6 +393,7 @@ mod tests {
 
     #[tokio::test]
     async fn independent_sessions_have_independent_output() {
+        let _test_lock = crate::platform::pty::native_pty_test_lock();
         let service = PtyService::new();
         let (tx_a, mut rx_a) = tokio::sync::mpsc::unbounded_channel();
         let (tx_b, mut rx_b) = tokio::sync::mpsc::unbounded_channel();
@@ -442,6 +443,7 @@ mod tests {
 
     #[tokio::test]
     async fn explicit_close_kills_the_child_and_drains_exit() {
+        let _test_lock = crate::platform::pty::native_pty_test_lock();
         let service = PtyService::new();
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         let (session_id, _) = service
@@ -483,6 +485,7 @@ mod tests {
 
     #[tokio::test]
     async fn attach_replays_retained_output_with_stable_session_id() {
+        let _test_lock = crate::platform::pty::native_pty_test_lock();
         let service = PtyService::new();
         let (tx_a, mut rx_a) = tokio::sync::mpsc::unbounded_channel();
         let (session_id, _) = service
