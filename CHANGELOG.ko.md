@@ -1,5 +1,6 @@
 # 변경 기록
 
+- F6.3-11을 완료했다. 일반 터미널 클릭은 더 이상 빈 selection을 열지 않으며, 포인터 이동 뒤에만 selection을 시작하고 완전한 drag start/update/end 계약은 보존한다. 터미널 모듈 drag/click 집중 검사 2/2, 재빌드 Tauri·Wails keyboard E2E 각각 4/4가 통과했고 `terminal.session.error`가 없으며 검증 뒤 양쪽 앱을 종료했다.
 - F8을 진행했다. custom image region의 명령 외 키 입력을 `interpretKeyEvents:`가 아니라 `NSTextInputContext handleEvent:`로 전달한다. 제한된 native image-region 회귀 검사가 일반 insert·조합·취소/키 라우팅·범위·후보 기하를 통과했다. 활성 한글 입력 소스와 재빌드 Tauri/Wails 증거는 아직 열려 있다.
 - F7.1–F7.18가 완료된 뒤 CSI 체크리스트 집계 상태를 바로잡았다. 부모 행은 F7.14–F7.17을 낡은 미완료 범위로 남기지 않고 selector 단위와 기계적 감사 근거를 기록한다.
 - F7.17을 완료했다. `scripts/check-terminal-protocol-inventory.mjs`가 고정 patch-411 reference, 필수 CSI 25행, selector 중복, 이름 있는 Rust 테스트와 complete-CSI 계약을 기계적으로 검사한다. 정상·주입 Red 실행이 통과했으며 vendor 계약은 F7.18에 남겼다.

@@ -382,6 +382,8 @@ for (const app of Object.values(APPS)) {
         t.diagnostic(`${app.name}: PASS terminal ${index + 1} typed line`);
         const sessionAfterTyping = await s.get("terminal.session", surface);
         const screenAfterTyping = await s.get("terminal.screen", surface);
+        assert.equal(sessionAfterTyping.error, undefined,
+          `terminal ${index + 1} must not report a selection/input error after focus click: ${sessionAfterTyping.error}`);
         t.diagnostic(`${app.name}: terminal ${index + 1} session after typing ` +
           `${JSON.stringify({ sessionId: sessionAfterTyping.sessionId, error: sessionAfterTyping.error })}`);
         t.diagnostic(`${app.name}: terminal ${index + 1} screen after typing ` +

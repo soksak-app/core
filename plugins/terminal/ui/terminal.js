@@ -452,6 +452,8 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   const preventDefaultFocus = (event) => event.preventDefault();
   view.addEventListener("pointerdown", preventDefaultFocus);
   let selectionPointerId = null;
+  let selectionStart = null;
+  let selectionStarted = false;
   const selectionPoint = (event) => {
     const rect = view.getBoundingClientRect();
     const x = event.clientX - rect.left;
@@ -466,9 +468,10 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     try {
       const point = selectionPoint(event);
       selectionPointerId = event.pointerId;
+      selectionStart = point;
+      selectionStarted = false;
       view.setPointerCapture?.(event.pointerId);
       event.preventDefault();
-      observeInput(terminal.send(id, { operation: "selection.start", ...point }));
     } catch (error) {
       reportInputError(error);
     }
@@ -478,6 +481,11 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     try {
       const point = selectionPoint(event);
       event.preventDefault();
+      if (!selectionStarted) {
+        if (point.x === selectionStart.x && point.y === selectionStart.y) return;
+        selectionStarted = true;
+        observeInput(terminal.send(id, { operation: "selection.start", ...selectionStart }));
+      }
       observeInput(terminal.send(id, { operation: "selection.update", ...point }));
     } catch (error) {
       reportInputError(error);
@@ -486,9 +494,12 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   const endSelection = (event) => {
     if (event.pointerId !== selectionPointerId) return;
     selectionPointerId = null;
+    const started = selectionStarted;
+    selectionStart = null;
+    selectionStarted = false;
     view.releasePointerCapture?.(event.pointerId);
     event.preventDefault();
-    observeInput(terminal.send(id, { operation: "selection.end" }));
+    if (started) observeInput(terminal.send(id, { operation: "selection.end" }));
   };
   view.addEventListener("pointerdown", beginSelection);
   view.addEventListener("pointermove", updateSelection);

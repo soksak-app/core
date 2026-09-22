@@ -864,6 +864,26 @@ test("terminal pointer drag sends one complete selection gesture to the sidecar"
   assert.equal(fakeSidecar.getMessages()[1].body.x, 42);
 });
 
+test("terminal click focuses without starting an empty selection", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  const fakeExpose = createFakeExpose();
+  const view = createFakeView();
+  await startTerminal({
+    view, attachImage: createFakeAttachImage().function,
+    sidecar: fakeSidecar, expose: fakeExpose,
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  openSession(fakeSidecar);
+  fakeSidecar.reset();
+
+  view._trigger("pointerdown", { button: 0, pointerId: 8, clientX: 10, clientY: 12 });
+  view._trigger("pointerup", { pointerId: 8, clientX: 10, clientY: 12 });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(fakeSidecar.getMessages(), [], "a click must not send an empty selection operation");
+});
+
 test("terminal.focus command reports focus rejection through terminal.session", { timeout: 10000 }, async () => {
   FakeResizeObserver.reset();
   const attach = createFakeAttachImage();
