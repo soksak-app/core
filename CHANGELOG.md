@@ -5,6 +5,7 @@
 - Completed F2.1-1. The real PTY lifecycle tests now serialize their macOS process-group cleanup without changing the production PTY service. The default lifecycle binary passes 2/2 and the full `pnpm test` passes with exit code 0.
 - Added waiting item F0.5.9-4 for the two Wails framework response-write errors observed after the E2E client closes; the messages remain visible and are not treated as a successful cleanup.
 - Started F0.5.9-4 investigation. The Wails transport source confirms the message is emitted when a Darwin WebKit URL-scheme response is written after its request task has stopped; the owning runtime call and lifecycle boundary are still being traced.
+- Closed parent checklist G2 after verifying that all of G2.3 through G2.9 are complete and provide the parent contract evidence.
 
 - Fix Tauri endpoint and asynchronous split paths to read native window handles on the AppKit main thread, preventing a second foreign-exception crash path during surface synchronization. Rebuilt repeated split presentation passed 3/3; package, native, documentation, boundary, exposure, and parity checks passed.
 
