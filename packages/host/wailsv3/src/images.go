@@ -11,6 +11,7 @@ package host
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -86,6 +87,7 @@ type ImageRasterState struct {
 	Configured         bool
 	Visible            bool
 	PresentedRaster    uint64
+	PresentationError  string
 }
 
 // ImageConfigure 는 권한 있는 사이드카에 보낼 새 래스터 설정이다.
@@ -283,6 +285,7 @@ func (i *Images) ConfigureRaster(key ImageKey, width, height int, scale float64,
 		state.Width, state.Height, state.Scale = width, height, scale
 		state.LastSequence = 0
 		state.Configured = false
+		state.PresentationError = ""
 		i.changedLocked()
 	}
 	surfaceVisible, known := i.surfaceVisible[key.Surface]
@@ -333,8 +336,22 @@ func (i *Images) MarkPresented(key ImageKey, generation, raster uint64, sequence
 	}
 	if state.PresentedRaster != raster {
 		state.PresentedRaster = raster
+		state.PresentationError = ""
 		i.changedLocked()
 	}
+}
+
+// MarkPresentationFailed records the native presentation failure for the current raster.
+func (i *Images) MarkPresentationFailed(key ImageKey, generation, raster uint64, sequence int, reason string) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	state := i.states[key]
+	if state == nil || state.Generation != generation || state.Raster != raster || state.LastSequence != sequence {
+		return
+	}
+	state.Configured = false
+	state.PresentationError = reason
+	i.changedLocked()
 }
 
 // currentPresentedLocked 는 보이는 모든 유효한 그림 영역이 현재 래스터를 표시했는지 반환한다.
@@ -357,19 +374,31 @@ func (i *Images) CurrentPresented() bool {
 
 // WaitCurrent 는 보이는 모든 그림 영역이 현재 래스터를 표시하거나 제한 시간이 끝날 때까지 기다린다.
 func (i *Images) WaitCurrent(timeout time.Duration) bool {
+	return i.WaitCurrentError(timeout) == nil
+}
+
+// WaitCurrentError waits for the current raster or returns its exact failure.
+func (i *Images) WaitCurrentError(timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	for {
 		i.mu.Lock()
+		for _, state := range i.states {
+			if state.PresentationError != "" {
+				err := errors.New(state.PresentationError)
+				i.mu.Unlock()
+				return err
+			}
+		}
 		if i.currentPresentedLocked() {
 			i.mu.Unlock()
-			return true
+			return nil
 		}
 		changed := i.changed
 		i.mu.Unlock()
 
 		remaining := time.Until(deadline)
 		if remaining <= 0 {
-			return false
+			return errors.New("presentationTimeout")
 		}
 		timer := time.NewTimer(remaining)
 		select {
@@ -381,7 +410,7 @@ func (i *Images) WaitCurrent(timeout time.Duration) bool {
 				}
 			}
 		case <-timer.C:
-			return false
+			return errors.New("presentationTimeout")
 		}
 	}
 }
@@ -392,6 +421,7 @@ func (i *Images) RetryConfigure(key ImageKey, generation, raster uint64) {
 	defer i.mu.Unlock()
 	if state := i.states[key]; state != nil && state.Generation == generation && state.Raster == raster {
 		state.Configured = false
+		state.PresentationError = ""
 	}
 }
 
@@ -618,6 +648,9 @@ func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, on
 			reason := "presentFailed"
 			if attempted && staleReason != "" {
 				reason = staleReason
+			}
+			if reason != "stale" {
+				images.MarkPresentationFailed(key, d.Generation, d.Raster, d.Sequence, reason)
 			}
 			response := AfterPresent(false, reason, d.Name, d.Generation, d.Raster, d.Sequence)
 			if err := sendResponse(d.Name, response); err != nil {

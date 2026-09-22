@@ -698,12 +698,16 @@ pub(crate) async fn present(
         // authoritative size and must complete the raster transaction.
         if presentation_settled {
             crate::composition::refresh_image_rasters(&raster_window)?;
-            if !images.wait_current(exposure::TIMEOUT) {
-                return Err(format!(
-                    "the current image raster did not present within {:?}",
-                    exposure::TIMEOUT
-                ));
-            }
+            images.wait_current(exposure::TIMEOUT).map_err(|reason| {
+                if reason == "presentationTimeout" {
+                    format!(
+                        "the current image raster did not present within {:?}",
+                        exposure::TIMEOUT
+                    )
+                } else {
+                    format!("the current image raster failed to present: {reason}")
+                }
+            })?;
         }
         Ok(())
     })

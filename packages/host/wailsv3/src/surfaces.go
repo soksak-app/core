@@ -574,8 +574,14 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 		if waiting == nil {
 			waiting = s.refreshImageRasters()
 		}
-		if waiting == nil && !s.images.WaitCurrent(pageTimeout) {
-			waiting = fmt.Errorf("the current image raster did not present within %s", pageTimeout)
+		if waiting == nil {
+			if err := s.images.WaitCurrentError(pageTimeout); err != nil {
+				if err.Error() == "presentationTimeout" {
+					waiting = fmt.Errorf("the current image raster did not present within %s", pageTimeout)
+				} else {
+					waiting = fmt.Errorf("the current image raster failed to present: %w", err)
+				}
+			}
 		}
 		// 커밋과 취소는 프레임워크 이벤트 잠금 밖에서 실행한다.
 		if err := system.EnqueueUI(func() {

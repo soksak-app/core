@@ -16,8 +16,8 @@ use serde_json::{json, Map, Value};
 use tauri::{AppHandle, Emitter, EventTarget, LogicalSize, Manager, Webview, Window};
 
 use crate::endpoint::{
-    Endpoint, Failure, Service, INVALID_PARAMS, MISSING_DOCUMENT, NOT_ACTIVE, NO_INPUT, TIMED_OUT,
-    UNKNOWN_NAME,
+    Endpoint, Failure, Service, HANDLER_FAILED, INVALID_PARAMS, MISSING_DOCUMENT, NOT_ACTIVE,
+    NO_INPUT, TIMED_OUT, UNKNOWN_NAME,
 };
 use crate::platform;
 use crate::surfaces::label_for;
@@ -993,10 +993,16 @@ pub(crate) fn presented(window: &Window, timeout: Duration) -> Result<f64, Failu
                 "the current image raster did not present within the time limit",
             ));
         };
-        if !data.images.wait_current(remaining) {
+        if let Err(reason) = data.images.wait_current(remaining) {
+            if reason == "presentationTimeout" {
+                return Err(Failure::new(
+                    TIMED_OUT,
+                    "the current image raster did not present within the time limit",
+                ));
+            }
             return Err(Failure::new(
-                TIMED_OUT,
-                "the current image raster did not present within the time limit",
+                HANDLER_FAILED,
+                format!("the current image raster failed to present: {reason}"),
             ));
         }
         let displayed = wait_frame()?;

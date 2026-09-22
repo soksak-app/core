@@ -289,7 +289,7 @@ fn presentation_wait_tracks_the_visible_current_raster() {
         .configure_raster(&key, 800, 600, 2.0, true)
         .unwrap()
         .unwrap();
-    assert!(!images.wait_current(Duration::ZERO));
+    assert!(images.wait_current(Duration::ZERO).is_err());
 
     let response = Arc::new(Mutex::new(None));
     let received = Arc::clone(&response);
@@ -305,7 +305,7 @@ fn presentation_wait_tracks_the_visible_current_raster() {
         },
     ));
     assert!(response.lock().unwrap().as_ref().unwrap()["image"]["consumed"].is_object());
-    assert!(images.wait_current(Duration::ZERO));
+    assert!(images.wait_current(Duration::ZERO).is_ok());
 
     let second = images
         .configure_raster(&key, 900, 600, 2.0, true)
@@ -314,15 +314,15 @@ fn presentation_wait_tracks_the_visible_current_raster() {
     assert!(second.raster > first.raster);
     assert!(!images.current_presented());
     images.set_visible(&key, false).unwrap();
-    assert!(images.wait_current(Duration::ZERO));
+    assert!(images.wait_current(Duration::ZERO).is_ok());
     images.set_visible(&key, true).unwrap();
-    assert!(!images.wait_current(Duration::ZERO));
+    assert!(images.wait_current(Duration::ZERO).is_err());
     images.set_surface_visible(&key.0, false);
-    assert!(images.wait_current(Duration::ZERO));
+    assert!(images.wait_current(Duration::ZERO).is_ok());
     images.set_surface_visible(&key.0, true);
-    assert!(!images.wait_current(Duration::ZERO));
+    assert!(images.wait_current(Duration::ZERO).is_err());
     images.end_generation(&key.0);
-    assert!(images.wait_current(Duration::ZERO));
+    assert!(images.wait_current(Duration::ZERO).is_ok());
 }
 
 #[test]
@@ -683,4 +683,9 @@ fn presentation_failure_is_reported() {
     );
     assert_eq!(response["image"]["name"], "view");
     assert_eq!(response["image"]["sequence"], 1);
+    assert_eq!(
+        images.wait_current(Duration::ZERO),
+        Err("presentFailed".to_string()),
+        "native presentation failure must unblock the current-raster wait"
+    );
 }

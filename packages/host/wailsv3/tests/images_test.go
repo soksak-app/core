@@ -862,4 +862,7 @@ func TestPresentationFailureIsReported(t *testing.T) {
 	if seqVal != 1 {
 		t.Fatalf("expected sequence 1, got %v", seqVal)
 	}
+	if err := images.WaitCurrentError(0); err == nil || err.Error() != "presentFailed" {
+		t.Fatalf("expected native presentation failure, got %v", err)
+	}
 }

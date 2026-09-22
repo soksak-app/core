@@ -1,6 +1,6 @@
 # 변경 기록
 
-- F2.13은 진행 중이다. 재빌드 분할 터미널에서 영속 사이드카 연결 또는 attach 실패가 보고되지만 표면이 사용할 수 없는 상태로 남을 수 있다. endpoint를 바꾸거나 대체 PTY를 만들거나 입력을 조용히 버리지 않고, 제한된 시간 안에 조치 가능한 표면 status로 실패를 노출하도록 수정한다.
+- F2.13을 완료했다. Tauri와 Wails가 stale이 아닌 native image 표시 실패를 현재 raster 상태에 기록하고 일반 raster timeout 대신 정확한 원인을 반환하며, stale 프레임 교체는 폐기 가능한 상태로 유지한다. Tauri 이미지 검사 16/16, Wails 이미지 검사와 `make native-test`가 통과했고 재빌드 분할 터미널 표시·주입 실패 E2E가 양쪽 호스트에서 case별 START/PASS, 실행 시간, 폐기 가능한 config, 명시적 애플리케이션 정리를 포함해 통과했다.
 
 - F6.6-3은 진행 중이다. inline-image placement가 terminal 행 anchor를 유지하고 primary grid의 scroll generation을 따라가므로 오래된 절대 행에 고정되지 않는다. 화면 밖 placement는 소유 상태를 삭제하지 않고 숨긴다. scroll-generation 집중 검사가 통과했으며 재빌드 Tauri/Wails 픽셀 검증은 남아 있다.
 

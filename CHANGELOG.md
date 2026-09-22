@@ -1,6 +1,6 @@
 # Changelog
 
-- F2.13 is in progress. A rebuilt split terminal currently exposes the persistent-sidecar connection or attach failure but can leave the surface unusable; the correction will make that failure a bounded, actionable surface status without creating a replacement PTY or silently changing the endpoint.
+- Completed F2.13. Tauri and Wails now record non-stale native image presentation failures in the current raster state, return the exact reason instead of waiting for a generic raster timeout, and keep stale-frame replacement discardable. Tauri image tests pass 16/16, Wails image tests and `make native-test` pass, and rebuilt split-terminal presentation plus injected-failure E2E pass on both hosts with per-case START/PASS, durations, disposable configuration, and explicit application cleanup.
 
 - F6.6-3 is in progress. Inline-image placements now retain their terminal-row anchor and follow primary-grid scroll generation instead of remaining at a stale absolute row; off-screen placements are hidden without deleting ownership. The scroll-generation focused test passes; rebuilt Tauri/Wails pixel verification remains.
 

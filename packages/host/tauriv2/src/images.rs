@@ -86,6 +86,7 @@ struct RasterState {
     configured: bool,
     visible: bool,
     presented_raster: u64,
+    presentation_error: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -365,6 +366,7 @@ impl Images {
             state.scale = scale;
             state.last_sequence = 0;
             state.configured = false;
+            state.presentation_error = None;
             self.changed();
         }
         if !visible || !surface_visible || state.configured {
@@ -404,6 +406,7 @@ impl Images {
         if let Some(state) = inner.states.get_mut(key) {
             if state.generation == generation && state.raster == raster {
                 state.configured = false;
+                state.presentation_error = None;
             }
         }
     }
@@ -482,8 +485,32 @@ impl Images {
         }
         if state.presented_raster != raster {
             state.presented_raster = raster;
+            state.presentation_error = None;
             self.changed();
         }
+    }
+
+    fn mark_presentation_failed(
+        &self,
+        key: &Key,
+        generation: u64,
+        raster: u64,
+        sequence: i32,
+        reason: &str,
+    ) {
+        let mut inner = self.lock();
+        let Some(state) = inner.states.get_mut(key) else {
+            return;
+        };
+        if state.generation != generation
+            || state.raster != raster
+            || state.last_sequence != sequence
+        {
+            return;
+        }
+        state.configured = false;
+        state.presentation_error = Some(reason.to_string());
+        self.changed();
     }
 
     fn current_presented_locked(inner: &Inner) -> bool {
@@ -507,15 +534,22 @@ impl Images {
     }
 
     /// 보이는 모든 그림 영역이 현재 래스터를 표시하거나 제한 시간이 끝날 때까지 기다린다.
-    pub fn wait_current(&self, timeout: Duration) -> bool {
+    pub fn wait_current(&self, timeout: Duration) -> Result<(), String> {
         let deadline = Instant::now() + timeout;
         let mut inner = self.lock();
         loop {
+            if let Some(error) = inner
+                .states
+                .values()
+                .find_map(|state| state.presentation_error.clone())
+            {
+                return Err(error);
+            }
             if Self::current_presented_locked(&inner) {
-                return true;
+                return Ok(());
             }
             let Some(remaining) = deadline.checked_duration_since(Instant::now()) else {
-                return false;
+                return Err("presentationTimeout".to_string());
             };
             let (next, result) = self
                 .shared
@@ -524,7 +558,7 @@ impl Images {
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             inner = next;
             if result.timed_out() && !Self::current_presented_locked(&inner) {
-                return false;
+                return Err("presentationTimeout".to_string());
             }
         }
     }
@@ -1007,6 +1041,10 @@ where
                             (false, Some(reason))
                         }
                     };
+
+                    if let Some(reason) = reason.as_deref().filter(|reason| *reason != "stale") {
+                        images.mark_presentation_failed(&key, generation, raster, sequence, reason);
+                    }
 
                     let response = if ok {
                         images.mark_presented(&key, generation, raster, sequence);
