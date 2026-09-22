@@ -1,5 +1,7 @@
 use alacritty_terminal::event::{Event, EventListener, WindowSize};
+use alacritty_terminal::index::{Column, Line, Point, Side};
 use alacritty_terminal::grid::Dimensions;
+use alacritty_terminal::selection::{Selection, SelectionType};
 use alacritty_terminal::term::cell::Flags;
 use alacritty_terminal::term::{Config, Osc52, Term, TermMode};
 use alacritty_terminal::vte::ansi::{Color, CursorShape, Processor, Rgb};
@@ -215,6 +217,29 @@ impl AlacrittyEngine {
         Ok(())
     }
 
+    pub fn selection_start(&mut self, col: u16, row: u16) -> Result<(), String> {
+        let point = Point::new(Line(i32::from(row)), Column(usize::from(col)));
+        if point.column >= self.term.grid().columns() || point.line.0 < 0 || point.line.0 >= self.term.grid().screen_lines() as i32 {
+            return Err(format!("selection cell is outside the terminal grid: {col},{row}"));
+        }
+        self.term.selection = Some(Selection::new(SelectionType::Simple, point, Side::Left));
+        Ok(())
+    }
+
+    pub fn selection_update(&mut self, col: u16, row: u16) -> Result<(), String> {
+        let point = Point::new(Line(i32::from(row)), Column(usize::from(col)));
+        if point.column >= self.term.grid().columns() || point.line.0 < 0 || point.line.0 >= self.term.grid().screen_lines() as i32 {
+            return Err(format!("selection cell is outside the terminal grid: {col},{row}"));
+        }
+        let selection = self.term.selection.as_mut().ok_or_else(|| "selection update without selection start".to_string())?;
+        selection.update(point, Side::Right);
+        Ok(())
+    }
+
+    pub fn selection_end(&mut self) -> Result<String, String> {
+        self.term.selection_to_string().filter(|text| !text.is_empty()).ok_or_else(|| "selection is empty".to_string())
+    }
+
     fn color_request(&self, index: usize) -> Result<Rgb, String> {
         if index >= 269 {
             return Err(format!("unsupported terminal color index {index}"));
@@ -370,6 +395,18 @@ impl Engine for AlacrittyEngine {
         AlacrittyEngine::reject_clipboard(self, request_id, reason)
     }
 
+    fn selection_start(&mut self, col: u16, row: u16) -> Result<(), String> {
+        AlacrittyEngine::selection_start(self, col, row)
+    }
+
+    fn selection_update(&mut self, col: u16, row: u16) -> Result<(), String> {
+        AlacrittyEngine::selection_update(self, col, row)
+    }
+
+    fn selection_end(&mut self) -> Result<String, String> {
+        AlacrittyEngine::selection_end(self)
+    }
+
     fn cursor(&self) -> Cursor {
         AlacrittyEngine::cursor(self)
     }
@@ -388,7 +425,13 @@ impl Engine for AlacrittyEngine {
                 panic!("display point outside terminal dimensions");
             }
             lines[row].resize_with(col + 1, Cell::default);
-            lines[row][col] = self.cell(indexed.cell, renderable.colors);
+            let mut cell = self.cell(indexed.cell, renderable.colors);
+            if renderable.selection.as_ref().is_some_and(|selection| {
+                selection.contains_cell(&indexed, indexed.point, renderable.cursor.shape)
+            }) {
+                cell.inverse = !cell.inverse;
+            }
+            lines[row][col] = cell;
         }
 
         for line in &mut lines {

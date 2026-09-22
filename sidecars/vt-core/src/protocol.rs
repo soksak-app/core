@@ -195,6 +195,9 @@ pub trait Engine: Send + 'static {
     fn drain_events(&mut self) -> Vec<EngineEvent>;
     fn resolve_clipboard(&mut self, request_id: u64, text: &str) -> Result<(), String>;
     fn reject_clipboard(&mut self, request_id: u64, reason: &str) -> Result<(), String>;
+    fn selection_start(&mut self, col: u16, row: u16) -> Result<(), String>;
+    fn selection_update(&mut self, col: u16, row: u16) -> Result<(), String>;
+    fn selection_end(&mut self) -> Result<String, String>;
     fn cursor(&self) -> Cursor;
     fn screen(&mut self) -> Screen;
     fn modes(&self) -> Modes;
@@ -502,6 +505,9 @@ enum SurfaceCommand {
         request_id: u64,
         reason: String,
     },
+    SelectionStart { x: f64, y: f64 },
+    SelectionUpdate { x: f64, y: f64 },
+    SelectionEnd,
 }
 
 #[derive(Debug, Clone)]
@@ -1246,6 +1252,61 @@ async fn surface_task(
                             });
                             if output_tx.send(response.to_string()).await.is_err() {
                                 return;
+                            }
+                        }
+                    }
+                    SurfaceCommand::SelectionStart { x, y } => {
+                        let result = image_state.as_ref().ok_or_else(|| "selection image is not configured".to_string())
+                            .and_then(|state| state.selection_cell(x, y))
+                            .and_then(|(col, row)| engine.selection_start(col, row));
+                        if let Err(error) = result {
+                            let response = json!({"surface": surface_id, "body": {"error": "invalidParams", "reason": error}});
+                            if output_tx.send(response.to_string()).await.is_err() { return; }
+                        } else {
+                            cursor_activity = Instant::now();
+                            last_cursor_frame = None;
+                            if let Some(state) = image_state.as_mut() {
+                                let screen = decorate_screen(engine.screen(), focused, &preedit, &cursor_policy, 0);
+                                if !present_screen(&surface_id, &screen, state, &output_tx).await { return; }
+                            }
+                            let response = json!({"surface": surface_id, "body": {"ack": true, "event": "selection.start"}});
+                            if output_tx.send(response.to_string()).await.is_err() { return; }
+                        }
+                    }
+                    SurfaceCommand::SelectionUpdate { x, y } => {
+                        let result = image_state.as_ref().ok_or_else(|| "selection image is not configured".to_string())
+                            .and_then(|state| state.selection_cell(x, y))
+                            .and_then(|(col, row)| engine.selection_update(col, row));
+                        if let Err(error) = result {
+                            let response = json!({"surface": surface_id, "body": {"error": "invalidParams", "reason": error}});
+                            if output_tx.send(response.to_string()).await.is_err() { return; }
+                        } else {
+                            cursor_activity = Instant::now();
+                            last_cursor_frame = None;
+                            if let Some(state) = image_state.as_mut() {
+                                let screen = decorate_screen(engine.screen(), focused, &preedit, &cursor_policy, 0);
+                                if !present_screen(&surface_id, &screen, state, &output_tx).await { return; }
+                            }
+                            let response = json!({"surface": surface_id, "body": {"ack": true, "event": "selection.update"}});
+                            if output_tx.send(response.to_string()).await.is_err() { return; }
+                        }
+                    }
+                    SurfaceCommand::SelectionEnd => {
+                        match engine.selection_end() {
+                            Ok(text) => {
+                                if let Some(state) = image_state.as_mut() {
+                                    let screen = decorate_screen(engine.screen(), focused, &preedit, &cursor_policy, 0);
+                                    if !present_screen(&surface_id, &screen, state, &output_tx).await { return; }
+                                }
+                                let response = json!({
+                                    "surface": surface_id,
+                                    "body": {"event": "selection.copy", "text": text, "userInitiated": true}
+                                });
+                                if output_tx.send(response.to_string()).await.is_err() { return; }
+                            }
+                            Err(error) => {
+                                let response = json!({"surface": surface_id, "body": {"error": "invalidParams", "reason": error}});
+                                if output_tx.send(response.to_string()).await.is_err() { return; }
                             }
                         }
                     }
@@ -2161,6 +2222,27 @@ where
                                     }
                                 }
                             },
+                            "selection.start" | "selection.update" => {
+                                let x = body.get("x").and_then(Value::as_f64);
+                                let y = body.get("y").and_then(Value::as_f64);
+                                match (x, y) {
+                                    (Some(x), Some(y)) if x.is_finite() && y.is_finite() => {
+                                        let command = if operation == "selection.start" {
+                                            SurfaceCommand::SelectionStart { x, y }
+                                        } else {
+                                            SurfaceCommand::SelectionUpdate { x, y }
+                                        };
+                                        if tx.send(command).await.is_err() { break; }
+                                    }
+                                    _ => {
+                                        let response = json!({"surface": surface_id, "body": {"error": "invalidParams", "reason": "selection requires finite x and y"}});
+                                        if output_tx.send(response.to_string()).await.is_err() { break; }
+                                    }
+                                }
+                            }
+                            "selection.end" => {
+                                if tx.send(SurfaceCommand::SelectionEnd).await.is_err() { break; }
+                            }
                             "screen.read" => {
                                 if let Err(_) = tx.send(SurfaceCommand::ScreenRead).await {
                                     break;
@@ -2372,6 +2454,10 @@ impl Engine for FakeEngine {
     fn reject_clipboard(&mut self, _request_id: u64, _reason: &str) -> Result<(), String> {
         Ok(())
     }
+
+    fn selection_start(&mut self, _col: u16, _row: u16) -> Result<(), String> { Ok(()) }
+    fn selection_update(&mut self, _col: u16, _row: u16) -> Result<(), String> { Ok(()) }
+    fn selection_end(&mut self) -> Result<String, String> { Ok("selected".to_string()) }
 
     fn cursor(&self) -> Cursor {
         Cursor {

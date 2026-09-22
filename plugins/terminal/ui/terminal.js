@@ -260,6 +260,12 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     }
     await terminal.send(id, { operation: "clipboard.resolve", requestId: body.requestId, text });
   };
+  const handleSelectionCopy = async (body) => {
+    if (body.userInitiated !== true) throw new Error("selection.copy requires userInitiated true");
+    if (typeof body.text !== "string" || body.text.length === 0) throw new Error("selection.copy requires non-empty text");
+    if (!clipboard || typeof clipboard.writeText !== "function") throw new Error("selection.copy requires a clipboard capability");
+    await clipboard.writeText(body.text);
+  };
 
   const observeInput = (promise) => promise.then(undefined, (error) => {
     reportInputError(error);
@@ -382,6 +388,49 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   // 네이티브 포커스를 받은 뒤 DOM 기본 동작이 키보드 소유권을 되찾지 않게 한다.
   const preventDefaultFocus = (event) => event.preventDefault();
   view.addEventListener("pointerdown", preventDefaultFocus);
+  let selectionPointerId = null;
+  const selectionPoint = (event) => {
+    const rect = view.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0 || x >= rect.width || y >= rect.height) {
+      throw new Error("terminal selection pointer is outside the view");
+    }
+    return { x, y };
+  };
+  const beginSelection = (event) => {
+    if (event.button !== 0 || selectionPointerId !== null) return;
+    try {
+      const point = selectionPoint(event);
+      selectionPointerId = event.pointerId;
+      view.setPointerCapture?.(event.pointerId);
+      event.preventDefault();
+      observeInput(terminal.send(id, { operation: "selection.start", ...point }));
+    } catch (error) {
+      reportInputError(error);
+    }
+  };
+  const updateSelection = (event) => {
+    if (event.pointerId !== selectionPointerId) return;
+    try {
+      const point = selectionPoint(event);
+      event.preventDefault();
+      observeInput(terminal.send(id, { operation: "selection.update", ...point }));
+    } catch (error) {
+      reportInputError(error);
+    }
+  };
+  const endSelection = (event) => {
+    if (event.pointerId !== selectionPointerId) return;
+    selectionPointerId = null;
+    view.releasePointerCapture?.(event.pointerId);
+    event.preventDefault();
+    observeInput(terminal.send(id, { operation: "selection.end" }));
+  };
+  view.addEventListener("pointerdown", beginSelection);
+  view.addEventListener("pointermove", updateSelection);
+  view.addEventListener("pointerup", endSelection);
+  view.addEventListener("pointercancel", endSelection);
 
   // screen.read 응답을 기다리는 resolver
   let pendingScreenRead = null;
@@ -483,6 +532,8 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       handleClipboardQuery(body).catch(reportInputError);
     } else if (body.event === "clipboard.rejected") {
       reportInputError(new Error(typeof body.reason === "string" ? body.reason : "program clipboard query rejected"));
+    } else if (body.event === "selection.copy") {
+      handleSelectionCopy(body).catch(reportInputError);
     } else if (body.event === "error") {
       // error 이벤트를 session 상태에 저장한다
       session = {
@@ -656,6 +707,10 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       settingsSubscription?.();
       stopSidecar?.();
       view.removeEventListener("pointerdown", preventDefaultFocus);
+      view.removeEventListener("pointerdown", beginSelection);
+      view.removeEventListener("pointermove", updateSelection);
+      view.removeEventListener("pointerup", endSelection);
+      view.removeEventListener("pointercancel", endSelection);
       await terminal.send(id, { operation: "close" });
     },
   };

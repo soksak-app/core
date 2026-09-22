@@ -79,12 +79,16 @@ function createFakeView() {
     surfaceId: "test-session",
     clientWidth: 800,
     clientHeight: 600,
+    getBoundingClientRect() { return { left: 0, top: 0, width: 800, height: 600 }; },
+    setPointerCapture() {},
+    releasePointerCapture() {},
     dataset: {},
     parentElement: parent,
     addEventListener(event, handler) { if (!listeners.has(event)) listeners.set(event, []); listeners.get(event).push(handler); },
     removeEventListener(event, handler) { listeners.set(event, (listeners.get(event) ?? []).filter((item) => item !== handler)); },
-    _trigger: function(event) {
+    _trigger: function(event, init = {}) {
       const nativeEvent = event instanceof Event ? event : new Event(event, { bubbles: true, cancelable: true });
+      for (const [name, value] of Object.entries(init)) Object.defineProperty(nativeEvent, name, { value, configurable: true });
       for (const handler of [...(listeners.get(nativeEvent.type) ?? [])]) handler(nativeEvent);
       if (nativeEvent.bubbles && !nativeEvent.cancelBubble) parent.dispatchEvent(nativeEvent);
       return nativeEvent;
@@ -518,6 +522,44 @@ test("allowed program clipboard handles only text through the host capability", 
   ]);
 });
 
+test("user selection copy writes non-empty text independently of program clipboard policy", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  const fakeExpose = createFakeExpose();
+  const writes = [];
+  const clipboard = { writeText: async (text) => writes.push(text) };
+  await startTerminal({
+    view: createFakeView(), attachImage: createFakeAttachImage().function,
+    sidecar: fakeSidecar, expose: fakeExpose, clipboard,
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  openSession(fakeSidecar);
+
+  fakeSidecar.triggerEvent("test-session", { event: "selection.copy", userInitiated: true, text: "selected text" });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(writes, ["selected text"]);
+});
+
+test("selection copy rejects non-user or empty payloads without writing", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  const fakeExpose = createFakeExpose();
+  const writes = [];
+  const clipboard = { writeText: async (text) => writes.push(text) };
+  await startTerminal({
+    view: createFakeView(), attachImage: createFakeAttachImage().function,
+    sidecar: fakeSidecar, expose: fakeExpose, clipboard,
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  openSession(fakeSidecar);
+
+  fakeSidecar.triggerEvent("test-session", { event: "selection.copy", userInitiated: false, text: "secret" });
+  fakeSidecar.triggerEvent("test-session", { event: "selection.copy", userInitiated: true, text: "" });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(writes, []);
+  assert.match(fakeExpose.getStatus("terminal.session").readFn().error, /selection.copy/);
+});
+
 // 테스트 4: 영역 key(Enter) → {operation:"input", keys:[{key:"Enter"}]}
 test("Region key event for Enter sends correct message format", async () => {
   FakeResizeObserver.reset();
@@ -664,6 +706,31 @@ test("terminal pointerdown prevents DOM focus and still bubbles to the card", as
   assert.equal(event.defaultPrevented, true);
   assert.equal(view._parent.bubbleCount, 1);
   assert.equal(expose.getBinds().length, 0);
+});
+
+test("terminal pointer drag sends one complete selection gesture to the sidecar", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  const fakeExpose = createFakeExpose();
+  const view = createFakeView();
+  await startTerminal({
+    view, attachImage: createFakeAttachImage().function,
+    sidecar: fakeSidecar, expose: fakeExpose,
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  openSession(fakeSidecar);
+  fakeSidecar.reset();
+
+  view._trigger("pointerdown", { button: 0, pointerId: 4, clientX: 10, clientY: 12 });
+  view._trigger("pointermove", { pointerId: 4, clientX: 42, clientY: 12 });
+  view._trigger("pointerup", { pointerId: 4, clientX: 42, clientY: 12 });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(fakeSidecar.getMessages().map(({ body }) => body.operation), [
+    "selection.start", "selection.update", "selection.end",
+  ]);
+  assert.equal(fakeSidecar.getMessages()[0].body.x, 10);
+  assert.equal(fakeSidecar.getMessages()[1].body.x, 42);
 });
 
 test("terminal.focus command reports focus rejection through terminal.session", { timeout: 10000 }, async () => {

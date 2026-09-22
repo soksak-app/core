@@ -72,6 +72,10 @@ impl Engine for MockEngine {
         Ok(())
     }
 
+    fn selection_start(&mut self, _col: u16, _row: u16) -> Result<(), String> { Ok(()) }
+    fn selection_update(&mut self, _col: u16, _row: u16) -> Result<(), String> { Ok(()) }
+    fn selection_end(&mut self) -> Result<String, String> { Ok("selected".to_string()) }
+
     fn cursor(&self) -> Cursor {
         Cursor {
             col: 0,
@@ -355,6 +359,31 @@ async fn test_clipboard_reject_is_an_explicit_protocol_event() {
     assert!(output.contains("clipboard.rejected"));
     assert!(output.contains("\"requestId\":7"));
     assert!(output.contains("\"reason\":\"denied\""));
+}
+
+#[tokio::test]
+async fn test_selection_release_emits_one_user_copy_event() {
+    let calls = Arc::new(Mutex::new(Calls::default()));
+    let input = r#"{"surface":"s1","body":{"operation":"open"}}
+{"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
+{"surface":"s1","body":{"operation":"selection.start","x":1.0,"y":1.0}}
+{"surface":"s1","body":{"operation":"selection.update","x":25.0,"y":1.0}}
+{"surface":"s1","body":{"operation":"selection.end"}}
+"#;
+    let reader = std::io::Cursor::new(input.as_bytes());
+    let mut writer = Vec::new();
+    let engine_factory = Arc::new(|| Box::new(MockEngine::new()) as Box<dyn Engine>);
+    let calls_for_factory = calls.clone();
+    let session_port_factory = Arc::new(move || {
+        Arc::new(FakeSessionPort::new("unused".to_string(), calls_for_factory.clone()))
+            as Arc<dyn SessionPort>
+    });
+    let _ = serve(engine_factory, reader, &mut writer, session_port_factory).await;
+    let output = String::from_utf8(writer).unwrap();
+    assert!(output.contains("selection.copy"), "selection release must emit a copy event: {output}");
+    assert!(!output.contains("Unknown operation: selection.start"));
+    assert!(!output.contains("Unknown operation: selection.update"));
+    assert!(!output.contains("Unknown operation: selection.end"));
 }
 
 /// Test A-7: close op ends the session (calls close, not detach)
@@ -2252,6 +2281,10 @@ async fn test_panicking_surface_reports_error() {
         fn reject_clipboard(&mut self, request_id: u64, _reason: &str) -> Result<(), String> {
             Err(format!("unknown clipboard request {request_id}"))
         }
+
+        fn selection_start(&mut self, _col: u16, _row: u16) -> Result<(), String> { Ok(()) }
+        fn selection_update(&mut self, _col: u16, _row: u16) -> Result<(), String> { Ok(()) }
+        fn selection_end(&mut self) -> Result<String, String> { Ok("selected".to_string()) }
 
         fn cursor(&self) -> Cursor {
             Cursor {

@@ -1,5 +1,7 @@
 # Changelog
 
+- F6.3 implementation is in progress. Terminal pointer drags now have explicit `selection.start`, `selection.update`, and `selection.end` operations; the Alacritty engine renders selected cells and returns one non-empty selection-copy payload; the terminal module writes only a verified `userInitiated` selection event. Invalid coordinates and missing or empty copy data remain explicit errors. Terminal module 50/50, Alacritty 30/30, VT core 44/44, `pnpm test`, structural gates, and `make native-test` pass. Rebuilt-host drag/pixel/clipboard evidence remains open because no current endpoint was available.
+
 - Corrected the `encode_paste` source contract comment to state the implemented behavior: preserve UTF-8 bytes and line endings, and reject rather than remove an embedded bracketed-paste terminator. The paired F6.1-1 checklist item is verified by the focused VT core test and documentation checks.
 
 - Completed F6.2. Terminal-program clipboard store/query requests now follow the declared `clipboard.program` deny/allow policy. Denials emit an explicit `clipboard.rejected` event and clear pending engine callbacks; allowed access is limited to text clipboard operations. User-initiated `terminal.paste` remains separate. Focused terminal, Alacritty, and VT protocol tests pass.

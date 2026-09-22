@@ -47,6 +47,25 @@ impl ImageState {
             theme: crate::palette::TerminalTheme::dark(),
         })
     }
+
+    pub fn selection_cell(&self, x: f64, y: f64) -> Result<(u16, u16), String> {
+        if !x.is_finite() || !y.is_finite() || x < 0.0 || y < 0.0 {
+            return Err("selection coordinates must be finite and non-negative".to_string());
+        }
+        let cell_width = f64::from(self.metrics.cell_width) / f64::from(self.scale);
+        let cell_height = f64::from(self.metrics.cell_height) / f64::from(self.scale);
+        if cell_width <= 0.0 || cell_height <= 0.0 {
+            return Err("selection cell metrics are unavailable".to_string());
+        }
+        let col = (x / cell_width).floor() as u16;
+        let row = (y / cell_height).floor() as u16;
+        let cols = (self.width_px as f32 / self.metrics.cell_width) as u16;
+        let rows = (self.height_px as f32 / self.metrics.cell_height) as u16;
+        if col >= cols || row >= rows {
+            return Err(format!("selection coordinates are outside the terminal grid: {x},{y}"));
+        }
+        Ok((col, row))
+    }
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -63,5 +82,9 @@ impl ImageState {
         _scale: f32,
     ) -> Option<ImageState> {
         None
+    }
+
+    pub fn selection_cell(&self, _x: f64, _y: f64) -> Result<(u16, u16), String> {
+        Err("terminal selection is not implemented on this operating system".to_string())
     }
 }

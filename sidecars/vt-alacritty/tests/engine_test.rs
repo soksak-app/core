@@ -226,6 +226,17 @@ fn clipboard_rejection_clears_a_pending_query_token() {
 }
 
 #[test]
+fn native_selection_updates_raster_cells_and_returns_text_once() {
+    let mut engine = AlacrittyEngine::new();
+    engine.feed(b"hello");
+    engine.selection_start(0, 0).expect("selection start");
+    engine.selection_update(4, 0).expect("selection update");
+    let selected = engine.screen();
+    assert!(selected.lines[0][2].inverse);
+    assert_eq!(engine.selection_end().expect("selection copy"), "hello");
+}
+
+#[test]
 fn text_area_callback_is_not_discarded() {
     let mut engine = AlacrittyEngine::new();
     engine.set_cell_metrics(8, 16).expect("renderer metrics");
