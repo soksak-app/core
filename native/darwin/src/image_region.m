@@ -84,6 +84,26 @@ static NSView *surfaceNativePlane(NSView *surface) {
     return (NSView *)webviewSurfaceNativePlane(surface);
 }
 
+static NSString *controlCharacterForANSIKeyCode(unsigned short keyCode) {
+    static const unsigned short letterKeyCodes[] = {
+        0, 11, 8, 2, 14, 3, 5, 4, 34, 38, 40, 37, 46,
+        45, 31, 35, 12, 15, 1, 17, 32, 9, 13, 7, 16, 6,
+    };
+    static const char letters[] = "abcdefghijklmnopqrstuvwxyz";
+    for (NSUInteger index = 0; index < sizeof(letterKeyCodes) / sizeof(letterKeyCodes[0]); index++) {
+        if (keyCode == letterKeyCodes[index]) {
+            return [NSString stringWithFormat:@"%c", letters[index]];
+        }
+    }
+    switch (keyCode) {
+        case 33: return @"[";
+        case 42: return @"\\";
+        case 30: return @"]";
+        case 49: return @" ";
+        default: return nil;
+    }
+}
+
 @implementation SPImageRegion
 
 - (id)initWithFrame:(NSRect)frame {
@@ -355,7 +375,11 @@ static NSView *surfaceNativePlane(NSView *surface) {
                 ctrl ? "true" : "false"];
         } else {
             // Ctrl/Option 조합 문자
-            NSString *textChar = [[NSString stringWithCharacters:&ch length:1] stringByReplacingOccurrencesOfString:@"\\" withString:@"\\\\"];
+            NSString *keyCharacter = (flags & NSEventModifierFlagControl)
+                ? controlCharacterForANSIKeyCode(event.keyCode)
+                : nil;
+            unichar reportedCharacter = keyCharacter.length > 0 ? [keyCharacter characterAtIndex:0] : ch;
+            NSString *textChar = [[NSString stringWithCharacters:&reportedCharacter length:1] stringByReplacingOccurrencesOfString:@"\\" withString:@"\\\\"];
             textChar = [textChar stringByReplacingOccurrencesOfString:@"\"" withString:@"\\\""];
             json = [NSString stringWithFormat:@"{\"type\":\"key\",\"key\":\"Char\",\"text\":\"%@\",\"shift\":%s,\"alt\":%s,\"ctrl\":%s}",
                 textChar,

@@ -551,6 +551,43 @@ int main(void) { @autoreleasepool {
         sp_region_close(region13);
     }
 
+    // TEST 13a: 한글 입력 소스 문자가 와도 Ctrl 키는 물리 ANSI 키로 전달한다
+    {
+        [collectedEvents removeAllObjects];
+
+        void *region13a = sp_region_create(surface, "test13a", testEvent, NULL);
+        sp_region_place(region13a, 10, 10, 10, 10, true);
+        sp_region_focus(region13a);
+
+        id regionView = (id)region13a;
+        NSEvent *ctrlUEvent = [NSEvent keyEventWithType:NSEventTypeKeyDown
+            location:NSZeroPoint
+            modifierFlags:NSEventModifierFlagControl
+            timestamp:0
+            windowNumber:0
+            context:nil
+            characters:@"ㅕ"
+            charactersIgnoringModifiers:@"ㅕ"
+            isARepeat:NO
+            keyCode:32];
+
+        [collectedEvents removeAllObjects];
+        [regionView keyDown:ctrlUEvent];
+
+        check([collectedEvents count] == 1,
+            [NSString stringWithFormat:@"TEST 13a: exactly 1 event for Ctrl+U (got %lu)", [collectedEvents count]]);
+        if ([collectedEvents count] > 0) {
+            NSString *eventStr = [collectedEvents objectAtIndex:0];
+            BOOL hasKeyChar = [eventStr rangeOfString:@"\"key\":\"Char\""].location != NSNotFound;
+            BOOL hasTextU = [eventStr rangeOfString:@"\"text\":\"u\""].location != NSNotFound;
+            BOOL hasCtrl = [eventStr rangeOfString:@"\"ctrl\":true"].location != NSNotFound;
+            check(hasKeyChar && hasTextU && hasCtrl,
+                [NSString stringWithFormat:@"TEST 13a: Korean character payload maps by physical ANSI key (got: %@)", eventStr]);
+        }
+
+        sp_region_close(region13a);
+    }
+
     // TEST 14: 키 이벤트 - 일반 문자 'a'
     {
         [collectedEvents removeAllObjects];
