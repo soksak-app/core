@@ -61,7 +61,7 @@ The unsupported rows are an explicit scope result, not successful no-ops. The en
 
 ## CSI selector evidence
 
-The sidecar currently records only CSI selectors with executable behavior evidence: `3C`, `?12h/l`, `?25h/l`, `CSI 1–7 SP q` (DECSCUSR), `m`, `?1049h/l`, `S/T` with `r`, `J/K`, `@/P`, `L/M`, `I/Z`, and `14t`. This partial inventory is not a complete CSI implementation claim; all unlisted movement, erase, mode, query, mouse, protected-cell, and attribute-stack categories remain open until named behavior or explicit rejection tests exist.
+The sidecar currently records only CSI selectors with executable behavior evidence: `3C`, `?12h/l`, `?25h/l`, `CSI 1–7 SP q` (DECSCUSR), `m`, `?1049h/l`, `S/T` with `r`, `J/K`, `@/P`, `L/M`, `I/Z`, `6n/c`, and `14t`. This partial inventory is not a complete CSI implementation claim; all unlisted movement, erase, mode, query, mouse, protected-cell, and attribute-stack categories remain open until named behavior or explicit rejection tests exist.
 
 The terminal must maintain two separate inventories against the pinned XTerm reference:
 
