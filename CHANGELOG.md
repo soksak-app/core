@@ -1,5 +1,7 @@
 # Changelog
 
+- Completed G2.8 by reconciling the dated Tauri/Wails parity-audit narrative with the completed G2.5 returned-value evidence; the filename mismatch remains explicitly historical.
+
 - Completed G2.5–G2.7. Tauri and Wails runtime contract tests now assert the same `waitPresented` result; a mechanical E2E audit requires 15 application suites to iterate both adapters and records three explicit host-independent suites. The parity inventory is synchronized at 56 lanes, 251 implementation files, and 171 test files.
 
 - Completed F6. The terminal selection, clipboard, bracketed-paste, file-drop, image-paste, and inline-image contracts are now complete with explicit ownership, error, and native-host evidence.

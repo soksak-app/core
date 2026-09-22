@@ -66,6 +66,7 @@
   - [o] G2.5 — Tauri·Wails runtime adapter pair가 `waitPresented`의 명령명·인자만이 아니라 반환하는 기대 상태도 단언한다. Red: Wails 케이스는 호출만 기록했고 양쪽 adapter 모두 반환값 단언이 없었다. Green에서 양쪽 runtime contract test가 같은 `{ displayed: 42 }` payload를 반환·단언하며 parity가 두 adapter와 테스트를 연결한다.
   - [o] G2.6 — 모든 앱 E2E suite가 Tauri·Wails adapter를 모두 순회하도록 기계적 E2E 호스트 parity 감사를 추가한다. 명시적으로 문서화한 호스트 독립 suite만 unit-only로 허용하며, 감사는 shared 앱 suite 15개와 명시적 unit suite 3개로 통과한다.
   - [o] G2.7 — G2.6 감사 추가 후 parity inventory를 보정한다. 완료된 G1.4를 되돌리지 않고 기계 출력의 현재 수를 lane 56개·구현 파일 251개·테스트 파일 171개로 기록했으며 수 감사가 통과한다.
+  - [o] G2.8 — G2.5–G2.7 이후 날짜가 기록된 parity 감사 서술을 보정한다. 예전 문장이 반환값 전달을 아직 미완료로 남겨두던 오류를 고치고, 파일 구조 관찰만 역사적 증거로 남긴다. `make docs-check`가 통과한다.
 - [o] G3 — 구현·테스트 누락, 실행 제외, 잘못된 연결, 테스트 0개, 필수 생략, 오래된 증거, 한쪽 호스트 누락으로 감사 자체 실패를 입증했다. Green: 주입 감사 검사가 미귀속 파일, 잘못된 연결, 테스트 0개/생략/충돌 결과, 변경된 실행 파일 hash, 무동작·응답 누락, 한쪽 호스트 counterpart 누락을 검사하며 실제 56 lane inventory와 호스트 graph는 정상이다. `node --test scripts/test/*.test.mjs`가 생략·todo 없이 80/80 도구 테스트를 보고했고 `pnpm test`, `make docs-check`, `make boundaries`, `make exposure-check`가 통과했다.
 - [o] G4 — 언어별로 시간 제한·진행 관측·출처 확인이 가능한 실행 결과를 제공한다. 명령 감독, 언어 어댑터, 변경 불가 증거 레코드가 완료되었으며 앱 수명주기와 호스트 통합은 F0·G2에 별도로 남아 있다.
   - [o] 명령 감독: `scripts/test-command.mjs`가 명시적 케이스 식별자를 요구하고, 경과 밀리초가 있는 시작·진행·종료 이벤트를 순서대로 내보내며, stdout/stderr를 전달하고, 명령별 타임아웃을 적용하며, 분리된 자기 프로세스 그룹만 취소·정리한다. 전용 스위트가 1.58초에 16/16 단언을 통과했고 실패·생략·todo가 0개였다. 비정상 종료·실행 파일 없음·타임아웃·취소·콜백 오류·출력 drain 오류·정리 검증 거부는 계속 명시적 실패다.
@@ -166,7 +167,7 @@
 
 ## Tauri/Wails 대칭 감사 (2026-09-21)
 
-기계적 호스트 검사는 `apps/tauriv2/test/runtime.test.mjs: no counterpart in apps/wailsv3`를 보고한다. 이것은 파일 구조 차이다. Wails의 `runtime-contract.test.mjs`에 이미 `waitPresented` 전달 검사가 있으므로 같은 파일명 부재만으로 동작 검사 누락을 단정하지 않는다. 반환값 전달에는 양쪽 어댑터를 거친 동일 단언이 여전히 필요하다.
+기계적 호스트 검사는 `apps/tauriv2/test/runtime.test.mjs: no counterpart in apps/wailsv3`를 보고한다. 이것은 여전히 파일 구조 차이다. Wails의 `runtime-contract.test.mjs`에는 `waitPresented` 전달 검사가 있고 G2.5에서 양쪽 adapter를 거친 `{ displayed: 42 }` 반환값도 단언하므로, 같은 파일명 부재만으로 동작 검사 누락을 단정하지 않는다.
 
 현재 macOS 호스트의 진단 녹화 상한 계약은 대칭이다. 양쪽 `diagnostics.capture.stop` 구현이 `frames`, `count`, `limited`, `longestGap`을 반환하며, Wails 플랫폼 어댑터는 공용 macOS 상한 상태를 읽는다. Wails payload 검사는 상한·비상한 결과를 모두 다룬다. `limited: true`는 정상 결과이고, 제스처 끝을 기록하지 못한 경우에만 측정을 실패시킨다.
 
