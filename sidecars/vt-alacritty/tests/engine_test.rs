@@ -925,3 +925,19 @@ fn csi_repeat_repeats_the_last_printed_character() {
     assert_eq!(screen.lines[0][1].ch.as_deref(), Some("A"));
     assert_eq!(screen.lines[0][2].ch.as_deref(), Some("A"));
 }
+
+#[test]
+fn csi_private_modes_export_keyboard_paste_and_mouse_state() {
+    let mut engine = AlacrittyEngine::new();
+    engine.feed(b"\x1b[?1h\x1b[?1000h\x1b[?1002h\x1b[?1003h\x1b[?1006h\x1b[?2004h");
+    let enabled = engine.modes();
+    assert!(enabled.app_cursor);
+    assert!(enabled.mouse_report);
+    assert!(enabled.bracketed_paste);
+
+    engine.feed(b"\x1b[?1l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?2004l");
+    let disabled = engine.modes();
+    assert!(!disabled.app_cursor);
+    assert!(!disabled.mouse_report);
+    assert!(!disabled.bracketed_paste);
+}

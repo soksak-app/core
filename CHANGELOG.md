@@ -298,3 +298,4 @@ Library validation on 2026-09-08: `make verify` passed, including 310/310 tests,
 - Completed F7.10. The CSI inventory now links `b` to an executable repeat-character case; the focused Alacritty test passes 1/1.
 - Completed V1. The canonical checklist and its Korean translation are mechanically synchronized, completed scope cannot be reopened, and the current documentation audit passes.
 - Completed V2. Paired-host structure, rebuilt Tauri/Wails first-raster presentation, exposure/parity, and language-lane evidence now have a named feature link; restoration, IME, and final repeat/release scopes remain open.
+- Completed F7.11. The CSI inventory now links private application-cursor, mouse-report, and bracketed-paste modes to an executable set/reset state case; the focused Alacritty test passes 1/1.
