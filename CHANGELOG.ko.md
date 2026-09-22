@@ -1,5 +1,6 @@
 # 변경 기록
 
+- F8을 진행했다. WebKit 비표준 한글 IME 경로가 조합 중 compatibility-jamo `insertText` echo를 보류하고 조합 해제 때 마지막 preedit을 정확히 한 번 확정한다. terminal plugin 집중 Red/Green 검사가 통과했고 재빌드 Wails가 직접 전달한 최초 `나`를 정확히 한 번 받아들였다. native 활성화는 브라우저 좌표의 대상 WebView만 기다리고 native 표면에서는 관련 없는 WebView를 기다리지 않는다. endpoint 키 주입은 사람이 직접 입력한 최초 `나`를 결정론적으로 재현하지 못하므로 실제 macOS IME와 후보 픽셀 증거는 아직 열려 있다.
 - F8를 진행했다. named character 입력이 물리 macOS ANSI 키 이벤트를 만들도록 하여 활성 키보드 입력 소스가 한글을 조합하게 했다. terminal plugin은 이제 sidecar 계약 `{operation: "input", compose: {...}}`으로 조합을 보내며, 이전 `{operation: "compose"}`가 확인된 `Unknown operation: compose` 원인이었다. `com.apple.inputmethod.Korean.2SetKorean`을 사용한 재빌드 Tauri·Wails probe가 각각 `terminal.compose` 전환 `ㅏ → ㄴ → 나`를 만들었고 session 오류는 0건이었다. 후보창 픽셀과 확정 입력의 정확히 한 번 전달은 아직 열려 있다.
 - V5 최종 감사를 시작했다. 필수 검사를 독립적인 제한시간과 START/PASS/FAIL 출력이 있는 lane으로 실행하며, 전체 타임아웃이나 mandatory skip을 완료 근거로 세지 않는다.
 - V5 Red에서 두 구조 실패를 확인했다. OSC 133이 shell plugin ID와 충돌하는 무접두사 `shell.state` namespace를 사용했고 Wails geometry 검사에 Tauri 대응 파일이 없었다. vendor event를 `vendor.shell.state`로 바꾸고 Tauri geometry 검사를 대응하는 `surfaces_geometry_test.rs` lane으로 옮겼다.

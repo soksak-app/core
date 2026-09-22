@@ -243,10 +243,10 @@ type Platform interface {
 	// 누름과 뗌은 좌표의 문서가 그 이벤트를 받거나 receive 초가 지난 뒤 done 을 UI 스레드에서 호출한다.
 	// 다른 단계는 전달한 즉시 호출한다.
 	InjectPointer(window unsafe.Pointer, x, y float64, phase, button int, deltaX, deltaY, receive float64, done func(PointerResult)) error
-	// ActivateWindow 는 애플리케이션을 활성화하고 창을 키 창으로 만든다. 창의 모든 웹뷰가 활성
-	// 상태를 받은 뒤 done(nil) 을, timeout 초 안에 끝나지 않으면 멈춘 단계를 적은 오류로 done 을
-	// UI 스레드에서 호출한다.
-	ActivateWindow(window unsafe.Pointer, timeout float64, done func(error)) error
+	// ActivateWindow 는 애플리케이션과 창을 활성화한다. 좌표의 웹뷰만 활성 상태를 받은 뒤
+	// done(nil) 을, timeout 초 안에 끝나지 않으면 멈춘 단계를 적은 오류로 done 을 UI 스레드에서
+	// 호출한다. 좌표가 네이티브 표면이면 웹뷰 상태를 기다리지 않는다.
+	ActivateWindow(window unsafe.Pointer, x, y, timeout float64, done func(error)) error
 	// InjectKey 는 창에 키 입력을 전달하고 전달했는지 반환한다. modifiers 는 1 Shift, 2 Control,
 	// 4 Option, 8 Command 의 비트 합이다.
 	InjectKey(window unsafe.Pointer, key, text string, modifiers uint, down bool) (bool, error)

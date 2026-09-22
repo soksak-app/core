@@ -251,7 +251,7 @@ func (implementation) InjectPointer(unsafe.Pointer, float64, float64, int, int, 
 	return unsupported("native pointer input")
 }
 
-func (implementation) ActivateWindow(unsafe.Pointer, float64, func(error)) error {
+func (implementation) ActivateWindow(unsafe.Pointer, float64, float64, float64, func(error)) error {
 	return unsupported("window activation")
 }
 

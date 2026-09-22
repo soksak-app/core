@@ -386,6 +386,8 @@ pub trait Platform: Send + Sync {
     fn input_activate(
         &self,
         window: Handle,
+        x: f64,
+        y: f64,
         timeout: Duration,
         done: Box<dyn FnOnce(Result<(), String>) + Send>,
     ) -> Result<(), String>;

@@ -29,8 +29,10 @@ extern "C" {
         done: extern "C" fn(*mut c_void, i32),
         context: *mut c_void,
     );
-    fn sp_input_activate(
+    fn sp_input_activate_at(
         window: *mut c_void,
+        x: f64,
+        y: f64,
         timeout: f64,
         done: extern "C" fn(*mut c_void, i32, *const c_char),
         context: *mut c_void,
@@ -132,11 +134,13 @@ fn activation_result(result: i32, timeout: f64, frontmost: &str) -> Result<(), S
 }
 
 /// 애플리케이션을 활성화하고 창을 키 창으로 만든 뒤 done 을 호출한다. 메인 스레드에서 호출한다.
-pub fn activate(window: Handle, timeout: Duration, done: Activated) {
+pub fn activate(window: Handle, x: f64, y: f64, timeout: Duration, done: Activated) {
     let context = Box::into_raw(Box::new(Activation { timeout, done })) as *mut c_void;
     unsafe {
-        sp_input_activate(
+        sp_input_activate_at(
             window as *mut c_void,
+            x,
+            y,
             timeout.as_secs_f64(),
             activated,
             context,

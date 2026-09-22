@@ -297,10 +297,12 @@ impl Platform for Windows {
     fn input_activate(
         &self,
         window: Handle,
+        x: f64,
+        y: f64,
         timeout: Duration,
         done: Box<dyn FnOnce(Result<(), String>) + Send>,
     ) -> Result<(), String> {
-        unsupported::input_activate(window, timeout, done)
+        unsupported::input_activate(window, x, y, timeout, done)
     }
     fn input_key(&self, window: Handle, key: &Key) -> Result<bool, String> {
         unsupported::input_key(window, key)

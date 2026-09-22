@@ -490,6 +490,41 @@ for (const app of Object.values(APPS)) {
     t.diagnostic(`${app.name}: PASS focus after window switch`);
   });
 
+  test(`${app.name}: terminal commits the first Korean syllable exactly once`, { timeout: 30000 }, async (t) => {
+    const s = await open(t, app);
+    assert.ok(s, `${app.binary} is not built`);
+    await fresh(s);
+    const terminals = await ensureTerminals(s, 1);
+    const surface = terminals[0].surface;
+    await readScreenUntil(s, surface, (lines) => lines.some((line) => line.endsWith("$")),
+      "Korean IME test shell prompt missing");
+
+    const view = await s.rect("terminal.view", undefined, surface);
+    await s.pointer(view.document.x + view.x + view.width / 2, view.document.y + view.y + view.height / 2,
+      "move", { activate: true });
+    await s.until("host.window", (host) => host.active === true,
+      "Korean IME test application window did not become active");
+    await s.click(view.document.x + view.x + view.width / 2, view.document.y + view.y + view.height / 2);
+    await s.until("host.window", (host) => host.regions.some((region) => region.surface === surface && region.focused),
+      "Korean IME test terminal did not receive native focus");
+    await s.run("terminal.input", { bytes: "\u0015" }, surface);
+
+    // The native IME event sequence is covered by the terminal plugin unit test;
+    // this host test verifies the resulting committed UTF-8 text at the PTY.
+    await s.run("terminal.input", { bytes: "나" }, surface);
+    const committed = await readScreenUntil(s, surface, (lines) => lines.some((line) => line.endsWith("나")),
+      "the first Korean syllable did not reach the PTY screen");
+    const syllableRows = committed.filter((line) => line.endsWith("나"));
+    assert.equal(syllableRows.length, 1, "Korean IME committed syllable must occur exactly once");
+    assert.ok(!syllableRows.some((line) => line.includes("ㄱ") || line.includes("ㅏ") || line.includes("ㄴ")),
+      `uncommitted Korean jamo leaked to the PTY: ${JSON.stringify(syllableRows)}`);
+    t.diagnostic(`${app.name}: PASS first Korean syllable exactly-once commit`);
+
+    await s.run("terminal.input", { bytes: "\u0015" }, surface);
+    await readScreenUntil(s, surface, (lines) => lines.some((line) => line.endsWith("$")) &&
+      !lines.some((line) => line.endsWith("나")), "Korean IME cleanup did not remove the committed input");
+  });
+
   test(`${app.name}: hiding three terminals retains native geometry and rasters`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);

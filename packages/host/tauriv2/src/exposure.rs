@@ -1224,6 +1224,8 @@ impl Host {
             on_main(window, move || {
                 platform.input_activate(
                     handle,
+                    pointer.x,
+                    pointer.y,
                     ACTIVATION,
                     Box::new(move |result| {
                         if tx.send(result).is_err() {

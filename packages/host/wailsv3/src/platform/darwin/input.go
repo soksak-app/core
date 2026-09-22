@@ -13,8 +13,8 @@ extern void inputActivated(void *context, int result, char *frontmost);
 static void activated(void *context, sp_activate_result result, const char *frontmost) {
     inputActivated(context, (int)result, (char *)frontmost);
 }
-static void activateWindow(void *window, double timeout, uintptr_t handle) {
-    sp_input_activate(window, timeout, activated, (void *)handle);
+static void activateWindowAt(void *window, double x, double y, double timeout, uintptr_t handle) {
+    sp_input_activate_at(window, x, y, timeout, activated, (void *)handle);
 }
 
 extern void inputDelivered(void *context, int result);
@@ -198,8 +198,8 @@ func activationResult(result C.sp_activate_result, timeout float64, frontmost st
 }
 
 // ActivateWindow 는 native/darwin 의 sp_input_activate 로 창을 키 창으로 만든다.
-func (implementation) ActivateWindow(window unsafe.Pointer, timeout float64, done func(error)) error {
-	C.activateWindow(window, C.double(timeout), C.uintptr_t(cgo.NewHandle(activation{timeout, done})))
+func (implementation) ActivateWindow(window unsafe.Pointer, x, y, timeout float64, done func(error)) error {
+	C.activateWindowAt(window, C.double(x), C.double(y), C.double(timeout), C.uintptr_t(cgo.NewHandle(activation{timeout, done})))
 	return nil
 }
 

@@ -44,6 +44,10 @@ typedef void (*sp_activate_done)(void *context, sp_activate_result result, const
 // 메인 스레드에서 호출한다.
 void sp_input_activate(void *window, double timeoutSeconds, sp_activate_done done, void *context);
 
+// 애플리케이션과 창을 활성화하고 좌표의 웹뷰만 활성 상태를 반영한 뒤 done 을 호출한다.
+// 좌표가 네이티브 표면이면 웹뷰 대기 없이 창 활성화만 완료한다.
+void sp_input_activate_at(void *window, double x, double y, double timeoutSeconds, sp_activate_done done, void *context);
+
 // key 는 키 이름(Enter, Tab, Escape, Backspace, ArrowLeft 등) 또는 문자 하나다. text 는 입력할
 // 문자열이며 NULL 이면 key 를 사용한다. modifiers 는 비트 합: 1 Shift, 2 Control, 4 Option,
 // 8 Command. down 이 참이면 누름, 거짓이면 뗌이다.

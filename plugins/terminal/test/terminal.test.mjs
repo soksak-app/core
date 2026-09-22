@@ -1372,6 +1372,48 @@ test("compose events are sent with ranges and published as preedit state", async
   });
 });
 
+test("Korean IME commits the first syllable once and does not leak jamo inserts", async () => {
+  FakeResizeObserver.reset();
+  const fakeAttachImage = createFakeAttachImage();
+  const fakeSidecar = createFakeSidecar();
+  const fakeExpose = createFakeExpose();
+  let regionReference;
+  await startTerminal({
+    view: createFakeView(),
+    attachImage: (view, name, sidecar) => {
+      regionReference = fakeAttachImage.function(view, name, sidecar);
+      return regionReference;
+    },
+    sidecar: fakeSidecar,
+    expose: fakeExpose,
+    scale: 1,
+    window: { ResizeObserver: FakeResizeObserver, TextEncoder: FakeTextEncoder, devicePixelRatio: 1 },
+  });
+  FakeResizeObserver.triggerAll();
+  openSession(fakeSidecar);
+
+  // WebKit's non-standard path: raw jamo inserts surround marked preedit updates.
+  regionReference._trigger("insert", { text: "ㄴ" });
+  regionReference._trigger("compose", {
+    text: "ㅏ", selectedRange: { location: 1, length: 0 }, replacementRange: null, attributed: true,
+  });
+  regionReference._trigger("insert", { text: "ㅏ" });
+  regionReference._trigger("compose", {
+    text: "나", selectedRange: { location: 1, length: 0 }, replacementRange: null, attributed: true,
+  });
+  regionReference._trigger("compose", {
+    text: "", selectedRange: { location: 0, length: 0 }, replacementRange: null, attributed: true,
+  });
+  regionReference._trigger("insert", { text: " " });
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+
+  const byteInputs = fakeSidecar.getMessages().filter(({ body }) => body.operation === "input" && body.bytes);
+  assert.equal(byteInputs.length, 2, "the committed syllable and following space are the only PTY writes");
+  assert.deepEqual(fakeSidecar.getMessages().filter(({ body }) => body.operation === "input" && body.compose)
+    .map(({ body }) => body.compose.text), ["ㅏ", "나", ""]);
+});
+
 test("native focus and cursor state route to sidecar and caret", async () => {
   FakeResizeObserver.reset();
   const fakeAttachImage = createFakeAttachImage();

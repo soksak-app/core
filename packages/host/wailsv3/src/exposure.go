@@ -695,7 +695,7 @@ func (b hostBackend) Pointer(window string, input PointerInput) error {
 		return err
 	}
 	if input.Activate {
-		if err := s.activate(); err != nil {
+		if err := s.activate(input.X, input.Y); err != nil {
 			return err
 		}
 	}
@@ -729,11 +729,11 @@ func (b hostBackend) Pointer(window string, input PointerInput) error {
 
 // activate 는 애플리케이션을 활성화하고 창을 키 창으로 만든 뒤, 창의 웹뷰가 활성 상태를 받을
 // 때까지 기다린다. 활성화가 끝나지 않으면 멈춘 단계를 적은 1006 오류를 반환한다.
-func (s *Surfaces) activate() error {
+func (s *Surfaces) activate(x, y float64) error {
 	done := make(chan error, 1)
 	var err error
 	application.InvokeSync(func() {
-		err = system.ActivateWindow(s.window.NativeWindow(), activateTimeout.Seconds(), func(result error) { done <- result })
+		err = system.ActivateWindow(s.window.NativeWindow(), x, y, activateTimeout.Seconds(), func(result error) { done <- result })
 	})
 	if err != nil {
 		return rpcError(codeNoInput, "%v", err)

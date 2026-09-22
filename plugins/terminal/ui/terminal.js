@@ -59,6 +59,19 @@ function sendInput(text, terminal, id, encoder) {
   return terminal.send(id, { operation: "input", bytes: base64 });
 }
 
+// macOS WebKit's Korean input source can emit compatibility jamo through insertText
+// while the actual syllable is still delivered through setMarkedText. Those insertText
+// events are not committed terminal input. They are consumed until the corresponding
+// preedit is confirmed or cancelled.
+function isHangulJamo(text) {
+  if (typeof text !== "string" || text.length === 0) return false;
+  for (const character of text) {
+    const code = character.codePointAt(0);
+    if (!((code >= 0x3131 && code <= 0x318e) || (code >= 0xffa0 && code <= 0xffdc))) return false;
+  }
+  return true;
+}
+
 const CURSOR_SHAPES = new Set(["block", "underline", "beam"]);
 const CURSOR_BLINK_MODES = new Set(["Never", "Off", "On", "Always"]);
 const CURSOR_UNFOCUSED = new Set(["hollow", "solid", "underline", "beam", "unchanged"]);
@@ -190,6 +203,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   };
   let screen = [];
   let compose = session.compose;
+  let pendingImeJamo = "";
   let cursor = { ...DEFAULT_CURSOR };
   const initialSettings = settings?.read?.() ?? {};
   let programClipboardPolicy = initialSettings["clipboard.program"] ?? "deny";
@@ -386,6 +400,12 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   // 영역 insert 이벤트: 평문 텍스트 입력
   onRegion("insert", async (event) => {
     const { text } = event;
+    // A WebKit Korean IME may echo both raw jamo and replacement syllables through
+    // insertText. While a preedit is active, neither echo is a terminal commit.
+    if (compose.text || pendingImeJamo || isHangulJamo(text)) {
+      if (isHangulJamo(text)) pendingImeJamo += text;
+      return;
+    }
     await observeInput(enqueueInput({ type: "insert", text }));
   });
 
@@ -414,6 +434,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   });
 
   onRegion("compose", async (event) => {
+    const previousText = compose.text;
     compose = {
       text: typeof event.text === "string" ? event.text : "",
       selectedRange: normalizeRange(event.selectedRange),
@@ -423,7 +444,13 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     session = { ...session, compose };
     changed("session");
     changed("compose");
-    await observeInput(enqueueInput({ type: "compose", ...compose }));
+    const composeRequest = enqueueInput({ type: "compose", ...compose });
+    const commitRequest = compose.text === "" && previousText
+      ? enqueueInput({ type: "insert", text: previousText })
+      : null;
+    if (compose.text === "") pendingImeJamo = "";
+    await observeInput(composeRequest);
+    if (commitRequest) await observeInput(commitRequest);
   });
 
   onRegion("command", async (event) => {

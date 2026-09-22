@@ -171,8 +171,13 @@ static void collectVisibleWebViews(NSView *view, NSMutableArray<WKWebView *> *fo
 // 창 안의 모든 웹뷰가 활성 상태를 웹 프로세스에 보낸 뒤 done 을 호출한다. WebKit 은 키 창 알림을
 // 받으면 활성 상태 전송을 예약하고, _doAfterActivityStateUpdate: 는 예약된 전송이 끝난 뒤(예약이
 // 없으면 즉시) 호출된다. 알림의 다른 관찰자가 모두 실행된 뒤 등록하도록 다음 메인 큐 차례에서 등록한다.
-static void afterWebViewsActive(NSWindow *window, void (^done)(void)) {
+static void afterWebViewsActive(NSWindow *window, WKWebView *target, BOOL waitForAll, void (^done)(void)) {
     dispatch_async(dispatch_get_main_queue(), ^{
+        if (target) {
+            [target _doAfterActivityStateUpdate:done];
+            return;
+        }
+        if (!waitForAll) { done(); return; }
         NSMutableArray<WKWebView *> *views = [NSMutableArray array];
         collectVisibleWebViews(window.contentView.superview ?: window.contentView, views, YES);
         __block NSUInteger pending = views.count;
@@ -192,8 +197,7 @@ static void report(sp_activate_done done, void *context, sp_activate_result resu
     done(context, result, name.UTF8String);
 }
 
-void sp_input_activate(void *handle, double timeoutSeconds, sp_activate_done done, void *context) {
-    NSWindow *window = (__bridge NSWindow *)handle;
+static void activateWindow(NSWindow *window, WKWebView *target, BOOL waitForAll, double timeoutSeconds, sp_activate_done done, void *context) {
     if (!window || !NSThread.isMainThread) { report(done, context, SP_ACTIVATE_REJECTED); return; }
     NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
     __block bool finished = false;
@@ -220,7 +224,7 @@ void sp_input_activate(void *handle, double timeoutSeconds, sp_activate_done don
     void (^check)(void) = ^{
         if (!waiting || !NSApp.isActive || !window.isKeyWindow) return;
         stopWaiting();
-        afterWebViewsActive(window, applied);
+        afterWebViewsActive(window, target, waitForAll, applied);
     };
     // 시스템은 활성화 요청을 거절할 수 있고(macOS 14 협조적 활성화), 활성화 직후 사용자가 다른 앱으로
     // 포커스를 옮길 수도 있다. 제한 시간은 활성화와 웹뷰 상태 전송 전체에 적용해 멈춘 단계를 반드시 보고한다.
@@ -231,7 +235,7 @@ void sp_input_activate(void *handle, double timeoutSeconds, sp_activate_done don
         });
     if (NSApp.isActive && window.isKeyWindow) {
         waiting = false;
-        afterWebViewsActive(window, applied);
+        afterWebViewsActive(window, target, waitForAll, applied);
         return;
     }
     keyObserver = [center addObserverForName:NSWindowDidBecomeKeyNotification object:window queue:nil
@@ -239,7 +243,17 @@ void sp_input_activate(void *handle, double timeoutSeconds, sp_activate_done don
     appObserver = [center addObserverForName:NSApplicationDidBecomeActiveNotification object:NSApp queue:nil
         usingBlock:^(NSNotification *note) { check(); }];
     [window makeKeyAndOrderFront:nil];
-    [NSApp activate];
+    [NSApp activateIgnoringOtherApps:YES];
+}
+
+void sp_input_activate(void *handle, double timeoutSeconds, sp_activate_done done, void *context) {
+    activateWindow((__bridge NSWindow *)handle, nil, YES, timeoutSeconds, done, context);
+}
+
+void sp_input_activate_at(void *handle, double x, double y, double timeoutSeconds, sp_activate_done done, void *context) {
+    NSWindow *window = (__bridge NSWindow *)handle;
+    WKWebView *target = window && NSThread.isMainThread ? webViewAt(window, x, y) : nil;
+    activateWindow(window, target, NO, timeoutSeconds, done, context);
 }
 
 typedef struct { const char *name; unsigned short code; unichar character; } SPKey;

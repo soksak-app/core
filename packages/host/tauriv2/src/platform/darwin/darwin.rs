@@ -399,10 +399,12 @@ impl Platform for Darwin {
     fn input_activate(
         &self,
         window: Handle,
+        x: f64,
+        y: f64,
         timeout: Duration,
         done: Box<dyn FnOnce(Result<(), String>) + Send>,
     ) -> Result<(), String> {
-        input::activate(window, timeout, done);
+        input::activate(window, x, y, timeout, done);
         Ok(())
     }
     fn input_key(&self, window: Handle, key: &Key) -> Result<bool, String> {

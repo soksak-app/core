@@ -263,6 +263,8 @@ pub fn input_pointer(
 
 pub fn input_activate(
     _window: Handle,
+    _x: f64,
+    _y: f64,
     _timeout: std::time::Duration,
     _done: Box<dyn FnOnce(Result<(), String>) + Send>,
 ) -> Result<(), String> {
