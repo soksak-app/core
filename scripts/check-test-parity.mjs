@@ -308,6 +308,20 @@ const FEATURE_LINKS = [
     levels: ["native", "application"],
   },
   {
+    id: "F0.5.7",
+    implementation: [
+      { file: "packages/workbench/index.html", symbol: "waitSurfaceReady" },
+      { file: "packages/workbench/surface-modules.js", symbol: "waitSurfaceReady" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/surface-modules.test.mjs", id: "surface readiness waits for module startup before a following layout command" },
+      { file: "e2e/commands.test.mjs", id: "card, tab, and menu commands change the grid" },
+      { file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" },
+    ],
+    expected: "A command that changes the visible layout replies only after each mounted surface module has completed startup and composition declaration, so an immediate following layout command cannot place an undeclared surface; normal shutdown still removes the owned endpoint and lock.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F0.1",
     implementation: [
       { file: "native/darwin/src/input_inject.m", symbol: "sp_input_pointer" },

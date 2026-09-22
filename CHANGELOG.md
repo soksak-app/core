@@ -6,6 +6,8 @@
 
 ## Unreleased
 
+- Completed F0.5.7. A rebuilt Tauri command matrix reproduced a surface-readiness race where `core.card.add-tab` answered before composition declaration and an immediate `core.tab.move` caused native presentation failure and endpoint timeouts. Workbench command settling now waits for every mounted surface module to complete startup; the focused readiness test and the bounded Tauri command, control, modal, shell, browser, terminal, library, and normal-shutdown checks pass.
+
 - Completed F0.5.6. A bounded rebuilt Tauri matrix exposed a real SIGABRT: `project_open` and `window_new` were asynchronous commands, so AppKit window creation and activation ran inside a Tokio worker and a Rust foreign exception crossed the IPC task boundary. The commands and menu callbacks now perform AppKit work on the event-loop thread. Current Tauri terminal, shell, modal/control, browser navigation/theme, library/project, and normal-shutdown checks pass with per-case output; normal shutdown removes the endpoint and process lock.
 
 - Completed G3. The host-pair audit is now injectable and rejects a missing host or counterpart in a fixture. Combined with the parity, language, evidence, and mutation injections, the tooling suite reports 80/80 passing tests with no skips or todos; package, documentation, boundary, and exposure gates pass.
