@@ -71,5 +71,8 @@ export async function mountSurfaceModule(module, root, context) {
   if (!result || typeof result !== "object" || typeof result.dispose !== "function") {
     throw new TypeError("surface module mount() must return { dispose() }");
   }
-  return { dispose: result.dispose };
+  return {
+    dispose: result.dispose,
+    focus: typeof result.focus === "function" ? result.focus : null,
+  };
 }

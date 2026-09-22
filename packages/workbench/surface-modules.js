@@ -136,6 +136,17 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
   return entry.ready;
 }
 
+/** Give a mounted surface's native input owner focus after its card has settled. */
+export async function focusSurface(surfaceId) {
+  const entry = mounted.get(surfaceId);
+  if (!entry) throw new Error(`surface ${surfaceId} is not mounted`);
+  await entry.ready;
+  if (typeof entry.module?.focus !== "function") return false;
+  if (native) await hostSurfaces.waitPresented();
+  await entry.module.focus();
+  return true;
+}
+
 export function suspendSurface(surfaceId) {
   const entry = mounted.get(surfaceId);
   if (entry) entry.host.dataset.surfaceSuspended = "true";

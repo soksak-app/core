@@ -184,6 +184,12 @@ for (const app of Object.values(APPS)) {
         const line = `echo ${marker}`;
         for (const ch of `${line}x`) await s.press(ch === " " ? "Space" : ch);
         t.diagnostic(`${app.name}: PASS terminal ${index + 1} typed line`);
+        const sessionAfterTyping = await s.get("terminal.session", surface);
+        const screenAfterTyping = await s.get("terminal.screen", surface);
+        t.diagnostic(`${app.name}: terminal ${index + 1} session after typing ` +
+          `${JSON.stringify({ sessionId: sessionAfterTyping.sessionId, error: sessionAfterTyping.error })}`);
+        t.diagnostic(`${app.name}: terminal ${index + 1} screen after typing ` +
+          `${JSON.stringify(textLines({ lines: screenAfterTyping }).filter(Boolean))}`);
         await readScreenUntil(s, surface, (lines) => lines.some((row) => row.endsWith(`${line}x`)), "native characters were not delivered");
         await s.press("Backspace");
         await readScreenUntil(s, surface, (lines) => lines.some((row) => row.endsWith(line)), "native Backspace was not delivered");

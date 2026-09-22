@@ -70,11 +70,11 @@ import {
 /* 표면을 모사하고 보고한다. 판은 슬롯 요소에 값을 기록만 하고 측정과 보고는 이쪽이
    담당한다. */
 import { latest, onCommit, onKnobChange, onRun, publish, publishAhead } from "./compositor.js";
-import { authorizeSurface, disposeSurfacesExcept } from "./surface-modules.js";
+import { authorizeSurface, disposeSurfacesExcept, focusSurface } from "./surface-modules.js";
 
 /* 판 하나. 이 문서는 판의 렌더링 방식을 알지 않고 렌더 완료만 수신한다. */
 import {
-  build, currentGrid, onLayout, onRender, setGap, settle, tabsOf,
+  build, currentGrid, onLayout, onRender, takeSurfaceFocus, setGap, settle, tabsOf,
 } from "./plane.js";
 
 /* 판과 컴포지터를 읽어 검증한다. 아무것도 변경하지 않으므로 그 둘은 이 모듈을
@@ -226,11 +226,16 @@ onRender(() => {
   presented = Promise.resolve(done);
   const record = latest();
   presented = presented.then(() => {
-    if (latest() !== record) return;
+    if (latest() !== record) return false;
     layoutFailure = null;
     check();
     coreChanged();
     if (record?.settled !== false) projects.keep();
+    return true;
+  }).then(async () => {
+    if (latest() !== record) return;
+    const surfaceId = takeSurfaceFocus();
+    if (surfaceId) await focusSurface(surfaceId);
   });
 });
 

@@ -158,6 +158,8 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose,
 
   // 세션이 생겼는지 추적한다. 래스터 크기는 페이지가 아니라 호스트 configure가 정한다.
   let sessionOpen = false;
+  let nativeFocused = false;
+  const focusWaiters = new Set();
 
   let inputChain = Promise.resolve();
   const inputQueue = [];
@@ -279,7 +281,12 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose,
       reportInputError("native focus event requires boolean focused");
       return;
     }
+    nativeFocused = event.focused;
     await observeInput(enqueueInput({ type: "focus", focused: event.focused }));
+    if (event.focused) {
+      for (const resolve of focusWaiters) resolve();
+      focusWaiters.clear();
+    }
   });
 
 
@@ -453,6 +460,21 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose,
   });
   await expose.bind(view, "terminal.focus", {}, { event: "pointerdown", failed: reportInputError });
   return {
+    async focus() {
+      if (nativeFocused) return;
+      let resolveFocus;
+      const focused = new Promise((resolve) => {
+        resolveFocus = resolve;
+        focusWaiters.add(resolve);
+      });
+      try {
+        await region.focus();
+        if (!nativeFocused) await focused;
+      } catch (error) {
+        focusWaiters.delete(resolveFocus);
+        throw error;
+      }
+    },
     async dispose() {
       stopSidecar?.();
       view.removeEventListener("pointerdown", preventDefaultFocus);

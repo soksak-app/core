@@ -545,6 +545,7 @@ test("View pointerdown triggers region focus", async () => {
     const originalFocus = result.focus.bind(result);
     result.focus = async function() {
       focusCalled = true;
+      queueMicrotask(() => result._trigger("focus", { focused: true }));
       return originalFocus();
     };
     regionReference = result;
@@ -580,7 +581,10 @@ test("pointerdown prevents DOM focus, bubbles, and invokes terminal.focus once",
   await startTerminal({
     view, attachImage: (...args) => {
       region = attach.function(...args);
-      region.focus = async () => { focusCalls++; };
+      region.focus = async () => {
+        focusCalls++;
+        queueMicrotask(() => region._trigger("focus", { focused: true }));
+      };
       return region;
     },
     sidecar: createFakeSidecar(), expose, window: { TextEncoder: FakeTextEncoder },

@@ -12,7 +12,7 @@ import { standIn } from "./compositor.js";
 import { native, onSurfaceInput, overlay, report, shapes, windowSidecar } from "./host.js";
 import { issueId } from "./ids.js";
 import { bind, delegate, mark, run } from "./commands.js";
-import { disposeSurface, mountSurface } from "./surface-modules.js";
+import { disposeSurface, focusSurface, mountSurface } from "./surface-modules.js";
 import { setSurfaceStatus } from "./surface-status.js";
 
 const NEEDS = ["cards", "card", "insertAt", "moveTo", "standings", "moveBoundary", "zoneAt",
@@ -178,7 +178,16 @@ function createCard(card) {
   el.addEventListener("pointerdown", (e) => {
     const id = el.dataset.cardId;
     if (!id || isPlace(id) || e.target.closest(".tab__x, .chrome__act, .chrome__ham")) return;
-    if (focusedId !== id) return run("core.card.focus", { card: id });
+    const tab = () => activeTab(grid.card(id));
+    const settleFocus = () => {
+      const active = tab();
+      if (!active) return false;
+      requestSurfaceFocus(active.id);
+      return true;
+    };
+    if (focusedId !== id) return Promise.resolve(run("core.card.focus", { card: id })).then(settleFocus);
+    const active = tab();
+    return active ? focusSurface(active.id) : false;
   });
   return el;
 }
@@ -881,6 +890,20 @@ function settle() {
 
 /* 진행 중인 scrollend 대기. 다음 요청이 이전 대기를 취소한다. */
 const landing = new WeakMap();
+
+// A card focus can replace the native surface at the same position. The native
+// input owner must receive focus after that presentation, not before it.
+let pendingSurfaceFocus = null;
+
+export function requestSurfaceFocus(surfaceId) {
+  pendingSurfaceFocus = surfaceId;
+}
+
+export function takeSurfaceFocus() {
+  const surfaceId = pendingSurfaceFocus;
+  pendingSurfaceFocus = null;
+  return surfaceId;
+}
 
 // 영속 터미널 actor는 네이티브 이미지 표면이 아니라 창 사이드카가 소유한다.
 // 따라서 숨겨진 탭은 WebView나 이미지 영역을 만들지 않고 PTY를 유지한다.

@@ -14,7 +14,7 @@ export async function mount(root, context) {
     throw new TypeError("startTerminal must return { dispose() }");
   }
   context.status.report("ready");
-  return { async dispose() {
+  return { focus: controller.focus, async dispose() {
     await controller.dispose();
     await composition.dispose();
     await context.exposure.dispose();
