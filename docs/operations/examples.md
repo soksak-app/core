@@ -40,6 +40,8 @@ node scripts/test-command.mjs --id inventory --timeout-ms 10000 -- node scripts/
 
 The supervisor streams stdout/stderr and emits JSON start/progress/final events with elapsed milliseconds. It reports nonzero exits, missing executables, timeout, cancellation, and cleanup errors. A permission-denied cleanup probe is not proof of process absence. This supervises one command process group; language adapters still need case discovery, per-case execution, zero-test/skip rejection, and source/binary evidence. It does not close independently running inspection applications.
 
+Run the four-language adapter gate with `make language-test`. It emits case-level expected/actual test counts and evidence hashes for the declared JS/TS, Rust, Go, and Objective-C cases. To retain failures across a retry, provide a file outside the repository: `node scripts/language-test-adapters.mjs --evidence-file "$TMPDIR/soksak-language-evidence.json" scripts/language-test-cases.json`. The next run appends an attempt only when the source, test, dependency, dirty-worktree, build-flag, and process snapshots are unchanged; otherwise it fails as stale evidence.
+
 ## Window checks
 
 Start each application once, from separate terminals, with the configuration directories the harness reads (`os.tmpdir()` of Node.js, `$TMPDIR` on macOS):

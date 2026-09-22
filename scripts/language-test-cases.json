@@ -6,28 +6,44 @@
       "language": "js-ts",
       "command": "node",
       "args": ["--test", "scripts/test/test-command.test.mjs"],
-      "expectedTests": 16
+      "expectedTests": 16,
+      "implementationFiles": ["scripts/test-command.mjs"],
+      "testFiles": ["scripts/test/test-command.test.mjs"],
+      "dependencyFiles": ["package.json", "pnpm-lock.yaml"],
+      "buildFlags": ["node>=20", "node --test"]
     },
     {
       "id": "rust-vt-encoding",
       "language": "rust",
       "command": "cargo",
       "args": ["test", "--manifest-path", "sidecars/Cargo.toml", "-p", "soksak-sidecar-vt-core", "--test", "encoding_validation_test"],
-      "expectedTests": 2
+      "expectedTests": 2,
+      "implementationFiles": ["sidecars/vt-core/src/vt-core.rs", "sidecars/vt-core/src/encoding.rs"],
+      "testFiles": ["sidecars/vt-core/tests/encoding_validation_test.rs"],
+      "dependencyFiles": ["sidecars/Cargo.toml", "sidecars/Cargo.lock"],
+      "buildFlags": ["MACOSX_DEPLOYMENT_TARGET=14.4", "cargo test"]
     },
     {
       "id": "go-shell-tests",
       "language": "go",
       "command": "go",
       "args": ["test", "-json", "./sidecars/shell/tests"],
-      "expectedTests": 13
+      "expectedTests": 13,
+      "implementationFiles": ["sidecars/shell/src/shell/shell.go"],
+      "testFiles": ["sidecars/shell/tests/serve_test.go"],
+      "dependencyFiles": ["sidecars/shell/go.mod"],
+      "buildFlags": ["CGO_ENABLED=1", "go test -json"]
     },
     {
       "id": "objc-appearance",
       "language": "objective-c",
       "command": "./native/darwin/build/appearance_test",
       "args": [],
-      "expectedTests": 5
+      "expectedTests": 5,
+      "implementationFiles": ["native/darwin/src/appearance.m"],
+      "testFiles": ["native/darwin/tests/appearance_test.m"],
+      "dependencyFiles": ["native/darwin/Makefile"],
+      "buildFlags": ["clang -fblocks -fmodules -mmacosx-version-min=14.4", "Cocoa WebKit"]
     }
   ]
 }

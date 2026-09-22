@@ -40,6 +40,8 @@ node scripts/test-command.mjs --id inventory --timeout-ms 10000 -- node scripts/
 
 감독기는 stdout/stderr를 전달하고 경과 밀리초와 함께 JSON 시작/진행/종료 이벤트를 출력한다. 비정상 종료·실행 파일 없음·시간 초과·취소·정리 오류를 보고한다. 정리 확인의 권한 거부는 프로세스 부재 증거가 아니다. 이 도구는 명령 프로세스 그룹 하나를 감독한다. 언어 어댑터의 케이스 발견·케이스별 실행·0개/생략 거부·소스/실행 파일 증거는 여전히 필요하다. 독립적으로 실행 중인 검사 앱은 닫지 않는다.
 
+네 언어 어댑터 게이트는 `make language-test`로 실행한다. 선언된 JS/TS·Rust·Go·Objective-C 케이스별 기대·실제 테스트 수와 증거 해시를 출력한다. 재시도 사이에 실패를 보존하려면 저장소 밖 파일을 지정한다: `node scripts/language-test-adapters.mjs --evidence-file "$TMPDIR/soksak-language-evidence.json" scripts/language-test-cases.json`. 다음 실행은 소스·테스트·의존성·dirty 작업 트리·빌드 옵션·프로세스 snapshot이 같을 때만 시도를 추가하고, 다르면 오래된 증거로 실패한다.
+
 ## 창 검사
 
 각각 다른 터미널에서, 하네스가 읽는 설정 디렉터리(Node.js의 `os.tmpdir()`, macOS에서는 `$TMPDIR`)로 앱을 한 번씩 실행한다.

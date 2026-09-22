@@ -12,6 +12,8 @@
 
 - 언어 어댑터 구현·manifest·테스트를 추가한 뒤 기계 inventory를 다시 맞췄다. lane 55개·구현 파일 249개·테스트 파일 168개이며 이전 53/247/166 기록은 G1.3-2 아래 과거 증거로 남겼다.
 
+- schema 버전이 있는 언어 증거 레코드를 추가했다. `make language-test`가 구현·테스트·의존성·dirty 작업 트리·빌드 옵션·프로세스·기대/실제 결과·경과 시간·시도 이력을 출력한다. `--evidence-file`은 불변 snapshot이 같을 때만 재시도를 추가하고 오래된 증거는 거부한다. 현재 inventory는 lane 56개·구현 파일 250개·테스트 파일 169개이며 이전 55/249/168 결과는 G1.3-7 아래 과거 증거다.
+
 - F0.4-1.3.3을 완료했다. Rust 실패 감사가 이제 VT core·VT Alacritty·Tauri host·Tauri application production lane을 모두 포함해 남은 bridge 경로를 암묵적으로 남기지 않는다. 선언된 native build 환경에서 production `Result` 무시가 없고, Windows 미지원 연산은 명시적 오류를 반환하며, parity 자기 테스트와 native workspace 검사가 통과했다. Objective-C와 교차 언어 실패 매트릭스는 F0.4-1.4와 F0.4-1.5에 남아 있다.
 
 - F0.4-1.3.2 Tauri host 작업을 완료했다. 범위 Rust 감사에서 callback send·transport read·정리·capture stop·close-owner 직렬화 결과 무시를 찾았다. production lane이 이제 각 결과를 반환하거나 명시적으로 보고하고, recording abort가 stop과 정리의 동시 오류를 보존하며, Tauri Rust 검사와 parity 감사가 통과한다. 남은 Rust host/bridge와 Objective-C lane은 F0.4-1.3.3부터 F0.4-1.5에 남아 있다.

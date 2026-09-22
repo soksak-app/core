@@ -29,8 +29,9 @@ const lane = (capability, language, implementation, tests, options = {}) => ({
 const MATRIX = [
   lane("test inventory", "js-ts", ["scripts/check-test-parity.mjs"], ["scripts/test/test-parity.test.mjs"]),
 lane("command supervision", "js-ts", ["scripts/test-command.mjs"], ["scripts/test/test-command.test.mjs"]),
-  lane("language test adapters", "js-ts", ["scripts/language-test-adapters.mjs"], ["scripts/test/test-language-test-adapters.test.mjs"]),
-  lane("language test adapter manifest", "declaration", ["scripts/language-test-cases.json"], ["scripts/test/test-language-test-manifest.test.mjs"], { testLanguage: "js-ts" }),
+lane("language test adapters", "js-ts", ["scripts/language-test-adapters.mjs"], ["scripts/test/test-language-test-adapters.test.mjs"]),
+lane("language test adapter manifest", "declaration", ["scripts/language-test-cases.json"], ["scripts/test/test-language-test-manifest.test.mjs"], { testLanguage: "js-ts" }),
+lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/test-evidence.test.mjs"]),
   lane("documentation and checklist checks", "js-ts", ["scripts/check-docs.mjs", "scripts/checklist.mjs"], ["scripts/test/checklist.test.mjs"]),
   lane("Rust package test commands", "declaration", ["sidecars/vt-core/package.json", "sidecars/vt-alacritty/package.json"], ["scripts/test/package-test-command.test.mjs"], { testLanguage: "js-ts" }),
   lane("soksak layout", "js-ts", ["packages/soksak/src/**/*.ts"], ["packages/soksak/test/**/*.mjs"]),
@@ -574,6 +575,27 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "G1.3-7",
+    implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "auditRecordedInventoryCounts" }],
+    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "recorded parity counts cannot drift from the current inventory" }],
+    expected: "The inventory record remains synchronized after adding the evidence recorder and its test.",
+    levels: ["unit"],
+  },
+  {
+    id: "G1.3-8",
+    implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "auditFeatureLinks" }],
+    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "completed capability entries all have feature evidence links" }],
+    expected: "The feature-link and parity self-test record is synchronized with the current completed entries.",
+    levels: ["unit"],
+  },
+  {
+    id: "G4",
+    implementation: [{ file: "scripts/language-test-adapters.mjs", symbol: "runLanguageCases" }],
+    tests: [{ file: "scripts/test/test-language-test-adapters.test.mjs", id: "reports expected and actual test counts without hiding mismatch" }],
+    expected: "Every declared language case is bounded, observable, attributable, and rejects incomplete or mismatched results.",
+    levels: ["unit", "native"],
+  },
+  {
     id: "G4.1",
     implementation: [{ file: "scripts/test-command.mjs", symbol: "runCommand" }],
     tests: [{ file: "scripts/test/test-command.test.mjs", id: "emits ordered start and terminal events" }],
@@ -592,6 +614,13 @@ const FEATURE_LINKS = [
     ],
     expected: "Each supported language has an attributable bounded case with expected and actual test counts; zero, skipped, failed, crashed, timed-out, or cancelled execution cannot pass.",
     levels: ["unit", "native"],
+  },
+  {
+    id: "G4.3",
+    implementation: [{ file: "scripts/test-evidence.mjs", symbol: "collectEvidence" }],
+    tests: [{ file: "scripts/test/test-evidence.test.mjs", id: "evidence records content hashes, dirty state, expected/actual result, and retry history" }],
+    expected: "Evidence contains immutable source and process identity snapshots and preserves every retry result.",
+    levels: ["unit"],
   },
   {
     id: "F1.1",

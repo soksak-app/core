@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { runCommand } from './test-command.mjs';
+import { collectEvidence, persistEvidence } from './test-evidence.mjs';
 
 export const DEFAULT_TIMEOUT_MS = Object.freeze({
   'js-ts': 10_000,
@@ -54,6 +55,10 @@ export function discoverLanguageCases(manifest) {
       ...(entry.cwd === undefined ? {} : { cwd: entry.cwd }),
       timeoutMs: validateTimeout(entry.timeoutMs, entry.language),
       expectedTests: entry.expectedTests,
+      ...(entry.implementationFiles === undefined ? {} : { implementationFiles: entry.implementationFiles }),
+      ...(entry.testFiles === undefined ? {} : { testFiles: entry.testFiles }),
+      ...(entry.dependencyFiles === undefined ? {} : { dependencyFiles: entry.dependencyFiles }),
+      ...(entry.buildFlags === undefined ? {} : { buildFlags: entry.buildFlags }),
     };
   });
 }
@@ -141,7 +146,7 @@ function caseResult(caseSpec, commandResult) {
   };
 }
 
-export async function runLanguageCases(cases, { onEvent } = {}) {
+export async function runLanguageCases(cases, { onEvent, evidence = false } = {}) {
   if (!Array.isArray(cases) || cases.length === 0) throw invalid('at least one discovered case is required');
   const results = [];
   for (const caseSpec of cases) {
@@ -153,7 +158,20 @@ export async function runLanguageCases(cases, { onEvent } = {}) {
       timeoutMs: caseSpec.timeoutMs,
       onEvent: (event) => onEvent?.({ ...event, language: caseSpec.language, caseId: caseSpec.id }),
     });
-    results.push(caseResult(caseSpec, commandResult));
+    const result = caseResult(caseSpec, commandResult);
+    if (evidence) {
+      result.evidence = await collectEvidence({
+        caseId: caseSpec.id,
+        language: caseSpec.language,
+        implementationFiles: caseSpec.implementationFiles,
+        testFiles: caseSpec.testFiles,
+        dependencyFiles: caseSpec.dependencyFiles,
+        buildFlags: caseSpec.buildFlags,
+        processes: [],
+        result,
+      });
+    }
+    results.push(result);
   }
   return {
     status: results.every((result) => result.status === 'pass') ? 'pass' : 'fail',
@@ -173,20 +191,29 @@ export async function readLanguageCaseManifest(path) {
   return discoverLanguageCases(manifest);
 }
 
+function parseCli(argv) {
+  let evidenceFile;
+  const positional = [];
+  for (let index = 0; index < argv.length; index++) {
+    if (argv[index] === '--evidence-file') {
+      if (!argv[index + 1]) throw new Error('--evidence-file requires a path');
+      evidenceFile = argv[++index];
+    } else positional.push(argv[index]);
+  }
+  if (positional.length !== 1) throw new Error('usage: node scripts/language-test-adapters.mjs [--evidence-file PATH] MANIFEST.json');
+  return { manifestPath: positional[0], evidenceFile };
+}
+
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
-  const manifestPath = process.argv[2];
-  if (!manifestPath) {
-    process.stderr.write('usage: node scripts/language-test-adapters.mjs MANIFEST.json\n');
-    process.exitCode = 2;
-  } else {
-    try {
+  try {
+    const { manifestPath, evidenceFile } = parseCli(process.argv.slice(2));
       const cases = await readLanguageCaseManifest(manifestPath);
-      const result = await runLanguageCases(cases, { onEvent: (event) => process.stdout.write(`${JSON.stringify(event)}\n`) });
-      process.stdout.write(`${JSON.stringify({ type: 'suite-final', status: result.status, cases: result.cases.map(({ id, language, status, expected, actual, elapsedMs, errors }) => ({ id, language, status, expected, actual, elapsedMs, errors })) })}\n`);
+      const result = await runLanguageCases(cases, { evidence: true, onEvent: (event) => process.stdout.write(`${JSON.stringify(event)}\n`) });
+      if (evidenceFile) await persistEvidence(evidenceFile, result.cases.map(({ evidence: record }) => record));
+      process.stdout.write(`${JSON.stringify({ type: 'suite-final', status: result.status, evidenceFile: evidenceFile ?? null, cases: result.cases.map(({ id, language, status, expected, actual, elapsedMs, errors, evidence: record }) => ({ id, language, status, expected, actual, elapsedMs, errors, evidence: record ? { git: record.git, implementation: record.implementation, tests: record.tests, dependencies: record.dependencies, buildFlags: record.buildFlags, processes: record.processes, attempts: record.attempts } : null })) })}\n`);
       process.exitCode = result.status === 'pass' ? 0 : 1;
-    } catch (error) {
-      process.stderr.write(`${error.code ?? 'LANGUAGE_TEST_ERROR'}: ${error.message}\n`);
-      process.exitCode = 2;
-    }
+  } catch (error) {
+    process.stderr.write(`${error.code ?? 'LANGUAGE_TEST_ERROR'}: ${error.message}\n`);
+    process.exitCode = 2;
   }
 }

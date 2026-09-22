@@ -16,6 +16,8 @@ Missing implementations, missing tests, unregistered build targets, unresolved r
 
 Evidence identifies the feature and test, verification level, language, host and platform, source and test content hashes including uncommitted content, build options, executable and sidecar hashes, expected and actual outcomes, and elapsed time. A changed dependency invalidates previous evidence. Structural coverage, behavior validation, and release approval are separate results.
 
+The language evidence recorder (`scripts/test-evidence.mjs`) stores those fields in schema version 1. `make language-test` emits one record for each declared JS/TS, Rust, Go, and Objective-C case. Passing `--evidence-file PATH` persists the records; a later run appends a numbered attempt only when the immutable source, test, dependency, dirty-worktree, build-flag, and process snapshot is identical. It retains the first failure and rejects stale or malformed records. A required running host or sidecar must be supplied by PID and executable path and is hashed while it is alive; an empty process list is explicit evidence that the case owns no running process.
+
 ## Bounded execution
 
 Each independently executed case has its own timeout: 10 seconds for pure unit behavior, 30 seconds for native-process behavior, and 60 seconds for application behavior by default. A longer case must declare its limit and concrete reason. Build time is reported separately and is not a test result. A whole-suite timeout does not replace per-case limits.
