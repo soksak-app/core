@@ -6,6 +6,8 @@
 
 ## Unreleased
 
+- Completed F0.5. The completed child checks and the current rebuilt single-instance Tauri matrix now cover startup, prompt/output, controls, first-click native input, appearance and surface scope, first-run project opening, view timing, process ownership, and stale composition rejection. All bounded cases passed and normal shutdown removed the endpoint and lock.
+
 - Completed F0.5.7. A rebuilt Tauri command matrix reproduced a surface-readiness race where `core.card.add-tab` answered before composition declaration and an immediate `core.tab.move` caused native presentation failure and endpoint timeouts. Workbench command settling now waits for every mounted surface module to complete startup; the focused readiness test and the bounded Tauri command, control, modal, shell, browser, terminal, library, and normal-shutdown checks pass.
 
 - Completed F0.5.6. A bounded rebuilt Tauri matrix exposed a real SIGABRT: `project_open` and `window_new` were asynchronous commands, so AppKit window creation and activation ran inside a Tokio worker and a Rust foreign exception crossed the IPC task boundary. The commands and menu callbacks now perform AppKit work on the event-loop thread. Current Tauri terminal, shell, modal/control, browser navigation/theme, library/project, and normal-shutdown checks pass with per-case output; normal shutdown removes the endpoint and process lock.

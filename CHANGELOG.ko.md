@@ -6,6 +6,8 @@
 
 ## 미배포
 
+- F0.5를 완료했다. 완료한 하위 검사와 최신 재빌드 단일 인스턴스 Tauri matrix가 startup·prompt/output·control·첫 클릭 네이티브 입력·appearance와 surface scope·first-run 프로젝트 열기·view timing·프로세스 소유권·stale composition 거부를 모두 포함한다. 제한된 모든 케이스가 통과했고 정상 종료가 endpoint와 lock을 제거했다.
+
 - F0.5.7을 완료했다. 재빌드 Tauri 명령 matrix에서 `core.card.add-tab`가 composition 선언 전에 응답하고 즉시 실행한 `core.tab.move`가 네이티브 표시 실패와 endpoint 시간 초과를 일으키는 표면 준비 경쟁을 재현했다. 이제 workbench 명령 정착이 마운트된 모든 표면 모듈의 시작 완료를 기다리며, 표면 준비 단위 검사와 제한된 Tauri 명령·제어·모달·셸·브라우저·터미널·라이브러리·정상 종료 검사가 통과한다.
 
 - F0.5.6을 완료했다. 제한된 재빌드 Tauri matrix에서 실제 SIGABRT가 드러났다. `project_open`과 `window_new`가 비동기 명령이어서 AppKit 창 생성·활성화가 Tokio 워커에서 실행되었고 Rust foreign exception이 IPC 작업 경계를 넘어갔다. 두 명령과 메뉴 콜백이 이제 이벤트 루프 스레드에서 AppKit 작업을 실행한다. 현재 Tauri 터미널·셸·모달/제어·브라우저 탐색/theme·라이브러리/프로젝트·정상 종료 검사가 케이스별 출력을 유지하며 통과했고, 정상 종료가 endpoint와 process lock을 제거한다.

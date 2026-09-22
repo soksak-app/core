@@ -322,6 +322,24 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F0.5",
+    implementation: [
+      { file: "packages/workbench/core-exposure.js", symbol: "installCoreExposure" },
+      { file: "packages/workbench/surface-modules.js", symbol: "mountSurface" },
+    ],
+    tests: [
+      { file: "e2e/commands.test.mjs", id: "card, tab, and menu commands change the grid" },
+      { file: "e2e/modal.test.mjs", id: "settings blocks background input and closes only through its close button" },
+      { file: "e2e/shell.test.mjs", id: "shell input returns shell output through the shell sidecar" },
+      { file: "e2e/browser.test.mjs", id: "browser documents follow host theme pixels for existing, new, and reloaded documents" },
+      { file: "e2e/terminal.test.mjs", id: "native keyboard edits and executes independently in three terminals" },
+      { file: "e2e/library.test.mjs", id: "library windows create and open projects in place" },
+      { file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" },
+    ],
+    expected: "The rebuilt Tauri application starts, accepts prompt and native input, exposes working controls and scoped surfaces, completes first-run project opening, rejects a second owner, prevents undeclared surface placement, and removes its endpoint and lock on normal shutdown.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F0.1",
     implementation: [
       { file: "native/darwin/src/input_inject.m", symbol: "sp_input_pointer" },
