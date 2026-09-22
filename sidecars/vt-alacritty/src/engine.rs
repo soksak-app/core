@@ -142,6 +142,7 @@ pub struct CsiSelectorEvidence {
 /// This is deliberately a partial inventory until the remaining XTerm categories
 /// have executable behavior and rejection contracts.
 pub const CSI_SELECTOR_INVENTORY: &[CsiSelectorEvidence] = &[
+    CsiSelectorEvidence { selector: "A/B/C/D/G/H/f/s/u", outcome: CsiOutcome::Implemented, test: "csi_cursor_movement_and_save_restore_are_observable" },
     CsiSelectorEvidence { selector: "3C", outcome: CsiOutcome::Implemented, test: "display_points_are_used_as_cell_indices" },
     CsiSelectorEvidence { selector: "?12h/l", outcome: CsiOutcome::Implemented, test: "cursor_visibility_and_application_shape_are_exported" },
     CsiSelectorEvidence { selector: "?25h/l", outcome: CsiOutcome::Implemented, test: "cursor_visibility_and_application_shape_are_exported" },

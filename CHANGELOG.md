@@ -20,6 +20,7 @@
 - Completed G2.9 by waiting for in-flight surface composition placement before native region detach. Rebuilt Tauri and Wails split-terminal checks pass, and both lifecycle logs are free of composition-declaration errors.
 - Started F7 OSC/CSI audit. The Red record confirms that selected title/color/OSC52/OSC1337 and CSI-scroll tests do not constitute selector-level XTerm patch 411 coverage; the missing inventory and explicit unsupported/policy-denied cases remain open.
 - Progressed F7 OSC audit. The pinned selector inventory now separates implemented, unsupported, and vendor selectors and links them to named Alacritty engine cases. The engine suite passes 40/40, including BEL/ST fragmentation and full indexed-color reset; explicit runtime rejection events for unsupported selectors and the remaining CSI/vendor contracts remain open.
+- Progressed F7 CSI audit. The selector inventory now links `A/B/C/D/G/H/f/s/u` to an executable cursor movement/save/restore case; the focused Rust test passes 1/1. Remaining CSI categories and vendor contracts stay open.
 
 - Completed G2.5–G2.7. Tauri and Wails runtime contract tests now assert the same `waitPresented` result; a mechanical E2E audit requires 15 application suites to iterate both adapters and records three explicit host-independent suites. The parity inventory is synchronized at 56 lanes, 251 implementation files, and 171 test files.
 

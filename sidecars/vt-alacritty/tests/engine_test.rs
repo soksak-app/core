@@ -180,6 +180,23 @@ fn csi_inventory_links_only_executed_behavior_cases() {
 }
 
 #[test]
+fn csi_cursor_movement_and_save_restore_are_observable() {
+    let mut engine = AlacrittyEngine::new();
+    engine.resize(20, 6);
+    engine.feed(b"abc\x1b[s\x1b[2D\x1b[2B\x1b[3C\x1b[u");
+    assert_eq!(engine.cursor().col, 3, "CSI s/u must restore the saved column");
+    assert_eq!(engine.cursor().row, 0, "CSI s/u must restore the saved row");
+
+    engine.feed(b"\x1b[2;5H\x1b[2A\x1b[3G");
+    assert_eq!(engine.cursor().col, 2, "CSI G must select the requested column");
+    assert_eq!(engine.cursor().row, 0, "CSI A must move up by the requested count");
+
+    engine.feed(b"\x1b[2B\x1b[2D");
+    assert_eq!(engine.cursor().col, 0, "CSI D must move left by the requested count");
+    assert_eq!(engine.cursor().row, 2, "CSI B must move down by the requested count");
+}
+
+#[test]
 fn osc50_cursor_shape_changes_program_cursor() {
     let mut engine = AlacrittyEngine::new();
     engine.feed(b"\x1b]50;CursorShape=2\x07");
