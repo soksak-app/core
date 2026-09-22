@@ -1050,9 +1050,11 @@ const FEATURE_LINKS = [
       { file: "sidecars/vt-alacritty/src/engine.rs", symbol: "OSC_SELECTOR_INVENTORY" },
       { file: "sidecars/vt-alacritty/src/engine.rs", symbol: "impl AlacrittyEngine" },
       { file: "sidecars/vt-alacritty/src/engine.rs", symbol: "fn osc_outcome" },
+      { file: "sidecars/vt-alacritty/src/engine.rs", symbol: "CSI_SELECTOR_INVENTORY" },
     ],
     tests: [
       { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "osc_selector_inventory_records_unsupported_operations" },
+      { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "csi_inventory_links_only_executed_behavior_cases" },
       { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "every_unsupported_osc_inventory_selector_emits_an_explicit_error" },
       { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "unsupported_osc_selector_is_an_explicit_error_after_fragmented_bel" },
       { file: "sidecars/vt-alacritty/tests/engine_test.rs", id: "unsupported_osc_selector_is_an_explicit_error_after_st" },

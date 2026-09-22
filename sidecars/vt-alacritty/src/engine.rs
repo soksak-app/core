@@ -126,6 +126,32 @@ pub const OSC_SELECTOR_INVENTORY: &[OscSelectorEvidence] = &[
     },
 ];
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CsiOutcome {
+    Implemented,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CsiSelectorEvidence {
+    pub selector: &'static str,
+    pub outcome: CsiOutcome,
+    pub test: &'static str,
+}
+
+/// Selector-level evidence for CSI behavior that this sidecar currently exposes.
+/// This is deliberately a partial inventory until the remaining XTerm categories
+/// have executable behavior and rejection contracts.
+pub const CSI_SELECTOR_INVENTORY: &[CsiSelectorEvidence] = &[
+    CsiSelectorEvidence { selector: "3C", outcome: CsiOutcome::Implemented, test: "display_points_are_used_as_cell_indices" },
+    CsiSelectorEvidence { selector: "?12h/l", outcome: CsiOutcome::Implemented, test: "cursor_visibility_and_application_shape_are_exported" },
+    CsiSelectorEvidence { selector: "?25h/l", outcome: CsiOutcome::Implemented, test: "cursor_visibility_and_application_shape_are_exported" },
+    CsiSelectorEvidence { selector: "4 q", outcome: CsiOutcome::Implemented, test: "cursor_visibility_and_application_shape_are_exported" },
+    CsiSelectorEvidence { selector: "m", outcome: CsiOutcome::Implemented, test: "sgr_color_does_not_drop_the_character" },
+    CsiSelectorEvidence { selector: "?1049h/l", outcome: CsiOutcome::Implemented, test: "alternate_screen_is_separate_from_primary_scrollback" },
+    CsiSelectorEvidence { selector: "S/T;r", outcome: CsiOutcome::Implemented, test: "csi_scroll_moves_the_visible_grid_and_respects_a_scroll_region" },
+    CsiSelectorEvidence { selector: "14t", outcome: CsiOutcome::Implemented, test: "text_area_callback_is_not_discarded" },
+];
+
 #[derive(Clone, Copy)]
 struct TermSize {
     columns: usize,

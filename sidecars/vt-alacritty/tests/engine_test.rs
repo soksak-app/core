@@ -1,7 +1,7 @@
 #[path = "../src/engine.rs"]
 mod engine;
 
-use engine::{AlacrittyEngine, OscOutcome, OSC_SELECTOR_INVENTORY};
+use engine::{AlacrittyEngine, CsiOutcome, OscOutcome, CSI_SELECTOR_INVENTORY, OSC_SELECTOR_INVENTORY};
 use soksak_sidecar_vt_core::{
     default_terminal_color, inline_image::Dimension, inline_image::InlineImageCommand, CursorShape,
     Engine, EngineEvent, TerminalTheme, DEFAULT_PALETTE,
@@ -167,6 +167,16 @@ fn vendor_osc_contracts_are_separate() {
         ["7,8,9,133", "1337"]
     );
     assert!(vendor.iter().all(|entry| !entry.test.is_empty()));
+}
+
+#[test]
+fn csi_inventory_links_only_executed_behavior_cases() {
+    assert!(!CSI_SELECTOR_INVENTORY.is_empty());
+    for entry in CSI_SELECTOR_INVENTORY {
+        assert_eq!(entry.outcome, CsiOutcome::Implemented);
+        assert!(!entry.selector.is_empty());
+        assert!(!entry.test.is_empty());
+    }
 }
 
 #[test]

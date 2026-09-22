@@ -59,6 +59,10 @@ The unsupported rows are an explicit scope result, not successful no-ops. The en
 
 ## Complete OSC and CSI requirement
 
+## CSI selector evidence
+
+The sidecar currently records only CSI selectors with executable behavior evidence: `3C`, `?12h/l`, `?25h/l`, `CSI 4 q`, `m`, `?1049h/l`, `S/T` with `r`, and `14t`. This partial inventory is not a complete CSI implementation claim; all unlisted movement, erase, mode, query, mouse, protected-cell, and attribute-stack categories remain open until named behavior or explicit rejection tests exist.
+
 The terminal must maintain two separate inventories against the pinned XTerm reference:
 
 - OSC: every standard selector in the reference, plus every selected vendor extension (including title, colors, hyperlinks, clipboard, notifications, shell metadata, and graphics). Each selector has an implementation test for its effect, response test when it is queryable, and explicit rejection test when policy or platform support prohibits it.
