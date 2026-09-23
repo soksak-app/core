@@ -475,13 +475,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
 
   onRegion("compose", async (event) => {
     recordImeTrace({ kind: "native-compose", text: event.text });
-    const previousText = compose.text;
-    const composeRequest = updateCompose(event);
-    const commitRequest = compose.text === "" && previousText
-      ? enqueueInput({ type: "insert", text: previousText })
-      : null;
-    await observeInput(composeRequest);
-    if (commitRequest) await observeInput(commitRequest);
+    await observeInput(updateCompose(event));
   });
 
   onRegion("command", async (event) => {

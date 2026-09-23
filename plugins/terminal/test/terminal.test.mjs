@@ -1437,6 +1437,40 @@ test("Korean IME insertText commit clears an active preedit and keeps later typi
   assert.equal(expose.getStatus("terminal.compose").readFn().text, "", "insertText must end the stale preedit");
 });
 
+test("clearing a native preedit cancels it without writing the uncommitted text to the PTY", async () => {
+  FakeResizeObserver.reset();
+  const fakeAttachImage = createFakeAttachImage();
+  const fakeSidecar = createFakeSidecar();
+  let regionReference;
+  const expose = createFakeExpose();
+  await startTerminal({
+    view: createFakeView(),
+    attachImage: (view, name, sidecar) => {
+      regionReference = fakeAttachImage.function(view, name, sidecar);
+      return regionReference;
+    },
+    sidecar: fakeSidecar,
+    expose,
+    scale: 1,
+    window: { ResizeObserver: FakeResizeObserver, TextEncoder, devicePixelRatio: 1 },
+  });
+  FakeResizeObserver.triggerAll();
+  openSession(fakeSidecar);
+
+  regionReference._trigger("compose", {
+    text: "한글", selectedRange: { location: 2, length: 0 }, replacementRange: null, attributed: true,
+  });
+  regionReference._trigger("compose", {
+    text: "", selectedRange: null, replacementRange: null, attributed: false,
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(expose.getStatus("terminal.compose").readFn().text, "", "the cancelled preedit must clear");
+  const byteInputs = fakeSidecar.getMessages().filter(({ body }) => body.operation === "input" && body.bytes);
+  assert.deepEqual(byteInputs, [], "a cleared marked string is not committed input");
+});
+
 test("terminal.compose.update exposes ordered preedit changes without writing partial text to the PTY", async () => {
   FakeResizeObserver.reset();
   const fakeAttachImage = createFakeAttachImage();

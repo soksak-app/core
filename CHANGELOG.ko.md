@@ -1,5 +1,6 @@
 # 변경 기록
 
+- F8-5 진행: 빈 native `compose` callback이 이전 marked 문자열을 PTY 확정 입력으로 합성하던 결함을 수정했다. Red 회귀검사는 `compose("한글") → compose("")`가 `insert` callback 없이 `한글`을 쓰는 것을 재현한다. 이제 빈 조합 상태는 지우기/취소로 처리하고 `insert`만 확정한다. 터미널 런타임 명세와 한영 F8-5 기록에 계약을 반영했다. 네이티브 입력, 후보창 픽셀, 재빌드 호스트의 실제 IME 동작 검증은 아직 남아 있다.
 - F8-1 Red를 터미널 오류 스크린샷 기준으로 기록했다. 네이티브 영역이 Ctrl `Char`에 `charactersIgnoringModifiers`를 직렬화하고 VT encoder는 지원하는 ASCII 제어 문자 범위 밖의 문자를 거부했다. 한글 `ㅕ` payload와 물리 ANSI U를 넣은 native 회귀 검사는 수정 전 실패했고, 수정 뒤 `u`를 내보낸다. sidecar 계약은 Ctrl+U가 `0x15`를 기록하는지 검증한다. 집중 검사·`pnpm test`·경계·노출·전체 vt-core 검사는 통과했다. `make native-test`는 별도 `input_inject_test`에서 예상하지 못한 pointer sequence와 WebKit 평가 timeout으로 두 번 중단됐고 원인은 미확정이라 F8-2에 기록했다. 스크린샷의 실제 키 payload는 알 수 없다.
 - F8-1의 지원되는 물리 Ctrl 문자 매핑을 완료했다. ANSI U 키의 한글 `ㅕ` payload가 Ctrl+U로 전달되며 vt-core는 `0x15`를 검증한다. 스크린샷의 실제 키는 특정하지 못했다. 독립 `make native-test` 실패는 F8-2에 남아 있다.
 - F8-3 Red: “terminal commits the first Korean syllable exactly once” 검사는 완성된 `나`를 `terminal.input`으로 기록한다. 따라서 네이티브 IME를 우회해 조합을 검증할 수 없다. 호스트 증거로 세기 전에 native 키 입력과 관측 가능한 preedit 검사로 교체한다.

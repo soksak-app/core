@@ -44,7 +44,7 @@
 
 네이티브 IME가 조합 문자를 소유한다. 조합 중에는 preedit를 표시하고 미완성 음절을 PTY에 쓰지 않는다. 확정 문자는 일반 입력과 같은 순서 보장 큐에서 정확히 한 번 전달한다. 캐럿 좌표가 후보창 위치를 정한다. 지원하지 않는 네이티브 텍스트 값과 입력 실패는 명시적 오류다.
 
-네이티브 입력 어댑터는 Unicode 범위 검사가 아니라 텍스트 입력 클라이언트의 marked-text callback으로 조합과 확정을 구분한다. 모든 `insert` callback은 바이트 단위로 순서대로 전달하며, 플러그인은 문자 스크립트나 코드 포인트를 근거로 조용히 버리거나 바꾸면 안 된다. 각 플랫폼 어댑터는 OS 텍스트 입력 수명주기를 사용하고 확정 callback을 정확히 한 번 노출해야 한다.
+네이티브 입력 어댑터는 Unicode 범위 검사가 아니라 텍스트 입력 클라이언트의 marked-text callback으로 조합과 확정을 구분한다. 모든 `insert` callback은 바이트 단위로 순서대로 전달하며, 플러그인은 문자 스크립트나 코드 포인트를 근거로 조용히 버리거나 바꾸면 안 된다. 각 플랫폼 어댑터는 OS 텍스트 입력 수명주기를 사용하고 확정 callback을 정확히 한 번 노출해야 한다. 빈 `compose` callback은 조합 중 텍스트를 지우거나 취소하며, 이전 marked 문자열을 확정하지 않는다. PTY 확정 입력은 `insert` callback만 만든다.
 
 터미널 플러그인은 네이티브 callback과 같은 순서 보장 사이드카 경로로 현재 preedit를 설정하는 `terminal.compose.update` 명령을 선언한다. 문자열 `text`, 선택적 `selectedRange` 및 `replacementRange`(`null` 또는 음이 아닌 정수 `{location, length}`), 선택적 boolean `attributed`를 받는다. 생략한 범위는 `null`, 생략한 `attributed`는 `false`이며 빈 문자열은 preedit를 지운다. 이 명령은 PTY 바이트를 쓰지 않는다. 기존 `terminal.compose` status가 적용된 preedit를 보고하고, 이전 이미지 전송이 소비된 다음 네이티브 이미지가 각 갱신을 표시한다. 이 명령은 preedit 렌더링과 순서를 검증하며 실제 OS IME 검증을 대체하지 않는다.
 
