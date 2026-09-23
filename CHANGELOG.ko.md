@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F8-6-1: `host.window.presented`와 명령 정착이 웹 콘텐츠 프로세스의 렌더링 커밋(`_doAfterNextPresentationUpdate:`)을 기다린 뒤 표시 시각을 보고한다. 이전에는 마지막 DOM 변경이 그려지기 전의 시각을 보고해, 드래그 녹화가 마지막 복귀를 놓쳤다. 두 드래그 e2e 사례가 두 호스트에서 3회 연속 통과한다.
 - F8-17: 터미널 세션 오류는 출처별로 관리되며, 그 오류를 해소하는 같은 종류의 유효한 이벤트만 지운다. 관련 없는 `state`, `session`, `theme` 이벤트는 더 이상 오류를 지우지 않으며, 카드 표시기와 `terminal.session.error`가 함께 남는다. 단위 테스트 10개의 Red와 두 디버그 앱의 e2e 사례로 확인했다.
 - F11-4: `make release-check`가 잘못된 형식의 스테이징된 `sidecar.json`을 파일과 오류와 함께 보고한다. 이전에는 조용히 건너뛰어 그 실행 파일을 검사하지 않았다.
 - F11-2: 플러그인은 검사 전용 항목을 `diagnostics.json`과 그 모듈에 선언하며, 이는 진단 빌드에만 스테이징된다. 터미널의 `terminal.compose.update`와 `terminal.ime.trace`가 그리로 옮겨졌고, `make release-check`는 릴리스 스테이징에 플러그인 진단 선언이나 모듈이 있으면 실패한다. 릴리스 두 앱에서 `terminal.ime.trace`는 1001을 반환하고, 디버그 두 앱에서 새 e2e 사례가 통과한다.

@@ -147,10 +147,13 @@ static void settle(WKWebView *main, void (^done)(double, const char *)) {
             [main release];
             return;
         }
-        // 표시를 기다리는 사이 새 트랜잭션이 열렸으면 그 트랜잭션의 확정부터 다시 기다린다.
-        if (layoutOpen(main.window)) settle(main, finish);
-        else afterNextFrame(main.window.screen, finish);
-        [main release];
+        // DOM 평가는 레이아웃만 끝낸다. 웹 콘텐츠 프로세스가 그 DOM 의 렌더링을 커밋해야 화면에 나온다.
+        [main _doAfterNextPresentationUpdate:^{
+            // 표시를 기다리는 사이 새 트랜잭션이 열렸으면 그 트랜잭션의 확정부터 다시 기다린다.
+            if (layoutOpen(main.window)) settle(main, finish);
+            else afterNextFrame(main.window.screen, finish);
+            [main release];
+        }];
     }];
 }
 

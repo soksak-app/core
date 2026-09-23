@@ -495,8 +495,10 @@ for (const app of Object.values(APPS)) {
         axis: "x", line: cards[0].c1, dx: 500, dy: 0, ms: 96, times: roundTripsPerSet,
       }, { capture: true });
       const edgeWidths = [];
+      const times = [];
       const positions = frames(result.frameDir).map((file, index) => {
         const frame = readFrame(file);
+        times.push(frame.time);
         let boxes;
         try {
           boxes = surfaceBoxes(frame, [30, 30, 30], { expectedRow: terminalY }).sort((a, b) => a.card.l - b.card.l);
@@ -520,7 +522,13 @@ for (const app of Object.values(APPS)) {
         });
         return ordered[1].card.l / frame.scale;
       });
-      assertRoundTrips(positions, roundTripsPerSet);
+      try {
+        assertRoundTrips(positions, roundTripsPerSet);
+      } catch (error) {
+        throw new Error(`set ${set}: ${error.message}; frames ${times.length}, first frame ${times[0]}ms, ` +
+          `last frame ${times.at(-1)}ms, last presentation ${result.displayed}ms, drag ${result.took}ms, ` +
+          `late steps ${result.late}`, { cause: error });
+      }
       const span = Math.max(...positions) - Math.min(...positions);
       assert.ok(span >= 50,
         `set ${set}: divider moved only ${span.toFixed(1)}pt; the drag did not move the layout`);

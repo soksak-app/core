@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F8-6-1: `host.window.presented` and command settling wait for the web content process to commit its rendering (`_doAfterNextPresentationUpdate:`) before they report the display time; previously they reported a time before the last DOM change was drawn, so drag recordings missed the final return. Both drag e2e cases pass 3 runs in a row on both hosts.
 - F8-17: terminal session errors are tracked by source and cleared only by a valid event of the kind that resolves them. Unrelated `state`, `session`, and `theme` events no longer clear errors, so the card indicator and `terminal.session.error` stay together. Verified by 10 Red unit tests and an e2e case on both debug applications.
 - F11-4: `make release-check` reports a malformed staged `sidecar.json` with its file and error; it previously skipped the file silently and left its executable unscanned.
 - F11-2: plugins declare check-only entries in `diagnostics.json` with their module, and only diagnostic builds stage them; the terminal `terminal.compose.update` and `terminal.ime.trace` moved there, and `make release-check` fails when release staging holds a plugin diagnostic declaration or module. Both release applications return 1001 for `terminal.ime.trace`, and the new e2e case passes on both debug applications.
