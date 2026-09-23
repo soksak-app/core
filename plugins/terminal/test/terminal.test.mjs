@@ -1471,6 +1471,46 @@ test("clearing a native preedit cancels it without writing the uncommitted text 
   assert.deepEqual(byteInputs, [], "a cleared marked string is not committed input");
 });
 
+test("an input method's edited syllables reach the PTY once and in order before Enter", async () => {
+  FakeResizeObserver.reset();
+  const fakeAttachImage = createFakeAttachImage();
+  const fakeSidecar = createFakeSidecar();
+  let regionReference;
+  const expose = createFakeExpose();
+  await startTerminal({
+    view: createFakeView(),
+    attachImage: (view, name, sidecar) => {
+      regionReference = fakeAttachImage.function(view, name, sidecar);
+      return regionReference;
+    },
+    sidecar: fakeSidecar,
+    expose,
+    scale: 1,
+    window: { ResizeObserver: FakeResizeObserver, TextEncoder, devicePixelRatio: 1 },
+  });
+  FakeResizeObserver.triggerAll();
+  openSession(fakeSidecar);
+
+  // macOS 한국어 입력기로 ddd 뒤 한글, Space, Enter 를 쳤을 때 네이티브 영역이 보고한 순서.
+  const compose = (text) => ({ type: "compose", text, selectedRange: { location: text.length, length: 0 }, replacementRange: null, attributed: false });
+  const insert = (text) => ({ type: "insert", text, replacementRange: null, attributed: false });
+  const sequence = [
+    insert("d"), insert("d"), insert("d"),
+    compose("ㅎ"), compose("하"), compose("한"), insert("한"),
+    compose("ㄱ"), compose("그"), compose("글"), insert("글"),
+    compose(" "), insert(" "), compose(""),
+    { type: "key", key: "Enter", shift: false, alt: false, ctrl: false },
+  ];
+  for (const event of sequence) regionReference._trigger(event.type, event);
+  for (let i = 0; i < 4; i++) await new Promise((resolve) => setImmediate(resolve));
+
+  const inputs = fakeSidecar.getMessages().filter(({ body }) => body.operation === "input" && (body.bytes || body.keys));
+  const written = inputs.map(({ body }) => body.bytes ? Buffer.from(body.bytes, "base64").toString("utf8") : `<${body.keys[0].key}>`);
+  assert.deepEqual(written, ["d", "d", "d", "한", "글", " ", "<Enter>"],
+    "only committed text reaches the PTY, once and in order, before the Enter key");
+  assert.equal(expose.getStatus("terminal.compose").readFn().text, "", "no preedit remains after the commit");
+});
+
 test("accepting native marked text writes it to the PTY exactly once", async () => {
   FakeResizeObserver.reset();
   const fakeAttachImage = createFakeAttachImage();

@@ -127,7 +127,7 @@ static NSArray *valuesOfType(NSString *type, NSUInteger from) {
 }
 
 // 사용자가 보고한 순서를 입력한다. 영문 입력 소스로 ddd 를 치고 한국어 2벌식으로 바꿔 한글(g k s r m f)과
-// Space 를 친다. 키마다 answered 가 늘어날 때까지 기다린다.
+// Space, Enter 를 친다. 키마다 answered 가 늘어날 때까지 기다린다.
 static void typeDddHangul(NSWindow *window, NSTextInputContext *context, NSUInteger (^answered)(void)) {
     TISInputSourceRef ascii = TISCopyCurrentASCIICapableKeyboardLayoutInputSource();
     NSString *asciiID = [[(NSString *)TISGetInputSourceProperty(ascii, kTISPropertyInputSourceID) copy] autorelease];
@@ -144,7 +144,7 @@ static void typeDddHangul(NSWindow *window, NSTextInputContext *context, NSUInte
     TISSelectInputSource(korean);
     CFRelease(korean);
     pump(^BOOL { return [context.selectedKeyboardInputSource isEqual:KOREAN_2SET]; });
-    for (NSString *key in @[@"g", @"k", @"s", @"r", @"m", @"f", @"Space"]) {
+    for (NSString *key in @[@"g", @"k", @"s", @"r", @"m", @"f", @"Space", @"Enter"]) {
         NSUInteger before = answered();
         sp_input_key(window, key.UTF8String, NULL, 0, true);
         sp_input_key(window, key.UTF8String, NULL, 0, false);
@@ -204,7 +204,7 @@ int main(void) { @autoreleasepool {
     pump(^BOOL { return NSTextInputContext.currentInputContext == control.inputContext
         && [control.inputContext.selectedKeyboardInputSource isEqual:KOREAN_2SET]; });
     typeDddHangul(window, control.inputContext, ^NSUInteger { return control.calls.count; });
-    check([control.string isEqual:@"ddd한글 "],
+    check([control.string isEqual:@"ddd한글 \n"],
         [NSString stringWithFormat:@"control: an AppKit text view receives ddd한글 through the injected keys (text %@, calls %@)",
             control.string, control.calls]);
     [control removeFromSuperview];
@@ -231,8 +231,10 @@ int main(void) { @autoreleasepool {
     [events removeAllObjects];
     typeDddHangul(window, context, ^NSUInteger { return events.count; });
     NSString *committed = [valuesOfType(@"insert", 0) componentsJoinedByString:@""];
-    check([committed isEqual:@"ddd한글 "],
-        [NSString stringWithFormat:@"image region: ddd한글 is committed exactly (committed %@, events %@)", committed, events]);
+    NSDictionary *last = events.lastObject;
+    check([committed isEqual:@"ddd한글 "] && [last[@"type"] isEqual:@"key"] && [last[@"key"] isEqual:@"Enter"],
+        [NSString stringWithFormat:@"image region: ddd한글 and a space are committed exactly once before Enter (committed %@, events %@)",
+            committed, events]);
 
     TISSelectInputSource(previousSource);
     CFRelease(previousSource);

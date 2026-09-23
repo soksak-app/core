@@ -19,6 +19,28 @@ static void testEvent(void *context, const char *json) {
     [collectedEvents addObject:[NSString stringWithUTF8String:json]];
 }
 
+// from 이후 insert 이벤트의 확정 문자열 목록.
+static NSArray *committedTexts(NSUInteger from) {
+    NSMutableArray *texts = [NSMutableArray array];
+    for (NSUInteger i = from; i < collectedEvents.count; i++) {
+        NSDictionary *event = [NSJSONSerialization JSONObjectWithData:[collectedEvents[i] dataUsingEncoding:NSUTF8StringEncoding]
+            options:0 error:NULL];
+        if ([event[@"type"] isEqual:@"insert"]) [texts addObject:event[@"text"] ?: NSNull.null];
+    }
+    return texts;
+}
+
+// from 이후 마지막 compose 이벤트의 조합 문자열. 없으면 nil.
+static NSString *lastPreedit(NSUInteger from) {
+    NSString *text = nil;
+    for (NSUInteger i = from; i < collectedEvents.count; i++) {
+        NSDictionary *event = [NSJSONSerialization JSONObjectWithData:[collectedEvents[i] dataUsingEncoding:NSUTF8StringEncoding]
+            options:0 error:NULL];
+        if ([event[@"type"] isEqual:@"compose"]) text = event[@"text"];
+    }
+    return text;
+}
+
 // 네 모서리를 다른 색으로 칠한 전역 IOSurface를 만든다
 static IOSurfaceRef createColoredGlobalSurface(size_t width, size_t height, unsigned char *nonce) {
     IOSurfaceRef surface = IOSurfaceCreate((CFDictionaryRef)@{
@@ -313,88 +335,72 @@ int main(void) { @autoreleasepool {
         sp_region_close(region7);
     }
 
-    // TEST 8: synthetic NSTextInputClient IME ordering and markedText state.
-    // This does not exercise the active Korean input source. replacementRange
-    // is a range in the existing document, not a range in the new preedit.
+    // TEST 8: synthetic NSTextInputClient calls. This does not exercise the active input
+    // source. Whether inserted text is committed at once or kept as editable preedit depends
+    // on the selected input source, so each case commits through a focus change and then
+    // checks the committed text, which is the same for every input source.
     {
-        [collectedEvents removeAllObjects];
-
         void *region8 = sp_region_create(surface, "test8", testEvent, NULL);
         sp_region_place(region8, 10, 10, 10, 10, true);
         sp_region_focus(region8);
-
-        [collectedEvents removeAllObjects];  // focus 이벤트 제거
-
-        id regionView = (id)region8;
-        NSResponder *firstResponder = ((NSView *)regionView).window.firstResponder;
-        check([firstResponder isKindOfClass:NSTextView.class],
+        NSTextView *regionView = (NSTextView *)region8;
+        check([window.firstResponder isKindOfClass:NSTextView.class],
             @"TEST 8: image input responder delegates text-system state to NSTextView");
-        // setMarkedText를 두 번 호출
+
+        [collectedEvents removeAllObjects];
         [(id<NSTextInputClient>)regionView setMarkedText:@"한" selectedRange:NSMakeRange(1, 0) replacementRange:NSMakeRange(NSNotFound, 0)];
-        check([(NSTextView *)regionView hasMarkedText],
-            @"TEST 8: NSTextView retains the active marked text");
+        check(regionView.hasMarkedText && [lastPreedit(0) isEqual:@"한"],
+            [NSString stringWithFormat:@"TEST 8: marked text is reported as preedit (got %@)", collectedEvents]);
         [(id<NSTextInputClient>)regionView setMarkedText:@"한글" selectedRange:NSMakeRange(2, 0) replacementRange:NSMakeRange(NSNotFound, 0)];
-        check(NSEqualRanges([(NSTextView *)regionView markedRange], NSMakeRange(0, 2)),
-            @"TEST 8: NSTextView updates its marked range with the replacement preedit");
+        check(NSEqualRanges(regionView.markedRange, NSMakeRange(0, 2)) && [lastPreedit(0) isEqual:@"한글"],
+            @"TEST 8: a replacement preedit updates the marked range and the reported preedit");
+        check(committedTexts(0).count == 0, @"TEST 8: marked text is not committed");
         [(id<NSTextInputClient>)regionView insertText:@"한글" replacementRange:NSMakeRange(NSNotFound, 0)];
-        check(![(NSTextView *)regionView hasMarkedText] && ((NSTextView *)regionView).textStorage.length == 0,
-            @"TEST 8: committed input clears marked state and temporary text storage");
+        [window makeFirstResponder:nil];
+        check([committedTexts(0) isEqualToArray:@[@"한글"]] && [lastPreedit(0) isEqual:@""]
+            && regionView.textStorage.length == 0,
+            [NSString stringWithFormat:@"TEST 8: inserted text is committed exactly once by the focus change (got %@)", collectedEvents]);
 
-        // 이벤트 순서: compose, compose, insert
-        check([collectedEvents count] >= 3,
-            [NSString stringWithFormat:@"TEST 8: at least 3 events (got %lu)", [collectedEvents count]]);
-
-        if ([collectedEvents count] >= 3) {
-            BOOL hasCompose1 = [[collectedEvents objectAtIndex:0] rangeOfString:@"\"type\":\"compose\""].location != NSNotFound;
-            BOOL hasCompose2 = [[collectedEvents objectAtIndex:1] rangeOfString:@"\"type\":\"compose\""].location != NSNotFound;
-            BOOL hasInsert = [[collectedEvents objectAtIndex:2] rangeOfString:@"\"type\":\"insert\""].location != NSNotFound;
-            check(hasCompose1 && hasCompose2 && hasInsert, @"TEST 8: events are compose, compose, insert");
+        // An input method edits its previous insert through a replacement range: ㅎ → 하 → 한.
+        sp_region_focus(region8);
+        NSUInteger beforeEdit = [collectedEvents count];
+        [(id<NSTextInputClient>)regionView insertText:@"ㅎ" replacementRange:NSMakeRange(NSNotFound, 0)];
+        NSArray *afterFirst = committedTexts(beforeEdit);
+        [(id<NSTextInputClient>)regionView insertText:@"하" replacementRange:NSMakeRange(0, 1)];
+        [(id<NSTextInputClient>)regionView insertText:@"한" replacementRange:NSMakeRange(0, 1)];
+        if (afterFirst.count == 0) {
+            check(committedTexts(beforeEdit).count == 0 && [lastPreedit(beforeEdit) isEqual:@"한"],
+                [NSString stringWithFormat:@"TEST 8: replaced input-method text stays editable preedit (got %@)", collectedEvents]);
+            [(id<NSTextInputClient>)regionView insertText:@"ㄱ" replacementRange:NSMakeRange(NSNotFound, 0)];
+            check([committedTexts(beforeEdit) isEqualToArray:@[@"한"]] && [lastPreedit(beforeEdit) isEqual:@"ㄱ"],
+                [NSString stringWithFormat:@"TEST 8: an appended insert commits the text before it (got %@)", collectedEvents]);
+            [(id<NSTextInputClient>)regionView doCommandBySelector:@selector(insertNewline:)];
+            check([committedTexts(beforeEdit) isEqualToArray:(@[@"한", @"ㄱ"])] && [lastPreedit(beforeEdit) isEqual:@""]
+                && [[collectedEvents lastObject] rangeOfString:@"insertNewline:"].location != NSNotFound,
+                [NSString stringWithFormat:@"TEST 8: a command commits the remaining preedit before it is reported (got %@)", collectedEvents]);
+        } else {
+            printf("TEST 8: the selected input source is a keyboard layout; replacement cases need an input method\n");
         }
 
-        // doCommandBySelector is an observable input command, not a silently
-        // ignored IME path.
+        NSUInteger beforeDelete = [collectedEvents count];
         [(id<NSTextInputClient>)regionView doCommandBySelector:@selector(deleteForward:)];
-        check([collectedEvents count] >= 4 &&
-            [[collectedEvents lastObject] rangeOfString:@"\"type\":\"command\""].location != NSNotFound &&
+        check([collectedEvents count] == beforeDelete + 1 &&
             [[collectedEvents lastObject] rangeOfString:@"deleteForward:"].location != NSNotFound,
             @"TEST 8: doCommandBySelector reports its selector");
 
         NSAttributedString *attributed = [[[NSAttributedString alloc] initWithString:@"한글"] autorelease];
         [(id<NSTextInputClient>)regionView setMarkedText:attributed selectedRange:NSMakeRange(1, 0)
-            replacementRange:NSMakeRange(3, 2)];
-        NSString *attributedEvent = [collectedEvents lastObject];
-        check([attributedEvent rangeOfString:@"\"attributed\":true"].location != NSNotFound &&
-            [attributedEvent rangeOfString:@"\"location\":1"].location != NSNotFound &&
-            [attributedEvent rangeOfString:@"\"location\":3"].location != NSNotFound,
-            @"TEST 8: attributed composition preserves selected and replacement ranges");
+            replacementRange:NSMakeRange(NSNotFound, 0)];
+        check([lastPreedit(0) isEqual:@"한글"], @"TEST 8: attributed marked text is reported as preedit");
         NSUInteger beforeUnmark = [collectedEvents count];
-        [(NSTextView *)regionView unmarkText];
-        check(![(NSTextView *)regionView hasMarkedText] && ((NSTextView *)regionView).textStorage.length == 0,
-            @"TEST 8: unmark clears AppKit's preedit storage");
+        [regionView unmarkText];
+        [window makeFirstResponder:nil];
         // NSTextInputClient 계약에서 unmarkText 는 marked text 를 일반 입력으로 받아들인다.
-        // 확정은 insert 한 번이고, 그 뒤에 조합 상태가 남지 않는다.
-        NSMutableArray *unmarkInserts = [NSMutableArray array];
-        NSDictionary *lastUnmarkCompose = nil;
-        for (NSUInteger i = beforeUnmark; i < [collectedEvents count]; i++) {
-            NSDictionary *event = [NSJSONSerialization JSONObjectWithData:
-                [collectedEvents[i] dataUsingEncoding:NSUTF8StringEncoding] options:0 error:NULL];
-            if ([event[@"type"] isEqual:@"insert"]) [unmarkInserts addObject:event[@"text"] ?: NSNull.null];
-            if ([event[@"type"] isEqual:@"compose"]) lastUnmarkCompose = event;
-            check(event != nil && ([event[@"type"] isEqual:@"insert"] ||
-                ([event[@"type"] isEqual:@"compose"] && [event[@"text"] isEqual:@""])),
-                [NSString stringWithFormat:@"TEST 8: unmarkText reports only insert or preedit clear (got %@)", collectedEvents[i]]);
-        }
-        check([unmarkInserts isEqualToArray:@[@"한글"]],
-            [NSString stringWithFormat:@"TEST 8: unmarkText commits the marked text as one insert (got %@)", unmarkInserts]);
-        NSUInteger lastInsert = NSNotFound;
-        for (NSUInteger i = beforeUnmark; i < [collectedEvents count]; i++) {
-            if ([collectedEvents[i] rangeOfString:@"\"type\":\"insert\""].location != NSNotFound) lastInsert = i;
-        }
-        check(lastUnmarkCompose == nil || lastInsert == [collectedEvents count] - 1,
-            [NSString stringWithFormat:@"TEST 8: no preedit event follows the unmarkText commit (got %@)",
-                [collectedEvents subarrayWithRange:NSMakeRange(beforeUnmark, [collectedEvents count] - beforeUnmark)]]);
+        check([committedTexts(beforeUnmark) isEqualToArray:@[@"한글"]] && [lastPreedit(beforeUnmark) isEqual:@""]
+            && !regionView.hasMarkedText && regionView.textStorage.length == 0,
+            [NSString stringWithFormat:@"TEST 8: unmarkText commits the marked text exactly once (got %@)", collectedEvents]);
         NSUInteger afterUnmark = [collectedEvents count];
-        [(NSTextView *)regionView unmarkText];
+        [regionView unmarkText];
         check([collectedEvents count] == afterUnmark,
             [NSString stringWithFormat:@"TEST 8: unmarkText without marked text reports nothing (got %lu events)",
                 [collectedEvents count] - afterUnmark]);
@@ -688,17 +694,14 @@ int main(void) { @autoreleasepool {
 
         [collectedEvents removeAllObjects];
         [regionView keyDown:aEvent];
+        [window makeFirstResponder:nil];
 
-        check([collectedEvents count] == 1,
-            [NSString stringWithFormat:@"TEST 14: exactly 1 event for 'a' (got %lu)", [collectedEvents count]]);
-        if ([collectedEvents count] > 0) {
-            NSString *eventStr = [collectedEvents objectAtIndex:0];
-            BOOL isInsertEvent = [eventStr rangeOfString:@"\"type\":\"insert\""].location != NSNotFound;
-            BOOL hasTextA = [eventStr rangeOfString:@"\"text\":\"a\""].location != NSNotFound;
-            BOOL noKeyEvent = [eventStr rangeOfString:@"\"type\":\"key\""].location == NSNotFound;
-            check(isInsertEvent && hasTextA && noKeyEvent,
-                [NSString stringWithFormat:@"TEST 14: event is insert event for 'a' (got: %@)", eventStr]);
+        BOOL noKeyEvent = YES;
+        for (NSString *eventStr in collectedEvents) {
+            if ([eventStr rangeOfString:@"\"type\":\"key\""].location != NSNotFound) noKeyEvent = NO;
         }
+        check([committedTexts(0) isEqualToArray:@[@"a"]] && noKeyEvent,
+            [NSString stringWithFormat:@"TEST 14: 'a' is committed once as text, not as a key event (got %@)", collectedEvents]);
 
         sp_region_close(region14);
     }

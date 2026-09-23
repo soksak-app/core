@@ -3,6 +3,7 @@
 // IOSurface 는 계층의 contents 에 직접 붙여진다. 레이어는 장치 픽셀 좌표를 쓰므로
 // 레이어 배율은 한 단위가 덮는 장치 픽셀 수다. 포인터는 통과한다(hitTest → nil).
 
+#import <Carbon/Carbon.h>
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import <IOSurface/IOSurface.h>
@@ -42,6 +43,8 @@
 @property BOOL placed;
 @property BOOL closed;
 @property BOOL hasFocus;
+@property(copy) NSString *reportedPreedit;  // 마지막으로 보고한 조합 문자열.
+@property NSUInteger committedLength;       // 문서 앞에서 이미 insert 로 확정한 길이.
 - (void)applyInsets;
 - (void)applyInsetsInTransaction;
 - (void)applyInsetsNow;
@@ -120,6 +123,20 @@ static NSString *controlCharacterForANSIKeyCode(unsigned short keyCode) {
     };
     self.richText = NO;
     self.allowsUndo = NO;
+    // 입력기가 넣은 문자열만 문서에 둔다. AppKit 의 자동 편집은 터미널 입력을 바꾸므로 끈다.
+    self.automaticQuoteSubstitutionEnabled = NO;
+    self.automaticDashSubstitutionEnabled = NO;
+    self.automaticTextReplacementEnabled = NO;
+    self.automaticSpellingCorrectionEnabled = NO;
+    self.automaticLinkDetectionEnabled = NO;
+    self.automaticDataDetectionEnabled = NO;
+    self.automaticTextCompletionEnabled = NO;
+    self.continuousSpellCheckingEnabled = NO;
+    self.grammarCheckingEnabled = NO;
+    self.smartInsertDeleteEnabled = NO;
+    self.reportedPreedit = @"";
+    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(inputSourceChanged:)
+        name:NSTextInputContextKeyboardSelectionDidChangeNotification object:nil];
     self.editable = YES;
     self.selectable = YES;
     self.wantsLayer = YES;
@@ -136,6 +153,8 @@ static NSString *controlCharacterForANSIKeyCode(unsigned short keyCode) {
 }
 
 - (void)dealloc {
+    [NSNotificationCenter.defaultCenter removeObserver:self];
+    [_reportedPreedit release];
     // 레이어의 contents 를 정리한 후 불변 스냅샷을 해제한다.
     self.imageLayer.contents = nil;
     if (_snapshot) CGImageRelease(_snapshot);
@@ -274,6 +293,7 @@ static NSString *controlCharacterForANSIKeyCode(unsigned short keyCode) {
 }
 
 - (BOOL)resignFirstResponder {
+    [self commitPending];
     BOOL result = [super resignFirstResponder];
     if (result && self.hasFocus) {
         self.hasFocus = NO;
@@ -406,6 +426,7 @@ static NSString *controlCharacterForANSIKeyCode(unsigned short keyCode) {
                 alt ? "true" : "false",
                 ctrl ? "true" : "false"];
         }
+        [self commitPending];
         [self report:json.UTF8String];
         return;
     }
@@ -417,46 +438,109 @@ static NSString *controlCharacterForANSIKeyCode(unsigned short keyCode) {
 - (void)doCommandBySelector:(SEL)selector {
     // NSTextInputClient commands are part of the input stream. Dropping them
     // loses IME actions such as cancel, delete, and accept.
+    [self commitPending];
     NSString *name = NSStringFromSelector(selector);
     NSString *json = [NSString stringWithFormat:@"{\"type\":\"command\",\"selector\":\"%@\"}",
         [self jsonEscapedString:name]];
     [self report:json.UTF8String];
 }
 
+// 입력기는 이전에 넣은 문자열을 교체 범위로 고쳐 쓸 수 있다(예: macOS 한국어 입력기의 ㅎ → 하 → 한).
+// 입력기는 조합 중인 음절의 문서 위치를 기억하므로, 조합하는 입력 소스가 선택된 동안 입력기가 넣은
+// 문자열은 확정한 뒤에도 문서에 남긴다. 새로 넣은 문자열의 시작보다 앞은 입력기가 더 고치지 않으므로
+// insert 로 확정하고, 그 뒤는 조합 문자열로 보고한다. 문서는 입력기의 조합을 끝낼 때 비운다.
 - (void)insertText:(id)string replacementRange:(NSRange)range {
     NSString *text = [string isKindOfClass:NSAttributedString.class]
         ? [(NSAttributedString *)string string]
         : ([string isKindOfClass:NSString.class] ? (NSString *)string : nil);
     if (!text) return;
 
+    if (range.location != NSNotFound && range.location < self.committedLength) {
+        // 이미 PTY 로 보낸 문자열은 되돌릴 수 없다. 교체를 버리지 않고 오류로 알린다.
+        NSString *reason = [NSString stringWithFormat:@"input method replaced committed text at %lu (committed %lu)",
+            (unsigned long)range.location, (unsigned long)self.committedLength];
+        NSData *data = [NSJSONSerialization dataWithJSONObject:@{ @"type": @"error", @"reason": reason } options:0 error:NULL];
+        [self report:[[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease].UTF8String];
+    }
     [super insertText:string replacementRange:range];
-    [self.textStorage deleteCharactersInRange:NSMakeRange(0, self.textStorage.length)];
-
-    NSString *json = [NSString stringWithFormat:@"{\"type\":\"insert\",\"text\":\"%@\",\"replacementRange\":%@,\"attributed\":%@}",
-        [self jsonEscapedString:text], [self jsonRange:range],
-        [string isKindOfClass:NSAttributedString.class] ? @"true" : @"false"];
-    [self report:json.UTF8String];
+    if (self.hasMarkedText) {
+        [self reportPreedit];
+        return;
+    }
+    if (![self selectedSourceComposes]) {
+        [self commitThrough:self.textStorage.length];
+        [self clearDocument];
+        return;
+    }
+    NSUInteger end = self.selectedRange.location;
+    NSUInteger start = end >= text.length ? end - text.length : 0;
+    if (start > self.committedLength) [self commitThrough:start];
+    [self reportPreedit];
 }
 
 - (void)setMarkedText:(id)string selectedRange:(NSRange)selectedRange replacementRange:(NSRange)replacementRange {
-    NSString *text = [string isKindOfClass:NSAttributedString.class]
-        ? [(NSAttributedString *)string string]
-        : ([string isKindOfClass:NSString.class] ? (NSString *)string : nil);
-    if (!text) return;
-
+    if (![string isKindOfClass:NSAttributedString.class] && ![string isKindOfClass:NSString.class]) return;
     [super setMarkedText:string selectedRange:selectedRange replacementRange:replacementRange];
+    [self reportPreedit];
+}
 
-    if (text.length == 0) {
-        NSString *json = [NSString stringWithFormat:@"{\"type\":\"compose\",\"text\":\"\",\"selectedRange\":%@,\"replacementRange\":%@,\"attributed\":%@}",
-            [self jsonRange:selectedRange], [self jsonRange:replacementRange],
-            [string isKindOfClass:NSAttributedString.class] ? @"true" : @"false"];
-        [self report:json.UTF8String];
-    } else {
-        NSString *json = [NSString stringWithFormat:@"{\"type\":\"compose\",\"text\":\"%@\",\"selectedRange\":%@,\"replacementRange\":%@,\"attributed\":%@}",
-            [self jsonEscapedString:text], [self jsonRange:selectedRange], [self jsonRange:replacementRange],
-            [string isKindOfClass:NSAttributedString.class] ? @"true" : @"false"];
-        [self report:json.UTF8String];
+// 선택된 입력 소스가 입력기인지 확인한다. 자판(keyboard layout)은 넣은 문자열을 고쳐 쓰지 않는다.
+- (BOOL)selectedSourceComposes {
+    NSString *identifier = self.inputContext.selectedKeyboardInputSource;
+    if (!identifier) return NO;
+    NSArray *sources = (NSArray *)TISCreateInputSourceList(
+        (CFDictionaryRef)@{(id)kTISPropertyInputSourceID: identifier}, false);
+    BOOL composes = NO;
+    if (sources.count > 0) {
+        CFStringRef type = TISGetInputSourceProperty((TISInputSourceRef)sources[0], kTISPropertyInputSourceType);
+        composes = type && !CFEqual(type, kTISTypeKeyboardLayout);
     }
+    [sources release];
+    return composes;
+}
+
+// 문서의 확정 위치부터 end 까지를 확정 입력으로 보고한다. 문서는 바꾸지 않는다.
+- (void)commitThrough:(NSUInteger)end {
+    if (end <= self.committedLength) return;
+    NSString *committed = [self.textStorage.string substringWithRange:
+        NSMakeRange(self.committedLength, end - self.committedLength)];
+    self.committedLength = end;
+    NSString *json = [NSString stringWithFormat:@"{\"type\":\"insert\",\"text\":\"%@\",\"replacementRange\":null,\"attributed\":false}",
+        [self jsonEscapedString:committed]];
+    [self report:json.UTF8String];
+}
+
+// 확정 위치 뒤, 입력기가 아직 고칠 수 있는 문자열을 조합 문자열로 보고한다. 바뀐 경우에만 보고한다.
+- (void)reportPreedit {
+    NSString *storage = self.textStorage.string;
+    NSString *preedit = self.committedLength <= storage.length ? [storage substringFromIndex:self.committedLength] : @"";
+    if ([preedit isEqualToString:self.reportedPreedit]) return;
+    self.reportedPreedit = preedit;
+    NSRange selected = self.selectedRange;
+    NSRange local = selected.location != NSNotFound && selected.location >= self.committedLength
+        ? NSMakeRange(selected.location - self.committedLength, selected.length) : NSMakeRange(NSNotFound, 0);
+    NSString *json = [NSString stringWithFormat:@"{\"type\":\"compose\",\"text\":\"%@\",\"selectedRange\":%@,\"replacementRange\":null,\"attributed\":false}",
+        [self jsonEscapedString:preedit], [self jsonRange:local]];
+    [self report:json.UTF8String];
+}
+
+- (void)clearDocument {
+    [self.textStorage deleteCharactersInRange:NSMakeRange(0, self.textStorage.length)];
+    self.committedLength = 0;
+    [self reportPreedit];
+}
+
+// 명령·특수 키·포커스 해제·입력 소스 전환·닫기 전에 남은 문자열을 확정하고 입력기의 조합을 끝낸다.
+// 입력기가 marked text 를 가진 동안은 입력기가 확정을 결정한다.
+- (void)commitPending {
+    if (self.hasMarkedText || self.textStorage.length == 0) return;
+    [self commitThrough:self.textStorage.length];
+    [self.inputContext discardMarkedText];
+    [self clearDocument];
+}
+
+- (void)inputSourceChanged:(NSNotification *)notification {
+    if (notification.object == self.inputContext) [self commitPending];
 }
 
 - (NSRect)firstRectForCharacterRange:(NSRange)range actualRange:(NSRangePointer)actualRange {
@@ -740,6 +824,7 @@ void sp_region_frame(void *handle, double *out) {
 void sp_region_close(void *handle) {
     NSCAssert(NSThread.isMainThread, @"image regions belong to the main thread");
     SPImageRegion *view = (SPImageRegion *)handle;
+    [view commitPending];
     view.closed = YES;
     view.event = NULL;
     NSView *clipView = view.superview;  // sp_region_create 가 만든 클립 뷰.
