@@ -70,6 +70,18 @@ static NSString *currentSourceID(void) {
     [self.calls addObject:[NSString stringWithFormat:@"read(%@) -> %@", NSStringFromRange(range), result.string]];
     return result;
 }
+- (void)unmarkText {
+    [self.calls addObject:@"unmark"];
+    [super unmarkText];
+}
+- (void)doCommandBySelector:(SEL)selector {
+    [self.calls addObject:NSStringFromSelector(selector)];
+    [super doCommandBySelector:selector];
+}
+- (void)keyDown:(NSEvent *)event {
+    [self.calls addObject:[NSString stringWithFormat:@"key(%@)", event.charactersIgnoringModifiers]];
+    [super keyDown:event];
+}
 - (void)dealloc { [_calls release]; [super dealloc]; }
 @end
 
@@ -120,24 +132,34 @@ static NSArray *valuesOfType(NSString *type, NSUInteger from) {
 }
 
 // 사용자가 보고한 순서를 입력한다. 영문 입력 소스로 ddd 를 치고 한국어 2벌식으로 바꿔 한글(g k s r m f)과
-// Space, Enter 를 친다. 키마다 answered 가 늘어날 때까지 기다린다.
+// Space 를 친다. 키마다 answered 가 늘어날 때까지 기다린다.
+static void typeKey(NSWindow *window, NSString *key, NSUInteger (^answered)(void)) {
+    NSUInteger before = answered();
+    BOOL sent = sp_input_key(window, key.UTF8String, NULL, 0, true) && sp_input_key(window, key.UTF8String, NULL, 0, false);
+    if (!sent) {
+        check(NO, [NSString stringWithFormat:@"the injector sends %@", key]);
+        return;
+    }
+    check(pump(^BOOL { return answered() > before; }), [NSString stringWithFormat:@"the client answers %@", key]);
+}
+
+static void selectSource(NSString *source, NSTextInputContext *context) {
+    check(sp_input_source_select(source.UTF8String), [NSString stringWithFormat:@"%@ is selected", source]);
+    pump(^BOOL { return [context.selectedKeyboardInputSource isEqual:source]; });
+}
+
+// 입력 소스 전환 직후 첫 음절(한)과 Space 를 친다. 입력기는 이 음절을 교체 범위로 조합한다.
+static void typeSwitchedSyllable(NSWindow *window, NSTextInputContext *context, NSUInteger (^answered)(void)) {
+    selectSource(ABC, context);
+    selectSource(KOREAN_2SET, context);
+    for (NSString *key in @[@"g", @"k", @"s", @"Space"]) typeKey(window, key, answered);
+}
+
 static void typeDddHangul(NSWindow *window, NSTextInputContext *context, NSUInteger (^answered)(void)) {
-    check(sp_input_source_select(ABC.UTF8String), @"ABC is selected");
-    pump(^BOOL { return [context.selectedKeyboardInputSource isEqual:ABC]; });
-    for (NSString *key in @[@"d", @"d", @"d"]) {
-        NSUInteger before = answered();
-        sp_input_key(window, key.UTF8String, NULL, 0, true);
-        sp_input_key(window, key.UTF8String, NULL, 0, false);
-        pump(^BOOL { return answered() > before; });
-    }
-    check(sp_input_source_select(KOREAN_2SET.UTF8String), @"Korean 2-Set is selected");
-    pump(^BOOL { return [context.selectedKeyboardInputSource isEqual:KOREAN_2SET]; });
-    for (NSString *key in @[@"g", @"k", @"s", @"r", @"m", @"f", @"Space", @"Enter"]) {
-        NSUInteger before = answered();
-        sp_input_key(window, key.UTF8String, NULL, 0, true);
-        sp_input_key(window, key.UTF8String, NULL, 0, false);
-        pump(^BOOL { return answered() > before; });
-    }
+    selectSource(ABC, context);
+    for (NSString *key in @[@"d", @"d", @"d"]) typeKey(window, key, answered);
+    selectSource(KOREAN_2SET, context);
+    for (NSString *key in @[@"g", @"k", @"s", @"r", @"m", @"f", @"Space"]) typeKey(window, key, answered);
 }
 
 int main(void) { @autoreleasepool {
@@ -193,10 +215,27 @@ int main(void) { @autoreleasepool {
     [window makeFirstResponder:control];
     pump(^BOOL { return NSTextInputContext.currentInputContext == control.inputContext
         && [control.inputContext.selectedKeyboardInputSource isEqual:KOREAN_2SET]; });
-    typeDddHangul(window, control.inputContext, ^NSUInteger { return control.calls.count; });
+    NSUInteger (^controlAnswered)(void) = ^NSUInteger {
+        return [control.calls indexesOfObjectsPassingTest:^BOOL(NSString *call, NSUInteger index, BOOL *stop) {
+            return ![call hasPrefix:@"key("];
+        }].count;
+    };
+    typeDddHangul(window, control.inputContext, controlAnswered);
+    typeKey(window, @"Enter", controlAnswered);
     check([control.string isEqual:@"ddd한글 \n"],
         [NSString stringWithFormat:@"control: an AppKit text view receives ddd한글 through the injected keys (text %@, calls %@)",
             control.string, control.calls]);
+    printf("MEASURE: text view calls for ddd한글 Space Enter: %s\n", [control.calls componentsJoinedByString:@"; "].UTF8String);
+    // 입력기는 조합하던 음절의 위치를 기억하고 입력 소스 전환 때 그 위치에 다시 확정하므로, 문서를 비우기 전에 조합을 끝낸다.
+    [control.inputContext discardMarkedText];
+    control.string = @"";
+    [control.calls removeAllObjects];
+    typeSwitchedSyllable(window, control.inputContext, controlAnswered);
+    typeKey(window, @"Enter", controlAnswered);
+    check([control.string isEqual:@"한 \n"],
+        [NSString stringWithFormat:@"control: an AppKit text view receives the first syllable after a switch and a space (text %@, calls %@)",
+            control.string, control.calls]);
+    printf("MEASURE: text view calls for a switch, 한 Space Enter: %s\n", [control.calls componentsJoinedByString:@"; "].UTF8String);
     [control removeFromSuperview];
 
     // 대조: 문서가 없는 최소 입력 클라이언트에서 입력기가 쓰는 방식을 기록한다.
@@ -219,12 +258,30 @@ int main(void) { @autoreleasepool {
 
     // 사용자 보고: ddd한글 을 치면 ddd글 이 된다. 그림 영역의 확정 입력은 정확히 ddd한글 이어야 한다.
     [events removeAllObjects];
-    typeDddHangul(window, context, ^NSUInteger { return events.count; });
+    NSUInteger (^regionAnswered)(void) = ^NSUInteger { return events.count; };
+    typeDddHangul(window, context, regionAnswered);
+    // F8-16: Space 가 조합을 끝내면 다음 키 없이 공백까지 확정되고 조합 문자열이 비어야 한다.
     NSString *committed = [valuesOfType(@"insert", 0) componentsJoinedByString:@""];
+    NSString *preedit = [valuesOfType(@"compose", 0) lastObject] ?: @"";
+    check([committed isEqual:@"ddd한글 "] && [preedit isEqual:@""],
+        [NSString stringWithFormat:@"image region: ddd한글 and a space are committed before any further key (committed %@, preedit '%@', events %@)",
+            committed, preedit, events]);
+    typeKey(window, @"Enter", regionAnswered);
+    committed = [valuesOfType(@"insert", 0) componentsJoinedByString:@""];
     NSDictionary *last = events.lastObject;
     check([committed isEqual:@"ddd한글 "] && [last[@"type"] isEqual:@"key"] && [last[@"key"] isEqual:@"Enter"],
         [NSString stringWithFormat:@"image region: ddd한글 and a space are committed exactly once before Enter (committed %@, events %@)",
             committed, events]);
+
+    // 전환 직후 교체 범위로 조합한 첫 음절 뒤의 Space 도 다음 키 없이 확정되어야 한다.
+    [events removeAllObjects];
+    typeSwitchedSyllable(window, context, regionAnswered);
+    committed = [valuesOfType(@"insert", 0) componentsJoinedByString:@""];
+    preedit = [valuesOfType(@"compose", 0) lastObject] ?: @"";
+    check([committed isEqual:@"한 "] && [preedit isEqual:@""],
+        [NSString stringWithFormat:@"image region: the first syllable after a switch and a space are committed before any further key (committed %@, preedit '%@', events %@)",
+            committed, preedit, events]);
+    typeKey(window, @"Enter", regionAnswered);
 
     check(sp_input_source_select(previousSource.UTF8String), @"the previous input source is restored");
     sp_region_close(region);

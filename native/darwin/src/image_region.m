@@ -9,6 +9,7 @@
 #import <IOSurface/IOSurface.h>
 #import <QuartzCore/QuartzCore.h>
 #import "image_region.h"
+#import "input_method_context.h"
 #import "webview_geometry.h"
 
 @class SPImageRegion;
@@ -45,6 +46,7 @@
 @property BOOL hasFocus;
 @property(copy) NSString *reportedPreedit;  // 마지막으로 보고한 조합 문자열.
 @property NSUInteger committedLength;       // 문서 앞에서 이미 insert 로 확정한 길이.
+@property(retain) SPInputMethodContext *inputMethodContext;
 - (void)applyInsets;
 - (void)applyInsetsInTransaction;
 - (void)applyInsetsNow;
@@ -155,6 +157,7 @@ static NSString *controlCharacterForANSIKeyCode(unsigned short keyCode) {
 - (void)dealloc {
     [NSNotificationCenter.defaultCenter removeObserver:self];
     [_reportedPreedit release];
+    [_inputMethodContext release];
     // 레이어의 contents 를 정리한 후 불변 스냅샷을 해제한다.
     self.imageLayer.contents = nil;
     if (_snapshot) CGImageRelease(_snapshot);
@@ -166,6 +169,14 @@ static NSString *controlCharacterForANSIKeyCode(unsigned short keyCode) {
 
 - (BOOL)acceptsFirstResponder {
     return YES;
+}
+
+// 입력기가 넣은 문자열과 키 바인딩이 넣은 문자열을 구별하려고 입력기 이벤트를 표시하는 컨텍스트를 쓴다.
+- (NSTextInputContext *)inputContext {
+    if (!self.inputMethodContext) {
+        self.inputMethodContext = [[[SPInputMethodContext alloc] initWithClient:self] autorelease];
+    }
+    return self.inputMethodContext;
 }
 
 - (NSView *)hitTest:(NSPoint)point {
@@ -448,7 +459,9 @@ static NSString *controlCharacterForANSIKeyCode(unsigned short keyCode) {
 // 입력기는 이전에 넣은 문자열을 교체 범위로 고쳐 쓸 수 있다(예: macOS 한국어 입력기의 ㅎ → 하 → 한).
 // 입력기는 조합 중인 음절의 문서 위치를 기억하므로, 조합하는 입력 소스가 선택된 동안 입력기가 넣은
 // 문자열은 확정한 뒤에도 문서에 남긴다. 새로 넣은 문자열의 시작보다 앞은 입력기가 더 고치지 않으므로
-// insert 로 확정하고, 그 뒤는 조합 문자열로 보고한다. 문서는 입력기의 조합을 끝낼 때 비운다.
+// insert 로 확정하고, 그 뒤는 조합 문자열로 보고한다. 입력기 이벤트 밖에서 들어온 문자열(입력기가
+// 처리하지 않은 키를 키 바인딩이 넣은 문자열, 예: 한글 뒤의 Space)은 입력기가 고치지 않으므로 그 앞의
+// 문자열과 함께 바로 확정한다. 문서는 입력기의 조합을 끝낼 때 비운다.
 - (void)insertText:(id)string replacementRange:(NSRange)range {
     NSString *text = [string isKindOfClass:NSAttributedString.class]
         ? [(NSAttributedString *)string string]
@@ -462,6 +475,7 @@ static NSString *controlCharacterForANSIKeyCode(unsigned short keyCode) {
         NSData *data = [NSJSONSerialization dataWithJSONObject:@{ @"type": @"error", @"reason": reason } options:0 error:NULL];
         [self report:[[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease].UTF8String];
     }
+    BOOL fromInputMethod = self.inputMethodContext.handlingInputMethodEvent;
     [super insertText:string replacementRange:range];
     if (self.hasMarkedText) {
         [self reportPreedit];
@@ -470,6 +484,11 @@ static NSString *controlCharacterForANSIKeyCode(unsigned short keyCode) {
     if (![self selectedSourceComposes]) {
         [self commitThrough:self.textStorage.length];
         [self clearDocument];
+        return;
+    }
+    if (!fromInputMethod) {
+        [self commitThrough:self.textStorage.length];
+        [self reportPreedit];
         return;
     }
     NSUInteger end = self.selectedRange.location;
@@ -624,6 +643,11 @@ void *sp_region_create(void *surfaceHandle, const char *name, sp_region_event ev
     NSCAssert(NSThread.isMainThread, @"image regions belong to the main thread");
     NSView *surface = (NSView *)surfaceHandle;
     if (!surface || !name || !event || !surface.window) return NULL;
+    if (![SPInputMethodContext observesInputMethodEvents]) {
+        fprintf(stderr, "image region: AppKit does not deliver input method events through "
+            "-[NSTextInputContext handleTSMEvent:completionHandler:]\n");
+        return NULL;
+    }
 
     SPImageRegion *view = [[SPImageRegion alloc] initWithFrame:NSZeroRect];
     view.event = event;

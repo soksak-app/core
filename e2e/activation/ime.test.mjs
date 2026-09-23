@@ -106,7 +106,8 @@ for (const app of Object.values(APPS)) {
         `the cursor after ASCII text must cover exactly one cell: ${JSON.stringify(narrow)}`);
       assert.equal((await s.request("diagnostics.input.source", { select: KOREAN_2SET })).current, KOREAN_2SET);
 
-      const steps = [["g", "ㅎ"], ["k", "하"], ["s", "한"], ["r", "ㄱ"], ["m", "그"], ["f", "글"], ["Space", " "]];
+      const steps = [["g", "ㅎ"], ["k", "하"], ["s", "한"], ["r", "ㄱ"], ["m", "그"], ["f", "글"]];
+      let preeditCursor;
       for (const [key, preedit] of steps) {
         await s.press(key);
         await s.until("terminal.compose", (compose) => compose.text === preedit,
@@ -114,6 +115,7 @@ for (const app of Object.values(APPS)) {
         if (preedit === "글") {
           // 넓은 조합 글자는 커서가 두 칸을 모두 덮는다.
           const measured = await cursorCellCoverage(s, surface);
+          preeditCursor = measured.cursor;
           t.diagnostic(`${app.name}: preedit 글 cursor coverage ${JSON.stringify(measured)}`);
           assert.ok(measured.first > 0.5 && measured.second > 0.5,
             `the block cursor does not cover the wide preedit: ${JSON.stringify(measured)}`);
@@ -122,7 +124,15 @@ for (const app of Object.values(APPS)) {
             `the right half of the wide preedit glyph is missing: ${JSON.stringify(measured)}`);
         }
       }
-      const typed = await readScreenUntil(s, surface, (lines) => lines.some((line) => line.endsWith("ddd한글")),
+      // F8-16: Space 는 입력기가 처리하지 않는 키이므로 글과 공백이 다음 키 없이 PTY 에 도착한다.
+      // 셸이 글(두 칸)과 공백(한 칸)을 반향하면 커서가 조합 시작 칸에서 세 칸 이동한다.
+      await s.press("Space");
+      await s.until("terminal.compose", (compose) => compose.text === "",
+        "the Space key left a preedit", { surface });
+      const spaced = await s.until("terminal.cursor", (cursor) => cursor.row === preeditCursor.row && cursor.col === preeditCursor.col + 3,
+        `the space after 글 did not reach the PTY before any further key (preedit cursor ${JSON.stringify(preeditCursor)})`, { surface });
+      t.diagnostic(`${app.name}: cursor after Space ${JSON.stringify(spaced)} from preedit cursor ${JSON.stringify(preeditCursor)}`);
+      const typed = await readScreenUntil(s, surface, (lines) => lines.some((line) => line.trimEnd().endsWith("ddd한글")),
         "the committed syllables did not reach the PTY before Enter");
       assert.ok(!typed.some((line) => /[ㄱ-ㅣ]/.test(line)),
         `uncommitted jamo reached the PTY: ${JSON.stringify(typed)}`);
