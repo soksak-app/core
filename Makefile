@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: preflight prepare build verify docs-check boundaries platforms hosts-check e2e-check exposure-check parity-check terminal-protocols-check language-test release-check
+.PHONY: preflight prepare build verify docs-check boundaries platforms hosts-check e2e-check exposure-check parity-check terminal-protocols-check language-test release-check rust-tests-alone
 
 docs-check:
 	@node scripts/check-docs.mjs
@@ -33,6 +33,21 @@ terminal-protocols-check:
 language-test: native-darwin
 	@$(MAKE) -C native/darwin $(CURDIR)/native/darwin/build/appearance_test
 	@node scripts/language-test-adapters.mjs scripts/language-test-cases.json
+
+# Rust 패키지의 각 테스트를 새 프로세스에서 혼자 실행한다. 다른 테스트가 만든 상태나 시간 순서에 기대는 테스트를 찾는다.
+# 첫 실패에서 테스트 이름을 보고한다. MANIFEST 는 패키지가 속한 작업 공간의 Cargo.toml 이다.
+MANIFEST ?= sidecars/Cargo.toml
+rust-tests-alone:
+	@case "$(PACKAGE)" in '') echo "rust-tests-alone requires PACKAGE=<cargo package> [MANIFEST=<Cargo.toml>]" >&2; exit 2;; esac
+	@cargo test -q --manifest-path $(MANIFEST) -p $(PACKAGE) --no-run
+	@names=$$(cargo test -q --manifest-path $(MANIFEST) -p $(PACKAGE) -- --list 2>/dev/null | sed -n 's/: test$$//p'); \
+	  count=0; for name in $$names; do \
+	    count=$$((count + 1)); \
+	    cargo test -q --manifest-path $(MANIFEST) -p $(PACKAGE) -- --exact "$$name" > /dev/null 2>&1 \
+	      || { echo "FAIL: $(PACKAGE) $$name fails when it runs alone (test $$count)" >&2; exit 1; }; \
+	  done; \
+	  [ $$count -gt 0 ] || { echo "rust-tests-alone found no tests in $(PACKAGE)" >&2; exit 1; }; \
+	  echo "$(PACKAGE): $$count tests pass alone"
 
 # 운영체제별 코드가 platform/<os>/ 아래에만 있는지 검사한다.
 platforms:

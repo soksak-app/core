@@ -636,6 +636,9 @@ async fn test_stdin_eof_terminates_quickly() {
         )) as Arc<dyn SessionPort>
     });
 
+    // 서비스는 시작할 때 글꼴을 먼저 읽는다. 이 검사는 EOF 뒤의 종료 시간만 재므로 같은 순서로 글꼴을 먼저 읽는다.
+    // 새 프로세스의 첫 CoreText 호출은 2초 넘게 걸릴 수 있다(V5-7).
+    soksak_sidecar_vt_core::platform::darwin::frame::load_default_font().expect("the system fixed-pitch font");
     let start = std::time::Instant::now();
     let result = serve(engine_factory, reader, &mut writer, session_port_factory).await;
     let elapsed = start.elapsed();
@@ -2685,6 +2688,31 @@ async fn next_image_envelope(
     panic!("no image envelope arrived");
 }
 
+// 호스트처럼 이미지 봉투에 consumed 로 답한다. 답하기 전까지 사이드카는 다음 raster 구성을 적용하지 않는다.
+async fn acknowledge_image(to_serve: &mut tokio::io::DuplexStream, envelope: &serde_json::Value) {
+    let image = &envelope["body"]["image"];
+    let consumed = serde_json::json!({"surface": envelope["surface"], "body": {"image": {"consumed": {
+        "name": image["name"], "generation": image["generation"],
+        "raster": image["raster"], "sequence": image["sequence"]}}}});
+    to_serve.write_all(format!("{consumed}\n").as_bytes()).await.unwrap();
+}
+
+// 지정한 raster 의 이미지 봉투를 기다린다. 커서 틱처럼 이전 raster 로 그린 이미지는 답하고 넘긴다.
+async fn next_image_of_raster(
+    lines: &mut tokio::io::Lines<tokio::io::BufReader<tokio::io::DuplexStream>>,
+    to_serve: &mut tokio::io::DuplexStream,
+    raster: u64,
+) -> serde_json::Value {
+    for _ in 0..20 {
+        let envelope = next_image_envelope(lines).await;
+        if envelope["body"]["image"]["raster"].as_u64() == Some(raster) {
+            return envelope;
+        }
+        acknowledge_image(to_serve, &envelope).await;
+    }
+    panic!("no image envelope for raster {raster} arrived");
+}
+
 /// A replacement raster is not used until the prior transfer is acknowledged.
 #[tokio::test]
 async fn test_replacement_raster_waits_for_prior_transfer() {
@@ -2740,7 +2768,7 @@ async fn test_replacement_raster_waits_for_prior_transfer() {
     to_serve.write_all(br#"{"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":2,"width":1600,"height":768,"scale":1.0}}}}
 "#).await.unwrap();
 
-    let image2 = next_image_envelope(&mut lines).await;
+    let image2 = next_image_of_raster(&mut lines, &mut to_serve, 2).await;
     let image2_obj = image2["body"]["image"]
         .as_object()
         .expect("image envelope after resize");
@@ -2996,7 +3024,8 @@ async fn test_replacement_raster_state_has_cell_dimensions() {
     to_serve.write_all(br#"{"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":2,"width":1600,"height":768,"scale":1.0}}}}
 "#).await.unwrap();
 
-    // Read until the state event for the resize arrives (image envelopes may come first)
+    // resize 의 state 이벤트까지 읽는다. 커서 틱이 만든 이미지가 먼저 올 수 있으며, 호스트처럼 각 이미지에
+    // consumed 로 답해야 대기 중인 raster 2 구성이 적용된다.
     let mut state_json: Option<serde_json::Value> = None;
     for _ in 0..10 {
         let line = tokio::time::timeout(std::time::Duration::from_secs(2), lines.next_line())
@@ -3009,6 +3038,9 @@ async fn test_replacement_raster_state_has_cell_dimensions() {
             if json["body"]["event"].as_str() == Some("state") {
                 state_json = Some(json);
                 break;
+            }
+            if json["body"]["image"].is_object() {
+                acknowledge_image(&mut to_serve, &json).await;
             }
         }
     }

@@ -126,6 +126,6 @@ Activation-tier window checks live in `e2e/activation/` and run only with `pnpm 
 
 `soksak capture --window main --config-dir DIR` writes a still PNG of a running diagnostic build's window without focusing it and prints its path, for looking at the result during development. Remove the printed `still-*` directory after viewing; numeric checks use recording frames instead.
 
-`make -C native/darwin repeat TEST=<name>_test COUNT=<n>` runs one default test repeatedly and `make -C native/darwin repeat-suite COUNT=<n>` runs the default suite repeatedly; each stops at the first failure and reports the run number and system load.
+`make -C native/darwin repeat TEST=<name>_test COUNT=<n>` runs one default test repeatedly and `make -C native/darwin repeat-suite COUNT=<n>` runs the default suite repeatedly; each stops at the first failure and reports the run number and system load. `make rust-tests-alone PACKAGE=<package> [MANIFEST=<Cargo.toml>]` runs each test of a Rust package alone in a new process and reports the first test that fails alone; a test that passes only after another test has run depends on shared state or timing.
 
 The baseline expects duplicate pointer movement in overlapping DOMs. The registered-input run requires exclusive pointer tracking, retained keyboard input, and cleanup after hiding or removing the overlay. Neither run tests delayed cursor responses.
