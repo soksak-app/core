@@ -121,9 +121,11 @@ fn exact_placements(
 /// 호출한 표면의 모든 네이티브 영역과 DOM 오버레이를 한 완전한 리비전으로 배치한다.
 pub(crate) fn place(webview: &Webview, request: CompositionPlaceRequest) -> Result<(), String> {
     let window = webview.window();
-    if webview.label() != window.label() {
-        return Err("composition operations must come from the main webview".into());
-    }
+    crate::exposure::authorize_main_caller(
+        webview.label(),
+        window.label(),
+        "composition operations",
+    )?;
     if request.surface.is_empty() {
         return Err(format!(
             "this composition is not surface {:?}",

@@ -624,9 +624,7 @@ impl Images {
 /// 호출한 표면 caller 의 웹뷰와 요청된 표면을 확인하고 window 를 반환한다.
 fn owner(webview: &Webview, request: &Request) -> Result<(Key, tauri::Window), String> {
     let window = webview.window();
-    if webview.label() != window.label() {
-        return Err("surface operations must come from the main webview".into());
-    }
+    crate::exposure::authorize_main_caller(webview.label(), window.label(), "surface operations")?;
     let key = check(Some(request.surface.as_str()), request)?;
     Ok((key, window))
 }
@@ -690,9 +688,7 @@ fn with_image<T: Send + 'static>(
     run: impl Fn(Handle) -> Result<T, String> + Send + 'static,
 ) -> Result<T, String> {
     let window = webview.window();
-    if webview.label() != window.label() {
-        return Err("surface operations must come from the main webview".into());
-    }
+    crate::exposure::authorize_main_caller(webview.label(), window.label(), "surface operations")?;
     let key = check(Some(request.surface.as_str()), request)?;
 
     let Ok(data) = window_data(&window) else {

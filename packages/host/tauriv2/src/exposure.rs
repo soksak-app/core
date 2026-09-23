@@ -426,12 +426,21 @@ pub(crate) fn log(window: &Window, line: &str) {
 #[cfg(not(feature = "diagnostics"))]
 pub(crate) fn log(_window: &Window, _line: &str) {}
 
+/// 표면을 대상으로 한 연산은 창의 메인 페이지만 호출한다. caller 는 호출한 웹뷰, window 는 창의 레이블이며,
+/// 메인 페이지의 웹뷰 레이블은 창 레이블과 같다. 다른 웹뷰의 호출은 거부한다.
+pub fn authorize_main_caller(caller: &str, window: &str, operation: &str) -> Result<(), String> {
+    if caller != window {
+        return Err(format!(
+            "{operation} must come from the main webview of {window}, not {caller}"
+        ));
+    }
+    Ok(())
+}
+
 /// 명령을 호출한 웹뷰가 창의 메인 페이지인지 확인한다.
 fn main_page(webview: &Webview) -> Result<Window, String> {
     let window = webview.window();
-    if webview.label() != window.label() {
-        return Err(format!("{} is not a main page", webview.label()));
-    }
+    authorize_main_caller(webview.label(), window.label(), "exposure operations")?;
     Ok(window)
 }
 

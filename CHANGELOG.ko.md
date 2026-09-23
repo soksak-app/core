@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- G2-3-8: Tauri의 메인 웹뷰 호출자 판정이 공개 함수 `authorize_main_caller` 하나가 되었고, Tauri 테스트가 알려진 메인 호출자 허용과 다른 호출자 거부를 다룬다.
 - G2-3-11: Tauri 엔드포인트는 중지할 때 다른 프로세스가 쓴 endpoint.json을 남기고, Tauri host 이름은 선언된 host 항목과 비교해 그 밖에는 1001을 반환하며, Tauri 테스트가 endpoint 사례 네 개를 다룬다.
 - G2-3-15: Tauri 사이드카 테스트가 절대 실행 파일 경로, 지속 전송의 설정 디렉터리, 빠진 environment.json, 실패한 hello, close-owner 실패 뒤 즉시 끝나는 중지를 다룬다.
 - G2-3-14: Tauri 녹화 테스트가 중지에 실패한 중단이 오류를 보고하고 폴더를 제거하는지 다룬다.

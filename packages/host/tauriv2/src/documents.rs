@@ -155,9 +155,7 @@ impl Documents {
 /// 호출한 웹뷰의 표면 id 를 확인하고 요청의 키와 창을 반환한다.
 fn owner(webview: &Webview, request: &Request) -> Result<(Key, Window), String> {
     let window = webview.window();
-    if webview.label() != window.label() {
-        return Err("surface operations must come from the main webview".into());
-    }
+    crate::exposure::authorize_main_caller(webview.label(), window.label(), "surface operations")?;
     let key = check(Some(request.surface.as_str()), request)?;
     Ok((key, window))
 }

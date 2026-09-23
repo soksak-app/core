@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G2-3-8: the Tauri main-webview caller check is the single exported `authorize_main_caller`, and Tauri tests cover the known main caller and rejected other callers.
 - G2-3-11: the Tauri endpoint keeps an endpoint.json written by another process at stop, Tauri host names are checked against the declared host entries with 1001 for others, and Tauri tests cover the four endpoint cases.
 - G2-3-15: Tauri sidecar tests cover an absolute executable path, the persistent configuration directory, a missing environment.json, a failed hello, and a prompt stop after a close-owner failure.
 - G2-3-14: a Tauri recording test covers an abort whose stop fails, which reports the error and removes the folder.
