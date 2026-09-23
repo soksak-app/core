@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G2-3-15: Tauri sidecar tests cover an absolute executable path, the persistent configuration directory, a missing environment.json, a failed hello, and a prompt stop after a close-owner failure.
 - G2-3-14: a Tauri recording test covers an abort whose stop fails, which reports the error and removes the folder.
 - G2-3-13: the Tauri flush tests cover the full-queue error message.
 - G2-3-12: Tauri tests cover main and surface reply payloads reaching their own requests.

@@ -199,6 +199,42 @@ fn an_executable_outside_the_package_fails() {
     );
 }
 
+// contract: sidecars.declaration.rejects-absolute-executable
+#[test]
+fn an_absolute_executable_fails() {
+    let directory = tempfile::tempdir().unwrap();
+    let error = create(
+        &files(r#"{"executable":"/bin/sh","protocol":1}"#),
+        directory.path(),
+    )
+    .err()
+    .unwrap();
+    assert!(error.contains("is not a path inside the package"), "{error}");
+}
+
+// contract: sidecars.declaration.persistent-requires-config-directory
+#[test]
+fn persistent_transport_requires_a_config_directory() {
+    let directory = tempfile::tempdir().unwrap();
+    let fixture = files(r#"{"executable":"build/echo","protocol":1,"transport":"persistent"}"#);
+    let error = Sidecars::<FakeOwner>::new(
+        &|path| fixture.get(path).map(|value| value.as_bytes().to_vec()),
+        directory.path().to_path_buf(),
+        std::path::PathBuf::new(),
+    )
+    .err()
+    .unwrap();
+    assert!(error.contains("config directory"), "{error}");
+}
+
+// contract: sidecars.declaration.fails-on-missing-environment
+#[test]
+fn a_frontend_without_environment_json_fails() {
+    let directory = tempfile::tempdir().unwrap();
+    let error = create(&Files::new(), directory.path()).err().unwrap();
+    assert!(error.contains("environment.json"), "{error}");
+}
+
 // contract: sidecars.declaration.rejects-unsupported-protocol
 #[test]
 fn an_unsupported_protocol_fails() {
@@ -328,7 +364,7 @@ fn concurrent_hosts_share_an_authenticated_service_endpoint() {
     service.join().unwrap();
 }
 
-// contract: sidecars-transport.endpoint.concurrent-hosts-share-authenticated-service, sidecars-transport.hello.declares-protocol-one, sidecars-transport.reconnect.after-connection-loss-preserves-owner
+// contract: sidecars-transport.endpoint.concurrent-hosts-share-authenticated-service, sidecars-transport.hello.declares-protocol-one, sidecars-transport.reconnect.after-connection-loss-preserves-owner, sidecars-transport.stop.close-owner-failure-returns-promptly
 #[test]
 fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
     let executable_directory = tempfile::tempdir().unwrap();
@@ -475,8 +511,15 @@ fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
         "s2"
     );
 
+    // 서비스는 close-owner 에 실패로 답한다. 종료는 제한 시간까지 기다리지 않고 바로 끝난다.
+    let stopping = std::time::Instant::now();
     first.stop();
     second.stop();
+    let elapsed = stopping.elapsed();
+    assert!(
+        elapsed <= Duration::from_secs(1),
+        "close-owner failure was not reported promptly: {elapsed:?}"
+    );
     service.join().unwrap();
 }
 
@@ -525,6 +568,55 @@ fn persistent_transport_rejects_unsupported_hello_protocol_without_replacing_end
         "{error}"
     );
     assert_eq!(std::fs::read(&endpoint_path).unwrap(), endpoint_bytes);
+    server.join().unwrap();
+}
+
+// contract: sidecars-transport.hello.rejects-auth-failure
+#[test]
+fn persistent_transport_rejects_a_failed_hello() {
+    let executable_directory = tempfile::tempdir().unwrap();
+    let config_directory = tempfile::tempdir().unwrap();
+    let service_directory = config_directory.path().join("services/echo");
+    std::fs::create_dir_all(&service_directory).unwrap();
+    let socket_path = service_directory.join("auth.sock");
+    let listener = UnixListener::bind(&socket_path).unwrap();
+    let endpoint = serde_json::json!({
+        "protocol": 1,
+        "pid": std::process::id(),
+        "socket": socket_path,
+        "token": "auth-token"
+    });
+    std::fs::write(
+        service_directory.join("endpoint.json"),
+        serde_json::to_vec(&endpoint).unwrap(),
+    )
+    .unwrap();
+    let server = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+        let mut hello = String::new();
+        reader.read_line(&mut hello).unwrap();
+        writeln!(
+            stream,
+            "{}",
+            r#"{"operation":"hello","ok":false,"error":"authentication or protocol mismatch"}"#
+        )
+        .unwrap();
+    });
+
+    let fixture = files(r#"{"executable":"build/echo","protocol":1,"transport":"persistent"}"#);
+    let read = |path: &str| fixture.get(path).map(|value| value.as_bytes().to_vec());
+    let sidecars = Sidecars::new(
+        &read,
+        executable_directory.path().to_path_buf(),
+        config_directory.path().to_path_buf(),
+    )
+    .unwrap();
+    let (window, _events) = owner("auth", "/projects/auth");
+    let error = sidecars
+        .send(&window, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
+        .unwrap_err();
+    assert!(error.contains("authentication handshake failed"), "{error}");
     server.join().unwrap();
 }
 
