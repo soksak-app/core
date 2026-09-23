@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F2-1: `e2e/normal-shutdown.mjs` waits for the process exit through an exit notification (`caffeinate -w`); the previous observer checked the exit only when a file event arrived and timed out when Wails removed `endpoint.json` before exiting. Both rebuilt hosts passed 10 runs each.
 - G4-2: both hosts write `endpoint.json` only after their first window is registered, so a request for that window right after the file appears is answered; checked 5 times on each rebuilt application; `make native-test` passes with all 207 cases on both hosts.
 - G2-3-19: the host tests for flush order, image refusal from another sidecar, the non-canonical configuration directory, and PNG persistence assert their declared behavior and fail when it is removed; `make native-test` passes with all 206 cases on both hosts.
 - G2-3-20: `make native-test` runs `make host-contract-check` in place of the separate host test commands, so a host change that leaves a contract case untested fails the native gate.

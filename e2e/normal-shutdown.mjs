@@ -1,6 +1,7 @@
 // 이미 실행 중인 호스트에서 선언된 command.run -> host.quit 생명주기를 검증한다.
 // 이 검사는 애플리케이션을 시작하거나 활성화하지 않는다. 실행 전에
 // SOKSAK_APP이 선택한 설정 디렉터리로 호스트를 시작한다.
+import { spawn } from "node:child_process";
 import { existsSync, watch } from "node:fs";
 import { dirname } from "node:path";
 import { connect } from "@soksak/client";
@@ -11,16 +12,6 @@ const endpointFile = `${app.configDir}/endpoint.json`;
 const STARTUP_LIMIT = 15_000;
 const SHUTDOWN_LIMIT = 5_000;
 const REQUEST_LIMIT = 2_000;
-
-function processAlive(pid) {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    if (error.code === "ESRCH") return false;
-    throw error;
-  }
-}
 
 async function request(client, method, params) {
   let timer;
@@ -71,35 +62,62 @@ async function waitForReady(client) {
   return Date.now() - started;
 }
 
+// 프로세스 종료는 설정 디렉터리의 파일 이벤트를 만들지 않는다. 호스트는 종료하기 전에
+// endpoint.json 을 지우므로 파일 이벤트만 기다리면 그 뒤의 종료를 확인하지 못한다. Node 는
+// 다른 프로세스의 종료 알림(kqueue NOTE_EXIT)을 제공하지 않으므로, 그 알림으로 pid 의 종료를
+// 기다리는 macOS 의 `caffeinate -w` 로 기다린다.
+function waitForExit(pid) {
+  const child = spawn("/usr/bin/caffeinate", ["-w", String(pid)], { stdio: "ignore" });
+  const exited = new Promise((resolve, reject) => {
+    child.once("error", reject);
+    child.once("exit", (code, signal) => {
+      if (code === 0) resolve();
+      else reject(new Error(`caffeinate -w ${pid} ended with ${code ?? signal}`));
+    });
+  });
+  return { exited, cancel: () => child.kill() };
+}
+
 function waitForShutdown(pid, limit) {
   const started = Date.now();
-  return new Promise((resolve, reject) => {
-    let timer;
-    let watcher;
-    const finish = (error, value) => {
-      clearTimeout(timer);
-      watcher?.close();
-      if (error) reject(error);
-      else resolve(value);
-    };
+  const exit = waitForExit(pid);
+  let exitedAt;
+  let removedAt;
+  let watcher;
+  const measured = exit.exited.then(() => {
+    exitedAt = Date.now() - started;
+  });
+  const removed = new Promise((resolve, reject) => {
     const check = () => {
-      if (!processAlive(pid) && !existsSync(endpointFile)) {
-        finish(null, Date.now() - started);
-      }
-    };
-    timer = setTimeout(() => {
+      if (existsSync(endpointFile)) return;
+      removedAt ??= Date.now() - started;
       watcher?.close();
-      reject(new Error(`application exit and endpoint removal did not complete within ${limit}ms`));
-    }, limit);
+      resolve();
+    };
     try {
       watcher = watch(dirname(endpointFile), { persistent: false }, check);
-      watcher.once("error", (error) => finish(error));
+      watcher.once("error", reject);
     } catch (error) {
-      finish(error);
+      reject(error);
       return;
     }
     check();
   });
+  let timer;
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error(`application exit and endpoint removal did not complete within ${limit}ms: ` +
+        `process ${exitedAt === undefined ? "running" : `exited at ${exitedAt}ms`}, ` +
+        `endpoint.json ${removedAt === undefined ? "present" : `removed at ${removedAt}ms`}`));
+    }, limit);
+  });
+  return Promise.race([Promise.all([measured, removed]), deadline])
+    .then(() => ({ exitedAt, removedAt }))
+    .finally(() => {
+      clearTimeout(timer);
+      watcher?.close();
+      exit.cancel();
+    });
 }
 
 console.log(`START normal-shutdown app=${app.name} case_timeout_ms=${SHUTDOWN_LIMIT}`);
@@ -115,6 +133,6 @@ const result = await request(client, "command.run", {
   params: {},
 });
 if (result !== null) throw new Error(`host.quit returned ${JSON.stringify(result)}, expected null`);
-const elapsed = await waitForShutdown(pid, SHUTDOWN_LIMIT);
+const { exitedAt, removedAt } = await waitForShutdown(pid, SHUTDOWN_LIMIT);
 client.close();
-console.log(`PASS normal-shutdown app=${app.name} pid=${pid} elapsed_ms=${elapsed}`);
+console.log(`PASS normal-shutdown app=${app.name} pid=${pid} endpoint_removed_ms=${removedAt} exited_ms=${exitedAt}`);
