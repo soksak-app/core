@@ -171,10 +171,12 @@ static WKWebView *webViewAtTopPoint(NSWindow *window, double x, double y) {
 }
 
 // 앱 이벤트 대기열의 이벤트를 꺼내 처리하며 기다린다. 이벤트 모니터는 꺼낼 때 실행된다.
+// 이 검사가 대기열에 넣은 휠 이벤트만 꺼내 보낸다. 모든 종류를 꺼내면 OS 가 보낸 앱 활성화
+// 이벤트(NSEventTypeAppKitDefined, 활성화 하위 종류)도 처리해 기본 검사가 앱을 활성화한다.
 static void pumpUntil(BOOL (^done)(void)) {
     NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
     while (!done() && deadline.timeIntervalSinceNow > 0) {
-        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny
+        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskScrollWheel
             untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01] inMode:NSDefaultRunLoopMode dequeue:YES];
         if (event) [NSApp sendEvent:event];
     }

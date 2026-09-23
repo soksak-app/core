@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-4: every native test links a shared exit hook, so a test that has not declared activation fails when its process is active at exit. The activation that the hook found in `webview_geometry_test` (an event pump that also dispatched the OS activation event) is corrected.
 - V5-10: both Rust workspaces are formatted with `rustfmt`, and `make rust-format-check`, which `make native-test` runs, fails on unformatted Rust code. The terminal protocol inventory check now reads the formatted CSI rows.
 - V5-9: surface module sidecar sends go through one ordered port per sidecar, so the host receives each send after the previous one finished; previously the host could reorder `selection.start` and `selection.update` and the selection came out empty. A tracked window check repeat target `pnpm -F @soksak/e2e run repeat` is added, and the selection check passes 32 runs in a row on both hosts.
 - V5-11: `host.hit` no longer defines the unreachable `surface` kind; points of DOM surfaces and image regions are `page`. The branches are removed from both hosts and the window check follows; it passes on both hosts.
