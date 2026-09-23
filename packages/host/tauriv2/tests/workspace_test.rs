@@ -5,7 +5,7 @@ use std::path::Path;
 
 use serde_json::{json, Value};
 use soksak_host_tauriv2::projects::folder;
-use soksak_host_tauriv2::workspace::Workspace;
+use soksak_host_tauriv2::workspace::{prepare_config_directory, Workspace};
 
 fn apply(store: &Workspace, request: Value) -> Value {
     store
@@ -122,4 +122,24 @@ fn directory_aliases_have_one_identity() {
     let file = root.path().join("file");
     fs::write(&file, "x").unwrap();
     assert!(folder(file.to_str().unwrap(), root.path()).is_err());
+}
+
+// contract: workspace.config-dir.creates-requested-path, workspace.config-dir.rejects-empty-path, workspace.config-dir.rejects-path-under-file
+#[test]
+fn config_directory_is_created_and_canonical() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("new").join("configuration");
+    let prepared = prepare_config_directory(&path).unwrap();
+    assert_eq!(prepared, fs::canonicalize(&path).unwrap());
+    assert!(prepared.is_dir(), "configuration directory was not created");
+    assert!(
+        prepare_config_directory(Path::new("")).is_err(),
+        "empty path was accepted"
+    );
+    let file = root.path().join("file");
+    fs::write(&file, "unchanged").unwrap();
+    assert!(
+        prepare_config_directory(&file.join("config")).is_err(),
+        "a file was treated as a configuration directory"
+    );
 }

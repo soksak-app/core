@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G2-3-17: Tauri prepares the configuration directory as Wails does: an empty path is rejected at startup, and the directory is created and used by its canonical path.
 - G2-3-16: Tauri logical surface creation adds the surface id to a failure and rejects a nil handle, and Tauri tests cover both cases.
 - G2-3-10: `recording::stop_payload` builds the Tauri capture stop reply, and Tauri tests cover a limited and an unbounded recording.
 - G2-3-9: Tauri saves pasted PNG files with owner-only permissions (0600) instead of the umask default, and a test checks the mode.

@@ -16,6 +16,16 @@ use tauri::{AppHandle, Manager};
 use crate::projects::project_folder;
 use crate::windows::{emit_window, opened};
 
+/// 설정 디렉터리를 만들고 정규 경로를 반환한다. 빈 경로는 현재 디렉터리로 바꾸지 않고 거부한다.
+pub fn prepare_config_directory(path: &Path) -> Result<PathBuf, String> {
+    if path.as_os_str().is_empty() {
+        return Err("config directory is required".into());
+    }
+    fs::create_dir_all(path).map_err(|error| format!("{}: {error}", path.display()))?;
+    path.canonicalize()
+        .map_err(|error| format!("{}: {error}", path.display()))
+}
+
 /// 설정 디렉터리 하나의 저장소. 쓰기 요청은 순서대로 실행한다.
 pub struct Workspace {
     directory: PathBuf,

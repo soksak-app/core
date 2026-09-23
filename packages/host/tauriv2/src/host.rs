@@ -65,12 +65,14 @@ fn flag(name: &str) -> Option<String> {
     None
 }
 
-/// 설정 디렉터리. `--config-dir` 가 없으면 애플리케이션 설정 디렉터리이다.
+/// 설정 디렉터리. `--config-dir` 가 없으면 애플리케이션 설정 디렉터리이다. 디렉터리를 만들고 정규 경로를 반환한다.
 pub(crate) fn config_directory(app: &tauri::AppHandle) -> tauri::Result<std::path::PathBuf> {
-    match flag("config-dir") {
-        Some(directory) => Ok(directory.into()),
-        None => app.path().app_config_dir(),
-    }
+    let directory = match flag("config-dir") {
+        Some(directory) => std::path::PathBuf::from(directory),
+        None => app.path().app_config_dir()?,
+    };
+    workspace::prepare_config_directory(&directory)
+        .map_err(|error| tauri::Error::Io(std::io::Error::other(error)))
 }
 
 /// 애플리케이션을 만들고 종료할 때까지 실행한다.
