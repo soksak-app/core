@@ -164,15 +164,13 @@ wailsv3: wailsv3-build
 wailsv3-release: wailsv3-build-release
 	@./$(WAILS_RELEASE)
 
-# 네이티브 코드의 단위 검사. 공용 입력 검사, Wails 와 Tauri 호스트 검사를 실행한다.
+# 네이티브 코드의 단위 검사. 공용 입력 검사, 사이드카 검사, 두 호스트의 테스트를 실행하는 호스트 계약 검사를 실행한다.
 native-test: native-darwin frontend-wailsv3 frontend-tauriv2
 	@$(MAKE) -C native/darwin test
 	@node scripts/verify-vt-recovery.mjs target/debug/soksak-vt-alacritty
-	@$(GO_ENV) go test -ldflags "$(GO_LINK)" ./packages/host/wailsv3/... ./sidecars/shell/...
-	@$(GO_ENV) go test -tags diagnostics -ldflags "$(GO_LINK)" ./packages/host/wailsv3/...
+	@$(GO_ENV) go test -ldflags "$(GO_LINK)" ./sidecars/shell/...
 	@$(CARGO_ENV) cargo test --manifest-path sidecars/Cargo.toml --workspace
-	@$(CARGO_ENV) cargo test -p soksak-host-tauriv2
-	@$(CARGO_ENV) cargo test -p soksak-host-tauriv2 --features diagnostics
+	@$(GO_ENV) $(CARGO_ENV) node scripts/check-host-contract.mjs --go-ldflags "$(GO_LINK)"
 
 # 두 호스트의 테스트를 기본 구성과 진단 구성으로 실행하고, 호스트 계약 사례(docs/spec/host-contract.md)를
 # 같은 수준으로 실행하는지 결과로 검사한다.
