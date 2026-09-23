@@ -21,8 +21,11 @@ const RULES = [
   { what: "TCP control port", pattern: /\b4973[1-3]\b|node:net/ },
   { what: "a repeating timer", pattern: /\bsetInterval\s*\(/ },
   { what: "a fixed sleep", pattern: /\b(sleep|delay|pause)\s*\(|timers\/promises/ },
-  { what: "application activation that takes user focus", pattern: /\bactivate\s*:\s*true\b/ },
+  { what: "application activation that takes user focus", pattern: /\bactivate\s*:\s*true\b/, activationTier: true },
 ];
+
+// e2e/activation 의 검사는 사용자가 승인한 실행에서만 돌며 앱을 활성화할 수 있다.
+const ACTIVATION_DIR = "e2e/activation/";
 
 /* setTimeout 은 콜백이 거절(reject)하는 상한으로만 허용한다. */
 const TIMEOUT = /\bsetTimeout\s*\(/g;
@@ -41,6 +44,7 @@ export function auditE2ESource(text, file) {
   const errors = [];
   text.split("\n").forEach((line, index) => {
     for (const rule of RULES) {
+      if (rule.activationTier && file.startsWith(ACTIVATION_DIR)) continue;
       if (rule.pattern.test(line)) errors.push(`${file}:${index + 1}: uses ${rule.what}`);
     }
   });

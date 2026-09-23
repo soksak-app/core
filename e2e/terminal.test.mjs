@@ -11,65 +11,8 @@ import { frames, pixel, readFrame } from "./frame.mjs";
 import { glyphShape, surfaceBoxes, whitePixels } from "./outside.mjs";
 import { assertRoundTrips } from "./drag-measurement.mjs";
 import { terminalProcessSnapshot } from "./terminal-processes.mjs";
+import { ensureTerminals, readScreenUntil, textLines } from "./terminal-screen.mjs";
 
-
-function textLines(screen) {
-  assert.ok(screen && Array.isArray(screen.lines), `invalid terminal screen: ${JSON.stringify(screen)}`);
-  return screen.lines.map((row) => row.map((cell) => {
-    assert.ok(Number.isInteger(cell.width) && cell.width >= 0, "cell width is required");
-    return cell.ch === undefined ? " ".repeat(cell.width) : cell.ch;
-  }).join("").trimEnd());
-}
-
-async function readScreenUntil(session, surface, predicate, message) {
-  // 현재 화면을 한 번 읽고 이후 출력은 알림으로 기다린다. 리사이즈도 이 읽기에 반영된다.
-  await session.run("terminal.screen.read", {}, surface);
-  const screen = await session.until("terminal.screen",
-    (lines) => predicate(textLines({ lines })), message, { surface });
-  return textLines({ lines: screen });
-}
-
-async function ensureTerminals(session, count) {
-  // The fixture starts with the shell tab active. Select the declared terminal
-  // before measuring visible native terminal surfaces; waiting for an inactive
-  // tab would turn a test setup mistake into a false runtime failure.
-  const initialGrid = await session.get("core.grid");
-  const terminalTab = initialGrid.cards.flatMap((card) => card.tabs)
-    .find((tab) => tab.plugin === "terminal");
-  assert.ok(terminalTab, "the fixture has no terminal tab");
-  const owner = initialGrid.cards.find((card) => card.tabs.some((tab) => tab.id === terminalTab.id));
-  if (owner?.active !== terminalTab.id) await session.run("core.tab.select", { tab: terminalTab.id });
-  await session.until(
-    "core.surfaces",
-    (surfaces) => surfaces.some((item) => item.visible && item.plugin === "terminal"),
-    "the fixture terminal did not register before splitting",
-  );
-  let terminals = (await session.surfaces("terminal")).length;
-  while (terminals < count) {
-    const grid = await session.get("core.grid");
-    const card = grid.cards.find((item) =>
-      item.active && item.tabs.some((tab) => tab.plugin === "terminal"));
-    assert.ok(card, "a visible terminal card was not found for splitting");
-    await session.run("core.card.split", { card: card.id, axis: "x", plugin: "terminal" });
-    await session.until(
-      "core.surfaces",
-      (surfaces) => surfaces.filter((item) => item.visible && item.plugin === "terminal").length >= terminals + 1,
-      `terminal count did not reach ${terminals + 1}`
-    );
-    terminals = (await session.get("core.surfaces"))
-      .filter((item) => item.visible && item.plugin === "terminal").length;
-  }
-  await session.until(
-    "core.surfaces",
-    (surfaces) => {
-      const visible = surfaces.filter((item) => item.visible && item.plugin === "terminal");
-      return visible.length >= count && visible.every((item) =>
-        item.exposes.includes("status terminal.session"));
-    },
-    `terminal native surfaces did not reach ${count} with terminal.session registered`
-  );
-  return session.surfaces("terminal");
-}
 
 async function clickAndExecute(session, surface, marker) {
   const view = await session.rect("terminal.view", undefined, surface);
@@ -488,44 +431,6 @@ for (const app of Object.values(APPS)) {
     await child.close();
     await s.windows(1, "focus test child window did not close");
     t.diagnostic(`${app.name}: PASS focus after window switch`);
-  });
-
-  test(`${app.name}: terminal commits the first Korean syllable exactly once`, { timeout: 30000 }, async (t) => {
-    const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
-    await fresh(s);
-    const terminals = await ensureTerminals(s, 1);
-    const surface = terminals[0].surface;
-    await readScreenUntil(s, surface, (lines) => lines.some((line) => line.endsWith("$")),
-      "Korean IME test shell prompt missing");
-
-    const view = await s.rect("terminal.view", undefined, surface);
-    await s.pointer(view.document.x + view.x + view.width / 2, view.document.y + view.y + view.height / 2,
-      "move");
-    await s.until("host.window", (host) => host.active === true,
-      "Korean IME test application window did not become active");
-    await s.click(view.document.x + view.x + view.width / 2, view.document.y + view.y + view.height / 2);
-    await s.until("host.window", (host) => host.regions.some((region) => region.surface === surface && region.focused),
-      "Korean IME test terminal did not receive native focus");
-    // 한글 2벌식 입력 소스에서 실제 ANSI 물리 키와 조합 상태를 검증한다.
-    await s.press("s");
-    await s.press("k");
-    await s.until("terminal.compose", (compose) => compose.text === "나",
-      "native Korean IME did not expose the 나 preedit", { surface });
-    await s.press("Space");
-    await s.until("terminal.compose", (compose) => compose.text === "",
-      "native Korean IME did not clear the committed preedit", { surface });
-    const committed = await readScreenUntil(s, surface, (lines) => lines.some((line) => line.endsWith("나")),
-      "the first Korean syllable did not reach the PTY screen");
-    const syllableRows = committed.filter((line) => line.endsWith("나"));
-    assert.equal(syllableRows.length, 1, "Korean IME committed syllable must occur exactly once");
-    assert.ok(!syllableRows.some((line) => line.includes("ㄱ") || line.includes("ㅏ") || line.includes("ㄴ")),
-      `uncommitted Korean jamo leaked to the PTY: ${JSON.stringify(syllableRows)}`);
-    t.diagnostic(`${app.name}: PASS first Korean syllable exactly-once commit`);
-
-    await s.press("u", { modifiers: ["control"] });
-    await readScreenUntil(s, surface, (lines) => lines.some((line) => line.endsWith("$")) &&
-      !lines.some((line) => line.endsWith("나")), "Korean IME cleanup did not remove the committed input");
   });
 
   test(`${app.name}: hiding three terminals retains native geometry and rasters`, async (t) => {

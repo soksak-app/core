@@ -5,7 +5,8 @@
   "description": "Window checks for running Wails and Tauri applications.",
   "type": "module",
   "scripts": {
-    "verify": "node --test --test-concurrency=1 ."
+    "verify": "node --test --test-concurrency=1 './*.test.mjs'",
+    "verify:activation": "node --test --test-concurrency=1 'activation/*.test.mjs'"
   },
   "dependencies": {
     "@soksak/client": "workspace:*"

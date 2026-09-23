@@ -6,13 +6,14 @@
 // 키는 endpoint 주입기와 같은 -[NSWindow sendEvent:] 경로로 보낸다. AppKit 텍스트 뷰 대조군이 이 경로로
 // 올바른 문서를 만드는지 먼저 확인하고, 문서가 없는 최소 입력 클라이언트의 콜백을 측정값으로 기록한 뒤,
 // 그림 영역이 사용자 보고 순서(ddd 뒤 한글)를 정확히 확정하는지 검사한다.
-#import <Carbon/Carbon.h>
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import "image_region.h"
 #import "input_inject.h"
+#import "input_source.h"
 #import "webview_geometry.h"
 
+static NSString *const ABC = @"com.apple.keylayout.ABC";
 static NSString *const KOREAN_2SET = @"com.apple.inputmethod.Korean.2SetKorean";
 
 static int failures = 0;
@@ -41,19 +42,11 @@ static BOOL pump(BOOL (^done)(void)) {
     return done();
 }
 
-static TISInputSourceRef copySource(NSString *identifier) {
-    NSArray *sources = (NSArray *)TISCreateInputSourceList(
-        (CFDictionaryRef)@{(id)kTISPropertyInputSourceID: identifier}, false);
-    TISInputSourceRef source = sources.count ? (TISInputSourceRef)CFRetain(sources[0]) : NULL;
-    [sources release];
-    return source;
-}
-
 static NSString *currentSourceID(void) {
-    TISInputSourceRef current = TISCopyCurrentKeyboardInputSource();
-    NSString *identifier = [[(NSString *)TISGetInputSourceProperty(current, kTISPropertyInputSourceID) copy] autorelease];
-    CFRelease(current);
-    return identifier;
+    char *identifier = sp_input_source_current();
+    NSString *result = identifier ? [NSString stringWithUTF8String:identifier] : nil;
+    free(identifier);
+    return result;
 }
 
 // 대조군 텍스트 뷰. 입력기가 보낸 콜백과 범위를 그대로 기록한다.
@@ -129,20 +122,15 @@ static NSArray *valuesOfType(NSString *type, NSUInteger from) {
 // 사용자가 보고한 순서를 입력한다. 영문 입력 소스로 ddd 를 치고 한국어 2벌식으로 바꿔 한글(g k s r m f)과
 // Space, Enter 를 친다. 키마다 answered 가 늘어날 때까지 기다린다.
 static void typeDddHangul(NSWindow *window, NSTextInputContext *context, NSUInteger (^answered)(void)) {
-    TISInputSourceRef ascii = TISCopyCurrentASCIICapableKeyboardLayoutInputSource();
-    NSString *asciiID = [[(NSString *)TISGetInputSourceProperty(ascii, kTISPropertyInputSourceID) copy] autorelease];
-    TISSelectInputSource(ascii);
-    CFRelease(ascii);
-    pump(^BOOL { return [context.selectedKeyboardInputSource isEqual:asciiID]; });
+    check(sp_input_source_select(ABC.UTF8String), @"ABC is selected");
+    pump(^BOOL { return [context.selectedKeyboardInputSource isEqual:ABC]; });
     for (NSString *key in @[@"d", @"d", @"d"]) {
         NSUInteger before = answered();
         sp_input_key(window, key.UTF8String, NULL, 0, true);
         sp_input_key(window, key.UTF8String, NULL, 0, false);
         pump(^BOOL { return answered() > before; });
     }
-    TISInputSourceRef korean = copySource(KOREAN_2SET);
-    TISSelectInputSource(korean);
-    CFRelease(korean);
+    check(sp_input_source_select(KOREAN_2SET.UTF8String), @"Korean 2-Set is selected");
     pump(^BOOL { return [context.selectedKeyboardInputSource isEqual:KOREAN_2SET]; });
     for (NSString *key in @[@"g", @"k", @"s", @"r", @"m", @"f", @"Space", @"Enter"]) {
         NSUInteger before = answered();
@@ -158,12 +146,11 @@ int main(void) { @autoreleasepool {
     [NSApp finishLaunching];
     events = [NSMutableArray new];
 
-    TISInputSourceRef korean = copySource(KOREAN_2SET);
-    if (!korean) {
-        fprintf(stderr, "FAIL: the %s input source is not enabled\n", KOREAN_2SET.UTF8String);
+    NSString *previousSource = currentSourceID();
+    if (!previousSource) {
+        fprintf(stderr, "FAIL: the selected input source could not be read\n");
         return 1;
     }
-    TISInputSourceRef previousSource = TISCopyCurrentKeyboardInputSource();
     NSRunningApplication *previousApp = [[NSWorkspace.sharedWorkspace.frontmostApplication retain] autorelease];
 
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(100, 100, 500, 400)
@@ -180,7 +167,10 @@ int main(void) { @autoreleasepool {
     void *region = sp_region_create(surface, "ime", regionEvent, NULL);
     sp_region_place(region, 10, 10, 10, 10, true);
 
-    check(TISSelectInputSource(korean) == noErr, @"Korean 2-Set is selected");
+    if (!sp_input_source_select(KOREAN_2SET.UTF8String)) {
+        fprintf(stderr, "FAIL: the %s input source is not enabled\n", KOREAN_2SET.UTF8String);
+        return 1;
+    }
     check(pump(^BOOL { return [currentSourceID() isEqual:KOREAN_2SET]; }),
         [NSString stringWithFormat:@"Korean 2-Set is the current input source (got %@)", currentSourceID()]);
     [NSApp activateIgnoringOtherApps:YES];
@@ -236,9 +226,7 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"image region: ddd한글 and a space are committed exactly once before Enter (committed %@, events %@)",
             committed, events]);
 
-    TISSelectInputSource(previousSource);
-    CFRelease(previousSource);
-    CFRelease(korean);
+    check(sp_input_source_select(previousSource.UTF8String), @"the previous input source is restored");
     sp_region_close(region);
     [window close];
     [window release];

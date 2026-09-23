@@ -122,6 +122,8 @@ make -C native/darwin test-activation
 
 `test-activation`은 검사 애플리케이션을 활성화하므로 키보드 포커스를 가져간다. 검사 창은 `ignoresMouseEvents`를 설정하지만, AppKit은 실제 포인터가 있는 추적 영역에 이동을 계속 전달한다. 그래서 겹친 웹뷰 검사는 창을 포인터에서 떨어진 곳에 두고, 포인터가 창에 들어오면 그 이유로 실패한다. `input_activate_test`(활성화 후 호버), 겹친 웹뷰 검사 `webview_input_test`(기준 실행 뒤 입력 등록 실행), `document_view_test --activation`(문서 영역에 OS 이벤트 대기열 클릭과 키), `image_region_ime_test`(그림 영역과 AppKit 텍스트 뷰 대조군의 한국어 2벌식 조합. 실행 동안 한국어 2벌식을 선택하고 이전 입력 소스를 되돌린다)를 실행한다.
 
+활성화 등급 창 검사는 `e2e/activation/`에 있으며 사용자가 승인한 실행에서 `pnpm -F @soksak/e2e verify:activation`으로만 실행한다. `pnpm -F @soksak/e2e verify`는 이를 포함하지 않는다. 이 검사는 `input.pointer`의 `activate: true`로 앱을 활성화할 수 있고(`make e2e-check`는 다른 곳에서 이를 거부한다), `diagnostics.input.source`로 키보드 입력 소스를 바꾸며 정리에서 이전 입력 소스를 되돌린다. `ime.test.mjs`는 ABC `ddd`를 치고 한국어 2벌식으로 바꿔 `g k s r m f`, Space, Enter를 치며, 조합 문자열 `ㅎ`, `하`, `한`, `ㄱ`, `그`, `글`, ` `과 화면의 확정 명령 `ddd한글`이 정확히 한 번임을 요구한다. 검사가 키보드 포커스를 가져가므로 실행 전에 앱 하나만 띄운다.
+
 `make -C native/darwin repeat TEST=<name>_test COUNT=<n>`은 기본 검사 하나를, `make -C native/darwin repeat-suite COUNT=<n>`은 기본 스위트를 반복 실행한다. 둘 다 첫 실패에서 멈추고 실행 번호와 시스템 부하를 보고한다.
 
 기준 실행은 겹친 DOM의 중복 포인터 이동을 확인한다. 입력 등록 실행은 단일 대상 포인터 추적, 키보드 입력 유지, 오버레이 숨김·제거 후 정리를 검사한다. 두 실행 모두 지연된 커서 응답을 검사하지 않는다.

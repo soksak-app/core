@@ -332,6 +332,14 @@ impl Platform for Windows {
     fn capture_longest_gap(&self) -> Result<f64, String> {
         unsupported::capture_longest_gap()
     }
+    #[cfg(feature = "diagnostics")]
+    fn input_source(&self) -> Result<String, String> {
+        unsupported::input_source()
+    }
+    #[cfg(feature = "diagnostics")]
+    fn select_input_source(&self, identifier: &str) -> Result<(), String> {
+        unsupported::select_input_source(identifier)
+    }
 
     fn on_termination(&self, quit: Box<dyn Fn() + Send>) -> Result<(), String> {
         unsupported::on_termination(quit)

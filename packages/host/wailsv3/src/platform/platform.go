@@ -77,6 +77,15 @@ type Input struct {
 	Point func(phase int, x, y float64)
 }
 
+// InputSources 는 키보드 입력 소스 연산이다. 진단 빌드(태그 diagnostics)의 플랫폼 구현만 제공하며,
+// 진단 코드는 Current() 의 값을 이 인터페이스로 확인해 사용한다. 두 연산 모두 메인 스레드에서 호출한다.
+type InputSources interface {
+	// InputSource 는 현재 선택된 키보드 입력 소스의 식별자를 반환한다.
+	InputSource() (string, error)
+	// SelectInputSource 는 켜져 있는 입력 소스 가운데 identifier 를 선택한다.
+	SelectInputSource(identifier string) error
+}
+
 // Capturer 는 창 녹화 연산이다. 진단 빌드(태그 diagnostics)의 플랫폼 구현만 제공하며, 진단
 // 코드는 Current() 의 값을 이 인터페이스로 확인해 사용한다.
 type Capturer interface {

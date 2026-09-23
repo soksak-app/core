@@ -415,6 +415,15 @@ pub trait Platform: Send + Sync {
     /// 마지막으로 멈춘 기록에서 연속한 프레임 사이의 가장 긴 표시 간격(ms).
     fn capture_longest_gap(&self) -> Result<f64, String>;
 
+    // 입력 소스
+
+    #[cfg(feature = "diagnostics")]
+    /// 현재 선택된 키보드 입력 소스의 식별자를 반환한다. 메인 스레드에서 호출한다.
+    fn input_source(&self) -> Result<String, String>;
+    #[cfg(feature = "diagnostics")]
+    /// 켜져 있는 입력 소스 가운데 identifier 를 선택한다. 메인 스레드에서 호출한다.
+    fn select_input_source(&self, identifier: &str) -> Result<(), String>;
+
     // 종료 요청
 
     /// 종료 신호(SIGTERM, SIGINT, SIGHUP)를 처음 받으면 quit 를 호출하게 한다. 그 뒤의 종료

@@ -85,6 +85,7 @@ The following methods exist only in diagnostic builds (Go build tag `diagnostics
 | `diagnostics.modal.hold` | `{window, on}` | With `on`, holds the host's answers to the window's modal content requests; without, sends the held answers and stops holding |
 | `diagnostics.modal.held` | `{window}` | Answers when the window holds a modal content answer or stops holding; fails when the window does not hold answers |
 | `diagnostics.transcript` | `{window, on}` | Starts or stops `diagnostics.log` notifications `{window, line}` for host requests, replies, and page verification lines |
+| `diagnostics.input.source` | `{window, select?}` | With `select`, selects that enabled keyboard input source; returns `{current}`, the selected source identifier. A platform without keyboard input sources returns an error. Activation-tier window checks use it to reproduce a user's input-source sequence |
 
 The host writes large data, such as captures, to files under the configuration directory, and the reply contains the file paths. The requester removes the capture files after measurement.
 

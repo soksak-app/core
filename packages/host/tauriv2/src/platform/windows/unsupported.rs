@@ -305,6 +305,16 @@ pub fn capture_longest_gap() -> Result<f64, String> {
     missing("window capture")
 }
 
+#[cfg(feature = "diagnostics")]
+pub fn input_source() -> Result<String, String> {
+    missing("keyboard input sources")
+}
+
+#[cfg(feature = "diagnostics")]
+pub fn select_input_source(_identifier: &str) -> Result<(), String> {
+    missing("keyboard input sources")
+}
+
 pub fn on_termination(_quit: Box<dyn Fn() + Send>) -> Result<(), String> {
     missing("termination requests")
 }

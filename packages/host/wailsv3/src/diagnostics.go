@@ -34,6 +34,7 @@ func init() {
 	diagnosticMethods["diagnostics.modal.hold"] = diagnosticModalHold
 	diagnosticMethods["diagnostics.modal.held"] = diagnosticModalHeld
 	diagnosticMethods["diagnostics.presentation.failure"] = diagnosticPresentationFailure
+	diagnosticMethods["diagnostics.input.source"] = diagnosticInputSource
 	holdModalContent = modalHolds.wait
 	diagnosticSubscriptions["diagnostics.transcript"] = transcriptTopic
 	diagnosticTopics[logTopic] = func(on bool) (string, any) {
@@ -338,6 +339,40 @@ func diagnosticKnob(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, 
 		return nil, rpcError(codeInvalidParams, "name and a numeric value are required")
 	}
 	return e.backend.PageRequest(window, "diagnostics.knob", mustJSON(p))
+}
+
+// diagnosticInputSource 는 select 가 있으면 그 입력 소스를 선택하고, 현재 선택된 키보드 입력 소스를 반환한다.
+func diagnosticInputSource(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+	if _, err := e.window(params); err != nil {
+		return nil, err
+	}
+	var p struct {
+		Select *string `json:"select"`
+	}
+	if err := decode(params, &p); err != nil {
+		return nil, err
+	}
+	if p.Select != nil && *p.Select == "" {
+		return nil, rpcError(codeInvalidParams, "select must be a non-empty string")
+	}
+	sources, ok := system.(platform.InputSources)
+	if !ok {
+		return nil, errors.New("keyboard input sources are not implemented on this platform")
+	}
+	var current string
+	var err error
+	application.InvokeSync(func() {
+		if p.Select != nil {
+			if err = sources.SelectInputSource(*p.Select); err != nil {
+				return
+			}
+		}
+		current, err = sources.InputSource()
+	})
+	if err != nil {
+		return nil, err
+	}
+	return map[string]string{"current": current}, nil
 }
 
 // transcriptTopic 은 diagnostics.transcript 의 params 에서 연결의 diagnostics.log 구독과 방향을 읽는다.

@@ -107,8 +107,10 @@ lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/tes
   ], { sharedTests: true }),
   lane("Darwin input", "objective-c", [
     "native/darwin/src/input_inject.m",
+    "native/darwin/src/input_source.m",
     "native/darwin/src/webview_input.m",
   ], [
+    "native/darwin/tests/image_region_ime_test.m",
     "native/darwin/tests/input_activate_test.m",
     "native/darwin/tests/input_inject_test.m",
     "native/darwin/tests/webview_focus_test.m",

@@ -135,6 +135,13 @@ test("window-source audit rejects native input that activates the application", 
   assert.deepEqual(auditE2ESource('await session.pointer(x, y, "move");', "e2e/clean.mjs"), []);
 });
 
+test("window-source audit allows activation only in the activation tier", { timeout: 1000 }, () => {
+  const line = 'await session.pointer(x, y, "move", { activate: true });';
+  assert.deepEqual(auditE2ESource(line, "e2e/activation/ime.test.mjs"), []);
+  assert.equal(auditE2ESource(line, "e2e/terminal.test.mjs").length, 1);
+  assert.equal(auditE2ESource(line, "e2e/activation-like.test.mjs").length, 1);
+});
+
 test("terminal protocol inventory rejects missing, duplicate, or unlinked CSI rows", { timeout: 5000 }, async () => {
   const result = await run(node, [join(root, "scripts/check-terminal-protocol-inventory.mjs")]);
   assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);

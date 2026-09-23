@@ -85,6 +85,7 @@ HTTP 요청 줄은 최대 길이보다 큰 길이 접두 또는 올바르지 않
 | `diagnostics.modal.hold` | `{window, on}` | `on`이면 창의 모달 내용 요청에 대한 호스트 응답을 붙잡고, 아니면 붙잡은 응답을 보내고 붙잡기를 멈춘다 |
 | `diagnostics.modal.held` | `{window}` | 창이 모달 내용 응답을 붙잡거나 붙잡기를 멈추면 답한다. 창이 응답을 붙잡고 있지 않으면 실패한다 |
 | `diagnostics.transcript` | `{window, on}` | 호스트 요청, 응답, 페이지 검증 줄에 대한 `diagnostics.log` 알림 `{window, line}`을 시작하거나 중지한다 |
+| `diagnostics.input.source` | `{window, select?}` | `select`가 있으면 켜진 키보드 입력 소스 가운데 그것을 선택하고, 선택된 입력 소스 식별자 `{current}`를 반환한다. 키보드 입력 소스가 없는 플랫폼은 오류를 반환한다. 활성화 등급 창 검사가 사용자의 입력 소스 순서를 재현할 때 쓴다 |
 
 호스트는 캡처 같은 큰 데이터를 설정 디렉터리 아래 파일에 기록하고, 응답에는 파일 경로를 담는다. 요청자는 측정 후 캡처 파일을 삭제한다.
 

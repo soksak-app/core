@@ -106,6 +106,7 @@ pub(crate) fn call(
             Ok(Value::Null)
         }
         "diagnostics.modal.held" => modal_held(window.label()),
+        "diagnostics.input.source" => input_source(window, params),
         "diagnostics.presentation.failure" => {
             exposure::inject_presentation_failure(window)?;
             Ok(Value::Null)
@@ -115,6 +116,24 @@ pub(crate) fn call(
             format!("{method} is not a diagnostic method"),
         )),
     }
+}
+
+/// select 가 있으면 그 입력 소스를 선택하고, 현재 선택된 키보드 입력 소스를 반환한다.
+fn input_source(window: &Window, params: Map<String, Value>) -> Result<Value, Failure> {
+    let select = match params.get("select") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(identifier)) if !identifier.is_empty() => Some(identifier.clone()),
+        Some(_) => return Err(Failure::params("select must be a non-empty string")),
+    };
+    let platform = platform::current().map_err(internal)?;
+    let current = on_main(window, move || {
+        if let Some(identifier) = &select {
+            platform.select_input_source(identifier)?;
+        }
+        platform.input_source()
+    })
+    .map_err(internal)?;
+    Ok(json!({"current": current}))
 }
 
 /// `<config-dir>/test-project` 를 빈 폴더 설정으로 만들고 페이지에 그 프로젝트만 열도록 요청한다.

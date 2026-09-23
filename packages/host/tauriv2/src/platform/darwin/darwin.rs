@@ -39,6 +39,9 @@ mod identity;
 mod image;
 #[path = "input.rs"]
 mod input;
+#[cfg(feature = "diagnostics")]
+#[path = "input_source.rs"]
+mod input_source;
 #[path = "layout.rs"]
 mod layout;
 #[path = "shapes.rs"]
@@ -434,6 +437,14 @@ impl Platform for Darwin {
     #[cfg(feature = "diagnostics")]
     fn capture_longest_gap(&self) -> Result<f64, String> {
         Ok(capture::longest_gap())
+    }
+    #[cfg(feature = "diagnostics")]
+    fn input_source(&self) -> Result<String, String> {
+        input_source::current()
+    }
+    #[cfg(feature = "diagnostics")]
+    fn select_input_source(&self, identifier: &str) -> Result<(), String> {
+        input_source::select(identifier)
     }
 
     fn on_termination(&self, quit: Box<dyn Fn() + Send>) -> Result<(), String> {
