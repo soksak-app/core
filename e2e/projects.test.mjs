@@ -158,8 +158,8 @@ for (const app of Object.values(APPS)) {
     await child.run("core.settings.reset", { key: "mode" });
     assert.deepEqual(read(join(second.root, ".soksak/settings.json")), {});
     await child.until("core.settings", (value) => value.values.mode === "light", "reset did not restore common settings");
-    assert.equal(await failure(settings(child, { projectOpening: "tabs" }, "project")), -32000,
-      "a common-only setting must be rejected in the project scope");
+    assert.equal(await failure(settings(child, { projectOpening: "tabs" }, "project")), -32602,
+      "a common-only setting must be rejected in the project scope as invalid params");
 
     const reopened = await s.run("core.project.open", { root: alias, color: "#fff" });
     assert.equal(reopened.id, second.id);

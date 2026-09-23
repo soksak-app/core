@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-13: the projects specification states that a common-only setting requested in the project scope is rejected with -32602, and the window check that still required the earlier -32000 follows it; it passes on both hosts.
 - F8-6-1: `host.window.presented` and command settling wait for the web content process to commit its rendering (`_doAfterNextPresentationUpdate:`) before they report the display time; previously they reported a time before the last DOM change was drawn, so drag recordings missed the final return. Both drag e2e cases pass 3 runs in a row on both hosts.
 - F8-17: terminal session errors are tracked by source and cleared only by a valid event of the kind that resolves them. Unrelated `state`, `session`, and `theme` events no longer clear errors, so the card indicator and `terminal.session.error` stay together. Verified by 10 Red unit tests and an e2e case on both debug applications.
 - F11-4: `make release-check` reports a malformed staged `sidecar.json` with its file and error; it previously skipped the file silently and left its executable unscanned.
