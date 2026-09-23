@@ -48,8 +48,9 @@ $(PKGCONFIG): Makefile | $(BUILD)
 $(BUILD):
 	@mkdir -p $@
 
-$(BUILD)/%_test: tests/%_test.m $(LIBRARY) $(wildcard src/*.h src/private/*.h)
-	@clang $(CFLAGS) -I$(CURDIR)/src $< -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
+# 모든 검사는 tests/support/no_activation.m 을 링크한다. 활성화를 선언하지 않은 검사는 종료할 때 활성이면 실패한다.
+$(BUILD)/%_test: tests/%_test.m tests/support/no_activation.m $(LIBRARY) $(wildcard src/*.h src/private/*.h)
+	@clang $(CFLAGS) -I$(CURDIR)/src $< tests/support/no_activation.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
 
 test: $(BUILD)/window_motion_test $(BUILD)/input_inject_test $(BUILD)/window_facts_test $(BUILD)/window_controls_test $(BUILD)/surface_layout_test $(BUILD)/webview_focus_test $(BUILD)/webview_geometry_test $(BUILD)/document_view_test $(BUILD)/image_region_test $(BUILD)/ui_queue_test $(BUILD)/surface_host_test $(BUILD)/clipboard_test $(BUILD)/capture_test $(BUILD)/dock_menu_test
 	@$(BUILD)/surface_host_test

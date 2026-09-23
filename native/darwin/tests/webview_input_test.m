@@ -112,7 +112,11 @@ static void reset(NSArray *views) {
     for (WKWebView *view in views) evaluate(view, @"probe.moves = 0");
 }
 
+// tests/support/no_activation.m: 이 검사는 make test-activation 에서 앱을 활성화한다.
+void sp_test_declare_activation(void);
+
 int main(int argc, const char **argv) { @autoreleasepool {
+    sp_test_declare_activation();
     BOOL baseline = NO;
     for (int i = 1; i < argc; ++i) {
         baseline |= strcmp(argv[i], "--baseline") == 0;

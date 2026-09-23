@@ -143,7 +143,11 @@ static void checkFailures(void) {
     for (NSWindow *window in @[pending, hiddenWindow, other, lost, unkeyable]) [window close];
 }
 
+// tests/support/no_activation.m: 이 검사는 make test-activation 에서 앱을 활성화한다.
+void sp_test_declare_activation(void);
+
 int main(void) { @autoreleasepool {
+    sp_test_declare_activation();
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     [NSApp finishLaunching];

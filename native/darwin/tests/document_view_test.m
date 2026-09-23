@@ -143,9 +143,13 @@ static void pumpEvents(NSString *what, BOOL (^done)(void)) {
     if (!done()) { fprintf(stderr, "FAIL: %s within 10 seconds\n", what.UTF8String); exit(1); }
 }
 
+// tests/support/no_activation.m: 이 검사는 make test-activation 에서 앱을 활성화한다.
+void sp_test_declare_activation(void);
+
 int main(int argc, char **argv) { @autoreleasepool {
     // --activation 은 앱을 활성화해 OS 이벤트 대기열의 클릭과 키를 검사한다. make test-activation 만 사용한다.
     BOOL activation = argc > 1 && strcmp(argv[1], "--activation") == 0;
+    if (activation) sp_test_declare_activation();
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     [NSApp finishLaunching];
@@ -360,8 +364,6 @@ int main(int argc, char **argv) { @autoreleasepool {
 
     for (id connection in held) nw_connection_cancel((nw_connection_t)connection);
     nw_listener_cancel(listener);
-    // make test 의 검사는 사용자 포커스를 가져가지 않는다.
-    if (!activation) check(!NSApp.isActive, @"the default native test does not activate the application");
     sp_surface_close(surface);
     [window close];
     [window release];

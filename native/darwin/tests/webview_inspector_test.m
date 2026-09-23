@@ -47,7 +47,11 @@ static NSString *describe(NSRect rect) {
     return [NSString stringWithFormat:@"%.0f,%.0f %.0fx%.0f", rect.origin.x, rect.origin.y, rect.size.width, rect.size.height];
 }
 
+// tests/support/no_activation.m: 이 검사는 make test-activation 에서 앱을 활성화한다.
+void sp_test_declare_activation(void);
+
 int main(void) { @autoreleasepool {
+    sp_test_declare_activation();
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
     [NSApp finishLaunching];

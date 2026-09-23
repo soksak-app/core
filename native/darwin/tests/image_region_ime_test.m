@@ -162,7 +162,11 @@ static void typeDddHangul(NSWindow *window, NSTextInputContext *context, NSUInte
     for (NSString *key in @[@"g", @"k", @"s", @"r", @"m", @"f", @"Space"]) typeKey(window, key, answered);
 }
 
+// tests/support/no_activation.m: 이 검사는 make test-activation 에서 앱을 활성화한다.
+void sp_test_declare_activation(void);
+
 int main(void) { @autoreleasepool {
+    sp_test_declare_activation();
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
     [NSApp finishLaunching];
