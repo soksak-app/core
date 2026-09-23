@@ -367,9 +367,37 @@ int main(void) { @autoreleasepool {
             [attributedEvent rangeOfString:@"\"location\":1"].location != NSNotFound &&
             [attributedEvent rangeOfString:@"\"location\":3"].location != NSNotFound,
             @"TEST 8: attributed composition preserves selected and replacement ranges");
+        NSUInteger beforeUnmark = [collectedEvents count];
         [(NSTextView *)regionView unmarkText];
         check(![(NSTextView *)regionView hasMarkedText] && ((NSTextView *)regionView).textStorage.length == 0,
             @"TEST 8: unmark clears AppKit's preedit storage");
+        // NSTextInputClient 계약에서 unmarkText 는 marked text 를 일반 입력으로 받아들인다.
+        // 확정은 insert 한 번이고, 그 뒤에 조합 상태가 남지 않는다.
+        NSMutableArray *unmarkInserts = [NSMutableArray array];
+        NSDictionary *lastUnmarkCompose = nil;
+        for (NSUInteger i = beforeUnmark; i < [collectedEvents count]; i++) {
+            NSDictionary *event = [NSJSONSerialization JSONObjectWithData:
+                [collectedEvents[i] dataUsingEncoding:NSUTF8StringEncoding] options:0 error:NULL];
+            if ([event[@"type"] isEqual:@"insert"]) [unmarkInserts addObject:event[@"text"] ?: NSNull.null];
+            if ([event[@"type"] isEqual:@"compose"]) lastUnmarkCompose = event;
+            check(event != nil && ([event[@"type"] isEqual:@"insert"] ||
+                ([event[@"type"] isEqual:@"compose"] && [event[@"text"] isEqual:@""])),
+                [NSString stringWithFormat:@"TEST 8: unmarkText reports only insert or preedit clear (got %@)", collectedEvents[i]]);
+        }
+        check([unmarkInserts isEqualToArray:@[@"한글"]],
+            [NSString stringWithFormat:@"TEST 8: unmarkText commits the marked text as one insert (got %@)", unmarkInserts]);
+        NSUInteger lastInsert = NSNotFound;
+        for (NSUInteger i = beforeUnmark; i < [collectedEvents count]; i++) {
+            if ([collectedEvents[i] rangeOfString:@"\"type\":\"insert\""].location != NSNotFound) lastInsert = i;
+        }
+        check(lastUnmarkCompose == nil || lastInsert == [collectedEvents count] - 1,
+            [NSString stringWithFormat:@"TEST 8: no preedit event follows the unmarkText commit (got %@)",
+                [collectedEvents subarrayWithRange:NSMakeRange(beforeUnmark, [collectedEvents count] - beforeUnmark)]]);
+        NSUInteger afterUnmark = [collectedEvents count];
+        [(NSTextView *)regionView unmarkText];
+        check([collectedEvents count] == afterUnmark,
+            [NSString stringWithFormat:@"TEST 8: unmarkText without marked text reports nothing (got %lu events)",
+                [collectedEvents count] - afterUnmark]);
 
         sp_region_close(region8);
     }

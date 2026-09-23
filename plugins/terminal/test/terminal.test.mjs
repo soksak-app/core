@@ -1471,6 +1471,43 @@ test("clearing a native preedit cancels it without writing the uncommitted text 
   assert.deepEqual(byteInputs, [], "a cleared marked string is not committed input");
 });
 
+test("accepting native marked text writes it to the PTY exactly once", async () => {
+  FakeResizeObserver.reset();
+  const fakeAttachImage = createFakeAttachImage();
+  const fakeSidecar = createFakeSidecar();
+  let regionReference;
+  const expose = createFakeExpose();
+  await startTerminal({
+    view: createFakeView(),
+    attachImage: (view, name, sidecar) => {
+      regionReference = fakeAttachImage.function(view, name, sidecar);
+      return regionReference;
+    },
+    sidecar: fakeSidecar,
+    expose,
+    scale: 1,
+    window: { ResizeObserver: FakeResizeObserver, TextEncoder, devicePixelRatio: 1 },
+  });
+  FakeResizeObserver.triggerAll();
+  openSession(fakeSidecar);
+
+  // macOS unmarkText 가 보고하는 순서: 조합 해제 뒤 확정 insert 하나.
+  regionReference._trigger("compose", {
+    text: "한글", selectedRange: { location: 2, length: 0 }, replacementRange: null, attributed: true,
+  });
+  regionReference._trigger("compose", {
+    text: "", selectedRange: { location: 0, length: 0 }, replacementRange: { location: 0, length: 2 }, attributed: false,
+  });
+  regionReference._trigger("insert", { text: "한글", replacementRange: { location: 0, length: 0 }, attributed: false });
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(expose.getStatus("terminal.compose").readFn().text, "", "the accepted preedit must clear");
+  const byteInputs = fakeSidecar.getMessages().filter(({ body }) => body.operation === "input" && body.bytes);
+  assert.deepEqual(byteInputs.map(({ body }) => Buffer.from(body.bytes, "base64").toString("utf8")), ["한글"],
+    "accepted marked text is committed once");
+});
+
 test("terminal.compose.update exposes ordered preedit changes without writing partial text to the PTY", async () => {
   FakeResizeObserver.reset();
   const fakeAttachImage = createFakeAttachImage();

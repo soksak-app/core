@@ -459,15 +459,6 @@ static NSString *controlCharacterForANSIKeyCode(unsigned short keyCode) {
     }
 }
 
-- (void)unmarkText {
-    BOOL hadMarkedText = self.hasMarkedText;
-    [super unmarkText];
-    if (hadMarkedText) {
-        [self.textStorage deleteCharactersInRange:NSMakeRange(0, self.textStorage.length)];
-        [self report:"{\"type\":\"compose\",\"text\":\"\"}"];
-    }
-}
-
 - (NSRect)firstRectForCharacterRange:(NSRange)range actualRange:(NSRangePointer)actualRange {
     if (actualRange) *actualRange = NSMakeRange(NSNotFound, 0);
 
