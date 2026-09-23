@@ -256,15 +256,16 @@ void sp_input_activate_at(void *handle, double x, double y, double timeoutSecond
     activateWindow(window, target, NO, timeoutSeconds, done, context);
 }
 
-typedef struct { const char *name; unsigned short code; unichar character; } SPKey;
+typedef struct { const char *name; unsigned short code; } SPKey;
 
+// 이름 있는 키의 macOS 키 코드. 문자는 AppKit 이 키 코드와 현재 입력 소스로 계산한다.
 static const SPKey keys[] = {
-    {"Enter", 36, '\r'}, {"Tab", 48, '\t'}, {"Escape", 53, 27}, {"Backspace", 51, 127},
-    {"Delete", 117, NSDeleteFunctionKey}, {"Space", 49, ' '},
-    {"ArrowLeft", 123, NSLeftArrowFunctionKey}, {"ArrowRight", 124, NSRightArrowFunctionKey},
-    {"ArrowDown", 125, NSDownArrowFunctionKey}, {"ArrowUp", 126, NSUpArrowFunctionKey},
-    {"Home", 115, NSHomeFunctionKey}, {"End", 119, NSEndFunctionKey},
-    {"PageUp", 116, NSPageUpFunctionKey}, {"PageDown", 121, NSPageDownFunctionKey},
+    {"Enter", 36}, {"Tab", 48}, {"Escape", 53}, {"Backspace", 51},
+    {"Delete", 117}, {"Space", 49},
+    {"ArrowLeft", 123}, {"ArrowRight", 124},
+    {"ArrowDown", 125}, {"ArrowUp", 126},
+    {"Home", 115}, {"End", 119},
+    {"PageUp", 116}, {"PageDown", 121},
 };
 
 // 문자만 담은 NSEvent에는 물리 키 정체성이 없다. NSTextInputContext가 현재
@@ -294,26 +295,23 @@ bool sp_input_key(void *handle, const char *key, const char *text, unsigned modi
     NSWindow *window = (__bridge NSWindow *)handle;
     if (!window || !key || !NSThread.isMainThread) return false;
     NSString *name = [NSString stringWithUTF8String:key];
-    NSString *characters = nil;
-    unsigned short code = 0;
+    unsigned short code = USHRT_MAX;
     for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
         if (strcmp(keys[i].name, key) == 0) {
             code = keys[i].code;
-            characters = [NSString stringWithCharacters:&keys[i].character length:1];
             break;
         }
     }
-    if (!characters) {
+    if (code == USHRT_MAX) {
         if (name.length != 1) return false;
-        characters = name;
         code = characterKeyCode([name characterAtIndex:0]);
         if (code == USHRT_MAX) return false;
     }
-    if (text) characters = [NSString stringWithUTF8String:text];
+    NSString *characters = text ? [NSString stringWithUTF8String:text] : nil;
     NSEvent *event = nil;
-    if (!text && name.length == 1) {
-        // AppKit이 물리 키와 현재 입력 소스로부터 문자를 계산하게 한다.
-        // 호출자의 문자를 직접 넣으면 NSTextInputContext 조합을 우회한다.
+    if (!text) {
+        // AppKit이 물리 키와 현재 입력 소스로부터 문자를 계산하게 한다. 이름 있는 키도 같다.
+        // 호출자의 문자를 직접 넣은 이벤트는 입력기를 거치지 않는다(조합 중 Backspace 등).
         CGEventRef raw = CGEventCreateKeyboardEvent(NULL, code, down);
         if (raw) {
             CGEventSetFlags(raw, cgFlags(modifiers));

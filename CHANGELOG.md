@@ -1,5 +1,6 @@
 # Changelog
 
+- V5-8: `sp_input_key` builds named keys from their key codes, so injected Backspace, Enter, and arrows reach the input method as hardware keys do; the terminal keyboard window check selects the ABC layout it types with. The physical Space showed that F8-16 did not correct the user's case, now F8-16-1 (P0). Registered V5-9.
 - F8-5: the activation IME check records `terminal.ime.trace` and verifies preedit order, cursor coverage, exactly-once commits of `ddd한글 한 ` in the native callbacks and the terminal input queue, and a second command in the same session on both rebuilt hosts. Registered F8-20 (Backspace during composition).
 - G2-3: host tests declare the host contract cases they execute, and `make host-contract-check` runs both hosts' tests and fails on a case without a passing test in either host. The current output lists 63 gaps and two tests without host code, registered as G2-3-1 to G2-3-19.
 - F8-18-1: the vt-core comment on the initial terminal font states the system fixed-pitch font.

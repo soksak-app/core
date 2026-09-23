@@ -292,6 +292,8 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
+    // 이 검사는 영문 명령을 네이티브 키로 입력한다.
+    await s.selectInputSource("com.apple.keylayout.ABC");
     const tab = (await s.get("core.grid")).cards.flatMap((card) => card.tabs).find((tab) => tab.plugin === "terminal");
     assert.ok(tab, "the fixture has no terminal tab");
     await s.run("core.tab.select", { tab: tab.id });

@@ -237,6 +237,17 @@ export class Session {
     await this.pointer(x, y, "up");
   }
 
+  /**
+   * 키보드 입력 소스를 고르고 검사가 끝나면 이전 입력 소스로 되돌린다. 네이티브 키의 문자는 현재 입력
+   * 소스가 정하므로, 영문을 입력하는 검사는 영문 자판을 먼저 고른다. 입력 소스 선택은 창을 활성화하지 않는다.
+   */
+  async selectInputSource(id) {
+    const original = (await this.request("diagnostics.input.source")).current;
+    this.cleanup(() => this.request("diagnostics.input.source", { select: original }));
+    const selected = await this.request("diagnostics.input.source", { select: id });
+    if (selected.current !== id) throw new Error(`${this.app.name}: input source ${id} was not selected (current ${selected.current})`);
+  }
+
   /** 누르고 떼는 네이티브 키. */
   async press(key, options = {}) {
     await this.key(key, "down", options);

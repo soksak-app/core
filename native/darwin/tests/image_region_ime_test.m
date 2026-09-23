@@ -236,6 +236,16 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"control: an AppKit text view receives the first syllable after a switch and a space (text %@, calls %@)",
             control.string, control.calls]);
     printf("MEASURE: text view calls for a switch, 한 Space Enter: %s\n", [control.calls componentsJoinedByString:@"; "].UTF8String);
+    // V5-8: 주입한 이름 있는 키는 물리 키와 같은 경로로 입력기에 도착한다. 조합 중 Backspace 는 입력기가 처리한다(한 → 하).
+    [control.inputContext discardMarkedText];
+    control.string = @"";
+    [control.calls removeAllObjects];
+    selectSource(ABC, control.inputContext);
+    selectSource(KOREAN_2SET, control.inputContext);
+    for (NSString *key in @[@"g", @"k", @"s", @"Backspace"]) typeKey(window, key, controlAnswered);
+    check([control.string isEqual:@"하"],
+        [NSString stringWithFormat:@"control: an injected Backspace during a composition reaches the input method and leaves 하 (text %@, calls %@)",
+            control.string, control.calls]);
     [control removeFromSuperview];
 
     // 대조: 문서가 없는 최소 입력 클라이언트에서 입력기가 쓰는 방식을 기록한다.
