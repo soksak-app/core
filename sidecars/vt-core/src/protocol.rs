@@ -1370,7 +1370,7 @@ async fn surface_task(
     let mut preedit: Option<Preedit> = None;
     let mut current_theme = crate::palette::TerminalTheme::dark();
     let mut cursor_policy = CursorPolicy::default();
-    // 이 표면의 터미널 글꼴. font 요청 전까지 번들 기본 글꼴이다.
+    // 이 표면의 터미널 글꼴. font 요청 전까지 시스템 고정폭 글꼴이다.
     let mut terminal_font = crate::platform::default_font();
     let mut cursor_activity = Instant::now();
     let mut cursor_tick = tokio::time::interval(Duration::from_millis(50));

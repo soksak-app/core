@@ -1,5 +1,6 @@
 # Changelog
 
+- F8-18-1: the vt-core comment on the initial terminal font states the system fixed-pitch font.
 - V5-7: vt-core `serve_contract` tests acknowledge every image they receive and the EOF timing test loads the font before its timer, so every vt-core test passes alone. New target `make rust-tests-alone PACKAGE=<package>` runs each Rust test alone. Registered F8-18-1 (stale font comment) and F8-19 (first CoreText call takes about 2 s in a new process).
 - F8-16: the image region commits text that arrives outside an input method event, such as Space after a Hangul syllable, together with the text before it, so the space reaches the PTY without a later key. The region's input context marks `-[NSTextInputContext handleTSMEvent:completionHandler:]` (listed in the private native API inventory). Checked with the native activation test and `e2e/activation/ime.test.mjs` on both rebuilt hosts. Registered F8-16-1 (a digit after a syllable stays preedit), G4-2 (a request right after `endpoint.json` appears failed on Tauri), and V5-7 (vt-core tests that depend on test order).
 - G4-1: the evidence recorder streams the worktree patch into its digest, so a multi-megabyte binary change no longer fails `pnpm test` with `ENOBUFS`.

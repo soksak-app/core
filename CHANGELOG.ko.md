@@ -1,5 +1,6 @@
 # 변경 기록
 
+- F8-18-1: 초기 터미널 글꼴에 대한 vt-core 주석이 시스템 고정폭 글꼴을 적는다.
 - V5-7: vt-core `serve_contract` 테스트가 받은 모든 이미지에 답하고 EOF 시간 테스트가 타이머 전에 글꼴을 읽으므로, 모든 vt-core 테스트가 혼자서도 통과한다. 새 대상 `make rust-tests-alone PACKAGE=<package>`는 Rust 테스트를 하나씩 혼자 실행한다. F8-18-1(오래된 글꼴 주석)과 F8-19(새 프로세스의 첫 CoreText 호출이 약 2초 걸림)를 등록했다.
 - F8-16: 그림 영역은 한글 음절 뒤의 Space처럼 입력기 이벤트 밖에서 도착한 문자열을 앞의 문자열과 함께 확정하므로, 공백이 다음 키 없이 PTY에 도착한다. 영역의 입력 컨텍스트가 `-[NSTextInputContext handleTSMEvent:completionHandler:]`를 표시한다(비공개 네이티브 API 목록에 기록). 네이티브 활성화 테스트와 재빌드된 두 호스트의 `e2e/activation/ime.test.mjs`로 확인했다. F8-16-1(음절 뒤 숫자가 조합 문자열로 남음), G4-2(Tauri에서 `endpoint.json`이 나타난 직후의 요청 실패), V5-7(테스트 순서에 의존하는 vt-core 테스트)을 등록했다.
 - G4-1: 증거 기록기가 작업 트리 patch를 digest로 스트리밍하므로, 수 MB 바이너리 변경이 더 이상 `pnpm test`를 `ENOBUFS`로 실패시키지 않는다.
