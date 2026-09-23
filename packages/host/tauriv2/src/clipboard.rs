@@ -1,8 +1,6 @@
-use std::fs::{self, OpenOptions};
+use std::fs;
 use std::io::Write;
 use std::path::Path;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use base64::Engine;
 use serde::{Deserialize, Serialize};
@@ -12,7 +10,6 @@ use crate::exposure;
 use crate::platform::{self, ClipboardValue};
 
 const MAX_BYTES: usize = 16 * 1024 * 1024;
-static SERIAL: AtomicU64 = AtomicU64::new(0);
 
 pub fn validate_read_request(kind: &str, user_initiated: bool) -> Result<(), String> {
     if !user_initiated {
@@ -126,30 +123,22 @@ fn persist_png_at(root: &Path, bytes: &[u8]) -> Result<String, String> {
     validate_png_payload(&bytes)?;
     let directory = root.join("clipboard");
     fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
-    for _ in 0..16 {
-        let serial = SERIAL.fetch_add(1, Ordering::Relaxed);
-        let stamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|e| e.to_string())?
-            .as_nanos();
-        let path = directory.join(format!("pasted-image-{stamp:x}-{serial:x}.png"));
-        match OpenOptions::new().write(true).create_new(true).open(&path) {
-            Ok(mut file) => {
-                file.write_all(bytes).map_err(|e| e.to_string())?;
-                file.sync_all().map_err(|e| e.to_string())?;
-                return Ok(path.to_string_lossy().into_owned());
-            }
-            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
-            Err(error) => return Err(error.to_string()),
-        }
-    }
-    Err("cannot allocate a unique clipboard image path".into())
+    // tempfile 은 이름이 겹치지 않는 새 파일을 소유자만 읽고 쓰는 권한(0600)으로 만든다.
+    let mut file = tempfile::Builder::new()
+        .prefix("pasted-image-")
+        .suffix(".png")
+        .tempfile_in(&directory)
+        .map_err(|e| e.to_string())?;
+    file.write_all(bytes).map_err(|e| e.to_string())?;
+    file.as_file().sync_all().map_err(|e| e.to_string())?;
+    let (_, path) = file.keep().map_err(|e| e.to_string())?;
+    Ok(path.to_string_lossy().into_owned())
 }
 
 #[cfg(test)]
 mod tests {
     use super::persist_png_at;
-    // contract: clipboard.persist-png.writes-exact-bytes
+    // contract: clipboard.persist-png.writes-exact-bytes, clipboard.persist-png.owner-only-mode
     #[test]
     fn persists_owned_png_without_overwriting() {
         let root =
@@ -163,6 +152,9 @@ mod tests {
         }
         let path = persist_png_at(&root, b"png").unwrap();
         assert_eq!(std::fs::read(&path).unwrap(), b"png");
+        let permissions = std::fs::metadata(&path).unwrap().permissions();
+        let mode = std::os::unix::fs::PermissionsExt::mode(&permissions);
+        assert_eq!(mode & 0o777, 0o600, "clipboard image mode {mode:o}");
         std::fs::remove_dir_all(root)
             .unwrap_or_else(|error| panic!("failed to clean clipboard test directory: {error}"));
     }
