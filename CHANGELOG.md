@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G2-3-5-1: the Wails host rejects a `null` page exposure list with -32603 instead of panicking on a nil map.
 - G2-3-4: the Wails host rejects an exposure reply whose `surface` is `null`, empty, or not a string instead of treating it as a main-document reply, and Wails tests cover the reply target cases.
 - G2-3-5: the Wails exposure relay is the exported `Relay[T]` with the structure of the Tauri relay, and Wails tests cover the exposure list and relay contract cases; `make host-contract-check` reports 188 of 205 cases for Wails.
 - G2-3-3: Wails endpoint tests cover the twelve endpoint contract cases that only the Tauri host tested; `make host-contract-check` reports 177 of 205 cases for Wails.

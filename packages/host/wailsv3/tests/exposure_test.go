@@ -106,11 +106,13 @@ func (b listBackend) PageRequest(window, method string, params json.RawMessage) 
 
 // contract: exposure.list.non-object-list-rejected
 func TestExposureListRejectsANonObjectPageList(t *testing.T) {
-	_, address, _ := serve(t, listBackend{fakeBackend: newFakeBackend(), reply: json.RawMessage(`[]`)})
-	conn := dial(t, address)
-	got := call(t, conn, 1, "exposure.list", map[string]any{"window": "main"})
-	if got.Error == nil || got.Error.Code != -32603 {
-		t.Fatalf("non-object page list: result %s, error %v", got.Result, got.Error)
+	for _, reply := range []string{`[]`, `null`, `3`, `"list"`} {
+		_, address, _ := serve(t, listBackend{fakeBackend: newFakeBackend(), reply: json.RawMessage(reply)})
+		conn := dial(t, address)
+		got := call(t, conn, 1, "exposure.list", map[string]any{"window": "main"})
+		if got.Error == nil || got.Error.Code != -32603 {
+			t.Fatalf("page list %s: result %s, error %v", reply, got.Result, got.Error)
+		}
 	}
 }
 

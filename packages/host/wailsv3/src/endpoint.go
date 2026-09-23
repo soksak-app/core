@@ -709,6 +709,10 @@ func exposureList(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, er
 	if err := json.Unmarshal(reply, &list); err != nil {
 		return nil, rpcError(codeInternal, "page exposure.list: %v", err)
 	}
+	// JSON null 은 오류 없이 nil 맵으로 해석되므로 객체가 아닌 목록으로 거부한다.
+	if list == nil {
+		return nil, rpcError(codeInternal, "page exposure.list is %s, not an object", reply)
+	}
 	for _, entry := range listedEntries(hostStatus, true) {
 		list["status"] = append(list["status"], mustJSON(entry))
 	}
