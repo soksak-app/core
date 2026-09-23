@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
+import { checkChangelogTranslations } from "../checklist.mjs";
 
 const checker = fileURLToPath(new URL("../check-docs.mjs", import.meta.url));
 const englishTable = "\n| Feature | Implementation | Validation | Release |\n| --- | --- | --- | --- |\n| Test | Source | Unverified | Unreleased |\n";
@@ -51,3 +52,22 @@ for (const [name, english, korean, reason] of [
     assert.match(result.stderr, new RegExp(reason));
   });
 }
+
+const englishLog = "# Changelog\n\n## Unreleased\n\n- F1-2: changed `a.js`.\n- Added `b`.\n\n## 2026-09-22\n\n- G3: done.\n";
+const koreanLog = "# 변경 기록\n\n## 미배포\n\n- F1-2: `a.js`를 바꿨다.\n- `b`를 추가했다.\n\n## 2026-09-22\n\n- G3: 완료했다.\n";
+
+test("changelog translations with the same sections, entries, identifiers, and code pass", () => {
+  assert.deepEqual(checkChangelogTranslations(englishLog, koreanLog), []);
+});
+
+test("a missing, reordered, or altered changelog translation fails", () => {
+  const missing = koreanLog.replace("- `b`를 추가했다.\n", "");
+  assert.match(checkChangelogTranslations(englishLog, missing).join("\n"), /has 2 entries and its translation 1/);
+  const reordered = koreanLog.replace("- F1-2: `a.js`를 바꿨다.\n- `b`를 추가했다.\n", "- `b`를 추가했다.\n- F1-2: `a.js`를 바꿨다.\n");
+  assert.match(checkChangelogTranslations(englishLog, reordered).join("\n"), /entry 1 differs/);
+  const altered = koreanLog.replace("`a.js`", "`a.ts`");
+  assert.match(checkChangelogTranslations(englishLog, altered).join("\n"), /entry 1 differs/);
+  const noSection = koreanLog.replace("## 2026-09-22\n\n", "");
+  assert.match(checkChangelogTranslations(englishLog, noSection).join("\n"), /2 and 1 sections/);
+  assert.match(checkChangelogTranslations("# Changelog\n\n- early\n", koreanLog).join("\n"), /entry before the first section heading/);
+});

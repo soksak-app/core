@@ -35,3 +35,42 @@ export function checkCompletedItems(previous, current, file) {
   }
   return errors;
 }
+
+// 변경 기록과 번역이 같은 정보를 같은 순서로 담는지 검사한다. 구역 제목의 수, 구역별 항목 수, 그리고 위치마다
+// 번역하지 않는 작업 ID와 코드 조각이 같아야 한다.
+export function checkChangelogTranslations(english, korean) {
+  const sections = (text) => {
+    const result = [];
+    for (const line of text.split("\n")) {
+      if (line.startsWith("## ")) result.push({ heading: line, entries: [] });
+      else if (line.startsWith("- ")) {
+        if (result.length === 0) return { error: "changelog entry before the first section heading", result };
+        result.at(-1).entries.push(line);
+      }
+    }
+    return { result };
+  };
+  const invariant = (line) => JSON.stringify([
+    [...new Set([...line.matchAll(/\b[FGV]\d+(?:[.\u2013-]\d+)*\b/g)].map((match) => match[0].replace("\u2013", "-")))].sort(),
+    [...new Set([...line.matchAll(/`([^`]+)`/g)].map((match) => match[1]))].sort(),
+  ]);
+  const en = sections(english), ko = sections(korean);
+  const errors = [];
+  if (en.error) errors.push(`CHANGELOG.md: ${en.error}`);
+  if (ko.error) errors.push(`CHANGELOG.ko.md: ${ko.error}`);
+  if (errors.length) return errors;
+  if (en.result.length !== ko.result.length) return [`changelog translations have ${en.result.length} and ${ko.result.length} sections`];
+  en.result.forEach((section, index) => {
+    const other = ko.result[index];
+    if (section.entries.length !== other.entries.length) {
+      errors.push(`changelog section ${index + 1} (${section.heading}) has ${section.entries.length} entries and its translation ${other.entries.length}`);
+      return;
+    }
+    section.entries.forEach((entry, position) => {
+      if (invariant(entry) !== invariant(other.entries[position])) {
+        errors.push(`changelog section ${index + 1} entry ${position + 1} differs from its translation in task identifiers or code: ${entry.slice(0, 80)}`);
+      }
+    });
+  });
+  return errors;
+}

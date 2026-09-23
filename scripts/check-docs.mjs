@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, extname, resolve } from "node:path";
-import { checkChecklistTranslations, checkCompletedItems } from "./checklist.mjs";
+import { checkChangelogTranslations, checkChecklistTranslations, checkCompletedItems } from "./checklist.mjs";
 
 const files = [...new Set(execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
   { encoding: "utf8" }).split("\0"))].filter((file) => file.endsWith(".md") && existsSync(file));
@@ -43,6 +43,9 @@ for (const file of files) {
 }
 
 const statusFiles = ["docs/features.md", "docs/features.ko.md"];
+if (existsSync("CHANGELOG.md") && existsSync("CHANGELOG.ko.md")) {
+  errors.push(...checkChangelogTranslations(readFileSync("CHANGELOG.md", "utf8"), readFileSync("CHANGELOG.ko.md", "utf8")));
+}
 errors.push(...checkChecklistTranslations(...statusFiles.map((file) => readFileSync(file, "utf8"))));
 for (const file of statusFiles) {
   const previous = execFileSync("git", ["show", `HEAD:${file}`], { encoding: "utf8" });
@@ -65,4 +68,4 @@ if (counts[0] !== counts[1]) errors.push("feature translations have different ro
 if (errors.length) {
   console.error(errors.join("\n"));
   process.exitCode = 1;
-} else console.log(`Documentation checks passed: ${files.length} files; links, translations, status fields, and canonical checklist`);
+} else console.log(`Documentation checks passed: ${files.length} files; links, translations, status fields, canonical checklist, and changelog translation`);

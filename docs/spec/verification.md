@@ -6,7 +6,7 @@
 
 The canonical work status is [features](../features.md). A source-file inventory is structural evidence only. It must not report feature parity or application correctness.
 
-Documentation checks require unique task identifiers, only waiting/in-progress/complete states, and identical checklist identifiers, ordering, indentation, and states in both translations. The text may be translated; the task state must not differ.
+Documentation checks require unique task identifiers, only waiting/in-progress/complete states, and identical checklist identifiers, ordering, indentation, and states in both translations. The text may be translated; the task state must not differ. The changelog and its translation must have the same sections, the same number of entries in each section, and, at each position, the same task identifiers and code spans.
 
 Additional work must receive a priority and acceptance criteria in that same checklist before implementation. A completed task retains its status and the scope of its evidence. A subsequent issue uses a linked identifier with a numeric suffix, such as `G1.1-1`, instead of reopening the completed task or starting another checklist.
 
