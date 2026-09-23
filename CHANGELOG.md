@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G2-3-3: Wails endpoint tests cover the twelve endpoint contract cases that only the Tauri host tested; `make host-contract-check` reports 177 of 205 cases for Wails.
 - V1-1: the Korean changelog now translates every entry in the same order, both changelogs have one unreleased section, and `make docs-check` compares their sections, entry counts, task identifiers, and code spans.
 - F8-20: during a Hangul composition the image region gives special keys to the input method first, so Backspace edits `한` to `하`; a key the input method does not handle is reported as the key after the composition is committed. Checked with the native activation test and on both rebuilt hosts.
 - F8-16-1: while the macOS Korean input method is selected, the image region commits text that contains no Hangul letter at once, so Space and digits after a syllable typed on a physical keyboard reach the PTY without a later key. The `handleTSMEvent:completionHandler:` override from F8-16 is removed. Checked with the native activation test and `e2e/activation/ime.test.mjs` on both rebuilt hosts.
