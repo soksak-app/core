@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G2-3-4: the Wails host rejects an exposure reply whose `surface` is `null`, empty, or not a string instead of treating it as a main-document reply, and Wails tests cover the reply target cases.
 - G2-3-5: the Wails exposure relay is the exported `Relay[T]` with the structure of the Tauri relay, and Wails tests cover the exposure list and relay contract cases; `make host-contract-check` reports 188 of 205 cases for Wails.
 - G2-3-3: Wails endpoint tests cover the twelve endpoint contract cases that only the Tauri host tested; `make host-contract-check` reports 177 of 205 cases for Wails.
 - V1-1: the Korean changelog now translates every entry in the same order, both changelogs have one unreleased section, and `make docs-check` compares their sections, entry counts, task identifiers, and code spans.

@@ -271,12 +271,25 @@ func (h *Host) ask(s *Surfaces, method string, params any, timeout time.Duration
 	return reply.Result, nil
 }
 
-// ExposureReplyRequest 는 문서가 요청 하나에 보낸 답이다.
+// ExposureReplyRequest 는 문서가 요청 하나에 보낸 답이다. surface 가 없으면 메인 문서의 답이다.
 type ExposureReplyRequest struct {
 	ID      uint64          `json:"id"`
-	Surface string          `json:"surface,omitempty"`
+	Surface json.RawMessage `json:"surface,omitempty"`
 	Result  json.RawMessage `json:"result"`
 	Error   *RPCError       `json:"error"`
+}
+
+// ReplySurface 는 답을 보낸 표면을 반환한다. surface 필드가 없으면 메인 문서이므로 빈 값이다. null, 빈 문자열,
+// 문자열이 아닌 값은 메인 문서의 답으로 바꾸지 않고 오류로 거부한다.
+func ReplySurface(surface json.RawMessage) (string, error) {
+	if len(surface) == 0 {
+		return "", nil
+	}
+	var id string
+	if err := json.Unmarshal(surface, &id); err != nil || id == "" || string(surface) == "null" {
+		return "", fmt.Errorf("exposure reply surface must be a nonempty string, got %s", surface)
+	}
+	return id, nil
 }
 
 // ExposureReply 는 메인 페이지가 exposure-request 에 보낸 답을 받는다.
@@ -285,19 +298,23 @@ func (h *Host) ExposureReply(ctx context.Context, req ExposureReplyRequest) erro
 	if err != nil {
 		return err
 	}
-	if req.Surface == "" {
+	surface, err := ReplySurface(req.Surface)
+	if err != nil {
+		return err
+	}
+	if surface == "" {
 		return h.relay.Resolve(req.ID, relayTarget{owner: s}, ExposureResult{Result: req.Result, Error: req.Error})
 	}
-	if err := s.authorizeSurface(uint64(s.window.ID()), req.Surface); err != nil {
+	if err := s.authorizeSurface(uint64(s.window.ID()), surface); err != nil {
 		return err
 	}
 	s.mu.Lock()
-	_, attached := s.compositions[req.Surface]
+	_, attached := s.compositions[surface]
 	s.mu.Unlock()
 	if !attached {
-		return fmt.Errorf("surface %q is not attached", req.Surface)
+		return fmt.Errorf("surface %q is not attached", surface)
 	}
-	return h.relay.Resolve(req.ID, relayTarget{owner: s, surface: req.Surface}, ExposureResult{Result: req.Result, Error: req.Error})
+	return h.relay.Resolve(req.ID, relayTarget{owner: s, surface: surface}, ExposureResult{Result: req.Result, Error: req.Error})
 }
 
 // ExposureChange 는 감시 중인 상태의 새 값이다.

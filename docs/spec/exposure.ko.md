@@ -172,7 +172,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 | `exposureForward` | `ExposureForward` | `exposure_forward` |
 | `exposureRegister` | `ExposureRegister` (표면 브리지) | `exposure_register` |
 
-표면 페이지의 페이지 인터페이스는 `page.exposure`이며 `register(kind, name)`, 전달된 요청마다 `fn({id, method, params})`를 호출하는 `onRequest(fn)`, `reply(id, payload)`로 구성된다. 메인 페이지는 `host.on("exposure-request", fn)`, `host.on("exposure-registered", fn)`, 그리고 위 호출을 담은 `host.call(...)`을 사용한다.
+표면 페이지의 페이지 인터페이스는 `page.exposure`이며 `register(kind, name)`, 전달된 요청마다 `fn({id, method, params})`를 호출하는 `onRequest(fn)`, `reply(id, payload)`로 구성된다. 메인 페이지는 `host.on("exposure-request", fn)`, `host.on("exposure-registered", fn)`, 그리고 위 호출을 담은 `host.call(...)`을 사용한다. `surface`가 없는 응답은 창의 메인 문서 요청에 대한 답이고, `surface`가 있는 응답은 그 표면 문서 요청에 대한 답이며 비어 있지 않은 문자열로 표면을 가리킨다. `surface`가 `null`, 빈 값, 문자열이 아니면 메인 문서 응답으로 처리하지 않고 오류로 거부한다.
 
 ## 오류
 

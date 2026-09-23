@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- G2-3-4: Wails 호스트는 `surface`가 `null`, 빈 값, 문자열이 아닌 노출 응답을 메인 문서 응답으로 처리하지 않고 거부하며, Wails 테스트가 응답 대상 사례를 다룬다.
 - G2-3-5: Wails 노출 중계가 Tauri 중계와 같은 구조의 공개 `Relay[T]`가 되었고, Wails 테스트가 노출 목록과 중계 계약 사례를 다룬다. `make host-contract-check`는 Wails에 대해 205개 중 188개를 보고한다.
 - G2-3-3: Wails endpoint 테스트가 Tauri 호스트만 검사하던 endpoint 계약 사례 12개를 다루며, `make host-contract-check`는 Wails에 대해 205개 중 177개를 보고한다.
 - V1-1: 한국어 변경 기록이 이제 모든 항목을 같은 순서로 번역하고, 두 변경 기록은 미배포 구역 하나를 가지며, `make docs-check`가 구역, 항목 수, 작업 ID, 코드 조각을 비교한다.
