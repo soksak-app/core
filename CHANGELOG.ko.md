@@ -1,5 +1,6 @@
 # 변경 기록
 
+- G1.4-4: parity 감사는 현재 inventory 수를 완료된 G1.4 항목이 아니라 운영 문서의 현재 상태 문장과 비교하며, G1.4는 원래 증거를 유지한다.
 - V5-3: 선언된 모든 작업공간 버전은 0.0.1이다. `scripts/check-versions.mjs`가 `pnpm test`에서 이를 강제하고, vt-alacritty manifest 두 개를 0.0.0에서 바꿨다. 완료된 터미널·클립보드·프로토콜·브라우저 외관 주장을 현재 빌드에서 다시 검증하는 V5-6을 등록했다.
 - F8-15: 넓은 조합 글자가 더 이상 잘리지 않는다. 이어짐 셀이 엔진 spacer처럼 폭 0이므로 배경이 오른쪽 절반을 덮지 않는다. 프레임 검사와 호스트 검사가 오른쪽 절반 잉크를 측정한다.
 - F11-3: native/darwin의 `sp_capture_still`을 바탕으로 두 호스트에 `diagnostics.capture.still`, CLI에 `soksak capture`를 추가해 포커스 없이 창 정지 이미지를 얻는다. F8-11에서 쓴 임시 PNG 기록기를 대신하며 재빌드된 두 앱에서 확인했다.

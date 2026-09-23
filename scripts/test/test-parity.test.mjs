@@ -129,10 +129,14 @@ test("completed capability entries all have feature evidence links", { timeout: 
 test("recorded parity counts cannot drift from the current inventory", { timeout: 1000 }, () => {
   const inventory = auditInventory(files);
   assert.deepEqual(auditRecordedInventoryCounts(inventory), []);
-  assert.match(
-    auditRecordedInventoryCounts({ ...inventory, testCount: inventory.testCount + 1 })[0],
-    /do not match current output/,
-  );
+  const drifted = auditRecordedInventoryCounts({ ...inventory, testCount: inventory.testCount + 1 });
+  assert.equal(drifted.length, 2, "both translations must report the drift");
+  assert.ok(drifted.every((error) => /do not match current output/.test(error)));
+  assert.match(auditRecordedInventoryCounts(inventory, "no count", "no count")[0], /not recorded in the expected form/);
+  // 완료된 G1.4 항목의 숫자는 비교 대상이 아니다.
+  const english = "The current inventory has 1 lanes, 2 implementation files, and 3 test files.";
+  const korean = "현재 목록은 lane 1개, 구현 파일 2개, 테스트 파일 3개다.";
+  assert.deepEqual(auditRecordedInventoryCounts({ trackCount: 1, implementationCount: 2, testCount: 3 }, english, korean), []);
 });
 
 test("completed F3 scope is not reported as currently open", { timeout: 1000 }, () => {

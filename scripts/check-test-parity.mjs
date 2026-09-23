@@ -180,7 +180,7 @@ const FEATURE_LINKS = [
     id: "G2-2",
     implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "auditCompletedFeatureLinks" }, { file: "scripts/check-test-parity.mjs", symbol: "auditRecordedInventoryCounts" }],
     tests: [{ file: "scripts/test/test-parity.test.mjs", id: "completed capability entries all have feature evidence links" }, { file: "scripts/test/test-parity.test.mjs", id: "recorded parity counts cannot drift from the current inventory" }],
-    expected: "Completed host-structure and parity-correction entries remain linked to named evidence, and the current inventory count cannot drift from the checklist record.",
+    expected: "Completed host-structure and parity-correction entries remain linked to named evidence, and the current inventory count cannot drift from the current-state record in the operations document.",
     levels: ["unit"],
   },
   {
@@ -257,7 +257,7 @@ const FEATURE_LINKS = [
     id: "G1.3-2",
     implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "auditRecordedInventoryCounts" }],
     tests: [{ file: "scripts/test/test-parity.test.mjs", id: "recorded parity counts cannot drift from the current inventory" }],
-    expected: "The G1.4 lane, implementation, and test counts recorded in the checklist match current inventory output and a count drift fails explicitly.",
+    expected: "The current lane, implementation, and test counts recorded in both operations-document translations match current inventory output, a count drift fails explicitly, and completed checklist evidence is not compared.",
     levels: ["unit"],
   },
   {
@@ -1793,16 +1793,30 @@ export function auditCompletedFeatureLinks(features, checklistSource = readFileS
     .map((id) => `${id}: completed capability has no feature link`);
 }
 
-export function auditRecordedInventoryCounts(inventory, checklistSource = readFileSync(`${ROOT}docs/features.md`, "utf8")) {
-  const line = checklistSource.split("\n").find((entry) => entry.includes("G1.4 — Every discovered test file"));
-  if (!line) return ["G1.4: recorded parity evidence line is missing"];
-  const match = line.match(/passes with (\d+) lanes, (\d+) implementation files, and (\d+) test files/);
-  if (!match) return ["G1.4: recorded parity evidence counts are not declared in the expected form"];
+// 현재 inventory 수는 운영 문서의 현재 상태 문장에 기록한다. 완료된 체크리스트 항목의 증거는 바꾸지 않는다.
+export function auditRecordedInventoryCounts(
+  inventory,
+  english = readFileSync(`${ROOT}docs/operations/examples.md`, "utf8"),
+  korean = readFileSync(`${ROOT}docs/operations/examples.ko.md`, "utf8"),
+) {
   const expected = [inventory.trackCount, inventory.implementationCount, inventory.testCount].map(String);
-  const actual = match.slice(1);
-  return actual.every((value, index) => value === expected[index])
-    ? []
-    : [`G1.4: recorded parity counts ${actual.join(", ")} do not match current output ${expected.join(", ")}`];
+  const records = [
+    ["docs/operations/examples.md", english, /The current inventory has (\d+) lanes, (\d+) implementation files, and (\d+) test files\./],
+    ["docs/operations/examples.ko.md", korean, /현재 목록은 lane (\d+)개, 구현 파일 (\d+)개, 테스트 파일 (\d+)개다\./],
+  ];
+  const errors = [];
+  for (const [path, source, pattern] of records) {
+    const match = source.match(pattern);
+    if (!match) {
+      errors.push(`${path}: the current inventory count is not recorded in the expected form`);
+      continue;
+    }
+    const actual = match.slice(1);
+    if (!actual.every((value, index) => value === expected[index])) {
+      errors.push(`${path}: recorded parity counts ${actual.join(", ")} do not match current output ${expected.join(", ")}`);
+    }
+  }
+  return errors;
 }
 
 export function auditHistoricalScopeWording(checklistSource = readFileSync(`${ROOT}docs/features.md`, "utf8")) {

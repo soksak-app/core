@@ -1,5 +1,6 @@
 # Changelog
 
+- G1.4-4: the parity audit compares the current inventory count with the current-state sentence in the operations document instead of the completed G1.4 entry, which keeps its original evidence.
 - V5-3: every declared workspace version is 0.0.1; `scripts/check-versions.mjs` enforces it in `pnpm test`, and the two vt-alacritty manifests moved from 0.0.0. Registered V5-6 to re-verify completed terminal, clipboard, protocol, and browser-appearance claims on current builds.
 - F8-15: a wide preedit glyph is no longer clipped; its continuation cell has width 0 like the engine spacer, so its background no longer covers the right half. Frame and host checks measure the right-half ink.
 - F11-3: added `diagnostics.capture.still` to both hosts and `soksak capture`, backed by `sp_capture_still` in native/darwin, for a still window image taken without focus. It replaces the ad hoc PNG writer used during F8-11 and was checked on both rebuilt applications.
