@@ -1,0 +1,244 @@
+# 호스트 계약 사례
+
+[English](host-contract.md)
+
+Wails 호스트(Go)와 Tauri 호스트(Rust)는 하나의 호스트 계약을 구현한다([네이티브 호스트](hosts.ko.md)). 이 문서는 두 호스트가 모두 실행해야 하는 계약 사례를 나열해, 한 호스트에서 검사한 동작을 다른 호스트에서도 검사하게 한다.
+
+## 선언
+
+각 호스트 테스트 함수는 함수 바로 위, Rust에서는 테스트 속성 위의 줄에 실행하는 사례를 선언한다.
+
+```go
+// contract: endpoint.transport.invalid-json-closes
+func TestEndpointClosesOnInvalidJSON(t *testing.T) {
+```
+
+```rust
+// contract: endpoint.transport.invalid-json-closes
+#[test]
+fn invalid_json_closes_connection() {
+```
+
+테스트 함수 하나는 쉼표로 나눈 여러 사례를 선언할 수 있다. `packages/host/wailsv3/tests/`, `packages/host/wailsv3/src/*_test.go`, `packages/host/tauriv2/tests/`, `packages/host/tauriv2/src/`의 테스트 모듈에 있는 모든 테스트 함수는 사례를 하나 이상 선언한다. 테스트는 단언이 사례의 결과를 확인할 때만 그 사례를 선언한다.
+
+## 검사
+
+`make host-contract-check`는 명령 감독자로 각 호스트의 테스트를 기본 구성과 진단 구성(Go 태그 `diagnostics`, Rust 기능 `diagnostics`)에서 실행하고 보고된 결과를 읽는다. 다음 경우에 실패한다.
+
+- 호스트 범위의 사례에 그 호스트의 통과한 테스트가 없다.
+- 선언한 테스트가 어느 구성에서도 실행되지 않았거나, 한 구성에서 실패했거나 건너뛰었다.
+- 테스트가 사례를 선언하지 않았거나, 정의되지 않은 사례나 호스트 범위 밖의 사례를 선언했다.
+- 선언이 테스트 함수에 붙어 있지 않다.
+- 호스트 실행이 테스트 0개를 보고했다.
+
+범위 열은 `both`이거나, 한 호스트에만 있는 동작이면 `<host> only: <이유>`다. 검사는 두 호스트가 모두 구현한 유일한 플랫폼인 macOS에서 실행한다. Windows와 Linux 진입점은 `not implemented` 오류를 반환하며 사례가 없다. 검사의 단위 테스트(`scripts/test/check-host-contract.test.mjs`)는 각 실패를 주입하며 `pnpm test`에서 실행된다.
+
+## Contract cases
+
+| 사례 | 동작 | 범위 |
+| --- | --- | --- |
+| `authorization.surface.cross-surface-rejected` | 한 표면의 호출자가 다른 표면에 대해 요청하면 거부한다. | both |
+| `authorization.surface.own-surface-accepted` | 자기 표면에 대한 호출자의 요청을 받아들인다. | both |
+| `authorization.surface.unscoped-caller-rejected-for-document` | 표면이 없는 호출자가 표면을 대상으로 한 문서 요청을 거부한다. | both |
+| `authorization.main.known-main-caller-accepted` | 표면이 없고 id가 주 창의 id인 호출자는 표면 대상 요청이 허용된다. | both |
+| `authorization.main.unknown-main-caller-rejected` | 표면이 없고 id가 주 창의 id가 아닌 호출자를 거부한다. | both |
+| `clipboard.persist-png.writes-exact-bytes` | 올바른 PNG 페이로드를 저장하면 입력 바이트와 정확히 같은 파일의 경로를 반환한다. | both |
+| `clipboard.persist-png.owner-only-mode` | 저장한 PNG 파일의 모드는 0600이다. | both |
+| `clipboard.png.rejects-oversize` | 16 MiB보다 큰 PNG 페이로드를 거부한다. | both |
+| `clipboard.png.rejects-empty` | 빈 PNG 페이로드를 거부한다. | both |
+| `clipboard.png.accepts-nonempty-within-bound` | 한도 안의 비어 있지 않은 PNG 페이로드를 받아들인다. | both |
+| `clipboard.read.requires-user-initiated` | 사용자의 명시적 붙여넣기가 아닌 클립보드 읽기를 거부한다. | both |
+| `clipboard.read.rejects-unknown-type` | 사용자가 시작했더라도 알 수 없는 형식의 클립보드 읽기를 거부한다. | both |
+| `clipboard.read.accepts-known-types` | 사용자가 시작한 텍스트와 파일 URL 읽기를 받아들인다. | both |
+| `diagnostics.capture-stop.payload-reports-frame-limit` | 한도에 도달한 녹화의 중지 페이로드는 frames, count, limited true, 가장 긴 간격을 보고한다. | both |
+| `diagnostics.capture-stop.payload-reports-unbounded` | 한도에 도달하지 않은 녹화의 중지 페이로드는 limited false를 보고한다. | both |
+| `documents.request.accepts-own-surface` | 호출자 자신의 표면에 대한 문서 요청을 받아들이고 표면과 이름 키를 반환한다. | both |
+| `documents.request.rejects-foreign-or-missing-caller` | 호출자 표면이 없거나 다른 표면에서 온 문서 요청은 "not surface"로 실패한다. | both |
+| `documents.request.rejects-invalid-names` | 빈 이름, 대문자, 하이픈으로 시작, 슬래시 포함, 65자 문서 이름을 거부한다. | both |
+| `documents.request.ignores-placement-fields` | 문서 요청을 해석하면 표면과 문서만 남기고 배치 필드를 버린다. | both |
+| `documents.request.url-and-action-default-empty` | url과 action이 없는 문서 요청을 해석하면 둘 다 비어 있다. | both |
+| `documents.registry.rejects-duplicate-reservation` | 같은 문서 키를 두 번 예약하면 "already attached"로 실패한다. | both |
+| `documents.registry.reserved-name-is-not-attached` | 설정 전의 예약된 문서 키를 읽으면 실패한다. | both |
+| `documents.registry.set-attaches-reserved-name` | 예약된 문서 키를 설정하면 성공하고 읽으면 핸들을 반환한다. | both |
+| `documents.registry.lists-names-by-handle` | 등록소는 각 문서 핸들을 그 키와 함께 나열한다. | both |
+| `documents.registry.surface-close-removes-only-its-documents` | 표면을 제거하면 그 문서를 반환하고 키를 읽을 수 없게 하며 다른 표면의 문서는 유지한다. | both |
+| `documents.registry.rejects-set-after-surface-removed` | 표면이 제거된 문서 키의 설정은 실패한다. | both |
+| `documents.registry.remove-reserved-returns-empty` | 예약만 된 문서 이름을 제거하면 빈 핸들로 성공한다. | both |
+| `documents.registry.remove-attached-returns-handle-once` | 연결된 문서 이름을 제거하면 핸들을 반환하고, 다시 제거하면 실패한다. | both |
+| `endpoint.process.one-owner-per-config-dir` | 같은 설정 디렉터리의 두 번째 엔드포인트는 "already owned by process"로 거부되고, 첫 엔드포인트는 닫을 때까지 잠금을 유지한다. | both |
+| `endpoint.transport.http-request-line-closes` | HTTP 요청 줄은 응답이나 메서드 호출 없이 연결을 닫는다. | both |
+| `endpoint.transport.invalid-json-closes` | 본문이 JSON이 아닌 프레임은 응답 없이 연결을 닫는다. | both |
+| `endpoint.transport.non-jsonrpc-object-closes` | JSON-RPC 2.0 요청이 아닌 JSON 프레임은 응답 없이 연결을 닫는다. | both |
+| `endpoint.transport.undeclared-method-closes` | 선언되지 않은 메서드는 응답 없이 연결을 닫고 페이지에 아무것도 전달하지 않는다. | both |
+| `endpoint.diagnostics.methods-exist-only-in-diagnostic-builds` | 릴리스 빌드에서 diagnostics.knob은 연결을 닫고, 진단 빌드에서는 응답되며 페이지에 한 번 전달된다. | both |
+| `endpoint.rpc.round-trip-by-id` | 한 연결의 여러 요청은 각각 같은 id와 결과를 가진 JSON-RPC 2.0 응답을 받는다. | both |
+| `endpoint.rpc.page-params-omit-window` | 페이지는 window 필드를 뺀 전달 매개변수를 받는다. | both |
+| `endpoint.rpc.unknown-window-1003` | 존재하지 않는 창에 대한 선언된 메서드는 페이지에 닿지 않고 오류 1003을 반환한다. | both |
+| `endpoint.rpc.missing-window-param-invalid` | window 매개변수가 없는 status.get은 -32602를 반환한다. | both |
+| `endpoint.names.unknown-host-name-1001` | 알 수 없는 host 이름의 command.run은 오류 1001을 반환한다. | both |
+| `endpoint.names.missing-name-invalid` | name이 없는 status.get은 -32602를 반환한다. | both |
+| `endpoint.names.owner-form-required` | owner.name 형식이 아닌 이름과 문자열이 아닌 이름은 -32602를 반환한다. | both |
+| `endpoint.names.valid-name-examples` | core.surface.document와 plugin-x.a-1 같은 이름은 올바르다. | both |
+| `endpoint.input.pointer-invalid-phase` | 알 수 없는 phase의 포인터 입력은 -32602를 반환한다. | both |
+| `endpoint.input.pointer-missing-coordinate` | x가 없는 포인터 입력은 -32602를 반환한다. | both |
+| `endpoint.input.pointer-numeric-button-rejected` | 숫자 포인터 버튼은 -32602를 반환한다. | both |
+| `endpoint.input.pointer-middle-button-rejected` | 가운데 포인터 버튼은 -32602를 반환한다. | both |
+| `endpoint.input.pointer-activate-only-on-move` | activate는 down phase에서 거부되고 move phase에서 받아들여진다. | both |
+| `endpoint.input.pointer-activate-must-be-bool` | 불리언이 아닌 activate는 -32602를 반환한다. | both |
+| `endpoint.input.pointer-defaults` | button이나 activate가 없는 포인터 입력은 왼쪽 버튼과 비활성화를 쓴다. | both |
+| `endpoint.input.pointer-right-button-accepted` | 오른쪽 포인터 버튼을 받아들이고 오른쪽 버튼으로 전달한다. | both |
+| `endpoint.input.pointer-phase-and-scroll-decoding` | drag와 scroll phase, deltaY, 소수 좌표를 그대로 전달한다. | both |
+| `endpoint.input.key-unknown-modifier-rejected` | 알 수 없는 키 수정자는 -32602를 반환한다. | both |
+| `endpoint.input.key-shift-command-mask` | shift와 command 수정자는 비트 마스크 9가 되고, 키와 phase는 그대로 전달된다. | both |
+| `endpoint.input.key-control-option-and-text` | control과 option 수정자는 6이 되고 text는 그대로 전달된다. | both |
+| `endpoint.input.key-invalid-phase-or-modifier-type` | 알 수 없는 키 phase나 배열이 아닌 modifiers 값은 -32602를 반환한다. | both |
+| `endpoint.discovery.writes-endpoint-json` | endpoint.json은 전송 방식, 주소, pid, 애플리케이션, 버전, 실행 파일, 시작 시각을 담는다. | both |
+| `endpoint.discovery.endpoint-json-mode-0600` | endpoint.json의 모드는 0600이다. | both |
+| `endpoint.discovery.removes-endpoint-json-on-close` | 엔드포인트를 닫으면 endpoint.json을 제거한다. | both |
+| `endpoint.discovery.removes-socket-on-close` | 소켓은 서비스 중에 존재하고 엔드포인트를 닫으면 제거된다. | both |
+| `endpoint.discovery.close-keeps-replacement` | 닫을 때 다른 프로세스가 쓴 endpoint.json은 제거하지 않는다. | both |
+| `endpoint.socket.private-modes` | 소켓 디렉터리의 모드는 0700이고 소켓의 모드는 0600이다. | both |
+| `endpoint.socket.sweeps-ended-process-sockets` | 수신을 시작하면 이 애플리케이션의 끝난 프로세스 소켓을 제거하고, 살아 있는 소켓과 다른 애플리케이션의 소켓은 유지한다. | both |
+| `endpoint.socket.refuses-open-directory` | 다른 사용자에게 열린 소켓 디렉터리를 오류에 모드를 적어 거부한다. | both |
+| `endpoint.socket.refuses-foreign-owner` | 다른 사용자가 소유한 소켓 디렉터리를 "belongs to another user"로 거부한다. | both |
+| `endpoint.socket.refuses-non-directory` | 심볼릭 링크인 소켓 경로를 "is not a directory"로 거부한다. | both |
+| `endpoint.watch.notifies-watching-connection` | status.watch 뒤의 변경은 window, name, value를 가진 status.changed 알림으로 그 연결에 도착한다. | both |
+| `endpoint.watch.non-watching-connection-not-notified` | 구독하지 않은 연결은 알림을 받지 않는다. | both |
+| `endpoint.watch.unwatch-is-per-connection` | 한 연결의 구독 해제는 같은 상태를 구독한 다른 연결의 알림을 유지한다. | both |
+| `endpoint.watch.page-watch-deduplicated` | 같은 상태를 구독하는 두 번째 연결은 페이지에 status.watch를 더 보내지 않는다. | both |
+| `endpoint.watch.no-page-unwatch-while-watched` | 어떤 연결이든 상태를 구독하는 동안 페이지는 status.unwatch를 받지 않는다. | both |
+| `endpoint.watch.last-watcher-close-unwatches-page` | 마지막 구독 연결을 닫으면 페이지에 status.unwatch를 보낸다. | both |
+| `endpoint.watch.registry-reflects-watches` | 구독 등록소는 활성 구독만 정확히 나열하고 마지막 구독자가 떠나면 비어 있다. | both |
+| `endpoint.watch.surface-and-plain-forwarded-separately` | 같은 이름의 표면 구독과 일반 구독은 각자의 매개변수로 모두 페이지에 전달된다. | both |
+| `endpoint.watch.empty-surface-invalid` | 빈 surface의 status.watch는 -32602를 반환한다. | both |
+| `endpoint.watch.surface-change-names-surface` | 표면 구독의 변경은 surface를 담고, 일반 구독의 변경은 담지 않는다. | both |
+| `endpoint.watch.surface-unwatch-forwarded-with-surface` | 표면 구독을 해제하면 surface를 담은 status.unwatch를 페이지에 보낸다. | both |
+| `endpoint.watch.surface-unwatch-keeps-plain-watch` | 표면 구독을 해제해도 같은 이름의 일반 구독은 유지된다. | both |
+| `endpoint.watch.subscription-arrival-order` | 연달아 보낸 watch, unwatch, watch는 느린 페이지에 그 순서로 도착하고 연결은 계속 구독한다. | both |
+| `endpoint.watch.other-requests-not-blocked-by-pending-subscription` | 페이지 구독 해제가 대기 중이어도 같은 연결의 다음 요청에 응답한다. | both |
+| `exposure-reply.payload.main-reply-unscoped` | surface가 없는 주 문서 응답 페이로드는 빈 surface로 해석된다. | both |
+| `exposure-reply.payload.scoped-reply-keeps-surface` | surface가 있는 응답 페이로드는 인코딩과 해석을 거쳐도 surface를 유지한다. | both |
+| `exposure-reply.target.main-and-surface-distinct` | surface가 없는 응답은 창의 주 문서를, surface가 있는 응답은 그 표면 문서를 대상으로 한다. | both |
+| `exposure-reply.target.invalid-surface-rejected` | surface가 null, 빈 문자열, 숫자, 객체인 응답은 주 응답이 아니라 오류다. | both |
+| `exposure.list.appends-host-entries-registered` | 노출 목록은 페이지 항목을 유지하고 호스트 상태와 명령 항목을 등록된 항목으로 더한다. | both |
+| `exposure.list.host-entries-exact-sorted-set` | 호스트 상태와 명령 이름은 정해진 정렬 목록과 같다. | both |
+| `exposure.list.host-entries-described` | 모든 호스트 항목은 비어 있지 않은 설명을 가진다. | both |
+| `exposure.list.host-quit-result-null` | host.quit은 null 결과 스키마를 선언한다. | both |
+| `exposure.list.non-object-list-rejected` | 객체가 아닌 페이지 노출 목록은 오류다. | both |
+| `exposure.timeout.command-run-default-and-declared` | command.run은 기본 10초를 기다리고 선언된 timeout을 쓴다. | both |
+| `exposure.timeout.status-next-unbounded` | timeout이 없는 status.next는 시간 제한이 없다. | both |
+| `exposure.timeout.invalid-timeout-rejected` | 0, 600000 초과, 소수, 문자열, 음수인 command.run timeout은 -32602를 반환한다. | both |
+| `exposure.timeout.status-next-timeout-rejected` | timeout이 있는 status.next는 -32602를 반환한다. | both |
+| `exposure.relay.reply-resolves-request` | 대상 문서에서 온 같은 id의 응답은 그 결과로 요청을 완료한다. | both |
+| `exposure.relay.missing-result-is-null` | result가 없는 응답은 null로 완료된다. | both |
+| `exposure.relay.error-reply-keeps-code-and-message` | 오류 응답은 같은 코드와 메시지로 요청을 실패시킨다. | both |
+| `exposure.relay.foreign-document-reply-ignored-timeout-1005` | 다른 문서의 응답은 무시되고, 요청은 1005로 시간 초과되며, 늦은 응답도 받지 않는다. | both |
+| `exposure.relay.send-failure-1003` | 문서로 보내기가 실패하면 요청은 즉시 1003으로 실패한다. | both |
+| `exposure.relay.closed-document-fails-pending-1003` | 문서를 닫으면 대기 중인 요청은 1003으로 실패한다. | both |
+| `exposure.relay.no-timeout-waits-until-close` | timeout이 없는 요청은 문서가 닫힐 때까지 기다린 뒤 1003으로 실패한다. | both |
+| `flush.queue.rejects-send-when-full` | 사이드카가 읽지 않아 쓰기 대기열이 가득 차면 보내기가 실패한다. | both |
+| `flush.queue.full-error-says-not-keeping-up` | 대기열이 가득 찬 오류는 "is not keeping up"을 적는다. | both |
+| `flush.buffer.replies-delivered-after-drain` | 대기열이 가득 찬 동안 버퍼에 넣은 응답은 사이드카가 다시 읽은 뒤 도착한다. | both |
+| `flush.buffer.closes-delivered-after-drain` | 대기열이 가득 찬 동안 버퍼에 넣은 표면 닫기 알림이 사이드카에 도착한다. | both |
+| `flush.buffer.consumed-acks-not-coalesced` | 버퍼에 넣은 consumed 응답은 같은 이미지의 두 응답을 포함해 각각 한 번 도착한다. | both |
+| `flush.buffer.delivered-after-queued-bodies` | 버퍼에 넣은 응답과 닫기 알림은 이미 대기열에 있던 본문 뒤에 도착한다. | both |
+| `images.envelope.rejects-unattached-image` | 연결된 적 없는 이미지 이름의 봉투에 notAttached로 응답한다. | both |
+| `images.envelope.refusal-echoes-name-and-sequence` | 거부 응답은 봉투의 name과 sequence를 담는다. | both |
+| `images.envelope.refusal-preserves-quoted-name` | 따옴표가 든 이름의 거부 응답은 올바른 JSON이며 이름을 유지한다. | both |
+| `images.envelope.rejects-other-sidecar` | 다른 사이드카가 보낸 연결된 이미지의 봉투에 notAttached로 응답한다. | both |
+| `images.envelope.presents-attached-current-frame` | 연결한 사이드카가 보낸 현재 raster 프레임은 토큰, 크기, 이름, sequence와 함께 표시된다. | both |
+| `images.envelope.present-carries-nonce-scale-generation-raster` | 표시할 프레임은 nonce, scale, generation, raster도 담는다. | both |
+| `images.envelope.rejects-unsupported-format` | bgra8이 아닌 형식의 봉투에 unsupported로 응답한다. | both |
+| `images.envelope.rejects-bad-nonce-length` | nonce가 16바이트가 아닌 봉투에 unsupported로 응답한다. | both |
+| `images.envelope.rejects-unknown-token-kind` | 토큰 종류가 iosurface-global이 아닌 봉투에 unsupported로 응답한다. | both |
+| `images.envelope.ignores-body-without-image` | image 필드가 없는 JSON 본문은 이미지 봉투가 아니다. | both |
+| `images.envelope.ignores-invalid-json` | JSON이 아닌 본문은 이미지 봉투가 아니다. | both |
+| `images.ack.consumed-carries-frame-identity` | 표시에 성공하면 consumed와 프레임의 name, generation, raster, sequence로 응답한다. | both |
+| `images.ack.failure-carries-error-and-frame-identity` | 표시에 실패하면 오류와 프레임의 name, generation, raster, sequence로 응답한다. | both |
+| `images.transfer.rejects-duplicate-sequence` | 현재 raster에서 같은 sequence를 반복하면 stale로 응답한다. | both |
+| `images.transfer.reconfigure-advances-raster` | 새 크기를 구성하면 더 큰 raster 번호를 반환한다. | both |
+| `images.transfer.rejects-stale-raster` | 대체된 raster의 프레임에는 stale로 응답하고 새 raster의 프레임은 표시한다. | both |
+| `images.transfer.configure-stamps-current-generation` | raster 구성은 현재 표면 generation을 담는다. | both |
+| `images.transfer.generation-advances` | 나중 generation의 번호가 더 크다. | both |
+| `images.transfer.rejects-old-generation-after-reattach` | 새 generation에서 이미지를 다시 연결하면 이전 generation의 프레임에 notAttached로 응답한다. | both |
+| `images.transfer.new-generation-invalidates-queued-old-frame` | 이미지를 닫기 전에 새 generation을 시작하면 대기 중인 이전 generation 프레임은 notAttached로 응답된다. | both |
+| `images.wait.blocks-before-first-frame` | 표시 대기는 보이는 raster의 첫 프레임 전에는 통과하지 않는다. | both |
+| `images.wait.releases-after-current-frame-presented` | 현재 raster의 프레임이 표시되면 표시 대기가 통과한다. | both |
+| `images.wait.successful-handle-replies-consumed` | 주 스레드 표시에 성공한 봉투를 처리하면 consumed로 응답한다. | both |
+| `images.wait.newer-sequence-rearms-wait` | 같은 raster에서 새 sequence를 결정하면 표시 대기가 다시 막힌다. | both |
+| `images.wait.reconfigure-clears-presented` | raster를 다시 구성하면 표시 상태를 지운다. | both |
+| `images.wait.hidden-image-does-not-block` | 숨긴 이미지는 표시 대기를 막지 않고, 다시 보이면 다시 막는다. | both |
+| `images.wait.hidden-surface-does-not-block` | 숨긴 표면은 표시 대기를 막지 않고, 다시 보이면 다시 막는다. | both |
+| `images.wait.ended-generation-does-not-block` | 표면 generation을 끝내면 표시 대기가 풀린다. | both |
+| `images.visibility.survives-first-document-navigation` | 첫 문서 이동 전에 숨긴 표면은 이동 뒤에도 숨겨진 상태를 유지한다. | both |
+| `images.visibility.hidden-surface-defers-configuration` | 숨긴 표면의 이미지를 구성하면 표면이 보일 때까지 구성을 반환하지 않는다. | both |
+| `images.visibility.refresh-list-excludes-hidden` | 새로 고침 목록은 숨긴 표면의 이미지와 숨긴 이미지를 뺀다. | both |
+| `images.present.rejects-frame-superseded-during-main-thread` | 주 스레드 표시 전에 raster가 다시 구성된 프레임에 stale로 응답한다. | both |
+| `images.present.rejects-frame-detached-during-main-thread` | 주 스레드 표시 전에 표면 이미지가 제거된 프레임에 stale로 응답한다. | both |
+| `images.present.main-thread-failure-reports-present-failed` | 주 스레드 표시가 실패하면 presentFailed로 응답하고 표시 대기는 그 오류를 반환한다. | both |
+| `images.present.missing-native-surface-requests-reconfiguration` | notFound로 실패한 표시는 같은 raster의 새 구성을 요청한다. | both |
+| `images.attach.surface-close-removes-only-its-images` | 표면을 제거하면 그 이미지 핸들을 반환하고 다른 표면의 이미지는 유지한다. | both |
+| `images.attach.rejects-reservation-without-sidecar` | 소유 사이드카가 없는 이미지 예약을 거부하고 아무것도 등록하지 않는다. | both |
+| `recording.finish.keeps-folder-and-reports-frames` | 녹화를 마치면 폴더를 유지하고 프레임 수를 보고하며, 두 번째 마침은 실패한다. | both |
+| `recording.start.failed-open-removes-folder` | 캡처 열기에 실패한 녹화는 폴더를 제거하고 실행 중인 것을 남기지 않는다. | both |
+| `recording.start.failed-start-removes-folder` | 캡처 시작에 실패한 녹화는 폴더를 제거하고 실행 중인 것을 남기지 않는다. | both |
+| `recording.start.no-first-frame-stops-and-removes` | 첫 프레임이 없는 녹화는 중지되고 폴더가 제거된다. | both |
+| `recording.start.rejects-while-running` | 녹화 중에 녹화를 시작하면 실패하고 폴더를 만들지 않는다. | both |
+| `recording.abort.stops-removes-and-allows-next` | 녹화를 중단하면 중지하고 폴더를 제거하며 다음 녹화를 허용한다. | both |
+| `recording.target.same-target-not-reopened` | 같은 대상을 다시 녹화하면 대상을 다시 준비하지 않는다. | both |
+| `recording.target.different-target-reopened` | 다른 대상을 녹화하면 대상을 다시 준비한다. | both |
+| `recording.abort.reports-stop-failure-and-removes-folder` | 중지에 실패한 중단은 중지 오류를 보고하고 폴더는 그래도 제거한다. | both |
+| `sidecars.send.delivers-only-to-owning-window` | 각 창의 사이드카 메시지는 사이드카, 표면, 본문이 그대로인 이벤트로 그 창에만 돌아온다. | both |
+| `sidecars.send.rejects-surface-owned-by-another-window` | 다른 창이 소유한 표면으로 보내면 "another window"로 실패한다. | both |
+| `sidecars.protocol.request-lines-carry-surface-root-body` | 사이드카는 surface, root, body 요청 줄을 보낸 순서로 받는다. | both |
+| `sidecars.close-owner.sends-closed-per-surface` | 창의 소유를 닫으면 각 표면의 closed 알림을 보낸다. | both |
+| `sidecars.send.rejects-undeclared-sidecar` | 어떤 플러그인도 선언하지 않은 사이드카로 보내면 "not declared"로 실패한다. | both |
+| `sidecars.send.rejects-after-stop` | 사이드카가 멈춘 뒤 보내면 "stopped"로 실패한다. | both |
+| `sidecars.send.rejects-when-no-plugin-declares-sidecars` | 선언된 사이드카가 없으면 생성은 성공하고 모든 보내기는 "not declared by any plugin"으로 실패한다. | both |
+| `sidecars.start.fails-on-missing-executable` | 디스크에 없는 선언된 실행 파일은 첫 보내기를 사이드카 이름과 함께 실패시킨다. | both |
+| `sidecars.declaration.fails-on-missing-sidecar-json` | sidecar.json이 없는 사이드카 패키지는 그 경로와 함께 생성을 실패시킨다. | both |
+| `sidecars.declaration.rejects-executable-escaping-package` | 패키지 밖의 실행 파일 경로는 생성을 실패시킨다. | both |
+| `sidecars.declaration.rejects-absolute-executable` | 절대 실행 파일 경로는 생성을 실패시킨다. | both |
+| `sidecars.declaration.rejects-unsupported-protocol` | 지원하지 않는 프로토콜 버전은 생성을 실패시킨다. | both |
+| `sidecars.declaration.rejects-unknown-transport` | 알 수 없는 전송 방식은 "is not supported"로 생성을 실패시킨다. | both |
+| `sidecars.declaration.persistent-requires-config-directory` | 설정 디렉터리가 없는 지속 전송은 생성을 실패시킨다. | both |
+| `sidecars.declaration.fails-on-missing-environment` | environment.json이 없는 프런트엔드는 "environment.json"과 함께 생성을 실패시킨다. | both |
+| `sidecars.persistent.accepts-non-canonical-config-directory` | 지속 전송은 정규화되지 않은 설정 디렉터리 경로를 받아들인다. | both |
+| `sidecars.send.fails-fast-when-sidecar-not-keeping-up` | 읽지 않는 사이드카로의 큰 보내기는 "is not keeping up"으로 끝난다. | both |
+| `sidecars.send.slow-sidecar-does-not-block-others` | 한 사이드카 대기열이 가득 찬 동안 다른 사이드카로의 보내기는 50ms 안에 반환된다. | both |
+| `sidecars.stop.honors-stop-timeout` | 입력을 비우지 않는 사이드카의 중지는 중지 제한 시간의 두 배 안에 반환된다. | both |
+| `sidecars.stop.graceful-on-stdin-eof` | 입력 끝에서 종료하는 사이드카는 제한 시간을 기다리지 않고 멈춘다. | both |
+| `sidecars.stop.kills-after-timeout` | 입력 끝을 무시하는 사이드카는 중지 제한 시간 뒤에 강제 종료된다. | both |
+| `sidecars-transport.endpoint.concurrent-hosts-share-authenticated-service` | 두 호스트가 토큰으로 한 서비스 엔드포인트에 인증하고 각자의 이벤트를 받는다. | both |
+| `sidecars-transport.hello.declares-protocol-one` | hello 요청은 프로토콜 1을 선언한다. | both |
+| `sidecars-transport.reconnect.after-connection-loss-preserves-owner` | 서비스가 연결을 끊으면 다음 보내기가 다시 연결하고 이벤트는 계속 소유자와 표면에 도착한다. | both |
+| `sidecars-transport.stop.close-owner-failure-returns-promptly` | close-owner 실패 응답은 중지를 1초 넘게 늦추지 않는다. | both |
+| `sidecars-transport.hello.rejects-auth-failure` | 실패한 hello 응답은 보내기를 "authentication handshake failed"로 실패시킨다. | both |
+| `sidecars-transport.hello.rejects-unsupported-protocol-without-replacing-endpoint` | 다른 프로토콜의 hello 응답은 보내기를 실패시키고 endpoint.json을 바꾸지 않는다. | both |
+| `sidecars-transport.endpoint.replaces-dead-service-endpoint` | 죽은 서비스가 남긴 엔드포인트는 새 서비스 엔드포인트로 바뀐다. | both |
+| `sidecars-transport.endpoint.live-unreachable-reported-without-replacement` | 살아 있지만 연결할 수 없는 서비스의 엔드포인트는 보내기를 실패시키고 바뀌지 않는다. | both |
+| `sidecars-transport.stop.close-owner-then-shutdown` | 중지는 close-owner를 보내고 성공 응답 뒤에 shutdown을 보낸다. | both |
+| `surface-activation.owner.resolves-registered-view` | 등록된 네이티브 뷰는 그 표면 id로 해석된다. | both |
+| `surface-activation.owner.ignores-unknown-view` | 등록되지 않은 네이티브 뷰는 표면으로 해석되지 않는다. | both |
+| `surface-activation.owner.ignores-empty-owner` | 빈 표면 id로 등록된 뷰는 표면으로 해석되지 않는다. | both |
+| `surface-activation.create.propagates-native-failure` | 네이티브 표면 생성이 실패하면 네이티브 오류와 표면 id를 담은 오류를 반환한다. | both |
+| `surface-activation.create.rejects-nil-handle` | 핸들을 반환하지 않은 네이티브 표면 생성은 "nil handle"로 실패한다. | both |
+| `surfaces-geometry.rect.accepts-zero-size` | 크기가 0인 사각형은 올바르다. | both |
+| `surfaces-geometry.rect.rejects-negative-size` | 크기가 음수인 사각형은 잘라 맞추지 않고 거부한다. | both |
+| `surfaces-geometry.rect.rejects-non-finite` | 크기가 유한하지 않은 사각형을 거부한다. | both |
+| `termination.signal.first-requests-quit-second-ends-process` | 첫 종료 신호는 종료를 요청하고 두 번째 신호는 프로세스를 끝낸다. | both |
+| `window-overlay.rects.packs-four-values-per-rect` | 보이는 오버레이는 입력 순서대로 x, y, width, height 값으로 묶인다. | both |
+| `window-overlay.rects.filters-hidden` | 숨긴 오버레이는 묶은 목록에서 빠진다. | both |
+| `workspace.config-dir.creates-requested-path` | 없는 설정 디렉터리를 준비하면 만들고 정규 경로를 반환한다. | both |
+| `workspace.config-dir.rejects-empty-path` | 빈 설정 디렉터리 경로를 거부한다. | both |
+| `workspace.config-dir.rejects-path-under-file` | 일반 파일 아래의 설정 디렉터리 경로를 거부한다. | both |
+| `workspace.settings.project-file-holds-only-overrides` | 프로젝트 설정 파일은 프로젝트 재정의만 담는다. | both |
+| `workspace.settings.persist-across-reopen` | 같은 설정 디렉터리로 다시 연 작업 공간은 저장된 공통 설정과 프로젝트 설정을 보여 준다. | both |
+| `workspace.settings.reset-removes-override` | 프로젝트 재정의를 제거하면 빈 프로젝트 설정 객체가 남는다. | both |
+| `workspace.settings.rejects-project-opening-override` | projectOpening의 프로젝트 재정의를 거부한다. | both |
+| `workspace.settings.invalid-common-file-not-overwritten` | 잘못된 공통 설정 파일은 설정 변경을 실패시키고 바이트 단위로 그대로 남는다. | both |
+| `workspace.settings.concurrent-patches-preserved` | 서로 다른 키에 대한 동시 공통 설정 변경이 모두 유지된다. | both |
+| `workspace.projects.move-reorders` | 프로젝트를 옮기면 저장된 순서의 위치가 바뀐다. | both |
+| `workspace.projects.remove-keeps-remaining-order` | 프로젝트를 제거해도 남은 프로젝트의 순서는 유지된다. | both |
+| `workspace.folder.aliases-share-identity` | 디렉터리와 그 심볼릭 링크는 같은 프로젝트 폴더로 해석된다. | both |
+| `workspace.folder.rejects-file` | 일반 파일은 프로젝트 폴더로 거부된다. | both |

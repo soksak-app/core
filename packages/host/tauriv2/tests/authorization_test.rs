@@ -1,6 +1,7 @@
 use soksak_host_tauriv2::documents::check as check_document;
 use soksak_host_tauriv2::images::check as check_image;
 
+// contract: authorization.surface.cross-surface-rejected, authorization.surface.own-surface-accepted, authorization.surface.unscoped-caller-rejected-for-document
 #[test]
 fn main_scope_is_explicit_and_cross_surface_is_rejected() {
     let document =

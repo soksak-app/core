@@ -1,5 +1,6 @@
 use soksak_host_tauriv2::clipboard::{validate_png_payload, validate_read_request};
 
+// contract: clipboard.read.requires-user-initiated, clipboard.read.rejects-unknown-type, clipboard.read.accepts-known-types
 #[test]
 fn clipboard_requires_explicit_user_paste_and_known_type() {
     assert!(validate_read_request("text", true).is_ok());
@@ -8,6 +9,7 @@ fn clipboard_requires_explicit_user_paste_and_known_type() {
     assert!(validate_read_request("fileURLs", true).is_ok());
 }
 
+// contract: clipboard.png.rejects-oversize, clipboard.png.rejects-empty, clipboard.png.accepts-nonempty-within-bound
 #[test]
 fn clipboard_png_payload_is_bounded() {
     assert!(validate_png_payload(b"png").is_ok());

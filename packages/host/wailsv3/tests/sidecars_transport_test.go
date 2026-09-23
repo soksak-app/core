@@ -135,6 +135,7 @@ func serveHarnessConnections(t *testing.T, listener net.Listener, connections in
 	return done
 }
 
+// contract: sidecars-transport.endpoint.concurrent-hosts-share-authenticated-service, sidecars-transport.reconnect.after-connection-loss-preserves-owner, sidecars-transport.stop.close-owner-failure-returns-promptly
 func TestPersistentTransportHarnessEndpointAuthConcurrentReconnectAndCloseAck(t *testing.T) {
 	root := t.TempDir()
 	socketDirectory, err := os.MkdirTemp("", "sp-h")
@@ -219,6 +220,7 @@ func TestPersistentTransportHarnessEndpointAuthConcurrentReconnectAndCloseAck(t 
 	}
 }
 
+// contract: sidecars-transport.hello.rejects-auth-failure
 func TestPersistentTransportHarnessAuthFailure(t *testing.T) {
 	root := t.TempDir()
 	socketDirectory, err := os.MkdirTemp("", "sp-h")
@@ -253,6 +255,7 @@ func TestPersistentTransportHarnessAuthFailure(t *testing.T) {
 	}
 }
 
+// contract: sidecars-transport.hello.rejects-unsupported-protocol-without-replacing-endpoint
 func TestPersistentTransportRejectsUnsupportedHelloProtocolWithoutReplacingEndpoint(t *testing.T) {
 	root := t.TempDir()
 	socketDirectory, err := os.MkdirTemp("", "sp-h-protocol-")
@@ -309,6 +312,7 @@ func TestPersistentTransportRejectsUnsupportedHelloProtocolWithoutReplacingEndpo
 	}
 }
 
+// contract: sidecars-transport.endpoint.replaces-dead-service-endpoint
 func TestPersistentTransportReplacesEndpointLeftByDeadService(t *testing.T) {
 	executableDir := t.TempDir()
 	configDir := t.TempDir()
@@ -433,6 +437,7 @@ func TestPersistentTransportReplacesEndpointLeftByDeadService(t *testing.T) {
 	}
 }
 
+// contract: sidecars-transport.endpoint.live-unreachable-reported-without-replacement
 func TestPersistentTransportReportsLiveButUnreachableEndpointWithoutReplacement(t *testing.T) {
 	root := t.TempDir()
 	socketDir, err := os.MkdirTemp("", "sp-u")

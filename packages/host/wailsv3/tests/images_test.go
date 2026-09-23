@@ -103,6 +103,7 @@ func echoSidecarsForImages(t *testing.T) (*host.Sidecars, string) {
 	return sidecars, record
 }
 
+// contract: images.envelope.rejects-unattached-image
 func TestUnattachedImageIsRefused(t *testing.T) {
 	images := host.NewImages()
 	nonce := "AAAAAAAAAAAAAAAAAAAAAA==" // 16 zero bytes
@@ -137,6 +138,7 @@ func TestUnattachedImageIsRefused(t *testing.T) {
 	}
 }
 
+// contract: images.envelope.rejects-other-sidecar
 func TestImageFromAnotherSidecarIsRefused(t *testing.T) {
 	images := host.NewImages()
 	key := host.ImageKey{Surface: "tab-1", Name: "view"}
@@ -181,6 +183,7 @@ func TestImageFromAnotherSidecarIsRefused(t *testing.T) {
 	}
 }
 
+// contract: images.envelope.presents-attached-current-frame
 func TestAttachedImageIsPresented(t *testing.T) {
 	images := host.NewImages()
 	key := host.ImageKey{Surface: "tab-1", Name: "view"}
@@ -234,6 +237,7 @@ func TestAttachedImageIsPresented(t *testing.T) {
 	}
 }
 
+// contract: images.ack.consumed-carries-frame-identity
 func TestSuccessfulPresentIsReleased(t *testing.T) {
 	response := host.AfterPresent(true, "", "view", 7, 3, 1)
 	image := response["image"].(map[string]interface{})
@@ -250,6 +254,7 @@ func TestSuccessfulPresentIsReleased(t *testing.T) {
 	}
 }
 
+// contract: images.transfer.rejects-duplicate-sequence, images.transfer.reconfigure-advances-raster, images.transfer.rejects-stale-raster, images.transfer.configure-stamps-current-generation, images.transfer.generation-advances, images.transfer.rejects-old-generation-after-reattach
 func TestOnlyTheCurrentGenerationRasterAndSequenceCanBePresented(t *testing.T) {
 	images := host.NewImages()
 	key := host.ImageKey{Surface: "tab-1", Name: "view"}
@@ -299,6 +304,7 @@ func TestOnlyTheCurrentGenerationRasterAndSequenceCanBePresented(t *testing.T) {
 	}
 }
 
+// contract: images.wait.blocks-before-first-frame, images.wait.releases-after-current-frame-presented, images.wait.reconfigure-clears-presented, images.wait.hidden-image-does-not-block, images.wait.hidden-surface-does-not-block, images.wait.ended-generation-does-not-block
 func TestPresentationWaitTracksTheVisibleCurrentRaster(t *testing.T) {
 	images := host.NewImages()
 	key := host.ImageKey{Surface: "tab-1", Name: "view"}
@@ -350,6 +356,7 @@ func TestPresentationWaitTracksTheVisibleCurrentRaster(t *testing.T) {
 	}
 }
 
+// contract: images.visibility.survives-first-document-navigation
 func TestSurfaceVisibilitySurvivesFirstDocumentNavigation(t *testing.T) {
 	images := host.NewImages()
 	key := host.ImageKey{Surface: "hidden", Name: "view"}
@@ -367,6 +374,7 @@ func TestSurfaceVisibilitySurvivesFirstDocumentNavigation(t *testing.T) {
 	}
 }
 
+// contract: images.visibility.hidden-surface-defers-configuration, images.visibility.refresh-list-excludes-hidden
 func TestHiddenSurfaceDefersRasterConfiguration(t *testing.T) {
 	images := host.NewImages()
 	key := host.ImageKey{Surface: "hidden", Name: "view"}
@@ -399,6 +407,7 @@ func TestHiddenSurfaceDefersRasterConfiguration(t *testing.T) {
 	}
 }
 
+// contract: images.present.rejects-frame-superseded-during-main-thread
 func TestFrameThatBecomesStaleBeforeMainThreadPresentationIsRejected(t *testing.T) {
 	images := host.NewImages()
 	key := host.ImageKey{Surface: "tab-1", Name: "view"}
@@ -431,6 +440,7 @@ func TestFrameThatBecomesStaleBeforeMainThreadPresentationIsRejected(t *testing.
 	}
 }
 
+// contract: images.ack.failure-carries-error-and-frame-identity
 func TestFailedPresentIsReported(t *testing.T) {
 	response := host.AfterPresent(false, "forbidden", "view", 7, 3, 1)
 	image := response["image"].(map[string]interface{})
@@ -449,6 +459,7 @@ func TestFailedPresentIsReported(t *testing.T) {
 	}
 }
 
+// contract: images.envelope.rejects-unsupported-format, images.envelope.rejects-bad-nonce-length, images.envelope.rejects-unknown-token-kind
 func TestUnsupportedImageIsRefused(t *testing.T) {
 	images := host.NewImages()
 
@@ -543,6 +554,7 @@ func TestUnsupportedImageIsRefused(t *testing.T) {
 	}
 }
 
+// contract: images.envelope.ignores-body-without-image, images.envelope.ignores-invalid-json
 func TestNonImageBodyIsNotHandled(t *testing.T) {
 	images := host.NewImages()
 
@@ -566,6 +578,7 @@ func TestNonImageBodyIsNotHandled(t *testing.T) {
 	}
 }
 
+// contract: images.envelope.refusal-preserves-quoted-name
 func TestReplyEscapesNames(t *testing.T) {
 	images := host.NewImages()
 	nonce := "AAAAAAAAAAAAAAAAAAAAAA==" // 16 zero bytes
@@ -611,6 +624,7 @@ func TestReplyEscapesNames(t *testing.T) {
 	}
 }
 
+// contract: images.attach.surface-close-removes-only-its-images
 func TestSurfaceCloseRemovesOnlyItsImages(t *testing.T) {
 	images := host.NewImages()
 
@@ -667,6 +681,7 @@ func TestSurfaceCloseRemovesOnlyItsImages(t *testing.T) {
 	}
 }
 
+// contract: images.attach.rejects-reservation-without-sidecar
 func TestReserveRejectsNilOwner(t *testing.T) {
 	images := host.NewImages()
 	key := host.ImageKey{Surface: "tab-1", Name: "view"}
@@ -686,6 +701,7 @@ func TestReserveRejectsNilOwner(t *testing.T) {
 	}
 }
 
+// contract: images.envelope.presents-attached-current-frame
 func TestEnvelopeFromTheAttachedSidecarIsPresented(t *testing.T) {
 	images := host.NewImages()
 	key := host.ImageKey{Surface: "tab-1", Name: "view"}
@@ -730,6 +746,7 @@ func TestEnvelopeFromTheAttachedSidecarIsPresented(t *testing.T) {
 	}
 }
 
+// contract: images.envelope.rejects-other-sidecar
 func TestEnvelopeFromAnotherSidecarIsRefused(t *testing.T) {
 	images := host.NewImages()
 	key := host.ImageKey{Surface: "tab-1", Name: "view"}
@@ -774,6 +791,7 @@ func TestEnvelopeFromAnotherSidecarIsRefused(t *testing.T) {
 	}
 }
 
+// contract: images.present.main-thread-failure-reports-present-failed
 func TestPresentationFailureIsReported(t *testing.T) {
 	images := host.NewImages()
 	key := host.ImageKey{Surface: "tab-1", Name: "view"}

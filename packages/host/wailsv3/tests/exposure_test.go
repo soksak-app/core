@@ -8,6 +8,7 @@ import (
 	host "github.com/min-median-max/soksak/packages/host/wailsv3/src"
 )
 
+// contract: exposure.list.appends-host-entries-registered
 func TestExposureListAppendsHostEntries(t *testing.T) {
 	_, address, _ := serve(t, newFakeBackend())
 	conn := dial(t, address)
@@ -36,6 +37,7 @@ func TestExposureListAppendsHostEntries(t *testing.T) {
 	}
 }
 
+// contract: exposure.timeout.command-run-default-and-declared, exposure.timeout.status-next-unbounded, exposure.timeout.invalid-timeout-rejected, exposure.timeout.status-next-timeout-rejected
 func TestForwardedRequestsUseTheDeclaredTimeout(t *testing.T) {
 	cases := []struct {
 		method, timeout string

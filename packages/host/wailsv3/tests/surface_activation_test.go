@@ -9,6 +9,7 @@ import (
 	host "github.com/min-median-max/soksak/packages/host/wailsv3/src"
 )
 
+// contract: surface-activation.owner.resolves-registered-view, surface-activation.owner.ignores-unknown-view, surface-activation.owner.ignores-empty-owner
 func TestSurfaceOwnerIDOnlyResolvesRegisteredNativeViews(t *testing.T) {
 	named := map[uintptr]string{101: "tab-1", 202: "tab-2"}
 	if id, ok := host.SurfaceOwnerID(named, 101); !ok || id != "tab-1" {
@@ -22,6 +23,7 @@ func TestSurfaceOwnerIDOnlyResolvesRegisteredNativeViews(t *testing.T) {
 	}
 }
 
+// contract: surface-activation.create.propagates-native-failure
 func TestLogicalSurfaceCreationPropagatesNativeFailure(t *testing.T) {
 	want := errors.New("native surface unavailable")
 	_, err := host.CreateLogicalSurfaceHandle(func() (unsafe.Pointer, error) {
@@ -32,6 +34,7 @@ func TestLogicalSurfaceCreationPropagatesNativeFailure(t *testing.T) {
 	}
 }
 
+// contract: surface-activation.create.rejects-nil-handle
 func TestLogicalSurfaceCreationRejectsNilHandle(t *testing.T) {
 	_, err := host.CreateLogicalSurfaceHandle(func() (unsafe.Pointer, error) {
 		return nil, nil

@@ -118,6 +118,7 @@ func serve(t *testing.T, backend host.Backend) (*host.Endpoint, string, string) 
 	return endpoint, listener.Addr().String(), config
 }
 
+// contract: endpoint.process.one-owner-per-config-dir
 func TestEndpointAllowsOneProcessPerConfigurationDirectory(t *testing.T) {
 	first, _, config := serve(t, newFakeBackend())
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -219,6 +220,7 @@ func expectClosed(t *testing.T, conn net.Conn) {
 	}
 }
 
+// contract: endpoint.transport.http-request-line-closes
 func TestEndpointClosesOnHTTPRequestLine(t *testing.T) {
 	backend := newFakeBackend()
 	_, address, _ := serve(t, backend)
@@ -232,6 +234,7 @@ func TestEndpointClosesOnHTTPRequestLine(t *testing.T) {
 	}
 }
 
+// contract: endpoint.transport.invalid-json-closes
 func TestEndpointClosesOnInvalidJSON(t *testing.T) {
 	_, address, _ := serve(t, newFakeBackend())
 	conn := dial(t, address)
@@ -243,6 +246,7 @@ func TestEndpointClosesOnInvalidJSON(t *testing.T) {
 	expectClosed(t, conn)
 }
 
+// contract: endpoint.transport.non-jsonrpc-object-closes
 func TestEndpointClosesOnNonRPCObject(t *testing.T) {
 	_, address, _ := serve(t, newFakeBackend())
 	conn := dial(t, address)
@@ -253,6 +257,7 @@ func TestEndpointClosesOnNonRPCObject(t *testing.T) {
 	expectClosed(t, conn)
 }
 
+// contract: endpoint.transport.undeclared-method-closes
 func TestEndpointClosesOnUndeclaredMethod(t *testing.T) {
 	backend := newFakeBackend()
 	_, address, _ := serve(t, backend)
@@ -282,6 +287,7 @@ func builtWith(tag string) bool {
 	return false
 }
 
+// contract: endpoint.diagnostics.methods-exist-only-in-diagnostic-builds
 func TestDiagnosticMethodsExistOnlyInDiagnosticBuilds(t *testing.T) {
 	backend := newFakeBackend()
 	_, address, _ := serve(t, backend)
@@ -304,6 +310,7 @@ func TestDiagnosticMethodsExistOnlyInDiagnosticBuilds(t *testing.T) {
 	}
 }
 
+// contract: endpoint.rpc.round-trip-by-id
 func TestEndpointRoundTrip(t *testing.T) {
 	_, address, _ := serve(t, newFakeBackend())
 	conn := dial(t, address)
@@ -322,6 +329,7 @@ func TestEndpointRoundTrip(t *testing.T) {
 	}
 }
 
+// contract: endpoint.rpc.unknown-window-1003
 func TestEndpointMissingWindow(t *testing.T) {
 	backend := newFakeBackend()
 	_, address, _ := serve(t, backend)
@@ -335,6 +343,7 @@ func TestEndpointMissingWindow(t *testing.T) {
 	}
 }
 
+// contract: endpoint.names.unknown-host-name-1001, endpoint.names.missing-name-invalid, endpoint.names.owner-form-required, endpoint.input.pointer-invalid-phase
 func TestEndpointNameErrors(t *testing.T) {
 	_, address, _ := serve(t, newFakeBackend())
 	conn := dial(t, address)
@@ -358,6 +367,7 @@ func TestEndpointNameErrors(t *testing.T) {
 	}
 }
 
+// contract: endpoint.input.pointer-numeric-button-rejected, endpoint.input.pointer-middle-button-rejected, endpoint.input.pointer-activate-only-on-move, endpoint.input.pointer-defaults, endpoint.input.pointer-right-button-accepted
 func TestEndpointPointerParams(t *testing.T) {
 	backend := newFakeBackend()
 	_, address, _ := serve(t, backend)
@@ -393,6 +403,7 @@ func TestEndpointPointerParams(t *testing.T) {
 	}
 }
 
+// contract: endpoint.input.key-unknown-modifier-rejected, endpoint.input.key-shift-command-mask
 func TestEndpointKeyModifiers(t *testing.T) {
 	backend := newFakeBackend()
 	_, address, _ := serve(t, backend)
@@ -412,6 +423,7 @@ func TestEndpointKeyModifiers(t *testing.T) {
 	}
 }
 
+// contract: endpoint.discovery.writes-endpoint-json, endpoint.discovery.endpoint-json-mode-0600, endpoint.discovery.removes-endpoint-json-on-close
 func TestEndpointFileIsWrittenAndRemoved(t *testing.T) {
 	endpoint, address, config := serve(t, newFakeBackend())
 	path := filepath.Join(config, "endpoint.json")
@@ -446,6 +458,7 @@ func TestEndpointFileIsWrittenAndRemoved(t *testing.T) {
 	}
 }
 
+// contract: endpoint.discovery.close-keeps-replacement
 func TestEndpointCloseDoesNotRemoveReplacement(t *testing.T) {
 	endpoint, _, config := serve(t, newFakeBackend())
 	path := filepath.Join(config, "endpoint.json")
@@ -469,6 +482,7 @@ func TestEndpointCloseDoesNotRemoveReplacement(t *testing.T) {
 	}
 }
 
+// contract: endpoint.watch.notifies-watching-connection, endpoint.watch.non-watching-connection-not-notified, endpoint.watch.unwatch-is-per-connection, endpoint.watch.page-watch-deduplicated, endpoint.watch.no-page-unwatch-while-watched, endpoint.watch.last-watcher-close-unwatches-page
 func TestWatchersBelongToTheirConnection(t *testing.T) {
 	backend := newFakeBackend()
 	endpoint, address, _ := serve(t, backend)
@@ -526,6 +540,7 @@ func TestWatchersBelongToTheirConnection(t *testing.T) {
 	}
 }
 
+// contract: endpoint.watch.surface-and-plain-forwarded-separately, endpoint.watch.empty-surface-invalid, endpoint.watch.surface-change-names-surface, endpoint.watch.surface-unwatch-forwarded-with-surface
 func TestSurfaceWatchesAreSeparate(t *testing.T) {
 	backend := newFakeBackend()
 	endpoint, address, _ := serve(t, backend)
@@ -584,6 +599,7 @@ func TestSurfaceWatchesAreSeparate(t *testing.T) {
 	}
 }
 
+// contract: endpoint.watch.subscription-arrival-order
 func TestSubscriptionChangesKeepArrivalOrder(t *testing.T) {
 	backend := newFakeBackend()
 	backend.held = make(chan struct{})
@@ -643,6 +659,7 @@ func listen(t *testing.T, directory, name string) (net.Listener, platform.Endpoi
 	return system.Listen(directory, name)
 }
 
+// contract: endpoint.socket.private-modes
 func TestEndpointFilesArePrivateToTheUser(t *testing.T) {
 	sockets := filepath.Join(socketParent(t), "sockets")
 	listener, address, err := listen(t, sockets, "test-modes")
@@ -668,6 +685,7 @@ func endedProcess(t *testing.T) int {
 	return command.Process.Pid
 }
 
+// contract: endpoint.socket.sweeps-ended-process-sockets
 func TestSocketsOfEndedProcessesAreRemoved(t *testing.T) {
 	sockets := filepath.Join(socketParent(t), "sockets")
 	if err := os.Mkdir(sockets, 0700); err != nil {
@@ -695,6 +713,7 @@ func TestSocketsOfEndedProcessesAreRemoved(t *testing.T) {
 	}
 }
 
+// contract: endpoint.socket.refuses-open-directory
 func TestSocketDirectoryOpenToOthersIsRefused(t *testing.T) {
 	sockets := filepath.Join(socketParent(t), "sockets")
 	if err := os.Mkdir(sockets, 0755); err != nil {
@@ -709,6 +728,7 @@ func TestSocketDirectoryOpenToOthersIsRefused(t *testing.T) {
 	}
 }
 
+// contract: endpoint.socket.refuses-foreign-owner
 func TestSocketDirectoryOfAnotherUserIsRefused(t *testing.T) {
 	// /usr 는 root 소유다. 검사는 권한보다 소유자를 먼저 본다.
 	_, _, err := listen(t, "/usr", "test-owner")
@@ -717,6 +737,7 @@ func TestSocketDirectoryOfAnotherUserIsRefused(t *testing.T) {
 	}
 }
 
+// contract: endpoint.socket.refuses-non-directory
 func TestSocketPathThatIsNotADirectoryIsRefused(t *testing.T) {
 	parent := socketParent(t)
 	target := filepath.Join(parent, "target")

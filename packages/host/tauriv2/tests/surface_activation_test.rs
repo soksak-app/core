@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use soksak_host_tauriv2::surface_owner_id;
 
+// contract: surface-activation.owner.resolves-registered-view, surface-activation.owner.ignores-unknown-view, surface-activation.owner.ignores-empty-owner
 #[test]
 fn surface_owner_id_only_resolves_registered_native_views() {
     let named = HashMap::from([(101usize, "tab-1".to_string()), (202, "tab-2".to_string())]);

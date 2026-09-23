@@ -9,6 +9,7 @@ import (
 	host "github.com/min-median-max/soksak/packages/host/wailsv3/src"
 )
 
+// contract: documents.request.accepts-own-surface, documents.request.rejects-foreign-or-missing-caller, documents.request.rejects-invalid-names
 func TestDocumentRequestsBelongToTheCallingSurface(t *testing.T) {
 	req := host.DocumentRequest{Surface: "tab-1", Document: "page"}
 	key, err := host.CheckDocument("tab-1", req)
@@ -27,6 +28,7 @@ func TestDocumentRequestsBelongToTheCallingSurface(t *testing.T) {
 	}
 }
 
+// contract: documents.request.ignores-placement-fields
 func TestDocumentRequestDoesNotExposeIndividualPlacement(t *testing.T) {
 	var req host.DocumentRequest
 	body := `{"surface":"tab-1","document":"page","left":1.5,"top":2,"right":3,"bottom":4,"visible":true}`
@@ -39,6 +41,7 @@ func TestDocumentRequestDoesNotExposeIndividualPlacement(t *testing.T) {
 	}
 }
 
+// contract: documents.registry.rejects-duplicate-reservation, documents.registry.reserved-name-is-not-attached, documents.registry.set-attaches-reserved-name, documents.registry.lists-names-by-handle, documents.registry.surface-close-removes-only-its-documents, documents.registry.rejects-set-after-surface-removed, documents.registry.remove-reserved-returns-empty, documents.registry.remove-attached-returns-handle-once
 func TestDocumentsReserveNamesAndCloseWithTheirSurface(t *testing.T) {
 	var a, b, c int
 	docs := host.NewDocuments()

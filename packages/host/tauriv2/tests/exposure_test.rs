@@ -8,6 +8,7 @@ use soksak_host_tauriv2::exposure::{self, Relay};
 
 const WAIT: Duration = Duration::from_secs(5);
 
+// contract: exposure.relay.reply-resolves-request
 #[test]
 fn reply_from_target_document_resolves_request() {
     let relay = Arc::new(Relay::default());
@@ -21,6 +22,7 @@ fn reply_from_target_document_resolves_request() {
     assert_eq!(result.unwrap(), json!({"ok": true}));
 }
 
+// contract: exposure.relay.missing-result-is-null
 #[test]
 fn missing_result_is_null() {
     let relay = Arc::new(Relay::default());
@@ -32,6 +34,7 @@ fn missing_result_is_null() {
     assert_eq!(result.unwrap(), Value::Null);
 }
 
+// contract: exposure.relay.error-reply-keeps-code-and-message
 #[test]
 fn error_reply_keeps_code_and_message() {
     let relay = Arc::new(Relay::default());
@@ -51,6 +54,7 @@ fn error_reply_keeps_code_and_message() {
     );
 }
 
+// contract: exposure.relay.foreign-document-reply-ignored-timeout-1005
 #[test]
 fn reply_from_another_document_is_ignored_and_request_times_out() {
     let relay = Arc::new(Relay::default());
@@ -65,6 +69,7 @@ fn reply_from_another_document_is_ignored_and_request_times_out() {
     assert!(!relay.reply("main", &json!({"id": 1, "result": 1})));
 }
 
+// contract: exposure.relay.send-failure-1003
 #[test]
 fn send_failure_is_reported_without_waiting() {
     let relay = Relay::default();
@@ -74,6 +79,7 @@ fn send_failure_is_reported_without_waiting() {
     assert_eq!(failure.code, 1003);
 }
 
+// contract: exposure.relay.closed-document-fails-pending-1003
 #[test]
 fn closed_document_fails_its_pending_requests() {
     let relay = Arc::new(Relay::default());
@@ -87,6 +93,7 @@ fn closed_document_fails_its_pending_requests() {
     assert_eq!(failure.code, 1003);
 }
 
+// contract: exposure.relay.no-timeout-waits-until-close
 #[test]
 fn request_without_timeout_waits_until_the_document_closes() {
     let relay = Arc::new(Relay::default());
@@ -101,6 +108,7 @@ fn request_without_timeout_waits_until_the_document_closes() {
     assert_eq!(failure.code, 1003);
 }
 
+// contract: exposure.list.appends-host-entries-registered, exposure.list.host-entries-exact-sorted-set, exposure.list.host-entries-described, exposure.list.host-quit-result-null, exposure.list.non-object-list-rejected
 #[test]
 fn host_entries_are_appended_as_registered() {
     let listed = exposure::with_host_entries(json!({
@@ -160,6 +168,7 @@ fn host_entries_are_appended_as_registered() {
     assert!(exposure::with_host_entries(json!([])).is_err());
 }
 
+// contract: endpoint.input.pointer-invalid-phase, endpoint.input.pointer-missing-coordinate, endpoint.input.pointer-numeric-button-rejected, endpoint.input.pointer-middle-button-rejected, endpoint.input.pointer-activate-only-on-move, endpoint.input.pointer-activate-must-be-bool, endpoint.input.pointer-defaults, endpoint.input.pointer-right-button-accepted, endpoint.input.pointer-phase-and-scroll-decoding, endpoint.input.key-unknown-modifier-rejected, endpoint.input.key-shift-command-mask, endpoint.input.key-control-option-and-text, endpoint.input.key-invalid-phase-or-modifier-type
 #[test]
 fn pointer_and_key_params_are_validated() {
     let pointer = exposure::pointer(
@@ -284,6 +293,7 @@ fn pointer_and_key_params_are_validated() {
     );
 }
 
+// contract: exposure.timeout.command-run-default-and-declared, exposure.timeout.status-next-unbounded, exposure.timeout.invalid-timeout-rejected, exposure.timeout.status-next-timeout-rejected
 #[test]
 fn forwarded_requests_use_the_declared_timeout() {
     assert_eq!(

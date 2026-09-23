@@ -1,5 +1,6 @@
 use soksak_host_tauriv2::platform::{visible_window_overlay_rects, WindowOverlay};
 
+// contract: window-overlay.rects.packs-four-values-per-rect
 #[test]
 fn packs_two_rects_with_four_values_each() {
     let overlays = [
@@ -24,6 +25,7 @@ fn packs_two_rects_with_four_values_each() {
     );
 }
 
+// contract: window-overlay.rects.filters-hidden
 #[test]
 fn filters_hidden_rects() {
     let overlays = [

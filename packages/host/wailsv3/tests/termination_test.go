@@ -15,6 +15,7 @@ import (
 // terminationChild 는 자식 프로세스임을 알리는 환경 변수다.
 const terminationChild = "SOKSAK_TERMINATION_CHILD"
 
+// contract: termination.signal.first-requests-quit-second-ends-process
 func TestTerminationSignalRequestsQuitOnceAndTheNextEndsTheProcess(t *testing.T) {
 	if os.Getenv(terminationChild) != "" {
 		terminate()

@@ -28,6 +28,7 @@ const lane = (capability, language, implementation, tests, options = {}) => ({
 // 기존 구성요소 연결도 파일 목록으로 유지한다. 동작 증거로 해석하지 않는다.
 const MATRIX = [
   lane("test inventory", "js-ts", ["scripts/check-test-parity.mjs"], ["scripts/test/test-parity.test.mjs"]),
+  lane("host contract audit", "js-ts", ["scripts/check-host-contract.mjs"], ["scripts/test/check-host-contract.test.mjs"]),
 lane("command supervision", "js-ts", ["scripts/test-command.mjs"], ["scripts/test/test-command.test.mjs"]),
 lane("language test adapters", "js-ts", ["scripts/language-test-adapters.mjs"], ["scripts/test/test-language-test-adapters.test.mjs"]),
 lane("language test adapter manifest", "declaration", ["scripts/language-test-cases.json"], ["scripts/test/test-language-test-manifest.test.mjs"], { testLanguage: "js-ts" }),
@@ -183,6 +184,13 @@ const FEATURE_LINKS = [
     tests: [{ file: "scripts/test/test-parity.test.mjs", id: "completed capability entries all have feature evidence links" }, { file: "scripts/test/test-parity.test.mjs", id: "recorded parity counts cannot drift from the current inventory" }],
     expected: "Completed host-structure and parity-correction entries remain linked to named evidence, and the current inventory count cannot drift from the current-state record in the operations document.",
     levels: ["unit"],
+  },
+  {
+    id: "G2-3",
+    implementation: [{ file: "scripts/check-host-contract.mjs", symbol: "auditHostContract" }, { file: "scripts/check-host-contract.mjs", symbol: "parseDeclarations" }],
+    tests: [{ file: "scripts/test/check-host-contract.test.mjs", id: "a host without a test for a shared case fails" }, { file: "scripts/test/check-host-contract.test.mjs", id: "a declared test that did not run, failed, or was skipped does not cover its case" }],
+    expected: "Both hosts' tests declare the host contract cases they execute, and the check fails when a host has no passing executed test for a case in its scope.",
+    levels: ["unit", "native"],
   },
   {
     id: "G3-1",

@@ -10,6 +10,7 @@ import (
 	host "github.com/min-median-max/soksak/packages/host/wailsv3/src"
 )
 
+// contract: workspace.config-dir.creates-requested-path, workspace.config-dir.rejects-empty-path, workspace.config-dir.rejects-path-under-file
 func TestNewConfigDirectoryPreservesRequestedPath(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "new", "configuration")
@@ -37,6 +38,7 @@ func TestNewConfigDirectoryPreservesRequestedPath(t *testing.T) {
 	}
 }
 
+// contract: workspace.settings.project-file-holds-only-overrides, workspace.settings.persist-across-reopen, workspace.settings.reset-removes-override, workspace.settings.rejects-project-opening-override, workspace.settings.invalid-common-file-not-overwritten
 func TestSettingsFilesAndInheritance(t *testing.T) {
 	root := t.TempDir()
 	config := t.TempDir()
@@ -91,6 +93,7 @@ func TestSettingsFilesAndInheritance(t *testing.T) {
 	}
 }
 
+// contract: workspace.settings.concurrent-patches-preserved, workspace.projects.move-reorders, workspace.projects.remove-keeps-remaining-order
 func TestConcurrentSettingsAndProjectOrder(t *testing.T) {
 	store := host.NewWorkspace(t.TempDir())
 	for _, id := range []string{"first", "second", "third"} {
@@ -133,6 +136,7 @@ func TestConcurrentSettingsAndProjectOrder(t *testing.T) {
 	}
 }
 
+// contract: workspace.folder.aliases-share-identity, workspace.folder.rejects-file
 func TestFolderIdentity(t *testing.T) {
 	root := t.TempDir()
 	link := filepath.Join(t.TempDir(), "alias")

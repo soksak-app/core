@@ -7,6 +7,7 @@ import (
 	host "github.com/min-median-max/soksak/packages/host/wailsv3/src"
 )
 
+// contract: authorization.surface.cross-surface-rejected, authorization.surface.own-surface-accepted, authorization.main.known-main-caller-accepted, authorization.main.unknown-main-caller-rejected
 func TestAuthorizeSurfaceCallerIdentities(t *testing.T) {
 	if err := host.AuthorizeSurfaceCaller("", "tab-1", 42, 42); err != nil {
 		t.Fatalf("known main caller rejected: %v", err)
@@ -22,6 +23,7 @@ func TestAuthorizeSurfaceCallerIdentities(t *testing.T) {
 	}
 }
 
+// contract: authorization.surface.unscoped-caller-rejected-for-document
 func TestDocumentCheckStillRejectsUnknownCaller(t *testing.T) {
 	_, err := host.CheckDocument("", host.DocumentRequest{Surface: "tab-1", Document: "page"})
 	if err == nil || !strings.Contains(err.Error(), "not surface") {

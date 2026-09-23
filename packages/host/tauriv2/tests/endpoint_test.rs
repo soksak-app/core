@@ -70,6 +70,7 @@ fn start(config: &Path, application: &str, service: Arc<Fake>) -> Endpoint {
     Endpoint::start(&config.join("sockets"), config, application, service).unwrap()
 }
 
+// contract: endpoint.process.one-owner-per-config-dir
 #[test]
 fn a_configuration_directory_has_one_process_owner() {
     let config = tempfile::tempdir().unwrap();
@@ -119,6 +120,7 @@ fn request(connection: &mut Box<dyn Connection>, id: u64, method: &str, params: 
     receive(connection).expect("the endpoint closed the connection")
 }
 
+// contract: endpoint.transport.http-request-line-closes
 #[test]
 fn http_request_line_closes_connection_without_running_a_method() {
     let config = tempfile::tempdir().unwrap();
@@ -133,6 +135,7 @@ fn http_request_line_closes_connection_without_running_a_method() {
     endpoint.stop();
 }
 
+// contract: endpoint.transport.invalid-json-closes
 #[test]
 fn invalid_json_closes_connection() {
     let config = tempfile::tempdir().unwrap();
@@ -149,6 +152,7 @@ fn invalid_json_closes_connection() {
     endpoint.stop();
 }
 
+// contract: endpoint.transport.non-jsonrpc-object-closes
 #[test]
 fn non_jsonrpc_object_closes_connection() {
     let config = tempfile::tempdir().unwrap();
@@ -161,6 +165,7 @@ fn non_jsonrpc_object_closes_connection() {
     endpoint.stop();
 }
 
+// contract: endpoint.transport.undeclared-method-closes
 #[test]
 fn undeclared_method_closes_connection() {
     let config = tempfile::tempdir().unwrap();
@@ -176,6 +181,7 @@ fn undeclared_method_closes_connection() {
     endpoint.stop();
 }
 
+// contract: endpoint.diagnostics.methods-exist-only-in-diagnostic-builds
 #[test]
 fn diagnostic_methods_exist_only_in_diagnostic_builds() {
     let config = tempfile::tempdir().unwrap();
@@ -201,6 +207,7 @@ fn diagnostic_methods_exist_only_in_diagnostic_builds() {
     endpoint.stop();
 }
 
+// contract: endpoint.rpc.unknown-window-1003, endpoint.rpc.missing-window-param-invalid
 #[test]
 fn declared_method_on_unknown_window_returns_1003() {
     let config = tempfile::tempdir().unwrap();
@@ -226,6 +233,7 @@ fn declared_method_on_unknown_window_returns_1003() {
     endpoint.stop();
 }
 
+// contract: endpoint.rpc.round-trip-by-id, endpoint.rpc.page-params-omit-window
 #[test]
 fn framing_round_trip_answers_requests_by_id() {
     let config = tempfile::tempdir().unwrap();
@@ -256,6 +264,7 @@ fn framing_round_trip_answers_requests_by_id() {
     endpoint.stop();
 }
 
+// contract: endpoint.discovery.writes-endpoint-json, endpoint.discovery.removes-endpoint-json-on-close, endpoint.discovery.removes-socket-on-close
 #[test]
 fn endpoint_file_is_written_and_removed() {
     let config = tempfile::tempdir().unwrap();
@@ -280,6 +289,7 @@ fn endpoint_file_is_written_and_removed() {
     assert!(!Path::new(&address).exists());
 }
 
+// contract: endpoint.discovery.endpoint-json-mode-0600, endpoint.socket.private-modes
 #[test]
 fn endpoint_files_are_private_to_the_user() {
     let config = tempfile::tempdir().unwrap();
@@ -297,6 +307,7 @@ fn ended_process() -> u32 {
     child.id()
 }
 
+// contract: endpoint.socket.sweeps-ended-process-sockets
 #[test]
 fn sockets_of_ended_processes_are_removed() {
     use std::os::unix::fs::DirBuilderExt;
@@ -326,6 +337,7 @@ fn sockets_of_ended_processes_are_removed() {
     );
 }
 
+// contract: endpoint.socket.refuses-open-directory
 #[test]
 fn a_socket_directory_open_to_others_is_refused() {
     use std::os::unix::fs::PermissionsExt;
@@ -341,6 +353,7 @@ fn a_socket_directory_open_to_others_is_refused() {
     assert!(!config.path().join("endpoint.json").exists());
 }
 
+// contract: endpoint.socket.refuses-foreign-owner
 #[test]
 fn a_socket_directory_of_another_user_is_refused() {
     // /usr 는 root 소유다. 검사는 권한보다 소유자를 먼저 본다.
@@ -352,6 +365,7 @@ fn a_socket_directory_of_another_user_is_refused() {
     assert!(refused.contains("belongs to another user"), "{refused}");
 }
 
+// contract: endpoint.socket.refuses-non-directory
 #[test]
 fn a_socket_path_that_is_not_a_directory_is_refused() {
     let config = tempfile::tempdir().unwrap();
@@ -366,6 +380,7 @@ fn a_socket_path_that_is_not_a_directory_is_refused() {
     assert!(refused.contains("is not a directory"), "{refused}");
 }
 
+// contract: endpoint.watch.notifies-watching-connection, endpoint.watch.non-watching-connection-not-notified, endpoint.watch.unwatch-is-per-connection, endpoint.watch.no-page-unwatch-while-watched, endpoint.watch.last-watcher-close-unwatches-page, endpoint.watch.registry-reflects-watches
 #[test]
 fn watchers_belong_to_their_connection() {
     let config = tempfile::tempdir().unwrap();
@@ -443,6 +458,7 @@ fn watchers_belong_to_their_connection() {
     endpoint.stop();
 }
 
+// contract: endpoint.watch.surface-and-plain-forwarded-separately, endpoint.watch.empty-surface-invalid, endpoint.watch.surface-change-names-surface, endpoint.watch.surface-unwatch-forwarded-with-surface, endpoint.watch.surface-unwatch-keeps-plain-watch
 #[test]
 fn surface_watches_are_separate() {
     let config = tempfile::tempdir().unwrap();
@@ -511,6 +527,7 @@ fn surface_watches_are_separate() {
     endpoint.stop();
 }
 
+// contract: endpoint.names.owner-form-required, endpoint.names.valid-name-examples
 #[test]
 fn names_must_have_the_owner_form() {
     let config = tempfile::tempdir().unwrap();
@@ -576,6 +593,7 @@ impl Service for GatedPage {
     }
 }
 
+// contract: endpoint.watch.subscription-arrival-order, endpoint.watch.other-requests-not-blocked-by-pending-subscription
 #[test]
 fn subscription_changes_reach_the_page_in_arrival_order() {
     let config = tempfile::tempdir().unwrap();

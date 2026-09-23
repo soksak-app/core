@@ -14,6 +14,7 @@ import (
 
 // TestEveryPendingReplyIsFlushedAfterTheQueueDrains verifies that when the write queue fills up,
 // all buffered replies and closes are written after the queue is drained, in the correct order.
+// contract: flush.queue.rejects-send-when-full, flush.queue.full-error-says-not-keeping-up, flush.buffer.replies-delivered-after-drain, flush.buffer.closes-delivered-after-drain, flush.buffer.consumed-acks-not-coalesced, flush.buffer.delivered-after-queued-bodies
 func TestEveryPendingReplyIsFlushedAfterTheQueueDrains(t *testing.T) {
 	directory := t.TempDir()
 	fifo := filepath.Join(directory, "go")
@@ -114,6 +115,7 @@ func TestEveryPendingReplyIsFlushedAfterTheQueueDrains(t *testing.T) {
 
 // TestOrderIsCorrectWhenStopFlushesBufferedMessages verifies that Stop() writes all
 // buffered messages before closing stdin, ensuring messages aren't lost.
+// contract: flush.queue.rejects-send-when-full, flush.queue.full-error-says-not-keeping-up, flush.buffer.replies-delivered-after-drain, flush.buffer.closes-delivered-after-drain
 func TestOrderIsCorrectWhenStopFlushesBufferedMessages(t *testing.T) {
 	directory := t.TempDir()
 	fifo := filepath.Join(directory, "go")

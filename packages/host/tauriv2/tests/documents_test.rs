@@ -10,6 +10,7 @@ fn key(surface: &str, name: &str) -> Key {
     (surface.to_string(), name.to_string())
 }
 
+// contract: documents.request.accepts-own-surface, documents.request.rejects-foreign-or-missing-caller, documents.request.rejects-invalid-names
 #[test]
 fn document_requests_belong_to_the_calling_surface() {
     assert_eq!(
@@ -28,6 +29,7 @@ fn document_requests_belong_to_the_calling_surface() {
     }
 }
 
+// contract: documents.request.ignores-placement-fields, documents.request.url-and-action-default-empty
 #[test]
 fn document_request_does_not_expose_individual_placement() {
     let request: Request = serde_json::from_str(
@@ -42,6 +44,7 @@ fn document_request_does_not_expose_individual_placement() {
     assert!(request.action.is_empty());
 }
 
+// contract: documents.registry.rejects-duplicate-reservation, documents.registry.reserved-name-is-not-attached, documents.registry.set-attaches-reserved-name, documents.registry.lists-names-by-handle, documents.registry.surface-close-removes-only-its-documents, documents.registry.rejects-set-after-surface-removed, documents.registry.remove-reserved-returns-empty, documents.registry.remove-attached-returns-handle-once
 #[test]
 fn documents_reserve_names_and_close_with_their_surface() {
     let docs = Documents::default();

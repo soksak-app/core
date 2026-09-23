@@ -91,6 +91,7 @@ fn echo_sidecars() -> (Sidecars<FakeOwner>, tempfile::TempDir) {
     (sidecars, directory)
 }
 
+// contract: sidecars.send.delivers-only-to-owning-window, sidecars.send.rejects-surface-owned-by-another-window, sidecars.protocol.request-lines-carry-surface-root-body, sidecars.close-owner.sends-closed-per-surface
 #[test]
 fn messages_reach_the_owning_window_only() {
     let (sidecars, directory) = echo_sidecars();
@@ -136,6 +137,7 @@ fn messages_reach_the_owning_window_only() {
     );
 }
 
+// contract: sidecars.send.rejects-undeclared-sidecar, sidecars.send.rejects-after-stop
 #[test]
 fn undeclared_and_stopped_sidecars_are_rejected() {
     let (sidecars, _directory) = echo_sidecars();
@@ -151,6 +153,7 @@ fn undeclared_and_stopped_sidecars_are_rejected() {
         .contains("stopped"));
 }
 
+// contract: sidecars.start.fails-on-missing-executable
 #[test]
 fn a_missing_executable_fails() {
     let directory = tempfile::tempdir().unwrap();
@@ -164,6 +167,7 @@ fn a_missing_executable_fails() {
     assert!(error.contains(&format!("sidecar {ECHO}")), "{error}");
 }
 
+// contract: sidecars.declaration.fails-on-missing-sidecar-json
 #[test]
 fn a_sidecar_without_sidecar_json_fails() {
     let directory = tempfile::tempdir().unwrap();
@@ -179,6 +183,7 @@ fn a_sidecar_without_sidecar_json_fails() {
     );
 }
 
+// contract: sidecars.declaration.rejects-executable-escaping-package
 #[test]
 fn an_executable_outside_the_package_fails() {
     let directory = tempfile::tempdir().unwrap();
@@ -194,6 +199,7 @@ fn an_executable_outside_the_package_fails() {
     );
 }
 
+// contract: sidecars.declaration.rejects-unsupported-protocol
 #[test]
 fn an_unsupported_protocol_fails() {
     let directory = tempfile::tempdir().unwrap();
@@ -209,6 +215,7 @@ fn an_unsupported_protocol_fails() {
     );
 }
 
+// contract: sidecars.declaration.rejects-unknown-transport
 #[test]
 fn persistent_transport_rejects_unknown_transport() {
     let directory = tempfile::tempdir().unwrap();
@@ -221,6 +228,7 @@ fn persistent_transport_rejects_unknown_transport() {
     assert!(error.contains("transport ptyd is not supported"), "{error}");
 }
 
+// contract: sidecars.persistent.accepts-non-canonical-config-directory
 #[test]
 fn persistent_transport_canonicalizes_the_config_directory() {
     let executable_directory = tempfile::tempdir().unwrap();
@@ -237,6 +245,7 @@ fn persistent_transport_canonicalizes_the_config_directory() {
     assert!(error.unwrap_err().contains("sidecar"));
 }
 
+// contract: sidecars-transport.endpoint.concurrent-hosts-share-authenticated-service, sidecars-transport.hello.declares-protocol-one
 #[test]
 fn concurrent_hosts_share_an_authenticated_service_endpoint() {
     let executable_directory = tempfile::tempdir().unwrap();
@@ -319,6 +328,7 @@ fn concurrent_hosts_share_an_authenticated_service_endpoint() {
     service.join().unwrap();
 }
 
+// contract: sidecars-transport.endpoint.concurrent-hosts-share-authenticated-service, sidecars-transport.hello.declares-protocol-one, sidecars-transport.reconnect.after-connection-loss-preserves-owner
 #[test]
 fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
     let executable_directory = tempfile::tempdir().unwrap();
@@ -470,6 +480,7 @@ fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
     service.join().unwrap();
 }
 
+// contract: sidecars-transport.hello.rejects-unsupported-protocol-without-replacing-endpoint
 #[test]
 fn persistent_transport_rejects_unsupported_hello_protocol_without_replacing_endpoint() {
     let executable_directory = tempfile::tempdir().unwrap();
@@ -517,6 +528,7 @@ fn persistent_transport_rejects_unsupported_hello_protocol_without_replacing_end
     server.join().unwrap();
 }
 
+// contract: sidecars-transport.endpoint.replaces-dead-service-endpoint
 #[test]
 fn persistent_transport_replaces_endpoint_left_by_a_dead_service() {
     let executable_directory = tempfile::tempdir().unwrap();
@@ -610,6 +622,7 @@ fn persistent_transport_replaces_endpoint_left_by_a_dead_service() {
     service.join().unwrap();
 }
 
+// contract: sidecars-transport.endpoint.live-unreachable-reported-without-replacement
 #[test]
 fn persistent_transport_reports_live_but_unreachable_endpoint_without_replacement() {
     let executable_directory = tempfile::tempdir().unwrap();
@@ -647,6 +660,7 @@ fn persistent_transport_reports_live_but_unreachable_endpoint_without_replacemen
     sidecars.stop();
 }
 
+// contract: sidecars-transport.stop.close-owner-then-shutdown
 #[test]
 fn persistent_stop_closes_owner_then_requests_service_shutdown() {
     let executable_directory = tempfile::tempdir().unwrap();
@@ -729,6 +743,7 @@ fn persistent_stop_closes_owner_then_requests_service_shutdown() {
     service.join().unwrap();
 }
 
+// contract: sidecars.send.rejects-when-no-plugin-declares-sidecars
 #[test]
 fn plugins_without_sidecars_declare_none() {
     let directory = tempfile::tempdir().unwrap();
@@ -741,6 +756,7 @@ fn plugins_without_sidecars_declare_none() {
     assert!(error.contains("is not declared by any plugin"), "{error}");
 }
 
+// contract: sidecars.send.fails-fast-when-sidecar-not-keeping-up, sidecars.send.slow-sidecar-does-not-block-others, sidecars.stop.honors-stop-timeout
 #[test]
 fn slow_sidecar_does_not_block_other_sends() {
     // 느린 사이드카는 stdin을 읽지 않고, 다른 사이드카는 정상적으로 동작한다.
@@ -842,6 +858,7 @@ fn slow_sidecar_does_not_block_other_sends() {
     );
 }
 
+// contract: sidecars.stop.graceful-on-stdin-eof
 #[test]
 fn stop_graceful_shutdown() {
     // 사이드카가 실제로 stdin 을 읽고 있을 때 stop() 이 stdin EOF 에 의해 정상 종료되는지 검증한다.
@@ -911,6 +928,7 @@ fn stop_graceful_shutdown() {
     );
 }
 
+// contract: sidecars.stop.kills-after-timeout
 #[test]
 fn stop_forced_kill() {
     // 기한을 초과해도 종료하지 않는 사이드카를 kill 하는지 검증한다.

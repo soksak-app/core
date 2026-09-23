@@ -7,6 +7,7 @@ import (
 	host "github.com/min-median-max/soksak/packages/host/wailsv3/src"
 )
 
+// contract: surfaces-geometry.rect.accepts-zero-size, surfaces-geometry.rect.rejects-negative-size, surfaces-geometry.rect.rejects-non-finite
 func TestValidateRectRejectsNegativeAndNonFiniteSizes(t *testing.T) {
 	if err := host.ValidateRect("surface", 0, 0, 0, 10); err != nil {
 		t.Fatalf("zero-sized hidden surface should remain valid: %v", err)

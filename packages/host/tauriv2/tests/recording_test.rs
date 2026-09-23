@@ -58,6 +58,7 @@ fn calls(fake: &Fake) -> Vec<String> {
     fake.calls.borrow().clone()
 }
 
+// contract: recording.finish.keeps-folder-and-reports-frames
 #[test]
 fn a_finished_recording_keeps_its_folder_and_reports_frames() {
     let parent = tempfile::tempdir().unwrap();
@@ -73,6 +74,7 @@ fn a_finished_recording_keeps_its_folder_and_reports_frames() {
     assert!(recording.finish(&fake).is_err());
 }
 
+// contract: recording.start.failed-open-removes-folder
 #[test]
 fn a_failed_open_removes_the_folder() {
     let parent = tempfile::tempdir().unwrap();
@@ -90,6 +92,7 @@ fn a_failed_open_removes_the_folder() {
     assert_eq!(recording.running(), None);
 }
 
+// contract: recording.start.failed-start-removes-folder
 #[test]
 fn a_failed_start_removes_the_folder() {
     let parent = tempfile::tempdir().unwrap();
@@ -107,6 +110,7 @@ fn a_failed_start_removes_the_folder() {
     assert_eq!(recording.running(), None);
 }
 
+// contract: recording.start.no-first-frame-stops-and-removes
 #[test]
 fn a_recording_without_a_first_frame_is_stopped_and_removed() {
     let parent = tempfile::tempdir().unwrap();
@@ -122,6 +126,7 @@ fn a_recording_without_a_first_frame_is_stopped_and_removed() {
     assert_eq!(recording.running(), None);
 }
 
+// contract: recording.start.rejects-while-running, recording.abort.stops-removes-and-allows-next, recording.target.same-target-not-reopened
 #[test]
 fn an_aborted_recording_is_stopped_and_removed_and_allows_the_next() {
     let parent = tempfile::tempdir().unwrap();
@@ -143,6 +148,7 @@ fn an_aborted_recording_is_stopped_and_removed_and_allows_the_next() {
     );
 }
 
+// contract: recording.target.different-target-reopened
 #[test]
 fn a_different_target_is_prepared_again() {
     let parent = tempfile::tempdir().unwrap();

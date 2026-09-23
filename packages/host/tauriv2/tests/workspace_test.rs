@@ -17,6 +17,7 @@ fn read(path: &Path) -> Value {
     serde_json::from_slice(&fs::read(path).unwrap()).unwrap()
 }
 
+// contract: workspace.settings.project-file-holds-only-overrides, workspace.settings.persist-across-reopen, workspace.settings.reset-removes-override, workspace.settings.rejects-project-opening-override, workspace.settings.invalid-common-file-not-overwritten
 #[test]
 fn settings_use_common_and_project_files_and_reset_removes_override() {
     let config = tempfile::tempdir().unwrap();
@@ -68,6 +69,7 @@ fn settings_use_common_and_project_files_and_reset_removes_override() {
     );
 }
 
+// contract: workspace.settings.concurrent-patches-preserved, workspace.projects.move-reorders, workspace.projects.remove-keeps-remaining-order
 #[test]
 fn concurrent_updates_preserve_fields_and_saved_project_order() {
     let config = tempfile::tempdir().unwrap();
@@ -105,6 +107,7 @@ fn concurrent_updates_preserve_fields_and_saved_project_order() {
     );
 }
 
+// contract: workspace.folder.aliases-share-identity, workspace.folder.rejects-file
 #[test]
 fn directory_aliases_have_one_identity() {
     let root = tempfile::tempdir().unwrap();

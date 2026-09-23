@@ -80,7 +80,7 @@ verify: prepare docs-check exposure-check parity-check terminal-protocols-check
 # 각 앱은 debug 와 release 두 프로필로 빌드한다. release 는 각 도구의 표준 축소
 # 옵션(cargo release 프로필, Go 의 -s -w -trimpath)을 사용한다. debug 는 진단 빌드(Go 태그·cargo
 # 기능 diagnostics)이고 release 는 진단 메서드를 포함하지 않는다.
-.PHONY: native-darwin sidecars-debug sidecars-release frontend-wailsv3 frontend-tauriv2 native-test \
+.PHONY: native-darwin sidecars-debug sidecars-release frontend-wailsv3 frontend-tauriv2 native-test host-contract-check \
         tauriv2 tauriv2-release tauriv2-build tauriv2-build-release \
         wailsv3 wailsv3-release wailsv3-build wailsv3-build-release \
         examples-verify examples-size
@@ -173,6 +173,11 @@ native-test: native-darwin frontend-wailsv3 frontend-tauriv2
 	@$(CARGO_ENV) cargo test --manifest-path sidecars/Cargo.toml --workspace
 	@$(CARGO_ENV) cargo test -p soksak-host-tauriv2
 	@$(CARGO_ENV) cargo test -p soksak-host-tauriv2 --features diagnostics
+
+# 두 호스트의 테스트를 기본 구성과 진단 구성으로 실행하고, 호스트 계약 사례(docs/spec/host-contract.md)를
+# 같은 수준으로 실행하는지 결과로 검사한다.
+host-contract-check: native-darwin frontend-wailsv3 frontend-tauriv2
+	@$(GO_ENV) $(CARGO_ENV) node scripts/check-host-contract.mjs --go-ldflags "$(GO_LINK)"
 
 # 이미 실행 중인 앱의 창을 로컬 엔드포인트로 순차 검사한다. 하네스는 앱을 실행하지 않는다.
 examples-verify: docs-check e2e-check exposure-check

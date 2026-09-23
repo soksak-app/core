@@ -2,7 +2,7 @@
 
 [한국어](hosts.ko.md)
 
-Core's native side lives in two library packages with the same structure. [Native host interfaces](native-host.md) defines the operations the workbench page uses.
+Core's native side lives in two library packages with the same structure. [Native host interfaces](native-host.md) defines the operations the workbench page uses. [Host contract cases](host-contract.md) lists the behaviors that the tests of both hosts execute.
 
 | Package | Language | Identity |
 | --- | --- | --- |

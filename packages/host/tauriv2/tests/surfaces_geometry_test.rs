@@ -1,5 +1,6 @@
 use soksak_host_tauriv2::surfaces::validate_rect;
 
+// contract: surfaces-geometry.rect.accepts-zero-size, surfaces-geometry.rect.rejects-negative-size, surfaces-geometry.rect.rejects-non-finite
 #[test]
 fn rejects_non_finite_and_negative_surface_geometry_without_fallback() {
     assert!(validate_rect("surface", 0.0, 0.0, 0.0, 10.0).is_ok());

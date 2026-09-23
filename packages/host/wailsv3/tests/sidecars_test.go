@@ -77,6 +77,7 @@ func echoSidecars(t *testing.T) (*host.Sidecars, string) {
 	return sidecars, record
 }
 
+// contract: sidecars.send.delivers-only-to-owning-window, sidecars.send.rejects-surface-owned-by-another-window, sidecars.protocol.request-lines-carry-surface-root-body, sidecars.close-owner.sends-closed-per-surface
 func TestSidecarMessagesReachTheOwningWindowOnly(t *testing.T) {
 	sidecars, record := echoSidecars(t)
 	first, second := newFakeOwner("/projects/a"), newFakeOwner("/projects/b")
@@ -110,6 +111,7 @@ func TestSidecarMessagesReachTheOwningWindowOnly(t *testing.T) {
 	}
 }
 
+// contract: sidecars.send.rejects-undeclared-sidecar, sidecars.send.rejects-after-stop
 func TestUndeclaredAndStoppedSidecarsAreRejected(t *testing.T) {
 	sidecars, _ := echoSidecars(t)
 	owner := newFakeOwner("/projects/a")
@@ -122,6 +124,7 @@ func TestUndeclaredAndStoppedSidecarsAreRejected(t *testing.T) {
 	}
 }
 
+// contract: sidecars.start.fails-on-missing-executable
 func TestMissingSidecarExecutableFails(t *testing.T) {
 	directory := t.TempDir()
 	sidecars, err := host.NewSidecars(frontend(`{"executable":"build/absent","protocol":1}`), directory, directory)
@@ -133,6 +136,7 @@ func TestMissingSidecarExecutableFails(t *testing.T) {
 	}
 }
 
+// contract: sidecars.declaration.fails-on-missing-sidecar-json, sidecars.declaration.rejects-executable-escaping-package, sidecars.declaration.rejects-absolute-executable, sidecars.declaration.rejects-unsupported-protocol, sidecars.declaration.rejects-unknown-transport, sidecars.declaration.persistent-requires-config-directory, sidecars.declaration.fails-on-missing-environment
 func TestInvalidSidecarDeclarationsFail(t *testing.T) {
 	cases := map[string]struct {
 		files fstest.MapFS
@@ -161,12 +165,14 @@ func TestInvalidSidecarDeclarationsFail(t *testing.T) {
 	}
 }
 
+// contract: sidecars.declaration.persistent-requires-config-directory
 func TestPersistentTransportRequiresConfigDirectory(t *testing.T) {
 	if _, err := host.NewSidecars(frontend(`{"executable":"build/echo","protocol":1,"transport":"persistent"}`), t.TempDir(), ""); err == nil || !strings.Contains(err.Error(), "persistent transport requires a config directory") {
 		t.Fatalf("persistent transport without config = %v", err)
 	}
 }
 
+// contract: sidecars.send.rejects-when-no-plugin-declares-sidecars
 func TestApplicationWithoutSidecarsRejectsSends(t *testing.T) {
 	files := fstest.MapFS{
 		"environment.json":                    {Data: []byte(`{"plugins":["@fixture/plugin"]}`)},
@@ -182,6 +188,7 @@ func TestApplicationWithoutSidecarsRejectsSends(t *testing.T) {
 	}
 }
 
+// contract: sidecars.send.fails-fast-when-sidecar-not-keeping-up, sidecars.send.slow-sidecar-does-not-block-others, sidecars.stop.honors-stop-timeout
 func TestSlowSidecarDoesNotBlockOtherSends(t *testing.T) {
 	// 느린 사이드카는 stdin 을 읽지 않고, 다른 사이드카는 정상적으로 동작한다.
 	// 느린 사이드카에 257번 보내면 256번째는 성공하고 257번째는 "is not keeping up" 오류로 실패한다.
@@ -280,6 +287,7 @@ func TestSlowSidecarDoesNotBlockOtherSends(t *testing.T) {
 // TestStopGracefulShutdown 은 사이드카가 실제로 stdin 을 읽고 있을 때 Stop() 이 stdin EOF 에 의해
 // 정상 종료되는지 검증한다. 측정은 사이드카가 Send 의 에코를 받은 뒤 시작해서, 기한(1초)까지
 // 기다리지 않고 즉시 종료되는지 확인한다.
+// contract: sidecars.stop.graceful-on-stdin-eof
 func TestStopGracefulShutdown(t *testing.T) {
 	directory := t.TempDir()
 
@@ -323,6 +331,7 @@ func TestStopGracefulShutdown(t *testing.T) {
 }
 
 // TestStopForcedKill 은 기한을 초과해도 종료하지 않는 사이드카를 kill 하는지 검증한다.
+// contract: sidecars.stop.kills-after-timeout
 func TestStopForcedKill(t *testing.T) {
 	directory := t.TempDir()
 

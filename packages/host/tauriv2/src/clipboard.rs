@@ -149,6 +149,7 @@ fn persist_png_at(root: &Path, bytes: &[u8]) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::persist_png_at;
+    // contract: clipboard.persist-png.writes-exact-bytes
     #[test]
     fn persists_owned_png_without_overwriting() {
         let root =

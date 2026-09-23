@@ -7,6 +7,7 @@ import (
 	host "github.com/min-median-max/soksak/packages/host/wailsv3/src"
 )
 
+// contract: authorization.main.known-main-caller-accepted, authorization.main.unknown-main-caller-rejected, exposure-reply.payload.main-reply-unscoped, exposure-reply.payload.scoped-reply-keeps-surface
 func TestExposureReplyMainAndScopedPayloads(t *testing.T) {
 	mainPayload, err := json.Marshal(host.ExposureReplyRequest{ID: 1, Result: json.RawMessage(`null`)})
 	if err != nil {

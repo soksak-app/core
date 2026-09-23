@@ -14,6 +14,7 @@ const CHILD: &str = "SOKSAK_TERMINATION_CHILD";
 
 const NAME: &str = "a_termination_signal_requests_quit_once_and_the_next_ends_the_process";
 
+// contract: termination.signal.first-requests-quit-second-ends-process
 #[test]
 fn a_termination_signal_requests_quit_once_and_the_next_ends_the_process() {
     if std::env::var_os(CHILD).is_some() {

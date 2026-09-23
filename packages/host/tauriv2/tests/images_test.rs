@@ -29,6 +29,7 @@ fn configured_envelope(configuration: &Configure, sequence: i32) -> String {
     .to_string()
 }
 
+// contract: images.attach.rejects-reservation-without-sidecar
 #[test]
 fn reserve_rejects_empty_sidecar() {
     let images = Images::default();
@@ -49,6 +50,7 @@ fn reserve_rejects_empty_sidecar() {
     );
 }
 
+// contract: images.envelope.rejects-unattached-image, images.envelope.refusal-echoes-name-and-sequence
 #[test]
 fn unattached_image_is_refused() {
     let images = Images::default();
@@ -87,6 +89,7 @@ fn unattached_image_is_refused() {
     }
 }
 
+// contract: images.envelope.rejects-other-sidecar
 #[test]
 fn image_from_another_sidecar_is_refused() {
     let images = Images::default();
@@ -131,6 +134,7 @@ fn image_from_another_sidecar_is_refused() {
     }
 }
 
+// contract: images.envelope.presents-attached-current-frame, images.envelope.present-carries-nonce-scale-generation-raster
 #[test]
 fn attached_image_is_presented() {
     let images = Images::default();
@@ -193,6 +197,7 @@ fn attached_image_is_presented() {
     }
 }
 
+// contract: images.ack.consumed-carries-frame-identity
 #[test]
 fn successful_present_is_consumed() {
     let response = after_present(true, None, "view", 7, 3, 1);
@@ -203,6 +208,7 @@ fn successful_present_is_consumed() {
     assert_eq!(response["image"]["consumed"]["sequence"], 1);
 }
 
+// contract: images.transfer.rejects-duplicate-sequence, images.transfer.reconfigure-advances-raster, images.transfer.rejects-stale-raster, images.transfer.configure-stamps-current-generation, images.transfer.generation-advances, images.transfer.rejects-old-generation-after-reattach
 #[test]
 fn only_the_current_generation_raster_and_sequence_can_be_presented() {
     let images = Images::default();
@@ -280,6 +286,7 @@ fn only_the_current_generation_raster_and_sequence_can_be_presented() {
     }
 }
 
+// contract: images.transfer.configure-stamps-current-generation, images.transfer.generation-advances, images.transfer.new-generation-invalidates-queued-old-frame
 #[test]
 fn beginning_a_new_generation_invalidates_a_queued_old_frame_before_image_close() {
     let images = Images::default();
@@ -315,6 +322,7 @@ fn beginning_a_new_generation_invalidates_a_queued_old_frame_before_image_close(
     }
 }
 
+// contract: images.transfer.reconfigure-advances-raster, images.wait.blocks-before-first-frame, images.wait.releases-after-current-frame-presented, images.wait.successful-handle-replies-consumed, images.wait.newer-sequence-rearms-wait, images.wait.reconfigure-clears-presented, images.wait.hidden-image-does-not-block, images.wait.hidden-surface-does-not-block, images.wait.ended-generation-does-not-block
 #[test]
 fn presentation_wait_tracks_the_visible_current_raster() {
     let images = Images::default();
@@ -375,6 +383,7 @@ fn presentation_wait_tracks_the_visible_current_raster() {
     assert!(images.wait_current(Duration::ZERO).is_ok());
 }
 
+// contract: images.visibility.survives-first-document-navigation
 #[test]
 fn surface_visibility_survives_first_document_navigation() {
     let images = Images::default();
@@ -395,6 +404,7 @@ fn surface_visibility_survives_first_document_navigation() {
     assert!(images.current_presented());
 }
 
+// contract: images.visibility.hidden-surface-defers-configuration, images.visibility.refresh-list-excludes-hidden
 #[test]
 fn hidden_surface_defers_raster_configuration() {
     let images = Images::default();
@@ -421,6 +431,7 @@ fn hidden_surface_defers_raster_configuration() {
     assert!(images.visible().is_empty());
 }
 
+// contract: images.present.rejects-frame-superseded-during-main-thread
 #[test]
 fn frame_that_becomes_stale_before_main_thread_presentation_is_rejected() {
     let images = Images::default();
@@ -458,6 +469,7 @@ fn frame_that_becomes_stale_before_main_thread_presentation_is_rejected() {
     assert!(!images.current_presented());
 }
 
+// contract: images.present.rejects-frame-detached-during-main-thread
 #[test]
 fn frame_detached_before_main_thread_presentation_is_reported_as_stale() {
     let images = Images::default();
@@ -492,6 +504,7 @@ fn frame_detached_before_main_thread_presentation_is_reported_as_stale() {
     );
 }
 
+// contract: images.ack.failure-carries-error-and-frame-identity
 #[test]
 fn failed_present_is_reported() {
     let response = after_present(false, Some("forbidden"), "view", 7, 3, 1);
@@ -503,6 +516,7 @@ fn failed_present_is_reported() {
     assert_eq!(response["image"]["sequence"], 1);
 }
 
+// contract: images.envelope.rejects-unsupported-format, images.envelope.rejects-bad-nonce-length, images.envelope.rejects-unknown-token-kind
 #[test]
 fn unsupported_image_is_refused() {
     let images = Images::default();
@@ -601,6 +615,7 @@ fn unsupported_image_is_refused() {
     }
 }
 
+// contract: images.envelope.ignores-body-without-image, images.envelope.ignores-invalid-json
 #[test]
 fn non_image_body_is_not_handled() {
     let images = Images::default();
@@ -628,6 +643,7 @@ fn non_image_body_is_not_handled() {
     }
 }
 
+// contract: images.envelope.refusal-preserves-quoted-name
 #[test]
 fn reply_escapes_names() {
     let images = Images::default();
@@ -668,6 +684,7 @@ fn reply_escapes_names() {
     }
 }
 
+// contract: images.attach.surface-close-removes-only-its-images
 #[test]
 fn surface_close_removes_only_its_images() {
     let images = Images::default();
@@ -705,6 +722,7 @@ fn surface_close_removes_only_its_images() {
     assert_eq!(images.get(&surface_2_img).unwrap(), 300);
 }
 
+// contract: images.present.main-thread-failure-reports-present-failed
 #[test]
 fn presentation_failure_is_reported() {
     let images = Images::default();
@@ -774,6 +792,7 @@ fn presentation_failure_is_reported() {
     );
 }
 
+// contract: images.present.missing-native-surface-requests-reconfiguration
 #[test]
 fn missing_native_surface_requests_a_fresh_raster_configuration() {
     let images = Images::default();

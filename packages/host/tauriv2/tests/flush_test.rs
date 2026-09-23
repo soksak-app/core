@@ -72,6 +72,7 @@ fn create(files: &Files, directory: &std::path::Path) -> Result<Sidecars<FakeOwn
 
 const ECHO: &str = "@fixture/sidecar-echo";
 
+// contract: flush.queue.rejects-send-when-full, flush.buffer.replies-delivered-after-drain, flush.buffer.closes-delivered-after-drain, flush.buffer.consumed-acks-not-coalesced, flush.buffer.delivered-after-queued-bodies
 #[test]
 fn every_pending_reply_is_flushed_after_the_queue_drains() {
     let directory = tempfile::tempdir().unwrap();
@@ -229,6 +230,7 @@ fn every_pending_reply_is_flushed_after_the_queue_drains() {
     }
 }
 
+// contract: flush.queue.rejects-send-when-full, flush.buffer.replies-delivered-after-drain, flush.buffer.closes-delivered-after-drain
 #[test]
 fn order_is_correct_when_stop_flushes_buffered_messages() {
     let directory = tempfile::tempdir().unwrap();

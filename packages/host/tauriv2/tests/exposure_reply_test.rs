@@ -1,6 +1,7 @@
 use serde_json::json;
 use soksak_host_tauriv2::exposure::reply_target;
 
+// contract: exposure-reply.target.main-and-surface-distinct
 #[test]
 fn main_and_surface_replies_use_distinct_targets() {
     assert_eq!(
@@ -17,6 +18,7 @@ fn main_and_surface_replies_use_distinct_targets() {
     );
 }
 
+// contract: exposure-reply.target.invalid-surface-rejected
 #[test]
 fn invalid_scope_cannot_be_converted_to_a_main_reply() {
     for scope in [json!(null), json!(""), json!(1), json!({})] {

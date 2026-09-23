@@ -71,6 +71,7 @@ func expectCalls(t *testing.T, fake *fakeCapture, want ...string) {
 	}
 }
 
+// contract: recording.finish.keeps-folder-and-reports-frames
 func TestFinishedRecordingKeepsItsFolderAndReportsFrames(t *testing.T) {
 	folder := filepath.Join(t.TempDir(), "frames")
 	var recording host.Recording
@@ -91,6 +92,7 @@ func TestFinishedRecordingKeepsItsFolderAndReportsFrames(t *testing.T) {
 	}
 }
 
+// contract: recording.start.failed-open-removes-folder
 func TestFailedOpenRemovesTheFolder(t *testing.T) {
 	folder := filepath.Join(t.TempDir(), "frames")
 	var recording host.Recording
@@ -100,6 +102,7 @@ func TestFailedOpenRemovesTheFolder(t *testing.T) {
 	}
 }
 
+// contract: recording.start.failed-start-removes-folder
 func TestFailedStartRemovesTheFolder(t *testing.T) {
 	folder := filepath.Join(t.TempDir(), "frames")
 	var recording host.Recording
@@ -109,6 +112,7 @@ func TestFailedStartRemovesTheFolder(t *testing.T) {
 	}
 }
 
+// contract: recording.start.no-first-frame-stops-and-removes
 func TestRecordingWithoutAFirstFrameIsStoppedAndRemoved(t *testing.T) {
 	folder := filepath.Join(t.TempDir(), "frames")
 	var recording host.Recording
@@ -119,6 +123,7 @@ func TestRecordingWithoutAFirstFrameIsStoppedAndRemoved(t *testing.T) {
 	expectCalls(t, fake, "open 7", "start", "wait", "stop")
 }
 
+// contract: recording.start.rejects-while-running, recording.abort.stops-removes-and-allows-next, recording.target.same-target-not-reopened
 func TestAbortedRecordingIsStoppedAndRemovedAndAllowsTheNext(t *testing.T) {
 	parent := t.TempDir()
 	first, second := filepath.Join(parent, "first"), filepath.Join(parent, "second")
@@ -141,6 +146,7 @@ func TestAbortedRecordingIsStoppedAndRemovedAndAllowsTheNext(t *testing.T) {
 	expectCalls(t, fake, "open 7", "start", "wait", "stop", "start", "wait")
 }
 
+// contract: recording.abort.reports-stop-failure-and-removes-folder
 func TestAbortReportsStopFailureAndStillRemovesFolder(t *testing.T) {
 	folder := filepath.Join(t.TempDir(), "frames")
 	var recording host.Recording
@@ -157,6 +163,7 @@ func TestAbortReportsStopFailureAndStillRemovesFolder(t *testing.T) {
 	}
 }
 
+// contract: recording.target.different-target-reopened
 func TestDifferentTargetIsPreparedAgain(t *testing.T) {
 	parent := t.TempDir()
 	var recording host.Recording

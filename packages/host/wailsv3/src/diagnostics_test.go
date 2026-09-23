@@ -12,6 +12,7 @@ type fakeCaptureStatus struct {
 func (c fakeCaptureStatus) Limited() bool       { return c.limited }
 func (c fakeCaptureStatus) LongestGap() float64 { return c.gap }
 
+// contract: diagnostics.capture-stop.payload-reports-frame-limit
 func TestCaptureStopPayloadReportsNormalFrameLimit(t *testing.T) {
 	payload := captureStopPayload(fakeCaptureStatus{limited: true, gap: 42.5}, "/tmp/frames", 600)
 	if payload["frames"] != "/tmp/frames" || payload["count"] != 600 || payload["limited"] != true || payload["longestGap"] != 42.5 {
@@ -19,6 +20,7 @@ func TestCaptureStopPayloadReportsNormalFrameLimit(t *testing.T) {
 	}
 }
 
+// contract: diagnostics.capture-stop.payload-reports-unbounded
 func TestCaptureStopPayloadReportsUnboundedRecording(t *testing.T) {
 	payload := captureStopPayload(fakeCaptureStatus{limited: false}, "/tmp/frames", 3)
 	if payload["limited"] != false {
