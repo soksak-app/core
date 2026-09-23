@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F11-4: `make release-check`가 잘못된 형식의 스테이징된 `sidecar.json`을 파일과 오류와 함께 보고한다. 이전에는 조용히 건너뛰어 그 실행 파일을 검사하지 않았다.
 - F11-2: 플러그인은 검사 전용 항목을 `diagnostics.json`과 그 모듈에 선언하며, 이는 진단 빌드에만 스테이징된다. 터미널의 `terminal.compose.update`와 `terminal.ime.trace`가 그리로 옮겨졌고, `make release-check`는 릴리스 스테이징에 플러그인 진단 선언이나 모듈이 있으면 실패한다. 릴리스 두 앱에서 `terminal.ime.trace`는 1001을 반환하고, 디버그 두 앱에서 새 e2e 사례가 통과한다.
 - F2-1: `e2e/normal-shutdown.mjs`가 프로세스 종료를 종료 알림(`caffeinate -w`)으로 기다린다. 이전 관찰기는 파일 이벤트가 올 때만 종료를 확인해, Wails가 종료 전에 `endpoint.json`을 지우면 시간 초과로 실패했다. 재빌드한 두 호스트에서 각각 10회 통과했다.
 - G4-2: 두 호스트가 첫 창을 등록한 뒤에만 `endpoint.json`을 쓰므로 파일이 나타난 직후의 첫 창 요청이 응답을 받는다. 재빌드한 두 앱에서 각각 5회 확인했고, `make native-test`가 두 호스트에서 207개 사례 모두로 통과한다.

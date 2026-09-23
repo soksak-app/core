@@ -28,23 +28,16 @@ function* files(dir) {
   }
 }
 
-// 스테이징된 사이드카 JSON에서 실행 파일 basename들을 추출한다.
-// helpers 필드가 있으면 그것도 포함한다.
-function* extractExecutableBasenames(sidecarJsonPath) {
+/**
+ * 스테이징된 sidecar.json 이 선언한 실행 파일과 헬퍼 실행 파일의 basename. 파일을 JSON 으로
+ * 읽을 수 없거나 실행 파일 경로가 문자열이 아니면 그 파일 경로와 오류로 예외를 던진다.
+ */
+export function executableBasenames(sidecarJsonPath) {
   try {
     const content = JSON.parse(readFileSync(sidecarJsonPath, "utf8"));
-    if (typeof content.executable === "string") {
-      yield basename(content.executable);
-    }
-    if (Array.isArray(content.helpers)) {
-      for (const helper of content.helpers) {
-        if (typeof helper.executable === "string") {
-          yield basename(helper.executable);
-        }
-      }
-    }
-  } catch {
-    // 잘못된 JSON 이나 구조는 무시한다. validateSidecar 가 따로 검사한다.
+    return [content.executable, ...(content.helpers ?? []).map((helper) => helper.executable)].map((path) => basename(path));
+  } catch (error) {
+    throw new Error(`${sidecarJsonPath}: ${error.message}`);
   }
 }
 
@@ -127,7 +120,14 @@ if (import.meta.main) {
     if (existsSync(modulesDir)) {
       for (const sidecarPath of files(modulesDir)) {
         if (!sidecarPath.endsWith("sidecar.json")) continue;
-        for (const execName of extractExecutableBasenames(sidecarPath)) {
+        let names;
+        try {
+          names = executableBasenames(sidecarPath);
+        } catch (error) {
+          errors.push(error.message.replace(ROOT, ""));
+          continue;
+        }
+        for (const execName of names) {
           const sidecarExe = join(ROOT, "target", "release", execName);
           if (!existsSync(sidecarExe)) {
             errors.push(`${relative(ROOT, sidecarExe)}: missing; run the release build first`);

@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { BREAKS } from "../../packages/soksak/scripts/breaks.mjs";
-import { auditPluginDiagnostics, find as findReleaseMarkers } from "../check-release.mjs";
+import { auditPluginDiagnostics, executableBasenames, find as findReleaseMarkers } from "../check-release.mjs";
 import { auditHostPairs } from "../check-hosts.mjs";
 import { auditE2ESource } from "../check-e2e.mjs";
 import { auditTerminalProtocolInventory } from "../check-terminal-protocol-inventory.mjs";
@@ -250,6 +250,16 @@ test("release plugin diagnostics audit rejects every staged diagnostic declarati
 
   await rm(join(frontend, "diagnostic-plugins.json"));
   assert.match(auditPluginDiagnostics(frontend, sources).join("\n"), /diagnostic-plugins\.json: missing/);
+});
+
+test("release check reports a malformed staged sidecar declaration", { timeout: 2000 }, async (t) => {
+  const dir = await mkdtemp(join(tmpdir(), "soksak-sidecar-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const path = join(dir, "sidecar.json");
+  await writeFile(path, JSON.stringify({ executable: "build/echo", helpers: [{ package: "@fixture/helper", executable: "build/helper" }] }));
+  assert.deepEqual(executableBasenames(path), ["echo", "helper"]);
+  await writeFile(path, "{broken");
+  assert.throws(() => executableBasenames(path), (error) => error.message.startsWith(`${path}: `) && /JSON/.test(error.message));
 });
 
 test("platform audit accepts only declared platform boundaries", { timeout: 5000 }, async () => {
