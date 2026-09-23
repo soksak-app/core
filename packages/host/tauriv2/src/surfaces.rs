@@ -564,8 +564,10 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
             let handle = if let Some(handle) = existing {
                 handle
             } else {
-                let handle =
-                    exposure::on_main(window, move || platform.create_surface(main_handle))?;
+                let handle = create_logical_surface_handle(
+                    || exposure::on_main(window, move || platform.create_surface(main_handle)),
+                    &s.id,
+                )?;
                 surface_hosts
                     .lock()
                     .map_err(|e| e.to_string())?
@@ -833,4 +835,16 @@ fn announce_run(window: &Window, running: &Running, going: bool) -> Result<(), S
     }
     let name = if going { "run-began" } else { "run-ended" };
     emit_window(window, name, ()).map_err(|e| e.to_string())
+}
+
+/// 논리 표면의 네이티브 핸들을 만든다. 실패와 0 핸들은 표면 id 를 담은 오류다.
+pub fn create_logical_surface_handle(
+    create: impl FnOnce() -> Result<crate::platform::Handle, String>,
+    id: &str,
+) -> Result<crate::platform::Handle, String> {
+    let handle = create().map_err(|error| format!("surface {id}: create: {error}"))?;
+    if handle == 0 {
+        return Err(format!("surface {id}: create returned a nil handle"));
+    }
+    Ok(handle)
 }

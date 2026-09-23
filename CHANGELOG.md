@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G2-3-16: Tauri logical surface creation adds the surface id to a failure and rejects a nil handle, and Tauri tests cover both cases.
 - G2-3-10: `recording::stop_payload` builds the Tauri capture stop reply, and Tauri tests cover a limited and an unbounded recording.
 - G2-3-9: Tauri saves pasted PNG files with owner-only permissions (0600) instead of the umask default, and a test checks the mode.
 - G2-3-8: the Tauri main-webview caller check is the single exported `authorize_main_caller`, and Tauri tests cover the known main caller and rejected other callers.
