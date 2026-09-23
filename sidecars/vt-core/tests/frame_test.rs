@@ -535,3 +535,61 @@ fn terminal_theme_changes_background_foreground_and_cursor_pixels_without_metric
     assert_eq!(initial_metrics.cell_height, unchanged.cell_height);
     assert_eq!(initial_metrics.font_size, unchanged.font_size);
 }
+
+fn bright_in_cell(frame: &Frame, metrics_width: u32, height: u32, cell: u32) -> f64 {
+    let start = metrics_width * cell;
+    let bright = (start..start + metrics_width)
+        .flat_map(|x| (0..height).map(move |y| (x, y)))
+        .filter_map(|(x, y)| frame.read_pixel(x, y))
+        .filter(|pixel| pixel[0] > 100 || pixel[1] > 100 || pixel[2] > 100)
+        .count();
+    bright as f64 / (metrics_width * height) as f64
+}
+
+#[test]
+fn block_cursor_covers_the_full_width_of_the_character_under_it() {
+    let metrics = metrics(13.0, 1.0);
+    let cell = metrics.cell_width as u32;
+    let height = metrics.cell_height as u32;
+
+    // 조합 중인 넓은 글자: 커서는 두 칸을 모두 덮는다.
+    let mut wide_preedit = screen(4, 1);
+    wide_preedit.cursor.focused = true;
+    wide_preedit.cursor.preedit = Some(Preedit {
+        text: "글".to_string(),
+        selected_range: None,
+        replacement_range: None,
+        attributed: false,
+    });
+    let frame = Frame::new(cell * 4, height).expect("frame");
+    frame.draw(&wide_preedit, &metrics).expect("wide preedit");
+    let second = bright_in_cell(&frame, cell, height, 1);
+    assert!(second > 0.5, "the block cursor must cover the second cell of a wide preedit (bright {second:.2})");
+    let third = bright_in_cell(&frame, cell, height, 2);
+    assert!(third < 0.1, "the cursor must not extend past the wide preedit (bright {third:.2})");
+
+    // 확정된 넓은 글자 위의 커서도 두 칸을 덮는다.
+    let mut wide_text = screen(4, 1);
+    wide_text.cursor.focused = true;
+    wide_text.lines[0][0].ch = Some("한".to_string());
+    wide_text.lines[0][0].width = 2;
+    wide_text.lines[0][1].width = 0;
+    let frame = Frame::new(cell * 4, height).expect("frame");
+    frame.draw(&wide_text, &metrics).expect("wide text");
+    let second = bright_in_cell(&frame, cell, height, 1);
+    assert!(second > 0.5, "the block cursor must cover the second cell of a wide character (bright {second:.2})");
+
+    // 좁은 조합 글자는 한 칸 커서를 유지한다.
+    let mut narrow = screen(4, 1);
+    narrow.cursor.focused = true;
+    narrow.cursor.preedit = Some(Preedit {
+        text: "a".to_string(),
+        selected_range: None,
+        replacement_range: None,
+        attributed: false,
+    });
+    let frame = Frame::new(cell * 4, height).expect("frame");
+    frame.draw(&narrow, &metrics).expect("narrow preedit");
+    let second = bright_in_cell(&frame, cell, height, 1);
+    assert!(second < 0.1, "a narrow preedit keeps a one-cell cursor (bright {second:.2})");
+}

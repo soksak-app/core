@@ -304,7 +304,7 @@ int frame_draw_with_inline_images(Frame *frame, Screen *screen, Metrics *metrics
         screen->cursor_col < screen->width && screen->cursor_row < screen->height) {
         CGFloat cursor_x = screen->cursor_col * metrics->cell_width;
         CGFloat cursor_y = (CGFloat)frame->height - ((CGFloat)screen->cursor_row + 1.0) * metrics->cell_height;
-        CGFloat cursor_width = metrics->cell_width;
+        CGFloat cursor_width = metrics->cell_width * screen->cursor_width;
         CGFloat cursor_height = metrics->cell_height;
         CGColorRef cursor_color = CGColorCreateSRGB(
             screen->default_cursor[0] / 255.0,

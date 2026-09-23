@@ -39,6 +39,7 @@ typedef struct {
     uint8_t default_foreground[3];
     uint8_t default_background[3];
     uint8_t default_cursor[3];
+    uint32_t cursor_width; // 커서 위치 글자가 차지하는 칸 수. 넓은 글자는 2 다.
 } Screen;
 
 typedef struct {

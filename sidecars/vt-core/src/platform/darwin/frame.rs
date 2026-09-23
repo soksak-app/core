@@ -39,6 +39,7 @@ pub struct CScreen {
     pub default_foreground: [u8; 3],
     pub default_background: [u8; 3],
     pub default_cursor: [u8; 3],
+    pub cursor_width: u32,
 }
 
 #[repr(C)]
@@ -274,6 +275,14 @@ impl Frame {
             }
         }
 
+        // 커서는 그 위치 글자의 폭만큼, 화면 오른쪽 끝을 넘지 않게 덮는다. 줄에 셀이 없는 위치는 빈 셀 한 칸이다.
+        let remaining = u32::from(render_screen.cols).saturating_sub(u32::from(render_screen.cursor.col)).max(1);
+        let cursor_width = render_screen
+            .lines
+            .get(render_screen.cursor.row as usize)
+            .and_then(|line| line.get(render_screen.cursor.col as usize))
+            .map_or(1, |cell| u32::from(cell.width.max(1)))
+            .min(remaining);
         let effective_shape =
             effective_cursor_shape(cursor.shape, cursor.focused, cursor.unfocused);
         let mut c_screen = CScreen {
@@ -296,6 +305,7 @@ impl Frame {
             default_foreground: theme.foreground,
             default_background: theme.background,
             default_cursor: theme.cursor,
+            cursor_width,
         };
 
         let mut c_metrics = CMetrics {
