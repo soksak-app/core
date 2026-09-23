@@ -1,5 +1,6 @@
 # 변경 기록
 
+- F8-11: 재빌드된 Tauri와 Wails는 ASCII 뒤에서 한 칸 커서, 넓은 한글 조합 글자 위에서 두 칸 커서를 그리며, 활성화 등급 검사의 창 캡처로 측정했다. F8-13(넓은 글자 뒤 빈틈)과 F11-3(관측용 창 정지 캡처)을 등록했다.
 - F8-12: `terminal.cursor`와 입력기 caret이 모든 `screen` 이벤트의 커서를 따르며, 불완전한 커서는 오류로 알린다. 재빌드된 Tauri와 Wails는 `ddd한` 입력 뒤 13열과 포커스를 보고한다.
 - F8-11 진행: vt-core 프레임 렌더러가 넓은 조합 문자열을 포함해 커서 아래 글자의 폭만큼 커서를 그린다. 새 프레임 테스트가 넓은 조합 글자, 넓은 확정 글자, 좁은 조합 글자를 다룬다. F8-12 등록: `terminal.cursor`와 입력기 caret이 `screen` 이벤트의 커서를 무시한다.
 - F8-10과 F8-3: 두 호스트가 `diagnostics.input.source`를 노출하고, 활성화 등급 창 검사 `e2e/activation/ime.test.mjs`가 ABC `ddd`를 친 뒤 한국어 2벌식으로 바꿔 `한글`, Space, Enter를 친다. 재빌드된 Tauri와 Wails에서 화면 행 `sh-3.2$ ddd한글`, `sh: ddd한글: command not found`로 통과하고, 수정 전 그림 영역으로 빌드한 Wails에서는 실패한다. 잘못된 한글 사례를 기본 창 검사에서 제거했고, `make e2e-check`는 `activate: true`를 `e2e/activation/`에서만 허용하며, 터미널 화면 도우미를 `e2e/terminal-screen.mjs`로 옮겼다. 조합 커서 폭을 F8-11로 등록했다.

@@ -17,6 +17,8 @@ const KOREAN_2SET = "com.apple.inputmethod.Korean.2SetKorean";
 
 // 커서 칸과 그 오른쪽 칸에서 표면 배경과 다른 픽셀의 비율을 잰다. 캡처는 창을 앞으로 가져오지 않는다.
 async function cursorCellCoverage(s, surface) {
+  // screen.read 응답이 현재 커서를 terminal.cursor 에 반영한다.
+  await s.run("terminal.screen.read", {}, surface);
   await s.request("diagnostics.capture.start", {});
   const displayed = await s.presented();
   const { frames: frameDir } = await s.request("diagnostics.capture.stop", { after: displayed.displayed });
@@ -82,6 +84,11 @@ for (const app of Object.values(APPS)) {
         await readScreenUntil(s, surface, (lines) => lines.some((line) => line.endsWith(typed)),
           `the ABC key did not produce ${typed}`);
       }
+      // 좁은 글자 뒤의 빈 칸에서는 커서가 한 칸만 덮는다.
+      const narrow = await cursorCellCoverage(s, surface);
+      t.diagnostic(`${app.name}: narrow cursor coverage ${JSON.stringify({ col: narrow.cursor.col, first: narrow.first, second: narrow.second })}`);
+      assert.ok(narrow.first > 0.9 && narrow.second < 0.1,
+        `the cursor after ASCII text must cover exactly one cell: ${JSON.stringify(narrow)}`);
       assert.equal((await s.request("diagnostics.input.source", { select: KOREAN_2SET })).current, KOREAN_2SET);
 
       const steps = [["g", "ㅎ"], ["k", "하"], ["s", "한"], ["r", "ㄱ"], ["m", "그"], ["f", "글"], ["Space", " "]];
