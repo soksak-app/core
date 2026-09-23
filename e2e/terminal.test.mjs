@@ -885,6 +885,20 @@ for (const app of Object.values(APPS)) {
     await s.until("terminal.session", (state) => Boolean(state?.sessionId),
       "terminal selection session did not open", { surface });
 
+    const transcript = await s.transcript();
+    s.cleanup(() => transcript.stop());
+    // 선택 제스처 동안 터미널 화면이 바뀌었는지 실패 보고에 쓴다.
+    const screens = [];
+    const offScreens = s.client.on("status.changed", (params) => {
+      if (params?.name === "terminal.screen" && params.surface === surface) {
+        screens.push(params.value.map((cells) => cells.map((cell) => cell.ch).join("").trimEnd()).slice(0, 3));
+      }
+    });
+    await s.request("status.watch", { name: "terminal.screen", surface });
+    s.cleanup(async () => {
+      offScreens();
+      await s.request("status.unwatch", { name: "terminal.screen", surface });
+    });
     const marker = "SELECTION-CLIP-123";
     await s.run("terminal.input", { bytes: `printf '\\033[2J\\033[H${marker}\\n'\r` }, surface);
     const lines = await readScreenUntil(s, surface,
@@ -909,12 +923,22 @@ for (const app of Object.values(APPS)) {
       x: viewX + (col + marker.length - 0.5) * metrics.cellWidth,
       y: start.y,
     };
+    const screensBefore = screens.length;
     await s.pointer(start.x, start.y, "down", { button: "left" });
     await s.pointer(end.x, end.y, "drag", { button: "left" });
     await s.pointer(end.x, end.y, "up", { button: "left" });
     await s.presented();
-    assert.equal((await s.get("terminal.session", surface)).error, undefined,
-      "native selection reported an input or clipboard error");
+    const selected = await s.get("terminal.session", surface);
+    if (selected.error !== undefined) {
+      const screen = await s.get("terminal.screen", surface);
+      assert.fail(`native selection reported ${selected.error}; marker at row ${row}, col ${col}; ` +
+        `pointer ${JSON.stringify(start)} → ${JSON.stringify(end)}; screen before selection ${JSON.stringify(lines.slice(0, row + 3))}; ` +
+        `screen after selection ${JSON.stringify(screen.slice(0, row + 3).map((cells) => cells.map((cell) => cell.inverse ? cell.ch.toUpperCase() + "*" : cell.ch).join("")))}; ` +
+        `grid before ${metrics.cols}×${metrics.rows} at ${metrics.cellWidth}×${metrics.cellHeight}, ` +
+        `after ${selected.cols}×${selected.rows} at ${selected.cellWidth}×${selected.cellHeight}; ` +
+        `transcript ${JSON.stringify(transcript.lines.slice(-10))}; ` +
+        `screens during the gesture ${JSON.stringify(screens.slice(screensBefore))}, last before ${JSON.stringify(screens[screensBefore - 1])}`);
+    }
 
     const after = await terminalFrame(s);
     let changed = 0;

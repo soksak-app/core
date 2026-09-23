@@ -10,7 +10,7 @@
 // 런타임 모듈(@soksak/runtime)이 담당한다.
 import { host as bridge } from "@soksak/runtime";
 import { plugins } from "./registry.js";
-import { createClipboardBridge, createExpose } from "@soksak/plugin-api";
+import { createClipboardBridge, createExpose, orderedSidecar } from "@soksak/plugin-api";
 import { registerSurfacePort, registry, unregisterSurfacePort } from "./exposure.js";
 
 /**
@@ -107,6 +107,21 @@ function windowOverlays() {
  */
 export const native = Boolean(bridge);
 
+/*
+ * 사이드카 이름마다 하나의 순서 포트. 호스트는 전송 호출을 동시에 처리할 수 있으므로, 앞선 전송이
+ * 끝난 뒤 다음 전송을 호출해야 사이드카가 보낸 순서대로 받는다. 같은 사이드카를 쓰는 모든 표면이
+ * 이 순서를 공유한다.
+ */
+const orderedSidecars = new Map();
+function orderedSidecarPort(name) {
+  if (!orderedSidecars.has(name)) {
+    orderedSidecars.set(name, orderedSidecar({
+      send: (surface, body) => bridge.call("sidecarSend", { sidecar: name, surface, body }),
+    }));
+  }
+  return orderedSidecars.get(name);
+}
+
 /**
  * 네이티브 표면을 만들지 않고 선언된 background 세션 명령을 보낸다.
  * 탭 id를 사이드카 표면 키로 유지해 나중에 표시되는 표면이 같은 영속 actor에
@@ -115,7 +130,7 @@ export const native = Boolean(bridge);
 export function windowSidecar(name) {
   if (!bridge) return null;
   return {
-    send: (surface, body) => bridge.call("sidecarSend", { sidecar: name, surface, body }),
+    send: (surface, body) => orderedSidecarPort(name).send(surface, body),
     on: (surface, listener) => Promise.resolve(bridge.on("sidecar-message", (event) => {
       if (event?.sidecar === name && event?.surface === surface) listener(event.body);
     })),
@@ -178,8 +193,11 @@ export function surfaceContextRuntime(surface, declarations = {}) {
       if (name !== undefined) throw new Error("surface runtime sidecar() does not accept a package name; use the declared sidecar");
       if (declared.length !== 1) throw new Error(`surface runtime requires exactly one declared sidecar, got ${declared.length}`);
       const sidecarName = declared[0];
+      const ordered = orderedSidecarPort(sidecarName);
       return {
-        send: (id, body) => invoke("sidecarSend", { sidecar: sidecarName, surface: id, body }),
+        send: (id, body) => id === surfaceId
+          ? ordered.send(surfaceId, body)
+          : Promise.reject(new Error(`surface ${surfaceId} cannot send to sidecar surface ${id}`)),
         on: (id, fn) => on("sidecar-message", (event) => {
           if (event.sidecar === sidecarName && event.surface === id) fn(event.body);
         }),

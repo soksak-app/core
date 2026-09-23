@@ -48,7 +48,7 @@ In a diagnostic build the workbench adds the declarations to the plugin's surfac
 
 ## Surface module ownership
 
-Each OS window has one app DOM WebView. The workbench owns the surface element and its Shadow Root; a plugin owns the DOM it mounts inside that root. Shadow DOM isolates styles, not security privileges. The context exposes surface-scoped commands, statuses, DOM bindings, sidecar messages, and the declared composition controller. The host validates the window, surface, and declaration again. Plugins do not create internal WebViews or iframes.
+Each OS window has one app DOM WebView. The workbench owns the surface element and its Shadow Root; a plugin owns the DOM it mounts inside that root. Shadow DOM isolates styles, not security privileges. The context exposes surface-scoped commands, statuses, DOM bindings, sidecar messages, and the declared composition controller. The host validates the window, surface, and declaration again. Sidecar messages sent through the context reach the sidecar in send order: the workbench starts a send only after the previous send to the same sidecar finished, and every surface and background session of that sidecar shares one order. A send whose surface is not the context's surface is rejected. Plugins do not create internal WebViews or iframes.
 
 `mount(root, context)` may be asynchronous and returns `{ dispose() }`. Native surface registration completes before mounting can attach a region. Mounting failure is a visible error; it cannot become a successful empty surface. Native readiness requires the first presented region, not merely a completed module import. The workbench distinguishes loading, ready, and error.
 

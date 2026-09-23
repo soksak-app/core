@@ -924,7 +924,8 @@ function syncBackgroundSessions() {
     backgroundSessions.set(tab.id, state);
     Promise.resolve(port.on(tab.id, (body) => {
       if (body?.error || body?.body?.error) {
-        report(`background session ${tab.id}: ${body.error ?? body.body.error}`);
+        const reply = body.error ? body : body.body;
+        report(`background session ${tab.id}: ${reply.error}${typeof reply.reason === "string" ? `: ${reply.reason}` : ""}`);
       }
     })).then((stop) => { state.stop = stop; }, (error) => {
       report(`background session ${tab.id} listener failed: ${error.message}`);

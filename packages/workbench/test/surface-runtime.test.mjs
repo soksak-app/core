@@ -4,10 +4,15 @@ import { JSDOM } from "jsdom";
 
 const calls = [];
 let registerEventListener;
+/* 호출 하나의 완료를 검사가 정할 때 쓴다. 없으면 호출은 바로 끝난다. */
+let answerCall;
 mock.module("@soksak/runtime", {
   namedExports: {
     host: {
-      call: async (name, payload) => { calls.push([name, payload]); return null; },
+      call: async (name, payload) => {
+        calls.push([name, payload]);
+        return answerCall ? answerCall(name, payload) : null;
+      },
       on: (name, callback) => {
         registerEventListener?.(name, callback);
         return Promise.resolve(() => {});
@@ -84,4 +89,34 @@ test("surface exposure replies retain the logical surface scope", async () => {
   assert.deepEqual(calls, [["exposureReply", { id: 17, result: "ok", surface }]]);
   await runtime.exposure.dispose();
   dom.window.close();
+});
+
+test("surface sidecar sends reach the host one at a time in send order", async () => {
+  const { surfaceContextRuntime } = await import("../host.js");
+  calls.length = 0;
+  const pending = [];
+  answerCall = () => new Promise((resolve) => pending.push(resolve));
+  const first = surfaceContextRuntime({ surfaceId: "ordered-a", sidecars: ["@fixture/ordered"] }).sidecar();
+  const second = surfaceContextRuntime({ surfaceId: "ordered-b", sidecars: ["@fixture/ordered"] }).sidecar();
+  const sent = [
+    first.send("ordered-a", { operation: "selection.start" }),
+    first.send("ordered-a", { operation: "selection.update" }),
+    second.send("ordered-b", { operation: "open" }),
+  ];
+  const operations = () => calls.filter(([name]) => name === "sidecarSend").map(([, payload]) => payload.body.operation);
+  for (const expected of [["selection.start"], ["selection.start", "selection.update"], ["selection.start", "selection.update", "open"]]) {
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(operations(), expected, "a send reached the host before the previous send finished");
+    pending.shift()();
+  }
+  await Promise.all(sent);
+  answerCall = undefined;
+});
+
+test("a surface sidecar send to another surface is rejected instead of being redirected", async () => {
+  const { surfaceContextRuntime } = await import("../host.js");
+  calls.length = 0;
+  const port = surfaceContextRuntime({ surfaceId: "own-surface", sidecars: ["@fixture/sidecar"] }).sidecar();
+  await assert.rejects(port.send("other-surface", { operation: "open" }), /own-surface cannot send to sidecar surface other-surface/);
+  assert.equal(calls.some(([name]) => name === "sidecarSend"), false);
 });

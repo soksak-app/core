@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-9: surface module sidecar sends go through one ordered port per sidecar, so the host receives each send after the previous one finished; previously the host could reorder `selection.start` and `selection.update` and the selection came out empty. A tracked window check repeat target `pnpm -F @soksak/e2e run repeat` is added, and the selection check passes 32 runs in a row on both hosts.
 - V5-11: `host.hit` no longer defines the unreachable `surface` kind; points of DOM surfaces and image regions are `page`. The branches are removed from both hosts and the window check follows; it passes on both hosts.
 - V5-14: the saved layout check no longer assumes that the shell card has two tabs; it requires every tab except the dropped first one to remain. It passes on both hosts.
 - V5-13: the projects specification states that a common-only setting requested in the project scope is rejected with -32602, and the window check that still required the earlier -32000 follows it; it passes on both hosts.

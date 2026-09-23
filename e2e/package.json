@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "verify": "node --test --test-concurrency=1 './*.test.mjs'",
-    "verify:activation": "node --test --test-concurrency=1 'activation/*.test.mjs'"
+    "verify:activation": "node --test --test-concurrency=1 'activation/*.test.mjs'",
+    "repeat": "node repeat.mjs"
   },
   "dependencies": {
     "@soksak/client": "workspace:*"
