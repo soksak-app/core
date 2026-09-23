@@ -65,9 +65,12 @@ impl Service for Fake {
     }
 }
 
-/// config 안의 sockets 디렉터리에 엔드포인트를 연다. 소켓 경로 길이 제한 안에 든다.
+/// config 안의 sockets 디렉터리에 엔드포인트를 열고 창 w1 로 endpoint.json 을 쓴다. 소켓 경로는
+/// 길이 제한 안에 든다.
 fn start(config: &Path, application: &str, service: Arc<Fake>) -> Endpoint {
-    Endpoint::start(&config.join("sockets"), config, application, service).unwrap()
+    let endpoint = Endpoint::start(&config.join("sockets"), config, application, service).unwrap();
+    endpoint.publish("w1").unwrap();
+    endpoint
 }
 
 // contract: endpoint.process.one-owner-per-config-dir
@@ -681,4 +684,59 @@ fn subscription_changes_reach_the_page_in_arrival_order() {
     notifier.changed("w1", "core.layout", None, json!(5));
     assert_eq!(receive(&mut connection).unwrap()["params"]["value"], 5);
     endpoint.stop();
+}
+
+/// 창 main 을 등록한 뒤에만 그 창을 가진 서비스.
+struct Late(std::sync::atomic::AtomicBool);
+
+impl Service for Late {
+    fn windows(&self) -> Result<Value, Failure> {
+        Ok(json!([]))
+    }
+
+    fn exists(&self, window: &str) -> bool {
+        window == "main" && self.0.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    fn call(&self, _: &str, _: &str, _: Map<String, Value>) -> Result<Value, Failure> {
+        Ok(json!("answered"))
+    }
+}
+
+// contract: endpoint.discovery.written-after-first-window
+#[test]
+fn endpoint_file_is_written_only_after_the_first_window_exists() {
+    let config = tempfile::tempdir().unwrap();
+    let service = Arc::new(Late(std::sync::atomic::AtomicBool::new(false)));
+    let endpoint = Endpoint::start(
+        &config.path().join("sockets"),
+        config.path(),
+        "test-first",
+        service.clone(),
+    )
+    .unwrap();
+    let file = config.path().join("endpoint.json");
+    assert!(
+        !file.exists(),
+        "endpoint.json was written before the first window was registered"
+    );
+    let refused = endpoint
+        .publish("main")
+        .expect_err("endpoint.json was published for a window that does not exist");
+    assert!(refused.contains("window main does not exist"), "{refused}");
+    assert!(!file.exists(), "a refused publication wrote endpoint.json");
+    service.0.store(true, std::sync::atomic::Ordering::SeqCst);
+    endpoint.publish("main").unwrap();
+    let written: Value = serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
+    assert_eq!(written["address"], endpoint.address());
+    let mut connection = open(&endpoint);
+    let reply = request(
+        &mut connection,
+        1,
+        "status.get",
+        json!({"window": "main", "name": "host.windows"}),
+    );
+    assert_eq!(reply["result"], "answered", "{reply}");
+    endpoint.stop();
+    assert!(!file.exists());
 }

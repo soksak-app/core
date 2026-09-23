@@ -20,7 +20,7 @@ Implementation: `src/platform/<os>/endpoint.*` in each [native host](hosts.md).
 
 ## Discovery
 
-When the endpoint is ready, the host writes `<config-dir>/endpoint.json`.
+The host listens first and writes `<config-dir>/endpoint.json` only after its first window is registered. A client that reads the file can therefore send requests for that window at once: `windows.list` lists it, and its host entries answer. Page entries return 1003 until `host.windows` reports the window as `ready`, so a client waits for that status notification. A host that cannot register its first window does not write the file and ends startup with an error.
 
 The host also atomically creates `<config-dir>/process.lock` before listening. Its contents are the owning host PID. A configuration directory has exactly one owning application process; that process may own multiple windows. A second process using the same configuration directory exits with an explicit ownership error before writing or replacing `endpoint.json`. A process using a different configuration directory has independent settings, endpoint, lock, and sidecar state and may run at the same time. Normal shutdown removes the lock. After an unclean termination, the next host may remove the lock only when its recorded PID is no longer running; malformed or live locks are errors.
 

@@ -13,6 +13,7 @@ import (
 	"runtime/debug"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -100,7 +101,7 @@ func (b *fakeBackend) seen() ([]string, []string) {
 	return append([]string(nil), b.requests...), append([]string(nil), b.commands...)
 }
 
-// serve 는 루프백 리스너로 엔드포인트를 시작한다. 엔드포인트의 전송은 운영체제 구현이
+// serve 는 루프백 리스너로 엔드포인트를 시작하고, 창 main 이 있으면 endpoint.json 을 쓴다. 엔드포인트의 전송은 운영체제 구현이
 // 만들고, 이 검사는 전송과 무관한 요청 처리를 확인한다.
 func serve(t *testing.T, backend host.Backend) (*host.Endpoint, string, string) {
 	t.Helper()
@@ -116,6 +117,11 @@ func serve(t *testing.T, backend host.Backend) (*host.Endpoint, string, string) 
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = endpoint.Close() })
+	if backend.HasWindow("main") {
+		if err := endpoint.Publish("main"); err != nil {
+			t.Fatal(err)
+		}
+	}
 	return endpoint, listener.Addr().String(), config
 }
 
@@ -882,5 +888,46 @@ func TestSocketPathThatIsNotADirectoryIsRefused(t *testing.T) {
 	_, _, err := listen(t, sockets, "test-link")
 	if err == nil || !strings.Contains(err.Error(), "is not a directory") {
 		t.Fatalf("got %v, want a kind error", err)
+	}
+}
+
+// lateBackend 는 창 main 을 등록한 뒤에만 그 창을 가진다.
+type lateBackend struct {
+	*fakeBackend
+	registered atomic.Bool
+}
+
+func (b *lateBackend) HasWindow(window string) bool { return window == "main" && b.registered.Load() }
+
+// contract: endpoint.discovery.written-after-first-window
+func TestEndpointFileIsWrittenOnlyAfterTheFirstWindowExists(t *testing.T) {
+	backend := &lateBackend{fakeBackend: newFakeBackend()}
+	endpoint, address, config := serve(t, backend)
+	file := filepath.Join(config, "endpoint.json")
+	if _, err := os.Stat(file); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("endpoint.json was written before the first window was registered: %v", err)
+	}
+	if err := endpoint.Publish("main"); err == nil || !strings.Contains(err.Error(), "window main does not exist") {
+		t.Fatalf("endpoint.json was published for a window that does not exist: %v", err)
+	}
+	if _, err := os.Stat(file); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("a refused publication wrote endpoint.json: %v", err)
+	}
+	backend.registered.Store(true)
+	if err := endpoint.Publish("main"); err != nil {
+		t.Fatal(err)
+	}
+	var info host.EndpointInfo
+	data, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(data, &info); err != nil || info.Address != address {
+		t.Fatalf("endpoint.json %s does not name the endpoint %s: %v", data, address, err)
+	}
+	conn := dial(t, address)
+	reply := call(t, conn, 1, "status.get", map[string]any{"window": "main", "name": "host.windows"})
+	if reply.Error != nil {
+		t.Fatalf("a request after publication failed: %+v", reply.Error)
 	}
 }

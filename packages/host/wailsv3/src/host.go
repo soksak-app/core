@@ -9,6 +9,7 @@
 package host
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"log"
@@ -94,6 +95,7 @@ func Run(assets fs.FS, options Options) error {
 		return err
 	}
 	// 엔드포인트는 창을 표시하기 전에 만든다. 만들 수 없으면 애플리케이션을 시작하지 않는다.
+	// endpoint.json 은 첫 창을 등록하고 애플리케이션이 시작한 뒤 쓴다.
 	listener, address, err := system.Listen(SocketDirectory(), applicationName)
 	if err != nil {
 		return fmt.Errorf("local endpoint: %w", err)
@@ -124,12 +126,25 @@ func Run(assets fs.FS, options Options) error {
 			"CmdOrCtrl+Shift+N": func(application.Window) { go host.WindowNew() },
 		},
 	})
+	// 클라이언트는 endpoint.json 을 읽자마자 첫 창에 요청하므로 창을 등록한 뒤 쓴다. 쓰지 못하면
+	// 애플리케이션을 끝내고 그 오류를 반환한다.
+	unpublished := make(chan error, 1)
 	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
 		close(started)
+		if err := host.endpoint.Publish("main"); err != nil {
+			unpublished <- fmt.Errorf("local endpoint: %w", err)
+			app.Quit()
+		}
 	})
 	setupDockMenu(host)
 	host.newWindow("main", "/")
-	return app.Run()
+	err = app.Run()
+	select {
+	case failure := <-unpublished:
+		return errors.Join(err, failure)
+	default:
+		return err
+	}
 }
 
 // setupDockMenu 는 애플리케이션이 시작하면 Dock 메뉴를 등록한다.

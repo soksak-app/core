@@ -394,7 +394,7 @@ pub(crate) struct Exposure {
     reported: Mutex<HashMap<String, Value>>,
 }
 
-/// 엔드포인트를 열고 endpoint.json 을 쓴다.
+/// 엔드포인트를 연다. endpoint.json 은 publish 가 쓴다.
 pub(crate) fn start(app: &AppHandle, directory: &std::path::Path) -> Result<(), String> {
     let endpoint = Endpoint::start(
         &crate::endpoint::socket_directory(),
@@ -406,6 +406,15 @@ pub(crate) fn start(app: &AppHandle, directory: &std::path::Path) -> Result<(), 
         .endpoint
         .set(endpoint)
         .map_err(|_| "the endpoint is already started".to_string())
+}
+
+/// 첫 창 window 를 등록한 뒤 endpoint.json 을 쓴다.
+pub(crate) fn publish(app: &AppHandle, window: &str) -> Result<(), String> {
+    app.state::<Exposure>()
+        .endpoint
+        .get()
+        .ok_or("the endpoint is not started")?
+        .publish(window)
 }
 
 /// 엔드포인트를 닫고 소켓과 endpoint.json 을 제거한다.

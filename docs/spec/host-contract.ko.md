@@ -93,6 +93,7 @@ fn invalid_json_closes_connection() {
 | `endpoint.input.key-control-option-and-text` | control과 option 수정자는 6이 되고 text는 그대로 전달된다. | both |
 | `endpoint.input.key-invalid-phase-or-modifier-type` | 알 수 없는 키 phase나 배열이 아닌 modifiers 값은 -32602를 반환한다. | both |
 | `endpoint.discovery.writes-endpoint-json` | endpoint.json은 전송 방식, 주소, pid, 애플리케이션, 버전, 실행 파일, 시작 시각을 담는다. | both |
+| `endpoint.discovery.written-after-first-window` | 엔드포인트를 시작할 때 endpoint.json을 쓰지 않는다. 없는 창으로 게시하면 실패하고 파일을 쓰지 않으며, 있는 창으로 게시한 뒤에는 그 창의 요청에 응답한다. | both |
 | `endpoint.discovery.endpoint-json-mode-0600` | endpoint.json의 모드는 0600이다. | both |
 | `endpoint.discovery.removes-endpoint-json-on-close` | 엔드포인트를 닫으면 endpoint.json을 제거한다. | both |
 | `endpoint.discovery.removes-socket-on-close` | 소켓은 서비스 중에 존재하고 엔드포인트를 닫으면 제거된다. | both |

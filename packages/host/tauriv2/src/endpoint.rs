@@ -339,9 +339,11 @@ pub struct Endpoint {
     listener: Arc<dyn Listener>,
     _process_lock: ProcessLock,
     address: String,
+    directory: PathBuf,
     file: PathBuf,
-    // 이 엔드포인트가 쓴 endpoint.json 내용. 닫을 때 파일이 이 내용일 때만 지운다.
+    // 이 엔드포인트가 게시하는 endpoint.json 내용. 닫을 때 파일이 이 내용일 때만 지운다.
     record: Value,
+    published: AtomicBool,
     stopped: Arc<AtomicBool>,
 }
 
@@ -414,7 +416,8 @@ impl Drop for ProcessLock {
 }
 
 impl Endpoint {
-    /// sockets 디렉터리에 application 이름의 엔드포인트를 열고 `<directory>/endpoint.json` 을 쓴다.
+    /// sockets 디렉터리에 application 이름의 엔드포인트를 연다. `<directory>/endpoint.json` 은
+    /// 첫 창을 등록한 뒤 [`Endpoint::publish`] 가 쓴다.
     pub fn start(
         sockets: &Path,
         directory: &Path,
@@ -439,8 +442,10 @@ impl Endpoint {
             listener,
             _process_lock: process_lock,
             address,
+            directory: directory.to_path_buf(),
             file,
             record: Value::Null,
+            published: AtomicBool::new(false),
             stopped: Arc::new(AtomicBool::new(false)),
         };
         let executable = std::env::current_exe()
@@ -455,10 +460,6 @@ impl Endpoint {
             "executable": executable.to_string_lossy(),
             "started": timestamp(SystemTime::now()),
         });
-        if let Err(error) = write_record(directory, &endpoint.file, &record) {
-            endpoint.listener.remove();
-            return Err(error);
-        }
         endpoint.record = record;
         let listener = endpoint.listener.clone();
         let shared = endpoint.shared.clone();
@@ -478,6 +479,20 @@ impl Endpoint {
             }
         });
         Ok(endpoint)
+    }
+
+    /// 창 window 가 등록되어 있으면 endpoint.json 을 쓴다. 파일을 읽은 클라이언트가 그 창에 바로
+    /// 요청할 수 있도록 첫 창을 등록한 뒤 한 번 호출한다.
+    pub fn publish(&self, window: &str) -> Result<(), String> {
+        if !self.shared.service.exists(window) {
+            return Err(format!(
+                "endpoint.json is not written: window {window} does not exist"
+            ));
+        }
+        if self.published.swap(true, Ordering::SeqCst) {
+            return Err("endpoint.json is already written".into());
+        }
+        write_record(&self.directory, &self.file, &self.record)
     }
 
     /// 소켓 경로 또는 파이프 이름.

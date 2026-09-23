@@ -93,6 +93,7 @@ The scope column is `both`, or `<host> only: <reason>` for behavior that exists 
 | `endpoint.input.key-control-option-and-text` | The control and option modifiers become 6, and text is passed through. | both |
 | `endpoint.input.key-invalid-phase-or-modifier-type` | An unknown key phase or a non-array modifiers value returns -32602. | both |
 | `endpoint.discovery.writes-endpoint-json` | endpoint.json holds the transport, address, pid, application, version, executable, and start time. | both |
+| `endpoint.discovery.written-after-first-window` | endpoint.json is not written when the endpoint starts; publishing it for a window that does not exist fails and writes no file; after publishing for an existing window, a request for that window is answered. | both |
 | `endpoint.discovery.endpoint-json-mode-0600` | endpoint.json has mode 0600. | both |
 | `endpoint.discovery.removes-endpoint-json-on-close` | endpoint.json is removed when the endpoint closes. | both |
 | `endpoint.discovery.removes-socket-on-close` | The socket exists while serving and is removed when the endpoint closes. | both |

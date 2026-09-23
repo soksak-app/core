@@ -168,6 +168,7 @@ type Endpoint struct {
 	processLock *processLock
 	file        string
 	owner       EndpointInfo
+	published   bool
 	conns       map[*endpointConn]bool
 	// counts 는 topic 마다 구독한 연결의 수다.
 	counts map[topic]int
@@ -245,7 +246,8 @@ func NewEndpoint(backend Backend) *Endpoint {
 	return &Endpoint{backend: backend, conns: map[*endpointConn]bool{}, counts: map[topic]int{}, queues: map[topic][]func(){}}
 }
 
-// Serve 는 configDir 에 endpoint.json 을 쓰고 listener 의 연결을 받기 시작한다.
+// Serve 는 configDir 의 소유권을 얻고 listener 의 연결을 받기 시작한다. endpoint.json 은
+// 첫 창을 등록한 뒤 Publish 가 쓴다.
 func (e *Endpoint) Serve(listener net.Listener, info EndpointInfo, configDir string) error {
 	lock, err := acquireProcessLock(configDir)
 	if err != nil {
@@ -260,9 +262,6 @@ func (e *Endpoint) Serve(listener net.Listener, info EndpointInfo, configDir str
 	if info.Executable, err = filepath.EvalSymlinks(executable); err != nil {
 		return errors.Join(err, lock.close())
 	}
-	if err := writeJSON(file, info); err != nil {
-		return errors.Join(err, lock.close())
-	}
 	e.mu.Lock()
 	e.listener, e.processLock, e.file, e.owner = listener, lock, file, info
 	e.mu.Unlock()
@@ -270,11 +269,32 @@ func (e *Endpoint) Serve(listener net.Listener, info EndpointInfo, configDir str
 	return nil
 }
 
+// Publish 는 창 window 가 등록되어 있으면 endpoint.json 을 쓴다. 파일을 읽은 클라이언트가 그 창에
+// 바로 요청할 수 있도록 첫 창을 등록한 뒤 한 번 호출한다.
+func (e *Endpoint) Publish(window string) error {
+	if !e.backend.HasWindow(window) {
+		return fmt.Errorf("endpoint.json is not written: window %s does not exist", window)
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	switch {
+	case e.file == "":
+		return errors.New("the endpoint is not serving")
+	case e.published:
+		return errors.New("endpoint.json is already written")
+	}
+	if err := writeJSON(e.file, e.owner); err != nil {
+		return err
+	}
+	e.published = true
+	return nil
+}
+
 // Close 는 연결을 받지 않고, 열린 연결을 닫고, endpoint.json 을 제거한다.
 func (e *Endpoint) Close() error {
 	e.mu.Lock()
 	listener, processLock, file, owner := e.listener, e.processLock, e.file, e.owner
-	e.listener, e.processLock, e.file, e.owner = nil, nil, "", EndpointInfo{}
+	e.listener, e.processLock, e.file, e.owner, e.published = nil, nil, "", EndpointInfo{}, false
 	conns := make([]*endpointConn, 0, len(e.conns))
 	for c := range e.conns {
 		conns = append(conns, c)

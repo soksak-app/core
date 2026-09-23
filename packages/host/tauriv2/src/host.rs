@@ -153,9 +153,12 @@ pub fn run(context: tauri::Context<tauri::Wry>, _background: &'static str) {
             let read = |path: &str| resolver.get(path.into()).map(|asset| asset.bytes);
             let sidecars = WindowSidecars::new(&read, sidecar_directory, directory)?;
             app.manage(sidecars);
-            if let Some(window) = app.get_webview_window("main") {
-                windows::register(window.as_ref().window())?;
-            }
+            let main = app
+                .get_webview_window("main")
+                .ok_or("the configuration has no main window")?;
+            windows::register(main.as_ref().window())?;
+            // 클라이언트는 endpoint.json 을 읽자마자 첫 창에 요청하므로 창을 등록한 뒤 쓴다.
+            exposure::publish(app.handle(), "main")?;
             Ok(())
         })
         .on_menu_event(|app, event| {
