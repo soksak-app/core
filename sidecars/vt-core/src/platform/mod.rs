@@ -2,7 +2,7 @@ pub mod darwin;
 pub mod platform;
 pub mod pty;
 
-pub use platform::{default_font, metrics, metrics_for, resolve_font, TerminalFont};
+pub use platform::{default_font, metrics, metrics_for, resolve_font_list, FontSelection, TerminalFont};
 pub use platform::service;
 pub use platform::ImageState;
 

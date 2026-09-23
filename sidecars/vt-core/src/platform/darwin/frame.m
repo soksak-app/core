@@ -361,20 +361,19 @@ void frame_drop(Frame *frame) {
     }
 }
 
-FrameFont *frame_font_from_data(const uint8_t *data, uint32_t length) {
-    if (!data || length == 0) return NULL;
-    CFDataRef bytes = CFDataCreate(NULL, data, length);
-    if (!bytes) return NULL;
-    CTFontDescriptorRef descriptor = CTFontManagerCreateFontDescriptorFromData(bytes);
-    CFRelease(bytes);
+FrameFont *frame_font_system_monospace(void) {
+    CTFontRef font = CTFontCreateUIFontForLanguage(kCTFontUIFontUserFixedPitch, 12, NULL);
+    if (!font) return NULL;
+    CTFontDescriptorRef descriptor = CTFontCopyFontDescriptor(font);
+    CFRelease(font);
     if (!descriptor) return NULL;
-    FrameFont *font = malloc(sizeof(FrameFont));
-    if (!font) {
+    FrameFont *result = malloc(sizeof(FrameFont));
+    if (!result) {
         CFRelease(descriptor);
         return NULL;
     }
-    font->descriptor = descriptor;
-    return font;
+    result->descriptor = descriptor;
+    return result;
 }
 
 FrameFont *frame_font_named(const char *family) {

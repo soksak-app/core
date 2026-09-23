@@ -2,7 +2,7 @@
 pub use crate::platform::darwin::service;
 
 #[cfg(target_os = "macos")]
-pub use crate::platform::darwin::frame::{default_font, metrics, metrics_for, resolve_font, Frame, Metrics, TerminalFont};
+pub use crate::platform::darwin::frame::{default_font, metrics, metrics_for, resolve_font_list, FontSelection, Frame, Metrics, TerminalFont};
 
 #[cfg(target_os = "macos")]
 pub struct ImageState {

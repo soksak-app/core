@@ -3042,12 +3042,12 @@ async fn test_replacement_raster_state_has_cell_dimensions() {
 }
 
 #[tokio::test]
-async fn test_font_selects_bundled_or_installed_family_and_rejects_missing_family() {
+async fn test_font_applies_the_first_installed_family_of_a_list() {
     let input = r#"
-{"surface":"s1","body":{"operation":"font","family":"D2Coding"}}
-{"surface":"s1","body":{"operation":"font","family":"Menlo"}}
+{"surface":"s1","body":{"operation":"font","family":"No Such Terminal Font Family;Menlo"}}
+{"surface":"s1","body":{"operation":"font","family":"Courier"}}
 {"surface":"s1","body":{"operation":"font","family":"No Such Terminal Font Family"}}
-{"surface":"s1","body":{"operation":"font","family":""}}
+{"surface":"s1","body":{"operation":"font","family":" ; "}}
 "#;
     let reader = std::io::Cursor::new(input.as_bytes());
     let mut writer = Vec::new();
@@ -3065,22 +3065,37 @@ async fn test_font_selects_bundled_or_installed_family_and_rejects_missing_famil
         .lines()
         .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
         .collect::<Vec<_>>();
-    let selected = outputs
+    let applied = outputs
         .iter()
         .filter(|value| value["body"]["event"] == "font")
         .map(|value| value["body"]["family"].as_str().unwrap().to_string())
         .collect::<Vec<_>>();
-    assert_eq!(selected, vec!["D2Coding".to_string(), "Menlo".to_string()]);
+    assert_eq!(applied.len(), 3);
+    assert_eq!(applied[..2], ["Menlo".to_string(), "Courier".to_string()]);
+    let system = outputs
+        .iter()
+        .filter(|value| value["body"]["event"] == "font")
+        .map(|value| value["body"]["system"].as_bool().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(system, vec![false, false, true], "only a list without installed families uses the system font");
+    let skipped = outputs
+        .iter()
+        .filter(|value| value["body"]["event"] == "font")
+        .map(|value| value["body"]["skipped"].clone())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        skipped,
+        vec![
+            serde_json::json!(["No Such Terminal Font Family"]),
+            serde_json::json!([]),
+            serde_json::json!(["No Such Terminal Font Family"]),
+        ],
+        "each answer names the families it skipped"
+    );
     let errors = outputs
         .iter()
         .filter(|value| value["body"]["error"] == "invalidParams")
         .map(|value| value["body"]["reason"].as_str().unwrap().to_string())
         .collect::<Vec<_>>();
-    assert_eq!(
-        errors,
-        vec![
-            "terminal font family is not installed: No Such Terminal Font Family".to_string(),
-            "font.family must be a non-empty string".to_string(),
-        ]
-    );
+    assert_eq!(errors, vec!["font.family must name at least one family".to_string()]);
 }

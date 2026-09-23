@@ -162,7 +162,7 @@ function normalizeCursorPolicy(value) {
  * @returns {Promise<void>}
  */
 export async function startTerminal({ id, view, attachImage, sidecar, expose, theme,
-  settings, clipboard, reportSurfaceError = () => {}, reportSurfaceReady = () => {},
+  settings, clipboard, reportSurfaceError = () => {},
   window: globalWindow = globalThis.window }) {
   // 브라우저 환경에서 필요한 객체들
   const window = globalWindow;
@@ -292,12 +292,9 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     changed("cursor");
     return policy;
   };
-  // 터미널 글꼴 family 를 사이드카에 보낸다. 사이드카의 font 확인 이벤트가 적용된 글꼴을 정하고,
-  // 거부는 오류 응답으로 도착하며 적용된 글꼴은 그대로 둔다.
+  // 터미널 글꼴 family 우선순위 목록(`;` 로 구분)을 사이드카에 보낸다. 사이드카는 설치된 첫 family 를
+  // 적용하고 font 확인 이벤트로 그 family 를 알린다.
   let requestedFont = null;
-  let fontErrorShown = false;
-  // 새 상태·세션·테마 응답이 해소하지 않는 오류. 네이티브 이미지 오류와 글꼴 오류는 각자의 동작이 해제한다.
-  const unresolvedError = () => session.error?.startsWith("native image:") || fontErrorShown ? session.error : undefined;
   const setFont = async (family) => {
     if (typeof family !== "string" || family.length === 0) throw new Error("font.family setting is invalid");
     if (family === requestedFont) return;
@@ -652,7 +649,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
         cellWidth: body.cellWidth,
         cellHeight: body.cellHeight,
         unsupported: session.unsupported,
-        error: unresolvedError(),
+        error: session.error?.startsWith("native image:") ? session.error : undefined,
       };
       if (body.cursor !== undefined) applyCursor(body.cursor, body.cursor);
       sessionOpen = true;
@@ -663,7 +660,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
         reportInputError("invalid persistent session event");
         return;
       }
-      session = { ...session, sessionId: body.sessionId, error: unresolvedError() };
+      session = { ...session, sessionId: body.sessionId, error: undefined };
       sessionOpen = true;
       changed("session");
     } else if (body.event === "screen") {
@@ -696,7 +693,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
         reportInputError(new Error("invalid theme acknowledgement from sidecar"));
         return;
       }
-      session = { ...session, theme: body.mode, error: unresolvedError() };
+      session = { ...session, theme: body.mode, error: undefined };
       changed("session");
     } else if (body.event === "clipboard.store") {
       handleClipboardStore(body).catch(reportInputError);
@@ -755,17 +752,11 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       changed("session");
       reportSurfaceError(error);
     } else if (body.event === "font" && typeof body.family === "string") {
-      // 글꼴 오류 뒤 글꼴이 적용되면 그 오류 표시를 해제한다.
-      session = { ...session, font: body.family, ...(fontErrorShown ? { error: undefined } : {}) };
+      session = { ...session, font: body.family, fontSystem: body.system === true };
       changed("session");
-      if (fontErrorShown) {
-        fontErrorShown = false;
-        reportSurfaceReady();
-      }
     } else if (body.error) {
       // 오류 응답 처리: {"error":"invalidParams","reason":"...",...}
       // reason 을 버리지 않고 오류에 실어 보낸다.
-      if (body.operation === "font") fontErrorShown = true;
       const message = typeof body.reason === "string" ? `${body.error}: ${body.reason}` : body.error;
       const error = new Error(message);
       session = {

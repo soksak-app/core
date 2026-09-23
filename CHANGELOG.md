@@ -1,5 +1,6 @@
 # Changelog
 
+- F8-18: the terminal no longer bundles a font. `font.family` is a `;`-separated priority list (default `D2Coding;Menlo`); the first installed family is used, missing families are logged instead of reported as errors, and the system fixed-pitch font is used when none is installed. `terminal.session` reports `font` and `fontSystem`. Checked on both rebuilt hosts.
 - F8-14: the terminal defaults to the bundled monospace Hangul font D2Coding (OFL 1.1) and follows a new `font.family` string setting; core settings support `string` values. The sidecar `font` operation recalculates metrics and rejects missing families explicitly, and the page keeps a font error until a font is applied. Checked on both rebuilt hosts. Registered F12 (font zoom), F8-16 (text that ends a Hangul composition waits for the next key), and F8-17 (error lifetime).
 - G1.4-4: the parity audit compares the current inventory count with the current-state sentence in the operations document instead of the completed G1.4 entry, which keeps its original evidence.
 - V5-3: every declared workspace version is 0.0.1; `scripts/check-versions.mjs` enforces it in `pnpm test`, and the two vt-alacritty manifests moved from 0.0.0. Registered V5-6 to re-verify completed terminal, clipboard, protocol, and browser-appearance claims on current builds.

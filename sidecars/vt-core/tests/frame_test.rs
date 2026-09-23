@@ -636,50 +636,28 @@ fn wide_preedit_glyph_is_not_clipped_by_its_continuation_cell() {
     assert!(ink >= reference, "the preedit glyph's second cell lost ink: {ink} of {reference}");
 }
 
-// 글자 잉크의 가장 오른쪽 픽셀 열. 잉크가 없으면 None.
-fn rightmost_ink(frame: &Frame, width: u32, height: u32) -> Option<u32> {
-    (0..width)
-        .rev()
-        .find(|&x| (0..height).filter_map(|y| frame.read_pixel(x, y)).any(|p| p[0] > 100 || p[1] > 100 || p[2] > 100))
-}
-
 #[test]
-fn default_font_draws_hangul_across_its_two_cells() {
-    // 화면 배율 2 에서 잰다. 1 에서는 13pt 셀 폭이 6.5px 라 올림이 글자 폭 비교를 흐린다.
-    let metrics = metrics(13.0, 2.0);
-    let cell = metrics.cell_width as u32;
-    let height = metrics.cell_height as u32;
-    let hidden = CursorRender {
-        visible: false,
-        ..CursorRender::default()
-    };
-    let mut state = screen(4, 1);
-    state.lines[0][0].ch = Some("한".to_string());
-    state.lines[0][0].width = 2;
-    state.lines[0][1].width = 0;
-    let frame = Frame::new(cell * 4, height).expect("frame");
-    frame.draw_with_cursor(&state, &metrics, hidden).expect("hangul");
-    let right = rightmost_ink(&frame, cell * 4, height).expect("the Hangul glyph has ink");
-    assert!(
-        right as f32 >= cell as f32 * 1.75 && right < cell * 2,
-        "the default font must draw Hangul across its two cells: ink ends at {right}px, cell width {cell}px"
-    );
-}
+fn a_font_list_uses_the_first_installed_family_and_the_system_font_when_none_is_installed() {
+    use soksak_sidecar_vt_core::platform::darwin::frame::{default_font, metrics_for, resolve_font_list};
+    let selection = resolve_font_list("No Such Terminal Font Family; Menlo ;Courier").expect("list");
+    assert_eq!(selection.font.family().expect("family"), "Menlo");
+    assert_eq!(selection.skipped, vec!["No Such Terminal Font Family".to_string()]);
+    assert!(!selection.system);
 
-#[test]
-fn a_selected_font_family_changes_cell_metrics_and_a_missing_family_is_rejected() {
-    use soksak_sidecar_vt_core::platform::darwin::frame::{metrics_for, resolve_font};
-    let bundled = resolve_font("D2Coding").expect("the bundled family resolves");
-    assert_eq!(bundled.family().expect("family"), "D2Coding");
-    let menlo = resolve_font("Menlo").expect("Menlo is installed on macOS");
-    assert_eq!(menlo.family().expect("family"), "Menlo");
-    let d2 = metrics_for(&bundled, 13.0, 2.0).expect("D2Coding metrics");
-    let menlo_metrics = metrics_for(&menlo, 13.0, 2.0).expect("Menlo metrics");
+    let courier = resolve_font_list("Courier;Menlo").expect("list");
+    assert_eq!(courier.font.family().expect("family"), "Courier", "the list order decides the family");
+    let menlo = metrics_for(&selection.font, 13.0, 2.0).expect("Menlo metrics");
+    let courier_metrics = metrics_for(&courier.font, 13.0, 2.0).expect("Courier metrics");
     assert_ne!(
-        (d2.cell_width, d2.cell_height),
-        (menlo_metrics.cell_width, menlo_metrics.cell_height),
+        (menlo.cell_width, menlo.cell_height),
+        (courier_metrics.cell_width, courier_metrics.cell_height),
         "different families produce different cell metrics"
     );
-    let error = resolve_font("No Such Terminal Font Family").expect_err("a missing family is an error");
-    assert_eq!(error, "terminal font family is not installed: No Such Terminal Font Family");
+
+    let none = resolve_font_list("No Such Terminal Font Family;Another Missing Family").expect("list");
+    assert!(none.system, "no installed family selects the system fixed-pitch font");
+    assert_eq!(none.skipped.len(), 2);
+    assert_eq!(none.font.family().expect("family"), default_font().family().expect("family"));
+
+    assert_eq!(resolve_font_list(" ; ").err().as_deref(), Some("font.family must name at least one family"));
 }

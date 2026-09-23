@@ -2217,69 +2217,53 @@ test("persistent reconnect restores the session identity before a new raster is 
   assert.equal(session.error, undefined);
 });
 
-test("the font.family setting selects the terminal font at startup and on change", async () => {
+test("the font.family list is sent at startup and on change, and the applied family is reported", async () => {
   FakeResizeObserver.reset();
   const fakeSidecar = createFakeSidecar();
   const fakeExpose = createFakeExpose();
   let notify;
-  let ready = 0;
   const errors = [];
   let values = {
     "cursor.shape": "block", "cursor.blink": "Off", "cursor.interval": 750,
     "cursor.idleTimeout": 5000, "cursor.unfocused": "hollow", "clipboard.program": "deny",
-    "font.family": "Menlo",
+    "font.family": "D2Coding;Menlo",
   };
-  // 사이드카는 font 요청을 확인 이벤트나 오류 응답으로 답한다.
+  // 사이드카는 설치된 첫 family 를 적용하고 확인 이벤트로 알린다. 이 가짜는 D2Coding 이 없다.
   const send = fakeSidecar.send;
   fakeSidecar.send = async (id, body) => {
     await send(id, body);
     if (body.operation !== "font") return;
-    queueMicrotask(() => fakeSidecar.triggerEvent("test-session", body.family === "Missing"
-      ? { error: "invalidParams", reason: "terminal font family is not installed: Missing", operation: "font" }
-      : { ack: true, event: "font", family: body.family }));
+    const applied = body.family.split(";").map((family) => family.trim()).find((family) => family !== "D2Coding") ?? "Menlo";
+    queueMicrotask(() => fakeSidecar.triggerEvent("test-session", { ack: true, event: "font", family: applied, system: false }));
   };
   const settings = { read: () => values, on: (listener) => { notify = listener; return () => { notify = null; }; } };
   const terminal = await startTerminal({
     view: createFakeView(), attachImage: createFakeAttachImage().function,
     sidecar: fakeSidecar, expose: fakeExpose, settings,
-    reportSurfaceError: (error) => errors.push(error.message), reportSurfaceReady: () => { ready++; },
+    reportSurfaceError: (error) => errors.push(error.message),
     window: { TextEncoder: FakeTextEncoder },
   });
   const settle = () => new Promise((resolve) => setImmediate(resolve));
   const fonts = () => fakeSidecar.getMessages().filter(({ body }) => body.operation === "font").map(({ body }) => body.family);
   await settle();
-  assert.deepEqual(fonts(), ["Menlo"], "the configured family is sent at startup");
-  assert.equal(fakeExpose.getStatus("terminal.session").readFn().font, "Menlo");
-  assert.deepEqual(fakeExpose.getStatus("terminal.session").readFn().unsupported, [], "the font acknowledgement is a known event");
+  assert.deepEqual(fonts(), ["D2Coding;Menlo"], "the configured list is sent at startup");
+  let session = fakeExpose.getStatus("terminal.session").readFn();
+  assert.equal(session.font, "Menlo", "the applied family is reported");
+  assert.deepEqual(session.unsupported, [], "the font acknowledgement is a known event");
 
   values = { ...values, "cursor.shape": "beam" };
   notify(values);
   await settle();
-  assert.deepEqual(fonts(), ["Menlo"], "an unchanged family is not sent again");
+  assert.deepEqual(fonts(), ["D2Coding;Menlo"], "an unchanged list is not sent again");
 
-  values = { ...values, "font.family": "Missing" };
+  values = { ...values, "font.family": "Courier;Menlo" };
   notify(values);
   await settle();
-  let session = fakeExpose.getStatus("terminal.session").readFn();
-  assert.equal(session.font, "Menlo", "a rejected family does not replace the applied font");
-  assert.match(session.error ?? "", /not installed: Missing/, "a rejected family is an observable error");
-  assert.equal(errors.length, 1, "the rejection is reported on the surface");
-  fakeSidecar.triggerEvent("test-session", { event: "state", sessionId: "s1", cols: 80, rows: 24, cellWidth: 8, cellHeight: 16 });
-  await settle();
-  assert.match(fakeExpose.getStatus("terminal.session").readFn().error ?? "", /not installed: Missing/,
-    "a later state event does not hide the font error that the surface still shows");
-  fakeSidecar.triggerEvent("test-session", { ack: true, event: "theme", mode: "dark" });
-  fakeSidecar.triggerEvent("test-session", { event: "session", sessionId: "s2" });
-  await settle();
-  assert.match(fakeExpose.getStatus("terminal.session").readFn().error ?? "", /not installed: Missing/,
-    "theme and session events do not hide the font error");
-
-  values = { ...values, "font.family": "D2Coding" };
-  notify(values);
-  await settle();
+  assert.deepEqual(fonts(), ["D2Coding;Menlo", "Courier;Menlo"]);
   session = fakeExpose.getStatus("terminal.session").readFn();
-  assert.equal(session.font, "D2Coding");
-  assert.equal(session.error, undefined, "applying a font clears the font error");
-  assert.equal(ready, 1, "the surface returns to ready after the font error is resolved");
+  assert.equal(session.font, "Courier");
+  assert.equal(session.fontSystem, false);
+  assert.equal(session.error, undefined, "a missing family is not an error");
+  assert.deepEqual(errors, []);
   await terminal.dispose();
 });

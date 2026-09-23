@@ -550,6 +550,8 @@ enum SurfaceCommand {
     },
     Font {
         font: std::sync::Arc<crate::platform::TerminalFont>,
+        system: bool,
+        skipped: Vec<String>,
     },
     Cursor {
         policy: CursorPolicy,
@@ -1744,7 +1746,7 @@ async fn surface_task(
                         let response = json!({"surface": surface_id, "body": {"ack": true, "event": "theme", "mode": mode}});
                         if output_tx.send(response.to_string()).await.is_err() { return; }
                     }
-                    SurfaceCommand::Font { font } => {
+                    SurfaceCommand::Font { font, system, skipped } => {
                         let family = match font.family() {
                             Ok(family) => family,
                             Err(reason) => {
@@ -1798,7 +1800,7 @@ async fn surface_task(
                         } else {
                             terminal_font = font;
                         }
-                        let response = json!({"surface": surface_id, "body": {"ack": true, "event": "font", "family": family}});
+                        let response = json!({"surface": surface_id, "body": {"ack": true, "event": "font", "family": family, "system": system, "skipped": skipped}});
                         if output_tx.send(response.to_string()).await.is_err() { return; }
                     }
                     SurfaceCommand::Cursor { policy } => {
@@ -2623,12 +2625,20 @@ where
                             }
                             "font" => {
                                 let resolved = match body.get("family").and_then(Value::as_str) {
-                                    Some(family) if !family.is_empty() => crate::platform::resolve_font(family),
-                                    _ => Err("font.family must be a non-empty string".to_string()),
+                                    Some(list) => crate::platform::resolve_font_list(list),
+                                    None => Err("font.family must be a string".to_string()),
                                 };
                                 match resolved {
-                                    Ok(font) => {
-                                        if tx.send(SurfaceCommand::Font { font }).await.is_err() {
+                                    Ok(selection) => {
+                                        // 설치되어 있지 않은 family 는 오류가 아니라 로그에 남긴다.
+                                        for family in &selection.skipped {
+                                            eprintln!("terminal font family is not installed: {family}");
+                                        }
+                                        if selection.system {
+                                            eprintln!("no listed terminal font family is installed; using the system fixed-pitch font");
+                                        }
+                                        let (font, system, skipped) = (selection.font, selection.system, selection.skipped);
+                                        if tx.send(SurfaceCommand::Font { font, system, skipped }).await.is_err() {
                                             break;
                                         }
                                     }

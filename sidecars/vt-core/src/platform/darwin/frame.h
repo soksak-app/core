@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <string.h>
 
-// 터미널 글꼴. 번들 글꼴 데이터나 설치된 글꼴 이름으로 만든다.
+// 터미널 글꼴. 설치된 글꼴 이름이나 시스템 고정폭 글꼴로 만든다.
 struct FrameFont;
 typedef struct FrameFont FrameFont;
 
@@ -82,8 +82,8 @@ int frame_draw_with_inline_images(Frame *frame, Screen *screen, Metrics *metrics
 // Free the frame and release IOSurface
 void frame_drop(Frame *frame);
 
-// 글꼴 데이터(TrueType 등)로 글꼴을 만든다. 데이터가 글꼴이 아니면 NULL 을 반환한다.
-FrameFont *frame_font_from_data(const uint8_t *data, uint32_t length);
+// 사용자의 시스템 고정폭 글꼴을 만든다. 만들지 못하면 NULL 을 반환한다.
+FrameFont *frame_font_system_monospace(void);
 // 설치된 글꼴 가운데 family 이름이 정확히 같은 글꼴을 만든다. 없으면 NULL 을 반환한다.
 FrameFont *frame_font_named(const char *family);
 void frame_font_drop(FrameFont *font);

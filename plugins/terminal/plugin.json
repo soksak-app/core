@@ -56,8 +56,8 @@
     },
     "font.family": {
       "type": "string",
-      "default": "D2Coding",
-      "maxLength": 128
+      "default": "D2Coding;Menlo",
+      "maxLength": 256
     }
   },
   "sidecars": [
@@ -94,6 +94,9 @@
             },
             "font": {
               "type": "string"
+            },
+            "fontSystem": {
+              "type": "boolean"
             },
             "cols": {
               "type": "integer"

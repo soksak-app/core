@@ -83,7 +83,7 @@ extern "C" {
     ) -> i32;
     fn frame_drop(frame: *mut CFrame);
     fn frame_metrics(font: *const CFrameFont, font_size: f64, scale: f64) -> CMetrics;
-    fn frame_font_from_data(data: *const u8, length: u32) -> *mut CFrameFont;
+    fn frame_font_system_monospace() -> *mut CFrameFont;
     fn frame_font_named(family: *const std::ffi::c_char) -> *mut CFrameFont;
     fn frame_font_drop(font: *mut CFrameFont);
     fn frame_font_family(font: *const CFrameFont) -> *mut std::ffi::c_char;
@@ -467,7 +467,7 @@ impl Drop for Frame {
     }
 }
 
-/// 터미널 글꼴. 번들 글꼴 데이터나 설치된 글꼴 이름으로 만든 CoreText 글꼴 설명이다.
+/// 터미널 글꼴. 설치된 글꼴 이름이나 시스템 고정폭 글꼴로 만든 CoreText 글꼴 설명이다.
 pub struct TerminalFont {
     ptr: *mut CFrameFont,
 }
@@ -476,32 +476,23 @@ pub struct TerminalFont {
 unsafe impl Send for TerminalFont {}
 unsafe impl Sync for TerminalFont {}
 
-/// 기본 터미널 글꼴. 한글과 라틴 문자가 모두 고정폭인 D2Coding(SIL Open Font License 1.1)이다.
-static BUNDLED_FONT: &[u8] = include_bytes!("../../../fonts/D2Coding.ttf");
-
 impl TerminalFont {
-    /// 사이드카에 포함한 기본 글꼴.
-    pub fn bundled() -> Result<Self, String> {
-        let ptr = unsafe { frame_font_from_data(BUNDLED_FONT.as_ptr(), BUNDLED_FONT.len() as u32) };
+    /// 사용자의 시스템 고정폭 글꼴.
+    pub fn system_monospace() -> Result<Self, String> {
+        let ptr = unsafe { frame_font_system_monospace() };
         if ptr.is_null() {
-            return Err("the bundled terminal font could not be loaded".to_string());
+            return Err("the system fixed-pitch font is unavailable".to_string());
         }
         Ok(Self { ptr })
     }
 
-    /// 설치된 글꼴 가운데 family 이름이 정확히 같은 글꼴. 없으면 대체하지 않고 오류를 반환한다.
-    pub fn installed(family: &str) -> Result<Self, String> {
-        let name = std::ffi::CString::new(family)
-            .map_err(|_| "terminal font family contains NUL".to_string())?;
+    /// 설치된 글꼴 가운데 family 이름이 정확히 같은 글꼴. 없으면 None 이다.
+    pub fn installed(family: &str) -> Option<Self> {
+        let name = std::ffi::CString::new(family).ok()?;
         let ptr = unsafe { frame_font_named(name.as_ptr()) };
-        if ptr.is_null() {
-            return Err(format!("terminal font family is not installed: {family}"));
-        }
-        Ok(Self { ptr })
+        (!ptr.is_null()).then_some(Self { ptr })
     }
-}
 
-impl TerminalFont {
     /// 글꼴의 family 이름.
     pub fn family(&self) -> Result<String, String> {
         let pointer = unsafe { frame_font_family(self.ptr) };
@@ -512,15 +503,6 @@ impl TerminalFont {
         unsafe { free(pointer as *mut std::ffi::c_void) };
         Ok(family)
     }
-}
-
-/// family 이름의 터미널 글꼴. 번들 글꼴의 family 이름과 같으면 번들 글꼴이고, 아니면 설치된 글꼴이다.
-pub fn resolve_font(family: &str) -> Result<std::sync::Arc<TerminalFont>, String> {
-    let bundled = default_font();
-    if bundled.family()? == family {
-        return Ok(bundled);
-    }
-    Ok(std::sync::Arc::new(TerminalFont::installed(family)?))
 }
 
 impl std::fmt::Debug for TerminalFont {
@@ -538,23 +520,53 @@ impl Drop for TerminalFont {
     }
 }
 
+/// `;` 로 이은 family 우선순위 목록에서 고른 글꼴.
+pub struct FontSelection {
+    pub font: std::sync::Arc<TerminalFont>,
+    /// 설치되어 있지 않아 건너뛴 family.
+    pub skipped: Vec<String>,
+    /// 목록의 family 가 하나도 설치되어 있지 않아 시스템 고정폭 글꼴을 썼는지.
+    pub system: bool,
+}
+
+/// family 목록에서 설치된 첫 family 를 고른다. 하나도 없으면 시스템 고정폭 글꼴이다.
+/// 목록에 family 가 없으면 오류다.
+pub fn resolve_font_list(list: &str) -> Result<FontSelection, String> {
+    let families = list
+        .split(';')
+        .map(str::trim)
+        .filter(|family| !family.is_empty())
+        .collect::<Vec<_>>();
+    if families.is_empty() {
+        return Err("font.family must name at least one family".to_string());
+    }
+    let mut skipped = Vec::new();
+    for family in families {
+        if let Some(font) = TerminalFont::installed(family) {
+            return Ok(FontSelection { font: std::sync::Arc::new(font), skipped, system: false });
+        }
+        skipped.push(family.to_string());
+    }
+    Ok(FontSelection { font: default_font(), skipped, system: true })
+}
+
 static DEFAULT_FONT: std::sync::OnceLock<std::sync::Arc<TerminalFont>> = std::sync::OnceLock::new();
 
-/// 번들 기본 글꼴을 읽는다. 서비스는 시작할 때 호출하며, 읽지 못하면 빌드 결함이므로 시작하지 않는다.
+/// 시스템 고정폭 글꼴을 읽는다. 서비스는 시작할 때 호출하며, 읽지 못하면 시작하지 않는다.
 pub fn load_default_font() -> Result<(), String> {
     if DEFAULT_FONT.get().is_none() {
-        let font = std::sync::Arc::new(TerminalFont::bundled()?);
+        let font = std::sync::Arc::new(TerminalFont::system_monospace()?);
         DEFAULT_FONT.get_or_init(|| font);
     }
     Ok(())
 }
 
-/// 기본 글꼴. 서비스는 시작할 때 load_default_font 로 먼저 읽는다.
+/// font 요청 전의 글꼴. 시스템 고정폭 글꼴이다. 서비스는 시작할 때 load_default_font 로 먼저 읽는다.
 pub fn default_font() -> std::sync::Arc<TerminalFont> {
     DEFAULT_FONT
         .get_or_init(|| {
             std::sync::Arc::new(
-                TerminalFont::bundled().expect("the bundled terminal font must load"),
+                TerminalFont::system_monospace().expect("the system fixed-pitch font must load"),
             )
         })
         .clone()
@@ -569,7 +581,7 @@ pub struct Metrics {
 
 /// 기본 글꼴의 메트릭.
 pub fn metrics(font_size: f32, scale: f32) -> Metrics {
-    metrics_for(&default_font(), font_size, scale).expect("the bundled terminal font has cell metrics")
+    metrics_for(&default_font(), font_size, scale).expect("the system fixed-pitch font has cell metrics")
 }
 
 /// font 의 메트릭. 셀 폭이나 높이를 잴 수 없는 글꼴은 오류다.
