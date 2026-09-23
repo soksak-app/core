@@ -100,7 +100,7 @@ fn host_declarations() -> Value {
             {"name": "host.hit", "description": "Returns the owner of a point in window coordinates.",
              "params": {"type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "number"}}},
              "result": {"type": "object", "properties": {
-                 "kind": {"type": "string", "enum": ["page", "surface", "document", "native"]},
+                 "kind": {"type": "string", "enum": ["page", "document", "native"]},
                  "surface": {"type": "string"}, "document": {"type": "string"},
                  "identifier": {"type": "string"}}}},
             {"name": "host.quit", "description": "Requests normal application termination, including pending saves.",
@@ -1080,20 +1080,11 @@ fn hit(window: &Window, x: f64, y: f64) -> Result<Value, Failure> {
     let found = on_main(window, move || platform.hit(handle, x, y)).map_err(internal)?;
     let context = window_data(window).map_err(internal)?;
     let documents = context.documents.names();
-    let owner = {
-        let views = context.views.0.lock().map_err(internal)?;
-        found
-            .chain
-            .iter()
-            .find_map(|view| match documents.get(view) {
-                Some((surface, document)) => {
-                    Some(json!({"kind": "document", "surface": surface, "document": document}))
-                }
-                None => views
-                    .get(view)
-                    .map(|surface| json!({"kind": "surface", "surface": surface})),
-            })
-    };
+    let owner = found.chain.iter().find_map(|view| {
+        documents
+            .get(view)
+            .map(|(surface, document)| json!({"kind": "document", "surface": surface, "document": document}))
+    });
     if let Some(owner) = owner {
         return Ok(owner);
     }

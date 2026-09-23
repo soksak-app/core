@@ -126,7 +126,7 @@ var hostCommands = map[string]hostEntry{
 		Params: map[string]any{"type": "object", "properties": map[string]any{
 			"x": map[string]any{"type": "number"}, "y": map[string]any{"type": "number"}}},
 		Result: map[string]any{"type": "object", "properties": map[string]any{
-			"kind":       map[string]any{"type": "string", "enum": []string{"page", "surface", "document", "native"}},
+			"kind":       map[string]any{"type": "string", "enum": []string{"page", "document", "native"}},
 			"surface":    map[string]any{"type": "string"},
 			"document":   map[string]any{"type": "string"},
 			"identifier": map[string]any{"type": "string"}}}},
@@ -1039,10 +1039,8 @@ func (s *Surfaces) hit(x, y float64) (map[string]any, error) {
 		Main       bool   `json:"main"`
 		Identifier string `json:"identifier"`
 	}
-	var named map[uint64]string
 	var documents map[uint64]DocumentKey
 	err := native(func() (string, error) { return system.WindowHit(s.window.NativeWindow(), x, y) }, &got, func() {
-		named = s.viewNames()
 		documents = s.documents.Names()
 	})
 	if err != nil {
@@ -1052,8 +1050,6 @@ func (s *Surfaces) hit(x, y float64) (map[string]any, error) {
 	case got.View != 0 && documents[got.View].Surface != "":
 		key := documents[got.View]
 		return map[string]any{"kind": "document", "surface": key.Surface, "document": key.Name}, nil
-	case got.View != 0 && named[got.View] != "":
-		return map[string]any{"kind": "surface", "surface": named[got.View]}, nil
 	case got.Main:
 		return map[string]any{"kind": "page"}, nil
 	default:

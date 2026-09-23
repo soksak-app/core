@@ -37,7 +37,8 @@ async function clickLastPixel(s, surface, scale) {
   const { state, frame } = await geometry(s, surface, scale);
   const x = frame.width / 2, y = frame.height - 0.5 / scale;
   const point = { x: frame.x + x, y: frame.y + y };
-  assert.deepEqual(await s.run("host.hit", point), { kind: "surface", surface });
+  // DOM 표면은 메인 페이지에 마운트되므로 그 점의 소유자는 페이지다.
+  assert.deepEqual(await s.run("host.hit", point), { kind: "page" });
   const seen = (await s.get("core.surface.input", surface)).at(-1)?.sequence ?? 0;
   const fresh = (list) => list.filter((e) => e.sequence > seen);
   await s.pointer(point.x, point.y, "down");

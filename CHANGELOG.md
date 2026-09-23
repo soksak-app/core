@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-11: `host.hit` no longer defines the unreachable `surface` kind; points of DOM surfaces and image regions are `page`. The branches are removed from both hosts and the window check follows; it passes on both hosts.
 - V5-14: the saved layout check no longer assumes that the shell card has two tabs; it requires every tab except the dropped first one to remain. It passes on both hosts.
 - V5-13: the projects specification states that a common-only setting requested in the project scope is rejected with -32602, and the window check that still required the earlier -32000 follows it; it passes on both hosts.
 - F8-6-1: `host.window.presented` and command settling wait for the web content process to commit its rendering (`_doAfterNextPresentationUpdate:`) before they report the display time; previously they reported a time before the last DOM change was drawn, so drag recordings missed the final return. Both drag e2e cases pass 3 runs in a row on both hosts.
