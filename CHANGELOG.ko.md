@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- G2-3-2: Wails 문서 요청 테스트가 `documents.request.url-and-action-default-empty`를 다룬다.
 - G2-3-5-1: Wails 호스트가 `null` 페이지 노출 목록에서 nil 맵 panic을 내지 않고 -32603으로 거부한다.
 - G2-3-4: Wails 호스트는 `surface`가 `null`, 빈 값, 문자열이 아닌 노출 응답을 메인 문서 응답으로 처리하지 않고 거부하며, Wails 테스트가 응답 대상 사례를 다룬다.
 - G2-3-5: Wails 노출 중계가 Tauri 중계와 같은 구조의 공개 `Relay[T]`가 되었고, Wails 테스트가 노출 목록과 중계 계약 사례를 다룬다. `make host-contract-check`는 Wails에 대해 205개 중 188개를 보고한다.

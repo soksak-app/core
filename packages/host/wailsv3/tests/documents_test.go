@@ -28,12 +28,15 @@ func TestDocumentRequestsBelongToTheCallingSurface(t *testing.T) {
 	}
 }
 
-// contract: documents.request.ignores-placement-fields
+// contract: documents.request.ignores-placement-fields, documents.request.url-and-action-default-empty
 func TestDocumentRequestDoesNotExposeIndividualPlacement(t *testing.T) {
 	var req host.DocumentRequest
 	body := `{"surface":"tab-1","document":"page","left":1.5,"top":2,"right":3,"bottom":4,"visible":true}`
 	if err := json.Unmarshal([]byte(body), &req); err != nil {
 		t.Fatal(err)
+	}
+	if req.URL != "" || req.Action != "" {
+		t.Fatalf("url %q action %q, want both empty", req.URL, req.Action)
 	}
 	want := host.DocumentRequest{Surface: "tab-1", Document: "page"}
 	if req != want {
