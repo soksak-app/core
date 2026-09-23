@@ -209,8 +209,8 @@ type Platform interface {
 	// PresentImage 는 외부 IOSurface 를 표시한다. token_id 는 IOSurface 의 전역 ID,
 	// nonce 는 논스 대조용 16바이트 데이터, width·height 는 장치 픽셀 단위의 크기이고,
 	// scale 은 이미지가 만들어진 배율이다 (contentsScale 로 사용).
-	// 성공하면 true, 찾지 못했거나 크기가 맞지 않으면 false 를 반환한다.
-	PresentImage(image unsafe.Pointer, token_id uint32, nonce [16]byte, width, height, scale float64) bool
+	// 실패하면 네이티브 거부 이유(notFound, forbidden, size, unsupported 등)를 오류 문자열로 반환한다.
+	PresentImage(image unsafe.Pointer, token_id uint32, nonce [16]byte, width, height, scale float64) error
 	// FocusImage 는 영역을 첫 응답자로 만들고 포커스 이벤트를 보낸다.
 	FocusImage(image unsafe.Pointer)
 	// CaretImage 는 캐럿(입력 커서) 위치를 받아 둔다.

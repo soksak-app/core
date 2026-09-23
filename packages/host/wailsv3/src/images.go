@@ -120,12 +120,21 @@ func (i *Images) changedLocked() {
 	i.changed = make(chan struct{})
 }
 
-// BeginGeneration 은 새 표면 문서가 시작될 때 이전 프레임과 구별할 세대를 만든다.
+// BeginGeneration 은 새 표면 문서가 시작될 때 이전 프레임과 구별할 세대를 만든다. 표면에 남아 있는 그림
+// 영역도 새 세대로 옮기고 구성을 지우므로, 영역을 닫기 전에 대기 중이던 이전 세대의 프레임은 거부된다.
 func (i *Images) BeginGeneration(surface string) uint64 {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 	i.nextGeneration++
 	i.generations[surface] = i.nextGeneration
+	for key, state := range i.states {
+		if key.Surface == surface {
+			state.Generation = i.nextGeneration
+			state.Configured = false
+			state.PresentationError = ""
+			state.LastSequence = 0
+		}
+	}
 	return i.nextGeneration
 }
 
@@ -606,9 +615,24 @@ func AfterPresent(ok bool, reason, name string, generation, raster uint64, seque
 	}
 }
 
-// HandleEnvelope 는 이미지 봉투를 처리한다. 메인 스레드에서 실행할 작업과 응답 전송 방식을 인자로 받는다.
-// 봉투를 처리했으면 true, 아니면 false를 반환한다.
-func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, onMain func(func() bool) bool, sendResponse func(string, map[string]interface{}) error) bool {
+// presentationReason 은 메인 스레드 표시 실패를 응답 이유로 바꾼다. 메인 스레드 작업 전에 떼어진 프레임
+// (notAttached)은 표시 실패가 아니라 무효화된 프레임이므로 stale 이다. 알 수 없는 이유는 presentFailed 다.
+func presentationReason(reason string) string {
+	switch reason {
+	case "stale", "notAttached":
+		return "stale"
+	case "notFound", "forbidden", "size", "scale", "unsupported":
+		return reason
+	default:
+		return "presentFailed"
+	}
+}
+
+// HandleEnvelope 는 이미지 봉투를 처리한다. 메인 스레드에서 실행할 작업, 응답 전송 방식, 표시 실패 뒤의
+// 복구를 인자로 받는다. recoverFrame 은 현재 프레임이 네이티브 이유로 실패한 뒤 그 이유와 함께 호출된다
+// (notFound 는 표시할 IOSurface 가 없으므로 새 래스터 구성을 요청한다). 봉투를 처리했으면 true 를 반환한다.
+func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, onMain func(func() error) error,
+	sendResponse func(string, map[string]interface{}) error, recoverFrame func(reason string) error) bool {
 	decision := Decide(bodyBytes, sender, surface, images)
 
 	switch d := decision.(type) {
@@ -632,29 +656,30 @@ func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, on
 			return true
 		}
 
-		attempted := false
-		staleReason := ""
-		ok := onMain(func() bool {
-			attempted = true
-			if staleReason = images.FrameStatus(key, d.Generation, d.Raster, d.Sequence); staleReason != "" {
-				return false
+		err = onMain(func() error {
+			if status := images.FrameStatus(key, d.Generation, d.Raster, d.Sequence); status != "" {
+				return errors.New(status)
 			}
 			width, height, scale, presentable := system.RasterImage(handle)
 			if !presentable || width != d.Width || height != d.Height || math.Abs(scale-d.Scale) > 0.000001 {
-				staleReason = "stale"
-				return false
+				return errors.New("stale")
 			}
 			// 플랫폼에 이미지를 표시한다
 			return system.PresentImage(handle, d.ID, d.Nonce, float64(d.Width), float64(d.Height), d.Scale)
 		})
 
-		if !ok {
-			reason := "presentFailed"
-			if attempted && staleReason != "" {
-				reason = staleReason
-			}
-			if reason != "stale" {
+		if err != nil {
+			reason := presentationReason(err.Error())
+			if reason == "stale" {
+				log.Printf("image frame invalidated before native presentation: surface=%s name=%s generation=%d raster=%d sequence=%d token=%d reason=%v",
+					surface, d.Name, d.Generation, d.Raster, d.Sequence, d.ID, err)
+			} else {
+				log.Printf("image present on main thread error: surface=%s name=%s generation=%d raster=%d sequence=%d token=%d reason=%v",
+					surface, d.Name, d.Generation, d.Raster, d.Sequence, d.ID, err)
 				images.MarkPresentationFailed(key, d.Generation, d.Raster, d.Sequence, reason)
+				if err := recoverFrame(reason); err != nil {
+					log.Printf("image recovery failed: surface=%s name=%s reason=%s error=%v", surface, d.Name, reason, err)
+				}
 			}
 			response := AfterPresent(false, reason, d.Name, d.Generation, d.Raster, d.Sequence)
 			if err := sendResponse(d.Name, response); err != nil {

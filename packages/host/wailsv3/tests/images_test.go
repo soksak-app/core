@@ -2,6 +2,7 @@ package host_test
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -103,7 +104,7 @@ func echoSidecarsForImages(t *testing.T) (*host.Sidecars, string) {
 	return sidecars, record
 }
 
-// contract: images.envelope.rejects-unattached-image
+// contract: images.envelope.rejects-unattached-image, images.envelope.refusal-echoes-name-and-sequence
 func TestUnattachedImageIsRefused(t *testing.T) {
 	images := host.NewImages()
 	nonce := "AAAAAAAAAAAAAAAAAAAAAA==" // 16 zero bytes
@@ -135,6 +136,10 @@ func TestUnattachedImageIsRefused(t *testing.T) {
 	imageData := reply.JSON["image"].(map[string]interface{})
 	if !strings.Contains(imageData["error"].(string), "notAttached") {
 		t.Fatalf("expected notAttached error, got %v", imageData["error"])
+	}
+	// 거절 응답은 봉투의 이름과 순번을 그대로 돌려준다.
+	if reply.Name != "view" || imageData["name"] != "view" || imageData["sequence"] != 1 {
+		t.Fatalf("refusal did not echo name and sequence: reply name %q, image %v", reply.Name, imageData)
 	}
 }
 
@@ -183,7 +188,7 @@ func TestImageFromAnotherSidecarIsRefused(t *testing.T) {
 	}
 }
 
-// contract: images.envelope.presents-attached-current-frame
+// contract: images.envelope.presents-attached-current-frame, images.envelope.present-carries-nonce-scale-generation-raster
 func TestAttachedImageIsPresented(t *testing.T) {
 	images := host.NewImages()
 	key := host.ImageKey{Surface: "tab-1", Name: "view"}
@@ -194,9 +199,10 @@ func TestAttachedImageIsPresented(t *testing.T) {
 		t.Fatalf("reserve failed: %v", err)
 	}
 	images.Set(key, unsafe.Pointer(&a))
-	configureImage(t, images, key, 800, 600, 2.0)
+	configured := configureImage(t, images, key, 800, 600, 2.0)
 
-	nonce := "AAAAAAAAAAAAAAAAAAAAAA=="
+	// 0부터 15까지의 16바이트다. 0이 아닌 값이어야 nonce 복사를 구별할 수 있다.
+	nonce := "AAECAwQFBgcICQoLDA0ODw=="
 	body := map[string]any{
 		"image": map[string]any{
 			"name": "view",
@@ -234,6 +240,16 @@ func TestAttachedImageIsPresented(t *testing.T) {
 	}
 	if present.Sequence != 1 {
 		t.Fatalf("expected sequence 1, got %d", present.Sequence)
+	}
+	if present.Nonce != [16]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15} {
+		t.Fatalf("expected nonce 0..15, got %v", present.Nonce)
+	}
+	if present.Scale != 2.0 {
+		t.Fatalf("expected scale 2, got %v", present.Scale)
+	}
+	if present.Generation != configured.Generation || present.Raster != configured.Raster {
+		t.Fatalf("expected generation %d raster %d, got generation %d raster %d",
+			configured.Generation, configured.Raster, present.Generation, present.Raster)
 	}
 }
 
@@ -304,7 +320,7 @@ func TestOnlyTheCurrentGenerationRasterAndSequenceCanBePresented(t *testing.T) {
 	}
 }
 
-// contract: images.wait.blocks-before-first-frame, images.wait.releases-after-current-frame-presented, images.wait.reconfigure-clears-presented, images.wait.hidden-image-does-not-block, images.wait.hidden-surface-does-not-block, images.wait.ended-generation-does-not-block
+// contract: images.wait.blocks-before-first-frame, images.wait.releases-after-current-frame-presented, images.wait.successful-handle-replies-consumed, images.wait.newer-sequence-rearms-wait, images.wait.reconfigure-clears-presented, images.wait.hidden-image-does-not-block, images.wait.hidden-surface-does-not-block, images.wait.ended-generation-does-not-block
 func TestPresentationWaitTracksTheVisibleCurrentRaster(t *testing.T) {
 	images := host.NewImages()
 	key := host.ImageKey{Surface: "tab-1", Name: "view"}
@@ -318,12 +334,29 @@ func TestPresentationWaitTracksTheVisibleCurrentRaster(t *testing.T) {
 	if images.WaitCurrent(0) {
 		t.Fatal("visible raster passed before a frame was presented")
 	}
-	if _, ok := host.Decide(configuredEnvelope(t, first, 1), "sidecar-a", key.Surface, images).(*host.Present); !ok {
-		t.Fatal("current frame was rejected")
+	// 메인 스레드 표시가 성공한 것으로 응답하는 onMain 으로 봉투를 처리한다.
+	var response map[string]interface{}
+	if !host.HandleEnvelope(configuredEnvelope(t, first, 1), "sidecar-a", key.Surface, images,
+		func(func() error) error { return nil },
+		func(_ string, value map[string]interface{}) error {
+			response = value
+			return nil
+		},
+		noRecovery(t),
+	) {
+		t.Fatal("current frame was not handled")
 	}
-	images.MarkPresented(key, first.Generation, first.Raster, 1)
+	if _, ok := response["image"].(map[string]interface{})["consumed"].(map[string]interface{}); !ok {
+		t.Fatalf("successful presentation did not reply consumed: %v", response)
+	}
 	if !images.WaitCurrent(0) {
 		t.Fatal("presented current raster did not release the wait")
+	}
+	if _, ok := host.Decide(configuredEnvelope(t, first, 2), "sidecar-a", key.Surface, images).(*host.Present); !ok {
+		t.Fatal("newer sequence on the current raster was rejected")
+	}
+	if images.WaitCurrent(0) {
+		t.Fatal("a newer sequence on the same raster did not rearm the wait")
 	}
 
 	second := configureImage(t, images, key, 900, 600, 2.0)
@@ -420,7 +453,7 @@ func TestFrameThatBecomesStaleBeforeMainThreadPresentationIsRejected(t *testing.
 	var response map[string]interface{}
 
 	host.HandleEnvelope(configuredEnvelope(t, first, 1), "sidecar-a", key.Surface, images,
-		func(work func() bool) bool {
+		func(work func() error) error {
 			if _, err := images.ConfigureRaster(key, 900, 600, 2.0, true); err != nil {
 				t.Fatal(err)
 			}
@@ -430,6 +463,7 @@ func TestFrameThatBecomesStaleBeforeMainThreadPresentationIsRejected(t *testing.
 			response = value
 			return nil
 		},
+		noRecovery(t),
 	)
 
 	if got := response["image"].(map[string]interface{})["error"]; got != "stale" {
@@ -828,13 +862,19 @@ func TestPresentationFailureIsReported(t *testing.T) {
 	var receivedImageName string
 	var receivedResponse map[string]interface{}
 	handled := host.HandleEnvelope(bodyBytes, "sidecar-a", "tab-1", images,
-		func(work func() bool) bool {
-			// 표시 실패를 시뮬레이션 - work 호출 없이 false 반환
-			return false
+		func(func() error) error {
+			// 메인 스레드 작업을 실행하지 못한 표시 실패다.
+			return errors.New("main thread unavailable")
 		},
 		func(imageName string, response map[string]interface{}) error {
 			receivedImageName = imageName
 			receivedResponse = response
+			return nil
+		},
+		func(reason string) error {
+			if reason != "presentFailed" {
+				t.Errorf("recovery reason %q, want presentFailed", reason)
+			}
 			return nil
 		},
 	)
@@ -882,5 +922,98 @@ func TestPresentationFailureIsReported(t *testing.T) {
 	}
 	if err := images.WaitCurrentError(0); err == nil || err.Error() != "presentFailed" {
 		t.Fatalf("expected native presentation failure, got %v", err)
+	}
+}
+
+// attachImage 는 사이드카 sidecar-a 의 그림 영역을 key 에 연결한다.
+func attachImage(t *testing.T, images *host.Images, key host.ImageKey) {
+	t.Helper()
+	var handle int
+	owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: newFakeImageOwner("")}
+	if err := images.Reserve(key, owner); err != nil || !images.Set(key, unsafe.Pointer(&handle)) {
+		t.Fatalf("attach %v: %v", key, err)
+	}
+}
+
+// noRecovery 는 표시 실패가 없어야 하는 사례에서 복구 호출을 실패로 기록한다.
+func noRecovery(t *testing.T) func(string) error {
+	return func(reason string) error {
+		t.Errorf("unexpected recovery for %q", reason)
+		return nil
+	}
+}
+
+// contract: images.transfer.new-generation-invalidates-queued-old-frame
+func TestBeginningANewGenerationInvalidatesAQueuedOldFrame(t *testing.T) {
+	images := host.NewImages()
+	key := host.ImageKey{Surface: "tab-queued", Name: "view"}
+	firstGeneration := images.BeginGeneration(key.Surface)
+	attachImage(t, images, key)
+	first := configureImage(t, images, key, 800, 600, 2.0)
+	if first.Generation != firstGeneration {
+		t.Fatalf("configured generation %d, want %d", first.Generation, firstGeneration)
+	}
+	if _, ok := host.Decide(configuredEnvelope(t, first, 1), "sidecar-a", key.Surface, images).(*host.Present); !ok {
+		t.Fatal("the current frame was rejected")
+	}
+	if next := images.BeginGeneration(key.Surface); next <= firstGeneration {
+		t.Fatalf("next generation %d is not after %d", next, firstGeneration)
+	}
+	reply, ok := host.Decide(configuredEnvelope(t, first, 2), "sidecar-a", key.Surface, images).(*host.Reply)
+	if !ok {
+		t.Fatal("a queued frame of the old generation was not invalidated")
+	}
+	if image := reply.JSON["image"].(map[string]interface{}); image["error"] != "notAttached" {
+		t.Fatalf("old generation frame answered %v, want notAttached", image)
+	}
+}
+
+// contract: images.present.rejects-frame-detached-during-main-thread
+func TestFrameDetachedBeforeMainThreadPresentationIsReportedAsStale(t *testing.T) {
+	images := host.NewImages()
+	key := host.ImageKey{Surface: "tab-1", Name: "view"}
+	attachImage(t, images, key)
+	first := configureImage(t, images, key, 800, 600, 2.0)
+	var response map[string]interface{}
+	host.HandleEnvelope(configuredEnvelope(t, first, 1), "sidecar-a", key.Surface, images,
+		func(work func() error) error {
+			images.RemoveSurface(key.Surface)
+			return work()
+		},
+		func(_ string, value map[string]interface{}) error {
+			response = value
+			return nil
+		},
+		noRecovery(t),
+	)
+	if image, _ := response["image"].(map[string]interface{}); image == nil || image["error"] != "stale" {
+		t.Fatalf("detached frame answered %v, want stale", response)
+	}
+}
+
+// contract: images.present.missing-native-surface-requests-reconfiguration
+func TestMissingNativeSurfaceRequestsAFreshRasterConfiguration(t *testing.T) {
+	images := host.NewImages()
+	key := host.ImageKey{Surface: "tab-1", Name: "view"}
+	attachImage(t, images, key)
+	first := configureImage(t, images, key, 800, 600, 2.0)
+	var recovered *host.ImageConfigure
+	host.HandleEnvelope(configuredEnvelope(t, first, 1), "sidecar-a", key.Surface, images,
+		func(func() error) error { return errors.New("notFound") },
+		func(string, map[string]interface{}) error { return nil },
+		func(reason string) error {
+			if reason != "notFound" {
+				t.Errorf("recovery reason %q, want notFound", reason)
+			}
+			next, err := images.ConfigureRaster(key, 800, 600, 2.0, true)
+			recovered = next
+			return err
+		},
+	)
+	if recovered == nil || recovered.Raster != first.Raster {
+		t.Fatalf("recovery configuration %+v, want raster %d again", recovered, first.Raster)
+	}
+	if images.CurrentPresented() {
+		t.Fatal("the failed raster is reported as presented")
 	}
 }

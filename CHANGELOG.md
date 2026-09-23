@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G2-3-6: Wails now invalidates a queued frame of the previous generation, reports a frame detached before main-thread presentation as `stale`, and requests a fresh raster after a `notFound` native rejection, as the Tauri host does; Wails tests cover all image contract cases and `make host-contract-check` reports 205 of 205 for Wails.
 - G2-3-1: the Wails clipboard read checks are the exported `ValidateClipboardRead`, and Wails tests cover the empty PNG payload and the three read cases.
 - G2-3-7: Wails sidecar tests cover a non-canonical persistent configuration directory, the hello protocol, and the close-owner then shutdown order.
 - G2-3-2: the Wails document request test covers `documents.request.url-and-action-default-empty`.

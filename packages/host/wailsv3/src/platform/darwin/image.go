@@ -60,8 +60,16 @@ func (implementation) RasterImage(image unsafe.Pointer) (int, int, float64, bool
 	return int(out[0]), int(out[1]), float64(out[2]), ok
 }
 
-func (implementation) PresentImage(image unsafe.Pointer, tokenID uint32, nonce [16]byte, width, height, scale float64) bool {
-	return bool(C.sp_region_present(image, C.uint(tokenID), (*C.uchar)(unsafe.Pointer(&nonce[0])), C.double(width), C.double(height), C.double(scale)))
+func (implementation) PresentImage(image unsafe.Pointer, tokenID uint32, nonce [16]byte, width, height, scale float64) error {
+	if C.sp_region_present(image, C.uint(tokenID), (*C.uchar)(unsafe.Pointer(&nonce[0])), C.double(width), C.double(height), C.double(scale)) {
+		return nil
+	}
+	reason := C.sp_region_last_error(image)
+	if reason == nil {
+		return errors.New("image presentation rejected without a native reason")
+	}
+	defer C.free(unsafe.Pointer(reason))
+	return errors.New(C.GoString(reason))
 }
 
 func (implementation) FocusImage(image unsafe.Pointer) {

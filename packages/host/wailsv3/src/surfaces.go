@@ -262,12 +262,12 @@ func (s *Surfaces) sidecarSendFrom(viewID uint64, name, surface string, body jso
 func (s *Surfaces) DecideImageEnvelope(sidecarName, surface string, body json.RawMessage) bool {
 	sidecars := s.sidecars
 	return HandleEnvelope(body, sidecarName, surface, s.images,
-		func(work func() bool) bool {
-			var result bool
+		func(work func() error) error {
+			var err error
 			application.InvokeSync(func() {
-				result = work()
+				err = work()
 			})
-			return result
+			return err
 		},
 		func(image string, response map[string]interface{}) error {
 			responseBytes, err := json.Marshal(response)
@@ -275,6 +275,12 @@ func (s *Surfaces) DecideImageEnvelope(sidecarName, surface string, body json.Ra
 				return err
 			}
 			return sidecars.SendResponse(sidecarName, surface, image, json.RawMessage(responseBytes))
+		},
+		func(reason string) error {
+			if reason != "notFound" {
+				return nil
+			}
+			return s.refreshImageRasters()
 		},
 	)
 }
