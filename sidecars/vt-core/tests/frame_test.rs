@@ -593,3 +593,45 @@ fn block_cursor_covers_the_full_width_of_the_character_under_it() {
     let second = bright_in_cell(&frame, cell, height, 1);
     assert!(second < 0.1, "a narrow preedit keeps a one-cell cursor (bright {second:.2})");
 }
+
+fn ink_in_cell(frame: &Frame, cell_width: u32, height: u32, cell: u32) -> usize {
+    let start = cell_width * cell;
+    (start..start + cell_width)
+        .flat_map(|x| (0..height).map(move |y| (x, y)))
+        .filter_map(|(x, y)| frame.read_pixel(x, y))
+        .filter(|pixel| pixel[0] > 100 || pixel[1] > 100 || pixel[2] > 100)
+        .count()
+}
+
+#[test]
+fn wide_preedit_glyph_is_not_clipped_by_its_continuation_cell() {
+    let metrics = metrics(13.0, 1.0);
+    let cell = metrics.cell_width as u32;
+    let height = metrics.cell_height as u32;
+    let hidden = CursorRender {
+        visible: false,
+        ..CursorRender::default()
+    };
+
+    // 확정된 넓은 글자의 둘째 칸 잉크가 기준이다.
+    let mut committed = screen(4, 1);
+    committed.lines[0][0].ch = Some("글".to_string());
+    committed.lines[0][0].width = 2;
+    committed.lines[0][1].width = 0;
+    let frame = Frame::new(cell * 4, height).expect("frame");
+    frame.draw_with_cursor(&committed, &metrics, hidden).expect("committed");
+    let reference = ink_in_cell(&frame, cell, height, 1);
+    assert!(reference > 0, "the committed wide glyph must have ink in its second cell");
+
+    let mut preedit = screen(4, 1);
+    preedit.cursor.preedit = Some(Preedit {
+        text: "글".to_string(),
+        selected_range: None,
+        replacement_range: None,
+        attributed: false,
+    });
+    let frame = Frame::new(cell * 4, height).expect("frame");
+    frame.draw_with_cursor(&preedit, &metrics, hidden).expect("preedit");
+    let ink = ink_in_cell(&frame, cell, height, 1);
+    assert!(ink >= reference, "the preedit glyph's second cell lost ink: {ink} of {reference}");
+}

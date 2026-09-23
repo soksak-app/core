@@ -424,8 +424,13 @@ fn apply_preedit(
             cell.bg = Some("#808080".to_string());
         }
         marked.push(cell);
+        // 엔진이 확정된 넓은 글자에 두는 spacer 와 같이 폭 0 인 이어짐 셀을 둔다.
+        // 폭이 있는 셀은 배경을 그려 앞 글자의 오른쪽 절반을 덮는다.
         for _ in 1..width {
-            marked.push(crate::protocol::Cell::default());
+            marked.push(crate::protocol::Cell {
+                width: 0,
+                ..crate::protocol::Cell::default()
+            });
         }
         utf16_col = utf16_end;
     }

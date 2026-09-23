@@ -1,5 +1,6 @@
 # Changelog
 
+- F8-15: a wide preedit glyph is no longer clipped; its continuation cell has width 0 like the engine spacer, so its background no longer covers the right half. Frame and host checks measure the right-half ink.
 - F11-3: added `diagnostics.capture.still` to both hosts and `soksak capture`, backed by `sp_capture_still` in native/darwin, for a still window image taken without focus. It replaces the ad hoc PNG writer used during F8-11 and was checked on both rebuilt applications.
 - F8-11: rebuilt Tauri and Wails draw a one-cell cursor after ASCII text and a two-cell cursor over a wide Hangul preedit, measured from window captures in the activation-tier check. Registered F8-13 (gap after wide glyphs) and F11-3 (still window capture for observation).
 - F8-12: `terminal.cursor` and the input-method caret now follow the cursor carried by every `screen` event, and an incomplete cursor is reported as an error. Rebuilt Tauri and Wails report column 13 and focus after typing `ddd한`.

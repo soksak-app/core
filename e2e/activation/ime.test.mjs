@@ -48,7 +48,22 @@ async function cursorCellCoverage(s, surface) {
       }
       return different / total;
     };
-    return { cursor, first: coverage(cursor.col), second: coverage(cursor.col + 1) };
+    // 블록 커서 아래의 글자 획은 반전되어 어둡다. 둘째 칸의 어두운 픽셀 비율은 글자 오른쪽 절반의 잉크다.
+    const darkInCell = (col) => {
+      const x0 = Math.round((region.frame.x + col * state.cellWidth) * frame.scale);
+      const y0 = Math.round((region.frame.y + cursor.row * state.cellHeight) * frame.scale);
+      let dark = 0;
+      let total = 0;
+      for (let y = y0; y < y0 + Math.floor(state.cellHeight * frame.scale); y++) {
+        for (let x = x0; x < x0 + Math.floor(state.cellWidth * frame.scale); x++) {
+          const [r, g, b] = pixel(frame, x, y);
+          total++;
+          if (0.299 * r + 0.587 * g + 0.114 * b < 100) dark++;
+        }
+      }
+      return dark / total;
+    };
+    return { cursor, first: coverage(cursor.col), second: coverage(cursor.col + 1), secondInk: darkInCell(cursor.col + 1) };
   } finally {
     rmSync(frameDir, { recursive: true, force: true });
   }
@@ -102,6 +117,9 @@ for (const app of Object.values(APPS)) {
           t.diagnostic(`${app.name}: preedit 글 cursor coverage ${JSON.stringify(measured)}`);
           assert.ok(measured.first > 0.5 && measured.second > 0.5,
             `the block cursor does not cover the wide preedit: ${JSON.stringify(measured)}`);
+          // 넓은 조합 글자의 오른쪽 절반도 그려진다.
+          assert.ok(measured.secondInk > 0.02,
+            `the right half of the wide preedit glyph is missing: ${JSON.stringify(measured)}`);
         }
       }
       const typed = await readScreenUntil(s, surface, (lines) => lines.some((line) => line.endsWith("ddd한글")),
