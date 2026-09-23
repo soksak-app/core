@@ -13,6 +13,7 @@ struct Fake {
     fail_open: bool,
     fail_start: bool,
     no_frame: bool,
+    fail_stop: bool,
 }
 
 impl Capture for Fake {
@@ -41,7 +42,11 @@ impl Capture for Fake {
     }
     fn stop(&self) -> Result<i32, String> {
         self.calls.borrow_mut().push("stop".into());
-        Ok(3)
+        if self.fail_stop {
+            Err("stop failed".into())
+        } else {
+            Ok(3)
+        }
     }
 }
 
@@ -146,6 +151,23 @@ fn an_aborted_recording_is_stopped_and_removed_and_allows_the_next() {
         calls(&fake),
         ["open 7", "start", "wait", "stop", "start", "wait"]
     );
+}
+
+// contract: recording.abort.reports-stop-failure-and-removes-folder
+#[test]
+fn an_abort_reports_a_stop_failure_and_still_removes_the_folder() {
+    let parent = tempfile::tempdir().unwrap();
+    let folder = parent.path().join("frames");
+    let recording = Recording::new();
+    let fake = Fake {
+        fail_stop: true,
+        ..Fake::default()
+    };
+    recording.start(&fake, WINDOW, &folder, &make).unwrap();
+    let error = recording.abort(&fake).unwrap_err();
+    assert!(error.contains("stop failed"), "{error}");
+    assert!(!folder.exists(), "the aborted folder remains");
+    assert_eq!(recording.running(), None);
 }
 
 // contract: recording.target.different-target-reopened
