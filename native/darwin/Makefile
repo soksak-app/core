@@ -5,7 +5,7 @@
 #
 #   make          build/libsoksak-darwin.a, build/soksak-darwin.pc
 #   make test             입력 주입, 창 상태, 창 단추 배치, 표시 대기, 웹뷰 초점, 문서 영역, 그림 영역 검사를 실행한다. 애플리케이션을 활성화하지 않는다
-#   make test-activation  창 활성화 후 호버 검사, 겹친 웹뷰 입력 검사(기준 실행·등록 실행), 웹 인스펙터 검사, 문서 영역의 OS 이벤트 대기열 클릭·키 검사를
+#   make test-activation  창 활성화 후 호버 검사, 겹친 웹뷰 입력 검사(기준 실행·등록 실행), 웹 인스펙터 검사, 문서 영역의 OS 이벤트 대기열 클릭·키 검사, 그림 영역의 한국어 입력기 조합 검사를
 #                         실행한다. 애플리케이션을 활성화해 포커스를 가져간다
 #   make repeat TEST=<name>_test COUNT=<n>
 #                         test 대상 검사 하나를 연속 n번 실행하고 첫 실패에서 실행 번호와 시스템 부하를 보고한다
@@ -49,7 +49,7 @@ $(BUILD):
 	@mkdir -p $@
 
 $(BUILD)/%_test: tests/%_test.m $(LIBRARY) $(wildcard src/*.h src/private/*.h)
-	@clang $(CFLAGS) -I$(CURDIR)/src $< -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
+	@clang $(CFLAGS) -I$(CURDIR)/src $< -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Network -framework Carbon $(MINIMUM) -o $@
 
 test: $(BUILD)/window_motion_test $(BUILD)/input_inject_test $(BUILD)/window_facts_test $(BUILD)/window_controls_test $(BUILD)/surface_layout_test $(BUILD)/webview_focus_test $(BUILD)/webview_geometry_test $(BUILD)/document_view_test $(BUILD)/image_region_test $(BUILD)/ui_queue_test $(BUILD)/surface_host_test $(BUILD)/clipboard_test $(BUILD)/capture_test $(BUILD)/dock_menu_test
 	@$(BUILD)/surface_host_test
@@ -67,13 +67,14 @@ test: $(BUILD)/window_motion_test $(BUILD)/input_inject_test $(BUILD)/window_fac
 	@$(BUILD)/capture_test
 	@$(BUILD)/dock_menu_test
 
-test-activation: $(BUILD)/input_activate_test $(BUILD)/webview_input_test $(BUILD)/webview_inspector_test $(BUILD)/window_fullscreen_test $(BUILD)/document_view_test
+test-activation: $(BUILD)/input_activate_test $(BUILD)/webview_input_test $(BUILD)/webview_inspector_test $(BUILD)/window_fullscreen_test $(BUILD)/document_view_test $(BUILD)/image_region_ime_test
 	@$(BUILD)/input_activate_test
 	@$(BUILD)/webview_inspector_test
 	@$(BUILD)/window_fullscreen_test
 	@$(BUILD)/webview_input_test --baseline
 	@$(BUILD)/webview_input_test
 	@$(BUILD)/document_view_test --activation
+	@$(BUILD)/image_region_ime_test
 
 repeat: $(BUILD)/$(TEST)
 	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "repeat requires TEST=<name>_test and a positive COUNT" >&2; exit 2;; esac
