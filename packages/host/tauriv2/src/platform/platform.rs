@@ -456,6 +456,8 @@ pub trait Platform: Send + Sync {
 
     /// 같은 디렉터리를 가리키는 경로에 같은 값을 반환한다.
     fn directory_identity(&self, path: &Path, metadata: &Metadata) -> Result<String, String>;
+    /// path 에서 없는 디렉터리를 현재 사용자 전용 권한으로 만든다. 이미 있는 디렉터리의 권한은 바꾸지 않는다.
+    fn create_private_directories(&self, path: &Path) -> Result<(), String>;
     #[cfg(feature = "diagnostics")]
     /// 현재 사용자만 접근할 수 있는 디렉터리를 상위 디렉터리와 함께 만든다.
     fn private_directory(&self, path: &Path) -> Result<(), String>;

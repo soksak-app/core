@@ -478,6 +478,11 @@ impl Platform for Darwin {
         clipboard::write_png(bytes)
     }
 
+    fn create_private_directories(&self, path: &Path) -> Result<(), String> {
+        std::os::unix::fs::DirBuilderExt::mode(std::fs::DirBuilder::new().recursive(true), 0o700)
+            .create(path)
+            .map_err(|error| format!("{}: {error}", path.display()))
+    }
     fn directory_identity(&self, _path: &Path, metadata: &Metadata) -> Result<String, String> {
         Ok(identity::identity(metadata))
     }

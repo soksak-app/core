@@ -71,8 +71,10 @@ pub(crate) fn config_directory(app: &tauri::AppHandle) -> tauri::Result<std::pat
         Some(directory) => std::path::PathBuf::from(directory),
         None => app.path().app_config_dir()?,
     };
-    workspace::prepare_config_directory(&directory)
-        .map_err(|error| tauri::Error::Io(std::io::Error::other(error)))
+    workspace::prepare_config_directory(&directory, |path| {
+        platform::current()?.create_private_directories(path)
+    })
+    .map_err(|error| tauri::Error::Io(std::io::Error::other(error)))
 }
 
 /// 애플리케이션을 만들고 종료할 때까지 실행한다.

@@ -371,6 +371,9 @@ impl Platform for Windows {
         unsupported::clipboard_write_png(bytes)
     }
 
+    fn create_private_directories(&self, path: &Path) -> Result<(), String> {
+        unsupported::create_private_directories(path)
+    }
     fn directory_identity(&self, path: &Path, _metadata: &Metadata) -> Result<String, String> {
         identity::identity(path)
     }

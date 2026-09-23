@@ -423,3 +423,7 @@ pub fn close_image(_image: Handle) -> Result<(), String> {
 pub fn service_process_exists(_pid: u32) -> Result<bool, String> {
     missing("service process inspection")
 }
+
+pub fn create_private_directories(_path: &std::path::Path) -> Result<(), String> {
+    missing("private directory creation")
+}

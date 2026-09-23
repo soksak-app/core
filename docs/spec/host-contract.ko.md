@@ -230,6 +230,7 @@ fn invalid_json_closes_connection() {
 | `window-overlay.rects.packs-four-values-per-rect` | 보이는 오버레이는 입력 순서대로 x, y, width, height 값으로 묶인다. | both |
 | `window-overlay.rects.filters-hidden` | 숨긴 오버레이는 묶은 목록에서 빠진다. | both |
 | `workspace.config-dir.creates-requested-path` | 없는 설정 디렉터리를 준비하면 만들고 정규 경로를 반환한다. | both |
+| `workspace.config-dir.creates-owner-only` | 준비 과정이 만든 설정 디렉터리의 권한은 0700이며, 이미 있는 디렉터리는 권한을 유지한다. | both |
 | `workspace.config-dir.rejects-empty-path` | 빈 설정 디렉터리 경로를 거부한다. | both |
 | `workspace.config-dir.rejects-path-under-file` | 일반 파일 아래의 설정 디렉터리 경로를 거부한다. | both |
 | `workspace.settings.project-file-holds-only-overrides` | 프로젝트 설정 파일은 프로젝트 재정의만 담는다. | both |

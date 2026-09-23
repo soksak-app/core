@@ -38,6 +38,32 @@ func TestNewConfigDirectoryPreservesRequestedPath(t *testing.T) {
 	}
 }
 
+// contract: workspace.config-dir.creates-owner-only
+func TestCreatedConfigDirectoryIsOwnerOnlyAndAnExistingOneKeepsItsMode(t *testing.T) {
+	root := t.TempDir()
+	created, err := host.PrepareConfigDirectory(filepath.Join(root, "created"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info, err := os.Stat(created); err != nil || info.Mode().Perm() != 0o700 {
+		t.Fatalf("created configuration directory mode: %v %v", info.Mode().Perm(), err)
+	}
+	existing := filepath.Join(root, "existing")
+	if err := os.Mkdir(existing, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(existing, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	kept, err := host.PrepareConfigDirectory(existing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info, err := os.Stat(kept); err != nil || info.Mode().Perm() != 0o755 {
+		t.Fatalf("existing configuration directory mode changed: %v %v", info.Mode().Perm(), err)
+	}
+}
+
 // contract: workspace.settings.project-file-holds-only-overrides, workspace.settings.persist-across-reopen, workspace.settings.reset-removes-override, workspace.settings.rejects-project-opening-override, workspace.settings.invalid-common-file-not-overwritten
 func TestSettingsFilesAndInheritance(t *testing.T) {
 	root := t.TempDir()

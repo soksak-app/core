@@ -4,6 +4,7 @@ use std::fs;
 use std::path::Path;
 
 use serde_json::{json, Value};
+use soksak_host_tauriv2::platform;
 use soksak_host_tauriv2::projects::folder;
 use soksak_host_tauriv2::workspace::{prepare_config_directory, Workspace};
 
@@ -129,17 +130,42 @@ fn directory_aliases_have_one_identity() {
 fn config_directory_is_created_and_canonical() {
     let root = tempfile::tempdir().unwrap();
     let path = root.path().join("new").join("configuration");
-    let prepared = prepare_config_directory(&path).unwrap();
+    let prepared = prepare_config_directory(&path, create).unwrap();
     assert_eq!(prepared, fs::canonicalize(&path).unwrap());
     assert!(prepared.is_dir(), "configuration directory was not created");
     assert!(
-        prepare_config_directory(Path::new("")).is_err(),
+        prepare_config_directory(Path::new(""), create).is_err(),
         "empty path was accepted"
     );
     let file = root.path().join("file");
     fs::write(&file, "unchanged").unwrap();
     assert!(
-        prepare_config_directory(&file.join("config")).is_err(),
+        prepare_config_directory(&file.join("config"), create).is_err(),
         "a file was treated as a configuration directory"
+    );
+}
+
+/// 플랫폼의 사용자 전용 디렉터리 생성이다.
+fn create(path: &Path) -> Result<(), String> {
+    platform::current()?.create_private_directories(path)
+}
+
+// contract: workspace.config-dir.creates-owner-only
+#[test]
+fn a_created_config_directory_is_owner_only_and_an_existing_one_keeps_its_mode() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = tempfile::tempdir().unwrap();
+    let created = prepare_config_directory(&root.path().join("created"), create).unwrap();
+    assert_eq!(
+        fs::metadata(&created).unwrap().permissions().mode() & 0o777,
+        0o700
+    );
+    let existing = root.path().join("existing");
+    fs::create_dir(&existing).unwrap();
+    fs::set_permissions(&existing, fs::Permissions::from_mode(0o755)).unwrap();
+    let kept = prepare_config_directory(&existing, create).unwrap();
+    assert_eq!(
+        fs::metadata(&kept).unwrap().permissions().mode() & 0o777,
+        0o755
     );
 }

@@ -230,6 +230,7 @@ The scope column is `both`, or `<host> only: <reason>` for behavior that exists 
 | `window-overlay.rects.packs-four-values-per-rect` | Visible overlays pack into x, y, width, height values in input order. | both |
 | `window-overlay.rects.filters-hidden` | Hidden overlays are left out of the packed list. | both |
 | `workspace.config-dir.creates-requested-path` | Preparing a missing configuration directory creates it and returns its canonical path. | both |
+| `workspace.config-dir.creates-owner-only` | A configuration directory that preparation creates has mode 0700, and an existing directory keeps its mode. | both |
 | `workspace.config-dir.rejects-empty-path` | An empty configuration directory path is rejected. | both |
 | `workspace.config-dir.rejects-path-under-file` | A configuration directory path under a regular file is rejected. | both |
 | `workspace.settings.project-file-holds-only-overrides` | The project settings file holds only the project overrides. | both |
