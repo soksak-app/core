@@ -56,6 +56,25 @@ Selection, clipboard, paste, file drop, image paste, and terminal-generated imag
 
 Terminal selection is a native-region gesture, not a DOM text selection. The native region reports a left-button press, movement, and release in its CSS-local coordinates with modifier state; the sidecar maps those coordinates to the configured cell grid and owns selection state. A normal drag creates a simple selection, updates the rendered selection pixels, and on release emits one explicit user-selection copy event containing the selected text. The terminal module writes that text through the scoped clipboard capability with `userInitiated: true`; the `clipboard.program` policy does not deny this user gesture. Missing clipboard capability, invalid coordinates, empty selections, and failed writes are explicit errors. Selection input is never sent to the PTY and a DOM fallback is not used.
 
+## Session errors
+
+`terminal.session.error` is the most recent unresolved error of the surface. The plugin keeps the latest error of each source, and an event of one source never removes the error of another. A snapshot source is resolved by the next valid event of the same kind; any other source stays until the surface closes, because no later event shows that the failed operation succeeded.
+
+| Source | Error | Resolved by |
+| --- | --- | --- |
+| `state` | Invalid `state` event | Next valid `state` event |
+| `session` | Invalid persistent `session` event | Next valid `session` event |
+| `theme` | Invalid theme acknowledgement | Next valid `theme` event |
+| `screen` | Invalid cursor in a `screen` event | Next `screen` event with a valid cursor |
+| `trace` | IME trace capacity exceeded (diagnostic builds) | Starting a new trace |
+| `sidecar` | Sidecar `error` event or error reply; the reply does not name the rejected operation | Not resolved |
+| `native image` | Native image region `error` event | Not resolved |
+| `input` | Failed input, paste, clipboard, or selection operation, and invalid one-time sidecar events | Not resolved |
+| `key` | Native key event with non-boolean modifiers | Not resolved |
+| `cursor` | Invalid cursor position from the sidecar | Not resolved |
+
+The `sidecar` and `native image` sources also report the surface error that the card shows. Neither is resolved, so the card indicator and `terminal.session.error` show the error until the surface closes.
+
 ## Verification
 
 - Record a failing baseline before each correction and run the same assertion after correction.

@@ -969,6 +969,34 @@ for (const app of Object.values(APPS)) {
       [["terminal-input", "compose", "한"], ["terminal-input", "compose", ""]]);
   });
 
+  // 세션 오류는 관련 없는 이벤트(테마 확인)가 지우지 않고, 그 오류를 해소하는 이벤트(새 trace)만 지운다.
+  test(`${app.name}: a terminal session error stays until the event that resolves it`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const [terminal] = await ensureTerminals(s, 1);
+    const surface = terminal.surface;
+    await s.until("terminal.session", (state) => Boolean(state?.sessionId && state.theme),
+      "terminal session did not report its effective theme", { surface });
+    const original = (await s.get("core.settings")).values.mode;
+    const other = original === "dark" ? "light" : "dark";
+    s.cleanup(() => s.run("core.settings.theme", { name: "midnight", mode: original, scope: "common" }));
+    await s.run("terminal.ime.trace", { action: "start" }, surface);
+    s.cleanup(() => s.run("terminal.ime.trace", { action: "stop" }, surface));
+    // trace 용량은 256 이다. Control-U 는 셸의 입력 줄만 지운다.
+    for (let i = 0; i < 257; i++) await s.run("terminal.input", { bytes: "\u0015" }, surface);
+    const overflow = "IME diagnostic trace capacity exceeded";
+    await s.until("terminal.session", (state) => state.error === overflow,
+      "the trace overflow did not reach terminal.session", { surface });
+    await s.run("core.settings.theme", { name: "midnight", mode: other, scope: "common" });
+    const switched = await s.until("terminal.session", (state) => state.theme === other,
+      `terminal did not acknowledge ${other} theme`, { surface });
+    assert.equal(switched.error, overflow, "a theme acknowledgement hid the trace overflow");
+    await s.run("terminal.ime.trace", { action: "start" }, surface);
+    await s.until("terminal.session", (state) => state.error === undefined,
+      "a new trace did not resolve the trace overflow", { surface });
+  });
+
   test(`${app.name}: terminal image follows a window resize`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);

@@ -12,9 +12,10 @@ const IME_TRACE_CAPACITY = 256;
  *   expose         표면의 공개 항목 등록 함수
  *   updateCompose  네이티브 compose callback 과 같은 경로로 preedit 를 바꾼다
  *   onInput        입력 기록 함수를 등록한다
- *   reportError    세션 오류를 보고한다
+ *   reportError    trace 출처의 세션 오류를 보고한다
+ *   resolveError   trace 출처의 세션 오류를 지운다. 새 trace 를 시작하면 해소된다
  */
-export async function attach({ expose, updateCompose, onInput, reportError }) {
+export async function attach({ expose, updateCompose, onInput, reportError, resolveError }) {
   let trace = { enabled: false, overflow: false, entries: [] };
   const watchers = new Set();
   const changed = () => {
@@ -40,6 +41,7 @@ export async function attach({ expose, updateCompose, onInput, reportError }) {
     expose.command("terminal.ime.trace", async ({ action }) => {
       if (action === "start") {
         trace = { enabled: true, overflow: false, entries: [] };
+        resolveError();
       } else if (action === "stop") {
         trace = { ...trace, enabled: false };
       } else {

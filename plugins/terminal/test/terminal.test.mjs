@@ -264,6 +264,84 @@ test("native image errors remain visible after later session state updates", asy
   assert.equal(expose.getStatus("terminal.session").readFn().error, "native image: size");
 });
 
+/** 오류 수명 검사용 터미널. 세션을 연 뒤 영역, 사이드카, 공개 항목을 반환한다. */
+async function errorTerminal() {
+  const attach = createFakeAttachImage();
+  const sidecar = createFakeSidecar();
+  const expose = createFakeExpose();
+  let region;
+  await startTerminal({
+    view: createFakeView(), attachImage: (...args) => (region = attach.function(...args)), sidecar, expose,
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  openSession(sidecar);
+  const error = () => expose.getStatus("terminal.session").readFn().error;
+  const emit = (event) => sidecar.triggerEvent("test-session", event);
+  return { region, sidecar, expose, error, emit };
+}
+
+/* 다른 출처의 오류를 해소하는 이벤트들. 어느 것도 관련 없는 오류를 지우지 않는다. */
+const UNRELATED_RESOLVERS = [
+  ["state", { event: "state", sessionId: "s1", cols: 100, rows: 50, cellWidth: 8, cellHeight: 16 }],
+  ["session", { event: "session", sessionId: "s1" }],
+  ["theme", { event: "theme", mode: "light" }],
+  ["screen", { event: "screen", lines: [""], cursor: { col: 0, row: 0, visible: true, focused: false } }],
+];
+
+const PERSISTENT_ERRORS = [
+  ["a sidecar error event", ({ emit }) => emit({ event: "error", reason: "pty failed" }), "pty failed"],
+  ["a sidecar error reply", ({ emit }) => emit({ error: "invalidParams", reason: "bad size" }), "invalidParams: bad size"],
+  ["a native image error", ({ region }) => region._trigger("error", { reason: "size" }), "native image: size"],
+  ["an invalid native key event", ({ region }) => region._trigger("key", { key: "Char", text: "c", shift: 1, alt: false, ctrl: false }),
+    "invalid key event from region: modifiers must be boolean, got shift:number alt:boolean ctrl:boolean"],
+  ["an invalid clipboard rejection", ({ emit }) => emit({ event: "clipboard.rejected", reason: "denied" }), "terminal input failed: denied"],
+];
+
+for (const [name, raise, message] of PERSISTENT_ERRORS) {
+  test(`${name} stays in terminal.session until the surface closes`, async () => {
+    const terminal = await errorTerminal();
+    raise(terminal);
+    assert.equal(terminal.error(), message);
+    for (const [kind, event] of UNRELATED_RESOLVERS) {
+      terminal.emit(event);
+      assert.equal(terminal.error(), message, `a ${kind} event hid ${name}`);
+    }
+  });
+}
+
+const RESOLVED_ERRORS = [
+  ["state", { event: "state", cols: 0, rows: 50, cellWidth: 8, cellHeight: 16 },
+    "invalid state from sidecar: cols: invalid value 0"],
+  ["session", { event: "session", sessionId: "" }, "terminal input failed: invalid persistent session event"],
+  ["theme", { event: "theme", mode: "sepia" }, "terminal input failed: invalid theme acknowledgement from sidecar"],
+  ["screen", { event: "screen", lines: [""], cursor: { col: -0.5, row: 0, visible: true, focused: false } },
+    "terminal input failed: invalid screen cursor from sidecar: {\"col\":-0.5,\"row\":0,\"visible\":true,\"focused\":false}"],
+];
+
+for (const [kind, invalid, message] of RESOLVED_ERRORS) {
+  test(`an invalid ${kind} event error is cleared only by the next valid ${kind} event`, async () => {
+    const terminal = await errorTerminal();
+    terminal.emit(invalid);
+    assert.equal(terminal.error(), message);
+    for (const [other, event] of UNRELATED_RESOLVERS) {
+      if (other === kind) continue;
+      terminal.emit(event);
+      assert.equal(terminal.error(), message, `a ${other} event hid the ${kind} error`);
+    }
+    terminal.emit(UNRELATED_RESOLVERS.find(([name]) => name === kind)[1]);
+    assert.equal(terminal.error(), undefined, `a valid ${kind} event did not resolve its error`);
+  });
+}
+
+test("resolving one error shows the most recent remaining error", async () => {
+  const terminal = await errorTerminal();
+  terminal.emit({ event: "error", reason: "pty failed" });
+  terminal.emit({ event: "theme", mode: "sepia" });
+  assert.equal(terminal.error(), "terminal input failed: invalid theme acknowledgement from sidecar");
+  terminal.emit({ event: "theme", mode: "dark" });
+  assert.equal(terminal.error(), "pty failed");
+});
+
 test("terminal.screen publishes sidecar output without polling or input commands", async () => {
   const sidecar = createFakeSidecar();
   const expose = createFakeExpose();
@@ -1701,6 +1779,12 @@ test("terminal.ime.trace records native callbacks and ordered terminal input, an
   const overflow = expose.getStatus("terminal.ime.trace").readFn();
   assert.equal(overflow.enabled, false);
   assert.equal(overflow.overflow, true);
+  const error = () => expose.getStatus("terminal.session").readFn().error;
+  assert.equal(error(), "IME diagnostic trace capacity exceeded");
+  openSession(fakeSidecar);
+  assert.equal(error(), "IME diagnostic trace capacity exceeded", "a state event hid the trace overflow");
+  await expose.getCommand("terminal.ime.trace")({ action: "start" });
+  assert.equal(error(), undefined, "a new trace did not resolve the overflow");
 });
 
 test("native focus and cursor state route to sidecar and caret", async () => {
@@ -2209,7 +2293,8 @@ test("a sidecar rejection is reported without DOM-driven retry", async () => {
   fakeSidecar.triggerEvent("test-session", { event: "state", sessionId: "s1", cols: 61, rows: 18, cellWidth: 8, cellHeight: 15.5 });
   const session = fakeExpose.getStatus("terminal.session").readFn();
   assert.equal(session.sessionId, "s1", "state event opens the session");
-  assert.equal(session.error, undefined, "a valid state clears the error");
+  // 오류 응답은 거부한 연산을 적지 않으므로 어떤 이벤트도 그것을 해소하지 않는다. 카드의 표면 오류와 같이 남는다.
+  assert.equal(session.error, "invalidParams: width and height must be positive", "a valid state keeps the rejection");
 
   // 세션이 생긴 뒤에도 DOM 크기는 프로토콜 입력이 아니다.
   fakeView.clientWidth = 600;

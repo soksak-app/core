@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F8-17: terminal session errors are tracked by source and cleared only by a valid event of the kind that resolves them. Unrelated `state`, `session`, and `theme` events no longer clear errors, so the card indicator and `terminal.session.error` stay together. Verified by 10 Red unit tests and an e2e case on both debug applications.
 - F11-4: `make release-check` reports a malformed staged `sidecar.json` with its file and error; it previously skipped the file silently and left its executable unscanned.
 - F11-2: plugins declare check-only entries in `diagnostics.json` with their module, and only diagnostic builds stage them; the terminal `terminal.compose.update` and `terminal.ime.trace` moved there, and `make release-check` fails when release staging holds a plugin diagnostic declaration or module. Both release applications return 1001 for `terminal.ime.trace`, and the new e2e case passes on both debug applications.
 - F2-1: `e2e/normal-shutdown.mjs` waits for the process exit through an exit notification (`caffeinate -w`); the previous observer checked the exit only when a file event arrived and timed out when Wails removed `endpoint.json` before exiting. Both rebuilt hosts passed 10 runs each.

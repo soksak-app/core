@@ -257,11 +257,26 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   const inputQueue = [];
   const MAX_QUEUE_SIZE = 1024;
 
-  const reportInputError = (error) => {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(`terminal input failed: ${message}`);
-    session = { ...session, error: `terminal input failed: ${message}` };
+  // 세션 오류. 출처마다 마지막 메시지를 두며 session.error 는 가장 최근에 남은 오류다. 스냅샷
+  // 출처(state, session, theme, screen, trace)의 오류는 같은 종류의 다음 유효한 이벤트가 해소하고,
+  // 다른 출처의 오류는 표면이 닫힐 때까지 남는다. 관련 없는 이벤트는 오류를 지우지 않는다.
+  const errors = new Map();
+  const setError = (source, message) => {
+    console.error(message);
+    errors.delete(source);
+    errors.set(source, message);
+    session = { ...session, error: message };
     changed("session");
+  };
+  // 반환값은 session 을 바꿨는지다. 호출자가 changed("session") 을 알린다.
+  const resolveError = (source) => {
+    if (!errors.delete(source)) return false;
+    session = { ...session, error: [...errors.values()].at(-1) };
+    return true;
+  };
+  const reportInputError = (error, source = "input") => {
+    const message = error instanceof Error ? error.message : String(error);
+    setError(source, `terminal input failed: ${message}`);
   };
 
   const setTheme = async (mode) => {
@@ -424,10 +439,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
         })).catch(reportInputError);
       }
     } catch (error) {
-      const message = `invalid cursor from sidecar: ${error.message}`;
-      console.error(message);
-      session = { ...session, error: message };
-      changed("session");
+      setError("cursor", `invalid cursor from sidecar: ${error.message}`);
     }
   };
 
@@ -477,10 +489,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     notifyInput({ kind: "native-key", key, text });
     // 네이티브 영역은 항상 불린으로 수정자를 보낸다. 아니면 계약 위반이다.
     if (typeof shift !== "boolean" || typeof alt !== "boolean" || typeof ctrl !== "boolean") {
-      const errorMsg = `invalid key event from region: modifiers must be boolean, got shift:${typeof shift} alt:${typeof alt} ctrl:${typeof ctrl}`;
-      console.error(errorMsg);
-      session = { ...session, error: errorMsg };
-      changed("session");
+      setError("key", `invalid key event from region: modifiers must be boolean, got shift:${typeof shift} alt:${typeof alt} ctrl:${typeof ctrl}`);
       return;
     }
     await observeInput(enqueueInput({ type: "key", key, text, shift, alt, ctrl }));
@@ -488,11 +497,8 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
 
   onRegion("error", (event) => {
     const message = `native image: ${event.reason}`;
-    console.error(message);
-    const error = new Error(message);
-    session = { ...session, error: message };
-    changed("session");
-    reportSurfaceError(error);
+    setError("native image", message);
+    reportSurfaceError(new Error(message));
   });
 
   onRegion("compose", async (event) => {
@@ -621,13 +627,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       }
 
       if (errorDetails.length > 0) {
-        const errorMsg = `invalid state from sidecar: ${errorDetails.join("; ")}`;
-        console.error(errorMsg);
-        session = {
-          ...session,
-          error: errorMsg,
-        };
-        changed("session");
+        setError("state", `invalid state from sidecar: ${errorDetails.join("; ")}`);
         return;
       }
 
@@ -639,18 +639,19 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
         cellWidth: body.cellWidth,
         cellHeight: body.cellHeight,
         unsupported: session.unsupported,
-        error: session.error?.startsWith("native image:") ? session.error : undefined,
       };
+      resolveError("state");
       if (body.cursor !== undefined) applyCursor(body.cursor, body.cursor);
       sessionOpen = true;
       changed("session");
       flushInputQueue();
     } else if (body.event === "session") {
       if (typeof body.sessionId !== "string" || body.sessionId.length === 0) {
-        reportInputError("invalid persistent session event");
+        reportInputError("invalid persistent session event", "session");
         return;
       }
-      session = { ...session, sessionId: body.sessionId, error: undefined };
+      session = { ...session, sessionId: body.sessionId };
+      resolveError("session");
       sessionOpen = true;
       changed("session");
     } else if (body.event === "screen") {
@@ -661,9 +662,10 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       if (body.cursor !== undefined) {
         const { col, row, visible, focused } = body.cursor ?? {};
         if (!Number.isInteger(col) || !Number.isInteger(row) || typeof visible !== "boolean" || typeof focused !== "boolean") {
-          reportInputError(`invalid screen cursor from sidecar: ${JSON.stringify(body.cursor)}`);
+          reportInputError(`invalid screen cursor from sidecar: ${JSON.stringify(body.cursor)}`, "screen");
         } else {
           applyCursor(body.cursor, { col, row, visible, focused });
+          if (resolveError("screen")) changed("session");
         }
       }
       if (pendingScreenRead) {
@@ -680,10 +682,11 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       }
     } else if (body.event === "theme") {
       if (body.mode !== "dark" && body.mode !== "light") {
-        reportInputError(new Error("invalid theme acknowledgement from sidecar"));
+        reportInputError(new Error("invalid theme acknowledgement from sidecar"), "theme");
         return;
       }
-      session = { ...session, theme: body.mode, error: undefined };
+      session = { ...session, theme: body.mode };
+      resolveError("theme");
       changed("session");
     } else if (body.event === "clipboard.store") {
       handleClipboardStore(body).catch(reportInputError);
@@ -735,11 +738,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     } else if (body.event === "error") {
       // error 이벤트를 session 상태에 저장한다
       const error = new Error(typeof body.reason === "string" ? body.reason : (typeof body.error === "string" ? body.error : "Unknown sidecar error"));
-      session = {
-        ...session,
-        error: error.message,
-      };
-      changed("session");
+      setError("sidecar", error.message);
       reportSurfaceError(error);
     } else if (body.event === "font" && typeof body.family === "string") {
       session = { ...session, font: body.family, fontSystem: body.system === true };
@@ -748,13 +747,8 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       // 오류 응답 처리: {"error":"invalidParams","reason":"...",...}
       // reason 을 버리지 않고 오류에 실어 보낸다.
       const message = typeof body.reason === "string" ? `${body.error}: ${body.reason}` : body.error;
-      const error = new Error(message);
-      session = {
-        ...session,
-        error: message,
-      };
-      changed("session");
-      reportSurfaceError(error);
+      setError("sidecar", message);
+      reportSurfaceError(new Error(message));
     } else if (body.event) {
       // 알 수 없는 이벤트 타입을 보고한다
       console.warn(`sidecar sent unknown event type: ${body.event}`);
@@ -909,9 +903,9 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
         inputObservers.add(fn);
         return () => inputObservers.delete(fn);
       },
-      reportError: (message) => {
-        session = { ...session, error: message };
-        changed("session");
+      reportError: (message) => setError("trace", message),
+      resolveError: () => {
+        if (resolveError("trace")) changed("session");
       },
     });
   }
