@@ -4,7 +4,7 @@
 use std::cell::RefCell;
 use std::path::Path;
 
-use soksak_host_tauriv2::recording::{Capture, Recording, Target};
+use soksak_host_tauriv2::recording::{stop_payload, Capture, Recording, Target};
 
 /// 호출을 기록하고 지정한 단계에서 실패하는 녹화 장치.
 #[derive(Default)]
@@ -201,4 +201,21 @@ fn a_different_target_is_prepared_again() {
             "stop"
         ]
     );
+}
+
+// contract: diagnostics.capture-stop.payload-reports-frame-limit
+#[test]
+fn the_stop_payload_reports_a_normal_frame_limit() {
+    let payload = stop_payload(Path::new("/tmp/frames"), 600, true, 42.5);
+    assert_eq!(
+        payload,
+        serde_json::json!({"frames": "/tmp/frames", "count": 600, "limited": true, "longestGap": 42.5})
+    );
+}
+
+// contract: diagnostics.capture-stop.payload-reports-unbounded
+#[test]
+fn the_stop_payload_reports_an_unbounded_recording() {
+    let payload = stop_payload(Path::new("/tmp/frames"), 3, false, 0.0);
+    assert_eq!(payload["limited"], false);
 }

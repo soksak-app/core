@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- G2-3-10: Tauri 녹화 중지 응답을 `recording::stop_payload`가 만들며, Tauri 테스트가 상한 도달과 미도달 응답을 다룬다.
 - G2-3-9: Tauri는 붙여넣은 PNG 파일을 umask 권한 대신 소유자 전용 권한(0600)으로 저장하며, 테스트가 그 권한을 확인한다.
 - G2-3-8: Tauri의 메인 웹뷰 호출자 판정이 공개 함수 `authorize_main_caller` 하나가 되었고, Tauri 테스트가 알려진 메인 호출자 허용과 다른 호출자 거부를 다룬다.
 - G2-3-11: Tauri 엔드포인트는 중지할 때 다른 프로세스가 쓴 endpoint.json을 남기고, Tauri host 이름은 선언된 host 항목과 비교해 그 밖에는 1001을 반환하며, Tauri 테스트가 endpoint 사례 네 개를 다룬다.

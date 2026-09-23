@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G2-3-10: `recording::stop_payload` builds the Tauri capture stop reply, and Tauri tests cover a limited and an unbounded recording.
 - G2-3-9: Tauri saves pasted PNG files with owner-only permissions (0600) instead of the umask default, and a test checks the mode.
 - G2-3-8: the Tauri main-webview caller check is the single exported `authorize_main_caller`, and Tauri tests cover the known main caller and rejected other callers.
 - G2-3-11: the Tauri endpoint keeps an endpoint.json written by another process at stop, Tauri host names are checked against the declared host entries with 1001 for others, and Tauri tests cover the four endpoint cases.
