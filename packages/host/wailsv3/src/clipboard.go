@@ -34,15 +34,23 @@ type ClipboardPersistRequest struct {
 	Data string `json:"data"`
 }
 
+// ValidateClipboardRead 는 명시적 사용자 붙여넣기에서 지원하는 형식을 읽는 요청만 허용한다.
+func ValidateClipboardRead(kind string, userInitiated bool) error {
+	if !userInitiated {
+		return fmt.Errorf("clipboard read requires an explicit user paste")
+	}
+	if kind != "text" && kind != "png" && kind != "fileURLs" {
+		return fmt.Errorf("unsupported clipboard type %q", kind)
+	}
+	return nil
+}
+
 func (h *Host) ClipboardRead(ctx context.Context, request ClipboardReadRequest) (ClipboardReadResponse, error) {
 	if _, err := h.surface(ctx); err != nil {
 		return ClipboardReadResponse{}, err
 	}
-	if !request.UserInitiated {
-		return ClipboardReadResponse{}, fmt.Errorf("clipboard read requires an explicit user paste")
-	}
-	if request.Type != "text" && request.Type != "png" && request.Type != "fileURLs" {
-		return ClipboardReadResponse{}, fmt.Errorf("unsupported clipboard type")
+	if err := ValidateClipboardRead(request.Type, request.UserInitiated); err != nil {
+		return ClipboardReadResponse{}, err
 	}
 	var value platform.ClipboardValue
 	var callErr error

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G2-3-1: the Wails clipboard read checks are the exported `ValidateClipboardRead`, and Wails tests cover the empty PNG payload and the three read cases.
 - G2-3-7: Wails sidecar tests cover a non-canonical persistent configuration directory, the hello protocol, and the close-owner then shutdown order.
 - G2-3-2: the Wails document request test covers `documents.request.url-and-action-default-empty`.
 - G2-3-5-1: the Wails host rejects a `null` page exposure list with -32603 instead of panicking on a nil map.

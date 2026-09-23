@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- G2-3-1: Wails 클립보드 읽기 확인이 공개 함수 `ValidateClipboardRead`가 되었고, Wails 테스트가 빈 PNG 페이로드와 읽기 사례 세 개를 다룬다.
 - G2-3-7: Wails 사이드카 테스트가 정규화되지 않은 지속 설정 디렉터리, hello 프로토콜, close-owner 다음 shutdown 순서를 다룬다.
 - G2-3-2: Wails 문서 요청 테스트가 `documents.request.url-and-action-default-empty`를 다룬다.
 - G2-3-5-1: Wails 호스트가 `null` 페이지 노출 목록에서 nil 맵 panic을 내지 않고 -32603으로 거부한다.

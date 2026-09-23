@@ -29,9 +29,27 @@ func TestPersistClipboardPNGCreatesOwnedFile(t *testing.T) {
 	}
 }
 
-// contract: clipboard.png.rejects-oversize
+// contract: clipboard.png.rejects-oversize, clipboard.png.rejects-empty
 func TestPersistClipboardPNGRejectsBounds(t *testing.T) {
 	if _, err := host.PersistClipboardPNG(t.TempDir(), make([]byte, 16*1024*1024+1)); err == nil {
 		t.Fatal("expected size error")
+	}
+	if _, err := host.PersistClipboardPNG(t.TempDir(), []byte{}); err == nil {
+		t.Fatal("expected empty payload error")
+	}
+}
+
+// contract: clipboard.read.requires-user-initiated, clipboard.read.rejects-unknown-type, clipboard.read.accepts-known-types
+func TestClipboardReadRequiresAnExplicitUserPasteAndAKnownType(t *testing.T) {
+	for _, kind := range []string{"text", "fileURLs"} {
+		if err := host.ValidateClipboardRead(kind, true); err != nil {
+			t.Fatalf("user paste of %s rejected: %v", kind, err)
+		}
+	}
+	if err := host.ValidateClipboardRead("text", false); err == nil {
+		t.Fatal("a read without an explicit user paste was accepted")
+	}
+	if err := host.ValidateClipboardRead("unknown", true); err == nil {
+		t.Fatal("an unknown clipboard type was accepted")
 	}
 }
