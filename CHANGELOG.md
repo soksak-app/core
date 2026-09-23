@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G2-3-13: the Tauri flush tests cover the full-queue error message.
 - G2-3-12: Tauri tests cover main and surface reply payloads reaching their own requests.
 - G2-3-6: Wails now invalidates a queued frame of the previous generation, reports a frame detached before main-thread presentation as `stale`, and requests a fresh raster after a `notFound` native rejection, as the Tauri host does; Wails tests cover all image contract cases and `make host-contract-check` reports 205 of 205 for Wails.
 - G2-3-1: the Wails clipboard read checks are the exported `ValidateClipboardRead`, and Wails tests cover the empty PNG payload and the three read cases.

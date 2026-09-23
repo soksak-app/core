@@ -72,7 +72,7 @@ fn create(files: &Files, directory: &std::path::Path) -> Result<Sidecars<FakeOwn
 
 const ECHO: &str = "@fixture/sidecar-echo";
 
-// contract: flush.queue.rejects-send-when-full, flush.buffer.replies-delivered-after-drain, flush.buffer.closes-delivered-after-drain, flush.buffer.consumed-acks-not-coalesced, flush.buffer.delivered-after-queued-bodies
+// contract: flush.queue.rejects-send-when-full, flush.queue.full-error-says-not-keeping-up, flush.buffer.replies-delivered-after-drain, flush.buffer.closes-delivered-after-drain, flush.buffer.consumed-acks-not-coalesced, flush.buffer.delivered-after-queued-bodies
 #[test]
 fn every_pending_reply_is_flushed_after_the_queue_drains() {
     let directory = tempfile::tempdir().unwrap();
@@ -115,7 +115,8 @@ fn every_pending_reply_is_flushed_after_the_queue_drains() {
     let big = raw(&format!(r#"{{"data":"{}"}}"#, "x".repeat(20 * 1024)));
     let mut full = false;
     for _i in 0..4000 {
-        if sidecars.send(&owner, ECHO, "s1", &big).is_err() {
+        if let Err(error) = sidecars.send(&owner, ECHO, "s1", &big) {
+            assert!(error.contains("is not keeping up"), "{error}");
             full = true;
             break;
         }
@@ -230,7 +231,7 @@ fn every_pending_reply_is_flushed_after_the_queue_drains() {
     }
 }
 
-// contract: flush.queue.rejects-send-when-full, flush.buffer.replies-delivered-after-drain, flush.buffer.closes-delivered-after-drain
+// contract: flush.queue.rejects-send-when-full, flush.queue.full-error-says-not-keeping-up, flush.buffer.replies-delivered-after-drain, flush.buffer.closes-delivered-after-drain
 #[test]
 fn order_is_correct_when_stop_flushes_buffered_messages() {
     let directory = tempfile::tempdir().unwrap();
@@ -273,7 +274,8 @@ fn order_is_correct_when_stop_flushes_buffered_messages() {
     let big = raw(&format!(r#"{{"data":"{}"}}"#, "x".repeat(20 * 1024)));
     let mut full = false;
     for _i in 0..4000 {
-        if sidecars.send(&owner, ECHO, "s1", &big).is_err() {
+        if let Err(error) = sidecars.send(&owner, ECHO, "s1", &big) {
+            assert!(error.contains("is not keeping up"), "{error}");
             full = true;
             break;
         }

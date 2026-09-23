@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- G2-3-13: Tauri flush 테스트가 대기열이 가득 찬 오류 문구를 다룬다.
 - G2-3-12: Tauri 테스트가 메인 응답과 표면 응답 페이로드가 각자의 요청에 도착하는지 다룬다.
 - G2-3-6: Wails는 이제 Tauri 호스트처럼 이전 generation의 대기 프레임을 무효화하고, 메인 스레드 표시 전에 떼어진 프레임을 `stale`로 보고하며, `notFound` 네이티브 거부 뒤 새 래스터를 요청한다. Wails 테스트가 모든 이미지 계약 사례를 다루며 `make host-contract-check`는 Wails에 대해 205개 중 205개를 보고한다.
 - G2-3-1: Wails 클립보드 읽기 확인이 공개 함수 `ValidateClipboardRead`가 되었고, Wails 테스트가 빈 PNG 페이로드와 읽기 사례 세 개를 다룬다.
