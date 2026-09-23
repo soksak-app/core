@@ -409,6 +409,29 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     return request;
   };
 
+  // 사이드카가 보낸 커서 값을 status 에 반영하고 입력기 caret 을 그 칸에 둔다.
+  // value 는 사이드카 원본, fields 는 반영할 값이다. 잘못된 값은 오류로 알린다.
+  const applyCursor = (value, fields) => {
+    try {
+      if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("cursor must be an object");
+      cursor = normalizeCursor({ ...cursor, ...fields });
+      changed("cursor");
+      if (typeof region.setCaret === "function") {
+        Promise.resolve(region.setCaret({
+          x: cursor.col * session.cellWidth,
+          y: cursor.row * session.cellHeight,
+          width: session.cellWidth,
+          height: session.cellHeight,
+        })).catch(reportInputError);
+      }
+    } catch (error) {
+      const message = `invalid cursor from sidecar: ${error.message}`;
+      console.error(message);
+      session = { ...session, error: message };
+      changed("session");
+    }
+  };
+
   const enqueueInput = (entry) => {
     recordImeTrace({ kind: "terminal-input", input: entry });
     if (!sessionOpen) {
@@ -619,24 +642,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
         unsupported: session.unsupported,
         error: session.error?.startsWith("native image:") ? session.error : undefined,
       };
-      if (body.cursor !== undefined) {
-        try {
-          cursor = normalizeCursor({ ...cursor, ...body.cursor });
-          changed("cursor");
-          if (typeof region.setCaret === "function") {
-            Promise.resolve(region.setCaret({
-              x: cursor.col * body.cellWidth,
-              y: cursor.row * body.cellHeight,
-              width: body.cellWidth,
-              height: body.cellHeight,
-            })).catch(reportInputError);
-          }
-        } catch (error) {
-          const message = `invalid cursor from sidecar: ${error.message}`;
-          console.error(message);
-          session = { ...session, error: message };
-        }
-      }
+      if (body.cursor !== undefined) applyCursor(body.cursor, body.cursor);
       sessionOpen = true;
       changed("session");
       flushInputQueue();
@@ -652,6 +658,15 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       // screen 이벤트를 처리한다. screen.read 응답이나 화면 변화 알림.
       screen = body.lines;
       changed("screen");
+      // 화면의 커서는 현재 위치·표시·포커스다. 모양은 표시 규칙이 적용된 값이므로 정책 값을 바꾸지 않는다.
+      if (body.cursor !== undefined) {
+        const { col, row, visible, focused } = body.cursor ?? {};
+        if (!Number.isInteger(col) || !Number.isInteger(row) || typeof visible !== "boolean" || typeof focused !== "boolean") {
+          reportInputError(`invalid screen cursor from sidecar: ${JSON.stringify(body.cursor)}`);
+        } else {
+          applyCursor(body.cursor, { col, row, visible, focused });
+        }
+      }
       if (pendingScreenRead) {
         pendingScreenRead(body);
         pendingScreenRead = null;

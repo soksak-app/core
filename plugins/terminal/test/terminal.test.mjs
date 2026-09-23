@@ -1471,6 +1471,49 @@ test("clearing a native preedit cancels it without writing the uncommitted text 
   assert.deepEqual(byteInputs, [], "a cleared marked string is not committed input");
 });
 
+test("screen events update terminal.cursor and move the input-method caret", async () => {
+  FakeResizeObserver.reset();
+  const fakeAttachImage = createFakeAttachImage();
+  const fakeSidecar = createFakeSidecar();
+  let regionReference;
+  const expose = createFakeExpose();
+  await startTerminal({
+    view: createFakeView(),
+    attachImage: (view, name, sidecar) => {
+      regionReference = fakeAttachImage.function(view, name, sidecar);
+      return regionReference;
+    },
+    sidecar: fakeSidecar,
+    expose,
+    scale: 1,
+    window: { ResizeObserver: FakeResizeObserver, TextEncoder, devicePixelRatio: 1 },
+  });
+  FakeResizeObserver.triggerAll();
+  openSession(fakeSidecar);
+
+  fakeSidecar.triggerEvent("test-session", {
+    event: "screen",
+    cols: 100,
+    rows: 50,
+    cursor: { col: 7, row: 3, shape: "Block", visible: true, blinking: false, blink_visible: true, focused: true, preedit: null },
+    lines: [],
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  const status = expose.getStatus("terminal.cursor").readFn();
+  assert.deepEqual({ col: status.col, row: status.row, visible: status.visible, focused: status.focused },
+    { col: 7, row: 3, visible: true, focused: true }, "terminal.cursor reports the cursor of the latest screen");
+  assert.deepEqual(regionReference._caret, { x: 56, y: 48, width: 8, height: 16 },
+    "the input-method caret follows the latest cursor cell");
+
+  fakeSidecar.triggerEvent("test-session", { event: "screen", cols: 100, rows: 50, cursor: { col: 1, row: 1 }, lines: [] });
+  await new Promise((resolve) => setImmediate(resolve));
+  const after = expose.getStatus("terminal.cursor").readFn();
+  assert.deepEqual({ col: after.col, row: after.row }, { col: 7, row: 3 }, "an incomplete cursor does not replace the status");
+  assert.match(expose.getStatus("terminal.session").readFn().error ?? "", /invalid screen cursor/,
+    "an incomplete cursor is reported as an error");
+});
+
 test("an input method's edited syllables reach the PTY once and in order before Enter", async () => {
   FakeResizeObserver.reset();
   const fakeAttachImage = createFakeAttachImage();
