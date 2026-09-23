@@ -20,12 +20,24 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
+// 실패 시 원인을 좁히도록 검사 창의 표시 상태를 기록한다.
+static NSWindow *testWindow = nil;
+static const char *currentStep = "setup";
+
+static void failTimeout(const char *reason) {
+    fprintf(stderr, "FAIL: %s within 10 seconds (step: %s, visible: %d, occlusion visible: %d, on active space: %d, "
+        "app active: %d)\n", reason, currentStep, testWindow.isVisible,
+        (testWindow.occlusionState & NSWindowOcclusionStateVisible) != 0, testWindow.isOnActiveSpace,
+        NSApp.isActive);
+    exit(1);
+}
+
 static void until(BOOL (^done)(void)) {
     NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
     while (!done() && deadline.timeIntervalSinceNow > 0) {
         [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
     }
-    if (!done()) { fprintf(stderr, "FAIL: WebKit did not answer within 10 seconds\n"); exit(1); }
+    if (!done()) failTimeout("WebKit did not answer");
 }
 
 static id evaluate(WKWebView *view, NSString *script) {
@@ -72,6 +84,7 @@ static void setScale(SPScaledWindow *window, CGFloat scale) {
 @end
 
 static void load(WKWebView *view, NSString *html) {
+    currentStep = __func__;
     SPLoaded *loaded = [[SPLoaded new] autorelease];
     view.navigationDelegate = loaded;
     [view loadHTMLString:html baseURL:nil];
@@ -81,6 +94,7 @@ static void load(WKWebView *view, NSString *html) {
 
 // 문서가 새 크기와 배율로 다시 배치될 때까지 기다린다. 끝내 맞지 않으면 마지막 값을 보고한다.
 static NSDictionary *documentState(WKWebView *view, CGFloat scale, double width, double height) {
+    currentStep = __func__;
     // WebKit exposes the CSS viewport on whole CSS pixels. A 200.5pt AppKit
     // frame therefore reports 200 CSS px even though its native backing is
     // 401px at 2x. Native geometry and the final backing row are checked
@@ -104,6 +118,7 @@ static NSDictionary *documentState(WKWebView *view, CGFloat scale, double width,
 
 // 스냅샷의 마지막 장치 픽셀 행이 문서의 색인지 확인한다. 문서가 덮지 못한 행은 흰색이다.
 static BOOL lastRowIsDocument(WKWebView *view, CGFloat scale) {
+    currentStep = __func__;
     __block NSImage *image = nil;
     WKSnapshotConfiguration *configuration = [[WKSnapshotConfiguration new] autorelease];
     [view takeSnapshotWithConfiguration:configuration completionHandler:^(NSImage *snapshot, NSError *error) {
@@ -119,6 +134,7 @@ static BOOL lastRowIsDocument(WKWebView *view, CGFloat scale) {
 
 // 표면의 마지막 장치 픽셀을 네이티브 입력으로 누르고 문서가 받은 좌표를 반환한다.
 static NSDictionary *pressLastPixel(NSWindow *window, WKWebView *surface, CGFloat scale) {
+    currentStep = __func__;
     double frame[4] = {0, 0, 0, 0};
     webviewGetFrame(surface, frame);
     double x = frame[0] + frame[2] / 2, y = frame[1] + frame[3] - 0.5 / scale;
@@ -162,19 +178,28 @@ static void pumpUntil(BOOL (^done)(void)) {
             untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01] inMode:NSDefaultRunLoopMode dequeue:YES];
         if (event) [NSApp sendEvent:event];
     }
-    if (!done()) { fprintf(stderr, "FAIL: the event was not handled within 10 seconds\n"); exit(1); }
+    if (!done()) failTimeout("the event was not handled");
 }
 
 // 표면이 스크롤을 마칠 때까지 기다리고 문서가 움직인 CSS 픽셀을 반환한다. 표시마다 두 번 같은 값이면 끝났다.
+// 마지막 스크롤 측정의 표시별 값과 경과 시간. 실패 메시지가 이 값을 보고한다.
+static NSMutableString *scrollSamples = nil;
+
 static double scrolledBy(WKWebView *surface) {
+    currentStep = __func__;
+    NSDate *start = [NSDate date];
+    [scrollSamples release];
+    scrollSamples = [[NSMutableString alloc] init];
     until(^BOOL { return [evaluate(surface, @"document.scrollingElement.scrollTop") doubleValue] > 0; });
     double last = -1, now = [evaluate(surface, @"document.scrollingElement.scrollTop") doubleValue];
+    [scrollSamples appendFormat:@"%g@%.0fms", now, -start.timeIntervalSinceNow * 1000];
     while (now != last) {
         last = now;
         __block BOOL shown = NO;
         [surface _doAfterNextPresentationUpdate:^{ shown = YES; }];
         until(^BOOL { return shown; });
         now = [evaluate(surface, @"document.scrollingElement.scrollTop") doubleValue];
+        [scrollSamples appendFormat:@" %g@%.0fms", now, -start.timeIntervalSinceNow * 1000];
     }
     return now;
 }
@@ -183,6 +208,7 @@ static double scrolledBy(WKWebView *surface) {
 // 픽셀 하나는 포인트 하나다. posted 이면 줄 단위 휠 이벤트(3줄, 120 픽셀)를 앱 이벤트 대기열에 넣어
 // 실제 이벤트와 같이 앱의 이벤트 모니터를 거치게 한다.
 static double scrollBy(NSWindow *window, WKWebView *surface, BOOL posted) {
+    currentStep = __func__;
     evaluate(surface, @"document.scrollingElement.scrollTop = 0; null");
     double frame[4] = {0, 0, 0, 0};
     webviewGetFrame(surface, frame);
@@ -238,10 +264,10 @@ static void verify(SPScaledWindow *window, WKWebView *surface, CGFloat scale, do
         [NSString stringWithFormat:@"%@: the last device pixel row shows the document", when]);
     double injected = scrollBy(window, surface, NO);
     check(injected == 120,
-        [NSString stringWithFormat:@"%@: an injected 120-point scroll moves the document by 120 CSS pixels (%g)", when, injected]);
+        [NSString stringWithFormat:@"%@: an injected 120-point scroll moves the document by 120 CSS pixels (%g; samples %@; app active %d)", when, injected, scrollSamples, NSApp.isActive]);
     double posted = scrollBy(window, surface, YES);
     check(posted == 120,
-        [NSString stringWithFormat:@"%@: a three-line scroll from the event queue moves the document by 120 CSS pixels (%g)", when, posted]);
+        [NSString stringWithFormat:@"%@: a three-line scroll from the event queue moves the document by 120 CSS pixels (%g; samples %@; app active %d)", when, posted, scrollSamples, NSApp.isActive]);
     NSDictionary *pressed = pressLastPixel(window, surface, scale);
     double expected = frame[3] - 0.5 / scale;
     check([pressed[@"trusted"] boolValue] && fabs([pressed[@"y"] doubleValue] - expected) < 0.001,
@@ -252,6 +278,7 @@ static void ignoreState(void *context, const char *state) {}
 
 // 표면의 문서 영역이 표면과 같은 배율로 여백 안의 CSS 크기를 갖는지 확인한다.
 static void verifyRegion(WKWebView *region, CGFloat scale, double width, double height, NSString *when) {
+    currentStep = __func__;
     NSDictionary *state = documentState(region, scale, width, height);
     check(state != nil, [NSString stringWithFormat:@"%@: the document region renders at scale %g with size %g x %g",
         when, scale, width, height]);
@@ -265,6 +292,7 @@ int main(void) { @autoreleasepool {
     SPScaledWindow *window = [[SPScaledWindow alloc] initWithContentRect:NSMakeRect(100, 100, 600, 400)
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
     [window setReleasedWhenClosed:NO];
+    testWindow = window;
     setScale(window, 1);
     WKWebView *main = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 600, 400)] autorelease];
     window.contentView = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, 600, 400)] autorelease];

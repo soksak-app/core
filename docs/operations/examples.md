@@ -120,6 +120,8 @@ make -C native/darwin test-activation
 
 `test` runs `input_inject_test` in a window of an inactive application. It checks presses, drags, scroll, keys, focus, and the inactive result for a move without a button, and it does not activate the application.
 
-`test-activation` activates the test application and therefore takes the keyboard focus. Its windows set `ignoresMouseEvents`, but AppKit still delivers a movement to the tracking areas the real pointer is in. The overlapping-webview check therefore places its window away from the pointer and fails with that reason if the pointer enters the window. It runs `input_activate_test` (hover after activation) and then the overlapping-webview check `webview_input_test`, first as the baseline run and then as the registered-input run.
+`test-activation` activates the test application and therefore takes the keyboard focus. Its windows set `ignoresMouseEvents`, but AppKit still delivers a movement to the tracking areas the real pointer is in. The overlapping-webview check therefore places its window away from the pointer and fails with that reason if the pointer enters the window. It runs `input_activate_test` (hover after activation), the overlapping-webview check `webview_input_test` (first as the baseline run and then as the registered-input run), and `document_view_test --activation` (an OS event-queue click and key into a document region).
+
+`make -C native/darwin repeat TEST=<name>_test COUNT=<n>` runs one default test repeatedly and `make -C native/darwin repeat-suite COUNT=<n>` runs the default suite repeatedly; each stops at the first failure and reports the run number and system load.
 
 The baseline expects duplicate pointer movement in overlapping DOMs. The registered-input run requires exclusive pointer tracking, retained keyboard input, and cleanup after hiding or removing the overlay. Neither run tests delayed cursor responses.

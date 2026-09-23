@@ -120,6 +120,8 @@ make -C native/darwin test-activation
 
 `test`는 비활성 애플리케이션의 창에서 `input_inject_test`를 실행한다. 누름, 끌기, 스크롤, 키, 포커스, 버튼 없는 이동의 비활성 결과를 검사하며 애플리케이션을 활성화하지 않는다.
 
-`test-activation`은 검사 애플리케이션을 활성화하므로 키보드 포커스를 가져간다. 검사 창은 `ignoresMouseEvents`를 설정하지만, AppKit은 실제 포인터가 있는 추적 영역에 이동을 계속 전달한다. 그래서 겹친 웹뷰 검사는 창을 포인터에서 떨어진 곳에 두고, 포인터가 창에 들어오면 그 이유로 실패한다. `input_activate_test`(활성화 후 호버)를 실행한 뒤, 겹친 웹뷰 검사 `webview_input_test`를 기준 실행과 입력 등록 실행 순서로 실행한다.
+`test-activation`은 검사 애플리케이션을 활성화하므로 키보드 포커스를 가져간다. 검사 창은 `ignoresMouseEvents`를 설정하지만, AppKit은 실제 포인터가 있는 추적 영역에 이동을 계속 전달한다. 그래서 겹친 웹뷰 검사는 창을 포인터에서 떨어진 곳에 두고, 포인터가 창에 들어오면 그 이유로 실패한다. `input_activate_test`(활성화 후 호버), 겹친 웹뷰 검사 `webview_input_test`(기준 실행 뒤 입력 등록 실행), `document_view_test --activation`(문서 영역에 OS 이벤트 대기열 클릭과 키)을 실행한다.
+
+`make -C native/darwin repeat TEST=<name>_test COUNT=<n>`은 기본 검사 하나를, `make -C native/darwin repeat-suite COUNT=<n>`은 기본 스위트를 반복 실행한다. 둘 다 첫 실패에서 멈추고 실행 번호와 시스템 부하를 보고한다.
 
 기준 실행은 겹친 DOM의 중복 포인터 이동을 확인한다. 입력 등록 실행은 단일 대상 포인터 추적, 키보드 입력 유지, 오버레이 숨김·제거 후 정리를 검사한다. 두 실행 모두 지연된 커서 응답을 검사하지 않는다.

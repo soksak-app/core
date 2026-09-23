@@ -1,4 +1,5 @@
-// 문서 영역 웹뷰의 이동, 기록, 상태 보고, 배치, 격리를 검사한다. 애플리케이션을 활성화하지 않는다.
+// 문서 영역 웹뷰의 이동, 기록, 상태 보고, 배치, 격리를 검사한다. 기본 실행은 애플리케이션을 활성화하지 않고,
+// 끝날 때 활성화되지 않았음을 확인한다. --activation 실행은 앱을 활성화해 OS 이벤트 대기열의 클릭과 키를 검사한다.
 //
 // 검사 문서는 이 프로세스가 루프백 주소에서 제공한다.
 #import <Cocoa/Cocoa.h>
@@ -142,7 +143,9 @@ static void pumpEvents(NSString *what, BOOL (^done)(void)) {
     if (!done()) { fprintf(stderr, "FAIL: %s within 10 seconds\n", what.UTF8String); exit(1); }
 }
 
-int main(void) { @autoreleasepool {
+int main(int argc, char **argv) { @autoreleasepool {
+    // --activation 은 앱을 활성화해 OS 이벤트 대기열의 클릭과 키를 검사한다. make test-activation 만 사용한다.
+    BOOL activation = argc > 1 && strcmp(argv[1], "--activation") == 0;
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     [NSApp finishLaunching];
@@ -224,46 +227,48 @@ int main(void) { @autoreleasepool {
     });
     check([evaluate(view, @"matchMedia('(prefers-color-scheme: dark)').matches") boolValue],
         @"the document renderer follows the owner's dark appearance again");
-    evaluate(view, @"window.nativeClicks=0; document.getElementById('field').value=''; null");
-    sp_document_set_event(document, event, NULL);
-    nativeEvents = 0;
-    [NSApp activateIgnoringOtherApps:YES];
-    [window makeKeyAndOrderFront:nil];
-    NSPoint windowPoint = NSMakePoint(25, NSHeight(window.contentView.bounds) - 35);
-    NSEvent *down = [NSEvent mouseEventWithType:NSEventTypeLeftMouseDown location:windowPoint
-        modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
-        context:nil eventNumber:1 clickCount:1 pressure:1];
-    NSEvent *up = [NSEvent mouseEventWithType:NSEventTypeLeftMouseUp location:windowPoint
-        modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
-        context:nil eventNumber:1 clickCount:1 pressure:0];
-    [NSApp postEvent:down atStart:NO];
-    [NSApp postEvent:up atStart:NO];
-    pumpEvents(@"the OS click was not delivered", ^BOOL {
-        return nativeEvents >= 1 && [evaluate(view, @"document.activeElement && document.activeElement.id") isEqual:@"field"];
-    });
-    check(nativeEvents == 1 && [latestNativeEvent[@"type"] isEqual:@"click"],
-        @"the OS event queue reports one document click to the owner callback");
-    NSView *firstResponder = [window.firstResponder isKindOfClass:NSView.class] ? (NSView *)window.firstResponder : nil;
-    check(firstResponder == view || [firstResponder isDescendantOf:view],
-        @"the OS click makes the document webview the window first responder");
-    check(view.superview == nativePlane && view.window == window,
-        @"the owner callback does not replace the document's WebKit target");
-    check([evaluate(view, @"document.activeElement && document.activeElement.id") isEqual:@"field"],
-        @"the OS click focuses the page field");
-    NSEvent *keyDown = [NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint
-        modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
-        context:nil characters:@"x" charactersIgnoringModifiers:@"x" isARepeat:NO keyCode:7];
-    NSEvent *keyUp = [NSEvent keyEventWithType:NSEventTypeKeyUp location:NSZeroPoint
-        modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
-        context:nil characters:@"x" charactersIgnoringModifiers:@"x" isARepeat:NO keyCode:7];
-    [NSApp postEvent:keyDown atStart:NO];
-    [NSApp postEvent:keyUp atStart:NO];
-    pumpEvents(@"the OS key was not delivered", ^BOOL {
-        return [evaluate(view, @"document.getElementById('field').value") isEqual:@"x"];
-    });
-    check([evaluate(view, @"document.getElementById('field').value") isEqual:@"x"],
-        @"the page receives the OS key after the document click");
-    check(nativeEvents == 1, @"keyboard input does not duplicate the document click callback");
+    if (activation) {
+        evaluate(view, @"window.nativeClicks=0; document.getElementById('field').value=''; null");
+        sp_document_set_event(document, event, NULL);
+        nativeEvents = 0;
+        [NSApp activateIgnoringOtherApps:YES];
+        [window makeKeyAndOrderFront:nil];
+        NSPoint windowPoint = NSMakePoint(25, NSHeight(window.contentView.bounds) - 35);
+        NSEvent *down = [NSEvent mouseEventWithType:NSEventTypeLeftMouseDown location:windowPoint
+            modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
+            context:nil eventNumber:1 clickCount:1 pressure:1];
+        NSEvent *up = [NSEvent mouseEventWithType:NSEventTypeLeftMouseUp location:windowPoint
+            modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
+            context:nil eventNumber:1 clickCount:1 pressure:0];
+        [NSApp postEvent:down atStart:NO];
+        [NSApp postEvent:up atStart:NO];
+        pumpEvents(@"the OS click was not delivered", ^BOOL {
+            return nativeEvents >= 1 && [evaluate(view, @"document.activeElement && document.activeElement.id") isEqual:@"field"];
+        });
+        check(nativeEvents == 1 && [latestNativeEvent[@"type"] isEqual:@"click"],
+            @"the OS event queue reports one document click to the owner callback");
+        NSView *firstResponder = [window.firstResponder isKindOfClass:NSView.class] ? (NSView *)window.firstResponder : nil;
+        check(firstResponder == view || [firstResponder isDescendantOf:view],
+            @"the OS click makes the document webview the window first responder");
+        check(view.superview == nativePlane && view.window == window,
+            @"the owner callback does not replace the document's WebKit target");
+        check([evaluate(view, @"document.activeElement && document.activeElement.id") isEqual:@"field"],
+            @"the OS click focuses the page field");
+        NSEvent *keyDown = [NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint
+            modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
+            context:nil characters:@"x" charactersIgnoringModifiers:@"x" isARepeat:NO keyCode:7];
+        NSEvent *keyUp = [NSEvent keyEventWithType:NSEventTypeKeyUp location:NSZeroPoint
+            modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
+            context:nil characters:@"x" charactersIgnoringModifiers:@"x" isARepeat:NO keyCode:7];
+        [NSApp postEvent:keyDown atStart:NO];
+        [NSApp postEvent:keyUp atStart:NO];
+        pumpEvents(@"the OS key was not delivered", ^BOOL {
+            return [evaluate(view, @"document.getElementById('field').value") isEqual:@"x"];
+        });
+        check([evaluate(view, @"document.getElementById('field').value") isEqual:@"x"],
+            @"the page receives the OS key after the document click");
+        check(nativeEvents == 1, @"keyboard input does not duplicate the document click callback");
+    }
     check([latest[@"url"] hasSuffix:@"/one"] && ![latest[@"canGoBack"] boolValue] && latest[@"error"] == NSNull.null,
         [NSString stringWithFormat:@"the state reports the loaded document: %@", latest]);
 
@@ -355,6 +360,8 @@ int main(void) { @autoreleasepool {
 
     for (id connection in held) nw_connection_cancel((nw_connection_t)connection);
     nw_listener_cancel(listener);
+    // make test 의 검사는 사용자 포커스를 가져가지 않는다.
+    if (!activation) check(!NSApp.isActive, @"the default native test does not activate the application");
     sp_surface_close(surface);
     [window close];
     [window release];
