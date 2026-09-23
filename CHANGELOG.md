@@ -1,5 +1,6 @@
 # Changelog
 
+- V5-3: every declared workspace version is 0.0.1; `scripts/check-versions.mjs` enforces it in `pnpm test`, and the two vt-alacritty manifests moved from 0.0.0. Registered V5-6 to re-verify completed terminal, clipboard, protocol, and browser-appearance claims on current builds.
 - F8-15: a wide preedit glyph is no longer clipped; its continuation cell has width 0 like the engine spacer, so its background no longer covers the right half. Frame and host checks measure the right-half ink.
 - F11-3: added `diagnostics.capture.still` to both hosts and `soksak capture`, backed by `sp_capture_still` in native/darwin, for a still window image taken without focus. It replaces the ad hoc PNG writer used during F8-11 and was checked on both rebuilt applications.
 - F8-11: rebuilt Tauri and Wails draw a one-cell cursor after ASCII text and a two-cell cursor over a wide Hangul preedit, measured from window captures in the activation-tier check. Registered F8-13 (gap after wide glyphs) and F11-3 (still window capture for observation).
