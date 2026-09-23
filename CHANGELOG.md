@@ -1,5 +1,6 @@
 # Changelog
 
+- F8-5: the activation IME check records `terminal.ime.trace` and verifies preedit order, cursor coverage, exactly-once commits of `ddd한글 한 ` in the native callbacks and the terminal input queue, and a second command in the same session on both rebuilt hosts. Registered F8-20 (Backspace during composition).
 - G2-3: host tests declare the host contract cases they execute, and `make host-contract-check` runs both hosts' tests and fails on a case without a passing test in either host. The current output lists 63 gaps and two tests without host code, registered as G2-3-1 to G2-3-19.
 - F8-18-1: the vt-core comment on the initial terminal font states the system fixed-pitch font.
 - V5-7: vt-core `serve_contract` tests acknowledge every image they receive and the EOF timing test loads the font before its timer, so every vt-core test passes alone. New target `make rust-tests-alone PACKAGE=<package>` runs each Rust test alone. Registered F8-18-1 (stale font comment) and F8-19 (first CoreText call takes about 2 s in a new process).

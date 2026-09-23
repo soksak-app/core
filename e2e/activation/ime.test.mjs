@@ -92,6 +92,10 @@ for (const app of Object.values(APPS)) {
         host.regions.some((region) => region.surface === surface && region.focused),
       "the terminal did not receive native focus in the active window");
 
+      // 네이티브 콜백과 PTY 입력 대기열을 기록한다. 결과는 아래에서 순서와 횟수로 검사한다.
+      await s.run("terminal.ime.trace", { action: "start" }, surface);
+      s.cleanup(() => s.run("terminal.ime.trace", { action: "stop" }, surface));
+
       // 사용자 보고 순서: 영문 자판으로 ddd, 한국어 2벌식으로 바꿔 한글(g k s r m f), Space, Enter.
       assert.equal((await s.request("diagnostics.input.source", { select: ABC })).current, ABC);
       for (const typed of ["d", "dd", "ddd"]) {
@@ -148,6 +152,29 @@ for (const app of Object.values(APPS)) {
         `the committed text was repeated: ${JSON.stringify(commandRows)}`);
       assert.ok(!output.some((line) => /[ㄱ-ㅣ]/.test(line)), `jamo reached the PTY: ${JSON.stringify(output)}`);
       t.diagnostic(`${app.name}: screen rows with the command: ${JSON.stringify(commandRows)}`);
+
+      // 같은 세션에서 이어서 조합한 음절도 한 번씩 순서대로 PTY 에 도착한다.
+      for (const key of ["g", "k", "s", "Space"]) await s.press(key);
+      await s.until("terminal.compose", (compose) => compose.text === "", "the second syllable left a preedit", { surface });
+      await s.press("Enter");
+      const second = await readScreenUntil(s, surface, (lines) => lines.some((line) => /한: command not found/.test(line)),
+        "the shell did not run the second committed command");
+      assert.ok(!second.some((line) => /[ㄱ-ㅣ]/.test(line)), `jamo reached the PTY: ${JSON.stringify(second)}`);
+
+      const trace = await s.run("terminal.ime.trace", { action: "stop" }, surface);
+      assert.equal(trace.overflow, false, "the IME trace overflowed");
+      const inserts = trace.entries.filter((entry) => entry.kind === "native-insert").map((entry) => entry.text).join("");
+      const written = trace.entries.filter((entry) => entry.kind === "terminal-input" && entry.input.type === "insert")
+        .map((entry) => entry.input.text).join("");
+      const composed = trace.entries.filter((entry) => entry.kind === "native-compose" && entry.text !== "").map((entry) => entry.text);
+      t.diagnostic(`${app.name}: native inserts ${JSON.stringify(inserts)}, terminal inserts ${JSON.stringify(written)}, preedit ${JSON.stringify(composed)}`);
+      assert.equal(inserts, "ddd한글 한 ", "the native client did not commit each syllable exactly once in order");
+      assert.equal(written, "ddd한글 한 ", "the terminal input queue did not receive each committed syllable exactly once in order");
+      assert.deepEqual(composed.slice(0, 6), ["ㅎ", "하", "한", "ㄱ", "그", "글"], "the preedit did not show each composition state in order");
+      const enters = trace.entries.filter((entry) => entry.kind === "native-key" && entry.key === "Enter").map((entry) => entry.sequence);
+      const lastInsert = trace.entries.filter((entry) => entry.kind === "native-insert").at(-1).sequence;
+      assert.equal(enters.length, 2, "two Enter keys were not traced");
+      assert.ok(enters[1] > lastInsert, "Enter was delivered before the committed text");
       t.diagnostic(`${app.name}: PASS ddd한글 after an input-source switch`);
     });
 }
