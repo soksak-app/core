@@ -23,7 +23,7 @@
 @end
 
 // 그림 영역 구현.
-@interface SPImageRegion : NSView <NSTextInputClient>
+@interface SPImageRegion : NSTextView
 @property sp_region_event event;
 @property void *context;
 @property(retain) CALayer *imageLayer;
@@ -42,10 +42,6 @@
 @property BOOL placed;
 @property BOOL closed;
 @property BOOL hasFocus;
-@property(copy) NSString *markedText;
-@property(nonatomic) NSRange selectedRange;
-@property(nonatomic) NSRange markedRange;
-
 - (void)applyInsets;
 - (void)applyInsetsInTransaction;
 - (void)applyInsetsNow;
@@ -109,6 +105,23 @@ static NSString *controlCharacterForANSIKeyCode(unsigned short keyCode) {
 - (id)initWithFrame:(NSRect)frame {
     self = [super initWithFrame:frame];
     if (!self) return nil;
+    self.drawsBackground = NO;
+    self.textColor = NSColor.clearColor;
+    self.insertionPointColor = NSColor.clearColor;
+    self.textContainerInset = NSZeroSize;
+    self.markedTextAttributes = @{
+        NSForegroundColorAttributeName: NSColor.clearColor,
+        NSBackgroundColorAttributeName: NSColor.clearColor,
+        NSUnderlineStyleAttributeName: @0,
+    };
+    self.selectedTextAttributes = @{
+        NSForegroundColorAttributeName: NSColor.clearColor,
+        NSBackgroundColorAttributeName: NSColor.clearColor,
+    };
+    self.richText = NO;
+    self.allowsUndo = NO;
+    self.editable = YES;
+    self.selectable = YES;
     self.wantsLayer = YES;
     self.layerUsesCoreImageFilters = YES;
     self.imageLayer = [[[CALayer alloc] init] autorelease];
@@ -118,9 +131,6 @@ static NSString *controlCharacterForANSIKeyCode(unsigned short keyCode) {
     // 바깥 표면 트랜잭션이 DOM과 함께 화면에 반영한다.
     self.imageLayer.contentsGravity = kCAGravityTopLeft;
     self.imageLayer.magnificationFilter = kCAFilterNearest;
-    self.markedText = @"";
-    self.selectedRange = NSMakeRange(NSNotFound, 0);
-    self.markedRange = NSMakeRange(NSNotFound, 0);
     self.snapshot = NULL;
     return self;
 }
@@ -132,7 +142,6 @@ static NSString *controlCharacterForANSIKeyCode(unsigned short keyCode) {
     [_imageLayer release];
     [_presentationError release];
     [_accessibilityText release];
-    [_markedText release];
     [super dealloc];
 }
 
@@ -280,16 +289,16 @@ static NSString *controlCharacterForANSIKeyCode(unsigned short keyCode) {
         return;
     }
 
-    // 조합 중이면 입력기로 넘긴다.
+    // NSTextView 가 AppKit 입력기 이벤트와 조합 상태의 수명주기를 소유한다.
     if ([self hasMarkedText]) {
-        [self.inputContext handleEvent:event];
+        [super keyDown:event];
         return;
     }
 
     // 특수 키 또는 Ctrl/Option 조합인지 확인한다.
     NSString *characters = event.charactersIgnoringModifiers;
     if (characters.length == 0) {
-        [self.inputContext handleEvent:event];
+        [super keyDown:event];
         return;
     }
 
@@ -402,7 +411,7 @@ static NSString *controlCharacterForANSIKeyCode(unsigned short keyCode) {
     }
 
     // 일반 문자는 입력기로 넘긴다.
-    [self.inputContext handleEvent:event];
+    [super keyDown:event];
 }
 
 - (void)doCommandBySelector:(SEL)selector {
@@ -420,9 +429,8 @@ static NSString *controlCharacterForANSIKeyCode(unsigned short keyCode) {
         : ([string isKindOfClass:NSString.class] ? (NSString *)string : nil);
     if (!text) return;
 
-    self.markedText = @"";
-    self.markedRange = NSMakeRange(NSNotFound, 0);
-    self.selectedRange = NSMakeRange(NSNotFound, 0);
+    [super insertText:string replacementRange:range];
+    [self.textStorage deleteCharactersInRange:NSMakeRange(0, self.textStorage.length)];
 
     NSString *json = [NSString stringWithFormat:@"{\"type\":\"insert\",\"text\":\"%@\",\"replacementRange\":%@,\"attributed\":%@}",
         [self jsonEscapedString:text], [self jsonRange:range],
@@ -436,18 +444,14 @@ static NSString *controlCharacterForANSIKeyCode(unsigned short keyCode) {
         : ([string isKindOfClass:NSString.class] ? (NSString *)string : nil);
     if (!text) return;
 
+    [super setMarkedText:string selectedRange:selectedRange replacementRange:replacementRange];
+
     if (text.length == 0) {
-        self.markedText = @"";
-        self.markedRange = NSMakeRange(NSNotFound, 0);
-        self.selectedRange = selectedRange;
         NSString *json = [NSString stringWithFormat:@"{\"type\":\"compose\",\"text\":\"\",\"selectedRange\":%@,\"replacementRange\":%@,\"attributed\":%@}",
             [self jsonRange:selectedRange], [self jsonRange:replacementRange],
             [string isKindOfClass:NSAttributedString.class] ? @"true" : @"false"];
         [self report:json.UTF8String];
     } else {
-        self.markedText = text;
-        self.markedRange = NSMakeRange(0, text.length);
-        self.selectedRange = selectedRange;
         NSString *json = [NSString stringWithFormat:@"{\"type\":\"compose\",\"text\":\"%@\",\"selectedRange\":%@,\"replacementRange\":%@,\"attributed\":%@}",
             [self jsonEscapedString:text], [self jsonRange:selectedRange], [self jsonRange:replacementRange],
             [string isKindOfClass:NSAttributedString.class] ? @"true" : @"false"];
@@ -456,28 +460,12 @@ static NSString *controlCharacterForANSIKeyCode(unsigned short keyCode) {
 }
 
 - (void)unmarkText {
-    if (self.markedText.length > 0) {
-        self.markedText = @"";
-        self.markedRange = NSMakeRange(NSNotFound, 0);
+    BOOL hadMarkedText = self.hasMarkedText;
+    [super unmarkText];
+    if (hadMarkedText) {
+        [self.textStorage deleteCharactersInRange:NSMakeRange(0, self.textStorage.length)];
         [self report:"{\"type\":\"compose\",\"text\":\"\"}"];
     }
-}
-
-- (BOOL)hasMarkedText {
-    return self.markedText.length > 0;
-}
-
-- (NSAttributedString *)attributedSubstringForProposedRange:(NSRange)range actualRange:(NSRangePointer)actualRange {
-    NSRange available = self.markedRange;
-    if (available.location == NSNotFound || NSMaxRange(available) < NSMaxRange(range)) {
-        if (actualRange) *actualRange = NSMakeRange(NSNotFound, 0);
-        return nil;
-    }
-    NSRange intersection = NSIntersectionRange(available, range);
-    if (actualRange) *actualRange = intersection;
-    NSString *text = [self.markedText substringWithRange:NSMakeRange(
-        intersection.location - available.location, intersection.length)];
-    return [[[NSAttributedString alloc] initWithString:text] autorelease];
 }
 
 - (NSRect)firstRectForCharacterRange:(NSRange)range actualRange:(NSRangePointer)actualRange {
@@ -494,10 +482,6 @@ static NSString *controlCharacterForANSIKeyCode(unsigned short keyCode) {
 
 - (NSUInteger)characterIndexForPoint:(NSPoint)point {
     return NSNotFound;
-}
-
-- (NSArray<NSString *> *)validAttributesForMarkedText {
-    return @[];
 }
 
 - (NSString *)jsonRange:(NSRange)range {

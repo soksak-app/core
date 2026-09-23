@@ -326,10 +326,19 @@ int main(void) { @autoreleasepool {
         [collectedEvents removeAllObjects];  // focus 이벤트 제거
 
         id regionView = (id)region8;
+        NSResponder *firstResponder = ((NSView *)regionView).window.firstResponder;
+        check([firstResponder isKindOfClass:NSTextView.class],
+            @"TEST 8: image input responder delegates text-system state to NSTextView");
         // setMarkedText를 두 번 호출
         [(id<NSTextInputClient>)regionView setMarkedText:@"한" selectedRange:NSMakeRange(1, 0) replacementRange:NSMakeRange(NSNotFound, 0)];
+        check([(NSTextView *)regionView hasMarkedText],
+            @"TEST 8: NSTextView retains the active marked text");
         [(id<NSTextInputClient>)regionView setMarkedText:@"한글" selectedRange:NSMakeRange(2, 0) replacementRange:NSMakeRange(NSNotFound, 0)];
+        check(NSEqualRanges([(NSTextView *)regionView markedRange], NSMakeRange(0, 2)),
+            @"TEST 8: NSTextView updates its marked range with the replacement preedit");
         [(id<NSTextInputClient>)regionView insertText:@"한글" replacementRange:NSMakeRange(NSNotFound, 0)];
+        check(![(NSTextView *)regionView hasMarkedText] && ((NSTextView *)regionView).textStorage.length == 0,
+            @"TEST 8: committed input clears marked state and temporary text storage");
 
         // 이벤트 순서: compose, compose, insert
         check([collectedEvents count] >= 3,
@@ -358,6 +367,9 @@ int main(void) { @autoreleasepool {
             [attributedEvent rangeOfString:@"\"location\":1"].location != NSNotFound &&
             [attributedEvent rangeOfString:@"\"location\":3"].location != NSNotFound,
             @"TEST 8: attributed composition preserves selected and replacement ranges");
+        [(NSTextView *)regionView unmarkText];
+        check(![(NSTextView *)regionView hasMarkedText] && ((NSTextView *)regionView).textStorage.length == 0,
+            @"TEST 8: unmark clears AppKit's preedit storage");
 
         sp_region_close(region8);
     }

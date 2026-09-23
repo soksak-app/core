@@ -59,19 +59,6 @@ function sendInput(text, terminal, id, encoder) {
   return terminal.send(id, { operation: "input", bytes: base64 });
 }
 
-// macOS WebKit's Korean input source can emit compatibility jamo through insertText
-// while the actual syllable is still delivered through setMarkedText. Those insertText
-// events are not committed terminal input. They are consumed until the corresponding
-// preedit is confirmed or cancelled.
-function isHangulJamo(text) {
-  if (typeof text !== "string" || text.length === 0) return false;
-  for (const character of text) {
-    const code = character.codePointAt(0);
-    if (!((code >= 0x3131 && code <= 0x318e) || (code >= 0xffa0 && code <= 0xffdc))) return false;
-  }
-  return true;
-}
-
 const CURSOR_SHAPES = new Set(["block", "underline", "beam"]);
 const CURSOR_BLINK_MODES = new Set(["Never", "Off", "On", "Always"]);
 const CURSOR_UNFOCUSED = new Set(["hollow", "solid", "underline", "beam", "unchanged"]);
@@ -84,8 +71,11 @@ const DEFAULT_CURSOR = Object.freeze({
 
 function normalizeRange(range) {
   if (range === null || range === undefined) return null;
-  if (!Number.isInteger(range.location) || !Number.isInteger(range.length) ||
-      range.location < 0 || range.length < 0) return null;
+  if (!range || typeof range !== "object" || Array.isArray(range) ||
+      !Number.isInteger(range.location) || !Number.isInteger(range.length) ||
+      range.location < 0 || range.length < 0) {
+    throw new Error("IME range must contain nonnegative integer location and length");
+  }
   return { location: range.location, length: range.length };
 }
 
@@ -184,7 +174,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   const encoder = new TextEncoder();
 
   // 공개 status 마다 값이 바뀔 때 호출할 함수
-  const watchers = { session: new Set(), screen: new Set(), compose: new Set(), cursor: new Set() };
+  const watchers = { session: new Set(), screen: new Set(), compose: new Set(), cursor: new Set(), imeTrace: new Set() };
   const changed = (name) => {
     for (const fn of watchers[name]) fn(read[name]());
   };
@@ -203,7 +193,20 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   };
   let screen = [];
   let compose = session.compose;
-  let pendingImeJamo = "";
+  let imeTrace = { enabled: false, overflow: false, entries: [] };
+  const IME_TRACE_CAPACITY = 256;
+  const recordImeTrace = (entry) => {
+    if (!imeTrace.enabled) return;
+    if (imeTrace.entries.length === IME_TRACE_CAPACITY) {
+      imeTrace = { ...imeTrace, enabled: false, overflow: true };
+      changed("imeTrace");
+      session = { ...session, error: "IME diagnostic trace capacity exceeded" };
+      changed("session");
+      return;
+    }
+    imeTrace = { ...imeTrace, entries: [...imeTrace.entries, { sequence: imeTrace.entries.length, ...entry }] };
+    changed("imeTrace");
+  };
   let cursor = { ...DEFAULT_CURSOR };
   const initialSettings = settings?.read?.() ?? {};
   let programClipboardPolicy = initialSettings["clipboard.program"] ?? "deny";
@@ -217,6 +220,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     screen: () => screen,
     compose: () => compose,
     cursor: () => cursor,
+    imeTrace: () => imeTrace,
   };
 
   // 터미널 사이드카가 이 표면의 VT 세션을 실행한다
@@ -227,6 +231,32 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   region = attachImage(view, "view");
   if (!region) throw new Error("Failed to attach image region");
   const onRegion = (type, handler) => region.on(type, handler);
+
+  const updateCompose = async (event) => {
+    if (!event || typeof event !== "object" || Array.isArray(event) || typeof event.text !== "string") {
+      throw new Error("terminal.compose.update requires a text string");
+    }
+    if (event.attributed !== undefined && typeof event.attributed !== "boolean") {
+      throw new Error("IME attributed must be a boolean");
+    }
+    const nextCompose = {
+      text: event.text,
+      selectedRange: normalizeRange(event.selectedRange),
+      replacementRange: normalizeRange(event.replacementRange),
+      attributed: event.attributed === true,
+    };
+    compose = nextCompose;
+    session = { ...session, compose };
+    changed("session");
+    changed("compose");
+    try {
+      await enqueueInput({ type: "compose", ...compose });
+    } catch (error) {
+      reportInputError(error);
+      throw error;
+    }
+    return null;
+  };
 
   // 세션이 생겼는지 추적한다. 래스터 크기는 페이지가 아니라 호스트 configure가 정한다.
   let sessionOpen = false;
@@ -380,6 +410,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   };
 
   const enqueueInput = (entry) => {
+    recordImeTrace({ kind: "terminal-input", input: entry });
     if (!sessionOpen) {
       if (inputQueue.length >= MAX_QUEUE_SIZE) {
         const error = new Error(`Input queue overflow (max ${MAX_QUEUE_SIZE})`);
@@ -400,19 +431,28 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   // 영역 insert 이벤트: 평문 텍스트 입력
   onRegion("insert", async (event) => {
     const { text } = event;
-    // A WebKit Korean IME may echo both raw jamo and replacement syllables through
-    // insertText. While a preedit is active, neither echo is a terminal commit.
-    if (compose.text || pendingImeJamo || isHangulJamo(text)) {
-      if (isHangulJamo(text)) pendingImeJamo += text;
-      return;
+    recordImeTrace({ kind: "native-insert", text });
+    let composeRequest = null;
+    if (compose.text) {
+      compose = { text: "", selectedRange: null, replacementRange: null, attributed: false };
+      session = { ...session, compose };
+      changed("session");
+      changed("compose");
+      composeRequest = enqueueInput({ type: "compose", ...compose });
     }
-    await observeInput(enqueueInput({ type: "insert", text }));
+    const insertRequest = enqueueInput({ type: "insert", text });
+    if (composeRequest) {
+      await Promise.all([observeInput(composeRequest), observeInput(insertRequest)]);
+    } else {
+      await observeInput(insertRequest);
+    }
   });
 
   // 영역 key 이벤트: 특수 키와 수정자
   // 사이드카는 키 이름만 받고 이스케이프 시퀀스를 생성한다
   onRegion("key", async (event) => {
     const { key, text, shift, alt, ctrl } = event;
+    recordImeTrace({ kind: "native-key", key, text });
     // 네이티브 영역은 항상 불린으로 수정자를 보낸다. 아니면 계약 위반이다.
     if (typeof shift !== "boolean" || typeof alt !== "boolean" || typeof ctrl !== "boolean") {
       const errorMsg = `invalid key event from region: modifiers must be boolean, got shift:${typeof shift} alt:${typeof alt} ctrl:${typeof ctrl}`;
@@ -434,21 +474,12 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   });
 
   onRegion("compose", async (event) => {
+    recordImeTrace({ kind: "native-compose", text: event.text });
     const previousText = compose.text;
-    compose = {
-      text: typeof event.text === "string" ? event.text : "",
-      selectedRange: normalizeRange(event.selectedRange),
-      replacementRange: normalizeRange(event.replacementRange),
-      attributed: event.attributed === true,
-    };
-    session = { ...session, compose };
-    changed("session");
-    changed("compose");
-    const composeRequest = enqueueInput({ type: "compose", ...compose });
+    const composeRequest = updateCompose(event);
     const commitRequest = compose.text === "" && previousText
       ? enqueueInput({ type: "insert", text: previousText })
       : null;
-    if (compose.text === "") pendingImeJamo = "";
     await observeInput(composeRequest);
     if (commitRequest) await observeInput(commitRequest);
   });
@@ -788,6 +819,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     expose.status("terminal.session", read.session, watch("session")),
     expose.status("terminal.screen", read.screen, watch("screen")),
     expose.status("terminal.compose", read.compose, watch("compose")),
+    expose.status("terminal.ime.trace", read.imeTrace, watch("imeTrace")),
     expose.status("terminal.cursor", read.cursor, watch("cursor")),
     expose.command("terminal.input", async ({ bytes }) => {
       if (typeof bytes !== "string") throw new Error("terminal.input requires bytes");
@@ -798,6 +830,18 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
         throw error;
       }
       return null;
+    }),
+    expose.command("terminal.compose.update", updateCompose),
+    expose.command("terminal.ime.trace", async ({ action }) => {
+      if (action === "start") {
+        imeTrace = { enabled: true, overflow: false, entries: [] };
+      } else if (action === "stop") {
+        imeTrace = { ...imeTrace, enabled: false };
+      } else {
+        throw new Error("terminal.ime.trace action must be start or stop");
+      }
+      changed("imeTrace");
+      return imeTrace;
     }),
     expose.command("terminal.screen.read", async () => {
       if (region === null) throw new Error("Terminal not initialized");

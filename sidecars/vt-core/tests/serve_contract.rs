@@ -363,6 +363,40 @@ async fn native_input_ack_is_not_reported_as_an_unsolicited_event() {
 }
 
 #[tokio::test]
+async fn each_native_preedit_update_presents_a_fresh_terminal_frame() {
+    let calls = Arc::new(Mutex::new(Calls::default()));
+    let factory_calls = calls.clone();
+    let factory = Arc::new(move || {
+        Arc::new(FakeSessionPort::new("preedit-frame".to_string(), factory_calls.clone()))
+            as Arc<dyn SessionPort>
+    });
+    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+{"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
+{"surface":"s1","body":{"image":{"consumed":{"name":"view","generation":1,"raster":1,"sequence":1}}}}
+{"surface":"s1","body":{"operation":"input","focus":{"focused":true}}}
+{"surface":"s1","body":{"image":{"consumed":{"name":"view","generation":1,"raster":1,"sequence":2}}}}
+{"surface":"s1","body":{"operation":"input","compose":{"text":"ㅎ","selectedRange":{"location":1,"length":0},"replacementRange":null,"attributed":true}}}
+{"surface":"s1","body":{"image":{"consumed":{"name":"view","generation":1,"raster":1,"sequence":3}}}}
+{"surface":"s1","body":{"operation":"input","compose":{"text":"하","selectedRange":{"location":1,"length":0},"replacementRange":null,"attributed":true}}}
+{"surface":"s1","body":{"image":{"consumed":{"name":"view","generation":1,"raster":1,"sequence":4}}}}
+{"surface":"s1","body":{"operation":"input","compose":{"text":"한","selectedRange":{"location":1,"length":0},"replacementRange":null,"attributed":true}}}
+{"surface":"s1","body":{"image":{"consumed":{"name":"view","generation":1,"raster":1,"sequence":5}}}}
+"#;
+    let reader = std::io::Cursor::new(input.as_bytes());
+    let mut writer = Vec::new();
+    let engine_factory = Arc::new(|| Box::new(MockEngine::new()) as Box<dyn Engine>);
+
+    serve(engine_factory, reader, &mut writer, factory).await.unwrap();
+
+    let frames = String::from_utf8(writer).unwrap().lines()
+        .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+        .filter(|value| value["body"]["image"]["sequence"].is_number())
+        .count();
+    assert!(frames >= 5,
+        "initial frame, focus frame, and all three successive preedit frames must be presented; got {frames}");
+}
+
+#[tokio::test]
 async fn test_paste_writes_ordered_text_using_bracketed_mode() {
     let calls = Arc::new(Mutex::new(Calls::default()));
     let fake_session_id = "test-paste-session".to_string();

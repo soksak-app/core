@@ -1693,6 +1693,24 @@ async fn surface_task(
                     }
                     SurfaceCommand::Compose { preedit: next } => {
                         preedit = next;
+                        cursor_activity = Instant::now();
+                        last_cursor_frame = None;
+                        if let Some(state) = image_state.as_mut() {
+                            if state.pending_draw {
+                                state.dirty = true;
+                            } else {
+                                let screen = decorate_screen(
+                                    engine.screen(),
+                                    focused,
+                                    &preedit,
+                                    &cursor_policy,
+                                    0,
+                                );
+                                if !present_screen(&surface_id, &screen, state, &output_tx).await {
+                                    return;
+                                }
+                            }
+                        }
                         let response = json!({"surface": surface_id, "body": {"ack": true}});
                         if output_tx.send(response.to_string()).await.is_err() { return; }
                     }

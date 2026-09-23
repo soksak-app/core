@@ -1306,7 +1306,7 @@ test("inline image display and deletion are observable through terminal.session"
     sidecar: fakeSidecar,
     expose: fakeExpose,
     scale: 1,
-    window: { ResizeObserver: FakeResizeObserver, TextEncoder: FakeTextEncoder, devicePixelRatio: 1 },
+    window: { ResizeObserver: FakeResizeObserver, TextEncoder, devicePixelRatio: 1 },
   });
   const status = fakeExpose.getStatus("terminal.session");
   fakeSidecar.triggerEvent("test-session", { event: "image.inline", command: "display", name: "plot" });
@@ -1372,7 +1372,7 @@ test("compose events are sent with ranges and published as preedit state", async
   });
 });
 
-test("Korean IME commits the first syllable once and does not leak jamo inserts", async () => {
+test("native insert callbacks preserve compatibility jamo instead of discarding by Unicode range", async () => {
   FakeResizeObserver.reset();
   const fakeAttachImage = createFakeAttachImage();
   const fakeSidecar = createFakeSidecar();
@@ -1387,31 +1387,146 @@ test("Korean IME commits the first syllable once and does not leak jamo inserts"
     sidecar: fakeSidecar,
     expose: fakeExpose,
     scale: 1,
-    window: { ResizeObserver: FakeResizeObserver, TextEncoder: FakeTextEncoder, devicePixelRatio: 1 },
+    window: { ResizeObserver: FakeResizeObserver, TextEncoder, devicePixelRatio: 1 },
   });
   FakeResizeObserver.triggerAll();
   openSession(fakeSidecar);
 
-  // WebKit's non-standard path: raw jamo inserts surround marked preedit updates.
+  regionReference._trigger("insert", { text: "ㅎ" });
   regionReference._trigger("insert", { text: "ㄴ" });
-  regionReference._trigger("compose", {
-    text: "ㅏ", selectedRange: { location: 1, length: 0 }, replacementRange: null, attributed: true,
-  });
-  regionReference._trigger("insert", { text: "ㅏ" });
-  regionReference._trigger("compose", {
-    text: "나", selectedRange: { location: 1, length: 0 }, replacementRange: null, attributed: true,
-  });
-  regionReference._trigger("compose", {
-    text: "", selectedRange: { location: 0, length: 0 }, replacementRange: null, attributed: true,
-  });
-  regionReference._trigger("insert", { text: " " });
   await new Promise((resolve) => setImmediate(resolve));
   await new Promise((resolve) => setImmediate(resolve));
 
   const byteInputs = fakeSidecar.getMessages().filter(({ body }) => body.operation === "input" && body.bytes);
-  assert.equal(byteInputs.length, 2, "the committed syllable and following space are the only PTY writes");
-  assert.deepEqual(fakeSidecar.getMessages().filter(({ body }) => body.operation === "input" && body.compose)
-    .map(({ body }) => body.compose.text), ["ㅏ", "나", ""]);
+  assert.deepEqual(byteInputs.map(({ body }) => Buffer.from(body.bytes, "base64").toString("utf8")), ["ㅎ", "ㄴ"],
+    "every native insert must be preserved exactly unless the native input client identifies it as preedit");
+});
+
+test("Korean IME insertText commit clears an active preedit and keeps later typing live", async () => {
+  FakeResizeObserver.reset();
+  const fakeAttachImage = createFakeAttachImage();
+  const fakeSidecar = createFakeSidecar();
+  let regionReference;
+  const expose = createFakeExpose();
+  await startTerminal({
+    view: createFakeView(),
+    attachImage: (view, name, sidecar) => {
+      regionReference = fakeAttachImage.function(view, name, sidecar);
+      return regionReference;
+    },
+    sidecar: fakeSidecar,
+    expose,
+    scale: 1,
+    window: { ResizeObserver: FakeResizeObserver, TextEncoder, devicePixelRatio: 1 },
+  });
+  FakeResizeObserver.triggerAll();
+  openSession(fakeSidecar);
+
+  regionReference._trigger("compose", {
+    text: "한", selectedRange: { location: 1, length: 0 }, replacementRange: null, attributed: true,
+  });
+  // NSTextInputClient.insertText는 native marked 상태를 지우지만 빈 compose event는 따로 보내지 않는다.
+  regionReference._trigger("insert", { text: "한" });
+  regionReference._trigger("insert", { text: "글" });
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+
+  const byteInputs = fakeSidecar.getMessages().filter(({ body }) => body.operation === "input" && body.bytes);
+  assert.equal(byteInputs.length, 2, "the committed syllable and following character must reach the PTY");
+  assert.deepEqual(byteInputs.map(({ body }) => Buffer.from(body.bytes, "base64").toString("utf8")), ["한", "글"]);
+  assert.equal(expose.getStatus("terminal.compose").readFn().text, "", "insertText must end the stale preedit");
+});
+
+test("terminal.compose.update exposes ordered preedit changes without writing partial text to the PTY", async () => {
+  FakeResizeObserver.reset();
+  const fakeAttachImage = createFakeAttachImage();
+  const fakeSidecar = createFakeSidecar();
+  const expose = createFakeExpose();
+  await startTerminal({
+    view: createFakeView(),
+    attachImage: fakeAttachImage.function,
+    sidecar: fakeSidecar,
+    expose,
+    scale: 1,
+    window: { ResizeObserver: FakeResizeObserver, TextEncoder, devicePixelRatio: 1 },
+  });
+  FakeResizeObserver.triggerAll();
+  openSession(fakeSidecar);
+
+  const update = expose.getCommand("terminal.compose.update");
+  assert.equal(typeof update, "function", "preedit must have a declared command entry point");
+  for (const text of ["ㅎ", "하", "한"]) {
+    await update({ text, selectedRange: { location: text.length, length: 0 }, attributed: true });
+    assert.equal(expose.getStatus("terminal.compose").readFn().text, text);
+  }
+  const inputMessages = fakeSidecar.getMessages().filter(({ body }) => body.operation === "input");
+  assert.deepEqual(inputMessages.map(({ body }) => body.compose?.text), ["ㅎ", "하", "한"]);
+  assert.equal(inputMessages.some(({ body }) => body.bytes !== undefined), false,
+    "preedit updates must not become PTY bytes");
+});
+
+test("terminal.compose.update rejects malformed ranges instead of replacing them with empty ranges", async () => {
+  FakeResizeObserver.reset();
+  const fakeAttachImage = createFakeAttachImage();
+  const fakeSidecar = createFakeSidecar();
+  const expose = createFakeExpose();
+  await startTerminal({
+    view: createFakeView(),
+    attachImage: fakeAttachImage.function,
+    sidecar: fakeSidecar,
+    expose,
+    scale: 1,
+    window: { ResizeObserver: FakeResizeObserver, TextEncoder, devicePixelRatio: 1 },
+  });
+  FakeResizeObserver.triggerAll();
+
+  await assert.rejects(expose.getCommand("terminal.compose.update")({
+    text: "한", selectedRange: { location: -1, length: 0 },
+  }), /IME range must contain nonnegative integer location and length/);
+  assert.equal(fakeSidecar.getMessages().some(({ body }) => body.operation === "input"), false,
+    "invalid compose input must not be sent");
+});
+
+test("terminal.ime.trace records native callbacks and ordered terminal input, and reports overflow", async () => {
+  FakeResizeObserver.reset();
+  const fakeAttachImage = createFakeAttachImage();
+  const fakeSidecar = createFakeSidecar();
+  const expose = createFakeExpose();
+  let regionReference;
+  await startTerminal({
+    view: createFakeView(),
+    attachImage: (view, name, sidecar) => {
+      regionReference = fakeAttachImage.function(view, name, sidecar);
+      return regionReference;
+    },
+    sidecar: fakeSidecar,
+    expose,
+    scale: 1,
+    window: { ResizeObserver: FakeResizeObserver, TextEncoder, devicePixelRatio: 1 },
+  });
+  FakeResizeObserver.triggerAll();
+  openSession(fakeSidecar);
+
+  await expose.getCommand("terminal.ime.trace")({ action: "start" });
+  regionReference._trigger("key", { key: "Char", text: "d", shift: false, alt: false, ctrl: false });
+  regionReference._trigger("insert", { text: "d" });
+  regionReference._trigger("compose", { text: "ㅎ" });
+  regionReference._trigger("insert", { text: "한" });
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+  const result = await expose.getCommand("terminal.ime.trace")({ action: "stop" });
+  assert.equal(result.overflow, false);
+  assert.deepEqual(result.entries.map(({ kind }) => kind), [
+    "native-key", "terminal-input", "native-insert", "terminal-input", "native-compose", "terminal-input", "native-insert", "terminal-input", "terminal-input",
+  ]);
+  assert.deepEqual(result.entries[0], { sequence: 0, kind: "native-key", key: "Char", text: "d" });
+  assert.deepEqual(result.entries.filter(({ kind }) => kind === "native-insert").map(({ text }) => text), ["d", "한"]);
+
+  await expose.getCommand("terminal.ime.trace")({ action: "start" });
+  for (let i = 0; i < 257; i++) regionReference._trigger("insert", { text: "x" });
+  const overflow = expose.getStatus("terminal.ime.trace").readFn();
+  assert.equal(overflow.enabled, false);
+  assert.equal(overflow.overflow, true);
 });
 
 test("native focus and cursor state route to sidecar and caret", async () => {
