@@ -1,5 +1,10 @@
-use serde_json::json;
-use soksak_host_tauriv2::exposure::reply_target;
+use std::sync::Arc;
+use std::time::Duration;
+
+use serde_json::{json, Value};
+use soksak_host_tauriv2::exposure::{reply_target, Relay};
+
+const WAIT: Duration = Duration::from_secs(5);
 
 // contract: exposure-reply.target.main-and-surface-distinct
 #[test]
@@ -24,4 +29,40 @@ fn invalid_scope_cannot_be_converted_to_a_main_reply() {
     for scope in [json!(null), json!(""), json!(1), json!({})] {
         assert!(reply_target("main", &json!({"id":1,"surface":scope})).is_err());
     }
+}
+
+// contract: exposure-reply.payload.main-reply-unscoped, exposure-reply.payload.scoped-reply-keeps-surface
+#[test]
+fn main_and_scoped_reply_payloads_reach_their_requests() {
+    // 문서가 보낸 응답 문자열을 exposure_reply 명령의 인자와 같이 Value 로 읽는다.
+    let decode = |payload: Value| -> Value {
+        serde_json::from_str(&serde_json::to_string(&payload).unwrap()).unwrap()
+    };
+    let relay = Arc::new(Relay::default());
+
+    let replying = relay.clone();
+    let main = relay.request("main", Some(WAIT), move |id| {
+        let payload = decode(json!({"id": id, "result": null}));
+        assert_eq!(payload.get("surface"), None);
+        let target = reply_target("main", &payload).unwrap();
+        assert!(
+            replying.reply(&target, &payload),
+            "main reply went to {target}"
+        );
+        Ok(())
+    });
+    assert_eq!(main.unwrap(), Value::Null);
+
+    let replying = relay.clone();
+    let scoped = relay.request("surface-main-tab-1", Some(WAIT), move |id| {
+        let payload = decode(json!({"id": id, "surface": "tab-1", "result": {"ok": true}}));
+        assert_eq!(payload["surface"], "tab-1");
+        let target = reply_target("main", &payload).unwrap();
+        assert!(
+            replying.reply(&target, &payload),
+            "scoped reply went to {target}"
+        );
+        Ok(())
+    });
+    assert_eq!(scoped.unwrap(), json!({"ok": true}));
 }
