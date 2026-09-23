@@ -85,6 +85,7 @@ The following methods exist only in diagnostic builds (Go build tag `diagnostics
 | `diagnostics.modal.hold` | `{window, on}` | With `on`, holds the host's answers to the window's modal content requests; without, sends the held answers and stops holding |
 | `diagnostics.modal.held` | `{window}` | Answers when the window holds a modal content answer or stops holding; fails when the window does not hold answers |
 | `diagnostics.transcript` | `{window, on}` | Starts or stops `diagnostics.log` notifications `{window, line}` for host requests, replies, and page verification lines |
+| `diagnostics.capture.still` | `{window}` | Writes a still PNG of the window at device-pixel resolution without focusing it and returns `{path}` inside a private `<config-dir>/captures/still-*` directory. It is observation material for development, not measurement; measurements use `diagnostics.capture.start`/`stop` frames. The requester removes the directory after viewing |
 | `diagnostics.input.source` | `{window, select?}` | With `select`, selects that enabled keyboard input source; returns `{current}`, the selected source identifier. A platform without keyboard input sources returns an error. Activation-tier window checks use it to reproduce a user's input-source sequence |
 
 The host writes large data, such as captures, to files under the configuration directory, and the reply contains the file paths. The requester removes the capture files after measurement.
@@ -96,7 +97,7 @@ The host writes large data, such as captures, to files under the configuration d
 | Package | Role |
 | --- | --- |
 | `packages/client` | Library that reads `endpoint.json`, connects, and sends requests |
-| `packages/cli` | `soksak` command with the subcommands `windows`, `list`, `status` (`--watch` prints each change), `run`, `dom`, and `input`. Every subcommand requires `--config-dir` |
+| `packages/cli` | `soksak` command with the subcommands `windows`, `list`, `status` (`--watch` prints each change), `run`, `dom`, `input`, and `capture` (diagnostic builds; a still window image for observation). Every subcommand requires `--config-dir` |
 | `packages/mcp` | stdio MCP server. It generates its tools from `exposure.list` and opens no network port |
 
 Window checks use `packages/client`.

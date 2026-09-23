@@ -306,6 +306,11 @@ pub fn capture_longest_gap() -> Result<f64, String> {
 }
 
 #[cfg(feature = "diagnostics")]
+pub fn capture_still(_window_number: isize, _path: &str) -> Result<(), String> {
+    missing("window capture")
+}
+
+#[cfg(feature = "diagnostics")]
 pub fn input_source() -> Result<String, String> {
     missing("keyboard input sources")
 }

@@ -333,6 +333,10 @@ impl Platform for Windows {
         unsupported::capture_longest_gap()
     }
     #[cfg(feature = "diagnostics")]
+    fn capture_still(&self, window_number: isize, path: &str) -> Result<(), String> {
+        unsupported::capture_still(window_number, path)
+    }
+    #[cfg(feature = "diagnostics")]
     fn input_source(&self) -> Result<String, String> {
         unsupported::input_source()
     }

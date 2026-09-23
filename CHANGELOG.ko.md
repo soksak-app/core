@@ -1,5 +1,6 @@
 # 변경 기록
 
+- F11-3: native/darwin의 `sp_capture_still`을 바탕으로 두 호스트에 `diagnostics.capture.still`, CLI에 `soksak capture`를 추가해 포커스 없이 창 정지 이미지를 얻는다. F8-11에서 쓴 임시 PNG 기록기를 대신하며 재빌드된 두 앱에서 확인했다.
 - F8-11: 재빌드된 Tauri와 Wails는 ASCII 뒤에서 한 칸 커서, 넓은 한글 조합 글자 위에서 두 칸 커서를 그리며, 활성화 등급 검사의 창 캡처로 측정했다. F8-13(넓은 글자 뒤 빈틈)과 F11-3(관측용 창 정지 캡처)을 등록했다.
 - F8-12: `terminal.cursor`와 입력기 caret이 모든 `screen` 이벤트의 커서를 따르며, 불완전한 커서는 오류로 알린다. 재빌드된 Tauri와 Wails는 `ddd한` 입력 뒤 13열과 포커스를 보고한다.
 - F8-11 진행: vt-core 프레임 렌더러가 넓은 조합 문자열을 포함해 커서 아래 글자의 폭만큼 커서를 그린다. 새 프레임 테스트가 넓은 조합 글자, 넓은 확정 글자, 좁은 조합 글자를 다룬다. F8-12 등록: `terminal.cursor`와 입력기 caret이 `screen` 이벤트의 커서를 무시한다.

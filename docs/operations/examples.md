@@ -124,6 +124,8 @@ make -C native/darwin test-activation
 
 Activation-tier window checks live in `e2e/activation/` and run only with `pnpm -F @soksak/e2e verify:activation` in a run the user approves; `pnpm -F @soksak/e2e verify` does not include them. They may activate the application with `input.pointer` `activate: true` (`make e2e-check` rejects it elsewhere) and change the keyboard input source with `diagnostics.input.source`, restoring the previous source in cleanup. `ime.test.mjs` types ABC `ddd`, switches to Korean 2-Set, types `g k s r m f`, Space, and Enter, and requires the preedit sequence `ㅎ`, `하`, `한`, `ㄱ`, `그`, `글`, ` ` and the committed command `ddd한글` exactly once on the screen. Start the application alone before the run, because the check takes the keyboard focus.
 
+`soksak capture --window main --config-dir DIR` writes a still PNG of a running diagnostic build's window without focusing it and prints its path, for looking at the result during development. Remove the printed `still-*` directory after viewing; numeric checks use recording frames instead.
+
 `make -C native/darwin repeat TEST=<name>_test COUNT=<n>` runs one default test repeatedly and `make -C native/darwin repeat-suite COUNT=<n>` runs the default suite repeatedly; each stops at the first failure and reports the run number and system load.
 
 The baseline expects duplicate pointer movement in overlapping DOMs. The registered-input run requires exclusive pointer tracking, retained keyboard input, and cleanup after hiding or removing the overlay. Neither run tests delayed cursor responses.

@@ -168,3 +168,11 @@ test("--surface names the surface of status, run, and dom requests", async (t) =
   assert.equal((await run(["dom", "rect", "core.tab", "--window", "main", "--surface", "tab-a", ...dir])).code, 0);
   assert.deepEqual(server.requests.map((m) => m.params.surface), ["tab-a", "tab-a", "tab-a"]);
 });
+
+test("capture requests a still window capture and prints its path", async (t) => {
+  const { server, dir } = await fixture(t);
+  const result = await run(["capture", "--window", "main", ...dir]);
+  assert.equal(result.code, 0, result.stderr);
+  assert.deepEqual(server.requests.map((m) => [m.method, m.params]), [["diagnostics.capture.still", { window: "main" }]]);
+  assert.deepEqual(JSON.parse(result.stdout), { path: "/config/captures/still-main-1.png" });
+});

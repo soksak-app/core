@@ -99,3 +99,15 @@ func (implementation) CaptureWait() (bool, error) {
 func (implementation) CaptureLimited() bool { return bool(C.sp_capture_limited()) }
 
 func (implementation) CaptureLongestGap() float64 { return float64(C.sp_capture_longest_gap()) }
+
+func (implementation) CaptureStill(windowNumber int, path string) error {
+	if strings.IndexByte(path, 0) >= 0 {
+		return errors.New("still capture: path contains NUL")
+	}
+	target := C.CString(path)
+	defer C.free(unsafe.Pointer(target))
+	if !bool(C.sp_capture_still(C.long(windowNumber), target)) {
+		return captureError("still")
+	}
+	return nil
+}

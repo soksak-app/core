@@ -10,6 +10,7 @@
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
 #import "capture.h"
+#import <ImageIO/ImageIO.h>
 #import <ScreenCaptureKit/ScreenCaptureKit.h>
 
 static void setCaptureError(NSString* message);
@@ -485,4 +486,72 @@ double sp_capture_longest_gap(void) {
     mach_timebase_info_data_t timebase;
     mach_timebase_info(&timebase);
     return (double)captureSink.longestGap * timebase.numer / timebase.denom / 1e6;
+}
+
+bool sp_capture_still(long windowNumber, const char *path) {
+    clearCaptureError();
+    if (path == NULL) {
+        setCaptureError(@"still capture needs a path");
+        return false;
+    }
+    NSURL *url = [NSURL fileURLWithPath:[NSString stringWithUTF8String:path]];
+    __block bool written = false;
+    dispatch_semaphore_t answered = dispatch_semaphore_create(0);
+    [SCShareableContent getCurrentProcessShareableContentWithCompletionHandler:
+        ^(SCShareableContent *content, NSError *error) {
+        if (error != nil) {
+            setCaptureError([NSString stringWithFormat:@"current-process capture unavailable: %@", error.localizedDescription]);
+            dispatch_semaphore_signal(answered);
+            return;
+        }
+        SCWindow *target = nil;
+        for (SCWindow *window in content.windows) {
+            if ((long)window.windowID == windowNumber) target = window;
+        }
+        if (target == nil) {
+            setCaptureError([NSString stringWithFormat:@"window %ld not found", windowNumber]);
+            dispatch_semaphore_signal(answered);
+            return;
+        }
+        if (CGRectIsEmpty(target.frame)) {
+            setCaptureError([NSString stringWithFormat:@"window %ld has no on-screen frame", windowNumber]);
+            dispatch_semaphore_signal(answered);
+            return;
+        }
+        SCContentFilter *filter = [[[SCContentFilter alloc] initWithDesktopIndependentWindow:target] autorelease];
+        SCStreamConfiguration *config = [[[SCStreamConfiguration alloc] init] autorelease];
+        // 관측 이미지는 장치 픽셀을 유지한다.
+        config.width = (size_t)(filter.contentRect.size.width * filter.pointPixelScale);
+        config.height = (size_t)(filter.contentRect.size.height * filter.pointPixelScale);
+        config.colorSpaceName = kCGColorSpaceSRGB;
+        config.showsCursor = NO;
+        [SCScreenshotManager captureImageWithFilter:filter configuration:config
+            completionHandler:^(CGImageRef image, NSError *captureError) {
+            if (image == NULL) {
+                setCaptureError([NSString stringWithFormat:@"still capture failed: %@",
+                    captureError.localizedDescription ?: @"no image"]);
+                dispatch_semaphore_signal(answered);
+                return;
+            }
+            CGImageDestinationRef destination = CGImageDestinationCreateWithURL(
+                (CFURLRef)url, (CFStringRef)@"public.png", 1, NULL);
+            if (destination == NULL) {
+                setCaptureError([NSString stringWithFormat:@"cannot write %@", url.path]);
+                dispatch_semaphore_signal(answered);
+                return;
+            }
+            CGImageDestinationAddImage(destination, image, NULL);
+            written = CGImageDestinationFinalize(destination);
+            CFRelease(destination);
+            if (!written) setCaptureError([NSString stringWithFormat:@"cannot write %@", url.path]);
+            dispatch_semaphore_signal(answered);
+        }];
+    }];
+    long wait = dispatch_semaphore_wait(answered, dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC));
+    dispatch_release(answered);
+    if (wait != 0) {
+        setCaptureError(@"still capture timed out after 10000ms");
+        return false;
+    }
+    return written;
 }

@@ -10,6 +10,7 @@ extern "C" {
     fn sp_capture_stop(after: f64) -> c_int;
     fn sp_capture_limited() -> bool;
     fn sp_capture_longest_gap() -> f64;
+    fn sp_capture_still(window_number: isize, path: *const c_char) -> bool;
 }
 
 /// 창 번호의 창을 캡처 대상으로 준비한다. display 이면 창이 있는 디스플레이에서 이 앱의 창을 캡처한다.
@@ -64,5 +65,15 @@ pub fn wait() -> Result<bool, String> {
         Ok(true)
     } else {
         Err(last_error("capture wait failed"))
+    }
+}
+
+/// 창 번호의 창을 포커스를 주지 않고 한 장 찍어 path 에 PNG 로 쓴다.
+pub fn still(window_number: isize, path: &str) -> Result<(), String> {
+    let target = CString::new(path).map_err(|_| "still capture failed: path contains NUL".to_owned())?;
+    if unsafe { sp_capture_still(window_number, target.as_ptr()) } {
+        Ok(())
+    } else {
+        Err(last_error("still capture failed"))
     }
 }

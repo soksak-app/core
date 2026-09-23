@@ -107,6 +107,7 @@ pub(crate) fn call(
         }
         "diagnostics.modal.held" => modal_held(window.label()),
         "diagnostics.input.source" => input_source(window, params),
+        "diagnostics.capture.still" => capture_still(window),
         "diagnostics.presentation.failure" => {
             exposure::inject_presentation_failure(window)?;
             Ok(Value::Null)
@@ -116,6 +117,33 @@ pub(crate) fn call(
             format!("{method} is not a diagnostic method"),
         )),
     }
+}
+
+/// 창을 포커스를 주지 않고 한 장 찍어 `<config-dir>/captures/still-*/window.png` 로 쓰고 경로를 반환한다.
+/// 개발 중 눈으로 확인하는 관측 자료이며, 요청자가 확인한 뒤 그 디렉터리를 지운다.
+fn capture_still(window: &Window) -> Result<Value, Failure> {
+    let platform = platform::current().map_err(internal)?;
+    let held = window.clone();
+    let numbers = on_main(window, move || platform.window_numbers(&held)).map_err(internal)?;
+    let number = *numbers
+        .first()
+        .ok_or_else(|| internal("the window has no window number"))?;
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(internal)?
+        .as_millis();
+    // 녹화와 같이 캡처마다 비공개 디렉터리를 만든다.
+    let directory = window
+        .state::<Workspace>()
+        .directory()
+        .join("captures")
+        .join(format!("still-{stamp}-{}", CAPTURES.fetch_add(1, Ordering::Relaxed)));
+    platform.private_directory(&directory).map_err(internal)?;
+    let path = directory.join("window.png");
+    platform
+        .capture_still(number, &path.to_string_lossy())
+        .map_err(internal)?;
+    Ok(json!({"path": path.to_string_lossy()}))
 }
 
 /// select 가 있으면 그 입력 소스를 선택하고, 현재 선택된 키보드 입력 소스를 반환한다.

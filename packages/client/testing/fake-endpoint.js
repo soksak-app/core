@@ -152,6 +152,7 @@ export function sampleHandlers() {
       watchers.get(params.name)?.delete(connection);
       return null;
     },
+    "diagnostics.capture.still": (params) => (window(params), { path: "/config/captures/still-main-1.png" }),
     "command.run": (params) => {
       window(params);
       if (params.name === "core.project.open") return { opened: params.params?.root ?? null };

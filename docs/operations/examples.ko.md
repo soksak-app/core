@@ -124,6 +124,8 @@ make -C native/darwin test-activation
 
 활성화 등급 창 검사는 `e2e/activation/`에 있으며 사용자가 승인한 실행에서 `pnpm -F @soksak/e2e verify:activation`으로만 실행한다. `pnpm -F @soksak/e2e verify`는 이를 포함하지 않는다. 이 검사는 `input.pointer`의 `activate: true`로 앱을 활성화할 수 있고(`make e2e-check`는 다른 곳에서 이를 거부한다), `diagnostics.input.source`로 키보드 입력 소스를 바꾸며 정리에서 이전 입력 소스를 되돌린다. `ime.test.mjs`는 ABC `ddd`를 치고 한국어 2벌식으로 바꿔 `g k s r m f`, Space, Enter를 치며, 조합 문자열 `ㅎ`, `하`, `한`, `ㄱ`, `그`, `글`, ` `과 화면의 확정 명령 `ddd한글`이 정확히 한 번임을 요구한다. 검사가 키보드 포커스를 가져가므로 실행 전에 앱 하나만 띄운다.
 
+`soksak capture --window main --config-dir DIR`은 실행 중인 진단 빌드의 창을 포커스 없이 정지 PNG로 쓰고 경로를 출력한다. 개발 중 결과를 눈으로 확인할 때 쓴다. 확인한 뒤 출력된 `still-*` 디렉터리를 지우며, 수치 검사는 녹화 프레임을 쓴다.
+
 `make -C native/darwin repeat TEST=<name>_test COUNT=<n>`은 기본 검사 하나를, `make -C native/darwin repeat-suite COUNT=<n>`은 기본 스위트를 반복 실행한다. 둘 다 첫 실패에서 멈추고 실행 번호와 시스템 부하를 보고한다.
 
 기준 실행은 겹친 DOM의 중복 포인터 이동을 확인한다. 입력 등록 실행은 단일 대상 포인터 추적, 키보드 입력 유지, 오버레이 숨김·제거 후 정리를 검사한다. 두 실행 모두 지연된 커서 응답을 검사하지 않는다.

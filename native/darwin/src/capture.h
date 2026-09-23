@@ -17,3 +17,7 @@ bool sp_capture_limited(void);
 // 마지막으로 멈춘 녹화에서 연속한 완성 프레임 사이의 가장 긴 표시 간격(ms). 이보다 긴 간격에는
 // 기록되지 않은 화면이 있다.
 double sp_capture_longest_gap(void);
+// 윈도 서버 번호 windowNumber 의 창을 포커스를 주지 않고 한 장 찍어 path 에 PNG 로 쓴다.
+// 개발 중 눈으로 확인하는 관측 자료를 만든다. 측정은 녹화 프레임으로 한다. 실패하면 false 를
+// 반환하고 sp_capture_error 가 이유를 반환한다.
+bool sp_capture_still(long windowNumber, const char *path);

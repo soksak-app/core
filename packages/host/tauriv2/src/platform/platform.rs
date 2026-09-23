@@ -414,6 +414,9 @@ pub trait Platform: Send + Sync {
     #[cfg(feature = "diagnostics")]
     /// 마지막으로 멈춘 기록에서 연속한 프레임 사이의 가장 긴 표시 간격(ms).
     fn capture_longest_gap(&self) -> Result<f64, String>;
+    #[cfg(feature = "diagnostics")]
+    /// 창 번호의 창을 포커스를 주지 않고 한 장 찍어 path 에 PNG 로 쓴다. 관측 자료다.
+    fn capture_still(&self, window_number: isize, path: &str) -> Result<(), String>;
 
     // 입력 소스
 

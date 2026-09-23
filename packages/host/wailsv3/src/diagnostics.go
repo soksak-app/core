@@ -35,6 +35,7 @@ func init() {
 	diagnosticMethods["diagnostics.modal.held"] = diagnosticModalHeld
 	diagnosticMethods["diagnostics.presentation.failure"] = diagnosticPresentationFailure
 	diagnosticMethods["diagnostics.input.source"] = diagnosticInputSource
+	diagnosticMethods["diagnostics.capture.still"] = diagnosticCaptureStill
 	holdModalContent = modalHolds.wait
 	diagnosticSubscriptions["diagnostics.transcript"] = transcriptTopic
 	diagnosticTopics[logTopic] = func(on bool) (string, any) {
@@ -267,6 +268,37 @@ func startCapture(h *Host, s *Surfaces, display bool) (string, error) {
 		return "", err
 	}
 	return directory, nil
+}
+
+// diagnosticCaptureStill 은 창을 포커스를 주지 않고 한 장 찍어 <config-dir>/captures/still-*/window.png 로
+// 쓰고 경로를 반환한다. 개발 중 눈으로 확인하는 관측 자료이며, 요청자가 확인한 뒤 그 디렉터리를 지운다.
+func diagnosticCaptureStill(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+	h, s, err := diagnosticHost(e, params)
+	if err != nil {
+		return nil, err
+	}
+	capture, err := recorder()
+	if err != nil {
+		return nil, err
+	}
+	var numbers []int
+	application.InvokeSync(func() { numbers, err = capture.WindowNumbers(s.window.NativeWindow()) })
+	if err != nil {
+		return nil, err
+	}
+	if len(numbers) == 0 {
+		return nil, errors.New("the window has no window server number")
+	}
+	// 녹화와 같이 캡처마다 비공개 디렉터리를 만든다.
+	directory := filepath.Join(h.workspace.directory, "captures", fmt.Sprintf("still-%s-%d", s.name, time.Now().UnixNano()))
+	if err := os.MkdirAll(directory, 0700); err != nil {
+		return nil, err
+	}
+	path := filepath.Join(directory, "window.png")
+	if err := capture.CaptureStill(numbers[0], path); err != nil {
+		return nil, err
+	}
+	return map[string]string{"path": path}, nil
 }
 
 // diagnosticCaptureStart 는 창 녹화를 시작하고 프레임 폴더를 반환한다.

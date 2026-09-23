@@ -13,6 +13,7 @@ commands:
   dom rect|click|input|dispatch NAME --window W [--surface S] [--index N] [--value V] [--event JSON]
   input pointer --window W --x X --y Y --phase move|down|drag|up|scroll [--button left|right] [--delta-x N] [--delta-y N] [--activate]
   input key --window W --key K --phase down|up [--text T] [--modifiers shift,control,option,command]
+  capture --window W      (diagnostic builds) writes a still PNG of the window without focusing it and prints {path}
 
 common options:
   --config-dir DIR        configuration directory of the running application (required)`;
@@ -91,6 +92,8 @@ function plan(positionals, values) {
         watch: values.watch,
       };
     }
+    case "capture":
+      return { method: "diagnostics.capture.still", params: { window: window() } };
     case "run": {
       const name = positional(positionals, 1, "NAME");
       const params = values.params === undefined ? {} : json(values, "params");
