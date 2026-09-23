@@ -261,7 +261,7 @@ fn persistent_transport_rejects_unknown_transport() {
 
 // contract: sidecars.persistent.accepts-non-canonical-config-directory
 #[test]
-fn persistent_transport_canonicalizes_the_config_directory() {
+fn persistent_transport_accepts_a_non_canonical_config_directory() {
     let executable_directory = tempfile::tempdir().unwrap();
     let config_directory = tempfile::tempdir().unwrap();
     let fixture = files(r#"{"executable":"build/echo","protocol":1,"transport":"persistent"}"#);
@@ -272,8 +272,17 @@ fn persistent_transport_canonicalizes_the_config_directory() {
     )
     .unwrap();
     let (window, _events) = owner("a", "/projects/test");
+    // 실행 파일이 없으므로 서비스 시작에서 실패하고, 그 전에 설정 디렉터리 아래에 서비스 디렉터리를 만든다.
     let error = sidecars.send(&window, ECHO, "s1", &raw("{}"));
     assert!(error.unwrap_err().contains("sidecar"));
+    assert!(
+        config_directory
+            .path()
+            .join("services")
+            .join("echo")
+            .is_dir(),
+        "the service directory is not under the config directory"
+    );
 }
 
 // contract: sidecars.send.rejects-when-no-plugin-declares-sidecars

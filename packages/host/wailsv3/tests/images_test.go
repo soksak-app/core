@@ -784,44 +784,20 @@ func TestEnvelopeFromTheAttachedSidecarIsPresented(t *testing.T) {
 func TestEnvelopeFromAnotherSidecarIsRefused(t *testing.T) {
 	images := host.NewImages()
 	key := host.ImageKey{Surface: "tab-1", Name: "view"}
-
-	var a int
-	// sidecar-a가 attachment 한 이미지
-	owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: newFakeImageOwner("")}
-	if err := images.Reserve(key, owner); err != nil {
-		t.Fatalf("reserve failed: %v", err)
-	}
-	images.Set(key, unsafe.Pointer(&a))
-
-	nonce := "AAAAAAAAAAAAAAAAAAAAAA=="
-	body := map[string]any{
-		"image": map[string]any{
-			"name": "view",
-			"token": map[string]any{
-				"kind":  "iosurface-global",
-				"id":    uint32(12345),
-				"nonce": nonce,
-			},
-			"width":      800,
-			"height":     600,
-			"scale":      2.0,
-			"format":     "bgra8",
-			"generation": uint64(1),
-			"raster":     uint64(1),
-			"sequence":   1,
-		},
-	}
-	bodyBytes, _ := json.Marshal(body)
-
-	// 다른 사이드카(sidecar-b)가 같은 이미지를 보내면 notAttached 오류 반환
-	decision := host.Decide(bodyBytes, "sidecar-b", "tab-1", images)
-	reply, ok := decision.(*host.Reply)
+	attachImage(t, images, key)
+	// 구성된 현재 래스터이므로 거부 이유는 보낸 사이드카뿐이다.
+	configured := configureImage(t, images, key, 800, 600, 2.0)
+	envelope := configuredEnvelope(t, configured, 1)
+	reply, ok := host.Decide(envelope, "sidecar-b", key.Surface, images).(*host.Reply)
 	if !ok {
-		t.Fatalf("expected Reply(notAttached), got %T", decision)
+		t.Fatal("an envelope from another sidecar was not refused")
 	}
-	imageData := reply.JSON["image"].(map[string]interface{})
-	if !strings.Contains(imageData["error"].(string), "notAttached") {
-		t.Fatalf("expected notAttached error, got %v", imageData["error"])
+	if image := reply.JSON["image"].(map[string]interface{}); image["error"] != "notAttached" {
+		t.Fatalf("another sidecar was answered %v, want notAttached", image)
+	}
+	// 대조: 연결한 사이드카가 보낸 같은 봉투는 표시된다.
+	if _, ok := host.Decide(envelope, "sidecar-a", key.Surface, images).(*host.Present); !ok {
+		t.Fatal("the attaching sidecar's envelope for the configured raster was not presented")
 	}
 }
 

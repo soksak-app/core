@@ -219,15 +219,12 @@ fn every_pending_reply_is_flushed_after_the_queue_drains() {
     }
 
     // Verify order: closes and replies came after the queued bodies
-    let last_body = data.rfind(r#""data":""#);
+    let last_body = data.rfind(r#""data":""#).expect("no queued body arrived");
     for want in &[r#""name":"a""#, r#""surface":"s2","closed":true"#] {
-        if let Some(idx) = data.find(want) {
-            assert!(
-                last_body.is_none() || idx > last_body.unwrap(),
-                "{} arrived before the queued bodies",
-                want
-            );
-        }
+        let idx = data
+            .find(want)
+            .unwrap_or_else(|| panic!("{want} did not arrive"));
+        assert!(idx > last_body, "{} arrived before the queued bodies", want);
     }
 }
 

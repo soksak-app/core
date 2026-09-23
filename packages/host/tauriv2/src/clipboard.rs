@@ -140,22 +140,17 @@ mod tests {
     use super::persist_png_at;
     // contract: clipboard.persist-png.writes-exact-bytes, clipboard.persist-png.owner-only-mode
     #[test]
-    fn persists_owned_png_without_overwriting() {
-        let root =
-            std::env::temp_dir().join(format!("soksak-clipboard-test-{}", std::process::id()));
-        if let Err(error) = std::fs::remove_dir_all(&root) {
-            assert_eq!(
-                error.kind(),
-                std::io::ErrorKind::NotFound,
-                "failed to clear clipboard test directory: {error}"
-            );
-        }
-        let path = persist_png_at(&root, b"png").unwrap();
-        assert_eq!(std::fs::read(&path).unwrap(), b"png");
-        let permissions = std::fs::metadata(&path).unwrap().permissions();
+    fn persists_each_png_to_a_new_owner_only_file() {
+        let root = tempfile::tempdir().unwrap();
+        let first = persist_png_at(root.path(), b"png").unwrap();
+        assert_eq!(std::fs::read(&first).unwrap(), b"png");
+        let permissions = std::fs::metadata(&first).unwrap().permissions();
         let mode = std::os::unix::fs::PermissionsExt::mode(&permissions);
         assert_eq!(mode & 0o777, 0o600, "clipboard image mode {mode:o}");
-        std::fs::remove_dir_all(root)
-            .unwrap_or_else(|error| panic!("failed to clean clipboard test directory: {error}"));
+        // 두 번째 저장은 새 파일을 만들고 첫 파일을 덮어쓰지 않는다.
+        let second = persist_png_at(root.path(), b"other").unwrap();
+        assert_ne!(first, second);
+        assert_eq!(std::fs::read(&first).unwrap(), b"png");
+        assert_eq!(std::fs::read(&second).unwrap(), b"other");
     }
 }

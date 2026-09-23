@@ -106,8 +106,14 @@ func TestEveryPendingReplyIsFlushedAfterTheQueueDrains(t *testing.T) {
 
 	// 순서: 닫힘과 반납은 큐에 먼저 들어간 큰 본문들보다 뒤에 온다.
 	last := strings.LastIndex(text, `"data":"`)
+	if last < 0 {
+		t.Fatal("no queued body arrived")
+	}
 	for _, want := range []string{`"name":"a"`, `"surface":"s2","closed":true`} {
-		if i := strings.Index(text, want); i >= 0 && i < last {
+		switch i := strings.Index(text, want); {
+		case i < 0:
+			t.Errorf("%s did not arrive", want)
+		case i < last:
 			t.Errorf("%s arrived before the queued bodies", want)
 		}
 	}

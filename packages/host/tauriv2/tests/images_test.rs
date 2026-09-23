@@ -94,44 +94,31 @@ fn unattached_image_is_refused() {
 fn image_from_another_sidecar_is_refused() {
     let images = Images::default();
     let key: Key = ("tab-1".to_string(), "view".to_string());
-
-    // 첫 번째 사이드카가 이미지를 등록
     images
         .reserve(&key, "owner-a", "sidecar-a")
         .expect("reserve");
     images.set(&key, 100);
-
-    let nonce_b64 = "AAAAAAAAAAAAAAAAAAAAAA==";
-    let body = json!({
-        "image": {
-            "name": "view",
-            "token": {
-                "kind": "iosurface-global",
-                "id": 12345u32,
-                "nonce": nonce_b64
-            },
-            "width": 800,
-            "height": 600,
-            "scale": 2.0,
-            "format": "bgra8",
-            "generation": 1,
-            "raster": 1,
-            "sequence": 1
-        }
-    })
-    .to_string();
-
-    // 다른 사이드카가 같은 이미지를 보내면 notAttached 오류를 반환해야 함
+    // 구성된 현재 래스터이므로 거부 이유는 보낸 사이드카뿐이다.
+    let configured = images
+        .configure_raster(&key, 800, 600, 2.0, true)
+        .unwrap()
+        .unwrap();
+    let body = configured_envelope(&configured, 1);
     match decide(&body, "sidecar-b", "tab-1", &images) {
         Decision::Reply { name, json } => {
             assert_eq!(name, "view");
-            assert!(json["image"]["error"]
-                .as_str()
-                .unwrap()
-                .contains("notAttached"));
+            assert_eq!(json["image"]["error"], "notAttached");
         }
         _ => panic!("expected Reply(notAttached) for different sidecar"),
     }
+    // 대조: 연결한 사이드카가 보낸 같은 봉투는 표시된다.
+    assert!(
+        matches!(
+            decide(&body, "sidecar-a", "tab-1", &images),
+            Decision::Present { .. }
+        ),
+        "the attaching sidecar's envelope for the configured raster was not presented"
+    );
 }
 
 // contract: images.envelope.presents-attached-current-frame, images.envelope.present-carries-nonce-scale-generation-raster
