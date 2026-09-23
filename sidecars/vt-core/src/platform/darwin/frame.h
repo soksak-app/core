@@ -4,12 +4,17 @@
 #include <stdint.h>
 #include <string.h>
 
+// 터미널 글꼴. 번들 글꼴 데이터나 설치된 글꼴 이름으로 만든다.
+struct FrameFont;
+typedef struct FrameFont FrameFont;
+
 typedef struct {
     uint32_t width;
     uint32_t height;
     uint32_t cell_width;
     uint32_t cell_height;
     double font_size;
+    const FrameFont *font; // 셀 메트릭을 계산하고 글자를 그리는 글꼴
 } Metrics;
 
 typedef struct {
@@ -77,10 +82,16 @@ int frame_draw_with_inline_images(Frame *frame, Screen *screen, Metrics *metrics
 // Free the frame and release IOSurface
 void frame_drop(Frame *frame);
 
-// Calculate metrics for a given font size and scale
-// font_size is in points (e.g., 13.0)
-// scale is typically 1.0 or 2.0
-Metrics frame_metrics(double font_size, double scale);
+// 글꼴 데이터(TrueType 등)로 글꼴을 만든다. 데이터가 글꼴이 아니면 NULL 을 반환한다.
+FrameFont *frame_font_from_data(const uint8_t *data, uint32_t length);
+// 설치된 글꼴 가운데 family 이름이 정확히 같은 글꼴을 만든다. 없으면 NULL 을 반환한다.
+FrameFont *frame_font_named(const char *family);
+void frame_font_drop(FrameFont *font);
+// 글꼴의 family 이름을 malloc 한 UTF-8 문자열로 반환한다. 호출자가 free 한다.
+char *frame_font_family(const FrameFont *font);
+
+// font 의 font_size(pt) 와 scale 로 셀 메트릭을 계산한다. 셀 폭은 'M' 의 advance 다.
+Metrics frame_metrics(const FrameFont *font, double font_size, double scale);
 
 // Read a pixel at (x, y) and return BGRA values
 // out must be at least 4 bytes

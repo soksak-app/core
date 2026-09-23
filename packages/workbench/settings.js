@@ -194,6 +194,10 @@ function validatePluginValue(key, value) {
       (!Number.isInteger(value) || value < definition.minimum || value > definition.maximum)) {
     throw new Error(`Invalid setting ${key}: integer value is outside its declared range`);
   }
+  if (definition.type === "string" &&
+      (typeof value !== "string" || value.length === 0 || value.length > definition.maxLength)) {
+    throw new Error(`Invalid setting ${key}: string value must be non-empty and at most ${definition.maxLength} characters`);
+  }
 }
 
 function validateValues(values, where) {

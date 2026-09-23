@@ -162,7 +162,7 @@ function normalizeCursorPolicy(value) {
  * @returns {Promise<void>}
  */
 export async function startTerminal({ id, view, attachImage, sidecar, expose, theme,
-  settings, clipboard, reportSurfaceError = () => {},
+  settings, clipboard, reportSurfaceError = () => {}, reportSurfaceReady = () => {},
   window: globalWindow = globalThis.window }) {
   // 브라우저 환경에서 필요한 객체들
   const window = globalWindow;
@@ -291,6 +291,18 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     };
     changed("cursor");
     return policy;
+  };
+  // 터미널 글꼴 family 를 사이드카에 보낸다. 사이드카의 font 확인 이벤트가 적용된 글꼴을 정하고,
+  // 거부는 오류 응답으로 도착하며 적용된 글꼴은 그대로 둔다.
+  let requestedFont = null;
+  let fontErrorShown = false;
+  // 새 상태·세션·테마 응답이 해소하지 않는 오류. 네이티브 이미지 오류와 글꼴 오류는 각자의 동작이 해제한다.
+  const unresolvedError = () => session.error?.startsWith("native image:") || fontErrorShown ? session.error : undefined;
+  const setFont = async (family) => {
+    if (typeof family !== "string" || family.length === 0) throw new Error("font.family setting is invalid");
+    if (family === requestedFont) return;
+    requestedFont = family;
+    await terminal.send(id, { operation: "font", family });
   };
   const sendPaste = async (text) => {
     if (typeof text !== "string" || text.length === 0) throw new Error("terminal paste text is empty");
@@ -640,7 +652,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
         cellWidth: body.cellWidth,
         cellHeight: body.cellHeight,
         unsupported: session.unsupported,
-        error: session.error?.startsWith("native image:") ? session.error : undefined,
+        error: unresolvedError(),
       };
       if (body.cursor !== undefined) applyCursor(body.cursor, body.cursor);
       sessionOpen = true;
@@ -651,7 +663,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
         reportInputError("invalid persistent session event");
         return;
       }
-      session = { ...session, sessionId: body.sessionId, error: undefined };
+      session = { ...session, sessionId: body.sessionId, error: unresolvedError() };
       sessionOpen = true;
       changed("session");
     } else if (body.event === "screen") {
@@ -684,7 +696,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
         reportInputError(new Error("invalid theme acknowledgement from sidecar"));
         return;
       }
-      session = { ...session, theme: body.mode, error: undefined };
+      session = { ...session, theme: body.mode, error: unresolvedError() };
       changed("session");
     } else if (body.event === "clipboard.store") {
       handleClipboardStore(body).catch(reportInputError);
@@ -742,9 +754,18 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       };
       changed("session");
       reportSurfaceError(error);
+    } else if (body.event === "font" && typeof body.family === "string") {
+      // 글꼴 오류 뒤 글꼴이 적용되면 그 오류 표시를 해제한다.
+      session = { ...session, font: body.family, ...(fontErrorShown ? { error: undefined } : {}) };
+      changed("session");
+      if (fontErrorShown) {
+        fontErrorShown = false;
+        reportSurfaceReady();
+      }
     } else if (body.error) {
       // 오류 응답 처리: {"error":"invalidParams","reason":"...",...}
       // reason 을 버리지 않고 오류에 실어 보낸다.
+      if (body.operation === "font") fontErrorShown = true;
       const message = typeof body.reason === "string" ? `${body.error}: ${body.reason}` : body.error;
       const error = new Error(message);
       session = {
@@ -804,6 +825,9 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     };
   };
   if (settings) {
+    await setFont((settings.read?.() ?? {})["font.family"]).catch((error) => {
+      reportInputError(error);
+    });
     await setCursorPolicy(settingsPolicy());
     settingsSubscription = settings.on((values) => {
       const nextClipboardPolicy = values["clipboard.program"];
@@ -820,6 +844,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
         unfocused: values["cursor.unfocused"],
       };
       setCursorPolicy(policy).catch(reportInputError);
+      setFont(values["font.family"]).catch(reportInputError);
     });
   }
 

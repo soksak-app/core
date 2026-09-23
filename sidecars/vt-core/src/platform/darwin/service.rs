@@ -193,6 +193,7 @@ pub async fn serve_persistent(
     service_dir: &Path,
     engine_factory: Arc<dyn Fn() -> Box<dyn crate::protocol::Engine> + Send + Sync>,
 ) -> Result<(), String> {
+    crate::platform::darwin::frame::load_default_font()?;
     let _lock = match service_lock(&service_dir) {
         Ok(file) => Lock(file),
         Err(error) if error == "already-running" => {

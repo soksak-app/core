@@ -5,6 +5,12 @@ pub struct CMetrics {
     pub cell_width: u32,
     pub cell_height: u32,
     pub font_size: f64,
+    pub font: *const CFrameFont,
+}
+
+#[repr(C)]
+pub struct CFrameFont {
+    _private: [u8; 0],
 }
 
 use unicode_segmentation::UnicodeSegmentation;
@@ -76,7 +82,12 @@ extern "C" {
         image_count: u32,
     ) -> i32;
     fn frame_drop(frame: *mut CFrame);
-    fn frame_metrics(font_size: f64, scale: f64) -> CMetrics;
+    fn frame_metrics(font: *const CFrameFont, font_size: f64, scale: f64) -> CMetrics;
+    fn frame_font_from_data(data: *const u8, length: u32) -> *mut CFrameFont;
+    fn frame_font_named(family: *const std::ffi::c_char) -> *mut CFrameFont;
+    fn frame_font_drop(font: *mut CFrameFont);
+    fn frame_font_family(font: *const CFrameFont) -> *mut std::ffi::c_char;
+    fn free(pointer: *mut std::ffi::c_void);
     fn frame_pixel(frame: *mut CFrame, x: u32, y: u32, out: *mut u8) -> i32;
 }
 
@@ -314,6 +325,7 @@ impl Frame {
             cell_width: metrics.cell_width as u32,
             cell_height: metrics.cell_height as u32,
             font_size: metrics.font_size as f64,
+            font: metrics.font.ptr,
         };
 
         let mut c_images = images
@@ -455,19 +467,127 @@ impl Drop for Frame {
     }
 }
 
+/// 터미널 글꼴. 번들 글꼴 데이터나 설치된 글꼴 이름으로 만든 CoreText 글꼴 설명이다.
+pub struct TerminalFont {
+    ptr: *mut CFrameFont,
+}
+
+// CoreText 글꼴 설명은 만든 뒤 바뀌지 않으므로 스레드 사이에서 공유할 수 있다.
+unsafe impl Send for TerminalFont {}
+unsafe impl Sync for TerminalFont {}
+
+/// 기본 터미널 글꼴. 한글과 라틴 문자가 모두 고정폭인 D2Coding(SIL Open Font License 1.1)이다.
+static BUNDLED_FONT: &[u8] = include_bytes!("../../../fonts/D2Coding.ttf");
+
+impl TerminalFont {
+    /// 사이드카에 포함한 기본 글꼴.
+    pub fn bundled() -> Result<Self, String> {
+        let ptr = unsafe { frame_font_from_data(BUNDLED_FONT.as_ptr(), BUNDLED_FONT.len() as u32) };
+        if ptr.is_null() {
+            return Err("the bundled terminal font could not be loaded".to_string());
+        }
+        Ok(Self { ptr })
+    }
+
+    /// 설치된 글꼴 가운데 family 이름이 정확히 같은 글꼴. 없으면 대체하지 않고 오류를 반환한다.
+    pub fn installed(family: &str) -> Result<Self, String> {
+        let name = std::ffi::CString::new(family)
+            .map_err(|_| "terminal font family contains NUL".to_string())?;
+        let ptr = unsafe { frame_font_named(name.as_ptr()) };
+        if ptr.is_null() {
+            return Err(format!("terminal font family is not installed: {family}"));
+        }
+        Ok(Self { ptr })
+    }
+}
+
+impl TerminalFont {
+    /// 글꼴의 family 이름.
+    pub fn family(&self) -> Result<String, String> {
+        let pointer = unsafe { frame_font_family(self.ptr) };
+        if pointer.is_null() {
+            return Err("the terminal font has no family name".to_string());
+        }
+        let family = unsafe { std::ffi::CStr::from_ptr(pointer) }.to_string_lossy().into_owned();
+        unsafe { free(pointer as *mut std::ffi::c_void) };
+        Ok(family)
+    }
+}
+
+/// family 이름의 터미널 글꼴. 번들 글꼴의 family 이름과 같으면 번들 글꼴이고, 아니면 설치된 글꼴이다.
+pub fn resolve_font(family: &str) -> Result<std::sync::Arc<TerminalFont>, String> {
+    let bundled = default_font();
+    if bundled.family()? == family {
+        return Ok(bundled);
+    }
+    Ok(std::sync::Arc::new(TerminalFont::installed(family)?))
+}
+
+impl std::fmt::Debug for TerminalFont {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.family() {
+            Ok(family) => write!(formatter, "TerminalFont({family})"),
+            Err(reason) => write!(formatter, "TerminalFont(<{reason}>)"),
+        }
+    }
+}
+
+impl Drop for TerminalFont {
+    fn drop(&mut self) {
+        unsafe { frame_font_drop(self.ptr) };
+    }
+}
+
+static DEFAULT_FONT: std::sync::OnceLock<std::sync::Arc<TerminalFont>> = std::sync::OnceLock::new();
+
+/// 번들 기본 글꼴을 읽는다. 서비스는 시작할 때 호출하며, 읽지 못하면 빌드 결함이므로 시작하지 않는다.
+pub fn load_default_font() -> Result<(), String> {
+    if DEFAULT_FONT.get().is_none() {
+        let font = std::sync::Arc::new(TerminalFont::bundled()?);
+        DEFAULT_FONT.get_or_init(|| font);
+    }
+    Ok(())
+}
+
+/// 기본 글꼴. 서비스는 시작할 때 load_default_font 로 먼저 읽는다.
+pub fn default_font() -> std::sync::Arc<TerminalFont> {
+    DEFAULT_FONT
+        .get_or_init(|| {
+            std::sync::Arc::new(
+                TerminalFont::bundled().expect("the bundled terminal font must load"),
+            )
+        })
+        .clone()
+}
+
 pub struct Metrics {
     pub cell_width: f32,
     pub cell_height: f32,
     pub font_size: f32,
+    pub font: std::sync::Arc<TerminalFont>,
 }
 
+/// 기본 글꼴의 메트릭.
 pub fn metrics(font_size: f32, scale: f32) -> Metrics {
-    let c_metrics = unsafe { frame_metrics(font_size as f64, scale as f64) };
-    Metrics {
+    metrics_for(&default_font(), font_size, scale).expect("the bundled terminal font has cell metrics")
+}
+
+/// font 의 메트릭. 셀 폭이나 높이를 잴 수 없는 글꼴은 오류다.
+pub fn metrics_for(
+    font: &std::sync::Arc<TerminalFont>,
+    font_size: f32,
+    scale: f32,
+) -> Result<Metrics, String> {
+    let c_metrics = unsafe { frame_metrics(font.ptr, font_size as f64, scale as f64) };
+    if c_metrics.cell_width == 0 || c_metrics.cell_height == 0 {
+        return Err("the terminal font has no measurable cell size".to_string());
+    }
+    Ok(Metrics {
         cell_width: c_metrics.cell_width as f32,
         cell_height: c_metrics.cell_height as f32,
         font_size: c_metrics.font_size as f32,
-    }
+        font: font.clone(),
+    })
 }
 
 fn parse_hex_color(color_opt: &Option<String>) -> ([u8; 3], bool) {

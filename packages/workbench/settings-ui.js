@@ -161,6 +161,19 @@ function slide(key, min, max, now, unit) {
   return wrap;
 }
 
+/** 한 줄 문자열 입력. 값은 change 로 도착한다. */
+function text(key, maxLength, now) {
+  const el = document.createElement("input");
+  el.type = "text";
+  el.className = "set-text";
+  el.dataset.set = key;
+  el.dataset.expose = "core.settings-modal.set";
+  valueCommand(el, key);
+  el.maxLength = maxLength;
+  el.setAttribute("value", String(now));
+  return el;
+}
+
 /** 버튼을 만든다. */
 function press(key, label) {
   const el = document.createElement("button");
@@ -251,7 +264,9 @@ function drawGeneral() {
       const now = value(key);
       const control = definition.type === "enum"
         ? segment(key, definition.values.map((item) => [item, item]), now)
-        : slide(key, definition.minimum, definition.maximum, now, "");
+        : definition.type === "string"
+          ? text(key, definition.maxLength, now)
+          : slide(key, definition.minimum, definition.maximum, now, "");
       return row(key, control);
     });
     body.append(group("플러그인", "플러그인이 선언한 설정은 같은 공통/프로젝트 범위와 저장 규칙을 사용한다.", controls));

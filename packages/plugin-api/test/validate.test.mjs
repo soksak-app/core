@@ -71,6 +71,10 @@ test("a manifest is rejected for each invalid field", () => {
     [{ ...card, background: { sidecar: "@scope/sidecar-other", operation: "open" } }, /sidecar must be declared/],
     [{ ...card, settings: { "cursor.shape": { type: "enum", default: "block", values: ["block", "block"] } } }, /distinct/],
     [{ ...card, settings: { "cursor.shape": { type: "integer", default: 1, minimum: 2, maximum: 3 } } }, /default and bounds/],
+    [{ ...card, settings: { "font.family": { type: "string", default: "", maxLength: 8 } } }, /string default and maxLength/],
+    [{ ...card, settings: { "font.family": { type: "string", default: "too long", maxLength: 3 } } }, /string default and maxLength/],
+    [{ ...card, settings: { "font.family": { type: "string", default: "Mono", maxLength: 0 } } }, /string default and maxLength/],
+    [{ ...card, settings: { "font.family": { type: "string", default: "Mono", maxLength: 8, values: [] } } }, /unknown field values/],
   ];
   for (const [manifest, message] of cases) assert.throws(() => validateManifest(manifest), message);
 });
@@ -215,4 +219,16 @@ test("a page's import map is read only when the page declares exactly one", () =
   assert.deepEqual(pageImports(`<title>x</title>${map}<script type="module"></script>`), { ...PAGE_IMPORTS });
   assert.throws(() => pageImports("<title>x</title>"), /found 0/);
   assert.throws(() => pageImports(map + map), /found 2/);
+});
+
+test("string settings declare a bounded non-empty default and reject other values", () => {
+  const manifest = { ...card, settings: { "font.family": { type: "string", default: "D2Coding", maxLength: 16 } } };
+  assert.deepEqual(validateManifest(manifest).settings["font.family"], { type: "string", default: "D2Coding", maxLength: 16 });
+  const value = environment();
+  value.settings.probe = { "font.family": "Menlo" };
+  checkReferences(value, [manifest, side]);
+  for (const invalid of ["", "a font family name that is too long", 3]) {
+    value.settings.probe = { "font.family": invalid };
+    assert.throws(() => checkReferences(value, [manifest, side]), /string value/);
+  }
 });

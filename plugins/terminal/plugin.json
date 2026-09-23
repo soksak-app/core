@@ -53,6 +53,11 @@
       "type": "enum",
       "default": "deny",
       "values": ["deny", "allow"]
+    },
+    "font.family": {
+      "type": "string",
+      "default": "D2Coding",
+      "maxLength": 128
     }
   },
   "sidecars": [
@@ -85,6 +90,9 @@
           "type": "object",
           "properties": {
             "sessionId": {
+              "type": "string"
+            },
+            "font": {
               "type": "string"
             },
             "cols": {

@@ -3040,3 +3040,47 @@ async fn test_replacement_raster_state_has_cell_dimensions() {
     drop(to_serve);
     task.await.unwrap().unwrap();
 }
+
+#[tokio::test]
+async fn test_font_selects_bundled_or_installed_family_and_rejects_missing_family() {
+    let input = r#"
+{"surface":"s1","body":{"operation":"font","family":"D2Coding"}}
+{"surface":"s1","body":{"operation":"font","family":"Menlo"}}
+{"surface":"s1","body":{"operation":"font","family":"No Such Terminal Font Family"}}
+{"surface":"s1","body":{"operation":"font","family":""}}
+"#;
+    let reader = std::io::Cursor::new(input.as_bytes());
+    let mut writer = Vec::new();
+    let engine_factory = Arc::new(|| Box::new(MockEngine::new()) as Box<dyn Engine>);
+    let session_port: Arc<dyn SessionPort> =
+        Arc::new(soksak_sidecar_vt_core::protocol::FakeSessionPort::new());
+    let session_port_for_factory = session_port.clone();
+    let factory = Arc::new(move || session_port_for_factory.clone());
+
+    serve(engine_factory, reader, &mut writer, factory)
+        .await
+        .expect("font contract");
+    let outputs = String::from_utf8(writer)
+        .expect("utf8 output")
+        .lines()
+        .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+        .collect::<Vec<_>>();
+    let selected = outputs
+        .iter()
+        .filter(|value| value["body"]["event"] == "font")
+        .map(|value| value["body"]["family"].as_str().unwrap().to_string())
+        .collect::<Vec<_>>();
+    assert_eq!(selected, vec!["D2Coding".to_string(), "Menlo".to_string()]);
+    let errors = outputs
+        .iter()
+        .filter(|value| value["body"]["error"] == "invalidParams")
+        .map(|value| value["body"]["reason"].as_str().unwrap().to_string())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        errors,
+        vec![
+            "terminal font family is not installed: No Such Terminal Font Family".to_string(),
+            "font.family must be a non-empty string".to_string(),
+        ]
+    );
+}

@@ -2,7 +2,7 @@
 pub use crate::platform::darwin::service;
 
 #[cfg(target_os = "macos")]
-pub use crate::platform::darwin::frame::{metrics, Frame, Metrics};
+pub use crate::platform::darwin::frame::{default_font, metrics, metrics_for, resolve_font, Frame, Metrics, TerminalFont};
 
 #[cfg(target_os = "macos")]
 pub struct ImageState {
@@ -30,10 +30,12 @@ impl ImageState {
         width_px: u32,
         height_px: u32,
         scale: f32,
-    ) -> Option<ImageState> {
-        let frame = Frame::new(width_px, height_px)?;
-        let device_metrics = metrics(13.0, scale);
-        Some(ImageState {
+        font: &std::sync::Arc<TerminalFont>,
+    ) -> Result<ImageState, String> {
+        let frame = Frame::new(width_px, height_px)
+            .ok_or_else(|| format!("IOSurface creation failed for {width_px}x{height_px}"))?;
+        let device_metrics = metrics_for(font, 13.0, scale)?;
+        Ok(ImageState {
             name,
             generation,
             raster,
@@ -82,8 +84,8 @@ impl ImageState {
         _width_px: u32,
         _height_px: u32,
         _scale: f32,
-    ) -> Option<ImageState> {
-        None
+    ) -> Result<ImageState, String> {
+        Err("terminal images are not implemented on this operating system".to_string())
     }
 
     pub fn selection_cell(&self, _x: f64, _y: f64) -> Result<(u16, u16), String> {

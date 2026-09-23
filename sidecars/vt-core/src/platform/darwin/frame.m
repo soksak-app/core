@@ -7,6 +7,11 @@
 #include <stdio.h>
 #include <string.h>
 
+// 글꼴은 CoreText 글꼴 설명 하나를 소유한다.
+struct FrameFont {
+    CTFontDescriptorRef descriptor;
+};
+
 struct Frame {
     IOSurfaceRef surface;
     uint32_t surface_id;
@@ -139,7 +144,7 @@ int frame_draw_with_inline_images(Frame *frame, Screen *screen, Metrics *metrics
     }
 
     // Set up font with the same size used in frame_metrics
-    CTFontRef font = CTFontCreateWithName(CFSTR("Menlo"), metrics->font_size, NULL);
+    CTFontRef font = metrics->font ? CTFontCreateWithFontDescriptor(metrics->font->descriptor, metrics->font_size, NULL) : NULL;
     if (!font) {
         CGContextRelease(ctx);
         IOSurfaceUnlock(frame->surface, 0, NULL);
@@ -356,17 +361,79 @@ void frame_drop(Frame *frame) {
     }
 }
 
-Metrics frame_metrics(double font_size, double scale) {
+FrameFont *frame_font_from_data(const uint8_t *data, uint32_t length) {
+    if (!data || length == 0) return NULL;
+    CFDataRef bytes = CFDataCreate(NULL, data, length);
+    if (!bytes) return NULL;
+    CTFontDescriptorRef descriptor = CTFontManagerCreateFontDescriptorFromData(bytes);
+    CFRelease(bytes);
+    if (!descriptor) return NULL;
+    FrameFont *font = malloc(sizeof(FrameFont));
+    if (!font) {
+        CFRelease(descriptor);
+        return NULL;
+    }
+    font->descriptor = descriptor;
+    return font;
+}
+
+FrameFont *frame_font_named(const char *family) {
+    if (!family) return NULL;
+    NSString *wanted = [NSString stringWithUTF8String:family];
+    if (wanted.length == 0) return NULL;
+    CTFontDescriptorRef descriptor = CTFontDescriptorCreateWithAttributes(
+        (__bridge CFDictionaryRef)@{(id)kCTFontFamilyNameAttribute: wanted});
+    if (!descriptor) return NULL;
+    // CoreText 는 없는 이름에도 다른 글꼴을 돌려주므로 실제 family 이름을 비교한다.
+    CTFontRef probe = CTFontCreateWithFontDescriptor(descriptor, 12, NULL);
+    CFStringRef actual = probe ? CTFontCopyFamilyName(probe) : NULL;
+    BOOL same = actual && [(__bridge NSString *)actual isEqualToString:wanted];
+    if (actual) CFRelease(actual);
+    if (probe) CFRelease(probe);
+    if (!same) {
+        CFRelease(descriptor);
+        return NULL;
+    }
+    FrameFont *font = malloc(sizeof(FrameFont));
+    if (!font) {
+        CFRelease(descriptor);
+        return NULL;
+    }
+    font->descriptor = descriptor;
+    return font;
+}
+
+char *frame_font_family(const FrameFont *font) {
+    if (!font) return NULL;
+    CFStringRef family = CTFontDescriptorCopyAttribute(font->descriptor, kCTFontFamilyNameAttribute);
+    if (!family) return NULL;
+    char *result = strdup([(__bridge NSString *)family UTF8String]);
+    CFRelease(family);
+    return result;
+}
+
+void frame_font_drop(FrameFont *font) {
+    if (!font) return;
+    CFRelease(font->descriptor);
+    free(font);
+}
+
+Metrics frame_metrics(const FrameFont *frame_font, double font_size, double scale) {
     Metrics metrics = {0};
+    if (!frame_font) return metrics;
 
-    // Create a temporary font to measure
     double scaled_font_size = font_size * scale;
-    CTFontRef font = CTFontCreateWithName(CFSTR("Menlo"), scaled_font_size, NULL);
+    CTFontRef font = CTFontCreateWithFontDescriptor(frame_font->descriptor, scaled_font_size, NULL);
 
-    // Measure 'M' for width
+    // 셀 폭은 'M' 글리프의 advance 다. 문자 코드를 글리프 번호로 바꿔 잰다.
     UniChar char_m = 'M';
+    CGGlyph glyph_m = 0;
+    if (!CTFontGetGlyphsForCharacters(font, &char_m, &glyph_m, 1)) {
+        CFRelease(font);
+        return metrics;
+    }
     CGSize advances;
-    CTFontGetAdvancesForGlyphs(font, kCTFontOrientationHorizontal, &char_m, &advances, 1);
+    CTFontGetAdvancesForGlyphs(font, kCTFontOrientationHorizontal, &glyph_m, &advances, 1);
     metrics.cell_width = (uint32_t)ceil(advances.width);
 
     // Measure height from ascent + descent + leading
@@ -377,6 +444,7 @@ Metrics frame_metrics(double font_size, double scale) {
 
     // Store the scaled font size for use in frame_draw
     metrics.font_size = scaled_font_size;
+    metrics.font = frame_font;
 
     CFRelease(font);
 

@@ -125,7 +125,7 @@ Each directory runs its own tests with `pnpm test`. A package checks its boundar
 
 ### Settings declarations
 
-A plugin may declare typed settings in `plugin.json` under `settings`. The object keys are plugin-local setting names; the workbench exposes them under `<plugin id>.<key>`. Each declaration has `type`, `default`, and `values` for an enum, or `type`, `default`, `minimum`, and `maximum` for a bounded integer. The declaration is the only source of the type and validation rule; unknown setting keys and invalid defaults fail manifest validation.
+A plugin may declare typed settings in `plugin.json` under `settings`. The object keys are plugin-local setting names; the workbench exposes them under `<plugin id>.<key>`. Each declaration has `type`, `default`, and `values` for an enum; `type`, `default`, `minimum`, and `maximum` for a bounded integer; or `type`, `default`, and `maxLength` for a non-empty string of at most `maxLength` characters. The declaration is the only source of the type and validation rule; unknown setting keys and invalid defaults fail manifest validation.
 
 An application may provide initial values in `environment.json` under `settings`, keyed by plugin id and local setting name. The values must name declared settings and pass the plugin declaration. The precedence is plugin default, application value, saved common value, then saved project override. Stored values are validated against the declaration before becoming effective; invalid stored data is an explicit load error and is not replaced.
 

@@ -94,7 +94,16 @@ function checkSettingDeclaration(where, declaration) {
     }
     return;
   }
-  throw new Error(`${where}: setting type must be enum or integer`);
+  if (declaration.type === "string") {
+    only(where, declaration, ["type", "default", "maxLength"]);
+    if (!Number.isInteger(declaration.maxLength) || declaration.maxLength < 1 ||
+        typeof declaration.default !== "string" || declaration.default.length === 0 ||
+        declaration.default.length > declaration.maxLength) {
+      throw new Error(`${where}: string default and maxLength are invalid`);
+    }
+    return;
+  }
+  throw new Error(`${where}: setting type must be enum, integer, or string`);
 }
 
 function checkSettings(where, settings) {
@@ -113,6 +122,10 @@ function checkSettingValue(where, declaration, value) {
   if (declaration.type === "integer" &&
       (!Number.isInteger(value) || value < declaration.minimum || value > declaration.maximum)) {
     throw new Error(`${where}: integer value is outside its declared range`);
+  }
+  if (declaration.type === "string" &&
+      (typeof value !== "string" || value.length === 0 || value.length > declaration.maxLength)) {
+    throw new Error(`${where}: string value must be non-empty and at most ${declaration.maxLength} characters`);
   }
 }
 

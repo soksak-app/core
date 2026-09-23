@@ -548,6 +548,9 @@ enum SurfaceCommand {
     Theme {
         theme: crate::palette::TerminalTheme,
     },
+    Font {
+        font: std::sync::Arc<crate::platform::TerminalFont>,
+    },
     Cursor {
         policy: CursorPolicy,
     },
@@ -696,15 +699,11 @@ fn set_engine_metrics(engine: &mut Box<dyn Engine>, state: &ImageState) -> Resul
 }
 
 /// Validate and calculate terminal size. Returns error if width/height invalid or result is 0.
-fn calculate_terminal_size(width: u32, height: u32, scale: f32) -> Result<(u16, u16), String> {
-    if scale <= 0.0 {
-        return Err("scale must be a positive number".to_string());
-    }
+fn calculate_terminal_size(width: u32, height: u32, metrics: &crate::platform::platform::Metrics) -> Result<(u16, u16), String> {
     if width == 0 || height == 0 {
         return Err("width and height must be positive".to_string());
     }
 
-    let metrics = crate::platform::metrics(13.0, scale);
     let cols = pixels_to_cells(width, metrics.cell_width);
     let rows = pixels_to_cells(height, metrics.cell_height);
 
@@ -1300,7 +1299,7 @@ async fn open_if_configured(
     {
         return true;
     }
-    let (cols, rows) = match calculate_terminal_size(state.width_px, state.height_px, state.scale) {
+    let (cols, rows) = match calculate_terminal_size(state.width_px, state.height_px, &state.metrics) {
         Ok(size) => size,
         Err(reason) => {
             let response = json!({"surface": surface_id, "body": {"error": "invalidParams", "reason": reason}});
@@ -1369,6 +1368,8 @@ async fn surface_task(
     let mut preedit: Option<Preedit> = None;
     let mut current_theme = crate::palette::TerminalTheme::dark();
     let mut cursor_policy = CursorPolicy::default();
+    // 이 표면의 터미널 글꼴. font 요청 전까지 번들 기본 글꼴이다.
+    let mut terminal_font = crate::platform::default_font();
     let mut cursor_activity = Instant::now();
     let mut cursor_tick = tokio::time::interval(Duration::from_millis(50));
     cursor_tick.set_missed_tick_behavior(MissedTickBehavior::Skip);
@@ -1447,15 +1448,17 @@ async fn surface_task(
                                 continue;
                             }
                         }
-                        let Some(new_state) = ImageState::new(configuration.name.clone(), configuration.generation,
-                            configuration.raster, configuration.width, configuration.height, configuration.scale) else {
-                            let response = json!({
-                                "surface": surface_id,
-                                "body": {"error": "image creation failed",
-                                    "reason": format!("IOSurface creation failed for {}x{}", configuration.width, configuration.height)}
-                            });
-                            if output_tx.send(response.to_string()).await.is_err() { return; }
-                            continue;
+                        let new_state = match ImageState::new(configuration.name.clone(), configuration.generation,
+                            configuration.raster, configuration.width, configuration.height, configuration.scale, &terminal_font) {
+                            Ok(state) => state,
+                            Err(reason) => {
+                                let response = json!({
+                                    "surface": surface_id,
+                                    "body": {"error": "image creation failed", "reason": reason}
+                                });
+                                if output_tx.send(response.to_string()).await.is_err() { return; }
+                                continue;
+                            }
                         };
                         let mut new_state = new_state;
                         new_state.theme = current_theme;
@@ -1463,7 +1466,7 @@ async fn surface_task(
                             .map(|previous_state| previous_state.inline_images.clone())
                             .unwrap_or_else(|| std::mem::take(&mut preserved_inline_images));
                         let (cols, rows) = match calculate_terminal_size(
-                            configuration.width, configuration.height, configuration.scale) {
+                            configuration.width, configuration.height, &new_state.metrics) {
                             Ok(size) => size,
                             Err(reason) => {
                                 let response = json!({"surface": surface_id,
@@ -1741,6 +1744,63 @@ async fn surface_task(
                         let response = json!({"surface": surface_id, "body": {"ack": true, "event": "theme", "mode": mode}});
                         if output_tx.send(response.to_string()).await.is_err() { return; }
                     }
+                    SurfaceCommand::Font { font } => {
+                        let family = match font.family() {
+                            Ok(family) => family,
+                            Err(reason) => {
+                                let response = json!({"surface": surface_id, "body": {"error": "invalidParams", "reason": reason}});
+                                if output_tx.send(response.to_string()).await.is_err() { return; }
+                                continue;
+                            }
+                        };
+                        // 현재 raster 크기를 유지하고 새 글꼴의 셀 메트릭으로 열과 행을 다시 계산한다.
+                        if let Some(state) = image_state.as_mut() {
+                            let metrics = match crate::platform::metrics_for(&font, 13.0, state.scale) {
+                                Ok(metrics) => metrics,
+                                Err(reason) => {
+                                    let response = json!({"surface": surface_id, "body": {"error": "invalidParams", "reason": reason}});
+                                    if output_tx.send(response.to_string()).await.is_err() { return; }
+                                    continue;
+                                }
+                            };
+                            let (cols, rows) = match calculate_terminal_size(state.width_px, state.height_px, &metrics) {
+                                Ok(size) => size,
+                                Err(reason) => {
+                                    let response = json!({"surface": surface_id, "body": {"error": "invalidParams", "reason": reason}});
+                                    if output_tx.send(response.to_string()).await.is_err() { return; }
+                                    continue;
+                                }
+                            };
+                            state.metrics = metrics;
+                            engine.resize(cols, rows);
+                            if let Err(error) = set_engine_metrics(&mut engine, state) {
+                                let response = json!({"surface": surface_id, "body": {"error": "invalid renderer metrics", "reason": error}});
+                                if output_tx.send(response.to_string()).await.is_err() { return; }
+                                continue;
+                            }
+                            terminal_font = font;
+                            refresh_inline_image_positions(&mut engine, &mut image_state);
+                            if let Some(sid) = session_id.as_ref() {
+                                if let Err(error) = session_port.resize(sid, cols, rows).await {
+                                    let response = json!({"surface": surface_id, "body": {"error": format!("Resize failed: {error}")}});
+                                    if output_tx.send(response.to_string()).await.is_err() { return; }
+                                } else if !send_state(&surface_id, sid, cols, rows, image_state.as_ref().unwrap(), &output_tx).await {
+                                    return;
+                                }
+                            }
+                            let state = image_state.as_mut().unwrap();
+                            if state.pending_draw {
+                                state.dirty = true;
+                            } else {
+                                let screen = decorate_screen(engine.screen(), focused, &preedit, &cursor_policy, cursor_activity.elapsed().as_millis() as u64);
+                                if !present_screen(&surface_id, &screen, state, &output_tx).await { return; }
+                            }
+                        } else {
+                            terminal_font = font;
+                        }
+                        let response = json!({"surface": surface_id, "body": {"ack": true, "event": "font", "family": family}});
+                        if output_tx.send(response.to_string()).await.is_err() { return; }
+                    }
                     SurfaceCommand::Cursor { policy } => {
                         cursor_policy = policy;
                         cursor_activity = Instant::now();
@@ -1913,18 +1973,20 @@ async fn surface_task(
                         if releases_pending {
                             image_state.as_mut().unwrap().pending_draw = false;
                             if let Some(configuration) = pending_configuration.take() {
-                                let Some(new_state) = ImageState::new(configuration.name.clone(), configuration.generation,
-                                    configuration.raster, configuration.width, configuration.height, configuration.scale) else {
-                                    let response = json!({"surface": surface_id,
-                                        "body": {"error": "image creation failed",
-                                            "reason": format!("IOSurface creation failed for {}x{}", configuration.width, configuration.height)}});
-                                    if output_tx.send(response.to_string()).await.is_err() { return; }
-                                    continue;
+                                let new_state = match ImageState::new(configuration.name.clone(), configuration.generation,
+                                    configuration.raster, configuration.width, configuration.height, configuration.scale, &terminal_font) {
+                                    Ok(state) => state,
+                                    Err(reason) => {
+                                        let response = json!({"surface": surface_id,
+                                            "body": {"error": "image creation failed", "reason": reason}});
+                                        if output_tx.send(response.to_string()).await.is_err() { return; }
+                                        continue;
+                                    }
                                 };
                                 let mut new_state = new_state;
                                 new_state.theme = current_theme;
                                 let (cols, rows) = match calculate_terminal_size(
-                                    configuration.width, configuration.height, configuration.scale) {
+                                    configuration.width, configuration.height, &new_state.metrics) {
                                     Ok(size) => size,
                                     Err(reason) => {
                                         let response = json!({"surface": surface_id,
@@ -2553,6 +2615,25 @@ where
                                     }
                                     None => {
                                         let response = json!({"surface": surface_id, "body": {"error": "invalidParams", "reason": "theme.mode must be dark or light"}});
+                                        if output_tx.send(response.to_string()).await.is_err() {
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            "font" => {
+                                let resolved = match body.get("family").and_then(Value::as_str) {
+                                    Some(family) if !family.is_empty() => crate::platform::resolve_font(family),
+                                    _ => Err("font.family must be a non-empty string".to_string()),
+                                };
+                                match resolved {
+                                    Ok(font) => {
+                                        if tx.send(SurfaceCommand::Font { font }).await.is_err() {
+                                            break;
+                                        }
+                                    }
+                                    Err(reason) => {
+                                        let response = json!({"surface": surface_id, "body": {"error": "invalidParams", "reason": reason, "operation": "font"}});
                                         if output_tx.send(response.to_string()).await.is_err() {
                                             break;
                                         }
