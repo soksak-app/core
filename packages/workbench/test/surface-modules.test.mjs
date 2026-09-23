@@ -1,6 +1,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { registerPlugin } from "../registry.js";
+
+// 표면 마운트는 플러그인 등록부에서 진단 모듈을 읽는다. release 빌드처럼 진단 모듈이 없다.
+for (const id of ["fixture", "fixture-integration"]) registerPlugin({ id, diagnostics: null, surface: () => null });
+
+test("a surface context carries its plugin's diagnostic module", async () => {
+  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  const { mountSurface } = await import("../surface-modules.js");
+  const diagnostics = { attach() {} };
+  registerPlugin({ id: "fixture-diagnostics", diagnostics, surface: () => null });
+  const moduleUrl = "data:text/javascript,export function mount(root,c){globalThis.mountedDiagnostics=c.diagnostics;return {dispose(){}}}";
+  await mountSurface(document.querySelector("#slot"),
+    { module: moduleUrl, surfaceId: "tab-diagnostics", pluginId: "fixture-diagnostics", composition: { kind: "dom" } });
+  assert.equal(globalThis.mountedDiagnostics, diagnostics);
+  dom.window.close();
+});
 
 test("surface mount keeps one module host when a tab moves slots", async () => {
   const dom = new JSDOM("<main><div id=a></div><div id=b></div></main>", { url: "http://localhost/" });

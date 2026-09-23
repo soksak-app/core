@@ -948,6 +948,27 @@ for (const app of Object.values(APPS)) {
     assert.ok(!lines.some((line) => line.includes("command not found")), "file drop must not execute a command");
   });
 
+  // 진단 빌드의 표면은 플러그인 진단 모듈(diagnostics.json)이 등록한 항목을 갖는다.
+  test(`${app.name}: diagnostic terminal entries inject preedit and record terminal input`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const [terminal] = await ensureTerminals(s, 1);
+    const surface = terminal.surface;
+    assert.deepEqual(await s.run("terminal.ime.trace", { action: "start" }, surface),
+      { enabled: true, overflow: false, entries: [] });
+    s.cleanup(() => s.run("terminal.ime.trace", { action: "stop" }, surface));
+    await s.run("terminal.compose.update", { text: "한", selectedRange: { location: 1, length: 0 } }, surface);
+    await s.until("terminal.compose", (compose) => compose.text === "한",
+      "the injected preedit did not reach terminal.compose", { surface });
+    await s.run("terminal.compose.update", { text: "" }, surface);
+    await s.until("terminal.compose", (compose) => compose.text === "",
+      "the empty preedit did not clear terminal.compose", { surface });
+    const trace = await s.run("terminal.ime.trace", { action: "stop" }, surface);
+    assert.deepEqual(trace.entries.map((entry) => [entry.kind, entry.input?.type, entry.input?.text]),
+      [["terminal-input", "compose", "한"], ["terminal-input", "compose", ""]]);
+  });
+
   test(`${app.name}: terminal image follows a window resize`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);

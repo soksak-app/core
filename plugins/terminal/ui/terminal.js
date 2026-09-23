@@ -162,7 +162,7 @@ function normalizeCursorPolicy(value) {
  * @returns {Promise<void>}
  */
 export async function startTerminal({ id, view, attachImage, sidecar, expose, theme,
-  settings, clipboard, reportSurfaceError = () => {},
+  settings, clipboard, reportSurfaceError = () => {}, diagnostics = null,
   window: globalWindow = globalThis.window }) {
   // 브라우저 환경에서 필요한 객체들
   const window = globalWindow;
@@ -174,7 +174,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   const encoder = new TextEncoder();
 
   // 공개 status 마다 값이 바뀔 때 호출할 함수
-  const watchers = { session: new Set(), screen: new Set(), compose: new Set(), cursor: new Set(), imeTrace: new Set() };
+  const watchers = { session: new Set(), screen: new Set(), compose: new Set(), cursor: new Set() };
   const changed = (name) => {
     for (const fn of watchers[name]) fn(read[name]());
   };
@@ -193,19 +193,10 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   };
   let screen = [];
   let compose = session.compose;
-  let imeTrace = { enabled: false, overflow: false, entries: [] };
-  const IME_TRACE_CAPACITY = 256;
-  const recordImeTrace = (entry) => {
-    if (!imeTrace.enabled) return;
-    if (imeTrace.entries.length === IME_TRACE_CAPACITY) {
-      imeTrace = { ...imeTrace, enabled: false, overflow: true };
-      changed("imeTrace");
-      session = { ...session, error: "IME diagnostic trace capacity exceeded" };
-      changed("session");
-      return;
-    }
-    imeTrace = { ...imeTrace, entries: [...imeTrace.entries, { sequence: imeTrace.entries.length, ...entry }] };
-    changed("imeTrace");
+  // 네이티브 입력 callback 과 터미널 입력 작업을 받는 함수. 진단 빌드의 진단 모듈만 등록한다.
+  const inputObservers = new Set();
+  const notifyInput = (entry) => {
+    for (const fn of inputObservers) fn(entry);
   };
   let cursor = { ...DEFAULT_CURSOR };
   const initialSettings = settings?.read?.() ?? {};
@@ -220,7 +211,6 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     screen: () => screen,
     compose: () => compose,
     cursor: () => cursor,
-    imeTrace: () => imeTrace,
   };
 
   // 터미널 사이드카가 이 표면의 VT 세션을 실행한다
@@ -442,7 +432,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   };
 
   const enqueueInput = (entry) => {
-    recordImeTrace({ kind: "terminal-input", input: entry });
+    notifyInput({ kind: "terminal-input", input: entry });
     if (!sessionOpen) {
       if (inputQueue.length >= MAX_QUEUE_SIZE) {
         const error = new Error(`Input queue overflow (max ${MAX_QUEUE_SIZE})`);
@@ -463,7 +453,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   // 영역 insert 이벤트: 평문 텍스트 입력
   onRegion("insert", async (event) => {
     const { text } = event;
-    recordImeTrace({ kind: "native-insert", text });
+    notifyInput({ kind: "native-insert", text });
     let composeRequest = null;
     if (compose.text) {
       compose = { text: "", selectedRange: null, replacementRange: null, attributed: false };
@@ -484,7 +474,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   // 사이드카는 키 이름만 받고 이스케이프 시퀀스를 생성한다
   onRegion("key", async (event) => {
     const { key, text, shift, alt, ctrl } = event;
-    recordImeTrace({ kind: "native-key", key, text });
+    notifyInput({ kind: "native-key", key, text });
     // 네이티브 영역은 항상 불린으로 수정자를 보낸다. 아니면 계약 위반이다.
     if (typeof shift !== "boolean" || typeof alt !== "boolean" || typeof ctrl !== "boolean") {
       const errorMsg = `invalid key event from region: modifiers must be boolean, got shift:${typeof shift} alt:${typeof alt} ctrl:${typeof ctrl}`;
@@ -506,7 +496,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   });
 
   onRegion("compose", async (event) => {
-    recordImeTrace({ kind: "native-compose", text: event.text });
+    notifyInput({ kind: "native-compose", text: event.text });
     await observeInput(updateCompose(event));
   });
 
@@ -844,7 +834,6 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     expose.status("terminal.session", read.session, watch("session")),
     expose.status("terminal.screen", read.screen, watch("screen")),
     expose.status("terminal.compose", read.compose, watch("compose")),
-    expose.status("terminal.ime.trace", read.imeTrace, watch("imeTrace")),
     expose.status("terminal.cursor", read.cursor, watch("cursor")),
     expose.command("terminal.input", async ({ bytes }) => {
       if (typeof bytes !== "string") throw new Error("terminal.input requires bytes");
@@ -855,18 +844,6 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
         throw error;
       }
       return null;
-    }),
-    expose.command("terminal.compose.update", updateCompose),
-    expose.command("terminal.ime.trace", async ({ action }) => {
-      if (action === "start") {
-        imeTrace = { enabled: true, overflow: false, entries: [] };
-      } else if (action === "stop") {
-        imeTrace = { ...imeTrace, enabled: false };
-      } else {
-        throw new Error("terminal.ime.trace action must be start or stop");
-      }
-      changed("imeTrace");
-      return imeTrace;
     }),
     expose.command("terminal.screen.read", async () => {
       if (region === null) throw new Error("Terminal not initialized");
@@ -923,6 +900,21 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   await expose.command("terminal.cursor.set", async (policy) => setCursorPolicy(policy));
   await expose.command("terminal.paste", pasteText);
   await expose.command("terminal.drop", dropFiles);
+  // 진단 빌드에서는 진단 모듈이 preedit 주입과 입력 기록 항목을 이 연산으로 등록한다.
+  if (diagnostics) {
+    await diagnostics.attach({
+      expose,
+      updateCompose,
+      onInput: (fn) => {
+        inputObservers.add(fn);
+        return () => inputObservers.delete(fn);
+      },
+      reportError: (message) => {
+        session = { ...session, error: message };
+        changed("session");
+      },
+    });
+  }
   return {
     setTheme,
     setCursorPolicy,

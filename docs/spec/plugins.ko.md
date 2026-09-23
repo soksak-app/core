@@ -40,6 +40,12 @@
 
 `surface.composition`은 `{ "kind": "dom" }`이거나 `kind: "hybrid"`, 완전한 `regions`, 완전한 `overlays`를 가진 혼합 선언이다. 그림 영역은 `sidecars`에 이미 나열한 사이드카를 지정한다. manifest 선언은 호스트에 전달하는 권한 데이터다. 페이지 코드는 선언에 없는 영역, 공급자, 입력 소유자, 쌓임 항목을 추가할 수 없다.
 
+## 진단 선언
+
+표면이 있는 플러그인은 검사에만 쓰는 status와 명령 항목을 패키지 루트의 `diagnostics.json` 파일에 둘 수 있다: `{ "module": "ui/<파일>.js", "exposes": { ... } }`. `module`은 패키지 안의 파일이며, `exposes`는 `plugin.json` `exposes`의 형식과 소유자 규칙을 따른다. 한 이름은 `plugin.json`과 `diagnostics.json` 중 한 곳에만 선언한다. `diagnostics.json`과 그 모듈은 패키지의 `files`에 나열하지 않으므로 릴리스 스테이징은 이를 복사하지 않는다. 둘 중 하나가 나열되어 있으면 스테이징이 실패한다. 사용자 입력이나 OS가 만드는 상태를 주입하거나 검사를 위해 내부 이벤트를 기록하는 항목은 `diagnostics.json`에 속하고, 보이는 상태를 보고하거나 사용자 조작을 수행하는 항목은 `plugin.json`에 속한다.
+
+진단 빌드에서 워크벤치는 이 선언을 플러그인의 표면 선언에 더하고, 표면을 마운트하기 전에 모듈을 import한다. 표면 context는 그 모듈을 `diagnostics`로 전달하며, 릴리스 빌드에서 `diagnostics`는 `null`이다. 표면 모듈은 이를 구현에 넘기고, 구현은 진단 항목이 쓰는 내부 연산을 모듈에 넘겨 호출한다.
+
 ## 표면 모듈 소유권
 
 OS 창마다 앱 DOM WebView가 하나 있다. 워크벤치는 표면 요소와 Shadow Root를 소유하며 플러그인은 그 루트 안에 마운트한 DOM을 소유한다. Shadow DOM은 스타일을 분리하며 보안 권한을 분리하지 않는다. context는 표면 범위의 명령, 상태, DOM 바인딩, 사이드카 메시지와 선언된 합성 컨트롤러를 제공한다. 호스트는 창, 표면, 선언을 다시 검증한다. 플러그인은 내부 WebView나 iframe을 만들지 않는다.
@@ -76,10 +82,12 @@ OS 창마다 앱 DOM WebView가 하나 있다. 워크벤치는 표면 요소와 
 | `/modules/<사이드카>/sidecar.json` | 플러그인의 `sidecars`에 나열된 각 사이드카 패키지의 `sidecar.json` |
 | `/diagnostics.js` | `--diagnostics`이면 워크벤치의 `observe.js`(페이지 진단 메서드), 아니면 빈 모듈 |
 | `/transcript.js` | `--diagnostics`이면 워크벤치의 `transcript.js`(진단 모듈이 쓰는 호출 기록기), 아니면 없음 |
+| `/diagnostic-plugins.json` | `--diagnostics`이면 `diagnostics.json`이 있는 나열된 플러그인 패키지마다 그 파일 내용을 담은 객체, 아니면 `{}` |
+| `/modules/<패키지>/<모듈>` | `--diagnostics`이면 플러그인의 `diagnostics.json`이 지정한 `module` 파일, 아니면 없음 |
 
 배포된 파일이 import 하는 모든 파일은 패키지의 `files` 배열에 나열되어야 한다. 이는 `packages/workbench/test/published-imports.test.mjs`가 검사한다.
 
-`--executables <디렉터리>`를 지정하면 각 사이드카의 빌드된 `executable` 파일을 파일 이름 그대로 `<디렉터리>`에 복사하고, 파일이 빌드되지 않았으면 실패한다. 디버그 스테이징 대상 `frontend-wailsv3`, `frontend-tauriv2`는 `sidecars-debug`를, 릴리스 빌드 대상은 `sidecars-release`를 실행한다. 두 대상은 애플리케이션이 선언한 사이드카와 그 사이드카가 선언한 헬퍼를 해당 프로필로 빌드한다. 그 뒤 애플리케이션 실행 파일의 디렉터리(`target/debug` 또는 `target/release`)를 `--executables`로 지정해 `apps/<app>/src/frontend`에 스테이징한다. 디버그 대상은 `--diagnostics`를 더하며, 릴리스 빌드에는 페이지 진단 코드가 없다.
+`--executables <디렉터리>`를 지정하면 각 사이드카의 빌드된 `executable` 파일을 파일 이름 그대로 `<디렉터리>`에 복사하고, 파일이 빌드되지 않았으면 실패한다. 디버그 스테이징 대상 `frontend-wailsv3`, `frontend-tauriv2`는 `sidecars-debug`를, 릴리스 빌드 대상은 `sidecars-release`를 실행한다. 두 대상은 애플리케이션이 선언한 사이드카와 그 사이드카가 선언한 헬퍼를 해당 프로필로 빌드한다. 그 뒤 애플리케이션 실행 파일의 디렉터리(`target/debug` 또는 `target/release`)를 `--executables`로 지정해 `apps/<app>/src/frontend`에 스테이징한다. 디버그 대상은 `--diagnostics`를 더하며, 릴리스 빌드에는 페이지와 플러그인의 진단 코드가 없다. 스테이징된 릴리스 프런트엔드의 `/diagnostic-plugins.json`이 비어 있지 않거나, 플러그인 진단 모듈이 있거나, 플러그인 `diagnostics.json`에 선언한 이름이 들어 있으면 `make release-check`가 실패한다.
 
 모든 페이지는 `PAGE_IMPORTS`와 같은 import map 하나를 선언한다. 항목은 `soksak`, `@soksak/plugin-api`, `@soksak/plugin-api/page`, `@soksak/runtime`, `@soksak/workbench/`다.
 

@@ -6,7 +6,8 @@ import { registry as exposure } from "./exposure.js";
 import { registerPlugin, registerSection } from "./registry.js";
 import { setPluginSettings, setSidebarDefaults } from "./settings.js";
 import {
-  ENVIRONMENT, MANIFEST, checkReferences, modulePath, validateEnvironment, validateManifest,
+  DIAGNOSTIC_PLUGINS, ENVIRONMENT, MANIFEST, checkReferences, mergeExposes, modulePath, validateDiagnosticPlugins,
+  validateEnvironment, validateManifest,
 } from "@soksak/plugin-api";
 
 let loaded = null;
@@ -24,29 +25,39 @@ function surfaceOf(name, pluginId, surface) {
     pluginId, home: surface.home ?? null, declarations: surface.declarations ?? {}, sidecars: surface.sidecars ?? [] });
 }
 
-/** environment.json 을 불러와 검사하고 플러그인, 섹션, 사이드바 기본값을 등록한다. */
+/**
+ * environment.json 을 불러와 검사하고 플러그인, 섹션, 사이드바 기본값을 등록한다. 진단 빌드에서는
+ * diagnostic-plugins.json 의 선언을 그 플러그인의 표면 선언에 더하고, 진단 모듈을 불러와 플러그인에 둔다.
+ */
 export async function loadEnvironment() {
   if (loaded) throw new Error("environment is already loaded");
   const environment = validateEnvironment(await readJson(ENVIRONMENT));
   const manifests = await Promise.all(environment.plugins.map(async (name) =>
     ({ name, manifest: validateManifest(await readJson(modulePath(name, MANIFEST))) })));
   checkReferences(environment, manifests.map((m) => m.manifest));
+  const diagnosticPlugins = validateDiagnosticPlugins(await readJson(DIAGNOSTIC_PLUGINS),
+    new Map(manifests.map((m) => [m.name, m.manifest])));
   setPluginSettings(manifests.map((m) => m.manifest), environment.settings ?? {});
+  const diagnosticModules = new Map(await Promise.all(Object.entries(diagnosticPlugins).map(async ([name, declared]) =>
+    [name, await import(`/${modulePath(name, declared.module)}`)])));
   for (const { name, manifest } of manifests) {
+    const diagnostics = diagnosticPlugins[name] ?? null;
+    const exposes = diagnostics ? mergeExposes(manifest.exposes ?? {}, diagnostics.exposes) : manifest.exposes;
     if (manifest.surface) {
       registerPlugin({
         id: manifest.id, name: manifest.name, mark: manifest.mark, svg: manifest.icon,
         ink: manifest.preview?.ink ?? null,
         background: manifest.background ?? null,
+        diagnostics: diagnosticModules.get(name) ?? null,
         surface: surfaceOf(name, manifest.id, {
           ...manifest.surface,
-          declarations: manifest.exposes ?? {},
+          declarations: exposes ?? {},
           sidecars: manifest.sidecars ?? [],
         }),
       });
     }
     for (const section of manifest.sections ?? []) registerSection(section);
-    if (manifest.exposes) exposure.declare(manifest.id, manifest.exposes);
+    if (exposes) exposure.declare(manifest.id, exposes);
   }
   setSidebarDefaults(environment.sidebars);
   loaded = environment;

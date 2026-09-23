@@ -40,6 +40,12 @@ A plugin requires `surface`, `sections`, or both. Only plugins with a surface ap
 
 `surface.composition` is either `{ "kind": "dom" }` or a hybrid declaration with `kind: "hybrid"`, complete `regions`, and complete `overlays`. An image region names a sidecar already listed in `sidecars`. The manifest declaration is authority data sent to the host; page code cannot add a region, supplier, input owner, or stacking entry that is absent from it.
 
+## Diagnostic declarations
+
+A plugin with a surface may keep status and command entries that exist only for checks in a `diagnostics.json` file at its package root: `{ "module": "ui/<file>.js", "exposes": { ... } }`. `module` is a file inside the package, and `exposes` has the form and owner rules of `plugin.json` `exposes`. A name is declared in `plugin.json` or in `diagnostics.json`, not in both. Neither `diagnostics.json` nor its module is listed in the package's `files`, so release staging never copies them; staging fails when either is listed. An entry belongs in `diagnostics.json` when it injects state that user input or the OS produces, or records internal events for a check; an entry that reports visible state or performs a user operation belongs in `plugin.json`.
+
+In a diagnostic build the workbench adds the declarations to the plugin's surface declarations and imports the module before it mounts the surface. The surface context carries the module as `diagnostics`; in a release build `diagnostics` is `null`. The surface module passes it to its implementation, which calls the module with the internal operations the diagnostic entries use.
+
 ## Surface module ownership
 
 Each OS window has one app DOM WebView. The workbench owns the surface element and its Shadow Root; a plugin owns the DOM it mounts inside that root. Shadow DOM isolates styles, not security privileges. The context exposes surface-scoped commands, statuses, DOM bindings, sidecar messages, and the declared composition controller. The host validates the window, surface, and declaration again. Plugins do not create internal WebViews or iframes.
@@ -76,10 +82,12 @@ The workbench loads `environment.json` and every listed `plugin.json` before it 
 | `/modules/<sidecar>/sidecar.json` | `sidecar.json` of each sidecar package listed in a plugin's `sidecars` |
 | `/diagnostics.js` | With `--diagnostics`, the workbench's `observe.js` (the page diagnostic methods); otherwise an empty module |
 | `/transcript.js` | With `--diagnostics`, the workbench's `transcript.js` (the call recorder of the diagnostic module); otherwise absent |
+| `/diagnostic-plugins.json` | With `--diagnostics`, an object that maps each listed plugin package with a `diagnostics.json` to that file's content; otherwise `{}` |
+| `/modules/<package>/<module>` | With `--diagnostics`, the `module` file named by the plugin's `diagnostics.json`; otherwise absent |
 
 Every file imported by published files must be listed in the package's `files` array; this is validated by `packages/workbench/test/published-imports.test.mjs`.
 
-With `--executables <dir>`, the tool also copies each sidecar's built `executable` file into `<dir>` under its file name and fails when the file is not built. The debug staging targets `frontend-wailsv3` and `frontend-tauriv2` run `sidecars-debug` and the release build targets run `sidecars-release`; those targets build the sidecar packages the applications declare and the helpers those sidecars declare, in that profile. They then stage into `apps/<app>/src/frontend` with `--executables` set to the directory of the application executable (`target/debug` or `target/release`). The debug targets add `--diagnostics`; release builds contain no page diagnostic code.
+With `--executables <dir>`, the tool also copies each sidecar's built `executable` file into `<dir>` under its file name and fails when the file is not built. The debug staging targets `frontend-wailsv3` and `frontend-tauriv2` run `sidecars-debug` and the release build targets run `sidecars-release`; those targets build the sidecar packages the applications declare and the helpers those sidecars declare, in that profile. They then stage into `apps/<app>/src/frontend` with `--executables` set to the directory of the application executable (`target/debug` or `target/release`). The debug targets add `--diagnostics`; release builds contain no page or plugin diagnostic code. `make release-check` fails when a staged release frontend has a non-empty `/diagnostic-plugins.json`, contains a plugin diagnostic module, or contains a name declared in a plugin's `diagnostics.json`.
 
 Every page declares one import map equal to `PAGE_IMPORTS`: `soksak`, `@soksak/plugin-api`, `@soksak/plugin-api/page`, `@soksak/runtime`, and `@soksak/workbench/`.
 

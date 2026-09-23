@@ -1,10 +1,22 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
-import { validateManifest } from "@soksak/plugin-api";
+import { validateDiagnostics, validateManifest } from "@soksak/plugin-api";
 
 const manifest = JSON.parse(readFileSync(new URL("../plugin.json", import.meta.url), "utf8"));
 const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+const diagnostics = JSON.parse(readFileSync(new URL("../diagnostics.json", import.meta.url), "utf8"));
+
+/** 소스에서 등록한 공개 항목을 `<종류> <이름>` 으로 모은다. */
+const registrations = (source) => [
+  ...[...source.matchAll(/expose\.status\(\s*["']([^"']+)["']/g)].map((match) => `status ${match[1]}`),
+  ...[...source.matchAll(/expose\.command\(\s*["']([^"']+)["']/g)].map((match) => `command ${match[1]}`),
+  ...[...source.matchAll(/expose\.dom\(\s*["']([^"']+)["']/g)].map((match) => `dom ${match[1]}`),
+].sort();
+const kinds = { status: "status", commands: "command", dom: "dom" };
+const declarations = (exposes) => Object.entries(exposes ?? {})
+  .flatMap(([kind, entries]) => entries.map((entry) => `${kinds[kind]} ${entry.name}`))
+  .sort();
 
 test("plugin.json satisfies the manifest format", () => {
   assert.equal(validateManifest(manifest), manifest);
@@ -31,22 +43,27 @@ test("the surface module delegates terminal startup", () => {
 test("registered terminal exposures match manifest declarations", () => {
   const moduleSource = readFileSync(new URL(`../${manifest.surface.module}`, import.meta.url), "utf8");
   const terminalSource = readFileSync(new URL("../ui/terminal.js", import.meta.url), "utf8");
-  const source = `${moduleSource}\n${terminalSource}`;
-  const kinds = { status: "status", commands: "command", dom: "dom" };
-  const declared = Object.entries(manifest.exposes ?? {})
-    .flatMap(([kind, entries]) => entries.map((entry) => `${kinds[kind]} ${entry.name}`))
-    .sort();
-  const registered = [
-    ...[...source.matchAll(/expose\.status\(\s*["']([^"']+)["']/g)].map((match) => `status ${match[1]}`),
-    ...[...source.matchAll(/expose\.command\(\s*["']([^"']+)["']/g)].map((match) => `command ${match[1]}`),
-    ...[...source.matchAll(/expose\.dom\(\s*["']([^"']+)["']/g)].map((match) => `dom ${match[1]}`),
-  ].sort();
-  assert.deepEqual(registered, declared);
+  assert.deepEqual(registrations(`${moduleSource}\n${terminalSource}`), declarations(manifest.exposes));
+});
+
+test("diagnostics.json declares the entries its module registers and is not published", () => {
+  assert.equal(validateDiagnostics(manifest, diagnostics), diagnostics);
+  const source = readFileSync(new URL(`../${diagnostics.module}`, import.meta.url), "utf8");
+  assert.deepEqual(registrations(source), declarations(diagnostics.exposes));
+  for (const path of ["diagnostics.json", diagnostics.module]) {
+    assert.equal(pkg.files.some((entry) => path === entry || path.startsWith(`${entry}/`)), false, `${path} is published`);
+  }
+});
+
+test("the diagnostic entries inject preedit and record the IME trace", () => {
+  const names = (kind) => diagnostics.exposes[kind].map((entry) => entry.name).sort();
+  assert.deepEqual(names("status"), ["terminal.ime.trace"]);
+  assert.deepEqual(names("commands"), ["terminal.compose.update", "terminal.ime.trace"]);
 });
 
 test("the terminal exposes its session, input, preedit, paste, file drop, screen.read, close commands, and view", () => {
   const names = (kind) => manifest.exposes[kind].map((entry) => entry.name).sort();
-  assert.deepEqual(names("status"), ["terminal.compose", "terminal.cursor", "terminal.ime.trace", "terminal.screen", "terminal.session"]);
-  assert.deepEqual(names("commands"), ["terminal.close", "terminal.compose.update", "terminal.cursor.set", "terminal.drop", "terminal.focus", "terminal.image.inline.delete", "terminal.ime.trace", "terminal.input", "terminal.paste", "terminal.screen.read"]);
+  assert.deepEqual(names("status"), ["terminal.compose", "terminal.cursor", "terminal.screen", "terminal.session"]);
+  assert.deepEqual(names("commands"), ["terminal.close", "terminal.cursor.set", "terminal.drop", "terminal.focus", "terminal.image.inline.delete", "terminal.input", "terminal.paste", "terminal.screen.read"]);
   assert.deepEqual(names("dom"), ["terminal.view"]);
 });

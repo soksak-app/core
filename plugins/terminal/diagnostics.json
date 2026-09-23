@@ -1,0 +1,55 @@
+{
+  "module": "ui/terminal-diagnostics.js",
+  "exposes": {
+    "status": [
+      {
+        "name": "terminal.ime.trace",
+        "description": "The explicitly enabled bounded IME callback and terminal-input diagnostic trace.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "overflow": { "type": "boolean" },
+            "entries": { "type": "array" }
+          }
+        }
+      }
+    ],
+    "commands": [
+      {
+        "name": "terminal.compose.update",
+        "description": "Updates the active native terminal preedit without writing PTY bytes.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "text": { "type": "string" },
+            "selectedRange": { "type": ["object", "null"], "properties": {
+              "location": { "type": "integer" }, "length": { "type": "integer" }
+            } },
+            "replacementRange": { "type": ["object", "null"], "properties": {
+              "location": { "type": "integer" }, "length": { "type": "integer" }
+            } },
+            "attributed": { "type": "boolean" }
+          }
+        },
+        "result": { "type": "null" }
+      },
+      {
+        "name": "terminal.ime.trace",
+        "description": "Starts or stops the bounded real IME callback and terminal-input trace.",
+        "params": {
+          "type": "object",
+          "properties": { "action": { "type": "string", "enum": ["start", "stop"] } }
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "overflow": { "type": "boolean" },
+            "entries": { "type": "array" }
+          }
+        }
+      }
+    ]
+  }
+}

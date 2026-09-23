@@ -6,7 +6,9 @@ const callable = (value, name) => {
 };
 const readyReleases = new WeakMap();
 
-export function createSurfaceContext({ root, surfaceId, pluginId, metadata = {}, declarations = {}, composition = null, runtime = {} } = {}) {
+export function createSurfaceContext({
+  root, surfaceId, pluginId, metadata = {}, declarations = {}, composition = null, diagnostics = null, runtime = {},
+} = {}) {
   if (!root || typeof root.appendChild !== "function") throw new TypeError("surface context requires a root element");
   if (typeof surfaceId !== "string" || surfaceId === "") throw new TypeError("surface context requires surfaceId");
   if (!runtime.exposure || typeof runtime.exposure.command !== "function") {
@@ -35,6 +37,8 @@ export function createSurfaceContext({ root, surfaceId, pluginId, metadata = {},
     root, surfaceId, pluginId, metadata: Object.freeze(structuredClone(metadata)),
     declarations: Object.freeze(structuredClone(declarations)),
     composition,
+    // 진단 빌드에서는 플러그인의 진단 모듈, release 빌드에서는 null 이다.
+    diagnostics,
     runtime: Object.freeze({
       sidecar: callable(runtime.sidecar, "runtime.sidecar").bind(runtime),
       native: runtime.native,

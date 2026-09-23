@@ -1,7 +1,8 @@
 // release 산출물에 진단 코드가 없는지 검사한다.
 //
-// 진단 코드(호스트의 진단 메서드, 창 녹화, 페이지 진단 모듈)는 진단 빌드에만 들어간다. 이
-// 검사는 release 빌드 직후, 스테이징된 프런트엔드와 두 release 실행 파일을 읽는다.
+// 진단 코드(호스트의 진단 메서드, 창 녹화, 페이지 진단 모듈, 플러그인의 diagnostics.json 선언과
+// 모듈)는 진단 빌드에만 들어간다. 이 검사는 release 빌드 직후, 스테이징된 프런트엔드와 두
+// release 실행 파일을 읽는다.
 // `make release-check` 가 release 빌드를 먼저 실행한다.
 //
 //   node scripts/check-release.mjs
@@ -54,6 +55,52 @@ export const find = (errors, label, text) => {
   }
 };
 
+/**
+ * 스테이징된 release 프런트엔드에 플러그인 진단 선언과 모듈이 없는지 검사한다. sources 는
+ * 플러그인 패키지마다 {package, diagnostics} 이며 diagnostics 는 원본 diagnostics.json 내용이다.
+ * diagnostic-plugins.json 은 {} 이어야 하고, 진단 모듈 파일은 없어야 하며, 어떤 스테이징 파일도
+ * 진단 항목 이름을 따옴표 안에 적지 않아야 한다.
+ */
+export function auditPluginDiagnostics(frontend, sources) {
+  const errors = [];
+  const index = join(frontend, "diagnostic-plugins.json");
+  if (!existsSync(index)) {
+    errors.push(`${index}: missing; run the release build first`);
+  } else if (readFileSync(index, "utf8").trim() !== "{}") {
+    errors.push(`${index}: must be {} in a release build`);
+  }
+  const names = new Set();
+  for (const { package: name, diagnostics } of sources) {
+    const module = join(frontend, "modules", name, diagnostics.module);
+    if (existsSync(module)) errors.push(`${module}: diagnostic module of ${name} is staged`);
+    for (const entries of Object.values(diagnostics.exposes)) for (const entry of entries) names.add(entry.name);
+  }
+  for (const path of files(frontend)) {
+    if (path === index) continue;
+    const text = readFileSync(path, "utf8");
+    for (const name of names) {
+      if (text.includes(`"${name}"`)) errors.push(`${path}: contains the diagnostic entry ${name}`);
+    }
+  }
+  return errors;
+}
+
+/** environment.json 의 플러그인 가운데 diagnostics.json 이 있는 패키지와 그 내용. */
+function pluginDiagnostics(app) {
+  const packages = new Map();
+  for (const dir of readdirSync(join(ROOT, "plugins"))) {
+    const manifest = join(ROOT, "plugins", dir, "package.json");
+    if (existsSync(manifest)) packages.set(JSON.parse(readFileSync(manifest, "utf8")).name, join(ROOT, "plugins", dir));
+  }
+  const environment = JSON.parse(readFileSync(join(ROOT, "apps", app, "environment.json"), "utf8"));
+  return environment.plugins.flatMap((name) => {
+    const dir = packages.get(name);
+    if (!dir) throw new Error(`apps/${app}/environment.json: ${name} is not a package under plugins/`);
+    const path = join(dir, "diagnostics.json");
+    return existsSync(path) ? [{ package: name, diagnostics: JSON.parse(readFileSync(path, "utf8")) }] : [];
+  });
+}
+
 // CLI 로 직접 실행될 때만 검사를 수행한다.
 if (import.meta.main) {
   const errors = [];
@@ -65,6 +112,7 @@ if (import.meta.main) {
       errors.push(`${relative(ROOT, frontend)}: no staged diagnostics module; run the release build first`);
     } else {
       for (const path of files(frontend)) find(errors, relative(ROOT, path), readFileSync(path, "utf8"));
+      errors.push(...auditPluginDiagnostics(frontend, pluginDiagnostics(app)).map((error) => error.replace(ROOT, "")));
     }
     const executable = join(ROOT, "target", "release", `soksak-${app}`);
     if (!existsSync(executable)) {

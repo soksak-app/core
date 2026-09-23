@@ -29,6 +29,8 @@ const files = {
     settings: { "cursor.shape": { type: "enum", default: "block", values: ["block", "beam"] } },
   },
   "/modules/@fixture/side/plugin.json": { id: "side", name: "Side", sections: [{ id: "side.list", name: "List" }] },
+  // release 빌드의 스테이징은 진단 선언이 없는 {} 를 둔다.
+  "/diagnostic-plugins.json": {},
 };
 const requested = [];
 globalThis.fetch = async (path) => {
@@ -46,11 +48,13 @@ test("the environment registers card plugins, sections, and sidebar defaults", a
   await loadEnvironment();
   assert.deepEqual(requested, [
     "/environment.json", "/modules/@fixture/card/plugin.json", "/modules/@fixture/side/plugin.json",
+    "/diagnostic-plugins.json",
   ]);
   assert.deepEqual(registry.plugins().map((p) => p.id), ["card"], "a plugin without a surface is not a card plugin");
   assert.deepEqual(registry.plugin("card").surface("tab 1"),
     { module: "/modules/@fixture/card/ui/card.js", composition: { kind: "dom" }, surfaceId: "tab 1", pluginId: "card", home: null, declarations: {}, sidecars: [] });
   assert.equal(registry.plugin("card").ink, "--fixture-ink");
+  assert.equal(registry.plugin("card").diagnostics, null, "a release build has no plugin diagnostic module");
   assert.equal(registry.section("side.list").name, "List");
   assert.equal(registry.section("card.info").name, "Info");
   assert.deepEqual(settings.defaults.sets, files["/environment.json"].sidebars.sets);

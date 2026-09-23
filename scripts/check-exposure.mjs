@@ -115,7 +115,12 @@ for (const name of readdirSync(PLUGINS)) {
   const ui = join(PLUGINS, name, "ui");
   const sources = existsSync(ui) ? [...files(ui, (file) => /\.(js|html)$/.test(file))] : [];
   plugins++;
-  check({ owner: manifest.id, exposes: manifest.exposes ?? {}, sources, registrations: [] });
+  // 진단 빌드에만 있는 선언(diagnostics.json)도 같은 규칙으로 검사한다.
+  const diagnosticsPath = join(PLUGINS, name, "diagnostics.json");
+  const diagnostics = existsSync(diagnosticsPath) ? readJson(diagnosticsPath).exposes : {};
+  const exposes = Object.fromEntries(["status", "commands", "dom"].map((key) =>
+    [key, [...(manifest.exposes?.[key] ?? []), ...(diagnostics[key] ?? [])]]));
+  check({ owner: manifest.id, exposes, sources, registrations: [] });
 }
 
 if (errors.length) {

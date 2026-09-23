@@ -1,6 +1,7 @@
 import { createSurfaceCompositionController, createSurfaceContext, mountSurfaceModule, releaseSurfaceReady } from "@soksak/plugin-api";
 import { native, onSurfacePrepared, surfaces as hostSurfaces, surfaceContextRuntime } from "./host.js";
 import { registry } from "./exposure.js";
+import { plugin } from "./registry.js";
 import { registerSurfaceExposure } from "./surface-exposure.js";
 import { onSettingsChange, pluginSettings } from "./settings.js";
 const mounted = new Map();
@@ -119,7 +120,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
     const context = createSurfaceContext({
       root: shadow, surfaceId: surface.surfaceId, pluginId: surface.pluginId,
       metadata: { home: surface.home },
-      declarations: surface.declarations ?? {}, composition,
+      declarations: surface.declarations ?? {}, composition, diagnostics: plugin(surface.pluginId).diagnostics,
       runtime: { sidecar: scoped.sidecar, native: scoped.native, exposure: scoped.exposure, emit, on,
         clipboard: scoped.clipboard,
         theme: scoped.theme,

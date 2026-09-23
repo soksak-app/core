@@ -49,3 +49,51 @@ test("unknown staging arguments are rejected", (t) => {
   const app = fixtureApp(t);
   assert.throws(() => execFileSync(process.execPath, [STAGE, "out", "--release"], { cwd: app, stdio: "pipe" }), /usage/);
 });
+
+/** diagnostics.json 을 가진 플러그인 하나를 둔 가짜 애플리케이션. files 는 플러그인이 배포하는 목록이다. */
+function diagnosticApp(t, files = ["plugin.json", "ui/probe.js"]) {
+  const app = fixtureApp(t);
+  const plugin = join(app, "node_modules/@fixture/probe");
+  mkdirSync(join(plugin, "ui"), { recursive: true });
+  writeFileSync(join(plugin, "package.json"), JSON.stringify({ name: "@fixture/probe", files }));
+  writeFileSync(join(plugin, "plugin.json"), JSON.stringify({
+    id: "probe", name: "Probe", mark: "p", icon: "<path/>",
+    surface: { module: "ui/probe.js", composition: { kind: "dom" } },
+  }));
+  writeFileSync(join(plugin, "ui/probe.js"), "export function mount() {}\n");
+  writeFileSync(join(plugin, "diagnostics.json"), JSON.stringify(DIAGNOSTICS));
+  writeFileSync(join(plugin, "ui/probe-diagnostics.js"), "export function attach() {}\n");
+  const environment = JSON.parse(readFileSync(join(app, "environment.json"), "utf8"));
+  environment.plugins = ["@fixture/probe"];
+  environment.workspace.grid.cards[0].tabs = [{ plugin: "probe", title: "p" }];
+  writeFileSync(join(app, "environment.json"), JSON.stringify(environment));
+  return app;
+}
+
+const DIAGNOSTICS = {
+  module: "ui/probe-diagnostics.js",
+  exposes: { commands: [{
+    name: "probe.inject", description: "Injects.", params: { type: "object", properties: {} }, result: { type: "null" },
+  }] },
+};
+
+test("plugin diagnostics are staged only with --diagnostics", (t) => {
+  const app = diagnosticApp(t);
+  stage(app);
+  assert.deepEqual(JSON.parse(readFileSync(join(app, "out/diagnostic-plugins.json"), "utf8")), {});
+  assert.equal(existsSync(join(app, "out/modules/@fixture/probe/ui/probe-diagnostics.js")), false);
+  assert.equal(existsSync(join(app, "out/modules/@fixture/probe/diagnostics.json")), false);
+  assert.equal(existsSync(join(app, "out/modules/@fixture/probe/ui/probe.js")), true);
+
+  stage(app, "--diagnostics");
+  assert.deepEqual(JSON.parse(readFileSync(join(app, "out/diagnostic-plugins.json"), "utf8")), { "@fixture/probe": DIAGNOSTICS });
+  assert.equal(existsSync(join(app, "out/modules/@fixture/probe/ui/probe-diagnostics.js")), true);
+});
+
+test("a plugin that publishes its diagnostic declarations or module is rejected", (t) => {
+  for (const listed of ["diagnostics.json", "ui"]) {
+    const app = diagnosticApp(t, ["plugin.json", "ui/probe.js", listed]);
+    assert.throws(() => execFileSync(process.execPath, [STAGE, "out"], { cwd: app, stdio: "pipe" }),
+      /is diagnostic and must not be listed in files/);
+  }
+});

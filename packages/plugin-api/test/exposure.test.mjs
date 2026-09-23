@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   EXPOSURE_ERRORS, actOn, createExpose, declarationMap, exposureEntries, matchesSchema, pagePackage,
-  replyPayload, validateExposes, validateExposureFile, validateManifest,
+  mergeExposes, replyPayload, validateDiagnosticPlugins, validateDiagnostics, validateExposes, validateExposureFile,
+  validateManifest,
 } from "../index.js";
 
 const exposes = () => ({
@@ -223,4 +224,28 @@ test("a surface page registers declared names once through its port and answers 
     [8, { result: { x: 1, y: 2, width: 3, height: 4 } }],
     [9, { error: { code: EXPOSURE_ERRORS.unknownName, message: "unknown status probe.missing" } }],
   ]);
+});
+
+test("diagnostic declarations extend a surface plugin once and are rejected otherwise", () => {
+  const manifest = { ...page, exposes: exposes() };
+  const inject = {
+    name: "probe.inject", description: "Injects.", params: { type: "object", properties: {} }, result: { type: "null" },
+  };
+  const diagnostics = { module: "ui/probe-diagnostics.js", exposes: { commands: [inject] } };
+  assert.equal(validateDiagnostics(manifest, diagnostics), diagnostics);
+  assert.deepEqual(mergeExposes(manifest.exposes, diagnostics.exposes).commands.map((entry) => entry.name),
+    ["probe.send", "probe.inject"]);
+  assert.throws(() => validateDiagnostics(manifest, { ...diagnostics, exposes: { commands: [manifest.exposes.commands[0]] } }),
+    /command probe\.send is declared twice/);
+  assert.throws(() => validateDiagnostics({ id: "probe", name: "Probe", sections: [] }, diagnostics), /diagnostics require a surface/);
+  assert.throws(() => validateDiagnostics(manifest, { ...diagnostics, module: "../probe.js" }), /module must be a JavaScript path/);
+  assert.throws(() => validateDiagnostics(manifest, { ...diagnostics, extra: true }), /extra/);
+  assert.throws(() => validateDiagnostics(manifest, { module: "ui/probe-diagnostics.js", exposes: { commands: [{ ...inject, name: "other.inject" }] } }),
+    /must be probe\.<name>/);
+
+  const manifests = new Map([["@fixture/probe", manifest]]);
+  assert.deepEqual(validateDiagnosticPlugins({}, manifests), {});
+  assert.deepEqual(validateDiagnosticPlugins({ "@fixture/probe": diagnostics }, manifests), { "@fixture/probe": diagnostics });
+  assert.throws(() => validateDiagnosticPlugins({ "@fixture/other": diagnostics }, manifests), /not a plugin of the environment/);
+  assert.throws(() => validateDiagnosticPlugins([], manifests), /expected an object/);
 });

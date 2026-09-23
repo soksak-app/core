@@ -18,6 +18,12 @@
 //   <출력>/diagnostics.js           --diagnostics 이면 워크벤치의 observe.js(페이지 진단 메서드),
 //                                  아니면 빈 모듈. 진단 코드는 진단 빌드에만 들어간다
 //   <출력>/transcript.js            --diagnostics 이면 진단 모듈이 쓰는 호출 기록기
+//   <출력>/diagnostic-plugins.json  --diagnostics 이면 플러그인 패키지 이름에서 그 diagnostics.json
+//                                  내용으로의 객체, 아니면 {}
+//   <출력>/modules/<플러그인>/<모듈>  --diagnostics 이면 diagnostics.json 의 module 파일
+//
+// diagnostics.json 과 그 모듈은 패키지의 files 에 나열하지 않는다. 나열되어 있으면 release 에
+// 복사되므로 실패한다.
 
 import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -26,7 +32,8 @@ import { fileURLToPath } from "node:url";
 import { replaceFile } from "./replace-file.mjs";
 import { STAGED } from "./staged.js";
 import {
-  ENVIRONMENT, MANIFEST, RUNTIME, SIDECAR, modulePath, validateEnvironment, validateManifest, validateSidecar,
+  DIAGNOSTIC_PLUGINS, DIAGNOSTICS, ENVIRONMENT, MANIFEST, RUNTIME, SIDECAR, modulePath, validateDiagnostics,
+  validateEnvironment, validateManifest, validateSidecar,
 } from "@soksak/plugin-api";
 
 const USAGE = "usage: soksak-stage <output directory> [--executables <directory>] [--diagnostics]";
@@ -90,10 +97,26 @@ function place(owner, dir, path) {
   replaceFile(built, join(executableTarget, file));
 }
 
+const diagnosticPlugins = {};
 for (const name of environment.plugins) {
   const dir = packageDir(app, name);
   const manifest = validateManifest(readJson(join(dir, MANIFEST)));
   copyPackage(dir, join(target, modulePath(name, "")));
+  if (existsSync(join(dir, DIAGNOSTICS))) {
+    const declared = validateDiagnostics(manifest, readJson(join(dir, DIAGNOSTICS)));
+    const { files } = readJson(join(dir, "package.json"));
+    for (const path of [DIAGNOSTICS, declared.module]) {
+      if (files.some((file) => path === file || path.startsWith(`${file}/`))) {
+        throw new Error(`${name}: ${path} is diagnostic and must not be listed in files`);
+      }
+    }
+    if (diagnostics) {
+      const module = join(target, modulePath(name, declared.module));
+      mkdirSync(dirname(module), { recursive: true });
+      copyFileSync(join(dir, declared.module), module);
+      diagnosticPlugins[name] = declared;
+    }
+  }
   for (const sidecar of manifest.sidecars ?? []) {
     if (sidecars.has(sidecar)) continue;
     sidecars.add(sidecar);
@@ -118,6 +141,7 @@ if (diagnostics) {
 else writeFileSync(join(target, "diagnostics.js"), "// 진단 빌드가 아니다. 진단 메서드가 없다.\nexport {};\n");
 
 writeFileSync(join(target, ENVIRONMENT), `${JSON.stringify(environment, null, 2)}\n`);
+writeFileSync(join(target, DIAGNOSTIC_PLUGINS), `${JSON.stringify(diagnosticPlugins, null, 2)}\n`);
 
 // STAGED 목록의 파일들이 실제로 만들어졌는지 검증.
 // 선언과 실제가 갈라지지 않도록 한다.

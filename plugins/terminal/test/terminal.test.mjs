@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { createBinder } from "@soksak/plugin-api";
+import * as terminalDiagnostics from "../ui/terminal-diagnostics.js";
 import { startTerminal as realStartTerminal } from "../ui/terminal.js";
 
 const startTerminal = (options) => realStartTerminal({ id: "test-session", ...options });
@@ -1591,6 +1592,22 @@ test("accepting native marked text writes it to the PTY exactly once", async () 
     "accepted marked text is committed once");
 });
 
+test("a terminal without a diagnostic module registers no diagnostic entries", async () => {
+  FakeResizeObserver.reset();
+  const expose = createFakeExpose();
+  await startTerminal({
+    view: createFakeView(),
+    attachImage: createFakeAttachImage().function,
+    sidecar: createFakeSidecar(),
+    expose,
+    scale: 1,
+    window: { ResizeObserver: FakeResizeObserver, TextEncoder, devicePixelRatio: 1 },
+  });
+  assert.equal(expose.getCommand("terminal.compose.update"), undefined);
+  assert.equal(expose.getCommand("terminal.ime.trace"), undefined);
+  assert.equal(expose.getStatus("terminal.ime.trace"), undefined);
+});
+
 test("terminal.compose.update exposes ordered preedit changes without writing partial text to the PTY", async () => {
   FakeResizeObserver.reset();
   const fakeAttachImage = createFakeAttachImage();
@@ -1601,6 +1618,7 @@ test("terminal.compose.update exposes ordered preedit changes without writing pa
     attachImage: fakeAttachImage.function,
     sidecar: fakeSidecar,
     expose,
+    diagnostics: terminalDiagnostics,
     scale: 1,
     window: { ResizeObserver: FakeResizeObserver, TextEncoder, devicePixelRatio: 1 },
   });
@@ -1629,6 +1647,7 @@ test("terminal.compose.update rejects malformed ranges instead of replacing them
     attachImage: fakeAttachImage.function,
     sidecar: fakeSidecar,
     expose,
+    diagnostics: terminalDiagnostics,
     scale: 1,
     window: { ResizeObserver: FakeResizeObserver, TextEncoder, devicePixelRatio: 1 },
   });
@@ -1655,6 +1674,7 @@ test("terminal.ime.trace records native callbacks and ordered terminal input, an
     },
     sidecar: fakeSidecar,
     expose,
+    diagnostics: terminalDiagnostics,
     scale: 1,
     window: { ResizeObserver: FakeResizeObserver, TextEncoder, devicePixelRatio: 1 },
   });

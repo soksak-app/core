@@ -25,6 +25,10 @@ export const SIDECAR = "sidecar.json";
 export const RUNTIME = "runtime";
 /** 코어가 공개하는 항목의 선언 파일. 워크벤치 패키지 루트에 있다. */
 export const EXPOSURE = "exposure.json";
+/** 플러그인 패키지 루트의 진단 선언 파일. 진단 빌드에만 스테이징된다. */
+export const DIAGNOSTICS = "diagnostics.json";
+/** 스테이징 루트의 플러그인 진단 선언 목록. 진단 빌드가 아니면 {} 다. */
+export const DIAGNOSTIC_PLUGINS = "diagnostic-plugins.json";
 
 /** 표면 문서가 등록하는 코어 항목의 이름 접두사. 다른 코어 항목은 메인 문서가 등록한다. */
 export const SURFACE_CORE = "core.surface.";
@@ -547,6 +551,47 @@ export function validateExposes(owner, exposes) {
     }
   }
   return exposes;
+}
+
+/**
+ * 플러그인의 diagnostics.json 을 manifest 와 함께 검사한다. `{module, exposes}` 이며 module 은
+ * 패키지 안의 JavaScript 경로, exposes 는 plugin.json exposes 와 같은 형식이다. 표면이 있는
+ * 플러그인만 가질 수 있고, 한 이름은 plugin.json 과 diagnostics.json 중 한 곳에만 선언한다.
+ */
+export function validateDiagnostics(manifest, diagnostics) {
+  const where = `plugin ${manifest.id} ${DIAGNOSTICS}`;
+  if (manifest.surface === undefined) throw new Error(`${where}: diagnostics require a surface`);
+  if (!isObject(diagnostics)) throw new Error(`${where}: expected an object`);
+  only(where, diagnostics, ["module", "exposes"]);
+  const { module } = diagnostics;
+  if (!isText(module) || module.startsWith("/") || module.split("/").includes("..") || !module.endsWith(".js")) {
+    throw new Error(`${where}: module must be a JavaScript path inside the package`);
+  }
+  validateExposes(manifest.id, diagnostics.exposes);
+  mergeExposes(manifest.exposes ?? {}, diagnostics.exposes);
+  return diagnostics;
+}
+
+/** 두 exposes 선언을 합친다. 같은 종류의 같은 이름이 두 곳에 있으면 예외를 던진다. */
+export function mergeExposes(first, second) {
+  declarationMap(second, declarationMap(first));
+  return Object.fromEntries(Object.keys(EXPOSE_KINDS)
+    .filter((key) => first[key] !== undefined || second[key] !== undefined)
+    .map((key) => [key, [...(first[key] ?? []), ...(second[key] ?? [])]]));
+}
+
+/**
+ * 스테이징된 diagnostic-plugins.json 을 검사한다. 키는 environment 의 플러그인 패키지 이름이고
+ * 값은 그 플러그인의 diagnostics.json 내용이다. manifests 는 패키지 이름에서 manifest 로의 Map 이다.
+ */
+export function validateDiagnosticPlugins(file, manifests) {
+  if (!isObject(file)) throw new Error(`${DIAGNOSTIC_PLUGINS}: expected an object`);
+  for (const [name, diagnostics] of Object.entries(file)) {
+    const manifest = manifests.get(name);
+    if (!manifest) throw new Error(`${DIAGNOSTIC_PLUGINS}: ${name} is not a plugin of the environment`);
+    validateDiagnostics(manifest, diagnostics);
+  }
+  return file;
 }
 
 /** 코어 선언 파일(exposure.json) 하나를 검사한다. 이름의 owner 는 core 다. */
