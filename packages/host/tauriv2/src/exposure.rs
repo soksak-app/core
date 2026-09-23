@@ -127,6 +127,27 @@ fn host_declarations() -> Value {
 }
 
 /// 페이지의 `exposure.list` 결과에 호스트 항목을 등록된 항목으로 추가한다.
+/// 소유자가 host 인 이름이 이 요청 방식으로 선언되었는지 확인한다. 선언되지 않은 이름은 1001 이다.
+pub fn check_host_name(method: &str, name: &str) -> Result<(), Failure> {
+    let kind = match method {
+        "status.get" | "status.watch" | "status.unwatch" | "status.next" => "status",
+        "command.run" => "commands",
+        _ => "",
+    };
+    let declared = host_declarations();
+    let listed = declared[kind]
+        .as_array()
+        .is_some_and(|entries| entries.iter().any(|entry| entry["name"] == name));
+    if listed {
+        Ok(())
+    } else {
+        Err(Failure::new(
+            UNKNOWN_NAME,
+            format!("{name} is not declared"),
+        ))
+    }
+}
+
 pub fn with_host_entries(listed: Value) -> Result<Value, Failure> {
     let Value::Object(mut listed) = listed else {
         return Err(Failure::new(
@@ -1128,6 +1149,7 @@ impl Host {
         name: &str,
         params: &Map<String, Value>,
     ) -> Result<Value, Failure> {
+        check_host_name(method, name)?;
         let unknown = || Failure::new(UNKNOWN_NAME, format!("{name} is not declared"));
         match (method, name) {
             ("status.get", "host.window") => window_status(window),

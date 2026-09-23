@@ -340,6 +340,8 @@ pub struct Endpoint {
     _process_lock: ProcessLock,
     address: String,
     file: PathBuf,
+    // 이 엔드포인트가 쓴 endpoint.json 내용. 닫을 때 파일이 이 내용일 때만 지운다.
+    record: Value,
     stopped: Arc<AtomicBool>,
 }
 
@@ -432,12 +434,13 @@ impl Endpoint {
             next: AtomicU64::new(1),
             orders: AtomicU64::new(1),
         });
-        let endpoint = Endpoint {
+        let mut endpoint = Endpoint {
             shared,
             listener,
             _process_lock: process_lock,
             address,
             file,
+            record: Value::Null,
             stopped: Arc::new(AtomicBool::new(false)),
         };
         let executable = std::env::current_exe()
@@ -456,6 +459,7 @@ impl Endpoint {
             endpoint.listener.remove();
             return Err(error);
         }
+        endpoint.record = record;
         let listener = endpoint.listener.clone();
         let shared = endpoint.shared.clone();
         let stopped = endpoint.stopped.clone();
@@ -492,10 +496,24 @@ impl Endpoint {
             return;
         }
         self.listener.remove();
-        if let Err(error) = std::fs::remove_file(&self.file) {
-            if error.kind() != ErrorKind::NotFound {
-                eprintln!("{}: {error}", self.file.display());
-            }
+        // 다른 프로세스가 대체한 endpoint.json 은 그 프로세스의 것이므로 지우지 않는다.
+        match std::fs::read(&self.file) {
+            Err(error) if error.kind() == ErrorKind::NotFound => {}
+            Err(error) => eprintln!("{}: {error}", self.file.display()),
+            Ok(data) => match serde_json::from_slice::<Value>(&data) {
+                Err(error) => eprintln!(
+                    "{}: endpoint file is not valid JSON: {error}",
+                    self.file.display()
+                ),
+                Ok(current) if current == self.record => {
+                    if let Err(error) = std::fs::remove_file(&self.file) {
+                        if error.kind() != ErrorKind::NotFound {
+                            eprintln!("{}: {error}", self.file.display());
+                        }
+                    }
+                }
+                Ok(_) => {}
+            },
         }
         if let Ok(peers) = self.shared.peers.lock() {
             for peer in peers.values() {

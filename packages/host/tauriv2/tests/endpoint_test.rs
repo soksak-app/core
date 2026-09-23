@@ -289,6 +289,27 @@ fn endpoint_file_is_written_and_removed() {
     assert!(!Path::new(&address).exists());
 }
 
+// contract: endpoint.discovery.close-keeps-replacement
+#[test]
+fn stop_keeps_an_endpoint_file_that_another_process_wrote() {
+    let config = tempfile::tempdir().unwrap();
+    let (fake, _) = Fake::new();
+    let endpoint = start(config.path(), "test-replacement", fake);
+    let file = config.path().join("endpoint.json");
+    let replacement = json!({
+        "transport": "unix", "address": "replacement.sock", "pid": std::process::id() + 1,
+        "application": "test-replacement", "version": "0.0.1", "executable": "/replacement",
+        "started": "2026-09-23T00:00:00Z",
+    });
+    std::fs::write(&file, serde_json::to_vec(&replacement).unwrap()).unwrap();
+    endpoint.stop();
+    let kept: Value = serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
+    assert_eq!(
+        kept, replacement,
+        "stop removed or changed the replacement endpoint file"
+    );
+}
+
 // contract: endpoint.discovery.endpoint-json-mode-0600, endpoint.socket.private-modes
 #[test]
 fn endpoint_files_are_private_to_the_user() {
@@ -380,7 +401,7 @@ fn a_socket_path_that_is_not_a_directory_is_refused() {
     assert!(refused.contains("is not a directory"), "{refused}");
 }
 
-// contract: endpoint.watch.notifies-watching-connection, endpoint.watch.non-watching-connection-not-notified, endpoint.watch.unwatch-is-per-connection, endpoint.watch.no-page-unwatch-while-watched, endpoint.watch.last-watcher-close-unwatches-page, endpoint.watch.registry-reflects-watches
+// contract: endpoint.watch.notifies-watching-connection, endpoint.watch.non-watching-connection-not-notified, endpoint.watch.unwatch-is-per-connection, endpoint.watch.page-watch-deduplicated, endpoint.watch.no-page-unwatch-while-watched, endpoint.watch.last-watcher-close-unwatches-page, endpoint.watch.registry-reflects-watches
 #[test]
 fn watchers_belong_to_their_connection() {
     let config = tempfile::tempdir().unwrap();
@@ -442,6 +463,13 @@ fn watchers_belong_to_their_connection() {
     );
     notifier.changed("w1", "core.layout", None, json!(2));
     assert_eq!(receive(&mut first).unwrap()["params"]["value"], 2);
+    // 페이지는 두 연결의 감시 가운데 첫 감시만 받는다.
+    let page_watches = fake
+        .calls()
+        .iter()
+        .filter(|(_, method, _)| method == "status.watch")
+        .count();
+    assert_eq!(page_watches, 1, "{:?}", fake.calls());
     assert!(!fake
         .calls()
         .iter()
@@ -527,13 +555,15 @@ fn surface_watches_are_separate() {
     endpoint.stop();
 }
 
-// contract: endpoint.names.owner-form-required, endpoint.names.valid-name-examples
+// contract: endpoint.names.missing-name-invalid, endpoint.names.owner-form-required, endpoint.names.valid-name-examples
 #[test]
 fn names_must_have_the_owner_form() {
     let config = tempfile::tempdir().unwrap();
     let (fake, _) = Fake::new();
     let endpoint = start(config.path(), "test-names", fake.clone());
     let mut connection = open(&endpoint);
+    let reply = request(&mut connection, 9, "status.get", json!({"window": "w1"}));
+    assert_eq!(reply["error"]["code"], -32602, "missing name: {reply}");
     for (id, name) in [
         (1, json!("layout")),
         (2, json!("Core.layout")),

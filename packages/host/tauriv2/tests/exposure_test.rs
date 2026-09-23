@@ -323,3 +323,26 @@ fn forwarded_requests_use_the_declared_timeout() {
         -32602
     );
 }
+
+// contract: endpoint.names.unknown-host-name-1001
+#[test]
+fn undeclared_host_names_are_unknown() {
+    for (method, name) in [
+        ("command.run", "host.nope"),
+        ("status.get", "host.nope"),
+        ("command.run", "host.window"),
+    ] {
+        let failure = exposure::check_host_name(method, name).unwrap_err();
+        assert_eq!(failure.code, 1001, "{method} {name}: {}", failure.message);
+    }
+    for (method, name) in [
+        ("status.get", "host.window"),
+        ("status.watch", "host.windows"),
+        ("command.run", "host.quit"),
+    ] {
+        assert!(
+            exposure::check_host_name(method, name).is_ok(),
+            "{method} {name}"
+        );
+    }
+}
