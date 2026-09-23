@@ -52,7 +52,7 @@ type Host struct {
 	configDir  string
 	// endpoint 는 로컬 엔드포인트이고 relay 는 페이지에 보낸 노출 요청이다.
 	endpoint *Endpoint
-	relay    relay
+	relay    *Relay[relayTarget]
 }
 
 // errNoWindow 는 이 애플리케이션의 창이 없을 때 반환한다. 여기의 호출은 모두 그 창에
@@ -69,7 +69,7 @@ func newHost(sidecars *Sidecars, configDir string) (*Host, error) {
 		directory = filepath.Join(config, "com.soksak.wailsv3")
 	}
 	return &Host{workspace: NewWorkspace(directory), configDir: directory, windows: map[uint]*Surfaces{}, owners: map[string]*Surfaces{}, sidecars: sidecars,
-		relay: relay{waiting: map[uint64]*waiter{}}}, nil
+		relay: NewRelay[relayTarget]()}, nil
 }
 
 func (h *Host) surface(ctx context.Context) (*Surfaces, error) {
@@ -246,7 +246,7 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 		s.ready = false
 		h.mu.Unlock()
 		// 이전 페이지에 보낸 요청은 답을 받지 못한다.
-		h.relay.abandon(s, map[string]bool{"": true})
+		h.relay.Abandon(func(t relayTarget) bool { return t.owner == s && t.surface == "" })
 		go h.windowsChanged()
 		// Finish the old surface cleanup before the replacement document can attach
 		// its images. Queueing this after the framework callback lets the new page
@@ -271,7 +271,7 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 			return
 		}
 		s.close()
-		h.relay.abandon(s, nil)
+		h.relay.Abandon(func(t relayTarget) bool { return t.owner == s })
 		h.notifyWorkspace()
 		go h.windowsChanged()
 		if quit {

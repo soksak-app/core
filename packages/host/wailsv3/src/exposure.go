@@ -10,6 +10,7 @@ package host
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -160,59 +161,39 @@ type ExposureResult struct {
 	Error  *RPCError       `json:"error,omitempty"`
 }
 
-// waiter 는 답을 기다리는 요청 하나다. surface 가 비어 있으면 메인 페이지의 요청이다.
-type waiter struct {
-	owner   *Surfaces
-	surface string
-	reply   chan ExposureResult
-}
-
-// relay 는 문서에 보낸 요청과 그 답을 연결한다.
-type relay struct {
+// Relay 는 문서에 보낸 요청과 그 답을 연결한다. T 는 요청을 받은 문서를 가리키며, 답은 같은 문서에서 와야 한다.
+type Relay[T comparable] struct {
 	mu      sync.Mutex
 	next    uint64
-	waiting map[uint64]*waiter
+	waiting map[uint64]*relayWaiter[T]
 }
 
-func (r *relay) open(owner *Surfaces, surface string) (uint64, *waiter) {
+type relayWaiter[T comparable] struct {
+	target T
+	reply  chan ExposureResult
+}
+
+// NewRelay 는 빈 중계를 만든다.
+func NewRelay[T comparable]() *Relay[T] {
+	return &Relay[T]{waiting: map[uint64]*relayWaiter[T]{}}
+}
+
+// Request 는 target 에 보낼 요청 id 를 만들고 send 로 보낸 뒤 답을 기다린다. send 가 실패하면 기다리지 않고
+// 1003 오류를 반환한다. 제한 시간이 지나면 요청을 지우고 1005 오류를 반환한다. timeout 이 0 이면 답이나
+// Abandon 까지 기다린다.
+func (r *Relay[T]) Request(target T, timeout time.Duration, send func(id uint64) error) ExposureResult {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	r.next++
-	w := &waiter{owner: owner, surface: surface, reply: make(chan ExposureResult, 1)}
-	r.waiting[r.next] = w
-	return r.next, w
-}
-
-// resolve 는 요청 id 의 답을 전달한다. 요청을 받은 문서가 아닌 곳에서 온 답은 버린다.
-func (r *relay) resolve(id uint64, owner *Surfaces, surface string, reply ExposureResult) error {
-	r.mu.Lock()
-	w := r.waiting[id]
-	if w == nil || w.owner != owner || w.surface != surface {
-		r.mu.Unlock()
-		return fmt.Errorf("exposure reply %d has no matching request", id)
-	}
-	delete(r.waiting, id)
+	id := r.next
+	w := &relayWaiter[T]{target: target, reply: make(chan ExposureResult, 1)}
+	r.waiting[id] = w
 	r.mu.Unlock()
-	w.reply <- reply
-	return nil
-}
-
-// abandon 은 사라진 문서에 보낸 요청에 1003 오류로 답한다. surfaces 가 nil 이면 창의 모든 요청이다.
-func (r *relay) abandon(owner *Surfaces, surfaces map[string]bool) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	for id, w := range r.waiting {
-		if w.owner != owner || (surfaces != nil && !surfaces[w.surface]) {
-			continue
-		}
+	if err := send(id); err != nil {
+		r.mu.Lock()
 		delete(r.waiting, id)
-		w.reply <- ExposureResult{Error: rpcError(codeNoWindow, "the document closed before it replied")}
+		r.mu.Unlock()
+		return ExposureResult{Error: rpcError(codeNoWindow, "send request %d: %v", id, err)}
 	}
-}
-
-// wait 는 답을 기다린다. 제한 시간이 지나면 요청을 지우고 1005 오류를 반환한다. timeout 이 0 이면
-// 답이나 abandon 까지 기다린다.
-func (r *relay) wait(id uint64, w *waiter, timeout time.Duration) ExposureResult {
 	if timeout == 0 {
 		return <-w.reply
 	}
@@ -234,27 +215,53 @@ func (r *relay) wait(id uint64, w *waiter, timeout time.Duration) ExposureResult
 	}
 }
 
-// forget 은 보내지 않은 요청을 지운다.
-func (r *relay) forget(id uint64) {
+// Resolve 는 요청 id 의 답을 전달한다. 요청을 받은 문서가 아닌 곳에서 온 답과 이미 끝난 요청의 답은 오류다.
+func (r *Relay[T]) Resolve(id uint64, from T, reply ExposureResult) error {
 	r.mu.Lock()
+	w := r.waiting[id]
+	if w == nil || w.target != from {
+		r.mu.Unlock()
+		return fmt.Errorf("exposure reply %d has no matching request", id)
+	}
 	delete(r.waiting, id)
 	r.mu.Unlock()
+	w.reply <- reply
+	return nil
+}
+
+// Abandon 은 match 가 참인 문서에 보낸 요청에 1003 오류로 답한다. 사라진 문서는 답하지 않는다.
+func (r *Relay[T]) Abandon(match func(T) bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for id, w := range r.waiting {
+		if !match(w.target) {
+			continue
+		}
+		delete(r.waiting, id)
+		w.reply <- ExposureResult{Error: rpcError(codeNoWindow, "the document closed before it replied")}
+	}
+}
+
+// relayTarget 은 창의 메인 문서(surface 가 빈 값) 또는 표면 문서다.
+type relayTarget struct {
+	owner   *Surfaces
+	surface string
 }
 
 // ask 는 창 s 의 메인 페이지에 요청을 보내고 답을 기다린다. timeout 이 0 이면 답이나 페이지 종료까지
 // 기다린다. 준비되지 않은 페이지는 요청을 받지 못하므로 1003 을 반환한다. 요청을 등록한 뒤 준비
-// 여부를 보므로, 그 사이 다시 읽힌 페이지의 요청은 여기서 거부되거나 abandon 으로 끝난다.
+// 여부를 보므로, 그 사이 다시 읽힌 페이지의 요청은 여기서 거부되거나 Abandon 으로 끝난다.
 func (h *Host) ask(s *Surfaces, method string, params any, timeout time.Duration) (json.RawMessage, error) {
-	id, w := h.relay.open(s, "")
-	h.mu.Lock()
-	ready := s.ready
-	h.mu.Unlock()
-	if !ready {
-		h.relay.forget(id)
-		return nil, rpcError(codeNoWindow, "the main page is not ready")
-	}
-	s.window.EmitEvent("exposure-request", map[string]any{"id": id, "method": method, "params": params})
-	reply := h.relay.wait(id, w, timeout)
+	reply := h.relay.Request(relayTarget{owner: s}, timeout, func(id uint64) error {
+		h.mu.Lock()
+		ready := s.ready
+		h.mu.Unlock()
+		if !ready {
+			return errors.New("the main page is not ready")
+		}
+		s.window.EmitEvent("exposure-request", map[string]any{"id": id, "method": method, "params": params})
+		return nil
+	})
 	if reply.Error != nil {
 		return nil, reply.Error
 	}
@@ -279,7 +286,7 @@ func (h *Host) ExposureReply(ctx context.Context, req ExposureReplyRequest) erro
 		return err
 	}
 	if req.Surface == "" {
-		return h.relay.resolve(req.ID, s, "", ExposureResult{Result: req.Result, Error: req.Error})
+		return h.relay.Resolve(req.ID, relayTarget{owner: s}, ExposureResult{Result: req.Result, Error: req.Error})
 	}
 	if err := s.authorizeSurface(uint64(s.window.ID()), req.Surface); err != nil {
 		return err
@@ -290,7 +297,7 @@ func (h *Host) ExposureReply(ctx context.Context, req ExposureReplyRequest) erro
 	if !attached {
 		return fmt.Errorf("surface %q is not attached", req.Surface)
 	}
-	return h.relay.resolve(req.ID, s, req.Surface, ExposureResult{Result: req.Result, Error: req.Error})
+	return h.relay.Resolve(req.ID, relayTarget{owner: s, surface: req.Surface}, ExposureResult{Result: req.Result, Error: req.Error})
 }
 
 // ExposureChange 는 감시 중인 상태의 새 값이다.
@@ -356,21 +363,22 @@ func (h *Host) ExposureForward(ctx context.Context, req ExposureForwardRequest) 
 	if invalid != nil {
 		return ExposureResult{Error: invalid}, nil
 	}
-	id, w := h.relay.open(s, req.Surface)
-	var sent bool
-	application.InvokeSync(func() {
-		if s.views[req.Surface] != nil {
-			s.window.EmitEvent("exposure-request", map[string]any{
-				"id": id, "surface": req.Surface, "method": req.Method, "params": req.Params,
-			})
-			sent = true
-		}
-	})
-	if !sent {
-		h.relay.abandon(s, map[string]bool{req.Surface: true})
-	}
 	// status.next 는 제한 시간이 없다. 표면이 닫히면 1003 으로 끝난다.
-	reply := h.relay.wait(id, w, timeout)
+	reply := h.relay.Request(relayTarget{owner: s, surface: req.Surface}, timeout, func(id uint64) error {
+		var sent bool
+		application.InvokeSync(func() {
+			if s.views[req.Surface] != nil {
+				s.window.EmitEvent("exposure-request", map[string]any{
+					"id": id, "surface": req.Surface, "method": req.Method, "params": req.Params,
+				})
+				sent = true
+			}
+		})
+		if !sent {
+			return fmt.Errorf("surface %q is not shown", req.Surface)
+		}
+		return nil
+	})
 	if reply.Error == nil && len(reply.Result) == 0 {
 		reply.Result = json.RawMessage(`null`)
 	}
@@ -492,7 +500,7 @@ func (s *Surfaces) surfacesClosed(ids []string) {
 		closed[id] = true
 		s.window.EmitEvent("exposure-registered", map[string]any{"surface": id, "closed": true})
 	}
-	s.host.relay.abandon(s, closed)
+	s.host.relay.Abandon(func(t relayTarget) bool { return t.owner == s && closed[t.surface] })
 }
 
 // byName 은 이름이 name 인 창을 반환한다.

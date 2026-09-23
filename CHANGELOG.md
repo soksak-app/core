@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G2-3-5: the Wails exposure relay is the exported `Relay[T]` with the structure of the Tauri relay, and Wails tests cover the exposure list and relay contract cases; `make host-contract-check` reports 188 of 205 cases for Wails.
 - G2-3-3: Wails endpoint tests cover the twelve endpoint contract cases that only the Tauri host tested; `make host-contract-check` reports 177 of 205 cases for Wails.
 - V1-1: the Korean changelog now translates every entry in the same order, both changelogs have one unreleased section, and `make docs-check` compares their sections, entry counts, task identifiers, and code spans.
 - F8-20: during a Hangul composition the image region gives special keys to the input method first, so Backspace edits `한` to `하`; a key the input method does not handle is reported as the key after the composition is committed. Checked with the native activation test and on both rebuilt hosts.

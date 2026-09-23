@@ -192,22 +192,24 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, 
 	}
 	ticks := plan.steps() * 2 * plan.Times
 	s.log(fmt.Sprintf("diagnostics: drag %s:%d by %g,%g in %d steps, %d times", plan.Axis, plan.Line, plan.DX, plan.DY, plan.steps(), plan.Times))
-	id, w := h.relay.open(s, "")
-	s.window.EmitEvent("exposure-request", map[string]any{"id": id, "method": "diagnostics.drag", "params": plan})
 	stop := make(chan struct{})
-	go func() {
-		tick := time.NewTicker(frameStep)
-		defer tick.Stop()
-		for left := ticks; left > 0; left-- {
-			select {
-			case <-tick.C:
-				s.window.EmitEvent("diagnostics-tick")
-			case <-stop:
-				return
+	// 페이지가 드래그 요청을 받은 뒤에 첫 틱이 도착하도록 요청을 보낸 다음 틱을 시작한다.
+	reply := h.relay.Request(relayTarget{owner: s}, time.Duration(ticks)*frameStep+pageTimeout, func(id uint64) error {
+		s.window.EmitEvent("exposure-request", map[string]any{"id": id, "method": "diagnostics.drag", "params": plan})
+		go func() {
+			tick := time.NewTicker(frameStep)
+			defer tick.Stop()
+			for left := ticks; left > 0; left-- {
+				select {
+				case <-tick.C:
+					s.window.EmitEvent("diagnostics-tick")
+				case <-stop:
+					return
+				}
 			}
-		}
-	}()
-	reply := h.relay.wait(id, w, time.Duration(ticks)*frameStep+pageTimeout)
+		}()
+		return nil
+	})
 	close(stop)
 	result, err := dragResult(s, reply)
 	if err != nil {

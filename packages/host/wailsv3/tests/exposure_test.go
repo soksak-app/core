@@ -2,6 +2,8 @@ package host_test
 
 import (
 	"encoding/json"
+	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -37,6 +39,81 @@ func TestExposureListAppendsHostEntries(t *testing.T) {
 	}
 }
 
+// contract: exposure.list.host-entries-exact-sorted-set, exposure.list.host-entries-described, exposure.list.host-quit-result-null
+func TestExposureListHostEntriesAreSortedAndDescribed(t *testing.T) {
+	_, address, _ := serve(t, newFakeBackend())
+	conn := dial(t, address)
+	got := call(t, conn, 1, "exposure.list", map[string]any{"window": "main"})
+	type entry struct {
+		Name        string
+		Description string
+		Registered  bool
+		Result      json.RawMessage
+	}
+	var list struct{ Status, Commands []entry }
+	if err := json.Unmarshal(got.Result, &list); err != nil {
+		t.Fatal(err)
+	}
+	names := func(entries []entry) []string {
+		out := make([]string, 0, len(entries))
+		for _, e := range entries {
+			out = append(out, e.Name)
+		}
+		return out
+	}
+	status := []string{"core.layout", "host.dock", "host.screens", "host.window", "host.windows"}
+	if !slices.Equal(names(list.Status), status) {
+		t.Fatalf("status %v, want %v", names(list.Status), status)
+	}
+	commands := []string{
+		"host.dock.select",
+		"host.hit",
+		"host.quit",
+		"host.window.close",
+		"host.window.fullscreen",
+		"host.window.maximize",
+		"host.window.move",
+		"host.window.presented",
+		"host.window.reload",
+		"host.window.resize",
+	}
+	if !slices.Equal(names(list.Commands), commands) {
+		t.Fatalf("commands %v, want %v", names(list.Commands), commands)
+	}
+	// 첫 상태 항목은 페이지 항목이므로 호스트 항목만 설명을 확인한다.
+	for _, e := range append(list.Status[1:], list.Commands...) {
+		if !e.Registered || e.Description == "" {
+			t.Fatalf("%s: registered %v, description %q", e.Name, e.Registered, e.Description)
+		}
+	}
+	if list.Commands[2].Name != "host.quit" || string(list.Commands[2].Result) != `{"type":"null"}` {
+		t.Fatalf("host.quit result %s", list.Commands[2].Result)
+	}
+}
+
+// listBackend 는 페이지의 exposure.list 답을 reply 로 바꾼 fakeBackend 다.
+type listBackend struct {
+	*fakeBackend
+	reply json.RawMessage
+}
+
+func (b listBackend) PageRequest(window, method string, params json.RawMessage) (json.RawMessage, error) {
+	if method == "exposure.list" {
+		return b.reply, nil
+	}
+	return b.fakeBackend.PageRequest(window, method, params)
+}
+
+// contract: exposure.list.non-object-list-rejected
+func TestExposureListRejectsANonObjectPageList(t *testing.T) {
+	_, address, _ := serve(t, listBackend{fakeBackend: newFakeBackend(), reply: json.RawMessage(`[]`)})
+	conn := dial(t, address)
+	got := call(t, conn, 1, "exposure.list", map[string]any{"window": "main"})
+	if got.Error == nil || got.Error.Code != -32603 {
+		t.Fatalf("non-object page list: result %s, error %v", got.Result, got.Error)
+	}
+}
+
 // contract: exposure.timeout.command-run-default-and-declared, exposure.timeout.status-next-unbounded, exposure.timeout.invalid-timeout-rejected, exposure.timeout.status-next-timeout-rejected
 func TestForwardedRequestsUseTheDeclaredTimeout(t *testing.T) {
 	cases := []struct {
@@ -61,5 +138,103 @@ func TestForwardedRequestsUseTheDeclaredTimeout(t *testing.T) {
 	}
 	if _, invalid := host.ForwardTimeout("status.next", json.RawMessage("10")); invalid == nil || invalid.Code != -32602 {
 		t.Fatalf("status.next accepted a timeout: %v", invalid)
+	}
+}
+
+// relayWait 는 중계 테스트가 답을 기다리는 시간이다.
+const relayWait = 5 * time.Second
+
+// contract: exposure.relay.reply-resolves-request
+func TestRelayReplyFromTheTargetDocumentResolvesTheRequest(t *testing.T) {
+	relay := host.NewRelay[string]()
+	got := relay.Request("main", relayWait, func(id uint64) error {
+		go func() {
+			if err := relay.Resolve(id, "main", host.ExposureResult{Result: json.RawMessage(`{"ok":true}`)}); err != nil {
+				t.Error(err)
+			}
+		}()
+		return nil
+	})
+	if got.Error != nil || string(got.Result) != `{"ok":true}` {
+		t.Fatalf("reply %+v", got)
+	}
+}
+
+// contract: exposure.relay.missing-result-is-null
+func TestRelayReplyWithoutResultIsNull(t *testing.T) {
+	relay := host.NewRelay[string]()
+	got := relay.Request("main", relayWait, func(id uint64) error {
+		return relay.Resolve(id, "main", host.ExposureResult{})
+	})
+	if got.Error != nil || len(got.Result) != 0 {
+		t.Fatalf("reply %+v, want an empty result", got)
+	}
+}
+
+// contract: exposure.relay.error-reply-keeps-code-and-message
+func TestRelayErrorReplyKeepsCodeAndMessage(t *testing.T) {
+	relay := host.NewRelay[string]()
+	got := relay.Request("main", relayWait, func(id uint64) error {
+		return relay.Resolve(id, "main", host.ExposureResult{Error: &host.RPCError{Code: 1002, Message: "not registered"}})
+	})
+	if got.Error == nil || got.Error.Code != 1002 || got.Error.Message != "not registered" {
+		t.Fatalf("reply %+v", got)
+	}
+}
+
+// contract: exposure.relay.foreign-document-reply-ignored-timeout-1005
+func TestRelayReplyFromAnotherDocumentIsRejectedAndTheRequestTimesOut(t *testing.T) {
+	relay := host.NewRelay[string]()
+	var requested uint64
+	got := relay.Request("main", 50*time.Millisecond, func(id uint64) error {
+		requested = id
+		if err := relay.Resolve(id, "surface-main-a", host.ExposureResult{Result: json.RawMessage(`1`)}); err == nil {
+			t.Error("a reply from another document was accepted")
+		}
+		return nil
+	})
+	if got.Error == nil || got.Error.Code != 1005 {
+		t.Fatalf("reply %+v, want 1005", got)
+	}
+	if err := relay.Resolve(requested, "main", host.ExposureResult{Result: json.RawMessage(`1`)}); err == nil {
+		t.Fatal("a late reply was accepted after the timeout")
+	}
+}
+
+// contract: exposure.relay.send-failure-1003
+func TestRelaySendFailureIsReportedWithoutWaiting(t *testing.T) {
+	relay := host.NewRelay[string]()
+	started := time.Now()
+	got := relay.Request("main", relayWait, func(uint64) error { return errors.New("webview is gone") })
+	if got.Error == nil || got.Error.Code != 1003 {
+		t.Fatalf("reply %+v, want 1003", got)
+	}
+	if elapsed := time.Since(started); elapsed >= relayWait {
+		t.Fatalf("the failed send waited %s", elapsed)
+	}
+}
+
+// contract: exposure.relay.closed-document-fails-pending-1003
+func TestRelayClosedDocumentFailsItsPendingRequests(t *testing.T) {
+	relay := host.NewRelay[string]()
+	got := relay.Request("main", relayWait, func(uint64) error {
+		relay.Abandon(func(target string) bool { return target == "main" })
+		return nil
+	})
+	if got.Error == nil || got.Error.Code != 1003 {
+		t.Fatalf("reply %+v, want 1003", got)
+	}
+}
+
+// contract: exposure.relay.no-timeout-waits-until-close
+func TestRelayRequestWithoutTimeoutWaitsUntilTheDocumentCloses(t *testing.T) {
+	relay := host.NewRelay[string]()
+	got := relay.Request("surface-main-a", 0, func(uint64) error {
+		// 응답 대기가 시작된 뒤 다른 고루틴이 문서 종료를 알린다.
+		go relay.Abandon(func(target string) bool { return target == "surface-main-a" })
+		return nil
+	})
+	if got.Error == nil || got.Error.Code != 1003 {
+		t.Fatalf("reply %+v, want 1003", got)
 	}
 }
