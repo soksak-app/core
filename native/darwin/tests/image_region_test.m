@@ -2,7 +2,6 @@
 #import <WebKit/WebKit.h>
 #import <IOSurface/IOSurface.h>
 #import "image_region.h"
-#import "input_method_context.h"
 #import "webview_geometry.h"
 
 static int failures = 0;
@@ -363,15 +362,9 @@ int main(void) { @autoreleasepool {
             [NSString stringWithFormat:@"TEST 8: inserted text is committed exactly once by the focus change (got %@)", collectedEvents]);
 
         // An input method edits its previous insert through a replacement range: ㅎ → 하 → 한.
-        // AppKit delivers input-method text inside an input method event; the calls run on that path.
         sp_region_focus(region8);
-        SPInputMethodContext *inputContext = (SPInputMethodContext *)regionView.inputContext;
-        check([inputContext isKindOfClass:SPInputMethodContext.class] && !inputContext.handlingInputMethodEvent,
-            @"TEST 8: the image region uses the input method context outside input method events");
         void (^inputMethod)(NSString *, NSRange) = ^(NSString *text, NSRange range) {
-            [inputContext performInputMethodEvent:^{
-                [(id<NSTextInputClient>)regionView insertText:text replacementRange:range];
-            }];
+            [(id<NSTextInputClient>)regionView insertText:text replacementRange:range];
         };
         NSUInteger beforeEdit = [collectedEvents count];
         inputMethod(@"ㅎ", NSMakeRange(NSNotFound, 0));
@@ -389,22 +382,27 @@ int main(void) { @autoreleasepool {
                 && [[collectedEvents lastObject] rangeOfString:@"insertNewline:"].location != NSNotFound,
                 [NSString stringWithFormat:@"TEST 8: a command commits the remaining preedit before it is reported (got %@)", collectedEvents]);
 
-            // F8-16: text outside an input method event (a key the input method does not handle, such as
-            // Space after 한) is committed with the text before it without waiting for a later key.
-            NSUInteger beforeSpace = [collectedEvents count];
-            inputMethod(@"ㅎ", NSMakeRange(NSNotFound, 0));
-            inputMethod(@"하", NSMakeRange(0, 1));
-            inputMethod(@"한", NSMakeRange(0, 1));
-            [(id<NSTextInputClient>)regionView insertText:@" " replacementRange:NSMakeRange(NSNotFound, 0)];
-            check([[committedTexts(beforeSpace) componentsJoinedByString:@""] isEqual:@"한 "]
-                && [lastPreedit(beforeSpace) isEqual:@""],
-                [NSString stringWithFormat:@"TEST 8: text outside an input method event is committed with the text before it (got %@)",
-                    collectedEvents]);
-            inputMethod(@"ㄱ", NSMakeRange(NSNotFound, 0));
-            check([[committedTexts(beforeSpace) componentsJoinedByString:@""] isEqual:@"한 "]
-                && [lastPreedit(beforeSpace) isEqual:@"ㄱ"],
-                [NSString stringWithFormat:@"TEST 8: input-method text after committed text starts a new preedit (got %@)",
-                    collectedEvents]);
+            // F8-16-1: the Korean input method composes only Hangul. The text it inserts after it confirms a syllable
+            // (Space or a digit) is committed with the syllable at once; a new jamo stays preedit.
+            if ([regionView.inputContext.selectedKeyboardInputSource hasPrefix:@"com.apple.inputmethod.Korean."]) {
+                NSUInteger beforeSpace = [collectedEvents count];
+                NSUInteger base = regionView.textStorage.length;
+                inputMethod(@"ㅎ", NSMakeRange(NSNotFound, 0));
+                inputMethod(@"하", NSMakeRange(base, 1));
+                inputMethod(@"한", NSMakeRange(base, 1));
+                inputMethod(@"한", NSMakeRange(base, 1));
+                inputMethod(@" ", NSMakeRange(NSNotFound, 0));
+                check([[committedTexts(beforeSpace) componentsJoinedByString:@""] isEqual:@"한 "]
+                    && [lastPreedit(beforeSpace) isEqual:@""],
+                    [NSString stringWithFormat:@"TEST 8: a space after a Korean syllable is committed at once (got %@)", collectedEvents]);
+                inputMethod(@"1", NSMakeRange(NSNotFound, 0));
+                inputMethod(@"ㄱ", NSMakeRange(NSNotFound, 0));
+                check([[committedTexts(beforeSpace) componentsJoinedByString:@""] isEqual:@"한 1"]
+                    && [lastPreedit(beforeSpace) isEqual:@"ㄱ"],
+                    [NSString stringWithFormat:@"TEST 8: a digit is committed at once and a new jamo stays preedit (got %@)", collectedEvents]);
+            } else {
+                printf("TEST 8: the selected input source is not the Korean input method; the Korean commit rule needs it\n");
+            }
             [window makeFirstResponder:nil];
             sp_region_focus(region8);
         } else {

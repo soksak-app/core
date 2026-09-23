@@ -161,6 +161,15 @@ for (const app of Object.values(APPS)) {
         "the shell did not run the second committed command");
       assert.ok(!second.some((line) => /[ㄱ-ㅣ]/.test(line)), `jamo reached the PTY: ${JSON.stringify(second)}`);
 
+      // F8-16-1: 음절 뒤 숫자도 다음 키 없이 PTY 에 도착한다.
+      for (const key of ["g", "k", "s", "1"]) await s.press(key);
+      await s.until("terminal.compose", (compose) => compose.text === "", "the digit after a syllable left a preedit", { surface });
+      await readScreenUntil(s, surface, (lines) => lines.some((line) => line.trimEnd().endsWith("한1")),
+        "the digit after a syllable did not reach the PTY before any further key");
+      await s.press("Enter");
+      await readScreenUntil(s, surface, (lines) => lines.some((line) => /한1: command not found/.test(line)),
+        "the shell did not run the command with the digit");
+
       const trace = await s.run("terminal.ime.trace", { action: "stop" }, surface);
       assert.equal(trace.overflow, false, "the IME trace overflowed");
       const inserts = trace.entries.filter((entry) => entry.kind === "native-insert").map((entry) => entry.text).join("");
@@ -168,13 +177,13 @@ for (const app of Object.values(APPS)) {
         .map((entry) => entry.input.text).join("");
       const composed = trace.entries.filter((entry) => entry.kind === "native-compose" && entry.text !== "").map((entry) => entry.text);
       t.diagnostic(`${app.name}: native inserts ${JSON.stringify(inserts)}, terminal inserts ${JSON.stringify(written)}, preedit ${JSON.stringify(composed)}`);
-      assert.equal(inserts, "ddd한글 한 ", "the native client did not commit each syllable exactly once in order");
-      assert.equal(written, "ddd한글 한 ", "the terminal input queue did not receive each committed syllable exactly once in order");
+      assert.equal(inserts, "ddd한글 한 한1", "the native client did not commit each syllable exactly once in order");
+      assert.equal(written, "ddd한글 한 한1", "the terminal input queue did not receive each committed syllable exactly once in order");
       assert.deepEqual(composed.slice(0, 6), ["ㅎ", "하", "한", "ㄱ", "그", "글"], "the preedit did not show each composition state in order");
       const enters = trace.entries.filter((entry) => entry.kind === "native-key" && entry.key === "Enter").map((entry) => entry.sequence);
       const lastInsert = trace.entries.filter((entry) => entry.kind === "native-insert").at(-1).sequence;
-      assert.equal(enters.length, 2, "two Enter keys were not traced");
-      assert.ok(enters[1] > lastInsert, "Enter was delivered before the committed text");
+      assert.equal(enters.length, 3, "three Enter keys were not traced");
+      assert.ok(enters[2] > lastInsert, "Enter was delivered before the committed text");
       t.diagnostic(`${app.name}: PASS ddd한글 after an input-source switch`);
     });
 }

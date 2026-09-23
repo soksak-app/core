@@ -21,11 +21,10 @@
 | `NSWindow._setWindowResolution:`, `NSWindow._adjustWindowResolution` 재정의 | [`webview_geometry_test.m`](../../native/darwin/tests/webview_geometry_test.m) 전용. WebKitTestRunner가 쓰는 메서드 | 해당 디스플레이 없이 검사 창의 백킹 배율을 2나 1로 정해 어느 기기에서나 배율 동작을 검사 |
 | `WKWebView._doAfterActivityStateUpdate:` | 두 호스트; [`input_inject.m`](../../native/darwin/src/input_inject.m), `sp_input_activate_at` | 브라우저 좌표에서는 대상 웹뷰만 활성 창 상태를 웹 프로세스에 보낸 뒤 활성화를 완료하고, native 좌표에서는 관련 없는 웹뷰를 기다리지 않음 |
 | `CGEventField` 51(창 번호), `CGEventSetWindowLocation` | 두 호스트; [`input_inject.m`](../../native/darwin/src/input_inject.m), `sp_input_pointer`의 스크롤 | 창과 창 좌표를 가진 스크롤 `NSEvent` 생성 |
-| 상위 클래스를 호출하는 하위 클래스의 `NSTextInputContext.handleTSMEvent:completionHandler:` 재정의 | 두 호스트; [`input_method_context.m`](../../native/darwin/src/input_method_context.m)의 `SPInputMethodContext`, [`image_region.m`](../../native/darwin/src/image_region.m) 그림 영역의 입력 컨텍스트 | 입력기가 넣은 문자열을 식별해, 입력기가 처리하지 않은 키의 문자열을 다음 키 없이 확정 |
 | `WKWebView._inspector`와 `_WKInspector`(`connect`, `show`, `attach`, `close`, `isVisible`, `isConnected`, `inspectorWebView`) | [`native/darwin/tests/webview_inspector_test.m`](../../native/darwin/tests/webview_inspector_test.m), 검사 전용 | 표면 웹뷰의 웹 인스펙터를 열고 창에 붙여 표면이 자리를 유지하는지 확인 |
 | `WKWebView._doAfterProcessingAllPendingMouseEvents:` | [`native/darwin/tests/webview_input_test.m`](../../native/darwin/tests/webview_input_test.m)의 `drain`; 독립 검사 전용 | DOM 이벤트 횟수를 검사하기 전에 네이티브 마우스 처리 완료 대기 |
 
-공용 라이브러리의 비공개 선언은 모두 [`native/darwin/src/private/`](../../native/darwin/src/private/)의 `webkit.h`, `coregraphics.h`, `appkit.h`에 있다. 소스와 검사는 이 헤더를 포함하며 비공개 API를 직접 선언하지 않는다. 다른 플랫폼은 `native/<os>/src/private/`에 선언을 둔다.
+공용 라이브러리의 비공개 선언은 모두 [`native/darwin/src/private/`](../../native/darwin/src/private/)의 `webkit.h`, `coregraphics.h`에 있다. 소스와 검사는 이 헤더를 포함하며 비공개 API를 직접 선언하지 않는다. 다른 플랫폼은 `native/<os>/src/private/`에 선언을 둔다.
 
 두 `drawsBackground` 항목의 대상 객체는 다르다. Wails는 생성된 뷰를 변경하고, Wry는 생성 전 구성을 변경한다. 프레임워크의 공개 Rust·Go 진입점도 비공개 네이티브 의존성을 포함할 수 있다.
 
@@ -74,12 +73,6 @@ Tauri 이벤트 전달 콜백은 Tao의 이벤트 처리 잠금을 가진다. �
 표면과 모달 웹뷰에는 이 설정을 유지한다. 웹뷰가 첫 응답자가 아닐 때 페이지가 요소에 초점을 주면 WebKit이 UI 프로세스에 `MakeFirstResponder`를 보내고, `PageClientImpl::makeFirstResponder`가 그 웹뷰를 창의 첫 응답자로 만든다. 불러온 뒤 입력칸에 초점을 주는 셸 표면이 열린 메뉴의 키 입력을 가져가 네이티브 Escape가 메뉴를 닫지 못했다. `_setShouldSuppressFirstResponderChanges:YES`이면 `PageClientImpl::makeFirstResponder`가 첫 응답자를 바꾸지 않고 돌아간다. AppKit 클릭과 호스트가 직접 호출하는 `-[NSWindow makeFirstResponder:]`는 영향을 받지 않는다. 메인 페이지는 이 설정을 쓰지 않으며 초점을 옮길 수 있다. 선택자가 없으면 함수가 실패를 반환하고 두 호스트는 웹뷰 생성을 실패로 처리한다.
 
 설정이 없으면 실패하는 [`webview_focus_test.m`](../../native/darwin/tests/webview_focus_test.m)과 [`modal.test.mjs`](../../e2e/modal.test.mjs)의 메뉴 Escape 단계로 검증한다. [`PageClientImplMac.mm`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/mac/PageClientImplMac.mm)의 `PageClientImpl::makeFirstResponder`와 [`WKWebViewPrivate.h`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/WKWebViewPrivate.h)의 선언을 검토한다.
-
-### 그림 영역의 입력기 이벤트 출처
-
-그림 영역이 `NSTextView` 입력 클라이언트인 동안 이 재정의를 유지한다. 텍스트 뷰 클라이언트에서 macOS 한국어 입력기는 marked text 대신 자모를 넣고 교체 범위로 고쳐 쓰며 조합한다. 음절 뒤의 Space처럼 입력기가 처리하지 않은 키는 키 바인딩 시스템을 거쳐 같은 `insertText:replacementRange:` 호출과 `NSNotFound` 범위로 클라이언트에 도착한다. 공개 `NSTextInputContext` API는 두 경로 중 어느 쪽이 문자열을 넣었는지 알려 주지 않는다. `handleEvent:`는 두 경우 모두 `YES`를 반환하고, 두 경로 모두 `NSString`을 넘긴다. 출처를 모르는 그림 영역은 공백을 다음 키까지 편집 가능한 조합 문자열로 두었다(F8-16). AppKit은 입력기 문자열을 `-[NSTextInputContext handleTSMEvent:completionHandler:]` 안에서 전달하고, 키 바인딩 문자열은 이 메서드 밖에서 `-[NSKeyBindingManager flushTextForClient:]`로 전달한다. 활성화 테스트가 macOS 26.6.2에서 두 호출 경로를 측정했다. 재정의는 상위 클래스를 그대로 호출하고 호출 중인 시간만 표시한다. 완료 블록은 형식을 선언하지 않고 그대로 넘긴다. 입력기가 음절을 확정한 뒤 넣는 숫자는 이 메서드 안에서 도착하므로 다음 이벤트까지 조합 문자열로 남는다. 선택자가 없으면 영역을 만들지 않으며, 두 호스트는 그림 영역을 만들 수 없다고 보고한다.
-
-확정 규칙은 [`image_region_test.m`](../../native/darwin/tests/image_region_test.m)의 TEST 8로, 실제 입력기는 활성화 등급의 [`image_region_ime_test.m`](../../native/darwin/tests/image_region_ime_test.m)과 [`ime.test.mjs`](../../e2e/activation/ime.test.mjs)로 검증한다. AppKit 업데이트 후에는 입력기가 여전히 이 메서드로 문자열을 넣고 키 바인딩 경로는 넣지 않는지 확인한다.
 
 ### 독립 검사의 마우스 처리 완료
 

@@ -293,6 +293,18 @@ int main(void) { @autoreleasepool {
             committed, preedit, events]);
     typeKey(window, @"Enter", regionAnswered);
 
+    // F8-16-1: 음절 뒤 숫자도 다음 키 없이 음절과 함께 확정된다.
+    [events removeAllObjects];
+    selectSource(ABC, context);
+    selectSource(KOREAN_2SET, context);
+    for (NSString *key in @[@"g", @"k", @"s", @"1"]) typeKey(window, key, regionAnswered);
+    committed = [valuesOfType(@"insert", 0) componentsJoinedByString:@""];
+    preedit = [valuesOfType(@"compose", 0) lastObject] ?: @"";
+    check([committed isEqual:@"한1"] && [preedit isEqual:@""],
+        [NSString stringWithFormat:@"image region: a digit after a syllable is committed with it before any further key (committed %@, preedit '%@', events %@)",
+            committed, preedit, events]);
+    typeKey(window, @"Enter", regionAnswered);
+
     check(sp_input_source_select(previousSource.UTF8String), @"the previous input source is restored");
     sp_region_close(region);
     [window close];

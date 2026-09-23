@@ -109,7 +109,6 @@ lane("workspace version audit", "js-ts", ["scripts/check-versions.mjs"], ["scrip
   ], { sharedTests: true }),
   lane("Darwin input", "objective-c", [
     "native/darwin/src/input_inject.m",
-    "native/darwin/src/input_method_context.m",
     "native/darwin/src/input_source.m",
     "native/darwin/src/webview_input.m",
   ], [
