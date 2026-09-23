@@ -28,7 +28,7 @@ make wailsv3-build tauriv2-build
 
 `make parity-check`로 구조 목록 게이트를 실행한다. 언어별 고정 루트 없이 Git에 보이는 JS/TS·Rust·Go·Objective-C·네이티브 헤더·HTML/CSS·셸 스크립트·계약 선언·빌드 매니페스트를 발견한다. 생성된 라이브러리 출력·Tauri 스키마는 명시적 제외 사유를 갖고 소스/출력 일치는 별도 빌드 검사로 유지한다. 연결 없는 구현·테스트, 빈 패턴, 중복 소유는 실패한다. 테스트 공유를 이유로 구현 중복 소유를 허용하지 않는다.
 
-`make host-contract-check`는 두 호스트의 테스트를 실행해 [호스트 계약 사례](../spec/host-contract.ko.md)와 비교하며, `make native-test`가 이를 실행하며, 먼저 `make rust-format-check`를 실행한다. 이 검사는 루트나 `sidecars` 워크스페이스의 Rust 패키지가 `rustfmt` 형식이 아니면 실패한다. 현재 목록은 lane 58개, 구현 파일 259개, 테스트 파일 182개다. 현재 연결 목록은 미완료다. 구조 검사가 통과해도 동작 동등성은 입증하지 않는다. [검증 계약](../spec/verification.ko.md)의 이름 있는 동작 연결, 언어별 실제 실행, 일치하는 빌드의 증거가 필요하다. 통과하려고 관련 없는 glob을 넓히거나 발견한 파일을 제외하지 않는다.
+`make host-contract-check`는 두 호스트의 테스트를 실행해 [호스트 계약 사례](../spec/host-contract.ko.md)와 비교하며, `make native-test`가 이를 실행하며, 먼저 `make rust-format-check`를 실행한다. 이 검사는 루트나 `sidecars` 워크스페이스의 Rust 패키지가 `rustfmt` 형식이 아니면 실패한다. 현재 목록은 lane 58개, 구현 파일 259개, 테스트 파일 183개다. 현재 연결 목록은 미완료다. 구조 검사가 통과해도 동작 동등성은 입증하지 않는다. [검증 계약](../spec/verification.ko.md)의 이름 있는 동작 연결, 언어별 실제 실행, 일치하는 빌드의 증거가 필요하다. 통과하려고 관련 없는 glob을 넓히거나 발견한 파일을 제외하지 않는다.
 
 `pnpm test`는 패키지 검사 전에 감사·체크리스트·명령 감독 자체 검사를 실행한다. Rust 터미널 패키지 두 개는 실제 Cargo 검사를 호출한다. 패키지 명령 검사는 Cargo를 실패 fixture로 교체해 호출·실패 전달을 검증하며 엔진 동작 검사로 세지 않는다.
 
@@ -122,7 +122,7 @@ make -C native/darwin test-activation
 
 `test-activation`은 검사 애플리케이션을 활성화하므로 키보드 포커스를 가져간다. 검사 창은 `ignoresMouseEvents`를 설정하지만, AppKit은 실제 포인터가 있는 추적 영역에 이동을 계속 전달한다. 그래서 겹친 웹뷰 검사는 창을 포인터에서 떨어진 곳에 두고, 포인터가 창에 들어오면 그 이유로 실패한다. `input_activate_test`(활성화 후 호버), 겹친 웹뷰 검사 `webview_input_test`(기준 실행 뒤 입력 등록 실행), `document_view_test --activation`(문서 영역에 OS 이벤트 대기열 클릭과 키), `image_region_ime_test`(그림 영역과 AppKit 텍스트 뷰 대조군의 한국어 2벌식 조합. 실행 동안 한국어 2벌식을 선택하고 이전 입력 소스를 되돌린다)를 실행한다.
 
-활성화 등급 창 검사는 `e2e/activation/`에 있으며 사용자가 승인한 실행에서 `pnpm -F @soksak/e2e verify:activation`으로만 실행한다. `pnpm -F @soksak/e2e verify`는 이를 포함하지 않는다. 이 검사는 `input.pointer`의 `activate: true`로 앱을 활성화할 수 있고(`make e2e-check`는 다른 곳에서 이를 거부한다), `diagnostics.input.source`로 키보드 입력 소스를 바꾸며 정리에서 이전 입력 소스를 되돌린다. `ime.test.mjs`는 ABC `ddd`를 치고 한국어 2벌식으로 바꿔 `g k s r m f`, Space, Enter를 치며, 조합 문자열 `ㅎ`, `하`, `한`, `ㄱ`, `그`, `글`, ` `과 화면의 확정 명령 `ddd한글`이 정확히 한 번임을 요구한다. 검사가 키보드 포커스를 가져가므로 실행 전에 앱 하나만 띄운다.
+활성화 등급 창 검사는 `e2e/activation/`에 있으며 사용자가 승인한 실행에서 `pnpm -F @soksak/e2e verify:activation`으로만 실행한다. `pnpm -F @soksak/e2e verify`는 이를 포함하지 않는다. 이 검사는 `input.pointer`의 `activate: true`로 앱을 활성화할 수 있고(`make e2e-check`는 다른 곳에서 이를 거부한다), `diagnostics.input.source`로 키보드 입력 소스를 바꾸며 정리에서 이전 입력 소스를 되돌린다. `ime.test.mjs`는 ABC `ddd`를 치고 한국어 2벌식으로 바꿔 `g k s r m f`, Space, Enter를 치며, 조합 문자열 `ㅎ`, `하`, `한`, `ㄱ`, `그`, `글`, ` `과 화면의 확정 명령 `ddd한글`이 정확히 한 번임을 요구한다. `marked-text.test.mjs`는 일본어(로마자)를 선택해 `n i h o n n`을 입력하고(입력기는 이를 marked text로 표시한다), ABC로 바꿔 조합을 끝낸 뒤, 마지막 marked text가 PTY에 정확히 한 번 도착하고 확정 뒤 preedit가 없기를 요구한다. `com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese` 입력 소스가 켜져 있어야 한다. 검사가 키보드 포커스를 가져가므로 실행 전에 앱 하나만 띄운다.
 
 `soksak capture --window main --config-dir DIR`은 실행 중인 진단 빌드의 창을 포커스 없이 정지 PNG로 쓰고 경로를 출력한다. 개발 중 결과를 눈으로 확인할 때 쓴다. 확인한 뒤 출력된 `still-*` 디렉터리를 지우며, 수치 검사는 녹화 프레임을 쓴다.
 
