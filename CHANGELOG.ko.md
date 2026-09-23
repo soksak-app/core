@@ -1,5 +1,6 @@
 # 변경 기록
 
+- F8-8: 입력기 동작은 AppKit 텍스트 뷰 대조군을 포함한 활성화 등급 검사로만 검증한다. 주입기 경로는 활성 키 창에서만 한국어 입력기에 도달한다. `image_region_ime_test`는 사용자의 `ddd한글` 결함을 F8-10 Red로 재현한다. 그림 영역은 `dddㅎㅏㄴ글 `을 확정하고 대조군은 `ddd한글 `을 만든다.
 - F8-8 진행: 활성화 등급 `image_region_ime_test`를 추가했다. 활성 키 창에서 endpoint 주입기 경로로는 그림 영역과 AppKit `NSTextView` 대조군 모두 `나`를 조합하지 못했고, 매 실행 첫 키에서 IMK mach port 오류가 기록되었다. 따라서 이 경로는 입력기 증거가 아니며, 도구 셸 밖 실행 측정이 남아 있다.
 - V5-2: `document_view_test`가 활성화하지 않는 `make test` 스위트 안에서 앱을 활성화했고, 이후 테스트 프로세스가 활성 상태로 실행되어 `webview_geometry_test`가 간헐적으로 시간 초과되었다. OS 이벤트 대기열 사례는 이제 `make test-activation`의 `document_view_test --activation`에서만 실행되고, 기본 실행은 활성화하지 않았음을 확인하며, geometry 실패는 단계·창·활성 상태·스크롤 표본을 보고한다. `make -C native/darwin repeat`와 `repeat-suite`를 추가했다. 스위트 10번 연속과 필수 검사가 모두 통과했고, 옮긴 활성화 사례는 실행하지 않았다.
 - F8-7 진행: `-[NSTextView unmarkText]`가 marked text를 `insert` 하나로 확정함을 측정했고, 그 확정 뒤에 빈 `compose`를 한 번 더 보고하던 그림 영역 재정의를 제거했다. TEST 8은 이벤트를 해석해 확정 한 번, 그 뒤 조합 이벤트 없음, marked text가 없을 때 이벤트 없음을 확인한다. terminal plugin 회귀검사는 보고된 순서에서 PTY 쓰기가 한 번인지 확인한다. 패키지·경계·노출·문서 검사는 통과했고 `make native-test`는 `webview_geometry_test`에서 간헐적으로 실패한다(V5-2).

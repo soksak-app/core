@@ -1,8 +1,11 @@
-// 활성 키 창의 그림 영역에 물리 키를 보내 macOS 한국어 2벌식 입력기의 조합과 확정을 검사한다.
+// 활성 키 창에 물리 키를 보내 macOS 한국어 2벌식 입력기의 조합 결과를 검사한다.
 //
 // 입력기는 키 창의 활성 입력 컨텍스트만 처리하므로 이 검사는 애플리케이션을 활성화해 포커스를 가져가고,
-// 검사 동안 선택된 입력 소스를 한국어 2벌식으로 바꾼다. 끝나면 이전 입력 소스와 이전 앱을 되돌린다.
+// 검사 동안 입력 소스를 영문과 한국어 2벌식으로 바꾼다. 끝나면 이전 입력 소스와 이전 앱을 되돌린다.
 // make test 에 포함하지 않고 make test-activation 으로만 실행한다. 한국어 2벌식이 켜져 있지 않으면 실패한다.
+// 키는 endpoint 주입기와 같은 -[NSWindow sendEvent:] 경로로 보낸다. AppKit 텍스트 뷰 대조군이 이 경로로
+// 올바른 문서를 만드는지 먼저 확인하고, 문서가 없는 최소 입력 클라이언트의 콜백을 측정값으로 기록한 뒤,
+// 그림 영역이 사용자 보고 순서(ddd 뒤 한글)를 정확히 확정하는지 검사한다.
 #import <Carbon/Carbon.h>
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
@@ -53,25 +56,67 @@ static NSString *currentSourceID(void) {
     return identifier;
 }
 
-// 물리 키 하나를 누르고 뗀다. 입력기가 응답할 이벤트 수를 늘리지 않으면 실패로 기록한다.
-static void press(NSWindow *window, const char *key) {
-    NSUInteger before = events.count;
-    check(sp_input_key(window, key, NULL, 0, true) && sp_input_key(window, key, NULL, 0, false),
-        [NSString stringWithFormat:@"the %s key is delivered to the key window", key]);
-    BOOL answered = pump(^BOOL { return events.count > before; });
-    check(answered, [NSString stringWithFormat:@"the input method answers the %s key (events %@)", key, events]);
+// 대조군 텍스트 뷰. 입력기가 보낸 콜백과 범위를 그대로 기록한다.
+@interface SPRecordingTextView : NSTextView
+@property(retain) NSMutableArray *calls;
+@end
+@implementation SPRecordingTextView
+- (void)insertText:(id)string replacementRange:(NSRange)range {
+    [self.calls addObject:[NSString stringWithFormat:@"insert(%@, replace %@)",
+        [string isKindOfClass:NSAttributedString.class] ? [string string] : string, NSStringFromRange(range)]];
+    [super insertText:string replacementRange:range];
 }
+- (void)setMarkedText:(id)string selectedRange:(NSRange)selected replacementRange:(NSRange)range {
+    [self.calls addObject:[NSString stringWithFormat:@"mark(%@, selected %@, replace %@)",
+        [string isKindOfClass:NSAttributedString.class] ? [string string] : string,
+        NSStringFromRange(selected), NSStringFromRange(range)]];
+    [super setMarkedText:string selectedRange:selected replacementRange:range];
+}
+- (NSAttributedString *)attributedSubstringForProposedRange:(NSRange)range actualRange:(NSRangePointer)actual {
+    NSAttributedString *result = [super attributedSubstringForProposedRange:range actualRange:actual];
+    [self.calls addObject:[NSString stringWithFormat:@"read(%@) -> %@", NSStringFromRange(range), result.string]];
+    return result;
+}
+- (void)dealloc { [_calls release]; [super dealloc]; }
+@end
 
-// 물리 키 하나를 하드웨어 입력과 같은 원본 상태로 만들어 WindowServer 를 거쳐 이 프로세스에 보낸다.
-static void postKeyToProcess(CGKeyCode code) {
-    CGEventSourceRef source = CGEventSourceCreate(kCGEventSourceStateHIDSystemState);
-    for (int down = 1; down >= 0; down--) {
-        CGEventRef event = CGEventCreateKeyboardEvent(source, code, down);
-        CGEventPostToPid(getpid(), event);
-        CFRelease(event);
-    }
-    CFRelease(source);
+// 문서를 갖지 않는 최소 입력 클라이언트. 확정 문자열을 보관하지 않고 조합 문자열만 가진다.
+@interface SPMinimalClient : NSView <NSTextInputClient>
+@property(retain) NSMutableArray *calls;
+@property(copy) NSString *marked;
+@property(retain) NSMutableString *committed;
+@end
+@implementation SPMinimalClient
+- (BOOL)acceptsFirstResponder { return YES; }
+- (void)keyDown:(NSEvent *)event { [self.inputContext handleEvent:event]; }
+- (void)insertText:(id)string replacementRange:(NSRange)range {
+    NSString *text = [string isKindOfClass:NSAttributedString.class] ? [string string] : string;
+    [self.calls addObject:[NSString stringWithFormat:@"insert(%@, replace %@)", text, NSStringFromRange(range)]];
+    [self.committed appendString:text];
+    self.marked = @"";
 }
+- (void)setMarkedText:(id)string selectedRange:(NSRange)selected replacementRange:(NSRange)range {
+    NSString *text = [string isKindOfClass:NSAttributedString.class] ? [string string] : string;
+    [self.calls addObject:[NSString stringWithFormat:@"mark(%@, selected %@, replace %@)", text,
+        NSStringFromRange(selected), NSStringFromRange(range)]];
+    self.marked = text;
+}
+- (void)unmarkText { [self.calls addObject:@"unmark"]; [self.committed appendString:self.marked ?: @""]; self.marked = @""; }
+- (BOOL)hasMarkedText { return self.marked.length > 0; }
+- (NSRange)markedRange { return self.marked.length ? NSMakeRange(0, self.marked.length) : NSMakeRange(NSNotFound, 0); }
+- (NSRange)selectedRange { return NSMakeRange(NSNotFound, 0); }
+- (NSArray<NSAttributedStringKey> *)validAttributesForMarkedText { return @[]; }
+- (NSAttributedString *)attributedSubstringForProposedRange:(NSRange)range actualRange:(NSRangePointer)actual {
+    [self.calls addObject:[NSString stringWithFormat:@"read(%@)", NSStringFromRange(range)]];
+    return nil;
+}
+- (NSUInteger)characterIndexForPoint:(NSPoint)point { return NSNotFound; }
+- (NSRect)firstRectForCharacterRange:(NSRange)range actualRange:(NSRangePointer)actual {
+    return [self.window convertRectToScreen:[self convertRect:self.bounds toView:nil]];
+}
+- (void)doCommandBySelector:(SEL)selector { [self.calls addObject:NSStringFromSelector(selector)]; }
+- (void)dealloc { [_calls release]; [_marked release]; [_committed release]; [super dealloc]; }
+@end
 
 static NSArray *valuesOfType(NSString *type, NSUInteger from) {
     NSMutableArray *values = [NSMutableArray array];
@@ -79,6 +124,32 @@ static NSArray *valuesOfType(NSString *type, NSUInteger from) {
         if ([events[i][@"type"] isEqual:type]) [values addObject:events[i][@"text"] ?: NSNull.null];
     }
     return values;
+}
+
+// 사용자가 보고한 순서를 입력한다. 영문 입력 소스로 ddd 를 치고 한국어 2벌식으로 바꿔 한글(g k s r m f)과
+// Space 를 친다. 키마다 answered 가 늘어날 때까지 기다린다.
+static void typeDddHangul(NSWindow *window, NSTextInputContext *context, NSUInteger (^answered)(void)) {
+    TISInputSourceRef ascii = TISCopyCurrentASCIICapableKeyboardLayoutInputSource();
+    NSString *asciiID = [[(NSString *)TISGetInputSourceProperty(ascii, kTISPropertyInputSourceID) copy] autorelease];
+    TISSelectInputSource(ascii);
+    CFRelease(ascii);
+    pump(^BOOL { return [context.selectedKeyboardInputSource isEqual:asciiID]; });
+    for (NSString *key in @[@"d", @"d", @"d"]) {
+        NSUInteger before = answered();
+        sp_input_key(window, key.UTF8String, NULL, 0, true);
+        sp_input_key(window, key.UTF8String, NULL, 0, false);
+        pump(^BOOL { return answered() > before; });
+    }
+    TISInputSourceRef korean = copySource(KOREAN_2SET);
+    TISSelectInputSource(korean);
+    CFRelease(korean);
+    pump(^BOOL { return [context.selectedKeyboardInputSource isEqual:KOREAN_2SET]; });
+    for (NSString *key in @[@"g", @"k", @"s", @"r", @"m", @"f", @"Space"]) {
+        NSUInteger before = answered();
+        sp_input_key(window, key.UTF8String, NULL, 0, true);
+        sp_input_key(window, key.UTF8String, NULL, 0, false);
+        pump(^BOOL { return answered() > before; });
+    }
 }
 
 int main(void) { @autoreleasepool {
@@ -123,52 +194,45 @@ int main(void) { @autoreleasepool {
             && [context.selectedKeyboardInputSource isEqual:KOREAN_2SET]; }),
         [NSString stringWithFormat:@"the region's input context is current and selects Korean 2-Set (current %d, selected %@)",
             NSTextInputContext.currentInputContext == context, context.selectedKeyboardInputSource]);
-    // 대조: AppKit 기본 텍스트 뷰가 두 전달 경로에서 조합하는지 확인한다. 조합하지 못하는 경로는 입력기에 닿지 않는다.
-    // window: -[NSWindow sendEvent:] 로 전달한다(endpoint 주입기와 같은 경로).
-    // pid: CGEventPostToPid 로 WindowServer 를 거쳐 이 프로세스에만 전달한다.
-    for (NSString *route in @[@"window", @"pid"]) {
-        NSTextView *control = [[[NSTextView alloc] initWithFrame:NSMakeRect(300, 10, 150, 40)] autorelease];
-        [window.contentView addSubview:control];
-        [window makeFirstResponder:control];
-        pump(^BOOL { return NSTextInputContext.currentInputContext == control.inputContext
-            && [control.inputContext.selectedKeyboardInputSource isEqual:KOREAN_2SET]; });
-        for (NSNumber *code in @[@1, @40]) {
-            if ([route isEqual:@"window"]) {
-                NSString *key = code.intValue == 1 ? @"s" : @"k";
-                sp_input_key(window, key.UTF8String, NULL, 0, true);
-                sp_input_key(window, key.UTF8String, NULL, 0, false);
-            } else {
-                postKeyToProcess(code.unsignedShortValue);
-            }
-            pump(^BOOL { return control.string.length > 0; });
-        }
-        pump(^BOOL { return control.hasMarkedText && [control.string isEqual:@"나"]; });
-        check(control.hasMarkedText && [control.string isEqual:@"나"],
-            [NSString stringWithFormat:@"control (%@ route): an AppKit text view composes 나 (marked %d, text %@)",
-                route, control.hasMarkedText, control.string]);
-        [control removeFromSuperview];
-    }
+    // 대조: AppKit 기본 텍스트 뷰가 같은 경로(-[NSWindow sendEvent:], endpoint 주입기와 같다)로 받은 키를
+    // 올바른 문서로 조합하는지 확인한다. 전환 직후 입력기는 확정한 글자를 교체 범위로 고쳐 쓰므로
+    // marked 상태가 아니라 최종 문서를 비교한다.
+    SPRecordingTextView *control = [[[SPRecordingTextView alloc] initWithFrame:NSMakeRect(300, 10, 150, 40)] autorelease];
+    control.calls = [NSMutableArray array];
+    [window.contentView addSubview:control];
+    [window makeFirstResponder:control];
+    pump(^BOOL { return NSTextInputContext.currentInputContext == control.inputContext
+        && [control.inputContext.selectedKeyboardInputSource isEqual:KOREAN_2SET]; });
+    typeDddHangul(window, control.inputContext, ^NSUInteger { return control.calls.count; });
+    check([control.string isEqual:@"ddd한글 "],
+        [NSString stringWithFormat:@"control: an AppKit text view receives ddd한글 through the injected keys (text %@, calls %@)",
+            control.string, control.calls]);
+    [control removeFromSuperview];
+
+    // 대조: 문서가 없는 최소 입력 클라이언트에서 입력기가 쓰는 방식을 기록한다.
+    SPMinimalClient *minimal = [[[SPMinimalClient alloc] initWithFrame:NSMakeRect(300, 60, 150, 40)] autorelease];
+    minimal.calls = [NSMutableArray array];
+    minimal.committed = [NSMutableString string];
+    [window.contentView addSubview:minimal];
+    [window makeFirstResponder:minimal];
+    pump(^BOOL { return NSTextInputContext.currentInputContext == minimal.inputContext
+        && [minimal.inputContext.selectedKeyboardInputSource isEqual:KOREAN_2SET]; });
+    typeDddHangul(window, minimal.inputContext, ^NSUInteger { return minimal.calls.count; });
+    // 측정값만 기록한다. 이 클라이언트는 제품 코드가 아니며, 문서가 없을 때 입력기가 보내는 콜백을 보여 준다.
+    printf("MEASURE: minimal client committed %s, marked %s, calls %s\n", minimal.committed.UTF8String,
+        minimal.marked.UTF8String, [minimal.calls componentsJoinedByString:@"; "].UTF8String);
+    [minimal removeFromSuperview];
     sp_region_focus(region);
     check(pump(^BOOL { return NSTextInputContext.currentInputContext == context; }),
         @"the region's input context is current again");
     [events removeAllObjects];
 
-    // ANSI s, k 는 2벌식에서 ㄴ, ㅏ 다. 입력기는 조합 중인 음절을 marked text 로 보고한다.
-    press(window, "s");
-    press(window, "k");
-    NSArray *composes = valuesOfType(@"compose", 0);
-    check([composes containsObject:@"ㄴ"] && [composes.lastObject isEqual:@"나"],
-        [NSString stringWithFormat:@"the input method composes ㄴ then 나 (compose %@)", composes]);
-    check(valuesOfType(@"insert", 0).count == 0,
-        [NSString stringWithFormat:@"no text is committed during composition (events %@)", events]);
-
-    // Space 는 조합을 확정하고 공백을 입력한다. 음절은 정확히 한 번 확정된다.
-    NSUInteger beforeCommit = events.count;
-    press(window, "Space");
-    pump(^BOOL { return valuesOfType(@"insert", beforeCommit).count >= 2; });
-    NSArray *inserts = valuesOfType(@"insert", beforeCommit);
-    check([inserts isEqualToArray:@[@"나", @" "]],
-        [NSString stringWithFormat:@"Space commits 나 once and then inserts a space (inserts %@, events %@)", inserts, events]);
+    // 사용자 보고: ddd한글 을 치면 ddd글 이 된다. 그림 영역의 확정 입력은 정확히 ddd한글 이어야 한다.
+    [events removeAllObjects];
+    typeDddHangul(window, context, ^NSUInteger { return events.count; });
+    NSString *committed = [valuesOfType(@"insert", 0) componentsJoinedByString:@""];
+    check([committed isEqual:@"ddd한글 "],
+        [NSString stringWithFormat:@"image region: ddd한글 is committed exactly (committed %@, events %@)", committed, events]);
 
     TISSelectInputSource(previousSource);
     CFRelease(previousSource);
