@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- G2-3-18: 호스트 코드가 없던 Tauri 전송 테스트 두 개를 지우고 지속 전송 테스트를 `sidecars_transport_test.rs`로 옮겼다. `make host-contract-check`가 이제 두 호스트 모두 205개 사례를 문제 없이 보고한다.
 - G2-3-17: Tauri가 Wails처럼 설정 디렉터리를 준비한다. 빈 경로는 시작 단계에서 거부하고, 디렉터리를 만든 뒤 정규 경로로 쓴다.
 - G2-3-16: Tauri 논리 표면 생성은 실패에 표면 id를 붙이고 0 핸들을 거부하며, Tauri 테스트가 두 사례를 다룬다.
 - G2-3-10: Tauri 녹화 중지 응답을 `recording::stop_payload`가 만들며, Tauri 테스트가 상한 도달과 미도달 응답을 다룬다.

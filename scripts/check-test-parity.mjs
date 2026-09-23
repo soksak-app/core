@@ -290,7 +290,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "scripts/verify-vt-recovery.mjs", id: "application_process_restarted" },
-      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "persistent_transport_replaces_endpoint_left_by_a_dead_service" },
+      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "persistent_transport_replaces_endpoint_left_by_a_dead_service" },
     ],
     expected: "Application-process loss reconnects to a surviving service, while service failure remains an explicit failure or declared replacement and never becomes a new shell.",
     levels: ["native", "application"],
@@ -591,7 +591,7 @@ const FEATURE_LINKS = [
       { file: "scripts/check-test-parity.mjs", symbol: "auditRustFailurePropagation" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "persistent_transport_reconnects_after_connection_loss_and_preserves_owner" },
+      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "persistent_transport_reconnects_after_connection_loss_and_preserves_owner" },
       { file: "packages/host/tauriv2/tests/recording_test.rs", id: "an_aborted_recording_is_stopped_and_removed_and_allows_the_next" },
       { file: "scripts/test/test-parity.test.mjs", id: "Rust failure audit rejects ignored outcomes in the scoped production lane" },
     ],
@@ -606,7 +606,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "scripts/test/test-parity.test.mjs", id: "Rust failure audit covers every production lane" },
-      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "persistent_transport_rejects_unsupported_hello_protocol_without_replacing_endpoint" },
+      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "persistent_transport_rejects_unsupported_hello_protocol_without_replacing_endpoint" },
     ],
     expected: "Every Rust production lane is included in the ignored-outcome audit, and unsupported host operations return explicit errors instead of successful no-op results.",
     levels: ["unit", "native"],
@@ -680,7 +680,7 @@ const FEATURE_LINKS = [
     id: "F2.4",
     implementation: [{ file: "sidecars/vt-core/src/platform/darwin/service.rs", symbol: "serve_persistent" }],
     tests: [
-      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "persistent_transport_reconnects_after_connection_loss_and_preserves_owner" },
+      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "persistent_transport_reconnects_after_connection_loss_and_preserves_owner" },
       { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestPersistentTransportHarnessEndpointAuthConcurrentReconnectAndCloseAck" },
     ],
     expected: "A client connection loss reconnects to the persistent service while preserving the owning surface identity.",
@@ -689,7 +689,7 @@ const FEATURE_LINKS = [
   {
     id: "F2.4-1",
     implementation: [{ file: "sidecars/vt-core/src/platform/darwin/service.rs", symbol: "serve_persistent" }],
-    tests: [{ file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "persistent_transport_reconnects_after_connection_loss_and_preserves_owner" }],
+    tests: [{ file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "persistent_transport_reconnects_after_connection_loss_and_preserves_owner" }],
     expected: "The reconnect case has its own five-second bound and reports timeout as failure under concurrent test load.",
     levels: ["native"],
   },
@@ -707,7 +707,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/wailsv3/src/sidecars.go", symbol: "NewSidecars" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "persistent_transport_replaces_endpoint_left_by_a_dead_service" },
+      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "persistent_transport_replaces_endpoint_left_by_a_dead_service" },
       { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestPersistentTransportReplacesEndpointLeftByDeadService" },
     ],
     expected: "A dead service endpoint is replaced through authenticated bootstrap and routes requests to the new service.",
@@ -720,7 +720,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/wailsv3/src/endpoint.go", symbol: "NewEndpoint" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "persistent_transport_reports_live_but_unreachable_endpoint_without_replacement" },
+      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "persistent_transport_reports_live_but_unreachable_endpoint_without_replacement" },
       { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestPersistentTransportReportsLiveButUnreachableEndpointWithoutReplacement" },
     ],
     expected: "A live but unreachable endpoint returns an explicit connection error and its endpoint record remains byte-for-byte unchanged.",
@@ -754,7 +754,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/wailsv3/src/sidecars.go", symbol: "protocol mismatch" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "persistent_transport_rejects_unsupported_hello_protocol_without_replacing_endpoint" },
+      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "persistent_transport_rejects_unsupported_hello_protocol_without_replacing_endpoint" },
       { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestPersistentTransportRejectsUnsupportedHelloProtocolWithoutReplacingEndpoint" },
     ],
     expected: "An unsupported service protocol is rejected explicitly and does not replace the endpoint record.",
