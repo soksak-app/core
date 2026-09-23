@@ -59,3 +59,33 @@ test('evidence rejects missing initial failure history and non-contiguous retrie
   };
   assert.match(validateEvidence(base).join('\n'), /not contiguous/);
 });
+
+test('evidence is recorded for a worktree with a multi-megabyte binary change', { timeout: 30000 }, async () => {
+  const { execFileSync } = await import('node:child_process');
+  const { randomBytes } = await import('node:crypto');
+  const { writeFile, rm } = await import('node:fs/promises');
+  const repo = await mkdtemp(join(tmpdir(), 'soksak-evidence-large-'));
+  try {
+    const run = (...args) => execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8' });
+    run('init', '-q');
+    run('config', 'user.email', 'evidence@example.invalid');
+    run('config', 'user.name', 'evidence');
+    await writeFile(join(repo, 'large.bin'), randomBytes(4 * 1024 * 1024));
+    await writeFile(join(repo, 'source.mjs'), 'export const value = 1;\n');
+    run('add', '.');
+    run('commit', '-q', '-m', 'initial');
+    await writeFile(join(repo, 'large.bin'), randomBytes(4 * 1024 * 1024));
+    const record = await collectEvidence({
+      root: repo,
+      caseId: 'large-binary-change', language: 'js-ts',
+      implementationFiles: ['source.mjs'], testFiles: ['source.mjs'], dependencyFiles: ['source.mjs'],
+      buildFlags: ['node>=20'],
+      result: { status: 'pass', expected: { status: 'pass', tests: 1 }, actual: { status: 'pass', tests: 1 }, elapsedMs: 1 },
+    });
+    assert.equal(validateEvidence(record).length, 0);
+    assert.match(record.git.patchSha256, /^[0-9a-f]{64}$/);
+    assert.ok(record.git.files.some(({ path }) => path === 'large.bin'));
+  } finally {
+    await rm(repo, { recursive: true, force: true });
+  }
+});

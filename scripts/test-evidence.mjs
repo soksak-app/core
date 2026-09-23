@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { readFile, realpath, rename, writeFile } from 'node:fs/promises';
 import { basename, resolve } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
@@ -54,6 +54,27 @@ function git(root, args) {
   }
 }
 
+// git 출력의 SHA-256. 출력을 버퍼에 모으지 않으므로 큰 바이너리 patch 도 크기 한도 없이 해시한다.
+function gitDigest(root, args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn('git', ['-C', root, ...args], { stdio: ['ignore', 'pipe', 'pipe'] });
+    const hash = createHash('sha256');
+    let stderr = '';
+    child.stdout.on('data', (chunk) => hash.update(chunk));
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    child.on('error', (error) => {
+      error.code = error.code ?? 'GIT_EVIDENCE_ERROR';
+      reject(error);
+    });
+    child.on('close', (code) => {
+      if (code === 0) return resolve(hash.digest('hex'));
+      const error = new Error(`git ${args.join(' ')} failed with exit ${code}: ${stderr.trim()}`);
+      error.code = 'GIT_EVIDENCE_ERROR';
+      reject(error);
+    });
+  });
+}
+
 async function dirtyState(root) {
   const status = git(root, ['status', '--porcelain=v1', '--untracked-files=all']);
   const files = [];
@@ -67,12 +88,12 @@ async function dirtyState(root) {
       else throw error;
     }
   }
-  const patch = git(root, ['diff', '--binary', 'HEAD']);
+  const patchSha256 = await gitDigest(root, ['diff', '--binary', 'HEAD']);
   return {
     head: git(root, ['rev-parse', 'HEAD']).trim(),
     files,
-    patchSha256: digest(patch),
-    sha256: digest(JSON.stringify({ files, patchSha256: digest(patch) })),
+    patchSha256,
+    sha256: digest(JSON.stringify({ files, patchSha256 })),
   };
 }
 
