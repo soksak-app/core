@@ -33,11 +33,11 @@ fn inline_image_raster_is_composited_without_erasing_terminal_background() {
     let width = metrics.cell_width as u32 * 4;
     let height = metrics.cell_height as u32;
     let png = [
-        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48,
-        0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00,
-        0x00, 0x1f, 0x15, 0xc4, 0x89, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x44, 0x41, 0x54, 0x78,
-        0x9c, 0x63, 0xf8, 0xcf, 0xc0, 0xf0, 0x1f, 0x00, 0x05, 0x00, 0x01, 0xff, 0x89, 0x99,
-        0x3d, 0x1d, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44,
+        0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f,
+        0x15, 0xc4, 0x89, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0xf8,
+        0xcf, 0xc0, 0xf0, 0x1f, 0x00, 0x05, 0x00, 0x01, 0xff, 0x89, 0x99, 0x3d, 0x1d, 0x00, 0x00,
+        0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
     ];
     let placement = InlineImagePlacement {
         name: "red.png".into(),
@@ -65,9 +65,15 @@ fn inline_image_raster_is_composited_without_erasing_terminal_background() {
         )
         .expect("inline image composite");
     let image_pixel = frame
-        .read_pixel(metrics.cell_width as u32 + metrics.cell_width as u32 / 2, height / 2)
+        .read_pixel(
+            metrics.cell_width as u32 + metrics.cell_width as u32 / 2,
+            height / 2,
+        )
         .expect("image pixel");
-    assert!(image_pixel[2] > image_pixel[0], "expected red image pixel: {image_pixel:?}");
+    assert!(
+        image_pixel[2] > image_pixel[0],
+        "expected red image pixel: {image_pixel:?}"
+    );
     let background = frame
         .read_pixel(metrics.cell_width as u32 / 2, height / 2)
         .expect("background");
@@ -564,9 +570,15 @@ fn block_cursor_covers_the_full_width_of_the_character_under_it() {
     let frame = Frame::new(cell * 4, height).expect("frame");
     frame.draw(&wide_preedit, &metrics).expect("wide preedit");
     let second = bright_in_cell(&frame, cell, height, 1);
-    assert!(second > 0.5, "the block cursor must cover the second cell of a wide preedit (bright {second:.2})");
+    assert!(
+        second > 0.5,
+        "the block cursor must cover the second cell of a wide preedit (bright {second:.2})"
+    );
     let third = bright_in_cell(&frame, cell, height, 2);
-    assert!(third < 0.1, "the cursor must not extend past the wide preedit (bright {third:.2})");
+    assert!(
+        third < 0.1,
+        "the cursor must not extend past the wide preedit (bright {third:.2})"
+    );
 
     // 확정된 넓은 글자 위의 커서도 두 칸을 덮는다.
     let mut wide_text = screen(4, 1);
@@ -577,7 +589,10 @@ fn block_cursor_covers_the_full_width_of_the_character_under_it() {
     let frame = Frame::new(cell * 4, height).expect("frame");
     frame.draw(&wide_text, &metrics).expect("wide text");
     let second = bright_in_cell(&frame, cell, height, 1);
-    assert!(second > 0.5, "the block cursor must cover the second cell of a wide character (bright {second:.2})");
+    assert!(
+        second > 0.5,
+        "the block cursor must cover the second cell of a wide character (bright {second:.2})"
+    );
 
     // 좁은 조합 글자는 한 칸 커서를 유지한다.
     let mut narrow = screen(4, 1);
@@ -591,7 +606,10 @@ fn block_cursor_covers_the_full_width_of_the_character_under_it() {
     let frame = Frame::new(cell * 4, height).expect("frame");
     frame.draw(&narrow, &metrics).expect("narrow preedit");
     let second = bright_in_cell(&frame, cell, height, 1);
-    assert!(second < 0.1, "a narrow preedit keeps a one-cell cursor (bright {second:.2})");
+    assert!(
+        second < 0.1,
+        "a narrow preedit keeps a one-cell cursor (bright {second:.2})"
+    );
 }
 
 fn ink_in_cell(frame: &Frame, cell_width: u32, height: u32, cell: u32) -> usize {
@@ -619,9 +637,14 @@ fn wide_preedit_glyph_is_not_clipped_by_its_continuation_cell() {
     committed.lines[0][0].width = 2;
     committed.lines[0][1].width = 0;
     let frame = Frame::new(cell * 4, height).expect("frame");
-    frame.draw_with_cursor(&committed, &metrics, hidden).expect("committed");
+    frame
+        .draw_with_cursor(&committed, &metrics, hidden)
+        .expect("committed");
     let reference = ink_in_cell(&frame, cell, height, 1);
-    assert!(reference > 0, "the committed wide glyph must have ink in its second cell");
+    assert!(
+        reference > 0,
+        "the committed wide glyph must have ink in its second cell"
+    );
 
     let mut preedit = screen(4, 1);
     preedit.cursor.preedit = Some(Preedit {
@@ -631,21 +654,36 @@ fn wide_preedit_glyph_is_not_clipped_by_its_continuation_cell() {
         attributed: false,
     });
     let frame = Frame::new(cell * 4, height).expect("frame");
-    frame.draw_with_cursor(&preedit, &metrics, hidden).expect("preedit");
+    frame
+        .draw_with_cursor(&preedit, &metrics, hidden)
+        .expect("preedit");
     let ink = ink_in_cell(&frame, cell, height, 1);
-    assert!(ink >= reference, "the preedit glyph's second cell lost ink: {ink} of {reference}");
+    assert!(
+        ink >= reference,
+        "the preedit glyph's second cell lost ink: {ink} of {reference}"
+    );
 }
 
 #[test]
 fn a_font_list_uses_the_first_installed_family_and_the_system_font_when_none_is_installed() {
-    use soksak_sidecar_vt_core::platform::darwin::frame::{default_font, metrics_for, resolve_font_list};
-    let selection = resolve_font_list("No Such Terminal Font Family; Menlo ;Courier").expect("list");
+    use soksak_sidecar_vt_core::platform::darwin::frame::{
+        default_font, metrics_for, resolve_font_list,
+    };
+    let selection =
+        resolve_font_list("No Such Terminal Font Family; Menlo ;Courier").expect("list");
     assert_eq!(selection.font.family().expect("family"), "Menlo");
-    assert_eq!(selection.skipped, vec!["No Such Terminal Font Family".to_string()]);
+    assert_eq!(
+        selection.skipped,
+        vec!["No Such Terminal Font Family".to_string()]
+    );
     assert!(!selection.system);
 
     let courier = resolve_font_list("Courier;Menlo").expect("list");
-    assert_eq!(courier.font.family().expect("family"), "Courier", "the list order decides the family");
+    assert_eq!(
+        courier.font.family().expect("family"),
+        "Courier",
+        "the list order decides the family"
+    );
     let menlo = metrics_for(&selection.font, 13.0, 2.0).expect("Menlo metrics");
     let courier_metrics = metrics_for(&courier.font, 13.0, 2.0).expect("Courier metrics");
     assert_ne!(
@@ -654,10 +692,20 @@ fn a_font_list_uses_the_first_installed_family_and_the_system_font_when_none_is_
         "different families produce different cell metrics"
     );
 
-    let none = resolve_font_list("No Such Terminal Font Family;Another Missing Family").expect("list");
-    assert!(none.system, "no installed family selects the system fixed-pitch font");
+    let none =
+        resolve_font_list("No Such Terminal Font Family;Another Missing Family").expect("list");
+    assert!(
+        none.system,
+        "no installed family selects the system fixed-pitch font"
+    );
     assert_eq!(none.skipped.len(), 2);
-    assert_eq!(none.font.family().expect("family"), default_font().family().expect("family"));
+    assert_eq!(
+        none.font.family().expect("family"),
+        default_font().family().expect("family")
+    );
 
-    assert_eq!(resolve_font_list(" ; ").err().as_deref(), Some("font.family must name at least one family"));
+    assert_eq!(
+        resolve_font_list(" ; ").err().as_deref(),
+        Some("font.family must name at least one family")
+    );
 }

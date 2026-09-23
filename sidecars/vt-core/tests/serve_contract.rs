@@ -3,7 +3,10 @@ use async_trait::async_trait;
 use soksak_sidecar_vt_core::protocol::{
     serve, Cell, Cursor, CursorShape, DaemonEvent, Engine, EngineEvent, Modes, Screen, SessionPort,
 };
-use soksak_sidecar_vt_core::{inline_image::{Dimension, InlineImageCommand}, TerminalTheme};
+use soksak_sidecar_vt_core::{
+    inline_image::{Dimension, InlineImageCommand},
+    TerminalTheme,
+};
 use std::sync::{Arc, Mutex};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 use tokio::sync::mpsc;
@@ -39,7 +42,6 @@ impl MockEngine {
             pending_events: Vec::new(),
         }
     }
-
 }
 
 impl Engine for MockEngine {
@@ -62,15 +64,14 @@ impl Engine for MockEngine {
     fn feed(&mut self, bytes: &[u8]) {
         self.feed_history.push(bytes.to_vec());
         if bytes == b"\x1b]1337;File=name=ZmlsZS5wbmc=;size=5;inline=1;width=2px:aGVsbG8=\x07" {
-            self.pending_events.push(EngineEvent::InlineImage(
-                InlineImageCommand::Display {
+            self.pending_events
+                .push(EngineEvent::InlineImage(InlineImageCommand::Display {
                     name: "file.png".to_string(),
                     data: b"hello".to_vec(),
                     width: Dimension::Pixels(2),
                     height: Dimension::Auto,
                     preserve_aspect_ratio: true,
-                },
-            ));
+                }));
         }
         if bytes == b"\x1b]7;file:///tmp/project\x07" {
             self.pending_events.push(EngineEvent::Directory {
@@ -92,9 +93,15 @@ impl Engine for MockEngine {
         Ok(())
     }
 
-    fn selection_start(&mut self, _col: u16, _row: u16) -> Result<(), String> { Ok(()) }
-    fn selection_update(&mut self, _col: u16, _row: u16) -> Result<(), String> { Ok(()) }
-    fn selection_end(&mut self) -> Result<String, String> { Ok("selected".to_string()) }
+    fn selection_start(&mut self, _col: u16, _row: u16) -> Result<(), String> {
+        Ok(())
+    }
+    fn selection_update(&mut self, _col: u16, _row: u16) -> Result<(), String> {
+        Ok(())
+    }
+    fn selection_end(&mut self) -> Result<String, String> {
+        Ok("selected".to_string())
+    }
 
     fn cursor(&self) -> Cursor {
         Cursor {
@@ -166,11 +173,18 @@ async fn vendor_event_is_emitted_only_with_the_owning_surface_id() {
     let engine_factory = Arc::new(|| Box::new(MockEngine::new()) as Box<dyn Engine>);
     let calls_for_factory = calls.clone();
     let session_port_factory = Arc::new(move || {
-        Arc::new(FakeSessionPort::new("owned-session".to_string(), calls_for_factory.clone()))
-            as Arc<dyn SessionPort>
+        Arc::new(FakeSessionPort::new(
+            "owned-session".to_string(),
+            calls_for_factory.clone(),
+        )) as Arc<dyn SessionPort>
     });
 
-    let task = tokio::spawn(serve(engine_factory, serve_in, serve_out, session_port_factory));
+    let task = tokio::spawn(serve(
+        engine_factory,
+        serve_in,
+        serve_out,
+        session_port_factory,
+    ));
     to_serve.write_all(input).await.unwrap();
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
     let mut found = false;
@@ -335,8 +349,10 @@ async fn native_input_ack_is_not_reported_as_an_unsolicited_event() {
     let calls = Arc::new(Mutex::new(Calls::default()));
     let factory_calls = calls.clone();
     let factory = Arc::new(move || {
-        Arc::new(FakeSessionPort::new("input-ack".to_string(), factory_calls.clone()))
-            as Arc<dyn SessionPort>
+        Arc::new(FakeSessionPort::new(
+            "input-ack".to_string(),
+            factory_calls.clone(),
+        )) as Arc<dyn SessionPort>
     });
     let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
@@ -347,7 +363,9 @@ async fn native_input_ack_is_not_reported_as_an_unsolicited_event() {
     let mut writer = Vec::new();
     let engine_factory = Arc::new(|| Box::new(MockEngine::new()) as Box<dyn Engine>);
 
-    serve(engine_factory, reader, &mut writer, factory).await.unwrap();
+    serve(engine_factory, reader, &mut writer, factory)
+        .await
+        .unwrap();
 
     let acknowledgements: Vec<serde_json::Value> = String::from_utf8(writer)
         .unwrap()
@@ -355,10 +373,16 @@ async fn native_input_ack_is_not_reported_as_an_unsolicited_event() {
         .filter_map(|line| serde_json::from_str(line).ok())
         .filter(|value: &serde_json::Value| value["body"]["ack"] == true)
         .collect();
-    assert_eq!(acknowledgements.len(), 2, "focus and compose must each acknowledge once");
+    assert_eq!(
+        acknowledgements.len(),
+        2,
+        "focus and compose must each acknowledge once"
+    );
     for acknowledgement in acknowledgements {
-        assert!(acknowledgement["body"]["event"].is_null(),
-            "native input ACK must not become an unsolicited event: {acknowledgement}");
+        assert!(
+            acknowledgement["body"]["event"].is_null(),
+            "native input ACK must not become an unsolicited event: {acknowledgement}"
+        );
     }
 }
 
@@ -367,8 +391,10 @@ async fn each_native_preedit_update_presents_a_fresh_terminal_frame() {
     let calls = Arc::new(Mutex::new(Calls::default()));
     let factory_calls = calls.clone();
     let factory = Arc::new(move || {
-        Arc::new(FakeSessionPort::new("preedit-frame".to_string(), factory_calls.clone()))
-            as Arc<dyn SessionPort>
+        Arc::new(FakeSessionPort::new(
+            "preedit-frame".to_string(),
+            factory_calls.clone(),
+        )) as Arc<dyn SessionPort>
     });
     let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
@@ -386,9 +412,13 @@ async fn each_native_preedit_update_presents_a_fresh_terminal_frame() {
     let mut writer = Vec::new();
     let engine_factory = Arc::new(|| Box::new(MockEngine::new()) as Box<dyn Engine>);
 
-    serve(engine_factory, reader, &mut writer, factory).await.unwrap();
+    serve(engine_factory, reader, &mut writer, factory)
+        .await
+        .unwrap();
 
-    let frames = String::from_utf8(writer).unwrap().lines()
+    let frames = String::from_utf8(writer)
+        .unwrap()
+        .lines()
         .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
         .filter(|value| value["body"]["image"]["sequence"].is_number())
         .count();
@@ -465,8 +495,10 @@ async fn test_bracketed_paste_rejects_embedded_terminator_without_writing() {
     });
     let calls_for_factory = calls.clone();
     let session_port_factory = Arc::new(move || {
-        Arc::new(FakeSessionPort::new("unused".to_string(), calls_for_factory.clone()))
-            as Arc<dyn SessionPort>
+        Arc::new(FakeSessionPort::new(
+            "unused".to_string(),
+            calls_for_factory.clone(),
+        )) as Arc<dyn SessionPort>
     });
     let _ = serve(engine_factory, reader, &mut writer, session_port_factory).await;
     let output = String::from_utf8(writer).unwrap();
@@ -484,8 +516,10 @@ async fn test_clipboard_reject_is_an_explicit_protocol_event() {
     let engine_factory = Arc::new(|| Box::new(MockEngine::new()) as Box<dyn Engine>);
     let calls_for_factory = calls.clone();
     let session_port_factory = Arc::new(move || {
-        Arc::new(FakeSessionPort::new("unused".to_string(), calls_for_factory.clone()))
-            as Arc<dyn SessionPort>
+        Arc::new(FakeSessionPort::new(
+            "unused".to_string(),
+            calls_for_factory.clone(),
+        )) as Arc<dyn SessionPort>
     });
     let _ = serve(engine_factory, reader, &mut writer, session_port_factory).await;
     let output = String::from_utf8(writer).unwrap();
@@ -508,12 +542,17 @@ async fn test_selection_release_emits_one_user_copy_event() {
     let engine_factory = Arc::new(|| Box::new(MockEngine::new()) as Box<dyn Engine>);
     let calls_for_factory = calls.clone();
     let session_port_factory = Arc::new(move || {
-        Arc::new(FakeSessionPort::new("unused".to_string(), calls_for_factory.clone()))
-            as Arc<dyn SessionPort>
+        Arc::new(FakeSessionPort::new(
+            "unused".to_string(),
+            calls_for_factory.clone(),
+        )) as Arc<dyn SessionPort>
     });
     let _ = serve(engine_factory, reader, &mut writer, session_port_factory).await;
     let output = String::from_utf8(writer).unwrap();
-    assert!(output.contains("selection.copy"), "selection release must emit a copy event: {output}");
+    assert!(
+        output.contains("selection.copy"),
+        "selection release must emit a copy event: {output}"
+    );
     assert!(!output.contains("Unknown operation: selection.start"));
     assert!(!output.contains("Unknown operation: selection.update"));
     assert!(!output.contains("Unknown operation: selection.end"));
@@ -638,7 +677,8 @@ async fn test_stdin_eof_terminates_quickly() {
 
     // 서비스는 시작할 때 글꼴을 먼저 읽는다. 이 검사는 EOF 뒤의 종료 시간만 재므로 같은 순서로 글꼴을 먼저 읽는다.
     // 새 프로세스의 첫 CoreText 호출은 2초 넘게 걸릴 수 있다(V5-7).
-    soksak_sidecar_vt_core::platform::darwin::frame::load_default_font().expect("the system fixed-pitch font");
+    soksak_sidecar_vt_core::platform::darwin::frame::load_default_font()
+        .expect("the system fixed-pitch font");
     let start = std::time::Instant::now();
     let result = serve(engine_factory, reader, &mut writer, session_port_factory).await;
     let elapsed = start.elapsed();
@@ -698,13 +738,27 @@ async fn test_repeated_image_open_resets_native_frame_without_closing_session() 
     let _ = serve(engine_factory, reader, &mut writer, session_port_factory).await;
 
     let calls = calls.lock().unwrap();
-    assert_eq!(calls.opens.len(), 1, "repeated image open must preserve the PTY session");
-    assert_eq!(calls.writes.len(), 1, "input must still reach the preserved session");
+    assert_eq!(
+        calls.opens.len(),
+        1,
+        "repeated image open must preserve the PTY session"
+    );
+    assert_eq!(
+        calls.writes.len(),
+        1,
+        "input must still reach the preserved session"
+    );
     let output = String::from_utf8(writer).unwrap();
-    assert_eq!(output.matches("\"event\":\"session\"").count(), 1,
-        "the replacement page must receive the preserved session identity exactly once");
-    assert_eq!(output.matches("\"image\"").count(), 2,
-        "each image open must wait for a fresh configured raster: {output}");
+    assert_eq!(
+        output.matches("\"event\":\"session\"").count(),
+        1,
+        "the replacement page must receive the preserved session identity exactly once"
+    );
+    assert_eq!(
+        output.matches("\"image\"").count(),
+        2,
+        "each image open must wait for a fresh configured raster: {output}"
+    );
 }
 
 #[tokio::test]
@@ -2551,9 +2605,15 @@ async fn test_panicking_surface_reports_error() {
             Err(format!("unknown clipboard request {request_id}"))
         }
 
-        fn selection_start(&mut self, _col: u16, _row: u16) -> Result<(), String> { Ok(()) }
-        fn selection_update(&mut self, _col: u16, _row: u16) -> Result<(), String> { Ok(()) }
-        fn selection_end(&mut self) -> Result<String, String> { Ok("selected".to_string()) }
+        fn selection_start(&mut self, _col: u16, _row: u16) -> Result<(), String> {
+            Ok(())
+        }
+        fn selection_update(&mut self, _col: u16, _row: u16) -> Result<(), String> {
+            Ok(())
+        }
+        fn selection_end(&mut self) -> Result<String, String> {
+            Ok("selected".to_string())
+        }
 
         fn cursor(&self) -> Cursor {
             Cursor {
@@ -2694,7 +2754,10 @@ async fn acknowledge_image(to_serve: &mut tokio::io::DuplexStream, envelope: &se
     let consumed = serde_json::json!({"surface": envelope["surface"], "body": {"image": {"consumed": {
         "name": image["name"], "generation": image["generation"],
         "raster": image["raster"], "sequence": image["sequence"]}}}});
-    to_serve.write_all(format!("{consumed}\n").as_bytes()).await.unwrap();
+    to_serve
+        .write_all(format!("{consumed}\n").as_bytes())
+        .await
+        .unwrap();
 }
 
 // 지정한 raster 의 이미지 봉투를 기다린다. 커서 틱처럼 이전 raster 로 그린 이미지는 답하고 넘긴다.
@@ -3109,7 +3172,11 @@ async fn test_font_applies_the_first_installed_family_of_a_list() {
         .filter(|value| value["body"]["event"] == "font")
         .map(|value| value["body"]["system"].as_bool().unwrap())
         .collect::<Vec<_>>();
-    assert_eq!(system, vec![false, false, true], "only a list without installed families uses the system font");
+    assert_eq!(
+        system,
+        vec![false, false, true],
+        "only a list without installed families uses the system font"
+    );
     let skipped = outputs
         .iter()
         .filter(|value| value["body"]["event"] == "font")
@@ -3129,5 +3196,8 @@ async fn test_font_applies_the_first_installed_family_of_a_list() {
         .filter(|value| value["body"]["error"] == "invalidParams")
         .map(|value| value["body"]["reason"].as_str().unwrap().to_string())
         .collect::<Vec<_>>();
-    assert_eq!(errors, vec!["font.family must name at least one family".to_string()]);
+    assert_eq!(
+        errors,
+        vec!["font.family must name at least one family".to_string()]
+    );
 }

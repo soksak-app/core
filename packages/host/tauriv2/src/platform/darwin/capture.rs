@@ -70,7 +70,8 @@ pub fn wait() -> Result<bool, String> {
 
 /// 창 번호의 창을 포커스를 주지 않고 한 장 찍어 path 에 PNG 로 쓴다.
 pub fn still(window_number: isize, path: &str) -> Result<(), String> {
-    let target = CString::new(path).map_err(|_| "still capture failed: path contains NUL".to_owned())?;
+    let target =
+        CString::new(path).map_err(|_| "still capture failed: path contains NUL".to_owned())?;
     if unsafe { sp_capture_still(window_number, target.as_ptr()) } {
         Ok(())
     } else {

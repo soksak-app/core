@@ -63,7 +63,10 @@ pub(crate) fn native_pty_test_lock() -> NativePtyTestLock {
             .expect("PTY test lock file must open");
         nix::fcntl::flock(file.as_raw_fd(), nix::fcntl::FlockArg::LockExclusive)
             .expect("PTY test lock must acquire");
-        NativePtyTestLock { _local: local, _file: file }
+        NativePtyTestLock {
+            _local: local,
+            _file: file,
+        }
     }
     #[cfg(not(unix))]
     {

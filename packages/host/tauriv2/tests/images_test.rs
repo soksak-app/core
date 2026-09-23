@@ -820,14 +820,16 @@ fn missing_native_surface_requests_a_fresh_raster_configuration() {
         |_image, _response| Ok(()),
         |reason| {
             assert_eq!(reason, "notFound");
-            let next = images
-                .configure_raster(&key, 800, 600, 2.0, true)
-                .unwrap();
+            let next = images.configure_raster(&key, 800, 600, 2.0, true).unwrap();
             *recovered_value.lock().unwrap() = next;
             Ok(())
         },
     ));
-    let next = recovered.lock().unwrap().take().expect("recovery was not requested");
+    let next = recovered
+        .lock()
+        .unwrap()
+        .take()
+        .expect("recovery was not requested");
     assert_eq!(next.raster, configured.raster);
     assert!(!images.current_presented());
 }

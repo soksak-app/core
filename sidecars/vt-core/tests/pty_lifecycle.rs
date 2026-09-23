@@ -8,7 +8,9 @@ use tokio::time::{timeout, Duration};
 
 fn lifecycle_test_lock() -> std::sync::MutexGuard<'static, ()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-    LOCK.get_or_init(|| Mutex::new(())).lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    LOCK.get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 fn native_pty_test_lock() -> std::fs::File {
@@ -97,7 +99,9 @@ async fn repeated_short_lived_sessions_close_without_process_group_races() {
                 tx,
             )
             .expect("short-lived PTY setup failed");
-        service.close(&session).expect("short-lived PTY close failed");
+        service
+            .close(&session)
+            .expect("short-lived PTY close failed");
     }
     assert!(
         started.elapsed() < Duration::from_secs(3),

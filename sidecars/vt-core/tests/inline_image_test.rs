@@ -39,7 +39,10 @@ fn malformed_size_base64_and_dimensions_are_rejected() {
         b"File=inline=1;width=0:ZGF0YQ==".as_slice(),
         b"File=inline=1;width=2em:ZGF0YQ==".as_slice(),
     ] {
-        assert!(parse(payload).is_err(), "accepted malformed payload {payload:?}");
+        assert!(
+            parse(payload).is_err(),
+            "accepted malformed payload {payload:?}"
+        );
     }
 }
 

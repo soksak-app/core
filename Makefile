@@ -80,7 +80,7 @@ verify: prepare docs-check exposure-check parity-check terminal-protocols-check
 # 각 앱은 debug 와 release 두 프로필로 빌드한다. release 는 각 도구의 표준 축소
 # 옵션(cargo release 프로필, Go 의 -s -w -trimpath)을 사용한다. debug 는 진단 빌드(Go 태그·cargo
 # 기능 diagnostics)이고 release 는 진단 메서드를 포함하지 않는다.
-.PHONY: native-darwin sidecars-debug sidecars-release frontend-wailsv3 frontend-tauriv2 native-test host-contract-check \
+.PHONY: native-darwin sidecars-debug sidecars-release frontend-wailsv3 frontend-tauriv2 native-test host-contract-check rust-format-check \
         tauriv2 tauriv2-release tauriv2-build tauriv2-build-release \
         wailsv3 wailsv3-release wailsv3-build wailsv3-build-release \
         examples-verify examples-size
@@ -166,11 +166,18 @@ wailsv3-release: wailsv3-build-release
 
 # 네이티브 코드의 단위 검사. 공용 입력 검사, 사이드카 검사, 두 호스트의 테스트를 실행하는 호스트 계약 검사를 실행한다.
 native-test: native-darwin frontend-wailsv3 frontend-tauriv2
+	@$(MAKE) rust-format-check
 	@$(MAKE) -C native/darwin test
 	@node scripts/verify-vt-recovery.mjs target/debug/soksak-vt-alacritty
 	@$(GO_ENV) go test -ldflags "$(GO_LINK)" ./sidecars/shell/...
 	@$(CARGO_ENV) cargo test --manifest-path sidecars/Cargo.toml --workspace
 	@$(GO_ENV) $(CARGO_ENV) node scripts/check-host-contract.mjs --go-ldflags "$(GO_LINK)"
+
+# 두 Rust 워크스페이스(루트와 sidecars)의 모든 패키지가 rustfmt 형식인지 검사한다.
+rust-format-check:
+	@cargo fmt --all --check
+	@cargo fmt --all --check --manifest-path sidecars/Cargo.toml
+	@echo "Rust format check passed: 2 workspaces"
 
 # 두 호스트의 테스트를 기본 구성과 진단 구성으로 실행하고, 호스트 계약 사례(docs/spec/host-contract.md)를
 # 같은 수준으로 실행하는지 결과로 검사한다.

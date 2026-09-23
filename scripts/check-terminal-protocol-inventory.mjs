@@ -47,7 +47,7 @@ export function auditTerminalProtocolInventory({ engineSource = engine, testSour
     errors.push("specification does not state the complete CSI inventory contract");
   }
 
-  const rows = [...engineSource.matchAll(/CsiSelectorEvidence \{ selector: "([^"]+)", outcome: CsiOutcome::(Implemented|Unsupported), test: "([^"]+)" \}/g)]
+  const rows = [...engineSource.matchAll(/CsiSelectorEvidence \{\s*selector: "([^"]+)",\s*outcome: CsiOutcome::(Implemented|Unsupported),\s*test: "([^"]+)",?\s*\}/g)]
     .map(([, selector, outcome, test]) => ({ selector, outcome, test }));
   const oscRows = [...engineSource.matchAll(/OscSelectorEvidence \{\s*selector: "([^"]+)",\s*outcome: OscOutcome::(Implemented|Unsupported|Vendor),\s*test: "([^"]+)",?\s*\}/g)]
     .map(([, selector, outcome, test]) => ({ selector, outcome, test }));

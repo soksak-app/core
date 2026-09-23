@@ -96,7 +96,9 @@ pub(crate) fn read(window: &Window, request: ReadRequest) -> Result<ReadResponse
     validate_read_request(&request.kind, request.user_initiated)?;
     let kind = request.kind;
     let read_kind = kind.clone();
-    let value = exposure::on_main(window, move || platform::current()?.clipboard_read(&read_kind))?;
+    let value = exposure::on_main(window, move || {
+        platform::current()?.clipboard_read(&read_kind)
+    })?;
     Ok(response(value, &kind))
 }
 

@@ -89,9 +89,12 @@ pub(crate) fn reload_surface_documents(window: &Window) -> Result<(), String> {
         // 새 프레임이 이전 IOSurface 종료와 경합하거나 그 token을 재사용하지 않도록
         // 모든 이전 native image를 먼저 제거한다.
         for sidecar in sidecars {
-            window
-                .state::<WindowSidecars>()
-                .send(&window, &sidecar, &surface, reconnect.as_ref())?;
+            window.state::<WindowSidecars>().send(
+                &window,
+                &sidecar,
+                &surface,
+                reconnect.as_ref(),
+            )?;
         }
     }
     data.composition_revisions

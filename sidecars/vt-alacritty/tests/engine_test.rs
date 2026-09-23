@@ -63,7 +63,10 @@ fn bel_and_st_terminated_effects_and_queries_preserve_response_order() {
         .iter()
         .position(|reply| *reply == b"\x1b[1;2R")
         .expect("CSI 6n must return the cursor position");
-    assert!(color_reply < cursor_reply, "responses must retain input order");
+    assert!(
+        color_reply < cursor_reply,
+        "responses must retain input order"
+    );
     assert_eq!(engine.screen().lines[0][0].ch.as_deref(), Some("A"));
     assert_eq!(engine.screen().lines[0][0].fg.as_deref(), Some("#00ffff"));
 }
@@ -183,13 +186,19 @@ fn unsupported_osc_selector_is_an_explicit_error_after_st() {
 
 #[test]
 fn every_unsupported_osc_inventory_selector_emits_an_explicit_error() {
-    for selector in ["1", "3", "5", "6", "13", "19", "21", "22", "46", "51", "60", "62", "105", "106", "I", "l", "L"] {
+    for selector in [
+        "1", "3", "5", "6", "13", "19", "21", "22", "46", "51", "60", "62", "105", "106", "I", "l",
+        "L",
+    ] {
         let mut engine = AlacrittyEngine::new();
         engine.feed(format!("\x1b]{selector};ignored\x07").as_bytes());
-        assert!(matches!(
-            engine.drain_events().as_slice(),
-            [EngineEvent::Error(reason)] if reason == &format!("unsupported OSC selector {selector}")
-        ), "selector {selector} did not produce an explicit rejection");
+        assert!(
+            matches!(
+                engine.drain_events().as_slice(),
+                [EngineEvent::Error(reason)] if reason == &format!("unsupported OSC selector {selector}")
+            ),
+            "selector {selector} did not produce an explicit rejection"
+        );
     }
 }
 
@@ -198,10 +207,13 @@ fn x11_and_tektronix_osc_selectors_are_explicitly_rejected() {
     for selector in ["13", "14", "15", "16", "17", "18", "19"] {
         let mut engine = AlacrittyEngine::new();
         engine.feed(format!("\x1b]{selector};ignored\x07").as_bytes());
-        assert!(matches!(
-            engine.drain_events().as_slice(),
-            [EngineEvent::Error(reason)] if reason == &format!("unsupported OSC selector {selector}")
-        ), "physical selector {selector} did not produce an explicit rejection");
+        assert!(
+            matches!(
+                engine.drain_events().as_slice(),
+                [EngineEvent::Error(reason)] if reason == &format!("unsupported OSC selector {selector}")
+            ),
+            "physical selector {selector} did not produce an explicit rejection"
+        );
     }
 }
 
@@ -210,8 +222,12 @@ fn implemented_and_vendor_osc_selectors_do_not_emit_unsupported_errors() {
     let mut engine = AlacrittyEngine::new();
     engine.feed(b"\x1b]2;title\x07\x1b]7;file:///tmp\x07");
     let events = engine.drain_events();
-    assert!(events.iter().any(|event| event == &EngineEvent::Title("title".to_string())));
-    assert!(!events.iter().any(|event| matches!(event, EngineEvent::Error(_))));
+    assert!(events
+        .iter()
+        .any(|event| event == &EngineEvent::Title("title".to_string())));
+    assert!(!events
+        .iter()
+        .any(|event| matches!(event, EngineEvent::Error(_))));
 }
 
 #[test]
@@ -266,9 +282,15 @@ fn vendor_osc_effects_are_typed_and_survive_bel_st_and_fragmentation() {
 fn malformed_vendor_osc_is_rejected_without_silent_drop() {
     for (sequence, expected) in [
         (b"\x1b]7;\x07".as_slice(), "OSC 7 directory URI is empty"),
-        (b"\x1b]8;missing-separator\x07".as_slice(), "OSC 8 hyperlink payload must contain params and URI"),
+        (
+            b"\x1b]8;missing-separator\x07".as_slice(),
+            "OSC 8 hyperlink payload must contain params and URI",
+        ),
         (b"\x1b]9;\x07".as_slice(), "OSC 9 notification is empty"),
-        (b"\x1b]133;Z\x07".as_slice(), "OSC 133 shell marker is unsupported: Z"),
+        (
+            b"\x1b]133;Z\x07".as_slice(),
+            "OSC 133 shell marker is unsupported: Z",
+        ),
     ] {
         let mut engine = AlacrittyEngine::new();
         engine.feed(sequence);
@@ -308,9 +330,21 @@ fn unsupported_csi_window_report_is_an_explicit_error() {
 #[test]
 fn unsupported_csi_rectangle_protected_and_palette_reports_are_explicit_errors() {
     for (prefix, suffix, expected) in [
-        (b"\x1b[1$".as_slice(), b"x".as_slice(), "unsupported CSI rectangle report 1$x"),
-        (b"\x1b[1\"".as_slice(), b"q".as_slice(), "unsupported CSI protected-cell report 1\"q"),
-        (b"\x1b[#".as_slice(), b"p".as_slice(), "unsupported CSI palette report #p"),
+        (
+            b"\x1b[1$".as_slice(),
+            b"x".as_slice(),
+            "unsupported CSI rectangle report 1$x",
+        ),
+        (
+            b"\x1b[1\"".as_slice(),
+            b"q".as_slice(),
+            "unsupported CSI protected-cell report 1\"q",
+        ),
+        (
+            b"\x1b[#".as_slice(),
+            b"p".as_slice(),
+            "unsupported CSI palette report #p",
+        ),
     ] {
         let mut engine = AlacrittyEngine::new();
         engine.feed(prefix);
@@ -332,16 +366,36 @@ fn csi_cursor_movement_and_save_restore_are_observable() {
     let mut engine = AlacrittyEngine::new();
     engine.resize(20, 6);
     engine.feed(b"abc\x1b[s\x1b[2D\x1b[2B\x1b[3C\x1b[u");
-    assert_eq!(engine.cursor().col, 3, "CSI s/u must restore the saved column");
+    assert_eq!(
+        engine.cursor().col,
+        3,
+        "CSI s/u must restore the saved column"
+    );
     assert_eq!(engine.cursor().row, 0, "CSI s/u must restore the saved row");
 
     engine.feed(b"\x1b[2;5H\x1b[2A\x1b[3G");
-    assert_eq!(engine.cursor().col, 2, "CSI G must select the requested column");
-    assert_eq!(engine.cursor().row, 0, "CSI A must move up by the requested count");
+    assert_eq!(
+        engine.cursor().col,
+        2,
+        "CSI G must select the requested column"
+    );
+    assert_eq!(
+        engine.cursor().row,
+        0,
+        "CSI A must move up by the requested count"
+    );
 
     engine.feed(b"\x1b[2B\x1b[2D");
-    assert_eq!(engine.cursor().col, 0, "CSI D must move left by the requested count");
-    assert_eq!(engine.cursor().row, 2, "CSI B must move down by the requested count");
+    assert_eq!(
+        engine.cursor().col,
+        0,
+        "CSI D must move left by the requested count"
+    );
+    assert_eq!(
+        engine.cursor().row,
+        2,
+        "CSI B must move down by the requested count"
+    );
 }
 
 #[test]
@@ -828,7 +882,15 @@ fn csi_fragmentation_and_malformed_input_preserve_engine_state() {
     complete.feed(b"\x1b[2;3H\x1b[2CX");
 
     let mut fragmented = AlacrittyEngine::new();
-    for chunk in [b"\x1b".as_slice(), b"[2".as_slice(), b";3".as_slice(), b"H".as_slice(), b"\x1b[".as_slice(), b"2C".as_slice(), b"X".as_slice()] {
+    for chunk in [
+        b"\x1b".as_slice(),
+        b"[2".as_slice(),
+        b";3".as_slice(),
+        b"H".as_slice(),
+        b"\x1b[".as_slice(),
+        b"2C".as_slice(),
+        b"X".as_slice(),
+    ] {
         fragmented.feed(chunk);
     }
     assert_eq!(text(&fragmented.screen()), text(&complete.screen()));
@@ -964,10 +1026,13 @@ fn unsupported_csi_alternate_modes_are_explicit_errors() {
     for selector in ["?47", "?1047", "?1048"] {
         let mut engine = AlacrittyEngine::new();
         engine.feed(format!("\x1b[{selector}h").as_bytes());
-        assert!(matches!(
-            engine.drain_events().as_slice(),
-            [EngineEvent::Error(reason)] if reason == &format!("unsupported CSI alternate screen mode {selector}h")
-        ), "selector {selector}h did not produce an explicit rejection");
+        assert!(
+            matches!(
+                engine.drain_events().as_slice(),
+                [EngineEvent::Error(reason)] if reason == &format!("unsupported CSI alternate screen mode {selector}h")
+            ),
+            "selector {selector}h did not produce an explicit rejection"
+        );
     }
 }
 
@@ -1002,7 +1067,9 @@ fn csi_erase_display_and_line_change_only_the_requested_cells() {
     let after_display_erase = engine.screen();
     assert_eq!(after_display_erase.lines[0][0].ch.as_deref(), Some("t"));
     assert_eq!(after_display_erase.lines[1][0].ch.as_deref(), Some("m"));
-    assert!(after_display_erase.lines[1].get(1).is_none_or(|cell| cell.ch.is_none()));
+    assert!(after_display_erase.lines[1]
+        .get(1)
+        .is_none_or(|cell| cell.ch.is_none()));
     assert!(after_display_erase.lines[2].is_empty());
 
     engine.reset();
@@ -1012,8 +1079,12 @@ fn csi_erase_display_and_line_change_only_the_requested_cells() {
     let after_line_erase = engine.screen();
     assert_eq!(after_line_erase.lines[0][0].ch.as_deref(), Some("a"));
     assert_eq!(after_line_erase.lines[0][2].ch.as_deref(), Some("c"));
-    assert!(after_line_erase.lines[0].get(3).is_none_or(|cell| cell.ch.is_none()));
-    assert!(after_line_erase.lines[0].get(4).is_none_or(|cell| cell.ch.is_none()));
+    assert!(after_line_erase.lines[0]
+        .get(3)
+        .is_none_or(|cell| cell.ch.is_none()));
+    assert!(after_line_erase.lines[0]
+        .get(4)
+        .is_none_or(|cell| cell.ch.is_none()));
 }
 
 #[test]
@@ -1025,8 +1096,12 @@ fn csi_insert_delete_characters_and_lines_preserve_requested_cells() {
     let after_insert = engine.screen();
     assert_eq!(after_insert.lines[0][0].ch.as_deref(), Some("a"));
     assert_eq!(after_insert.lines[0][1].ch.as_deref(), Some("b"));
-    assert!(after_insert.lines[0].get(2).is_none_or(|cell| cell.ch.is_none()));
-    assert!(after_insert.lines[0].get(3).is_none_or(|cell| cell.ch.is_none()));
+    assert!(after_insert.lines[0]
+        .get(2)
+        .is_none_or(|cell| cell.ch.is_none()));
+    assert!(after_insert.lines[0]
+        .get(3)
+        .is_none_or(|cell| cell.ch.is_none()));
     assert_eq!(after_insert.lines[0][4].ch.as_deref(), Some("c"));
     assert_eq!(after_insert.lines[0][5].ch.as_deref(), Some("d"));
 
@@ -1037,7 +1112,9 @@ fn csi_insert_delete_characters_and_lines_preserve_requested_cells() {
     assert_eq!(after_delete.lines[0][0].ch.as_deref(), Some("a"));
     assert_eq!(after_delete.lines[0][1].ch.as_deref(), Some("b"));
     assert_eq!(after_delete.lines[0][2].ch.as_deref(), Some("d"));
-    assert!(after_delete.lines[0].get(3).is_none_or(|cell| cell.ch.is_none()));
+    assert!(after_delete.lines[0]
+        .get(3)
+        .is_none_or(|cell| cell.ch.is_none()));
 
     engine.reset();
     engine.resize(8, 4);
@@ -1057,9 +1134,17 @@ fn csi_tabulation_forward_and_backward_use_tab_stops() {
     let mut engine = AlacrittyEngine::new();
     engine.resize(20, 2);
     engine.feed(b"\x1b[1I");
-    assert_eq!(engine.cursor().col, 8, "CSI I must move to the next tab stop");
+    assert_eq!(
+        engine.cursor().col,
+        8,
+        "CSI I must move to the next tab stop"
+    );
     engine.feed(b"\x1b[1Z");
-    assert_eq!(engine.cursor().col, 0, "CSI Z must move to the previous tab stop");
+    assert_eq!(
+        engine.cursor().col,
+        0,
+        "CSI Z must move to the previous tab stop"
+    );
 }
 
 #[test]

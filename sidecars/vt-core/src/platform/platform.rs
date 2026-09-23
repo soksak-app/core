@@ -2,7 +2,10 @@
 pub use crate::platform::darwin::service;
 
 #[cfg(target_os = "macos")]
-pub use crate::platform::darwin::frame::{default_font, metrics, metrics_for, resolve_font_list, FontSelection, Frame, Metrics, TerminalFont};
+pub use crate::platform::darwin::frame::{
+    default_font, metrics, metrics_for, resolve_font_list, FontSelection, Frame, Metrics,
+    TerminalFont,
+};
 
 #[cfg(target_os = "macos")]
 pub struct ImageState {
@@ -66,7 +69,9 @@ impl ImageState {
         let cols = (self.width_px as f32 / self.metrics.cell_width) as u16;
         let rows = (self.height_px as f32 / self.metrics.cell_height) as u16;
         if col >= cols || row >= rows {
-            return Err(format!("selection coordinates are outside the terminal grid: {x},{y}"));
+            return Err(format!(
+                "selection coordinates are outside the terminal grid: {x},{y}"
+            ));
         }
         Ok((col, row))
     }

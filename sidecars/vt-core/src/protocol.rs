@@ -55,9 +55,7 @@ pub struct PersistentRegistry {
 
 const SURFACE_ACTOR_CLOSE_TIMEOUT: Duration = Duration::from_secs(2);
 
-async fn await_surface_actor(
-    actor: tokio::task::JoinHandle<()>,
-) -> Result<(), String> {
+async fn await_surface_actor(actor: tokio::task::JoinHandle<()>) -> Result<(), String> {
     match tokio::time::timeout(SURFACE_ACTOR_CLOSE_TIMEOUT, actor).await {
         Ok(Ok(())) => Ok(()),
         Ok(Err(error)) => Err(format!("surface actor join failed: {error}")),
@@ -573,9 +571,17 @@ enum SurfaceCommand {
         request_id: u64,
         reason: String,
     },
-    InlineImageDelete { name: String },
-    SelectionStart { x: f64, y: f64 },
-    SelectionUpdate { x: f64, y: f64 },
+    InlineImageDelete {
+        name: String,
+    },
+    SelectionStart {
+        x: f64,
+        y: f64,
+    },
+    SelectionUpdate {
+        x: f64,
+        y: f64,
+    },
     SelectionEnd,
 }
 
@@ -701,7 +707,11 @@ fn set_engine_metrics(engine: &mut Box<dyn Engine>, state: &ImageState) -> Resul
 }
 
 /// Validate and calculate terminal size. Returns error if width/height invalid or result is 0.
-fn calculate_terminal_size(width: u32, height: u32, metrics: &crate::platform::platform::Metrics) -> Result<(u16, u16), String> {
+fn calculate_terminal_size(
+    width: u32,
+    height: u32,
+    metrics: &crate::platform::platform::Metrics,
+) -> Result<(u16, u16), String> {
     if width == 0 || height == 0 {
         return Err("width and height must be positive".to_string());
     }
@@ -885,11 +895,7 @@ struct MultipartAssembly {
     data: Vec<u8>,
 }
 
-fn resolve_inline_dimension(
-    dimension: &Dimension,
-    cell_size: u32,
-    frame_size: u32,
-) -> u32 {
+fn resolve_inline_dimension(dimension: &Dimension, cell_size: u32, frame_size: u32) -> u32 {
     match dimension {
         Dimension::Auto => 0,
         Dimension::Cells(value) => cell_size.saturating_mul(*value),
@@ -923,14 +929,26 @@ fn store_inline_display(
         data,
         x: u32::from(cursor.col).saturating_mul(state.metrics.cell_width.round() as u32),
         y: u32::from(cursor.row).saturating_mul(state.metrics.cell_height.round() as u32),
-        width: resolve_inline_dimension(&width, state.metrics.cell_width.round() as u32, state.width_px),
-        height: resolve_inline_dimension(&height, state.metrics.cell_height.round() as u32, state.height_px),
+        width: resolve_inline_dimension(
+            &width,
+            state.metrics.cell_width.round() as u32,
+            state.width_px,
+        ),
+        height: resolve_inline_dimension(
+            &height,
+            state.metrics.cell_height.round() as u32,
+            state.height_px,
+        ),
         preserve_aspect_ratio,
         anchor_row: i32::from(cursor.row),
         anchor_scroll: scroll,
         visible: true,
     };
-    if let Some(existing) = state.inline_images.iter_mut().find(|image| image.name == name) {
+    if let Some(existing) = state
+        .inline_images
+        .iter_mut()
+        .find(|image| image.name == name)
+    {
         *existing = placement;
     } else {
         state.inline_images.push(placement);
@@ -971,14 +989,18 @@ fn apply_inline_image_command(
             if multipart.is_some() {
                 return Err("inline image multipart transfer is already active".to_string());
             }
-            *multipart = Some(MultipartAssembly { name, data: Vec::new() });
+            *multipart = Some(MultipartAssembly {
+                name,
+                data: Vec::new(),
+            });
             Ok(())
         }
         InlineImageCommand::MultipartPart(data) => {
             let Some(assembly) = multipart.as_mut() else {
                 return Err("inline image multipart part has no active transfer".to_string());
             };
-            if assembly.data.len().saturating_add(data.len()) > crate::inline_image::MAX_IMAGE_BYTES {
+            if assembly.data.len().saturating_add(data.len()) > crate::inline_image::MAX_IMAGE_BYTES
+            {
                 return Err(format!(
                     "inline image multipart payload exceeds {} bytes",
                     crate::inline_image::MAX_IMAGE_BYTES
@@ -1023,7 +1045,9 @@ async fn send_engine_events(
         match event {
             EngineEvent::InlineImage(command) => {
                 let command_for_event = command.clone();
-                if let Err(error) = apply_inline_image_command(command, engine, image_state, multipart) {
+                if let Err(error) =
+                    apply_inline_image_command(command, engine, image_state, multipart)
+                {
                     if !emit_surface_events {
                         continue;
                     }
@@ -1117,7 +1141,8 @@ async fn send_engine_events(
                 if !emit_surface_events {
                     continue;
                 }
-                let response = json!({"surface": surface_id, "body": {"event": "directory", "uri": uri}});
+                let response =
+                    json!({"surface": surface_id, "body": {"event": "directory", "uri": uri}});
                 if output_tx.send(response.to_string()).await.is_err() {
                     return false;
                 }
@@ -1301,7 +1326,11 @@ async fn open_if_configured(
     {
         return true;
     }
-    let (cols, rows) = match calculate_terminal_size(state.width_px, state.height_px, &state.metrics) {
+    let (cols, rows) = match calculate_terminal_size(
+        state.width_px,
+        state.height_px,
+        &state.metrics,
+    ) {
         Ok(size) => size,
         Err(reason) => {
             let response = json!({"surface": surface_id, "body": {"error": "invalidParams", "reason": reason}});
@@ -2632,13 +2661,24 @@ where
                                     Ok(selection) => {
                                         // 설치되어 있지 않은 family 는 오류가 아니라 로그에 남긴다.
                                         for family in &selection.skipped {
-                                            eprintln!("terminal font family is not installed: {family}");
+                                            eprintln!(
+                                                "terminal font family is not installed: {family}"
+                                            );
                                         }
                                         if selection.system {
                                             eprintln!("no listed terminal font family is installed; using the system fixed-pitch font");
                                         }
-                                        let (font, system, skipped) = (selection.font, selection.system, selection.skipped);
-                                        if tx.send(SurfaceCommand::Font { font, system, skipped }).await.is_err() {
+                                        let (font, system, skipped) =
+                                            (selection.font, selection.system, selection.skipped);
+                                        if tx
+                                            .send(SurfaceCommand::Font {
+                                                font,
+                                                system,
+                                                skipped,
+                                            })
+                                            .await
+                                            .is_err()
+                                        {
                                             break;
                                         }
                                     }
@@ -2698,16 +2738,22 @@ where
                                         } else {
                                             SurfaceCommand::SelectionUpdate { x, y }
                                         };
-                                        if tx.send(command).await.is_err() { break; }
+                                        if tx.send(command).await.is_err() {
+                                            break;
+                                        }
                                     }
                                     _ => {
                                         let response = json!({"surface": surface_id, "body": {"error": "invalidParams", "reason": "selection requires finite x and y"}});
-                                        if output_tx.send(response.to_string()).await.is_err() { break; }
+                                        if output_tx.send(response.to_string()).await.is_err() {
+                                            break;
+                                        }
                                     }
                                 }
                             }
                             "selection.end" => {
-                                if tx.send(SurfaceCommand::SelectionEnd).await.is_err() { break; }
+                                if tx.send(SurfaceCommand::SelectionEnd).await.is_err() {
+                                    break;
+                                }
                             }
                             "screen.read" => {
                                 if let Err(_) = tx.send(SurfaceCommand::ScreenRead).await {
@@ -2741,27 +2787,53 @@ where
                             }
                             "clipboard.reject" => {
                                 let request_id = body.get("requestId").and_then(Value::as_u64);
-                                let reason = body.get("reason").and_then(Value::as_str).map(str::to_string);
+                                let reason = body
+                                    .get("reason")
+                                    .and_then(Value::as_str)
+                                    .map(str::to_string);
                                 match (request_id, reason) {
                                     (Some(request_id), Some(reason)) if !reason.is_empty() => {
-                                        if tx.send(SurfaceCommand::ClipboardReject { request_id, reason }).await.is_err() {
+                                        if tx
+                                            .send(SurfaceCommand::ClipboardReject {
+                                                request_id,
+                                                reason,
+                                            })
+                                            .await
+                                            .is_err()
+                                        {
                                             break;
                                         }
                                     }
                                     _ => {
                                         let response = json!({"surface": surface_id, "body": {"error": "invalidParams", "reason": "clipboard.reject requires requestId and non-empty reason"}});
-                                        if output_tx.send(response.to_string()).await.is_err() { break; }
+                                        if output_tx.send(response.to_string()).await.is_err() {
+                                            break;
+                                        }
                                     }
                                 }
                             }
                             "image.inline.delete" => {
-                                match body.get("name").and_then(Value::as_str).filter(|name| !name.is_empty()) {
+                                match body
+                                    .get("name")
+                                    .and_then(Value::as_str)
+                                    .filter(|name| !name.is_empty())
+                                {
                                     Some(name) => {
-                                        if tx.send(SurfaceCommand::InlineImageDelete { name: name.to_string() }).await.is_err() { break; }
+                                        if tx
+                                            .send(SurfaceCommand::InlineImageDelete {
+                                                name: name.to_string(),
+                                            })
+                                            .await
+                                            .is_err()
+                                        {
+                                            break;
+                                        }
                                     }
                                     None => {
                                         let response = json!({"surface": surface_id, "body": {"error": "invalidParams", "reason": "image.inline.delete requires a non-empty name"}});
-                                        if output_tx.send(response.to_string()).await.is_err() { break; }
+                                        if output_tx.send(response.to_string()).await.is_err() {
+                                            break;
+                                        }
                                     }
                                 }
                             }
@@ -2769,14 +2841,15 @@ where
                                 let close_result = if let Some(registry) = registry.as_ref() {
                                     registry.close_surface(&registry_key, &owner).await
                                 } else if let Some(tx) = surface_txs.remove(&registry_key) {
-                                    tx.send(SurfaceCommand::SessionClose)
-                                        .await
-                                        .map_err(|_| "surface actor closed before close".to_string())
+                                    tx.send(SurfaceCommand::SessionClose).await.map_err(|_| {
+                                        "surface actor closed before close".to_string()
+                                    })
                                 } else {
                                     Ok(())
                                 };
                                 if let Err(error) = close_result {
-                                    let response = json!({"surface": surface_id, "body": {"error": error}});
+                                    let response =
+                                        json!({"surface": surface_id, "body": {"error": error}});
                                     if output_tx.send(response.to_string()).await.is_err() {
                                         break;
                                     }
@@ -2944,9 +3017,15 @@ impl Engine for FakeEngine {
         Ok(())
     }
 
-    fn selection_start(&mut self, _col: u16, _row: u16) -> Result<(), String> { Ok(()) }
-    fn selection_update(&mut self, _col: u16, _row: u16) -> Result<(), String> { Ok(()) }
-    fn selection_end(&mut self) -> Result<String, String> { Ok("selected".to_string()) }
+    fn selection_start(&mut self, _col: u16, _row: u16) -> Result<(), String> {
+        Ok(())
+    }
+    fn selection_update(&mut self, _col: u16, _row: u16) -> Result<(), String> {
+        Ok(())
+    }
+    fn selection_end(&mut self) -> Result<String, String> {
+        Ok("selected".to_string())
+    }
 
     fn cursor(&self) -> Cursor {
         Cursor {

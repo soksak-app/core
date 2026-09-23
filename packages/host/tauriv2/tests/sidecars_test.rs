@@ -6,7 +6,6 @@ use std::path::Path;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::time::Duration;
 
-
 use serde_json::value::RawValue;
 use soksak_host_tauriv2::sidecars::{Message, Owner, Sidecars};
 
@@ -204,7 +203,10 @@ fn an_absolute_executable_fails() {
     )
     .err()
     .unwrap();
-    assert!(error.contains("is not a path inside the package"), "{error}");
+    assert!(
+        error.contains("is not a path inside the package"),
+        "{error}"
+    );
 }
 
 // contract: sidecars.declaration.persistent-requires-config-directory

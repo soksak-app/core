@@ -792,7 +792,7 @@ mod tests {
     }
 
     #[test]
-fn test_encode_paste_rejects_end_marker_without_dropping_it() {
+    fn test_encode_paste_rejects_end_marker_without_dropping_it() {
         let modes = Modes {
             bracketed_paste: true,
             ..Default::default()

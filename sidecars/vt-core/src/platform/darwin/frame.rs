@@ -287,7 +287,9 @@ impl Frame {
         }
 
         // 커서는 그 위치 글자의 폭만큼, 화면 오른쪽 끝을 넘지 않게 덮는다. 줄에 셀이 없는 위치는 빈 셀 한 칸이다.
-        let remaining = u32::from(render_screen.cols).saturating_sub(u32::from(render_screen.cursor.col)).max(1);
+        let remaining = u32::from(render_screen.cols)
+            .saturating_sub(u32::from(render_screen.cursor.col))
+            .max(1);
         let cursor_width = render_screen
             .lines
             .get(render_screen.cursor.row as usize)
@@ -499,7 +501,9 @@ impl TerminalFont {
         if pointer.is_null() {
             return Err("the terminal font has no family name".to_string());
         }
-        let family = unsafe { std::ffi::CStr::from_ptr(pointer) }.to_string_lossy().into_owned();
+        let family = unsafe { std::ffi::CStr::from_ptr(pointer) }
+            .to_string_lossy()
+            .into_owned();
         unsafe { free(pointer as *mut std::ffi::c_void) };
         Ok(family)
     }
@@ -543,11 +547,19 @@ pub fn resolve_font_list(list: &str) -> Result<FontSelection, String> {
     let mut skipped = Vec::new();
     for family in families {
         if let Some(font) = TerminalFont::installed(family) {
-            return Ok(FontSelection { font: std::sync::Arc::new(font), skipped, system: false });
+            return Ok(FontSelection {
+                font: std::sync::Arc::new(font),
+                skipped,
+                system: false,
+            });
         }
         skipped.push(family.to_string());
     }
-    Ok(FontSelection { font: default_font(), skipped, system: true })
+    Ok(FontSelection {
+        font: default_font(),
+        skipped,
+        system: true,
+    })
 }
 
 static DEFAULT_FONT: std::sync::OnceLock<std::sync::Arc<TerminalFont>> = std::sync::OnceLock::new();
@@ -581,7 +593,8 @@ pub struct Metrics {
 
 /// 기본 글꼴의 메트릭.
 pub fn metrics(font_size: f32, scale: f32) -> Metrics {
-    metrics_for(&default_font(), font_size, scale).expect("the system fixed-pitch font has cell metrics")
+    metrics_for(&default_font(), font_size, scale)
+        .expect("the system fixed-pitch font has cell metrics")
 }
 
 /// font 의 메트릭. 셀 폭이나 높이를 잴 수 없는 글꼴은 오류다.

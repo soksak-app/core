@@ -130,8 +130,8 @@ pub const OSC_SELECTOR_INVENTORY: &[OscSelectorEvidence] = &[
 fn parse_vendor_osc(selector: &[u8], payload: &[u8]) -> Result<Option<EngineEvent>, String> {
     let selector = std::str::from_utf8(selector)
         .map_err(|_| "vendor OSC selector is not UTF-8".to_string())?;
-    let payload = std::str::from_utf8(payload)
-        .map_err(|_| format!("OSC {selector} payload is not UTF-8"))?;
+    let payload =
+        std::str::from_utf8(payload).map_err(|_| format!("OSC {selector} payload is not UTF-8"))?;
     match selector {
         "7" => {
             if payload.is_empty() {
@@ -151,7 +151,9 @@ fn parse_vendor_osc(selector: &[u8], payload: &[u8]) -> Result<Option<EngineEven
                 let mut id = None;
                 for parameter in params.split(':') {
                     let Some(value) = parameter.strip_prefix("id=") else {
-                        return Err(format!("OSC 8 hyperlink parameter is unsupported: {parameter}"));
+                        return Err(format!(
+                            "OSC 8 hyperlink parameter is unsupported: {parameter}"
+                        ));
                     };
                     if id.replace(value).is_some() {
                         return Err("OSC 8 hyperlink id is duplicated".to_string());
@@ -212,31 +214,131 @@ pub struct CsiSelectorEvidence {
 /// This is deliberately a partial inventory until the remaining XTerm categories
 /// have executable behavior and rejection contracts.
 pub const CSI_SELECTOR_INVENTORY: &[CsiSelectorEvidence] = &[
-    CsiSelectorEvidence { selector: "A/B/C/D/G/H/f/s/u", outcome: CsiOutcome::Implemented, test: "csi_cursor_movement_and_save_restore_are_observable" },
-    CsiSelectorEvidence { selector: "E/F", outcome: CsiOutcome::Implemented, test: "csi_cursor_next_and_previous_line_are_observable" },
-    CsiSelectorEvidence { selector: "3C", outcome: CsiOutcome::Implemented, test: "display_points_are_used_as_cell_indices" },
-    CsiSelectorEvidence { selector: "?12h/l", outcome: CsiOutcome::Implemented, test: "cursor_visibility_and_application_shape_are_exported" },
-    CsiSelectorEvidence { selector: "?25h/l", outcome: CsiOutcome::Implemented, test: "cursor_visibility_and_application_shape_are_exported" },
-    CsiSelectorEvidence { selector: "0,7 SP q", outcome: CsiOutcome::Implemented, test: "decscusr_initial_cursor_resources_are_observable" },
-    CsiSelectorEvidence { selector: "1-6 SP q", outcome: CsiOutcome::Implemented, test: "decscusr_cursor_style_ids_are_observable" },
-    CsiSelectorEvidence { selector: "CSI framing", outcome: CsiOutcome::Implemented, test: "csi_fragmentation_and_malformed_input_preserve_engine_state" },
-    CsiSelectorEvidence { selector: "m", outcome: CsiOutcome::Implemented, test: "sgr_color_does_not_drop_the_character" },
-    CsiSelectorEvidence { selector: "?1049h/l", outcome: CsiOutcome::Implemented, test: "alternate_screen_is_separate_from_primary_scrollback" },
-    CsiSelectorEvidence { selector: "?47/?1047/?1048h/l", outcome: CsiOutcome::Unsupported, test: "unsupported_csi_alternate_modes_are_explicit_errors" },
-    CsiSelectorEvidence { selector: "S/T;r", outcome: CsiOutcome::Implemented, test: "csi_scroll_moves_the_visible_grid_and_respects_a_scroll_region" },
-    CsiSelectorEvidence { selector: "J/K", outcome: CsiOutcome::Implemented, test: "csi_erase_display_and_line_change_only_the_requested_cells" },
-    CsiSelectorEvidence { selector: "@/P", outcome: CsiOutcome::Implemented, test: "csi_insert_delete_characters_and_lines_preserve_requested_cells" },
-    CsiSelectorEvidence { selector: "L/M", outcome: CsiOutcome::Implemented, test: "csi_insert_delete_characters_and_lines_preserve_requested_cells" },
-    CsiSelectorEvidence { selector: "I/Z", outcome: CsiOutcome::Implemented, test: "csi_tabulation_forward_and_backward_use_tab_stops" },
-    CsiSelectorEvidence { selector: "6n/c", outcome: CsiOutcome::Implemented, test: "bel_and_st_terminated_effects_and_queries_preserve_response_order" },
-    CsiSelectorEvidence { selector: "5n/6n", outcome: CsiOutcome::Implemented, test: "csi_device_status_reports_are_observable" },
-    CsiSelectorEvidence { selector: "c/>c", outcome: CsiOutcome::Implemented, test: "csi_device_status_reports_are_observable" },
-    CsiSelectorEvidence { selector: "b", outcome: CsiOutcome::Implemented, test: "csi_repeat_repeats_the_last_printed_character" },
-    CsiSelectorEvidence { selector: "?1,?1000,?1002,?1003,?1004,?1005,?1006,?1007,?2004 h/l", outcome: CsiOutcome::Implemented, test: "csi_private_modes_export_keyboard_paste_and_mouse_state" },
-    CsiSelectorEvidence { selector: "ESC =/>", outcome: CsiOutcome::Implemented, test: "csi_application_keypad_mode_uses_the_private_equals_prefix" },
-    CsiSelectorEvidence { selector: "14t", outcome: CsiOutcome::Implemented, test: "text_area_callback_is_not_discarded" },
-    CsiSelectorEvidence { selector: "other t", outcome: CsiOutcome::Unsupported, test: "unsupported_csi_window_report_is_an_explicit_error" },
-    CsiSelectorEvidence { selector: "rectangle/protected/palette", outcome: CsiOutcome::Unsupported, test: "unsupported_csi_rectangle_protected_and_palette_reports_are_explicit_errors" },
+    CsiSelectorEvidence {
+        selector: "A/B/C/D/G/H/f/s/u",
+        outcome: CsiOutcome::Implemented,
+        test: "csi_cursor_movement_and_save_restore_are_observable",
+    },
+    CsiSelectorEvidence {
+        selector: "E/F",
+        outcome: CsiOutcome::Implemented,
+        test: "csi_cursor_next_and_previous_line_are_observable",
+    },
+    CsiSelectorEvidence {
+        selector: "3C",
+        outcome: CsiOutcome::Implemented,
+        test: "display_points_are_used_as_cell_indices",
+    },
+    CsiSelectorEvidence {
+        selector: "?12h/l",
+        outcome: CsiOutcome::Implemented,
+        test: "cursor_visibility_and_application_shape_are_exported",
+    },
+    CsiSelectorEvidence {
+        selector: "?25h/l",
+        outcome: CsiOutcome::Implemented,
+        test: "cursor_visibility_and_application_shape_are_exported",
+    },
+    CsiSelectorEvidence {
+        selector: "0,7 SP q",
+        outcome: CsiOutcome::Implemented,
+        test: "decscusr_initial_cursor_resources_are_observable",
+    },
+    CsiSelectorEvidence {
+        selector: "1-6 SP q",
+        outcome: CsiOutcome::Implemented,
+        test: "decscusr_cursor_style_ids_are_observable",
+    },
+    CsiSelectorEvidence {
+        selector: "CSI framing",
+        outcome: CsiOutcome::Implemented,
+        test: "csi_fragmentation_and_malformed_input_preserve_engine_state",
+    },
+    CsiSelectorEvidence {
+        selector: "m",
+        outcome: CsiOutcome::Implemented,
+        test: "sgr_color_does_not_drop_the_character",
+    },
+    CsiSelectorEvidence {
+        selector: "?1049h/l",
+        outcome: CsiOutcome::Implemented,
+        test: "alternate_screen_is_separate_from_primary_scrollback",
+    },
+    CsiSelectorEvidence {
+        selector: "?47/?1047/?1048h/l",
+        outcome: CsiOutcome::Unsupported,
+        test: "unsupported_csi_alternate_modes_are_explicit_errors",
+    },
+    CsiSelectorEvidence {
+        selector: "S/T;r",
+        outcome: CsiOutcome::Implemented,
+        test: "csi_scroll_moves_the_visible_grid_and_respects_a_scroll_region",
+    },
+    CsiSelectorEvidence {
+        selector: "J/K",
+        outcome: CsiOutcome::Implemented,
+        test: "csi_erase_display_and_line_change_only_the_requested_cells",
+    },
+    CsiSelectorEvidence {
+        selector: "@/P",
+        outcome: CsiOutcome::Implemented,
+        test: "csi_insert_delete_characters_and_lines_preserve_requested_cells",
+    },
+    CsiSelectorEvidence {
+        selector: "L/M",
+        outcome: CsiOutcome::Implemented,
+        test: "csi_insert_delete_characters_and_lines_preserve_requested_cells",
+    },
+    CsiSelectorEvidence {
+        selector: "I/Z",
+        outcome: CsiOutcome::Implemented,
+        test: "csi_tabulation_forward_and_backward_use_tab_stops",
+    },
+    CsiSelectorEvidence {
+        selector: "6n/c",
+        outcome: CsiOutcome::Implemented,
+        test: "bel_and_st_terminated_effects_and_queries_preserve_response_order",
+    },
+    CsiSelectorEvidence {
+        selector: "5n/6n",
+        outcome: CsiOutcome::Implemented,
+        test: "csi_device_status_reports_are_observable",
+    },
+    CsiSelectorEvidence {
+        selector: "c/>c",
+        outcome: CsiOutcome::Implemented,
+        test: "csi_device_status_reports_are_observable",
+    },
+    CsiSelectorEvidence {
+        selector: "b",
+        outcome: CsiOutcome::Implemented,
+        test: "csi_repeat_repeats_the_last_printed_character",
+    },
+    CsiSelectorEvidence {
+        selector: "?1,?1000,?1002,?1003,?1004,?1005,?1006,?1007,?2004 h/l",
+        outcome: CsiOutcome::Implemented,
+        test: "csi_private_modes_export_keyboard_paste_and_mouse_state",
+    },
+    CsiSelectorEvidence {
+        selector: "ESC =/>",
+        outcome: CsiOutcome::Implemented,
+        test: "csi_application_keypad_mode_uses_the_private_equals_prefix",
+    },
+    CsiSelectorEvidence {
+        selector: "14t",
+        outcome: CsiOutcome::Implemented,
+        test: "text_area_callback_is_not_discarded",
+    },
+    CsiSelectorEvidence {
+        selector: "other t",
+        outcome: CsiOutcome::Unsupported,
+        test: "unsupported_csi_window_report_is_an_explicit_error",
+    },
+    CsiSelectorEvidence {
+        selector: "rectangle/protected/palette",
+        outcome: CsiOutcome::Unsupported,
+        test: "unsupported_csi_rectangle_protected_and_palette_reports_are_explicit_errors",
+    },
 ];
 
 #[derive(Clone, Copy)]
@@ -405,7 +507,9 @@ impl AlacrittyEngine {
                 }
             } else if outcome == OscOutcome::Unsupported {
                 let selector = String::from_utf8_lossy(selector);
-                Some(EngineEvent::Error(format!("unsupported OSC selector {selector}")))
+                Some(EngineEvent::Error(format!(
+                    "unsupported OSC selector {selector}"
+                )))
             } else {
                 None
             };
@@ -425,10 +529,7 @@ impl AlacrittyEngine {
         input.extend_from_slice(bytes);
         let mut index = 0;
         while index < input.len() {
-            let Some(relative) = input[index..]
-                .windows(2)
-                .position(|pair| pair == b"\x1b[")
-            else {
+            let Some(relative) = input[index..].windows(2).position(|pair| pair == b"\x1b[") else {
                 if input.last() == Some(&0x1b) {
                     self.pending_csi.push(0x1b);
                 }
@@ -449,24 +550,34 @@ impl AlacrittyEngine {
             } else if (input[final_index] == b'h' || input[final_index] == b'l')
                 && matches!(body, b"?47" | b"?1047" | b"?1048")
             {
-                Some(format!("alternate screen mode {}{}", String::from_utf8_lossy(body), input[final_index] as char))
+                Some(format!(
+                    "alternate screen mode {}{}",
+                    String::from_utf8_lossy(body),
+                    input[final_index] as char
+                ))
             } else if input[final_index] == b'x' && body.contains(&b'$') {
-                Some(format!("rectangle report {}x", String::from_utf8_lossy(body)))
+                Some(format!(
+                    "rectangle report {}x",
+                    String::from_utf8_lossy(body)
+                ))
             } else if input[final_index] == b'q' && body.contains(&b'"') {
-                Some(format!("protected-cell report {}q", String::from_utf8_lossy(body)))
+                Some(format!(
+                    "protected-cell report {}q",
+                    String::from_utf8_lossy(body)
+                ))
             } else if input[final_index] == b'p' && body.starts_with(b"#") {
                 Some(format!("palette report {}p", String::from_utf8_lossy(body)))
             } else {
                 None
             };
             if let Some(selector) = unsupported {
-                    self.events
-                        .events
-                        .lock()
-                        .expect("engine event queue poisoned")
-                        .push_back(QueuedEvent::Neutral(EngineEvent::Error(format!(
-                            "unsupported CSI {selector}"
-                        ))));
+                self.events
+                    .events
+                    .lock()
+                    .expect("engine event queue poisoned")
+                    .push_back(QueuedEvent::Neutral(EngineEvent::Error(format!(
+                        "unsupported CSI {selector}"
+                    ))));
             }
             index = final_index + 1;
         }

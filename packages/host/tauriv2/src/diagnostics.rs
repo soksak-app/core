@@ -137,7 +137,10 @@ fn capture_still(window: &Window) -> Result<Value, Failure> {
         .state::<Workspace>()
         .directory()
         .join("captures")
-        .join(format!("still-{stamp}-{}", CAPTURES.fetch_add(1, Ordering::Relaxed)));
+        .join(format!(
+            "still-{stamp}-{}",
+            CAPTURES.fetch_add(1, Ordering::Relaxed)
+        ));
     platform.private_directory(&directory).map_err(internal)?;
     let path = directory.join("window.png");
     platform
@@ -324,7 +327,9 @@ fn capture_stop(after: f64) -> Result<Value, Failure> {
     let (directory, count) = RECORDING.finish(&recorder).map_err(internal)?;
     let limited = recorder.0.capture_limited().map_err(internal)?;
     let gap = recorder.0.capture_longest_gap().map_err(internal)?;
-    Ok(crate::recording::stop_payload(&directory, count, limited, gap))
+    Ok(crate::recording::stop_payload(
+        &directory, count, limited, gap,
+    ))
 }
 
 /// 한 창에서 붙잡은 모달 내용 응답.

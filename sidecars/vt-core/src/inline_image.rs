@@ -29,7 +29,9 @@ pub enum InlineImageCommand {
         name: Option<String>,
         data: Vec<u8>,
     },
-    MultipartStart { name: String },
+    MultipartStart {
+        name: String,
+    },
     MultipartPart(Vec<u8>),
     MultipartEnd,
 }
@@ -124,7 +126,9 @@ fn split_transfer(payload: &[u8]) -> Result<(&str, &str, &str), String> {
     let encoded = std::str::from_utf8(&payload[separator + 1..])
         .map_err(|_| "OSC 1337 image data is not ASCII base64".to_string())?;
     if encoded.len() > MAX_ENCODED_BYTES {
-        return Err(format!("OSC 1337 image payload exceeds {MAX_IMAGE_BYTES} bytes"));
+        return Err(format!(
+            "OSC 1337 image payload exceeds {MAX_IMAGE_BYTES} bytes"
+        ));
     }
     Ok((kind, attributes, encoded))
 }
