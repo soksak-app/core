@@ -27,7 +27,7 @@ function assertAligned(run) {
     const at = outside(frame);
     if (!at) return;
     const geometry = alignment(frame, at);
-    assert.ok(geometry, `the shell line, sidebar, or rail could not be measured in frame ${index}`);
+    assert.equal(geometry.missing, undefined, `frame ${index} of ${files.length}: could not measure the ${geometry.missing}`);
     initial ??= geometry;
     const delta = Math.max(...Object.keys(initial).map((key) => Math.abs(geometry[key] - initial[key])));
     if (delta > delayed.delta) delayed = { delta, frame: index, geometry };
