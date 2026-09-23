@@ -85,7 +85,7 @@ func serveHarnessConnections(t *testing.T, listener net.Listener, connections in
 					return
 				}
 				var hello map[string]any
-				if err := json.Unmarshal(line, &hello); err != nil || hello["operation"] != "hello" || hello["token"] != "harness-token" {
+				if err := json.Unmarshal(line, &hello); err != nil || hello["operation"] != "hello" || hello["protocol"] != float64(1) || hello["token"] != "harness-token" {
 					_, _ = io.WriteString(connection, `{"operation":"hello","ok":false,"error":"authentication failed"}`+"\n")
 					return
 				}
@@ -135,7 +135,7 @@ func serveHarnessConnections(t *testing.T, listener net.Listener, connections in
 	return done
 }
 
-// contract: sidecars-transport.endpoint.concurrent-hosts-share-authenticated-service, sidecars-transport.reconnect.after-connection-loss-preserves-owner, sidecars-transport.stop.close-owner-failure-returns-promptly
+// contract: sidecars-transport.endpoint.concurrent-hosts-share-authenticated-service, sidecars-transport.hello.declares-protocol-one, sidecars-transport.reconnect.after-connection-loss-preserves-owner, sidecars-transport.stop.close-owner-failure-returns-promptly
 func TestPersistentTransportHarnessEndpointAuthConcurrentReconnectAndCloseAck(t *testing.T) {
 	root := t.TempDir()
 	socketDirectory, err := os.MkdirTemp("", "sp-h")
@@ -217,6 +217,95 @@ func TestPersistentTransportHarnessEndpointAuthConcurrentReconnectAndCloseAck(t 
 	}
 	if err := <-serverDone; err != nil {
 		t.Fatal(err)
+	}
+}
+
+// contract: sidecars-transport.stop.close-owner-then-shutdown
+func TestPersistentStopClosesOwnerThenRequestsServiceShutdown(t *testing.T) {
+	root := t.TempDir()
+	socketDirectory, err := os.MkdirTemp("", "sp-h")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(socketDirectory)
+	socket := filepath.Join(socketDirectory, "s.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	writeHarnessEndpoint(t, root, socket)
+
+	// 서비스는 hello, open, close-owner, shutdown 을 이 순서로 받아야 한다.
+	operations := make(chan []string, 1)
+	serverDone := make(chan error, 1)
+	go func() {
+		connection, err := listener.Accept()
+		if err != nil {
+			serverDone <- err
+			return
+		}
+		defer connection.Close()
+		if err := connection.SetReadDeadline(time.Now().Add(10 * time.Second)); err != nil {
+			serverDone <- err
+			return
+		}
+		reader := bufio.NewReader(connection)
+		var seen []string
+		defer func() { operations <- seen }()
+		for {
+			line, err := reader.ReadBytes('\n')
+			if err != nil {
+				serverDone <- fmt.Errorf("after %v: %w", seen, err)
+				return
+			}
+			var request map[string]any
+			if err := json.Unmarshal(line, &request); err != nil {
+				serverDone <- err
+				return
+			}
+			operation, _ := request["operation"].(string)
+			if body, ok := request["body"].(map[string]any); ok {
+				operation, _ = body["operation"].(string)
+			}
+			seen = append(seen, operation)
+			var reply map[string]any
+			switch operation {
+			case "hello":
+				reply = map[string]any{"operation": "hello", "protocol": 1, "ok": true}
+			case "close-owner":
+				reply = map[string]any{"operation": "closed-owner", "request": request["request"], "ok": true}
+			case "shutdown":
+				reply = map[string]any{"operation": "shutdown", "request": request["request"], "ok": true}
+			}
+			if reply != nil {
+				encoded, _ := json.Marshal(reply)
+				if _, err := connection.Write(append(encoded, '\n')); err != nil {
+					serverDone <- err
+					return
+				}
+			}
+			if operation == "shutdown" {
+				serverDone <- nil
+				return
+			}
+		}
+	}()
+
+	sidecars, err := NewSidecars(harnessFrontend(), t.TempDir(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := &harnessOwner{root: "/shutdown", seen: make(chan SidecarMessage, 1)}
+	if err := sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	sidecars.Stop()
+	if err := <-serverDone; err != nil {
+		t.Fatalf("service did not receive shutdown: %v", err)
+	}
+	if got := strings.Join(<-operations, ","); got != "hello,open,close-owner,shutdown" {
+		t.Fatalf("service operations = %s, want hello,open,close-owner,shutdown", got)
 	}
 }
 

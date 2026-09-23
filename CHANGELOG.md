@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- G2-3-7: Wails sidecar tests cover a non-canonical persistent configuration directory, the hello protocol, and the close-owner then shutdown order.
 - G2-3-2: the Wails document request test covers `documents.request.url-and-action-default-empty`.
 - G2-3-5-1: the Wails host rejects a `null` page exposure list with -32603 instead of panicking on a nil map.
 - G2-3-4: the Wails host rejects an exposure reply whose `surface` is `null`, empty, or not a string instead of treating it as a main-document reply, and Wails tests cover the reply target cases.

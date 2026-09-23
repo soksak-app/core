@@ -172,6 +172,24 @@ func TestPersistentTransportRequiresConfigDirectory(t *testing.T) {
 	}
 }
 
+// contract: sidecars.persistent.accepts-non-canonical-config-directory
+func TestPersistentTransportAcceptsNonCanonicalConfigDirectory(t *testing.T) {
+	// filepath.Join 은 "." 를 지우므로 문자열로 이어 정규화되지 않은 경로를 만든다.
+	configDirectory := t.TempDir()
+	sidecars, err := host.NewSidecars(frontend(`{"executable":"build/echo","protocol":1,"transport":"persistent"}`), t.TempDir(), configDirectory+string(os.PathSeparator)+".")
+	if err != nil {
+		t.Fatalf("non-canonical config directory was rejected: %v", err)
+	}
+	// 실행 파일이 없으므로 서비스 시작에서 실패하고, 그 전에 서비스 디렉터리를 설정 디렉터리 아래에 만든다.
+	err = sidecars.Send(newFakeOwner("/projects/test"), echoSidecar, "s1", json.RawMessage(`{}`))
+	if err == nil || !strings.Contains(err.Error(), "sidecar") {
+		t.Fatalf("send = %v, want a sidecar start error", err)
+	}
+	if info, err := os.Stat(filepath.Join(configDirectory, "services", "echo")); err != nil || !info.IsDir() {
+		t.Fatalf("service directory under the config directory: %v", err)
+	}
+}
+
 // contract: sidecars.send.rejects-when-no-plugin-declares-sidecars
 func TestApplicationWithoutSidecarsRejectsSends(t *testing.T) {
 	files := fstest.MapFS{
