@@ -347,7 +347,9 @@ for (const app of Object.values(APPS)) {
     const layout = record.spaces.find((x) => x.id === record.activeSpaceId).layout;
     const { cards, paidBy } = layout.state;
     const shell = cards.find((c) => c.id === "shell");
+    // 셸 카드의 첫 탭을 없는 플러그인의 것으로 바꾼다. 나머지 탭은 이 환경에 등록된 플러그인의 것이다.
     const [gone, kept] = shell.data.tabs;
+    const remaining = shell.data.tabs.slice(1).map((tab) => tab.id);
     gone.plugin = "gone";
     shell.data.activeId = gone.id;
     for (const tab of cards.find((c) => c.id === "browser").data.tabs) tab.plugin = "gone";
@@ -369,7 +371,7 @@ for (const app of Object.values(APPS)) {
     const reopened = s.on(added(await s.windows(2, "saved project did not reopen"), [s.window]));
     const grid = await reopened.until("core.grid", (value) => value?.cards.length > 0, "saved project did not render");
     assert.equal(await reopened.get("core.page.error") ?? "", "");
-    assert.deepEqual(grid.cards.find((c) => c.id === "shell").tabs.map((tab) => tab.id), [kept.id]);
+    assert.deepEqual(grid.cards.find((c) => c.id === "shell").tabs.map((tab) => tab.id), remaining);
     assert.equal(grid.cards.find((c) => c.id === "shell").active, kept.id);
     assert.equal(grid.cards.some((c) => c.id === "browser" || c.id === "rail-gone"), false);
     assert.equal(grid.cards.flatMap((c) => c.tabs).some((tab) => tab.plugin === "gone"), false);
