@@ -1,5 +1,6 @@
 # Changelog
 
+- F8-20: during a Hangul composition the image region gives special keys to the input method first, so Backspace edits `한` to `하`; a key the input method does not handle is reported as the key after the composition is committed. Checked with the native activation test and on both rebuilt hosts.
 - F8-16-1: while the macOS Korean input method is selected, the image region commits text that contains no Hangul letter at once, so Space and digits after a syllable typed on a physical keyboard reach the PTY without a later key. The `handleTSMEvent:completionHandler:` override from F8-16 is removed. Checked with the native activation test and `e2e/activation/ime.test.mjs` on both rebuilt hosts.
 - V5-8: `sp_input_key` builds named keys from their key codes, so injected Backspace, Enter, and arrows reach the input method as hardware keys do; the terminal keyboard window check selects the ABC layout it types with. The physical Space showed that F8-16 did not correct the user's case, now F8-16-1 (P0). Registered V5-9.
 - F8-5: the activation IME check records `terminal.ime.trace` and verifies preedit order, cursor coverage, exactly-once commits of `ddd한글 한 ` in the native callbacks and the terminal input queue, and a second command in the same session on both rebuilt hosts. Registered F8-20 (Backspace during composition).

@@ -305,6 +305,32 @@ int main(void) { @autoreleasepool {
             committed, preedit, events]);
     typeKey(window, @"Enter", regionAnswered);
 
+    // F8-20: 조합 중 Backspace 는 입력기가 음절을 편집하며(한 → 하) PTY 에 키나 문자열을 보내지 않는다.
+    [events removeAllObjects];
+    selectSource(ABC, context);
+    selectSource(KOREAN_2SET, context);
+    for (NSString *key in @[@"g", @"k", @"s", @"Backspace"]) typeKey(window, key, regionAnswered);
+    NSUInteger (^keyCount)(NSString *) = ^NSUInteger(NSString *name) {
+        return [events indexesOfObjectsPassingTest:^BOOL(NSDictionary *event, NSUInteger index, BOOL *stop) {
+            return [event[@"type"] isEqual:@"key"] && [event[@"key"] isEqual:name];
+        }].count;
+    };
+    committed = [valuesOfType(@"insert", 0) componentsJoinedByString:@""];
+    preedit = [valuesOfType(@"compose", 0) lastObject] ?: @"";
+    check([preedit isEqual:@"하"] && committed.length == 0 && keyCount(@"Backspace") == 0,
+        [NSString stringWithFormat:@"image region: Backspace during a composition edits it to 하 without PTY input (preedit '%@', committed '%@', events %@)",
+            preedit, committed, events]);
+    typeKey(window, @"Enter", regionAnswered);
+    committed = [valuesOfType(@"insert", 0) componentsJoinedByString:@""];
+    NSDictionary *enter = events.lastObject;
+    check([committed isEqual:@"하"] && [enter[@"key"] isEqual:@"Enter"] && keyCount(@"Enter") == 1,
+        [NSString stringWithFormat:@"image region: Enter commits the edited syllable once and is reported after it (committed '%@', events %@)", committed, events]);
+    // 조합이 없을 때 Backspace 는 키로 보고한다.
+    [events removeAllObjects];
+    typeKey(window, @"Backspace", regionAnswered);
+    check(keyCount(@"Backspace") == 1 && [valuesOfType(@"insert", 0) count] == 0,
+        [NSString stringWithFormat:@"image region: Backspace without a composition is reported as a key (events %@)", events]);
+
     check(sp_input_source_select(previousSource.UTF8String), @"the previous input source is restored");
     sp_region_close(region);
     [window close];

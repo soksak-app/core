@@ -45,6 +45,7 @@
 @property BOOL hasFocus;
 @property(copy) NSString *reportedPreedit;  // 마지막으로 보고한 조합 문자열.
 @property NSUInteger committedLength;       // 문서 앞에서 이미 insert 로 확정한 길이.
+@property(copy) NSString *unhandledKey;     // 입력기에 먼저 준 특수 키의 보고. 입력기가 처리하지 않으면 보고한다.
 - (void)applyInsets;
 - (void)applyInsetsInTransaction;
 - (void)applyInsetsNow;
@@ -165,6 +166,7 @@ static BOOL containsHangul(NSString *text) {
 - (void)dealloc {
     [NSNotificationCenter.defaultCenter removeObserver:self];
     [_reportedPreedit release];
+    [_unhandledKey release];
     // 레이어의 contents 를 정리한 후 불변 스냅샷을 해제한다.
     self.imageLayer.contents = nil;
     if (_snapshot) CGImageRelease(_snapshot);
@@ -436,6 +438,15 @@ static BOOL containsHangul(NSString *text) {
                 alt ? "true" : "false",
                 ctrl ? "true" : "false"];
         }
+        // 입력기가 아직 고칠 수 있는 문자열이 있으면 특수 키를 먼저 입력기에 준다(예: 조합 중 Backspace 는
+        // 한 → 하). 입력기가 키를 처리하지 않으면 AppKit 이 그 키의 명령을 요청하며, 그때 남은 문자열을
+        // 확정하고 원래 키를 보고한다(doCommandBySelector:).
+        if (isSpecialKey && !hasCtrlOrOption && self.textStorage.length > self.committedLength) {
+            self.unhandledKey = json;
+            [super keyDown:event];
+            self.unhandledKey = nil;
+            return;
+        }
         [self commitPending];
         [self report:json.UTF8String];
         return;
@@ -446,6 +457,14 @@ static BOOL containsHangul(NSString *text) {
 }
 
 - (void)doCommandBySelector:(SEL)selector {
+    // 입력기가 처리하지 않은 특수 키는 명령이 아니라 원래 키로 보고한다.
+    NSString *key = [[self.unhandledKey retain] autorelease];
+    if (key) {
+        self.unhandledKey = nil;
+        [self commitPending];
+        [self report:key.UTF8String];
+        return;
+    }
     // NSTextInputClient commands are part of the input stream. Dropping them
     // loses IME actions such as cancel, delete, and accept.
     [self commitPending];

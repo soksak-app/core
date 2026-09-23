@@ -170,6 +170,13 @@ for (const app of Object.values(APPS)) {
       await readScreenUntil(s, surface, (lines) => lines.some((line) => /한1: command not found/.test(line)),
         "the shell did not run the command with the digit");
 
+      // F8-20: 조합 중 Backspace 는 입력기가 음절을 편집하고(한 → 하) PTY 에는 최종 음절만 도착한다.
+      for (const key of ["g", "k", "s", "Backspace"]) await s.press(key);
+      await s.until("terminal.compose", (compose) => compose.text === "하", "Backspace did not edit the composition to 하", { surface });
+      await s.press("Enter");
+      await readScreenUntil(s, surface, (lines) => lines.some((line) => /하: command not found/.test(line)),
+        "the shell did not run the edited syllable");
+
       const trace = await s.run("terminal.ime.trace", { action: "stop" }, surface);
       assert.equal(trace.overflow, false, "the IME trace overflowed");
       const inserts = trace.entries.filter((entry) => entry.kind === "native-insert").map((entry) => entry.text).join("");
@@ -177,13 +184,15 @@ for (const app of Object.values(APPS)) {
         .map((entry) => entry.input.text).join("");
       const composed = trace.entries.filter((entry) => entry.kind === "native-compose" && entry.text !== "").map((entry) => entry.text);
       t.diagnostic(`${app.name}: native inserts ${JSON.stringify(inserts)}, terminal inserts ${JSON.stringify(written)}, preedit ${JSON.stringify(composed)}`);
-      assert.equal(inserts, "ddd한글 한 한1", "the native client did not commit each syllable exactly once in order");
-      assert.equal(written, "ddd한글 한 한1", "the terminal input queue did not receive each committed syllable exactly once in order");
+      assert.equal(inserts, "ddd한글 한 한1하", "the native client did not commit each syllable exactly once in order");
+      assert.equal(written, "ddd한글 한 한1하", "the terminal input queue did not receive each committed syllable exactly once in order");
       assert.deepEqual(composed.slice(0, 6), ["ㅎ", "하", "한", "ㄱ", "그", "글"], "the preedit did not show each composition state in order");
+      assert.ok(!trace.entries.some((entry) => entry.kind === "native-key" && entry.key === "Backspace"),
+        "Backspace during a composition reached the terminal as a key");
       const enters = trace.entries.filter((entry) => entry.kind === "native-key" && entry.key === "Enter").map((entry) => entry.sequence);
       const lastInsert = trace.entries.filter((entry) => entry.kind === "native-insert").at(-1).sequence;
-      assert.equal(enters.length, 3, "three Enter keys were not traced");
-      assert.ok(enters[2] > lastInsert, "Enter was delivered before the committed text");
+      assert.equal(enters.length, 4, "four Enter keys were not traced");
+      assert.ok(enters[3] > lastInsert, "Enter was delivered before the committed text");
       t.diagnostic(`${app.name}: PASS ddd한글 after an input-source switch`);
     });
 }
