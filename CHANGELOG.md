@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-6-5 (progress): a window check pastes a PNG from the general pasteboard into a terminal on both hosts and requires the owned image path, and requires an explicit error for bytes that are not a PNG.
 - V5-6-4 (progress): both hosts reject clipboard images without the PNG signature or a valid `IHDR` chunk; three host contract cases cover it.
 - V5-29: closing a PTY session treats a process group whose processes have all ended as closed when macOS answers `EPERM`, and otherwise names the remaining members. New target `make rust-repeat`. Validated with the new lifecycle tests, 20 package runs, and the terminal service window checks on rebuilt Wails and Tauri.
 - V5-30: `check-breaks.mjs` bounds the baseline only against a hang, bounds each break run by three times the file's baseline time, and reports elapsed times and catches by the bound. `make verify` passes.

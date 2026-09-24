@@ -2,7 +2,9 @@
 // 창 크기가 바뀌어도 터미널 그림이 영역과 DOM 을 따라가는지 검사한다.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import test from "node:test";
 
 import { APPS, drag, failure, fresh, open, within } from "./app.mjs";
@@ -11,6 +13,9 @@ import { glyphShape, surfaceBoxes, whitePixels } from "./outside.mjs";
 import { assertHeldStatesShown } from "./drag-measurement.mjs";
 import { terminalProcessSnapshot } from "./terminal-processes.mjs";
 import { ensureTerminals, readScreenUntil } from "./terminal-screen.mjs";
+
+// 1x1 RGBA PNG.
+const PNG = Buffer.from("89504E470D0A1A0A0000000D49484452000000010000000108060000001F15C4890000000A49444154789C63000100000500010D0A2DB40000000049454E44AE426082", "hex");
 
 
 async function closeTerminalTabs(session) {
@@ -928,6 +933,40 @@ for (const app of Object.values(APPS)) {
       "explicit paste did not return the selected text to the terminal");
     assert.ok(pasted.filter((line) => line.includes(marker)).length >= 2,
       "selection clipboard text was not pasted exactly as selected");
+  });
+
+  test(`${app.name}: an explicit PNG paste writes an owned image and inserts its quoted path`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const [terminal] = await ensureTerminals(s, 1);
+    const surface = terminal.surface;
+    s.cleanup(() => closeTerminalTabs(s));
+    await readScreenUntil(s, surface, (lines) => lines.some((line) => line.includes("$")), "shell prompt missing");
+    // 검사는 일반 클립보드를 쓴다. 끝나면 이전 텍스트를 되돌린다.
+    const previous = execFileSync("pbpaste", { encoding: "utf8" });
+    s.cleanup(() => execFileSync("pbcopy", { input: previous }));
+    const directory = mkdtempSync(join(tmpdir(), "soksak-png-paste-"));
+    s.cleanup(() => rmSync(directory, { recursive: true, force: true }));
+    const image = join(directory, "one.png");
+    writeFileSync(image, PNG);
+    execFileSync("osascript", ["-e", `set the clipboard to (read (POSIX file "${image}") as «class PNGf»)`]);
+
+    await s.run("terminal.paste", {}, surface);
+    // 긴 경로는 터미널 폭에서 줄바꿈되므로 줄을 이어 읽는다.
+    const quoted = /'([^']*\/pasted-image-[^'/]*\.png)'/;
+    const pasted = await readScreenUntil(s, surface, (lines) => quoted.test(lines.join("")),
+      "the PNG paste did not insert a quoted image path");
+    const line = pasted.join("");
+    const saved = quoted.exec(line)[1];
+    s.cleanup(() => rmSync(saved, { force: true }));
+    assert.equal(dirname(saved), join(realpathSync(app.configDir), "clipboard"), `the image is not owned by the configuration: ${line}`);
+    assert.deepEqual(readFileSync(saved), PNG, "the saved image differs from the clipboard PNG");
+    assert.equal((await s.get("terminal.session", surface)).error, undefined);
+
+    // PNG 로 해석되지 않는 클립보드 바이트는 읽기에서 명시적 오류가 되고 저장되지 않는다.
+    execFileSync("osascript", ["-e", "set the clipboard to «data PNGf706E67»"]);
+    await assert.rejects(() => s.run("terminal.paste", {}, surface), /PNG decode failed/);
   });
 
   test(`${app.name}: terminal file drop pastes quoted paths without executing`, async (t) => {
