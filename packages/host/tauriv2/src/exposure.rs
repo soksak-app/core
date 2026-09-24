@@ -16,8 +16,8 @@ use serde_json::{json, Map, Value};
 use tauri::{AppHandle, Emitter, EventTarget, LogicalSize, Manager, Webview, Window};
 
 use crate::endpoint::{
-    Endpoint, Failure, Service, HANDLER_FAILED, INVALID_PARAMS, MISSING_DOCUMENT, NOT_ACTIVE,
-    NO_INPUT, TIMED_OUT, UNKNOWN_NAME,
+    Endpoint, Failure, Service, BUTTON_HELD, HANDLER_FAILED, INVALID_PARAMS, MISSING_DOCUMENT,
+    NOT_ACTIVE, NO_INPUT, TIMED_OUT, UNKNOWN_NAME,
 };
 use crate::platform;
 use crate::surfaces::label_for;
@@ -1309,6 +1309,10 @@ impl Host {
                     "the document did not receive the input within {} ms",
                     RECEIPT.as_millis()
                 ),
+            )),
+            Delivery::ButtonHeld => Err(Failure::new(
+                BUTTON_HELD,
+                "a physical mouse button is pressed, so the press or release was not delivered",
             )),
         }
     }

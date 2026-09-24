@@ -304,6 +304,8 @@ const (
 	PointerInactive
 	// PointerUnreceived 는 누름이나 뗌을 전달했지만 문서가 제한 시간 안에 받지 않았다는 뜻이다.
 	PointerUnreceived
+	// PointerButtonHeld 는 실제 마우스 버튼이 눌려 있어 누름이나 뗌을 전달하지 않았다는 뜻이다.
+	PointerButtonHeld
 )
 
 // Endpoint 는 로컬 엔드포인트의 전송과 주소다.

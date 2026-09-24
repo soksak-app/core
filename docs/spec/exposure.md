@@ -138,6 +138,7 @@ The host delivers `input.pointer` and `input.key` as native events, and the page
 - Keys and scroll go through `-[NSWindow sendEvent:]`. Presses, drags, and releases go to the view under the point, because AppKit does not deliver a press in an inactive window to the view.
 - A `down` or `up` into a web view returns after that view's document has received the trusted `pointerdown` or `pointerup`. A script in a separate WebKit content world, which the page cannot see, reports the receipt. While a text field has focus, WebKit passes mouse events to the input method asynchronously first, so a press and a release sent one after the other could otherwise reach the document in the opposite order. If the document does not receive the event within 2 seconds, the request returns 1005. A `scroll` is delivered after the web view under the point has presented its current state, because WebKit does not scroll a new document with a wheel event received before its scrolling tree is presented; if the view does not present within 2 seconds, the request returns 1005.
 - WebKit updates hover (`pointerover`, `pointermove` without a button, `:hover`) only while the window is the key window. A `move` to a window that is not the key window returns 1006.
+- WebKit reads the pressed buttons of a mouse event from the system (`+[NSEvent pressedMouseButtons]`), not from the event. While a physical mouse button is pressed, a synthetic press or release reaches the document as `pointermove` instead of `pointerdown` or `pointerup`, so a `down` or `up` is not delivered and returns 1007.
 - With `activate: true`, the host activates the application and makes the window key, waits until every webview of the window has sent the active state to its web process, and then delivers the move. This takes the keyboard focus from the application the user is using. If activation does not finish within 5 seconds, the request returns 1006 with the step that stopped: the system did not activate the application, the window did not become key, the webviews did not apply the active state, or the window lost activation before they did. Except for the webview step, the message names the frontmost application.
 - The OS input method serves only the active input context of the key window of the active application. `input.key` to a window that is not that key window does not reach the input method, so its result is not input-method evidence. Input-method behavior is verified only by activation-tier checks.
 
@@ -186,6 +187,7 @@ The page interface for surface pages is `page.exposure`: `register(kind, name)`,
 | 1004 | Native input is not available on this platform |
 | 1005 | Request timed out: the owning document did not reply within 10 seconds |
 | 1006 | The window is not active: a pointer `move` needs the key window, or the system did not activate the application |
+| 1007 | A physical mouse button is pressed, so a pointer `down` or `up` was not delivered |
 | -32000 | A registered command or status handler failed; `message` is its error message |
 
 The [local endpoint](endpoint.md) closes the connection after an undeclared method.

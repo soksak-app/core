@@ -92,6 +92,10 @@ sp_input_result sp_input_pointer(void *handle, double x, double y, int phase, in
     }
     NSView *hit = hitView(window, point);
     if (!hit) return SP_INPUT_REJECTED;
+    // WebKit 은 마우스 이벤트의 눌린 버튼을 이벤트가 아니라 +[NSEvent pressedMouseButtons] 로 읽는다.
+    // 실제 버튼이 눌린 동안의 누름과 뗌은 다른 버튼과 겹친 입력이 되어 pointerdown 이나 pointerup
+    // 대신 pointermove 로 전달되므로, 전달하지 않고 알린다.
+    if ((phase == 1 || phase == 3) && NSEvent.pressedMouseButtons != 0) return SP_INPUT_BUTTON_HELD;
     BOOL right = button == 1;
     switch (phase) {
         case 1:
@@ -150,10 +154,10 @@ void sp_input_pointer_then(void *handle, double x, double y, int phase, int butt
         done(context, sp_input_pointer(handle, x, y, phase, button, deltaX, deltaY));
         return;
     }
-    // 뗌은 브라우저가 click을 합성한 뒤에만 완료한다. 다음 요청이 click 처리보다
-    // 앞서지 않게 한다.
+    // 문서가 pointerdown 이나 pointerup 을 받은 뒤 완료한다. 받은 뒤 WebKit 의 대기 중인 마우스 처리를
+    // 기다리므로, 뗌이 만드는 click 도 다음 요청보다 먼저 처리된다.
     __block sp_input_result result = SP_INPUT_REJECTED;
-    webviewInputSendThen(target, phase == 3 ? @"click" : @"pointerdown", timeoutSeconds, ^BOOL {
+    webviewInputSendThen(target, phase == 3 ? @"pointerup" : @"pointerdown", timeoutSeconds, ^BOOL {
         result = sp_input_pointer(handle, x, y, phase, button, deltaX, deltaY);
         return result == SP_INPUT_DELIVERED;
     }, ^(BOOL received) {

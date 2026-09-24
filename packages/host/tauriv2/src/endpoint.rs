@@ -38,6 +38,8 @@ pub const NO_INPUT: i64 = 1004;
 pub const TIMED_OUT: i64 = 1005;
 /// 창이 활성 상태가 아니다. 포인터 이동은 키 창이 필요하다.
 pub const NOT_ACTIVE: i64 = 1006;
+/// 실제 마우스 버튼이 눌려 있어 누름이나 뗌을 전달하지 않았다.
+pub const BUTTON_HELD: i64 = 1007;
 /// 등록된 명령이나 상태 처리 함수가 실패했다.
 pub const HANDLER_FAILED: i64 = -32000;
 

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F8-21-1: 실제 마우스 버튼이 눌린 동안 합성한 포인터 누름이나 뗌은 이동으로 문서에 도달하지 않고 1007을 반환하며, 뗌은 문서가 `pointerup`을 받은 뒤 완료된다. V5-19를 등록했다.
 - F8-21: 빈 칸 위의 터미널 끌기가 더 이상 `invalidParams: selection is empty`를 보고하지 않는다. 사이드카는 글자 없는 선택을 지우고 `copied: false`인 `selection.end`로 답한다. `terminal.session`은 `selecting`과 `selectionReleases`를 보고한다.
 - V5-12: F8-6 수정 뒤 `native content, cards, and the sidebar rail stay aligned`가 두 호스트에서 통과한다.
 - F8-6: 경계 끌기가 포인터를 따라간다. 배치 큐는 가장 새 대기 배치만 유지하고 대신된 배치를 애플리케이션 로그에 보고한다. 레일 외곽선은 `SoksakView.painted`로 그려진 카드를 따라간다. 앱 DOM 웹뷰는 화면 갱신 주기로 렌더링한다. 정렬 검사는 끌기 지연을 재며 한도는 50ms다.

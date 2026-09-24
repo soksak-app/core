@@ -84,6 +84,8 @@ pub enum Delivery {
     Inactive,
     /// 누름이나 뗌을 전달했지만 문서가 제한 시간 안에 받지 않았다.
     Unreceived,
+    /// 실제 마우스 버튼이 눌려 있어 누름이나 뗌을 전달하지 않았다.
+    ButtonHeld,
 }
 
 /// 네이티브 입력으로 전달하는 키 동작.

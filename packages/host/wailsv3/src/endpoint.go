@@ -38,6 +38,7 @@ const (
 	codeNoInput       = 1004
 	codeTimeout       = 1005
 	codeInactive      = 1006
+	codeButtonHeld    = 1007
 )
 
 // RPCError 는 JSON-RPC 오류 객체다.
