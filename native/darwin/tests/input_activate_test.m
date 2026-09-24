@@ -162,7 +162,7 @@ int main(void) { @autoreleasepool {
         "#target{position:absolute;left:100px;top:50px;width:200px;height:200px}"
         "#target:hover{background:rgb(255,0,0)}</style><div id='target'></div><script>"
         "window.probe={events:[]};"
-        "for (const type of ['pointerover','pointermove'])"
+        "for (const type of ['pointerover','pointermove','pointerdown','pointerup','click'])"
         " addEventListener(type,e=>probe.events.push({type,trusted:e.isTrusted,x:e.clientX,y:e.clientY}),true);"
         "</script>";
     [view loadHTMLString:html baseURL:nil];
@@ -184,6 +184,17 @@ int main(void) { @autoreleasepool {
     check([evaluate(view, @"probe.events.some(e=>e.type==='pointerover'&&e.trusted)") boolValue], @"the target receives a trusted pointerover");
     check([evaluate(view, @"getComputedStyle(document.getElementById('target')).backgroundColor") isEqual:@"rgb(255, 0, 0)"],
         @"the :hover style applies to the element under the point");
+
+    // V5-5: 활성 키 창에서도 주입한 누름과 놓음이 페이지에 도달한다(기본 검사는 비활성 창에서 같은 호출을 쓴다).
+    check(sp_input_pointer(window, 180, 120, 1, 0, 0, 0) == SP_INPUT_DELIVERED
+        && sp_input_pointer(window, 180, 120, 3, 0, 0, 0) == SP_INPUT_DELIVERED,
+        @"press and release are delivered to the active key window");
+    until(^BOOL { return [evaluate(view, @"probe.events.some(e=>e.type==='click')") boolValue]; });
+    NSArray *presses = evaluate(view, @"probe.events.filter(e=>['pointerdown','pointerup','click'].includes(e.type))");
+    NSArray *types = [presses valueForKey:@"type"];
+    check([types isEqual:@[@"pointerdown", @"pointerup", @"click"]] && ![[presses valueForKey:@"trusted"] containsObject:@NO]
+        && [[presses valueForKey:@"x"] isEqual:@[@180, @180, @180]] && [[presses valueForKey:@"y"] isEqual:@[@120, @120, @120]],
+        [NSString stringWithFormat:@"press and release reach the page of the active key window as trusted pointerdown, pointerup, and click at the point: %@", presses]);
     [window close];
     return failures ? 1 : 0;
 }}

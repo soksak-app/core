@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-5: an activation-tier native check shows that injected press and release reach the page of an active key window as trusted `pointerdown`, `pointerup`, and `click`; the injector needs no change.
 - V5-15: the inspector activation check dispatches events while it waits, so the application becomes active, and uses a surface tall enough for WebKit to attach the inspector; private WebKit declarations moved to the private header. It passes 3 runs in a row.
 - V5-14-1: the saved layout check writes the registry through a temporary file and a rename, so the running application no longer reads a partial `projects.json`; the project checks pass 8 runs in a row on both hosts.
 - V5-16: the terminal process check failures after activation runs came from sessions of force-ended application instances that the terminal service keeps, not from the activation checks; the procedure now states to stop that service after forcing an application to end.
