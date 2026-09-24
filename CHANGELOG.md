@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-40: a click without movement clears the terminal selection by ending an empty selection at the pressed cell.
 - V5-38: a real-input window check tier posts HID events through the window server with `CGEventPost` and restores every pasteboard item type.
 - V5-25-1: the webview geometry scroll failure was traced to a held Shift key that a source-less wheel event inherited; the check sets the event flags explicitly and reports the dequeued events.
 - V5-25: the intermittent `webview_geometry_test` press failure was traced to a physical mouse button held during the check, which the press step now reports with its result code.

@@ -985,7 +985,7 @@ test("terminal pointer drag sends one complete selection gesture to the sidecar"
   assert.equal(fakeSidecar.getMessages()[1].body.x, 42);
 });
 
-test("terminal click focuses without starting an empty selection", async () => {
+test("a terminal click clears the selection with an empty selection at the pressed cell", async () => {
   FakeResizeObserver.reset();
   const fakeSidecar = createFakeSidecar();
   const fakeExpose = createFakeExpose();
@@ -1002,7 +1002,10 @@ test("terminal click focuses without starting an empty selection", async () => {
   view._trigger("pointerup", { pointerId: 8, clientX: 10, clientY: 12 });
   await new Promise((resolve) => setImmediate(resolve));
 
-  assert.deepEqual(fakeSidecar.getMessages(), [], "a click must not send an empty selection operation");
+  // 빈 선택의 뗌은 이전 선택을 지운다(docs/spec/terminal-runtime.md). 움직이지 않은 클릭은 그 뗌을 보내야 한다.
+  assert.deepEqual(fakeSidecar.getMessages().map((message) => message.body.operation), ["selection.start", "selection.end"],
+    "a click must end an empty selection so that the previous selection is cleared");
+  assert.equal(fakeSidecar.getMessages()[0].body.x, 10);
 });
 
 test("terminal.focus command reports focus rejection through terminal.session", { timeout: 10000 }, async () => {

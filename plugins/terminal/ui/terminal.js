@@ -596,13 +596,16 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     if (event.pointerId !== selectionPointerId) return;
     selectionPointerId = null;
     const started = selectionStarted;
+    const start = selectionStart;
     selectionStart = null;
     selectionStarted = false;
     session = { ...session, selecting: false };
     changed("session");
     view.releasePointerCapture?.(event.pointerId);
     event.preventDefault();
-    if (started) observeInput(terminal.send(id, { operation: "selection.end" }));
+    // 움직이지 않은 클릭은 누른 칸에서 빈 선택을 시작하고 끝낸다. 빈 선택의 뗌은 이전 선택을 지운다.
+    if (!started) observeInput(terminal.send(id, { operation: "selection.start", ...start }));
+    observeInput(terminal.send(id, { operation: "selection.end" }));
   };
   view.addEventListener("pointerdown", beginSelection);
   view.addEventListener("pointermove", updateSelection);
