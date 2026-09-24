@@ -26,9 +26,9 @@ static const char *currentStep = "setup";
 
 static void failTimeout(const char *reason) {
     fprintf(stderr, "FAIL: %s within 10 seconds (step: %s, visible: %d, occlusion visible: %d, on active space: %d, "
-        "app active: %d)\n", reason, currentStep, testWindow.isVisible,
+        "app active: %d, physical buttons: %lu)\n", reason, currentStep, testWindow.isVisible,
         (testWindow.occlusionState & NSWindowOcclusionStateVisible) != 0, testWindow.isOnActiveSpace,
-        NSApp.isActive);
+        NSApp.isActive, (unsigned long)NSEvent.pressedMouseButtons);
     exit(1);
 }
 
@@ -183,14 +183,32 @@ static WKWebView *webViewAtTopPoint(NSWindow *window, double x, double y) {
 // 앱 이벤트 대기열의 이벤트를 꺼내 처리하며 기다린다. 이벤트 모니터는 꺼낼 때 실행된다.
 // 이 검사가 대기열에 넣은 휠 이벤트만 꺼내 보낸다. 모든 종류를 꺼내면 OS 가 보낸 앱 활성화
 // 이벤트(NSEventTypeAppKitDefined, 활성화 하위 종류)도 처리해 기본 검사가 앱을 활성화한다.
-static void pumpUntil(BOOL (^done)(void)) {
+// 실패하면 꺼내 보낸 휠 이벤트 수, 시작할 때의 실제 마우스 버튼, state 가 돌려준 측정값을 보고한다.
+static void pumpUntil(BOOL (^done)(void), NSString *(^state)(void)) {
+    NSUInteger buttons = NSEvent.pressedMouseButtons;
+    NSUInteger sent = 0;
+    NSMutableArray *seen = [NSMutableArray array];
     NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
     while (!done() && deadline.timeIntervalSinceNow > 0) {
         NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskScrollWheel
             untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01] inMode:NSDefaultRunLoopMode dequeue:YES];
-        if (event) [NSApp sendEvent:event];
+        if (event) {
+            sent++;
+            NSView *content = event.window.contentView;
+            NSView *hit = [content hitTest:[content.superview convertPoint:event.locationInWindow fromView:nil]];
+            [seen addObject:[NSString stringWithFormat:@"{delta %g,%g modifiers 0x%lx physical modifiers 0x%llx precise %d phase %lu momentum %lu window %d at %@ hit %@}",
+                event.scrollingDeltaX, event.scrollingDeltaY, (unsigned long)event.modifierFlags,
+                (unsigned long long)CGEventSourceFlagsState(kCGEventSourceStateHIDSystemState), event.hasPreciseScrollingDeltas,
+                (unsigned long)event.phase, (unsigned long)event.momentumPhase, event.window == testWindow,
+                NSStringFromPoint(event.locationInWindow), hit.class]];
+            [NSApp sendEvent:event];
+        }
     }
-    if (!done()) failTimeout("the event was not handled");
+    if (!done()) {
+        fprintf(stderr, "wheel events dequeued and sent: %lu %s; physical buttons at start: %lu; %s\n",
+            (unsigned long)sent, [seen componentsJoinedByString:@" "].UTF8String, (unsigned long)buttons, state().UTF8String);
+        failTimeout("the event was not handled");
+    }
 }
 
 // 표면이 스크롤을 마칠 때까지 기다리고 문서가 움직인 CSS 픽셀을 반환한다. 표시마다 두 번 같은 값이면 끝났다.
@@ -252,14 +270,27 @@ static double scrollBy(NSWindow *window, WKWebView *surface, BOOL posted) {
     NSPoint local = NSMakePoint(x, content.bounds.size.height - y);
     NSPoint inWindow = [content convertPoint:local toView:nil];
     NSPoint screen = [window convertPointToScreen:inWindow];
+    // 실패 보고가 문서까지 온 휠 이벤트 수를 적도록 센다.
+    // 실패 보고가 문서까지 온 휠 이벤트 수와 기다리는 동안 돈 애니메이션 프레임 수를 적도록 센다.
+    evaluate(surface, @"window.wheels = 0; window.animationFrames = 0; if (!window.wheelCounted) { window.wheelCounted = true;"
+        " addEventListener('wheel', () => { window.wheels++; }, {passive: true});"
+        " const tick = () => { window.animationFrames++; requestAnimationFrame(tick); }; requestAnimationFrame(tick); } null");
     CGEventRef wheel = CGEventCreateScrollWheelEvent2(NULL, kCGScrollEventUnitLine, 1, -3, 0, 0);
+    // 원본이 없는 이벤트는 실제 키보드의 수정키를 물려받는다. AppKit 은 Shift 가 눌린 마우스 휠의 세로 이동을
+    // 가로로 바꾸므로, 사람이 Shift 를 누른 동안 이 스크롤은 문서를 움직이지 않았다(V5-25-1).
+    CGEventSetFlags(wheel, 0);
     CGEventSetLocation(wheel, CGPointMake(screen.x, NSMaxY(NSScreen.screens.firstObject.frame) - screen.y));
     CGEventSetIntegerValueField(wheel, kSPEventWindowNumberField, window.windowNumber);
     CGEventSetWindowLocation(wheel, CGPointMake(inWindow.x, NSHeight(window.frame) - inWindow.y));
     [NSApp postEvent:[NSEvent eventWithCGEvent:wheel] atStart:NO];
     CFRelease(wheel);
     __block double moved = 0;
-    pumpUntil(^BOOL { moved = [evaluate(surface, @"document.scrollingElement.scrollTop") doubleValue]; return moved > 0; });
+    pumpUntil(^BOOL { moved = [evaluate(surface, @"document.scrollingElement.scrollTop") doubleValue]; return moved > 0; },
+        ^NSString *{ return [NSString stringWithFormat:@"last scrollTop: %g; document state: %@; scale %g; surface frame %@",
+            moved, evaluate(surface, @"JSON.stringify({wheels: window.wheels, animationFrames: window.animationFrames,"
+                " visibility: document.visibilityState, scrollHeight: document.scrollingElement.scrollHeight,"
+                " clientHeight: document.scrollingElement.clientHeight, scrollTop: document.scrollingElement.scrollTop})"),
+            window.backingScaleFactor, NSStringFromRect(surface.frame)]; });
     return scrolledBy(surface);
 }
 

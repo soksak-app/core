@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-25-1: the webview geometry scroll failure was traced to a held Shift key that a source-less wheel event inherited; the check sets the event flags explicitly and reports the dequeued events.
 - V5-25: the intermittent `webview_geometry_test` press failure was traced to a physical mouse button held during the check, which the press step now reports with its result code.
 - V5-19: the recovery check waits for the service's ready line, as the host does, instead of polling `endpoint.json` for 5 s.
 - V5-34: the application ends its terminal sessions that no layout holds when it starts, when a project is removed, and when a space is closed, through a `retain` request to each persistent service.
