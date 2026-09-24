@@ -85,7 +85,7 @@
       },
       {
         "name": "terminal.session",
-        "description": "The session state: identifier, dimensions, and cell size.",
+        "description": "The session state: identifier, dimensions, cell size, and the number of selection releases the sidecar answered.",
         "schema": {
           "type": "object",
           "properties": {
@@ -113,6 +113,12 @@
             "inlineImages": {
               "type": "array",
               "items": { "type": "string" }
+            },
+            "selectionReleases": {
+              "type": "integer"
+            },
+            "selecting": {
+              "type": "boolean"
             }
           }
         }

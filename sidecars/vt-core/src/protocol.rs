@@ -210,7 +210,9 @@ pub trait Engine: Send + 'static {
     fn reject_clipboard(&mut self, request_id: u64, reason: &str) -> Result<(), String>;
     fn selection_start(&mut self, col: u16, row: u16) -> Result<(), String>;
     fn selection_update(&mut self, col: u16, row: u16) -> Result<(), String>;
-    fn selection_end(&mut self) -> Result<String, String>;
+    /// Ends the selection and returns its text. A selection that covers no text is cleared
+    /// and returns `None`; that is a normal gesture, not an error.
+    fn selection_end(&mut self) -> Result<Option<String>, String>;
     fn cursor(&self) -> Cursor;
     fn screen(&mut self) -> Screen;
     fn scroll_generation(&self) -> i64 {
@@ -1655,10 +1657,12 @@ async fn surface_task(
                                     let screen = decorate_screen(engine.screen(), focused, &preedit, &cursor_policy, 0);
                                     if !present_screen(&surface_id, &screen, state, &output_tx).await { return; }
                                 }
-                                let response = json!({
-                                    "surface": surface_id,
-                                    "body": {"event": "selection.copy", "text": text, "userInitiated": true}
-                                });
+                                // A selection without text copies nothing and reports the release.
+                                let body = match text {
+                                    Some(text) => json!({"event": "selection.copy", "text": text, "userInitiated": true}),
+                                    None => json!({"event": "selection.end", "copied": false}),
+                                };
+                                let response = json!({"surface": surface_id, "body": body});
                                 if output_tx.send(response.to_string()).await.is_err() { return; }
                             }
                             Err(error) => {
@@ -3023,8 +3027,8 @@ impl Engine for FakeEngine {
     fn selection_update(&mut self, _col: u16, _row: u16) -> Result<(), String> {
         Ok(())
     }
-    fn selection_end(&mut self) -> Result<String, String> {
-        Ok("selected".to_string())
+    fn selection_end(&mut self) -> Result<Option<String>, String> {
+        Ok(Some("selected".to_string()))
     }
 
     fn cursor(&self) -> Cursor {

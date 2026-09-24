@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F8-21: A terminal drag over blank cells no longer reports `invalidParams: selection is empty`. The sidecar clears a selection without text and answers `selection.end` with `copied: false`; `terminal.session` reports `selecting` and `selectionReleases`.
 - V5-12: `native content, cards, and the sidebar rail stay aligned` passes on both hosts after the F8-6 corrections.
 - F8-6: Divider drags follow the pointer. The layout queue keeps only the newest waiting layout and reports replaced layouts in the application log; the rail outline follows the painted cards through `SoksakView.painted`; the app DOM webview renders at the display rate. The alignment check measures the drag delay, limited to 50ms.
 - V5-6: each re-verified terminal, clipboard, protocol, and browser-appearance claim maps to named tests that pass on the current builds; weak or missing coverage is registered as V5-6-1 to V5-6-6.

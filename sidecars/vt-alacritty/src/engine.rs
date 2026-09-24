@@ -799,11 +799,15 @@ impl AlacrittyEngine {
         Ok(())
     }
 
-    pub fn selection_end(&mut self) -> Result<String, String> {
-        self.term
+    pub fn selection_end(&mut self) -> Result<Option<String>, String> {
+        let text = self
+            .term
             .selection_to_string()
-            .filter(|text| !text.is_empty())
-            .ok_or_else(|| "selection is empty".to_string())
+            .filter(|text| !text.is_empty());
+        if text.is_none() {
+            self.term.selection = None;
+        }
+        Ok(text)
     }
 
     fn color_request(&self, index: usize) -> Result<Rgb, String> {
@@ -969,7 +973,7 @@ impl Engine for AlacrittyEngine {
         AlacrittyEngine::selection_update(self, col, row)
     }
 
-    fn selection_end(&mut self) -> Result<String, String> {
+    fn selection_end(&mut self) -> Result<Option<String>, String> {
         AlacrittyEngine::selection_end(self)
     }
 

@@ -893,6 +893,46 @@ for (const app of Object.values(APPS)) {
       "invalid cursor setting must not replace the effective value");
   });
 
+  test(`${app.name}: a native drag over blank terminal cells ends without a surface error`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const [terminal] = await ensureTerminals(s, 1);
+    const surface = terminal.surface;
+    s.cleanup(() => closeTerminalTabs(s));
+    await s.until("core.surfaces", (surfaces) => surfaces.some((item) =>
+      item.surface === surface && item.exposes.includes("status terminal.session")),
+    "terminal selection status did not register");
+    await s.until("terminal.session", (state) => Boolean(state?.sessionId),
+      "terminal selection session did not open", { surface });
+    const marker = "BLANK-SELECTION-1";
+    await s.run("terminal.input", { bytes: `printf '\\033[2J\\033[H${marker}\\n'\r` }, surface);
+    await readScreenUntil(s, surface, (screen) => screen.some((line) => line.trim() === marker),
+      "terminal blank selection marker did not render");
+
+    const view = await s.rect("terminal.view", undefined, surface);
+    const metrics = await s.get("terminal.session", surface);
+    assert.ok(metrics.rows > 4 && metrics.cols > 20, `terminal grid is too small: ${metrics.cols}×${metrics.rows}`);
+    const row = metrics.rows - 2;
+    const viewX = view.document.x + view.x;
+    const y = view.document.y + view.y + (row + 0.5) * metrics.cellHeight;
+    const released = metrics.selectionReleases;
+    await s.pointer(viewX + 5.5 * metrics.cellWidth, y, "down", { button: "left" });
+    await s.pointer(viewX + 20.5 * metrics.cellWidth, y, "drag", { button: "left" });
+    await s.pointer(viewX + 20.5 * metrics.cellWidth, y, "up", { button: "left" });
+    // 사이드카가 해제에 답하거나 오류를 보고할 때까지 기다린다.
+    const state = await s.until("terminal.session",
+      (value) => value?.selectionReleases > released || value?.error !== undefined,
+      "the sidecar did not answer the selection release", { surface });
+    const lines = await s.run("terminal.screen.read", {}, surface);
+    assert.equal(state.error, undefined,
+      `a drag over blank row ${row} reported ${state.error}; inverse cells in columns 5–20: ` +
+        `${lines[row].slice(5, 21).filter((cell) => cell.inverse).length}`);
+    // 커서 블록도 반전 셀이므로 끈 구간만 본다.
+    const dragged = lines[row].slice(5, 21).filter((cell) => cell.inverse).length;
+    assert.equal(dragged, 0, `the blank selection was not cleared: ${dragged} inverse cells in columns 5–20 of row ${row}`);
+  });
+
   test(`${app.name}: native terminal selection renders and copies through one explicit paste`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);

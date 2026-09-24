@@ -18,6 +18,7 @@ struct MockEngine {
     custom_modes: Option<Modes>,
     themes: Vec<TerminalTheme>,
     pending_events: Vec<EngineEvent>,
+    selection: Option<String>,
 }
 
 impl MockEngine {
@@ -29,6 +30,7 @@ impl MockEngine {
             custom_modes: None,
             themes: Vec::new(),
             pending_events: Vec::new(),
+            selection: Some("selected".to_string()),
         }
     }
 
@@ -40,6 +42,7 @@ impl MockEngine {
             custom_modes: Some(modes),
             themes: Vec::new(),
             pending_events: Vec::new(),
+            selection: Some("selected".to_string()),
         }
     }
 }
@@ -99,8 +102,8 @@ impl Engine for MockEngine {
     fn selection_update(&mut self, _col: u16, _row: u16) -> Result<(), String> {
         Ok(())
     }
-    fn selection_end(&mut self) -> Result<String, String> {
-        Ok("selected".to_string())
+    fn selection_end(&mut self) -> Result<Option<String>, String> {
+        Ok(self.selection.clone())
     }
 
     fn cursor(&self) -> Cursor {
@@ -556,6 +559,49 @@ async fn test_selection_release_emits_one_user_copy_event() {
     assert!(!output.contains("Unknown operation: selection.start"));
     assert!(!output.contains("Unknown operation: selection.update"));
     assert!(!output.contains("Unknown operation: selection.end"));
+}
+
+/// A release over blank cells reports the end of the gesture without an error or a copy.
+#[tokio::test]
+async fn test_blank_selection_release_reports_end_without_copy() {
+    let calls = Arc::new(Mutex::new(Calls::default()));
+    let input = r#"{"surface":"s1","body":{"operation":"open"}}
+{"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
+{"surface":"s1","body":{"operation":"selection.start","x":700.0,"y":300.0}}
+{"surface":"s1","body":{"operation":"selection.update","x":760.0,"y":300.0}}
+{"surface":"s1","body":{"operation":"selection.end"}}
+"#;
+    let reader = std::io::Cursor::new(input.as_bytes());
+    let mut writer = Vec::new();
+    let engine_factory = Arc::new(|| {
+        let mut engine = MockEngine::new();
+        engine.selection = None;
+        Box::new(engine) as Box<dyn Engine>
+    });
+    let calls_for_factory = calls.clone();
+    let session_port_factory = Arc::new(move || {
+        Arc::new(FakeSessionPort::new(
+            "unused".to_string(),
+            calls_for_factory.clone(),
+        )) as Arc<dyn SessionPort>
+    });
+    let _ = serve(engine_factory, reader, &mut writer, session_port_factory).await;
+    let output = String::from_utf8(writer).unwrap();
+    let ends: Vec<serde_json::Value> = output
+        .lines()
+        .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+        .filter(|message| message["body"]["event"] == "selection.end")
+        .collect();
+    assert_eq!(ends.len(), 1, "one selection.end event: {output}");
+    assert_eq!(ends[0]["body"]["copied"], serde_json::Value::Bool(false));
+    assert!(
+        !output.contains("selection.copy"),
+        "nothing is copied: {output}"
+    );
+    assert!(
+        !output.contains("\"error\""),
+        "the release is not an error: {output}"
+    );
 }
 
 /// Test A-7: close op ends the session (calls close, not detach)
@@ -2611,8 +2657,8 @@ async fn test_panicking_surface_reports_error() {
         fn selection_update(&mut self, _col: u16, _row: u16) -> Result<(), String> {
             Ok(())
         }
-        fn selection_end(&mut self) -> Result<String, String> {
-            Ok("selected".to_string())
+        fn selection_end(&mut self) -> Result<Option<String>, String> {
+            Ok(Some("selected".to_string()))
         }
 
         fn cursor(&self) -> Cursor {

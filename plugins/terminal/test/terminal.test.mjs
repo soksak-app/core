@@ -770,6 +770,28 @@ test("selection copy rejects non-user or empty payloads without writing", async 
   assert.match(fakeExpose.getStatus("terminal.session").readFn().error, /selection.copy/);
 });
 
+test("a selection release without text is accepted without a copy or an error", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  const fakeExpose = createFakeExpose();
+  const writes = [];
+  const clipboard = { writeText: async (text) => writes.push(text) };
+  await startTerminal({
+    view: createFakeView(), attachImage: createFakeAttachImage().function,
+    sidecar: fakeSidecar, expose: fakeExpose, clipboard,
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  openSession(fakeSidecar);
+
+  fakeSidecar.triggerEvent("test-session", { event: "selection.end", copied: false });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(writes, []);
+  const state = fakeExpose.getStatus("terminal.session").readFn();
+  assert.equal(state.error, undefined);
+  assert.ok(!state.unsupported.includes("selection.end"), "selection.end is a declared event");
+  assert.equal(state.selectionReleases, 1, "the answered release is counted");
+});
+
 // 테스트 4: 영역 key(Enter) → {operation:"input", keys:[{key:"Enter"}]}
 test("Region key event for Enter sends correct message format", async () => {
   FakeResizeObserver.reset();

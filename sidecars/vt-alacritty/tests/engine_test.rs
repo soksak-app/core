@@ -707,7 +707,33 @@ fn native_selection_updates_raster_cells_and_returns_text_once() {
     engine.selection_update(4, 0).expect("selection update");
     let selected = engine.screen();
     assert!(selected.lines[0][2].inverse);
-    assert_eq!(engine.selection_end().expect("selection copy"), "hello");
+    assert_eq!(
+        engine.selection_end().expect("selection copy").as_deref(),
+        Some("hello")
+    );
+}
+
+#[test]
+fn blank_selection_release_is_not_an_error() {
+    let mut engine = AlacrittyEngine::new();
+    engine.feed(b"hi");
+    engine.selection_start(5, 0).expect("selection start");
+    engine.selection_update(9, 0).expect("selection update");
+    let ended = engine.selection_end();
+    assert!(
+        ended.is_ok(),
+        "a selection over blank cells must end without an error: {ended:?}"
+    );
+    assert_eq!(
+        ended.unwrap(),
+        None,
+        "a selection over blank cells has no text"
+    );
+    let screen = engine.screen();
+    assert!(
+        screen.lines.iter().flatten().all(|cell| !cell.inverse),
+        "a selection without text is cleared"
+    );
 }
 
 #[test]

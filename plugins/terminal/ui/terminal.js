@@ -187,6 +187,10 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   let session = {
     sessionId: "", cols: 80, rows: 24, cellWidth: 8, cellHeight: 16, unsupported: [],
     inlineImages: [],
+    // 사이드카가 답한 선택 해제의 수. 해제의 결과(복사 또는 빈 선택)가 도착했음을 알린다.
+    selectionReleases: 0,
+    // 왼쪽 버튼을 누른 선택 제스처가 진행 중인지.
+    selecting: false,
     vendor: { directory: null, hyperlink: null, notification: null, shell: null },
     compose: { text: "", selectedRange: null, replacementRange: null, attributed: false },
     theme: "dark",
@@ -379,6 +383,10 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     }
     await terminal.send(id, { operation: "clipboard.resolve", requestId: body.requestId, text });
   };
+  const releasedSelection = () => {
+    session = { ...session, selectionReleases: session.selectionReleases + 1 };
+    changed("session");
+  };
   const handleSelectionCopy = async (body) => {
     if (body.userInitiated !== true) throw new Error("selection.copy requires userInitiated true");
     if (typeof body.text !== "string" || body.text.length === 0) throw new Error("selection.copy requires non-empty text");
@@ -550,6 +558,8 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       selectionPointerId = event.pointerId;
       selectionStart = point;
       selectionStarted = false;
+      session = { ...session, selecting: true };
+      changed("session");
       view.setPointerCapture?.(event.pointerId);
       event.preventDefault();
     } catch (error) {
@@ -577,6 +587,8 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     const started = selectionStarted;
     selectionStart = null;
     selectionStarted = false;
+    session = { ...session, selecting: false };
+    changed("session");
     view.releasePointerCapture?.(event.pointerId);
     event.preventDefault();
     if (started) observeInput(terminal.send(id, { operation: "selection.end" }));
@@ -696,6 +708,11 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       reportInputError(new Error(typeof body.reason === "string" ? body.reason : "program clipboard query rejected"));
     } else if (body.event === "selection.copy") {
       handleSelectionCopy(body).catch(reportInputError);
+      releasedSelection();
+    } else if (body.event === "selection.end") {
+      // 글자를 담지 않은 선택의 해제다. 사이드카가 선택을 지웠고 복사할 것이 없다.
+      if (body.copied !== false) reportInputError(new Error("selection.end requires copied false"));
+      releasedSelection();
     } else if (body.event === "directory") {
       if (typeof body.uri !== "string" || body.uri.length === 0) {
         reportInputError(new Error("invalid directory event from sidecar"));
