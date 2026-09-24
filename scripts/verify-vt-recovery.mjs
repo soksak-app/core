@@ -1,7 +1,7 @@
 import { mkdir, readFile, rm } from "node:fs/promises";
 import { mkdtemp } from "node:fs/promises";
 import net from "node:net";
-import { tmpdir } from "node:os";
+import { loadavg, tmpdir } from "node:os";
 import { spawn } from "node:child_process";
 import { join } from "node:path";
 import { performance } from "node:perf_hooks";
@@ -26,7 +26,7 @@ const withTimeout = async (promise, label) => {
   }
 };
 
-const waitForFile = async (path) => {
+const waitForFile = async (path, service) => {
   const started = performance.now();
   while (performance.now() - started < STEP_TIMEOUT_MS) {
     try {
@@ -36,7 +36,10 @@ const waitForFile = async (path) => {
       await new Promise((resolve) => setTimeout(resolve, 20));
     }
   }
-  fail(`endpoint file ${path} timed out after ${STEP_TIMEOUT_MS}ms`);
+  // 실패를 해석하도록 서비스가 살아 있는지와 부하를 적는다. 서비스 stderr 는 호출자가 붙인다.
+  fail(`endpoint file ${path} timed out after ${STEP_TIMEOUT_MS}ms (service pid ${service.pid}, ` +
+    `exit ${service.exitCode ?? "none"}, signal ${service.signalCode ?? "none"}, ` +
+    `load average ${loadavg().map((value) => value.toFixed(1)).join(" ")})`);
 };
 
 const lineClient = async (endpoint, clientName) => {
@@ -201,7 +204,8 @@ const main = async () => {
 
   const endpointPath = join(serviceDirectory, "endpoint.json");
   try {
-    const endpoint = JSON.parse(await waitForFile(endpointPath));
+    const endpoint = JSON.parse(await waitForFile(endpointPath, service));
+    console.log(`PASS service_endpoint_ms=${Math.round(performance.now() - started)}`);
     if (endpoint.protocol !== 1 || !endpoint.socket || !endpoint.token || endpoint.pid !== service.pid) {
       fail(`invalid endpoint: ${JSON.stringify(endpoint)}`);
     }
