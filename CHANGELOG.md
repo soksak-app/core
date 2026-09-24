@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-45-1: diagnostic pointer input keeps delivering to the view under the point, and the real-input tier checks a person's pointer path, as the user decided.
 - V5-45: diagnostic keys to the key window go through NSApplication like a person's keys, so Command+C and Command+V run the Edit menu, and a key to a non-key window is rejected.
 - V5-57: the terminal no longer redraws a raster the host is still copying, which showed frames without text while scrolling.
 - V5-58: the terminal scrollbar's track background, thumb color, width, and shape are plugin settings.
