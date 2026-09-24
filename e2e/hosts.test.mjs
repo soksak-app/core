@@ -35,6 +35,10 @@ const atRest = (calls) => {
 
 const SIZE = { width: 1000, height: 620 };
 
+/** 전사에서 확정된 배치 요청마다 첫 표면의 x. */
+const settledX = (lines) => (transcript(lines).get("syncSurfaces") ?? [])
+  .filter((call) => /"settled":true/.test(call.request)).map((call) => JSON.parse(call.request).surfaces[0]?.x);
+
 /** 페이지가 확정된 배치를 표시했다는 줄. */
 const settled = (lines) => lines.some((line) => /^host presentSurfaces .*"settled":true.* ->/.test(line));
 
@@ -52,12 +56,35 @@ async function both(t) {
 test("both hosts answer the same page the same way", async (t) => {
   const sessions = await both(t);
   if (!sessions) return t.skip("both hosts must be built");
+  const dragged = {};
+  const results = {};
   const logs = {};
   for (const [name, s] of Object.entries(sessions)) {
     await fresh(s);
+    // 끌기의 확정 배치는 설정 모달을 열기 전에 기록을 멈춰 얻는다. 모달은 창 전체의 오버레이로 다음 배치를
+    // 바꾸며, 그 배치가 기록에 들어오는 시점은 호스트마다 다르다.
+    const start = (await s.get("host.window")).surfaces.find((item) => item.frame.width > 0)?.frame.x;
+    const dragLog = await s.transcript();
+    results[name] = await drag(t, s, PLAN);
+    // 끌기 도중 멈춘 순간에도 확정 배치가 생긴다. 끌기는 제자리로 돌아오므로, 마지막 확정 배치가 끌기 전
+    // 배치와 같아질 때까지 기다린다.
+    try {
+      await dragLog.until((lines) => {
+        const xs = settledX(lines);
+        const lastSync = lines.findLastIndex((line) => /^host syncSurfaces .*"settled":true/.test(line));
+        const lastPresent = lines.findLastIndex((line) => /^host presentSurfaces .*"settled":true.* ->/.test(line));
+        return xs.length > 0 && xs.at(-1) === start && lastPresent > lastSync;
+      }, "the drag did not end with a settled commit at its start position");
+    } catch (error) {
+      const now = await s.get("host.window");
+      const grid = await s.get("core.grid");
+      error.message += `\nstart x ${start}; drag result boundary ${JSON.stringify(results[name].boundary)}, steps ` +
+        `${results[name].steps}, took ${results[name].took}; surfaces now ` +
+        `${JSON.stringify(now.surfaces.map((item) => [item.frame.x, item.frame.width]))}; grid ${JSON.stringify(grid).slice(0, 600)}`;
+      throw error;
+    }
+    dragged[name] = await dragLog.stop();
     const log = await s.transcript();
-    await drag(t, s, PLAN);
-    await log.until(settled, "the drag did not end with a settled commit");
     await s.run("core.settings.open");
     const { controls } = await s.until("core.settings-modal", (modal) => modal.open, "settings did not open");
     assert.ok(controls.some((c) => c.key === "nav:compositing"), "settings must have a compositing section");
@@ -67,14 +94,19 @@ test("both hosts answer the same page the same way", async (t) => {
     await s.run("core.settings.close");
   }
 
-  const wails = transcript(logs.wailsv3);
-  const tauri = transcript(logs.tauriv2);
-  const restedWails = atRest(wails);
-  const restedTauri = atRest(tauri);
-  assert.ok(restedWails, `the Wails host recorded no settled commit:\n${logs.wailsv3.join("\n")}`);
-  assert.ok(restedTauri, `the Tauri host recorded no settled commit:\n${logs.tauriv2.join("\n")}`);
-  assert.equal(restedTauri.request, restedWails.request, "the two hosts give the page a different plane to lay out");
+  const restedWails = atRest(transcript(dragged.wailsv3));
+  const restedTauri = atRest(transcript(dragged.tauriv2));
+  assert.ok(restedWails, `the Wails host recorded no settled commit:\n${dragged.wailsv3.join("\n")}`);
+  assert.ok(restedTauri, `the Tauri host recorded no settled commit:\n${dragged.tauriv2.join("\n")}`);
+  // 실패하면 호스트마다 확정된 배치의 첫 표면 x 순서와 끌기 결과의 경계를 적는다.
+  const boundary = (result) => result.boundary && [result.boundary[0], result.boundary.at(-1)];
+  assert.equal(restedTauri.request, restedWails.request, "the two hosts give the page a different plane to lay out " +
+    `after the drag:\nWails ${restedWails.request}\nTauri ${restedTauri.request}\n` +
+    `settled first-surface x: Wails ${JSON.stringify(settledX(dragged.wailsv3))}, Tauri ${JSON.stringify(settledX(dragged.tauriv2))}; ` +
+    `drag boundary first and last: Wails ${JSON.stringify(boundary(results.wailsv3))}, Tauri ${JSON.stringify(boundary(results.tauriv2))}`);
   assert.equal(restedTauri.answer, restedWails.answer, "the two hosts place the same surfaces differently");
+  const wails = transcript([...dragged.wailsv3, ...logs.wailsv3]);
+  const tauri = transcript([...dragged.tauriv2, ...logs.tauriv2]);
   const onlyWails = [...wails.keys()].filter((name) => !tauri.has(name));
   const onlyTauri = [...tauri.keys()].filter((name) => !wails.has(name));
   assert.deepEqual({ onlyWails, onlyTauri }, { onlyWails: [], onlyTauri: [] },
