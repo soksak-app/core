@@ -1,5 +1,6 @@
 // 250pt를 400ms에 이동하는 두 왕복을 녹화해 표면의 카드 내부 표시를 검사한다.
 import assert from "node:assert/strict";
+import { availableParallelism, loadavg } from "node:os";
 import test from "node:test";
 
 import { APPS, drag, fresh, open } from "./app.mjs";
@@ -51,7 +52,9 @@ function assertAligned(run) {
   const lag = pointerLag(samples, run.ticks, run.boundary);
   assert.ok(lag.lag <= LAG,
     `the card showed a layout ${lag.lag.toFixed(1)}ms after the grid left it (limit ${LAG}ms): ` +
-      `offset ${lag.shown?.toFixed(1)}pt at ${lag.time?.toFixed(1)}ms matches step ${lag.step} while step ${lag.sent} was sent; median ${lag.median.toFixed(1)}ms`);
+      `offset ${lag.shown?.toFixed(1)}pt at ${lag.time?.toFixed(1)}ms matches step ${lag.step} while step ${lag.sent} was sent; median ${lag.median.toFixed(1)}ms; ` +
+      // 표시 지연은 다른 프로세스의 CPU 사용에 따라 달라지므로 측정 때의 시스템 부하를 함께 적는다.
+      `load average ${loadavg().map((value) => value.toFixed(1)).join(" ")} on ${availableParallelism()} processors`);
 
   assert.ok(delayed.delta <= 1,
     `native content, card, sidebar, and rail geometry differ by ${delayed.delta.toFixed(1)}pt in frame ` +
