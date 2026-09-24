@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-29-1: closing a PTY session also treats a process group whose shell is still exiting, waiting for unread terminal output to drain, as closed.
 - V5-6-2: the cursor policy window check sets the cursor interval and idle timeout through their settings controls on both hosts.
 - V5-6-4: validated in real windows on rebuilt Wails and Tauri through the PNG paste window check.
 - V5-6-5 (progress): a window check pastes a PNG from the general pasteboard into a terminal on both hosts and requires the owned image path, and requires an explicit error for bytes that are not a PNG.

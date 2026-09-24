@@ -6,7 +6,19 @@ pub struct Member {
     pub pid: i32,
     /// 끝났고 아직 회수되지 않은 프로세스.
     pub zombie: bool,
+    /// exit() 을 처리하는 중인 프로세스. 예를 들어 읽히지 않은 출력이 남은 터미널을 닫으며 기다린다.
+    pub exiting: bool,
 }
+
+impl Member {
+    /// 더 끝낼 것이 없는 구성원. macOS 는 이런 구성원만 남은 그룹의 신호에 EPERM 으로 답한다.
+    pub fn ended(&self) -> bool {
+        self.zombie || self.exiting
+    }
+}
+
+// sys/proc_info.h 의 PROC_FLAG_INEXIT. libc 크레이트는 이 값을 내보내지 않는다.
+const PROC_FLAG_INEXIT: u32 = 4;
 
 // sys/proc_info.h 의 PROC_PGRP_ONLY. libc 크레이트는 이 값을 내보내지 않는다.
 const PROC_PGRP_ONLY: u32 = 2;
@@ -57,6 +69,7 @@ pub fn members(group: i32) -> Result<Vec<Member>, String> {
             members.push(Member {
                 pid,
                 zombie: info.pbi_status == libc::SZOMB,
+                exiting: info.pbi_flags & PROC_FLAG_INEXIT != 0,
             });
             continue;
         }

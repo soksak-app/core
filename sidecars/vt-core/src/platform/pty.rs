@@ -36,11 +36,13 @@ pub fn kill_process_group(
             Err(nix::errno::Errno::ESRCH) => Ok(()),
             #[cfg(target_os = "macos")]
             Err(nix::errno::Errno::EPERM) => {
-                // macOS 는 구성원이 모두 끝나 회수를 기다리는(좀비) 그룹의 신호에 EPERM 을 돌려준다.
-                // 그런 그룹은 끝낼 프로세스가 없다. 끝나지 않은 구성원이 있으면 그 상태를 적어 실패한다.
+                // macOS 는 구성원이 모두 exit() 을 처리하는 중이거나 회수를 기다리는(좀비) 그룹의 신호에
+                // EPERM 을 돌려준다. 셸이 읽히지 않은 출력을 남기고 끝나면 터미널을 닫으며 출력이 비워지기를
+                // 기다리는 동안 종료 중이다. 그런 그룹은 끝낼 프로세스가 없다. 끝나지 않은 구성원이 있으면
+                // 그 상태를 적어 실패한다.
                 let members = crate::platform::darwin::process_group::members(group)
                     .map_err(|error| format!("kill PTY process group {group}: EPERM; {error}"))?;
-                if members.iter().all(|member| member.zombie) {
+                if members.iter().all(|member| member.ended()) {
                     return Ok(());
                 }
                 Err(format!(

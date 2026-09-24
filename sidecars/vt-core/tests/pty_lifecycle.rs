@@ -226,7 +226,8 @@ fn process_group_members_report_running_and_ended_processes() {
         members(group),
         Ok(vec![Member {
             pid: group,
-            zombie: false
+            zombie: false,
+            exiting: false
         }])
     );
     child.kill().expect("sleep must end");
@@ -246,13 +247,63 @@ fn process_group_members_report_running_and_ended_processes() {
         "waitid failed: {}",
         std::io::Error::last_os_error()
     );
-    assert_eq!(
-        members(group),
-        Ok(vec![Member {
-            pid: group,
-            zombie: true
-        }])
+    let ended = members(group).expect("the group must be readable");
+    assert!(
+        ended.len() == 1 && ended[0].pid == group && ended[0].zombie && ended[0].ended(),
+        "the ended process was not reported as a zombie: {ended:?}"
     );
     child.wait().expect("sleep must be reaped");
     assert_eq!(members(group), Ok(vec![]));
+}
+
+/// 셸이 읽히지 않은 PTY 출력을 남기고 끝나면 커널은 슬레이브를 닫으며 출력이 비워지기를 기다린다.
+/// 그동안 셸은 좀비가 아니라 종료 중이고, macOS 는 그 그룹의 신호에 EPERM 으로 답한다.
+#[test]
+fn a_process_group_whose_members_are_exiting_is_already_terminated() {
+    use soksak_sidecar_vt_core::platform::darwin::process_group::members;
+    use std::os::fd::FromRawFd;
+    use std::os::unix::process::CommandExt;
+    let _test_lock = lifecycle_test_lock();
+    let _native_test_lock = native_pty_test_lock();
+    let (mut master, mut slave) = (0, 0);
+    let opened = unsafe {
+        libc::openpty(
+            &mut master,
+            &mut slave,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        )
+    };
+    assert_eq!(
+        opened,
+        0,
+        "openpty failed: {}",
+        std::io::Error::last_os_error()
+    );
+    let master = unsafe { std::os::fd::OwnedFd::from_raw_fd(master) };
+    // 슬레이브는 자식에게만 남기고 이 프로세스에서는 닫는다.
+    let mut child = std::process::Command::new("/bin/sh")
+        .args(["-c", "printf unread-output"])
+        .stdout(unsafe { std::process::Stdio::from_raw_fd(slave) })
+        .process_group(0)
+        .spawn()
+        .expect("the shell must start");
+    let group = child.id() as i32;
+    let started = std::time::Instant::now();
+    let exiting = loop {
+        let now = members(group).expect("the group must be readable");
+        if now.iter().any(|member| member.exiting && !member.zombie) {
+            break now;
+        }
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(2),
+            "the shell never reported an exit in progress: {now:?}"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    };
+    let result = soksak_sidecar_vt_core::platform::pty::kill_process_group(Some(group));
+    drop(master);
+    child.wait().expect("the shell must be reaped");
+    assert_eq!(result, Ok(()), "members while exiting: {exiting:?}");
 }
