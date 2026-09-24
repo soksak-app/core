@@ -45,6 +45,8 @@ export function createSurfaceContext({
       clipboard: runtime.clipboard,
       theme: runtime.theme,
       settings: runtime.settings,
+      // 이 표면의 실제 글자 배율. read() 는 현재 배율, on(fn) 은 배율이 바뀔 때 fn(배율) 을 부른다.
+      textSize: runtime.textSize,
     }),
     exposure: Object.freeze(runtime.exposure),
     events: Object.freeze({

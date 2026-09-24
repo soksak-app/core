@@ -98,6 +98,9 @@
             "fontSystem": {
               "type": "boolean"
             },
+            "fontSize": {
+              "type": "number"
+            },
             "cols": {
               "type": "integer"
             },

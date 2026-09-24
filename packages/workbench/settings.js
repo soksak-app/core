@@ -26,7 +26,7 @@
 
 import { surfaces as host } from "./host.js";
 import { effectiveSettings } from "./settings-scope.js";
-import { TEXT_STEPS } from "./text-size.js";
+import { TEXT_STEPS, notifyTextSize } from "./text-size.js";
 
 /* 고를 수 있는 폰트. 테마가 이 중 하나를 기본으로 지정하고 설정에서 바꾼다.
    설치되지 않은 이름은 목록의 다음 이름으로 넘어간다. */
@@ -404,6 +404,7 @@ export function install() {
   root.dataset.seam = seam();
   // 프레임 크롬과 카드 내용의 CSS zoom 이 읽는 프레임 글자 배율.
   root.style.setProperty("--frame-text", String(settings.textSize));
+  notifyTextSize();
   for (const [token, value] of Object.entries(themeTokens())) {
     root.style.setProperty(token, value);
   }

@@ -6,7 +6,7 @@
 // 검증의 존재를 알지 않는다. 렌더링 완료만 통지하고 이후 처리는 문서가 정한다.
 import { Soksak, SoksakView, outline } from "soksak";
 import { cardRadius, halfGap, linkedSet, set as setSetting, stagePad, value } from "./settings.js";
-import { nextTextSize, setTextScope, textScope } from "./text-size.js";
+import { nextTextSize, notifyTextSize, setSurfaceTextSize, setTextScope, textScope } from "./text-size.js";
 import { hasPlugin, isPlace, isRailId, plugin, plugins, railId, railKind, sectionNames } from "./registry.js";
 import { environment } from "./environment.js";
 import { standIn } from "./compositor.js";
@@ -1171,6 +1171,8 @@ export function build(kept = fresh()) {
       markFocus();
       centreTabs();
       railShape = drawRail();
+      // 탭이 카드를 옮기거나 카드 배율이 바뀌면 표면의 실제 배율이 바뀐다.
+      notifyTextSize();
       listener?.(reason);
     },
   });
@@ -1376,6 +1378,14 @@ const cardTextSize = (card) => card?.data?.textSize ?? 1;
 export function currentTextScope() {
   return textScope() ?? { kind: "card", card: focusedId };
 }
+
+/** 표면(탭)의 실제 글자 배율. 프레임 배율과 그 탭을 담은 카드의 배율을 곱한다. 판에 없는 탭은 null 이다. */
+function surfaceTextSize(surfaceId) {
+  const card = grid?.cards.find((item) => tabsOf(item).some((t) => t.id === surfaceId));
+  return card ? value("textSize") * cardTextSize(card) : null;
+}
+
+setSurfaceTextSize(surfaceTextSize);
 
 /** 모든 카드의 글자 크기 배율. */
 export function cardTextSizes() {

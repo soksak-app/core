@@ -2364,6 +2364,48 @@ test("persistent reconnect restores the session identity before a new raster is 
   assert.equal(session.error, undefined);
 });
 
+test("the font size is 13 points times the text size factor and follows its changes", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  const fakeExpose = createFakeExpose();
+  const values = {
+    "cursor.shape": "block", "cursor.blink": "Off", "cursor.interval": 750,
+    "cursor.idleTimeout": 5000, "cursor.unfocused": "hollow", "clipboard.program": "deny",
+    "font.family": "Menlo",
+  };
+  const send = fakeSidecar.send;
+  fakeSidecar.send = async (id, body) => {
+    await send(id, body);
+    if (body.operation !== "font") return;
+    queueMicrotask(() => fakeSidecar.triggerEvent("test-session",
+      { ack: true, event: "font", family: body.family, system: false, skipped: [], size: body.size }));
+  };
+  let factor = 1.5;
+  let notify;
+  const textSize = { read: () => factor, on: (listener) => { notify = listener; return () => { notify = null; }; } };
+  const terminal = await startTerminal({
+    view: createFakeView(), attachImage: createFakeAttachImage().function,
+    sidecar: fakeSidecar, expose: fakeExpose, textSize,
+    settings: { read: () => values, on: () => () => {} },
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  const settle = () => new Promise((resolve) => setImmediate(resolve));
+  const fonts = () => fakeSidecar.getMessages().filter(({ body }) => body.operation === "font")
+    .map(({ body }) => [body.family, body.size]);
+  await settle();
+  assert.deepEqual(fonts(), [["Menlo", 19.5]], "the startup font uses the current factor");
+  factor = 2;
+  notify(factor);
+  await settle();
+  assert.deepEqual(fonts(), [["Menlo", 19.5], ["Menlo", 26]]);
+  notify(factor);
+  await settle();
+  assert.equal(fonts().length, 2, "an unchanged size is not sent again");
+  assert.equal(fakeExpose.getStatus("terminal.session").readFn().fontSize, 26, "the applied size is reported");
+  await terminal.dispose();
+  assert.equal(notify, null, "disposing the terminal stops following the text size");
+});
+
 test("the font.family list is sent at startup and on change, and the applied family is reported", async () => {
   FakeResizeObserver.reset();
   const fakeSidecar = createFakeSidecar();
@@ -2394,6 +2436,8 @@ test("the font.family list is sent at startup and on change, and the applied fam
   const fonts = () => fakeSidecar.getMessages().filter(({ body }) => body.operation === "font").map(({ body }) => body.family);
   await settle();
   assert.deepEqual(fonts(), ["D2Coding;Menlo"], "the configured list is sent at startup");
+  assert.equal(fakeSidecar.getMessages().find(({ body }) => body.operation === "font").body.size, 13,
+    "without a text size source the factor is 1");
   let session = fakeExpose.getStatus("terminal.session").readFn();
   assert.equal(session.font, "Menlo", "the applied family is reported");
   assert.deepEqual(session.unsupported, [], "the font acknowledgement is a known event");

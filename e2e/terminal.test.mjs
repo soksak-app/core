@@ -902,6 +902,40 @@ for (const app of Object.values(APPS)) {
       "invalid cursor setting must not replace the effective value");
   });
 
+  test(`${app.name}: the terminal font follows the pressed card's text size`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const [terminal] = await ensureTerminals(s, 1);
+    const surface = terminal.surface;
+    s.cleanup(() => closeTerminalTabs(s));
+    await s.until("terminal.session", (state) => Boolean(state?.sessionId) && state.fontSize === 13,
+      "the terminal did not open at 13 points", { surface });
+    // 빨간 글자 한 줄의 픽셀 높이가 그려진 글꼴 크기를 나타낸다.
+    const red = async (marker) => {
+      await s.run("terminal.input", { bytes: `printf '\\033[2J\\033[H\\033[31m${marker}\\033[0m\\n'\r` }, surface);
+      await readScreenUntil(s, surface, (lines) => lines.some((line) => line.trim() === marker), `${marker} did not render`);
+      await s.presented();
+      return terminalColorBounds(s, surface, "red");
+    };
+    const before = await s.get("terminal.session", surface);
+    const glyphBefore = await red("HGHGHG");
+    assert.ok(glyphBefore.count > 0, "the red text was not found in the terminal pixels");
+    const view = await s.rect("terminal.view", undefined, surface);
+    await s.click(view.document.x + view.x + view.width / 2, view.document.y + view.y + view.height / 2);
+    await s.until("core.text", (value) => value.scope.kind === "card", "pressing the terminal card did not make it the scope");
+    await s.run("host.menu.select", { menu: "View", title: "글자 크게" });
+    await s.run("host.menu.select", { menu: "View", title: "글자 크게" });
+    const after = await s.until("terminal.session", (state) => state.fontSize === 13 * 1.25,
+      "the terminal font did not reach 13 points times 1.25", { surface });
+    const cell = after.cellHeight / before.cellHeight;
+    assert.ok(Math.abs(cell - 1.25) <= 0.1, `the cell height must grow with the factor: ${before.cellHeight} → ${after.cellHeight}`);
+    const glyphAfter = await red("HGHGHG");
+    const glyph = (glyphAfter.maxY - glyphAfter.minY + 1) / (glyphBefore.maxY - glyphBefore.minY + 1);
+    assert.ok(Math.abs(glyph - 1.25) <= 0.15,
+      `the rendered glyph height must grow with the factor: ${JSON.stringify(glyphBefore)} → ${JSON.stringify(glyphAfter)}`);
+  });
+
   test(`${app.name}: a native drag over blank terminal cells ends without a surface error`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);

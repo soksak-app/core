@@ -22,6 +22,31 @@ export function nextTextSize(value, direction) {
 
 let scope = null;
 const listeners = new Set();
+const sizeListeners = new Set();
+
+let resolveSurface = null;
+
+/** 표면의 실제 배율을 계산하는 함수를 정한다. 판이 정한다. */
+export function setSurfaceTextSize(fn) {
+  resolveSurface = fn;
+}
+
+/** 표면의 실제 배율. 판에 없는 표면은 null 이다. 계산하는 함수가 정해지기 전에는 오류다. */
+export function surfaceTextSize(surfaceId) {
+  if (!resolveSurface) throw new Error("the surface text size is not available before the plane starts");
+  return resolveSurface(surfaceId);
+}
+
+/** 배율이 바뀌었을 수 있음을 알린다. 표면은 자기 실제 배율을 다시 읽는다. */
+export function notifyTextSize() {
+  for (const fn of sizeListeners) fn();
+}
+
+/** 배율이 바뀌었을 수 있을 때 호출할 함수를 등록한다. 등록을 끝내는 함수를 반환한다. */
+export function onTextSize(fn) {
+  sizeListeners.add(fn);
+  return () => sizeListeners.delete(fn);
+}
 
 /** 현재 범위. {kind: "card", card} 이거나 {kind: "frame"} 이며, 누르기 전에는 null 이다. */
 export const textScope = () => scope;

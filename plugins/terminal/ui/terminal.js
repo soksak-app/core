@@ -163,6 +163,8 @@ function normalizeCursorPolicy(value) {
  */
 export async function startTerminal({ id, view, attachImage, sidecar, expose, theme,
   settings, clipboard, reportSurfaceError = () => {}, diagnostics = null,
+  // 이 표면의 실제 글자 배율(docs/spec/text-size.md). 출처가 없으면 배율은 1 이다.
+  textSize = { read: () => 1, on: () => () => {} },
   window: globalWindow = globalThis.window }) {
   // 브라우저 환경에서 필요한 객체들
   const window = globalWindow;
@@ -305,12 +307,27 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   };
   // 터미널 글꼴 family 우선순위 목록(`;` 로 구분)을 사이드카에 보낸다. 사이드카는 설치된 첫 family 를
   // 적용하고 font 확인 이벤트로 그 family 를 알린다.
-  let requestedFont = null;
+  // 글꼴 크기는 13포인트에 이 표면의 글자 배율을 곱한 값이다. family 나 크기가 바뀌면 둘을 함께 보낸다.
+  const BASE_FONT_SIZE = 13;
+  let fontFamily = null;
+  let textFactor = textSize.read();
+  let requested = null;
+  const sendFont = async () => {
+    if (fontFamily === null) return;
+    const size = BASE_FONT_SIZE * textFactor;
+    if (requested?.family === fontFamily && requested?.size === size) return;
+    requested = { family: fontFamily, size };
+    await terminal.send(id, { operation: "font", family: fontFamily, size });
+  };
   const setFont = async (family) => {
     if (typeof family !== "string" || family.length === 0) throw new Error("font.family setting is invalid");
-    if (family === requestedFont) return;
-    requestedFont = family;
-    await terminal.send(id, { operation: "font", family });
+    fontFamily = family;
+    await sendFont();
+  };
+  const setTextSize = async (factor) => {
+    if (!Number.isFinite(factor) || factor <= 0) throw new Error(`text size factor is invalid: ${String(factor)}`);
+    textFactor = factor;
+    await sendFont();
   };
   const sendPaste = async (text) => {
     if (typeof text !== "string" || text.length === 0) throw new Error("terminal paste text is empty");
@@ -762,7 +779,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       setError("sidecar", error.message);
       reportSurfaceError(error);
     } else if (body.event === "font" && typeof body.family === "string") {
-      session = { ...session, font: body.family, fontSystem: body.system === true };
+      session = { ...session, font: body.family, fontSystem: body.system === true, fontSize: body.size };
       changed("session");
     } else if (body.error) {
       // 오류 응답 처리: {"error":"invalidParams","reason":"...",...}
@@ -843,6 +860,8 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       setFont(values["font.family"]).catch(reportInputError);
     });
   }
+
+  const textSizeSubscription = textSize.on((factor) => setTextSize(factor).catch(reportInputError));
 
   // 공개 항목 등록
   await Promise.all([
@@ -953,6 +972,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       const offTheme = await themeSubscription?.dispose;
       offTheme?.();
       settingsSubscription?.();
+      textSizeSubscription();
       stopSidecar?.();
       view.removeEventListener("pointerdown", preventDefaultFocus);
       view.removeEventListener("pointerdown", beginSelection);

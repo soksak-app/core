@@ -34,10 +34,11 @@ impl ImageState {
         height_px: u32,
         scale: f32,
         font: &std::sync::Arc<TerminalFont>,
+        font_size: f32,
     ) -> Result<ImageState, String> {
         let frame = Frame::new(width_px, height_px)
             .ok_or_else(|| format!("IOSurface creation failed for {width_px}x{height_px}"))?;
-        let device_metrics = metrics_for(font, 13.0, scale)?;
+        let device_metrics = metrics_for(font, font_size, scale)?;
         Ok(ImageState {
             name,
             generation,

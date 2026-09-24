@@ -552,6 +552,8 @@ enum SurfaceCommand {
         font: std::sync::Arc<crate::platform::TerminalFont>,
         system: bool,
         skipped: Vec<String>,
+        /// 글꼴 크기(포인트).
+        size: f32,
     },
     Cursor {
         policy: CursorPolicy,
@@ -818,6 +820,12 @@ pub use crate::platform::ImageState;
 
 /// 화면을 그림에 그려 봉투를 보내고 그림을 호스트에 넘긴다.
 /// 그리기에 실패하면 오류 이벤트를 보내고 true 를 반환한다. 출력 통로가 닫혔으면 false 를 반환한다.
+/// 글꼴 크기의 기본값과 범위(포인트). 기본 크기에 프레임과 카드의 글자 배율(각각 최대 3)을 곱한 값이 범위 안에
+/// 든다(docs/spec/text-size.md).
+const DEFAULT_FONT_SIZE: f32 = 13.0;
+const FONT_SIZE_MIN: f64 = 4.0;
+const FONT_SIZE_MAX: f64 = 128.0;
+
 async fn present_screen(
     surface_id: &str,
     screen: &Screen,
@@ -1403,6 +1411,8 @@ async fn surface_task(
     let mut cursor_policy = CursorPolicy::default();
     // 이 표면의 터미널 글꼴. font 요청 전까지 시스템 고정폭 글꼴이다.
     let mut terminal_font = crate::platform::default_font();
+    // 글꼴 크기(포인트). font 연산이 정한다(docs/spec/text-size.md).
+    let mut terminal_font_size = DEFAULT_FONT_SIZE;
     let mut cursor_activity = Instant::now();
     let mut cursor_tick = tokio::time::interval(Duration::from_millis(50));
     cursor_tick.set_missed_tick_behavior(MissedTickBehavior::Skip);
@@ -1482,7 +1492,7 @@ async fn surface_task(
                             }
                         }
                         let new_state = match ImageState::new(configuration.name.clone(), configuration.generation,
-                            configuration.raster, configuration.width, configuration.height, configuration.scale, &terminal_font) {
+                            configuration.raster, configuration.width, configuration.height, configuration.scale, &terminal_font, terminal_font_size) {
                             Ok(state) => state,
                             Err(reason) => {
                                 let response = json!({
@@ -1779,7 +1789,7 @@ async fn surface_task(
                         let response = json!({"surface": surface_id, "body": {"ack": true, "event": "theme", "mode": mode}});
                         if output_tx.send(response.to_string()).await.is_err() { return; }
                     }
-                    SurfaceCommand::Font { font, system, skipped } => {
+                    SurfaceCommand::Font { font, system, skipped, size } => {
                         let family = match font.family() {
                             Ok(family) => family,
                             Err(reason) => {
@@ -1790,7 +1800,7 @@ async fn surface_task(
                         };
                         // 현재 raster 크기를 유지하고 새 글꼴의 셀 메트릭으로 열과 행을 다시 계산한다.
                         if let Some(state) = image_state.as_mut() {
-                            let metrics = match crate::platform::metrics_for(&font, 13.0, state.scale) {
+                            let metrics = match crate::platform::metrics_for(&font, size, state.scale) {
                                 Ok(metrics) => metrics,
                                 Err(reason) => {
                                     let response = json!({"surface": surface_id, "body": {"error": "invalidParams", "reason": reason}});
@@ -1814,6 +1824,7 @@ async fn surface_task(
                                 continue;
                             }
                             terminal_font = font;
+                            terminal_font_size = size;
                             refresh_inline_image_positions(&mut engine, &mut image_state);
                             if let Some(sid) = session_id.as_ref() {
                                 if let Err(error) = session_port.resize(sid, cols, rows).await {
@@ -1832,8 +1843,9 @@ async fn surface_task(
                             }
                         } else {
                             terminal_font = font;
+                            terminal_font_size = size;
                         }
-                        let response = json!({"surface": surface_id, "body": {"ack": true, "event": "font", "family": family, "system": system, "skipped": skipped}});
+                        let response = json!({"surface": surface_id, "body": {"ack": true, "event": "font", "family": family, "system": system, "skipped": skipped, "size": size}});
                         if output_tx.send(response.to_string()).await.is_err() { return; }
                     }
                     SurfaceCommand::Cursor { policy } => {
@@ -2009,7 +2021,7 @@ async fn surface_task(
                             image_state.as_mut().unwrap().pending_draw = false;
                             if let Some(configuration) = pending_configuration.take() {
                                 let new_state = match ImageState::new(configuration.name.clone(), configuration.generation,
-                                    configuration.raster, configuration.width, configuration.height, configuration.scale, &terminal_font) {
+                                    configuration.raster, configuration.width, configuration.height, configuration.scale, &terminal_font, terminal_font_size) {
                                     Ok(state) => state,
                                     Err(reason) => {
                                         let response = json!({"surface": surface_id,
@@ -2657,12 +2669,18 @@ where
                                 }
                             }
                             "font" => {
+                                let size = match body.get("size").and_then(Value::as_f64) {
+                                    Some(size) if (FONT_SIZE_MIN..=FONT_SIZE_MAX).contains(&size) => Ok(size as f32),
+                                    _ => Err(format!("font.size must be a number from {FONT_SIZE_MIN} to {FONT_SIZE_MAX} points")),
+                                };
                                 let resolved = match body.get("family").and_then(Value::as_str) {
                                     Some(list) => crate::platform::resolve_font_list(list),
                                     None => Err("font.family must be a string".to_string()),
                                 };
-                                match resolved {
-                                    Ok(selection) => {
+                                match size
+                                    .and_then(|size| resolved.map(|selection| (selection, size)))
+                                {
+                                    Ok((selection, size)) => {
                                         // 설치되어 있지 않은 family 는 오류가 아니라 로그에 남긴다.
                                         for family in &selection.skipped {
                                             eprintln!(
@@ -2679,6 +2697,7 @@ where
                                                 font,
                                                 system,
                                                 skipped,
+                                                size,
                                             })
                                             .await
                                             .is_err()

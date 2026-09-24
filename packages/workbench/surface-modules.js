@@ -4,6 +4,7 @@ import { registry } from "./exposure.js";
 import { plugin } from "./registry.js";
 import { registerSurfaceExposure } from "./surface-exposure.js";
 import { onSettingsChange, pluginSettings } from "./settings.js";
+import { onTextSize, surfaceTextSize } from "./text-size.js";
 const mounted = new Map();
 const parking = document.createDocumentFragment();
 const authorization = new Map();
@@ -125,6 +126,21 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
       runtime: { sidecar: scoped.sidecar, native: scoped.native, exposure: scoped.exposure, emit, on,
         clipboard: scoped.clipboard,
         theme: scoped.theme,
+        // 이 표면의 실제 글자 배율(docs/spec/text-size.md). 알림마다 다시 읽고 바뀐 값만 전달한다. 판에서
+        // 빠진 탭(null)은 해제될 때까지 마지막 배율을 유지한다.
+        textSize: { read: () => {
+          const factor = surfaceTextSize(surface.surfaceId);
+          if (factor === null) throw new Error(`surface ${surface.surfaceId} is not in the layout`);
+          return factor;
+        }, on: (listener) => {
+          let last = surfaceTextSize(surface.surfaceId);
+          return onTextSize(() => {
+            const next = surfaceTextSize(surface.surfaceId);
+            if (next === null || next === last) return;
+            last = next;
+            listener(next);
+          });
+        } },
         settings: { read: () => pluginSettings(surface.pluginId), on: (listener) =>
           onSettingsChange(() => listener(pluginSettings(surface.pluginId))) },
       },

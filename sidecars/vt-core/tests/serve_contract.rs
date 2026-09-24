@@ -3185,10 +3185,10 @@ async fn test_replacement_raster_state_has_cell_dimensions() {
 #[tokio::test]
 async fn test_font_applies_the_first_installed_family_of_a_list() {
     let input = r#"
-{"surface":"s1","body":{"operation":"font","family":"No Such Terminal Font Family;Menlo"}}
-{"surface":"s1","body":{"operation":"font","family":"Courier"}}
-{"surface":"s1","body":{"operation":"font","family":"No Such Terminal Font Family"}}
-{"surface":"s1","body":{"operation":"font","family":" ; "}}
+{"surface":"s1","body":{"operation":"font","family":"No Such Terminal Font Family;Menlo","size":13}}
+{"surface":"s1","body":{"operation":"font","family":"Courier","size":13}}
+{"surface":"s1","body":{"operation":"font","family":"No Such Terminal Font Family","size":13}}
+{"surface":"s1","body":{"operation":"font","family":" ; ","size":13}}
 "#;
     let reader = std::io::Cursor::new(input.as_bytes());
     let mut writer = Vec::new();
@@ -3246,4 +3246,83 @@ async fn test_font_applies_the_first_installed_family_of_a_list() {
         errors,
         vec!["font.family must name at least one family".to_string()]
     );
+}
+
+/// state 이벤트나 오류 응답이 올 때까지 줄을 읽는다.
+async fn next_state(
+    lines: &mut tokio::io::Lines<tokio::io::BufReader<tokio::io::DuplexStream>>,
+    expect: &str,
+) -> serde_json::Value {
+    loop {
+        let line = tokio::time::timeout(std::time::Duration::from_secs(2), lines.next_line())
+            .await
+            .expect(expect)
+            .unwrap()
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_str(&line).unwrap();
+        if json["body"]["event"] == "state" || json["body"]["error"].is_string() {
+            return json;
+        }
+    }
+}
+
+/// 글꼴 크기는 칸 크기를 정한다(docs/spec/text-size.md). 크기가 두 배면 칸 높이도 두 배이고, 잘못된 크기는 오류다.
+#[tokio::test]
+async fn test_font_size_sets_the_cell_size() {
+    let calls = Arc::new(Mutex::new(Calls::default()));
+    let engine_factory = Arc::new(|| Box::new(MockEngine::new()) as Box<dyn Engine>);
+    let port = Arc::new(FakeSessionPort::new(
+        "test-session-font-size".to_string(),
+        calls.clone(),
+    ));
+    let factory = Arc::new(move || port.clone() as Arc<dyn SessionPort>);
+    let (mut to_serve, serve_in) = tokio::io::duplex(64 * 1024);
+    let (serve_out, from_serve) = tokio::io::duplex(64 * 1024);
+    let task = tokio::spawn(serve(engine_factory, serve_in, serve_out, factory));
+    let mut lines = tokio::io::BufReader::new(from_serve).lines();
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+{"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
+"#).await.unwrap();
+    let initial = next_state(&mut lines, "the open state").await;
+    let base = initial["body"]["cellHeight"].as_f64().unwrap();
+    to_serve
+        .write_all(
+            br#"{"surface":"s1","body":{"operation":"font","family":"Menlo","size":26}}
+"#,
+        )
+        .await
+        .unwrap();
+    let larger = next_state(&mut lines, "the state after a font size change").await;
+    let height = larger["body"]["cellHeight"].as_f64().unwrap();
+    assert!(
+        (height / base - 2.0).abs() < 0.1,
+        "a font twice as large doubles the cell height: {base} -> {height}"
+    );
+    to_serve
+        .write_all(
+            br#"{"surface":"s1","body":{"operation":"font","family":"Menlo","size":0}}
+{"surface":"s1","body":{"operation":"font","family":"Menlo"}}
+"#,
+        )
+        .await
+        .unwrap();
+    let invalid = next_state(&mut lines, "the invalid size error").await;
+    assert_eq!(invalid["body"]["error"], "invalidParams");
+    assert!(
+        invalid["body"]["reason"]
+            .as_str()
+            .unwrap()
+            .contains("font.size"),
+        "{invalid}"
+    );
+    let missing = next_state(&mut lines, "the missing size error").await;
+    assert!(
+        missing["body"]["reason"]
+            .as_str()
+            .unwrap()
+            .contains("font.size"),
+        "{missing}"
+    );
+    drop(to_serve);
+    let _ = task.await;
 }
