@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-42: Command+V on a terminal runs `terminal.paste` through the command registry instead of inserting the text into the input-method document.
 - V5-46: a click on another card records the surface to focus before the card focus renders, so the clicked terminal receives native focus.
 - V5-40: a click without movement clears the terminal selection by ending an empty selection at the pressed cell.
 - V5-38: a real-input window check tier posts HID events through the window server with `CGEventPost` and restores every pasteboard item type.

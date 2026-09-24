@@ -1050,6 +1050,28 @@ int main(void) { @autoreleasepool {
         sp_region_close(region);
     }
 
+    // Edit 메뉴의 붙여넣기는 입력기 문서가 아니라 페이지의 붙여넣기 명령으로 간다(V5-42).
+    {
+        void *region = sp_region_create(surface, "edit-actions", testEvent, NULL);
+        sp_region_place(region, 0, 0, 0, 0, true);
+        NSTextView *regionView = (NSTextView *)region;
+        NSUInteger before = collectedEvents.count;
+        [NSApp sendAction:@selector(paste:) to:regionView from:nil];
+        [NSApp sendAction:@selector(pasteAsPlainText:) to:regionView from:nil];
+        NSArray *reported = [collectedEvents subarrayWithRange:NSMakeRange(before, collectedEvents.count - before)];
+        check([reported isEqualToArray:@[@"{\"type\":\"action\",\"name\":\"paste\"}", @"{\"type\":\"action\",\"name\":\"paste\"}"]]
+            && regionView.textStorage.length == 0,
+            [NSString stringWithFormat:@"edit actions: paste reports one paste action and leaves the input document empty (got %@)", reported]);
+        NSMenuItem *item = [[[NSMenuItem alloc] initWithTitle:@"" action:@selector(paste:) keyEquivalent:@""] autorelease];
+        check([regionView validateMenuItem:item], @"edit actions: Paste is enabled for a terminal region");
+        for (NSString *name in @[@"cut:", @"selectAll:", @"delete:"]) {
+            item.action = NSSelectorFromString(name);
+            check(![regionView validateMenuItem:item],
+                [NSString stringWithFormat:@"edit actions: %@ is disabled for a terminal region", name]);
+        }
+        sp_region_close(region);
+    }
+
     [window close];
     [window release];
 

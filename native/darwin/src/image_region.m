@@ -191,6 +191,28 @@ static BOOL containsHangul(NSString *text) {
     return nil;
 }
 
+// Edit 메뉴의 붙여넣기는 페이지에 알려 선언된 붙여넣기 명령을 실행하게 한다. NSTextView 의 붙여넣기는 입력기의
+// 작업 공간인 입력 문서에 넣으므로 쓰지 않는다(docs/spec/terminal-runtime.md).
+- (void)paste:(id)sender {
+    [self report:"{\"type\":\"action\",\"name\":\"paste\"}"];
+}
+
+- (void)pasteAsPlainText:(id)sender {
+    [self paste:sender];
+}
+
+// 입력 문서를 편집하는 Edit 동작은 터미널 내용과 관계없으므로 끈다.
+- (BOOL)validateUserInterfaceItem:(id<NSValidatedUserInterfaceItem>)item {
+    SEL action = item.action;
+    if (action == @selector(paste:) || action == @selector(pasteAsPlainText:)) return YES;
+    if (action == @selector(cut:) || action == @selector(selectAll:) || action == @selector(delete:)) return NO;
+    return [super validateUserInterfaceItem:item];
+}
+
+- (BOOL)validateMenuItem:(NSMenuItem *)item {
+    return [self validateUserInterfaceItem:item];
+}
+
 // 서비스 메뉴가 입력 문서를 읽거나 바꾸지 않게 한다. 입력 문서는 입력기의 작업 공간이며 터미널 내용이 아니다.
 - (id)validRequestorForSendType:(NSPasteboardType)sendType returnType:(NSPasteboardType)returnType {
     return nil;

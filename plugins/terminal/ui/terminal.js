@@ -533,6 +533,17 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     await observeInput(enqueueInput({ type: "command", selector: event.selector }));
   });
 
+  // Edit 메뉴 동작은 선언된 명령을 레지스트리로 실행한다(docs/spec/terminal-runtime.md).
+  const ACTIONS = { paste: "terminal.paste" };
+  onRegion("action", async (event) => {
+    const command = ACTIONS[event?.name];
+    if (!command) {
+      reportInputError(new Error(`unknown native action: ${String(event?.name)}`));
+      return;
+    }
+    await observeInput(Promise.resolve().then(() => expose.run(command, {})));
+  });
+
   onRegion("focus", async (event) => {
     if (typeof event.focused !== "boolean") {
       reportInputError("native focus event requires boolean focused");

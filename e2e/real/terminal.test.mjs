@@ -7,7 +7,7 @@ import test from "node:test";
 import { APPS, fresh, open } from "../app.mjs";
 import { frames, pixel, readFrame } from "../frame.mjs";
 import { ensureTerminals, readScreenUntil } from "../terminal-screen.mjs";
-import { bringFront, click, dragPath, keepPasteboard, pasteboardText, requireTrusted, screenCenter } from "./hid.mjs";
+import { bringFront, click, dragPath, key, KEYS, keepPasteboard, pasteboardText, requireTrusted, screenCenter, writePasteboard } from "./hid.mjs";
 
 // 터미널 한 칸의 중심 화면 좌표.
 function cellPoint(origin, session, column, row) {
@@ -48,6 +48,9 @@ async function prepare(t, app, line) {
   const origin = { x: center.x - view.width / 2, y: center.y - view.height / 2 };
   return { s, surface, session, origin, row: lines.indexOf(line) };
 }
+
+/** Command+V 부터 붙여넣은 텍스트가 화면에 나오기까지의 한도(ms). */
+const PASTE_LIMIT = 500;
 
 const same = (a, b) => a.every((value, index) => Math.abs(value - b[index]) <= 8);
 
@@ -91,5 +94,29 @@ for (const app of Object.values(APPS)) {
         `${terminal.surface} did not become the native first responder after a real click`);
       assert.deepEqual(host.regions.filter((region) => region.focused).map((region) => region.surface), [terminal.surface]);
     }
+  });
+}
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: a real Command+V pastes the clipboard text without another key`, { timeout: 90000 }, async (t) => {
+    const { s, surface, origin, session, row } = await prepare(t, app, "PASTEHERE");
+    const point = cellPoint(origin, session, 0, row + 1);
+    click(point.x, point.y);
+    await s.until("host.window", (window) => window.responder?.surface === surface, "the terminal did not take native focus");
+    const marker = `PASTED${process.pid}`;
+    writePasteboard([{ "public.utf8-plain-text": Buffer.from(marker).toString("base64") }]);
+    const started = performance.now();
+    key(KEYS.v, ["command"]);
+    // key 는 osascript 를 시작해 이벤트를 보내고 돌아온다. 키가 보내진 시각은 started 와 posted 사이다.
+    const posted = performance.now();
+    // 다른 키 없이 붙여넣은 텍스트가 화면에 나와야 한다. 입력기 문서에 남으면 다음 키까지 나오지 않는다.
+    await readScreenUntil(s, surface, (lines) => lines.some((line) => line.includes(marker)),
+      "Command+V did not paste the clipboard text without another key");
+    const elapsed = performance.now() - started;
+    t.diagnostic(`${app.name}: Command+V text shown ${elapsed.toFixed(0)} ms after the post started and ` +
+      `${(performance.now() - posted).toFixed(0)} ms after it returned`);
+    // 입력기 문서에 머문 텍스트는 다른 계기로 확정될 때까지 몇 초 동안 나오지 않았다(V5-42).
+    assert.ok(elapsed <= PASTE_LIMIT, `Command+V text appeared ${elapsed.toFixed(0)} ms after the key (limit ${PASTE_LIMIT} ms)`);
+    assert.equal((await s.get("terminal.session", surface)).error, undefined);
   });
 }

@@ -895,6 +895,8 @@ export function createExpose(port, load) {
     bind: binding(binder.bind),
     mark: binding(binder.mark),
     delegate: binding(binder.delegate),
+    /** 이 문서에 선언된 명령을 레지스트리로 실행한다. */
+    run: binding(binder.run),
     /** root 안에서 명령이나 dom 이름이 없는 조작 요소. */
     audit: (root) => binder.audit(root),
     /** 연결이 바뀌면 fn 을 호출한다. 해제 함수를 반환한다. */

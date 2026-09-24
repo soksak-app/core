@@ -56,6 +56,14 @@ test("bind reports a failed run to failed", async () => {
   assert.deepEqual(errors, ["no"]);
 });
 
+test("run executes a declared command and rejects an undeclared one", async () => {
+  const b = binder();
+  assert.equal(await b.run("fixture.press", { id: "r" }), "ran");
+  assert.deepEqual(b.calls, [["fixture.press", { id: "r" }]]);
+  assert.throws(() => b.run("fixture.absent"), /fixture.absent is not declared/);
+  assert.equal(b.calls.length, 1);
+});
+
 test("binding or marking an undeclared command throws", () => {
   const b = binder();
   assert.throws(() => b.bind(element("button"), "fixture.absent"), /fixture.absent is not declared/);

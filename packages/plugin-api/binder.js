@@ -124,7 +124,13 @@ export function createBinder(run, { check, changed = () => {} }) {
       }));
   }
 
-  return { mark, bind, delegate, audit, run, dispose() {
+  /** 선언된 명령을 실행한다. 연속 동작의 결과나 네이티브 동작처럼 요소 이벤트가 아닌 사용자 조작이 쓴다. */
+  function runDeclared(name, params = {}) {
+    check(name);
+    return run(name, params);
+  }
+
+  return { mark, bind, delegate, audit, run: runDeclared, dispose() {
     cleanup.forEach((dispose) => dispose());
     cleanup.clear();
   } };

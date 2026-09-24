@@ -141,6 +141,8 @@ function createFakeAttachImage() {
       };
     },
     getCalls: () => attachCalls,
+    // 네이티브 영역이 보고한 이벤트를 처리기에 전달하고 처리기의 결과를 모두 기다린다.
+    trigger: (eventType, event) => Promise.all((regionEventHandlers[eventType] ?? []).map((handler) => handler(event))),
     reset: () => {
       attachCalls.length = 0;
       regionEventHandlers = {};
@@ -214,6 +216,7 @@ function createFakeExpose() {
       return Promise.resolve();
     },
     bind: async function(...args) { binds.push(args); return binder.bind(...args); },
+    run: async function(name, params) { return binder.run(name, params); },
     dispose: async function() { binder.dispose(); },
     getStatus: (name) => statuses.get(name),
     getCommand: (name) => commands.get(name),
@@ -538,6 +541,47 @@ test("terminal.paste reads explicit user text once and sends one paste operation
   assert.deepEqual(clipboardCalls, ["text"]);
   assert.deepEqual(fakeSidecar.getMessages().map(({ body }) => body.operation), ["paste"]);
   assert.equal(fakeSidecar.getMessages()[0].body.text, "printf 'user paste'\n");
+});
+
+test("the region's paste action runs terminal.paste once", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  const fakeExpose = createFakeExpose();
+  const attach = createFakeAttachImage();
+  const clipboardCalls = [];
+  const clipboard = { read: async (type) => { clipboardCalls.push(type); return "echo pasted"; } };
+  await startTerminal({
+    view: createFakeView(), attachImage: attach.function,
+    sidecar: fakeSidecar, expose: fakeExpose, clipboard,
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  openSession(fakeSidecar);
+  fakeSidecar.reset();
+
+  await attach.trigger("action", { type: "action", name: "paste" });
+
+  assert.deepEqual(clipboardCalls, ["text"]);
+  assert.deepEqual(fakeSidecar.getMessages().map(({ body }) => body.operation), ["paste"]);
+  assert.equal(fakeSidecar.getMessages()[0].body.text, "echo pasted");
+});
+
+test("the region reports an unknown action as an input error", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  const fakeExpose = createFakeExpose();
+  const attach = createFakeAttachImage();
+  await startTerminal({
+    view: createFakeView(), attachImage: attach.function,
+    sidecar: fakeSidecar, expose: fakeExpose,
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  openSession(fakeSidecar);
+  fakeSidecar.reset();
+
+  await attach.trigger("action", { type: "action", name: "print" });
+
+  assert.match(fakeExpose.getStatus("terminal.session").readFn().error, /unknown native action: print/);
+  assert.deepEqual(fakeSidecar.getMessages(), []);
 });
 
 test("terminal.paste rejects an absent clipboard without sending input", async () => {
