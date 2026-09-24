@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-25: the intermittent `webview_geometry_test` press failure was traced to a physical mouse button held during the check, which the press step now reports with its result code.
 - V5-19: the recovery check waits for the service's ready line, as the host does, instead of polling `endpoint.json` for 5 s.
 - V5-34: the application ends its terminal sessions that no layout holds when it starts, when a project is removed, and when a space is closed, through a `retain` request to each persistent service.
 - V5-36: the Tauri release executable is stripped (14.8 MB to 10.3 MB, smaller than the 12.8 MB Wails executable), and the release check finds capture code by its class name.
