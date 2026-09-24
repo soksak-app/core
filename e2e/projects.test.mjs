@@ -1,6 +1,6 @@
 // 파일 저장·설정 상속·프로젝트 창의 실제 네이티브 동작을 검사한다.
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
@@ -9,7 +9,12 @@ import { APPS, failure, fresh, open } from "./app.mjs";
 
 const read = (path) => JSON.parse(readFileSync(path, "utf8"));
 
-const write = (path, value) => writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
+// 실행 중인 앱이 같은 파일을 읽으므로 호스트처럼 임시 파일에 쓴 뒤 이름을 바꾼다. 앱은 부분 파일을 읽지 않는다.
+const write = (path, value) => {
+  const temporary = `${path}.${process.pid}.tmp`;
+  writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`);
+  renameSync(temporary, path);
+};
 
 const mode = async (s) => (await s.get("core.settings")).values.mode;
 
