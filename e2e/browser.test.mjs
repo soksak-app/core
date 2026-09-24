@@ -8,6 +8,36 @@ import test from "node:test";
 import { APPS, fresh, open } from "./app.mjs";
 import { frames, pixel, readFrame } from "./frame.mjs";
 
+/** block 문서의 왼쪽 위에 놓는 CSS 크기 120×60 의 빨간 블록. 페이지 확대만큼 픽셀이 커진다. */
+const BLOCK = '<div style="position:absolute;left:0;top:0;width:120px;height:60px;background:rgb(220,30,30)"></div>';
+
+/** 문서 영역에서 빨간 블록의 픽셀 폭과 높이를 잰다. */
+async function blockSize(s, surface) {
+  const { rect } = await placed(s, surface, "block document");
+  const { displayed } = await s.presented();
+  await s.request("diagnostics.capture.start", {});
+  const result = await s.request("diagnostics.capture.stop", { after: displayed });
+  try {
+    const files = frames(result.frames);
+    assert.ok(files.length > 0, "block capture produced no frames");
+    const frame = readFrame(files.at(-1));
+    const scale = frame.scale;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (let y = Math.round(rect.y * scale); y < Math.round((rect.y + rect.height) * scale) && y < frame.height; y++) {
+      for (let x = Math.round(rect.x * scale); x < Math.round((rect.x + rect.width) * scale) && x < frame.width; x++) {
+        const [r, g, b] = pixel(frame, x, y);
+        if (r >= 180 && g <= 80 && b <= 80) {
+          minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+        }
+      }
+    }
+    assert.ok(maxX >= minX, "the red block was not found in the document pixels");
+    return { width: maxX - minX + 1, height: maxY - minY + 1, rect };
+  } finally {
+    rmSync(result.frames, { recursive: true, force: true });
+  }
+}
+
 /** 경로 이름을 제목으로 갖는 긴 문서를 주는 루프백 서버. 검사가 끝나면 닫는다. */
 async function serve(t) {
   const server = createServer((request, response) => {
@@ -19,7 +49,7 @@ async function serve(t) {
       @media (prefers-color-scheme: dark) {
         body { background:rgb(21,28,42); color:rgb(235,238,245); }
       }
-    </style><body><div style="height:6000px">${name}</div>`);
+    </style><body>${name === "block" ? BLOCK : ""}<div style="height:6000px">${name}</div>`);
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   t.after(() => new Promise((resolve) => {
@@ -302,5 +332,34 @@ for (const app of Object.values(APPS)) {
       `Google's site preference was overwritten by the host theme: ${JSON.stringify({ light, dark })}`);
     assert.equal((await s.get("browser.location", surface)).url, location.url,
       "host theme change must not change Google's site location");
+  });
+}
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: the browser document zoom follows the pressed card's text size`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const base = await serve(t);
+    const [browser] = await browsers(s);
+    const surface = browser.surface;
+    const url = `${base}/block`;
+    await s.run("browser.navigate", { url }, surface);
+    await loaded(s, surface, url);
+    // 브라우저 카드를 누르면 그 카드가 범위다. 누르면 포커스가 바뀌어 배치도 바뀌므로 그 뒤에 잰다.
+    const address = await s.rect("browser.address", undefined, surface);
+    await s.click(address.document.x + address.x + address.width / 2, address.document.y + address.y + address.height / 2);
+    await s.until("core.text", (value) => value.scope.kind === "card", "pressing the browser card did not make it the scope");
+    const before = await blockSize(s, surface);
+    // 두 단계 뒤 배율은 1.25 다.
+    await s.run("host.menu.select", { menu: "View", title: "글자 크게" });
+    await s.run("host.menu.select", { menu: "View", title: "글자 크게" });
+    const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.id === surface));
+    await s.until("core.text", (value) => value.cards[card.id] === 1.25, "the browser card did not reach factor 1.25");
+    const after = await blockSize(s, surface);
+    assert.ok(Math.abs(after.width / before.width - 1.25) <= 0.05 && Math.abs(after.height / before.height - 1.25) <= 0.05,
+      `the document block must grow by the factor: ${JSON.stringify(before)} → ${JSON.stringify(after)}`);
+    // blockSize 는 영역이 자기 요소의 사각형에 놓일 때까지 기다린 뒤 잰다. 카드 글자가 커지면 주소창도
+    // 커지므로 요소의 높이는 줄 수 있다.
   });
 }

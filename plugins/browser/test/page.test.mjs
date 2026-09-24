@@ -36,7 +36,10 @@ test("browser mount publishes document state, respects shadow focus, and dispose
     onState(fn) { states.push(fn); return () => { states.splice(states.indexOf(fn), 1); }; },
     load: async (url) => { states.forEach((fn) => fn({ url, title: "loaded" })); },
     back: async () => {}, forward: async () => {}, reload: async () => {}, stop: async () => {},
+    zoom: async (factor) => { zooms.push(factor); },
   };
+  const zooms = [];
+  let notifyTextSize = null;
   const composition = {
     region: () => region,
     dispose: async () => { composition.disposed = true; },
@@ -53,9 +56,16 @@ test("browser mount publishes document state, respects shadow focus, and dispose
       dispose: async () => { exposed.disposed = true; },
     },
     status: { report: (phase) => { exposed.phase = phase; } },
+    runtime: { textSize: { read: () => 1.25,
+      on: (fn) => { notifyTextSize = fn; return () => { notifyTextSize = null; }; } } },
   };
   const { mount } = await import("../ui/browser.js");
   const mounted = await mount(shadow, context);
+  // 문서의 페이지 확대는 표면의 글자 배율을 따른다(docs/spec/text-size.md).
+  assert.deepEqual(zooms, [1.25], "the document starts at the surface text size");
+  notifyTextSize(2);
+  await Promise.resolve();
+  assert.deepEqual(zooms, [1.25, 2], "the document follows text size changes");
   const address = shadow.querySelector("#address");
   address.focus();
   Object.defineProperty(shadow, "activeElement", { configurable: true, value: address });
@@ -71,6 +81,7 @@ test("browser mount publishes document state, respects shadow focus, and dispose
   assert.equal(composition.disposed, true);
   assert.equal(exposed.disposed, true);
   assert.equal(states.length, 0);
+  assert.equal(notifyTextSize, null, "disposing stops following the text size");
   assert.equal(shadow.childNodes.length, 0);
   dom.window.close();
 });

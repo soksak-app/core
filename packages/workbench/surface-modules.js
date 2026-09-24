@@ -41,6 +41,7 @@ function pageRuntime(surface, scoped, compositionReady) {
     document: {
       attach: (name) => invoke("documentAttach", { document: name }),
       load: (name, url) => invoke("documentLoad", { document: name, url }),
+      zoom: (name, zoom) => invoke("documentZoom", { document: name, zoom }),
       go: (name, action) => invoke("documentGo", { document: name, action }),
       detach: (name) => invoke("documentDetach", { document: name }),
       onState: (listener) => scoped.native.on("document-state", (event) => listener(event.document, event.state)),

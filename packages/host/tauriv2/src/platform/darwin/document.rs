@@ -16,6 +16,7 @@ extern "C" {
     ) -> *mut c_void;
     fn sp_document_set_event(document: *mut c_void, event: Event, context: *mut c_void);
     fn sp_document_load(document: *mut c_void, url: *const c_char) -> bool;
+    fn sp_document_zoom(document: *mut c_void, zoom: f64) -> bool;
     fn sp_document_go(document: *mut c_void, action: i32) -> bool;
     fn sp_document_place(
         document: *mut c_void,
@@ -86,6 +87,11 @@ pub fn create(
 pub fn load(document: Handle, url: &str) -> Result<bool, String> {
     let url = CString::new(url).map_err(|e| e.to_string())?;
     Ok(unsafe { sp_document_load(document as *mut c_void, url.as_ptr()) })
+}
+
+/// 문서의 페이지 확대를 정한다. 유한한 양수가 아니면 false 다.
+pub fn zoom(document: Handle, zoom: f64) -> bool {
+    unsafe { sp_document_zoom(document as *mut c_void, zoom) }
 }
 
 pub fn set_event(document: Handle, receive: Box<dyn Fn(String) + Send>) -> Result<(), String> {

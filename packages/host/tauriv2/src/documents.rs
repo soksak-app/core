@@ -32,6 +32,18 @@ pub struct Request {
     pub url: String,
     #[serde(default)]
     pub action: String,
+    #[serde(default)]
+    pub zoom: Option<f64>,
+}
+
+impl Request {
+    /// 문서의 글자 배율(docs/spec/text-size.md). 없거나 유한한 양수가 아니면 오류다.
+    pub fn zoom_factor(&self) -> Result<f64, String> {
+        match self.zoom {
+            Some(zoom) if zoom.is_finite() && zoom > 0.0 => Ok(zoom),
+            _ => Err("document zoom must be a finite positive number".into()),
+        }
+    }
 }
 
 /// document-state 이벤트의 값.
@@ -276,6 +288,19 @@ pub(crate) fn load(webview: &Webview, request: Request) -> Result<(), String> {
             Err(format!(
                 "only http and https addresses can be opened: {url:?}"
             ))
+        }
+    })
+}
+
+/// 문서의 페이지 확대를 글자 배율로 정한다.
+pub(crate) fn zoom(webview: &Webview, request: Request) -> Result<(), String> {
+    let platform = platform::current()?;
+    let zoom = request.zoom_factor()?;
+    with_document(webview, &request, move |handle| {
+        if platform.zoom_document(handle, zoom)? {
+            Ok(())
+        } else {
+            Err(format!("document zoom {zoom} was rejected"))
         }
     })
 }

@@ -100,3 +100,23 @@ func TestDocumentsReserveNamesAndCloseWithTheirSurface(t *testing.T) {
 		t.Fatal("a detached name was removed twice")
 	}
 }
+
+// contract: documents.request.zoom-must-be-finite-positive
+func TestDocumentZoomMustBeAFinitePositiveFactor(t *testing.T) {
+	for _, body := range []string{`{}`, `{"zoom":0}`, `{"zoom":-1}`} {
+		var req host.DocumentRequest
+		if err := json.Unmarshal([]byte(body), &req); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := req.ZoomFactor(); err == nil {
+			t.Fatalf("%s: zoom was accepted", body)
+		}
+	}
+	var req host.DocumentRequest
+	if err := json.Unmarshal([]byte(`{"surface":"tab-1","document":"page","zoom":1.25}`), &req); err != nil {
+		t.Fatal(err)
+	}
+	if zoom, err := req.ZoomFactor(); err != nil || zoom != 1.25 {
+		t.Fatalf("zoom %v, %v", zoom, err)
+	}
+}

@@ -20,9 +20,10 @@ async function setup(t) {
   const region = {
     onState(fn) { states.add(fn); return () => states.delete(fn); },
     async load(url) { navigations.push(url); for (const fn of states) fn({ url, title: url }); },
-    async back() {}, async forward() {}, async reload() {}, async stop() {},
+    async back() {}, async forward() {}, async reload() {}, async stop() {}, async zoom() {},
   };
   const controller = await mount(root, {
+    runtime: { textSize: { read: () => 1, on: () => () => {} } },
     surfaceId: "browser-address-test",
     metadata: { home: "https://example.test/old" },
     composition: { async create() { return { region: () => region, async dispose() {} }; } },

@@ -871,6 +871,22 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F12",
+    implementation: [
+      { file: "packages/workbench/text-size.js", symbol: "nextTextSize" },
+      { file: "packages/workbench/plane.js", symbol: "changeTextSize" },
+      { file: "plugins/terminal/ui/terminal.js", symbol: "setTextSize" },
+      { file: "native/darwin/src/document_view.m", symbol: "sp_document_zoom" },
+    ],
+    tests: [
+      { file: "e2e/text-size.test.mjs", id: "text size commands enlarge the pressed card or the frame and keep the plane in the window" },
+      { file: "e2e/terminal.test.mjs", id: "the terminal font follows the pressed card's text size" },
+      { file: "e2e/browser.test.mjs", id: "the browser document zoom follows the pressed card's text size" },
+    ],
+    expected: "Command =, -, and 0 change the text size of the last pressed card or of the frame and every card: DOM content by CSS zoom, terminal cells by font size, and browser documents by page zoom, while the plane stays inside the window.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "V1",
     implementation: [{ file: "scripts/checklist.mjs", symbol: "checkCompletedItems" }],
     tests: [{ file: "scripts/test/checklist.test.mjs", id: "checklist permits translated text and linked follow-up identifiers" }],

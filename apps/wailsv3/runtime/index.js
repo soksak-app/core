@@ -64,6 +64,7 @@ const METHOD = {
   imageDetach: "ImageDetach",
   documentAttach: "DocumentAttach",
   documentLoad: "DocumentLoad",
+  documentZoom: "DocumentZoom",
   documentGo: "DocumentGo",
   documentDetach: "DocumentDetach",
   sidecarSend: "SidecarSend",
@@ -126,6 +127,7 @@ export const page = (() => {
     document: {
       attach: (document) => call("DocumentAttach", { surface, document }),
       load: (document, url) => call("DocumentLoad", { surface, document, url }),
+      zoom: (document, zoom) => call("DocumentZoom", { surface, document, zoom }),
       go: (document, action) => call("DocumentGo", { surface, document, action }),
       detach: (document) => call("DocumentDetach", { surface, document }),
       onState: (fn) => listen("document-state", (sent) => {

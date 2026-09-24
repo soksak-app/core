@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"regexp"
 	"sync"
 	"unsafe"
@@ -24,10 +25,19 @@ var documentName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,63}$`)
 
 // DocumentRequest 는 표면 페이지의 문서 영역 호출이다. 필드는 호출마다 필요한 것만 쓴다.
 type DocumentRequest struct {
-	Surface  string `json:"surface"`
-	Document string `json:"document"`
-	URL      string `json:"url"`
-	Action   string `json:"action"`
+	Surface  string   `json:"surface"`
+	Document string   `json:"document"`
+	URL      string   `json:"url"`
+	Action   string   `json:"action"`
+	Zoom     *float64 `json:"zoom,omitempty"`
+}
+
+// ZoomFactor 는 문서의 글자 배율이다(docs/spec/text-size.md). 없거나 유한한 양수가 아니면 오류다.
+func (r DocumentRequest) ZoomFactor() (float64, error) {
+	if r.Zoom == nil || math.IsNaN(*r.Zoom) || math.IsInf(*r.Zoom, 0) || *r.Zoom <= 0 {
+		return 0, fmt.Errorf("document zoom must be a finite positive number")
+	}
+	return *r.Zoom, nil
 }
 
 // DocumentState 는 document-state 이벤트의 값이다.
@@ -248,6 +258,20 @@ func (s *Surfaces) loadDocument(viewID uint64, req DocumentRequest) error {
 	return s.withDocument(viewID, req, func(handle unsafe.Pointer) error {
 		if !system.LoadDocument(handle, req.URL) {
 			return fmt.Errorf("only http and https addresses can be opened: %q", req.URL)
+		}
+		return nil
+	})
+}
+
+// zoomDocument 는 문서의 페이지 확대를 글자 배율로 정한다.
+func (s *Surfaces) zoomDocument(viewID uint64, req DocumentRequest) error {
+	zoom, err := req.ZoomFactor()
+	if err != nil {
+		return err
+	}
+	return s.withDocument(viewID, req, func(handle unsafe.Pointer) error {
+		if !system.ZoomDocument(handle, zoom) {
+			return fmt.Errorf("document zoom %g was rejected", zoom)
 		}
 		return nil
 	})

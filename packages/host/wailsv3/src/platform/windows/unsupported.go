@@ -139,6 +139,11 @@ func (implementation) LoadDocument(unsafe.Pointer, string) bool {
 	return false
 }
 
+func (implementation) ZoomDocument(unsafe.Pointer, float64) bool {
+	unreachable("document zoom")
+	return false
+}
+
 func (implementation) GoDocument(unsafe.Pointer, int) bool {
 	unreachable("document history")
 	return false

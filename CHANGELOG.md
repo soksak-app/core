@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F12-3: A browser document's page zoom is its card's effective text size factor, set through the new host document operation `documentZoom`.
 - F12-2: A terminal card's font size is 13 points times its effective text size factor. The sidecar `font` operation takes `size`, and `terminal.session` reports `fontSize`.
 - F12-1: Command `=`, `-`, and `0` in the View menu enlarge, reduce, and restore the text of the last pressed card, or of the frame and every card after a frame press. The frame factor is the common setting `textSize`, and card factors are saved with the layout.
 - V5-21: The Wails application menu no longer zooms or reloads the whole webview; its View menu has only full screen, like the Tauri menu. Both hosts report the application menu as `host.menu`.

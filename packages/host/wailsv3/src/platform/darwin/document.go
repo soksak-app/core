@@ -69,6 +69,10 @@ func (implementation) LoadDocument(document unsafe.Pointer, url string) bool {
 	return bool(C.sp_document_load(document, address))
 }
 
+func (implementation) ZoomDocument(document unsafe.Pointer, zoom float64) bool {
+	return bool(C.sp_document_zoom(document, C.double(zoom)))
+}
+
 func (implementation) SetDocumentEvent(document unsafe.Pointer, event func(value string)) error {
 	receiver := cgo.NewHandle(event)
 	C.documentSetEvent(document, C.uintptr_t(receiver))

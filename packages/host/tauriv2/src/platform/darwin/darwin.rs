@@ -231,6 +231,9 @@ impl Platform for Darwin {
     fn load_document(&self, document: Handle, url: &str) -> Result<bool, String> {
         document::load(document, url)
     }
+    fn zoom_document(&self, document: Handle, zoom: f64) -> Result<bool, String> {
+        Ok(document::zoom(document, zoom))
+    }
     fn go_document(&self, document: Handle, action: i32) -> Result<bool, String> {
         Ok(document::go(document, action))
     }

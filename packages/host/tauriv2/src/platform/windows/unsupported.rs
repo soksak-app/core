@@ -151,6 +151,10 @@ pub fn load_document(_document: Handle, _url: &str) -> Result<bool, String> {
     missing("document navigation")
 }
 
+pub fn zoom_document(_document: Handle, _zoom: f64) -> Result<bool, String> {
+    missing("document zoom")
+}
+
 pub fn go_document(_document: Handle, _action: i32) -> Result<bool, String> {
     missing("document history")
 }

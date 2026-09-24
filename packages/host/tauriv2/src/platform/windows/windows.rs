@@ -151,6 +151,9 @@ impl Platform for Windows {
     fn load_document(&self, document: Handle, url: &str) -> Result<bool, String> {
         unsupported::load_document(document, url)
     }
+    fn zoom_document(&self, document: Handle, zoom: f64) -> Result<bool, String> {
+        unsupported::zoom_document(document, zoom)
+    }
     fn go_document(&self, document: Handle, action: i32) -> Result<bool, String> {
         unsupported::go_document(document, action)
     }

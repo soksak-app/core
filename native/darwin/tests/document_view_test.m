@@ -210,6 +210,15 @@ int main(int argc, char **argv) { @autoreleasepool {
     sp_document_frame(document, frame);
     check(frame[4] == 1, @"restoring a visible surface restores a document placed while the surface was hidden");
 
+    // 글자 배율(docs/spec/text-size.md)은 페이지 확대이며 배치와 배율 변경 뒤에도 유지된다.
+    check(sp_document_zoom(document, 1.5) && view.pageZoom == 1.5, @"the document page zoom is the text size factor");
+    sp_document_place(document, 10, 20, 30, 40, true);
+    webviewSetFrame(surface, 0, 0, 520, 420);
+    check(view.pageZoom == 1.5, [NSString stringWithFormat:@"placement keeps the document page zoom: %g", view.pageZoom]);
+    check(!sp_document_zoom(document, 0) && !sp_document_zoom(document, NAN) && view.pageZoom == 1.5,
+        @"an invalid page zoom is rejected and leaves the zoom unchanged");
+    check(sp_document_zoom(document, 1) && view.pageZoom == 1, @"the document page zoom returns to 1");
+
     check(!sp_document_load(document, "file:///etc/hosts"), @"a file address is rejected");
     check(!sp_document_load(document, "not a url"), @"an invalid address is rejected");
 

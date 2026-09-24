@@ -164,6 +164,13 @@ func (h *Host) DocumentLoad(ctx context.Context, req DocumentRequest) error {
 	}
 	return s.loadDocument(uint64(s.window.ID()), req)
 }
+func (h *Host) DocumentZoom(ctx context.Context, req DocumentRequest) error {
+	s, err := h.surface(ctx)
+	if err != nil {
+		return err
+	}
+	return s.zoomDocument(uint64(s.window.ID()), req)
+}
 func (h *Host) DocumentGo(ctx context.Context, req DocumentRequest) (bool, error) {
 	s, err := h.surface(ctx)
 	if err != nil {
@@ -286,7 +293,7 @@ func invokeNative(s *Surfaces, viewID uint64, call nativeCall) (any, error) {
 			return s.ModalContent(id, instance), nil
 		}
 		return nil, s.ModalReady(id, instance)
-	case "DocumentAttach", "DocumentLoad", "DocumentGo", "DocumentDetach":
+	case "DocumentAttach", "DocumentLoad", "DocumentZoom", "DocumentGo", "DocumentDetach":
 		var req DocumentRequest
 		if err := nativeArgs(call, &req); err != nil {
 			return nil, err
@@ -296,6 +303,8 @@ func invokeNative(s *Surfaces, viewID uint64, call nativeCall) (any, error) {
 			return nil, s.attachDocument(viewID, req)
 		case "DocumentLoad":
 			return nil, s.loadDocument(viewID, req)
+		case "DocumentZoom":
+			return nil, s.zoomDocument(viewID, req)
 		case "DocumentGo":
 			return s.goDocument(viewID, req)
 		default:

@@ -256,6 +256,8 @@ pub trait Platform: Send + Sync {
     ) -> Result<(), String>;
     /// http 또는 https 주소를 연다. 그 밖의 주소이면 false 를 반환한다. 메인 스레드에서 호출한다.
     fn load_document(&self, document: Handle, url: &str) -> Result<bool, String>;
+    /// 문서의 페이지 확대를 정한다. 유한한 양수가 아니면 false 다.
+    fn zoom_document(&self, document: Handle, zoom: f64) -> Result<bool, String>;
     /// 뒤로 0, 앞으로 1, 다시 읽기 2, 멈춤 3 을 실행하고 실행했는지 반환한다. 메인 스레드에서 호출한다.
     fn go_document(&self, document: Handle, action: i32) -> Result<bool, String>;
     /// 표면 뷰포트의 CSS 픽셀 여백으로 문서 영역을 정한다. 메인 스레드에서 호출한다.

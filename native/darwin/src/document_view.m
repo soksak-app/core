@@ -53,6 +53,8 @@ static CGFloat documentSurfaceScale(NSView *surface) {
 @property(assign) NSView *webSurface;
 @property NSPoint offset;
 @property NSEdgeInsets insets;
+// 글자 배율(docs/spec/text-size.md). 페이지 확대로 적용한다.
+@property double zoom;
 @property BOOL wanted;
 @property BOOL placed;
 @property BOOL pending;
@@ -217,7 +219,7 @@ static BOOL webAddress(NSURL *url) {
 }
 
 // 여백을 표면 뷰의 AppKit point 좌표로 바꾼다. 표면 웹뷰와 문서 웹뷰는
-// CSS pixel과 point를 1:1로 유지하고 backing 배율은 WebKit raster에만 적용한다.
+// CSS 픽셀은 글자 배율(페이지 확대)만큼 point 보다 크고, backing 배율은 WebKit raster에만 적용한다.
 - (void)applyInsets {
     NSView *surface = self.webSurface;
     if (!surface) return;
@@ -228,13 +230,13 @@ static BOOL webAddress(NSURL *url) {
     CGFloat top = insets.top;
     CGFloat y = surface.isFlipped ? top : NSHeight(bounds) - top - height;
     self.frame = NSMakeRect(insets.left, y, MAX(width, 0), MAX(height, 0));
-    self.pageZoom = 1;
+    self.pageZoom = self.zoom;
     self.hidden = !self.wanted || width < 1 || height < 1 || surface.isHiddenOrHasHiddenAncestor;
 }
 
 - (void)surfaceScaleChanged {
     WKWebView *view = (WKWebView *)self;
-    view.pageZoom = 1;
+    view.pageZoom = self.zoom;
     [view _setOverrideDeviceScaleFactor:documentSurfaceScale(self.webSurface)];
     if (self.placed) [self applyInsets];
 }
@@ -307,7 +309,8 @@ void *sp_document_create(void *surfaceHandle, const char *store, sp_document_cha
     [nativePlane addSubview:view];
     [view installEventMonitor];
     [surface addObserver:view forKeyPath:@"effectiveAppearance" options:0 context:NULL];
-    view.pageZoom = 1;
+    view.zoom = 1;
+    view.pageZoom = view.zoom;
     [view _setOverrideDeviceScaleFactor:sp_surface_scale(surface)];
     for (NSString *key in observedKeys()) [view addObserver:view forKeyPath:key options:0 context:NULL];
     return view; // sp_document_close 까지 호출자가 이 참조를 소유한다.
@@ -362,6 +365,15 @@ void sp_document_frame(void *handle, double *out) {
     out[2] = frame.size.width;
     out[3] = frame.size.height;
     out[4] = view.isHiddenOrHasHiddenAncestor ? 0 : 1;
+}
+
+bool sp_document_zoom(void *document, double zoom) {
+    NSCAssert(NSThread.isMainThread, @"document zoom requires the UI thread");
+    if (!document || !isfinite(zoom) || zoom <= 0) return false;
+    SPDocumentView *view = (SPDocumentView *)document;
+    view.zoom = zoom;
+    view.pageZoom = zoom;
+    return true;
 }
 
 void sp_document_background(void *handle, bool enabled) {

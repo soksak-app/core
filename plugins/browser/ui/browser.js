@@ -33,6 +33,12 @@ export async function mount(root, context) {
     for (const listener of locationListeners) listener(current);
   };
   const stopState = region.onState(show);
+  // 문서의 페이지 확대는 이 표면의 실제 글자 배율이다(docs/spec/text-size.md).
+  const textSize = context.runtime.textSize;
+  await region.zoom(textSize.read());
+  const stopTextSize = textSize.on((factor) => {
+    region.zoom(factor).catch((error) => context.status.report("error", error));
+  });
   context.exposure.status("browser.location", () => current, (fn) => {
     locationListeners.add(fn);
     fn(current);
@@ -61,6 +67,7 @@ export async function mount(root, context) {
     address.removeEventListener("pointerdown", beginSelection);
     address.removeEventListener("mouseup", retainSelection);
     stopState();
+    stopTextSize();
     locationListeners.clear();
     await composition.dispose();
     await context.exposure.dispose();

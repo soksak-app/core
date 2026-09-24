@@ -121,6 +121,8 @@ export function attachRegion(port, element, name, view = element.ownerDocument.d
     },
     _place: placeAt,
     load: (url) => queue(() => port.load(name, url)),
+    /** 문서의 페이지 확대를 글자 배율로 정한다(docs/spec/text-size.md). */
+    zoom: (factor) => queue(() => port.zoom(name, factor)),
     go(action) {
       if (!DOCUMENT_ACTIONS.includes(action)) return Promise.reject(new Error(`unknown document action ${action}`));
       return queue(() => port.go(name, action));

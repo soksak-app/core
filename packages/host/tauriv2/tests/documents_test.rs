@@ -93,3 +93,19 @@ fn documents_reserve_names_and_close_with_their_surface() {
         "a detached name was removed twice"
     );
 }
+
+// contract: documents.request.zoom-must-be-finite-positive
+#[test]
+fn document_zoom_must_be_a_finite_positive_factor() {
+    for body in [
+        r#"{"surface":"s","document":"d"}"#,
+        r#"{"surface":"s","document":"d","zoom":0}"#,
+        r#"{"surface":"s","document":"d","zoom":-1}"#,
+    ] {
+        let request: Request = serde_json::from_str(body).unwrap();
+        assert!(request.zoom_factor().is_err(), "{body}: zoom was accepted");
+    }
+    let request: Request =
+        serde_json::from_str(r#"{"surface":"tab-1","document":"page","zoom":1.25}"#).unwrap();
+    assert_eq!(request.zoom_factor(), Ok(1.25));
+}

@@ -58,6 +58,7 @@ pub(crate) fn handler() -> impl Fn(Invoke) -> bool + Send + Sync + 'static {
         document_attach,
         composition_declare,
         document_load,
+        document_zoom,
         document_go,
         document_detach,
         image_attach,
@@ -304,6 +305,12 @@ fn composition_place(
 #[tauri::command(async)]
 fn document_load(webview: Webview, request: documents::Request) -> Result<(), String> {
     documents::load(&webview, request)
+}
+
+/// 문서 영역의 페이지 확대를 글자 배율로 정한다.
+#[tauri::command(async)]
+fn document_zoom(webview: Webview, request: documents::Request) -> Result<(), String> {
+    documents::zoom(&webview, request)
 }
 
 /// 문서 영역의 기록 이동, 다시 읽기, 멈춤을 실행한다.

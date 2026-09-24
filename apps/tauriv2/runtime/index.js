@@ -36,6 +36,7 @@ const COMMAND = {
   imageDetach: "image_detach",
   documentAttach: "document_attach",
   documentLoad: "document_load",
+  documentZoom: "document_zoom",
   documentGo: "document_go",
   documentDetach: "document_detach",
   sidecarSend: "sidecar_send",
@@ -78,6 +79,7 @@ const ARG = {
   imageDetach: (request) => ({ request }),
   documentAttach: (request) => ({ request }),
   documentLoad: (request) => ({ request }),
+  documentZoom: (request) => ({ request }),
   documentGo: (request) => ({ request }),
   documentDetach: (request) => ({ request }),
   sidecarSend: ({ sidecar, surface, body }) => ({ sidecar, surface, body }),
@@ -138,6 +140,7 @@ export const page = (() => {
     document: {
       attach: (document) => invoke("document_attach", { request: { surface, document } }),
       load: (document, url) => invoke("document_load", { request: { surface, document, url } }),
+      zoom: (document, zoom) => invoke("document_zoom", { request: { surface, document, zoom } }),
       go: (document, action) => invoke("document_go", { request: { surface, document, action } }),
       detach: (document) => invoke("document_detach", { request: { surface, document } }),
       onState: (fn) => listen("document-state", (e) => {

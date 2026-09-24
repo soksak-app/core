@@ -35,6 +35,10 @@ void sp_document_place(void *document, double left, double top, double right, do
 // 창 좌표의 영역과 표시 여부 {x, y, width, height, visible} 를 out[0..4] 에 쓴다.
 void sp_document_frame(void *document, double *out);
 
+// 문서의 페이지 확대를 글자 배율 zoom 으로 정한다(docs/spec/text-size.md). 배치와 표면 배율이 바뀌어도
+// 유지한다. 유한한 양수가 아니면 false 를 반환하고 바꾸지 않는다.
+bool sp_document_zoom(void *document, double zoom);
+
 // 대화 상자가 열린 동안 문서를 흐리게 표시한다.
 void sp_document_background(void *document, bool enabled);
 
