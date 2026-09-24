@@ -183,6 +183,8 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     return () => watchers[name].delete(fn);
   };
 
+  // 확인 응답만 있고 따로 처리할 결과가 없는 사이드카 연산.
+  const ACKNOWLEDGED = new Set(["selection.start", "selection.update", "paste"]);
   // 현재 세션 상태
   let session = {
     sessionId: "", cols: 80, rows: 24, cellWidth: 8, cellHeight: 16, unsupported: [],
@@ -709,6 +711,8 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     } else if (body.event === "selection.copy") {
       handleSelectionCopy(body).catch(reportInputError);
       releasedSelection();
+    } else if (body.ack === true && ACKNOWLEDGED.has(body.event)) {
+      // 사이드카가 연산을 적용했다는 확인이다. 결과는 이미지나 뒤따르는 이벤트로 온다.
     } else if (body.event === "selection.end") {
       // 글자를 담지 않은 선택의 해제다. 사이드카가 선택을 지웠고 복사할 것이 없다.
       if (body.copied !== false) reportInputError(new Error("selection.end requires copied false"));

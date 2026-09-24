@@ -792,6 +792,26 @@ test("a selection release without text is accepted without a copy or an error", 
   assert.equal(state.selectionReleases, 1, "the answered release is counted");
 });
 
+test("sidecar acknowledgements of selection and paste operations are not unsupported events", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  const fakeExpose = createFakeExpose();
+  await startTerminal({
+    view: createFakeView(), attachImage: createFakeAttachImage().function,
+    sidecar: fakeSidecar, expose: fakeExpose,
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  openSession(fakeSidecar);
+
+  for (const event of ["selection.start", "selection.update", "paste"]) {
+    fakeSidecar.triggerEvent("test-session", { ack: true, event });
+  }
+  await new Promise((resolve) => setImmediate(resolve));
+  const state = fakeExpose.getStatus("terminal.session").readFn();
+  assert.deepEqual(state.unsupported, []);
+  assert.equal(state.error, undefined);
+});
+
 // 테스트 4: 영역 key(Enter) → {operation:"input", keys:[{key:"Enter"}]}
 test("Region key event for Enter sends correct message format", async () => {
   FakeResizeObserver.reset();

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F8-22: The terminal module accepts the sidecar acknowledgements of `selection.start`, `selection.update`, and `paste` instead of recording them as unsupported events.
 - F8-21-1: A synthetic pointer press or release while a physical mouse button is pressed returns 1007 instead of reaching the document as a move, and a release completes after the document receives `pointerup`. Registered V5-19.
 - F8-21: A terminal drag over blank cells no longer reports `invalidParams: selection is empty`. The sidecar clears a selection without text and answers `selection.end` with `copied: false`; `terminal.session` reports `selecting` and `selectionReleases`.
 - V5-12: `native content, cards, and the sidebar rail stay aligned` passes on both hosts after the F8-6 corrections.

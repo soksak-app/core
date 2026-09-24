@@ -928,6 +928,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(state.error, undefined,
       `a drag over blank row ${row} reported ${state.error}; inverse cells in columns 5–20: ` +
         `${lines[row].slice(5, 21).filter((cell) => cell.inverse).length}`);
+    assert.deepEqual(state.unsupported, [], "the sidecar answers of the drag are declared events");
     // 커서 블록도 반전 셀이므로 끈 구간만 본다.
     const dragged = lines[row].slice(5, 21).filter((cell) => cell.inverse).length;
     assert.equal(dragged, 0, `the blank selection was not cleared: ${dragged} inverse cells in columns 5–20 of row ${row}`);
