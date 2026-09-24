@@ -355,6 +355,27 @@ for (const app of Object.values(APPS)) {
           "typing after output required another click");
         assert.equal(next.filter((row) => row === continued).length, 1, "continued input must execute once without refocusing");
         t.diagnostic(`${app.name}: PASS terminal ${index + 1} continued input`);
+        // 화살표 키: Left 두 번 뒤 입력은 줄 가운데에 들어가고, Up 은 앞 명령을 다시 불러온다.
+        const arrowed = `a${index}q${index}bc`;
+        for (const ch of `echo a${index}${index}bc`) await s.press(ch === " " ? "Space" : ch);
+        for (let step = 0; step < 3; step++) await s.press("ArrowLeft");
+        await s.press("q");
+        await s.press("Enter");
+        await readScreenUntil(s, surface, (lines) => lines.includes(arrowed), "native Left did not move the insertion point");
+        await s.press("ArrowUp");
+        await s.press("Enter");
+        const recalled = await readScreenUntil(s, surface, (lines) => lines.filter((row) => row === arrowed).length === 2,
+          "native Up did not recall the previous command");
+        assert.equal(recalled.filter((row) => row === arrowed).length, 2, "the recalled command must run once more");
+        // Ctrl+C 는 실행 중인 명령을 끊는다. 끊지 않으면 sleep 이 대기 한도보다 오래 걸린다.
+        for (const ch of "sleep 60") await s.press(ch === " " ? "Space" : ch);
+        await s.press("Enter");
+        await s.press("c", { modifiers: ["control"] });
+        const interrupted = `interrupted${index}`;
+        for (const ch of `echo ${interrupted}`) await s.press(ch === " " ? "Space" : ch);
+        await s.press("Enter");
+        await readScreenUntil(s, surface, (lines) => lines.includes(interrupted), "native Ctrl+C did not interrupt the running command");
+        t.diagnostic(`${app.name}: PASS terminal ${index + 1} arrows and interrupt`);
         for (const [other, before] of others) assert.deepEqual(await s.get("terminal.screen", other), before,
           `typing in ${surface} changed ${other}`);
       });
