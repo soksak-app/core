@@ -21,11 +21,63 @@ pub fn validate_read_request(kind: &str, user_initiated: bool) -> Result<(), Str
     Ok(())
 }
 
+const PNG_SIGNATURE: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
+
 pub fn validate_png_payload(bytes: &[u8]) -> Result<(), String> {
     if bytes.is_empty() || bytes.len() > MAX_BYTES {
         return Err("clipboard PNG size is invalid".into());
     }
+    if !bytes.starts_with(&PNG_SIGNATURE) {
+        return Err("clipboard PNG signature is missing".into());
+    }
+    validate_png_header(bytes)
+        .map_err(|reason| format!("clipboard PNG header is invalid: {reason}"))
+}
+
+// 서명 뒤의 첫 청크는 13바이트 IHDR 이다(PNG 명세 11.2.2).
+fn validate_png_header(bytes: &[u8]) -> Result<(), &'static str> {
+    let chunk = bytes.get(8..33).ok_or("the IHDR chunk is truncated")?;
+    if chunk[0..4] != [0, 0, 0, 13] || &chunk[4..8] != b"IHDR" {
+        return Err("the first chunk is not a 13-byte IHDR");
+    }
+    let expected = u32::from_be_bytes([chunk[21], chunk[22], chunk[23], chunk[24]]);
+    if crc32(&chunk[4..21]) != expected {
+        return Err("the IHDR CRC does not match");
+    }
+    let width = u32::from_be_bytes([chunk[8], chunk[9], chunk[10], chunk[11]]);
+    let height = u32::from_be_bytes([chunk[12], chunk[13], chunk[14], chunk[15]]);
+    if width == 0 || height == 0 {
+        return Err("the width or height is zero");
+    }
+    let allowed: &[u8] = match chunk[17] {
+        0 => &[1, 2, 4, 8, 16],
+        3 => &[1, 2, 4, 8],
+        2 | 4 | 6 => &[8, 16],
+        _ => return Err("the color type is not a PNG color type"),
+    };
+    if !allowed.contains(&chunk[16]) {
+        return Err("the bit depth is not allowed for the color type");
+    }
+    if chunk[18] != 0 || chunk[19] != 0 || chunk[20] > 1 {
+        return Err("the compression, filter, or interlace method is not a PNG method");
+    }
     Ok(())
+}
+
+// PNG 가 쓰는 CRC-32(다항식 0xEDB88320).
+fn crc32(bytes: &[u8]) -> u32 {
+    let mut crc = 0xFFFF_FFFFu32;
+    for byte in bytes {
+        crc ^= u32::from(*byte);
+        for _ in 0..8 {
+            crc = if crc & 1 != 0 {
+                (crc >> 1) ^ 0xEDB8_8320
+            } else {
+                crc >> 1
+            };
+        }
+    }
+    !crc
 }
 
 #[derive(Debug, Deserialize)]
@@ -143,16 +195,24 @@ mod tests {
     // contract: clipboard.persist-png.writes-exact-bytes, clipboard.persist-png.owner-only-mode
     #[test]
     fn persists_each_png_to_a_new_owner_only_file() {
+        // 1x1 RGBA PNG 의 서명과 IHDR. 뒤의 바이트는 검사하지 않으므로 두 파일을 구별하는 데 쓴다.
+        let png: Vec<u8> = [
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48,
+            0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00,
+            0x00, 0x1F, 0x15, 0xC4, 0x89,
+        ]
+        .to_vec();
+        let other = [png.as_slice(), b"other"].concat();
         let root = tempfile::tempdir().unwrap();
-        let first = persist_png_at(root.path(), b"png").unwrap();
-        assert_eq!(std::fs::read(&first).unwrap(), b"png");
+        let first = persist_png_at(root.path(), &png).unwrap();
+        assert_eq!(std::fs::read(&first).unwrap(), png);
         let permissions = std::fs::metadata(&first).unwrap().permissions();
         let mode = std::os::unix::fs::PermissionsExt::mode(&permissions);
         assert_eq!(mode & 0o777, 0o600, "clipboard image mode {mode:o}");
         // 두 번째 저장은 새 파일을 만들고 첫 파일을 덮어쓰지 않는다.
-        let second = persist_png_at(root.path(), b"other").unwrap();
+        let second = persist_png_at(root.path(), &other).unwrap();
         assert_ne!(first, second);
-        assert_eq!(std::fs::read(&first).unwrap(), b"png");
-        assert_eq!(std::fs::read(&second).unwrap(), b"other");
+        assert_eq!(std::fs::read(&first).unwrap(), png);
+        assert_eq!(std::fs::read(&second).unwrap(), other);
     }
 }

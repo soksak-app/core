@@ -1,9 +1,13 @@
 package host
 
 import (
+	stdbytes "bytes"
 	"context"
 	"encoding/base64"
+	"encoding/binary"
+	"errors"
 	"fmt"
+	"hash/crc32"
 	"os"
 	"path/filepath"
 	"sync/atomic"
@@ -112,10 +116,18 @@ func (h *Host) ClipboardPersistPNG(ctx context.Context, request ClipboardPersist
 	return map[string]string{"path": path}, nil
 }
 
+var pngSignature = []byte{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A}
+
 // PersistClipboardPNG writes an owned PNG below the supplied config directory.
 func PersistClipboardPNG(root string, bytes []byte) (string, error) {
 	if len(bytes) == 0 || len(bytes) > clipboardMaxBytes {
 		return "", fmt.Errorf("clipboard PNG size is invalid")
+	}
+	if !stdbytes.HasPrefix(bytes, pngSignature) {
+		return "", fmt.Errorf("clipboard PNG signature is missing")
+	}
+	if err := validatePNGHeader(bytes); err != nil {
+		return "", fmt.Errorf("clipboard PNG header is invalid: %w", err)
 	}
 	directory := filepath.Join(root, "clipboard")
 	if err := os.MkdirAll(directory, 0700); err != nil {
@@ -145,4 +157,33 @@ func PersistClipboardPNG(root string, bytes []byte) (string, error) {
 		return path, nil
 	}
 	return "", fmt.Errorf("cannot allocate a unique clipboard image path")
+}
+
+// validatePNGHeader 는 서명 뒤의 첫 청크가 13바이트 IHDR 인지 검사한다(PNG 명세 11.2.2).
+func validatePNGHeader(bytes []byte) error {
+	if len(bytes) < 33 {
+		return errors.New("the IHDR chunk is truncated")
+	}
+	chunk := bytes[8:33]
+	if binary.BigEndian.Uint32(chunk[0:4]) != 13 || string(chunk[4:8]) != "IHDR" {
+		return errors.New("the first chunk is not a 13-byte IHDR")
+	}
+	if crc32.ChecksumIEEE(chunk[4:21]) != binary.BigEndian.Uint32(chunk[21:25]) {
+		return errors.New("the IHDR CRC does not match")
+	}
+	if binary.BigEndian.Uint32(chunk[8:12]) == 0 || binary.BigEndian.Uint32(chunk[12:16]) == 0 {
+		return errors.New("the width or height is zero")
+	}
+	allowed := map[byte][]byte{0: {1, 2, 4, 8, 16}, 3: {1, 2, 4, 8}, 2: {8, 16}, 4: {8, 16}, 6: {8, 16}}
+	depths, ok := allowed[chunk[17]]
+	if !ok {
+		return errors.New("the color type is not a PNG color type")
+	}
+	if !stdbytes.Contains(depths, chunk[16:17]) {
+		return errors.New("the bit depth is not allowed for the color type")
+	}
+	if chunk[18] != 0 || chunk[19] != 0 || chunk[20] > 1 {
+		return errors.New("the compression, filter, or interlace method is not a PNG method")
+	}
+	return nil
 }

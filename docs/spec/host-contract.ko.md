@@ -46,7 +46,9 @@ fn invalid_json_closes_connection() {
 | `clipboard.persist-png.owner-only-mode` | 저장한 PNG 파일의 모드는 0600이다. | both |
 | `clipboard.png.rejects-oversize` | 16 MiB보다 큰 PNG 페이로드를 거부한다. | both |
 | `clipboard.png.rejects-empty` | 빈 PNG 페이로드를 거부한다. | both |
-| `clipboard.png.accepts-nonempty-within-bound` | 한도 안의 비어 있지 않은 PNG 페이로드를 받아들인다. | both |
+| `clipboard.png.accepts-valid-within-bound` | 한도 안에서 PNG 서명과 올바른 `IHDR` 청크로 시작하는 페이로드를 받아들인다. | both |
+| `clipboard.png.rejects-bad-signature` | 8바이트 PNG 서명으로 시작하지 않는 페이로드를 PNG 서명을 적은 오류로 거부한다. | both |
+| `clipboard.png.rejects-bad-header` | 첫 청크가 CRC가 맞고, 너비와 높이가 0이 아니며, PNG가 허용하는 비트 깊이와 색 형식 조합이고, 압축과 필터 방식이 0이며, 인터레이스 방식이 0 또는 1인 13바이트 `IHDR` 청크가 아닌 페이로드를 PNG 헤더를 적은 오류로 거부한다. | both |
 | `clipboard.read.requires-user-initiated` | 사용자의 명시적 붙여넣기가 아닌 클립보드 읽기를 거부한다. | both |
 | `clipboard.read.rejects-unknown-type` | 사용자가 시작했더라도 알 수 없는 형식의 클립보드 읽기를 거부한다. | both |
 | `clipboard.read.accepts-known-types` | 사용자가 시작한 텍스트와 파일 URL 읽기를 받아들인다. | both |

@@ -46,7 +46,9 @@ The scope column is `both`, or `<host> only: <reason>` for behavior that exists 
 | `clipboard.persist-png.owner-only-mode` | The saved PNG file has mode 0600. | both |
 | `clipboard.png.rejects-oversize` | A PNG payload larger than 16 MiB is rejected. | both |
 | `clipboard.png.rejects-empty` | An empty PNG payload is rejected. | both |
-| `clipboard.png.accepts-nonempty-within-bound` | A non-empty PNG payload within the bound is accepted. | both |
+| `clipboard.png.accepts-valid-within-bound` | A payload within the bound that starts with the PNG signature and a valid `IHDR` chunk is accepted. | both |
+| `clipboard.png.rejects-bad-signature` | A payload that does not start with the 8-byte PNG signature is rejected with an error that names the PNG signature. | both |
+| `clipboard.png.rejects-bad-header` | A payload whose first chunk is not a 13-byte `IHDR` chunk with a matching CRC, a nonzero width and height, a bit depth and color type pair that PNG allows, compression and filter method 0, and interlace method 0 or 1 is rejected with an error that names the PNG header. | both |
 | `clipboard.read.requires-user-initiated` | A clipboard read that is not an explicit user paste is rejected. | both |
 | `clipboard.read.rejects-unknown-type` | A user-initiated clipboard read of an unknown type is rejected. | both |
 | `clipboard.read.accepts-known-types` | User-initiated reads of text and file URLs are accepted. | both |
