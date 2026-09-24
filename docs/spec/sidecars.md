@@ -122,7 +122,7 @@ The sidecar sends these event bodies:
 | `{"id": request, "error": message}` | A `run` that could not start or that lacks an id or a command |
 | `{"error": message}` | Another failed request |
 
-A closed surface ends its session and its `run` commands by terminating their process groups. When standard input closes, the sidecar ends every session and exits. On Windows every operation fails with `shell sessions are not implemented on windows`.
+A closed surface ends its session and its `run` commands by terminating their process groups. A group whose processes have all ended or are exiting, which macOS answers with `EPERM` (closing the session's standard input ends the shell), is already terminated; any other failure is an error that names the remaining processes. When standard input closes, the sidecar ends every session and exits. On Windows every operation fails with `shell sessions are not implemented on windows`.
 
 Public symbols in sidecars and their helpers that are diagnostic-only start with `sp_diag_`. The release build check uses this marker to reject binaries that contain diagnostic code. When a sidecar includes diagnostic symbols in a release build, the release check fails with an error message pointing to the symbol name.
 

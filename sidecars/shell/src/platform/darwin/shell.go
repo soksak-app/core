@@ -3,6 +3,7 @@
 package darwin
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -52,4 +53,22 @@ func (implementation) Run(command string) (*exec.Cmd, error) {
 
 func (implementation) Interrupt(pid int) error { return syscall.Kill(-pid, syscall.SIGINT) }
 
-func (implementation) Terminate(pid int) error { return syscall.Kill(-pid, syscall.SIGKILL) }
+// Terminate 는 그룹에 SIGKILL 을 보낸다. macOS 는 구성원이 모두 exit() 을 처리하는 중이거나 회수를
+// 기다리는(좀비) 그룹의 신호에 EPERM 으로 답한다. 셸의 표준 입력을 닫으면 셸이 끝나므로 이 상태가 된다.
+// 그런 그룹은 끝낼 프로세스가 없다. 끝나지 않은 구성원이 있으면 그 상태를 적어 실패한다.
+func (implementation) Terminate(pid int) error {
+	err := syscall.Kill(-pid, syscall.SIGKILL)
+	if err != syscall.EPERM {
+		return err
+	}
+	group, readErr := members(pid)
+	if readErr != nil {
+		return fmt.Errorf("%w; %v", err, readErr)
+	}
+	for _, m := range group {
+		if !m.zombie && !m.exiting {
+			return fmt.Errorf("%w with members %+v", err, group)
+		}
+	}
+	return nil
+}

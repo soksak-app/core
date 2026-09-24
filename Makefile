@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: preflight prepare build verify docs-check boundaries platforms hosts-check e2e-check exposure-check parity-check terminal-protocols-check language-test release-check rust-tests-alone rust-repeat
+.PHONY: preflight prepare build verify docs-check boundaries platforms hosts-check e2e-check exposure-check parity-check terminal-protocols-check language-test release-check rust-tests-alone rust-repeat go-repeat
 
 docs-check:
 	@node scripts/check-docs.mjs
@@ -61,6 +61,20 @@ rust-repeat:
 	    else cargo test -q --manifest-path $(MANIFEST) -p $(PACKAGE) > "$$output" 2>&1; fi \
 	      || { cat "$$output"; echo "FAIL: $(PACKAGE) $(TEST) run $$run of $(COUNT); load $$(sysctl -n vm.loadavg)" >&2; exit 1; }; \
 	    if [ -n "$(TEST)" ] && ! grep -q "1 passed" "$$output"; then cat "$$output"; echo "FAIL: $(PACKAGE) has no test named $(TEST)" >&2; exit 1; fi; \
+	    run=$$((run + 1)); \
+	  done; \
+	  echo "$(PACKAGE) $(TEST): $(COUNT) of $(COUNT) runs pass"
+
+# Go 패키지의 테스트를 COUNT 번 차례로 실행한다. TEST 는 go test -run 정규식이다.
+# 간헐 실패를 재현하고 수용하는 대상이다. 첫 실패에서 실행 번호, 시스템 부하, 그 실행의 출력을 보고한다.
+go-repeat:
+	@case "$(PACKAGE)" in '') echo "go-repeat requires PACKAGE=<go package path> COUNT=<n> [TEST=<regexp>]" >&2; exit 2;; esac
+	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "go-repeat requires COUNT=<n> with n >= 1" >&2; exit 2;; esac
+	@output=$$(mktemp); trap 'rm -f "$$output"' EXIT; \
+	  run=1; while [ $$run -le $(COUNT) ]; do \
+	    $(GO_ENV) go test -count=1 -ldflags "$(GO_LINK)" $(if $(TEST),-run '$(TEST)') $(PACKAGE) > "$$output" 2>&1 \
+	      || { cat "$$output"; echo "FAIL: $(PACKAGE) $(TEST) run $$run of $(COUNT); load $$(sysctl -n vm.loadavg)" >&2; exit 1; }; \
+	    if grep -q "no tests to run" "$$output"; then cat "$$output"; echo "FAIL: $(PACKAGE) has no test matching $(TEST)" >&2; exit 1; fi; \
 	    run=$$((run + 1)); \
 	  done; \
 	  echo "$(PACKAGE) $(TEST): $(COUNT) of $(COUNT) runs pass"
