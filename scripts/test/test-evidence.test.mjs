@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { appendEvidenceAttempt, collectEvidence, evidenceDrift, persistEvidence, validateEvidence } from '../test-evidence.mjs';
 
-test('evidence records content hashes, dirty state, expected/actual result, and retry history', async () => {
+test('evidence records content hashes, dirty state, expected/actual result, and retry history', async (t) => {
   // Use the real repository for git metadata while keeping the test file set explicit.
   const repo = process.cwd();
   const record = await collectEvidence({
@@ -27,7 +27,9 @@ test('evidence records content hashes, dirty state, expected/actual result, and 
   assert.match(retried.processes[0].sha256, /^[0-9a-f]{64}$/);
   assert.deepEqual(evidenceDrift(retried, { ...retried, buildFlags: ['different'] }), ['evidence snapshot is stale: source, test, dependency, build, process, or dirty-worktree content changed']);
   assert.deepEqual(evidenceDrift(retried, { ...retried, processes: [{ ...retried.processes[0], sha256: '0'.repeat(64) }] }), ['evidence snapshot is stale: source, test, dependency, build, process, or dirty-worktree content changed']);
-  const evidenceFile = join(await mkdtemp(join(tmpdir(), 'soksak-evidence-file-')), 'evidence.json');
+  const evidenceDirectory = await mkdtemp(join(tmpdir(), 'soksak-evidence-file-'));
+  t.after(() => rm(evidenceDirectory, { recursive: true, force: true }));
+  const evidenceFile = join(evidenceDirectory, 'evidence.json');
   await persistEvidence(evidenceFile, [record]);
   await persistEvidence(evidenceFile, [retried]);
   const persisted = JSON.parse(await readFile(evidenceFile, 'utf8'));

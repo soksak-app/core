@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-28: `check-breaks.mjs` makes no package copy for `--list` or unknown ids and removes its copy however it ends; the evidence test removes its directory. Validated with the extended break inventory test and a `pnpm test` run that left no directory.
 - V5-23: the activation-tier keyboard checks pass on rebuilt Wails and Tauri, 5 of 5 tracked repeats.
 - V5-27: the terminal sidecar maps a selection point in the region padding past the last whole column or row to the nearest cell; `host.window` reports the system pointer location, and activation-tier checks keep their window beside the pointer. Validated on rebuilt Wails and Tauri with the padding window check, all activation checks, and 5 of 5 tracked repeats of the keyboard checks.
 - V5-23 (progress): the terminal image region reports a character key that the input method left unanswered outside the key window of the active application as an error instead of dropping it; the native keyboard check moved to the activation tier as `e2e/activation/terminal-keyboard.test.mjs` with a check of that error. Validated once on rebuilt Wails and Tauri; tracked repeats are pending V5-27.

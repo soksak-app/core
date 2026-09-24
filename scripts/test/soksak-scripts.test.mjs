@@ -6,6 +6,7 @@ import {
   rm,
   writeFile,
   mkdir,
+  readdir,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -185,6 +186,8 @@ test("build environment audit reports the measured toolchain", { timeout: 5000 }
 });
 
 test("break inventory lists only requested, known entries", { timeout: 5000 }, async () => {
+  const copies = async () => (await readdir(tmpdir())).filter((name) => name.startsWith("soksak-breaks-"));
+  const before = new Set(await copies());
   const result = await run(node, [
     join(packageRoot, "scripts/check-breaks.mjs"),
     "state",
@@ -201,6 +204,9 @@ test("break inventory lists only requested, known entries", { timeout: 5000 }, a
   ]);
   assert.equal(invalid.code, 2);
   assert.match(invalid.stderr, /Unknown break id/);
+  // 목록과 잘못된 id 는 결함을 넣은 복사본이 필요 없으므로 복사본을 만들지 않는다.
+  assert.deepEqual((await copies()).filter((name) => !before.has(name)), [],
+    "listing or rejecting break ids left a package copy");
 });
 
 test("mutation inventory lists candidates without running the mutation suite", { timeout: 5000 }, async () => {
