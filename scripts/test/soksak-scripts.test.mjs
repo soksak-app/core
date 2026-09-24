@@ -143,6 +143,15 @@ test("window-source audit allows activation only in the activation tier", { time
   assert.equal(auditE2ESource(line, "e2e/activation-like.test.mjs").length, 1);
 });
 
+test("window-source audit allows activation in the real-input tier and input pacing only in its tool", { timeout: 1000 }, () => {
+  const line = 'await session.pointer(x, y, "move", { activate: true });';
+  assert.deepEqual(auditE2ESource(line, "e2e/real/terminal.test.mjs"), []);
+  const pacing = "  if (step.wait) delay(step.wait / 1000);";
+  assert.deepEqual(auditE2ESource(pacing, "e2e/real/hid.mjs"), []);
+  assert.deepEqual(auditE2ESource(pacing, "e2e/real/terminal.test.mjs"), ["e2e/real/terminal.test.mjs:1: uses a fixed sleep"]);
+  assert.deepEqual(auditE2ESource(pacing, "e2e/terminal.test.mjs"), ["e2e/terminal.test.mjs:1: uses a fixed sleep"]);
+});
+
 test("terminal protocol inventory rejects missing, duplicate, or unlinked CSI rows", { timeout: 5000 }, async () => {
   const result = await run(node, [join(root, "scripts/check-terminal-protocol-inventory.mjs")]);
   assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);

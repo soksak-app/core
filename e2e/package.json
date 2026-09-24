@@ -7,6 +7,7 @@
   "scripts": {
     "verify": "node --test --test-concurrency=1 './*.test.mjs'",
     "verify:activation": "node --test --test-concurrency=1 'activation/*.test.mjs'",
+    "verify:real": "node --test --test-concurrency=1 'real/*.test.mjs'",
     "repeat": "node repeat.mjs"
   },
   "dependencies": {

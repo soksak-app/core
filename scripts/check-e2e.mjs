@@ -20,12 +20,15 @@ const RULES = [
   { what: "native probe", pattern: /\bnativeProbe\b|["'`]native ["'`]\s*\+/ },
   { what: "TCP control port", pattern: /\b4973[1-3]\b|node:net/ },
   { what: "a repeating timer", pattern: /\bsetInterval\s*\(/ },
-  { what: "a fixed sleep", pattern: /\b(sleep|delay|pause)\s*\(|timers\/promises/ },
+  { what: "a fixed sleep", pattern: /\b(sleep|delay|pause)\s*\(|timers\/promises/, inputPacing: true },
   { what: "application activation that takes user focus", pattern: /\bactivate\s*:\s*true\b/, activationTier: true },
 ];
 
-// e2e/activation 의 검사는 사용자가 승인한 실행에서만 돌며 앱을 활성화할 수 있다.
-const ACTIVATION_DIR = "e2e/activation/";
+// e2e/activation 과 e2e/real 의 검사는 사용자가 승인한 실행에서만 돌며 앱을 활성화할 수 있다.
+const ACTIVATION_DIRS = ["e2e/activation/", "e2e/real/"];
+// 실제 입력 도구는 사람이 움직이는 속도로 HID 이벤트 사이에 간격을 둔다. 상태를 기다리는 대기가 아니며,
+// 간격 없이 보낸 끌기 이벤트는 창 서버가 합친다. 이 파일 밖에서는 고정 대기를 쓸 수 없다.
+const INPUT_PACING_FILE = "e2e/real/hid.mjs";
 
 /* setTimeout 은 콜백이 거절(reject)하는 상한으로만 허용한다. */
 const TIMEOUT = /\bsetTimeout\s*\(/g;
@@ -44,7 +47,8 @@ export function auditE2ESource(text, file) {
   const errors = [];
   text.split("\n").forEach((line, index) => {
     for (const rule of RULES) {
-      if (rule.activationTier && file.startsWith(ACTIVATION_DIR)) continue;
+      if (rule.activationTier && ACTIVATION_DIRS.some((dir) => file.startsWith(dir))) continue;
+      if (rule.inputPacing && file === INPUT_PACING_FILE) continue;
       if (rule.pattern.test(line)) errors.push(`${file}:${index + 1}: uses ${rule.what}`);
     }
   });
