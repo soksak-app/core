@@ -341,6 +341,10 @@ pub fn dock_items() -> Result<Value, String> {
     missing("Dock menu")
 }
 
+pub fn menu_items() -> Result<Value, String> {
+    missing("application menu")
+}
+
 pub fn dock_select(_title: &str) -> Result<(), String> {
     missing("Dock menu")
 }

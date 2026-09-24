@@ -285,6 +285,9 @@ type Platform interface {
 	InstallDock(newWindow func()) error
 	// DockItems 는 Dock 메뉴 항목의 제목을 JSON 배열로 반환한다. UI 스레드에서 호출한다.
 	DockItems() (string, error)
+	// MenuItems 는 애플리케이션 메뉴를 JSON 배열로 반환한다. 하위 메뉴마다 {title, items: [{title, key}]} 다.
+	// UI 스레드에서 호출한다.
+	MenuItems() (string, error)
 	// DockSelect 는 제목이 title 인 Dock 메뉴 항목을 실행한다. UI 스레드에서 호출한다.
 	DockSelect(title string) error
 

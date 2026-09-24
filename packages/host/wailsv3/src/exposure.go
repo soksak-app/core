@@ -100,6 +100,16 @@ var hostStatus = map[string]hostEntry{
 			"ready": map[string]any{"type": "boolean"},
 		}}},
 	},
+	"host.menu": {
+		Description: "The application menu: each submenu's title and its items' titles and key equivalents, without separators.",
+		Schema: map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{
+			"title": map[string]any{"type": "string"},
+			"items": map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{
+				"title": map[string]any{"type": "string"},
+				"key":   map[string]any{"type": "string"},
+			}}},
+		}}},
+	},
 	"host.dock": {
 		Description: "The titles of the application's Dock menu items in order.",
 		Schema:      map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
@@ -594,6 +604,8 @@ func (b hostBackend) HostStatus(window, name string) (any, error) {
 		return screens()
 	case "host.dock":
 		return dockItems()
+	case "host.menu":
+		return menuItems()
 	case "host.windows":
 		return b.Windows(), nil
 	}
@@ -1060,6 +1072,15 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 func screens() (any, error) {
 	var out []map[string]any
 	if err := native(system.Screens, &out, nil); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// menuItems 는 host.menu 의 현재 값을 읽는다.
+func menuItems() (any, error) {
+	var out []any
+	if err := native(system.MenuItems, &out, nil); err != nil {
 		return nil, err
 	}
 	return out, nil

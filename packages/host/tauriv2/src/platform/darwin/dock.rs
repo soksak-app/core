@@ -20,6 +20,14 @@ pub fn install(new_window: Box<dyn Fn()>) -> Result<(), String> {
     }
 }
 
+/// 애플리케이션 메뉴.
+pub fn menu() -> Result<Value, String> {
+    extern "C" {
+        fn sp_menu_items() -> *mut c_char;
+    }
+    facts_value(unsafe { sp_menu_items() }, "application menu")
+}
+
 /// Dock 메뉴 항목의 제목 목록.
 pub fn items() -> Result<Value, String> {
     extern "C" {

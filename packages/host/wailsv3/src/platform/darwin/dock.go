@@ -37,6 +37,10 @@ func (implementation) DockItems() (string, error) {
 	return facts(C.sp_dock_items(), "Dock menu")
 }
 
+func (implementation) MenuItems() (string, error) {
+	return facts(C.sp_menu_items(), "application menu")
+}
+
 func (implementation) DockSelect(title string) error {
 	text := C.CString(title)
 	defer C.free(unsafe.Pointer(text))

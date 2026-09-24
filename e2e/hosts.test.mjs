@@ -110,3 +110,20 @@ test("both hosts lay out the same page the same way after a resize", async (t) =
   assert.equal(rested.tauriv2.answer, rested.wailsv3.answer,
     `the two hosts place the same surfaces differently at ${SIZE.width}x${SIZE.height}`);
 });
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: the application menu does not zoom or reload the whole webview`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    const menus = await s.get("host.menu");
+    const view = menus.find((menu) => menu.title === "View");
+    assert.ok(view, `the application menu has no View menu: ${JSON.stringify(menus.map((menu) => menu.title))}`);
+    // 배치와 네이티브 표면은 웹뷰 확대를 따르지 않고, 다시 읽기는 메인 페이지 상태를 바꾼다.
+    // macOS 는 View 메뉴에 F 키의 전체 화면 항목을 스스로 더한다.
+    assert.ok(view.items.length > 0 && view.items.every((item) => /Full Screen/.test(item.title)),
+      `the View menu must have only full screen items: ${JSON.stringify(view.items)}`);
+    const forbidden = menus.flatMap((menu) => menu.items)
+      .filter((item) => /zoom in|zoom out|actual size|reload/i.test(item.title));
+    assert.deepEqual(forbidden, [], "no menu item zooms or reloads the whole webview");
+  });
+}

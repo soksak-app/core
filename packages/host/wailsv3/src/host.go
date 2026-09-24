@@ -136,6 +136,7 @@ func Run(assets fs.FS, options Options) error {
 			app.Quit()
 		}
 	})
+	app.Menu.Set(ApplicationMenu())
 	setupDockMenu(host)
 	host.newWindow("main", "/")
 	err = app.Run()

@@ -454,6 +454,8 @@ pub trait Platform: Send + Sync {
     fn clipboard_write_png(&self, bytes: &[u8]) -> Result<(), String>;
     /// Dock 메뉴 항목의 제목 목록을 반환한다. 메인 스레드에서 호출한다.
     fn dock_items(&self) -> Result<Value, String>;
+    /// 애플리케이션 메뉴를 반환한다. 하위 메뉴마다 {title, items: [{title, key}]} 다. 메인 스레드에서 호출한다.
+    fn menu_items(&self) -> Result<Value, String>;
     /// 제목이 title 인 Dock 메뉴 항목을 실행한다. 메인 스레드에서 호출한다.
     fn dock_select(&self, title: &str) -> Result<(), String>;
 

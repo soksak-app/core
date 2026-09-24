@@ -361,6 +361,9 @@ impl Platform for Windows {
     fn dock_items(&self) -> Result<Value, String> {
         unsupported::dock_items()
     }
+    fn menu_items(&self) -> Result<Value, String> {
+        unsupported::menu_items()
+    }
     fn dock_select(&self, title: &str) -> Result<(), String> {
         unsupported::dock_select(title)
     }

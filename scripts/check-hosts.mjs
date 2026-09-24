@@ -20,6 +20,7 @@ const PAIRS = [
         "src/bridge.js": "H3",
         "src/platform/darwin/webview.m": "H4",
         "src/diagnostics_test": "H5",
+        "src/menu": "H6", "tests/menu_test": "H6",
       },
       right: {
         "Cargo.toml": "A4", "Cargo.lock": "A4",

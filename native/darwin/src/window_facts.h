@@ -32,6 +32,10 @@ char *sp_screens(void);
 // 창 프레임의 왼쪽 위를 화면 좌표 (x, y) 로 옮긴다.
 bool sp_window_move(void *window, double x, double y);
 
+// 애플리케이션 메뉴(JSON 배열). 하위 메뉴마다 {title, items: [{title, key}]} 이며 구분선은 뺀다.
+// key 는 단축키로, 수정 키를 ctrl, opt, shift, cmd 순서로 + 로 이어 붙인 뒤 키 문자를 붙인다.
+char *sp_menu_items(void);
+
 // Dock 메뉴 항목의 제목 목록(JSON 배열).
 char *sp_dock_items(void);
 

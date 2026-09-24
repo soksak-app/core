@@ -61,7 +61,7 @@ func TestExposureListHostEntriesAreSortedAndDescribed(t *testing.T) {
 		}
 		return out
 	}
-	status := []string{"core.layout", "host.dock", "host.screens", "host.window", "host.windows"}
+	status := []string{"core.layout", "host.dock", "host.menu", "host.screens", "host.window", "host.windows"}
 	if !slices.Equal(names(list.Status), status) {
 		t.Fatalf("status %v, want %v", names(list.Status), status)
 	}

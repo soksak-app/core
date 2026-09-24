@@ -87,6 +87,10 @@ func (implementation) DockItems() (string, error) {
 	return "", unsupported("Dock menu")
 }
 
+func (implementation) MenuItems() (string, error) {
+	return "", unsupported("application menu")
+}
+
 func (implementation) DockSelect(string) error {
 	return unsupported("Dock menu")
 }

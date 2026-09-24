@@ -188,6 +188,33 @@ static NSMenu *dockMenu(void) {
     return [delegate respondsToSelector:@selector(applicationDockMenu:)] ? [delegate applicationDockMenu:NSApp] : nil;
 }
 
+// 메뉴 항목의 단축키. 단축키가 없으면 빈 문자열이다.
+static NSString *menuKey(NSMenuItem *item) {
+    if (item.keyEquivalent.length == 0) return @"";
+    NSEventModifierFlags mask = item.keyEquivalentModifierMask;
+    NSMutableString *key = [NSMutableString string];
+    if (mask & NSEventModifierFlagControl) [key appendString:@"ctrl+"];
+    if (mask & NSEventModifierFlagOption) [key appendString:@"opt+"];
+    if (mask & NSEventModifierFlagShift) [key appendString:@"shift+"];
+    if (mask & NSEventModifierFlagCommand) [key appendString:@"cmd+"];
+    [key appendString:item.keyEquivalent];
+    return key;
+}
+
+char *sp_menu_items(void) {
+    NSMutableArray *menus = [NSMutableArray array];
+    for (NSMenuItem *top in NSApp.mainMenu.itemArray) {
+        NSMutableArray *items = [NSMutableArray array];
+        for (NSMenuItem *item in top.submenu.itemArray) {
+            if (item.isSeparatorItem) continue;
+            [items addObject:@{ @"title": item.title, @"key": menuKey(item) }];
+        }
+        NSString *title = top.submenu.title.length ? top.submenu.title : top.title;
+        [menus addObject:@{ @"title": title, @"items": items }];
+    }
+    return copyJSON(menus);
+}
+
 char *sp_dock_items(void) {
     NSMutableArray *titles = [NSMutableArray array];
     for (NSMenuItem *item in dockMenu().itemArray) [titles addObject:item.title];

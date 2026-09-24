@@ -45,6 +45,23 @@ int main(void) { @autoreleasepool {
         && [responderFacts[@"responder"][@"class"] length] > 0
         && responderFacts[@"responder"][@"main"] == (id)kCFBooleanTrue,
         [NSString stringWithFormat:@"a responder change is reported with its class: %@", responderFacts[@"responder"]]);
+    // 애플리케이션 메뉴는 하위 메뉴마다 제목과 항목의 제목, 단축키를 보고한다. 구분선은 뺀다.
+    NSMenu *mainMenu = [[[NSMenu alloc] initWithTitle:@""] autorelease];
+    NSMenuItem *viewItem = [[[NSMenuItem alloc] initWithTitle:@"View" action:nil keyEquivalent:@""] autorelease];
+    NSMenu *viewMenu = [[[NSMenu alloc] initWithTitle:@"View"] autorelease];
+    [viewMenu addItemWithTitle:@"Zoom In" action:nil keyEquivalent:@"+"];
+    [viewMenu addItem:NSMenuItem.separatorItem];
+    NSMenuItem *full = [viewMenu addItemWithTitle:@"Toggle Full Screen" action:nil keyEquivalent:@"f"];
+    full.keyEquivalentModifierMask = NSEventModifierFlagCommand | NSEventModifierFlagControl;
+    viewItem.submenu = viewMenu;
+    [mainMenu addItem:viewItem];
+    NSApp.mainMenu = mainMenu;
+    NSArray *menus = parse(sp_menu_items());
+    check([menus isEqual:@[@{ @"title": @"View", @"items": @[
+            @{ @"title": @"Zoom In", @"key": @"cmd++" },
+            @{ @"title": @"Toggle Full Screen", @"key": @"ctrl+cmd+f" } ] }]],
+        [NSString stringWithFormat:@"the application menu is reported with titles and keys: %@", menus]);
+
     check(sp_window_move(window, 120, 80), @"move accepted");
     NSDictionary *facts = parse(sp_window_facts(window));
     CGFloat primary = NSMaxY(NSScreen.screens.firstObject.frame);

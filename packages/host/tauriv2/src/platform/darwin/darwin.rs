@@ -468,6 +468,9 @@ impl Platform for Darwin {
     fn dock_items(&self) -> Result<Value, String> {
         dock::items()
     }
+    fn menu_items(&self) -> Result<Value, String> {
+        dock::menu()
+    }
     fn dock_select(&self, title: &str) -> Result<(), String> {
         dock::select(title)
     }

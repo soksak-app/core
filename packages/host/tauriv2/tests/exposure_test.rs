@@ -128,6 +128,7 @@ fn host_entries_are_appended_as_registered() {
         [
             "core.layout",
             "host.dock",
+            "host.menu",
             "host.screens",
             "host.window",
             "host.windows"

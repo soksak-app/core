@@ -50,6 +50,16 @@ fn host_declarations() -> Value {
             "description": "The titles of the application's Dock menu items in order.",
             "schema": {"type": "array", "items": {"type": "string"}},
         }, {
+            "name": "host.menu",
+            "description": "The application menu: each submenu's title and its items' titles and key equivalents, without separators.",
+            "schema": {"type": "array", "items": {"type": "object", "properties": {
+                "title": {"type": "string"},
+                "items": {"type": "array", "items": {"type": "object", "properties": {
+                    "title": {"type": "string"},
+                    "key": {"type": "string"},
+                }}},
+            }}},
+        }, {
             "name": "host.screens",
             "description": "The displays in screen coordinates with their backing scale and the area not covered by the menu bar and Dock.",
             "schema": {"type": "array", "items": {"type": "object", "properties": {
@@ -1206,9 +1216,13 @@ impl Host {
                 let platform = platform::current().map_err(internal)?;
                 on_main(window, move || platform.dock_items()).map_err(internal)
             }
+            ("status.get", "host.menu") => {
+                let platform = platform::current().map_err(internal)?;
+                on_main(window, move || platform.menu_items()).map_err(internal)
+            }
             (
                 "status.watch" | "status.unwatch",
-                "host.window" | "host.windows" | "host.screens" | "host.dock",
+                "host.window" | "host.windows" | "host.screens" | "host.dock" | "host.menu",
             ) => Ok(Value::Null),
             ("command.run", _) => {
                 let arguments = match params.get("params") {

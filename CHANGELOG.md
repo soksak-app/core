@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-21: The Wails application menu no longer zooms or reloads the whole webview; its View menu has only full screen, like the Tauri menu. Both hosts report the application menu as `host.menu`.
 - V5-18: Both hosts fix a surface's root at its first sidecar request and send it with later requests and the closed notice, so a terminal session opened under an earlier project root is closed. Registered F8-6-3, F8-6-4, V5-22, V5-23, V5-24, V5-25.
 - V5-20: The Tauri `host.window` reader releases the modal webview mutex before it waits for the main thread, which removes a deadlock with modal placement.
 - V5-17: A surface hidden during a placement returns the keyboard focus to its owner when it is shown again, so one click focuses a browser document. `host.window` reports the first responder. Registered V5-17-1.
