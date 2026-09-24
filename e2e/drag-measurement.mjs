@@ -1,19 +1,29 @@
 import assert from "node:assert/strict";
 
 // 실제 캡처 좌표로 왕복 횟수와 시작점 복귀를 확인한다. 정지한 화면은 통과할 수 없다.
+//
+// 페이지는 기다리는 배치 중 가장 새 것만 표시하므로(docs/spec/native-surfaces.md), 한 번의 표시보다 짧게
+// 머문 위치는 대신될 수 있다. 끌기는 왕복 사이에 시작 위치에 한 걸음만 머물므로 그 위치는 보이지 않을 수
+// 있다. 녹화는 처음과 마지막에 시작 쪽 끝에 있고, 먼 끝에는 왕복마다 한 번 도달해야 한다.
 export function assertRoundTrips(positions, times) {
   assert.ok(positions.length > 1 && positions.every(Number.isFinite), "drag positions are missing or invalid");
   const low = Math.min(...positions), high = Math.max(...positions);
   const span = high - low;
   assert.ok(span >= 50, `the card moved only ${span}pt; the requested drag was not recorded`);
-  const ends = [];
+  const end = (position) => position <= low + span * .2 ? "low" : position >= high - span * .2 ? "high" : null;
+  const start = end(positions[0]);
+  assert.ok(start && end(positions.at(-1)) === start,
+    `the recording must start and end at the start end; positions: ${positions.join(",")}`);
+  const far = start === "low" ? "high" : "low";
+  let visits = 0;
+  let inside = false;
   for (const position of positions) {
-    const end = position <= low + span * .2 ? "low" : position >= high - span * .2 ? "high" : null;
-    if (end && ends.at(-1) !== end) ends.push(end);
+    const now = end(position) === far;
+    if (now && !inside) visits++;
+    inside = now;
   }
-  assert.equal(ends.length, times * 2 + 1,
-    `expected ${times} complete round trips, observed ${ends.join(",")}; positions: ${positions.join(",")}`);
-  assert.equal(ends[0], ends.at(-1), "the recorded drag did not return to its starting end");
+  assert.equal(visits, times,
+    `expected the far end once in each of ${times} round trips, observed ${visits}; positions: ${positions.join(",")}`);
   assert.ok(Math.abs(positions[0] - positions.at(-1)) <= 1,
     `the recorded card must return to its initial position: ${positions[0]} → ${positions.at(-1)}`);
   return span;
@@ -56,4 +66,37 @@ export function pointerLag(samples, ticks, boundary) {
   }
   lags.sort((a, b) => a - b);
   return { ...worst, median: lags[Math.floor(lags.length / 2)] ?? 0 };
+}
+
+/** 녹화에 반드시 나와야 하는 상태의 최소 유지 시간(ms). 60Hz 화면의 두 프레임이다. */
+const HOLD = 34;
+
+/**
+ * 한 번의 표시보다 오래 유지된 배치가 녹화에 나왔는지 확인한다.
+ *
+ * 페이지는 기다리는 배치 중 가장 새 것만 표시하므로(docs/spec/native-surfaces.md) 짧게 머문 위치는 대신될
+ * 수 있다. boundary 와 ticks 로 걸음마다 경계가 머문 시간을 계산하고, HOLD 이상 머문 위치(끌기 전과 끝난 뒤의
+ * 위치 포함)는 그 위치에 들어선 뒤의 녹화 프레임에 나와야 한다. samples 는 { time, position } 이고 첫 항목이
+ * 끌기 전 위치다.
+ */
+export function assertHeldStatesShown(samples, ticks, boundary, hold = HOLD) {
+  assert.ok(Array.isArray(ticks) && ticks.length > 0, "the host reported no step times");
+  assert.equal(boundary?.length, ticks.length + 1,
+    `the page reported ${boundary?.length} boundary positions for ${ticks.length} steps`);
+  const base = samples[0].position;
+  const values = boundary.map((value) => value - boundary[0]);
+  // 상태 i 는 values[i] 이고, i 번째 걸음(ticks[i-1])부터 다음 걸음까지 유지된다.
+  const segments = [];
+  for (let i = 0; i < values.length; i++) {
+    const start = i === 0 ? -Infinity : ticks[i - 1];
+    const end = i < ticks.length ? ticks[i] : Infinity;
+    const last = segments.at(-1);
+    if (last && Math.abs(last.value - values[i]) <= 1) last.end = end;
+    else segments.push({ value: values[i], start, end });
+  }
+  const missing = segments.filter((segment) => segment.end - segment.start >= hold).filter((segment) =>
+    !samples.some(({ time, position }) => time >= segment.start && Math.abs(position - base - segment.value) <= 1));
+  assert.deepEqual(missing.map(({ value, start, end }) => ({ value, held: end - start })), [],
+    `layouts held for ${hold}ms or longer are missing from the recording; ` +
+    `recorded offsets: ${samples.map(({ position }) => (position - base).toFixed(0)).join(",")}`);
 }

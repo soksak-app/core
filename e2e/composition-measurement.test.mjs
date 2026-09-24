@@ -1,13 +1,33 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { glyphShape, surfaceBoxes, whitePixels } from "./outside.mjs";
-import { assertRoundTrips } from "./drag-measurement.mjs";
+import { assertHeldStatesShown, assertRoundTrips } from "./drag-measurement.mjs";
 
 test("drag measurement rejects a stationary, incomplete, or non-returning gesture", () => {
   assert.throws(() => assertRoundTrips([100, 100, 100], 2), /moved only/);
-  assert.throws(() => assertRoundTrips([100, 200, 100], 2), /complete round trips/);
+  assert.throws(() => assertRoundTrips([100, 200, 100], 2), /far end/);
   assert.throws(() => assertRoundTrips([100, 200, 100, 200, 110], 2), /initial position/);
   assert.equal(assertRoundTrips([100, 150, 200, 150, 100, 150, 200, 150, 100], 2), 100);
+});
+
+test("every layout held for two frames must appear in the recording, and shorter ones may be replaced", () => {
+  // 걸음은 16ms 간격이다. 0 → -10 → -20(세 걸음 유지) → -10 → 0(끝).
+  const ticks = [0, 16, 32, 48, 64, 80];
+  const boundary = [100, 90, 80, 80, 80, 90, 100];
+  const sample = (time, offset) => ({ time, position: 200 + offset });
+  const shown = [sample(-5, 0), sample(20, -10), sample(40, -20), sample(90, 0)];
+  assertHeldStatesShown(shown, ticks, boundary);
+  assert.throws(() => assertHeldStatesShown([sample(-5, 0), sample(90, 0)], ticks, boundary), /missing/,
+    "the -20 layout held for 48ms must appear");
+  assert.throws(() => assertHeldStatesShown([sample(-5, 0), sample(40, -20)], ticks, boundary), /missing/,
+    "the final layout must appear");
+});
+
+test("a start position held for less than one presentation may be replaced between round trips", () => {
+  // 왕복 사이의 시작 위치는 더 새 배치로 대신될 수 있다(docs/spec/native-surfaces.md). 먼 끝은 매 왕복 보인다.
+  assert.equal(assertRoundTrips([100, 150, 200, 150, 200, 150, 100], 2), 100);
+  assert.throws(() => assertRoundTrips([100, 150, 200, 200, 200, 150, 100], 2), /far end/);
+  assert.throws(() => assertRoundTrips([150, 200, 150, 200, 150, 100], 2), /start/);
 });
 
 function fixture() {

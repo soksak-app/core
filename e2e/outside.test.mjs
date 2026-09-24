@@ -6,7 +6,7 @@ import { APPS, drag, fresh, open } from "./app.mjs";
 import { frames, pixel, readFrame } from "./frame.mjs";
 import { outside, whitePixels } from "./outside.mjs";
 import { alignment } from "./alignment.mjs";
-import { assertRoundTrips, pointerLag } from "./drag-measurement.mjs";
+import { assertHeldStatesShown, assertRoundTrips, pointerLag } from "./drag-measurement.mjs";
 
 const PLAN = { axis: "x", line: 2, dx: -250, dy: 0, ms: 400, times: 2 };
 
@@ -46,17 +46,7 @@ function assertAligned(run) {
     `only ${read} of ${files.length} frames could be measured, so this run checked nothing. ` +
       "The surface or its card was not found in the rest.");
 
-  const low = Math.min(...positions), high = Math.max(...positions);
-  const span = high - low;
-  assert.ok(span >= 50, `the card moved only ${span}pt; the requested drag was not recorded`);
-  const ends = [];
-  for (const position of positions) {
-    const end = position <= low + span * .2 ? "low" : position >= high - span * .2 ? "high" : null;
-    if (end && ends.at(-1) !== end) ends.push(end);
-  }
-  assert.deepEqual(ends, ["high", "low", "high", "low", "high"], "the recording must contain both complete round trips");
-  assert.ok(Math.abs(positions[0] - positions.at(-1)) <= 1,
-    `the recorded card must return to its initial position: ${positions[0]} → ${positions.at(-1)}`);
+  assertRoundTrips(positions, 2);
 
   const lag = pointerLag(samples, run.ticks, run.boundary);
   assert.ok(lag.lag <= LAG,
@@ -80,14 +70,14 @@ function assertAligned(run) {
 function assertNoWhiteSurfaceBleed(run, message) {
   const files = frames(run.frames);
   assert.ok(files.length > 0, `${message}: no frames were recorded`);
-  const positions = [];
+  const samples = [];
   let worst = { ratio: 0, frame: -1 };
   for (const [frameIndex, path] of files.entries()) {
     const frame = readFrame(path);
     const measured = outside(frame);
     assert.ok(measured, `${message}: shell/card geometry could not be measured in frame ${frameIndex}`);
     const { l, r } = measured.card;
-    positions.push(l / measured.scale);
+    samples.push({ time: frame.time, position: l / measured.scale });
     const y0 = measured.row + 5;
     const center = Math.floor((l + r) / 2);
     // 카드 푸터로 검사 영역을 한정한다. 아래 브라우저 문서의 흰 배경은 셸 영역이 아니다.
@@ -115,7 +105,8 @@ function assertNoWhiteSurfaceBleed(run, message) {
     `${message}: white pixels ${(worst.ratio * 100).toFixed(2)}% in frame ${worst.frame} ` +
       `within card ${worst.measured?.card?.l}..${worst.measured?.card?.r}, ` +
       `rows ${worst.y0}..${worst.y1}`);
-  assertRoundTrips(positions, 4);
+  // 한 걸음마다 16ms 이므로 이 끌기의 짧은 되돌아오기는 한 번의 표시보다 짧을 수 있다. 오래 머문 배치만 요구한다.
+  assertHeldStatesShown(samples, run.ticks, run.boundary);
 }
 
 for (const app of Object.values(APPS)) {

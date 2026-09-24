@@ -10,7 +10,7 @@ import test from "node:test";
 import { APPS, drag, failure, fresh, open, within } from "./app.mjs";
 import { frames, pixel, readFrame } from "./frame.mjs";
 import { glyphShape, surfaceBoxes, whitePixels } from "./outside.mjs";
-import { assertRoundTrips } from "./drag-measurement.mjs";
+import { assertHeldStatesShown } from "./drag-measurement.mjs";
 import { terminalProcessSnapshot } from "./terminal-processes.mjs";
 import { ensureTerminals, readScreenUntil, textLines } from "./terminal-screen.mjs";
 
@@ -553,7 +553,9 @@ for (const app of Object.values(APPS)) {
         return ordered[1].card.l / frame.scale;
       });
       try {
-        assertRoundTrips(positions, roundTripsPerSet);
+        // 오래 머문 배치는 모두 녹화에 나와야 한다. 한 번의 표시보다 짧게 머문 위치는 대신될 수 있다.
+        assertHeldStatesShown(positions.map((position, index) => ({ time: times[index], position })),
+          result.ticks, result.boundary);
       } catch (error) {
         throw new Error(`set ${set}: ${error.message}; frames ${times.length}, first frame ${times[0]}ms, ` +
           `last frame ${times.at(-1)}ms, last presentation ${result.displayed}ms, drag ${result.took}ms, ` +
@@ -1362,7 +1364,8 @@ for (const app of Object.values(APPS)) {
       const terminalBoxes = boxes.filter((box) =>
         Math.abs(box.row / frame.scale - terminalY) <= 5);
       assert.equal(terminalBoxes.length, terminals.length, `frame ${index}: every terminal must be measurable`);
-      positions.push([...terminalBoxes].sort((a, b) => a.card.l - b.card.l)[1].card.l / frame.scale);
+      positions.push({ time: frame.time,
+        position: [...terminalBoxes].sort((a, b) => a.card.l - b.card.l)[1].card.l / frame.scale });
       for (const box of terminalBoxes) {
         assert.ok(box.l > box.card.l && box.r - 1 < box.card.r,
           `frame ${index}: terminal ${box.l}..${box.r - 1} invades DOM card ${box.card.l}..${box.card.r}`);
@@ -1391,7 +1394,8 @@ for (const app of Object.values(APPS)) {
           `frame ${index}: terminal glyph raster width changed beyond subpixel rounding`);
       }
     }
-    assertRoundTrips(positions, 1);
+    // 오래 머문 배치는 모두 녹화에 나와야 한다. 한 번의 표시보다 짧게 머문 위치는 대신될 수 있다.
+    assertHeldStatesShown(positions, result.ticks, result.boundary);
     for (const surface of await s.surfaces("terminal")) {
       const session = await s.get("terminal.session", surface.surface);
       const original = before.get(surface.surface);
