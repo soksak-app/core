@@ -167,3 +167,92 @@ async fn three_real_sessions_reconnect_with_same_pid_and_retained_output() {
         service.close(&session).expect("close failed");
     }
 }
+
+/// macOS answers EPERM to a signal for a process group whose members are all zombies.
+/// Such a group has nothing left to terminate, so closing it succeeds.
+#[test]
+fn a_process_group_of_only_zombies_is_already_terminated() {
+    use std::os::unix::process::CommandExt;
+    let _test_lock = lifecycle_test_lock();
+    let _native_test_lock = native_pty_test_lock();
+    let mut child = std::process::Command::new("/bin/sh")
+        .args(["-c", "exit 0"])
+        .process_group(0)
+        .spawn()
+        .expect("the shell must start");
+    let group = child.id() as i32;
+    // 종료를 기다리되 회수하지 않아 그룹에 좀비 하나만 남긴다.
+    let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
+    let waited = unsafe {
+        libc::waitid(
+            libc::P_PID,
+            group as libc::id_t,
+            &mut info,
+            libc::WEXITED | libc::WNOWAIT,
+        )
+    };
+    assert_eq!(
+        waited,
+        0,
+        "waitid failed: {}",
+        std::io::Error::last_os_error()
+    );
+    assert_eq!(
+        nix::sys::signal::kill(
+            nix::unistd::Pid::from_raw(-group),
+            nix::sys::signal::Signal::SIGKILL
+        ),
+        Err(nix::errno::Errno::EPERM),
+        "the operating system answers a zombie-only group with EPERM"
+    );
+    let result = soksak_sidecar_vt_core::platform::pty::kill_process_group(Some(group));
+    child.wait().expect("the shell must be reaped");
+    assert_eq!(result, Ok(()));
+}
+
+#[test]
+fn process_group_members_report_running_and_ended_processes() {
+    use soksak_sidecar_vt_core::platform::darwin::process_group::{members, Member};
+    use std::os::unix::process::CommandExt;
+    let _test_lock = lifecycle_test_lock();
+    let _native_test_lock = native_pty_test_lock();
+    let mut child = std::process::Command::new("/bin/sleep")
+        .arg("30")
+        .process_group(0)
+        .spawn()
+        .expect("sleep must start");
+    let group = child.id() as i32;
+    assert_eq!(
+        members(group),
+        Ok(vec![Member {
+            pid: group,
+            zombie: false
+        }])
+    );
+    child.kill().expect("sleep must end");
+    // 종료를 기다리되 회수하지 않는다. 끝난 프로세스는 좀비로 보고된다.
+    let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
+    let waited = unsafe {
+        libc::waitid(
+            libc::P_PID,
+            group as libc::id_t,
+            &mut info,
+            libc::WEXITED | libc::WNOWAIT,
+        )
+    };
+    assert_eq!(
+        waited,
+        0,
+        "waitid failed: {}",
+        std::io::Error::last_os_error()
+    );
+    assert_eq!(
+        members(group),
+        Ok(vec![Member {
+            pid: group,
+            zombie: true
+        }])
+    );
+    child.wait().expect("sleep must be reaped");
+    assert_eq!(members(group), Ok(vec![]));
+}

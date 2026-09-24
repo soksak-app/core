@@ -15,6 +15,7 @@ tokio = { version = "1", features = ["io-util", "rt", "time", "net", "process", 
 uuid = { version = "1", features = ["v4", "serde"] }
 base64 = "0.21"
 nix = { version = "0.27", features = ["process", "net", "fs", "signal"] }
+libc = "0.2"
 async-trait = "0.1"
 portable-pty = "0.8"
 unicode-segmentation = "1.12"

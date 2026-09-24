@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-29: closing a PTY session treats a process group whose processes have all ended as closed when macOS answers `EPERM`, and otherwise names the remaining members. New target `make rust-repeat`. Validated with the new lifecycle tests, 20 package runs, and the terminal service window checks on rebuilt Wails and Tauri.
 - V5-30: `check-breaks.mjs` bounds the baseline only against a hang, bounds each break run by three times the file's baseline time, and reports elapsed times and catches by the bound. `make verify` passes.
 - V5-28: `check-breaks.mjs` makes no package copy for `--list` or unknown ids and removes its copy however it ends; the evidence test removes its directory. Validated with the extended break inventory test and a `pnpm test` run that left no directory.
 - V5-23: the activation-tier keyboard checks pass on rebuilt Wails and Tauri, 5 of 5 tracked repeats.

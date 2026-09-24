@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: preflight prepare build verify docs-check boundaries platforms hosts-check e2e-check exposure-check parity-check terminal-protocols-check language-test release-check rust-tests-alone
+.PHONY: preflight prepare build verify docs-check boundaries platforms hosts-check e2e-check exposure-check parity-check terminal-protocols-check language-test release-check rust-tests-alone rust-repeat
 
 docs-check:
 	@node scripts/check-docs.mjs
@@ -48,6 +48,22 @@ rust-tests-alone:
 	  done; \
 	  [ $$count -gt 0 ] || { echo "rust-tests-alone found no tests in $(PACKAGE)" >&2; exit 1; }; \
 	  echo "$(PACKAGE): $$count tests pass alone"
+
+# Rust 패키지의 테스트를 COUNT 번 차례로 실행한다. TEST 를 주면 그 이름의 테스트만 실행한다.
+# 간헐 실패를 재현하고 수용하는 대상이다. 첫 실패에서 실행 번호, 시스템 부하, 그 실행의 출력을 보고한다.
+rust-repeat:
+	@case "$(PACKAGE)" in '') echo "rust-repeat requires PACKAGE=<cargo package> COUNT=<n> [TEST=<name>] [MANIFEST=<Cargo.toml>]" >&2; exit 2;; esac
+	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "rust-repeat requires COUNT=<n> with n >= 1" >&2; exit 2;; esac
+	@cargo test -q --manifest-path $(MANIFEST) -p $(PACKAGE) --no-run
+	@output=$$(mktemp); trap 'rm -f "$$output"' EXIT; \
+	  run=1; while [ $$run -le $(COUNT) ]; do \
+	    if [ -n "$(TEST)" ]; then cargo test -q --manifest-path $(MANIFEST) -p $(PACKAGE) -- --exact "$(TEST)" > "$$output" 2>&1; \
+	    else cargo test -q --manifest-path $(MANIFEST) -p $(PACKAGE) > "$$output" 2>&1; fi \
+	      || { cat "$$output"; echo "FAIL: $(PACKAGE) $(TEST) run $$run of $(COUNT); load $$(sysctl -n vm.loadavg)" >&2; exit 1; }; \
+	    if [ -n "$(TEST)" ] && ! grep -q "1 passed" "$$output"; then cat "$$output"; echo "FAIL: $(PACKAGE) has no test named $(TEST)" >&2; exit 1; fi; \
+	    run=$$((run + 1)); \
+	  done; \
+	  echo "$(PACKAGE) $(TEST): $(COUNT) of $(COUNT) runs pass"
 
 # 운영체제별 코드가 platform/<os>/ 아래에만 있는지 검사한다.
 platforms:

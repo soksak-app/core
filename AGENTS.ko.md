@@ -47,4 +47,4 @@
 - 입력기(IME) 동작은 사용자 승인 아래 실행하는 활성화 등급 검사(`make -C native/darwin test-activation`, `pnpm -F @soksak/e2e verify:activation`)로만 검증한다. OS 입력기는 활성 애플리케이션의 키 창만 처리한다. 각 실행은 같은 창의 AppKit 텍스트 뷰 대조군에도 같은 키를 보내며, 대조군이 기대한 문서를 만들 때만 결과를 증거로 인정한다.
 - 선언된 모든 작업공간 버전은 현재 릴리스 버전 0.0.1이다. `scripts/check-versions.mjs`가 `pnpm test`에서 이를 강제한다.
 - 검증한 구현과 플랫폼을 기록한다. 이전 결과로 이후 코드를 검증하거나 테스트 통과를 배포로 기록하지 않는다.
-- 간헐 실패는 추적되는 반복 대상으로 재현하고 수용한다(네이티브 테스트 하나는 `make -C native/darwin repeat TEST=<name>_test COUNT=<n>`, 기본 스위트는 `make -C native/darwin repeat-suite COUNT=<n>`, Rust 패키지는 테스트 순서 의존을 찾도록 각 테스트를 혼자 실행하는 `make rust-tests-alone PACKAGE=<package>`). 실패한 검사는 원인을 찾는 데 필요한 측정 상태를 보고한다. 셸 세션에서 입력한 명령, 임시 스크립트, 임시 폴더는 재현이나 수용 근거가 아니며, 필요한 검사는 추적되는 테스트나 대상으로 만든다.
+- 간헐 실패는 추적되는 반복 대상으로 재현하고 수용한다(네이티브 테스트 하나는 `make -C native/darwin repeat TEST=<name>_test COUNT=<n>`, 기본 스위트는 `make -C native/darwin repeat-suite COUNT=<n>`, Rust 패키지는 테스트를 반복하는 `make rust-repeat PACKAGE=<package> COUNT=<n> [TEST=<name>]`과 테스트 순서 의존을 찾도록 각 테스트를 혼자 실행하는 `make rust-tests-alone PACKAGE=<package>`). 실패한 검사는 원인을 찾는 데 필요한 측정 상태를 보고한다. 셸 세션에서 입력한 명령, 임시 스크립트, 임시 폴더는 재현이나 수용 근거가 아니며, 필요한 검사는 추적되는 테스트나 대상으로 만든다.

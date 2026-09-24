@@ -34,6 +34,19 @@ pub fn kill_process_group(
         match kill(Pid::from_raw(-group), Signal::SIGKILL) {
             Ok(()) => Ok(()),
             Err(nix::errno::Errno::ESRCH) => Ok(()),
+            #[cfg(target_os = "macos")]
+            Err(nix::errno::Errno::EPERM) => {
+                // macOS 는 구성원이 모두 끝나 회수를 기다리는(좀비) 그룹의 신호에 EPERM 을 돌려준다.
+                // 그런 그룹은 끝낼 프로세스가 없다. 끝나지 않은 구성원이 있으면 그 상태를 적어 실패한다.
+                let members = crate::platform::darwin::process_group::members(group)
+                    .map_err(|error| format!("kill PTY process group {group}: EPERM; {error}"))?;
+                if members.iter().all(|member| member.zombie) {
+                    return Ok(());
+                }
+                Err(format!(
+                    "kill PTY process group {group}: EPERM with members {members:?}"
+                ))
+            }
             Err(error) => Err(format!("kill PTY process group {group}: {error}")),
         }
     }
