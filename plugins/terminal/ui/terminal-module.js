@@ -1,16 +1,21 @@
 import { startTerminal } from "./terminal.js";
 
-const css = `:host{display:block;height:100%;background:transparent;color:var(--surface-fg)}#view{height:100%;outline:0}`;
+// 스크롤바는 네이티브 그림 위의 DOM overlay 다. 뷰 오른쪽 가장자리에 놓는다.
+const css = `:host{display:block;height:100%;background:transparent;color:var(--surface-fg);position:relative}#view{height:100%;outline:0}
+#scrollbar{position:absolute;top:0;right:0;bottom:0;width:10px}#scrollbar[hidden]{display:none}
+#thumb{position:absolute;left:2px;right:2px;border-radius:3px;background:color-mix(in srgb,var(--surface-fg) 45%,transparent);cursor:default}`;
 
 export async function mount(root, context) {
-  root.innerHTML = `<style>${css}</style><div id="view" data-expose="terminal.view" tabindex="0"></div>`;
+  root.innerHTML = `<style>${css}</style><div id="view" data-expose="terminal.view" tabindex="0"></div>` +
+    `<div id="scrollbar" hidden><div id="thumb"></div></div>`;
   const view = root.querySelector("#view");
-  const composition = await context.composition.create({ regions: { view }, overlays: {} });
+  const scrollbar = { track: root.querySelector("#scrollbar"), thumb: root.querySelector("#thumb") };
+  const composition = await context.composition.create({ regions: { view }, overlays: { scrollbar: scrollbar.track } });
   const image = composition.region("view");
   const sidecar = context.runtime.sidecar();
   let controller;
   try {
-    controller = await startTerminal({ id: context.surfaceId, view, attachImage: () => image, sidecar,
+    controller = await startTerminal({ id: context.surfaceId, view, attachImage: () => image, sidecar, scrollbar,
       expose: context.exposure, window, theme: context.runtime.theme, settings: context.runtime.settings,
       textSize: context.runtime.textSize,
       reportSurfaceError: (error) => context.status.report("error", error),

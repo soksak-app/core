@@ -162,7 +162,7 @@ function normalizeCursorPolicy(value) {
  * @returns {Promise<void>}
  */
 export async function startTerminal({ id, view, attachImage, sidecar, expose, theme,
-  settings, clipboard, reportSurfaceError = () => {}, diagnostics = null,
+  settings, clipboard, scrollbar = null, reportSurfaceError = () => {}, diagnostics = null,
   // 이 표면의 실제 글자 배율(docs/spec/text-size.md). 출처가 없으면 배율은 1 이다.
   textSize = { read: () => 1, on: () => () => {} },
   window: globalWindow = globalThis.window }) {
@@ -643,6 +643,56 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     observeInput(terminal.send(id, { operation: "scroll", lines, col, row }));
   };
   view.addEventListener("wheel", scrollWheel, { passive: false });
+
+  // 스크롤바는 뷰포트가 가장 새 출력보다 위에 있는 동안 보인다(docs/spec/terminal-runtime.md).
+  const thumbGeometry = () => {
+    const { rows, scrollback: { offset, history } } = session;
+    const height = scrollbar.track.getBoundingClientRect().height;
+    const size = Math.min(height, Math.max(16, height * rows / (rows + history)));
+    const top = Math.min(height - size, height * (history - offset) / (rows + history));
+    return { height, size, top };
+  };
+  const drawScrollbar = () => {
+    if (!scrollbar) return;
+    scrollbar.track.hidden = session.scrollback.offset === 0;
+    if (scrollbar.track.hidden) return;
+    const { size, top } = thumbGeometry();
+    scrollbar.thumb.style.height = `${size}px`;
+    scrollbar.thumb.style.top = `${top}px`;
+  };
+  // 손잡이를 끄는 동안 포인터 아래의 오프셋으로 선언된 명령을 실행한다.
+  let thumbDrag = null;
+  const beginThumbDrag = (event) => {
+    if (event.button !== 0 || thumbDrag) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const { top } = thumbGeometry();
+    thumbDrag = { pointerId: event.pointerId, grab: event.clientY - scrollbar.track.getBoundingClientRect().top - top, sent: null };
+    scrollbar.thumb.setPointerCapture?.(event.pointerId);
+  };
+  const moveThumb = (event) => {
+    if (!thumbDrag || event.pointerId !== thumbDrag.pointerId) return;
+    event.preventDefault();
+    const { rows, scrollback: { history } } = session;
+    const { height } = thumbGeometry();
+    const top = event.clientY - scrollbar.track.getBoundingClientRect().top - thumbDrag.grab;
+    const offset = Math.min(history, Math.max(0, Math.round(history - top / height * (rows + history))));
+    if (offset === thumbDrag.sent) return;
+    thumbDrag.sent = offset;
+    observeInput(Promise.resolve().then(() => expose.run("terminal.scrollback.set", { offset })));
+  };
+  const endThumbDrag = (event) => {
+    if (!thumbDrag || event.pointerId !== thumbDrag.pointerId) return;
+    scrollbar.thumb.releasePointerCapture?.(event.pointerId);
+    thumbDrag = null;
+  };
+  if (scrollbar) {
+    scrollbar.thumb.addEventListener("pointerdown", beginThumbDrag);
+    scrollbar.thumb.addEventListener("pointermove", moveThumb);
+    scrollbar.thumb.addEventListener("pointerup", endThumbDrag);
+    scrollbar.thumb.addEventListener("pointercancel", endThumbDrag);
+    drawScrollbar();
+  }
   view.addEventListener("pointerdown", beginSelection);
   view.addEventListener("pointermove", updateSelection);
   view.addEventListener("pointerup", endSelection);
@@ -727,6 +777,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
         } else if (offset !== session.scrollback.offset || history !== session.scrollback.history) {
           session = { ...session, scrollback: { offset, history } };
           changed("session");
+          drawScrollbar();
         }
       }
       // 화면의 커서는 현재 위치·표시·포커스다. 모양은 표시 규칙이 적용된 값이므로 정책 값을 바꾸지 않는다.
@@ -980,6 +1031,18 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   });
   await expose.command("terminal.cursor.set", async (policy) => setCursorPolicy(policy));
   await expose.command("terminal.paste", pasteText);
+  await expose.command("terminal.scrollback.set", async ({ offset } = {}) => {
+    if (!Number.isInteger(offset) || offset < 0) throw new Error(`terminal.scrollback.set requires a nonnegative integer offset: ${String(offset)}`);
+    await terminal.send(id, { operation: "viewport", offset });
+    return null;
+  });
+  if (scrollbar) {
+    await Promise.all([
+      expose.dom("terminal.scrollbar", scrollbar.track),
+      expose.dom("terminal.scrollbar.thumb", scrollbar.thumb),
+      expose.mark(scrollbar.thumb, "terminal.scrollback.set"),
+    ]);
+  }
   // 현재 선택의 텍스트는 사이드카가 copy 이벤트로 보낸다.
   await expose.command("terminal.copy", async () => {
     await terminal.send(id, { operation: "copy" });
@@ -1031,6 +1094,12 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       view.removeEventListener("pointermove", updateSelection);
       view.removeEventListener("pointerup", endSelection);
       view.removeEventListener("wheel", scrollWheel);
+      if (scrollbar) {
+        scrollbar.thumb.removeEventListener("pointerdown", beginThumbDrag);
+        scrollbar.thumb.removeEventListener("pointermove", moveThumb);
+        scrollbar.thumb.removeEventListener("pointerup", endThumbDrag);
+        scrollbar.thumb.removeEventListener("pointercancel", endThumbDrag);
+      }
       view.removeEventListener("pointercancel", endSelection);
       view.removeEventListener("dragover", dragOverFiles);
       view.removeEventListener("drop", dropFilesFromEvent);

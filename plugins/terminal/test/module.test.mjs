@@ -6,10 +6,13 @@ import test from "node:test";
 const SHELL_SETTINGS = { read: () => ({ shell: "/bin/sh" }), on: () => () => {} };
 test("terminal module waits for composition presentation, publishes state, and disposes the controller", async () => {
   const view = { addEventListener() {}, removeEventListener() {} };
+  const element = () => ({ style: {}, hidden: true, addEventListener() {}, removeEventListener() {},
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 10, height: 300 }) });
+  const parts = { "#view": view, "#scrollbar": element(), "#thumb": element() };
   const root = {
     childNodes: [],
     set innerHTML(value) { this.childNodes = value ? [view] : []; },
-    querySelector(selector) { return selector === "#view" ? view : null; },
+    querySelector(selector) { return parts[selector] ?? null; },
     replaceChildren() { this.childNodes = []; },
   };
   globalThis.window = { TextEncoder };
@@ -39,7 +42,7 @@ test("terminal module waits for composition presentation, publishes state, and d
     },
     exposure: {
       status: async (name, read, subscribe) => statuses.set(name, { read, subscribe }),
-      command: async () => {}, dom: async () => {}, bind: async () => {}, delegate: async () => {},
+      command: async () => {}, dom: async () => {}, bind: async () => {}, delegate: async () => {}, mark: async () => {},
       dispose: async () => { exposureDisposed = true; },
     },
     status: { report: (phase) => { phases.push(phase); } },
@@ -93,7 +96,7 @@ test("terminal module disposes its native composition when sidecar open fails", 
         };
       },
     },
-    exposure: { status: async () => {}, command: async () => {}, dom: async () => {}, bind: async () => {}, delegate: async () => {}, dispose: async () => {} },
+    exposure: { status: async () => {}, command: async () => {}, dom: async () => {}, bind: async () => {}, delegate: async () => {}, mark: async () => {}, dispose: async () => {} },
     status: { report: (phase, error) => { phases.push({ phase, error }); } },
   };
   const { mount } = await import(`../ui/terminal-module.js?open-failure=${Date.now()}`);

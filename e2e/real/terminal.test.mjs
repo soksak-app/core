@@ -259,3 +259,53 @@ for (const app of Object.values(APPS)) {
     }
   });
 }
+
+// 화면 좌표 한 점의 표시된 픽셀.
+async function screenPixel(s, point) {
+  await s.request("diagnostics.capture.start", {});
+  const displayed = await s.presented();
+  const { frames: directory } = await s.request("diagnostics.capture.stop", { after: displayed.displayed });
+  try {
+    const files = frames(directory);
+    assert.ok(files.length > 0, "the capture produced no frames");
+    const frame = readFrame(files.at(-1));
+    const { frame: window } = await s.get("host.window");
+    return pixel(frame, Math.round((point.x - window.x) * frame.scale), Math.round((point.y - window.y) * frame.scale));
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+}
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: a scrolled terminal shows a scrollbar whose thumb moves the viewport when dragged`, { timeout: 120000 }, async (t) => {
+    const { s, surface, session, origin } = await prepare(t, app, "BARSTART");
+    await s.run("terminal.input", { bytes: "i=0; while [ $i -lt 80 ]; do printf 'ROW%02d\\n' $i; i=$((i+1)); done\r" }, surface);
+    await readScreenUntil(s, surface, (lines) => lines.some((line) => line === "ROW79"), "the rows did not render");
+    const inside = cellPoint(origin, session, 3, 3);
+    post([{ type: "move", x: inside.x, y: inside.y }, { type: "wheel", x: inside.x, y: inside.y, lines: 3 }]);
+    const scrolled = await s.until("terminal.session", (value) => value.scrollback?.offset > 0, "the wheel did not scroll", { surface });
+
+    const thumbRect = await s.rect("terminal.scrollbar.thumb", undefined, surface);
+    assert.ok(thumbRect.width > 0 && thumbRect.height >= 16, `the scrollbar thumb is not laid out: ${JSON.stringify(thumbRect)}`);
+    const thumb = await screenCenter(s, thumbRect);
+    const background = await screenPixel(s, cellPoint(origin, session, 3, 3));
+    const shown = await screenPixel(s, thumb);
+    assert.ok(!same(shown, background), `the thumb is not drawn above the terminal: ${shown} against ${background}`);
+
+    // 손잡이를 맨 위로 끌면 가장 오래된 기록이 보인다.
+    const track = await s.rect("terminal.scrollbar", undefined, surface);
+    const trackTop = (await screenCenter(s, track)).y - track.height / 2;
+    dragPath(thumb, { x: thumb.x, y: trackTop - 30 });
+    const top = await s.until("terminal.session", (value) => value.scrollback.offset === value.scrollback.history,
+      "dragging the thumb to the top did not show the oldest history", { surface });
+    t.diagnostic(`${app.name}: wheel offset ${scrolled.scrollback.offset}, top offset ${top.scrollback.offset} of ${top.scrollback.history}`);
+
+    // 맨 아래로 끌면 가장 새 출력으로 돌아오고 스크롤바가 숨는다.
+    const moved = await screenCenter(s, await s.rect("terminal.scrollbar.thumb", undefined, surface));
+    dragPath(moved, { x: moved.x, y: trackTop + track.height + 30 });
+    await s.until("terminal.session", (value) => value.scrollback.offset === 0,
+      "dragging the thumb to the bottom did not return to the newest output", { surface });
+    const hidden = await s.rect("terminal.scrollbar", undefined, surface);
+    assert.equal(hidden.width * hidden.height, 0, `the scrollbar stayed visible at the newest output: ${JSON.stringify(hidden)}`);
+  });
+}

@@ -648,6 +648,10 @@ enum SurfaceCommand {
         col: u16,
         row: u16,
     },
+    /// 스크롤바 끌기. 기본 뷰포트를 이 오프셋으로 옮기며 프로그램에는 쓰지 않는다.
+    Viewport {
+        offset: u32,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -1801,6 +1805,19 @@ async fn surface_task(
                                 if output_tx.send(response.to_string()).await.is_err() { return; }
                             }
                         }
+                    }
+                    SurfaceCommand::Viewport { offset } => {
+                        // 엔진이 보관된 기록 범위 안으로 제한한다.
+                        let delta = i64::from(offset) - i64::from(engine.viewport_offset());
+                        if delta != 0 {
+                            engine.scroll_viewport(delta.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32);
+                        }
+                        refresh_inline_image_positions(&mut engine, &mut image_state);
+                        let screen = decorate_screen(engine.screen(), focused, &preedit, &cursor_policy, 0);
+                        if let Some(state) = image_state.as_mut() {
+                            if !present_screen(&surface_id, &screen, state, &output_tx).await { return; }
+                        }
+                        if output_tx.send(screen_event(&surface_id, &screen).to_string()).await.is_err() { return; }
                     }
                     SurfaceCommand::Scroll { lines, col, row } => {
                         let modes = engine.modes();
@@ -2983,6 +3000,22 @@ where
                             }
                             "copy" => {
                                 if tx.send(SurfaceCommand::Copy).await.is_err() {
+                                    break;
+                                }
+                            }
+                            "viewport" => {
+                                let Some(offset) = body
+                                    .get("offset")
+                                    .and_then(Value::as_u64)
+                                    .and_then(|v| u32::try_from(v).ok())
+                                else {
+                                    let response = json!({"surface": surface_id, "body": {"error": "invalidParams", "reason": "viewport requires a nonnegative integer offset"}});
+                                    if output_tx.send(response.to_string()).await.is_err() {
+                                        break;
+                                    }
+                                    continue;
+                                };
+                                if tx.send(SurfaceCommand::Viewport { offset }).await.is_err() {
                                     break;
                                 }
                             }

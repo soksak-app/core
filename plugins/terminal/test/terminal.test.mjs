@@ -222,6 +222,7 @@ function createFakeExpose() {
       return Promise.resolve();
     },
     bind: async function(...args) { binds.push(args); return binder.bind(...args); },
+    mark: async function(...args) { return binder.mark(...args); },
     run: async function(name, params) { return binder.run(name, params); },
     dispose: async function() { binder.dispose(); },
     getStatus: (name) => statuses.get(name),
@@ -662,6 +663,41 @@ test("wheel input is sent as whole scroll lines at the pointer cell and the scre
   fakeSidecar.triggerEvent("test-session", { event: "screen", lines: [""], cursor: { col: 0, row: 0, visible: false, focused: false },
     scrollback: { offset: 3, history: 40 } });
   assert.deepEqual(fakeExpose.getStatus("terminal.session").readFn().scrollback, { offset: 3, history: 40 });
+});
+
+test("the scrollbar shows the scrollback position and dragging its thumb moves the viewport", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  const fakeExpose = createFakeExpose();
+  const track = Object.assign(createFakeView(), { style: {}, hidden: false });
+  const thumb = Object.assign(createFakeView(), { style: {} });
+  await startTerminal({
+    view: createFakeView(), attachImage: createFakeAttachImage().function,
+    sidecar: fakeSidecar, expose: fakeExpose, scrollbar: { track, thumb },
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  openSession(fakeSidecar);
+  fakeSidecar.getMessages().length = 0;
+  assert.equal(track.hidden, true, "the scrollbar is hidden at the newest output");
+
+  // 50행, 기록 50줄, 오프셋 25. 600 픽셀 트랙에서 손잡이는 높이 300, 위치 150 이다.
+  const screen = (offset) => fakeSidecar.triggerEvent("test-session", { event: "screen", lines: [""],
+    cursor: { col: 0, row: 0, visible: false, focused: false }, scrollback: { offset, history: 50 } });
+  screen(25);
+  assert.equal(track.hidden, false);
+  assert.deepEqual([thumb.style.height, thumb.style.top], ["300px", "150px"]);
+
+  thumb._trigger("pointerdown", { button: 0, pointerId: 4, clientX: 795, clientY: 160 });
+  thumb._trigger("pointermove", { pointerId: 4, clientX: 795, clientY: 10 });
+  thumb._trigger("pointermove", { pointerId: 4, clientX: 795, clientY: 460 });
+  thumb._trigger("pointerup", { pointerId: 4, clientX: 795, clientY: 460 });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(sessionMessages(fakeSidecar).map(({ body }) => body), [
+    { operation: "viewport", offset: 50 },
+    { operation: "viewport", offset: 0 },
+  ]);
+  screen(0);
+  assert.equal(track.hidden, true);
 });
 
 test("the region reports an unknown action as an input error", async () => {

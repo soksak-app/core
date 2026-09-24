@@ -737,6 +737,28 @@ async fn a_scroll_on_the_alternate_screen_writes_cursor_keys() {
 }
 
 #[tokio::test]
+async fn a_viewport_request_moves_the_viewport_to_the_offset_without_writing() {
+    let (output, viewport, writes) = serve_scroll(
+        None,
+        r#"{"surface":"s1","body":{"operation":"viewport","offset":7}}
+{"surface":"s1","body":{"operation":"viewport","offset":-1}}
+{"surface":"s1","body":{"operation":"viewport","offset":2.5}}
+"#,
+    )
+    .await;
+    assert_eq!(viewport, vec!["viewport 7".to_string()], "{output}");
+    assert!(
+        output.contains(r#""scrollback""#),
+        "the viewport request is answered with a screen event: {output}"
+    );
+    assert_eq!(output.matches("invalidParams").count(), 2, "{output}");
+    assert!(
+        writes.is_empty(),
+        "a viewport request writes nothing to the program"
+    );
+}
+
+#[tokio::test]
 async fn an_invalid_scroll_is_rejected() {
     let (output, viewport, writes) = serve_scroll(
         None,

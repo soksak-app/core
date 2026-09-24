@@ -15,7 +15,7 @@
           "input": "dom"
         }
       ],
-      "overlays": []
+      "overlays": ["scrollbar"]
     }
   },
   "preview": {
@@ -261,6 +261,19 @@
         }
       },
       {
+        "name": "terminal.scrollback.set",
+        "description": "Moves the terminal viewport to the given number of lines above the newest output, limited to the retained history, without writing to the program.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "offset": { "type": "integer" }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
         "name": "terminal.copy",
         "description": "Copies the text of the current terminal selection to the clipboard; without a selection the clipboard is unchanged.",
         "params": {
@@ -303,6 +316,14 @@
       {
         "name": "terminal.view",
         "description": "The terminal view area."
+      },
+      {
+        "name": "terminal.scrollbar",
+        "description": "The scrollbar track shown while the viewport is above the newest output."
+      },
+      {
+        "name": "terminal.scrollbar.thumb",
+        "description": "The scrollbar thumb; dragging it moves the viewport."
       }
     ]
   }
