@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-20: The Tauri `host.window` reader releases the modal webview mutex before it waits for the main thread, which removes a deadlock with modal placement.
 - V5-17: A surface hidden during a placement returns the keyboard focus to its owner when it is shown again, so one click focuses a browser document. `host.window` reports the first responder. Registered V5-17-1.
 - F8-22: The terminal module accepts the sidecar acknowledgements of `selection.start`, `selection.update`, and `paste` instead of recording them as unsupported events.
 - F8-21-1: A synthetic pointer press or release while a physical mouse button is pressed returns 1007 instead of reaching the document as a move, and a release completes after the document receives `pointerup`. Registered V5-19.

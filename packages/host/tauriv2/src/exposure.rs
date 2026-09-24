@@ -870,11 +870,10 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
     let overlay = &context.overlay;
     let mut surfaces = Vec::new();
     let mut attached = Vec::new();
-    let modal_view = overlay
-        .view
-        .lock()
-        .map_err(internal)?
-        .clone()
+    // 모달 웹뷰 잠금은 메인 스레드 작업을 기다리기 전에 푼다. 메인 스레드의 모달 배치가 같은 잠금을
+    // 기다리므로, 잠금을 쥔 채 with_view 를 기다리면 두 스레드가 서로를 기다린다.
+    let modal_webview = overlay.view.lock().map_err(internal)?.clone();
+    let modal_view = modal_webview
         .map(|view| with_view(&view, move |view| platform.view_id(view)).map_err(internal))
         .transpose()?;
     let mut modal = match overlay.open_state() {
