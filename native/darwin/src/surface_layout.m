@@ -111,6 +111,33 @@ static void afterNextFrame(NSScreen *screen, void (^done)(double, const char *))
     [link addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
 }
 
+// WebKit 은 macOS 에서 페이지 렌더링 갱신을 60fps 근처로 묶는 기능을 기본으로 켠다. 배치 한 번은
+// 앱 DOM 의 다음 표시(_doAfterNextPresentationUpdate)를 기다리므로, 120Hz 화면에서도 배치가 60Hz
+// 주기로 묶이고 끌기 중 화면이 포인터보다 두 주기 이상 늦는다. 이 기능은 WebKit 의 기능 플래그
+// 목록(_WKFeature)으로 켜고 끈다.
+static _WKFeature *near60FPSFeature(void) {
+    for (_WKFeature *feature in [WKPreferences _features]) {
+        if ([feature.key isEqualToString:@"PreferPageRenderingUpdatesNear60FPSEnabled"]) return feature;
+    }
+    return nil;
+}
+
+bool surfaceLayoutRenderAtDisplayRate(void *handle) {
+    NSCAssert(NSThread.isMainThread, @"webview configuration requires the UI thread");
+    WKWebView *view = (WKWebView *)handle;
+    _WKFeature *feature = near60FPSFeature();
+    if (!feature) return false;
+    [view.configuration.preferences _setEnabled:NO forFeature:feature];
+    return true;
+}
+
+int surfaceLayoutPrefersNear60FPS(void *handle) {
+    WKWebView *view = (WKWebView *)handle;
+    _WKFeature *feature = near60FPSFeature();
+    if (!feature) return -1;
+    return [view.configuration.preferences _isEnabledForFeature:feature] ? 1 : 0;
+}
+
 void surfaceLayoutAfterPresentation(void *handle, void (^done)(void)) {
     NSCAssert(NSThread.isMainThread, @"surface presentation requires the UI thread");
     WKWebView *main = (WKWebView *)handle;

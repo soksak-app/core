@@ -78,6 +78,8 @@ export declare class SoksakView {
     set bleed(px: number);
     private prefix;
     private cardEls;
+    /** The device-pixel rects the last paint wrote to the card elements. */
+    private paintedRects;
     private dividerEls;
     private ruleEls;
     /**
@@ -288,6 +290,14 @@ export declare class SoksakView {
      * pointer capture: the boundary jumps once and then stops responding.
      */
     private makeDivider;
+    /**
+     * The rect the last paint wrote to a card's element, if the card is painted.
+     *
+     * With a `commit` hook the grid can hold a newer layout than the elements
+     * show until its draw runs. Decorations drawn beside the cards read this rect
+     * so they stay with the painted cards instead of the grid.
+     */
+    painted(id: string): Rect | undefined;
     /** The element currently showing a card, if any. */
     element(id: string): HTMLElement | undefined;
     destroy(): void;

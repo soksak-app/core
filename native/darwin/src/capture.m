@@ -555,3 +555,9 @@ bool sp_capture_still(long windowNumber, const char *path) {
     }
     return written;
 }
+
+double sp_capture_clock(void) {
+    mach_timebase_info_data_t timebase;
+    mach_timebase_info(&timebase);
+    return (double)mach_absolute_time() * timebase.numer / timebase.denom / 1e6;
+}

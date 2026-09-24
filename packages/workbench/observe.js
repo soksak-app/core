@@ -13,7 +13,7 @@ import { registry } from "./exposure.js";
 import { native, report, watchCalls } from "./host.js";
 import { createTranscript } from "./transcript.js";
 import { host } from "@soksak/runtime";
-import { surfaceInput } from "./plane.js";
+import { currentGrid, surfaceInput } from "./plane.js";
 
 const KNOBS = ["latency", "skew"];
 
@@ -122,10 +122,13 @@ async function shake({ axis, line, dx, dy, ms, times }) {
   late = 0;
   deepest = 0;
   surfaceInput({ phase: 0, x: from.x, y: from.y });
+  // 걸음마다 격자에 놓인 경계의 위치. 경계는 이웃 선에 붙거나 최소 크기에서 멈추므로
+  // 포인터 위치와 같지 않다. 녹화한 화면이 어느 걸음의 배치인지는 이 값으로 찾는다.
+  const boundary = [currentGrid().boundaryPos(axis, line)];
   const began = performance.now();
   for (let turn = 0; turn < times; turn++) {
-    await sweep(from, dx, dy, 0, 1, steps);
-    await sweep(from, dx, dy, 1, 0, steps);
+    await sweep(from, dx, dy, 0, 1, steps, () => boundary.push(currentGrid().boundaryPos(axis, line)));
+    await sweep(from, dx, dy, 1, 0, steps, () => boundary.push(currentGrid().boundaryPos(axis, line)));
   }
   const took = performance.now() - began;
   surfaceInput({ phase: 2, x: from.x, y: from.y });
@@ -133,15 +136,16 @@ async function shake({ axis, line, dx, dy, ms, times }) {
   // 시간을 함께 반환한다.
   return {
     from, steps: times * 2 * steps, took: Math.round(took), asked: times * 2 * steps * FRAME,
-    late, deepest,
+    late, deepest, boundary,
   };
 }
 
-/** 누른 지점을 오프셋의 한 비율에서 다른 비율까지 옮긴다. */
-async function sweep(from, dx, dy, start, end, steps) {
+/** 누른 지점을 오프셋의 한 비율에서 다른 비율까지 옮기고, 걸음마다 moved 를 부른다. */
+async function sweep(from, dx, dy, start, end, steps, moved) {
   for (let i = 1; i <= steps; i++) {
     await tick();
     const at = start + (end - start) * (i / steps);
     surfaceInput({ phase: 1, x: from.x + dx * at, y: from.y + dy * at });
+    moved();
   }
 }

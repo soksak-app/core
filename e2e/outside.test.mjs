@@ -6,11 +6,14 @@ import { APPS, drag, fresh, open } from "./app.mjs";
 import { frames, pixel, readFrame } from "./frame.mjs";
 import { outside, whitePixels } from "./outside.mjs";
 import { alignment } from "./alignment.mjs";
-import { assertRoundTrips } from "./drag-measurement.mjs";
+import { assertRoundTrips, pointerLag } from "./drag-measurement.mjs";
 
 const PLAN = { axis: "x", line: 2, dx: -250, dy: 0, ms: 400, times: 2 };
 
 const READ = 0.5;
+
+// 격자가 한 배치를 떠난 뒤 그 배치가 화면에 남아 있어도 되는 시간(ms). 60Hz 화면의 세 프레임이다.
+const LAG = 50;
 
 function assertAligned(run) {
   const files = frames(run.frames);
@@ -20,6 +23,7 @@ function assertAligned(run) {
   let read = 0;
   let broke = 0;
   const positions = [];
+  const samples = [];
   let initial = null;
   let delayed = { delta: 0, frame: -1, geometry: null };
   files.forEach((path, index) => {
@@ -33,6 +37,7 @@ function assertAligned(run) {
     if (delta > delayed.delta) delayed = { delta, frame: index, geometry };
     read++;
     positions.push(at.card.l / at.scale);
+    samples.push({ time: frame.time, position: at.card.l / at.scale });
     if (at.out <= 0) return;
     broke++;
     if (at.out > worst.out) worst = { out: at.out, frame: index, at };
@@ -53,6 +58,11 @@ function assertAligned(run) {
   assert.ok(Math.abs(positions[0] - positions.at(-1)) <= 1,
     `the recorded card must return to its initial position: ${positions[0]} → ${positions.at(-1)}`);
 
+  const lag = pointerLag(samples, run.ticks, run.boundary);
+  assert.ok(lag.lag <= LAG,
+    `the card showed a layout ${lag.lag.toFixed(1)}ms after the grid left it (limit ${LAG}ms): ` +
+      `offset ${lag.shown?.toFixed(1)}pt at ${lag.time?.toFixed(1)}ms matches step ${lag.step} while step ${lag.sent} was sent; median ${lag.median.toFixed(1)}ms`);
+
   assert.ok(delayed.delta <= 1,
     `native content, card, sidebar, and rail geometry differ by ${delayed.delta.toFixed(1)}pt in frame ` +
       `${delayed.frame} of ${files.length}: initial ${JSON.stringify(initial)}, frame ${JSON.stringify(delayed.geometry)}`);
@@ -64,6 +74,7 @@ function assertAligned(run) {
       (at?.onNeighbour > 0 ? `, ${at.onNeighbour.toFixed(1)}pt of it over the neighbouring card` : "") +
       (at ? `: the card spans ${at.card.l}..${at.card.r} and the surface ${at.surface.l}..${at.surface.r} ` +
         `on row ${at.row}, at ${at.scale} pixels to the point` : ""));
+  return lag;
 }
 
 function assertNoWhiteSurfaceBleed(run, message) {
@@ -112,7 +123,8 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
-    assertAligned(await drag(t, s, PLAN, { capture: true }));
+    const lag = assertAligned(await drag(t, s, PLAN, { capture: true }));
+    t.diagnostic(`pointer lag: worst ${lag.lag.toFixed(1)}ms, median ${lag.median.toFixed(1)}ms`);
   });
 
   test(`${app.name}: shell divider drag does not leave a white surface frame`, async (t) => {

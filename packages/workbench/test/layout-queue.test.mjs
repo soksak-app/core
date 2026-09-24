@@ -4,7 +4,7 @@ import { createLayoutQueue } from "../layout-queue.js";
 
 test("a failed presentation rejects its request, reports failure, and permits the next drag", async () => {
   const reported = [];
-  const queue = createLayoutQueue({ failed: (error) => reported.push(error) });
+  const queue = createLayoutQueue({ failed: (error) => reported.push(error), superseded: assert.fail });
   const failure = new Error("current image raster did not present");
   const first = queue.run(() => { throw failure; });
   await assert.rejects(first, (error) => error === failure);
@@ -17,7 +17,7 @@ test("a failed presentation rejects its request, reports failure, and permits th
 });
 
 test("a new layout cannot run before the active presentation finishes", async () => {
-  const queue = createLayoutQueue({ failed: assert.fail });
+  const queue = createLayoutQueue({ failed: assert.fail, superseded: assert.fail });
   let finish;
   const gate = new Promise((resolve) => { finish = resolve; });
   const calls = [];
@@ -30,16 +30,20 @@ test("a new layout cannot run before the active presentation finishes", async ()
   assert.deepEqual(calls, [1, 2, 3]);
 });
 
-test("pending layouts run in order without dropping a user-visible state", async () => {
-  const queue = createLayoutQueue({ failed: assert.fail });
+test("a newer waiting layout replaces the older waiting layout and reports it", async () => {
+  const superseded = [];
+  const queue = createLayoutQueue({ failed: assert.fail, superseded: (work) => superseded.push(work) });
   let release;
   const gate = new Promise((resolve) => { release = resolve; });
-  const first = queue.run(async () => { await gate; });
-  const old = () => "old";
-  const replacement = queue.run(old);
-  const newest = queue.run(() => "new");
+  const calls = [];
+  const first = queue.run(async () => { calls.push("first"); await gate; });
+  const old = () => { calls.push("old"); };
+  const replaced = queue.run(old);
+  const newest = queue.run(() => { calls.push("new"); return "new"; });
   release();
   await first;
-  assert.equal(await replacement, "old");
+  assert.deepEqual(await replaced, { status: "superseded" });
   assert.equal(await newest, "new");
+  assert.deepEqual(calls, ["first", "new"]);
+  assert.deepEqual(superseded, [old]);
 });

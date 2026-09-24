@@ -105,6 +105,8 @@ type Capturer interface {
 	CaptureLimited() bool
 	// CaptureLongestGap 은 마지막으로 멈춘 녹화에서 연속한 프레임 사이의 가장 긴 표시 간격(ms)이다.
 	CaptureLongestGap() float64
+	// CaptureClock 은 현재 시각(ms)이다. 기록 프레임의 표시 시각과 같은 시계다.
+	CaptureClock() float64
 	// CaptureStill 은 윈도 서버 번호 windowNumber 의 창을 포커스를 주지 않고 한 장 찍어 path 에 PNG 로 쓴다.
 	// 관측 자료다.
 	CaptureStill(windowNumber int, path string) error

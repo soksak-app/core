@@ -2,6 +2,11 @@
 #include <stdint.h>
 
 bool surfaceLayoutCommit(void *owner, uint64_t ticket);
+// 앱 DOM 웹뷰가 60fps 근처로 묶이지 않고 화면의 갱신 주기로 렌더링을 갱신하게 한다.
+// WebKit 에 그 기능이 없으면 false 를 반환한다.
+bool surfaceLayoutRenderAtDisplayRate(void *webview);
+// 웹뷰가 60fps 근처의 렌더링 갱신을 선호하면 1, 아니면 0, 기능이 없으면 -1 을 반환한다.
+int surfaceLayoutPrefersNear60FPS(void *webview);
 void surfaceLayoutCancel(void *owner);
 #ifdef __BLOCKS__
 void surfaceLayoutBegin(void *owner, uint64_t ticket, void (^ready)(int));

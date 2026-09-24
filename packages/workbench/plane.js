@@ -1079,9 +1079,11 @@ function drawRail() {
   // 포커스 카드와 묶는 대상은 그 카드의 종류를 담당하는 레일뿐이다. 레일이 없으면
   // 외곽선을 그리지 않는다. `filter(Boolean)` 만 두면 포커스 카드 하나만 감싼
   // 외곽선을 레일 외곽선으로 그리게 된다.
+  // 격자는 준비 중인 다음 배치를 이미 담을 수 있다. 카드 요소는 그린 배치에 있으므로
+  // 외곽선도 그린 사각형으로 그려야 카드와 같은 자리에 선다.
   const kind = focusedPlugin();
-  const rail = kind ? grid.rect(railId(kind)) : null;
-  const focused = grid.rect(focusedId);
+  const rail = kind ? view.painted(railId(kind)) : null;
+  const focused = view.painted(focusedId);
   // 변 없이 그려진 카드는 감쌀 것이 없다. 획은 카드에서 통로의 절반만큼 떨어져
   // 지나므로, 두께 없는 카드를 감싸면 그 획이 이웃 카드의 안쪽을 가로지른다.
   const drawable = (r) => r !== undefined && r.w > 0 && r.h > 0;

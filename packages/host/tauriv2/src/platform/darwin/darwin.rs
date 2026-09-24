@@ -439,6 +439,10 @@ impl Platform for Darwin {
         Ok(capture::longest_gap())
     }
     #[cfg(feature = "diagnostics")]
+    fn capture_clock(&self) -> Result<f64, String> {
+        Ok(capture::clock())
+    }
+    #[cfg(feature = "diagnostics")]
     fn capture_still(&self, window_number: isize, path: &str) -> Result<(), String> {
         capture::still(window_number, path)
     }

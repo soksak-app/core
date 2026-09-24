@@ -184,12 +184,21 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, 
 		return nil, rpcError(codeInvalidParams, "ms must be positive and times must be at least 1")
 	}
 	var frames string
+	// 녹화하면 걸음을 보낸 시각을 프레임과 같은 시계로 기록한다. 걸음부터 화면까지의 지연을 잴 수 있다.
+	var clock func() float64
 	if p.Capture {
 		frames, err = startCapture(h, s, false)
 		if err != nil {
 			return nil, err
 		}
+		capture, err := recorder()
+		if err != nil {
+			return nil, err
+		}
+		clock = capture.CaptureClock
 	}
+	var tickMu sync.Mutex
+	sent := []float64{}
 	ticks := plan.steps() * 2 * plan.Times
 	s.log(fmt.Sprintf("diagnostics: drag %s:%d by %g,%g in %d steps, %d times", plan.Axis, plan.Line, plan.DX, plan.DY, plan.steps(), plan.Times))
 	stop := make(chan struct{})
@@ -202,6 +211,11 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, 
 			for left := ticks; left > 0; left-- {
 				select {
 				case <-tick.C:
+					if clock != nil {
+						tickMu.Lock()
+						sent = append(sent, clock())
+						tickMu.Unlock()
+					}
 					s.window.EmitEvent("diagnostics-tick")
 				case <-stop:
 					return
@@ -225,6 +239,9 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, 
 	}
 	if p.Capture {
 		result["frames"] = frames
+		tickMu.Lock()
+		result["ticks"] = append([]float64(nil), sent...)
+		tickMu.Unlock()
 	}
 	return result, nil
 }

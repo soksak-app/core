@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- V5-12: `native content, cards, and the sidebar rail stay aligned` passes on both hosts after the F8-6 corrections.
+- F8-6: Divider drags follow the pointer. The layout queue keeps only the newest waiting layout and reports replaced layouts in the application log; the rail outline follows the painted cards through `SoksakView.painted`; the app DOM webview renders at the display rate. The alignment check measures the drag delay, limited to 50ms.
 - V5-6: each re-verified terminal, clipboard, protocol, and browser-appearance claim maps to named tests that pass on the current builds; weak or missing coverage is registered as V5-6-1 to V5-6-6.
 - V5-15-1: the unused surface frame hold is removed; no current case moves a surface, and the specification states that the host holds no surface frame against outside changes.
 - V5-1: the native keyboard window check also sends arrow keys and Ctrl+C through the image region, the terminal input queue, and sidecar key encoding, and fails when the region key or insert forwarding is removed; it passes on both hosts.

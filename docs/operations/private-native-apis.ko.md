@@ -14,6 +14,7 @@
 | `WKWebView._setOverrideDeviceScaleFactor:` | 두 호스트의 [`webview_geometry.m`](../../native/darwin/src/webview_geometry.m), `webviewAttachSurface` | 장치 픽셀 컨테이너의 로컬 한 단위를 backing 픽셀 하나로 렌더링 |
 | 문서 웹뷰의 `WKWebView._setOverrideDeviceScaleFactor:` | 두 호스트의 [`webview_geometry.m`](../../native/darwin/src/webview_geometry.m), `webviewMatchSurface`. [`document_view.m`](../../native/darwin/src/document_view.m)의 `sp_document_create`가 호출 | 장치 픽셀 표면 안의 문서 영역을 표면과 같은 밀도로 렌더링 |
 | `WKWebView._doAfterNextPresentationUpdate:` | 두 호스트의 [`surface_layout.m`](../../native/darwin/src/surface_layout.m), 배치 커밋 전 `surfaceLayoutAfterPresentation`와, 공개 DOM 평가 뒤 display link 전의 `settle`(`host.window.presented`와 명령 정착이 사용); [`input_inject.m`](../../native/darwin/src/input_inject.m), `sp_input_pointer_then`; 프로브와 독립 입력 검사에서도 사용한다. DOM 평가는 레이아웃만 끝내고 웹 콘텐츠 프로세스는 그 DOM의 렌더링을 나중에 커밋하므로, 이 호출 없는 정착은 페이지의 마지막 DOM 변경이 그려지기 전의 표시 시각을 보고했다. | 네이티브 좌표 커밋, 새 문서로의 네이티브 스크롤 전달, 렌더링 결과 측정 전에 웹뷰 표시 완료 확인 |
+| `PreferPageRenderingUpdatesNear60FPSEnabled` 기능에 대한 `WKPreferences._features`, `_WKFeature.key`, `WKPreferences._setEnabled:forFeature:`, `WKPreferences._isEnabledForFeature:` | 두 호스트의 [`surface_layout.m`](../../native/darwin/src/surface_layout.m), [`window_facts.m`](../../native/darwin/src/window_facts.m)의 `sp_window_set_main_webview`가 호출하는 `surfaceLayoutRenderAtDisplayRate`; `host.window` 웹뷰 행의 `surfaceLayoutPrefersNear60FPS` | 배치마다 앱 DOM 웹뷰의 다음 표시를 기다리므로 그 웹뷰가 화면 갱신 주기로 렌더링을 갱신하게 함 |
 | `WKWebView._setIgnoresMouseMoveEvents:` | 두 호스트의 [`webview_input.m`](../../native/darwin/src/webview_input.m), 등록·포인터 처리·제거. 표면, 모달, 문서 영역 웹뷰 | 겹친 웹뷰의 포인터 추적을 AppKit 히트테스트 결과로 제한 |
 | `WKWebView` KVC `drawsBackground` (`_drawsBackground` / `_setDrawsBackground:`) | Tauri 앱 DOM 표면 생성의 [`webview_geometry.m`](../../native/darwin/src/webview_geometry.m), Wails [`webview.m`](../../packages/host/wailsv3/src/platform/darwin/webview.m)의 혼합 표면·모달 생성; 두 호스트 [`window_facts.m`](../../native/darwin/src/window_facts.m)의 `host.window` 조회 | 위에 놓인 DOM 평면의 불투명 배경 비활성화 및 상태 보고 |
 | `WKWebViewConfiguration` KVC `drawsBackground` (`_setDrawsBackground:`) | Tauri → Wry 혼합 표면·모달 생성; [`modals.rs`](../../packages/host/tauriv2/src/modals.rs) `show`가 `background_color(Color(0, 0, 0, 0))` 요청; 메인도 배경색 설정 | 위에 놓인 DOM 평면의 웹뷰 초기화 전에 배경 그리기 설정 |
@@ -37,6 +38,12 @@
 업데이트 후 선택자의 시그니처와 사용자 지정 배율·기본 배율의 의미를 검토한다. 의미가 변경되면 CSS 크기, 렌더링 밀도 또는 입력 좌표가 잘못될 수 있다. [`webview_geometry_test.m`](../../native/darwin/tests/webview_geometry_test.m)으로 0.5pt 문서 영역, 마지막 장치 픽셀, 2×↔1× 전환을, [`geometry.test.mjs`](../../e2e/geometry.test.mjs)로 창 크기 변경을 검증한다. 좌표 계약은 [네이티브 표면](../spec/native-surfaces.ko.md)에 정의한다.
 
 선언은 [`WKWebViewPrivate.h`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/WKWebViewPrivate.h)에 있다. 구현은 [`WebPageProxy.cpp`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/WebPageProxy.cpp)의 `WebPageProxy::setCustomDeviceScaleFactor`와 `deviceScaleFactor`를 사용한다.
+
+### 렌더링 갱신 주기
+
+앱 DOM 웹뷰에 이 설정을 유지한다. macOS의 WebKit은 `PreferPageRenderingUpdatesNear60FPSEnabled`를 기본으로 켜므로 120Hz 화면에서도 페이지는 60fps 근처로 렌더링을 갱신한다. 배치마다 앱 DOM 웹뷰의 다음 표시를 기다리므로 경계 끌기는 60Hz 프레임마다 최대 한 번 진행했다. 이 기능은 WebKit 기능 플래그이고, `_setEnabled:forFeature:`는 `WKPreferences` 객체에서 그런 플래그를 바꾸도록 WebKit이 제공하는 인터페이스다. 기능이 없으면 앱 DOM 웹뷰 등록이 실패하고 두 호스트는 시작에 실패한다. 다른 웹뷰는 기본값을 유지한다. `host.window`는 웹뷰마다 값을 `near60fps`로 보고한다.
+
+설정이 없으면 실패하는 [`window_facts_test.m`](../../native/darwin/tests/window_facts_test.m)과 [`outside.test.mjs`](../../e2e/outside.test.mjs)의 `native content, cards, and the sidebar rail stay aligned`로 검증한다. 기능 키는 [`UnifiedWebPreferences.yaml`](https://github.com/WebKit/WebKit/blob/main/Source/WTF/Scripts/Preferences/UnifiedWebPreferences.yaml), 선언은 [`WKPreferencesPrivate.h`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/WKPreferencesPrivate.h)와 [`_WKFeature.h`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/_WKFeature.h)에서 검토한다.
 
 ### 표시 완료
 

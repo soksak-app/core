@@ -230,7 +230,10 @@ onRender(() => {
     layoutFailure = null;
     check();
     coreChanged();
-    if (record?.settled !== false) projects.keep();
+    if (record?.settled !== false) {
+      projects.keep();
+      reportSuperseded();
+    }
     return true;
   }).then(async () => {
     if (latest() !== record) return;
@@ -241,12 +244,23 @@ onRender(() => {
 
 /* 네이티브 표면 준비가 완료된 뒤 카드 DOM을 갱신한다. */
 let drawing = Promise.resolve();
+/* 표시되기 전에 더 새 배치로 대신된 배치의 수. 움직임이 멈춘 표시에서 애플리케이션 로그에
+   한 줄로 남긴다. 움직이는 동안 배치마다 호스트를 부르면 표시가 그만큼 늦어진다. */
+let supersededLayouts = 0;
+function reportSuperseded() {
+  if (supersededLayouts === 0) return;
+  host.report(`layout: ${supersededLayouts} waiting layouts were replaced by newer layouts before presentation`);
+  supersededLayouts = 0;
+}
 const layouts = createLayoutQueue({
   failed(error) {
     layoutFailure = error;
     console.error(`surface presentation failed: ${error.message}`);
     showError(`surface presentation failed: ${error.message}`);
     setVerify([{ name: "Surface presentation", ok: false, note: error.message }]);
+  },
+  superseded() {
+    supersededLayouts++;
   },
 });
 let layoutEpoch = 0;

@@ -1449,6 +1449,22 @@ test("each commit callback draws its own prepared layout exactly once", () => {
   view.destroy();
 });
 
+test("painted reports the drawn rect, not a newer grid rect waiting for its draw", () => {
+  const pending = [];
+  const { grid, view } = mount({ commit: (rects, draw) => pending.push({ rects, draw }) });
+  assert.equal(view.painted("card"), undefined, "nothing is painted before the first draw");
+  pending.shift().draw();
+  const first = view.painted("card");
+  assert.equal(first.w, parseFloat(view.element("card").style.width));
+  grid.moveBoundary("x", 1, 300);
+  view.render();
+  assert.notEqual(grid.rect("card").w, first.w, "the grid holds the newer layout");
+  assert.deepEqual(view.painted("card"), first, "the element still shows the earlier rect");
+  pending.shift().draw();
+  assert.equal(view.painted("card").w, parseFloat(view.element("card").style.width));
+  view.destroy();
+});
+
 test("the view places elements on the display's pixel grid", () => {
   // A display that draws two pixels per unit has a grid half a unit fine, so a
   // fractional edge lands on a half. The step is read from the window the host

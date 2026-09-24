@@ -13,6 +13,18 @@
 @property (nonatomic, readonly) WKWebView *inspectorWebView;
 @end
 
+// _WKFeature.h
+@interface _WKFeature : NSObject
+@property (nonatomic, readonly, copy) NSString *key;
+@end
+
+@interface WKPreferences (SPPrivate)
+// WKPreferencesPrivate.h
++ (NSArray<_WKFeature *> *)_features;
+- (BOOL)_isEnabledForFeature:(_WKFeature *)feature;
+- (void)_setEnabled:(BOOL)value forFeature:(_WKFeature *)feature;
+@end
+
 @interface WKWebView (SPPrivate)
 // WKWebViewPrivate.h
 - (void)_setOverrideDeviceScaleFactor:(double)scale;

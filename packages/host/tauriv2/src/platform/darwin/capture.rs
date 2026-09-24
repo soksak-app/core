@@ -10,6 +10,7 @@ extern "C" {
     fn sp_capture_stop(after: f64) -> c_int;
     fn sp_capture_limited() -> bool;
     fn sp_capture_longest_gap() -> f64;
+    fn sp_capture_clock() -> f64;
     fn sp_capture_still(window_number: isize, path: *const c_char) -> bool;
 }
 
@@ -57,6 +58,11 @@ pub fn limited() -> bool {
 /// 마지막으로 멈춘 기록에서 연속한 프레임 사이의 가장 긴 표시 간격(ms).
 pub fn longest_gap() -> f64 {
     unsafe { sp_capture_longest_gap() }
+}
+
+/// 현재 시각(ms). 기록 프레임의 표시 시각과 같은 시계다.
+pub fn clock() -> f64 {
+    unsafe { sp_capture_clock() }
 }
 
 /// 첫 프레임을 기다리고 기록 여부를 반환한다.

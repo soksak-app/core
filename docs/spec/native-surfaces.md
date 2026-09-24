@@ -21,7 +21,7 @@ The host must not assume that DOM and native rendering differ by at most one fra
 2. The host acquires the UI thread's layer transaction for the owning window and applies the full native rectangles. The response contains actual geometry and one identifier for the complete preparation.
 3. After preparation completes, the page updates card DOM and requests presentation for that identifier.
 4. After the window's app DOM confirms presentation and the required image rasters are ready, the host commits the transaction and returns actual geometry. [Document regions](#document-regions) render independently and never join the DOM presentation wait, regardless of their URL origin.
-5. The page starts the next preparation after that response, using the latest pending layout. Outdated draw callbacks do not draw.
+5. The page starts the next preparation after that response, using the latest pending layout. A newer layout replaces an older layout that has not started, and neither the preparation nor the draw of the replaced layout runs. The newest layout contains every earlier input. When a presentation settles, the page writes the number of replaced layouts to the application log.
 
 A native surface is never temporarily reduced to the intersection of pending rectangles. A surface without a matching future slot is hidden before the DOM changes. Measurement after drawing supplies the new rectangles.
 
@@ -102,7 +102,9 @@ The terminal exposes its latest cell rows as `terminal.screen` and notifies subs
 ## Acceptance criteria
 
 - Recorded native content stays within its card on every measurable frame. Native content, card chrome, the rail sidebar, and its outer rail must preserve their relative geometry in the same frame; temporary inset growth does not satisfy this requirement.
-- Page drawing that follows the cards, such as the rail outline, uses the plane's CSS pixels. A coordinate system that scales with its element fits the previous drawing to the new box, which moves it before the cards move.
+- Page drawing that follows the cards, such as the rail outline, uses the rectangles that the last draw wrote to the card elements and the plane's CSS pixels. While a preparation is pending, the grid already holds the next layout, so drawing from the grid moves the drawing before the cards.
+- During a divider drag, each recorded frame shows the layout of a step at most 50ms (three 60Hz frames) after the grid left that layout. A placement waits for the next presentation of the app DOM webview, so that webview renders at the display rate instead of WebKit's default rendering near 60fps.
+- Such drawing does not use a coordinate system that scales with its element. That coordinate system fits the previous drawing to the new box, which moves it before the cards move.
 - Drag input completes at the requested rate and recording includes the complete drag. Recording starts before input. A controlled test stops recording only after the capture contains the final geometry; a presentation callback or frame timestamp alone is insufficient.
 - A run must fail if it records too few frames or cannot identify the surface and card in most frames.
 - Continuous input must continue to update the displayed layout; postponing all rendering until release does not satisfy this specification.

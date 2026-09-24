@@ -227,13 +227,21 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
     let app = window.app_handle().clone();
     let label = window.label().to_string();
     let length = FRAME * steps as u32;
+    // 기록하면 걸음을 보낸 시각을 프레임과 같은 시계로 남긴다. 걸음부터 화면까지의 지연을 잴 수 있다.
+    let sent = std::sync::Arc::new(std::sync::Mutex::new(Vec::<f64>::new()));
+    let clock = if frames.is_some() {
+        Some(platform::current().map_err(internal)?)
+    } else {
+        None
+    };
+    let recorded = sent.clone();
     // 페이지는 끌기를 시작할 때 이전 단계를 버리므로 단계는 요청 이벤트를 보낸 뒤 보낸다.
     let result = host.page_then(
         window,
         "diagnostics.drag",
         params,
         Some(TIMEOUT + length),
-        move || tick(app, label, steps),
+        move || tick(app, label, steps, clock, recorded),
     );
     let finished = (|| -> Result<Value, Failure> {
         let result = result?;
@@ -258,6 +266,8 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
                 "frames".into(),
                 Value::String(frames.to_string_lossy().into_owned()),
             );
+            let ticks = sent.lock().map_err(internal)?.clone();
+            merged.insert("ticks".into(), serde_json::json!(ticks));
         }
         Ok(Value::Object(merged))
     })();
@@ -270,13 +280,26 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
 
 /// 페이지에 끌기 단계 시각을 steps 번 보낸다. 각 단계는 시작 시각 기준의 예정 시각에 보낸다.
 /// 한 단계씩 잠들면 각 단계의 실행 시간이 이후 단계에 누적된다.
-fn tick(app: tauri::AppHandle, label: String, steps: u64) {
+fn tick(
+    app: tauri::AppHandle,
+    label: String,
+    steps: u64,
+    clock: Option<&'static dyn platform::Platform>,
+    sent: std::sync::Arc<std::sync::Mutex<Vec<f64>>>,
+) {
     std::thread::spawn(move || {
         let began = Instant::now();
         for step in 1..=steps {
             let due = FRAME * step as u32;
             if let Some(left) = due.checked_sub(began.elapsed()) {
                 std::thread::sleep(left);
+            }
+            if let Some(platform) = clock {
+                match (platform.capture_clock(), sent.lock()) {
+                    (Ok(now), Ok(mut ticks)) => ticks.push(now),
+                    (Err(error), _) => eprintln!("drag tick clock: {error}"),
+                    (_, Err(error)) => eprintln!("drag tick clock: {error}"),
+                }
             }
             if let Err(error) = app.emit_to(EventTarget::webview(&label), "diagnostics-tick", ()) {
                 eprintln!("{error}");

@@ -4,6 +4,7 @@
 #import <objc/runtime.h>
 #import "window_facts.h"
 #import "webview_geometry.h"
+#import "surface_layout.h"
 
 static const char mainWebviewKey;
 
@@ -14,6 +15,8 @@ bool sp_window_set_main_webview(void *handle, void *mainHandle) {
     if (!window || ![main isKindOfClass:WKWebView.class] || main.window != window) return false;
     NSValue *registered = objc_getAssociatedObject(window, &mainWebviewKey);
     if (registered && registered.nonretainedObjectValue != main) return false;
+    // 배치 표시는 이 웹뷰의 다음 표시를 기다리므로 이 웹뷰는 화면 갱신 주기로 렌더링해야 한다.
+    if (!registered && !surfaceLayoutRenderAtDisplayRate(main)) return false;
     objc_setAssociatedObject(window, &mainWebviewKey, [NSValue valueWithNonretainedObject:main], OBJC_ASSOCIATION_RETAIN);
     return true;
 }
@@ -106,6 +109,8 @@ char *sp_window_facts(void *handle) {
         row[@"draws"] = [view valueForKey:@"drawsBackground"];
         row[@"alpha"] = @(view.underPageBackgroundColor.alphaComponent);
         row[@"main"] = @(view == mainWebview(window));
+        int near60 = surfaceLayoutPrefersNear60FPS(view);
+        row[@"near60fps"] = near60 < 0 ? (id)NSNull.null : @(near60 == 1);
         NSView *nativePlane = (NSView *)sp_surface_native_plane(view);
         BOOL document = view != mainWebview(window) && nativePlane && [view isDescendantOf:nativePlane];
         row[@"document"] = @(document);

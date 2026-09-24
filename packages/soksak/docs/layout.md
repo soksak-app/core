@@ -480,15 +480,21 @@ a grid rebuilt from it closes cards the same way. `checkState` is what the
 constructor runs; call it to reject a stale saved layout before installing one.
 
 `SoksakView(host, grid, options)` — `render(reason?)`, `element(id)`,
-`destroy()`. Options: `createCard` (required), `updateCard`, `destroyCard`,
+`painted(id)`, `destroy()`. Options: `createCard` (required), `updateCard`, `destroyCard`,
 `onChange(reason)`, `updateDivider`, `rules` (default on), `commit(rects, draw)`,
 `classPrefix` (default `sp`), `observeResize` (default on), `bleed` (default 0).
 
 `commit(rects, draw)` runs before every layout change. It receives the rectangles
 on the device's pixel grid. The host calls `draw()` after preparing its views.
-Only the latest pending callback can draw, and it runs once; an older callback
-cannot draw a newer layout against an earlier preparation. DOM and native
-presentation require separate synchronization in the host.
+Each callback draws the layout it received, once; a later grid change cannot
+replace that layout before it is drawn. A host that skips an older callback
+skips that layout. DOM and native presentation require separate synchronization
+in the host.
+
+`painted(id)` returns the rectangle the last draw wrote to a card's element, or
+`undefined` before the card is drawn. With a `commit` hook the grid holds a newer
+layout than the elements until its draw runs, so a host that draws beside the
+cards reads this rectangle instead of `rect(id)`.
 
 The DOM binding observes display-resolution changes and redraws on the new
 device-pixel grid even when the host's CSS size is unchanged. `destroy()` removes

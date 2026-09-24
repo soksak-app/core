@@ -142,6 +142,8 @@ export class SoksakView {
   }
   private prefix: string;
   private cardEls = new Map<string, { el: HTMLElement; card: Card }>();
+  /** The device-pixel rects the last paint wrote to the card elements. */
+  private paintedRects = new Map<string, Rect>();
   private dividerEls = new Map<string, HTMLElement>();
   private ruleEls = new Map<string, HTMLElement>();
   /**
@@ -328,6 +330,7 @@ export class SoksakView {
     // of a drag.
     const box = snapshot.rects;
     const live = new Set<string>();
+    this.paintedRects = new Map();
     for (const card of snapshot.cards) {
       live.add(card.id);
       let held = this.cardEls.get(card.id);
@@ -345,6 +348,7 @@ export class SoksakView {
       held.card = card;
       const rect = onGrid(box.get(card.id) as Rect, step);
       place(held.el, rect);
+      this.paintedRects.set(card.id, rect);
       this.options.updateCard?.(held.el, card, rect);
     }
     // The card is gone from the grid, so `destroyCard` receives the last copy
@@ -950,6 +954,17 @@ export class SoksakView {
 
     this.host.appendChild(el);
     return el;
+  }
+
+  /**
+   * The rect the last paint wrote to a card's element, if the card is painted.
+   *
+   * With a `commit` hook the grid can hold a newer layout than the elements
+   * show until its draw runs. Decorations drawn beside the cards read this rect
+   * so they stay with the painted cards instead of the grid.
+   */
+  painted(id: string): Rect | undefined {
+    return this.paintedRects.get(id);
   }
 
   /** The element currently showing a card, if any. */
