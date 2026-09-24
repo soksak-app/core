@@ -1,7 +1,8 @@
 // 실제 입력 등급 터미널 검사: 사람의 마우스와 키보드가 지나는 경로(창 서버, 키 창, 메뉴 키 대응)로 터미널
 // 선택, 복사, 붙여넣기, 휠을 검사한다. 사용자가 승인한 실행에서 pnpm -F @soksak/e2e verify:real 로만 실행한다.
 import assert from "node:assert/strict";
-import { rmSync } from "node:fs";
+import { readFileSync, realpathSync, rmSync } from "node:fs";
+import { dirname, join } from "node:path";
 import test from "node:test";
 
 import { APPS, fresh, open } from "../app.mjs";
@@ -117,6 +118,29 @@ for (const app of Object.values(APPS)) {
       `${(performance.now() - posted).toFixed(0)} ms after it returned`);
     // 입력기 문서에 머문 텍스트는 다른 계기로 확정될 때까지 몇 초 동안 나오지 않았다(V5-42).
     assert.ok(elapsed <= PASTE_LIMIT, `Command+V text appeared ${elapsed.toFixed(0)} ms after the key (limit ${PASTE_LIMIT} ms)`);
+    assert.equal((await s.get("terminal.session", surface)).error, undefined);
+  });
+}
+
+// 1x1 PNG. 붙여넣으면 설정 디렉터리의 clipboard 폴더에 소유 파일로 저장된다.
+const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==", "base64");
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: a real Command+V pastes a clipboard image as a quoted owned path`, { timeout: 90000 }, async (t) => {
+    const { s, surface, origin, session, row } = await prepare(t, app, "IMAGEHERE");
+    const point = cellPoint(origin, session, 0, row + 1);
+    click(point.x, point.y);
+    await s.until("host.window", (window) => window.responder?.surface === surface, "the terminal did not take native focus");
+    writePasteboard([{ "public.png": PNG.toString("base64") }]);
+    key(KEYS.v, ["command"]);
+    // 긴 경로는 터미널 폭에서 줄바꿈되므로 줄을 이어 읽는다.
+    const quoted = /'([^']*\/pasted-image-[^'/]*\.png)'/;
+    const lines = await readScreenUntil(s, surface, (screen) => quoted.test(screen.join("")),
+      "Command+V did not paste the clipboard image as a quoted path");
+    const saved = quoted.exec(lines.join(""))[1];
+    s.cleanup(() => rmSync(saved, { force: true }));
+    assert.equal(dirname(saved), join(realpathSync(app.configDir), "clipboard"), `the image is not owned by the configuration: ${saved}`);
+    assert.deepEqual(readFileSync(saved), PNG, "the saved image differs from the clipboard PNG");
     assert.equal((await s.get("terminal.session", surface)).error, undefined);
   });
 }
