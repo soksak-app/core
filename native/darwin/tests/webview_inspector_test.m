@@ -7,20 +7,7 @@
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import "webview_geometry.h"
-
-@protocol SPInspector <NSObject>
-- (void)connect;
-- (void)show;
-- (void)attach;
-- (void)close;
-@property (nonatomic, readonly, getter=isVisible) BOOL visible;
-@property (nonatomic, readonly, getter=isConnected) BOOL connected;
-@property (nonatomic, readonly) WKWebView *inspectorWebView;
-@end
-
-@interface WKWebView (SPInspector)
-@property (nonatomic, readonly) id<SPInspector> _inspector;
-@end
+#import "private/webkit.h"
 
 static int failures = 0;
 
@@ -29,10 +16,13 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
+// 앱 이벤트를 꺼내 처리하며 기다린다. 이 검사는 앱을 활성화하며, 활성화와 인스펙터 창 이벤트는 이벤트로 도착한다.
 static void until(BOOL (^done)(void)) {
     NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
     while (!done() && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny
+            untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01] inMode:NSDefaultRunLoopMode dequeue:YES];
+        if (event) [NSApp sendEvent:event];
     }
 }
 
@@ -65,7 +55,7 @@ int main(void) { @autoreleasepool {
     WKWebView *main = [[[WKWebView alloc] initWithFrame:window.contentView.bounds
         configuration:configuration] autorelease];
     [window.contentView addSubview:main];
-    WKWebView *surface = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 300)
+    WKWebView *surface = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 600, 450)
         configuration:[[configuration copy] autorelease]] autorelease];
     [window.contentView addSubview:surface];
     [main loadHTMLString:@"<body style='margin:0'>main</body>" baseURL:nil];
@@ -75,15 +65,17 @@ int main(void) { @autoreleasepool {
     check(sp_surface_create(main) != NULL,
         @"the main webview creates the composition before a surface webview is attached");
     webviewAttachSurface(surface, main);
-    webviewSetFrame(surface, 100, 50, 400, 300);
+    webviewSetFrame(surface, 100, 50, 600, 450);
     NSRect placed = frameOf(surface);
-    check(NSEqualRects(placed, NSMakeRect(100, 50, 400, 300)),
+    check(NSEqualRects(placed, NSMakeRect(100, 50, 600, 450)),
         [NSString stringWithFormat:@"the surface starts at its place (%@)", describe(placed)]);
 
     surface.inspectable = YES;
     id<SPInspector> inspector = surface._inspector;
     check(inspector != nil, @"the surface webview has an inspector");
     [NSApp activateIgnoringOtherApps:YES];
+    until(^BOOL { return NSApp.isActive && window.isKeyWindow; });
+    check(NSApp.isActive && window.isKeyWindow, @"the test window becomes the key window of the active application");
     [inspector connect];
     until(^BOOL { return inspector.connected; });
     [inspector show];
@@ -93,7 +85,9 @@ int main(void) { @autoreleasepool {
     // 인스펙터를 창에 붙인다. 사용자가 인스펙터의 도킹 단추로 하는 동작이다.
     [inspector attach];
     until(^BOOL { return inspector.inspectorWebView.window == window; });
-    check(inspector.inspectorWebView.window == window, @"the inspector attaches to the window");
+    check(inspector.inspectorWebView.window == window, [NSString stringWithFormat:
+        @"the inspector attaches to the window (inspector window %@, test window %@, app active %d, key %d)",
+        inspector.inspectorWebView.window, window, NSApp.isActive, window.isKeyWindow]);
     NSRect attached = frameOf(surface);
     check(NSEqualRects(attached, placed),
         [NSString stringWithFormat:@"the attached inspector leaves the surface at its place (%@)", describe(attached)]);
