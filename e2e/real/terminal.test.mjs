@@ -351,3 +351,32 @@ for (const app of Object.values(APPS)) {
     }
   });
 }
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: scrollbar settings change the drawn track width, thumb color, and shape`, { timeout: 120000 }, async (t) => {
+    const { s, surface } = await prepare(t, app, "BARSETTINGS");
+    await s.run("terminal.input", { bytes: "i=0; while [ $i -lt 60 ]; do printf 'ROW%02d\\n' $i; i=$((i+1)); done\r" }, surface);
+    await readScreenUntil(s, surface, (lines) => lines.some((line) => line === "ROW59"), "the rows did not render");
+    await s.until("terminal.session", (value) => value.scrollback?.history > 0, "the output did not exceed the screen", { surface });
+    const set = (key, value) => s.run("core.settings.change", { key: `terminal.scrollbar.${key}`, value, scope: "common" });
+    await set("width", 20);
+    await set("thumb", "#ff0000");
+    await set("track", "#0000ff");
+    await set("shape", "square");
+    const track = await s.rect("terminal.scrollbar", undefined, surface);
+    assert.equal(track.width, 20, `the track width setting was not applied: ${JSON.stringify(track)}`);
+    const thumbRect = await s.rect("terminal.scrollbar.thumb", undefined, surface);
+    const center = await screenCenter(s, thumbRect);
+    const corner = { x: center.x - thumbRect.width / 2 + 1, y: center.y - thumbRect.height / 2 + 1 };
+    const near = (actual, expected) => actual.every((value, index) => Math.abs(value - expected[index]) <= 24);
+    const drawn = await screenPixel(s, center);
+    assert.ok(near(drawn, [255, 0, 0]), `the thumb color setting was not drawn: ${drawn}`);
+    const squareCorner = await screenPixel(s, corner);
+    assert.ok(near(squareCorner, [255, 0, 0]), `a square thumb does not fill its corner: ${squareCorner}`);
+    await set("shape", "rounded");
+    const roundCorner = await screenPixel(s, corner);
+    assert.ok(near(roundCorner, [0, 0, 255]), `a rounded thumb corner does not show the track color: ${roundCorner}`);
+    const trackPixel = await screenPixel(s, { x: center.x, y: center.y - thumbRect.height / 2 - 4 });
+    t.diagnostic(`${app.name}: thumb ${drawn}, square corner ${squareCorner}, rounded corner ${roundCorner}, track ${trackPixel}`);
+  });
+}

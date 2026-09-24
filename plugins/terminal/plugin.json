@@ -63,6 +63,27 @@
       "type": "string",
       "default": "login",
       "maxLength": 1024
+    },
+    "scrollbar.track": {
+      "type": "string",
+      "default": "terminal",
+      "maxLength": 9
+    },
+    "scrollbar.thumb": {
+      "type": "string",
+      "default": "#8f98a080",
+      "maxLength": 9
+    },
+    "scrollbar.width": {
+      "type": "integer",
+      "default": 10,
+      "minimum": 4,
+      "maximum": 24
+    },
+    "scrollbar.shape": {
+      "type": "enum",
+      "default": "rounded",
+      "values": ["rounded", "square"]
     }
   },
   "sidecars": [

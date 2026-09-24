@@ -652,6 +652,30 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     const top = Math.min(height - size, height * (history - offset) / (rows + history));
     return { height, size, top };
   };
+  // 스크롤바 설정(docs/spec/terminal-runtime.md). 잘못된 값은 입력 오류로 보고하고 적용하지 않는다.
+  const COLOR = /^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/;
+  const scrollbarStyle = { track: "terminal", thumb: "#8f98a080", width: 10, shape: "rounded" };
+  let terminalBackground = null;
+  const applyScrollbarSettings = (values) => {
+    const next = { track: values["scrollbar.track"], thumb: values["scrollbar.thumb"], width: values["scrollbar.width"], shape: values["scrollbar.shape"] };
+    if (next.track === "terminal" || COLOR.test(next.track ?? "")) scrollbarStyle.track = next.track;
+    else reportInputError(new Error(`scrollbar.track setting is invalid: ${String(next.track)}`));
+    if (COLOR.test(next.thumb ?? "")) scrollbarStyle.thumb = next.thumb;
+    else reportInputError(new Error(`scrollbar.thumb setting is invalid: ${String(next.thumb)}`));
+    if (Number.isInteger(next.width) && next.width >= 4 && next.width <= 24) scrollbarStyle.width = next.width;
+    else reportInputError(new Error(`scrollbar.width setting is invalid: ${String(next.width)}`));
+    if (next.shape === "rounded" || next.shape === "square") scrollbarStyle.shape = next.shape;
+    else reportInputError(new Error(`scrollbar.shape setting is invalid: ${String(next.shape)}`));
+    paintScrollbar();
+  };
+  // 트랙은 네이티브 그림이 잘린 자리를 칠한다. terminal 은 터미널의 현재 기본 배경색이다.
+  const paintScrollbar = () => {
+    if (!scrollbar) return;
+    scrollbar.track.style.width = `${scrollbarStyle.width}px`;
+    scrollbar.track.style.background = scrollbarStyle.track === "terminal" ? (terminalBackground ?? "") : scrollbarStyle.track;
+    scrollbar.thumb.style.background = scrollbarStyle.thumb;
+    scrollbar.thumb.style.borderRadius = scrollbarStyle.shape === "square" ? "0px" : "999px";
+  };
   const drawScrollbar = () => {
     if (!scrollbar) return;
     scrollbar.track.hidden = session.scrollback.history === 0;
@@ -770,8 +794,10 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       // screen 이벤트를 처리한다. screen.read 응답이나 화면 변화 알림.
       screen = body.lines;
       changed("screen");
-      // 스크롤바 트랙은 네이티브 그림이 잘린 자리를 칠하므로 터미널의 현재 기본 배경색을 쓴다.
-      if (typeof body.background === "string" && scrollbar) scrollbar.track.style.background = body.background;
+      if (typeof body.background === "string" && body.background !== terminalBackground) {
+        terminalBackground = body.background;
+        paintScrollbar();
+      }
       if (body.scrollback !== undefined) {
         const { offset, history } = body.scrollback ?? {};
         if (!Number.isInteger(offset) || !Number.isInteger(history) || offset < 0 || history < 0) {
@@ -942,7 +968,9 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       reportInputError(error);
     });
     await setCursorPolicy(settingsPolicy());
+    applyScrollbarSettings(settings.read?.() ?? {});
     settingsSubscription = settings.on((values) => {
+      applyScrollbarSettings(values);
       const nextClipboardPolicy = values["clipboard.program"];
       if (!PROGRAM_CLIPBOARD_POLICIES.has(nextClipboardPolicy)) {
         reportInputError(new Error(`clipboard.program setting is invalid: ${String(nextClipboardPolicy)}`));

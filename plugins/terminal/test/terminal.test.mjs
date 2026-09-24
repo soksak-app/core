@@ -709,6 +709,40 @@ test("the scrollbar shows the scrollback position and dragging its thumb moves t
   assert.equal(track.hidden, true, "the scrollbar is hidden without history");
 });
 
+test("scrollbar settings set the track background, thumb color, width, and shape", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  const fakeExpose = createFakeExpose();
+  const track = Object.assign(createFakeView(), { style: {}, hidden: true });
+  const thumb = Object.assign(createFakeView(), { style: {} });
+  let values = {
+    ...SHELL_SETTINGS.read(),
+    "scrollbar.track": "terminal", "scrollbar.thumb": "#ff000080", "scrollbar.width": 16, "scrollbar.shape": "square",
+  };
+  let notify = null;
+  await startTerminal({
+    view: createFakeView(), attachImage: createFakeAttachImage().function,
+    sidecar: fakeSidecar, expose: fakeExpose, scrollbar: { track, thumb },
+    settings: { read: () => values, on: (listener) => { notify = listener; return () => {}; } },
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  openSession(fakeSidecar);
+  fakeSidecar.triggerEvent("test-session", { event: "screen", lines: [""], background: "#102030",
+    cursor: { col: 0, row: 0, visible: true, focused: false }, scrollback: { offset: 0, history: 50 } });
+  assert.deepEqual([track.style.width, track.style.background, thumb.style.background, thumb.style.borderRadius],
+    ["16px", "#102030", "#ff000080", "0px"]);
+
+  values = { ...values, "scrollbar.track": "#112233", "scrollbar.width": 8, "scrollbar.shape": "rounded" };
+  notify(values);
+  assert.deepEqual([track.style.width, track.style.background, thumb.style.borderRadius], ["8px", "#112233", "999px"]);
+
+  // 잘못된 색은 입력 오류이며 적용하지 않는다.
+  values = { ...values, "scrollbar.thumb": "red" };
+  notify(values);
+  assert.equal(thumb.style.background, "#ff000080");
+  assert.match(fakeExpose.getStatus("terminal.session").readFn().error, /scrollbar.thumb/);
+});
+
 test("the region reports an unknown action as an input error", async () => {
   FakeResizeObserver.reset();
   const fakeSidecar = createFakeSidecar();
@@ -899,7 +933,7 @@ test("allowed program clipboard handles only text through the host capability", 
   const fakeSidecar = createFakeSidecar();
   const fakeExpose = createFakeExpose();
   const writes = [];
-  const settings = { read: () => ({ "clipboard.program": "allow", shell: "/bin/sh" }), on: () => () => {} };
+  const settings = { read: () => ({ ...SHELL_SETTINGS.read(), "clipboard.program": "allow" }), on: () => () => {} };
   const clipboard = {
     read: async (type) => { assert.equal(type, "text"); return "from host"; },
     writeText: async (text) => { writes.push(text); },
@@ -2140,6 +2174,7 @@ test("declared settings are sent at startup and on effective setting changes", a
   let notify;
   const settings = {
     read: () => ({
+      ...SHELL_SETTINGS.read(),
       "cursor.shape": "underline", "cursor.blink": "On", "cursor.interval": 900,
       "cursor.idleTimeout": 0, "cursor.unfocused": "beam", "clipboard.program": "deny", shell: "/bin/sh",
     }),
@@ -2600,6 +2635,7 @@ test("the font size is 13 points times the text size factor and follows its chan
   const fakeSidecar = createFakeSidecar();
   const fakeExpose = createFakeExpose();
   const values = {
+    ...SHELL_SETTINGS.read(),
     "cursor.shape": "block", "cursor.blink": "Off", "cursor.interval": 750,
     "cursor.idleTimeout": 5000, "cursor.unfocused": "hollow", "clipboard.program": "deny",
     "font.family": "Menlo", shell: "/bin/sh",
@@ -2644,6 +2680,7 @@ test("the font.family list is sent at startup and on change, and the applied fam
   let notify;
   const errors = [];
   let values = {
+    ...SHELL_SETTINGS.read(),
     "cursor.shape": "block", "cursor.blink": "Off", "cursor.interval": 750,
     "cursor.idleTimeout": 5000, "cursor.unfocused": "hollow", "clipboard.program": "deny",
     "font.family": "D2Coding;Menlo", shell: "/bin/sh",

@@ -2,8 +2,8 @@ import { startTerminal } from "./terminal.js";
 
 // 스크롤바는 네이티브 그림 위의 DOM overlay 다. 뷰 오른쪽 가장자리에 놓는다.
 const css = `:host{display:block;height:100%;background:transparent;color:var(--surface-fg);position:relative}#view{height:100%;outline:0}
-#scrollbar{position:absolute;top:0;right:0;bottom:0;width:10px}#scrollbar[hidden]{display:none}
-#thumb{position:absolute;left:2px;right:2px;border-radius:3px;background:color-mix(in srgb,var(--surface-fg) 45%,transparent);cursor:default}`;
+#scrollbar{position:absolute;top:0;right:0;bottom:0}#scrollbar[hidden]{display:none}
+#thumb{position:absolute;left:2px;right:2px;cursor:default}`;
 
 export async function mount(root, context) {
   root.innerHTML = `<style>${css}</style><div id="view" data-expose="terminal.view" tabindex="0"></div>` +

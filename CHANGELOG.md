@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-58: the terminal scrollbar's track background, thumb color, width, and shape are plugin settings.
 - V5-56-1: DOM overlays are visible above native regions, and the terminal scrollbar is shown whenever the terminal retains history.
 - V5-56: a scrolled terminal shows a scrollbar above the native image, and dragging its thumb moves the viewport through the scrollback.
 - V5-55: a terminal drag selects from the pressed cell to the cell under the pointer in both directions and past the view edge, and the drawn selection equals the copied text.
