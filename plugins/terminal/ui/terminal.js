@@ -195,6 +195,8 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     selectionReleases: 0,
     // 왼쪽 버튼을 누른 선택 제스처가 진행 중인지.
     selecting: false,
+    // 뷰포트가 가장 새 출력보다 위에 있는 줄 수와 보관된 기록 줄 수.
+    scrollback: { offset: 0, history: 0 },
     vendor: { directory: null, hyperlink: null, notification: null, shell: null },
     compose: { text: "", selectedRange: null, replacementRange: null, attributed: false },
     theme: "dark",
@@ -618,6 +620,23 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     if (!started) observeInput(terminal.send(id, { operation: "selection.start", ...start }));
     observeInput(terminal.send(id, { operation: "selection.end" }));
   };
+  // 휠은 스크롤 제스처다. 이동량을 정수 줄로 바꿔 포인터 칸과 함께 보낸다(docs/spec/terminal-runtime.md).
+  // 한 줄보다 작은 픽셀 이동은 누적한다. 양수 줄은 오래된 출력 쪽이다.
+  let wheelLines = 0;
+  const scrollWheel = (event) => {
+    event.preventDefault();
+    const { cols, rows, cellWidth, cellHeight } = session;
+    const delta = event.deltaMode === 1 ? event.deltaY : event.deltaMode === 2 ? event.deltaY * rows : event.deltaY / cellHeight;
+    wheelLines -= delta;
+    const lines = Math.trunc(wheelLines);
+    if (lines === 0) return;
+    wheelLines -= lines;
+    const rect = view.getBoundingClientRect();
+    const col = Math.min(cols - 1, Math.max(0, Math.floor((event.clientX - rect.left) / cellWidth)));
+    const row = Math.min(rows - 1, Math.max(0, Math.floor((event.clientY - rect.top) / cellHeight)));
+    observeInput(terminal.send(id, { operation: "scroll", lines, col, row }));
+  };
+  view.addEventListener("wheel", scrollWheel, { passive: false });
   view.addEventListener("pointerdown", beginSelection);
   view.addEventListener("pointermove", updateSelection);
   view.addEventListener("pointerup", endSelection);
@@ -695,6 +714,15 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       // screen 이벤트를 처리한다. screen.read 응답이나 화면 변화 알림.
       screen = body.lines;
       changed("screen");
+      if (body.scrollback !== undefined) {
+        const { offset, history } = body.scrollback ?? {};
+        if (!Number.isInteger(offset) || !Number.isInteger(history) || offset < 0 || history < 0) {
+          reportInputError(`invalid screen scrollback from sidecar: ${JSON.stringify(body.scrollback)}`, "screen");
+        } else if (offset !== session.scrollback.offset || history !== session.scrollback.history) {
+          session = { ...session, scrollback: { offset, history } };
+          changed("session");
+        }
+      }
       // 화면의 커서는 현재 위치·표시·포커스다. 모양은 표시 규칙이 적용된 값이므로 정책 값을 바꾸지 않는다.
       if (body.cursor !== undefined) {
         const { col, row, visible, focused } = body.cursor ?? {};
@@ -996,6 +1024,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       view.removeEventListener("pointerdown", beginSelection);
       view.removeEventListener("pointermove", updateSelection);
       view.removeEventListener("pointerup", endSelection);
+      view.removeEventListener("wheel", scrollWheel);
       view.removeEventListener("pointercancel", endSelection);
       view.removeEventListener("dragover", dragOverFiles);
       view.removeEventListener("drop", dropFilesFromEvent);

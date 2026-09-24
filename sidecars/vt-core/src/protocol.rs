@@ -246,9 +246,17 @@ pub trait Engine: Send + 'static {
     fn selection_end(&mut self) -> Result<Option<String>, String>;
     /// 현재 선택의 텍스트. 선택이 없거나 글자를 담지 않으면 `None` 이다.
     fn selection_text(&self) -> Option<String>;
+    /// 기본 화면의 뷰포트를 lines 만큼 움직인다. 양수는 오래된 출력 쪽이다.
+    fn scroll_viewport(&mut self, lines: i32);
+    /// 뷰포트를 가장 새 출력으로 되돌리고, 움직였으면 true 를 반환한다.
+    fn scroll_to_newest(&mut self) -> bool;
     fn cursor(&self) -> Cursor;
     fn screen(&mut self) -> Screen;
     fn scroll_generation(&self) -> i64 {
+        0
+    }
+    /// 뷰포트가 가장 새 출력보다 위에 있는 줄 수. 스크롤백이 없는 엔진은 0 이다.
+    fn viewport_offset(&self) -> u32 {
         0
     }
     fn modes(&self) -> Modes;
@@ -483,11 +491,20 @@ pub struct Modes {
     pub alt_screen: bool,
 }
 
+/// 뷰포트가 가장 새 출력보다 위에 있는 줄 수와 보관된 기록 줄 수.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq)]
+pub struct Scrollback {
+    pub offset: u32,
+    pub history: u32,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Screen {
     pub cols: u16,
     pub rows: u16,
     pub cursor: Cursor,
+    #[serde(default)]
+    pub scrollback: Scrollback,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub lines: Vec<Vec<Cell>>,
 }
@@ -625,6 +642,12 @@ enum SurfaceCommand {
     SelectionEnd,
     /// 사용자의 복사 명령. 현재 선택의 텍스트를 copy 이벤트로 보낸다.
     Copy,
+    /// 휠 스크롤. lines 는 0 이 아니며 양수는 오래된 출력 쪽이다. col, row 는 포인터 칸이다.
+    Scroll {
+        lines: i32,
+        col: u16,
+        row: u16,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -864,6 +887,21 @@ const DEFAULT_FONT_SIZE: f32 = 13.0;
 const FONT_SIZE_MIN: f64 = 4.0;
 const FONT_SIZE_MAX: f64 = 128.0;
 
+/// 화면 이벤트 본문. 뷰포트의 줄, 커서, 스크롤백 상태를 담는다.
+fn screen_event(surface_id: &str, screen: &Screen) -> Value {
+    json!({
+        "surface": surface_id,
+        "body": {
+            "event": "screen",
+            "cols": screen.cols,
+            "rows": screen.rows,
+            "cursor": screen.cursor,
+            "lines": screen.lines,
+            "scrollback": screen.scrollback
+        }
+    })
+}
+
 async fn present_screen(
     surface_id: &str,
     screen: &Screen,
@@ -1012,9 +1050,11 @@ fn refresh_inline_image_positions(
         return;
     };
     let current_scroll = engine.scroll_generation();
+    // 스크롤백을 보는 동안 뷰포트는 그만큼 아래로 내려간 행을 보인다.
+    let offset = engine.viewport_offset() as i32;
     let cell_height = state.metrics.cell_height.round() as u32;
     for image in &mut state.inline_images {
-        let row = image.anchor_row - (current_scroll - image.anchor_scroll) as i32;
+        let row = image.anchor_row - (current_scroll - image.anchor_scroll) as i32 + offset;
         image.visible = row >= 0;
         image.y = if row >= 0 {
             (row as u32).saturating_mul(cell_height)
@@ -1609,6 +1649,15 @@ async fn surface_task(
                     SurfaceCommand::Input { bytes } => {
                         cursor_activity = Instant::now();
                         last_cursor_frame = None;
+                        // 입력은 뷰포트를 가장 새 출력으로 되돌린 뒤 쓴다.
+                        if engine.scroll_to_newest() {
+                            refresh_inline_image_positions(&mut engine, &mut image_state);
+                            let screen = decorate_screen(engine.screen(), focused, &preedit, &cursor_policy, 0);
+                            if let Some(state) = image_state.as_mut() {
+                                if !present_screen(&surface_id, &screen, state, &output_tx).await { return; }
+                            }
+                            if output_tx.send(screen_event(&surface_id, &screen).to_string()).await.is_err() { return; }
+                        }
                         if let Some(ref sid) = session_id {
                             match session_port.write(sid, &bytes).await {
                                 Ok(()) => {
@@ -1643,6 +1692,15 @@ async fn surface_task(
                     SurfaceCommand::Paste { text } => {
                         cursor_activity = Instant::now();
                         last_cursor_frame = None;
+                        // 입력은 뷰포트를 가장 새 출력으로 되돌린 뒤 쓴다.
+                        if engine.scroll_to_newest() {
+                            refresh_inline_image_positions(&mut engine, &mut image_state);
+                            let screen = decorate_screen(engine.screen(), focused, &preedit, &cursor_policy, 0);
+                            if let Some(state) = image_state.as_mut() {
+                                if !present_screen(&surface_id, &screen, state, &output_tx).await { return; }
+                            }
+                            if output_tx.send(screen_event(&surface_id, &screen).to_string()).await.is_err() { return; }
+                        }
                         if let Some(ref sid) = session_id {
                             let bytes = match encoding::encode_paste(&text, &engine.modes()) {
                                 Ok(bytes) => bytes,
@@ -1744,6 +1802,52 @@ async fn surface_task(
                             }
                         }
                     }
+                    SurfaceCommand::Scroll { lines, col, row } => {
+                        let modes = engine.modes();
+                        // 마우스 보고, 대체 화면의 대체 스크롤, 기본 화면의 뷰포트 순으로 적용한다.
+                        let bytes = if modes.mouse_report {
+                            match encoding::encode_wheel(&modes, lines > 0, col, row) {
+                                Ok(event) => Some(event.repeat(lines.unsigned_abs() as usize)),
+                                Err(error) => {
+                                    let response = json!({"surface": surface_id, "body": {"error": "invalidParams", "reason": error}});
+                                    if output_tx.send(response.to_string()).await.is_err() { return; }
+                                    continue;
+                                }
+                            }
+                        } else if modes.alt_screen && modes.alternate_scroll {
+                            let key = if lines > 0 { "Up" } else { "Down" };
+                            let keys = vec![InputKey { key: key.to_string(), text: String::new(), shift: false, alt: false, ctrl: false }; lines.unsigned_abs() as usize];
+                            match encode_keys(&keys, &modes) {
+                                Ok(bytes) => Some(bytes),
+                                Err(error) => {
+                                    let response = json!({"surface": surface_id, "body": {"error": "invalidParams", "reason": error}});
+                                    if output_tx.send(response.to_string()).await.is_err() { return; }
+                                    continue;
+                                }
+                            }
+                        } else {
+                            None
+                        };
+                        match bytes {
+                            Some(bytes) => {
+                                if let Some(ref sid) = session_id {
+                                    if let Err(error) = session_port.write(sid, &bytes).await {
+                                        let response = json!({"surface": surface_id, "body": {"error": "scroll write failed", "reason": error}});
+                                        if output_tx.send(response.to_string()).await.is_err() { return; }
+                                    }
+                                }
+                            }
+                            None => {
+                                engine.scroll_viewport(lines);
+                                refresh_inline_image_positions(&mut engine, &mut image_state);
+                                let screen = decorate_screen(engine.screen(), focused, &preedit, &cursor_policy, 0);
+                                if let Some(state) = image_state.as_mut() {
+                                    if !present_screen(&surface_id, &screen, state, &output_tx).await { return; }
+                                }
+                                if output_tx.send(screen_event(&surface_id, &screen).to_string()).await.is_err() { return; }
+                            }
+                        }
+                    }
                     SurfaceCommand::Copy => {
                         // 선택이 없으면 복사하지 않고 그렇다고 알린다. 클립보드는 바꾸지 않는다.
                         let body = match engine.selection_text() {
@@ -1756,6 +1860,15 @@ async fn surface_task(
                     SurfaceCommand::InputKeys { keys } => {
                         cursor_activity = Instant::now();
                         last_cursor_frame = None;
+                        // 입력은 뷰포트를 가장 새 출력으로 되돌린 뒤 쓴다.
+                        if engine.scroll_to_newest() {
+                            refresh_inline_image_positions(&mut engine, &mut image_state);
+                            let screen = decorate_screen(engine.screen(), focused, &preedit, &cursor_policy, 0);
+                            if let Some(state) = image_state.as_mut() {
+                                if !present_screen(&surface_id, &screen, state, &output_tx).await { return; }
+                            }
+                            if output_tx.send(screen_event(&surface_id, &screen).to_string()).await.is_err() { return; }
+                        }
                         if let Some(ref sid) = session_id {
                             let modes = engine.modes();
                             match encode_keys(&keys, &modes) {
@@ -1995,16 +2108,7 @@ async fn surface_task(
                     }
                     SurfaceCommand::ScreenRead => {
                         let screen = decorate_screen(engine.screen(), focused, &preedit, &cursor_policy, cursor_activity.elapsed().as_millis() as u64);
-                        let response = json!({
-                            "surface": surface_id,
-                            "body": {
-                                "event": "screen",
-                                "cols": screen.cols,
-                                "rows": screen.rows,
-                                "cursor": screen.cursor,
-                                "lines": screen.lines
-                            }
-                        });
+                        let response = screen_event(&surface_id, &screen);
                         if let Err(_) = output_tx.send(response.to_string()).await {
                             return;
                         }
@@ -2168,16 +2272,7 @@ async fn surface_task(
                                 } }
 
                                 if headless { continue; }
-                                let response = json!({
-                                    "surface": surface_id,
-                                    "body": {
-                                        "event": "screen",
-                                        "cols": screen.cols,
-                                        "rows": screen.rows,
-                                        "cursor": screen.cursor,
-                                        "lines": screen.lines
-                                    }
-                                });
+                                let response = screen_event(&surface_id, &screen);
                                 if let Err(_) = output_tx.send(response.to_string()).await {
                                     return;
                                 }
@@ -2891,6 +2986,38 @@ where
                                     break;
                                 }
                             }
+                            "scroll" => {
+                                let lines = body
+                                    .get("lines")
+                                    .and_then(Value::as_i64)
+                                    .filter(|lines| *lines != 0 && i32::try_from(*lines).is_ok());
+                                let col = body
+                                    .get("col")
+                                    .and_then(Value::as_u64)
+                                    .and_then(|v| u16::try_from(v).ok());
+                                let row = body
+                                    .get("row")
+                                    .and_then(Value::as_u64)
+                                    .and_then(|v| u16::try_from(v).ok());
+                                let (Some(lines), Some(col), Some(row)) = (lines, col, row) else {
+                                    let response = json!({"surface": surface_id, "body": {"error": "invalidParams", "reason": "scroll requires a nonzero integer lines and cell col and row"}});
+                                    if output_tx.send(response.to_string()).await.is_err() {
+                                        break;
+                                    }
+                                    continue;
+                                };
+                                if tx
+                                    .send(SurfaceCommand::Scroll {
+                                        lines: lines as i32,
+                                        col,
+                                        row,
+                                    })
+                                    .await
+                                    .is_err()
+                                {
+                                    break;
+                                }
+                            }
                             "screen.read" => {
                                 if let Err(_) = tx.send(SurfaceCommand::ScreenRead).await {
                                     break;
@@ -3165,6 +3292,10 @@ impl Engine for FakeEngine {
     fn selection_text(&self) -> Option<String> {
         Some("selected".to_string())
     }
+    fn scroll_viewport(&mut self, _lines: i32) {}
+    fn scroll_to_newest(&mut self) -> bool {
+        false
+    }
 
     fn cursor(&self) -> Cursor {
         Cursor {
@@ -3222,6 +3353,7 @@ impl Engine for FakeEngine {
                 focused: false,
                 preedit: None,
             },
+            scrollback: Default::default(),
             lines,
         }
     }

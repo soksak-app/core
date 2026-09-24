@@ -1,5 +1,5 @@
 use alacritty_terminal::event::{Event, EventListener, WindowSize};
-use alacritty_terminal::grid::Dimensions;
+use alacritty_terminal::grid::{Dimensions, Scroll};
 use alacritty_terminal::index::{Column, Line, Point, Side};
 use alacritty_terminal::selection::{Selection, SelectionType};
 use alacritty_terminal::term::cell::Flags;
@@ -766,30 +766,59 @@ impl AlacrittyEngine {
         Ok(())
     }
 
-    pub fn selection_start(&mut self, col: u16, row: u16) -> Result<(), String> {
-        let point = Point::new(Line(i32::from(row)), Column(usize::from(col)));
-        if point.column >= self.term.grid().columns()
-            || point.line.0 < 0
-            || point.line.0 >= self.term.grid().screen_lines() as i32
+    /// 뷰포트 좌표의 칸을 격자 좌표로 바꾼다. 스크롤백을 보는 동안 뷰포트의 위쪽 행은 기록 행이다.
+    fn viewport_point(&self, col: u16, row: u16) -> Option<Point> {
+        if usize::from(col) >= self.term.grid().columns()
+            || usize::from(row) >= self.term.grid().screen_lines()
         {
+            return None;
+        }
+        let offset = self.term.grid().display_offset() as i32;
+        Some(Point::new(
+            Line(i32::from(row) - offset),
+            Column(usize::from(col)),
+        ))
+    }
+
+    /// 뷰포트를 lines 만큼 움직인다. 양수는 오래된 출력 쪽이며 보관된 기록 범위 안으로 제한된다.
+    pub fn scroll_viewport(&mut self, lines: i32) {
+        self.term.scroll_display(Scroll::Delta(lines));
+    }
+
+    /// 뷰포트를 가장 새 출력으로 되돌리고, 움직였으면 true 를 반환한다.
+    pub fn scroll_to_newest(&mut self) -> bool {
+        // 이미 가장 새 출력이면 움직이지 않는다. scroll_display 는 움직이지 않아도 렌더러 알림을 낸다.
+        if self.term.grid().display_offset() == 0 {
+            return false;
+        }
+        self.term.scroll_display(Scroll::Bottom);
+        true
+    }
+
+    /// (뷰포트가 가장 새 출력보다 위에 있는 줄 수, 보관된 기록 줄 수).
+    pub fn scrollback(&self) -> (usize, usize) {
+        (
+            self.term.grid().display_offset(),
+            self.term.grid().history_size(),
+        )
+    }
+
+    pub fn selection_start(&mut self, col: u16, row: u16) -> Result<(), String> {
+        let Some(point) = self.viewport_point(col, row) else {
             return Err(format!(
                 "selection cell is outside the terminal grid: {col},{row}"
             ));
-        }
+        };
         self.term.selection = Some(Selection::new(SelectionType::Simple, point, Side::Left));
         Ok(())
     }
 
     pub fn selection_update(&mut self, col: u16, row: u16) -> Result<(), String> {
-        let point = Point::new(Line(i32::from(row)), Column(usize::from(col)));
-        if point.column >= self.term.grid().columns()
-            || point.line.0 < 0
-            || point.line.0 >= self.term.grid().screen_lines() as i32
-        {
+        let Some(point) = self.viewport_point(col, row) else {
             return Err(format!(
                 "selection cell is outside the terminal grid: {col},{row}"
             ));
-        }
+        };
         let selection = self
             .term
             .selection
@@ -836,9 +865,12 @@ impl AlacrittyEngine {
 
     pub fn cursor(&self) -> Cursor {
         let renderable = self.term.renderable_content();
+        // 커서 행은 격자 좌표이므로 뷰포트 행으로 바꾼다. 스크롤백을 보는 동안 뷰포트 밖이면 숨긴다.
+        let row = renderable.cursor.point.line.0 + renderable.display_offset as i32;
+        let in_view = row >= 0 && (row as usize) < self.term.grid().screen_lines();
         Cursor {
             col: renderable.cursor.point.column.0 as u16,
-            row: renderable.cursor.point.line.0 as u16,
+            row: if in_view { row as u16 } else { 0 },
             shape: match renderable.cursor.shape {
                 CursorShape::Block => ProtocolCursorShape::Block,
                 CursorShape::Underline => ProtocolCursorShape::Underline,
@@ -846,7 +878,7 @@ impl AlacrittyEngine {
                 CursorShape::HollowBlock => ProtocolCursorShape::HollowBlock,
                 CursorShape::Hidden => ProtocolCursorShape::Hidden,
             },
-            visible: renderable.cursor.shape != CursorShape::Hidden,
+            visible: in_view && renderable.cursor.shape != CursorShape::Hidden,
             blinking: self.term.cursor_style().blinking,
             blink_visible: true,
             focused: false,
@@ -987,19 +1019,34 @@ impl Engine for AlacrittyEngine {
         AlacrittyEngine::selection_text(self)
     }
 
+    fn scroll_viewport(&mut self, lines: i32) {
+        AlacrittyEngine::scroll_viewport(self, lines)
+    }
+
+    fn scroll_to_newest(&mut self) -> bool {
+        AlacrittyEngine::scroll_to_newest(self)
+    }
+
+    fn viewport_offset(&self) -> u32 {
+        self.term.grid().display_offset() as u32
+    }
+
     fn cursor(&self) -> Cursor {
         AlacrittyEngine::cursor(self)
     }
 
     fn screen(&mut self) -> Screen {
+        let cursor = self.cursor();
         let renderable = self.term.renderable_content();
         let cols = self.term.grid().columns() as u16;
         let rows = self.term.grid().screen_lines() as u16;
         let mut lines = vec![Vec::<Cell>::new(); rows as usize];
+        // 표시 점은 격자 좌표다. 스크롤백을 보는 동안 기록 행은 음수이므로 뷰포트 오프셋을 더한다.
+        let offset = renderable.display_offset as i32;
 
         for indexed in renderable.display_iter {
-            let row =
-                usize::try_from(indexed.point.line.0).expect("display row must be non-negative");
+            let row = usize::try_from(indexed.point.line.0 + offset)
+                .expect("display row must be non-negative");
             let col = usize::from(indexed.point.column.0);
             if row >= lines.len() || col >= usize::from(cols) {
                 panic!("display point outside terminal dimensions");
@@ -1023,18 +1070,14 @@ impl Engine for AlacrittyEngine {
             }
         }
 
+        let (offset, history) = self.scrollback();
         Screen {
             cols,
             rows,
-            cursor: Cursor {
-                col: renderable.cursor.point.column.0 as u16,
-                row: renderable.cursor.point.line.0 as u16,
-                shape: self.cursor().shape,
-                visible: self.cursor().visible,
-                blinking: self.cursor().blinking,
-                blink_visible: true,
-                focused: false,
-                preedit: None,
+            cursor,
+            scrollback: soksak_sidecar_vt_core::Scrollback {
+                offset: offset as u32,
+                history: history as u32,
             },
             lines,
         }

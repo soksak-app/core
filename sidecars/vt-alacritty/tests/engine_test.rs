@@ -732,6 +732,66 @@ fn the_current_selection_text_is_readable_until_the_selection_is_cleared() {
     );
 }
 
+fn line_text(screen: &soksak_sidecar_vt_core::Screen, row: usize) -> String {
+    screen.lines[row]
+        .iter()
+        .map(|cell| cell.ch.as_deref().unwrap_or(" "))
+        .collect::<String>()
+        .trim_end()
+        .to_string()
+}
+
+#[test]
+fn the_viewport_scrolls_through_the_scrollback_and_returns_to_the_newest_output() {
+    let mut engine = AlacrittyEngine::new();
+    for index in 0..60 {
+        engine.feed(format!("LINE{index:02}\r\n").as_bytes());
+    }
+    let newest = engine.screen();
+    assert_eq!(
+        line_text(&newest, 0),
+        "LINE37",
+        "the newest screen starts at line 37"
+    );
+    assert_eq!(engine.scrollback(), (0, 37));
+
+    engine.scroll_viewport(10);
+    let scrolled = engine.screen();
+    assert_eq!(
+        line_text(&scrolled, 0),
+        "LINE27",
+        "ten lines toward older output"
+    );
+    assert_eq!(engine.scrollback(), (10, 37));
+    assert!(
+        !scrolled.cursor.visible,
+        "the cursor row is below the viewport"
+    );
+
+    engine.scroll_viewport(100);
+    assert_eq!(
+        engine.scrollback(),
+        (37, 37),
+        "the viewport stops at the oldest retained line"
+    );
+    assert_eq!(line_text(&engine.screen(), 0), "LINE00");
+
+    // 스크롤한 뷰포트의 선택은 보이는 글자를 복사한다.
+    engine.selection_start(0, 1).expect("selection start");
+    engine.selection_update(5, 1).expect("selection update");
+    assert_eq!(
+        engine.selection_end().expect("selection copy").as_deref(),
+        Some("LINE01")
+    );
+
+    engine.scroll_viewport(-5);
+    assert_eq!(engine.scrollback(), (32, 37));
+    engine.scroll_to_newest();
+    assert_eq!(engine.scrollback(), (0, 37));
+    assert_eq!(line_text(&engine.screen(), 0), "LINE37");
+    assert!(engine.screen().cursor.visible);
+}
+
 #[test]
 fn blank_selection_release_is_not_an_error() {
     let mut engine = AlacrittyEngine::new();

@@ -91,7 +91,7 @@
       },
       {
         "name": "terminal.session",
-        "description": "The session state: identifier, dimensions, cell size, and the number of selection releases the sidecar answered.",
+        "description": "The session state: identifier, dimensions, cell size, the scrollback viewport offset and history, and the number of selection releases the sidecar answered.",
         "schema": {
           "type": "object",
           "properties": {
@@ -125,6 +125,13 @@
             },
             "selectionReleases": {
               "type": "integer"
+            },
+            "scrollback": {
+              "type": "object",
+              "properties": {
+                "offset": { "type": "integer" },
+                "history": { "type": "integer" }
+              }
             },
             "selecting": {
               "type": "boolean"

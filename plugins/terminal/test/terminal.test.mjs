@@ -631,6 +631,39 @@ test("the region's copy action runs terminal.copy and writes the sidecar's selec
   assert.equal(session.selectionReleases, releases, "a copy is not a selection release");
 });
 
+test("wheel input is sent as whole scroll lines at the pointer cell and the screen reports scrollback", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  const fakeExpose = createFakeExpose();
+  const view = createFakeView();
+  await startTerminal({
+    view, attachImage: createFakeAttachImage().function,
+    sidecar: fakeSidecar, expose: fakeExpose,
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  openSession(fakeSidecar);
+  fakeSidecar.getMessages().length = 0;
+  const scrolls = () => sessionMessages(fakeSidecar).filter(({ body }) => body.operation === "scroll").map(({ body }) => body);
+
+  // 칸은 8x16 이다. 위로 48 픽셀은 오래된 출력 쪽 세 줄이다.
+  const up = view._trigger("wheel", { deltaY: -48, deltaMode: 0, clientX: 20, clientY: 40 });
+  assert.equal(up.defaultPrevented, true, "the wheel does not scroll the page");
+  // 한 줄보다 작은 이동은 누적한다.
+  view._trigger("wheel", { deltaY: 10, deltaMode: 0, clientX: 20, clientY: 40 });
+  view._trigger("wheel", { deltaY: 10, deltaMode: 0, clientX: 20, clientY: 40 });
+  view._trigger("wheel", { deltaY: 2, deltaMode: 1, clientX: 20, clientY: 40 });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(scrolls(), [
+    { operation: "scroll", lines: 3, col: 2, row: 2 },
+    { operation: "scroll", lines: -1, col: 2, row: 2 },
+    { operation: "scroll", lines: -2, col: 2, row: 2 },
+  ]);
+
+  fakeSidecar.triggerEvent("test-session", { event: "screen", lines: [""], cursor: { col: 0, row: 0, visible: false, focused: false },
+    scrollback: { offset: 3, history: 40 } });
+  assert.deepEqual(fakeExpose.getStatus("terminal.session").readFn().scrollback, { offset: 3, history: 40 });
+});
+
 test("the region reports an unknown action as an input error", async () => {
   FakeResizeObserver.reset();
   const fakeSidecar = createFakeSidecar();

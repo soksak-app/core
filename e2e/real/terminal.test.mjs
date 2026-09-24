@@ -8,7 +8,7 @@ import test from "node:test";
 import { APPS, fresh, open } from "../app.mjs";
 import { frames, pixel, readFrame } from "../frame.mjs";
 import { ensureTerminals, readScreenUntil } from "../terminal-screen.mjs";
-import { bringFront, click, dragPath, key, KEYS, keepPasteboard, pasteboardText, requireTrusted, screenCenter, writePasteboard } from "./hid.mjs";
+import { bringFront, click, dragPath, key, KEYS, keepPasteboard, pasteboardText, post, requireTrusted, screenCenter, writePasteboard } from "./hid.mjs";
 
 // 터미널 한 칸의 중심 화면 좌표.
 function cellPoint(origin, session, column, row) {
@@ -161,5 +161,44 @@ for (const app of Object.values(APPS)) {
     await s.until("terminal.session", () => pasteboardText() === "COPYME",
       `Command+C did not copy the selection (the pasteboard holds ${JSON.stringify(pasteboardText())})`, { surface });
     assert.equal((await s.get("terminal.session", surface)).error, undefined);
+  });
+}
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: a real wheel scrolls the scrollback and a key returns to the newest output`, { timeout: 90000 }, async (t) => {
+    const { s, surface, session, origin } = await prepare(t, app, "WHEELSTART");
+    await s.run("terminal.input", { bytes: "i=0; while [ $i -lt 60 ]; do printf 'ROW%02d\\n' $i; i=$((i+1)); done\r" }, surface);
+    const filled = await readScreenUntil(s, surface, (lines) => lines.some((line) => line === "ROW59"), "the rows did not render");
+    const top = filled.find((line) => line.trim());
+    const point = cellPoint(origin, session, 3, 3);
+    post([{ type: "move", x: point.x, y: point.y }, { type: "wheel", x: point.x, y: point.y, lines: 5 }]);
+    // 앱의 이벤트 모니터가 줄 단위 휠을 뷰 단위로 바꾸므로 움직인 줄 수는 보고만 한다.
+    const scrolled = await s.until("terminal.session", (value) => value.scrollback?.offset > 0,
+      "a real wheel did not move the viewport toward older output", { surface });
+    t.diagnostic(`${app.name}: a five-line wheel moved the viewport ${scrolled.scrollback.offset} of ${scrolled.scrollback.history} lines`);
+    const lines = await readScreenUntil(s, surface, (screen) => !screen.includes("ROW59"), "the viewport still shows the newest row");
+    assert.notEqual(lines.find((line) => line.trim()), top, "the top row did not change");
+    // 입력은 가장 새 출력으로 되돌린다. 포커스를 준 뒤 입력기와 무관한 Escape 키를 보낸다.
+    click(point.x, point.y);
+    await s.until("host.window", (window) => window.responder?.surface === surface, "the terminal did not take native focus");
+    key(KEYS.escape);
+    await s.until("terminal.session", (value) => value.scrollback?.offset === 0,
+      "a key did not return the viewport to the newest output", { surface });
+  });
+}
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: a real wheel on the alternate screen scrolls the program instead of the scrollback`, { timeout: 90000 }, async (t) => {
+    const { s, surface, session, origin } = await prepare(t, app, "LESSSTART");
+    s.cleanup(() => s.run("terminal.input", { bytes: "q" }, surface));
+    await s.run("terminal.input", { bytes: "i=0; while [ $i -lt 200 ]; do printf 'ITEM%03d\\n' $i; i=$((i+1)); done | less\r" }, surface);
+    await readScreenUntil(s, surface, (lines) => lines[0] === "ITEM000", "less did not show the first item");
+    const point = cellPoint(origin, session, 3, 3);
+    // 새 출력 쪽으로 굴리면 less 가 아래로 스크롤한다.
+    post([{ type: "move", x: point.x, y: point.y }, { type: "wheel", x: point.x, y: point.y, lines: -3 }]);
+    const lines = await readScreenUntil(s, surface, (screen) => screen[0] !== "ITEM000" && /^ITEM\d{3}$/.test(screen[0]),
+      "a wheel on the alternate screen did not scroll less");
+    t.diagnostic(`${app.name}: less shows ${lines[0]} at the top after the wheel`);
+    assert.equal((await s.get("terminal.session", surface)).scrollback.offset, 0, "the wheel moved the scrollback viewport");
   });
 }

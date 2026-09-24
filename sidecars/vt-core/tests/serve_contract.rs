@@ -20,6 +20,7 @@ struct MockEngine {
     pending_events: Vec<EngineEvent>,
     selection: Option<String>,
     selected_cells: Arc<Mutex<Vec<(u16, u16)>>>,
+    viewport: Arc<Mutex<Vec<String>>>,
 }
 
 impl MockEngine {
@@ -33,6 +34,7 @@ impl MockEngine {
             pending_events: Vec::new(),
             selection: Some("selected".to_string()),
             selected_cells: Arc::new(Mutex::new(Vec::new())),
+            viewport: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -46,6 +48,7 @@ impl MockEngine {
             pending_events: Vec::new(),
             selection: Some("selected".to_string()),
             selected_cells: Arc::new(Mutex::new(Vec::new())),
+            viewport: Arc::new(Mutex::new(Vec::new())),
         }
     }
 }
@@ -113,6 +116,16 @@ impl Engine for MockEngine {
     fn selection_text(&self) -> Option<String> {
         self.selection.clone()
     }
+    fn scroll_viewport(&mut self, lines: i32) {
+        self.viewport
+            .lock()
+            .unwrap()
+            .push(format!("viewport {lines}"));
+    }
+    fn scroll_to_newest(&mut self) -> bool {
+        self.viewport.lock().unwrap().push("newest".to_string());
+        false
+    }
 
     fn cursor(&self) -> Cursor {
         Cursor {
@@ -159,6 +172,7 @@ impl Engine for MockEngine {
                 focused: false,
                 preedit: None,
             },
+            scrollback: Default::default(),
             lines,
         }
     }
@@ -603,6 +617,136 @@ async fn a_copy_request_sends_the_current_selection_text_or_reports_none() {
         "a copy request without a selection did not report that nothing was copied: {output}"
     );
     assert!(!output.contains("Unknown operation: copy"), "{output}");
+}
+
+async fn serve_scroll(modes: Option<Modes>, requests: &str) -> (String, Vec<String>, Vec<Vec<u8>>) {
+    let calls = Arc::new(Mutex::new(Calls::default()));
+    let input = format!(
+        "{}\n{}\n{}",
+        r#"{"surface":"s1","body":{"operation":"open","shell":"/bin/sh"}}"#,
+        r#"{"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}"#,
+        requests
+    );
+    let reader = std::io::Cursor::new(input.into_bytes());
+    let mut writer = Vec::new();
+    let viewport = Arc::new(Mutex::new(Vec::new()));
+    let engine_viewport = viewport.clone();
+    let engine_factory = Arc::new(move || {
+        let mut engine = match modes.clone() {
+            Some(modes) => MockEngine::with_modes(modes),
+            None => MockEngine::new(),
+        };
+        engine.viewport = engine_viewport.clone();
+        Box::new(engine) as Box<dyn Engine>
+    });
+    let port_calls = calls.clone();
+    let session_port_factory = Arc::new(move || {
+        Arc::new(FakeSessionPort::new(
+            "scroll".to_string(),
+            port_calls.clone(),
+        )) as Arc<dyn SessionPort>
+    });
+    let _ = serve(engine_factory, reader, &mut writer, session_port_factory).await;
+    let writes = calls
+        .lock()
+        .unwrap()
+        .writes
+        .iter()
+        .map(|(_, bytes)| bytes.clone())
+        .collect();
+    let viewport = viewport.lock().unwrap().clone();
+    (String::from_utf8(writer).unwrap(), viewport, writes)
+}
+
+#[tokio::test]
+async fn a_scroll_moves_the_primary_viewport_and_input_returns_it_to_the_newest_output() {
+    let (output, viewport, writes) = serve_scroll(
+        None,
+        r#"{"surface":"s1","body":{"operation":"scroll","lines":3,"col":2,"row":1}}
+{"surface":"s1","body":{"operation":"input","bytes":"aGk="}}
+"#,
+    )
+    .await;
+    assert_eq!(
+        viewport,
+        vec!["viewport 3".to_string(), "newest".to_string()],
+        "{output}"
+    );
+    assert!(
+        output.contains(r#""scrollback""#),
+        "the screen event after a scroll carries scrollback: {output}"
+    );
+    assert_eq!(
+        writes,
+        vec![b"hi".to_vec()],
+        "a primary-screen scroll writes nothing to the shell"
+    );
+}
+
+#[tokio::test]
+async fn a_scroll_with_mouse_reporting_writes_wheel_buttons_at_the_pointer_cell() {
+    let modes = Modes {
+        mouse_report: true,
+        sgr_mouse: true,
+        ..Modes::default()
+    };
+    let (output, viewport, writes) = serve_scroll(
+        Some(modes),
+        r#"{"surface":"s1","body":{"operation":"scroll","lines":2,"col":4,"row":6}}
+{"surface":"s1","body":{"operation":"scroll","lines":-1,"col":4,"row":6}}
+"#,
+    )
+    .await;
+    assert!(
+        viewport.iter().all(|call| !call.starts_with("viewport")),
+        "{viewport:?}"
+    );
+    assert_eq!(
+        writes,
+        vec![
+            b"\x1b[<64;5;7M\x1b[<64;5;7M".to_vec(),
+            b"\x1b[<65;5;7M".to_vec()
+        ],
+        "{output}"
+    );
+}
+
+#[tokio::test]
+async fn a_scroll_on_the_alternate_screen_writes_cursor_keys() {
+    let modes = Modes {
+        alt_screen: true,
+        alternate_scroll: true,
+        ..Modes::default()
+    };
+    let (output, viewport, writes) = serve_scroll(
+        Some(modes),
+        r#"{"surface":"s1","body":{"operation":"scroll","lines":2,"col":0,"row":0}}
+{"surface":"s1","body":{"operation":"scroll","lines":-1,"col":0,"row":0}}
+"#,
+    )
+    .await;
+    assert!(
+        viewport.iter().all(|call| !call.starts_with("viewport")),
+        "{viewport:?}"
+    );
+    assert_eq!(
+        writes,
+        vec![b"\x1b[A\x1b[A".to_vec(), b"\x1b[B".to_vec()],
+        "{output}"
+    );
+}
+
+#[tokio::test]
+async fn an_invalid_scroll_is_rejected() {
+    let (output, viewport, writes) = serve_scroll(
+        None,
+        r#"{"surface":"s1","body":{"operation":"scroll","lines":0,"col":0,"row":0}}
+{"surface":"s1","body":{"operation":"scroll","lines":1.5,"col":0,"row":0}}
+"#,
+    )
+    .await;
+    assert_eq!(output.matches("invalidParams").count(), 2, "{output}");
+    assert!(viewport.is_empty() && writes.is_empty());
 }
 
 #[tokio::test]
@@ -2796,6 +2940,10 @@ async fn test_panicking_surface_reports_error() {
         fn selection_text(&self) -> Option<String> {
             Some("selected".to_string())
         }
+        fn scroll_viewport(&mut self, _lines: i32) {}
+        fn scroll_to_newest(&mut self) -> bool {
+            false
+        }
 
         fn cursor(&self) -> Cursor {
             Cursor {
@@ -2824,6 +2972,7 @@ async fn test_panicking_surface_reports_error() {
                     focused: false,
                     preedit: None,
                 },
+                scrollback: Default::default(),
                 lines: Vec::new(),
             }
         }

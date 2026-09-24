@@ -21,6 +21,7 @@ fn screen(cols: u16, rows: u16) -> Screen {
             focused: false,
             preedit: None,
         },
+        scrollback: Default::default(),
         lines: (0..rows)
             .map(|_| (0..cols).map(|_| Cell::default()).collect())
             .collect(),

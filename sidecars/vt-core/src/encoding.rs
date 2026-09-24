@@ -346,6 +346,39 @@ fn compute_modifier_param(modifiers: Modifiers) -> u8 {
 /// - `bracketed_paste` 모드가 켜져 있으면 `ESC [ 200 ~` 로 시작해 `ESC [ 201 ~` 로 끝남.
 /// - 텍스트 내의 `ESC [ 201 ~` 시퀀스는 감싸기를 빠져나가지 못하도록 거부함.
 /// - 텍스트의 UTF-8 바이트와 개행을 그대로 보존함.
+/// 포인터 칸 (col, row) 의 휠 버튼 이벤트 하나. older 가 참이면 버튼 64(오래된 출력 쪽), 아니면 65 다.
+/// SGR(1006), UTF-8(1005), 기본 인코딩 순으로 현재 모드를 따른다. 기본 인코딩이 나타낼 수 없는 칸은 오류다.
+pub fn encode_wheel(modes: &Modes, older: bool, col: u16, row: u16) -> Result<Vec<u8>, String> {
+    let button: u32 = if older { 64 } else { 65 };
+    let (x, y) = (u32::from(col) + 1, u32::from(row) + 1);
+    if modes.sgr_mouse {
+        return Ok(format!("\x1b[<{button};{x};{y}M").into_bytes());
+    }
+    if modes.utf8_mouse {
+        let mut bytes = b"\x1b[M".to_vec();
+        for value in [32 + button, 32 + x, 32 + y] {
+            let ch = char::from_u32(value)
+                .ok_or_else(|| format!("mouse coordinate {value} cannot be encoded"))?;
+            let mut buffer = [0u8; 4];
+            bytes.extend_from_slice(ch.encode_utf8(&mut buffer).as_bytes());
+        }
+        return Ok(bytes);
+    }
+    if x > 223 || y > 223 {
+        return Err(format!(
+            "mouse cell {col},{row} cannot be encoded without SGR or UTF-8 mouse mode"
+        ));
+    }
+    Ok(vec![
+        0x1b,
+        b'[',
+        b'M',
+        (32 + button) as u8,
+        (32 + x) as u8,
+        (32 + y) as u8,
+    ])
+}
+
 pub fn encode_paste(text: &str, modes: &Modes) -> Result<Vec<u8>, String> {
     if modes.bracketed_paste && text.contains("\x1b[201~") {
         return Err("paste text contains the bracketed-paste terminator".to_string());
@@ -519,6 +552,37 @@ impl CompositionState {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn wheel_events_follow_the_mouse_encoding() {
+        let sgr = Modes {
+            mouse_report: true,
+            sgr_mouse: true,
+            ..Modes::default()
+        };
+        assert_eq!(encode_wheel(&sgr, true, 4, 6).unwrap(), b"\x1b[<64;5;7M");
+        assert_eq!(encode_wheel(&sgr, false, 0, 0).unwrap(), b"\x1b[<65;1;1M");
+        let plain = Modes {
+            mouse_report: true,
+            ..Modes::default()
+        };
+        assert_eq!(
+            encode_wheel(&plain, true, 0, 0).unwrap(),
+            vec![0x1b, b'[', b'M', 96, 33, 33]
+        );
+        assert!(
+            encode_wheel(&plain, true, 300, 0).is_err(),
+            "the default encoding cannot address column 301"
+        );
+        let utf8 = Modes {
+            mouse_report: true,
+            utf8_mouse: true,
+            ..Modes::default()
+        };
+        let encoded = encode_wheel(&utf8, false, 300, 0).unwrap();
+        assert_eq!(&encoded[..4], &[0x1b, b'[', b'M', 97]);
+        assert_eq!(std::str::from_utf8(&encoded[4..]).unwrap(), "\u{14d}!");
+    }
 
     #[test]
     fn test_cursor_keys_app_cursor_mode() {
