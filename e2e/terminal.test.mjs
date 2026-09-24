@@ -350,6 +350,92 @@ for (const app of Object.values(APPS)) {
       `the new terminal did not start ${userInfo().shell} as a login shell (argv0 ${expected})`);
   });
 
+  for (const shell of ["/bin/zsh", "/bin/bash"]) {
+    test(`${app.name}: a resize redraws a wrapped ${basename(shell)} input line without rows of the previous width`, async (t) => {
+      const s = await open(t, app);
+      if (!s) return t.skip(`${app.binary} is not built`);
+      await fresh(s);
+      s.cleanup(() => closeTerminalTabs(s));
+      const existing = await ensureTerminals(s, 1);
+      await s.run("core.settings.change", { key: "terminal.shell", value: shell, scope: "common" });
+      const terminals = await ensureTerminals(s, existing.length + 1);
+      const opened = terminals.find((terminal) => !existing.some((item) => item.surface === terminal.surface));
+      assert.ok(opened, "no new terminal opened after the setting changed");
+      // 셸 통합이 첫 프롬프트를 알려야 크기 변경에서 프롬프트 행을 지운다.
+      await s.until("terminal.session", (session) => session.vendor?.shell?.marker === "prompt.start",
+        `${shell} did not report an OSC 133 prompt start`, { surface: opened.surface });
+      const { cols } = await s.get("terminal.session", opened.surface);
+      // 화면 상태의 행은 끝의 기본 칸을 생략하므로 열 수까지 채운다. 출력 행 뒤의 행을 이어 붙이면 프롬프트의 논리적 행이다.
+      const rowsOf = (lines, width) => lines.map((row) => row.map((cell) =>
+        cell.ch === undefined ? " ".repeat(cell.width) : cell.ch).join("").padEnd(width, " "));
+      // 프롬프트 바로 위의 출력 행도 크기 변경 뒤 그대로 있어야 한다. 셸이 올라가는 행 수가 틀리면 이 행을 덮어쓴다.
+      const above = "ABOVE-LINE";
+      await s.run("terminal.input", { bytes: `printf '${above}\\n'\r` }, opened.surface);
+      await s.until("terminal.screen", (lines) => {
+        const rows = rowsOf(lines, cols);
+        const index = rows.lastIndexOf(above.padEnd(cols, " "));
+        return index >= 0 && rows[index + 1]?.trim().length > 0;
+      }, `${shell} did not show a prompt after the output line`, { surface: opened.surface });
+      // 입력은 실행하지 않고 두 행 가까이 차지하게 한다. 공백은 앞에만 있어 행 경계에 걸리지 않는다.
+      const input = `true START-${"x".repeat(Math.max(20, cols - 20))}-END`;
+      await s.run("terminal.input", { bytes: input }, opened.surface);
+      const promptLine = (rows, width) => {
+        const index = rows.lastIndexOf(above.padEnd(width, " "));
+        return index < 0 ? null : { row: index + 1, text: rows.slice(index + 1).join("") };
+      };
+      // 출력 행 바로 다음 행에서 프롬프트와 입력이 한 번만 이어지고, 커서가 입력의 끝에 있어야 한다.
+      const consistent = async (width, label, prompt) => {
+        let measured = "";
+        let found = null;
+        try {
+          await s.until("terminal.screen", (lines) => {
+            const rows = rowsOf(lines, width);
+            const line = promptLine(rows, width);
+            const count = rows.join("").split("START-").length - 1;
+            measured = `START- ${count} times in ${JSON.stringify(rows.join("").trimEnd())}`;
+            const starts = line && (prompt === undefined ? line.text.indexOf(input) > 0 : line.text.startsWith(prompt + input));
+            if (count === 1 && starts) found = line;
+            return count === 1 && Boolean(starts);
+          }, `${label}: the screen did not show the prompt line below the output line`, { surface: opened.surface });
+        } catch (error) {
+          const { vendor } = await s.get("terminal.session", opened.surface);
+          throw new Error(`${label}: the prompt line does not follow ${above} once: ${measured}; ` +
+            `last shell mark ${JSON.stringify(vendor?.shell)}`);
+        }
+        // 조건을 만족한 뒤에도 화면이 올라갈 수 있으므로 마지막 화면에서 입력의 끝을 계산한다.
+        const current = rowsOf(await s.get("terminal.screen", opened.surface), width);
+        const shown = current.map((row) => row.trimEnd());
+        found = promptLine(current, width);
+        assert.ok(found && found.text.indexOf(input) > 0, `${label}: the prompt line changed after it matched: ${JSON.stringify(shown)}`);
+        const end = found.row * width + found.text.indexOf(input) + input.length;
+        await s.until("terminal.cursor",
+          (value) => value.row === Math.floor(end / width) && value.col === end % width,
+          `${label}: the cursor is not after the input end at row ${Math.floor(end / width)} col ${end % width} ` +
+            `in ${JSON.stringify(shown)}`,
+          { surface: opened.surface });
+        return found.text.slice(0, found.text.indexOf(input));
+      };
+      const prompt = await consistent(cols, "before the resize");
+      const grid = await s.get("core.grid");
+      const card = grid.cards.find((item) => item.active === opened.surface);
+      assert.ok(card && card.c0 > 0, "the new terminal card has no left boundary");
+      const start = grid.lines.x[card.c0];
+      await s.run("core.boundary.move", { axis: "x", line: card.c0, position: start + Math.round(card.w / 2) });
+      const narrow = (await s.until("terminal.session", (session) => session.cols < cols,
+        "the terminal did not narrow", { surface: opened.surface })).cols;
+      await consistent(narrow, `after narrowing to ${narrow} columns`, prompt);
+      await s.run("core.boundary.move", { axis: "x", line: card.c0, position: start });
+      await s.until("terminal.session", (session) => session.cols === cols,
+        "the terminal did not return to its width", { surface: opened.surface });
+      await consistent(cols, `after widening to ${cols} columns`, prompt);
+      // 경계를 끌면 셸이 다시 그리는 사이에도 크기가 연달아 바뀐다.
+      await drag(t, s, { axis: "x", line: card.c0, dx: Math.round(card.w / 2), dy: 0, ms: 96, times: 1 });
+      await s.until("terminal.session", (session) => session.cols === cols,
+        "the terminal did not return to its width after the drag", { surface: opened.surface });
+      await consistent(cols, `after a divider drag`, prompt);
+    });
+  }
+
   test(`${app.name}: a page start keeps the terminal sessions that the layouts hold`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);

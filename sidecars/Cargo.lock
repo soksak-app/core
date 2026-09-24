@@ -698,6 +698,7 @@ name = "soksak-sidecar-vt-alacritty"
 version = "0.0.1"
 dependencies = [
  "alacritty_terminal",
+ "libc",
  "soksak-sidecar-vt-core",
  "tokio",
 ]

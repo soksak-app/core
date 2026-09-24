@@ -67,7 +67,7 @@ The selected vendor scope is explicit and separate from the standard OSC invento
 - OSC 7 emits a directory URI event owned by the current surface. An empty URI is rejected.
 - OSC 8 parses `id=` parameters and emits a typed hyperlink open/close event. Unsupported or duplicate parameters are rejected; an empty URI closes the current link.
 - OSC 9 emits a notification event. Empty notifications are rejected and the payload is never executed.
-- OSC 133 emits one of four typed shell markers (`prompt.start`, `prompt.end`, `command.start`, `command.finished`) with string parameters. Unknown markers are rejected.
+- OSC 133 emits one of four typed shell markers (`prompt.start`, `prompt.end`, `command.start`, `command.finished`) with string parameters, and sets the engine shell state that the [terminal runtime](terminal-runtime.md) uses on resize. Unknown markers and `redraw` values other than `0`, `1`, and `last` are rejected.
 - OSC 52 remains policy-gated clipboard ownership. Query tokens are single-use, rejection clears ownership, and BEL/ST fragmentation is tested.
 - OSC 1337 remains a bounded image transfer. Invalid payloads reject explicitly, multipart state cannot cross surfaces, and deletion rejects names not owned by that surface.
 

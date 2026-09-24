@@ -1348,3 +1348,206 @@ fn csi_application_keypad_mode_uses_the_private_equals_prefix() {
     engine.feed(b"\x1b>");
     assert!(!engine.modes().app_keypad);
 }
+
+fn row_text(screen: &soksak_sidecar_vt_core::Screen, row: usize) -> String {
+    screen.lines[row]
+        .iter()
+        .filter_map(|cell| cell.ch.as_deref())
+        .collect::<String>()
+        .trim_end()
+        .to_string()
+}
+
+fn wrapped_prompt(mark: &[u8]) -> AlacrittyEngine {
+    let mut engine = AlacrittyEngine::new();
+    engine.resize(20, 6);
+    engine.feed(b"o1\r\no2\r\no3\r\n");
+    engine.feed(mark);
+    // 프롬프트 "P>" 와 입력 30자는 폭 20에서 3, 4행을 차지한다. 폭 10에서는 네 행이다.
+    engine.feed(b"P>abcdefghijklmnopqrstuvwxyz0123");
+    engine.drain_events();
+    engine
+}
+
+const PROMPT_LINE: &str = "o1o2o3P>abcdefghijklmnopqrstuvwxyz0123";
+
+/// 기록과 화면의 모든 칸 글자를 위에서부터 이어 붙인다.
+fn all_text(engine: &mut AlacrittyEngine) -> String {
+    let (_, history) = engine.scrollback();
+    engine.scroll_viewport(history as i32);
+    let mut value = text(&engine.screen());
+    let rows = engine.screen().lines.len();
+    engine.scroll_to_newest();
+    let screen = engine.screen();
+    let hidden = rows.min(history);
+    value.push_str(
+        &screen.lines[rows - hidden..]
+            .iter()
+            .flat_map(|line| line.iter().filter_map(|cell| cell.ch.as_deref()))
+            .collect::<String>(),
+    );
+    value
+}
+
+#[test]
+fn a_resize_in_the_prompt_state_clears_the_cursor_logical_line_to_the_bottom() {
+    let mut engine = wrapped_prompt(b"\x1b]133;A\x07");
+    engine.resize(10, 6);
+    let screen = engine.screen();
+    assert_eq!(
+        row_text(&screen, 0),
+        "o3",
+        "the output above the prompt must remain"
+    );
+    for row in 1..6 {
+        assert_eq!(
+            row_text(&screen, row),
+            "",
+            "row {row} of the prompt line must be cleared"
+        );
+    }
+    let cursor = engine.cursor();
+    assert_eq!(
+        (cursor.row, cursor.col),
+        (2, 0),
+        "the cursor must lie one row below the first prompt row, as at the previous width"
+    );
+    assert!(engine
+        .drain_events()
+        .iter()
+        .all(|event| !matches!(event, EngineEvent::Error(_))));
+    assert_eq!(all_text(&mut engine), "o1o2o3");
+}
+
+#[test]
+fn redraw_last_places_the_cursor_as_redraw_1_does() {
+    // 폭 20에서 커서는 논리적 행의 첫 행(3행)보다 한 행 아래(4행)에 있었다. readline 도 한 행 올라가 다시 그린다.
+    let mut engine = wrapped_prompt(b"\x1b]133;A;redraw=last;cl=line\x07");
+    engine.resize(10, 6);
+    let screen = engine.screen();
+    assert_eq!(row_text(&screen, 0), "o3");
+    for row in 1..6 {
+        assert_eq!(
+            row_text(&screen, row),
+            "",
+            "row {row} of the prompt line must be cleared"
+        );
+    }
+    let cursor = engine.cursor();
+    assert_eq!((cursor.row, cursor.col), (2, 0));
+}
+
+#[test]
+fn redraw_last_scrolls_the_screen_when_the_offset_row_is_below_the_bottom() {
+    let mut engine = AlacrittyEngine::new();
+    engine.resize(10, 5);
+    // 폭 10에서 프롬프트 행은 네 행이고 커서는 그 첫 행보다 세 행 아래에 있다.
+    engine.feed(b"o1\r\no2\r\n\x1b]133;A;redraw=last\x07P>abcdefghijklmnopqrstuvwxyz0123");
+    engine.resize(40, 5);
+    let cursor = engine.cursor();
+    let screen = engine.screen();
+    let rows: Vec<String> = (0..5).map(|row| row_text(&screen, row)).collect();
+    let last_output = rows.iter().rposition(|row| !row.is_empty()).unwrap();
+    assert_eq!(
+        (usize::from(cursor.row), cursor.col),
+        (last_output + 1 + 3, 0),
+        "the cursor must lie three rows below the first prompt row: {rows:?}"
+    );
+    assert_eq!(
+        all_text(&mut engine),
+        "o1o2",
+        "the output above the prompt must remain"
+    );
+}
+
+#[test]
+fn prompt_rows_that_the_reflow_moved_into_the_scrollback_are_cleared() {
+    let mut engine = AlacrittyEngine::new();
+    engine.resize(20, 3);
+    engine.feed(b"o1\r\n\x1b]133;A;redraw=last\x07P>abcdefghijklmnopqrstuvwxyz0123");
+    // 폭 10에서 프롬프트 행은 네 행이고, 커서 행을 유지하는 재배치가 앞의 행을 기록으로 옮긴다.
+    engine.resize(10, 3);
+    assert_eq!(all_text(&mut engine), "o1");
+    let cursor = engine.cursor();
+    assert_eq!(
+        (cursor.row, cursor.col),
+        (0, 0),
+        "the cursor must move to the top row"
+    );
+}
+
+#[test]
+fn a_resize_keeps_the_screen_without_a_redrawing_prompt_state() {
+    for (name, mark) in [
+        ("no mark", b"".as_slice()),
+        ("redraw=0", b"\x1b]133;A;redraw=0\x07".as_slice()),
+        ("command start", b"\x1b]133;A\x07\x1b]133;C\x07".as_slice()),
+        (
+            "command finished",
+            b"\x1b]133;A\x07\x1b]133;D;0\x07".as_slice(),
+        ),
+    ] {
+        let mut engine = wrapped_prompt(mark);
+        engine.resize(10, 6);
+        assert_eq!(
+            all_text(&mut engine),
+            PROMPT_LINE,
+            "{name}: the screen must only reflow"
+        );
+    }
+}
+
+#[test]
+fn a_resize_to_the_current_dimensions_keeps_the_prompt() {
+    let mut engine = wrapped_prompt(b"\x1b]133;A\x07");
+    engine.resize(20, 6);
+    assert_eq!(all_text(&mut engine), PROMPT_LINE);
+    let cursor = engine.cursor();
+    assert_eq!((cursor.row, cursor.col), (4, 12));
+}
+
+#[test]
+fn a_resize_on_the_alternate_screen_keeps_its_cells() {
+    let mut engine = wrapped_prompt(b"\x1b]133;A\x07");
+    engine.feed(b"\x1b[?1049h\x1b[Hfull-screen-program");
+    engine.resize(10, 6);
+    assert_eq!(row_text(&engine.screen(), 0), "full-scree");
+}
+
+#[test]
+fn a_prompt_start_moves_a_cursor_off_column_zero_to_the_next_line() {
+    let mut engine = AlacrittyEngine::new();
+    engine.resize(20, 6);
+    // 표시가 입력 조각 사이에서 끊겨도 앞의 출력 뒤에 적용된다.
+    engine.feed(b"partial\x1b]133;");
+    engine.feed(b"A\x07P>");
+    let screen = engine.screen();
+    assert_eq!(row_text(&screen, 0), "partial");
+    assert_eq!(row_text(&screen, 1), "P>");
+    let cursor = engine.cursor();
+    assert_eq!((cursor.row, cursor.col), (1, 2));
+
+    engine.feed(b"\r\n\x1b]133;A\x07");
+    let cursor = engine.cursor();
+    assert_eq!(
+        (cursor.row, cursor.col),
+        (2, 0),
+        "a prompt start at column 0 must not add a line"
+    );
+}
+
+#[test]
+fn an_unsupported_redraw_value_is_rejected_without_a_state_change() {
+    let mut engine = AlacrittyEngine::new();
+    engine.resize(20, 6);
+    engine.feed(b"\x1b]133;A;redraw=2\x07");
+    assert_eq!(
+        engine.drain_events(),
+        vec![EngineEvent::Error(
+            "OSC 133 redraw value is unsupported: 2".to_string()
+        )]
+    );
+    engine.feed(b"P>abcdefghijklmnopqrstuvwxyz0123");
+    engine.resize(10, 6);
+    assert_eq!(all_text(&mut engine), "P>abcdefghijklmnopqrstuvwxyz0123");
+}

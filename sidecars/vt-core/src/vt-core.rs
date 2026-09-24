@@ -6,6 +6,7 @@ pub mod platform;
 pub mod protocol;
 pub mod pty;
 pub mod service;
+pub mod shell_integration;
 
 pub use palette::{
     default_terminal_color, TerminalTheme, DEFAULT_BACKGROUND_HEX, DEFAULT_BACKGROUND_RGB,

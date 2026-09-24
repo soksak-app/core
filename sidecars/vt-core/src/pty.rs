@@ -86,6 +86,7 @@ impl PtyService {
     ) -> Result<(String, String), String> {
         let mut command = CommandBuilder::new_default_prog();
         command.env("SHELL", shell);
+        crate::shell_integration::apply(shell, &mut command)?;
         self.spawn_owned(owner, command, cwd, cols, rows, events)
     }
 
