@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-6-2: the cursor policy window check sets the cursor interval and idle timeout through their settings controls on both hosts.
 - V5-6-4: validated in real windows on rebuilt Wails and Tauri through the PNG paste window check.
 - V5-6-5 (progress): a window check pastes a PNG from the general pasteboard into a terminal on both hosts and requires the owned image path, and requires an explicit error for bytes that are not a PNG.
 - V5-6-4 (progress): both hosts reject clipboard images without the PNG signature or a valid `IHDR` chunk; three host contract cases cover it.

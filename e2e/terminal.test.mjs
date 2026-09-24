@@ -691,19 +691,24 @@ for (const app of Object.values(APPS)) {
     await pick("pick:terminal.cursor.shape:underline");
     await pick("pick:terminal.cursor.blink:Never");
     await pick("pick:terminal.cursor.unfocused:beam");
+    // 숫자 설정은 값 입력 컨트롤이 가리키는 명령으로 바꾼다.
+    const enter = async (key, value) => {
+      const modal = await s.until("core.settings-modal", (state) =>
+        state.controls.some((control) => control.name === "core.settings-modal.set" && control.key === key),
+      `settings value control ${key} did not appear`);
+      const control = modal.controls.find((item) => item.name === "core.settings-modal.set" && item.key === key);
+      assert.ok(control.command, `settings value control ${key} has no command`);
+      await s.run(control.command.name, { ...control.command.params, value: String(value) });
+      await s.until("core.settings", (state) => state.values[key] === value && !state.saving,
+        `settings value control did not apply ${key}=${value}`);
+    };
+    await enter("terminal.cursor.interval", 900);
+    await enter("terminal.cursor.idleTimeout", 0);
     await s.run("core.settings.close");
 
-    await s.run("core.settings.set", {
-      patch: {
-        "terminal.cursor.interval": 900,
-        "terminal.cursor.idleTimeout": 0,
-      },
-      scope: "common",
-    });
-    await s.until("core.settings", (state) => state.values["terminal.cursor.unfocused"] === "beam" && !state.saving,
-      "cursor settings were not saved");
-    await s.until("terminal.cursor", (state) => state.unfocused === "beam" && state.blink === "Never",
-      "terminal did not receive the effective cursor settings", { surface: terminal.surface });
+    await s.until("terminal.cursor", (state) => state.unfocused === "beam" && state.blink === "Never" &&
+      state.interval === 900 && state.idleTimeout === 0,
+    "terminal did not receive the effective cursor settings", { surface: terminal.surface });
     await s.presented();
     const after = await terminalCursorCell(s, terminal.surface);
     assert.ok(differentPixels(before.surface, after.surface) > 0,
