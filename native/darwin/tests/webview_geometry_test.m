@@ -147,9 +147,19 @@ static NSDictionary *pressLastPixel(NSWindow *window, WKWebView *surface, CGFloa
     check(surfaceHit, [NSString stringWithFormat:@"the last surface pixel resolves to the DOM plane (hit %@)",
         NSStringFromClass(hit.class)]);
     evaluate(surface, @"window.pressed = null; null");
-    check(sp_input_pointer(window, x, y, 1, 0, 0, 0) == SP_INPUT_DELIVERED
-        && sp_input_pointer(window, x, y, 3, 0, 0, 0) == SP_INPUT_DELIVERED,
-        [NSString stringWithFormat:@"press on the last device pixel delivered at scale %g", scale]);
+    // 결과 코드와 실제 마우스 버튼 상태를 보고한다. 실제 버튼이 눌린 동안 합성 누름은 전달되지 않는다
+    // (SP_INPUT_BUTTON_HELD). 전달되지 않은 누름은 문서가 받을 수 없으므로 기다리지 않고 실패한다.
+    NSUInteger buttons = NSEvent.pressedMouseButtons;
+    sp_input_result down = sp_input_pointer(window, x, y, 1, 0, 0, 0);
+    sp_input_result up = sp_input_pointer(window, x, y, 3, 0, 0, 0);
+    BOOL delivered = down == SP_INPUT_DELIVERED && up == SP_INPUT_DELIVERED;
+    check(delivered, [NSString stringWithFormat:@"press on the last device pixel delivered at scale %g "
+        "(down %d, up %d; physical buttons before %lu, after %lu)", scale, down, up,
+        (unsigned long)buttons, (unsigned long)NSEvent.pressedMouseButtons]);
+    if (!delivered) {
+        fprintf(stderr, "FAIL: the press was not delivered (step: %s)\n", currentStep);
+        exit(1);
+    }
     __block NSDictionary *pressed = nil;
     until(^BOOL {
         id value = evaluate(surface, @"window.pressed");
@@ -303,6 +313,9 @@ int main(void) { @autoreleasepool {
     WKWebView *surface = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 10, 10)] autorelease];
     [window.contentView addSubview:surface positioned:NSWindowAbove relativeTo:main];
     [window orderBack:nil];
+    // 창은 포커스를 가져가지 않도록 뒤에 있으므로 다른 창에 가려질 수 있다. 실패를 해석하도록 시작 상태를 적는다.
+    fprintf(stdout, "INFO: window occlusion visible at start: %d\n",
+        (window.occlusionState & NSWindowOcclusionStateVisible) != 0);
     check(sp_surface_create(main) != NULL,
         @"the main webview creates the composition before a surface webview is attached");
     webviewAttachSurface(surface, main);
