@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-35: the graceful sidecar stop tests of both hosts require the stop to return before its deadline instead of a separate 250 ms bound.
 - F8-13: a wide glyph narrower than its two cells is centred in them; frame and window checks measure the ink margins.
 - V5-6-6: the terminal protocol inventory check compares the OSC report in the specification with the engine inventory selector by selector and requires each named test to exist.
 - F8-6-3: the drag delay check passes within the full default run on both hosts at a load average below 10.

@@ -464,8 +464,9 @@ fn stop_graceful_shutdown() {
     ]);
 
     let mut sidecars = create(&files, directory.path()).unwrap();
-    // 테스트를 위해 기한을 1초로 설정한다.
-    sidecars.stop_timeout = Duration::from_secs(1);
+    // stop() 은 기한이 지나야만 강제로 끝낸다. 기한보다 먼저 돌아오면 사이드카가 stdin EOF 로 스스로 끝난 것이다.
+    // 기한은 기계 부하 속의 프로세스 종료 시간보다 충분히 길게 둔다.
+    sidecars.stop_timeout = Duration::from_secs(5);
     let (owner, events) = owner("a", "/projects/test");
 
     // 사이드카를 시작한다.
@@ -493,11 +494,11 @@ fn stop_graceful_shutdown() {
     sidecars.stop();
     let elapsed = start.elapsed();
 
-    // 정상 종료는 250ms 안에 일어나야 한다 (기한까지 기다리지 않음).
     assert!(
-        elapsed < Duration::from_millis(250),
-        "graceful stop took {:?}, want < 250ms",
-        elapsed
+        elapsed < sidecars.stop_timeout,
+        "graceful stop took {:?}, which reached the {:?} deadline",
+        elapsed,
+        sidecars.stop_timeout
     );
 }
 

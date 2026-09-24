@@ -348,8 +348,9 @@ func TestStopGracefulShutdown(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// 테스트를 위해 기한을 1초로 설정한다.
-	sidecars.StopTimeout = 1 * time.Second
+	// Stop() 은 기한이 지나야만 강제로 끝낸다. 기한보다 먼저 돌아오면 사이드카가 stdin EOF 로 스스로 끝난 것이다.
+	// 기한은 기계 부하 속의 프로세스 종료 시간보다 충분히 길게 둔다.
+	sidecars.StopTimeout = 5 * time.Second
 
 	owner := newFakeOwner("/projects/test")
 
@@ -369,9 +370,8 @@ func TestStopGracefulShutdown(t *testing.T) {
 	sidecars.Stop()
 	elapsed := time.Since(start)
 
-	// 정상 종료는 250ms 안에 일어나야 한다 (기한까지 기다리지 않음).
-	if elapsed > 250*time.Millisecond {
-		t.Errorf("graceful stop took %v, want < 250ms", elapsed)
+	if elapsed >= sidecars.StopTimeout {
+		t.Errorf("graceful stop took %v, which reached the %v deadline", elapsed, sidecars.StopTimeout)
 	}
 }
 
