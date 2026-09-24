@@ -166,6 +166,25 @@ test("terminal protocol inventory reproduces missing and duplicate CSI rows as R
   assert.ok(brokenOsc.errors.some((error) => error.includes("required OSC inventory row is missing: 0,2")));
 });
 
+test("the OSC report in the specification matches the engine inventory selector by selector", { timeout: 5000 }, async () => {
+  const specification = await readFile(join(root, "docs/spec/terminal-protocols.md"), "utf8");
+  assert.deepEqual(auditTerminalProtocolInventory().errors, []);
+  const missing = auditTerminalProtocolInventory({
+    specSource: specification.replace(/^\| `46` \|.*\n/m, ""),
+  });
+  assert.ok(missing.errors.includes("OSC selector 46 has no row in the specification report"), missing.errors.join("\n"));
+  const outcome = auditTerminalProtocolInventory({
+    specSource: specification.replace("| `4` | Indexed color set/query | `implemented`", "| `4` | Indexed color set/query | `unsupported`"),
+  });
+  assert.ok(outcome.errors.includes("OSC selector 4 is implemented in the engine but unsupported in the specification report"),
+    outcome.errors.join("\n"));
+  const evidence = auditTerminalProtocolInventory({
+    specSource: specification.replace("`osc104_resets_indexed_colors`", "`osc104_test_that_does_not_exist`"),
+  });
+  assert.ok(evidence.errors.includes("OSC selector 104 names a test that does not exist: osc104_test_that_does_not_exist"),
+    evidence.errors.join("\n"));
+});
+
 test("exposure audit verifies every declared core and plugin entry", { timeout: 5000 }, async () => {
   const result = await run(node, [join(root, "scripts/check-exposure.mjs")]);
   assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);

@@ -32,7 +32,7 @@ OSC 1337 이미지 전송은 OSC 확장을 사용한다. APC 그래픽 프로토
 
 ## OSC 선택자 inventory
 
-다음은 고정한 XTerm 기준과 현재 Alacritty handler를 selector 단위로 대조한 결과다. `implemented`는 엔진이 관측 가능한 효과나 응답을 낸다는 뜻이다. `unsupported`는 이 런타임이 효과·응답을 의도적으로 제공하지 않는다는 뜻이며 지원한다고 설명해서는 안 된다. `vendor`는 별도 계약으로 추적하며 표준 OSC 완료 범위에 넣지 않는다.
+다음은 고정한 XTerm 기준과 현재 Alacritty handler를 selector 단위로 대조한 결과다. `implemented`는 엔진이 관측 가능한 효과나 응답을 낸다는 뜻이다. `unsupported`는 이 런타임이 효과·응답을 의도적으로 제공하지 않는다는 뜻이며 지원한다고 설명해서는 안 된다. `vendor`는 별도 계약으로 추적하며 표준 OSC 완료 범위에 넣지 않는다. `scripts/check-terminal-protocol-inventory.mjs`는 이 표를 엔진 목록과 선택자 하나씩 비교한다. 엔진 선택자에 이 표의 행이 없거나, 행에 엔진 선택자가 없거나, 결과가 다르거나, 행이 테스트를 적지 않거나, 적은 테스트가 사이드카 소스에 없으면 실패한다.
 
 | 선택자 | XTerm 동작 | 현재 결과 | 이름 있는 근거 |
 | --- | --- | --- | --- |

@@ -32,7 +32,7 @@ This table is a requirements inventory, not a completed per-selector conformance
 
 ## OSC selector inventory
 
-The following is the current selector-level audit against the pinned XTerm reference. `implemented` means that the engine produces the specified observable effect or reply. `unsupported` means that this runtime deliberately provides no effect or reply and must not describe the selector as supported. `vendor` is tracked by a separate contract and is not included in the standard OSC claim.
+The following is the current selector-level audit against the pinned XTerm reference. `implemented` means that the engine produces the specified observable effect or reply. `unsupported` means that this runtime deliberately provides no effect or reply and must not describe the selector as supported. `vendor` is tracked by a separate contract and is not included in the standard OSC claim. `scripts/check-terminal-protocol-inventory.mjs` compares this table with the engine inventory selector by selector: it fails when an engine selector has no row here, a row has no engine selector, the outcomes differ, a row names no test, or a named test does not exist in the sidecar sources.
 
 | Selector | XTerm operation | Current outcome | Named evidence |
 | --- | --- | --- | --- |
