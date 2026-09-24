@@ -8,6 +8,7 @@ const readyReleases = new WeakMap();
 
 export function createSurfaceContext({
   root, surfaceId, pluginId, metadata = {}, declarations = {}, composition = null, diagnostics = null, runtime = {},
+  tab, origin = { directory: null },
 } = {}) {
   if (!root || typeof root.appendChild !== "function") throw new TypeError("surface context requires a root element");
   if (typeof surfaceId !== "string" || surfaceId === "") throw new TypeError("surface context requires surfaceId");
@@ -16,6 +17,9 @@ export function createSurfaceContext({
   }
   if (typeof runtime.emit !== "function") {
     throw new TypeError("surface context requires scoped event routing");
+  }
+  if (typeof tab?.title !== "function" || typeof tab?.directory !== "function") {
+    throw new TypeError("surface context requires tab.title and tab.directory");
   }
   const listeners = new Set();
   const eventListeners = new Map();
@@ -39,6 +43,10 @@ export function createSurfaceContext({
     composition,
     // 진단 빌드에서는 플러그인의 진단 모듈, release 빌드에서는 null 이다.
     diagnostics,
+    // 탭 알림(docs/spec/plugins.md#tab-reports): 탭에 보일 제목과 작업 디렉터리를 워크벤치에 알린다.
+    tab: Object.freeze({ title: tab.title, directory: tab.directory }),
+    // 이 탭을 만든 카드의 활성 탭이 그때 기록한 작업 디렉터리.
+    origin: Object.freeze({ directory: origin.directory ?? null }),
     runtime: Object.freeze({
       sidecar: callable(runtime.sidecar, "runtime.sidecar").bind(runtime),
       native: runtime.native,

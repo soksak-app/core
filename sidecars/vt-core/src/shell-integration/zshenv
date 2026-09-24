@@ -16,13 +16,26 @@ fi
 } always {
     'builtin' 'unset' '_soksak_file'
     if [[ -o 'interactive' ]]; then
-        # 프롬프트 전: 앞 명령이 있었으면 그 종료 상태(D), 그리고 프롬프트 시작(A).
+        # 작업 디렉터리(OSC 7). 예약되지 않은 문자와 / 밖의 바이트를 퍼센트 인코딩한다.
+        _soksak_directory() {
+            'builtin' 'emulate' -L zsh
+            'builtin' 'local' LC_ALL=C encoded= char hex
+            for char in ${(s::)PWD}; do
+                case $char in
+                    [A-Za-z0-9._~/-]) encoded+=$char ;;
+                    *) 'builtin' 'printf' -v hex '%%%02X' "'$char"; encoded+=$hex ;;
+                esac
+            done
+            'builtin' 'print' -n "\e]7;file://${HOST}${encoded}\a"
+        }
+        # 프롬프트 전: 앞 명령이 있었으면 그 종료 상태(D), 작업 디렉터리, 그리고 프롬프트 시작(A).
         _soksak_precmd() {
             'builtin' 'local' ret=$?
             if (( ${+_soksak_running} )); then
                 'builtin' 'print' -n "\e]133;D;${ret}\a"
                 'builtin' 'unset' '_soksak_running'
             fi
+            _soksak_directory
             'builtin' 'print' -n '\e]133;A\a'
         }
         # 명령 실행 전: 명령 시작(C).

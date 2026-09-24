@@ -64,7 +64,7 @@ unsupported 행은 성공한 무동작 결과가 아니라 명시된 범위 결�
 
 선택한 vendor 범위는 표준 OSC inventory와 분리해 명시한다.
 
-- OSC 7은 현재 표면이 소유하는 directory URI event를 낸다. 빈 URI는 거부한다.
+- OSC 7은 현재 표면이 소유하는 directory event를 URI와 그 로컬 `path`([터미널 런타임](terminal-runtime.ko.md))와 함께 낸다. 빈 URI, 다른 스킴, 디코딩할 수 없는 경로는 거부한다.
 - OSC 8은 `id=` parameter를 파싱해 typed hyperlink open/close event를 낸다. 지원하지 않는 parameter나 중복 parameter는 거부하며 빈 URI는 현재 link를 닫는다.
 - OSC 9는 notification event를 낸다. 빈 notification은 거부하며 payload를 실행하지 않는다.
 - OSC 133은 네 가지 typed shell marker(`prompt.start`, `prompt.end`, `command.start`, `command.finished`)와 문자열 parameter를 내고, [터미널 런타임](terminal-runtime.ko.md)이 크기 변경에 쓰는 엔진 셸 상태를 정한다. 알 수 없는 marker와 `0`, `1`, `last`가 아닌 `redraw` 값은 거부한다.

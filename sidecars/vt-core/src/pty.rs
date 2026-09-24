@@ -33,6 +33,19 @@ pub fn resolve_shell(request: &str) -> Result<String, String> {
     Ok(shell)
 }
 
+/// 셸이 시작할 디렉터리. 있는 디렉터리의 절대 경로여야 하며, 다른 디렉터리로 대신하지 않고 오류를 반환한다.
+pub fn resolve_directory(request: &str) -> Result<String, String> {
+    if !request.starts_with('/') {
+        return Err(format!(
+            "terminal directory {request:?} is not an absolute path"
+        ));
+    }
+    if !std::path::Path::new(request).is_dir() {
+        return Err(format!("terminal directory {request:?} is not a directory"));
+    }
+    Ok(request.to_string())
+}
+
 const RETAINED_OUTPUT: usize = 10_000;
 
 struct Session {

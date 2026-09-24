@@ -34,6 +34,7 @@
     "settings.js",
     "settings-scope.js",
     "settings-ui.js",
+    "tab-reports.js",
     "text-size.js",
     "verify.js",
     "exposure.json",

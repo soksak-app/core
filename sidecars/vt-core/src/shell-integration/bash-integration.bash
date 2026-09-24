@@ -57,12 +57,29 @@ if [[ -n $_soksak_install ]]; then
         return $_soksak_status
     }
 
-    # PROMPT_COMMAND 의 마지막 항목: 앞 명령이 있었으면 종료 상태(D), 그리고 프롬프트 시작(A).
+    # 작업 디렉터리(OSC 7). 예약되지 않은 문자와 / 밖의 바이트를 퍼센트 인코딩한다.
+    _soksak_directory() {
+        builtin local LC_ALL=C encoded= char code hex index
+        for (( index = 0; index < ${#PWD}; index++ )); do
+            char=${PWD:index:1}
+            case $char in
+                [A-Za-z0-9._~/-]) encoded+=$char ;;
+                # bash 3.2 의 printf 는 127 보다 큰 바이트를 부호 확장하므로 한 바이트로 자른다.
+                *) builtin printf -v code '%d' "'$char"
+                   builtin printf -v hex '%%%02X' $(( code & 255 ))
+                   encoded+=$hex ;;
+            esac
+        done
+        builtin printf '\e]7;file://%s%s\a' "$HOSTNAME" "$encoded"
+    }
+
+    # PROMPT_COMMAND 의 마지막 항목: 앞 명령이 있었으면 종료 상태(D), 작업 디렉터리, 그리고 프롬프트 시작(A).
     _soksak_prompt_end() {
         if [[ -n $_soksak_running ]]; then
             builtin printf '\e]133;D;%s\a' "$_soksak_status"
             _soksak_running=
         fi
+        _soksak_directory
         builtin printf '\e]133;A\a'
         _soksak_at_prompt=1
     }

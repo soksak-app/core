@@ -5,6 +5,7 @@ use alacritty_terminal::selection::{Selection, SelectionType};
 use alacritty_terminal::term::cell::{Cell as GridCell, Flags};
 use alacritty_terminal::term::{Config, Osc52, Term, TermMode};
 use alacritty_terminal::vte::ansi::{Color, CursorShape, Handler, NamedColor, Processor, Rgb};
+use soksak_sidecar_vt_core::directory_uri::local_path;
 use soksak_sidecar_vt_core::{
     default_terminal_color, inline_image::parse as parse_inline_image, Cell, ClipboardSelection,
     Cursor, CursorShape as ProtocolCursorShape, Engine, EngineEvent, Modes, Screen, ShellMarker,
@@ -139,6 +140,7 @@ fn parse_vendor_osc(selector: &[u8], payload: &[u8]) -> Result<Option<EngineEven
             }
             Ok(Some(EngineEvent::Directory {
                 uri: payload.to_string(),
+                path: local_path(payload)?,
             }))
         }
         "8" => {

@@ -1,4 +1,5 @@
 // 공통 VT 계층: 프로토콜, 세션 수명, 화면 타입, Engine 트레이트
+pub mod directory_uri;
 pub mod encoding;
 pub mod inline_image;
 pub mod palette;
@@ -16,5 +17,5 @@ pub use palette::{
 pub use protocol::{
     make_default_session_port_factory, serve, Cell, ClipboardSelection, Cursor, CursorShape,
     DaemonEvent, Engine, EngineEvent, LocalSessionPort, Modes, Preedit, Screen, Scrollback,
-    SessionPort, ShellMarker,
+    SessionPort, ShellMarker, ShellRequest,
 };

@@ -15,6 +15,7 @@ import { issueId } from "./ids.js";
 import { bind, delegate, mark, run } from "./commands.js";
 import { disposeSurface, focusSurface, mountSurface } from "./surface-modules.js";
 import { setSurfaceStatus } from "./surface-status.js";
+import { onTabReports, recordOrigin, tabLabel } from "./tab-reports.js";
 
 const NEEDS = ["cards", "card", "insertAt", "moveTo", "standings", "moveBoundary", "zoneAt",
   "splitToward", "replace"];
@@ -128,6 +129,8 @@ const tab = (plugin, title) => ({ id: issueId("tab"), plugin, title });
 const tabsOf = (card) => card?.data?.tabs ?? [];
 const activeTab = (card) => tabsOf(card).find((t) => t.id === card.data.activeId) ?? tabsOf(card)[0];
 const focusedPlugin = () => activeTab(grid.card(focusedId))?.plugin ?? null;
+/** 탭에 보이는 이름: 표면이 알린 제목이 있으면 그것, 없으면 탭 이름. */
+const tabName = (t) => tabLabel(t.id) ?? t.title;
 
 /** 새 탭 하나. 번호는 화면에 보이는 이름일 뿐이고 id 는 ids.js 가 발급한다. */
 function newTab(kind) {
@@ -249,7 +252,7 @@ function updateCard(el, card) {
   }
 
   const tabs = tabsOf(card);
-  const key = tabs.map((t) => `${t.id}\u0000${t.title}`).join("\u0001");
+  const key = tabs.map((t) => `${t.id}\u0000${tabName(t)}`).join("\u0001");
   let ham = chrome.querySelector(".chrome__ham");
   if (!ham) {
     ham = document.createElement("button");
@@ -283,7 +286,7 @@ function updateCard(el, card) {
       // 제목은 `textContent` 로 설정한다. 사용자 입력을 마크업으로 해석하지 않는다.
       b.innerHTML = '<span class="tab__name"></span>' +
         '<button class="tab__x" title="닫기" data-expose="core.card.tab-close">&#10005;</button>';
-      b.querySelector(".tab__name").textContent = t.title;
+      b.querySelector(".tab__name").textContent = tabName(t);
       // 누름은 탭을 고르고 드래그를 시작한다. 놓은 자리의 결과는 core.tab.move 가 만든다.
       b.addEventListener("pointerdown", (e) => {
         if (e.target.closest(".tab__x")) return;
@@ -556,7 +559,7 @@ function openTabList(anchor, cardId) {
   const card = grid.card(cardId);
   if (!card?.data) return;
   openLayer(anchor, `탭 ${tabsOf(card).length}개`, tabsOf(card).map((t) => ({
-    key: t.id, name: t.title, mark: plugin(t.plugin).mark, svg: plugin(t.plugin).svg,
+    key: t.id, name: tabName(t), mark: plugin(t.plugin).mark, svg: plugin(t.plugin).svg,
     active: t.id === card.data.activeId,
   })), (id) => {
     const c = grid.card(cardId);
@@ -653,6 +656,7 @@ function addTab(cardId, plugin) {
   const card = grid.card(cardId);
   if (!card?.data) return;
   const t = newTab(plugin);
+  recordOrigin(t.id, activeTab(card)?.id);
   card.data.tabs.push(t);
   card.data.activeId = t.id;
   focusedId = cardId;
@@ -665,6 +669,7 @@ function splitWith(cardId, axis, plugin) {
   const card = grid.card(cardId);
   if (!card?.data) return;
   const t = newTab(plugin);
+  recordOrigin(t.id, activeTab(card)?.id);
   // 공간이 없으면 split 이 null 을 반환한다. 원본 카드에서 제거한 탭이 없으므로
   // 복구할 상태가 없다.
   const born = grid.split(cardId, axis, { data: { tabs: [t], activeId: t.id } });
@@ -1195,6 +1200,15 @@ export function build(kept = fresh()) {
   });
   settle();
 }
+
+// 표면이 탭 제목을 알리면 탭 이름만 다시 쓴다. 레이아웃은 바뀌지 않으므로 다시 그리거나 저장하지 않는다.
+onTabReports(() => {
+  for (const name of document.querySelectorAll(".card .tab[data-tab-id] .tab__name")) {
+    const id = name.parentElement.dataset.tabId;
+    const t = grid?.cards.flatMap(tabsOf).find((item) => item.id === id);
+    if (t) name.textContent = tabName(t);
+  }
+});
 
 /** 통로 값을 판과 뷰에 적용한다. */
 export function setGap(half) {

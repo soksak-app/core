@@ -64,6 +64,11 @@
       "default": "login",
       "maxLength": 1024
     },
+    "title": {
+      "type": "enum",
+      "default": "program",
+      "values": ["program", "name"]
+    },
     "scrollbar.track": {
       "type": "string",
       "default": "terminal",

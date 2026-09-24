@@ -4,7 +4,7 @@ use std::fs::OpenOptions;
 use std::os::fd::AsRawFd;
 use std::sync::{Mutex, OnceLock};
 
-use soksak_sidecar_vt_core::pty::{resolve_shell, PtyService};
+use soksak_sidecar_vt_core::pty::{resolve_directory, resolve_shell, PtyService};
 use soksak_sidecar_vt_core::DaemonEvent;
 use tokio::time::{timeout, Duration};
 
@@ -339,4 +339,99 @@ async fn a_resize_during_bash_startup_does_not_report_a_command_at_the_first_pro
         !output.contains("\x1b]133;C\x07"),
         "the first prompt reported a command start: {output:?}"
     );
+}
+
+#[test]
+fn a_start_directory_must_be_an_existing_absolute_directory() {
+    assert_eq!(resolve_directory("/tmp").unwrap(), "/tmp");
+    for invalid in ["", "tmp", "/nonexistent/directory", "/etc/hosts"] {
+        let error = resolve_directory(invalid).unwrap_err();
+        assert!(
+            error.contains("terminal directory"),
+            "{invalid:?} was not rejected with a terminal directory error: {error}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_session_starts_in_the_requested_directory() {
+    let _lock = native_pty_test_lock();
+    let directory = startup_directory("soksak-start-directory-test", &[]);
+    let directory = std::fs::canonicalize(&directory).unwrap();
+    let service = PtyService::new();
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let (session, _) = service
+        .open_shell("", "/bin/sh", Some(directory.to_str().unwrap()), 80, 24, tx)
+        .expect("open a shell session");
+    service
+        .write(&session, b"printf 'PWD=%s\\n' \"$(pwd -P)\"\n")
+        .unwrap();
+    let mut output = String::new();
+    let expected = format!("PWD={}\r\n", directory.display());
+    let found = collect_until(&mut rx, &mut output, |text| text.contains(&expected)).await;
+    let _ = service.close(&session);
+    let _ = std::fs::remove_dir_all(&directory);
+    assert!(
+        found,
+        "the shell did not start in {}: {output:?}",
+        directory.display()
+    );
+}
+
+/// 셸이 알릴 디렉터리 URI: 예약되지 않은 문자와 `/` 밖의 바이트를 퍼센트 인코딩한다.
+fn directory_uri(path: &std::path::Path) -> String {
+    let host = soksak_sidecar_vt_core::directory_uri::host_name().unwrap();
+    let mut encoded = String::new();
+    for byte in path.to_str().unwrap().bytes() {
+        if byte.is_ascii_alphanumeric() || b"._~/-".contains(&byte) {
+            encoded.push(byte as char);
+        } else {
+            encoded.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    format!("\x1b]7;file://{host}{encoded}\x07")
+}
+
+async fn reports_its_directory(shell: &str, variable: &str, files: &[(&str, &str)]) {
+    let _lock = native_pty_test_lock();
+    let home = startup_directory(&format!("soksak-{variable}-osc7-test"), files);
+    let start = home.join("a b-한글%");
+    std::fs::create_dir_all(&start).unwrap();
+    let start = std::fs::canonicalize(&start).unwrap();
+    let original = std::env::var_os(variable);
+    std::env::set_var(variable, &home);
+    let service = PtyService::new();
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let opened = service.open_shell("", shell, Some(start.to_str().unwrap()), 80, 24, tx);
+    match original {
+        Some(value) => std::env::set_var(variable, value),
+        None => std::env::remove_var(variable),
+    }
+    let (session, _) = opened.expect("open a shell session");
+    let expected = directory_uri(&start);
+    let mut output = String::new();
+    let first = collect_until(&mut rx, &mut output, |text| text.contains(&expected)).await;
+    // 디렉터리를 바꾸면 다음 프롬프트 전에 새 디렉터리를 알린다.
+    service.write(&session, b"cd /\n").unwrap();
+    let changed = collect_until(&mut rx, &mut output, |text| {
+        in_order(
+            text,
+            &[expected.as_str(), &directory_uri(std::path::Path::new("/"))],
+        )
+    })
+    .await;
+    let _ = service.close(&session);
+    let _ = std::fs::remove_dir_all(&home);
+    assert!(first, "{shell} did not report {expected:?}: {output:?}");
+    assert!(changed, "{shell} did not report / after cd: {output:?}");
+}
+
+#[tokio::test]
+async fn zsh_reports_its_working_directory_before_each_prompt() {
+    reports_its_directory("/bin/zsh", "ZDOTDIR", &[(".zshrc", "PS1='T> '\n")]).await;
+}
+
+#[tokio::test]
+async fn bash_reports_its_working_directory_before_each_prompt() {
+    reports_its_directory("/bin/bash", "HOME", &[(".bash_profile", "PS1='T> '\n")]).await;
 }

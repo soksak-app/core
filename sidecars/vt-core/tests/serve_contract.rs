@@ -2,6 +2,7 @@ use async_trait::async_trait;
 /// Integration tests for serve contract with fake daemon
 use soksak_sidecar_vt_core::protocol::{
     serve, Cell, Cursor, CursorShape, DaemonEvent, Engine, EngineEvent, Modes, Screen, SessionPort,
+    ShellRequest,
 };
 use soksak_sidecar_vt_core::{
     inline_image::{Dimension, InlineImageCommand},
@@ -85,6 +86,7 @@ impl Engine for MockEngine {
         if bytes == b"\x1b]7;file:///tmp/project\x07" {
             self.pending_events.push(EngineEvent::Directory {
                 uri: "file:///tmp/project".to_string(),
+                path: Some("/tmp/project".to_string()),
             });
         }
     }
@@ -224,6 +226,7 @@ async fn vendor_event_is_emitted_only_with_the_owning_surface_id() {
         if value["body"]["event"] == "directory" {
             assert_eq!(value["surface"], "owned-surface");
             assert_eq!(value["body"]["uri"], "file:///tmp/project");
+            assert_eq!(value["body"]["path"], "/tmp/project");
             found = true;
             break;
         }
@@ -236,6 +239,7 @@ async fn vendor_event_is_emitted_only_with_the_owning_surface_id() {
 #[derive(Debug, Default, Clone)]
 struct Calls {
     opens: Vec<(u16, u16)>,
+    directories: Vec<Option<String>>,
     writes: Vec<(String, Vec<u8>)>,
     resizes: Vec<(String, u16, u16)>,
     detaches: Vec<String>,
@@ -267,14 +271,10 @@ impl FakeSessionPort {
 
 #[async_trait]
 impl SessionPort for FakeSessionPort {
-    async fn open(
-        &self,
-        _program: &str,
-        cols: u16,
-        rows: u16,
-        _hint: Option<&str>,
-    ) -> Result<String, String> {
-        self.calls.lock().unwrap().opens.push((cols, rows));
+    async fn open(&self, request: &ShellRequest, cols: u16, rows: u16) -> Result<String, String> {
+        let mut calls = self.calls.lock().unwrap();
+        calls.opens.push((cols, rows));
+        calls.directories.push(request.directory.clone());
         Ok(self.session_id.clone())
     }
 
@@ -396,6 +396,59 @@ async fn an_open_without_a_shell_is_rejected_without_a_session() {
         calls.lock().unwrap().opens.is_empty(),
         "an open without a shell started a session"
     );
+}
+
+async fn serve_open(open: &str) -> (String, Calls) {
+    let calls = Arc::new(Mutex::new(Calls::default()));
+    let input = format!(
+        "{open}\n{}\n",
+        r#"{"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}"#
+    );
+    let reader = std::io::Cursor::new(input.into_bytes());
+    let mut writer = Vec::new();
+    let engine_factory = Arc::new(|| Box::new(MockEngine::new()) as Box<dyn Engine>);
+    let factory_calls = calls.clone();
+    let session_port_factory = Arc::new(move || {
+        Arc::new(FakeSessionPort::new(
+            "directory".to_string(),
+            factory_calls.clone(),
+        )) as Arc<dyn SessionPort>
+    });
+    let _ = serve(engine_factory, reader, &mut writer, session_port_factory).await;
+    let calls = calls.lock().unwrap().clone();
+    (String::from_utf8(writer).unwrap(), calls)
+}
+
+#[tokio::test]
+async fn an_open_passes_its_directory_to_the_session() {
+    let (_, calls) = serve_open(
+        r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view","shell":"login","directory":"/tmp"}}"#,
+    )
+    .await;
+    assert_eq!(calls.directories, vec![Some("/tmp".to_string())]);
+    let (_, calls) = serve_open(
+        r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view","shell":"login"}}"#,
+    )
+    .await;
+    assert_eq!(calls.directories, vec![None]);
+}
+
+#[tokio::test]
+async fn an_open_with_a_relative_or_non_text_directory_is_rejected_without_a_session() {
+    for directory in [r#""tmp""#, "7", "null"] {
+        let (output, calls) = serve_open(&format!(
+            r#"{{"surface":"s1","root":"/tmp","body":{{"operation":"open","image":"view","shell":"login","directory":{directory}}}}}"#
+        ))
+        .await;
+        assert!(
+            output.contains(r#""reason":"open directory must be an absolute path""#),
+            "directory {directory} was not rejected: {output}"
+        );
+        assert!(
+            calls.opens.is_empty(),
+            "directory {directory} started a session"
+        );
+    }
 }
 
 #[tokio::test]

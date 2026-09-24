@@ -2304,7 +2304,7 @@ test("vendor_events_update_the_session_and_unrelated_events_remain_unsupported",
   const initialSession = sessionStatus.readFn();
   assert(!initialSession.unsupported.includes("unclassified"), "unclassified not in unsupported initially");
 
-  fakeSidecar.triggerEvent("test-session", { event: "directory", uri: "file:///tmp/project" });
+  fakeSidecar.triggerEvent("test-session", { event: "directory", uri: "file:///tmp/project", path: "/tmp/project" });
   fakeSidecar.triggerEvent("test-session", { event: "hyperlink", id: "docs", uri: "https://example.test" });
   fakeSidecar.triggerEvent("test-session", { event: "notification", message: "build complete" });
   fakeSidecar.triggerEvent("test-session", { event: "vendor.shell.state", marker: "command.finished", params: ["0"] });
@@ -2725,4 +2725,103 @@ test("the font.family list is sent at startup and on change, and the applied fam
   assert.equal(session.error, undefined, "a missing family is not an error");
   assert.deepEqual(errors, []);
   await terminal.dispose();
+});
+
+function createFakeTab({ reject = false } = {}) {
+  const calls = [];
+  return {
+    calls,
+    title: (text) => {
+      if (reject && text !== null) throw new TypeError("a tab title must be 1 to 256 characters without control characters");
+      calls.push(["title", text]);
+    },
+    directory: (path) => calls.push(["directory", path]),
+  };
+}
+
+function titleSettings(values) {
+  const listeners = [];
+  let current = { shell: "login", title: "program", ...values };
+  return {
+    read: () => current,
+    on: (listener) => { listeners.push(listener); return () => {}; },
+    change: (next) => { current = { ...current, ...next }; for (const listener of listeners) listener(current); },
+  };
+}
+
+test("the tab shows the program title and a title reset or an empty title removes it", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  const tab = createFakeTab();
+  await startTerminal({
+    view: createFakeView(), attachImage: createFakeAttachImage().function,
+    sidecar: fakeSidecar, expose: createFakeExpose(), tab, settings: titleSettings({}),
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  fakeSidecar.triggerEvent("test-session", { event: "title", title: "vim README.md" });
+  fakeSidecar.triggerEvent("test-session", { event: "title.reset" });
+  fakeSidecar.triggerEvent("test-session", { event: "title", title: "less" });
+  fakeSidecar.triggerEvent("test-session", { event: "title", title: "" });
+  assert.deepEqual(tab.calls.filter(([kind]) => kind === "title"),
+    [["title", null], ["title", "vim README.md"], ["title", null], ["title", "less"], ["title", null]]);
+});
+
+test("the name setting removes the program title and program shows the last title again", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  const tab = createFakeTab();
+  const settings = titleSettings({ title: "name" });
+  await startTerminal({
+    view: createFakeView(), attachImage: createFakeAttachImage().function,
+    sidecar: fakeSidecar, expose: createFakeExpose(), tab, settings,
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  fakeSidecar.triggerEvent("test-session", { event: "title", title: "vim" });
+  assert.deepEqual(tab.calls.filter(([kind]) => kind === "title").at(-1), ["title", null]);
+  settings.change({ title: "program" });
+  assert.deepEqual(tab.calls.filter(([kind]) => kind === "title").at(-1), ["title", "vim"]);
+  settings.change({ title: "name" });
+  assert.deepEqual(tab.calls.filter(([kind]) => kind === "title").at(-1), ["title", null]);
+});
+
+test("a title that the tab rejects is a session error", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  const fakeExpose = createFakeExpose();
+  const errors = [];
+  await startTerminal({
+    view: createFakeView(), attachImage: createFakeAttachImage().function,
+    sidecar: fakeSidecar, expose: fakeExpose, tab: createFakeTab({ reject: true }), settings: titleSettings({}),
+    reportSurfaceError: (error) => errors.push(error.message),
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  fakeSidecar.triggerEvent("test-session", { event: "title", title: "x".repeat(300) });
+  assert.match(errors.join("\n"), /a tab title must be 1 to 256 characters/);
+});
+
+test("OSC 7 records the local directory and a directory of another machine removes it", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  const tab = createFakeTab();
+  await startTerminal({
+    view: createFakeView(), attachImage: createFakeAttachImage().function,
+    sidecar: fakeSidecar, expose: createFakeExpose(), tab, settings: titleSettings({}),
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  fakeSidecar.triggerEvent("test-session", { event: "directory", uri: "file:///tmp/a%20b", path: "/tmp/a b" });
+  fakeSidecar.triggerEvent("test-session", { event: "directory", uri: "file://remote/tmp", path: null });
+  assert.deepEqual(tab.calls.filter(([kind]) => kind === "directory"),
+    [["directory", "/tmp/a b"], ["directory", null]]);
+});
+
+test("a session opens in the origin directory of its tab", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  await startTerminal({
+    view: createFakeView(), attachImage: createFakeAttachImage().function,
+    sidecar: fakeSidecar, expose: createFakeExpose(), tab: createFakeTab(), origin: { directory: "/tmp/origin" },
+    settings: titleSettings({}), window: { TextEncoder: FakeTextEncoder },
+  });
+  const open = fakeSidecar.getMessages().find((message) => message.body.operation === "open");
+  assert.deepEqual(open.body, { operation: "open", image: "view", shell: "login", directory: "/tmp/origin" });
 });

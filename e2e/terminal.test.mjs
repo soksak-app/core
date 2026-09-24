@@ -436,6 +436,59 @@ for (const app of Object.values(APPS)) {
     });
   }
 
+  test(`${app.name}: the terminal tab shows the program title unless the title setting is name`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    s.cleanup(() => closeTerminalTabs(s));
+    const [terminal] = await ensureTerminals(s, 1);
+    const label = (grid) => grid.cards.flatMap((card) => card.tabs).find((tab) => tab.id === terminal.surface)?.label;
+    await s.run("terminal.input", { bytes: "printf '\\033]2;TITLE-CHECK\\007'\r" }, terminal.surface);
+    await s.until("core.grid", (grid) => label(grid) === "TITLE-CHECK",
+      "the tab did not show the program title", { timeout: 10000 });
+    await s.run("core.settings.change", { key: "terminal.title", value: "name", scope: "common" });
+    await s.until("core.grid", (grid) => label(grid) === null, "the name setting kept the program title");
+    await s.run("core.settings.change", { key: "terminal.title", value: "program", scope: "common" });
+    await s.until("core.grid", (grid) => label(grid) === "TITLE-CHECK", "the program setting did not show the last title");
+    // 제목 초기화(빈 제목)는 탭 이름으로 돌아간다.
+    await s.run("terminal.input", { bytes: "printf '\\033]2;\\007'\r" }, terminal.surface);
+    await s.until("core.grid", (grid) => label(grid) === null, "an empty program title did not remove the title");
+  });
+
+  test(`${app.name}: a terminal split from a terminal starts in the directory that terminal reported`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    s.cleanup(() => closeTerminalTabs(s));
+    const directory = realpathSync(mkdtempSync(join(tmpdir(), "soksak-origin ")));
+    t.after(() => rmSync(directory, { recursive: true, force: true }));
+    const existing = await ensureTerminals(s, 1);
+    // 셸 통합이 작업 디렉터리를 알리는 셸로 연다.
+    await s.run("core.settings.change", { key: "terminal.shell", value: "/bin/zsh", scope: "common" });
+    const terminals = await ensureTerminals(s, existing.length + 1);
+    const source = terminals.find((terminal) => !existing.some((item) => item.surface === terminal.surface));
+    assert.ok(source, "no new terminal opened after the setting changed");
+    await s.until("terminal.session", (session) => session.vendor?.shell?.marker === "prompt.start",
+      "zsh did not report an OSC 133 prompt start", { surface: source.surface });
+    const quoted = `'${directory.replaceAll("'", "'\\''")}'`;
+    await s.run("terminal.input", { bytes: `cd ${quoted}\r` }, source.surface);
+    const encoded = directory.split("/").map(encodeURIComponent).join("/");
+    await s.until("terminal.session", (session) => session.vendor?.directory?.endsWith(encoded),
+      `zsh did not report ${directory}`, { surface: source.surface });
+    const card = (await s.get("core.grid")).cards.find((item) => item.active === source.surface);
+    const made = await s.run("core.card.split", { card: card.id, axis: "x", plugin: "terminal" });
+    await s.until("core.surfaces", (surfaces) => surfaces.some((item) => item.surface === made.tab && item.visible &&
+      item.exposes.includes("status terminal.session")), "the split terminal did not register");
+    await s.until("terminal.session", (session) => session.vendor?.shell?.marker === "prompt.start",
+      "the split terminal did not show a prompt", { surface: made.tab });
+    // 경로 전체 대신 고유한 마지막 이름을 출력한다.
+    await s.run("terminal.input", { bytes: "printf 'START=%s\\n' \"$(basename \"$(pwd -P)\")\"\r" }, made.tab);
+    // 좁은 카드에서는 출력이 줄바꿈되고 행 끝의 공백은 잘리므로 공백을 빼고 비교한다.
+    const printed = `START=${basename(directory)}`.replaceAll(" ", "");
+    await readScreenUntil(s, made.tab, (lines) => lines.join("").replaceAll(" ", "").includes(printed),
+      `the split terminal did not start in ${directory}`);
+  });
+
   test(`${app.name}: a page start keeps the terminal sessions that the layouts hold`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);

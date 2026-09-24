@@ -5,6 +5,7 @@ import { plugin } from "./registry.js";
 import { registerSurfaceExposure } from "./surface-exposure.js";
 import { onSettingsChange, pluginSettings } from "./settings.js";
 import { onTextSize, surfaceTextSize } from "./text-size.js";
+import { forgetTab, reportDirectory, reportTitle, tabOrigin } from "./tab-reports.js";
 const mounted = new Map();
 const parking = document.createDocumentFragment();
 const authorization = new Map();
@@ -127,6 +128,9 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
       root: shadow, surfaceId: surface.surfaceId, pluginId: surface.pluginId,
       metadata: { home: surface.home },
       declarations: surface.declarations ?? {}, composition, diagnostics: plugin(surface.pluginId).diagnostics,
+      tab: { title: (text) => reportTitle(surface.surfaceId, text),
+        directory: (path) => reportDirectory(surface.surfaceId, path) },
+      origin: tabOrigin(surface.surfaceId),
       runtime: { sidecar: scoped.sidecar, native: scoped.native, exposure: scoped.exposure, emit, on,
         clipboard: scoped.clipboard,
         theme: scoped.theme,
@@ -239,6 +243,7 @@ export async function disposeSurface(surfaceId) {
     entry.state();
     entry.host.removeAttribute("data-surface-suspended");
     entry.host.remove();
+    forgetTab(surfaceId);
     authorization.delete(surfaceId);
     if (mounted.get(surfaceId) === entry) mounted.delete(surfaceId);
   })();

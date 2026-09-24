@@ -163,6 +163,8 @@ function normalizeCursorPolicy(value) {
  */
 export async function startTerminal({ id, view, attachImage, sidecar, expose, theme,
   settings, clipboard, scrollbar = null, reportSurfaceError = () => {}, diagnostics = null,
+  // 탭 알림(docs/spec/plugins.md#tab-reports)과 이 탭을 만든 카드의 작업 디렉터리.
+  tab = { title() {}, directory() {} }, origin = { directory: null },
   // 이 표면의 실제 글자 배율(docs/spec/text-size.md). 출처가 없으면 배율은 1 이다.
   textSize = { read: () => 1, on: () => () => {} },
   window: globalWindow = globalThis.window }) {
@@ -287,6 +289,20 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   const reportInputError = (error, source = "input") => {
     const message = error instanceof Error ? error.message : String(error);
     setError(source, `terminal input failed: ${message}`);
+  };
+
+  // 프로그램이 정한 마지막 제목(OSC 0/2). 설정 title 이 program 이면 탭에 보이고, name 이면 지운다.
+  // 탭이 거부한 제목은 세션 오류이며 다음에 받아들여진 제목이 그 오류를 해소한다.
+  let programTitle = null;
+  const applyTitle = () => {
+    const shown = (settings?.read?.() ?? {}).title === "program" ? programTitle : null;
+    try {
+      tab.title(shown);
+      if (resolveError("title")) changed("session");
+    } catch (error) {
+      setError("title", `terminal title failed: ${error.message}`);
+      reportSurfaceError(error);
+    }
   };
 
   const setTheme = async (mode) => {
@@ -858,12 +874,29 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       if (body.copied !== false) reportInputError(new Error("selection.end requires copied false"));
       releasedSelection();
     } else if (body.event === "directory") {
-      if (typeof body.uri !== "string" || body.uri.length === 0) {
+      if (typeof body.uri !== "string" || body.uri.length === 0 || (body.path !== null && typeof body.path !== "string")) {
         reportInputError(new Error("invalid directory event from sidecar"));
         return;
       }
       session = { ...session, vendor: { ...session.vendor, directory: body.uri } };
       changed("session");
+      // 다른 컴퓨터의 디렉터리(path null)는 기록한 디렉터리를 지운다.
+      try {
+        tab.directory(body.path);
+      } catch (error) {
+        reportInputError(error);
+      }
+    } else if (body.event === "title") {
+      if (typeof body.title !== "string") {
+        reportInputError(new Error("invalid title event from sidecar"));
+        return;
+      }
+      // 빈 제목은 제목이 없다는 뜻이다.
+      programTitle = body.title === "" ? null : body.title;
+      applyTitle();
+    } else if (body.event === "title.reset") {
+      programTitle = null;
+      applyTitle();
     } else if (body.event === "hyperlink") {
       if (typeof body.id !== "string" || (body.uri !== null && typeof body.uri !== "string")) {
         reportInputError(new Error("invalid hyperlink event from sidecar"));
@@ -925,7 +958,10 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   // 세션은 설정 shell 이 가리키는 셸을 연다(login 은 계정의 로그인 셸). 설정이 없으면 다른 셸로 대신하지 않는다.
   const shell = (settings?.read?.() ?? {}).shell;
   if (typeof shell !== "string" || shell.length === 0) throw new Error("terminal shell setting is missing");
-  await terminal.send(id, { operation: "open", image: "view", shell });
+  applyTitle();
+  // 터미널에서 쪼갠 터미널은 그 터미널이 마지막으로 알린 디렉터리에서 시작한다.
+  await terminal.send(id, { operation: "open", image: "view", shell,
+    ...(origin.directory === null ? {} : { directory: origin.directory }) });
 
   let themeReady = Promise.resolve();
   let themeSubscription = null;
@@ -971,6 +1007,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     applyScrollbarSettings(settings.read?.() ?? {});
     settingsSubscription = settings.on((values) => {
       applyScrollbarSettings(values);
+      applyTitle();
       const nextClipboardPolicy = values["clipboard.program"];
       if (!PROGRAM_CLIPBOARD_POLICIES.has(nextClipboardPolicy)) {
         reportInputError(new Error(`clipboard.program setting is invalid: ${String(nextClipboardPolicy)}`));

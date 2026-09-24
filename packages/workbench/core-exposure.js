@@ -25,6 +25,7 @@ import { modalState, onModalState } from "./host.js";
 import { windows } from "@soksak/runtime";
 import { audit, onBinding } from "./commands.js";
 import { onTextScope } from "./text-size.js";
+import { onTabReports, tabLabel } from "./tab-reports.js";
 
 /* 감시 중인 코어 status 의 수신자. */
 const watchers = new Set();
@@ -108,7 +109,7 @@ function gridState() {
       c0: card.c0, c1: card.c1, r0: card.r0, r1: card.r1,
       fixed: Boolean(card.fixed), width: card.width ?? null, focused: card.id === focused(),
       pane: el.querySelector(".chrome__acts") ? pane++ : null,
-      tabs: tabs.map(({ id, plugin, title }) => ({ id, plugin, title })),
+      tabs: tabs.map(({ id, plugin, title }) => ({ id, plugin, title, label: tabLabel(id) })),
       active: tabs.length ? activeTab(card).id : null,
       acts: cardActs(card.id),
     };
@@ -197,6 +198,7 @@ export async function installCoreExposure({ library, renames, resetLayout, chrom
   });
   status("core.layout", () => (currentGrid() ? capture() : null));
   status("core.grid", gridState);
+  onTabReports(coreChanged);
   status("core.surfaces", surfacesState);
   status("core.settings", () => ({
     values: Object.fromEntries(Object.keys(defaults).map((key) => [key, value(key)])),

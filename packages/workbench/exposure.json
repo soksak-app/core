@@ -138,7 +138,7 @@
       },
       {
         "name": "core.grid",
-        "description": "The current grid: size, gap, boundary positions, and cards in document order with their rectangles in plane coordinates, or null, with each card's tool buttons (enabled, hidden, title) and header fit.",
+        "description": "The current grid: size, gap, boundary positions, and cards in document order with their rectangles in plane coordinates, or null, with each card's tabs (with the title a surface reported as label), tool buttons (enabled, hidden, title), and header fit.",
         "schema": {
           "type": [
             "object",
@@ -251,6 +251,12 @@
                         },
                         "title": {
                           "type": "string"
+                        },
+                        "label": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         }
                       }
                     }

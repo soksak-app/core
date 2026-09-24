@@ -258,6 +258,7 @@ fn vendor_osc_effects_are_typed_and_survive_bel_st_and_fragmentation() {
         vec![
             EngineEvent::Directory {
                 uri: "file:///tmp/project".to_string(),
+                path: Some("/tmp/project".to_string()),
             },
             EngineEvent::Hyperlink {
                 id: "docs".to_string(),
@@ -1550,4 +1551,22 @@ fn an_unsupported_redraw_value_is_rejected_without_a_state_change() {
     engine.feed(b"P>abcdefghijklmnopqrstuvwxyz0123");
     engine.resize(10, 6);
     assert_eq!(all_text(&mut engine), "P>abcdefghijklmnopqrstuvwxyz0123");
+}
+
+#[test]
+fn osc7_reports_the_local_path_or_none_for_another_machine_and_rejects_other_uris() {
+    let mut engine = AlacrittyEngine::new();
+    engine.feed(b"\x1b]7;file://another-machine.invalid/tmp\x07\x1b]7;http://localhost/tmp\x07");
+    assert_eq!(
+        engine.drain_events(),
+        vec![
+            EngineEvent::Directory {
+                uri: "file://another-machine.invalid/tmp".to_string(),
+                path: None,
+            },
+            EngineEvent::Error(
+                "OSC 7 directory URI is not a file URI: \"http://localhost/tmp\"".to_string()
+            ),
+        ]
+    );
 }

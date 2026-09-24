@@ -271,6 +271,8 @@ pub enum EngineEvent {
     ResetTitle,
     Directory {
         uri: String,
+        /// 이 컴퓨터의 디렉터리이면 그 경로, 다른 컴퓨터의 디렉터리이면 None.
+        path: Option<String>,
     },
     Hyperlink {
         id: String,
@@ -545,16 +547,18 @@ pub enum DaemonEvent {
 }
 
 /// 세션 포트: 데몬과 통신하는 추상 인터페이스
+/// 세션을 여는 요청의 셸과 시작 디렉터리.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ShellRequest {
+    /// 터미널 설정 shell 의 값. `login` 이거나 셸의 절대 경로다.
+    pub shell: String,
+    /// 셸이 시작할 디렉터리의 절대 경로. 없으면 계정의 홈 디렉터리다.
+    pub directory: Option<String>,
+}
+
 #[async_trait]
 pub trait SessionPort: Send + Sync {
-    /// shell 은 터미널 설정 shell 의 값이다(`login` 이거나 셸의 절대 경로).
-    async fn open(
-        &self,
-        shell: &str,
-        cols: u16,
-        rows: u16,
-        hint: Option<&str>,
-    ) -> Result<String, String>;
+    async fn open(&self, request: &ShellRequest, cols: u16, rows: u16) -> Result<String, String>;
     async fn write(&self, session_id: &str, data: &[u8]) -> Result<(), String>;
     async fn resize(&self, session_id: &str, cols: u16, rows: u16) -> Result<(), String>;
     async fn detach(&self, session_id: &str) -> Result<(), String>;
@@ -581,8 +585,7 @@ struct Envelope {
 enum SurfaceCommand {
     Open {
         image: Option<String>,
-        /// 터미널 설정 shell 의 값. `login` 이거나 셸의 절대 경로다.
-        shell: String,
+        request: ShellRequest,
     },
     Reconnect,
     Configure(ImageConfiguration),
@@ -1239,12 +1242,11 @@ async fn send_engine_events(
                     return false;
                 }
             }
-            EngineEvent::Directory { uri } => {
+            EngineEvent::Directory { uri, path } => {
                 if !emit_surface_events {
                     continue;
                 }
-                let response =
-                    json!({"surface": surface_id, "body": {"event": "directory", "uri": uri}});
+                let response = json!({"surface": surface_id, "body": {"event": "directory", "uri": uri, "path": path}});
                 if output_tx.send(response.to_string()).await.is_err() {
                     return false;
                 }
@@ -1384,7 +1386,7 @@ fn inline_dimension(dimension: &Dimension) -> Value {
 }
 
 async fn open_headless(
-    shell: &str,
+    shell: &ShellRequest,
     session_id: &mut Option<String>,
     engine: &mut Box<dyn Engine>,
     session_port: &Arc<dyn SessionPort>,
@@ -1394,7 +1396,7 @@ async fn open_headless(
         return true;
     }
     engine.resize(80, 24);
-    match session_port.open(shell, 80, 24, None).await {
+    match session_port.open(shell, 80, 24).await {
         Ok(id) => {
             *session_id = Some(id);
             true
@@ -1411,7 +1413,7 @@ async fn open_if_configured(
     surface_id: &str,
     requested: bool,
     requested_image: &Option<String>,
-    shell: &str,
+    shell: &ShellRequest,
     session_id: &mut Option<String>,
     engine: &mut Box<dyn Engine>,
     image_state: &mut Option<ImageState>,
@@ -1446,7 +1448,7 @@ async fn open_if_configured(
         let response = json!({"surface": surface_id, "body": {"error": "invalid renderer metrics", "reason": error}});
         return output_tx.send(response.to_string()).await.is_ok();
     }
-    match session_port.open(shell, cols, rows, None).await {
+    match session_port.open(shell, cols, rows).await {
         Ok(sid) => {
             *session_id = Some(sid.clone());
             if !send_state(surface_id, &sid, cols, rows, state, output_tx).await {
@@ -1518,7 +1520,7 @@ async fn surface_task(
     let mut multipart: Option<MultipartAssembly> = None;
     let mut open_requested = false;
     let mut requested_image: Option<String> = None;
-    let mut requested_shell = String::new();
+    let mut requested_shell = ShellRequest::default();
     let mut headless = false;
     let mut pending_configuration: Option<ImageConfiguration> = None;
     let mut focused = false;
@@ -1564,10 +1566,10 @@ async fn surface_task(
             }
             Some(cmd) = cmd_rx.recv() => {
                 match cmd {
-                    SurfaceCommand::Open { image, shell } => {
+                    SurfaceCommand::Open { image, request } => {
                         open_requested = true;
                         requested_image = image;
-                        requested_shell = shell;
+                        requested_shell = request;
                         headless = requested_image.is_none();
                         if headless && !open_headless(&requested_shell, &mut session_id, &mut engine, &session_port, &output_tx).await { return; }
                         if !open_if_configured(&surface_id, open_requested, &requested_image, &requested_shell, &mut session_id,
@@ -2723,9 +2725,27 @@ where
                                     }
                                     continue;
                                 };
-                                let shell = shell.to_string();
+                                let directory = match body.get("directory") {
+                                    None => None,
+                                    Some(Value::String(directory))
+                                        if directory.starts_with('/') =>
+                                    {
+                                        Some(directory.clone())
+                                    }
+                                    Some(_) => {
+                                        let response = json!({"surface": surface_id, "body": {"error": "invalidParams", "reason": "open directory must be an absolute path"}});
+                                        if output_tx.send(response.to_string()).await.is_err() {
+                                            break;
+                                        }
+                                        continue;
+                                    }
+                                };
+                                let request = ShellRequest {
+                                    shell: shell.to_string(),
+                                    directory,
+                                };
                                 if tx
-                                    .send(SurfaceCommand::Open { image, shell })
+                                    .send(SurfaceCommand::Open { image, request })
                                     .await
                                     .is_err()
                                 {
@@ -3446,19 +3466,18 @@ impl LocalSessionPort {
 
 #[async_trait]
 impl SessionPort for LocalSessionPort {
-    async fn open(
-        &self,
-        shell: &str,
-        cols: u16,
-        rows: u16,
-        _hint: Option<&str>,
-    ) -> Result<String, String> {
+    async fn open(&self, request: &ShellRequest, cols: u16, rows: u16) -> Result<String, String> {
         let service = Arc::clone(&self.service);
         let owner = self.owner.clone();
-        let shell = crate::pty::resolve_shell(shell)?;
+        let shell = crate::pty::resolve_shell(&request.shell)?;
+        let directory = request
+            .directory
+            .as_deref()
+            .map(crate::pty::resolve_directory)
+            .transpose()?;
         let events = self.events_tx.clone();
         let (session_id, attachment_id) = tokio::task::spawn_blocking(move || {
-            service.open_shell(&owner, &shell, None, cols, rows, events)
+            service.open_shell(&owner, &shell, directory.as_deref(), cols, rows, events)
         })
         .await
         .map_err(|error| format!("open PTY task failed: {error}"))??;
@@ -3554,16 +3573,10 @@ impl FakeSessionPort {
 
 #[async_trait]
 impl SessionPort for FakeSessionPort {
-    async fn open(
-        &self,
-        program: &str,
-        _cols: u16,
-        _rows: u16,
-        _hint: Option<&str>,
-    ) -> Result<String, String> {
+    async fn open(&self, request: &ShellRequest, _cols: u16, _rows: u16) -> Result<String, String> {
         let mut calls = self.calls.lock().await;
         let session_id = format!("session-{}", calls.opens.len());
-        calls.opens.push(program.to_string());
+        calls.opens.push(request.shell.clone());
         Ok(session_id)
     }
 

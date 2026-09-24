@@ -64,7 +64,7 @@ The unsupported rows are an explicit scope result, not successful no-ops. The en
 
 The selected vendor scope is explicit and separate from the standard OSC inventory:
 
-- OSC 7 emits a directory URI event owned by the current surface. An empty URI is rejected.
+- OSC 7 emits a directory event owned by the current surface with the URI and its local `path` ([terminal runtime](terminal-runtime.md)). An empty URI, another scheme, and an undecodable path are rejected.
 - OSC 8 parses `id=` parameters and emits a typed hyperlink open/close event. Unsupported or duplicate parameters are rejected; an empty URI closes the current link.
 - OSC 9 emits a notification event. Empty notifications are rejected and the payload is never executed.
 - OSC 133 emits one of four typed shell markers (`prompt.start`, `prompt.end`, `command.start`, `command.finished`) with string parameters, and sets the engine shell state that the [terminal runtime](terminal-runtime.md) uses on resize. Unknown markers and `redraw` values other than `0`, `1`, and `last` are rejected.
