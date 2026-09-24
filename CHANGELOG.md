@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-6-1: the default native suite runs `appearance_test`.
 - V5-26: the shell sidecar treats a process group whose shell has ended or is exiting as terminated when macOS answers `EPERM`. New target `make go-repeat`.
 - V5-6-3: a window check distinguishes each cursor shape and the focused and unfocused cursor in captured pixels; unfocused solid, underline, and beam cursors, which were drawn hollow, now draw their shape, and `terminal.cursor` follows the sidecar's answer.
 - V5-29-1: closing a PTY session also treats a process group whose shell is still exiting, waiting for unread terminal output to drain, as closed.

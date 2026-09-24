@@ -52,7 +52,7 @@ $(BUILD):
 $(BUILD)/%_test: tests/%_test.m tests/support/no_activation.m $(LIBRARY) $(wildcard src/*.h src/private/*.h)
 	@clang $(CFLAGS) -I$(CURDIR)/src $< tests/support/no_activation.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
 
-test: $(BUILD)/window_motion_test $(BUILD)/input_inject_test $(BUILD)/window_facts_test $(BUILD)/window_controls_test $(BUILD)/surface_layout_test $(BUILD)/webview_focus_test $(BUILD)/webview_geometry_test $(BUILD)/document_view_test $(BUILD)/image_region_test $(BUILD)/ui_queue_test $(BUILD)/surface_host_test $(BUILD)/clipboard_test $(BUILD)/capture_test $(BUILD)/dock_menu_test
+test: $(BUILD)/window_motion_test $(BUILD)/input_inject_test $(BUILD)/window_facts_test $(BUILD)/window_controls_test $(BUILD)/surface_layout_test $(BUILD)/webview_focus_test $(BUILD)/webview_geometry_test $(BUILD)/document_view_test $(BUILD)/image_region_test $(BUILD)/ui_queue_test $(BUILD)/surface_host_test $(BUILD)/clipboard_test $(BUILD)/capture_test $(BUILD)/dock_menu_test $(BUILD)/appearance_test
 	@$(BUILD)/surface_host_test
 	@$(BUILD)/ui_queue_test
 	@$(BUILD)/window_motion_test
@@ -67,6 +67,7 @@ test: $(BUILD)/window_motion_test $(BUILD)/input_inject_test $(BUILD)/window_fac
 	@$(BUILD)/clipboard_test
 	@$(BUILD)/capture_test
 	@$(BUILD)/dock_menu_test
+	@$(BUILD)/appearance_test
 
 test-activation: $(BUILD)/input_activate_test $(BUILD)/webview_input_test $(BUILD)/webview_inspector_test $(BUILD)/window_fullscreen_test $(BUILD)/document_view_test $(BUILD)/image_region_ime_test
 	@$(BUILD)/input_activate_test
