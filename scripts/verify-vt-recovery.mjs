@@ -26,21 +26,34 @@ const withTimeout = async (promise, label) => {
   }
 };
 
-const waitForFile = async (path, service) => {
-  const started = performance.now();
-  while (performance.now() - started < STEP_TIMEOUT_MS) {
-    try {
-      return await readFile(path, "utf8");
-    } catch (error) {
-      if (error.code !== "ENOENT") throw error;
-      await new Promise((resolve) => setTimeout(resolve, 20));
-    }
-  }
+// 서비스는 기본 글꼴을 읽은 뒤 엔드포인트를 게시하고 준비 줄을 쓴다. 호스트처럼 준비 줄을 기다린다. 첫 CoreText
+// 호출은 몇 초 걸릴 수 있으므로 한도는 멈춤만 막는다(docs/spec/terminal-runtime.md).
+const READY_GUARD_MS = 60000;
+
+const readyLine = (service) => new Promise((resolve, reject) => {
+  let buffered = "";
+  const finish = (error, value) => {
+    clearTimeout(timer);
+    service.stdout.off("data", onData);
+    service.off("exit", onExit);
+    if (error) reject(error);
+    else resolve(value);
+  };
+  const onData = (chunk) => {
+    buffered += chunk;
+    const newline = buffered.indexOf("\n");
+    if (newline >= 0) finish(null, buffered.slice(0, newline));
+  };
+  const onExit = (code, signal) => finish(new Error(`service ${service.pid} exited before its ready line ` +
+    `(exit ${code ?? "none"}, signal ${signal ?? "none"}, stdout ${JSON.stringify(buffered)})`));
   // 실패를 해석하도록 서비스가 살아 있는지와 부하를 적는다. 서비스 stderr 는 호출자가 붙인다.
-  fail(`endpoint file ${path} timed out after ${STEP_TIMEOUT_MS}ms (service pid ${service.pid}, ` +
-    `exit ${service.exitCode ?? "none"}, signal ${service.signalCode ?? "none"}, ` +
-    `load average ${loadavg().map((value) => value.toFixed(1)).join(" ")})`);
-};
+  const timer = setTimeout(() => finish(new Error(`service ${service.pid} wrote no ready line within ${READY_GUARD_MS}ms ` +
+    `(exit ${service.exitCode ?? "none"}, signal ${service.signalCode ?? "none"}, stdout ${JSON.stringify(buffered)}, ` +
+    `load average ${loadavg().map((value) => value.toFixed(1)).join(" ")})`)), READY_GUARD_MS);
+  service.stdout.setEncoding("utf8");
+  service.stdout.on("data", onData);
+  service.once("exit", onExit);
+});
 
 const lineClient = async (endpoint, clientName) => {
   const socket = net.createConnection(endpoint.socket);
@@ -233,8 +246,13 @@ const main = async () => {
 
   const endpointPath = join(serviceDirectory, "endpoint.json");
   try {
-    const endpoint = JSON.parse(await waitForFile(endpointPath, service));
+    const ready = await readyLine(service);
     console.log(`PASS service_endpoint_ms=${Math.round(performance.now() - started)}`);
+    const endpoint = JSON.parse(ready);
+    const published = await readFile(endpointPath, "utf8");
+    if (JSON.stringify(JSON.parse(published)) !== JSON.stringify(endpoint)) {
+      fail(`endpoint.json ${published.trim()} differs from the ready line ${ready}`);
+    }
     if (endpoint.protocol !== 1 || !endpoint.socket || !endpoint.token || endpoint.pid !== service.pid) {
       fail(`invalid endpoint: ${JSON.stringify(endpoint)}`);
     }
