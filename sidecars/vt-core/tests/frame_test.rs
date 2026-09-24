@@ -769,3 +769,45 @@ fn drawing_an_unfocused_screen_keeps_its_cursor_shape() {
     );
     assert!(bottom[0] > 100 || bottom[1] > 100 || bottom[2] > 100);
 }
+
+/// 넓은 글자의 폭이 두 칸보다 좁으면(예: Menlo 아래의 대체 한글 글꼴) 두 칸 안에서 가로 가운데에 둔다.
+#[test]
+fn a_wide_glyph_narrower_than_two_cells_is_centred_in_them() {
+    use soksak_sidecar_vt_core::platform::darwin::frame::{metrics_for, resolve_font_list};
+    let font = resolve_font_list("Menlo").expect("Menlo").font;
+    let metrics = metrics_for(&font, 13.0, 1.0).expect("Menlo metrics");
+    let cell = metrics.cell_width as u32;
+    let height = metrics.cell_height as u32;
+    let mut state = screen(4, 1);
+    state.lines[0][0].ch = Some("한".to_string());
+    state.lines[0][0].width = 2;
+    state.lines[0][1].width = 0;
+    let frame = Frame::new(cell * 4, height).expect("frame");
+    frame
+        .draw_with_cursor(
+            &state,
+            &metrics,
+            CursorRender {
+                visible: false,
+                ..CursorRender::default()
+            },
+        )
+        .expect("wide glyph");
+    let inked: Vec<u32> = (0..cell * 2)
+        .filter(|&x| {
+            (0..height).any(|y| {
+                frame
+                    .read_pixel(x, y)
+                    .map(|pixel| pixel[0] > 100 || pixel[1] > 100 || pixel[2] > 100)
+                    .unwrap_or(false)
+            })
+        })
+        .collect();
+    let (first, last) = (*inked.first().expect("ink"), *inked.last().expect("ink"));
+    let left = first as f64;
+    let right = (cell * 2 - 1 - last) as f64;
+    assert!(
+        (left - right).abs() <= 2.0,
+        "the wide glyph is not centred in its two cells: {left} px left and {right} px right of its ink, cells {cell} px"
+    );
+}

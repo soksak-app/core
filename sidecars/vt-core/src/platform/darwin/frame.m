@@ -241,7 +241,15 @@ int frame_draw_with_inline_images(Frame *frame, Screen *screen, Metrics *metrics
                 if (attr_str) {
                     CTLineRef line = CTLineCreateWithAttributedString(attr_str);
                     if (line) {
-                        CGContextSetTextPosition(ctx, x, y + descent);
+                        // 넓은 글자의 폭이 두 칸보다 좁으면(대체 글꼴의 한글 등) 두 칸 안에서 가로 가운데에 둔다.
+                        // 글자 크기는 바꾸지 않는다. 두 칸보다 넓은 글자는 칸의 시작에 둔다.
+                        CGFloat offset = 0;
+                        if (cell->width == 2) {
+                            CGFloat advance = CTLineGetTypographicBounds(line, NULL, NULL, NULL);
+                            CGFloat span = metrics->cell_width * 2;
+                            if (advance < span) offset = (span - advance) / 2;
+                        }
+                        CGContextSetTextPosition(ctx, x + offset, y + descent);
                         CTLineDraw(line, ctx);
                         CFRelease(line);
                     }

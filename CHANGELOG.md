@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F8-13: a wide glyph narrower than its two cells is centred in them; frame and window checks measure the ink margins.
 - V5-6-6: the terminal protocol inventory check compares the OSC report in the specification with the engine inventory selector by selector and requires each named test to exist.
 - F8-6-3: the drag delay check passes within the full default run on both hosts at a load average below 10.
 - V5-33: a surface that leaves the layout during its mount reads the text size factor it was mounted with instead of failing, so later commands no longer fail with `surface … is not in the layout`.
