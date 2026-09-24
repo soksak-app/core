@@ -343,16 +343,31 @@ int main(void) { @autoreleasepool {
         void *region8 = sp_region_create(surface, "test8", testEvent, NULL);
         sp_region_place(region8, 10, 10, 10, 10, true);
         sp_region_focus(region8);
-        NSView<NSTextInputClient> *regionView = (NSView<NSTextInputClient> *)region8;
-        // 입력 클라이언트는 자기 입력 문서를 가진 일반 뷰다. NSTextView 의 텍스트 편집을 상속하지 않는다.
-        check(window.firstResponder == (NSResponder *)regionView && [regionView conformsToProtocol:@protocol(NSTextInputClient)]
-            && ![regionView isKindOfClass:NSText.class],
-            @"TEST 8: the image input responder is a text input client that inherits no text view");
-        NSUInteger (^documentLength)(void) = ^NSUInteger {
-            NSRange actual = NSMakeRange(NSNotFound, 0);
-            [regionView attributedSubstringForProposedRange:NSMakeRange(0, NSIntegerMax) actualRange:&actual];
-            return actual.length;
-        };
+        NSTextView *regionView = (NSTextView *)region8;
+        check([window.firstResponder isKindOfClass:NSTextView.class],
+            @"TEST 8: image input responder delegates text-system state to NSTextView");
+        // F8-9: NSTextView 가 상속하는 편집은 모두 꺼져 있거나 입력에 영향이 없다.
+        check(!regionView.automaticQuoteSubstitutionEnabled && !regionView.automaticDashSubstitutionEnabled
+            && !regionView.automaticTextReplacementEnabled && !regionView.automaticSpellingCorrectionEnabled
+            && !regionView.automaticLinkDetectionEnabled && !regionView.automaticDataDetectionEnabled
+            && !regionView.automaticTextCompletionEnabled && !regionView.continuousSpellCheckingEnabled
+            && !regionView.grammarCheckingEnabled && !regionView.smartInsertDeleteEnabled
+            && regionView.enabledTextCheckingTypes == 0,
+            @"TEST 8: automatic substitution, replacement, spelling, grammar, detection, completion, and text checking are off");
+        check(!regionView.allowsUndo && !regionView.isRichText && !regionView.importsGraphics
+            && !regionView.usesFindBar && !regionView.usesFontPanel && !regionView.usesRuler,
+            @"TEST 8: undo, rich text, graphics, find, font panel, and ruler are off");
+        check([regionView validRequestorForSendType:NSPasteboardTypeString returnType:NSPasteboardTypeString] == nil
+            && [regionView validRequestorForSendType:NSPasteboardTypeString returnType:nil] == nil,
+            @"TEST 8: the Services menu cannot read or replace the input document");
+        check([regionView hitTest:NSMakePoint(1, 1)] == nil,
+            @"TEST 8: pointer, menu, and drag input never target the input client");
+        NSUInteger beforeSubstitution = [collectedEvents count];
+        [regionView insertText:@"\"a\" -- (c) teh" replacementRange:NSMakeRange(NSNotFound, 0)];
+        [window makeFirstResponder:nil];
+        check([[committedTexts(beforeSubstitution) componentsJoinedByString:@""] isEqual:@"\"a\" -- (c) teh"],
+            [NSString stringWithFormat:@"TEST 8: inserted text is committed without substitution or correction (got %@)", committedTexts(beforeSubstitution)]);
+        sp_region_focus(region8);
 
         [collectedEvents removeAllObjects];
         [(id<NSTextInputClient>)regionView setMarkedText:@"한" selectedRange:NSMakeRange(1, 0) replacementRange:NSMakeRange(NSNotFound, 0)];
@@ -365,7 +380,7 @@ int main(void) { @autoreleasepool {
         [(id<NSTextInputClient>)regionView insertText:@"한글" replacementRange:NSMakeRange(NSNotFound, 0)];
         [window makeFirstResponder:nil];
         check([committedTexts(0) isEqualToArray:@[@"한글"]] && [lastPreedit(0) isEqual:@""]
-            && documentLength() == 0,
+            && regionView.textStorage.length == 0,
             [NSString stringWithFormat:@"TEST 8: inserted text is committed exactly once by the focus change (got %@)", collectedEvents]);
 
         // An input method edits its previous insert through a replacement range: ㅎ → 하 → 한.
@@ -393,7 +408,7 @@ int main(void) { @autoreleasepool {
             // (Space or a digit) is committed with the syllable at once; a new jamo stays preedit.
             if ([regionView.inputContext.selectedKeyboardInputSource hasPrefix:@"com.apple.inputmethod.Korean."]) {
                 NSUInteger beforeSpace = [collectedEvents count];
-                NSUInteger base = documentLength();
+                NSUInteger base = regionView.textStorage.length;
                 inputMethod(@"ㅎ", NSMakeRange(NSNotFound, 0));
                 inputMethod(@"하", NSMakeRange(base, 1));
                 inputMethod(@"한", NSMakeRange(base, 1));
@@ -431,7 +446,7 @@ int main(void) { @autoreleasepool {
         [window makeFirstResponder:nil];
         // NSTextInputClient 계약에서 unmarkText 는 marked text 를 일반 입력으로 받아들인다.
         check([committedTexts(beforeUnmark) isEqualToArray:@[@"한글"]] && [lastPreedit(beforeUnmark) isEqual:@""]
-            && !regionView.hasMarkedText && documentLength() == 0,
+            && !regionView.hasMarkedText && regionView.textStorage.length == 0,
             [NSString stringWithFormat:@"TEST 8: unmarkText commits the marked text exactly once (got %@)", collectedEvents]);
         NSUInteger afterUnmark = [collectedEvents count];
         [regionView unmarkText];
