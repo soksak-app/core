@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F8-6-3: the drag delay check passes within the full default run on both hosts at a load average below 10.
 - V5-33: a surface that leaves the layout during its mount reads the text size factor it was mounted with instead of failing, so later commands no longer fail with `surface … is not in the layout`.
 - V5-22: the host parity check compares the settled layout at the end of the drag, recorded apart from the settings modal it opens afterwards.
 - F8-19: measured the first-terminal cost of a new terminal service on both hosts and stated in the specification that the default font load before the endpoint is accepted.
