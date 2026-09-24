@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F8-9: the input client of the terminal image region is a plain `NSView` with its own input document instead of an `NSTextView`, so it inherits no text editing that the terminal does not declare. The simpler client was chosen after both produced `ddd한글 ` on the same Korean sequence, and the activation-tier Korean and Japanese checks pass on both hosts.
 - F8-7: the activation-tier window check `marked-text.test.mjs` verifies that marked text of the Japanese input method (`日本`) is written to the PTY exactly once on both hosts when the composition ends.
 - V5-4: every native test links a shared exit hook, so a test that has not declared activation fails when its process is active at exit. The activation that the hook found in `webview_geometry_test` (an event pump that also dispatched the OS activation event) is corrected.
 - V5-10: both Rust workspaces are formatted with `rustfmt`, and `make rust-format-check`, which `make native-test` runs, fails on unformatted Rust code. The terminal protocol inventory check now reads the formatted CSI rows.

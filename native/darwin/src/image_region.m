@@ -24,7 +24,13 @@
 @end
 
 // 그림 영역 구현.
-@interface SPImageRegion : NSTextView
+// 그림 영역은 입력기의 텍스트 입력 클라이언트다. 입력기가 교체 범위로 고쳐 쓰는 문자열을 담는 입력
+// 문서를 스스로 가진다. NSTextView 를 쓰지 않으므로 자동 치환, 맞춤법 교정, 서비스, 실행 취소 같은
+// 터미널이 선언하지 않은 텍스트 편집을 상속하지 않는다.
+@interface SPImageRegion : NSView <NSTextInputClient>
+@property(retain) NSMutableString *document;    // 입력기가 넣은 문자열. 조합 중인 marked text 를 포함한다.
+@property NSRange markedDocumentRange;          // 문서 안의 marked text. 없으면 location 이 NSNotFound 다.
+@property NSRange selectedDocumentRange;        // 문서 안의 선택. 입력 위치다.
 @property sp_region_event event;
 @property void *context;
 @property(retain) CALayer *imageLayer;
@@ -119,37 +125,12 @@ static BOOL containsHangul(NSString *text) {
 - (id)initWithFrame:(NSRect)frame {
     self = [super initWithFrame:frame];
     if (!self) return nil;
-    self.drawsBackground = NO;
-    self.textColor = NSColor.clearColor;
-    self.insertionPointColor = NSColor.clearColor;
-    self.textContainerInset = NSZeroSize;
-    self.markedTextAttributes = @{
-        NSForegroundColorAttributeName: NSColor.clearColor,
-        NSBackgroundColorAttributeName: NSColor.clearColor,
-        NSUnderlineStyleAttributeName: @0,
-    };
-    self.selectedTextAttributes = @{
-        NSForegroundColorAttributeName: NSColor.clearColor,
-        NSBackgroundColorAttributeName: NSColor.clearColor,
-    };
-    self.richText = NO;
-    self.allowsUndo = NO;
-    // 입력기가 넣은 문자열만 문서에 둔다. AppKit 의 자동 편집은 터미널 입력을 바꾸므로 끈다.
-    self.automaticQuoteSubstitutionEnabled = NO;
-    self.automaticDashSubstitutionEnabled = NO;
-    self.automaticTextReplacementEnabled = NO;
-    self.automaticSpellingCorrectionEnabled = NO;
-    self.automaticLinkDetectionEnabled = NO;
-    self.automaticDataDetectionEnabled = NO;
-    self.automaticTextCompletionEnabled = NO;
-    self.continuousSpellCheckingEnabled = NO;
-    self.grammarCheckingEnabled = NO;
-    self.smartInsertDeleteEnabled = NO;
+    self.document = [NSMutableString string];
+    self.markedDocumentRange = NSMakeRange(NSNotFound, 0);
+    self.selectedDocumentRange = NSMakeRange(0, 0);
     self.reportedPreedit = @"";
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(inputSourceChanged:)
         name:NSTextInputContextKeyboardSelectionDidChangeNotification object:nil];
-    self.editable = YES;
-    self.selectable = YES;
     self.wantsLayer = YES;
     self.layerUsesCoreImageFilters = YES;
     self.imageLayer = [[[CALayer alloc] init] autorelease];
@@ -165,6 +146,7 @@ static BOOL containsHangul(NSString *text) {
 
 - (void)dealloc {
     [NSNotificationCenter.defaultCenter removeObserver:self];
+    [_document release];
     [_reportedPreedit release];
     [_unhandledKey release];
     // 레이어의 contents 를 정리한 후 불변 스냅샷을 해제한다.
@@ -321,16 +303,16 @@ static BOOL containsHangul(NSString *text) {
         return;
     }
 
-    // NSTextView 가 AppKit 입력기 이벤트와 조합 상태의 수명주기를 소유한다.
+    // 입력기가 marked text 를 가진 동안은 입력기가 키와 조합 상태의 수명주기를 소유한다.
     if ([self hasMarkedText]) {
-        [super keyDown:event];
+        [self handleInputEvent:event];
         return;
     }
 
     // 특수 키 또는 Ctrl/Option 조합인지 확인한다.
     NSString *characters = event.charactersIgnoringModifiers;
     if (characters.length == 0) {
-        [super keyDown:event];
+        [self handleInputEvent:event];
         return;
     }
 
@@ -441,9 +423,9 @@ static BOOL containsHangul(NSString *text) {
         // 입력기가 아직 고칠 수 있는 문자열이 있으면 특수 키를 먼저 입력기에 준다(예: 조합 중 Backspace 는
         // 한 → 하). 입력기가 키를 처리하지 않으면 AppKit 이 그 키의 명령을 요청하며, 그때 남은 문자열을
         // 확정하고 원래 키를 보고한다(doCommandBySelector:).
-        if (isSpecialKey && !hasCtrlOrOption && self.textStorage.length > self.committedLength) {
+        if (isSpecialKey && !hasCtrlOrOption && self.document.length > self.committedLength) {
             self.unhandledKey = json;
-            [super keyDown:event];
+            [self handleInputEvent:event];
             self.unhandledKey = nil;
             return;
         }
@@ -453,7 +435,12 @@ static BOOL containsHangul(NSString *text) {
     }
 
     // 일반 문자는 입력기로 넘긴다.
-    [super keyDown:event];
+    [self handleInputEvent:event];
+}
+
+// 키를 입력 컨텍스트(입력기와 키 바인딩)에 준다. 입력 컨텍스트가 처리하지 않은 키는 응답 사슬에 넘긴다.
+- (void)handleInputEvent:(NSEvent *)event {
+    if (![self.inputContext handleEvent:event]) [super keyDown:event];
 }
 
 - (void)doCommandBySelector:(SEL)selector {
@@ -493,29 +480,68 @@ static BOOL containsHangul(NSString *text) {
         NSData *data = [NSJSONSerialization dataWithJSONObject:@{ @"type": @"error", @"reason": reason } options:0 error:NULL];
         [self report:[[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease].UTF8String];
     }
-    [super insertText:string replacementRange:range];
+    [self replaceDocumentRange:range withText:text marked:NO selectedRange:NSMakeRange(text.length, 0)];
     if (self.hasMarkedText) {
         [self reportPreedit];
         return;
     }
     if (![self selectedSourceComposes]) {
-        [self commitThrough:self.textStorage.length];
+        [self commitThrough:self.document.length];
         [self clearDocument];
         return;
     }
     NSUInteger end = self.selectedRange.location;
     NSUInteger start = end >= text.length ? end - text.length : 0;
     if (start > self.committedLength) [self commitThrough:start];
-    if ([self selectedSourceComposesOnlyHangul] && !containsHangul([self.textStorage.string substringFromIndex:self.committedLength])) {
-        [self commitThrough:self.textStorage.length];
+    if ([self selectedSourceComposesOnlyHangul] && !containsHangul([self.document substringFromIndex:self.committedLength])) {
+        [self commitThrough:self.document.length];
     }
     [self reportPreedit];
 }
 
 - (void)setMarkedText:(id)string selectedRange:(NSRange)selectedRange replacementRange:(NSRange)replacementRange {
     if (![string isKindOfClass:NSAttributedString.class] && ![string isKindOfClass:NSString.class]) return;
-    [super setMarkedText:string selectedRange:selectedRange replacementRange:replacementRange];
+    NSString *text = [string isKindOfClass:NSAttributedString.class] ? [(NSAttributedString *)string string] : string;
+    [self replaceDocumentRange:replacementRange withText:text marked:YES selectedRange:selectedRange];
     [self reportPreedit];
+}
+
+// 입력기의 교체를 문서에 적용한다. 교체 범위가 없으면 marked text, 그것도 없으면 선택을 교체한다.
+// 선택은 넣은 문자열 안의 selected 위치가 된다. marked 이면 넣은 문자열이 새 marked text 다.
+- (void)replaceDocumentRange:(NSRange)range withText:(NSString *)text marked:(BOOL)marked selectedRange:(NSRange)selected {
+    NSRange target = range.location != NSNotFound ? range
+        : (self.markedDocumentRange.location != NSNotFound ? self.markedDocumentRange : self.selectedDocumentRange);
+    target = [self documentRange:target];
+    [self.document replaceCharactersInRange:target withString:text];
+    self.markedDocumentRange = marked && text.length > 0 ? NSMakeRange(target.location, text.length) : NSMakeRange(NSNotFound, 0);
+    self.selectedDocumentRange = NSMakeRange(target.location + MIN(selected.location, text.length), selected.length);
+}
+
+// 범위를 문서 안으로 줄인다. 문서 끝의 빈 범위는 그 위치를 유지한다(NSIntersectionRange 는 {0, 0} 을 준다).
+- (NSRange)documentRange:(NSRange)range {
+    NSUInteger length = self.document.length;
+    NSUInteger location = MIN(range.location, length);
+    return NSMakeRange(location, MIN(range.length, length - location));
+}
+
+// marked text 를 문서의 일반 문자열로 확정한다. 조합 문자열을 비운 뒤 같은 문자열을 넣는다.
+- (void)unmarkText {
+    if (!self.hasMarkedText) return;
+    NSRange marked = self.markedDocumentRange;
+    NSString *text = [self.document substringWithRange:marked];
+    [self setMarkedText:@"" selectedRange:NSMakeRange(0, 0) replacementRange:marked];
+    [self insertText:text replacementRange:NSMakeRange(NSNotFound, 0)];
+}
+
+- (BOOL)hasMarkedText { return self.markedDocumentRange.location != NSNotFound; }
+- (NSRange)markedRange { return self.markedDocumentRange; }
+- (NSRange)selectedRange { return self.selectedDocumentRange; }
+- (NSArray<NSAttributedStringKey> *)validAttributesForMarkedText { return @[]; }
+
+- (NSAttributedString *)attributedSubstringForProposedRange:(NSRange)range actualRange:(NSRangePointer)actualRange {
+    NSRange clipped = [self documentRange:range];
+    if (actualRange) *actualRange = clipped;
+    return [[[NSAttributedString alloc] initWithString:[self.document substringWithRange:clipped]] autorelease];
 }
 
 // 선택된 입력 소스가 입력기인지 확인한다. 자판(keyboard layout)은 넣은 문자열을 고쳐 쓰지 않는다.
@@ -542,7 +568,7 @@ static BOOL containsHangul(NSString *text) {
 // 문서의 확정 위치부터 end 까지를 확정 입력으로 보고한다. 문서는 바꾸지 않는다.
 - (void)commitThrough:(NSUInteger)end {
     if (end <= self.committedLength) return;
-    NSString *committed = [self.textStorage.string substringWithRange:
+    NSString *committed = [self.document substringWithRange:
         NSMakeRange(self.committedLength, end - self.committedLength)];
     self.committedLength = end;
     NSString *json = [NSString stringWithFormat:@"{\"type\":\"insert\",\"text\":\"%@\",\"replacementRange\":null,\"attributed\":false}",
@@ -552,7 +578,7 @@ static BOOL containsHangul(NSString *text) {
 
 // 확정 위치 뒤, 입력기가 아직 고칠 수 있는 문자열을 조합 문자열로 보고한다. 바뀐 경우에만 보고한다.
 - (void)reportPreedit {
-    NSString *storage = self.textStorage.string;
+    NSString *storage = self.document;
     NSString *preedit = self.committedLength <= storage.length ? [storage substringFromIndex:self.committedLength] : @"";
     if ([preedit isEqualToString:self.reportedPreedit]) return;
     self.reportedPreedit = preedit;
@@ -565,7 +591,9 @@ static BOOL containsHangul(NSString *text) {
 }
 
 - (void)clearDocument {
-    [self.textStorage deleteCharactersInRange:NSMakeRange(0, self.textStorage.length)];
+    [self.document setString:@""];
+    self.markedDocumentRange = NSMakeRange(NSNotFound, 0);
+    self.selectedDocumentRange = NSMakeRange(0, 0);
     self.committedLength = 0;
     [self reportPreedit];
 }
@@ -573,8 +601,8 @@ static BOOL containsHangul(NSString *text) {
 // 명령·특수 키·포커스 해제·입력 소스 전환·닫기 전에 남은 문자열을 확정하고 입력기의 조합을 끝낸다.
 // 입력기가 marked text 를 가진 동안은 입력기가 확정을 결정한다.
 - (void)commitPending {
-    if (self.hasMarkedText || self.textStorage.length == 0) return;
-    [self commitThrough:self.textStorage.length];
+    if (self.hasMarkedText || self.document.length == 0) return;
+    [self commitThrough:self.document.length];
     [self.inputContext discardMarkedText];
     [self clearDocument];
 }

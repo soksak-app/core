@@ -123,6 +123,54 @@ static NSString *currentSourceID(void) {
 - (void)dealloc { [_calls release]; [_marked release]; [_committed release]; [super dealloc]; }
 @end
 
+// 문서를 스스로 가진 일반 NSView 입력 클라이언트. NSTextView 없이 입력기의 교체 범위를 문서에 적용한다.
+// 그림 영역의 NSTextView 상위 클래스가 필요한지 같은 순서로 비교하는 대조군이다(F8-9).
+@interface SPDocumentClient : NSView <NSTextInputClient>
+@property(retain) NSMutableString *document;
+@property NSRange marked;
+@property NSRange selected;
+@end
+@implementation SPDocumentClient
+- (BOOL)acceptsFirstResponder { return YES; }
+- (void)keyDown:(NSEvent *)event { [self.inputContext handleEvent:event]; }
+- (NSRange)target:(NSRange)replacement {
+    if (replacement.location != NSNotFound) return replacement;
+    return self.marked.location != NSNotFound ? self.marked : self.selected;
+}
+- (void)insertText:(id)string replacementRange:(NSRange)replacement {
+    NSString *text = [string isKindOfClass:NSAttributedString.class] ? [string string] : string;
+    NSRange range = [self target:replacement];
+    [self.document replaceCharactersInRange:range withString:text];
+    self.marked = NSMakeRange(NSNotFound, 0);
+    self.selected = NSMakeRange(range.location + text.length, 0);
+}
+- (void)setMarkedText:(id)string selectedRange:(NSRange)selected replacementRange:(NSRange)replacement {
+    NSString *text = [string isKindOfClass:NSAttributedString.class] ? [string string] : string;
+    NSRange range = [self target:replacement];
+    [self.document replaceCharactersInRange:range withString:text];
+    self.marked = text.length ? NSMakeRange(range.location, text.length) : NSMakeRange(NSNotFound, 0);
+    self.selected = NSMakeRange(range.location + selected.location, selected.length);
+}
+- (void)unmarkText { self.marked = NSMakeRange(NSNotFound, 0); }
+- (BOOL)hasMarkedText { return self.marked.location != NSNotFound; }
+- (NSRange)markedRange { return self.marked; }
+- (NSRange)selectedRange { return self.selected; }
+- (NSArray<NSAttributedStringKey> *)validAttributesForMarkedText { return @[]; }
+- (NSAttributedString *)attributedSubstringForProposedRange:(NSRange)range actualRange:(NSRangePointer)actual {
+    NSRange clipped = NSIntersectionRange(range, NSMakeRange(0, self.document.length));
+    if (actual) *actual = clipped;
+    return [[[NSAttributedString alloc] initWithString:[self.document substringWithRange:clipped]] autorelease];
+}
+- (NSUInteger)characterIndexForPoint:(NSPoint)point { return NSNotFound; }
+- (NSRect)firstRectForCharacterRange:(NSRange)range actualRange:(NSRangePointer)actual {
+    return [self.window convertRectToScreen:[self convertRect:self.bounds toView:nil]];
+}
+- (void)doCommandBySelector:(SEL)selector {
+    if (selector == @selector(insertNewline:)) [self insertText:@"\n" replacementRange:NSMakeRange(NSNotFound, 0)];
+}
+- (void)dealloc { [_document release]; [super dealloc]; }
+@end
+
 static NSArray *valuesOfType(NSString *type, NSUInteger from) {
     NSMutableArray *values = [NSMutableArray array];
     for (NSUInteger i = from; i < events.count; i++) {
@@ -265,6 +313,25 @@ int main(void) { @autoreleasepool {
     printf("MEASURE: minimal client committed %s, marked %s, calls %s\n", minimal.committed.UTF8String,
         minimal.marked.UTF8String, [minimal.calls componentsJoinedByString:@"; "].UTF8String);
     [minimal removeFromSuperview];
+
+    // 대조: 문서를 가진 일반 NSView 클라이언트가 같은 순서에서 텍스트 뷰와 같은 문서를 만드는지 본다.
+    SPDocumentClient *plain = [[[SPDocumentClient alloc] initWithFrame:NSMakeRect(300, 60, 150, 40)] autorelease];
+    plain.document = [NSMutableString string];
+    plain.marked = NSMakeRange(NSNotFound, 0);
+    plain.selected = NSMakeRange(0, 0);
+    [window.contentView addSubview:plain];
+    [window makeFirstResponder:plain];
+    pump(^BOOL { return NSTextInputContext.currentInputContext == plain.inputContext
+        && [plain.inputContext.selectedKeyboardInputSource isEqual:KOREAN_2SET]; });
+    __block NSUInteger plainEdits = 0;
+    __block NSString *plainSeen = @"";
+    typeDddHangul(window, plain.inputContext, ^NSUInteger {
+        if (![plain.document isEqual:plainSeen] || plain.hasMarkedText) { plainSeen = [[plain.document copy] autorelease]; plainEdits++; }
+        return plainEdits;
+    });
+    check([plain.document isEqual:@"ddd한글 "] && !plain.hasMarkedText,
+        [NSString stringWithFormat:@"plain NSView client with its own document: ddd한글 Space produces ddd한글 and a space (document %@)", plain.document]);
+    [plain removeFromSuperview];
     sp_region_focus(region);
     check(pump(^BOOL { return NSTextInputContext.currentInputContext == context; }),
         @"the region's input context is current again");
