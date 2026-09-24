@@ -916,6 +916,12 @@ async fn present_screen(
     state: &mut ImageState,
     output_tx: &OutputSink,
 ) -> bool {
+    // 호스트는 표시 요청의 래스터를 복사한 뒤 consumed 로 답한다. 답을 받기 전에 같은 래스터에 다시 그리면
+    // 복사 중인 픽셀을 덮어 글자가 빠진 프레임이 표시된다. 그 동안의 화면은 dirty 로 남겨 답을 받은 뒤 그린다.
+    if state.pending_draw {
+        state.dirty = true;
+        return true;
+    }
     if let Err(reason) = state.frame.draw_with_theme_and_inline_images(
         screen,
         &state.metrics,

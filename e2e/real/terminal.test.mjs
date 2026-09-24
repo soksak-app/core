@@ -331,8 +331,14 @@ for (const app of Object.values(APPS)) {
       const files = frames(directory);
       assert.ok(files.length > 10, `the recording has only ${files.length} frames`);
       // 글자 픽셀: 터미널 영역(스크롤바 열 제외) 안의 밝은 픽셀 수를 줄 간격마다 센다.
+      // 글자가 사라진 프레임을 해석하도록 영역 중앙과 영역 위 카드 머리의 색을 함께 적는다.
+      const samples = [];
       const counts = files.map((file) => {
         const frame = readFrame(file);
+        samples.push({
+          center: pixel(frame, Math.round((region.frame.x + region.frame.width / 2) * frame.scale), Math.round((region.frame.y + region.frame.height / 2) * frame.scale)).join(","),
+          above: pixel(frame, Math.round((region.frame.x + 20) * frame.scale), Math.round((region.frame.y - 12) * frame.scale)).join(","),
+        });
         let count = 0;
         const left = Math.round(region.frame.x * frame.scale), top = Math.round(region.frame.y * frame.scale);
         const right = Math.round((region.frame.x + region.frame.width - 12) * frame.scale);
@@ -344,7 +350,8 @@ for (const app of Object.values(APPS)) {
       });
       t.diagnostic(`${app.name}: text pixels per frame min ${Math.min(...counts)} max ${Math.max(...counts)} over ${counts.length} frames`);
       const first = counts[0];
-      const dropped = counts.map((count, index) => [index, count]).filter(([, count]) => count < first / 2);
+      const dropped = counts.map((count, index) => [index, count, samples[index], samples[index - 1] ?? null])
+        .filter(([, count]) => count < first / 2);
       assert.deepEqual(dropped, [], `frames lost most of their text while scrolling (first frame ${first} text pixels): ${JSON.stringify(dropped)}`);
     } finally {
       rmSync(directory, { recursive: true, force: true });

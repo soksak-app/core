@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-57: the terminal no longer redraws a raster the host is still copying, which showed frames without text while scrolling.
 - V5-58: the terminal scrollbar's track background, thumb color, width, and shape are plugin settings.
 - V5-56-1: DOM overlays are visible above native regions, and the terminal scrollbar is shown whenever the terminal retains history.
 - V5-56: a scrolled terminal shows a scrollbar above the native image, and dragging its thumb moves the viewport through the scrollback.

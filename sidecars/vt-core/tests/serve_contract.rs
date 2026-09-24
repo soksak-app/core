@@ -760,6 +760,24 @@ async fn a_viewport_request_moves_the_viewport_to_the_offset_without_writing() {
 }
 
 #[tokio::test]
+async fn a_scroll_does_not_draw_over_a_raster_the_host_has_not_consumed() {
+    // 호스트는 표시 요청의 래스터를 복사한 뒤 consumed 로 답한다. 그 전에 다시 그리면 복사 중인 래스터를 덮는다.
+    let (output, viewport, _) = serve_scroll(
+        None,
+        r#"{"surface":"s1","body":{"operation":"scroll","lines":3,"col":0,"row":0}}
+{"surface":"s1","body":{"operation":"viewport","offset":1}}
+"#,
+    )
+    .await;
+    assert_eq!(viewport.len(), 2, "{viewport:?}");
+    assert_eq!(
+        output.matches(r#""kind":"iosurface-global""#).count(),
+        1,
+        "a raster was drawn and presented again before the host consumed the previous one: {output}"
+    );
+}
+
+#[tokio::test]
 async fn an_invalid_scroll_is_rejected() {
     let (output, viewport, writes) = serve_scroll(
         None,
