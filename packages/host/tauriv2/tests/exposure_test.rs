@@ -145,6 +145,7 @@ fn host_entries_are_appended_as_registered() {
         [
             "host.dock.select",
             "host.hit",
+            "host.menu.select",
             "host.quit",
             "host.window.close",
             "host.window.fullscreen",
@@ -164,8 +165,13 @@ fn host_entries_are_appended_as_registered() {
         assert_eq!(entry["registered"], true);
         assert!(entry["description"].as_str().is_some_and(|d| !d.is_empty()));
     }
-    assert_eq!(listed["commands"][2]["name"], "host.quit");
-    assert_eq!(listed["commands"][2]["result"], json!({"type": "null"}));
+    let quit = listed["commands"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["name"] == "host.quit")
+        .unwrap();
+    assert_eq!(quit["result"], json!({"type": "null"}));
     assert!(exposure::with_host_entries(json!([])).is_err());
 }
 

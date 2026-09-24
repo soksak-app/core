@@ -9,7 +9,8 @@ import { registry, connectExposure, revisitRegistrations } from "./exposure.js";
 import { EXPOSURE_ERRORS, ExposureError } from "@soksak/plugin-api";
 import * as projects from "./projects.js";
 import {
-  activeTab, addTabTo, capture, cardActs, closeCard, closePicker, closeTabById, currentGrid, dragState, focusCard,
+  activeTab, addTabTo, capture, cardActs, cardTextSizes, changeTextSize, closeCard, closePicker, closeTabById,
+  currentGrid, currentTextScope, dragState, focusCard,
   focused, fresh, moveTab, onPicker, openCardMenu, openCardTabs, pickItem, pickerState, plane, railState, selectTab,
   settle, splitCard, tabsOf,
 } from "./plane.js";
@@ -23,6 +24,7 @@ import { latest, seated } from "./compositor.js";
 import { modalState, onModalState } from "./host.js";
 import { windows } from "@soksak/runtime";
 import { audit, onBinding } from "./commands.js";
+import { onTextScope } from "./text-size.js";
 
 /* 감시 중인 코어 status 의 수신자. */
 const watchers = new Set();
@@ -210,6 +212,8 @@ export async function installCoreExposure({ library, renames, resetLayout, chrom
   status("core.drag", dragState);
   status("core.rename", renames.state);
   status("core.focus", focusState);
+  status("core.text", () => ({ scope: currentTextScope(), frame: value("textSize"), cards: cardTextSizes() }));
+  onTextScope(() => coreChanged());
   status("core.chrome", chrome);
   status("core.rail", () => (currentGrid() ? railState() : null));
 
@@ -268,6 +272,9 @@ export async function installCoreExposure({ library, renames, resetLayout, chrom
   registry.command("core.layout.reset", () => { resetLayout(); });
 
   registry.command("core.card.focus", ({ card }) => { focusCard(card); });
+  registry.command("core.text.larger", async () => { await changeTextSize(1); });
+  registry.command("core.text.smaller", async () => { await changeTextSize(-1); });
+  registry.command("core.text.reset", async () => { await changeTextSize(0); });
   registry.command("core.card.menu", ({ card, menu }) => { openCardMenu(card, menu); });
   registry.command("core.card.tab-list", ({ card }) => { openCardTabs(card); });
   registry.command("core.card.add-tab", ({ card, plugin }) => ({ tab: addTabTo(card, plugin) }));

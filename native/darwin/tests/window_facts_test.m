@@ -62,6 +62,13 @@ int main(void) { @autoreleasepool {
             @{ @"title": @"Toggle Full Screen", @"key": @"ctrl+cmd+f" } ] }]],
         [NSString stringWithFormat:@"the application menu is reported with titles and keys: %@", menus]);
 
+    __block BOOL performed = NO;
+    NSMenuItem *zoomIn = [viewMenu itemWithTitle:@"Zoom In"];
+    zoomIn.target = [NSBlockOperation blockOperationWithBlock:^{ performed = YES; }];
+    zoomIn.action = @selector(main);
+    check(sp_menu_select("View", "Zoom In") && performed, @"a menu item is performed by its menu and title");
+    check(!sp_menu_select("View", "Missing") && !sp_menu_select("Missing", "Zoom In"), @"an unknown menu item is rejected");
+
     check(sp_window_move(window, 120, 80), @"move accepted");
     NSDictionary *facts = parse(sp_window_facts(window));
     CGFloat primary = NSMaxY(NSScreen.screens.firstObject.frame);

@@ -471,6 +471,12 @@ impl Platform for Darwin {
     fn menu_items(&self) -> Result<Value, String> {
         dock::menu()
     }
+    fn menu_select(&self, menu: &str, title: &str) -> Result<(), String> {
+        dock::menu_select(menu, title)
+    }
+    fn main_window(&self) -> Result<Handle, String> {
+        Ok(dock::main_window())
+    }
     fn dock_select(&self, title: &str) -> Result<(), String> {
         dock::select(title)
     }

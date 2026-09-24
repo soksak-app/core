@@ -103,6 +103,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 | status | `host.windows` | `windows.list` 결과. 창이 열리거나 닫힐 때와 창의 제목, 프로젝트, 키 상태, 페이지 준비 상태가 바뀔 때 바뀐다 |
 | status | `host.screens` | `[{x, y, width, height, scale, visible}]`: 화면 좌표의 디스플레이와 백킹 배율, 그리고 메뉴 막대와 Dock 을 뺀 영역 `visible`(최대화한 창의 프레임) |
 | status | `host.dock` | 애플리케이션 Dock 메뉴 항목 제목의 순서 목록 |
+| command | `host.menu.select` | 애플리케이션 메뉴 항목 `{menu, title}`을 실행한다. 제목이 `menu`인 하위 메뉴에서 제목이 `title`인 항목이다 |
 | status | `host.menu` | 애플리케이션 메뉴. 구분선을 뺀 하위 메뉴마다 `[{title, items: [{title, key}]}]`이며, `key`는 수정 키 `ctrl`, `opt`, `shift`, `cmd`를 이 순서로 `+`로 이은 뒤 키를 붙인 단축키이거나 빈 문자열이다 |
 | command | `host.window.close` | 창의 일반 닫기 동작으로 창을 닫는다 |
 | command | `host.window.move` | 창 프레임 원점을 화면 좌표 `{x, y}`로 옮긴다 |

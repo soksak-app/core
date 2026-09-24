@@ -345,6 +345,14 @@ pub fn menu_items() -> Result<Value, String> {
     missing("application menu")
 }
 
+pub fn menu_select(_menu: &str, _title: &str) -> Result<(), String> {
+    missing("application menu")
+}
+
+pub fn main_window() -> Result<Handle, String> {
+    missing("main window")
+}
+
 pub fn dock_select(_title: &str) -> Result<(), String> {
     missing("Dock menu")
 }

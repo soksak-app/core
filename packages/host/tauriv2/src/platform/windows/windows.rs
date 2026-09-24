@@ -364,6 +364,12 @@ impl Platform for Windows {
     fn menu_items(&self) -> Result<Value, String> {
         unsupported::menu_items()
     }
+    fn menu_select(&self, menu: &str, title: &str) -> Result<(), String> {
+        unsupported::menu_select(menu, title)
+    }
+    fn main_window(&self) -> Result<Handle, String> {
+        unsupported::main_window()
+    }
     fn dock_select(&self, title: &str) -> Result<(), String> {
         unsupported::dock_select(title)
     }

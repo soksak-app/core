@@ -1,6 +1,7 @@
 package host_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -21,8 +22,8 @@ func labels(menu *application.Menu) []string {
 	return out
 }
 
-// contract: menu.application.view-has-only-full-screen
-func TestApplicationMenuViewHasOnlyFullScreen(t *testing.T) {
+// contract: menu.application.view-has-full-screen-and-text-size
+func TestApplicationMenuViewHasFullScreenAndTextSize(t *testing.T) {
 	// 앱 메뉴의 About 항목은 애플리케이션 이름을 읽으므로 실행하지 않는 애플리케이션을 만든다.
 	application.New(application.Options{Name: "soksak-menu-test"})
 	menu := host.ApplicationMenu()
@@ -35,8 +36,16 @@ func TestApplicationMenuViewHasOnlyFullScreen(t *testing.T) {
 	if view == nil {
 		t.Fatalf("the application menu has no View menu: %v", labels(menu))
 	}
-	if got := labels(view); len(got) != 1 || got[0] != "Toggle Full Screen" {
-		t.Fatalf("View menu items = %v, want only Toggle Full Screen", got)
+	want := []string{"Toggle Full Screen", "글자 크게", "글자 작게", "글자 기본 크기"}
+	if got := labels(view); !slices.Equal(got, want) {
+		t.Fatalf("View menu items = %v, want %v", got, want)
+	}
+	accelerators := []string{}
+	for index := 1; view.ItemAt(index) != nil; index++ {
+		accelerators = append(accelerators, view.ItemAt(index).GetAccelerator())
+	}
+	if !slices.Equal(accelerators, []string{"Cmd+=", "Cmd+-", "Cmd+0"}) {
+		t.Fatalf("text size accelerators = %v", accelerators)
 	}
 	for _, label := range labels(menu) {
 		switch label {

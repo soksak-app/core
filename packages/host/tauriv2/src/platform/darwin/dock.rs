@@ -36,6 +36,28 @@ pub fn items() -> Result<Value, String> {
     facts_value(unsafe { sp_dock_items() }, "Dock menu")
 }
 
+/// 제목이 menu 인 하위 메뉴에서 제목이 title 인 애플리케이션 메뉴 항목을 실행한다.
+pub fn menu_select(menu: &str, title: &str) -> Result<(), String> {
+    extern "C" {
+        fn sp_menu_select(menu: *const c_char, title: *const c_char) -> bool;
+    }
+    let menu_text = CString::new(menu).map_err(|e| e.to_string())?;
+    let title_text = CString::new(title).map_err(|e| e.to_string())?;
+    if unsafe { sp_menu_select(menu_text.as_ptr(), title_text.as_ptr()) } {
+        Ok(())
+    } else {
+        Err(format!("application menu {menu:?} has no item {title:?}"))
+    }
+}
+
+/// 애플리케이션의 주 창 핸들. 없으면 0 이다.
+pub fn main_window() -> super::Handle {
+    extern "C" {
+        fn sp_app_main_window() -> *mut std::ffi::c_void;
+    }
+    unsafe { sp_app_main_window() as super::Handle }
+}
+
 /// 제목이 title 인 Dock 메뉴 항목을 실행한다.
 pub fn select(title: &str) -> Result<(), String> {
     extern "C" {

@@ -456,6 +456,10 @@ pub trait Platform: Send + Sync {
     fn dock_items(&self) -> Result<Value, String>;
     /// 애플리케이션 메뉴를 반환한다. 하위 메뉴마다 {title, items: [{title, key}]} 다. 메인 스레드에서 호출한다.
     fn menu_items(&self) -> Result<Value, String>;
+    /// 제목이 menu 인 하위 메뉴에서 제목이 title 인 항목을 실행한다. 메인 스레드에서 호출한다.
+    fn menu_select(&self, menu: &str, title: &str) -> Result<(), String>;
+    /// 애플리케이션의 주 창 핸들. 없으면 0 이다. 메인 스레드에서 호출한다.
+    fn main_window(&self) -> Result<Handle, String>;
     /// 제목이 title 인 Dock 메뉴 항목을 실행한다. 메인 스레드에서 호출한다.
     fn dock_select(&self, title: &str) -> Result<(), String>;
 

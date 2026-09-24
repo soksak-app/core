@@ -83,7 +83,8 @@ import { verify } from "./verify.js";
 import { createLayoutQueue } from "./layout-queue.js";
 
 /* 애플리케이션 인터페이스. 없으면 아무 일도 하지 않는 구현이 온다. */
-import { chrome, surfaces as host } from "./host.js";
+import { chrome, onMenuCommand, surfaces as host } from "./host.js";
+import { setTextScope } from "./text-size.js";
 
 /* 코어의 공개 항목과 진단 메서드. 등록소가 호스트의 요청에 답한다. */
 import { coreChanged, installCoreExposure, setVerify } from "./core-exposure.js";
@@ -558,6 +559,19 @@ addEventListener("keydown", (event) => {
     event.preventDefault();
     return run("core.focus.set", { name: "core.library.search" });
   }
+});
+/* 판 밖의 프레임을 누르면 글자 크기의 범위는 프레임이다(docs/spec/text-size.md). */
+addEventListener("pointerdown", (event) => {
+  if (event.target.closest?.(".chrome-bar, .tabs--space, .tabs--project")) setTextScope({ kind: "frame" });
+}, true);
+/* 애플리케이션 메뉴의 글자 크기 항목은 이 명령들만 요청한다. 다른 이름은 오류로 알린다. */
+const MENU_COMMANDS = ["core.text.larger", "core.text.smaller", "core.text.reset"];
+onMenuCommand((name) => {
+  if (!MENU_COMMANDS.includes(name)) {
+    showError(`menu command is not allowed: ${String(name)}`);
+    return;
+  }
+  Promise.resolve(run(name)).catch((error) => showError(`${name} failed: ${error.message}`));
 });
 /* 키보드 초점의 이동을 core.focus 로 알린다. */
 addEventListener("focusin", coreChanged);

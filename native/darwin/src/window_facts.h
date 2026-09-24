@@ -36,6 +36,13 @@ bool sp_window_move(void *window, double x, double y);
 // key 는 단축키로, 수정 키를 ctrl, opt, shift, cmd 순서로 + 로 이어 붙인 뒤 키 문자를 붙인다.
 char *sp_menu_items(void);
 
+// 제목이 menu 인 하위 메뉴에서 제목이 title 인 항목을 실행한다. 항목이 없으면 false 다.
+bool sp_menu_select(const char *menu, const char *title);
+
+// 애플리케이션의 주 창. 주 창이 없으면(한 번도 활성화되지 않은 애플리케이션) 가장 앞의 보이는 창이고,
+// 그것도 없으면 NULL 이다.
+void *sp_app_main_window(void);
+
 // Dock 메뉴 항목의 제목 목록(JSON 배열).
 char *sp_dock_items(void);
 

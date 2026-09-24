@@ -5,7 +5,8 @@
 //
 // 검증의 존재를 알지 않는다. 렌더링 완료만 통지하고 이후 처리는 문서가 정한다.
 import { Soksak, SoksakView, outline } from "soksak";
-import { cardRadius, halfGap, linkedSet, stagePad, value } from "./settings.js";
+import { cardRadius, halfGap, linkedSet, set as setSetting, stagePad, value } from "./settings.js";
+import { nextTextSize, setTextScope, textScope } from "./text-size.js";
 import { hasPlugin, isPlace, isRailId, plugin, plugins, railId, railKind, sectionNames } from "./registry.js";
 import { environment } from "./environment.js";
 import { standIn } from "./compositor.js";
@@ -177,6 +178,8 @@ function createCard(card) {
   el.dataset.command = "core.card.focus";
   el.addEventListener("pointerdown", (e) => {
     const id = el.dataset.cardId;
+    // 누른 카드가 글자 크기의 범위다(docs/spec/text-size.md).
+    if (id) setTextScope({ kind: "card", card: id });
     if (!id || isPlace(id) || e.target.closest(".tab__x, .chrome__act, .chrome__ham")) return;
     const tab = () => activeTab(grid.card(id));
     const settleFocus = () => {
@@ -204,6 +207,8 @@ const setHTML = (el, html) => { if (el.dataset.html !== html) { el.innerHTML = h
 
 function updateCard(el, card) {
   const place = isPlace(card.id) ? card.id : null;
+  // 카드 내용의 CSS zoom 이 프레임 배율과 곱해 읽는 카드 글자 배율.
+  el.style.setProperty("--card-text", String(cardTextSize(card)));
   el.dataset.role = card.fixed ? "fixed" : "pane";
   el.dataset.focused = String(card.id === focusedId);
   const chrome = el.querySelector(".chrome");
@@ -1364,5 +1369,34 @@ export function railState() {
 
 export { settle, tabsOf, activeTab, plane };
 export const currentGrid = () => grid;
+/** 카드의 글자 크기 배율. 값이 없으면 1 이다. */
+const cardTextSize = (card) => card?.data?.textSize ?? 1;
+
+/** 글자 크기의 현재 범위. 아직 누른 곳이 없으면 포커스된 카드다. */
+export function currentTextScope() {
+  return textScope() ?? { kind: "card", card: focusedId };
+}
+
+/** 모든 카드의 글자 크기 배율. */
+export function cardTextSizes() {
+  return Object.fromEntries((grid?.cards ?? []).map((card) => [card.id, cardTextSize(card)]));
+}
+
+/**
+ * 현재 범위의 글자 크기를 direction 으로 옮긴다. 1 은 크게, -1 은 작게, 0 은 기본이다.
+ * 프레임 배율은 공통 설정이고, 카드 배율은 카드의 레이아웃 데이터에 저장된다.
+ */
+export async function changeTextSize(direction) {
+  const scope = currentTextScope();
+  if (scope.kind === "frame") {
+    await setSetting({ textSize: nextTextSize(value("textSize"), direction) }, "common");
+    return;
+  }
+  const card = grid?.card(scope.card);
+  if (!card) throw new Error(`text size card ${scope.card} is not in the layout`);
+  grid.setData(card.id, { ...(card.data ?? {}), textSize: nextTextSize(cardTextSize(card), direction) });
+  settle();
+}
+
 /** 포커스된 카드의 id. */
 export const focused = () => focusedId;

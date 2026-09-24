@@ -88,6 +88,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
     }
     const host = document.createElement("div");
     host.className = "surface-module-host";
+    // 글자 배율은 app.css 의 .surface-module-host 가 정한다(docs/spec/text-size.md).
     host.style.cssText = "position:absolute;inset:0;overflow:hidden";
     slot.append(host);
     const shadow = host.attachShadow({ mode: "open" });

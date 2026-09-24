@@ -128,6 +128,9 @@ var hostCommands = map[string]hostEntry{
 	"host.window.move": {Description: "Moves the window frame origin to a point in screen coordinates.", Result: nullSchema,
 		Params: map[string]any{"type": "object", "properties": map[string]any{
 			"x": map[string]any{"type": "number"}, "y": map[string]any{"type": "number"}}}},
+	"host.menu.select": {Description: "Performs the application menu item with the title in the submenu with the menu title.", Result: nullSchema,
+		Params: map[string]any{"type": "object", "properties": map[string]any{
+			"menu": map[string]any{"type": "string"}, "title": map[string]any{"type": "string"}}}},
 	"host.dock.select": {Description: "Performs the Dock menu item with the title.", Result: nullSchema,
 		Params: map[string]any{"type": "object", "properties": map[string]any{"title": map[string]any{"type": "string"}}}},
 	"host.window.reload":    {Description: "Reloads the main page.", Params: emptyObject, Result: nullSchema},
@@ -664,6 +667,19 @@ func (b hostBackend) HostCommand(window, name string, params json.RawMessage) (a
 		var moved error
 		application.InvokeSync(func() { moved = system.MoveWindow(s.window.NativeWindow(), *p.X, *p.Y) })
 		return nil, moved
+	case "host.menu.select":
+		var p struct {
+			Menu, Title *string
+		}
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, rpcError(codeInvalidParams, "%v", err)
+		}
+		if p.Menu == nil || p.Title == nil {
+			return nil, rpcError(codeInvalidParams, "menu and title are required")
+		}
+		var selected error
+		application.InvokeSync(func() { selected = system.MenuSelect(*p.Menu, *p.Title) })
+		return nil, selected
 	case "host.dock.select":
 		var p struct {
 			Title *string

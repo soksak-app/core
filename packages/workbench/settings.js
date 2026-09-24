@@ -26,6 +26,7 @@
 
 import { surfaces as host } from "./host.js";
 import { effectiveSettings } from "./settings-scope.js";
+import { TEXT_STEPS } from "./text-size.js";
 
 /* 고를 수 있는 폰트. 테마가 이 중 하나를 기본으로 지정하고 설정에서 바꾼다.
    설치되지 않은 이름은 목록의 다음 이름으로 넘어간다. */
@@ -165,6 +166,8 @@ export const defaults = {
   font: THEMES[0].shape.font,
   /* 글자 크기(px). */
   size: parseFloat(THEMES[0].shape.size),
+  /* 프레임 크롬과 모든 카드에 적용하는 글자 크기 배율. TEXT_STEPS 의 값이다(docs/spec/text-size.md). */
+  textSize: 1,
 
   /* 사이드바는 세트를 조합해서 만든다. 세트 하나가 섹션을 순서대로 담고 links 가
      그 세트를 자리에 연결한다. 연결은 제목이 아니라 id 로 한다. 기본값은
@@ -185,6 +188,9 @@ let changes = 0;
 let revision = 0;
 
 function validatePluginValue(key, value) {
+  if (key === "textSize" && !TEXT_STEPS.includes(value)) {
+    throw new Error(`Invalid setting textSize: ${JSON.stringify(value)} is not a text size step`);
+  }
   const definition = pluginDefinitions.get(key);
   if (!definition) return;
   if (definition.type === "enum" && !definition.values.includes(value)) {
@@ -396,6 +402,8 @@ export function install() {
   root.dataset.focusInd = settings.focusInd;
   root.dataset.fullRule = settings.fullRule;
   root.dataset.seam = seam();
+  // 프레임 크롬과 카드 내용의 CSS zoom 이 읽는 프레임 글자 배율.
+  root.style.setProperty("--frame-text", String(settings.textSize));
   for (const [token, value] of Object.entries(themeTokens())) {
     root.style.setProperty(token, value);
   }

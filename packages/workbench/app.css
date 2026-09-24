@@ -86,7 +86,12 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 /* 창이 그리는 단추가 차지하는 폭. 창이 단추를 그리지 않으면 0 이고, 브라우저에는
    창이 없으므로 0 이다. */
 :root{--controls-w:0px}
-.chrome-bar{position:relative;flex:0 0 var(--chrome-h);height:var(--chrome-h);display:flex;align-items:center;
+/* 프레임 글자 배율(docs/spec/text-size.md). 첫 행은 창 제목줄 높이보다 작아지지 않고, 확대된 탭 행이
+   더 높으면 그 높이를 따른다. */
+:root{--frame-text:1}
+.chrome-bar > .brand,.chrome-bar > .tabs--project,.chrome-bar__acts,.tabs--space,.workarea > .tabs--project{zoom:var(--frame-text)}
+.chrome-bar{--chrome-row:max(var(--chrome-h),calc(var(--chrome-row-h) * var(--frame-text)))}
+.chrome-bar{position:relative;flex:0 0 var(--chrome-row);height:var(--chrome-row);display:flex;align-items:center;
   gap:var(--space-2);padding:0 var(--space-3) 0 calc(var(--space-3) + var(--controls-w));
   border-bottom:var(--bw) solid var(--edge);background:var(--card);user-select:none}
 /* 창을 끄는 영역. 막대 전체를 덮고, 탭과 단추는 그 위에 배치된다.
@@ -457,3 +462,8 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 }
 .set-reset { font-size: var(--text-caption); }
 .set-row:has(.set-reset) { flex-wrap: wrap; }
+
+/* 카드 내용의 글자 배율은 프레임 배율과 카드 배율의 곱이다(docs/spec/text-size.md). WebKit 은 zoom 요소의
+   퍼센트 크기를 확대하지 않으므로 호스트는 그대로 슬롯을 채우고 그 안의 내용만 커진다. 슬롯 사각형과
+   네이티브 배치는 바뀌지 않는다. */
+.surface-module-host,.card > .set{zoom:calc(var(--frame-text,1) * var(--card-text,1))}

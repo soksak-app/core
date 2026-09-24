@@ -82,6 +82,31 @@ pub(crate) fn config_directory(app: &tauri::AppHandle) -> tauri::Result<std::pat
 /// context 는 애플리케이션의 `tauri::generate_context!()` 이다. background 는 표면 웹뷰가
 /// 문서보다 먼저 실행하는 스크립트이며, 애플리케이션이 프론트엔드의 `background.js` 를
 /// 포함해 전달한다.
+/// View 메뉴의 글자 크기 항목. 명령 이름, 제목, 단축키다.
+const TEXT_SIZE_ITEMS: [(&str, &str, &str); 3] = [
+    ("core.text.larger", "글자 크게", "CmdOrCtrl+="),
+    ("core.text.smaller", "글자 작게", "CmdOrCtrl+-"),
+    ("core.text.reset", "글자 기본 크기", "CmdOrCtrl+0"),
+];
+
+/// 애플리케이션 주 창의 메인 페이지에 명령 실행을 요청한다. 메뉴 이벤트는 메인 스레드에서 처리된다.
+/// 주 창이 없으면 가장 앞의 보이는 창이 대상이고, 그것도 없으면 오류다.
+fn run_menu_command(app: &tauri::AppHandle, command: &str) -> Result<(), String> {
+    let platform = platform::current()?;
+    let main = platform.main_window()?;
+    for window in app.windows().into_values() {
+        if main != 0 && platform.window_handle(&window)? == main {
+            return windows::emit_window(
+                &window,
+                "menu-command",
+                serde_json::json!({ "name": command }),
+            )
+            .map_err(|e| e.to_string());
+        }
+    }
+    Err("no main window".into())
+}
+
 pub fn run(context: tauri::Context<tauri::Wry>, _background: &'static str) {
     // 창 확대 애니메이션은 창 프레임만 움직이고 웹 문서는 그 뒤에 따라온다. AppKit 이 기본값을
     // 읽기 전에 그 길이를 줄인다.
@@ -141,6 +166,29 @@ pub fn run(context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 true,
                 Some("CmdOrCtrl+Shift+N"),
             )?)?;
+            // 글자 크기 항목은 View 메뉴에 둔다(docs/spec/text-size.md). 메뉴 단축키는 어느 뷰가
+            // 키보드 포커스를 가져도 동작한다.
+            let view = menu
+                .items()?
+                .into_iter()
+                .find_map(|item| match item {
+                    tauri::menu::MenuItemKind::Submenu(submenu)
+                        if submenu.text().ok().as_deref() == Some("View") =>
+                    {
+                        Some(submenu)
+                    }
+                    _ => None,
+                })
+                .ok_or("default view menu is missing")?;
+            for (command, label, accelerator) in TEXT_SIZE_ITEMS {
+                view.append(&tauri::menu::MenuItem::with_id(
+                    app,
+                    command,
+                    label,
+                    true,
+                    Some(accelerator),
+                )?)?;
+            }
             app.set_menu(menu)?;
             let directory = config_directory(app.handle())?;
             app.manage(workspace::Workspace::new(directory.clone()));
@@ -162,9 +210,14 @@ pub fn run(context: tauri::Context<tauri::Wry>, _background: &'static str) {
             Ok(())
         })
         .on_menu_event(|app, event| {
-            if event.id().as_ref() == "new-window" {
+            let id = event.id().as_ref();
+            if id == "new-window" {
                 if let Err(error) = windows::window_new_on_main(app.clone()) {
                     eprintln!("{error}");
+                }
+            } else if TEXT_SIZE_ITEMS.iter().any(|(command, _, _)| *command == id) {
+                if let Err(error) = run_menu_command(app, id) {
+                    eprintln!("menu command {id}: {error}");
                 }
             }
         })

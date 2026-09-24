@@ -409,6 +409,14 @@ let onInput = () => {};
  *               잡는 영역은 통로보다 넓어서 통로가 선 하나 폭이면 그 영역 전체가
  *               표면 아래에 놓인다.
  */
+/* 호스트 애플리케이션 메뉴가 이 창에 실행을 요청한 명령. */
+let onMenu = () => {};
+
+/** 애플리케이션 메뉴 항목이 명령 이름을 보낼 때 호출할 함수를 등록한다. */
+export function onMenuCommand(fn) {
+  onMenu = fn;
+}
+
 export function onSurfaceInput({ press, input }) {
   onPress = press;
   onInput = input;
@@ -416,6 +424,7 @@ export function onSurfaceInput({ press, input }) {
 
 if (native) {
   bridge.on("surface-pressed", (id) => onPress(id));
+  bridge.on("menu-command", (message) => onMenu(message?.name));
   bridge.on("surface-input", (step) => onInput(step));
   // 모달은 여러 번 응답하므로 여기서 구독을 해제하지 않고 hide 에서 해제한다.
   // 답에는 어느 모달의 것인지가 함께 온다. 닫힌 모달이 마지막으로 보낸 답이 다음

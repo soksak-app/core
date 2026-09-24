@@ -113,6 +113,8 @@ fn host_declarations() -> Value {
                  "kind": {"type": "string", "enum": ["page", "document", "native"]},
                  "surface": {"type": "string"}, "document": {"type": "string"},
                  "identifier": {"type": "string"}}}},
+            {"name": "host.menu.select", "description": "Performs the application menu item with the title in the submenu with the menu title.",
+             "params": {"type": "object", "properties": {"menu": {"type": "string"}, "title": {"type": "string"}}}, "result": nothing},
             {"name": "host.quit", "description": "Requests normal application termination, including pending saves.",
              "params": empty, "result": nothing},
             {"name": "host.window.close", "description": "Closes the window through its normal close action.",
@@ -1274,6 +1276,19 @@ impl Host {
                 let platform = platform::current().map_err(internal)?;
                 let handle = native_owner_on_main(window).map_err(internal)?;
                 on_main(window, move || platform.move_window(handle, x, y)).map_err(internal)?;
+                Ok(Value::Null)
+            })(),
+            "host.menu.select" => (|| {
+                let text = |name: &str| {
+                    arguments
+                        .get(name)
+                        .and_then(Value::as_str)
+                        .map(str::to_string)
+                        .ok_or_else(|| Failure::params(format!("{name} must be a string")))
+                };
+                let (menu, title) = (text("menu")?, text("title")?);
+                let platform = platform::current().map_err(internal)?;
+                on_main(window, move || platform.menu_select(&menu, &title)).map_err(internal)?;
                 Ok(Value::Null)
             })(),
             "host.dock.select" => (|| {

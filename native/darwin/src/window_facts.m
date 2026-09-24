@@ -215,6 +215,30 @@ char *sp_menu_items(void) {
     return copyJSON(menus);
 }
 
+bool sp_menu_select(const char *menu, const char *title) {
+    if (!menu || !title) return false;
+    NSString *menuTitle = [NSString stringWithUTF8String:menu];
+    NSString *itemTitle = [NSString stringWithUTF8String:title];
+    for (NSMenuItem *top in NSApp.mainMenu.itemArray) {
+        NSString *name = top.submenu.title.length ? top.submenu.title : top.title;
+        if (![name isEqualToString:menuTitle]) continue;
+        NSInteger index = [top.submenu indexOfItemWithTitle:itemTitle];
+        if (index < 0) return false;
+        [top.submenu performActionForItemAtIndex:index];
+        return true;
+    }
+    return false;
+}
+
+void *sp_app_main_window(void) {
+    if (NSApp.mainWindow) return NSApp.mainWindow;
+    // 한 번도 활성화되지 않은 애플리케이션에는 주 창이 없다. 그때는 가장 앞의 보이는 창이다.
+    for (NSWindow *window in NSApp.orderedWindows) {
+        if (window.isVisible && window.canBecomeMainWindow) return window;
+    }
+    return NULL;
+}
+
 char *sp_dock_items(void) {
     NSMutableArray *titles = [NSMutableArray array];
     for (NSMenuItem *item in dockMenu().itemArray) [titles addObject:item.title];

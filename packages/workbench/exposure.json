@@ -928,6 +928,36 @@
         }
       },
       {
+        "name": "core.text",
+        "description": "The text size scope and factors: the frame factor and each card's factor.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "scope": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "card",
+                    "frame"
+                  ]
+                },
+                "card": {
+                  "type": "string"
+                }
+              }
+            },
+            "frame": {
+              "type": "number"
+            },
+            "cards": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      {
         "name": "core.chrome",
         "description": "The window chrome: the width reserved for the window's own buttons and where the project tabs stand.",
         "schema": {
@@ -1465,6 +1495,39 @@
       {
         "name": "core.layout.reset",
         "description": "Rebuilds the current space with the initial layout.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.text.larger",
+        "description": "Enlarges the text of the current text size scope: the last pressed card, or the frame and every card.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.text.smaller",
+        "description": "Reduces the text of the current text size scope.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.text.reset",
+        "description": "Restores the text of the current text size scope to factor 1.",
         "params": {
           "type": "object",
           "properties": {}

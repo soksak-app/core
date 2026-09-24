@@ -41,6 +41,18 @@ func (implementation) MenuItems() (string, error) {
 	return facts(C.sp_menu_items(), "application menu")
 }
 
+func (implementation) MenuSelect(menu, title string) error {
+	menuText, titleText := C.CString(menu), C.CString(title)
+	defer C.free(unsafe.Pointer(menuText))
+	defer C.free(unsafe.Pointer(titleText))
+	if !C.sp_menu_select(menuText, titleText) {
+		return fmt.Errorf("application menu %q has no item %q", menu, title)
+	}
+	return nil
+}
+
+func (implementation) MainWindow() unsafe.Pointer { return C.sp_app_main_window() }
+
 func (implementation) DockSelect(title string) error {
 	text := C.CString(title)
 	defer C.free(unsafe.Pointer(text))

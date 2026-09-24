@@ -119,9 +119,14 @@ for (const app of Object.values(APPS)) {
     const view = menus.find((menu) => menu.title === "View");
     assert.ok(view, `the application menu has no View menu: ${JSON.stringify(menus.map((menu) => menu.title))}`);
     // 배치와 네이티브 표면은 웹뷰 확대를 따르지 않고, 다시 읽기는 메인 페이지 상태를 바꾼다.
-    // macOS 는 View 메뉴에 F 키의 전체 화면 항목을 스스로 더한다.
-    assert.ok(view.items.length > 0 && view.items.every((item) => /Full Screen/.test(item.title)),
-      `the View menu must have only full screen items: ${JSON.stringify(view.items)}`);
+    // View 메뉴에는 전체 화면과 글자 크기 항목만 있다(docs/spec/text-size.md). macOS 는 F 키의 전체
+    // 화면 항목을 스스로 더한다.
+    const text = view.items.filter((item) => item.title.startsWith("글자 "));
+    assert.deepEqual(text, [
+      { title: "글자 크게", key: "cmd+=" }, { title: "글자 작게", key: "cmd+-" }, { title: "글자 기본 크기", key: "cmd+0" },
+    ], `the View menu must have the text size items: ${JSON.stringify(view.items)}`);
+    assert.ok(view.items.every((item) => /Full Screen/.test(item.title) || text.includes(item)),
+      `the View menu must have only full screen and text size items: ${JSON.stringify(view.items)}`);
     const forbidden = menus.flatMap((menu) => menu.items)
       .filter((item) => /zoom in|zoom out|actual size|reload/i.test(item.title));
     assert.deepEqual(forbidden, [], "no menu item zooms or reloads the whole webview");

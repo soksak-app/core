@@ -68,6 +68,7 @@ func TestExposureListHostEntriesAreSortedAndDescribed(t *testing.T) {
 	commands := []string{
 		"host.dock.select",
 		"host.hit",
+		"host.menu.select",
 		"host.quit",
 		"host.window.close",
 		"host.window.fullscreen",
@@ -86,8 +87,9 @@ func TestExposureListHostEntriesAreSortedAndDescribed(t *testing.T) {
 			t.Fatalf("%s: registered %v, description %q", e.Name, e.Registered, e.Description)
 		}
 	}
-	if list.Commands[2].Name != "host.quit" || string(list.Commands[2].Result) != `{"type":"null"}` {
-		t.Fatalf("host.quit result %s", list.Commands[2].Result)
+	quit := list.Commands[slices.IndexFunc(list.Commands, func(e entry) bool { return e.Name == "host.quit" })]
+	if string(quit.Result) != `{"type":"null"}` {
+		t.Fatalf("host.quit result %s", quit.Result)
 	}
 }
 

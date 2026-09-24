@@ -288,6 +288,10 @@ type Platform interface {
 	// MenuItems 는 애플리케이션 메뉴를 JSON 배열로 반환한다. 하위 메뉴마다 {title, items: [{title, key}]} 다.
 	// UI 스레드에서 호출한다.
 	MenuItems() (string, error)
+	// MenuSelect 는 제목이 menu 인 하위 메뉴에서 제목이 title 인 항목을 실행한다. UI 스레드에서 호출한다.
+	MenuSelect(menu, title string) error
+	// MainWindow 는 애플리케이션의 주 창 핸들이다. 없으면 nil 이다. UI 스레드에서 호출한다.
+	MainWindow() unsafe.Pointer
 	// DockSelect 는 제목이 title 인 Dock 메뉴 항목을 실행한다. UI 스레드에서 호출한다.
 	DockSelect(title string) error
 

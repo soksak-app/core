@@ -91,6 +91,12 @@ func (implementation) MenuItems() (string, error) {
 	return "", unsupported("application menu")
 }
 
+func (implementation) MenuSelect(string, string) error {
+	return unsupported("application menu")
+}
+
+func (implementation) MainWindow() unsafe.Pointer { return nil }
+
 func (implementation) DockSelect(string) error {
 	return unsupported("Dock menu")
 }

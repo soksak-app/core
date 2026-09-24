@@ -40,4 +40,4 @@ The frame factor is the common setting `textSize`. A card factor is stored in th
 
 The status `core.text` reports `{scope: {kind: "frame"} or {kind: "card", card}, frame, cards}`, where `cards` maps each card identifier to its card factor.
 
-The View menu of both hosts has the items 글자 크게 (Command `=`), 글자 작게 (Command `-`), and 글자 기본 크기 (Command `0`). A menu key equivalent works whatever view has the keyboard focus, including a native terminal region or a browser document, and each item runs the command in the window's main page.
+The View menu of both hosts has the items 글자 크게 (Command `=`), 글자 작게 (Command `-`), and 글자 기본 크기 (Command `0`). A menu key equivalent works whatever view has the keyboard focus, including a native terminal region or a browser document, and each item runs the command in the main page of the application's main window, or of its frontmost visible window when the application has not been active and has no main window.
