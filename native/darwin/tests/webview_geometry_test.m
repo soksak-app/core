@@ -5,6 +5,7 @@
 // 디스플레이 이동 때 AppKit 이 보내는 창 알림과 viewDidChangeBackingProperties 를 검사가 보낸다.
 // docs/operations/private-native-apis.md 참고. 애플리케이션을 활성화하지 않는다.
 #import <Cocoa/Cocoa.h>
+#import <QuartzCore/QuartzCore.h>
 #import <WebKit/WebKit.h>
 #import "document_view.h"
 #import "input_inject.h"
@@ -377,7 +378,20 @@ int main(void) { @autoreleasepool {
         @"a declared DOM overlay receives input above a native document region");
     check(webViewAtTopPoint(window, 60, 60) == region,
         @"the native document receives input outside the declared DOM overlay");
+    // 논리적으로 위에 있는 overlay 의 DOM 이 보이도록 네이티브 평면을 overlay 사각형에서 잘라낸다.
+    NSView *host = surface;
+    while (host && ![NSStringFromClass(host.class) isEqualToString:@"SPSurfaceHost"]) host = host.superview;
+    NSView *plane = nil;
+    for (NSView *child in host.subviews) if ([NSStringFromClass(child.class) isEqualToString:@"SPSurfaceNativePlane"]) plane = child;
+    CAShapeLayer *mask = [plane.layer.mask isKindOfClass:CAShapeLayer.class] ? (CAShapeLayer *)plane.layer.mask : nil;
+    CGPoint (^layerPoint)(CGFloat, CGFloat) = ^CGPoint(CGFloat x, CGFloat y) {
+        return NSPointToCGPoint([plane convertPointToLayer:[plane convertPoint:NSMakePoint(x, y) fromView:host]]);
+    };
+    check(mask && !CGPathContainsPoint(mask.path, NULL, layerPoint(150, 100), true)
+        && CGPathContainsPoint(mask.path, NULL, layerPoint(20, 20), true),
+        [NSString stringWithFormat:@"native pixels are cut out under a visible declared DOM overlay (host %@, plane %@, mask %@)", host, plane, plane.layer.mask]);
     webviewSetSurfaceOverlays(surface, NULL, 0);
+    check(plane.layer.mask == nil, @"native pixels are shown again when no overlay is visible");
 
     setScale(window, 1);
     webviewSetFrame(surface, 40, 30, 300, 200.5);

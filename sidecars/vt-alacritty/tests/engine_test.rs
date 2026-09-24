@@ -826,6 +826,18 @@ fn the_rendered_selection_and_the_copied_text_cover_the_same_cells_in_both_direc
 }
 
 #[test]
+fn the_screen_reports_the_current_default_background() {
+    let mut engine = AlacrittyEngine::new();
+    assert_eq!(engine.screen().background.as_deref(), Some("#1e1e1e"));
+    engine.feed(b"\x1b]11;rgb:10/20/30\x07");
+    assert_eq!(
+        engine.screen().background.as_deref(),
+        Some("#102030"),
+        "OSC 11 changes the default background"
+    );
+}
+
+#[test]
 fn blank_selection_release_is_not_an_error() {
     let mut engine = AlacrittyEngine::new();
     engine.feed(b"hi");

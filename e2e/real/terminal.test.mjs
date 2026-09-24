@@ -277,35 +277,77 @@ async function screenPixel(s, point) {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: a scrolled terminal shows a scrollbar whose thumb moves the viewport when dragged`, { timeout: 120000 }, async (t) => {
+  test(`${app.name}: a terminal with history shows a scrollbar whose thumb moves the viewport when dragged`, { timeout: 120000 }, async (t) => {
     const { s, surface, session, origin } = await prepare(t, app, "BARSTART");
     await s.run("terminal.input", { bytes: "i=0; while [ $i -lt 80 ]; do printf 'ROW%02d\\n' $i; i=$((i+1)); done\r" }, surface);
     await readScreenUntil(s, surface, (lines) => lines.some((line) => line === "ROW79"), "the rows did not render");
-    const inside = cellPoint(origin, session, 3, 3);
-    post([{ type: "move", x: inside.x, y: inside.y }, { type: "wheel", x: inside.x, y: inside.y, lines: 3 }]);
-    const scrolled = await s.until("terminal.session", (value) => value.scrollback?.offset > 0, "the wheel did not scroll", { surface });
+    const newest = await s.until("terminal.session", (value) => value.scrollback?.history > 0 && value.scrollback.offset === 0,
+      "the output did not exceed the screen", { surface });
 
-    const thumbRect = await s.rect("terminal.scrollbar.thumb", undefined, surface);
-    assert.ok(thumbRect.width > 0 && thumbRect.height >= 16, `the scrollbar thumb is not laid out: ${JSON.stringify(thumbRect)}`);
-    const thumb = await screenCenter(s, thumbRect);
-    const background = await screenPixel(s, cellPoint(origin, session, 3, 3));
-    const shown = await screenPixel(s, thumb);
-    assert.ok(!same(shown, background), `the thumb is not drawn above the terminal: ${shown} against ${background}`);
+    // 기록이 있으면 스크롤하기 전에도 스크롤바가 보이고 손잡이는 트랙 맨 아래에 있다.
+    const track = await s.rect("terminal.scrollbar", undefined, surface);
+    const bottomThumb = await s.rect("terminal.scrollbar.thumb", undefined, surface);
+    assert.ok(track.width > 0 && bottomThumb.height >= 16, `the scrollbar is not shown with history: ${JSON.stringify({ track, bottomThumb })}`);
+    assert.ok(Math.abs(bottomThumb.y + bottomThumb.height - (track.y + track.height)) <= 1,
+      `the thumb is not at the bottom at the newest output: ${JSON.stringify({ track, bottomThumb })}`);
 
     // 손잡이를 맨 위로 끌면 가장 오래된 기록이 보인다.
-    const track = await s.rect("terminal.scrollbar", undefined, surface);
     const trackTop = (await screenCenter(s, track)).y - track.height / 2;
-    dragPath(thumb, { x: thumb.x, y: trackTop - 30 });
+    const start = await screenCenter(s, bottomThumb);
+    dragPath(start, { x: start.x, y: trackTop - 30 });
     const top = await s.until("terminal.session", (value) => value.scrollback.offset === value.scrollback.history,
       "dragging the thumb to the top did not show the oldest history", { surface });
-    t.diagnostic(`${app.name}: wheel offset ${scrolled.scrollback.offset}, top offset ${top.scrollback.offset} of ${top.scrollback.history}`);
+    t.diagnostic(`${app.name}: history ${newest.scrollback.history}, top offset ${top.scrollback.offset}`);
+    const topThumb = await screenCenter(s, await s.rect("terminal.scrollbar.thumb", undefined, surface));
+    const withThumb = await screenPixel(s, topThumb);
 
-    // 맨 아래로 끌면 가장 새 출력으로 돌아오고 스크롤바가 숨는다.
-    const moved = await screenCenter(s, await s.rect("terminal.scrollbar.thumb", undefined, surface));
-    dragPath(moved, { x: moved.x, y: trackTop + track.height + 30 });
+    // 맨 아래로 끌면 가장 새 출력으로 돌아온다. 위쪽 자리의 픽셀은 손잡이가 떠난 뒤 달라야 한다.
+    dragPath(topThumb, { x: topThumb.x, y: trackTop + track.height + 30 });
     await s.until("terminal.session", (value) => value.scrollback.offset === 0,
       "dragging the thumb to the bottom did not return to the newest output", { surface });
-    const hidden = await s.rect("terminal.scrollbar", undefined, surface);
-    assert.equal(hidden.width * hidden.height, 0, `the scrollbar stayed visible at the newest output: ${JSON.stringify(hidden)}`);
+    const withoutThumb = await screenPixel(s, topThumb);
+    assert.ok(!same(withThumb, withoutThumb),
+      `the thumb was not drawn: the same point shows ${withThumb} with the thumb and ${withoutThumb} without it`);
+  });
+}
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: text stays drawn in every frame while a real wheel scrolls`, { timeout: 120000 }, async (t) => {
+    const { s, surface, session, origin } = await prepare(t, app, "FLICKER");
+    await s.run("terminal.input", { bytes: "i=0; while [ $i -lt 200 ]; do printf 'LINE%03d text text text text\\n' $i; i=$((i+1)); done\r" }, surface);
+    await readScreenUntil(s, surface, (lines) => lines.some((line) => line.startsWith("LINE199")), "the lines did not render");
+    const region = (await s.get("host.window")).regions.find((item) => item.surface === surface && item.name === "view");
+    const point = cellPoint(origin, session, 3, 3);
+    await s.request("diagnostics.capture.start", {});
+    const steps = [{ type: "move", x: point.x, y: point.y }];
+    for (let i = 0; i < 8; i++) steps.push({ type: "wheel", x: point.x, y: point.y, lines: 2, wait: 40 });
+    for (let i = 0; i < 8; i++) steps.push({ type: "wheel", x: point.x, y: point.y, lines: -2, wait: 40 });
+    // 트랙패드처럼 작은 픽셀 이동을 짧은 간격으로 많이 보낸다.
+    for (let i = 0; i < 60; i++) steps.push({ type: "wheel", unit: "pixel", x: point.x, y: point.y, lines: i < 30 ? 5 : -5, wait: 8 });
+    post(steps);
+    const displayed = await s.presented();
+    const { frames: directory } = await s.request("diagnostics.capture.stop", { after: displayed.displayed });
+    try {
+      const files = frames(directory);
+      assert.ok(files.length > 10, `the recording has only ${files.length} frames`);
+      // 글자 픽셀: 터미널 영역(스크롤바 열 제외) 안의 밝은 픽셀 수를 줄 간격마다 센다.
+      const counts = files.map((file) => {
+        const frame = readFrame(file);
+        let count = 0;
+        const left = Math.round(region.frame.x * frame.scale), top = Math.round(region.frame.y * frame.scale);
+        const right = Math.round((region.frame.x + region.frame.width - 12) * frame.scale);
+        const bottom = Math.round((region.frame.y + region.frame.height) * frame.scale);
+        for (let y = top; y < bottom; y += 2) for (let x = left; x < right; x += 2) {
+          if (pixel(frame, x, y).every((value) => value > 150)) count++;
+        }
+        return count;
+      });
+      t.diagnostic(`${app.name}: text pixels per frame min ${Math.min(...counts)} max ${Math.max(...counts)} over ${counts.length} frames`);
+      const first = counts[0];
+      const dropped = counts.map((count, index) => [index, count]).filter(([, count]) => count < first / 2);
+      assert.deepEqual(dropped, [], `frames lost most of their text while scrolling (first frame ${first} text pixels): ${JSON.stringify(dropped)}`);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 }

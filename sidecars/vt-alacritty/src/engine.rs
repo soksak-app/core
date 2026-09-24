@@ -4,7 +4,7 @@ use alacritty_terminal::index::{Column, Line, Point, Side};
 use alacritty_terminal::selection::{Selection, SelectionType};
 use alacritty_terminal::term::cell::Flags;
 use alacritty_terminal::term::{Config, Osc52, Term, TermMode};
-use alacritty_terminal::vte::ansi::{Color, CursorShape, Processor, Rgb};
+use alacritty_terminal::vte::ansi::{Color, CursorShape, NamedColor, Processor, Rgb};
 use soksak_sidecar_vt_core::{
     default_terminal_color, inline_image::parse as parse_inline_image, Cell, ClipboardSelection,
     Cursor, CursorShape as ProtocolCursorShape, Engine, EngineEvent, Modes, Screen, ShellMarker,
@@ -1091,6 +1091,7 @@ impl Engine for AlacrittyEngine {
                 offset: offset as u32,
                 history: history as u32,
             },
+            background: self.color(Color::Named(NamedColor::Background), self.term.colors()),
             lines,
         }
     }

@@ -505,6 +505,9 @@ pub struct Screen {
     pub cursor: Cursor,
     #[serde(default)]
     pub scrollback: Scrollback,
+    /// 현재 기본 배경색(`#rrggbb`). 프로그램이 OSC 11 로 바꾼 값을 포함한다.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub background: Option<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub lines: Vec<Vec<Cell>>,
 }
@@ -901,7 +904,8 @@ fn screen_event(surface_id: &str, screen: &Screen) -> Value {
             "rows": screen.rows,
             "cursor": screen.cursor,
             "lines": screen.lines,
-            "scrollback": screen.scrollback
+            "scrollback": screen.scrollback,
+            "background": screen.background
         }
     })
 }
@@ -3387,6 +3391,7 @@ impl Engine for FakeEngine {
                 preedit: None,
             },
             scrollback: Default::default(),
+            background: None,
             lines,
         }
     }

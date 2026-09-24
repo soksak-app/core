@@ -678,13 +678,17 @@ test("the scrollbar shows the scrollback position and dragging its thumb moves t
   });
   openSession(fakeSidecar);
   fakeSidecar.getMessages().length = 0;
-  assert.equal(track.hidden, true, "the scrollbar is hidden at the newest output");
+  assert.equal(track.hidden, true, "the scrollbar is hidden without history");
 
   // 50행, 기록 50줄, 오프셋 25. 600 픽셀 트랙에서 손잡이는 높이 300, 위치 150 이다.
   const screen = (offset) => fakeSidecar.triggerEvent("test-session", { event: "screen", lines: [""],
     cursor: { col: 0, row: 0, visible: false, focused: false }, scrollback: { offset, history: 50 } });
   screen(25);
   assert.equal(track.hidden, false);
+  // 트랙은 네이티브 그림이 잘린 자리를 칠하므로 터미널의 현재 기본 배경색이어야 한다.
+  fakeSidecar.triggerEvent("test-session", { event: "screen", lines: [""], background: "#102030",
+    cursor: { col: 0, row: 0, visible: false, focused: false }, scrollback: { offset: 25, history: 50 } });
+  assert.equal(track.style.background, "#102030");
   assert.deepEqual([thumb.style.height, thumb.style.top], ["300px", "150px"]);
 
   thumb._trigger("pointerdown", { button: 0, pointerId: 4, clientX: 795, clientY: 160 });
@@ -696,8 +700,13 @@ test("the scrollbar shows the scrollback position and dragging its thumb moves t
     { operation: "viewport", offset: 50 },
     { operation: "viewport", offset: 0 },
   ]);
+  // 가장 새 출력에서도 기록이 있으면 보이며 손잡이는 트랙 맨 아래에 있다.
   screen(0);
-  assert.equal(track.hidden, true);
+  assert.equal(track.hidden, false);
+  assert.deepEqual([thumb.style.height, thumb.style.top], ["300px", "300px"]);
+  fakeSidecar.triggerEvent("test-session", { event: "screen", lines: [""], cursor: { col: 0, row: 0, visible: true, focused: false },
+    scrollback: { offset: 0, history: 0 } });
+  assert.equal(track.hidden, true, "the scrollbar is hidden without history");
 });
 
 test("the region reports an unknown action as an input error", async () => {

@@ -644,7 +644,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   };
   view.addEventListener("wheel", scrollWheel, { passive: false });
 
-  // 스크롤바는 뷰포트가 가장 새 출력보다 위에 있는 동안 보인다(docs/spec/terminal-runtime.md).
+  // 스크롤바는 터미널이 기록을 보관하는 동안 보인다(docs/spec/terminal-runtime.md).
   const thumbGeometry = () => {
     const { rows, scrollback: { offset, history } } = session;
     const height = scrollbar.track.getBoundingClientRect().height;
@@ -654,7 +654,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   };
   const drawScrollbar = () => {
     if (!scrollbar) return;
-    scrollbar.track.hidden = session.scrollback.offset === 0;
+    scrollbar.track.hidden = session.scrollback.history === 0;
     if (scrollbar.track.hidden) return;
     const { size, top } = thumbGeometry();
     scrollbar.thumb.style.height = `${size}px`;
@@ -770,6 +770,8 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       // screen 이벤트를 처리한다. screen.read 응답이나 화면 변화 알림.
       screen = body.lines;
       changed("screen");
+      // 스크롤바 트랙은 네이티브 그림이 잘린 자리를 칠하므로 터미널의 현재 기본 배경색을 쓴다.
+      if (typeof body.background === "string" && scrollbar) scrollbar.track.style.background = body.background;
       if (body.scrollback !== undefined) {
         const { offset, history } = body.scrollback ?? {};
         if (!Number.isInteger(offset) || !Number.isInteger(history) || offset < 0 || history < 0) {

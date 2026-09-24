@@ -173,6 +173,7 @@ impl Engine for MockEngine {
                 preedit: None,
             },
             scrollback: Default::default(),
+            background: None,
             lines,
         }
     }
@@ -2995,6 +2996,7 @@ async fn test_panicking_surface_reports_error() {
                     preedit: None,
                 },
                 scrollback: Default::default(),
+                background: None,
                 lines: Vec::new(),
             }
         }

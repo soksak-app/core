@@ -1429,7 +1429,8 @@ for (const app of Object.values(APPS)) {
       const session = await s.get("terminal.session", surface.surface);
       before.set(surface.surface, { cellWidth: session.cellWidth, cellHeight: session.cellHeight });
       const marker = `DRAG-TEXT-${index}`;
-      await s.run("terminal.input", { bytes: `printf '\\033[2J\\033[H${marker}\\n'\r` }, surface.surface);
+      // 기록도 지운다(ED 3). 이 검사는 네이티브 영역의 정렬을 재며, 기록이 있으면 보이는 스크롤바는 따로 검사한다.
+      await s.run("terminal.input", { bytes: `printf '\\033[2J\\033[3J\\033[H${marker}\\n'\r` }, surface.surface);
       await readScreenUntil(
         s,
         surface.surface,

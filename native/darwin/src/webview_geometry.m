@@ -33,7 +33,7 @@ static void normalizeCoordinateBounds(SPSurfaceCoordinates *coordinates) {
 @property(nonatomic, assign) WKWebView *webview;
 @property(nonatomic, assign) WKWebView *mainWebview;
 @property(retain) SPSurfaceNativePlane *nativePlane;
-@property(retain) NSArray<NSValue *> *domOverlays;
+@property(nonatomic, copy) NSArray<NSValue *> *domOverlays;
 @end
 
 // Hybrid surfaces place native regions below a WebView. CSS transparency does
@@ -112,6 +112,52 @@ static void notifyScale(NSView *view) {
     [super dealloc];
 }
 - (BOOL)isFlipped { return YES; }
+// 보이는 선언 overlay 의 사각형(호스트 좌표). hit test 와 네이티브 마스크가 같은 사각형을 쓴다.
+// Surface DOM coordinates are CSS/AppKit points. A document region may use a different pageZoom,
+// but it is a child of the same point-space native plane and must not scale the overlay rectangles.
+- (NSArray<NSValue *> *)visibleOverlayRects {
+    CGFloat zoom = self.webview.pageZoom > 0 ? self.webview.pageZoom : 1;
+    NSMutableArray<NSValue *> *rects = [NSMutableArray array];
+    for (NSValue *value in self.domOverlays) {
+        SPDOMOverlay overlay;
+        [value getValue:&overlay size:sizeof(overlay)];
+        if (!overlay.visible) continue;
+        NSRect rect = NSMakeRect(overlay.left * zoom, overlay.top * zoom,
+            MAX(NSWidth(self.bounds) - (overlay.left + overlay.right) * zoom, 0),
+            MAX(NSHeight(self.bounds) - (overlay.top + overlay.bottom) * zoom, 0));
+        [rects addObject:[NSValue valueWithRect:rect]];
+    }
+    return rects;
+}
+// 네이티브 평면은 DOM 백킹 위에 합성되므로, 보이는 overlay 아래의 네이티브 픽셀을 잘라내야 논리적으로 위에 있는
+// overlay 의 DOM 이 보인다(docs/spec/surface-composition.md). 평면 전체에서 overlay 사각형을 뺀 모양으로 자른다.
+- (void)applyOverlayMask {
+    NSView *plane = self.nativePlane;
+    if (!plane.layer) return;
+    NSArray<NSValue *> *rects = [self visibleOverlayRects];
+    if (rects.count == 0) {
+        plane.layer.mask = nil;
+        return;
+    }
+    CAShapeLayer *mask = [CAShapeLayer layer];
+    mask.frame = plane.layer.bounds;
+    mask.fillRule = kCAFillRuleEvenOdd;
+    CGMutablePathRef path = CGPathCreateMutable();
+    CGPathAddRect(path, NULL, plane.layer.bounds);
+    for (NSValue *value in rects) {
+        NSRect inPlane = [plane convertRect:value.rectValue fromView:self];
+        CGPathAddRect(path, NULL, [plane convertRectToLayer:inPlane]);
+    }
+    mask.path = path;
+    CGPathRelease(path);
+    plane.layer.mask = mask;
+}
+- (void)setDomOverlays:(NSArray<NSValue *> *)overlays {
+    if (_domOverlays == overlays) return;
+    [_domOverlays release];
+    _domOverlays = [overlays copy];
+    [self applyOverlayMask];
+}
 - (void)setBounds:(NSRect)bounds {
     NSSize frameSize = self.frame.size;
     if (frameSize.width > 0 && frameSize.height > 0) {
@@ -120,20 +166,12 @@ static void notifyScale(NSView *view) {
     [super setBounds:bounds];
     self.nativePlane.frame = self.bounds;
     if (self.webview && self.webview.superview == self) self.webview.frame = self.bounds;
+    [self applyOverlayMask];
 }
 - (NSView *)hitTest:(NSPoint)point {
     if (self.hidden || self.alphaValue <= 0 || !NSPointInRect(point, self.bounds)) return nil;
-    // Surface DOM coordinates are CSS/AppKit points. A document region may
-    // use a different pageZoom, but it is a child of the same point-space
-    // native plane and must not scale the surface overlay rectangles.
-    CGFloat zoom = self.webview.pageZoom > 0 ? self.webview.pageZoom : 1;
-    for (NSValue *value in [self.domOverlays reverseObjectEnumerator]) {
-        SPDOMOverlay overlay;
-        [value getValue:&overlay size:sizeof(overlay)];
-        if (!overlay.visible) continue;
-        NSRect rect = NSMakeRect(overlay.left * zoom, overlay.top * zoom,
-            MAX(NSWidth(self.bounds) - (overlay.left + overlay.right) * zoom, 0),
-            MAX(NSHeight(self.bounds) - (overlay.top + overlay.bottom) * zoom, 0));
+    for (NSValue *rectValue in [[self visibleOverlayRects] reverseObjectEnumerator]) {
+        NSRect rect = rectValue.rectValue;
         if (NSPointInRect(point, rect) && self.mainWebview) return nil;
         if (NSPointInRect(point, rect) && self.webview && !self.webview.hidden) {
             NSPoint domPoint = [self.webview convertPoint:point fromView:self];
@@ -158,6 +196,7 @@ static void notifyScale(NSView *view) {
     self.nativePlane.frame = self.bounds;
     if (self.webview && self.webview.superview == self) self.webview.frame = self.bounds;
     notifyScale(self.nativePlane);
+    [self applyOverlayMask];
     [CATransaction commit];
 }
 @end
