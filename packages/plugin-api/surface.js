@@ -18,8 +18,8 @@ export function createSurfaceContext({
   if (typeof runtime.emit !== "function") {
     throw new TypeError("surface context requires scoped event routing");
   }
-  if (typeof tab?.title !== "function" || typeof tab?.directory !== "function") {
-    throw new TypeError("surface context requires tab.title and tab.directory");
+  if (typeof tab?.title !== "function" || typeof tab?.directory !== "function" || typeof tab?.notify !== "function") {
+    throw new TypeError("surface context requires tab.title, tab.directory, and tab.notify");
   }
   const listeners = new Set();
   const eventListeners = new Map();
@@ -44,7 +44,7 @@ export function createSurfaceContext({
     // 진단 빌드에서는 플러그인의 진단 모듈, release 빌드에서는 null 이다.
     diagnostics,
     // 탭 알림(docs/spec/plugins.md#tab-reports): 탭에 보일 제목과 작업 디렉터리를 워크벤치에 알린다.
-    tab: Object.freeze({ title: tab.title, directory: tab.directory }),
+    tab: Object.freeze({ title: tab.title, directory: tab.directory, notify: tab.notify }),
     // 이 탭을 만든 카드의 활성 탭이 그때 기록한 작업 디렉터리.
     origin: Object.freeze({ directory: origin.directory ?? null }),
     runtime: Object.freeze({

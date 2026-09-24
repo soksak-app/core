@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createSurfaceContext, mountSurfaceModule, releaseSurfaceReady } from "../surface.js";
 
-const TAB = { title() {}, directory() {} };
+const TAB = { title() {}, directory() {}, notify() {} };
 
 test("surface modules mount into the supplied root and dispose exactly once", async () => {
   const root = { children: [], appendChild(node) { this.children.push(node); } };
@@ -45,14 +45,16 @@ test("surface context carries the tab reports and the origin directory", () => {
   const reported = [];
   const runtime = { exposure: { command() {} }, sidecar() {}, emit() {}, native: {} };
   const context = createSurfaceContext({ root, surfaceId: "tab-1", pluginId: "fixture", runtime,
-    tab: { title: (text) => reported.push(["title", text]), directory: (path) => reported.push(["directory", path]) },
+    tab: { title: (text) => reported.push(["title", text]), directory: (path) => reported.push(["directory", path]),
+      notify: (text) => reported.push(["notify", text]) },
     origin: { directory: "/tmp/origin" } });
   context.tab.title("vim");
   context.tab.directory("/tmp");
-  assert.deepEqual(reported, [["title", "vim"], ["directory", "/tmp"]]);
+  context.tab.notify("done");
+  assert.deepEqual(reported, [["title", "vim"], ["directory", "/tmp"], ["notify", "done"]]);
   assert.equal(context.origin.directory, "/tmp/origin");
   assert.equal(Object.isFrozen(context.origin), true);
   assert.equal(createSurfaceContext({ root, surfaceId: "tab-2", runtime, tab: TAB }).origin.directory, null);
   assert.throws(() => createSurfaceContext({ root, surfaceId: "tab-3", runtime }),
-    /surface context requires tab.title and tab.directory/);
+    /surface context requires tab.title, tab.directory, and tab.notify/);
 });

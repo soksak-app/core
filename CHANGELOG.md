@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-51-4 (partial): an OSC 9 notification from a terminal out of view marks its tab and the card's tab list button with a dot until the tab comes into view.
 - V5-51-3: a terminal tab shows the program's OSC 0/2 title unless `terminal.title` is `name`, and a terminal split from a terminal starts in the directory that terminal reported through OSC 7.
 - V5-51-1, V5-48: zsh and bash start with shell integration that reports OSC 133 marks, and a resize at a prompt clears the prompt's reflowed rows and places the cursor where the shell redraws, so a wrapped input line no longer leaves rows of the previous width.
 - V5-45-1: diagnostic pointer input keeps delivering to the view under the point, and the real-input tier checks a person's pointer path, as the user decided.

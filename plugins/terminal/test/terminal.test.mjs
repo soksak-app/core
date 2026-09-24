@@ -2736,6 +2736,10 @@ function createFakeTab({ reject = false } = {}) {
       calls.push(["title", text]);
     },
     directory: (path) => calls.push(["directory", path]),
+    notify: (text) => {
+      if (reject) throw new TypeError("a tab notice must be 1 to 1024 characters without control characters");
+      calls.push(["notify", text]);
+    },
   };
 }
 
@@ -2824,4 +2828,27 @@ test("a session opens in the origin directory of its tab", async () => {
   });
   const open = fakeSidecar.getMessages().find((message) => message.body.operation === "open");
   assert.deepEqual(open.body, { operation: "open", image: "view", shell: "login", directory: "/tmp/origin" });
+});
+
+test("an OSC 9 notification becomes a tab notice and a rejected one is a session error", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  const tab = createFakeTab();
+  await startTerminal({
+    view: createFakeView(), attachImage: createFakeAttachImage().function,
+    sidecar: fakeSidecar, expose: createFakeExpose(), tab, settings: titleSettings({}),
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  fakeSidecar.triggerEvent("test-session", { event: "notification", message: "build complete" });
+  assert.deepEqual(tab.calls.filter(([kind]) => kind === "notify"), [["notify", "build complete"]]);
+
+  const errors = [];
+  const rejecting = createFakeSidecar();
+  await startTerminal({
+    view: createFakeView(), attachImage: createFakeAttachImage().function,
+    sidecar: rejecting, expose: createFakeExpose(), tab: createFakeTab({ reject: true }), settings: titleSettings({ title: "name" }),
+    reportSurfaceError: (error) => errors.push(error.message), window: { TextEncoder: FakeTextEncoder },
+  });
+  rejecting.triggerEvent("test-session", { event: "notification", message: "x".repeat(2000) });
+  assert.match(errors.join("\n"), /a tab notice must be 1 to 1024 characters/);
 });

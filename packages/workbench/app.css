@@ -253,6 +253,11 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .tab[data-active=true]{color:var(--fg);background:var(--chip-sel)}
 .tab[data-dragging=true]{opacity:.4}
 .tab__name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+/* 표면이 알린 알림이 있는 탭과 그 카드의 탭 목록 버튼은 점을 보인다. */
+.tab[data-notice=true]::before,.chrome__ham[data-notice=true]::after,.picker__item[data-notice=true]::before{
+  content:"";width:6px;height:6px;border-radius:50%;background:var(--focus);flex:0 0 auto}
+.chrome__ham{position:relative}
+.chrome__ham[data-notice=true]::after{position:absolute;top:2px;right:2px}
 /* one 단계에서 활성 탭은 남은 너비만 사용하고 제목을 말줄임한다.
    제목 전체가 들어갈 때만 표시하면 탭이 불필요하게 숨겨진다. */
 .chrome[data-fit=one] .tab[data-active=true]{flex:0 1 auto;min-width:0}

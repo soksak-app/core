@@ -5,7 +5,7 @@ import { plugin } from "./registry.js";
 import { registerSurfaceExposure } from "./surface-exposure.js";
 import { onSettingsChange, pluginSettings } from "./settings.js";
 import { onTextSize, surfaceTextSize } from "./text-size.js";
-import { forgetTab, reportDirectory, reportTitle, tabOrigin } from "./tab-reports.js";
+import { forgetTab, reportDirectory, reportNotice, reportTitle, tabOrigin } from "./tab-reports.js";
 const mounted = new Map();
 const parking = document.createDocumentFragment();
 const authorization = new Map();
@@ -129,7 +129,8 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
       metadata: { home: surface.home },
       declarations: surface.declarations ?? {}, composition, diagnostics: plugin(surface.pluginId).diagnostics,
       tab: { title: (text) => reportTitle(surface.surfaceId, text),
-        directory: (path) => reportDirectory(surface.surfaceId, path) },
+        directory: (path) => reportDirectory(surface.surfaceId, path),
+        notify: (text) => reportNotice(surface.surfaceId, text) },
       origin: tabOrigin(surface.surfaceId),
       runtime: { sidecar: scoped.sidecar, native: scoped.native, exposure: scoped.exposure, emit, on,
         clipboard: scoped.clipboard,

@@ -455,6 +455,29 @@ for (const app of Object.values(APPS)) {
     await s.until("core.grid", (grid) => label(grid) === null, "an empty program title did not remove the title");
   });
 
+  test(`${app.name}: an OSC 9 notification from a terminal out of view becomes a tab notice until the tab is in view`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    s.cleanup(() => closeTerminalTabs(s));
+    const [shown, hidden] = await ensureTerminals(s, 2);
+    const cardOf = (grid, surface) => grid.cards.find((card) => card.tabs.some((tab) => tab.id === surface));
+    const notice = (grid, surface) => cardOf(grid, surface).tabs.find((tab) => tab.id === surface).notice;
+    await s.run("core.card.focus", { card: cardOf(await s.get("core.grid"), shown.surface).id });
+    await s.until("core.grid", (grid) => cardOf(grid, shown.surface).focused, "the first terminal card did not take focus");
+    // 보이는 탭(포커스된 카드의 활성 탭)의 알림은 두지 않는다.
+    await s.run("terminal.input", { bytes: "printf '\\033]9;SHOWN-NOTICE\\007'\r" }, shown.surface);
+    await s.until("terminal.session", (session) => session.vendor?.notification === "SHOWN-NOTICE",
+      "the focused terminal did not receive its notification", { surface: shown.surface });
+    assert.equal(notice(await s.get("core.grid"), shown.surface), null, "the tab in view received a notice");
+    await s.run("terminal.input", { bytes: "printf '\\033]9;NOTICE-CHECK\\007'\r" }, hidden.surface);
+    await s.until("core.grid", (grid) => notice(grid, hidden.surface) === "NOTICE-CHECK",
+      "the terminal out of view did not show a tab notice", { timeout: 10000 });
+    await s.run("core.card.focus", { card: cardOf(await s.get("core.grid"), hidden.surface).id });
+    await s.until("core.grid", (grid) => notice(grid, hidden.surface) === null,
+      "the notice stayed after the tab came into view");
+  });
+
   test(`${app.name}: a terminal split from a terminal starts in the directory that terminal reported`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);

@@ -164,7 +164,7 @@ function normalizeCursorPolicy(value) {
 export async function startTerminal({ id, view, attachImage, sidecar, expose, theme,
   settings, clipboard, scrollbar = null, reportSurfaceError = () => {}, diagnostics = null,
   // 탭 알림(docs/spec/plugins.md#tab-reports)과 이 탭을 만든 카드의 작업 디렉터리.
-  tab = { title() {}, directory() {} }, origin = { directory: null },
+  tab = { title() {}, directory() {}, notify() {} }, origin = { directory: null },
   // 이 표면의 실제 글자 배율(docs/spec/text-size.md). 출처가 없으면 배율은 1 이다.
   textSize = { read: () => 1, on: () => () => {} },
   window: globalWindow = globalThis.window }) {
@@ -911,6 +911,13 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       }
       session = { ...session, vendor: { ...session.vendor, notification: body.message } };
       changed("session");
+      // 보이지 않는 탭이면 워크벤치가 탭에 알림을 둔다. 거부된 알림은 세션 오류다.
+      try {
+        tab.notify(body.message);
+      } catch (error) {
+        setError("notification", `terminal notification failed: ${error.message}`);
+        reportSurfaceError(error);
+      }
     } else if (body.event === "vendor.shell.state") {
       const markers = new Set(["prompt.start", "prompt.end", "command.start", "command.finished"]);
       if (!markers.has(body.marker) || !Array.isArray(body.params) || body.params.some((value) => typeof value !== "string")) {

@@ -2,6 +2,9 @@
 const labels = new Map();
 const directories = new Map();
 const origins = new Map();
+const notices = new Map();
+// 탭이 보이는지(포커스된 카드의 활성 탭인지) 판이 알려 준다.
+let visibleTab = () => false;
 const listeners = new Set();
 
 const CONTROL = /[\u0000-\u001f\u007f-\u009f]/;
@@ -22,6 +25,32 @@ export function reportTitle(tabId, text) {
   if (labels.get(tabId) === text) return;
   labels.set(tabId, text);
   notify();
+}
+
+/** 판이 탭이 보이는지 판단하는 함수를 정한다. */
+export function setVisibleTab(probe) {
+  visibleTab = probe;
+}
+
+/** 보이지 않는 탭에 알림을 둔다. 보이는 탭이면 표면이 이미 보이므로 아무것도 바꾸지 않는다. */
+export function reportNotice(tabId, text) {
+  if (typeof text !== "string" || text.length === 0 || text.length > 1024 || CONTROL.test(text)) {
+    throw new TypeError("a tab notice must be 1 to 1024 characters without control characters");
+  }
+  if (visibleTab(tabId) || notices.get(tabId) === text) return;
+  notices.set(tabId, text);
+  notify();
+}
+
+export const tabNotice = (tabId) => notices.get(tabId) ?? null;
+
+/** 보이게 된 탭의 알림을 지운다. 판이 그릴 때마다 부른다. */
+export function clearVisibleNotices() {
+  let removed = false;
+  for (const tabId of [...notices.keys()]) {
+    if (visibleTab(tabId)) removed = notices.delete(tabId) || removed;
+  }
+  if (removed) notify();
 }
 
 /** 탭 id 의 표면의 작업 디렉터리를 기록하거나(path) 지운다(null). */
@@ -49,7 +78,8 @@ export const tabOrigin = (tabId) => origins.get(tabId) ?? Object.freeze({ direct
 export function forgetTab(tabId) {
   directories.delete(tabId);
   origins.delete(tabId);
-  if (labels.delete(tabId)) notify();
+  const noticed = notices.delete(tabId);
+  if (labels.delete(tabId) || noticed) notify();
 }
 
 export function onTabReports(listener) {

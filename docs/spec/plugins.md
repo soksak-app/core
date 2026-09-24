@@ -58,9 +58,11 @@ A `background` declaration is an explicit session-lifetime contract, not a secon
 
 ## Tab reports
 
-A surface context has `tab.title(text)` and `tab.directory(path)`, and a frozen `origin` object.
+A surface context has `tab.title(text)`, `tab.directory(path)`, and `tab.notify(text)`, and a frozen `origin` object.
 
 `tab.title(text)` sets the title that the surface's tab shows in place of its name, and `tab.title(null)` removes it so the tab shows its name again. The text is a string of 1 to 256 characters without control characters (U+0000–U+001F and U+007F–U+009F); any other value throws. The title is not saved with the layout. `core.grid` reports each tab's shown title as `label`, or `null`.
+
+`tab.notify(text)` gives the tab a notice when the tab is not the active tab of the focused card; for that tab the call changes nothing, because the surface is in view. The text follows the title rules with up to 1024 characters; another value throws. A tab with a notice shows a dot, and its tab and the card's tab list button carry the text as their tooltip; the tab list shows the dot beside the tab. The notice is removed when the tab becomes the active tab of the focused card or is closed, and a later notice replaces an earlier one. `core.grid` reports each tab's notice as `notice`, or `null`. The workbench does not save notices.
 
 `tab.directory(path)` records the surface's working directory, an absolute path, and `tab.directory(null)` removes it; any other value throws. The workbench does not read the filesystem for it and does not save it. When `+` or a split creates a tab, the new surface's `origin.directory` is the directory that the active tab of the card that was added to or split recorded at that moment, or `null`.
 

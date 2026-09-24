@@ -15,7 +15,7 @@ import { issueId } from "./ids.js";
 import { bind, delegate, mark, run } from "./commands.js";
 import { disposeSurface, focusSurface, mountSurface } from "./surface-modules.js";
 import { setSurfaceStatus } from "./surface-status.js";
-import { onTabReports, recordOrigin, tabLabel } from "./tab-reports.js";
+import { clearVisibleNotices, onTabReports, recordOrigin, setVisibleTab, tabLabel, tabNotice } from "./tab-reports.js";
 
 const NEEDS = ["cards", "card", "insertAt", "moveTo", "standings", "moveBoundary", "zoneAt",
   "splitToward", "replace"];
@@ -302,6 +302,7 @@ function updateCard(el, card) {
   for (const b of strip.querySelectorAll(".tab")) {
     b.dataset.active = String(b.dataset.tabId === card.data.activeId);
   }
+  drawNotices(chrome, tabs);
 
   // 카드의 연산은 넷이다: 탭 추가(T2), 세로 분할, 가로 분할, 닫기.
   // 탭 ✕ 는 그 탭 하나를 닫고 마지막 탭이면 카드도 닫는다(T5). 카드 ✕ 는 탭 수와
@@ -559,7 +560,7 @@ function openTabList(anchor, cardId) {
   const card = grid.card(cardId);
   if (!card?.data) return;
   openLayer(anchor, `탭 ${tabsOf(card).length}개`, tabsOf(card).map((t) => ({
-    key: t.id, name: tabName(t), mark: plugin(t.plugin).mark, svg: plugin(t.plugin).svg,
+    key: t.id, name: tabName(t), mark: plugin(t.plugin).mark, svg: plugin(t.plugin).svg, notice: tabNotice(t.id),
     active: t.id === card.data.activeId,
   })), (id) => {
     const c = grid.card(cardId);
@@ -593,6 +594,10 @@ function openLayer(anchor, ask, items, pick, align = "right") {
     b.type = "button";
     b.dataset.key = it.key;
     b.dataset.active = String(!!it.active);
+    if (it.notice) {
+      b.dataset.notice = "true";
+      b.title = it.notice;
+    }
     b.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true">${it.svg}</svg>` +
       `<span class="picker__name"></span><small></small>`;
     b.querySelector(".picker__name").textContent = it.name;
@@ -1191,6 +1196,8 @@ export function build(kept = fresh()) {
         divider.dataset.expose = "core.divider";
       }
       markFocus();
+      // 보이게 된 탭의 알림을 지운다.
+      clearVisibleNotices();
       centreTabs();
       railShape = drawRail();
       // 탭이 카드를 옮기거나 카드 배율이 바뀌면 표면의 실제 배율이 바뀐다.
@@ -1201,12 +1208,43 @@ export function build(kept = fresh()) {
   settle();
 }
 
-// 표면이 탭 제목을 알리면 탭 이름만 다시 쓴다. 레이아웃은 바뀌지 않으므로 다시 그리거나 저장하지 않는다.
+/** 알림이 있는 탭과, 그런 탭을 가진 카드의 탭 목록 버튼에 점과 도움말을 둔다. */
+function drawNotices(chrome, tabs) {
+  for (const b of chrome.querySelectorAll(".chrome__tabs .tab[data-tab-id]")) {
+    const notice = tabNotice(b.dataset.tabId);
+    if (notice) {
+      b.dataset.notice = "true";
+      b.title = notice;
+    } else if (b.dataset.notice) {
+      delete b.dataset.notice;
+      b.removeAttribute("title");
+    }
+  }
+  const ham = chrome.querySelector(".chrome__ham");
+  if (!ham) return;
+  const notices = tabs.map((t) => tabNotice(t.id)).filter(Boolean);
+  if (notices.length) ham.dataset.notice = "true";
+  else delete ham.dataset.notice;
+  ham.title = notices.length ? notices.join("\n") : "탭 목록";
+}
+
+// 탭이 보인다는 것은 포커스된 카드의 활성 탭이라는 뜻이다. 그 탭에 온 알림은 두지 않는다.
+setVisibleTab((id) => {
+  const card = grid?.card(focusedId);
+  return Boolean(card?.data) && activeTab(card)?.id === id;
+});
+
+// 표면이 탭 제목이나 알림을 알리면 탭 이름과 점만 다시 쓴다. 레이아웃은 바뀌지 않으므로 다시 그리거나 저장하지 않는다.
 onTabReports(() => {
-  for (const name of document.querySelectorAll(".card .tab[data-tab-id] .tab__name")) {
-    const id = name.parentElement.dataset.tabId;
-    const t = grid?.cards.flatMap(tabsOf).find((item) => item.id === id);
-    if (t) name.textContent = tabName(t);
+  for (const el of document.querySelectorAll(".card[data-card-id]")) {
+    const card = grid?.card(el.dataset.cardId);
+    const chrome = el.querySelector(".chrome");
+    if (!card?.data || !chrome) continue;
+    for (const name of chrome.querySelectorAll(".tab[data-tab-id] .tab__name")) {
+      const t = tabsOf(card).find((item) => item.id === name.parentElement.dataset.tabId);
+      if (t) name.textContent = tabName(t);
+    }
+    drawNotices(chrome, tabsOf(card));
   }
 });
 
