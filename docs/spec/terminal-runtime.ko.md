@@ -16,7 +16,7 @@
 
 ### 서비스 전송
 
-사이드카 선언은 `transport: "persistent"`를 선택한다. 이 필드가 없는 사이드카는 해당 도메인의 stdio 전송을 사용한다. 호스트는 선언한 실행 파일을 `--service-dir <config-dir>/services/<executable-name>`으로 시작한다. 서비스는 해당 디렉터리의 독점 잠금을 얻은 뒤 리스너를 생성한다. Unix 소켓 경로 제한을 지키도록 접근 제한된 짧은 임시 디렉터리에 소켓을 만들고 `{protocol: 1, pid, socket, token}`의 `endpoint.json`을 원자적으로 게시한다. 디렉터리 권한은 0700, 토큰을 담은 파일은 0600이다. stdout 준비 줄은 리스너가 준비된 뒤에만 해당 엔드포인트를 담는다.
+사이드카 선언은 `transport: "persistent"`를 선택한다. 이 필드가 없는 사이드카는 해당 도메인의 stdio 전송을 사용한다. 호스트는 선언한 실행 파일을 `--service-dir <config-dir>/services/<executable-name>`으로 시작한다. 서비스는 해당 디렉터리의 독점 잠금을 얻은 뒤 리스너를 생성한다. Unix 소켓 경로 제한을 지키도록 접근 제한된 짧은 임시 디렉터리에 소켓을 만들고 `{protocol: 1, pid, socket, token}`의 `endpoint.json`을 원자적으로 게시한다. 디렉터리 권한은 0700, 토큰을 담은 파일은 0600이다. stdout 준비 줄은 리스너가 준비된 뒤에만 해당 엔드포인트를 담는다. 서비스는 엔드포인트를 게시하기 전에 기본 터미널 글꼴을 읽고, 호스트는 시간 제한 없이 준비 줄을 기다린다. 따라서 서비스 프로세스의 첫 CoreText 호출은 그 프로세스의 첫 터미널만 늦춘다. 이 비용은 서비스 프로세스마다 한 번 생기고 서비스가 앱 재시작보다 오래 살아 있으므로 받아들인다.
 
 첫 줄 단위 JSON 메시지는 `{operation: "hello", protocol: 1, token, client}`다. 서비스는 `{operation: "hello", protocol: 1, ok: true}` 또는 `{operation: "hello", ok: false, error}`로 답한다. 인증 후 표면 메시지는 선언된 사이드카 봉투를 유지한다. `{operation: "close-owner", request}`는 인증한 클라이언트의 세션을 종료하고 정리 뒤 `{operation: "closed-owner", request, ok: true}` 또는 `ok: false`와 `error`로 답한다. `{operation: "shutdown", request}`는 소유자 닫기 이후에만 수락하고 `{operation: "shutdown", request, ok: true}`로 답하며, 클라이언트 연결이 모두 종료된 뒤 서비스를 종료하도록 허용한다. 소켓 EOF는 세션을 보존한다. 엔드포인트 파일만으로 해당 PID를 종료하지 않으며 프로토콜·인증 실패 시 경쟁 서비스를 시작하지 않는다.
 

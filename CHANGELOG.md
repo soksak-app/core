@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F8-19: measured the first-terminal cost of a new terminal service on both hosts and stated in the specification that the default font load before the endpoint is accepted.
 - V5-24: the package test command check bounds `pnpm test` only against a hang and reports its duration; the time was `pnpm` start under load, not compilation.
 - V5-31: the supervisor SIGTERM test reads a pid file that is written atomically and waits for a positive pid. New target `make node-repeat`.
 - V5-6-1: the default native suite runs `appearance_test`.
