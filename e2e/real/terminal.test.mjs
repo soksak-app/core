@@ -7,7 +7,7 @@ import test from "node:test";
 import { APPS, fresh, open } from "../app.mjs";
 import { frames, pixel, readFrame } from "../frame.mjs";
 import { ensureTerminals, readScreenUntil } from "../terminal-screen.mjs";
-import { bringFront, click, dragPath, keepPasteboard, pasteboardText, requireTrusted } from "./hid.mjs";
+import { bringFront, click, dragPath, keepPasteboard, pasteboardText, requireTrusted, screenCenter } from "./hid.mjs";
 
 // 터미널 한 칸의 중심 화면 좌표.
 function cellPoint(origin, session, column, row) {
@@ -70,5 +70,26 @@ for (const app of Object.values(APPS)) {
     const cleared = await cellPixel(s, surface, session, blank, row);
     assert.ok(same(cleared, background), `a click left the selection rendered: ${cleared} against ${background}`);
     assert.equal(pasteboardText(), "SELECTME", "the click changed the copied selection");
+  });
+}
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: a real click gives native focus to the clicked terminal and its card`, { timeout: 90000 }, async (t) => {
+    requireTrusted();
+    const s = await open(t, app);
+    assert.ok(s, `${app.binary} is not built`);
+    await fresh(s);
+    const terminals = await ensureTerminals(s, 3);
+    await s.presented();
+    await bringFront(s, app, await s.rect("terminal.view", undefined, terminals[0].surface));
+    for (const terminal of [...terminals, terminals[0]]) {
+      const point = await screenCenter(s, await s.rect("terminal.view", undefined, terminal.surface));
+      click(point.x, point.y);
+      await s.until("core.grid", (grid) => grid.cards.some((card) => card.focused &&
+        card.tabs.some((tab) => tab.id === terminal.surface)), `the card of ${terminal.surface} did not take focus`);
+      const host = await s.until("host.window", (window) => window.responder?.surface === terminal.surface,
+        `${terminal.surface} did not become the native first responder after a real click`);
+      assert.deepEqual(host.regions.filter((region) => region.focused).map((region) => region.surface), [terminal.surface]);
+    }
   });
 }

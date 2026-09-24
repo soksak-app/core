@@ -181,15 +181,16 @@ function createCard(card) {
     // 누른 카드가 글자 크기의 범위다(docs/spec/text-size.md).
     if (id) setTextScope({ kind: "card", card: id });
     if (!id || isPlace(id) || e.target.closest(".tab__x, .chrome__act, .chrome__ham")) return;
-    const tab = () => activeTab(grid.card(id));
-    const settleFocus = () => {
-      const active = tab();
-      if (!active) return false;
-      requestSurfaceFocus(active.id);
-      return true;
-    };
-    if (focusedId !== id) return Promise.resolve(run("core.card.focus", { card: id })).then(settleFocus);
-    const active = tab();
+    const active = activeTab(grid.card(id));
+    if (focusedId !== id) {
+      // 카드 포커스가 만든 렌더는 표시를 마치면 대기 중인 표면 포커스를 가져간다. 명령이 끝난 뒤에 적으면
+      // 렌더가 먼저 끝나 포커스가 다음 렌더로 밀리므로, 명령을 실행하기 전에 적는다(V5-46).
+      if (active) requestSurfaceFocus(active.id);
+      return Promise.resolve(run("core.card.focus", { card: id })).catch((error) => {
+        if (active) cancelSurfaceFocus(active.id);
+        throw error;
+      });
+    }
     return active ? focusSurface(active.id) : false;
   });
   return el;
@@ -910,6 +911,11 @@ let pendingSurfaceFocus = null;
 
 export function requestSurfaceFocus(surfaceId) {
   pendingSurfaceFocus = surfaceId;
+}
+
+/** 명령이 실패해 렌더가 없으면 대기 중인 표면 포커스를 지운다. */
+export function cancelSurfaceFocus(surfaceId) {
+  if (pendingSurfaceFocus === surfaceId) pendingSurfaceFocus = null;
 }
 
 export function takeSurfaceFocus() {

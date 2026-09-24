@@ -315,6 +315,24 @@ for (const app of Object.values(APPS)) {
     assert.deepEqual(left, [], `the removed project's shells remain: ${left} (before ${held}, after ${after})`);
   });
 
+  test(`${app.name}: a click gives native focus to the clicked terminal and its card`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const terminals = await ensureTerminals(s, 3);
+    await s.presented();
+    // 누른 카드의 포커스와 네이티브 키보드 포커스는 같은 터미널을 가리켜야 한다(V5-46).
+    for (const terminal of [...terminals, terminals[0]]) {
+      const view = await s.rect("terminal.view", undefined, terminal.surface);
+      await s.click(view.document.x + view.x + view.width / 2, view.document.y + view.y + view.height / 2);
+      await s.until("core.grid", (grid) => grid.cards.some((card) => card.focused &&
+        card.tabs.some((tab) => tab.id === terminal.surface)), `the card of ${terminal.surface} did not take focus`);
+      const host = await s.until("host.window", (window) => window.responder?.surface === terminal.surface,
+        `${terminal.surface} did not become the native first responder after its click`);
+      assert.deepEqual(host.regions.filter((region) => region.focused).map((region) => region.surface), [terminal.surface]);
+    }
+  });
+
   test(`${app.name}: a page start keeps the terminal sessions that the layouts hold`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
