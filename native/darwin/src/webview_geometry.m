@@ -4,7 +4,6 @@
 #import "webview_geometry.h"
 #import "private/webkit.h"
 
-static void holdFrame(NSView *view, NSRect frame);
 
 @interface SPSurfaceCoordinates : NSView
 @property CGFloat scale;
@@ -157,10 +156,7 @@ static void notifyScale(NSView *view) {
     [CATransaction setDisableActions:YES];
     [super setFrameSize:size];
     self.nativePlane.frame = self.bounds;
-    if (self.webview && self.webview.superview == self) {
-        holdFrame(self.webview, self.bounds);
-        self.webview.frame = self.bounds;
-    }
+    if (self.webview && self.webview.superview == self) self.webview.frame = self.bounds;
     notifyScale(self.nativePlane);
     [CATransaction commit];
 }
@@ -410,48 +406,6 @@ void webviewMatchSurface(void *handle, void *surfaceHandle) {
     if (surfaceHost(surface)) [view _setOverrideDeviceScaleFactor:1];
 }
 
-// SPHeldFrame 은 호스트가 정한 프레임을 지킨다. 웹 인스펙터를 창에 붙이면 WebKit 이 검사 대상
-// 뷰를 창의 남은 자리로 옮기고 인스펙터를 닫아도 되돌리지 않는다. 표면과 모달의 자리는 페이지가
-// 정하므로 밖에서 바뀐 프레임은 마지막으로 정한 값으로 되돌린다.
-@interface SPHeldFrame : NSObject
-@property(nonatomic, assign) NSView *view;
-@property(nonatomic) NSRect frame;
-@end
-
-@implementation SPHeldFrame
-- (instancetype)initWithView:(NSView *)view {
-    if ((self = [super init])) {
-        _view = view;
-        view.postsFrameChangedNotifications = YES;
-        [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(frameChanged:)
-            name:NSViewFrameDidChangeNotification object:view];
-    }
-    return self;
-}
-- (void)dealloc {
-    [NSNotificationCenter.defaultCenter removeObserver:self];
-    [super dealloc];
-}
-- (void)frameChanged:(NSNotification *)notification {
-    if (NSEqualRects(self.view.frame, self.frame)) return;
-    [CATransaction begin];
-    [CATransaction setDisableActions:YES];
-    self.view.frame = self.frame;
-    [CATransaction commit];
-}
-@end
-
-static const char kHeldFrame;
-
-static void holdFrame(NSView *view, NSRect frame) {
-    SPHeldFrame *held = objc_getAssociatedObject(view, &kHeldFrame);
-    if (!held) {
-        held = [[[SPHeldFrame alloc] initWithView:view] autorelease];
-        objc_setAssociatedObject(view, &kHeldFrame, held, OBJC_ASSOCIATION_RETAIN);
-    }
-    held.frame = frame;
-}
-
 void webviewSetFrame(void *handle, double x, double y, double width, double height) {
     NSView *view = (NSView *)handle;
     NSWindow *window = view.window;
@@ -469,11 +423,6 @@ void webviewSetFrame(void *handle, double x, double y, double width, double heig
         normalizeCoordinateBounds((SPSurfaceCoordinates *)placedView.superview);
     }
     NSRect placed = [placedView.superview convertRect:frame fromView:window.contentView];
-    // 표면만 프레임을 지킨다. 창 크기를 따라가는 모달은 창이 그 크기를 바꾼다.
-    if (host) {
-        holdFrame(host, placed);
-        if (view != host) holdFrame(view, NSMakeRect(0, 0, placed.size.width, placed.size.height));
-    }
     [CATransaction begin];
     [CATransaction setDisableActions:YES];
     placedView.frame = placed;

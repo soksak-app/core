@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-15-1: the unused surface frame hold is removed; no current case moves a surface, and the specification states that the host holds no surface frame against outside changes.
 - V5-1: the native keyboard window check also sends arrow keys and Ctrl+C through the image region, the terminal input queue, and sidecar key encoding, and fails when the region key or insert forwarding is removed; it passes on both hosts.
 - V5-5: an activation-tier native check shows that injected press and release reach the page of an active key window as trusted `pointerdown`, `pointerup`, and `click`; the injector needs no change.
 - V5-15: the inspector activation check dispatches events while it waits, so the application becomes active, and uses a surface tall enough for WebKit to attach the inspector; private WebKit declarations moved to the private header. It passes 3 runs in a row.
