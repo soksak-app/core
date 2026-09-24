@@ -77,17 +77,32 @@ const order = (file) => {
 const originals = {};
 for (const b of BREAKS) originals[b.file] ??= readFileSync(`${HERE}${b.file}`, "utf8");
 
-const TEST_TIMEOUT = 20_000;
+// The baseline bound only stops a hang: a file that passes takes what it takes.
+// `every invariant holds after each structural change` alone uses about 15 s of
+// CPU time and took 20-23 s of wall time under other load, so no bound near
+// that can tell a slow file from a hung one.
+const BASELINE_TIMEOUT = 120_000;
+// A break is bounded by its file's baseline time. Eight breaks run at once, and
+// eight copies of that file took 22 s each where one took 21 s; three times the
+// baseline leaves that and further load, while a break that makes the file hang
+// still ends.
+const baselineTime = {};
+const breakTimeout = (file) => Math.max(20_000, 3 * baselineTime[file]);
 
-/** Whether this test file fails in a copy. Bounded, so a hang cannot outlive it. */
-const fails = (root, file) =>
+/**
+ * Run one test file in a copy. Bounded, so a hang cannot outlive it. The
+ * result says whether it failed, whether the bound ended it, and how long it took.
+ */
+const runFile = (root, file, timeout) =>
   new Promise((done) => {
+    const start = performance.now();
     const child = spawn(
       "node",
-      [`${root}scripts/bounded.mjs`, String(TEST_TIMEOUT), "node", "--test", file],
+      [`${root}scripts/bounded.mjs`, String(timeout), "node", "--test", file],
       { cwd: root, stdio: "ignore" },
     );
-    child.on("exit", (code) => done(code !== 0));
+    child.on("exit", (code) =>
+      done({ failed: code !== 0, timedOut: code === 124, elapsed: Math.round(performance.now() - start) }));
   });
 
 // A copy that does not pass before a break is applied measures nothing: the run
@@ -95,9 +110,11 @@ const fails = (root, file) =>
 // every time.
 const broken = [];
 for (const file of TESTS) {
-  console.log(`START baseline test=${file} timeout_ms=${TEST_TIMEOUT}`);
-  if (await fails(HERE, file)) broken.push(file);
-  console.log(`${broken.includes(file) ? "FAIL" : "PASS"} baseline test=${file}`);
+  console.log(`START baseline test=${file} timeout_ms=${BASELINE_TIMEOUT}`);
+  const result = await runFile(HERE, file, BASELINE_TIMEOUT);
+  baselineTime[file] = result.elapsed;
+  if (result.failed) broken.push(`${file} (${result.timedOut ? "timed out" : "failed"} after ${result.elapsed} ms)`);
+  console.log(`${result.failed ? "FAIL" : "PASS"} baseline test=${file} elapsed_ms=${result.elapsed}`);
 }
 if (broken.length) {
   console.error(
@@ -149,12 +166,16 @@ const run = async (b) => {
     const src = originals[b.file];
     writeFileSync(`${root}${b.file}`, src.split(b.find).join(b.to));
     for (const file of order(b.file)) {
-      console.log(`START break=${b.id} test=${file} timeout_ms=${TEST_TIMEOUT}`);
-      if (await fails(root, file)) {
-        console.log(`PASS break=${b.id} result=caught test=${file}`);
+      const timeout = breakTimeout(file);
+      console.log(`START break=${b.id} test=${file} timeout_ms=${timeout}`);
+      const result = await runFile(root, file, timeout);
+      if (result.failed) {
+        // A break that makes the file hang is caught by the bound; the result names that.
+        const how = result.timedOut ? "caught-by-timeout" : "caught";
+        console.log(`PASS break=${b.id} result=${how} test=${file} elapsed_ms=${result.elapsed}`);
         return { b, caught: true };
       }
-      console.log(`PASS break=${b.id} test=${file}`);
+      console.log(`PASS break=${b.id} test=${file} elapsed_ms=${result.elapsed}`);
     }
     console.log(`FAIL break=${b.id} result=survived`);
     return { b, caught: false };
