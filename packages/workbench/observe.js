@@ -17,14 +17,18 @@ import { currentGrid, surfaceInput } from "./plane.js";
 
 const KNOBS = ["latency", "skew"];
 
-registry.method("diagnostics.fixture", async ({ root }) => {
+registry.method("diagnostics.fixture", async ({ root, settings: overrides }) => {
   if (typeof root !== "string" || !root) throw new Error("diagnostics.fixture requires root");
+  if (overrides !== undefined && (typeof overrides !== "object" || overrides === null || Array.isArray(overrides))) {
+    throw new Error("diagnostics.fixture settings must be an object");
+  }
   const projects = await import("./projects.js");
   const settings = await import("./settings.js");
   const plane = await import("./plane.js");
   await projects.flush();
   for (const project of [...projects.all()]) await projects.close(project.id);
-  await settings.set(structuredClone(settings.defaults), "common");
+  // 검사가 준 공통 설정은 기본값과 한 번에 적용한다. 열리는 표면이 그 값으로 시작하고 변경 알림은 한 번이다.
+  await settings.set({ ...structuredClone(settings.defaults), ...overrides }, "common");
   await projects.open({ root, color: "#ffb36b", layout: plane.fresh() });
   await projects.flush();
   return { root };

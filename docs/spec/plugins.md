@@ -34,7 +34,7 @@ Common functionality belongs to the workbench or the native host so plugins do n
 | `sections` | no | Sidebar sections `{ "id": "<plugin id>.<name>", "name" }` |
 | `preview` | no | `{ "ink": "--<token>" }`: the theme token name that colors the plugin's cards in library previews; requires `surface` |
 | `sidecars` | no | Package names of the [sidecars](sidecars.md) the page surface uses; requires `surface`. Each must be a dependency in the plugin's `package.json` |
-| `background` | no | `{ "sidecar": "<declared sidecar>", "operation": "<operation name>" }`: keeps one declared sidecar session for each non-active tab without creating a native surface; requires `surface` and `sidecars` |
+| `background` | no | `{ "sidecar": "<declared sidecar>", "operation": "<operation name>", "settings"?: { "<request field>": "<declared setting>" } }`: keeps one declared sidecar session for each non-active tab without creating a native surface; the workbench puts the current value of each mapped plugin setting into the request field, and `settings` cannot name `operation` or an undeclared setting; requires `surface` and `sidecars` |
 
 A plugin requires `surface`, `sections`, or both. Only plugins with a surface appear in the add menu and own a rail. The workbench imports `modules/<package name>/<module>` and calls its `mount(root, context)` export. The surface identifier is an explicit context member, not a URL query. The old `page` declaration is rejected; it does not select an alternate implementation. Unknown fields are rejected.
 

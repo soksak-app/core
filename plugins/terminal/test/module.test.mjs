@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+
+// 터미널은 설정 shell 이 가리키는 셸을 연다.
+const SHELL_SETTINGS = { read: () => ({ shell: "/bin/sh" }), on: () => () => {} };
 test("terminal module waits for composition presentation, publishes state, and disposes the controller", async () => {
   const view = { addEventListener() {}, removeEventListener() {} };
   const root = {
@@ -27,7 +30,7 @@ test("terminal module waits for composition presentation, publishes state, and d
   const statuses = new Map();
   const context = {
     surfaceId: "terminal-test",
-    runtime: { sidecar: () => sidecar, theme: (listener) => listener({ scheme: "light" }) },
+    runtime: { sidecar: () => sidecar, theme: (listener) => listener({ scheme: "light" }), settings: SHELL_SETTINGS },
     composition: {
       async create() {
         await presentation;
@@ -81,7 +84,7 @@ test("terminal module disposes its native composition when sidecar open fails", 
       async send(_id, body) {
         if (body.operation === "open") throw new Error("connect authenticated service: socket missing");
       },
-    }), theme: () => {} },
+    }), theme: () => {}, settings: SHELL_SETTINGS },
     composition: {
       async create() {
         return {

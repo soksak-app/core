@@ -13,6 +13,26 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use uuid::Uuid;
 
+/// 설정 값 request 가 가리키는 셸 경로. `login` 은 계정의 로그인 셸이고, 그 밖의 값은 실행할 수 있는 절대
+/// 경로여야 한다. 다른 셸로 대신하지 않고 오류를 반환한다.
+pub fn resolve_shell(request: &str) -> Result<String, String> {
+    let shell = if request == "login" {
+        crate::platform::darwin::account::login_shell()?
+    } else {
+        request.to_string()
+    };
+    if !shell.starts_with('/') {
+        return Err(format!("terminal shell {shell:?} is not an absolute path"));
+    }
+    let path = std::path::Path::new(&shell);
+    if !path.is_file() {
+        return Err(format!("terminal shell {shell:?} is not a file"));
+    }
+    nix::unistd::access(path, nix::unistd::AccessFlags::X_OK)
+        .map_err(|error| format!("terminal shell {shell:?} is not executable: {error}"))?;
+    Ok(shell)
+}
+
 const RETAINED_OUTPUT: usize = 10_000;
 
 struct Session {
@@ -54,11 +74,40 @@ impl PtyService {
         self.open_owned("", program, args, cwd, cols, rows, events)
     }
 
+    /// 이미 확인한 셸 경로 shell 을 로그인 셸로 시작한다(argv[0] 은 `-` 와 셸 이름, SHELL 은 셸 경로).
+    pub fn open_shell(
+        &self,
+        owner: &str,
+        shell: &str,
+        cwd: Option<&str>,
+        cols: u16,
+        rows: u16,
+        events: tokio::sync::mpsc::UnboundedSender<DaemonEvent>,
+    ) -> Result<(String, String), String> {
+        let mut command = CommandBuilder::new_default_prog();
+        command.env("SHELL", shell);
+        self.spawn_owned(owner, command, cwd, cols, rows, events)
+    }
+
     pub fn open_owned(
         &self,
         owner: &str,
         program: &str,
         args: &[String],
+        cwd: Option<&str>,
+        cols: u16,
+        rows: u16,
+        events: tokio::sync::mpsc::UnboundedSender<DaemonEvent>,
+    ) -> Result<(String, String), String> {
+        let mut command = CommandBuilder::new(program);
+        command.args(args);
+        self.spawn_owned(owner, command, cwd, cols, rows, events)
+    }
+
+    fn spawn_owned(
+        &self,
+        owner: &str,
+        mut command: CommandBuilder,
         cwd: Option<&str>,
         cols: u16,
         rows: u16,
@@ -74,8 +123,6 @@ impl PtyService {
             })
             .map_err(|error| format!("open PTY: {error}"))?;
 
-        let mut command = CommandBuilder::new(program);
-        command.args(args);
         if let Some(directory) = cwd {
             command.cwd(directory);
         }

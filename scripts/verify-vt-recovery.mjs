@@ -151,7 +151,7 @@ const worker = async () => {
   const project = "/recovery/project";
   const client = await lineClient(endpoint, serviceDirectory);
   const openSession = async (name, label) => {
-    sendSurface(client, name, project, { operation: "open", image: "terminal" });
+    sendSurface(client, name, project, { operation: "open", image: "terminal", shell: "/bin/sh" });
     sendSurface(client, name, project, { image: { configure: {
       name: "terminal", generation: 1, raster: 1, width: 640, height: 384, scale: 1,
     } } });
@@ -184,7 +184,7 @@ const worker = async () => {
     console.log(`WORKER_ORPHAN_CLOSED_SESSION_ID=${expectedOrphan}`);
     sendSurface(client, orphan, project, { operation: "close" });
 
-    sendSurface(client, surface, project, { operation: "open", image: "terminal" });
+    sendSurface(client, surface, project, { operation: "open", image: "terminal", shell: "/bin/sh" });
     sendSurface(client, surface, project, { operation: "screen.read" });
     const reconnected = await waitFor(client, (value) => value.surface === surface && value.body?.event === "session", "worker session reattach");
     if (reconnected.body.sessionId !== expectedSession) {

@@ -805,7 +805,10 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
 
   // 세션 열기는 크기를 보내지 않는다. 호스트가 네이티브 영역을 적용하며 보낸 configure만
   // 이미지와 PTY 크기의 권위 있는 입력이다.
-  await terminal.send(id, { operation: "open", image: "view" });
+  // 세션은 설정 shell 이 가리키는 셸을 연다(login 은 계정의 로그인 셸). 설정이 없으면 다른 셸로 대신하지 않는다.
+  const shell = (settings?.read?.() ?? {}).shell;
+  if (typeof shell !== "string" || shell.length === 0) throw new Error("terminal shell setting is missing");
+  await terminal.send(id, { operation: "open", image: "view", shell });
 
   let themeReady = Promise.resolve();
   let themeSubscription = null;

@@ -395,6 +395,9 @@ const START = { width: 1200, height: 760 };
  * 창을 검사 시작 상태로 만든다. 다른 창을 닫고, 창 크기를 시작 크기로 되돌리고, 테스트 프로젝트를 새 배치로 열고 메인 문서를 다시 읽은 뒤,
  * 첫 셸 문서가 테마를 적용할 때까지 기다리고 표시 완료를 확인한다.
  */
+
+/** 창 검사 터미널의 셸. 로그인 셸의 프로필에 따라 달라지는 프롬프트를 피한다. */
+const CHECK_SHELL = fileURLToPath(new URL("./check-shell", import.meta.url));
 export async function fresh(s) {
   for (const window of await s.get("host.windows")) {
     if (window.window !== s.window) await s.on(window.window).close();
@@ -415,7 +418,8 @@ export async function fresh(s) {
   const initial = verification.values.length;
   let records;
   try {
-    await s.request("diagnostics.fixture");
+    // 창 검사의 터미널은 사용자의 로그인 셸과 무관하게 검사용 셸(check-shell)로 시작한다.
+    await s.request("diagnostics.fixture", { settings: { "terminal.shell": CHECK_SHELL } });
     await s.presented();
     if (presentationErrors.length) {
       throw new Error(`test preparation reported presentation errors before reload: ${JSON.stringify(presentationErrors)}; ` +

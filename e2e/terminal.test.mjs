@@ -3,8 +3,8 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { tmpdir, userInfo } from "node:os";
+import { basename, dirname, join } from "node:path";
 import test from "node:test";
 
 import { APPS, drag, failure, fresh, open, within } from "./app.mjs";
@@ -333,6 +333,23 @@ for (const app of Object.values(APPS)) {
     }
   });
 
+  test(`${app.name}: the login shell setting starts the account's login shell as a login shell`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    s.cleanup(() => closeTerminalTabs(s));
+    const existing = await ensureTerminals(s, 1);
+    await s.run("core.settings.change", { key: "terminal.shell", value: "login", scope: "common" });
+    // 설정은 그 뒤에 여는 세션에 적용된다. 새 터미널을 연다.
+    const terminals = await ensureTerminals(s, existing.length + 1);
+    const opened = terminals.find((terminal) => !existing.some((item) => item.surface === terminal.surface));
+    assert.ok(opened, "no new terminal opened after the setting changed");
+    const expected = `-${basename(userInfo().shell)}`;
+    await s.run("terminal.input", { bytes: "printf 'ARGV0=%s\\n' \"$0\"\r" }, opened.surface);
+    await readScreenUntil(s, opened.surface, (lines) => lines.some((line) => line.trim() === `ARGV0=${expected}`),
+      `the new terminal did not start ${userInfo().shell} as a login shell (argv0 ${expected})`);
+  });
+
   test(`${app.name}: a page start keeps the terminal sessions that the layouts hold`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
@@ -629,6 +646,8 @@ for (const app of Object.values(APPS)) {
     s.cleanup(() => closeTerminalTabs(s));
     await s.until("terminal.session", (state) => Boolean(state?.sessionId && state.rows > 8),
       "inline-image terminal session did not open", { surface });
+    // 셸이 프롬프트를 낸 뒤에 입력한다. 그 전의 입력은 터미널이 먼저 한 번 보여 준다.
+    await readScreenUntil(s, surface, (lines) => lines.some((line) => line.includes("$")), "the shell prompt did not appear");
 
     const red = "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAADklEQVR4nGP4z8DwH4QBEfcD/ePF9e8AAAAASUVORK5CYII=";
     const blue = "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAADklEQVR4nGNgYPj/H4QBDfsD/Yde1YcAAAAASUVORK5CYII=";

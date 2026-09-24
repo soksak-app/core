@@ -97,7 +97,22 @@ func diagnosticFixture(e *Endpoint, _ *endpointConn, params json.RawMessage) (an
 	if err := writeJSON(filepath.Join(root, ".soksak", "settings.json"), Record{}); err != nil {
 		return nil, err
 	}
-	return h.ask(s, "diagnostics.fixture", map[string]any{"root": root}, pageTimeout)
+	// settings 는 기본값 위에 적용할 공통 설정이다. 주어지면 객체여야 한다.
+	var request struct {
+		Settings json.RawMessage `json:"settings"`
+	}
+	if err := json.Unmarshal(params, &request); err != nil {
+		return nil, err
+	}
+	page := map[string]any{"root": root}
+	if len(request.Settings) > 0 {
+		var settings map[string]any
+		if err := json.Unmarshal(request.Settings, &settings); err != nil || settings == nil {
+			return nil, fmt.Errorf("diagnostics.fixture settings must be an object")
+		}
+		page["settings"] = settings
+	}
+	return h.ask(s, "diagnostics.fixture", page, pageTimeout)
 }
 
 // dragPlan 은 경계 하나를 왕복하는 끌기다. 각 반복은 왕복이므로 경계는 제자리로 돌아온다.

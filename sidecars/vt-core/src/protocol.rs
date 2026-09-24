@@ -525,9 +525,10 @@ pub enum DaemonEvent {
 /// 세션 포트: 데몬과 통신하는 추상 인터페이스
 #[async_trait]
 pub trait SessionPort: Send + Sync {
+    /// shell 은 터미널 설정 shell 의 값이다(`login` 이거나 셸의 절대 경로).
     async fn open(
         &self,
-        program: &str,
+        shell: &str,
         cols: u16,
         rows: u16,
         hint: Option<&str>,
@@ -558,6 +559,8 @@ struct Envelope {
 enum SurfaceCommand {
     Open {
         image: Option<String>,
+        /// 터미널 설정 shell 의 값. `login` 이거나 셸의 절대 경로다.
+        shell: String,
     },
     Reconnect,
     Configure(ImageConfiguration),
@@ -1323,6 +1326,7 @@ fn inline_dimension(dimension: &Dimension) -> Value {
 }
 
 async fn open_headless(
+    shell: &str,
     session_id: &mut Option<String>,
     engine: &mut Box<dyn Engine>,
     session_port: &Arc<dyn SessionPort>,
@@ -1332,7 +1336,7 @@ async fn open_headless(
         return true;
     }
     engine.resize(80, 24);
-    match session_port.open("/bin/sh", 80, 24, None).await {
+    match session_port.open(shell, 80, 24, None).await {
         Ok(id) => {
             *session_id = Some(id);
             true
@@ -1349,6 +1353,7 @@ async fn open_if_configured(
     surface_id: &str,
     requested: bool,
     requested_image: &Option<String>,
+    shell: &str,
     session_id: &mut Option<String>,
     engine: &mut Box<dyn Engine>,
     image_state: &mut Option<ImageState>,
@@ -1383,7 +1388,7 @@ async fn open_if_configured(
         let response = json!({"surface": surface_id, "body": {"error": "invalid renderer metrics", "reason": error}});
         return output_tx.send(response.to_string()).await.is_ok();
     }
-    match session_port.open("/bin/sh", cols, rows, None).await {
+    match session_port.open(shell, cols, rows, None).await {
         Ok(sid) => {
             *session_id = Some(sid.clone());
             if !send_state(surface_id, &sid, cols, rows, state, output_tx).await {
@@ -1455,6 +1460,7 @@ async fn surface_task(
     let mut multipart: Option<MultipartAssembly> = None;
     let mut open_requested = false;
     let mut requested_image: Option<String> = None;
+    let mut requested_shell = String::new();
     let mut headless = false;
     let mut pending_configuration: Option<ImageConfiguration> = None;
     let mut focused = false;
@@ -1500,12 +1506,13 @@ async fn surface_task(
             }
             Some(cmd) = cmd_rx.recv() => {
                 match cmd {
-                    SurfaceCommand::Open { image } => {
+                    SurfaceCommand::Open { image, shell } => {
                         open_requested = true;
                         requested_image = image;
+                        requested_shell = shell;
                         headless = requested_image.is_none();
-                        if headless && !open_headless(&mut session_id, &mut engine, &session_port, &output_tx).await { return; }
-                        if !open_if_configured(&surface_id, open_requested, &requested_image, &mut session_id,
+                        if headless && !open_headless(&requested_shell, &mut session_id, &mut engine, &session_port, &output_tx).await { return; }
+                        if !open_if_configured(&surface_id, open_requested, &requested_image, &requested_shell, &mut session_id,
                             &mut engine, &mut image_state, &session_port, &output_tx).await {
                             return;
                         }
@@ -1590,7 +1597,7 @@ async fn surface_task(
                             if !present_screen(&surface_id, &screen, image_state.as_mut().unwrap(), &output_tx).await {
                                 return;
                             }
-                        } else if !open_if_configured(&surface_id, open_requested, &requested_image, &mut session_id,
+                        } else if !open_if_configured(&surface_id, open_requested, &requested_image, &requested_shell, &mut session_id,
                             &mut engine, &mut image_state, &session_port, &output_tx).await {
                             return;
                         }
@@ -2570,7 +2577,23 @@ where
                                     .get("image")
                                     .and_then(|v| v.as_str())
                                     .map(str::to_string);
-                                if tx.send(SurfaceCommand::Open { image }).await.is_err() {
+                                let Some(shell) = body
+                                    .get("shell")
+                                    .and_then(|v| v.as_str())
+                                    .filter(|shell| !shell.is_empty())
+                                else {
+                                    let response = json!({"surface": surface_id, "body": {"error": "invalidParams", "reason": "open requires a shell"}});
+                                    if output_tx.send(response.to_string()).await.is_err() {
+                                        break;
+                                    }
+                                    continue;
+                                };
+                                let shell = shell.to_string();
+                                if tx
+                                    .send(SurfaceCommand::Open { image, shell })
+                                    .await
+                                    .is_err()
+                                {
                                     break;
                                 }
                             }
@@ -3228,17 +3251,17 @@ impl LocalSessionPort {
 impl SessionPort for LocalSessionPort {
     async fn open(
         &self,
-        program: &str,
+        shell: &str,
         cols: u16,
         rows: u16,
         _hint: Option<&str>,
     ) -> Result<String, String> {
         let service = Arc::clone(&self.service);
         let owner = self.owner.clone();
-        let program = program.to_string();
+        let shell = crate::pty::resolve_shell(shell)?;
         let events = self.events_tx.clone();
         let (session_id, attachment_id) = tokio::task::spawn_blocking(move || {
-            service.open_owned(&owner, &program, &[], None, cols, rows, events)
+            service.open_shell(&owner, &shell, None, cols, rows, events)
         })
         .await
         .map_err(|error| format!("open PTY task failed: {error}"))??;

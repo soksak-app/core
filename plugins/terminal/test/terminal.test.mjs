@@ -5,7 +5,13 @@ import { createBinder } from "@soksak/plugin-api";
 import * as terminalDiagnostics from "../ui/terminal-diagnostics.js";
 import { startTerminal as realStartTerminal } from "../ui/terminal.js";
 
-const startTerminal = (options) => realStartTerminal({ id: "test-session", ...options });
+// 설정을 받지 않는 테스트의 터미널은 매니페스트 기본값과 /bin/sh 로 시작한다. 설정을 받는 테스트는 shell 값을 직접 적는다.
+const SHELL_SETTINGS = {
+  read: () => ({ ...Object.fromEntries(Object.entries(terminalManifest.settings).map(([key, { default: value }]) => [key, value])),
+    shell: "/bin/sh" }),
+  on: () => () => {},
+};
+const startTerminal = (options) => realStartTerminal({ id: "test-session", settings: SHELL_SETTINGS, ...options });
 const terminalManifest = JSON.parse(readFileSync(new URL("../plugin.json", import.meta.url), "utf8"));
 
 /**
@@ -268,6 +274,9 @@ test("native image errors remain visible after later session state updates", asy
 });
 
 /** 오류 수명 검사용 터미널. 세션을 연 뒤 영역, 사이드카, 공개 항목을 반환한다. */
+// 설정이 보내는 글꼴과 커서 정책을 뺀 세션 메시지. 글꼴과 커서 메시지는 각자의 테스트가 검사한다.
+const sessionMessages = (sidecar) => sidecar.getMessages().filter(({ body }) => !["font", "cursor"].includes(body.operation));
+
 async function errorTerminal() {
   const attach = createFakeAttachImage();
   const sidecar = createFakeSidecar();
@@ -365,7 +374,7 @@ test("terminal.screen publishes sidecar output without polling or input commands
   sidecar.triggerEvent("test-session", { event: "screen", lines: [] });
   assert.deepEqual(status.readFn(), []);
   assert.deepEqual(received, [lines]);
-  assert.deepEqual(sidecar.getMessages().map(({ body }) => body.operation), ["open"]);
+  assert.deepEqual(sessionMessages(sidecar).map(({ body }) => body.operation), ["open"]);
 });
 
 // 테스트 1: 부팅 → attachImage가 한 번 호출되고 sidecar에 open이 간다
@@ -541,6 +550,31 @@ test("terminal.paste reads explicit user text once and sends one paste operation
   assert.deepEqual(clipboardCalls, ["text"]);
   assert.deepEqual(fakeSidecar.getMessages().map(({ body }) => body.operation), ["paste"]);
   assert.equal(fakeSidecar.getMessages()[0].body.text, "printf 'user paste'\n");
+});
+
+test("a session opens the shell that the shell setting names", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  await startTerminal({
+    view: createFakeView(), attachImage: createFakeAttachImage().function,
+    sidecar: fakeSidecar, expose: createFakeExpose(),
+    settings: { read: () => ({ shell: "login" }), on: () => () => {} },
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  const open = fakeSidecar.getMessages().find((message) => message.body.operation === "open");
+  assert.deepEqual(open.body, { operation: "open", image: "view", shell: "login" });
+});
+
+test("a session without a shell setting is not opened", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  await assert.rejects(startTerminal({
+    view: createFakeView(), attachImage: createFakeAttachImage().function,
+    sidecar: fakeSidecar, expose: createFakeExpose(),
+    settings: { read: () => ({}), on: () => () => {} },
+    window: { TextEncoder: FakeTextEncoder },
+  }), /terminal shell setting is missing/);
+  assert.equal(fakeSidecar.getMessages().some((message) => message.body.operation === "open"), false);
 });
 
 test("the region's paste action runs terminal.paste once", async () => {
@@ -755,7 +789,7 @@ test("allowed program clipboard handles only text through the host capability", 
   const fakeSidecar = createFakeSidecar();
   const fakeExpose = createFakeExpose();
   const writes = [];
-  const settings = { read: () => ({ "clipboard.program": "allow" }), on: () => () => {} };
+  const settings = { read: () => ({ "clipboard.program": "allow", shell: "/bin/sh" }), on: () => () => {} };
   const clipboard = {
     read: async (type) => { assert.equal(type, "text"); return "from host"; },
     writeText: async (text) => { writes.push(text); },
@@ -1315,17 +1349,17 @@ test("open is independent of DOM element size", async () => {
   });
 
   // DOM 크기가 0이어도 세션 요청은 즉시 전송된다. 실제 래스터는 호스트가 구성한다.
-  let messages = fakeSidecar.getMessages();
+  let messages = sessionMessages(fakeSidecar);
   let openMessage = messages.find((m) => m.body.operation === "open");
   assert(openMessage, "open message is sent at DOM size 0x0");
-  assert.deepEqual(openMessage.body, { operation: "open", image: "view" });
+  assert.deepEqual(openMessage.body, { operation: "open", image: "view", shell: "/bin/sh" });
 
   // 이제 크기를 800x400으로 변경한다
   fakeView.clientWidth = 800;
   fakeView.clientHeight = 400;
   FakeResizeObserver.triggerAll();
 
-  messages = fakeSidecar.getMessages();
+  messages = sessionMessages(fakeSidecar);
   openMessage = messages.find((m) => m.body.operation === "open");
   assert(openMessage, "the original open remains the only session request");
   const openMessages = messages.filter((m) => m.body.operation === "open");
@@ -1966,7 +2000,7 @@ test("declared settings are sent at startup and on effective setting changes", a
   const settings = {
     read: () => ({
       "cursor.shape": "underline", "cursor.blink": "On", "cursor.interval": 900,
-      "cursor.idleTimeout": 0, "cursor.unfocused": "beam", "clipboard.program": "deny",
+      "cursor.idleTimeout": 0, "cursor.unfocused": "beam", "clipboard.program": "deny", shell: "/bin/sh",
     }),
     on: (listener) => { notify = listener; return () => { notify = null; }; },
   };
@@ -2218,9 +2252,9 @@ test("a caller scale option cannot enter the terminal protocol", async () => {
     scale: 0,
     window: fakeWindow,
   });
-  assert.deepEqual(fakeSidecar.getMessages(), [{
+  assert.deepEqual(sessionMessages(fakeSidecar), [{
     id: "test-session",
-    body: { operation: "open", image: "view" },
+    body: { operation: "open", image: "view", shell: "/bin/sh" },
   }]);
 });
 
@@ -2302,16 +2336,16 @@ test("region input is buffered in order until sidecar state opens the session", 
   regionReference._trigger("key", { key: "Enter", shift: false, alt: false, ctrl: false });
 
   // open만 전송되고 입력은 bounded startup queue에 남는다.
-  let messages = fakeSidecar.getMessages();
+  let messages = sessionMessages(fakeSidecar);
   assert.equal(messages.length, 1, "only open is sent before the session exists");
   assert.equal(messages[0].body.operation, "open", "first message is open");
-  assert.deepEqual(messages[0].body, { operation: "open", image: "view" });
+  assert.deepEqual(messages[0].body, { operation: "open", image: "view", shell: "/bin/sh" });
 
   // 사이드카가 state 이벤트로 세션을 연다
   fakeSidecar.triggerEvent("test-session", { event: "state", sessionId: "s1", cols: 100, rows: 50, cellWidth: 8, cellHeight: 16 });
   await new Promise((resolve) => setImmediate(resolve));
 
-  messages = fakeSidecar.getMessages();
+  messages = sessionMessages(fakeSidecar);
   assert.equal(messages.length, 3, "open and two inputs are sent after state");
   assert.equal(Buffer.from(messages[1].body.bytes, "base64").toString(), "a");
   assert.equal(messages[2].body.keys[0].key, "Enter");
@@ -2364,7 +2398,7 @@ test("a sidecar rejection is reported without DOM-driven retry", async () => {
   });
 
   // open은 페이지 크기와 무관하게 한 번만 나간다.
-  let messages = fakeSidecar.getMessages();
+  let messages = sessionMessages(fakeSidecar);
   assert.equal(messages.length, 1, "one open message");
   assert.equal(messages[0].body.operation, "open", "first message is open");
   assert.equal("width" in messages[0].body, false, "transient DOM width is not sent");
@@ -2383,7 +2417,7 @@ test("a sidecar rejection is reported without DOM-driven retry", async () => {
   fakeView.clientWidth = 494;
   fakeView.clientHeight = 287;
   FakeResizeObserver.triggerAll();
-  messages = fakeSidecar.getMessages();
+  messages = sessionMessages(fakeSidecar);
 
   assert.equal(messages.length, 1, "DOM size change does not retry open");
 
@@ -2398,7 +2432,7 @@ test("a sidecar rejection is reported without DOM-driven retry", async () => {
   fakeView.clientWidth = 600;
   fakeView.clientHeight = 300;
   FakeResizeObserver.triggerAll();
-  messages = fakeSidecar.getMessages();
+  messages = sessionMessages(fakeSidecar);
   assert.equal(messages.length, 1, "DOM resize sends no sidecar message");
 });
 
@@ -2427,7 +2461,7 @@ test("the font size is 13 points times the text size factor and follows its chan
   const values = {
     "cursor.shape": "block", "cursor.blink": "Off", "cursor.interval": 750,
     "cursor.idleTimeout": 5000, "cursor.unfocused": "hollow", "clipboard.program": "deny",
-    "font.family": "Menlo",
+    "font.family": "Menlo", shell: "/bin/sh",
   };
   const send = fakeSidecar.send;
   fakeSidecar.send = async (id, body) => {
@@ -2471,7 +2505,7 @@ test("the font.family list is sent at startup and on change, and the applied fam
   let values = {
     "cursor.shape": "block", "cursor.blink": "Off", "cursor.interval": 750,
     "cursor.idleTimeout": 5000, "cursor.unfocused": "hollow", "clipboard.program": "deny",
-    "font.family": "D2Coding;Menlo",
+    "font.family": "D2Coding;Menlo", shell: "/bin/sh",
   };
   // 사이드카는 설치된 첫 family 를 적용하고 확인 이벤트로 알린다. 이 가짜는 D2Coding 이 없다.
   const send = fakeSidecar.send;

@@ -5,7 +5,7 @@
 //
 // 검증의 존재를 알지 않는다. 렌더링 완료만 통지하고 이후 처리는 문서가 정한다.
 import { Soksak, SoksakView, outline } from "soksak";
-import { cardRadius, halfGap, linkedSet, set as setSetting, stagePad, value } from "./settings.js";
+import { cardRadius, halfGap, linkedSet, pluginSettings, set as setSetting, stagePad, value } from "./settings.js";
 import { nextTextSize, notifyTextSize, setSurfaceTextSize, setTextScope, textScope } from "./text-size.js";
 import { hasPlugin, isPlace, isRailId, plugin, plugins, railId, railKind, sectionNames } from "./registry.js";
 import { environment } from "./environment.js";
@@ -951,7 +951,10 @@ function syncBackgroundSessions() {
     });
     // manifest가 연산을 명시한다. 사이드카 전송은 기존 wire 필드 `op`를 유지하며
     // 이 위치가 유일한 프로토콜 변환 지점이다.
-    port.send(tab.id, { operation: descriptor.operation }).catch((error) => {
+    // background.settings 가 선언한 요청 필드에 그 플러그인 설정의 현재 값을 넣는다.
+    const values = pluginSettings(tab.plugin);
+    const fields = Object.fromEntries(Object.entries(descriptor.settings ?? {}).map(([field, setting]) => [field, values[setting]]));
+    port.send(tab.id, { ...fields, operation: descriptor.operation }).catch((error) => {
       backgroundSessions.delete(tab.id);
       report(`background session ${tab.id} open failed: ${error.message}`);
     });

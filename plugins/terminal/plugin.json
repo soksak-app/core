@@ -58,6 +58,11 @@
       "type": "string",
       "default": "D2Coding;Menlo",
       "maxLength": 256
+    },
+    "shell": {
+      "type": "string",
+      "default": "login",
+      "maxLength": 1024
     }
   },
   "sidecars": [
@@ -65,7 +70,8 @@
   ],
   "background": {
     "sidecar": "@soksak/sidecar-vt-alacritty",
-    "operation": "open"
+    "operation": "open",
+    "settings": { "shell": "shell" }
   },
   "exposes": {
     "status": [

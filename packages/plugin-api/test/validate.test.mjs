@@ -38,6 +38,8 @@ test("a manifest with a page surface or with sections only is accepted", () => {
   assert.deepEqual(validateManifest(card).settings["cursor.shape"].values, ["block", "beam"]);
   const background = { sidecar: "@scope/sidecar-worker", operation: "open" };
   assert.equal(validateManifest({ ...card, background }).background.operation, "open");
+  const withSettings = { ...background, settings: { shape: "cursor.shape" } };
+  assert.deepEqual(validateManifest({ ...card, background: withSettings }).background.settings, { shape: "cursor.shape" });
 });
 
 test("a manifest is rejected for each invalid field", () => {
@@ -69,6 +71,9 @@ test("a manifest is rejected for each invalid field", () => {
     [{ ...card, background: { sidecar: "@scope/sidecar-worker" } }, /operation must be a non-empty string/],
     [{ ...card, background: { sidecar: "@scope/sidecar-worker", operation: "" } }, /operation must be a non-empty string/],
     [{ ...card, background: { sidecar: "@scope/sidecar-other", operation: "open" } }, /sidecar must be declared/],
+    [{ ...card, background: { sidecar: "@scope/sidecar-worker", operation: "open", settings: [] } }, /settings must map request fields/],
+    [{ ...card, background: { sidecar: "@scope/sidecar-worker", operation: "open", settings: { program: "absent" } } }, /setting absent is not declared/],
+    [{ ...card, background: { sidecar: "@scope/sidecar-worker", operation: "open", settings: { operation: "cursor.shape" } } }, /cannot replace operation/],
     [{ ...card, settings: { "cursor.shape": { type: "enum", default: "block", values: ["block", "block"] } } }, /distinct/],
     [{ ...card, settings: { "cursor.shape": { type: "integer", default: 1, minimum: 2, maximum: 3 } } }, /default and bounds/],
     [{ ...card, settings: { "font.family": { type: "string", default: "", maxLength: 8 } } }, /string default and maxLength/],

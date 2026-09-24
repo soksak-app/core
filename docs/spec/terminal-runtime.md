@@ -10,6 +10,8 @@ One persistent terminal service owns PTYs, VT state, scrollback, and rendering f
 
 A surface attachment is not a session. The first open for a surface key creates one registry actor and allocates a stable session identifier before starting its shell; repeated requests with the same creation identifier return the same result. Attaching a replacement surface does not create a PTY. The active attachment owns input and size changes, and stale attachments receive an explicit error. A session preserves its terminal dimensions when no surface is attached.
 
+A session starts the shell that the terminal setting `terminal.shell` names. The default `login` is the login shell of the account's user database entry; any other value must be an absolute path to an executable file. The shell starts as a login shell: `argv[0]` is `-` followed by its file name and `SHELL` is its path. The terminal page sends the value as `shell` in its `open` request, and the workbench sends it for a background session through the plugin's `background.settings`. A missing value, a relative path, a missing or non-executable file, and an account without a login shell are explicit errors, and no other shell is started instead. A change of the setting applies to sessions opened after it.
+
 The service endpoint is scoped to the configuration directory, authenticated, versioned, and protected by a single-instance lock. A test configuration cannot discover a service belonging to another configuration. Session state and input queues are isolated. A busy session must not hold a global lock while reading, writing, emulating, or rendering.
 
 ## Closing and recovery

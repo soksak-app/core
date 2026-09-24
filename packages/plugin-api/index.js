@@ -186,9 +186,20 @@ function checkComposition(where, composition, sidecars) {
   }
 }
 
-function checkBackground(where, background, sidecars) {
+function checkBackground(where, background, sidecars, settings = {}) {
   if (!isObject(background)) throw new Error(`${where}: background must be an object`);
-  only(`${where} background`, background, ["sidecar", "operation"]);
+  only(`${where} background`, background, ["sidecar", "operation", "settings"]);
+  // settings 는 요청 필드 이름에서 이 플러그인이 선언한 설정 이름으로의 대응이다. 코어는 세션을 열 때 그 설정의
+  // 값을 요청 필드에 넣는다.
+  if (background.settings !== undefined) {
+    if (!isObject(background.settings)) throw new Error(`${where} background: settings must map request fields to setting names`);
+    for (const [field, setting] of Object.entries(background.settings)) {
+      if (field === "operation") throw new Error(`${where} background: a setting cannot replace operation`);
+      if (typeof setting !== "string" || !Object.hasOwn(settings ?? {}, setting)) {
+        throw new Error(`${where} background: setting ${setting} is not declared by the plugin`);
+      }
+    }
+  }
   if (typeof background.sidecar !== "string" || !sidecars.includes(background.sidecar)) {
     throw new Error(`${where} background: sidecar must be declared by the plugin`);
   }
@@ -224,7 +235,7 @@ export function validateManifest(manifest) {
   }
   if (manifest.background !== undefined) {
     if (manifest.surface === undefined) throw new Error(`${where}: background requires a surface`);
-    checkBackground(`${where}`, manifest.background, manifest.sidecars ?? []);
+    checkBackground(`${where}`, manifest.background, manifest.sidecars ?? [], manifest.settings);
   }
   if (manifest.surface !== undefined) {
     const surface = manifest.surface;

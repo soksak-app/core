@@ -66,7 +66,7 @@ pub(crate) fn call(
     params: Map<String, Value>,
 ) -> Result<Value, Failure> {
     match method {
-        "diagnostics.fixture" => fixture(host, window),
+        "diagnostics.fixture" => fixture(host, window, params),
         "diagnostics.drag" => drag(host, window, params),
         "diagnostics.capture.start" => {
             let display = match params.get("display") {
@@ -168,7 +168,7 @@ fn input_source(window: &Window, params: Map<String, Value>) -> Result<Value, Fa
 }
 
 /// `<config-dir>/test-project` 를 빈 폴더 설정으로 만들고 페이지에 그 프로젝트만 열도록 요청한다.
-fn fixture(host: &Host, window: &Window) -> Result<Value, Failure> {
+fn fixture(host: &Host, window: &Window, request: Map<String, Value>) -> Result<Value, Failure> {
     let platform = platform::current().map_err(internal)?;
     let root = window.state::<Workspace>().directory().join("test-project");
     let settings = root.join(".soksak");
@@ -179,6 +179,15 @@ fn fixture(host: &Host, window: &Window) -> Result<Value, Failure> {
         "root".into(),
         Value::String(root.to_string_lossy().into_owned()),
     );
+    // settings 는 기본값 위에 적용할 공통 설정이다. 주어지면 객체여야 한다.
+    if let Some(settings) = request.get("settings") {
+        if !settings.is_object() {
+            return Err(Failure::params(
+                "diagnostics.fixture settings must be an object",
+            ));
+        }
+        params.insert("settings".into(), settings.clone());
+    }
     host.page(window, "diagnostics.fixture", params, TIMEOUT)
 }
 

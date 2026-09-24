@@ -172,7 +172,7 @@ impl Engine for MockEngine {
 #[tokio::test]
 async fn vendor_event_is_emitted_only_with_the_owning_surface_id() {
     let calls = Arc::new(Mutex::new(Calls::default()));
-    let input = br#"{"surface":"owned-surface","root":"/tmp","body":{"operation":"open","image":"view"}}
+    let input = br#"{"surface":"owned-surface","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"owned-surface","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 {"surface":"owned-surface","body":{"operation":"input","bytes":"G103O2ZpbGU6Ly8vdG1wL3Byb2plY3QH"}}
 "#;
@@ -323,7 +323,7 @@ async fn test_a3_input_calls_write() {
     let calls = Arc::new(Mutex::new(Calls::default()));
     let fake_session_id = "test-session".to_string();
 
-    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 {"surface":"s1","body":{"operation":"input","bytes":"aGk="}}
 "#;
@@ -353,6 +353,34 @@ async fn test_a3_input_calls_write() {
 }
 
 #[tokio::test]
+async fn an_open_without_a_shell_is_rejected_without_a_session() {
+    let calls = Arc::new(Mutex::new(Calls::default()));
+    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+{"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
+"#;
+    let reader = std::io::Cursor::new(input.as_bytes());
+    let mut writer = Vec::new();
+    let engine_factory = Arc::new(|| Box::new(MockEngine::new()) as Box<dyn Engine>);
+    let factory_calls = calls.clone();
+    let session_port_factory = Arc::new(move || {
+        Arc::new(FakeSessionPort::new(
+            "no-shell".to_string(),
+            factory_calls.clone(),
+        )) as Arc<dyn SessionPort>
+    });
+    let _ = serve(engine_factory, reader, &mut writer, session_port_factory).await;
+    let output = String::from_utf8(writer).unwrap();
+    assert!(
+        output.contains(r#""reason":"open requires a shell""#),
+        "an open without a shell was not rejected: {output}"
+    );
+    assert!(
+        calls.lock().unwrap().opens.is_empty(),
+        "an open without a shell started a session"
+    );
+}
+
+#[tokio::test]
 async fn native_input_ack_is_not_reported_as_an_unsolicited_event() {
     let calls = Arc::new(Mutex::new(Calls::default()));
     let factory_calls = calls.clone();
@@ -362,7 +390,7 @@ async fn native_input_ack_is_not_reported_as_an_unsolicited_event() {
             factory_calls.clone(),
         )) as Arc<dyn SessionPort>
     });
-    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 {"surface":"s1","body":{"operation":"input","focus":{"focused":true}}}
 {"surface":"s1","body":{"operation":"input","compose":{"text":"한","selectedRange":{"location":1,"length":0},"replacementRange":null,"attributed":true}}}
@@ -404,7 +432,7 @@ async fn each_native_preedit_update_presents_a_fresh_terminal_frame() {
             factory_calls.clone(),
         )) as Arc<dyn SessionPort>
     });
-    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 {"surface":"s1","body":{"image":{"consumed":{"name":"view","generation":1,"raster":1,"sequence":1}}}}
 {"surface":"s1","body":{"operation":"input","focus":{"focused":true}}}
@@ -438,7 +466,7 @@ async fn each_native_preedit_update_presents_a_fresh_terminal_frame() {
 async fn test_paste_writes_ordered_text_using_bracketed_mode() {
     let calls = Arc::new(Mutex::new(Calls::default()));
     let fake_session_id = "test-paste-session".to_string();
-    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 {"surface":"s1","body":{"operation":"paste","text":"one\ntwo"}}
 "#;
@@ -490,7 +518,7 @@ async fn test_paste_rejects_non_text_payload() {
 #[tokio::test]
 async fn test_bracketed_paste_rejects_embedded_terminator_without_writing() {
     let calls = Arc::new(Mutex::new(Calls::default()));
-    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open"}}
+    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh"}}
 {"surface":"s1","body":{"operation":"paste","text":"before\u001b[201~after"}}
 "#;
     let reader = std::io::Cursor::new(input.as_bytes());
@@ -539,7 +567,7 @@ async fn test_clipboard_reject_is_an_explicit_protocol_event() {
 #[tokio::test]
 async fn test_selection_release_emits_one_user_copy_event() {
     let calls = Arc::new(Mutex::new(Calls::default()));
-    let input = r#"{"surface":"s1","body":{"operation":"open"}}
+    let input = r#"{"surface":"s1","body":{"operation":"open","shell":"/bin/sh"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 {"surface":"s1","body":{"operation":"selection.start","x":1.0,"y":1.0}}
 {"surface":"s1","body":{"operation":"selection.update","x":25.0,"y":1.0}}
@@ -571,7 +599,7 @@ async fn test_selection_release_emits_one_user_copy_event() {
 async fn test_selection_in_the_region_padding_selects_the_nearest_cell() {
     let calls = Arc::new(Mutex::new(Calls::default()));
     // 801 x 383 픽셀은 칸 크기의 배수가 아니므로 마지막 완전한 행과 열 뒤에 여백이 남는다.
-    let input = r#"{"surface":"s1","body":{"operation":"open"}}
+    let input = r#"{"surface":"s1","body":{"operation":"open","shell":"/bin/sh"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":801,"height":383,"scale":1.0}}}}
 {"surface":"s1","body":{"operation":"selection.start","x":1.0,"y":1.0}}
 {"surface":"s1","body":{"operation":"selection.update","x":800.5,"y":382.5}}
@@ -629,7 +657,7 @@ async fn test_selection_in_the_region_padding_selects_the_nearest_cell() {
 #[tokio::test]
 async fn test_blank_selection_release_reports_end_without_copy() {
     let calls = Arc::new(Mutex::new(Calls::default()));
-    let input = r#"{"surface":"s1","body":{"operation":"open"}}
+    let input = r#"{"surface":"s1","body":{"operation":"open","shell":"/bin/sh"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 {"surface":"s1","body":{"operation":"selection.start","x":700.0,"y":300.0}}
 {"surface":"s1","body":{"operation":"selection.update","x":760.0,"y":300.0}}
@@ -674,7 +702,7 @@ async fn test_a7_close_op_ends_the_session() {
     let calls = Arc::new(Mutex::new(Calls::default()));
     let fake_session_id = "test-session".to_string();
 
-    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 {"surface":"s1","body":{"operation":"close"}}
 "#;
@@ -712,7 +740,7 @@ async fn test_a8_closed_surface_closes_session() {
     let calls = Arc::new(Mutex::new(Calls::default()));
     let fake_session_id = "test-session".to_string();
 
-    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 {"surface":"s1","closed":true}
 "#;
@@ -747,7 +775,7 @@ async fn test_a8_closed_surface_closes_session() {
 #[tokio::test]
 async fn test_input_not_fed_to_engine() {
     let calls = Arc::new(Mutex::new(Calls::default()));
-    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 {"surface":"s1","body":{"operation":"input","bytes":"aGVsbG8="}}
 "#;
@@ -770,7 +798,7 @@ async fn test_input_not_fed_to_engine() {
 #[tokio::test]
 async fn test_stdin_eof_terminates_quickly() {
     let calls = Arc::new(Mutex::new(Calls::default()));
-    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#;
     let reader = std::io::Cursor::new(input.as_bytes());
@@ -804,7 +832,7 @@ async fn test_stdin_eof_terminates_quickly() {
 #[tokio::test]
 async fn test_open_and_close_session() {
     let calls = Arc::new(Mutex::new(Calls::default()));
-    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 {"surface":"s1","closed":true}
 "#;
@@ -826,10 +854,10 @@ async fn test_open_and_close_session() {
 #[tokio::test]
 async fn test_repeated_image_open_resets_native_frame_without_closing_session() {
     let calls = Arc::new(Mutex::new(Calls::default()));
-    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 {"surface":"s1","body":{"operation":"reconnect"}}
-{"surface":"s1","body":{"operation":"open","image":"view"}}
+{"surface":"s1","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":2,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 {"surface":"s1","body":{"operation":"input","bytes":"Yg=="}}
 "#;
@@ -874,7 +902,7 @@ async fn test_repeated_image_open_resets_native_frame_without_closing_session() 
 #[tokio::test]
 async fn test_resize() {
     let calls = Arc::new(Mutex::new(Calls::default()));
-    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 {"surface":"s1","body":{"image":{"consumed":{"name":"view","generation":1,"raster":1,"sequence":1}}}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":2,"width":1600,"height":768,"scale":1.0}}}}
@@ -897,7 +925,7 @@ async fn test_resize() {
 #[tokio::test]
 async fn test_close_session() {
     let calls = Arc::new(Mutex::new(Calls::default()));
-    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 {"surface":"s1","closed":true}
 {"surface":"s1","body":{"operation":"input","bytes":"aGk="}}
@@ -952,7 +980,7 @@ async fn test_a2_pushed_output_reaches_screen() {
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
     // Send open command
-    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
 
@@ -1036,7 +1064,7 @@ async fn test_inline_image_event_is_explicit_and_base64_encoded() {
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
     to_serve
-        .write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+        .write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#)
         .await
@@ -1121,7 +1149,7 @@ async fn test_inline_image_delete_is_explicit_for_unowned_names() {
 #[tokio::test]
 async fn test_a5_screen_read_returns_current_screen() {
     let input = r#"
-{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 {"surface":"s1","body":{"operation":"input","bytes":"aGk="}}
 {"surface":"s1","body":{"operation":"screen.read"}}
@@ -1264,7 +1292,7 @@ async fn test_k1_keys_up_without_app_cursor() {
     let calls = Arc::new(Mutex::new(Calls::default()));
     let fake_session_id = "test-session".to_string();
 
-    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 {"surface":"s1","body":{"operation":"input","keys":[{"key":"Up"}]}}
 "#;
@@ -1297,7 +1325,7 @@ async fn test_k2_keys_up_with_app_cursor() {
     let calls = Arc::new(Mutex::new(Calls::default()));
     let fake_session_id = "test-session".to_string();
 
-    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 {"surface":"s1","body":{"operation":"input","keys":[{"key":"Up"}]}}
 "#;
@@ -1336,7 +1364,7 @@ async fn test_k3_char_key_encoding() {
     let fake_session_id = "test-session".to_string();
 
     // native 물리 키 매핑 뒤 Ctrl+C는 0x03, Ctrl+U는 0x15를 기록한다.
-    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 {"surface":"s1","body":{"operation":"input","keys":[{"key":"Char","text":"c","ctrl":true}]}}
 {"surface":"s1","body":{"operation":"input","keys":[{"key":"Char","text":"u","ctrl":true}]}}
@@ -1367,7 +1395,7 @@ async fn test_k3_char_key_encoding() {
     let calls2 = Arc::new(Mutex::new(Calls::default()));
     let fake_session_id2 = "test-session-2".to_string();
 
-    let input2 = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+    let input2 = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 {"surface":"s1","body":{"operation":"input","keys":[{"key":"Char","text":"한"}]}}
 "#;
@@ -1407,7 +1435,7 @@ async fn test_k4_unknown_key_returns_error() {
     let calls = Arc::new(Mutex::new(Calls::default()));
     let fake_session_id = "test-session".to_string();
 
-    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 {"surface":"s1","body":{"operation":"input","keys":[{"key":"Nope"}]}}
 "#;
@@ -1475,7 +1503,7 @@ async fn test_open_waits_for_host_raster_configuration() {
 
     to_serve
         .write_all(
-            br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+            br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 "#,
         )
         .await
@@ -1520,7 +1548,7 @@ async fn test_headless_open_creates_one_session_before_configuration() {
     let mut lines = tokio::io::BufReader::new(output).lines();
     input
         .write_all(
-            b"{\"surface\":\"hidden\",\"root\":\"/tmp\",\"body\":{\"operation\":\"open\"}}\n",
+            b"{\"surface\":\"hidden\",\"root\":\"/tmp\",\"body\":{\"operation\":\"open\",\"shell\":\"/bin/sh\"}}\n",
         )
         .await
         .unwrap();
@@ -1604,7 +1632,7 @@ async fn test_i1_image_envelope_on_output() {
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
     // Open WITH image field
-    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
 
@@ -1694,7 +1722,7 @@ async fn test_i2_no_image_envelope_until_consumed() {
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
     // Open WITH image field
-    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
 
@@ -1798,7 +1826,7 @@ async fn test_i3_image_response_no_error() {
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
     // Open WITH image field
-    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
 
@@ -1893,7 +1921,7 @@ async fn test_open_with_image_is_a_request() {
     let calls = Arc::new(Mutex::new(Calls::default()));
     let fake_session_id = "test-session-open-image".to_string();
 
-    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+    let input = r#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#;
     let reader = std::io::Cursor::new(input.as_bytes());
@@ -1959,7 +1987,7 @@ async fn test_configure_with_invalid_width_type() {
     let task = tokio::spawn(serve(engine_factory, serve_in, serve_out, factory));
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
-    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":"800","height":384,"scale":1.0}}}}
 "#).await.unwrap();
 
@@ -2016,7 +2044,7 @@ async fn test_input_without_bytes_or_keys_rejected() {
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
     // Open first
-    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
 
@@ -2084,7 +2112,7 @@ async fn test_input_with_non_string_bytes_rejected() {
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
     // Open first
-    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
 
@@ -2152,7 +2180,7 @@ async fn test_input_with_non_array_keys_rejected() {
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
     // Open first
-    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
 
@@ -2220,7 +2248,7 @@ async fn test_replacement_raster_with_missing_height_is_rejected() {
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
     // Open first
-    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
 
@@ -2295,7 +2323,7 @@ async fn test_cell_dimensions_from_metrics() {
     let width_px = 800u32;
     let height_px = 384u32;
 
-    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":2.0}}}}
 "#).await.unwrap();
 
@@ -2385,7 +2413,7 @@ async fn test_cell_dimensions_from_metrics() {
 
     let scale2 = 1.0f32;
 
-    to_serve2.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+    to_serve2.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
 
@@ -2449,7 +2477,7 @@ async fn test_zero_sized_configuration_is_rejected() {
     let task = tokio::spawn(serve(engine_factory, serve_in, serve_out, factory));
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
-    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":0,"height":0,"scale":1.0}}}}
 "#).await.unwrap();
 
@@ -2532,7 +2560,7 @@ async fn test_replacement_raster_with_zero_size_is_rejected() {
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
     // Send open with normal size
-    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
 
@@ -2622,7 +2650,7 @@ async fn test_too_small_size_is_rejected() {
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
     // This raster is positive but too small to contain one terminal cell.
-    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":3,"height":3,"scale":1.0}}}}
 "#).await.unwrap();
 
@@ -2797,7 +2825,7 @@ async fn test_panicking_surface_reports_error() {
     panic_engine_flag.store(true, std::sync::atomic::Ordering::Relaxed);
 
     // Send open - this should trigger panic in resize
-    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
 
@@ -2910,7 +2938,7 @@ async fn test_replacement_raster_waits_for_prior_transfer() {
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
     // Open with image at 800x384
-    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
 
@@ -2991,7 +3019,7 @@ async fn test_no_image_envelope_while_outstanding_after_release() {
     let task = tokio::spawn(serve(engine_factory, serve_in, serve_out, factory));
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
-    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
 
@@ -3101,7 +3129,7 @@ async fn test_image_error_response_reenables_drawing() {
     let task = tokio::spawn(serve(engine_factory, serve_in, serve_out, factory));
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
-    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
 
@@ -3181,7 +3209,7 @@ async fn test_replacement_raster_state_has_cell_dimensions() {
     let task = tokio::spawn(serve(engine_factory, serve_in, serve_out, factory));
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
 
-    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
 
@@ -3344,7 +3372,7 @@ async fn test_font_size_sets_the_cell_size() {
     let (serve_out, from_serve) = tokio::io::duplex(64 * 1024);
     let task = tokio::spawn(serve(engine_factory, serve_in, serve_out, factory));
     let mut lines = tokio::io::BufReader::new(from_serve).lines();
-    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","image":"view"}}
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
 "#).await.unwrap();
     let initial = next_state(&mut lines, "the open state").await;
