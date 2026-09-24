@@ -799,6 +799,12 @@ impl AlacrittyEngine {
         Ok(())
     }
 
+    pub fn selection_text(&self) -> Option<String> {
+        self.term
+            .selection_to_string()
+            .filter(|text| !text.is_empty())
+    }
+
     pub fn selection_end(&mut self) -> Result<Option<String>, String> {
         let text = self
             .term
@@ -975,6 +981,10 @@ impl Engine for AlacrittyEngine {
 
     fn selection_end(&mut self) -> Result<Option<String>, String> {
         AlacrittyEngine::selection_end(self)
+    }
+
+    fn selection_text(&self) -> Option<String> {
+        AlacrittyEngine::selection_text(self)
     }
 
     fn cursor(&self) -> Cursor {

@@ -201,10 +201,16 @@ static BOOL containsHangul(NSString *text) {
     [self paste:sender];
 }
 
+// Edit 메뉴의 복사는 페이지의 복사 명령을 실행하게 한다. 명령은 사이드카가 가진 터미널 선택을 복사한다.
+// NSTextView 의 복사는 입력 문서의 선택을 쓰며, 빈 선택이면 페이스트보드를 비운다.
+- (void)copy:(id)sender {
+    [self report:"{\"type\":\"action\",\"name\":\"copy\"}"];
+}
+
 // 입력 문서를 편집하는 Edit 동작은 터미널 내용과 관계없으므로 끈다.
 - (BOOL)validateUserInterfaceItem:(id<NSValidatedUserInterfaceItem>)item {
     SEL action = item.action;
-    if (action == @selector(paste:) || action == @selector(pasteAsPlainText:)) return YES;
+    if (action == @selector(paste:) || action == @selector(pasteAsPlainText:) || action == @selector(copy:)) return YES;
     if (action == @selector(cut:) || action == @selector(selectAll:) || action == @selector(delete:)) return NO;
     return [super validateUserInterfaceItem:item];
 }

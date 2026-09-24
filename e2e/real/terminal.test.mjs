@@ -144,3 +144,22 @@ for (const app of Object.values(APPS)) {
     assert.equal((await s.get("terminal.session", surface)).error, undefined);
   });
 }
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: a real drag copies the selection and Command+C copies it again`, { timeout: 90000 }, async (t) => {
+    const { s, surface, session, origin, row } = await prepare(t, app, "COPYME");
+    writePasteboard([{ "public.utf8-plain-text": Buffer.from("BEFORE-COPY").toString("base64") }]);
+    const before = (await s.get("terminal.session", surface)).selectionReleases;
+    dragPath(cellPoint(origin, session, 0, row), cellPoint(origin, session, 5, row));
+    await s.until("terminal.session", (value) => value.selectionReleases === before + 1,
+      "the sidecar did not answer the release of a real drag", { surface });
+    await s.until("terminal.session", () => pasteboardText() === "COPYME",
+      `the drag selection did not reach the general pasteboard (it holds ${JSON.stringify(pasteboardText())})`, { surface });
+    // 다른 애플리케이션이 클립보드를 바꾼 뒤 Command+C 는 선택을 다시 복사한다.
+    writePasteboard([{ "public.utf8-plain-text": Buffer.from("CHANGED").toString("base64") }]);
+    key(KEYS.c, ["command"]);
+    await s.until("terminal.session", () => pasteboardText() === "COPYME",
+      `Command+C did not copy the selection (the pasteboard holds ${JSON.stringify(pasteboardText())})`, { surface });
+    assert.equal((await s.get("terminal.session", surface)).error, undefined);
+  });
+}

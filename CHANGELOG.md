@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-41: Command+C on a terminal copies the sidecar's current selection instead of emptying the clipboard with the input-method document's selection.
 - V5-43: a real-input check shows that Command+V on a terminal pastes a clipboard image as the quoted path of an owned file.
 - V5-50: a terminal session starts the shell of the `terminal.shell` setting, by default the account's login shell as a login shell, instead of `/bin/sh`.
 - V5-42: Command+V on a terminal runs `terminal.paste` through the command registry instead of inserting the text into the input-method document.

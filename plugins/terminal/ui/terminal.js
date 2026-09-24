@@ -534,7 +534,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   });
 
   // Edit 메뉴 동작은 선언된 명령을 레지스트리로 실행한다(docs/spec/terminal-runtime.md).
-  const ACTIONS = { paste: "terminal.paste" };
+  const ACTIONS = { paste: "terminal.paste", copy: "terminal.copy" };
   onRegion("action", async (event) => {
     const command = ACTIONS[event?.name];
     if (!command) {
@@ -734,6 +734,10 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     } else if (body.event === "selection.copy") {
       handleSelectionCopy(body).catch(reportInputError);
       releasedSelection();
+    } else if (body.event === "copy") {
+      // 복사 명령의 답이다. 선택이 없으면 사이드카가 copied false 로 알리고 클립보드는 그대로 둔다.
+      if (body.copied === false) return;
+      handleSelectionCopy(body).catch(reportInputError);
     } else if (body.ack === true && ACKNOWLEDGED.has(body.event)) {
       // 사이드카가 연산을 적용했다는 확인이다. 결과는 이미지나 뒤따르는 이벤트로 온다.
     } else if (body.event === "selection.end") {
@@ -942,6 +946,11 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   });
   await expose.command("terminal.cursor.set", async (policy) => setCursorPolicy(policy));
   await expose.command("terminal.paste", pasteText);
+  // 현재 선택의 텍스트는 사이드카가 copy 이벤트로 보낸다.
+  await expose.command("terminal.copy", async () => {
+    await terminal.send(id, { operation: "copy" });
+    return null;
+  });
   await expose.command("terminal.drop", dropFiles);
   // 진단 빌드에서는 진단 모듈이 preedit 주입과 입력 기록 항목을 이 연산으로 등록한다.
   if (diagnostics) {

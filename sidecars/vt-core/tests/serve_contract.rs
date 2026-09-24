@@ -110,6 +110,9 @@ impl Engine for MockEngine {
     fn selection_end(&mut self) -> Result<Option<String>, String> {
         Ok(self.selection.clone())
     }
+    fn selection_text(&self) -> Option<String> {
+        self.selection.clone()
+    }
 
     fn cursor(&self) -> Cursor {
         Cursor {
@@ -562,6 +565,44 @@ async fn test_clipboard_reject_is_an_explicit_protocol_event() {
     assert!(output.contains("clipboard.rejected"));
     assert!(output.contains("\"requestId\":7"));
     assert!(output.contains("\"reason\":\"denied\""));
+}
+
+async fn serve_copy(selection: Option<&str>) -> String {
+    let calls = Arc::new(Mutex::new(Calls::default()));
+    let input = r#"{"surface":"s1","body":{"operation":"open","shell":"/bin/sh"}}
+{"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
+{"surface":"s1","body":{"operation":"copy"}}
+"#;
+    let reader = std::io::Cursor::new(input.as_bytes());
+    let mut writer = Vec::new();
+    let selection = selection.map(str::to_string);
+    let engine_factory = Arc::new(move || {
+        let mut engine = MockEngine::new();
+        engine.selection = selection.clone();
+        Box::new(engine) as Box<dyn Engine>
+    });
+    let session_port_factory = Arc::new(move || {
+        Arc::new(FakeSessionPort::new("copy".to_string(), calls.clone())) as Arc<dyn SessionPort>
+    });
+    let _ = serve(engine_factory, reader, &mut writer, session_port_factory).await;
+    String::from_utf8(writer).unwrap()
+}
+
+#[tokio::test]
+async fn a_copy_request_sends_the_current_selection_text_or_reports_none() {
+    let output = serve_copy(Some("selected")).await;
+    assert!(
+        output.contains(r#""event":"copy""#)
+            && output.contains(r#""text":"selected""#)
+            && output.contains(r#""userInitiated":true"#),
+        "a copy request did not send the selection text: {output}"
+    );
+    let output = serve_copy(None).await;
+    assert!(
+        output.contains(r#""event":"copy""#) && output.contains(r#""copied":false"#),
+        "a copy request without a selection did not report that nothing was copied: {output}"
+    );
+    assert!(!output.contains("Unknown operation: copy"), "{output}");
 }
 
 #[tokio::test]
@@ -2751,6 +2792,9 @@ async fn test_panicking_surface_reports_error() {
         }
         fn selection_end(&mut self) -> Result<Option<String>, String> {
             Ok(Some("selected".to_string()))
+        }
+        fn selection_text(&self) -> Option<String> {
+            Some("selected".to_string())
         }
 
         fn cursor(&self) -> Cursor {

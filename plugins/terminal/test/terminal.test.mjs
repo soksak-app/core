@@ -599,6 +599,38 @@ test("the region's paste action runs terminal.paste once", async () => {
   assert.equal(fakeSidecar.getMessages()[0].body.text, "echo pasted");
 });
 
+test("the region's copy action runs terminal.copy and writes the sidecar's selection text once", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  const fakeExpose = createFakeExpose();
+  const attach = createFakeAttachImage();
+  const writes = [];
+  const clipboard = { read: async () => null, writeText: async (text) => { writes.push(text); } };
+  await startTerminal({
+    view: createFakeView(), attachImage: attach.function,
+    sidecar: fakeSidecar, expose: fakeExpose, clipboard,
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  openSession(fakeSidecar);
+  // 이벤트 수신자는 남기고 보낸 메시지만 비운다.
+  fakeSidecar.getMessages().length = 0;
+  const releases = fakeExpose.getStatus("terminal.session").readFn().selectionReleases;
+
+  await attach.trigger("action", { type: "action", name: "copy" });
+  assert.deepEqual(sessionMessages(fakeSidecar).map(({ body }) => body.operation), ["copy"]);
+  fakeSidecar.triggerEvent("test-session", { event: "copy", text: "chosen", userInitiated: true });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(writes, ["chosen"]);
+
+  // 선택이 없으면 클립보드를 바꾸지 않으며 오류도 아니다.
+  fakeSidecar.triggerEvent("test-session", { event: "copy", copied: false });
+  await new Promise((resolve) => setImmediate(resolve));
+  const session = fakeExpose.getStatus("terminal.session").readFn();
+  assert.deepEqual(writes, ["chosen"]);
+  assert.equal(session.error, undefined);
+  assert.equal(session.selectionReleases, releases, "a copy is not a selection release");
+});
+
 test("the region reports an unknown action as an input error", async () => {
   FakeResizeObserver.reset();
   const fakeSidecar = createFakeSidecar();

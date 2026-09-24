@@ -244,6 +244,8 @@ pub trait Engine: Send + 'static {
     /// Ends the selection and returns its text. A selection that covers no text is cleared
     /// and returns `None`; that is a normal gesture, not an error.
     fn selection_end(&mut self) -> Result<Option<String>, String>;
+    /// 현재 선택의 텍스트. 선택이 없거나 글자를 담지 않으면 `None` 이다.
+    fn selection_text(&self) -> Option<String>;
     fn cursor(&self) -> Cursor;
     fn screen(&mut self) -> Screen;
     fn scroll_generation(&self) -> i64 {
@@ -621,6 +623,8 @@ enum SurfaceCommand {
         y: f64,
     },
     SelectionEnd,
+    /// 사용자의 복사 명령. 현재 선택의 텍스트를 copy 이벤트로 보낸다.
+    Copy,
 }
 
 #[derive(Debug, Clone)]
@@ -1739,6 +1743,15 @@ async fn surface_task(
                                 if output_tx.send(response.to_string()).await.is_err() { return; }
                             }
                         }
+                    }
+                    SurfaceCommand::Copy => {
+                        // 선택이 없으면 복사하지 않고 그렇다고 알린다. 클립보드는 바꾸지 않는다.
+                        let body = match engine.selection_text() {
+                            Some(text) => json!({"event": "copy", "text": text, "userInitiated": true}),
+                            None => json!({"event": "copy", "copied": false}),
+                        };
+                        let response = json!({"surface": surface_id, "body": body});
+                        if output_tx.send(response.to_string()).await.is_err() { return; }
                     }
                     SurfaceCommand::InputKeys { keys } => {
                         cursor_activity = Instant::now();
@@ -2873,6 +2886,11 @@ where
                                     break;
                                 }
                             }
+                            "copy" => {
+                                if tx.send(SurfaceCommand::Copy).await.is_err() {
+                                    break;
+                                }
+                            }
                             "screen.read" => {
                                 if let Err(_) = tx.send(SurfaceCommand::ScreenRead).await {
                                     break;
@@ -3143,6 +3161,9 @@ impl Engine for FakeEngine {
     }
     fn selection_end(&mut self) -> Result<Option<String>, String> {
         Ok(Some("selected".to_string()))
+    }
+    fn selection_text(&self) -> Option<String> {
+        Some("selected".to_string())
     }
 
     fn cursor(&self) -> Cursor {

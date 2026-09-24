@@ -254,6 +254,17 @@
         }
       },
       {
+        "name": "terminal.copy",
+        "description": "Copies the text of the current terminal selection to the clipboard; without a selection the clipboard is unchanged.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
         "name": "terminal.paste",
         "description": "Reads one user-selected text, file, or PNG clipboard payload and pastes it once without executing it.",
         "params": {

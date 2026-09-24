@@ -1062,7 +1062,17 @@ int main(void) { @autoreleasepool {
         check([reported isEqualToArray:@[@"{\"type\":\"action\",\"name\":\"paste\"}", @"{\"type\":\"action\",\"name\":\"paste\"}"]]
             && regionView.textStorage.length == 0,
             [NSString stringWithFormat:@"edit actions: paste reports one paste action and leaves the input document empty (got %@)", reported]);
-        NSMenuItem *item = [[[NSMenuItem alloc] initWithTitle:@"" action:@selector(paste:) keyEquivalent:@""] autorelease];
+        // 복사는 터미널 선택을 복사하는 페이지 명령으로 가며, 입력기 문서를 페이스트보드에 쓰지 않는다.
+        NSInteger changes = NSPasteboard.generalPasteboard.changeCount;
+        NSUInteger beforeCopy = collectedEvents.count;
+        [NSApp sendAction:@selector(copy:) to:regionView from:nil];
+        NSArray *copied = [collectedEvents subarrayWithRange:NSMakeRange(beforeCopy, collectedEvents.count - beforeCopy)];
+        check([copied isEqualToArray:@[@"{\"type\":\"action\",\"name\":\"copy\"}"]]
+            && NSPasteboard.generalPasteboard.changeCount == changes,
+            [NSString stringWithFormat:@"edit actions: copy reports one copy action and leaves the pasteboard unchanged (got %@)", copied]);
+        NSMenuItem *item = [[[NSMenuItem alloc] initWithTitle:@"" action:@selector(copy:) keyEquivalent:@""] autorelease];
+        check([regionView validateMenuItem:item], @"edit actions: Copy is enabled for a terminal region");
+        item.action = @selector(paste:);
         check([regionView validateMenuItem:item], @"edit actions: Paste is enabled for a terminal region");
         for (NSString *name in @[@"cut:", @"selectAll:", @"delete:"]) {
             item.action = NSSelectorFromString(name);

@@ -714,6 +714,25 @@ fn native_selection_updates_raster_cells_and_returns_text_once() {
 }
 
 #[test]
+fn the_current_selection_text_is_readable_until_the_selection_is_cleared() {
+    let mut engine = AlacrittyEngine::new();
+    engine.feed(b"hello");
+    assert_eq!(engine.selection_text(), None, "no selection has no text");
+    engine.selection_start(0, 0).expect("selection start");
+    engine.selection_update(4, 0).expect("selection update");
+    engine.selection_end().expect("selection copy");
+    assert_eq!(engine.selection_text().as_deref(), Some("hello"));
+    // 움직이지 않은 클릭은 빈 선택으로 이전 선택을 지운다.
+    engine.selection_start(8, 0).expect("click press");
+    assert_eq!(engine.selection_end().expect("click release"), None);
+    assert_eq!(
+        engine.selection_text(),
+        None,
+        "a cleared selection has no text"
+    );
+}
+
+#[test]
 fn blank_selection_release_is_not_an_error() {
     let mut engine = AlacrittyEngine::new();
     engine.feed(b"hi");
