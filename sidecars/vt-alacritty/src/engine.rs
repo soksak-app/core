@@ -414,6 +414,8 @@ pub struct AlacrittyEngine {
     pending_osc: Vec<u8>,
     pending_csi: Vec<u8>,
     pending_cursor_reset: Vec<u8>,
+    /// 선택을 시작한 칸. 끄는 방향에 따라 이 칸과 포인터 칸을 모두 포함하도록 선택의 경계 쪽을 정한다.
+    selection_anchor: Option<Point>,
 }
 
 impl AlacrittyEngine {
@@ -434,6 +436,7 @@ impl AlacrittyEngine {
             pending_osc: Vec::new(),
             pending_csi: Vec::new(),
             pending_cursor_reset: Vec::new(),
+            selection_anchor: None,
         }
     }
 
@@ -810,6 +813,7 @@ impl AlacrittyEngine {
             ));
         };
         self.term.selection = Some(Selection::new(SelectionType::Simple, point, Side::Left));
+        self.selection_anchor = Some(point);
         Ok(())
     }
 
@@ -819,12 +823,19 @@ impl AlacrittyEngine {
                 "selection cell is outside the terminal grid: {col},{row}"
             ));
         };
-        let selection = self
-            .term
-            .selection
-            .as_mut()
+        let anchor = self
+            .selection_anchor
+            .filter(|_| self.term.selection.is_some())
             .ok_or_else(|| "selection update without selection start".to_string())?;
-        selection.update(point, Side::Right);
+        // 앞쪽으로 끌면 시작 칸의 오른쪽 경계와 포인터 칸의 왼쪽 경계를 쓴다. 두 칸이 모두 선택에 든다.
+        let (anchor_side, point_side) = if point < anchor {
+            (Side::Right, Side::Left)
+        } else {
+            (Side::Left, Side::Right)
+        };
+        let mut selection = Selection::new(SelectionType::Simple, anchor, anchor_side);
+        selection.update(point, point_side);
+        self.term.selection = Some(selection);
         Ok(())
     }
 
@@ -1053,8 +1064,9 @@ impl Engine for AlacrittyEngine {
             }
             lines[row].resize_with(col + 1, Cell::default);
             let mut cell = self.cell(indexed.cell, renderable.colors);
+            // 두 번째 인자는 커서 위치다. alacritty 는 블록 커서가 선택 경계에 있을 때만 그 칸을 반전하지 않는다.
             if renderable.selection.as_ref().is_some_and(|selection| {
-                selection.contains_cell(&indexed, indexed.point, renderable.cursor.shape)
+                selection.contains_cell(&indexed, renderable.cursor.point, renderable.cursor.shape)
             }) {
                 cell.inverse = !cell.inverse;
             }

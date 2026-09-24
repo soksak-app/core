@@ -1128,6 +1128,37 @@ test("terminal pointer drag sends one complete selection gesture to the sidecar"
   assert.equal(fakeSidecar.getMessages()[1].body.x, 42);
 });
 
+test("a drag that leaves the view selects to the nearest edge point", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  const fakeExpose = createFakeExpose();
+  const view = createFakeView();
+  await startTerminal({
+    view, attachImage: createFakeAttachImage().function,
+    sidecar: fakeSidecar, expose: fakeExpose,
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  openSession(fakeSidecar);
+  fakeSidecar.getMessages().length = 0;
+
+  view._trigger("pointerdown", { button: 0, pointerId: 9, clientX: 44, clientY: 20 });
+  view._trigger("pointermove", { pointerId: 9, clientX: -30, clientY: 20 });
+  view._trigger("pointermove", { pointerId: 9, clientX: 900, clientY: 700 });
+  view._trigger("pointerup", { pointerId: 9, clientX: -30, clientY: -5 });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  const selection = sessionMessages(fakeSidecar).filter(({ body }) => body.operation.startsWith("selection."))
+    .map(({ body }) => body);
+  // 뷰는 800x600 이다. 뷰 밖의 점은 뷰 안의 가장 가까운 점이 된다.
+  assert.deepEqual(selection, [
+    { operation: "selection.start", x: 44, y: 20 },
+    { operation: "selection.update", x: 0, y: 20 },
+    { operation: "selection.update", x: 799, y: 599 },
+    { operation: "selection.end" },
+  ]);
+  assert.equal(fakeExpose.getStatus("terminal.session").readFn().error, undefined);
+});
+
 test("a terminal click clears the selection with an empty selection at the pressed cell", async () => {
   FakeResizeObserver.reset();
   const fakeSidecar = createFakeSidecar();

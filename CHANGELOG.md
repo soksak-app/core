@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-55: a terminal drag selects from the pressed cell to the cell under the pointer in both directions and past the view edge, and the drawn selection equals the copied text.
 - V5-39: the wheel scrolls the terminal scrollback, scrolls programs on the alternate screen through cursor keys, and reaches programs that request mouse reporting as wheel buttons.
 - V5-41: Command+C on a terminal copies the sidecar's current selection instead of emptying the clipboard with the input-method document's selection.
 - V5-43: a real-input check shows that Command+V on a terminal pastes a clipboard image as the quoted path of an owned file.

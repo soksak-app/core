@@ -792,6 +792,39 @@ fn the_viewport_scrolls_through_the_scrollback_and_returns_to_the_newest_output(
     assert!(engine.screen().cursor.visible);
 }
 
+fn inverted_text(screen: &soksak_sidecar_vt_core::Screen, row: usize) -> String {
+    screen.lines[row]
+        .iter()
+        .filter(|cell| cell.inverse)
+        .map(|cell| cell.ch.as_deref().unwrap_or(" "))
+        .collect()
+}
+
+#[test]
+fn the_rendered_selection_and_the_copied_text_cover_the_same_cells_in_both_directions() {
+    for (from, to, expected) in [
+        (1u16, 5u16, "EFTED"),
+        (5, 1, "EFTED"),
+        (0, 7, "LEFTEDGE"),
+        (7, 0, "LEFTEDGE"),
+    ] {
+        let mut engine = AlacrittyEngine::new();
+        engine.feed(b"LEFTEDGE");
+        engine.selection_start(from, 0).expect("selection start");
+        engine.selection_update(to, 0).expect("selection update");
+        let rendered = inverted_text(&engine.screen(), 0);
+        let copied = engine
+            .selection_end()
+            .expect("selection end")
+            .unwrap_or_default();
+        assert_eq!(
+            (rendered.as_str(), copied.as_str()),
+            (expected, expected),
+            "a drag from cell {from} to cell {to} rendered {rendered:?} and copied {copied:?}"
+        );
+    }
+}
+
 #[test]
 fn blank_selection_release_is_not_an_error() {
     let mut engine = AlacrittyEngine::new();

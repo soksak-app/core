@@ -566,11 +566,17 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   let selectionPointerId = null;
   let selectionStart = null;
   let selectionStarted = false;
-  const selectionPoint = (event) => {
+  // 누름은 뷰 안이어야 한다. 누른 뒤 끄는 포인터가 뷰 밖으로 나가면 뷰 안의 가장 가까운 점으로 맞춘다.
+  // 줄의 처음이나 끝을 고르는 끌기는 포인터가 뷰 가장자리를 지나기 쉽다.
+  const selectionPoint = (event, nearest = false) => {
     const rect = view.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
-    if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0 || x >= rect.width || y >= rect.height) {
+    let x = event.clientX - rect.left;
+    let y = event.clientY - rect.top;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) throw new Error("terminal selection pointer has no position");
+    if (nearest) {
+      x = Math.min(rect.width - 1, Math.max(0, x));
+      y = Math.min(rect.height - 1, Math.max(0, y));
+    } else if (x < 0 || y < 0 || x >= rect.width || y >= rect.height) {
       throw new Error("terminal selection pointer is outside the view");
     }
     return { x, y };
@@ -593,7 +599,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   const updateSelection = (event) => {
     if (event.pointerId !== selectionPointerId) return;
     try {
-      const point = selectionPoint(event);
+      const point = selectionPoint(event, true);
       event.preventDefault();
       if (!selectionStarted) {
         if (point.x === selectionStart.x && point.y === selectionStart.y) return;

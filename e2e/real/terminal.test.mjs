@@ -202,3 +202,60 @@ for (const app of Object.values(APPS)) {
     assert.equal((await s.get("terminal.session", surface)).scrollback.offset, 0, "the wheel moved the scrollback viewport");
   });
 }
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: a real drag that leaves the view selects to the nearest cell`, { timeout: 90000 }, async (t) => {
+    const { s, surface, session, origin, row } = await prepare(t, app, "LEFTEDGE");
+    writePasteboard([{ "public.utf8-plain-text": Buffer.from("BEFORE").toString("base64") }]);
+    const before = (await s.get("terminal.session", surface)).selectionReleases;
+    // 줄의 처음을 선택하려는 끌기는 포인터가 뷰의 왼쪽 밖으로 나가기 쉽다.
+    const start = cellPoint(origin, session, 5, row);
+    dragPath(start, { x: origin.x - 20, y: start.y });
+    await s.until("terminal.session", (value) => value.selectionReleases === before + 1,
+      "the sidecar did not answer the release of a drag that left the view", { surface });
+    await s.until("terminal.session", () => pasteboardText() === "LEFTED",
+      `the drag did not select to the first cell (the pasteboard holds ${JSON.stringify(pasteboardText())})`, { surface });
+    assert.equal((await s.get("terminal.session", surface)).error, undefined);
+  });
+}
+
+// 화면에 선택으로 그려진 글자. 사이드카가 그린 화면의 반전 칸을 읽는다.
+async function selectedCharacters(s, surface, row) {
+  await s.run("terminal.screen.read", {}, surface);
+  const lines = await s.get("terminal.screen", surface);
+  return lines[row].filter((cell) => cell.inverse).map((cell) => cell.ch ?? " ").join("").trimEnd();
+}
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: a real drag, Command+C, and Command+V paste exactly the characters shown as selected`, { timeout: 180000 }, async (t) => {
+    const line = "0123456789ABCDEFGHIJ";
+    const { s, surface, session, origin, row } = await prepare(t, app, line);
+    const view = await s.rect("terminal.view", undefined, surface);
+    const cases = [
+      ["forward", cellPoint(origin, session, 2, row), cellPoint(origin, session, 8, row)],
+      ["backward", cellPoint(origin, session, 12, row), cellPoint(origin, session, 4, row)],
+      ["past the left edge", cellPoint(origin, session, 6, row), { x: origin.x - 20, y: cellPoint(origin, session, 0, row).y }],
+      ["past the right edge", cellPoint(origin, session, 15, row), { x: origin.x + view.width + 20, y: cellPoint(origin, session, 0, row).y }],
+    ];
+    for (const [name, from, to] of cases) {
+      const before = (await s.get("terminal.session", surface)).selectionReleases;
+      dragPath(from, to);
+      await s.until("terminal.session", (value) => value.selectionReleases === before + 1,
+        `the sidecar did not answer the ${name} drag`, { surface });
+      await s.until("host.window", (window) => window.responder?.surface === surface, "the terminal did not take native focus");
+      const shown = await selectedCharacters(s, surface, row);
+      assert.ok(shown.length > 0, `the ${name} drag showed no selected characters`);
+      key(KEYS.c, ["command"]);
+      key(KEYS.v, ["command"]);
+      const pasted = await readScreenUntil(s, surface, (lines) => lines.some((text) => text.startsWith("sh-3.2$ ") && text.length > 8),
+        `the ${name} selection was not pasted`);
+      const typed = pasted.find((text) => text.startsWith("sh-3.2$ ") && text.length > 8).slice(8);
+      t.diagnostic(`${app.name} ${name}: shown ${JSON.stringify(shown)} pasted ${JSON.stringify(typed)}`);
+      assert.equal(typed, shown, `the ${name} drag pasted other characters than it showed as selected`);
+      // 붙여넣은 입력 줄을 지운다(Control+U).
+      key(32, ["control"]);
+      await readScreenUntil(s, surface, (lines) => !lines.some((text) => text.startsWith("sh-3.2$ ") && text.length > 8),
+        "the pasted input was not cleared");
+    }
+  });
+}
