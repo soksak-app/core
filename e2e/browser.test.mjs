@@ -203,6 +203,34 @@ for (const app of Object.values(APPS)) {
       "closing one surface closed another surface's document region");
   });
 
+  test(`${app.name}: a card focus keeps a shown document visible while its placement is prepared`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const base = await serve(t);
+    const [browser] = await browsers(s);
+    const surface = browser.surface;
+    await s.run("browser.navigate", { url: `${base}/focus` }, surface);
+    await loaded(s, surface, `${base}/focus`);
+    await placed(s, surface, "focus document");
+    await s.run("core.card.focus", { card: "shell" });
+    await s.presented();
+
+    // 준비 요청은 창의 레이어 트랜잭션 안에서 적용되어 커밋 전에는 화면에 나오지 않는다. 그동안 화면에 보이는
+    // 표면이 숨으면 그 자리의 누름은 표면 대신 페이지로 간다. 위치가 그대로인 카드 포커스는 표면을 숨기지 않는다.
+    const log = await s.transcript();
+    for (const card of ["browser", "shell", "browser"]) {
+      await s.run("core.card.focus", { card });
+      await s.presented();
+    }
+    const lines = await log.stop();
+    const requests = lines.map((line) => /^host syncSurfaces (\{.*\}) ->/.exec(line)).filter(Boolean)
+      .map((found) => JSON.parse(found[1]));
+    assert.ok(requests.length >= 3, `the card focus changes made ${requests.length} placement requests`);
+    const hiding = requests.filter((request) => request.surfaces.some((item) => item.id === surface && item.visible === false));
+    assert.equal(hiding.length, 0, `a placement request hid the shown browser surface: ${JSON.stringify(hiding[0])}`);
+  });
+
   test(`${app.name}: browser document focus and isolation`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);

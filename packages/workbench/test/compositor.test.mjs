@@ -30,8 +30,11 @@ test("a layout published before drawing waits for the host's placement answer", 
   pending.then(() => { drawn = true; });
   await Promise.resolve();
   assert.equal(drawn, false, "the DOM must wait while the native placement is outstanding");
-  assert.equal(prepared.surfaces[0].visible, false,
-    "native preparation must keep the surface hidden until the DOM is drawn");
+  // 준비는 창의 레이어 트랜잭션 안에서 적용되어 커밋 전에는 화면에 나오지 않는다. 위치를 잰 표면을 숨기면
+  // 화면에는 보이는 표면이 그동안 입력을 받지 못한다(docs/spec/native-surfaces.md).
+  assert.equal(prepared.surfaces[0].visible, true,
+    "native preparation keeps a surface whose future slot was measured visible at its new rectangle");
+  assert.deepEqual(prepared.surfaces[0].declared, { x: 22, y: 30, w: 176, h: 100 });
   answer();
   assert.deepEqual(await pending, [{ id: "surface", x: 22, y: 30, w: 176, h: 100 }]);
   assert.equal(drawn, true);
@@ -43,5 +46,11 @@ test("a layout published before drawing waits for the host's placement answer", 
   assert.equal(prepared.surfaces[0].visible, false, "content with no matching future slot must be hidden before its card changes");
   answer();
   await replacement;
+
+  // 다음 배치에 카드가 없는 표면도 숨긴다. 호스트는 visible 을 불리언으로 요구한다.
+  const removed = publishAhead(new Map(), new Map());
+  assert.strictEqual(prepared.surfaces[0].visible, false, "content whose card leaves the layout must be hidden with a boolean");
+  answer();
+  await removed;
   dom.window.close();
 });

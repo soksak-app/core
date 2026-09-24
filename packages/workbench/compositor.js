@@ -204,8 +204,8 @@ export function publishAhead(rects, seated) {
     const card = el && rects.get(el.dataset.cardId);
     const seat = el && seated.get(el.dataset.cardId);
     const inset = el && insetOf(slot, el);
-    const measurable = card && seat?.id === id && inset && !inset.flat
-      && card.w >= inset.width && card.h >= inset.height;
+    const measurable = Boolean(card && seat?.id === id && inset && !inset.flat
+      && card.w >= inset.width && card.h >= inset.height);
     if (!measurable) aheadComplete = false;
     seats.push({
       id,
@@ -213,10 +213,9 @@ export function publishAhead(rects, seated) {
       title: slot.dataset.nativeTitle,
       plugin: slot.dataset.nativePlugin,
       dim: seat?.dim === true,
-      // 준비 단계는 DOM이 대응하는 카드를 그리기 전에 네이티브 뷰를 옮길 수 있다.
-      // 그려진 커밋이 같은 ticket을 표시할 때까지 숨겨 네이티브 평면이 DOM보다
-      // 한 프레임 앞서지 않게 한다.
-      visible: false,
+      // 준비는 창의 레이어 트랜잭션 안에서 적용되어 커밋 전에는 화면에 나오지 않는다. 위치를 잰 표면은
+      // 새 자리에 보인 채로 두어, 화면에 보이는 표면이 그동안 입력을 받게 한다. 자리를 잴 수 없는 표면만 숨긴다.
+      visible: measurable,
       frame: measurable ? {
         x: card.x + inset.left,
         y: card.y + inset.top,

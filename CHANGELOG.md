@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-17-1: a placement preparation keeps surfaces whose future slot is measured visible, so a press where the screen still shows a surface reaches it instead of the page.
 - V5-35: the graceful sidecar stop tests of both hosts require the stop to return before its deadline instead of a separate 250 ms bound.
 - F8-13: a wide glyph narrower than its two cells is centred in them; frame and window checks measure the ink margins.
 - V5-6-6: the terminal protocol inventory check compares the OSC report in the specification with the engine inventory selector by selector and requires each named test to exist.
