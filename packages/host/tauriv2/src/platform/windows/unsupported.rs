@@ -275,7 +275,7 @@ pub fn input_activate(
     missing("native input")
 }
 
-pub fn input_key(_window: Handle, _key: &Key) -> Result<bool, String> {
+pub fn input_key(_window: Handle, _key: &Key) -> Result<Delivery, String> {
     missing("native input")
 }
 

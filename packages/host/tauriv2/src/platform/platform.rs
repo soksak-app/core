@@ -396,7 +396,7 @@ pub trait Platform: Send + Sync {
         done: Box<dyn FnOnce(Result<(), String>) + Send>,
     ) -> Result<(), String>;
     /// 창에 키 입력을 전달하고 전달 여부를 반환한다. 메인 스레드에서 호출한다.
-    fn input_key(&self, window: Handle, key: &Key) -> Result<bool, String>;
+    fn input_key(&self, window: Handle, key: &Key) -> Result<Delivery, String>;
 
     // 캡처
 

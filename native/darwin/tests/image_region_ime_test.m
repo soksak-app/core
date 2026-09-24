@@ -183,7 +183,7 @@ static NSArray *valuesOfType(NSString *type, NSUInteger from) {
 // Space 를 친다. 키마다 answered 가 늘어날 때까지 기다린다.
 static void typeKey(NSWindow *window, NSString *key, NSUInteger (^answered)(void)) {
     NSUInteger before = answered();
-    BOOL sent = sp_input_key(window, key.UTF8String, NULL, 0, true) && sp_input_key(window, key.UTF8String, NULL, 0, false);
+    BOOL sent = (sp_input_key(window, key.UTF8String, NULL, 0, true) == SP_INPUT_DELIVERED) && (sp_input_key(window, key.UTF8String, NULL, 0, false) == SP_INPUT_DELIVERED);
     if (!sent) {
         check(NO, [NSString stringWithFormat:@"the injector sends %@", key]);
         return;

@@ -265,7 +265,7 @@ type Platform interface {
 	ActivateWindow(window unsafe.Pointer, x, y, timeout float64, done func(error)) error
 	// InjectKey 는 창에 키 입력을 전달하고 전달했는지 반환한다. modifiers 는 1 Shift, 2 Control,
 	// 4 Option, 8 Command 의 비트 합이다.
-	InjectKey(window unsafe.Pointer, key, text string, modifiers uint, down bool) (bool, error)
+	InjectKey(window unsafe.Pointer, key, text string, modifiers uint, down bool) (PointerResult, error)
 
 	// Listen 은 directory 안에 로컬 엔드포인트의 리스너를 만든다. directory 는 현재 사용자 전용이어야
 	// 한다. application 은 주소 이름에 들어간다.

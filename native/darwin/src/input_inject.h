@@ -4,7 +4,7 @@
 typedef enum {
     SP_INPUT_DELIVERED = 0,
     SP_INPUT_REJECTED = 1, // 창, 좌표, 단계, 스레드가 올바르지 않다
-    SP_INPUT_INACTIVE = 2, // 버튼 없는 이동이며 창이 키 창이 아니다. WebKit 은 이 이동으로 호버를 갱신하지 않는다
+    SP_INPUT_INACTIVE = 2, // 버튼 없는 이동이며 창이 키 창이 아니다(WebKit 은 이 이동으로 호버를 갱신하지 않는다), 또는 활성 애플리케이션의 키 창이 아닌 창에 보낸 키다
     SP_INPUT_UNRECEIVED = 3, // 누름이나 뗌을 문서가 제한 시간 안에 받지 않았거나, 스크롤 대상이 제한 시간 안에 표시하지 않았다
     SP_INPUT_BUTTON_HELD = 4, // 누름이나 뗌이며 실제 마우스 버튼이 눌려 있다. WebKit 은 이벤트의 버튼 상태를 시스템에서 읽는다
 } sp_input_result;
@@ -52,4 +52,4 @@ void sp_input_activate_at(void *window, double x, double y, double timeoutSecond
 // key 는 키 이름(Enter, Tab, Escape, Backspace, ArrowLeft 등) 또는 문자 하나다. text 는 입력할
 // 문자열이며 NULL 이면 key 를 사용한다. modifiers 는 비트 합: 1 Shift, 2 Control, 4 Option,
 // 8 Command. down 이 참이면 누름, 거짓이면 뗌이다.
-bool sp_input_key(void *window, const char *key, const char *text, unsigned modifiers, bool down);
+sp_input_result sp_input_key(void *window, const char *key, const char *text, unsigned modifiers, bool down);

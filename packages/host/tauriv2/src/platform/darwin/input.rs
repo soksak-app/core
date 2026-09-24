@@ -43,7 +43,7 @@ extern "C" {
         text: *const c_char,
         modifiers: u32,
         down: bool,
-    ) -> bool;
+    ) -> i32;
 }
 
 /// sp_input_pointer 의 결과 값.
@@ -152,7 +152,7 @@ pub fn activate(window: Handle, x: f64, y: f64, timeout: Duration, done: Activat
 
 /// 창에 키 입력을 전달하고 전달 여부를 반환한다. 메인 스레드에서 호출한다. NUL 문자를 포함한
 /// 키 이름과 문자열은 오류를 반환한다.
-pub fn key(window: Handle, key: &Key) -> Result<bool, String> {
+pub fn key(window: Handle, key: &Key) -> Result<Delivery, String> {
     let name = CString::new(key.key.as_str()).map_err(|e| e.to_string())?;
     let text = key
         .text
@@ -161,7 +161,7 @@ pub fn key(window: Handle, key: &Key) -> Result<bool, String> {
         .transpose()
         .map_err(|e| e.to_string())?;
     let text = text.as_ref().map_or(std::ptr::null(), |text| text.as_ptr());
-    Ok(unsafe {
+    let result = unsafe {
         sp_input_key(
             window as *mut c_void,
             name.as_ptr(),
@@ -169,6 +169,11 @@ pub fn key(window: Handle, key: &Key) -> Result<bool, String> {
             key.modifiers,
             key.down,
         )
+    };
+    Ok(match result {
+        SP_INPUT_DELIVERED => Delivery::Delivered,
+        SP_INPUT_INACTIVE => Delivery::Inactive,
+        _ => Delivery::Rejected,
     })
 }
 

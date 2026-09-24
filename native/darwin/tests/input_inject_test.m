@@ -174,9 +174,9 @@ static void checkIndependentWindowKeys(void) {
         @"second window receives its focus click");
     drain(firstView);
     drain(secondView);
-    check(sp_input_key(first, "a", "a", 0, true) && sp_input_key(first, "a", "a", 0, false),
+    check((sp_input_key(first, "a", "a", 0, true) == SP_INPUT_DELIVERED) && (sp_input_key(first, "a", "a", 0, false) == SP_INPUT_DELIVERED),
         @"a key is delivered to the first window target");
-    check(sp_input_key(second, "Escape", NULL, 0, true) && sp_input_key(second, "Escape", NULL, 0, false),
+    check((sp_input_key(second, "Escape", NULL, 0, true) == SP_INPUT_DELIVERED) && (sp_input_key(second, "Escape", NULL, 0, false) == SP_INPUT_DELIVERED),
         @"Escape is delivered to the second window target");
     until(^BOOL { return [[evaluate(firstView, @"document.getElementById('field').value") description] isEqual:@"a"]; });
     check([evaluate(firstView, @"document.getElementById('field').value") isEqual:@"a"],
@@ -250,9 +250,9 @@ int main(void) { @autoreleasepool {
     drain(view);
     check([evaluate(view, @"document.activeElement && document.activeElement.id") isEqual:@"field"], @"a click focuses the field in an inactive window");
     evaluate(view, @"probe.events.length=0; null");
-    check(sp_input_key(window, "a", "a", 0, true) && sp_input_key(window, "a", "a", 0, false), @"explicit text key accepted");
-    check(sp_input_key(window, "Enter", NULL, 0, true) && sp_input_key(window, "Enter", NULL, 0, false), @"named key accepted");
-    check(!sp_input_key(window, "NoSuchKey", NULL, 0, true), @"unknown key name rejected");
+    check((sp_input_key(window, "a", "a", 0, true) == SP_INPUT_DELIVERED) && (sp_input_key(window, "a", "a", 0, false) == SP_INPUT_DELIVERED), @"explicit text key accepted");
+    check((sp_input_key(window, "Enter", NULL, 0, true) == SP_INPUT_DELIVERED) && (sp_input_key(window, "Enter", NULL, 0, false) == SP_INPUT_DELIVERED), @"named key accepted");
+    check(sp_input_key(window, "NoSuchKey", NULL, 0, true) == SP_INPUT_REJECTED, @"unknown key name rejected");
     until(^BOOL { return [evaluate(view, @"probe.events.filter(e=>e.type==='keydown').length") intValue] >= 2; });
     NSArray *keysSeen = evaluate(view, @"probe.events.filter(e=>e.type==='keydown').map(e=>e.key)");
     check([keysSeen isEqual:@[@"a", @"Enter"]],
@@ -284,7 +284,7 @@ int main(void) { @autoreleasepool {
     check([childActiveElement isEqual:@"other"],
         [NSString stringWithFormat:@"child page remains responsive and focuses its input after click (got %@)", childActiveElement]);
     // 자식 웹뷰의 포커스 라우팅 검사에서는 입력 소스 변환 없이 영문 b를 명시한다.
-    check(sp_input_key(window, "b", "b", 0, true) && sp_input_key(window, "b", "b", 0, false), @"key after child click accepted");
+    check((sp_input_key(window, "b", "b", 0, true) == SP_INPUT_DELIVERED) && (sp_input_key(window, "b", "b", 0, false) == SP_INPUT_DELIVERED), @"key after child click accepted");
     until(^BOOL { return [[evaluate(child, @"document.getElementById('other').value") description] isEqual:@"b"]; });
     check([evaluate(child, @"document.getElementById('other').value") isEqual:@"b"], @"keys reach the pressed webview");
     check([evaluate(view, @"document.getElementById('field').value") isEqual:@"a"], @"the previous webview keeps its text");

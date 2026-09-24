@@ -1388,8 +1388,12 @@ impl Host {
         let platform = platform::current().map_err(|e| Failure::new(NO_INPUT, e))?;
         let handle = native_owner_on_main(window).map_err(|e| Failure::new(NO_INPUT, e))?;
         match on_main(window, move || platform.input_key(handle, &key)) {
-            Ok(true) => Ok(Value::Null),
-            Ok(false) => Err(Failure::new(
+            Ok(Delivery::Delivered) => Ok(Value::Null),
+            Ok(Delivery::Inactive) => Err(Failure::new(
+                NOT_ACTIVE,
+                "keys reach only the key window of the active application",
+            )),
+            Ok(_) => Err(Failure::new(
                 INVALID_PARAMS,
                 "the window did not accept the input",
             )),

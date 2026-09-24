@@ -216,7 +216,7 @@ for (const app of Object.values(APPS)) {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: a character key to a terminal outside the key window reports an input method error`, { timeout: 30000 }, async (t) => {
+  test(`${app.name}: a key to a window that is not the key window is rejected instead of delivered`, { timeout: 30000 }, async (t) => {
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
@@ -234,7 +234,7 @@ for (const app of Object.values(APPS)) {
       host.regions.some((region) => region.surface === surface && region.focused),
     "the terminal did not receive native focus in the active window");
 
-    // 다른 프로젝트 창이 키 창이 되면 첫 창의 터미널은 첫 응답자로 남지만 입력기의 답을 받지 못한다.
+    // 다른 프로젝트 창이 키 창이 되면 사람의 키는 첫 창에 닿지 않는다. 진단 키도 다른 창에 전달하지 않고 거부한다.
     const project = mkdtempSync(join(tmpdir(), "soksak-terminal-key-window-"));
     s.cleanup(() => rmSync(project, { recursive: true, force: true }));
     await s.run("core.settings.set", { patch: { projectOpening: "windows" }, scope: "common" });
@@ -246,10 +246,8 @@ for (const app of Object.values(APPS)) {
     await s.until("host.window", (host) => host.key === false && host.regions.some((region) =>
       region.surface === surface && region.focused), "the first window lost its terminal responder");
 
-    await s.press("e");
-    const state = await s.until("terminal.session", (session) => typeof session.error === "string",
-      "a character key outside the key window was dropped without an error", { surface });
-    assert.match(state.error, /input method did not answer native keyCode=14 outside the key window of the active application/);
+    await assert.rejects(s.press("e"), /keys reach only the key window of the active application/);
+    assert.equal((await s.get("terminal.session", surface)).error, undefined, "the rejected key reached the terminal");
     await child.close();
     await s.windows(1, "the second project window did not close");
   });

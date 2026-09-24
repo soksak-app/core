@@ -805,11 +805,14 @@ func (b hostBackend) Key(window string, input KeyInput) error {
 	if err != nil {
 		return err
 	}
-	var ok bool
+	var result platform.PointerResult
 	application.InvokeSync(func() {
-		ok, err = system.InjectKey(s.window.NativeWindow(), input.Key, input.Text, input.Modifiers, input.Down)
+		result, err = system.InjectKey(s.window.NativeWindow(), input.Key, input.Text, input.Modifiers, input.Down)
 	})
-	return delivered(ok, err)
+	if err == nil && result == platform.PointerInactive {
+		return rpcError(codeInactive, "keys reach only the key window of the active application")
+	}
+	return delivered(result == platform.PointerDelivered, err)
 }
 
 // native 는 UI 스레드에서 read 로 네이티브 JSON 을 읽어 into 에 넣는다. inspect 는 같은 UI 스레드

@@ -270,8 +270,8 @@ func (implementation) ActivateWindow(unsafe.Pointer, float64, float64, float64, 
 	return unsupported("window activation")
 }
 
-func (implementation) InjectKey(unsafe.Pointer, string, string, uint, bool) (bool, error) {
-	return false, unsupported("native key input")
+func (implementation) InjectKey(unsafe.Pointer, string, string, uint, bool) (platform.PointerResult, error) {
+	return platform.PointerRejected, unsupported("native key input")
 }
 
 func (implementation) Listen(string, string) (net.Listener, platform.Endpoint, error) {

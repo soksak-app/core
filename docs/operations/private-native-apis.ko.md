@@ -21,7 +21,7 @@
 | `WKWebView._setShouldSuppressFirstResponderChanges:` | 두 호스트; [`webview_input.m`](../../native/darwin/src/webview_input.m)의 `webviewIgnorePageFocus`, 표면, 모달, 문서 영역 웹뷰 | 페이지가 요소에 초점을 줄 때 창의 키보드 초점을 옮기지 않게 함 |
 | `NSWindow._setWindowResolution:`, `NSWindow._adjustWindowResolution` 재정의 | [`webview_geometry_test.m`](../../native/darwin/tests/webview_geometry_test.m) 전용. WebKitTestRunner가 쓰는 메서드 | 해당 디스플레이 없이 검사 창의 백킹 배율을 2나 1로 정해 어느 기기에서나 배율 동작을 검사 |
 | `WKWebView._doAfterActivityStateUpdate:` | 두 호스트; [`input_inject.m`](../../native/darwin/src/input_inject.m), `sp_input_activate_at` | 브라우저 좌표에서는 대상 웹뷰만 활성 창 상태를 웹 프로세스에 보낸 뒤 활성화를 완료하고, native 좌표에서는 관련 없는 웹뷰를 기다리지 않음 |
-| `CGEventField` 51(창 번호), `CGEventSetWindowLocation` | 두 호스트; [`input_inject.m`](../../native/darwin/src/input_inject.m), `sp_input_pointer`의 스크롤 | 창과 창 좌표를 가진 스크롤 `NSEvent` 생성 |
+| `CGEventField` 51(창 번호), `CGEventSetWindowLocation` | 두 호스트; [`input_inject.m`](../../native/darwin/src/input_inject.m), `sp_input_pointer`의 스크롤과 `sp_input_key`의 키(필드 51만) | 창과 창 좌표를 가진 스크롤 `NSEvent` 생성, `-[NSApplication sendEvent:]`에 보낼 창을 가진 키 `NSEvent` 생성 |
 | `WKWebView._inspector`와 `_WKInspector`(`connect`, `show`, `attach`, `close`, `isVisible`, `isConnected`, `inspectorWebView`) | [`native/darwin/tests/webview_inspector_test.m`](../../native/darwin/tests/webview_inspector_test.m), 검사 전용 | 표면 웹뷰의 웹 인스펙터를 열고 창에 붙여 표면이 자리를 유지하는지 확인 |
 | `WKWebView._doAfterProcessingAllPendingMouseEvents:` | [`native/darwin/tests/webview_input_test.m`](../../native/darwin/tests/webview_input_test.m)의 `drain`; 독립 검사 전용 | DOM 이벤트 횟수를 검사하기 전에 네이티브 마우스 처리 완료 대기 |
 

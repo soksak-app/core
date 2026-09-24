@@ -413,7 +413,7 @@ impl Platform for Darwin {
         input::activate(window, x, y, timeout, done);
         Ok(())
     }
-    fn input_key(&self, window: Handle, key: &Key) -> Result<bool, String> {
+    fn input_key(&self, window: Handle, key: &Key) -> Result<Delivery, String> {
         input::key(window, key)
     }
 

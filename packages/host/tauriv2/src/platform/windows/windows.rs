@@ -307,7 +307,7 @@ impl Platform for Windows {
     ) -> Result<(), String> {
         unsupported::input_activate(window, x, y, timeout, done)
     }
-    fn input_key(&self, window: Handle, key: &Key) -> Result<bool, String> {
+    fn input_key(&self, window: Handle, key: &Key) -> Result<Delivery, String> {
         unsupported::input_key(window, key)
     }
 

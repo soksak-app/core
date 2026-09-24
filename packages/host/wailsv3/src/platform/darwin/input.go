@@ -206,7 +206,7 @@ func (implementation) ActivateWindow(window unsafe.Pointer, x, y, timeout float6
 }
 
 // InjectKey 는 native/darwin 의 sp_input_key 로 입력을 전달한다. text 가 비어 있으면 key 를 입력한다.
-func (implementation) InjectKey(window unsafe.Pointer, key, text string, modifiers uint, down bool) (bool, error) {
+func (implementation) InjectKey(window unsafe.Pointer, key, text string, modifiers uint, down bool) (platform.PointerResult, error) {
 	name := C.CString(key)
 	defer C.free(unsafe.Pointer(name))
 	var typed *C.char
@@ -214,7 +214,14 @@ func (implementation) InjectKey(window unsafe.Pointer, key, text string, modifie
 		typed = C.CString(text)
 		defer C.free(unsafe.Pointer(typed))
 	}
-	return bool(C.sp_input_key(window, name, typed, C.uint(modifiers), C.bool(down))), nil
+	switch C.sp_input_key(window, name, typed, C.uint(modifiers), C.bool(down)) {
+	case C.SP_INPUT_DELIVERED:
+		return platform.PointerDelivered, nil
+	case C.SP_INPUT_INACTIVE:
+		return platform.PointerInactive, nil
+	default:
+		return platform.PointerRejected, nil
+	}
 }
 
 func (implementation) UnwatchInput(monitor uintptr) {

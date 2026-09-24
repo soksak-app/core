@@ -295,9 +295,9 @@ static CGEventFlags cgFlags(unsigned modifiers) {
     return result;
 }
 
-bool sp_input_key(void *handle, const char *key, const char *text, unsigned modifiers, bool down) {
+sp_input_result sp_input_key(void *handle, const char *key, const char *text, unsigned modifiers, bool down) {
     NSWindow *window = (__bridge NSWindow *)handle;
-    if (!window || !key || !NSThread.isMainThread) return false;
+    if (!window || !key || !NSThread.isMainThread) return SP_INPUT_REJECTED;
     NSString *name = [NSString stringWithUTF8String:key];
     unsigned short code = USHRT_MAX;
     for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
@@ -307,9 +307,9 @@ bool sp_input_key(void *handle, const char *key, const char *text, unsigned modi
         }
     }
     if (code == USHRT_MAX) {
-        if (name.length != 1) return false;
+        if (name.length != 1) return SP_INPUT_REJECTED;
         code = characterKeyCode([name characterAtIndex:0]);
-        if (code == USHRT_MAX) return false;
+        if (code == USHRT_MAX) return SP_INPUT_REJECTED;
     }
     NSString *characters = text ? [NSString stringWithUTF8String:text] : nil;
     NSEvent *event = nil;
@@ -319,6 +319,7 @@ bool sp_input_key(void *handle, const char *key, const char *text, unsigned modi
         CGEventRef raw = CGEventCreateKeyboardEvent(NULL, code, down);
         if (raw) {
             CGEventSetFlags(raw, cgFlags(modifiers));
+            CGEventSetIntegerValueField(raw, kSPEventWindowNumberField, window.windowNumber);
             event = [NSEvent eventWithCGEvent:raw];
             CFRelease(raw);
         }
@@ -329,7 +330,14 @@ bool sp_input_key(void *handle, const char *key, const char *text, unsigned modi
             context:nil characters:characters charactersIgnoringModifiers:characters
             isARepeat:NO keyCode:code];
     }
-    if (!event) return false;
-    [window sendEvent:event];
-    return true;
+    if (!event) return SP_INPUT_REJECTED;
+    // 사람의 키는 키 창에만 간다. 다른 창이 키 창이면 대상 창에 전달하지 않고 알린다.
+    NSWindow *keyWindow = NSApp.keyWindow;
+    if (keyWindow && keyWindow != window) return SP_INPUT_INACTIVE;
+    // 대상 창이 키 창이면 사람의 키와 같이 -[NSApplication sendEvent:] 로 분배한다. 메뉴의 키 대응(Command+C,
+    // Command+V)도 AppKit 이 판단한다. 키 창이 없는 비활성 애플리케이션에는 사람의 키가 오지 않으므로, 창을
+    // 활성화하지 않는 검사를 위해 대상 창에 보낸다.
+    if (keyWindow == window) [NSApp sendEvent:event];
+    else [window sendEvent:event];
+    return SP_INPUT_DELIVERED;
 }
