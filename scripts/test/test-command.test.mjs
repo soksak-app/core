@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { loadavg, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { runCommand } from '../test-command.mjs';
@@ -187,15 +187,26 @@ test('forwards CLI SIGTERM to command cancellation and cleanup', { timeout: 3000
     await rm(directory, { recursive: true, force: true });
   });
   const descendantSource = `const {writeFileSync}=require('node:fs'); process.on('SIGTERM',()=>writeFileSync(${JSON.stringify(markerFile)},'term')); process.send('ready'); setTimeout(()=>{},2000);`;
-  const commandSource = `const {spawn}=require('node:child_process'); const {writeFileSync}=require('node:fs'); const child=spawn(process.execPath,['-e',${JSON.stringify(descendantSource)}],{stdio:['ignore','ignore','ignore','ipc']}); child.on('message',message=>{if(message==='ready') writeFileSync(${JSON.stringify(pidFile)},String(child.pid));}); setTimeout(()=>{},2000);`;
+  // pid 파일은 임시 파일에 쓴 뒤 이름을 바꿔 만든다. 읽는 쪽이 쓰기 도중의 빈 파일을 읽지 않는다.
+  const commandSource = `const {spawn}=require('node:child_process'); const {renameSync,writeFileSync}=require('node:fs'); const child=spawn(process.execPath,['-e',${JSON.stringify(descendantSource)}],{stdio:['ignore','ignore','ignore','ipc']}); child.on('message',message=>{if(message==='ready'){writeFileSync(${JSON.stringify(pidFile + '.tmp')},String(child.pid)); renameSync(${JSON.stringify(pidFile + '.tmp')},${JSON.stringify(pidFile)});}}); setTimeout(()=>{},2000);`;
   cli = spawn(node, [join(process.cwd(), 'scripts/test-command.mjs'), '--id', 'cli-signal', '--timeout-ms', '1500', '--', node, '-e', commandSource], { stdio: ['ignore', 'pipe', 'pipe'] });
   let stdout = '';
   cli.stdout.on('data', (chunk) => { stdout += chunk; });
-  const readyDeadline = Date.now() + 1000;
+  const started = Date.now();
+  const readyDeadline = started + 1000;
+  let read = null;
   while (Date.now() < readyDeadline) {
-    try { descendantPid = Number(await readFile(pidFile, 'utf8')); break; } catch { await new Promise((resolve) => setTimeout(resolve, 10)); }
+    try {
+      read = await readFile(pidFile, 'utf8');
+      const pid = Number(read);
+      if (Number.isInteger(pid) && pid > 0) { descendantPid = pid; break; }
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
   }
-  assert.ok(descendantPid, 'command did not report descendant readiness');
+  assert.ok(descendantPid, `command did not report descendant readiness within ${Date.now() - started} ms ` +
+    `(pid file ${read === null ? 'absent' : JSON.stringify(read)}; load average ${loadavg().map((value) => value.toFixed(1)).join(' ')})`);
   cli.kill('SIGTERM');
   const closeResult = await new Promise((resolve) => cli.once('close', (code, signal) => resolve({ code, signal })));
   assert.equal(closeResult.code, 1);

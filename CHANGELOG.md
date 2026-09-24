@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-31: the supervisor SIGTERM test reads a pid file that is written atomically and waits for a positive pid. New target `make node-repeat`.
 - V5-6-1: the default native suite runs `appearance_test`.
 - V5-26: the shell sidecar treats a process group whose shell has ended or is exiting as terminated when macOS answers `EPERM`. New target `make go-repeat`.
 - V5-6-3: a window check distinguishes each cursor shape and the focused and unfocused cursor in captured pixels; unfocused solid, underline, and beam cursors, which were drawn hollow, now draw their shape, and `terminal.cursor` follows the sidecar's answer.

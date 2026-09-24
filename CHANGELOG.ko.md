@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- V5-31: 감독 SIGTERM 테스트는 원자적으로 쓴 pid 파일을 읽고 양의 pid를 기다린다. 새 대상 `make node-repeat`.
 - V5-6-1: 기본 네이티브 스위트가 `appearance_test`를 실행한다.
 - V5-26: 셸 사이드카는 macOS가 `EPERM`으로 답할 때 셸이 끝났거나 끝나는 중인 프로세스 그룹을 종료된 것으로 본다. 새 대상 `make go-repeat`.
 - V5-6-3: 창 검사가 캡처 픽셀에서 각 커서 모양과 포커스·비포커스 커서를 구별한다. hollow로 그려지던 포커스 없는 solid, underline, beam 커서가 이제 제 모양으로 그려지고, `terminal.cursor`는 사이드카의 응답을 따른다.
