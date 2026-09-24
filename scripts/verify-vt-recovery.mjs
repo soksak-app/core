@@ -120,29 +120,37 @@ const closeSocket = async (socket, label) => {
 };
 
 const worker = async () => {
-  if (process.argv.length !== 7) {
-    fail("usage: node scripts/verify-vt-recovery.mjs --worker <endpoint> <service-dir> <initial|restore> [session]");
+  if (process.argv.length !== 8) {
+    fail("usage: node scripts/verify-vt-recovery.mjs --worker <endpoint> <service-dir> <initial|restore> <session|-> <orphan-session|->");
   }
   const endpointPath = process.argv[3];
   const serviceDirectory = process.argv[4];
   const mode = process.argv[5];
   const expectedSession = process.argv[6];
+  const expectedOrphan = process.argv[7];
   if (mode !== "initial" && mode !== "restore") fail(`unknown worker mode: ${mode}`);
-  if (mode === "restore" && !expectedSession) fail("restore worker requires a session ID");
+  if (mode === "restore" && (expectedSession === "-" || expectedOrphan === "-")) fail("restore worker requires both session IDs");
 
   const endpoint = JSON.parse(await readFile(endpointPath, "utf8"));
   const surface = "recovery-surface";
+  // orphan 표면은 닫힘 알림 없이 애플리케이션과 함께 사라진 표면이다. 재시작한 애플리케이션의 레이아웃에 없다.
+  const orphan = "orphan-surface";
   const project = "/recovery/project";
   const client = await lineClient(endpoint, serviceDirectory);
+  const openSession = async (name, label) => {
+    sendSurface(client, name, project, { operation: "open", image: "terminal" });
+    sendSurface(client, name, project, { image: { configure: {
+      name: "terminal", generation: 1, raster: 1, width: 640, height: 384, scale: 1,
+    } } });
+    const state = await waitFor(client, (value) => value.surface === name && value.body?.event === "state", label);
+    if (!state.body.sessionId) fail(`${label} did not contain a session ID`);
+    return state.body.sessionId;
+  };
   try {
-    sendSurface(client, surface, project, { operation: "open", image: "terminal" });
     if (mode === "initial") {
-      sendSurface(client, surface, project, { image: { configure: {
-        name: "terminal", generation: 1, raster: 1, width: 640, height: 384, scale: 1,
-      } } });
-      const state = await waitFor(client, (value) => value.surface === surface && value.body?.event === "state", "worker initial state");
-      const sessionId = state.body.sessionId;
-      if (!sessionId) fail("worker initial state did not contain a session ID");
+      const sessionId = await openSession(surface, "worker initial state");
+      const orphanSession = await openSession(orphan, "worker orphan state");
+      console.log(`WORKER_ORPHAN_SESSION_ID=${orphanSession}`);
       sendSurface(client, surface, project, {
         operation: "input",
         bytes: Buffer.from("echo RECOVERY\n").toString("base64"),
@@ -152,6 +160,18 @@ const worker = async () => {
       return;
     }
 
+    // 재시작한 애플리케이션은 표면을 보내기 전에 레이아웃의 표면만 남기도록 retain 을 보낸다. 닫힌 수 1 은
+    // 고아 세션이 재시작 뒤에도 서비스에 남아 있었다는 측정이다.
+    client.write({ operation: "retain", request: "orphan-retain", surfaces: [{ surface, root: project }] });
+    const retained = await waitFor(client, (value) => value.operation === "retained" && value.request === "orphan-retain", "worker retain reply");
+    console.log(`WORKER_RETAIN_REPLY=${JSON.stringify(retained)}`);
+    if (retained.ok !== true || retained.closed !== 1) fail(`retain did not close exactly the orphan session: ${JSON.stringify(retained)}`);
+    const reopened = await openSession(orphan, "worker orphan reopen state");
+    if (reopened === expectedOrphan) fail(`the orphan session ${expectedOrphan} survived retain`);
+    console.log(`WORKER_ORPHAN_CLOSED_SESSION_ID=${expectedOrphan}`);
+    sendSurface(client, orphan, project, { operation: "close" });
+
+    sendSurface(client, surface, project, { operation: "open", image: "terminal" });
     sendSurface(client, surface, project, { operation: "screen.read" });
     const reconnected = await waitFor(client, (value) => value.surface === surface && value.body?.event === "session", "worker session reattach");
     if (reconnected.body.sessionId !== expectedSession) {
@@ -165,8 +185,8 @@ const worker = async () => {
   }
 };
 
-const runWorker = async (endpointPath, serviceDirectory, mode, sessionId = "-") => {
-  const child = spawn(process.execPath, [process.argv[1], "--worker", endpointPath, serviceDirectory, mode, sessionId], {
+const runWorker = async (endpointPath, serviceDirectory, mode, sessionId = "-", orphanSession = "-") => {
+  const child = spawn(process.execPath, [process.argv[1], "--worker", endpointPath, serviceDirectory, mode, sessionId, orphanSession], {
     stdio: ["ignore", "pipe", "pipe"],
   });
   let stdout = "";
@@ -175,10 +195,19 @@ const runWorker = async (endpointPath, serviceDirectory, mode, sessionId = "-") 
   child.stderr.setEncoding("utf8");
   child.stdout.on("data", (chunk) => { stdout += chunk; });
   child.stderr.on("data", (chunk) => { stderr += chunk; });
-  const result = await withTimeout(new Promise((resolve, reject) => {
+  const exited = new Promise((resolve, reject) => {
     child.once("error", reject);
     child.once("exit", (code, signal) => resolve({ code, signal }));
-  }), `worker ${mode} process`);
+  });
+  let result;
+  try {
+    result = await withTimeout(exited, `worker ${mode} process`);
+  } catch (error) {
+    // 멈춘 단계를 찾도록 작업자가 남긴 출력을 붙이고 작업자를 끝낸다.
+    child.kill("SIGKILL");
+    await exited;
+    fail(`${error.message}; worker stdout: ${stdout.trim() || "none"}; worker stderr: ${stderr.trim() || "none"}`);
+  }
   if (result.code !== 0) {
     fail(`worker ${mode} exited with code=${result.code} signal=${result.signal}: ${stderr.trim()}`);
   }
@@ -213,13 +242,19 @@ const main = async () => {
     const sessionMatch = initial.match(/^WORKER_SESSION_ID=([^\n]+)$/m);
     if (!sessionMatch) fail(`initial worker did not report a session ID: ${initial.trim()}`);
     const sessionId = sessionMatch[1];
+    const orphanMatch = initial.match(/^WORKER_ORPHAN_SESSION_ID=([^\n]+)$/m);
+    if (!orphanMatch) fail(`initial worker did not report the orphan session ID: ${initial.trim()}`);
     assertServiceAlive(service.pid);
     console.log(`PASS service_alive_after_application_process_exit pid=${service.pid}`);
-    const restored = await runWorker(endpointPath, serviceDirectory, "restore", sessionId);
+    const restored = await runWorker(endpointPath, serviceDirectory, "restore", sessionId, orphanMatch[1]);
     if (!restored.match(new RegExp(`^WORKER_RESTORED_SESSION_ID=${sessionId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "m"))) {
       fail(`restore worker did not report the expected session: ${restored.trim()}`);
     }
     console.log(`PASS application_process_restarted session=${sessionId}`);
+    if (!restored.includes(`WORKER_ORPHAN_CLOSED_SESSION_ID=${orphanMatch[1]}`)) {
+      fail(`restore worker did not report the retain of the orphan session: ${restored.trim()}`);
+    }
+    console.log(`PASS retain_closed_orphan_session=${orphanMatch[1]}`);
     console.log("PASS retained_screen_contains_RECOVERY");
   } catch (error) {
     const detail = serviceStderr.trim();

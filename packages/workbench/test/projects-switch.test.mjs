@@ -21,6 +21,13 @@ mock.module("@soksak/runtime", {
     },
   },
 });
+// 사이드카 세션 정리 호출을 기록한다.
+const retained = [];
+mock.module("../host.js", {
+  namedExports: {
+    retainSidecarSessions: async (surfaces) => { retained.push(surfaces); return { closed: 0 }; },
+  },
+});
 mock.module("../settings.js", {
   namedExports: {
     selectProject: async () => {},
@@ -82,4 +89,32 @@ test("opening a project while the library is still clearing the plane loads it a
   assert.deepEqual(plane.events, ["empty started", "emptied", "load"]);
   assert.deepEqual(plane.layout, PROJECT.spaces[0].layout);
   await projects.flush();
+});
+
+test("the surfaces of every layout are listed with their project root, and removing a project retains the rest", async () => {
+  const layout = { state: { cards: [
+    { id: "left" },
+    { id: "right", data: { tabs: [{ id: "tab-a" }, { id: "tab-b" }] } },
+  ] } };
+  const two = {
+    ...structuredClone(PROJECT), id: "prj-two", root: "/work/two",
+    spaces: [{ id: "spc-two", title: "SPACE1", layout }],
+  };
+  const one = { ...structuredClone(PROJECT), id: "prj-three" };
+  let listed = [one, two];
+  const local = { ...store, snapshot: async () => ({ common: {}, projects: listed.map((item) => structuredClone(item)), open: [] }),
+    remove: async (id) => { listed = listed.filter((item) => item.id !== id); } };
+  await projects.initialise(local);
+  assert.throws(() => projects.layoutSurfaces(), /has no layout cards/, "a layout without cards is an explicit error");
+  listed[0].spaces[0].layout = { state: { cards: [{ id: "one", data: { tabs: [{ id: "tab-one" }] } }] } };
+  await projects.initialise(local);
+  assert.deepEqual(projects.layoutSurfaces(), [
+    { surface: "tab-one", root: "/work/one" },
+    { surface: "tab-a", root: "/work/two" },
+    { surface: "tab-b", root: "/work/two" },
+  ]);
+  retained.length = 0;
+  await projects.close("prj-two");
+  assert.deepEqual(retained, [[{ surface: "tab-one", root: "/work/one" }]],
+    "removing a project retains only the surfaces of the remaining layouts");
 });

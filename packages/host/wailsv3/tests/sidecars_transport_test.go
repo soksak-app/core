@@ -572,3 +572,114 @@ func TestPersistentTransportReportsLiveButUnreachableEndpointWithoutReplacement(
 	}
 	sidecars.Stop()
 }
+
+// contract: sidecars.retain.sends-layout-and-known-surfaces, sidecars.retain.reports-service-failure
+func TestPersistentRetainSendsLayoutAndKnownSurfaces(t *testing.T) {
+	root := t.TempDir()
+	socketDirectory, err := os.MkdirTemp("", "sp-r")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(socketDirectory)
+	socket := filepath.Join(socketDirectory, "s.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	writeHarnessEndpoint(t, root, socket)
+
+	requests := make(chan map[string]any, 3)
+	go func() {
+		connection, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer connection.Close()
+		reader := bufio.NewReader(connection)
+		answered := 0
+		for {
+			line, err := reader.ReadBytes('\n')
+			if err != nil {
+				return
+			}
+			var request map[string]any
+			if json.Unmarshal(line, &request) != nil {
+				return
+			}
+			var reply map[string]any
+			switch request["operation"] {
+			case "hello":
+				reply = map[string]any{"operation": "hello", "protocol": 1, "ok": true}
+			case "close-owner":
+				reply = map[string]any{"operation": "closed-owner", "request": request["request"], "ok": true}
+			case "shutdown":
+				reply = map[string]any{"operation": "shutdown", "request": request["request"], "ok": true}
+			case "retain":
+				requests <- request
+				answered++
+				if answered <= 2 {
+					reply = map[string]any{"operation": "retained", "request": request["request"], "ok": true, "closed": 2}
+				} else {
+					reply = map[string]any{"operation": "retained", "request": request["request"], "ok": false, "error": "retain failed in the service"}
+				}
+			}
+			if reply != nil {
+				encoded, _ := json.Marshal(reply)
+				if _, err := connection.Write(append(encoded, '\n')); err != nil {
+					return
+				}
+			}
+		}
+	}()
+
+	sidecars, err := NewSidecars(harnessFrontend(), t.TempDir(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sidecars.Stop()
+	// 레이아웃에 표면이 없고 이 프로세스가 보낸 표면도 없으면 빈 배열을 보낸다.
+	if closed, err := sidecars.Retain([]host.RetainedSurface{}); err != nil || closed != 2 {
+		t.Fatalf("retain with no surfaces = %d, %v; want the service's count 2", closed, err)
+	}
+	empty, _ := json.Marshal((<-requests)["surfaces"])
+	if string(empty) != "[]" {
+		t.Fatalf("retained surfaces = %s, want [] when no surface is kept", empty)
+	}
+	owner := &harnessOwner{root: "/live", seen: make(chan SidecarMessage, 4)}
+	if err := sidecars.Send(owner, "fixture-service", "sent", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	closed, err := sidecars.Retain([]host.RetainedSurface{{Surface: "listed", Root: "/project"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if closed != 2 {
+		t.Fatalf("closed = %d, want the service's count 2", closed)
+	}
+	request := <-requests
+	got, _ := json.Marshal(request["surfaces"])
+	want := `[{"root":"/project","surface":"listed"},{"root":"/live","surface":"sent"}]`
+	if string(got) != want {
+		t.Fatalf("retained surfaces = %s, want %s: the layout surfaces and the surfaces this process sent", got, want)
+	}
+	if _, err := sidecars.Retain([]host.RetainedSurface{}); err == nil || !strings.Contains(err.Error(), "retain failed in the service") {
+		t.Fatalf("a failed retain was not reported: %v", err)
+	}
+}
+
+// contract: sidecars.retain.skips-service-without-endpoint
+func TestPersistentRetainSkipsAServiceWithoutEndpoint(t *testing.T) {
+	sidecars, err := NewSidecars(harnessFrontend(), t.TempDir(), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sidecars.Stop()
+	closed, err := sidecars.Retain([]host.RetainedSurface{})
+	if err != nil || closed != 0 {
+		t.Fatalf("retain without a service = %d, %v; want 0 and no error without starting a service", closed, err)
+	}
+	if _, err := sidecars.Retain(nil); err == nil {
+		t.Fatal("retain without a surfaces list was accepted")
+	}
+}

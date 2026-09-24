@@ -289,6 +289,55 @@ for (const app of Object.values(APPS)) {
     assert.deepEqual(after.shells, [], "normal terminal close must reap every PTY child");
   });
 
+  test(`${app.name}: removing a project ends the terminal sessions that its layout held`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const [terminal] = await ensureTerminals(s, 1);
+    await readScreenUntil(s, terminal.surface, (lines) => lines.some((line) => line.includes("$")), "shell prompt missing");
+    const held = terminalProcessSnapshot(app.configDir).shells;
+    assert.ok(held.length > 0, "the first project has no terminal shell");
+
+    // 같은 창에서 다른 프로젝트를 열면 첫 프로젝트의 세션은 보존된다.
+    s.cleanup(() => s.run("core.settings.set", { patch: { projectOpening: "windows" }, scope: "common" }));
+    await s.run("core.settings.set", { patch: { projectOpening: "tabs" }, scope: "common" });
+    const other = mkdtempSync(join(tmpdir(), "soksak-retain-"));
+    s.cleanup(() => rmSync(other, { recursive: true, force: true }));
+    await s.run("core.project.open", { root: other, color: "#7fe3b0" });
+    await s.until("core.project", (project) => project?.root === realpathSync(other), "the second project did not open in the window");
+    const preserved = terminalProcessSnapshot(app.configDir).shells;
+    assert.ok(held.every((pid) => preserved.includes(pid)), `opening another project ended the first project's shells: ${held} -> ${preserved}`);
+
+    // fixture 는 두 프로젝트를 지운다. 지운 레이아웃의 탭은 다시 붙을 곳이 없으므로 그 세션은 끝난다.
+    await s.request("diagnostics.fixture");
+    const after = terminalProcessSnapshot(app.configDir).shells;
+    const left = held.filter((pid) => after.includes(pid));
+    assert.deepEqual(left, [], `the removed project's shells remain: ${left} (before ${held}, after ${after})`);
+  });
+
+  test(`${app.name}: a page start keeps the terminal sessions that the layouts hold`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const [terminal] = await ensureTerminals(s, 1);
+    const surface = terminal.surface;
+    const before = await s.until("terminal.session", (state) => Boolean(state?.sessionId), "the terminal session did not open", { surface });
+    const shells = terminalProcessSnapshot(app.configDir).shells;
+
+    // 다시 읽은 페이지는 시작할 때 모든 레이아웃의 표면을 남기도록 서비스에 알린다. 레이아웃이 가진 세션은 남는다.
+    const log = await s.transcript();
+    const document = (await s.get("core.window.document")).timeOrigin;
+    await s.run("host.window.reload");
+    await s.until("core.window.document", (value) => value.timeOrigin !== document && value.readyState === "complete",
+      "the main document did not reload");
+    await s.until("core.surfaces", (surfaces) => surfaces.some((item) =>
+      item.surface === surface && item.exposes.includes("status terminal.session")), "the terminal did not return after the reload");
+    const after = await s.until("terminal.session", (state) => Boolean(state?.sessionId), "the terminal session did not return", { surface });
+    await log.stop();
+    assert.equal(after.sessionId, before.sessionId, "the page start replaced the terminal session");
+    assert.deepEqual(terminalProcessSnapshot(app.configDir).shells, shells, "the page start ended a shell that a layout holds");
+  });
+
   test(`${app.name}: hiding three terminals retains native geometry and rasters`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);

@@ -137,6 +137,15 @@ export function windowSidecar(name) {
   };
 }
 
+/**
+ * 영속 사이드카 서비스에서 surfaces 에 없는 이 애플리케이션의 세션을 닫게 하고 {closed} 를 반환한다.
+ * 호스트가 없는 페이지에는 사이드카 세션이 없으므로 null 을 반환한다.
+ */
+export function retainSidecarSessions(surfaces) {
+  if (!bridge) return Promise.resolve(null);
+  return bridge.call("sidecarsRetain", { surfaces });
+}
+
 /* 이 문서에 표면 모듈이 마운트되므로 모든 네이티브 연산은 호스트 경계를 넘기
    전에 명시적인 표면 범위로 제한한다. */
 export function surfaceContextRuntime(surface, declarations = {}) {

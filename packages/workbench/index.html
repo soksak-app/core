@@ -83,7 +83,7 @@ import { verify } from "./verify.js";
 import { createLayoutQueue } from "./layout-queue.js";
 
 /* 애플리케이션 인터페이스. 없으면 아무 일도 하지 않는 구현이 온다. */
-import { chrome, onMenuCommand, surfaces as host } from "./host.js";
+import { chrome, onMenuCommand, retainSidecarSessions, surfaces as host } from "./host.js";
 import { setTextScope } from "./text-size.js";
 
 /* 코어의 공개 항목과 진단 메서드. 등록소가 호스트의 요청에 답한다. */
@@ -582,6 +582,8 @@ await connectSettings(storage);
 projects.onChange(() => { drawBars(); drawSettings(); library.render(); coreChanged(); });
 await projects.initialise(storage);
 drawBars();
+// 앱이 다시 시작하거나 페이지가 실패한 뒤, 어떤 레이아웃에도 없는 표면의 사이드카 세션을 닫는다.
+retainSidecarSessions(projects.layoutSurfaces()).catch(showError);
 
 let geometrySave;
 addEventListener("resize", () => {

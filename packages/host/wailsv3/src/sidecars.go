@@ -70,6 +70,8 @@ type sidecar struct {
 	// 각 항목을 보존하여 sequence가 다른 응답을 덮어쓰지 않는다.
 	pendingReplies [][]byte
 	closeWaiters   map[string]chan error
+	// retained 는 retain 요청마다 서비스가 닫은 세션 수다.
+	retained map[string]int
 }
 
 // SidecarOwner 는 표면을 소유한 창이다. 사이드카 메시지의 root 를 제공하고 이벤트를 받는다.
@@ -367,6 +369,94 @@ func (c *Sidecars) Stop() {
 		}(process)
 	}
 	wg.Wait()
+}
+
+// RetainedSurface 는 retain 에 보내는 표면과 그 표면을 연 프로젝트 루트다.
+type RetainedSurface struct {
+	Surface string `json:"surface"`
+	Root    string `json:"root"`
+}
+
+// retainTimeout 은 서비스가 retain 에 답하기를 기다리는 시간이다. 세션을 닫는 데 걸리는 시간을 포함한다.
+const retainTimeout = 10 * time.Second
+
+// Retain 은 각 영속 서비스에서 surfaces 에 없는 이 애플리케이션의 세션을 닫고, 닫은 세션 수를 반환한다.
+// 이 프로세스가 이미 메시지를 보낸 표면은 목록에 없어도 남긴다. 서비스가 떠 있지 않고 엔드포인트도
+// 없으면 세션이 없으므로 건너뛴다.
+func (c *Sidecars) Retain(surfaces []RetainedSurface) (int, error) {
+	if surfaces == nil {
+		return 0, errors.New("retain requires a surfaces list")
+	}
+	c.mu.Lock()
+	// 빈 목록도 JSON 배열로 보내도록 nil 이 아닌 슬라이스에서 시작한다.
+	keep := append(make([]RetainedSurface, 0, len(surfaces)+len(c.roots)), surfaces...)
+	for surface, root := range c.roots {
+		keep = append(keep, RetainedSurface{Surface: surface, Root: root})
+	}
+	names := make([]string, 0, len(c.persistent))
+	for name, persistent := range c.persistent {
+		if persistent {
+			names = append(names, name)
+		}
+	}
+	c.mu.Unlock()
+	for _, item := range keep {
+		if item.Surface == "" || item.Root == "" {
+			return 0, fmt.Errorf("retain surface entry is invalid: %+v", item)
+		}
+	}
+	total := 0
+	for _, name := range names {
+		request := fmt.Sprintf("%d", atomic.AddUint64(&c.nextRequest, 1))
+		line, err := json.Marshal(map[string]any{"operation": "retain", "request": request, "surfaces": keep})
+		if err != nil {
+			return total, err
+		}
+		line = append(line, '\n')
+		waiter := make(chan error, 1)
+		c.mu.Lock()
+		if c.stopped {
+			c.mu.Unlock()
+			return total, errors.New("sidecars are stopped")
+		}
+		if _, running := c.running[name]; !running {
+			endpoint := filepath.Join(c.configDir, "services", filepath.Base(c.declared[name]), "endpoint.json")
+			if _, err := os.Stat(endpoint); errors.Is(err, os.ErrNotExist) {
+				c.mu.Unlock()
+				continue
+			} else if err != nil {
+				c.mu.Unlock()
+				return total, fmt.Errorf("sidecar %s: read endpoint: %w", name, err)
+			}
+		}
+		process, err := c.process(name)
+		if err != nil {
+			c.mu.Unlock()
+			return total, err
+		}
+		process.closeWaiters[request] = waiter
+		c.mu.Unlock()
+		timer := time.NewTimer(retainTimeout)
+		select {
+		case process.outbox <- line:
+		case <-timer.C:
+			return total, fmt.Errorf("sidecar %s: retain was not sent within %s", name, retainTimeout)
+		}
+		select {
+		case err := <-waiter:
+			timer.Stop()
+			if err != nil {
+				return total, fmt.Errorf("sidecar %s: retain: %w", name, err)
+			}
+		case <-timer.C:
+			return total, fmt.Errorf("sidecar %s: retain was not answered within %s", name, retainTimeout)
+		}
+		c.mu.Lock()
+		total += process.retained[request]
+		delete(process.retained, request)
+		c.mu.Unlock()
+	}
+	return total, nil
 }
 
 func (c *Sidecars) closePersistentOwner(process *sidecar, ctx context.Context) error {
@@ -777,7 +867,7 @@ func (c *Sidecars) readPersistent(process *sidecar, reader *bufio.Reader) {
 				break
 			}
 		}
-		if operation == "closed-owner" || operation == "shutdown" {
+		if operation == "closed-owner" || operation == "shutdown" || operation == "retained" {
 			var request string
 			if err := json.Unmarshal(value["request"], &request); err != nil || request == "" {
 				log.Printf("sidecar %s: invalid close-owner request: %v", process.name, err)
@@ -795,15 +885,28 @@ func (c *Sidecars) readPersistent(process *sidecar, reader *bufio.Reader) {
 					break
 				}
 			}
+			var closed int
+			if operation == "retained" && ok {
+				if err := json.Unmarshal(value["closed"], &closed); err != nil {
+					log.Printf("sidecar %s: invalid retain count: %v", process.name, err)
+					break
+				}
+			}
 			c.mu.Lock()
 			waiter := process.closeWaiters[request]
 			delete(process.closeWaiters, request)
+			if operation == "retained" && waiter != nil {
+				if process.retained == nil {
+					process.retained = map[string]int{}
+				}
+				process.retained[request] = closed
+			}
 			c.mu.Unlock()
 			if waiter != nil {
 				if ok {
 					waiter <- nil
 				} else if reason == "" {
-					waiter <- errors.New("close-owner failed")
+					waiter <- fmt.Errorf("%s failed", operation)
 				} else {
 					waiter <- errors.New(reason)
 				}

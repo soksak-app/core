@@ -2,6 +2,7 @@
 import { issueId } from "./ids.js";
 import { selectProject, value, flushSettings } from "./settings.js";
 import { windows } from "@soksak/runtime";
+import { retainSidecarSessions } from "./host.js";
 
 let store;
 let projects = [];
@@ -16,6 +17,18 @@ let writing = Promise.resolve();
 let refreshing = Promise.resolve();
 
 export const all = () => projects;
+
+/**
+ * 모든 프로젝트의 모든 공간 레이아웃이 가진 탭을 표면과 그 프로젝트 루트로 반환한다. 이 목록에 없는 표면의
+ * 사이드카 세션은 다시 붙을 곳이 없다(docs/spec/terminal-runtime.md).
+ */
+export function layoutSurfaces() {
+  return projects.flatMap((project) => project.spaces.flatMap((space) => {
+    const cards = space.layout?.state?.cards;
+    if (!Array.isArray(cards)) throw new Error(`project ${project.id} space ${space.id} has no layout cards`);
+    return cards.flatMap((card) => (card.data?.tabs ?? []).map((tab) => ({ surface: tab.id, root: project.root })));
+  }));
+}
 export const active = () => projects.find((p) => p.id === activeProjectId) ?? null;
 export const local = () => projects.filter((p) => owned.has(p.id));
 export const inLibrary = () => browsing;
@@ -170,6 +183,8 @@ export async function close(id) {
   owned.delete(id);
   await store.remove(id);
   await refresh();
+  // 지운 프로젝트의 탭은 어떤 레이아웃에도 없으므로 그 사이드카 세션을 끝낸다.
+  await retainSidecarSessions(layoutSurfaces());
   if (active() && !browsing) listener.update();
   if (!active()) {
     const next = local()[0];
@@ -215,6 +230,8 @@ export function closeSpace(id) {
   project.spaces.splice(at, 1);
   if (id === project.activeSpaceId) project.activeSpaceId = project.spaces[Math.min(at, project.spaces.length - 1)].id;
   restore();
+  // 닫은 공간의 탭은 어떤 레이아웃에도 없으므로 그 사이드카 세션을 끝낸다.
+  retainSidecarSessions(layoutSurfaces()).catch(failed);
 }
 
 export function renameSpace(id, title) {

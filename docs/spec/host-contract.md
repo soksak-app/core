@@ -196,6 +196,9 @@ The scope column is `both`, or `<host> only: <reason>` for behavior that exists 
 | `sidecars.send.rejects-surface-owned-by-another-window` | Sending to a surface that another window owns fails with "another window". | both |
 | `sidecars.protocol.request-lines-carry-surface-root-body` | The sidecar receives surface, root, and body request lines in send order. | both |
 | `sidecars.close-owner.sends-closed-per-surface` | Closing a window's ownership sends a closed notice for each of its surfaces. | both |
+| `sidecars.retain.sends-layout-and-known-surfaces` | Retaining sends each running or published persistent service one `retain` request whose surfaces are the given layout surfaces and every surface this process has sent, an empty array when there are none, and returns the service's closed count. | both |
+| `sidecars.retain.reports-service-failure` | A `retained` reply with `ok: false` is returned as an error that carries the service's reason. | both |
+| `sidecars.retain.skips-service-without-endpoint` | Retaining without a running service or its endpoint file starts no service and closes nothing. | both |
 | `menu.application.view-has-full-screen-and-text-size` | The application menu's View menu has full screen and the [text size](text-size.md) items with Command `=`, `-`, and `0`; no menu item zooms or reloads the whole webview. | wailsv3 only: the Tauri host builds its menu from Tauri's default menu, whose View menu has only full screen, while the Wails default menu adds zoom and reload |
 | `sidecars.protocol.surface-keeps-its-first-root` | After the owning window changes project, requests and the closed notice of an open surface carry the root of its first request. | both |
 | `sidecars.send.rejects-undeclared-sidecar` | Sending to a sidecar that no plugin declares fails with "not declared". | both |

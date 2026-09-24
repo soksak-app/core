@@ -48,6 +48,7 @@ pub(crate) fn handler() -> impl Fn(Invoke) -> bool + Send + Sync + 'static {
         overlay_pick,
         window_controls,
         sidecar_send,
+        sidecars_retain,
         theme,
         set_theme,
         report,
@@ -231,6 +232,40 @@ fn sidecar_send(
     window
         .state::<WindowSidecars>()
         .send(&window, &sidecar, &surface, &body)
+}
+
+/// retain 요청의 표면 하나. 표면과 그 표면을 연 프로젝트 루트다.
+#[derive(serde::Deserialize)]
+struct RetainedSurface {
+    surface: String,
+    root: String,
+}
+
+/// 모든 프로젝트 레이아웃이 가진 표면 목록.
+#[derive(serde::Deserialize)]
+struct RetainRequest {
+    surfaces: Vec<RetainedSurface>,
+}
+
+/// 영속 사이드카 서비스에서 어떤 레이아웃에도 없는 표면의 세션을 닫고 닫은 수를 반환한다
+/// (docs/spec/terminal-runtime.md). 서비스를 기다리므로 async 명령이다.
+#[tauri::command(async)]
+fn sidecars_retain(window: Window, request: RetainRequest) -> Result<serde_json::Value, String> {
+    let surfaces: Vec<(String, String)> = request
+        .surfaces
+        .into_iter()
+        .map(|item| {
+            if item.surface.is_empty() || item.root.is_empty() {
+                Err("retain surface entry is invalid".to_string())
+            } else {
+                Ok((item.surface, item.root))
+            }
+        })
+        .collect::<Result<_, _>>()?;
+    let closed = window
+        .state::<WindowSidecars>()
+        .retain_sessions(&surfaces)?;
+    Ok(serde_json::json!({ "closed": closed }))
 }
 
 /// 현재 테마를 반환한다.

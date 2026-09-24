@@ -638,3 +638,118 @@ fn persistent_stop_closes_owner_then_requests_service_shutdown() {
     sidecars.stop();
     service.join().unwrap();
 }
+
+// contract: sidecars.retain.sends-layout-and-known-surfaces, sidecars.retain.reports-service-failure
+#[test]
+fn persistent_retain_sends_layout_and_known_surfaces() {
+    let executable_directory = tempfile::tempdir().unwrap();
+    let config_directory = tempfile::tempdir().unwrap();
+    let service_directory = config_directory.path().join("services/echo");
+    std::fs::create_dir_all(&service_directory).unwrap();
+    let socket_path = service_directory.join("retain.sock");
+    let listener = UnixListener::bind(&socket_path).unwrap();
+    let endpoint = serde_json::json!({
+        "protocol": 1,
+        "pid": std::process::id(),
+        "socket": socket_path,
+        "token": "retain-token"
+    });
+    std::fs::write(
+        service_directory.join("endpoint.json"),
+        serde_json::to_vec(&endpoint).unwrap(),
+    )
+    .unwrap();
+
+    let (requests, received) = channel::<serde_json::Value>();
+    let service = std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+        let mut answered = 0;
+        loop {
+            let mut line = String::new();
+            if reader.read_line(&mut line).unwrap_or(0) == 0 {
+                return;
+            }
+            let request: serde_json::Value = serde_json::from_str(&line).unwrap();
+            let reply = match request["operation"].as_str() {
+                Some("hello") => {
+                    serde_json::json!({"operation": "hello", "protocol": 1, "ok": true})
+                }
+                Some("retain") => {
+                    answered += 1;
+                    requests.send(request.clone()).unwrap();
+                    if answered <= 2 {
+                        serde_json::json!({"operation": "retained", "request": request["request"], "ok": true, "closed": 2})
+                    } else {
+                        serde_json::json!({"operation": "retained", "request": request["request"], "ok": false, "error": "retain failed in the service"})
+                    }
+                }
+                Some("close-owner") => {
+                    serde_json::json!({"operation": "closed-owner", "request": request["request"], "ok": true})
+                }
+                Some("shutdown") => {
+                    let reply = serde_json::json!({"operation": "shutdown", "request": request["request"], "ok": true});
+                    writeln!(stream, "{}", reply).unwrap();
+                    return;
+                }
+                _ => continue,
+            };
+            writeln!(stream, "{}", reply).unwrap();
+        }
+    });
+
+    let fixture = files(r#"{"executable":"build/echo","protocol":1,"transport":"persistent"}"#);
+    let read = |path: &str| fixture.get(path).map(|value| value.as_bytes().to_vec());
+    let sidecars = Sidecars::new(
+        &read,
+        executable_directory.path().to_path_buf(),
+        config_directory.path().to_path_buf(),
+    )
+    .unwrap();
+    // 레이아웃에 표면이 없고 이 프로세스가 보낸 표면도 없으면 빈 배열을 보낸다.
+    assert_eq!(
+        sidecars.retain_sessions(&[]).unwrap(),
+        2,
+        "the service's closed count"
+    );
+    let empty = received.recv_timeout(Duration::from_secs(5)).unwrap();
+    assert_eq!(empty["surfaces"], serde_json::json!([]), "no kept surface");
+    let (owner, _events) = owner("retain", "/live");
+    sidecars
+        .send(&owner, ECHO, "sent", &raw(r#"{"operation":"open"}"#))
+        .unwrap();
+    let closed = sidecars
+        .retain_sessions(&[("listed".to_string(), "/project".to_string())])
+        .unwrap();
+    assert_eq!(closed, 2, "the service's closed count");
+    let request = received.recv_timeout(Duration::from_secs(5)).unwrap();
+    assert_eq!(
+        request["surfaces"],
+        serde_json::json!([
+            {"surface": "listed", "root": "/project"},
+            {"surface": "sent", "root": "/live"}
+        ]),
+        "the layout surfaces and the surfaces this process sent"
+    );
+    let error = sidecars.retain_sessions(&[]).unwrap_err();
+    assert!(error.contains("retain failed in the service"), "{error}");
+    sidecars.stop();
+    service.join().unwrap();
+}
+
+// contract: sidecars.retain.skips-service-without-endpoint
+#[test]
+fn persistent_retain_skips_a_service_without_endpoint() {
+    let executable_directory = tempfile::tempdir().unwrap();
+    let config_directory = tempfile::tempdir().unwrap();
+    let fixture = files(r#"{"executable":"build/echo","protocol":1,"transport":"persistent"}"#);
+    let read = |path: &str| fixture.get(path).map(|value| value.as_bytes().to_vec());
+    let sidecars = Sidecars::<FakeOwner>::new(
+        &read,
+        executable_directory.path().to_path_buf(),
+        config_directory.path().to_path_buf(),
+    )
+    .unwrap();
+    assert_eq!(sidecars.retain_sessions(&[]), Ok(0));
+    sidecars.stop();
+}

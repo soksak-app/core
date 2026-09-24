@@ -185,14 +185,22 @@ fn write_pending<O: Owner>(state: &Mutex<State<O>>, name: &str, stdin: &mut Chil
         .all(|line| write_line(stdin, name, line))
 }
 
+/// 서비스가 retain 에 답하기를 기다리는 시간. 세션을 닫는 데 걸리는 시간을 포함한다.
+const RETAIN_TIMEOUT: Duration = Duration::from_secs(10);
+static RETAIN_REQUESTS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
 struct Process {
     child: Option<Child>,
     outbox: SyncSender<Outgoing>, // 용량 256인 채널
     persistent: Option<PersistentConnection>,
 }
 
+type RetainWaiters = Arc<Mutex<HashMap<String, SyncSender<Result<usize, String>>>>>;
+
 struct PersistentConnection {
     close_waiters: Arc<Mutex<HashMap<String, SyncSender<Result<(), String>>>>>,
+    /// retain 요청마다 서비스가 닫은 세션 수나 오류를 받는다.
+    retain_waiters: RetainWaiters,
     shutdown_waiters: Arc<Mutex<HashMap<String, SyncSender<Result<(), String>>>>>,
     connected: Arc<AtomicBool>,
 }
@@ -458,6 +466,97 @@ impl<O: Owner> Sidecars<O> {
             }
         }
         Ok(())
+    }
+
+    /// 각 영속 서비스에서 surfaces(표면, 루트) 에 없는 이 애플리케이션의 세션을 닫고 닫은 세션 수를
+    /// 반환한다(docs/spec/terminal-runtime.md). 이 프로세스가 이미 메시지를 보낸 표면은 목록에 없어도
+    /// 남긴다. 서비스가 떠 있지 않고 엔드포인트도 없으면 세션이 없으므로 건너뛴다.
+    pub fn retain_sessions(&self, surfaces: &[(String, String)]) -> Result<usize, String> {
+        let mut total = 0;
+        let mut names: Vec<String> = self
+            .persistent
+            .iter()
+            .filter(|(_, persistent)| **persistent)
+            .map(|(name, _)| name.clone())
+            .collect();
+        names.sort();
+        for name in names {
+            let request = format!(
+                "retain-{}-{}",
+                std::process::id(),
+                RETAIN_REQUESTS.fetch_add(1, Ordering::Relaxed)
+            );
+            let (waiter, answer) = sync_channel(1);
+            {
+                let mut state = self.state.lock().map_err(|e| e.to_string())?;
+                if state.stopped {
+                    return Err("sidecars are stopped".into());
+                }
+                let mut keep: Vec<serde_json::Value> = surfaces
+                    .iter()
+                    .map(|(surface, root)| serde_json::json!({"surface": surface, "root": root}))
+                    .collect();
+                keep.extend(
+                    state.roots.iter().map(
+                        |(surface, root)| serde_json::json!({"surface": surface, "root": root}),
+                    ),
+                );
+                if !state.running.contains_key(&name) {
+                    let program = self
+                        .declared
+                        .get(&name)
+                        .ok_or_else(|| format!("sidecar {name} is not declared"))?;
+                    let basename = program
+                        .file_name()
+                        .and_then(|value| value.to_str())
+                        .ok_or_else(|| {
+                            format!("sidecar {name}: executable has no valid basename")
+                        })?;
+                    let endpoint = self
+                        .config_directory
+                        .join("services")
+                        .join(basename)
+                        .join("endpoint.json");
+                    match std::fs::metadata(&endpoint) {
+                        Ok(_) => {}
+                        Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                        Err(error) => {
+                            return Err(format!("sidecar {name}: read endpoint: {error}"))
+                        }
+                    }
+                    let process = self.start(&name)?;
+                    state.running.insert(name.clone(), process);
+                }
+                let process = state.running.get(&name).expect("started above");
+                let connection = process
+                    .persistent
+                    .as_ref()
+                    .ok_or_else(|| format!("sidecar {name} is not a persistent service"))?;
+                connection
+                    .retain_waiters
+                    .lock()
+                    .expect("retain waiters")
+                    .insert(request.clone(), waiter);
+                let mut line = serde_json::to_vec(&serde_json::json!({
+                    "operation": "retain",
+                    "request": request,
+                    "surfaces": keep,
+                }))
+                .map_err(|e| e.to_string())?;
+                line.push(b'\n');
+                process
+                    .outbox
+                    .try_send(Outgoing::Line(line))
+                    .map_err(|_| format!("sidecar {name} is not keeping up"))?;
+            }
+            total += answer
+                .recv_timeout(RETAIN_TIMEOUT)
+                .map_err(|_| {
+                    format!("sidecar {name}: retain was not answered within {RETAIN_TIMEOUT:?}")
+                })?
+                .map_err(|error| format!("sidecar {name}: retain: {error}"))?;
+        }
+        Ok(total)
     }
 
     /// 사이드카에 응답(이미지 반납 등)을 전달한다. ResponseSender와 동일한 역할을 한다.
@@ -904,6 +1003,7 @@ impl<O: Owner> Sidecars<O> {
             Arc::new(Mutex::new(HashMap::new()));
         let shutdown_waiters: Arc<Mutex<HashMap<String, SyncSender<Result<(), String>>>>> =
             Arc::new(Mutex::new(HashMap::new()));
+        let retain_waiters: RetainWaiters = Arc::new(Mutex::new(HashMap::new()));
         let connected = Arc::new(AtomicBool::new(true));
         let write_name = name.to_string();
         let write_state = Arc::clone(&self.state);
@@ -964,6 +1064,7 @@ impl<O: Owner> Sidecars<O> {
         let sidecar = name.to_string();
         let waiters = Arc::clone(&close_waiters);
         let shutdown_waiters_for_reader = Arc::clone(&shutdown_waiters);
+        let retain_waiters_for_reader = Arc::clone(&retain_waiters);
         let tx_clone = tx.clone();
         let reader_connected = Arc::clone(&connected);
         thread::spawn(move || {
@@ -999,6 +1100,35 @@ impl<O: Owner> Sidecars<O> {
                         break;
                     }
                 };
+                if value.get("operation").and_then(|v| v.as_str()) == Some("retained") {
+                    if let Some(request) = value.get("request").and_then(|v| v.as_str()) {
+                        if let Some(sender) = retain_waiters_for_reader
+                            .lock()
+                            .expect("retain waiters")
+                            .remove(request)
+                        {
+                            let result = if value.get("ok").and_then(|v| v.as_bool()) == Some(true)
+                            {
+                                value
+                                    .get("closed")
+                                    .and_then(|v| v.as_u64())
+                                    .map(|closed| closed as usize)
+                                    .ok_or_else(|| "retain reply has no closed count".to_string())
+                            } else {
+                                Err(value
+                                    .get("error")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("retain failed")
+                                    .to_string())
+                            };
+                            if sender.send(result).is_err() {
+                                eprintln!("sidecar: retain response had no waiter");
+                            }
+                        }
+                    }
+                    line.clear();
+                    continue;
+                }
                 if value.get("operation").and_then(|v| v.as_str()) == Some("closed-owner") {
                     if let Some(request) = value.get("request").and_then(|v| v.as_str()) {
                         if let Some(sender) = waiters.lock().expect("close waiters").remove(request)
@@ -1118,6 +1248,7 @@ impl<O: Owner> Sidecars<O> {
             outbox: tx,
             persistent: Some(PersistentConnection {
                 close_waiters,
+                retain_waiters,
                 shutdown_waiters,
                 connected,
             }),

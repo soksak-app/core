@@ -222,6 +222,26 @@ func (h *Host) ImageDetach(ctx context.Context, req ImageRequest) error {
 	return s.detachImage(uint64(s.window.ID()), req)
 }
 
+// RetainRequest 는 모든 프로젝트 레이아웃이 가진 표면 목록이다.
+type RetainRequest struct {
+	Surfaces []RetainedSurface `json:"surfaces"`
+}
+
+// RetainResult 는 영속 서비스가 닫은 세션 수다.
+type RetainResult struct {
+	Closed int `json:"closed"`
+}
+
+// SidecarsRetain 은 영속 사이드카 서비스에서 어떤 레이아웃에도 없는 표면의 세션을 닫는다
+// (docs/spec/terminal-runtime.md).
+func (h *Host) SidecarsRetain(ctx context.Context, req RetainRequest) (RetainResult, error) {
+	if _, err := h.surface(ctx); err != nil {
+		return RetainResult{}, err
+	}
+	closed, err := h.sidecars.Retain(req.Surfaces)
+	return RetainResult{Closed: closed}, err
+}
+
 func (h *Host) SidecarSend(ctx context.Context, name, surface string, body json.RawMessage) error {
 	s, err := h.surface(ctx)
 	if err != nil {

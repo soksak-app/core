@@ -130,6 +130,37 @@ impl PersistentRegistry {
         Ok(())
     }
 
+    /// 이 소유자의 세션 가운데 keep 에 없는 세션을 닫고 닫은 수를 반환한다. 앱이 다시 시작한 뒤, 어떤
+    /// 레이아웃에도 없는 표면의 세션은 다시 붙을 곳이 없다(docs/spec/terminal-runtime.md).
+    async fn retain(
+        &self,
+        owner: &str,
+        keep: &std::collections::HashSet<String>,
+    ) -> Result<usize, String> {
+        let entries = {
+            let mut registry = self.entries.lock().await;
+            let keys = registry
+                .iter()
+                .filter_map(|(key, entry)| {
+                    (entry.owner == owner && !keep.contains(key)).then_some(key.clone())
+                })
+                .collect::<Vec<_>>();
+            keys.into_iter()
+                .filter_map(|key| registry.remove(&key))
+                .collect::<Vec<_>>()
+        };
+        let count = entries.len();
+        for entry in entries {
+            entry
+                .tx
+                .send(SurfaceCommand::SessionClose)
+                .await
+                .map_err(|_| "surface actor closed before retain".to_string())?;
+            await_surface_actor(entry.actor).await?;
+        }
+        Ok(count)
+    }
+
     async fn current_epoch(&self, key: &str, owner: &str) -> Option<u64> {
         let entries = self.entries.lock().await;
         entries
@@ -1372,6 +1403,27 @@ fn newer_configuration(configuration: &ImageConfiguration, state: &ImageState) -
     (configuration.generation, configuration.raster) > (state.generation, state.raster)
 }
 
+/// retain 요청의 surfaces 목록 `[{surface, root}]` 을 세션 키로 바꾼다. 형식이 틀리면 오류다.
+fn retain_keys(value: &Value) -> Result<std::collections::HashSet<String>, String> {
+    let surfaces = value
+        .get("surfaces")
+        .and_then(Value::as_array)
+        .ok_or("retain requires a surfaces array")?;
+    surfaces
+        .iter()
+        .map(|item| {
+            let surface = item.get("surface").and_then(Value::as_str);
+            let root = item.get("root").and_then(Value::as_str);
+            match (surface, root) {
+                (Some(surface), Some(root)) if !surface.is_empty() && !root.is_empty() => {
+                    Ok(format!("{root}\0{surface}"))
+                }
+                _ => Err(format!("retain surface entry is invalid: {item}")),
+            }
+        })
+        .collect()
+}
+
 fn local_surface_key(
     surface_txs: &HashMap<String, mpsc::Sender<SurfaceCommand>>,
     root: Option<&str>,
@@ -2298,6 +2350,26 @@ where
                     Ok(()) => json!({"operation": "closed-owner", "request": request, "ok": true}),
                     Err(error) => {
                         json!({"operation": "closed-owner", "request": request, "ok": false, "error": error})
+                    }
+                };
+                if output_tx.send(reply.to_string()).await.is_err() {
+                    break;
+                }
+                continue;
+            }
+            if value.get("operation").and_then(Value::as_str) == Some("retain") {
+                let request = value.get("request").and_then(Value::as_str).unwrap_or("");
+                let result = match (registry.as_ref(), retain_keys(&value)) {
+                    (Some(registry), Ok(keep)) => registry.retain(&owner, &keep).await,
+                    (None, _) => Err("retain is unavailable".to_string()),
+                    (_, Err(error)) => Err(error),
+                };
+                let reply = match result {
+                    Ok(closed) => {
+                        json!({"operation": "retained", "request": request, "ok": true, "closed": closed})
+                    }
+                    Err(error) => {
+                        json!({"operation": "retained", "request": request, "ok": false, "error": error})
                     }
                 };
                 if output_tx.send(reply.to_string()).await.is_err() {
@@ -3373,6 +3445,49 @@ mod tests {
             .is_err());
         registry.close_owner("client-a").await.unwrap();
         assert!(!registry.contains("root\0surface").await);
+    }
+
+    fn closing_actor() -> (mpsc::Sender<SurfaceCommand>, tokio::task::JoinHandle<()>) {
+        let (tx, mut rx) = mpsc::channel(1);
+        let actor = tokio::spawn(async move {
+            while let Some(command) = rx.recv().await {
+                if matches!(command, SurfaceCommand::SessionClose) {
+                    break;
+                }
+            }
+        });
+        (tx, actor)
+    }
+
+    #[tokio::test]
+    async fn persistent_registry_retain_closes_only_the_owners_unlisted_sessions() {
+        let registry = PersistentRegistry::new();
+        for (key, owner) in [
+            ("root\0kept", "client-a"),
+            ("root\0orphan", "client-a"),
+            ("root\0other", "client-b"),
+        ] {
+            let (tx, actor) = closing_actor();
+            let (output, _events) = mpsc::channel(1);
+            registry.entries.lock().await.insert(
+                key.to_string(),
+                PersistentEntry {
+                    tx,
+                    output: OutputSink::direct(output),
+                    actor,
+                    epoch: 1,
+                    owner: owner.to_string(),
+                },
+            );
+        }
+        let keep = std::collections::HashSet::from(["root\0kept".to_string()]);
+        assert_eq!(registry.retain("client-a", &keep).await, Ok(1));
+        assert!(registry.contains("root\0kept").await);
+        assert!(!registry.contains("root\0orphan").await);
+        assert!(
+            registry.contains("root\0other").await,
+            "another client's session stays"
+        );
     }
 
     #[tokio::test]

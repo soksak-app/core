@@ -68,6 +68,7 @@ const METHOD = {
   documentGo: "DocumentGo",
   documentDetach: "DocumentDetach",
   sidecarSend: "SidecarSend",
+  sidecarsRetain: "SidecarsRetain",
   clipboardRead: "ClipboardRead",
   clipboardWriteText: "ClipboardWriteText",
   clipboardPersistPNG: "ClipboardPersistPNG",
