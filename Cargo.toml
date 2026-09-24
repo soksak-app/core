@@ -6,6 +6,11 @@ members = ["apps/tauriv2", "packages/host/tauriv2"]
 [profile.dev]
 incremental = true
 
+# Wails release 빌드의 `-s -w` 처럼 release 실행 파일의 기호 테이블을 벗긴다. 진단 코드 검사는
+# 기호가 아니어도 남는 문자열로 한다(scripts/check-release.mjs).
+[profile.release]
+strip = true
+
 # wry 0.56 은 문서를 그리기 전에 웹뷰가 흰색으로 칠해지는 것을 막는다. crates.io 의
 # tauri-runtime-wry 는 wry 0.55 를 고정하고 main 만 0.56 을 사용하므로 tauri 계열 전체를
 # 해당 커밋에서 가져온다.

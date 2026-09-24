@@ -247,6 +247,14 @@ test("release marker scanner reports diagnostics and ignores clean content", { t
   assert.deepEqual(clean, []);
 });
 
+test("release marker scanner finds capture code in an executable without symbols", { timeout: 2000 }, () => {
+  // 기호를 벗긴 실행 파일에는 sp_capture_ 기호가 없지만 ObjC 클래스 이름은 문자열로 남는다.
+  const errors = [];
+  findReleaseMarkers(errors, "stripped", "\u0000SPCapture\u0000frame-%04d.bgra\u0000");
+  assert.equal(errors.length, 1, errors.join("\n"));
+  assert.match(errors[0], /window capture/);
+});
+
 test("release plugin diagnostics audit rejects every staged diagnostic declaration and module", { timeout: 2000 }, async (t) => {
   const frontend = await mkdtemp(join(tmpdir(), "soksak-release-"));
   t.after(() => rm(frontend, { recursive: true, force: true }));

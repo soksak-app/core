@@ -22,7 +22,7 @@ Run the browser application with `pnpm example` and open `http://localhost:8749/
 
 The build targets build `native/darwin`, the workbench, and the sidecars, then run `soksak-stage src/frontend --executables <executable directory>` in each application. The tool stages the workbench, the layout library, the plugin API, the plugins named in `environment.json`, and the application's `runtime/` directory into the generated `apps/<app>/src/frontend/`, and copies the sidecar executables into the executable directory. Debug targets add `--diagnostics`, which stages the page diagnostic module (`diagnostics.js`); release targets stage an empty module. Both executables embed the frontend at build time. A running process does not acquire a newly built frontend; restart the corresponding application after building.
 
-Debug executables are `target/debug/soksak-wailsv3` and `target/debug/soksak-tauriv2`. Release builds use `make wailsv3-build-release tauriv2-build-release` and write `target/release/soksak-wailsv3` and `target/release/soksak-tauriv2`. `make examples-size` builds both profiles and reports their sizes.
+Debug executables are `target/debug/soksak-wailsv3` and `target/debug/soksak-tauriv2`. Release builds use `make wailsv3-build-release tauriv2-build-release` and write `target/release/soksak-wailsv3` and `target/release/soksak-tauriv2`. Both release executables carry no symbol table: the Wails build links with `-s -w`, and the root `Cargo.toml` release profile sets `strip = true`; `make release-check` therefore finds diagnostic code by strings that stripping keeps (diagnostic method names and the capture class name `SPCapture`). `make examples-size` builds both profiles and reports their sizes.
 
 ## Test parity
 

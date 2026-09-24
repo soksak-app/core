@@ -22,7 +22,7 @@ make wailsv3-build tauriv2-build
 
 빌드 대상은 `native/darwin`, 워크벤치, 사이드카를 빌드한 뒤 각 애플리케이션에서 `soksak-stage src/frontend --executables <실행 파일 디렉터리>`를 실행한다. 이 도구는 워크벤치, 배치 라이브러리, 플러그인 API, `environment.json`에 적힌 플러그인, 애플리케이션의 `runtime/` 디렉터리를 생성된 `apps/<app>/src/frontend/`에 배치하고, 사이드카 실행 파일을 실행 파일 디렉터리에 복사한다. 디버그 대상은 `--diagnostics`를 더해 페이지 진단 모듈(`diagnostics.js`)을 배치하고, 릴리스 대상은 빈 모듈을 배치한다. 두 실행 파일 모두 빌드 시 프런트엔드를 포함한다. 실행 중인 프로세스에는 새 프런트엔드가 적용되지 않으므로 빌드 후 해당 앱을 다시 실행한다.
 
-디버그 실행 파일은 `target/debug/soksak-wailsv3`와 `target/debug/soksak-tauriv2`다. 릴리스 빌드는 `make wailsv3-build-release tauriv2-build-release`를 사용하며 `target/release/soksak-wailsv3`와 `target/release/soksak-tauriv2`를 만든다. `make examples-size`는 두 프로파일을 빌드하고 크기를 출력한다.
+디버그 실행 파일은 `target/debug/soksak-wailsv3`와 `target/debug/soksak-tauriv2`다. 릴리스 빌드는 `make wailsv3-build-release tauriv2-build-release`를 사용하며 `target/release/soksak-wailsv3`와 `target/release/soksak-tauriv2`를 만든다. 두 release 실행 파일에는 기호 테이블이 없다. Wails 빌드는 `-s -w`로 링크하고, 루트 `Cargo.toml`의 release 프로필은 `strip = true`다. 그래서 `make release-check`는 기호를 벗겨도 남는 문자열(진단 메서드 이름과 녹화 클래스 이름 `SPCapture`)로 진단 코드를 찾는다. `make examples-size`는 두 프로파일을 빌드하고 크기를 출력한다.
 
 ## 테스트 동등성
 

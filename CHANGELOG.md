@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-36: the Tauri release executable is stripped (14.8 MB to 10.3 MB, smaller than the 12.8 MB Wails executable), and the release check finds capture code by its class name.
 - V5-17-1: a placement preparation keeps surfaces whose future slot is measured visible, so a press where the screen still shows a surface reaches it instead of the page.
 - V5-35: the graceful sidecar stop tests of both hosts require the stop to return before its deadline instead of a separate 250 ms bound.
 - F8-13: a wide glyph narrower than its two cells is centred in them; frame and window checks measure the ink margins.
