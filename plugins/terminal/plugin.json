@@ -128,7 +128,7 @@
       },
       {
         "name": "terminal.cursor",
-        "description": "The terminal cursor position and rendering policy.",
+        "description": "The terminal cursor position and the rendering policy that the sidecar applied and presented.",
         "schema": {
           "type": "object",
           "properties": {

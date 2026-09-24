@@ -323,7 +323,8 @@ int frame_draw_with_inline_images(Frame *frame, Screen *screen, Metrics *metrics
                                               cursor_width, 2.0));
         } else if (screen->cursor_shape == 2) {
             CGContextFillRect(ctx, CGRectMake(cursor_x, cursor_y, 2.0, cursor_height));
-        } else if (screen->cursor_focused && screen->cursor_shape != 3) {
+        } else if (screen->cursor_shape == 0) {
+            // 블록은 포커스와 관계없이 칸을 채운다. 포커스 없는 모양은 상위 서비스가 이미 골랐다(solid 는 블록).
             CGContextSaveGState(ctx);
             CGContextSetBlendMode(ctx, kCGBlendModeDifference);
             CGContextSetRGBFillColor(ctx, 1.0, 1.0, 1.0, 1.0);

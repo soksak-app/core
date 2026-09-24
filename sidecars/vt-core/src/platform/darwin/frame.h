@@ -38,9 +38,8 @@ typedef struct {
     Cell *cells;
     uint32_t cell_count;
     uint8_t cursor_visible;
-    uint8_t cursor_focused;
     uint8_t cursor_blink_visible;
-    uint8_t cursor_shape; // 0 블록, 1 밑줄, 2 빔
+    uint8_t cursor_shape; // 0 블록, 1 밑줄, 2 빔, 3 빈 블록, 4 숨김
     uint8_t default_foreground[3];
     uint8_t default_background[3];
     uint8_t default_cursor[3];

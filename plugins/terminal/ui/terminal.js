@@ -291,18 +291,10 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     if (mode !== "dark" && mode !== "light") throw new Error(`terminal theme mode is invalid: ${String(mode)}`);
     await terminal.send(id, { operation: "theme", mode });
   };
+  // terminal.cursor 는 사이드카가 정책을 적용하고 다시 그린 뒤 보내는 cursor 응답으로 바뀐다.
   const setCursorPolicy = async (value) => {
     const policy = normalizeCursorPolicy(value);
     await terminal.send(id, { operation: "cursor", ...policy });
-    cursor = {
-      ...cursor,
-      shape: policy.shape,
-      blink: policy.blink,
-      interval: policy.interval,
-      idleTimeout: policy.idleTimeout,
-      unfocused: policy.unfocused,
-    };
-    changed("cursor");
     return policy;
   };
   // 터미널 글꼴 family 우선순위 목록(`;` 로 구분)을 사이드카에 보낸다. 사이드카는 설치된 첫 family 를

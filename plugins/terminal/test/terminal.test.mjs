@@ -1932,6 +1932,11 @@ test("declared settings are sent at startup and on effective setting changes", a
     operation: "cursor", shape: "underline", blink: "On", interval: 900,
     idleTimeout: 0, unfocused: "beam",
   });
+  // 상태는 보낸 정책이 아니라 사이드카가 적용한 뒤 보낸 cursor 응답을 따른다.
+  assert.equal(fakeExpose.getStatus("terminal.cursor").readFn().shape, "block");
+  fakeSidecar.triggerEvent("test-session", {
+    ack: true, event: "cursor", shape: "underline", blink: "On", interval: 900, idleTimeout: 0, unfocused: "beam",
+  });
   assert.equal(fakeExpose.getStatus("terminal.cursor").readFn().shape, "underline");
   assert.equal(fakeExpose.getStatus("terminal.cursor").readFn().blink, "On");
   notify({
@@ -1942,6 +1947,10 @@ test("declared settings are sent at startup and on effective setting changes", a
   assert.deepEqual(fakeSidecar.getMessages().at(-1).body, {
     operation: "cursor", shape: "beam", blink: "Never", interval: 1000,
     idleTimeout: 5000, unfocused: "solid",
+  });
+  assert.equal(fakeExpose.getStatus("terminal.cursor").readFn().shape, "underline");
+  fakeSidecar.triggerEvent("test-session", {
+    ack: true, event: "cursor", shape: "beam", blink: "Never", interval: 1000, idleTimeout: 5000, unfocused: "solid",
   });
   assert.equal(fakeExpose.getStatus("terminal.cursor").readFn().shape, "beam");
   assert.equal(fakeExpose.getStatus("terminal.cursor").readFn().blink, "Never");

@@ -733,6 +733,114 @@ for (const app of Object.values(APPS)) {
       "invalid cursor setting must not replace the effective value");
   });
 
+  test(`${app.name}: each cursor shape and focus state renders its own cursor-cell pixels`, { timeout: 60000 }, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const [terminal] = await ensureTerminals(s, 1);
+    const surface = terminal.surface;
+    const keys = ["terminal.cursor.shape", "terminal.cursor.blink", "terminal.cursor.unfocused"];
+    s.cleanup(async () => {
+      for (const key of keys) await s.run("core.settings.reset", { key });
+      await closeTerminalTabs(s);
+    });
+    await readScreenUntil(s, surface, (lines) => lines.some((line) => line.endsWith("$")), "shell prompt missing");
+    const set = async (patch) => {
+      await s.run("core.settings.set", { patch, scope: "common" });
+      const [key, value] = Object.entries(patch)[0];
+      const field = { "terminal.cursor.shape": "shape", "terminal.cursor.blink": "blink", "terminal.cursor.unfocused": "unfocused" }[key];
+      await s.until("terminal.cursor", (state) => state[field] === value, `the terminal did not apply ${key}=${value}`, { surface });
+    };
+    // 깜박임을 끄면 커서는 한 모양으로 머문다.
+    await set({ "terminal.cursor.blink": "Never" });
+
+    // 커서 칸의 장치 픽셀에서 배경과 다른 픽셀의 비율을 테두리 띠와 안쪽으로 나누어 잰다.
+    const measure = async (label) => {
+      const cursor = await s.run("terminal.screen.read", {}, surface).then(() => s.get("terminal.cursor", surface));
+      await s.presented();
+      await s.request("diagnostics.capture.start", {});
+      const displayed = await s.presented();
+      const { frames: frameDir } = await s.request("diagnostics.capture.stop", { after: displayed.displayed });
+      try {
+        const files = frames(frameDir);
+        assert.ok(files.length > 0, `${label}: the capture produced no frames`);
+        const frame = readFrame(files.at(-1));
+        const region = (await s.get("host.window")).regions.find((item) => item.surface === surface && item.name === "view");
+        const state = await s.get("terminal.session", surface);
+        const x0 = Math.round((region.frame.x + cursor.col * state.cellWidth) * frame.scale);
+        const y0 = Math.round((region.frame.y + cursor.row * state.cellHeight) * frame.scale);
+        const width = Math.floor(state.cellWidth * frame.scale);
+        const height = Math.floor(state.cellHeight * frame.scale);
+        const background = pixel(frame, Math.round((region.frame.x + region.frame.width - 3) * frame.scale),
+          Math.round((region.frame.y + region.frame.height - 3) * frame.scale));
+        const ink = (x, y) => pixel(frame, x0 + x, y0 + y).some((value, index) => Math.abs(value - background[index]) > 60);
+        const band = (fx, fy, fw, fh) => {
+          let count = 0;
+          for (let y = fy; y < fy + fh; y++) for (let x = fx; x < fx + fw; x++) if (ink(x, y)) count++;
+          return count / (fw * fh);
+        };
+        // 커서 선은 2장치 픽셀이다. 띠는 칸 가장자리의 장치 픽셀 한 줄이고, 안쪽은 그 선 안쪽이다.
+        const line = 2;
+        // 실패 보고용: 커서 칸과 그 둘레 한 칸의 잉크 지도.
+        const map = [];
+        for (let y = -height; y < 2 * height; y++) {
+          let row = "";
+          for (let x = -width; x < 2 * width; x++) row += ink(x, y) ? "#" : ".";
+          map.push(row);
+        }
+        return {
+          label,
+          cell: { col: cursor.col, row: cursor.row, x0, y0, width, height, scale: frame.scale },
+          top: band(line, 0, width - 2 * line, 1),
+          bottom: band(line, height - 1, width - 2 * line, 1),
+          left: band(0, line, 1, height - 2 * line),
+          right: band(width - 1, line, 1, height - 2 * line),
+          inside: band(line + 1, line + 1, width - 2 * line - 2, height - 2 * line - 2),
+          map,
+        };
+      } finally {
+        rmSync(frameDir, { recursive: true, force: true });
+      }
+    };
+    const expect = (value, shape) => {
+      const full = (v) => v > 0.8;
+      const empty = (v) => v < 0.1;
+      const rules = {
+        block: full(value.top) && full(value.bottom) && full(value.left) && full(value.right) && full(value.inside),
+        hollow: full(value.top) && full(value.bottom) && full(value.left) && full(value.right) && empty(value.inside),
+        underline: full(value.bottom) && empty(value.top) && empty(value.right) && empty(value.inside),
+        beam: full(value.left) && empty(value.right) && empty(value.top) && empty(value.inside),
+        hidden: empty(value.top) && empty(value.bottom) && empty(value.left) && empty(value.right) && empty(value.inside),
+      };
+      const { map, ...bands } = value;
+      assert.ok(rules[shape], `${value.label} did not render a ${shape} cursor: ${JSON.stringify(bands)}\n${map.join("\n")}`);
+    };
+
+    // 포커스 전: 포커스 없는 커서 설정이 모양을 정한다.
+    await s.until("host.window", (host) => host.regions.some((region) => region.surface === surface && !region.focused),
+      "the terminal started with keyboard focus");
+    for (const [unfocused, shape] of [["hollow", "hollow"], ["solid", "block"], ["underline", "underline"], ["beam", "beam"]]) {
+      await set({ "terminal.cursor.unfocused": unfocused });
+      expect(await measure(`unfocused ${unfocused}`), shape);
+    }
+    await set({ "terminal.cursor.unfocused": "hollow" });
+
+    // 포커스 뒤: 커서 모양 설정이 모양을 정한다.
+    const view = await s.rect("terminal.view", undefined, surface);
+    await s.click(view.document.x + view.x + view.width / 2, view.document.y + view.y + view.height / 2);
+    await s.until("host.window", (host) => host.regions.some((region) => region.surface === surface && region.focused),
+      "the terminal did not receive keyboard focus");
+    for (const shape of ["block", "underline", "beam"]) {
+      await set({ "terminal.cursor.shape": shape });
+      expect(await measure(`focused ${shape}`), shape);
+    }
+
+    // 프로그램이 숨긴 커서는 그리지 않는다.
+    await s.run("terminal.input", { bytes: "printf '\\033[?25l'\r" }, surface);
+    await s.until("terminal.cursor", (state) => state.visible === false, "the program did not hide the cursor", { surface });
+    expect(await measure("hidden"), "hidden");
+  });
+
   test(`${app.name}: the terminal font follows the pressed card's text size`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);

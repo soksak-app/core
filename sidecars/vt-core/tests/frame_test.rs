@@ -408,6 +408,39 @@ fn unfocused_cursor_policy_changes_only_cursor_pixels() {
         .read_pixel(width / 2, height - 1)
         .expect("unchanged bottom");
     assert!(unchanged_bottom[0] > 100 || unchanged_bottom[1] > 100 || unchanged_bottom[2] > 100);
+
+    // solid 는 포커스가 없어도 칸 전체를 채운다. hollow 는 가운데를 비운다.
+    frame
+        .draw_with_cursor(
+            &state,
+            &metrics,
+            CursorRender {
+                unfocused: UnfocusedCursor::Solid,
+                ..CursorRender::default()
+            },
+        )
+        .expect("unfocused solid");
+    let solid_middle = frame
+        .read_pixel(width / 2, height / 2)
+        .expect("solid middle");
+    assert!(
+        solid_middle[0] > 100 || solid_middle[1] > 100 || solid_middle[2] > 100,
+        "an unfocused solid cursor left the cell middle empty: {solid_middle:?}"
+    );
+    frame
+        .draw_with_cursor(
+            &state,
+            &metrics,
+            CursorRender {
+                unfocused: UnfocusedCursor::Hollow,
+                ..CursorRender::default()
+            },
+        )
+        .expect("unfocused hollow");
+    let hollow_middle = frame
+        .read_pixel(width / 2, height / 2)
+        .expect("hollow middle");
+    assert!(hollow_middle[0] < 100 && hollow_middle[1] < 100 && hollow_middle[2] < 100);
 }
 
 #[test]
@@ -708,4 +741,31 @@ fn a_font_list_uses_the_first_installed_family_and_the_system_font_when_none_is_
         resolve_font_list(" ; ").err().as_deref(),
         Some("font.family must name at least one family")
     );
+}
+
+/// 서비스는 포커스 없는 커서 정책을 화면에 이미 적용한다. 그리기는 그 모양을 그대로 그린다.
+#[test]
+fn drawing_an_unfocused_screen_keeps_its_cursor_shape() {
+    let metrics = metrics(13.0, 1.0);
+    let width = metrics.cell_width as u32;
+    let height = metrics.cell_height as u32;
+    let frame = Frame::new(width, height).expect("frame");
+    let mut state = screen(1, 1);
+    state.cursor.focused = false;
+    state.cursor.shape = CursorShape::Block;
+    frame.draw(&state, &metrics).expect("unfocused block");
+    let middle = frame.read_pixel(width / 2, height / 2).expect("middle");
+    assert!(
+        middle[0] > 100 || middle[1] > 100 || middle[2] > 100,
+        "an unfocused block was drawn hollow: {middle:?}"
+    );
+    state.cursor.shape = CursorShape::Underline;
+    frame.draw(&state, &metrics).expect("unfocused underline");
+    let top = frame.read_pixel(width / 2, 1).expect("top");
+    let bottom = frame.read_pixel(width / 2, height - 1).expect("bottom");
+    assert!(
+        top[0] < 100 && top[1] < 100 && top[2] < 100,
+        "an unfocused underline was drawn hollow: {top:?}"
+    );
+    assert!(bottom[0] > 100 || bottom[1] > 100 || bottom[2] > 100);
 }

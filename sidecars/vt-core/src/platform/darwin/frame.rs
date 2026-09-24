@@ -39,7 +39,6 @@ pub struct CScreen {
     pub cells: *mut CCell,
     pub cell_count: u32,
     pub cursor_visible: u8,
-    pub cursor_focused: u8,
     pub cursor_blink_visible: u8,
     pub cursor_shape: u8,
     pub default_foreground: [u8; 3],
@@ -157,7 +156,8 @@ impl CursorRender {
             // 엔진의 blinking 값은 활성화 상태일 뿐이다. phase는 서비스 scheduler가 전달한다.
             blink_visible: cursor.blink_visible,
             shape: cursor.shape,
-            unfocused: UnfocusedCursor::Hollow,
+            // 서비스가 포커스 없는 커서 정책을 화면의 커서 모양에 이미 적용했으므로 다시 바꾸지 않는다.
+            unfocused: UnfocusedCursor::Unchanged,
         }
     }
 }
@@ -306,7 +306,6 @@ impl Frame {
             cells: cells.as_mut_ptr(),
             cell_count: cells.len() as u32,
             cursor_visible: cursor.visible as u8,
-            cursor_focused: cursor.focused as u8,
             cursor_blink_visible: cursor.blink_visible as u8,
             cursor_shape: match effective_shape {
                 crate::protocol::CursorShape::Block => 0,
