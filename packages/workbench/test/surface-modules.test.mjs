@@ -5,6 +5,9 @@ import { registerPlugin } from "../registry.js";
 
 // 표면 마운트는 플러그인 등록부에서 진단 모듈을 읽는다. release 빌드처럼 진단 모듈이 없다.
 for (const id of ["fixture", "fixture-integration"]) registerPlugin({ id, diagnostics: null, surface: () => null });
+// 앱에서는 판이 표면보다 먼저 시작해 표면의 글자 배율을 계산하는 함수를 정한다. 여기서는 모든 표면이 배율 1 이다.
+const { setSurfaceTextSize } = await import("../text-size.js");
+setSurfaceTextSize(() => 1);
 
 test("a surface context carries its plugin's diagnostic module", async () => {
   const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
@@ -115,5 +118,21 @@ test("surface mount readiness separates module mount from native presentation", 
   const mounting = mountSurface(document.querySelector("#slot"), surface);
   await waitSurfaceCompositionDeclared(surface.surfaceId);
   await mounting;
+  dom.window.close();
+});
+
+test("a tab that leaves the layout during its mount reads the factor it was mounted with", async () => {
+  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  const { mountSurface } = await import("../surface-modules.js");
+  let inLayout = true;
+  setSurfaceTextSize((id) => (id === "tab-leaving" && inLayout ? 1.5 : null));
+  // 모듈은 기다리는 동안 탭이 판에서 빠진 뒤에 배율을 읽는다(분할한 카드를 곧 닫는 경우).
+  globalThis.leaveLayout = () => { inLayout = false; };
+  const moduleUrl = "data:text/javascript,export async function mount(root,c){await Promise.resolve();" +
+    "globalThis.leaveLayout();globalThis.readFactor=c.runtime.textSize.read();return {dispose(){}}}";
+  await mountSurface(document.querySelector("#slot"),
+    { module: moduleUrl, surfaceId: "tab-leaving", pluginId: "fixture", composition: { kind: "dom" } });
+  assert.equal(globalThis.readFactor, 1.5);
   dom.window.close();
 });

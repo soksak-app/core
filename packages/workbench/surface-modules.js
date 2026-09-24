@@ -120,6 +120,9 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
         return createSurfaceCompositionController(page, surface.composition, elements, view, () => viewport);
       },
     };
+    // 마운트는 탭이 판에 있을 때 시작한다. 탭이 판에서 빠지면 해제될 때까지 마지막 배율을 유지한다
+    // (docs/spec/text-size.md). 마운트 도중 빠져도 모듈은 마운트를 시작한 때의 배율을 읽는다.
+    let factor = surfaceTextSize(surface.surfaceId);
     const context = createSurfaceContext({
       root: shadow, surfaceId: surface.surfaceId, pluginId: surface.pluginId,
       metadata: { home: surface.home },
@@ -127,18 +130,18 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
       runtime: { sidecar: scoped.sidecar, native: scoped.native, exposure: scoped.exposure, emit, on,
         clipboard: scoped.clipboard,
         theme: scoped.theme,
-        // 이 표면의 실제 글자 배율(docs/spec/text-size.md). 알림마다 다시 읽고 바뀐 값만 전달한다. 판에서
-        // 빠진 탭(null)은 해제될 때까지 마지막 배율을 유지한다.
+        // 이 표면의 실제 글자 배율(docs/spec/text-size.md). 알림마다 다시 읽고 바뀐 값만 전달한다.
         textSize: { read: () => {
-          const factor = surfaceTextSize(surface.surfaceId);
+          factor = surfaceTextSize(surface.surfaceId) ?? factor;
           if (factor === null) throw new Error(`surface ${surface.surfaceId} is not in the layout`);
           return factor;
         }, on: (listener) => {
-          let last = surfaceTextSize(surface.surfaceId);
+          let last = surfaceTextSize(surface.surfaceId) ?? factor;
           return onTextSize(() => {
             const next = surfaceTextSize(surface.surfaceId);
             if (next === null || next === last) return;
             last = next;
+            factor = next;
             listener(next);
           });
         } },
