@@ -89,7 +89,9 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 /* 프레임 글자 배율(docs/spec/text-size.md). 첫 행은 창 제목줄 높이보다 작아지지 않고, 확대된 탭 행이
    더 높으면 그 높이를 따른다. */
 :root{--frame-text:1}
-.chrome-bar > .brand,.chrome-bar > .tabs--project,.chrome-bar__acts,.tabs--space,.workarea > .tabs--project{zoom:var(--frame-text)}
+:root[data-frame-text] .chrome-bar > .brand,:root[data-frame-text] .chrome-bar > .tabs--project,
+:root[data-frame-text] .chrome-bar__acts,:root[data-frame-text] .tabs--space,
+:root[data-frame-text] .workarea > .tabs--project{zoom:var(--frame-text)}
 .chrome-bar{--chrome-row:max(var(--chrome-h),calc(var(--chrome-row-h) * var(--frame-text)))}
 .chrome-bar{position:relative;flex:0 0 var(--chrome-row);height:var(--chrome-row);display:flex;align-items:center;
   gap:var(--space-2);padding:0 var(--space-3) 0 calc(var(--space-3) + var(--controls-w));
@@ -463,7 +465,7 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .set-reset { font-size: var(--text-caption); }
 .set-row:has(.set-reset) { flex-wrap: wrap; }
 
-/* 카드 내용의 글자 배율은 프레임 배율과 카드 배율의 곱이다(docs/spec/text-size.md). WebKit 은 zoom 요소의
-   퍼센트 크기를 확대하지 않으므로 호스트는 그대로 슬롯을 채우고 그 안의 내용만 커진다. 슬롯 사각형과
-   네이티브 배치는 바뀌지 않는다. */
-.surface-module-host,.card > .set{zoom:calc(var(--frame-text,1) * var(--card-text,1))}
+/* 카드 내용의 글자 배율은 프레임 배율과 카드 배율의 곱이다(docs/spec/text-size.md). 판은 그 값이 1 이
+   아닐 때만 data-text-zoom 과 --text-zoom 을 쓴다. WebKit 은 zoom 요소의 퍼센트 크기를 확대하지 않으므로
+   호스트는 그대로 슬롯을 채우고 그 안의 내용만 커진다. 슬롯 사각형과 네이티브 배치는 바뀌지 않는다. */
+.card[data-text-zoom] .surface-module-host,.card[data-text-zoom] > .set{zoom:var(--text-zoom)}

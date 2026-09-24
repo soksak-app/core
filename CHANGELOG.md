@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F12-4: Cards and the frame declare CSS `zoom` only when their factor is not 1, which restores every drag frame on Tauri.
 - F8-6-4: Fast drag checks require every layout held for two 60Hz frames to appear in the recording, since a shorter one may be replaced before it is presented.
 - F12-3: A browser document's page zoom is its card's effective text size factor, set through the new host document operation `documentZoom`.
 - F12-2: A terminal card's font size is 13 points times its effective text size factor. The sidecar `font` operation takes `size`, and `terminal.session` reports `fontSize`.

@@ -402,8 +402,10 @@ export function install() {
   root.dataset.focusInd = settings.focusInd;
   root.dataset.fullRule = settings.fullRule;
   root.dataset.seam = seam();
-  // 프레임 크롬과 카드 내용의 CSS zoom 이 읽는 프레임 글자 배율.
+  // 프레임 크롬의 CSS zoom 이 읽는 프레임 글자 배율. 1 이면 zoom 을 선언하지 않는다(app.css).
   root.style.setProperty("--frame-text", String(settings.textSize));
+  if (settings.textSize === 1) delete root.dataset.frameText;
+  else root.dataset.frameText = "";
   notifyTextSize();
   for (const [token, value] of Object.entries(themeTokens())) {
     root.style.setProperty(token, value);

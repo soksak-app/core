@@ -207,8 +207,16 @@ const setHTML = (el, html) => { if (el.dataset.html !== html) { el.innerHTML = h
 
 function updateCard(el, card) {
   const place = isPlace(card.id) ? card.id : null;
-  // 카드 내용의 CSS zoom 이 프레임 배율과 곱해 읽는 카드 글자 배율.
-  el.style.setProperty("--card-text", String(cardTextSize(card)));
+  // 카드 내용의 실제 글자 배율(프레임 배율 × 카드 배율). 배율이 1 이면 zoom 을 선언하지 않는다. 값이 1 인
+  // zoom 선언만으로도 WebKit 이 표면 내용을 다시 그리는 비용이 커져 끌기 중 표시가 줄었다.
+  const textZoom = value("textSize") * cardTextSize(card);
+  if (textZoom === 1) {
+    delete el.dataset.textZoom;
+    el.style.removeProperty("--text-zoom");
+  } else {
+    el.dataset.textZoom = "";
+    el.style.setProperty("--text-zoom", String(textZoom));
+  }
   el.dataset.role = card.fixed ? "fixed" : "pane";
   el.dataset.focused = String(card.id === focusedId);
   const chrome = el.querySelector(".chrome");
