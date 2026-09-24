@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-6: each re-verified terminal, clipboard, protocol, and browser-appearance claim maps to named tests that pass on the current builds; weak or missing coverage is registered as V5-6-1 to V5-6-6.
 - V5-15-1: the unused surface frame hold is removed; no current case moves a surface, and the specification states that the host holds no surface frame against outside changes.
 - V5-1: the native keyboard window check also sends arrow keys and Ctrl+C through the image region, the terminal input queue, and sidecar key encoding, and fails when the region key or insert forwarding is removed; it passes on both hosts.
 - V5-5: an activation-tier native check shows that injected press and release reach the page of an active key window as trusted `pointerdown`, `pointerup`, and `click`; the injector needs no change.
