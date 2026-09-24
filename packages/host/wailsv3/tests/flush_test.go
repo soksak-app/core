@@ -86,7 +86,7 @@ func TestEveryPendingReplyIsFlushedAfterTheQueueDrains(t *testing.T) {
 			t.Errorf("reply %s never reached the sidecar", want)
 		}
 	}
-	for _, s := range []string{`"surface":"s2","closed":true`, `"surface":"s3","closed":true`} {
+	for _, s := range []string{`"surface":"s2","root":"/p","closed":true`, `"surface":"s3","root":"/p","closed":true`} {
 		if !strings.Contains(text, s) {
 			t.Errorf("close %s never reached the sidecar", s)
 		}
@@ -109,7 +109,7 @@ func TestEveryPendingReplyIsFlushedAfterTheQueueDrains(t *testing.T) {
 	if last < 0 {
 		t.Fatal("no queued body arrived")
 	}
-	for _, want := range []string{`"name":"a"`, `"surface":"s2","closed":true`} {
+	for _, want := range []string{`"name":"a"`, `"surface":"s2","root":"/p","closed":true`} {
 		switch i := strings.Index(text, want); {
 		case i < 0:
 			t.Errorf("%s did not arrive", want)
@@ -190,7 +190,7 @@ func TestOrderIsCorrectWhenStopFlushesBufferedMessages(t *testing.T) {
 	text := string(data)
 
 	// 모든 보관 메시지가 도착했는지 확인
-	for _, want := range []string{`"name":"x"`, `"name":"y"`, `"name":"z"`, `"surface":"s2","closed":true`} {
+	for _, want := range []string{`"name":"x"`, `"name":"y"`, `"name":"z"`, `"surface":"s2","root":"/p","closed":true`} {
 		if !strings.Contains(text, want) {
 			t.Errorf("buffered message %s was lost", want)
 		}

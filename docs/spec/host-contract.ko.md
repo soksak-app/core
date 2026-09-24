@@ -193,6 +193,7 @@ fn invalid_json_closes_connection() {
 | `sidecars.send.rejects-surface-owned-by-another-window` | 다른 창이 소유한 표면으로 보내면 "another window"로 실패한다. | both |
 | `sidecars.protocol.request-lines-carry-surface-root-body` | 사이드카는 surface, root, body 요청 줄을 보낸 순서로 받는다. | both |
 | `sidecars.close-owner.sends-closed-per-surface` | 창의 소유를 닫으면 각 표면의 closed 알림을 보낸다. | both |
+| `sidecars.protocol.surface-keeps-its-first-root` | 소유 창의 프로젝트가 바뀐 뒤에도 열린 표면의 요청과 closed 알림은 첫 요청의 root를 가진다. | both |
 | `sidecars.send.rejects-undeclared-sidecar` | 어떤 플러그인도 선언하지 않은 사이드카로 보내면 "not declared"로 실패한다. | both |
 | `sidecars.send.rejects-after-stop` | 사이드카가 멈춘 뒤 보내면 "stopped"로 실패한다. | both |
 | `sidecars.send.rejects-when-no-plugin-declares-sidecars` | 선언된 사이드카가 없으면 생성은 성공하고 모든 보내기는 "not declared by any plugin"으로 실패한다. | both |

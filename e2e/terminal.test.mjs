@@ -1,6 +1,7 @@
 // 터미널 표면의 입력이 터미널 사이드카를 거쳐 같은 표면의 출력으로 돌아오는지 검사한다.
 // 창 크기가 바뀌어도 터미널 그림이 영역과 DOM 을 따라가는지 검사한다.
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -239,7 +240,15 @@ for (const app of Object.values(APPS)) {
     assert.equal(window.appDomWebviews, 1, "all plugin DOM must share the window's single app WebView");
     assert.equal(window.documentWebviews, 2, "external browser documents must have independent native WebViews");
     const processes = terminalProcessSnapshot(app.configDir);
-    assert.equal(processes.shells.length, 3, "three independent terminals must own three shells, not three daemons");
+    if (processes.shells.length !== 3) {
+      const sessions = [];
+      for (const terminal of terminals) {
+        sessions.push({ surface: terminal.surface, session: (await s.get("terminal.session", terminal.surface)).sessionId });
+      }
+      const ages = execFileSync("ps", ["-o", "pid=,etime=,command=", "-p", processes.shells.join(",")], { encoding: "utf8" }).trim();
+      assert.fail(`three independent terminals must own three shells, found ${processes.shells.length}; ` +
+        `fixture tab ${tab.id}; visible sessions ${JSON.stringify(sessions)}; shells (pid, age, command): ${JSON.stringify(ages.split("\n"))}`);
+    }
     const sessions = await Promise.all(terminals.map(async ({ surface }) =>
       [surface, (await s.get("terminal.session", surface)).sessionId]));
     assert.equal(new Set(sessions.map(([, id]) => id)).size, 3, "terminals must not share a PTY session");

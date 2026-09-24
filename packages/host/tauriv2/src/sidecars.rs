@@ -200,6 +200,9 @@ struct PersistentConnection {
 struct State<O> {
     running: HashMap<String, Process>,
     owners: HashMap<String, O>,
+    // 표면을 처음 보낼 때의 프로젝트 디렉터리. 사이드카는 root 와 표면으로 세션을 찾으므로, 창의
+    // 프로젝트가 바뀐 뒤에도 이미 열린 표면의 요청과 닫힘은 이 root 로 보낸다.
+    roots: HashMap<String, String>,
     stopped: bool,
     // pending_replies: 각 사이드카별로 immutable 이미지 응답을 전송 순서대로 버퍼링한다.
     // pending_closes: 각 사이드카별로 표면의 닫힘 메시지를 버퍼링한다 (surface → close message)
@@ -309,6 +312,7 @@ impl<O: Owner> Sidecars<O> {
             state: Arc::new(Mutex::new(State {
                 running: HashMap::new(),
                 owners: HashMap::new(),
+                roots: HashMap::new(),
                 stopped: false,
                 pending_replies: HashMap::new(),
                 pending_closes: HashMap::new(),
@@ -326,9 +330,13 @@ impl<O: Owner> Sidecars<O> {
         surface: &str,
         body: &RawValue,
     ) -> Result<(), String> {
-        let root = owner.root()?;
+        let current = owner.root()?;
+        let root = {
+            let state = self.state.lock().map_err(|e| e.to_string())?;
+            state.roots.get(surface).cloned().unwrap_or(current)
+        };
 
-        // 먼저 뮤텍스 밖에서 JSON 직렬화한다.
+        // JSON 직렬화는 뮤텍스 밖에서 한다.
         let mut line = serde_json::to_vec(&Request {
             surface,
             root: Some(&root),
@@ -364,6 +372,10 @@ impl<O: Owner> Sidecars<O> {
             state.running.insert(name.to_string(), process);
         }
         state.owners.insert(surface.to_string(), owner.clone());
+        state
+            .roots
+            .entry(surface.to_string())
+            .or_insert_with(|| root.clone());
         let process = state.running.get(name).expect("started above");
 
         // 논블로킹으로 채널에 전송한다. 채널이 가득 차면 "is not keeping up" 오류를 반환한다.
@@ -408,11 +420,11 @@ impl<O: Owner> Sidecars<O> {
 
         for surface in gone {
             state.owners.remove(&surface);
+            let root = state.roots.remove(&surface);
 
-            // 뮤텍스 밖에서 직렬화한다.
             let mut line = serde_json::to_vec(&Request {
                 surface: &surface,
-                root: None,
+                root: root.as_deref(),
                 closed: true,
                 body: None,
             })

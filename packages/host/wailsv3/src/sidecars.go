@@ -80,11 +80,14 @@ type SidecarOwner interface {
 
 // Sidecars 는 애플리케이션 하나의 사이드카 프로세스와 표면 소유 창을 관리한다.
 type Sidecars struct {
-	mu          sync.Mutex
-	declared    map[string]string
-	persistent  map[string]bool
-	running     map[string]*sidecar
-	owners      map[string]SidecarOwner
+	mu         sync.Mutex
+	declared   map[string]string
+	persistent map[string]bool
+	running    map[string]*sidecar
+	owners     map[string]SidecarOwner
+	// roots 는 표면을 처음 보낼 때의 프로젝트 디렉터리다. 사이드카는 root 와 표면으로 세션을 찾으므로,
+	// 창의 프로젝트가 바뀐 뒤에도 이미 열린 표면의 요청과 닫힘은 이 root 로 보낸다.
+	roots       map[string]string
 	stopped     bool
 	StopTimeout time.Duration // 테스트에서 주입 가능한 Stop() 기한. 기본값 5초.
 	configDir   string
@@ -115,6 +118,7 @@ func NewSidecars(frontend fs.FS, directory, configDirectory string) (*Sidecars, 
 		persistent:  map[string]bool{},
 		running:     map[string]*sidecar{},
 		owners:      map[string]SidecarOwner{},
+		roots:       map[string]string{},
 		StopTimeout: 5 * time.Second,
 	}
 	configDirectoryProvided := strings.TrimSpace(configDirectory) != ""
@@ -182,8 +186,14 @@ func NewSidecars(frontend fs.FS, directory, configDirectory string) (*Sidecars, 
 // Send 는 owner 창의 표면 surface 에서 온 body 를 사이드카 name 에 전달한다.
 // 뮤텍스 밖에서 직렬화하고 논블로킹 채널로 전송하므로, 사이드카가 느려도 다른 전송을 차단하지 않는다.
 func (c *Sidecars) Send(owner SidecarOwner, name, surface string, body json.RawMessage) error {
-	// 먼저 뮤텍스 밖에서 JSON 직렬화한다.
-	line, err := json.Marshal(sidecarRequest{Surface: surface, Root: owner.ProjectRoot(), Body: body})
+	c.mu.Lock()
+	root, known := c.roots[surface]
+	c.mu.Unlock()
+	if !known {
+		root = owner.ProjectRoot()
+	}
+	// JSON 직렬화는 뮤텍스 밖에서 한다.
+	line, err := json.Marshal(sidecarRequest{Surface: surface, Root: root, Body: body})
 	if err != nil {
 		return fmt.Errorf("sidecar %s: %w", name, err)
 	}
@@ -205,6 +215,9 @@ func (c *Sidecars) Send(owner SidecarOwner, name, surface string, body json.RawM
 		return err
 	}
 	c.owners[surface] = owner
+	if _, ok := c.roots[surface]; !ok {
+		c.roots[surface] = root
+	}
 
 	// 논블로킹으로 채널에 전송한다. 채널이 가득 차면 "is not keeping up" 오류를 반환한다.
 	select {
@@ -267,9 +280,10 @@ func (c *Sidecars) Close(surface string) {
 		return
 	}
 	delete(c.owners, surface)
+	root := c.roots[surface]
+	delete(c.roots, surface)
 
-	// 뮤텍스 밖에서 직렬화한다.
-	line, err := json.Marshal(sidecarRequest{Surface: surface, Closed: true})
+	line, err := json.Marshal(sidecarRequest{Surface: surface, Root: root, Closed: true})
 	if err != nil {
 		log.Printf("sidecar close %s: marshal: %v", surface, err)
 		return

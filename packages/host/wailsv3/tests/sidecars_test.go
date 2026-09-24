@@ -104,7 +104,34 @@ func TestSidecarMessagesReachTheOwningWindowOnly(t *testing.T) {
 	}
 	want := `{"surface":"s1","root":"/projects/a","body":{"operation":"open"}}
 {"surface":"s2","root":"/projects/b","body":{"operation":"open"}}
-{"surface":"s1","closed":true}
+{"surface":"s1","root":"/projects/a","closed":true}
+`
+	if string(requests) != want {
+		t.Fatalf("requests =\n%s\nwant\n%s", requests, want)
+	}
+}
+
+// contract: sidecars.protocol.surface-keeps-its-first-root
+func TestSurfaceKeepsTheRootItWasOpenedWith(t *testing.T) {
+	sidecars, record := echoSidecars(t)
+	owner := newFakeOwner("/projects/a")
+	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	// 같은 창이 다른 프로젝트로 바뀐 뒤에도 이미 열린 표면은 처음 root 로 보낸다.
+	owner.root = "/projects/b"
+	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"operation":"input"}`)); err != nil {
+		t.Fatal(err)
+	}
+	sidecars.CloseOwner(owner)
+	sidecars.Stop()
+	requests, err := os.ReadFile(record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"surface":"s1","root":"/projects/a","body":{"operation":"open"}}
+{"surface":"s1","root":"/projects/a","body":{"operation":"input"}}
+{"surface":"s1","root":"/projects/a","closed":true}
 `
 	if string(requests) != want {
 		t.Fatalf("requests =\n%s\nwant\n%s", requests, want)

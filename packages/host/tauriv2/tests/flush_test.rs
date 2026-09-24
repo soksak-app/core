@@ -188,8 +188,8 @@ fn every_pending_reply_is_flushed_after_the_queue_drains() {
 
     // Verify closes were sent
     for s in &[
-        r#""surface":"s2","closed":true"#,
-        r#""surface":"s3","closed":true"#,
+        r#""surface":"s2","root":"/p","closed":true"#,
+        r#""surface":"s3","root":"/p","closed":true"#,
     ] {
         assert!(data.contains(s), "close {} never reached the sidecar", s);
     }
@@ -220,7 +220,10 @@ fn every_pending_reply_is_flushed_after_the_queue_drains() {
 
     // Verify order: closes and replies came after the queued bodies
     let last_body = data.rfind(r#""data":""#).expect("no queued body arrived");
-    for want in &[r#""name":"a""#, r#""surface":"s2","closed":true"#] {
+    for want in &[
+        r#""name":"a""#,
+        r#""surface":"s2","root":"/p","closed":true"#,
+    ] {
         let idx = data
             .find(want)
             .unwrap_or_else(|| panic!("{want} did not arrive"));
@@ -318,7 +321,7 @@ fn order_is_correct_when_stop_flushes_buffered_messages() {
         r#""name":"x""#,
         r#""name":"y""#,
         r#""name":"z""#,
-        r#""surface":"s2","closed":true"#,
+        r#""surface":"s2","root":"/p","closed":true"#,
     ] {
         assert!(data.contains(want), "buffered message {} was lost", want);
     }

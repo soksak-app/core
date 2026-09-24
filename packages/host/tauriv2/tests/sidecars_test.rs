@@ -125,7 +125,36 @@ fn messages_reach_the_owning_window_only() {
             "\n",
             r#"{"surface":"s2","root":"/projects/b","body":{"operation":"open"}}"#,
             "\n",
-            r#"{"surface":"s1","closed":true}"#,
+            r#"{"surface":"s1","root":"/projects/a","closed":true}"#,
+            "\n",
+        )
+    );
+}
+
+// contract: sidecars.protocol.surface-keeps-its-first-root
+#[test]
+fn a_surface_keeps_the_root_it_was_opened_with() {
+    let (sidecars, directory) = echo_sidecars();
+    let (before, _before_events) = owner("a", "/projects/a");
+    // 같은 창이 다른 프로젝트로 바뀐 뒤에도 이미 열린 표면은 처음 root 로 보낸다.
+    let (after, _after_events) = owner("a", "/projects/b");
+    sidecars
+        .send(&before, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+        .unwrap();
+    sidecars
+        .send(&after, ECHO, "s1", &raw(r#"{"operation":"input"}"#))
+        .unwrap();
+    sidecars.retain(&after, &|_| false).unwrap();
+    sidecars.stop();
+    let requests = std::fs::read_to_string(directory.path().join("requests")).unwrap();
+    assert_eq!(
+        requests,
+        concat!(
+            r#"{"surface":"s1","root":"/projects/a","body":{"operation":"open"}}"#,
+            "\n",
+            r#"{"surface":"s1","root":"/projects/a","body":{"operation":"input"}}"#,
+            "\n",
+            r#"{"surface":"s1","root":"/projects/a","closed":true}"#,
             "\n",
         )
     );

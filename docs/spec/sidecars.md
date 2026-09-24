@@ -36,8 +36,8 @@ Each message is one JSON object on one line.
 
 | Direction | Message |
 | --- | --- |
-| Host → sidecar | `{"surface": id, "root": path, "body": value}` for a page request. `root` is the project directory of the window that owns the surface |
-| Host → sidecar | `{"surface": id, "closed": true}` when the surface is removed or its window closes |
+| Host → sidecar | `{"surface": id, "root": path, "body": value}` for a page request. `root` is the project directory of the owning window when the host first sends for the surface; later requests for the surface keep that root after the window changes project, because a sidecar may identify a session by root and surface |
+| Host → sidecar | `{"surface": id, "root": path, "closed": true}` when the surface is removed or its window closes, with the surface's root |
 | Sidecar → host | `{"surface": id, "body": value}` |
 
 The host records the window that first sends for a surface and delivers each sidecar message only to that window, as the `sidecar-message` event `{sidecar, surface, body}`, where `sidecar` is the package name. A request from another window for the same surface fails. When the application exits, the host closes each sidecar's standard input and waits for the process to end.
