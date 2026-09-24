@@ -138,6 +138,7 @@ char *sp_window_facts(void *handle) {
     return copyJSON(@{
         @"responder": responder,
         @"frame": screenRect(window.frame),
+        @"pointer": @{ @"x": @(NSEvent.mouseLocation.x), @"y": @(primaryTop() - NSEvent.mouseLocation.y) },
         @"content": @{ @"width": @(content.bounds.size.width), @"height": @(content.bounds.size.height) },
         @"scale": @(window.backingScaleFactor),
         @"key": @(window.isKeyWindow),

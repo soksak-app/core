@@ -47,9 +47,10 @@ var presentedSchema = map[string]any{"type": "object", "properties": map[string]
 
 var hostStatus = map[string]hostEntry{
 	"host.window": {
-		Description: "Window frame in screen coordinates, content size, backing scale, maximized, key and application active state, child window count, window buttons, native surfaces, document regions, image regions, and the open native modal.",
+		Description: "Window frame and system pointer location in screen coordinates, content size, backing scale, maximized, key and application active state, child window count, window buttons, native surfaces, document regions, image regions, and the open native modal.",
 		Schema: map[string]any{"type": "object", "properties": map[string]any{
 			"frame":     rectSchema,
+			"pointer":   map[string]any{"type": "object", "properties": map[string]any{"x": map[string]any{"type": "number"}, "y": map[string]any{"type": "number"}}},
 			"content":   rectSchema,
 			"scale":     map[string]any{"type": "number"},
 			"maximized": map[string]any{"type": "boolean"},
@@ -836,6 +837,12 @@ type frame struct {
 	Height float64 `json:"height"`
 }
 
+// point 는 화면 좌표의 한 점이다.
+type point struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+}
+
 // windowFacts 는 native/darwin 의 sp_window_facts 결과다.
 type windowFacts struct {
 	Responder struct {
@@ -846,6 +853,7 @@ type windowFacts struct {
 	} `json:"responder"`
 	Main    uint64 `json:"main"`
 	Frame   frame  `json:"frame"`
+	Pointer point  `json:"pointer"`
 	Content struct {
 		Width  float64 `json:"width"`
 		Height float64 `json:"height"`
@@ -946,6 +954,7 @@ type WindowResponder struct {
 type WindowStatus struct {
 	Responder        WindowResponder  `json:"responder"`
 	Frame            frame            `json:"frame"`
+	Pointer          point            `json:"pointer"`
 	Content          frame            `json:"content"`
 	Scale            float64          `json:"scale"`
 	Maximized        bool             `json:"maximized"`
@@ -1000,7 +1009,7 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 		return WindowStatus{}, err
 	}
 	out := WindowStatus{
-		Frame: facts.Frame, Content: frame{Width: facts.Content.Width, Height: facts.Content.Height},
+		Frame: facts.Frame, Pointer: facts.Pointer, Content: frame{Width: facts.Content.Width, Height: facts.Content.Height},
 		Scale: facts.Scale, Maximized: facts.Zoomed, Key: facts.Key, Active: facts.Active, Children: facts.Children,
 		Controls: facts.Controls, Surfaces: []WindowSurface{}, Documents: []WindowDocument{}, Regions: regions,
 	}

@@ -798,6 +798,47 @@ for (const app of Object.values(APPS)) {
     assert.equal(dragged, 0, `the blank selection was not cleared: ${dragged} inverse cells in columns 5–20 of row ${row}`);
   });
 
+  test(`${app.name}: a native drag into the padding below the last row selects to the last row`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const [terminal] = await ensureTerminals(s, 1);
+    const surface = terminal.surface;
+    s.cleanup(() => closeTerminalTabs(s));
+    await s.until("core.surfaces", (surfaces) => surfaces.some((item) =>
+      item.surface === surface && item.exposes.includes("status terminal.session")),
+    "terminal selection status did not register");
+    await s.until("terminal.session", (state) => Boolean(state?.sessionId),
+      "terminal selection session did not open", { surface });
+    const marker = "PADDING-SELECTION-1";
+    await s.run("terminal.input", { bytes: `printf '\\033[2J\\033[H${marker}\\n'\r` }, surface);
+    await readScreenUntil(s, surface, (screen) => screen.some((line) => line.trim() === marker),
+      "terminal padding selection marker did not render");
+
+    const view = await s.rect("terminal.view", undefined, surface);
+    const metrics = await s.get("terminal.session", surface);
+    const padding = view.height - metrics.rows * metrics.cellHeight;
+    assert.ok(padding >= 1 && padding < metrics.cellHeight,
+      `the view must leave padding below the last row: ${view.height} for ${metrics.rows} rows of ${metrics.cellHeight}`);
+    const viewX = view.document.x + view.x;
+    const top = view.document.y + view.y;
+    const released = metrics.selectionReleases;
+    await s.pointer(viewX + 0.5 * metrics.cellWidth, top + 0.5 * metrics.cellHeight, "down", { button: "left" });
+    await s.pointer(viewX + 3.5 * metrics.cellWidth, top + metrics.rows * metrics.cellHeight + padding / 2, "drag", { button: "left" });
+    // 사이드카가 선택을 반영한 화면을 알릴 때까지 기다린다. 선택은 칸의 왼쪽 절반에서 끝나므로 넷째 칸
+    // 가운데까지 끌면 마지막 행의 앞 세 칸이 선택된다.
+    await s.run("terminal.screen.read", {}, surface);
+    await s.until("terminal.screen", (lines) => {
+      const cells = lines[metrics.rows - 1]?.slice(0, 3) ?? [];
+      return cells.length === 3 && cells.every((cell) => cell.inverse);
+    }, "the drag into the bottom padding did not select the first three cells of the last row", { surface });
+    await s.pointer(viewX + 3.5 * metrics.cellWidth, top + metrics.rows * metrics.cellHeight + padding / 2, "up", { button: "left" });
+    const state = await s.until("terminal.session",
+      (value) => value?.selectionReleases > released || value?.error !== undefined,
+      "the sidecar did not answer the selection release", { surface });
+    assert.equal(state.error, undefined, `a drag into the bottom padding reported ${state.error}`);
+  });
+
   test(`${app.name}: native terminal selection renders and copies through one explicit paste`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);

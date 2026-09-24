@@ -238,6 +238,36 @@ export class Session {
   }
 
   /**
+   * 활성화 등급 검사에서 시스템 포인터가 창 밖에 있도록 창을 포인터의 왼쪽이나 오른쪽으로 옮긴다. 활성
+   * 애플리케이션의 키 창은 포인터 위치를 이동으로 받으므로, 창 안의 포인터는 합성 누름과 뗌 사이에 이동으로
+   * 끼어든다. 창이 어느 쪽에도 들어가지 않으면 창 폭을 넓은 쪽에 맞게 줄인다.
+   */
+  async keepPointerOutside() {
+    const window = await this.get("host.window");
+    const { pointer } = window;
+    const inside = (rect) => pointer.x >= rect.x && pointer.x < rect.x + rect.width &&
+      pointer.y >= rect.y && pointer.y < rect.y + rect.height;
+    if (!inside(window.frame)) return;
+    const screen = (await this.get("host.screens")).find((item) => inside(item));
+    if (!screen) throw new Error(`${this.app.name}: the pointer ${JSON.stringify(pointer)} is on no screen`);
+    const area = screen.visible;
+    const left = Math.floor(pointer.x - area.x);
+    const right = Math.floor(area.x + area.width - pointer.x) - 1;
+    const width = Math.min(window.frame.width, Math.max(left, right));
+    if (width < window.frame.width) {
+      await this.run("host.window.resize", { width, height: window.content.height });
+      await this.until("host.window", (value) => value.frame.width === width,
+        `the window did not narrow to ${width} points beside the pointer`);
+    }
+    const frame = (await this.get("host.window")).frame;
+    const x = left >= frame.width ? area.x : area.x + area.width - frame.width;
+    await this.run("host.window.move", { x, y: frame.y });
+    await this.until("host.window", (value) => value.frame.x === x && !(value.pointer.x >= value.frame.x &&
+      value.pointer.x < value.frame.x + value.frame.width && value.pointer.y >= value.frame.y &&
+      value.pointer.y < value.frame.y + value.frame.height), "the window did not move away from the pointer");
+  }
+
+  /**
    * 키보드 입력 소스를 고르고 검사가 끝나면 이전 입력 소스로 되돌린다. 네이티브 키의 문자는 현재 입력
    * 소스가 정하므로, 영문을 입력하는 검사는 영문 자판을 먼저 고른다. 입력 소스 선택은 창을 활성화하지 않는다.
    */

@@ -29,6 +29,8 @@ for (const app of Object.values(APPS)) {
       const original = (await s.request("diagnostics.input.source")).current;
       s.cleanup(() => s.request("diagnostics.input.source", { select: original }));
 
+      // 키 창은 포인터 위치를 이동으로 받으므로 창을 포인터 밖에 둔다.
+      await s.keepPointerOutside();
       const view = await s.rect("terminal.view", undefined, surface);
       const x = view.document.x + view.x + view.width / 2;
       const y = view.document.y + view.y + view.height / 2;

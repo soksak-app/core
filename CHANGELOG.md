@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-27: the terminal sidecar maps a selection point in the region padding past the last whole column or row to the nearest cell; `host.window` reports the system pointer location, and activation-tier checks keep their window beside the pointer. Validated on rebuilt Wails and Tauri with the padding window check, all activation checks, and 5 of 5 tracked repeats of the keyboard checks.
 - V5-23 (progress): the terminal image region reports a character key that the input method left unanswered outside the key window of the active application as an error instead of dropping it; the native keyboard check moved to the activation tier as `e2e/activation/terminal-keyboard.test.mjs` with a check of that error. Validated once on rebuilt Wails and Tauri; tracked repeats are pending V5-27.
 - F12-4: Cards and the frame declare CSS `zoom` only when their factor is not 1, which restores every drag frame on Tauri.
 - F8-6-4: Fast drag checks require every layout held for two 60Hz frames to appear in the recording, since a shorter one may be replaced before it is presented.

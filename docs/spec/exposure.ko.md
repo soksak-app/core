@@ -99,7 +99,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 
 | 종류 | 이름 | 의미 |
 | --- | --- | --- |
-| status | `host.window` | `{frame, content, scale, maximized, key, active, children, controls, surfaces, documents, modal, responder}`: 창 프레임, 콘텐츠 크기, 백킹 배율, 프레임이 최대화 프레임인지, 키 창 여부, 애플리케이션 활성 여부, 자식 OS 창 수, `hidden`을 포함한 창 단추 프레임, 네이티브 표면 `{id, frame, visible, order}`, [문서 영역](native-surfaces.ko.md#문서-영역) `{surface, document, frame, visible, focused, order}`, 열린 네이티브 모달 `{id, mode, shown, frame, order, background}` 또는 `null`, 창의 첫 응답자 `{class, owner, surface, document}`. `owner`는 `page`, `surface`, `document`, `modal`, `webview`(등록되지 않은 웹뷰), `native`(이미지 영역처럼 모든 웹뷰 밖의 뷰) 중 하나다 |
+| status | `host.window` | `{frame, pointer, content, scale, maximized, key, active, children, controls, surfaces, documents, modal, responder}`: 창 프레임, 상태를 읽은 때의 화면 좌표 시스템 포인터 위치 `{x, y}`, 콘텐츠 크기, 백킹 배율, 프레임이 최대화 프레임인지, 키 창 여부, 애플리케이션 활성 여부, 자식 OS 창 수, `hidden`을 포함한 창 단추 프레임, 네이티브 표면 `{id, frame, visible, order}`, [문서 영역](native-surfaces.ko.md#문서-영역) `{surface, document, frame, visible, focused, order}`, 열린 네이티브 모달 `{id, mode, shown, frame, order, background}` 또는 `null`, 창의 첫 응답자 `{class, owner, surface, document}`. `owner`는 `page`, `surface`, `document`, `modal`, `webview`(등록되지 않은 웹뷰), `native`(이미지 영역처럼 모든 웹뷰 밖의 뷰) 중 하나다 |
 | status | `host.windows` | `windows.list` 결과. 창이 열리거나 닫힐 때와 창의 제목, 프로젝트, 키 상태, 페이지 준비 상태가 바뀔 때 바뀐다 |
 | status | `host.screens` | `[{x, y, width, height, scale, visible}]`: 화면 좌표의 디스플레이와 백킹 배율, 그리고 메뉴 막대와 Dock 을 뺀 영역 `visible`(최대화한 창의 프레임) |
 | status | `host.dock` | 애플리케이션 Dock 메뉴 항목 제목의 순서 목록 |
@@ -139,7 +139,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 
 - 키와 스크롤은 `-[NSWindow sendEvent:]`로 보낸다. AppKit은 비활성 창의 누름을 뷰에 전달하지 않으므로 누름·끌기·뗌은 좌표의 뷰에 보낸다.
 - 웹뷰에 대한 `down`과 `up`은 그 웹뷰의 문서가 신뢰 `pointerdown` 또는 `pointerup`을 받은 뒤 반환한다. 페이지가 볼 수 없는 별도 WebKit content world의 스크립트가 수신을 알린다. 입력 칸에 초점이 있으면 WebKit은 마우스 이벤트를 먼저 입력기에 비동기로 넘기므로, 이렇게 하지 않으면 이어서 보낸 누름과 뗌이 문서에 반대 순서로 도착할 수 있다. 문서가 2초 안에 받지 않으면 1005를 반환한다. `scroll`은 좌표의 웹뷰가 현재 상태를 표시한 뒤 전달한다. WebKit은 스크롤 트리가 표시되기 전에 받은 휠 이벤트로 새 문서를 스크롤하지 않기 때문이다. 웹뷰가 2초 안에 표시하지 않으면 1005를 반환한다.
-- WebKit은 창이 키 창일 때만 호버(`pointerover`, 버튼 없는 `pointermove`, `:hover`)를 갱신한다. 키 창이 아닌 창에 대한 `move`는 1006을 반환한다.
+- WebKit은 창이 키 창일 때만 호버(`pointerover`, 버튼 없는 `pointermove`, `:hover`)를 갱신한다. 키 창이 아닌 창에 대한 `move`는 1006을 반환한다. 활성 애플리케이션의 키 창은 예를 들어 키 창이 될 때 시스템 포인터 위치도 이동으로 받으며, 합성 `down`과 `up` 사이의 이런 이동은 문서에 끌기로 도착한다. 그래서 활성화 등급 검사는 창을 시스템 포인터에서 떨어뜨려 둔다.
 - WebKit은 마우스 이벤트의 눌린 버튼을 이벤트가 아니라 시스템(`+[NSEvent pressedMouseButtons]`)에서 읽는다. 실제 마우스 버튼이 눌린 동안 합성한 누름이나 뗌은 `pointerdown`이나 `pointerup` 대신 `pointermove`로 문서에 도달하므로, `down`이나 `up`을 전달하지 않고 1007을 반환한다.
 - `activate: true`이면 호스트가 애플리케이션을 활성화하고 창을 키 창으로 만든 뒤, 창의 모든 웹뷰가 활성 상태를 웹 프로세스에 보낼 때까지 기다렸다가 이동을 전달한다. 사용자가 쓰고 있는 애플리케이션의 키보드 포커스를 가져온다. 활성화가 5초 안에 끝나지 않으면 멈춘 단계를 적은 1006을 반환한다. 단계는 시스템이 애플리케이션을 활성화하지 않음, 창이 키 창이 되지 않음, 웹뷰가 활성 상태를 반영하지 않음, 반영 전에 창이 활성 상태를 잃음이다. 웹뷰 단계를 뺀 메시지에는 최전면 애플리케이션을 적는다.
 - OS 입력기는 활성 애플리케이션의 키 창에 있는 활성 입력 컨텍스트만 처리한다. 그 키 창이 아닌 창에 보낸 `input.key`는 입력기에 도달하지 않으므로 그 결과는 입력기 증거가 아니다. 문자 키를 입력 컨텍스트에 넘기는 뷰(예: 터미널 그림 영역)는 애플리케이션이 한 번 활성화된 뒤에는 그 키 창 밖에서 그 키의 문자를 받지 못한다. 입력 컨텍스트가 키를 받고 입력기가 답하지 않기 때문이다. 터미널 그림 영역은 이런 키를 오류 `input method did not answer native keyCode=<code> outside the key window of the active application`으로 보고한다. 영역이 직접 보고하는 이름 있는 키와 Control 또는 Option 조합은 어느 창에서나 전달된다. 터미널 문자 입력과 입력기 동작은 활성화 등급 검사로만 검증한다.

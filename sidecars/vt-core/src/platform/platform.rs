@@ -65,15 +65,21 @@ impl ImageState {
         if cell_width <= 0.0 || cell_height <= 0.0 {
             return Err("selection cell metrics are unavailable".to_string());
         }
-        let col = (x / cell_width).floor() as u16;
-        let row = (y / cell_height).floor() as u16;
-        let cols = (self.width_px as f32 / self.metrics.cell_width) as u16;
-        let rows = (self.height_px as f32 / self.metrics.cell_height) as u16;
-        if col >= cols || row >= rows {
+        let width = f64::from(self.width_px) / f64::from(self.scale);
+        let height = f64::from(self.height_px) / f64::from(self.scale);
+        if x >= width || y >= height {
             return Err(format!(
-                "selection coordinates are outside the terminal grid: {x},{y}"
+                "selection coordinates are outside the terminal region: {x},{y}"
             ));
         }
+        let cols = (self.width_px as f32 / self.metrics.cell_width) as u16;
+        let rows = (self.height_px as f32 / self.metrics.cell_height) as u16;
+        if cols == 0 || rows == 0 {
+            return Err("the terminal region holds no whole cell".to_string());
+        }
+        // 영역은 마지막 완전한 열과 행 뒤에 한 칸보다 작은 여백을 가진다. 여백의 점은 가장 가까운 칸이다.
+        let col = ((x / cell_width).floor() as u16).min(cols - 1);
+        let row = ((y / cell_height).floor() as u16).min(rows - 1);
         Ok((col, row))
     }
 }

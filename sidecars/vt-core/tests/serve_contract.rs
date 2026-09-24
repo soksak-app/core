@@ -19,6 +19,7 @@ struct MockEngine {
     themes: Vec<TerminalTheme>,
     pending_events: Vec<EngineEvent>,
     selection: Option<String>,
+    selected_cells: Arc<Mutex<Vec<(u16, u16)>>>,
 }
 
 impl MockEngine {
@@ -31,6 +32,7 @@ impl MockEngine {
             themes: Vec::new(),
             pending_events: Vec::new(),
             selection: Some("selected".to_string()),
+            selected_cells: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -43,6 +45,7 @@ impl MockEngine {
             themes: Vec::new(),
             pending_events: Vec::new(),
             selection: Some("selected".to_string()),
+            selected_cells: Arc::new(Mutex::new(Vec::new())),
         }
     }
 }
@@ -96,10 +99,12 @@ impl Engine for MockEngine {
         Ok(())
     }
 
-    fn selection_start(&mut self, _col: u16, _row: u16) -> Result<(), String> {
+    fn selection_start(&mut self, col: u16, row: u16) -> Result<(), String> {
+        self.selected_cells.lock().unwrap().push((col, row));
         Ok(())
     }
-    fn selection_update(&mut self, _col: u16, _row: u16) -> Result<(), String> {
+    fn selection_update(&mut self, col: u16, row: u16) -> Result<(), String> {
+        self.selected_cells.lock().unwrap().push((col, row));
         Ok(())
     }
     fn selection_end(&mut self) -> Result<Option<String>, String> {
@@ -559,6 +564,65 @@ async fn test_selection_release_emits_one_user_copy_event() {
     assert!(!output.contains("Unknown operation: selection.start"));
     assert!(!output.contains("Unknown operation: selection.update"));
     assert!(!output.contains("Unknown operation: selection.end"));
+}
+
+/// A point in the region past the last full row or column selects the nearest cell; a point outside the region is an error.
+#[tokio::test]
+async fn test_selection_in_the_region_padding_selects_the_nearest_cell() {
+    let calls = Arc::new(Mutex::new(Calls::default()));
+    // 801 x 383 픽셀은 칸 크기의 배수가 아니므로 마지막 완전한 행과 열 뒤에 여백이 남는다.
+    let input = r#"{"surface":"s1","body":{"operation":"open"}}
+{"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":801,"height":383,"scale":1.0}}}}
+{"surface":"s1","body":{"operation":"selection.start","x":1.0,"y":1.0}}
+{"surface":"s1","body":{"operation":"selection.update","x":800.5,"y":382.5}}
+{"surface":"s1","body":{"operation":"selection.update","x":1.0,"y":383.0}}
+"#;
+    let reader = std::io::Cursor::new(input.as_bytes());
+    let mut writer = Vec::new();
+    let cells = Arc::new(Mutex::new(Vec::new()));
+    let recorded = cells.clone();
+    let engine_factory = Arc::new(move || {
+        let mut engine = MockEngine::new();
+        engine.selected_cells = recorded.clone();
+        Box::new(engine) as Box<dyn Engine>
+    });
+    let calls_for_factory = calls.clone();
+    let session_port_factory = Arc::new(move || {
+        Arc::new(FakeSessionPort::new(
+            "unused".to_string(),
+            calls_for_factory.clone(),
+        )) as Arc<dyn SessionPort>
+    });
+    let _ = serve(engine_factory, reader, &mut writer, session_port_factory).await;
+    let output = String::from_utf8(writer).unwrap();
+    let state = output
+        .lines()
+        .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+        .filter(|message| message["body"]["event"] == "state")
+        .last()
+        .expect("a state event");
+    let cols = state["body"]["cols"].as_u64().unwrap() as u16;
+    let rows = state["body"]["rows"].as_u64().unwrap() as u16;
+    let cell_width = state["body"]["cellWidth"].as_f64().unwrap();
+    let cell_height = state["body"]["cellHeight"].as_f64().unwrap();
+    assert!(
+        f64::from(cols) * cell_width < 800.5 && f64::from(rows) * cell_height < 382.5,
+        "the region must leave padding past the grid: {cols}x{rows} cells of {cell_width}x{cell_height}"
+    );
+    assert_eq!(
+        *cells.lock().unwrap(),
+        vec![(0, 0), (cols - 1, rows - 1)],
+        "the padding point selects the last cell: {output}"
+    );
+    let errors: Vec<&str> = output
+        .lines()
+        .filter(|line| line.contains("outside the terminal region"))
+        .collect();
+    assert_eq!(
+        errors.len(),
+        1,
+        "only the point below the region is an error: {output}"
+    );
 }
 
 /// A release over blank cells reports the end of the gesture without an error or a copy.

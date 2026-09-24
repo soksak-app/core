@@ -45,7 +45,9 @@ for (const app of Object.values(APPS)) {
     const terminals = await ensureTerminals(s, 3);
     assert.equal(terminals.length, 3);
     await s.presented();
-    // 입력기는 활성 애플리케이션의 키 창에만 답하므로 앱을 활성화한다.
+    // 입력기는 활성 애플리케이션의 키 창에만 답하므로 앱을 활성화한다. 키 창은 포인터 위치를 이동으로 받으므로
+    // 창을 포인터 밖에 둔다.
+    await s.keepPointerOutside();
     const first = await s.rect("terminal.view", undefined, terminals[0].surface);
     await s.pointer(first.document.x + first.x + first.width / 2, first.document.y + first.y + first.height / 2,
       "move", { activate: true });
@@ -158,6 +160,7 @@ for (const app of Object.values(APPS)) {
     const beforeResize = await s.get("terminal.session", returnedTerminal.surface);
     await s.run("host.window.resize", { width: 800, height: 920 });
     await s.until("host.window", (host) => host.content.width === 800, "window did not resize for focus test");
+    await s.keepPointerOutside();
     await s.until("terminal.session", (state) => state.cols < beforeResize.cols,
       "terminal did not resize before focus was tested again", { surface: returnedTerminal.surface });
     await clickAndExecute(s, returnedTerminal.surface, "afterresize");
@@ -204,6 +207,7 @@ for (const app of Object.values(APPS)) {
     await child.presented();
     const childTerminal = (await child.get("core.surfaces")).find((item) =>
       item.visible && item.plugin === "terminal" && item.exposes.includes("status terminal.session"));
+    await child.keepPointerOutside();
     await clickAndExecute(child, childTerminal.surface, "afterwindow");
     await child.close();
     await s.windows(1, "focus test child window did not close");
@@ -219,6 +223,7 @@ for (const app of Object.values(APPS)) {
     const [terminal] = await ensureTerminals(s, 1);
     const surface = terminal.surface;
     await readScreenUntil(s, surface, (lines) => lines.some((line) => line.includes("$")), "shell prompt missing");
+    await s.keepPointerOutside();
     const view = await s.rect("terminal.view", undefined, surface);
     const x = view.document.x + view.x + view.width / 2;
     const y = view.document.y + view.y + view.height / 2;

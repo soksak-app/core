@@ -69,9 +69,10 @@ fn host_declarations() -> Value {
                 "scale": {"type": "number"}}}},
         }, {
             "name": "host.window",
-            "description": "Window frame in screen coordinates, content size, backing scale, maximized, key and application active state, child window count, window buttons, native surfaces, image regions, and the open native modal.",
+            "description": "Window frame and system pointer location in screen coordinates, content size, backing scale, maximized, key and application active state, child window count, window buttons, native surfaces, image regions, and the open native modal.",
             "schema": {"type": "object", "properties": {
                 "frame": rect,
+                "pointer": {"type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "number"}}},
                 "content": rect,
                 "scale": {"type": "number"},
                 "maximized": {"type": "boolean"},
@@ -974,6 +975,7 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
     Ok(json!({
         "responder": responder,
         "frame": facts["frame"],
+        "pointer": facts["pointer"],
         "content": {"x": 0.0, "y": 0.0, "width": facts["content"]["width"], "height": facts["content"]["height"]},
         "scale": facts["scale"],
         "maximized": facts["zoomed"],
