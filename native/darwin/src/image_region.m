@@ -46,6 +46,7 @@
 @property(copy) NSString *reportedPreedit;  // 마지막으로 보고한 조합 문자열.
 @property NSUInteger committedLength;       // 문서 앞에서 이미 insert 로 확정한 길이.
 @property(copy) NSString *unhandledKey;     // 입력기에 먼저 준 특수 키의 보고. 입력기가 처리하지 않으면 보고한다.
+@property NSUInteger reports;               // 보낸 보고의 수. 입력 컨텍스트가 키에 답했는지 확인한다.
 - (void)applyInsets;
 - (void)applyInsetsInTransaction;
 - (void)applyInsetsNow;
@@ -296,6 +297,7 @@ static BOOL containsHangul(NSString *text) {
 
 - (void)report:(const char *)json {
     if (self.closed || !self.event) return;
+    self.reports++;
     self.event(self.context, json);
 }
 
@@ -463,8 +465,17 @@ static BOOL containsHangul(NSString *text) {
         return;
     }
 
-    // 일반 문자는 입력기로 넘긴다.
+    // 일반 문자는 입력기로 넘긴다. 입력기는 활성 애플리케이션의 키 창에만 답한다. 애플리케이션이 한 번
+    // 활성화된 뒤에는 입력 컨텍스트가 그 밖의 창에 온 키를 받고도 문자를 넣지 않으므로, 답이 없으면 오류로 알린다.
+    NSUInteger before = self.reports;
     [super keyDown:event];
+    if (self.reports == before && !(NSApp.isActive && self.window.isKeyWindow)) {
+        NSString *reason = [NSString stringWithFormat:
+            @"input method did not answer native keyCode=%hu outside the key window of the active application",
+            event.keyCode];
+        NSData *data = [NSJSONSerialization dataWithJSONObject:@{ @"type": @"error", @"reason": reason } options:0 error:NULL];
+        [self report:[[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease].UTF8String];
+    }
 }
 
 - (void)doCommandBySelector:(SEL)selector {

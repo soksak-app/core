@@ -2,9 +2,7 @@
 // 창 크기가 바뀌어도 터미널 그림이 영역과 DOM 을 따라가는지 검사한다.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
+import { rmSync } from "node:fs";
 import test from "node:test";
 
 import { APPS, drag, failure, fresh, open, within } from "./app.mjs";
@@ -12,19 +10,8 @@ import { frames, pixel, readFrame } from "./frame.mjs";
 import { glyphShape, surfaceBoxes, whitePixels } from "./outside.mjs";
 import { assertHeldStatesShown } from "./drag-measurement.mjs";
 import { terminalProcessSnapshot } from "./terminal-processes.mjs";
-import { ensureTerminals, readScreenUntil, textLines } from "./terminal-screen.mjs";
+import { ensureTerminals, readScreenUntil } from "./terminal-screen.mjs";
 
-
-async function clickAndExecute(session, surface, marker) {
-  const view = await session.rect("terminal.view", undefined, surface);
-  await session.click(view.document.x + view.x + view.width / 2, view.document.y + view.y + view.height / 2);
-  await session.until("host.window", (host) => host.regions.some((region) =>
-    region.surface === surface && region.focused), `${surface} did not receive native focus`);
-  for (const ch of `echo ${marker}`) await session.press(ch === " " ? "Space" : ch);
-  await session.press("Enter");
-  await readScreenUntil(session, surface, (lines) => lines.includes(marker),
-    `${surface} did not execute its first post-context command`);
-}
 
 async function closeTerminalTabs(session) {
   const grid = await session.get("core.grid");
@@ -295,174 +282,6 @@ for (const app of Object.values(APPS)) {
     const after = terminalProcessSnapshot(app.configDir);
     assert.equal(after.service, before.service, "closing tabs must not recreate the shared terminal service");
     assert.deepEqual(after.shells, [], "normal terminal close must reap every PTY child");
-  });
-
-  test(`${app.name}: native keyboard edits and executes independently in three terminals`, { timeout: 60000 }, async (t) => {
-    const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
-    await fresh(s);
-    // 이 검사는 영문 명령을 네이티브 키로 입력한다.
-    await s.selectInputSource("com.apple.keylayout.ABC");
-    const tab = (await s.get("core.grid")).cards.flatMap((card) => card.tabs).find((tab) => tab.plugin === "terminal");
-    assert.ok(tab, "the fixture has no terminal tab");
-    await s.run("core.tab.select", { tab: tab.id });
-    const terminals = await ensureTerminals(s, 3);
-    assert.equal(terminals.length, 3);
-    await s.presented();
-    for (const [index, terminal] of terminals.entries()) {
-      await t.test(`terminal ${index + 1}`, { timeout: 15000 }, async () => {
-        const surface = terminal.surface;
-        t.diagnostic(`${app.name}: START terminal ${index + 1} prompt`);
-        await readScreenUntil(s, surface, (lines) => lines.some((line) => line.includes("$")), "shell prompt missing");
-        t.diagnostic(`${app.name}: PASS terminal ${index + 1} prompt`);
-        const others = await Promise.all(terminals.filter((item) => item.surface !== surface)
-          .map(async (item) => [item.surface, await s.get("terminal.screen", item.surface)]));
-        const view = await s.rect("terminal.view", undefined, surface);
-        t.diagnostic(`${app.name}: START terminal ${index + 1} pointer focus`);
-        try {
-          await s.click(view.document.x + view.x + view.width / 2, view.document.y + view.y + view.height / 2);
-        } catch (error) {
-          t.diagnostic(`${app.name}: terminal ${index + 1} click failure host=${JSON.stringify(await s.get("host.window"))}`);
-          t.diagnostic(`${app.name}: terminal ${index + 1} click failure input=${JSON.stringify(await s.get("core.surface.input", surface))}`);
-          throw error;
-        }
-        t.diagnostic(`${app.name}: PASS terminal ${index + 1} pointer focus`);
-        await s.until("host.window", (host) => host.regions.some((region) => region.surface === surface && region.focused),
-          `terminal ${index + 1} did not receive keyboard focus`);
-        t.diagnostic(`${app.name}: PASS terminal ${index + 1} native focus`);
-        const marker = `typed${index}`;
-        const line = `echo ${marker}`;
-        for (const ch of `${line}x`) await s.press(ch === " " ? "Space" : ch);
-        t.diagnostic(`${app.name}: PASS terminal ${index + 1} typed line`);
-        const sessionAfterTyping = await s.get("terminal.session", surface);
-        const screenAfterTyping = await s.get("terminal.screen", surface);
-        assert.equal(sessionAfterTyping.error, undefined,
-          `terminal ${index + 1} must not report a selection/input error after focus click: ${sessionAfterTyping.error}`);
-        t.diagnostic(`${app.name}: terminal ${index + 1} session after typing ` +
-          `${JSON.stringify({ sessionId: sessionAfterTyping.sessionId, error: sessionAfterTyping.error })}`);
-        t.diagnostic(`${app.name}: terminal ${index + 1} screen after typing ` +
-          `${JSON.stringify(textLines({ lines: screenAfterTyping }).filter(Boolean))}`);
-        await readScreenUntil(s, surface, (lines) => lines.some((row) => row.endsWith(`${line}x`)), "native characters were not delivered");
-        const focusedAfterFirstInput = await s.get("host.window");
-        assert.ok(focusedAfterFirstInput.regions.some((region) => region.surface === surface && region.focused),
-          `terminal ${index + 1} lost native focus before its first command completed`);
-        await s.press("Backspace");
-        await readScreenUntil(s, surface, (lines) => lines.some((row) => row.endsWith(line)), "native Backspace was not delivered");
-        await s.press("u", { modifiers: ["control"] });
-        await readScreenUntil(s, surface, (lines) => lines.some((row) => row.endsWith("$")) && !lines.some((row) => row.includes(marker)),
-          "native Ctrl+U did not clear the input line");
-        t.diagnostic(`${app.name}: PASS terminal ${index + 1} editing`);
-        for (const ch of line) await s.press(ch === " " ? "Space" : ch);
-        await s.press("Enter");
-        const output = await readScreenUntil(s, surface, (lines) => lines.includes(marker), "native Enter did not execute the command");
-        assert.equal(output.filter((row) => row === marker).length, 1, "command output must occur once");
-        t.diagnostic(`${app.name}: PASS terminal ${index + 1} command`);
-        const continued = `continued${index}`;
-        for (const ch of `echo ${continued}`) await s.press(ch === " " ? "Space" : ch);
-        await s.press("Enter");
-        const next = await readScreenUntil(s, surface, (lines) => lines.includes(continued),
-          "typing after output required another click");
-        assert.equal(next.filter((row) => row === continued).length, 1, "continued input must execute once without refocusing");
-        t.diagnostic(`${app.name}: PASS terminal ${index + 1} continued input`);
-        // 화살표 키: Left 두 번 뒤 입력은 줄 가운데에 들어가고, Up 은 앞 명령을 다시 불러온다.
-        const arrowed = `a${index}q${index}bc`;
-        for (const ch of `echo a${index}${index}bc`) await s.press(ch === " " ? "Space" : ch);
-        for (let step = 0; step < 3; step++) await s.press("ArrowLeft");
-        await s.press("q");
-        await s.press("Enter");
-        await readScreenUntil(s, surface, (lines) => lines.includes(arrowed), "native Left did not move the insertion point");
-        await s.press("ArrowUp");
-        await s.press("Enter");
-        const recalled = await readScreenUntil(s, surface, (lines) => lines.filter((row) => row === arrowed).length === 2,
-          "native Up did not recall the previous command");
-        assert.equal(recalled.filter((row) => row === arrowed).length, 2, "the recalled command must run once more");
-        // Ctrl+C 는 실행 중인 명령을 끊는다. 끊지 않으면 sleep 이 대기 한도보다 오래 걸린다.
-        for (const ch of "sleep 60") await s.press(ch === " " ? "Space" : ch);
-        await s.press("Enter");
-        await s.press("c", { modifiers: ["control"] });
-        const interrupted = `interrupted${index}`;
-        for (const ch of `echo ${interrupted}`) await s.press(ch === " " ? "Space" : ch);
-        await s.press("Enter");
-        await readScreenUntil(s, surface, (lines) => lines.includes(interrupted), "native Ctrl+C did not interrupt the running command");
-        t.diagnostic(`${app.name}: PASS terminal ${index + 1} arrows and interrupt`);
-        for (const [other, before] of others) assert.deepEqual(await s.get("terminal.screen", other), before,
-          `typing in ${surface} changed ${other}`);
-      });
-    }
-
-    const terminalTab = (await s.get("core.grid")).cards.flatMap((card) => card.tabs)
-      .find((tab) => tab.plugin === "terminal");
-    const browserTab = (await s.get("core.grid")).cards.flatMap((card) => card.tabs)
-      .find((tab) => tab.plugin === "browser");
-    assert.ok(terminalTab && browserTab, "the focus context test requires terminal and browser tabs");
-    t.diagnostic(`${app.name}: START focus after browser tab`);
-    await s.run("core.tab.select", { tab: browserTab.id });
-    await s.until("core.surfaces", (surfaces) => surfaces.some((item) => item.visible && item.plugin === "browser"),
-      "browser tab did not become visible before returning to the terminal");
-    await s.run("core.tab.select", { tab: terminalTab.id });
-    await s.until("core.surfaces", (surfaces) => surfaces.some((item) =>
-      item.visible && item.plugin === "terminal" && item.exposes.includes("status terminal.session")),
-    "terminal did not return after browser tab switching");
-    await s.presented();
-    const returnedTerminal = (await s.get("core.surfaces")).find((item) =>
-      item.visible && item.plugin === "terminal" && item.exposes.includes("status terminal.session"));
-    await clickAndExecute(s, returnedTerminal.surface, "afterbrowser");
-    t.diagnostic(`${app.name}: PASS focus after browser tab`);
-
-    t.diagnostic(`${app.name}: START focus after resize`);
-    const beforeResize = await s.get("terminal.session", returnedTerminal.surface);
-    await s.run("host.window.resize", { width: 800, height: 920 });
-    await s.until("host.window", (host) => host.content.width === 800, "window did not resize for focus test");
-    await s.until("terminal.session", (state) => state.cols < beforeResize.cols,
-      "terminal did not resize before focus was tested again", { surface: returnedTerminal.surface });
-    await clickAndExecute(s, returnedTerminal.surface, "afterresize");
-    t.diagnostic(`${app.name}: PASS focus after resize`);
-
-    t.diagnostic(`${app.name}: START focus after modal close`);
-    await s.run("core.settings.open");
-    await s.until("core.settings-modal", (modal) => modal.open, "settings modal did not open for focus test");
-    await s.run("core.settings.close");
-    await s.until("core.settings-modal", (modal) => !modal.open, "settings modal did not close for focus test");
-    await s.presented();
-    await clickAndExecute(s, returnedTerminal.surface, "aftermodal");
-    t.diagnostic(`${app.name}: PASS focus after modal close`);
-
-    t.diagnostic(`${app.name}: START focus after project return`);
-    const project = await s.get("core.project");
-    await s.run("core.projects.browse");
-    await s.until("core.screen", (screen) => screen.screen === "library", "project library did not open for focus test");
-    await s.run("core.library.open", { id: project.id });
-    await s.until("core.surfaces", (surfaces) => surfaces.some((item) =>
-      item.visible && item.plugin === "terminal" && item.exposes.includes("status terminal.session")),
-    "terminal did not return after project navigation");
-    await s.presented();
-    const restoredTerminal = (await s.get("core.surfaces")).find((item) =>
-      item.visible && item.plugin === "terminal" && item.exposes.includes("status terminal.session"));
-    await clickAndExecute(s, restoredTerminal.surface, "afterproject");
-    t.diagnostic(`${app.name}: PASS focus after project return`);
-
-    t.diagnostic(`${app.name}: START focus after window switch`);
-    const temporaryProject = mkdtempSync(join(tmpdir(), "soksak-terminal-focus-"));
-    s.cleanup(() => rmSync(temporaryProject, { recursive: true, force: true }));
-    await s.run("core.settings.set", { patch: { projectOpening: "windows" }, scope: "common" });
-    const opened = await s.run("core.project.open", { root: temporaryProject, color: "#7fe3b0" });
-    const child = s.on((await s.windows(2, "focus test project window did not open"))
-      .find((window) => window.window !== s.window).window);
-    await child.until("core.grid", (grid) => grid.cards.length > 0, "focus test project window did not render");
-    const childTerminalTab = (await child.get("core.grid")).cards.flatMap((card) => card.tabs)
-      .find((tab) => tab.plugin === "terminal");
-    assert.ok(childTerminalTab, `opened project ${opened.id} has no terminal tab`);
-    await child.run("core.tab.select", { tab: childTerminalTab.id });
-    await child.until("core.surfaces", (surfaces) => surfaces.some((item) =>
-      item.visible && item.plugin === "terminal" && item.exposes.includes("status terminal.session")),
-    "focus test child window terminal did not become visible");
-    await child.presented();
-    const childTerminal = (await child.get("core.surfaces")).find((item) =>
-      item.visible && item.plugin === "terminal" && item.exposes.includes("status terminal.session"));
-    await clickAndExecute(child, childTerminal.surface, "afterwindow");
-    await child.close();
-    await s.windows(1, "focus test child window did not close");
-    t.diagnostic(`${app.name}: PASS focus after window switch`);
   });
 
   test(`${app.name}: hiding three terminals retains native geometry and rasters`, async (t) => {

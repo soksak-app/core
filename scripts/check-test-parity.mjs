@@ -329,7 +329,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "e2e/library.test.mjs", id: "library windows create and open projects in place" },
-      { file: "e2e/terminal.test.mjs", id: "native keyboard edits and executes independently in three terminals" },
+      { file: "e2e/activation/terminal-keyboard.test.mjs", id: "native keyboard edits and executes independently in three terminals" },
       { file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" },
     ],
     expected: "AppKit window creation and activation run on the event-loop thread, the bounded Tauri basic-operation matrix remains observable, and normal shutdown removes the owned endpoint and lock.",
@@ -448,7 +448,7 @@ const FEATURE_LINKS = [
       { file: "e2e/modal.test.mjs", id: "settings blocks background input and closes only through its close button" },
       { file: "e2e/shell.test.mjs", id: "shell input returns shell output through the shell sidecar" },
       { file: "e2e/browser.test.mjs", id: "browser documents follow host theme pixels for existing, new, and reloaded documents" },
-      { file: "e2e/terminal.test.mjs", id: "native keyboard edits and executes independently in three terminals" },
+      { file: "e2e/activation/terminal-keyboard.test.mjs", id: "native keyboard edits and executes independently in three terminals" },
       { file: "e2e/library.test.mjs", id: "library windows create and open projects in place" },
       { file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" },
     ],
@@ -463,7 +463,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "e2e/commands.test.mjs", id: "card, tab, and menu commands change the grid" },
-      { file: "e2e/terminal.test.mjs", id: "native keyboard edits and executes independently in three terminals" },
+      { file: "e2e/activation/terminal-keyboard.test.mjs", id: "native keyboard edits and executes independently in three terminals" },
       { file: "e2e/browser.test.mjs", id: "browser documents follow host theme pixels for existing, new, and reloaded documents" },
       { file: "e2e/library.test.mjs", id: "library windows create and open projects in place" },
       { file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" },
