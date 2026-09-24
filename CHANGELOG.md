@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-16: the terminal process check failures after activation runs came from sessions of force-ended application instances that the terminal service keeps, not from the activation checks; the procedure now states to stop that service after forcing an application to end.
 - F8-9-1: the plain `NSView` input client of F8-9 caused a stall and an `EXC_BAD_ACCESS` crash in Tauri, so the `NSTextView` client is restored; every inherited edit is off, Services cannot use the input document, and tests assert each edit is off. The same reproduction cycle passes 10 times with the restored client.
 - F8-9: the input client of the terminal image region is a plain `NSView` with its own input document instead of an `NSTextView`, so it inherits no text editing that the terminal does not declare. The simpler client was chosen after both produced `ddd한글 ` on the same Korean sequence, and the activation-tier Korean and Japanese checks pass on both hosts.
 - F8-7: the activation-tier window check `marked-text.test.mjs` verifies that marked text of the Japanese input method (`日本`) is written to the PTY exactly once on both hosts when the composition ends.

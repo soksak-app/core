@@ -59,7 +59,7 @@ pnpm -F @soksak/e2e run verify
 
 하네스(`e2e/app.mjs`)는 `@soksak/client`로 `<config-dir>/endpoint.json`을 읽어 연결한다([로컬 엔드포인트](../spec/endpoint.ko.md)). `application`이 기대한 호스트인지, `executable`이 이 체크아웃의 실행 파일인지 확인한다. 임시 디렉터리의 잠금 파일 `soksak-check.lock`이 동시 실행을 막으며, 두 번째 실행은 측정하지 않고 실패한다. 검사는 앱을 시작하지 않는다. 상태 조회와 변경은 선언된 항목([노출](../spec/exposure.ko.md))만 사용한다. status 값, 명령, DOM 항목, 호스트 항목, 디버그 빌드의 진단 메서드다. 대기는 `status.watch` 알림과 `host.window.presented`를 사용하며 하네스에는 폴링 반복이나 고정 지연이 없다. 실제 입력 검사는 애플리케이션을 활성화하지 않는 `input.pointer`와 `input.key`를 사용한다. `input.key`는 명시한 text가 없는 모든 키를 이름 있는 키까지 macOS 키 코드로 만들므로 AppKit과 입력기가 하드웨어 입력처럼 문자를 계산한다. 따라서 라틴 문자를 입력하는 검사는 `session.selectInputSource`로 ABC 자판을 선택하며, 이 함수는 검사가 끝나면 이전 입력 소스를 되돌린다. `make e2e-check`는 `e2e/`의 타이머, `eval`, `Function` 생성자, 제거된 네이티브 프로브, 제거된 TCP 제어 포트를 거부한다. 실행 중인 앱이 없으면 실패하고, 바이너리가 없으면 건너뜀으로 표시한다. 호스트 검사를 건너뛴 실행으로 두 호스트를 검증했다고 기록하지 않는다.
 
-`make examples-verify`는 `make e2e-check`, `make exposure-check`, 문서 검사, 창 검사를 실행한다. 검증 전에 두 앱을 빌드하고 다시 실행한다. 실행 파일을 다시 빌드해도 이미 실행 중인 프로세스는 교체되지 않는다.
+`make examples-verify`는 `make e2e-check`, `make exposure-check`, 문서 검사, 창 검사를 실행한다. 검증 전에 두 앱을 빌드하고 다시 실행한다. 실행 파일을 다시 빌드해도 이미 실행 중인 프로세스는 교체되지 않는다. 연결이 끊겨도 세션은 유지되므로([터미널 런타임](../spec/terminal-runtime.ko.md)) 검사 설정의 터미널 서비스는 정상 종료 없이 끝난 앱의 세션을 계속 가진다. 터미널 프로세스 검사는 그 서비스의 셸을 세므로, 앱을 강제로 끝낸 뒤에는 검사 전에 `--service-dir`가 그 설정 디렉터리에 있는 `soksak-vt-alacritty` 프로세스를 멈춘다.
 
 일회용 설정 디렉터리를 사용한다. 하네스는 해당 디렉터리의 프로젝트 목록과 공통 설정을 교체하고 검사 전용 설정을 포함한 `test-project` 폴더를 생성한다. 프로젝트 창 검사는 추가 임시 프로젝트 폴더를 생성하고 일반 파일과 창 API를 실행한다.
 
