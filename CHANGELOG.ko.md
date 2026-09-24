@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- V5-17: 배치 중에 숨긴 표면이 다시 보일 때 키보드 포커스를 소유자에게 되돌리므로 한 번의 클릭으로 브라우저 문서에 포커스가 간다. `host.window`가 첫 응답자를 보고한다. V5-17-1을 등록했다.
 - F8-22: 터미널 모듈은 `selection.start`, `selection.update`, `paste`에 대한 사이드카 확인 응답을 지원하지 않는 이벤트로 기록하지 않고 받는다.
 - F8-21-1: 실제 마우스 버튼이 눌린 동안 합성한 포인터 누름이나 뗌은 이동으로 문서에 도달하지 않고 1007을 반환하며, 뗌은 문서가 `pointerup`을 받은 뒤 완료된다. V5-19를 등록했다.
 - F8-21: 빈 칸 위의 터미널 끌기가 더 이상 `invalidParams: selection is empty`를 보고하지 않는다. 사이드카는 글자 없는 선택을 지우고 `copied: false`인 `selection.end`로 답한다. `terminal.session`은 `selecting`과 `selectionReleases`를 보고한다.

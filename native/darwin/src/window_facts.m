@@ -118,7 +118,25 @@ char *sp_window_facts(void *handle) {
         [webviews addObject:row];
         [row release];
     }
+    // 첫 응답자와 그것을 담은 웹뷰. 키보드 입력이 어디로 가는지 보고한다.
+    // surface 는 첫 응답자를 담은 표면 뷰이며 nativeSurfaces 의 view 와 같은 기준이다.
+    NSResponder *first = window.firstResponder;
+    NSView *owner = [first isKindOfClass:NSView.class] ? (NSView *)first : nil;
+    while (owner && ![owner isKindOfClass:WKWebView.class]) owner = owner.superview;
+    NSView *surface = [first isKindOfClass:NSView.class] ? (NSView *)first : nil;
+    while (surface) {
+        NSView *plane = sp_surface_native_plane(surface);
+        if (plane && plane.superview == surface) break;
+        surface = surface.superview;
+    }
+    NSDictionary *responder = @{
+        @"class": first ? NSStringFromClass(first.class) : @"",
+        @"webview": @((unsigned long long)(uintptr_t)owner),
+        @"surface": @((unsigned long long)(uintptr_t)surface),
+        @"main": owner != nil && owner == mainWebview(window) ? @YES : @NO,
+    };
     return copyJSON(@{
+        @"responder": responder,
         @"frame": screenRect(window.frame),
         @"content": @{ @"width": @(content.bounds.size.width), @"height": @(content.bounds.size.height) },
         @"scale": @(window.backingScaleFactor),

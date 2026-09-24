@@ -810,6 +810,12 @@ type frame struct {
 
 // windowFacts 는 native/darwin 의 sp_window_facts 결과다.
 type windowFacts struct {
+	Responder struct {
+		Class   string `json:"class"`
+		Webview uint64 `json:"webview"`
+		Surface uint64 `json:"surface"`
+		Main    bool   `json:"main"`
+	} `json:"responder"`
 	Main    uint64 `json:"main"`
 	Frame   frame  `json:"frame"`
 	Content struct {
@@ -898,8 +904,19 @@ type WindowRegion struct {
 	Error *string `json:"error"`
 }
 
+// WindowResponder 는 창의 첫 응답자다. Owner 는 그것을 담은 웹뷰의 종류이며 page, surface,
+// document, modal, webview, native 중 하나다. webview 는 등록되지 않은 웹뷰이고, native 는
+// 웹뷰 밖의 뷰(예: 이미지 영역)다. Surface 는 첫 응답자를 담은 표면이다.
+type WindowResponder struct {
+	Class    string  `json:"class"`
+	Owner    string  `json:"owner"`
+	Surface  *string `json:"surface"`
+	Document *string `json:"document"`
+}
+
 // WindowStatus 는 host.window 의 값이다.
 type WindowStatus struct {
+	Responder        WindowResponder  `json:"responder"`
 	Frame            frame            `json:"frame"`
 	Content          frame            `json:"content"`
 	Scale            float64          `json:"scale"`
@@ -965,9 +982,13 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 		out.Controls = []WindowControl{}
 	}
 	var modal *WindowModal
+	var modalHandle uint64
 	s.mu.Lock()
 	if s.modal != nil {
 		modal = &WindowModal{ID: s.modal.id, Mode: s.modal.content.Mode, Shown: s.modal.visible}
+		if s.modal.view != nil {
+			modalHandle = uint64(uintptr(s.modal.view.handle))
+		}
 		if s.modal.view != nil && s.modal.visible {
 			modalView := uint64(uintptr(s.modal.view.handle))
 			found := false
@@ -1004,6 +1025,25 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 		if key, ok := documents[view.View]; ok {
 			out.Documents = append(out.Documents, WindowDocument{Surface: key.Surface, Document: key.Name,
 				Frame: view.frame, Visible: !view.Hidden, Focused: view.Focused, Order: order})
+		}
+	}
+	out.Responder = WindowResponder{Class: facts.Responder.Class, Owner: "native"}
+	if id, ok := named[facts.Responder.Surface]; ok && facts.Responder.Surface != 0 {
+		out.Responder.Surface = &id
+	}
+	if view := facts.Responder.Webview; view != 0 {
+		key, document := documents[view]
+		switch {
+		case document:
+			out.Responder.Owner, out.Responder.Surface, out.Responder.Document = "document", &key.Surface, &key.Name
+		case out.Responder.Surface != nil:
+			out.Responder.Owner = "surface"
+		case modalHandle != 0 && modalHandle == view:
+			out.Responder.Owner = "modal"
+		case facts.Responder.Main:
+			out.Responder.Owner = "page"
+		default:
+			out.Responder.Owner = "webview"
 		}
 	}
 	sort.Slice(out.Regions, func(a, b int) bool {

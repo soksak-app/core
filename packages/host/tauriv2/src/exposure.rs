@@ -925,7 +925,43 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
             modal["background"] = json!({"draws": view["draws"], "alpha": view["alpha"]});
         }
     }
+    // 첫 응답자와 그것을 담은 웹뷰의 종류. 등록되지 않은 웹뷰는 webview, 웹뷰 밖의 뷰(예: 이미지
+    // 영역)는 native 다. surface 는 첫 응답자를 담은 표면이다.
+    let responder_facts = &facts["responder"];
+    let class = responder_facts["class"]
+        .as_str()
+        .ok_or_else(|| internal("window facts missing responder class"))?;
+    let owner = responder_facts["webview"]
+        .as_u64()
+        .ok_or_else(|| internal("window facts missing responder webview"))?
+        as platform::Handle;
+    let container = responder_facts["surface"]
+        .as_u64()
+        .ok_or_else(|| internal("window facts missing responder surface"))?
+        as platform::Handle;
+    let main = responder_facts["main"]
+        .as_bool()
+        .ok_or_else(|| internal("window facts missing responder main"))?;
+    let surface = if container == 0 {
+        None
+    } else {
+        named.get(&container).cloned()
+    };
+    let responder = if owner == 0 {
+        json!({"class": class, "owner": "native", "surface": surface, "document": null})
+    } else if let Some((surface, document)) = documents.get(&owner) {
+        json!({"class": class, "owner": "document", "surface": surface, "document": document})
+    } else if surface.is_some() {
+        json!({"class": class, "owner": "surface", "surface": surface, "document": null})
+    } else if modal_view == Some(owner) {
+        json!({"class": class, "owner": "modal", "surface": null, "document": null})
+    } else if main {
+        json!({"class": class, "owner": "page", "surface": null, "document": null})
+    } else {
+        json!({"class": class, "owner": "webview", "surface": null, "document": null})
+    };
     Ok(json!({
+        "responder": responder,
         "frame": facts["frame"],
         "content": {"x": 0.0, "y": 0.0, "width": facts["content"]["width"], "height": facts["content"]["height"]},
         "scale": facts["scale"],

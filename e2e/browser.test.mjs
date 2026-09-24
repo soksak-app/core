@@ -197,6 +197,8 @@ for (const app of Object.values(APPS)) {
       document.surface === surface && document.document === "page" && document.visible &&
       document.frame.width > 0 && document.frame.height > 0),
     "the focused browser document did not settle after card selection");
+    // 카드 선택이 만든 배치가 모두 표시된 뒤 잰다. 준비 중인 배치는 표면을 숨긴다.
+    await s.presented();
     assert.deepEqual(await s.run("host.hit", firstPoint), { kind: "document", surface, document: "page" },
       "the click coordinate stopped hitting the focused browser document");
     await s.pointer(firstPoint.x, firstPoint.y, "scroll", { deltaY: 120 });

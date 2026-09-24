@@ -100,6 +100,20 @@ int main(void) { @autoreleasepool {
     NSPoint outside = [surface convertPoint:NSMakePoint(-1, 10) toView:window.contentView.superview];
     hit = [window.contentView hitTest:outside];
     check(hit != field && ![hit isDescendantOf:field], "native input cannot cross the surface boundary");
+    // 배치 준비는 DOM 이 그려질 때까지 표면을 숨겼다가 다시 보인다. 그 사이 키보드 소유자가 바뀌면 안 된다.
+    WKWebView *focusedDocument = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 100, 40)] autorelease];
+    [plane addSubview:focusedDocument];
+    check([window makeFirstResponder:focusedDocument], "a document in the surface takes keyboard focus");
+    webviewSetSurfaceHidden(surface, true);
+    webviewSetSurfaceHidden(surface, false);
+    check(window.firstResponder == focusedDocument,
+        [[NSString stringWithFormat:@"a transient surface hide keeps the document's keyboard focus: %@",
+            NSStringFromClass(window.firstResponder.class)] UTF8String]);
+    webviewSetSurfaceHidden(surface, true);
+    [window makeFirstResponder:main];
+    webviewSetSurfaceHidden(surface, false);
+    check(window.firstResponder == main, "a focus change while the surface is hidden is not replaced on show");
+    [focusedDocument removeFromSuperview];
     webviewSetSurfaceAlpha(surface, 0.5);
     check(surface.alphaValue == 0.5, "dimming applies to the logical surface");
     webviewSetSurfaceHidden(surface, true);

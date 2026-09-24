@@ -455,16 +455,47 @@ void webviewGetFrame(void *handle, double *out) {
     out[3] = frame.size.height;
 }
 
+// 첫 응답자를 담은 뷰를 숨기면 AppKit 은 첫 응답자를 다른 뷰나 창으로 옮긴다. 배치는 DOM 이
+// 그려질 때까지만 표면을 숨기므로, 숨긴 표면은 키보드 소유자와 AppKit 이 대신 정한 응답자를 기록한다.
+@interface SPHiddenResponder : NSObject
+@property(nonatomic, retain) NSView *owner;
+@property(nonatomic, assign) NSResponder *replacement;
+@end
+@implementation SPHiddenResponder
+- (void)dealloc { [_owner release]; [super dealloc]; }
+@end
+
+static const char hiddenResponderKey;
+
 void webviewSetSurfaceHidden(void *handle, bool hidden) {
     NSCAssert(NSThread.isMainThread, @"webview geometry requires the UI thread");
     NSView *view = (NSView *)handle;
     SPSurfaceHost *host = surfaceHost(view);
+    NSView *surface = host ?: view;
+    NSWindow *window = surface.window;
+    NSResponder *first = window.firstResponder;
+    NSView *owner = hidden && !surface.hidden && [first isKindOfClass:NSView.class]
+        && [(NSView *)first isDescendantOf:surface] ? (NSView *)first : nil;
     // Native regions inspect the surface ancestry while applying geometry. Make
     // the ancestry authoritative before reapplying it; otherwise restoring a
     // surface leaves its documents hidden after the host becomes visible.
-    (host ?: view).hidden = hidden;
+    surface.hidden = hidden;
     view.hidden = hidden;
+    if (owner) {
+        SPHiddenResponder *held = [[SPHiddenResponder new] autorelease];
+        held.owner = owner;
+        held.replacement = window.firstResponder;
+        objc_setAssociatedObject(surface, &hiddenResponderKey, held, OBJC_ASSOCIATION_RETAIN);
+    }
     if (!hidden) {
+        // 숨긴 동안 포커스가 옮겨지지 않았고 소유자가 아직 표면 안에 있을 때만 되돌린다.
+        SPHiddenResponder *held = objc_getAssociatedObject(surface, &hiddenResponderKey);
+        if (held) {
+            if (window && window.firstResponder == held.replacement && [held.owner isDescendantOf:surface]) {
+                [window makeFirstResponder:held.owner];
+            }
+            objc_setAssociatedObject(surface, &hiddenResponderKey, nil, OBJC_ASSOCIATION_RETAIN);
+        }
         NSView *coordinates = host.superview;
         if ([coordinates isKindOfClass:SPSurfaceCoordinates.class]) {
             reconfigureSurfaceWebviews(coordinates);

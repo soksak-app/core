@@ -35,6 +35,16 @@ int main(void) { @autoreleasepool {
     [top setValue:@NO forKey:@"drawsBackground"];
     top.underPageBackgroundColor = NSColor.clearColor;
 
+    [window makeFirstResponder:top];
+    NSDictionary *responderFacts = parse(sp_window_facts(window));
+    check([responderFacts[@"responder"][@"webview"] unsignedLongLongValue] == (uintptr_t)top,
+        [NSString stringWithFormat:@"the first responder's webview is reported: %@", responderFacts[@"responder"]]);
+    [window makeFirstResponder:main];
+    responderFacts = parse(sp_window_facts(window));
+    check([responderFacts[@"responder"][@"webview"] unsignedLongLongValue] == (uintptr_t)main
+        && [responderFacts[@"responder"][@"class"] length] > 0
+        && responderFacts[@"responder"][@"main"] == (id)kCFBooleanTrue,
+        [NSString stringWithFormat:@"a responder change is reported with its class: %@", responderFacts[@"responder"]]);
     check(sp_window_move(window, 120, 80), @"move accepted");
     NSDictionary *facts = parse(sp_window_facts(window));
     CGFloat primary = NSMaxY(NSScreen.screens.firstObject.frame);
