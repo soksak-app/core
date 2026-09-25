@@ -1300,6 +1300,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F8",
+    implementation: [
+      { file: "native/darwin/src/image_region.m", symbol: "commitThrough" },
+      { file: "native/darwin/src/image_region.m", symbol: "reportPreedit" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/image_region_ime_test.m", id: "image region: Backspace during a composition edits it to 하 without PTY input" },
+      { file: "native/darwin/tests/image_region_ime_test.m", id: "image region: Escape during a composition commits it once and is reported after it" },
+      { file: "e2e/activation/ime.test.mjs", id: "a Korean syllable typed right after an input-source switch reaches the PTY once" },
+      { file: "e2e/activation/marked-text.test.mjs", id: "marked text that the input method ends is written to the PTY once" },
+    ],
+    expected: "The real macOS Korean input method composes in the terminal region with its preedit shown, edits with Backspace, commits each syllable exactly once before a following key such as Escape or Enter, and never writes uncommitted text to the PTY on both hosts; the AppKit control in the same window produces the same document.",
+    levels: ["native", "application"],
+  },
+  {
     id: "F6.5",
     implementation: [
       { file: "native/darwin/src/webview_geometry.m", symbol: "SPFileDropView" },
