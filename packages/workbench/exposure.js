@@ -54,6 +54,8 @@ export function createRegistry({ call = null } = {}) {
     surfacePlugin: () => null, preferred: () => [], registrationChanged: () => {},
     // 코어 명령이 실행된 뒤 기다릴 작업. 문서는 판의 그리기를 넘겨, 배치를 바꾼 명령이 그려진 뒤 답하게 한다.
     settled: () => undefined,
+    // 이 문서 안의 관찰이 실패하면 호출된다. 페이지 오류로 보고한다(docs/spec/plugins.md#sections).
+    failed: (error) => dispatchEvent(new ErrorEvent("error", { message: error.message })),
   };
   let forwards = 0;
   /* 이 문서 안에서 surface status 를 따라가는 관찰자. 섹션 모듈이 사용한다. */
@@ -175,6 +177,9 @@ export function createRegistry({ call = null } = {}) {
     return options.preferred().find((surface) => owners.has(surface)) ?? [...owners.keys()].at(-1);
   }
 
+  /** 관찰의 실패를 이름과 표면을 붙여 보고한다. */
+  const observeFailed = (name, surface) => (error) => options.failed(new Error(`${name} on ${surface}: ${error.message}`));
+
   /** 관찰자의 감시를 끝낸다. 다른 관찰자나 외부 감시가 없으면 표면의 감시도 끝낸다. */
   function detach(observer) {
     const { watch } = observer;
@@ -185,7 +190,7 @@ export function createRegistry({ call = null } = {}) {
     const key = watchKey(observer.name, watch.surface);
     if (following.get(key) !== watch) return;
     following.delete(key);
-    release(watch, observer.name).catch(() => {});
+    release(watch, observer.name).catch(observeFailed(observer.name, watch.surface));
   }
 
   /** 관찰자가 따라갈 표면을 다시 정한다. 표면이 바뀌면 감시를 옮긴다. */
@@ -207,14 +212,15 @@ export function createRegistry({ call = null } = {}) {
       observer.watch = watch;
       forward(surface, "status.get", { name }).then((value) => {
         if (observer.watch === watch) observer.fn(value, surface);
-      }, () => {});
+      }, observeFailed(name, surface));
       return;
     }
     watch = { surface, requested: surface, name, version: 0, external: false, local: new Set([observer.listener]) };
     following.set(key, watch);
     observer.watch = watch;
-    forward(surface, "status.watch", { name }).then(() => follow(key, name, watch), () => {
+    forward(surface, "status.watch", { name }).then(() => follow(key, name, watch), (error) => {
       if (following.get(key) === watch) following.delete(key);
+      observeFailed(name, surface)(error);
     });
   }
 

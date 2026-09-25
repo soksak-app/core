@@ -443,3 +443,30 @@ test("run forwards a plugin command to the named surface", async () => {
   assert.equal(await made.run("probe.send", {}, "tab-a"), "tab-a");
   await assert.rejects(made.run("probe.send", {}, "tab-c"), { code: EXPOSURE_ERRORS.unregistered });
 });
+
+test("observe reports a failed watch, value read, or release instead of hiding it", async () => {
+  const host = fakeHost(({ surface, method }) => {
+    if (method === "status.next") return new Promise(() => {});
+    if (surface === "tab-a" && method === "status.watch") return { error: { code: 1003, message: "watch lost" } };
+    if (method === "status.get") return { error: { code: 1003, message: "read lost" } };
+    if (method === "status.unwatch") return { error: { code: 1003, message: "unwatch lost" } };
+    return { result: null };
+  });
+  const made = coreRegistry(host);
+  const failures = [];
+  made.configure({ surfacePlugin: () => "probe", failed: (error) => failures.push(error.message) });
+  made.registered({ surface: "tab-a", kind: "status", name: "probe.lines" });
+  const stopA = made.observe("probe.lines", "tab-a", () => {});
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(failures, ["probe.lines on tab-a: watch lost"]);
+  stopA();
+  made.registered({ surface: "tab-b", kind: "status", name: "probe.lines" });
+  const stopB = made.observe("probe.lines", "tab-b", () => {});
+  const stopC = made.observe("probe.lines", "tab-b", () => {});
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(failures.slice(1), ["probe.lines on tab-b: read lost"], "a joined observer reports a failed read");
+  stopB();
+  stopC();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(failures.slice(2), ["probe.lines on tab-b: unwatch lost"]);
+});
