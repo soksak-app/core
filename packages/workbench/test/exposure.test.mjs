@@ -404,3 +404,42 @@ test("a core command answers after the configured settling work", async () => {
   release();
   assert.equal(await answer, 2);
 });
+
+test("observe follows a surface status in the page, switches surfaces on registration, and stops on dispose", async () => {
+  const pending = [];
+  const host = fakeHost(({ surface, method, params }) => {
+    if (method === "status.get") return { result: [`${surface} now`] };
+    if (method !== "status.next") return { result: null };
+    if (params.version === 0) return { result: { version: 1, value: [`${surface} first`] } };
+    return new Promise((resolve) => pending.push(resolve));
+  });
+  const made = coreRegistry(host);
+  made.configure({ surfacePlugin: () => "probe", preferred: () => [] });
+  const seen = [];
+  const stop = made.observe("probe.lines", "tab-b", (value, surface) => seen.push([surface, value]));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(seen, [[null, null]], "without a registered surface the observer receives null");
+  made.registered({ surface: "tab-a", kind: "status", name: "probe.lines" });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(seen.at(-1), ["tab-a", ["tab-a first"]], "the only registered surface is followed");
+  made.registered({ surface: "tab-b", kind: "status", name: "probe.lines" });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(seen.at(-1), ["tab-b", ["tab-b first"]], "the requested surface is followed once it registers");
+  const changes = host.calls.filter(([name]) => name === "exposureChanged");
+  assert.equal(changes.length, 0, "a page observer sends no exposureChanged");
+  stop();
+  await new Promise((resolve) => setImmediate(resolve));
+  const unwatched = host.calls.filter(([name, arg]) => name === "exposureForward" && arg.method === "status.unwatch")
+    .map(([, arg]) => arg.surface);
+  assert.deepEqual(unwatched, ["tab-a", "tab-b"]);
+});
+
+test("run forwards a plugin command to the named surface", async () => {
+  const host = fakeHost(({ surface }) => ({ result: surface }));
+  const made = coreRegistry(host);
+  made.configure({ surfacePlugin: () => "probe" });
+  made.registered({ surface: "tab-a", kind: "command", name: "probe.send" });
+  made.registered({ surface: "tab-b", kind: "command", name: "probe.send" });
+  assert.equal(await made.run("probe.send", {}, "tab-a"), "tab-a");
+  await assert.rejects(made.run("probe.send", {}, "tab-c"), { code: EXPOSURE_ERRORS.unregistered });
+});

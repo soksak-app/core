@@ -56,6 +56,8 @@ export function createRegistry({ call = null } = {}) {
     settled: () => undefined,
   };
   let forwards = 0;
+  /* 이 문서 안에서 surface status 를 따라가는 관찰자. 섹션 모듈이 사용한다. */
+  const observers = new Set();
 
   const changed = (name, value, surface) => {
     if (call) call("exposureChanged", surface === undefined ? { name, value } : { name, surface, value });
@@ -105,7 +107,8 @@ export function createRegistry({ call = null } = {}) {
       }
       if (following.get(key) !== watch || answer?.closed) break;
       watch.version = answer.version;
-      changed(name, answer.value, watch.requested);
+      if (watch.external) changed(name, answer.value, watch.requested);
+      for (const listener of watch.local) listener(answer.value, watch.surface);
     }
     if (following.get(key) === watch) following.delete(key);
   }
@@ -127,16 +130,23 @@ export function createRegistry({ call = null } = {}) {
     const key = watchKey(name, requested);
     if (method === "status.unwatch") {
       const watch = following.get(key);
+      if (watch?.local.size) {
+        watch.external = false;
+        return null;
+      }
       following.delete(key);
       if (watch) await release(watch, name);
       return null;
     }
-    if (method === "status.watch" && following.has(key)) return null;
+    if (method === "status.watch" && following.has(key)) {
+      following.get(key).external = true;
+      return null;
+    }
     const surface = pick(kind, name, requested);
     const result = await forward(surface, method, method === "status.watch" ? { name } : params);
     if (method === "status.watch") {
       // 표면의 문서는 이름마다 값 하나를 따라가므로 각 감시는 버전 0 부터 받는다.
-      const watch = { surface, requested, name, version: 0 };
+      const watch = { surface, requested, name, version: 0, external: true, local: new Set() };
       following.set(key, watch);
       follow(key, name, watch);
     }
@@ -156,6 +166,62 @@ export function createRegistry({ call = null } = {}) {
     }
     return out;
   }
+
+  /** 이름을 등록한 표면 중 이 문서의 요청이 쓸 표면. wanted 가 등록했으면 그 표면이고, 없으면 null 이다. */
+  function target(kind, name, wanted) {
+    const owners = surfaces.get(declarationKey(kind, name));
+    if (!owners?.size) return null;
+    if (wanted && owners.has(wanted)) return wanted;
+    return options.preferred().find((surface) => owners.has(surface)) ?? [...owners.keys()].at(-1);
+  }
+
+  /** 관찰자의 감시를 끝낸다. 다른 관찰자나 외부 감시가 없으면 표면의 감시도 끝낸다. */
+  function detach(observer) {
+    const { watch } = observer;
+    observer.watch = null;
+    if (!watch) return;
+    watch.local.delete(observer.listener);
+    if (watch.local.size || watch.external) return;
+    const key = watchKey(observer.name, watch.surface);
+    if (following.get(key) !== watch) return;
+    following.delete(key);
+    release(watch, observer.name).catch(() => {});
+  }
+
+  /** 관찰자가 따라갈 표면을 다시 정한다. 표면이 바뀌면 감시를 옮긴다. */
+  function reattach(observer) {
+    const surface = target("status", observer.name, observer.wanted);
+    const live = observer.watch && following.get(watchKey(observer.name, surface)) === observer.watch;
+    if (observer.surface === surface && (surface === null || live)) return;
+    detach(observer);
+    observer.surface = surface;
+    if (surface === null) {
+      observer.fn(null, null);
+      return;
+    }
+    const { name } = observer;
+    const key = watchKey(name, surface);
+    let watch = following.get(key);
+    if (watch) {
+      watch.local.add(observer.listener);
+      observer.watch = watch;
+      forward(surface, "status.get", { name }).then((value) => {
+        if (observer.watch === watch) observer.fn(value, surface);
+      }, () => {});
+      return;
+    }
+    watch = { surface, requested: surface, name, version: 0, external: false, local: new Set([observer.listener]) };
+    following.set(key, watch);
+    observer.watch = watch;
+    forward(surface, "status.watch", { name }).then(() => follow(key, name, watch), () => {
+      if (following.get(key) === watch) following.delete(key);
+    });
+  }
+
+  const registrationChanged = () => {
+    for (const observer of observers) reattach(observer);
+    options.registrationChanged();
+  };
 
   return {
     configure(values) {
@@ -190,7 +256,27 @@ export function createRegistry({ call = null } = {}) {
      * 이 문서의 코어 명령 하나를 실행한다. 선언의 params 스키마로 검사한다. 문서의 UI 가
      * 조작을 이 경로로 수행하므로, 사람의 조작과 외부 요청이 같은 명령을 거친다.
      */
-    run: (name, params = {}) => core.answer("command.run", { name, params }),
+    run: (name, params = {}, surface) => (surfaceName(name)
+      ? answer("command.run", surface === undefined ? { name, params } : { name, params, surface })
+      : core.answer("command.run", { name, params })),
+
+    /**
+     * 표면 status 하나를 이 문서 안에서 따라간다. fn(value, surface) 는 현재 값과 그 뒤의 변경마다
+     * 호출된다. surface 가 그 이름을 등록했으면 그 표면을, 아니면 요청의 기본 선택을 따라가고,
+     * 등록한 표면이 없으면 fn(null, null) 이다. 등록이 바뀌면 표면을 다시 고른다. 해제 함수를 반환한다.
+     */
+    chosen: (kind, name, wanted) => target(kind, name, wanted),
+
+    observe(name, surface, fn) {
+      const observer = { name, wanted: surface ?? null, fn, surface: undefined, watch: null, listener: null };
+      observer.listener = (value, from) => fn(value, from);
+      observers.add(observer);
+      reattach(observer);
+      return () => {
+        observers.delete(observer);
+        detach(observer);
+      };
+    },
 
     /** 선언된 이름인지. */
     declared: (kind, name) => declared.has(declarationKey(kind, name)),
@@ -210,7 +296,7 @@ export function createRegistry({ call = null } = {}) {
         pending.delete(surface);
         for (const owners of surfaces.values()) owners.delete(surface);
         for (const [watched, watch] of following) if (watch.surface === surface) following.delete(watched);
-        options.registrationChanged();
+        registrationChanged();
         return;
       }
       const key = declarationKey(kind, name);
@@ -231,7 +317,7 @@ export function createRegistry({ call = null } = {}) {
       const owners = surfaces.get(key);
       owners.delete(surface);
       owners.set(surface, kind);
-      options.registrationChanged();
+      registrationChanged();
     },
 
     /**
@@ -267,7 +353,7 @@ export function createRegistry({ call = null } = {}) {
       for (const [key, watch] of following) {
         if (watch.surface === surface) following.delete(key);
       }
-      options.registrationChanged();
+      registrationChanged();
     },
 
     /** 표면이 등록한 항목. `<kind> <name>` 형식이다. */

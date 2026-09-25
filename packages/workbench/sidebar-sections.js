@@ -4,6 +4,7 @@
 // 세트의 layout 이 list 이면 모든 섹션을 머리와 함께 쌓고, tabs 이면 고른 탭의 섹션 하나만 마운트한다.
 // 탭 선택과 섹션 접힘은 사이드바마다 이 모듈이 보관한다.
 import { bind } from "./commands.js";
+import { registry } from "./exposure.js";
 import { knownSections } from "./registry.js";
 
 /* 사이드바 id 마다 고른 탭과 접힌 섹션. */
@@ -32,13 +33,44 @@ function unmount(entry) {
   entry.mounted = false;
   entry.error = null;
   pending.then((result) => result?.dispose()).catch(() => {});
+  for (const stop of entry.observing.splice(0)) stop();
+}
+
+/**
+ * 섹션 모듈이 받는 문맥. card 와 surface 에 더해, 섹션을 가진 플러그인의 status 를 따라가는
+ * status(name, fn) 과 요소를 그 플러그인의 명령에 연결하는 bind(el, name, params, options) 를 준다.
+ */
+function sectionContext(entry, context) {
+  const owner = entry.section.id.slice(0, entry.section.id.indexOf("."));
+  const own = (name) => {
+    if (!name.startsWith(`${owner}.`)) throw new Error(`section ${entry.section.id} cannot use ${name}`);
+  };
+  return {
+    card: context.card,
+    surface: context.surface,
+    status(name, fn) {
+      own(name);
+      const stop = registry.observe(name, context.surface, fn);
+      entry.observing.push(stop);
+      return () => {
+        const at = entry.observing.indexOf(stop);
+        if (at >= 0) entry.observing.splice(at, 1);
+        stop();
+      };
+    },
+    bind(el, name, params, options) {
+      own(name);
+      el.dataset.expose = "core.sidebar.section.control";
+      return bind(el, name, params, options);
+    },
+  };
 }
 
 function mount(entry, context) {
   if (entry.mount) return;
   const mountOnce = entry.mount = import(entry.section.module).then(async (module) => {
     if (typeof module.mount !== "function") throw new TypeError(`section ${entry.section.id} module has no mount()`);
-    const result = await module.mount(entry.body, context);
+    const result = await module.mount(entry.body, sectionContext(entry, context));
     if (!result || typeof result.dispose !== "function") {
       throw new TypeError(`section ${entry.section.id} mount() must return { dispose() }`);
     }
@@ -59,7 +91,10 @@ function mount(entry, context) {
 export function clearSet(container) {
   const record = drawn.get(container);
   if (!record) return;
-  for (const entry of record.entries) unmount(entry);
+  for (const entry of record.entries) {
+    unmount(entry);
+    entry.watcher?.disconnect();
+  }
   drawn.delete(container);
   container.replaceChildren();
   delete container.dataset.sidebar;
@@ -125,8 +160,12 @@ export function drawSet(container, sidebar, set, context) {
       element.dataset.expose = "core.sidebar.section";
       element.dataset.section = section.id;
       const entry = { section, element, header: null, tab: null, body: document.createElement("div"),
-        mount: null, mounted: false, error: null };
+        mount: null, mounted: false, error: null, observing: [] };
       entry.body.className = "set__body";
+      if (context.surface) entry.body.dataset.surface = context.surface;
+      // 섹션이 그린 내용은 core.sidebars 의 text 로 드러나므로, 내용이 바뀌면 알린다.
+      entry.watcher = typeof MutationObserver === "function" ? new MutationObserver(notify) : null;
+      entry.watcher?.observe(entry.body, { subtree: true, childList: true, characterData: true });
       const params = { sidebar, section: section.id };
       if (strip) {
         entry.tab = document.createElement("button");
@@ -197,7 +236,7 @@ export function sidebarsState() {
         sections: record.entries.map((entry) => ({
           id: entry.section.id, name: entry.section.name,
           folded: record.layout === "list" && choice.folded.has(entry.section.id),
-          mounted: entry.mounted, error: entry.error,
+          mounted: entry.mounted, error: entry.error, text: entry.body.textContent,
         })),
       };
     });

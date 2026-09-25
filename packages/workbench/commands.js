@@ -10,7 +10,17 @@ export { commandOf, valueOf } from "@soksak/plugin-api";
 /* 연결이 바뀌면 부를 함수. core.page.audit 의 감시가 등록한다. */
 const listeners = new Set();
 
-const binder = createBinder((name, params = {}) => registry.run(name, params), {
+/**
+ * 요소가 가리키는 명령을 실행한다. 플러그인 명령은 요소를 담은 가장 가까운 data-surface 의 표면이
+ * 등록했으면 그 표면에서, 아니면 요청의 기본 선택 표면에서 실행한다. 사이드바 섹션의 조작이 이 경로를 쓴다.
+ */
+const runFrom = (name, params = {}, el) => {
+  if (!registry.declared("command", name) || name.startsWith("core.")) return registry.run(name, params);
+  const wanted = el?.closest?.("[data-surface]")?.dataset.surface ?? null;
+  return registry.run(name, params, registry.chosen("command", name, wanted) ?? undefined);
+};
+
+const binder = createBinder(runFrom, {
   check(name) {
     if (!registry.declared("command", name)) throw new Error(`command ${name} is not declared`);
   },

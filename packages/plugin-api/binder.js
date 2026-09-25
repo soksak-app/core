@@ -26,7 +26,7 @@ export function commandOf(el, value) {
 /**
  * 연결기 하나를 만든다.
  *
- *   run(name, params)  명령 실행. promise 를 반환한다
+ *   run(name, params, el)  명령 실행. el 은 조작한 요소다. promise 를 반환한다
  *   check(name)        선언된 명령이 아니면 예외를 던진다
  *   changed()          연결이 바뀌면 호출된다. audit 결과가 달라졌을 수 있다
  */
@@ -58,7 +58,7 @@ export function createBinder(run, { check, changed = () => {} }) {
     const listener = (e) => {
       if (when && !when(e)) return;
       if (stop) e.stopPropagation();
-      const done = run(name, typeof params === "function" ? params(e) : params);
+      const done = run(name, typeof params === "function" ? params(e) : params, el);
       return failed ? Promise.resolve(done).catch(failed) : done;
     };
     el.addEventListener(event, listener);
@@ -73,14 +73,14 @@ export function createBinder(run, { check, changed = () => {} }) {
    * input 으로 실행한다(input 은 data-live 가 있는 요소만).
    */
   function delegate(root, { failed } = {}) {
-    const go = (found) => {
-      const done = run(found.name, found.params);
+    const go = (found, el) => {
+      const done = run(found.name, found.params, el);
       return failed ? Promise.resolve(done).catch(failed) : done;
     };
     const click = (e) => {
       const el = e.target.closest?.("[data-command]");
       if (!el || !root.contains(el) || el.matches("input, select, textarea")) return;
-      return go(commandOf(el));
+      return go(commandOf(el), el);
     };
     root.addEventListener("click", click);
     cleanup.add(() => root.removeEventListener("click", click));
@@ -89,7 +89,7 @@ export function createBinder(run, { check, changed = () => {} }) {
         const el = e.target.closest?.("[data-command]");
         if (!el || !root.contains(el) || !el.matches("input, select, textarea")) return;
         if (type === "input" && !("live" in el.dataset)) return;
-        return go(commandOf(el, valueOf(el)));
+        return go(commandOf(el, valueOf(el)), el);
       };
       root.addEventListener(type, listener);
       cleanup.add(() => root.removeEventListener(type, listener));

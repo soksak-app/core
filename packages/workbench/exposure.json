@@ -138,7 +138,7 @@
       },
       {
         "name": "core.sidebars",
-        "description": "The drawn sidebars in document order: the sidebar (the id of the card that holds it), its set, layout, selected tab or null, the card and active tab its sections receive, and each section's id, name, fold state, whether its module is mounted, and its mount error or null.",
+        "description": "The drawn sidebars in document order: the sidebar (the id of the card that holds it), its set, layout, selected tab or null, the card and active tab its sections receive, and each section's id, name, fold state, whether its module is mounted, its mount error or null, and the text content the module drew.",
         "schema": {
           "type": "array",
           "items": {
@@ -197,6 +197,9 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "text": {
+                      "type": "string"
                     }
                   }
                 }
@@ -2289,6 +2292,11 @@
       {
         "name": "core.sidebar.section",
         "description": "The section elements of drawn sidebars in document order; each holds the content its plugin module draws.",
+        "many": true
+      },
+      {
+        "name": "core.sidebar.section.control",
+        "description": "The interactive elements that section modules draw, in document order; each runs a command of the section's plugin.",
         "many": true
       },
       {
