@@ -165,7 +165,9 @@ var nativeViews = map[uint64]*nativeWebview{}
 var nativeSerial uint64
 
 type Surfaces struct {
-	window *application.WebviewWindow
+	// prepareNative 는 메인 웹뷰를 등록하고 창을 준비한다. 창을 만들 때 정한다.
+	prepareNative func()
+	window        *application.WebviewWindow
 	// host 는 이 창을 만든 호스트다. name 은 엔드포인트의 창 식별자이고 title 은 창 제목이다.
 	host     *Host
 	name     string

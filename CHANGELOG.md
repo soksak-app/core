@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-65, V5-66: the Wails settings webview again matches the window content, and a Wails window that opens hidden behind other windows registers its main webview and loads its project.
 - F8: Korean input-method behavior (preedit, editing, Escape, exactly-once commits, and caret placement) is verified with the real input method on both hosts; Escape during a composition has its own native check.
 - V5-60: terminal wheel scrolling over a long history passes its real-input limits on both hosts, and the user accepted its speed.
 - V5-51-4-1, V5-51-4, V5-51: pressing a system notification of a terminal out of view selects its tab on both hosts; the Tauri endpoint declares `diagnostics.notifications`.

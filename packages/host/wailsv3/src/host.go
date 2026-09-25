@@ -144,7 +144,10 @@ func Run(assets fs.FS, options Options) error {
 	})
 	app.Menu.Set(ApplicationMenu())
 	setupDockMenu(host)
-	host.newWindow("main", "/")
+	main := host.newWindow("main", "/")
+	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
+		main.prepareNative()
+	})
 	err = app.Run()
 	select {
 	case failure := <-unpublished:

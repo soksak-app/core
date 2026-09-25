@@ -250,6 +250,13 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 	}
 	win.OnWindowEvent(events.Common.WindowDidResize, place)
 	win.OnWindowEvent(events.Common.WindowShow, place)
+	// WindowShow 는 창의 가림 상태가 보임으로 바뀔 때 온다. 다른 애플리케이션의 창에 완전히 가려진 채 열린
+	// 창에는 오지 않으므로, 네이티브 창이 있으면 만든 직후에 준비한다. 애플리케이션이 실행되기 전에 만든
+	// 첫 창은 애플리케이션이 시작하면 준비한다.
+	s.prepareNative = func() { place(nil) }
+	if win.NativeWindow() != nil {
+		s.prepareNative()
+	}
 	// host.window 를 감시하는 연결에 창의 위치, 크기와 키 상태 변경을 알린다.
 	changed := func(*application.WindowEvent) {
 		s.windowChanged()
