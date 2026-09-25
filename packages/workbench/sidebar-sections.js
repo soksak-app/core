@@ -160,6 +160,7 @@ export function drawSet(container, sidebar, set, context) {
     if (set.layout === "tabs") {
       strip = document.createElement("div");
       strip.className = "set__tabs";
+      strip.dataset.expose = "core.sidebar.tabs";
       strip.setAttribute("role", "tablist");
       container.append(strip);
     }
@@ -191,7 +192,7 @@ export function drawSet(container, sidebar, set, context) {
         entry.header.type = "button";
         entry.header.className = "set__head";
         entry.header.dataset.expose = "core.sidebar.section.header";
-        entry.header.innerHTML = `<span class="set__chevron" aria-hidden="true">${icon("chevron-down")}</span><span class="set__name"></span>`;
+        entry.header.innerHTML = `<span class="set__chevron" aria-hidden="true">${icon("chevron-down")}</span><span class="set__name" data-expose="core.sidebar.section.name"></span>`;
         entry.header.querySelector(".set__name").textContent = section.name;
         bind(entry.header, "core.sidebar.section.fold", params);
         element.append(entry.header, entry.body);
@@ -247,6 +248,8 @@ export function sidebarsState() {
           id: entry.section.id, name: entry.section.name,
           folded: record.layout === "list" && choice.folded.has(entry.section.id),
           mounted: entry.mounted, error: entry.error, text: entry.body.textContent,
+          // 탭 글자가 탭 폭에 다 들어가는지. 줄바꿈이나 줄어듦으로 잘리면 true 다.
+          clipped: entry.tab ? entry.tab.scrollWidth > entry.tab.clientWidth || entry.tab.scrollHeight > entry.tab.clientHeight : false,
           controls: entry.body.querySelectorAll('[data-expose="core.sidebar.section.control"]').length,
         })),
       };

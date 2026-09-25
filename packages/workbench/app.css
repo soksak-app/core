@@ -17,6 +17,8 @@
   /* 형태. 모드와 무관하다. */
   --r:10px;--half-gap:6px;--bw:1px;
   --font:ui-monospace,SFMono-Regular,Menlo,monospace;--size:13px;
+  /* 카드 안 사이드바 경계선의 누르고 끄는 폭. 접은 사이드바에 남는 폭이기도 하다. */
+  --divider:6px;
   /* 사이드바 섹션 이름과 빈 상태 문구의 한글 UI 글꼴. */
   --ui-font:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",system-ui,sans-serif;
 
@@ -285,14 +287,12 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .card[data-side]{grid-template-columns:var(--side-w) minmax(0,1fr)}
 .card[data-side] > .chrome,.card[data-side] > .status{grid-column:1 / -1}
 .side{grid-row:2;grid-column:1;min-width:0;overflow:hidden;display:flex;flex-direction:column;border-right:var(--bw) solid var(--edge)}
-.side__text{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
-.side__fold{flex:0 0 auto;border:0;background:transparent;color:var(--muted);cursor:pointer;padding:0 2px;font:inherit}
-.side__fold:hover{color:var(--fg)}
-.card[data-side=folded] .side > .set,.card[data-side=folded] .side__text{display:none}
-.card[data-side=folded] .side__status{padding:0;justify-content:center}
+/* 접은 사이드바는 내용을 숨기고 경계선 폭(--divider)만 남는다. 오른쪽 테두리가 보이는 선이다. */
+.card[data-side=folded] .side > *{display:none}
 .side{user-select:none}
-.side__grip{grid-row:2;grid-column:1;justify-self:end;width:6px;margin-right:-3px;z-index:2;cursor:col-resize}
-.card[data-side=folded] > .side__grip{display:none}
+.side__grip{grid-row:2;grid-column:1;justify-self:end;width:var(--divider);margin-right:calc(var(--divider) / -2);z-index:2;cursor:col-resize}
+/* 접으면 손잡이가 남은 경계선 폭을 채워 표면에 가리지 않고 누를 수 있다. */
+.card[data-side=folded] > .side__grip{margin-right:0;cursor:pointer}
 .card[data-side] > .slot{grid-row:2;grid-column:2}
 /* 상태줄은 카드가 좁아져도 한 줄을 유지한다. 줄바꿈이 생기면 22px 안에서 잘려
    두 번째 줄이 사라지고 첫 줄의 세로 정렬도 어긋난다. */
@@ -504,18 +504,24 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .set__head,.set__tab{display:flex;align-items:center;gap:6px;height:var(--head);flex:0 0 var(--head);box-sizing:border-box;padding:0 10px;
   border:0;background:color-mix(in srgb,var(--fg) 3%,var(--card));color:var(--fg);
   font:600 11.5px var(--ui-font);letter-spacing:0;text-align:left;cursor:pointer}
-.set__head{width:100%;border-bottom:var(--bw) solid var(--edge)}
-.set__section + .set__section .set__head{border-top:var(--bw) solid var(--edge)}
+/* 머리 선은 안쪽 그림자여서 어느 상태에서도 머리의 내용 상자가 같고 이름이 움직이지 않는다. 아래 선은 늘 있고,
+   위 선은 앞 섹션이 펼쳐져 본문이 끝나는 자리에만 그린다. 앞 섹션이 접혀 있으면 그 머리의 아래 선이 경계다. */
+.set__head{width:100%;box-shadow:inset 0 calc(0px - var(--bw)) 0 var(--edge)}
+.set__section:not([data-folded=true]) + .set__section .set__head{
+  box-shadow:inset 0 var(--bw) 0 var(--edge),inset 0 calc(0px - var(--bw)) 0 var(--edge)}
 .set__head:hover,.set__tab:hover{background:color-mix(in srgb,var(--fg) 7%,var(--card))}
 /* 접기 표시는 코어의 획 아이콘(chevron-down)이고 머리 글자 크기다. 접으면 오른쪽을 향하도록 돌린다. */
 .set__chevron{display:flex;flex:0 0 1em;width:1em;height:1em;color:var(--muted)}
 .set__chevron svg{width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .set__head[aria-expanded=false] .set__chevron{transform:rotate(-90deg)}
 .set__name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.set__section[data-folded=true] .set__head{border-bottom:0}
 .set__section[data-folded=true] .set__body{display:none}
-.set__tabs{display:flex;flex:0 0 var(--head);border-bottom:var(--bw) solid var(--edge);background:color-mix(in srgb,var(--fg) 3%,var(--card))}
-.set__tab{color:var(--muted);background:transparent}
+/* 탭 줄은 카드 탭 줄처럼 넘치면 가로로 스크롤하고, 탭은 줄바꿈하거나 줄어들지 않는다. 아래 선은 그림자여서
+   탭이 줄의 높이를 그대로 채운다. */
+.set__tabs{display:flex;flex:0 0 var(--head);height:var(--head);overflow-x:auto;overflow-y:hidden;scrollbar-width:none;
+  box-shadow:inset 0 calc(0px - var(--bw)) 0 var(--edge);background:color-mix(in srgb,var(--fg) 3%,var(--card))}
+.set__tabs::-webkit-scrollbar{display:none}
+.set__tab{flex:0 0 auto;height:100%;white-space:nowrap;color:var(--muted);background:transparent}
 .set__tab[aria-selected=true]{color:var(--fg);box-shadow:inset 0 -2px 0 var(--rail)}
 .set__body{padding:9px 14px;font:12px/1.6 var(--font);color:color-mix(in srgb,var(--fg) 80%,var(--muted))}
 .set__body ul{margin:0;padding:0;list-style:none}

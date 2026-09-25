@@ -50,7 +50,7 @@ for (const app of Object.values(APPS)) {
     await control(s, "core.settings-modal.set", "left");
     await control(s, "core.settings-modal.set", "right");
     await control(s, "core.settings-modal.set", "link:left:");
-    for (const key of ["sidebarMinWidth", "sidebarMaxWidth", "sidebarWidth", "sidebarFoldedWidth", "railWidth"]) {
+    for (const key of ["sidebarMinWidth", "sidebarMaxWidth", "sidebarWidth", "railWidth"]) {
       await control(s, "core.settings-modal.set", key);
     }
     const pluginKeys = Object.keys((await s.get("core.settings")).values).filter((key) => key.includes("."));
@@ -178,9 +178,10 @@ for (const app of Object.values(APPS)) {
     await assert.rejects(s.run("core.card.sidebar.size", { card: card.id, width: 130 }), /140 to 480/);
     await assert.rejects(s.run("core.settings.set", { patch: { sidebarMinWidth: 200 }, scope: "common" }),
       /sidebarMinWidth .*sidebarWidth .*sidebarMaxWidth/);
+    await s.run("core.card.sidebar.size", { card: card.id, width: 300 });
     await s.act("core.card.sidebar.grip", "dispatch", { index: 0, event: { type: "dblclick" } });
-    await s.until("core.grid", (value) => value.cards.find((item) => item.id === card.id)?.sidebar?.width === 140,
-      "a double click did not set sidebarMinWidth");
+    await s.until("core.grid", (value) => value.cards.find((item) => item.id === card.id)?.sidebar?.width === 150,
+      "a double click did not set sidebarWidth");
   });
 
   test(`${app.name}: an invalid stored set or link is rejected when it is changed and when it is loaded`, { timeout: 60000 }, async (t) => {
@@ -250,7 +251,7 @@ for (const app of Object.values(APPS)) {
     assert.deepEqual(keys, ["pick:rail:inset", "pick:rail:flow", "pick:rail:pin", "pick:rail:off"]);
   });
 
-  test(`${app.name}: a new inset sidebar opens at 190 points and a grip double click sets the minimum`, { timeout: 60000 }, async (t) => {
+  test(`${app.name}: a new inset sidebar opens at 190 points and a divider double click sets the default width`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
@@ -258,8 +259,10 @@ for (const app of Object.values(APPS)) {
       "no card holds an inset sidebar");
     const card = grid.cards.find((item) => item.sidebar);
     assert.deepEqual(card.sidebar, { width: 190, collapsed: false });
+    await s.run("core.card.sidebar.size", { card: card.id, width: 300 });
+    await s.until("core.grid", (value) => value.cards.find((item) => item.id === card.id)?.sidebar?.width === 300, "the sidebar did not take 300");
     await s.act("core.card.sidebar.grip", "dispatch", { index: 0, event: { type: "dblclick" } });
-    await s.until("core.grid", (value) => value.cards.find((item) => item.id === card.id)?.sidebar?.width === 120,
-      "a double click on the grip did not set the minimum width 120");
+    await s.until("core.grid", (value) => value.cards.find((item) => item.id === card.id)?.sidebar?.width === 190,
+      "a double click on the divider did not set the default width 190");
   });
 }

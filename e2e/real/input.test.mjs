@@ -54,7 +54,7 @@ for (const app of Object.values(APPS)) {
       "the injected vertical wheel did not scroll the history while Shift was held", { surface });
   });
 
-  test(`${app.name}: a posted double click on the inset sidebar grip sets the minimum width`, { timeout: 60000 }, async (t) => {
+  test(`${app.name}: a posted double click on the inset sidebar divider sets the default width without folding`, { timeout: 60000 }, async (t) => {
     requireTrusted();
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);
@@ -70,8 +70,11 @@ for (const app of Object.values(APPS)) {
     const point = await bringFront(s, app, grip);
     post([{ type: "move", ...point }, { type: "down", ...point, clicks: 1 }, { type: "up", ...point, clicks: 1 },
       { type: "down", ...point, clicks: 2 }, { type: "up", ...point, clicks: 2 }]);
-    await s.until("core.grid", (value) => value.cards.find((item) => item.id === card.id)?.sidebar?.width === 120,
-      "a posted double click on the grip did not set the minimum width");
+    // 두 번 누름은 기본 폭(sidebarWidth)으로 펴고, 첫 누름이 먼저 접지 않는다.
+    const width = (await s.get("core.settings")).values.sidebarWidth;
+    const done = await s.until("core.grid", (value) => value.cards.find((item) => item.id === card.id)?.sidebar?.width === width,
+      "a posted double click on the divider did not set the default width");
+    assert.equal(done.cards.find((item) => item.id === card.id).sidebar.collapsed, false, "the double click folded the sidebar");
   });
 
   test(`${app.name}: the real-input pasteboard helpers restore every item type`, { timeout: 30000 }, async (t) => {

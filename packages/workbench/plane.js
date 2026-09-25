@@ -11,7 +11,7 @@ import { hasPlugin, isPlace, isRailId, plugin, plugins, railId, railKind } from 
 import { clearSet, drawSet } from "./sidebar-sections.js";
 import { environment } from "./environment.js";
 import { standIn } from "./compositor.js";
-import { native, onSurfaceInput, overlay, report, shapes, windowSidecar } from "./host.js";
+import { chrome as hostChrome, native, onSurfaceInput, overlay, report, shapes, windowSidecar } from "./host.js";
 import { issueId } from "./ids.js";
 import { bind, delegate, mark, run } from "./commands.js";
 import { disposeSurface, focusSurface, mountSurface } from "./surface-modules.js";
@@ -178,7 +178,7 @@ function createCard(card) {
     const id = el.dataset.cardId;
     // 누른 카드가 글자 크기의 범위다(docs/spec/text-size.md).
     if (id) setTextScope({ kind: "card", card: id });
-    if (!id || isPlace(id) || e.target.closest(".tab__x, .chrome__act, .chrome__ham, .side__fold, .side__grip, .set button")) return;
+    if (!id || isPlace(id) || e.target.closest(".tab__x, .chrome__act, .chrome__ham, .side__grip, .set button")) return;
     const active = activeTab(grid.card(id));
     if (focusedId !== id) {
       // 카드 포커스가 만든 렌더는 표시를 마치면 대기 중인 표면 포커스를 가져간다. 명령이 끝난 뒤에 적으면
@@ -845,6 +845,12 @@ export function sizeSidebar(id, width) {
   settle();
 }
 
+/* 경계선에서 누름과 끌기를 가르는 움직임(pt). */
+const DRAG_THRESHOLD = 3;
+/* 시스템의 두 번 누름 간격(ms). 호스트에서 한 번 읽는다. */
+let doubleClickWait = null;
+const doubleClickInterval = () => (doubleClickWait ??= hostChrome.doubleClickInterval());
+
 function drawSidebar(el, card) {
   const state = cardSidebar(card);
   let side = el.querySelector(":scope > .side");
@@ -860,20 +866,29 @@ function drawSidebar(el, card) {
   if (!side) {
     side = document.createElement("aside");
     side.className = "side";
-    side.innerHTML = '<div class="set"></div><div class="sidebar-status side__status" data-expose="core.sidebar.status">' +
-      '<span class="side__text"></span><button class="side__fold" type="button" data-expose="core.card.sidebar.fold"></button></div>';
+    // 카드 발이 사이드바를 닫으므로 카드 안 사이드바는 자기 상태 줄이 없다. 섹션이 카드 발까지 채운다.
+    side.innerHTML = '<div class="set"></div>';
     grip = document.createElement("div");
     grip.className = "side__grip";
     grip.dataset.expose = "core.card.sidebar.grip";
     el.querySelector(".slot").before(side, grip);
     // 손잡이를 끄는 동안 폭을 선언된 명령으로 정한다.
+    // 경계선 하나가 세 동작을 받는다. 끌기는 폭을 바꾸고, 한 번 누름은 접거나 펴고, 두 번 누름은 기본 폭으로
+    // 편다. 한 번 누름은 시스템의 두 번 누름 간격이 지난 뒤에 실행해서 두 번 누름이 먼저 접히지 않게 한다.
+    let dragged = false;
+    let pending = null;
     grip.addEventListener("pointerdown", (event) => {
       // 글자 선택은 .side 의 user-select 가 막는다. 여기서 기본 동작을 막으면 WebKit 이 마우스 호환 이벤트를
-      // 보내지 않아 두 번 누름(dblclick)이 오지 않는다.
+      // 보내지 않아 두 번 누름이 오지 않는다.
       event.stopPropagation();
       grip.setPointerCapture(event.pointerId);
+      dragged = false;
+      const startX = event.clientX;
       const left = el.getBoundingClientRect().left;
       const move = (e) => {
+        // 작은 떨림은 누름이다. 문턱을 넘은 움직임만 끌기이고 끌기는 누름이 되지 않는다.
+        if (!dragged && Math.abs(e.clientX - startX) < DRAG_THRESHOLD) return;
+        dragged = true;
         const width = Math.min(value("sidebarMaxWidth"), Math.max(value("sidebarMinWidth"), e.clientX - left));
         run("core.card.sidebar.size", { card: el.dataset.cardId, width });
       };
@@ -886,26 +901,41 @@ function drawSidebar(el, card) {
       grip.addEventListener("pointerup", end);
       grip.addEventListener("pointercancel", end);
     });
-    // 두 번 누르면 가장 좁은 폭으로 정리한다.
+    grip.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (dragged) return;
+      clearTimeout(pending);
+      pending = null;
+      // 두 번째 누름은 대기 중인 한 번 누름을 취소할 뿐이다. 두 번 누름의 동작은 dblclick 이 한다.
+      if (event.detail >= 2) return;
+      const id = el.dataset.cardId;
+      // 브라우저 런타임은 시스템 간격을 알 수 없어 한 번 누름을 바로 실행한다(docs/spec/example-model.md).
+      if (!hostChrome) {
+        run("core.card.sidebar.toggle", { card: id });
+        return;
+      }
+      doubleClickInterval().then((interval) => {
+        pending = setTimeout(() => { pending = null; run("core.card.sidebar.toggle", { card: id }); }, interval);
+      });
+    });
+    // 두 번 누르면 기본 폭으로 편다. 접혀 있으면 폭을 정한 뒤 편다.
     grip.addEventListener("dblclick", (event) => {
       event.stopPropagation();
-      run("core.card.sidebar.size", { card: el.dataset.cardId, width: value("sidebarMinWidth") });
+      clearTimeout(pending);
+      pending = null;
+      const id = el.dataset.cardId;
+      const folded = cardSidebar(grid.card(id))?.collapsed;
+      Promise.resolve(run("core.card.sidebar.size", { card: id, width: value("sidebarWidth") }))
+        .then(() => (folded ? run("core.card.sidebar.toggle", { card: id }) : null));
     });
   }
-  const fold = side.querySelector(".side__fold");
-  if (!fold.dataset.bound) {
-    bind(fold, "core.card.sidebar.toggle", () => ({ card: el.dataset.cardId }));
-    fold.dataset.bound = "true";
-  }
   mark(grip, "core.card.sidebar.size", { card: card.id });
-  fold.textContent = state.collapsed ? "›" : "‹";
-  fold.title = state.collapsed ? "사이드바 펼치기" : "사이드바 접기";
+  grip.title = state.collapsed ? "눌러 사이드바 펼치기" : "끌어 폭 바꾸기 · 눌러 접기 · 두 번 눌러 기본 폭";
   el.dataset.side = state.collapsed ? "folded" : "open";
-  el.style.setProperty("--side-w", `${state.collapsed ? value("sidebarFoldedWidth") : state.width}px`);
+  // 접은 사이드바는 내용 없이 경계선만 남는다. 경계선 폭은 손잡이 폭이어서 접은 뒤에도 누를 수 있다.
+  el.style.setProperty("--side-w", state.collapsed ? "var(--divider)" : `${state.width}px`);
   const set = linkedSet("rail", activeTab(card).plugin);
   drawSet(side.querySelector(".set"), card.id, set, { card: card.id, surface: activeTab(card).id });
-  // 상태 줄은 세트 이름을 보인다. 세트 제목 줄이 없으므로 어떤 세트인지는 여기서 읽는다.
-  setText(side.querySelector(".side__text"), set.title);
 }
 
 /* ── 레일. 카드이므로 이동에 move() 를 사용한다 ───────────────────────── */

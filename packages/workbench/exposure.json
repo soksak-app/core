@@ -138,7 +138,7 @@
       },
       {
         "name": "core.sidebars",
-        "description": "The drawn sidebars in document order: the sidebar (the id of the card that holds it), its set, layout, selected tab or null, the card and active tab its sections receive, and each section's id, name, fold state, whether its module is mounted, its mount error or null, the text content the module drew, and the number of its core.sidebar.section.control elements.",
+        "description": "The drawn sidebars in document order: the sidebar (the id of the card that holds it), its set, layout, selected tab or null, the card and active tab its sections receive, and each section's id, name, fold state, whether its module is mounted, its mount error or null, the text content the module drew, the number of its core.sidebar.section.control elements, and whether its tab text is clipped (always false in list layout).",
         "schema": {
           "type": "array",
           "items": {
@@ -187,6 +187,9 @@
                       "type": "string"
                     },
                     "folded": {
+                      "type": "boolean"
+                    },
+                    "clipped": {
                       "type": "boolean"
                     },
                     "mounted": {
@@ -2385,13 +2388,8 @@
         "many": true
       },
       {
-        "name": "core.card.sidebar.fold",
-        "description": "The fold buttons of inset sidebars in document order.",
-        "many": true
-      },
-      {
         "name": "core.card.sidebar.grip",
-        "description": "The width grips of inset sidebars in document order.",
+        "description": "The dividers of inset sidebars in document order: a drag sets the width, a click folds or unfolds after the system double-click interval, and a double click unfolds at the default width.",
         "many": true
       },
       {
@@ -2411,7 +2409,7 @@
       },
       {
         "name": "core.sidebar.status",
-        "description": "The 26-point status lines that end the left, right, rail, and inset sidebars in document order.",
+        "description": "The status lines that end the left, right, and rail sidebars in document order; an inset sidebar ends at its card footer.",
         "many": true
       },
       {
@@ -2427,6 +2425,16 @@
       {
         "name": "core.sidebar.section.header",
         "description": "The fold headers of sections in list-layout sidebars in document order.",
+        "many": true
+      },
+      {
+        "name": "core.sidebar.tabs",
+        "description": "The tab strips of tabs-layout sidebars in document order.",
+        "many": true
+      },
+      {
+        "name": "core.sidebar.section.name",
+        "description": "The names in the fold headers of list-layout sidebars in document order.",
         "many": true
       },
       {
