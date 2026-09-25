@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F13-5: sidebars follow the sidebar design: no set title or place chip, 26-point section header bars that fold to the header, a 26-point status line at the end of every sidebar, empty lists in the muted UI font, and one rule between an inset sidebar and its card, with colors from theme tokens. New dom names `core.sidebar` and `core.sidebar.status`. Validated on rebuilt Wails and Tauri hosts with captures in dark and light modes.
 - V5-74: a browser tab and the 탭 section show the document title, or the address when the page has no title.
 - F13-2-2: the browser DOM section lists the document's elements and the 네트워크 section lists the requests its Performance API recorded (`browser.elements`, `browser.requests`), reported by a content-world script of the shared document view; `make exposure-check` accepts core names in section modules.
 - F13-2-1: the browser 히스토리 section lists the session history of the document region and loads an entry on a click (`browser.history`, `browser.history.go`, document `go` action `entry`), and the 탭 section lists the browser tabs of the card and selects one on a click through `core.grid` and `core.tab.select`; sections may follow core statuses and bind core commands.

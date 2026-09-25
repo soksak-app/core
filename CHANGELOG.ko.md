@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F13-5: 사이드바가 사이드바 디자인을 따른다. 세트 제목과 자리 표시가 없고, 섹션 머리는 머리까지 접히는 26pt 띠이며, 모든 사이드바가 26pt 상태 줄로 끝나고, 빈 목록은 흐린 UI 글꼴이며, 카드 안 사이드바와 카드 사이는 선 하나다. 색은 테마 토큰에서 온다. 새 dom 이름 `core.sidebar`, `core.sidebar.status`. 다시 빌드한 Wails와 Tauri 호스트에서 다크·라이트 캡처로 검증했다.
 - V5-74: 브라우저 탭과 탭 섹션이 문서 제목을, 페이지에 제목이 없으면 주소를 보인다.
 - F13-2-2: 브라우저 DOM 섹션이 문서의 요소를, 네트워크 섹션이 Performance API가 기록한 요청을 나열한다(`browser.elements`, `browser.requests`). 공유 문서 뷰의 콘텐츠 월드 스크립트가 보고한다. `make exposure-check`는 섹션 모듈의 코어 이름을 받는다.
 - F13-2-1: 브라우저 히스토리 섹션이 문서 영역의 세션 기록을 나열하고 누르면 그 항목을 연다(`browser.history`, `browser.history.go`, 문서 `go` 동작 `entry`). 탭 섹션은 `core.grid`와 `core.tab.select`로 카드의 브라우저 탭을 나열하고 누르면 고른다. 섹션은 코어 status를 따라가고 코어 명령을 연결할 수 있다.
