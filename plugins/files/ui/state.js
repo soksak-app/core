@@ -10,7 +10,9 @@ export async function mount(context) {
   let git = [];
   const pending = new Map();
   let next = 0;
-  const listeners = { tree: new Set(), bookmarks: new Set(), git: new Set() };
+  const listeners = { tree: new Set(), bookmarks: new Set(), git: new Set(), selection: new Set() };
+  /* 고른 경로. 프로젝트의 모든 트리가 같은 선택을 보인다. */
+  let selection = null;
 
   await context.sidecar.on((body) => {
     // 감시한 디렉터리가 바뀌었거나 감시가 도중에 실패했다(docs/spec/sidecars.md#files).
@@ -51,21 +53,25 @@ export async function mount(context) {
 
   /** 펼친 디렉터리를 모두 다시 나열한다. 사라진 하위 디렉터리는 접는다. 프로젝트 폴더의 실패는 error 로 보인다. */
   async function refresh() {
-    listings.clear();
-    error = null;
+    // 새 목록은 따로 모은 뒤 한 번에 바꾼다. 나열하는 동안 files.tree 를 읽는 쪽은 이전 목록을 본다.
+    const fresh = new Map();
+    let failed = null;
     for (const path of [...expanded].sort((a, b) => a.length - b.length)) {
       const parent = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
-      if (path && !(listings.get(parent) ?? []).some((entry) => entry.directory && join(parent, entry.name) === path)) {
+      if (path && !(fresh.get(parent) ?? []).some((entry) => entry.directory && join(parent, entry.name) === path)) {
         expanded.delete(path);
         continue;
       }
       try {
-        listings.set(path, await list(path));
+        fresh.set(path, await list(path));
       } catch (failure) {
         if (path) { expanded.delete(path); continue; }
-        error = failure.message;
+        failed = failure.message;
       }
     }
+    listings.clear();
+    for (const [path, entries] of fresh) listings.set(path, entries);
+    error = failed;
     await watchExpanded();
     notify("tree", tree);
     git = await request({ operation: "git" });
@@ -83,6 +89,12 @@ export async function mount(context) {
   context.exposure.status("files.tree", tree, watch("tree"));
   context.exposure.status("files.bookmarks", bookmarks, watch("bookmarks"));
   context.exposure.status("files.git", () => git, watch("git"));
+  context.exposure.status("files.selection", () => selection, watch("selection"));
+  context.exposure.command("files.select", async ({ path }) => {
+    selection = path ?? null;
+    notify("selection", () => selection);
+    return null;
+  });
   context.exposure.command("files.refresh", () => inTurn(async () => { await refresh(); return null; }));
   context.exposure.command("files.tree.toggle", ({ path }) => inTurn(async () => {
     const row = rows().find((entry) => entry.path === path);
@@ -116,6 +128,7 @@ export async function mount(context) {
       listeners.tree.clear();
       listeners.bookmarks.clear();
       listeners.git.clear();
+      listeners.selection.clear();
       await inTurn(() => request({ operation: "watch", paths: [] }));
     },
   };

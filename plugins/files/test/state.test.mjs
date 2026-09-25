@@ -122,3 +122,26 @@ test("the state reports git status from the sidecar and asks again after a chang
   assert.ok(asked() > before);
   assert.deepEqual(f.statuses.get("files.git").read().map((e) => e.path), ["a.txt", "src/main.go"]);
 });
+
+test("the selection is the project's state, shared by every tree", async () => {
+  const f = fakeContext(listing());
+  const { mount } = await import("../ui/state.js");
+  await mount(f.context);
+  const seen = [];
+  f.statuses.get("files.selection").subscribe((value) => seen.push(value));
+  assert.equal(f.statuses.get("files.selection").read(), null);
+  await f.commands.get("files.select")({ path: "a.txt" });
+  assert.equal(f.statuses.get("files.selection").read(), "a.txt");
+  await f.commands.get("files.select")({ path: null });
+  assert.deepEqual(seen, ["a.txt", null]);
+});
+
+test("files.tree read during a refresh shows the previous listing, not an empty tree", async () => {
+  const f = fakeContext(listing());
+  const { mount } = await import("../ui/state.js");
+  await mount(f.context);
+  const refreshing = f.commands.get("files.refresh")({});
+  await Promise.resolve();
+  assert.deepEqual(f.statuses.get("files.tree").read().entries.map((entry) => entry.path), ["src", "a.txt"]);
+  await refreshing;
+});

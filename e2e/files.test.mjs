@@ -32,10 +32,10 @@ const controlIndex = (sidebars, sidebar, section, at) => {
   throw new Error(`no section ${section} in ${sidebar}`);
 };
 
-/* 파일 트리 섹션의 조작 요소 순서: ☆, 새로 고침, 트리를 담은 요소. */
-const STAR = 0;
-const REFRESH = 1;
-const HOLDER = 2;
+/* 파일 트리 섹션의 조작 요소 순서: 선택을 받는 섹션 상자, 별, 새로 고침, 트리를 담은 요소. */
+const STAR = 1;
+const REFRESH = 2;
+const HOLDER = 3;
 /* 트리 행의 높이(pt). 사이드바 목록의 행 높이다(plugins/files/ui/sections/tree.js). */
 const ROW = 20;
 
@@ -204,5 +204,117 @@ for (const app of Object.values(APPS)) {
     const section = await s.rect("core.sidebar.section", headerIndex);
     assert.ok(holder.y + holder.height >= section.y + section.height - 1,
       `the tree ends at ${holder.y + holder.height}, before its section ends at ${section.y + section.height}`);
+  });
+}
+
+/** 캡처에서 트리를 담은 요소의 위에서부터 잉크가 있는 행의 수. 첫 빈 행에서 멈춘다. */
+function drawnRows(image, scale, holder) {
+  let rows = 0;
+  while ((rows + 1) * ROW <= holder.height) {
+    const band = { x: holder.x, y: holder.y + rows * ROW, width: holder.width, height: ROW };
+    if (inkRuns(image, scale, band, 1).length === 0) break;
+    rows++;
+  }
+  return rows;
+}
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: two mounted trees of one project show files.tree and bookmark through native clicks`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    s.cleanup(() => s.run("core.settings.reset", { key: "sets" }));
+    s.cleanup(() => s.run("core.settings.reset", { key: "rail" }));
+    // 셸 카드의 inset 사이드바에도 파일 트리를 둔다. 좌측 사이드바의 트리와 함께 둘이 마운트된다.
+    const sets = (await s.get("core.settings")).values.sets;
+    await s.run("core.settings.set", { patch: { sets: sets.map((set) => set.id === "set-shell" ? { ...set, sections: ["files.tree"] } : set) },
+      scope: "common" });
+    await s.run("core.settings.change", { key: "rail", value: "inset", scope: "common" });
+    const project = await s.get("core.project");
+    const folder = `pair-${process.pid}`;
+    const directory = join(project.root, folder);
+    mkdirSync(directory);
+    writeFileSync(join(directory, "a.txt"), "a\n");
+    s.cleanup(() => rmSync(directory, { recursive: true, force: true }));
+    await s.run("files.refresh");
+    let tree = await s.until("files.tree", (value) => value?.entries.some((entry) => entry.path === folder),
+      "files.tree did not list the folder");
+    const mountedTrees = (value) => ["left", "shell"].every((id) => value.find((item) => item.sidebar === id)
+      ?.sections.find((item) => item.id === "files.tree")?.mounted);
+    // 트리는 files.tree 값을 받은 콜백에서 머리 제목을 적고 같은 콜백에서 행을 바꾼다. 두 트리의 제목이 보이면
+    // 두 트리가 값을 받은 것이다.
+    const titled = (value) => mountedTrees(value) && ["left", "shell"].every((id) => value.find((item) => item.sidebar === id)
+      ?.sections.find((item) => item.id === "files.tree")?.text.includes(project.root.split("/").at(-1)));
+    let sidebars = await s.until("core.sidebars", titled, "the left and inset trees did not receive files.tree");
+    const holders = async () => {
+      const value = await s.get("core.sidebars");
+      return Promise.all(["left", "shell"].map((id) =>
+        s.rect("core.sidebar.section.control", controlIndex(value, id, "files.tree", HOLDER))));
+    };
+    /** 두 트리가 그린 행의 수. 캡처는 검사가 끝나기 전에 지운다. */
+    const rowsDrawn = async () => {
+      await s.presented();
+      const window = await s.get("host.window");
+      if (window.occluded) throw new Error(`${app.name}'s window is completely covered by other windows; nothing was measured`);
+      const { path } = await s.request("diagnostics.capture.still", {});
+      try {
+        const image = readPng(path);
+        const scale = image.width / (await s.get("host.window")).content.width;
+        const header = await s.rect("core.sidebar.section.header", 0);
+        if (firstInk(image, scale, header) === null) {
+          throw new Error(`${app.name}'s capture shows no page (window ${JSON.stringify({ occluded: window.occluded, active: window.active, key: window.key })}); nothing was measured`);
+        }
+        return (await holders()).map((holder) => drawnRows(image, scale, holder));
+      } finally {
+        rmSync(dirname(path), { recursive: true, force: true });
+      }
+    };
+    const same = async (what) => {
+      const value = await s.get("files.tree");
+      const drawn = await rowsDrawn();
+      assert.deepEqual(drawn, [value.entries.length, value.entries.length],
+        `${what}: the left and inset trees drew ${drawn} rows for ${value.entries.length} entries ${JSON.stringify(value.entries.map((e) => e.path))} of ${value.root} (error ${value.error})`);
+      return value;
+    };
+    await same("after the listing");
+
+    // inset 트리에서 폴더를 네이티브 클릭으로 열면 files.tree 가 펼치고, 두 트리가 같이 펼친다.
+    const [, inset] = await holders();
+    const at = tree.entries.findIndex((entry) => entry.path === folder);
+    await s.click(inset.x + inset.width / 2, inset.y + (at + 0.5) * ROW);
+    tree = await s.until("files.tree", (value) => value.entries.some((entry) => entry.path === `${folder}/a.txt`),
+      "a click on the folder in the inset tree did not open it");
+    await same("after the inset tree opened the folder");
+
+    // 디스크에서 지운 폴더는 두 트리에서 함께 사라진다.
+    rmSync(directory, { recursive: true, force: true });
+    tree = await s.until("files.tree", (value) => !value.entries.some((entry) => entry.path.startsWith(folder)),
+      "the removed folder stayed in files.tree");
+    await same("after the folder was removed on disk");
+
+    // 북마크: inset 트리에서 파일을 네이티브 클릭으로 고르고 inset 트리의 별을 누른다.
+    mkdirSync(directory);
+    writeFileSync(join(directory, "a.txt"), "a\n");
+    await s.until("files.tree", (value) => value.entries.some((entry) => entry.path === folder), "the folder did not come back");
+    sidebars = await s.get("core.sidebars");
+    const [, insetNow] = await holders();
+    const clickInset = async (value, path) => {
+      const index = value.entries.findIndex((entry) => entry.path === path);
+      assert.ok(index >= 0, `${path} is not a row`);
+      await s.click(insetNow.x + insetNow.width / 2, insetNow.y + (index + 0.5) * ROW);
+    };
+    // 다른 카드가 포커스를 가진 채로 inset 트리를 누른다. 누름이 셸 카드에 포커스를 옮기며 사이드바를 다시 그린다.
+    await s.run("core.card.focus", { card: "browser" });
+    await clickInset(await s.get("files.tree"), folder);
+    const file = { path: `${folder}/a.txt` };
+    await clickInset(await s.until("files.tree", (value) => value.entries.some((entry) => entry.path === file.path),
+      "the inset tree did not open the folder again"), file.path);
+    // 선택은 프로젝트의 상태여서 두 트리가 함께 보이고, 어느 트리의 별도 그 파일을 북마크한다.
+    await s.until("files.selection", (value) => value === file.path, "the selection in the inset tree did not reach files.selection");
+    const star = await s.rect("core.sidebar.section.control", controlIndex(sidebars, "left", "files.tree", STAR));
+    await s.click(star.x + star.width / 2, star.y + star.height / 2);
+    await s.until("files.bookmarks", (value) => value.includes(file.path),
+      `a native click on ${file.path} in the inset tree and on the left tree's star did not bookmark it`);
+    s.cleanup(() => s.run("files.bookmarks.remove", { path: file.path }));
   });
 }

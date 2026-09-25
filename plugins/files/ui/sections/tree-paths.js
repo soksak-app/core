@@ -4,22 +4,32 @@
 /** 보이지 않는 자식. 목록이 없는 폴더도 열 수 있게 한다. 실제 파일 이름과 겹치지 않는다. */
 export const PLACEHOLDER = "​";
 
-/** 행의 경로 목록. 파일은 그 경로, 나열된 자식이 없는 폴더는 자리 표시 자식이다. */
+/**
+ * 행의 경로 목록. 폴더는 그 자신의 경로("dir/")이고, 나열된 자식이 없는 폴더는 자리 표시 자식도 갖는다. 파일은
+ * 그 경로다. 폴더를 자기 경로로 두어야 자식이 모두 빠져도 폴더가 남고, 폴더가 빠지면 하위 트리째 빠진다.
+ */
 export function treePaths(rows) {
   const parents = new Set(rows.map((row) => row.path.slice(0, row.path.lastIndexOf("/"))).filter(Boolean));
   return rows.flatMap((row) => {
     if (!row.directory) return [row.path];
-    return parents.has(row.path) ? [] : [`${row.path}/${PLACEHOLDER}`];
+    return parents.has(row.path) ? [`${row.path}/`] : [`${row.path}/`, `${row.path}/${PLACEHOLDER}`];
   });
 }
 
-/** before 에서 after 로 가는 일괄 작업. 더하기가 먼저 온다. 폴더는 마지막 자식이 빠지는 사이에도 남는다. */
+/**
+ * before 에서 after 로 가는 일괄 작업. 더하기가 먼저 온다. 빠지는 폴더는 하위 트리째 한 번 지우고, 그 안의 경로는
+ * 따로 지우지 않는다.
+ */
 export function pathDiff(before, after) {
   const had = new Set(before);
   const has = new Set(after);
+  const gone = before.filter((path) => !has.has(path));
+  const goneDirectories = gone.filter((path) => path.endsWith("/"));
+  const inside = (path) => goneDirectories.some((dir) => path !== dir && path.startsWith(dir));
   return [
     ...after.filter((path) => !had.has(path)).map((path) => ({ type: "add", path })),
-    ...before.filter((path) => !has.has(path)).map((path) => ({ type: "remove", path })),
+    ...gone.filter((path) => !inside(path))
+      .map((path) => (path.endsWith("/") ? { type: "remove", path, recursive: true } : { type: "remove", path })),
   ];
 }
 

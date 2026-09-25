@@ -95,9 +95,12 @@ export function mount(root, context) {
   box.append(head, holder, message);
   root.append(box);
 
-  let selected = null;
+  // 선택은 상태 모듈의 files.selection 이다. 트리에서 고른 경로는 box 의 이벤트로 files.select 에 닿는다.
+  let selection = null;
+  let syncingSelection = false;
   const failed = (error) => reportError(error);
-  context.bind(star, "files.bookmarks.add", () => ({ path: selected }), { failed });
+  context.bind(star, "files.bookmarks.add", () => ({ path: selection }), { failed });
+  context.bind(box, "files.select", (event) => ({ path: event.detail.path }), { event: "files-select", failed });
   context.bind(refresh, "files.refresh", {}, { failed });
   // 트리의 shadow root 안에서 연 폴더와 닫은 폴더는 holder 의 이벤트로 명령에 닿는다(docs/spec/plugins.md#sections).
   context.bind(holder, "files.tree.toggle", (event) => ({ path: event.detail.path }), { event: "files-toggle", failed });
@@ -109,9 +112,10 @@ export function mount(root, context) {
     flattenEmptyDirectories: false,
     unsafeCSS: SCROLLBAR,
     onSelectionChange(paths) {
-      const file = [...paths].reverse().find((path) => !path.endsWith(PLACEHOLDER) && tree.getItem(path)?.isDirectory() === false);
-      selected = file ?? null;
-      star.disabled = selected === null;
+      if (syncingSelection) return;
+      const picked = [...paths].reverse().find((path) => !path.endsWith(PLACEHOLDER));
+      const path = picked === undefined ? null : picked.replace(/\/$/, "");
+      if (path !== selection) box.dispatchEvent(new CustomEvent("files-select", { detail: { path } }));
     },
   });
   tree.render({ containerWrapper: holder });
@@ -165,13 +169,31 @@ export function mount(root, context) {
     } finally {
       syncing = false;
     }
+    applySelection();
   });
   const stopGit = context.status("files.git", (entries) => tree.setGitStatus(entries ?? []));
+  /** 트리의 선택을 files.selection 에 맞추고, 파일이 골라져 있을 때만 별을 켠다. */
+  const applySelection = () => {
+    syncingSelection = true;
+    try {
+      for (const path of tree.getSelectedPaths()) if (path.replace(/\/$/, "") !== selection) tree.getItem(path)?.deselect();
+      const item = selection === null ? null : tree.getItem(selection);
+      if (item && !item.isSelected()) item.select();
+    } finally {
+      syncingSelection = false;
+    }
+    star.disabled = !rows.some((row) => row.path === selection && !row.directory);
+  };
+  const stopSelection = context.status("files.selection", (value) => {
+    selection = value ?? null;
+    applySelection();
+  });
 
   return {
     dispose() {
       stopTree();
       stopGit();
+      stopSelection();
       unsubscribe();
       themeWatch.disconnect();
       tree.cleanUp();

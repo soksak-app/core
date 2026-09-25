@@ -11,8 +11,8 @@ const rows = [
   { path: "a.txt", name: "a.txt", directory: false, depth: 0, expanded: false },
 ];
 
-test("a directory without listed children holds a placeholder so it can be opened", () => {
-  assert.deepEqual(treePaths(rows), [`src/lib/${PLACEHOLDER}`, "src/main.go", `empty/${PLACEHOLDER}`, "a.txt"]);
+test("every directory is its own path, and one without listed children holds a placeholder so it can be opened", () => {
+  assert.deepEqual(treePaths(rows), ["src/", "src/lib/", `src/lib/${PLACEHOLDER}`, "src/main.go", "empty/", `empty/${PLACEHOLDER}`, "a.txt"]);
 });
 
 test("the diff adds before it removes so a directory never loses its last child in between", () => {
@@ -23,6 +23,12 @@ test("the diff adds before it removes so a directory never loses its last child 
     { type: "remove", path: `src/lib/${PLACEHOLDER}` },
   ]);
   assert.deepEqual(pathDiff(after, after), []);
+});
+
+test("a directory that leaves is removed with its subtree once", () => {
+  const before = treePaths(rows);
+  const after = treePaths([rows[3], rows[4]]);
+  assert.deepEqual(pathDiff(before, after), [{ type: "remove", path: "src/", recursive: true }]);
 });
 
 test("a directory opened or closed in the tree asks for files.tree.toggle once until the state follows", () => {

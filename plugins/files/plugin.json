@@ -102,6 +102,16 @@
             }
           }
         }
+      },
+      {
+        "name": "files.selection",
+        "description": "The path of the selected file or folder of the project's file trees, relative to the project folder, or null. Every mounted tree shows this selection.",
+        "schema": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
       }
     ],
     "commands": [
@@ -154,6 +164,24 @@
           "properties": {
             "path": {
               "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "files.select",
+        "description": "Selects a path of the file tree, or clears the selection with null.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": [
+                "string",
+                "null"
+              ]
             }
           }
         },
