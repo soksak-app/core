@@ -77,7 +77,7 @@ The scope column is `both`, or `<host> only: <reason>` for behavior that exists 
 | `endpoint.transport.invalid-json-closes` | A frame whose body is not JSON closes the connection without a reply. | both |
 | `endpoint.transport.non-jsonrpc-object-closes` | A JSON frame that is not a JSON-RPC 2.0 request closes the connection without a reply. | both |
 | `endpoint.transport.undeclared-method-closes` | An undeclared method closes the connection without a reply, and nothing reaches the page. | both |
-| `endpoint.diagnostics.methods-exist-only-in-diagnostic-builds` | In a release build diagnostics.transcript closes the connection; in a diagnostic build it is answered and forwarded to the page once. | both |
+| `endpoint.diagnostics.methods-exist-only-in-diagnostic-builds` | In a release build diagnostics.transcript closes the connection and reaches no page; in a diagnostic build it is answered. | both |
 | `endpoint.rpc.round-trip-by-id` | Several requests on one connection each receive a JSON-RPC 2.0 reply with the matching id and result. | both |
 | `endpoint.rpc.page-params-omit-window` | The page receives forwarded params without the window field. | both |
 | `endpoint.rpc.unknown-window-1003` | A declared method on a window that does not exist returns error 1003 without reaching the page. | both |

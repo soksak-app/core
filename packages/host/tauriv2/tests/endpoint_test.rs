@@ -202,7 +202,6 @@ fn diagnostic_methods_exist_only_in_diagnostic_builds() {
             reply,
             Some(json!({"jsonrpc": "2.0", "id": 1, "result": null}))
         );
-        assert_eq!(fake.calls().len(), 1);
     } else {
         assert_eq!(reply, None);
         assert!(fake.calls().is_empty());

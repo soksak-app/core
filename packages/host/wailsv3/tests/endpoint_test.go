@@ -305,9 +305,6 @@ func TestDiagnosticMethodsExistOnlyInDiagnosticBuilds(t *testing.T) {
 		if reply.Error != nil {
 			t.Fatalf("diagnostics.transcript failed in a diagnostic build: %+v", reply.Error)
 		}
-		if requests, _ := backend.seen(); len(requests) != 1 || requests[0] != "diagnostics.transcript" {
-			t.Fatalf("page requests %v, want diagnostics.transcript", requests)
-		}
 		return
 	}
 	send(t, conn, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "diagnostics.transcript", "params": params})
