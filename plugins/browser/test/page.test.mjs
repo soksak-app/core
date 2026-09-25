@@ -24,7 +24,7 @@ test("the document region is a declared dom entry and the start address is the h
   assert.equal(manifest.home, undefined);
   assert.deepEqual(manifest.settings.home, { label: "홈 주소", description: manifest.settings.home.description, type: "address", default: "" });
   assert.deepEqual(names("commands"), ["browser.history.go", "browser.address.select", "browser.navigate", "browser.back", "browser.forward", "browser.reload", "browser.stop"]);
-  assert.deepEqual(names("status"), ["browser.location", "browser.address.text", "browser.history"]);
+  assert.deepEqual(names("status"), ["browser.location", "browser.address.text", "browser.history", "browser.elements", "browser.requests"]);
 });
 
 test("browser mount publishes document state, respects shadow focus, and disposes every port", async () => {
@@ -35,7 +35,7 @@ test("browser mount publishes document state, respects shadow focus, and dispose
   const exposed = { statuses: new Map(), commands: new Map(), doms: new Map(), disposed: false };
   const region = {
     onState(fn) { states.push(fn); return () => { states.splice(states.indexOf(fn), 1); }; },
-    load: async (url) => { states.forEach((fn) => fn({ url, title: "loaded", history: { entries: [], index: -1 } })); },
+    load: async (url) => { states.forEach((fn) => fn({ url, title: "loaded", history: { entries: [], index: -1 }, elements: { nodes: [], truncated: false }, requests: { entries: [], truncated: false } })); },
     back: async () => {}, forward: async () => {}, reload: async () => {}, stop: async () => {},
     zoom: async (factor) => { zooms.push(factor); },
   };
@@ -74,11 +74,11 @@ test("browser mount publishes document state, respects shadow focus, and dispose
   address.focus();
   address.value = "https://typing.test/";
   address.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
-  states[0]({ url: "https://changed.test/", title: "changed", history: { entries: [], index: -1 } });
+  states[0]({ url: "https://changed.test/", title: "changed", history: { entries: [], index: -1 }, elements: { nodes: [], truncated: false }, requests: { entries: [], truncated: false } });
   assert.equal(address.value, "https://typing.test/", "text being typed is not overwritten");
   const watchValues = [];
   const stopWatch = exposed.statuses.get("browser.location").subscribe((value) => watchValues.push(value.url));
-  states[0]({ url: "https://next.test/", history: { entries: [], index: -1 } });
+  states[0]({ url: "https://next.test/", history: { entries: [], index: -1 }, elements: { nodes: [], truncated: false }, requests: { entries: [], truncated: false } });
   assert.equal(exposed.statuses.get("browser.location").read().url, "https://next.test/");
   assert.deepEqual(watchValues, ["https://changed.test/", "https://next.test/"]);
   stopWatch();

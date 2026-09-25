@@ -36,7 +36,7 @@ const errors = [];
 const report = (path, index, text) => errors.push(`${relative(ROOT, path)}:${index + 1}: ${text}`);
 
 /** 한 구성 요소(코어 또는 플러그인 하나)를 검사한다. */
-function check({ owner, exposes, sources, registrations }) {
+function check({ owner, exposes, sources, registrations, sections = new Set(), core = null }) {
   const declared = {
     status: new Set((exposes.status ?? []).map((e) => e.name)),
     command: new Set((exposes.commands ?? []).map((e) => e.name)),
@@ -53,6 +53,11 @@ function check({ owner, exposes, sources, registrations }) {
     const lines = text.split("\n");
     lines.forEach((line, index) => {
       // 1. 이름
+      if (sections.has(path)) {
+        for (const [, name] of line.matchAll(/["'`](core\.[a-z0-9-]+(?:\.[a-z0-9-]+)*)["'`]/g)) {
+          if (!core.status.has(name) && !core.command.has(name)) report(path, index, `${name} is not a declared core status or command`);
+        }
+      }
       for (const [, name] of line.matchAll(quoted)) {
         if (!FILE.test(name) && !any(name)) report(path, index, `${name} is not declared`);
       }
@@ -60,7 +65,9 @@ function check({ owner, exposes, sources, registrations }) {
         if (!declared.command.has(name)) report(path, index, `data-command ${name} is not a declared command`);
       }
       for (const [, name] of line.matchAll(/\b(?:mark|bind)\(\s*\w+(?:\.\w+|\([^)]*\))*\s*,\s*["']([^"']+)["']/g)) {
-        if (!declared.command.has(name)) report(path, index, `${name} is bound to an element but is not a declared command`);
+        // 섹션 모듈은 코어 명령도 연결할 수 있다(docs/spec/plugins.md#sections).
+        const coreCommand = sections.has(path) && core?.command.has(name);
+        if (!declared.command.has(name) && !coreCommand) report(path, index, `${name} is bound to an element but is not a declared command`);
       }
       for (const [, name] of line.matchAll(/\b(?:run|command)\(\s*["']([^"']+)["']/g)) {
         if (!declared.command.has(name)) report(path, index, `${name} is run but is not a declared command`);
@@ -99,9 +106,14 @@ function check({ owner, exposes, sources, registrations }) {
 }
 
 const workbenchSources = [...files(WORKBENCH, (name) => /\.(js|html)$/.test(name) && !name.endsWith(".mjs"))];
+const coreExposes = readJson(join(WORKBENCH, "exposure.json")).exposes;
+const coreDeclared = {
+  status: new Set((coreExposes.status ?? []).map((e) => e.name)),
+  command: new Set((coreExposes.commands ?? []).map((e) => e.name)),
+};
 check({
   owner: "core",
-  exposes: readJson(join(WORKBENCH, "exposure.json")).exposes,
+  exposes: coreExposes,
   sources: workbenchSources,
   // 코어 표면 항목(core.surface.*)은 플러그인 페이지 인터페이스가 등록한다.
   registrations: [join(ROOT, "packages/plugin-api/page.js")],
@@ -120,7 +132,8 @@ for (const name of readdirSync(PLUGINS)) {
   const diagnostics = existsSync(diagnosticsPath) ? readJson(diagnosticsPath).exposes : {};
   const exposes = Object.fromEntries(["status", "commands", "dom"].map((key) =>
     [key, [...(manifest.exposes?.[key] ?? []), ...(diagnostics[key] ?? [])]]));
-  check({ owner: manifest.id, exposes, sources, registrations: [] });
+  const sections = new Set((manifest.sections ?? []).map((section) => join(PLUGINS, name, section.module)));
+  check({ owner: manifest.id, exposes, sources, registrations: [], sections, core: coreDeclared });
 }
 
 if (errors.length) {

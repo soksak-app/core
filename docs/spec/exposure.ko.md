@@ -55,7 +55,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 - 모든 조작 요소(`button`, `input`, `select`, `textarea`, `role="button"`, `contenteditable`)는 명령에 연결되고(직접 연결되거나, 위임한 루트 안에서 `data-command`를 가짐) dom 이름을 가진다.
 - 네이티브 모달은 요소의 사본을 그리고 컨트롤의 key로 답한다. 메인 페이지는 자기 요소에서 그 컨트롤을 찾아 명령을 실행한다.
 
-충족 여부는 실행 중인 문서에서 판단한다. 연결기의 `audit(루트)`는 연결되지 않았거나 dom 이름이 없는 조작 요소를 `{tag, expose, command, text}`로 나열한다. 메인 페이지는 이를 `core.page.audit`로, 모든 플러그인 페이지는 `core.surface.document`의 `unbound`로 공개한다. `e2e/audit.test.mjs`가 두 앱의 모든 화면, 모달 구역, 메뉴, 편집 상태, 보이는 플러그인 표면을 방문해 빈 목록을 요구한다. `scripts/check-exposure.mjs`(`make exposure-check`)는 워크벤치와 플러그인 페이지(`plugins/*/ui`)에서 소스가 적은 것만 검사한다. 소스에 적은 이름은 모두 선언되고, 선언한 status와 명령은 등록되며, 선언한 dom 이름은 공개 값으로 적혀 있다.
+충족 여부는 실행 중인 문서에서 판단한다. 연결기의 `audit(루트)`는 연결되지 않았거나 dom 이름이 없는 조작 요소를 `{tag, expose, command, text}`로 나열한다. 메인 페이지는 이를 `core.page.audit`로, 모든 플러그인 페이지는 `core.surface.document`의 `unbound`로 공개한다. `e2e/audit.test.mjs`가 두 앱의 모든 화면, 모달 구역, 메뉴, 편집 상태, 보이는 플러그인 표면을 방문해 빈 목록을 요구한다. `scripts/check-exposure.mjs`(`make exposure-check`)는 워크벤치와 플러그인 페이지(`plugins/*/ui`)에서 소스가 적은 것만 검사한다. 소스에 적은 이름은 모두 선언되고, 선언한 status와 명령은 등록되며, 선언한 dom 이름은 공개 값으로 적혀 있다. 플러그인 섹션 모듈은 코어 status를 적고 코어 명령을 연결할 수도 있으며([섹션](plugins.ko.md#섹션)), 그 이름은 코어가 선언해야 한다.
 
 ## 등록
 

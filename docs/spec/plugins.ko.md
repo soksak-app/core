@@ -178,7 +178,7 @@ OS 창마다 앱 DOM WebView가 하나 있다. 워크벤치는 표면 요소와 
 
 ### 브라우저 섹션
 
-브라우저 페이지는 [문서 영역](native-surfaces.ko.md#문서-영역)의 세션 기록을 `browser.history` `{entries: [{url, title}], index}`로 보고하고, `browser.history.go {index}`는 그 위치의 항목을 연다. 히스토리 섹션은 따라가는 표면의 항목을 오래된 것부터 나열하고 현재 항목을 표시하며, 각 항목을 `browser.history.go`에 연결한다. 탭 섹션은 `core.grid`를 따라가 `context.surface`를 가진 카드에서 플러그인이 `browser`인 탭을 보이는 제목과 함께 나열하고, 활성 탭을 표시하며, 각 탭을 `core.tab.select`에 연결한다.
+브라우저 페이지는 [문서 영역](native-surfaces.ko.md#문서-영역)의 세션 기록을 `browser.history` `{entries: [{url, title}], index}`로 보고하고, `browser.history.go {index}`는 그 위치의 항목을 연다. 히스토리 섹션은 따라가는 표면의 항목을 오래된 것부터 나열하고 현재 항목을 표시하며, 각 항목을 `browser.history.go`에 연결한다. 탭 섹션은 `core.grid`를 따라가 `context.surface`를 가진 카드에서 플러그인이 `browser`인 탭을 보이는 제목과 함께 나열하고, 활성 탭을 표시하며, 각 탭을 `core.tab.select`에 연결한다. 페이지는 영역 상태의 `elements`와 `requests`를 문서의 요소 `browser.elements`와 기록된 요청 `browser.requests`로 보고한다. DOM 섹션은 요소를 깊이만큼 들여 `tag#id.class`로 나열하고 목록이 잘렸으면 알린다. 네트워크 섹션은 각 요청의 형식, 주소, 걸린 시간을 나열하고 목록이 잘렸으면 알린다. 두 섹션은 섹션의 표면을 따라가며 조작 요소가 없다.
 
 ### 브라우저 주소 입력
 

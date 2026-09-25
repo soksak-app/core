@@ -21,6 +21,40 @@ static NSString *const kScrollScript = @"(() => {"
     "post();"
     "})();";
 
+// 문서의 요소와 Performance API 가 기록한 요청을 보내는 스크립트(docs/spec/native-surfaces.md#document-regions).
+// 호스트의 콘텐츠 월드에서 실행되므로 페이지 스크립트는 이 처리기에 보낼 수 없다. 페이지 캐시에서 돌아온
+// 문서는 스크립트를 다시 실행하지 않으므로 pageshow 에서도 보낸다.
+static NSString *const kPageMessage = @"soksakDocumentPage";
+static NSString *const kPageScript = @"(() => {"
+    "const post = (value) => window.webkit.messageHandlers.soksakDocumentPage.postMessage(value);"
+    "const elements = () => {"
+    "  const nodes = []; let count = 0;"
+    "  const walk = (element, depth) => {"
+    "    count++;"
+    "    if (nodes.length < 500) nodes.push({ depth, tag: element.localName, id: element.getAttribute('id') ?? '',"
+    "      class: element.getAttribute('class') ?? '' });"
+    "    for (const child of element.children) walk(child, depth + 1);"
+    "  };"
+    "  if (document.documentElement) walk(document.documentElement, 0);"
+    "  post({ elements: { nodes, truncated: count > 500 } });"
+    "};"
+    "const requests = () => {"
+    "  const entries = ["
+    "    ...performance.getEntriesByType('navigation').map((entry) => ({ url: entry.name, type: 'navigation',"
+    "      start: entry.startTime, duration: entry.duration })),"
+    "    ...performance.getEntriesByType('resource').map((entry) => ({ url: entry.name, type: entry.initiatorType || 'other',"
+    "      start: entry.startTime, duration: entry.duration })),"
+    "  ];"
+    "  post({ requests: { entries: entries.slice(0, 200), truncated: entries.length > 200 } });"
+    "};"
+    "new MutationObserver(elements).observe(document, { childList: true, subtree: true, attributes: true,"
+    "  attributeFilter: ['id', 'class'] });"
+    "new PerformanceObserver(requests).observe({ type: 'resource' });"
+    "addEventListener('load', requests);"
+    "addEventListener('pageshow', () => { elements(); requests(); });"
+    "elements(); requests();"
+    "})();";
+
 static NSArray<NSString *> *observedKeys(void) {
     return @[ @"URL", @"title", @"loading", @"estimatedProgress", @"canGoBack", @"canGoForward" ];
 }
@@ -33,7 +67,7 @@ static CGFloat documentSurfaceScale(NSView *surface) {
     return sp_surface_scale(surface);
 }
 
-// 메시지 처리기. 사용자 콘텐츠 컨트롤러가 처리기를 보유하므로 뷰를 약하게 가리킨다.
+// 스크롤과 문서 내용 메시지 처리기. 사용자 콘텐츠 컨트롤러가 처리기를 보유하므로 뷰를 약하게 가리킨다.
 @interface SPDocumentScroll : NSObject <WKScriptMessageHandler>
 @property(assign) SPDocumentView *view;
 @end
@@ -51,6 +85,9 @@ static CGFloat documentSurfaceScale(NSView *surface) {
 @property(retain) WKNavigation *navigation;
 @property(assign) NSView *webSurface;
 @property NSPoint offset;
+// 현재 문서의 요소와 기록된 요청. 이동이 시작되면 비우고 새 문서가 보낸 값으로 바꾼다.
+@property(copy) NSDictionary *elements;
+@property(copy) NSDictionary *requests;
 @property NSEdgeInsets insets;
 // 글자 배율(docs/spec/text-size.md). 페이지 확대로 적용한다.
 @property double zoom;
@@ -72,6 +109,12 @@ static CGFloat documentSurfaceScale(NSView *surface) {
     SPDocumentView *view = self.view;
     if (!view || !message.frameInfo.isMainFrame || ![message.body isKindOfClass:NSDictionary.class]) return;
     NSDictionary *body = message.body;
+    if ([message.name isEqualToString:kPageMessage]) {
+        if ([body[@"elements"] isKindOfClass:NSDictionary.class]) view.elements = body[@"elements"];
+        if ([body[@"requests"] isKindOfClass:NSDictionary.class]) view.requests = body[@"requests"];
+        [view report];
+        return;
+    }
     if (![body[@"x"] isKindOfClass:NSNumber.class] || ![body[@"y"] isKindOfClass:NSNumber.class]) return;
     NSPoint offset = NSMakePoint([body[@"x"] doubleValue], [body[@"y"] doubleValue]);
     if (NSEqualPoints(offset, view.offset)) return;
@@ -85,6 +128,8 @@ static CGFloat documentSurfaceScale(NSView *surface) {
 - (void)dealloc {
     [_scroll release];
     [_failure release];
+    [_elements release];
+    [_requests release];
     [_navigation release];
     [_eventMonitor release];
     [super dealloc];
@@ -150,6 +195,8 @@ static CGFloat documentSurfaceScale(NSView *surface) {
         @"error": self.failure ?: (id)NSNull.null,
         @"scroll": @{ @"x": @(self.offset.x), @"y": @(self.offset.y) },
         @"history": [self history],
+        @"elements": self.elements ?: @{ @"nodes": @[], @"truncated": @NO },
+        @"requests": self.requests ?: @{ @"entries": @[], @"truncated": @NO },
     };
     NSData *data = [NSJSONSerialization dataWithJSONObject:state options:0 error:nil];
     if (!data) return;
@@ -182,6 +229,8 @@ static CGFloat documentSurfaceScale(NSView *surface) {
 - (void)webView:(WKWebView *)view didStartProvisionalNavigation:(WKNavigation *)navigation {
     self.navigation = navigation;
     self.failure = nil;
+    self.elements = nil;
+    self.requests = nil;
     [self report];
 }
 
@@ -322,9 +371,12 @@ void *sp_document_create(void *surfaceHandle, const char *directory, sp_document
     WKContentWorld *world = [WKContentWorld worldWithName:@"soksak-document"];
     SPDocumentScroll *scroll = [[SPDocumentScroll new] autorelease];
     [configuration.userContentController addScriptMessageHandler:scroll contentWorld:world name:kScrollMessage];
+    [configuration.userContentController addScriptMessageHandler:scroll contentWorld:world name:kPageMessage];
     WKUserScript *script = [[[WKUserScript alloc] initWithSource:kScrollScript
         injectionTime:WKUserScriptInjectionTimeAtDocumentEnd forMainFrameOnly:YES inContentWorld:world] autorelease];
     [configuration.userContentController addUserScript:script];
+    [configuration.userContentController addUserScript:[[[WKUserScript alloc] initWithSource:kPageScript
+        injectionTime:WKUserScriptInjectionTimeAtDocumentEnd forMainFrameOnly:YES inContentWorld:world] autorelease]];
 
     SPDocumentView *view = [[SPDocumentView alloc] initWithFrame:NSZeroRect configuration:configuration];
     scroll.view = view;

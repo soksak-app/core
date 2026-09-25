@@ -121,6 +121,34 @@
             "index": { "type": "integer" }
           }
         }
+      },
+      {
+        "name": "browser.elements",
+        "description": "The elements of the document in document order with depth, tag, id, and class, at most 500, and whether the list was truncated.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "nodes": {
+              "type": "array",
+              "items": { "type": "object", "properties": { "depth": { "type": "integer" }, "tag": { "type": "string" }, "id": { "type": "string" }, "class": { "type": "string" } } }
+            },
+            "truncated": { "type": "boolean" }
+          }
+        }
+      },
+      {
+        "name": "browser.requests",
+        "description": "The requests of the document that its Performance API recorded, the navigation first, with address, type, start, and duration in milliseconds, at most 200, and whether the list was truncated.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "entries": {
+              "type": "array",
+              "items": { "type": "object", "properties": { "url": { "type": "string" }, "type": { "type": "string" }, "start": { "type": "number" }, "duration": { "type": "number" } } }
+            },
+            "truncated": { "type": "boolean" }
+          }
+        }
       }
     ],
     "commands": [

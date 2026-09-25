@@ -178,7 +178,7 @@ Plugin pages import from `@soksak/plugin-api/page` and do not import workbench f
 
 ### Browser sections
 
-The browser page reports its session history as `browser.history`, `{entries: [{url, title}], index}` from its [document region](native-surfaces.md#document-regions), and `browser.history.go {index}` loads the entry at that position. The 히스토리 section lists the entries of the followed surface from the oldest, marks the current entry, and binds each entry to `browser.history.go`. The 탭 section follows `core.grid` and lists the tabs whose plugin is `browser` in the card that holds `context.surface` with their shown titles, marks the active tab, and binds each tab to `core.tab.select`.
+The browser page reports its session history as `browser.history`, `{entries: [{url, title}], index}` from its [document region](native-surfaces.md#document-regions), and `browser.history.go {index}` loads the entry at that position. The 히스토리 section lists the entries of the followed surface from the oldest, marks the current entry, and binds each entry to `browser.history.go`. The 탭 section follows `core.grid` and lists the tabs whose plugin is `browser` in the card that holds `context.surface` with their shown titles, marks the active tab, and binds each tab to `core.tab.select`. The page reports the document's elements as `browser.elements` and its recorded requests as `browser.requests`, the `elements` and `requests` of the region state. The DOM section lists the elements indented by depth as `tag#id.class` and states when the list is truncated; the 네트워크 section lists each request's type, address, and duration and states when the list is truncated. Both follow the section's surface and have no controls.
 
 ### Browser address input
 

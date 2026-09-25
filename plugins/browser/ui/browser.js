@@ -50,10 +50,19 @@ export async function mount(root, context) {
   // 세션 기록은 문서 영역 상태의 history 다(docs/spec/native-surfaces.md#document-regions).
   let history = { entries: [], index: -1 };
   const historyListeners = new Set();
-  const show = ({ history: sessionHistory, ...state }) => {
+  // 문서의 요소와 기록된 요청도 영역 상태에서 온다.
+  let elements = { nodes: [], truncated: false };
+  let requests = { entries: [], truncated: false };
+  const elementListeners = new Set();
+  const requestListeners = new Set();
+  const show = ({ history: sessionHistory, elements: documentElements, requests: documentRequests, ...state }) => {
     current = state;
     history = sessionHistory;
+    elements = documentElements;
+    requests = documentRequests;
     for (const listener of historyListeners) listener(history);
+    for (const listener of elementListeners) listener(elements);
+    for (const listener of requestListeners) listener(requests);
     showEmpty(state.url);
     if (state.url !== "") storage.setItem(storageKey, state.url);
     if (!editing) address.value = state.url;
@@ -76,6 +85,16 @@ export async function mount(root, context) {
     historyListeners.add(fn);
     fn(history);
     return () => historyListeners.delete(fn);
+  });
+  context.exposure.status("browser.elements", () => elements, (fn) => {
+    elementListeners.add(fn);
+    fn(elements);
+    return () => elementListeners.delete(fn);
+  });
+  context.exposure.status("browser.requests", () => requests, (fn) => {
+    requestListeners.add(fn);
+    fn(requests);
+    return () => requestListeners.delete(fn);
   });
   context.exposure.command("browser.history.go", navigated(({ index }) => {
     if (!Number.isInteger(index) || index < 0 || index >= history.entries.length) {
@@ -122,6 +141,8 @@ export async function mount(root, context) {
     stopTextSize();
     locationListeners.clear();
     historyListeners.clear();
+    elementListeners.clear();
+    requestListeners.clear();
     await composition.dispose();
     await context.exposure.dispose();
     root.replaceChildren();

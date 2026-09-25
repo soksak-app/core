@@ -31,7 +31,8 @@ async function setup(t) {
   t.after(async () => { await controller.dispose(); dom.window.close(); });
   const send = (index) => {
     const history = { entries: [{ url: "https://a.test/one", title: "One" }, { url: "https://a.test/two", title: "Two" }], index };
-    for (const fn of states) fn({ url: history.entries[index].url, title: history.entries[index].title, history });
+    for (const fn of states) fn({ url: history.entries[index].url, title: history.entries[index].title, history,
+      elements: { nodes: [], truncated: false }, requests: { entries: [], truncated: false } });
   };
   return { statuses, commands, entries, send };
 }

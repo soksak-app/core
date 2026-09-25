@@ -37,6 +37,10 @@ static NSString *pageFor(NSString *path) {
     }
     if ([path isEqualToString:@"/two"]) return @"<!doctype html><title>Two</title><body>two</body>";
     if ([path isEqualToString:@"/blank"]) return @"<!doctype html><title>Blank</title><body>blank</body>";
+    if ([path isEqualToString:@"/inspect"]) {
+        return @"<!doctype html><title>Inspect</title><body><div id='box' class='a b'><p>text</p></div>"
+            "<script>fetch('/blank').then(() => { document.title = 'Inspected'; });</script></body>";
+    }
     return nil;
 }
 
@@ -398,6 +402,30 @@ int main(int argc, char **argv) { @autoreleasepool {
     check(view.contentFilters.count == 1, @"the background state blurs the document");
     sp_document_background(document, false);
     check(view.contentFilters.count == 0, @"clearing the background state removes the blur");
+
+    // 문서의 요소와 기록된 요청이 상태에 실린다.
+    check(sp_document_load(document, [base stringByAppendingString:@"/inspect"].UTF8String), @"the inspect address is accepted");
+    settle(@"the inspect document did not report its elements and requests", ^BOOL(NSDictionary *state) {
+        NSArray *entries = state[@"requests"][@"entries"];
+        BOOL fetched = NO;
+        for (NSDictionary *entry in entries) if ([entry[@"type"] isEqual:@"fetch"] && [entry[@"url"] hasSuffix:@"/blank"]) fetched = YES;
+        return [state[@"title"] isEqual:@"Inspected"] && fetched && [state[@"elements"][@"nodes"] count] > 0;
+    });
+    NSArray *nodes = latest[@"elements"][@"nodes"];
+    NSMutableArray *shown = [NSMutableArray array];
+    for (NSDictionary *node in nodes) {
+        [shown addObject:[NSString stringWithFormat:@"%@:%@#%@.%@", node[@"depth"], node[@"tag"], node[@"id"], node[@"class"]]];
+    }
+    check([[shown componentsJoinedByString:@" "] isEqual:@"0:html#. 1:head#. 2:title#. 1:body#. 2:div#box.a b 3:p#. 2:script#."]
+        && ![latest[@"elements"][@"truncated"] boolValue],
+        [NSString stringWithFormat:@"the elements are reported in document order with depth, tag, id, and class: %@", shown]);
+    NSDictionary *first = [latest[@"requests"][@"entries"] firstObject];
+    check([first[@"type"] isEqual:@"navigation"] && [first[@"url"] hasSuffix:@"/inspect"] && [first[@"duration"] doubleValue] >= 0,
+        [NSString stringWithFormat:@"the navigation is the first request: %@", first]);
+    evaluate(view, @"document.body.append(document.createElement('section')); null");
+    settle(@"a new element was not reported", ^BOOL(NSDictionary *state) {
+        return [[[state[@"elements"][@"nodes"] lastObject] objectForKey:@"tag"] isEqual:@"section"];
+    });
 
     // 같은 디렉터리의 문서는 사이트 데이터를 공유하고, 다른 디렉터리의 문서는 공유하지 않는다.
     void *same = sp_document_create(surface, storeA.fileSystemRepresentation, changed, NULL);

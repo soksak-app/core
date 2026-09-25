@@ -199,7 +199,10 @@ async function serveTitles(t) {
   const server = createServer((request, response) => {
     const name = new URL(request.url, "http://127.0.0.1").pathname.slice(1);
     response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
-    response.end(`<!doctype html><title>${name}</title><body>${name}`);
+    // inspect 는 요소 하나와 이미지 요청 하나를 가진다.
+    response.end(name === "inspect"
+      ? `<!doctype html><title>inspect</title><body><div id="box" class="a b"><img src="/pixel"></div>`
+      : `<!doctype html><title>${name}</title><body>${name}`);
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   t.after(() => new Promise((resolve) => { server.closeAllConnections(); server.close(resolve); }));
@@ -251,5 +254,83 @@ for (const app of Object.values(APPS)) {
     await press(s, "core.sidebar.section.control", controlIndex(sidebars, sidebar, "browser.tabs", 0));
     await s.until("core.grid", (grid) => grid.cards.find((card) => card.id === "browser")?.active === surface,
       "a click on the first tab did not select it");
+  });
+}
+
+/** 두 길이가 반 포인트 안에서 같은지. */
+const near = (a, b) => Math.abs(a - b) <= 0.5;
+
+/** 사이드바 요소 안에 놓인 상태 줄의 사각형. 상태 줄은 사이드바마다 하나다. */
+const statusLineOf = async (s, box) => {
+  for (let index = 0; ; index += 1) {
+    const rect = await s.rect("core.sidebar.status", index);
+    if (rect.x + rect.width / 2 > box.x && rect.x + rect.width / 2 < box.x + box.width) return rect;
+  }
+};
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: a sidebar starts with its sections, draws 26-point headers, and ends in a 26-point status line`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    s.cleanup(() => s.run("core.settings.reset", { key: "rail" }));
+    const check = async (sidebar) => {
+      const sidebars = await s.until("core.sidebars", (value) => value.find((item) => item.sidebar === sidebar)?.sections.every((item) => item.mounted),
+        `sidebar ${sidebar} did not mount its sections`);
+      const at = sidebars.findIndex((item) => item.sidebar === sidebar);
+      const box = await s.rect("core.sidebar", at);
+      const first = await s.rect("core.sidebar.section", sidebars.slice(0, at).reduce((sum, item) => sum + item.sections.length, 0));
+      assert.ok(near(first.y, box.y), `${sidebar}: the first section starts ${first.y - box.y} pt below the sidebar top`);
+      const header = await s.rect("core.sidebar.section.header", sidebars.slice(0, at).filter((item) => item.layout === "list")
+        .reduce((sum, item) => sum + item.sections.length, 0));
+      assert.ok(near(header.height, 26), `${sidebar}: the section header is ${header.height} pt high`);
+      const line = await statusLineOf(s, box);
+      assert.ok(near(line.height, 26), `${sidebar}: the status line is ${line.height} pt high`);
+      assert.ok(line.y >= box.y + box.height - 0.5, `${sidebar}: the status line is not below the sections`);
+      assert.ok(box.height > 100, `${sidebar}: the sections have only ${box.height} pt`);
+      return { box, line };
+    };
+    // 좌측 사이드바는 머리 줄 없이 카드 테두리 바로 안에서 시작한다.
+    const grid = await s.get("core.grid");
+    const left = grid.cards.find((card) => card.id === "left");
+    const { box, line } = await check("left");
+    assert.ok(near(box.y, grid.plane.y + left.y + 1), `left: the sidebar starts ${box.y - (grid.plane.y + left.y + 1)} pt below the card border`);
+    const bottom = grid.plane.y + left.y + left.h - 1;
+    assert.ok(near(line.y + line.height, bottom), `left: the status line ends ${bottom - line.y - line.height} pt above the card border`);
+    await check("rail-shell");
+    await s.run("core.settings.change", { key: "rail", value: "inset", scope: "common" });
+    await check("shell");
+  });
+}
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: the browser DOM and network sections list the document's elements and requests`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    s.cleanup(() => s.run("core.settings.reset", { key: "sets" }));
+    const base = await serveTitles(t);
+    const sidebar = "right";
+    const sections = ["browser.dom", "browser.network"];
+    const sets = (await s.get("core.settings")).values.sets;
+    await s.run("core.settings.set", { patch: { sets: sets.map((set) => set.id === "set-browser" ? { ...set, sections, layout: "list" } : set) },
+      scope: "common" });
+    await s.run("core.card.focus", { card: "browser" });
+    const of = (sidebars) => sidebars.find((item) => item.sidebar === sidebar);
+    const text = (sidebars, id) => of(sidebars)?.sections.find((item) => item.id === id)?.text ?? "";
+    const sidebars = await s.until("core.sidebars", (value) => of(value)?.set === "set-browser"
+      && sections.every((id) => of(value).sections.find((item) => item.id === id)?.mounted),
+    "the right sidebar did not mount the DOM and network sections");
+    const surface = of(sidebars).surface;
+    await s.run("browser.navigate", { url: `${base}/inspect` }, surface);
+    const elements = await s.until("browser.elements", (value) => value.nodes.some((node) => node.id === "box"),
+      "browser.elements did not report the document's elements", { surface });
+    assert.deepEqual(elements.nodes.map((node) => `${node.depth}:${node.tag}`), ["0:html", "1:head", "2:title", "1:body", "2:div", "3:img"]);
+    const requests = await s.until("browser.requests", (value) => value.entries.some((entry) => entry.url === `${base}/pixel`),
+      "browser.requests did not report the image request", { surface });
+    assert.deepEqual(requests.entries.map((entry) => [entry.type, entry.url]), [["navigation", `${base}/inspect`], ["img", `${base}/pixel`]]);
+    await s.until("core.sidebars", (value) => text(value, "browser.dom") === "htmlheadtitlebodydiv#box.a.bimg"
+      && text(value, "browser.network").startsWith(`navigation ${base}/inspect `) && text(value, "browser.network").includes(`img ${base}/pixel `),
+    "the DOM and network sections did not show the elements and requests");
   });
 }
