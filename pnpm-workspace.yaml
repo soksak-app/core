@@ -5,3 +5,5 @@ packages:
   - sidecars/*
   - apps/*
   - e2e
+allowBuilds:
+  esbuild: true

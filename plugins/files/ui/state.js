@@ -6,9 +6,11 @@ export async function mount(context) {
   /* 나열한 디렉터리마다 항목. */
   const listings = new Map();
   let error = null;
+  /* 프로젝트 폴더의 git 상태. 폴더가 저장소가 아니면 비어 있다. */
+  let git = [];
   const pending = new Map();
   let next = 0;
-  const listeners = { tree: new Set(), bookmarks: new Set() };
+  const listeners = { tree: new Set(), bookmarks: new Set(), git: new Set() };
 
   await context.sidecar.on((body) => {
     // 감시한 디렉터리가 바뀌었거나 감시가 도중에 실패했다(docs/spec/sidecars.md#files).
@@ -66,6 +68,8 @@ export async function mount(context) {
     }
     await watchExpanded();
     notify("tree", tree);
+    git = await request({ operation: "git" });
+    notify("git", () => git);
   }
 
   // 새로 고침, 펼침, 변경 알림은 나열 결과를 함께 바꾸므로 받은 순서대로 하나씩 실행한다.
@@ -78,6 +82,7 @@ export async function mount(context) {
   const watch = (name) => (fn) => { listeners[name].add(fn); return () => listeners[name].delete(fn); };
   context.exposure.status("files.tree", tree, watch("tree"));
   context.exposure.status("files.bookmarks", bookmarks, watch("bookmarks"));
+  context.exposure.status("files.git", () => git, watch("git"));
   context.exposure.command("files.refresh", () => inTurn(async () => { await refresh(); return null; }));
   context.exposure.command("files.tree.toggle", ({ path }) => inTurn(async () => {
     const row = rows().find((entry) => entry.path === path);
@@ -110,6 +115,7 @@ export async function mount(context) {
     async dispose() {
       listeners.tree.clear();
       listeners.bookmarks.clear();
+      listeners.git.clear();
       await inTurn(() => request({ operation: "watch", paths: [] }));
     },
   };

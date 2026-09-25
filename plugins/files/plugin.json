@@ -83,6 +83,24 @@
             "type": "string"
           }
         }
+      },
+      {
+        "name": "files.git",
+        "description": "The git status of the project folder from the files sidecar: each path relative to the folder with added, deleted, modified, renamed, or untracked; empty when the folder is not in a git repository. It is read again after every listing.",
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              }
+            }
+          }
+        }
       }
     ],
     "commands": [

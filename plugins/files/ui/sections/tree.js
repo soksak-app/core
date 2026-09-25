@@ -1,45 +1,163 @@
-// 파일 트리 섹션. 상태 모듈이 공개한 files.tree 의 행을 그린다. 디렉터리를 누르면 files.tree.toggle,
-// ☆ 를 누르면 files.bookmarks.add, 새로 고침을 누르면 files.refresh 를 실행한다.
+// 파일 트리 섹션. 상태 모듈이 공개한 files.tree 와 files.git 을 @pierre/trees 의 트리로 그린다.
+//
+// 목록은 상태 모듈이 갖는다. 사람이 트리에서 폴더를 열거나 닫으면 files.tree.toggle 을 실행하고, 상태가
+// 그 폴더를 나열하면 바뀐 경로만 트리에 더하거나 뺀다. 색은 앱의 테마 토큰에 묶는다.
+import { FileTree, themeToTreeStyles } from "../vendor/trees.js";
+import { PLACEHOLDER, expansionRequests, pathDiff, treePaths } from "./tree-paths.js";
+
+/* 트리 안의 4pt 스크롤 막대. */
+const SCROLLBAR = `
+::-webkit-scrollbar{-webkit-appearance:none;width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(127,127,127,0.22);border-radius:2px}
+::-webkit-scrollbar-thumb:hover{background:rgba(127,127,127,0.42)}
+::-webkit-scrollbar-corner{background:transparent}
+`;
+
+/* 섹션의 스타일. 이 섹션의 요소에만 적용된다. 문서의 stylesheet 로 두어 섹션의 텍스트에 섞이지 않는다. */
+const STYLE = `
+.files-tree{display:flex;flex-direction:column;min-width:0}
+.files-tree__head{display:flex;align-items:center;gap:4px;padding:0 4px 2px 8px}
+.files-tree__title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
+.files-tree__button{border:0;padding:0 4px;background:transparent;color:var(--muted);font:inherit;cursor:pointer;border-radius:var(--r-xs)}
+.files-tree__button:hover:not(:disabled){color:var(--fg);background:var(--inset)}
+.files-tree__button:disabled{opacity:.4;cursor:default}
+.files-tree__holder{min-height:0}
+.files-tree__message{padding:4px 8px;color:var(--muted)}
+`;
+
+/* 트리가 한 번에 보이는 가장 많은 행. 그보다 많으면 트리 안에서 스크롤한다. */
+const MAX_ROWS = 20;
+
+/** 트리 색. 라이브러리 기본값이 드러나지 않도록 모든 색을 앱 토큰의 var() 로 준다. */
+function themeStyles() {
+  const style = getComputedStyle(document.documentElement);
+  const mode = document.documentElement.dataset.mode === "light" ? "light" : "dark";
+  return {
+    ...themeToTreeStyles({ type: mode, bg: style.getPropertyValue("--card").trim(), fg: style.getPropertyValue("--fg").trim() }),
+    "--trees-padding-inline-override": "2px",
+    "--trees-item-padding-x-override": "2px",
+    "--trees-bg-override": "var(--card)",
+    "--trees-bg-muted-override": "var(--inset)",
+    "--trees-fg-override": "var(--fg)",
+    "--trees-fg-muted-override": "var(--muted)",
+    "--trees-accent-override": "var(--rail)",
+    "--trees-border-color-override": "var(--edge)",
+    "--trees-selected-bg-override": "var(--chip-sel)",
+    "--trees-selected-fg-override": "var(--fg)",
+    "color-scheme": mode,
+  };
+}
+
 export function mount(root, context) {
-  const list = document.createElement("ul");
-  list.className = "section-list";
-  root.append(list);
-  // 같은 값이면 다시 그리지 않는다. 누르는 동안 요소를 바꾸면 그 누름은 명령을 실행하지 않는다.
-  let drawn;
-  const stop = context.status("files.tree", (tree, source) => {
-    const key = JSON.stringify([tree, source]);
-    if (key === drawn) return;
-    drawn = key;
-    if (source === null) { list.replaceChildren(); list.textContent = "프로젝트 없음"; return; }
-    // 그릴 때마다 요소를 새로 만든다. 같은 요소를 다시 연결하면 누름 한 번이 명령을 여러 번 실행한다.
-    const refresh = document.createElement("button");
-    refresh.type = "button";
-    refresh.textContent = "새로 고침";
-    const head = document.createElement("li");
-    head.append(context.bind(refresh, "files.refresh", {}));
-    if (tree.error !== null) {
-      const failure = document.createElement("li");
-      failure.textContent = `오류: ${tree.error}`;
-      list.replaceChildren(head, failure);
+  const sheet = new CSSStyleSheet();
+  sheet.replaceSync(STYLE);
+  document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+  const box = document.createElement("div");
+  box.className = "files-tree";
+  const head = document.createElement("div");
+  head.className = "files-tree__head";
+  const title = document.createElement("span");
+  title.className = "files-tree__title";
+  const star = document.createElement("button");
+  star.type = "button";
+  star.className = "files-tree__button";
+  star.textContent = "☆";
+  star.title = "고른 파일을 북마크에 추가";
+  const refresh = document.createElement("button");
+  refresh.type = "button";
+  refresh.className = "files-tree__button";
+  refresh.textContent = "새로 고침";
+  const holder = document.createElement("div");
+  holder.className = "files-tree__holder";
+  const message = document.createElement("div");
+  message.className = "files-tree__message";
+  head.append(title, star, refresh);
+  box.append(head, holder, message);
+  root.append(box);
+
+  let selected = null;
+  const failed = (error) => reportError(error);
+  context.bind(star, "files.bookmarks.add", () => ({ path: selected }), { failed });
+  context.bind(refresh, "files.refresh", {}, { failed });
+  // 트리의 shadow root 안에서 연 폴더와 닫은 폴더는 holder 의 이벤트로 명령에 닿는다(docs/spec/plugins.md#sections).
+  context.bind(holder, "files.tree.toggle", (event) => ({ path: event.detail.path }), { event: "files-toggle", failed });
+
+  const tree = new FileTree({
+    paths: [],
+    density: "compact",
+    flattenEmptyDirectories: false,
+    unsafeCSS: SCROLLBAR,
+    onSelectionChange(paths) {
+      const file = [...paths].reverse().find((path) => !path.endsWith(PLACEHOLDER) && tree.getItem(path)?.isDirectory() === false);
+      selected = file ?? null;
+      star.disabled = selected === null;
+    },
+  });
+  tree.render({ containerWrapper: holder });
+  star.disabled = true;
+
+  const applyTheme = () => Object.entries(themeStyles()).forEach(([name, value]) => holder.style.setProperty(name, value));
+  applyTheme();
+  const themeWatch = new MutationObserver(applyTheme);
+  themeWatch.observe(document.documentElement, { attributes: true, attributeFilter: ["style", "data-mode"] });
+
+  let rows = [];
+  let paths = [];
+  let syncing = false;
+  const pending = new Set();
+  const isExpanded = (path) => tree.getItem(path)?.isExpanded?.() ?? false;
+  const unsubscribe = tree.subscribe(() => {
+    if (syncing) return;
+    for (const path of expansionRequests(rows, isExpanded, pending)) {
+      holder.dispatchEvent(new CustomEvent("files-toggle", { detail: { path } }));
+    }
+  });
+
+  const stopTree = context.status("files.tree", (value, source) => {
+    if (source === null || value.error !== null) {
+      message.textContent = source === null ? "프로젝트 없음" : `오류: ${value.error}`;
+      message.hidden = false;
       return;
     }
-    list.replaceChildren(head, ...tree.entries.map((entry) => {
-      const item = document.createElement("li");
-      item.style.paddingLeft = `${entry.depth * 12}px`;
-      const control = document.createElement("button");
-      control.type = "button";
-      if (entry.directory) {
-        control.textContent = `${entry.expanded ? "▾" : "▸"} ${entry.name}`;
-        item.append(context.bind(control, "files.tree.toggle", { path: entry.path }));
-      } else {
-        const name = document.createElement("span");
-        name.textContent = entry.name;
-        control.textContent = "☆";
-        control.title = "북마크에 추가";
-        item.append(name, context.bind(control, "files.bookmarks.add", { path: entry.path }));
+    message.hidden = true;
+    title.textContent = value.root.split("/").filter(Boolean).at(-1) ?? value.root;
+    title.title = value.root;
+    rows = value.entries;
+    const next = treePaths(rows);
+    syncing = true;
+    try {
+      const operations = pathDiff(paths, next);
+      if (operations.length) tree.batch(operations);
+      paths = next;
+      // 상태의 펼침을 트리에 옮긴다. 요청 중인 폴더는 상태가 따라올 때까지 사람이 둔 대로 둔다.
+      for (const row of rows) {
+        if (!row.directory || pending.has(row.path)) continue;
+        const item = tree.getItem(row.path);
+        if (!item?.isDirectory()) continue;
+        if (row.expanded && !item.isExpanded()) item.expand();
+        if (!row.expanded && item.isExpanded()) item.collapse();
       }
-      return item;
-    }));
+      for (const path of [...pending]) {
+        const row = rows.find((item) => item.path === path);
+        if (!row || row.expanded === isExpanded(path)) pending.delete(path);
+      }
+    } finally {
+      syncing = false;
+    }
+    holder.style.height = `${Math.max(1, Math.min(rows.length, MAX_ROWS)) * tree.getItemHeight() + 8}px`;
   });
-  return { dispose() { stop(); list.remove(); } };
+  const stopGit = context.status("files.git", (entries) => tree.setGitStatus(entries ?? []));
+
+  return {
+    dispose() {
+      stopTree();
+      stopGit();
+      unsubscribe();
+      themeWatch.disconnect();
+      tree.cleanUp();
+      document.adoptedStyleSheets = document.adoptedStyleSheets.filter((item) => item !== sheet);
+      box.remove();
+    },
+  };
 }

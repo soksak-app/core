@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 /** 가짜 문맥. listing 은 상대 경로마다 항목 배열이나 오류 문자열이다. */
-function fakeContext(listing) {
+function fakeContext(listing, git = []) {
   const statuses = new Map();
   const commands = new Map();
   const stored = {};
@@ -20,6 +20,7 @@ function fakeContext(listing) {
       send: async (body) => {
         sent.push(body);
         if (body.operation === "watch") { queueMicrotask(() => reply({ id: body.id })); return; }
+        if (body.operation === "git") { queueMicrotask(() => reply({ id: body.id, entries: git.slice() })); return; }
         const value = listing[body.path];
         queueMicrotask(() => reply(typeof value === "string" ? { id: body.id, error: value } : { id: body.id, entries: value ?? [] }));
       },
@@ -105,4 +106,19 @@ test("the state watches the expanded directories, refreshes on a change, and sto
   assert.deepEqual(watched(), [""]);
   await mounted.dispose();
   assert.deepEqual(watched(), []);
+});
+
+test("the state reports git status from the sidecar and asks again after a change", async () => {
+  const git = [{ path: "a.txt", status: "modified" }];
+  const f = fakeContext(listing(), git);
+  const { mount } = await import("../ui/state.js");
+  await mount(f.context);
+  assert.deepEqual(f.statuses.get("files.git").read(), [{ path: "a.txt", status: "modified" }]);
+  const asked = () => f.sent.filter((body) => body.operation === "git").length;
+  const before = asked();
+  git.push({ path: "src/main.go", status: "untracked" });
+  f.emit({ changed: "" });
+  await f.commands.get("files.refresh")({});
+  assert.ok(asked() > before);
+  assert.deepEqual(f.statuses.get("files.git").read().map((e) => e.path), ["a.txt", "src/main.go"]);
 });

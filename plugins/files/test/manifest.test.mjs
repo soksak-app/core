@@ -52,25 +52,10 @@ test("every section and the state module are published", () => {
   }
 });
 
-test("the file tree section draws files.tree with toggles, bookmark controls, and a refresh control", async () => {
-  const s = await mountSection("files.tree");
-  s.send("files.tree", null, null);
-  assert.equal(s.root.textContent, "프로젝트 없음");
-  s.send("files.tree", { root: "/work/p1", error: "denied", entries: [] });
-  assert.equal(s.root.textContent, "새로 고침오류: denied");
-  s.send("files.tree", { root: "/work/p1", error: null, entries: [
-    { path: "src", name: "src", directory: true, depth: 0, expanded: true },
-    { path: "src/main.go", name: "main.go", directory: false, depth: 1, expanded: false },
-  ] });
-  assert.equal(s.root.textContent, "새로 고침▾ srcmain.go☆");
-  assert.deepEqual(s.bound.map(({ el, name, params }) => [el.textContent, name, params]), [
-    ["새로 고침", "files.refresh", {}],
-    ["▾ src", "files.tree.toggle", { path: "src" }],
-    ["☆", "files.bookmarks.add", { path: "src/main.go" }],
-  ]);
-  s.dispose();
-  assert.equal(s.observers.size, 0);
-  assert.equal(s.root.children.length, 0);
+test("the file tree section imports only its package's files and the bundled tree library", () => {
+  const source = readFileSync(new URL("../ui/sections/tree.js", import.meta.url), "utf8");
+  const imports = [...source.matchAll(/from "([^"]+)"/g)].map((match) => match[1]);
+  assert.deepEqual(imports, ["../vendor/trees.js", "./tree-paths.js"]);
 });
 
 test("the bookmarks section lists files.bookmarks with remove controls", async () => {

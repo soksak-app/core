@@ -73,7 +73,7 @@ lane("workspace version audit", "js-ts", ["scripts/check-versions.mjs"], ["scrip
   lane("CLI", "js-ts", ["packages/cli/**/*.js"], ["packages/cli/test/**/*.mjs"]),
   lane("MCP client", "js-ts", ["packages/mcp/**/*.js"], ["packages/mcp/test/**/*.mjs"]),
   lane("browser plugin", "js-ts", ["plugins/browser/ui/**/*.js"], ["plugins/browser/test/**/*.mjs"], { sharedTests: true }),
-  lane("files plugin", "js-ts", ["plugins/files/ui/**/*.js"], ["plugins/files/test/**/*.mjs"], { sharedTests: true }),
+  lane("files plugin", "js-ts", ["plugins/files/ui/**/*.js", "plugins/files/scripts/**/*.mjs", "plugins/files/vendor/**/*.js"], ["plugins/files/test/**/*.mjs"], { sharedTests: true }),
   lane("shell plugin", "js-ts", ["plugins/shell/ui/**/*.js"], ["plugins/shell/test/**/*.mjs"], { sharedTests: true }),
   lane("terminal plugin", "js-ts", ["plugins/terminal/ui/**/*.js"], ["plugins/terminal/test/**/*.mjs"], { sharedTests: true }),
   lane("browser runtime", "js-ts", ["apps/browser/runtime/**/*.js"], ["apps/browser/test/**/*.mjs"], { sharedTests: true }),

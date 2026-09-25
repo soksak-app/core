@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F13-2-5: 파일 트리 draws the project folder with `@pierre/trees` (bundled with its license texts): file-type icons, selection, a 4-point scrollbar, colors bound to the theme tokens, folders listed when opened, disk changes reconciled per folder, and git status decorations from the new `git` operation of the files sidecar (`files.git`). ☆ bookmarks the selected file. Validated on rebuilt Wails and Tauri hosts (`e2e/files.test.mjs`) and in dark and light captures.
 - F13-2-4: the file tree follows the disk. The files sidecar watches the project folder and the expanded directories (kqueue on macOS) and reports changes, and the files state lists them again, so a file created or removed outside the application appears or leaves without 새로 고침.
 - V5-77: an inset sidebar without a stored width opens at 190 points (`sidebarWidth`); the minimum stays 120, and a double click on the grip still sets it.
 - V5-75: 사이드바 위치 (`rail`) defaults to `inset`, the sidebar inside the card, and its control lists 카드 안 first. A settings file that stores another value keeps it.

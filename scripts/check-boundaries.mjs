@@ -13,7 +13,8 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 
 const ROOT = new URL("../", import.meta.url).pathname;
-const SKIP_DIRS = new Set(["node_modules", "dist", "build", "target", "frontend", "bin", "gen"]);
+// vendor 는 플러그인이 번들한 외부 라이브러리다(docs/spec/plugins.md#third-party-libraries). 그 코드는 이 저장소의 이름을 쓰지 않는다.
+const SKIP_DIRS = new Set(["node_modules", "dist", "build", "target", "frontend", "bin", "gen", "vendor"]);
 const SKIP_FILES = new Set(["package.json", "plugin.json", "sidecar.json"]);
 const SOURCE = /\.(js|mjs|html|css|json|go|rs|m|h|toml)$/;
 
