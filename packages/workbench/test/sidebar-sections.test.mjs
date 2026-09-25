@@ -43,6 +43,7 @@ test("a section observes its plugin status, binds controls with the section cont
   const [state] = sidebarsState();
   assert.equal(state.sections[0].mounted, true, state.sections[0].error);
   assert.equal(state.sections[0].text, "[null,null]send", "without a registered surface the section shows null");
+  assert.equal(state.sections[0].controls, 1, "the section reports its controls");
   const button = container.querySelector("button:not(.set__head)");
   assert.equal(button.dataset.expose, "core.sidebar.section.control");
   assert.equal(button.dataset.command, "probe.send");

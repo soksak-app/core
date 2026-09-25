@@ -241,6 +241,7 @@ export function sidebarsState() {
           id: entry.section.id, name: entry.section.name,
           folded: record.layout === "list" && choice.folded.has(entry.section.id),
           mounted: entry.mounted, error: entry.error, text: entry.body.textContent,
+          controls: entry.body.querySelectorAll('[data-expose="core.sidebar.section.control"]').length,
         })),
       };
     });

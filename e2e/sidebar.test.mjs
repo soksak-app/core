@@ -127,3 +127,68 @@ for (const app of Object.values(APPS)) {
     await assert.rejects(s.run("core.sidebar.section.fold", { sidebar: rail, section: "shell.cwd" }), /does not use the list layout/);
   });
 }
+
+/** 문서 순서의 core.sidebar.section.control 중 sidebar 의 section 이 그린 at 번째 조작 요소의 index. */
+const controlIndex = (sidebars, sidebar, section, at) => {
+  let index = 0;
+  for (const item of sidebars) {
+    for (const value of item.sections) {
+      if (item.sidebar === sidebar && value.id === section) {
+        assert.ok(at < value.controls, `${sidebar} ${section} has ${value.controls} controls`);
+        return index + at;
+      }
+      index += value.controls;
+    }
+  }
+  throw new Error(`no section ${section} in ${sidebar}`);
+};
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: the shell sections show the shell's directory, written lines, and pending runs`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    s.cleanup(() => s.run("core.settings.reset", { key: "sets" }));
+    const rail = "rail-shell";
+    const sections = ["shell.history", "shell.cwd", "shell.jobs"];
+    const sets = (await s.get("core.settings")).values.sets;
+    await s.run("core.settings.set", { patch: { sets: sets.map((set) => set.id === "set-shell" ? { ...set, sections } : set) },
+      scope: "common" });
+    const of = (sidebars) => sidebars.find((item) => item.sidebar === rail);
+    const text = (sidebars, id) => of(sidebars)?.sections.find((item) => item.id === id)?.text;
+    let sidebars = await s.until("core.sidebars", (value) => sections.every((id) => text(value, id) !== undefined
+      && of(value).sections.find((item) => item.id === id).mounted), "the shell rail did not mount the three sections");
+    const surface = of(sidebars).surface;
+    assert.ok(surface, "the rail sections received the shell tab");
+
+    // cwd: 섹션은 shell.cwd 가 보고한 디렉터리를 보인다.
+    await s.run("shell.write", { data: "cd /\n" }, surface);
+    await s.until("shell.cwd", (cwd) => cwd === "/", "the shell did not report /", { surface });
+    sidebars = await s.until("core.sidebars", (value) => text(value, "shell.cwd") === "/",
+      "the cwd section did not show the reported directory");
+
+    // 실행 기록: 쓴 줄이 항목이 되고, 항목을 네이티브 클릭으로 누르면 같은 줄을 다시 쓴다.
+    const history = await s.get("shell.history", surface);
+    assert.equal(history.at(-1), "cd /");
+    sidebars = await s.until("core.sidebars", (value) => text(value, "shell.history") === history.join(""),
+      "the run history section did not show shell.history");
+    await press(s, "core.sidebar.section.control", controlIndex(sidebars, rail, "shell.history", history.length - 1));
+    await s.until("shell.history", (value) => value.length === history.length + 1 && value.at(-1) === "cd /",
+      "a click on a history entry did not write the line again", { surface });
+
+    // 작업: 끝나지 않은 shell.run 이 보이고, 중단 단추가 그 실행을 끝낸다.
+    const running = s.run("shell.run", { command: "sleep 30" }, surface).catch((error) => error);
+    await s.until("shell.jobs", (value) => value.length === 1 && value[0].command === "sleep 30",
+      "shell.jobs did not report the run", { surface });
+    sidebars = await s.until("core.sidebars", (value) => text(value, "shell.jobs") === "sleep 30중단",
+      "the jobs section did not show the pending run");
+    const entries = (await s.get("shell.history", surface)).length;
+    await press(s, "core.sidebar.section.control", controlIndex(sidebars, rail, "shell.jobs", 0));
+    await s.until("shell.jobs", (value) => value.length === 0, "the interrupt control did not end the run", { surface });
+    assert.equal((await s.get("shell.history", surface)).length, entries, "the press wrote a history line instead");
+    const ended = await running;
+    assert.notEqual(ended?.exit, 0, `the interrupted run did not report a failure: ${JSON.stringify(ended)}`);
+    await s.until("core.sidebars", (value) => text(value, "shell.jobs") === "실행 중인 작업 없음",
+      "the jobs section did not show that no run is pending");
+  });
+}
