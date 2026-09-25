@@ -193,13 +193,16 @@ const current = $.NSCursor.currentSystemCursor;
 if (current.isNil()) return JSON.stringify(null);
 const image = (cursor) => cursor.image.TIFFRepresentation;
 const names = { arrow: $.NSCursor.arrowCursor, openHand: $.NSCursor.openHandCursor, closedHand: $.NSCursor.closedHandCursor,
-  pointingHand: $.NSCursor.pointingHandCursor, iBeam: $.NSCursor.IBeamCursor };
+  pointingHand: $.NSCursor.pointingHandCursor, iBeam: $.NSCursor.IBeamCursor,
+  resizeLeftRight: $.NSCursor.resizeLeftRightCursor, resizeUpDown: $.NSCursor.resizeUpDownCursor,
+  columnResize: $.NSCursor.columnResizeCursor, rowResize: $.NSCursor.rowResizeCursor };
 for (const name of Object.keys(names)) {
   if (image(current).isEqualToData(image(names[name]))) return JSON.stringify(name);
 }
 return JSON.stringify("other");`);
 
-/** 지금 화면의 시스템 커서 이름: arrow, openHand, closedHand, pointingHand, iBeam, other, 또는 null. */
+/** 지금 화면의 시스템 커서 이름: arrow, openHand, closedHand, pointingHand, iBeam, resizeLeftRight, resizeUpDown,
+ * columnResize, rowResize, other, 또는 null. */
 export function systemCursor() {
   return readCursor();
 }

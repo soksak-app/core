@@ -549,3 +549,85 @@ for (const app of Object.values(APPS)) {
     assert.equal(dragging, "closedHand", "the pointer while the thumb is dragged is not a closed hand");
   });
 }
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: dividers and card icons show their cursors after moves, focus changes, and terminal output`, { timeout: 180000 }, async (t) => {
+    const { s, surface, origin, session } = await prepare(t, app, "CURSORS");
+    const grid = await s.get("core.grid");
+    const dividers = [];
+    for (let index = 0; ; index++) {
+      const rect = await s.rect("core.divider", index).catch(() => null);
+      if (!rect) break;
+      dividers.push(rect);
+    }
+    const vertical = dividers.find((rect) => rect.height > rect.width * 4);
+    assert.ok(vertical, `no vertical divider in ${JSON.stringify(dividers)}`);
+    const divider = await screenCenter(s, vertical);
+    const close = await screenCenter(s, await s.rect("core.card.close", 0));
+    const text = cellPoint(origin, session, 3, 2);
+    const read = async (point) => {
+      post([{ type: "move", x: text.x, y: text.y }, { type: "move", x: point.x, y: point.y }]);
+      await s.presented();
+      return systemCursor();
+    };
+    const seen = {};
+    seen.dividerAfterText = await read(divider);
+    seen.closeAfterText = await read(close);
+    // 터미널이 계속 출력하는 동안(네이티브 표면이 갱신되는 동안) 디바이더 위의 커서를 여러 번 읽는다.
+    await s.run("terminal.input", { bytes: "i=0; while [ $i -lt 3000 ]; do echo line$i; i=$((i+1)); done\r" }, surface);
+    post([{ type: "move", x: divider.x, y: divider.y }]);
+    seen.dividerDuringOutput = [];
+    for (let i = 0; i < 5; i++) {
+      await s.presented();
+      seen.dividerDuringOutput.push(systemCursor());
+    }
+    // 포인터가 디바이더 위에 있는 채로 다른 카드에 포커스를 준다. 카드마다 종류와 응답자를 함께 적는다.
+    seen.focus = [];
+    for (const card of grid.cards.filter((item) => item.tabs.length)) {
+      await s.run("core.card.focus", { card: card.id });
+      await s.presented();
+      const plugin = card.tabs.find((tab) => tab.id === card.active)?.plugin;
+      seen.focus.push({ card: card.id, plugin, cursor: systemCursor(), responder: (await s.get("host.window")).responder });
+    }
+    seen.dividerAfterFocus = seen.focus.find((item) => item.cursor !== "resizeLeftRight")?.cursor ?? "resizeLeftRight";
+    // 포인터가 아이콘 위에 있는 채로 카드마다 포커스를 준다.
+    post([{ type: "move", x: close.x - 3, y: close.y }, { type: "move", x: close.x, y: close.y }]);
+    await s.presented();
+    // 포커스가 카드 폭을 바꾸면 아이콘이 포인터 밑에서 떠날 수 있다. 아이콘이 포인터 밑에 남아 있으면 손, 떠났으면 손이
+    // 아니어야 한다.
+    seen.closeAfterFocus = [];
+    for (const card of grid.cards.filter((item) => item.tabs.length)) {
+      await s.run("core.card.focus", { card: card.id });
+      await s.presented();
+      const now = await s.rect("core.card.close", 0);
+      const at = await screenCenter(s, now);
+      const under = Math.abs(at.x - close.x) <= now.width / 2 && Math.abs(at.y - close.y) <= now.height / 2;
+      seen.closeAfterFocus.push({ card: card.id, under, cursor: systemCursor() });
+    }
+    // 포인터가 디바이더 위에 있는 채로 디바이더가 떠나면 크기 조절 커서도 떠나야 한다.
+    post([{ type: "move", x: divider.x, y: divider.y - 3 }, { type: "move", x: divider.x, y: divider.y }]);
+    await s.presented();
+    const line = (await s.get("core.grid")).cards.find((card) => card.active === surface)?.c1;
+    // 디바이더 사각형은 문서 좌표이고 격자 선은 판 좌표다.
+    const current = await s.get("core.grid");
+    const moveFrom = current.lines.x;
+    const center = vertical.x + vertical.width / 2 - current.plane.x;
+    const index = moveFrom.findIndex((position) => Math.abs(position - center) <= 4);
+    assert.ok(index > 0, `the hovered divider is not a grid line: ${JSON.stringify({ lines: moveFrom, vertical, line })}`);
+    await s.run("core.boundary.move", { axis: "x", line: index, position: moveFrom[index] + 80 });
+    await s.presented();
+    await s.presented();
+    seen.afterDividerLeft = systemCursor();
+    await s.run("core.boundary.move", { axis: "x", line: index, position: moveFrom[index] });
+    t.diagnostic(`${app.name}: ${JSON.stringify(seen)}`);
+    assert.ok(seen.closeAfterFocus.every((item) => (item.cursor === "pointingHand") === item.under),
+      `close icon after focus changes: ${JSON.stringify(seen)}`);
+    assert.ok(seen.closeAfterFocus.some((item) => item.under), `the icon never stayed under the pointer: ${JSON.stringify(seen)}`);
+    assert.ok(!["resizeLeftRight", "columnResize"].includes(seen.afterDividerLeft), `the resize cursor stayed after the divider left: ${JSON.stringify(seen)}`);
+    const resize = ["resizeLeftRight", "columnResize"];
+    assert.ok(resize.includes(seen.dividerAfterText), `divider after text: ${JSON.stringify(seen)}`);
+    assert.equal(seen.closeAfterText, "pointingHand", `close icon after text: ${JSON.stringify(seen)}`);
+    assert.ok(seen.dividerDuringOutput.every((name) => resize.includes(name)), `divider during output: ${JSON.stringify(seen)}`);
+    assert.ok(resize.includes(seen.dividerAfterFocus), `divider after a focus change: ${JSON.stringify(seen)}`);
+  });
+}

@@ -71,6 +71,30 @@ static void reconfigureSurfaceWebviews(NSView *root) {
     return self;
 }
 - (void)dealloc { [_overlays release]; [super dealloc]; }
+// 창의 뷰 배치가 바뀌면 AppKit 은 포인터 아래 뷰에 cursorUpdate: 로 지금 위치의 커서를 정하라고 요청한다. WKWebView 는
+// 이 메시지를 처리하지 않아 창의 기본 동작이 화살표를 설정하고, 페이지가 정한 커서(디바이더의 크기 조절, 아이콘의
+// 손)를 덮는다. WebKit 은 포인터 위치를 추적 영역 소유자의 mouseMoved: 로 받아 페이지 커서를 계산하며, 레이아웃 뒤에는
+// 스스로 같은 위치의 이동으로 다시 계산한다. 그래서 실제 포인터 위치를 포인터 아래 문서의 그 입구로 넘긴다. 버튼을
+// 누른 동안은 끌기이므로 넘기지 않는다.
+- (void)cursorUpdate:(NSEvent *)event {
+    NSWindow *window = self.window;
+    if (!window || NSEvent.pressedMouseButtons != 0) return;
+    NSPoint location = window.mouseLocationOutsideOfEventStream;
+    NSView *hit = [self hitTest:[self.superview convertPoint:location fromView:nil]];
+    while (hit && ![hit isKindOfClass:WKWebView.class]) hit = hit.superview;
+    if (!hit) return;
+    NSEvent *moved = [NSEvent mouseEventWithType:NSEventTypeMouseMoved location:location
+        modifierFlags:NSEvent.modifierFlags timestamp:NSProcessInfo.processInfo.systemUptime
+        windowNumber:window.windowNumber context:nil eventNumber:0 clickCount:0 pressure:0];
+    for (NSTrackingArea *area in hit.trackingAreas) {
+        // WebKit 의 추적 영역은 보이는 영역 전체(NSTrackingInVisibleRect)이므로 rect 를 비교하지 않는다. 뷰는 이미
+        // 포인터 위치의 히트 테스트로 골랐다.
+        if ((area.options & NSTrackingMouseMoved) && [area.owner respondsToSelector:@selector(mouseMoved:)]) {
+            [area.owner mouseMoved:moved];
+            return;
+        }
+    }
+}
 - (NSView *)hitTest:(NSPoint)point {
     if (self.hidden || self.alphaValue <= 0) return nil;
     NSPoint local = [self convertPoint:point fromView:self.superview];
