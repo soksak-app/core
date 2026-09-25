@@ -50,6 +50,14 @@ async function report(s, surface, on, count, off, act) {
   return Buffer.from(hex, "hex").toString("latin1");
 }
 
+/** 검사가 쓴 응답 줄(R<n>:…)이 검사 뒤에 남지 않도록 터미널 탭을 닫는다. */
+async function closeTerminalTabs(s) {
+  const grid = await s.get("core.grid");
+  for (const tab of grid.cards.flatMap((card) => card.tabs).filter((tab) => tab.plugin === "terminal")) {
+    await s.run("core.tab.close", { tab: tab.id });
+  }
+}
+
 const text = (screen, row) => screen[row].map((cell) => cell.ch ?? " ").join("").trimEnd();
 const at = (screen, row, col) => screen[row][col].ch ?? " ";
 
@@ -59,6 +67,7 @@ for (const app of Object.values(APPS)) {
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
+    s.cleanup(() => closeTerminalTabs(s));
     const surface = terminal.surface;
     await readScreenUntil(s, surface, (lines) => lines.some((line) => line.includes("$")), "shell prompt missing");
     await s.run("terminal.input", { bytes: SETUP }, surface);
@@ -142,6 +151,7 @@ for (const app of Object.values(APPS)) {
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
+    s.cleanup(() => closeTerminalTabs(s));
     const surface = terminal.surface;
     await readScreenUntil(s, surface, (lines) => lines.some((line) => line.includes("$")), "shell prompt missing");
     await s.run("terminal.input", { bytes: SETUP }, surface);
@@ -247,6 +257,7 @@ for (const app of Object.values(APPS)) {
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
+    s.cleanup(() => closeTerminalTabs(s));
     const surface = terminal.surface;
     await readScreenUntil(s, surface, (lines) => lines.some((line) => line.includes("$")), "shell prompt missing");
     await s.run("terminal.input", { bytes: SETUP }, surface);
