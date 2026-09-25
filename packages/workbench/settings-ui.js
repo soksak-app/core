@@ -394,7 +394,6 @@ const SIZE_LABELS = {
   sidebarMinWidth: "카드 안 사이드바 최소 폭",
   sidebarMaxWidth: "카드 안 사이드바 최대 폭",
   sidebarWidth: "카드 안 사이드바 처음 폭",
-  sidebarFoldedWidth: "접은 사이드바 폭",
   railWidth: "레일 처음 폭",
 };
 

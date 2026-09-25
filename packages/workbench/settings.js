@@ -175,11 +175,10 @@ export const defaults = {
   sets: [],
   links: [],
 
-  /* 배치 값(pt). 카드 안 사이드바의 최소·최대·처음·접은 폭과 새 레일 열의 폭이다(docs/spec/settings.md). */
+  /* 배치 값(pt). 카드 안 사이드바의 최소·최대·처음 폭과 새 레일 열의 폭이다(docs/spec/settings.md). */
   sidebarMinWidth: 120,
   sidebarMaxWidth: 480,
   sidebarWidth: 190,
-  sidebarFoldedWidth: 28,
   railWidth: 190,
 };
 
@@ -188,7 +187,6 @@ export const LAYOUT_RANGES = {
   sidebarMinWidth: [60, 400],
   sidebarMaxWidth: [120, 800],
   sidebarWidth: [60, 800],
-  sidebarFoldedWidth: [16, 64],
   railWidth: [120, 480],
 };
 

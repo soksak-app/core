@@ -23,12 +23,11 @@ test("the layout values are settings with the former constants as defaults", () 
   assert.equal(defaults.sidebarMinWidth, 120);
   assert.equal(defaults.sidebarMaxWidth, 480);
   assert.equal(defaults.sidebarWidth, 190);
-  assert.equal(defaults.sidebarFoldedWidth, 28);
   assert.equal(defaults.railWidth, 190);
 });
 
 test("a layout value outside its range or order is rejected before anything changes", () => {
-  assert.throws(() => set({ sidebarFoldedWidth: 8 }, "common"), /sidebarFoldedWidth/);
+  assert.throws(() => set({ railWidth: 8 }, "common"), /railWidth/);
   assert.throws(() => set({ sidebarMinWidth: 200 }, "common"), /sidebarMinWidth .*sidebarWidth .*sidebarMaxWidth/);
   assert.throws(() => set({ sidebarWidth: 500 }, "common"), /sidebarMinWidth .*sidebarWidth .*sidebarMaxWidth/);
   assert.throws(() => set({ railWidth: 1.5 }, "common"), /railWidth/);
