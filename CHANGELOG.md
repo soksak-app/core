@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-68: the build registers each bundle again with LaunchServices, so the Dock shows the soksak icon for Wails too.
 - V5-68: the title bar shows the soksak logo in the colors of the dark and light modes, and both applications use the soksak icon in the Dock.
 - V5-67: `host.window` reports whether other windows cover the whole window, and drag measurements refuse to run while they do.
 - V5-65, V5-66: the Wails settings webview again matches the window content, and a Wails window that opens hidden behind other windows registers its main webview and loads its project.

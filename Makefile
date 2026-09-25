@@ -159,8 +159,10 @@ WAILS_RELEASE = $(WAILS_RELEASE_BUNDLE)/Contents/MacOS/soksak-wailsv3
 # 번들의 Info.plist 와 Dock 아이콘을 쓴다. 첫 인자는 번들, 둘째 인자는 애플리케이션이다.
 bundle-info = mkdir -p $(1)/Contents/MacOS $(1)/Contents/Resources && cp apps/$(2)/platform/darwin/Info.plist $(1)/Contents/Info.plist \
 	&& cp apps/$(2)/platform/darwin/AppIcon.icns $(1)/Contents/Resources/AppIcon.icns
-# 번들 안의 실행 파일과 Info.plist 를 ad hoc 서명으로 봉인한다.
-bundle-sign = codesign --sign - --force --deep $(1)
+# 번들 안의 실행 파일과 Info.plist 를 ad hoc 서명으로 봉인하고 LaunchServices 에 다시 등록한다. Dock 은
+# 등록된 번들 정보로 아이콘을 보이며, 번들 안의 파일만 바뀌면 LaunchServices 는 등록을 새로 읽지 않는다.
+LSREGISTER = /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
+bundle-sign = codesign --sign - --force --deep $(1) && $(LSREGISTER) -f $(1)
 
 native-darwin:
 	@$(MAKE) -C native/darwin

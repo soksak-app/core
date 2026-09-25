@@ -153,7 +153,7 @@ Wails 바인딩 서비스 이름은 `github.com/min-median-max/soksak/packages/h
 
 `soksak-stage`는 프런트엔드를 `apps/<app>/src/frontend/`에 배치하며, 각 애플리케이션의 `.gitignore`가 이 디렉터리를 제외한다. `go:embed`는 포함하는 패키지 디렉터리 아래의 파일만 포함할 수 있으므로 Wails는 `src/main.go`의 `//go:embed all:frontend`로 이 디렉터리를 포함한다. `host.Run`은 `frontend/`를 자산 루트로 사용한다. Tauri는 `tauri.conf.json`의 `"frontendDist": "src/frontend"`로 이 디렉터리를 읽고, `src/main.rs`는 `frontend/background.js`를 포함한다.
 
-macOS에서 각 애플리케이션은 애플리케이션 번들에서 실행된다. 운영체제의 알림 센터가 번들에서 실행된 프로세스만 받기 때문이다([플러그인](plugins.ko.md#탭-알림)). 디버그 실행 파일은 `target/debug/soksak-wailsv3.app/Contents/MacOS/soksak-wailsv3`와 `target/debug/soksak-tauriv2.app/Contents/MacOS/soksak-tauriv2`이며, 릴리스 번들은 `target/release/`에 있다. 빌드는 각 번들의 `Contents/Info.plist`를 실행 파일과 번들 식별자(`com.soksak.wailsv3`, `com.soksak.tauriv2`)를 적은 `apps/<app>/platform/darwin/Info.plist`에서 쓰고, Dock이 보이는 soksak 아이콘 `apps/<app>/platform/darwin/AppIcon.icns`를 `Contents/Resources/`에 복사하며, 번들에 ad hoc 서명을 한다. 스테이징은 사이드카 실행 파일을 번들의 `Contents/MacOS/`에 복사하고, 호스트는 실행 중인 실행 파일의 디렉터리에서 사이드카를 시작한다.
+macOS에서 각 애플리케이션은 애플리케이션 번들에서 실행된다. 운영체제의 알림 센터가 번들에서 실행된 프로세스만 받기 때문이다([플러그인](plugins.ko.md#탭-알림)). 디버그 실행 파일은 `target/debug/soksak-wailsv3.app/Contents/MacOS/soksak-wailsv3`와 `target/debug/soksak-tauriv2.app/Contents/MacOS/soksak-tauriv2`이며, 릴리스 번들은 `target/release/`에 있다. 빌드는 각 번들의 `Contents/Info.plist`를 실행 파일과 번들 식별자(`com.soksak.wailsv3`, `com.soksak.tauriv2`)를 적은 `apps/<app>/platform/darwin/Info.plist`에서 쓰고, Dock이 보이는 soksak 아이콘 `apps/<app>/platform/darwin/AppIcon.icns`를 `Contents/Resources/`에 복사하며, 번들에 ad hoc 서명을 하고 LaunchServices에 다시 등록한다. Dock은 등록된 번들의 아이콘을 보이며, 번들 안의 파일만 바뀌면 LaunchServices는 번들을 다시 읽지 않는다. 스테이징은 사이드카 실행 파일을 번들의 `Contents/MacOS/`에 복사하고, 호스트는 실행 중인 실행 파일의 디렉터리에서 사이드카를 시작한다.
 
 ## 워크스페이스 파일
 
