@@ -49,7 +49,7 @@ async function serve(t) {
       @media (prefers-color-scheme: dark) {
         body { background:rgb(21,28,42); color:rgb(235,238,245); }
       }
-    </style><body>${name === "block" ? BLOCK : ""}<div style="height:6000px">${name}</div>`);
+    </style>${name === "scheme" ? "<script>document.title = matchMedia('(prefers-color-scheme: dark)').matches ? 'scheme-dark' : 'scheme-light'</script>" : ""}<body>${name === "block" ? BLOCK : ""}<div style="height:6000px">${name}</div>`);
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   t.after(() => new Promise((resolve) => {
@@ -63,7 +63,7 @@ const LIGHT_DOCUMENT = [231, 233, 238];
 const DARK_DOCUMENT = [21, 28, 42];
 
 /** 현재 문서 영역 중앙의 실제 창 픽셀을 캡처해 읽는다. */
-async function documentPixel(t, s, surface) {
+async function documentPixel(t, s, surface, at = (rect) => ({ x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 })) {
   const rect = await regionRect(s, surface);
   const capture = await s.request("diagnostics.capture.start", {});
   let stopped = false;
@@ -77,8 +77,9 @@ async function documentPixel(t, s, surface) {
   const files = frames(result.frames);
   assert.ok(files.length > 0, "document pixel capture produced no frames");
   const frame = readFrame(files.at(-1));
-  const x = Math.floor(rect.x + rect.width / 2);
-  const y = Math.floor(rect.y + rect.height / 2);
+  const point = at(rect);
+  const x = Math.floor(point.x);
+  const y = Math.floor(point.y);
   assert.ok(x >= 0 && y >= 0 && x < frame.width && y < frame.height,
     `document sample ${x},${y} is outside ${frame.width}×${frame.height}`);
   const value = pixel(frame, x, y);
@@ -448,6 +449,13 @@ for (const app of Object.values(APPS)) {
     await fresh(s);
     const [browser] = await browsers(s);
     const surface = browser.surface;
+    // 앱 밝은 모드에서 문서 영역이 받는 prefers-color-scheme 을 로컬 문서의 제목으로 잰다.
+    await s.run("core.settings.set", { patch: { mode: "light" } });
+    await s.until("core.settings", (value) => value.values.mode === "light" && !value.saving, "host did not settle light theme");
+    const base = await serve(t);
+    await s.run("browser.navigate", { url: `${base}/scheme` }, surface);
+    const scheme = (await s.until("browser.location", (value) => value.url === `${base}/scheme` && !value.loading &&
+      /^scheme-(dark|light)$/.test(value.title), "the scheme document did not report its color scheme", { surface })).title;
     const google = "https://www.google.com/";
     await s.run("browser.navigate", { url: google }, surface);
     const location = await s.until("browser.location", (value) =>
@@ -459,13 +467,23 @@ for (const app of Object.values(APPS)) {
     await s.until("core.settings", (value) => value.values.mode === "light" && !value.saving,
       "host did not settle light theme for Google");
     const light = await documentPixel(t, s, surface);
+    // 실패하면 표본 점과 모서리의 픽셀, 점의 소유자, 문서 영역, 앱 모드와 문서 상태를 함께 알린다.
+    const rect = await regionRect(s, surface);
+    const sample = { x: Math.floor(rect.x + rect.width / 2), y: Math.floor(rect.y + rect.height / 2) };
+    const measuredLight = { light, scheme, sample, hit: await s.run("host.hit", sample),
+      corner: await documentPixel(t, s, surface, (r) => ({ x: r.x + 4, y: r.y + 4 })),
+      region: (await s.get("host.window")).documents.find((d) => d.surface === surface),
+      mode: (await s.get("core.settings")).values.mode,
+      location: await s.get("browser.location", surface) };
     await s.run("core.settings.set", { patch: { mode: "dark" } });
     await s.until("core.settings", (value) => value.values.mode === "dark" && !value.saving,
       "host did not settle dark theme for Google");
     const dark = await documentPixel(t, s, surface);
-    assert.deepEqual(light, [255, 255, 255], `Google site preference was not light in the disposable profile: ${JSON.stringify(light)}`);
+    // 문서 저장소는 검사 설정 폴더와 달리 실행 사이에 남으므로 Google 이 기억한 자기 모양은 실행마다 다를 수 있다.
+    // 계약은 앱 모드가 그 모양을 바꾸지 않는 것이고, 문서 영역의 prefers-color-scheme 은 앱 모드를 따른다.
+    assert.equal(scheme, "scheme-light", `the region did not receive the light color scheme: ${JSON.stringify(measuredLight)}`);
     assert.deepEqual(dark, light,
-      `Google's site preference was overwritten by the host theme: ${JSON.stringify({ light, dark })}`);
+      `Google's site preference was overwritten by the host theme: ${JSON.stringify({ ...measuredLight, dark })}`);
     assert.equal((await s.get("browser.location", surface)).url, location.url,
       "host theme change must not change Google's site location");
   });
