@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F13-5-2: a click on the inset sidebar divider folds or unfolds at once; the double click and the host `pointerTiming` call are removed, and the folded divider shows a 2-point line.
 - F13-2-6 (files): the file tree header uses card-header icon buttons (star, rotate-cw) through the new section context `icon(name)`; the tree has no extra padding, its header text and row chevrons line up with the section header's chevron, and rows use the sidebar's 12-point text and 20-point row height.
 - F13-1-1: each sidebar's selected tab and folded sections are saved with the space (`sidebars` in the space layout) and shown again after a reload or a restart. The `sidebar-sections.js` part landed in d5e71587.
 - V5-76-1: the browser example opens a project without a page error. Without a host, surfaces that need sidecars or native regions show a placeholder instead of failing, the compositor receives the page's own placements, and `report` writes to the console. `make browser-example-check` opens a project in headless Chrome and fails on any console error.
