@@ -29,6 +29,30 @@ for (const app of Object.values(APPS)) {
       "a posted click did not give the terminal region native focus");
   });
 
+  test(`${app.name}: an injected wheel keeps its own modifier flags while a physical Shift is held`, { timeout: 60000 }, async (t) => {
+    requireTrusted();
+    const s = await open(t, app);
+    assert.ok(s, `${app.binary} is not built`);
+    await fresh(s);
+    const [terminal] = await ensureTerminals(s, 1);
+    const surface = terminal.surface;
+    await s.run("terminal.input", { bytes: "i=0; while [ $i -lt 200 ]; do echo row$i; i=$((i+1)); done\r" }, surface);
+    await s.until("terminal.session", (session) => session.scrollback?.history > 20, "the rows did not exceed the screen", { surface });
+    const view = await s.rect("terminal.view", undefined, surface);
+    await bringFront(s, app, view);
+    // 실제 Shift 를 누른 상태를 만든다. 원본 없는 이벤트는 이 상태를 물려받는다.
+    post([{ type: "key", code: 56, down: true, modifiers: ["shift"] }]);
+    t.after(() => post([{ type: "key", code: 56, down: false }]));
+    const seen = (await s.get("core.surface.input", surface)).at(-1)?.sequence ?? 0;
+    await s.pointer(view.document.x + view.x + view.width / 2, view.document.y + view.y + view.height / 2, "scroll", { deltaY: -120 });
+    const events = await s.until("core.surface.input", (list) => list.some((event) => event.sequence > seen && event.type === "wheel"),
+      "the injected wheel did not reach the terminal page", { surface });
+    const wheel = events.find((event) => event.sequence > seen && event.type === "wheel");
+    assert.deepEqual(wheel.modifiers, [], "the injected wheel carried the physical modifier state");
+    await s.until("terminal.session", (value) => value.scrollback.offset > 0,
+      "the injected vertical wheel did not scroll the history while Shift was held", { surface });
+  });
+
   test(`${app.name}: the real-input pasteboard helpers restore every item type`, { timeout: 30000 }, async (t) => {
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);

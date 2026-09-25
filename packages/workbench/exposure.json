@@ -764,7 +764,7 @@
       },
       {
         "name": "core.surface.input",
-        "description": "Registered by every plugin surface page: its last 32 pointer, click, wheel, and key events in order.",
+        "description": "Registered by every plugin surface page: its last 32 pointer, click, wheel, and key events in order, with the modifier keys each event carries.",
         "schema": {
           "type": "array",
           "items": {
@@ -787,6 +787,12 @@
               },
               "key": {
                 "type": "string"
+              },
+              "modifiers": {
+                "type": "array",
+                "items": {
+                  "enum": ["shift", "alt", "control", "command"]
+                }
               }
             }
           }

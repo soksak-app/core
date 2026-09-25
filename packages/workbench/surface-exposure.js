@@ -2,6 +2,8 @@
 // staged separately through diagnostics.js and is not part of this module.
 const INPUT_TYPES = ["pointerdown", "pointerup", "pointermove", "click", "wheel", "keydown"];
 const INPUT_KEPT = 32;
+// 이벤트가 담은 수정 키. 네이티브 이벤트의 플래그가 그대로 드러난다.
+const MODIFIERS = [["shiftKey", "shift"], ["altKey", "alt"], ["ctrlKey", "control"], ["metaKey", "command"]];
 
 export function registerSurfaceExposure({ root, expose, view = root.ownerDocument?.defaultView ?? globalThis, declarations = null }) {
   if (!root || !expose) throw new TypeError("surface exposure requires a root and exposure");
@@ -33,7 +35,8 @@ export function registerSurfaceExposure({ root, expose, view = root.ownerDocumen
     const frame = rect();
     events.push({ sequence: ++sequence, type: event.type, trusted: event.isTrusted,
       x: event.clientX === undefined ? null : event.clientX - frame.left,
-      y: event.clientY === undefined ? null : event.clientY - frame.top, key: event.key ?? null });
+      y: event.clientY === undefined ? null : event.clientY - frame.top, key: event.key ?? null,
+      modifiers: MODIFIERS.filter(([property]) => event[property]).map(([, name]) => name) });
     if (events.length > INPUT_KEPT) events.shift();
     inputNotify?.();
   };

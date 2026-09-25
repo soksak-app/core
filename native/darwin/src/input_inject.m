@@ -78,6 +78,8 @@ sp_input_result sp_input_pointer(void *handle, double x, double y, int phase, in
         CGEventRef scroll = CGEventCreateScrollWheelEvent2(NULL, kCGScrollEventUnitPixel, 2,
             (int32_t)-deltaY, (int32_t)-deltaX, 0);
         if (!scroll) return SP_INPUT_REJECTED;
+        // 원본 없는 이벤트는 실제 수정 키 상태를 물려받는다. 포인터 입력은 수정 키를 받지 않으므로 비운다.
+        CGEventSetFlags(scroll, 0);
         NSPoint screen = [window convertPointToScreen:point];
         CGFloat top = NSMaxY(NSScreen.screens.firstObject.frame);
         CGEventSetLocation(scroll, CGPointMake(screen.x, top - screen.y));
