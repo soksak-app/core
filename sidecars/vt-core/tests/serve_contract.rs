@@ -4055,3 +4055,15 @@ async fn an_invalid_mouse_operation_is_rejected() {
     assert!(output.contains("mouse requires phase"), "{output}");
     assert!(writes.is_empty());
 }
+
+#[tokio::test]
+async fn focus_changes_are_reported_to_a_program_that_enables_focus_reports() {
+    let focus = |focused: bool| format!("{{\"surface\":\"s1\",\"body\":{{\"operation\":\"input\",\"focus\":{{\"focused\":{focused}}}}}}}\n");
+    let requests = [focus(true), focus(true), focus(false)].concat();
+    let modes = Modes { focus_in_out: true, ..Modes::default() };
+    let (_, _, writes) = serve_scroll(Some(modes), &requests).await;
+    assert_eq!(written(&writes), vec!["\x1b[I".to_string(), "\x1b[O".to_string()],
+        "a focus report must follow each change and only a change");
+    let (_, _, writes) = serve_scroll(None, &requests).await;
+    assert!(writes.is_empty(), "focus changes must not be written without ?1004: {:?}", written(&writes));
+}

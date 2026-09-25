@@ -193,7 +193,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(await reply(s, surface, "\\033]52;c;?\\007", "\"$b\""), `\x1b]52;c;${Buffer.from("OSC52-ALLOWED").toString("base64")}`,
       "OSC 52 query");
   });
-  test(`${app.name}: mouse, paste, and alternate-scroll modes report input`, { timeout: 120000 }, async (t) => {
+  test(`${app.name}: mouse, focus, paste, and alternate-scroll modes report input`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
@@ -236,5 +236,14 @@ for (const app of Object.values(APPS)) {
     writePasteboard([{ "public.utf8-plain-text": Buffer.from("PASTE").toString("base64") }]);
     assert.equal(await report(s, surface, "\\033[?2004h", 17, "\\033[?2004l", () => s.run("terminal.paste", {}, surface)),
       "\x1b[200~PASTE\x1b[201~", "?2004 bracketed paste");
+    // ?1004: 초점을 잃고 얻을 때 알린다.
+    await s.run("terminal.focus", {}, surface);
+    await s.until("terminal.cursor", (cursor) => cursor.focused === true, "the terminal did not take focus", { surface });
+    const outside = await s.rect("core.card.close", 0);
+    assert.equal(await report(s, surface, "\\033[?1004h", 6, "\\033[?1004l", async () => {
+      await s.click(outside.document.x + outside.x - 40, outside.document.y + outside.y + outside.height / 2);
+      await s.until("terminal.cursor", (cursor) => cursor.focused === false, "the terminal did not lose focus", { surface });
+      await s.run("terminal.focus", {}, surface);
+    }), "\x1b[O\x1b[I", "?1004 focus report");
   });
 }

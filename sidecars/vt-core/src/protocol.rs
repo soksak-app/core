@@ -2142,6 +2142,16 @@ async fn surface_task(
                     SurfaceCommand::Focus { focused: next } => {
                         cursor_activity = Instant::now();
                         last_cursor_frame = None;
+                        // ?1004 를 켠 프로그램에는 초점이 바뀔 때마다 알린다.
+                        if next != focused && engine.modes().focus_in_out {
+                            if let Some(ref sid) = session_id {
+                                let report: &[u8] = if next { b"\x1b[I" } else { b"\x1b[O" };
+                                if let Err(error) = session_port.write(sid, report).await {
+                                    let response = json!({"surface": surface_id, "body": {"error": "focus report write failed", "reason": error}});
+                                    if output_tx.send(response.to_string()).await.is_err() { return; }
+                                }
+                            }
+                        }
                         focused = next;
                         let screen = decorate_screen(engine.screen(), focused, &preedit, &cursor_policy, cursor_activity.elapsed().as_millis() as u64);
                         if let Some(ref mut state) = image_state {
