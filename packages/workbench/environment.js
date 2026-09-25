@@ -11,6 +11,7 @@ import {
 } from "@soksak/plugin-api";
 
 let loaded = null;
+let units = [];
 
 async function readJson(path) {
   const response = await fetch(`/${path}`);
@@ -62,8 +63,18 @@ export async function loadEnvironment() {
     if (exposes) exposure.declare(manifest.id, exposes);
   }
   setSidebarDefaults(environment.sidebars);
+  units = manifests.map(({ manifest }) => ({
+    id: manifest.id, name: manifest.name, surface: Boolean(manifest.surface),
+    sections: (manifest.sections ?? []).map((s) => s.id),
+  }));
   loaded = environment;
 }
+
+/**
+ * 환경의 플러그인을 environment.json 순서로 반환한다. 설정 창의 플러그인 목록이 쓴다.
+ * 표면이 없는 플러그인도 포함한다. 항목은 {id, name, surface, sections} 다.
+ */
+export const pluginUnits = () => units;
 
 /** 불러온 environment.json 을 반환한다. 불러오기 전이면 예외를 던진다. */
 export function environment() {

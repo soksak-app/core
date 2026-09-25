@@ -85,10 +85,10 @@ for (const app of Object.values(APPS)) {
     await s.run("core.picker.close");
     await s.until("core.picker", (picker) => !picker.open, "the tab list did not close");
 
-    await s.run("core.card.split", { card: "shell", axis: "y", plugin: "browser" });
+    const second = await s.run("core.card.split", { card: "shell", axis: "y", plugin: "browser" });
     await s.until("core.grid", (grid) => panes(grid).length === panes(start).length + 1, "the second split did not add a card");
-    await s.run("core.layout.reset");
-    await s.until("core.grid", (grid) => ids(grid).join() === ids(start).join(), "core.layout.reset did not restore the layout");
+    await s.run("core.card.close", { card: second.card });
+    await s.until("core.grid", (grid) => ids(grid).join() === ids(start).join(), "closing the second split did not restore the layout");
   });
 
   test(`${app.name}: settings modal commands change its section, scope, and position`, async (t) => {
@@ -97,7 +97,7 @@ for (const app of Object.values(APPS)) {
     await fresh(s);
     await s.run("core.settings.open");
     const opened = await s.until("core.settings-modal", (modal) => modal.open, "settings did not open");
-    for (const section of ["sidebars", "compositing", "general"]) {
+    for (const section of ["sidebars", "plugins", "general"]) {
       await s.run("core.settings-modal.nav", { section });
       await s.until("core.settings-modal", (modal) => modal.section === section, `settings did not show ${section}`);
     }

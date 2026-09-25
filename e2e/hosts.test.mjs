@@ -87,8 +87,8 @@ test("both hosts answer the same page the same way", async (t) => {
     const log = await s.transcript();
     await s.run("core.settings.open");
     const { controls } = await s.until("core.settings-modal", (modal) => modal.open, "settings did not open");
-    assert.ok(controls.some((c) => c.key === "nav:compositing"), "settings must have a compositing section");
-    await s.run("core.settings-modal.nav", { section: "compositing" });
+    assert.ok(controls.some((c) => c.key === "nav:sidebars"), "settings must have a sidebars section");
+    await s.run("core.settings-modal.nav", { section: "sidebars" });
     await log.until((lines) => lines.some((line) => line.startsWith("host overlayPlace")), "settings were not placed");
     logs[name] = await log.stop();
     await s.run("core.settings.close");

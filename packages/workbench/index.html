@@ -75,12 +75,12 @@ import {
 
 /* 표면을 모사하고 보고한다. 판은 슬롯 요소에 값을 기록만 하고 측정과 보고는 이쪽이
    담당한다. */
-import { latest, onCommit, onKnobChange, onRun, publish, publishAhead } from "./compositor.js";
+import { latest, onCommit, onRun, publish, publishAhead } from "./compositor.js";
 import { authorizeSurface, disposeSurfacesExcept, focusSurface, waitSurfaceCompositionDeclared } from "./surface-modules.js";
 
 /* 판 하나. 이 문서는 판의 렌더링 방식을 알지 않고 렌더 완료만 수신한다. */
 import {
-  build, currentGrid, onLayout, onRender, takeSurfaceFocus, setGap, settle, tabsOf,
+  currentGrid, onLayout, onRender, takeSurfaceFocus, setGap, settle, tabsOf,
 } from "./plane.js";
 
 /* 판과 컴포지터를 읽어 검증한다. 아무것도 변경하지 않으므로 그 둘은 이 모듈을
@@ -535,15 +535,8 @@ function drawBars() {
 }
 
 const library = createLibrary(document.getElementById("library"), coreChanged);
-/** 판을 초기 배치로 다시 만든다. 라이브러리 화면에서는 판이 없다. */
-function resetLayout() {
-  if (projects.inLibrary()) throw new Error("the library has no layout");
-  build();
-  drawBars();
-  drawSettings();
-}
 await installCoreExposure({
-  library, renames, resetLayout,
+  library, renames,
   // 판의 그리기 순서. 배치를 바꾼 코어 명령은 이것을 기다린 뒤 답한다.
   drawn: async () => {
     await drawing;
@@ -600,7 +593,6 @@ if (!chrome) addEventListener("pagehide", () => { projects.flush().catch(showErr
 
 /* 합성 손잡이가 바뀌면 다시 그린다. 손잡이는 렌더에서 읽히므로 다시 그리지 않으면
    바꾼 값이 나타나지 않는다. */
-onKnobChange(() => settle());
 
 /* 설정이 바뀌면 판과 크롬을 다시 그린다. 첫 프로젝트를 만든 뒤에 등록한다. 그 전에
    호출되면 그릴 프로젝트가 없다. */

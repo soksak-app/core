@@ -62,7 +62,7 @@ for (const app of Object.values(APPS)) {
     await s.until("core.settings-modal", (modal) => modal.open, "settings did not open");
     for (const scope of ["common", "project"]) {
       await s.run("core.settings-modal.scope", { scope });
-      for (const section of ["general", "sidebars", "compositing"]) {
+      for (const section of ["general", "plugins", "sidebars"]) {
         await s.run("core.settings-modal.nav", { section });
         await s.until("core.settings-modal", (modal) => modal.section === section && modal.scope === scope,
           `settings did not show ${scope} ${section}`);

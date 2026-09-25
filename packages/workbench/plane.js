@@ -96,12 +96,7 @@ const pickerEl = document.getElementById("picker");
 
 // 레일을 닫으면 카드와 함께 폭도 사라진다. 사용자가 드래그로 지정한 폭을 플러그인
 // 종류별로 보관했다가 다시 열 때 그 폭으로 복원한다. 설정이 아니라 스페이스의 값이다.
-//
-// 초기 폭은 종류와 무관하게 같은 값이다. 등록된 종류마다 같은 값으로 채우므로
-// 플러그인이 늘어도 이 파일을 수정할 필요가 없다.
-const RAIL_WIDTH = 190;
-const freshRailWidth = () =>
-  Object.fromEntries(plugins().map((p) => [p.id, RAIL_WIDTH]));
+// 폭을 바꾼 적이 없는 종류는 설정 railWidth 로 연다.
 // 등록이 끝난 뒤에 채운다. 모듈 평가 시점에 읽으면 등록 순서에 따라 결과가 달라진다.
 let railWidth = {};
 let edgeWidth = {};
@@ -820,16 +815,13 @@ function dropTab(fromId, tabId, hit) {
    활성 탭의 플러그인에 연결된 세트가 있으면 카드 안 표면 왼쪽에 사이드바를 둔다. 카드의 크기는
    바뀌지 않고, 표면은 자기 자리(.slot)를 따른다. 폭과 접힘은 카드 데이터에 저장한다. */
 
-const SIDEBAR_MIN = 120;
-const SIDEBAR_MAX = 480;
-
 /** 카드가 inset 사이드바를 가지면 그 상태를, 아니면 null 을 반환한다. */
 export function cardSidebar(card) {
   if (value("rail") !== "inset" || !card?.data) return null;
   const kind = activeTab(card)?.plugin;
   if (!kind || !linkedSet("rail", kind)) return null;
   const state = card.data.sidebar ?? {};
-  return { width: state.width ?? SIDEBAR_MIN, collapsed: state.collapsed === true };
+  return { width: state.width ?? value("sidebarWidth"), collapsed: state.collapsed === true };
 }
 
 function sidebarCard(id) {
@@ -848,8 +840,9 @@ export function toggleSidebar(id) {
 
 /** 카드의 inset 사이드바 폭을 정한다. */
 export function sizeSidebar(id, width) {
-  if (!Number.isFinite(width) || width < SIDEBAR_MIN || width > SIDEBAR_MAX) {
-    throw new Error(`sidebar width must be ${SIDEBAR_MIN} to ${SIDEBAR_MAX} points`);
+  const min = value("sidebarMinWidth"), max = value("sidebarMaxWidth");
+  if (!Number.isFinite(width) || width < min || width > max) {
+    throw new Error(`sidebar width must be ${min} to ${max} points`);
   }
   const card = sidebarCard(id);
   card.data.sidebar = { width: Math.round(width), collapsed: cardSidebar(card).collapsed };
@@ -884,7 +877,7 @@ function drawSidebar(el, card) {
       grip.setPointerCapture(event.pointerId);
       const left = el.getBoundingClientRect().left;
       const move = (e) => {
-        const width = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, e.clientX - left));
+        const width = Math.min(value("sidebarMaxWidth"), Math.max(value("sidebarMinWidth"), e.clientX - left));
         run("core.card.sidebar.size", { card: el.dataset.cardId, width });
       };
       const end = () => {
@@ -899,7 +892,7 @@ function drawSidebar(el, card) {
     // 두 번 누르면 가장 좁은 폭으로 정리한다.
     grip.addEventListener("dblclick", (event) => {
       event.stopPropagation();
-      run("core.card.sidebar.size", { card: el.dataset.cardId, width: SIDEBAR_MIN });
+      run("core.card.sidebar.size", { card: el.dataset.cardId, width: value("sidebarMinWidth") });
     });
   }
   const fold = side.querySelector(".side__fold");
@@ -911,7 +904,7 @@ function drawSidebar(el, card) {
   fold.textContent = state.collapsed ? "›" : "‹";
   fold.title = state.collapsed ? "사이드바 펼치기" : "사이드바 접기";
   el.dataset.side = state.collapsed ? "folded" : "open";
-  el.style.setProperty("--side-w", `${state.width}px`);
+  el.style.setProperty("--side-w", `${state.collapsed ? value("sidebarFoldedWidth") : state.width}px`);
   const set = linkedSet("rail", activeTab(card).plugin);
   drawSet(side.querySelector(".set"), card.id, set, { card: card.id, surface: activeTab(card).id });
 }
@@ -941,7 +934,7 @@ function standRail(kind) {
   if (!has) {
     const line = railTarget(id, kind);
     if (line === null) return;
-    grid.insertAt("x", line, { id, data: null, size: railWidth[kind] });
+    grid.insertAt("x", line, { id, data: null, size: railWidth[kind] ?? value("railWidth") });
     grid.setFixed(id, true);
     return;
   }
@@ -1299,7 +1292,7 @@ function seats() {
 }
 
 /** 판을 처음부터 다시 만든다. */
-export function build(kept = fresh()) {
+function build(kept) {
   view?.destroy();
   named = kept.named;
   railWidth = { ...kept.railWidth };
@@ -1427,8 +1420,10 @@ export function adopt(kept) {
 export const fresh = () => ({
   state: initial(),
   focusedId: environment().workspace.focus,
-  railWidth: freshRailWidth(),
-  edgeWidth: { left: 190, right: 210 },
+  railWidth: {},
+  // 좌·우 사이드바를 다시 열 때의 폭. 처음 값은 environment.json 의 left, right 카드 폭이다.
+  edgeWidth: Object.fromEntries(environment().workspace.grid.cards
+    .filter((card) => card.id === "left" || card.id === "right").map((card) => [card.id, card.width])),
   named: 0,
 });
 

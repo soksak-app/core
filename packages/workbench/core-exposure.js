@@ -18,11 +18,12 @@ import {
   applyTheme, defaults, link, onSaved, overridden, reset, saving, scopedValue, set, settingProject, value,
 } from "./settings.js";
 import {
-  closeSettings, moveSettings, onSettingsDrawn, openSettings, settingsModalState, showScope, showSection,
+  closeSettings, editSet, moveSettings, onSettingsDrawn, openSettings, settingsModalState, showPlugin, showScope, showSection,
 } from "./settings-ui.js";
+import { createSet, deleteSet, updateSet } from "./sidebar-sets.js";
 import { latest, seated } from "./compositor.js";
 import { modalState, onFilesDropped, onModalState } from "./host.js";
-import { plugin } from "./registry.js";
+import { plugin, section } from "./registry.js";
 import { systemNotifications } from "./system-notifications.js";
 import { windows } from "@soksak/runtime";
 import { audit, onBinding } from "./commands.js";
@@ -209,7 +210,7 @@ function need(project, id) {
  * drawn 은 판이 예약된 그리기를 모두 마치면 이행되는 promise 를 반환한다. 코어 명령은 실행 뒤 그
  * 그리기를 기다린 다음 답한다. 명령이 배치를 바꾸면 답을 받은 쪽은 이미 그려진 배치를 읽는다.
  */
-export async function installCoreExposure({ library, renames, resetLayout, chrome, drawn }) {
+export async function installCoreExposure({ library, renames, chrome, drawn }) {
   status("core.window.document", () => ({
     timeOrigin: performance.timeOrigin,
     readyState: document.readyState,
@@ -280,6 +281,20 @@ export async function installCoreExposure({ library, renames, resetLayout, chrom
     if (id !== null && !value("sets").some((s) => s.id === id)) throw new Error(`unknown set ${id}`);
     await link(place, plugin, id, scope);
   });
+  registry.command("core.settings.sets.create", async ({ scope = "common" }) => {
+    const sets = createSet(scopedValue("sets", scope));
+    const { id } = sets.at(-1);
+    await set({ sets }, scope);
+    if (settingsModalState().open) editSet(id);
+    return { id };
+  });
+  registry.command("core.settings.sets.update", async ({ id, title, layout, section: sectionId, on, scope = "common" }) => {
+    if (sectionId !== undefined) section(sectionId);
+    await set({ sets: updateSet(scopedValue("sets", scope), id, { title, layout, section: sectionId, on }) }, scope);
+  });
+  registry.command("core.settings.sets.delete", async ({ id, scope = "common" }) => {
+    await set(deleteSet(scopedValue("sets", scope), scopedValue("links", scope), id), scope);
+  });
   registry.command("core.settings.open", () => { openSettings(); });
   registry.command("core.settings.close", () => { closeSettings(); });
   registry.command("core.projects.browse", async () => { await projects.browse(); });
@@ -311,8 +326,9 @@ export async function installCoreExposure({ library, renames, resetLayout, chrom
   });
   registry.command("core.settings-modal.nav", ({ section }) => { showSection(section); });
   registry.command("core.settings-modal.scope", ({ scope }) => { showScope(scope); });
+  registry.command("core.settings-modal.plugin", ({ plugin: id }) => { showPlugin(id); });
+  registry.command("core.settings-modal.edit", ({ set: id = null }) => { editSet(id); });
   registry.command("core.settings-modal.move", ({ dx, dy }) => { moveSettings(dx, dy); });
-  registry.command("core.layout.reset", () => { resetLayout(); });
 
   registry.command("core.card.focus", ({ card }) => { focusCard(card); });
   registry.command("core.card.sidebar.toggle", ({ card }) => { toggleSidebar(card); });

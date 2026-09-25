@@ -550,7 +550,7 @@
       },
       {
         "name": "core.settings-modal",
-        "description": "The settings modal: whether it is open, its section, scope, card rectangle in window coordinates, and its controls with the command each control runs.",
+        "description": "The settings modal: whether it is open, its section, scope, the selected plugin in the plugins section or null, the edited set or null, card rectangle in window coordinates, and its controls with the command each control runs.",
         "schema": {
           "type": "object",
           "properties": {
@@ -609,9 +609,15 @@
             "section": {
               "enum": [
                 "general",
-                "sidebars",
-                "compositing"
+                "plugins",
+                "sidebars"
               ]
+            },
+            "plugin": {
+              "type": ["string", "null"]
+            },
+            "editing": {
+              "type": ["string", "null"]
             },
             "scope": {
               "enum": [
@@ -1563,6 +1569,37 @@
         }
       },
       {
+        "name": "core.settings.sets.create",
+        "description": "Adds a sidebar set titled 새 세트 with layout list and no sections to the scope, opens it for editing when settings are open, and returns its id.",
+        "params": {
+          "type": "object",
+          "properties": { "scope": { "enum": ["common", "project"] } }
+        },
+        "result": { "type": "object", "properties": { "id": { "type": "string" } } }
+      },
+      {
+        "name": "core.settings.sets.update",
+        "description": "Changes the title, the layout, or one section of a sidebar set in the scope; on true appends the section to the end and on false removes it.",
+        "params": {
+          "type": "object",
+          "properties": { "id": { "type": "string" }, "title": { "type": "string" }, "layout": { "enum": ["list", "tabs"] }, "section": { "type": "string" }, "on": { "type": "boolean" }, "scope": { "enum": ["common", "project"] } }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings.sets.delete",
+        "description": "Removes a sidebar set and every link to it in the scope in one change.",
+        "params": {
+          "type": "object",
+          "properties": { "id": { "type": "string" }, "scope": { "enum": ["common", "project"] } }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
         "name": "core.settings-modal.nav",
         "description": "Shows a section of the open settings modal.",
         "params": {
@@ -1571,8 +1608,8 @@
             "section": {
               "enum": [
                 "general",
-                "sidebars",
-                "compositing"
+                "plugins",
+                "sidebars"
               ]
             }
           }
@@ -1618,11 +1655,22 @@
         }
       },
       {
-        "name": "core.layout.reset",
-        "description": "Rebuilds the current space with the initial layout.",
+        "name": "core.settings-modal.plugin",
+        "description": "Selects a plugin in the plugins section of the open settings modal.",
         "params": {
           "type": "object",
-          "properties": {}
+          "properties": { "plugin": { "type": "string" } }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings-modal.edit",
+        "description": "Opens the editor of a sidebar set in the open settings modal; a null set closes the editor.",
+        "params": {
+          "type": "object",
+          "properties": { "set": { "type": ["string", "null"] } }
         },
         "result": {
           "type": "null"
@@ -2375,8 +2423,28 @@
         "many": true
       },
       {
-        "name": "core.settings-modal.build",
-        "description": "The button that rebuilds the initial layout."
+        "name": "core.settings-modal.plugin",
+        "description": "The plugin buttons of the settings plugins section in environment order.",
+        "many": true
+      },
+      {
+        "name": "core.settings-modal.edit",
+        "description": "The set edit buttons in set order, then the button that closes the editor.",
+        "many": true
+      },
+      {
+        "name": "core.settings-modal.delete",
+        "description": "The set delete buttons in set order.",
+        "many": true
+      },
+      {
+        "name": "core.settings-modal.create",
+        "description": "The button that creates a sidebar set."
+      },
+      {
+        "name": "core.settings-modal.section",
+        "description": "The section buttons of the set editor, grouped by plugin; each shows whether the section is in the set.",
+        "many": true
       },
       {
         "name": "core.project-tab.close",

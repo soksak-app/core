@@ -137,8 +137,6 @@ export const MODES = ["dark", "light"];
  */
 export const defaults = {
   projectOpening: "windows",
-  latency: 0,
-  skew: 0,
   theme: THEMES[0].name,
   mode: "dark",
 
@@ -174,7 +172,30 @@ export const defaults = {
      environment.json 의 sidebars 가 정한다(setSidebarDefaults). */
   sets: [],
   links: [],
+
+  /* 배치 값(pt). 카드 안 사이드바의 최소·최대·처음·접은 폭과 새 레일 열의 폭이다(docs/spec/settings.md). */
+  sidebarMinWidth: 120,
+  sidebarMaxWidth: 480,
+  sidebarWidth: 120,
+  sidebarFoldedWidth: 28,
+  railWidth: 190,
 };
+
+/* 배치 값의 범위. 정수만 받는다. */
+export const LAYOUT_RANGES = {
+  sidebarMinWidth: [60, 400],
+  sidebarMaxWidth: [120, 800],
+  sidebarWidth: [60, 800],
+  sidebarFoldedWidth: [16, 64],
+  railWidth: [120, 480],
+};
+
+/** 카드 안 사이드바의 처음 폭이 최소와 최대 사이에 있는지 검사한다. */
+function checkSidebarOrder(values) {
+  if (!(values.sidebarMinWidth <= values.sidebarWidth && values.sidebarWidth <= values.sidebarMaxWidth)) {
+    throw new Error("Invalid setting: sidebarMinWidth <= sidebarWidth <= sidebarMaxWidth does not hold");
+  }
+}
 
 let settings = structuredClone(defaults);
 const pluginDefinitions = new Map();
@@ -190,6 +211,10 @@ let revision = 0;
 function validatePluginValue(key, value) {
   if (key === "textSize" && !TEXT_STEPS.includes(value)) {
     throw new Error(`Invalid setting textSize: ${JSON.stringify(value)} is not a text size step`);
+  }
+  const range = LAYOUT_RANGES[key];
+  if (range && (!Number.isInteger(value) || value < range[0] || value > range[1])) {
+    throw new Error(`Invalid setting ${key}: ${JSON.stringify(value)} is not an integer from ${range[0]} to ${range[1]}`);
   }
   const definition = pluginDefinitions.get(key);
   if (!definition) return;
@@ -266,6 +291,7 @@ async function refresh() {
   const nextOverrides = snapshot.projects.find((p) => p.id === projectId)?.settings ?? {};
   validateValues(snapshot.common, "common settings");
   validateValues(nextOverrides, "project settings");
+  checkSidebarOrder(effectiveSettings(defaults, snapshot.common, nextOverrides));
   if (JSON.stringify(common) === JSON.stringify(snapshot.common) && JSON.stringify(overrides) === JSON.stringify(nextOverrides)) return;
   common = snapshot.common;
   overrides = nextOverrides;
@@ -366,8 +392,14 @@ export function set(patch, scope = projectId ? "project" : "common") {
     if (!Object.hasOwn(defaults, key)) throw new Error(`Unknown setting: ${key}`);
     if (val !== undefined) validatePluginValue(key, val);
   }
+  const target = id ? overrides : common;
+  const patched = { ...target };
   for (const [key, val] of Object.entries(patch)) {
-    const target = id ? overrides : common;
+    if (val === undefined) delete patched[key];
+    else patched[key] = val;
+  }
+  checkSidebarOrder(id ? effectiveSettings(defaults, common, patched) : effectiveSettings(defaults, patched, overrides));
+  for (const [key, val] of Object.entries(patch)) {
     if (val === undefined) delete target[key];
     else target[key] = val;
   }

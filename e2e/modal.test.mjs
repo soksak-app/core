@@ -52,11 +52,11 @@ async function control(s, name, key) {
   return controls.find((c) => c.name === name && c.key === key);
 }
 
-async function openCompositing(s) {
+async function openSidebars(s) {
   await openSettings(s);
-  await control(s, "core.settings-modal.nav", "nav:compositing");
-  await s.run("core.settings-modal.nav", { section: "compositing" });
-  await control(s, "core.settings-modal.build", "press:build");
+  await control(s, "core.settings-modal.nav", "nav:sidebars");
+  await s.run("core.settings-modal.nav", { section: "sidebars" });
+  await control(s, "core.settings-modal.create", "sets:create");
 }
 
 /** 모달 문서의 사각형이 메인 문서의 카드 사각형과 같아질 때까지 기다린다. */
@@ -72,7 +72,7 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
-    await openCompositing(s);
+    await openSidebars(s);
     const { document } = await s.get("core.modal");
     assert.equal(document.filter, "none", "settings navigation must not copy the background blur into the dialog");
     assert.equal(document.bodyBackground, "rgba(0, 0, 0, 0)", "the modal body must remain transparent");
@@ -88,7 +88,7 @@ for (const app of Object.values(APPS)) {
     await s.run("core.settings.open");
     await s.request("diagnostics.modal.held");
     // 첫 응답을 붙잡은 동안 내용 이벤트가 모달을 그리고 위치 이벤트가 모달을 옮긴다.
-    await s.run("core.settings-modal.nav", { section: "compositing" });
+    await s.run("core.settings-modal.nav", { section: "sidebars" });
     const shown = await s.until("core.modal", (modal) => modal?.document?.loaded === false,
       "the content event did not render the modal before its first answer");
     await s.run("core.settings-modal.move", { dx: 40, dy: 20 });
@@ -104,21 +104,20 @@ for (const app of Object.values(APPS)) {
     await s.run("core.settings.close");
   });
 
-  test(`${app.name}: rebuilding the layout from settings keeps settings above new surfaces`, { timeout: 30000 }, async (t) => {
+  test(`${app.name}: a card split while settings are open keeps settings above new surfaces`, { timeout: 30000 }, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
-    await openCompositing(s);
+    await openSidebars(s);
     await s.presented();
     const before = await s.get("host.window");
     settingsAboveSurfaces(before);
     const old = new Set(before.surfaces.map((x) => x.id));
-    const build = await control(s, "core.settings-modal.build", "press:build");
-    await s.run(build.command.name, build.command.params);
+    await s.run("core.card.split", { card: "shell", axis: "x", plugin: "browser" });
     const after = await s.until("host.window",
       (state) => state.surfaces.some((x) => x.visible && !old.has(x.id)) && state.modal?.shown,
-      "the layout rebuild did not display new native surfaces");
-    assert.ok(after.surfaces.some((x) => !old.has(x.id)), "the layout rebuild must create new native surfaces");
+      "the split did not display a new native surface");
+    assert.ok(after.surfaces.some((x) => !old.has(x.id)), "the split must create a new native surface");
     await s.presented();
     settingsAboveSurfaces(await s.get("host.window"));
   });

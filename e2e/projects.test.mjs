@@ -203,17 +203,17 @@ for (const app of Object.values(APPS)) {
     assert.equal(await mode(s), "dark");
     assert.equal(read(join(second.root, ".soksak/settings.json")).mode, "light");
     assert.equal(read(join(config, "settings.json")).mode, "dark");
-    const commonLatency = read(join(config, "settings.json")).latency;
-    await press(child, "core.settings-modal.nav", "nav:compositing");
-    await press(child, "core.settings-modal.set", "latency", "7");
-    await child.until("core.settings", (value) => value.overridden.includes("latency") && !value.saving,
+    const commonFolded = read(join(config, "settings.json")).sidebarFoldedWidth;
+    await press(child, "core.settings-modal.nav", "nav:sidebars");
+    await press(child, "core.settings-modal.set", "sidebarFoldedWidth", "40");
+    await child.until("core.settings", (value) => value.overridden.includes("sidebarFoldedWidth") && !value.saving,
       "category change did not retain project scope");
-    assert.equal(read(join(second.root, ".soksak/settings.json")).latency, 7);
-    assert.equal(read(join(config, "settings.json")).latency, commonLatency);
-    await press(child, "core.settings-modal.reset", "reset:latency");
-    await child.until("core.settings", (value) => !value.overridden.includes("latency") && !value.saving,
+    assert.equal(read(join(second.root, ".soksak/settings.json")).sidebarFoldedWidth, 40);
+    assert.equal(read(join(config, "settings.json")).sidebarFoldedWidth, commonFolded);
+    await press(child, "core.settings-modal.reset", "reset:sidebarFoldedWidth");
+    await child.until("core.settings", (value) => !value.overridden.includes("sidebarFoldedWidth") && !value.saving,
       "project override was not removed");
-    assert.equal(read(join(second.root, ".soksak/settings.json")).latency, undefined);
+    assert.equal(read(join(second.root, ".soksak/settings.json")).sidebarFoldedWidth, undefined);
     await press(child, "core.settings-modal.nav", "nav:general");
     await control(child, "core.settings-modal.scope", "pick:scope:project", (c) => c.on,
       "General did not retain the selected project tab");
