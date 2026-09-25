@@ -76,7 +76,7 @@ lane("workspace version audit", "js-ts", ["scripts/check-versions.mjs"], ["scrip
   lane("files plugin", "js-ts", ["plugins/files/ui/**/*.js", "plugins/files/scripts/**/*.mjs", "plugins/files/vendor/**/*.js"], ["plugins/files/test/**/*.mjs"], { sharedTests: true }),
   lane("shell plugin", "js-ts", ["plugins/shell/ui/**/*.js"], ["plugins/shell/test/**/*.mjs"], { sharedTests: true }),
   lane("terminal plugin", "js-ts", ["plugins/terminal/ui/**/*.js"], ["plugins/terminal/test/**/*.mjs"], { sharedTests: true }),
-  lane("browser runtime", "js-ts", ["apps/browser/runtime/**/*.js"], ["apps/browser/test/**/*.mjs"], { sharedTests: true }),
+  lane("browser runtime", "js-ts", ["apps/browser/runtime/**/*.js"], ["apps/browser/test/**/*.mjs", "apps/browser/check/**/*.mjs"], { sharedTests: true }),
   lane("Tauri runtime", "js-ts", ["apps/tauriv2/runtime/**/*.js"], ["apps/tauriv2/test/**/*.mjs"], { sharedTests: true }),
   lane("Wails runtime", "js-ts", ["apps/wailsv3/runtime/**/*.js"], ["apps/wailsv3/test/**/*.mjs"], { sharedTests: true }),
   lane("files plugin declaration", "declaration", ["plugins/files/plugin.json"], ["plugins/files/test/manifest.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),

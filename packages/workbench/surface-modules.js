@@ -8,6 +8,8 @@ import { onTextSize, surfaceTextSize } from "./text-size.js";
 import { forgetTab, reportDirectory, reportNotice, reportTitle, tabOrigin } from "./tab-reports.js";
 import { icon } from "./icons.js";
 const mounted = new Map();
+/* 호스트가 없는 문서에서 마운트하지 않은 표면의 자리 표시. 표면 id 마다 요소다. */
+const placeholders = new Map();
 const parking = document.createDocumentFragment();
 const authorization = new Map();
 
@@ -76,6 +78,21 @@ function pageRuntime(surface, scoped, compositionReady) {
 
 export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
   if (!slot || !surface?.module) throw new TypeError("surface module mount requires a slot and module");
+  // 호스트가 없으면 사이드카와 네이티브 영역이 없다. 그것이 필요한 표면은 마운트하지 않고 자리 표시를 그린다
+  // (docs/spec/plugins.md#runtime-module).
+  if (!native && ((surface.sidecars ?? []).length > 0 || surface.composition?.kind === "hybrid")) {
+    const placeholder = document.createElement("div");
+    placeholder.className = "surface-placeholder";
+    placeholder.dataset.surfaceId = surface.surfaceId;
+    placeholder.style.cssText = "position:absolute;inset:0;display:grid;place-items:center;color:var(--muted)";
+    placeholder.textContent = `${plugin(surface.pluginId).name} 표면은 네이티브 호스트가 있어야 열립니다`;
+    placeholders.get(surface.surfaceId)?.remove();
+    slot.querySelector(":scope > .surface-placeholder")?.remove();
+    slot.append(placeholder);
+    placeholders.set(surface.surfaceId, placeholder);
+    onState({ phase: "ready" });
+    return null;
+  }
   const view = slot.ownerDocument?.defaultView ?? globalThis;
   let entry = mounted.get(surface.surfaceId);
   if (entry && entry.slot === slot) {
@@ -210,6 +227,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
 
 /** Wait until a native surface has declared its composition. */
 export async function waitSurfaceCompositionDeclared(surfaceId) {
+  if (placeholders.has(surfaceId)) return;
   const entry = mounted.get(surfaceId);
   if (!entry) throw new Error(`surface ${surfaceId} is not mounted`);
   await entry.composition;
@@ -217,6 +235,7 @@ export async function waitSurfaceCompositionDeclared(surfaceId) {
 
 /** Give a mounted surface's native input owner focus after its card has settled. */
 export async function focusSurface(surfaceId) {
+  if (placeholders.has(surfaceId)) return false;
   const entry = mounted.get(surfaceId);
   if (!entry) throw new Error(`surface ${surfaceId} is not mounted`);
   await entry.ready;
@@ -232,6 +251,8 @@ export function suspendSurface(surfaceId) {
 }
 
 export async function disposeSurface(surfaceId) {
+  placeholders.get(surfaceId)?.remove();
+  placeholders.delete(surfaceId);
   const entry = mounted.get(surfaceId);
   if (!entry) return;
   if (entry.disposing) return entry.disposing;
@@ -257,6 +278,11 @@ export const mountedSurface = (surfaceId) => mounted.get(surfaceId) ?? null;
 
 /** Dispose modules whose tabs are no longer declared by the current workspace. */
 export async function disposeSurfacesExcept(surfaceIds) {
+  for (const [id, placeholder] of placeholders) {
+    if (surfaceIds.has(id)) continue;
+    placeholder.remove();
+    placeholders.delete(id);
+  }
   const stale = [...mounted.keys()].filter((id) => !surfaceIds.has(id));
   await Promise.all(stale.map((id) => disposeSurface(id)));
 }

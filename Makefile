@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: preflight prepare build verify docs-check boundaries platforms hosts-check e2e-check exposure-check parity-check terminal-protocols-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat
+.PHONY: preflight prepare build verify browser-example-check docs-check boundaries platforms hosts-check e2e-check exposure-check parity-check terminal-protocols-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat
 
 docs-check:
 	@node scripts/check-docs.mjs
@@ -14,6 +14,11 @@ boundaries:
 	@node scripts/check-boundaries.mjs
 
 # 창 검사가 엔드포인트의 선언된 항목과 네이티브 입력만 쓰는지 검사한다.
+# 스테이징한 브라우저 예제에서 프로젝트를 열고 페이지 오류가 없는지 headless Chrome 으로 검사한다.
+browser-example-check:
+	@pnpm -F @soksak/browser frontend
+	@pnpm -F @soksak/browser check
+
 e2e-check:
 	@node scripts/check-e2e.mjs
 

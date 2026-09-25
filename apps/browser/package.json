@@ -7,7 +7,8 @@
   "scripts": {
     "frontend": "soksak-stage build",
     "dev": "pnpm run frontend && python3 -m http.server 8749 -d build",
-    "test": "node --test test/"
+    "test": "node --test test/",
+    "check": "node --test check/"
   },
   "dependencies": {
     "@soksak/workbench": "workspace:*",

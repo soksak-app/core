@@ -239,8 +239,8 @@ export function watchCalls(fn) {
   watcher = fn;
 }
 
-/** 줄 하나를 애플리케이션 로그로 보낸다. */
-export const report = (line) => bridge.call("report", line);
+/** 줄 하나를 애플리케이션 로그로 보낸다. 호스트가 없는 문서(브라우저 예제)의 로그는 콘솔이다. */
+export const report = (line) => (bridge ? bridge.call("report", line) : console.error(line));
 
 /* 애플리케이션에는 콘솔이 없다. 여기서 실패를 잡으면 기록되지 않으므로 잡지
    않는다. 문서의 unhandledrejection 이 애플리케이션 로그로 전달한다. */
@@ -403,7 +403,8 @@ export const surfaces = native ? {
   kinds: [],
   report: () => {},
   theme: () => {},
-  place: () => {},
+  // 호스트가 없으면 이 문서가 앉힌 자리가 실제 자리다. 컴포지터는 그 답을 기록한다.
+  place: (record) => record.surfaces.map((s) => ({ id: s.id, ...s.applied })),
   waitPresented: async () => null,
 };
 

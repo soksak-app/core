@@ -91,6 +91,10 @@ pnpm -F @soksak/e2e run verify
 
 프로젝트 복귀 프로세스 검사는 검사 설정의 터미널 서비스 엔드포인트와 OS 프로세스 목록을 읽는다. 해당 설정의 서비스가 정확히 하나이고 열린 터미널(숨겨진 탭 포함)마다 직접 자식 셸이 하나이며 PTY 헬퍼 자식과 좀비 자식이 없어야 한다. 라이브러리 복귀는 개수뿐 아니라 서비스와 셸 PID 자체를 보존해야 한다. 다른 실행 중인 앱은 설정 식별자로 제외한다. 파서 단위 검사는 서비스 수명주기를 검증하지 않으며 재빌드한 호스트 실행이 필요하다.
 
+## 브라우저 예제 검사
+
+`make browser-example-check`는 스테이징된 브라우저 예제로 `apps/browser/check/served.test.mjs`를 실행한다. 검사는 자기 루프백 HTTP 서버로 `apps/browser/build`를 제공하고, 설치된 Google Chrome을 일회용 프로필로 headless 실행하며(`CHROME`이 다른 실행 파일을 지정한다), Node 내장 `WebSocket`으로 Chrome DevTools 프로토콜을 통해 조작하므로 브라우저 자동화 패키지를 의존성으로 두지 않는다. 사람이 그 애플리케이션에서 하듯 프로젝트를 연다. `core.library.add`를 누르고 `core.library.form.parent`에 폴더 경로를 입력한 뒤 `core.library.form.submit`을 누른다. 브라우저 예제는 입력한 경로를 등록하므로 폴더 선택기가 필요 없다([프로젝트](../spec/projects.ko.md)). 페이지가 작업 화면을 보이고 모든 사이드바 섹션이 마운트될 때까지 기다리며, 처리되지 않은 예외, `console.error`, 수준 `error`의 브라우저 로그가 하나라도 있으면 각각을 보고하며 실패한다. Chrome이 없으면 건너뛰지 않고 실패한다. 검사는 끝날 때 프로필을 지우고 Chrome과 서버를 멈춘다.
+
 ## 수동 인수
 
 터미널 키보드 검사는 호스트마다 보이는 터미널 3개에서 네이티브 클릭과 키를 사용한다. 문자·Backspace·Ctrl+U·Enter·정확히 한 번의 명령 출력·다른 터미널 화면의 불변을 확인한다. 현재 화면을 한 번 읽고 `terminal.screen` 알림을 기다리며, 키보드 전달 검증에 `terminal.input`을 사용하지 않는다. 입력 통과가 드래그 결과를 대신하지 않도록 합성 녹화와 별도로 실행한다.
