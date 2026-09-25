@@ -181,6 +181,17 @@ for (const app of Object.values(APPS)) {
     await effect(s, surface, "\\033]50;CursorShape=0\\007");
     await s.until("terminal.cursor", (cursor) => cursor.drawn.shape === "block", "OSC 50 CursorShape=0 did not draw a block", { surface });
 
+    // 5, 6, 105, 106: 굵게, 밑줄, 반전, 기울임 글자의 특수 색. 깜빡임(2)은 적용할 수 없어 오류다.
+    const special = await color("5;0");
+    assert.match(special, /^\x1b\]5;0;rgb:[0-9a-f]{4}\/[0-9a-f]{4}\/[0-9a-f]{4}$/, "OSC 5 query");
+    await effect(s, surface, "\\033]5;0;rgb:11/22/33\\007\\033]6;0;1\\007\\033]106;0;0\\007");
+    assert.equal(await color("5;0"), "\x1b]5;0;rgb:1111/2222/3333", "OSC 5 set");
+    await effect(s, surface, "\\033]105;0\\007");
+    assert.equal(await color("5;0"), special, "OSC 105 reset");
+    assert.equal((await s.get("terminal.session", surface)).error, undefined, "OSC 5, 6, 105, and 106 reported an error");
+    await effect(s, surface, "\\033]5;2;#ffffff\\007");
+    await s.until("terminal.session", (value) => /blink/.test(value.error ?? ""), "the blink color was not rejected", { surface });
+
     // 22: 포인터 모양.
     await effect(s, surface, "\\033]22;crosshair\\007");
     await s.until("terminal.session", (value) => value.pointer === "crosshair", "OSC 22 did not set the pointer", { surface });

@@ -165,12 +165,12 @@ fn osc_selector_inventory_records_unsupported_operations() {
 #[test]
 fn unsupported_osc_selector_is_an_explicit_error_after_fragmented_bel() {
     let mut engine = AlacrittyEngine::new();
-    engine.feed(b"\x1b]6;ignored");
+    engine.feed(b"\x1b]13;ignored");
     assert!(engine.drain_events().is_empty());
     engine.feed(b"\x07");
     assert!(matches!(
         engine.drain_events().as_slice(),
-        [EngineEvent::Error(reason)] if reason == "unsupported OSC selector 6"
+        [EngineEvent::Error(reason)] if reason == "unsupported OSC selector 13"
     ));
 }
 
@@ -187,7 +187,7 @@ fn unsupported_osc_selector_is_an_explicit_error_after_st() {
 #[test]
 fn every_unsupported_osc_inventory_selector_emits_an_explicit_error() {
     for selector in [
-        "1", "3", "5", "6", "13", "18", "21", "46", "51", "60", "62", "105", "106", "I", "l", "L",
+        "1", "3", "13", "18", "21", "46", "51", "60", "62", "I", "l", "L",
     ] {
         let mut engine = AlacrittyEngine::new();
         engine.feed(format!("\x1b]{selector};ignored\x07").as_bytes());
@@ -1707,4 +1707,34 @@ fn osc22_sets_the_pointer_shape_and_rejects_unknown_shapes() {
     }).collect();
     assert_eq!(shapes, ["pointer", "text", "default"]);
     assert!(events.iter().any(|event| matches!(event, EngineEvent::Error(reason) if reason.contains("spaceship"))));
+}
+
+#[test]
+fn osc_special_colors_draw_attributed_text_when_enabled_and_answer_queries() {
+    let mut engine = AlacrittyEngine::new();
+    engine.resize(10, 2);
+    engine.feed(b"\x1b]5;0;?\x07");
+    let unset = replies(&mut engine);
+    assert!(unset.len() == 1 && unset[0].starts_with("\x1b]5;0;rgb:"), "{unset:?}");
+    let default_bold = engine.screen().lines.first().and_then(|line| line.first()).and_then(|cell| cell.fg.clone());
+
+    engine.feed(b"\x1b]5;0;rgb:11/22/33;4;#445566\x07\x1b[1mB\x1b[0m\x1b[3mI\x1b[0m\x1b[1;31mR\x1b[0m");
+    let before = engine.screen().lines[0].clone();
+    assert_ne!(before[0].fg.as_deref(), Some("#112233"), "a special color is not used until OSC 6 enables it");
+    engine.feed(b"\x1b]6;0;1\x07\x1b]106;4;1\x07\x1b]5;0;?\x07");
+    assert_eq!(replies(&mut engine), ["\x1b]5;0;rgb:1111/2222/3333\x07"]);
+    let line = engine.screen().lines[0].clone();
+    assert_eq!(line[0].fg.as_deref(), Some("#112233"), "bold text with the default foreground uses the bold color");
+    assert_eq!(line[1].fg.as_deref(), Some("#445566"), "italic text uses the italic color");
+    assert_ne!(line[2].fg.as_deref(), Some("#112233"), "an explicit foreground is kept");
+
+    engine.feed(b"\x1b]105;0\x07\x1b]5;0;?\x07");
+    assert_eq!(replies(&mut engine), unset, "OSC 105 restores the default");
+    engine.feed(b"\x1b]6;0;0\x07");
+    assert_eq!(engine.screen().lines[0][0].fg, before[0].fg);
+    let _ = default_bold;
+
+    engine.feed(b"\x1b]5;2;#ffffff\x07");
+    assert!(engine.drain_events().iter().any(|event| matches!(event, EngineEvent::Error(reason) if reason.contains("blink"))),
+        "the blink color cannot apply and must be rejected");
 }

@@ -39,9 +39,9 @@ OSC 1337 이미지 전송은 OSC 확장을 사용한다. APC 그래픽 프로토
 | `0`, `2` | 아이콘 이름 및 창 제목 설정 | `implemented`: 제목 event. 아이콘 소유권은 노출하지 않음 | `vt_events_are_retained_and_exposed_in_order`, `osc_title_supports_bel_st_and_fragmentation` |
 | `1`, `3` | 아이콘 전용 제목 / X property | `unsupported`: 아이콘·X property 호스트 계약 없음 | `osc_selector_inventory_records_unsupported_operations` |
 | `4` | 인덱스 색상 설정·조회 | `implemented`: 팔레트 효과와 정확한 RGB 응답 | `indexed_colors_and_combining_characters_survive_export`, `every_default_indexed_color_query_returns_the_default_palette` |
-| `5`, `6` | 특수 색상 설정 / 활성 상태 | `unsupported`: 특수 색상·모드 계약 없음 | `osc_selector_inventory_records_unsupported_operations` |
+| `5`, `6` | 특수 색상 설정·조회 / 활성 상태 | `implemented`: OSC 6이 켠 동안 색 0(굵게), 1(밑줄), 3(반전), 4(기울임)가 그 속성 글자의 기본 전경색을 대신한다. 색 2(깜빡임)는 격자가 깜빡임 속성을 보관하지 않으므로 명시적 오류다 | `osc_special_colors_draw_attributed_text_when_enabled_and_answer_queries` |
 | `10`–`12` | VT 전경·배경·커서 색상 | `implemented`: 효과와 조회 응답 | `dynamic_color_replies_and_screen_colors_use_the_same_palette`, `osc_default_color_queries_match_renderer_defaults` |
-| `13`, `14` | 포인터 전경·배경 색 | `unsupported`: 페이지는 자체 색을 가진 시스템 포인터 그림을 쓴다. 만든 포인터 그림으로의 구현은 아직 없다 | `osc_selector_inventory_records_unsupported_operations` |
+| `13`, `14` | 포인터 전경·배경 색 | `unsupported`: 페이지는 시스템이 정해진 색으로 그리는 macOS 시스템 포인터 그림을 보이므로, 터미널은 포인터 색을 바꿀 수 없다 | `osc_selector_inventory_records_unsupported_operations` |
 | `15`, `16`, `18`, `21` | Tektronix 색과 제목 | `unsupported`: 터미널에 Tektronix 에뮬레이션이 없다 | `osc_selector_inventory_records_unsupported_operations` |
 | `17`, `19` | 강조 배경·글자 색 | `implemented`: 설정, 요청과 같은 종결자의 조회 응답, 선택 칸을 반전 대신 그 색으로 그림. 설정하지 않은 색은 반전 색으로 답한다 | `osc_highlight_colors_are_set_queried_reset_and_draw_the_selection` |
 | `22` | 포인터 모양 | `implemented`: X 커서 글꼴 이름과 CSS 이름을 터미널 뷰의 CSS cursor로 바꾸고 `terminal.session.pointer`로 알린다. 빈 이름은 기본값으로 되돌리고, 모르는 이름은 명시적 오류다 | `osc22_sets_the_pointer_shape_and_rejects_unknown_shapes` |
@@ -51,7 +51,7 @@ OSC 1337 이미지 전송은 OSC 확장을 사용한다. APC 그래픽 프로토
 | `52` | clipboard selection 저장·조회 | `implemented`: 정책 제한 typed event와 조회 응답 | `clipboard_query_uses_a_token_and_resolves_to_pty_bytes`, `clipboard_query_survives_a_fragmented_st_terminator`, `clipboard_rejection_clears_a_pending_query_token` |
 | `60`–`62` | 권한 기능 조회 | `unsupported`: capability 상태는 XTerm wire 응답이 아닌 sidecar 계약이 소유 | `osc_selector_inventory_records_unsupported_operations` |
 | `104` | 인덱스 색상 초기화 | `implemented`: 팔레트 초기화 | `osc104_resets_indexed_colors`, `osc104_without_parameters_resets_all_indexed_colors` |
-| `105`, `106` | 특수 색상 초기화·모드 | `unsupported`: 특수 색상 계약 없음 | `osc_selector_inventory_records_unsupported_operations` |
+| `105`, `106` | 특수 색상 초기화 / 활성 상태 | `implemented`: OSC 105는 번호의 특수 색이나 모든 특수 색을 초기화한다. OSC 106은 OSC 6과 같다 | `osc_special_colors_draw_attributed_text_when_enabled_and_answer_queries` |
 | `110`–`112` | 동적 색상 초기화 | `implemented`: 전경·배경·커서 초기화 | `osc_dynamic_color_resets_restore_defaults` |
 | `117`, `119` | 강조 색 초기화 | `implemented`: 초기화한 색의 선택은 다시 반전으로 그린다 | `osc_highlight_colors_are_set_queried_reset_and_draw_the_selection` |
 | `I`, `l`, `L` | Sun/CDE 아이콘·제목 형식 | `unsupported`: icon-label·비숫자 선택자 계약 없음 | `osc_selector_inventory_records_unsupported_operations` |

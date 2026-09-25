@@ -29,7 +29,7 @@ fn osc_outcome(selector: &[u8]) -> OscOutcome {
         return OscOutcome::Unsupported;
     };
     match number {
-        0 | 2 | 4 | 10..=12 | 17 | 19 | 22 | 50 | 52 | 104 | 110..=112 | 117 | 119 => OscOutcome::Implemented,
+        0 | 2 | 4 | 5 | 6 | 10..=12 | 17 | 19 | 22 | 50 | 52 | 104 | 105 | 106 | 110..=112 | 117 | 119 => OscOutcome::Implemented,
         7 | 8 | 9 | 133 | 1337 => OscOutcome::Vendor,
         _ => OscOutcome::Unsupported,
     }
@@ -62,9 +62,9 @@ pub const OSC_SELECTOR_INVENTORY: &[OscSelectorEvidence] = &[
         test: "indexed_colors_and_combining_characters_survive_export",
     },
     OscSelectorEvidence {
-        selector: "5,6",
-        outcome: OscOutcome::Unsupported,
-        test: "osc_selector_inventory_records_unsupported_operations",
+        selector: "5,6,105,106",
+        outcome: OscOutcome::Implemented,
+        test: "osc_special_colors_draw_attributed_text_when_enabled_and_answer_queries",
     },
     OscSelectorEvidence {
         selector: "10-12",
@@ -110,11 +110,6 @@ pub const OSC_SELECTOR_INVENTORY: &[OscSelectorEvidence] = &[
         selector: "104",
         outcome: OscOutcome::Implemented,
         test: "osc104_resets_indexed_colors",
-    },
-    OscSelectorEvidence {
-        selector: "105,106",
-        outcome: OscOutcome::Unsupported,
-        test: "osc_selector_inventory_records_unsupported_operations",
     },
     OscSelectorEvidence {
         selector: "110-112",
@@ -518,6 +513,9 @@ pub struct AlacrittyEngine {
     /// OSC 17 과 19 가 정한 선택 영역의 배경과 글자 색. 없으면 선택 칸을 반전해 그린다.
     highlight_background: Option<Rgb>,
     highlight_foreground: Option<Rgb>,
+    /// OSC 5 가 정한 특수 색(0 굵게, 1 밑줄, 2 깜빡임, 3 반전, 4 기울임)과 OSC 6/106 이 켠 사용 여부.
+    special_colors: [Option<Rgb>; 5],
+    special_enabled: [bool; 5],
 }
 
 impl AlacrittyEngine {
@@ -542,6 +540,8 @@ impl AlacrittyEngine {
             shell: ShellState::Output,
             highlight_background: None,
             highlight_foreground: None,
+            special_colors: [None; 5],
+            special_enabled: [false; 5],
         }
     }
 
@@ -708,6 +708,23 @@ impl AlacrittyEngine {
                 }
                 None => Some(EngineEvent::Error(format!("OSC {selector} color is not an X color: {payload}"))),
             },
+            "5" => self.special_color_osc(&payload, terminator),
+            "6" | "106" => self.special_mode_osc(selector, &payload),
+            "105" => {
+                if payload.is_empty() {
+                    self.special_colors = [None; 5];
+                    None
+                } else {
+                    let mut error = None;
+                    for part in payload.split(';') {
+                        match part.parse::<usize>() {
+                            Ok(index) if index < 5 => self.special_colors[index] = None,
+                            _ => error = Some(EngineEvent::Error(format!("OSC 105 special color number is not 0-4: {part}"))),
+                        }
+                    }
+                    error
+                }
+            }
             "117" => { self.highlight_background = None; None }
             "119" => { self.highlight_foreground = None; None }
             "22" => match pointer_shape(&payload) {
@@ -716,6 +733,69 @@ impl AlacrittyEngine {
             },
             _ => return None,
         })
+    }
+
+    /// OSC 5: 특수 색 번호와 색 이름의 쌍들. `?` 는 현재 색을 요청과 같은 종결자로 답한다. 깜빡임(2)은 격자가
+    /// 깜빡임 속성을 보관하지 않아 적용할 수 없으므로 명시적 오류다.
+    fn special_color_osc(&mut self, payload: &str, terminator: &str) -> Option<EngineEvent> {
+        let parts: Vec<_> = payload.split(';').collect();
+        if parts.len() % 2 != 0 {
+            return Some(EngineEvent::Error(format!("OSC 5 needs pairs of a color number and a color: {payload}")));
+        }
+        let mut replies = String::new();
+        for pair in parts.chunks(2) {
+            let index = match pair[0].parse::<usize>() {
+                Ok(index) if index < 5 => index,
+                _ => return Some(EngineEvent::Error(format!("OSC 5 special color number is not 0-4: {}", pair[0]))),
+            };
+            if index == 2 {
+                return Some(EngineEvent::Error("OSC 5 blink color cannot apply: the grid does not keep the blink attribute".to_string()));
+            }
+            if pair[1] == "?" {
+                let Some(rgb) = self.special_colors[index].or_else(|| self.default_rgb(NamedColor::Foreground)) else {
+                    return Some(EngineEvent::Error("OSC 5 query has no foreground color".to_string()));
+                };
+                replies.push_str(&format!(
+                    "\x1b]5;{index};rgb:{:02x}{:02x}/{:02x}{:02x}/{:02x}{:02x}{terminator}",
+                    rgb.r, rgb.r, rgb.g, rgb.g, rgb.b, rgb.b
+                ));
+            } else {
+                match parse_x_color(pair[1]) {
+                    Some(rgb) => self.special_colors[index] = Some(rgb),
+                    None => return Some(EngineEvent::Error(format!("OSC 5 color is not an X color: {}", pair[1]))),
+                }
+            }
+        }
+        (!replies.is_empty()).then(|| EngineEvent::PtyWrite(replies.into_bytes()))
+    }
+
+    /// OSC 6 과 106: 특수 색 번호와 켜기(0 이 아닌 값)·끄기(0)의 쌍들.
+    fn special_mode_osc(&mut self, selector: &str, payload: &str) -> Option<EngineEvent> {
+        let parts: Vec<_> = payload.split(';').collect();
+        if parts.len() % 2 != 0 {
+            return Some(EngineEvent::Error(format!("OSC {selector} needs pairs of a color number and a flag: {payload}")));
+        }
+        for pair in parts.chunks(2) {
+            match (pair[0].parse::<usize>(), pair[1].parse::<u32>()) {
+                (Ok(2), Ok(_)) => {
+                    return Some(EngineEvent::Error(format!("OSC {selector} blink color cannot apply: the grid does not keep the blink attribute")));
+                }
+                (Ok(index), Ok(flag)) if index < 5 => self.special_enabled[index] = flag != 0,
+                _ => return Some(EngineEvent::Error(format!("OSC {selector} pair is not a color number 0-4 and a flag: {};{}", pair[0], pair[1]))),
+            }
+        }
+        None
+    }
+
+    /// 속성이 있는 기본 전경색 글자에 켜진 특수 색을 적용한다. 굵게, 밑줄, 반전, 기울임 순으로 첫 색을 쓴다.
+    fn special_foreground(&self, flags: Flags, foreground: Color) -> Option<Rgb> {
+        if foreground != Color::Named(NamedColor::Foreground) {
+            return None;
+        }
+        [(0, Flags::BOLD), (1, Flags::UNDERLINE), (3, Flags::INVERSE), (4, Flags::ITALIC)]
+            .into_iter()
+            .find(|(index, flag)| flags.contains(*flag) && self.special_enabled[*index] && self.special_colors[*index].is_some())
+            .and_then(|(index, _)| self.special_colors[index])
     }
 
     /// 테마가 정한 기본 색.
@@ -1229,7 +1309,10 @@ impl AlacrittyEngine {
             } else {
                 1
             },
-            fg: self.color(cell.fg, colors),
+            fg: match self.special_foreground(cell.flags, cell.fg) {
+                Some(rgb) => Some(format!("#{:02x}{:02x}{:02x}", rgb.r, rgb.g, rgb.b)),
+                None => self.color(cell.fg, colors),
+            },
             bg: self.color(cell.bg, colors),
             bold: cell.flags.contains(Flags::BOLD),
             italic: cell.flags.contains(Flags::ITALIC),
