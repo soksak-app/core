@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- V5-68: Tauri 애플리케이션이 `custom-protocol` 기능을 켜므로 Tauri가 시작할 때 Dock 아이콘을 바꾸지 않고, 두 애플리케이션은 같은 크기의 번들 아이콘을 보인다.
 - V5-68: 빌드가 각 번들을 LaunchServices에 다시 등록하므로 Wails도 Dock에 soksak 아이콘을 보인다.
 - V5-68: 제목줄에 dark와 light 모드의 색으로 soksak 로고가 보이고, 두 애플리케이션은 Dock에 soksak 아이콘을 쓴다.
 - V5-67: `host.window`가 다른 창이 창 전체를 가리는지 알리고, 가리는 동안 끌기 측정은 실행되지 않는다.

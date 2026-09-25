@@ -13,4 +13,6 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 soksak-host-tauriv2 = { path = "../../packages/host/tauriv2" }
-tauri = { version = "2", features = ["unstable"] }
+# custom-protocol 은 Tauri 의 배포 설정이다. 이것이 없으면 Tauri 는 개발 실행으로 보고 시작할 때
+# icons/icon.png 로 Dock 아이콘을 덮어쓰므로, 번들의 AppIcon.icns 를 쓰는 Wails 와 Dock 아이콘이 달라진다.
+tauri = { version = "2", features = ["unstable", "custom-protocol"] }
