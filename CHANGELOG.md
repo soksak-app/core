@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-64: output sequences the terminal rejects are recorded in `terminal.session.rejected` instead of becoming a red surface error.
 - V5-53: an inline image is placed where its sequence appears even when later output in the same chunk moves the cursor, and its events reach the page with the raster that draws it.
 - V5-51-5: the terminal implements the OSC 5/6/105/106 special colors for bold, underline, reverse, and italic text and rejects the blink color explicitly.
 - V5-51-5 (partial): the terminal implements OSC 17/19 highlight colors with their queries and 117/119 resets, and OSC 22 pointer shapes.

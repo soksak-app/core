@@ -2193,6 +2193,28 @@ test("an OSC 22 pointer event sets the view cursor and the session pointer", asy
   assert.equal(view.style.cursor, "", "the default pointer returns the page cursor");
 });
 
+test("a sequence the engine rejected is recorded in the session without a surface error", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  const fakeExpose = createFakeExpose();
+  const errors = [];
+  await startTerminal({
+    view: createFakeView(), attachImage: createFakeAttachImage().function,
+    sidecar: fakeSidecar, expose: fakeExpose,
+    window: { TextEncoder: FakeTextEncoder },
+    reportSurfaceError: (error) => errors.push(error),
+  });
+  openSession(fakeSidecar);
+  for (let index = 0; index < 10; index++) {
+    fakeSidecar.triggerEvent("test-session", { event: "sequence.rejected", reason: `unsupported OSC selector ${index}` });
+  }
+  const session = fakeExpose.getStatus("terminal.session").readFn();
+  assert.equal(session.error, undefined, "a program's rejected sequence is not a terminal error");
+  assert.deepEqual(errors, []);
+  assert.deepEqual(session.rejected, [2, 3, 4, 5, 6, 7, 8, 9].map((index) => `unsupported OSC selector ${index}`),
+    "the session keeps the last eight rejected sequences");
+});
+
 test("cursor policy sends explicit shape, blink, interval, idle timeout, and unfocused rendering", async () => {
   FakeResizeObserver.reset();
   const fakeSidecar = createFakeSidecar();

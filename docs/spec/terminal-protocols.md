@@ -24,7 +24,7 @@ OSC 1337 image transfer uses an OSC extension. The APC graphics protocol uses AP
 | Notifications | Attribute the message to its session; do not execute payload | Typed `notification` event; parser, malformed-input, and surface-owner tests pass |
 | Font, logging, window and resource operations | Implement documented semantics or explicitly report unsupported/policy-denied operations; no successful no-op | Pending |
 | In-band graphics | Validate size, encoding, limits and lifetime; preserve grid placement and deletion semantics | Pending |
-| Unknown or malformed sequences | Report bounded diagnostic metadata without copying secret payloads into logs; never claim support | Pending |
+| Unknown or malformed sequences | Report bounded diagnostic metadata without copying secret payloads into logs; never claim support | The sidecar sends each engine rejection as a `sequence.rejected` event; the page keeps the last eight reasons in `terminal.session.rejected` and does not report them as terminal or surface errors, because they describe the program's output; the protocol window checks read them |
 | Cursor control | Respect terminal visibility/shape/blink controls plus user policy; verify actual pixels and positions | Engine and renderer integration in progress |
 | Primary-screen reflow | Preserve soft-wrap logical lines through narrow/wide cycles and preserve hard newlines | Engine test exists; current rebuilt-host check pending |
 

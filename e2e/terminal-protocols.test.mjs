@@ -131,8 +131,10 @@ for (const app of Object.values(APPS)) {
 
     // 지원하지 않는 CSI 는 명시적인 오류로 남는다.
     await effect(s, surface, "\\033[18t");
-    await s.until("terminal.session", (value) => value.error === "unsupported CSI window report 18t",
-      "an unsupported CSI window report was not reported as the session error", { surface });
+    // 거부한 시퀀스는 프로그램의 출력이므로 세션 오류가 아니라 거부 기록에 남는다.
+    const rejected = await s.until("terminal.session", (value) => value.rejected.includes("unsupported CSI window report 18t"),
+      "an unsupported CSI window report was not recorded as rejected", { surface });
+    assert.equal(rejected.error, undefined, "a rejected program sequence became a terminal error");
   });
 
   test(`${app.name}: implemented OSC sequences change the title, colors, cursor, and clipboard and reply`, { timeout: 120000 }, async (t) => {
@@ -190,7 +192,8 @@ for (const app of Object.values(APPS)) {
     assert.equal(await color("5;0"), special, "OSC 105 reset");
     assert.equal((await s.get("terminal.session", surface)).error, undefined, "OSC 5, 6, 105, and 106 reported an error");
     await effect(s, surface, "\\033]5;2;#ffffff\\007");
-    await s.until("terminal.session", (value) => /blink/.test(value.error ?? ""), "the blink color was not rejected", { surface });
+    await s.until("terminal.session", (value) => value.rejected.some((reason) => /blink/.test(reason)),
+      "the blink color was not rejected", { surface });
 
     // 22: 포인터 모양.
     await effect(s, surface, "\\033]22;crosshair\\007");

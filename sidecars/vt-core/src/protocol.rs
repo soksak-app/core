@@ -1532,8 +1532,9 @@ async fn send_engine_events(
                 if !emit_surface_events {
                     continue;
                 }
+                // 엔진의 거부는 프로그램 출력의 시퀀스에 대한 것이다. 페이지는 이를 터미널 오류가 아니라 기록으로 남긴다.
                 let response =
-                    json!({"surface": surface_id, "body": {"event": "error", "reason": reason}});
+                    json!({"surface": surface_id, "body": {"event": "sequence.rejected", "reason": reason}});
                 if output_tx.send(response.to_string()).await.is_err() {
                     return false;
                 }

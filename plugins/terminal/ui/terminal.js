@@ -69,6 +69,9 @@ const DEFAULT_CURSOR = Object.freeze({
   blinkVisible: true, drawn: Object.freeze({ shape: "block", blinking: false }),
 });
 
+// terminal.session.rejected 에 남기는 거부한 시퀀스의 수.
+const REJECTED_KEPT = 8;
+
 // 사이드카가 화면에 그린 커서 모양. 프로그램의 요청과 초점 규칙이 적용된 값이다.
 const DRAWN_SHAPES = { Block: "block", Underline: "underline", Beam: "beam", HollowBlock: "hollowBlock", Hidden: "hidden" };
 
@@ -209,6 +212,8 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     link: null,
     // OSC 22 로 프로그램이 정한 포인터 모양(CSS cursor 값). 링크 칸 위에서는 손 모양이 우선한다.
     pointer: "default",
+    // 엔진이 거부한 프로그램 출력 시퀀스의 최근 이유. 프로그램의 출력이므로 터미널 오류가 아니다.
+    rejected: [],
     vendor: { directory: null, hyperlink: null, notification: null, shell: null },
     compose: { text: "", selectedRange: null, replacementRange: null, attributed: false },
     theme: "dark",
@@ -1017,6 +1022,13 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
         session = { ...session, inlineImages: session.inlineImages.filter((name) => name !== body.name) };
         changed("session");
       }
+    } else if (body.event === "sequence.rejected") {
+      if (typeof body.reason !== "string" || body.reason.length === 0) {
+        reportInputError(new Error("invalid sequence.rejected event from sidecar"));
+        return;
+      }
+      session = { ...session, rejected: [...session.rejected, body.reason].slice(-REJECTED_KEPT) };
+      changed("session");
     } else if (body.event === "error") {
       // error 이벤트를 session 상태에 저장한다
       const error = new Error(typeof body.reason === "string" ? body.reason : (typeof body.error === "string" ? body.error : "Unknown sidecar error"));
