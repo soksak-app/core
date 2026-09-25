@@ -1290,8 +1290,9 @@ impl Engine for AlacrittyEngine {
             app_cursor: mode.contains(TermMode::APP_CURSOR),
             app_keypad: mode.contains(TermMode::APP_KEYPAD),
             bracketed_paste: mode.contains(TermMode::BRACKETED_PASTE),
-            mouse_report: mode.contains(TermMode::MOUSE_REPORT_CLICK)
-                || mode.contains(TermMode::MOUSE_MOTION),
+            mouse_click: mode.contains(TermMode::MOUSE_REPORT_CLICK),
+            mouse_drag: mode.contains(TermMode::MOUSE_DRAG),
+            mouse_motion: mode.contains(TermMode::MOUSE_MOTION),
             focus_in_out: mode.contains(TermMode::FOCUS_IN_OUT),
             utf8_mouse: mode.contains(TermMode::UTF8_MOUSE),
             sgr_mouse: mode.contains(TermMode::SGR_MOUSE),

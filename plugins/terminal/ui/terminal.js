@@ -617,6 +617,24 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     const link = screen[row]?.[col]?.link;
     return typeof link === "string" ? link : null;
   };
+  // 포인터 입력을 사이드카에 알린다. 프로그램이 마우스 보고를 켰으면 사이드카가 보고로 바꾸고, 아니면 무시한다.
+  // 버튼 없는 움직임은 칸이 바뀔 때만 보낸다.
+  let hoverCell = null;
+  const sendMouse = (phase, point, event, pressed) => {
+    observeInput(terminal.send(id, { operation: "mouse", phase, ...point, pressed,
+      shift: event.shiftKey === true, alt: event.altKey === true, ctrl: event.ctrlKey === true }));
+  };
+  const hoverMouse = (event) => {
+    if (selectionPointerId !== null || !(session.cellWidth > 0 && session.cellHeight > 0)) return;
+    const rect = view.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0 || x >= rect.width || y >= rect.height) return;
+    const cell = `${Math.floor(x / session.cellWidth)},${Math.floor(y / session.cellHeight)}`;
+    if (cell === hoverCell) return;
+    hoverCell = cell;
+    sendMouse("move", { x, y }, event, false);
+  };
   // 링크 칸 위의 포인터는 손 모양이다.
   const hoverLink = (event) => {
     const link = event.type === "pointerleave" ? null : linkAt(event);
@@ -636,6 +654,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     }
     try {
       const point = selectionPoint(event);
+      sendMouse("down", point, event, true);
       selectionPointerId = event.pointerId;
       selectionStart = point;
       selectionStarted = false;
@@ -652,6 +671,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     try {
       const point = selectionPoint(event, true);
       event.preventDefault();
+      sendMouse("move", point, event, true);
       if (!selectionStarted) {
         if (point.x === selectionStart.x && point.y === selectionStart.y) return;
         selectionStarted = true;
@@ -676,6 +696,12 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     // 움직이지 않은 클릭은 누른 칸에서 빈 선택을 시작하고 끝낸다. 빈 선택의 뗌은 이전 선택을 지운다.
     if (!started) observeInput(terminal.send(id, { operation: "selection.start", ...start }));
     observeInput(terminal.send(id, { operation: "selection.end" }));
+    // 뗌은 선택 연산 뒤에 보낸다. 사이드카는 마우스 보고 제스처의 선택 연산을 뗌 전에 받아 선택하지 않는다.
+    try {
+      sendMouse("up", selectionPoint(event, true), event, false);
+    } catch (error) {
+      reportInputError(error);
+    }
   };
   // 휠은 스크롤 제스처다. 이동량을 정수 줄로 바꿔 포인터 칸과 함께 보낸다(docs/spec/terminal-runtime.md).
   // 한 줄보다 작은 픽셀 이동은 누적한다. 양수 줄은 오래된 출력 쪽이다.
@@ -774,6 +800,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   view.addEventListener("pointerdown", beginSelection);
   view.addEventListener("pointermove", updateSelection);
   view.addEventListener("pointermove", hoverLink);
+  view.addEventListener("pointermove", hoverMouse);
   view.addEventListener("pointerleave", hoverLink);
   view.addEventListener("pointerup", endSelection);
   view.addEventListener("pointercancel", endSelection);
@@ -1214,6 +1241,7 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
       view.removeEventListener("pointerdown", beginSelection);
       view.removeEventListener("pointermove", updateSelection);
       view.removeEventListener("pointermove", hoverLink);
+      view.removeEventListener("pointermove", hoverMouse);
       view.removeEventListener("pointerleave", hoverLink);
       view.removeEventListener("pointerup", endSelection);
       view.removeEventListener("wheel", scrollWheel);

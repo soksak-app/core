@@ -193,4 +193,48 @@ for (const app of Object.values(APPS)) {
     assert.equal(await reply(s, surface, "\\033]52;c;?\\007", "\"$b\""), `\x1b]52;c;${Buffer.from("OSC52-ALLOWED").toString("base64")}`,
       "OSC 52 query");
   });
+  test(`${app.name}: mouse, paste, and alternate-scroll modes report input`, { timeout: 120000 }, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const [terminal] = await ensureTerminals(s, 1);
+    const surface = terminal.surface;
+    await readScreenUntil(s, surface, (lines) => lines.some((line) => line.includes("$")), "shell prompt missing");
+    await s.run("terminal.input", { bytes: SETUP }, surface);
+    const view = await s.rect("terminal.view", undefined, surface);
+    const { cellWidth, cellHeight } = await s.get("terminal.session", surface);
+    // 1부터 센 칸 (col, row) 의 가운데.
+    const cell = (col, row) => ({ x: view.document.x + view.x + (col - 0.5) * cellWidth, y: view.document.y + view.y + (row - 0.5) * cellHeight });
+
+    // ?1000 과 ?1006: 누름과 뗌을 SGR 로 알린다.
+    const click = cell(10, 5);
+    const clicked = "\x1b[<0;10;5M\x1b[<0;10;5m";
+    assert.equal(await report(s, surface, "\\033[?1000h\\033[?1006h", clicked.length, "\\033[?1000l\\033[?1006l",
+      () => s.click(click.x, click.y)), clicked, "?1000 and ?1006 click report");
+    // ?1000 과 ?1005: 95 열을 넘는 좌표를 UTF-8 로 알린다.
+    const far = cell(100, 5);
+    assert.equal(Buffer.from(await report(s, surface, "\\033[?1000h\\033[?1005h", 14, "\\033[?1000l\\033[?1005l",
+      () => s.click(far.x, far.y)), "latin1").toString("hex"), Buffer.from("\x1b[M \u0084%\x1b[M#\u0084%", "utf8").toString("hex"),
+      "?1005 UTF-8 coordinates");
+    // ?1002: 누른 채 움직이면 움직임을 알린다.
+    const to = cell(12, 5);
+    const dragged = "\x1b[<0;10;5M\x1b[<32;12;5M\x1b[<0;12;5m";
+    assert.equal(await report(s, surface, "\\033[?1002h\\033[?1006h", dragged.length, "\\033[?1002l\\033[?1006l", async () => {
+      await s.pointer(click.x, click.y, "down");
+      await s.pointer(to.x, to.y, "drag");
+      await s.pointer(to.x, to.y, "up");
+    }), dragged, "?1002 button motion report");
+    // ?1000 과 ?1006 에서 휠은 줄마다 휠 단추를 알린다. 31 픽셀은 두 줄이다.
+    const wheel = await report(s, surface, "\\033[?1000h\\033[?1006h", "\x1b[<64;10;5M".length * 2, "\\033[?1000l\\033[?1006l",
+      () => s.pointer(click.x, click.y, "scroll", { deltaY: 31 }));
+    assert.match(wheel, /^(\x1b\[<6[45];10;5M){2}$/, `?1000 wheel report: ${JSON.stringify(wheel)}`);
+    // ?1007: 대체 화면에서 휠은 방향키가 된다.
+    const arrows = await report(s, surface, "\\033[?1049h\\033[?1007h", 6, "\\033[?1007l\\033[?1049l",
+      () => s.pointer(click.x, click.y, "scroll", { deltaY: 31 }));
+    assert.match(arrows, /^(\x1b[\[O][AB]){2}$/, `?1007 alternate scroll: ${JSON.stringify(arrows)}`);
+    // ?2004: 붙여넣기를 괄호로 감싼다.
+    writePasteboard([{ "public.utf8-plain-text": Buffer.from("PASTE").toString("base64") }]);
+    assert.equal(await report(s, surface, "\\033[?2004h", 17, "\\033[?2004l", () => s.run("terminal.paste", {}, surface)),
+      "\x1b[200~PASTE\x1b[201~", "?2004 bracketed paste");
+  });
 }

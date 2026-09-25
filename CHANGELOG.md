@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-51-6-3: terminal programs that enable mouse reporting (?1000, ?1002, ?1003) receive left-button presses, releases, and movements in the default, UTF-8, or SGR encoding; Shift keeps selecting text.
 - V5-63-1: the window-check harness makes the previously active application active again after any check that leaves its application active, such as full screen or a new project window.
 - V5-51-6-2: `CSI 14t` reports the terminal text area in device pixels, the unit of inline image pixel sizes, instead of rounded points.
 - V5-51-6-1: every terminal raster carries the screen event it draws, so a focus change updates the page's cursor state at once, and `terminal.cursor` reports the drawn cursor shape and blink request in `drawn`.

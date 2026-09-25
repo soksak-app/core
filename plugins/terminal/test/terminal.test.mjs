@@ -1201,11 +1201,16 @@ test("terminal pointer drag sends one complete selection gesture to the sidecar"
   view._trigger("pointerup", { pointerId: 4, clientX: 42, clientY: 12 });
   await new Promise((resolve) => setImmediate(resolve));
 
-  assert.deepEqual(fakeSidecar.getMessages().map(({ body }) => body.operation), [
-    "selection.start", "selection.update", "selection.end",
+  // 포인터 입력은 mouse 로도 알린다. 뗌은 선택 연산 뒤에 온다.
+  assert.deepEqual(fakeSidecar.getMessages().map(({ body }) => body.operation === "mouse" ? `mouse.${body.phase}` : body.operation), [
+    "mouse.down", "mouse.move", "selection.start", "selection.update", "selection.end", "mouse.up",
   ]);
-  assert.equal(fakeSidecar.getMessages()[0].body.x, 10);
-  assert.equal(fakeSidecar.getMessages()[1].body.x, 42);
+  const messages = fakeSidecar.getMessages().map(({ body }) => body);
+  assert.deepEqual(messages[0], { operation: "mouse", phase: "down", x: 10, y: 12, pressed: true, shift: false, alt: false, ctrl: false });
+  assert.deepEqual(messages[1], { operation: "mouse", phase: "move", x: 42, y: 12, pressed: true, shift: false, alt: false, ctrl: false });
+  assert.equal(messages[2].x, 10);
+  assert.equal(messages[3].x, 42);
+  assert.deepEqual(messages[5], { operation: "mouse", phase: "up", x: 42, y: 12, pressed: false, shift: false, alt: false, ctrl: false });
 });
 
 test("a drag that leaves the view selects to the nearest edge point", async () => {
@@ -1257,9 +1262,9 @@ test("a terminal click clears the selection with an empty selection at the press
   await new Promise((resolve) => setImmediate(resolve));
 
   // 빈 선택의 뗌은 이전 선택을 지운다(docs/spec/terminal-runtime.md). 움직이지 않은 클릭은 그 뗌을 보내야 한다.
-  assert.deepEqual(fakeSidecar.getMessages().map((message) => message.body.operation), ["selection.start", "selection.end"],
-    "a click must end an empty selection so that the previous selection is cleared");
-  assert.equal(fakeSidecar.getMessages()[0].body.x, 10);
+  assert.deepEqual(fakeSidecar.getMessages().map((message) => message.body.operation).filter((operation) => operation !== "mouse"),
+    ["selection.start", "selection.end"], "a click must end an empty selection so that the previous selection is cleared");
+  assert.equal(fakeSidecar.getMessages().find((message) => message.body.operation === "selection.start").body.x, 10);
 });
 
 test("terminal.focus command reports focus rejection through terminal.session", { timeout: 10000 }, async () => {

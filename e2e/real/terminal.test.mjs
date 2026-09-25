@@ -630,4 +630,40 @@ for (const app of Object.values(APPS)) {
     assert.ok(seen.dividerDuringOutput.every((name) => resize.includes(name)), `divider during output: ${JSON.stringify(seen)}`);
     assert.ok(resize.includes(seen.dividerAfterFocus), `divider after a focus change: ${JSON.stringify(seen)}`);
   });
+
+  test(`${app.name}: a real pointer move is reported with ?1003 and a real Shift drag selects while ?1002 is on`, { timeout: 90000 }, async (t) => {
+    const { s, surface, session, origin, row } = await prepare(t, app, "SHIFTSELECT");
+    // 입력 COUNT 바이트를 원시 모드로 읽어 R<ID>:<16진수> 로 쓴다. 명령 줄의 글자가 표시와 같지 않게 %s 로 만든다.
+    const read = async (id, on, count, off) => {
+      await s.run("terminal.input", { bytes: `printf '${on}'; stty raw -echo; printf 'WAIT%s\\r\\n' ${id}; ` +
+        `R=$(dd bs=1 count=${count} 2>/dev/null | od -An -tx1 | tr -d ' \\n'); stty sane; printf '${off}'; printf 'R%s:%s\\n' ${id} "$R"\r` }, surface);
+      await readScreenUntil(s, surface, (lines) => lines.some((line) => line.startsWith(`WAIT${id}`)), `${id} did not start reading`);
+    };
+    const result = async (id) => {
+      const lines = await readScreenUntil(s, surface, (screen) => screen.some((line) => line.startsWith(`R${id}:`)), `${id} did not finish`);
+      return Buffer.from(lines.find((line) => line.startsWith(`R${id}:`)).slice(`R${id}:`.length).trim(), "hex").toString("latin1");
+    };
+
+    // ?1003: 버튼 없이 움직인 포인터를 칸이 바뀔 때 알린다.
+    const motion = "\x1b[<35;10;5M";
+    await read("MOTION", "\\033[?1003h\\033[?1006h", motion.length, "\\033[?1003l\\033[?1006l");
+    post([{ type: "move", ...cellPoint(origin, session, 9, 4) }]);
+    assert.equal(await result("MOTION"), motion, "?1003 did not report a real pointer move");
+
+    // ?1002 에서도 Shift 를 누른 끌기는 알리지 않고 글자를 선택한다. 뒤에 쓴 Z 가 PTY 의 첫 바이트여야 한다.
+    await read("SHIFT", "\\033[?1002h\\033[?1006h", 1, "\\033[?1002l\\033[?1006l");
+    const before = (await s.get("terminal.session", surface)).selectionReleases;
+    const from = cellPoint(origin, session, 0, row);
+    const to = cellPoint(origin, session, 4, row);
+    const steps = [{ type: "move", ...from, modifiers: ["shift"] }, { type: "down", ...from, modifiers: ["shift"] }];
+    for (let i = 1; i <= 8; i++) steps.push({ type: "drag", x: from.x + (to.x - from.x) * i / 8, y: from.y, modifiers: ["shift"] });
+    steps.push({ type: "up", ...to, modifiers: ["shift"] });
+    post(steps);
+    await s.until("terminal.session", (value) => value.selectionReleases === before + 1,
+      "the sidecar did not answer the release of the Shift drag", { surface });
+    await s.until("terminal.session", () => pasteboardText() === "SHIFT", "the Shift drag did not copy the selection", { surface });
+    await s.run("terminal.input", { bytes: "Z" }, surface);
+    assert.equal(await result("SHIFT"), "Z", "the Shift drag was reported to the program");
+  });
 }
+

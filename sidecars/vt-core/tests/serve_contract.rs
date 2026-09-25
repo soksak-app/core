@@ -756,7 +756,7 @@ async fn a_scroll_moves_the_primary_viewport_and_input_returns_it_to_the_newest_
 #[tokio::test]
 async fn a_scroll_with_mouse_reporting_writes_wheel_buttons_at_the_pointer_cell() {
     let modes = Modes {
-        mouse_report: true,
+        mouse_click: true,
         sgr_mouse: true,
         ..Modes::default()
     };
@@ -3967,4 +3967,91 @@ async fn a_focus_change_sends_the_screen_with_the_presentation_that_draws_it() {
         assert!(value["body"]["ack"] != true, "the focus change was answered without its screen: {seen:#?}");
     }
     task.abort();
+}
+
+fn mouse(phase: &str, x: f64, pressed: bool, shift: bool) -> String {
+    format!(
+        "{{\"surface\":\"s1\",\"body\":{{\"operation\":\"mouse\",\"phase\":\"{phase}\",\"x\":{x},\"y\":0.5,\"pressed\":{pressed},\"shift\":{shift},\"alt\":false,\"ctrl\":false}}}}\n"
+    )
+}
+
+fn selection(operation: &str, x: f64) -> String {
+    if operation == "selection.end" {
+        return "{\"surface\":\"s1\",\"body\":{\"operation\":\"selection.end\"}}\n".to_string();
+    }
+    format!("{{\"surface\":\"s1\",\"body\":{{\"operation\":\"{operation}\",\"x\":{x},\"y\":0.5}}}}\n")
+}
+
+/// 페이지는 누름, 움직임, 선택 연산, 뗌 순서로 보낸다.
+fn drag_gesture(shift: bool) -> String {
+    [
+        mouse("down", 0.5, true, shift),
+        mouse("move", 200.5, true, shift),
+        selection("selection.start", 0.5),
+        selection("selection.update", 200.5),
+        selection("selection.end", 0.0),
+        mouse("up", 200.5, false, shift),
+    ]
+    .concat()
+}
+
+fn written(writes: &[Vec<u8>]) -> Vec<String> {
+    writes.iter().map(|bytes| String::from_utf8_lossy(bytes).into_owned()).collect()
+}
+
+#[tokio::test]
+async fn a_drag_is_reported_as_press_motion_and_release_when_the_program_tracks_button_motion() {
+    let modes = Modes { mouse_drag: true, sgr_mouse: true, ..Modes::default() };
+    let (output, _, writes) = serve_scroll(Some(modes), &drag_gesture(false)).await;
+    let writes = written(&writes);
+    assert_eq!(writes.len(), 3, "{writes:?}");
+    assert_eq!(writes[0], "\x1b[<0;1;1M");
+    let motion = writes[1].strip_prefix("\x1b[<32;").and_then(|rest| rest.strip_suffix(";1M")).expect("motion report");
+    let col: u16 = motion.parse().unwrap();
+    assert!(col > 1, "{writes:?}");
+    assert_eq!(writes[2], format!("\x1b[<0;{col};1m"));
+    assert!(!output.contains("selection.copy"), "a reported drag must not select text: {output}");
+    assert!(output.contains(r#""copied":false"#), "the page must receive the release of its selection: {output}");
+}
+
+#[tokio::test]
+async fn a_click_program_receives_press_and_release_but_no_motion() {
+    let modes = Modes { mouse_click: true, sgr_mouse: true, ..Modes::default() };
+    let (_, _, writes) = serve_scroll(Some(modes), &drag_gesture(false)).await;
+    let writes = written(&writes);
+    assert_eq!(writes.len(), 2, "{writes:?}");
+    assert_eq!(writes[0], "\x1b[<0;1;1M");
+    assert!(writes[1].starts_with("\x1b[<0;") && writes[1].ends_with(";1m"), "{writes:?}");
+}
+
+#[tokio::test]
+async fn a_shift_drag_selects_instead_of_reporting() {
+    let modes = Modes { mouse_drag: true, sgr_mouse: true, ..Modes::default() };
+    let (_, _, writes) = serve_scroll(Some(modes), &drag_gesture(true)).await;
+    assert!(writes.is_empty(), "{:?}", written(&writes));
+}
+
+#[tokio::test]
+async fn pointer_input_is_not_reported_without_a_mouse_mode() {
+    let (_, _, writes) = serve_scroll(None, &drag_gesture(false)).await;
+    assert!(writes.is_empty(), "{:?}", written(&writes));
+}
+
+#[tokio::test]
+async fn any_motion_tracking_reports_moves_without_a_button_once_per_cell() {
+    let modes = Modes { mouse_motion: true, sgr_mouse: true, ..Modes::default() };
+    let requests = [mouse("move", 0.5, false, false), mouse("move", 1.0, false, false), mouse("move", 200.5, false, false)].concat();
+    let (_, _, writes) = serve_scroll(Some(modes), &requests).await;
+    let writes = written(&writes);
+    assert_eq!(writes.len(), 2, "{writes:?}");
+    assert_eq!(writes[0], "\x1b[<35;1;1M");
+    assert!(writes[1].starts_with("\x1b[<35;") && writes[1] != writes[0], "{writes:?}");
+}
+
+#[tokio::test]
+async fn an_invalid_mouse_operation_is_rejected() {
+    let (output, _, writes) = serve_scroll(None,
+        "{\"surface\":\"s1\",\"body\":{\"operation\":\"mouse\",\"phase\":\"hover\",\"x\":1,\"y\":1,\"pressed\":false,\"shift\":false,\"alt\":false,\"ctrl\":false}}\n").await;
+    assert!(output.contains("mouse requires phase"), "{output}");
+    assert!(writes.is_empty());
 }

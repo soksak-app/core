@@ -41,24 +41,32 @@ pub enum Key {
     Escape,
 }
 
-/// 마우스 이벤트의 종류.
+/// 마우스 보고의 버튼. None 은 버튼을 누르지 않고 움직인 포인터다.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MouseButton {
     Left,
-    Middle,
-    Right,
+    None,
     WheelUp,
     WheelDown,
 }
 
-/// 마우스 이벤트. 좌표는 **셀 좌표**(1-based)로 받는다.
+/// 마우스 보고의 동작.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MouseAction {
+    Press,
+    Release,
+    Motion,
+}
+
+/// 마우스 보고 하나. 칸은 0부터 센다.
 #[derive(Debug, Clone, Copy)]
-pub struct MouseEvent {
+pub struct MouseReport {
     pub button: MouseButton,
-    pub col: u16,        // 1-based cell column
-    pub row: u16,        // 1-based cell row
-    pub pressed: bool,   // true if button pressed, false if released
-    pub is_motion: bool, // true if mouse is moving
+    pub action: MouseAction,
+    pub col: u16,
+    pub row: u16,
+    pub alt: bool,
+    pub ctrl: bool,
 }
 
 /// 키 인코딩 오류.
@@ -346,17 +354,37 @@ fn compute_modifier_param(modifiers: Modifiers) -> u8 {
 /// - `bracketed_paste` 모드가 켜져 있으면 `ESC [ 200 ~` 로 시작해 `ESC [ 201 ~` 로 끝남.
 /// - 텍스트 내의 `ESC [ 201 ~` 시퀀스는 감싸기를 빠져나가지 못하도록 거부함.
 /// - 텍스트의 UTF-8 바이트와 개행을 그대로 보존함.
-/// 포인터 칸 (col, row) 의 휠 버튼 이벤트 하나. older 가 참이면 버튼 64(오래된 출력 쪽), 아니면 65 다.
-/// SGR(1006), UTF-8(1005), 기본 인코딩 순으로 현재 모드를 따른다. 기본 인코딩이 나타낼 수 없는 칸은 오류다.
-pub fn encode_wheel(modes: &Modes, older: bool, col: u16, row: u16) -> Result<Vec<u8>, String> {
-    let button: u32 = if older { 64 } else { 65 };
-    let (x, y) = (u32::from(col) + 1, u32::from(row) + 1);
+/// 마우스 보고 하나를 현재 인코딩으로 만든다. SGR(1006), UTF-8(1005), 기본 인코딩 순으로 모드를 따른다.
+///
+/// 버튼 값은 왼쪽 0, 버튼 없음 3, 휠 64/65 이고, 움직임은 32, alt 는 8, ctrl 은 16 을 더한다. SGR 은 뗌을 `m` 으로
+/// 끝내고 버튼을 유지한다. 기본과 UTF-8 인코딩의 뗌은 버튼 3 이다. 기본 인코딩이 나타낼 수 없는 칸은 오류다.
+pub fn encode_mouse(report: &MouseReport, modes: &Modes) -> Result<Vec<u8>, String> {
+    let mut code: u32 = match report.button {
+        MouseButton::Left => 0,
+        MouseButton::None => 3,
+        MouseButton::WheelUp => 64,
+        MouseButton::WheelDown => 65,
+    };
+    if report.action == MouseAction::Motion {
+        code += 32;
+    }
+    if report.alt {
+        code += 8;
+    }
+    if report.ctrl {
+        code += 16;
+    }
+    let (x, y) = (u32::from(report.col) + 1, u32::from(report.row) + 1);
     if modes.sgr_mouse {
-        return Ok(format!("\x1b[<{button};{x};{y}M").into_bytes());
+        let end = if report.action == MouseAction::Release { 'm' } else { 'M' };
+        return Ok(format!("\x1b[<{code};{x};{y}{end}").into_bytes());
+    }
+    if report.action == MouseAction::Release {
+        code = 3 + (code & (8 | 16));
     }
     if modes.utf8_mouse {
         let mut bytes = b"\x1b[M".to_vec();
-        for value in [32 + button, 32 + x, 32 + y] {
+        for value in [32 + code, 32 + x, 32 + y] {
             let ch = char::from_u32(value)
                 .ok_or_else(|| format!("mouse coordinate {value} cannot be encoded"))?;
             let mut buffer = [0u8; 4];
@@ -366,17 +394,20 @@ pub fn encode_wheel(modes: &Modes, older: bool, col: u16, row: u16) -> Result<Ve
     }
     if x > 223 || y > 223 {
         return Err(format!(
-            "mouse cell {col},{row} cannot be encoded without SGR or UTF-8 mouse mode"
+            "mouse cell {},{} cannot be encoded without SGR or UTF-8 mouse mode",
+            report.col, report.row
         ));
     }
-    Ok(vec![
-        0x1b,
-        b'[',
-        b'M',
-        (32 + button) as u8,
-        (32 + x) as u8,
-        (32 + y) as u8,
-    ])
+    Ok(vec![0x1b, b'[', b'M', (32 + code) as u8, (32 + x) as u8, (32 + y) as u8])
+}
+
+/// 포인터 칸 (col, row) 의 휠 버튼 이벤트 하나. older 가 참이면 버튼 64(오래된 출력 쪽), 아니면 65 다.
+pub fn encode_wheel(modes: &Modes, older: bool, col: u16, row: u16) -> Result<Vec<u8>, String> {
+    let button = if older { MouseButton::WheelUp } else { MouseButton::WheelDown };
+    encode_mouse(
+        &MouseReport { button, action: MouseAction::Press, col, row, alt: false, ctrl: false },
+        modes,
+    )
 }
 
 pub fn encode_paste(text: &str, modes: &Modes) -> Result<Vec<u8>, String> {
@@ -398,93 +429,6 @@ pub fn encode_paste(text: &str, modes: &Modes) -> Result<Vec<u8>, String> {
     Ok(result)
 }
 
-/// 마우스 이벤트를 PTY 에 쓸 바이트로 인코딩한다. SGR(1006) 형식 사용.
-///
-/// # SGR 형식
-/// - 누름: `ESC [ < <button> ; <col> ; <row> M`
-/// - 뗌: `ESC [ < <button> ; <col> ; <row> m`
-/// - 좌표는 **1-based** (셀 좌표).
-///
-/// # 버튼 인코딩
-/// - 왼쪽: 0, 가운데: 1, 오른쪽: 2
-/// - 이동 중: +32
-/// - 수식자: shift +4, alt +8, ctrl +16
-/// - 휠 위: 64, 휠 아래: 65
-///
-/// # 반환값
-/// 마우스 보고 모드가 꺼져 있으면 `None`. 켜져 있으면 인코딩된 바이트.
-pub fn encode_mouse(event: MouseEvent, modes: &Modes) -> Option<Vec<u8>> {
-    if !modes.mouse_report {
-        return None;
-    }
-
-    let mut button_code = match event.button {
-        MouseButton::Left => 0,
-        MouseButton::Middle => 1,
-        MouseButton::Right => 2,
-        MouseButton::WheelUp => 64,
-        MouseButton::WheelDown => 65,
-    };
-
-    if event.is_motion
-        && event.button != MouseButton::WheelUp
-        && event.button != MouseButton::WheelDown
-    {
-        button_code += 32;
-    }
-
-    let action_char = if event.pressed { b'M' } else { b'm' };
-
-    let result = format!(
-        "\x1b[<{};{};{}{}",
-        button_code, event.col, event.row, action_char as char
-    );
-
-    Some(result.into_bytes())
-}
-
-/// 스크롤 이벤트를 인코딩한다.
-///
-/// # 세 가지 경우
-/// 1. 마우스 보고 모드가 켜져 있으면: 휠 버튼 보고를 줄 수만큼 반복 (`lines` 만큼 위/아래).
-/// 2. 마우스 보고는 꺼져 있지만 대체 화면(alt_screen) 모드: 커서 위/아래 키를 줄 수만큼.
-///    (대체 화면에는 스크롤백이 없으므로 위/아래 키가 관례).
-/// 3. 둘 다 아니면 `None` (호출자가 자체 스크롤백을 움직인다).
-///
-/// # 인자
-/// - `lines`: 스크롤할 줄 수. 양수면 아래(down), 음수면 위(up).
-pub fn encode_scroll(lines: i32, modes: &Modes) -> Option<Vec<u8>> {
-    if modes.mouse_report {
-        // 마우스 보고 모드: 휠 버튼 이벤트를 반복
-        let mut result = Vec::new();
-        if lines > 0 {
-            for _ in 0..lines {
-                result.extend_from_slice(b"\x1b[<65;1;1M"); // WheelDown at (1,1)
-            }
-        } else if lines < 0 {
-            for _ in 0..(-lines) {
-                result.extend_from_slice(b"\x1b[<64;1;1M"); // WheelUp at (1,1)
-            }
-        }
-        Some(result)
-    } else if modes.alt_screen {
-        // 대체 화면: 커서 위/아래 키
-        let mut result = Vec::new();
-        if lines > 0 {
-            for _ in 0..lines {
-                result.extend_from_slice(b"\x1b[B"); // Down arrow
-            }
-        } else if lines < 0 {
-            for _ in 0..(-lines) {
-                result.extend_from_slice(b"\x1b[A"); // Up arrow
-            }
-        }
-        Some(result)
-    } else {
-        // 둘 다 아님: 스크롤백은 호출자가 직접 관리
-        None
-    }
-}
 
 /// 조합(IME) 상태를 추적하는 간단한 상태 머신.
 /// 조합 중인 문자열을 보관하고, 확정 시점에만 바이트를 돌려준다.
@@ -553,17 +497,46 @@ impl CompositionState {
 mod tests {
     use super::*;
 
+    fn press(button: MouseButton, action: MouseAction, col: u16, row: u16) -> MouseReport {
+        MouseReport { button, action, col, row, alt: false, ctrl: false }
+    }
+
+    #[test]
+    fn sgr_reports_keep_the_button_on_release_and_add_motion_and_modifier_bits() {
+        let modes = Modes { mouse_click: true, sgr_mouse: true, ..Modes::default() };
+        assert_eq!(encode_mouse(&press(MouseButton::Left, MouseAction::Press, 9, 4), &modes).unwrap(), b"\x1b[<0;10;5M");
+        assert_eq!(encode_mouse(&press(MouseButton::Left, MouseAction::Release, 9, 4), &modes).unwrap(), b"\x1b[<0;10;5m");
+        assert_eq!(encode_mouse(&press(MouseButton::Left, MouseAction::Motion, 9, 4), &modes).unwrap(), b"\x1b[<32;10;5M");
+        assert_eq!(encode_mouse(&press(MouseButton::None, MouseAction::Motion, 9, 4), &modes).unwrap(), b"\x1b[<35;10;5M");
+        let modified = MouseReport { alt: true, ctrl: true, ..press(MouseButton::Left, MouseAction::Press, 0, 0) };
+        assert_eq!(encode_mouse(&modified, &modes).unwrap(), b"\x1b[<24;1;1M");
+    }
+
+    #[test]
+    fn default_and_utf8_reports_release_as_button_three() {
+        let plain = Modes { mouse_click: true, ..Modes::default() };
+        assert_eq!(encode_mouse(&press(MouseButton::Left, MouseAction::Press, 9, 4), &plain).unwrap(), b"\x1b[M *%");
+        assert_eq!(encode_mouse(&press(MouseButton::Left, MouseAction::Release, 9, 4), &plain).unwrap(), b"\x1b[M#*%");
+        let modified = MouseReport { ctrl: true, ..press(MouseButton::Left, MouseAction::Release, 9, 4) };
+        assert_eq!(encode_mouse(&modified, &plain).unwrap(), b"\x1b[M3*%");
+        assert!(encode_mouse(&press(MouseButton::Left, MouseAction::Press, 223, 0), &plain).is_err(),
+            "the default encoding cannot represent column 224");
+        let utf8 = Modes { mouse_click: true, utf8_mouse: true, ..Modes::default() };
+        assert_eq!(encode_mouse(&press(MouseButton::Left, MouseAction::Press, 99, 4), &utf8).unwrap(),
+            "\x1b[M \u{84}%".as_bytes());
+    }
+
     #[test]
     fn wheel_events_follow_the_mouse_encoding() {
         let sgr = Modes {
-            mouse_report: true,
+            mouse_click: true,
             sgr_mouse: true,
             ..Modes::default()
         };
         assert_eq!(encode_wheel(&sgr, true, 4, 6).unwrap(), b"\x1b[<64;5;7M");
         assert_eq!(encode_wheel(&sgr, false, 0, 0).unwrap(), b"\x1b[<65;1;1M");
         let plain = Modes {
-            mouse_report: true,
+            mouse_click: true,
             ..Modes::default()
         };
         assert_eq!(
@@ -575,7 +548,7 @@ mod tests {
             "the default encoding cannot address column 301"
         );
         let utf8 = Modes {
-            mouse_report: true,
+            mouse_click: true,
             utf8_mouse: true,
             ..Modes::default()
         };
@@ -590,7 +563,7 @@ mod tests {
             app_cursor: false,
             app_keypad: false,
             bracketed_paste: false,
-            mouse_report: false,
+            mouse_click: false,
             alt_screen: false,
             ..Default::default()
         };
@@ -598,7 +571,7 @@ mod tests {
             app_cursor: true,
             app_keypad: false,
             bracketed_paste: false,
-            mouse_report: false,
+            mouse_click: false,
             alt_screen: false,
             ..Default::default()
         };
@@ -881,191 +854,6 @@ mod tests {
         assert_eq!(result, b"\x1b[200~hello\rworld\x1b[201~".to_vec());
     }
 
-    #[test]
-    fn test_encode_mouse_sgr_format() {
-        let modes = Modes {
-            mouse_report: true,
-            ..Default::default()
-        };
-
-        // Left button press at (1, 1)
-        let event = MouseEvent {
-            button: MouseButton::Left,
-            col: 1,
-            row: 1,
-            pressed: true,
-            is_motion: false,
-        };
-        let result = encode_mouse(event, &modes).unwrap();
-        assert_eq!(result, b"\x1b[<0;1;1M".to_vec());
-
-        // Left button release
-        let event = MouseEvent {
-            button: MouseButton::Left,
-            col: 1,
-            row: 1,
-            pressed: false,
-            is_motion: false,
-        };
-        let result = encode_mouse(event, &modes).unwrap();
-        assert_eq!(result, b"\x1b[<0;1;1m".to_vec());
-    }
-
-    #[test]
-    fn test_encode_mouse_buttons() {
-        let modes = Modes {
-            mouse_report: true,
-            ..Default::default()
-        };
-
-        // Middle button
-        let event = MouseEvent {
-            button: MouseButton::Middle,
-            col: 10,
-            row: 20,
-            pressed: true,
-            is_motion: false,
-        };
-        let result = encode_mouse(event, &modes).unwrap();
-        assert_eq!(result, b"\x1b[<1;10;20M".to_vec());
-
-        // Right button
-        let event = MouseEvent {
-            button: MouseButton::Right,
-            col: 10,
-            row: 20,
-            pressed: true,
-            is_motion: false,
-        };
-        let result = encode_mouse(event, &modes).unwrap();
-        assert_eq!(result, b"\x1b[<2;10;20M".to_vec());
-    }
-
-    #[test]
-    fn test_encode_mouse_motion() {
-        let modes = Modes {
-            mouse_report: true,
-            ..Default::default()
-        };
-
-        // Left button motion (pressed + moving)
-        let event = MouseEvent {
-            button: MouseButton::Left,
-            col: 5,
-            row: 5,
-            pressed: true,
-            is_motion: true,
-        };
-        let result = encode_mouse(event, &modes).unwrap();
-        // Button code: 0 + 32 = 32
-        assert_eq!(result, b"\x1b[<32;5;5M".to_vec());
-    }
-
-    #[test]
-    fn test_encode_mouse_wheel() {
-        let modes = Modes {
-            mouse_report: true,
-            ..Default::default()
-        };
-
-        // Wheel up
-        let event = MouseEvent {
-            button: MouseButton::WheelUp,
-            col: 1,
-            row: 1,
-            pressed: false,
-            is_motion: false,
-        };
-        let result = encode_mouse(event, &modes).unwrap();
-        assert_eq!(result, b"\x1b[<64;1;1m".to_vec());
-
-        // Wheel down
-        let event = MouseEvent {
-            button: MouseButton::WheelDown,
-            col: 1,
-            row: 1,
-            pressed: false,
-            is_motion: false,
-        };
-        let result = encode_mouse(event, &modes).unwrap();
-        assert_eq!(result, b"\x1b[<65;1;1m".to_vec());
-    }
-
-    #[test]
-    fn test_encode_mouse_disabled() {
-        let modes = Modes {
-            mouse_report: false,
-            ..Default::default()
-        };
-
-        let event = MouseEvent {
-            button: MouseButton::Left,
-            col: 1,
-            row: 1,
-            pressed: true,
-            is_motion: false,
-        };
-        let result = encode_mouse(event, &modes);
-        assert_eq!(result, None);
-    }
-
-    #[test]
-    fn test_encode_scroll_with_mouse_report() {
-        let modes = Modes {
-            mouse_report: true,
-            alt_screen: false,
-            ..Default::default()
-        };
-
-        // Scroll down (positive)
-        let result = encode_scroll(3, &modes).unwrap();
-        assert_eq!(result, b"\x1b[<65;1;1M\x1b[<65;1;1M\x1b[<65;1;1M".to_vec());
-
-        // Scroll up (negative)
-        let result = encode_scroll(-2, &modes).unwrap();
-        assert_eq!(result, b"\x1b[<64;1;1M\x1b[<64;1;1M".to_vec());
-
-        // No scroll
-        let result = encode_scroll(0, &modes).unwrap();
-        assert_eq!(result, b"".to_vec());
-    }
-
-    #[test]
-    fn test_encode_scroll_alt_screen() {
-        let modes = Modes {
-            mouse_report: false,
-            alt_screen: true,
-            ..Default::default()
-        };
-
-        // Scroll down (positive)
-        let result = encode_scroll(2, &modes).unwrap();
-        assert_eq!(result, b"\x1b[B\x1b[B".to_vec());
-
-        // Scroll up (negative)
-        let result = encode_scroll(-3, &modes).unwrap();
-        assert_eq!(result, b"\x1b[A\x1b[A\x1b[A".to_vec());
-
-        // No scroll
-        let result = encode_scroll(0, &modes).unwrap();
-        assert_eq!(result, b"".to_vec());
-    }
-
-    #[test]
-    fn test_encode_scroll_no_handling() {
-        let modes = Modes {
-            mouse_report: false,
-            alt_screen: false,
-            ..Default::default()
-        };
-
-        // No mouse report, no alt screen → None
-        let result = encode_scroll(5, &modes);
-        assert_eq!(result, None);
-
-        let result = encode_scroll(-3, &modes);
-        assert_eq!(result, None);
-    }
 
     #[test]
     fn test_composition_state_not_composing() {

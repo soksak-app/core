@@ -1315,7 +1315,8 @@ fn csi_private_modes_export_keyboard_paste_and_mouse_state() {
     engine.feed(b"\x1b[?1h\x1b[?1000h\x1b[?1002h\x1b[?1003h\x1b[?1006h\x1b[?2004h");
     let enabled = engine.modes();
     assert!(enabled.app_cursor);
-    assert!(enabled.mouse_report);
+    // 마우스 모드는 하나만 켜진다. 마지막으로 켠 ?1003 이 남는다.
+    assert!(enabled.mouse_motion && !enabled.mouse_click && !enabled.mouse_drag);
     assert!(enabled.bracketed_paste);
 
     engine.feed(b"\x1b[?1004h\x1b[?1007h");
@@ -1333,7 +1334,11 @@ fn csi_private_modes_export_keyboard_paste_and_mouse_state() {
     engine.feed(b"\x1b[?1l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1004l\x1b[?1005l\x1b[?1006l\x1b[?1007l\x1b[?2004l");
     let disabled = engine.modes();
     assert!(!disabled.app_cursor);
-    assert!(!disabled.mouse_report);
+    assert!(!disabled.mouse_report());
+    engine.feed(b"\x1b[?1000h");
+    assert!(engine.modes().mouse_click && !engine.modes().mouse_drag);
+    engine.feed(b"\x1b[?1002h");
+    assert!(engine.modes().mouse_drag && !engine.modes().mouse_click);
     assert!(!disabled.bracketed_paste);
     assert!(!disabled.focus_in_out);
     assert!(!disabled.utf8_mouse);

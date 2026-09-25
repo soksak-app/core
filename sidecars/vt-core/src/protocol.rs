@@ -483,8 +483,15 @@ pub struct Modes {
     pub app_keypad: bool,
     #[serde(default)]
     pub bracketed_paste: bool,
+    /// ?1000: 누름과 뗌을 알린다.
     #[serde(default)]
-    pub mouse_report: bool,
+    pub mouse_click: bool,
+    /// ?1002: 누름과 뗌, 버튼을 누른 채 움직임을 알린다.
+    #[serde(default)]
+    pub mouse_drag: bool,
+    /// ?1003: 누름과 뗌, 모든 움직임을 알린다.
+    #[serde(default)]
+    pub mouse_motion: bool,
     #[serde(default)]
     pub focus_in_out: bool,
     #[serde(default)]
@@ -495,6 +502,21 @@ pub struct Modes {
     pub alternate_scroll: bool,
     #[serde(default)]
     pub alt_screen: bool,
+}
+
+/// 포인터 입력의 단계.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MousePhase {
+    Down,
+    Move,
+    Up,
+}
+
+impl Modes {
+    /// 프로그램이 마우스 보고를 켰는지.
+    pub fn mouse_report(&self) -> bool {
+        self.mouse_click || self.mouse_drag || self.mouse_motion
+    }
 }
 
 /// 뷰포트가 가장 새 출력보다 위에 있는 줄 수와 보관된 기록 줄 수.
@@ -640,6 +662,16 @@ enum SurfaceCommand {
     },
     InlineImageDelete {
         name: String,
+    },
+    /// 페이지의 포인터 입력. 프로그램이 마우스 보고를 켰으면 보고로 바꾼다.
+    Mouse {
+        phase: MousePhase,
+        x: f64,
+        y: f64,
+        pressed: bool,
+        shift: bool,
+        alt: bool,
+        ctrl: bool,
     },
     SelectionStart {
         x: f64,
@@ -1584,6 +1616,9 @@ async fn surface_task(
     let mut headless = false;
     let mut pending_configuration: Option<ImageConfiguration> = None;
     let mut focused = false;
+    // 마우스 보고로 시작한 누름. 뗄 때까지 선택 연산은 선택하지 않는다.
+    let mut mouse_gesture = false;
+    let mut mouse_cell: Option<(u16, u16)> = None;
     let mut preedit: Option<Preedit> = None;
     let mut current_theme = crate::palette::TerminalTheme::dark();
     let mut cursor_policy = CursorPolicy::default();
@@ -1823,6 +1858,71 @@ async fn surface_task(
                             }
                         }
                     }
+                    SurfaceCommand::Mouse { phase, x, y, pressed, shift, alt, ctrl } => {
+                        let modes = engine.modes();
+                        let cell = match image_state.as_ref()
+                            .ok_or_else(|| "mouse image is not configured".to_string())
+                            .and_then(|state| state.selection_cell(x, y)) {
+                            Ok(cell) => cell,
+                            Err(reason) => {
+                                let response = json!({"surface": surface_id, "body": {"error": "invalidParams", "reason": reason}});
+                                if output_tx.send(response.to_string()).await.is_err() { return; }
+                                continue;
+                            }
+                        };
+                        // Shift 를 누른 누름은 프로그램의 마우스 보고와 상관없이 글자를 선택한다.
+                        let report = match phase {
+                            MousePhase::Down if modes.mouse_report() && !shift => {
+                                mouse_gesture = true;
+                                Some((encoding::MouseButton::Left, encoding::MouseAction::Press))
+                            }
+                            MousePhase::Down => None,
+                            MousePhase::Move if mouse_cell == Some(cell) => None,
+                            MousePhase::Move if mouse_gesture && pressed && (modes.mouse_drag || modes.mouse_motion) =>
+                                Some((encoding::MouseButton::Left, encoding::MouseAction::Motion)),
+                            MousePhase::Move if !pressed && !mouse_gesture && modes.mouse_motion =>
+                                Some((encoding::MouseButton::None, encoding::MouseAction::Motion)),
+                            MousePhase::Move => None,
+                            MousePhase::Up if mouse_gesture => {
+                                mouse_gesture = false;
+                                Some((encoding::MouseButton::Left, encoding::MouseAction::Release))
+                            }
+                            MousePhase::Up => None,
+                        };
+                        mouse_cell = Some(cell);
+                        if let Some((button, action)) = report {
+                            let encoded = encoding::encode_mouse(&encoding::MouseReport {
+                                button, action, col: cell.0, row: cell.1, alt, ctrl,
+                            }, &modes);
+                            match encoded {
+                                Ok(bytes) => {
+                                    if let Some(ref sid) = session_id {
+                                        if let Err(error) = session_port.write(sid, &bytes).await {
+                                            let response = json!({"surface": surface_id, "body": {"error": "mouse write failed", "reason": error}});
+                                            if output_tx.send(response.to_string()).await.is_err() { return; }
+                                        }
+                                    }
+                                }
+                                Err(reason) => {
+                                    let response = json!({"surface": surface_id, "body": {"error": "invalidParams", "reason": reason}});
+                                    if output_tx.send(response.to_string()).await.is_err() { return; }
+                                }
+                            }
+                        }
+                    }
+                    // 마우스 보고 제스처는 글자를 선택하지 않는다. 페이지는 선택 연산의 답을 기다린다.
+                    SurfaceCommand::SelectionStart { .. } if mouse_gesture => {
+                        let response = json!({"surface": surface_id, "body": {"ack": true, "event": "selection.start"}});
+                        if output_tx.send(response.to_string()).await.is_err() { return; }
+                    }
+                    SurfaceCommand::SelectionUpdate { .. } if mouse_gesture => {
+                        let response = json!({"surface": surface_id, "body": {"ack": true, "event": "selection.update"}});
+                        if output_tx.send(response.to_string()).await.is_err() { return; }
+                    }
+                    SurfaceCommand::SelectionEnd if mouse_gesture => {
+                        let response = json!({"surface": surface_id, "body": {"event": "selection.end", "copied": false}});
+                        if output_tx.send(response.to_string()).await.is_err() { return; }
+                    }
                     SurfaceCommand::SelectionStart { x, y } => {
                         let result = image_state.as_ref().ok_or_else(|| "selection image is not configured".to_string())
                             .and_then(|state| state.selection_cell(x, y))
@@ -1896,7 +1996,7 @@ async fn surface_task(
                     SurfaceCommand::Scroll { lines, col, row } => {
                         let modes = engine.modes();
                         // 마우스 보고, 대체 화면의 대체 스크롤, 기본 화면의 뷰포트 순으로 적용한다.
-                        let bytes = if modes.mouse_report {
+                        let bytes = if modes.mouse_report() {
                             match encoding::encode_wheel(&modes, lines > 0, col, row) {
                                 Ok(event) => Some(event.repeat(lines.unsigned_abs() as usize)),
                                 Err(error) => {
@@ -3066,6 +3166,31 @@ where
                                     }
                                 }
                             },
+                            "mouse" => {
+                                let phase = match body.get("phase").and_then(Value::as_str) {
+                                    Some("down") => Some(MousePhase::Down),
+                                    Some("move") => Some(MousePhase::Move),
+                                    Some("up") => Some(MousePhase::Up),
+                                    _ => None,
+                                };
+                                let x = body.get("x").and_then(Value::as_f64).filter(|x| x.is_finite());
+                                let y = body.get("y").and_then(Value::as_f64).filter(|y| y.is_finite());
+                                let flag = |name: &str| body.get(name).and_then(Value::as_bool);
+                                match (phase, x, y, flag("pressed"), flag("shift"), flag("alt"), flag("ctrl")) {
+                                    (Some(phase), Some(x), Some(y), Some(pressed), Some(shift), Some(alt), Some(ctrl)) => {
+                                        if tx.send(SurfaceCommand::Mouse { phase, x, y, pressed, shift, alt, ctrl }).await.is_err() {
+                                            break;
+                                        }
+                                    }
+                                    _ => {
+                                        let response = json!({"surface": surface_id, "body": {"error": "invalidParams",
+                                            "reason": "mouse requires phase down, move, or up, finite x and y, and boolean pressed, shift, alt, and ctrl"}});
+                                        if output_tx.send(response.to_string()).await.is_err() {
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
                             "selection.start" | "selection.update" => {
                                 let x = body.get("x").and_then(Value::as_f64);
                                 let y = body.get("y").and_then(Value::as_f64);
