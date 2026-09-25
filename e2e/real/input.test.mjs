@@ -7,7 +7,8 @@ import test from "node:test";
 
 import { APPS, fresh, open } from "../app.mjs";
 import { ensureTerminals } from "../terminal-screen.mjs";
-import { bringFront, click, keepPasteboard, post, readPasteboard, requireTrusted, writePasteboard } from "./hid.mjs";
+import { readPasteboard, writePasteboard } from "../pasteboard.mjs";
+import { bringFront, click, post, requireTrusted } from "./hid.mjs";
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a posted HID click reaches the terminal region through the window server`, { timeout: 60000 }, async (t) => {
@@ -56,7 +57,6 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: the real-input pasteboard helpers restore every item type`, { timeout: 30000 }, async (t) => {
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);
-    keepPasteboard(s);
     const items = [{
       "public.utf8-plain-text": Buffer.from("real input").toString("base64"),
       "public.png": Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString("base64"),

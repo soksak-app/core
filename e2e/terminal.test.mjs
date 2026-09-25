@@ -1411,9 +1411,6 @@ for (const app of Object.values(APPS)) {
     const surface = terminal.surface;
     s.cleanup(() => closeTerminalTabs(s));
     await readScreenUntil(s, surface, (lines) => lines.some((line) => line.includes("$")), "shell prompt missing");
-    // 검사는 일반 클립보드를 쓴다. 끝나면 이전 텍스트를 되돌린다.
-    const previous = execFileSync("pbpaste", { encoding: "utf8" });
-    s.cleanup(() => execFileSync("pbcopy", { input: previous }));
     const directory = mkdtempSync(join(tmpdir(), "soksak-png-paste-"));
     s.cleanup(() => rmSync(directory, { recursive: true, force: true }));
     const image = join(directory, "one.png");

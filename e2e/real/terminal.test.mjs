@@ -8,7 +8,8 @@ import test from "node:test";
 import { APPS, fresh, open } from "../app.mjs";
 import { frames, pixel, readFrame } from "../frame.mjs";
 import { ensureTerminals, readScreenUntil } from "../terminal-screen.mjs";
-import { activateFinder, bringFront, click, dragPath, key, KEYS, keepPasteboard, pasteboardText, post, requireTrusted, screenCenter, systemCursor, writePasteboard } from "./hid.mjs";
+import { pasteboardText, writePasteboard } from "../pasteboard.mjs";
+import { activateFinder, bringFront, click, dragPath, key, KEYS, post, requireTrusted, screenCenter, systemCursor } from "./hid.mjs";
 
 // 터미널 한 칸의 중심 화면 좌표.
 function cellPoint(origin, session, column, row) {
@@ -38,7 +39,6 @@ async function prepare(t, app, line) {
   const s = await open(t, app);
   assert.ok(s, `${app.binary} is not built`);
   await fresh(s);
-  keepPasteboard(s);
   const [terminal] = await ensureTerminals(s, 1);
   const surface = terminal.surface;
   await s.run("terminal.input", { bytes: `clear; printf '${line}\\n'\r` }, surface);

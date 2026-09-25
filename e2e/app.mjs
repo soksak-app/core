@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { connect, EndpointError } from "@soksak/client";
+import { readPasteboard, writePasteboard } from "./pasteboard.mjs";
 
 // 검사하는 애플리케이션 실행 파일. 작업 디렉터리와 무관하게 이 파일 위치를 기준으로 찾는다.
 const built = (name) => fileURLToPath(new URL(`../target/debug/${name}`, import.meta.url));
@@ -139,6 +140,18 @@ export async function open(t, app) {
     );
   }
   const session = new Session(app, client);
+  // 검사는 사용자의 페이스트보드를 쓸 수 있다. 모든 항목 형식을 저장하고, 다른 정리가 모두 끝난 뒤 되돌려
+  // 확인한다. 정리는 등록의 역순으로 실행하므로 이 정리가 마지막이다.
+  const pasteboard = readPasteboard();
+  session.cleanup(() => {
+    writePasteboard(pasteboard.items);
+    const after = readPasteboard().items;
+    if (JSON.stringify(after) !== JSON.stringify(pasteboard.items)) {
+      throw new Error(`${app.name}: the pasteboard after the check differs from before it: ` +
+        `${after.map((item) => Object.keys(item).join("+")).join(", ")} instead of ` +
+        `${pasteboard.items.map((item) => Object.keys(item).join("+")).join(", ")}`);
+    }
+  });
   // 검사의 정리는 연결을 닫기 전에 실행한다. node:test 는 after 훅을 등록 순서로 실행한다.
   // 정리 하나가 실패해도(앱이 응답하지 않는 경우 등) 나머지 정리는 실행하고, 실패는 모아서 알린다.
   t.after(async () => {

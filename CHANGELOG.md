@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-49: every window check saves and restores all general-pasteboard item types through the harness and fails when the pasteboard differs afterwards.
 - V5-37: injected wheel events carry no modifier flags instead of the physical modifier state, and `core.surface.input` records the modifier keys of each event.
 - V5-61: `clear` leaves no history and no scrollbar, because the terminal engine erases the screen for `ESC[2J` without moving it into the history; `ESC[1J` also erases the first line when the cursor is on the second line.
 - V5-54: a terminal page that places its image region before its new surface has a native frame no longer fails with `image "view" has no raster geometry` and no longer breaks later layouts and fixtures; the region is configured when the surface is placed, and `core.surfaces` reports each surface page's status.

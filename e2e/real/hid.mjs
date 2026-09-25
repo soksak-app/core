@@ -102,60 +102,6 @@ export function frontWindowAt(x, y) {
   return windowAt({ x, y });
 }
 
-const readItems = jxa(`
-const board = $.NSPasteboard.generalPasteboard;
-const items = [];
-const list = board.pasteboardItems;
-for (let i = 0; i < list.count; i++) {
-  const item = list.objectAtIndex(i);
-  const entry = {};
-  const types = item.types;
-  for (let k = 0; k < types.count; k++) {
-    const type = types.objectAtIndex(k).js;
-    const data = item.dataForType(type);
-    if (!data.isNil()) entry[type] = data.base64EncodedStringWithOptions(0).js;
-  }
-  items.push(entry);
-}
-return JSON.stringify({ changeCount: board.changeCount, items });`);
-
-const writeItems = jxa(`
-const board = $.NSPasteboard.generalPasteboard;
-board.clearContents;
-const objects = $.NSMutableArray.array;
-for (const entry of input.items) {
-  const item = $.NSPasteboardItem.alloc.init;
-  for (const [type, value] of Object.entries(entry)) {
-    item.setDataForType($.NSData.alloc.initWithBase64EncodedStringOptions(value, 0), type);
-  }
-  objects.addObject(item);
-}
-if (input.items.length > 0 && !board.writeObjects(objects)) throw new Error("pasteboard write failed");
-return JSON.stringify(board.changeCount);`);
-
-/** 일반 페이스트보드의 모든 항목을 형식별 base64 로 읽는다. */
-export function readPasteboard() {
-  return readItems();
-}
-
-/** 일반 페이스트보드를 items 로 바꾼다. items 는 readPasteboard().items 의 모양이다. */
-export function writePasteboard(items) {
-  return writeItems({ items });
-}
-
-/** 일반 페이스트보드의 텍스트. 텍스트가 없으면 null 이다. */
-export function pasteboardText() {
-  const { items } = readPasteboard();
-  const text = items.find((item) => item["public.utf8-plain-text"] !== undefined)?.["public.utf8-plain-text"];
-  return text === undefined ? null : Buffer.from(text, "base64").toString("utf8");
-}
-
-/** 검사가 끝나면 페이스트보드의 모든 항목을 되돌린다. */
-export function keepPasteboard(s) {
-  const saved = readPasteboard();
-  s.cleanup(() => writePasteboard(saved.items));
-}
-
 /** 설정 디렉터리의 endpoint.json 이 적은 애플리케이션 프로세스. */
 export function appPid(app) {
   return JSON.parse(readFileSync(join(app.configDir, "endpoint.json"), "utf8")).pid;

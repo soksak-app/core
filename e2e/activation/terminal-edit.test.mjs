@@ -7,15 +7,13 @@ import test from "node:test";
 
 import { APPS, fresh, open } from "../app.mjs";
 import { ensureTerminals, readScreenUntil } from "../terminal-screen.mjs";
-import { pasteboardText, readPasteboard, writePasteboard } from "../real/hid.mjs";
+import { pasteboardText, writePasteboard } from "../pasteboard.mjs";
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: injected Command+C and Command+V run the Edit menu like a person's keys`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
-    const saved = readPasteboard();
-    s.cleanup(() => writePasteboard(saved.items));
     const [terminal] = await ensureTerminals(s, 1);
     const surface = terminal.surface;
     await s.run("terminal.input", { bytes: "clear; printf 'EDITMENU\\n'\r" }, surface);
