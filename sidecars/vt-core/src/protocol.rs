@@ -13,19 +13,41 @@ use tokio::time::{Duration, Instant, MissedTickBehavior};
 #[derive(Clone)]
 struct OutputSink {
     sender: Arc<tokio::sync::Mutex<Option<mpsc::Sender<String>>>>,
+    /// 영속 서비스의 연결이다. 클라이언트의 출력이 닫히면 오류 대신 분리한다.
+    detachable: bool,
 }
 
 impl OutputSink {
     fn direct(sender: mpsc::Sender<String>) -> Self {
         Self {
             sender: Arc::new(tokio::sync::Mutex::new(Some(sender))),
+            detachable: false,
+        }
+    }
+
+    /// 영속 서비스의 연결. 세션은 클라이언트가 끊겨도 유지되므로(docs/spec/terminal-runtime.md), 입력의 끝을
+    /// 읽기 전에 출력 쪽이 먼저 닫힌 클라이언트도 분리한다. 다시 붙은 클라이언트는 현재 화면을 받는다.
+    fn detachable(sender: mpsc::Sender<String>) -> Self {
+        Self {
+            sender: Arc::new(tokio::sync::Mutex::new(Some(sender))),
+            detachable: true,
         }
     }
 
     async fn send(&self, message: String) -> Result<(), ()> {
         let sender = self.sender.lock().await.clone();
         match sender {
-            Some(sender) => sender.send(message).await.map_err(|_| ()),
+            Some(sender) => match sender.send(message).await {
+                Ok(()) => Ok(()),
+                Err(_) if self.detachable => {
+                    let mut current = self.sender.lock().await;
+                    if current.as_ref().is_some_and(|current| current.same_channel(&sender)) {
+                        *current = None;
+                    }
+                    Ok(())
+                }
+                Err(_) => Err(()),
+            },
             None => Ok(()),
         }
     }
@@ -2607,7 +2629,11 @@ where
 {
     let buf_reader = BufReader::new(reader);
     let (output_sender, output_rx) = mpsc::channel::<String>(100);
-    let output_tx = OutputSink::direct(output_sender);
+    let output_tx = if registry.is_some() {
+        OutputSink::detachable(output_sender)
+    } else {
+        OutputSink::direct(output_sender)
+    };
 
     let input_task = run_input_loop(
         buf_reader,
@@ -3849,6 +3875,20 @@ mod tests {
     fn test_base64_decode() {
         assert_eq!(base64_decode("aGk=").unwrap(), b"hi");
         assert_eq!(base64_decode("aGVsbG8=").unwrap(), b"hello");
+    }
+
+    #[tokio::test]
+    async fn a_persistent_sink_detaches_when_its_client_output_closed_and_a_direct_sink_fails() {
+        // 영속 서비스의 세션은 클라이언트가 끊겨도 유지된다. 출력 쪽이 먼저 닫힌 연결로 보낸 출력은 분리로 다룬다.
+        let (sender, receiver) = mpsc::channel(4);
+        let persistent = OutputSink::detachable(sender);
+        drop(receiver);
+        assert!(persistent.send("screen".to_string()).await.is_ok());
+        assert!(persistent.sender().await.is_none(), "the closed client must be detached");
+        let (sender, receiver) = mpsc::channel(4);
+        let direct = OutputSink::direct(sender);
+        drop(receiver);
+        assert!(direct.send("screen".to_string()).await.is_err(), "a closed direct output is an error");
     }
 
     #[tokio::test]

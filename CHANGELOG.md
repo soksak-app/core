@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-62: the terminal service keeps a surface's actor when the client's output closes before its connection ends, so a later `retain` can close the session.
 - V5-51-6-4: terminal programs that enable focus reports (?1004) receive `ESC[I` and `ESC[O` when the terminal gains and loses focus.
 - V5-51-6-3: terminal programs that enable mouse reporting (?1000, ?1002, ?1003) receive left-button presses, releases, and movements in the default, UTF-8, or SGR encoding; Shift keeps selecting text.
 - V5-63-1: the window-check harness makes the previously active application active again after any check that leaves its application active, such as full screen or a new project window.
