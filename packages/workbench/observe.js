@@ -1,21 +1,18 @@
 // 페이지 쪽 진단 메서드.
 //
 // 진단 빌드의 호스트가 exposure-request 로 요청하면 이 문서에서 그 일을 한다. 메서드는
-// 넷이다. 설정과 프로젝트를 검사 전 상태로 되돌리는 diagnostics.fixture, 이름으로
-// 지정한 경계를 호스트의 시각에 맞춰 끄는 diagnostics.drag, 합성 손잡이를 바꾸는
-// diagnostics.knob, 호출 기록을 켜고 끄는 diagnostics.transcript 다. 끌기의 걸음은
+// 셋이다. 설정과 프로젝트를 검사 전 상태로 되돌리는 diagnostics.fixture, 이름으로
+// 지정한 경계를 호스트의 시각에 맞춰 끄는 diagnostics.drag, 호출 기록을 켜고 끄는
+// diagnostics.transcript 다. 끌기의 걸음은
 // 호스트 이벤트 diagnostics-tick 으로 온다.
 //
 // 두 애플리케이션이 이 파일을 함께 실행하므로, 어떻게 끄는지는 한 번만 적힌다.
 // 호스트가 요청하지 않으면 실행되지 않는다.
-import { setKnob } from "./compositor.js";
 import { registry } from "./exposure.js";
 import { native, report, watchCalls } from "./host.js";
 import { createTranscript } from "./transcript.js";
 import { host } from "@soksak/runtime";
 import { currentGrid, surfaceInput } from "./plane.js";
-
-const KNOBS = ["latency", "skew"];
 
 registry.method("diagnostics.fixture", async ({ root, settings: overrides }) => {
   if (typeof root !== "string" || !root) throw new Error("diagnostics.fixture requires root");
@@ -32,16 +29,6 @@ registry.method("diagnostics.fixture", async ({ root, settings: overrides }) => 
   await projects.open({ root, color: "#ffb36b", layout: plane.fresh() });
   await projects.flush();
   return { root };
-});
-
-// 손잡이는 사람이 설정 화면에서 돌리는 것과 같은 값이다. 진단이 그것을 돌릴 수
-// 있어야, 어떤 값에서 무엇이 달라지는지를 사람이 아니라 검사가 잰다.
-registry.method("diagnostics.knob", ({ name, value }) => {
-  if (!KNOBS.includes(name) || typeof value !== "number") {
-    throw new Error(`diagnostics.knob requires name ${KNOBS.join(" or ")} and a number value`);
-  }
-  setKnob(name, value);
-  return null;
 });
 
 // 호출 기록기. 기록기가 이 패키지에 있으므로 두 애플리케이션이 같은 형식과 순서로 남긴다.

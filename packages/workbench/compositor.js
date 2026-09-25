@@ -7,7 +7,6 @@
 // 기록하고, 이 모듈은 그 속성을 읽어 측정하고 보고한다.
 import { plugin } from "./registry.js";
 import { native, surfaces as app } from "./host.js";
-import { value as setting, set as setSetting } from "./settings.js";
 
 const plane = document.getElementById("plane");
 
@@ -35,17 +34,12 @@ export function onRun(fn) {
 /** 지금 갱신이 이어지는 중인지. */
 let going = false;
 
-/** 사용자가 설정하는 두 값. 커밋을 지연시키고 적용 위치에 오차를 만든다. */
-export const knobs = { get latency() { return setting("latency"); }, get skew() { return setting("skew"); } };
-
 let seq = 0;
 let latestRecord = null;
 let aheadRecord = null;
-/* 미리 게시한 커밋의 번호. 그 번호로 커밋이 이루어졌을 때만 예측 레코드가 생긴다.
-   지연이 걸려 있으면 뒤이은 측정 커밋이 그것을 대신하므로 예측은 게시되지 않는다. */
+/* 미리 게시한 커밋의 번호. 그 번호로 커밋이 이루어졌을 때만 예측 레코드가 생긴다. */
 let aheadSeq = -1;
 let aheadComplete = false;
-let timer = null;
 const drawn = new Map();
 
 /** 슬롯이 속한 카드의 요소. 판이 기록한 data-card-id 를 가진 조상이다. */
@@ -172,25 +166,14 @@ export function publish() {
   return deliver(mine, snapshot);
 }
 
-/**
- * 이 스냅샷을 커밋한다. 커밋 지연이 있으면 그만큼 늦춘다.
- *
- * 지연은 실제 애플리케이션에서 판이 그려진 뒤 표면이 따라오기까지의 시차를 만들어
- * 본다. 늦춘 커밋은 앞선 커밋을 대신하므로 이전 것을 취소한다.
- */
+/** 이 스냅샷을 커밋하고, 실행이 시작되거나 끝났으면 그 끝을 알린다. */
 function deliver(mine, snapshot) {
-  clearTimeout(timer);
-  const send = () => {
-    const running = !settled();
-    if (running !== going) {
-      going = running;
-      edge?.(going);
-    }
-    return commit(mine, snapshot, !running);
-  };
-  if (knobs.latency === 0) return send();
-  timer = setTimeout(send, knobs.latency);
-  return undefined;
+  const running = !settled();
+  if (running !== going) {
+    going = running;
+    edge?.(going);
+  }
+  return commit(mine, snapshot, !running);
 }
 
 /** 다음 카드 배치를 준비한다. 위치를 계산할 수 없는 기존 표면은 먼저 숨긴다. */
@@ -242,7 +225,7 @@ function commit(mine, snapshot, final) {
     // 호스트가 없으면 이 모듈이 표면을 모사하므로 적용 위치도 여기서 정한다.
     // 호스트가 있으면 호스트가 실제로 앉힌 자리를 답으로 주고, 아래에서 그것으로
     // 바꿔 넣는다.
-    const seat = { ...s.frame, x: s.frame.x + knobs.skew, y: s.frame.y + knobs.skew };
+    const seat = { ...s.frame };
     const declared = {
       id: s.id, plugin: s.plugin, layer: s.layer, declared: s.frame, applied: seat,
       visible: s.visible, dim: s.dim,
@@ -308,20 +291,6 @@ function seat(record, placed) {
     if (now) s.applied = { x: now.x, y: now.y, w: now.w, h: now.h };
   }
   if (!seatedRecord || record.seq >= seatedRecord.seq) seatedRecord = record;
-}
-
-/* 손잡이가 바뀌었음을 듣는 쪽. 문서가 등록한다. */
-let onKnob = () => {};
-
-/** 손잡이가 바뀌면 fn 을 호출한다. */
-export function onKnobChange(fn) {
-  onKnob = fn;
-}
-
-/** 손잡이 하나를 바꾸고 알린다. 값은 다음 렌더에서 읽힌다. */
-export function setKnob(name, value) {
-  setSetting({ [name]: value });
-  onKnob();
 }
 
 /**

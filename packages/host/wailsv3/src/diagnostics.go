@@ -30,7 +30,6 @@ func init() {
 	diagnosticMethods["diagnostics.drag"] = diagnosticDrag
 	diagnosticMethods["diagnostics.capture.start"] = diagnosticCaptureStart
 	diagnosticMethods["diagnostics.capture.stop"] = diagnosticCaptureStop
-	diagnosticMethods["diagnostics.knob"] = diagnosticKnob
 	diagnosticMethods["diagnostics.modal.hold"] = diagnosticModalHold
 	diagnosticMethods["diagnostics.modal.held"] = diagnosticModalHeld
 	diagnosticMethods["diagnostics.presentation.failure"] = diagnosticPresentationFailure
@@ -415,25 +414,6 @@ type captureStatusAdapter struct{ platformCapture }
 
 func (c captureStatusAdapter) Limited() bool       { return c.CaptureLimited() }
 func (c captureStatusAdapter) LongestGap() float64 { return c.CaptureLongestGap() }
-
-// diagnosticKnob 은 합성기의 검사 값을 페이지에 전달한다.
-func diagnosticKnob(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
-	window, err := e.window(params)
-	if err != nil {
-		return nil, err
-	}
-	var p struct {
-		Name  string   `json:"name"`
-		Value *float64 `json:"value"`
-	}
-	if err := decode(params, &p); err != nil {
-		return nil, err
-	}
-	if p.Name == "" || p.Value == nil {
-		return nil, rpcError(codeInvalidParams, "name and a numeric value are required")
-	}
-	return e.backend.PageRequest(window, "diagnostics.knob", mustJSON(p))
-}
 
 // diagnosticInputSource 는 select 가 있으면 그 입력 소스를 선택하고, 현재 선택된 키보드 입력 소스를 반환한다.
 func diagnosticInputSource(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {

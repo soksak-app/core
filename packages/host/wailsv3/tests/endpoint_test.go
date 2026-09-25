@@ -299,18 +299,18 @@ func TestDiagnosticMethodsExistOnlyInDiagnosticBuilds(t *testing.T) {
 	backend := newFakeBackend()
 	_, address, _ := serve(t, backend)
 	conn := dial(t, address)
-	params := map[string]any{"window": "main", "name": "latency", "value": 0}
+	params := map[string]any{"window": "main", "on": false}
 	if builtWith("diagnostics") {
-		reply := call(t, conn, 1, "diagnostics.knob", params)
+		reply := call(t, conn, 1, "diagnostics.transcript", params)
 		if reply.Error != nil {
-			t.Fatalf("diagnostics.knob failed in a diagnostic build: %+v", reply.Error)
+			t.Fatalf("diagnostics.transcript failed in a diagnostic build: %+v", reply.Error)
 		}
-		if requests, _ := backend.seen(); len(requests) != 1 || requests[0] != "diagnostics.knob" {
-			t.Fatalf("page requests %v, want diagnostics.knob", requests)
+		if requests, _ := backend.seen(); len(requests) != 1 || requests[0] != "diagnostics.transcript" {
+			t.Fatalf("page requests %v, want diagnostics.transcript", requests)
 		}
 		return
 	}
-	send(t, conn, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "diagnostics.knob", "params": params})
+	send(t, conn, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "diagnostics.transcript", "params": params})
 	expectClosed(t, conn)
 	if requests, _ := backend.seen(); len(requests) != 0 {
 		t.Fatalf("a diagnostic method reached the page in a release build: %v", requests)

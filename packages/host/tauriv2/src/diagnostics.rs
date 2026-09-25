@@ -87,16 +87,6 @@ pub(crate) fn call(
             };
             capture_stop(after)
         }
-        "diagnostics.knob" => {
-            if !params.get("name").is_some_and(Value::is_string)
-                || !params.get("value").is_some_and(Value::is_number)
-            {
-                return Err(Failure::params(
-                    "knob takes a name string and a number value",
-                ));
-            }
-            host.page(window, method, params, TIMEOUT)
-        }
         "diagnostics.transcript" => host.page(window, method, params, TIMEOUT),
         "diagnostics.modal.hold" => {
             let Some(on) = params.get("on").and_then(Value::as_bool) else {

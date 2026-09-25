@@ -193,8 +193,8 @@ fn diagnostic_methods_exist_only_in_diagnostic_builds() {
     let mut connection = open(&endpoint);
     send(
         &mut connection,
-        json!({"jsonrpc": "2.0", "id": 1, "method": "diagnostics.knob",
-        "params": {"window": "w1", "name": "latency", "value": 0}}),
+        json!({"jsonrpc": "2.0", "id": 1, "method": "diagnostics.transcript",
+        "params": {"window": "w1", "on": false}}),
     );
     let reply = receive(&mut connection);
     if cfg!(feature = "diagnostics") {
