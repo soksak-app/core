@@ -39,6 +39,10 @@ pub enum Key {
     Tab,
     Backspace,
     Escape,
+    /// 숫자 키패드의 글자 키: `0`–`9`, `.`, `+`, `-`, `*`, `/`, `=`.
+    Keypad(char),
+    /// 숫자 키패드의 Enter.
+    KeypadEnter,
 }
 
 /// 마우스 보고의 버튼. None 은 버튼을 누르지 않고 움직인 포인터다.
@@ -96,7 +100,7 @@ pub type Modifiers = u8;
 ///   문자는 `encode_text()`를 통해 직접 인코딩하기.
 ///
 /// # 미지원
-/// - **App keypad 모드**: `modes.app_keypad` 가 켜져 있어도 현재 단계에서 지원하지 않음.
+/// - **응용 키패드 모드**: `modes.app_keypad` 가 켜져 있으면 수정 키 없는 키패드 키가 `ESC O` 시퀀스가 됨.
 ///   숫자 키는 그대로 보냄. 향후 확장 예정.
 ///
 /// # 에러
@@ -300,6 +304,31 @@ pub fn encode_key(key: Key, modifiers: Modifiers, modes: &Modes) -> Result<Vec<u
         Key::Tab => Ok(b"\t".to_vec()),
         Key::Backspace => Ok(b"\x7f".to_vec()),
         Key::Escape => Ok(b"\x1b".to_vec()),
+        // 응용 키패드 모드(ESC =)에서 수정 키 없는 키패드 키는 SS3 시퀀스다. 그 밖에는 키의 글자다.
+        Key::Keypad(ch) => {
+            let application = match ch {
+                '0'..='9' => (b'p' + (ch as u8 - b'0')) as char,
+                '.' => 'n',
+                '+' => 'k',
+                '-' => 'm',
+                '*' => 'j',
+                '/' => 'o',
+                '=' => 'X',
+                _ => return Err(EncodeError::Unsupported),
+            };
+            if modes.app_keypad && modifiers == 0 {
+                Ok(format!("\x1bO{application}").into_bytes())
+            } else {
+                Ok(ch.to_string().into_bytes())
+            }
+        }
+        Key::KeypadEnter => {
+            if modes.app_keypad && modifiers == 0 {
+                Ok(b"\x1bOM".to_vec())
+            } else {
+                Ok(b"\r".to_vec())
+            }
+        }
     }
 }
 
@@ -496,6 +525,21 @@ impl CompositionState {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn keypad_keys_send_ss3_sequences_only_in_application_keypad_mode() {
+        let numeric = Modes::default();
+        let application = Modes { app_keypad: true, ..Modes::default() };
+        for (ch, final_byte) in [('0', 'p'), ('5', 'u'), ('9', 'y'), ('.', 'n'), ('+', 'k'), ('-', 'm'), ('*', 'j'), ('/', 'o'), ('=', 'X')] {
+            assert_eq!(encode_key(Key::Keypad(ch), 0, &application).unwrap(), format!("\x1bO{final_byte}").into_bytes());
+            assert_eq!(encode_key(Key::Keypad(ch), 0, &numeric).unwrap(), ch.to_string().into_bytes());
+            assert_eq!(encode_key(Key::Keypad(ch), 1, &application).unwrap(), ch.to_string().into_bytes(),
+                "a modified keypad key sends its character");
+        }
+        assert_eq!(encode_key(Key::KeypadEnter, 0, &application).unwrap(), b"\x1bOM");
+        assert_eq!(encode_key(Key::KeypadEnter, 0, &numeric).unwrap(), b"\r");
+        assert!(encode_key(Key::Keypad('a'), 0, &application).is_err());
+    }
 
     fn press(button: MouseButton, action: MouseAction, col: u16, row: u16) -> MouseReport {
         MouseReport { button, action, col, row, alt: false, ctrl: false }

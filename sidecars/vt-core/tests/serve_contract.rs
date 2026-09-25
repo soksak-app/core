@@ -4067,3 +4067,12 @@ async fn focus_changes_are_reported_to_a_program_that_enables_focus_reports() {
     let (_, _, writes) = serve_scroll(None, &requests).await;
     assert!(writes.is_empty(), "focus changes must not be written without ?1004: {:?}", written(&writes));
 }
+
+#[tokio::test]
+async fn keypad_keys_follow_the_application_keypad_mode() {
+    let keys = "{\"surface\":\"s1\",\"body\":{\"operation\":\"input\",\"keys\":[{\"key\":\"Keypad5\",\"text\":\"\",\"shift\":false,\"alt\":false,\"ctrl\":false},{\"key\":\"KeypadEnter\",\"text\":\"\",\"shift\":false,\"alt\":false,\"ctrl\":false}]}}\n";
+    let (_, _, writes) = serve_scroll(Some(Modes { app_keypad: true, ..Modes::default() }), keys).await;
+    assert_eq!(written(&writes), vec!["\x1bOu\x1bOM".to_string()]);
+    let (_, _, writes) = serve_scroll(None, keys).await;
+    assert_eq!(written(&writes), vec!["5\r".to_string()]);
+}

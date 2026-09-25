@@ -1335,6 +1335,10 @@ fn csi_private_modes_export_keyboard_paste_and_mouse_state() {
     let disabled = engine.modes();
     assert!(!disabled.app_cursor);
     assert!(!disabled.mouse_report());
+    engine.feed(b"\x1b=");
+    assert!(engine.modes().app_keypad, "ESC = selects the application keypad");
+    engine.feed(b"\x1b>");
+    assert!(!engine.modes().app_keypad, "ESC > selects the numeric keypad");
     engine.feed(b"\x1b[?1000h");
     assert!(engine.modes().mouse_click && !engine.modes().mouse_drag);
     engine.feed(b"\x1b[?1002h");

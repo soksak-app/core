@@ -665,5 +665,26 @@ for (const app of Object.values(APPS)) {
     await s.run("terminal.input", { bytes: "Z" }, surface);
     assert.equal(await result("SHIFT"), "Z", "the Shift drag was reported to the program");
   });
+
+  test(`${app.name}: real keypad keys send SS3 sequences in application keypad mode and characters otherwise`, { timeout: 90000 }, async (t) => {
+    const { s, surface } = await prepare(t, app, "KEYPAD");
+    const read = async (id, on, count, off) => {
+      await s.run("terminal.input", { bytes: `printf '${on}'; stty raw -echo; printf 'WAIT%s\\r\\n' ${id}; ` +
+        `R=$(dd bs=1 count=${count} 2>/dev/null | od -An -tx1 | tr -d ' \\n'); stty sane; printf '${off}'; printf 'R%s:%s\\n' ${id} "$R"\r` }, surface);
+      await readScreenUntil(s, surface, (lines) => lines.some((line) => line.startsWith(`WAIT${id}`)), `${id} did not start reading`);
+    };
+    const result = async (id) => {
+      const lines = await readScreenUntil(s, surface, (screen) => screen.some((line) => line.startsWith(`R${id}:`)), `${id} did not finish`);
+      return Buffer.from(lines.find((line) => line.startsWith(`R${id}:`)).slice(`R${id}:`.length).trim(), "hex").toString("latin1");
+    };
+    // 키 코드 87 은 키패드 5, 76 은 키패드 Enter 다.
+    const keypad = () => { key(87); key(76); };
+    await read("APPLICATION", "\\033=", 6, "\\033>");
+    keypad();
+    assert.equal(await result("APPLICATION"), "\x1bOu\x1bOM", "ESC = did not select the application keypad");
+    await read("NUMERIC", "\\033>", 2, "");
+    keypad();
+    assert.equal(await result("NUMERIC"), "5\r", "ESC > did not select the numeric keypad");
+  });
 }
 

@@ -887,6 +887,17 @@ fn encode_keys(keys: &[InputKey], modes: &Modes) -> Result<Vec<u8>, String> {
             "Tab" => Key::Tab,
             "Backspace" => Key::Backspace,
             "Escape" => Key::Escape,
+            "KeypadEnter" => Key::KeypadEnter,
+            name if name.starts_with("Keypad") => match &name["Keypad".len()..] {
+                digit if digit.len() == 1 && digit.as_bytes()[0].is_ascii_digit() => Key::Keypad(digit.as_bytes()[0] as char),
+                "Decimal" => Key::Keypad('.'),
+                "Plus" => Key::Keypad('+'),
+                "Minus" => Key::Keypad('-'),
+                "Multiply" => Key::Keypad('*'),
+                "Divide" => Key::Keypad('/'),
+                "Equals" => Key::Keypad('='),
+                _ => return Err(format!("unknown key: {}", key_name)),
+            },
             "Char" => {
                 // "Char" 특수 처리
                 if text.is_empty() {

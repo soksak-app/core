@@ -572,6 +572,28 @@ int main(void) { @autoreleasepool {
         sp_region_close(region11);
     }
 
+    // 숫자 키패드 키는 입력기를 거치지 않고 키패드 키 이름으로 보고한다. 응용 키패드 모드의 인코딩은 사이드카가 정한다.
+    {
+        void *region = sp_region_create(surface, "keypad", testEvent, NULL);
+        sp_region_place(region, 10, 10, 10, 10, true);
+        sp_region_focus(region);
+        id regionView = (id)region;
+        NSArray *cases = @[@[@"5", @87, @"Keypad5"], @[@".", @65, @"KeypadDecimal"], @[@"+", @69, @"KeypadPlus"],
+            @[@"\x03", @76, @"KeypadEnter"], @[@"=", @81, @"KeypadEquals"]];
+        for (NSArray *item in cases) {
+            NSString *characters = [item[0] isEqualToString:@"\x03"] ? [NSString stringWithFormat:@"%C", (unichar)0x03] : item[0];
+            NSEvent *event = [NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint
+                modifierFlags:NSEventModifierFlagNumericPad timestamp:0 windowNumber:0 context:nil
+                characters:characters charactersIgnoringModifiers:characters isARepeat:NO keyCode:[item[1] unsignedShortValue]];
+            [collectedEvents removeAllObjects];
+            [regionView keyDown:event];
+            NSString *expected = [NSString stringWithFormat:@"\"key\":\"%@\"", item[2]];
+            check(collectedEvents.count == 1 && [collectedEvents[0] rangeOfString:expected].location != NSNotFound,
+                [NSString stringWithFormat:@"keypad: keyCode %@ reports %@ (got %@)", item[1], item[2], collectedEvents]);
+        }
+        sp_region_close(region);
+    }
+
     // TEST 12: 키 이벤트 - Backspace
     {
         [collectedEvents removeAllObjects];

@@ -105,6 +105,31 @@ static NSString *controlCharacterForANSIKeyCode(unsigned short keyCode) {
     }
 }
 
+// 숫자 키패드 키의 이름. 키패드가 아닌 키는 nil 이다. 응용 키패드 모드(ESC =)의 인코딩은 사이드카가 정하므로
+// 키패드 키는 입력기를 거치지 않고 이름으로 보고한다.
+static NSString *keypadKeyName(unsigned short keyCode) {
+    switch (keyCode) {
+        case 82: return @"Keypad0";
+        case 83: return @"Keypad1";
+        case 84: return @"Keypad2";
+        case 85: return @"Keypad3";
+        case 86: return @"Keypad4";
+        case 87: return @"Keypad5";
+        case 88: return @"Keypad6";
+        case 89: return @"Keypad7";
+        case 91: return @"Keypad8";
+        case 92: return @"Keypad9";
+        case 65: return @"KeypadDecimal";
+        case 67: return @"KeypadMultiply";
+        case 69: return @"KeypadPlus";
+        case 75: return @"KeypadDivide";
+        case 76: return @"KeypadEnter";
+        case 78: return @"KeypadMinus";
+        case 81: return @"KeypadEquals";
+        default: return nil;
+    }
+}
+
 // 한글 자모(U+1100–U+11FF, U+3130–U+318F, U+A960–U+A97F, U+D7B0–U+D7FF)나 음절(U+AC00–U+D7A3)이 있으면 YES.
 static BOOL containsHangul(NSString *text) {
     for (NSUInteger i = 0; i < text.length; i++) {
@@ -384,6 +409,18 @@ static BOOL containsHangul(NSString *text) {
     unichar ch = [characters characterAtIndex:0];
     NSEventModifierFlags flags = event.modifierFlags;
     BOOL hasCtrlOrOption = (flags & NSEventModifierFlagControl) || (flags & NSEventModifierFlagOption);
+
+    NSString *keypad = keypadKeyName(event.keyCode);
+    if (keypad) {
+        NSString *json = [NSString stringWithFormat:@"{\"type\":\"key\",\"key\":\"%@\",\"shift\":%s,\"alt\":%s,\"ctrl\":%s}",
+            keypad,
+            (flags & NSEventModifierFlagShift) ? "true" : "false",
+            (flags & NSEventModifierFlagOption) ? "true" : "false",
+            (flags & NSEventModifierFlagControl) ? "true" : "false"];
+        [self commitPending];
+        [self report:json.UTF8String];
+        return;
+    }
 
     // 특수 키 판정 - function keys와 특정 문자 코드
     BOOL isSpecialKey = NO;
