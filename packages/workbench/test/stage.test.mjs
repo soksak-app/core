@@ -99,13 +99,13 @@ test("a plugin that publishes its diagnostic declarations or module is rejected"
 });
 
 /** 섹션 하나를 가진 플러그인을 둔 가짜 애플리케이션. files 는 플러그인이 배포하는 목록이다. */
-function sectionApp(t, files) {
+function sectionApp(t, files, extra = {}) {
   const app = fixtureApp(t);
   const plugin = join(app, "node_modules/@fixture/side");
   mkdirSync(join(plugin, "ui"), { recursive: true });
   writeFileSync(join(plugin, "package.json"), JSON.stringify({ name: "@fixture/side", files }));
   writeFileSync(join(plugin, "plugin.json"), JSON.stringify({
-    id: "side", name: "Side", sections: [{ id: "side.list", name: "List", module: "ui/list.js" }],
+    id: "side", name: "Side", sections: [{ id: "side.list", name: "List", module: "ui/list.js" }], ...extra,
   }));
   writeFileSync(join(plugin, "ui/list.js"), "export function mount() {}\n");
   const environment = JSON.parse(readFileSync(join(app, "environment.json"), "utf8"));
@@ -121,4 +121,10 @@ test("a section module is staged and a section module missing from files is reje
   const missing = sectionApp(t, ["plugin.json"]);
   assert.throws(() => execFileSync(process.execPath, [STAGE, "out"], { cwd: missing, stdio: "pipe" }),
     /side\.list module ui\/list\.js must be listed in files/);
+});
+
+test("a state module missing from files is rejected", (t) => {
+  const missing = sectionApp(t, ["plugin.json", "ui/list.js"], { state: { module: "ui/state.js" } });
+  assert.throws(() => execFileSync(process.execPath, [STAGE, "out"], { cwd: missing, stdio: "pipe" }),
+    /side state module ui\/state\.js must be listed in files/);
 });

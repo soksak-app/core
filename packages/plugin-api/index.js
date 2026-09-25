@@ -253,13 +253,37 @@ function checkBackground(where, background, sidecars, settings = {}) {
  */
 export function validateManifest(manifest) {
   if (!isObject(manifest)) throw new Error("plugin.json: expected an object");
-  only("plugin.json", manifest, ["id", "name", "mark", "icon", "surface", "sections", "preview", "sidecars", "background", "exposes", "settings"]);
+  only("plugin.json", manifest, ["id", "name", "mark", "icon", "surface", "sections", "preview", "sidecars", "background", "exposes", "settings",
+    "state", "data"]);
   const { id } = manifest;
   if (typeof id !== "string" || !ID.test(id)) throw new Error(`plugin.json: invalid id ${id}`);
   const where = `plugin ${id}`;
   if (!isText(manifest.name)) throw new Error(`${where}: name is required`);
+  if (manifest.state !== undefined) {
+    if (!isObject(manifest.state)) throw new Error(`${where}: state must be an object`);
+    only(`${where} state`, manifest.state, ["module"]);
+    const { module } = manifest.state;
+    if (!isText(module) || module.startsWith("/") || module.split("/").includes("..") || !module.endsWith(".js")) {
+      throw new Error(`${where}: state module must be a JavaScript path inside the package`);
+    }
+    if (manifest.sections === undefined) throw new Error(`${where}: state requires sections`);
+  }
+  if (manifest.data !== undefined) {
+    if (manifest.state === undefined) throw new Error(`${where}: data requires a state module`);
+    if (!isObject(manifest.data)) throw new Error(`${where}: data must be an object`);
+    for (const [key, entry] of Object.entries(manifest.data)) {
+      if (!ID.test(key)) throw new Error(`${where}: invalid data key ${key}`);
+      if (!isObject(entry) || !isObject(entry.schema) || !Object.hasOwn(entry, "default")) {
+        throw new Error(`${where}: data ${key} requires schema and default`);
+      }
+      only(`${where} data ${key}`, entry, ["schema", "default"]);
+      if (!matchesSchema(entry.schema, entry.default)) throw new Error(`${where}: data ${key} default does not match its schema`);
+    }
+  }
   if (manifest.sidecars !== undefined) {
-    if (manifest.surface === undefined) throw new Error(`${where}: sidecars require a surface`);
+    if (manifest.surface === undefined && manifest.state === undefined) {
+      throw new Error(`${where}: sidecars require a surface or a state module`);
+    }
     checkSidecars(`${where} sidecars`, manifest.sidecars);
   }
   if (manifest.background !== undefined) {
@@ -311,7 +335,9 @@ export function validateManifest(manifest) {
     }
   }
   if (manifest.exposes !== undefined) {
-    if (manifest.surface === undefined) throw new Error(`${where}: exposes require a surface`);
+    if (manifest.surface === undefined && manifest.state === undefined) {
+      throw new Error(`${where}: exposes require a surface or a state module`);
+    }
     validateExposes(id, manifest.exposes);
   }
   checkSettings(`${where}`, manifest.settings);
@@ -319,6 +345,17 @@ export function validateManifest(manifest) {
     throw new Error(`${where}: a plugin requires a surface or sections`);
   }
   return manifest;
+}
+
+/**
+ * 플러그인 plugin 의 프로젝트 데이터 값 하나를 선언 data 로 검사하고 값을 반환한다.
+ * 선언하지 않은 키이거나 스키마에 맞지 않으면 예외를 던진다(docs/spec/plugins.md#project-data).
+ */
+export function checkProjectData(plugin, data, key, value) {
+  const entry = data?.[key];
+  if (!entry) throw new Error(`${plugin} data ${key} is not declared`);
+  if (!matchesSchema(entry.schema, value)) throw new Error(`${plugin} data ${key} does not match its schema`);
+  return value;
 }
 
 /**

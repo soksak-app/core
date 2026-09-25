@@ -109,6 +109,10 @@ for (const name of environment.plugins) {
       throw new Error(`${name}: section ${section.id} module ${section.module} must be listed in files`);
     }
   }
+  const state = manifest.state?.module;
+  if (state && !published.some((file) => state === file || state.startsWith(`${file}/`))) {
+    throw new Error(`${name}: ${manifest.id} state module ${state} must be listed in files`);
+  }
   if (existsSync(join(dir, DIAGNOSTICS))) {
     const declared = validateDiagnostics(manifest, readJson(join(dir, DIAGNOSTICS)));
     const { files } = readJson(join(dir, "package.json"));
