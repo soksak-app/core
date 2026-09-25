@@ -14,6 +14,7 @@
     "app.css",
     "library.css",
     "card.js",
+    "sidebar-sections.js",
     "commands.js",
     "compositor.js",
     "surface-modules.js",

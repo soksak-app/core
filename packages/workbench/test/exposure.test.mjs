@@ -77,7 +77,7 @@ test("the core declaration file is valid and every main-page entry is registered
   assert.ok(file.exposes.status.some(({ name }) => name.startsWith(SURFACE_CORE)), "surface document entries are declared");
   for (const { name } of main(file.exposes.status)) assert.match(code, new RegExp(`status\\("${name}"`), name);
   for (const { name } of main(file.exposes.commands)) assert.match(code, new RegExp(`command\\("${name}"`), name);
-  const markup = ["index.html", "plane.js", "settings-ui.js", "library.js"].map(source).join("\n");
+  const markup = ["index.html", "plane.js", "sidebar-sections.js", "settings-ui.js", "library.js"].map(source).join("\n");
   for (const { name } of file.exposes.dom) {
     assert.ok(markup.includes(`"${name}"`) || markup.includes(`'${name}'`), `${name} has no data-expose in the markup`);
   }

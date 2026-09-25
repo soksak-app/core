@@ -27,6 +27,7 @@ import { systemNotifications } from "./system-notifications.js";
 import { windows } from "@soksak/runtime";
 import { audit, onBinding } from "./commands.js";
 import { onTextScope } from "./text-size.js";
+import { foldSection, onSectionsChange, selectSection, sidebarsState } from "./sidebar-sections.js";
 import { onTabReports, tabLabel, tabNotice } from "./tab-reports.js";
 
 /* 감시 중인 코어 status 의 수신자. */
@@ -232,6 +233,8 @@ export async function installCoreExposure({ library, renames, resetLayout, chrom
   });
   status("core.layout", () => (currentGrid() ? capture() : null));
   status("core.grid", gridState);
+  status("core.sidebars", sidebarsState);
+  onSectionsChange(coreChanged);
   onTabReports(coreChanged);
   status("core.surfaces", surfacesState);
   status("core.drop", () => lastDrop);
@@ -314,6 +317,8 @@ export async function installCoreExposure({ library, renames, resetLayout, chrom
   registry.command("core.card.focus", ({ card }) => { focusCard(card); });
   registry.command("core.card.sidebar.toggle", ({ card }) => { toggleSidebar(card); });
   registry.command("core.card.sidebar.size", ({ card, width }) => { sizeSidebar(card, width); });
+  registry.command("core.sidebar.section.select", ({ sidebar, section }) => { selectSection(sidebar, section); });
+  registry.command("core.sidebar.section.fold", ({ sidebar, section }) => { foldSection(sidebar, section); });
   registry.command("core.text.larger", async () => { await changeTextSize(1); });
   registry.command("core.text.smaller", async () => { await changeTextSize(-1); });
   registry.command("core.text.reset", async () => { await changeTextSize(0); });

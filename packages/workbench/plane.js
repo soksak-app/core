@@ -7,7 +7,8 @@
 import { Soksak, SoksakView, outline } from "soksak";
 import { cardRadius, halfGap, linkedSet, pluginSettings, set as setSetting, stagePad, value } from "./settings.js";
 import { nextTextSize, notifyTextSize, setSurfaceTextSize, setTextScope, textScope } from "./text-size.js";
-import { hasPlugin, isPlace, isRailId, plugin, plugins, railId, railKind, sectionNames } from "./registry.js";
+import { hasPlugin, isPlace, isRailId, plugin, plugins, railId, railKind } from "./registry.js";
+import { clearSet, drawSet } from "./sidebar-sections.js";
 import { environment } from "./environment.js";
 import { standIn } from "./compositor.js";
 import { native, onSurfaceInput, overlay, report, shapes, windowSidecar } from "./host.js";
@@ -141,7 +142,7 @@ function newTab(kind) {
 }
 
 /**
- * 해당 자리에 연결된 세트와 그 세트가 담은 섹션 이름을 반환한다.
+ * 해당 자리에 연결된 세트를 반환한다.
  *
  * 연결된 세트가 없으면 null 을 반환하고 사이드바를 표시하지 않는다.
  */
@@ -152,8 +153,7 @@ function standingSet(place) {
   const set = kind ? linkedSet("rail", kind)
     : place === "left" ? linkedSet("left", null)
     : linkedSet(place, focusedPlugin());
-  if (!set) return null;
-  return { name: set.title, sections: sectionNames(set.sections) };
+  return set;
 }
 
 /** environment.json 의 workspace.grid 로 새 스페이스의 배치를 만든다. 탭 id 는 새로 발급한다. */
@@ -184,7 +184,7 @@ function createCard(card) {
     const id = el.dataset.cardId;
     // 누른 카드가 글자 크기의 범위다(docs/spec/text-size.md).
     if (id) setTextScope({ kind: "card", card: id });
-    if (!id || isPlace(id) || e.target.closest(".tab__x, .chrome__act, .chrome__ham, .side__fold, .side__grip")) return;
+    if (!id || isPlace(id) || e.target.closest(".tab__x, .chrome__act, .chrome__ham, .side__fold, .side__grip, .set button")) return;
     const active = activeTab(grid.card(id));
     if (focusedId !== id) {
       // 카드 포커스가 만든 렌더는 표시를 마치면 대기 중인 표면 포커스를 가져간다. 명령이 끝난 뒤에 적으면
@@ -241,9 +241,15 @@ function updateCard(el, card) {
       : kind ? `${plugin(kind).name} 레일` : "레일";
     setHTML(chrome, `<span class="tab" data-active="true">${name}</span>`);
     const set = standingSet(place);
-    setHTML(el.querySelector(".set"), set
-      ? `<b>${set.name}</b>${set.sections.join(" · ")}`
-      : "<b>—</b>포커스된 플러그인 없음");
+    const holder = el.querySelector(".set");
+    if (set) {
+      // 좌측 사이드바는 카드에 속하지 않는다. 다른 사이드바는 포커스한 카드와 그 활성 탭을 섹션에 넘긴다.
+      const owner = place === "left" ? null : grid.card(focusedId);
+      drawSet(holder, card.id, set, { card: owner?.id ?? null, surface: activeTab(owner)?.id ?? null });
+    } else {
+      clearSet(holder);
+      setHTML(holder, "<b>—</b>포커스된 플러그인 없음");
+    }
     setText(status, place === "left"
       ? `열 ${card.c0}–${card.c1} · 설치 전체가 한 세트`
       : kind
@@ -855,6 +861,7 @@ function drawSidebar(el, card) {
   let side = el.querySelector(":scope > .side");
   let grip = el.querySelector(":scope > .side__grip");
   if (!state) {
+    if (side) clearSet(side.querySelector(".set"));
     side?.remove();
     grip?.remove();
     delete el.dataset.side;
@@ -906,7 +913,7 @@ function drawSidebar(el, card) {
   el.dataset.side = state.collapsed ? "folded" : "open";
   el.style.setProperty("--side-w", `${state.width}px`);
   const set = linkedSet("rail", activeTab(card).plugin);
-  setHTML(side.querySelector(".set"), `<b>${set.title}</b>${sectionNames(set.sections).join(" · ")}`);
+  drawSet(side.querySelector(".set"), card.id, set, { card: card.id, surface: activeTab(card).id });
 }
 
 /* ── 레일. 카드이므로 이동에 move() 를 사용한다 ───────────────────────── */

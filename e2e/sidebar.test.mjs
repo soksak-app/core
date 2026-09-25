@@ -1,4 +1,4 @@
-// 사이드바 위치 inset: 사이드바가 카드 안 표면 왼쪽에 서고, 접기와 폭 변경이 카드 크기를 바꾸지 않는지 검사한다.
+// 사이드바 검사: inset 사이드바의 자리, 접기, 폭 변경과, 세트의 섹션을 list 와 tabs 레이아웃으로 마운트하는지 검사한다.
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -56,5 +56,74 @@ for (const app of Object.values(APPS)) {
     await s.click(fold.x + fold.width / 2, fold.y + fold.height / 2);
     await s.until("core.grid", (value) => value.cards.find((item) => item.id === card.id)?.sidebar?.collapsed === true,
       "a click on the fold button did not fold the sidebar");
+  });
+}
+
+/** 문서 순서의 사이드바 목록에서 layout 을 쓰는 사이드바의 섹션 앞에 놓인 같은 종류 요소의 수. */
+const indexOf = (sidebars, layout, sidebar, section) => {
+  let index = 0;
+  for (const item of sidebars.filter((value) => value.layout === layout)) {
+    if (item.sidebar === sidebar) return index + item.sections.findIndex((value) => value.id === section);
+    index += item.sections.length;
+  }
+  throw new Error(`no ${layout} sidebar ${sidebar}`);
+};
+
+/** 요소의 가운데를 네이티브 입력으로 누른다. */
+const press = async (s, name, index) => {
+  const rect = await s.rect(name, index);
+  assert.ok(rect.width > 0 && rect.height > 0, `${name} ${index} has no area`);
+  await s.click(rect.x + rect.width / 2, rect.y + rect.height / 2);
+};
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: a combined set mounts every section in list layout and switches sections in tabs layout`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    s.cleanup(() => s.run("core.settings.reset", { key: "sets" }));
+    s.cleanup(() => s.run("core.settings.reset", { key: "rail" }));
+    const rail = "rail-shell";
+    const of = (sidebars, id) => sidebars.find((item) => item.sidebar === id);
+    const mounted = (item, ids) => item && ids.every((id) => item.sections.find((value) => value.id === id)?.mounted);
+
+    // list: 셸 레일의 세트는 두 섹션을 모두 마운트한다.
+    let sidebars = await s.until("core.sidebars", (value) => mounted(of(value, rail), ["shell.history", "shell.cwd"]),
+      "the shell rail did not mount both sections");
+    const listed = of(sidebars, rail);
+    assert.equal(listed.layout, "list");
+    assert.deepEqual(listed.sections.map((item) => [item.id, item.folded, item.error]),
+      [["shell.history", false, null], ["shell.cwd", false, null]]);
+    const shellCard = (await s.get("core.grid")).cards.find((card) => card.id === "shell");
+    assert.deepEqual([listed.card, listed.surface], ["shell", shellCard.active], "the sections received the focused card and tab");
+    // 네이티브 클릭으로 머리를 누르면 그 섹션이 접힌다.
+    await press(s, "core.sidebar.section.header", indexOf(sidebars, "list", rail, "shell.cwd"));
+    sidebars = await s.until("core.sidebars", (value) => of(value, rail)?.sections[1].folded === true,
+      "a click on the header did not fold the section");
+    assert.equal(of(sidebars, rail).sections[0].folded, false);
+
+    // tabs: 같은 세트를 tabs 로 바꾸면 고른 섹션 하나만 마운트한다.
+    const sets = (await s.get("core.settings")).values.sets;
+    await s.run("core.settings.set", { patch: { sets: sets.map((set) => set.id === "set-shell" ? { ...set, layout: "tabs" } : set) },
+      scope: "common" });
+    sidebars = await s.until("core.sidebars", (value) => of(value, rail)?.layout === "tabs" && mounted(of(value, rail), ["shell.history"]),
+      "the tabs layout did not mount the first section");
+    assert.equal(of(sidebars, rail).tab, "shell.history");
+    assert.equal(of(sidebars, rail).sections[1].mounted, false, "a section of an unselected tab is mounted");
+    await press(s, "core.sidebar.section.tab", indexOf(sidebars, "tabs", rail, "shell.cwd"));
+    sidebars = await s.until("core.sidebars", (value) => of(value, rail)?.tab === "shell.cwd" && mounted(of(value, rail), ["shell.cwd"]),
+      "a click on the tab did not show its section");
+    assert.equal(of(sidebars, rail).sections[0].mounted, false, "the previous tab's section stayed mounted");
+
+    // 선택은 사이드바마다 유지된다. inset 사이드바는 자기 선택으로 시작하고, 레일로 돌아오면 레일의 선택이 남아 있다.
+    await s.run("core.settings.change", { key: "rail", value: "inset", scope: "common" });
+    sidebars = await s.until("core.sidebars", (value) => !of(value, rail) && mounted(of(value, "shell"), ["shell.history"]),
+      "the inset sidebar did not mount its first tab");
+    assert.equal(of(sidebars, "shell").tab, "shell.history");
+    await s.run("core.sidebar.section.select", { sidebar: "shell", section: "shell.history" });
+    await s.run("core.settings.change", { key: "rail", value: "flow", scope: "common" });
+    sidebars = await s.until("core.sidebars", (value) => of(value, rail)?.tab === "shell.cwd" && mounted(of(value, rail), ["shell.cwd"]),
+      "the rail did not keep its selection");
+    await assert.rejects(s.run("core.sidebar.section.fold", { sidebar: rail, section: "shell.cwd" }), /does not use the list layout/);
   });
 }

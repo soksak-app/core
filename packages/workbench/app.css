@@ -488,3 +488,13 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
    아닐 때만 data-text-zoom 과 --text-zoom 을 쓴다. WebKit 은 zoom 요소의 퍼센트 크기를 확대하지 않으므로
    호스트는 그대로 슬롯을 채우고 그 안의 내용만 커진다. 슬롯 사각형과 네이티브 배치는 바뀌지 않는다. */
 .card[data-text-zoom] .surface-module-host,.card[data-text-zoom] > .set{zoom:var(--text-zoom)}
+/* 사이드바 섹션. list 는 머리로 접고, tabs 는 고른 탭의 섹션만 보인다. */
+.set{overflow:auto}
+.set__tabs{display:flex;gap:2px;margin-bottom:4px}
+.set__tab,.set__head{font:inherit;color:var(--muted);background:none;border:0;padding:2px 4px;cursor:pointer;text-align:left}
+.set__tab[aria-selected=true]{color:var(--fg);box-shadow:inset 0 -1px 0 var(--fg)}
+.set__head{display:block;width:100%;color:var(--fg)}
+.set__head[aria-expanded=false]::before{content:"▸ "}
+.set__head[aria-expanded=true]::before{content:"▾ "}
+.set__section[data-folded=true] .set__body{display:none}
+.set__body ul{margin:0 0 6px;padding:0 0 0 12px;list-style:none}

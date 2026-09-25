@@ -83,6 +83,9 @@ export function section(id) {
   return found;
 }
 
-/** 섹션 id 목록 중 등록된 섹션의 이름을 순서대로 반환한다. 세트는 다른 환경에서 저장되었을 수 있다. */
-export const sectionNames = (ids) =>
-  ids.filter((id) => registeredSections.some((s) => s.id === id)).map((id) => section(id).name);
+/** 섹션 id 목록 중 등록된 섹션을 순서대로 반환한다. 세트는 다른 환경에서 저장되었을 수 있다. */
+export const knownSections = (ids) =>
+  ids.filter((id) => registeredSections.some((s) => s.id === id)).map(section);
+
+/** 섹션 id 목록 중 등록된 섹션의 이름을 순서대로 반환한다. */
+export const sectionNames = (ids) => knownSections(ids).map((s) => s.name);
