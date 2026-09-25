@@ -69,7 +69,7 @@ export async function loadEnvironment() {
   }
   setSidebarDefaults(environment.sidebars);
   units = manifests.map(({ manifest }) => ({
-    id: manifest.id, name: manifest.name, surface: Boolean(manifest.surface),
+    id: manifest.id, name: manifest.name, description: manifest.description, surface: Boolean(manifest.surface),
     sections: (manifest.sections ?? []).map((s) => s.id),
   }));
   loaded = environment;
@@ -77,7 +77,7 @@ export async function loadEnvironment() {
 
 /**
  * 환경의 플러그인을 environment.json 순서로 반환한다. 설정 창의 플러그인 목록이 쓴다.
- * 표면이 없는 플러그인도 포함한다. 항목은 {id, name, surface, sections} 다.
+ * 표면이 없는 플러그인도 포함한다. 항목은 {id, name, description, surface, sections} 다.
  */
 export const pluginUnits = () => units;
 

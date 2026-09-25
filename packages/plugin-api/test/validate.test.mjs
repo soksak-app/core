@@ -6,11 +6,11 @@ import {
 } from "../index.js";
 
 const card = {
-  id: "probe", name: "Probe", mark: "p", icon: "<path/>",
+  id: "probe", name: "Probe", description: "검사용 표면.", mark: "p", icon: "<path/>",
   surface: { module: "ui/probe.js", composition: { kind: "dom" } }, sidecars: ["@scope/sidecar-worker"],
   settings: { "cursor.shape": { type: "enum", label: "커서 모양", default: "block", values: ["block", "beam"] } },
 };
-const side = { id: "side", name: "Side", sections: [{ id: "side.list", name: "List", module: "ui/list.js" }] };
+const side = { id: "side", name: "Side", description: "검사용 섹션.", sections: [{ id: "side.list", name: "List", module: "ui/list.js" }] };
 const environment = () => ({
   runtime: "runtime",
   plugins: ["@scope/plugin-probe", "plugin-side"],
@@ -67,7 +67,7 @@ test("a manifest is rejected for each invalid field", () => {
     [{ ...side, sections: [{ id: "side.list", name: "List" }] }, /section side.list requires a module/],
     [{ ...side, sections: [{ id: "side.list", name: "List", module: "../list.js" }] }, /section side.list module must be a JavaScript path inside the package/],
     [{ ...side, sections: [{ id: "side.list", name: "List", module: "ui/list.css" }] }, /section side.list module must be a JavaScript path inside the package/],
-    [{ id: "empty", name: "Empty" }, /surface or sections/],
+    [{ id: "empty", name: "Empty", description: "빈 플러그인." }, /surface or sections/],
     [{ ...side, sidecars: ["@scope/sidecar-worker"] }, /sidecars require a surface/],
     [{ ...card, sidecars: ["Worker"] }, /expected sidecar package names/],
     [{ ...card, preview: { ink: "red" } }, /preview.ink must be a theme token/],
@@ -133,7 +133,7 @@ test("an environment is rejected for each invalid field", () => {
     [(e) => { e.workspace.focus = "left"; }, /focus must name a card with tabs/],
     [(e) => { e.workspace.grid.cards[1].tabs = []; }, /non-empty array/],
     [(e) => { e.sidebars.links[0].set = "missing"; }, /known set/],
-    [(e) => { e.sidebars.links[1].plugin = null; }, /plugin null/],
+    [(e) => { e.sidebars.links[0].set = null; }, /set null requires a left or right link that names a plugin/],
     [(e) => { e.sidebars.sets.push(e.sidebars.sets[0]); }, /duplicate set/],
     [(e) => { delete e.sidebars.sets[0].layout; }, /set set-side layout must be list or tabs/],
     [(e) => { e.sidebars.sets[0].layout = "grid"; }, /set set-side layout must be list or tabs/],
@@ -280,4 +280,38 @@ test("a setting declaration requires a label and allows a description", () => {
   assert.throws(() => validateManifest(withSetting({ ...base, label: "" })), /label must be 1 to 40/);
   assert.throws(() => validateManifest(withSetting({ ...base, label: "가".repeat(41) })), /label must be 1 to 40/);
   assert.throws(() => validateManifest(withSetting({ ...base, label: "모양", description: "" })), /description must be 1 to 200/);
+});
+
+test("a plugin manifest requires a description of 1 to 200 characters", () => {
+  const { description, ...without } = card;
+  assert.throws(() => validateManifest(without), /plugin probe: description must be 1 to 200 characters/);
+  assert.throws(() => validateManifest({ ...card, description: "" }), /description must be 1 to 200/);
+  assert.throws(() => validateManifest({ ...card, description: "가".repeat(201) }), /description must be 1 to 200/);
+  assert.equal(validateManifest({ ...card, description: "검사용 표면." }).description, "검사용 표면.");
+});
+
+test("sidebar links allow a plugin choice with a set or null and reject repeats and reserved set ids", () => {
+  const base = () => ({
+    sets: [{ id: "set-1", title: "묶음", sections: [], layout: "list" }],
+    links: [
+      { place: "left", plugin: null, set: "set-1" },
+      { place: "right", plugin: null, set: "set-1" },
+      { place: "right", plugin: "side", set: null },
+      { place: "left", plugin: "side", set: "set-1" },
+      { place: "rail", plugin: "side", set: "set-1" },
+    ],
+  });
+  validateSidebars(base(), "settings");
+  for (const [change, error] of [
+    [(s) => { s.links.push({ place: "right", plugin: "side", set: "set-1" }); }, /settings: link right side appears twice/],
+    [(s) => { s.links[0].set = null; }, /set null requires a left or right link that names a plugin/],
+    [(s) => { s.links[4].set = null; }, /set null requires a left or right link that names a plugin/],
+    [(s) => { s.links[4].plugin = null; }, /a rail link names a plugin/],
+    [(s) => { s.sets[0].id = "off"; s.links = []; }, /set id off is reserved/],
+    [(s) => { s.sets[0].id = "inherit"; s.links = []; }, /set id inherit is reserved/],
+  ]) {
+    const value = base();
+    change(value);
+    assert.throws(() => validateSidebars(value, "settings"), error);
+  }
 });

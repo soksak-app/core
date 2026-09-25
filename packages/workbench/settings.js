@@ -27,6 +27,7 @@
 import { surfaces as host } from "./host.js";
 import { checkSidebarReferences, isSettingAddress, validateSidebars } from "@soksak/plugin-api";
 import { effectiveSettings } from "./settings-scope.js";
+import { chooseLink, resolveSidebar } from "./sidebar-sets.js";
 import { TEXT_STEPS, notifyTextSize } from "./text-size.js";
 
 /* 고를 수 있는 폰트. 테마가 이 중 하나를 기본으로 지정하고 설정에서 바꾼다.
@@ -482,32 +483,14 @@ const announce = () => { for (const fn of listeners) fn(); };
 export const sets = () => settings.sets;
 
 /**
- * 세트를 자리에 연결한다. `setId` 가 null 이면 연결을 제거하고 사이드바를 표시하지
- * 않는다.
+ * 사이드바 선택 하나를 바꾼다. choice 는 세트 id, off, inherit 이다(docs/spec/settings.md 의 사이드바 선택).
  */
-export function link(place, plugin, setId, scope) {
-  const rest = scopedValue("links", scope).filter((l) => !(l.place === place && l.plugin === plugin));
-  return set({ links: setId === null ? rest : [...rest, { place, plugin, set: setId }] }, scope);
+export function link(place, plugin, choice, scope) {
+  return set({ links: chooseLink(scopedValue("links", scope), place, plugin, choice) }, scope);
 }
 
-/** 해당 자리에 연결된 세트의 id 를 반환한다. 없으면 null. */
-export function linkedId(place, plugin) {
-  const found = settings.links.find((l) => l.place === place && l.plugin === plugin);
-  return found ? found.set : null;
-}
-
-/**
- * 해당 자리에 연결된 세트를 반환한다. 없으면 null.
- *
- * 섹션의 이름은 읽지 않는다. 등록 목록은 레지스트리가 갖고 설정은 선택한 id 만 갖는다.
- */
-export function linkedSet(place, plugin) {
-  const link = settings.links.find((l) => l.place === place && l.plugin === plugin);
-  if (!link) return null;
-  const set = settings.sets.find((s) => s.id === link.set);
-  if (!set) throw new Error(`link points at a set that is gone: ${link.set}`);
-  return set;
-}
+/** 해당 위치에 보일 세트를 반환한다. left, right 는 plugin 의 선택이 일반 선택보다 앞선다. 없으면 null. */
+export const linkedSet = (place, plugin) => resolveSidebar(settings.links, settings.sets, place, plugin);
 
 /** 현재 테마 이름과 모드를 반환한다. */
 export const themeName = () => settings.theme;

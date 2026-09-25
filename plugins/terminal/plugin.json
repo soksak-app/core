@@ -1,6 +1,7 @@
 {
   "id": "terminal",
   "name": "터미널",
+  "description": "터미널 프로그램을 실행하는 터미널 카드. 커서, 글꼴, 셸, 스크롤바를 설정한다.",
   "mark": "◊",
   "icon": "<rect x=\"2\" y=\"3\" width=\"12\" height=\"10\" rx=\"2\"/><circle cx=\"5\" cy=\"7\" r=\"1.5\"/><path d=\"M8 9l2-2m-2 0l2 2\"/>",
   "surface": {

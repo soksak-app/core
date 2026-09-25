@@ -204,7 +204,9 @@ for (const app of Object.values(APPS)) {
     assert.equal(read(join(second.root, ".soksak/settings.json")).mode, "light");
     assert.equal(read(join(config, "settings.json")).mode, "dark");
     const commonFolded = read(join(config, "settings.json")).sidebarFoldedWidth;
+    // 다른 절에 다녀와도 프로젝트 범위가 유지된다.
     await press(child, "core.settings-modal.nav", "nav:sidebars");
+    await press(child, "core.settings-modal.nav", "nav:general");
     await press(child, "core.settings-modal.set", "sidebarFoldedWidth", "40");
     await child.until("core.settings", (value) => value.overridden.includes("sidebarFoldedWidth") && !value.saving,
       "category change did not retain project scope");

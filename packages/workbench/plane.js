@@ -145,9 +145,8 @@ function standingSet(place) {
   // 레일은 자신의 플러그인 종류에 해당하는 세트를 표시한다. 포커스가 다른 종류로
   // 이동해도 레일의 종류는 바뀌지 않는다.
   const kind = railKind(place);
-  const set = kind ? linkedSet("rail", kind)
-    : place === "left" ? linkedSet("left", null)
-    : linkedSet(place, focusedPlugin());
+  // 좌·우는 포커스 카드 플러그인의 선택이 일반 선택보다 앞선다(docs/spec/settings.md 의 사이드바 선택).
+  const set = kind ? linkedSet("rail", kind) : linkedSet(place, focusedPlugin());
   return set;
 }
 

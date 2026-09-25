@@ -36,6 +36,7 @@
     "registry.js",
     "settings.js",
     "sidebar-sets.js",
+    "plugin-search.js",
     "settings-scope.js",
     "settings-ui.js",
     "tab-reports.js",

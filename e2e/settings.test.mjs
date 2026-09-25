@@ -34,7 +34,7 @@ async function section(s, id) {
 const settingsValue = async (s, key) => (await s.get("core.settings")).values[key];
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: settings show general, plugin, and sidebar sections without compositing`, { timeout: 60000 }, async (t) => {
+  test(`${app.name}: settings keep sidebar appearance in general and list plugins with search and pages`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
@@ -44,54 +44,60 @@ for (const app of Object.values(APPS)) {
     const navs = opened.controls.filter((c) => c.name === "core.settings-modal.nav").map((c) => c.key);
     assert.deepEqual(navs, ["nav:general", "nav:plugins", "nav:sidebars"]);
 
+    // 일반: 사이드바 모양이 여기 있고 플러그인 설정은 없다.
     await section(s, "general");
-    const settings = await s.get("core.settings");
-    const pluginKeys = Object.keys(settings.values).filter((key) => key.includes("."));
-    assert.ok(pluginKeys.length > 0, "the environment declares no plugin setting");
-    const forbidden = new Set([...pluginKeys, "rail", "left", "right", "sets", "links"]);
+    await control(s, "core.settings-modal.pick", "pick:rail:inset");
+    await control(s, "core.settings-modal.set", "left");
+    await control(s, "core.settings-modal.set", "right");
+    await control(s, "core.settings-modal.set", "link:left:");
+    for (const key of ["sidebarMinWidth", "sidebarMaxWidth", "sidebarWidth", "sidebarFoldedWidth", "railWidth"]) {
+      await control(s, "core.settings-modal.set", key);
+    }
+    const pluginKeys = Object.keys((await s.get("core.settings")).values).filter((key) => key.includes("."));
     const general = (await controls(s)).map((c) => c.key ?? "").map((key) => key.startsWith("pick:") ? key.split(":")[1] : key);
-    const leaked = general.filter((key) => forbidden.has(key) || key.startsWith("link:"));
-    assert.deepEqual(leaked, [], "일반 shows plugin or sidebar settings");
+    assert.deepEqual(general.filter((key) => pluginKeys.includes(key)), [], "일반 shows plugin settings");
 
+    // 사이드바: 세트 목록과 새 세트만 있다.
+    await section(s, "sidebars");
+    const sidebars = (await controls(s)).filter((c) => !["core.settings-modal.nav", "core.settings-modal.scope",
+      "core.settings-modal.grip", "core.settings-modal.close"].includes(c.name)).map((c) => c.name);
+    assert.deepEqual([...new Set(sidebars)].sort(),
+      ["core.settings-modal.create", "core.settings-modal.delete", "core.settings-modal.edit"]);
+
+    // 플러그인: 검색 칸과 목록. 검색어가 목록을 거르고, 행이 페이지를 열고, 목록이 돌아온다.
     await section(s, "plugins");
-    const listed = (await controls(s)).filter((c) => c.name === "core.settings-modal.plugin").map((c) => c.key);
-    assert.deepEqual(listed, ["plugin:shell", "plugin:browser", "plugin:files", "plugin:terminal"]);
-    assert.equal((await s.get("core.settings-modal")).plugin, "shell", "the first plugin is not selected");
-    await control(s, "core.settings-modal.set", "link:rail:shell");
-    await control(s, "core.settings-modal.set", "link:right:shell");
+    const list = await s.until("core.settings-modal", (modal) => modal.plugin === null && modal.listed.length > 0,
+      "the plugin list did not show");
+    assert.deepEqual(list.listed, ["shell", "browser", "files", "terminal"]);
+    assert.equal(list.query, "");
+    const rows = list.controls.filter((c) => c.name === "core.settings-modal.plugin");
+    assert.deepEqual(rows.map((c) => c.key), list.listed.map((id) => `plugin:${id}`));
+    assert.ok(rows.every((c) => c.label.includes(" — ")), `a plugin row lacks its description: ${JSON.stringify(rows.map((c) => c.label))}`);
+    await press(s, "core.settings-modal.search", "plugin-search", "TERM", "query");
+    await s.until("core.settings-modal", (modal) => modal.query === "TERM" && modal.listed.join() === "terminal",
+      "the search did not keep only terminal");
+    await press(s, "core.settings-modal.search", "plugin-search", "없는플러그인", "query");
+    await s.until("core.settings-modal", (modal) => modal.listed.length === 0, "a query without a match still lists plugins");
+    await press(s, "core.settings-modal.search", "plugin-search", "", "query");
+    await s.until("core.settings-modal", (modal) => modal.listed.length === 4, "an empty query did not list every plugin");
 
     await press(s, "core.settings-modal.plugin", "plugin:terminal");
-    const terminal = await s.until("core.settings-modal", (modal) => modal.plugin === "terminal", "terminal was not selected");
-    const keys = new Set(terminal.controls.map((c) => c.key ?? "")
-      .map((key) => key.startsWith("pick:") ? key.split(":")[1] : key)
-      .filter((key) => key.startsWith("terminal.")));
-    assert.equal(keys.size, 13, `terminal shows ${keys.size} settings: ${[...keys]}`);
-    // 행 이름은 manifest 의 label 이고, 설명이 있는 설정은 그 아래에 설명을 보인다.
+    const terminal = await s.until("core.settings-modal", (modal) => modal.plugin === "terminal", "terminal page did not open");
+    assert.deepEqual(terminal.listed, [], "the page still shows the plugin list");
     assert.equal(terminal.rows.length, 13, `terminal rows: ${JSON.stringify(terminal.rows)}`);
     assert.deepEqual(terminal.rows.find((row) => row.key === "terminal.cursor.shape"), {
       key: "terminal.cursor.shape", name: "커서 모양",
       description: "block은 칸 전체, underline은 밑줄, beam은 세로 막대로 그린다. 프로그램이 모양을 정하면 그 모양을 쓴다.",
     });
-    assert.equal(terminal.rows.find((row) => row.key === "terminal.cursor.interval").description, null);
-    assert.ok(terminal.rows.every((row) => row.name && !row.name.includes(".")), "a plugin setting row shows its key");
+    await control(s, "core.settings-modal.set", "link:right:terminal");
     await press(s, "core.settings-modal.pick", "pick:terminal.cursor.shape:beam");
     await s.until("core.settings", (value) => value.values["terminal.cursor.shape"] === "beam" && !value.saving,
       "the plugin page did not change terminal.cursor.shape");
-
-    await press(s, "core.settings-modal.plugin", "plugin:files");
-    const files = await s.until("core.settings-modal", (modal) => modal.plugin === "files", "files was not selected");
-    assert.ok(!files.controls.some((c) => c.key?.startsWith("link:rail:")), "a plugin without a surface shows a rail link");
-
-    await section(s, "sidebars");
-    await control(s, "core.settings-modal.pick", "pick:rail:inset");
-    await control(s, "core.settings-modal.set", "left");
-    await control(s, "core.settings-modal.set", "link:left:");
-    for (const key of ["sidebarMinWidth", "sidebarMaxWidth", "sidebarWidth", "sidebarFoldedWidth", "railWidth"]) {
-      await control(s, "core.settings-modal.set", key);
-    }
+    await press(s, "core.settings-modal.back", "plugins:list");
+    await s.until("core.settings-modal", (modal) => modal.plugin === null && modal.listed.length === 4, "목록 did not return to the list");
   });
 
-  test(`${app.name}: settings create, edit, and delete a sidebar set`, { timeout: 60000 }, async (t) => {
+  test(`${app.name}: settings create, edit with section rows, and delete a sidebar set`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
@@ -111,16 +117,44 @@ for (const app of Object.values(APPS)) {
 
     await press(s, "core.settings-modal.set", `title:${made.id}`, "검사 세트", "title");
     await press(s, "core.settings-modal.pick", `layout:${made.id}:tabs`);
-    await press(s, "core.settings-modal.section", `section:${made.id}:files.tree`);
-    await press(s, "core.settings-modal.section", `section:${made.id}:shell.jobs`);
-    const edited = await s.until("core.settings", (value) => {
-      const found = value.values.sets.find((item) => item.id === made.id);
-      return !value.saving && found?.title === "검사 세트" && found.layout === "tabs" && found.sections.join() === "files.tree,shell.jobs";
-    }, "the editor did not change the title, layout, and sections");
-    assert.ok(edited);
-    await press(s, "core.settings-modal.section", `section:${made.id}:files.tree`);
-    await s.until("core.settings", (value) => !value.saving &&
-      value.values.sets.find((item) => item.id === made.id)?.sections.join() === "shell.jobs", "a section was not removed");
+    const sectionsOf = async () => (await settingsValue(s, "sets")).find((item) => item.id === made.id).sections;
+    const saved = (want, message) => s.until("core.settings", (value) => !value.saving &&
+      value.values.sets.find((item) => item.id === made.id)?.sections.join() === want.join(), message);
+
+    // +는 세트에 없는 첫 등록 섹션을 더한다. 세 번 누르면 세 행이다.
+    for (let n = 1; n <= 3; n++) {
+      await press(s, "core.settings-modal.add", `add:${made.id}`);
+      await s.until("core.settings", (value) => !value.saving &&
+        value.values.sets.find((item) => item.id === made.id)?.sections.length === n, `+ did not add row ${n}`);
+    }
+    const three = await sectionsOf();
+    assert.equal(new Set(three).size, 3);
+    const editor = await s.until("core.settings-modal", (modal) =>
+      modal.controls.filter((c) => c.name === "core.settings-modal.row").length === 3, "the editor did not draw three rows");
+    // 편집기는 등록된 섹션마다의 컨트롤을 두지 않는다. 행마다 선택 상자 하나와 ▲▼− 가 있고 + 는 하나다.
+    assert.equal(editor.controls.filter((c) => c.name === "core.settings-modal.section").length, 0);
+    assert.equal(editor.controls.filter((c) => c.name === "core.settings-modal.add").length, 1);
+    assert.deepEqual(editor.controls.filter((c) => c.name === "core.settings-modal.row-act").map((c) => c.key), [
+      `down:${made.id}:0`, `remove:${made.id}:0`,
+      `up:${made.id}:1`, `down:${made.id}:1`, `remove:${made.id}:1`,
+      `up:${made.id}:2`, `remove:${made.id}:2`,
+    ]);
+    const select = editor.controls.find((c) => c.key === `row:${made.id}:0`);
+    assert.equal(select.value, three[0]);
+    assert.deepEqual(select.groups.map((g) => g.label), ["셸", "브라우저", "파일"]);
+    assert.equal(select.groups.flatMap((g) => g.values).length, 9);
+
+    await press(s, "core.settings-modal.row-act", `down:${made.id}:0`);
+    await saved([three[1], three[0], three[2]], "▼ did not move row 0 down");
+    await press(s, "core.settings-modal.row-act", `up:${made.id}:2`);
+    await saved([three[1], three[2], three[0]], "▲ did not move row 2 up");
+    await press(s, "core.settings-modal.row-act", `remove:${made.id}:1`);
+    await saved([three[1], three[0]], "− did not remove row 1");
+    await press(s, "core.settings-modal.row", `row:${made.id}:0`, "files.bookmarks", "section");
+    await saved(["files.bookmarks", three[0]], "the select box did not replace row 0");
+    await assert.rejects(press(s, "core.settings-modal.row", `row:${made.id}:1`, "files.bookmarks", "section"),
+      new RegExp(`section files.bookmarks is already in set ${made.id}`));
+    assert.deepEqual(await sectionsOf(), ["files.bookmarks", three[0]], "a rejected repeat changed the set");
 
     await press(s, "core.settings-modal.edit", "edit:");
     await s.until("core.settings-modal", (modal) => modal.editing === null, "완료 did not close the editor");
@@ -176,5 +210,27 @@ for (const app of Object.values(APPS)) {
     await s.until("core.page.error", (text) => /settings: set .* names unknown section gone\.section/.test(text ?? ""),
       "loading a project with an invalid stored set showed no error");
     await opened;
+  });
+
+  test(`${app.name}: a plugin's right sidebar choice takes precedence over the general choice`, { timeout: 60000 }, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const right = async (card, want, message) => {
+      await s.run("core.card.focus", { card });
+      await s.until("core.sidebars", (bars) => (bars.find((bar) => bar.sidebar === "right")?.set ?? null) === want, message);
+    };
+    const choose = (plugin, set) => s.run("core.settings.link", { place: "right", plugin, set, scope: "common" });
+    // 일반 사용 안 함 + 플러그인 세트 → 보인다. 기본값에서 셸은 set-process 를 고르고 일반 선택은 없다.
+    await right("shell", "set-process", "a plugin set did not show while the general choice is off");
+    // 일반 세트 + 플러그인 사용 안 함 → 숨는다.
+    await choose(null, "set-page");
+    await choose("shell", "off");
+    await right("shell", null, "plugin 사용 안 함 did not hide the right sidebar");
+    // 플러그인 일반 따름 → 일반 세트.
+    await choose("shell", "inherit");
+    await right("shell", "set-page", "plugin 일반 따름 did not show the general set");
+    await right("browser", "set-browser", "the browser set did not take precedence over the general set");
+    await assert.rejects(s.run("core.settings.link", { place: "right", plugin: null, set: "inherit", scope: "common" }), /inherit/);
   });
 }

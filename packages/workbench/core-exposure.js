@@ -18,12 +18,13 @@ import {
   applyTheme, defaults, link, onSaved, overridden, reset, saving, scopedValue, set, settingProject, value,
 } from "./settings.js";
 import {
-  closeSettings, editSet, moveSettings, onSettingsDrawn, openSettings, settingsModalState, showPlugin, showScope, showSection,
+  closeSettings, editSet, moveSettings, onSettingsDrawn, openSettings, settingsModalState, searchPlugins, showPlugin, showScope, showSection,
 } from "./settings-ui.js";
-import { createSet, deleteSet, updateSet } from "./sidebar-sets.js";
+import { changeRow, createSet, deleteSet, updateSet } from "./sidebar-sets.js";
+import { pluginUnits } from "./environment.js";
 import { latest, seated } from "./compositor.js";
 import { modalState, onFilesDropped, onModalState } from "./host.js";
-import { plugin, section } from "./registry.js";
+import { plugin } from "./registry.js";
 import { systemNotifications } from "./system-notifications.js";
 import { windows } from "@soksak/runtime";
 import { audit, onBinding } from "./commands.js";
@@ -275,12 +276,20 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   registry.command("core.settings.theme", async ({ name, mode, scope }) => {
     await applyTheme(name, mode ?? scopedValue("mode", scope ?? "common"), scope);
   });
-  registry.command("core.settings.link", async ({ place, plugin = null, set: setId, scope }) => {
-    if (!["left", "right", "rail"].includes(place)) throw new Error(`unknown place ${place}`);
-    const id = setId === "" || setId === undefined ? null : setId;
-    if (id !== null && !value("sets").some((s) => s.id === id)) throw new Error(`unknown set ${id}`);
-    await link(place, plugin, id, scope);
-  });
+  // 사이드바 선택과 세트 변경의 거부는 잘못된 요청 인자다(docs/spec/settings.md).
+  const invalid = (run) => async (params) => {
+    try {
+      return await run(params);
+    } catch (error) {
+      throw new ExposureError(EXPOSURE_ERRORS.invalidParams, error.message);
+    }
+  };
+  registry.command("core.settings.link", invalid(async ({ place, plugin = null, set: choice, scope = "common" }) => {
+    if (choice !== "off" && choice !== "inherit" && !scopedValue("sets", scope).some((s) => s.id === choice)) {
+      throw new Error(`unknown set ${choice}`);
+    }
+    await link(place, plugin, choice, scope);
+  }));
   registry.command("core.settings.sets.create", async ({ scope = "common" }) => {
     const sets = createSet(scopedValue("sets", scope));
     const { id } = sets.at(-1);
@@ -288,10 +297,14 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
     if (settingsModalState().open) editSet(id);
     return { id };
   });
-  registry.command("core.settings.sets.update", async ({ id, title, layout, section: sectionId, on, scope = "common" }) => {
-    if (sectionId !== undefined) section(sectionId);
-    await set({ sets: updateSet(scopedValue("sets", scope), id, { title, layout, section: sectionId, on }) }, scope);
-  });
+  registry.command("core.settings.sets.update", invalid(async ({ id, title, layout, scope = "common" }) => {
+    const change = Object.fromEntries(Object.entries({ title, layout }).filter(([, v]) => v !== undefined));
+    await set({ sets: updateSet(scopedValue("sets", scope), id, change) }, scope);
+  }));
+  registry.command("core.settings.sets.row", invalid(async ({ id, action, index, section: sectionId, scope = "common" }) => {
+    const registered = pluginUnits().flatMap((u) => u.sections);
+    await set({ sets: changeRow(scopedValue("sets", scope), id, { action, index, section: sectionId }, registered) }, scope);
+  }));
   registry.command("core.settings.sets.delete", async ({ id, scope = "common" }) => {
     await set(deleteSet(scopedValue("sets", scope), scopedValue("links", scope), id), scope);
   });
@@ -326,7 +339,8 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   });
   registry.command("core.settings-modal.nav", ({ section }) => { showSection(section); });
   registry.command("core.settings-modal.scope", ({ scope }) => { showScope(scope); });
-  registry.command("core.settings-modal.plugin", ({ plugin: id }) => { showPlugin(id); });
+  registry.command("core.settings-modal.plugin", ({ plugin: id = null }) => { showPlugin(id); });
+  registry.command("core.settings-modal.search", ({ query }) => { searchPlugins(query); });
   registry.command("core.settings-modal.edit", ({ set: id = null }) => { editSet(id); });
   registry.command("core.settings-modal.move", ({ dx, dy }) => { moveSettings(dx, dy); });
 

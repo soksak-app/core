@@ -19,6 +19,7 @@ import { icon } from "./icons.js";
 import { onGripDrag, showValue } from "./card.js";
 import { commandOf, delegate, mark, run } from "./commands.js";
 import { pluginUnits } from "./environment.js";
+import { matchPlugins } from "./plugin-search.js";
 import { section, sectionNames } from "./registry.js";
 import {
   FONTS, LAYOUT_RANGES, MODES, THEMES, scopedValue, settingProject, overridden,
@@ -35,8 +36,10 @@ let body = null;
 /** 현재 절. 닫아도 유지하고 다시 열 때 같은 절을 표시한다. */
 let here = "general";
 let scope = "common";
-/** 플러그인 절에서 고른 플러그인 id. 처음 열면 첫 플러그인이다. */
+/** 플러그인 절에서 페이지를 연 플러그인 id. null 이면 목록을 보인다. */
 let chosen = null;
+/** 플러그인 목록의 검색어. */
+let query = "";
 /** 사이드바 절에서 편집 중인 세트 id. 없으면 null. */
 let editing = null;
 const value = (key) => scopedValue(key, scope);
@@ -252,6 +255,19 @@ function drawGeneral() {
     row("프로젝트 탭 위치", segment("projectTabs", [["top", "위"], ["left", "왼쪽"]], value("projectTabs"))),
   ]));
 
+  body.append(group("사이드바", "사이드바 위치는 모든 플러그인에 적용된다. 플러그인 페이지에서 고른 왼쪽·오른쪽 사이드바가 이 선택보다 앞선다.", [
+    row("사이드바 위치", segment("rail",
+      [["flow", "포커스 카드 옆"], ["pin", "고정"], ["inset", "카드 안"], ["off", "없음"]], value("rail"))),
+    row("왼쪽 사이드바 보이기", toggle("left", value("left"))),
+    row("오른쪽 사이드바 보이기", toggle("right", value("right"))),
+    row("왼쪽 사이드바 세트", choose("link:left:", generalOptions(), choiceOf("left", null))),
+    row("오른쪽 사이드바 세트", choose("link:right:", generalOptions(), choiceOf("right", null))),
+    ...(scope === "project" && overridden("links") ? [row("", press("reset:links", "전역 연결 사용"))] : []),
+  ]));
+
+  body.append(group("사이드바 크기", "사이드바의 폭(pt). 처음 폭은 최소 폭과 최대 폭 사이여야 한다.",
+    Object.entries(LAYOUT_RANGES).map(([key, [min, max]]) => row(SIZE_LABELS[key], slide(key, min, max, value(key), "pt")))));
+
   body.append(group("표시", "배치는 그대로 두고 보이는 모습만 바꾼다.", [
     row("포커스 표시", segment("focusInd", [["border", "테두리"], ["corner", "꺽쇠"]], value("focusInd"))),
     row("경계선", segment("fullRule", [["under", "가림"], ["over", "보임"], ["none", "숨김"]], value("fullRule"))),
@@ -272,10 +288,16 @@ function button(key, name, label, command, params, on = null) {
   return el;
 }
 
-/** 세트 선택 목록의 항목. 없음과 모든 세트다. */
-const setOptions = () => [["", "없음"], ...value("sets").map((s) => [s.id,
-  `${s.title} — ${sectionNames(s.sections).join(" · ")}`])];
-const linkedId = (place, plugin) => value("links").find((l) => l.place === place && l.plugin === plugin)?.set;
+/** 세트 선택 상자의 세트 항목. 값은 세트 id 다. */
+const setItems = () => value("sets").map((s) => [s.id, `${s.title} — ${sectionNames(s.sections).join(" · ") || "섹션 없음"}`]);
+/** 일반 선택의 항목: 사용 안 함과 모든 세트. */
+const generalOptions = () => [["off", "사용 안 함"], ...setItems()];
+/** 선택 상자에 보일 현재 선택. 세트 id, off, 또는 inherit(플러그인의 일반 따름)이다. */
+function choiceOf(place, plugin) {
+  const found = value("links").find((l) => l.place === place && l.plugin === plugin);
+  if (!found) return plugin === null || place === "rail" ? "off" : "inherit";
+  return found.set ?? "off";
+}
 
 /** 설정 한 행. 선언된 형식에 따라 선택, 슬라이더, 글자 입력이다. */
 function declaredRow(key, definition) {
@@ -301,18 +323,38 @@ function declaredRow(key, definition) {
 /** 세트 한 줄의 설명. 제목, 배치, 섹션 이름. */
 const setLine = (s) => `${s.title} · ${s.layout === "tabs" ? "탭" : "목록"} · ${sectionNames(s.sections).join(", ") || "섹션 없음"}`;
 
-function drawPlugins() {
-  const units = pluginUnits();
-  if (!units.some((u) => u.id === chosen)) chosen = units[0]?.id ?? null;
-  const list = document.createElement("div");
-  list.className = "set-seg";
-  for (const u of units) {
-    list.append(button(`plugin:${u.id}`, "core.settings-modal.plugin", u.name, "core.settings-modal.plugin",
-      { plugin: u.id }, u.id === chosen));
+/** 플러그인 목록. 검색 칸과 검색어에 맞는 행이다. */
+function drawPluginList() {
+  const search = document.createElement("input");
+  search.type = "search";
+  search.className = "set-text";
+  search.placeholder = "이름, id, 설명으로 찾기";
+  search.dataset.set = "plugin-search";
+  search.dataset.expose = "core.settings-modal.search";
+  mark(search, "core.settings-modal.search", {}, "query");
+  search.setAttribute("value", query);
+  const rows = matchPlugins(pluginUnits(), query).map((u) =>
+    button(`plugin:${u.id}`, "core.settings-modal.plugin", `${u.name} — ${u.description}`, "core.settings-modal.plugin", { plugin: u.id }));
+  for (const el of rows) el.dataset.listed = el.dataset.key.slice("plugin:".length);
+  if (!rows.length) {
+    const none = document.createElement("p");
+    none.className = "set-caption";
+    none.textContent = "찾는 플러그인이 없습니다.";
+    rows.push(none);
   }
-  body.append(group("플러그인", "환경에 들어 있는 플러그인. 하나를 고르면 그 설정과 사이드바가 보인다.", [list]));
-  const unit = units.find((u) => u.id === chosen);
-  if (!unit) return;
+  const list = document.createElement("div");
+  list.className = "set-list";
+  list.append(...rows);
+  body.append(group("플러그인", "환경에 들어 있는 플러그인. 행을 누르면 그 플러그인의 설정, 섹션, 사이드바가 보인다.", [row("찾기", search), list]));
+}
+
+/** 플러그인 한 개의 페이지. 목록으로 돌아가는 버튼, 설정, 섹션, 사이드바 선택이다. */
+function drawPluginPage(unit) {
+  const back = button("plugins:list", "core.settings-modal.back", "목록", "core.settings-modal.plugin", { plugin: null });
+  const about = document.createElement("p");
+  about.className = "set-caption";
+  about.textContent = unit.description;
+  body.append(group(unit.name, unit.id, [row("", back), about]));
 
   const declared = Object.entries(settingDefinitions()).filter(([, d]) => d.plugin === unit.id);
   if (declared.length) {
@@ -324,28 +366,27 @@ function drawPlugins() {
     body.append(group("설정", `${unit.name} 플러그인이 선언한 설정.`, [none]));
   }
 
-  const rows = [];
+  const names = document.createElement("p");
+  names.className = "set-caption";
+  names.textContent = unit.sections.length ? sectionNames(unit.sections).join(", ") : "이 플러그인에는 섹션이 없습니다.";
+  body.append(group("섹션", "이 플러그인이 사이드바에 제공하는 섹션.", [names]));
+
   if (unit.surface) {
-    const options = setOptions();
-    rows.push(row("레일 사이드바", choose(`link:rail:${unit.id}`, options, linkedId("rail", unit.id) ?? "")));
-    rows.push(row("오른쪽 사이드바", choose(`link:right:${unit.id}`, options, linkedId("right", unit.id) ?? "")));
+    const own = [["inherit", "일반 따름"], ["off", "사용 안 함"], ...setItems()];
+    body.append(group("사이드바", "이 플러그인의 카드가 포커스된 동안 쓰는 사이드바. 일반 따름이면 일반의 선택을 쓴다.", [
+      row("왼쪽 사이드바", choose(`link:left:${unit.id}`, own, choiceOf("left", unit.id))),
+      row("오른쪽 사이드바", choose(`link:right:${unit.id}`, own, choiceOf("right", unit.id))),
+      row("레일 사이드바", choose(`link:rail:${unit.id}`, generalOptions(), choiceOf("rail", unit.id))),
+    ]));
   }
-  for (const s of value("sets").filter((item) => item.sections.some((id) => unit.sections.includes(id)))) {
-    const line = document.createElement("p");
-    line.className = "set-caption";
-    line.textContent = setLine(s);
-    rows.push(line);
-  }
-  if (rows.length) {
-    body.append(group("사이드바", unit.surface
-      ? "이 플러그인의 레일과 오른쪽 사이드바에 보여 줄 세트, 그리고 이 플러그인의 섹션을 쓰는 세트."
-      : "이 플러그인의 섹션을 쓰는 세트.", rows));
-  }
-  if (unit.sections.length) {
-    const names = document.createElement("p");
-    names.className = "set-caption";
-    names.textContent = sectionNames(unit.sections).join(", ");
-    body.append(group("섹션", "이 플러그인이 사이드바에 제공하는 섹션.", [names]));
+}
+
+function drawPlugins() {
+  const unit = pluginUnits().find((u) => u.id === chosen);
+  if (unit) drawPluginPage(unit);
+  else {
+    chosen = null;
+    drawPluginList();
   }
 }
 
@@ -357,7 +398,31 @@ const SIZE_LABELS = {
   railWidth: "레일 처음 폭",
 };
 
-/** 세트 편집. 이름, 배치, 플러그인별 섹션 버튼. */
+/** 섹션 행 하나의 선택 상자. 등록된 모든 섹션을 플러그인마다 optgroup 으로 묶는다. */
+function sectionSelect(s, index, now) {
+  const wrap = document.createElement("span");
+  wrap.className = "select-field";
+  const el = document.createElement("select");
+  el.dataset.set = `row:${s.id}:${index}`;
+  el.dataset.expose = "core.settings-modal.row";
+  mark(el, "core.settings.sets.row", { id: s.id, action: "choose", index, scope }, "section");
+  for (const u of pluginUnits().filter((item) => item.sections.length)) {
+    const optgroup = document.createElement("optgroup");
+    optgroup.label = u.name;
+    for (const id of u.sections) {
+      const o = document.createElement("option");
+      o.value = id;
+      o.textContent = section(id).name;
+      if (id === now) o.setAttribute("selected", "");
+      optgroup.append(o);
+    }
+    el.append(optgroup);
+  }
+  wrap.append(el);
+  return wrap;
+}
+
+/** 세트 편집. 이름, 배치, 섹션 행(선택 상자와 ▲ ▼ −), 그리고 + 하나. */
 function setEditor(s) {
   const title = document.createElement("input");
   title.type = "text";
@@ -374,33 +439,25 @@ function setEditor(s) {
       { id: s.id, layout: v, scope }, s.layout === v));
   }
   const rows = [row("이름", title), row("배치", layout)];
-  for (const u of pluginUnits().filter((item) => item.sections.length)) {
-    const buttons = document.createElement("span");
-    buttons.className = "set-seg";
-    for (const id of u.sections) {
-      const on = s.sections.includes(id);
-      buttons.append(button(`section:${s.id}:${id}`, "core.settings-modal.section", section(id).name,
-        "core.settings.sets.update", { id: s.id, section: id, on: !on, scope }, on));
-    }
-    rows.push(row(u.name, buttons));
-  }
+  s.sections.forEach((id, index) => {
+    const acts = document.createElement("span");
+    acts.className = "set-seg";
+    const act = (action, label) => button(`${action}:${s.id}:${index}`, "core.settings-modal.row-act", label,
+      "core.settings.sets.row", { id: s.id, action, index, scope });
+    if (index > 0) acts.append(act("up", "▲"));
+    if (index < s.sections.length - 1) acts.append(act("down", "▼"));
+    acts.append(act("remove", "−"));
+    const line = document.createElement("span");
+    line.className = "set-seg";
+    line.append(sectionSelect(s, index, id), acts);
+    rows.push(row(`섹션 ${index + 1}`, line));
+  });
+  rows.push(row("", button(`add:${s.id}`, "core.settings-modal.add", "+", "core.settings.sets.row", { id: s.id, action: "add", scope })));
   rows.push(row("", button("edit:", "core.settings-modal.edit", "완료", "core.settings-modal.edit", { set: null })));
-  return group(`세트 편집: ${s.title}`, "바꾼 값은 바로 저장된다. 섹션을 누르면 세트 끝에 더하고, 다시 누르면 뺀다.", rows);
+  return group(`세트 편집: ${s.title}`, "바꾼 값은 바로 저장된다. 같은 섹션은 한 세트에 한 번만 들어간다.", rows);
 }
 
 function drawSidebars() {
-  body.append(group("배치", "사이드바 위치는 모든 플러그인에 적용된다. 왼쪽 사이드바는 어느 카드에도 속하지 않는다.", [
-    row("사이드바 위치", segment("rail",
-      [["flow", "포커스 카드 옆"], ["pin", "고정"], ["inset", "카드 안"], ["off", "없음"]], value("rail"))),
-    row("왼쪽 사이드바", toggle("left", value("left"))),
-    row("오른쪽 사이드바", toggle("right", value("right"))),
-    row("왼쪽 사이드바 세트", choose("link:left:", setOptions(), linkedId("left", null) ?? "")),
-    ...(scope === "project" && overridden("links") ? [row("", press("reset:links", "전역 연결 사용"))] : []),
-  ]));
-
-  body.append(group("크기", "사이드바의 폭(pt). 처음 폭은 최소 폭과 최대 폭 사이여야 한다.",
-    Object.entries(LAYOUT_RANGES).map(([key, [min, max]]) => row(SIZE_LABELS[key], slide(key, min, max, value(key), "pt")))));
-
   const sets = value("sets");
   if (!sets.some((s) => s.id === editing)) editing = null;
   const rows = sets.map((s) => {
@@ -420,7 +477,7 @@ function drawSidebars() {
   });
   rows.push(row("", button("sets:create", "core.settings-modal.create", "새 세트", "core.settings.sets.create", { scope })));
   if (scope === "project" && overridden("sets")) rows.push(row("", press("reset:sets", "전역 세트 사용")));
-  body.append(group("세트", "사이드바에 보여 줄 섹션 묶음. 연결은 플러그인 절과 위의 왼쪽 사이드바 세트에서 고른다.", rows));
+  body.append(group("세트", "사이드바에 보여 줄 섹션 묶음. 어느 사이드바에 보일지는 일반과 플러그인 페이지에서 고른다.", rows));
   const edited = sets.find((s) => s.id === editing);
   if (edited) body.append(setEditor(edited));
 }
@@ -489,6 +546,10 @@ export function settingsModalState() {
       on: on === null ? null : on === "true",
       value: "value" in el && el.tagName !== "BUTTON" ? String(el.value) : null,
       command: commandOf(el),
+      // 섹션 행의 선택 상자는 플러그인마다 optgroup 으로 묶는다. 묶음의 이름과 값을 보고한다.
+      groups: el.tagName === "SELECT" && el.querySelector("optgroup")
+        ? [...el.querySelectorAll("optgroup")].map((g) => ({ label: g.label, values: [...g.querySelectorAll("option")].map((o) => o.value) }))
+        : null,
     };
   });
   // 선언된 설정의 행 이름과 설명. 플러그인 페이지가 manifest 의 label 과 description 으로 그린다.
@@ -498,7 +559,8 @@ export function settingsModalState() {
     description: card.querySelector(`[data-describes="${CSS.escape(el.dataset.row)}"]`)?.textContent ?? null,
   }));
   const r = card.getBoundingClientRect();
-  return { open: true, rows, section: here, scope, plugin: here === "plugins" ? chosen : null, editing,
+  const listed = [...card.querySelectorAll("[data-listed]")].map((el) => el.dataset.listed);
+  return { open: true, rows, query, listed, section: here, scope, plugin: here === "plugins" ? chosen : null, editing,
     card: { x: r.left, y: r.top, w: r.width, h: r.height }, controls };
 }
 
@@ -510,11 +572,19 @@ export function showSection(id) {
   drawSettings();
 }
 
-/** 플러그인 절에서 플러그인 하나를 고른다. */
+/** 플러그인 절에서 플러그인 하나의 페이지를 연다. null 이면 목록으로 돌아간다. */
 export function showPlugin(id) {
   if (!card) throw new Error("settings are not open");
-  if (!pluginUnits().some((u) => u.id === id)) throw new Error(`unknown plugin ${id}`);
+  if (id !== null && !pluginUnits().some((u) => u.id === id)) throw new Error(`unknown plugin ${id}`);
   chosen = id;
+  drawSettings();
+}
+
+/** 플러그인 목록의 검색어를 바꾼다. */
+export function searchPlugins(text) {
+  if (!card) throw new Error("settings are not open");
+  if (typeof text !== "string") throw new Error("query must be a string");
+  query = text;
   drawSettings();
 }
 

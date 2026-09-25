@@ -57,7 +57,7 @@ function diagnosticApp(t, files = ["plugin.json", "ui/probe.js"]) {
   mkdirSync(join(plugin, "ui"), { recursive: true });
   writeFileSync(join(plugin, "package.json"), JSON.stringify({ name: "@fixture/probe", files }));
   writeFileSync(join(plugin, "plugin.json"), JSON.stringify({
-    id: "probe", name: "Probe", mark: "p", icon: "<path/>",
+    id: "probe", name: "Probe", description: "검사용 표면.", mark: "p", icon: "<path/>",
     surface: { module: "ui/probe.js", composition: { kind: "dom" } },
   }));
   writeFileSync(join(plugin, "ui/probe.js"), "export function mount() {}\n");
@@ -105,7 +105,7 @@ function sectionApp(t, files, extra = {}) {
   mkdirSync(join(plugin, "ui"), { recursive: true });
   writeFileSync(join(plugin, "package.json"), JSON.stringify({ name: "@fixture/side", files }));
   writeFileSync(join(plugin, "plugin.json"), JSON.stringify({
-    id: "side", name: "Side", sections: [{ id: "side.list", name: "List", module: "ui/list.js" }], ...extra,
+    id: "side", name: "Side", description: "검사용 섹션.", sections: [{ id: "side.list", name: "List", module: "ui/list.js" }], ...extra,
   }));
   writeFileSync(join(plugin, "ui/list.js"), "export function mount() {}\n");
   const environment = JSON.parse(readFileSync(join(app, "environment.json"), "utf8"));

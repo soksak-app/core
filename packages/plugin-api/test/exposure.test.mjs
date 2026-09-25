@@ -19,7 +19,7 @@ const exposes = () => ({
 });
 
 const page = {
-  id: "probe", name: "Probe", mark: "p", icon: "<path/>",
+  id: "probe", name: "Probe", description: "검사용 플러그인.", mark: "p", icon: "<path/>",
   surface: { module: "ui/probe.js", composition: { kind: "dom" } },
 };
 
@@ -65,7 +65,7 @@ test("exposes are rejected for each invalid field", () => {
     assert.throws(() => validateExposes("probe", value), message);
   }
   assert.throws(() => validateExposes("Probe", {}), /invalid owner/);
-  assert.throws(() => validateManifest({ id: "probe", name: "Probe", sections: [{ id: "probe.list", name: "List", module: "ui/list.js" }], exposes: exposes() }),
+  assert.throws(() => validateManifest({ id: "probe", name: "Probe", description: "검사용 플러그인.", sections: [{ id: "probe.list", name: "List", module: "ui/list.js" }], exposes: exposes() }),
     /exposes require a surface/);
   assert.throws(() => validateExposureFile({ exposes: exposes() }), /must be core.<name>/);
   assert.throws(() => validateExposureFile({ exposes: {}, extra: 1 }), /unknown field extra/);
@@ -248,7 +248,7 @@ test("diagnostic declarations extend a surface plugin once and are rejected othe
     ["probe.send", "probe.inject"]);
   assert.throws(() => validateDiagnostics(manifest, { ...diagnostics, exposes: { commands: [manifest.exposes.commands[0]] } }),
     /command probe\.send is declared twice/);
-  assert.throws(() => validateDiagnostics({ id: "probe", name: "Probe", sections: [] }, diagnostics), /diagnostics require a surface/);
+  assert.throws(() => validateDiagnostics({ id: "probe", name: "Probe", description: "검사용 플러그인.", sections: [] }, diagnostics), /diagnostics require a surface/);
   assert.throws(() => validateDiagnostics(manifest, { ...diagnostics, module: "../probe.js" }), /module must be a JavaScript path/);
   assert.throws(() => validateDiagnostics(manifest, { ...diagnostics, extra: true }), /extra/);
   assert.throws(() => validateDiagnostics(manifest, { module: "ui/probe-diagnostics.js", exposes: { commands: [{ ...inject, name: "other.inject" }] } }),

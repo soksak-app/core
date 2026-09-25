@@ -1,6 +1,7 @@
 {
   "id": "browser",
   "name": "브라우저",
+  "description": "웹 페이지를 여는 브라우저 카드. 사이드바에 문서 구조, 네트워크, 탭, 방문 기록을 보여 준다.",
   "mark": "www",
   "icon": "<rect x=\"2\" y=\"3\" width=\"12\" height=\"10\" rx=\"2\"/><path d=\"M2 6.25h12M4.3 4.6h.01M6.1 4.6h.01\"/>",
   "surface": {

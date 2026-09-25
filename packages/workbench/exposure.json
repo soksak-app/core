@@ -556,7 +556,7 @@
       },
       {
         "name": "core.settings-modal",
-        "description": "The settings modal: whether it is open, its section, scope, the selected plugin in the plugins section or null, the edited set or null, the rows of declared plugin settings with their label and description, card rectangle in window coordinates, and its controls with the command each control runs.",
+        "description": "The settings modal: whether it is open, its section, scope, the plugin search text, the plugin ids listed, the plugin whose page is shown or null, the edited set or null, the rows of declared plugin settings with their label and description, card rectangle in window coordinates, and its controls with the command each control runs.",
         "schema": {
           "type": "object",
           "properties": {
@@ -608,6 +608,16 @@
                         "type": "object"
                       }
                     }
+                  },
+                  "groups": {
+                    "type": ["array", "null"],
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "label": { "type": "string" },
+                        "values": { "type": "array", "items": { "type": "string" } }
+                      }
+                    }
                   }
                 }
               }
@@ -621,6 +631,13 @@
             },
             "plugin": {
               "type": ["string", "null"]
+            },
+            "query": {
+              "type": "string"
+            },
+            "listed": {
+              "type": "array",
+              "items": { "type": "string" }
             },
             "rows": {
               "type": "array",
@@ -1550,7 +1567,7 @@
       },
       {
         "name": "core.settings.link",
-        "description": "Links a sidebar set to a place (left, right, or rail) for a plugin; an empty or missing set removes the link.",
+        "description": "Changes one sidebar choice (docs/spec/settings.md#sidebar-choices): set is a set id, off, or inherit. A plugin null left or right choice is the general choice; inherit applies only to a plugin's left or right choice. A rejected choice fails with invalid params.",
         "params": {
           "type": "object",
           "properties": {
@@ -1568,10 +1585,7 @@
               ]
             },
             "set": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": "string"
             },
             "scope": {
               "enum": [
@@ -1596,10 +1610,65 @@
       },
       {
         "name": "core.settings.sets.update",
-        "description": "Changes the title, the layout, or one section of a sidebar set in the scope; on true appends the section to the end and on false removes it.",
+        "description": "Changes the title or the layout of a sidebar set in the scope; a rejected change fails with invalid params.",
         "params": {
           "type": "object",
-          "properties": { "id": { "type": "string" }, "title": { "type": "string" }, "layout": { "enum": ["list", "tabs"] }, "section": { "type": "string" }, "on": { "type": "boolean" }, "scope": { "enum": ["common", "project"] } }
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "layout": {
+              "enum": [
+                "list",
+                "tabs"
+              ]
+            },
+            "scope": {
+              "enum": [
+                "common",
+                "project"
+              ]
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings.sets.row",
+        "description": "Changes one section row of a sidebar set in the scope: choose replaces row index with section, up and down swap it with a neighbour, remove deletes it, and add appends the first registered section the set lacks. A repeated section or an impossible move fails with invalid params.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "action": {
+              "enum": [
+                "choose",
+                "up",
+                "down",
+                "remove",
+                "add"
+              ]
+            },
+            "index": {
+              "type": "integer"
+            },
+            "section": {
+              "type": "string"
+            },
+            "scope": {
+              "enum": [
+                "common",
+                "project"
+              ]
+            }
+          }
         },
         "result": {
           "type": "null"
@@ -1673,10 +1742,32 @@
       },
       {
         "name": "core.settings-modal.plugin",
-        "description": "Selects a plugin in the plugins section of the open settings modal.",
+        "description": "Opens the page of a plugin in the plugins section of the open settings modal; a null plugin returns to the list.",
         "params": {
           "type": "object",
-          "properties": { "plugin": { "type": "string" } }
+          "properties": {
+            "plugin": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings-modal.search",
+        "description": "Sets the plugin search text of the open settings modal; the list shows plugins whose id, name, or description contains it, ignoring letter case.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string"
+            }
+          }
         },
         "result": {
           "type": "null"
@@ -2446,7 +2537,7 @@
       },
       {
         "name": "core.settings-modal.plugin",
-        "description": "The plugin buttons of the settings plugins section in environment order.",
+        "description": "The rows of the plugin list in environment order, filtered by the search text; each shows the plugin name and description.",
         "many": true
       },
       {
@@ -2464,11 +2555,28 @@
         "description": "The button that creates a sidebar set."
       },
       {
-        "name": "core.settings-modal.section",
-        "description": "The section buttons of the set editor, grouped by plugin; each shows whether the section is in the set.",
+        "name": "core.settings-modal.search",
+        "description": "The plugin search field."
+      },
+      {
+        "name": "core.settings-modal.back",
+        "description": "The 목록 button of a plugin page, which returns to the plugin list."
+      },
+      {
+        "name": "core.settings-modal.row",
+        "description": "The section select boxes of the set editor, one per row in set order.",
         "many": true
       },
       {
+        "name": "core.settings-modal.row-act",
+        "description": "The ▲, ▼, and − buttons of the set editor rows in document order.",
+        "many": true
+      },
+      {
+        "name": "core.settings-modal.add",
+        "description": "The + button of the set editor, which adds a section row."
+      },
+{
         "name": "core.project-tab.close",
         "description": "The close buttons of the project tabs, in tab order.",
         "many": true

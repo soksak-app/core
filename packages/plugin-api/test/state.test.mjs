@@ -4,7 +4,7 @@ import test from "node:test";
 import { checkProjectData, validateManifest } from "../index.js";
 
 const base = () => ({
-  id: "probe", name: "Probe",
+  id: "probe", name: "Probe", description: "검사용 플러그인.",
   sections: [{ id: "probe.list", name: "목록", module: "ui/list.js" }],
   state: { module: "ui/state.js" },
   sidecars: ["@scope/sidecar-probe"],

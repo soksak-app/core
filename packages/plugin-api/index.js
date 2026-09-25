@@ -76,6 +76,9 @@ function only(where, value, keys) {
   }
 }
 
+/* 설정 창이 보이는 플러그인 설명의 최대 길이. */
+const PLUGIN_DESCRIPTION_MAX = 200;
+
 /* 설정 창이 보이는 설정 이름과 설명의 최대 길이. */
 const SETTING_LABEL_MAX = 40;
 const SETTING_DESCRIPTION_MAX = 200;
@@ -253,12 +256,17 @@ function checkBackground(where, background, sidecars, settings = {}) {
  */
 export function validateManifest(manifest) {
   if (!isObject(manifest)) throw new Error("plugin.json: expected an object");
-  only("plugin.json", manifest, ["id", "name", "mark", "icon", "surface", "sections", "preview", "sidecars", "background", "exposes", "settings",
+  only("plugin.json", manifest, ["id", "name", "description", "mark", "icon", "surface", "sections", "preview", "sidecars", "background", "exposes", "settings",
     "state", "data"]);
   const { id } = manifest;
   if (typeof id !== "string" || !ID.test(id)) throw new Error(`plugin.json: invalid id ${id}`);
   const where = `plugin ${id}`;
   if (!isText(manifest.name)) throw new Error(`${where}: name is required`);
+  // 설정 창의 플러그인 목록이 설명을 보여 주고 검색한다.
+  if (typeof manifest.description !== "string" || manifest.description.length < 1 ||
+      manifest.description.length > PLUGIN_DESCRIPTION_MAX) {
+    throw new Error(`${where}: description must be 1 to ${PLUGIN_DESCRIPTION_MAX} characters`);
+  }
   if (manifest.state !== undefined) {
     if (!isObject(manifest.state)) throw new Error(`${where}: state must be an object`);
     only(`${where} state`, manifest.state, ["module"]);
@@ -482,6 +490,9 @@ export function checkReferences(environment, manifests) {
   checkSidebarReferences(environment.sidebars, manifests, "environment.json");
 }
 
+/** 세트 id 로 쓸 수 없는 값. */
+const RESERVED_SET_IDS = ["off", "inherit"];
+
 /** 세트 제목의 최대 길이. */
 const SET_TITLE_MAX = 40;
 
@@ -508,17 +519,31 @@ export function validateSidebars(sidebars, where) {
     }
     // 세트는 섹션을 모두 쌓아 보이거나(list) 하나씩 탭으로 보인다(tabs).
     if (!["list", "tabs"].includes(set.layout)) throw new Error(`${where}: set ${set.id} layout must be list or tabs`);
+    // 설정 창의 선택 상자가 off 와 inherit 을 세트가 아닌 선택으로 쓴다.
+    if (RESERVED_SET_IDS.includes(set.id)) throw new Error(`${where}: set id ${set.id} is reserved`);
     if (setIds.has(set.id)) throw new Error(`${where}: duplicate set ${set.id}`);
     setIds.add(set.id);
   }
+  // 연결의 뜻은 docs/spec/settings.md 의 사이드바 선택이다. plugin 이 null 인 left, right 연결은 일반 선택,
+  // 플러그인을 가리키는 left, right 연결은 그 플러그인의 선택(set null 은 사용 안 함), rail 연결은 플러그인의 레일이다.
+  const seen = new Set();
   for (const link of sidebars.links) {
-    if (!isObject(link) || !["left", "right", "rail"].includes(link.place) || !setIds.has(link.set)) {
+    if (!isObject(link) || !["left", "right", "rail"].includes(link.place)) {
       throw new Error(`${where}: every link requires a place (left, right, rail) and a known set`);
     }
     only(`${where} link`, link, ["place", "plugin", "set"]);
-    if ((link.place === "left") !== (link.plugin === null)) {
-      throw new Error(`${where}: a left link has plugin null and other links name a plugin`);
+    if (link.plugin !== null && !isText(link.plugin)) throw new Error(`${where}: a link plugin is null or a plugin id`);
+    if (link.place === "rail" && link.plugin === null) throw new Error(`${where}: a rail link names a plugin`);
+    if (link.set === null) {
+      if (link.place === "rail" || link.plugin === null) {
+        throw new Error(`${where}: set null requires a left or right link that names a plugin`);
+      }
+    } else if (!setIds.has(link.set)) {
+      throw new Error(`${where}: every link requires a place (left, right, rail) and a known set`);
     }
+    const key = `${link.place} ${link.plugin ?? "general"}`;
+    if (seen.has(key)) throw new Error(`${where}: link ${key} appears twice`);
+    seen.add(key);
   }
   return sidebars;
 }

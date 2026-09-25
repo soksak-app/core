@@ -13,14 +13,11 @@ export function createSet(sets) {
   return [...sets, { id: `set-${n}`, title: "새 세트", sections: [], layout: "list" }];
 }
 
-/**
- * 세트 하나의 제목, 배치, 또는 섹션 하나를 바꾼다.
- *
- *   change.title    1자에서 40자 사이의 문자열
- *   change.layout   list 또는 tabs
- *   change.section  섹션 id. change.on 이 true 면 끝에 더하고 false 면 뺀다
- */
+/** 세트 하나의 제목이나 배치를 바꾼다. 섹션은 changeRow 가 바꾼다. */
 export function updateSet(sets, id, change) {
+  for (const key of Object.keys(change)) {
+    if (!["title", "layout"].includes(key)) throw new Error(`set update has unknown field ${key}`);
+  }
   const index = sets.findIndex((s) => s.id === id);
   if (index < 0) throw new Error(`unknown set ${id}`);
   const next = structuredClone(sets[index]);
@@ -34,14 +31,81 @@ export function updateSet(sets, id, change) {
     if (!LAYOUTS.includes(change.layout)) throw new Error(`set layout must be ${LAYOUTS.join(" or ")}`);
     next.layout = change.layout;
   }
-  if (change.section !== undefined) {
-    if (typeof change.section !== "string" || typeof change.on !== "boolean") {
-      throw new Error("a section change requires a section id and on");
-    }
-    next.sections = next.sections.filter((s) => s !== change.section);
-    if (change.on) next.sections.push(change.section);
-  }
   return sets.map((s, i) => (i === index ? next : s));
+}
+
+/**
+ * 세트의 섹션 행 하나를 바꾼다(docs/spec/settings.md 의 사이드바 절).
+ *
+ *   choose  index 행을 section 으로 바꾼다
+ *   up      index 행을 위 행과 바꾼다
+ *   down    index 행을 아래 행과 바꾼다
+ *   remove  index 행을 뺀다
+ *   add     세트에 없는 등록 섹션 중 registered 순서로 첫 섹션을 끝에 더한다
+ *
+ * registered 는 등록된 섹션 id 를 플러그인과 선언 순서로 담는다. 같은 섹션이 두 번 들어가게 하는 변경은 거부한다.
+ */
+export function changeRow(sets, id, { action, index, section }, registered) {
+  const at = sets.findIndex((s) => s.id === id);
+  if (at < 0) throw new Error(`unknown set ${id}`);
+  const rows = [...sets[at].sections];
+  const row = () => {
+    if (!Number.isInteger(index) || index < 0 || index >= rows.length) throw new Error(`set ${id} has no row ${index}`);
+  };
+  if (action === "choose") {
+    row();
+    if (!registered.includes(section)) throw new Error(`unknown section ${section}`);
+    if (rows.some((other, i) => i !== index && other === section)) throw new Error(`section ${section} is already in set ${id}`);
+    rows[index] = section;
+  } else if (action === "up") {
+    row();
+    if (index === 0) throw new Error(`row ${index} cannot move up`);
+    [rows[index - 1], rows[index]] = [rows[index], rows[index - 1]];
+  } else if (action === "down") {
+    row();
+    if (index === rows.length - 1) throw new Error(`row ${index} cannot move down`);
+    [rows[index], rows[index + 1]] = [rows[index + 1], rows[index]];
+  } else if (action === "remove") {
+    row();
+    rows.splice(index, 1);
+  } else if (action === "add") {
+    const next = registered.find((candidate) => !rows.includes(candidate));
+    if (!next) throw new Error(`set ${id} already contains every registered section`);
+    rows.push(next);
+  } else {
+    throw new Error(`unknown row action ${action}`);
+  }
+  return sets.map((s, i) => (i === at ? { ...structuredClone(s), sections: rows } : s));
+}
+
+/**
+ * 사이드바 선택 하나를 바꾼 연결 목록을 반환한다(docs/spec/settings.md 의 사이드바 선택).
+ * choice 는 세트 id, off, inherit 이다. plugin 이 null 이면 left, right 의 일반 선택이다.
+ */
+export function chooseLink(links, place, plugin, choice) {
+  if (!["left", "right", "rail"].includes(place)) throw new Error(`unknown place ${place}`);
+  if (place === "rail" && plugin === null) throw new Error("a rail choice names a plugin");
+  const rest = links.filter((l) => !(l.place === place && l.plugin === plugin));
+  const general = plugin === null || place === "rail";
+  if (choice === "inherit") {
+    if (general) throw new Error(`${place} ${plugin ?? "general"} has no inherit choice`);
+    return rest;
+  }
+  if (choice === "off") return general ? rest : [...rest, { place, plugin, set: null }];
+  return [...rest, { place, plugin, set: choice }];
+}
+
+/**
+ * 사이드바에 보일 세트를 반환한다. 없거나 사용 안 함이면 null.
+ * left, right 는 plugin 의 선택이 있으면 그것을, 없으면 일반 선택을 쓴다. rail 은 그 플러그인의 연결만 쓴다.
+ */
+export function resolveSidebar(links, sets, place, plugin) {
+  const own = links.find((l) => l.place === place && l.plugin === plugin && plugin !== null);
+  const chosen = own ?? (place === "rail" ? null : links.find((l) => l.place === place && l.plugin === null));
+  if (!chosen || chosen.set === null) return null;
+  const set = sets.find((s) => s.id === chosen.set);
+  if (!set) throw new Error(`link points at a set that is gone: ${chosen.set}`);
+  return set;
 }
 
 /** 세트와 그 세트를 가리키는 연결을 함께 뺀다. */
