@@ -330,8 +330,6 @@ export const chrome = native ? {
   draggable: (el) => bridge.draggable(el),
   /** 창이 그리는 단추가 차지하는 영역. 단추를 그리지 않는 창이면 폭이 0 이다. */
   controls: () => tellInTurn("windowControls"),
-  /** 시스템 설정의 두 번 누름 간격(ms). 한 번 누름과 두 번 누름을 가르는 시간이다. */
-  doubleClickInterval: () => bridge.call("pointerTiming").then((timing) => timing.doubleClickInterval),
 } : null;
 
 /** 표면 인터페이스. 애플리케이션이 없으면 아무 일도 하지 않는다. */

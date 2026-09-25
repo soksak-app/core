@@ -69,10 +69,6 @@ func (implementation) WindowControls(window unsafe.Pointer) (platform.Rect, erro
 	return platform.Rect{X: float64(out[0]), Y: float64(out[1]), W: float64(out[2]), H: float64(out[3])}, nil
 }
 
-func (implementation) DoubleClickInterval() (float64, error) {
-	return float64(C.sp_double_click_interval()), nil
-}
-
 // facts 는 native/darwin 이 반환한 JSON 문자열을 Go 문자열로 옮기고 해제한다.
 func facts(text *C.char, what string) (string, error) {
 	if text == nil {

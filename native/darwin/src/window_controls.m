@@ -23,10 +23,6 @@ double windowUnifiedTitlebar(void *handle) {
 }
 
 // Reading a position must not repair it: callers need the actual geometry.
-double sp_double_click_interval(void) {
-    return NSEvent.doubleClickInterval;
-}
-
 void windowControls(void *handle, double *out) {
     NSCAssert(NSThread.isMainThread, @"Window controls belong to the main thread");
     NSWindow *window = (NSWindow *)handle;

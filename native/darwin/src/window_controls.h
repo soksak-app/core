@@ -1,8 +1,5 @@
 #include <stdbool.h>
 
-// 시스템 설정의 두 번 누름 간격(초)을 반환한다. 두 번 누름의 첫 누름과 한 번 누름을 가르는 시간이다.
-double sp_double_click_interval(void);
-
 // 창 단추 세 개가 보이는 영역을 콘텐츠 왼쪽 위 기준 {x, y, width, height} 로 out 에 쓴다.
 void windowControls(void *window, double *out);
 

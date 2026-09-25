@@ -42,10 +42,6 @@ pub fn window_controls(_window: Handle) -> Result<Frame, String> {
     missing("window button area")
 }
 
-pub fn double_click_interval() -> Result<f64, String> {
-    missing("double-click interval")
-}
-
 pub fn clipboard_read(_kind: &str) -> Result<super::ClipboardValue, String> {
     missing("clipboard read")
 }

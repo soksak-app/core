@@ -48,7 +48,6 @@ pub(crate) fn handler() -> impl Fn(Invoke) -> bool + Send + Sync + 'static {
         overlay_hide,
         overlay_pick,
         window_controls,
-        pointer_timing,
         sidecar_send,
         sidecars_retain,
         theme,
@@ -225,12 +224,6 @@ fn overlay_pick(
 #[tauri::command]
 fn window_controls(window: Window) -> Result<windows::Chrome, String> {
     windows::window_chrome(&window)
-}
-
-/// 시스템의 두 번 누름 간격(밀리초)을 반환한다.
-#[tauri::command]
-fn pointer_timing() -> Result<windows::PointerTiming, String> {
-    windows::pointer_timing()
 }
 
 /// 표면 페이지가 보낸 메시지를 사이드카에 전달한다.

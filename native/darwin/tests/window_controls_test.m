@@ -61,11 +61,6 @@ int main(void) { @autoreleasepool {
     [plain setReleasedWhenClosed:NO];
     check(windowUnifiedTitlebar(plain) == 0, @"a window without standard buttons reports no title bar");
 
-    // 페이지는 이 값으로 한 번 누름과 두 번 누름을 가른다. 시스템 설정 값이어야 한다.
-    check(sp_double_click_interval() == NSEvent.doubleClickInterval && sp_double_click_interval() > 0,
-        [NSString stringWithFormat:@"the double-click interval is the system value (%.3fs, system %.3fs)",
-            sp_double_click_interval(), NSEvent.doubleClickInterval]);
-
     [window close];
     [plain close];
     return failures ? 1 : 0;

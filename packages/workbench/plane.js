@@ -11,7 +11,7 @@ import { hasPlugin, isPlace, isRailId, plugin, plugins, railId, railKind } from 
 import { clearSet, drawSet, restoreSidebarChoices, sidebarChoices } from "./sidebar-sections.js";
 import { environment } from "./environment.js";
 import { standIn } from "./compositor.js";
-import { chrome as hostChrome, native, onSurfaceInput, overlay, report, shapes, windowSidecar } from "./host.js";
+import { native, onSurfaceInput, overlay, report, shapes, windowSidecar } from "./host.js";
 import { issueId } from "./ids.js";
 import { bind, delegate, mark, run } from "./commands.js";
 import { disposeSurface, focusSurface, mountSurface } from "./surface-modules.js";
@@ -847,9 +847,6 @@ export function sizeSidebar(id, width) {
 
 /* 경계선에서 누름과 끌기를 가르는 움직임(pt). */
 const DRAG_THRESHOLD = 3;
-/* 시스템의 두 번 누름 간격(ms). 호스트에서 한 번 읽는다. */
-let doubleClickWait = null;
-const doubleClickInterval = () => (doubleClickWait ??= hostChrome.doubleClickInterval());
 
 function drawSidebar(el, card) {
   const state = cardSidebar(card);
@@ -872,14 +869,11 @@ function drawSidebar(el, card) {
     grip.className = "side__grip";
     grip.dataset.expose = "core.card.sidebar.grip";
     el.querySelector(".slot").before(side, grip);
-    // 손잡이를 끄는 동안 폭을 선언된 명령으로 정한다.
-    // 경계선 하나가 세 동작을 받는다. 끌기는 폭을 바꾸고, 한 번 누름은 접거나 펴고, 두 번 누름은 기본 폭으로
-    // 편다. 한 번 누름은 시스템의 두 번 누름 간격이 지난 뒤에 실행해서 두 번 누름이 먼저 접히지 않게 한다.
+    // 경계선은 두 동작을 받는다. 끌기는 폭을 바꾸고, 누름은 곧바로 접거나 편다.
     let dragged = false;
-    let pending = null;
     grip.addEventListener("pointerdown", (event) => {
       // 글자 선택은 .side 의 user-select 가 막는다. 여기서 기본 동작을 막으면 WebKit 이 마우스 호환 이벤트를
-      // 보내지 않아 두 번 누름이 오지 않는다.
+      // 보내지 않아 click 이 오지 않는다.
       event.stopPropagation();
       grip.setPointerCapture(event.pointerId);
       dragged = false;
@@ -904,33 +898,11 @@ function drawSidebar(el, card) {
     grip.addEventListener("click", (event) => {
       event.stopPropagation();
       if (dragged) return;
-      clearTimeout(pending);
-      pending = null;
-      // 두 번째 누름은 대기 중인 한 번 누름을 취소할 뿐이다. 두 번 누름의 동작은 dblclick 이 한다.
-      if (event.detail >= 2) return;
-      const id = el.dataset.cardId;
-      // 브라우저 런타임은 시스템 간격을 알 수 없어 한 번 누름을 바로 실행한다(docs/spec/example-model.md).
-      if (!hostChrome) {
-        run("core.card.sidebar.toggle", { card: id });
-        return;
-      }
-      doubleClickInterval().then((interval) => {
-        pending = setTimeout(() => { pending = null; run("core.card.sidebar.toggle", { card: id }); }, interval);
-      });
-    });
-    // 두 번 누르면 기본 폭으로 편다. 접혀 있으면 폭을 정한 뒤 편다.
-    grip.addEventListener("dblclick", (event) => {
-      event.stopPropagation();
-      clearTimeout(pending);
-      pending = null;
-      const id = el.dataset.cardId;
-      const folded = cardSidebar(grid.card(id))?.collapsed;
-      Promise.resolve(run("core.card.sidebar.size", { card: id, width: value("sidebarWidth") }))
-        .then(() => (folded ? run("core.card.sidebar.toggle", { card: id }) : null));
+      run("core.card.sidebar.toggle", { card: el.dataset.cardId });
     });
   }
   mark(grip, "core.card.sidebar.size", { card: card.id });
-  grip.title = state.collapsed ? "눌러 사이드바 펼치기" : "끌어 폭 바꾸기 · 눌러 접기 · 두 번 눌러 기본 폭";
+  grip.title = state.collapsed ? "눌러 사이드바 펼치기" : "끌어 폭 바꾸기 · 눌러 접기";
   el.dataset.side = state.collapsed ? "folded" : "open";
   // 접은 사이드바는 내용 없이 경계선만 남는다. 경계선 폭은 손잡이 폭이어서 접은 뒤에도 누를 수 있다.
   el.style.setProperty("--side-w", state.collapsed ? "var(--divider)" : `${state.width}px`);

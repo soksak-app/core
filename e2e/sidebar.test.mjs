@@ -49,9 +49,7 @@ for (const app of Object.values(APPS)) {
     await surfaceAt(260 + GRIP);
     await assert.rejects(s.run("core.card.sidebar.size", { card: card.id, width: 60 }), /120 to 480/);
     assert.ok(before, "the surface was measured");
-    // 경계선을 두 번 누르면 기본 폭(190pt)이 된다.
-    await s.act("core.card.sidebar.grip", "dispatch", { index: 0, event: { type: "dblclick" } });
-    await s.until("core.grid", (value) => sidebarOf(value)?.width === 190, "a double click on the divider did not set the default width");
+    await s.run("core.card.sidebar.size", { card: card.id, width: 190 });
 
     // 경계선의 사이드바 쪽 절반을 네이티브로 끌면 폭이 바뀐다. 끌기는 누름이 아니므로 접히지 않는다.
     let divider = await s.rect("core.card.sidebar.grip", 0);
@@ -64,15 +62,17 @@ for (const app of Object.values(APPS)) {
     const dragged = await s.until("core.grid", (value) => Math.abs(sidebarOf(value)?.width - 250) <= 2, "a drag on the divider did not resize");
     assert.equal(sidebarOf(dragged).collapsed, false, "a drag on the divider folded the sidebar");
 
-    // 네이티브 한 번 누름은 두 번 누름 간격이 지난 뒤 접는다. 접힌 뒤에는 경계선만 남고, 다시 누르면 펴진다.
+    // 네이티브 누름은 곧바로 접는다. 다음 표시에 이미 접혀 있어야 한다. 접힌 뒤에는 경계선만 남고, 다시 누르면 펴진다.
     divider = await s.rect("core.card.sidebar.grip", 0);
     await s.click(divider.x + divider.width / 4, y);
-    await s.until("core.grid", (value) => sidebarOf(value)?.collapsed === true, "a click on the divider did not fold the sidebar");
+    await s.presented();
+    assert.equal(sidebarOf(await s.get("core.grid")).collapsed, true, "a click on the divider did not fold the sidebar by the next presentation");
     await surfaceAt(DIVIDER);
     divider = await s.rect("core.card.sidebar.grip", 0);
     assert.ok(Math.abs(divider.width - DIVIDER) <= 0.5, `the folded divider is ${divider.width} pt wide`);
     await s.click(divider.x + divider.width / 2, y);
-    await s.until("core.grid", (value) => sidebarOf(value)?.collapsed === false, "a click on the folded divider did not unfold the sidebar");
+    await s.presented();
+    assert.equal(sidebarOf(await s.get("core.grid")).collapsed, false, "a click on the folded divider did not unfold the sidebar by the next presentation");
     await surfaceAt(sidebarOf(dragged).width + GRIP);
   });
 }

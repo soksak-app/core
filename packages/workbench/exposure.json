@@ -2389,7 +2389,7 @@
       },
       {
         "name": "core.card.sidebar.grip",
-        "description": "The dividers of inset sidebars in document order: a drag sets the width, a click folds or unfolds after the system double-click interval, and a double click unfolds at the default width.",
+        "description": "The dividers of inset sidebars in document order: a drag sets the width and a click folds or unfolds at once.",
         "many": true
       },
       {

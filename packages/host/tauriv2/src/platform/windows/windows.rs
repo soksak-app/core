@@ -50,9 +50,6 @@ impl Platform for Windows {
     fn window_controls(&self, window: Handle) -> Result<Frame, String> {
         unsupported::window_controls(window)
     }
-    fn double_click_interval(&self) -> Result<f64, String> {
-        unsupported::double_click_interval()
-    }
     #[cfg(feature = "diagnostics")]
     fn window_numbers(&self, window: &Window) -> Result<Vec<isize>, String> {
         unsupported::window_numbers(window)

@@ -359,11 +359,6 @@ func (s *Surfaces) WindowChrome() (Chrome, error) {
 	return Chrome{Controls: controls, Row: row}, nil
 }
 
-// PointerTiming 은 시스템의 포인터 시간 값이다. DoubleClickInterval 은 밀리초다.
-type PointerTiming struct {
-	DoubleClickInterval float64 `json:"doubleClickInterval"`
-}
-
 // WindowControls 는 창 단추가 차지하는 영역을 페이지 좌표로 반환한다. 페이지는 첫 행에서
 // 그만큼을 비운다. 빈 영역은 창이 단추를 그리지 않는다는 뜻이다.
 func (s *Surfaces) WindowControls() (Rect, error) {

@@ -53,14 +53,6 @@ pub fn controls(window: Handle) -> Frame {
     (rect[0], rect[1], rect[2], rect[3])
 }
 
-/// 시스템 설정의 두 번 누름 간격(초)을 읽는다.
-pub fn double_click_interval() -> f64 {
-    extern "C" {
-        fn sp_double_click_interval() -> f64;
-    }
-    unsafe { sp_double_click_interval() }
-}
-
 /// 창을 전체 화면으로 바꾸거나 되돌리고 전환이 끝나면 done 을 호출한다.
 pub fn fullscreen(window: Handle, on: bool, done: Box<dyn Fn()>) -> Result<(), String> {
     extern "C" {

@@ -183,8 +183,6 @@ pub trait Platform: Send + Sync {
     fn unified_titlebar(&self, window: Handle) -> Result<f64, String>;
     /// 창 버튼이 차지하는 영역을 페이지 좌표로 반환한다.
     fn window_controls(&self, window: Handle) -> Result<Frame, String>;
-    /// 시스템 설정의 두 번 누름 간격(초)을 반환한다.
-    fn double_click_interval(&self) -> Result<f64, String>;
     #[cfg(feature = "diagnostics")]
     /// 창 서버가 창과 창에 붙은 창에 부여한 번호를 반환한다.
     fn window_numbers(&self, window: &Window) -> Result<Vec<isize>, String>;
