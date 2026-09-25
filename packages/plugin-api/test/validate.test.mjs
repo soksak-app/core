@@ -9,7 +9,7 @@ const card = {
   surface: { module: "ui/probe.js", composition: { kind: "dom" } }, sidecars: ["@scope/sidecar-worker"],
   settings: { "cursor.shape": { type: "enum", default: "block", values: ["block", "beam"] } },
 };
-const side = { id: "side", name: "Side", sections: [{ id: "side.list", name: "List" }] };
+const side = { id: "side", name: "Side", sections: [{ id: "side.list", name: "List", module: "ui/list.js" }] };
 const environment = () => ({
   runtime: "runtime",
   plugins: ["@scope/plugin-probe", "plugin-side"],
@@ -24,7 +24,7 @@ const environment = () => ({
     },
   },
   sidebars: {
-    sets: [{ id: "set-side", title: "Side", sections: ["side.list"] }],
+    sets: [{ id: "set-side", title: "Side", sections: ["side.list"], layout: "list" }],
     links: [{ place: "left", plugin: null, set: "set-side" }, { place: "right", plugin: "probe", set: "set-side" }],
   },
   settings: { probe: { "cursor.shape": "block" } },
@@ -60,6 +60,9 @@ test("a manifest is rejected for each invalid field", () => {
     [{ ...card, icon: undefined }, /icon is required/],
     [{ ...side, sections: [{ id: "other.list", name: "x" }] }, /must be side.<name>/],
     [{ ...side, sections: [side.sections[0], side.sections[0]] }, /duplicate section/],
+    [{ ...side, sections: [{ id: "side.list", name: "List" }] }, /section side.list requires a module/],
+    [{ ...side, sections: [{ id: "side.list", name: "List", module: "../list.js" }] }, /section side.list module must be a JavaScript path inside the package/],
+    [{ ...side, sections: [{ id: "side.list", name: "List", module: "ui/list.css" }] }, /section side.list module must be a JavaScript path inside the package/],
     [{ id: "empty", name: "Empty" }, /surface or sections/],
     [{ ...side, sidecars: ["@scope/sidecar-worker"] }, /sidecars require a surface/],
     [{ ...card, sidecars: ["Worker"] }, /expected sidecar package names/],
@@ -128,6 +131,8 @@ test("an environment is rejected for each invalid field", () => {
     [(e) => { e.sidebars.links[0].set = "missing"; }, /known set/],
     [(e) => { e.sidebars.links[1].plugin = null; }, /plugin null/],
     [(e) => { e.sidebars.sets.push(e.sidebars.sets[0]); }, /duplicate set/],
+    [(e) => { delete e.sidebars.sets[0].layout; }, /set set-side layout must be list or tabs/],
+    [(e) => { e.sidebars.sets[0].layout = "grid"; }, /set set-side layout must be list or tabs/],
   ];
   for (const [change, message] of cases) {
     const value = environment();

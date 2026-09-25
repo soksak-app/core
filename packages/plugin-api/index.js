@@ -261,13 +261,17 @@ export function validateManifest(manifest) {
     const seen = new Set();
     for (const section of manifest.sections) {
       if (!isObject(section)) throw new Error(`${where}: section must be an object`);
-      only(`${where} section`, section, ["id", "name"]);
+      only(`${where} section`, section, ["id", "name", "module"]);
       if (typeof section.id !== "string" || !section.id.startsWith(`${id}.`) || !ID.test(section.id.slice(id.length + 1))) {
         throw new Error(`${where}: section id ${section.id} must be ${id}.<name>`);
       }
       if (seen.has(section.id)) throw new Error(`${where}: duplicate section ${section.id}`);
       seen.add(section.id);
       if (!isText(section.name)) throw new Error(`${where}: section ${section.id} requires a name`);
+      if (!isText(section.module)) throw new Error(`${where}: section ${section.id} requires a module`);
+      if (section.module.startsWith("/") || section.module.split("/").includes("..") || !section.module.endsWith(".js")) {
+        throw new Error(`${where}: section ${section.id} module must be a JavaScript path inside the package`);
+      }
     }
   }
   if (manifest.preview !== undefined) {
@@ -397,7 +401,9 @@ export function validateEnvironment(environment) {
     if (!isObject(set) || !isText(set.id) || !isText(set.title) || !Array.isArray(set.sections)) {
       throw new Error("environment.json: every set requires id, title, and sections");
     }
-    only(`environment.json set ${set.id}`, set, ["id", "title", "sections"]);
+    only(`environment.json set ${set.id}`, set, ["id", "title", "sections", "layout"]);
+    // 세트는 섹션을 모두 쌓아 보이거나(list) 하나씩 탭으로 보인다(tabs).
+    if (!["list", "tabs"].includes(set.layout)) throw new Error(`environment.json: set ${set.id} layout must be list or tabs`);
     if (setIds.has(set.id)) throw new Error(`environment.json: duplicate set ${set.id}`);
     setIds.add(set.id);
   }
