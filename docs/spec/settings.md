@@ -120,10 +120,11 @@ The following values were constants in `plane.js` and `app.css`. They are core s
 
 | Key | Label | Default | Range | Use |
 |---|---|---|---|---|
-| `sidebarMinWidth` | 카드 안 사이드바 최소 폭 | 120 | 60–400 | Smallest width of an inset sidebar |
-| `sidebarMaxWidth` | 카드 안 사이드바 최대 폭 | 480 | 120–800 | Largest width of an inset sidebar |
-| `sidebarWidth` | 카드 안 사이드바 처음 폭 | 190 | 60–800 | Width of an inset sidebar that has no stored width |
-| `railWidth` | 레일 처음 폭 | 190 | 120–480 | Width of a rail column that a plugin has not resized in the space |
+| `sidebarMinWidth` | 최소 폭 | 120 | 60–800 | Smallest width of an inset sidebar |
+| `sidebarMaxWidth` | 최대 폭 | 480 | 60–800 | Largest width of an inset sidebar |
+| `sidebarWidth` | 처음 폭 | 190 | 60–800 | Width of an inset sidebar that has no stored width, and of a rail column that its plugin has not resized in the space |
+
+The three values share one range, 60 to 800 points, and their sliders use that range, so equal values sit at equal slider positions. The rows are named 최소 폭, 최대 폭, and 처음 폭 on one line under the group 사이드바 크기.
 
 A change that leaves `sidebarMinWidth` ≤ `sidebarWidth` ≤ `sidebarMaxWidth` false fails with -32602 (invalid params) and changes nothing. A stored card width outside the current range is drawn as stored until the grip changes it.
 
