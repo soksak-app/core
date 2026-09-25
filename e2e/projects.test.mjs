@@ -123,6 +123,8 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
+    // 이 검사는 사이드바 위치 flow 의 레일 카드를 쓴다. 기본값은 inset 이다.
+    await s.run("core.settings.set", { patch: { rail: "flow" }, scope: "common" });
     const temporary = realpathSync(mkdtempSync(join(tmpdir(), "soksak-projects-")));
     const secondRoot = join(temporary, "second"); mkdirSync(secondRoot);
     const thirdRoot = join(temporary, "third"); mkdirSync(thirdRoot);
@@ -338,7 +340,8 @@ for (const app of Object.values(APPS)) {
     });
     const first = await s.get("core.project");
     const config = dirname(first.root);
-    await settings(s, { projectOpening: "windows" }, "common");
+    // 레일 카드(flow)의 저장과 제거를 검사한다. 기본값은 inset 이다.
+    await settings(s, { projectOpening: "windows", rail: "flow" }, "common");
     const saved = await s.run("core.project.open", { root, color: "#7fe3b0" });
     const child = s.on(added(await s.windows(2, "project window was not created"), [s.window]));
     await child.until("core.grid", (grid) => grid?.cards.some((c) => c.id === "rail-shell"), "the shell rail did not stand");

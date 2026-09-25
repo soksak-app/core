@@ -129,3 +129,7 @@ test("a plugin's left or right choice takes precedence over the general choice",
   assert.deepEqual(chooseLink(chooseLink([], "rail", "alpha", "set-a"), "rail", "alpha", "off"), []);
   assert.equal(resolveSidebar([{ place: "rail", plugin: "alpha", set: "set-a" }], two, "rail", "alpha").id, "set-a");
 });
+
+test("the sidebar position defaults to the inset sidebar", () => {
+  assert.equal(defaults.rail, "inset");
+});

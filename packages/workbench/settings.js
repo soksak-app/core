@@ -145,7 +145,7 @@ export const defaults = {
   /* 프로젝트 탭의 위치. top = 크롬 행, left = 왼쪽 세로 레일. */
   projectTabs: "top",
   /* 레일의 포커스 추적 방식. flow = 추적, pin = 고정, off = 표시하지 않음. */
-  rail: "flow",
+  rail: "inset",
   /* 좌·우 영역의 표시 여부. 무엇을 표시할지는 links 가 정한다. */
   left: true,
   right: true,

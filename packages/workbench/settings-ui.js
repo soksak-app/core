@@ -257,7 +257,7 @@ function drawGeneral() {
 
   body.append(group("사이드바", "사이드바 위치는 모든 플러그인에 적용된다. 플러그인 페이지에서 고른 왼쪽·오른쪽 사이드바가 이 선택보다 앞선다.", [
     row("사이드바 위치", segment("rail",
-      [["flow", "포커스 카드 옆"], ["pin", "고정"], ["inset", "카드 안"], ["off", "없음"]], value("rail"))),
+      [["inset", "카드 안"], ["flow", "포커스 카드 옆"], ["pin", "고정"], ["off", "없음"]], value("rail"))),
     row("왼쪽 사이드바 보이기", toggle("left", value("left"))),
     row("오른쪽 사이드바 보이기", toggle("right", value("right"))),
     row("왼쪽 사이드바 세트", choose("link:left:", generalOptions(), choiceOf("left", null))),

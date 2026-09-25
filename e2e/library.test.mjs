@@ -104,6 +104,8 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
+    // 이 검사는 사이드바 위치 flow 의 레일 카드를 쓴다. 기본값은 inset 이다.
+    await s.run("core.settings.set", { patch: { rail: "flow" }, scope: "common" });
     const verification = await s.collect("core.verify");
     s.cleanup(async () => {
       const failed = (await verification.stop()).filter((value) => value?.rows?.some((row) =>

@@ -233,4 +233,20 @@ for (const app of Object.values(APPS)) {
     await right("browser", "set-browser", "the browser set did not take precedence over the general set");
     await assert.rejects(s.run("core.settings.link", { place: "right", plugin: null, set: "inherit", scope: "common" }), /inherit/);
   });
+
+  test(`${app.name}: a fresh configuration starts with inset sidebars and lists 카드 안 first`, { timeout: 60000 }, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    assert.equal(await settingsValue(s, "rail"), "inset");
+    const grid = await s.until("core.grid", (value) => value.cards.some((card) => card.sidebar),
+      "no card holds an inset sidebar in a fresh configuration");
+    assert.equal(grid.cards.some((card) => card.id.startsWith("rail-")), false, "a rail column stands in a fresh configuration");
+    await s.run("core.settings.open");
+    s.cleanup(() => s.run("core.settings.close"));
+    await section(s, "general");
+    await control(s, "core.settings-modal.pick", "pick:rail:inset");
+    const keys = (await controls(s)).filter((c) => c.key?.startsWith("pick:rail:")).map((c) => c.key);
+    assert.deepEqual(keys, ["pick:rail:inset", "pick:rail:flow", "pick:rail:pin", "pick:rail:off"]);
+  });
 }
