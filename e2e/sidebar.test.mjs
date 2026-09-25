@@ -20,7 +20,7 @@ for (const app of Object.values(APPS)) {
     const grid = await s.until("core.grid", (value) => railed(value).length === 0 && value.cards.some((card) => card.sidebar),
       "no card holds an inset sidebar");
     const card = grid.cards.find((item) => item.sidebar);
-    assert.deepEqual(card.sidebar, { width: 190, collapsed: false });
+    assert.deepEqual(card.sidebar, { width: 120, collapsed: false });
     const surfaceOf = async () => (await s.get("core.surfaces")).find((item) => item.surface === card.active);
     // 표면 위치는 판의 원점과 카드 테두리(1pt)를 더한 문서 좌표다.
     const origin = grid.plane.x + card.x + 1;
@@ -28,7 +28,7 @@ for (const app of Object.values(APPS)) {
       const surface = surfaces.find((item) => item.surface === card.active);
       return surface && Math.abs(surface.applied.x - (origin + inside)) <= 1;
     }, `the surface did not start ${inside} pt into the card`);
-    await surfaceAt(190 + GRIP);
+    await surfaceAt(120 + GRIP);
     const before = await surfaceOf();
 
     await s.run("core.card.sidebar.toggle", { card: card.id });

@@ -823,7 +823,7 @@ export function cardSidebar(card) {
   const kind = activeTab(card)?.plugin;
   if (!kind || !linkedSet("rail", kind)) return null;
   const state = card.data.sidebar ?? {};
-  return { width: state.width ?? RAIL_WIDTH, collapsed: state.collapsed === true };
+  return { width: state.width ?? SIDEBAR_MIN, collapsed: state.collapsed === true };
 }
 
 function sidebarCard(id) {
@@ -871,8 +871,8 @@ function drawSidebar(el, card) {
     el.querySelector(".slot").before(side, grip);
     // 손잡이를 끄는 동안 폭을 선언된 명령으로 정한다.
     grip.addEventListener("pointerdown", (event) => {
-      // 끄는 동안 사이드바 글자가 선택되지 않게 한다.
-      event.preventDefault();
+      // 글자 선택은 .side 의 user-select 가 막는다. 여기서 기본 동작을 막으면 WebKit 이 마우스 호환 이벤트를
+      // 보내지 않아 두 번 누름(dblclick)이 오지 않는다.
       event.stopPropagation();
       grip.setPointerCapture(event.pointerId);
       const left = el.getBoundingClientRect().left;

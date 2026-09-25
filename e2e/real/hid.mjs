@@ -45,6 +45,8 @@ for (const step of input.steps) {
   } else {
     const button = step.type === "rightDown" || step.type === "rightUp" ? 1 : 0;
     event = $.CGEventCreateMouseEvent(null, types[step.type], { x: step.x, y: step.y }, button);
+    // 창 서버는 게시된 이벤트의 누름 횟수를 세지 않는다. 두 번 누름은 kCGMouseEventClickState(1)에 2 를 싣는다.
+    if (step.clicks) $.CGEventSetIntegerValueField(event, 1, step.clicks);
   }
   // 원본이 없는 이벤트는 실제 수정키 상태를 물려받으므로 플래그를 명시한다.
   $.CGEventSetFlags(event, flags);
@@ -56,7 +58,7 @@ for (const step of input.steps) {
 return JSON.stringify(times);`);
 
 /**
- * HID 이벤트를 차례로 보낸다. step 은 {type, x, y, modifiers, wait} 이다. type 은 move, down, up, drag,
+ * HID 이벤트를 차례로 보낸다. step 은 {type, x, y, modifiers, wait, clicks} 이다. clicks 는 누름 횟수다. type 은 move, down, up, drag,
  * rightDown, rightUp, wheel({lines, unit}), key({code, down}) 이다. 좌표는 화면 좌표(왼쪽 위 원점, 포인트)다.
  * 각 이벤트를 보낸 시각(ms, 녹화 프레임의 표시 시각과 같은 시계)의 배열을 돌려준다.
  */

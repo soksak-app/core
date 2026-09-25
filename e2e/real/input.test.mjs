@@ -54,6 +54,26 @@ for (const app of Object.values(APPS)) {
       "the injected vertical wheel did not scroll the history while Shift was held", { surface });
   });
 
+  test(`${app.name}: a posted double click on the inset sidebar grip sets the minimum width`, { timeout: 60000 }, async (t) => {
+    requireTrusted();
+    const s = await open(t, app);
+    assert.ok(s, `${app.binary} is not built`);
+    await fresh(s);
+    s.cleanup(() => s.run("core.settings.reset", { key: "rail" }));
+    await s.run("core.settings.change", { key: "rail", value: "inset", scope: "common" });
+    const grid = await s.until("core.grid", (value) => value.cards.some((card) => card.sidebar), "no card holds an inset sidebar");
+    const card = grid.cards.find((item) => item.sidebar);
+    await s.run("core.card.sidebar.size", { card: card.id, width: 300 });
+    await s.until("core.grid", (value) => value.cards.find((item) => item.id === card.id)?.sidebar?.width === 300,
+      "the sidebar did not take 300");
+    const grip = await s.rect("core.card.sidebar.grip", 0);
+    const point = await bringFront(s, app, grip);
+    post([{ type: "move", ...point }, { type: "down", ...point, clicks: 1 }, { type: "up", ...point, clicks: 1 },
+      { type: "down", ...point, clicks: 2 }, { type: "up", ...point, clicks: 2 }]);
+    await s.until("core.grid", (value) => value.cards.find((item) => item.id === card.id)?.sidebar?.width === 120,
+      "a posted double click on the grip did not set the minimum width");
+  });
+
   test(`${app.name}: the real-input pasteboard helpers restore every item type`, { timeout: 30000 }, async (t) => {
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);
