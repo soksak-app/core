@@ -667,7 +667,12 @@ for (const app of Object.values(APPS)) {
   });
 
   test(`${app.name}: real keypad keys send SS3 sequences in application keypad mode and characters otherwise`, { timeout: 90000 }, async (t) => {
-    const { s, surface } = await prepare(t, app, "KEYPAD");
+    const { s, surface, session, origin } = await prepare(t, app, "KEYPAD");
+    // 키는 초점을 가진 터미널 영역에 간다.
+    const focus = cellPoint(origin, session, 2, 0);
+    click(focus.x, focus.y);
+    await s.until("host.window", (window) => window.regions.some((region) => region.surface === surface && region.focused),
+      "the click did not give the terminal region native focus");
     const read = async (id, on, count, off) => {
       await s.run("terminal.input", { bytes: `printf '${on}'; stty raw -echo; printf 'WAIT%s\\r\\n' ${id}; ` +
         `R=$(dd bs=1 count=${count} 2>/dev/null | od -An -tx1 | tr -d ' \\n'); stty sane; printf '${off}'; printf 'R%s:%s\\n' ${id} "$R"\r` }, surface);
