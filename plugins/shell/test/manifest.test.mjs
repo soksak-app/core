@@ -57,21 +57,69 @@ test("every declared control is represented by the surface module", () => {
   }
 });
 
-test("every section module is published and draws a list that dispose removes", async () => {
-  // 섹션 모듈이 쓰는 문서 기능만 흉내 낸다.
-  const element = () => ({ children: [], textContent: "", className: "", parent: null,
-    append(...items) { for (const item of items) { item.parent = this; this.children.push(item); } },
-    remove() { this.parent.children.splice(this.parent.children.indexOf(this), 1); } });
+/** 섹션 모듈이 쓰는 문서 기능만 흉내 낸다. */
+const element = (tag) => ({ tag, children: [], dataset: {}, className: "", parent: null, _text: "",
+  get textContent() { return this._text + this.children.map((item) => item.textContent).join(""); },
+  set textContent(value) { this._text = value; this.children = []; },
+  append(...items) { for (const item of items) { item.parent = this; this.children.push(item); } },
+  replaceChildren(...items) { this.children = []; this._text = ""; this.append(...items); },
+  remove() { this.parent.children.splice(this.parent.children.indexOf(this), 1); } });
+
+/** 섹션을 마운트하고, 관찰한 status 에 값을 보내는 함수와 연결한 요소를 돌려준다. */
+async function mountSection(id) {
+  const section = manifest.sections.find((item) => item.id === id);
   globalThis.document = { createElement: element };
+  const root = element("div");
+  const observers = new Map();
+  const bound = [];
+  const context = { card: "c1", surface: "t1",
+    status(name, fn) { observers.set(name, fn); return () => observers.delete(name); },
+    bind(el, name, params) { bound.push({ el, name, params }); return el; } };
+  const mounted = await (await import(`../${section.module}`)).mount(root, context);
+  const send = (name, value, surface = "t1") => { bound.length = 0; observers.get(name)(value, surface); };
+  return { root, observers, bound, send, dispose: () => { mounted.dispose(); delete globalThis.document; } };
+}
+
+test("every section module is published", () => {
   for (const section of manifest.sections ?? []) {
     assert.ok(existsSync(new URL(`../${section.module}`, import.meta.url)), section.module);
     assert.ok(pkg.files.some((entry) => section.module === entry || section.module.startsWith(`${entry}/`)), section.module);
-    const root = element();
-    const { dispose } = (await import(`../${section.module}`)).mount(root, { card: "c1", surface: "t1" });
-    assert.deepEqual(root.children[0].children.map((item) => item.textContent),
-      [`${section.name}: 내용 준비 중`, "카드: c1", "탭: t1"], section.id);
-    dispose();
-    assert.equal(root.children.length, 0, section.id);
   }
-  delete globalThis.document;
+});
+
+test("the cwd section shows shell.cwd", async () => {
+  const s = await mountSection("shell.cwd");
+  s.send("shell.cwd", null, null);
+  assert.equal(s.root.textContent, "셸 표면 없음");
+  s.send("shell.cwd", null);
+  assert.equal(s.root.textContent, "디렉터리 보고 전");
+  s.send("shell.cwd", "/tmp/project");
+  assert.equal(s.root.textContent, "/tmp/project");
+  s.dispose();
+  assert.equal(s.observers.size, 0);
+  assert.equal(s.root.children.length, 0);
+});
+
+test("the run history section lists shell.history and writes an entry again on press", async () => {
+  const s = await mountSection("shell.history");
+  s.send("shell.history", []);
+  assert.equal(s.root.textContent, "기록 없음");
+  s.send("shell.history", ["ls", "pwd"]);
+  assert.equal(s.root.textContent, "lspwd");
+  assert.deepEqual(s.bound.map(({ el, name, params }) => [el.tag, el.textContent, name, params]),
+    [["button", "ls", "shell.write", { data: "ls\n" }], ["button", "pwd", "shell.write", { data: "pwd\n" }]]);
+  s.dispose();
+  assert.equal(s.observers.size, 0);
+});
+
+test("the jobs section lists shell.jobs with an interrupt control", async () => {
+  const s = await mountSection("shell.jobs");
+  s.send("shell.jobs", []);
+  assert.equal(s.root.textContent, "실행 중인 작업 없음");
+  assert.equal(s.bound.length, 0);
+  s.send("shell.jobs", [{ id: "run-1", command: "sleep 5" }]);
+  assert.equal(s.root.textContent, "sleep 5중단");
+  assert.deepEqual(s.bound.map(({ name, params }) => [name, params]), [["shell.interrupt", {}]]);
+  s.dispose();
+  assert.equal(s.observers.size, 0);
 });

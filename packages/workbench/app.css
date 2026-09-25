@@ -497,3 +497,6 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .set__head[aria-expanded=true]::before{content:"▾ "}
 .set__section[data-folded=true] .set__body{display:none}
 .set__body ul{margin:0 0 6px;padding:0 0 0 12px;list-style:none}
+.set__body p{margin:0 0 6px;padding:0 0 0 12px;overflow-wrap:anywhere}
+.set__body li button{border:0;padding:0;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.set__body li button:hover{text-decoration:underline}

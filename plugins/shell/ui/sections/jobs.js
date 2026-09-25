@@ -1,12 +1,23 @@
-// 작업 섹션. 실제 내용을 그리기 전까지 섹션이 받은 카드와 탭을 목록으로 보인다.
+// 작업 섹션. 끝나지 않은 shell.run 명령(shell.jobs)을 보이고, 중단 단추로 shell.interrupt 를 실행한다.
 export function mount(root, context) {
   const list = document.createElement("ul");
   list.className = "section-list";
-  for (const text of ["작업: 내용 준비 중", `카드: ${context.card ?? "없음"}`, `탭: ${context.surface ?? "없음"}`]) {
-    const item = document.createElement("li");
-    item.textContent = text;
-    list.append(item);
-  }
   root.append(list);
-  return { dispose: () => list.remove() };
+  const stop = context.status("shell.jobs", (jobs, surface) => {
+    if (surface === null) { list.replaceChildren(); list.textContent = "셸 표면 없음"; return; }
+    if (!jobs?.length) { list.replaceChildren(); list.textContent = "실행 중인 작업 없음"; return; }
+    const items = jobs.map((job) => {
+      const item = document.createElement("li");
+      item.textContent = job.command;
+      return item;
+    });
+    const control = document.createElement("li");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = "중단";
+    context.bind(button, "shell.interrupt", {});
+    control.append(button);
+    list.replaceChildren(...items, control);
+  });
+  return { dispose() { stop(); list.remove(); } };
 }

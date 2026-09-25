@@ -1,12 +1,10 @@
-// cwd 섹션. 실제 내용을 그리기 전까지 섹션이 받은 카드와 탭을 목록으로 보인다.
+// cwd 섹션. 셸 표면이 보고한 현재 디렉터리(shell.cwd)를 보인다.
 export function mount(root, context) {
-  const list = document.createElement("ul");
-  list.className = "section-list";
-  for (const text of ["cwd: 내용 준비 중", `카드: ${context.card ?? "없음"}`, `탭: ${context.surface ?? "없음"}`]) {
-    const item = document.createElement("li");
-    item.textContent = text;
-    list.append(item);
-  }
-  root.append(list);
-  return { dispose: () => list.remove() };
+  const line = document.createElement("p");
+  line.className = "section-line";
+  root.append(line);
+  const stop = context.status("shell.cwd", (cwd, surface) => {
+    line.textContent = surface === null ? "셸 표면 없음" : cwd ?? "디렉터리 보고 전";
+  });
+  return { dispose() { stop(); line.remove(); } };
 }

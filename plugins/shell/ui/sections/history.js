@@ -1,12 +1,20 @@
-// 실행 기록 섹션. 실제 내용을 그리기 전까지 섹션이 받은 카드와 탭을 목록으로 보인다.
+// 실행 기록 섹션. 셸 세션에 쓴 줄(shell.history)을 보이고, 항목을 누르면 그 줄을 다시 쓴다.
 export function mount(root, context) {
   const list = document.createElement("ul");
   list.className = "section-list";
-  for (const text of ["실행 기록: 내용 준비 중", `카드: ${context.card ?? "없음"}`, `탭: ${context.surface ?? "없음"}`]) {
-    const item = document.createElement("li");
-    item.textContent = text;
-    list.append(item);
-  }
   root.append(list);
-  return { dispose: () => list.remove() };
+  const stop = context.status("shell.history", (lines, surface) => {
+    if (surface === null) { list.replaceChildren(); list.textContent = "셸 표면 없음"; return; }
+    if (!lines?.length) { list.replaceChildren(); list.textContent = "기록 없음"; return; }
+    list.replaceChildren(...lines.map((line) => {
+      const item = document.createElement("li");
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = line;
+      context.bind(button, "shell.write", { data: `${line}\n` });
+      item.append(button);
+      return item;
+    }));
+  });
+  return { dispose() { stop(); list.remove(); } };
 }
