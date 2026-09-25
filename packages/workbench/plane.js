@@ -346,7 +346,7 @@ function updateCard(el, card) {
     if (b.disabled !== off) b.disabled = off;
     // 이 카드는 자리가 아니므로 `fixed` 가 아니다. 닫히지 않는 이유는 하나다.
     const title = off && what === "close"
-      ? "닫을 수 없다 — 어느 이웃도 이 자리를 빈틈없이 못 메운다"
+      ? "닫을 수 없다 — 어느 이웃도 이 위치를 빈틈없이 못 메운다"
       : b.dataset.title;
     if (b.title !== title) b.title = title;
   }
@@ -548,8 +548,8 @@ const DO_OF = Object.fromEntries(Object.entries(MENU_OF).map(([what, menu]) => [
 
 const PICKER_ASK = {
   add: "새 탭에 무엇을 띄울까",
-  x: "새 자리에 무엇을 띄울까",
-  y: "새 자리에 무엇을 띄울까",
+  x: "새 위치에 무엇을 띄울까",
+  y: "새 위치에 무엇을 띄울까",
 };
 
 delegate(pickerEl);

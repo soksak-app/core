@@ -244,7 +244,7 @@ function drawGeneral() {
     row("글자 크기", slide("size", 10, 18, value("size"), "px")),
   ]));
 
-  body.append(group("자리", "판의 크기와 카드의 자리가 함께 움직인다.", [
+  body.append(group("위치", "탭과 사이드바가 놓이는 위치. 바꾸면 카드 배치도 함께 바뀐다.", [
     row("프로젝트 탭", segment("projectTabs", [["top", "위"], ["left", "왼쪽"]], value("projectTabs"))),
     row("사이드바 위치", segment("rail",
       [["flow", "따라감"], ["pin", "고정"], ["inset", "카드 안"], ["off", "없음"]], value("rail"))),
@@ -252,7 +252,7 @@ function drawGeneral() {
     row("우측 사이드바 위치", toggle("right", value("right"))),
   ]));
 
-  body.append(group("표시", "자리는 그대로 두고 보이는 것만 바꾼다.", [
+  body.append(group("표시", "배치는 그대로 두고 보이는 모습만 바꾼다.", [
     row("포커스 표시", segment("focusInd", [["border", "테두리"], ["corner", "꺽쇠"]], value("focusInd"))),
     row("경계선", segment("fullRule", [["under", "가림"], ["over", "보임"], ["none", "숨김"]], value("fullRule"))),
     row("포커스 밖 흐리게", toggle("dim", value("dim"))),
@@ -283,7 +283,7 @@ function drawSidebars() {
     rows.push(row(`${p.name} 우측`, choose(`link:right:${p.id}`, options, linkedId("right", p.id) ?? "")));
   }
   if (scope === "project" && overridden("links")) rows.push(row("", press("reset:links", "전역 연결 사용")));
-  body.append(group("연결", "자리마다 세트를 건다. 걸지 않으면 그 사이드바는 없다.", rows));
+  body.append(group("연결", "사이드바 위치마다 세트를 건다. 걸지 않으면 그 사이드바는 없다.", rows));
 }
 
 function drawCompositing() {
