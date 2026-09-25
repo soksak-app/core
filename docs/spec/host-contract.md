@@ -62,7 +62,6 @@ The scope column is `both`, or `<host> only: <reason>` for behavior that exists 
 | `documents.request.rejects-foreign-or-missing-caller` | A document request from no caller surface or from another surface fails with "not surface". | both |
 | `documents.request.rejects-invalid-names` | Empty, capitalized, hyphen-first, slash-containing, and 65-character document names are rejected. | both |
 | `documents.request.zoom-must-be-finite-positive` | A document zoom request without a zoom, or with zero or a negative zoom, is rejected; a finite positive zoom is the factor. | both |
-| `documents.request.entry-requires-offset` | A document `go` request with `entry` requires a non-zero integer `offset`, and another action with an `offset` is rejected. | both |
 | `documents.request.ignores-placement-fields` | Parsing a document request keeps only the surface and document and drops placement fields. | both |
 | `documents.request.url-and-action-default-empty` | A parsed document request without url or action has both empty. | both |
 | `documents.registry.rejects-duplicate-reservation` | Reserving a document key twice fails with "already attached". | both |
