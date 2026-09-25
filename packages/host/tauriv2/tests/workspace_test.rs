@@ -169,3 +169,33 @@ fn a_created_config_directory_is_owner_only_and_an_existing_one_keeps_its_mode()
         0o755
     );
 }
+
+// contract: workspace.projects.plugin-data-patched
+#[test]
+fn a_project_patch_stores_plugin_data_and_rejects_unknown_fields() {
+    let config = tempfile::tempdir().unwrap();
+    let root = tempfile::tempdir().unwrap();
+    let store = Workspace::new(config.path().into());
+    apply(
+        &store,
+        json!({"kind":"add", "project":{"id":"prj-test", "root":root.path(), "identity":"1:2"}}),
+    );
+    apply(
+        &store,
+        json!({"kind":"patch", "id":"prj-test", "patch":{"plugins":{"files":{"bookmarks":["a.txt"]}}}}),
+    );
+    let snapshot = apply(
+        &Workspace::new(config.path().into()),
+        json!({"kind":"snapshot"}),
+    );
+    assert_eq!(
+        snapshot["projects"][0]["plugins"],
+        json!({"files":{"bookmarks":["a.txt"]}})
+    );
+    assert!(store
+        .apply(
+            serde_json::from_value(json!({"kind":"patch", "id":"prj-test", "patch":{"other":1}}))
+                .unwrap()
+        )
+        .is_err());
+}

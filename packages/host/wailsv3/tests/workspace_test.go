@@ -198,3 +198,34 @@ func readJSON(t *testing.T, path string, into *host.Record) error {
 	}
 	return json.Unmarshal(data, into)
 }
+
+// contract: workspace.projects.plugin-data-patched
+func TestAProjectPatchStoresPluginDataAndRejectsUnknownFields(t *testing.T) {
+	config := t.TempDir()
+	root := t.TempDir()
+	store := host.NewWorkspace(config)
+	if _, err := store.Apply(host.WorkspaceRequest{Kind: "add", Project: host.Record{"id": "prj-test", "root": root, "identity": "1:2"}}); err != nil {
+		t.Fatal(err)
+	}
+	plugins := map[string]any{"files": map[string]any{"bookmarks": []any{"a.txt"}}}
+	if _, err := store.Apply(host.WorkspaceRequest{Kind: "patch", ID: "prj-test", Patch: host.Record{"plugins": plugins}}); err != nil {
+		t.Fatalf("plugins patch: %v", err)
+	}
+	snapshot, err := host.NewWorkspace(config).Apply(host.WorkspaceRequest{Kind: "snapshot"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, _ := json.Marshal(snapshot)
+	var read struct {
+		Projects []map[string]any `json:"projects"`
+	}
+	if err := json.Unmarshal(encoded, &read); err != nil || len(read.Projects) != 1 {
+		t.Fatalf("snapshot %s: %v", encoded, err)
+	}
+	if got, _ := json.Marshal(read.Projects[0]["plugins"]); string(got) != `{"files":{"bookmarks":["a.txt"]}}` {
+		t.Fatalf("stored plugins = %s", got)
+	}
+	if _, err := store.Apply(host.WorkspaceRequest{Kind: "patch", ID: "prj-test", Patch: host.Record{"other": 1}}); err == nil {
+		t.Fatal("an unknown project field was accepted")
+	}
+}

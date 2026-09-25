@@ -62,6 +62,7 @@ The scope column is `both`, or `<host> only: <reason>` for behavior that exists 
 | `documents.request.rejects-foreign-or-missing-caller` | A document request from no caller surface or from another surface fails with "not surface". | both |
 | `documents.request.rejects-invalid-names` | Empty, capitalized, hyphen-first, slash-containing, and 65-character document names are rejected. | both |
 | `documents.request.zoom-must-be-finite-positive` | A document zoom request without a zoom, or with zero or a negative zoom, is rejected; a finite positive zoom is the factor. | both |
+| `documents.request.entry-requires-offset` | A document `go` request with `entry` requires a non-zero integer `offset`, and another action with an `offset` is rejected. | both |
 | `documents.request.ignores-placement-fields` | Parsing a document request keeps only the surface and document and drops placement fields. | both |
 | `documents.request.url-and-action-default-empty` | A parsed document request without url or action has both empty. | both |
 | `documents.registry.rejects-duplicate-reservation` | Reserving a document key twice fails with "already attached". | both |
@@ -253,6 +254,7 @@ The scope column is `both`, or `<host> only: <reason>` for behavior that exists 
 | `workspace.settings.invalid-common-file-not-overwritten` | An invalid common settings file makes a settings change fail and stays byte-identical. | both |
 | `workspace.settings.concurrent-patches-preserved` | Concurrent common settings changes of different keys are all kept. | both |
 | `workspace.projects.move-reorders` | Moving a project changes its position in the saved order. | both |
+| `workspace.projects.plugin-data-patched` | A project patch stores its `plugins` object, and a patch of another unknown field is rejected. | both |
 | `workspace.projects.remove-keeps-remaining-order` | Removing a project keeps the order of the remaining projects. | both |
 | `workspace.folder.aliases-share-identity` | A directory and a symbolic link to it resolve to the same project folder. | both |
 | `workspace.folder.rejects-file` | A regular file is rejected as a project folder. | both |

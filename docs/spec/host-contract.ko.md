@@ -62,6 +62,7 @@ fn invalid_json_closes_connection() {
 | `documents.request.rejects-foreign-or-missing-caller` | 호출자 표면이 없거나 다른 표면에서 온 문서 요청은 "not surface"로 실패한다. | both |
 | `documents.request.rejects-invalid-names` | 빈 이름, 대문자, 하이픈으로 시작, 슬래시 포함, 65자 문서 이름을 거부한다. | both |
 | `documents.request.zoom-must-be-finite-positive` | 확대 값이 없거나 0 또는 음수인 문서 확대 요청은 거부하고, 유한한 양수는 배율이다. | both |
+| `documents.request.entry-requires-offset` | `entry` 문서 `go` 요청은 0이 아닌 정수 `offset`이 필요하고, `offset`이 있는 다른 동작은 거부한다. | both |
 | `documents.request.ignores-placement-fields` | 문서 요청을 해석하면 표면과 문서만 남기고 배치 필드를 버린다. | both |
 | `documents.request.url-and-action-default-empty` | url과 action이 없는 문서 요청을 해석하면 둘 다 비어 있다. | both |
 | `documents.registry.rejects-duplicate-reservation` | 같은 문서 키를 두 번 예약하면 "already attached"로 실패한다. | both |
@@ -253,6 +254,7 @@ fn invalid_json_closes_connection() {
 | `workspace.settings.invalid-common-file-not-overwritten` | 잘못된 공통 설정 파일은 설정 변경을 실패시키고 바이트 단위로 그대로 남는다. | both |
 | `workspace.settings.concurrent-patches-preserved` | 서로 다른 키에 대한 동시 공통 설정 변경이 모두 유지된다. | both |
 | `workspace.projects.move-reorders` | 프로젝트를 옮기면 저장된 순서의 위치가 바뀐다. | both |
+| `workspace.projects.plugin-data-patched` | 프로젝트 patch는 `plugins` 객체를 저장하고, 알 수 없는 다른 필드의 patch는 거부된다. | both |
 | `workspace.projects.remove-keeps-remaining-order` | 프로젝트를 제거해도 남은 프로젝트의 순서는 유지된다. | both |
 | `workspace.folder.aliases-share-identity` | 디렉터리와 그 심볼릭 링크는 같은 프로젝트 폴더로 해석된다. | both |
 | `workspace.folder.rejects-file` | 일반 파일은 프로젝트 폴더로 거부된다. | both |

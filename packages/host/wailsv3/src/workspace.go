@@ -158,7 +158,7 @@ func (w *Workspace) Apply(req WorkspaceRequest) (any, error) {
 		}
 		for key, value := range req.Patch {
 			switch key {
-			case "title", "color", "spaces", "activeSpaceId", "named", "geometry", "pinned", "lastOpened":
+			case "title", "color", "spaces", "activeSpaceId", "named", "geometry", "pinned", "lastOpened", "plugins":
 				projects[at][key] = value
 			default:
 				return nil, fmt.Errorf("invalid project field: %s", key)

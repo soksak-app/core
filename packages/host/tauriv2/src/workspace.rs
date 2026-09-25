@@ -149,6 +149,7 @@ impl Workspace {
                         "geometry",
                         "pinned",
                         "lastOpened",
+                        "plugins",
                     ]
                     .contains(&key.as_str())
                     {
