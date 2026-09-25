@@ -119,8 +119,10 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
-    const lag = assertAligned(await drag(t, s, PLAN, { capture: true }));
+    const run = await drag(t, s, PLAN, { capture: true });
+    const lag = assertAligned(run);
     t.diagnostic(`pointer lag: worst ${lag.lag.toFixed(1)}ms, median ${lag.median.toFixed(1)}ms; transactions ${lag.stages}`);
+    t.diagnostic(`page handling per step (ms), first 12: ${JSON.stringify(run.handled?.slice(0, 12))}, steps 40-51: ${JSON.stringify(run.handled?.slice(40, 52))}`);
   });
 
   test(`${app.name}: shell divider drag does not leave a white surface frame`, async (t) => {
