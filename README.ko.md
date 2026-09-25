@@ -26,6 +26,7 @@ pnpm test
 - [애플리케이션](apps/README.ko.md)
 - [플러그인과 애플리케이션 환경](docs/spec/plugins.ko.md)
 - [프로젝트·설정·창](docs/spec/projects.ko.md)
+- [설정 창](docs/spec/settings.ko.md)
 - [네이티브 호스트](docs/spec/hosts.ko.md)
 - [네이티브 표면 배치](docs/spec/native-surfaces.ko.md)
 - [data-native-modal](docs/spec/native-modals.ko.md)

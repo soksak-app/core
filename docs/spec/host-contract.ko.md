@@ -77,7 +77,7 @@ fn invalid_json_closes_connection() {
 | `endpoint.transport.invalid-json-closes` | 본문이 JSON이 아닌 프레임은 응답 없이 연결을 닫는다. | both |
 | `endpoint.transport.non-jsonrpc-object-closes` | JSON-RPC 2.0 요청이 아닌 JSON 프레임은 응답 없이 연결을 닫는다. | both |
 | `endpoint.transport.undeclared-method-closes` | 선언되지 않은 메서드는 응답 없이 연결을 닫고 페이지에 아무것도 전달하지 않는다. | both |
-| `endpoint.diagnostics.methods-exist-only-in-diagnostic-builds` | 릴리스 빌드에서 diagnostics.knob은 연결을 닫고, 진단 빌드에서는 응답되며 페이지에 한 번 전달된다. | both |
+| `endpoint.diagnostics.methods-exist-only-in-diagnostic-builds` | 릴리스 빌드에서 diagnostics.transcript는 연결을 닫고, 진단 빌드에서는 응답되며 페이지에 한 번 전달된다. | both |
 | `endpoint.rpc.round-trip-by-id` | 한 연결의 여러 요청은 각각 같은 id와 결과를 가진 JSON-RPC 2.0 응답을 받는다. | both |
 | `endpoint.rpc.page-params-omit-window` | 페이지는 window 필드를 뺀 전달 매개변수를 받는다. | both |
 | `endpoint.rpc.unknown-window-1003` | 존재하지 않는 창에 대한 선언된 메서드는 페이지에 닿지 않고 오류 1003을 반환한다. | both |

@@ -1,0 +1,97 @@
+# Settings window
+
+[한국어](settings.ko.md)
+
+This specification defines the sections of the settings window, the settings they show, and the stored form of sidebar sets. [Projects](projects.md#settings) defines scopes and storage files, [native modals](native-modals.md) defines how the window is drawn, and [plugins](plugins.md) defines plugin declarations. [Features](../features.md) records implementation and validation.
+
+## Sections
+
+The left navigation lists three sections in this order. Every section shows the scope tabs (전역, 프로젝트) above its controls; the project tab exists only while a project is selected.
+
+| Id | Label | Content |
+|---|---|---|
+| `general` | 일반 | Settings that apply to the whole workbench and name no plugin |
+| `plugins` | 플러그인 | The plugins of the environment and the page of the selected plugin |
+| `sidebars` | 사이드바 | Sidebar placement, sizes, the left sidebar link, and the set list with create, edit, and delete |
+
+`core.settings-modal.nav {section}` shows a section. The window keeps the section, the selected plugin, and the edited set while it is closed and reopened.
+
+### 일반
+
+일반 holds only core settings. No plugin setting and no sidebar setting appears in it.
+
+| Group | Rows |
+|---|---|
+| 프로젝트 (common scope only) | 열기 방식 `projectOpening` |
+| 테마 | theme swatches `theme`, 모드 `mode` |
+| 형태 | 통로 `gap`, 모서리 `radius`, 폰트 `font`, 글자 크기 `size` |
+| 위치 | 프로젝트 탭 위치 `projectTabs` |
+| 표시 | 포커스 표시 `focusInd`, 경계선 `fullRule`, 포커스 밖 흐리게 `dim` |
+
+### 플러그인
+
+The section lists every plugin of `environment.json` in its declared order, each as a button with the manifest `name`. The list is built from the loaded manifests; a plugin is one unit that contributes its surface, sections, and settings. The window has no install, enable, or disable action. `core.settings-modal.plugin {plugin}` selects a plugin; the first plugin is selected when none was selected before.
+
+The page of the selected plugin shows:
+
+- 설정: one row for each setting the manifest declares, labelled with its local name, in manifest order. An `enum` is a choice row, an `integer` a slider between its bounds, and a `string` a text field. A plugin without settings shows the text "이 플러그인에는 설정이 없습니다."
+- 사이드바: for a plugin with a surface, the set linked to its rail (레일 사이드바) and to its right sidebar (오른쪽 사이드바), each chosen from all sets or 없음 through `core.settings.link`. Below them, the sets that contain a section of this plugin, each with its title and section names.
+- 섹션: the names of the sections the plugin declares.
+
+A plugin without a surface has no rail or right sidebar of its own; its page shows 설정, the sets that use its sections, and 섹션.
+
+### 사이드바
+
+| Group | Rows |
+|---|---|
+| 배치 | 사이드바 위치 `rail`, 왼쪽 사이드바 `left`, 오른쪽 사이드바 `right`, 왼쪽 사이드바 세트 (the `left` link) |
+| 크기 | the width settings of [layout values](#layout-values) |
+| 세트 | the set list, then 새 세트 |
+
+사이드바 위치 is one setting for every plugin. `flow` shows the rail beside the focused card, `pin` keeps it where it stood, `inset` shows it inside every card, and `off` hides it ([example model](example-model.md)).
+
+Each row of the set list shows the set title, its layout (목록 or 탭), its section names, and two buttons: 편집 (`core.settings-modal.edit {set}`) and 삭제 (`core.settings.sets.delete {id, scope}`). 새 세트 runs `core.settings.sets.create {scope}`, which adds a set titled "새 세트" with layout `list` and no sections, and opens it for editing.
+
+The editor of a set shows 이름 (a text field, `core.settings.sets.update {id, title}`), 배치 (목록 `list` or 탭 `tabs`, `core.settings.sets.update {id, layout}`), and one button for each registered section, grouped under its plugin name, that shows whether the section is in the set (`core.settings.sets.update {id, section, on}`); pressing a section outside the set appends it to the end of the set, and pressing a section in the set removes it. 완료 (`core.settings-modal.edit {set: null}`) closes the editor. Every change is saved immediately to the scope shown.
+
+## Stored sets and links
+
+`sets` and `links` are settings. Their default values come from `environment.json` `sidebars`. A change writes the whole list to the shown scope, like any other setting; a project override of `sets` or `links` replaces the common list.
+
+A set is `{id, title, sections, layout}`:
+
+- `id`: a non-empty string, unique in the list. A created set receives `set-<n>` with the smallest positive `n` that no set in the list uses.
+- `title`: a string of 1 to 40 characters.
+- `sections`: section ids without repetition.
+- `layout`: `list` or `tabs` ([plugins](plugins.md#sections)).
+
+A link is `{place, plugin, set}` with the rules of `environment.json` `sidebars.links`. Stored sets and links are validated with the same plugin-api function that validates `environment.json` `sidebars`; invalid stored data is a load error and is not replaced. A stored section id or plugin id that the current environment does not register is ignored when the sidebar is drawn, as for saved spaces ([plugins](plugins.md)).
+
+Deleting a set removes it and every link to it in the same scope in one write. A link that names a set absent from the effective list shows no sidebar.
+
+## Layout values
+
+The following values were constants in `plane.js` and `app.css`. They are core settings shown in 사이드바 › 크기, integers in points.
+
+| Key | Label | Default | Range | Use |
+|---|---|---|---|---|
+| `sidebarMinWidth` | 카드 안 사이드바 최소 폭 | 120 | 60–400 | Smallest width of an inset sidebar; a grip double click sets this width |
+| `sidebarMaxWidth` | 카드 안 사이드바 최대 폭 | 480 | 120–800 | Largest width of an inset sidebar |
+| `sidebarWidth` | 카드 안 사이드바 처음 폭 | 120 | 60–800 | Width of an inset sidebar that has no stored width |
+| `sidebarFoldedWidth` | 접은 사이드바 폭 | 28 | 16–64 | Width of a folded inset sidebar |
+| `railWidth` | 레일 처음 폭 | 190 | 120–480 | Width of a rail column that a plugin has not resized in the space |
+
+A change that leaves `sidebarMinWidth` ≤ `sidebarWidth` ≤ `sidebarMaxWidth` false fails with -32602 (invalid params) and changes nothing. A stored card width outside the current range is drawn as stored until the grip changes it.
+
+The following layout constants remain in code because they are tied to the document structure rather than to a preference: the card header 32 and footer 22 points and the tab strip thresholds (`plane.js`). The left and right sidebar widths of a new space come from the `workspace.grid` cards of `environment.json`.
+
+## Status
+
+`core.settings-modal` reports `section`, `scope`, `plugin` (the selected plugin id or `null`), `editing` (the edited set id or `null`), and every control with its command. `core.settings` reports every effective value, including `sets`, `links`, and the layout values.
+
+## Acceptance
+
+- 일반 contains no control whose key names a plugin setting, `rail`, `left`, `right`, `sets`, or `links`.
+- 플러그인 lists the environment plugins in order; selecting one shows its declared settings and its sidebar links, and changing a plugin setting there updates `core.settings`.
+- 사이드바 creates, edits (title, layout, sections), and deletes a set through declared commands; `core.settings` reflects each change, and deleting a linked set removes its links.
+- The layout values change the inset sidebar limits, default width, folded width, and new rail width.

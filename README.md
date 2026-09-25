@@ -26,6 +26,7 @@ pnpm test
 - [Applications](apps/README.md)
 - [Plugins and application environments](docs/spec/plugins.md)
 - [Projects, settings, and windows](docs/spec/projects.md)
+- [Settings window](docs/spec/settings.md)
 - [Native hosts](docs/spec/hosts.md)
 - [Native surface placement](docs/spec/native-surfaces.md)
 - [data-native-modal](docs/spec/native-modals.md)
