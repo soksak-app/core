@@ -170,7 +170,7 @@ function createCard(card) {
   el.dataset.expose = "core.card";
   el.innerHTML = isPlace(card.id)
     ? '<header class="chrome"></header><div class="set"></div><footer class="status sidebar-status" data-expose="core.sidebar.status"></footer>'
-    : '<header class="chrome"></header><div class="slot"></div><footer class="status"></footer>';
+    : '<header class="chrome" data-expose="core.card.header"></header><div class="slot"></div><footer class="status" data-expose="core.card.status"></footer>';
   // 카드 객체를 클로저에 담지 않고 요소의 data-card-id 를 읽는다. 스페이스를
   // 바꾸면 같은 id 로 새 카드 객체가 만들어지므로, 담아 둔 참조는 없어진 객체다.
   el.dataset.command = "core.card.focus";

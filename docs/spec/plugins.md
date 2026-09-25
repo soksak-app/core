@@ -52,7 +52,7 @@ A section shows its plugin's state through the plugin's declared statuses and ch
 
 A set combines sections of any plugins in order and has a `layout` chosen when the set is made. With `list` the sidebar shows every section of the set from top to bottom, each under a header with its name that folds and unfolds it. With `tabs` the sidebar shows a row of tabs with the section names and only the section of the selected tab; the selection is kept for each sidebar. Every sidebar that shows the set, whether a rail, an inset sidebar, or the left or right sidebar, draws it the same way.
 
-A sidebar shows no set title or place label: its sections start at its top, and it ends in a status line that states its place or its set. A folded section keeps only its header. A section states an empty list in words, such as 기록 없음.
+A sidebar shows no set title or place label: its sections start at its top, and it ends in a status line that states its place or its set. A folded section keeps only its header. Section headers have the height of a card header and the status line has the height of a card footer, so their rules line up with those of the neighbouring cards. A section states an empty list in words, such as 기록 없음.
 
 The sidebar is identified by the id of the card that holds it: the `left`, `right`, or rail card, or the card of an inset sidebar. Folding a section header runs `core.sidebar.section.fold` and choosing a tab runs `core.sidebar.section.select`, both with `{sidebar, section}`; status `core.sidebars` reports every drawn sidebar with its set, layout, selected tab, and each section's fold and mount state. A section module is a file listed in the package's `files`, so release staging copies it; staging fails when a section module is not listed.
 

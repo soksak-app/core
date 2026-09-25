@@ -4,6 +4,7 @@
 // 세트의 layout 이 list 이면 모든 섹션을 머리와 함께 쌓고, tabs 이면 고른 탭의 섹션 하나만 마운트한다.
 // 탭 선택과 섹션 접힘은 사이드바마다 이 모듈이 보관한다.
 import { bind } from "./commands.js";
+import { icon } from "./icons.js";
 import { registry } from "./exposure.js";
 import { section } from "./registry.js";
 
@@ -190,7 +191,7 @@ export function drawSet(container, sidebar, set, context) {
         entry.header.type = "button";
         entry.header.className = "set__head";
         entry.header.dataset.expose = "core.sidebar.section.header";
-        entry.header.innerHTML = '<span class="set__chevron" aria-hidden="true"></span><span class="set__name"></span>';
+        entry.header.innerHTML = `<span class="set__chevron" aria-hidden="true">${icon("chevron-down")}</span><span class="set__name"></span>`;
         entry.header.querySelector(".set__name").textContent = section.name;
         bind(entry.header, "core.sidebar.section.fold", params);
         element.append(entry.header, entry.body);

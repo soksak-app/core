@@ -4,6 +4,8 @@ import { createServer } from "node:http";
 import test from "node:test";
 
 import { APPS, fresh, open } from "./app.mjs";
+import { rmSync } from "node:fs";
+import { frames, pixel, readFrame } from "./frame.mjs";
 
 /** 손잡이는 사이드바 테두리 위에 겹치므로 표면은 사이드바 바로 뒤에서 시작한다. */
 const GRIP = 0;
@@ -258,24 +260,57 @@ for (const app of Object.values(APPS)) {
   });
 }
 
+/** sRGB 색의 상대 휘도. */
+const luminance = ([r, g, b]) => {
+  const c = (v) => { const x = v / 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; };
+  return 0.2126 * c(r) + 0.7152 * c(g) + 0.0722 * c(b);
+};
+/** 두 색의 대비. 밝은 쪽을 위에 둔다. */
+const contrast = (a, b) => { const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05); };
+/** 디자인의 머리 선(#2a2d3a)과 머리 배경(#20232d)의 대비. */
+const DESIGN_RULE_CONTRAST = contrast([0x2a, 0x2d, 0x3a], [0x20, 0x23, 0x2d]);
+
+/** 창을 녹화해 섹션 머리의 아래 선 픽셀과 머리 가운데 배경 픽셀의 대비를 잰다. */
+async function headerRuleContrast(s, rect) {
+  const { displayed } = await s.presented();
+  await s.request("diagnostics.capture.start", {});
+  const result = await s.request("diagnostics.capture.stop", { after: displayed });
+  try {
+    const files = frames(result.frames);
+    assert.ok(files.length > 0, "the header capture produced no frames");
+    const frame = readFrame(files.at(-1));
+    // 이름 글자를 피해 머리 오른쪽 끝 가까이에서 잰다.
+    const x = Math.round((rect.x + rect.width - 6) * frame.scale);
+    const rule = pixel(frame, x, Math.ceil((rect.y + rect.height) * frame.scale) - 1);
+    const back = pixel(frame, x, Math.round((rect.y + rect.height / 2) * frame.scale));
+    return contrast(rule, back);
+  } finally {
+    rmSync(result.frames, { recursive: true, force: true });
+  }
+}
+
 /** 두 길이가 반 포인트 안에서 같은지. */
 const near = (a, b) => Math.abs(a - b) <= 0.5;
 
-/** 사이드바 요소 안에 놓인 상태 줄의 사각형. 상태 줄은 사이드바마다 하나다. */
-const statusLineOf = async (s, box) => {
-  for (let index = 0; ; index += 1) {
-    const rect = await s.rect("core.sidebar.status", index);
-    if (rect.x + rect.width / 2 > box.x && rect.x + rect.width / 2 < box.x + box.width) return rect;
+/** 이름의 모든 요소 사각형. 없는 index 에서 멈춘다. */
+const rects = async (s, name) => {
+  const out = [];
+  for (;;) {
+    try {
+      out.push(await s.rect(name, out.length));
+    } catch {
+      return out;
+    }
   }
 };
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: a sidebar starts with its sections, draws 26-point headers, and ends in a 26-point status line`, async (t) => {
+  test(`${app.name}: a sidebar starts with its sections and lines up its header and status rules with the neighbouring cards`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     s.cleanup(() => s.run("core.settings.reset", { key: "rail" }));
-    const check = async (sidebar) => {
+    const locate = async (sidebar) => {
       const sidebars = await s.until("core.sidebars", (value) => value.find((item) => item.sidebar === sidebar)?.sections.every((item) => item.mounted),
         `sidebar ${sidebar} did not mount its sections`);
       const at = sidebars.findIndex((item) => item.sidebar === sidebar);
@@ -284,23 +319,33 @@ for (const app of Object.values(APPS)) {
       assert.ok(near(first.y, box.y), `${sidebar}: the first section starts ${first.y - box.y} pt below the sidebar top`);
       const header = await s.rect("core.sidebar.section.header", sidebars.slice(0, at).filter((item) => item.layout === "list")
         .reduce((sum, item) => sum + item.sections.length, 0));
-      assert.ok(near(header.height, 26), `${sidebar}: the section header is ${header.height} pt high`);
-      const line = await statusLineOf(s, box);
-      assert.ok(near(line.height, 26), `${sidebar}: the status line is ${line.height} pt high`);
+      const inside = (rect) => rect.x + rect.width / 2 > box.x && rect.x + rect.width / 2 < box.x + box.width;
+      const line = (await rects(s, "core.sidebar.status")).find(inside);
+      assert.ok(line, `${sidebar}: no status line`);
       assert.ok(line.y >= box.y + box.height - 0.5, `${sidebar}: the status line is not below the sections`);
       assert.ok(box.height > 100, `${sidebar}: the sections have only ${box.height} pt`);
-      return { box, line };
+      return { box, header, line };
     };
-    // 좌측 사이드바는 머리 줄 없이 카드 테두리 바로 안에서 시작한다.
-    const grid = await s.get("core.grid");
-    const left = grid.cards.find((card) => card.id === "left");
-    const { box, line } = await check("left");
-    assert.ok(near(box.y, grid.plane.y + left.y + 1), `left: the sidebar starts ${box.y - (grid.plane.y + left.y + 1)} pt below the card border`);
-    const bottom = grid.plane.y + left.y + left.h - 1;
-    assert.ok(near(line.y + line.height, bottom), `left: the status line ends ${bottom - line.y - line.height} pt above the card border`);
-    await check("rail-shell");
+    // 이웃 카드: 판 맨 위 카드의 머리와 판 맨 아래 카드의 발.
+    const cardHeaders = await rects(s, "core.card.header");
+    const top = cardHeaders.reduce((a, b) => (b.y < a.y ? b : a));
+    const cardFooters = await rects(s, "core.card.status");
+    const bottom = cardFooters.reduce((a, b) => (b.y + b.height > a.y + a.height ? b : a));
+    for (const sidebar of ["left", "right", "rail-shell"]) {
+      const { header, line } = await locate(sidebar);
+      assert.ok(near(header.y + header.height, top.y + top.height),
+        `${sidebar}: the first header rule is at ${header.y + header.height}, the card header rule at ${top.y + top.height}`);
+      assert.ok(near(line.y, bottom.y), `${sidebar}: the status line rule is at ${line.y}, the card footer rule at ${bottom.y}`);
+    }
+    // 머리의 아래 선은 머리 배경과 디자인만큼 구별된다(디자인: #20232d 머리 위 #2a2d3a 선).
+    const ratio = await headerRuleContrast(s, (await locate("left")).header);
+    assert.ok(ratio >= DESIGN_RULE_CONTRAST, `the header rule contrast ${ratio.toFixed(3)} is below the design's ${DESIGN_RULE_CONTRAST.toFixed(3)}`);
+    // inset 사이드바는 카드 머리 줄을 함께 쓰므로 첫 섹션이 그 머리 바로 아래에서 시작한다.
     await s.run("core.settings.change", { key: "rail", value: "inset", scope: "common" });
-    await check("shell");
+    await s.until("core.sidebars", (value) => value.some((item) => item.sidebar === "shell"), "the inset sidebar was not drawn");
+    const shellHeader = (await rects(s, "core.card.header")).reduce((a, b) => (b.y < a.y ? b : a));
+    const { box } = await locate("shell");
+    assert.ok(near(box.y, shellHeader.y + shellHeader.height), `shell: the inset sections start at ${box.y}, the card header ends at ${shellHeader.y + shellHeader.height}`);
   });
 }
 

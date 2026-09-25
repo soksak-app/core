@@ -2400,6 +2400,16 @@
         "many": true
       },
       {
+        "name": "core.card.header",
+        "description": "The headers of cards with tabs in document order.",
+        "many": true
+      },
+      {
+        "name": "core.card.status",
+        "description": "The footers of cards with tabs in document order.",
+        "many": true
+      },
+      {
         "name": "core.sidebar.status",
         "description": "The 26-point status lines that end the left, right, rail, and inset sidebars in document order.",
         "many": true
