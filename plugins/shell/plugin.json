@@ -11,7 +11,7 @@
     }
   },
   "preview": {
-    "ink": "--surface-fg"
+    "ink": "--fg"
   },
   "sections": [
     {

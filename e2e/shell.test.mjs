@@ -143,3 +143,38 @@ async function freshSurface(s, expected) {
   assert.ok(current, `shell ${expected} was not visible after selection`);
   return current.surface;
 }
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: the shell surface is drawn in the card color of every theme and mode`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    const shell = await fresh(s);
+    s.cleanup(() => s.run("core.settings.theme", { name: "midnight", mode: "dark", scope: "common" }));
+    const { THEMES } = await import("../packages/workbench/settings.js");
+    const { frames, pixel, readFrame } = await import("./frame.mjs");
+    const { rmSync: remove } = await import("node:fs");
+    for (const { name } of THEMES) {
+      for (const mode of ["dark", "light"]) {
+        await s.run("core.settings.theme", { name, mode, scope: "common" });
+        await s.until("core.surface.document", (value) => value?.themed, "the shell page did not apply the theme", { surface: shell.surface });
+        // 출력 칸의 빈 오른쪽 아래를 잰다. 셸 표면의 배경은 카드 색(--card)이다.
+        const out = await s.rect("shell.output", undefined, shell.surface);
+        const { displayed } = await s.presented();
+        await s.request("diagnostics.capture.start", {});
+        const result = await s.request("diagnostics.capture.stop", { after: displayed });
+        let sample;
+        try {
+          const frame = readFrame(frames(result.frames).at(-1));
+          sample = pixel(frame, Math.round((out.document.x + out.x + out.width - 8) * frame.scale),
+            Math.round((out.document.y + out.y + out.height - 8) * frame.scale));
+        } finally {
+          remove(result.frames, { recursive: true, force: true });
+        }
+        const card = THEMES.find((item) => item.name === name)[mode].card;
+        const expected = [1, 3, 5].map((at) => parseInt(card.slice(at, at + 2), 16));
+        assert.ok(sample.every((value, index) => Math.abs(value - expected[index]) <= 2),
+          `${name} ${mode}: the shell surface pixel is rgb(${sample}), the card color is ${card}`);
+      }
+    }
+  });
+}

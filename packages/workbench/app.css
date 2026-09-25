@@ -12,7 +12,6 @@
   --bg:#101117;--card:#191b24;--fg:#ececf5;--muted:#8f92a4;
   --edge:#2b2e3d;--rule:#22242f;--rail:#7279ff;--focus:#ffb36b;
   --no:#ff7c7c;
-  --surface:#0d1a14;--surface-fg:#7fe3b0;
 
   /* 형태. 모드와 무관하다. */
   --r:10px;--half-gap:6px;--bw:1px;
@@ -329,7 +328,7 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 /* ── 표면 ─────────────────────────────────────────────────────────────────
    모사한 네이티브 표면. 컴포지터가 applied 프레임에 배치한다. 카드가 클립하므로
    모서리를 따로 두지 않는다.                                                  */
-.surface{position:absolute;z-index:50;background:var(--surface);color:var(--surface-fg);
+.surface{position:absolute;z-index:50;background:var(--card);color:var(--fg);
   font-size:var(--text-small);padding:6px 9px;overflow:hidden;pointer-events:none}
 .surface[data-hidden=true]{display:none}
 /* 포커스를 잃은 표면. 애플리케이션은 뷰의 알파를 같은 값으로 낮춘다. */
@@ -338,7 +337,7 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 
 /* `.standin` 은 표면과 동일하게 보여야 하므로 `.surface` 와 같은 값을 사용한다.
    값이 다르면 표면을 숨기는 시점에 화면이 바뀐다. */
-.standin{position:absolute;inset:0;background:var(--surface);color:var(--surface-fg);
+.standin{position:absolute;inset:0;background:var(--card);color:var(--fg);
   font-size:var(--text-small);padding:6px 9px;overflow:hidden}
 .standin b{color:var(--fg)}
 /* 드롭 구획은 DOM 이므로 표면이 숨겨진 동안에만 보인다. z 를 표면보다 낮게 둔다.

@@ -29,7 +29,7 @@ body[data-screen=library] #chromeActs .act[title="우측 사이드바 위치"]{d
 .library-project h2{margin:0 0 var(--space-1);font-size:var(--text-control);font-weight:400;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .library-project__path{font-size:var(--text-small);color:var(--muted);margin:0 0 var(--space-2);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .library-project__meta{display:flex;flex-wrap:wrap;gap:var(--space-2);color:var(--muted);font-size:var(--text-caption);margin:0}
-.library-open{color:var(--surface-fg)}
+.library-open{color:var(--rail)}
 .library-project__pin{position:absolute;right:var(--space-2);top:var(--space-2);background:var(--card)}
 .library-project__pin[aria-pressed=true]{color:var(--focus)}
 .library-add{min-height:220px;border:var(--bw) dashed var(--edge);border-radius:var(--r);background:transparent;color:var(--muted);padding:var(--space-3)}
