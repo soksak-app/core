@@ -63,14 +63,14 @@ func TestListReturnsDirectoriesFirstThenFilesByName(t *testing.T) {
 		t.Fatalf("events = %+v", events)
 	}
 	got, _ := json.Marshal(events[0].Body)
-	want := `{"id":"1","entries":[{"name":"b-dir","directory":true},{"name":"src","directory":true},{"name":"a.txt","directory":false},{"name":"z.txt","directory":false}]}`
+	want := `{"id":"1","entries":[{"directory":true,"name":"b-dir"},{"directory":true,"name":"src"},{"directory":false,"name":"a.txt"},{"directory":false,"name":"z.txt"}]}`
 	if string(got) != want {
 		t.Fatalf("root listing = %s, want %s", got, want)
 	}
 	if events[0].Surface != "state:files:p1" {
 		t.Fatalf("surface = %q", events[0].Surface)
 	}
-	if got, _ := json.Marshal(events[1].Body); string(got) != `{"id":"2","entries":[{"name":"main.go","directory":false}]}` {
+	if got, _ := json.Marshal(events[1].Body); string(got) != `{"id":"2","entries":[{"directory":false,"name":"main.go"}]}` {
 		t.Fatalf("src listing = %s", got)
 	}
 }

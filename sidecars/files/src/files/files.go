@@ -4,8 +4,10 @@
 //
 //	입력  {"surface": id, "root": 경로, "body": {"operation": "list", "id": 요청, "path": 상대 경로}}
 //	      {"surface": id, "root": 경로, "body": {"operation": "watch", "id": 요청, "paths": [상대 경로]}}
+//	      {"surface": id, "root": 경로, "body": {"operation": "git", "id": 요청}}
 //	      {"surface": id, "closed": true}
 //	출력  {"surface": id, "body": {"id": 요청, "entries": [{"name": 이름, "directory": 참거짓}]}}
+//	      {"surface": id, "body": {"id": 요청, "entries": [{"path": 상대 경로, "status": 상태}]}}
 //	      {"surface": id, "body": {"id": 요청}}
 //	      {"surface": id, "body": {"changed": 상대 경로}}
 //	      {"surface": id, "body": {"id": 요청, "error": 메시지}}
@@ -53,8 +55,8 @@ type Entry struct {
 // EventBody 는 요청의 답(목록, 감시 확인, 실패)이나 감시한 디렉터리의 변경 하나를 담는다.
 type EventBody struct {
 	ID string `json:"id,omitempty"`
-	// Entries 는 목록의 답에만 있다. 빈 디렉터리는 빈 배열이다.
-	Entries *[]Entry `json:"entries,omitempty"`
+	// Entries 는 목록([]Entry)과 git 상태([]GitEntry)의 답에만 있다. 항목이 없으면 빈 배열이다.
+	Entries any `json:"entries,omitempty"`
 	// Changed 는 항목이 바뀐 감시 디렉터리의 상대 경로다. 프로젝트 폴더는 빈 문자열이다.
 	Changed *string `json:"changed,omitempty"`
 	Error   string  `json:"error,omitempty"`
@@ -123,7 +125,14 @@ func handle(watches *watches, request Request, body *EventBody) error {
 		if err != nil {
 			return err
 		}
-		body.Entries = &entries
+		body.Entries = entries
+		return nil
+	case "git":
+		entries, err := GitStatus(request.Root)
+		if err != nil {
+			return err
+		}
+		body.Entries = entries
 		return nil
 	case "watch":
 		return watches.set(request.Surface, request.Root, request.Body.Paths)
