@@ -1,11 +1,11 @@
-// 검사 창 자리: fresh 가 두 검사 앱을 정해진 자리에 두고, 가려진 창은 가림 상태를 감시자에게 알린다.
+// 검사 창 자리와 가림 보고: fresh 가 두 검사 앱을 정해진 자리에 두고, 가려진 창은 가림 상태를 감시자에게 알린다.
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { APPS, fresh, open } from "./app.mjs";
+import { APPS, fresh, keepCommonSettings, open } from "./app.mjs";
 
 test("fresh places the two check windows at their own frames", async (t) => {
   const sessions = [];
@@ -15,48 +15,54 @@ test("fresh places the two check windows at their own frames", async (t) => {
     sessions.push(s);
   }
   if (sessions.length < 2) return t.skip("only one check application is selected");
-  // 두 창을 같은 자리에 겹친 뒤 fresh 가 각자의 자리로 되돌리는지 본다.
+  // 두 창을 같은 자리에 겹친 뒤 fresh 가 각자의 자리로 되돌리는지 본다. 자리 정하기가 정하는 것은 창의 자리뿐이다.
+  // 다른 애플리케이션의 창이 검사 창을 가리는지는 자리와 무관하므로 여기서 재지 않는다.
   const { frame } = await sessions[0].get("host.window");
   await sessions[1].run("host.window.move", { x: frame.x, y: frame.y });
   await sessions[1].until("host.window", (w) => w.frame.x === frame.x && w.frame.y === frame.y, "the second window did not move onto the first");
   for (const s of sessions) await fresh(s);
-  const frames = [];
-  for (const s of sessions) {
-    const w = await s.until("host.window", (value) => value.occluded === false,
-      `${s.app.name}'s window is completely covered after fresh`);
-    frames.push(w.frame);
-  }
-  assert.notEqual(frames[0].x, frames[1].x, `both check windows stand at x ${frames[0].x}`);
+  const [screen] = await sessions[0].get("host.screens");
+  const area = screen.visible;
+  const [left, right] = await Promise.all(sessions.map(async (s) => (await s.get("host.window")).frame));
+  assert.deepEqual([left.x, left.y], [area.x, area.y], `${sessions[0].app.name} is not at the top left of the visible area`);
+  assert.deepEqual([right.x + right.width, right.y], [area.x + area.width, area.y],
+    `${sessions[1].app.name} is not at the top right of the visible area`);
+  // 두 창은 서로의 자리를 모두 덮지 않는다.
+  const contains = (a, b) => a.x <= b.x && a.y <= b.y && a.x + a.width >= b.x + b.width && a.y + a.height >= b.y + b.height;
+  assert.ok(!contains(left, right) && !contains(right, left), `one check window covers the other: ${JSON.stringify([left, right])}`);
 });
 
-// 창 서버의 앞뒤 순서대로 나열한 일반 층 창의 소유 프로세스 번호.
-function windowOrder() {
-  const script = `ObjC.import("CoreGraphics");
-const list = ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo(1 | 16, 0)));
-JSON.stringify(list.filter((item) => item.kCGWindowLayer === 0).map((item) => item.kCGWindowOwnerPID));`;
-  return JSON.parse(execFileSync("osascript", ["-l", "JavaScript", "-e", script], { encoding: "utf8" }));
-}
-
-test("a check window that another window covers reports occluded to its watchers", async (t) => {
-  const sessions = [];
-  for (const app of Object.values(APPS)) {
+// 앞뒤 순서는 활성화 없이 바꿀 수 없으므로, 각 앱의 창을 그 앱이 새로 연 프로젝트 창으로 덮는다. 새 창은 그 앱의
+// 앞 창이 된다. 검사가 활성화한 애플리케이션은 하네스가 검사가 끝날 때 앞서 활성이던 것으로 되돌린다.
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: a check window that another window covers reports occluded to its watchers`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
-    sessions.push(s);
-  }
-  if (sessions.length < 2) return t.skip("only one check application is selected");
-  for (const s of sessions) await fresh(s);
-  // 창은 활성화하지 않으므로 앞뒤 순서를 바꿀 수 없다. 앞 창을 뒤 창보다 크게 해 뒤 창 전체와 그 그림자를 덮는다.
-  const pid = (s) => JSON.parse(readFileSync(join(s.app.configDir, "endpoint.json"), "utf8")).pid;
-  const order = windowOrder();
-  const [front, rear] = [...sessions].sort((a, b) => order.indexOf(pid(a)) - order.indexOf(pid(b)));
-  const covered = (await rear.get("host.window")).frame;
-  await front.run("host.window.resize", { width: covered.width + 200, height: covered.height + 100 });
-  await front.run("host.window.move", { x: covered.x - 100, y: covered.y });
-  await rear.until("host.window", (w) => w.occluded === true,
-    `${rear.app.name} was not reported occluded under ${front.app.name}`, { timeout: 2000 });
-  // 가린 창을 되돌리면 다시 보인다.
-  for (const s of sessions) await fresh(s);
-  await rear.until("host.window", (w) => w.occluded === false,
-    `${rear.app.name} was still reported occluded after ${front.app.name} moved away`, { timeout: 2000 });
-});
+    await fresh(s);
+    await keepCommonSettings(s);
+    await s.run("core.settings.set", { patch: { projectOpening: "windows" }, scope: "common" });
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "soksak-cover-")));
+    s.cleanup(() => rmSync(root, { recursive: true, force: true }));
+    s.cleanup(async () => {
+      for (const window of await s.get("host.windows")) {
+        if (window.window !== s.window) await s.on(window.window).close();
+      }
+      await s.windows(1, "the covering project window did not close");
+      for (const project of await s.get("core.projects")) {
+        if (project.root === root) await s.run("core.project.close", { id: project.id });
+      }
+    });
+    const covered = (await s.get("host.window")).frame;
+    await s.run("core.project.open", { root, color: "#7db4ff" });
+    const windows = await s.windows(2, "the covering project window did not open");
+    const cover = s.on(windows.find((w) => w.window !== s.window).window);
+    await cover.run("host.window.resize", { width: covered.width + 200, height: covered.height + 100 });
+    await cover.run("host.window.move", { x: covered.x - 100, y: covered.y });
+    await s.until("host.window", (w) => w.occluded === true, `${app.name} was not reported occluded under its project window`,
+      { timeout: 2000 });
+    await cover.close();
+    await s.windows(1, "the covering project window did not close");
+    await s.until("host.window", (w) => w.occluded === false,
+      `${app.name} was still reported occluded after its project window closed`, { timeout: 2000 });
+  });
+}

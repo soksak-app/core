@@ -7,7 +7,7 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import test from "node:test";
 
-import { APPS, fresh, open } from "./app.mjs";
+import { APPS, coveredBy, fresh, open } from "./app.mjs";
 import { distance, readPng } from "./png.mjs";
 
 /** 요소의 가운데를 네이티브 입력으로 누른다. */
@@ -255,7 +255,7 @@ for (const app of Object.values(APPS)) {
     const rowsDrawn = async () => {
       await s.presented();
       const window = await s.get("host.window");
-      if (window.occluded) throw new Error(`${app.name}'s window is completely covered by other windows; nothing was measured`);
+      if (window.occluded) throw new Error(`${app.name}'s window is completely covered by ${coveredBy(s, window)}; nothing was measured`);
       const { path } = await s.request("diagnostics.capture.still", {});
       try {
         const image = readPng(path);

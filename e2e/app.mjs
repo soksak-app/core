@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { connect, EndpointError } from "@soksak/client";
-import { activateApp, frontmostApp } from "./frontmost.mjs";
+import { activateApp, coveringWindows, frontmostApp } from "./frontmost.mjs";
 import { readPasteboard, writePasteboard } from "./pasteboard.mjs";
 
 // 검사하는 애플리케이션 실행 파일. 애플리케이션은 번들에서 실행된다(docs/spec/hosts.md). 작업 디렉터리와
@@ -561,13 +561,20 @@ const GAP = 100;
 
 const paced = ({ took, asked }) => took <= asked * MARGIN && took >= asked / MARGIN;
 
+/** 창을 덮은 다른 창의 소유자 이름. 가려져 재지 않는 까닭으로 적는다. */
+export function coveredBy(s, window) {
+  const covering = coveringWindows(s.client.endpoint.pid, window.frame);
+  return covering.length ? covering.map(({ owner, frame }) => `${owner} at ${JSON.stringify(frame)}`).join(", ")
+    : "windows that together cover it";
+}
+
 async function dragOnce(t, s, plan, capture) {
   // 활성 창은 배치가 바뀔 때 AppKit 의 커서 갱신을 받고, 창은 실제 포인터 위치를 페이지에 이동으로 넘긴다.
   // 버튼 없이 합성한 진단 끌기는 그 이동과 섞이므로 비활성 애플리케이션에서만 잰다.
   const window = await s.get("host.window");
   // 다른 창에 완전히 가려진 창은 WebKit 이 그리기를 늦추므로, 그 상태의 지연과 녹화는 사람이 보는 화면이 아니다.
   if (window.occluded) {
-    throw new Error(`${s.app.name}'s window is completely covered by other windows, so WebKit renders it less often. ` +
+    throw new Error(`${s.app.name}'s window is completely covered by ${coveredBy(s, window)}, so WebKit renders it less often. ` +
       "Nothing was measured: uncover the window, without activating the application, and run the check again.");
   }
   if (window.active) {

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-86-1, V5-89: the occlusion notification check covers each app with its own project window, the placement check asserts only the frames it sets, and a check that refuses a covered window names the covering windows.
 - V5-84: a terminal drag selection covers a cell once the pointer passes the cell's midpoint, as in macOS Terminal; the sidecar maps selection points to the nearest cell edge.
 - V5-85: `core.surface.document` reports `body` as the surface content size, larger than `viewport` when the content overflows.
 - V5-86: both hosts notify `host.window` watchers when the window's occlusion changes; the spec states that windows at the same frame do not cover each other.
