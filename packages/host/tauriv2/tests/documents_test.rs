@@ -1,6 +1,6 @@
 //! 문서 영역 요청의 소유 표면 검사와 창의 문서 영역 목록을 검사한다.
 
-use soksak_host_tauriv2::documents::{check, Documents, Key, Request};
+use soksak_host_tauriv2::documents::{check, go_action, Documents, Key, Request};
 
 fn request(surface: &str, document: &str) -> Request {
     serde_json::from_value(serde_json::json!({"surface": surface, "document": document})).unwrap()
@@ -108,4 +108,28 @@ fn document_zoom_must_be_a_finite_positive_factor() {
     let request: Request =
         serde_json::from_str(r#"{"surface":"tab-1","document":"page","zoom":1.25}"#).unwrap();
     assert_eq!(request.zoom_factor(), Ok(1.25));
+}
+
+// contract: documents.request.entry-requires-offset
+#[test]
+fn document_entry_requires_a_non_zero_offset() {
+    for body in [
+        r#"{"surface":"s","document":"d","action":"entry"}"#,
+        r#"{"surface":"s","document":"d","action":"entry","offset":0}"#,
+        r#"{"surface":"s","document":"d","action":"back","offset":1}"#,
+        r#"{"surface":"s","document":"d","action":"home"}"#,
+    ] {
+        let request: Request = serde_json::from_str(body).unwrap();
+        assert!(
+            go_action(&request).is_err(),
+            "{body}: the request was accepted"
+        );
+    }
+    let request: Request =
+        serde_json::from_str(r#"{"surface":"s","document":"d","action":"entry","offset":-2}"#)
+            .unwrap();
+    assert_eq!(go_action(&request), Ok((4, -2)));
+    let request: Request =
+        serde_json::from_str(r#"{"surface":"s","document":"d","action":"stop"}"#).unwrap();
+    assert_eq!(go_action(&request), Ok((3, 0)));
 }

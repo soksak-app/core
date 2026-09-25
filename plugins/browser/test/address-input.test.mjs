@@ -19,7 +19,7 @@ async function setup(t) {
   const navigations = [];
   const region = {
     onState(fn) { states.add(fn); return () => states.delete(fn); },
-    async load(url) { navigations.push(url); for (const fn of states) fn({ url, title: url }); },
+    async load(url) { navigations.push(url); for (const fn of states) fn({ url, title: url, history: { entries: [], index: -1 } }); },
     async back() {}, async forward() {}, async reload() {}, async stop() {}, async zoom() {},
   };
   const controller = await mount(root, {
@@ -92,9 +92,9 @@ test("a navigation that did not come from typing shows its address in the focuse
   assert.equal(address.value, "https://example.test/other");
   // 입력 중인 글자는 이동이 아닌 문서 상태 변화로 바뀌지 않는다.
   type("https://example.test/oth");
-  for (const fn of states) fn({ url: "https://example.test/other", title: "scrolled" });
+  for (const fn of states) fn({ url: "https://example.test/other", title: "scrolled", history: { entries: [], index: -1 } });
   assert.equal(address.value, "https://example.test/oth");
   await commands.get("browser.back")({});
-  for (const fn of states) fn({ url: "https://example.test/typed", title: "back" });
+  for (const fn of states) fn({ url: "https://example.test/typed", title: "back", history: { entries: [], index: -1 } });
   assert.equal(address.value, "https://example.test/typed");
 });

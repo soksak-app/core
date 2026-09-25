@@ -157,8 +157,8 @@ impl Platform for Windows {
     fn zoom_document(&self, document: Handle, zoom: f64) -> Result<bool, String> {
         unsupported::zoom_document(document, zoom)
     }
-    fn go_document(&self, document: Handle, action: i32) -> Result<bool, String> {
-        unsupported::go_document(document, action)
+    fn go_document(&self, document: Handle, action: i32, offset: i32) -> Result<bool, String> {
+        unsupported::go_document(document, action, offset)
     }
     fn place_document(
         &self,

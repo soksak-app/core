@@ -47,8 +47,13 @@ export async function mount(root, context) {
   address.addEventListener("focus", notifyAddress);
   address.addEventListener("blur", left);
   let current = { url: restored ?? "", title: "", loading: false, progress: 0, canGoBack: false, canGoForward: false, error: null, scroll: { x: 0, y: 0 } };
-  const show = (state) => {
+  // 세션 기록은 문서 영역 상태의 history 다(docs/spec/native-surfaces.md#document-regions).
+  let history = { entries: [], index: -1 };
+  const historyListeners = new Set();
+  const show = ({ history: sessionHistory, ...state }) => {
     current = state;
+    history = sessionHistory;
+    for (const listener of historyListeners) listener(history);
     showEmpty(state.url);
     if (state.url !== "") storage.setItem(storageKey, state.url);
     if (!editing) address.value = state.url;
@@ -67,6 +72,18 @@ export async function mount(root, context) {
     fn(current);
     return () => locationListeners.delete(fn);
   });
+  context.exposure.status("browser.history", () => history, (fn) => {
+    historyListeners.add(fn);
+    fn(history);
+    return () => historyListeners.delete(fn);
+  });
+  context.exposure.command("browser.history.go", navigated(({ index }) => {
+    if (!Number.isInteger(index) || index < 0 || index >= history.entries.length) {
+      throw new Error(`history entry ${index} is outside the session history of ${history.entries.length} entries`);
+    }
+    if (index === history.index) return false;
+    return region.entry(index - history.index);
+  }));
   context.exposure.status("browser.address.text", addressText, (fn) => {
     addressListeners.add(fn);
     fn(addressText());
@@ -104,6 +121,7 @@ export async function mount(root, context) {
     stopState();
     stopTextSize();
     locationListeners.clear();
+    historyListeners.clear();
     await composition.dispose();
     await context.exposure.dispose();
     root.replaceChildren();

@@ -25,8 +25,9 @@ void sp_document_set_event(void *document, sp_document_event event, void *contex
 // http 또는 https 주소를 연다. 그 밖의 주소는 거부하고 false 를 반환한다.
 bool sp_document_load(void *document, const char *url);
 
-// action: 0 뒤로, 1 앞으로, 2 다시 읽기, 3 멈춤.
-bool sp_document_go(void *document, int action);
+// action: 0 뒤로, 1 앞으로, 2 다시 읽기, 3 멈춤, 4 현재 항목에서 offset 만큼 떨어진 세션 기록 항목.
+// offset 은 4 에서만 쓰며 0 이거나 기록 밖이면 false 를 반환한다.
+bool sp_document_go(void *document, int action, int offset);
 
 // 표면 뷰포트의 CSS 픽셀 여백(왼쪽, 위, 오른쪽, 아래)으로 영역을 정한다. 표면 크기가 바뀌면
 // 여백을 유지한다.

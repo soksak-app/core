@@ -171,7 +171,7 @@ pub fn zoom_document(_document: Handle, _zoom: f64) -> Result<bool, String> {
     missing("document zoom")
 }
 
-pub fn go_document(_document: Handle, _action: i32) -> Result<bool, String> {
+pub fn go_document(_document: Handle, _action: i32, _offset: i32) -> Result<bool, String> {
     missing("document history")
 }
 

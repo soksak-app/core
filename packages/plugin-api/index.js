@@ -866,6 +866,28 @@ export function exposureEntries(declared) {
   return {
     declared,
 
+    /**
+     * 이 문서에 등록된 status 하나를 문서 안에서 따라간다. fn(value) 는 현재 값과 그 뒤의 바뀐 값마다
+     * 호출된다. 등록되지 않은 이름이면 예외를 던진다. 따라가기를 멈추는 함수를 반환한다.
+     */
+    follow(name, fn) {
+      const entry = status(name);
+      let active = true;
+      let text;
+      const deliver = (value) => {
+        const next = JSON.stringify(value ?? null);
+        if (!active || next === text) return;
+        text = next;
+        fn(value ?? null);
+      };
+      const stopper = entry.subscribe(deliver);
+      Promise.resolve(entry.read()).then(deliver);
+      return () => {
+        active = false;
+        if (typeof stopper === "function") stopper();
+      };
+    },
+
     /** 이름이 이 문서에 등록되어 있는지. dom 은 연결된 요소가 있을 때 등록된 것이다. */
     registered(kind, name) {
       return kind === "dom" ? elements(name).length > 0 : tables[kind].has(name);

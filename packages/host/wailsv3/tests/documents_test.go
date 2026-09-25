@@ -120,3 +120,26 @@ func TestDocumentZoomMustBeAFinitePositiveFactor(t *testing.T) {
 		t.Fatalf("zoom %v, %v", zoom, err)
 	}
 }
+
+// contract: documents.request.entry-requires-offset
+func TestDocumentEntryRequiresANonZeroOffset(t *testing.T) {
+	for _, body := range []string{`{"action":"entry"}`, `{"action":"entry","offset":0}`, `{"action":"back","offset":1}`, `{"action":"home"}`} {
+		var req host.DocumentRequest
+		if err := json.Unmarshal([]byte(body), &req); err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := host.DocumentGoAction(req); err == nil {
+			t.Fatalf("%s: the request was accepted", body)
+		}
+	}
+	for body, want := range map[string][2]int{`{"action":"entry","offset":-2}`: {4, -2}, `{"action":"stop"}`: {3, 0}} {
+		var req host.DocumentRequest
+		if err := json.Unmarshal([]byte(body), &req); err != nil {
+			t.Fatal(err)
+		}
+		action, offset, err := host.DocumentGoAction(req)
+		if err != nil || action != want[0] || offset != want[1] {
+			t.Fatalf("%s: %d %d %v", body, action, offset, err)
+		}
+	}
+}

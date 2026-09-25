@@ -151,7 +151,7 @@ export const page = (() => {
       attach: (document) => invoke("document_attach", { request: { surface, document } }),
       load: (document, url) => invoke("document_load", { request: { surface, document, url } }),
       zoom: (document, zoom) => invoke("document_zoom", { request: { surface, document, zoom } }),
-      go: (document, action) => invoke("document_go", { request: { surface, document, action } }),
+      go: (document, action, offset) => invoke("document_go", { request: offset === undefined ? { surface, document, action } : { surface, document, action, offset } }),
       detach: (document) => invoke("document_detach", { request: { surface, document } }),
       onState: (fn) => listen("document-state", (e) => {
         if (e.payload.surface === surface) fn(e.payload.document, e.payload.state);

@@ -7,6 +7,10 @@ import { JSDOM } from "jsdom";
 const dom = new JSDOM("<body></body>", { url: "https://example.test/" });
 globalThis.window = dom.window;
 globalThis.document = dom.window.document;
+// 페이지 오류 보고를 기록한다.
+const reported = [];
+globalThis.ErrorEvent = dom.window.ErrorEvent;
+globalThis.dispatchEvent = (event) => { reported.push(event.message); return true; };
 
 const { registry } = await import("../exposure.js");
 const { audit } = await import("../commands.js");
@@ -31,6 +35,19 @@ const source = `export function mount(root, context) {
   return { dispose() { stop(); line.remove(); button.remove(); } };
 }`;
 registerSection({ id: "probe.view", name: "보기", module: `data:text/javascript,${encodeURIComponent(source)}` });
+// 코어 status 를 따라가고 코어 명령에 연결하는 섹션과 다른 플러그인의 이름을 쓰는 섹션.
+const coreSource = `export function mount(root, context) {
+  const line = document.createElement("p");
+  const button = document.createElement("button");
+  button.textContent = "select";
+  context.bind(button, "core.tab.select", { tab: "tab-a" });
+  const stop = context.status("core.drop", (value, source) => { line.textContent = source + ":" + value.mode; });
+  root.append(line, button);
+  return { dispose() { stop(); line.remove(); button.remove(); } };
+}`;
+registerSection({ id: "probe.core", name: "코어", module: `data:text/javascript,${encodeURIComponent(coreSource)}` });
+const otherSource = `export function mount(root, context) { context.status("other.cwd", () => {}); return { dispose() {} }; }`;
+registerSection({ id: "probe.other", name: "다른", module: `data:text/javascript,${encodeURIComponent(otherSource)}` });
 const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
 
 test("a section observes its plugin status, binds controls with the section control name, and reports its text", async () => {
@@ -50,4 +67,28 @@ test("a section observes its plugin status, binds controls with the section cont
   assert.equal(button.closest("[data-surface]")?.dataset.surface, "tab-a", "the section names the card's tab");
   assert.deepEqual(audit(container), [], "section controls are connected and named");
   clearSet(container);
+});
+
+test("a section follows a core status and binds a core command but not another plugin's names", async () => {
+  let theme = { mode: "light" };
+  const listeners = new Set();
+  registry.status("core.drop", () => theme, (fn) => { listeners.add(fn); return () => listeners.delete(fn); });
+  const container = document.createElement("div");
+  container.className = "set";
+  document.body.append(container);
+  drawSet(container, "rail-core", { id: "set-core", title: "세트", layout: "list", sections: ["probe.core", "probe.other"] },
+    { card: "rail-core", surface: "tab-a" });
+  await settle();
+  const state = sidebarsState().find((item) => item.sidebar === "rail-core");
+  assert.equal(state.sections[0].text, "core:lightselect", state.sections[0].error);
+  theme = { mode: "dark" };
+  for (const fn of listeners) fn(theme);
+  await settle();
+  assert.equal(sidebarsState().find((item) => item.sidebar === "rail-core").sections[0].text, "core:darkselect");
+  assert.equal(container.querySelector("[data-command='core.tab.select']").dataset.expose, "core.sidebar.section.control");
+  assert.match(state.sections[1].error ?? "", /cannot use other.cwd/);
+  clearSet(container);
+  assert.equal(listeners.size, 0, "clearing the set stops following the core status");
+  await settle();
+  assert.ok(reported.some((message) => /probe.other: .*cannot use other.cwd/.test(message)), JSON.stringify(reported));
 });

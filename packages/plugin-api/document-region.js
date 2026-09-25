@@ -127,6 +127,11 @@ export function attachRegion(port, element, name, view = element.ownerDocument.d
       if (!DOCUMENT_ACTIONS.includes(action)) return Promise.reject(new Error(`unknown document action ${action}`));
       return queue(() => port.go(name, action));
     },
+    /** 현재 항목에서 offset 만큼 떨어진 세션 기록 항목을 연다. offset 은 0 이 아닌 정수다. */
+    entry(offset) {
+      if (!Number.isInteger(offset) || offset === 0) return Promise.reject(new Error(`invalid history offset ${offset}`));
+      return queue(() => port.go(name, "entry", offset));
+    },
     back() { return this.go("back"); },
     forward() { return this.go("forward"); },
     reload() { return this.go("reload"); },

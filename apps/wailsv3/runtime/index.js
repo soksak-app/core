@@ -133,7 +133,7 @@ export const page = (() => {
       attach: (document) => call("DocumentAttach", { surface, document }),
       load: (document, url) => call("DocumentLoad", { surface, document, url }),
       zoom: (document, zoom) => call("DocumentZoom", { surface, document, zoom }),
-      go: (document, action) => call("DocumentGo", { surface, document, action }),
+      go: (document, action, offset) => call("DocumentGo", offset === undefined ? { surface, document, action } : { surface, document, action, offset }),
       detach: (document) => call("DocumentDetach", { surface, document }),
       onState: (fn) => listen("document-state", (sent) => {
         if (sent.surface === surface) fn(sent.document, sent.state);

@@ -124,6 +124,21 @@ static CGFloat documentSurfaceScale(NSView *surface) {
     CFRunLoopWakeUp(CFRunLoopGetMain());
 }
 
+// 세션 기록. 항목은 오래된 것부터이고 index 는 현재 항목의 위치다. 첫 로드 전에는 비어 있고 -1 이다.
+- (NSDictionary *)history {
+    WKBackForwardList *list = self.backForwardList;
+    NSMutableArray *entries = [NSMutableArray array];
+    NSInteger index = -1;
+    NSArray<WKBackForwardListItem *> *items = list.currentItem
+        ? [[list.backList arrayByAddingObject:list.currentItem] arrayByAddingObjectsFromArray:list.forwardList]
+        : @[];
+    for (WKBackForwardListItem *item in items) {
+        if (item == list.currentItem) index = (NSInteger)entries.count;
+        [entries addObject:@{ @"url": item.URL.absoluteString ?: @"", @"title": item.title ?: @"" }];
+    }
+    return @{ @"entries": entries, @"index": @(index) };
+}
+
 - (void)deliver {
     NSDictionary *state = @{
         @"url": self.URL.absoluteString ?: @"",
@@ -134,6 +149,7 @@ static CGFloat documentSurfaceScale(NSView *surface) {
         @"canGoForward": @(self.canGoForward),
         @"error": self.failure ?: (id)NSNull.null,
         @"scroll": @{ @"x": @(self.offset.x), @"y": @(self.offset.y) },
+        @"history": [self history],
     };
     NSData *data = [NSJSONSerialization dataWithJSONObject:state options:0 error:nil];
     if (!data) return;
@@ -357,7 +373,7 @@ bool sp_document_load(void *handle, const char *address) {
     return true;
 }
 
-bool sp_document_go(void *handle, int action) {
+bool sp_document_go(void *handle, int action, int offset) {
     NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
     SPDocumentView *view = (SPDocumentView *)handle;
     switch (action) {
@@ -365,6 +381,10 @@ bool sp_document_go(void *handle, int action) {
         case 1: return [view requestIfStarted:[view goForward]];
         case 2: return [view requestIfStarted:[view reload]];
         case 3: [view stopLoading]; return true;
+        case 4: {
+            WKBackForwardListItem *item = offset == 0 ? nil : [view.backForwardList itemAtIndex:offset];
+            return item ? [view requestIfStarted:[view goToBackForwardListItem:item]] : false;
+        }
         default: return false;
     }
 }

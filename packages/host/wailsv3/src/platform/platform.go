@@ -211,8 +211,9 @@ type Platform interface {
 	LoadDocument(document unsafe.Pointer, url string) bool
 	// ZoomDocument 는 문서의 페이지 확대를 정한다. 유한한 양수가 아니면 false 를 반환한다.
 	ZoomDocument(document unsafe.Pointer, zoom float64) bool
-	// GoDocument 는 뒤로 0, 앞으로 1, 다시 읽기 2, 멈춤 3 을 실행하고 실행했는지 반환한다.
-	GoDocument(document unsafe.Pointer, action int) bool
+	// GoDocument 는 뒤로 0, 앞으로 1, 다시 읽기 2, 멈춤 3, 현재에서 offset 만큼 떨어진 기록 항목 4 를
+	// 실행하고 실행했는지 반환한다.
+	GoDocument(document unsafe.Pointer, action, offset int) bool
 	// PlaceDocument 는 표면 뷰포트의 CSS 픽셀 여백으로 문서 영역을 정한다.
 	PlaceDocument(document unsafe.Pointer, left, top, right, bottom float64, visible bool)
 	// SetDocumentBackground 는 대화 상자가 열린 동안 문서를 흐리게 표시한다.

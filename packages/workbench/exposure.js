@@ -334,6 +334,9 @@ export function createRegistry({ call = null } = {}) {
       };
     },
 
+    /** 코어 status 하나를 이 문서 안에서 따라간다. fn(value, "core") 이며 해제 함수를 반환한다. */
+    observeCore: (name, fn) => core.follow(name, (value) => fn(value, "core")),
+
     observe(name, surface, fn) {
       const observer = { name, wanted: surface ?? null, fn, surface: undefined, watch: null, listener: null,
         pageEntry: null, stopPage: null };

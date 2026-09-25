@@ -451,3 +451,15 @@ test("a shadow-root composition scopes the marker and measures from its viewport
   assert.equal(plane.style.getPropertyValue("background-color"), "transparent");
   await composition.update(() => {});
 });
+
+test("the document region handle loads a session history entry by its offset", async () => {
+  const f = fixture();
+  const r = runtime();
+  const composition = await createSurfaceCompositionController(r.page, declaration, {
+    regions: { image: f.image, page: f.page },
+    overlays: { badge: f.badge, toolbar: f.toolbar },
+  }, f.window);
+  assert.equal(await composition.region("page").entry(-1), true);
+  assert.deepEqual(r.documentCalls.at(-1), ["go", "page", "entry", -1]);
+  await composition.dispose();
+});

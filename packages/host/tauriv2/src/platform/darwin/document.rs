@@ -17,7 +17,7 @@ extern "C" {
     fn sp_document_set_event(document: *mut c_void, event: Event, context: *mut c_void);
     fn sp_document_load(document: *mut c_void, url: *const c_char) -> bool;
     fn sp_document_zoom(document: *mut c_void, zoom: f64) -> bool;
-    fn sp_document_go(document: *mut c_void, action: i32) -> bool;
+    fn sp_document_go(document: *mut c_void, action: i32, offset: i32) -> bool;
     fn sp_document_place(
         document: *mut c_void,
         left: f64,
@@ -102,8 +102,8 @@ pub fn set_event(document: Handle, receive: Box<dyn Fn(String) + Send>) -> Resul
 }
 
 /// 뒤로 0, 앞으로 1, 다시 읽기 2, 멈춤 3 을 실행하고 실행했는지 반환한다.
-pub fn go(document: Handle, action: i32) -> bool {
-    unsafe { sp_document_go(document as *mut c_void, action) }
+pub fn go(document: Handle, action: i32, offset: i32) -> bool {
+    unsafe { sp_document_go(document as *mut c_void, action, offset) }
 }
 
 /// 표면 뷰포트의 CSS 픽셀 여백으로 문서 영역을 정한다.

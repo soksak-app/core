@@ -46,15 +46,18 @@ function unmount(entry) {
  */
 function sectionContext(entry, context) {
   const owner = entry.section.id.slice(0, entry.section.id.indexOf("."));
+  // 섹션은 자기 플러그인과 코어의 이름만 쓴다(docs/spec/plugins.md#sections).
   const own = (name) => {
-    if (!name.startsWith(`${owner}.`)) throw new Error(`section ${entry.section.id} cannot use ${name}`);
+    if (!name.startsWith(`${owner}.`) && !name.startsWith("core.")) {
+      throw new Error(`section ${entry.section.id} cannot use ${name}`);
+    }
   };
   return {
     card: context.card,
     surface: context.surface,
     status(name, fn) {
       own(name);
-      const stop = registry.observe(name, context.surface, fn);
+      const stop = name.startsWith("core.") ? registry.observeCore(name, fn) : registry.observe(name, context.surface, fn);
       entry.observing.push(stop);
       return () => {
         const at = entry.observing.indexOf(stop);

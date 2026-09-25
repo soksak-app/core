@@ -23,7 +23,7 @@ test("every sidecar the plugin uses is a declared package dependency", () => {
   }
 });
 
-test("every section module is published and draws a list that dispose removes", async () => {
+test("every section module is published and the DOM and network sections draw a list that dispose removes", async () => {
   // 섹션 모듈이 쓰는 문서 기능만 흉내 낸다.
   const element = () => ({ children: [], textContent: "", className: "", parent: null,
     append(...items) { for (const item of items) { item.parent = this; this.children.push(item); } },
@@ -32,6 +32,7 @@ test("every section module is published and draws a list that dispose removes", 
   for (const section of manifest.sections ?? []) {
     assert.ok(existsSync(new URL(`../${section.module}`, import.meta.url)), section.module);
     assert.ok(pkg.files.some((entry) => section.module === entry || section.module.startsWith(`${entry}/`)), section.module);
+    if (!["browser.dom", "browser.network"].includes(section.id)) continue;
     const root = element();
     const { dispose } = (await import(`../${section.module}`)).mount(root, { card: "c1", surface: "t1" });
     assert.deepEqual(root.children[0].children.map((item) => item.textContent),
@@ -40,4 +41,58 @@ test("every section module is published and draws a list that dispose removes", 
     assert.equal(root.children.length, 0, section.id);
   }
   delete globalThis.document;
+});
+
+/** 섹션 모듈이 쓰는 문서 기능만 흉내 낸다. */
+const node = (tag) => ({ tag, children: [], attributes: {}, className: "", title: "", parent: null, _text: "",
+  get textContent() { return this._text + this.children.map((item) => item.textContent).join(""); },
+  set textContent(value) { this._text = value; this.children = []; },
+  setAttribute(name, value) { this.attributes[name] = value; },
+  append(...items) { for (const item of items) { item.parent = this; this.children.push(item); } },
+  replaceChildren(...items) { this.children = []; this._text = ""; this.append(...items); },
+  remove() { this.parent.children.splice(this.parent.children.indexOf(this), 1); } });
+
+/** 섹션을 마운트하고, 관찰한 status 에 값을 보내는 함수와 연결한 요소를 돌려준다. */
+async function mountSection(id, surface = "t1") {
+  const section = manifest.sections.find((item) => item.id === id);
+  globalThis.document = { createElement: node };
+  const root = node("div");
+  const observers = new Map();
+  const bound = [];
+  const context = { card: "rail", surface,
+    status(name, fn) { observers.set(name, fn); return () => observers.delete(name); },
+    bind(el, name, params) { bound.push({ el, name, params }); return el; } };
+  const mounted = await (await import(`../${section.module}`)).mount(root, context);
+  const send = (name, value, source = "t1") => { bound.length = 0; observers.get(name)(value, source); };
+  return { root, observers, bound, send, dispose: () => { mounted.dispose(); delete globalThis.document; } };
+}
+
+test("the history section lists browser.history and loads an entry on press", async () => {
+  const s = await mountSection("browser.history");
+  s.send("browser.history", null, null);
+  assert.equal(s.root.textContent, "브라우저 표면 없음");
+  s.send("browser.history", { entries: [], index: -1 });
+  assert.equal(s.root.textContent, "기록 없음");
+  s.send("browser.history", { entries: [{ url: "https://a.test/one", title: "One" }, { url: "https://a.test/two", title: "" }], index: 1 });
+  assert.deepEqual(s.bound.map(({ el, name, params }) => [el.textContent, el.attributes["aria-current"] ?? null, name, params]),
+    [["One", null, "browser.history.go", { index: 0 }], ["https://a.test/two", "page", "browser.history.go", { index: 1 }]]);
+  s.dispose();
+  assert.equal(s.observers.size, 0);
+});
+
+test("the tabs section lists the browser tabs of the card that holds its surface and selects a tab on press", async () => {
+  const s = await mountSection("browser.tabs", "b1");
+  const grid = { cards: [
+    { id: "rail", tabs: [], active: null },
+    { id: "main", active: "b1", tabs: [
+      { id: "b1", plugin: "browser", title: "브라우저", label: "One" },
+      { id: "s1", plugin: "other", title: "다른", label: null },
+      { id: "b2", plugin: "browser", title: "브라우저", label: null }] }] };
+  s.send("core.grid", grid, "core");
+  assert.deepEqual(s.bound.map(({ el, name, params }) => [el.textContent, el.attributes["aria-current"] ?? null, name, params]),
+    [["One", "page", "core.tab.select", { tab: "b1" }], ["브라우저", null, "core.tab.select", { tab: "b2" }]]);
+  s.send("core.grid", { cards: [] }, "core");
+  assert.equal(s.root.textContent, "브라우저 탭 없음");
+  s.dispose();
+  assert.equal(s.observers.size, 0);
 });

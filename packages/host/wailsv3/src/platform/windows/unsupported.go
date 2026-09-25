@@ -155,7 +155,7 @@ func (implementation) ZoomDocument(unsafe.Pointer, float64) bool {
 	return false
 }
 
-func (implementation) GoDocument(unsafe.Pointer, int) bool {
+func (implementation) GoDocument(unsafe.Pointer, int, int) bool {
 	unreachable("document history")
 	return false
 }

@@ -1,5 +1,6 @@
 // 사이드바 검사: inset 사이드바의 자리, 접기, 폭 변경과, 세트의 섹션을 list 와 tabs 레이아웃으로 마운트하는지 검사한다.
 import assert from "node:assert/strict";
+import { createServer } from "node:http";
 import test from "node:test";
 
 import { APPS, fresh, open } from "./app.mjs";
@@ -190,5 +191,65 @@ for (const app of Object.values(APPS)) {
     assert.notEqual(ended?.exit, 0, `the interrupted run did not report a failure: ${JSON.stringify(ended)}`);
     await s.until("core.sidebars", (value) => text(value, "shell.jobs") === "실행 중인 작업 없음",
       "the jobs section did not show that no run is pending");
+  });
+}
+
+/** 경로 이름을 제목으로 갖는 문서를 주는 루프백 서버. 검사가 끝나면 닫는다. */
+async function serveTitles(t) {
+  const server = createServer((request, response) => {
+    const name = new URL(request.url, "http://127.0.0.1").pathname.slice(1);
+    response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
+    response.end(`<!doctype html><title>${name}</title><body>${name}`);
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => new Promise((resolve) => { server.closeAllConnections(); server.close(resolve); }));
+  return `http://127.0.0.1:${server.address().port}`;
+}
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: the browser sections list the session history and the card's browser tabs`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    s.cleanup(() => s.run("core.settings.reset", { key: "sets" }));
+    const base = await serveTitles(t);
+    const sidebar = "right";
+    const sections = ["browser.tabs", "browser.history"];
+    const sets = (await s.get("core.settings")).values.sets;
+    await s.run("core.settings.set", { patch: { sets: sets.map((set) => set.id === "set-browser" ? { ...set, sections, layout: "list" } : set) },
+      scope: "common" });
+    await s.run("core.card.focus", { card: "browser" });
+    const of = (sidebars) => sidebars.find((item) => item.sidebar === sidebar);
+    const text = (sidebars, id) => of(sidebars)?.sections.find((item) => item.id === id)?.text;
+    let sidebars = await s.until("core.sidebars", (value) => of(value)?.set === "set-browser"
+      && sections.every((id) => of(value).sections.find((item) => item.id === id)?.mounted),
+    "the right sidebar did not mount the browser sections");
+    const surface = of(sidebars).surface;
+    assert.ok(surface, "the browser sections received the browser tab");
+
+    // 히스토리: 연 두 문서가 항목이 되고, 첫 항목을 네이티브 클릭으로 누르면 그 문서를 연다.
+    for (const name of ["one", "two"]) {
+      await s.run("browser.navigate", { url: `${base}/${name}` }, surface);
+      await s.until("browser.location", (at) => at.url === `${base}/${name}` && !at.loading && at.title === name,
+        `the browser did not load ${name}`, { surface });
+    }
+    sidebars = await s.until("core.sidebars", (value) => text(value, "browser.history") === "onetwo",
+      "the history section did not list the two documents");
+    await press(s, "core.sidebar.section.control", controlIndex(sidebars, sidebar, "browser.history", 0));
+    await s.until("browser.location", (at) => at.url === `${base}/one` && !at.loading,
+      "a click on the first history entry did not load it", { surface });
+
+    // 탭: 카드의 브라우저 탭이 제목과 함께 보이고, 첫 탭을 누르면 그 탭이 활성 탭이 된다.
+    const { tab } = await s.run("core.card.add-tab", { card: "browser", plugin: "browser" });
+    await s.until("core.grid", (grid) => grid.cards.find((card) => card.id === "browser")?.active === tab,
+      "the added browser tab did not become active");
+    const tabs = (await s.get("core.grid")).cards.find((card) => card.id === "browser").tabs;
+    assert.deepEqual(tabs.map((item) => item.id), [surface, tab]);
+    const shown = tabs.map((item) => item.label ?? item.title).join("");
+    sidebars = await s.until("core.sidebars", (value) => text(value, "browser.tabs") === shown,
+      `the tabs section did not list the card's browser tabs with their titles: ${shown}`);
+    await press(s, "core.sidebar.section.control", controlIndex(sidebars, sidebar, "browser.tabs", 0));
+    await s.until("core.grid", (grid) => grid.cards.find((card) => card.id === "browser")?.active === surface,
+      "a click on the first tab did not select it");
   });
 }

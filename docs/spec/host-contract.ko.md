@@ -62,6 +62,7 @@ fn invalid_json_closes_connection() {
 | `documents.request.rejects-foreign-or-missing-caller` | 호출자 표면이 없거나 다른 표면에서 온 문서 요청은 "not surface"로 실패한다. | both |
 | `documents.request.rejects-invalid-names` | 빈 이름, 대문자, 하이픈으로 시작, 슬래시 포함, 65자 문서 이름을 거부한다. | both |
 | `documents.request.zoom-must-be-finite-positive` | 확대 값이 없거나 0 또는 음수인 문서 확대 요청은 거부하고, 유한한 양수는 배율이다. | both |
+| `documents.request.entry-requires-offset` | `entry` 문서 `go` 요청은 0이 아닌 정수 `offset`이 필요하고, `offset`이 있는 다른 동작은 거부한다. | both |
 | `documents.request.ignores-placement-fields` | 문서 요청을 해석하면 표면과 문서만 남기고 배치 필드를 버린다. | both |
 | `documents.request.url-and-action-default-empty` | url과 action이 없는 문서 요청을 해석하면 둘 다 비어 있다. | both |
 | `documents.registry.rejects-duplicate-reservation` | 같은 문서 키를 두 번 예약하면 "already attached"로 실패한다. | both |

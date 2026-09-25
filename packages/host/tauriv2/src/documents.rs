@@ -35,6 +35,8 @@ pub struct Request {
     pub action: String,
     #[serde(default)]
     pub zoom: Option<f64>,
+    #[serde(default)]
+    pub offset: Option<i32>,
 }
 
 impl Request {
@@ -238,9 +240,12 @@ fn create(
         let directory = crate::config_directory(host.app_handle())
             .map_err(|e| e.to_string())?
             .join(DOCUMENT_DATA);
-        let directory = directory
-            .to_str()
-            .ok_or_else(|| format!("document data directory is not UTF-8: {}", directory.display()))?;
+        let directory = directory.to_str().ok_or_else(|| {
+            format!(
+                "document data directory is not UTF-8: {}",
+                directory.display()
+            )
+        })?;
         let handle = platform.create_document(surface, directory, changed)?;
         let dark = crate::theme::is_dark(&host)?;
         platform.set_document_appearance(handle, dark)?;
@@ -312,18 +317,33 @@ pub(crate) fn zoom(webview: &Webview, request: Request) -> Result<(), String> {
     })
 }
 
-/// 기록 이동, 다시 읽기, 멈춤을 실행하고 실행했는지 반환한다.
-pub(crate) fn go(webview: &Webview, request: Request) -> Result<bool, String> {
-    let platform = platform::current()?;
+/// go 요청의 동작 번호와 거리. entry 는 0 이 아닌 offset 이 필요하고 다른 동작은 offset 을 받지 않는다.
+pub fn go_action(request: &Request) -> Result<(i32, i32), String> {
     let action = match request.action.as_str() {
         "back" => 0,
         "forward" => 1,
         "reload" => 2,
         "stop" => 3,
+        "entry" => 4,
         other => return Err(format!("unknown document action {other:?}")),
     };
+    match (action, request.offset) {
+        (4, Some(offset)) if offset != 0 => Ok((action, offset)),
+        (4, _) => Err("document action entry requires a non-zero offset".into()),
+        (_, Some(_)) => Err(format!(
+            "document action {:?} does not take an offset",
+            request.action
+        )),
+        (_, None) => Ok((action, 0)),
+    }
+}
+
+/// 기록 이동, 기록 항목 열기, 다시 읽기, 멈춤을 실행하고 실행했는지 반환한다.
+pub(crate) fn go(webview: &Webview, request: Request) -> Result<bool, String> {
+    let platform = platform::current()?;
+    let (action, offset) = go_action(&request)?;
     with_document(webview, &request, move |handle| {
-        platform.go_document(handle, action)
+        platform.go_document(handle, action, offset)
     })
 }
 

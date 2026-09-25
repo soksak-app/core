@@ -341,19 +341,34 @@ int main(int argc, char **argv) { @autoreleasepool {
         return [state[@"title"] isEqual:@"Two"] && ![state[@"loading"] boolValue] && [state[@"canGoBack"] boolValue];
     });
     check(latest[@"error"] == NSNull.null, @"a new navigation clears the previous error");
+    // 세션 기록은 오래된 항목부터이고 index 는 현재 항목이다.
+    NSArray *entries = latest[@"history"][@"entries"];
+    check(entries.count == 2 && [entries[0][@"url"] hasSuffix:@"/one"] && [entries[0][@"title"] isEqual:@"One"]
+        && [entries[1][@"title"] isEqual:@"Two"] && [latest[@"history"][@"index"] intValue] == 1,
+        [NSString stringWithFormat:@"the state reports the session history: %@", latest[@"history"]]);
+    check(!sp_document_go(document, 4, -5), @"an entry outside the history is refused");
+    check(!sp_document_go(document, 4, 0), @"an entry at offset 0 is refused");
+    check(sp_document_go(document, 4, -1), @"the entry before the current one is accepted");
+    settle(@"the entry did not load the first document", ^BOOL(NSDictionary *state) {
+        return [state[@"title"] isEqual:@"One"] && ![state[@"loading"] boolValue] && [state[@"history"][@"index"] intValue] == 0;
+    });
+    check(sp_document_go(document, 4, 1), @"the entry after the current one is accepted");
+    settle(@"the entry did not load the second document", ^BOOL(NSDictionary *state) {
+        return [state[@"title"] isEqual:@"Two"] && ![state[@"loading"] boolValue] && [state[@"history"][@"index"] intValue] == 1;
+    });
 
-    check(sp_document_go(document, 0), @"back is accepted");
+    check(sp_document_go(document, 0, 0), @"back is accepted");
     settle(@"back did not return to the first document", ^BOOL(NSDictionary *state) {
         return [state[@"title"] isEqual:@"One"] && [state[@"canGoForward"] boolValue] && ![state[@"loading"] boolValue];
     });
-    check(sp_document_go(document, 1), @"forward is accepted");
+    check(sp_document_go(document, 1, 0), @"forward is accepted");
     settle(@"forward did not return to the second document", ^BOOL(NSDictionary *state) {
         return [state[@"title"] isEqual:@"Two"] && ![state[@"canGoForward"] boolValue];
     });
-    check(!sp_document_go(document, 1), @"forward without a next document is refused");
-    check(sp_document_go(document, 3), @"stop is accepted");
+    check(!sp_document_go(document, 1, 0), @"forward without a next document is refused");
+    check(sp_document_go(document, 3, 0), @"stop is accepted");
 
-    check(sp_document_go(document, 0), @"back is accepted again");
+    check(sp_document_go(document, 0, 0), @"back is accepted again");
     settle(@"back did not return to the first document", ^BOOL(NSDictionary *state) {
         return [state[@"title"] isEqual:@"One"] && ![state[@"loading"] boolValue];
     });

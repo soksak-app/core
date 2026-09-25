@@ -42,7 +42,7 @@ function port() {
     attach: (name) => { calls.push(["attach", name]); return attached; },
     place: async (name, insets, visible) => { calls.push(["place", name, insets, visible]); },
     load: async (name, url) => { calls.push(["load", name, url]); },
-    go: async (name, action) => { calls.push(["go", name, action]); return true; },
+    go: async (name, action, offset) => { calls.push(offset === undefined ? ["go", name, action] : ["go", name, action, offset]); return true; },
     detach: async (name) => { calls.push(["detach", name]); },
     onState: (fn) => { receive = fn; return Promise.resolve(() => { stopped = true; }); },
   };
@@ -141,6 +141,17 @@ test("invalid names and actions are rejected", async () => {
   p.release();
   const region = attachRegion(p, f.element, "page", f.window);
   await assert.rejects(region.go("home"), /unknown document action/);
+  await assert.rejects(region.entry(0), /invalid history offset/);
+  await assert.rejects(region.entry(1.5), /invalid history offset/);
+});
+
+test("a history entry is sent as the entry action with its offset", async () => {
+  const f = fixture();
+  const p = port();
+  p.release();
+  const region = attachRegion(p, f.element, "page", f.window);
+  assert.equal(await region.entry(-2), true);
+  assert.deepEqual(p.calls.at(-1), ["go", "page", "entry", -2]);
 });
 
 test("visibility: display:none element is hidden", () => {

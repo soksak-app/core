@@ -107,9 +107,29 @@
             "focused": { "type": "boolean" }
           }
         }
+      },
+      {
+        "name": "browser.history",
+        "description": "The session history of the document region: its entries from the oldest with address and title, and the position of the current entry, or -1 before the first load.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "entries": {
+              "type": "array",
+              "items": { "type": "object", "properties": { "url": { "type": "string" }, "title": { "type": "string" } } }
+            },
+            "index": { "type": "integer" }
+          }
+        }
       }
     ],
     "commands": [
+      {
+        "name": "browser.history.go",
+        "description": "Loads the session history entry at a position; returns whether a load started, false for the current entry.",
+        "params": { "type": "object", "properties": { "index": { "type": "integer" } } },
+        "result": { "type": "boolean" }
+      },
       {
         "name": "browser.address.select",
         "description": "Focuses the address field and selects its complete value for replacement.",

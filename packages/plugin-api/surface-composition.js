@@ -329,7 +329,7 @@ export async function createSurfaceCompositionController(
       if (entry.declared.kind === "document") {
         const exposed = {
           name, onState: handle.onState, load: handle.load, zoom: handle.zoom, go: handle.go,
-          back: handle.back.bind(handle), forward: handle.forward.bind(handle),
+          entry: handle.entry.bind(handle), back: handle.back.bind(handle), forward: handle.forward.bind(handle),
           reload: handle.reload.bind(handle), stop: handle.stop.bind(handle),
         };
         Object.defineProperty(exposed, "state", { get: () => handle.state });

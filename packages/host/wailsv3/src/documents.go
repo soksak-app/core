@@ -32,6 +32,7 @@ type DocumentRequest struct {
 	URL      string   `json:"url"`
 	Action   string   `json:"action"`
 	Zoom     *float64 `json:"zoom,omitempty"`
+	Offset   *int     `json:"offset,omitempty"`
 }
 
 // ZoomFactor 는 문서의 글자 배율이다(docs/spec/text-size.md). 없거나 유한한 양수가 아니면 오류다.
@@ -171,7 +172,26 @@ func (d *Documents) All() []unsafe.Pointer {
 	return all
 }
 
-var documentActions = map[string]int{"back": 0, "forward": 1, "reload": 2, "stop": 3}
+var documentActions = map[string]int{"back": 0, "forward": 1, "reload": 2, "stop": 3, "entry": 4}
+
+// DocumentGoAction 은 go 요청의 동작 번호와 거리를 반환한다. entry 는 0 이 아닌 offset 이 필요하고
+// 다른 동작은 offset 을 받지 않는다.
+func DocumentGoAction(req DocumentRequest) (int, int, error) {
+	action, ok := documentActions[req.Action]
+	if !ok {
+		return 0, 0, fmt.Errorf("unknown document action %q", req.Action)
+	}
+	if req.Action == "entry" {
+		if req.Offset == nil || *req.Offset == 0 {
+			return 0, 0, fmt.Errorf("document action entry requires a non-zero offset")
+		}
+		return action, *req.Offset, nil
+	}
+	if req.Offset != nil {
+		return 0, 0, fmt.Errorf("document action %q does not take an offset", req.Action)
+	}
+	return action, 0, nil
+}
 
 // attachDocument 는 표면 안에 숨긴 문서 영역을 만든다. 같은 이름이 이미 있으면 오류다.
 func (s *Surfaces) attachDocument(viewID uint64, req DocumentRequest) error {
@@ -279,15 +299,15 @@ func (s *Surfaces) zoomDocument(viewID uint64, req DocumentRequest) error {
 	})
 }
 
-// goDocument 는 기록 이동, 다시 읽기, 멈춤을 실행하고 실행했는지 반환한다.
+// goDocument 는 기록 이동, 기록 항목 열기, 다시 읽기, 멈춤을 실행하고 실행했는지 반환한다.
 func (s *Surfaces) goDocument(viewID uint64, req DocumentRequest) (bool, error) {
-	action, ok := documentActions[req.Action]
-	if !ok {
-		return false, fmt.Errorf("unknown document action %q", req.Action)
+	action, offset, err := DocumentGoAction(req)
+	if err != nil {
+		return false, err
 	}
 	var done bool
-	err := s.withDocument(viewID, req, func(handle unsafe.Pointer) error {
-		done = system.GoDocument(handle, action)
+	err = s.withDocument(viewID, req, func(handle unsafe.Pointer) error {
+		done = system.GoDocument(handle, action, offset)
 		return nil
 	})
 	return done, err

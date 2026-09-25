@@ -80,8 +80,8 @@ func (implementation) SetDocumentEvent(document unsafe.Pointer, event func(value
 	return nil
 }
 
-func (implementation) GoDocument(document unsafe.Pointer, action int) bool {
-	return bool(C.sp_document_go(document, C.int(action)))
+func (implementation) GoDocument(document unsafe.Pointer, action, offset int) bool {
+	return bool(C.sp_document_go(document, C.int(action), C.int(offset)))
 }
 
 func (implementation) PlaceDocument(document unsafe.Pointer, left, top, right, bottom float64, visible bool) {

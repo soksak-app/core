@@ -18,7 +18,7 @@ async function setup(t) {
   }, { check(name) { assert.ok(manifest.exposes.commands.some((entry) => entry.name === name), `undeclared command ${name}`); } });
   const region = {
     onState(fn) { states.add(fn); return () => states.delete(fn); },
-    async load(url) { for (const fn of states) fn({ url, title: url }); },
+    async load(url) { for (const fn of states) fn({ url, title: url, history: { entries: [], index: -1 } }); },
     async back() {}, async forward() {}, async reload() {}, async stop() {}, async zoom() {},
   };
   const controller = await mount(root, {

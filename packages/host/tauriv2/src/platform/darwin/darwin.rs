@@ -241,8 +241,8 @@ impl Platform for Darwin {
     fn zoom_document(&self, document: Handle, zoom: f64) -> Result<bool, String> {
         Ok(document::zoom(document, zoom))
     }
-    fn go_document(&self, document: Handle, action: i32) -> Result<bool, String> {
-        Ok(document::go(document, action))
+    fn go_document(&self, document: Handle, action: i32, offset: i32) -> Result<bool, String> {
+        Ok(document::go(document, action, offset))
     }
     fn place_document(
         &self,
