@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { connect, EndpointError } from "@soksak/client";
+import { activateApp, frontmostApp } from "./frontmost.mjs";
 import { readPasteboard, writePasteboard } from "./pasteboard.mjs";
 
 // 검사하는 애플리케이션 실행 파일. 작업 디렉터리와 무관하게 이 파일 위치를 기준으로 찾는다.
@@ -143,6 +144,16 @@ export async function open(t, app) {
   // 검사는 사용자의 페이스트보드를 쓸 수 있다. 모든 항목 형식을 저장하고, 다른 정리가 모두 끝난 뒤 되돌려
   // 확인한다. 정리는 등록의 역순으로 실행하므로 이 정리가 마지막이다.
   const pasteboard = readPasteboard();
+  // 전체 화면 전환이나 새 프로젝트 창은 애플리케이션을 활성화한다. 검사가 활성화했으면 끝날 때 앞서 활성이던
+  // 애플리케이션을 되돌린다. 다음 검사의 합성 끌기는 비활성 애플리케이션을 전제한다.
+  const previous = frontmostApp();
+  if (previous !== null && previous !== client.endpoint.pid) {
+    session.cleanup(async () => {
+      if (frontmostApp() !== client.endpoint.pid) return;
+      activateApp(previous);
+      await session.until("host.window", (w) => w.active === false, "the application stayed active after the check");
+    });
+  }
   session.cleanup(() => {
     writePasteboard(pasteboard.items);
     const after = readPasteboard().items;

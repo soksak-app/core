@@ -7,6 +7,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
+
 // osascript 의 JavaScript 로 스크립트를 실행하고 JSON 결과를 돌려준다.
 function jxa(body) {
   const script = `ObjC.import("CoreGraphics"); ObjC.import("AppKit"); ObjC.import("ApplicationServices");
@@ -97,24 +98,6 @@ for (const item of list) {
 }
 return JSON.stringify(null);`);
 
-const frontmost = jxa(`
-const app = $.NSWorkspace.sharedWorkspace.frontmostApplication;
-return JSON.stringify(app.isNil() ? null : app.processIdentifier);`);
-
-const activate = jxa(`
-const app = $.NSRunningApplication.runningApplicationWithProcessIdentifier(input.pid);
-return JSON.stringify(!app.isNil() && app.activateWithOptions(0));`);
-
-/** 지금 활성인 애플리케이션의 프로세스 번호. */
-export function frontmostApp() {
-  return frontmost();
-}
-
-/** 프로세스 pid 의 애플리케이션을 활성화한다. 활성화할 수 없으면 실패한다. */
-export function activateApp(pid) {
-  assert.equal(activate({ pid }), true, `application ${pid} could not be activated`);
-}
-
 /** 화면 점 (x, y) 에서 맨 앞에 있는 일반 창의 소유 프로세스. */
 export function frontWindowAt(x, y) {
   return windowAt({ x, y });
@@ -139,9 +122,6 @@ export async function screenCenter(s, rect) {
  * 앞에 있으면 보낸 이벤트는 그 창으로 가므로 검사는 실패한다.
  */
 export async function bringFront(s, app, rect) {
-  // 검사가 끝나면 앞서 활성이던 애플리케이션을 다시 활성화한다. 기본 창 검사는 비활성 애플리케이션을 전제한다.
-  const previous = frontmostApp();
-  if (previous !== null && previous !== appPid(app)) s.cleanup(() => activateApp(previous));
   await s.pointer(rect.document.x + rect.x + rect.width / 2, rect.document.y + rect.y + rect.height / 2,
     "move", { activate: true });
   await s.until("host.window", (window) => window.active === true && window.key === true,
