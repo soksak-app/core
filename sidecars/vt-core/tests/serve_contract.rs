@@ -12,6 +12,20 @@ use std::sync::{Arc, Mutex};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 use tokio::sync::mpsc;
 
+/// 표시와 함께 오는 화면 줄을 건너뛰고 다음 줄을 읽는다.
+async fn next_line_except_screen<R: tokio::io::AsyncBufRead + Unpin>(lines: &mut tokio::io::Lines<R>) -> String {
+    loop {
+        let line = tokio::time::timeout(std::time::Duration::from_secs(2), lines.next_line())
+            .await
+            .expect("timeout waiting for a sidecar line")
+            .expect("failed to read a sidecar line")
+            .expect("the sidecar closed its output");
+        if !line.contains(r#""event":"screen""#) {
+            return line;
+        }
+    }
+}
+
 struct MockEngine {
     cols: u16,
     rows: u16,
@@ -1323,7 +1337,9 @@ async fn test_a2_pushed_output_reaches_screen() {
                         }
                     }
                 }
-                break; // Exit after first screen event
+                if found_hi {
+                    break;
+                }
             }
         }
     }
@@ -2276,11 +2292,7 @@ async fn test_configure_with_invalid_width_type() {
 {"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":"800","height":384,"scale":1.0}}}}
 "#).await.unwrap();
 
-    let error_line = tokio::time::timeout(std::time::Duration::from_secs(2), lines.next_line())
-        .await
-        .expect("timeout waiting for error")
-        .expect("failed to read error line")
-        .expect("error line is empty");
+    let error_line = next_line_except_screen(&mut lines).await;
 
     let error_json: serde_json::Value =
         serde_json::from_str(&error_line).expect("failed to parse error JSON");
@@ -2350,11 +2362,7 @@ async fn test_input_without_bytes_or_keys_rejected() {
         .await
         .unwrap();
 
-    let error_line = tokio::time::timeout(std::time::Duration::from_secs(2), lines.next_line())
-        .await
-        .expect("timeout waiting for error")
-        .expect("failed to read error line")
-        .expect("error line is empty");
+    let error_line = next_line_except_screen(&mut lines).await;
 
     let error_json: serde_json::Value =
         serde_json::from_str(&error_line).expect("failed to parse error JSON");
@@ -2418,11 +2426,7 @@ async fn test_input_with_non_string_bytes_rejected() {
         .await
         .unwrap();
 
-    let error_line = tokio::time::timeout(std::time::Duration::from_secs(2), lines.next_line())
-        .await
-        .expect("timeout waiting for error")
-        .expect("failed to read error line")
-        .expect("error line is empty");
+    let error_line = next_line_except_screen(&mut lines).await;
 
     let error_json: serde_json::Value =
         serde_json::from_str(&error_line).expect("failed to parse error JSON");
@@ -2486,11 +2490,7 @@ async fn test_input_with_non_array_keys_rejected() {
         .await
         .unwrap();
 
-    let error_line = tokio::time::timeout(std::time::Duration::from_secs(2), lines.next_line())
-        .await
-        .expect("timeout waiting for error")
-        .expect("failed to read error line")
-        .expect("error line is empty");
+    let error_line = next_line_except_screen(&mut lines).await;
 
     let error_json: serde_json::Value =
         serde_json::from_str(&error_line).expect("failed to parse error JSON");
@@ -2550,11 +2550,7 @@ async fn test_replacement_raster_with_missing_height_is_rejected() {
     to_serve.write_all(br#"{"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":2,"width":1024,"scale":1.0}}}}
 "#).await.unwrap();
 
-    let error_line = tokio::time::timeout(std::time::Duration::from_secs(2), lines.next_line())
-        .await
-        .expect("timeout waiting for error")
-        .expect("failed to read error line")
-        .expect("error line is empty");
+    let error_line = next_line_except_screen(&mut lines).await;
 
     let error_json: serde_json::Value =
         serde_json::from_str(&error_line).expect("failed to parse error JSON");
@@ -2767,11 +2763,7 @@ async fn test_zero_sized_configuration_is_rejected() {
 "#).await.unwrap();
 
     // Should receive error response
-    let error_line = tokio::time::timeout(std::time::Duration::from_secs(2), lines.next_line())
-        .await
-        .expect("timeout waiting for error")
-        .expect("failed to read error line")
-        .expect("error line is empty");
+    let error_line = next_line_except_screen(&mut lines).await;
 
     let error_json: serde_json::Value =
         serde_json::from_str(&error_line).expect("failed to parse error JSON");
@@ -2861,11 +2853,7 @@ async fn test_replacement_raster_with_zero_size_is_rejected() {
 "#).await.unwrap();
 
     // Read response - should be error
-    let error_line = tokio::time::timeout(std::time::Duration::from_secs(2), lines.next_line())
-        .await
-        .unwrap()
-        .unwrap()
-        .unwrap();
+    let error_line = next_line_except_screen(&mut lines).await;
 
     let error_json: serde_json::Value =
         serde_json::from_str(&error_line).expect("failed to parse error response");
@@ -2940,11 +2928,7 @@ async fn test_too_small_size_is_rejected() {
 "#).await.unwrap();
 
     // Should receive error response
-    let error_line = tokio::time::timeout(std::time::Duration::from_secs(2), lines.next_line())
-        .await
-        .expect("timeout waiting for error")
-        .expect("failed to read error line")
-        .expect("error line is empty");
+    let error_line = next_line_except_screen(&mut lines).await;
 
     let error_json: serde_json::Value =
         serde_json::from_str(&error_line).expect("failed to parse error JSON");
@@ -3753,6 +3737,13 @@ async fn output_while_the_host_holds_a_raster_sends_one_screen_with_the_next_pre
             break;
         }
     }
+    // 첫 표시의 화면은 그 래스터와 함께 온다.
+    let opened = tokio::time::timeout(std::time::Duration::from_secs(2), lines.next_line())
+        .await
+        .expect("timeout waiting for the first screen")
+        .unwrap()
+        .unwrap();
+    assert!(opened.contains(r#""event":"screen""#), "the first presentation came without its screen: {opened}");
     for index in 0..50 {
         port.push_event(DaemonEvent::Output {
             session_id: session_id.clone(),
@@ -3897,4 +3888,83 @@ async fn the_page_screen_event_carries_only_text_width_links_and_set_attributes(
             );
         }
     }
+}
+
+#[tokio::test]
+async fn a_focus_change_sends_the_screen_with_the_presentation_that_draws_it() {
+    // 초점은 커서의 그린 모양을 바꾼다. 그 래스터와 함께 화면을 보내야 페이지의 커서 상태가 화면과 같다.
+    let calls = Arc::new(Mutex::new(Calls::default()));
+    let engine_factory = Arc::new(|| Box::new(MockEngine::new()) as Box<dyn Engine>);
+    let port = Arc::new(FakeSessionPort::new("focus".to_string(), calls.clone()));
+    let port_for_factory = port.clone();
+    let factory = Arc::new(move || port_for_factory.clone() as Arc<dyn SessionPort>);
+    let (mut to_serve, serve_in) = tokio::io::duplex(1024 * 1024);
+    let (serve_out, from_serve) = tokio::io::duplex(16 * 1024 * 1024);
+    let task = tokio::spawn(serve(engine_factory, serve_in, serve_out, factory));
+    let mut lines = tokio::io::BufReader::new(from_serve).lines();
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
+{"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
+"#).await.unwrap();
+    macro_rules! next {
+        () => {
+            tokio::time::timeout(std::time::Duration::from_secs(2), lines.next_line())
+                .await
+                .expect("timeout waiting for sidecar output")
+                .unwrap()
+                .unwrap()
+        };
+    }
+    // 호스트처럼 표시마다 consumed 로 답하고, 화면 읽기의 답 앞에 표시가 없을 때까지 읽어 사이드카를 한가하게 한다.
+    macro_rules! consume {
+        ($sequence:expr) => {
+            to_serve.write_all(format!(
+                "{{\"surface\":\"s1\",\"body\":{{\"image\":{{\"consumed\":{{\"name\":\"view\",\"generation\":1,\"raster\":1,\"sequence\":{}}}}}}}}}\n",
+                $sequence
+            ).as_bytes()).await.unwrap();
+        };
+    }
+    let mut rounds = 0;
+    loop {
+        rounds += 1;
+        assert!(rounds < 20, "the sidecar kept presenting");
+        to_serve.write_all(b"{\"surface\":\"s1\",\"body\":{\"operation\":\"screen.read\"}}\n").await.unwrap();
+        let mut presented = false;
+        loop {
+            let line = next!();
+            let value: serde_json::Value = serde_json::from_str(&line).unwrap();
+            if let Some(sequence) = value["body"]["image"]["sequence"].as_i64() {
+                consume!(sequence);
+                presented = true;
+                // 표시와 함께 온 화면을 읽는다.
+                let screen = next!();
+                assert!(screen.contains(r#""event":"screen""#), "a presentation came without its screen: {screen}");
+                continue;
+            }
+            if value["body"]["event"] == "screen" {
+                break;
+            }
+        }
+        if !presented {
+            break;
+        }
+    }
+    to_serve.write_all(b"{\"surface\":\"s1\",\"body\":{\"operation\":\"input\",\"focus\":{\"focused\":true}}}\n").await.unwrap();
+    let mut seen = Vec::new();
+    let mut presented = false;
+    loop {
+        let line = next!();
+        seen.push(line.chars().take(160).collect::<String>());
+        let value: serde_json::Value = serde_json::from_str(&line).unwrap();
+        if value["body"]["image"]["sequence"].is_i64() {
+            presented = true;
+            continue;
+        }
+        if value["body"]["event"] == "screen" {
+            assert!(presented && value["body"]["cursor"]["focused"] == true,
+                "the focused screen did not follow its presentation: {seen:#?}");
+            break;
+        }
+        assert!(value["body"]["ack"] != true, "the focus change was answered without its screen: {seen:#?}");
+    }
+    task.abort();
 }

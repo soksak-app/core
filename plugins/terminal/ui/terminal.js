@@ -66,8 +66,11 @@ const PROGRAM_CLIPBOARD_POLICIES = new Set(["deny", "allow"]);
 const DEFAULT_CURSOR = Object.freeze({
   row: 0, col: 0, shape: "block", visible: true, blinking: false, focused: false,
   blink: "Off", interval: 750, idleTimeout: 5000, unfocused: "hollow", hollow: false,
-  blinkVisible: true,
+  blinkVisible: true, drawn: Object.freeze({ shape: "block", blinking: false }),
 });
+
+// 사이드카가 화면에 그린 커서 모양. 프로그램의 요청과 초점 규칙이 적용된 값이다.
+const DRAWN_SHAPES = { Block: "block", Underline: "underline", Beam: "beam", HollowBlock: "hollowBlock", Hidden: "hidden" };
 
 function normalizeRange(range) {
   if (range === null || range === undefined) return null;
@@ -125,6 +128,7 @@ function normalizeCursor(value) {
     unfocused: cursor.unfocused ?? DEFAULT_CURSOR.unfocused,
     hollow: boolean("hollow", rawShape === "HollowBlock" || DEFAULT_CURSOR.hollow),
     blinkVisible: boolean("blinkVisible", DEFAULT_CURSOR.blinkVisible),
+    drawn: cursor.drawn ?? DEFAULT_CURSOR.drawn,
   };
 }
 
@@ -860,13 +864,15 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
           drawScrollbar();
         }
       }
-      // 화면의 커서는 현재 위치·표시·포커스다. 모양은 표시 규칙이 적용된 값이므로 정책 값을 바꾸지 않는다.
+      // 화면의 커서는 현재 위치·표시·포커스와 그린 모양이다. 그린 모양은 표시 규칙이 적용된 값이므로 정책 값을 바꾸지 않고
+      // drawn 에 둔다.
       if (body.cursor !== undefined) {
-        const { col, row, visible, focused } = body.cursor ?? {};
-        if (!Number.isInteger(col) || !Number.isInteger(row) || typeof visible !== "boolean" || typeof focused !== "boolean") {
+        const { col, row, visible, focused, shape, blinking } = body.cursor ?? {};
+        if (!Number.isInteger(col) || !Number.isInteger(row) || typeof visible !== "boolean" || typeof focused !== "boolean" ||
+          !Object.hasOwn(DRAWN_SHAPES, shape) || typeof blinking !== "boolean") {
           reportInputError(`invalid screen cursor from sidecar: ${JSON.stringify(body.cursor)}`, "screen");
         } else {
-          applyCursor(body.cursor, { col, row, visible, focused });
+          applyCursor(body.cursor, { col, row, visible, focused, drawn: { shape: DRAWN_SHAPES[shape], blinking } });
           if (resolveError("screen")) changed("session");
         }
       }

@@ -1006,7 +1006,9 @@ async fn present_screen(
             }
         }
     });
+    // 페이지의 화면은 이 래스터가 그린 화면이다. 둘을 함께 보내야 커서와 글자 상태가 화면 픽셀과 같다.
     output_tx.send(image_envelope.to_string()).await.is_ok()
+        && output_tx.send(screen_event(surface_id, screen).to_string()).await.is_ok()
 }
 
 /// 호스트가 앞 래스터를 복사하는 중인지. 그동안의 화면 변경은 dirty 로 남기고 그리거나 화면 JSON 을 보내지
@@ -1728,8 +1730,7 @@ async fn surface_task(
                                 let screen = decorate_screen(engine.screen(), focused, &preedit, &cursor_policy, 0);
                                 if let Some(state) = image_state.as_mut() {
                                     if !present_screen(&surface_id, &screen, state, &output_tx).await { return; }
-                                }
-                                if output_tx.send(screen_event(&surface_id, &screen).to_string()).await.is_err() { return; }
+                                } else if output_tx.send(screen_event(&surface_id, &screen).to_string()).await.is_err() { return; }
                             }
                         }
                         if let Some(ref sid) = session_id {
@@ -1773,8 +1774,7 @@ async fn surface_task(
                                 let screen = decorate_screen(engine.screen(), focused, &preedit, &cursor_policy, 0);
                                 if let Some(state) = image_state.as_mut() {
                                     if !present_screen(&surface_id, &screen, state, &output_tx).await { return; }
-                                }
-                                if output_tx.send(screen_event(&surface_id, &screen).to_string()).await.is_err() { return; }
+                                } else if output_tx.send(screen_event(&surface_id, &screen).to_string()).await.is_err() { return; }
                             }
                         }
                         if let Some(ref sid) = session_id {
@@ -1889,8 +1889,7 @@ async fn surface_task(
                         let screen = decorate_screen(engine.screen(), focused, &preedit, &cursor_policy, 0);
                         if let Some(state) = image_state.as_mut() {
                             if !present_screen(&surface_id, &screen, state, &output_tx).await { return; }
-                        }
-                        if output_tx.send(screen_event(&surface_id, &screen).to_string()).await.is_err() { return; }
+                        } else if output_tx.send(screen_event(&surface_id, &screen).to_string()).await.is_err() { return; }
                     }
                     SurfaceCommand::Scroll { lines, col, row } => {
                         let modes = engine.modes();
@@ -1934,8 +1933,7 @@ async fn surface_task(
                                 let screen = decorate_screen(engine.screen(), focused, &preedit, &cursor_policy, 0);
                                 if let Some(state) = image_state.as_mut() {
                                     if !present_screen(&surface_id, &screen, state, &output_tx).await { return; }
-                                }
-                                if output_tx.send(screen_event(&surface_id, &screen).to_string()).await.is_err() { return; }
+                                } else if output_tx.send(screen_event(&surface_id, &screen).to_string()).await.is_err() { return; }
                             }
                         }
                     }
@@ -1958,8 +1956,7 @@ async fn surface_task(
                                 let screen = decorate_screen(engine.screen(), focused, &preedit, &cursor_policy, 0);
                                 if let Some(state) = image_state.as_mut() {
                                     if !present_screen(&surface_id, &screen, state, &output_tx).await { return; }
-                                }
-                                if output_tx.send(screen_event(&surface_id, &screen).to_string()).await.is_err() { return; }
+                                } else if output_tx.send(screen_event(&surface_id, &screen).to_string()).await.is_err() { return; }
                             }
                         }
                         if let Some(ref sid) = session_id {
@@ -2333,11 +2330,8 @@ async fn surface_task(
                                 }
                             } else if image_state.as_ref().unwrap().dirty {
                                 let screen = decorate_screen(engine.screen(), focused, &preedit, &cursor_policy, cursor_activity.elapsed().as_millis() as u64);
+                                // 기다린 동안의 변경을 담은 화면 하나를 래스터와 함께 보낸다.
                                 if !present_screen(&surface_id, &screen, image_state.as_mut().unwrap(), &output_tx).await {
-                                    return;
-                                }
-                                // 기다린 동안의 변경을 담은 화면 하나를 보낸다.
-                                if !headless && output_tx.send(screen_event(&surface_id, &screen).to_string()).await.is_err() {
                                     return;
                                 }
                             }
@@ -2369,7 +2363,7 @@ async fn surface_task(
                                         }
                                 } }
 
-                                if headless { continue; }
+                                if headless || image_state.is_some() { continue; }
                                 let response = screen_event(&surface_id, &screen);
                                 if let Err(_) = output_tx.send(response.to_string()).await {
                                     return;

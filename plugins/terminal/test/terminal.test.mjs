@@ -299,7 +299,7 @@ const UNRELATED_RESOLVERS = [
   ["state", { event: "state", sessionId: "s1", cols: 100, rows: 50, cellWidth: 8, cellHeight: 16 }],
   ["session", { event: "session", sessionId: "s1" }],
   ["theme", { event: "theme", mode: "light" }],
-  ["screen", { event: "screen", lines: [""], cursor: { col: 0, row: 0, visible: true, focused: false } }],
+  ["screen", { event: "screen", lines: [""], cursor: { col: 0, row: 0, visible: true, focused: false, shape: "Block", blinking: false } }],
 ];
 
 const PERSISTENT_ERRORS = [
@@ -328,8 +328,8 @@ const RESOLVED_ERRORS = [
     "invalid state from sidecar: cols: invalid value 0"],
   ["session", { event: "session", sessionId: "" }, "terminal input failed: invalid persistent session event"],
   ["theme", { event: "theme", mode: "sepia" }, "terminal input failed: invalid theme acknowledgement from sidecar"],
-  ["screen", { event: "screen", lines: [""], cursor: { col: -0.5, row: 0, visible: true, focused: false } },
-    "terminal input failed: invalid screen cursor from sidecar: {\"col\":-0.5,\"row\":0,\"visible\":true,\"focused\":false}"],
+  ["screen", { event: "screen", lines: [""], cursor: { col: -0.5, row: 0, visible: true, focused: false, shape: "Block", blinking: false } },
+    "terminal input failed: invalid screen cursor from sidecar: {\"col\":-0.5,\"row\":0,\"visible\":true,\"focused\":false,\"shape\":\"Block\",\"blinking\":false}"],
 ];
 
 for (const [kind, invalid, message] of RESOLVED_ERRORS) {
@@ -661,7 +661,7 @@ test("wheel input is sent as whole scroll lines at the pointer cell and the scre
     { operation: "scroll", lines: -2, col: 2, row: 2 },
   ]);
 
-  fakeSidecar.triggerEvent("test-session", { event: "screen", lines: [""], cursor: { col: 0, row: 0, visible: false, focused: false },
+  fakeSidecar.triggerEvent("test-session", { event: "screen", lines: [""], cursor: { col: 0, row: 0, visible: false, focused: false, shape: "Block", blinking: false },
     scrollback: { offset: 3, history: 40 } });
   assert.deepEqual(fakeExpose.getStatus("terminal.session").readFn().scrollback, { offset: 3, history: 40 });
 });
@@ -683,12 +683,12 @@ test("the scrollbar shows the scrollback position and dragging its thumb moves t
 
   // 50행, 기록 50줄, 오프셋 25. 600 픽셀 트랙에서 손잡이는 높이 300, 위치 150 이다.
   const screen = (offset) => fakeSidecar.triggerEvent("test-session", { event: "screen", lines: [""],
-    cursor: { col: 0, row: 0, visible: false, focused: false }, scrollback: { offset, history: 50 } });
+    cursor: { col: 0, row: 0, visible: false, focused: false, shape: "Block", blinking: false }, scrollback: { offset, history: 50 } });
   screen(25);
   assert.equal(track.hidden, false);
   // 트랙은 네이티브 그림이 잘린 자리를 칠하므로 터미널의 현재 기본 배경색이어야 한다.
   fakeSidecar.triggerEvent("test-session", { event: "screen", lines: [""], background: "#102030",
-    cursor: { col: 0, row: 0, visible: false, focused: false }, scrollback: { offset: 25, history: 50 } });
+    cursor: { col: 0, row: 0, visible: false, focused: false, shape: "Block", blinking: false }, scrollback: { offset: 25, history: 50 } });
   assert.equal(track.style.background, "#102030");
   assert.deepEqual([thumb.style.height, thumb.style.top], ["300px", "150px"]);
 
@@ -705,7 +705,7 @@ test("the scrollbar shows the scrollback position and dragging its thumb moves t
   screen(0);
   assert.equal(track.hidden, false);
   assert.deepEqual([thumb.style.height, thumb.style.top], ["300px", "300px"]);
-  fakeSidecar.triggerEvent("test-session", { event: "screen", lines: [""], cursor: { col: 0, row: 0, visible: true, focused: false },
+  fakeSidecar.triggerEvent("test-session", { event: "screen", lines: [""], cursor: { col: 0, row: 0, visible: true, focused: false, shape: "Block", blinking: false },
     scrollback: { offset: 0, history: 0 } });
   assert.equal(track.hidden, true, "the scrollbar is hidden without history");
 });
@@ -729,7 +729,7 @@ test("scrollbar settings set the track background, thumb color, width, and shape
   });
   openSession(fakeSidecar);
   fakeSidecar.triggerEvent("test-session", { event: "screen", lines: [""], background: "#102030",
-    cursor: { col: 0, row: 0, visible: true, focused: false }, scrollback: { offset: 0, history: 50 } });
+    cursor: { col: 0, row: 0, visible: true, focused: false, shape: "Block", blinking: false }, scrollback: { offset: 0, history: 50 } });
   assert.deepEqual([track.style.width, track.style.background, thumb.style.background, thumb.style.borderRadius],
     ["16px", "#102030", "#ff000080", "0px"]);
 
@@ -2140,9 +2140,34 @@ test("cursor state exposes typed shape and blink policy while routing the caret"
   assert.deepEqual(fakeExpose.getStatus("terminal.cursor").readFn(), {
     row: 1, col: 2, shape: "beam", visible: true, blinking: true, focused: true,
     blink: "Always", interval: 700, idleTimeout: 1200, unfocused: "hollow", hollow: true,
-    blinkVisible: true,
+    blinkVisible: true, drawn: { shape: "block", blinking: false },
   });
   assert.deepEqual(regionReference._caret, { x: 18, y: 18, width: 9, height: 18 });
+});
+
+test("the drawn cursor follows the screen event while the policy shape stays", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  const fakeExpose = createFakeExpose();
+  await startTerminal({
+    view: createFakeView(),
+    attachImage: createFakeAttachImage().function,
+    sidecar: fakeSidecar, expose: fakeExpose,
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  openSession(fakeSidecar);
+  fakeSidecar.triggerEvent("test-session", {
+    event: "screen", lines: [""],
+    cursor: { col: 1, row: 0, visible: true, focused: true, shape: "Underline", blinking: true },
+  });
+  const cursor = fakeExpose.getStatus("terminal.cursor").readFn();
+  assert.deepEqual(cursor.drawn, { shape: "underline", blinking: true });
+  assert.equal(cursor.shape, "block", "the program shape must not replace the policy shape");
+  fakeSidecar.triggerEvent("test-session", {
+    event: "screen", lines: [""],
+    cursor: { col: 1, row: 0, visible: true, focused: false, shape: "HollowBlock", blinking: false },
+  });
+  assert.deepEqual(fakeExpose.getStatus("terminal.cursor").readFn().drawn, { shape: "hollowBlock", blinking: false });
 });
 
 test("cursor policy sends explicit shape, blink, interval, idle timeout, and unfocused rendering", async () => {

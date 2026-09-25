@@ -170,7 +170,7 @@
       },
       {
         "name": "terminal.cursor",
-        "description": "The terminal cursor position and the rendering policy that the sidecar applied and presented.",
+        "description": "The terminal cursor position, the rendering policy that the sidecar applied and presented, and the shape and blink request that the sidecar drew after the program's request and the focus rule.",
         "schema": {
           "type": "object",
           "properties": {
@@ -185,7 +185,14 @@
             "idleTimeout": { "type": "number" },
             "unfocused": { "type": "string", "enum": ["hollow", "solid", "underline", "beam", "unchanged"] },
             "hollow": { "type": "boolean" },
-            "blinkVisible": { "type": "boolean" }
+            "blinkVisible": { "type": "boolean" },
+            "drawn": {
+              "type": "object",
+              "properties": {
+                "shape": { "type": "string", "enum": ["block", "underline", "beam", "hollowBlock", "hidden"] },
+                "blinking": { "type": "boolean" }
+              }
+            }
           }
         }
       },

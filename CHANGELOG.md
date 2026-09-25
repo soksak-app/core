@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-51-6-1: every terminal raster carries the screen event it draws, so a focus change updates the page's cursor state at once, and `terminal.cursor` reports the drawn cursor shape and blink request in `drawn`.
 - V5-63: real-input checks make the previously active application active again when they end, and a synthetic drag check fails with an explicit error when the application is active.
 - V5-49: every window check saves and restores all general-pasteboard item types through the harness and fails when the pasteboard differs afterwards.
 - V5-37: injected wheel events carry no modifier flags instead of the physical modifier state, and `core.surface.input` records the modifier keys of each event.
