@@ -122,7 +122,7 @@ The following values were constants in `plane.js` and `app.css`. They are core s
 |---|---|---|---|---|
 | `sidebarMinWidth` | 카드 안 사이드바 최소 폭 | 120 | 60–400 | Smallest width of an inset sidebar; a grip double click sets this width |
 | `sidebarMaxWidth` | 카드 안 사이드바 최대 폭 | 480 | 120–800 | Largest width of an inset sidebar |
-| `sidebarWidth` | 카드 안 사이드바 처음 폭 | 120 | 60–800 | Width of an inset sidebar that has no stored width |
+| `sidebarWidth` | 카드 안 사이드바 처음 폭 | 190 | 60–800 | Width of an inset sidebar that has no stored width |
 | `sidebarFoldedWidth` | 접은 사이드바 폭 | 28 | 16–64 | Width of a folded inset sidebar |
 | `railWidth` | 레일 처음 폭 | 190 | 120–480 | Width of a rail column that a plugin has not resized in the space |
 
