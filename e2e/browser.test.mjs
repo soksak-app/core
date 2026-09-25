@@ -268,6 +268,49 @@ for (const app of Object.values(APPS)) {
       "a document state change replaced the text being typed");
   });
 
+  test(`${app.name}: the browser history buttons draw the core icons at the card header button size`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const [browser] = await browsers(s);
+    const surface = browser.surface;
+    const buttons = [];
+    for (const name of ["browser.back", "browser.forward", "browser.reload"]) {
+      const rect = await s.rect(name, undefined, surface);
+      assert.deepEqual([rect.width, rect.height], [20, 20], `${name} is not a 20×20 card header button: ${JSON.stringify(rect)}`);
+      buttons.push({ name, x: rect.document.x + rect.x, y: rect.document.y + rect.y });
+    }
+
+    /** 단추 안의 픽셀 중 단추 모서리 픽셀과 다른 것의 수와 모서리 픽셀. */
+    const ink = async ({ x, y }) => {
+      const { displayed } = await s.presented();
+      await s.request("diagnostics.capture.start", {});
+      const result = await s.request("diagnostics.capture.stop", { after: displayed });
+      try {
+        const files = frames(result.frames);
+        assert.ok(files.length > 0, "button capture produced no frames");
+        const frame = readFrame(files.at(-1));
+        const k = frame.scale;
+        const corner = pixel(frame, Math.round((x + 1) * k), Math.round((y + 1) * k));
+        let count = 0;
+        for (let py = Math.round((y + 3) * k); py < Math.round((y + 17) * k); py++) {
+          for (let px = Math.round((x + 3) * k); px < Math.round((x + 17) * k); px++) {
+            const value = pixel(frame, px, py);
+            if (value.some((c, i) => Math.abs(c - corner[i]) > 20)) count++;
+          }
+        }
+        return { count, corner, scale: k };
+      } finally {
+        rmSync(result.frames, { recursive: true, force: true });
+      }
+    };
+    for (const button of buttons) {
+      const measured = await ink(button);
+      // 14px 셰브런의 두 획은 길이 약 12 CSS 픽셀, 굵기 약 1 CSS 픽셀이다.
+      assert.ok(measured.count >= 12 * measured.scale ** 2, `${button.name} draws ${measured.count} icon pixels: ${JSON.stringify(measured)}`);
+    }
+  });
+
   test(`${app.name}: a card focus keeps a shown document visible while its placement is prepared`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);

@@ -8,7 +8,7 @@ const readyReleases = new WeakMap();
 
 export function createSurfaceContext({
   root, surfaceId, pluginId, metadata = {}, declarations = {}, composition = null, diagnostics = null, runtime = {},
-  tab, origin = { directory: null },
+  tab, origin = { directory: null }, icon,
 } = {}) {
   if (!root || typeof root.appendChild !== "function") throw new TypeError("surface context requires a root element");
   if (typeof surfaceId !== "string" || surfaceId === "") throw new TypeError("surface context requires surfaceId");
@@ -21,6 +21,7 @@ export function createSurfaceContext({
   if (typeof tab?.title !== "function" || typeof tab?.directory !== "function" || typeof tab?.notify !== "function") {
     throw new TypeError("surface context requires tab.title, tab.directory, and tab.notify");
   }
+  if (typeof icon !== "function") throw new TypeError("surface context requires icon(name)");
   const listeners = new Set();
   const eventListeners = new Map();
   const state = { phase: "loading", error: null };
@@ -47,6 +48,8 @@ export function createSurfaceContext({
     tab: Object.freeze({ title: tab.title, directory: tab.directory, notify: tab.notify }),
     // 이 탭을 만든 카드의 활성 탭이 그때 기록한 작업 디렉터리.
     origin: Object.freeze({ directory: origin.directory ?? null }),
+    // 코어 아이콘(docs/spec/plugins.md#icons): 이름의 24 단위 획 SVG 문자열. 없는 이름은 실패한다.
+    icon,
     runtime: Object.freeze({
       sidecar: callable(runtime.sidecar, "runtime.sidecar").bind(runtime),
       native: runtime.native,

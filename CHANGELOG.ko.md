@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- V5-72: 표면 컨텍스트가 코어 아이콘을 `icon(name)`으로 제공하고, 브라우저의 뒤로, 앞으로, 새로 고침 단추가 문자 ‹ › ↻ 대신 Lucide 셰브런과 회전 화살표를 카드 머리 단추의 크기, 색, 획, hover로 그린다.
 - F13-3: 설정 창의 절은 일반, 플러그인, 사이드바다. 합성 절을 합성기의 커밋 지연과 적용 오차(`latency`, `skew`), `diagnostics.knob`, `core.layout.reset`과 함께 제거했다. `latency`나 `skew`가 남은 설정 파일은 "common settings: unknown setting latency"(프로젝트 파일이면 같은 형식의 오류)로 불러오기에 실패하므로 파일에서 그 키를 지워야 한다. 플러그인 절은 환경의 플러그인 목록과 각 플러그인이 선언한 설정, 레일과 오른쪽 사이드바 세트, 섹션을 보여 주고, 일반에는 플러그인 설정과 사이드바 설정이 없다. 사이드바 절에는 사이드바 위치, 왼쪽과 오른쪽 사이드바, 폭, 그리고 `core.settings.sets.*`로 만들기, 편집(제목, `list` 또는 `tabs` 배치, 섹션), 삭제를 하는 세트 목록이 있다. 카드 안 사이드바의 최소, 최대, 처음, 접은 폭과 새 레일 폭은 설정 `sidebarMinWidth`, `sidebarMaxWidth`, `sidebarWidth`, `sidebarFoldedWidth`, `railWidth`다.
 - F13-1: 모든 사이드바(좌측, 우측, 레일, 카드 안)가 세트의 각 섹션 `module`을 `{card, surface}`로 마운트한다. 세트의 `layout`이 `list`이면 모든 섹션을 접기 머리(`core.sidebar.section.fold`) 아래 쌓고, `tabs`이면 고른 섹션만 마운트한다(`core.sidebar.section.select`). 접힘과 선택은 사이드바마다 유지되며 `core.sidebars`가 보고한다. 섹션 행은 `module`을, 세트는 `layout`을 요구하고, 스테이징은 패키지가 배포하지 않는 섹션 모듈을 거부한다. 아홉 섹션은 F13-2 전까지 자리표시 목록을 그린다. 다시 빌드한 Wails와 Tauri 호스트에서 검증했다(`e2e/sidebar.test.mjs` 4/4, `e2e/audit.test.mjs` 2/2).
 - V5-71: 브라우저 주소 칸이 입력에서 오지 않은 이동 뒤에 연 주소를 보이며, Enter 뒤 포커스를 유지하는 동안에도 그렇다. 입력 중인 글자는 이동 명령이 실행되거나 칸이 포커스를 잃을 때까지 유지된다. 새 상태 `browser.address.text`가 칸의 글자와 포커스를 보고한다.

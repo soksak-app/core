@@ -82,6 +82,12 @@ A notice is also a system notification. The host of the window posts it through 
 
 A surface context has `runtime.links.open(url)`, which asks the host to open an absolute `http`, `https`, or `mailto` URL with the user's default application for its scheme. The host rejects another scheme, a URL that does not parse, and a URL longer than 8192 characters, and the returned promise rejects with the reason. The macOS hosts open the URL through `NSWorkspace`; the Windows platform returns `not implemented on windows`.
 
+## Icons
+
+A surface context has `icon(name)`, which returns the core icon `name` as SVG markup with a 24-unit `viewBox`, stroke paths only, and `aria-hidden`; an unknown name throws. Core keeps the icons in `packages/workbench/icons.js`, and a plugin page draws them through the context instead of carrying its own artwork, because plugins cannot import the workbench. The markup carries no style: the page sets the size, color, and stroke in its own Shadow Root. The names are `star`, `projects`, `panel-left`, `panel-right`, `sun`, `moon`, `settings`, `close`, and the Lucide icons `chevron-left`, `chevron-right`, and `rotate-cw`.
+
+The browser back, forward, and reload buttons draw `chevron-left`, `chevron-right`, and `rotate-cw` with the look of the card header buttons: a 20×20 button, a 14px icon, the `--muted` color, and the `--inset` background with the `--fg` color under the pointer. The stroke width is 1.95 units, which draws the icon with the width of the header buttons' 1.3-unit stroke in a 16-unit `viewBox`.
+
 ## environment.json
 
 | Field | Meaning |

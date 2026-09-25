@@ -1,10 +1,12 @@
-const css = `:host{display:flex;height:100%;flex-direction:column;background:var(--card);color:var(--fg);font:12px/1.4 var(--font)}#bar{display:flex;gap:4px;padding:4px 6px;border-bottom:1px solid var(--rule)}button{border:0;background:transparent;color:inherit}input{flex:1;min-width:0;background:transparent;color:inherit;border:1px solid var(--edge);border-radius:5px;padding:3px 8px}#document,#empty{flex:1;min-height:0}#empty{display:flex;align-items:center;justify-content:center;color:var(--muted);cursor:text}[hidden]{display:none!important}`;
+const css = `:host{display:flex;height:100%;flex-direction:column;background:var(--card);color:var(--fg);font:12px/1.4 var(--font)}#bar{display:flex;gap:4px;padding:4px 6px;border-bottom:1px solid var(--rule)}#bar button{display:grid;place-items:center;width:20px;height:20px;padding:0;border:0;border-radius:var(--r-xs);background:transparent;color:var(--muted);cursor:pointer}#bar button:hover:not(:disabled){background:var(--inset);color:var(--fg)}#bar svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.95;stroke-linecap:round;stroke-linejoin:round}#bar{align-items:center}input{flex:1;min-width:0;background:transparent;color:inherit;border:1px solid var(--edge);border-radius:5px;padding:3px 8px}#document,#empty{flex:1;min-height:0}#empty{display:flex;align-items:center;justify-content:center;color:var(--muted);cursor:text}[hidden]{display:none!important}`;
 
+// 기록 단추는 카드 머리 단추(.chrome__act)와 같은 크기, 색, hover 를 쓴다. 획 폭 1.95 는 24 단위 아이콘을
+// 14px 로 그릴 때 카드 머리의 16 단위 획 1.3 과 같은 굵기다.
 export async function mount(root, context) {
   if (typeof context.surfaceId !== "string" || context.surfaceId === "") {
     throw new TypeError("browser surface requires a surfaceId for location persistence");
   }
-  root.innerHTML = `<style>${css}</style><div id="bar"><button data-command="browser.back">‹</button><button data-command="browser.forward">›</button><button data-command="browser.reload">↻</button><input id="address" data-expose="browser.address" aria-label="주소"></div><div id="document" data-expose="browser.document"></div><div id="empty" data-expose="browser.empty" data-command="browser.address.select">주소를 입력하세요</div>`;
+  root.innerHTML = `<style>${css}</style><div id="bar"><button data-command="browser.back" aria-label="뒤로">${context.icon("chevron-left")}</button><button data-command="browser.forward" aria-label="앞으로">${context.icon("chevron-right")}</button><button data-command="browser.reload" aria-label="새로 고침">${context.icon("rotate-cw")}</button><input id="address" data-expose="browser.address" aria-label="주소"></div><div id="document" data-expose="browser.document"></div><div id="empty" data-expose="browser.empty" data-command="browser.address.select">주소를 입력하세요</div>`;
   const address = root.querySelector("#address");
   const area = root.querySelector("#document");
   const empty = root.querySelector("#empty");

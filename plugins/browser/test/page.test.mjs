@@ -45,6 +45,7 @@ test("browser mount publishes document state, respects shadow focus, and dispose
     dispose: async () => { composition.disposed = true; },
   };
   const context = {
+    icon: (name) => `<svg data-icon="${name}"></svg>`,
     surfaceId: "browser-page-test",
     metadata: { home: "https://home.test/" },
     composition: { create: async () => composition },
@@ -66,6 +67,9 @@ test("browser mount publishes document state, respects shadow focus, and dispose
   notifyTextSize(2);
   await Promise.resolve();
   assert.deepEqual(zooms, [1.25, 2], "the document follows text size changes");
+  // 기록 이동과 새로 고침 단추는 코어 아이콘을 그린다.
+  const iconOf = (command) => shadow.querySelector(`[data-command="${command}"] svg`)?.dataset.icon;
+  assert.deepEqual(["browser.back", "browser.forward", "browser.reload"].map(iconOf), ["chevron-left", "chevron-right", "rotate-cw"]);
   const address = shadow.querySelector("#address");
   address.focus();
   address.value = "https://typing.test/";

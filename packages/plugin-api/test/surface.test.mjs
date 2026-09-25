@@ -3,11 +3,12 @@ import test from "node:test";
 import { createSurfaceContext, mountSurfaceModule, releaseSurfaceReady } from "../surface.js";
 
 const TAB = { title() {}, directory() {}, notify() {} };
+const ICON = (name) => `<svg data-icon="${name}"></svg>`;
 
 test("surface modules mount into the supplied root and dispose exactly once", async () => {
   const root = { children: [], appendChild(node) { this.children.push(node); } };
   const phases = [];
-  const context = createSurfaceContext({ root, surfaceId: "tab-1", pluginId: "fixture", tab: TAB, runtime: {
+  const context = createSurfaceContext({ root, surfaceId: "tab-1", pluginId: "fixture", tab: TAB, icon: ICON, runtime: {
     exposure: { command() {} },
     sidecar() {}, emit() {}, native: {},
   } });
@@ -30,7 +31,7 @@ test("surface modules mount into the supplied root and dispose exactly once", as
 
 test("surface context exposes only scoped runtime capabilities", () => {
   const root = { appendChild() {} };
-  const context = createSurfaceContext({ root, surfaceId: "tab-1", pluginId: "fixture", tab: TAB, runtime: {
+  const context = createSurfaceContext({ root, surfaceId: "tab-1", pluginId: "fixture", tab: TAB, icon: ICON, runtime: {
     sidecar: () => "port", native: { composition: {} }, exposure: { command() {} }, emit() {},
     settings: { read: () => ({ "cursor.shape": "block" }), on: () => () => {} },
   } });
@@ -44,7 +45,7 @@ test("surface context carries the tab reports and the origin directory", () => {
   const root = { appendChild() {} };
   const reported = [];
   const runtime = { exposure: { command() {} }, sidecar() {}, emit() {}, native: {} };
-  const context = createSurfaceContext({ root, surfaceId: "tab-1", pluginId: "fixture", runtime,
+  const context = createSurfaceContext({ root, surfaceId: "tab-1", pluginId: "fixture", runtime, icon: ICON,
     tab: { title: (text) => reported.push(["title", text]), directory: (path) => reported.push(["directory", path]),
       notify: (text) => reported.push(["notify", text]) },
     origin: { directory: "/tmp/origin" } });
@@ -54,7 +55,16 @@ test("surface context carries the tab reports and the origin directory", () => {
   assert.deepEqual(reported, [["title", "vim"], ["directory", "/tmp"], ["notify", "done"]]);
   assert.equal(context.origin.directory, "/tmp/origin");
   assert.equal(Object.isFrozen(context.origin), true);
-  assert.equal(createSurfaceContext({ root, surfaceId: "tab-2", runtime, tab: TAB }).origin.directory, null);
-  assert.throws(() => createSurfaceContext({ root, surfaceId: "tab-3", runtime }),
+  assert.equal(createSurfaceContext({ root, surfaceId: "tab-2", runtime, tab: TAB, icon: ICON }).origin.directory, null);
+  assert.throws(() => createSurfaceContext({ root, surfaceId: "tab-3", runtime, icon: ICON }),
     /surface context requires tab.title, tab.directory, and tab.notify/);
+});
+
+test("surface context offers the core icons and requires them", () => {
+  const root = { appendChild() {} };
+  const runtime = { exposure: { command() {} }, sidecar() {}, emit() {}, native: {} };
+  const context = createSurfaceContext({ root, surfaceId: "tab-1", runtime, tab: TAB, icon: ICON });
+  assert.equal(context.icon("rotate-cw"), '<svg data-icon="rotate-cw"></svg>');
+  assert.throws(() => createSurfaceContext({ root, surfaceId: "tab-2", runtime, tab: TAB }),
+    /surface context requires icon\(name\)/);
 });
