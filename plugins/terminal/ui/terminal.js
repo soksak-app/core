@@ -207,6 +207,8 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     scrollback: { offset: 0, history: 0 },
     // 포인터 아래 칸의 OSC 8 링크 URI. 없으면 null.
     link: null,
+    // OSC 22 로 프로그램이 정한 포인터 모양(CSS cursor 값). 링크 칸 위에서는 손 모양이 우선한다.
+    pointer: "default",
     vendor: { directory: null, hyperlink: null, notification: null, shell: null },
     compose: { text: "", selectedRange: null, replacementRange: null, attributed: false },
     theme: "dark",
@@ -635,11 +637,13 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
     hoverCell = cell;
     sendMouse("move", { x, y }, event, false);
   };
+  // 프로그램이 정한 포인터 모양. 기본값은 페이지의 커서다.
+  const pointerStyle = () => (session.pointer === "default" ? "" : session.pointer);
   // 링크 칸 위의 포인터는 손 모양이다.
   const hoverLink = (event) => {
     const link = event.type === "pointerleave" ? null : linkAt(event);
     if (link === session.link) return;
-    view.style.cursor = link ? "pointer" : "";
+    view.style.cursor = link ? "pointer" : pointerStyle();
     session = { ...session, link };
     changed("session");
   };
@@ -972,6 +976,14 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
         return;
       }
       session = { ...session, vendor: { ...session.vendor, hyperlink: { id: body.id, uri: body.uri } } };
+      changed("session");
+    } else if (body.event === "pointer") {
+      if (typeof body.shape !== "string" || body.shape.length === 0) {
+        reportInputError(new Error("invalid pointer event from sidecar"));
+        return;
+      }
+      session = { ...session, pointer: body.shape };
+      if (!session.link) view.style.cursor = pointerStyle();
       changed("session");
     } else if (body.event === "notification") {
       if (typeof body.message !== "string" || body.message.length === 0) {

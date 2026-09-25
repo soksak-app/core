@@ -325,6 +325,8 @@ pub enum EngineEvent {
         code: Option<i32>,
     },
     MouseCursorDirty,
+    /// OSC 22 가 정한 포인터 모양. CSS cursor 값이다.
+    PointerShape(String),
     Error(String),
 }
 
@@ -1381,6 +1383,15 @@ async fn send_engine_events(
                     continue;
                 }
                 let response = json!({"surface": surface_id, "body": {"event": "hyperlink", "id": id, "uri": uri}});
+                if output_tx.send(response.to_string()).await.is_err() {
+                    return false;
+                }
+            }
+            EngineEvent::PointerShape(shape) => {
+                if !emit_surface_events {
+                    continue;
+                }
+                let response = json!({"surface": surface_id, "body": {"event": "pointer", "shape": shape}});
                 if output_tx.send(response.to_string()).await.is_err() {
                     return false;
                 }

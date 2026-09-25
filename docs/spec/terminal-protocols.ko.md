@@ -41,8 +41,10 @@ OSC 1337 이미지 전송은 OSC 확장을 사용한다. APC 그래픽 프로토
 | `4` | 인덱스 색상 설정·조회 | `implemented`: 팔레트 효과와 정확한 RGB 응답 | `indexed_colors_and_combining_characters_survive_export`, `every_default_indexed_color_query_returns_the_default_palette` |
 | `5`, `6` | 특수 색상 설정 / 활성 상태 | `unsupported`: 특수 색상·모드 계약 없음 | `osc_selector_inventory_records_unsupported_operations` |
 | `10`–`12` | VT 전경·배경·커서 색상 | `implemented`: 효과와 조회 응답 | `dynamic_color_replies_and_screen_colors_use_the_same_palette`, `osc_default_color_queries_match_renderer_defaults` |
-| `13`–`19`, `21` | 포인터·Tektronix·강조 색상, 창 제목 | `unsupported`: 대응하는 exported state 없음 | `osc_selector_inventory_records_unsupported_operations` |
-| `22` | 포인터 모양 | `unsupported`: native pointer 모양은 터미널 protocol output이 아님 | `osc_selector_inventory_records_unsupported_operations` |
+| `13`, `14` | 포인터 전경·배경 색 | `unsupported`: 페이지는 자체 색을 가진 시스템 포인터 그림을 쓴다. 만든 포인터 그림으로의 구현은 아직 없다 | `osc_selector_inventory_records_unsupported_operations` |
+| `15`, `16`, `18`, `21` | Tektronix 색과 제목 | `unsupported`: 터미널에 Tektronix 에뮬레이션이 없다 | `osc_selector_inventory_records_unsupported_operations` |
+| `17`, `19` | 강조 배경·글자 색 | `implemented`: 설정, 요청과 같은 종결자의 조회 응답, 선택 칸을 반전 대신 그 색으로 그림. 설정하지 않은 색은 반전 색으로 답한다 | `osc_highlight_colors_are_set_queried_reset_and_draw_the_selection` |
+| `22` | 포인터 모양 | `implemented`: X 커서 글꼴 이름과 CSS 이름을 터미널 뷰의 CSS cursor로 바꾸고 `terminal.session.pointer`로 알린다. 빈 이름은 기본값으로 되돌리고, 모르는 이름은 명시적 오류다 | `osc22_sets_the_pointer_shape_and_rejects_unknown_shapes` |
 | `46` | 로그 파일 | `unsupported`: 터미널 process가 호스트 로그 파일을 선택하지 않음 | `osc_selector_inventory_records_unsupported_operations` |
 | `50` | 커서 글꼴·모양 동작 | `implemented`: 지원하는 커서 모양 하위 형식만. 다른 글꼴 형식은 parser 계약에서 거부 | `osc50_cursor_shape_changes_program_cursor` |
 | `51` | Emacs shell 예약 | `unsupported`: 효과 없음 | `osc_selector_inventory_records_unsupported_operations` |
@@ -51,6 +53,7 @@ OSC 1337 이미지 전송은 OSC 확장을 사용한다. APC 그래픽 프로토
 | `104` | 인덱스 색상 초기화 | `implemented`: 팔레트 초기화 | `osc104_resets_indexed_colors`, `osc104_without_parameters_resets_all_indexed_colors` |
 | `105`, `106` | 특수 색상 초기화·모드 | `unsupported`: 특수 색상 계약 없음 | `osc_selector_inventory_records_unsupported_operations` |
 | `110`–`112` | 동적 색상 초기화 | `implemented`: 전경·배경·커서 초기화 | `osc_dynamic_color_resets_restore_defaults` |
+| `117`, `119` | 강조 색 초기화 | `implemented`: 초기화한 색의 선택은 다시 반전으로 그린다 | `osc_highlight_colors_are_set_queried_reset_and_draw_the_selection` |
 | `I`, `l`, `L` | Sun/CDE 아이콘·제목 형식 | `unsupported`: icon-label·비숫자 선택자 계약 없음 | `osc_selector_inventory_records_unsupported_operations` |
 | `7` | 현재 작업 디렉터리 URI | `vendor implemented`: typed `directory` event. 빈 URI는 거부 | `vendor_osc_effects_are_typed_and_survive_bel_st_and_fragmentation`, `malformed_vendor_osc_is_rejected_without_silent_drop`, `vendor_event_is_emitted_only_with_the_owning_surface_id` |
 | `8` | hyperlink parameter·URI | `vendor implemented`: typed open/close event. 알 수 없거나 중복된 parameter는 거부 | `vendor_osc_effects_are_typed_and_survive_bel_st_and_fragmentation`, `malformed_vendor_osc_is_rejected_without_silent_drop` |

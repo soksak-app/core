@@ -181,6 +181,41 @@ for (const app of Object.values(APPS)) {
     await effect(s, surface, "\\033]50;CursorShape=0\\007");
     await s.until("terminal.cursor", (cursor) => cursor.drawn.shape === "block", "OSC 50 CursorShape=0 did not draw a block", { surface });
 
+    // 22: 포인터 모양.
+    await effect(s, surface, "\\033]22;crosshair\\007");
+    await s.until("terminal.session", (value) => value.pointer === "crosshair", "OSC 22 did not set the pointer", { surface });
+    await effect(s, surface, "\\033]22;\\007");
+    await s.until("terminal.session", (value) => value.pointer === "default", "an empty OSC 22 did not restore the pointer", { surface });
+
+    // 17, 19, 117, 119: 선택 영역의 강조 색.
+    const highlight = await color("17");
+    const highlightText = await color("19");
+    assert.match(highlight, /^\x1b\]17;rgb:[0-9a-f]{4}\/[0-9a-f]{4}\/[0-9a-f]{4}$/, "OSC 17 query");
+    await effect(s, surface, "\\033]17;rgb:12/34/56\\007\\033]19;rgb:ab/cd/ef\\007\\033[1;1HHIGHLIGHT");
+    assert.equal(await color("17"), "\x1b]17;rgb:1212/3434/5656", "OSC 17 set");
+    assert.equal(await color("19"), "\x1b]19;rgb:abab/cdcd/efef", "OSC 19 set");
+    await effect(s, surface, "\\033[1;1HHIGHLIGHT");
+    const view = await s.rect("terminal.view", undefined, surface);
+    const { cellWidth, cellHeight } = await s.get("terminal.session", surface);
+    const at = (col) => ({ x: view.document.x + view.x + (col + 0.5) * cellWidth, y: view.document.y + view.y + 0.5 * cellHeight });
+    const selectFirstCells = async () => {
+      const before = (await s.get("terminal.session", surface)).selectionReleases;
+      await s.pointer(at(0).x, at(0).y, "down");
+      await s.pointer(at(3).x, at(3).y, "drag");
+      await s.pointer(at(3).x, at(3).y, "up");
+      await s.until("terminal.session", (value) => value.selectionReleases === before + 1, "the selection was not released", { surface });
+    };
+    await selectFirstCells();
+    await s.until("terminal.screen", (lines) => lines[0][1]?.ch === "I" && !lines[0][1].inverse,
+      "a selected cell with highlight colors was drawn inverse", { surface });
+    await effect(s, surface, "\\033]117\\007\\033]119\\007\\033[1;1HHIGHLIGHT");
+    assert.equal(await color("17"), highlight, "OSC 117 reset");
+    assert.equal(await color("19"), highlightText, "OSC 119 reset");
+    await effect(s, surface, "\\033[1;1HHIGHLIGHT");
+    await selectFirstCells();
+    await s.until("terminal.screen", (lines) => lines[0][1]?.ch === "I" && lines[0][1].inverse === true,
+      "a selected cell without highlight colors was not drawn inverse", { surface });
+
     // 52: 기본 정책은 거부하고, 허용하면 텍스트를 저장하고 조회에 답한다.
     const before = pasteboardText();
     await effect(s, surface, `\\033]52;c;${Buffer.from("OSC52-DENIED").toString("base64")}\\007`);

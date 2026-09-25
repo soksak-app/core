@@ -2175,6 +2175,24 @@ test("the drawn cursor follows the screen event while the policy shape stays", a
   assert.deepEqual(fakeExpose.getStatus("terminal.cursor").readFn().drawn, { shape: "hollowBlock", blinking: false });
 });
 
+test("an OSC 22 pointer event sets the view cursor and the session pointer", async () => {
+  FakeResizeObserver.reset();
+  const fakeSidecar = createFakeSidecar();
+  const fakeExpose = createFakeExpose();
+  const view = createFakeView();
+  await startTerminal({
+    view, attachImage: createFakeAttachImage().function,
+    sidecar: fakeSidecar, expose: fakeExpose,
+    window: { TextEncoder: FakeTextEncoder },
+  });
+  openSession(fakeSidecar);
+  fakeSidecar.triggerEvent("test-session", { event: "pointer", shape: "crosshair" });
+  assert.equal(fakeExpose.getStatus("terminal.session").readFn().pointer, "crosshair");
+  assert.equal(view.style.cursor, "crosshair");
+  fakeSidecar.triggerEvent("test-session", { event: "pointer", shape: "default" });
+  assert.equal(view.style.cursor, "", "the default pointer returns the page cursor");
+});
+
 test("cursor policy sends explicit shape, blink, interval, idle timeout, and unfocused rendering", async () => {
   FakeResizeObserver.reset();
   const fakeSidecar = createFakeSidecar();

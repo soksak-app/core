@@ -187,8 +187,7 @@ fn unsupported_osc_selector_is_an_explicit_error_after_st() {
 #[test]
 fn every_unsupported_osc_inventory_selector_emits_an_explicit_error() {
     for selector in [
-        "1", "3", "5", "6", "13", "19", "21", "22", "46", "51", "60", "62", "105", "106", "I", "l",
-        "L",
+        "1", "3", "5", "6", "13", "18", "21", "46", "51", "60", "62", "105", "106", "I", "l", "L",
     ] {
         let mut engine = AlacrittyEngine::new();
         engine.feed(format!("\x1b]{selector};ignored\x07").as_bytes());
@@ -204,7 +203,8 @@ fn every_unsupported_osc_inventory_selector_emits_an_explicit_error() {
 
 #[test]
 fn x11_and_tektronix_osc_selectors_are_explicitly_rejected() {
-    for selector in ["13", "14", "15", "16", "17", "18", "19"] {
+    // 17 과 19(강조 색)는 구현했다. 나머지는 포인터 색과 Tektronix 색이다.
+    for selector in ["13", "14", "15", "16", "18"] {
         let mut engine = AlacrittyEngine::new();
         engine.feed(format!("\x1b]{selector};ignored\x07").as_bytes());
         assert!(
@@ -1653,4 +1653,58 @@ fn erase_above_clears_every_line_above_the_cursor_and_the_line_up_to_it() {
     );
     let cursor = engine.cursor();
     assert_eq!((cursor.row, cursor.col), (1, 3));
+}
+
+fn replies(engine: &mut AlacrittyEngine) -> Vec<String> {
+    engine
+        .drain_events()
+        .into_iter()
+        .filter_map(|event| match event {
+            EngineEvent::PtyWrite(bytes) => Some(String::from_utf8(bytes).unwrap()),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn osc_highlight_colors_are_set_queried_reset_and_draw_the_selection() {
+    let mut engine = AlacrittyEngine::new();
+    engine.resize(10, 2);
+    engine.feed(b"AB");
+    let default_background = engine.screen().background.clone().expect("default background");
+    // 설정하지 않은 강조 배경은 기본 전경색, 강조 글자는 기본 배경색이다(반전과 같다).
+    engine.feed(b"\x1b]17;?\x07\x1b]19;?\x1b\\");
+    let unset = replies(&mut engine);
+    assert_eq!(unset.len(), 2, "{unset:?}");
+    assert!(unset[0].starts_with("\x1b]17;rgb:") && unset[0].ends_with('\x07'), "{unset:?}");
+    assert!(unset[1].starts_with("\x1b]19;rgb:") && unset[1].ends_with("\x1b\\"), "{unset:?}");
+
+    engine.feed(b"\x1b]17;rgb:12/34/56\x07\x1b]19;#abcdef\x07\x1b]17;?\x07\x1b]19;?\x07");
+    assert_eq!(replies(&mut engine), ["\x1b]17;rgb:1212/3434/5656\x07", "\x1b]19;rgb:abab/cdcd/efef\x07"]);
+    engine.selection_start(0, 0).unwrap();
+    engine.selection_update(0, 0).unwrap();
+    let cell = engine.screen().lines[0][0].clone();
+    assert_eq!((cell.bg.as_deref(), cell.fg.as_deref(), cell.inverse), (Some("#123456"), Some("#abcdef"), false),
+        "a selected cell uses the highlight colors instead of inverse");
+
+    engine.feed(b"\x1b]117\x07\x1b]119\x07\x1b]17;?\x07");
+    assert_eq!(replies(&mut engine), unset[..1].to_vec(), "OSC 117 restores the default highlight background");
+    assert!(engine.screen().lines[0][0].inverse, "without highlight colors a selected cell is inverse");
+    assert!(default_background.starts_with('#'));
+
+    engine.feed(b"\x1b]17;not-a-color\x07");
+    assert!(engine.drain_events().iter().any(|event| matches!(event, EngineEvent::Error(reason) if reason.contains("OSC 17"))));
+}
+
+#[test]
+fn osc22_sets_the_pointer_shape_and_rejects_unknown_shapes() {
+    let mut engine = AlacrittyEngine::new();
+    engine.feed(b"\x1b]22;hand2\x07\x1b]22;text\x07\x1b]22;\x07\x1b]22;spaceship\x07");
+    let events = engine.drain_events();
+    let shapes: Vec<_> = events.iter().filter_map(|event| match event {
+        EngineEvent::PointerShape(shape) => Some(shape.clone()),
+        _ => None,
+    }).collect();
+    assert_eq!(shapes, ["pointer", "text", "default"]);
+    assert!(events.iter().any(|event| matches!(event, EngineEvent::Error(reason) if reason.contains("spaceship"))));
 }

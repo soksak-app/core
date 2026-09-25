@@ -29,7 +29,7 @@ fn osc_outcome(selector: &[u8]) -> OscOutcome {
         return OscOutcome::Unsupported;
     };
     match number {
-        0 | 2 | 4 | 10..=12 | 50 | 52 | 104 | 110..=112 => OscOutcome::Implemented,
+        0 | 2 | 4 | 10..=12 | 17 | 19 | 22 | 50 | 52 | 104 | 110..=112 | 117 | 119 => OscOutcome::Implemented,
         7 | 8 | 9 | 133 | 1337 => OscOutcome::Vendor,
         _ => OscOutcome::Unsupported,
     }
@@ -72,9 +72,19 @@ pub const OSC_SELECTOR_INVENTORY: &[OscSelectorEvidence] = &[
         test: "dynamic_color_replies_and_screen_colors_use_the_same_palette",
     },
     OscSelectorEvidence {
-        selector: "13-19,21,22,46",
+        selector: "13-16,18,21,46",
         outcome: OscOutcome::Unsupported,
         test: "osc_selector_inventory_records_unsupported_operations",
+    },
+    OscSelectorEvidence {
+        selector: "17,19,117,119",
+        outcome: OscOutcome::Implemented,
+        test: "osc_highlight_colors_are_set_queried_reset_and_draw_the_selection",
+    },
+    OscSelectorEvidence {
+        selector: "22",
+        outcome: OscOutcome::Implemented,
+        test: "osc22_sets_the_pointer_shape_and_rejects_unknown_shapes",
     },
     OscSelectorEvidence {
         selector: "50",
@@ -127,6 +137,54 @@ pub const OSC_SELECTOR_INVENTORY: &[OscSelectorEvidence] = &[
         test: "osc1337_inline_image_is_typed_and_survives_input_chunk_boundaries",
     },
 ];
+
+/// X 색 이름의 `rgb:h/h/h`(성분마다 1–4자리 16진수)와 `#hhh`–`#hhhhhhhhhhhh` 형식.
+fn parse_x_color(value: &str) -> Option<Rgb> {
+    let scale = |digits: &str| -> Option<u8> {
+        if digits.is_empty() || digits.len() > 4 {
+            return None;
+        }
+        let value = u32::from_str_radix(digits, 16).ok()?;
+        let max = (1u32 << (4 * digits.len())) - 1;
+        Some(((value * 255 + max / 2) / max) as u8)
+    };
+    if let Some(rest) = value.strip_prefix("rgb:") {
+        let parts: Vec<_> = rest.split('/').collect();
+        if parts.len() != 3 {
+            return None;
+        }
+        return Some(Rgb { r: scale(parts[0])?, g: scale(parts[1])?, b: scale(parts[2])? });
+    }
+    let hex = value.strip_prefix('#')?;
+    if hex.is_empty() || hex.len() % 3 != 0 || hex.len() > 12 {
+        return None;
+    }
+    let width = hex.len() / 3;
+    Some(Rgb { r: scale(&hex[..width])?, g: scale(&hex[width..2 * width])?, b: scale(&hex[2 * width..])? })
+}
+
+/// OSC 22 의 포인터 이름을 CSS cursor 값으로 바꾼다. X 커서 글꼴 이름과 CSS 이름을 받는다. 빈 이름은 기본값이다.
+fn pointer_shape(name: &str) -> Option<&'static str> {
+    Some(match name {
+        "" | "default" | "left_ptr" | "arrow" | "top_left_arrow" => "default",
+        "text" | "xterm" | "ibeam" => "text",
+        "pointer" | "hand" | "hand1" | "hand2" => "pointer",
+        "wait" | "watch" => "wait",
+        "progress" => "progress",
+        "crosshair" | "cross" | "tcross" => "crosshair",
+        "move" | "fleur" => "move",
+        "help" | "question_arrow" => "help",
+        "not-allowed" | "X_cursor" => "not-allowed",
+        "ew-resize" | "sb_h_double_arrow" => "ew-resize",
+        "ns-resize" | "sb_v_double_arrow" => "ns-resize",
+        "col-resize" => "col-resize",
+        "row-resize" => "row-resize",
+        "grab" => "grab",
+        "grabbing" => "grabbing",
+        "none" => "none",
+        _ => return None,
+    })
+}
 
 fn parse_vendor_osc(selector: &[u8], payload: &[u8]) -> Result<Option<EngineEvent>, String> {
     let selector = std::str::from_utf8(selector)
@@ -457,6 +515,9 @@ pub struct AlacrittyEngine {
     /// 선택을 시작한 칸. 끄는 방향에 따라 이 칸과 포인터 칸을 모두 포함하도록 선택의 경계 쪽을 정한다.
     selection_anchor: Option<Point>,
     shell: ShellState,
+    /// OSC 17 과 19 가 정한 선택 영역의 배경과 글자 색. 없으면 선택 칸을 반전해 그린다.
+    highlight_background: Option<Rgb>,
+    highlight_foreground: Option<Rgb>,
 }
 
 impl AlacrittyEngine {
@@ -479,6 +540,8 @@ impl AlacrittyEngine {
             pending_sequence: Vec::new(),
             selection_anchor: None,
             shell: ShellState::Output,
+            highlight_background: None,
+            highlight_foreground: None,
         }
     }
 
@@ -574,14 +637,18 @@ impl AlacrittyEngine {
             } else {
                 self.pending_osc.len() - 2
             };
-            let body = &self.pending_osc[2..terminator];
+            let owned = self.pending_osc[2..terminator].to_vec();
+            let body = owned.as_slice();
             let (selector, payload) = body
                 .iter()
                 .position(|byte| *byte == b';')
                 .map(|position| (&body[..position], &body[position + 1..]))
                 .unwrap_or((body, &[]));
             let outcome = osc_outcome(selector);
-            let event = if outcome == OscOutcome::Vendor {
+            let bel = self.pending_osc.last() == Some(&b'\x07');
+            let event = if let Some(result) = self.engine_osc(selector, payload, bel) {
+                result
+            } else if outcome == OscOutcome::Vendor {
                 match parse_vendor_osc(selector, payload) {
                     Ok(Some(event)) => Some(event),
                     Ok(None) => None,
@@ -616,6 +683,49 @@ impl AlacrittyEngine {
             self.pending_osc.clear();
         }
         marks
+    }
+
+    /// 엔진이 직접 처리하는 OSC: 17/19 강조 색의 설정과 조회, 117/119 초기화, 22 포인터 모양. 처리하지 않는
+    /// 선택자는 None 이다. 조회의 답은 요청과 같은 종결자로 끝난다.
+    fn engine_osc(&mut self, selector: &[u8], payload: &[u8], bel: bool) -> Option<Option<EngineEvent>> {
+        let selector = std::str::from_utf8(selector).ok()?;
+        let payload = String::from_utf8_lossy(payload);
+        let terminator = if bel { "\x07" } else { "\x1b\\" };
+        Some(match selector {
+            "17" | "19" if payload == "?" => {
+                let background = selector == "17";
+                let rgb = if background { self.highlight_background } else { self.highlight_foreground }
+                    .or_else(|| self.default_rgb(if background { NamedColor::Foreground } else { NamedColor::Background }));
+                rgb.map(|rgb| EngineEvent::PtyWrite(format!(
+                    "\x1b]{selector};rgb:{:02x}{:02x}/{:02x}{:02x}/{:02x}{:02x}{terminator}",
+                    rgb.r, rgb.r, rgb.g, rgb.g, rgb.b, rgb.b
+                ).into_bytes()))
+            }
+            "17" | "19" => match parse_x_color(&payload) {
+                Some(rgb) => {
+                    if selector == "17" { self.highlight_background = Some(rgb) } else { self.highlight_foreground = Some(rgb) }
+                    None
+                }
+                None => Some(EngineEvent::Error(format!("OSC {selector} color is not an X color: {payload}"))),
+            },
+            "117" => { self.highlight_background = None; None }
+            "119" => { self.highlight_foreground = None; None }
+            "22" => match pointer_shape(&payload) {
+                Some(shape) => Some(EngineEvent::PointerShape(shape.to_string())),
+                None => Some(EngineEvent::Error(format!("OSC 22 pointer shape is not supported: {payload}"))),
+            },
+            _ => return None,
+        })
+    }
+
+    /// 테마가 정한 기본 색.
+    fn default_rgb(&self, name: NamedColor) -> Option<Rgb> {
+        self.term.colors()[name].or_else(|| {
+            self.theme
+                .color(name as usize)
+                .or_else(|| default_terminal_color(name as usize))
+                .map(|rgb| Rgb { r: rgb[0], g: rgb[1], b: rgb[2] })
+        })
     }
 
     fn apply_shell_mark(&mut self, marker: ShellMarker, redraw: Option<bool>) {
@@ -1252,7 +1362,18 @@ impl Engine for AlacrittyEngine {
             if renderable.selection.as_ref().is_some_and(|selection| {
                 selection.contains_cell(&indexed, renderable.cursor.point, renderable.cursor.shape)
             }) {
-                cell.inverse = !cell.inverse;
+                if self.highlight_background.is_some() || self.highlight_foreground.is_some() {
+                    // 강조 색이 있으면 반전 대신 그 색으로 그린다. 정하지 않은 쪽은 반전과 같은 색이다.
+                    let hex = |rgb: Rgb| format!("#{:02x}{:02x}{:02x}", rgb.r, rgb.g, rgb.b);
+                    let (foreground, background) = if cell.inverse { (cell.bg.clone(), cell.fg.clone()) } else { (cell.fg.clone(), cell.bg.clone()) };
+                    let foreground = foreground.or_else(|| self.default_rgb(NamedColor::Foreground).map(hex));
+                    let background = background.or_else(|| self.default_rgb(NamedColor::Background).map(hex));
+                    cell.bg = self.highlight_background.map(hex).or(foreground);
+                    cell.fg = self.highlight_foreground.map(hex).or(background);
+                    cell.inverse = false;
+                } else {
+                    cell.inverse = !cell.inverse;
+                }
             }
             lines[row][col] = cell;
         }

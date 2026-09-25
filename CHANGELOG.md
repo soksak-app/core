@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-51-5 (partial): the terminal implements OSC 17/19 highlight colors with their queries and 117/119 resets, and OSC 22 pointer shapes.
 - V5-62: the terminal service keeps a surface's actor when the client's output closes before its connection ends, so a later `retain` can close the session.
 - V5-51-6-4: terminal programs that enable focus reports (?1004) receive `ESC[I` and `ESC[O` when the terminal gains and loses focus.
 - V5-51-6-3: terminal programs that enable mouse reporting (?1000, ?1002, ?1003) receive left-button presses, releases, and movements in the default, UTF-8, or SGR encoding; Shift keeps selecting text.

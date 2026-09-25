@@ -41,8 +41,10 @@ The following is the current selector-level audit against the pinned XTerm refer
 | `4` | Indexed color set/query | `implemented`: palette effect and exact RGB reply | `indexed_colors_and_combining_characters_survive_export`, `every_default_indexed_color_query_returns_the_default_palette` |
 | `5`, `6` | Special color set / enable state | `unsupported`: no special-color or mode contract | `osc_selector_inventory_records_unsupported_operations` |
 | `10`–`12` | VT foreground/background/cursor colors | `implemented`: effect and query reply | `dynamic_color_replies_and_screen_colors_use_the_same_palette`, `osc_default_color_queries_match_renderer_defaults` |
-| `13`–`19`, `21` | Pointer, Tektronix, highlight colors, window title | `unsupported`: no corresponding exported state | `osc_selector_inventory_records_unsupported_operations` |
-| `22` | Pointer shape | `unsupported`: native pointer shape is not a terminal protocol output | `osc_selector_inventory_records_unsupported_operations` |
+| `13`, `14` | Pointer foreground and background colors | `unsupported`: the page uses the system pointer images, which carry their own colors; not yet implemented through generated pointer images | `osc_selector_inventory_records_unsupported_operations` |
+| `15`, `16`, `18`, `21` | Tektronix colors and title | `unsupported`: the terminal has no Tektronix emulation | `osc_selector_inventory_records_unsupported_operations` |
+| `17`, `19` | Highlight background and text colors | `implemented`: set, query with the request's terminator, and selected cells drawn with them instead of inverse; an unset color answers as the inverse color | `osc_highlight_colors_are_set_queried_reset_and_draw_the_selection` |
+| `22` | Pointer shape | `implemented`: X cursor font names and CSS names map to the terminal view's CSS cursor, reported as `terminal.session.pointer`; an empty name restores the default, an unknown name is an explicit error | `osc22_sets_the_pointer_shape_and_rejects_unknown_shapes` |
 | `46` | Log file | `unsupported`: terminal processes cannot select a host log file | `osc_selector_inventory_records_unsupported_operations` |
 | `50` | Cursor font/shape operation | `implemented`: supported cursor-shape subform only; other font forms are rejected by the parser contract | `osc50_cursor_shape_changes_program_cursor` |
 | `51` | Emacs shell reservation | `unsupported`: no effect | `osc_selector_inventory_records_unsupported_operations` |
@@ -51,6 +53,7 @@ The following is the current selector-level audit against the pinned XTerm refer
 | `104` | Indexed color reset | `implemented`: palette reset | `osc104_resets_indexed_colors`, `osc104_without_parameters_resets_all_indexed_colors` |
 | `105`, `106` | Special color reset/mode | `unsupported`: no special-color contract | `osc_selector_inventory_records_unsupported_operations` |
 | `110`–`112` | Dynamic color reset | `implemented`: foreground/background/cursor reset | `osc_dynamic_color_resets_restore_defaults` |
+| `117`, `119` | Highlight color reset | `implemented`: the selection returns to inverse for the reset color | `osc_highlight_colors_are_set_queried_reset_and_draw_the_selection` |
 | `I`, `l`, `L` | Sun/CDE icon and title forms | `unsupported`: no icon-label or nonnumeric selector contract | `osc_selector_inventory_records_unsupported_operations` |
 | `7` | Current working directory URI | `vendor implemented`: typed `directory` event; empty URI is rejected | `vendor_osc_effects_are_typed_and_survive_bel_st_and_fragmentation`, `malformed_vendor_osc_is_rejected_without_silent_drop`, `vendor_event_is_emitted_only_with_the_owning_surface_id` |
 | `8` | Hyperlink parameters and URI | `vendor implemented`: typed open/close event; unknown or duplicate parameters are rejected | `vendor_osc_effects_are_typed_and_survive_bel_st_and_fragmentation`, `malformed_vendor_osc_is_rejected_without_silent_drop` |
