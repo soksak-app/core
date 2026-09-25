@@ -2,7 +2,7 @@
 //
 // 한 줄에 JSON 메시지 하나를 사용한다. 형식은 docs/spec/sidecars.md 에 정의한다.
 //
-//	입력  {"surface": id, "root": 경로, "body": {"operation": "open"}}
+//	입력  {"surface": id, "root": 경로, "body": {"operation": "open", "directory"?: 경로}}
 //	      {"surface": id, "body": {"operation": "write", "data": 텍스트}}
 //	      {"surface": id, "body": {"operation": "run", "id": 요청, "command": 명령}}
 //	      {"surface": id, "body": {"operation": "interrupt"}}
@@ -23,6 +23,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"sync"
 )
 
@@ -36,6 +37,7 @@ type Request struct {
 		Data      string `json:"data,omitempty"`
 		ID        string `json:"id,omitempty"`
 		Command   string `json:"command,omitempty"`
+		Directory string `json:"directory,omitempty"`
 	} `json:"body"`
 }
 
@@ -113,7 +115,15 @@ func handle(shells *Shells, request Request) error {
 		if request.Root == "" {
 			return fmt.Errorf("open requires a root")
 		}
-		_, err := shells.Open(request.Surface, request.Root)
+		// directory 가 있으면 그곳에서, 없으면 프로젝트 루트에서 시작한다(docs/spec/sidecars.md).
+		dir := request.Root
+		if request.Body.Directory != "" {
+			if err := checkDirectory(request.Body.Directory); err != nil {
+				return err
+			}
+			dir = request.Body.Directory
+		}
+		_, err := shells.Open(request.Surface, dir)
 		return err
 	case "close":
 		return shells.Close(request.Surface)
@@ -129,4 +139,19 @@ func handle(shells *Shells, request Request) error {
 	default:
 		return fmt.Errorf("unknown operation: %q", request.Body.Operation)
 	}
+}
+
+// checkDirectory 는 open 의 directory 가 있는 디렉터리의 절대 경로인지 검사한다.
+func checkDirectory(dir string) error {
+	if !filepath.IsAbs(dir) {
+		return fmt.Errorf("open directory must be an absolute path: %q", dir)
+	}
+	info, err := os.Stat(dir)
+	if err != nil {
+		return fmt.Errorf("open directory %q: %w", dir, err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("open directory %q is not a directory", dir)
+	}
+	return nil
 }

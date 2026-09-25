@@ -8,7 +8,7 @@ const readyReleases = new WeakMap();
 
 export function createSurfaceContext({
   root, surfaceId, pluginId, declarations = {}, composition = null, diagnostics = null, runtime = {},
-  tab, origin = { directory: null }, icon,
+  tab, origin = { directory: null }, project = null, icon,
 } = {}) {
   if (!root || typeof root.appendChild !== "function") throw new TypeError("surface context requires a root element");
   if (typeof surfaceId !== "string" || surfaceId === "") throw new TypeError("surface context requires surfaceId");
@@ -48,6 +48,8 @@ export function createSurfaceContext({
     tab: Object.freeze({ title: tab.title, directory: tab.directory, notify: tab.notify }),
     // 이 탭을 만든 카드의 활성 탭이 그때 기록한 작업 디렉터리.
     origin: Object.freeze({ directory: origin.directory ?? null }),
+    // 표면 창이 보이는 프로젝트의 정규 루트. 프로젝트가 없는 창에서는 null 이다.
+    project: project === null ? null : Object.freeze({ root: project.root }),
     // 코어 아이콘(docs/spec/plugins.md#icons): 이름의 24 단위 획 SVG 문자열. 없는 이름은 실패한다.
     icon,
     runtime: Object.freeze({

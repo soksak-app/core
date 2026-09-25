@@ -333,3 +333,21 @@ func TestMalformedInputStopsTheSidecar(t *testing.T) {
 		t.Fatalf("error = %v", err)
 	}
 }
+
+func TestOpenStartsInTheGivenDirectoryAndRejectsAnInvalidOne(t *testing.T) {
+	s := start(t)
+	root := t.TempDir()
+	directory := t.TempDir()
+	s.send(`{"surface":"d1","root":"` + root + `","body":{"operation":"open","directory":"` + directory + `"}}`)
+	event, _ := s.until(func(e shell.Event) bool { return e.Surface == "d1" && e.Body.Cwd != "" })
+	if !sameDir(event.Body.Cwd, directory) {
+		t.Fatalf("first directory report = %q, want %q", event.Body.Cwd, directory)
+	}
+	for surface, value := range map[string]string{"d2": "relative/path", "d3": root + "/missing"} {
+		s.send(`{"surface":"` + surface + `","root":"` + root + `","body":{"operation":"open","directory":"` + value + `"}}`)
+		event, _ := s.until(func(e shell.Event) bool { return e.Surface == surface && e.Body.Error != "" })
+		if !strings.Contains(event.Body.Error, "directory") {
+			t.Fatalf("%s: error = %q, want a directory error", surface, event.Body.Error)
+		}
+	}
+}

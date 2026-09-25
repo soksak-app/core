@@ -73,3 +73,35 @@ test("shell module reports written lines as shell.history and pending runs as sh
   assert.deepEqual(statuses.get("shell.jobs").read(), [{ id: "run-1", command: "sleep 5" }]);
   delete globalThis.document;
 });
+
+test("shell module opens in its origin directory and reports each directory to its tab", async () => {
+  const input = { value: "" };
+  const output = { children: [], append() {}, replaceChildren() {} };
+  const root = {
+    set innerHTML(value) {},
+    querySelector(selector) { return { "#in": input, "#out": output }[selector] ?? {}; },
+    replaceChildren() {},
+  };
+  const opened = [];
+  const directories = [];
+  let listener = null;
+  const context = {
+    surfaceId: "shell-origin", origin: Object.freeze({ directory: "/work/sub" }),
+    tab: { title() {}, directory: (path) => directories.push(path), notify() {} },
+    composition: { create: async () => ({ dispose: async () => {} }) },
+    runtime: { sidecar: () => ({
+      send: async (_surface, body) => { if (body.operation === "open") opened.push(body); },
+      on: async (_surface, fn) => { listener = fn; return () => {}; },
+    }) },
+    exposure: {
+      command: async () => {}, status: async () => {}, dom: async () => {},
+      delegate: async () => {}, bind: async () => {}, dispose: async () => {},
+    },
+    status: { report: () => {} },
+  };
+  const { mount } = await import("../ui/shell.js");
+  await mount(root, context);
+  assert.deepEqual(opened, [{ operation: "open", directory: "/work/sub" }]);
+  listener({ cwd: "/work/sub/deeper" });
+  assert.deepEqual(directories, ["/work/sub/deeper"]);
+});

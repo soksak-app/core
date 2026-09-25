@@ -17,7 +17,7 @@ export async function mount(root, context) {
   try {
     controller = await startTerminal({ id: context.surfaceId, view, attachImage: () => image, sidecar, scrollbar,
       expose: context.exposure, window, theme: context.runtime.theme, settings: context.runtime.settings,
-      textSize: context.runtime.textSize, tab: context.tab, origin: context.origin,
+      textSize: context.runtime.textSize, tab: context.tab, origin: context.origin, project: context.project,
       links: context.runtime.links,
       reportSurfaceError: (error) => context.status.report("error", error),
       diagnostics: context.diagnostics,

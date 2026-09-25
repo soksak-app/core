@@ -7,6 +7,7 @@ import { onSettingsChange, pluginSettings } from "./settings.js";
 import { onTextSize, surfaceTextSize } from "./text-size.js";
 import { forgetTab, reportDirectory, reportNotice, reportTitle, tabOrigin } from "./tab-reports.js";
 import { icon } from "./icons.js";
+import { active } from "./projects.js";
 const mounted = new Map();
 /* 호스트가 없는 문서에서 마운트하지 않은 표면의 자리 표시. 표면 id 마다 요소다. */
 const placeholders = new Map();
@@ -149,6 +150,8 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
         directory: (path) => reportDirectory(surface.surfaceId, path),
         notify: (text) => reportNotice(surface.surfaceId, text) },
       origin: tabOrigin(surface.surfaceId),
+      // 표면 창이 보이는 프로젝트의 정규 루트(docs/spec/plugins.md#tab-reports). 라이브러리 창에는 없다.
+      project: active() ? { root: active().root } : null,
       icon,
       runtime: { sidecar: scoped.sidecar, native: scoped.native, exposure: scoped.exposure, emit, on,
         clipboard: scoped.clipboard,

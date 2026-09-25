@@ -172,6 +172,8 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   settings, clipboard, scrollbar = null, reportSurfaceError = () => {}, diagnostics = null,
   // 탭 알림(docs/spec/plugins.md#tab-reports)과 이 탭을 만든 카드의 작업 디렉터리.
   tab = { title() {}, directory() {}, notify() {} }, origin = { directory: null },
+  // 표면 창의 프로젝트. 없으면 null 이다.
+  project = null,
   // 링크 열기(docs/spec/plugins.md#opening-links).
   links = null,
   // 이 표면의 실제 글자 배율(docs/spec/text-size.md). 출처가 없으면 배율은 1 이다.
@@ -1040,9 +1042,10 @@ export async function startTerminal({ id, view, attachImage, sidecar, expose, th
   const shell = (settings?.read?.() ?? {}).shell;
   if (typeof shell !== "string" || shell.length === 0) throw new Error("terminal shell setting is missing");
   applyTitle();
-  // 터미널에서 쪼갠 터미널은 그 터미널이 마지막으로 알린 디렉터리에서 시작한다.
-  await terminal.send(id, { operation: "open", image: "view", shell,
-    ...(origin.directory === null ? {} : { directory: origin.directory }) });
+  // 터미널에서 쪼갠 터미널은 그 터미널이 마지막으로 알린 디렉터리에서, 아니면 프로젝트 루트에서 시작한다.
+  // 프로젝트가 없는 창에서는 홈 디렉터리에서 시작한다(docs/spec/terminal-runtime.md).
+  const directory = origin.directory ?? project?.root ?? null;
+  await terminal.send(id, { operation: "open", image: "view", shell, ...(directory === null ? {} : { directory }) });
 
   let themeReady = Promise.resolve();
   let themeSubscription = null;

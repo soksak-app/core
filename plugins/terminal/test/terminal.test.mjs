@@ -2977,3 +2977,17 @@ test("a link that the host rejects is an input session error", async () => {
   await new Promise((resolve) => setImmediate(resolve));
   assert.match(fakeExpose.getStatus("terminal.session").readFn().error ?? "", /is not opened/);
 });
+
+test("a session without an origin directory opens in the project root, and without a project in the home directory", async () => {
+  for (const [project, expected] of [[{ root: "/work/app" }, { directory: "/work/app" }], [null, {}]]) {
+    FakeResizeObserver.reset();
+    const fakeSidecar = createFakeSidecar();
+    await startTerminal({
+      view: createFakeView(), attachImage: createFakeAttachImage().function,
+      sidecar: fakeSidecar, expose: createFakeExpose(), tab: createFakeTab(), project,
+      settings: titleSettings({}), window: { TextEncoder: FakeTextEncoder },
+    });
+    const open = fakeSidecar.getMessages().find((message) => message.body.operation === "open");
+    assert.deepEqual(open.body, { operation: "open", image: "view", shell: "login", ...expected });
+  }
+});
