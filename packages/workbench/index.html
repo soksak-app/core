@@ -107,6 +107,7 @@ import { drawSettings } from "./settings-ui.js";
 import { bind, run } from "./commands.js";
 import { icon } from "./icons.js";
 import { adopt, capture, fresh, clear, onDrag } from "./plane.js";
+import { onChoicesChange } from "./sidebar-sections.js";
 
 import { createLibrary } from "./library.js";
 
@@ -280,6 +281,9 @@ onLayout((made, draw, seated) => {
     draw();
   });
 });
+
+// 사이드바의 탭 선택과 접기는 스페이스에 저장한다(docs/spec/projects.md#persistence).
+onChoicesChange(() => projects.keep());
 
 /* 스페이스가 바뀌면 현재 판을 저장하고 다른 상태를 적용한다. 프로젝트 전환도 같은
    동작이다. */

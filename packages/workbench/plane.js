@@ -8,7 +8,7 @@ import { Soksak, SoksakView, outline } from "soksak";
 import { cardRadius, halfGap, linkedSet, pluginSettings, set as setSetting, stagePad, value } from "./settings.js";
 import { nextTextSize, notifyTextSize, setSurfaceTextSize, setTextScope, textScope } from "./text-size.js";
 import { hasPlugin, isPlace, isRailId, plugin, plugins, railId, railKind } from "./registry.js";
-import { clearSet, drawSet } from "./sidebar-sections.js";
+import { clearSet, drawSet, restoreSidebarChoices, sidebarChoices } from "./sidebar-sections.js";
 import { environment } from "./environment.js";
 import { standIn } from "./compositor.js";
 import { chrome as hostChrome, native, onSurfaceInput, overlay, report, shapes, windowSidecar } from "./host.js";
@@ -1324,6 +1324,8 @@ function seats() {
 function build(kept) {
   view?.destroy();
   named = kept.named;
+  // 사이드바마다 고른 탭과 접은 섹션. sidebars 가 없는 배치에는 저장된 선택이 없다(docs/spec/projects.md#persistence).
+  restoreSidebarChoices(kept.sidebars ?? {});
   railWidth = { ...kept.railWidth };
   edgeWidth = { ...kept.edgeWidth };
   const half = halfGap();
@@ -1431,6 +1433,7 @@ export const capture = () => ({
   railWidth: { ...railWidth },
   edgeWidth: { ...edgeWidth },
   named,
+  sidebars: sidebarChoices(),
 });
 
 /** 보관해 둔 상태 한 벌을 판에 적용한다. */
@@ -1441,6 +1444,7 @@ export function adopt(kept) {
   railWidth = { ...kept.railWidth };
   edgeWidth = { ...kept.edgeWidth };
   named = kept.named;
+  restoreSidebarChoices(kept.sidebars ?? {});
   forgetUnknown();
   settle();
 }
@@ -1454,6 +1458,7 @@ export const fresh = () => ({
   edgeWidth: Object.fromEntries(environment().workspace.grid.cards
     .filter((card) => card.id === "left" || card.id === "right").map((card) => [card.id, card.width])),
   named: 0,
+  sidebars: {},
 });
 
 export function clear() {
