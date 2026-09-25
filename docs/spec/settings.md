@@ -30,7 +30,7 @@ The left navigation lists three sections in this order. Every section shows the 
 | 사이드바 크기 | the width settings of [layout values](#layout-values) |
 | 표시 | 포커스 표시 `focusInd`, 경계선 `fullRule`, 포커스 밖 흐리게 `dim` |
 
-사이드바 위치 is one setting for every plugin. `flow` shows the rail beside the focused card, `pin` keeps it where it stood, `inset` shows it inside every card, and `off` hides it ([example model](example-model.md)). No plugin setting appears in 일반.
+사이드바 위치 is one setting for every plugin; its default is `inset`, and its control lists 카드 안 first. `flow` shows the rail beside the focused card, `pin` keeps it where it stood, `inset` shows it inside every card, and `off` hides it ([example model](example-model.md)). No plugin setting appears in 일반.
 
 ### 플러그인
 
