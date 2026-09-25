@@ -4,7 +4,9 @@
 
 ## 미배포
 
+- F13-1: 모든 사이드바(좌측, 우측, 레일, 카드 안)가 세트의 각 섹션 `module`을 `{card, surface}`로 마운트한다. 세트의 `layout`이 `list`이면 모든 섹션을 접기 머리(`core.sidebar.section.fold`) 아래 쌓고, `tabs`이면 고른 섹션만 마운트한다(`core.sidebar.section.select`). 접힘과 선택은 사이드바마다 유지되며 `core.sidebars`가 보고한다. 섹션 행은 `module`을, 세트는 `layout`을 요구하고, 스테이징은 패키지가 배포하지 않는 섹션 모듈을 거부한다. 아홉 섹션은 F13-2 전까지 자리표시 목록을 그린다. 다시 빌드한 Wails와 Tauri 호스트에서 검증했다(`e2e/sidebar.test.mjs` 4/4, `e2e/audit.test.mjs` 2/2).
 - V5-71: 브라우저 주소 칸이 입력에서 오지 않은 이동 뒤에 연 주소를 보이며, Enter 뒤 포커스를 유지하는 동안에도 그렇다. 입력 중인 글자는 이동 명령이 실행되거나 칸이 포커스를 잃을 때까지 유지된다. 새 상태 `browser.address.text`가 칸의 글자와 포커스를 보고한다.
+- V5-70: 문서 영역은 같은 WebKit의 Safari 사용자 에이전트(`applicationNameForUserAgent`로 시스템 Safari의 `Version/<major>.<minor> Safari/605.1.15`)를 보낸다. 브라우저 이름으로 페이지를 고르는 사이트가 더 이상 축소된 페이지를 보내지 않으며, Google 검색은 회색 버튼이 있는 기본 페이지 대신 현재 페이지를 보낸다. `document_view_test`가 요청 헤더와 `navigator.userAgent`를 검사한다(이전 Red: WebKit 기본 사용자 에이전트). 로컬 `prefers-color-scheme` 페이지는 이미 두 호스트의 캡처 픽셀에서 앱 모드를 따랐다.
 - F13-4: 주소 없는 브라우저 카드는 문서 영역을 숨기고 그 자리에 빈 상태 `browser.empty`("주소를 입력하세요")를 보인다. 이를 누르면 `browser.address.select`로 주소창이 초점을 받고, 첫 로드 뒤 영역이 다시 보인다. 이전에는 보이는 빈 WKWebView가 누름으로 네이티브 초점을 받아 흰색을 그렸다. 다시 빌드한 Wails와 Tauri 호스트에서 검증했다(`e2e/browser.test.mjs` 14/14, `e2e/audit.test.mjs` 2/2).
 - F13-0: 카드 안 사이드바 손잡이를 두 번 누르면 가장 좁은 폭 120이 된다(손잡이가 포인터 기본 동작을 막아 `dblclick`이 오지 않던 것을 고쳤다). 저장된 폭이 없는 사이드바는 120으로 열리고, 실제 입력 도구는 누름 횟수를 실어 게시한 두 번 누름이 실제 두 번 누름이 된다.
 - V5-69-2: 설정 창과 메뉴가 카드와 사이드바가 놓이는 곳을 "위치"로 부르고, 묶음 설명이 각 묶음이 바꾸는 것을 말한다.

@@ -40,6 +40,9 @@ static NSString *pageFor(NSString *path) {
     return nil;
 }
 
+// 서버가 마지막으로 받은 요청의 User-Agent 헤더.
+static NSString *requestAgent;
+
 // 응답하지 않는 요청의 연결. 검사가 끝날 때 닫는다.
 static NSMutableArray *held;
 
@@ -56,6 +59,12 @@ static nw_listener_t serve(void) {
         nw_connection_receive(connection, 1, 65536, ^(dispatch_data_t content, nw_content_context_t context, bool complete, nw_error_t error) {
             NSString *request = content ? [[[NSString alloc] initWithData:(NSData *)content encoding:NSUTF8StringEncoding] autorelease] : @"";
             NSArray *words = [[request componentsSeparatedByString:@"\r\n"].firstObject componentsSeparatedByString:@" "];
+            for (NSString *line in [request componentsSeparatedByString:@"\r\n"]) {
+                if ([line.lowercaseString hasPrefix:@"user-agent: "]) {
+                    [requestAgent release];
+                    requestAgent = [[line substringFromIndex:12] copy];
+                }
+            }
             if (words.count > 1 && [words[1] isEqualToString:@"/slow"]) {
                 [held addObject:(id)connection];
                 return;
@@ -226,6 +235,15 @@ int main(int argc, char **argv) { @autoreleasepool {
     settle(@"the first document did not load", ^BOOL(NSDictionary *state) {
         return [state[@"title"] isEqual:@"One"] && ![state[@"loading"] boolValue];
     });
+    // 문서는 같은 WebKit 위의 Safari 사용자 에이전트를 보낸다(docs/spec/native-surfaces.md#document-regions).
+    NSString *safari = [NSBundle bundleWithPath:@"/Applications/Safari.app"].infoDictionary[@"CFBundleShortVersionString"];
+    NSArray *parts = [safari componentsSeparatedByString:@"."];
+    NSString *suffix = [NSString stringWithFormat:@" Version/%@.%@ Safari/605.1.15", parts[0], parts[1]];
+    NSString *pageAgent = evaluate(view, @"navigator.userAgent");
+    check([requestAgent hasSuffix:suffix] && [requestAgent hasPrefix:@"Mozilla/5.0 "] && [requestAgent containsString:@"AppleWebKit/"],
+        [NSString stringWithFormat:@"the document request sends the Safari user agent ending in '%@': %@", suffix, requestAgent]);
+    check([pageAgent isEqual:requestAgent],
+        [NSString stringWithFormat:@"the page user agent equals the request header: %@ / %@", pageAgent, requestAgent]);
     check([evaluate(view, @"matchMedia('(prefers-color-scheme: dark)').matches") boolValue],
         @"the document renderer matches the owner's dark appearance");
     window.appearance = [NSAppearance appearanceNamed:NSAppearanceNameAqua];

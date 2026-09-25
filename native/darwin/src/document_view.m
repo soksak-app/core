@@ -273,11 +273,24 @@ static NSUUID *storeIdentifier(const char *name) {
     return [[[NSUUID alloc] initWithUUIDBytes:digest] autorelease];
 }
 
+// 영역 문서가 사용자 에이전트 뒤에 붙이는 Safari 이름. 브라우저 이름이 없는 WebKit 사용자 에이전트에는
+// 사이트가 축소된 페이지를 보내고, Google 검색의 기본 페이지에는 다크 테마가 없다. 버전은 시스템 Safari 의
+// 버전이며, 읽지 못하면 nil 이다.
+static NSString *safariApplicationName(void) {
+    NSString *version = [NSBundle bundleWithPath:@"/Applications/Safari.app"].infoDictionary[@"CFBundleShortVersionString"];
+    NSArray<NSString *> *parts = [version componentsSeparatedByString:@"."];
+    if (parts.count < 2) return nil;
+    return [NSString stringWithFormat:@"Version/%@.%@ Safari/605.1.15", parts[0], parts[1]];
+}
+
 void *sp_document_create(void *surfaceHandle, const char *store, sp_document_changed changed, void *context) {
     NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
     NSView *surface = (NSView *)surfaceHandle;
     if (!surface || !store || !changed || !surface.window) return NULL;
+    NSString *applicationName = safariApplicationName();
+    if (!applicationName) return NULL;
     WKWebViewConfiguration *configuration = [[[WKWebViewConfiguration alloc] init] autorelease];
+    configuration.applicationNameForUserAgent = applicationName;
     configuration.websiteDataStore = [WKWebsiteDataStore dataStoreForIdentifier:storeIdentifier(store)];
     WKContentWorld *world = [WKContentWorld worldWithName:@"soksak-document"];
     SPDocumentScroll *scroll = [[SPDocumentScroll new] autorelease];
