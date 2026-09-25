@@ -126,6 +126,15 @@
 
 사이드카와 그 헬퍼의 진단 용도 공개 심볼은 모두 `sp_diag_`로 시작한다. 릴리스 산출물 검사는 이 표지를 사용해 진단 코드를 담은 바이너리를 거부한다. 사이드카가 릴리스 빌드에 진단 심볼을 포함하면 검사가 심볼 이름을 가리키는 오류로 실패한다.
 
+## files
+
+`sidecars/files`(`@soksak/sidecar-files`)는 `pnpm run build`로 `build/soksak-files`를 빌드하고 세션의 `root` 안의 디렉터리를 나열한다. 코드는 `src/`(`src/main.go`와 패키지 `src/files`)에 있고 이식 가능한 Go 파일 동작만 쓰므로 플랫폼 디렉터리가 없다. 요청 사이에 상태를 갖지 않는다.
+
+| 요청 본문 | 답 본문 |
+| --- | --- |
+| `{operation: "list", id, path}` | `{id, entries: [{name, directory}]}`: `root/path`의 항목. 디렉터리가 먼저 오고 각 묶음은 이름순이다. `path`는 `root` 기준 상대 경로이며 `""`는 `root` 자신이다 |
+| 모든 실패 | `{id, error}`: `root`가 없거나, `path`가 절대 경로이거나 (심볼릭 링크를 따라간 뒤) `root`를 벗어나거나, 디렉터리를 읽을 수 없는 경우 |
+
 ## 터미널 사이드카 (vt-core)
 
 터미널 사이드카(`@soksak/sidecar-vt-core`)는 [터미널 런타임](terminal-runtime.ko.md)이 정의한 영속 서비스의 클라이언트 모듈이다. 서비스는 애플리케이션 설정 디렉터리마다 하나의 프로세스로 실행되며 독립 PTY·셸 프로세스·VT 상태·스크롤백·IOSurface 렌더링을 소유한다. 사이드카는 터미널 세션 제어 요청을 받고 영역에 화면 그림을 공급한다.
@@ -144,4 +153,4 @@
 
 ## 테스트
 
-각 사이드카는 자기 디렉터리에서 테스트를 실행한다. `shell`은 `go test ./...`로 프로토콜, 출력 순서, 디렉터리 보고, 명령 입력, `run` 결과, 중단을, `node --test tests/`로 `sidecar.json`을 검사한다. 각 호스트는 `tests/sidecars_test.*`에서 fake 사이드카 실행 파일로 전달과 스테이징된 선언 파일을 통한 해석을 검사하고 실제 사이드카를 실행하지 않는다.
+각 사이드카는 자기 디렉터리에서 테스트를 실행한다. `shell`은 `go test ./...`로 프로토콜, 출력 순서, 디렉터리 보고, 명령 입력, `run` 결과, 중단을, `node --test tests/`로 `sidecar.json`을 검사한다. `files`는 `go test ./...`로 나열, 정렬, `root` 밖 경로의 거부를 검사하고 같은 방법으로 `sidecar.json`을 검사한다. 각 호스트는 `tests/sidecars_test.*`에서 fake 사이드카 실행 파일로 전달과 스테이징된 선언 파일을 통한 해석을 검사하고 실제 사이드카를 실행하지 않는다.

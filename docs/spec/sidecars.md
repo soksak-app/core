@@ -126,6 +126,15 @@ A closed surface ends its session and its `run` commands by terminating their pr
 
 Public symbols in sidecars and their helpers that are diagnostic-only start with `sp_diag_`. The release build check uses this marker to reject binaries that contain diagnostic code. When a sidecar includes diagnostic symbols in a release build, the release check fails with an error message pointing to the symbol name.
 
+## files
+
+`sidecars/files` (`@soksak/sidecar-files`) builds `build/soksak-files` with `pnpm run build` and lists directories inside the session's `root`. Its code is in `src/` (`src/main.go` and the package `src/files`) and uses only portable Go file operations, so it has no platform directory. It keeps no state between requests.
+
+| Request body | Reply body |
+| --- | --- |
+| `{operation: "list", id, path}` | `{id, entries: [{name, directory}]}`: the entries of `root/path`, directories first, each group sorted by name; `path` is relative to `root`, `""` names `root` itself |
+| any failure | `{id, error}`: a missing `root`, a `path` that is absolute or leaves `root` (after resolving symbolic links), or a directory that cannot be read |
+
 ## Terminal sidecar (vt-core)
 
 The terminal sidecar (`@soksak/sidecar-vt-core`) is the client module for the persistent terminal service defined by [terminal runtime](terminal-runtime.md). The service is one process per application configuration directory and owns the independent PTYs, shell processes, VT state, scrollback, and IOSurface-backed rendering. The sidecar accepts requests to control a terminal session and supplies screen images to a region.
@@ -144,4 +153,4 @@ The sidecar sends `{event: "screen", ...}` whenever the terminal screen changes,
 
 ## Tests
 
-Each sidecar runs its tests in its own directory. `shell` tests its protocol, output order, directory reports, command input, `run` results, and interrupts with `go test ./...` and validates its `sidecar.json` with `node --test tests/`. Each host tests its relay in `tests/sidecars_test.*` and its resolution from staged manifests with a fake sidecar executable and does not start a real sidecar.
+Each sidecar runs its tests in its own directory. `shell` tests its protocol, output order, directory reports, command input, `run` results, and interrupts with `go test ./...` and validates its `sidecar.json` with `node --test tests/`. `files` tests listing, ordering, and the rejection of paths outside `root` with `go test ./...` and validates its `sidecar.json` the same way. Each host tests its relay in `tests/sidecars_test.*` and its resolution from staged manifests with a fake sidecar executable and does not start a real sidecar.

@@ -85,7 +85,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 
 ### 표면 선택
 
-여러 표면 페이지가 같은 이름을 등록할 수 있다. 이런 이름에 대한 `status.get`, `status.watch`, `status.unwatch`, `command.run`, `dom.rect`, `dom.act` 요청은 `core.surfaces`의 식별자인 `surface`를 포함할 수 있다. `surface`가 없으면 메인 페이지가 포커스된 카드의 활성 탭, 최근 배치의 보이는 표면, 마지막 등록 순서로 고른다. 그 이름을 등록하지 않은 `surface`는 1002를 반환한다.
+여러 표면 페이지가 같은 이름을 등록할 수 있다. 이런 이름에 대한 `status.get`, `status.watch`, `status.unwatch`, `command.run`, `dom.rect`, `dom.act` 요청은 `core.surfaces`의 식별자인 `surface`를 포함할 수 있다. `surface`가 없으면 메인 페이지가 포커스된 카드의 활성 탭, 최근 배치의 보이는 표면, 마지막 등록 순서로 고른다. 그 이름을 등록하지 않은 `surface`는 1002를 반환한다. [플러그인 상태 모듈](plugins.ko.md#플러그인-상태)이 등록한 이름에 대한 `surface` 없는 요청은 애플리케이션 문서의 그 모듈이 답한다.
 
 ## 창
 
