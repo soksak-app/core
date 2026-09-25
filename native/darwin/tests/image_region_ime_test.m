@@ -298,6 +298,16 @@ int main(void) { @autoreleasepool {
     check([control.string isEqual:@"하"],
         [NSString stringWithFormat:@"control: an injected Backspace during a composition reaches the input method and leaves 하 (text %@, calls %@)",
             control.string, control.calls]);
+    // F8: 조합 중 Escape 는 입력기가 조합을 끝낸다. 대조 컨트롤이 남기는 문서를 먼저 잰다.
+    [control.inputContext discardMarkedText];
+    control.string = @"";
+    [control.calls removeAllObjects];
+    selectSource(ABC, control.inputContext);
+    selectSource(KOREAN_2SET, control.inputContext);
+    for (NSString *key in @[@"g", @"k", @"s", @"Escape"]) typeKey(window, key, controlAnswered);
+    check([control.string isEqual:@"한"] && !control.hasMarkedText,
+        [NSString stringWithFormat:@"control: an injected Escape during a composition ends it and leaves 한 (text %@, marked %d, calls %@)",
+            control.string, control.hasMarkedText, control.calls]);
     [control removeFromSuperview];
 
     // 대조: 문서가 없는 최소 입력 클라이언트에서 입력기가 쓰는 방식을 기록한다.
@@ -401,6 +411,21 @@ int main(void) { @autoreleasepool {
     typeKey(window, @"Backspace", regionAnswered);
     check(keyCount(@"Backspace") == 1 && [valuesOfType(@"insert", 0) count] == 0,
         [NSString stringWithFormat:@"image region: Backspace without a composition is reported as a key (events %@)", events]);
+    // 조합 중 Escape 는 남은 조합을 한 번 확정하고 그 뒤에 Escape 를 키로 보고한다(docs/spec/terminal-runtime.md).
+    [events removeAllObjects];
+    selectSource(ABC, context);
+    selectSource(KOREAN_2SET, context);
+    for (NSString *key in @[@"g", @"k", @"s", @"Escape"]) typeKey(window, key, regionAnswered);
+    committed = [valuesOfType(@"insert", 0) componentsJoinedByString:@""];
+    NSUInteger inserted = [events indexOfObjectPassingTest:^BOOL(NSDictionary *event, NSUInteger index, BOOL *stop) {
+        return [event[@"type"] isEqual:@"insert"];
+    }];
+    NSUInteger escaped = [events indexOfObjectPassingTest:^BOOL(NSDictionary *event, NSUInteger index, BOOL *stop) {
+        return [event[@"type"] isEqual:@"key"] && [event[@"key"] isEqual:@"Escape"];
+    }];
+    check([committed isEqual:@"한"] && keyCount(@"Escape") == 1 && inserted < escaped,
+        [NSString stringWithFormat:@"image region: Escape during a composition commits it once and is reported after it (committed '%@', events %@)",
+            committed, events]);
 
     check(sp_input_source_select(previousSource.UTF8String), @"the previous input source is restored");
     sp_region_close(region);
