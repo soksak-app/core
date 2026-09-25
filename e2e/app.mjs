@@ -11,8 +11,9 @@ import { connect, EndpointError } from "@soksak/client";
 import { activateApp, frontmostApp } from "./frontmost.mjs";
 import { readPasteboard, writePasteboard } from "./pasteboard.mjs";
 
-// 검사하는 애플리케이션 실행 파일. 작업 디렉터리와 무관하게 이 파일 위치를 기준으로 찾는다.
-const built = (name) => fileURLToPath(new URL(`../target/debug/${name}`, import.meta.url));
+// 검사하는 애플리케이션 실행 파일. 애플리케이션은 번들에서 실행된다(docs/spec/hosts.md). 작업 디렉터리와
+// 무관하게 이 파일 위치를 기준으로 찾는다.
+const built = (name) => fileURLToPath(new URL(`../target/debug/${name}.app/Contents/MacOS/${name}`, import.meta.url));
 
 /** 검사 대상 앱. 실행 파일과 설정 폴더. */
 const appNames = process.env.SOKSAK_APP ? [process.env.SOKSAK_APP] : ["wailsv3", "tauriv2"];

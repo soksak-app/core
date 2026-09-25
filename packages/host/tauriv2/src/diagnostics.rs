@@ -108,6 +108,7 @@ pub(crate) fn call(
         "diagnostics.modal.held" => modal_held(window.label()),
         "diagnostics.input.source" => input_source(window, params),
         "diagnostics.capture.still" => capture_still(window),
+        "diagnostics.notifications" => delivered_notifications(window),
         "diagnostics.presentation.failure" => {
             exposure::inject_presentation_failure(window)?;
             Ok(Value::Null)
@@ -450,6 +451,27 @@ fn modal_hold(window: &str, on: bool) {
 }
 
 /// 창에서 모달 내용 응답을 하나 붙잡으면 답한다.
+/// 알림 센터가 아직 보이는 이 애플리케이션의 알림을 반환한다.
+fn delivered_notifications(window: &Window) -> Result<Value, Failure> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    on_main(window, move || {
+        platform::current()?.delivered_notifications(Box::new(move |list| {
+            if tx.send(list).is_err() {
+                eprintln!("delivered notifications had no pending receiver");
+            }
+        }))
+    })
+    .map_err(internal)?;
+    let list = rx.recv_timeout(TIMEOUT).map_err(|_| {
+        Failure::new(
+            crate::endpoint::TIMED_OUT,
+            "the notification center did not list delivered notifications within the time limit",
+        )
+    })?;
+    serde_json::from_str(&list)
+        .map_err(|error| internal(format!("delivered notifications {list:?}: {error}")))
+}
+
 fn modal_held(window: &str) -> Result<Value, Failure> {
     let hold = modal_hold_of(window)
         .ok_or_else(|| internal("modal content answers are not held in this window"))?;

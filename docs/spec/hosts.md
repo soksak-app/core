@@ -152,7 +152,7 @@ The Wails binding service name is `github.com/min-median-max/soksak/packages/hos
 
 `soksak-stage` places the frontend in `apps/<app>/src/frontend/`, which each application's `.gitignore` excludes. Wails embeds it with `//go:embed all:frontend` in `src/main.go` because `go:embed` reaches only files below the embedding package's directory; `host.Run` uses `frontend/` as the asset root. Tauri reads it through `"frontendDist": "src/frontend"` in `tauri.conf.json`, and `src/main.rs` includes `frontend/background.js`.
 
-The debug executables are `target/debug/soksak-wailsv3` and `target/debug/soksak-tauriv2`; release executables are in `target/release/`. Staging copies sidecar executables into the same directory, and the hosts start sidecars from the directory of the running executable.
+On macOS each application runs from an application bundle, because the operating system's notification center serves only bundled processes ([plugins](plugins.md#tab-reports)). The debug executables are `target/debug/soksak-wailsv3.app/Contents/MacOS/soksak-wailsv3` and `target/debug/soksak-tauriv2.app/Contents/MacOS/soksak-tauriv2`; release bundles are in `target/release/`. The build writes each bundle's `Contents/Info.plist` from `apps/<app>/platform/darwin/Info.plist`, which names the executable and the bundle identifier (`com.soksak.wailsv3`, `com.soksak.tauriv2`), and signs the bundle with an ad hoc signature. Staging copies sidecar executables into the bundle's `Contents/MacOS/`, and the hosts start sidecars from the directory of the running executable.
 
 ## Workspace files
 

@@ -46,6 +46,8 @@ mod input_source;
 mod layout;
 #[path = "link.rs"]
 mod link;
+
+mod notifications;
 #[path = "shapes.rs"]
 mod shapes;
 #[path = "termination.rs"]
@@ -458,6 +460,11 @@ impl Platform for Darwin {
         capture::still(window_number, path)
     }
     #[cfg(feature = "diagnostics")]
+    fn delivered_notifications(&self, done: Box<dyn FnOnce(String) + Send>) -> Result<(), String> {
+        capture::delivered_notifications(done);
+        Ok(())
+    }
+    #[cfg(feature = "diagnostics")]
     fn layout_trace_start(&self) -> Result<(), String> {
         capture::layout_trace_start();
         Ok(())
@@ -512,6 +519,18 @@ impl Platform for Darwin {
     }
     fn open_link(&self, url: &str) -> Result<(), String> {
         link::open(url)
+    }
+    fn start_notifications(
+        &self,
+        receive: Box<dyn Fn(String) + Send + Sync>,
+    ) -> Result<(), String> {
+        notifications::start(receive)
+    }
+    fn post_notification(&self, identifier: &str, title: &str, body: &str) -> Result<(), String> {
+        notifications::post(identifier, title, body)
+    }
+    fn remove_notification(&self, identifier: &str) -> Result<(), String> {
+        notifications::remove(identifier)
     }
 
     fn create_private_directories(&self, path: &Path) -> Result<(), String> {

@@ -16,7 +16,7 @@ make wailsv3
 make tauriv2
 ```
 
-The targets build `target/debug/soksak-wailsv3` and `target/debug/soksak-tauriv2` and run them. The applications call the host libraries in `packages/host/wailsv3` and `packages/host/tauriv2`.
+The targets build `target/debug/soksak-wailsv3.app` and `target/debug/soksak-tauriv2.app` and run them. The applications call the host libraries in `packages/host/wailsv3` and `packages/host/tauriv2`.
 
 Startup displays the project library. Create a project or select a saved project to use that same window. The title bar’s project-list button returns to the library while preserving current work. New Window, including the macOS Dock menu, opens another library screen. The common opening mode applies when a window already owns a project. Common settings are stored in the application configuration directory; folder overrides are stored in `.soksak/settings.json` inside the project.
 

@@ -441,6 +441,18 @@
         }
       },
       {
+        "name": "core.notifications",
+        "description": "The operating system's permission for this application's notifications the last failure to request permission, post, or remove a notification, and the tabs of the window whose notification the notification center accepted and that were not removed.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "authorization": { "enum": ["notDetermined", "denied", "authorized", "provisional"] },
+            "error": { "type": ["string", "null"] },
+            "posted": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      },
+      {
         "name": "core.settings",
         "description": "The effective settings, the project that project-scope changes apply to, the keys that the project overrides, and whether a change is still being saved.",
         "schema": {

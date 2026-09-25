@@ -19,7 +19,7 @@ BUILD      := $(CURDIR)/build
 OBJECTS    := $(SOURCES:src/%.m=$(BUILD)/%.o)
 LIBRARY    := $(BUILD)/libsoksak-darwin.a
 PKGCONFIG  := $(BUILD)/soksak-darwin.pc
-FRAMEWORKS := -framework Cocoa -framework WebKit -framework QuartzCore -framework CoreImage -framework ScreenCaptureKit -framework CoreMedia -framework CoreVideo -framework IOSurface -framework Carbon
+FRAMEWORKS := -framework Cocoa -framework WebKit -framework QuartzCore -framework CoreImage -framework ScreenCaptureKit -framework CoreMedia -framework CoreVideo -framework IOSurface -framework Carbon -framework UserNotifications
 # 소스가 사용하는 가장 새로운 API 는 macOS 14.4 의 것이다(capture.m 의
 # getCurrentProcessShareableContentWithCompletionHandler).
 # 사용하는 빌드가 같은 최소 버전으로 컴파일·링크하도록 .pc 의 Cflags 와 Libs 에도 넣는다.
@@ -52,7 +52,13 @@ $(BUILD):
 $(BUILD)/%_test: tests/%_test.m tests/support/no_activation.m $(LIBRARY) $(wildcard src/*.h src/private/*.h)
 	@clang $(CFLAGS) -I$(CURDIR)/src $< tests/support/no_activation.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
 
-test: $(BUILD)/window_motion_test $(BUILD)/input_inject_test $(BUILD)/window_facts_test $(BUILD)/window_controls_test $(BUILD)/surface_layout_test $(BUILD)/webview_focus_test $(BUILD)/webview_geometry_test $(BUILD)/document_view_test $(BUILD)/image_region_test $(BUILD)/ui_queue_test $(BUILD)/surface_host_test $(BUILD)/clipboard_test $(BUILD)/link_test $(BUILD)/capture_test $(BUILD)/dock_menu_test $(BUILD)/appearance_test
+# 알림 센터는 번들에서 실행된 프로세스만 받으므로 알림 검사는 번들 안에서도 실행한다.
+$(BUILD)/notifications_test.app/Contents/MacOS/notifications_test: $(BUILD)/notifications_test tests/support/notifications_test.plist
+	@mkdir -p $(dir $@)
+	@cp tests/support/notifications_test.plist $(BUILD)/notifications_test.app/Contents/Info.plist
+	@cp $< $@
+
+test: $(BUILD)/notifications_test.app/Contents/MacOS/notifications_test $(BUILD)/window_motion_test $(BUILD)/input_inject_test $(BUILD)/window_facts_test $(BUILD)/window_controls_test $(BUILD)/surface_layout_test $(BUILD)/webview_focus_test $(BUILD)/webview_geometry_test $(BUILD)/document_view_test $(BUILD)/image_region_test $(BUILD)/ui_queue_test $(BUILD)/surface_host_test $(BUILD)/clipboard_test $(BUILD)/link_test $(BUILD)/capture_test $(BUILD)/dock_menu_test $(BUILD)/appearance_test
 	@$(BUILD)/surface_host_test
 	@$(BUILD)/ui_queue_test
 	@$(BUILD)/window_motion_test
@@ -69,6 +75,8 @@ test: $(BUILD)/window_motion_test $(BUILD)/input_inject_test $(BUILD)/window_fac
 	@$(BUILD)/capture_test
 	@$(BUILD)/dock_menu_test
 	@$(BUILD)/appearance_test
+	@$(BUILD)/notifications_test
+	@$(BUILD)/notifications_test.app/Contents/MacOS/notifications_test --bundled
 
 test-activation: $(BUILD)/input_activate_test $(BUILD)/webview_input_test $(BUILD)/webview_inspector_test $(BUILD)/window_fullscreen_test $(BUILD)/document_view_test $(BUILD)/image_region_ime_test
 	@$(BUILD)/input_activate_test

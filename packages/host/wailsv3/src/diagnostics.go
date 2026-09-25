@@ -36,6 +36,7 @@ func init() {
 	diagnosticMethods["diagnostics.presentation.failure"] = diagnosticPresentationFailure
 	diagnosticMethods["diagnostics.input.source"] = diagnosticInputSource
 	diagnosticMethods["diagnostics.capture.still"] = diagnosticCaptureStill
+	diagnosticMethods["diagnostics.notifications"] = diagnosticNotifications
 	holdModalContent = modalHolds.wait
 	diagnosticSubscriptions["diagnostics.transcript"] = transcriptTopic
 	diagnosticTopics[logTopic] = func(on bool) (string, any) {
@@ -547,6 +548,29 @@ func diagnosticModalHold(e *Endpoint, _ *endpointConn, params json.RawMessage) (
 }
 
 // diagnosticModalHeld 는 창에서 모달 내용 응답을 하나 붙잡으면 답한다.
+// diagnosticNotifications 는 알림 센터가 아직 보이는 이 애플리케이션의 알림을 반환한다.
+func diagnosticNotifications(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+	if _, _, err := diagnosticHost(e, params); err != nil {
+		return nil, err
+	}
+	capture, err := recorder()
+	if err != nil {
+		return nil, err
+	}
+	answer := make(chan string, 1)
+	application.InvokeSync(func() { capture.DeliveredNotifications(func(list string) { answer <- list }) })
+	select {
+	case list := <-answer:
+		var delivered []map[string]string
+		if err := json.Unmarshal([]byte(list), &delivered); err != nil {
+			return nil, fmt.Errorf("delivered notifications %q: %w", list, err)
+		}
+		return delivered, nil
+	case <-time.After(pageTimeout):
+		return nil, rpcError(codeTimeout, "the notification center did not list delivered notifications within %s", pageTimeout)
+	}
+}
+
 func diagnosticModalHeld(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
 	_, s, err := diagnosticHost(e, params)
 	if err != nil {

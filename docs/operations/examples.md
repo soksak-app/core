@@ -22,13 +22,13 @@ Run the browser application with `pnpm example` and open `http://localhost:8749/
 
 The build targets build `native/darwin`, the workbench, and the sidecars, then run `soksak-stage src/frontend --executables <executable directory>` in each application. The tool stages the workbench, the layout library, the plugin API, the plugins named in `environment.json`, and the application's `runtime/` directory into the generated `apps/<app>/src/frontend/`, and copies the sidecar executables into the executable directory. Debug targets add `--diagnostics`, which stages the page diagnostic module (`diagnostics.js`); release targets stage an empty module. Both executables embed the frontend at build time. A running process does not acquire a newly built frontend; restart the corresponding application after building.
 
-Debug executables are `target/debug/soksak-wailsv3` and `target/debug/soksak-tauriv2`. Release builds use `make wailsv3-build-release tauriv2-build-release` and write `target/release/soksak-wailsv3` and `target/release/soksak-tauriv2`. Both release executables carry no symbol table: the Wails build links with `-s -w`, and the root `Cargo.toml` release profile sets `strip = true`; `make release-check` therefore finds diagnostic code by strings that stripping keeps (diagnostic method names and the capture class name `SPCapture`). `make examples-size` builds both profiles and reports their sizes.
+Debug executables are `target/debug/soksak-wailsv3.app` and `target/debug/soksak-tauriv2.app`. Release builds use `make wailsv3-build-release tauriv2-build-release` and write `target/release/soksak-wailsv3` and `target/release/soksak-tauriv2`. Both release executables carry no symbol table: the Wails build links with `-s -w`, and the root `Cargo.toml` release profile sets `strip = true`; `make release-check` therefore finds diagnostic code by strings that stripping keeps (diagnostic method names and the capture class name `SPCapture`). `make examples-size` builds both profiles and reports their sizes.
 
 ## Test parity
 
 Run the structural inventory gate with `make parity-check`. It discovers Git-visible JS/TS, Rust, Go, Objective-C, native headers, HTML/CSS, shell scripts, contract declarations, and build manifests without fixed language roots. Generated library output and Tauri schemas have explicit exclusions; source/output equality remains a separate build check. Unclaimed implementation or test files, empty patterns, and duplicate ownership fail. Shared tests do not permit duplicate implementation ownership.
 
-`make host-contract-check` runs the tests of both hosts and compares them with the [host contract cases](../spec/host-contract.md); `make native-test` runs it, and it first runs `make rust-format-check`, which fails when a Rust package of the root or `sidecars` workspace is not formatted by `rustfmt`. The current inventory has 59 lanes, 274 implementation files, and 202 test files. The current mapping is incomplete. A structural pass would not establish behavior parity: named behavior mappings, actual per-language execution, and matching-build evidence remain required by the [verification contract](../spec/verification.md). Do not expand unrelated globs or exclude discovered files to obtain a pass.
+`make host-contract-check` runs the tests of both hosts and compares them with the [host contract cases](../spec/host-contract.md); `make native-test` runs it, and it first runs `make rust-format-check`, which fails when a Rust package of the root or `sidecars` workspace is not formatted by `rustfmt`. The current inventory has 60 lanes, 281 implementation files, and 206 test files. The current mapping is incomplete. A structural pass would not establish behavior parity: named behavior mappings, actual per-language execution, and matching-build evidence remain required by the [verification contract](../spec/verification.md). Do not expand unrelated globs or exclude discovered files to obtain a pass.
 
 `pnpm test` runs the audit/checklist/command-supervision self-tests before package tests. The two Rust terminal packages invoke their actual Cargo tests; package-command tests replace Cargo with a failing fixture to verify invocation and failure propagation, not engine behavior.
 
@@ -47,8 +47,8 @@ Run the four-language adapter gate with `make language-test`. It emits case-leve
 Start each application once, from separate terminals, with the configuration directories the harness reads (`os.tmpdir()` of Node.js, `$TMPDIR` on macOS):
 
 ```sh
-./target/debug/soksak-wailsv3 --config-dir "$TMPDIR/soksak-check-wailsv3"
-./target/debug/soksak-tauriv2 --config-dir "$TMPDIR/soksak-check-tauriv2"
+./target/debug/soksak-wailsv3.app/Contents/MacOS/soksak-wailsv3 --config-dir "$TMPDIR/soksak-check-wailsv3"
+./target/debug/soksak-tauriv2.app/Contents/MacOS/soksak-tauriv2 --config-dir "$TMPDIR/soksak-check-tauriv2"
 ```
 
 Keep the display on and both windows available for rendering. Run:
@@ -109,7 +109,7 @@ Manual appearance validation confirmed settings blur in both macOS hosts on 2026
 
 ## Diagnostics
 
-Debug builds (`make wailsv3-build tauriv2-build`) include the diagnostic methods of the [local endpoint](../spec/endpoint.md): `diagnostics.fixture`, `diagnostics.drag`, `diagnostics.capture.start`, `diagnostics.capture.stop`, `diagnostics.knob`, `diagnostics.modal.hold`, `diagnostics.modal.held`, and `diagnostics.transcript`. The `soksak` command and the `soksak-mcp` server send the same requests; for example `soksak status core.screen --window main --config-dir DIR`. `soksak dom dispatch NAME --window main --event '{"type":"click"}' --config-dir DIR` dispatches a synthetic event to a declared DOM entry; checks of real input use `input.pointer` and `input.key` instead.
+Debug builds (`make wailsv3-build tauriv2-build`) include the diagnostic methods of the [local endpoint](../spec/endpoint.md): `diagnostics.fixture`, `diagnostics.drag`, `diagnostics.capture.start`, `diagnostics.capture.stop`, `diagnostics.knob`, `diagnostics.modal.hold`, `diagnostics.modal.held`, `diagnostics.notifications`, and `diagnostics.transcript`. The `soksak` command and the `soksak-mcp` server send the same requests; for example `soksak status core.screen --window main --config-dir DIR`. `soksak dom dispatch NAME --window main --event '{"type":"click"}' --config-dir DIR` dispatches a synthetic event to a declared DOM entry; checks of real input use `input.pointer` and `input.key` instead.
 
 `pnpm -F @soksak/client run bench:application -- --config-dir DIR` measures sequential round trips of a running application on three paths: `windows.list` (host only), `status.get core.screen` (relayed to the main page), and `status.get core.surface.document` with a surface (relayed through the main page to a surface page). `bench` measures the transports alone. On 2026-09-17 (M3 Pro, debug builds, 2000 requests per path, two runs) the p50 values were: Wails host 142–157µs, page 1.5–1.7ms, surface 4.4–4.5ms; Tauri host 443µs, page 2.6–2.7ms, surface 1.4–7.5ms.
 

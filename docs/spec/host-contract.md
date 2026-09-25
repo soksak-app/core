@@ -54,6 +54,8 @@ The scope column is `both`, or `<host> only: <reason>` for behavior that exists 
 | `clipboard.read.accepts-known-types` | User-initiated reads of text and file URLs are accepted. | both |
 | `links.open.accepts-web-and-mail-schemes` | Absolute `http`, `https`, and `mailto` URLs are accepted for opening. | both |
 | `links.open.rejects-other-schemes` | A URL with another scheme, a URL that does not parse, and a URL longer than 8192 characters are rejected. | both |
+| `notifications.request.accepts-tab-notices` | A notification with a surface and title of 1 to 256 characters and a body of 1 to 1024 characters without control characters is accepted, and a removal needs only the surface. | both |
+| `notifications.request.rejects-invalid-fields` | An empty, too long, or control-character surface, title, or body is rejected with an error that names the field. | both |
 | `diagnostics.capture-stop.payload-reports-frame-limit` | The capture stop payload of a limited capture reports frames, count, limited true, and the longest gap. | both |
 | `diagnostics.capture-stop.payload-reports-unbounded` | The capture stop payload of a capture below its limit reports limited false. | both |
 | `documents.request.accepts-own-surface` | A document request for the caller's own surface is accepted and returns the surface and name key. | both |

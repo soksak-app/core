@@ -350,6 +350,10 @@ impl Platform for Windows {
         unsupported::capture_still(window_number, path)
     }
     #[cfg(feature = "diagnostics")]
+    fn delivered_notifications(&self, done: Box<dyn FnOnce(String) + Send>) -> Result<(), String> {
+        unsupported::delivered_notifications(done)
+    }
+    #[cfg(feature = "diagnostics")]
     fn layout_trace_start(&self) -> Result<(), String> {
         unsupported::layout_trace_start()
     }
@@ -402,6 +406,18 @@ impl Platform for Windows {
     }
     fn open_link(&self, url: &str) -> Result<(), String> {
         unsupported::open_link(url)
+    }
+    fn start_notifications(
+        &self,
+        receive: Box<dyn Fn(String) + Send + Sync>,
+    ) -> Result<(), String> {
+        unsupported::start_notifications(receive)
+    }
+    fn post_notification(&self, identifier: &str, title: &str, body: &str) -> Result<(), String> {
+        unsupported::post_notification(identifier, title, body)
+    }
+    fn remove_notification(&self, identifier: &str) -> Result<(), String> {
+        unsupported::remove_notification(identifier)
     }
 
     fn create_private_directories(&self, path: &Path) -> Result<(), String> {

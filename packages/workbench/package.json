@@ -17,6 +17,7 @@
     "commands.js",
     "compositor.js",
     "surface-modules.js",
+    "system-notifications.js",
     "surface-status.js",
     "modal-order.js",
     "environment.js",

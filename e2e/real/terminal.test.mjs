@@ -11,7 +11,7 @@ import { frames, pixel, readFrame } from "../frame.mjs";
 import { ensureTerminals, readScreenUntil } from "../terminal-screen.mjs";
 import { pasteboardText, writePasteboard } from "../pasteboard.mjs";
 import { activateFinder, appPid, bringFront, click, closeFinderWindow, dragPath, finderItemCenter, frontWindowAt, key, KEYS,
-  dragPasteboard, openFinderWindow, post, requireTrusted, screenCenter, systemCursor } from "./hid.mjs";
+  dragPasteboard, notificationBanners, openFinderWindow, waitNotificationBanner, post, requireTrusted, screenCenter, systemCursor } from "./hid.mjs";
 
 // 터미널 한 칸의 중심 화면 좌표.
 function cellPoint(origin, session, column, row) {
@@ -732,6 +732,32 @@ for (const app of Object.values(APPS)) {
     await read("NUMERIC", "\\033>", 2, "");
     keypad();
     assert.equal(await result("NUMERIC"), "5\r", "ESC > did not select the numeric keypad");
+  });
+
+  test(`${app.name}: pressing a system notification of a terminal out of view selects its tab`, { timeout: 60000 }, async (t) => {
+    requireTrusted();
+    const s = await open(t, app);
+    assert.ok(s, `${app.binary} is not built`);
+    await fresh(s);
+    const [shown, hidden] = await ensureTerminals(s, 2);
+    const cardOf = (grid, surface) => grid.cards.find((card) => card.tabs.some((tab) => tab.id === surface));
+    await s.run("core.card.focus", { card: cardOf(await s.get("core.grid"), shown.surface).id });
+    await s.until("core.grid", (grid) => cardOf(grid, shown.surface).focused, "the first terminal card did not take focus");
+    const state = await s.get("core.notifications");
+    assert.ok(["authorized", "provisional"].includes(state.authorization),
+      `system notifications are ${state.authorization}; allow notifications for soksak-${app.name} in System Settings > Notifications`);
+    const before = notificationBanners();
+    await s.run("terminal.input", { bytes: "printf '\\033]9;PRESS-NOTICE\\007'\r" }, hidden.surface);
+    await s.until("core.notifications", (value) => value.posted.includes(hidden.surface),
+      "the notification center did not accept the notification", { timeout: 10000 });
+    // 배너는 알림 센터가 게시를 받아들인 뒤 그린다.
+    const { banner, list } = waitNotificationBanner(before, 10000);
+    assert.ok(banner, `no notification banner appeared within 10 s; banners ${JSON.stringify(list)}, before ${JSON.stringify(before)}`);
+    const center = { x: banner.x + banner.width / 2, y: banner.y + banner.height / 2 };
+    post([{ type: "move", ...center }, { type: "down", ...center }, { type: "up", ...center }]);
+    await s.until("core.grid", (grid) => cardOf(grid, hidden.surface).focused && cardOf(grid, hidden.surface).active === hidden.surface,
+      "pressing the notification did not select its tab");
+    await s.until("host.window", (window) => window.key === true, "pressing the notification did not make the window key");
   });
 
   test(`${app.name}: a real Finder drag of a file and of an image pastes their quoted paths without executing`, { timeout: 90000 }, async (t) => {

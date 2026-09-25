@@ -483,6 +483,39 @@ for (const app of Object.values(APPS)) {
       "the notice stayed after the tab came into view");
   });
 
+  test(`${app.name}: an OSC 9 notification from a terminal out of view is a system notification until the tab is in view`,
+    { timeout: 180000 }, async (t) => {
+      const s = await open(t, app);
+      if (!s) return t.skip(`${app.binary} is not built`);
+      await fresh(s);
+      s.cleanup(() => closeTerminalTabs(s));
+      const [shown, hidden] = await ensureTerminals(s, 2);
+      const cardOf = (grid, surface) => grid.cards.find((card) => card.tabs.some((tab) => tab.id === surface));
+      await s.run("core.card.focus", { card: cardOf(await s.get("core.grid"), shown.surface).id });
+      await s.until("core.grid", (grid) => cardOf(grid, shown.surface).focused, "the first terminal card did not take focus");
+      await s.run("terminal.input", { bytes: "printf '\\033]9;SYSTEM-NOTICE\\007'\r" }, hidden.surface);
+      // 첫 알림은 운영체제에 권한을 요청한다. 사람이 허용해야 알림이 게시된다.
+      const state = await s.until("core.notifications", (value) => value.authorization !== "notDetermined" || value.error !== null,
+        "the application did not ask for notification permission", { timeout: 150000 });
+      assert.ok(["authorized", "provisional"].includes(state.authorization),
+        `system notifications are ${state.authorization} (error ${JSON.stringify(state.error)}); allow notifications for ` +
+        `soksak-${app.name} in System Settings > Notifications`);
+      await s.until("core.notifications", (value) => value.posted.includes(hidden.surface),
+        "the notification center did not accept the notification", { timeout: 10000 });
+      const grid = await s.get("core.grid");
+      const tab = cardOf(grid, hidden.surface).tabs.find((item) => item.id === hidden.surface);
+      const identifier = JSON.stringify([s.window, hidden.surface]);
+      const delivered = await s.request("diagnostics.notifications", {});
+      assert.deepEqual(delivered.filter((item) => item.identifier === identifier).map(({ title, body }) => ({ title, body })),
+        [{ title: tab.label ?? tab.title, body: "SYSTEM-NOTICE" }], `delivered notifications ${JSON.stringify(delivered)}`);
+      // 탭이 보이면 탭 알림과 시스템 알림이 함께 지워진다.
+      await s.run("core.card.focus", { card: cardOf(grid, hidden.surface).id });
+      await s.until("core.notifications", (value) => !value.posted.includes(hidden.surface),
+        "the system notification stayed after the tab came into view");
+      const after = await s.request("diagnostics.notifications", {});
+      assert.ok(!after.some((item) => item.identifier === identifier), `the notification remained: ${JSON.stringify(after)}`);
+    });
+
   test(`${app.name}: OSC 8 linked cells are drawn with an underline and plain cells are not`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);

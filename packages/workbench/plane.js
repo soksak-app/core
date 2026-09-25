@@ -16,6 +16,7 @@ import { bind, delegate, mark, run } from "./commands.js";
 import { disposeSurface, focusSurface, mountSurface } from "./surface-modules.js";
 import { setSurfaceStatus } from "./surface-status.js";
 import { clearVisibleNotices, onTabReports, recordOrigin, setVisibleTab, tabLabel, tabNotice } from "./tab-reports.js";
+import { configureSystemNotifications, systemNotifications } from "./system-notifications.js";
 
 const NEEDS = ["cards", "card", "insertAt", "moveTo", "standings", "moveBoundary", "zoneAt",
   "splitToward", "replace"];
@@ -613,7 +614,7 @@ function openLayer(anchor, ask, items, pick, align = "right") {
     b.dataset.active = String(!!it.active);
     if (it.notice) {
       b.dataset.notice = "true";
-      b.title = it.notice;
+      b.title = systemNotifications.tooltip(it.notice);
     }
     b.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true">${it.svg}</svg>` +
       `<span class="picker__name"></span><small></small>`;
@@ -1231,7 +1232,7 @@ function drawNotices(chrome, tabs) {
     const notice = tabNotice(b.dataset.tabId);
     if (notice) {
       b.dataset.notice = "true";
-      b.title = notice;
+      b.title = systemNotifications.tooltip(notice);
     } else if (b.dataset.notice) {
       delete b.dataset.notice;
       b.removeAttribute("title");
@@ -1242,7 +1243,7 @@ function drawNotices(chrome, tabs) {
   const notices = tabs.map((t) => tabNotice(t.id)).filter(Boolean);
   if (notices.length) ham.dataset.notice = "true";
   else delete ham.dataset.notice;
-  ham.title = notices.length ? notices.join("\n") : "탭 목록";
+  ham.title = notices.length ? systemNotifications.tooltip(notices.join("\n")) : "탭 목록";
 }
 
 // 탭이 보인다는 것은 포커스된 카드의 활성 탭이라는 뜻이다. 그 탭에 온 알림은 두지 않는다.
@@ -1252,7 +1253,8 @@ setVisibleTab((id) => {
 });
 
 // 표면이 탭 제목이나 알림을 알리면 탭 이름과 점만 다시 쓴다. 레이아웃은 바뀌지 않으므로 다시 그리거나 저장하지 않는다.
-onTabReports(() => {
+// 시스템 알림 권한이 바뀌면 알림 도움말도 다시 쓴다.
+const redrawTabReports = () => {
   for (const el of document.querySelectorAll(".card[data-card-id]")) {
     const card = grid?.card(el.dataset.cardId);
     const chrome = el.querySelector(".chrome");
@@ -1263,6 +1265,18 @@ onTabReports(() => {
     }
     drawNotices(chrome, tabsOf(card));
   }
+};
+onTabReports(redrawTabReports);
+systemNotifications.onChange(redrawTabReports);
+
+// 시스템 알림의 제목은 탭 이름이고, 누른 알림은 선언된 명령으로 그 탭을 고른다.
+configureSystemNotifications({
+  tabName: (id) => {
+    const card = grid?.card(cardOfTab(id)?.id);
+    const t = card ? tabsOf(card).find((item) => item.id === id) : null;
+    return t ? tabName(t) : id;
+  },
+  select: (id) => run("core.tab.select", { tab: id }),
 });
 
 /** 통로 값을 판과 뷰에 적용한다. */

@@ -44,6 +44,9 @@ export function reportNotice(tabId, text) {
 
 export const tabNotice = (tabId) => notices.get(tabId) ?? null;
 
+/** 모든 탭 알림의 [탭 id, 텍스트] 목록. */
+export const tabNotices = () => [...notices];
+
 /** 보이게 된 탭의 알림을 지운다. 판이 그릴 때마다 부른다. */
 export function clearVisibleNotices() {
   let removed = false;

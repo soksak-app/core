@@ -429,6 +429,10 @@ pub trait Platform: Send + Sync {
     /// 창 번호의 창을 포커스를 주지 않고 한 장 찍어 path 에 PNG 로 쓴다. 관측 자료다.
     fn capture_still(&self, window_number: isize, path: &str) -> Result<(), String>;
     #[cfg(feature = "diagnostics")]
+    /// 알림 센터가 아직 보이는 이 애플리케이션의 알림을 [{identifier, title, body}] JSON 으로 done 에 준다.
+    /// 메인 스레드에서 호출하고 done 도 메인 스레드에서 불린다.
+    fn delivered_notifications(&self, done: Box<dyn FnOnce(String) + Send>) -> Result<(), String>;
+    #[cfg(feature = "diagnostics")]
     /// 배치 트랜잭션마다 시작, 앱 DOM 표시 확인, 커밋 시각의 기록을 시작한다. 메인 스레드에서 호출한다.
     fn layout_trace_start(&self) -> Result<(), String>;
     #[cfg(feature = "diagnostics")]
@@ -467,6 +471,14 @@ pub trait Platform: Send + Sync {
     fn clipboard_write_png(&self, bytes: &[u8]) -> Result<(), String>;
     /// URL 을 그 스킴의 사용자 기본 애플리케이션으로 연다. 메인 스레드에서 호출한다.
     fn open_link(&self, url: &str) -> Result<(), String>;
+    /// 운영체제의 알림 센터를 쓰기 시작하고 그 사건 JSON 을 receive 로 메인 스레드에서 넘긴다
+    /// ({"type":"state",...} 와 {"type":"activated","identifier":...}). 메인 스레드에서 호출한다.
+    fn start_notifications(&self, receive: Box<dyn Fn(String) + Send + Sync>)
+        -> Result<(), String>;
+    /// identifier 의 알림을 게시하거나 바꾼다. 메인 스레드에서 호출한다.
+    fn post_notification(&self, identifier: &str, title: &str, body: &str) -> Result<(), String>;
+    /// identifier 의 알림을 지운다. 메인 스레드에서 호출한다.
+    fn remove_notification(&self, identifier: &str) -> Result<(), String>;
     /// Dock 메뉴 항목의 제목 목록을 반환한다. 메인 스레드에서 호출한다.
     fn dock_items(&self) -> Result<Value, String>;
     /// 애플리케이션 메뉴를 반환한다. 하위 메뉴마다 {title, items: [{title, key}]} 다. 메인 스레드에서 호출한다.

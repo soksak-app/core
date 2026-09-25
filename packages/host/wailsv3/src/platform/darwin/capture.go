@@ -11,6 +11,12 @@ package darwin
 #include <stdlib.h>
 #include "capture.h"
 #include "surface_layout.h"
+#include "notifications.h"
+
+extern void deliveredNotifications(void *context, char *json);
+static void listDeliveredNotifications(void) {
+    sp_notifications_delivered((void (*)(void *, const char *))deliveredNotifications, NULL);
+}
 #import <Cocoa/Cocoa.h>
 
 // 이 창과 이 창에 붙은 창의 윈도 서버 번호를 최대 max 개 기록하고 기록한 수를 반환한다.
@@ -102,6 +108,19 @@ func (implementation) CaptureLimited() bool { return bool(C.sp_capture_limited()
 func (implementation) CaptureLongestGap() float64 { return float64(C.sp_capture_longest_gap()) }
 
 func (implementation) CaptureClock() float64 { return float64(C.sp_capture_clock()) }
+
+// deliveredDone 은 진행 중인 알림 조회의 결과를 받는다.
+var deliveredDone func(string)
+
+//export deliveredNotifications
+func deliveredNotifications(_ unsafe.Pointer, json *C.char) {
+	deliveredDone(C.GoString(json))
+}
+
+func (implementation) DeliveredNotifications(done func(json string)) {
+	deliveredDone = done
+	C.listDeliveredNotifications()
+}
 
 func (implementation) LayoutTraceStart() { C.surfaceLayoutTraceStart() }
 

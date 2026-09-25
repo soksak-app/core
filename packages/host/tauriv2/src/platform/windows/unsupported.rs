@@ -54,6 +54,15 @@ pub fn clipboard_write_png(_bytes: &[u8]) -> Result<(), String> {
 pub fn open_link(_url: &str) -> Result<(), String> {
     missing("link open")
 }
+pub fn start_notifications(_receive: Box<dyn Fn(String) + Send + Sync>) -> Result<(), String> {
+    missing("system notifications")
+}
+pub fn post_notification(_identifier: &str, _title: &str, _body: &str) -> Result<(), String> {
+    missing("system notifications")
+}
+pub fn remove_notification(_identifier: &str) -> Result<(), String> {
+    missing("system notifications")
+}
 
 #[cfg(feature = "diagnostics")]
 pub fn window_numbers(_window: &Window) -> Result<Vec<isize>, String> {
@@ -324,6 +333,11 @@ pub fn capture_clock() -> Result<f64, String> {
 #[cfg(feature = "diagnostics")]
 pub fn capture_still(_window_number: isize, _path: &str) -> Result<(), String> {
     missing("window capture")
+}
+
+#[cfg(feature = "diagnostics")]
+pub fn delivered_notifications(_done: Box<dyn FnOnce(String) + Send>) -> Result<(), String> {
+    missing("system notifications")
 }
 
 #[cfg(feature = "diagnostics")]

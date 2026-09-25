@@ -293,6 +293,20 @@ export function onFilesDropped(listener) {
   if (native) bridge.on("files-dropped", listener);
 }
 
+/**
+ * 운영체제의 알림 센터(docs/spec/plugins.md#tab-reports). 애플리케이션이 없으면 null 이다.
+ * onState 는 {authorization, error}, onPosted 는 알림 센터가 받아들인 알림의, onActivated 는 누른 알림의
+ * {surface} 를 받는다.
+ */
+export const notificationCenter = native ? {
+  post: (request) => tell("notify", request),
+  remove: (request) => tell("notificationRemove", request),
+  state: () => tell("notificationState"),
+  onState: (listener) => bridge.on("notification-state", listener),
+  onPosted: (listener) => bridge.on("notification-posted", listener),
+  onActivated: (listener) => bridge.on("notification-activated", listener),
+} : null;
+
 export function onSurfacePrepared(listener) {
   if (typeof listener !== "function") throw new TypeError("surface preparation listener must be a function");
   surfacePreparedListeners.add(listener);

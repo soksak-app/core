@@ -23,6 +23,7 @@ import {
 import { latest, seated } from "./compositor.js";
 import { modalState, onFilesDropped, onModalState } from "./host.js";
 import { plugin } from "./registry.js";
+import { systemNotifications } from "./system-notifications.js";
 import { windows } from "@soksak/runtime";
 import { audit, onBinding } from "./commands.js";
 import { onTextScope } from "./text-size.js";
@@ -233,6 +234,8 @@ export async function installCoreExposure({ library, renames, resetLayout, chrom
   onTabReports(coreChanged);
   status("core.surfaces", surfacesState);
   status("core.drop", () => lastDrop);
+  status("core.notifications", () => systemNotifications.state());
+  systemNotifications.onChange(coreChanged);
   onFilesDropped((drop) => { dropFiles(drop).then(coreChanged); });
   status("core.settings", () => ({
     values: Object.fromEntries(Object.keys(defaults).map((key) => [key, value(key)])),

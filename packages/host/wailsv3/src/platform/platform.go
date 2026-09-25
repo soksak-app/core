@@ -107,6 +107,9 @@ type Capturer interface {
 	CaptureLongestGap() float64
 	// CaptureClock 은 현재 시각(ms)이다. 기록 프레임의 표시 시각과 같은 시계다.
 	CaptureClock() float64
+	// DeliveredNotifications 는 알림 센터가 아직 보이는 이 애플리케이션의 알림을 [{identifier, title, body}] JSON 으로
+	// done 에 준다. UI 스레드에서 호출하고 done 도 UI 스레드에서 불린다.
+	DeliveredNotifications(done func(json string))
 	// LayoutTraceStart 는 배치 트랜잭션마다 시작, 앱 DOM 표시 확인, 커밋 시각의 기록을 시작한다. UI 스레드에서 부른다.
 	LayoutTraceStart()
 	// LayoutTraceStop 은 기록을 멈추고 트랜잭션마다 ticket, begun, presented, committed(ms, 표시 시각과 같은 시계)를
@@ -149,6 +152,13 @@ type Platform interface {
 	ClipboardWritePNG(bytes []byte) error
 	// OpenLink 는 URL 을 그 스킴의 사용자 기본 애플리케이션으로 연다. UI 스레드에서 호출한다.
 	OpenLink(url string) error
+	// StartNotifications 는 운영체제의 알림 센터를 쓰기 시작하고 그 사건 JSON 을 receive 로 UI 스레드에서
+	// 넘긴다({"type":"state",...} 와 {"type":"activated","identifier":...}). UI 스레드에서 호출한다.
+	StartNotifications(receive func(event string)) error
+	// PostNotification 은 identifier 의 알림을 게시하거나 바꾼다. UI 스레드에서 호출한다.
+	PostNotification(identifier, title, body string) error
+	// RemoveNotification 은 identifier 의 알림을 지운다. UI 스레드에서 호출한다.
+	RemoveNotification(identifier string) error
 	// WindowHit 는 창 좌표 (x, y) 의 히트 테스트 결과 {view, main, identifier} 를 JSON 으로 반환한다.
 	// UI 스레드에서 호출한다.
 	WindowHit(window unsafe.Pointer, x, y float64) (string, error)

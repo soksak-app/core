@@ -131,6 +131,12 @@ func Run(assets fs.FS, options Options) error {
 	unpublished := make(chan error, 1)
 	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
 		close(started)
+		// 알림 센터를 쓸 수 없으면 애플리케이션을 시작하지 않는다(docs/spec/hosts.md).
+		if err := host.startNotifications(); err != nil {
+			unpublished <- err
+			app.Quit()
+			return
+		}
 		if err := host.endpoint.Publish("main"); err != nil {
 			unpublished <- fmt.Errorf("local endpoint: %w", err)
 			app.Quit()

@@ -71,6 +71,9 @@ const METHOD = {
   sidecarsRetain: "SidecarsRetain",
   clipboardRead: "ClipboardRead",
   linkOpen: "LinkOpen",
+  notify: "Notify",
+  notificationRemove: "NotificationRemove",
+  notificationState: "NotificationState",
   clipboardWriteText: "ClipboardWriteText",
   clipboardPersistPNG: "ClipboardPersistPNG",
 };

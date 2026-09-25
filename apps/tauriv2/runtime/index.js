@@ -43,6 +43,9 @@ const COMMAND = {
   sidecarsRetain: "sidecars_retain",
   clipboardRead: "clipboard_read",
   linkOpen: "link_open",
+  notify: "notify",
+  notificationRemove: "notification_remove",
+  notificationState: "notification_state",
   clipboardWriteText: "clipboard_write_text",
   clipboardPersistPNG: "clipboard_persist_png",
 };
@@ -88,6 +91,9 @@ const ARG = {
   sidecarsRetain: (request) => ({ request }),
   clipboardRead: (request) => ({ request }),
   linkOpen: (request) => ({ request }),
+  notify: (request) => ({ request }),
+  notificationRemove: (request) => ({ request }),
+  notificationState: () => ({}),
   clipboardWriteText: (text) => ({ text }),
   clipboardPersistPNG: (request) => ({ request }),
 };

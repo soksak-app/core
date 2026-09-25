@@ -12,8 +12,27 @@ extern "C" {
     fn sp_capture_longest_gap() -> f64;
     fn sp_capture_clock() -> f64;
     fn sp_capture_still(window_number: isize, path: *const c_char) -> bool;
+    fn sp_notifications_delivered(
+        done: extern "C" fn(context: *mut std::ffi::c_void, json: *const c_char),
+        context: *mut std::ffi::c_void,
+    );
     fn surfaceLayoutTraceStart();
     fn surfaceLayoutTraceStop(out: *mut f64, capacity: usize) -> usize;
+}
+
+extern "C" fn delivered(context: *mut std::ffi::c_void, json: *const c_char) {
+    let done = unsafe { Box::from_raw(context.cast::<Box<dyn FnOnce(String) + Send>>()) };
+    done(
+        unsafe { CStr::from_ptr(json) }
+            .to_string_lossy()
+            .into_owned(),
+    );
+}
+
+/// 알림 센터가 아직 보이는 알림 목록을 done 에 준다. 메인 스레드에서 호출한다.
+pub fn delivered_notifications(done: Box<dyn FnOnce(String) + Send>) {
+    let context = Box::into_raw(Box::new(done)).cast();
+    unsafe { sp_notifications_delivered(delivered, context) }
 }
 
 /// 배치 트랜잭션 시각의 기록을 시작한다. 메인 스레드에서 호출한다.

@@ -98,6 +98,31 @@ for (const item of list) {
 }
 return JSON.stringify(null);`);
 
+// 알림 센터(NotificationCenter 프로세스)의 배너 창. 배너는 다른 프로세스가 그리고, 창 서버는 창이 생길 때 알리는
+// 사건을 주지 않으며, 검사하는 애플리케이션에는 다른 프로세스의 손쉬운 사용 관찰 권한이 없다. 그래서 창 목록이
+// 바뀔 때까지 input.within 밀리초 동안 다시 읽고, 새 배너가 없으면 마지막 목록을 돌려준다.
+const newBanner = jxa(`
+ObjC.import("Foundation");
+const read = () => ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo(1 | 16, 0)))
+  .filter((item) => item.kCGWindowOwnerName === "NotificationCenter" && item.kCGWindowBounds.Width > 100)
+  .map((item) => ({ number: item.kCGWindowNumber, x: item.kCGWindowBounds.X, y: item.kCGWindowBounds.Y,
+    width: item.kCGWindowBounds.Width, height: item.kCGWindowBounds.Height }));
+const until = Date.now() + input.within;
+let list = read();
+while (Date.now() < until) {
+  const banner = list.find((item) => !input.before.includes(item.number));
+  if (banner) return JSON.stringify({ banner, list });
+  delay(0.02);
+  list = read();
+}
+return JSON.stringify({ banner: null, list });`);
+
+/** 화면에 보이는 알림 센터 배너 창의 번호 목록. */
+const bannerNumbers = jxa(`
+return JSON.stringify(ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo(1 | 16, 0)))
+  .filter((item) => item.kCGWindowOwnerName === "NotificationCenter" && item.kCGWindowBounds.Width > 100)
+  .map((item) => item.kCGWindowNumber));`);
+
 const finderOpen = jxa(`
 const finder = Application("Finder");
 finder.open(Path(input.directory));
@@ -167,6 +192,16 @@ export function finderItemCenter(name) {
 /** 화면 점 (x, y) 에서 맨 앞에 있는 일반 창의 소유 프로세스. */
 export function frontWindowAt(x, y) {
   return windowAt({ x, y });
+}
+
+/** 지금 화면에 보이는 알림 센터 배너 창의 번호. waitNotificationBanner 에 넘긴다. */
+export function notificationBanners() {
+  return bannerNumbers();
+}
+
+/** before 에 없던 배너 창을 within 밀리초 안에 찾아 {banner: {x, y, width, height}, list} 로 돌려준다. */
+export function waitNotificationBanner(before, within) {
+  return newBanner({ before, within });
 }
 
 /** 설정 디렉터리의 endpoint.json 이 적은 애플리케이션 프로세스. */

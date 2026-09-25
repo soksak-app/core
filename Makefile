@@ -145,10 +145,21 @@ GO_ENV       = CGO_CFLAGS="-O2 -g -mmacosx-version-min=$(MACOS_MINIMUM) -DSOKSAK
 GO_LINK      = -extldflags=-mmacosx-version-min=$(MACOS_MINIMUM)
 CARGO_ENV    = MACOSX_DEPLOYMENT_TARGET=$(MACOS_MINIMUM)
 
-TAURI_DEBUG   = target/debug/soksak-tauriv2
-TAURI_RELEASE = target/release/soksak-tauriv2
-WAILS_DEBUG   = target/debug/soksak-wailsv3
-WAILS_RELEASE = target/release/soksak-wailsv3
+# macOS 의 알림 센터는 번들에서 실행된 프로세스만 받으므로 애플리케이션은 번들에서 실행한다
+# (docs/spec/hosts.md). 사이드카도 번들의 Contents/MacOS 에 둔다.
+TAURI_DEBUG_BUNDLE   = target/debug/soksak-tauriv2.app
+TAURI_RELEASE_BUNDLE = target/release/soksak-tauriv2.app
+WAILS_DEBUG_BUNDLE   = target/debug/soksak-wailsv3.app
+WAILS_RELEASE_BUNDLE = target/release/soksak-wailsv3.app
+TAURI_DEBUG   = $(TAURI_DEBUG_BUNDLE)/Contents/MacOS/soksak-tauriv2
+TAURI_RELEASE = $(TAURI_RELEASE_BUNDLE)/Contents/MacOS/soksak-tauriv2
+WAILS_DEBUG   = $(WAILS_DEBUG_BUNDLE)/Contents/MacOS/soksak-wailsv3
+WAILS_RELEASE = $(WAILS_RELEASE_BUNDLE)/Contents/MacOS/soksak-wailsv3
+
+# 번들의 Info.plist 를 쓴다. 첫 인자는 번들, 둘째 인자는 애플리케이션이다.
+bundle-info = mkdir -p $(1)/Contents/MacOS && cp apps/$(2)/platform/darwin/Info.plist $(1)/Contents/Info.plist
+# 번들 안의 실행 파일과 Info.plist 를 ad hoc 서명으로 봉인한다.
+bundle-sign = codesign --sign - --force --deep $(1)
 
 native-darwin:
 	@$(MAKE) -C native/darwin
@@ -174,27 +185,37 @@ stage-wailsv3 = pnpm -F @soksak/wailsv3 exec soksak-stage src/frontend --executa
 stage-tauriv2 = pnpm -F @soksak/tauriv2 exec soksak-stage src/frontend --executables $(1) $(2)
 
 frontend-wailsv3: build sidecars-debug
-	@$(call stage-wailsv3,../../target/debug,--diagnostics)
+	@$(call bundle-info,$(WAILS_DEBUG_BUNDLE),wailsv3)
+	@$(call stage-wailsv3,../../$(WAILS_DEBUG_BUNDLE)/Contents/MacOS,--diagnostics)
 
 frontend-tauriv2: build sidecars-debug
-	@$(call stage-tauriv2,../../target/debug,--diagnostics)
+	@$(call bundle-info,$(TAURI_DEBUG_BUNDLE),tauriv2)
+	@$(call stage-tauriv2,../../$(TAURI_DEBUG_BUNDLE)/Contents/MacOS,--diagnostics)
 
 # generate_context! 가 프런트엔드를 포함하므로 크레이트를 다시 빌드하게 한다.
 tauriv2-build: native-darwin frontend-tauriv2
 	@touch apps/tauriv2/src/main.rs
 	@$(CARGO_ENV) cargo build -p soksak-tauriv2 --features diagnostics
+	@cp target/debug/soksak-tauriv2 $(TAURI_DEBUG)
+	@$(call bundle-sign,$(TAURI_DEBUG_BUNDLE))
 
 tauriv2-build-release: native-darwin build sidecars-release
-	@$(call stage-tauriv2,../../target/release)
+	@$(call bundle-info,$(TAURI_RELEASE_BUNDLE),tauriv2)
+	@$(call stage-tauriv2,../../$(TAURI_RELEASE_BUNDLE)/Contents/MacOS)
 	@touch apps/tauriv2/src/main.rs
 	@$(CARGO_ENV) cargo build --release -p soksak-tauriv2
+	@cp target/release/soksak-tauriv2 $(TAURI_RELEASE)
+	@$(call bundle-sign,$(TAURI_RELEASE_BUNDLE))
 
 wailsv3-build: native-darwin frontend-wailsv3
 	@$(GO_ENV) go build -C apps/wailsv3 -tags diagnostics -ldflags "$(GO_LINK)" -o ../../$(WAILS_DEBUG) ./src
+	@$(call bundle-sign,$(WAILS_DEBUG_BUNDLE))
 
 wailsv3-build-release: native-darwin build sidecars-release
-	@$(call stage-wailsv3,../../target/release)
+	@$(call bundle-info,$(WAILS_RELEASE_BUNDLE),wailsv3)
+	@$(call stage-wailsv3,../../$(WAILS_RELEASE_BUNDLE)/Contents/MacOS)
 	@$(GO_ENV) go build -C apps/wailsv3 -trimpath -ldflags "-s -w $(GO_LINK)" -o ../../$(WAILS_RELEASE) ./src
+	@$(call bundle-sign,$(WAILS_RELEASE_BUNDLE))
 
 tauriv2: tauriv2-build
 	@./$(TAURI_DEBUG)

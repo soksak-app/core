@@ -53,6 +53,8 @@ type Host struct {
 	// endpoint 는 로컬 엔드포인트이고 relay 는 페이지에 보낸 노출 요청이다.
 	endpoint *Endpoint
 	relay    *Relay[relayTarget]
+	// notifications 는 알림 센터가 마지막으로 알린 권한 상태다.
+	notifications NotificationState
 }
 
 // errNoWindow 는 이 애플리케이션의 창이 없을 때 반환한다. 여기의 호출은 모두 그 창에

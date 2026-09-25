@@ -23,6 +23,7 @@ pub mod exposure;
 pub mod images;
 pub mod link;
 mod modals;
+pub mod notifications;
 #[path = "platform/platform.rs"]
 pub mod platform;
 pub mod projects;
@@ -148,6 +149,8 @@ pub fn run(context: tauri::Context<tauri::Wry>, _background: &'static str) {
             }
         })
         .setup(|app| {
+            // 알림 센터를 쓸 수 없으면 애플리케이션을 시작하지 않는다(docs/spec/hosts.md).
+            notifications::start(app.handle())?;
             let dock = app.handle().clone();
             platform::current()?.install_dock_menu(Box::new(move || {
                 if let Err(error) = windows::window_new_on_main(dock.clone()) {

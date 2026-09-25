@@ -54,6 +54,8 @@ fn invalid_json_closes_connection() {
 | `clipboard.read.accepts-known-types` | 사용자가 시작한 텍스트와 파일 URL 읽기를 받아들인다. | both |
 | `links.open.accepts-web-and-mail-schemes` | 절대 `http`, `https`, `mailto` URL은 열기를 받아들인다. | both |
 | `links.open.rejects-other-schemes` | 다른 스킴의 URL, 해석되지 않는 URL, 8192자보다 긴 URL은 거부한다. | both |
+| `notifications.request.accepts-tab-notices` | 제어 문자 없이 1–256자인 표면과 제목, 1–1024자인 본문의 알림을 받아들이며, 제거에는 표면만 필요하다. | both |
+| `notifications.request.rejects-invalid-fields` | 비었거나 너무 길거나 제어 문자가 있는 표면, 제목, 본문은 그 필드를 적은 오류로 거부한다. | both |
 | `diagnostics.capture-stop.payload-reports-frame-limit` | 한도에 도달한 녹화의 중지 페이로드는 frames, count, limited true, 가장 긴 간격을 보고한다. | both |
 | `diagnostics.capture-stop.payload-reports-unbounded` | 한도에 도달하지 않은 녹화의 중지 페이로드는 limited false를 보고한다. | both |
 | `documents.request.accepts-own-surface` | 호출자 자신의 표면에 대한 문서 요청을 받아들이고 표면과 이름 키를 반환한다. | both |

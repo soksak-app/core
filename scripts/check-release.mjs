@@ -109,7 +109,9 @@ if (import.meta.main) {
       for (const path of files(frontend)) find(errors, relative(ROOT, path), readFileSync(path, "utf8"));
       errors.push(...auditPluginDiagnostics(frontend, pluginDiagnostics(app)).map((error) => error.replace(ROOT, "")));
     }
-    const executable = join(ROOT, "target", "release", `soksak-${app}`);
+    // 애플리케이션과 사이드카는 번들의 Contents/MacOS 에 있다(docs/spec/hosts.md).
+    const executables = join(ROOT, "target", "release", `soksak-${app}.app`, "Contents", "MacOS");
+    const executable = join(executables, `soksak-${app}`);
     if (!existsSync(executable)) {
       errors.push(`${relative(ROOT, executable)}: missing; run the release build first`);
       continue;
@@ -130,7 +132,7 @@ if (import.meta.main) {
           continue;
         }
         for (const execName of names) {
-          const sidecarExe = join(ROOT, "target", "release", execName);
+          const sidecarExe = join(executables, execName);
           if (!existsSync(sidecarExe)) {
             errors.push(`${relative(ROOT, sidecarExe)}: missing; run the release build first`);
             continue;

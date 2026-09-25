@@ -22,13 +22,13 @@ make wailsv3-build tauriv2-build
 
 빌드 대상은 `native/darwin`, 워크벤치, 사이드카를 빌드한 뒤 각 애플리케이션에서 `soksak-stage src/frontend --executables <실행 파일 디렉터리>`를 실행한다. 이 도구는 워크벤치, 배치 라이브러리, 플러그인 API, `environment.json`에 적힌 플러그인, 애플리케이션의 `runtime/` 디렉터리를 생성된 `apps/<app>/src/frontend/`에 배치하고, 사이드카 실행 파일을 실행 파일 디렉터리에 복사한다. 디버그 대상은 `--diagnostics`를 더해 페이지 진단 모듈(`diagnostics.js`)을 배치하고, 릴리스 대상은 빈 모듈을 배치한다. 두 실행 파일 모두 빌드 시 프런트엔드를 포함한다. 실행 중인 프로세스에는 새 프런트엔드가 적용되지 않으므로 빌드 후 해당 앱을 다시 실행한다.
 
-디버그 실행 파일은 `target/debug/soksak-wailsv3`와 `target/debug/soksak-tauriv2`다. 릴리스 빌드는 `make wailsv3-build-release tauriv2-build-release`를 사용하며 `target/release/soksak-wailsv3`와 `target/release/soksak-tauriv2`를 만든다. 두 release 실행 파일에는 기호 테이블이 없다. Wails 빌드는 `-s -w`로 링크하고, 루트 `Cargo.toml`의 release 프로필은 `strip = true`다. 그래서 `make release-check`는 기호를 벗겨도 남는 문자열(진단 메서드 이름과 녹화 클래스 이름 `SPCapture`)로 진단 코드를 찾는다. `make examples-size`는 두 프로파일을 빌드하고 크기를 출력한다.
+디버그 실행 파일은 `target/debug/soksak-wailsv3.app`와 `target/debug/soksak-tauriv2.app`다. 릴리스 빌드는 `make wailsv3-build-release tauriv2-build-release`를 사용하며 `target/release/soksak-wailsv3`와 `target/release/soksak-tauriv2`를 만든다. 두 release 실행 파일에는 기호 테이블이 없다. Wails 빌드는 `-s -w`로 링크하고, 루트 `Cargo.toml`의 release 프로필은 `strip = true`다. 그래서 `make release-check`는 기호를 벗겨도 남는 문자열(진단 메서드 이름과 녹화 클래스 이름 `SPCapture`)로 진단 코드를 찾는다. `make examples-size`는 두 프로파일을 빌드하고 크기를 출력한다.
 
 ## 테스트 동등성
 
 `make parity-check`로 구조 목록 게이트를 실행한다. 언어별 고정 루트 없이 Git에 보이는 JS/TS·Rust·Go·Objective-C·네이티브 헤더·HTML/CSS·셸 스크립트·계약 선언·빌드 매니페스트를 발견한다. 생성된 라이브러리 출력·Tauri 스키마는 명시적 제외 사유를 갖고 소스/출력 일치는 별도 빌드 검사로 유지한다. 연결 없는 구현·테스트, 빈 패턴, 중복 소유는 실패한다. 테스트 공유를 이유로 구현 중복 소유를 허용하지 않는다.
 
-`make host-contract-check`는 두 호스트의 테스트를 실행해 [호스트 계약 사례](../spec/host-contract.ko.md)와 비교하며, `make native-test`가 이를 실행하며, 먼저 `make rust-format-check`를 실행한다. 이 검사는 루트나 `sidecars` 워크스페이스의 Rust 패키지가 `rustfmt` 형식이 아니면 실패한다. 현재 목록은 lane 59개, 구현 파일 274개, 테스트 파일 202개다. 현재 연결 목록은 미완료다. 구조 검사가 통과해도 동작 동등성은 입증하지 않는다. [검증 계약](../spec/verification.ko.md)의 이름 있는 동작 연결, 언어별 실제 실행, 일치하는 빌드의 증거가 필요하다. 통과하려고 관련 없는 glob을 넓히거나 발견한 파일을 제외하지 않는다.
+`make host-contract-check`는 두 호스트의 테스트를 실행해 [호스트 계약 사례](../spec/host-contract.ko.md)와 비교하며, `make native-test`가 이를 실행하며, 먼저 `make rust-format-check`를 실행한다. 이 검사는 루트나 `sidecars` 워크스페이스의 Rust 패키지가 `rustfmt` 형식이 아니면 실패한다. 현재 목록은 lane 60개, 구현 파일 281개, 테스트 파일 206개다. 현재 연결 목록은 미완료다. 구조 검사가 통과해도 동작 동등성은 입증하지 않는다. [검증 계약](../spec/verification.ko.md)의 이름 있는 동작 연결, 언어별 실제 실행, 일치하는 빌드의 증거가 필요하다. 통과하려고 관련 없는 glob을 넓히거나 발견한 파일을 제외하지 않는다.
 
 `pnpm test`는 패키지 검사 전에 감사·체크리스트·명령 감독 자체 검사를 실행한다. Rust 터미널 패키지 두 개는 실제 Cargo 검사를 호출한다. 패키지 명령 검사는 Cargo를 실패 fixture로 교체해 호출·실패 전달을 검증하며 엔진 동작 검사로 세지 않는다.
 
@@ -47,8 +47,8 @@ node scripts/test-command.mjs --id inventory --timeout-ms 10000 -- node scripts/
 각각 다른 터미널에서, 하네스가 읽는 설정 디렉터리(Node.js의 `os.tmpdir()`, macOS에서는 `$TMPDIR`)로 앱을 한 번씩 실행한다.
 
 ```sh
-./target/debug/soksak-wailsv3 --config-dir "$TMPDIR/soksak-check-wailsv3"
-./target/debug/soksak-tauriv2 --config-dir "$TMPDIR/soksak-check-tauriv2"
+./target/debug/soksak-wailsv3.app/Contents/MacOS/soksak-wailsv3 --config-dir "$TMPDIR/soksak-check-wailsv3"
+./target/debug/soksak-tauriv2.app/Contents/MacOS/soksak-tauriv2 --config-dir "$TMPDIR/soksak-check-tauriv2"
 ```
 
 디스플레이를 켜고 두 창이 렌더링 가능한 상태에서 실행한다.
@@ -109,7 +109,7 @@ pnpm -F @soksak/e2e run verify
 
 ## 진단
 
-디버그 빌드(`make wailsv3-build tauriv2-build`)는 [로컬 엔드포인트](../spec/endpoint.ko.md)의 진단 메서드 `diagnostics.fixture`, `diagnostics.drag`, `diagnostics.capture.start`, `diagnostics.capture.stop`, `diagnostics.knob`, `diagnostics.modal.hold`, `diagnostics.modal.held`, `diagnostics.transcript`를 포함한다. `soksak` 명령과 `soksak-mcp` 서버도 같은 요청을 보낸다. 예를 들어 `soksak status core.screen --window main --config-dir DIR`이다. `soksak dom dispatch NAME --window main --event '{"type":"click"}' --config-dir DIR`는 선언된 DOM 항목에 합성 이벤트를 보낸다. 실제 입력 검사는 `input.pointer`와 `input.key`를 쓴다.
+디버그 빌드(`make wailsv3-build tauriv2-build`)는 [로컬 엔드포인트](../spec/endpoint.ko.md)의 진단 메서드 `diagnostics.fixture`, `diagnostics.drag`, `diagnostics.capture.start`, `diagnostics.capture.stop`, `diagnostics.knob`, `diagnostics.modal.hold`, `diagnostics.modal.held`, `diagnostics.notifications`, `diagnostics.transcript`를 포함한다. `soksak` 명령과 `soksak-mcp` 서버도 같은 요청을 보낸다. 예를 들어 `soksak status core.screen --window main --config-dir DIR`이다. `soksak dom dispatch NAME --window main --event '{"type":"click"}' --config-dir DIR`는 선언된 DOM 항목에 합성 이벤트를 보낸다. 실제 입력 검사는 `input.pointer`와 `input.key`를 쓴다.
 
 `pnpm -F @soksak/client run bench:application -- --config-dir DIR`은 실행 중인 애플리케이션의 세 경로 순차 왕복을 잰다. `windows.list`(호스트만 응답), `status.get core.screen`(메인 페이지에 중계), 표면을 지정한 `status.get core.surface.document`(메인 페이지를 거쳐 표면 페이지에 중계)다. `bench`는 전송만 잰다. 2026-09-17(M3 Pro, 디버그 빌드, 경로당 2000회, 두 번 실행)의 p50은 Wails 호스트 142–157µs, 페이지 1.5–1.7ms, 표면 4.4–4.5ms, Tauri 호스트 443µs, 페이지 2.6–2.7ms, 표면 1.4–7.5ms였다.
 

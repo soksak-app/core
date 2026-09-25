@@ -72,7 +72,10 @@ pub(crate) fn handler() -> impl Fn(Invoke) -> bool + Send + Sync + 'static {
         clipboard_read,
         clipboard_write_text,
         clipboard_persist_png,
-        link_open
+        link_open,
+        notify,
+        notification_remove,
+        notification_state
     ]
 }
 
@@ -410,6 +413,30 @@ fn clipboard_read(
 #[tauri::command(async)]
 fn link_open(window: Window, request: link::OpenRequest) -> Result<(), String> {
     link::open(&window, request)
+}
+
+/// 호출한 창의 탭 알림을 시스템 알림으로 게시한다.
+#[tauri::command(async)]
+fn notify(
+    window: Window,
+    request: crate::notifications::NotificationRequest,
+) -> Result<(), String> {
+    crate::notifications::notify(&window, request)
+}
+
+/// 호출한 창의 탭 알림을 지운다.
+#[tauri::command(async)]
+fn notification_remove(
+    window: Window,
+    request: crate::notifications::NotificationRequest,
+) -> Result<(), String> {
+    crate::notifications::remove(&window, request)
+}
+
+/// 알림 센터가 마지막으로 알린 권한 상태를 반환한다.
+#[tauri::command(async)]
+fn notification_state() -> Result<crate::notifications::NotificationState, String> {
+    crate::notifications::state()
 }
 
 #[tauri::command(async)]
