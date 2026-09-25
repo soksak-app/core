@@ -283,7 +283,7 @@ function drawSidebars() {
     rows.push(row(`${p.name} 우측`, choose(`link:right:${p.id}`, options, linkedId("right", p.id) ?? "")));
   }
   if (scope === "project" && overridden("links")) rows.push(row("", press("reset:links", "전역 연결 사용")));
-  body.append(group("연결", "사이드바 위치마다 세트를 건다. 걸지 않으면 그 사이드바는 없다.", rows));
+  body.append(group("연결", "각 사이드바에 보여 줄 섹션 묶음을 고른다. 고르지 않은 사이드바는 나타나지 않는다.", rows));
 }
 
 function drawCompositing() {
