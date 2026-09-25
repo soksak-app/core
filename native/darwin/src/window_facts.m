@@ -144,6 +144,8 @@ char *sp_window_facts(void *handle) {
         @"key": @(window.isKeyWindow),
         @"zoomed": @(window.isZoomed),
         @"active": @(NSApp.isActive),
+        // 다른 창에 완전히 가려진 창은 WebKit 이 그리기를 늦추므로 표시 측정의 조건이다.
+        @"occluded": @((BOOL)((window.occlusionState & NSWindowOcclusionStateVisible) == 0)),
         @"children": @(window.childWindows.count),
         @"controls": controls,
         @"webviews": webviews,

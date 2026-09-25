@@ -69,7 +69,7 @@ fn host_declarations() -> Value {
                 "scale": {"type": "number"}}}},
         }, {
             "name": "host.window",
-            "description": "Window frame and system pointer location in screen coordinates, content size, backing scale, maximized, key and application active state, child window count, window buttons, native surfaces, image regions, and the open native modal.",
+            "description": "Window frame and system pointer location in screen coordinates, content size, backing scale, maximized, key and application active state, whether other windows cover the whole window, child window count, window buttons, native surfaces, image regions, and the open native modal.",
             "schema": {"type": "object", "properties": {
                 "frame": rect,
                 "pointer": {"type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "number"}}},
@@ -78,6 +78,7 @@ fn host_declarations() -> Value {
                 "maximized": {"type": "boolean"},
                 "key": {"type": "boolean"},
                 "active": {"type": "boolean"},
+                "occluded": {"type": "boolean"},
                 "children": {"type": "integer"},
                 "controls": {"type": "array", "items": rect},
                 "surfaces": {"type": "array", "items": {"type": "object", "properties": {
@@ -981,6 +982,7 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
         "maximized": facts["zoomed"],
         "key": facts["key"],
         "active": facts["active"],
+        "occluded": facts["occluded"],
         "children": facts["children"],
         "appDomWebviews": app_dom_webviews,
         "documentWebviews": document_webviews,

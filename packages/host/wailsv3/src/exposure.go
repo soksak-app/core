@@ -47,7 +47,7 @@ var presentedSchema = map[string]any{"type": "object", "properties": map[string]
 
 var hostStatus = map[string]hostEntry{
 	"host.window": {
-		Description: "Window frame and system pointer location in screen coordinates, content size, backing scale, maximized, key and application active state, child window count, window buttons, native surfaces, document regions, image regions, and the open native modal.",
+		Description: "Window frame and system pointer location in screen coordinates, content size, backing scale, maximized, key and application active state, whether other windows cover the whole window, child window count, window buttons, native surfaces, document regions, image regions, and the open native modal.",
 		Schema: map[string]any{"type": "object", "properties": map[string]any{
 			"frame":     rectSchema,
 			"pointer":   map[string]any{"type": "object", "properties": map[string]any{"x": map[string]any{"type": "number"}, "y": map[string]any{"type": "number"}}},
@@ -56,6 +56,7 @@ var hostStatus = map[string]hostEntry{
 			"maximized": map[string]any{"type": "boolean"},
 			"key":       map[string]any{"type": "boolean"},
 			"active":    map[string]any{"type": "boolean"},
+			"occluded":  map[string]any{"type": "boolean"},
 			"children":  map[string]any{"type": "integer"},
 			"controls":  map[string]any{"type": "array", "items": rectSchema},
 			"surfaces": map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{
@@ -865,6 +866,7 @@ type windowFacts struct {
 	Zoomed   bool            `json:"zoomed"`
 	Key      bool            `json:"key"`
 	Active   bool            `json:"active"`
+	Occluded bool            `json:"occluded"`
 	Children int             `json:"children"`
 	Controls []WindowControl `json:"controls"`
 	Webviews []struct {
@@ -963,6 +965,7 @@ type WindowStatus struct {
 	Maximized        bool             `json:"maximized"`
 	Key              bool             `json:"key"`
 	Active           bool             `json:"active"`
+	Occluded         bool             `json:"occluded"`
 	Children         int              `json:"children"`
 	AppDomWebviews   int              `json:"appDomWebviews"`
 	DocumentWebviews int              `json:"documentWebviews"`
@@ -1013,7 +1016,7 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 	}
 	out := WindowStatus{
 		Frame: facts.Frame, Pointer: facts.Pointer, Content: frame{Width: facts.Content.Width, Height: facts.Content.Height},
-		Scale: facts.Scale, Maximized: facts.Zoomed, Key: facts.Key, Active: facts.Active, Children: facts.Children,
+		Scale: facts.Scale, Maximized: facts.Zoomed, Key: facts.Key, Active: facts.Active, Occluded: facts.Occluded, Children: facts.Children,
 		Controls: facts.Controls, Surfaces: []WindowSurface{}, Documents: []WindowDocument{}, Regions: regions,
 	}
 	out.DocumentWebviews = facts.DocumentWebviews

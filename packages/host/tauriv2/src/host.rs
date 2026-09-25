@@ -8,6 +8,9 @@
 //! 그 영역에 맞춘다. 처음 선언된 영역에는 웹뷰를 만들고, 기존 웹뷰는 이동하고 크기를 바꾸고,
 //! 선언에서 빠진 웹뷰는 닫는다. 자식 웹뷰는 tauri 크레이트의 `unstable` 기능을 사용한다.
 
+// host.window 스키마 같은 큰 json! 표현은 serde_json 매크로의 기본 재귀 한도(128)를 넘는다.
+#![recursion_limit = "256"]
+
 use std::sync::atomic::Ordering;
 
 use tauri::Manager;
