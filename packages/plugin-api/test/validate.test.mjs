@@ -166,8 +166,8 @@ test("references to missing plugins and sections are rejected", () => {
   assert.throws(() => checkReferences({ ...environment(), settings: { missing: {} } }, [card, side]), /unknown plugin/);
 });
 
-test("an environment has no sidecar field", () => {
-  assert.throws(() => validateEnvironment({ ...environment(), sidecars: ["@scope/sidecar-worker"] }), /unknown field sidecars/);
+test("an environment does not list sidecars; plugins declare them", () => {
+  assert.throws(() => validateEnvironment({ ...environment(), sidecars: ["@scope/sidecar-worker"] }), /sidecars must be true or false/);
 });
 
 test("a sidecar manifest names an executable inside its package and a protocol version", () => {

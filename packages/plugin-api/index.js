@@ -419,7 +419,10 @@ export function validateSidecar(sidecar) {
  */
 export function validateEnvironment(environment) {
   if (!isObject(environment)) throw new Error("environment.json: expected an object");
-  only("environment.json", environment, ["runtime", "plugins", "workspace", "sidebars", "settings"]);
+  only("environment.json", environment, ["runtime", "plugins", "workspace", "sidebars", "settings", "sidecars"]);
+  if (environment.sidecars !== undefined && typeof environment.sidecars !== "boolean") {
+    throw new Error("environment.json: sidecars must be true or false");
+  }
   if (!isText(environment.runtime) || environment.runtime.startsWith("/") || environment.runtime.split("/").includes("..")) {
     throw new Error("environment.json: runtime must be a directory inside the application");
   }
@@ -488,6 +491,14 @@ export function checkReferences(environment, manifests) {
     }
   }
   checkSidebarReferences(environment.sidebars, manifests, "environment.json");
+  // 사이드카를 실행하지 못하는 런타임은 표면을 열지 않지만 상태 모듈은 마운트한다(docs/spec/plugins.md#environmentjson).
+  if (environment.sidecars === false) {
+    for (const manifest of manifests) {
+      if (manifest.state && manifest.sidecars?.length) {
+        throw new Error(`environment.json: plugin ${manifest.id} has a state module that uses sidecars, which this environment cannot run`);
+      }
+    }
+  }
 }
 
 /** 세트 id 로 쓸 수 없는 값. */

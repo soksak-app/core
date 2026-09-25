@@ -13,9 +13,6 @@ importers:
       '@soksak/plugin-browser':
         specifier: workspace:*
         version: link:../../plugins/browser
-      '@soksak/plugin-files':
-        specifier: workspace:*
-        version: link:../../plugins/files
       '@soksak/plugin-shell':
         specifier: workspace:*
         version: link:../../plugins/shell

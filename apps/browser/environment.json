@@ -2,9 +2,9 @@
   "runtime": "runtime",
   "plugins": [
     "@soksak/plugin-shell",
-    "@soksak/plugin-browser",
-    "@soksak/plugin-files"
+    "@soksak/plugin-browser"
   ],
+  "sidecars": false,
   "workspace": {
     "focus": "shell",
     "grid": {
@@ -74,15 +74,6 @@
   "sidebars": {
     "sets": [
       {
-        "id": "set-install",
-        "title": "탐색기",
-        "sections": [
-          "files.tree",
-          "files.bookmarks"
-        ],
-        "layout": "list"
-      },
-      {
         "id": "set-shell",
         "title": "셸",
         "sections": [
@@ -119,11 +110,6 @@
       }
     ],
     "links": [
-      {
-        "place": "left",
-        "plugin": null,
-        "set": "set-install"
-      },
       {
         "place": "rail",
         "plugin": "shell",

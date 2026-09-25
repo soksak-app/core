@@ -12,7 +12,6 @@
   "dependencies": {
     "@soksak/workbench": "workspace:*",
     "@soksak/plugin-browser": "workspace:*",
-    "@soksak/plugin-files": "workspace:*",
     "@soksak/plugin-shell": "workspace:*"
   },
   "devDependencies": {
