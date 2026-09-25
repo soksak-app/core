@@ -20,20 +20,47 @@ struct Frame {
     uint32_t height;
 };
 
-// Parse hex color string (#rrggbb format)
-static CGColorRef parse_color(const char *hex_color) {
-    if (!hex_color || hex_color[0] != '#' || strlen(hex_color) != 7) {
-        return NULL;
-    }
+// 이웃한 셀은 대개 같은 색이다. 마지막으로 만든 색을 RGB 값으로 기억해 셀마다 색을 새로 만들지 않는다.
+typedef struct {
+    int valid;
+    uint8_t rgb[3];
+    CGColorRef color;
+} ColorCache;
 
-    unsigned int r, g, b;
-    if (sscanf(hex_color + 1, "%02x%02x%02x", &r, &g, &b) == 3) {
-        CGFloat red = r / 255.0;
-        CGFloat green = g / 255.0;
-        CGFloat blue = b / 255.0;
-        return CGColorCreateSRGB(red, green, blue, 1.0);
+static CGColorRef cached_color(ColorCache *cache, const uint8_t rgb[3]) {
+    if (cache->valid && memcmp(cache->rgb, rgb, 3) == 0) return cache->color;
+    if (cache->color) CGColorRelease(cache->color);
+    cache->color = CGColorCreateSRGB(rgb[0] / 255.0, rgb[1] / 255.0, rgb[2] / 255.0, 1.0);
+    memcpy(cache->rgb, rgb, 3);
+    cache->valid = cache->color != NULL;
+    return cache->color;
+}
+
+// 셀 글자가 유니코드 스칼라 하나이고 기본 글꼴에 그 글리프가 있으면 글리프를 돌려준다. 결합 문자나
+// 기본 글꼴에 없는 글자는 0 을 돌려주며, 그런 셀은 대체 글꼴을 고르는 CoreText 줄로 그린다.
+static CGGlyph single_glyph(CTFontRef font, const uint8_t *bytes, uint32_t length) {
+    uint32_t scalar;
+    uint32_t used;
+    if (length == 0) return 0;
+    if (bytes[0] < 0x80) { scalar = bytes[0]; used = 1; }
+    else if ((bytes[0] & 0xE0) == 0xC0 && length >= 2) { scalar = ((bytes[0] & 0x1F) << 6) | (bytes[1] & 0x3F); used = 2; }
+    else if ((bytes[0] & 0xF0) == 0xE0 && length >= 3) { scalar = ((bytes[0] & 0x0F) << 12) | ((bytes[1] & 0x3F) << 6) | (bytes[2] & 0x3F); used = 3; }
+    else if ((bytes[0] & 0xF8) == 0xF0 && length >= 4) {
+        scalar = ((bytes[0] & 0x07) << 18) | ((bytes[1] & 0x3F) << 12) | ((bytes[2] & 0x3F) << 6) | (bytes[3] & 0x3F); used = 4;
+    } else return 0;
+    if (used != length) return 0;
+    UniChar units[2];
+    CFIndex count;
+    if (scalar < 0x10000) { units[0] = (UniChar)scalar; count = 1; }
+    else {
+        uint32_t value = scalar - 0x10000;
+        units[0] = (UniChar)(0xD800 + (value >> 10));
+        units[1] = (UniChar)(0xDC00 + (value & 0x3FF));
+        count = 2;
     }
-    return NULL;
+    CGGlyph glyphs[2] = {0, 0};
+    if (!CTFontGetGlyphsForCharacters(font, units, glyphs, count)) return 0;
+    return glyphs[0];
 }
 
 // Create a frame with given pixel dimensions
@@ -167,6 +194,9 @@ int frame_draw_with_inline_images(Frame *frame, Screen *screen, Metrics *metrics
     CGContextSetFillColorWithColor(ctx, default_bg_color);
     CGContextFillRect(ctx, CGRectMake(0, 0, (CGFloat)frame->width, (CGFloat)frame->height));
 
+    ColorCache fg_cache = {0};
+    ColorCache bg_cache = {0};
+    CGFloat descent = CTFontGetDescent(font);
     // Draw cells
     for (uint32_t i = 0; i < screen->cell_count; i++) {
         Cell *cell = &screen->cells[i];
@@ -175,25 +205,9 @@ int frame_draw_with_inline_images(Frame *frame, Screen *screen, Metrics *metrics
         CGFloat x = cell->col * metrics->cell_width;
         CGFloat y = (CGFloat)frame->height - ((CGFloat)cell->row + 1.0) * metrics->cell_height;
 
-        // Get colors
-        CGColorRef bg_color = NULL;
-        CGColorRef fg_color = NULL;
-        int parsed_bg = 0;
-        int parsed_fg = 0;
-
-        if (cell->has_bg) {
-            char hex_buf[8];
-            snprintf(hex_buf, sizeof(hex_buf), "#%02x%02x%02x", cell->bg[0], cell->bg[1], cell->bg[2]);
-            bg_color = parse_color(hex_buf);
-            if (bg_color) parsed_bg = 1;
-        }
-        if (cell->has_fg) {
-            char hex_buf[8];
-            snprintf(hex_buf, sizeof(hex_buf), "#%02x%02x%02x", cell->fg[0], cell->fg[1], cell->fg[2]);
-            fg_color = parse_color(hex_buf);
-            if (fg_color) parsed_fg = 1;
-        }
-
+        // 색은 이웃 셀과 같으면 다시 만들지 않는다.
+        CGColorRef bg_color = cell->has_bg ? cached_color(&bg_cache, cell->bg) : NULL;
+        CGColorRef fg_color = cell->has_fg ? cached_color(&fg_cache, cell->fg) : NULL;
         if (!bg_color) bg_color = default_bg_color;
         if (!fg_color) fg_color = default_fg_color;
 
@@ -204,13 +218,31 @@ int frame_draw_with_inline_images(Frame *frame, Screen *screen, Metrics *metrics
             fg_color = tmp;
         }
 
-        // Draw background
-        CGContextSetFillColorWithColor(ctx, bg_color);
-        CGContextFillRect(ctx, CGRectMake(x, y, metrics->cell_width * cell->width, metrics->cell_height));
+        // 기본 배경은 이미 칠했다.
+        if (bg_color != default_bg_color) {
+            CGContextSetFillColorWithColor(ctx, bg_color);
+            CGContextFillRect(ctx, CGRectMake(x, y, metrics->cell_width * cell->width, metrics->cell_height));
+        }
 
-        // Draw character if present
-        if (cell->ch_len > 0 && cell->width > 0) {
+        CGGlyph glyph = (cell->ch_len > 0 && cell->width > 0 && cell->ch) ? single_glyph(font, cell->ch, cell->ch_len) : 0;
+        if (glyph != 0) {
+            // 기본 글꼴의 글리프 하나는 줄 객체 없이 그린다. 넓은 글자는 CoreText 줄과 같이 두 칸 가운데에 둔다.
+            CGFloat offset = 0;
+            if (cell->width == 2) {
+                CGSize advance;
+                CTFontGetAdvancesForGlyphs(font, kCTFontOrientationHorizontal, &glyph, &advance, 1);
+                CGFloat span = metrics->cell_width * 2;
+                if (advance.width < span) offset = (span - advance.width) / 2;
+            }
+            CGPoint position = CGPointMake(x + offset, y + descent);
+            CGContextSetFillColorWithColor(ctx, fg_color);
+            // 글리프 위치는 텍스트 행렬을 거친다. 대체 경로의 CGContextSetTextPosition 이 옮긴 행렬을 되돌린다.
+            CGContextSetTextMatrix(ctx, CGAffineTransformIdentity);
+            CTFontDrawGlyphs(font, &glyph, &position, 1, ctx);
+        } else if (cell->ch_len > 0 && cell->width > 0) {
             if (!cell->ch) {
+                if (fg_cache.color) CGColorRelease(fg_cache.color);
+                if (bg_cache.color) CGColorRelease(bg_cache.color);
                 CFRelease(font);
                 CGContextRelease(ctx);
                 CGColorRelease(default_fg_color);
@@ -220,6 +252,8 @@ int frame_draw_with_inline_images(Frame *frame, Screen *screen, Metrics *metrics
             }
             NSString *ch = [[NSString alloc] initWithBytes:cell->ch length:cell->ch_len encoding:NSUTF8StringEncoding];
             if (!ch) {
+                if (fg_cache.color) CGColorRelease(fg_cache.color);
+                if (bg_cache.color) CGColorRelease(bg_cache.color);
                 CFRelease(font);
                 CGContextRelease(ctx);
                 CGColorRelease(default_fg_color);
@@ -267,9 +301,9 @@ int frame_draw_with_inline_images(Frame *frame, Screen *screen, Metrics *metrics
             CGContextFillRect(ctx, CGRectMake(x, MAX(top, y), metrics->cell_width * cell->width, thickness));
         }
 
-        if (parsed_bg) CGColorRelease(bg_color);
-        if (parsed_fg) CGColorRelease(fg_color);
     }
+    if (fg_cache.color) CGColorRelease(fg_cache.color);
+    if (bg_cache.color) CGColorRelease(bg_cache.color);
 
     for (uint32_t i = 0; i < image_count; i++) {
         InlineImageRaster *raster = &images[i];

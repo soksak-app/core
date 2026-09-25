@@ -420,3 +420,106 @@ for (const app of Object.values(APPS)) {
     assert.equal((await s.get("terminal.session", surface)).error ?? null, null, "the link open left a session error");
   });
 }
+
+// 휠 스크롤 측정. 줄 i 는 i % 97 번째 열에 '#' 하나를 가진다. 각 녹화 프레임의 맨 위 행에서 '#' 의 열을 읽으면
+// 그 프레임이 보인 줄을 97 을 법으로 알 수 있고, 이웃 프레임의 차이로 이동한 줄 수를 얻는다.
+const MARKS = 97;
+
+function topMark(frame, region, session) {
+  const top = Math.round(region.frame.y * frame.scale);
+  const bottom = Math.round((region.frame.y + session.cellHeight) * frame.scale);
+  let best = null;
+  let bestCount = 0;
+  for (let column = 0; column < MARKS; column++) {
+    const left = Math.round((region.frame.x + column * session.cellWidth) * frame.scale);
+    const right = Math.round((region.frame.x + (column + 1) * session.cellWidth) * frame.scale);
+    let count = 0;
+    for (let y = top; y < bottom; y++) for (let x = left; x < right; x++) {
+      if (pixel(frame, x, y).every((value) => value > 150)) count++;
+    }
+    if (count > bestCount) { best = column; bestCount = count; }
+  }
+  return bestCount >= 4 ? best : null;
+}
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: a real wheel over a long history is shown without lag, stalls, or reversal`, { timeout: 240000 }, async (t) => {
+    const { s, surface, session, origin } = await prepare(t, app, "WHEELSTART");
+    assert.ok(session.cols > MARKS, `the terminal has ${session.cols} columns; the check needs more than ${MARKS}`);
+    await s.run("terminal.input", {
+      bytes: "clear; awk 'BEGIN{for(i=0;i<100000;i++) printf \"%\" (i%97+1) \"s\\n\", \"#\"}'; printf 'WHEELREADY\\n'\r",
+    }, surface);
+    const writeStart = performance.now();
+    await s.run("terminal.screen.read", {}, surface);
+    await s.until("terminal.screen", (rows) => rows.some((row) => row.map((cell) => cell.ch ?? " ").join("").trim() === "WHEELREADY"),
+      "100,000 lines were not written", { surface, timeout: 180000 });
+    const writeMs = Math.round(performance.now() - writeStart);
+    t.diagnostic(`${app.name}: 100,000 lines were written and shown in ${writeMs} ms`);
+    const history = (await s.get("terminal.session", surface)).scrollback.history;
+    const region = (await s.get("host.window")).regions.find((item) => item.surface === surface && item.name === "view");
+    const point = cellPoint(origin, session, 50, 5);
+    post([{ type: "move", x: point.x, y: point.y }]);
+    await s.request("diagnostics.capture.start", {});
+    // 사람이 휠을 계속 굴리듯 16 ms 마다 3줄씩 120번 보낸다.
+    const steps = [];
+    for (let i = 0; i < 120; i++) steps.push({ type: "wheel", x: point.x, y: point.y, lines: 3 });
+    const sent = post(steps);
+    const displayed = await s.presented();
+    const { frames: directory } = await s.request("diagnostics.capture.stop", { after: displayed.displayed });
+    try {
+      const final = (await s.get("terminal.session", surface)).scrollback.offset;
+      const files = frames(directory);
+      assert.ok(files.length > 30, `the recording has only ${files.length} frames`);
+      const shown = [];
+      let previous = null;
+      let moved = 0;
+      let backward = 0;
+      let largest = 0;
+      for (const file of files) {
+        const frame = readFrame(file);
+        const mark = topMark(frame, region, session);
+        assert.notEqual(mark, null, `frame at ${frame.time} ms shows no line mark in the top row`);
+        if (previous !== null) {
+          // 위로 스크롤하면 맨 위 줄 번호가 줄어든다. 차이를 (-48, 48] 로 옮겨 이동한 줄 수를 얻는다.
+          let delta = ((previous - mark) % MARKS + MARKS) % MARKS;
+          if (delta > MARKS / 2) delta -= MARKS;
+          if (delta < 0) backward++;
+          largest = Math.max(largest, Math.abs(delta));
+          moved += delta;
+        }
+        previous = mark;
+        shown.push({ time: frame.time, moved });
+      }
+      const inputStart = sent[0];
+      const inputEnd = sent.at(-1);
+      const firstMove = shown.find((item) => item.moved > 0);
+      const settled = shown.find((item) => item.moved === moved);
+      // 입력이 이어지는 동안 화면이 바뀌지 않은 가장 긴 시간.
+      let stall = 0;
+      let changedAt = firstMove?.time ?? inputStart;
+      for (let index = 1; index < shown.length; index++) {
+        if (shown[index].time > inputEnd) break;
+        if (shown[index].moved !== shown[index - 1].moved) changedAt = shown[index].time;
+        else stall = Math.max(stall, shown[index].time - changedAt);
+      }
+      const intervals = shown.slice(1).map((item, index) => item.time - shown[index].time);
+      const report = {
+        writeMs, history, final, displayedLines: moved, frames: shown.length,
+        inputMs: Math.round(inputEnd - inputStart),
+        startLagMs: firstMove ? Math.round(firstMove.time - inputStart) : null,
+        endLagMs: Math.round(settled.time - inputEnd),
+        longestStallMs: Math.round(stall),
+        largestStepLines: largest, backwardFrames: backward,
+        medianFrameMs: intervals.sort((a, b) => a - b)[Math.floor(intervals.length / 2)],
+      };
+      t.diagnostic(`${app.name}: ${JSON.stringify(report)}`);
+      assert.equal(moved, final, `the display moved ${moved} lines but the viewport is at ${final}: ${JSON.stringify(report)}`);
+      assert.equal(backward, 0, `the display moved backward: ${JSON.stringify(report)}`);
+      assert.ok(report.startLagMs !== null && report.startLagMs <= 50, `the first wheel event was shown late: ${JSON.stringify(report)}`);
+      assert.ok(report.endLagMs <= 50, `the last wheel event was shown late: ${JSON.stringify(report)}`);
+      assert.ok(report.longestStallMs <= 50, `the display stalled while the wheel turned: ${JSON.stringify(report)}`);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+}

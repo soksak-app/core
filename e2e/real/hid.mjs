@@ -30,7 +30,9 @@ const TYPES = { move: 5, down: 1, up: 2, drag: 6, rightDown: 3, rightUp: 4 };
 const FLAGS = { shift: 0x20000, control: 0x40000, option: 0x80000, command: 0x100000 };
 
 const postSteps = jxa(`
+ObjC.import("Foundation");
 const types = ${JSON.stringify(TYPES)};
+const times = [];
 for (const step of input.steps) {
   let event;
   const flags = (step.modifiers || []).reduce((sum, name) => sum + ${JSON.stringify(FLAGS)}[name], 0);
@@ -46,16 +48,19 @@ for (const step of input.steps) {
   // 원본이 없는 이벤트는 실제 수정키 상태를 물려받으므로 플래그를 명시한다.
   $.CGEventSetFlags(event, flags);
   $.CGEventPost(0, event);
+  // 녹화 프레임의 표시 시각과 같은 시계(mach 시각, 잠자기 제외)로 보낸 시각을 기록한다.
+  times.push($.NSProcessInfo.processInfo.systemUptime * 1000);
   if (step.wait) delay(step.wait / 1000);
 }
-return "";`);
+return JSON.stringify(times);`);
 
 /**
  * HID 이벤트를 차례로 보낸다. step 은 {type, x, y, modifiers, wait} 이다. type 은 move, down, up, drag,
  * rightDown, rightUp, wheel({lines, unit}), key({code, down}) 이다. 좌표는 화면 좌표(왼쪽 위 원점, 포인트)다.
+ * 각 이벤트를 보낸 시각(ms, 녹화 프레임의 표시 시각과 같은 시계)의 배열을 돌려준다.
  */
 export function post(steps) {
-  postSteps({ steps: steps.map((step) => ({ wait: 16, ...step })) });
+  return postSteps({ steps: steps.map((step) => ({ wait: 16, ...step })) });
 }
 
 /** 누르고 떼는 클릭이다. */

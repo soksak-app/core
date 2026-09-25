@@ -901,6 +901,45 @@ const DEFAULT_FONT_SIZE: f32 = 13.0;
 const FONT_SIZE_MIN: f64 = 4.0;
 const FONT_SIZE_MAX: f64 = 128.0;
 
+/// 페이지로 보내는 셀. 페이지는 글자, 폭, 링크, 켜진 속성만 쓰고 색은 래스터가 그린다. 기본값 필드를 셀마다
+/// 보내면 글자로 찬 화면 하나가 수백 KB 가 되어 프레임마다 호스트와 페이지를 지난다.
+#[derive(Serialize)]
+struct PageCell<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ch: Option<&'a str>,
+    width: u8,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    bold: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    italic: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    underline: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    inverse: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    link: Option<&'a str>,
+}
+
+fn page_lines(screen: &Screen) -> Vec<Vec<PageCell<'_>>> {
+    screen
+        .lines
+        .iter()
+        .map(|line| {
+            line.iter()
+                .map(|cell| PageCell {
+                    ch: cell.ch.as_deref(),
+                    width: cell.width,
+                    bold: cell.bold,
+                    italic: cell.italic,
+                    underline: cell.underline,
+                    inverse: cell.inverse,
+                    link: cell.link.as_deref(),
+                })
+                .collect()
+        })
+        .collect()
+}
+
 /// 화면 이벤트 본문. 뷰포트의 줄, 커서, 스크롤백 상태를 담는다.
 fn screen_event(surface_id: &str, screen: &Screen) -> Value {
     json!({
@@ -910,7 +949,7 @@ fn screen_event(surface_id: &str, screen: &Screen) -> Value {
             "cols": screen.cols,
             "rows": screen.rows,
             "cursor": screen.cursor,
-            "lines": screen.lines,
+            "lines": page_lines(screen),
             "scrollback": screen.scrollback,
             "background": screen.background
         }
@@ -968,6 +1007,19 @@ async fn present_screen(
         }
     });
     output_tx.send(image_envelope.to_string()).await.is_ok()
+}
+
+/// 호스트가 앞 래스터를 복사하는 중인지. 그동안의 화면 변경은 dirty 로 남기고 그리거나 화면 JSON 을 보내지
+/// 않는다. 출력이 몰릴 때 화면마다 JSON 을 보내면 페이지가 지난 화면을 처리하느라 입력과 스크롤이 밀린다.
+/// 호스트가 답하면 그때의 화면을 한 번 그리고 보낸다.
+fn hold_while_presenting(image_state: &mut Option<ImageState>) -> bool {
+    match image_state.as_mut() {
+        Some(state) if state.pending_draw => {
+            state.dirty = true;
+            true
+        }
+        _ => false,
+    }
 }
 
 async fn send_state(
@@ -1672,11 +1724,13 @@ async fn surface_task(
                         // 입력은 뷰포트를 가장 새 출력으로 되돌린 뒤 쓴다.
                         if engine.scroll_to_newest() {
                             refresh_inline_image_positions(&mut engine, &mut image_state);
-                            let screen = decorate_screen(engine.screen(), focused, &preedit, &cursor_policy, 0);
-                            if let Some(state) = image_state.as_mut() {
-                                if !present_screen(&surface_id, &screen, state, &output_tx).await { return; }
+                            if !hold_while_presenting(&mut image_state) {
+                                let screen = decorate_screen(engine.screen(), focused, &preedit, &cursor_policy, 0);
+                                if let Some(state) = image_state.as_mut() {
+                                    if !present_screen(&surface_id, &screen, state, &output_tx).await { return; }
+                                }
+                                if output_tx.send(screen_event(&surface_id, &screen).to_string()).await.is_err() { return; }
                             }
-                            if output_tx.send(screen_event(&surface_id, &screen).to_string()).await.is_err() { return; }
                         }
                         if let Some(ref sid) = session_id {
                             match session_port.write(sid, &bytes).await {
@@ -1715,11 +1769,13 @@ async fn surface_task(
                         // 입력은 뷰포트를 가장 새 출력으로 되돌린 뒤 쓴다.
                         if engine.scroll_to_newest() {
                             refresh_inline_image_positions(&mut engine, &mut image_state);
-                            let screen = decorate_screen(engine.screen(), focused, &preedit, &cursor_policy, 0);
-                            if let Some(state) = image_state.as_mut() {
-                                if !present_screen(&surface_id, &screen, state, &output_tx).await { return; }
+                            if !hold_while_presenting(&mut image_state) {
+                                let screen = decorate_screen(engine.screen(), focused, &preedit, &cursor_policy, 0);
+                                if let Some(state) = image_state.as_mut() {
+                                    if !present_screen(&surface_id, &screen, state, &output_tx).await { return; }
+                                }
+                                if output_tx.send(screen_event(&surface_id, &screen).to_string()).await.is_err() { return; }
                             }
-                            if output_tx.send(screen_event(&surface_id, &screen).to_string()).await.is_err() { return; }
                         }
                         if let Some(ref sid) = session_id {
                             let bytes = match encoding::encode_paste(&text, &engine.modes()) {
@@ -1829,6 +1885,7 @@ async fn surface_task(
                             engine.scroll_viewport(delta.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32);
                         }
                         refresh_inline_image_positions(&mut engine, &mut image_state);
+                        if hold_while_presenting(&mut image_state) { continue; }
                         let screen = decorate_screen(engine.screen(), focused, &preedit, &cursor_policy, 0);
                         if let Some(state) = image_state.as_mut() {
                             if !present_screen(&surface_id, &screen, state, &output_tx).await { return; }
@@ -1873,6 +1930,7 @@ async fn surface_task(
                             None => {
                                 engine.scroll_viewport(lines);
                                 refresh_inline_image_positions(&mut engine, &mut image_state);
+                                if hold_while_presenting(&mut image_state) { continue; }
                                 let screen = decorate_screen(engine.screen(), focused, &preedit, &cursor_policy, 0);
                                 if let Some(state) = image_state.as_mut() {
                                     if !present_screen(&surface_id, &screen, state, &output_tx).await { return; }
@@ -1896,11 +1954,13 @@ async fn surface_task(
                         // 입력은 뷰포트를 가장 새 출력으로 되돌린 뒤 쓴다.
                         if engine.scroll_to_newest() {
                             refresh_inline_image_positions(&mut engine, &mut image_state);
-                            let screen = decorate_screen(engine.screen(), focused, &preedit, &cursor_policy, 0);
-                            if let Some(state) = image_state.as_mut() {
-                                if !present_screen(&surface_id, &screen, state, &output_tx).await { return; }
+                            if !hold_while_presenting(&mut image_state) {
+                                let screen = decorate_screen(engine.screen(), focused, &preedit, &cursor_policy, 0);
+                                if let Some(state) = image_state.as_mut() {
+                                    if !present_screen(&surface_id, &screen, state, &output_tx).await { return; }
+                                }
+                                if output_tx.send(screen_event(&surface_id, &screen).to_string()).await.is_err() { return; }
                             }
-                            if output_tx.send(screen_event(&surface_id, &screen).to_string()).await.is_err() { return; }
                         }
                         if let Some(ref sid) = session_id {
                             let modes = engine.modes();
@@ -2276,6 +2336,10 @@ async fn surface_task(
                                 if !present_screen(&surface_id, &screen, image_state.as_mut().unwrap(), &output_tx).await {
                                     return;
                                 }
+                                // 기다린 동안의 변경을 담은 화면 하나를 보낸다.
+                                if !headless && output_tx.send(screen_event(&surface_id, &screen).to_string()).await.is_err() {
+                                    return;
+                                }
                             }
                         }
                     }
@@ -2293,6 +2357,7 @@ async fn surface_task(
                                 }
                                 engine.feed(&data);
                                 if !send_engine_events(&surface_id, session_id.as_deref(), &mut engine, &session_port, &output_tx, !headless, &mut image_state, &mut multipart).await { return; }
+                                if headless || hold_while_presenting(&mut image_state) { continue; }
                                 let screen = decorate_screen(engine.screen(), focused, &preedit, &cursor_policy, cursor_activity.elapsed().as_millis() as u64);
 
                                 if !headless { if let Some(ref mut img_state) = image_state {

@@ -55,7 +55,9 @@ const readyLine = (service) => new Promise((resolve, reject) => {
   service.once("exit", onExit);
 });
 
-const lineClient = async (endpoint, clientName) => {
+// root 가 있으면 호스트처럼 표시 요청마다 래스터를 받았다고 consumed 로 답한다. 사이드카는 답을 받기 전에 바뀐
+// 화면을 그리거나 보내지 않는다(docs/spec/terminal-runtime.md).
+const lineClient = async (endpoint, clientName, { root = null } = {}) => {
   const socket = net.createConnection(endpoint.socket);
   await withTimeout(new Promise((resolve, reject) => {
     socket.once("connect", resolve);
@@ -75,6 +77,12 @@ const lineClient = async (endpoint, clientName) => {
       const line = buffered.slice(0, newline);
       buffered = buffered.slice(newline + 1);
       const value = JSON.parse(line);
+      const image = value.body?.image;
+      if (root && value.surface && image?.token) {
+        socket.write(`${JSON.stringify({ surface: value.surface, root, body: { image: { consumed: {
+          name: image.name, generation: image.generation, raster: image.raster, sequence: image.sequence,
+        } } } })}\n`);
+      }
       const waiter = waiters.shift();
       if (waiter) waiter.resolve(value);
       else queued.push(value);
@@ -149,7 +157,7 @@ const worker = async () => {
   // orphan 표면은 닫힘 알림 없이 애플리케이션과 함께 사라진 표면이다. 재시작한 애플리케이션의 레이아웃에 없다.
   const orphan = "orphan-surface";
   const project = "/recovery/project";
-  const client = await lineClient(endpoint, serviceDirectory);
+  const client = await lineClient(endpoint, serviceDirectory, { root: project });
   const openSession = async (name, label) => {
     sendSurface(client, name, project, { operation: "open", image: "terminal", shell: "/bin/sh" });
     sendSurface(client, name, project, { image: { configure: {

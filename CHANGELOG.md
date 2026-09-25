@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-60 (partial): the terminal sends the page one compact screen per presentation instead of a full screen per output chunk and draws base-font glyphs without per-cell CoreText lines, so 100,000 lines are written in about 2.5 s instead of more than 180 s and wheel scrolling over the history shows each event about 30 ms later without stalls over 50 ms.
 - V5-51-2: OSC 8 links in the terminal are underlined, show a hand pointer, and open with the default application on Command-click through the new host operation `linkOpen`; the terminal raster now draws SGR 4 and input-method underlines, which it never drew before.
 - V5-51-4 (partial): an OSC 9 notification from a terminal out of view marks its tab and the card's tab list button with a dot until the tab comes into view.
 - V5-51-3: a terminal tab shows the program's OSC 0/2 title unless `terminal.title` is `name`, and a terminal split from a terminal starts in the directory that terminal reported through OSC 7.

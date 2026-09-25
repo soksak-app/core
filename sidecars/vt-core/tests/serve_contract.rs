@@ -714,9 +714,11 @@ async fn serve_scroll(modes: Option<Modes>, requests: &str) -> (String, Vec<Stri
 
 #[tokio::test]
 async fn a_scroll_moves_the_primary_viewport_and_input_returns_it_to_the_newest_output() {
+    // 호스트가 첫 표시에 답한 뒤의 스크롤이다. 답하기 전의 스크롤은 답을 받은 뒤 한 화면으로 보인다.
     let (output, viewport, writes) = serve_scroll(
         None,
-        r#"{"surface":"s1","body":{"operation":"scroll","lines":3,"col":2,"row":1}}
+        r#"{"surface":"s1","body":{"image":{"consumed":{"name":"view","generation":1,"raster":1,"sequence":1}}}}
+{"surface":"s1","body":{"operation":"scroll","lines":3,"col":2,"row":1}}
 {"surface":"s1","body":{"operation":"input","bytes":"aGk="}}
 "#,
     )
@@ -794,7 +796,8 @@ async fn a_scroll_on_the_alternate_screen_writes_cursor_keys() {
 async fn a_viewport_request_moves_the_viewport_to_the_offset_without_writing() {
     let (output, viewport, writes) = serve_scroll(
         None,
-        r#"{"surface":"s1","body":{"operation":"viewport","offset":7}}
+        r#"{"surface":"s1","body":{"image":{"consumed":{"name":"view","generation":1,"raster":1,"sequence":1}}}}
+{"surface":"s1","body":{"operation":"viewport","offset":7}}
 {"surface":"s1","body":{"operation":"viewport","offset":-1}}
 {"surface":"s1","body":{"operation":"viewport","offset":2.5}}
 "#,
@@ -1273,6 +1276,9 @@ async fn test_a2_pushed_output_reaches_screen() {
     let state_json: serde_json::Value =
         serde_json::from_str(&state_line).expect("failed to parse state JSON");
     assert_eq!(state_json["body"]["event"], "state", "expected state event");
+    // 호스트처럼 첫 표시에 답한다. 답하기 전의 출력은 답을 받은 뒤의 화면으로 보인다.
+    to_serve.write_all(br#"{"surface":"s1","body":{"image":{"consumed":{"name":"view","generation":1,"raster":1,"sequence":1}}}}
+"#).await.unwrap();
 
     // Push output event with "hi\r\n"
     port.push_event(DaemonEvent::Output {
@@ -3705,4 +3711,190 @@ async fn test_font_size_sets_the_cell_size() {
     );
     drop(to_serve);
     let _ = task.await;
+}
+
+/// 화면 이벤트 한 줄의 셀 글자를 이어 붙인다. JSON 에서는 글자마다 셀 객체이므로 문자열 검색으로 찾을 수 없다.
+fn screen_text(line: &str) -> String {
+    let value: serde_json::Value = serde_json::from_str(line).expect("screen event JSON");
+    value["body"]["lines"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .flat_map(|row| row.as_array().into_iter().flatten())
+        .filter_map(|cell| cell["ch"].as_str())
+        .collect()
+}
+
+#[tokio::test]
+async fn output_while_the_host_holds_a_raster_sends_one_screen_with_the_next_presentation() {
+    // 호스트가 앞 래스터를 복사하는 동안 온 출력은 화면 JSON 을 보내지 않는다. 보내면 출력이 몰릴 때 페이지가
+    // 지난 화면을 뒤늦게 처리하느라 입력과 스크롤이 밀린다. 답을 받은 뒤 한 번 그리고 그 화면 하나를 보낸다.
+    let calls = Arc::new(Mutex::new(Calls::default()));
+    let session_id = "held-raster".to_string();
+    let engine_factory = Arc::new(|| Box::new(MockEngine::new()) as Box<dyn Engine>);
+    let port = Arc::new(FakeSessionPort::new(session_id.clone(), calls.clone()));
+    let port_for_factory = port.clone();
+    let factory = Arc::new(move || port_for_factory.clone() as Arc<dyn SessionPort>);
+    let (mut to_serve, serve_in) = tokio::io::duplex(1024 * 1024);
+    let (serve_out, from_serve) = tokio::io::duplex(16 * 1024 * 1024);
+    let task = tokio::spawn(serve(engine_factory, serve_in, serve_out, factory));
+    let mut lines = tokio::io::BufReader::new(from_serve).lines();
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
+{"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
+"#).await.unwrap();
+    // 열기의 첫 표시까지 읽는다. 그 래스터는 아직 호스트에 있다.
+    loop {
+        let line = tokio::time::timeout(std::time::Duration::from_secs(2), lines.next_line())
+            .await
+            .expect("timeout waiting for the first presentation")
+            .unwrap()
+            .unwrap();
+        if line.contains(r#""kind":"iosurface-global""#) {
+            break;
+        }
+    }
+    for index in 0..50 {
+        port.push_event(DaemonEvent::Output {
+            session_id: session_id.clone(),
+            data: format!("line{index}\r\n").into_bytes(),
+            sequence: index,
+            truncated: false,
+        });
+    }
+    // 출력 채널과 요청 채널은 순서가 없으므로, 읽기 답이 마지막 출력을 보일 때까지 기다린 뒤 consumed 를 보낸다.
+    // 그 사이의 화면 이벤트는 모두 읽기 요청의 답이어야 한다.
+    let mut reads = 0;
+    let mut screens_before = 0;
+    let mut presentations_before = 0;
+    'fed: loop {
+        assert!(reads < 200, "200 screen reads did not show the last output");
+        to_serve
+            .write_all(b"{\"surface\":\"s1\",\"body\":{\"operation\":\"screen.read\"}}\n")
+            .await
+            .unwrap();
+        reads += 1;
+        loop {
+            let line = tokio::time::timeout(std::time::Duration::from_secs(2), lines.next_line())
+                .await
+                .expect("timeout waiting for a screen read")
+                .unwrap()
+                .unwrap();
+            if line.contains(r#""kind":"iosurface-global""#) {
+                presentations_before += 1;
+            }
+            if line.contains(r#""event":"screen""#) {
+                screens_before += 1;
+                if screen_text(&line).contains("line49") {
+                    break 'fed;
+                }
+                break;
+            }
+        }
+    }
+    assert_eq!(
+        presentations_before, 0,
+        "output was drawn over a raster the host still held"
+    );
+    assert_eq!(
+        screens_before, reads,
+        "output during a held raster sent screen events besides the read answers"
+    );
+    to_serve.write_all(br#"{"surface":"s1","body":{"image":{"consumed":{"name":"view","generation":1,"raster":1,"sequence":1}}}}
+"#).await.unwrap();
+    let mut screens = Vec::new();
+    let mut presentations = 0;
+    while let Ok(Some(line)) =
+        tokio::time::timeout(std::time::Duration::from_millis(500), lines.next_line())
+            .await
+            .map(|line| line.unwrap())
+    {
+        if line.contains(r#""kind":"iosurface-global""#) {
+            presentations += 1;
+        }
+        if line.contains(r#""event":"screen""#) {
+            screens.push(line);
+        }
+    }
+    drop(to_serve);
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(2), task).await;
+    assert_eq!(
+        presentations, 1,
+        "the held raster must be followed by exactly one presentation"
+    );
+    assert_eq!(
+        screens.len(),
+        1,
+        "the answer sent {} screen events",
+        screens.len()
+    );
+    assert!(
+        screen_text(&screens[0]).contains("line49"),
+        "the screen after the presentation is not the latest output: {}",
+        screens[0]
+    );
+}
+
+#[tokio::test]
+async fn the_page_screen_event_carries_only_text_width_links_and_set_attributes() {
+    // 페이지는 글자, 폭, 링크, 선택(반전)만 쓰고 색은 래스터가 그린다. 기본값 필드를 셀마다 보내면 글자로 찬
+    // 122×18 화면 하나가 약 240 KB 가 되어 스크롤 프레임마다 호스트와 페이지를 지난다.
+    let calls = Arc::new(Mutex::new(Calls::default()));
+    let session_id = "compact".to_string();
+    let engine_factory = Arc::new(|| Box::new(MockEngine::new()) as Box<dyn Engine>);
+    let port = Arc::new(FakeSessionPort::new(session_id.clone(), calls.clone()));
+    let port_for_factory = port.clone();
+    let factory = Arc::new(move || port_for_factory.clone() as Arc<dyn SessionPort>);
+    let (mut to_serve, serve_in) = tokio::io::duplex(1024 * 1024);
+    let (serve_out, from_serve) = tokio::io::duplex(16 * 1024 * 1024);
+    let task = tokio::spawn(serve(engine_factory, serve_in, serve_out, factory));
+    let mut lines = tokio::io::BufReader::new(from_serve).lines();
+    to_serve.write_all(br#"{"surface":"s1","root":"/tmp","body":{"operation":"open","shell":"/bin/sh","image":"view"}}
+{"surface":"s1","body":{"image":{"configure":{"name":"view","generation":1,"raster":1,"width":800,"height":384,"scale":1.0}}}}
+"#).await.unwrap();
+    port.push_event(DaemonEvent::Output {
+        session_id: session_id.clone(),
+        data: b"text".to_vec(),
+        sequence: 0,
+        truncated: false,
+    });
+    let mut screen = None;
+    for _ in 0..200 {
+        to_serve
+            .write_all(b"{\"surface\":\"s1\",\"body\":{\"operation\":\"screen.read\"}}\n")
+            .await
+            .unwrap();
+        let line = loop {
+            let line = tokio::time::timeout(std::time::Duration::from_secs(2), lines.next_line())
+                .await
+                .expect("timeout waiting for a screen read")
+                .unwrap()
+                .unwrap();
+            if line.contains(r#""event":"screen""#) {
+                break line;
+            }
+        };
+        if screen_text(&line).contains("text") {
+            screen = Some(line);
+            break;
+        }
+    }
+    drop(to_serve);
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(2), task).await;
+    let line = screen.expect("200 screen reads did not show the output");
+    let value: serde_json::Value = serde_json::from_str(&line).unwrap();
+    for cell in value["body"]["lines"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|row| row.as_array().unwrap())
+    {
+        for (key, field) in cell.as_object().unwrap() {
+            assert!(
+                matches!(key.as_str(), "ch" | "width" | "link")
+                    || (matches!(key.as_str(), "bold" | "italic" | "underline" | "inverse")
+                        && field == &serde_json::json!(true)),
+                "the page cell carries {key}: {field} in {line}"
+            );
+        }
+    }
 }
