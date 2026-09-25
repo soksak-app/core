@@ -25,6 +25,7 @@
    스타일시트를 물려받지 못하므로, 호스트가 이 값들을 그대로 실어 보낸다.     */
 
 import { surfaces as host } from "./host.js";
+import { checkSidebarReferences, validateSidebars } from "@soksak/plugin-api";
 import { effectiveSettings } from "./settings-scope.js";
 import { TEXT_STEPS, notifyTextSize } from "./text-size.js";
 
@@ -190,8 +191,9 @@ export const LAYOUT_RANGES = {
   railWidth: [120, 480],
 };
 
-/** 카드 안 사이드바의 처음 폭이 최소와 최대 사이에 있는지 검사한다. */
-function checkSidebarOrder(values) {
+/** 유효 설정을 검사한다. 사이드바 세트와 연결, 그리고 카드 안 사이드바의 처음 폭이 최소와 최대 사이에 있는지. */
+function checkValues(values) {
+  checkSidebars(values);
   if (!(values.sidebarMinWidth <= values.sidebarWidth && values.sidebarWidth <= values.sidebarMaxWidth)) {
     throw new Error("Invalid setting: sidebarMinWidth <= sidebarWidth <= sidebarMaxWidth does not hold");
   }
@@ -199,6 +201,15 @@ function checkSidebarOrder(values) {
 
 let settings = structuredClone(defaults);
 const pluginDefinitions = new Map();
+/* 환경의 manifest. 저장된 세트의 섹션과 연결의 플러그인을 이 목록으로 검사한다. */
+let manifestList = [];
+
+/** 유효 설정의 sets 와 links 를 environment.json 의 sidebars 와 같은 함수로 검사한다. */
+function checkSidebars(values) {
+  const sidebars = { sets: values.sets, links: values.links };
+  validateSidebars(sidebars, "settings");
+  checkSidebarReferences(sidebars, manifestList, "settings");
+}
 
 let common = {};
 let overrides = {};
@@ -241,6 +252,7 @@ function validateValues(values, where) {
 /** Register validated plugin settings before persistent settings are loaded. */
 export function setPluginSettings(manifests, applicationValues = {}) {
   if (store) throw new Error("plugin settings must be set before settings are connected");
+  manifestList = manifests;
   for (const manifest of manifests) {
     for (const [local, definition] of Object.entries(manifest.settings ?? {})) {
       const key = `${manifest.id}.${local}`;
@@ -291,7 +303,7 @@ async function refresh() {
   const nextOverrides = snapshot.projects.find((p) => p.id === projectId)?.settings ?? {};
   validateValues(snapshot.common, "common settings");
   validateValues(nextOverrides, "project settings");
-  checkSidebarOrder(effectiveSettings(defaults, snapshot.common, nextOverrides));
+  checkValues(effectiveSettings(defaults, snapshot.common, nextOverrides));
   if (JSON.stringify(common) === JSON.stringify(snapshot.common) && JSON.stringify(overrides) === JSON.stringify(nextOverrides)) return;
   common = snapshot.common;
   overrides = nextOverrides;
@@ -398,7 +410,7 @@ export function set(patch, scope = projectId ? "project" : "common") {
     if (val === undefined) delete patched[key];
     else patched[key] = val;
   }
-  checkSidebarOrder(id ? effectiveSettings(defaults, common, patched) : effectiveSettings(defaults, patched, overrides));
+  checkValues(id ? effectiveSettings(defaults, common, patched) : effectiveSettings(defaults, patched, overrides));
   for (const [key, val] of Object.entries(patch)) {
     if (val === undefined) delete target[key];
     else target[key] = val;

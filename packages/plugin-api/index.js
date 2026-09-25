@@ -391,31 +391,7 @@ export function validateEnvironment(environment) {
   if (!grid.cards.some((card) => card.id === workspace.focus && card.tabs)) {
     throw new Error("environment.json: workspace.focus must name a card with tabs");
   }
-  const { sidebars } = environment;
-  if (!isObject(sidebars) || !Array.isArray(sidebars.sets) || !Array.isArray(sidebars.links)) {
-    throw new Error("environment.json: sidebars requires sets and links");
-  }
-  only("environment.json sidebars", sidebars, ["sets", "links"]);
-  const setIds = new Set();
-  for (const set of sidebars.sets) {
-    if (!isObject(set) || !isText(set.id) || !isText(set.title) || !Array.isArray(set.sections)) {
-      throw new Error("environment.json: every set requires id, title, and sections");
-    }
-    only(`environment.json set ${set.id}`, set, ["id", "title", "sections", "layout"]);
-    // 세트는 섹션을 모두 쌓아 보이거나(list) 하나씩 탭으로 보인다(tabs).
-    if (!["list", "tabs"].includes(set.layout)) throw new Error(`environment.json: set ${set.id} layout must be list or tabs`);
-    if (setIds.has(set.id)) throw new Error(`environment.json: duplicate set ${set.id}`);
-    setIds.add(set.id);
-  }
-  for (const link of sidebars.links) {
-    if (!isObject(link) || !["left", "right", "rail"].includes(link.place) || !setIds.has(link.set)) {
-      throw new Error("environment.json: every link requires a place (left, right, rail) and a known set");
-    }
-    only("environment.json link", link, ["place", "plugin", "set"]);
-    if ((link.place === "left") !== (link.plugin === null)) {
-      throw new Error("environment.json: a left link has plugin null and other links name a plugin");
-    }
-  }
+  validateSidebars(environment.sidebars, "environment.json");
   return environment;
 }
 
@@ -425,7 +401,6 @@ export function validateEnvironment(environment) {
  */
 export function checkReferences(environment, manifests) {
   const cards = new Set(manifests.filter((m) => m.surface).map((m) => m.id));
-  const sections = new Set(manifests.flatMap((m) => (m.sections ?? []).map((s) => s.id)));
   const ids = manifests.map((m) => m.id);
   if (new Set(ids).size !== ids.length) throw new Error("environment.json: two plugins declare the same id");
   const byId = new Map(manifests.map((manifest) => [manifest.id, manifest]));
@@ -445,14 +420,62 @@ export function checkReferences(environment, manifests) {
       if (!cards.has(tab.plugin)) throw new Error(`environment.json: tab plugin ${tab.plugin} has no surface`);
     }
   }
-  for (const set of environment.sidebars.sets) {
-    for (const id of set.sections) {
-      if (!sections.has(id)) throw new Error(`environment.json: set ${set.id} names unknown section ${id}`);
+  checkSidebarReferences(environment.sidebars, manifests, "environment.json");
+}
+
+/** 세트 제목의 최대 길이. */
+const SET_TITLE_MAX = 40;
+
+/**
+ * 사이드바 세트(sets)와 연결(links)의 형식을 검사한다. environment.json 의 sidebars 와 설정에
+ * 저장된 sets, links 가 같은 규칙을 따른다. 틀리면 where 로 시작하는 예외를 던진다.
+ */
+export function validateSidebars(sidebars, where) {
+  if (!isObject(sidebars) || !Array.isArray(sidebars.sets) || !Array.isArray(sidebars.links)) {
+    throw new Error(`${where}: sidebars requires sets and links`);
+  }
+  only(`${where} sidebars`, sidebars, ["sets", "links"]);
+  const setIds = new Set();
+  for (const set of sidebars.sets) {
+    if (!isObject(set) || !isText(set.id) || typeof set.title !== "string" || !Array.isArray(set.sections)) {
+      throw new Error(`${where}: every set requires id, title, and sections`);
+    }
+    only(`${where} set ${set.id}`, set, ["id", "title", "sections", "layout"]);
+    if (set.title.length < 1 || set.title.length > SET_TITLE_MAX) {
+      throw new Error(`${where}: set ${set.id} title must be 1 to ${SET_TITLE_MAX} characters`);
+    }
+    if (set.sections.some((id) => !isText(id)) || new Set(set.sections).size !== set.sections.length) {
+      throw new Error(`${where}: set ${set.id} sections must be section ids without repetition`);
+    }
+    // 세트는 섹션을 모두 쌓아 보이거나(list) 하나씩 탭으로 보인다(tabs).
+    if (!["list", "tabs"].includes(set.layout)) throw new Error(`${where}: set ${set.id} layout must be list or tabs`);
+    if (setIds.has(set.id)) throw new Error(`${where}: duplicate set ${set.id}`);
+    setIds.add(set.id);
+  }
+  for (const link of sidebars.links) {
+    if (!isObject(link) || !["left", "right", "rail"].includes(link.place) || !setIds.has(link.set)) {
+      throw new Error(`${where}: every link requires a place (left, right, rail) and a known set`);
+    }
+    only(`${where} link`, link, ["place", "plugin", "set"]);
+    if ((link.place === "left") !== (link.plugin === null)) {
+      throw new Error(`${where}: a left link has plugin null and other links name a plugin`);
     }
   }
-  for (const link of environment.sidebars.links) {
+  return sidebars;
+}
+
+/** 세트의 섹션 id 와 연결의 플러그인 id 가 불러온 manifest 에 있는지 검사한다. 없으면 예외를 던진다. */
+export function checkSidebarReferences(sidebars, manifests, where) {
+  const cards = new Set(manifests.filter((m) => m.surface).map((m) => m.id));
+  const sections = new Set(manifests.flatMap((m) => (m.sections ?? []).map((s) => s.id)));
+  for (const set of sidebars.sets) {
+    for (const id of set.sections) {
+      if (!sections.has(id)) throw new Error(`${where}: set ${set.id} names unknown section ${id}`);
+    }
+  }
+  for (const link of sidebars.links) {
     if (link.plugin !== null && !cards.has(link.plugin)) {
-      throw new Error(`environment.json: link names plugin ${link.plugin} without a surface`);
+      throw new Error(`${where}: link names plugin ${link.plugin} without a surface`);
     }
   }
 }

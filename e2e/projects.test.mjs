@@ -320,7 +320,7 @@ for (const app of Object.values(APPS)) {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: saved layouts drop plugins and sections that the environment does not register`, async (t) => {
+  test(`${app.name}: saved layouts drop plugins that the environment does not register`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
@@ -340,13 +340,12 @@ for (const app of Object.values(APPS)) {
     const saved = await s.run("core.project.open", { root, color: "#7fe3b0" });
     const child = s.on(added(await s.windows(2, "project window was not created"), [s.window]));
     await child.until("core.grid", (grid) => grid?.cards.some((c) => c.id === "rail-shell"), "the shell rail did not stand");
-    const sets = (await child.get("core.settings")).values.sets;
     await child.run("core.projects.flush");
     await child.close();
     await s.windows(1, "project window did not close");
 
     // 다른 환경에서 저장된 배치: 셸 카드의 첫 탭, 문서 카드의 모든 탭, 셸 레일이
-    // 이 환경에 없는 플러그인 gone 의 것이고, 세트에 없는 섹션이 있다.
+    // 이 환경에 없는 플러그인 gone 의 것이다.
     const records = read(join(config, "projects.json"));
     const record = records.find((p) => p.id === saved.id);
     const layout = record.spaces.find((x) => x.id === record.activeSpaceId).layout;
@@ -363,9 +362,6 @@ for (const app of Object.values(APPS)) {
     delete paidBy["rail-shell"];
     layout.railWidth.gone = layout.railWidth.shell;
     write(join(config, "projects.json"), records);
-    mkdirSync(join(root, ".soksak"), { recursive: true });
-    write(join(root, ".soksak/settings.json"),
-      { sets: sets.map((set) => ({ ...set, sections: [...set.sections, "gone"] })) });
 
     await s.run("core.projects.browse");
     const library = await s.until("core.library", (value) => value.previews[saved.id], "the library did not show the project");
@@ -382,6 +378,6 @@ for (const app of Object.values(APPS)) {
     assert.equal(grid.cards.flatMap((c) => c.tabs).some((tab) => tab.plugin === "gone"), false);
     assert.equal(Object.hasOwn((await reopened.get("core.layout")).railWidth, "gone"), false);
     await reopened.close();
-    t.diagnostic("verified that unknown tabs, rails, and sections are dropped from a saved layout and its library preview");
+    t.diagnostic("verified that unknown tabs and rails are dropped from a saved layout and its library preview");
   });
 }

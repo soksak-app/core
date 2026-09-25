@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createSet, deleteSet, updateSet } from "../sidebar-sets.js";
-import { defaults, set } from "../settings.js";
+import { defaults, set, setPluginSettings, setSidebarDefaults } from "../settings.js";
 
 const sets = [
   { id: "set-1", title: "탐색기", sections: ["alpha.one"], layout: "list" },
@@ -60,4 +60,16 @@ test("deleting a set removes its links in the same change", () => {
   assert.deepEqual(next.sets.map((s) => s.id), ["set-1"]);
   assert.deepEqual(next.links, [links[0]]);
   assert.throws(() => deleteSet(sets, links, "set-9"), /set-9/);
+});
+
+test("a stored set or link that breaks the sidebars rules is rejected before anything changes", () => {
+  setPluginSettings([{ id: "alpha", surface: {}, sections: [{ id: "alpha.one", name: "하나", module: "ui/one.js" }] }]);
+  setSidebarDefaults({ sets: [{ id: "set-1", title: "묶음", sections: ["alpha.one"], layout: "list" }], links: [] });
+  const stored = (change) => { const value = structuredClone(defaults.sets); change(value); return value; };
+  assert.throws(() => set({ sets: stored((v) => { v[0].sections = ["alpha.gone"]; }) }, "common"),
+    /settings: set set-1 names unknown section alpha.gone/);
+  assert.throws(() => set({ sets: stored((v) => { v[0].layout = "grid"; }) }, "common"), /layout must be list or tabs/);
+  assert.throws(() => set({ sets: stored((v) => { v[0].title = ""; }) }, "common"), /title must be 1 to 40/);
+  assert.throws(() => set({ links: [{ place: "left", plugin: null, set: "set-9" }] }, "common"), /known set/);
+  assert.throws(() => set({ links: [{ place: "rail", plugin: "beta", set: "set-1" }] }, "common"), /plugin beta without a surface/);
 });

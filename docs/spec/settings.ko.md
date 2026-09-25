@@ -65,9 +65,9 @@
 - `sections`: 반복 없는 섹션 id.
 - `layout`: `list` 또는 `tabs`([플러그인](plugins.ko.md#섹션)).
 
-연결은 `{place, plugin, set}`이고 `environment.json`의 `sidebars.links` 규칙을 따른다. 저장된 세트와 연결은 `environment.json`의 `sidebars`를 검사하는 plugin-api 함수로 같은 방식으로 검사한다. 잘못된 저장 데이터는 불러오기 오류이며 다른 값으로 바꾸지 않는다. 현재 환경이 등록하지 않은 섹션 id나 플러그인 id는 저장된 스페이스와 같이 사이드바를 그릴 때 무시한다([플러그인](plugins.ko.md)).
+연결은 `{place, plugin, set}`이고 `environment.json`의 `sidebars.links` 규칙을 따른다. 유효한 `sets`와 `links`는 `environment.json`의 `sidebars`도 검사하는 plugin-api 함수 `validateSidebars`와 `checkSidebarReferences`로 검사한다. 검사는 설정을 불러올 때와 변경을 저장하기 전에 실행한다. 환경이 등록하지 않은 섹션을 가리키는 세트, 표면이 없는 플러그인이나 없는 세트를 가리키는 연결은 실패한다. 불러오기는 오류를 보고하고 아무것도 바꾸지 않으며, 변경은 -32602(invalid params)로 실패하고 아무것도 바꾸지 않는다.
 
-세트를 삭제하면 같은 범위에서 그 세트와 그 세트를 가리키는 연결을 한 번의 쓰기로 제거한다. 유효 목록에 없는 세트를 가리키는 연결은 사이드바를 보여 주지 않는다.
+세트를 삭제하면 남은 세트와 그 세트를 가리키는 연결을 뺀 연결을 같은 범위에 한 번의 변경으로 쓴다.
 
 ## 배치 값
 

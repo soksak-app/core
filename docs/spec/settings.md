@@ -65,9 +65,9 @@ A set is `{id, title, sections, layout}`:
 - `sections`: section ids without repetition.
 - `layout`: `list` or `tabs` ([plugins](plugins.md#sections)).
 
-A link is `{place, plugin, set}` with the rules of `environment.json` `sidebars.links`. Stored sets and links are validated with the same plugin-api function that validates `environment.json` `sidebars`; invalid stored data is a load error and is not replaced. A stored section id or plugin id that the current environment does not register is ignored when the sidebar is drawn, as for saved spaces ([plugins](plugins.md)).
+A link is `{place, plugin, set}` with the rules of `environment.json` `sidebars.links`. The effective `sets` and `links` are validated with the plugin-api functions `validateSidebars` and `checkSidebarReferences`, which also validate `environment.json` `sidebars`. The check runs when settings load and before a change is stored. A set that names a section the environment does not register, or a link that names a plugin without a surface or a missing set, fails: a load reports the error and replaces nothing, and a change fails with -32602 (invalid params) and changes nothing.
 
-Deleting a set removes it and every link to it in the same scope in one write. A link that names a set absent from the effective list shows no sidebar.
+Deleting a set writes the remaining sets and the links without the ones to it to the same scope in one change.
 
 ## Layout values
 

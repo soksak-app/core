@@ -1,5 +1,8 @@
 // 설정 창의 절(일반, 플러그인, 사이드바), 세트 만들기·편집·삭제, 배치 값 설정을 검사한다(docs/spec/settings.md).
 import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
 import { APPS, fresh, open } from "./app.mjs";
@@ -136,5 +139,34 @@ for (const app of Object.values(APPS)) {
     await s.act("core.card.sidebar.grip", "dispatch", { index: 0, event: { type: "dblclick" } });
     await s.until("core.grid", (value) => value.cards.find((item) => item.id === card.id)?.sidebar?.width === 140,
       "a double click did not set sidebarMinWidth");
+  });
+
+  test(`${app.name}: an invalid stored set or link is rejected when it is changed and when it is loaded`, { timeout: 60000 }, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const sets = await settingsValue(s, "sets");
+    const broken = sets.map((item, index) => (index === 0 ? { ...item, sections: [...item.sections, "gone.section"] } : item));
+    await assert.rejects(s.run("core.settings.set", { patch: { sets: broken }, scope: "common" }),
+      /names unknown section gone.section/);
+    await assert.rejects(s.run("core.settings.set", { patch: { links: [{ place: "left", plugin: null, set: "set-none" }] }, scope: "common" }),
+      /known set/);
+    assert.deepEqual(await settingsValue(s, "sets"), sets, "a rejected change altered the sets");
+
+    // 프로젝트 설정 파일에 등록되지 않은 섹션을 담은 세트가 있으면 그 프로젝트를 불러올 때 오류가 보인다.
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "soksak-sets-")));
+    s.cleanup(() => rmSync(root, { recursive: true, force: true }));
+    mkdirSync(join(root, ".soksak"), { recursive: true });
+    writeFileSync(join(root, ".soksak/settings.json"), JSON.stringify({ sets: broken }));
+    await s.run("core.settings.set", { patch: { projectOpening: "tabs" }, scope: "common" });
+    const opened = s.run("core.project.open", { root, color: "#7fe3b0" }).catch((error) => error);
+    s.cleanup(async () => {
+      for (const item of await s.get("core.projects")) {
+        if (item.root === root) await s.run("core.project.close", { id: item.id });
+      }
+    });
+    await s.until("core.page.error", (text) => /settings: set .* names unknown section gone\.section/.test(text ?? ""),
+      "loading a project with an invalid stored set showed no error");
+    await opened;
   });
 }

@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  PAGE_IMPORTS, checkReferences, modulePath, pageImports, validateEnvironment, validateManifest, validateSidecar,
+  PAGE_IMPORTS, checkReferences, checkSidebarReferences, modulePath, pageImports, validateEnvironment, validateManifest,
+  validateSidebars, validateSidecar,
 } from "../index.js";
 
 const card = {
@@ -241,4 +242,29 @@ test("string settings declare a bounded non-empty default and reject other value
     value.settings.probe = { "font.family": invalid };
     assert.throws(() => checkReferences(value, [manifest, side]), /string value/);
   }
+});
+
+test("the exported sidebars validator applies the environment rules to stored sets and links", () => {
+  const sidebars = () => ({
+    sets: [{ id: "set-1", title: "묶음", sections: ["side.tree"], layout: "list" }],
+    links: [{ place: "left", plugin: null, set: "set-1" }],
+  });
+  const manifests = [{ id: "side", sections: [{ id: "side.tree", name: "트리", module: "ui/tree.js" }] }];
+  validateSidebars(sidebars(), "settings");
+  checkSidebarReferences(sidebars(), manifests, "settings");
+  for (const [change, error] of [
+    [(s) => { s.sets[0].title = ""; }, /settings: set set-1 title must be 1 to 40 characters/],
+    [(s) => { s.sets[0].title = "가".repeat(41); }, /title must be 1 to 40/],
+    [(s) => { s.sets[0].sections.push("side.tree"); }, /without repetition/],
+    [(s) => { s.sets[0].layout = "grid"; }, /layout must be list or tabs/],
+    [(s) => { s.links[0].set = "set-9"; }, /known set/],
+    [(s) => { s.extra = 1; }, /settings sidebars/],
+  ]) {
+    const value = sidebars();
+    change(value);
+    assert.throws(() => validateSidebars(value, "settings"), error);
+  }
+  const unknown = sidebars();
+  unknown.sets[0].sections = ["side.gone"];
+  assert.throws(() => checkSidebarReferences(unknown, manifests, "settings"), /settings: set set-1 names unknown section side.gone/);
 });
