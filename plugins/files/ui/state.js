@@ -59,11 +59,18 @@ export async function mount(context) {
     notify("tree", tree);
   }
 
+  // 새로 고침과 펼침은 나열 결과를 함께 바꾸므로 받은 순서대로 하나씩 실행한다.
+  let turn = Promise.resolve();
+  const inTurn = (work) => {
+    const done = turn.then(work);
+    turn = done.then(() => undefined, () => undefined);
+    return done;
+  };
   const watch = (name) => (fn) => { listeners[name].add(fn); return () => listeners[name].delete(fn); };
   context.exposure.status("files.tree", tree, watch("tree"));
   context.exposure.status("files.bookmarks", bookmarks, watch("bookmarks"));
-  context.exposure.command("files.refresh", async () => { await refresh(); return null; });
-  context.exposure.command("files.tree.toggle", async ({ path }) => {
+  context.exposure.command("files.refresh", () => inTurn(async () => { await refresh(); return null; }));
+  context.exposure.command("files.tree.toggle", ({ path }) => inTurn(async () => {
     const row = rows().find((entry) => entry.path === path);
     if (!row?.directory) throw new Error(`${path} is not a listed directory`);
     if (expanded.has(path)) {
@@ -74,7 +81,7 @@ export async function mount(context) {
     }
     notify("tree", tree);
     return null;
-  });
+  }));
   context.exposure.command("files.bookmarks.add", async ({ path }) => {
     const current = bookmarks();
     if (!current.includes(path)) await context.data.set("bookmarks", [...current, path]);
@@ -88,6 +95,6 @@ export async function mount(context) {
     notify("bookmarks", bookmarks);
     return null;
   });
-  await refresh();
+  await inTurn(refresh);
   return { dispose() { listeners.tree.clear(); listeners.bookmarks.clear(); } };
 }
