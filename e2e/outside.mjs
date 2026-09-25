@@ -13,13 +13,11 @@
 // 카드는 표면이 닿지 않는 머리 행에서 읽는다. 머리는 문서가 그리는 행이므로 그
 // 행의 카드는 페이지가 지금 그린 자리에 있다. 표면은 자기 배경색이 차지한 가로
 // 구간으로 읽는다. 둘이 한 프레임에서 나오므로 시계가 끼어들지 않는다.
+// 셸 표면은 카드와 같은 색(--card)으로 그리므로 배경으로는 카드와 구별되지 않는다. 표면이 그리는 것 중
+// 표면의 폭 전체에 걸친 것은 입력 줄 위의 1pt 구분선(--edge, plugins/shell/ui/shell.js)이다. 이 선의 가로
+// 구간이 그 프레임에 합성된 표면의 가로 구간이다.
 import { pixel } from "./frame.mjs";
 
-/**
- * 셸 표면의 배경. 기본 테마 midnight 의 --surface(#0d1a14)다. 캡처는 sRGB 로 기록하므로
- * 테마 값을 그대로 쓴다(packages/workbench/settings.js).
- */
-const TERM = [13, 26, 20];
 /** 카드의 배경. 머리와 발이 이 색이다. midnight 테마의 --card(#191b24). */
 const CARD = [25, 27, 36];
 /** 판의 배경. 카드 사이의 통로가 이 색이다. midnight 테마의 --bg(#101117). */
@@ -27,46 +25,56 @@ const PLANE = [16, 17, 23];
 /** 카드의 테두리. 평소(--edge #2b2e3d)와 포커스를 받았을 때(--focus #ffb36b). */
 const BORDERS = [[43, 46, 61], [255, 179, 107]];
 
+/**
+ * 셸 입력 구분선의 색. --edge(#2b2e3d)를 카드 위에 1pt 로 그린다. 경계가 장치 픽셀 사이에 걸치면 덮은 비율만큼
+ * CARD 와 EDGE 사이의 색이므로 덮은 비율이 절반 가까이 이상인 픽셀을 선으로 본다.
+ */
+const EDGE = [43, 46, 61];
+
+/** 셸 구분선으로 볼 가장 짧은 가로 구간(px). 글자의 흐린 가장자리 픽셀은 이만큼 이어지지 않는다. */
+const LINE = 40;
+
+export function onLine(value) {
+  const coverage = (value[1] - CARD[1]) / (EDGE[1] - CARD[1]);
+  return coverage >= 0.4 && coverage <= 1.1 &&
+    value.every((channel, i) => Math.abs(channel - (CARD[i] + coverage * (EDGE[i] - CARD[i]))) <= 5);
+}
+
 /** 이만큼 벗어난 색은 그 색이 아니다. */
 const NEAR = 5;
 
-/** 표면이 그리는 글자가 만드는 틈. 이보다 짧은 틈은 같은 표면으로 잇는다. */
-const GAP = 12;
 
 const near = (p, q) => p.every((v, i) => Math.abs(v - q[i]) <= NEAR);
 const any = (p, list) => list.some((q) => near(p, q));
 
 /**
- * 표면이 가로로 차지한 구간.
- *
- * 가장 긴 연속 구간에서 시작해 글자가 만드는 틈을 건너뛰며 좌우로 넓힌다. 표면은
- * 사각형 하나이므로 한 행의 구간이 그 폭이다.
+ * 셸 표면의 입력 구분선. 열 cx 에서 top 부터 bottom 앞까지 내려가며 처음 만나는, LINE 이상 이어진 선의 행과
+ * 가로 구간이다. 표면 안에는 이 선 위로 글자만 있으므로 처음 만나는 선이 구분선이다. 좌표는 픽셀이다.
  */
-function surfaceRun(f) {
-  const px = (x, y) => pixel(f, x, y);
-  let best = null;
-  for (let y = 0; y < f.height; y += 2) {
-    let x = 0;
-    while (x < f.width) {
-      if (!near(px(x, y), TERM)) { x++; continue; }
-      const from = x;
-      while (x < f.width && near(px(x, y), TERM)) x++;
-      if (!best || x - from > best.w) best = { y, l: from, r: x - 1, w: x - from };
-    }
+export function shellLine(f, { cx, top, bottom }) {
+  const line = (x, y) => onLine(pixel(f, x, y));
+  for (let y = Math.max(0, top); y < Math.min(bottom, f.height); y++) {
+    if (!line(cx, y)) continue;
+    let l = cx, r = cx;
+    while (l > 0 && line(l - 1, y)) l--;
+    while (r + 1 < f.width && line(r + 1, y)) r++;
+    if (r - l + 1 >= LINE) return { y, l, r };
   }
-  if (!best || best.w < 40) return null;
-  let { y, l, r } = best;
-  for (;;) {
-    let moved = false;
-    for (let k = 1; k <= GAP && l - k >= 0; k++) {
-      if (near(px(l - k, y), TERM)) { l -= k; moved = true; break; }
-    }
-    for (let k = 1; k <= GAP && r + k < f.width; k++) {
-      if (near(px(r + k, y), TERM)) { r += k; moved = true; break; }
-    }
-    if (!moved) break;
-  }
-  return { y, l, r };
+  return null;
+}
+
+/**
+ * 셸 표면을 찾을 기준. 표면의 선언된 자리(host.window)에서 읽는다. head 는 표면 바로 위 카드 머리의 한 행,
+ * top 과 bottom 은 표면의 위와 아래, cx 는 표면 오른쪽 가장자리에서 24pt 안쪽의 열이다. 모두 점 단위다.
+ * 검사는 셸 카드의 왼쪽이나 아래 경계를 끌므로 머리 행, 표면의 위, 오른쪽 가장자리는 움직이지 않는다.
+ */
+export async function shellMarks(s) {
+  const card = (await s.get("core.grid")).cards.find((item) => item.id === "shell");
+  if (!card?.active) throw new Error("the fixture has no shell card with an active surface");
+  const surface = (await s.get("host.window")).surfaces.find((item) => item.id === card.active);
+  if (!surface?.frame?.width) throw new Error(`the shell surface ${card.active} has no declared frame`);
+  const { x, y, width, height } = surface.frame;
+  return { head: y - 2, top: y, bottom: y + height, cx: x + width - 24 };
 }
 
 /**
@@ -118,11 +126,11 @@ function perPoint(f, y, card) {
  * 잴 수 없는 프레임은 null 이다 — 표면이 이 프레임에 없거나, 머리가 보이지 않거나,
  * 카드를 읽을 수 없는 프레임이다.
  */
-export function outside(f) {
-  const run = surfaceRun(f);
+export function outside(f, marks) {
+  const px = (value) => Math.round(value * f.scale);
+  const run = shellLine(f, { cx: px(marks.cx), top: px(marks.top) + 1, bottom: px(marks.bottom) - 2 });
   if (!run) return null;
-  const y = headRow(f, run);
-  if (y === null) return null;
+  const y = px(marks.head);
   const cx = Math.round((run.l + run.r) / 2);
   const card = span(f, y, cx);
   if (!card || card.w < 40) return null;

@@ -4,8 +4,8 @@ import { availableParallelism, loadavg } from "node:os";
 import test from "node:test";
 
 import { APPS, drag, fresh, keepCommonSettings, open } from "./app.mjs";
-import { frames, pixel, readFrame } from "./frame.mjs";
-import { outside, whitePixels } from "./outside.mjs";
+import { frames, readFrame } from "./frame.mjs";
+import { outside, shellMarks, whitePixels } from "./outside.mjs";
 import { alignment } from "./alignment.mjs";
 import { assertHeldStatesShown, assertRoundTrips, lagStages, pointerLag } from "./drag-measurement.mjs";
 
@@ -16,7 +16,7 @@ const READ = 0.5;
 // 격자가 한 배치를 떠난 뒤 그 배치가 화면에 남아 있어도 되는 시간(ms). 60Hz 화면의 두 프레임이다.
 const LAG = 34;
 
-function assertAligned(run) {
+function assertAligned(run, marks) {
   const files = frames(run.frames);
   assert.ok(files.length > 30, `only ${files.length} frames were recorded`);
 
@@ -29,7 +29,7 @@ function assertAligned(run) {
   let delayed = { delta: 0, frame: -1, geometry: null };
   files.forEach((path, index) => {
     const frame = readFrame(path);
-    const at = outside(frame);
+    const at = outside(frame, marks);
     if (!at) return;
     const geometry = alignment(frame, at);
     assert.equal(geometry.missing, undefined, `frame ${index} of ${files.length}: could not measure the ${geometry.missing}`);
@@ -72,35 +72,20 @@ function assertAligned(run) {
   return lag;
 }
 
-function assertNoWhiteSurfaceBleed(run, message) {
+function assertNoWhiteSurfaceBleed(run, message, marks) {
   const files = frames(run.frames);
   assert.ok(files.length > 0, `${message}: no frames were recorded`);
   const samples = [];
   let worst = { ratio: 0, frame: -1 };
   for (const [frameIndex, path] of files.entries()) {
     const frame = readFrame(path);
-    const measured = outside(frame);
+    const measured = outside(frame, marks);
     assert.ok(measured, `${message}: shell/card geometry could not be measured in frame ${frameIndex}`);
     const { l, r } = measured.card;
     samples.push({ time: frame.time, position: l / measured.scale });
-    const y0 = measured.row + 5;
-    const center = Math.floor((l + r) / 2);
-    // 카드 푸터로 검사 영역을 한정한다. 아래 브라우저 문서의 흰 배경은 셸 영역이 아니다.
-    let y1 = frame.height;
-    let cardRows = 0;
-    for (let y = y0; y < frame.height; y += 2) {
-      const [red, green, blue] = pixel(frame, center, y);
-      if (Math.abs(red - 25) <= 5 && Math.abs(green - 27) <= 5 && Math.abs(blue - 36) <= 5) {
-        cardRows++;
-      } else {
-        cardRows = 0;
-      }
-      if (cardRows >= 5) {
-        y1 = y - 8;
-        break;
-      }
-    }
-    assert.ok(y1 < frame.height, `${message}: shell footer missing in frame ${frameIndex}`);
+    // 가로 끌기 동안 표면의 위아래는 움직이지 않는다. 카드 테두리 사이, 표면의 위부터 아래까지를 잰다.
+    const y0 = Math.round(marks.top * frame.scale);
+    const y1 = Math.round(marks.bottom * frame.scale);
     const left = l + measured.scale, right = r - measured.scale + 1;
     const white = whitePixels(frame, { l: left, r: right, t: y0, b: y1 });
     const ratio = white / ((right - left) * (y1 - y0));
@@ -122,8 +107,9 @@ for (const app of Object.values(APPS)) {
     await keepCommonSettings(s);
     // 이 검사는 사이드바 위치 flow 의 레일 카드를 쓴다. 기본값은 inset 이다.
     await s.run("core.settings.set", { patch: { rail: "flow" }, scope: "common" });
+    const marks = await shellMarks(s);
     const run = await drag(t, s, PLAN, { capture: true });
-    const lag = assertAligned(run);
+    const lag = assertAligned(run, marks);
     t.diagnostic(`pointer lag: worst ${lag.lag.toFixed(1)}ms, median ${lag.median.toFixed(1)}ms; transactions ${lag.stages}`);
     t.diagnostic(`page handling per step (ms), first 12: ${JSON.stringify(run.handled?.slice(0, 12))}, steps 40-51: ${JSON.stringify(run.handled?.slice(40, 52))}`);
   });
@@ -132,11 +118,15 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
+    await keepCommonSettings(s);
+    // 이 검사는 사이드바 위치 flow 의 레일 카드와 셸 카드 사이 경계를 끈다. 기본값은 inset 이다.
+    await s.run("core.settings.set", { patch: { rail: "flow" }, scope: "common" });
+    const marks = await shellMarks(s);
     const narrow = await drag(t, s,
       { axis: "x", line: 2, dx: -500, dy: 0, ms: 96, times: 4 }, { capture: true });
-    assertNoWhiteSurfaceBleed(narrow, "shell divider drag to narrow");
+    assertNoWhiteSurfaceBleed(narrow, "shell divider drag to narrow", marks);
     const wide = await drag(t, s,
       { axis: "x", line: 2, dx: 500, dy: 0, ms: 96, times: 4 }, { capture: true });
-    assertNoWhiteSurfaceBleed(wide, "shell divider drag back to wide");
+    assertNoWhiteSurfaceBleed(wide, "shell divider drag back to wide", marks);
   });
 }

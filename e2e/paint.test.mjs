@@ -1,13 +1,14 @@
 // 경계를 흔드는 동안 표면에 렌더링되지 않은 영역이 나타나는지 검사한다.
 //
-// 웹뷰는 레이아웃한 영역만 렌더링하고 나머지는 흰색으로 채운다. 셸 표면과 그
-// 표면이 놓인 행은 모두 어두우므로, 그 행의 흰 픽셀이 렌더링되지 않은 영역이다.
+// 웹뷰는 레이아웃한 영역만 렌더링하고 나머지는 흰색으로 채운다. 셸 표면과 카드는 모두 어두우므로, 카드 색에
+// 맞붙은 흰 픽셀이 렌더링되지 않은 영역이다.
 import assert from "node:assert/strict";
 import test from "node:test";
 
 import { APPS, drag, fresh, open } from "./app.mjs";
 import { frames, readFrame } from "./frame.mjs";
-import { area, bare } from "./surface.mjs";
+import { shellMarks } from "./outside.mjs";
+import { bare, cardSize } from "./surface.mjs";
 
 /**
  * 흔들 경계와 폭.
@@ -22,13 +23,12 @@ const PLANS = {
 };
 
 /**
- * 경계가 움직였다고 판정할 표면 넓이의 변화량.
+ * 경계가 움직였다고 판정할 셸 카드 폭이나 높이의 변화량(점).
  *
  * 경계가 최소 카드 크기에 걸려 있으면 이 값은 0 에 가깝고, 그때 렌더링 검사는 아무것도
- * 검사하지 않고 통과하므로 먼저 경계가 실제로 움직였는지 확인한다. 가장 적게 움직인 세로
- * 끌기가 7000 이상이다.
+ * 검사하지 않고 통과하므로 먼저 녹화에서 경계가 실제로 움직였는지 확인한다. 두 끌기는 180pt 이상 움직인다.
  */
-const MOVED = 2000;
+const MOVED = 100;
 
 for (const app of Object.values(APPS)) {
   for (const [which, plan] of Object.entries(PLANS)) {
@@ -36,6 +36,7 @@ for (const app of Object.values(APPS)) {
       const s = await open(t, app);
       if (!s) return t.skip(`${app.binary} is not built`);
       await fresh(s);
+      const marks = await shellMarks(s);
       // 페이지의 검증기는 렌더마다 돌고 결과를 core.verify 로 공개한다. 끌기 동안의 모든 결과를 모은다.
       const verify = await s.collect("core.verify");
       const run = await drag(t, s, plan, { capture: true });
@@ -49,19 +50,26 @@ for (const app of Object.values(APPS)) {
       assert.ok(files.length > 60, `only ${files.length} frames were recorded`);
       let worst = { n: 0, frame: -1 };
       let seen = 0;
-      let least = Infinity;
-      let most = 0;
+      let least = { width: Infinity, height: Infinity };
+      let most = { width: 0, height: 0 };
+      let measured = 0;
       files.forEach((path, index) => {
         const frame = readFrame(path);
         const n = bare(frame);
         if (n > 0) seen++;
         if (n > worst.n) worst = { n, frame: index };
-        const size = area(frame);
-        least = Math.min(least, size);
-        most = Math.max(most, size);
+        const size = cardSize(frame, { x: marks.cx, y: marks.head });
+        if (!size) return;
+        measured++;
+        for (const key of ["width", "height"]) {
+          least[key] = Math.min(least[key], size[key]);
+          most[key] = Math.max(most[key], size[key]);
+        }
       });
-      assert.ok(most - least >= MOVED,
-        `the shell surface changed by ${most - least} while the boundary was shaken, so the boundary did not move`);
+      assert.equal(measured, files.length, `the shell card was measured in only ${measured} of ${files.length} frames`);
+      const moved = Math.max(most.width - least.width, most.height - least.height);
+      assert.ok(moved >= MOVED,
+        `the shell card changed by ${moved}pt while the boundary was shaken, so the boundary did not move`);
       assert.equal(worst.n, 0,
         `${seen} of ${files.length} frames show unrendered area; the worst is ${worst.n} pixels in frame ${worst.frame}`);
     });
