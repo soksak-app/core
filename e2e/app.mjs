@@ -440,6 +440,23 @@ export async function keepCommonSettings(s) {
   });
 }
 
+/**
+ * 검사 앱마다 정해진 창 자리. 첫 앱은 주 화면 작업 영역의 왼쪽 위, 둘째 앱은 오른쪽 위에 둔다. 두 창이 같은
+ * 자리에 있으면 앞 창이 뒤 창을 완전히 가려 WebKit 이 뒤 창을 덜 그리고, 끌기 검사는 재지 않고 실패한다.
+ * 작업 영역이 두 창 폭의 합보다 좁으면 가운데가 겹치지만 어느 창도 다른 창에 완전히 가려지지 않는다. 창 이동은
+ * 애플리케이션을 활성화하지 않는다.
+ */
+async function place(s) {
+  const [screen] = await s.get("host.screens");
+  const area = screen.visible;
+  const { frame } = await s.get("host.window");
+  const x = ["wailsv3", "tauriv2"].indexOf(s.app.name) === 0 ? area.x : area.x + area.width - frame.width;
+  const y = area.y;
+  if (frame.x === x && frame.y === y) return;
+  await s.run("host.window.move", { x, y });
+  await s.until("host.window", (w) => w.frame.x === x && w.frame.y === y, `the window did not move to its check frame ${x},${y}`);
+}
+
 export async function fresh(s) {
   for (const window of await s.get("host.windows")) {
     if (window.window !== s.window) await s.on(window.window).close();
@@ -449,6 +466,7 @@ export async function fresh(s) {
   await s.run("host.window.resize", START);
   await s.until("host.window", (w) => w.content.width === START.width && w.content.height === START.height,
     "the window did not return to its start size");
+  await place(s);
   // 픽스처 교체 중의 표시 실패를 다음 문서의 정상 상태로 덮어 통과시키지 않는다.
   const verification = await s.collect("core.verify");
   const presentationErrors = [];
