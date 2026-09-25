@@ -202,10 +202,10 @@ type Platform interface {
 	// AlignRect 는 페이지 좌표의 영역을 디스플레이 픽셀에 안쪽으로 맞춘다.
 	AlignRect(window unsafe.Pointer, at Rect) (Rect, error)
 
-	// CreateDocument 는 표면 웹뷰 surface 안에 외부 문서 웹뷰를 숨긴 상태로 만든다. store 는 영구 데이터
-	// 저장소의 이름이다. changed 는 상태 JSON({url, title, loading, progress, canGoBack, canGoForward,
+	// CreateDocument 는 표면 웹뷰 surface 안에 외부 문서 웹뷰를 숨긴 상태로 만든다. directory 는 영구
+	// 데이터 저장소가 사이트 데이터를 두는 절대 경로다. changed 는 상태 JSON({url, title, loading, progress, canGoBack, canGoForward,
 	// error, scroll}) 을 UI 스레드에서 받는다.
-	CreateDocument(surface unsafe.Pointer, store string, changed func(state string)) (unsafe.Pointer, error)
+	CreateDocument(surface unsafe.Pointer, directory string, changed func(state string)) (unsafe.Pointer, error)
 	SetDocumentEvent(document unsafe.Pointer, event func(value string)) error
 	// LoadDocument 는 http 또는 https 주소를 연다. 그 밖의 주소이면 false 를 반환한다.
 	LoadDocument(document unsafe.Pointer, url string) bool

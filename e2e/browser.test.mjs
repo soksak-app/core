@@ -2,7 +2,8 @@
 // 입력을 받고, 표면을 따라 배치되고, 표면과 함께 닫히는지 검사한다.
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
-import { rmSync } from "node:fs";
+import { rmSync, statSync } from "node:fs";
+import { join } from "node:path";
 import test from "node:test";
 
 import { APPS, fresh, open } from "./app.mjs";
@@ -42,7 +43,16 @@ async function blockSize(s, surface) {
 async function serve(t) {
   const server = createServer((request, response) => {
     const name = new URL(request.url, "http://127.0.0.1").pathname.slice(1) || "index";
-    response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
+    const url = new URL(request.url, "http://127.0.0.1");
+    // set-cookie 는 질의의 값을 쿠키 run 으로 저장하고, cookie 는 문서의 쿠키를 제목으로 보인다.
+    const headers = { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" };
+    if (name === "set-cookie") headers["set-cookie"] = `run=${url.searchParams.get("run")}; Path=/; Max-Age=3600`;
+    if (name === "cookie") {
+      response.writeHead(200, headers);
+      response.end("<!doctype html><title>cookie</title><script>document.title = 'cookie:' + document.cookie</script>");
+      return;
+    }
+    response.writeHead(200, headers);
     response.end(`<!doctype html><title>${name}</title><style>
       :root, body { width:100%; height:100%; margin:0; }
       body { background:rgb(231,233,238); color:rgb(20,24,32); }
@@ -310,6 +320,28 @@ for (const app of Object.values(APPS)) {
       // 14px 셰브런의 두 획은 길이 약 12 CSS 픽셀, 굵기 약 1 CSS 픽셀이다.
       assert.ok(measured.count >= 12 * measured.scale ** 2, `${button.name} draws ${measured.count} icon pixels: ${JSON.stringify(measured)}`);
     }
+  });
+
+  test(`${app.name}: document site data lives in the configuration directory`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const base = await serve(t);
+    const [browser] = await browsers(s);
+    const surface = browser.surface;
+    const run = `${process.pid}-${Date.now()}`;
+    await s.run("browser.navigate", { url: `${base}/set-cookie?run=${run}` }, surface);
+    await s.until("browser.location", (at) => at.url === `${base}/set-cookie?run=${run}` && !at.loading,
+      "the cookie page did not load", { surface });
+    await s.run("browser.navigate", { url: `${base}/cookie` }, surface);
+    const read = await s.until("browser.location", (at) => at.url === `${base}/cookie` && at.title.startsWith("cookie:"),
+      "the cookie page did not report its cookies", { surface });
+    assert.ok(read.title.includes(`run=${run}`), `the document store did not keep the cookie: ${read.title}`);
+    // 저장소는 실행 중인 앱의 --config-dir 안에 사이트 데이터를 둔다(docs/spec/native-surfaces.md#document-regions).
+    const directory = join(app.configDir, "document-data");
+    let stat = null;
+    try { stat = statSync(directory); } catch (error) { if (error.code !== "ENOENT") throw error; }
+    assert.ok(stat?.isDirectory(), `the configuration directory has no document site data directory: ${directory}`);
   });
 
   test(`${app.name}: a card focus keeps a shown document visible while its placement is prepared`, async (t) => {

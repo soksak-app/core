@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"path/filepath"
 	"regexp"
 	"sync"
 	"unsafe"
@@ -18,8 +19,9 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// documentStore 는 문서 영역의 영구 데이터 저장소 이름이다. 앱 문서의 저장소와 다르다.
-const documentStore = "soksak-documents"
+// documentData 는 문서 영역의 영구 사이트 데이터를 두는 설정 디렉터리 안의 디렉터리다. 앱 문서의
+// 저장소와 다르다(docs/spec/native-surfaces.md#document-regions).
+const documentData = "document-data"
 
 var documentName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,63}$`)
 
@@ -190,7 +192,7 @@ func (s *Surfaces) attachDocument(viewID uint64, req DocumentRequest) error {
 			err = fmt.Errorf("surface %q has no view", key.Surface)
 			return
 		}
-		handle, err = system.CreateDocument(view.handle, documentStore, func(state string) {
+		handle, err = system.CreateDocument(view.handle, filepath.Join(s.host.configDir, documentData), func(state string) {
 			s.documentChanged(key, state)
 		})
 		if err == nil {

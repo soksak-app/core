@@ -182,7 +182,12 @@ int main(int argc, char **argv) { @autoreleasepool {
     NSView *nativePlane = (NSView *)sp_surface_native_plane(surface);
 
     window.appearance = [NSAppearance appearanceNamed:NSAppearanceNameDarkAqua];
-    void *document = sp_document_create(surface, "soksak-test/documents", changed, NULL);
+    // 저장소 디렉터리는 검사가 끝나면 지운다.
+    NSString *stores = [NSTemporaryDirectory() stringByAppendingPathComponent:
+        [NSString stringWithFormat:@"soksak-document-store-%d", getpid()]];
+    NSString *storeA = [stores stringByAppendingPathComponent:@"a"];
+    NSString *storeB = [stores stringByAppendingPathComponent:@"b"];
+    void *document = sp_document_create(surface, storeA.fileSystemRepresentation, changed, NULL);
     check(document != NULL, @"a document view is created inside the surface");
     WKWebView *view = (WKWebView *)document;
     check([view.appearance.name isEqual:NSAppearanceNameDarkAqua],
@@ -379,6 +384,36 @@ int main(int argc, char **argv) { @autoreleasepool {
     sp_document_background(document, false);
     check(view.contentFilters.count == 0, @"clearing the background state removes the blur");
 
+    // 같은 디렉터리의 문서는 사이트 데이터를 공유하고, 다른 디렉터리의 문서는 공유하지 않는다.
+    void *same = sp_document_create(surface, storeA.fileSystemRepresentation, changed, NULL);
+    void *other = sp_document_create(surface, storeB.fileSystemRepresentation, changed, NULL);
+    check(same != NULL && other != NULL, @"documents are created for a shared and a separate store directory");
+    NSHTTPCookie *cookie = [NSHTTPCookie cookieWithProperties:@{
+        NSHTTPCookieDomain: @"127.0.0.1", NSHTTPCookiePath: @"/", NSHTTPCookieName: @"store",
+        NSHTTPCookieValue: @"a", NSHTTPCookieExpires: [NSDate dateWithTimeIntervalSinceNow:3600]}];
+    __block BOOL stored = NO;
+    [view.configuration.websiteDataStore.httpCookieStore setCookie:cookie completionHandler:^{ stored = YES; }];
+    until(@"the cookie was not stored", ^BOOL { return stored; });
+    NSArray<NSHTTPCookie *> *(^cookies)(void *) = ^NSArray<NSHTTPCookie *> *(void *handle) {
+        __block NSArray<NSHTTPCookie *> *found = nil;
+        [((WKWebView *)handle).configuration.websiteDataStore.httpCookieStore getAllCookies:^(NSArray<NSHTTPCookie *> *all) {
+            found = [all retain];
+        }];
+        until(@"the cookie store did not answer", ^BOOL { return found != nil; });
+        return [found autorelease];
+    };
+    BOOL (^hasStoreCookie)(NSArray<NSHTTPCookie *> *) = ^BOOL(NSArray<NSHTTPCookie *> *all) {
+        for (NSHTTPCookie *item in all) if ([item.name isEqual:@"store"]) return YES;
+        return NO;
+    };
+    check(hasStoreCookie(cookies(same)), @"a document with the same store directory sees the cookie");
+    check(!hasStoreCookie(cookies(other)), @"a document with another store directory does not see the cookie");
+    BOOL isDirectory = NO;
+    check([NSFileManager.defaultManager fileExistsAtPath:storeA isDirectory:&isDirectory] && isDirectory,
+        @"the store keeps its data in the given directory");
+    sp_document_close(same);
+    sp_document_close(other);
+
     // 닫기 직전에 보고를 예약해 두고, 닫은 뒤 그 차례가 지나도 보고가 없는지 본다.
     evaluate(view, @"scrollTo(0, 10); null");
     sp_document_close(document);
@@ -389,6 +424,7 @@ int main(int argc, char **argv) { @autoreleasepool {
     check(reports == after, @"a closed document reports nothing");
     check(documents(nativePlane) == 0, @"closing removes the document view");
 
+    [NSFileManager.defaultManager removeItemAtPath:stores error:nil];
     for (id connection in held) nw_connection_cancel((nw_connection_t)connection);
     nw_listener_cancel(listener);
     sp_surface_close(surface);

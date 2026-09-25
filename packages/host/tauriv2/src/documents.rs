@@ -12,7 +12,7 @@ use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tauri::{Webview, Window};
+use tauri::{Manager, Webview, Window};
 
 use crate::exposure::{self, on_main, with_view};
 use crate::log_error;
@@ -20,8 +20,9 @@ use crate::platform::{self, Handle};
 use crate::surfaces::{require_region, surface_handle};
 use crate::windows::{emit_window, window_data};
 
-/// 문서 영역의 영구 데이터 저장소 이름. 앱 문서의 저장소와 다르다.
-const STORE: &str = "soksak-documents";
+/// 문서 영역의 영구 사이트 데이터를 두는 설정 디렉터리 안의 디렉터리. 앱 문서의 저장소와 다르다
+/// (docs/spec/native-surfaces.md#document-regions).
+const DOCUMENT_DATA: &str = "document-data";
 
 /// 표면 페이지의 문서 영역 호출. 필드는 호출마다 필요한 것만 쓴다.
 #[derive(Clone, Debug, Deserialize)]
@@ -234,7 +235,13 @@ fn create(
             exposure::window_changed(&state_host);
         });
         let surface = surface_handle(&host, &surface_id)?;
-        let handle = platform.create_document(surface, STORE, changed)?;
+        let directory = crate::config_directory(host.app_handle())
+            .map_err(|e| e.to_string())?
+            .join(DOCUMENT_DATA);
+        let directory = directory
+            .to_str()
+            .ok_or_else(|| format!("document data directory is not UTF-8: {}", directory.display()))?;
+        let handle = platform.create_document(surface, directory, changed)?;
         let dark = crate::theme::is_dark(&host)?;
         platform.set_document_appearance(handle, dark)?;
         platform.set_document_background(handle, dialog)?;

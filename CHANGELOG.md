@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-70-2: document regions keep their site data in `document-data` inside the application's configuration directory instead of the application's WebKit container, so each `--config-dir`, including a disposable check directory, has its own cookies and caches.
 - F13-3-1: stored sidebar `sets` and `links` pass the plugin-api `validateSidebars` and `checkSidebarReferences`, the same functions that check `environment.json`; a set naming an unregistered section or a link to a missing set or plugin fails the settings load with an error, and a change fails with -32602. Sidebars no longer skip unregistered sections.
 - F13-3-2: a sidebar section's mount failure after release and its dispose failure are reported as page errors instead of being ignored.
 - F13-3-3: every plugin setting declares a Korean `label` and, where needed, a `description`; the settings window shows them on the plugin page.

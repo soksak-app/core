@@ -14,9 +14,9 @@ typedef void (*sp_document_changed)(void *context, const char *state);
 // 해제된다. 메인 스레드에서 호출된다.
 typedef void (*sp_document_event)(void *context, const char *json);
 
-// surface 웹뷰 안에 숨긴 문서 웹뷰를 만든다. store 는 영구 데이터 저장소의 이름으로, 같은 이름은
-// 같은 저장소를 쓴다. 만들 수 없으면 NULL 을 반환한다.
-void *sp_document_create(void *surface, const char *store, sp_document_changed changed, void *context);
+// surface 웹뷰 안에 숨긴 문서 웹뷰를 만든다. directory 는 영구 데이터 저장소가 사이트 데이터를 두는
+// 절대 경로로, 없으면 만든다. 같은 디렉터리의 문서는 같은 저장소를 쓴다. 만들 수 없으면 NULL 을 반환한다.
+void *sp_document_create(void *surface, const char *directory, sp_document_changed changed, void *context);
 
 // 문서의 네이티브 이벤트 수신기를 설정한다. event 가 NULL 이면 이벤트를 보고하지 않는다.
 // 호출자는 문서가 살아 있는 동안 context 를 유지해야 한다.

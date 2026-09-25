@@ -4,7 +4,6 @@
 // 콘텐츠 월드(WKContentWorld)의 스크립트가 scroll 이벤트마다 보낸다. 그 월드와 메시지
 // 처리기는 문서 페이지의 스크립트에서 보이지 않는다.
 #import <Cocoa/Cocoa.h>
-#import <CommonCrypto/CommonDigest.h>
 #import <CoreImage/CoreImage.h>
 #import <WebKit/WebKit.h>
 #import "document_view.h"
@@ -264,13 +263,23 @@ static BOOL webAddress(NSURL *url) {
 
 @end
 
-// 저장소 이름에서 고정된 UUID 를 만든다(SHA-256 의 앞 16바이트, 버전 5 형식).
-static NSUUID *storeIdentifier(const char *name) {
-    unsigned char digest[CC_SHA256_DIGEST_LENGTH];
-    CC_SHA256(name, (CC_LONG)strlen(name), digest);
-    digest[6] = (digest[6] & 0x0F) | 0x50;
-    digest[8] = (digest[8] & 0x3F) | 0x80;
-    return [[[NSUUID alloc] initWithUUIDBytes:digest] autorelease];
+// 디렉터리마다 영구 데이터 저장소 하나. 같은 디렉터리를 쓰는 두 저장소 객체는 같은 파일을 따로 쓰므로
+// 한 디렉터리의 문서는 모두 같은 저장소를 쓴다. 저장소는 프로세스가 끝날 때까지 유지한다.
+static WKWebsiteDataStore *storeForDirectory(const char *path) {
+    static NSMutableDictionary<NSString *, WKWebsiteDataStore *> *stores;
+    if (!stores) stores = [NSMutableDictionary new];
+    NSString *directory = [NSFileManager.defaultManager stringWithFileSystemRepresentation:path length:strlen(path)];
+    if (!directory.absolutePath) return nil;
+    WKWebsiteDataStore *store = stores[directory];
+    if (store) return store;
+    if (![NSFileManager.defaultManager createDirectoryAtPath:directory withIntermediateDirectories:YES attributes:nil error:nil]) {
+        return nil;
+    }
+    _WKWebsiteDataStoreConfiguration *configuration = [[[_WKWebsiteDataStoreConfiguration alloc]
+        initWithDirectory:[NSURL fileURLWithPath:directory isDirectory:YES]] autorelease];
+    store = [[[WKWebsiteDataStore alloc] _initWithConfiguration:configuration] autorelease];
+    if (store) stores[directory] = store;
+    return store;
 }
 
 // 영역 문서가 사용자 에이전트 뒤에 붙이는 Safari 이름. 브라우저 이름이 없는 WebKit 사용자 에이전트에는
@@ -283,15 +292,17 @@ static NSString *safariApplicationName(void) {
     return [NSString stringWithFormat:@"Version/%@.%@ Safari/605.1.15", parts[0], parts[1]];
 }
 
-void *sp_document_create(void *surfaceHandle, const char *store, sp_document_changed changed, void *context) {
+void *sp_document_create(void *surfaceHandle, const char *directory, sp_document_changed changed, void *context) {
     NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
     NSView *surface = (NSView *)surfaceHandle;
-    if (!surface || !store || !changed || !surface.window) return NULL;
+    if (!surface || !directory || !changed || !surface.window) return NULL;
+    WKWebsiteDataStore *store = storeForDirectory(directory);
+    if (!store) return NULL;
     NSString *applicationName = safariApplicationName();
     if (!applicationName) return NULL;
     WKWebViewConfiguration *configuration = [[[WKWebViewConfiguration alloc] init] autorelease];
     configuration.applicationNameForUserAgent = applicationName;
-    configuration.websiteDataStore = [WKWebsiteDataStore dataStoreForIdentifier:storeIdentifier(store)];
+    configuration.websiteDataStore = store;
     WKContentWorld *world = [WKContentWorld worldWithName:@"soksak-document"];
     SPDocumentScroll *scroll = [[SPDocumentScroll new] autorelease];
     [configuration.userContentController addScriptMessageHandler:scroll contentWorld:world name:kScrollMessage];

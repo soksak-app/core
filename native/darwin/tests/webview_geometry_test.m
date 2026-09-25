@@ -381,7 +381,10 @@ int main(void) { @autoreleasepool {
     webviewSetFrame(surface, 40, 30, 300, 200.5);
     verify(window, surface, 2, 200.5, @"at 2x");
     // 문서 영역은 표면의 하위 뷰다. 여백을 뺀 크기는 300-10-30 × 200.5-20-40 이다.
-    WKWebView *region = (WKWebView *)sp_document_create(surface, "soksak-test/geometry", ignoreState, NULL);
+    // 문서 저장소 디렉터리는 검사가 끝나면 지운다.
+    NSString *store = [NSTemporaryDirectory() stringByAppendingPathComponent:
+        [NSString stringWithFormat:@"soksak-geometry-store-%d", getpid()]];
+    WKWebView *region = (WKWebView *)sp_document_create(surface, store.fileSystemRepresentation, ignoreState, NULL);
     check(region != NULL, @"a document region is created in the surface");
     sp_document_place(region, 10, 20, 30, 40, true);
     verifyRegion(region, 2, 260, 140.5, @"at 2x");
@@ -416,6 +419,7 @@ int main(void) { @autoreleasepool {
     verify(window, surface, 2, 200.5, @"after changing back to 2x");
     verifyRegion(region, 2, 260, 140.5, @"after changing back to 2x");
     sp_document_close(region);
+    [NSFileManager.defaultManager removeItemAtPath:store error:NULL];
 
     // 창의 파일 놓기 뷰: 파일 URL 만 받는 유일한 네이티브 끌기 대상이며 적중 검사는 아래 뷰로 간다.
     check(sp_window_file_drop(main, droppedFiles, NULL), @"file drop: the window composition accepts a drop handler");

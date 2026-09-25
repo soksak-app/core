@@ -38,3 +38,13 @@
 - (void)_doAfterActivityStateUpdate:(void (^)(void))completion;
 - (void)_doAfterProcessingAllPendingMouseEvents:(void (^)(void))completion;
 @end
+
+// _WKWebsiteDataStoreConfiguration.h
+@interface _WKWebsiteDataStoreConfiguration : NSObject
+- (instancetype)initWithDirectory:(NSURL *)directory;
+@end
+
+// WKWebsiteDataStorePrivate.h
+@interface WKWebsiteDataStore (SPPrivate)
+- (instancetype)_initWithConfiguration:(_WKWebsiteDataStoreConfiguration *)configuration;
+@end

@@ -50,8 +50,8 @@ func documentEvent(context unsafe.Pointer, value *C.char) {
 	cgo.Handle(uintptr(context)).Value().(func(string))(C.GoString(value))
 }
 
-func (implementation) CreateDocument(surface unsafe.Pointer, store string, changed func(state string)) (unsafe.Pointer, error) {
-	name := C.CString(store)
+func (implementation) CreateDocument(surface unsafe.Pointer, directory string, changed func(state string)) (unsafe.Pointer, error) {
+	name := C.CString(directory)
 	defer C.free(unsafe.Pointer(name))
 	receiver := cgo.NewHandle(changed)
 	document := C.documentCreate(surface, name, C.uintptr_t(receiver))

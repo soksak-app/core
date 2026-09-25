@@ -242,8 +242,8 @@ pub trait Platform: Send + Sync {
 
     // 문서 영역
 
-    /// 표면 웹뷰 surface 안에 외부 문서 웹뷰를 숨긴 상태로 만든다. store 는 영구 데이터 저장소의
-    /// 이름이다. changed 는 상태 JSON({url, title, loading, progress, canGoBack, canGoForward,
+    /// 표면 웹뷰 surface 안에 외부 문서 웹뷰를 숨긴 상태로 만든다. store 는 영구 데이터 저장소가
+    /// 사이트 데이터를 두는 절대 경로다. changed 는 상태 JSON({url, title, loading, progress, canGoBack, canGoForward,
     /// error, scroll}) 을 메인 스레드에서 받는다. 메인 스레드에서 호출한다.
     fn create_document(
         &self,
