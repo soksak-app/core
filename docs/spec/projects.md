@@ -16,6 +16,8 @@ Layout previews are schematic diagrams of the active space's saved card grid. Th
 
 The title bar’s project-list button and project-add action open the library in that window while preserving its current work. Selecting a project or returning to the workspace restores the work screen. New Window always creates an unassigned window. On macOS, closing all windows keeps the application available for this action. The library footer, Command/Ctrl+Shift+N, and macOS Dock menu invoke the same action. The library always uses common settings, including when returning from a project workspace. Returning to the workspace reapplies that project’s overrides.
 
+A terminal or shell surface opened in a project starts in the project's canonical root unless it was split from a surface that reported a directory ([tab reports](plugins.md#tab-reports)).
+
 ## Shared appearance
 
 The library and project workspace use the same typography, color, border, corner, and spacing definitions in `app.css`. `library.css` defines the library layout and its component placement. It does not define a separate type scale or fixed theme colors and corner radii.

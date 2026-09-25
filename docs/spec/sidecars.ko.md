@@ -93,7 +93,7 @@
 
 ## shell
 
-`sidecars/shell`(`@soksak/sidecar-shell`)은 `pnpm run build`로 `build/soksak-shell`을 빌드하고, 표면마다 셸 세션 하나를 표면의 프로젝트 디렉터리에서 실행한다. 터미널 에뮬레이터가 아닌 줄 단위 콘솔이다. 코드는 `src/`에 있다: 진입점 `src/main.go`, 패키지 `src/shell`의 프로토콜, `src/platform/platform.go`를 통해 등록되는 `src/platform/{darwin,linux,windows}/`의 운영체제별 동작([플랫폼 선택](hosts.ko.md#플랫폼-선택)). 테스트는 `tests/`에 있다.
+`sidecars/shell`(`@soksak/sidecar-shell`)은 `pnpm run build`로 `build/soksak-shell`을 빌드하고, 표면마다 셸 세션 하나를 실행한다. `open`은 세션이 시작할 디렉터리로, 있는 디렉터리의 절대 경로인 `directory`를 가질 수 있고, 다른 값은 명시적 오류다. 없으면 세션은 표면의 프로젝트 디렉터리(`root`)에서 시작한다. 셸 페이지는 표면의 `origin.directory`가 `null`이 아니면 그것을 보내고 디렉터리 이벤트마다 `tab.directory`로 알리므로([탭 알림](plugins.ko.md#탭-알림)), 셸에서 쪼갠 셸은 그 셸이 있던 곳에서 시작한다. 터미널 에뮬레이터가 아닌 줄 단위 콘솔이다. 코드는 `src/`에 있다: 진입점 `src/main.go`, 패키지 `src/shell`의 프로토콜, `src/platform/platform.go`를 통해 등록되는 `src/platform/{darwin,linux,windows}/`의 운영체제별 동작([플랫폼 선택](hosts.ko.md#플랫폼-선택)). 테스트는 `tests/`에 있다.
 
 세션 셸은 `$SHELL`이 POSIX 셸(`sh`, `bash`, `zsh`, `ksh`, `dash`)이면 그것이고 아니면 `/bin/sh`다. 세션 스크립트가 POSIX 문법을 쓰기 때문이다. 셸은 터미널 없이 자기 프로세스 그룹에서 실행되며 다음 스크립트를 실행한다.
 

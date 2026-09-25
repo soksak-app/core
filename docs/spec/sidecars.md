@@ -93,7 +93,7 @@ The host sends the authorized supplier a `configure` body containing the region 
 
 ## shell
 
-`sidecars/shell` (`@soksak/sidecar-shell`) builds `build/soksak-shell` with `pnpm run build` and runs one shell session per surface in the surface's project directory. It is a line console, not a terminal emulator. Its code is in `src/`: the entry point `src/main.go`, the protocol in the package `src/shell`, and the OS operations in `src/platform/{darwin,linux,windows}/`, which register through `src/platform/platform.go` ([platform selection](hosts.md#platform-selection)). Its tests are in `tests/`.
+`sidecars/shell` (`@soksak/sidecar-shell`) builds `build/soksak-shell` with `pnpm run build` and runs one shell session per surface. `open` may carry `directory`, an absolute path of an existing directory, in which the session starts; another value is an explicit error. Without it the session starts in the surface's project directory (`root`). The shell page sends its surface's `origin.directory` when it is not `null` and reports each directory event with `tab.directory` ([tab reports](plugins.md#tab-reports)), so a shell split from a shell starts where that shell was. It is a line console, not a terminal emulator. Its code is in `src/`: the entry point `src/main.go`, the protocol in the package `src/shell`, and the OS operations in `src/platform/{darwin,linux,windows}/`, which register through `src/platform/platform.go` ([platform selection](hosts.md#platform-selection)). Its tests are in `tests/`.
 
 The session shell is `$SHELL` when it is a POSIX shell (`sh`, `bash`, `zsh`, `ksh`, `dash`) and `/bin/sh` otherwise, because the session script uses POSIX syntax. It runs in its own process group without a terminal and executes a script that:
 
