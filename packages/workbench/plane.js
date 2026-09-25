@@ -184,7 +184,7 @@ function createCard(card) {
     const id = el.dataset.cardId;
     // 누른 카드가 글자 크기의 범위다(docs/spec/text-size.md).
     if (id) setTextScope({ kind: "card", card: id });
-    if (!id || isPlace(id) || e.target.closest(".tab__x, .chrome__act, .chrome__ham")) return;
+    if (!id || isPlace(id) || e.target.closest(".tab__x, .chrome__act, .chrome__ham, .side__fold, .side__grip")) return;
     const active = activeTab(grid.card(id));
     if (focusedId !== id) {
       // 카드 포커스가 만든 렌더는 표시를 마치면 대기 중인 표면 포커스를 가져간다. 명령이 끝난 뒤에 적으면
@@ -871,6 +871,8 @@ function drawSidebar(el, card) {
     el.querySelector(".slot").before(side, grip);
     // 손잡이를 끄는 동안 폭을 선언된 명령으로 정한다.
     grip.addEventListener("pointerdown", (event) => {
+      // 끄는 동안 사이드바 글자가 선택되지 않게 한다.
+      event.preventDefault();
       event.stopPropagation();
       grip.setPointerCapture(event.pointerId);
       const left = el.getBoundingClientRect().left;
@@ -889,7 +891,10 @@ function drawSidebar(el, card) {
     });
   }
   const fold = side.querySelector(".side__fold");
-  mark(fold, "core.card.sidebar.toggle", { card: card.id });
+  if (!fold.dataset.bound) {
+    bind(fold, "core.card.sidebar.toggle", () => ({ card: el.dataset.cardId }));
+    fold.dataset.bound = "true";
+  }
   mark(grip, "core.card.sidebar.size", { card: card.id });
   fold.textContent = state.collapsed ? "›" : "‹";
   fold.title = state.collapsed ? "사이드바 펼치기" : "사이드바 접기";

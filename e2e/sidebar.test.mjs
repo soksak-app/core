@@ -4,8 +4,8 @@ import test from "node:test";
 
 import { APPS, fresh, open } from "./app.mjs";
 
-/** 사이드바 칸과 표면 사이 손잡이의 폭(pt). */
-const GRIP = 6;
+/** 손잡이는 사이드바 테두리 위에 겹치므로 표면은 사이드바 바로 뒤에서 시작한다. */
+const GRIP = 0;
 /** 접은 사이드바의 폭(pt). */
 const FOLDED = 28;
 
@@ -47,5 +47,10 @@ for (const app of Object.values(APPS)) {
     await surfaceAt(260 + GRIP);
     await assert.rejects(s.run("core.card.sidebar.size", { card: card.id, width: 60 }), /120 to 480/);
     assert.ok(before, "the surface was measured");
+    // 접기 단추를 네이티브 클릭으로 누르면 접힌다.
+    const fold = await s.rect("core.card.sidebar.fold", 0);
+    await s.click(fold.x + fold.width / 2, fold.y + fold.height / 2);
+    await s.until("core.grid", (value) => value.cards.find((item) => item.id === card.id)?.sidebar?.collapsed === true,
+      "a click on the fold button did not fold the sidebar");
   });
 }
