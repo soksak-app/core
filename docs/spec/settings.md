@@ -26,7 +26,7 @@ The left navigation lists three sections in this order. Every section shows the 
 | 테마 | theme swatches `theme`, 모드 `mode` |
 | 형태 | 통로 `gap`, 모서리 `radius`, 폰트 `font`, 글자 크기 `size` |
 | 위치 | 프로젝트 탭 위치 `projectTabs` |
-| 사이드바 | 사이드바 위치 `rail`, 왼쪽 사이드바 `left`, 오른쪽 사이드바 `right`, 왼쪽 사이드바 세트 (a select of all sets and 없음, `core.settings.link {place: "left"}`) |
+| 사이드바 | 사이드바 위치 `rail`, 왼쪽 사이드바 보이기 `left`, 오른쪽 사이드바 보이기 `right`, 왼쪽 사이드바 세트 and 오른쪽 사이드바 세트 (each a select of all sets and 사용 안 함, `core.settings.link {place, plugin: null, set}`) |
 | 사이드바 크기 | the width settings of [layout values](#layout-values) |
 | 표시 | 포커스 표시 `focusInd`, 경계선 `fullRule`, 포커스 밖 흐리게 `dim` |
 
@@ -45,7 +45,7 @@ The page of a plugin replaces the search field and the list. It shows:
 - The plugin name and description.
 - 설정: one row per setting the manifest declares, in manifest order, named with its `label` and followed by its `description` when it has one. An `enum` is a choice row, an `integer` a slider between its bounds, and a `string` a text field. A plugin without settings shows "이 플러그인에는 설정이 없습니다."
 - 섹션: the names of the sections the plugin declares, as one line of text.
-- 사이드바, for a plugin with a surface: 레일 사이드바 and 오른쪽 사이드바, each a select of all sets and 없음 through `core.settings.link {place, plugin}`.
+- 사이드바, for a plugin with a surface: 왼쪽 사이드바 and 오른쪽 사이드바, each a select of 일반 따름, 사용 안 함, and all sets, and 레일 사이드바, a select of 사용 안 함 and all sets. Each runs `core.settings.link {place, plugin, set}`.
 
 ### 사이드바
 
@@ -85,6 +85,35 @@ A link is `{place, plugin, set}` with the rules of `environment.json` `sidebars.
 
 Deleting a set writes the remaining sets and the links without the ones to it to the same scope in one change.
 
+## Sidebar choices
+
+`links` holds the sidebar choices:
+
+| Link | Meaning |
+|---|---|
+| `{place: "left" or "right", plugin: null, set: "<set id>"}` | The general choice of that sidebar. Without it the general choice is 사용 안 함 |
+| `{place: "left" or "right", plugin: "<plugin id>", set: "<set id>"}` | The plugin shows that set in that sidebar |
+| `{place: "left" or "right", plugin: "<plugin id>", set: null}` | The plugin hides that sidebar (사용 안 함). Without a link for the plugin, the plugin follows the general choice (일반 따름) |
+| `{place: "rail", plugin: "<plugin id>", set: "<set id>"}` | The rail of that plugin shows the set. Without it the plugin has no rail |
+
+`place` and `plugin` together appear at most once. `set: null` is allowed only on a left or right link that names a plugin. A set id cannot be `off` or `inherit`, because the selects use those two values.
+
+The left or right sidebar of a window is resolved from the plugin of the focused card's active tab:
+
+1. If `links` has a link for that place and that plugin, its `set` applies: a set is shown, and `null` hides the sidebar.
+2. Otherwise the general link of that place applies: its set is shown, and without it the sidebar is hidden.
+3. The sidebar stands only while the switch `left` or `right` is on; the switch hides the resolved set without changing any choice.
+
+So both levels can hide a sidebar: with the general choice 사용 안 함, a plugin that chose a set shows it while its card is focused; with a general set, a plugin that chose 사용 안 함 hides the sidebar while its card is focused.
+
+`core.settings.link {place, plugin, set, scope}` changes one choice. `set` is a set id, `off`, or `inherit`:
+
+| Place and plugin | `set` id | `off` | `inherit` |
+|---|---|---|---|
+| left or right, `plugin: null` | Stores the general link | Removes the general link (사용 안 함) | Fails with -32602 |
+| left or right, a plugin | Stores the plugin link | Stores the plugin link with `set: null` | Removes the plugin link (일반 따름) |
+| rail, a plugin | Stores the rail link | Removes the rail link | Fails with -32602 |
+
 ## Layout values
 
 The following values were constants in `plane.js` and `app.css`. They are core settings shown in 일반 › 사이드바 크기, integers in points.
@@ -123,5 +152,6 @@ The following layout constants remain in code because they are tied to the docum
 - 일반 holds the sidebar appearance controls (`rail`, `left`, `right`, the left link, the widths) and no plugin setting.
 - 사이드바 holds only the set list, 새 세트, and the editor. The editor has no control per registered section: its section controls are one select box and ▲ ▼ − per row, and one +.
 - The section rows choose, move, remove, and add sections through `core.settings.sets.row`; a repeated section is rejected.
-- 플러그인 shows a filtered list; a row opens the plugin page with its settings, sections, and sidebar links, and 목록 returns to the list.
+- 플러그인 shows a filtered list; a row opens the plugin page with its settings, sections, and sidebar choices, and 목록 returns to the list.
+- The sidebar resolution holds: general 사용 안 함 with a plugin set shows the set while that plugin's card is focused; a general set with plugin 사용 안 함 hides the sidebar; plugin 일반 따름 shows the general set.
 - The layout values change the inset sidebar limits, default width, folded width, and new rail width.

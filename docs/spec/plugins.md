@@ -116,7 +116,7 @@ The browser back, forward, and reload buttons draw `chevron-left`, `chevron-righ
 | `workspace.grid` | Grid lines and cards of a new space. A card with `tabs` lists `{ plugin, title }` entries |
 | `workspace.focus` | Card focused in a new space; it must have tabs |
 | `sidebars.sets` | Default section sets `{id, title, sections, layout}`; `layout` is `list` or `tabs` |
-| `sidebars.links` | Default assignments of sets to `left` (with `plugin: null`), `right`, or `rail` (with a plugin id) |
+| `sidebars.links` | Default sidebar choices in the form of [sidebar choices](settings.md#sidebar-choices): general `left` and `right` links with `plugin: null`, plugin `left` and `right` links with a set or `null`, and `rail` links with a plugin id |
 
 The workbench loads `environment.json` and every listed `plugin.json` before it reads settings or builds a space. A tab or link that names a plugin without a surface, or a set that names an unknown section, fails the load before any registration. Saved spaces are not environment files; their tabs and rails of unregistered plugins are dropped when a space opens ([projects](projects.md#persistence)). Stored sidebar sets and links are settings and pass the same sidebars validation as `environment.json`; a stored set that names an unregistered section, or a link that names a plugin without a surface, fails the settings load with an error ([settings window](settings.md#stored-sets-and-links)).
 
