@@ -212,6 +212,8 @@ type Platform interface {
 	PlaceImage(image unsafe.Pointer, left, top, right, bottom float64, visible bool)
 	// RasterImage 는 적용된 그림 영역의 장치 픽셀 크기와 CSS 픽셀당 장치 픽셀 배율을 반환한다.
 	RasterImage(image unsafe.Pointer) (width, height int, scale float64, ok bool)
+	// SurfacePlacedImage 는 영역의 표면이 네이티브 크기를 가졌는지 반환한다. 아직 배치되지 않은 표면의 영역은 래스터 크기를 갖지 않는다.
+	SurfacePlacedImage(image unsafe.Pointer) bool
 	// PresentImage 는 외부 IOSurface 를 표시한다. token_id 는 IOSurface 의 전역 ID,
 	// nonce 는 논스 대조용 16바이트 데이터, width·height 는 장치 픽셀 단위의 크기이고,
 	// scale 은 이미지가 만들어진 배율이다 (contentsScale 로 사용).

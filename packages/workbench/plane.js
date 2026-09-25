@@ -366,6 +366,11 @@ function updateCard(el, card) {
     onState: (state) => {
       slot.dataset.surfaceStatus = state.phase;
       setSurfaceStatus(status, state);
+      surfaceStates.set(shown.id, {
+        phase: state.phase ?? "loading",
+        error: state.phase === "error" ? String(state.error?.message ?? state.error ?? "") : null,
+      });
+      surfaceStateChanged();
     },
   }).catch((error) => {
     report(`surface ${shown.id} mount failed: ${error.message}`);
@@ -505,6 +510,18 @@ function beginTabDrag(e, cardId, tabId) {
    배치가 바뀌면 레이어의 기준 위치가 무효가 되므로 settle 이 먼저 닫는다.     */
 
 let picker = null;
+
+/* 표면 페이지의 상태(불러오는 중, 준비, 오류). 카드 상태 줄에 보이는 값과 같다. */
+const surfaceStates = new Map();
+let surfaceStateChanged = () => {};
+
+/** 표면 상태가 바뀔 때 호출할 함수를 등록한다. */
+export function onSurfaceState(fn) {
+  surfaceStateChanged = fn;
+}
+
+/** 표면 id 의 상태 {phase, error}. 아직 보고가 없으면 불러오는 중이다. */
+export const surfaceState = (id) => surfaceStates.get(id) ?? { phase: "loading", error: null };
 
 /* 선택 레이어가 열리고 닫힐 때 호출할 함수. 공개 항목이 등록한다. */
 let pickerChanged = () => {};

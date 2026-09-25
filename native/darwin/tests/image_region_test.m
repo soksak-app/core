@@ -1082,6 +1082,24 @@ int main(void) { @autoreleasepool {
         sp_region_close(region);
     }
 
+    // 첫 배치를 받지 않은 표면의 영역은 래스터 크기가 없고, 표면이 배치되지 않았다고 알린다.
+    // 표면이 배치되면 두 값이 함께 생긴다.
+    {
+        WKWebView *unplaced = [[[WKWebView alloc] initWithFrame:NSZeroRect] autorelease];
+        [window.contentView addSubview:unplaced];
+        webviewAttachSurface(unplaced, main);
+        void *region = sp_region_create(unplaced, "unplaced", testEvent, NULL);
+        sp_region_place(region, 0, 0, 0, 0, true);
+        double raster[3] = {0};
+        check(!sp_region_raster(region, raster) && !sp_region_surface_placed(region),
+            @"unplaced surface: a shown region has no raster geometry and reports its surface as not placed");
+        webviewSetFrame(unplaced, 0, 0, 200, 100);
+        check(sp_region_raster(region, raster) && sp_region_surface_placed(region) && raster[0] == 400 && raster[1] == 200,
+            [NSString stringWithFormat:@"unplaced surface: placing the surface gives the region a 400x200 raster (got %.0fx%.0f)",
+                raster[0], raster[1]]);
+        sp_region_close(region);
+    }
+
     [window close];
     [window release];
 

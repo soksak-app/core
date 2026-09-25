@@ -352,7 +352,7 @@
       },
       {
         "name": "core.surfaces",
-        "description": "The native surfaces of the current plane with their plugin, visibility, dimming, declared and applied frames in window coordinates, and registered entries as \"<kind> <name>\".",
+        "description": "The native surfaces of the current plane with their plugin, visibility, dimming, declared and applied frames in window coordinates, registered entries as \"<kind> <name>\", and the page status shown in the card status row: phase loading, ready, or error, and the error message.",
         "schema": {
           "type": "array",
           "items": {
@@ -408,6 +408,17 @@
                 "type": "array",
                 "items": {
                   "type": "string"
+                }
+              },
+              "status": {
+                "type": "object",
+                "properties": {
+                  "phase": {
+                    "enum": ["loading", "ready", "error"]
+                  },
+                  "error": {
+                    "type": ["string", "null"]
+                  }
                 }
               }
             }

@@ -61,15 +61,28 @@ func (s *Surfaces) sendImageConfigurations(configurations []pendingConfigure) er
 	return nil
 }
 
+// rasterFacts 는 래스터 크기를 정하지 못한 영역의 측정 상태(배치, 크기, 표면 배율)를 오류에 싣는다.
+func rasterFacts(handle unsafe.Pointer) string {
+	facts, err := system.FactsImage(handle)
+	if err != nil {
+		return err.Error()
+	}
+	return facts
+}
+
 // 표면 복귀나 바깥 크기 변경은 DOM 여백이 같아도 실제 네이티브 래스터를 갱신해야 한다.
 func (s *Surfaces) refreshImageRasters() error {
 	var configurations []pendingConfigure
 	var failure error
 	application.InvokeSync(func() {
 		for key, handle := range s.images.Visible() {
+			// 아직 배치되지 않은 표면의 영역은 래스터 크기가 없다. 표면을 배치하는 다음 준비에서 갱신한다.
+			if !system.SurfacePlacedImage(handle) {
+				continue
+			}
 			width, height, scale, ok := system.RasterImage(handle)
 			if !ok {
-				failure = fmt.Errorf("image %q has no raster geometry", key.Name)
+				failure = fmt.Errorf("image %q has no raster geometry: %s", key.Name, rasterFacts(handle))
 				return
 			}
 			configuration, err := s.images.ConfigureRaster(key, width, height, scale, true)
@@ -211,8 +224,8 @@ func (s *Surfaces) placeComposition(viewID uint64, request CompositionPlaceReque
 					return
 				}
 				width, height, scale, ok := system.RasterImage(region.handle)
-				if !ok && p.Visible {
-					err = fmt.Errorf("image %q has no raster geometry", region.declaration.Name)
+				if !ok && p.Visible && system.SurfacePlacedImage(region.handle) {
+					err = fmt.Errorf("image %q has no raster geometry: %s", region.declaration.Name, rasterFacts(region.handle))
 					return
 				}
 				if ok {

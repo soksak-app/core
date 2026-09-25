@@ -412,6 +412,9 @@ pub fn place_image(_image: Handle, _insets: Insets, _visible: bool) -> Result<()
 pub fn image_raster(_image: Handle) -> Result<Option<Raster>, String> {
     missing("image raster geometry")
 }
+pub fn image_surface_placed(_image: Handle) -> Result<bool, String> {
+    missing("image surface placement")
+}
 
 pub fn image_facts(_image: Handle) -> Result<String, String> {
     missing("image facts")

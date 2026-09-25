@@ -22,6 +22,7 @@ extern "C" {
         visible: bool,
     );
     fn sp_region_raster(region: *mut c_void, out: *mut f64) -> bool;
+    fn sp_region_surface_placed(region: *mut c_void) -> bool;
     fn sp_region_facts(region: *mut c_void) -> *mut c_char;
     fn free(pointer: *mut c_void);
     fn sp_region_present(
@@ -79,6 +80,11 @@ pub fn create(surface: Handle, name: &str, receive: Box<dyn Fn(String)>) -> Resu
 /// 표면 뷰포트의 CSS 픽셀 여백으로 영역을 정한다.
 pub fn place(image: Handle, left: f64, top: f64, right: f64, bottom: f64, visible: bool) {
     unsafe { sp_region_place(image as *mut c_void, left, top, right, bottom, visible) }
+}
+
+/// 영역의 표면이 네이티브 크기를 가졌는지. 아직 배치되지 않은 표면의 영역은 래스터 크기를 갖지 않는다.
+pub fn surface_placed(image: Handle) -> bool {
+    unsafe { sp_region_surface_placed(image as *mut c_void) }
 }
 
 pub fn raster(image: Handle) -> Option<Raster> {

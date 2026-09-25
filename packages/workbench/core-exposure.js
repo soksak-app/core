@@ -11,8 +11,8 @@ import * as projects from "./projects.js";
 import {
   activeTab, addTabTo, capture, cardActs, cardTextSizes, changeTextSize, closeCard, closePicker, closeTabById,
   currentGrid, currentTextScope, dragState, focusCard,
-  focused, fresh, moveTab, onPicker, openCardMenu, openCardTabs, pickItem, pickerState, plane, railState, selectTab,
-  settle, splitCard, tabsOf,
+  focused, fresh, moveTab, onPicker, onSurfaceState, openCardMenu, openCardTabs, pickItem, pickerState, plane, railState, selectTab,
+  settle, splitCard, surfaceState, tabsOf,
 } from "./plane.js";
 import {
   applyTheme, defaults, link, onSaved, overridden, reset, saving, scopedValue, set, settingProject, value,
@@ -128,7 +128,7 @@ function surfacesState() {
   return record.surfaces.map((s) => ({
     surface: s.id, plugin: s.plugin, visible: s.visible, dim: s.dim,
     declared: shift(s.declared, at), applied: shift(s.applied, at),
-    exposes: registry.namesOf(s.id),
+    exposes: registry.namesOf(s.id), status: surfaceState(s.id),
   }));
 }
 
@@ -319,6 +319,7 @@ export async function installCoreExposure({ library, renames, resetLayout, chrom
   }
 
   onPicker(coreChanged);
+  onSurfaceState(coreChanged);
   onSettingsDrawn(coreChanged);
   onModalState(coreChanged);
   onSaved(coreChanged);

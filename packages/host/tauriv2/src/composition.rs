@@ -40,6 +40,11 @@ fn send_image_configurations(
     Ok(())
 }
 
+/// 래스터 크기를 정하지 못한 영역의 측정 상태(배치, 크기, 표면 배율)를 오류에 싣는다.
+fn raster_facts(platform: &dyn platform::Platform, handle: platform::Handle) -> String {
+    platform.image_facts(handle).unwrap_or_else(|error| error)
+}
+
 /// 표면 복귀나 바깥 크기 변경은 DOM 여백이 같아도 실제 네이티브 래스터를 갱신해야 한다.
 pub(crate) fn refresh_image_rasters(window: &Window) -> Result<(), String> {
     let data = window_data(window)?;
@@ -48,9 +53,17 @@ pub(crate) fn refresh_image_rasters(window: &Window) -> Result<(), String> {
         let mut configurations = Vec::new();
         let result = (|| -> Result<(), String> {
             for (key, handle) in data.images.visible() {
-                let raster = platform
-                    .image_raster(handle)?
-                    .ok_or_else(|| format!("image {:?} has no raster geometry", key.1))?;
+                // 아직 배치되지 않은 표면의 영역은 래스터 크기가 없다. 표면을 배치하는 다음 준비에서 갱신한다.
+                if !platform.image_surface_placed(handle)? {
+                    continue;
+                }
+                let raster = platform.image_raster(handle)?.ok_or_else(|| {
+                    format!(
+                        "image {:?} has no raster geometry: {}",
+                        key.1,
+                        raster_facts(platform, handle)
+                    )
+                })?;
                 if let Some(configuration) = data.images.configure_raster(
                     &key,
                     raster.width,
@@ -208,8 +221,12 @@ pub(crate) fn place(webview: &Webview, request: CompositionPlaceRequest) -> Resu
                                 configurations.push((key, configuration));
                             }
                         }
-                        None if placement.visible => {
-                            return Err(format!("image {:?} has no raster geometry", region.name));
+                        None if placement.visible && platform.image_surface_placed(handle)? => {
+                            return Err(format!(
+                                "image {:?} has no raster geometry: {}",
+                                region.name,
+                                raster_facts(platform, handle)
+                            ));
                         }
                         None => {}
                     }

@@ -529,6 +529,44 @@ for (const app of Object.values(APPS)) {
     }
   });
 
+  test(`${app.name}: a presentation that fails while the terminal service is stopped leaves the next fixture and splits usable`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    s.cleanup(() => closeTerminalTabs(s));
+    const [terminal] = await ensureTerminals(s, 1);
+    await s.presented();
+    // 서비스를 멈추면 분할의 표시가 기존 터미널의 새 래스터를 기다리다 실패한다.
+    const { service } = terminalProcessSnapshot(app.configDir);
+    process.kill(service, "SIGSTOP");
+    let stopped = true;
+    t.after(() => { if (stopped) process.kill(service, "SIGCONT"); });
+    const card = (await s.get("core.grid")).cards.find((item) => item.active === terminal.surface);
+    const { tab } = await s.run("core.card.split", { card: card.id, axis: "x", plugin: "terminal" });
+    await s.until("core.page.error", (error) => /did not present/.test(error ?? ""),
+      "the presentation did not fail while the terminal service was stopped");
+    // 실패 뒤 새 터미널 페이지가 영역을 배치한다. 배치가 끝나거나 표면이 오류를 보고할 때까지 서비스를 멈춰 둔다.
+    const placed = s.until("host.window", (value) => value.regions.some((region) => region.surface === tab),
+      "the new terminal did not place its region").then(() => null);
+    const failure = s.until("core.surfaces", (surfaces) => surfaces.find((item) => item.surface === tab)?.status.phase === "error",
+      "the new terminal did not report an error").then((surfaces) => surfaces.find((item) => item.surface === tab).status.error);
+    const error = await Promise.race([placed, failure]);
+    process.kill(service, "SIGCONT");
+    stopped = false;
+    assert.equal(error, null, "the new terminal failed to place its region after the failed presentation");
+    // 실패한 검사의 정리와 다음 검사의 준비를 같은 순서로 실행한다.
+    await closeTerminalTabs(s);
+    await fresh(s);
+    const terminals = await ensureTerminals(s, 3);
+    for (const item of terminals) {
+      await s.until("host.window", (value) => value.regions.some((region) => region.surface === item.surface &&
+        region.visible && region.presented?.width === Math.round(region.frame.width * region.presented.scale)),
+        `${item.surface} did not present after the failed presentation`);
+    }
+    const failed = (await s.get("core.surfaces")).filter((item) => item.status.phase === "error");
+    assert.deepEqual(failed, [], "a surface reported an error after the failed presentation");
+  });
+
   test(`${app.name}: a terminal split from a terminal starts in the directory that terminal reported`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);

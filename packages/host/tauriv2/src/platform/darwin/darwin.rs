@@ -286,6 +286,9 @@ impl Platform for Darwin {
     fn image_raster(&self, image: Handle) -> Result<Option<Raster>, String> {
         Ok(image::raster(image))
     }
+    fn image_surface_placed(&self, image: Handle) -> Result<bool, String> {
+        Ok(image::surface_placed(image))
+    }
     fn image_facts(&self, image: Handle) -> Result<String, String> {
         image::facts(image)
     }

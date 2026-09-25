@@ -287,6 +287,8 @@ pub trait Platform: Send + Sync {
     fn place_image(&self, image: Handle, insets: Insets, visible: bool) -> Result<(), String>;
     /// 적용된 그림 영역의 래스터 기하를 반환한다. 아직 유효한 크기가 없으면 None 이다.
     fn image_raster(&self, image: Handle) -> Result<Option<Raster>, String>;
+    /// 영역의 표면이 네이티브 크기를 가졌는지. 아직 배치되지 않은 표면의 영역은 래스터 크기를 갖지 않는다.
+    fn image_surface_placed(&self, image: Handle) -> Result<bool, String>;
     /// 그림 영역의 현재 프레임, 표시 래스터와 오류를 JSON 으로 반환한다. 메인 스레드에서 호출한다.
     fn image_facts(&self, image: Handle) -> Result<String, String>;
     /// 외부 IOSurface 를 표시한다. token_id 는 IOSurface 의 전역 ID, nonce 는 논스 대조용

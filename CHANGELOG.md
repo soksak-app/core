@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- V5-54: a terminal page that places its image region before its new surface has a native frame no longer fails with `image "view" has no raster geometry` and no longer breaks later layouts and fixtures; the region is configured when the surface is placed, and `core.surfaces` reports each surface page's status.
 - V5-52: dividers and card icons keep their resize and pointing-hand cursors after a layout change or a terminal presentation, because the window composition answers AppKit's cursor update with the page cursor at the pointer.
 - V5-59: the terminal scrollbar thumb shows an open hand and a closed hand while dragged, and the native terminal region no longer registers I-beam cursor rectangles over page elements above it.
 - V5-60 (partial): the terminal sends the page one compact screen per presentation instead of a full screen per output chunk and draws base-font glyphs without per-cell CoreText lines, so 100,000 lines are written in about 2.5 s instead of more than 180 s and wheel scrolling over the history shows each event about 30 ms later without stalls over 50 ms.

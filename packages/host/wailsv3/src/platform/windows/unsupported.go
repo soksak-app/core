@@ -295,6 +295,11 @@ func (implementation) PlaceImage(unsafe.Pointer, float64, float64, float64, floa
 	unreachable("image placement")
 }
 
+func (implementation) SurfacePlacedImage(unsafe.Pointer) bool {
+	unreachable("image surface placement")
+	return false
+}
+
 func (implementation) RasterImage(unsafe.Pointer) (int, int, float64, bool) {
 	unreachable("image raster geometry")
 	return 0, 0, 0, false

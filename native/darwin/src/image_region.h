@@ -18,6 +18,9 @@ void sp_region_place(void *region, double left, double top, double right, double
 // 아직 배치되지 않았거나 크기와 배율을 얻을 수 없으면 false 다.
 bool sp_region_raster(void *region, double *out);
 
+// 영역의 표면이 네이티브 크기를 가졌으면 true 다. 아직 배치되지 않은 표면의 영역은 래스터 크기를 갖지 않는다.
+bool sp_region_surface_placed(void *region);
+
 // 외부 IOSurface 를 표시한다. token_id 는 IOSurface 의 전역 ID, nonce 는 논스 대조용
 // 16바이트 데이터, width·height 는 장치 픽셀 단위의 크기고, scale 은 이미지가 만들어진
 // 배율이다 (contentsScale 로 사용). 성공하면 true, 찾지 못했거나 크기가 맞지 않으면 false 를 반환한다.

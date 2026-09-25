@@ -771,6 +771,14 @@ bool sp_region_raster(void *handle, double *out) {
     return true;
 }
 
+bool sp_region_surface_placed(void *handle) {
+    NSCAssert(NSThread.isMainThread, @"image regions belong to the main thread");
+    SPImageRegion *view = (SPImageRegion *)handle;
+    // 영역은 클립 뷰 안에 있고 클립 뷰는 표면의 네이티브 평면 안에 있다.
+    NSView *nativePlane = view.superview.superview;
+    return nativePlane && NSWidth(nativePlane.bounds) > 0 && NSHeight(nativePlane.bounds) > 0;
+}
+
 bool sp_region_present(void *handle, unsigned int token_id, const unsigned char *nonce, double width, double height, double scale) {
     NSCAssert(NSThread.isMainThread, @"image regions belong to the main thread");
     SPImageRegion *view = (SPImageRegion *)handle;
@@ -968,6 +976,8 @@ const char *sp_region_facts(void *handle) {
     [json appendString:@"{"];
     [json appendFormat:@"\"frame\":{\"x\":%.1f,\"y\":%.1f,\"width\":%.1f,\"height\":%.1f},", x, y, width, height];
     [json appendFormat:@"\"visible\":%@,", visible ? @"true" : @"false"];
+    // 래스터 크기는 배치된 영역의 backing 크기와 표면 배율로 정한다(sp_region_raster).
+    [json appendFormat:@"\"placed\":%@,\"surfaceScale\":%.2f,", view.placed ? @"true" : @"false", surfaceScale(view.webSurface)];
     [json appendFormat:@"\"focused\":%@,", focused ? @"true" : @"false"];
     [json appendFormat:@"\"layer\":{\"bounds\":{\"x\":0,\"y\":0,\"width\":%.1f,\"height\":%.1f},\"contentsScale\":%.2f},",
           layerWidth, layerHeight, contentsScale];
