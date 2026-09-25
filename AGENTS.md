@@ -11,10 +11,14 @@ This workspace contains the headless layout library `soksak`, the workbench fron
 - Maintain the [private native API inventory](docs/operations/private-native-apis.md) with each API or call-condition change. Read it first when diagnosing failures after native source, framework, SDK, or OS updates; review each correction's necessity and actual API semantics.
 - Remove harmful or unnecessary changes. Preserve correct unrelated changes separately and describe their actual purpose in the commit.
 - Verify behavior before rewriting commits. Do not merge or push without authorization.
+- Report every error. Do not ignore a result, catch an error without reporting it, coerce an invalid input into a valid-looking one, or drop input or output silently; reject invalid values at the boundary with an explicit error, and signal and document any bounded buffer that sheds data.
+- Keep a standard once it is set. When code does not meet a check's criterion, fix the code; change the criterion only when it is itself wrong, and state why in the same change.
+- Treat an unexpected finding in existing code as a defect to report and resolve: fix it, or record the verification that shows it is correct, and add a rule when the finding shows one is missing. Existing code is not a reason by itself.
+- When a request cannot be met the standard way, state which part needs another approach and why before implementing it.
 
 ## Structure
 
-- Core (`packages/`), plugins (`plugins/`), and sidecars (`sidecars/`) do not name each other in code or tests. Only declaration files connect them: `environment.json` lists plugins, `plugin.json` lists sidecar packages, and `sidecar.json` describes a sidecar. `make boundaries` checks this rule.
+- Core (`packages/`), plugins (`plugins/`), and sidecars (`sidecars/`) do not name each other in code or tests. Only declaration files connect them: `environment.json` lists plugins, `plugin.json` lists sidecar packages, and `sidecar.json` describes a sidecar. `make boundaries` checks this rule. It skips a plugin's `ui/vendor/` bundle, which is third-party code rebuilt from pinned versions and compared with the committed file ([third-party libraries](docs/spec/plugins.md#third-party-libraries)), because that code cannot name a package of this repository.
 - Common functionality belongs to core so plugins do not reimplement it. Plugin functionality does not move into core. A sidecar holds native functionality for one domain.
 - Platform-specific files live only under `platform/<os>/` (`darwin`, `windows`, `linux`) in the owning package. Do not add stub files for other platforms.
 - Native code packages (Go, Rust, Objective-C) keep code in `src/`, tests in `tests/`, and manifests and build files at the root. Go and Rust files that serve the same role have the same name; test files end in `_test` in both languages. The [native host specification](docs/spec/hosts.md) lists the allowed differences.
