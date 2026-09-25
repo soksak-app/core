@@ -28,7 +28,7 @@ make wailsv3-build tauriv2-build
 
 `make parity-check`로 구조 목록 게이트를 실행한다. 언어별 고정 루트 없이 Git에 보이는 JS/TS·Rust·Go·Objective-C·네이티브 헤더·HTML/CSS·셸 스크립트·계약 선언·빌드 매니페스트를 발견한다. 생성된 라이브러리 출력·Tauri 스키마는 명시적 제외 사유를 갖고 소스/출력 일치는 별도 빌드 검사로 유지한다. 연결 없는 구현·테스트, 빈 패턴, 중복 소유는 실패한다. 테스트 공유를 이유로 구현 중복 소유를 허용하지 않는다.
 
-`make host-contract-check`는 두 호스트의 테스트를 실행해 [호스트 계약 사례](../spec/host-contract.ko.md)와 비교하며, `make native-test`가 이를 실행하며, 먼저 `make rust-format-check`를 실행한다. 이 검사는 루트나 `sidecars` 워크스페이스의 Rust 패키지가 `rustfmt` 형식이 아니면 실패한다. 현재 목록은 lane 60개, 구현 파일 290개, 테스트 파일 212개다. 현재 연결 목록은 미완료다. 구조 검사가 통과해도 동작 동등성은 입증하지 않는다. [검증 계약](../spec/verification.ko.md)의 이름 있는 동작 연결, 언어별 실제 실행, 일치하는 빌드의 증거가 필요하다. 통과하려고 관련 없는 glob을 넓히거나 발견한 파일을 제외하지 않는다.
+`make host-contract-check`는 두 호스트의 테스트를 실행해 [호스트 계약 사례](../spec/host-contract.ko.md)와 비교하며, `make native-test`가 이를 실행하며, 먼저 `make rust-format-check`를 실행한다. 이 검사는 루트나 `sidecars` 워크스페이스의 Rust 패키지가 `rustfmt` 형식이 아니면 실패한다. 현재 목록은 lane 62개, 구현 파일 310개, 테스트 파일 223개다. 현재 연결 목록은 미완료다. 구조 검사가 통과해도 동작 동등성은 입증하지 않는다. [검증 계약](../spec/verification.ko.md)의 이름 있는 동작 연결, 언어별 실제 실행, 일치하는 빌드의 증거가 필요하다. 통과하려고 관련 없는 glob을 넓히거나 발견한 파일을 제외하지 않는다.
 
 `pnpm test`는 패키지 검사 전에 감사·체크리스트·명령 감독 자체 검사를 실행한다. Rust 터미널 패키지 두 개는 실제 Cargo 검사를 호출한다. 패키지 명령 검사는 Cargo를 실패 fixture로 교체해 호출·실패 전달을 검증하며 엔진 동작 검사로 세지 않는다.
 
